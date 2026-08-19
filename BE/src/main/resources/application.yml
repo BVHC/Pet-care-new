@@ -1,0 +1,43 @@
+spring:
+  application:
+    name: petcare-api
+
+  datasource:
+    url: jdbc:postgresql://localhost:5432/petcare
+    username: postgres
+    password: postgres
+
+  jpa:
+    hibernate:
+      ddl-auto: validate
+    properties:
+      hibernate:
+        format_sql: true
+        dialect: org.hibernate.dialect.PostgreSQLDialect
+
+  flyway:
+    enabled: true
+    locations: classpath:db/migration
+    baseline-on-migrate: true
+
+  data:
+    redis:
+      host: localhost
+      port: 6379
+
+jwt:
+  secret: ${JWT_SECRET:petcare-256-bit-secret-key-for-jwt-signing-min-32-chars}
+  access-token-ttl-min: 60
+  refresh-token-ttl-days: 30
+
+server:
+  port: 8080
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info
+  endpoint:
+    health:
+      show-details: when-authorized

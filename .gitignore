@@ -1,0 +1,77 @@
+# ============================
+# Common
+# ============================
+.DS_Store
+Thumbs.db
+*.log
+
+# ============================
+# Java / Maven
+# ============================
+BE/target/
+BE/**/*.class
+BE/**/*.jar
+BE/**/*.war
+BE/**/application-local.yml
+BE/**/application-local.properties
+BE/.mvn/wrapper/maven-wrapper.jar
+
+# Gradle
+BE/.gradle/
+BE/build/
+
+# IDE
+BE/.idea/
+BE/*.iml
+BE/out/
+
+# ============================
+# Node / Frontend
+# ============================
+FE/node_modules/
+FE/.pnp/
+FE/.pnp.js
+FE/dist/
+FE/dist-ssr/
+FE/*.local
+FE/.env
+FE/.env.local
+FE/.env.*.local
+
+# Logs
+FE/npm-debug.log*
+FE/yarn-debug.log*
+FE/yarn-error.log*
+FE/pnpm-debug.log*
+
+# Editor
+FE/.vscode/*
+!.vscode/extensions.json
+FE/.idea/
+FE/*.suo
+FE/*.ntvs*
+FE/*.njsproj
+FE/*.sln
+FE/*.sw?
+
+# ============================
+# Docker
+# ============================
+*.pid
+*.seed
+*.pid.lock
+
+# ============================
+# Database
+# ============================
+*.sql.gz
+*.dump
+
+# ============================
+# Secrets (never commit these)
+# ============================
+*.pem
+*.key
+.env
+.env.*
+!.env.example

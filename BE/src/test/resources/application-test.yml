@@ -1,0 +1,31 @@
+spring:
+  application:
+    name: petcare-api-test
+
+  datasource:
+    url: jdbc:postgresql://localhost:5432/petcare_test
+    username: postgres
+    password: postgres
+
+  jpa:
+    hibernate:
+      ddl-auto: create-drop
+    properties:
+      hibernate:
+        dialect: org.hibernate.dialect.PostgreSQLDialect
+
+  flyway:
+    enabled: false
+
+  data:
+    redis:
+      host: localhost
+      port: 6379
+
+jwt:
+  secret: test-secret-key-for-jwt-signing-minimum-32-characters-long
+  access-token-ttl-min: 60
+  refresh-token-ttl-days: 30
+
+server:
+  port: 8081
