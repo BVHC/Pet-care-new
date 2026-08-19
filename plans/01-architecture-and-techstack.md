@@ -104,16 +104,17 @@
 
 ---
 
-## 5. FSMs Summary (6 FSMs)
+## 5. FSMs Summary (7 FSMs)
 
 | FSM | States | Transitions | Phase |
 |-----|--------|-------------|-------|
+| **CaregiverInvitation** | 5 | 5 | W1 |
 | **Appointment** | 7 | 10 | W2 |
 | **Order** | 8 | 10 | W2 |
 | **Payment** | 6 | 7 | W2 |
 | **Invoice** | 6 | 7 | W3 |
 | **Refund** | 6 | 6 | W3 |
-| **CaregiverInvitation** | 5 | 5 | W1 |
+| **Grooming** | 4 | 6 | W6 |
 
 ---
 
