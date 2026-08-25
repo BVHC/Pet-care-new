@@ -32,15 +32,21 @@ Tài liệu này chuẩn hóa toàn bộ thuật ngữ chuyên ngành (Ubiquitou
 
 | Term | Loại | Định nghĩa | Values (Status-Enum) | Deprecated synonym |
 |---|---|---|---|---|
-| PlatformAdmin | Actor | Người quản trị toàn bộ nền tảng ở cấp cao nhất. | — | Super Admin |
-| OrganizationAdmin | Actor | Người quản lý Organization, Warehouse trung tâm và các Store trực thuộc. | — | Org Admin |
-| StoreManager | Actor | Người quản lý và điều hành vận hành tại một Store cụ thể. | — | Store Admin |
-| Role | Entity Candidate | Vai trò xác định nhóm quyền hạn của người dùng trong phạm vi quản lý. | — | User Role |
-| Permission | Entity Candidate | Quyền cho phép thực hiện một nghiệp vụ cụ thể. | — | Privilege |
-| User | Entity Candidate | Thực thể người dùng được định danh và cấp quyền trong hệ thống. | — | System User |
-| ManageUser | Command Candidate | Thao tác quản lý người dùng trong phạm vi được phép. | — | — |
-| ManageRole | Command Candidate | Thao tác quản lý vai trò trong phạm vi được phép. | — | — |
-| ManagePermission | Command Candidate | Thao tác quản lý quyền hạn trong phạm vi được phép. | — | — |
+| PlatformAdmin | Actor | Người quản trị toàn bộ nền tảng ở cấp cao nhất (System Role: `SUPER_ADMIN`, Scope: `PLATFORM`). Quản lý tenant, master catalog, cấu hình toàn cục. | — | Super Admin |
+| OrganizationAdmin | Actor | Người quản trị cấp chuỗi/tổ chức doanh nghiệp (System Role: `ORGANIZATION_ADMIN`, Scope: `ORGANIZATION`). Quản lý warehouse trung tâm, các store trực thuộc, nhân sự tenant và chính sách chuỗi. | — | Org Admin |
+| StoreManager | Actor | Người quản lý và điều hành vận hành tại một Store chi nhánh cụ thể (System Role: `STORE_MANAGER`, Scope: `STORE`). Thẩm quyền phê duyệt Maker-Checker. | — | Store Admin |
+| Receptionist | Actor | Nhân viên tiếp đón khách, check-in và thu ngân tại Store (System Role: `RECEPTIONIST`, Scope: `STORE`). | — | Front Desk |
+| Veterinarian | Actor | Bác sĩ thú y phụ trách khám bệnh, chẩn đoán, kê đơn và tiêm phòng tại Store (System Role: `VETERINARIAN`, Scope: `STORE`). | — | Doctor, Vet |
+| Groomer | Actor | Chuyên viên spa/làm đẹp thú cưng tại Store (System Role: `GROOMER`, Scope: `STORE`). | — | Pet Stylist |
+| InventoryStaff | Actor | Nhân viên quản lý và vận hành kho tại Store hoặc Warehouse trung tâm (Functional Role: `INVENTORY_STAFF`, Scope: `STORE / WAREHOUSE`). | — | Stock Keeper |
+| FinanceStaff | Actor | Nhân viên kế toán, tài chính phụ trách chi tiền hoàn, đối soát hóa đơn và quyết toán (Functional Role: `FINANCE_STAFF`, Scope: `ORGANIZATION / STORE`). | — | Accountant |
+| RoleScope | Status-Enum | Cấp độ phạm vi dữ liệu và quyền lực áp dụng cho một vai trò người dùng trong hệ thống Multi-tenancy. | PLATFORM, ORGANIZATION, STORE, CUSTOMER | ScopeLevel |
+| Role | Entity Candidate | Vai trò xác định nhóm quyền hạn của người dùng gắn với một `RoleScope` cụ thể. | — | User Role |
+| Permission | Entity Candidate | Quyền cho phép thực hiện một nghiệp vụ hoặc Command cụ thể. | — | Privilege |
+| User | Entity Candidate | Thực thể người dùng được định danh, cấp tài khoản và gán vai trò trong hệ thống. | — | System User |
+| ManageUser | Command Candidate | Thao tác quản lý người dùng trong phạm vi quyền hạn được phép. | — | — |
+| ManageRole | Command Candidate | Thao tác quản lý vai trò trong phạm vi quyền hạn được phép. | — | — |
+| ManagePermission | Command Candidate | Thao tác quản lý quyền hạn trong phạm vi quyền hạn được phép. | — | — |
 | LockAccount | Command Candidate | Thao tác khóa tài khoản không cho phép đăng nhập hoặc thao tác. | — | SuspendAccount |
 | UnlockAccount | Command Candidate | Thao tác mở khóa tài khoản người dùng. | — | UnbanAccount |
 | AssignPermission | Command Candidate | Thao tác phân quyền cho nhân viên trong phạm vi Store/Org. | — | GrantPermission |
@@ -52,12 +58,12 @@ Tài liệu này chuẩn hóa toàn bộ thuật ngữ chuyên ngành (Ubiquitou
 | Term | Loại | Định nghĩa | Values (Status-Enum) | Deprecated synonym |
 |---|---|---|---|---|
 | StoreStatus | Status-Enum | Trạng thái vận hành của một Store. | ACTIVE, SUSPENDED, DEACTIVATED, ARCHIVED | — |
-| Organization | Entity Candidate | Tổ chức sở hữu và quản lý một hoặc nhiều Store và Warehouse. | — | Tenant, Chain |
-| Store | Entity Candidate | Cơ sở / chi nhánh thuộc Organization nơi dịch vụ được cung cấp. | — | Branch, Clinic |
-| OrganizationPolicy | Entity Candidate | Chính sách quy định cách Organization vận hành và chia sẻ dữ liệu. | — | Org Policy |
+| Organization | Entity Candidate | Tổ chức doanh nghiệp sở hữu và quản lý một hoặc nhiều Store và Warehouse trung tâm (Tenant Entity). | — | Tenant, Chain |
+| Store | Entity Candidate | Cơ sở / chi nhánh thuộc Organization nơi dịch vụ được cung cấp trực tiếp cho khách hàng. | — | Branch, Clinic |
+| OrganizationPolicy | Entity Candidate | Chính sách quy định cách Organization vận hành và chia sẻ dữ liệu nội bộ. | — | Org Policy |
 | StorePolicy | Entity Candidate | Chính sách quy định cách Store vận hành tại chỗ. | — | Operational Policy |
 | OperatingHour | Value Object Candidate | Khung thời gian làm việc quy định của Store trong ngày/tuần. | — | Store Hours |
-| StoreResource | Entity Candidate | Tài nguyên phòng khám/bàn grooming được Store quản lý. | — | Facility Resource |
+| StoreResource | Entity Candidate | Tài nguyên phòng khám/bàn grooming chuyên dụng được Store quản lý để tránh xung đột lịch hẹn. | — | Facility Resource |
 | CreateOrganization | Command Candidate | Thao tác tạo Organization mới trên nền tảng. | — | — |
 | UpdateOrganization | Command Candidate | Thao tác cập nhật thông tin Organization. | — | — |
 | ManageOrganizationPolicy| Command Candidate | Thao tác quản lý chính sách của Organization. | — | — |
@@ -83,10 +89,11 @@ Tài liệu này chuẩn hóa toàn bộ thuật ngữ chuyên ngành (Ubiquitou
 
 | Term | Loại | Định nghĩa | Values (Status-Enum) | Deprecated synonym |
 |---|---|---|---|---|
-| Caregiver | Actor | Người được Customer ủy quyền chăm sóc hoặc thao tác với Pet. | — | Authorized Person |
-| CaregiverInvitation | Aggregate Candidate | Hồ sơ lời mời và quan hệ ủy quyền chăm sóc Pet giữa Customer và Caregiver. | — | DelegationRecord |
+| Customer | Actor | Người sử dụng nền tảng sở hữu tài khoản và hồ sơ thú cưng cá nhân (Scope: User/Account). | — | Pet Owner |
+| Caregiver | Actor | Người chăm sóc được chủ thú cưng ủy quyền thông qua `PetCaregiverDelegation` để thay mặt thao tác với Pet. | — | Authorized Person |
+| PetCaregiverDelegation| Aggregate Candidate | Hồ sơ quan hệ ủy quyền chăm sóc Pet giữa chủ thú cưng (Customer) và người được ủy quyền (Caregiver). | — | DelegationRecord, CaregiverInvitation |
 | CaregiverStatus | Status-Enum | Trạng thái vòng đời của lời mời và quan hệ ủy quyền Caregiver. | INVITED, ACTIVE, REJECTED, EXPIRED, REVOKED | — |
-| Pet | Entity Candidate | Thú cưng được Customer đăng ký quản lý và sử dụng dịch vụ. | — | Animal Patient |
+| Pet | Entity Candidate | Thú cưng được Customer đăng ký quản lý và sử dụng dịch vụ trong hệ sinh thái. | — | Animal Patient |
 | CustomerProfile | Value Object Candidate | Thông tin định danh và liên hệ của Customer. | — | Profile Info |
 | PetOwnership | Entity Candidate | Quyền sở hữu và trách nhiệm pháp lý của Customer đối với Pet. | — | Pet Owner Link |
 | AuthorizedPet | Value Object Candidate | Phạm vi Pet cụ thể mà Caregiver được cấp quyền thao tác. | — | Delegated Pet |
@@ -259,17 +266,27 @@ Tài liệu này chuẩn hóa toàn bộ thuật ngữ chuyên ngành (Ubiquitou
 
 | Term | Loại | Định nghĩa | Values (Status-Enum) | Deprecated synonym |
 |---|---|---|---|---|
-| Groomer | Actor | Nhân viên chuyên môn thực hiện dịch vụ làm đẹp, cắt tỉa lông cho Pet. | — | Pet Stylist |
+| Groomer | Actor | Nhân viên chuyên môn thực hiện dịch vụ làm đẹp, cắt tỉa lông cho Pet tại Store (System Role: `GROOMER`, Scope: `STORE`). | — | Pet Stylist |
 | Grooming | Aggregate Candidate | Phiên thực hiện dịch vụ chăm sóc ngoại hình và vệ sinh cho Pet. | — | Grooming Session |
+| GroomingStatus | Status-Enum | Trạng thái vòng đời của một ca dịch vụ grooming. | WAITING, IN_PROGRESS, AWAITING_CUSTOMER_APPROVAL, COMPLETED, CANCELLED | — |
 | GroomingResult | Entity Candidate | Kết quả tình trạng và hình ảnh sau khi hoàn thành grooming. | — | Grooming Outcome |
-| AdditionalService | Entity Candidate | Dịch vụ phát sinh thêm trong quá trình grooming (cắt móng, spa). | — | Extra Service |
+| AdditionalService | Entity Candidate | Dịch vụ phát sinh thêm trong quá trình grooming (gỡ rối, spa đặc biệt). | — | Extra Service |
 | CheckInGrooming | Command Candidate | Thao tác tiếp nhận Pet vào khu vực grooming. | — | — |
 | InspectPet | Command Candidate | Thao tác kiểm tra thể trạng và da lông Pet trước grooming. | — | Pre-Grooming Check |
-| PerformGrooming | Command Candidate | Thao tác tiến hành thực hiện các bước grooming. | — | — |
+| PerformGrooming | Command Candidate | Thao tác tiến hành thực hiện các bước grooming (chuyển sang IN_PROGRESS). | — | — |
 | UpdateGroomingResult | Command Candidate | Thao tác cập nhật tiến độ và kết quả phiên grooming. | — | — |
-| AddGroomingService | Command Candidate | Thao tác đề xuất dịch vụ phát sinh trong ca grooming. | — | — |
+| AddGroomingService | Command Candidate | Thao tác đề xuất dịch vụ phát sinh (chuyển sang AWAITING_CUSTOMER_APPROVAL). | — | — |
 | ConfirmAdditionalService | Command Candidate | Thao tác khách hàng xác nhận đồng ý dịch vụ phát sinh. | — | — |
-| CompleteGrooming | Command Candidate | Thao tác hoàn tất quy trình grooming. | — | — |
+| RejectAdditionalService | Command Candidate | Thao tác khách hàng từ chối dịch vụ phát sinh thêm. | — | — |
+| CompleteGrooming | Command Candidate | Thao tác hoàn tất quy trình grooming (chuyển sang COMPLETED). | — | — |
+| CancelGrooming | Command Candidate | Thao tác hủy phiên dịch vụ grooming (chuyển sang CANCELLED). | — | — |
+| GroomingCheckedIn | Domain Event Candidate | Sự kiện phát sinh khi thú cưng được tiếp nhận vào phòng grooming. | — | — |
+| GroomingStarted | Domain Event Candidate | Sự kiện phát sinh khi bắt đầu thực hiện ca làm đẹp. | — | — |
+| AdditionalServiceRequested | Domain Event Candidate | Sự kiện phát sinh khi Groomer đề xuất dịch vụ phát sinh thêm. | — | — |
+| AdditionalServiceConfirmed | Domain Event Candidate | Sự kiện phát sinh khi khách hàng đồng ý dịch vụ phát sinh. | — | — |
+| AdditionalServiceRejected | Domain Event Candidate | Sự kiện phát sinh khi khách hàng từ chối dịch vụ phát sinh. | — | — |
+| GroomingCompleted | Domain Event Candidate | Sự kiện phát sinh khi ca làm đẹp hoàn tất toàn bộ. | — | — |
+| GroomingCancelled | Domain Event Candidate | Sự kiện phát sinh khi ca làm đẹp bị hủy bỏ. | — | — |
 
 ---
 
@@ -281,8 +298,8 @@ Tài liệu này chuẩn hóa toàn bộ thuật ngữ chuyên ngành (Ubiquitou
 | Inventory | Aggregate Candidate | Quản lý số lượng tồn kho thực tế và khả dụng của sản phẩm tại một vị trí kho. | — | Stock |
 | Warehouse | Aggregate Candidate | Kho tổng / kho trung tâm cấp Organization cung cấp hàng cho các Store. | — | Central Warehouse |
 | StockTransfer | Aggregate Candidate | Phiếu điều chuyển hàng hóa giữa Store↔Store hoặc Warehouse→Store (Replenishment). | — | Inventory Transfer |
-| StockTransferStatus | Status-Enum | Trạng thái vòng đời của phiếu điều chuyển kho. | REQUESTED, APPROVED, REJECTED, IN_TRANSIT, RECEIVED, CANCELLED | — |
-| InventoryAdjustment | Entity Candidate | Phiếu điều chỉnh cân bằng lại số lượng tồn kho thực tế sau kiểm kê. | — | Stock Adjustment |
+| StockTransferStatus | Status-Enum | Trạng thái vòng đời của phiếu điều chuyển kho. | REQUESTED, APPROVED, REJECTED, IN_TRANSIT, RECEIVED, DISCREPANCY, CANCELLED | — |
+| InventoryAdjustment | Entity Candidate | Phiếu điều chỉnh cân bằng lại số lượng tồn kho thực tế sau kiểm kê hoặc xử lý hao hụt chuyển kho. | — | Stock Adjustment |
 | Expiry | Value Object Candidate | Thông tin về thời hạn sử dụng của lô sản phẩm. | — | Expiration Date |
 | ReceiveInventory | Command Candidate | Thao tác nhập hàng vào kho. | — | Inward Stock |
 | IssueInventory | Command Candidate | Thao tác xuất hàng ra khỏi kho. | — | Outward Stock |
@@ -296,7 +313,9 @@ Tài liệu này chuẩn hóa toàn bộ thuật ngữ chuyên ngành (Ubiquitou
 | RejectStockTransfer | Command Candidate | Thao tác Store Manager từ chối phiếu chuyển kho. | — | — |
 | CancelStockTransfer | Command Candidate | Thao tác hủy phiếu yêu cầu chuyển kho. | — | — |
 | ShipStockTransfer | Command Candidate | Thao tác xuất hàng vận chuyển sang kho đích (chuyển sang IN_TRANSIT). | — | DispatchStockTransfer |
-| ReceiveStockTransfer | Command Candidate | Thao tác tiếp nhận và nhập kho hàng chuyển đến (chuyển sang RECEIVED). | — | — |
+| ReceiveStockTransfer | Command Candidate | Thao tác tiếp nhận và nhập kho hàng chuyển đến nguyên vẹn (chuyển sang RECEIVED). | — | — |
+| ReceiveStockTransferWithDiscrepancy | Command Candidate | Thao tác ghi nhận phát hiện hàng hóa chuyển kho bị hư hỏng/thiếu hụt (chuyển sang DISCREPANCY). | — | — |
+| ResolveStockTransferDiscrepancy | Command Candidate | Thao tác Store Manager giải quyết hao hụt chuyển kho qua phiếu InventoryAdjustment (chuyển sang RECEIVED). | — | — |
 | ManageWarehouse | Command Candidate | Thao tác quản lý thông tin kho tổng Warehouse. | — | — |
 | ReceiveAtWarehouse | Command Candidate | Thao tác nhập hàng trực tiếp vào kho tổng Warehouse. | — | — |
 | ApproveInventoryAdjustment| Command Candidate | Thao tác phê duyệt phiếu điều chỉnh tồn kho. | — | — |
@@ -307,6 +326,8 @@ Tài liệu này chuẩn hóa toàn bộ thuật ngữ chuyên ngành (Ubiquitou
 | StockTransferCancelled | Domain Event Candidate | Sự kiện phát sinh khi phiếu chuyển kho bị hủy. | — | — |
 | StockTransferShipped | Domain Event Candidate | Sự kiện phát sinh khi hàng bắt đầu được vận chuyển. | — | — |
 | StockTransferReceived | Domain Event Candidate | Sự kiện phát sinh khi kho đích đã nhận đủ hàng. | — | — |
+| StockTransferDiscrepancyReported | Domain Event Candidate | Sự kiện phát sinh khi phát hiện hàng hóa chuyển kho bị hư hỏng hoặc sai lệch số lượng. | — | — |
+| StockTransferDiscrepancyResolved | Domain Event Candidate | Sự kiện phát sinh khi sự cố sai lệch chuyển kho đã được giải quyết qua điều chỉnh kiểm kê. | — | — |
 
 ---
 
@@ -318,7 +339,7 @@ Tài liệu này chuẩn hóa toàn bộ thuật ngữ chuyên ngành (Ubiquitou
 | PurchaseRequest | Entity Candidate | Phiếu yêu cầu mua hàng nội bộ do nhân viên kho đề xuất. | — | Procurement Request |
 | PurchaseRequestStatus | Status-Enum | Trạng thái vòng đời của phiếu yêu cầu mua hàng. | DRAFT, SUBMITTED, APPROVED, REJECTED, CANCELLED | — |
 | PurchaseOrder | Aggregate Candidate | Đơn đặt hàng chính thức gửi tới nhà cung cấp (Supplier). | — | PO |
-| PurchaseOrderStatus | Status-Enum | Trạng thái vòng đời của đơn đặt hàng nhà cung cấp. | ISSUED, PARTIALLY_RECEIVED, RECEIVED, CANCELLED | — |
+| PurchaseOrderStatus | Status-Enum | Trạng thái vòng đời của đơn đặt hàng nhà cung cấp. | ISSUED, PARTIALLY_RECEIVED, RECEIVED, CLOSED, CANCELLED | — |
 | CreatePurchaseRequest | Command Candidate | Thao tác tạo phiếu đề xuất mua hàng. | — | — |
 | SubmitPurchaseRequest | Command Candidate | Thao tác gửi yêu cầu mua hàng lên cấp quản lý. | — | — |
 | ApprovePurchaseRequest | Command Candidate | Thao tác Store Manager duyệt yêu cầu mua hàng. | — | — |
@@ -328,11 +349,13 @@ Tài liệu này chuẩn hóa toàn bộ thuật ngữ chuyên ngành (Ubiquitou
 | TrackPurchaseOrder | Command Candidate | Thao tác theo dõi tiến độ đơn đặt hàng. | — | — |
 | ReceiveGoods | Command Candidate | Thao tác tiếp nhận và kiểm tra hàng giao từ Supplier. | — | Receive PO |
 | InspectGoods | Command Candidate | Thao tác kiểm tra chất lượng hàng hóa nhập. | — | Quality Check |
-| CancelPurchaseOrder | Command Candidate | Thao tác hủy đơn đặt hàng nhà cung cấp. | — | — |
+| CancelPurchaseOrder | Command Candidate | Thao tác hủy đơn đặt hàng nhà cung cấp khi chưa nhận hàng. | — | — |
+| CancelRemainingPurchaseOrder | Command Candidate | Thao tác hủy số lượng hàng còn lại chưa giao khi đã nhận một phần (chuyển sang CLOSED). | — | ClosePO |
 | UpdateInventory | Command Candidate | Thao tác cập nhật tăng tồn kho sau khi nhận hàng từ PO. | — | — |
 | ManageSupplier | Command Candidate | Thao tác quản lý danh mục nhà cung cấp. | — | — |
 | PurchaseRequestApproved | Domain Event Candidate | Sự kiện phát sinh khi yêu cầu mua hàng được duyệt. | — | — |
 | GoodsReceived | Domain Event Candidate | Sự kiện phát sinh khi hàng mua từ nhà cung cấp đã nhập kho. | — | — |
+| PurchaseOrderRemainingCancelled | Domain Event Candidate | Sự kiện phát sinh khi phần hàng chưa giao của đơn đặt hàng bị hủy và đóng đơn. | — | — |
 
 ---
 
@@ -346,6 +369,8 @@ Tài liệu này chuẩn hóa toàn bộ thuật ngữ chuyên ngành (Ubiquitou
 | CreateOrder | Command Candidate | Thao tác tạo đơn hàng mới. | — | — |
 | ViewOrder | Command Candidate | Thao tác tra cứu thông tin chi tiết đơn hàng. | — | — |
 | CancelOrder | Command Candidate | Thao tác hủy đơn hàng khi chưa bàn giao hoặc chưa thanh toán. | — | — |
+| ProcessOrderTimeout | Command Candidate | Thao tác hệ thống tự động hủy đơn hàng và giải phóng tồn kho giữ chỗ sau 15 phút chưa thanh toán. | — | ExpireOrder |
+| CancelOrderWithRefund | Command Candidate | Thao tác Store Manager / Tiếp tân hủy đơn hàng đang soạn hoặc đã sẵn sàng và kích hoạt hoàn tiền. | — | CancelAndRefundOrder |
 | ConfirmOrder | Command Candidate | Thao tác xác nhận đơn hàng sau khi đã thanh toán thành công. | — | — |
 | ProcessOrder | Command Candidate | Thao tác chuyển đơn hàng vào giai đoạn soạn hàng tại Store. | — | — |
 | PrepareProductOrder | Command Candidate | Thao tác nhân viên kho đóng gói sản phẩm (chuyển sang READY). | — | Pack Order |
@@ -358,6 +383,7 @@ Tài liệu này chuẩn hóa toàn bộ thuật ngữ chuyên ngành (Ubiquitou
 | ProductOrderPrepared | Domain Event Candidate | Sự kiện phát sinh khi hàng đã sẵn sàng nhận tại quầy (READY). | — | — |
 | OrderDelivered | Domain Event Candidate | Sự kiện phát sinh khi hàng đã bàn giao thành công cho khách. | — | — |
 | OrderCancelled | Domain Event Candidate | Sự kiện phát sinh khi đơn hàng bị hủy. | — | — |
+| OrderTimedOut | Domain Event Candidate | Sự kiện phát sinh khi đơn hàng hết hạn thanh toán 15 phút và bị hủy tự động. | — | — |
 | OrderRefunded | Domain Event Candidate | Sự kiện phát sinh khi đơn hàng được hoàn tiền đầy đủ. | — | — |
 | OrderNotification | Domain Event Candidate | Sự kiện thông báo trạng thái đơn hàng tới khách hàng. | — | — |
 
@@ -367,17 +393,19 @@ Tài liệu này chuẩn hóa toàn bộ thuật ngữ chuyên ngành (Ubiquitou
 
 | Term | Loại | Định nghĩa | Values (Status-Enum) | Deprecated synonym |
 |---|---|---|---|---|
-| FinanceStaff | Actor | Nhân sự tài chính quản lý hóa đơn, đối soát và xử lý hoàn tiền. | — | Accountant |
+| FinanceStaff | Actor | Nhân sự tài chính quản lý hóa đơn, đối soát và xử lý hoàn tiền (Scope: Organization/Store). | — | Accountant |
 | Invoice | Aggregate Candidate | Hóa đơn tài chính ghi nhận nghĩa vụ thanh toán của Customer đối với Store. | — | Bill |
 | InvoiceStatus | Status-Enum | Trạng thái vòng đời của hóa đơn tài chính. | DRAFT, ISSUED, PARTIALLY_PAID, PAID, VOID, REFUNDED | — |
 | Discount | Value Object Candidate | Khoản giảm trừ giá trị áp dụng trên hóa đơn từ voucher/khuyến mãi. | — | Price Reduction |
 | PaymentObligation | Value Object Candidate | Nghĩa vụ số tiền khách hàng còn phải thanh toán cho hóa đơn. | — | Amount Due |
 | CreateInvoice | Command Candidate | Thao tác tạo hóa đơn dạng bản nháp (DRAFT). | — | DraftInvoice |
+| DiscardInvoice | Command Candidate | Thao tác hủy bỏ bản nháp hóa đơn tạo sai (chuyển sang VOID). | — | CancelDraftInvoice |
 | AddServiceToInvoice | Command Candidate | Thao tác thêm dịch vụ vào hóa đơn. | — | — |
 | AddProductToInvoice | Command Candidate | Thao tác thêm sản phẩm vào hóa đơn. | — | — |
 | ApplyDiscount | Command Candidate | Thao tác áp dụng mã khuyến mãi/giảm giá vào hóa đơn. | — | — |
 | IssueInvoice | Command Candidate | Thao tác phát hành hóa đơn chính thức (chuyển sang ISSUED). | — | PublishInvoice |
 | VoidInvoice | Command Candidate | Thao tác vô hiệu hóa/hủy hóa đơn đã phát hành (chuyển sang VOID). | — | InvalidateInvoice |
+| VoidPartiallyPaidInvoice | Command Candidate | Thao tác vô hiệu hóa hóa đơn thanh toán một phần sau khi đã hoàn trả đủ tiền đã nhận. | — | — |
 | ReconcileInvoice | Command Candidate | Thao tác đối soát số liệu hóa đơn với doanh thu thực tế. | — | — |
 | ViewInvoice | Command Candidate | Thao tác xem chi tiết nội dung hóa đơn. | — | — |
 | InvoiceCreated | Domain Event Candidate | Sự kiện phát sinh khi hóa đơn được tạo nháp. | — | — |
@@ -385,6 +413,7 @@ Tài liệu này chuẩn hóa toàn bộ thuật ngữ chuyên ngành (Ubiquitou
 | InvoicePartiallyPaid | Domain Event Candidate | Sự kiện phát sinh khi hóa đơn nhận thanh toán một phần tiền. | — | — |
 | InvoicePaid | Domain Event Candidate | Sự kiện phát sinh khi hóa đơn được thanh toán đủ 100% số tiền. | — | — |
 | InvoiceVoided | Domain Event Candidate | Sự kiện phát sinh khi hóa đơn bị vô hiệu hóa. | — | — |
+| InvoiceDraftDiscarded | Domain Event Candidate | Sự kiện phát sinh khi bản nháp hóa đơn bị hủy. | — | — |
 | InvoiceRefunded | Domain Event Candidate | Sự kiện phát sinh khi toàn bộ thanh toán của hóa đơn đã hoàn tiền. | — | — |
 
 ---
@@ -394,7 +423,8 @@ Tài liệu này chuẩn hóa toàn bộ thuật ngữ chuyên ngành (Ubiquitou
 | Term | Loại | Định nghĩa | Values (Status-Enum) | Deprecated synonym |
 |---|---|---|---|---|
 | Payment | Aggregate Candidate | Giao dịch tài chính thanh toán tiền của Customer cho nghĩa vụ thanh toán. | — | Transaction |
-| PaymentStatus | Status-Enum | Trạng thái vòng đời của một giao dịch thanh toán. | PENDING, PROCESSING, SUCCESS, FAILED, CANCELLED, REFUNDED | — |
+| PaymentStatus | Status-Enum | Trạng thái vòng đời của một giao dịch thanh toán. | PENDING, PROCESSING, SUCCESS, PARTIALLY_REFUNDED, FAILED, CANCELLED, REFUNDED | — |
+| RemainingRefundableAmount| Value Object Candidate | Số tiền còn lại có thể hoàn trả của giao dịch (`TotalAmount - Sum(CompletedRefunds)`). | — | Refundable Balance |
 | CashPayment | Value Object Candidate | Phương thức thanh toán trực tiếp bằng tiền mặt tại quầy. | — | Cash Method |
 | PaymentMethod | Value Object Candidate | Phương thức thanh toán sử dụng (CASH, ONLINE_GATEWAY). | — | Channel |
 | MakePayment | Command Candidate | Thao tác khách hàng khởi tạo thanh toán qua cổng điện tử. | — | PayOnline |
@@ -407,9 +437,10 @@ Tài liệu này chuẩn hóa toàn bộ thuật ngữ chuyên ngành (Ubiquitou
 | PaymentCreated | Domain Event Candidate | Sự kiện phát sinh khi giao dịch thanh toán được khởi tạo. | — | — |
 | PaymentProcessing | Domain Event Candidate | Sự kiện phát sinh khi giao dịch đang được cổng thanh toán xử lý. | — | — |
 | PaymentSucceeded | Domain Event Candidate | Sự kiện phát sinh khi giao dịch thanh toán thành công hoàn toàn. | — | PaymentSuccess |
+| PaymentPartiallyRefunded | Domain Event Candidate | Sự kiện phát sinh khi giao dịch thanh toán được hoàn trả một phần tiền. | — | — |
 | PaymentFailed | Domain Event Candidate | Sự kiện phát sinh khi giao dịch thanh toán thất bại hoặc bị từ chối. | — | — |
 | PaymentCancelled | Domain Event Candidate | Sự kiện phát sinh khi giao dịch thanh toán bị hủy. | — | — |
-| PaymentRefunded | Domain Event Candidate | Sự kiện phát sinh khi số tiền giao dịch đã được hoàn trả lại. | — | — |
+| PaymentRefunded | Domain Event Candidate | Sự kiện phát sinh khi số tiền giao dịch đã được hoàn trả lại toàn bộ (100%). | — | — |
 
 ---
 
@@ -419,14 +450,16 @@ Tài liệu này chuẩn hóa toàn bộ thuật ngữ chuyên ngành (Ubiquitou
 |---|---|---|---|---|
 | Refund | Aggregate Candidate | Khoản tiền hoàn trả cho khách gắn với một giao dịch `Payment` gốc cụ thể. | — | Refund Record |
 | RefundRequest | Entity Candidate | Hồ sơ yêu cầu hoàn tiền do khách hàng hoặc tiếp tân đề xuất. | — | Refund Proposal |
-| RefundStatus | Status-Enum | Trạng thái vòng đời của một khoản hoàn tiền. | REQUESTED, APPROVED, REJECTED, PROCESSING, COMPLETED, FAILED | — |
+| RefundStatus | Status-Enum | Trạng thái vòng đời của một khoản hoàn tiền (`FAILED` là trạng thái xử lý sự cố có thể thử lại). | REQUESTED, APPROVED, REJECTED, PROCESSING, COMPLETED, FAILED | — |
 | RequestRefund | Command Candidate | Thao tác khách hàng gửi yêu cầu hoàn tiền cho giao dịch Payment. | — | — |
 | CreateRefundRequest | Command Candidate | Thao tác tiếp tân tạo yêu cầu hoàn tiền tại quầy cho khách. | — | — |
 | ApproveRefund | Command Candidate | Thao tác Store Manager phê duyệt yêu cầu hoàn tiền. | — | — |
 | RejectRefund | Command Candidate | Thao tác Store Manager từ chối yêu cầu hoàn tiền có ghi lý do. | — | DeclineRefund |
 | ProcessRefund | Command Candidate | Thao tác Finance Staff tiến hành hoàn tiền qua cổng thanh toán/tiền mặt. | — | — |
 | CompleteRefund | Command Candidate | Thao tác xác nhận giao dịch hoàn tiền hoàn tất thành công (COMPLETED). | — | SettleRefund |
-| FailRefund | Command Candidate | Thao tác hệ thống ghi nhận lỗi xử lý hoàn tiền từ phía cổng thanh toán. | — | — |
+| FailRefund | Command Candidate | Thao tác hệ thống ghi nhận lỗi xử lý hoàn tiền từ phía cổng thanh toán (chuyển sang FAILED, cho phép Retry/Manual). | — | — |
+| RetryRefund | Command Candidate | Thao tác thử lại lệnh hoàn tiền qua cổng thanh toán sau khi bị lỗi. | — | ReattemptRefund |
+| ResolveRefundManually | Command Candidate | Thao tác Finance Staff hoàn tất hoàn tiền ngoại tuyến (chuyển khoản trực tiếp/tiền mặt) khi cổng lỗi. | — | ManualRefundSettlement |
 | ReconcileRefund | Command Candidate | Thao tác đối soát các khoản hoàn tiền với báo cáo tài chính. | — | — |
 | SendRefundNotification | Command Candidate | Thao tác gửi thông báo kết quả hoàn tiền cho khách. | — | — |
 | RefundRequested | Domain Event Candidate | Sự kiện phát sinh khi yêu cầu hoàn tiền được tạo. | — | — |
@@ -435,6 +468,8 @@ Tài liệu này chuẩn hóa toàn bộ thuật ngữ chuyên ngành (Ubiquitou
 | RefundProcessing | Domain Event Candidate | Sự kiện phát sinh khi giao dịch hoàn tiền đang được thực thi. | — | — |
 | RefundCompleted | Domain Event Candidate | Sự kiện phát sinh khi tiền đã được hoàn trả thành công về tài khoản/tiền mặt của khách. | — | — |
 | RefundFailed | Domain Event Candidate | Sự kiện phát sinh khi giao dịch hoàn tiền gặp lỗi kỹ thuật. | — | — |
+| RefundRetried | Domain Event Candidate | Sự kiện phát sinh khi lệnh hoàn tiền được kích hoạt thử lại. | — | — |
+| RefundManuallyResolved | Domain Event Candidate | Sự kiện phát sinh khi khoản hoàn tiền được đối soát và xử lý thành công ngoại tuyến. | — | — |
 
 ---
 

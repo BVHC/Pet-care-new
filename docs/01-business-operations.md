@@ -8,21 +8,23 @@
 
 ---
 
-# 1. Actors chính
+# 1. Actors chính & Phạm vi Quyền lực (Scopes)
 
-| Actor | Vai trò |
-|---|---|
-| **Platform Admin** | Quản trị toàn bộ nền tảng, quản lý phân quyền cấp cao và danh mục sản phẩm mẫu |
-| **Organization Admin** | Quản lý Organization, Warehouse trung tâm, chính sách tổ chức và các Store trực thuộc |
-| **StoreManager** | Quản lý, điều phối vận hành Store, nhân sự, lịch làm việc, phê duyệt chuyển kho, hoàn tiền, mua hàng |
-| **Receptionist** | Tiếp nhận khách, quản lý lịch hẹn, xếp hàng walk-in, tạo đơn/hóa đơn, ghi nhận thanh toán tại quầy |
-| **Veterinarian** | Khám, chẩn đoán, điều trị, kê đơn, tiêm phòng vaccine và quản lý hồ sơ y tế thú cưng |
-| **Groomer** | Kiểm tra thể trạng trước grooming, thực hiện dịch vụ làm đẹp, đề xuất dịch vụ phát sinh |
-| **InventoryStaff** | Quản lý kho Store & Warehouse: nhập, xuất, kiểm kê, điều chỉnh, chuyển kho và mua hàng |
-| **FinanceStaff** | Phát hành hóa đơn, đối soát tài chính, xử lý giao dịch hoàn tiền, xác minh thanh toán |
-| **Customer** | Chủ thú cưng: đăng ký tài khoản, quản lý Pet, đặt lịch, mua hàng, thanh toán, ủy quyền chăm sóc |
-| **Caregiver** | Người được Customer ủy quyền: tiếp nhận lời mời, thao tác và đặt lịch cho Pet được phân quyền |
-| **System** | Tác vụ nền tự động: gửi thông báo, nhắc lịch, kiểm tra hết hạn (OTP, Package, Voucher), xử lý callback cổng thanh toán |
+Hệ thống phân định rõ 11 Actors nghiệp vụ được phân bổ trên 4 cấp phạm vi quản trị Multi-tenancy (**Platform Scope**, **Organization Scope**, **Store Scope**, **Customer Scope**) cùng cơ chế Ủy quyền dữ liệu (**Pet Delegation**):
+
+| Actor | Phạm vi (Scope) | Vai trò & Trách nhiệm chính |
+|---|---|---|
+| **Platform Admin** (`SUPER_ADMIN`) | **Platform** | Quản trị toàn bộ nền tảng SaaS đa tổ chức, quản lý vòng đời Tenant (Organizations), danh mục sản phẩm mẫu và cấu hình hệ thống toàn cục. |
+| **Organization Admin** (`ORGANIZATION_ADMIN`) | **Organization** | Quản lý Organization/chuỗi chi nhánh, Warehouse trung tâm, chính sách tổ chức, danh mục bảng giá dịch vụ và các Store trực thuộc. Cách ly dữ liệu 100% giữa các Organization. |
+| **StoreManager** (`STORE_MANAGER`) | **Store** | Quản lý, điều phối vận hành Store chi nhánh, phân ca nhân sự, thẩm định và phê duyệt Maker-Checker (`ApproveRefund`, `ApproveStockTransfer`, `ApprovePurchaseRequest`, `ApproveInventoryAdjustment`). |
+| **Receptionist** (`RECEPTIONIST`) | **Store** | Tiếp đón khách, quản lý đặt lịch/check-in hẹn khám, xếp hàng walk-in, tạo đơn/hóa đơn POS tại quầy, ghi nhận tiền mặt, tạo yêu cầu hoàn tiền. |
+| **Veterinarian** (`VETERINARIAN`) | **Store** | Khám bệnh, chẩn đoán, điều trị, kê đơn thuốc, thực hiện tiêm phòng vaccine và quản lý hồ sơ bệnh án thú cưng (`MedicalRecord`). |
+| **Groomer** (`GROOMER`) | **Store** | Kiểm tra thể trạng trước grooming, thực hiện dịch vụ làm đẹp/spa thú cưng, đề xuất dịch vụ phát sinh thêm. |
+| **InventoryStaff** | **Store / Warehouse** | *Vai trò vận hành kho:* Nhập, xuất, kiểm kê, tạo phiếu điều chỉnh, điều phối chuyển kho và tiếp nhận hàng hóa mua từ nhà cung cấp. |
+| **FinanceStaff** | **Organization / Store** | *Vai trò vận hành tài chính:* Phát hành hóa đơn chính thức, đối soát doanh thu/hóa đơn, thực thi lệnh chi tiền hoàn (`ProcessRefund`, `CompleteRefund`) và đối soát thanh toán. |
+| **Customer** (`CUSTOMER`) | **User / Account** | Chủ thú cưng: đăng ký tài khoản, quản lý hồ sơ Pet, đặt lịch hẹn, mua hàng online, thanh toán điện tử, gửi yêu cầu hoàn tiền và quản lý ủy quyền chăm sóc. |
+| **Caregiver** | **Pet Delegation** | Người được ủy quyền chăm sóc: tài khoản `CUSTOMER` được chủ pet ủy quyền thông qua quan hệ `PetCaregiverDelegation` để thay mặt đặt lịch, đưa pet đi khám/spa trong phạm vi hiệu lực. |
+| **System** | **Automated Runtime** | Tác vụ nền tự động: gửi thông báo, nhắc lịch tiêm, kiểm tra hết hạn (OTP, Order timeout 15p, Package, Voucher), tiếp nhận webhook cổng thanh toán. |
 
 ---
 
@@ -157,6 +159,10 @@
 | System | Quản lý thứ tự số thứ tự Queue | `ManageQueueOrder` |
 | System | Gửi thông báo khi đến lượt phục vụ | `SendTurnNotification` |
 
+- **Cơ chế Cầu nối Dữ liệu Walk-in sang Appointment (Walk-in to Appointment Lifecycle Bridge):**
+  - Khi tiếp tân thực hiện lệnh `CheckInWalkIn`, hệ thống tự động khởi tạo một bản ghi `Appointment` nội bộ với kênh tiếp nhận `Channel = WALK_IN`, gắn mã phiếu hàng đợi (`QueueTicketId`), nhân viên phục vụ (`StaffId`) và tài nguyên cơ sở vật chất (`StoreResourceId`).
+  - Bản ghi Appointment này được chuyển thẳng sang trạng thái `IN_PROGRESS`, cho phép các module khám bệnh, tiêm phòng, grooming, xuất hóa đơn và báo cáo doanh thu vận hành trên cùng một mô hình dữ liệu đồng nhất.
+
 ---
 
 # 9. Workforce Management
@@ -189,10 +195,19 @@
 | Veterinarian | Kê đơn thuốc (Prescription) | `CreatePrescription` |
 | Veterinarian | Cập nhật bệnh án (Medical Record) | `UpdateMedicalRecord` |
 | Veterinarian | Xem lịch sử y tế trong Store | `ViewMedicalHistory` |
-| Veterinarian | Truy cập lịch sử y tế Cross-store theo chính sách | `ViewMedicalHistory` |
+| Veterinarian | Yêu cầu quyền truy cập lịch sử y tế Cross-store | `RequestCrossStoreConsent` |
+| Veterinarian / Receptionist | Xác thực mã OTP đồng thuận truy cập bệnh án Cross-store | `VerifyCrossStoreConsentOTP` |
+| Veterinarian | Kích hoạt truy cập khẩn cấp hồ sơ bệnh án (Emergency Override) | `EmergencyOverrideAccess` |
 | Veterinarian | Lập lịch tái khám (Follow-up) | `CreateFollowUp` |
 | Customer | Xem lịch sử y tế của Pet được phép | `ViewMedicalHistory` |
 | Caregiver | Xem lịch sử y tế của Pet được ủy quyền | `ViewMedicalHistory` |
+
+- **Quy trình Khám Lâm sàng & Điều trị Bệnh lý (Clinical Medical Examination & Therapeutic Treatment Workflow):**
+  1. Tiếp nhận thú cưng vào phòng khám chuyên dụng (`EXAMINATION_ROOM`).
+  2. Bác sĩ thực hiện khám chuyên sâu (`ExaminePet`, `RecordSymptom`, `RecordExaminationResult`).
+  3. Bác sĩ mở/cập nhật hồ sơ bệnh án (`UpdateMedicalRecord` / `CreateMedicalRecord`) và chẩn đoán (`DiagnosePet`).
+  4. Bác sĩ lập phác đồ điều trị (`CreateTreatment`), có thể bao gồm kê đơn thuốc (`CreatePrescription`), chỉ định xét nghiệm/chẩn đoán hình ảnh, hoặc tiêm thuốc/vaccine điều trị.
+  5. Đóng phiên khám, lập lịch tái khám (`CreateFollowUp`), và chuyển viện phí sang hóa đơn thanh toán.
 
 ---
 
@@ -201,7 +216,7 @@
 | Actor | Nghiệp vụ | Mã Command tương ứng |
 |---|---|---|
 | Veterinarian | Kiểm tra phác đồ tiêm vaccine | `CheckVaccinationSchedule` |
-| Veterinarian | Thực hiện tiêm phòng vaccine | `AdministerVaccine` |
+| Veterinarian | Quét mã vạch và thực hiện tiêm phòng vaccine | `AdministerVaccine` |
 | Veterinarian | Ghi nhận mũi tiêm vào hồ sơ | `RecordVaccination` |
 | Veterinarian | Thiết lập lịch tiêm nhắc lại tiếp theo | `ScheduleNextVaccination` |
 | InventoryStaff | Quản lý danh mục vaccine | `ManageVaccine` |
@@ -209,6 +224,14 @@
 | InventoryStaff | Theo dõi hạn sử dụng vaccine (Expiry) | `ManageVaccineExpiry` |
 | System | Gửi thông báo nhắc tiêm phòng | `SendVaccineReminder` |
 | Customer | Xem lịch sử và lịch hẹn tiêm phòng | `ViewVaccinationSchedule` |
+
+- **Quy trình Dịch vụ Tiêm phòng Định kỳ Nhanh (Routine / Direct Vaccination Service Workflow):**
+  1. Khách hàng đặt lịch hẹn (`BookAppointment`) hoặc đến trực tiếp (`CreateWalkIn`).
+  2. Tiếp nhận check-in tại quầy (`CheckInAppointment` / `CheckInWalkIn`).
+  3. Bác sĩ thú y thực hiện khám sàng lọc thể trạng nhanh (Pre-vaccination Screening: kiểm tra thân nhiệt, thể trạng, lịch sử phản ứng phụ) mà không cần tạo bệnh án phức tạp (`MedicalRecord`).
+  4. Bác sĩ quét mã vạch (Barcode/QR code) của lọ vaccine (`AdministerVaccine` theo `RULE-10-06`). Hệ thống tự động xác thực hạn sử dụng và tồn kho thời gian thực.
+  5. Hệ thống ghi nhận `RecordVaccination` vào hồ sơ tiêm chủng của Pet, tự động trừ tồn kho khả dụng của lô vaccine, và tự động lập lịch tiêm nhắc lại (`ScheduleNextVaccination`).
+  6. Tiếp tân hoàn tất check-out (`CheckOutAppointment`) và tạo hóa đơn thanh toán tại quầy (`CreateInvoice`).
 
 ---
 
@@ -406,12 +429,18 @@
 |---|---|---|
 | Customer | Cấp quyền đồng ý xử lý dữ liệu (Consent) | `GrantConsent` |
 | Customer | Thu hồi quyền đồng ý xử lý dữ liệu | `RevokeConsent` |
+| Customer / Receptionist | Xác nhận mã OTP đồng thuận chia sẻ bệnh án Cross-store | `VerifyCrossStoreConsentOTP` |
+| Veterinarian | Kích hoạt quyền truy cập khẩn cấp hồ sơ bệnh án Cross-store | `EmergencyOverrideAccess` |
 | Customer | Yêu cầu trích xuất dữ liệu cá nhân | `RequestDataExport` |
 | Customer | Yêu cầu xóa/ẩn danh dữ liệu cá nhân | `RequestDataDeletion` |
 | Organization Admin | Cấu hình chính sách bảo mật (Privacy Policy) | `ManagePrivacyPolicy` |
 | Organization Admin | Cấu hình thời hạn lưu trữ (Retention Policy) | `ManageRetentionPolicy` |
 | System | Tự động xử lý gói trích xuất dữ liệu | `ProcessDataExport` |
 | System | Tự động xóa hoặc ẩn danh dữ liệu theo quy định | `ProcessDataDeletion` |
+
+- **Cơ chế Đồng thuận Chia sẻ Dữ liệu Bệnh án Cross-Store (Cross-Store Medical Record Consent Protocol):**
+  - *Cơ chế 1 (Tiêu chuẩn):* Bác sĩ gửi yêu cầu (`RequestCrossStoreConsent`), hệ thống phát sinh mã OTP gửi về số điện thoại hoặc thông báo App của Customer sở hữu Pet. Tiếp tân/Bác sĩ nhập mã xác thực (`VerifyCrossStoreConsentOTP`) để mở khóa quyền xem hồ sơ bệnh án trong 24 giờ.
+  - *Cơ chế 2 (Cấp cứu Khẩn cấp):* Trong tình huống cấp cứu nguy kịch cần tra cứu tiền sử bệnh/dị ứng ngay lập tức, Bác sĩ kích hoạt `EmergencyOverrideAccess` kèm lý do lâm sàng. Hệ thống mở quyền truy cập tức thì, đồng thời ghi nhận nhật ký kiểm toán đặc biệt `EMERGENCY_ACCESS_LOG` và gửi tin nhắn cảnh báo bảo mật tới chủ Pet.
 
 ---
 

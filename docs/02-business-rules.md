@@ -79,6 +79,15 @@ Tài liệu này đặc tả toàn bộ các quy tắc nghiệp vụ (Business R
 | RULE-06-07 | Appointment chỉ được đặt khi Service đang khả dụng tại Store và Staff được phân công có lịch làm việc phù hợp. | Store / Service / Staff / Appointment |
 | RULE-06-08 | Hủy lịch hẹn (`CancelAppointment`) chỉ được thực hiện khi lịch hẹn đang ở trạng thái `BOOKED` hoặc `CONFIRMED` và tuân thủ thời hạn hủy tối thiểu trước giờ hẹn theo chính sách Store. | Appointment |
 | RULE-06-09 | Hệ thống hoặc Receptionist chỉ đánh dấu `NO_SHOW` khi Appointment ở trạng thái `BOOKED`/`CONFIRMED` và khách không Check-in sau khoảng thời gian ân hạn (Grace Period) quy định. | Appointment |
+| RULE-06-10 | Lịch hẹn (Appointment) chỉ được xác nhận (`CONFIRMED`) hoặc tiếp nhận khi Store đáp ứng đầy đủ cả hai điều kiện khả dụng đồng thời: (1) Staff phụ trách không bị trùng lịch làm việc/ca khám; (2) Tài nguyên chuyên dụng của Store (`StoreResource`: Phòng khám thú y, Bàn phẫu thuật/tiểu phẫu, Bàn cắt tỉa Grooming, Máy chẩn đoán hình ảnh siêu âm/X-quang) còn vị trí/công suất trống trong toàn bộ khung thời gian dự kiến thực hiện dịch vụ. | Store / StoreResource / Staff / Appointment |
+
+### Quy tắc Kiểm tra Xung đột Tài nguyên Cơ sở Vật chất (StoreResource Collision Guard)
+- Mỗi dịch vụ (`Service`) tại Store được cấu hình danh mục tài nguyên bắt buộc (`RequiredStoreResources`, ví dụ: dịch vụ Khám bệnh cần 1 `EXAMINATION_ROOM`; dịch vụ Grooming cần 1 `GROOMING_TABLE`; dịch vụ Siêu âm cần 1 `ULTRASOUND_ROOM` + `ULTRASOUND_MACHINE`).
+- Khi thực hiện `BookAppointment`, `RescheduleAppointment` hoặc `ConfirmAppointment`, hệ thống thực hiện kiểm tra đồng thời (Composite Availability Check):
+  1. $\text{StaffAvailability}(\text{staffId}, \text{timeRange}) == \text{FREE}$
+  2. $\forall r \in \text{RequiredStoreResources}: \text{ActiveBookings}(r, \text{timeRange}) < \text{Capacity}(r)$
+- Nếu bất kỳ tài nguyên nào vượt quá công suất (Capacity) trong khung giờ đó, lệnh đặt lịch bị từ chối với mã lỗi `RESOURCE_CAPACITY_EXCEEDED` ngay cả khi nhân sự vẫn đang rảnh.
+- Đảm bảo tính khả thi thực tế tại chi nhánh, ngăn chặn tình trạng nhiều bác sĩ hoặc groomer cùng nhận khách nhưng thiếu phòng khám hoặc bàn cắt tỉa.
 
 ---
 
@@ -90,6 +99,7 @@ Tài liệu này đặc tả toàn bộ các quy tắc nghiệp vụ (Business R
 | RULE-07-02 | Khách chỉ có thể được xếp vào Queue của Store nơi Walk-in được tạo. | Store / Queue / WalkIn |
 | RULE-07-03 | Mỗi lượt Walk-in đang chờ chỉ có duy nhất một vị trí `QueuePosition` tại một thời điểm. | Store / Queue |
 | RULE-07-04 | Thứ tự phục vụ trong Queue phải tuân thủ nguyên tắc FIFO (vào trước phục vụ trước) trừ trường hợp cấp cứu y tế được ưu tiên. | Store / Queue |
+| RULE-07-05 | Khi lượt khách Walk-in được tiếp nhận vào phục vụ (`CheckInWalkIn`), hệ thống tự động khởi tạo một bản ghi Appointment nội bộ (nguồn Channel = `WALK_IN`, trạng thái chuyển trực tiếp sang `IN_PROGRESS`) gắn với Store, Staff và tài nguyên `StoreResource` phục vụ để đồng nhất dữ liệu quản trị, quản lý tải nhân sự và báo cáo doanh thu/dịch vụ tập trung. | Store / WalkIn / Appointment |
 
 ---
 
@@ -111,12 +121,14 @@ Tài liệu này đặc tả toàn bộ các quy tắc nghiệp vụ (Business R
 | ID | Quy tắc nghiệp vụ (Business Rule) | Phạm vi (Scope) |
 |---|---|---|
 | RULE-09-01 | Bệnh án (`MedicalRecord`) chỉ được tạo và cập nhật bởi Bác sĩ thú y (`Veterinarian`) có thẩm quyền chuyên môn đối với Pet đang khám. | Organization / Store / Pet / MedicalRecord |
-| RULE-09-02 | Lịch sử y tế (`MedicalHistory`) Cross-store chỉ được truy cập khi tuân thủ chính sách chia sẻ dữ liệu của Organization và có sự đồng thuận của khách hàng. | Organization / Store / Pet / MedicalHistory |
+| RULE-09-02 | Lịch sử y tế (`MedicalHistory`) Cross-store chỉ được Bác sĩ thú y tại Store khác trong cùng Organization truy cập khi thỏa mãn một trong hai cơ chế đồng thuận: (1) Cơ chế chuẩn: Khách hàng xác thực đồng thuận thông qua mã OTP SMS gửi đến số điện thoại chủ Pet hoặc phê duyệt trên App Customer; (2) Cơ chế khẩn cấp (`EMERGENCY_OVERRIDE`): Trong trường hợp cấp cứu y tế nguy kịch, Bác sĩ được phép mở truy cập khẩn cấp, hệ thống bắt buộc ghi nhận nhật ký kiểm toán đặc biệt (`EMERGENCY_ACCESS_LOG`) và gửi thông báo tức thì đến chủ Pet. | Organization / Store / Pet / MedicalHistory / Consent |
 | RULE-09-03 | Chẩn đoán (`Diagnosis`) phải gắn liền với một phiên khám bệnh cụ thể được ghi nhận trong bệnh án. | Clinical / Pet / Diagnosis |
 | RULE-09-04 | Phác đồ điều trị (`Treatment`) phải thuộc về bệnh án của Pet tương ứng. | Clinical / Pet / Treatment |
 | RULE-09-05 | Đơn thuốc (`Prescription`) phải thuộc về bệnh án của Pet và do Bác sĩ thú y chịu trách nhiệm ký duyệt. | Clinical / Pet / Prescription |
 | RULE-09-06 | Kế hoạch tái khám (`FollowUp`) phải gắn liền với Pet và hoạt động khám chữa bệnh liên quan. | Clinical / Pet / FollowUp |
 | RULE-09-07 | Customer hoặc Caregiver chỉ được xem bệnh án và lịch sử y tế của Pet khi có quyền sở hữu hoặc ủy quyền hợp lệ. | Customer / Caregiver / MedicalHistory |
+
+- *Ghi chú phân định:* Dịch vụ tiêm phòng phòng bệnh định kỳ thông thường (`Routine Vaccination`) được tách rời khỏi `MedicalRecord` và ghi trực tiếp vào `VaccinationRecord` để tối ưu quy trình phục vụ tại điểm tiếp đón, trong khi tiêm thuốc/điều trị bệnh lý bắt buộc phải gắn với `MedicalRecord` theo `RULE-10-07`.
 
 ---
 
@@ -129,6 +141,16 @@ Tài liệu này đặc tả toàn bộ các quy tắc nghiệp vụ (Business R
 | RULE-10-03 | Vaccine đã hết hạn sử dụng (`Expired`) tuyệt đối không được phép sử dụng để tiêm phòng cho Pet. | Store / Vaccine / VaccineBatch |
 | RULE-10-04 | Lịch tiêm phòng nhắc lại (`VaccinationSchedule`) phải gắn với Pet và loại vaccine tương ứng. | Pet / VaccinationSchedule |
 | RULE-10-05 | Mũi tiêm vaccine chỉ được ghi nhận thành công khi vaccine còn hạn sử dụng và thuộc tồn kho khả dụng tại Store tiêm. | Store / Vaccine / Inventory / Vaccination |
+| RULE-10-06 | Tại thời điểm thực hiện tiêm phòng (`AdministerVaccine`), Bác sĩ thú y bắt buộc phải quét mã vạch (Barcode/QR code) của lô vaccine (`VaccineBatch`). Hệ thống tự động kiểm tra thời gian thực: (1) Lô vaccine đang ở trạng thái ACTIVE và thuộc kho khả dụng của Store; (2) Hạn sử dụng còn hiệu lực (`ExpiryDate > CurrentDate`); (3) Loại vaccine tương thích với loài và thể trạng của Pet theo phác đồ tiêm chủng. Mũi tiêm chỉ được ghi nhận khi tất cả các kiểm tra trên đều hợp lệ. | Store / Veterinarian / VaccineBatch / Vaccination |
+| RULE-10-07 | Dịch vụ tiêm phòng định kỳ thông thường (Routine Vaccination / Direct Service) được tiếp nhận trực tiếp hoặc theo lịch hẹn mà không bắt buộc tạo hồ sơ bệnh án khám bệnh phức tạp (`MedicalRecord`), Bác sĩ thú y thực hiện khám sàng lọc thể trạng nhanh và ghi nhận vào `VaccinationRecord`. Đối với tiêm vaccine trong phác đồ điều trị bệnh lý (Therapeutic Vaccination), mũi tiêm bắt buộc phải gắn liền với bệnh án (`MedicalRecord`) và phác đồ điều trị (`Treatment`) của phiên khám lâm sàng. | Store / Veterinarian / Vaccination / MedicalRecord |
+
+### Quy tắc Kiểm tra An toàn Tiêm chủng tại Điểm thực hiện (Point-of-Care Vaccine Safety Guard)
+- Khi Bác sĩ gửi lệnh `AdministerVaccine` kèm `scannedBarcode`:
+  1. Hệ thống giải mã barcode ra `batchNumber` và `vaccineId`.
+  2. Kiểm tra `VaccineBatch.storeId == CurrentStoreId` và `VaccineBatch.status == ACTIVE`.
+  3. Kiểm tra $\text{VaccineBatch.expiryDate} > \text{CurrentDate}()$. Nếu $\text{expiryDate} \le \text{CurrentDate}()$, hệ thống chặn thao tác ngay lập tức, trả về lỗi `VACCINE_BATCH_EXPIRED`, và tự động kích hoạt cảnh báo tồn kho lô hết hạn (`TriggerExpiryWarning`).
+  4. Kiểm tra tồn kho khả dụng của lô: $\text{VaccineBatch.availableQuantity} \ge 1$. Khi tiêm thành công, tự động trừ 1 liều khỏi lô tồn kho.
+  5. Ghi nhận thông tin định danh lô (`batchNumber`, `manufacturer`, `expiryDate`) vào bản ghi lịch sử tiêm chủng `VaccinationRecord` của Pet.
 
 ---
 
@@ -182,6 +204,15 @@ Tài liệu này đặc tả toàn bộ các quy tắc nghiệp vụ (Business R
 | RULE-14-04 | Trạng thái OrderStatus phải phản ánh chính xác quy trình: `PENDING_PAYMENT -> PAID -> CONFIRMED -> PROCESSING -> READY -> DELIVERED`. | Order |
 | RULE-14-05 | Bàn giao đơn hàng (`CompleteStoreOrder`) chỉ được thực hiện tại Store nơi đơn hàng được xử lý và khi đơn hàng ở trạng thái `READY`. | Store / Order |
 | RULE-14-06 | Hủy đơn hàng (`CancelOrder`) chỉ được phép thực hiện khi đơn hàng đang ở trạng thái `PENDING_PAYMENT` hoặc `CONFIRMED` (chưa vào giai đoạn soạn hàng `PROCESSING`). | Order |
+| RULE-14-07 | Khi đơn hàng ở trạng thái `PENDING_PAYMENT`, hệ thống giữ chỗ số lượng tồn kho khả dụng (Reserved Quantity) tối đa trong thời gian Hold TTL là 15 phút. Quá thời hạn 15 phút khách hàng chưa hoàn tất thanh toán thành công, hệ thống tự động giải phóng số lượng tồn kho đã giữ và chuyển đơn hàng sang trạng thái `CANCELLED` (kích hoạt qua sự kiện `ProcessOrderTimeout`). | Store / Inventory / Order |
+
+### Mô hình Khóa Tồn kho Đồng thời (Inventory Concurrency & Reservation Invariant)
+- Tồn kho của một sản phẩm tại Store được tính theo công thức:
+  $$\text{AvailableQuantity} = \text{PhysicalQuantity} - \text{ReservedQuantity}$$
+- Khi tạo đơn hàng (`CreateOrder`): Hệ thống kiểm tra $\text{AvailableQuantity} \ge \text{OrderQuantity}$. Nếu thỏa mãn, áp dụng Optimistic Locking (dùng trường `version` trong DB) để tăng $\text{ReservedQuantity}$ lên tương ứng mà chưa giảm $\text{PhysicalQuantity}$.
+- Khi thanh toán thành công (`PaymentSucceeded`): Chuyển đơn sang `PAID`/`CONFIRMED`, số lượng đã giữ chuyển từ $\text{ReservedQuantity}$ sang khấu trừ chính thức khỏi $\text{PhysicalQuantity}$ khi đơn hàng vào giai đoạn đóng gói (`PROCESSING`).
+- Khi hết thời gian giữ chỗ (Hold TTL = 15 phút) hoặc khách hủy đơn (`CancelOrder`): Hệ thống tự động giảm $\text{ReservedQuantity}$, khôi phục $\text{AvailableQuantity}$, và chuyển đơn hàng sang `CANCELLED`.
+- Ngăn ngừa hoàn toàn rủi ro Dead Inventory Lock (treo tồn kho ảo) và Race Condition khi nhiều khách hàng cùng thanh toán món hàng cuối cùng.
 
 ---
 
@@ -221,6 +252,15 @@ Tài liệu này đặc tả toàn bộ các quy tắc nghiệp vụ (Business R
 | RULE-17-04 | Xử lý hoàn tiền (`ProcessRefund`) chỉ được phép tiến hành sau khi yêu cầu hoàn tiền đã được Store Manager phê duyệt (`APPROVED`). | Refund |
 | RULE-17-05 | Trạng thái RefundStatus phải phản ánh chính xác kết quả xử lý: `REQUESTED -> APPROVED / REJECTED -> PROCESSING -> COMPLETED / FAILED`. | Refund |
 | RULE-17-06 | Từ chối hoàn tiền (`RejectRefund`) chỉ được thực hiện bởi Store Manager khi yêu cầu đang ở trạng thái `REQUESTED` và phải ghi rõ lý do từ chối. | StoreManager / Refund |
+| RULE-17-07 | Yêu cầu hoàn tiền (Refund) chỉ có hiệu lực và được hệ thống chấp nhận tiếp nhận xử lý trong thời hạn tối đa 30 ngày kể từ ngày giao dịch thanh toán gốc (`Payment`) thành công, đồng thời dịch vụ hoặc sản phẩm tương ứng chưa bị tiêu thụ/sử dụng vượt quá định mức theo Chính sách hoàn trả của Organization. | Store / Payment / Refund / Policy |
+
+### Quy tắc Kiểm soát Thời hạn & Điều kiện Hoàn tiền (Refund Window & Eligibility Policy)
+- Điều kiện tiên quyết để tạo yêu cầu hoàn tiền (`RequestRefund` / `CreateRefundRequest`):
+  1. $\text{CurrentTimestamp} \le \text{Payment.CompletedTimestamp} + 30\text{ days}$.
+  2. $\text{RemainingRefundableAmount} = \text{Payment.TotalAmount} - \sum(\text{CompletedRefunds}) \ge \text{RequestedRefundAmount} > 0$.
+  3. Đối với hàng hóa vật phẩm: Sản phẩm còn nguyên bao bì/tem mác hoặc bị hư hại do lỗi nhà phân phối/vận chuyển tại thời điểm bàn giao (`READY`/`DELIVERED`).
+  4. Đối với gói dịch vụ (`Package`): Áp dụng công thức hoàn tiền theo số buổi/lượt dịch vụ thực tế chưa sử dụng trừ đi phí quản lý theo chính sách gói.
+- Nếu quá hạn 30 ngày, hệ thống tự động từ chối tiếp nhận yêu cầu hoàn tiền với mã lỗi `REFUND_REQUEST_WINDOW_EXPIRED`, trừ trường hợp có phê duyệt ngoại lệ đặc biệt từ Organization Admin.
 
 ---
 
@@ -289,6 +329,7 @@ Tài liệu này đặc tả toàn bộ các quy tắc nghiệp vụ (Business R
 | RULE-22-05 | Chính sách lưu trữ dữ liệu (`RetentionPolicy`) của Organization áp dụng nhất quán cho tất cả các Store trực thuộc. | Organization |
 | RULE-22-06 | Chính sách bảo mật (`PrivacyPolicy`) của Organization quy định quyền và nghĩa vụ bảo vệ dữ liệu khách hàng trên toàn nền tảng. | Organization |
 | RULE-22-07 | Mọi hoạt động truy cập và xử lý dữ liệu Customer và Pet bắt buộc phải thỏa mãn cả hai điều kiện: User có Permission hợp lệ và Customer có Consent còn hiệu lực. | Organization / Customer / Pet |
+| RULE-22-08 | Đồng thuận chia sẻ dữ liệu y tế Cross-Store (`CrossStoreMedicalConsent`) phải quy định rõ thời hạn hiệu lực truy cập (mặc định 24 giờ cho một phiên khám hoặc vô thời hạn theo cấu hình của chủ Pet) và có thể bị chủ Pet thu hồi (`RevokeConsent`) bất kỳ lúc nào. | Organization / Customer / Pet / Consent |
 
 ---
 
