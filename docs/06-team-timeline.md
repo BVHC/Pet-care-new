@@ -140,52 +140,54 @@ ClinicalExaminationCreatedEvent → Invoice (auto-create)
 
 ---
 
-## 4. MODULE OWNERSHIP MATRIX
+## 4. MODULE OWNERSHIP MATRIX (Updated per C-565e7b1)
 
 | Module | P1 | P2 | P3 | Phase | FSM |
 |--------|:--:|:--:|:--:|:-----:|:--:|
 | **Auth + OTP** | ✅ | | | W1 | ❌ |
 | **Users** | ✅ | | | W1 | ❌ |
 | **Organizations** | ✅ | | | W1 | ❌ |
-| **Stores** | ✅ | | | W1 | ❌ |
+| **Stores + StoreResources** | ✅ | | | W1 | ✅ (4 states, 6 transitions) |
 | **Pets** | | ✅ | | W1 | ❌ |
-| **Caregivers** | | ✅ | | W1 | ✅ |
+| **Caregivers** | | ✅ | | W1 | ✅ (5 states - CaregiverStatus) |
 | **Products** | | | ✅ | W1 | ❌ |
-| **Inventory** | | | ✅ | W1 | ❌ |
-| **Appointments** | ✅ | | | W2 | ✅ |
-| **Orders + Cart** | | ✅ | | W2 | ✅ |
-| **Payments** | | | ✅ | W2 | ✅ |
-| **Invoices** | ✅ | | | W3 | ✅ |
-| **Refunds** | ✅ | | | W3 | ✅ |
-| **Clinical (FULL)** | | ✅ | | W3 | ❌ |
+| **Inventory (with Reserve TTL)** | | | ✅ | W1 | ❌ |
+| **Appointments (+ Reschedule)** | ✅ | | | W2 | ✅ |
+| **Orders + Cart (+ Reserve 15min)** | | ✅ | | W2 | ✅ |
+| **Payments (+ Partial Refund)** | | | ✅ | W2 | ✅ |
+| **Invoices (+ Partially Paid)** | ✅ | | | W3 | ✅ |
+| **Refunds (+ 30-day + Retry)** | ✅ | | | W3 | ✅ |
+| **Clinical (FULL + Cross-Store Consent)** | | ✅ | | W3 | ❌ |
 | **Promotions + Vouchers** | | ✅ | | W3 | ❌ |
-| **Vaccinations** | | | ✅ | W3 | ❌ |
-| **Event Bridges** | ✅ | ✅ | ✅ | W4 | ❌ |
+| **Vaccinations (+ Barcode Scan)** | | | ✅ | W3 | ❌ |
+| **Event Bridges (Outbox Pattern)** | ✅ | ✅ | ✅ | W4 | ❌ |
 | **FE Integration** | ✅ | ✅ | ✅ | W5 | ❌ |
 | **Notifications** | ✅ | | | W6 | ❌ |
-| **Walk-ins** | | ✅ | | W6 | ❌ |
-| **Grooming FSM** | | | ✅ | W6 | ✅ |
+| **Walk-ins + Appointment Bridge** | | ✅ | | W6 | ❌ |
+| **Grooming FSM (+ Customer Approval)** | | | ✅ | W6 | ✅ |
 | **Workforce** | ✅ | | | W6 | ❌ |
 | **Reports** | | ✅ | | W6 | ❌ |
-| **Audit Logs** | ✅ | | | W6 | ❌ |
+| **Audit Logs + Medical Access** | ✅ | | | W6 | ❌ |
 | **Docker + Deploy** | | | ✅ | W6 | ❌ |
 | **Tests** | ✅ | ✅ | ✅ | All | ❌ |
 
 ---
 
-## 5. FSM SUMMARY (7 FSMs)
+## 5. FSM SUMMARY (8 FSMs - Updated per C-565e7b1)
 
 | FSM | States | Transitions | Guards | Owner | Week |
 |-----|--------|-------------|--------|-------|------|
+| **Account** | PENDING_VERIFICATION, ACTIVE, LOCKED | 4 | RULE-01-01 → 01-05 | P1 | W1 |
+| **Store** | ACTIVE, SUSPENDED, DEACTIVATED, ARCHIVED | 6 | RULE-03-01 → 03-06 | P1 | W1 |
 | **CaregiverInvitation** | INVITED, ACTIVE, REJECTED, EXPIRED, REVOKED | 5 | RULE-04-01 → 04-06 | P2 | W1 |
-| **Appointment** | BOOKED, CONFIRMED, CHECKED_IN, IN_PROGRESS, COMPLETED, CANCELLED, NO_SHOW | 10 | RULE-06-01 → 06-09 | P1 | W2 |
-| **Order** | PENDING_PAYMENT, PAID, CONFIRMED, PROCESSING, READY, DELIVERED, CANCELLED, REFUNDED | 10 | RULE-14-01 → 14-06 | P2 | W2 |
-| **Payment** | PENDING, PROCESSING, SUCCESS, FAILED, CANCELLED, REFUNDED | 7 | RULE-16-01 → 16-05 | P3 | W2 |
-| **Invoice** | DRAFT, ISSUED, PARTIALLY_PAID, PAID, VOID, REFUNDED | 7 | RULE-15-01 → 15-07 | P1 | W3 |
-| **Refund** | REQUESTED, APPROVED, REJECTED, PROCESSING, COMPLETED, FAILED | 6 | RULE-17-01 → 17-06 | P1 | W3 |
-| **Grooming** | WAITING, IN_PROGRESS, COMPLETED, CANCELLED | 6 | RULE-11-01 → 11-05 | P3 | W6 |
+| **Appointment** | BOOKED, CONFIRMED, CHECKED_IN, IN_PROGRESS, COMPLETED, CANCELLED, NO_SHOW | 14 (+Reschedule) | RULE-06-01 → 06-10 | P1 | W2 |
+| **Order** | PENDING_PAYMENT, PAID, CONFIRMED, PROCESSING, READY, DELIVERED, CANCELLED, REFUNDED | 13 (+ProcessTimeout, +CancelWithRefund) | RULE-14-01 → 14-07 | P2 | W2 |
+| **Payment** | PENDING, PROCESSING, SUCCESS, PARTIALLY_REFUNDED, REFUNDED, FAILED, CANCELLED | 10 (+PartialRefund) | RULE-16-01 → 16-05 | P3 | W2 |
+| **Invoice** | DRAFT, ISSUED, PARTIALLY_PAID, PAID, VOID, REFUNDED | 11 (+Discard, +VoidPartiallyPaid) | RULE-15-01 → 15-07 | P1 | W3 |
+| **Refund** | REQUESTED, APPROVED, REJECTED, PROCESSING, COMPLETED, FAILED | 8 (+Retry, +ManualResolve, +30-day) | RULE-17-01 → 17-07 | P1 | W3 |
+| **Grooming** | WAITING, IN_PROGRESS, AWAITING_CUSTOMER_APPROVAL, COMPLETED, CANCELLED | 9 (+AddService, +Confirm/Reject) | RULE-11-01 → 11-05 | P3 | W6 |
 
-**Total: 51 FSM transitions to implement + test**
+**Total: 8 Core FSMs + 7 Extended FSMs, ~80 transitions**
 
 ---
 
@@ -280,7 +282,12 @@ refactor: simplify payment callback handler
 |------|--------|------------|
 | P1 delay blocks others | HIGH | P2, P3 parallel work on independent modules |
 | FSM complexity | MEDIUM | Test each transition individually |
-| Event bridge race conditions | MEDIUM | Use @TransactionalEventListener(AFTER_COMMIT) |
+| Event bridge race conditions | HIGH | **Use Transactional Outbox Pattern (D-04)** — NOT `@TransactionalEventListener(AFTER_COMMIT)` |
+| StoreResource collision under high load | MEDIUM | Use database-level capacity check + Redis cache |
+| Inventory reservation race conditions | HIGH | Optimistic Locking + 15-min TTL TTL auto-release |
+| Vaccine barcode misuse | MEDIUM | Real-time expiry + stock check (RULE-10-06) |
+| Cross-Store medical access abuse | MEDIUM | Emergency override logs EMERGENCY_ACCESS_LOG + notifies owner |
+| Refund window edge cases | LOW | Hard 30-day check + Org Admin exception |
 | FE integration challenges | MEDIUM | Daily sync during W5 |
 | Clinical module too complex | MEDIUM | Focus on core examination → prescription flow |
 | Docker issues at end | LOW | P3 starts Docker setup in W5 |

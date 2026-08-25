@@ -1,0 +1,1693 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Pet Care Ecosystem · Architecture & Diagrams Portal</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Instrument+Serif:ital@0;1&family=Geist:wght@400;500;600;700&family=Geist+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+    :root {
+      --color-paper:   #f6f6f8;
+      --color-card:    #ffffff;
+      --color-ink:     #232733;
+      --color-muted:   #5b6579;
+      --color-accent:  #eb6c36;
+      --color-accent-subtle: rgba(235, 108, 54, 0.08);
+      --color-fk:      #2e5aa8;
+      --color-border:  rgba(45, 49, 66, 0.15);
+      --font-sans:     'Geist', system-ui, sans-serif;
+      --font-serif:    'Instrument Serif', serif;
+      --font-mono:     'Geist Mono', ui-monospace, monospace;
+      --sidebar-width: 310px;
+    }
+
+    body {
+      font-family: var(--font-sans);
+      background: var(--color-paper);
+      color: var(--color-ink);
+      height: 100vh;
+      display: flex;
+      overflow: hidden;
+      user-select: none;
+    }
+
+    /* Sidebar */
+    .sidebar {
+      width: var(--sidebar-width);
+      background: #ececef;
+      border-right: 1px solid var(--color-border);
+      display: flex;
+      flex-direction: column;
+      flex-shrink: 0;
+      z-index: 10;
+    }
+
+    .sidebar-brand {
+      padding: 18px 20px 14px;
+      border-bottom: 1px solid var(--color-border);
+      background: #e4e4e8;
+    }
+
+    .sidebar-brand .eyebrow {
+      font-family: var(--font-mono);
+      font-size: 0.65rem;
+      font-weight: 600;
+      letter-spacing: 0.16em;
+      text-transform: uppercase;
+      color: var(--color-accent);
+      margin-bottom: 3px;
+    }
+
+    .sidebar-brand h2 {
+      font-family: var(--font-serif);
+      font-size: 1.35rem;
+      font-weight: 400;
+      color: var(--color-ink);
+      letter-spacing: -0.01em;
+    }
+
+    .sidebar-menu {
+      flex: 1;
+      overflow-y: auto;
+      padding: 12px 10px;
+    }
+
+    /* Collapsible Accordion Group */
+    .nav-group {
+      margin-bottom: 6px;
+    }
+
+    .nav-group-header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 10px 12px;
+      border-radius: 6px;
+      color: var(--color-ink);
+      font-size: 0.85rem;
+      font-weight: 600;
+      cursor: pointer;
+      transition: all 0.12s ease;
+      background: rgba(45, 49, 66, 0.04);
+    }
+
+    .nav-group-header:hover {
+      background: rgba(45, 49, 66, 0.08);
+    }
+
+    .nav-group-title {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+
+    .nav-icon {
+      font-size: 0.9rem;
+      opacity: 0.85;
+    }
+
+    .chevron {
+      font-size: 0.65rem;
+      color: var(--color-muted);
+      transition: transform 0.2s ease;
+    }
+
+    .nav-group.open .chevron {
+      transform: rotate(90deg);
+    }
+
+    .nav-group-content {
+      display: none;
+      padding: 4px 0 4px 14px;
+    }
+
+    .nav-group.open .nav-group-content {
+      display: block;
+    }
+
+    /* Submenu Items */
+    .menu-item {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 8px 12px;
+      border-radius: 5px;
+      color: var(--color-muted);
+      font-size: 0.82rem;
+      font-weight: 500;
+      cursor: pointer;
+      transition: all 0.12s ease;
+      border: 1px solid transparent;
+      margin-bottom: 3px;
+    }
+
+    .menu-item:hover {
+      background: rgba(45, 49, 66, 0.06);
+      color: var(--color-ink);
+    }
+
+    .menu-item.active {
+      background: #ffffff;
+      color: var(--color-ink);
+      border-color: rgba(45, 49, 66, 0.18);
+      box-shadow: 0 1px 4px rgba(0,0,0,0.05);
+      font-weight: 600;
+    }
+
+    .menu-item-left {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+
+    .menu-item .badge {
+      font-family: var(--font-mono);
+      font-size: 0.68rem;
+      color: var(--color-muted);
+      opacity: 0.7;
+    }
+
+    .menu-item.active .badge {
+      color: var(--color-accent);
+      opacity: 1;
+      font-weight: 700;
+    }
+
+    .table-count-pill {
+      font-family: var(--font-mono);
+      font-size: 0.68rem;
+      background: rgba(45, 49, 66, 0.08);
+      color: var(--color-muted);
+      padding: 2px 6px;
+      border-radius: 10px;
+    }
+
+    .menu-item.active .table-count-pill {
+      background: rgba(235, 108, 54, 0.12);
+      color: var(--color-accent);
+      font-weight: 600;
+    }
+
+    .coming-soon-pill {
+      font-family: var(--font-mono);
+      font-size: 0.62rem;
+      background: rgba(79, 93, 117, 0.15);
+      color: var(--color-muted);
+      padding: 2px 5px;
+      border-radius: 4px;
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+    }
+
+    /* Main View Area */
+    .content-area {
+      flex: 1;
+      height: 100vh;
+      display: flex;
+      flex-direction: column;
+      overflow: hidden;
+      position: relative;
+    }
+
+    /* Top Control Bar */
+    .top-bar {
+      padding: 12px 24px;
+      background: #ffffff;
+      border-bottom: 1px solid var(--color-border);
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      flex-shrink: 0;
+      z-index: 5;
+    }
+
+    .header-titles .eyebrow-top {
+      font-family: var(--font-mono);
+      font-size: 0.65rem;
+      font-weight: 600;
+      letter-spacing: 0.15em;
+      text-transform: uppercase;
+      color: var(--color-muted);
+      margin-bottom: 2px;
+    }
+
+    .header-titles h1 {
+      font-family: var(--font-serif);
+      font-size: 1.45rem;
+      font-weight: 400;
+      line-height: 1.2;
+      color: var(--color-ink);
+    }
+
+    /* Toolbar */
+    .toolbar {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+
+    .btn-tool {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      padding: 6px 12px;
+      font-family: var(--font-mono);
+      font-size: 0.75rem;
+      font-weight: 500;
+      color: var(--color-ink);
+      background: #f1f2f4;
+      border: 1px solid var(--color-border);
+      border-radius: 5px;
+      cursor: pointer;
+      transition: all 0.1s ease;
+    }
+
+    .btn-tool:hover {
+      background: #e4e6ea;
+    }
+
+    .btn-tool.active {
+      background: var(--color-ink);
+      color: #ffffff;
+      border-color: var(--color-ink);
+    }
+
+    .zoom-badge {
+      font-family: var(--font-mono);
+      font-size: 0.75rem;
+      font-weight: 600;
+      color: var(--color-muted);
+      min-width: 44px;
+      text-align: center;
+    }
+
+    /* Canvas Viewport */
+    .canvas-viewport {
+      flex: 1;
+      width: 100%;
+      height: 100%;
+      position: relative;
+      overflow: hidden;
+      background: var(--color-paper);
+      cursor: grab;
+    }
+
+    .canvas-viewport.dragging-canvas {
+      cursor: grabbing;
+    }
+
+    .canvas-viewport.drag-tables-mode {
+      cursor: default;
+    }
+
+    svg.diagram-canvas {
+      position: absolute;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 100%;
+      transform-origin: 0 0;
+      will-change: transform;
+    }
+
+    /* SVG Table Styles */
+    .table-group {
+      cursor: move;
+    }
+
+    .table-group:hover .table-bg {
+      stroke: var(--color-accent);
+      stroke-width: 1.6px;
+    }
+
+    .table-group.is-focal .table-header-bg {
+      fill: var(--color-accent);
+    }
+
+    .table-group.is-focal .table-bg {
+      stroke: var(--color-accent);
+    }
+
+    /* Floating Legend & Info */
+    .floating-footer {
+      position: absolute;
+      bottom: 16px;
+      left: 24px;
+      right: 24px;
+      pointer-events: none;
+      display: flex;
+      justify-content: space-between;
+      align-items: flex-end;
+      gap: 16px;
+      z-index: 6;
+    }
+
+    .info-card {
+      pointer-events: auto;
+      background: rgba(255, 255, 255, 0.95);
+      backdrop-filter: blur(8px);
+      border: 1px solid var(--color-border);
+      box-shadow: 0 4px 14px rgba(0,0,0,0.06);
+      border-radius: 6px;
+      padding: 10px 16px;
+      font-size: 0.76rem;
+      color: var(--color-muted);
+      line-height: 1.5;
+      max-width: 680px;
+    }
+
+    .info-card strong {
+      color: var(--color-ink);
+    }
+
+    .legend-card {
+      pointer-events: auto;
+      background: rgba(255, 255, 255, 0.95);
+      backdrop-filter: blur(8px);
+      border: 1px solid var(--color-border);
+      box-shadow: 0 4px 14px rgba(0,0,0,0.06);
+      border-radius: 6px;
+      padding: 8px 14px;
+      display: flex;
+      align-items: center;
+      gap: 14px;
+      font-family: var(--font-mono);
+      font-size: 0.72rem;
+      color: var(--color-muted);
+    }
+
+    .legend-item {
+      display: flex;
+      align-items: center;
+      gap: 5px;
+    }
+
+    .chip-sample {
+      display: inline-block;
+      padding: 1px 4px;
+      border-radius: 2px;
+      font-size: 0.65rem;
+      font-weight: 600;
+      border: 0.8px solid rgba(45,49,66,0.4);
+    }
+
+    .chip-sample.pk { border-color: #eb6c36; color: #eb6c36; }
+    .chip-sample.fk { border-color: #2e5aa8; color: #2e5aa8; }
+    .chip-sample.uq { border-color: #7b4ac7; color: #7b4ac7; }
+  </style>
+</head>
+<body>
+
+  <!-- Sidebar with Dropdowns -->
+  <aside class="sidebar">
+    <div class="sidebar-brand">
+      <div class="eyebrow">SYSTEM ARCHITECTURE</div>
+      <h2>Pet Care Ecosystem</h2>
+    </div>
+    <nav class="sidebar-menu">
+
+      <!-- 1. Database Schema Dropdown (OPEN BY DEFAULT) -->
+      <div class="nav-group open" id="group-db-schema">
+        <div class="nav-group-header" onclick="toggleGroup('group-db-schema')">
+          <div class="nav-group-title">
+            <span class="nav-icon">🗄️</span> Database Schema
+          </div>
+          <span class="chevron">▶</span>
+        </div>
+        <div class="nav-group-content">
+          <div class="menu-item active" onclick="loadDiagram('overview', 'Database Schema · Pet-care System', '01. Complete System Overview (38 Tables)')">
+            <div class="menu-item-left">
+              <span class="badge">01</span> Overview (All)
+            </div>
+            <span class="table-count-pill">38 tables</span>
+          </div>
+          <div class="menu-item" onclick="loadDiagram('commerce', 'Database Schema · Commerce Domain', '02. Commerce & Billing Subsystem (11 Tables)')">
+            <div class="menu-item-left">
+              <span class="badge">02</span> Commerce Domain
+            </div>
+            <span class="table-count-pill">11 tables</span>
+          </div>
+          <div class="menu-item" onclick="loadDiagram('clinical', 'Database Schema · Clinical Domain', '03. Clinical, Medical & Vaccines (12 Tables)')">
+            <div class="menu-item-left">
+              <span class="badge">03</span> Clinical Domain
+            </div>
+            <span class="table-count-pill">12 tables</span>
+          </div>
+          <div class="menu-item" onclick="loadDiagram('appointments', 'Database Schema · Appointments Domain', '04. Appointments, Queues & Grooming (10 Tables)')">
+            <div class="menu-item-left">
+              <span class="badge">04</span> Appointments Domain
+            </div>
+            <span class="table-count-pill">10 tables</span>
+          </div>
+          <div class="menu-item" onclick="loadDiagram('operations', 'Database Schema · Operations Domain', '05. Inventory, Workforce & Audit (10 Tables)')">
+            <div class="menu-item-left">
+              <span class="badge">05</span> Operations Domain
+            </div>
+            <span class="table-count-pill">10 tables</span>
+          </div>
+        </div>
+      </div>
+
+      <!-- 2. Use Case Diagrams Dropdown -->
+      <div class="nav-group" id="group-usecase">
+        <div class="nav-group-header" onclick="toggleGroup('group-usecase')">
+          <div class="nav-group-title">
+            <span class="nav-icon">🎯</span> Use Case Diagrams
+          </div>
+          <span class="chevron">▶</span>
+        </div>
+        <div class="nav-group-content">
+          <div class="menu-item" onclick="showPlaceholder('Use Case Diagrams', 'Auth & Identity Lifecycle')">
+            <div class="menu-item-left">
+              <span class="badge">UC1</span> Auth & Roles
+            </div>
+            <span class="coming-soon-pill">SOON</span>
+          </div>
+          <div class="menu-item" onclick="showPlaceholder('Use Case Diagrams', 'Appointment Booking & Walk-in Flow')">
+            <div class="menu-item-left">
+              <span class="badge">UC2</span> Booking & Queue
+            </div>
+            <span class="coming-soon-pill">SOON</span>
+          </div>
+          <div class="menu-item" onclick="showPlaceholder('Use Case Diagrams', 'Cart, Checkout & Payment FSM')">
+            <div class="menu-item-left">
+              <span class="badge">UC3</span> Commerce & Order
+            </div>
+            <span class="coming-soon-pill">SOON</span>
+          </div>
+        </div>
+      </div>
+
+      <!-- 3. Sequence Diagrams Dropdown -->
+      <div class="nav-group" id="group-sequence">
+        <div class="nav-group-header" onclick="toggleGroup('group-sequence')">
+          <div class="nav-group-title">
+            <span class="nav-icon">⚡</span> Sequence Diagrams
+          </div>
+          <span class="chevron">▶</span>
+        </div>
+        <div class="nav-group-content">
+          <div class="menu-item" onclick="showPlaceholder('Sequence Diagrams', 'Appointment Booking Transaction Flow')">
+            <div class="menu-item-left">
+              <span class="badge">SQ1</span> Booking Flow
+            </div>
+            <span class="coming-soon-pill">SOON</span>
+          </div>
+          <div class="menu-item" onclick="showPlaceholder('Sequence Diagrams', 'Payment Gateway & Webhook Reconciliation')">
+            <div class="menu-item-left">
+              <span class="badge">SQ2</span> Payment Flow
+            </div>
+            <span class="coming-soon-pill">SOON</span>
+          </div>
+          <div class="menu-item" onclick="showPlaceholder('Sequence Diagrams', 'Vaccination Schedule & Reminder Dispatch')">
+            <div class="menu-item-left">
+              <span class="badge">SQ3</span> Vaccine Schedule
+            </div>
+            <span class="coming-soon-pill">SOON</span>
+          </div>
+        </div>
+      </div>
+
+      <!-- 4. State Machines (FSM) Dropdown -->
+      <div class="nav-group" id="group-fsm">
+        <div class="nav-group-header" onclick="toggleGroup('group-fsm')">
+          <div class="nav-group-title">
+            <span class="nav-icon">🔄</span> FSM State Machines
+          </div>
+          <span class="chevron">▶</span>
+        </div>
+        <div class="nav-group-content">
+          <div class="menu-item" onclick="showPlaceholder('FSM State Diagrams', 'Order Lifecycle FSM (8 States)')">
+            <div class="menu-item-left">
+              <span class="badge">FSM1</span> Order Lifecycle
+            </div>
+            <span class="coming-soon-pill">SOON</span>
+          </div>
+          <div class="menu-item" onclick="showPlaceholder('FSM State Diagrams', 'Payment & Refund State Machine (7 States)')">
+            <div class="menu-item-left">
+              <span class="badge">FSM2</span> Payment FSM
+            </div>
+            <span class="coming-soon-pill">SOON</span>
+          </div>
+          <div class="menu-item" onclick="showPlaceholder('FSM State Diagrams', 'Appointment State Machine (7 States)')">
+            <div class="menu-item-left">
+              <span class="badge">FSM3</span> Appointment FSM
+            </div>
+            <span class="coming-soon-pill">SOON</span>
+          </div>
+        </div>
+      </div>
+
+    </nav>
+  </aside>
+
+  <!-- Main Viewport Area -->
+  <main class="content-area">
+    <!-- Top Action Bar -->
+    <div class="top-bar">
+      <div class="header-titles">
+        <p class="eyebrow-top" id="top-eyebrow">Database Schema · Pet-care System</p>
+        <h1 id="top-title">01. Complete System Overview (38 Tables)</h1>
+      </div>
+      <div class="toolbar">
+        <button class="btn-tool" onclick="zoomIn()" title="Phóng to (+)">+ Zoom</button>
+        <span class="zoom-badge" id="zoom-text">100%</span>
+        <button class="btn-tool" onclick="zoomOut()" title="Thu nhỏ (-)">- Zoom</button>
+        <button class="btn-tool" onclick="resetZoom()" title="Khôi phục góc nhìn">⛶ Fit</button>
+        <button class="btn-tool active" id="btn-mode-pan" onclick="setInteractionMode('pan')" title="Kéo rê canvas tự do">✋ Pan Canvas</button>
+        <button class="btn-tool" id="btn-mode-drag" onclick="setInteractionMode('drag')" title="Kéo thả di chuyển từng bảng">🖐 Drag Tables</button>
+      </div>
+    </div>
+
+    <!-- Interactive Canvas Viewport -->
+    <div class="canvas-viewport" id="viewport">
+      <svg class="diagram-canvas" id="canvas-svg" xmlns="http://www.w3.org/2000/svg">
+        <defs>
+          <marker id="arr" markerWidth="8" markerHeight="6" refX="7" refY="3" orient="auto"><polygon points="0 0, 8 3, 0 6" fill="#4f5d75"/></marker>
+          <marker id="arr-acc" markerWidth="8" markerHeight="6" refX="7" refY="3" orient="auto"><polygon points="0 0, 8 3, 0 6" fill="#eb6c36"/></marker>
+          <marker id="arr-blue" markerWidth="8" markerHeight="6" refX="7" refY="3" orient="auto"><polygon points="0 0, 8 3, 0 6" fill="#2e5aa8"/></marker>
+        </defs>
+        <g id="canvas-content"></g>
+      </svg>
+    </div>
+
+    <!-- Floating Footer -->
+    <div class="floating-footer">
+      <div class="info-card" id="footer-desc">
+        <strong>Tip:</strong> Lăn chuột để Zoom in/out, kéo chuột để Pan khắp 38 bảng. Bấm nút <strong>"Drag Tables"</strong> nếu muốn tự tay kéo đổi vị trí bảng theo bố cục riêng.
+      </div>
+      <div class="legend-card">
+        <div class="legend-item"><span class="chip-sample pk">PK</span> Primary Key</div>
+        <div class="legend-item"><span class="chip-sample fk">FK</span> Foreign Key</div>
+        <div class="legend-item"><span class="chip-sample uq">UQ</span> Unique</div>
+        <div class="legend-item"><span style="display:inline-block;width:12px;height:2px;background:#eb6c36;"></span> Focal Cascade</div>
+      </div>
+    </div>
+  </main>
+
+  <!-- Complete 38 Tables Database Schema Definitions -->
+  <script>
+    // Toggle Accordion Group
+    function toggleGroup(groupId) {
+      const el = document.getElementById(groupId);
+      if (el) el.classList.toggle('open');
+    }
+
+    // Placeholder view for future diagrams
+    function showPlaceholder(category, title) {
+      document.querySelectorAll('.menu-item').forEach(el => el.classList.remove('active'));
+      event.currentTarget.classList.add('active');
+
+      document.getElementById('top-eyebrow').textContent = `${category} · Pet-care Ecosystem`;
+      document.getElementById('top-title').textContent = title;
+      document.getElementById('footer-desc').innerHTML = `<strong>${category}:</strong> Phân hệ này đang sẵn sàng tiếp nhận sơ đồ tương tác khi bạn cần thêm các luồng chi tiết.`;
+
+      const container = document.getElementById('canvas-content');
+      container.innerHTML = `
+        <rect x="200" y="100" width="700" height="320" rx="10" fill="#ffffff" stroke="#2d3142" stroke-width="1.5"/>
+        <text x="550" y="210" font-family="'Instrument Serif', serif" font-size="28" fill="#232733" text-anchor="middle">${title}</text>
+        <text x="550" y="250" font-family="'Geist', sans-serif" font-size="14" fill="#5b6579" text-anchor="middle">Sơ đồ sẽ được kết xuất dưới dạng SVG chuẩn Editorial tương tác tại đây.</text>
+        <rect x="470" y="280" width="160" height="36" rx="6" fill="#eb6c36"/>
+        <text x="550" y="303" font-family="'Geist Mono', monospace" font-size="12" font-weight="600" fill="#ffffff" text-anchor="middle">UPCOMING MODULE</text>
+      `;
+      zoomLevel = 1.0;
+      panX = 40;
+      panY = 40;
+      updateTransform();
+    }
+
+    // Master Schema Catalog
+    const MASTER_TABLES = {
+      accounts: { id: 'accounts', name: 'public.accounts', w: 260, focal: false, columns: [
+        { n: 'id', t: 'bigint', pk: true },
+        { n: 'phone', t: 'varchar', uq: true },
+        { n: 'email', t: 'varchar', uq: true },
+        { n: 'password_hash', t: 'varchar' },
+        { n: 'status', t: 'account_status' },
+        { n: 'role', t: 'user_role' },
+        { n: 'refresh_token', t: 'varchar' },
+        { n: 'refresh_token_expiry', t: 'timestamp' },
+        { n: 'created_at', t: 'timestamp' },
+        { n: 'updated_at', t: 'timestamp' }
+      ]},
+      users: { id: 'users', name: 'public.users', w: 260, focal: false, columns: [
+        { n: 'id', t: 'bigint', pk: true },
+        { n: 'account_id', t: 'bigint', fk: true, uq: true },
+        { n: 'name', t: 'varchar' },
+        { n: 'avatar', t: 'varchar' },
+        { n: 'organization_id', t: 'bigint', fk: true },
+        { n: 'store_id', t: 'bigint', fk: true },
+        { n: 'created_at', t: 'timestamp' },
+        { n: 'updated_at', t: 'timestamp' }
+      ]},
+      otps: { id: 'otps', name: 'public.otps', w: 250, focal: false, columns: [
+        { n: 'id', t: 'bigint', pk: true },
+        { n: 'account_id', t: 'bigint', fk: true },
+        { n: 'code', t: 'varchar' },
+        { n: 'type', t: 'varchar' },
+        { n: 'expires_at', t: 'timestamp' },
+        { n: 'used_at', t: 'timestamp' },
+        { n: 'attempts', t: 'int' },
+        { n: 'created_at', t: 'timestamp' }
+      ]},
+      organizations: { id: 'organizations', name: 'public.organizations', w: 260, focal: false, columns: [
+        { n: 'id', t: 'bigint', pk: true },
+        { n: 'name', t: 'varchar' },
+        { n: 'code', t: 'varchar', uq: true },
+        { n: 'description', t: 'text' },
+        { n: 'created_at', t: 'timestamp' },
+        { n: 'updated_at', t: 'timestamp' }
+      ]},
+      stores: { id: 'stores', name: 'public.stores', w: 260, focal: false, columns: [
+        { n: 'id', t: 'bigint', pk: true },
+        { n: 'organization_id', t: 'bigint', fk: true },
+        { n: 'name', t: 'varchar' },
+        { n: 'code', t: 'varchar', uq: true },
+        { n: 'address', t: 'varchar' },
+        { n: 'phone', t: 'varchar' },
+        { n: 'status', t: 'store_status' },
+        { n: 'created_at', t: 'timestamp' },
+        { n: 'updated_at', t: 'timestamp' }
+      ]},
+      operating_hours: { id: 'operating_hours', name: 'public.operating_hours', w: 250, focal: false, columns: [
+        { n: 'id', t: 'bigint', pk: true },
+        { n: 'store_id', t: 'bigint', fk: true },
+        { n: 'day_of_week', t: 'smallint' },
+        { n: 'open_time', t: 'time' },
+        { n: 'close_time', t: 'time' },
+        { n: 'is_closed', t: 'boolean' }
+      ]},
+      store_services: { id: 'store_services', name: 'public.store_services', w: 250, focal: false, columns: [
+        { n: 'id', t: 'bigint', pk: true },
+        { n: 'store_id', t: 'bigint', fk: true },
+        { n: 'service_id', t: 'bigint', fk: true },
+        { n: 'price', t: 'decimal' },
+        { n: 'is_available', t: 'boolean' }
+      ]},
+      pets: { id: 'pets', name: 'public.pets', w: 260, focal: false, columns: [
+        { n: 'id', t: 'bigint', pk: true },
+        { n: 'owner_id', t: 'bigint', fk: true },
+        { n: 'name', t: 'varchar' },
+        { n: 'species', t: 'varchar' },
+        { n: 'breed', t: 'varchar' },
+        { n: 'birth_date', t: 'date' },
+        { n: 'weight', t: 'decimal' },
+        { n: 'image_url', t: 'varchar' },
+        { n: 'notes', t: 'text' },
+        { n: 'created_at', t: 'timestamp' },
+        { n: 'updated_at', t: 'timestamp' }
+      ]},
+      services: { id: 'services', name: 'public.services', w: 250, focal: false, columns: [
+        { n: 'id', t: 'bigint', pk: true },
+        { n: 'name', t: 'varchar' },
+        { n: 'description', t: 'text' },
+        { n: 'category', t: 'varchar' },
+        { n: 'duration_minutes', t: 'int' },
+        { n: 'price', t: 'decimal' },
+        { n: 'is_active', t: 'boolean' },
+        { n: 'created_at', t: 'timestamp' }
+      ]},
+      products: { id: 'products', name: 'public.products', w: 260, focal: false, columns: [
+        { n: 'id', t: 'bigint', pk: true },
+        { n: 'name', t: 'varchar' },
+        { n: 'description', t: 'text' },
+        { n: 'category', t: 'varchar' },
+        { n: 'price', t: 'decimal' },
+        { n: 'discount_percent', t: 'int' },
+        { n: 'image_url', t: 'varchar' },
+        { n: 'is_active', t: 'boolean' },
+        { n: 'created_at', t: 'timestamp' },
+        { n: 'updated_at', t: 'timestamp' }
+      ]},
+      inventory: { id: 'inventory', name: 'public.inventory', w: 250, focal: true, columns: [
+        { n: 'id', t: 'bigint', pk: true },
+        { n: 'store_id', t: 'bigint', fk: true },
+        { n: 'product_id', t: 'bigint', fk: true },
+        { n: 'quantity', t: 'int' },
+        { n: 'min_threshold', t: 'int' },
+        { n: 'updated_at', t: 'timestamp' }
+      ]},
+      store_resources: { id: 'store_resources', name: 'public.store_resources', w: 250, focal: false, columns: [
+        { n: 'id', t: 'bigint', pk: true },
+        { n: 'store_id', t: 'bigint', fk: true },
+        { n: 'resource_type', t: 'varchar' },
+        { n: 'name', t: 'varchar' },
+        { n: 'capacity', t: 'int' },
+        { n: 'is_active', t: 'boolean' },
+        { n: 'created_at', t: 'timestamp' }
+      ]},
+      service_required_resources: { id: 'service_required_resources', name: 'public.service_required_resources', w: 260, focal: false, columns: [
+        { n: 'id', t: 'bigint', pk: true },
+        { n: 'service_id', t: 'bigint', fk: true },
+        { n: 'resource_type', t: 'varchar' },
+        { n: 'quantity_required', t: 'int' }
+      ]},
+      carts: { id: 'carts', name: 'public.carts', w: 250, focal: false, columns: [
+        { n: 'id', t: 'bigint', pk: true },
+        { n: 'customer_id', t: 'bigint', fk: true },
+        { n: 'store_id', t: 'bigint', fk: true },
+        { n: 'created_at', t: 'timestamp' },
+        { n: 'updated_at', t: 'timestamp' }
+      ]},
+      cart_items: { id: 'cart_items', name: 'public.cart_items', w: 250, focal: false, columns: [
+        { n: 'id', t: 'bigint', pk: true },
+        { n: 'cart_id', t: 'bigint', fk: true },
+        { n: 'product_id', t: 'bigint', fk: true },
+        { n: 'quantity', t: 'int' },
+        { n: 'unit_price', t: 'decimal' },
+        { n: 'created_at', t: 'timestamp' }
+      ]},
+      orders: { id: 'orders', name: 'public.orders', w: 270, focal: true, columns: [
+        { n: 'id', t: 'bigint', pk: true },
+        { n: 'order_number', t: 'varchar', uq: true },
+        { n: 'customer_id', t: 'bigint', fk: true },
+        { n: 'store_id', t: 'bigint', fk: true },
+        { n: 'status', t: 'order_status' },
+        { n: 'subtotal', t: 'decimal' },
+        { n: 'discount', t: 'decimal' },
+        { n: 'total', t: 'decimal' },
+        { n: 'voucher_code', t: 'varchar' },
+        { n: 'notes', t: 'text' },
+        { n: 'created_at', t: 'timestamp' },
+        { n: 'updated_at', t: 'timestamp' }
+      ]},
+      order_items: { id: 'order_items', name: 'public.order_items', w: 260, focal: false, columns: [
+        { n: 'id', t: 'bigint', pk: true },
+        { n: 'order_id', t: 'bigint', fk: true },
+        { n: 'product_id', t: 'bigint', fk: true },
+        { n: 'quantity', t: 'int' },
+        { n: 'unit_price', t: 'decimal' },
+        { n: 'subtotal', t: 'decimal' },
+        { n: 'created_at', t: 'timestamp' }
+      ]},
+      payments: { id: 'payments', name: 'public.payments', w: 260, focal: false, columns: [
+        { n: 'id', t: 'bigint', pk: true },
+        { n: 'order_id', t: 'bigint', fk: true },
+        { n: 'amount', t: 'decimal' },
+        { n: 'method', t: 'varchar' },
+        { n: 'status', t: 'payment_status' },
+        { n: 'transaction_id', t: 'varchar' },
+        { n: 'gateway_response', t: 'jsonb' },
+        { n: 'paid_at', t: 'timestamp' },
+        { n: 'created_at', t: 'timestamp' },
+        { n: 'updated_at', t: 'timestamp' }
+      ]},
+      refunds: { id: 'refunds', name: 'public.refunds', w: 260, focal: false, columns: [
+        { n: 'id', t: 'bigint', pk: true },
+        { n: 'payment_id', t: 'bigint', fk: true },
+        { n: 'order_id', t: 'bigint', fk: true },
+        { n: 'amount', t: 'decimal' },
+        { n: 'reason', t: 'text' },
+        { n: 'status', t: 'refund_status' },
+        { n: 'approved_by', t: 'bigint', fk: true },
+        { n: 'approved_at', t: 'timestamp' },
+        { n: 'rejection_reason', t: 'text' },
+        { n: 'processed_at', t: 'timestamp' },
+        { n: 'completed_at', t: 'timestamp' },
+        { n: 'created_at', t: 'timestamp' }
+      ]},
+      invoices: { id: 'invoices', name: 'billing.invoices', w: 260, focal: false, columns: [
+        { n: 'id', t: 'bigint', pk: true },
+        { n: 'invoice_number', t: 'varchar', uq: true },
+        { n: 'order_id', t: 'bigint', fk: true },
+        { n: 'appointment_id', t: 'bigint', fk: true },
+        { n: 'customer_id', t: 'bigint', fk: true },
+        { n: 'store_id', t: 'bigint', fk: true },
+        { n: 'status', t: 'invoice_status' },
+        { n: 'subtotal', t: 'decimal' },
+        { n: 'tax', t: 'decimal' },
+        { n: 'discount', t: 'decimal' },
+        { n: 'total', t: 'decimal' },
+        { n: 'paid_amount', t: 'decimal' },
+        { n: 'issued_at', t: 'timestamp' }
+      ]},
+      invoice_items: { id: 'invoice_items', name: 'billing.invoice_items', w: 250, focal: false, columns: [
+        { n: 'id', t: 'bigint', pk: true },
+        { n: 'invoice_id', t: 'bigint', fk: true },
+        { n: 'type', t: 'varchar' },
+        { n: 'reference_id', t: 'bigint' },
+        { n: 'name', t: 'varchar' },
+        { n: 'quantity', t: 'int' },
+        { n: 'unit_price', t: 'decimal' },
+        { n: 'subtotal', t: 'decimal' }
+      ]},
+      vouchers: { id: 'vouchers', name: 'public.vouchers', w: 250, focal: false, columns: [
+        { n: 'id', t: 'bigint', pk: true },
+        { n: 'code', t: 'varchar', uq: true },
+        { n: 'description', t: 'text' },
+        { n: 'discount_type', t: 'varchar' },
+        { n: 'discount_value', t: 'decimal' },
+        { n: 'min_order_value', t: 'decimal' },
+        { n: 'max_usage', t: 'int' },
+        { n: 'current_usage', t: 'int' },
+        { n: 'max_per_user', t: 'int' },
+        { n: 'valid_from', t: 'timestamp' },
+        { n: 'valid_to', t: 'timestamp' },
+        { n: 'is_active', t: 'boolean' },
+        { n: 'created_at', t: 'timestamp' }
+      ]},
+      voucher_usages: { id: 'voucher_usages', name: 'public.voucher_usages', w: 250, focal: false, columns: [
+        { n: 'id', t: 'bigint', pk: true },
+        { n: 'voucher_id', t: 'bigint', fk: true },
+        { n: 'customer_id', t: 'bigint', fk: true },
+        { n: 'order_id', t: 'bigint', fk: true },
+        { n: 'discount_amount', t: 'decimal' },
+        { n: 'used_at', t: 'timestamp' }
+      ]},
+      appointments: { id: 'appointments', name: 'public.appointments', w: 280, focal: true, columns: [
+        { n: 'id', t: 'bigint', pk: true },
+        { n: 'pet_id', t: 'bigint', fk: true },
+        { n: 'store_id', t: 'bigint', fk: true },
+        { n: 'service_id', t: 'bigint', fk: true },
+        { n: 'staff_id', t: 'bigint', fk: true },
+        { n: 'customer_id', t: 'bigint', fk: true },
+        { n: 'scheduled_at', t: 'timestamp' },
+        { n: 'status', t: 'appointment_status' },
+        { n: 'notes', t: 'text' },
+        { n: 'checked_in_at', t: 'timestamp' },
+        { n: 'started_at', t: 'timestamp' },
+        { n: 'completed_at', t: 'timestamp' },
+        { n: 'cancelled_at', t: 'timestamp' },
+        { n: 'cancellation_reason', t: 'text' },
+        { n: 'created_at', t: 'timestamp' },
+        { n: 'updated_at', t: 'timestamp' }
+      ]},
+      queues: { id: 'queues', name: 'public.queues', w: 250, focal: false, columns: [
+        { n: 'id', t: 'bigint', pk: true },
+        { n: 'store_id', t: 'bigint', fk: true },
+        { n: 'date', t: 'date' },
+        { n: 'current_position', t: 'int' },
+        { n: 'status', t: 'varchar' },
+        { n: 'created_at', t: 'timestamp' }
+      ]},
+      queue_entries: { id: 'queue_entries', name: 'public.queue_entries', w: 250, focal: false, columns: [
+        { n: 'id', t: 'bigint', pk: true },
+        { n: 'queue_id', t: 'bigint', fk: true },
+        { n: 'walkin_id', t: 'bigint', fk: true },
+        { n: 'position', t: 'int' },
+        { n: 'status', t: 'queue_entry_status' },
+        { n: 'called_at', t: 'timestamp' },
+        { n: 'service_started_at', t: 'timestamp' },
+        { n: 'completed_at', t: 'timestamp' },
+        { n: 'created_at', t: 'timestamp' }
+      ]},
+      walkins: { id: 'walkins', name: 'public.walkins', w: 260, focal: false, columns: [
+        { n: 'id', t: 'bigint', pk: true },
+        { n: 'store_id', t: 'bigint', fk: true },
+        { n: 'pet_id', t: 'bigint', fk: true },
+        { n: 'customer_id', t: 'bigint', fk: true },
+        { n: 'service_id', t: 'bigint', fk: true },
+        { n: 'queue_number', t: 'int' },
+        { n: 'status', t: 'varchar' },
+        { n: 'called_at', t: 'timestamp' },
+        { n: 'served_at', t: 'timestamp' },
+        { n: 'estimated_wait_minutes', t: 'int' },
+        { n: 'appointment_id', t: 'bigint', fk: true },
+        { n: 'created_at', t: 'timestamp' }
+      ]},
+      grooming_sessions: { id: 'grooming_sessions', name: 'public.grooming_sessions', w: 270, focal: true, columns: [
+        { n: 'id', t: 'bigint', pk: true },
+        { n: 'appointment_id', t: 'bigint', fk: true },
+        { n: 'pet_id', t: 'bigint', fk: true },
+        { n: 'store_id', t: 'bigint', fk: true },
+        { n: 'groomer_id', t: 'bigint', fk: true },
+        { n: 'status', t: 'grooming_status' },
+        { n: 'scheduled_at', t: 'timestamp' },
+        { n: 'started_at', t: 'timestamp' },
+        { n: 'completed_at', t: 'timestamp' },
+        { n: 'notes', t: 'text' },
+        { n: 'created_at', t: 'timestamp' },
+        { n: 'updated_at', t: 'timestamp' }
+      ]},
+      grooming_services: { id: 'grooming_services', name: 'public.grooming_services', w: 260, focal: false, columns: [
+        { n: 'id', t: 'bigint', pk: true },
+        { n: 'session_id', t: 'bigint', fk: true },
+        { n: 'service_type', t: 'varchar' },
+        { n: 'price', t: 'decimal' },
+        { n: 'is_additional', t: 'boolean' },
+        { n: 'customer_confirmed', t: 'boolean' },
+        { n: 'created_at', t: 'timestamp' }
+      ]},
+      medical_records: { id: 'medical_records', name: 'public.medical_records', w: 280, focal: true, columns: [
+        { n: 'id', t: 'bigint', pk: true },
+        { n: 'pet_id', t: 'bigint', fk: true },
+        { n: 'appointment_id', t: 'bigint', fk: true },
+        { n: 'veterinarian_id', t: 'bigint', fk: true },
+        { n: 'store_id', t: 'bigint', fk: true },
+        { n: 'examination_date', t: 'timestamp' },
+        { n: 'chief_complaint', t: 'text' },
+        { n: 'symptoms', t: 'text[]' },
+        { n: 'examination_results', t: 'jsonb' },
+        { n: 'diagnosis', t: 'text' },
+        { n: 'treatment_plan', t: 'text' },
+        { n: 'status', t: 'varchar' },
+        { n: 'created_at', t: 'timestamp' },
+        { n: 'updated_at', t: 'timestamp' }
+      ]},
+      diagnoses: { id: 'diagnoses', name: 'public.diagnoses', w: 260, focal: false, columns: [
+        { n: 'id', t: 'bigint', pk: true },
+        { n: 'medical_record_id', t: 'bigint', fk: true },
+        { n: 'diagnosis_code', t: 'varchar' },
+        { n: 'diagnosis_name', t: 'varchar' },
+        { n: 'severity', t: 'varchar' },
+        { n: 'notes', t: 'text' },
+        { n: 'created_at', t: 'timestamp' }
+      ]},
+      prescriptions: { id: 'prescriptions', name: 'public.prescriptions', w: 260, focal: false, columns: [
+        { n: 'id', t: 'bigint', pk: true },
+        { n: 'medical_record_id', t: 'bigint', fk: true },
+        { n: 'veterinarian_id', t: 'bigint', fk: true },
+        { n: 'prescription_date', t: 'timestamp' },
+        { n: 'instructions', t: 'text' },
+        { n: 'notes', t: 'text' },
+        { n: 'status', t: 'varchar' },
+        { n: 'created_at', t: 'timestamp' }
+      ]},
+      prescription_items: { id: 'prescription_items', name: 'public.prescription_items', w: 260, focal: false, columns: [
+        { n: 'id', t: 'bigint', pk: true },
+        { n: 'prescription_id', t: 'bigint', fk: true },
+        { n: 'medication_name', t: 'varchar' },
+        { n: 'dosage', t: 'varchar' },
+        { n: 'frequency', t: 'varchar' },
+        { n: 'duration', t: 'varchar' },
+        { n: 'quantity', t: 'varchar' },
+        { n: 'instructions', t: 'text' },
+        { n: 'price', t: 'decimal' },
+        { n: 'created_at', t: 'timestamp' }
+      ]},
+      follow_ups: { id: 'follow_ups', name: 'public.follow_ups', w: 260, focal: false, columns: [
+        { n: 'id', t: 'bigint', pk: true },
+        { n: 'medical_record_id', t: 'bigint', fk: true },
+        { n: 'pet_id', t: 'bigint', fk: true },
+        { n: 'scheduled_date', t: 'timestamp' },
+        { n: 'purpose', t: 'varchar' },
+        { n: 'notes', t: 'text' },
+        { n: 'status', t: 'varchar' },
+        { n: 'created_at', t: 'timestamp' }
+      ]},
+      vaccines: { id: 'vaccines', name: 'public.vaccines', w: 250, focal: false, columns: [
+        { n: 'id', t: 'bigint', pk: true },
+        { n: 'name', t: 'varchar' },
+        { n: 'description', t: 'text' },
+        { n: 'manufacturer', t: 'varchar' },
+        { n: 'valid_months', t: 'int' },
+        { n: 'is_active', t: 'boolean' },
+        { n: 'created_at', t: 'timestamp' }
+      ]},
+      vaccine_batches: { id: 'vaccine_batches', name: 'public.vaccine_batches', w: 260, focal: false, columns: [
+        { n: 'id', t: 'bigint', pk: true },
+        { n: 'vaccine_id', t: 'bigint', fk: true },
+        { n: 'store_id', t: 'bigint', fk: true },
+        { n: 'batch_number', t: 'varchar' },
+        { n: 'barcode', t: 'varchar' },
+        { n: 'expiry_date', t: 'date' },
+        { n: 'quantity', t: 'int' },
+        { n: 'available_quantity', t: 'int' },
+        { n: 'price', t: 'decimal' },
+        { n: 'status', t: 'varchar' },
+        { n: 'manufacturer', t: 'varchar' },
+        { n: 'created_at', t: 'timestamp' }
+      ]},
+      vaccinations: { id: 'vaccinations', name: 'public.vaccinations', w: 260, focal: false, columns: [
+        { n: 'id', t: 'bigint', pk: true },
+        { n: 'pet_id', t: 'bigint', fk: true },
+        { n: 'vaccine_id', t: 'bigint', fk: true },
+        { n: 'batch_id', t: 'bigint', fk: true },
+        { n: 'store_id', t: 'bigint', fk: true },
+        { n: 'veterinarian_id', t: 'bigint', fk: true },
+        { n: 'administered_at', t: 'timestamp' },
+        { n: 'next_due_date', t: 'date' },
+        { n: 'site', t: 'varchar' },
+        { n: 'batch_number', t: 'varchar' },
+        { n: 'notes', t: 'text' },
+        { n: 'created_at', t: 'timestamp' }
+      ]},
+      vaccination_schedules: { id: 'vaccination_schedules', name: 'public.vaccination_schedules', w: 260, focal: false, columns: [
+        { n: 'id', t: 'bigint', pk: true },
+        { n: 'pet_id', t: 'bigint', fk: true },
+        { n: 'vaccine_id', t: 'bigint', fk: true },
+        { n: 'due_date', t: 'date' },
+        { n: 'reminder_sent', t: 'boolean' },
+        { n: 'status', t: 'varchar' },
+        { n: 'created_at', t: 'timestamp' }
+      ]},
+      work_schedules: { id: 'work_schedules', name: 'public.work_schedules', w: 250, focal: false, columns: [
+        { n: 'id', t: 'bigint', pk: true },
+        { n: 'user_id', t: 'bigint', fk: true },
+        { n: 'store_id', t: 'bigint', fk: true },
+        { n: 'day_of_week', t: 'smallint' },
+        { n: 'start_time', t: 'time' },
+        { n: 'end_time', t: 'time' },
+        { n: 'is_active', t: 'boolean' },
+        { n: 'created_at', t: 'timestamp' }
+      ]},
+      staff_absences: { id: 'staff_absences', name: 'public.staff_absences', w: 250, focal: false, columns: [
+        { n: 'id', t: 'bigint', pk: true },
+        { n: 'user_id', t: 'bigint', fk: true },
+        { n: 'store_id', t: 'bigint', fk: true },
+        { n: 'start_date', t: 'date' },
+        { n: 'end_date', t: 'date' },
+        { n: 'reason', t: 'varchar' },
+        { n: 'status', t: 'varchar' },
+        { n: 'approved_by', t: 'bigint', fk: true },
+        { n: 'created_at', t: 'timestamp' }
+      ]},
+      notifications: { id: 'notifications', name: 'public.notifications', w: 260, focal: false, columns: [
+        { n: 'id', t: 'bigint', pk: true },
+        { n: 'user_id', t: 'bigint', fk: true },
+        { n: 'type', t: 'varchar' },
+        { n: 'title', t: 'varchar' },
+        { n: 'message', t: 'text' },
+        { n: 'reference_type', t: 'varchar' },
+        { n: 'reference_id', t: 'bigint' },
+        { n: 'is_read', t: 'boolean' },
+        { n: 'read_at', t: 'timestamp' },
+        { n: 'created_at', t: 'timestamp' }
+      ]},
+      audit_logs: { id: 'audit_logs', name: 'public.audit_logs', w: 260, focal: false, columns: [
+        { n: 'id', t: 'bigint', pk: true },
+        { n: 'user_id', t: 'bigint', fk: true },
+        { n: 'action', t: 'varchar' },
+        { n: 'entity_type', t: 'varchar' },
+        { n: 'entity_id', t: 'bigint' },
+        { n: 'changes', t: 'jsonb' },
+        { n: 'ip_address', t: 'varchar' },
+        { n: 'user_agent', t: 'text' },
+        { n: 'created_at', t: 'timestamp' }
+      ]}
+    };
+
+    function createTableInstance(key, x, y) {
+      const template = MASTER_TABLES[key];
+      return {
+        ...template,
+        x: x,
+        y: y
+      };
+    }
+
+    const SCHEMAS = {
+      overview: {
+        description: "Toàn bộ 38 bảng của hệ thống được hiển thị đầy đủ 100% cột và quan hệ. Sử dụng Pan / Zoom để khám phá mọi phân hệ.",
+        tables: [
+          createTableInstance('accounts', 40, 50),
+          createTableInstance('users', 40, 370),
+          createTableInstance('otps', 40, 650),
+          createTableInstance('organizations', 40, 930),
+          createTableInstance('stores', 40, 1180),
+          createTableInstance('operating_hours', 40, 1470),
+          createTableInstance('store_services', 40, 1690),
+
+          createTableInstance('carts', 350, 50),
+          createTableInstance('cart_items', 350, 240),
+          createTableInstance('orders', 350, 470),
+          createTableInstance('order_items', 350, 850),
+          createTableInstance('payments', 350, 1100),
+          createTableInstance('refunds', 350, 1420),
+          createTableInstance('invoices', 350, 1780),
+          createTableInstance('invoice_items', 350, 2180),
+          createTableInstance('vouchers', 350, 2460),
+          createTableInstance('voucher_usages', 350, 2850),
+
+          createTableInstance('services', 660, 50),
+          createTableInstance('appointments', 660, 310),
+          createTableInstance('queues', 660, 780),
+          createTableInstance('queue_entries', 660, 1000),
+          createTableInstance('walkins', 660, 1310),
+          createTableInstance('grooming_sessions', 660, 1690),
+          createTableInstance('grooming_services', 660, 2060),
+
+          createTableInstance('pets', 980, 50),
+          createTableInstance('medical_records', 980, 380),
+          createTableInstance('diagnoses', 980, 790),
+          createTableInstance('prescriptions', 980, 1040),
+          createTableInstance('prescription_items', 980, 1310),
+          createTableInstance('follow_ups', 980, 1630),
+
+          createTableInstance('vaccines', 1300, 50),
+          createTableInstance('vaccine_batches', 1300, 280),
+          createTableInstance('vaccinations', 1300, 640),
+          createTableInstance('vaccination_schedules', 1300, 1000),
+          createTableInstance('products', 1300, 1240),
+          createTableInstance('inventory', 1300, 1570),
+          createTableInstance('store_resources', 1300, 1790),
+          createTableInstance('service_required_resources', 1300, 2040),
+          createTableInstance('work_schedules', 1300, 2220),
+          createTableInstance('staff_absences', 1300, 2490),
+          createTableInstance('notifications', 1300, 2770),
+          createTableInstance('audit_logs', 1300, 3080)
+        ],
+        relations: [
+          { from: 'users', fromCol: 'account_id', to: 'accounts', toCol: 'id', type: 'RESTRICT' },
+          { from: 'users', fromCol: 'organization_id', to: 'organizations', toCol: 'id', type: 'RESTRICT' },
+          { from: 'users', fromCol: 'store_id', to: 'stores', toCol: 'id', type: 'RESTRICT' },
+          { from: 'otps', fromCol: 'account_id', to: 'accounts', toCol: 'id', type: 'CASCADE' },
+          { from: 'stores', fromCol: 'organization_id', to: 'organizations', toCol: 'id', type: 'RESTRICT' },
+          { from: 'operating_hours', fromCol: 'store_id', to: 'stores', toCol: 'id', type: 'CASCADE' },
+          { from: 'store_services', fromCol: 'store_id', to: 'stores', toCol: 'id', type: 'CASCADE' },
+          { from: 'pets', fromCol: 'owner_id', to: 'users', toCol: 'id', type: 'RESTRICT' },
+          { from: 'cart_items', fromCol: 'cart_id', to: 'carts', toCol: 'id', type: 'CASCADE' },
+          { from: 'order_items', fromCol: 'order_id', to: 'orders', toCol: 'id', type: 'CASCADE' },
+          { from: 'payments', fromCol: 'order_id', to: 'orders', toCol: 'id', type: 'CASCADE' },
+          { from: 'refunds', fromCol: 'payment_id', to: 'payments', toCol: 'id', type: 'CASCADE' },
+          { from: 'invoices', fromCol: 'order_id', to: 'orders', toCol: 'id', type: 'RESTRICT' },
+          { from: 'invoice_items', fromCol: 'invoice_id', to: 'invoices', toCol: 'id', type: 'CASCADE' },
+          { from: 'voucher_usages', fromCol: 'voucher_id', to: 'vouchers', toCol: 'id', type: 'CASCADE' },
+          { from: 'appointments', fromCol: 'pet_id', to: 'pets', toCol: 'id', type: 'RESTRICT' },
+          { from: 'appointments', fromCol: 'store_id', to: 'stores', toCol: 'id', type: 'RESTRICT' },
+          { from: 'appointments', fromCol: 'service_id', to: 'services', toCol: 'id', type: 'RESTRICT' },
+          { from: 'queue_entries', fromCol: 'queue_id', to: 'queues', toCol: 'id', type: 'CASCADE' },
+          { from: 'walkins', fromCol: 'appointment_id', to: 'appointments', toCol: 'id', type: 'RESTRICT' },
+          { from: 'grooming_sessions', fromCol: 'appointment_id', to: 'appointments', toCol: 'id', type: 'RESTRICT' },
+          { from: 'grooming_services', fromCol: 'session_id', to: 'grooming_sessions', toCol: 'id', type: 'CASCADE' },
+          { from: 'medical_records', fromCol: 'pet_id', to: 'pets', toCol: 'id', type: 'RESTRICT' },
+          { from: 'diagnoses', fromCol: 'medical_record_id', to: 'medical_records', toCol: 'id', type: 'CASCADE' },
+          { from: 'prescriptions', fromCol: 'medical_record_id', to: 'medical_records', toCol: 'id', type: 'CASCADE' },
+          { from: 'prescription_items', fromCol: 'prescription_id', to: 'prescriptions', toCol: 'id', type: 'CASCADE' },
+          { from: 'follow_ups', fromCol: 'medical_record_id', to: 'medical_records', toCol: 'id', type: 'CASCADE' },
+          { from: 'vaccine_batches', fromCol: 'vaccine_id', to: 'vaccines', toCol: 'id', type: 'CASCADE' },
+          { from: 'vaccinations', fromCol: 'batch_id', to: 'vaccine_batches', toCol: 'id', type: 'RESTRICT' },
+          { from: 'vaccinations', fromCol: 'pet_id', to: 'pets', toCol: 'id', type: 'RESTRICT' },
+          { from: 'vaccination_schedules', fromCol: 'pet_id', to: 'pets', toCol: 'id', type: 'CASCADE' },
+          { from: 'inventory', fromCol: 'product_id', to: 'products', toCol: 'id', type: 'RESTRICT' },
+          { from: 'inventory', fromCol: 'store_id', to: 'stores', toCol: 'id', type: 'RESTRICT' },
+          { from: 'work_schedules', fromCol: 'user_id', to: 'users', toCol: 'id', type: 'CASCADE' },
+          { from: 'staff_absences', fromCol: 'user_id', to: 'users', toCol: 'id', type: 'CASCADE' },
+          { from: 'notifications', fromCol: 'user_id', to: 'users', toCol: 'id', type: 'CASCADE' },
+          { from: 'audit_logs', fromCol: 'user_id', to: 'users', toCol: 'id', type: 'CASCADE' }
+        ]
+      },
+
+      commerce: {
+        description: "11 bảng trong Commerce & Billing: Carts, Cart Items, Orders, Order Items, Payments, Refunds, Invoices, Invoice Items, Vouchers, Voucher Usages, Products.",
+        tables: [
+          createTableInstance('carts', 40, 50),
+          createTableInstance('cart_items', 40, 240),
+          createTableInstance('orders', 340, 50),
+          createTableInstance('order_items', 340, 420),
+          createTableInstance('payments', 660, 50),
+          createTableInstance('refunds', 660, 360),
+          createTableInstance('invoices', 970, 50),
+          createTableInstance('invoice_items', 970, 440),
+          createTableInstance('vouchers', 1280, 50),
+          createTableInstance('voucher_usages', 1280, 430),
+          createTableInstance('products', 1280, 660)
+        ],
+        relations: [
+          { from: 'cart_items', fromCol: 'cart_id', to: 'carts', toCol: 'id', type: 'CASCADE' },
+          { from: 'order_items', fromCol: 'order_id', to: 'orders', toCol: 'id', type: 'CASCADE' },
+          { from: 'payments', fromCol: 'order_id', to: 'orders', toCol: 'id', type: 'CASCADE' },
+          { from: 'refunds', fromCol: 'payment_id', to: 'payments', toCol: 'id', type: 'CASCADE' },
+          { from: 'invoices', fromCol: 'order_id', to: 'orders', toCol: 'id', type: 'RESTRICT' },
+          { from: 'invoice_items', fromCol: 'invoice_id', to: 'invoices', toCol: 'id', type: 'CASCADE' },
+          { from: 'voucher_usages', fromCol: 'voucher_id', to: 'vouchers', toCol: 'id', type: 'CASCADE' },
+          { from: 'voucher_usages', fromCol: 'order_id', to: 'orders', toCol: 'id', type: 'CASCADE' }
+        ]
+      },
+
+      clinical: {
+        description: "12 bảng trong Clinical & Vaccines: Pets, Medical Records, Diagnoses, Prescriptions, Prescription Items, Follow-ups, Vaccines, Batches, Vaccinations, Schedules, Appointments, Users.",
+        tables: [
+          createTableInstance('pets', 40, 50),
+          createTableInstance('appointments', 40, 380),
+          createTableInstance('users', 40, 830),
+          createTableInstance('medical_records', 340, 50),
+          createTableInstance('diagnoses', 340, 460),
+          createTableInstance('follow_ups', 340, 710),
+          createTableInstance('prescriptions', 670, 50),
+          createTableInstance('prescription_items', 670, 330),
+          createTableInstance('vaccines', 980, 50),
+          createTableInstance('vaccine_batches', 980, 270),
+          createTableInstance('vaccinations', 980, 640),
+          createTableInstance('vaccination_schedules', 980, 1000)
+        ],
+        relations: [
+          { from: 'medical_records', fromCol: 'pet_id', to: 'pets', toCol: 'id', type: 'RESTRICT' },
+          { from: 'medical_records', fromCol: 'appointment_id', to: 'appointments', toCol: 'id', type: 'RESTRICT' },
+          { from: 'diagnoses', fromCol: 'medical_record_id', to: 'medical_records', toCol: 'id', type: 'CASCADE' },
+          { from: 'prescriptions', fromCol: 'medical_record_id', to: 'medical_records', toCol: 'id', type: 'CASCADE' },
+          { from: 'prescription_items', fromCol: 'prescription_id', to: 'prescriptions', toCol: 'id', type: 'CASCADE' },
+          { from: 'follow_ups', fromCol: 'medical_record_id', to: 'medical_records', toCol: 'id', type: 'CASCADE' },
+          { from: 'vaccine_batches', fromCol: 'vaccine_id', to: 'vaccines', toCol: 'id', type: 'CASCADE' },
+          { from: 'vaccinations', fromCol: 'batch_id', to: 'vaccine_batches', toCol: 'id', type: 'RESTRICT' },
+          { from: 'vaccinations', fromCol: 'pet_id', to: 'pets', toCol: 'id', type: 'RESTRICT' },
+          { from: 'vaccination_schedules', fromCol: 'pet_id', to: 'pets', toCol: 'id', type: 'CASCADE' }
+        ]
+      },
+
+      appointments: {
+        description: "10 bảng Appointments, Queues & Grooming: Stores, Services, Pets, Appointments, Queues, Queue Entries, Walk-ins, Grooming Sessions, Grooming Services, Invoices.",
+        tables: [
+          createTableInstance('stores', 40, 50),
+          createTableInstance('services', 40, 330),
+          createTableInstance('pets', 40, 600),
+          createTableInstance('appointments', 340, 50),
+          createTableInstance('queues', 340, 520),
+          createTableInstance('queue_entries', 340, 750),
+          createTableInstance('walkins', 670, 50),
+          createTableInstance('grooming_sessions', 980, 50),
+          createTableInstance('grooming_services', 980, 420),
+          createTableInstance('invoices', 980, 680)
+        ],
+        relations: [
+          { from: 'appointments', fromCol: 'store_id', to: 'stores', toCol: 'id', type: 'RESTRICT' },
+          { from: 'appointments', fromCol: 'service_id', to: 'services', toCol: 'id', type: 'RESTRICT' },
+          { from: 'appointments', fromCol: 'pet_id', to: 'pets', toCol: 'id', type: 'RESTRICT' },
+          { from: 'queues', fromCol: 'store_id', to: 'stores', toCol: 'id', type: 'CASCADE' },
+          { from: 'queue_entries', fromCol: 'queue_id', to: 'queues', toCol: 'id', type: 'CASCADE' },
+          { from: 'walkins', fromCol: 'appointment_id', to: 'appointments', toCol: 'id', type: 'RESTRICT' },
+          { from: 'grooming_sessions', fromCol: 'appointment_id', to: 'appointments', toCol: 'id', type: 'RESTRICT' },
+          { from: 'grooming_services', fromCol: 'session_id', to: 'grooming_sessions', toCol: 'id', type: 'CASCADE' },
+          { from: 'invoices', fromCol: 'appointment_id', to: 'appointments', toCol: 'id', type: 'RESTRICT' }
+        ]
+      },
+
+      operations: {
+        description: "10 bảng Operations, Inventory & Workforce: Stores, Users, Products, Inventory, Store Resources, Service Required Resources, Work Schedules, Staff Absences, Notifications, Audit Logs.",
+        tables: [
+          createTableInstance('stores', 40, 50),
+          createTableInstance('users', 40, 320),
+          createTableInstance('products', 340, 50),
+          createTableInstance('inventory', 340, 380),
+          createTableInstance('store_resources', 340, 610),
+          createTableInstance('service_required_resources', 340, 850),
+          createTableInstance('work_schedules', 670, 50),
+          createTableInstance('staff_absences', 670, 310),
+          createTableInstance('notifications', 980, 50),
+          createTableInstance('audit_logs', 980, 380)
+        ],
+        relations: [
+          { from: 'inventory', fromCol: 'product_id', to: 'products', toCol: 'id', type: 'RESTRICT' },
+          { from: 'inventory', fromCol: 'store_id', to: 'stores', toCol: 'id', type: 'RESTRICT' },
+          { from: 'store_resources', fromCol: 'store_id', to: 'stores', toCol: 'id', type: 'CASCADE' },
+          { from: 'work_schedules', fromCol: 'user_id', to: 'users', toCol: 'id', type: 'CASCADE' },
+          { from: 'staff_absences', fromCol: 'user_id', to: 'users', toCol: 'id', type: 'CASCADE' },
+          { from: 'notifications', fromCol: 'user_id', to: 'users', toCol: 'id', type: 'CASCADE' },
+          { from: 'audit_logs', fromCol: 'user_id', to: 'users', toCol: 'id', type: 'CASCADE' }
+        ]
+      }
+    };
+
+    // State Variables
+    let currentKey = 'overview';
+    let currentData = null;
+    let zoomLevel = 0.75;
+    let panX = 40;
+    let panY = 30;
+    let isPanning = false;
+    let startMouseX = 0;
+    let startMouseY = 0;
+    let interactionMode = 'pan';
+    let draggingTable = null;
+    let dragOffsetX = 0;
+    let dragOffsetY = 0;
+
+    const ROW_HEIGHT = 24;
+    const HEADER_HEIGHT = 30;
+
+    function calcTableHeight(table) {
+      return HEADER_HEIGHT + (table.columns.length * ROW_HEIGHT) + 8;
+    }
+
+    // Render Schema
+    function renderDiagram() {
+      const container = document.getElementById('canvas-content');
+      container.innerHTML = '';
+
+      if (!currentData) return;
+
+      // 1. Draw Orthogonal Connection Lines
+      const linesGroup = document.createElementNS("http://www.w3.org/2000/svg", "g");
+      linesGroup.id = "lines-layer";
+
+      currentData.relations.forEach(rel => {
+        const fromTable = currentData.tables.find(t => t.id === rel.from);
+        const toTable = currentData.tables.find(t => t.id === rel.to);
+
+        if (!fromTable || !toTable) return;
+
+        const fromColIdx = fromTable.columns.findIndex(c => c.n === rel.fromCol);
+        const toColIdx = toTable.columns.findIndex(c => c.n === rel.toCol);
+
+        const fromY = fromTable.y + HEADER_HEIGHT + (fromColIdx >= 0 ? fromColIdx * ROW_HEIGHT + 12 : 20);
+        const toY = toTable.y + HEADER_HEIGHT + (toColIdx >= 0 ? toColIdx * ROW_HEIGHT + 12 : 20);
+
+        let pathData = '';
+        const isAccent = rel.type === 'CASCADE';
+        const strokeColor = isAccent ? '#eb6c36' : (rel.type === 'RESTRICT' ? '#4f5d75' : '#2e5aa8');
+        const markerUrl = isAccent ? 'url(#arr-acc)' : 'url(#arr)';
+
+        // Clean Orthogonal Manhattan Routing
+        if (fromTable.x >= toTable.x + toTable.w) {
+          const startX = fromTable.x;
+          const endX = toTable.x + toTable.w;
+          const midX = startX - (startX - endX) / 2;
+          pathData = `M ${startX} ${fromY} H ${midX} V ${toY} H ${endX}`;
+        } else if (fromTable.x + fromTable.w <= toTable.x) {
+          const startX = fromTable.x + fromTable.w;
+          const endX = toTable.x;
+          const midX = startX + (endX - startX) / 2;
+          pathData = `M ${startX} ${fromY} H ${midX} V ${toY} H ${endX}`;
+        } else {
+          const startX = fromTable.x + fromTable.w;
+          const endX = toTable.x + toTable.w;
+          const sideX = Math.max(startX, endX) + 24;
+          pathData = `M ${startX} ${fromY} H ${sideX} V ${toY} H ${endX}`;
+        }
+
+        const pathEl = document.createElementNS("http://www.w3.org/2000/svg", "path");
+        pathEl.setAttribute("d", pathData);
+        pathEl.setAttribute("fill", "none");
+        pathEl.setAttribute("stroke", strokeColor);
+        pathEl.setAttribute("stroke-width", isAccent ? "1.8" : "1.2");
+        pathEl.setAttribute("marker-end", markerUrl);
+        pathEl.setAttribute("stroke-linecap", "round");
+        pathEl.setAttribute("stroke-linejoin", "round");
+        if (isAccent) {
+          pathEl.setAttribute("stroke-dasharray", "4,3");
+        }
+        linesGroup.appendChild(pathEl);
+      });
+
+      container.appendChild(linesGroup);
+
+      // 2. Draw Tables
+      const tablesGroup = document.createElementNS("http://www.w3.org/2000/svg", "g");
+      tablesGroup.id = "tables-layer";
+
+      currentData.tables.forEach(table => {
+        const totalHeight = calcTableHeight(table);
+
+        const g = document.createElementNS("http://www.w3.org/2000/svg", "g");
+        g.setAttribute("class", `table-group ${table.focal ? 'is-focal' : ''}`);
+        g.setAttribute("id", `table-${table.id}`);
+        g.setAttribute("transform", `translate(${table.x}, ${table.y})`);
+
+        // Table Background
+        const bg = document.createElementNS("http://www.w3.org/2000/svg", "rect");
+        bg.setAttribute("class", "table-bg");
+        bg.setAttribute("width", table.w);
+        bg.setAttribute("height", totalHeight);
+        bg.setAttribute("rx", "6");
+        bg.setAttribute("fill", "#ffffff");
+        bg.setAttribute("stroke", table.focal ? "#eb6c36" : "#2d3142");
+        bg.setAttribute("stroke-width", table.focal ? "1.8" : "1");
+        g.appendChild(bg);
+
+        // Header Background
+        const hbg = document.createElementNS("http://www.w3.org/2000/svg", "path");
+        hbg.setAttribute("class", "table-header-bg");
+        hbg.setAttribute("d", `M 0,6 Q 0,0 6,0 L ${table.w - 6},0 Q ${table.w},0 ${table.w},6 L ${table.w},${HEADER_HEIGHT} L 0,${HEADER_HEIGHT} Z`);
+        hbg.setAttribute("fill", table.focal ? "rgba(235,108,54,0.12)" : "rgba(45,49,66,0.05)");
+        g.appendChild(hbg);
+
+        // Header divider
+        const hline = document.createElementNS("http://www.w3.org/2000/svg", "line");
+        hline.setAttribute("x1", "0");
+        hline.setAttribute("y1", HEADER_HEIGHT);
+        hline.setAttribute("x2", table.w);
+        hline.setAttribute("y2", HEADER_HEIGHT);
+        hline.setAttribute("stroke", table.focal ? "rgba(235,108,54,0.4)" : "rgba(45,49,66,0.2)");
+        hline.setAttribute("stroke-width", "1");
+        g.appendChild(hline);
+
+        // Table Title
+        const titleText = document.createElementNS("http://www.w3.org/2000/svg", "text");
+        titleText.setAttribute("x", "12");
+        titleText.setAttribute("y", "20");
+        titleText.setAttribute("font-family", "'Geist', sans-serif");
+        titleText.setAttribute("font-size", "12");
+        titleText.setAttribute("font-weight", "600");
+        titleText.setAttribute("fill", "#2d3142");
+        titleText.textContent = table.name;
+        g.appendChild(titleText);
+
+        // Chip TABLE tag
+        const tagBox = document.createElementNS("http://www.w3.org/2000/svg", "rect");
+        tagBox.setAttribute("x", table.w - 48);
+        tagBox.setAttribute("y", "9");
+        tagBox.setAttribute("width", "38");
+        tagBox.setAttribute("height", "13");
+        tagBox.setAttribute("rx", "2");
+        tagBox.setAttribute("fill", "none");
+        tagBox.setAttribute("stroke", "rgba(45,49,66,0.35)");
+        tagBox.setAttribute("stroke-width", "0.8");
+        g.appendChild(tagBox);
+
+        const tagText = document.createElementNS("http://www.w3.org/2000/svg", "text");
+        tagText.setAttribute("x", table.w - 29);
+        tagText.setAttribute("y", "18");
+        tagText.setAttribute("font-family", "'Geist Mono', monospace");
+        tagText.setAttribute("font-size", "7.5");
+        tagText.setAttribute("fill", "#2d3142");
+        tagText.setAttribute("opacity", "0.8");
+        tagText.setAttribute("text-anchor", "middle");
+        tagText.setAttribute("letter-spacing", "0.06em");
+        tagText.textContent = "TABLE";
+        g.appendChild(tagText);
+
+        // Column Rows
+        table.columns.forEach((col, idx) => {
+          const rowY = HEADER_HEIGHT + idx * ROW_HEIGHT;
+
+          // Alternating row stripe
+          if (idx % 2 === 0) {
+            const stripe = document.createElementNS("http://www.w3.org/2000/svg", "rect");
+            stripe.setAttribute("x", "0");
+            stripe.setAttribute("y", rowY);
+            stripe.setAttribute("width", table.w);
+            stripe.setAttribute("height", ROW_HEIGHT);
+            stripe.setAttribute("fill", "rgba(45,49,66,0.02)");
+            g.appendChild(stripe);
+          }
+
+          // Column Name
+          const nameText = document.createElementNS("http://www.w3.org/2000/svg", "text");
+          nameText.setAttribute("x", "12");
+          nameText.setAttribute("y", rowY + 16);
+          nameText.setAttribute("font-family", "'Geist', sans-serif");
+          nameText.setAttribute("font-size", "11.5");
+          nameText.setAttribute("fill", "#2d3142");
+          nameText.textContent = col.n;
+          g.appendChild(nameText);
+
+          // Constraint Badges
+          let chipX = table.w - 85;
+          if (col.pk) {
+            const pkChip = document.createElementNS("http://www.w3.org/2000/svg", "rect");
+            pkChip.setAttribute("x", chipX);
+            pkChip.setAttribute("y", rowY + 6);
+            pkChip.setAttribute("width", "18");
+            pkChip.setAttribute("height", "12");
+            pkChip.setAttribute("rx", "2");
+            pkChip.setAttribute("fill", "none");
+            pkChip.setAttribute("stroke", "rgba(235,108,54,0.7)");
+            pkChip.setAttribute("stroke-width", "0.8");
+            g.appendChild(pkChip);
+
+            const pkTxt = document.createElementNS("http://www.w3.org/2000/svg", "text");
+            pkTxt.setAttribute("x", chipX + 9);
+            pkTxt.setAttribute("y", rowY + 15);
+            pkTxt.setAttribute("font-family", "'Geist Mono', monospace");
+            pkTxt.setAttribute("font-size", "7.5");
+            pkTxt.setAttribute("font-weight", "600");
+            pkTxt.setAttribute("fill", "#eb6c36");
+            pkTxt.setAttribute("text-anchor", "middle");
+            pkTxt.textContent = "PK";
+            g.appendChild(pkTxt);
+          }
+
+          if (col.fk) {
+            const fkChip = document.createElementNS("http://www.w3.org/2000/svg", "rect");
+            fkChip.setAttribute("x", chipX);
+            fkChip.setAttribute("y", rowY + 6);
+            fkChip.setAttribute("width", "18");
+            fkChip.setAttribute("height", "12");
+            fkChip.setAttribute("rx", "2");
+            fkChip.setAttribute("fill", "none");
+            fkChip.setAttribute("stroke", "rgba(46,90,168,0.7)");
+            fkChip.setAttribute("stroke-width", "0.8");
+            g.appendChild(fkChip);
+
+            const fkTxt = document.createElementNS("http://www.w3.org/2000/svg", "text");
+            fkTxt.setAttribute("x", chipX + 9);
+            fkTxt.setAttribute("y", rowY + 15);
+            fkTxt.setAttribute("font-family", "'Geist Mono', monospace");
+            fkTxt.setAttribute("font-size", "7.5");
+            fkTxt.setAttribute("font-weight", "600");
+            fkTxt.setAttribute("fill", "#2e5aa8");
+            fkTxt.setAttribute("text-anchor", "middle");
+            fkTxt.textContent = "FK";
+            g.appendChild(fkTxt);
+          }
+
+          if (col.uq) {
+            const uqChip = document.createElementNS("http://www.w3.org/2000/svg", "rect");
+            uqChip.setAttribute("x", chipX - 22);
+            uqChip.setAttribute("y", rowY + 6);
+            uqChip.setAttribute("width", "18");
+            uqChip.setAttribute("height", "12");
+            uqChip.setAttribute("rx", "2");
+            uqChip.setAttribute("fill", "none");
+            uqChip.setAttribute("stroke", "rgba(123,74,199,0.7)");
+            uqChip.setAttribute("stroke-width", "0.8");
+            g.appendChild(uqChip);
+
+            const uqTxt = document.createElementNS("http://www.w3.org/2000/svg", "text");
+            uqTxt.setAttribute("x", chipX - 13);
+            uqTxt.setAttribute("y", rowY + 15);
+            uqTxt.setAttribute("font-family", "'Geist Mono', monospace");
+            uqTxt.setAttribute("font-size", "7.5");
+            uqTxt.setAttribute("font-weight", "600");
+            uqTxt.setAttribute("fill", "#7b4ac7");
+            uqTxt.setAttribute("text-anchor", "middle");
+            uqTxt.textContent = "UQ";
+            g.appendChild(uqTxt);
+          }
+
+          // Column Type
+          const typeText = document.createElementNS("http://www.w3.org/2000/svg", "text");
+          typeText.setAttribute("x", table.w - 12);
+          typeText.setAttribute("y", rowY + 16);
+          typeText.setAttribute("font-family", "'Geist Mono', monospace");
+          typeText.setAttribute("font-size", "9.5");
+          typeText.setAttribute("fill", "#5b6579");
+          typeText.setAttribute("text-anchor", "end");
+          typeText.textContent = col.t;
+          g.appendChild(typeText);
+        });
+
+        // Mouse Drag on Table
+        g.addEventListener('mousedown', (e) => {
+          if (interactionMode === 'drag') {
+            e.stopPropagation();
+            draggingTable = table;
+            const pt = getSvgCoordinates(e);
+            dragOffsetX = pt.x - table.x;
+            dragOffsetY = pt.y - table.y;
+          }
+        });
+
+        tablesGroup.appendChild(g);
+      });
+
+      container.appendChild(tablesGroup);
+    }
+
+    function updateTransform() {
+      const content = document.getElementById('canvas-content');
+      content.setAttribute('transform', `translate(${panX}, ${panY}) scale(${zoomLevel})`);
+      document.getElementById('zoom-text').textContent = `${Math.round(zoomLevel * 100)}%`;
+    }
+
+    function getSvgCoordinates(e) {
+      const svg = document.getElementById('canvas-svg');
+      const rect = svg.getBoundingClientRect();
+      const x = (e.clientX - rect.left - panX) / zoomLevel;
+      const y = (e.clientY - rect.top - panY) / zoomLevel;
+      return { x, y };
+    }
+
+    function setInteractionMode(mode) {
+      interactionMode = mode;
+      document.getElementById('btn-mode-pan').classList.toggle('active', mode === 'pan');
+      document.getElementById('btn-mode-drag').classList.toggle('active', mode === 'drag');
+      document.getElementById('viewport').classList.toggle('drag-tables-mode', mode === 'drag');
+    }
+
+    function zoomIn() {
+      zoomLevel = Math.min(zoomLevel * 1.2, 3.0);
+      updateTransform();
+    }
+
+    function zoomOut() {
+      zoomLevel = Math.max(zoomLevel / 1.2, 0.2);
+      updateTransform();
+    }
+
+    function resetZoom() {
+      if (currentKey === 'overview') {
+        zoomLevel = 0.55;
+        panX = 30;
+        panY = 20;
+      } else {
+        zoomLevel = 0.85;
+        panX = 40;
+        panY = 30;
+      }
+      updateTransform();
+    }
+
+    function loadDiagram(key, eyebrow, title) {
+      currentKey = key;
+      currentData = SCHEMAS[key];
+
+      document.querySelectorAll('.menu-item').forEach(el => el.classList.remove('active'));
+      const activeItem = Array.from(document.querySelectorAll('.menu-item')).find(el => el.getAttribute('onclick')?.includes(key));
+      if (activeItem) activeItem.classList.add('active');
+
+      document.getElementById('top-eyebrow').textContent = eyebrow;
+      document.getElementById('top-title').textContent = title;
+      document.getElementById('footer-desc').innerHTML = `<strong>Domain Note:</strong> ${currentData.description}`;
+
+      resetZoom();
+      renderDiagram();
+    }
+
+    // Viewport Drag / Pan Setup
+    const viewport = document.getElementById('viewport');
+
+    viewport.addEventListener('mousedown', (e) => {
+      if (interactionMode === 'pan') {
+        isPanning = true;
+        startMouseX = e.clientX - panX;
+        startMouseY = e.clientY - panY;
+        viewport.classList.add('dragging-canvas');
+      }
+    });
+
+    window.addEventListener('mousemove', (e) => {
+      if (isPanning && interactionMode === 'pan') {
+        panX = e.clientX - startMouseX;
+        panY = e.clientY - startMouseY;
+        updateTransform();
+      } else if (draggingTable && interactionMode === 'drag') {
+        const pt = getSvgCoordinates(e);
+        draggingTable.x = Math.round(pt.x - dragOffsetX);
+        draggingTable.y = Math.round(pt.y - dragOffsetY);
+        renderDiagram();
+      }
+    });
+
+    window.addEventListener('mouseup', () => {
+      isPanning = false;
+      draggingTable = null;
+      viewport.classList.remove('dragging-canvas');
+    });
+
+    // Wheel Zoom centered on mouse
+    viewport.addEventListener('wheel', (e) => {
+      e.preventDefault();
+      const zoomFactor = e.deltaY < 0 ? 1.1 : 0.9;
+      const rect = viewport.getBoundingClientRect();
+      const mouseX = e.clientX - rect.left;
+      const mouseY = e.clientY - rect.top;
+
+      const newZoom = Math.min(Math.max(zoomLevel * zoomFactor, 0.2), 3.5);
+      panX = mouseX - (mouseX - panX) * (newZoom / zoomLevel);
+      panY = mouseY - (mouseY - panY) * (newZoom / zoomLevel);
+      zoomLevel = newZoom;
+
+      updateTransform();
+    }, { passive: false });
+
+    // Initial Load
+    window.addEventListener('DOMContentLoaded', () => {
+      loadDiagram('overview', 'Database Schema · Pet-care System', '01. Complete System Overview (38 Tables)');
+    });
+  </script>
+</body>
+</html>

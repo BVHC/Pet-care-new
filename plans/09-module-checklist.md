@@ -6,16 +6,19 @@
 
 ---
 
-## 1. Roles (5 Roles)
+## 1. Roles (8 Roles)
 
-| Role | Mô tả |
-|------|-------|
-| SUPER_ADMIN | Quản trị toàn hệ thống |
-| STORE_MANAGER | Quản lý store, duyệt refunds |
-| RECEPTIONIST | Tiếp khách, check-in, tạo đơn |
-| VETERINARIAN | Khám bệnh, kê đơn, tiêm phòng |
-| GROOMER | Làm đẹp thú cưng |
-| CUSTOMER | Khách hàng |
+| Scope | Role | Mô tả |
+|-------|------|-------|
+| Platform | SUPER_ADMIN | Quản trị toàn hệ thống |
+| Organization | ORG_ADMIN | Quản lý chuỗi cửa hàng |
+| Store | STORE_MANAGER | Quản lý store, duyệt refunds |
+| Store | FINANCE_STAFF | Thu ngân, đối soát |
+| Store | INVENTORY_STAFF | Quản lý kho |
+| Store | RECEPTIONIST | Tiếp khách, check-in, tạo đơn |
+| Store | VETERINARIAN | Khám bệnh, kê đơn, tiêm phòng |
+| Store | GROOMER | Làm đẹp thú cưng |
+| User | CUSTOMER | Khách hàng |
 
 ---
 
@@ -78,23 +81,18 @@
 | Store status FSM (ACTIVE/SUSPENDED/ARCHIVED) | ☐ |
 | Test: store operations | ☐ |
 
-### Module 5: Pets + Caregivers
+### Module 5: Pets
 
 **Owner:** P2  
-**FSM:** ✅ CaregiverInvitation
+**FSM:** ❌
 
 | Task | Done |
 |------|------|
 | Pet entity + migration | ☐ |
 | Pet CRUD | ☐ |
 | Pet ownership (RULE-04-01) | ☐ |
-| CaregiverInvitation entity | ☐ |
-| InviteCaregiver → INVITED | ☐ |
-| AcceptInvitation → ACTIVE | ☐ |
-| RejectInvitation → REJECTED | ☐ |
-| RevokeCaregiver → REVOKED | ☐ |
-| ProcessExpiry → EXPIRED | ☐ |
-| Test: caregiver FSM | ☐ |
+| Pet medical history lookup | ☐ |
+| Test: pet operations | ☐ |
 
 ### Module 6: Products
 
@@ -133,12 +131,14 @@
 |------|------|
 | Appointment entity + migration | ☐ |
 | BookAppointment (RULE-06-01, 06-02, 06-04, 06-07) | ☐ |
-| ConfirmAppointment (RULE-06-01) | ☐ |
+| ConfirmAppointment (RULE-06-01, 06-10) | ☐ |
 | CheckInAppointment (RULE-06-06) | ☐ |
-| StartAppointmentService | ☐ |
-| CompleteAppointment (RULE-06-06) | ☐ |
+| StartAppointmentService (RULE-09-01, 11-01) | ☐ |
+| CheckOutAppointment (RULE-06-06) | ☐ |
 | CancelAppointment (RULE-06-05, 06-08) | ☐ |
+| RescheduleAppointment (NEW - RULE-06-10) | ☐ |
 | MarkNoShow (RULE-06-09) | ☐ |
+| StoreResource collision check (RULE-06-10) | ☐ |
 | List appointments | ☐ |
 | Test: full FSM | ☐ |
 | Test: invalid transitions | ☐ |
@@ -152,16 +152,20 @@
 |------|------|
 | Cart entity + CRUD | ☐ |
 | Order entity + migration | ☐ |
-| CreateOrder (RULE-14-01, 14-02) | ☐ |
+| CreateOrder (RULE-14-01, 14-02, 14-07) | ☐ |
+| Inventory Reservation (RULE-14-07) | ☐ |
+| ProcessOrderTimeout (auto-cancel 15min) | ☐ |
 | Order → PAID (event) | ☐ |
 | ConfirmOrder (RULE-14-04) | ☐ |
 | ProcessOrder | ☐ |
 | PrepareProductOrder (RULE-12-04, 14-02) | ☐ |
 | CompleteStoreOrder (RULE-14-05) | ☐ |
 | CancelOrder (RULE-14-03, 14-06) | ☐ |
+| CancelOrderWithRefund (NEW) | ☐ |
 | Order → REFUNDED (event) | ☐ |
 | Test: full FSM | ☐ |
 | Test: invalid transitions | ☐ |
+| Test: inventory reservation timeout | ☐ |
 
 ### Module 10: Payments ⭐⭐
 
@@ -177,9 +181,11 @@
 | Payment callback (RULE-16-03, 16-05) | ☐ |
 | Payment SUCCESS / FAILED | ☐ |
 | CancelPayment (RULE-16-04) | ☐ |
+| Payment PARTIALLY_REFUNDED (NEW) | ☐ |
 | Payment → REFUNDED (event) | ☐ |
 | Mock payment gateway | ☐ |
 | Test: payment FSM | ☐ |
+| Test: partial refund flow | ☐ |
 
 ---
 
@@ -208,13 +214,17 @@
 | Task | Done |
 |------|------|
 | Refund entity | ☐ |
-| RequestRefund (RULE-17-01, 17-02, 17-03) | ☐ |
+| RequestRefund (RULE-17-01, 17-02, 17-03, 17-07) | ☐ |
+| 30-day refund window check (RULE-17-07) | ☐ |
 | ApproveRefund (RULE-17-01, 17-02, 17-04) | ☐ |
 | RejectRefund (RULE-17-06) | ☐ |
 | ProcessRefund (RULE-17-04) | ☐ |
 | CompleteRefund (RULE-17-02, 17-05) | ☐ |
 | FailRefund (RULE-17-05) | ☐ |
+| RetryRefund (NEW) | ☐ |
+| ResolveRefundManually (NEW) | ☐ |
 | Test: refund FSM | ☐ |
+| Test: 30-day window | ☐ |
 
 ### Module 13: Clinical (FULL) ⭐⭐
 
@@ -234,6 +244,10 @@
 | MedicalHistory view (RULE-09-02) | ☐ |
 | CreateFollowUp (RULE-09-06) | ☐ |
 | Permission check (RULE-09-07) | ☐ |
+| **Cross-Store Consent (NEW - RULE-09-02, 22-08)** | ☐ |
+| RequestCrossStoreConsent + OTP | ☐ |
+| VerifyCrossStoreConsentOTP | ☐ |
+| EmergencyOverrideAccess (NEW) | ☐ |
 | Test: clinical flow | ☐ |
 
 ### Module 14: Promotions + Vouchers
@@ -260,13 +274,19 @@
 | Task | Done |
 |------|------|
 | Vaccine entity | ☐ |
-| VaccineBatch entity | ☐ |
+| VaccineBatch entity + barcode field (NEW) | ☐ |
+| available_quantity field (NEW - C-565e7b1) | ☐ |
 | Vaccination entity | ☐ |
 | VaccinationSchedule entity | ☐ |
-| AdministerVaccination (RULE-10-01, 10-02, 10-05) | ☐ |
+| **Barcode scanning (RULE-10-06 - NEW)** | ☐ |
+| ValidateBarcode API | ☐ |
+| AdministerVaccine (RULE-10-05, 10-06) | ☐ |
 | Expiry check (RULE-10-03) | ☐ |
+| Stock decrement on injection (RULE-10-05) | ☐ |
 | CreateVaccinationSchedule (RULE-10-04) | ☐ |
+| ScheduleNextVaccination (RULE-10-04) | ☐ |
 | Reminder notifications | ☐ |
+| **Routine vs Clinical vaccination (RULE-10-07)** | ☐ |
 | Test: vaccination flow | ☐ |
 
 ### Module 16: Event Bridges (W4)
@@ -326,27 +346,32 @@
 
 | Task | Done |
 |------|------|
-| Walkin entity | ☐ |
+| Queue entity (NEW) | ☐ |
+| QueueEntry entity (NEW) | ☐ |
+| Walkin entity + appointment_id FK (NEW) | ☐ |
 | CreateWalkIn (RULE-07-01) | ☐ |
 | Enqueue (RULE-07-02, 07-03) | ☐ |
 | Call queue (RULE-07-04) | ☐ |
 | FIFO ordering | ☐ |
+| **Walk-in to Appointment Bridge (RULE-07-05)** | ☐ |
+| CheckInWalkIn → auto-create Appointment | ☐ |
 | Test: walk-in flow | ☐ |
 
 ### Module 20: Grooming FSM
 
 **Owner:** P3  
-**FSM:** ✅ WAITING → COMPLETED
+**FSM:** ✅ WAITING → AWAITING_CUSTOMER_APPROVAL → COMPLETED
 
 | Task | Done |
 |------|------|
 | GroomingSession entity | ☐ |
 | GroomingService entity | ☐ |
-| CreateGroomingSession (RULE-11-01) | ☐ |
-| StartGrooming | ☐ |
-| AddAdditionalService (RULE-11-02) | ☐ |
+| CheckInGrooming (RULE-11-01) | ☐ |
+| PerformGrooming | ☐ |
+| AddGroomingService (RULE-11-02) | ☐ |
 | ConfirmAdditionalService (RULE-11-03) | ☐ |
-| CompleteGrooming | ☐ |
+| RejectAdditionalService (RULE-11-03) | ☐ |
+| CompleteGrooming (RULE-11-04) | ☐ |
 | CancelGrooming | ☐ |
 | Test: grooming FSM | ☐ |
 
@@ -422,34 +447,33 @@
 
 ---
 
-## 6. Progress Tracking
+## 6. Progress Tracking (Updated per C-565e7b1)
 
 | Phase | Module | Owner | Status | % |
 |-------|--------|-------|--------|---|
 | **W1** | Auth + OTP | P1 | ☐ | 0% |
 | **W1** | Users | P1 | ☐ | 0% |
 | **W1** | Organizations | P1 | ☐ | 0% |
-| **W1** | Stores | P1 | ☐ | 0% |
+| **W1** | Stores + StoreResources | P1 | ☐ | 0% |
 | **W1** | Pets | P2 | ☐ | 0% |
-| **W1** | Caregivers | P2 | ☐ | 0% |
 | **W1** | Products | P3 | ☐ | 0% |
 | **W1** | Inventory | P3 | ☐ | 0% |
-| **W2** | Appointments | P1 | ☐ | 0% |
-| **W2** | Orders | P2 | ☐ | 0% |
-| **W2** | Payments | P3 | ☐ | 0% |
-| **W3** | Invoices | P1 | ☐ | 0% |
-| **W3** | Refunds | P1 | ☐ | 0% |
-| **W3** | Clinical | P2 | ☐ | 0% |
+| **W2** | Appointments + Reschedule | P1 | ☐ | 0% |
+| **W2** | Orders + Inventory Reserve | P2 | ☐ | 0% |
+| **W2** | Payments + Partial Refund | P3 | ☐ | 0% |
+| **W3** | Invoices + Partially Paid | P1 | ☐ | 0% |
+| **W3** | Refunds + Retry + 30-day | P1 | ☐ | 0% |
+| **W3** | Clinical + Cross-Store Consent | P2 | ☐ | 0% |
 | **W3** | Promotions | P2 | ☐ | 0% |
-| **W3** | Vaccinations | P3 | ☐ | 0% |
-| **W4** | Event Bridges | All | ☐ | 0% |
+| **W3** | Vaccinations + Barcode | P3 | ☐ | 0% |
+| **W4** | Event Bridges (Outbox) | All | ☐ | 0% |
 | **W5** | FE Integration | All | ☐ | 0% |
 | **W5** | Notifications | P1 | ☐ | 0% |
-| **W5** | Walk-ins | P2 | ☐ | 0% |
-| **W6** | Grooming | P3 | ☐ | 0% |
+| **W5** | Walk-ins + Appointment Bridge | P2 | ☐ | 0% |
+| **W6** | Grooming + Customer Approval | P3 | ☐ | 0% |
 | **W6** | Workforce | P1 | ☐ | 0% |
 | **W6** | Reports | P2 | ☐ | 0% |
-| **W6** | Audit | P1 | ☐ | 0% |
+| **W6** | Audit + Medical Record Access | P1 | ☐ | 0% |
 | **W6** | Docker | P3 | ☐ | 0% |
 | **W6** | Tests | All | ☐ | 0% |
 

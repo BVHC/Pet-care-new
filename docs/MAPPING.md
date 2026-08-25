@@ -4,14 +4,16 @@
 
 ---
 
-## Tổng quan mapping
+## Tổng quan mapping (Updated per C-565e7b1)
 
 | Docs File | Phase | Module | FSM |
 |-----------|-------|--------|-----|
 | **01-business-operations.md** | All | Tất cả | Tất cả |
 | **02-business-rules.md** | All | Tất cả | Tất cả |
-| **03-state-machines.md** | W2, W3, W6 | Appointments, Orders, Payments, Invoices, Refunds, Grooming | ✅ |
+| **03-state-machines.md** | All | Account, Store, Appointments, Orders, Payments, Invoices, Refunds, Grooming, Package, Membership, StockTransfer, PurchaseOrder, Incident | ✅ (8 FSMs chính + 7 FSMs mở rộng) |
 | **04-glossary.md** | All | Tất cả | Tất cả |
+| **06-team-timeline.md** | All | All modules | Phased delivery |
+| **MAPPING.md** | All | All | Cross-reference |
 
 ---
 
@@ -24,8 +26,8 @@
 | Auth + OTP | Section 2: Authentication & OTP | RULE-01-01 → 01-05 | ❌ |
 | Users | Section 3: Identity & Access | RULE-02-01 → 02-05 | ❌ |
 | Organizations | Section 4: Organization & Store | RULE-03-01 → 03-06 | ❌ |
-| Stores | Section 4: Organization & Store | RULE-03-07 → 03-10 | ❌ |
-| Pets | Section 5: Customer & Pet | RULE-04-01 → 04-06 | Section 5: CaregiverInvitation FSM |
+| Stores | Section 4: Organization & Store | RULE-03-01 → 03-06 (shared with Orgs) | ❌ |
+| Pets | Section 5: Customer & Pet | RULE-04-01 | ❌ |
 | Products | Section 6: Service & Product | RULE-05-01 → 05-05 | ❌ |
 | Inventory | Section 13: Inventory | RULE-12-01 → 12-08 | ❌ |
 
@@ -35,9 +37,9 @@
 
 | Module | Business Operations | Business Rules | State Machines |
 |--------|--------------------|--------------------|-------------------|
-| **Appointments** | Section 7: Appointment | RULE-06-01 → 06-09 | Section 7: Appointment FSM |
-| **Orders** | Section 15: Order | RULE-14-01 → 14-06 | Section 15: Order FSM |
-| **Payments** | Section 17: Payment | RULE-16-01 → 16-05 | Section 17: Payment FSM |
+| **Appointments** | Section 7: Appointment | RULE-06-01 → 06-10 | Section 7: Appointment FSM (+ RescheduleAppointment) |
+| **Orders** | Section 15: Order | RULE-14-01 → 14-07 | Section 15: Order FSM (+ ProcessOrderTimeout 15min, + CancelOrderWithRefund) |
+| **Payments** | Section 17: Payment | RULE-16-01 → 16-05 | Section 17: Payment FSM (+ PARTIALLY_REFUNDED) |
 
 ---
 
@@ -45,11 +47,11 @@
 
 | Module | Business Operations | Business Rules | State Machines |
 |--------|--------------------|--------------------|-------------------|
-| **Invoices** | Section 16: Billing | RULE-15-01 → 15-07 | Section 16: Invoice FSM |
-| **Refunds** | Section 18: Refund | RULE-17-01 → 17-06 | Section 18: Refund FSM |
-| Clinical | Section 10: Veterinary/Clinical | RULE-09-01 → 09-07 | ❌ |
+| **Invoices** | Section 16: Billing | RULE-15-01 → 15-07 | Section 16: Invoice FSM (+ PARTIALLY_PAID) |
+| **Refunds** | Section 18: Refund | RULE-17-01 → 17-07 | Section 18: Refund FSM (+ RetryRefund, + ResolveRefundManually, + 30-day window) |
+| Clinical | Section 10: Veterinary/Clinical | RULE-09-01 → 09-07 + RULE-22-08 | ❌ (+ CrossStoreConsent, EmergencyOverride) |
 | Promotions | Section 19: Promotion | RULE-18-01 → 18-05 | ❌ |
-| Vaccinations | Section 11: Vaccination | RULE-10-01 → 10-05 | ❌ |
+| Vaccinations | Section 11: Vaccination | RULE-10-01 → 10-07 | ❌ (+ Barcode scanning, + available_quantity) |
 
 ---
 
@@ -82,11 +84,10 @@
 - RULE-02-01 → 02-05: User management
 
 ## RULE-03: Organization/Store
-- RULE-03-01 → 03-10: Store operations
+- RULE-03-01 → 03-06: Organization/Store operations
 
 ## RULE-04: Pets
-- RULE-04-01: Only owner/caregiver can manage pet
-- RULE-04-02 → 04-06: Caregiver FSM
+- RULE-04-01: Only owner can manage pet
 
 ## RULE-05: Products
 - RULE-05-01 → 05-05: Product management
@@ -160,32 +161,46 @@
 
 ## FSMs trong 03-state-machines.md
 
+### W1: 2 FSMs (NEW per C-565e7b1)
+
+| FSM | States | Section |
+|-----|--------|---------|
+| **Account** | PENDING_VERIFICATION, ACTIVE, LOCKED | Section 1 |
+| **Store** | ACTIVE, SUSPENDED, DEACTIVATED, ARCHIVED | Section 2 |
+
 ### W2: 3 Core FSMs
 
 | FSM | States | Section |
 |-----|--------|---------|
-| **Appointment** | BOOKED, CONFIRMED, CHECKED_IN, IN_PROGRESS, COMPLETED, CANCELLED, NO_SHOW | Section 7 |
-| **Order** | PENDING_PAYMENT, PAID, CONFIRMED, PROCESSING, READY, DELIVERED, CANCELLED, REFUNDED | Section 15 |
-| **Payment** | PENDING, PROCESSING, SUCCESS, FAILED, CANCELLED, REFUNDED | Section 17 |
+| **Appointment** | BOOKED, CONFIRMED, CHECKED_IN, IN_PROGRESS, COMPLETED, CANCELLED, NO_SHOW | Section 4 |
+| **Order** | PENDING_PAYMENT, PAID, CONFIRMED, PROCESSING, READY, DELIVERED, CANCELLED, REFUNDED | Section 5 |
+| **Payment** | PENDING, PROCESSING, SUCCESS, FAILED, CANCELLED, PARTIALLY_REFUNDED, REFUNDED | Section 7 |
 
 ### W3: 2 Commerce FSMs
 
 | FSM | States | Section |
 |-----|--------|---------|
-| **Invoice** | DRAFT, ISSUED, PARTIALLY_PAID, PAID, VOID, REFUNDED | Section 16 |
-| **Refund** | REQUESTED, APPROVED, REJECTED, PROCESSING, COMPLETED, FAILED | Section 18 |
+| **Invoice** | DRAFT, ISSUED, PARTIALLY_PAID, PAID, VOID, REFUNDED | Section 6 |
+| **Refund** | REQUESTED, APPROVED, REJECTED, PROCESSING, COMPLETED, FAILED | Section 8 |
 
-### W1: 1 Caregiver FSM
-
-| FSM | States | Section |
-|-----|--------|---------|
-| **CaregiverInvitation** | INVITED, ACTIVE, REJECTED, EXPIRED, REVOKED | Section 5 |
 
 ### W6: 1 Grooming FSM
 
 | FSM | States | Section |
 |-----|--------|---------|
-| **Grooming** | WAITING, IN_PROGRESS, COMPLETED, CANCELLED | Section 12 |
+| **Grooming** | WAITING, IN_PROGRESS, AWAITING_CUSTOMER_APPROVAL, COMPLETED, CANCELLED | Section 15 |
+
+### Additional FSMs (Mở rộng theo docs/03)
+
+| FSM | States | Section |
+|-----|--------|---------|
+| **CaregiverInvitation** | INVITED, ACTIVE, REJECTED, EXPIRED, REVOKED | Section 3 |
+| **Membership** | ACTIVE, UPGRADED, EXPIRED | Section 9 |
+| **Package** | PURCHASED, ACTIVATED, PARTIALLY_CONSUMED, FULLY_CONSUMED, CANCELLED, EXPIRED | Section 10 |
+| **StockTransfer** | REQUESTED, APPROVED, REJECTED, IN_TRANSIT, RECEIVED, DISCREPANCY, CANCELLED | Section 11 |
+| **PurchaseRequest** | DRAFT, SUBMITTED, APPROVED, REJECTED, CANCELLED | Section 12 |
+| **PurchaseOrder** | ISSUED, PARTIALLY_RECEIVED, RECEIVED, CLOSED, CANCELLED | Section 13 |
+| **Incident** | RECORDED, CLASSIFIED, UNDER_INVESTIGATION, ESCALATED, RESOLVED, CLOSED | Section 14 |
 
 ---
 

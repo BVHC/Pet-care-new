@@ -7,16 +7,19 @@
 
 ---
 
-## 1. Roles (5 Roles)
+## 1. Roles (8 Roles)
 
-| Role | Mô tả | Ai |
-|------|-------|-----|
-| SUPER_ADMIN | Quản trị toàn hệ thống, setup | Dev / PO |
-| STORE_MANAGER | Quản lý store, duyệt refunds | Chủ store |
-| RECEPTIONIST | Tiếp khách, check-in, tạo đơn | Lễ tân |
-| VETERINARIAN | Khám bệnh, kê đơn, tiêm phòng | Bác sĩ |
-| GROOMER | Làm đẹp thú cưng | Stylist |
-| CUSTOMER | Đặt lịch, mua hàng, thanh toán | Khách hàng |
+| Scope | Role | Mô tả | Ai |
+|-------|------|-------|-----|
+| Platform | SUPER_ADMIN | Quản trị toàn hệ thống, setup | Dev / PO |
+| Organization | ORG_ADMIN | Quản lý chuỗi cửa hàng | Chủ chuỗi |
+| Store | STORE_MANAGER | Quản lý store, duyệt refunds | Chủ store |
+| Store | FINANCE_STAFF | Thu ngân, đối soát | Kế toán |
+| Store | INVENTORY_STAFF | Quản lý kho | Thủ kho |
+| Store | RECEPTIONIST | Tiếp khách, check-in, tạo đơn | Lễ tân |
+| Store | VETERINARIAN | Khám bệnh, kê đơn, tiêm phòng | Bác sĩ |
+| Store | GROOMER | Làm đẹp thú cưng | Stylist |
+| User | CUSTOMER | Đặt lịch, mua hàng, thanh toán | Khách hàng |
 
 ---
 
@@ -322,9 +325,28 @@ src/main/java/com/petcare/
 src/main/resources/
 ├── application.yml
 └── db/migration/
-    ├── V1__core_enums.sql
-    ├── V2__accounts_users.sql
-    ├── V3__organizations_stores.sql
+    ├── V1__core_enums.sql          # 9 user_role + status enums
+    ├── V2__accounts_users.sql      # Account, User, OTP
+    ├── V3__organizations_stores.sql # Organization, Store, OperatingHours
+    ├── V4__pets.sql                # Pet entity
+    ├── V5__services_products.sql   # Services, Products
+    ├── V5b__store_resources.sql    # StoreResources + RequiredResources (C-565e7b1)
+    ├── V6__inventory.sql           # Inventory (PhysicalQuantity + ReservedQuantity)
+    ├── V7__appointments.sql        # Appointment FSM
+    ├── V8__orders.sql              # Order + Cart FSM
+    ├── V9__payments.sql            # Payment FSM (with PARTIALLY_REFUNDED)
+    ├── V10__invoices.sql           # Invoice FSM
+    ├── V11__refunds.sql            # Refund FSM
+    ├── V12__clinical.sql           # MedicalRecord + CrossStoreConsent (C-565e7b1)
+    ├── V13__vaccinations.sql       # Vaccination + VaccineBatch (with barcode - C-565e7b1)
+    ├── V14__promotions.sql         # Voucher
+    ├── V15__notifications.sql      # Notification
+    ├── V16__walkins.sql            # Walkin + Queue + QueueEntry (C-565e7b1)
+    ├── V17__grooming.sql           # Grooming FSM (with AWAITING_CUSTOMER_APPROVAL)
+    ├── V18__workforce.sql          # WorkSchedule + Leave
+    ├── V19__reports.sql            # Read-only aggregates
+    ├── V20__audit_logs.sql         # AuditLog + EMERGENCY_ACCESS_LOG
+    └── V21__outbox_events.sql      # Transactional Outbox (D-04)
     └── ...
 
 src/test/java/com/petcare/
@@ -437,8 +459,8 @@ curl -X POST http://localhost:8080/api/auth/register \
 | Mon | Create project + Docker | — | — |
 | Tue | Auth module | — | — |
 | Wed | Users + Organizations | Pets entity | Products entity |
-| Thu | Stores + Operating hours | PetService | ProductService |
-| Fri | Inventory | Caregiver FSM | Inventory module |
+| Thu | Stores + Operating hours + StoreResources | PetService | ProductService |
+| Fri | Inventory (with PhysicalQuantity + ReservedQuantity) | Pet validations | Inventory module |
 
 ### W2: Core FSM
 
@@ -446,8 +468,8 @@ curl -X POST http://localhost:8080/api/auth/register \
 |-----|-----|-----|-----|
 | Mon | Appointments entity | Cart entity | Payment entity |
 | Tue | Appointments FSM | Orders FSM | Payments FSM |
-| Wed | Appointment tests | Order tests | Payment tests |
-| Thu | Fix + polish | Fix + polish | Fix + polish |
+| Wed | Appointment tests (with StoreResource collision) | Order tests (with Inventory Reserve 15min TTL) | Payment tests (with PARTIALLY_REFUNDED) |
+| Thu | RescheduleAppointment | CancelOrderWithRefund | Partial refund flow |
 | Fri | **Demo M2** | **Demo M2** | **Demo M2** |
 
 ---

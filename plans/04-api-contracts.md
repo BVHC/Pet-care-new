@@ -1,29 +1,37 @@
 # Pet-care-new: REST API Contracts
 
 > **Date:** 2026-08-18  
-> **Scope:** MVP - 11 modules P0+P1, 5 roles  
+> **Scope:** MVP - 11 modules P0+P1, 8 roles  
 > **Base URL:** `/api`
 
 ---
 
-## 1. Roles (Final - 5 Roles)
+## 1. Roles (Final — 8 Roles)
 
-### Nhóm 1: Admin (1 role)
+### Nhóm 1: Platform (1 role)
 
 | Role | Mô tả | Ai |
 |------|-------|-----|
 | SUPER_ADMIN | Quản trị toàn hệ thống, setup Organization/Stores đầu tiên | Dev / PO |
 
-### Nhóm 2: Store-Level (4 roles)
+### Nhóm 2: Organization (1 role)
 
 | Role | Mô tả | Ai |
 |------|-------|-----|
-| STORE_MANAGER | Quản lý store, duyệt refunds, inventory, finance, reports | Chủ store |
+| ORG_ADMIN | Quản lý chuỗi cửa hàng, setup organization | Chủ chuỗi |
+
+### Nhóm 3: Store-Level (6 roles)
+
+| Role | Mô tả | Ai |
+|------|-------|-----|
+| STORE_MANAGER | Quản lý store, duyệt refunds, reports | Chủ store |
+| FINANCE_STAFF | Thu ngân, thanh toán, hoàn tiền, đối soát | Kế toán |
+| INVENTORY_STAFF | Quản lý kho, chuyển kho, mua hàng | Thủ kho |
 | RECEPTIONIST | Tiếp khách, check-in, tạo đơn, thu tiền mặt | Lễ tân |
 | VETERINARIAN | Khám bệnh, kê đơn, tiêm phòng, tạo bệnh án | Bác sĩ |
 | GROOMER | Làm đẹp thú cưng, thêm dịch vụ phát sinh | Stylist |
 
-### Nhóm 3: Customer (1 role)
+### Nhóm 4: Customer (1 role)
 
 | Role | Mô tả | Ai |
 |------|-------|-----|
@@ -312,41 +320,7 @@ Response (200):
 }
 ```
 
-### 4.3 Caregiver Invitation
 
-```
-POST /api/pets/{petId}/caregivers/invite
-Authorization: Bearer <token>
-Roles: CUSTOMER
-
-Request:
-{
-  "phone": "0987654321",
-  "permissions": ["pet:view", "appointment:create"]
-}
-
-Response (201):
-{
-  "data": { "id": 1, "status": "INVITED", "expiresAt": "..." },
-  "message": "Invitation sent",
-  "code": 201
-}
-```
-
-### 4.4 Accept/Reject Invitation
-
-```
-POST /api/caregiver/invitations/{id}/accept
-POST /api/caregiver/invitations/{id}/reject
-Authorization: Bearer <token>
-
-Response (200):
-{
-  "data": { "status": "ACTIVE" },
-  "message": "Invitation accepted",
-  "code": 200
-}
-```
 
 ---
 
@@ -467,7 +441,7 @@ Response (200):
 }
 ```
 
-### 6.3 Appointment Transitions
+### 6.3 Appointment Transitions (Updated per C-565e7b1)
 
 ```
 POST /api/appointments/{id}/confirm      → CONFIRMED
@@ -475,10 +449,11 @@ POST /api/appointments/{id}/check-in     → CHECKED_IN
 POST /api/appointments/{id}/start        → IN_PROGRESS
 POST /api/appointments/{id}/complete     → COMPLETED
 POST /api/appointments/{id}/cancel       → CANCELLED
-POST /api/appointments/{id}/no-show      → NO_SHOW
+POST /api/appointments/{id}/no-show       → NO_SHOW
+POST /api/appointments/{id}/reschedule    → BOOKED (NEW)
 
 Authorization: Bearer <token>
-Roles: RECEPTIONIST (most), CUSTOMER (cancel only)
+Roles: RECEPTIONIST (most), CUSTOMER (cancel, reschedule)
 
 Response (200):
 {
@@ -487,6 +462,32 @@ Response (200):
   "code": 200
 }
 ```
+
+### 6.4 Reschedule Appointment (NEW - C-565e7b1)
+
+```
+POST /api/appointments/{id}/reschedule
+Authorization: Bearer <token>
+Roles: CUSTOMER, RECEPTIONIST
+
+Request:
+{
+  "newScheduledAt": "2026-08-22T10:00:00"
+}
+
+Response (200):
+{
+  "data": {
+    "id": 1,
+    "status": "BOOKED",
+    "scheduledAt": "2026-08-22T10:00:00"
+  },
+  "message": "Appointment rescheduled",
+  "code": 200
+}
+```
+
+Note: Reschedule về trạng thái BOOKED để tái kiểm tra StoreResource availability.
 
 ---
 
@@ -555,18 +556,22 @@ Response (201):
 }
 ```
 
-### 7.3 Order Transitions
+### 7.3 Order Transitions (Updated per C-565e7b1)
 
 ```
-POST /api/orders/{id}/confirm       → CONFIRMED
-POST /api/orders/{id}/process       → PROCESSING
-POST /api/orders/{id}/prepare       → READY
-POST /api/orders/{id}/deliver       → DELIVERED
-POST /api/orders/{id}/cancel        → CANCELLED
+POST /api/orders/{id}/confirm          → CONFIRMED
+POST /api/orders/{id}/process          → PROCESSING
+POST /api/orders/{id}/prepare          → READY
+POST /api/orders/{id}/deliver          → DELIVERED
+POST /api/orders/{id}/cancel           → CANCELLED (PENDING_PAYMENT/CONFIRMED only)
+POST /api/orders/{id}/cancel-with-refund → CANCELLED (PROCESSING/READY - NEW)
+POST /api/orders/{id}/reschedule       → BOOKED (NEW - if Order has appointment)
 
 Authorization: Bearer <token>
 Roles: RECEPTIONIST (most), CUSTOMER (cancel only)
 ```
+
+Note: Inventory Reservation có TTL 15 phút. Quá hạn → hệ thống tự động cancel + giải phóng tồn kho.
 
 ---
 
@@ -885,7 +890,184 @@ Response (200):
 
 ---
 
-## 14. Skip (P2 - Không có endpoints)
+## 13. Clinical + Cross-Store Medical Records (NEW - C-565e7b1)
+
+### 13.1 Examine Pet
+
+```
+POST /api/clinical/examinations
+Authorization: Bearer <token>
+Roles: VETERINARIAN
+
+Request:
+{
+  "petId": 1,
+  "appointmentId": 1,
+  "chiefComplaint": "Khó thở nhẹ",
+  "symptoms": ["ho", "khó thở"],
+  "examinationResults": {
+    "temperature": 38.5,
+    "heartRate": 120,
+    "weight": 4.2
+  },
+  "diagnosis": "Viêm đường hô hấp nhẹ",
+  "treatmentPlan": "Thuốc kháng sinh 5 ngày"
+}
+
+Response (201):
+{
+  "data": { "medicalRecordId": 1, "status": "ACTIVE" },
+  "message": "Medical record created",
+  "code": 201
+}
+```
+
+### 13.2 Cross-Store Medical Record Consent (NEW)
+
+```
+# Bác sĩ gửi yêu cầu truy cập bệnh án Store khác
+POST /api/clinical/cross-store-consent/request
+Authorization: Bearer <token>
+Roles: VETERINARIAN
+
+Request:
+{
+  "petId": 1,
+  "targetStoreId": 2,
+  "reason": "Pet có tiền sử dị ứng"
+}
+
+Response (200):
+{
+  "data": { "consentRequestId": 1, "status": "PENDING" },
+  "message": "OTP sent to pet owner",
+  "code": 200
+}
+
+# Customer xác thực OTP
+POST /api/clinical/cross-store-consent/verify
+Authorization: Bearer <token>
+Roles: CUSTOMER
+
+Request:
+{
+  "consentRequestId": 1,
+  "otp": "123456"
+}
+
+Response (200):
+{
+  "data": { "accessGranted": true, "expiresAt": "..." },
+  "message": "Cross-store access granted for 24 hours",
+  "code": 200
+}
+
+# Emergency Override (không cần OTP)
+POST /api/clinical/cross-store-consent/emergency
+Authorization: Bearer <token>
+Roles: VETERINARIAN
+
+Request:
+{
+  "petId": 1,
+  "reason": "Cấp cứu nguy kịch - cần biết tiền sử dị ứng"
+}
+
+Response (200):
+{
+  "data": { "accessGranted": true },
+  "message": "Emergency access granted - audit log recorded",
+  "code": 200
+}
+```
+
+---
+
+## 14. Vaccinations with Barcode Scanning (NEW - C-565e7b1)
+
+### 14.1 Administer Vaccine with Barcode
+
+```
+POST /api/vaccinations/administer
+Authorization: Bearer <token>
+Roles: VETERINARIAN
+
+Request:
+{
+  "petId": 1,
+  "vaccineId": 1,
+  "scannedBarcode": "VAC-2024-001",  // Bắt buộc
+  "site": "right_shoulder",
+  "nextDueDate": "2027-08-25",
+  "notes": "Pet khỏe"
+}
+
+Response (201):
+{
+  "data": {
+    "vaccinationId": 1,
+    "batchNumber": "VAC-2024-001",
+    "expiryDate": "2027-08-01",
+    "manufacturer": "Zoetis"
+  },
+  "message": "Vaccination recorded",
+  "code": 201
+}
+```
+
+### 14.2 Validate Barcode
+
+```
+POST /api/vaccinations/validate-barcode
+Authorization: Bearer <token>
+Roles: VETERINARIAN
+
+Request:
+{
+  "barcode": "VAC-2024-001",
+  "storeId": 1
+}
+
+Response (200):
+{
+  "data": {
+    "valid": true,
+    "batchId": 1,
+    "vaccineName": "Rabies",
+    "expiryDate": "2027-08-01",
+    "availableQuantity": 50
+  },
+  "code": 200
+}
+```
+
+---
+
+## 15. Walk-in to Appointment Bridge (NEW - C-565e7b1)
+
+### 15.1 Check-in Walk-in
+
+```
+POST /api/walkins/{id}/check-in
+Authorization: Bearer <token>
+Roles: RECEPTIONIST
+
+Response (200):
+{
+  "data": {
+    "walkinId": 1,
+    "appointmentId": 100,  // Auto-created
+    "status": "IN_PROGRESS",
+    "channel": "WALK_IN"
+  },
+  "message": "Walk-in checked in - internal appointment created",
+  "code": 200
+}
+```
+
+---
+
+## 16. Skip (P2 - Không có endpoints)
 
 | Module | Lý do |
 |--------|-------|

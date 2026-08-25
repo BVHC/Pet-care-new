@@ -14,9 +14,9 @@
 | **Phases** | 4 |
 | **Tuần** | 6 |
 | **Modules** | 22 |
-| **FSMs** | 7 |
-| **Roles** | 5 |
-| **Rules** | ~150 |
+| **FSMs** | 8 (Updated per C-565e7b1) |
+| **Roles** | 8 (SUPER_ADMIN, ORG_ADMIN, STORE_MANAGER, FINANCE_STAFF, INVENTORY_STAFF, RECEPTIONIST, VETERINARIAN, GROOMER, CUSTOMER) |
+| **Rules** | ~150+ |
 
 ---
 
@@ -31,7 +31,7 @@
 | Users | P1 | ❌ |
 | Organizations | P1 | ❌ |
 | Stores | P1 | ❌ |
-| Pets + Caregivers | P2 | ✅ |
+| Pets | P2 | ✅ |
 | Products | P3 | ❌ |
 | Inventory | P3 | ❌ |
 
@@ -75,27 +75,30 @@
 |--------|-------|----------|
 | FE Integration | All | P1 |
 | Notifications | P1 | P2 |
-| Walk-ins | P2 | P2 |
-| **Grooming FSM** | P3 | P2 |
+| Walk-ins + Appointment Bridge | P2 | P2 |
+| **Grooming FSM + Customer Approval** | P3 | P2 |
 | Workforce | P1 | P2 |
 | Reports | P2 | P2 |
-| Audit Logs | P1 | P2 |
+| Audit Logs + Medical Access | P1 | P2 |
 | Docker + Deploy | P3 | P1 |
 
 **Deliverable:** ✅ Demo ready
 
 ---
 
-## 2. Roles (5 Roles - Final)
+## 2. Roles (8 Roles)
 
-| Role | Mô tả | Ai |
-|------|-------|-----|
-| **SUPER_ADMIN** | Quản trị toàn hệ thống, setup | Dev / PO |
-| **STORE_MANAGER** | Quản lý store, duyệt refunds, inventory, finance, reports | Chủ store |
-| **RECEPTIONIST** | Tiếp khách, check-in, tạo đơn, thu tiền | Lễ tân |
-| **VETERINARIAN** | Khám bệnh, kê đơn, tiêm phòng, tạo bệnh án | Bác sĩ |
-| **GROOMER** | Làm đẹp thú cưng, thêm dịch vụ phát sinh | Stylist |
-| **CUSTOMER** | Đặt lịch, mua hàng, thanh toán, quản lý pets | Khách hàng |
+| Scope | Role | Mô tả | Ai |
+|-------|------|-------|-----|
+| Platform | **SUPER_ADMIN** | Quản trị toàn hệ thống, setup | Dev / PO |
+| Organization | **ORG_ADMIN** | Quản lý chuỗi cửa hàng | Chủ chuỗi |
+| Store | **STORE_MANAGER** | Quản lý store, duyệt refunds, reports | Chủ store |
+| Store | **FINANCE_STAFF** | Thu ngân, thanh toán, hoàn tiền, đối soát | Kế toán |
+| Store | **INVENTORY_STAFF** | Quản lý kho, chuyển kho, mua hàng | Thủ kho |
+| Store | **RECEPTIONIST** | Tiếp khách, check-in, tạo đơn, thu tiền | Lễ tân |
+| Store | **VETERINARIAN** | Khám bệnh, kê đơn, tiêm phòng, tạo bệnh án | Bác sĩ |
+| Store | **GROOMER** | Làm đẹp thú cưng, thêm dịch vụ phát sinh | Stylist |
+| User | **CUSTOMER** | Đặt lịch, mua hàng, thanh toán, quản lý pets | Khách hàng |
 
 ---
 
@@ -109,19 +112,20 @@
 
 ---
 
-## 4. FSMs Summary (7 FSMs)
+## 4. FSMs Summary (8 FSMs - Updated per C-565e7b1)
 
 | FSM | States | Transitions | Guards | Phase |
 |-----|--------|-------------|--------|-------|
-| **CaregiverInvitation** | 4 | 5 | RULE-04-01 → 04-06 | W1 |
-| **Appointment** | 7 | 10 | RULE-06-01 → 06-09 | W2 |
-| **Order** | 8 | 10 | RULE-14-01 → 14-06 | W2 |
-| **Payment** | 6 | 7 | RULE-16-01 → 16-05 | W2 |
-| **Invoice** | 6 | 7 | RULE-15-01 → 15-07 | W3 |
-| **Refund** | 6 | 6 | RULE-17-01 → 17-06 | W3 |
-| **Grooming** | 4 | 6 | RULE-11-01 → 11-05 | W6 |
+| **Account** | 3 | 4 | RULE-01-01 → 01-05 | W1 |
+| **Store** | 4 | 6 | RULE-03-01 → 03-06 | W1 |
+| **Appointment** | 7 | 14 | RULE-06-01 → 06-10 | W2 |
+| **Order** | 8 | 13 | RULE-14-01 → 14-07 | W2 |
+| **Payment** | 7 | 10 | RULE-16-01 → 16-05 | W2 |
+| **Invoice** | 6 | 11 | RULE-15-01 → 15-07 | W3 |
+| **Refund** | 6 | 8 | RULE-17-01 → 17-07 | W3 |
+| **Grooming** | 5 | 9 | RULE-11-01 → 11-05 | W6 |
 
-**Tổng: 7 FSMs, 51 transitions**
+**Tổng: 8 FSMs, ~75 transitions**
 
 ---
 
@@ -134,8 +138,8 @@
 | Mon | Maven setup + Docker Compose | — | — |
 | Tue | SecurityConfig + JWT + Auth | — | — |
 | Wed | Users + Organizations | Pets entity | Products entity |
-| Thu | Stores + Operating hours | PetService + Caregiver | ProductService |
-| Fri | Inventory config | Caregiver FSM | Inventory module |
+| Thu | Stores + Operating hours | PetService CRUD | ProductService |
+| Fri | Inventory config | Pet validations | Inventory module |
 
 **Deliverable:** ✅ Auth, Users, Orgs, Pets, Products, Inventory
 
@@ -148,10 +152,10 @@
 | Mon | Appointments entity | Cart entity | Payment entity |
 | Tue | Appointments FSM (book, confirm) | Orders entity + FSM | Payments FSM |
 | Wed | Appointments FSM (check-in, start) | Orders FSM (confirm, process) | Payments FSM (verify, callback) |
-| Thu | Appointments FSM (complete, cancel) | Orders FSM (prepare, deliver) | Payments FSM (cancel) |
-| Fri | AppointmentController + tests | OrderController + tests | PaymentController + tests |
+| Thu | Appointments FSM (reschedule, cancel) | Orders FSM (prepare, deliver, timeout) | Payments FSM (cancel, partial refund) |
+| Fri | AppointmentController + StoreResource collision | OrderController + Inventory reserve | PaymentController + tests |
 
-**Deliverable:** ✅ Appointments + Orders + Payments FSMs
+**Deliverable:** ✅ Appointments + Orders + Payments FSMs (with StoreResource + Inventory Reservation + 15min TTL)
 
 ---
 
@@ -159,10 +163,10 @@
 
 | Day | P1 (Lead) | P2 | P3 |
 |-----|-----------|-----|-----|
-| Mon | Invoice entity + FSM | MedicalRecord + Diagnosis entities | Voucher entity |
-| Tue | Invoice FSM | ClinicalService: examine, diagnose | Vaccination schema |
-| Wed | Refund entity + FSM | Prescription + FollowUp | Vaccinations |
-| Thu | Refund FSM (approve, reject) | MedicalHistory + permissions | Voucher validation |
+| Mon | Invoice entity + FSM | MedicalRecord + Cross-Store Consent | Voucher entity |
+| Tue | Invoice FSM + Partially Paid | ClinicalService + Emergency Override | Vaccination + Barcode schema |
+| Wed | Refund entity + FSM + 30-day window | Prescription + FollowUp | Vaccination + Barcode scanning |
+| Thu | Refund FSM (approve, reject, retry, manual) | MedicalHistory + permissions | Voucher validation |
 | Fri | Refund FSM (process, complete) | ClinicalController + tests | Vaccination tests |
 
 **W4: Event bridges + Integration**

@@ -7,24 +7,32 @@
 
 ---
 
-## 1. Roles (5 Roles - Final)
+## 1. Roles (8 Roles)
 
-### Nhóm 1: Admin (1 role)
+### Nhóm 1: Platform (1 role)
 
 | Role | Mô tả | Ai |
 |------|-------|-----|
 | SUPER_ADMIN | Quản trị toàn hệ thống, setup | Dev / PO |
 
-### Nhóm 2: Store-Level (4 roles)
+### Nhóm 2: Organization (1 role)
 
 | Role | Mô tả | Ai |
 |------|-------|-----|
-| STORE_MANAGER | Quản lý store, duyệt refunds, inventory, finance, reports | Chủ store |
+| ORG_ADMIN | Quản lý chuỗi cửa hàng, setup organization | Chủ chuỗi |
+
+### Nhóm 3: Store-Level (6 roles)
+
+| Role | Mô tả | Ai |
+|------|-------|-----|
+| STORE_MANAGER | Quản lý store, duyệt refunds, reports | Chủ store |
+| FINANCE_STAFF | Thu ngân, thanh toán, hoàn tiền, đối soát | Kế toán |
+| INVENTORY_STAFF | Quản lý kho, chuyển kho, mua hàng | Thủ kho |
 | RECEPTIONIST | Tiếp khách, check-in, tạo đơn, thu tiền | Lễ tân |
 | VETERINARIAN | Khám bệnh, kê đơn, tiêm phòng, tạo bệnh án | Bác sĩ |
 | GROOMER | Làm đẹp thú cưng, thêm dịch vụ phát sinh | Stylist |
 
-### Nhóm 3: Customer (1 role)
+### Nhóm 4: Customer (1 role)
 
 | Role | Mô tả | Ai |
 |------|-------|-----|
@@ -42,7 +50,7 @@
 | Users | ❌ |
 | Organizations | ❌ |
 | Stores | ❌ |
-| Pets + Caregivers | ❌ |
+| Pets | ❌ |
 | Products | ❌ |
 | Inventory | ❌ |
 
@@ -85,10 +93,13 @@
 ```sql
 -- V1__core_enums.sql
 
--- 5 Roles
+-- 8 System Roles
 CREATE TYPE user_role AS ENUM (
     'SUPER_ADMIN',
+    'ORG_ADMIN',
     'STORE_MANAGER',
+    'FINANCE_STAFF',
+    'INVENTORY_STAFF',
     'RECEPTIONIST',
     'VETERINARIAN',
     'GROOMER',
@@ -121,7 +132,7 @@ CREATE TYPE order_status AS ENUM (
 
 -- Payment Status (FSM)
 CREATE TYPE payment_status AS ENUM (
-    'PENDING', 'PROCESSING', 'SUCCESS', 'FAILED', 'CANCELLED', 'REFUNDED'
+    'PENDING', 'PROCESSING', 'SUCCESS', 'FAILED', 'CANCELLED', 'PARTIALLY_REFUNDED', 'REFUNDED'
 );
 
 -- Invoice Status (FSM)
@@ -134,14 +145,24 @@ CREATE TYPE refund_status AS ENUM (
     'REQUESTED', 'APPROVED', 'REJECTED', 'PROCESSING', 'COMPLETED', 'FAILED'
 );
 
--- Caregiver Status
-CREATE TYPE caregiver_status AS ENUM (
-    'INVITED', 'ACTIVE', 'REJECTED', 'EXPIRED', 'REVOKED'
-);
-
 -- Grooming Status (FSM)
 CREATE TYPE grooming_status AS ENUM (
-    'WAITING', 'IN_PROGRESS', 'COMPLETED', 'CANCELLED'
+    'WAITING', 'IN_PROGRESS', 'AWAITING_CUSTOMER_APPROVAL', 'COMPLETED', 'CANCELLED'
+);
+
+-- Queue Entry Status (NEW - C-565e7b1)
+CREATE TYPE queue_entry_status AS ENUM (
+    'WAITING', 'CALLED', 'IN_SERVICE', 'COMPLETED', 'CANCELLED', 'NO_SHOW'
+);
+
+-- Consent Status (NEW - C-565e7b1)
+CREATE TYPE consent_status AS ENUM (
+    'ACTIVE', 'REVOKED', 'EXPIRED'
+);
+
+-- Cross-Store Consent Status (NEW - C-565e7b1)
+CREATE TYPE cross_store_consent_status AS ENUM (
+    'PENDING', 'APPROVED', 'EXPIRED', 'REVOKED'
 );
 ```
 
@@ -234,7 +255,7 @@ CREATE TABLE store_services (
 );
 ```
 
-### 3.4 Pets + Caregivers (V4)
+### 3.4 Pets (V4)
 
 ```sql
 -- V4__pets.sql
@@ -253,19 +274,6 @@ CREATE TABLE pets (
 );
 
 CREATE INDEX idx_pets_owner ON pets(owner_id);
-
-CREATE TABLE caregiver_invitations (
-    id BIGSERIAL PRIMARY KEY,
-    pet_id BIGINT NOT NULL REFERENCES pets(id),
-    inviter_id BIGINT NOT NULL REFERENCES users(id),
-    caregiver_phone VARCHAR(20) NOT NULL,
-    permissions TEXT[],  -- pet:view, appointment:create, ...
-    status caregiver_status NOT NULL DEFAULT 'INVITED',
-    expires_at TIMESTAMP NOT NULL,
-    accepted_at TIMESTAMP,
-    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-);
 ```
 
 ### 3.5 Services + Products + Inventory (V5)
@@ -308,6 +316,32 @@ CREATE TABLE inventory (
 
 CREATE INDEX idx_inventory_store ON inventory(store_id);
 CREATE INDEX idx_inventory_low_stock ON inventory(store_id, quantity) WHERE quantity <= min_threshold;
+```
+
+### 3.5b Store Resources (NEW - C-565e7b1)
+
+```sql
+-- V5b__store_resources.sql (thêm vào Phase 1)
+CREATE TABLE store_resources (
+    id BIGSERIAL PRIMARY KEY,
+    store_id BIGINT NOT NULL REFERENCES stores(id),
+    resource_type VARCHAR(50) NOT NULL,  -- EXAMINATION_ROOM, GROOMING_TABLE, ULTRASOUND_ROOM, etc.
+    name VARCHAR(100) NOT NULL,
+    capacity INT NOT NULL DEFAULT 1,
+    is_active BOOLEAN DEFAULT TRUE,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    UNIQUE(store_id, resource_type, name)
+);
+
+CREATE TABLE service_required_resources (
+    id BIGSERIAL PRIMARY KEY,
+    service_id BIGINT NOT NULL REFERENCES services(id),
+    resource_type VARCHAR(50) NOT NULL,
+    quantity_required INT NOT NULL DEFAULT 1,
+    UNIQUE(service_id, resource_type)
+);
+
+CREATE INDEX idx_store_resources_store ON store_resources(store_id, resource_type);
 ```
 
 ### 3.6 Appointments (V6) - FSM
@@ -596,9 +630,13 @@ CREATE TABLE vaccine_batches (
     vaccine_id BIGINT NOT NULL REFERENCES vaccines(id),
     store_id BIGINT NOT NULL REFERENCES stores(id),
     batch_number VARCHAR(100) NOT NULL,
+    barcode VARCHAR(100),  -- Barcode/QR for scanning (C-565e7b1)
     expiry_date DATE NOT NULL,
     quantity INT NOT NULL,
+    available_quantity INT NOT NULL,  -- Separate from reserved (C-565e7b1)
     price DECIMAL(12,2),
+    status VARCHAR(20) DEFAULT 'ACTIVE',  -- ACTIVE, EXPIRED, EXHAUSTED
+    manufacturer VARCHAR(200),
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     UNIQUE(vaccine_id, batch_number)
 );
@@ -655,8 +693,32 @@ CREATE INDEX idx_notifications_unread ON notifications(user_id, is_read) WHERE i
 
 ### 3.15 Walk-ins + Queue (V15)
 
+> Updated per C-565e7b1: Thêm bảng Queue + Walk-in to Appointment Bridge
+
 ```sql
 -- V15__walkins.sql
+CREATE TABLE queues (
+    id BIGSERIAL PRIMARY KEY,
+    store_id BIGINT NOT NULL REFERENCES stores(id),
+    date DATE NOT NULL,
+    current_position INT DEFAULT 0,
+    status VARCHAR(20) DEFAULT 'ACTIVE',  -- ACTIVE, CLOSED
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    UNIQUE(store_id, date)
+);
+
+CREATE TABLE queue_entries (
+    id BIGSERIAL PRIMARY KEY,
+    queue_id BIGINT NOT NULL REFERENCES queues(id),
+    walkin_id BIGINT NOT NULL REFERENCES walkins(id),
+    position INT NOT NULL,
+    status queue_entry_status NOT NULL DEFAULT 'WAITING',
+    called_at TIMESTAMP,
+    service_started_at TIMESTAMP,
+    completed_at TIMESTAMP,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
+
 CREATE TABLE walkins (
     id BIGSERIAL PRIMARY KEY,
     store_id BIGINT NOT NULL REFERENCES stores(id),
@@ -664,16 +726,19 @@ CREATE TABLE walkins (
     customer_id BIGINT NOT NULL REFERENCES users(id),
     service_id BIGINT REFERENCES services(id),
     queue_number INT NOT NULL,
-    position INT NOT NULL,
     status VARCHAR(20) DEFAULT 'WAITING',  -- WAITING, CALLED, SERVED, CANCELLED
     called_at TIMESTAMP,
     served_at TIMESTAMP,
     estimated_wait_minutes INT,
+    -- Walk-in to Appointment Bridge (C-565e7b1)
+    appointment_id BIGINT REFERENCES appointments(id),  -- Tự động tạo khi CheckInWalkIn
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
 
 CREATE INDEX idx_walkins_store ON walkins(store_id, status);
 CREATE INDEX idx_walkins_queue ON walkins(store_id, queue_number);
+CREATE INDEX idx_queue_entries_queue ON queue_entries(queue_id, position);
+CREATE INDEX idx_queues_store_date ON queues(store_id, date);
 ```
 
 ### 3.16 Grooming (V16) - FSM
@@ -818,7 +883,6 @@ INSERT INTO vaccines (name, valid_months) VALUES
 | Organizations module | P1 | ☐ |
 | Stores module | P1 | ☐ |
 | Pets module | P2 | ☐ |
-| Caregivers FSM | P2 | ☐ |
 | Products module | P3 | ☐ |
 | Inventory module | P3 | ☐ |
 

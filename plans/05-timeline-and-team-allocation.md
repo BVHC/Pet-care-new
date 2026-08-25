@@ -38,7 +38,7 @@
 |-----|-----------|-----|-----|
 | Wed | Users CRUD + Roles | Pets entity | Products entity |
 | Thu | Organizations CRUD | PetService + Controller | ProductService + Controller |
-| Fri | Stores CRUD + Operating hours | Caregiver FSM | Inventory module |
+| Fri | Stores CRUD + Operating hours | Pet validations | Inventory module |
 
 **Deliverable W1:** ✅ Foundation CRUD working
 
@@ -66,29 +66,29 @@
 
 ### Phase 3: Commerce (W3-W4)
 
-**Goal:** Invoices, Refunds, Vouchers, Clinical (FULL), Vaccinations
+**Goal:** Invoices, Refunds, Vouchers, Clinical (FULL + Cross-Store), Vaccinations (Barcode)
 
 #### W3
 
 | Day | P1 (Lead) | P2 | P3 |
 |-----|-----------|-----|-----|
-| Mon | Invoice entity + items | MedicalRecord, Diagnosis entities | Voucher entity + validation |
-| Tue | InvoiceService: create, issue, void | ClinicalService: examine(), diagnose() | Vaccination entity + schedule |
-| Wed | Refund entity + request | ClinicalService: prescription() | VaccinationService: administer() |
-| Thu | RefundService: approve, reject | MedicalHistory view + follow-ups | Vaccination reminders |
-| Fri | RefundService: process, complete | ClinicalController + tests | Voucher + Vaccination tests |
+| Mon | Invoice entity + items (with PARTIALLY_PAID) | MedicalRecord + CrossStoreConsent entities | Voucher entity + validation |
+| Tue | InvoiceService: create, issue, void, partial | ClinicalService: examine(), CrossStoreConsent | Vaccination entity + barcode schema |
+| Wed | Refund entity + 30-day window check | ClinicalService: prescription() | VaccinationService: barcode scanning |
+| Thu | RefundService: approve, reject, retry | MedicalHistory + Emergency Override | Voucher validation |
+| Fri | RefundService: process, complete, manual resolve | ClinicalController + tests | Vaccination tests |
 
 #### W4
 
 | Day | P1 (Lead) | P2 | P3 |
 |-----|-----------|-----|-----|
-| Mon | Event bridges (Payment → Invoice) | Event: Order → Invoice | Event: Refund → Payment |
-| Tue | Event: Appointment → Invoice | Integration tests | Integration tests |
-| Wed | Integration: Order → Payment → Invoice | Integration: Clinical → Invoice | Integration: Vaccination |
+| Mon | Outbox: Payment → Invoice | Outbox: Order → Invoice | Outbox: Refund → Payment |
+| Tue | Outbox: Appointment → Invoice | Integration tests | Integration tests |
+| Wed | Integration: Order → Payment → Invoice | Integration: Clinical → Invoice | Integration: Vaccination barcode |
 | Thu | Bug fixes | Bug fixes | Bug fixes |
 | Fri | Commerce polish | Clinical polish | Commerce polish |
 
-**Deliverable W4:** ✅ Full commerce + Clinical working
+**Deliverable W4:** ✅ Full commerce + Clinical working (with Outbox Pattern)
 
 ---
 
@@ -112,7 +112,7 @@
 |-----|-----------|-----|-----|
 | Mon | E2E tests: Customer flow | E2E tests: Staff flow | Docker compose setup |
 | Tue | FSM unit tests | FSM unit tests | Docker image build |
-| Wed | **Notifications module** | **Walk-ins module** | **Grooming FSM** |
+| Wed | **Notifications module** | **Walk-ins + Appointment Bridge** | **Grooming FSM + Customer Approval** |
 | Thu | **Workforce (basic)** | **Reports (basic)** | Grooming integration |
 | Fri | Demo prep | Demo prep | Demo prep |
 
@@ -120,38 +120,37 @@
 
 ---
 
-## 3. Modules chi tiết theo tuần
+## 3. Modules chi tiết theo tuần (Updated per C-565e7b1)
 
 ### Phase 1: Foundation (W1)
 
 | Module | Owner | Tasks |
 |---------|-------|-------|
 | Auth + OTP | P1 | Register, Login, OTP, JWT |
-| Users | P1 | CRUD, Roles |
+| Users | P1 | CRUD, Roles (8 roles) |
 | Organizations | P1 | CRUD |
-| Stores | P1 | CRUD, Operating hours |
+| Stores + StoreResources | P1 | CRUD, Operating hours, Resource config |
 | Pets | P2 | CRUD |
-| Caregivers | P2 | Invitation FSM |
 | Products | P3 | CRUD |
-| Inventory | P3 | Stock management |
+| Inventory (with PhysicalQuantity + ReservedQuantity) | P3 | Stock management, 15-min TTL reservation |
 
 ### Phase 2: Core Domain (W2)
 
 | Module | Owner | FSM |
 |---------|-------|-----|
-| Appointments | P1 | ✅ BOOKED → COMPLETED |
-| Orders | P2 | ✅ PENDING_PAYMENT → DELIVERED |
-| Payments | P3 | ✅ PENDING → SUCCESS |
+| Appointments | P1 | ✅ BOOKED → COMPLETED (+ RescheduleAppointment, + StoreResource collision check) |
+| Orders | P2 | ✅ PENDING_PAYMENT → DELIVERED (+ ProcessOrderTimeout, + CancelOrderWithRefund) |
+| Payments | P3 | ✅ PENDING → SUCCESS (+ PARTIALLY_REFUNDED) |
 
 ### Phase 3: Commerce (W3-W4)
 
 | Module | Owner | FSM |
 |---------|-------|-----|
-| Invoices | P1 | ✅ DRAFT → PAID |
-| Refunds | P1 | ✅ REQUESTED → COMPLETED |
-| Clinical (FULL) | P2 | ❌ |
+| Invoices | P1 | ✅ DRAFT → PAID (+ PARTIALLY_PAID, + DiscardInvoice) |
+| Refunds | P1 | ✅ REQUESTED → COMPLETED (+ 30-day window, + RetryRefund, + ResolveRefundManually) |
+| Clinical + Cross-Store Consent | P2 | ❌ (+ RequestCrossStoreConsent, + EmergencyOverride) |
 | Promotions | P2 | ❌ |
-| Vaccinations | P3 | ❌ |
+| Vaccinations + Barcode | P3 | ❌ (+ ValidateBarcode, + AdministerVaccine) |
 
 ### Phase 4: Polish (W5-W6)
 
@@ -159,11 +158,11 @@
 |---------|-------|----------|
 | FE Integration | All | P1 |
 | Notifications | P1 | P2 |
-| Walk-ins | P2 | P2 |
-| Grooming FSM | P3 | P2 |
+| Walk-ins + Appointment Bridge | P2 | P2 |
+| Grooming FSM + Customer Approval | P3 | P2 |
 | Workforce | P1 | P2 |
 | Reports | P2 | P2 |
-| Audit Logs | P1 | P2 |
+| Audit Logs + Medical Access | P1 | P2 |
 
 ---
 

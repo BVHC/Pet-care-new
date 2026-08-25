@@ -2,7 +2,7 @@
 
 > **Version:** 1.0  
 > **Date:** 2026-08-18  
-> **Scope:** 22 modules, 7 FSMs, 6 tuần
+> **Scope:** 22 modules, 6 FSMs, 6 tuần
 
 ---
 
@@ -14,41 +14,65 @@
 | 2 | [02-business-rules.md](02-business-rules.md) | Tất cả Business Rules |
 | 3 | [03-state-machines.md](03-state-machines.md) | FSM Specifications |
 | 4 | [04-glossary.md](04-glossary.md) | Ubiquitous Language |
+| 5 | [06-team-timeline.md](06-team-timeline.md) | Timeline 6 tuần |
+| 6 | [MAPPING.md](MAPPING.md) | Mapping docs ↔ plans |
 
 ---
 
-## 🎯 Tóm tắt Project
+## 🎯 Tóm tắt Project (Updated per C-565e7b1)
 
 | Aspect | Value |
 |--------|-------|
 | **Phases** | 4 |
 | **Tuần** | 6 |
 | **Modules** | 22 |
-| **FSMs** | 7 |
-| **Roles** | 6 |
-| **Rules** | ~150 |
+| **FSMs** | 8 (Account, Store, Appointment, Order, Payment, Invoice, Refund, Grooming) |
+| **Roles** | 9 (SUPER_ADMIN, ORG_ADMIN, STORE_MANAGER, FINANCE_STAFF, INVENTORY_STAFF, RECEPTIONIST, VETERINARIAN, GROOMER, CUSTOMER) |
+| **Rules** | ~150+ |
 
 ---
 
-## 👥 Roles (5 Roles - Final)
+## 👥 Roles (8 Roles - FINAL per Reconciliation 2026-08-24)
 
-| Role | Mô tả | Từ docs cũ |
-|------|--------|-------------|
-| **SUPER_ADMIN** | Quản trị toàn hệ thống | = Platform Admin |
-| **STORE_MANAGER** | Quản lý store, duyệt refunds | = StoreManager + InventoryStaff + FinanceStaff |
-| **RECEPTIONIST** | Tiếp khách, check-in, tạo đơn | Giữ nguyên |
-| **VETERINARIAN** | Khám bệnh, kê đơn, tiêm phòng | Giữ nguyên |
-| **GROOMER** | Làm đẹp thú cưng | Giữ nguyên |
-| **CUSTOMER** | Khách hàng | Giữ nguyên |
+> **Approved:** D-01 — Restore ORG_ADMIN for multi-tenant security
 
-### Roles đã gộp/bỏ:
+### Platform Scope
 
-| Role cũ | Xử lý |
-|---------|--------|
-| ORGANIZATION_ADMIN | Gộp vào SUPER_ADMIN |
-| INVENTORY_STAFF | Gộp vào STORE_MANAGER |
-| FINANCE_STAFF | Gộp vào STORE_MANAGER |
-| CAREGIVER | Bỏ (không cần riêng) |
+| Role | Mô tả | Notes |
+|------|--------|-------|
+| **SUPER_ADMIN** | Quản trị toàn hệ thống, setup platform | Dev/PO |
+
+### Organization Scope
+
+| Role | Mô tả | Notes |
+|------|--------|-------|
+| **ORG_ADMIN** | Quản lý chuỗi cửa hàng, setup organization | Chủ chuỗi |
+
+### Store Scope
+
+| Role | Mô tả | Notes |
+|------|--------|-------|
+| **STORE_MANAGER** | Quản lý vận hành store | Chủ store |
+| **FINANCE_STAFF** | Thu ngân, thanh toán, hoàn tiền | Dưới Manager |
+| **INVENTORY_STAFF** | Quản lý kho, chuyển kho | Dưới Manager |
+| **RECEPTIONIST** | Tiếp khách, check-in, tạo đơn | Lễ tân |
+| **VETERINARIAN** | Khám bệnh, kê đơn, tiêm phòng | Bác sĩ |
+| **GROOMER** | Làm đẹp thú cưng | Stylist |
+
+### User Scope
+
+| Role | Mô tả | Notes |
+|------|--------|-------|
+| **CUSTOMER** | Khách hàng | Đặt lịch, mua hàng, quản lý thú cưng |
+
+### RBAC Summary
+
+| Scope | Roles |
+|-------|-------|
+| Platform | SUPER_ADMIN |
+| Organization | ORG_ADMIN |
+| Store | STORE_MANAGER, FINANCE_STAFF, INVENTORY_STAFF, RECEPTIONIST, VETERINARIAN, GROOMER |
+| User | CUSTOMER |
 
 ---
 
@@ -62,7 +86,7 @@
 | Users | 01, 02 | RULE-02-xx |
 | Organizations | 01, 02 | RULE-03-xx |
 | Stores | 01, 02 | RULE-03-xx |
-| Pets + Caregivers | 01, 02 | RULE-04-xx |
+| Pets | 01, 02 | RULE-04-xx |
 | Products | 01, 02 | RULE-05-xx |
 | Inventory | 01, 02 | RULE-12-xx |
 
@@ -98,19 +122,20 @@
 
 ---
 
-## 🔄 FSMs (7 FSMs)
+## 🔄 FSMs (8 FSMs - Updated per C-565e7b1)
 
 ### Chi tiết FSMs:
 
-| FSM | States | Docs | Phase |
-|-----|--------|------|-------|
-| **CaregiverInvitation** | INVITED → ACTIVE → REVOKED | 03 | W1 |
-| **Appointment** | BOOKED → CONFIRMED → COMPLETED | 03 | W2 |
-| **Order** | PENDING_PAYMENT → DELIVERED | 03 | W2 |
-| **Payment** | PENDING → SUCCESS | 03 | W2 |
-| **Invoice** | DRAFT → PAID | 03 | W3 |
-| **Refund** | REQUESTED → COMPLETED | 03 | W3 |
-| **Grooming** | WAITING → COMPLETED | 03 | W6 |
+| FSM | States | Docs | Phase | Notable |
+|-----|--------|------|-------|---------|
+| **Account** | PENDING_VERIFICATION → ACTIVE → LOCKED | 03 | W1 | 3 states, 4 transitions |
+| **Store** | ACTIVE → SUSPENDED → DEACTIVATED → ARCHIVED | 03 | W1 | 4 states, 6 transitions |
+| **Appointment** | BOOKED → CONFIRMED → CHECKED_IN → IN_PROGRESS → COMPLETED | 03 | W2 | +RescheduleAppointment |
+| **Order** | PENDING_PAYMENT → PAID → CONFIRMED → PROCESSING → READY → DELIVERED | 03 | W2 | +ProcessOrderTimeout (15min), +CancelOrderWithRefund |
+| **Payment** | PENDING → PROCESSING → SUCCESS → PARTIALLY_REFUNDED → REFUNDED | 03 | W2 | +PARTIALLY_REFUNDED state |
+| **Invoice** | DRAFT → ISSUED → PARTIALLY_PAID → PAID → VOID | 03 | W3 | +PARTIALLY_PAID state |
+| **Refund** | REQUESTED → APPROVED → PROCESSING → COMPLETED → FAILED | 03 | W3 | +RetryRefund, +30-day window |
+| **Grooming** | WAITING → IN_PROGRESS → AWAITING_CUSTOMER_APPROVAL → COMPLETED | 03 | W6 | +AWAITING_CUSTOMER_APPROVAL |
 
 ---
 

@@ -22,24 +22,34 @@
 
 ---
 
-## 2. Roles (5 Roles - Final)
+## 2. Roles (8 Roles - FINAL per Reconciliation 2026-08-24)
 
-### Nhóm 1: Admin (1 role)
+> **D-01 Approved:** Restore ORG_ADMIN for multi-tenant security
+
+### Platform Scope
 
 | Role | Mô tả | Ai |
 |------|-------|-----|
 | SUPER_ADMIN | Quản trị toàn hệ thống, setup | Dev / PO |
 
-### Nhóm 2: Store-Level (4 roles)
+### Organization Scope
 
 | Role | Mô tả | Ai |
 |------|-------|-----|
-| STORE_MANAGER | Quản lý store, duyệt refunds, inventory, finance, reports | Chủ store |
-| RECEPTIONIST | Tiếp khách, check-in, tạo đơn, thu tiền | Lễ tân |
-| VETERINARIAN | Khám bệnh, kê đơn, tiêm phòng, tạo bệnh án | Bác sĩ |
-| GROOMER | Làm đẹp thú cưng, thêm dịch vụ phát sinh | Stylist |
+| ORG_ADMIN | Quản lý chuỗi cửa hàng | Chủ chuỗi |
 
-### Nhóm 3: Customer (1 role)
+### Store Scope
+
+| Role | Mô tả | Ai |
+|------|-------|-----|
+| STORE_MANAGER | Quản lý vận hành store | Chủ store |
+| FINANCE_STAFF | Thu ngân, thanh toán, hoàn tiền | Dưới Manager |
+| INVENTORY_STAFF | Quản lý kho, chuyển kho | Dưới Manager |
+| RECEPTIONIST | Tiếp khách, check-in, tạo đơn | Lễ tân |
+| VETERINARIAN | Khám bệnh, kê đơn, tiêm phòng | Bác sĩ |
+| GROOMER | Làm đẹp thú cưng | Stylist |
+
+### User Scope
 
 | Role | Mô tả | Ai |
 |------|-------|-----|
@@ -68,7 +78,7 @@
 | 2 | Users | ❌ | P1 |
 | 3 | Organizations | ❌ | P1 |
 | 4 | Stores | ❌ | P1 |
-| 5 | Pets + Caregivers | ❌ | P2 |
+| 5 | Pets | ❌ | P2 |
 | 6 | Products | ❌ | P3 |
 | 7 | Inventory | ❌ | P3 |
 
@@ -104,41 +114,43 @@
 
 ---
 
-## 5. FSMs Summary (7 FSMs)
+## 5. FSMs Summary (8 FSMs - Updated per C-565e7b1)
 
-| FSM | States | Transitions | Phase |
-|-----|--------|-------------|-------|
-| **CaregiverInvitation** | 5 | 5 | W1 |
-| **Appointment** | 7 | 10 | W2 |
-| **Order** | 8 | 10 | W2 |
-| **Payment** | 6 | 7 | W2 |
-| **Invoice** | 6 | 7 | W3 |
-| **Refund** | 6 | 6 | W3 |
-| **Grooming** | 4 | 6 | W6 |
+| FSM | States | Transitions | Phase | Notes |
+|-----|--------|-------------|-------|-------|
+| **Appointment** | 7 | 12+2 | W2 | **+RescheduleAppointment** (C) |
+| **Order** | 8 | 11+2 | W2 | **+ProcessOrderTimeout**, **+CancelOrderWithRefund** (C) |
+| **Payment** | 7 | 9+3 | W2 | **+PARTIALLY_REFUNDED** (D-05) |
+| **Invoice** | 6 | 10+1 | W3 | **+PARTIALLY_PAID**, **+DiscardInvoice**, **+VoidPartiallyPaidInvoice** (C) |
+| **Refund** | 6 | 8+2 | W3 | **+RetryRefund**, **+ResolveRefundManually** (H-01, C) |
+| **Grooming** | 4+1 | 7+2 | W6 | **+AWAITING_CUSTOMER_APPROVAL** (C) |
+| **Store** | 4 | 6 | W1 | |
+| **Account** | 3 | 4 | W1 | |
 
 ---
 
-## 6. Permissions Matrix
+## 6. Permissions Matrix (Updated per C-565e7b1)
 
-| Permission | SUPER_ADMIN | MANAGER | RECEPTION | VET | GROOMER | CUSTOMER |
-|------------|:-----------:|:-------:|:---------:|:---:|:-------:|:--------:|
-| system:* | ✅ | ❌ | ❌ | ❌ | ❌ | ❌ |
-| store:create | ✅ | ❌ | ❌ | ❌ | ❌ | ❌ |
-| store:manage | ✅ | ✅ | ❌ | ❌ | ❌ | ❌ |
-| staff:manage | ✅ | ✅ | ❌ | ❌ | ❌ | ❌ |
-| inventory:* | ✅ | ✅ | ❌ | ❌ | ❌ | ❌ |
-| refund:approve | ✅ | ✅ | ❌ | ❌ | ❌ | ❌ |
-| pet:view | ✅ | ✅ | ✅ | ✅ | ✅ | own |
-| pet:create | ✅ | ✅ | ✅ | ❌ | ❌ | own |
-| appointment:* | ✅ | ✅ | ✅ | ✅ | ❌ | own |
-| order:* | ✅ | ✅ | ✅ | ❌ | ❌ | own |
-| payment:* | ✅ | ✅ | record | ❌ | ❌ | own |
-| invoice:* | ✅ | ✅ | ✅ | ❌ | ❌ | view own |
-| medical:* | ✅ | ✅ | ❌ | ✅ | ❌ | ❌ |
-| vaccination:* | ✅ | ✅ | ❌ | ✅ | ❌ | ❌ |
-| grooming:* | ✅ | ✅ | ❌ | ❌ | ✅ | ❌ |
-| notification:* | ✅ | ✅ | ✅ | ✅ | ✅ | own |
-| report:* | ✅ | ✅ | ❌ | ❌ | ❌ | ❌ |
+| Permission | SUPER_ADMIN | ORG_ADMIN | STORE_MANAGER | FINANCE_STAFF | INVENTORY_STAFF | RECEPTIONIST | VETERINARIAN | GROOMER | CUSTOMER |
+|------------|:-----------:|:---------:|:-------------:|:--------------:|:----------------:|:-----------:|:-------------:|:-------:|:--------:|
+| system:* | ✅ | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ |
+| org:* | ✅ | ✅ | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ |
+| store:* | ✅ | ✅ | ✅ | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ |
+| staff:* | ✅ | ✅ | ✅ | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ |
+| inventory:* | ✅ | ✅ | ✅ | ❌ | ✅ | ❌ | ❌ | ❌ | ❌ |
+| refund:approve | ✅ | ✅ | ✅ | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ |
+| refund:process | ✅ | ✅ | ✅ | ✅ | ❌ | ❌ | ❌ | ❌ | ❌ |
+| pet:* | ✅ | ✅ | ✅ | ❌ | ❌ | ✅ | ✅ | ✅ | own |
+| appointment:* | ✅ | ✅ | ✅ | ❌ | ❌ | ✅ | ✅ | ❌ | own |
+| order:* | ✅ | ✅ | ✅ | ❌ | ❌ | ✅ | ❌ | ❌ | own |
+| payment:* | ✅ | ✅ | ✅ | ✅ | ❌ | ✅ | ❌ | ❌ | own |
+| invoice:* | ✅ | ✅ | ✅ | ✅ | ❌ | ✅ | ❌ | ❌ | view own |
+| medical:* | ✅ | ✅ | ✅ | ❌ | ❌ | ❌ | ✅ | ❌ | ❌ |
+| vaccination:* | ✅ | ✅ | ✅ | ❌ | ❌ | ❌ | ✅ | ❌ | ❌ |
+| grooming:* | ✅ | ✅ | ✅ | ❌ | ❌ | ❌ | ❌ | ✅ | ❌ |
+| report:* | ✅ | ✅ | ✅ | ✅ | ❌ | ❌ | ❌ | ❌ | ❌ |
+| audit:* | ✅ | ✅ | ✅ | ✅ | ✅ | ❌ | ❌ | ❌ | ❌ |
+| notification:* | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ |
 
 ---
 
@@ -158,7 +170,7 @@ backend/
 │   │   ├── auth/           # Login, Register, OTP
 │   │   ├── users/          # User CRUD
 │   │   ├── organizations/  # Org + Stores
-│   │   ├── pets/           # Pets + Caregivers
+│   │   ├── pets/           # Pets CRUD
 │   │   ├── appointments/   # FSM: BOOKED → COMPLETED
 │   │   ├── products/       # Products + Categories
 │   │   ├── inventory/      # Stock management
@@ -190,7 +202,7 @@ backend/
 
 | Phase | Tuần | P1 | P2 | P3 |
 |-------|------|-----|-----|-----|
-| **1. Foundation** | W1 | Auth + Users + Orgs | Pets + Caregivers | Products + Inventory |
+| **1. Foundation** | W1 | Auth + Users + Orgs | Pets | Products + Inventory |
 | **2. Core Domain** | W2 | Appointments FSM | Orders FSM | Payments FSM |
 | **3. Commerce** | W3-W4 | Invoices + Refunds | Clinical (FULL) + Vouchers | Vaccinations |
 | **4. Polish** | W5 | Integration | Integration | Docker + Deploy |
