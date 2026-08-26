@@ -1,52 +1,46 @@
 package com.petcare.modules.auth.entity;
 
+import com.petcare.common.model.BaseEntity;
+import com.petcare.common.enums.UserRole;
+import com.petcare.common.enums.AccountStatus;
 import jakarta.persistence.*;
 import lombok.*;
-import org.hibernate.annotations.CreationTimestamp;
-import org.hibernate.annotations.UpdateTimestamp;
-
 import java.time.LocalDateTime;
 
 @Entity
-@Table(name = "accounts")
+@Table(name = "accounts", uniqueConstraints = {
+    @UniqueConstraint(name = "uk_accounts_phone", columnNames = "phone"),
+    @UniqueConstraint(name = "uk_accounts_email", columnNames = "email")
+})
 @Getter
 @Setter
 @NoArgsConstructor
 @AllArgsConstructor
 @Builder
-public class Account {
+public class Account extends BaseEntity {
 
-    @Id
-    @GeneratedValue(strategy = GenerationType.IDENTITY)
-    private Long id;
-
-    @Column(unique = true)
+    @Column(nullable = false, unique = true, length = 20)
     private String phone;
 
-    @Column(unique = true)
+    @Column(unique = true, length = 255)
     private String email;
 
-    @Column(name = "password_hash")
+    @Column(name = "password_hash", nullable = false)
     private String passwordHash;
 
     @Enumerated(EnumType.STRING)
-    @Column(nullable = false)
-    private String status = "PENDING_VERIFICATION";
+    @Column(nullable = false, length = 30)
+    @Builder.Default
+    private AccountStatus status = AccountStatus.PENDING_VERIFICATION;
 
-    @Column(nullable = false)
-    private String role = "CUSTOMER";
+    @Enumerated(EnumType.STRING)
+    @Column(nullable = false, length = 20)
+    @Builder.Default
+    private UserRole role = UserRole.CUSTOMER;
 
-    @Column(name = "refresh_token")
+    @Column(name = "refresh_token", length = 500)
     private String refreshToken;
 
     @Column(name = "refresh_token_expiry")
     private LocalDateTime refreshTokenExpiry;
-
-    @CreationTimestamp
-    @Column(name = "created_at", updatable = false)
-    private LocalDateTime createdAt;
-
-    @UpdateTimestamp
-    @Column(name = "updated_at")
-    private LocalDateTime updatedAt;
 }

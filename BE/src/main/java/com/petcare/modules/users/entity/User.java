@@ -1,31 +1,29 @@
 package com.petcare.modules.users.entity;
 
+import com.petcare.common.model.BaseEntity;
 import jakarta.persistence.*;
 import lombok.*;
-import org.hibernate.annotations.CreationTimestamp;
-import org.hibernate.annotations.UpdateTimestamp;
-
-import java.time.LocalDateTime;
 
 @Entity
-@Table(name = "users")
+@Table(name = "users", indexes = {
+    @Index(name = "idx_users_account_id", columnList = "account_id"),
+    @Index(name = "idx_users_store_id", columnList = "store_id"),
+    @Index(name = "idx_users_organization_id", columnList = "organization_id")
+})
 @Getter
 @Setter
 @NoArgsConstructor
 @AllArgsConstructor
 @Builder
-public class User {
-
-    @Id
-    @GeneratedValue(strategy = GenerationType.IDENTITY)
-    private Long id;
+public class User extends BaseEntity {
 
     @Column(name = "account_id", nullable = false)
     private Long accountId;
 
-    @Column(nullable = false)
+    @Column(nullable = false, length = 255)
     private String name;
 
+    @Column(length = 500)
     private String avatar;
 
     @Column(name = "organization_id")
@@ -33,12 +31,4 @@ public class User {
 
     @Column(name = "store_id")
     private Long storeId;
-
-    @CreationTimestamp
-    @Column(name = "created_at", updatable = false)
-    private LocalDateTime createdAt;
-
-    @UpdateTimestamp
-    @Column(name = "updated_at")
-    private LocalDateTime updatedAt;
 }

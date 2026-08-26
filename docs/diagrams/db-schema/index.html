@@ -284,6 +284,51 @@
       text-align: center;
     }
 
+    .toolbar-divider {
+      width: 1px;
+      height: 20px;
+      background: var(--color-border);
+      margin: 0 4px;
+    }
+
+    .btn-tool.btn-download {
+      background: #ffffff;
+      color: var(--color-ink);
+      border-color: rgba(45, 49, 66, 0.25);
+    }
+
+    .btn-tool.btn-download:hover {
+      background: var(--color-accent-subtle);
+      border-color: var(--color-accent);
+      color: var(--color-accent);
+    }
+
+    .toast-notice {
+      position: fixed;
+      bottom: 24px;
+      right: 24px;
+      background: #232733;
+      color: #ffffff;
+      padding: 10px 18px;
+      border-radius: 6px;
+      font-family: var(--font-mono);
+      font-size: 0.78rem;
+      box-shadow: 0 8px 24px rgba(0,0,0,0.2);
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      z-index: 9999;
+      opacity: 0;
+      transform: translateY(12px);
+      transition: all 0.25s cubic-bezier(0.16, 1, 0.3, 1);
+      pointer-events: none;
+    }
+
+    .toast-notice.show {
+      opacity: 1;
+      transform: translateY(0);
+    }
+
     /* Canvas Viewport */
     .canvas-viewport {
       flex: 1;
@@ -559,6 +604,9 @@
         <button class="btn-tool" onclick="resetZoom()" title="Khôi phục góc nhìn">⛶ Fit</button>
         <button class="btn-tool active" id="btn-mode-pan" onclick="setInteractionMode('pan')" title="Kéo rê canvas tự do">✋ Pan Canvas</button>
         <button class="btn-tool" id="btn-mode-drag" onclick="setInteractionMode('drag')" title="Kéo thả di chuyển từng bảng">🖐 Drag Tables</button>
+        <div class="toolbar-divider"></div>
+        <button class="btn-tool btn-download" onclick="downloadPng()" title="Tải ảnh PNG độ nét cao (2x HD) để chèn báo cáo/Word">📥 Tải PNG (HD)</button>
+        <button class="btn-tool btn-download" onclick="downloadSvg()" title="Tải file Vector SVG phóng to không vỡ nét">📥 Tải SVG</button>
       </div>
     </div>
 
@@ -586,6 +634,9 @@
         <div class="legend-item"><span style="display:inline-block;width:12px;height:2px;background:#eb6c36;"></span> Focal Cascade</div>
       </div>
     </div>
+
+    <!-- Toast Notification -->
+    <div id="toast" class="toast-notice"></div>
   </main>
 
   <!-- Complete 38 Tables Database Schema Definitions -->
@@ -1688,6 +1739,134 @@
     window.addEventListener('DOMContentLoaded', () => {
       loadDiagram('overview', 'Database Schema · Pet-care System', '01. Complete System Overview (38 Tables)');
     });
+
+    // Toast Notification
+    let toastTimeout = null;
+    function showToast(msg) {
+      const toast = document.getElementById('toast');
+      if (!toast) return;
+      toast.textContent = msg;
+      toast.classList.add('show');
+      if (toastTimeout) clearTimeout(toastTimeout);
+      toastTimeout = setTimeout(() => {
+        toast.classList.remove('show');
+      }, 2500);
+    }
+
+    // Diagram Bounding Box Calculation
+    function getDiagramBounds(padding = 50) {
+      if (!currentData || !currentData.tables || currentData.tables.length === 0) {
+        return { minX: 0, minY: 0, width: 1400, height: 900 };
+      }
+      let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;
+      currentData.tables.forEach(t => {
+        const h = calcTableHeight(t);
+        if (t.x < minX) minX = t.x;
+        if (t.y < minY) minY = t.y;
+        if (t.x + t.w > maxX) maxX = t.x + t.w;
+        if (t.y + h > maxY) maxY = t.y + h;
+      });
+
+      minX = Math.max(0, minX - padding);
+      minY = Math.max(0, minY - padding);
+      maxX = maxX + padding + 30;
+      maxY = maxY + padding;
+
+      return {
+        minX,
+        minY,
+        width: maxX - minX,
+        height: maxY - minY
+      };
+    }
+
+    // Build Self-Contained SVG String
+    function buildStandaloneSvg() {
+      const bounds = getDiagramBounds(60);
+      const defs = document.querySelector('#canvas-svg defs').outerHTML;
+      const content = document.getElementById('canvas-content').innerHTML;
+      const title = document.getElementById('top-title').textContent || 'Database Schema';
+
+      const svgString = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="${bounds.minX} ${bounds.minY} ${bounds.width} ${bounds.height}" width="${bounds.width}" height="${bounds.height}">
+  <style>
+    @import url('https://fonts.googleapis.com/css2?family=Geist:wght@400;500;600;700&amp;family=Geist+Mono:wght@400;500;600&amp;display=swap');
+    text { font-family: 'Geist', system-ui, -apple-system, sans-serif; }
+    .table-group { cursor: default; }
+  </style>
+  <rect x="${bounds.minX}" y="${bounds.minY}" width="${bounds.width}" height="${bounds.height}" fill="#f6f6f8" />
+  ${defs}
+  <g id="export-content">
+    ${content}
+  </g>
+</svg>`;
+      return { svgString, bounds, title };
+    }
+
+    // Download SVG File
+    function downloadSvg() {
+      const { svgString, title } = buildStandaloneSvg();
+      const blob = new Blob([svgString], { type: 'image/svg+xml;charset=utf-8' });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      const safeFilename = (title || 'petcare-db-schema').toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '');
+      a.href = url;
+      a.download = `${safeFilename}.svg`;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      URL.revokeObjectURL(url);
+      showToast('✅ Đã tải xuống file SVG thành công!');
+    }
+
+    // Download PNG File (HD 2x)
+    function downloadPng() {
+      const { svgString, bounds, title } = buildStandaloneSvg();
+      const blob = new Blob([svgString], { type: 'image/svg+xml;charset=utf-8' });
+      const url = URL.createObjectURL(blob);
+      const img = new Image();
+
+      showToast('⏳ Đang xuất ảnh PNG (HD 2x)...');
+
+      img.onload = () => {
+        const scale = 2; // 2x Retina Resolution
+        const canvas = document.createElement('canvas');
+        canvas.width = bounds.width * scale;
+        canvas.height = bounds.height * scale;
+        const ctx = canvas.getContext('2d');
+
+        // Draw solid background
+        ctx.fillStyle = '#f6f6f8';
+        ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+        ctx.scale(scale, scale);
+        ctx.drawImage(img, 0, 0);
+
+        canvas.toBlob((pngBlob) => {
+          if (!pngBlob) {
+            alert('Không thể tạo file ảnh PNG.');
+            return;
+          }
+          const pngUrl = URL.createObjectURL(pngBlob);
+          const a = document.createElement('a');
+          const safeFilename = (title || 'petcare-db-schema').toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '');
+          a.href = pngUrl;
+          a.download = `${safeFilename}.png`;
+          document.body.appendChild(a);
+          a.click();
+          document.body.removeChild(a);
+          URL.revokeObjectURL(pngUrl);
+          URL.revokeObjectURL(url);
+          showToast('✅ Đã tải xuống ảnh PNG (HD 2x) thành công!');
+        }, 'image/png');
+      };
+
+      img.onerror = () => {
+        URL.revokeObjectURL(url);
+        alert('Lỗi tạo ảnh PNG. Bạn có thể bấm Tải SVG thay thế.');
+      };
+
+      img.src = url;
+    }
   </script>
 </body>
 </html>

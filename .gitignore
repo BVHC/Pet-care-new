@@ -1,77 +1,83 @@
-# ============================
-# Common
-# ============================
-.DS_Store
-Thumbs.db
-*.log
-
-# ============================
-# Java / Maven
-# ============================
-BE/target/
-BE/**/*.class
-BE/**/*.jar
-BE/**/*.war
-BE/**/application-local.yml
-BE/**/application-local.properties
-BE/.mvn/wrapper/maven-wrapper.jar
-
-# Gradle
-BE/.gradle/
-BE/build/
+# Build output
+target/
+build/
+dist/
+*.jar
+*.war
 
 # IDE
-BE/.idea/
-BE/*.iml
-BE/out/
+.idea/
+*.iml
+.vscode/
+*.swp
+*.swo
 
-# ============================
-# Node / Frontend
-# ============================
-FE/node_modules/
-FE/.pnp/
-FE/.pnp.js
-FE/dist/
-FE/dist-ssr/
-FE/*.local
-FE/.env
-FE/.env.local
-FE/.env.*.local
+# OS
+.DS_Store
+Thumbs.db
 
 # Logs
-FE/npm-debug.log*
-FE/yarn-debug.log*
-FE/yarn-error.log*
-FE/pnpm-debug.log*
+*.log
+logs/
 
-# Editor
-FE/.vscode/*
-!.vscode/extensions.json
-FE/.idea/
-FE/*.suo
-FE/*.ntvs*
-FE/*.njsproj
-FE/*.sln
-FE/*.sw?
+# Environment (NEVER commit .env files)
+.env
+.env.local
+.env.*.local
+*.env
 
-# ============================
-# Docker
-# ============================
-*.pid
-*.seed
-*.pid.lock
-
-# ============================
 # Database
-# ============================
-*.sql.gz
-*.dump
+*.db
+*.sqlite
+*.sqlite3
 
-# ============================
-# Secrets (never commit these)
-# ============================
+# Uploads
+uploads/
+/uploads/*
+
+# Node
+node_modules/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+
+# Test coverage
+coverage/
+*.lcov
+jacoco/
+.pitest/
+
+# Gradle
+.gradle/
+build/
+
+# Maven
+target/
+
+# Docker
+.dockerignore
+
+# Secrets (NEVER commit)
+**/secrets/
+**/credentials/
 *.pem
 *.key
-.env
-.env.*
-!.env.example
+*.p12
+*.jks
+
+# Temporary files
+*.tmp
+*.temp
+*.bak
+
+# Package files (if using npm)
+package-lock.json
+yarn.lock
+
+# FE build
+FE/dist/
+FE/.vite/
+FE/build/
+
+# OS specific
+Thumbs.db

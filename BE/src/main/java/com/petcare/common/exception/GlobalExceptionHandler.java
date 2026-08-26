@@ -1,6 +1,7 @@
 package com.petcare.common.exception;
 
 import com.petcare.common.model.ApiResponse;
+import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.validation.FieldError;
 import org.springframework.web.bind.MethodArgumentNotValidException;
@@ -15,6 +16,13 @@ public class GlobalExceptionHandler {
 
     @ExceptionHandler(BusinessException.class)
     public ResponseEntity<ApiResponse<Void>> handleBusinessException(BusinessException ex) {
+        return ResponseEntity
+            .status(ex.getStatus())
+            .body(ApiResponse.error(ex.getMessage(), ex.getStatus().value()));
+    }
+
+    @ExceptionHandler(ResourceNotFoundException.class)
+    public ResponseEntity<ApiResponse<Void>> handleResourceNotFoundException(ResourceNotFoundException ex) {
         return ResponseEntity
             .status(ex.getStatus())
             .body(ApiResponse.error(ex.getMessage(), ex.getStatus().value()));
