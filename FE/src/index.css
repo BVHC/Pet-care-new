@@ -1,26 +1,63 @@
-/* Base styles */
-:root {
-  font-family: Inter, system-ui, Avenir, Helvetica, Arial, sans-serif;
-  line-height: 1.5;
-  font-weight: 400;
-  color-scheme: light dark;
-  font-synthesis: none;
-  text-rendering: optimizeLegibility;
-  -webkit-font-smoothing: antialiased;
-  -moz-osx-font-smoothing: grayscale;
-}
+/* Font substitutions — no webfont files provided with the design brief.
+   Friendly Sans -> Baloo 2, Professional Sans -> Inter. */
+@import url('https://fonts.googleapis.com/css2?family=Baloo+2:wght@400;500;600;700;800&family=Inter:wght@400;500;600;700;800&display=swap');
+@import 'tailwindcss';
 
-* {
-  margin: 0;
-  padding: 0;
-  box-sizing: border-box;
+@theme {
+  /* ---- palette (from DESIGN tokens/colors.css) ---- */
+  --color-golden-yellow: #ffc107;
+  --color-warm-orange: #ff9800;
+  --color-soft-orange: #ffb74d;
+  --color-dark-gray: #3b2a1e;
+  --color-mid-gray: #8a7565;
+  --color-light-gray: #fbeedd;
+  --color-off-white: #fdf6ec;
+  --color-border-gray: #eadfcf;
+  --color-teal: #009688;
+  --color-sky-blue: #00bcd4;
+  --color-deep-red: #d32f2f;
+
+  --color-brand-primary: var(--color-golden-yellow);
+  --color-brand-primary-hover: #ffb300;
+  --color-brand-primary-active: #ffa000;
+  --color-brand-secondary: var(--color-warm-orange);
+  --color-brand-tertiary: var(--color-soft-orange);
+
+  --color-surface-page: var(--color-off-white);
+  --color-surface-card: #ffffff;
+  --color-surface-sunken: var(--color-light-gray);
+
+  --color-text-primary: var(--color-dark-gray);
+  --color-text-secondary: var(--color-mid-gray);
+  --color-text-on-brand: var(--color-dark-gray);
+  --color-text-on-dark: var(--color-off-white);
+  --color-text-link: var(--color-teal);
+
+  --color-border-default: var(--color-border-gray);
+  --color-border-strong: #bdbdbd;
+  --color-border-focus: var(--color-sky-blue);
+
+  --color-state-info-bg: #e0f7fa;
+  --color-state-error: var(--color-deep-red);
+  --color-state-error-bg: #ffebee;
+
+  /* ---- type ---- */
+  --font-friendly: 'Baloo 2', ui-rounded, 'Segoe UI', sans-serif;
+  --font-professional: 'Inter', -apple-system, 'Segoe UI', sans-serif;
+
+  /* ---- radius ---- */
+  --radius-rounded: 8px;
+  --radius-pill: 24px;
+
+  /* ---- shadows ---- */
+  --shadow-1: 0 1px 3px rgba(51, 51, 51, 0.08), 0 1px 2px rgba(51, 51, 51, 0.06);
+  --shadow-2: 0 4px 8px rgba(51, 51, 51, 0.1), 0 2px 4px rgba(51, 51, 51, 0.08);
 }
 
 body {
-  min-height: 100vh;
-  background-color: #f5f5f5;
-}
-
-#root {
-  min-height: 100vh;
+  font-family: var(--font-professional);
+  color: var(--color-text-primary);
+  background: var(--color-surface-page);
+  -webkit-font-smoothing: antialiased;
+  margin: 0;
 }

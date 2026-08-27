@@ -1,33 +1,61 @@
-// ===========================================
-// App.tsx - Main Application Entry
-// Routes sẽ được implement trong Week 1
-// ===========================================
+import { Routes, Route } from 'react-router-dom';
+import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
+import { Toaster } from 'sonner';
+import { GlobalModal } from './GlobalModal';
+import { PublicLayout } from '../shared/components/layout/PublicLayout';
+import { HomePage } from '../pages/customer/HomePage';
+import { ShopPage } from '../pages/customer/ShopPage';
+import { ProductDetailPage } from '../pages/customer/ProductDetailPage';
+import { CartPage } from '../pages/customer/CartPage';
+import { CheckoutPage } from '../pages/customer/CheckoutPage';
+import { OrderConfirmationPage } from '../pages/customer/OrderConfirmationPage';
+import { BookingPage } from '../pages/customer/BookingPage';
+import { PetsPage } from '../pages/customer/PetsPage';
+import { AccountPage } from '../pages/customer/AccountPage';
+import { OrderHistoryPage } from '../pages/customer/OrderHistoryPage';
+import { AboutPage } from '../pages/about/AboutPage';
+import { RecommendPage } from '../pages/recommend/RecommendPage';
+import { HotelPage } from '../pages/hotel/HotelPage';
+import { LoginPage } from '../pages/auth/LoginPage';
+import { RegisterPage } from '../pages/auth/RegisterPage';
+import { NewsPage } from '../pages/news/NewsPage';
+import { ReviewPage } from '../pages/review/ReviewPage';
 
-import { Routes, Route, Navigate } from 'react-router-dom'
+const queryClient = new QueryClient({
+  defaultOptions: { queries: { staleTime: 60_000, refetchOnWindowFocus: false } },
+});
 
-function App() {
+export function App() {
   return (
-    <Routes>
-      {/* Auth routes - Week 1 */}
-      <Route path="/auth/login" element={<div>Login - Week 1</div>} />
-      <Route path="/auth/register" element={<div>Register - Week 1</div>} />
+    <QueryClientProvider client={queryClient}>
+      <Routes>
+        {/* Public Layout */}
+        <Route element={<PublicLayout />}>
+          <Route path="/" element={<HomePage />} />
+          <Route path="/shop" element={<ShopPage />} />
+          <Route path="/shop/:id" element={<ProductDetailPage />} />
+          <Route path="/cart" element={<CartPage />} />
+          <Route path="/checkout" element={<CheckoutPage />} />
+          <Route path="/order/:id" element={<OrderConfirmationPage />} />
+          <Route path="/booking" element={<BookingPage />} />
+          <Route path="/pets" element={<PetsPage />} />
+          <Route path="/account" element={<AccountPage />} />
+          <Route path="/orders" element={<OrderHistoryPage />} />
+          <Route path="/about" element={<AboutPage />} />
+          <Route path="/recommend" element={<RecommendPage />} />
+          <Route path="/hotel" element={<HotelPage />} />
+          <Route path="/news" element={<NewsPage />} />
+          <Route path="/review" element={<ReviewPage />} />
+        </Route>
 
-      {/* Admin routes - Week 1 */}
-      <Route path="/admin" element={<div>Dashboard - Week 1</div>} />
-
-      {/* Staff routes - Week 1 */}
-      <Route path="/staff/appointments" element={<div>Appointments - Week 1</div>} />
-      <Route path="/staff/clinical" element={<div>Clinical - Week 1</div>} />
-
-      {/* Customer routes - Week 1 */}
-      <Route path="/customer/pets" element={<div>Pets - Week 1</div>} />
-      <Route path="/customer/shop" element={<div>Shop - Week 1</div>} />
-      <Route path="/customer/cart" element={<div>Cart - Week 1</div>} />
-
-      {/* Default redirect */}
-      <Route path="/" element={<Navigate to="/auth/login" replace />} />
-    </Routes>
-  )
+        {/* Auth Routes (without header/footer layout) */}
+        <Route path="/auth/login" element={<LoginPage />} />
+        <Route path="/auth/register" element={<RegisterPage />} />
+      </Routes>
+      <GlobalModal />
+      <Toaster position="top-right" richColors />
+    </QueryClientProvider>
+  );
 }
 
-export default App
+export default App;
