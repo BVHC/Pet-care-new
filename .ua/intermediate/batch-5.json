@@ -1,0 +1,723 @@
+{
+  "nodes": [
+    {
+      "id": "file:BE/pom.xml",
+      "type": "config",
+      "name": "pom.xml",
+      "filePath": "BE/pom.xml",
+      "summary": "Maven build configuration for Spring Boot 3.5.15 pet care application with PostgreSQL, JWT, and Redis dependencies.",
+      "tags": ["configuration", "build-system", "java", "spring-boot"],
+      "complexity": "moderate"
+    },
+    {
+      "id": "file:BE/src/main/java/com/petcare/PetcareApplication.java",
+      "type": "file",
+      "name": "PetcareApplication.java",
+      "filePath": "BE/src/main/java/com/petcare/PetcareApplication.java",
+      "summary": "Spring Boot main entry point that bootstraps the application context.",
+      "tags": ["entry-point", "spring-boot"],
+      "complexity": "simple"
+    },
+    {
+      "id": "file:BE/src/main/java/com/petcare/common/config/JpaAuditingConfig.java",
+      "type": "file",
+      "name": "JpaAuditingConfig.java",
+      "filePath": "BE/src/main/java/com/petcare/common/config/JpaAuditingConfig.java",
+      "summary": "JPA auditing configuration enabling automatic timestamp population for entities.",
+      "tags": ["configuration", "jpa", "auditing"],
+      "complexity": "simple"
+    },
+    {
+      "id": "file:BE/src/main/java/com/petcare/common/config/SecurityConfig.java",
+      "type": "file",
+      "name": "SecurityConfig.java",
+      "filePath": "BE/src/main/java/com/petcare/common/config/SecurityConfig.java",
+      "summary": "Spring Security configuration with JWT authentication filter and stateless session management.",
+      "tags": ["configuration", "security", "spring-security", "jwt"],
+      "complexity": "moderate"
+    },
+    {
+      "id": "file:BE/src/main/java/com/petcare/common/enums/AccountStatus.java",
+      "type": "file",
+      "name": "AccountStatus.java",
+      "filePath": "BE/src/main/java/com/petcare/common/enums/AccountStatus.java",
+      "summary": "Account status enumeration with values: PENDING_VERIFICATION, ACTIVE, LOCKED, SUSPENDED, DELETED.",
+      "tags": ["enum", "security", "account"],
+      "complexity": "simple"
+    },
+    {
+      "id": "file:BE/src/main/java/com/petcare/common/enums/UserRole.java",
+      "type": "file",
+      "name": "UserRole.java",
+      "filePath": "BE/src/main/java/com/petcare/common/enums/UserRole.java",
+      "summary": "User role enumeration with 10 roles from SUPER_ADMIN to CUSTOMER for role-based access control.",
+      "tags": ["enum", "authorization", "rbac"],
+      "complexity": "simple"
+    },
+    {
+      "id": "file:BE/src/main/java/com/petcare/common/exception/BusinessException.java",
+      "type": "file",
+      "name": "BusinessException.java",
+      "filePath": "BE/src/main/java/com/petcare/common/exception/BusinessException.java",
+      "summary": "Runtime exception with error code and HTTP status for business rule violations.",
+      "tags": ["exception", "error-handling"],
+      "complexity": "simple"
+    },
+    {
+      "id": "file:BE/src/main/java/com/petcare/common/exception/GlobalExceptionHandler.java",
+      "type": "file",
+      "name": "GlobalExceptionHandler.java",
+      "filePath": "BE/src/main/java/com/petcare/common/exception/GlobalExceptionHandler.java",
+      "summary": "REST controller advice handling BusinessException, ResourceNotFoundException, and validation errors.",
+      "tags": ["exception-handler", "rest", "error-handling"],
+      "complexity": "moderate"
+    },
+    {
+      "id": "file:BE/src/main/java/com/petcare/common/exception/ResourceNotFoundException.java",
+      "type": "file",
+      "name": "ResourceNotFoundException.java",
+      "filePath": "BE/src/main/java/com/petcare/common/exception/ResourceNotFoundException.java",
+      "summary": "Runtime exception for 404 resource not found errors with formatted message.",
+      "tags": ["exception", "error-handling", "not-found"],
+      "complexity": "simple"
+    },
+    {
+      "id": "file:BE/src/main/java/com/petcare/common/model/ApiResponse.java",
+      "type": "file",
+      "name": "ApiResponse.java",
+      "filePath": "BE/src/main/java/com/petcare/common/model/ApiResponse.java",
+      "summary": "Generic API response wrapper record with static factory methods for ok, created, and error responses.",
+      "tags": ["api", "response-wrapper", "record"],
+      "complexity": "simple"
+    },
+    {
+      "id": "file:BE/src/main/java/com/petcare/common/model/BaseEntity.java",
+      "type": "file",
+      "name": "BaseEntity.java",
+      "filePath": "BE/src/main/java/com/petcare/common/model/BaseEntity.java",
+      "summary": "Abstract base entity with JPA auditing providing id, createdAt, and updatedAt fields.",
+      "tags": ["entity", "base-class", "jpa", "auditing"],
+      "complexity": "simple"
+    },
+    {
+      "id": "file:BE/src/main/java/com/petcare/common/model/PageResponse.java",
+      "type": "file",
+      "name": "PageResponse.java",
+      "filePath": "BE/src/main/java/com/petcare/common/model/PageResponse.java",
+      "summary": "Generic pagination response record wrapping Spring Data Page with pagination metadata.",
+      "tags": ["pagination", "response", "record"],
+      "complexity": "simple"
+    },
+    {
+      "id": "file:BE/src/main/java/com/petcare/common/security/JwtAuthenticationFilter.java",
+      "type": "file",
+      "name": "JwtAuthenticationFilter.java",
+      "filePath": "BE/src/main/java/com/petcare/common/security/JwtAuthenticationFilter.java",
+      "summary": "Servlet filter extracting JWT from Authorization header and setting SecurityContext authentication.",
+      "tags": ["security", "jwt", "filter", "authentication"],
+      "complexity": "moderate"
+    },
+    {
+      "id": "file:BE/src/main/java/com/petcare/common/security/JwtTokenProvider.java",
+      "type": "file",
+      "name": "JwtTokenProvider.java",
+      "filePath": "BE/src/main/java/com/petcare/common/security/JwtTokenProvider.java",
+      "summary": "JWT token provider generating and validating access/refresh tokens with HMAC-SHA signing.",
+      "tags": ["security", "jwt", "token", "authentication"],
+      "complexity": "moderate"
+    },
+    {
+      "id": "file:BE/src/main/java/com/petcare/common/security/UserPrincipal.java",
+      "type": "file",
+      "name": "UserPrincipal.java",
+      "filePath": "BE/src/main/java/com/petcare/common/security/UserPrincipal.java",
+      "summary": "UserDetails implementation holding user identity, role, and organization context for Spring Security.",
+      "tags": ["security", "user-details", "authentication"],
+      "complexity": "simple"
+    },
+    {
+      "id": "file:BE/src/main/java/com/petcare/modules/auth/entity/Account.java",
+      "type": "file",
+      "name": "Account.java",
+      "filePath": "BE/src/main/java/com/petcare/modules/auth/entity/Account.java",
+      "summary": "Account entity with phone, email, password hash, status, and role extending BaseEntity.",
+      "tags": ["entity", "authentication", "account"],
+      "complexity": "simple"
+    },
+    {
+      "id": "file:BE/src/main/java/com/petcare/modules/pets/controller/PetController.java",
+      "type": "file",
+      "name": "PetController.java",
+      "filePath": "BE/src/main/java/com/petcare/modules/pets/controller/PetController.java",
+      "summary": "REST controller for pet CRUD operations with role-based access control for customers, receptionists, and admins.",
+      "tags": ["rest-controller", "api-handler", "crud", "pets"],
+      "complexity": "moderate"
+    },
+    {
+      "id": "file:BE/src/main/java/com/petcare/modules/pets/dto/request/CreatePetRequest.java",
+      "type": "file",
+      "name": "CreatePetRequest.java",
+      "filePath": "BE/src/main/java/com/petcare/modules/pets/dto/request/CreatePetRequest.java",
+      "summary": "DTO for pet creation with validation constraints for name, species, breed, birth date, and weight.",
+      "tags": ["dto", "request", "validation", "pets"],
+      "complexity": "simple"
+    },
+    {
+      "id": "file:BE/src/main/java/com/petcare/modules/pets/dto/request/UpdatePetRequest.java",
+      "type": "file",
+      "name": "UpdatePetRequest.java",
+      "filePath": "BE/src/main/java/com/petcare/modules/pets/dto/request/UpdatePetRequest.java",
+      "summary": "DTO for pet updates with optional fields and validation constraints.",
+      "tags": ["dto", "request", "validation", "pets"],
+      "complexity": "simple"
+    },
+    {
+      "id": "file:BE/src/main/java/com/petcare/modules/pets/dto/response/PetResponse.java",
+      "type": "file",
+      "name": "PetResponse.java",
+      "filePath": "BE/src/main/java/com/petcare/modules/pets/dto/response/PetResponse.java",
+      "summary": "Pet response DTO with computed age fields and species display name in Vietnamese.",
+      "tags": ["dto", "response", "pets"],
+      "complexity": "simple"
+    },
+    {
+      "id": "file:BE/src/main/java/com/petcare/modules/pets/entity/Pet.java",
+      "type": "file",
+      "name": "Pet.java",
+      "filePath": "BE/src/main/java/com/petcare/modules/pets/entity/Pet.java",
+      "summary": "Pet JPA entity with owner relationship, species, breed, weight, and optional notes.",
+      "tags": ["entity", "jpa", "pets", "domain-model"],
+      "complexity": "simple"
+    },
+    {
+      "id": "file:BE/src/main/java/com/petcare/modules/pets/repository/PetRepository.java",
+      "type": "file",
+      "name": "PetRepository.java",
+      "filePath": "BE/src/main/java/com/petcare/modules/pets/repository/PetRepository.java",
+      "summary": "Spring Data JPA repository for Pet entity with custom queries for owner and species lookups.",
+      "tags": ["repository", "jpa", "data-access", "pets"],
+      "complexity": "simple"
+    },
+    {
+      "id": "file:BE/src/main/java/com/petcare/modules/pets/service/PetService.java",
+      "type": "file",
+      "name": "PetService.java",
+      "filePath": "BE/src/main/java/com/petcare/modules/pets/service/PetService.java",
+      "summary": "Pet service interface defining CRUD operations, search, and ownership validation.",
+      "tags": ["service", "interface", "business-logic", "pets"],
+      "complexity": "simple"
+    },
+    {
+      "id": "file:BE/src/main/java/com/petcare/modules/pets/service/impl/PetServiceImpl.java",
+      "type": "file",
+      "name": "PetServiceImpl.java",
+      "filePath": "BE/src/main/java/com/petcare/modules/pets/service/impl/PetServiceImpl.java",
+      "summary": "Pet service implementation with transactional CRUD, owner validation, and Vietnamese species display names.",
+      "tags": ["service", "implementation", "business-logic", "pets"],
+      "complexity": "moderate"
+    },
+    {
+      "id": "file:BE/src/main/java/com/petcare/modules/users/entity/User.java",
+      "type": "file",
+      "name": "User.java",
+      "filePath": "BE/src/main/java/com/petcare/modules/users/entity/User.java",
+      "summary": "User entity with account relationship, name, avatar, and optional organization/store assignments.",
+      "tags": ["entity", "jpa", "users", "domain-model"],
+      "complexity": "simple"
+    },
+    {
+      "id": "class:BE/src/main/java/com/petcare/common/model/BaseEntity.java:BaseEntity",
+      "type": "class",
+      "name": "BaseEntity",
+      "filePath": "BE/src/main/java/com/petcare/common/model/BaseEntity.java",
+      "lineRange": [16, 29],
+      "summary": "Abstract base entity providing id, createdAt, updatedAt with JPA auditing support.",
+      "tags": ["base-class", "entity", "auditing"],
+      "complexity": "simple"
+    },
+    {
+      "id": "class:BE/src/main/java/com/petcare/common/model/ApiResponse.java:ApiResponse",
+      "type": "class",
+      "name": "ApiResponse",
+      "filePath": "BE/src/main/java/com/petcare/common/model/ApiResponse.java",
+      "lineRange": [3, 23],
+      "summary": "Generic record for unified API responses with static factory methods.",
+      "tags": ["response-wrapper", "record", "api"],
+      "complexity": "simple"
+    },
+    {
+      "id": "class:BE/src/main/java/com/petcare/common/model/PageResponse.java:PageResponse",
+      "type": "class",
+      "name": "PageResponse",
+      "filePath": "BE/src/main/java/com/petcare/common/model/PageResponse.java",
+      "lineRange": [6, 26],
+      "summary": "Generic pagination response record with Spring Data Page integration.",
+      "tags": ["pagination", "response", "record"],
+      "complexity": "simple"
+    },
+    {
+      "id": "class:BE/src/main/java/com/petcare/common/security/UserPrincipal.java:UserPrincipal",
+      "type": "class",
+      "name": "UserPrincipal",
+      "filePath": "BE/src/main/java/com/petcare/common/security/UserPrincipal.java",
+      "lineRange": [18, 62],
+      "summary": "UserDetails implementation for Spring Security with user ID, account ID, role, and organization context.",
+      "tags": ["user-details", "security", "authentication"],
+      "complexity": "simple"
+    },
+    {
+      "id": "class:BE/src/main/java/com/petcare/modules/auth/entity/Account.java:Account",
+      "type": "class",
+      "name": "Account",
+      "filePath": "BE/src/main/java/com/petcare/modules/auth/entity/Account.java",
+      "lineRange": [20, 46],
+      "summary": "Account entity extending BaseEntity with phone, email, password hash, status, and role.",
+      "tags": ["entity", "authentication", "account"],
+      "complexity": "simple"
+    },
+    {
+      "id": "class:BE/src/main/java/com/petcare/modules/users/entity/User.java:User",
+      "type": "class",
+      "name": "User",
+      "filePath": "BE/src/main/java/com/petcare/modules/users/entity/User.java",
+      "lineRange": [18, 34],
+      "summary": "User entity extending BaseEntity with account relationship and organization/store assignment.",
+      "tags": ["entity", "users", "domain-model"],
+      "complexity": "simple"
+    },
+    {
+      "id": "class:BE/src/main/java/com/petcare/modules/pets/entity/Pet.java:Pet",
+      "type": "class",
+      "name": "Pet",
+      "filePath": "BE/src/main/java/com/petcare/modules/pets/entity/Pet.java",
+      "lineRange": [22, 47],
+      "summary": "Pet entity extending BaseEntity with owner relationship, species, breed, weight, and notes.",
+      "tags": ["entity", "pets", "domain-model"],
+      "complexity": "simple"
+    },
+    {
+      "id": "class:BE/src/main/java/com/petcare/modules/pets/dto/request/CreatePetRequest.java:CreatePetRequest",
+      "type": "class",
+      "name": "CreatePetRequest",
+      "filePath": "BE/src/main/java/com/petcare/modules/pets/dto/request/CreatePetRequest.java",
+      "lineRange": [12, 37],
+      "summary": "DTO for pet creation with validation constraints.",
+      "tags": ["dto", "request", "validation"],
+      "complexity": "simple"
+    },
+    {
+      "id": "class:BE/src/main/java/com/petcare/modules/pets/dto/request/UpdatePetRequest.java:UpdatePetRequest",
+      "type": "class",
+      "name": "UpdatePetRequest",
+      "filePath": "BE/src/main/java/com/petcare/modules/pets/dto/request/UpdatePetRequest.java",
+      "lineRange": [12, 32],
+      "summary": "DTO for pet updates with optional fields.",
+      "tags": ["dto", "request", "validation"],
+      "complexity": "simple"
+    },
+    {
+      "id": "class:BE/src/main/java/com/petcare/modules/pets/dto/response/PetResponse.java:PetResponse",
+      "type": "class",
+      "name": "PetResponse",
+      "filePath": "BE/src/main/java/com/petcare/modules/pets/dto/response/PetResponse.java",
+      "lineRange": [12, 28],
+      "summary": "Pet response DTO with computed age and Vietnamese species names.",
+      "tags": ["dto", "response"],
+      "complexity": "simple"
+    },
+    {
+      "id": "class:BE/src/main/java/com/petcare/common/security/JwtTokenProvider.java:JwtTokenProvider",
+      "type": "class",
+      "name": "JwtTokenProvider",
+      "filePath": "BE/src/main/java/com/petcare/common/security/JwtTokenProvider.java",
+      "lineRange": [12, 85],
+      "summary": "JWT token provider with access/refresh token generation, parsing, and validation.",
+      "tags": ["jwt", "token", "security"],
+      "complexity": "moderate"
+    },
+    {
+      "id": "class:BE/src/main/java/com/petcare/modules/pets/service/PetService.java:PetService",
+      "type": "class",
+      "name": "PetService",
+      "filePath": "BE/src/main/java/com/petcare/modules/pets/service/PetService.java",
+      "lineRange": [11, 36],
+      "summary": "Pet service interface defining CRUD, search, and validation operations.",
+      "tags": ["service", "interface", "business-logic"],
+      "complexity": "simple"
+    },
+    {
+      "id": "class:BE/src/main/java/com/petcare/modules/pets/service/impl/PetServiceImpl.java:PetServiceImpl",
+      "type": "class",
+      "name": "PetServiceImpl",
+      "filePath": "BE/src/main/java/com/petcare/modules/pets/service/impl/PetServiceImpl.java",
+      "lineRange": [22, 166],
+      "summary": "Pet service implementation with transaction management and Vietnamese species display names.",
+      "tags": ["service", "implementation", "business-logic"],
+      "complexity": "moderate"
+    },
+    {
+      "id": "class:BE/src/main/java/com/petcare/modules/pets/repository/PetRepository.java:PetRepository",
+      "type": "class",
+      "name": "PetRepository",
+      "filePath": "BE/src/main/java/com/petcare/modules/pets/repository/PetRepository.java",
+      "lineRange": [15, 38],
+      "summary": "Spring Data JPA repository for Pet with custom query methods.",
+      "tags": ["repository", "jpa", "data-access"],
+      "complexity": "simple"
+    },
+    {
+      "id": "class:BE/src/main/java/com/petcare/common/exception/BusinessException.java:BusinessException",
+      "type": "class",
+      "name": "BusinessException",
+      "filePath": "BE/src/main/java/com/petcare/common/exception/BusinessException.java",
+      "lineRange": [5, 35],
+      "summary": "Runtime exception with error code and HTTP status for business rule violations.",
+      "tags": ["exception", "error-handling"],
+      "complexity": "simple"
+    },
+    {
+      "id": "class:BE/src/main/java/com/petcare/common/exception/ResourceNotFoundException.java:ResourceNotFoundException",
+      "type": "class",
+      "name": "ResourceNotFoundException",
+      "filePath": "BE/src/main/java/com/petcare/common/exception/ResourceNotFoundException.java",
+      "lineRange": [5, 20],
+      "summary": "Runtime exception for 404 errors with formatted message.",
+      "tags": ["exception", "error-handling", "not-found"],
+      "complexity": "simple"
+    },
+    {
+      "id": "class:BE/src/main/java/com/petcare/common/exception/GlobalExceptionHandler.java:GlobalExceptionHandler",
+      "type": "class",
+      "name": "GlobalExceptionHandler",
+      "filePath": "BE/src/main/java/com/petcare/common/exception/GlobalExceptionHandler.java",
+      "lineRange": [15, 53],
+      "summary": "REST controller advice handling BusinessException, ResourceNotFoundException, and validation errors.",
+      "tags": ["exception-handler", "rest", "error-handling"],
+      "complexity": "moderate"
+    }
+  ],
+  "edges": [
+    {
+      "source": "file:BE/src/main/java/com/petcare/PetcareApplication.java",
+      "target": "class:BE/src/main/java/com/petcare/common/config/JpaAuditingConfig.java:JpaAuditingConfig",
+      "type": "contains",
+      "direction": "forward",
+      "weight": 1.0
+    },
+    {
+      "source": "file:BE/src/main/java/com/petcare/common/config/SecurityConfig.java",
+      "target": "class:BE/src/main/java/com/petcare/common/security/JwtAuthenticationFilter.java:JwtAuthenticationFilter",
+      "type": "contains",
+      "direction": "forward",
+      "weight": 1.0
+    },
+    {
+      "source": "file:BE/src/main/java/com/petcare/common/model/BaseEntity.java",
+      "target": "class:BE/src/main/java/com/petcare/common/model/BaseEntity.java:BaseEntity",
+      "type": "contains",
+      "direction": "forward",
+      "weight": 1.0
+    },
+    {
+      "source": "file:BE/src/main/java/com/petcare/common/model/ApiResponse.java",
+      "target": "class:BE/src/main/java/com/petcare/common/model/ApiResponse.java:ApiResponse",
+      "type": "contains",
+      "direction": "forward",
+      "weight": 1.0
+    },
+    {
+      "source": "file:BE/src/main/java/com/petcare/common/model/PageResponse.java",
+      "target": "class:BE/src/main/java/com/petcare/common/model/PageResponse.java:PageResponse",
+      "type": "contains",
+      "direction": "forward",
+      "weight": 1.0
+    },
+    {
+      "source": "file:BE/src/main/java/com/petcare/common/security/UserPrincipal.java",
+      "target": "class:BE/src/main/java/com/petcare/common/security/UserPrincipal.java:UserPrincipal",
+      "type": "contains",
+      "direction": "forward",
+      "weight": 1.0
+    },
+    {
+      "source": "file:BE/src/main/java/com/petcare/common/security/JwtTokenProvider.java",
+      "target": "class:BE/src/main/java/com/petcare/common/security/JwtTokenProvider.java:JwtTokenProvider",
+      "type": "contains",
+      "direction": "forward",
+      "weight": 1.0
+    },
+    {
+      "source": "file:BE/src/main/java/com/petcare/common/exception/BusinessException.java",
+      "target": "class:BE/src/main/java/com/petcare/common/exception/BusinessException.java:BusinessException",
+      "type": "contains",
+      "direction": "forward",
+      "weight": 1.0
+    },
+    {
+      "source": "file:BE/src/main/java/com/petcare/common/exception/ResourceNotFoundException.java",
+      "target": "class:BE/src/main/java/com/petcare/common/exception/ResourceNotFoundException.java:ResourceNotFoundException",
+      "type": "contains",
+      "direction": "forward",
+      "weight": 1.0
+    },
+    {
+      "source": "file:BE/src/main/java/com/petcare/common/exception/GlobalExceptionHandler.java",
+      "target": "class:BE/src/main/java/com/petcare/common/exception/GlobalExceptionHandler.java:GlobalExceptionHandler",
+      "type": "contains",
+      "direction": "forward",
+      "weight": 1.0
+    },
+    {
+      "source": "file:BE/src/main/java/com/petcare/modules/auth/entity/Account.java",
+      "target": "class:BE/src/main/java/com/petcare/modules/auth/entity/Account.java:Account",
+      "type": "contains",
+      "direction": "forward",
+      "weight": 1.0
+    },
+    {
+      "source": "file:BE/src/main/java/com/petcare/modules/users/entity/User.java",
+      "target": "class:BE/src/main/java/com/petcare/modules/users/entity/User.java:User",
+      "type": "contains",
+      "direction": "forward",
+      "weight": 1.0
+    },
+    {
+      "source": "file:BE/src/main/java/com/petcare/modules/pets/entity/Pet.java",
+      "target": "class:BE/src/main/java/com/petcare/modules/pets/entity/Pet.java:Pet",
+      "type": "contains",
+      "direction": "forward",
+      "weight": 1.0
+    },
+    {
+      "source": "file:BE/src/main/java/com/petcare/modules/pets/dto/request/CreatePetRequest.java",
+      "target": "class:BE/src/main/java/com/petcare/modules/pets/dto/request/CreatePetRequest.java:CreatePetRequest",
+      "type": "contains",
+      "direction": "forward",
+      "weight": 1.0
+    },
+    {
+      "source": "file:BE/src/main/java/com/petcare/modules/pets/dto/request/UpdatePetRequest.java",
+      "target": "class:BE/src/main/java/com/petcare/modules/pets/dto/request/UpdatePetRequest.java:UpdatePetRequest",
+      "type": "contains",
+      "direction": "forward",
+      "weight": 1.0
+    },
+    {
+      "source": "file:BE/src/main/java/com/petcare/modules/pets/dto/response/PetResponse.java",
+      "target": "class:BE/src/main/java/com/petcare/modules/pets/dto/response/PetResponse.java:PetResponse",
+      "type": "contains",
+      "direction": "forward",
+      "weight": 1.0
+    },
+    {
+      "source": "file:BE/src/main/java/com/petcare/modules/pets/repository/PetRepository.java",
+      "target": "class:BE/src/main/java/com/petcare/modules/pets/repository/PetRepository.java:PetRepository",
+      "type": "contains",
+      "direction": "forward",
+      "weight": 1.0
+    },
+    {
+      "source": "file:BE/src/main/java/com/petcare/modules/pets/service/PetService.java",
+      "target": "class:BE/src/main/java/com/petcare/modules/pets/service/PetService.java:PetService",
+      "type": "contains",
+      "direction": "forward",
+      "weight": 1.0
+    },
+    {
+      "source": "file:BE/src/main/java/com/petcare/modules/pets/service/impl/PetServiceImpl.java",
+      "target": "class:BE/src/main/java/com/petcare/modules/pets/service/impl/PetServiceImpl.java:PetServiceImpl",
+      "type": "contains",
+      "direction": "forward",
+      "weight": 1.0
+    },
+    {
+      "source": "file:BE/src/main/java/com/petcare/common/config/SecurityConfig.java",
+      "target": "file:BE/src/main/java/com/petcare/common/security/JwtAuthenticationFilter.java",
+      "type": "imports",
+      "direction": "forward",
+      "weight": 0.7
+    },
+    {
+      "source": "file:BE/src/main/java/com/petcare/common/exception/GlobalExceptionHandler.java",
+      "target": "file:BE/src/main/java/com/petcare/common/model/ApiResponse.java",
+      "type": "imports",
+      "direction": "forward",
+      "weight": 0.7
+    },
+    {
+      "source": "file:BE/src/main/java/com/petcare/common/security/JwtAuthenticationFilter.java",
+      "target": "file:BE/src/main/java/com/petcare/common/security/JwtTokenProvider.java",
+      "type": "imports",
+      "direction": "forward",
+      "weight": 0.7
+    },
+    {
+      "source": "file:BE/src/main/java/com/petcare/common/security/JwtAuthenticationFilter.java",
+      "target": "file:BE/src/main/java/com/petcare/common/security/UserPrincipal.java",
+      "type": "imports",
+      "direction": "forward",
+      "weight": 0.7
+    },
+    {
+      "source": "file:BE/src/main/java/com/petcare/common/security/JwtTokenProvider.java",
+      "target": "file:BE/src/main/java/com/petcare/common/security/UserPrincipal.java",
+      "type": "imports",
+      "direction": "forward",
+      "weight": 0.7
+    },
+    {
+      "source": "file:BE/src/main/java/com/petcare/modules/auth/entity/Account.java",
+      "target": "file:BE/src/main/java/com/petcare/common/model/BaseEntity.java",
+      "type": "imports",
+      "direction": "forward",
+      "weight": 0.7
+    },
+    {
+      "source": "file:BE/src/main/java/com/petcare/modules/pets/controller/PetController.java",
+      "target": "file:BE/src/main/java/com/petcare/common/model/ApiResponse.java",
+      "type": "imports",
+      "direction": "forward",
+      "weight": 0.7
+    },
+    {
+      "source": "file:BE/src/main/java/com/petcare/modules/pets/controller/PetController.java",
+      "target": "file:BE/src/main/java/com/petcare/common/model/PageResponse.java",
+      "type": "imports",
+      "direction": "forward",
+      "weight": 0.7
+    },
+    {
+      "source": "file:BE/src/main/java/com/petcare/modules/pets/controller/PetController.java",
+      "target": "file:BE/src/main/java/com/petcare/modules/pets/dto/request/CreatePetRequest.java",
+      "type": "imports",
+      "direction": "forward",
+      "weight": 0.7
+    },
+    {
+      "source": "file:BE/src/main/java/com/petcare/modules/pets/controller/PetController.java",
+      "target": "file:BE/src/main/java/com/petcare/modules/pets/dto/request/UpdatePetRequest.java",
+      "type": "imports",
+      "direction": "forward",
+      "weight": 0.7
+    },
+    {
+      "source": "file:BE/src/main/java/com/petcare/modules/pets/controller/PetController.java",
+      "target": "file:BE/src/main/java/com/petcare/modules/pets/dto/response/PetResponse.java",
+      "type": "imports",
+      "direction": "forward",
+      "weight": 0.7
+    },
+    {
+      "source": "file:BE/src/main/java/com/petcare/modules/pets/controller/PetController.java",
+      "target": "file:BE/src/main/java/com/petcare/modules/pets/service/PetService.java",
+      "type": "imports",
+      "direction": "forward",
+      "weight": 0.7
+    },
+    {
+      "source": "file:BE/src/main/java/com/petcare/modules/pets/entity/Pet.java",
+      "target": "file:BE/src/main/java/com/petcare/common/model/BaseEntity.java",
+      "type": "imports",
+      "direction": "forward",
+      "weight": 0.7
+    },
+    {
+      "source": "file:BE/src/main/java/com/petcare/modules/pets/service/impl/PetServiceImpl.java",
+      "target": "file:BE/src/main/java/com/petcare/common/exception/ResourceNotFoundException.java",
+      "type": "imports",
+      "direction": "forward",
+      "weight": 0.7
+    },
+    {
+      "source": "file:BE/src/main/java/com/petcare/modules/pets/service/impl/PetServiceImpl.java",
+      "target": "file:BE/src/main/java/com/petcare/modules/pets/dto/request/CreatePetRequest.java",
+      "type": "imports",
+      "direction": "forward",
+      "weight": 0.7
+    },
+    {
+      "source": "file:BE/src/main/java/com/petcare/modules/pets/service/impl/PetServiceImpl.java",
+      "target": "file:BE/src/main/java/com/petcare/modules/pets/dto/request/UpdatePetRequest.java",
+      "type": "imports",
+      "direction": "forward",
+      "weight": 0.7
+    },
+    {
+      "source": "file:BE/src/main/java/com/petcare/modules/pets/service/impl/PetServiceImpl.java",
+      "target": "file:BE/src/main/java/com/petcare/modules/pets/dto/response/PetResponse.java",
+      "type": "imports",
+      "direction": "forward",
+      "weight": 0.7
+    },
+    {
+      "source": "file:BE/src/main/java/com/petcare/modules/pets/service/impl/PetServiceImpl.java",
+      "target": "file:BE/src/main/java/com/petcare/modules/pets/entity/Pet.java",
+      "type": "imports",
+      "direction": "forward",
+      "weight": 0.7
+    },
+    {
+      "source": "file:BE/src/main/java/com/petcare/modules/pets/service/impl/PetServiceImpl.java",
+      "target": "file:BE/src/main/java/com/petcare/modules/pets/repository/PetRepository.java",
+      "type": "imports",
+      "direction": "forward",
+      "weight": 0.7
+    },
+    {
+      "source": "file:BE/src/main/java/com/petcare/modules/pets/service/impl/PetServiceImpl.java",
+      "target": "file:BE/src/main/java/com/petcare/modules/pets/service/PetService.java",
+      "type": "imports",
+      "direction": "forward",
+      "weight": 0.7
+    },
+    {
+      "source": "file:BE/src/main/java/com/petcare/modules/users/entity/User.java",
+      "target": "file:BE/src/main/java/com/petcare/common/model/BaseEntity.java",
+      "type": "imports",
+      "direction": "forward",
+      "weight": 0.7
+    },
+    {
+      "source": "class:BE/src/main/java/com/petcare/modules/auth/entity/Account.java:Account",
+      "target": "class:BE/src/main/java/com/petcare/common/model/BaseEntity.java:BaseEntity",
+      "type": "inherits",
+      "direction": "forward",
+      "weight": 0.9
+    },
+    {
+      "source": "class:BE/src/main/java/com/petcare/modules/users/entity/User.java:User",
+      "target": "class:BE/src/main/java/com/petcare/common/model/BaseEntity.java:BaseEntity",
+      "type": "inherits",
+      "direction": "forward",
+      "weight": 0.9
+    },
+    {
+      "source": "class:BE/src/main/java/com/petcare/modules/pets/entity/Pet.java:Pet",
+      "target": "class:BE/src/main/java/com/petcare/common/model/BaseEntity.java:BaseEntity",
+      "type": "inherits",
+      "direction": "forward",
+      "weight": 0.9
+    },
+    {
+      "source": "class:BE/src/main/java/com/petcare/modules/pets/service/impl/PetServiceImpl.java:PetServiceImpl",
+      "target": "class:BE/src/main/java/com/petcare/modules/pets/service/PetService.java:PetService",
+      "type": "implements",
+      "direction": "forward",
+      "weight": 0.9
+    },
+    {
+      "source": "file:BE/src/main/java/com/petcare/modules/pets/controller/PetController.java",
+      "target": "file:BE/src/main/java/com/petcare/modules/pets/service/impl/PetServiceImpl.java",
+      "type": "calls",
+      "direction": "forward",
+      "weight": 0.8
+    },
+    {
+      "source": "file:BE/src/main/java/com/petcare/common/security/JwtTokenProvider.java",
+      "target": "file:BE/src/main/java/com/petcare/common/security/UserPrincipal.java",
+      "type": "depends_on",
+      "direction": "forward",
+      "weight": 0.6
+    }
+  ]
+}

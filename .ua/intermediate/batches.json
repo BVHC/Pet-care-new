@@ -1,0 +1,482 @@
+{
+  "schemaVersion": 1,
+  "algorithm": "louvain",
+  "totalFiles": 43,
+  "totalBatches": 6,
+  "exportsByPath": {
+    "BE/src/main/java/com/petcare/PetcareApplication.java": [
+      "main",
+      "PetcareApplication"
+    ],
+    "BE/src/main/java/com/petcare/common/config/JpaAuditingConfig.java": [
+      "JpaAuditingConfig"
+    ],
+    "BE/src/main/java/com/petcare/common/config/SecurityConfig.java": [
+      "filterChain",
+      "passwordEncoder",
+      "SecurityConfig"
+    ],
+    "BE/src/main/java/com/petcare/common/enums/AccountStatus.java": [
+      "AccountStatus"
+    ],
+    "BE/src/main/java/com/petcare/common/enums/UserRole.java": [
+      "UserRole"
+    ],
+    "BE/src/main/java/com/petcare/common/exception/BusinessException.java": [
+      "BusinessException",
+      "BusinessException",
+      "BusinessException",
+      "getCode",
+      "getStatus",
+      "BusinessException"
+    ],
+    "BE/src/main/java/com/petcare/common/exception/GlobalExceptionHandler.java": [
+      "handleBusinessException",
+      "handleResourceNotFoundException",
+      "handleValidationException",
+      "handleGenericException",
+      "GlobalExceptionHandler"
+    ],
+    "BE/src/main/java/com/petcare/common/exception/ResourceNotFoundException.java": [
+      "ResourceNotFoundException",
+      "ResourceNotFoundException",
+      "getStatus",
+      "ResourceNotFoundException"
+    ],
+    "BE/src/main/java/com/petcare/common/model/ApiResponse.java": [
+      "ok",
+      "ok",
+      "created",
+      "error",
+      "ApiResponse"
+    ],
+    "BE/src/main/java/com/petcare/common/model/BaseEntity.java": [
+      "BaseEntity"
+    ],
+    "BE/src/main/java/com/petcare/common/model/PageResponse.java": [
+      "of",
+      "PageResponse"
+    ],
+    "BE/src/main/java/com/petcare/common/security/JwtAuthenticationFilter.java": [
+      "JwtAuthenticationFilter"
+    ],
+    "BE/src/main/java/com/petcare/common/security/JwtTokenProvider.java": [
+      "JwtTokenProvider",
+      "generateAccessToken",
+      "generateRefreshToken",
+      "parseToken",
+      "validateToken",
+      "JwtTokenProvider"
+    ],
+    "BE/src/main/java/com/petcare/common/security/UserPrincipal.java": [
+      "getAuthorities",
+      "getPassword",
+      "getUsername",
+      "isAccountNonExpired",
+      "isAccountNonLocked",
+      "isCredentialsNonExpired",
+      "isEnabled",
+      "UserPrincipal"
+    ],
+    "BE/src/main/java/com/petcare/modules/auth/entity/Account.java": [
+      "Account"
+    ],
+    "BE/src/main/java/com/petcare/modules/pets/controller/PetController.java": [
+      "createPet",
+      "getMyPets",
+      "getPetById",
+      "updatePet",
+      "deletePet",
+      "searchPets",
+      "PetController"
+    ],
+    "BE/src/main/java/com/petcare/modules/pets/dto/request/CreatePetRequest.java": [
+      "CreatePetRequest"
+    ],
+    "BE/src/main/java/com/petcare/modules/pets/dto/request/UpdatePetRequest.java": [
+      "UpdatePetRequest"
+    ],
+    "BE/src/main/java/com/petcare/modules/pets/dto/response/PetResponse.java": [
+      "PetResponse"
+    ],
+    "BE/src/main/java/com/petcare/modules/pets/entity/Pet.java": [
+      "Pet"
+    ],
+    "BE/src/main/java/com/petcare/modules/pets/repository/PetRepository.java": [
+      "PetRepository"
+    ],
+    "BE/src/main/java/com/petcare/modules/pets/service/PetService.java": [
+      "PetService"
+    ],
+    "BE/src/main/java/com/petcare/modules/pets/service/impl/PetServiceImpl.java": [
+      "createPet",
+      "getPetById",
+      "getPetByIdForOwner",
+      "getPetsByOwner",
+      "updatePet",
+      "deletePet",
+      "searchPets",
+      "getAllPetsBySpecies",
+      "countPetsByOwner",
+      "isOwnerOfPet",
+      "PetServiceImpl"
+    ],
+    "BE/src/main/java/com/petcare/modules/users/entity/User.java": [
+      "User"
+    ],
+    "FE/src/main.tsx": [],
+    "FE/src/app/App.tsx": [],
+    "FE/src/index.css": []
+  },
+  "batches": [
+    {
+      "batchIndex": 1,
+      "files": [
+        {
+          "path": "BE/Dockerfile",
+          "sizeLines": 30,
+          "fileCategory": "infra",
+          "language": "Dockerfile"
+        }
+      ],
+      "batchImportData": {
+        "BE/Dockerfile": []
+      },
+      "neighborMap": {}
+    },
+    {
+      "batchIndex": 2,
+      "files": [
+        {
+          "path": "BE/src/main/resources/db/migration/V1__init_schema.sql",
+          "sizeLines": 200,
+          "fileCategory": "data",
+          "language": "SQL"
+        }
+      ],
+      "batchImportData": {
+        "BE/src/main/resources/db/migration/V1__init_schema.sql": []
+      },
+      "neighborMap": {}
+    },
+    {
+      "batchIndex": 3,
+      "files": [
+        {
+          "path": "FE/index.html",
+          "sizeLines": 20,
+          "fileCategory": "markup",
+          "language": "HTML"
+        },
+        {
+          "path": "FE/package.json",
+          "sizeLines": 40,
+          "fileCategory": "config",
+          "language": "JSON"
+        },
+        {
+          "path": "FE/tsconfig.json",
+          "sizeLines": 30,
+          "fileCategory": "config",
+          "language": "JSON"
+        },
+        {
+          "path": "FE/vite.config.ts",
+          "sizeLines": 25,
+          "fileCategory": "config",
+          "language": "TypeScript"
+        }
+      ],
+      "batchImportData": {
+        "FE/index.html": [],
+        "FE/package.json": [],
+        "FE/tsconfig.json": [],
+        "FE/vite.config.ts": []
+      },
+      "neighborMap": {}
+    },
+    {
+      "batchIndex": 4,
+      "files": [
+        {
+          "path": "docs/01-business-operations.md",
+          "sizeLines": 100,
+          "fileCategory": "docs",
+          "language": "Markdown"
+        },
+        {
+          "path": "docs/02-business-rules.md",
+          "sizeLines": 80,
+          "fileCategory": "docs",
+          "language": "Markdown"
+        },
+        {
+          "path": "docs/03-state-machines.md",
+          "sizeLines": 60,
+          "fileCategory": "docs",
+          "language": "Markdown"
+        }
+      ],
+      "batchImportData": {
+        "docs/01-business-operations.md": [],
+        "docs/02-business-rules.md": [],
+        "docs/03-state-machines.md": []
+      },
+      "neighborMap": {}
+    },
+    {
+      "batchIndex": 5,
+      "files": [
+        {
+          "path": "BE/pom.xml",
+          "sizeLines": 120,
+          "fileCategory": "config",
+          "language": "XML"
+        },
+        {
+          "path": "BE/src/main/java/com/petcare/PetcareApplication.java",
+          "sizeLines": 15,
+          "fileCategory": "code",
+          "language": "Java"
+        },
+        {
+          "path": "BE/src/main/java/com/petcare/common/config/JpaAuditingConfig.java",
+          "sizeLines": 25,
+          "fileCategory": "code",
+          "language": "Java"
+        },
+        {
+          "path": "BE/src/main/java/com/petcare/common/config/SecurityConfig.java",
+          "sizeLines": 80,
+          "fileCategory": "code",
+          "language": "Java"
+        },
+        {
+          "path": "BE/src/main/java/com/petcare/common/enums/AccountStatus.java",
+          "sizeLines": 15,
+          "fileCategory": "code",
+          "language": "Java"
+        },
+        {
+          "path": "BE/src/main/java/com/petcare/common/enums/UserRole.java",
+          "sizeLines": 12,
+          "fileCategory": "code",
+          "language": "Java"
+        },
+        {
+          "path": "BE/src/main/java/com/petcare/common/exception/BusinessException.java",
+          "sizeLines": 20,
+          "fileCategory": "code",
+          "language": "Java"
+        },
+        {
+          "path": "BE/src/main/java/com/petcare/common/exception/GlobalExceptionHandler.java",
+          "sizeLines": 60,
+          "fileCategory": "code",
+          "language": "Java"
+        },
+        {
+          "path": "BE/src/main/java/com/petcare/common/exception/ResourceNotFoundException.java",
+          "sizeLines": 15,
+          "fileCategory": "code",
+          "language": "Java"
+        },
+        {
+          "path": "BE/src/main/java/com/petcare/common/model/ApiResponse.java",
+          "sizeLines": 30,
+          "fileCategory": "code",
+          "language": "Java"
+        },
+        {
+          "path": "BE/src/main/java/com/petcare/common/model/BaseEntity.java",
+          "sizeLines": 40,
+          "fileCategory": "code",
+          "language": "Java"
+        },
+        {
+          "path": "BE/src/main/java/com/petcare/common/model/PageResponse.java",
+          "sizeLines": 35,
+          "fileCategory": "code",
+          "language": "Java"
+        },
+        {
+          "path": "BE/src/main/java/com/petcare/common/security/JwtAuthenticationFilter.java",
+          "sizeLines": 50,
+          "fileCategory": "code",
+          "language": "Java"
+        },
+        {
+          "path": "BE/src/main/java/com/petcare/common/security/JwtTokenProvider.java",
+          "sizeLines": 70,
+          "fileCategory": "code",
+          "language": "Java"
+        },
+        {
+          "path": "BE/src/main/java/com/petcare/common/security/UserPrincipal.java",
+          "sizeLines": 45,
+          "fileCategory": "code",
+          "language": "Java"
+        },
+        {
+          "path": "BE/src/main/java/com/petcare/modules/auth/entity/Account.java",
+          "sizeLines": 55,
+          "fileCategory": "code",
+          "language": "Java"
+        },
+        {
+          "path": "BE/src/main/java/com/petcare/modules/pets/controller/PetController.java",
+          "sizeLines": 80,
+          "fileCategory": "code",
+          "language": "Java"
+        },
+        {
+          "path": "BE/src/main/java/com/petcare/modules/pets/dto/request/CreatePetRequest.java",
+          "sizeLines": 35,
+          "fileCategory": "code",
+          "language": "Java"
+        },
+        {
+          "path": "BE/src/main/java/com/petcare/modules/pets/dto/request/UpdatePetRequest.java",
+          "sizeLines": 30,
+          "fileCategory": "code",
+          "language": "Java"
+        },
+        {
+          "path": "BE/src/main/java/com/petcare/modules/pets/dto/response/PetResponse.java",
+          "sizeLines": 40,
+          "fileCategory": "code",
+          "language": "Java"
+        },
+        {
+          "path": "BE/src/main/java/com/petcare/modules/pets/entity/Pet.java",
+          "sizeLines": 60,
+          "fileCategory": "code",
+          "language": "Java"
+        },
+        {
+          "path": "BE/src/main/java/com/petcare/modules/pets/repository/PetRepository.java",
+          "sizeLines": 20,
+          "fileCategory": "code",
+          "language": "Java"
+        },
+        {
+          "path": "BE/src/main/java/com/petcare/modules/pets/service/PetService.java",
+          "sizeLines": 30,
+          "fileCategory": "code",
+          "language": "Java"
+        },
+        {
+          "path": "BE/src/main/java/com/petcare/modules/pets/service/impl/PetServiceImpl.java",
+          "sizeLines": 100,
+          "fileCategory": "code",
+          "language": "Java"
+        },
+        {
+          "path": "BE/src/main/java/com/petcare/modules/users/entity/User.java",
+          "sizeLines": 50,
+          "fileCategory": "code",
+          "language": "Java"
+        }
+      ],
+      "batchImportData": {
+        "BE/pom.xml": [],
+        "BE/src/main/java/com/petcare/PetcareApplication.java": [],
+        "BE/src/main/java/com/petcare/common/config/JpaAuditingConfig.java": [],
+        "BE/src/main/java/com/petcare/common/config/SecurityConfig.java": [],
+        "BE/src/main/java/com/petcare/common/enums/AccountStatus.java": [],
+        "BE/src/main/java/com/petcare/common/enums/UserRole.java": [],
+        "BE/src/main/java/com/petcare/common/exception/BusinessException.java": [],
+        "BE/src/main/java/com/petcare/common/exception/GlobalExceptionHandler.java": [],
+        "BE/src/main/java/com/petcare/common/exception/ResourceNotFoundException.java": [],
+        "BE/src/main/java/com/petcare/common/model/ApiResponse.java": [],
+        "BE/src/main/java/com/petcare/common/model/BaseEntity.java": [],
+        "BE/src/main/java/com/petcare/common/model/PageResponse.java": [],
+        "BE/src/main/java/com/petcare/common/security/JwtAuthenticationFilter.java": [],
+        "BE/src/main/java/com/petcare/common/security/JwtTokenProvider.java": [],
+        "BE/src/main/java/com/petcare/common/security/UserPrincipal.java": [],
+        "BE/src/main/java/com/petcare/modules/auth/entity/Account.java": [],
+        "BE/src/main/java/com/petcare/modules/pets/controller/PetController.java": [],
+        "BE/src/main/java/com/petcare/modules/pets/dto/request/CreatePetRequest.java": [],
+        "BE/src/main/java/com/petcare/modules/pets/dto/request/UpdatePetRequest.java": [],
+        "BE/src/main/java/com/petcare/modules/pets/dto/response/PetResponse.java": [],
+        "BE/src/main/java/com/petcare/modules/pets/entity/Pet.java": [],
+        "BE/src/main/java/com/petcare/modules/pets/repository/PetRepository.java": [],
+        "BE/src/main/java/com/petcare/modules/pets/service/PetService.java": [],
+        "BE/src/main/java/com/petcare/modules/pets/service/impl/PetServiceImpl.java": [],
+        "BE/src/main/java/com/petcare/modules/users/entity/User.java": []
+      },
+      "neighborMap": {}
+    },
+    {
+      "batchIndex": 6,
+      "files": [
+        {
+          "path": "BE/src/main/resources/application-docker.yml",
+          "sizeLines": 30,
+          "fileCategory": "config",
+          "language": "YAML"
+        },
+        {
+          "path": "BE/src/main/resources/application.yml",
+          "sizeLines": 50,
+          "fileCategory": "config",
+          "language": "YAML"
+        },
+        {
+          "path": "FE/src/app/App.tsx",
+          "sizeLines": 30,
+          "fileCategory": "code",
+          "language": "TypeScript"
+        },
+        {
+          "path": "FE/src/index.css",
+          "sizeLines": 50,
+          "fileCategory": "code",
+          "language": "CSS"
+        },
+        {
+          "path": "FE/src/main.tsx",
+          "sizeLines": 15,
+          "fileCategory": "code",
+          "language": "TypeScript"
+        },
+        {
+          "path": "README.md",
+          "sizeLines": 150,
+          "fileCategory": "docs",
+          "language": "Markdown"
+        },
+        {
+          "path": "docker-compose.yml",
+          "sizeLines": 60,
+          "fileCategory": "infra",
+          "language": "YAML"
+        },
+        {
+          "path": "plans/01-architecture-and-techstack.md",
+          "sizeLines": 120,
+          "fileCategory": "docs",
+          "language": "Markdown"
+        },
+        {
+          "path": "plans/02-database-and-implementation.md",
+          "sizeLines": 150,
+          "fileCategory": "docs",
+          "language": "Markdown"
+        }
+      ],
+      "batchImportData": {
+        "BE/src/main/resources/application-docker.yml": [],
+        "BE/src/main/resources/application.yml": [],
+        "FE/src/app/App.tsx": [],
+        "FE/src/index.css": [],
+        "FE/src/main.tsx": [],
+        "README.md": [],
+        "docker-compose.yml": [],
+        "plans/01-architecture-and-techstack.md": [],
+        "plans/02-database-and-implementation.md": []
+      },
+      "neighborMap": {}
+    }
+  ]
+}

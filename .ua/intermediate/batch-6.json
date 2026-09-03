@@ -1,0 +1,256 @@
+{
+  "nodes": [
+    {
+      "id": "config:BE/src/main/resources/application-docker.yml",
+      "type": "config",
+      "name": "application-docker.yml",
+      "filePath": "BE/src/main/resources/application-docker.yml",
+      "summary": "Spring Boot configuration for Docker environment with environment variable substitution for database and Redis hosts, Hikari connection pool settings, and JWT token configuration.",
+      "tags": ["configuration", "docker", "spring-boot", "database"],
+      "complexity": "simple",
+      "languageNotes": "Uses environment variable placeholders (${DB_HOST:-default}) for Docker container networking."
+    },
+    {
+      "id": "config:BE/src/main/resources/application.yml",
+      "type": "config",
+      "name": "application.yml",
+      "filePath": "BE/src/main/resources/application.yml",
+      "summary": "Spring Boot configuration for local development with PostgreSQL, Redis, Flyway migrations, and JWT authentication settings.",
+      "tags": ["configuration", "spring-boot", "local-dev", "database"],
+      "complexity": "simple"
+    },
+    {
+      "id": "file:FE/src/app/App.tsx",
+      "type": "file",
+      "name": "App.tsx",
+      "filePath": "FE/src/app/App.tsx",
+      "summary": "Main React application entry defining routes for customer-facing pages, authentication, admin dashboard, and staff portals (reception and doctor) with toast notifications.",
+      "tags": ["entry-point", "routing", "react", "spa"],
+      "complexity": "moderate"
+    },
+    {
+      "id": "file:FE/src/index.css",
+      "type": "file",
+      "name": "index.css",
+      "filePath": "FE/src/index.css",
+      "summary": "Global CSS with Tailwind CSS import and custom design tokens defining the pet-care brand palette (golden yellow, warm orange), typography (Baloo 2, Inter), and shadow utilities.",
+      "tags": ["styling", "design-system", "tailwindcss", "branding"],
+      "complexity": "simple",
+      "languageNotes": "Uses CSS @theme directive for Tailwind v4 design token configuration."
+    },
+    {
+      "id": "file:FE/src/main.tsx",
+      "type": "file",
+      "name": "main.tsx",
+      "filePath": "FE/src/main.tsx",
+      "summary": "React application bootstrap that sets up QueryClient for data fetching, BrowserRouter for routing, and renders the App component.",
+      "tags": ["entry-point", "bootstrap", "react", "react-query"],
+      "complexity": "simple"
+    },
+    {
+      "id": "document:README.md",
+      "type": "document",
+      "name": "README.md",
+      "filePath": "README.md",
+      "summary": "Comprehensive project documentation for Pet Care management system covering 22 modules, 8 FSMs, 9 roles, 4 phases over 6 weeks, tech stack, architecture, and setup instructions.",
+      "tags": ["documentation", "entry-point", "overview"],
+      "complexity": "complex"
+    },
+    {
+      "id": "service:docker-compose.yml",
+      "type": "service",
+      "name": "docker-compose.yml",
+      "filePath": "docker-compose.yml",
+      "summary": "Multi-service Docker orchestration defining PostgreSQL 17, Redis 7, Spring Boot backend, and React frontend with health checks, volumes, and shared network.",
+      "tags": ["containerization", "orchestration", "infrastructure", "deployment"],
+      "complexity": "moderate",
+      "languageNotes": "Defines 4 services with dependency ordering and health checks for production-ready deployment."
+    },
+    {
+      "id": "document:plans/01-architecture-and-techstack.md",
+      "type": "document",
+      "name": "01-architecture-and-techstack.md",
+      "filePath": "plans/01-architecture-and-techstack.md",
+      "summary": "Architecture and tech stack planning document detailing 8 roles, 4 implementation phases, 22 modules with FSM summaries, permissions matrix, project structure, and timeline.",
+      "tags": ["documentation", "architecture", "planning"],
+      "complexity": "complex"
+    },
+    {
+      "id": "document:plans/02-database-and-implementation.md",
+      "type": "document",
+      "name": "02-database-and-implementation.md",
+      "filePath": "plans/02-database-and-implementation.md",
+      "summary": "Detailed database schema and implementation guide covering 19 entity groups (Auth, Organizations, Pets, Services, Appointments, Orders, Payments, Clinical, etc.) with 38 sections including SQL definitions and seed data.",
+      "tags": ["documentation", "database-schema", "implementation"],
+      "complexity": "complex"
+    },
+    {
+      "id": "function:FE/src/app/App.tsx:ReceptionDashboardPage",
+      "type": "function",
+      "name": "ReceptionDashboardPage",
+      "filePath": "FE/src/app/App.tsx",
+      "lineRange": [34, 50],
+      "summary": "Staff reception dashboard component with navigation to appointments, orders, and customer management routes.",
+      "tags": ["component", "dashboard", "staff"],
+      "complexity": "simple"
+    },
+    {
+      "id": "function:FE/src/app/App.tsx:DoctorDashboardPage",
+      "type": "function",
+      "name": "DoctorDashboardPage",
+      "filePath": "FE/src/app/App.tsx",
+      "lineRange": [53, 69],
+      "summary": "Veterinary doctor dashboard component with navigation to schedule, medical records, and patient management routes.",
+      "tags": ["component", "dashboard", "medical"],
+      "complexity": "simple"
+    },
+    {
+      "id": "function:FE/src/app/App.tsx:NotFoundPage",
+      "type": "function",
+      "name": "NotFoundPage",
+      "filePath": "FE/src/app/App.tsx",
+      "lineRange": [71, 79],
+      "summary": "404 error page component displayed for unmatched routes with return-to-home link.",
+      "tags": ["component", "error-handling"],
+      "complexity": "simple"
+    },
+    {
+      "id": "function:FE/src/app/App.tsx:App",
+      "type": "function",
+      "name": "App",
+      "filePath": "FE/src/app/App.tsx",
+      "lineRange": [81, 134],
+      "summary": "Main App component defining all application routes using React Router with public, auth, admin, and staff route groups plus toast notifications.",
+      "tags": ["component", "routing", "entry-point"],
+      "complexity": "moderate"
+    }
+  ],
+  "edges": [
+    {
+      "source": "file:FE/src/app/App.tsx",
+      "target": "file:FE/src/main.tsx",
+      "type": "imports",
+      "direction": "forward",
+      "weight": 0.7
+    },
+    {
+      "source": "file:FE/src/main.tsx",
+      "target": "file:FE/src/index.css",
+      "type": "imports",
+      "direction": "forward",
+      "weight": 0.7
+    },
+    {
+      "source": "service:docker-compose.yml",
+      "target": "file:FE/src/app/App.tsx",
+      "type": "deploys",
+      "direction": "forward",
+      "weight": 0.7
+    },
+    {
+      "source": "service:docker-compose.yml",
+      "target": "file:FE/src/main.tsx",
+      "type": "deploys",
+      "direction": "forward",
+      "weight": 0.7
+    },
+    {
+      "source": "service:docker-compose.yml",
+      "target": "config:BE/src/main/resources/application-docker.yml",
+      "type": "configures",
+      "direction": "forward",
+      "weight": 0.6
+    },
+    {
+      "source": "document:README.md",
+      "target": "file:FE/src/app/App.tsx",
+      "type": "documents",
+      "direction": "forward",
+      "weight": 0.5
+    },
+    {
+      "source": "document:README.md",
+      "target": "service:docker-compose.yml",
+      "type": "documents",
+      "direction": "forward",
+      "weight": 0.5
+    },
+    {
+      "source": "document:README.md",
+      "target": "document:plans/01-architecture-and-techstack.md",
+      "type": "documents",
+      "direction": "forward",
+      "weight": 0.5
+    },
+    {
+      "source": "document:README.md",
+      "target": "document:plans/02-database-and-implementation.md",
+      "type": "documents",
+      "direction": "forward",
+      "weight": 0.5
+    },
+    {
+      "source": "config:BE/src/main/resources/application-docker.yml",
+      "target": "config:BE/src/main/resources/application.yml",
+      "type": "related",
+      "direction": "forward",
+      "weight": 0.5
+    },
+    {
+      "source": "file:FE/src/app/App.tsx",
+      "target": "function:FE/src/app/App.tsx:ReceptionDashboardPage",
+      "type": "contains",
+      "direction": "forward",
+      "weight": 1.0
+    },
+    {
+      "source": "file:FE/src/app/App.tsx",
+      "target": "function:FE/src/app/App.tsx:DoctorDashboardPage",
+      "type": "contains",
+      "direction": "forward",
+      "weight": 1.0
+    },
+    {
+      "source": "file:FE/src/app/App.tsx",
+      "target": "function:FE/src/app/App.tsx:NotFoundPage",
+      "type": "contains",
+      "direction": "forward",
+      "weight": 1.0
+    },
+    {
+      "source": "file:FE/src/app/App.tsx",
+      "target": "function:FE/src/app/App.tsx:App",
+      "type": "contains",
+      "direction": "forward",
+      "weight": 1.0
+    },
+    {
+      "source": "file:FE/src/main.tsx",
+      "target": "function:FE/src/app/App.tsx:App",
+      "type": "depends_on",
+      "direction": "forward",
+      "weight": 0.6
+    },
+    {
+      "source": "document:plans/01-architecture-and-techstack.md",
+      "target": "document:plans/02-database-and-implementation.md",
+      "type": "documents",
+      "direction": "forward",
+      "weight": 0.5
+    },
+    {
+      "source": "document:plans/01-architecture-and-techstack.md",
+      "target": "service:docker-compose.yml",
+      "type": "documents",
+      "direction": "forward",
+      "weight": 0.5
+    },
+    {
+      "source": "document:plans/02-database-and-implementation.md",
+      "target": "config:BE/src/main/resources/application.yml",
+      "type": "documents",
+      "direction": "forward",
+      "weight": 0.5
+    }
+  ]
+}

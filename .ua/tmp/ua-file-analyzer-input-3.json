@@ -1,0 +1,12 @@
+{
+  "projectRoot": "D:/Do-an/Pet-care-new",
+  "batchFiles": [
+    {"path": "FE/index.html", "language": "HTML", "sizeLines": 20, "fileCategory": "markup"},
+    {"path": "FE/package.json", "language": "JSON", "sizeLines": 40, "fileCategory": "config"},
+    {"path": "FE/tsconfig.json", "language": "JSON", "sizeLines": 30, "fileCategory": "config"},
+    {"path": "FE/vite.config.ts", "language": "TypeScript", "sizeLines": 25, "fileCategory": "config"}
+  ],
+  "batchImportData": {
+    "FE/vite.config.ts": ["FE/package.json"]
+  }
+}

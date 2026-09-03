@@ -1,0 +1,19 @@
+{
+  "projectRoot": "D:/Do-an/Pet-care-new",
+  "batchFiles": [
+    {"path": "BE/src/main/resources/application-docker.yml", "language": "YAML", "sizeLines": 30, "fileCategory": "config"},
+    {"path": "BE/src/main/resources/application.yml", "language": "YAML", "sizeLines": 50, "fileCategory": "config"},
+    {"path": "FE/src/app/App.tsx", "language": "TypeScript", "sizeLines": 30, "fileCategory": "code"},
+    {"path": "FE/src/index.css", "language": "CSS", "sizeLines": 50, "fileCategory": "code"},
+    {"path": "FE/src/main.tsx", "language": "TypeScript", "sizeLines": 15, "fileCategory": "code"},
+    {"path": "README.md", "language": "Markdown", "sizeLines": 150, "fileCategory": "docs"},
+    {"path": "docker-compose.yml", "language": "YAML", "sizeLines": 60, "fileCategory": "infra"},
+    {"path": "plans/01-architecture-and-techstack.md", "language": "Markdown", "sizeLines": 120, "fileCategory": "docs"},
+    {"path": "plans/02-database-and-implementation.md", "language": "Markdown", "sizeLines": 150, "fileCategory": "docs"}
+  ],
+  "batchImportData": {
+    "FE/src/app/App.tsx": ["FE/src/main.tsx"],
+    "FE/src/main.tsx": ["FE/src/index.css"],
+    "FE/src/index.css": []
+  }
+}

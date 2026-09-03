@@ -1,0 +1,2969 @@
+{
+  "scriptCompleted": true,
+  "filesAnalyzed": 24,
+  "filesSkipped": [
+    "BE/pom.xml"
+  ],
+  "analysisOutcomes": {
+    "structure": {
+      "succeeded": 24,
+      "failed": 0
+    },
+    "callGraph": {
+      "succeeded": 24,
+      "failed": 0,
+      "skipped": 0
+    }
+  },
+  "results": [
+    {
+      "path": "BE/src/main/java/com/petcare/PetcareApplication.java",
+      "language": "java",
+      "fileCategory": "code",
+      "totalLines": 12,
+      "nonEmptyLines": 9,
+      "functions": [
+        {
+          "name": "main",
+          "startLine": 9,
+          "endLine": 11,
+          "params": [
+            "args"
+          ]
+        }
+      ],
+      "classes": [
+        {
+          "name": "PetcareApplication",
+          "startLine": 6,
+          "endLine": 12,
+          "methods": [
+            "main"
+          ],
+          "properties": []
+        }
+      ],
+      "exports": [
+        {
+          "name": "main",
+          "line": 9,
+          "isDefault": false
+        },
+        {
+          "name": "PetcareApplication",
+          "line": 6,
+          "isDefault": false
+        }
+      ],
+      "callGraph": [
+        {
+          "caller": "main",
+          "callee": "SpringApplication.run",
+          "lineNumber": 10
+        }
+      ],
+      "metrics": {
+        "importCount": 1,
+        "exportCount": 2,
+        "functionCount": 1,
+        "classCount": 1
+      }
+    },
+    {
+      "path": "BE/src/main/java/com/petcare/common/config/JpaAuditingConfig.java",
+      "language": "java",
+      "fileCategory": "code",
+      "totalLines": 9,
+      "nonEmptyLines": 7,
+      "classes": [
+        {
+          "name": "JpaAuditingConfig",
+          "startLine": 6,
+          "endLine": 9,
+          "methods": [],
+          "properties": []
+        }
+      ],
+      "exports": [
+        {
+          "name": "JpaAuditingConfig",
+          "line": 6,
+          "isDefault": false
+        }
+      ],
+      "metrics": {
+        "importCount": 1,
+        "exportCount": 1,
+        "functionCount": 0,
+        "classCount": 1
+      }
+    },
+    {
+      "path": "BE/src/main/java/com/petcare/common/config/SecurityConfig.java",
+      "language": "java",
+      "fileCategory": "code",
+      "totalLines": 46,
+      "nonEmptyLines": 40,
+      "functions": [
+        {
+          "name": "filterChain",
+          "startLine": 25,
+          "endLine": 40,
+          "params": [
+            "http"
+          ]
+        },
+        {
+          "name": "passwordEncoder",
+          "startLine": 42,
+          "endLine": 45,
+          "params": []
+        }
+      ],
+      "classes": [
+        {
+          "name": "SecurityConfig",
+          "startLine": 17,
+          "endLine": 46,
+          "methods": [
+            "filterChain",
+            "passwordEncoder"
+          ],
+          "properties": [
+            "jwtAuthenticationFilter"
+          ]
+        }
+      ],
+      "exports": [
+        {
+          "name": "filterChain",
+          "line": 25,
+          "isDefault": false
+        },
+        {
+          "name": "passwordEncoder",
+          "line": 42,
+          "isDefault": false
+        },
+        {
+          "name": "SecurityConfig",
+          "line": 17,
+          "isDefault": false
+        }
+      ],
+      "callGraph": [
+        {
+          "caller": "filterChain",
+          "callee": "http\r\n            .csrf(AbstractHttpConfigurer::disable)\r\n            .sessionManagement(session -> session\r\n                .sessionCreationPolicy(SessionCreationPolicy.STATELESS))\r\n            .authorizeHttpRequests(auth -> auth\r\n                .requestMatchers(\"/api/auth/**\").permitAll()\r\n                .requestMatchers(\"/actuator/health\").permitAll()\r\n                .requestMatchers(\"/actuator/info\").permitAll()\r\n                .anyRequest().authenticated()\r\n            ).addFilterBefore",
+          "lineNumber": 27
+        },
+        {
+          "caller": "filterChain",
+          "callee": "http\r\n            .csrf(AbstractHttpConfigurer::disable)\r\n            .sessionManagement(session -> session\r\n                .sessionCreationPolicy(SessionCreationPolicy.STATELESS)).authorizeHttpRequests",
+          "lineNumber": 27
+        },
+        {
+          "caller": "filterChain",
+          "callee": "http\r\n            .csrf(AbstractHttpConfigurer::disable).sessionManagement",
+          "lineNumber": 27
+        },
+        {
+          "caller": "filterChain",
+          "callee": "http.csrf",
+          "lineNumber": 27
+        },
+        {
+          "caller": "filterChain",
+          "callee": "session.sessionCreationPolicy",
+          "lineNumber": 29
+        },
+        {
+          "caller": "filterChain",
+          "callee": "auth\r\n                .requestMatchers(\"/api/auth/**\").permitAll()\r\n                .requestMatchers(\"/actuator/health\").permitAll()\r\n                .requestMatchers(\"/actuator/info\").permitAll()\r\n                .anyRequest().authenticated",
+          "lineNumber": 31
+        },
+        {
+          "caller": "filterChain",
+          "callee": "auth\r\n                .requestMatchers(\"/api/auth/**\").permitAll()\r\n                .requestMatchers(\"/actuator/health\").permitAll()\r\n                .requestMatchers(\"/actuator/info\").permitAll().anyRequest",
+          "lineNumber": 31
+        },
+        {
+          "caller": "filterChain",
+          "callee": "auth\r\n                .requestMatchers(\"/api/auth/**\").permitAll()\r\n                .requestMatchers(\"/actuator/health\").permitAll()\r\n                .requestMatchers(\"/actuator/info\").permitAll",
+          "lineNumber": 31
+        },
+        {
+          "caller": "filterChain",
+          "callee": "auth\r\n                .requestMatchers(\"/api/auth/**\").permitAll()\r\n                .requestMatchers(\"/actuator/health\").permitAll().requestMatchers",
+          "lineNumber": 31
+        },
+        {
+          "caller": "filterChain",
+          "callee": "auth\r\n                .requestMatchers(\"/api/auth/**\").permitAll()\r\n                .requestMatchers(\"/actuator/health\").permitAll",
+          "lineNumber": 31
+        },
+        {
+          "caller": "filterChain",
+          "callee": "auth\r\n                .requestMatchers(\"/api/auth/**\").permitAll().requestMatchers",
+          "lineNumber": 31
+        },
+        {
+          "caller": "filterChain",
+          "callee": "auth\r\n                .requestMatchers(\"/api/auth/**\").permitAll",
+          "lineNumber": 31
+        },
+        {
+          "caller": "filterChain",
+          "callee": "auth.requestMatchers",
+          "lineNumber": 31
+        },
+        {
+          "caller": "filterChain",
+          "callee": "http.build",
+          "lineNumber": 39
+        },
+        {
+          "caller": "passwordEncoder",
+          "callee": "new BCryptPasswordEncoder",
+          "lineNumber": 44
+        }
+      ],
+      "metrics": {
+        "importCount": 2,
+        "exportCount": 3,
+        "functionCount": 2,
+        "classCount": 1
+      }
+    },
+    {
+      "path": "BE/src/main/java/com/petcare/common/enums/AccountStatus.java",
+      "language": "java",
+      "fileCategory": "code",
+      "totalLines": 9,
+      "nonEmptyLines": 8,
+      "classes": [
+        {
+          "name": "AccountStatus",
+          "startLine": 3,
+          "endLine": 9,
+          "methods": [],
+          "properties": []
+        }
+      ],
+      "exports": [
+        {
+          "name": "AccountStatus",
+          "line": 3,
+          "isDefault": false
+        }
+      ],
+      "metrics": {
+        "importCount": 0,
+        "exportCount": 1,
+        "functionCount": 0,
+        "classCount": 1
+      }
+    },
+    {
+      "path": "BE/src/main/java/com/petcare/common/enums/UserRole.java",
+      "language": "java",
+      "fileCategory": "code",
+      "totalLines": 13,
+      "nonEmptyLines": 12,
+      "classes": [
+        {
+          "name": "UserRole",
+          "startLine": 3,
+          "endLine": 13,
+          "methods": [],
+          "properties": []
+        }
+      ],
+      "exports": [
+        {
+          "name": "UserRole",
+          "line": 3,
+          "isDefault": false
+        }
+      ],
+      "metrics": {
+        "importCount": 0,
+        "exportCount": 1,
+        "functionCount": 0,
+        "classCount": 1
+      }
+    },
+    {
+      "path": "BE/src/main/java/com/petcare/common/exception/BusinessException.java",
+      "language": "java",
+      "fileCategory": "code",
+      "totalLines": 35,
+      "nonEmptyLines": 27,
+      "functions": [
+        {
+          "name": "BusinessException",
+          "startLine": 10,
+          "endLine": 14,
+          "params": [
+            "message"
+          ]
+        },
+        {
+          "name": "BusinessException",
+          "startLine": 16,
+          "endLine": 20,
+          "params": [
+            "code",
+            "message"
+          ]
+        },
+        {
+          "name": "BusinessException",
+          "startLine": 22,
+          "endLine": 26,
+          "params": [
+            "code",
+            "message",
+            "status"
+          ]
+        },
+        {
+          "name": "getCode",
+          "startLine": 28,
+          "endLine": 30,
+          "params": []
+        },
+        {
+          "name": "getStatus",
+          "startLine": 32,
+          "endLine": 34,
+          "params": []
+        }
+      ],
+      "classes": [
+        {
+          "name": "BusinessException",
+          "startLine": 5,
+          "endLine": 35,
+          "methods": [
+            "BusinessException",
+            "BusinessException",
+            "BusinessException",
+            "getCode",
+            "getStatus"
+          ],
+          "properties": [
+            "code",
+            "status"
+          ]
+        }
+      ],
+      "exports": [
+        {
+          "name": "BusinessException",
+          "line": 10,
+          "isDefault": false
+        },
+        {
+          "name": "BusinessException",
+          "line": 16,
+          "isDefault": false
+        },
+        {
+          "name": "BusinessException",
+          "line": 22,
+          "isDefault": false
+        },
+        {
+          "name": "getCode",
+          "line": 28,
+          "isDefault": false
+        },
+        {
+          "name": "getStatus",
+          "line": 32,
+          "isDefault": false
+        },
+        {
+          "name": "BusinessException",
+          "line": 5,
+          "isDefault": false
+        }
+      ],
+      "metrics": {
+        "importCount": 0,
+        "exportCount": 6,
+        "functionCount": 5,
+        "classCount": 1
+      }
+    },
+    {
+      "path": "BE/src/main/java/com/petcare/common/exception/GlobalExceptionHandler.java",
+      "language": "java",
+      "fileCategory": "code",
+      "totalLines": 53,
+      "nonEmptyLines": 45,
+      "functions": [
+        {
+          "name": "handleBusinessException",
+          "startLine": 17,
+          "endLine": 22,
+          "params": [
+            "ex"
+          ]
+        },
+        {
+          "name": "handleResourceNotFoundException",
+          "startLine": 24,
+          "endLine": 29,
+          "params": [
+            "ex"
+          ]
+        },
+        {
+          "name": "handleValidationException",
+          "startLine": 31,
+          "endLine": 45,
+          "params": [
+            "ex"
+          ]
+        },
+        {
+          "name": "handleGenericException",
+          "startLine": 47,
+          "endLine": 52,
+          "params": [
+            "ex"
+          ]
+        }
+      ],
+      "classes": [
+        {
+          "name": "GlobalExceptionHandler",
+          "startLine": 14,
+          "endLine": 53,
+          "methods": [
+            "handleBusinessException",
+            "handleResourceNotFoundException",
+            "handleValidationException",
+            "handleGenericException"
+          ],
+          "properties": []
+        }
+      ],
+      "exports": [
+        {
+          "name": "handleBusinessException",
+          "line": 17,
+          "isDefault": false
+        },
+        {
+          "name": "handleResourceNotFoundException",
+          "line": 24,
+          "isDefault": false
+        },
+        {
+          "name": "handleValidationException",
+          "line": 31,
+          "isDefault": false
+        },
+        {
+          "name": "handleGenericException",
+          "line": 47,
+          "isDefault": false
+        },
+        {
+          "name": "GlobalExceptionHandler",
+          "line": 14,
+          "isDefault": false
+        }
+      ],
+      "callGraph": [
+        {
+          "caller": "handleBusinessException",
+          "callee": "ResponseEntity\r\n            .status(ex.getStatus()).body",
+          "lineNumber": 19
+        },
+        {
+          "caller": "handleBusinessException",
+          "callee": "ResponseEntity.status",
+          "lineNumber": 19
+        },
+        {
+          "caller": "handleBusinessException",
+          "callee": "ex.getStatus",
+          "lineNumber": 20
+        },
+        {
+          "caller": "handleBusinessException",
+          "callee": "ApiResponse.error",
+          "lineNumber": 21
+        },
+        {
+          "caller": "handleBusinessException",
+          "callee": "ex.getMessage",
+          "lineNumber": 21
+        },
+        {
+          "caller": "handleBusinessException",
+          "callee": "ex.getStatus().value",
+          "lineNumber": 21
+        },
+        {
+          "caller": "handleBusinessException",
+          "callee": "ex.getStatus",
+          "lineNumber": 21
+        },
+        {
+          "caller": "handleResourceNotFoundException",
+          "callee": "ResponseEntity\r\n            .status(ex.getStatus()).body",
+          "lineNumber": 26
+        },
+        {
+          "caller": "handleResourceNotFoundException",
+          "callee": "ResponseEntity.status",
+          "lineNumber": 26
+        },
+        {
+          "caller": "handleResourceNotFoundException",
+          "callee": "ex.getStatus",
+          "lineNumber": 27
+        },
+        {
+          "caller": "handleResourceNotFoundException",
+          "callee": "ApiResponse.error",
+          "lineNumber": 28
+        },
+        {
+          "caller": "handleResourceNotFoundException",
+          "callee": "ex.getMessage",
+          "lineNumber": 28
+        },
+        {
+          "caller": "handleResourceNotFoundException",
+          "callee": "ex.getStatus().value",
+          "lineNumber": 28
+        },
+        {
+          "caller": "handleResourceNotFoundException",
+          "callee": "ex.getStatus",
+          "lineNumber": 28
+        },
+        {
+          "caller": "handleValidationException",
+          "callee": "new HashMap<>",
+          "lineNumber": 34
+        },
+        {
+          "caller": "handleValidationException",
+          "callee": "ex.getBindingResult().getAllErrors().forEach",
+          "lineNumber": 35
+        },
+        {
+          "caller": "handleValidationException",
+          "callee": "ex.getBindingResult().getAllErrors",
+          "lineNumber": 35
+        },
+        {
+          "caller": "handleValidationException",
+          "callee": "ex.getBindingResult",
+          "lineNumber": 35
+        },
+        {
+          "caller": "handleValidationException",
+          "callee": "((FieldError) error).getField",
+          "lineNumber": 36
+        },
+        {
+          "caller": "handleValidationException",
+          "callee": "error.getDefaultMessage",
+          "lineNumber": 37
+        },
+        {
+          "caller": "handleValidationException",
+          "callee": "errors.put",
+          "lineNumber": 38
+        },
+        {
+          "caller": "handleValidationException",
+          "callee": "new ApiResponse<>",
+          "lineNumber": 41
+        },
+        {
+          "caller": "handleValidationException",
+          "callee": "ResponseEntity.badRequest().body",
+          "lineNumber": 44
+        },
+        {
+          "caller": "handleValidationException",
+          "callee": "ResponseEntity.badRequest",
+          "lineNumber": 44
+        },
+        {
+          "caller": "handleGenericException",
+          "callee": "ResponseEntity\r\n            .internalServerError().body",
+          "lineNumber": 49
+        },
+        {
+          "caller": "handleGenericException",
+          "callee": "ResponseEntity.internalServerError",
+          "lineNumber": 49
+        },
+        {
+          "caller": "handleGenericException",
+          "callee": "ApiResponse.error",
+          "lineNumber": 51
+        },
+        {
+          "caller": "handleGenericException",
+          "callee": "ex.getMessage",
+          "lineNumber": 51
+        }
+      ],
+      "metrics": {
+        "importCount": 3,
+        "exportCount": 5,
+        "functionCount": 4,
+        "classCount": 1
+      }
+    },
+    {
+      "path": "BE/src/main/java/com/petcare/common/exception/ResourceNotFoundException.java",
+      "language": "java",
+      "fileCategory": "code",
+      "totalLines": 20,
+      "nonEmptyLines": 14,
+      "functions": [
+        {
+          "name": "ResourceNotFoundException",
+          "startLine": 9,
+          "endLine": 11,
+          "params": [
+            "resourceName",
+            "fieldName",
+            "fieldValue"
+          ]
+        },
+        {
+          "name": "ResourceNotFoundException",
+          "startLine": 13,
+          "endLine": 15,
+          "params": [
+            "message"
+          ]
+        },
+        {
+          "name": "getStatus",
+          "startLine": 17,
+          "endLine": 19,
+          "params": []
+        }
+      ],
+      "classes": [
+        {
+          "name": "ResourceNotFoundException",
+          "startLine": 5,
+          "endLine": 20,
+          "methods": [
+            "ResourceNotFoundException",
+            "ResourceNotFoundException",
+            "getStatus"
+          ],
+          "properties": [
+            "status"
+          ]
+        }
+      ],
+      "exports": [
+        {
+          "name": "ResourceNotFoundException",
+          "line": 9,
+          "isDefault": false
+        },
+        {
+          "name": "ResourceNotFoundException",
+          "line": 13,
+          "isDefault": false
+        },
+        {
+          "name": "getStatus",
+          "line": 17,
+          "isDefault": false
+        },
+        {
+          "name": "ResourceNotFoundException",
+          "line": 5,
+          "isDefault": false
+        }
+      ],
+      "callGraph": [
+        {
+          "caller": "ResourceNotFoundException",
+          "callee": "String.format",
+          "lineNumber": 10
+        }
+      ],
+      "metrics": {
+        "importCount": 0,
+        "exportCount": 4,
+        "functionCount": 3,
+        "classCount": 1
+      }
+    },
+    {
+      "path": "BE/src/main/java/com/petcare/common/model/ApiResponse.java",
+      "language": "java",
+      "fileCategory": "code",
+      "totalLines": 23,
+      "nonEmptyLines": 19,
+      "functions": [
+        {
+          "name": "ok",
+          "startLine": 8,
+          "endLine": 10,
+          "params": [
+            "data"
+          ]
+        },
+        {
+          "name": "ok",
+          "startLine": 12,
+          "endLine": 14,
+          "params": [
+            "data",
+            "message"
+          ]
+        },
+        {
+          "name": "created",
+          "startLine": 16,
+          "endLine": 18,
+          "params": [
+            "data",
+            "message"
+          ]
+        },
+        {
+          "name": "error",
+          "startLine": 20,
+          "endLine": 22,
+          "params": [
+            "message",
+            "code"
+          ]
+        }
+      ],
+      "classes": [
+        {
+          "name": "ApiResponse",
+          "startLine": 3,
+          "endLine": 23,
+          "methods": [
+            "ok",
+            "ok",
+            "created",
+            "error"
+          ],
+          "properties": []
+        }
+      ],
+      "exports": [
+        {
+          "name": "ok",
+          "line": 8,
+          "isDefault": false
+        },
+        {
+          "name": "ok",
+          "line": 12,
+          "isDefault": false
+        },
+        {
+          "name": "created",
+          "line": 16,
+          "isDefault": false
+        },
+        {
+          "name": "error",
+          "line": 20,
+          "isDefault": false
+        },
+        {
+          "name": "ApiResponse",
+          "line": 3,
+          "isDefault": false
+        }
+      ],
+      "callGraph": [
+        {
+          "caller": "ok",
+          "callee": "new ApiResponse<>",
+          "lineNumber": 9
+        },
+        {
+          "caller": "ok",
+          "callee": "new ApiResponse<>",
+          "lineNumber": 13
+        },
+        {
+          "caller": "created",
+          "callee": "new ApiResponse<>",
+          "lineNumber": 17
+        },
+        {
+          "caller": "error",
+          "callee": "new ApiResponse<>",
+          "lineNumber": 21
+        }
+      ],
+      "metrics": {
+        "importCount": 0,
+        "exportCount": 5,
+        "functionCount": 4,
+        "classCount": 1
+      }
+    },
+    {
+      "path": "BE/src/main/java/com/petcare/common/model/BaseEntity.java",
+      "language": "java",
+      "fileCategory": "code",
+      "totalLines": 29,
+      "nonEmptyLines": 23,
+      "classes": [
+        {
+          "name": "BaseEntity",
+          "startLine": 12,
+          "endLine": 29,
+          "methods": [],
+          "properties": [
+            "id",
+            "createdAt",
+            "updatedAt"
+          ]
+        }
+      ],
+      "exports": [
+        {
+          "name": "BaseEntity",
+          "line": 12,
+          "isDefault": false
+        }
+      ],
+      "metrics": {
+        "importCount": 0,
+        "exportCount": 1,
+        "functionCount": 0,
+        "classCount": 1
+      }
+    },
+    {
+      "path": "BE/src/main/java/com/petcare/common/model/PageResponse.java",
+      "language": "java",
+      "fileCategory": "code",
+      "totalLines": 26,
+      "nonEmptyLines": 24,
+      "functions": [
+        {
+          "name": "of",
+          "startLine": 15,
+          "endLine": 25,
+          "params": [
+            "page"
+          ]
+        }
+      ],
+      "classes": [
+        {
+          "name": "PageResponse",
+          "startLine": 6,
+          "endLine": 26,
+          "methods": [
+            "of"
+          ],
+          "properties": []
+        }
+      ],
+      "exports": [
+        {
+          "name": "of",
+          "line": 15,
+          "isDefault": false
+        },
+        {
+          "name": "PageResponse",
+          "line": 6,
+          "isDefault": false
+        }
+      ],
+      "callGraph": [
+        {
+          "caller": "of",
+          "callee": "new PageResponse<>",
+          "lineNumber": 16
+        },
+        {
+          "caller": "of",
+          "callee": "page.getContent",
+          "lineNumber": 17
+        },
+        {
+          "caller": "of",
+          "callee": "page.getNumber",
+          "lineNumber": 18
+        },
+        {
+          "caller": "of",
+          "callee": "page.getSize",
+          "lineNumber": 19
+        },
+        {
+          "caller": "of",
+          "callee": "page.getTotalElements",
+          "lineNumber": 20
+        },
+        {
+          "caller": "of",
+          "callee": "page.getTotalPages",
+          "lineNumber": 21
+        },
+        {
+          "caller": "of",
+          "callee": "page.isFirst",
+          "lineNumber": 22
+        },
+        {
+          "caller": "of",
+          "callee": "page.isLast",
+          "lineNumber": 23
+        }
+      ],
+      "metrics": {
+        "importCount": 1,
+        "exportCount": 2,
+        "functionCount": 1,
+        "classCount": 1
+      }
+    },
+    {
+      "path": "BE/src/main/java/com/petcare/common/security/JwtAuthenticationFilter.java",
+      "language": "java",
+      "fileCategory": "code",
+      "totalLines": 57,
+      "nonEmptyLines": 47,
+      "functions": [
+        {
+          "name": "doFilterInternal",
+          "startLine": 23,
+          "endLine": 48,
+          "params": [
+            "request",
+            "response",
+            "filterChain"
+          ]
+        },
+        {
+          "name": "getJwtFromRequest",
+          "startLine": 50,
+          "endLine": 56,
+          "params": [
+            "request"
+          ]
+        }
+      ],
+      "classes": [
+        {
+          "name": "JwtAuthenticationFilter",
+          "startLine": 17,
+          "endLine": 57,
+          "methods": [
+            "doFilterInternal",
+            "getJwtFromRequest"
+          ],
+          "properties": [
+            "tokenProvider"
+          ]
+        }
+      ],
+      "exports": [
+        {
+          "name": "JwtAuthenticationFilter",
+          "line": 17,
+          "isDefault": false
+        }
+      ],
+      "callGraph": [
+        {
+          "caller": "doFilterInternal",
+          "callee": "getJwtFromRequest",
+          "lineNumber": 28
+        },
+        {
+          "caller": "doFilterInternal",
+          "callee": "StringUtils.hasText",
+          "lineNumber": 30
+        },
+        {
+          "caller": "doFilterInternal",
+          "callee": "tokenProvider.validateToken",
+          "lineNumber": 30
+        },
+        {
+          "caller": "doFilterInternal",
+          "callee": "tokenProvider.parseToken",
+          "lineNumber": 31
+        },
+        {
+          "caller": "doFilterInternal",
+          "callee": "new UsernamePasswordAuthenticationToken",
+          "lineNumber": 34
+        },
+        {
+          "caller": "doFilterInternal",
+          "callee": "userPrincipal.getAuthorities",
+          "lineNumber": 37
+        },
+        {
+          "caller": "doFilterInternal",
+          "callee": "authentication.setDetails",
+          "lineNumber": 39
+        },
+        {
+          "caller": "doFilterInternal",
+          "callee": "new WebAuthenticationDetailsSource().buildDetails",
+          "lineNumber": 39
+        },
+        {
+          "caller": "doFilterInternal",
+          "callee": "new WebAuthenticationDetailsSource",
+          "lineNumber": 39
+        },
+        {
+          "caller": "doFilterInternal",
+          "callee": "SecurityContextHolder.getContext().setAuthentication",
+          "lineNumber": 41
+        },
+        {
+          "caller": "doFilterInternal",
+          "callee": "SecurityContextHolder.getContext",
+          "lineNumber": 41
+        },
+        {
+          "caller": "doFilterInternal",
+          "callee": "logger.error",
+          "lineNumber": 44
+        },
+        {
+          "caller": "doFilterInternal",
+          "callee": "filterChain.doFilter",
+          "lineNumber": 47
+        },
+        {
+          "caller": "getJwtFromRequest",
+          "callee": "request.getHeader",
+          "lineNumber": 51
+        },
+        {
+          "caller": "getJwtFromRequest",
+          "callee": "StringUtils.hasText",
+          "lineNumber": 52
+        },
+        {
+          "caller": "getJwtFromRequest",
+          "callee": "bearerToken.startsWith",
+          "lineNumber": 52
+        },
+        {
+          "caller": "getJwtFromRequest",
+          "callee": "bearerToken.substring",
+          "lineNumber": 53
+        }
+      ],
+      "metrics": {
+        "importCount": 2,
+        "exportCount": 1,
+        "functionCount": 2,
+        "classCount": 1
+      }
+    },
+    {
+      "path": "BE/src/main/java/com/petcare/common/security/JwtTokenProvider.java",
+      "language": "java",
+      "fileCategory": "code",
+      "totalLines": 85,
+      "nonEmptyLines": 73,
+      "functions": [
+        {
+          "name": "JwtTokenProvider",
+          "startLine": 19,
+          "endLine": 26,
+          "params": [
+            "secret",
+            "accessTokenTtlMin",
+            "refreshTokenTtlDays"
+          ]
+        },
+        {
+          "name": "generateAccessToken",
+          "startLine": 28,
+          "endLine": 44,
+          "params": [
+            "user"
+          ]
+        },
+        {
+          "name": "generateRefreshToken",
+          "startLine": 46,
+          "endLine": 57,
+          "params": [
+            "user"
+          ]
+        },
+        {
+          "name": "parseToken",
+          "startLine": 59,
+          "endLine": 75,
+          "params": [
+            "token"
+          ]
+        },
+        {
+          "name": "validateToken",
+          "startLine": 77,
+          "endLine": 84,
+          "params": [
+            "token"
+          ]
+        }
+      ],
+      "classes": [
+        {
+          "name": "JwtTokenProvider",
+          "startLine": 12,
+          "endLine": 85,
+          "methods": [
+            "JwtTokenProvider",
+            "generateAccessToken",
+            "generateRefreshToken",
+            "parseToken",
+            "validateToken"
+          ],
+          "properties": [
+            "key",
+            "accessTokenTtlMs",
+            "refreshTokenTtlMs"
+          ]
+        }
+      ],
+      "exports": [
+        {
+          "name": "JwtTokenProvider",
+          "line": 19,
+          "isDefault": false
+        },
+        {
+          "name": "generateAccessToken",
+          "line": 28,
+          "isDefault": false
+        },
+        {
+          "name": "generateRefreshToken",
+          "line": 46,
+          "isDefault": false
+        },
+        {
+          "name": "parseToken",
+          "line": 59,
+          "isDefault": false
+        },
+        {
+          "name": "validateToken",
+          "line": 77,
+          "isDefault": false
+        },
+        {
+          "name": "JwtTokenProvider",
+          "line": 12,
+          "isDefault": false
+        }
+      ],
+      "callGraph": [
+        {
+          "caller": "JwtTokenProvider",
+          "callee": "Keys.hmacShaKeyFor",
+          "lineNumber": 23
+        },
+        {
+          "caller": "JwtTokenProvider",
+          "callee": "secret.getBytes",
+          "lineNumber": 23
+        },
+        {
+          "caller": "generateAccessToken",
+          "callee": "new Date",
+          "lineNumber": 29
+        },
+        {
+          "caller": "generateAccessToken",
+          "callee": "new Date",
+          "lineNumber": 30
+        },
+        {
+          "caller": "generateAccessToken",
+          "callee": "now.getTime",
+          "lineNumber": 30
+        },
+        {
+          "caller": "generateAccessToken",
+          "callee": "Jwts.builder()\r\n                .subject(String.valueOf(user.getUserId()))\r\n                .claim(\"accountId\", user.getAccountId())\r\n                .claim(\"phone\", user.getPhone())\r\n                .claim(\"name\", user.getName())\r\n                .claim(\"role\", user.getRole())\r\n                .claim(\"organizationId\", user.getOrganizationId())\r\n                .claim(\"storeId\", user.getStoreId())\r\n                .issuedAt(now)\r\n                .expiration(expiry)\r\n                .signWith(key).compact",
+          "lineNumber": 32
+        },
+        {
+          "caller": "generateAccessToken",
+          "callee": "Jwts.builder()\r\n                .subject(String.valueOf(user.getUserId()))\r\n                .claim(\"accountId\", user.getAccountId())\r\n                .claim(\"phone\", user.getPhone())\r\n                .claim(\"name\", user.getName())\r\n                .claim(\"role\", user.getRole())\r\n                .claim(\"organizationId\", user.getOrganizationId())\r\n                .claim(\"storeId\", user.getStoreId())\r\n                .issuedAt(now)\r\n                .expiration(expiry).signWith",
+          "lineNumber": 32
+        },
+        {
+          "caller": "generateAccessToken",
+          "callee": "Jwts.builder()\r\n                .subject(String.valueOf(user.getUserId()))\r\n                .claim(\"accountId\", user.getAccountId())\r\n                .claim(\"phone\", user.getPhone())\r\n                .claim(\"name\", user.getName())\r\n                .claim(\"role\", user.getRole())\r\n                .claim(\"organizationId\", user.getOrganizationId())\r\n                .claim(\"storeId\", user.getStoreId())\r\n                .issuedAt(now).expiration",
+          "lineNumber": 32
+        },
+        {
+          "caller": "generateAccessToken",
+          "callee": "Jwts.builder()\r\n                .subject(String.valueOf(user.getUserId()))\r\n                .claim(\"accountId\", user.getAccountId())\r\n                .claim(\"phone\", user.getPhone())\r\n                .claim(\"name\", user.getName())\r\n                .claim(\"role\", user.getRole())\r\n                .claim(\"organizationId\", user.getOrganizationId())\r\n                .claim(\"storeId\", user.getStoreId()).issuedAt",
+          "lineNumber": 32
+        },
+        {
+          "caller": "generateAccessToken",
+          "callee": "Jwts.builder()\r\n                .subject(String.valueOf(user.getUserId()))\r\n                .claim(\"accountId\", user.getAccountId())\r\n                .claim(\"phone\", user.getPhone())\r\n                .claim(\"name\", user.getName())\r\n                .claim(\"role\", user.getRole())\r\n                .claim(\"organizationId\", user.getOrganizationId()).claim",
+          "lineNumber": 32
+        },
+        {
+          "caller": "generateAccessToken",
+          "callee": "Jwts.builder()\r\n                .subject(String.valueOf(user.getUserId()))\r\n                .claim(\"accountId\", user.getAccountId())\r\n                .claim(\"phone\", user.getPhone())\r\n                .claim(\"name\", user.getName())\r\n                .claim(\"role\", user.getRole()).claim",
+          "lineNumber": 32
+        },
+        {
+          "caller": "generateAccessToken",
+          "callee": "Jwts.builder()\r\n                .subject(String.valueOf(user.getUserId()))\r\n                .claim(\"accountId\", user.getAccountId())\r\n                .claim(\"phone\", user.getPhone())\r\n                .claim(\"name\", user.getName()).claim",
+          "lineNumber": 32
+        },
+        {
+          "caller": "generateAccessToken",
+          "callee": "Jwts.builder()\r\n                .subject(String.valueOf(user.getUserId()))\r\n                .claim(\"accountId\", user.getAccountId())\r\n                .claim(\"phone\", user.getPhone()).claim",
+          "lineNumber": 32
+        },
+        {
+          "caller": "generateAccessToken",
+          "callee": "Jwts.builder()\r\n                .subject(String.valueOf(user.getUserId()))\r\n                .claim(\"accountId\", user.getAccountId()).claim",
+          "lineNumber": 32
+        },
+        {
+          "caller": "generateAccessToken",
+          "callee": "Jwts.builder()\r\n                .subject(String.valueOf(user.getUserId())).claim",
+          "lineNumber": 32
+        },
+        {
+          "caller": "generateAccessToken",
+          "callee": "Jwts.builder().subject",
+          "lineNumber": 32
+        },
+        {
+          "caller": "generateAccessToken",
+          "callee": "Jwts.builder",
+          "lineNumber": 32
+        },
+        {
+          "caller": "generateAccessToken",
+          "callee": "String.valueOf",
+          "lineNumber": 33
+        },
+        {
+          "caller": "generateAccessToken",
+          "callee": "user.getUserId",
+          "lineNumber": 33
+        },
+        {
+          "caller": "generateAccessToken",
+          "callee": "user.getAccountId",
+          "lineNumber": 34
+        },
+        {
+          "caller": "generateAccessToken",
+          "callee": "user.getPhone",
+          "lineNumber": 35
+        },
+        {
+          "caller": "generateAccessToken",
+          "callee": "user.getName",
+          "lineNumber": 36
+        },
+        {
+          "caller": "generateAccessToken",
+          "callee": "user.getRole",
+          "lineNumber": 37
+        },
+        {
+          "caller": "generateAccessToken",
+          "callee": "user.getOrganizationId",
+          "lineNumber": 38
+        },
+        {
+          "caller": "generateAccessToken",
+          "callee": "user.getStoreId",
+          "lineNumber": 39
+        },
+        {
+          "caller": "generateRefreshToken",
+          "callee": "new Date",
+          "lineNumber": 47
+        },
+        {
+          "caller": "generateRefreshToken",
+          "callee": "new Date",
+          "lineNumber": 48
+        },
+        {
+          "caller": "generateRefreshToken",
+          "callee": "now.getTime",
+          "lineNumber": 48
+        },
+        {
+          "caller": "generateRefreshToken",
+          "callee": "Jwts.builder()\r\n                .subject(String.valueOf(user.getUserId()))\r\n                .claim(\"type\", \"refresh\")\r\n                .issuedAt(now)\r\n                .expiration(expiry)\r\n                .signWith(key).compact",
+          "lineNumber": 50
+        },
+        {
+          "caller": "generateRefreshToken",
+          "callee": "Jwts.builder()\r\n                .subject(String.valueOf(user.getUserId()))\r\n                .claim(\"type\", \"refresh\")\r\n                .issuedAt(now)\r\n                .expiration(expiry).signWith",
+          "lineNumber": 50
+        },
+        {
+          "caller": "generateRefreshToken",
+          "callee": "Jwts.builder()\r\n                .subject(String.valueOf(user.getUserId()))\r\n                .claim(\"type\", \"refresh\")\r\n                .issuedAt(now).expiration",
+          "lineNumber": 50
+        },
+        {
+          "caller": "generateRefreshToken",
+          "callee": "Jwts.builder()\r\n                .subject(String.valueOf(user.getUserId()))\r\n                .claim(\"type\", \"refresh\").issuedAt",
+          "lineNumber": 50
+        },
+        {
+          "caller": "generateRefreshToken",
+          "callee": "Jwts.builder()\r\n                .subject(String.valueOf(user.getUserId())).claim",
+          "lineNumber": 50
+        },
+        {
+          "caller": "generateRefreshToken",
+          "callee": "Jwts.builder().subject",
+          "lineNumber": 50
+        },
+        {
+          "caller": "generateRefreshToken",
+          "callee": "Jwts.builder",
+          "lineNumber": 50
+        },
+        {
+          "caller": "generateRefreshToken",
+          "callee": "String.valueOf",
+          "lineNumber": 51
+        },
+        {
+          "caller": "generateRefreshToken",
+          "callee": "user.getUserId",
+          "lineNumber": 51
+        },
+        {
+          "caller": "parseToken",
+          "callee": "Jwts.parser()\r\n                .verifyWith(key)\r\n                .build()\r\n                .parseSignedClaims(token).getPayload",
+          "lineNumber": 60
+        },
+        {
+          "caller": "parseToken",
+          "callee": "Jwts.parser()\r\n                .verifyWith(key)\r\n                .build().parseSignedClaims",
+          "lineNumber": 60
+        },
+        {
+          "caller": "parseToken",
+          "callee": "Jwts.parser()\r\n                .verifyWith(key).build",
+          "lineNumber": 60
+        },
+        {
+          "caller": "parseToken",
+          "callee": "Jwts.parser().verifyWith",
+          "lineNumber": 60
+        },
+        {
+          "caller": "parseToken",
+          "callee": "Jwts.parser",
+          "lineNumber": 60
+        },
+        {
+          "caller": "parseToken",
+          "callee": "UserPrincipal.builder()\r\n                .userId(Long.parseLong(claims.getSubject()))\r\n                .accountId(claims.get(\"accountId\", Long.class))\r\n                .phone(claims.get(\"phone\", String.class))\r\n                .name(claims.get(\"name\", String.class))\r\n                .role(claims.get(\"role\", String.class))\r\n                .organizationId(claims.get(\"organizationId\", Long.class))\r\n                .storeId(claims.get(\"storeId\", Long.class)).build",
+          "lineNumber": 66
+        },
+        {
+          "caller": "parseToken",
+          "callee": "UserPrincipal.builder()\r\n                .userId(Long.parseLong(claims.getSubject()))\r\n                .accountId(claims.get(\"accountId\", Long.class))\r\n                .phone(claims.get(\"phone\", String.class))\r\n                .name(claims.get(\"name\", String.class))\r\n                .role(claims.get(\"role\", String.class))\r\n                .organizationId(claims.get(\"organizationId\", Long.class)).storeId",
+          "lineNumber": 66
+        },
+        {
+          "caller": "parseToken",
+          "callee": "UserPrincipal.builder()\r\n                .userId(Long.parseLong(claims.getSubject()))\r\n                .accountId(claims.get(\"accountId\", Long.class))\r\n                .phone(claims.get(\"phone\", String.class))\r\n                .name(claims.get(\"name\", String.class))\r\n                .role(claims.get(\"role\", String.class)).organizationId",
+          "lineNumber": 66
+        },
+        {
+          "caller": "parseToken",
+          "callee": "UserPrincipal.builder()\r\n                .userId(Long.parseLong(claims.getSubject()))\r\n                .accountId(claims.get(\"accountId\", Long.class))\r\n                .phone(claims.get(\"phone\", String.class))\r\n                .name(claims.get(\"name\", String.class)).role",
+          "lineNumber": 66
+        },
+        {
+          "caller": "parseToken",
+          "callee": "UserPrincipal.builder()\r\n                .userId(Long.parseLong(claims.getSubject()))\r\n                .accountId(claims.get(\"accountId\", Long.class))\r\n                .phone(claims.get(\"phone\", String.class)).name",
+          "lineNumber": 66
+        },
+        {
+          "caller": "parseToken",
+          "callee": "UserPrincipal.builder()\r\n                .userId(Long.parseLong(claims.getSubject()))\r\n                .accountId(claims.get(\"accountId\", Long.class)).phone",
+          "lineNumber": 66
+        },
+        {
+          "caller": "parseToken",
+          "callee": "UserPrincipal.builder()\r\n                .userId(Long.parseLong(claims.getSubject())).accountId",
+          "lineNumber": 66
+        },
+        {
+          "caller": "parseToken",
+          "callee": "UserPrincipal.builder().userId",
+          "lineNumber": 66
+        },
+        {
+          "caller": "parseToken",
+          "callee": "UserPrincipal.builder",
+          "lineNumber": 66
+        },
+        {
+          "caller": "parseToken",
+          "callee": "Long.parseLong",
+          "lineNumber": 67
+        },
+        {
+          "caller": "parseToken",
+          "callee": "claims.getSubject",
+          "lineNumber": 67
+        },
+        {
+          "caller": "parseToken",
+          "callee": "claims.get",
+          "lineNumber": 68
+        },
+        {
+          "caller": "parseToken",
+          "callee": "claims.get",
+          "lineNumber": 69
+        },
+        {
+          "caller": "parseToken",
+          "callee": "claims.get",
+          "lineNumber": 70
+        },
+        {
+          "caller": "parseToken",
+          "callee": "claims.get",
+          "lineNumber": 71
+        },
+        {
+          "caller": "parseToken",
+          "callee": "claims.get",
+          "lineNumber": 72
+        },
+        {
+          "caller": "parseToken",
+          "callee": "claims.get",
+          "lineNumber": 73
+        },
+        {
+          "caller": "validateToken",
+          "callee": "Jwts.parser().verifyWith(key).build().parseSignedClaims",
+          "lineNumber": 79
+        },
+        {
+          "caller": "validateToken",
+          "callee": "Jwts.parser().verifyWith(key).build",
+          "lineNumber": 79
+        },
+        {
+          "caller": "validateToken",
+          "callee": "Jwts.parser().verifyWith",
+          "lineNumber": 79
+        },
+        {
+          "caller": "validateToken",
+          "callee": "Jwts.parser",
+          "lineNumber": 79
+        }
+      ],
+      "metrics": {
+        "importCount": 2,
+        "exportCount": 6,
+        "functionCount": 5,
+        "classCount": 1
+      }
+    },
+    {
+      "path": "BE/src/main/java/com/petcare/common/security/UserPrincipal.java",
+      "language": "java",
+      "fileCategory": "code",
+      "totalLines": 62,
+      "nonEmptyLines": 51,
+      "functions": [
+        {
+          "name": "getAuthorities",
+          "startLine": 28,
+          "endLine": 31,
+          "params": []
+        },
+        {
+          "name": "getPassword",
+          "startLine": 33,
+          "endLine": 36,
+          "params": []
+        },
+        {
+          "name": "getUsername",
+          "startLine": 38,
+          "endLine": 41,
+          "params": []
+        },
+        {
+          "name": "isAccountNonExpired",
+          "startLine": 43,
+          "endLine": 46,
+          "params": []
+        },
+        {
+          "name": "isAccountNonLocked",
+          "startLine": 48,
+          "endLine": 51,
+          "params": []
+        },
+        {
+          "name": "isCredentialsNonExpired",
+          "startLine": 53,
+          "endLine": 56,
+          "params": []
+        },
+        {
+          "name": "isEnabled",
+          "startLine": 58,
+          "endLine": 61,
+          "params": []
+        }
+      ],
+      "classes": [
+        {
+          "name": "UserPrincipal",
+          "startLine": 14,
+          "endLine": 62,
+          "methods": [
+            "getAuthorities",
+            "getPassword",
+            "getUsername",
+            "isAccountNonExpired",
+            "isAccountNonLocked",
+            "isCredentialsNonExpired",
+            "isEnabled"
+          ],
+          "properties": [
+            "userId",
+            "accountId",
+            "phone",
+            "name",
+            "role",
+            "organizationId",
+            "storeId"
+          ]
+        }
+      ],
+      "exports": [
+        {
+          "name": "getAuthorities",
+          "line": 28,
+          "isDefault": false
+        },
+        {
+          "name": "getPassword",
+          "line": 33,
+          "isDefault": false
+        },
+        {
+          "name": "getUsername",
+          "line": 38,
+          "isDefault": false
+        },
+        {
+          "name": "isAccountNonExpired",
+          "line": 43,
+          "isDefault": false
+        },
+        {
+          "name": "isAccountNonLocked",
+          "line": 48,
+          "isDefault": false
+        },
+        {
+          "name": "isCredentialsNonExpired",
+          "line": 53,
+          "isDefault": false
+        },
+        {
+          "name": "isEnabled",
+          "line": 58,
+          "isDefault": false
+        },
+        {
+          "name": "UserPrincipal",
+          "line": 14,
+          "isDefault": false
+        }
+      ],
+      "callGraph": [
+        {
+          "caller": "getAuthorities",
+          "callee": "List.of",
+          "lineNumber": 30
+        },
+        {
+          "caller": "getAuthorities",
+          "callee": "new SimpleGrantedAuthority",
+          "lineNumber": 30
+        }
+      ],
+      "metrics": {
+        "importCount": 2,
+        "exportCount": 8,
+        "functionCount": 7,
+        "classCount": 1
+      }
+    },
+    {
+      "path": "BE/src/main/java/com/petcare/modules/auth/entity/Account.java",
+      "language": "java",
+      "fileCategory": "code",
+      "totalLines": 46,
+      "nonEmptyLines": 37,
+      "classes": [
+        {
+          "name": "Account",
+          "startLine": 10,
+          "endLine": 46,
+          "methods": [],
+          "properties": [
+            "phone",
+            "email",
+            "passwordHash",
+            "status",
+            "role",
+            "refreshToken",
+            "refreshTokenExpiry"
+          ]
+        }
+      ],
+      "exports": [
+        {
+          "name": "Account",
+          "line": 10,
+          "isDefault": false
+        }
+      ],
+      "metrics": {
+        "importCount": 3,
+        "exportCount": 1,
+        "functionCount": 0,
+        "classCount": 1
+      }
+    },
+    {
+      "path": "BE/src/main/java/com/petcare/modules/pets/controller/PetController.java",
+      "language": "java",
+      "fileCategory": "code",
+      "totalLines": 108,
+      "nonEmptyLines": 86,
+      "functions": [
+        {
+          "name": "createPet",
+          "startLine": 24,
+          "endLine": 35,
+          "params": [
+            "request"
+          ]
+        },
+        {
+          "name": "getMyPets",
+          "startLine": 37,
+          "endLine": 48,
+          "params": [
+            "page",
+            "size"
+          ]
+        },
+        {
+          "name": "getPetById",
+          "startLine": 50,
+          "endLine": 64,
+          "params": [
+            "id"
+          ]
+        },
+        {
+          "name": "updatePet",
+          "startLine": 66,
+          "endLine": 76,
+          "params": [
+            "id",
+            "request"
+          ]
+        },
+        {
+          "name": "deletePet",
+          "startLine": 78,
+          "endLine": 85,
+          "params": [
+            "id"
+          ]
+        },
+        {
+          "name": "searchPets",
+          "startLine": 87,
+          "endLine": 98,
+          "params": [
+            "keyword",
+            "page",
+            "size"
+          ]
+        },
+        {
+          "name": "getCurrentUserId",
+          "startLine": 101,
+          "endLine": 103,
+          "params": []
+        },
+        {
+          "name": "getCurrentUserRole",
+          "startLine": 105,
+          "endLine": 107,
+          "params": []
+        }
+      ],
+      "classes": [
+        {
+          "name": "PetController",
+          "startLine": 17,
+          "endLine": 108,
+          "methods": [
+            "createPet",
+            "getMyPets",
+            "getPetById",
+            "updatePet",
+            "deletePet",
+            "searchPets",
+            "getCurrentUserId",
+            "getCurrentUserRole"
+          ],
+          "properties": [
+            "petService"
+          ]
+        }
+      ],
+      "exports": [
+        {
+          "name": "createPet",
+          "line": 24,
+          "isDefault": false
+        },
+        {
+          "name": "getMyPets",
+          "line": 37,
+          "isDefault": false
+        },
+        {
+          "name": "getPetById",
+          "line": 50,
+          "isDefault": false
+        },
+        {
+          "name": "updatePet",
+          "line": 66,
+          "isDefault": false
+        },
+        {
+          "name": "deletePet",
+          "line": 78,
+          "isDefault": false
+        },
+        {
+          "name": "searchPets",
+          "line": 87,
+          "isDefault": false
+        },
+        {
+          "name": "PetController",
+          "line": 17,
+          "isDefault": false
+        }
+      ],
+      "callGraph": [
+        {
+          "caller": "createPet",
+          "callee": "getCurrentUserId",
+          "lineNumber": 29
+        },
+        {
+          "caller": "createPet",
+          "callee": "petService.createPet",
+          "lineNumber": 30
+        },
+        {
+          "caller": "createPet",
+          "callee": "ResponseEntity\n                .status(HttpStatus.CREATED).body",
+          "lineNumber": 32
+        },
+        {
+          "caller": "createPet",
+          "callee": "ResponseEntity.status",
+          "lineNumber": 32
+        },
+        {
+          "caller": "createPet",
+          "callee": "ApiResponse.created",
+          "lineNumber": 34
+        },
+        {
+          "caller": "getMyPets",
+          "callee": "getCurrentUserId",
+          "lineNumber": 43
+        },
+        {
+          "caller": "getMyPets",
+          "callee": "PageRequest.of",
+          "lineNumber": 44
+        },
+        {
+          "caller": "getMyPets",
+          "callee": "Sort.by(\"createdAt\").descending",
+          "lineNumber": 44
+        },
+        {
+          "caller": "getMyPets",
+          "callee": "Sort.by",
+          "lineNumber": 44
+        },
+        {
+          "caller": "getMyPets",
+          "callee": "petService.getPetsByOwner",
+          "lineNumber": 45
+        },
+        {
+          "caller": "getMyPets",
+          "callee": "ResponseEntity.ok",
+          "lineNumber": 47
+        },
+        {
+          "caller": "getMyPets",
+          "callee": "ApiResponse.ok",
+          "lineNumber": 47
+        },
+        {
+          "caller": "getMyPets",
+          "callee": "PageResponse.of",
+          "lineNumber": 47
+        },
+        {
+          "caller": "getPetById",
+          "callee": "getCurrentUserId",
+          "lineNumber": 53
+        },
+        {
+          "caller": "getPetById",
+          "callee": "getCurrentUserRole",
+          "lineNumber": 54
+        },
+        {
+          "caller": "getPetById",
+          "callee": "role.contains",
+          "lineNumber": 57
+        },
+        {
+          "caller": "getPetById",
+          "callee": "petService.getPetByIdForOwner",
+          "lineNumber": 58
+        },
+        {
+          "caller": "getPetById",
+          "callee": "petService.getPetById",
+          "lineNumber": 60
+        },
+        {
+          "caller": "getPetById",
+          "callee": "ResponseEntity.ok",
+          "lineNumber": 63
+        },
+        {
+          "caller": "getPetById",
+          "callee": "ApiResponse.ok",
+          "lineNumber": 63
+        },
+        {
+          "caller": "updatePet",
+          "callee": "getCurrentUserId",
+          "lineNumber": 72
+        },
+        {
+          "caller": "updatePet",
+          "callee": "petService.updatePet",
+          "lineNumber": 73
+        },
+        {
+          "caller": "updatePet",
+          "callee": "ResponseEntity.ok",
+          "lineNumber": 75
+        },
+        {
+          "caller": "updatePet",
+          "callee": "ApiResponse.ok",
+          "lineNumber": 75
+        },
+        {
+          "caller": "deletePet",
+          "callee": "getCurrentUserId",
+          "lineNumber": 81
+        },
+        {
+          "caller": "deletePet",
+          "callee": "petService.deletePet",
+          "lineNumber": 82
+        },
+        {
+          "caller": "deletePet",
+          "callee": "ResponseEntity.ok",
+          "lineNumber": 84
+        },
+        {
+          "caller": "deletePet",
+          "callee": "ApiResponse.ok",
+          "lineNumber": 84
+        },
+        {
+          "caller": "searchPets",
+          "callee": "PageRequest.of",
+          "lineNumber": 94
+        },
+        {
+          "caller": "searchPets",
+          "callee": "petService.searchPets",
+          "lineNumber": 95
+        },
+        {
+          "caller": "searchPets",
+          "callee": "ResponseEntity.ok",
+          "lineNumber": 97
+        },
+        {
+          "caller": "searchPets",
+          "callee": "ApiResponse.ok",
+          "lineNumber": 97
+        },
+        {
+          "caller": "searchPets",
+          "callee": "PageResponse.of",
+          "lineNumber": 97
+        }
+      ],
+      "metrics": {
+        "importCount": 6,
+        "exportCount": 7,
+        "functionCount": 8,
+        "classCount": 1
+      }
+    },
+    {
+      "path": "BE/src/main/java/com/petcare/modules/pets/dto/request/CreatePetRequest.java",
+      "language": "java",
+      "fileCategory": "code",
+      "totalLines": 37,
+      "nonEmptyLines": 28,
+      "classes": [
+        {
+          "name": "CreatePetRequest",
+          "startLine": 8,
+          "endLine": 37,
+          "methods": [],
+          "properties": [
+            "name",
+            "species",
+            "breed",
+            "birthDate",
+            "weight",
+            "imageUrl",
+            "notes"
+          ]
+        }
+      ],
+      "exports": [
+        {
+          "name": "CreatePetRequest",
+          "line": 8,
+          "isDefault": false
+        }
+      ],
+      "metrics": {
+        "importCount": 0,
+        "exportCount": 1,
+        "functionCount": 0,
+        "classCount": 1
+      }
+    },
+    {
+      "path": "BE/src/main/java/com/petcare/modules/pets/dto/request/UpdatePetRequest.java",
+      "language": "java",
+      "fileCategory": "code",
+      "totalLines": 32,
+      "nonEmptyLines": 24,
+      "classes": [
+        {
+          "name": "UpdatePetRequest",
+          "startLine": 8,
+          "endLine": 32,
+          "methods": [],
+          "properties": [
+            "name",
+            "breed",
+            "birthDate",
+            "weight",
+            "imageUrl",
+            "notes"
+          ]
+        }
+      ],
+      "exports": [
+        {
+          "name": "UpdatePetRequest",
+          "line": 8,
+          "isDefault": false
+        }
+      ],
+      "metrics": {
+        "importCount": 0,
+        "exportCount": 1,
+        "functionCount": 0,
+        "classCount": 1
+      }
+    },
+    {
+      "path": "BE/src/main/java/com/petcare/modules/pets/dto/response/PetResponse.java",
+      "language": "java",
+      "fileCategory": "code",
+      "totalLines": 28,
+      "nonEmptyLines": 26,
+      "classes": [
+        {
+          "name": "PetResponse",
+          "startLine": 8,
+          "endLine": 28,
+          "methods": [],
+          "properties": [
+            "id",
+            "ownerId",
+            "ownerName",
+            "name",
+            "species",
+            "speciesDisplayName",
+            "breed",
+            "birthDate",
+            "ageYears",
+            "ageMonths",
+            "weight",
+            "imageUrl",
+            "notes",
+            "createdAt",
+            "updatedAt"
+          ]
+        }
+      ],
+      "exports": [
+        {
+          "name": "PetResponse",
+          "line": 8,
+          "isDefault": false
+        }
+      ],
+      "metrics": {
+        "importCount": 0,
+        "exportCount": 1,
+        "functionCount": 0,
+        "classCount": 1
+      }
+    },
+    {
+      "path": "BE/src/main/java/com/petcare/modules/pets/entity/Pet.java",
+      "language": "java",
+      "fileCategory": "code",
+      "totalLines": 47,
+      "nonEmptyLines": 36,
+      "classes": [
+        {
+          "name": "Pet",
+          "startLine": 12,
+          "endLine": 47,
+          "methods": [],
+          "properties": [
+            "ownerId",
+            "name",
+            "species",
+            "breed",
+            "birthDate",
+            "weight",
+            "imageUrl",
+            "notes"
+          ]
+        }
+      ],
+      "exports": [
+        {
+          "name": "Pet",
+          "line": 12,
+          "isDefault": false
+        }
+      ],
+      "metrics": {
+        "importCount": 2,
+        "exportCount": 1,
+        "functionCount": 0,
+        "classCount": 1
+      }
+    },
+    {
+      "path": "BE/src/main/java/com/petcare/modules/pets/repository/PetRepository.java",
+      "language": "java",
+      "fileCategory": "code",
+      "totalLines": 38,
+      "nonEmptyLines": 28,
+      "classes": [
+        {
+          "name": "PetRepository",
+          "startLine": 14,
+          "endLine": 38,
+          "methods": [
+            "findByOwnerId",
+            "findByOwnerId",
+            "findByIdAndOwnerId",
+            "findBySpecies",
+            "countByOwnerId",
+            "existsByIdAndOwnerId",
+            "searchByName"
+          ],
+          "properties": []
+        }
+      ],
+      "exports": [
+        {
+          "name": "PetRepository",
+          "line": 14,
+          "isDefault": false
+        }
+      ],
+      "metrics": {
+        "importCount": 1,
+        "exportCount": 1,
+        "functionCount": 0,
+        "classCount": 1
+      }
+    },
+    {
+      "path": "BE/src/main/java/com/petcare/modules/pets/service/PetService.java",
+      "language": "java",
+      "fileCategory": "code",
+      "totalLines": 36,
+      "nonEmptyLines": 24,
+      "classes": [
+        {
+          "name": "PetService",
+          "startLine": 11,
+          "endLine": 36,
+          "methods": [
+            "createPet",
+            "getPetById",
+            "getPetByIdForOwner",
+            "getPetsByOwner",
+            "updatePet",
+            "deletePet",
+            "searchPets",
+            "getAllPetsBySpecies",
+            "countPetsByOwner",
+            "isOwnerOfPet"
+          ],
+          "properties": []
+        }
+      ],
+      "exports": [
+        {
+          "name": "PetService",
+          "line": 11,
+          "isDefault": false
+        }
+      ],
+      "metrics": {
+        "importCount": 4,
+        "exportCount": 1,
+        "functionCount": 0,
+        "classCount": 1
+      }
+    },
+    {
+      "path": "BE/src/main/java/com/petcare/modules/pets/service/impl/PetServiceImpl.java",
+      "language": "java",
+      "fileCategory": "code",
+      "totalLines": 166,
+      "nonEmptyLines": 145,
+      "functions": [
+        {
+          "name": "createPet",
+          "startLine": 26,
+          "endLine": 45,
+          "params": [
+            "ownerId",
+            "request"
+          ]
+        },
+        {
+          "name": "getPetById",
+          "startLine": 47,
+          "endLine": 52,
+          "params": [
+            "petId"
+          ]
+        },
+        {
+          "name": "getPetByIdForOwner",
+          "startLine": 54,
+          "endLine": 60,
+          "params": [
+            "petId",
+            "ownerId"
+          ]
+        },
+        {
+          "name": "getPetsByOwner",
+          "startLine": 62,
+          "endLine": 67,
+          "params": [
+            "ownerId",
+            "pageable"
+          ]
+        },
+        {
+          "name": "updatePet",
+          "startLine": 69,
+          "endLine": 95,
+          "params": [
+            "petId",
+            "ownerId",
+            "request"
+          ]
+        },
+        {
+          "name": "deletePet",
+          "startLine": 97,
+          "endLine": 103,
+          "params": [
+            "petId",
+            "ownerId"
+          ]
+        },
+        {
+          "name": "searchPets",
+          "startLine": 105,
+          "endLine": 110,
+          "params": [
+            "keyword",
+            "pageable"
+          ]
+        },
+        {
+          "name": "getAllPetsBySpecies",
+          "startLine": 112,
+          "endLine": 119,
+          "params": [
+            "species"
+          ]
+        },
+        {
+          "name": "countPetsByOwner",
+          "startLine": 121,
+          "endLine": 125,
+          "params": [
+            "ownerId"
+          ]
+        },
+        {
+          "name": "isOwnerOfPet",
+          "startLine": 127,
+          "endLine": 131,
+          "params": [
+            "petId",
+            "ownerId"
+          ]
+        },
+        {
+          "name": "findPetById",
+          "startLine": 134,
+          "endLine": 137,
+          "params": [
+            "id"
+          ]
+        },
+        {
+          "name": "mapToResponse",
+          "startLine": 139,
+          "endLine": 154,
+          "params": [
+            "pet"
+          ]
+        },
+        {
+          "name": "getSpeciesDisplayName",
+          "startLine": 156,
+          "endLine": 165,
+          "params": [
+            "species"
+          ]
+        }
+      ],
+      "classes": [
+        {
+          "name": "PetServiceImpl",
+          "startLine": 18,
+          "endLine": 166,
+          "methods": [
+            "createPet",
+            "getPetById",
+            "getPetByIdForOwner",
+            "getPetsByOwner",
+            "updatePet",
+            "deletePet",
+            "searchPets",
+            "getAllPetsBySpecies",
+            "countPetsByOwner",
+            "isOwnerOfPet",
+            "findPetById",
+            "mapToResponse",
+            "getSpeciesDisplayName"
+          ],
+          "properties": [
+            "petRepository"
+          ]
+        }
+      ],
+      "exports": [
+        {
+          "name": "createPet",
+          "line": 26,
+          "isDefault": false
+        },
+        {
+          "name": "getPetById",
+          "line": 47,
+          "isDefault": false
+        },
+        {
+          "name": "getPetByIdForOwner",
+          "line": 54,
+          "isDefault": false
+        },
+        {
+          "name": "getPetsByOwner",
+          "line": 62,
+          "isDefault": false
+        },
+        {
+          "name": "updatePet",
+          "line": 69,
+          "isDefault": false
+        },
+        {
+          "name": "deletePet",
+          "line": 97,
+          "isDefault": false
+        },
+        {
+          "name": "searchPets",
+          "line": 105,
+          "isDefault": false
+        },
+        {
+          "name": "getAllPetsBySpecies",
+          "line": 112,
+          "isDefault": false
+        },
+        {
+          "name": "countPetsByOwner",
+          "line": 121,
+          "isDefault": false
+        },
+        {
+          "name": "isOwnerOfPet",
+          "line": 127,
+          "isDefault": false
+        },
+        {
+          "name": "PetServiceImpl",
+          "line": 18,
+          "isDefault": false
+        }
+      ],
+      "callGraph": [
+        {
+          "caller": "createPet",
+          "callee": "log.info",
+          "lineNumber": 28
+        },
+        {
+          "caller": "createPet",
+          "callee": "Pet.builder()\n                .ownerId(ownerId)\n                .name(request.getName())\n                .species(request.getSpecies().toUpperCase())\n                .breed(request.getBreed())\n                .birthDate(request.getBirthDate())\n                .weight(request.getWeight())\n                .imageUrl(request.getImageUrl())\n                .notes(request.getNotes()).build",
+          "lineNumber": 30
+        },
+        {
+          "caller": "createPet",
+          "callee": "Pet.builder()\n                .ownerId(ownerId)\n                .name(request.getName())\n                .species(request.getSpecies().toUpperCase())\n                .breed(request.getBreed())\n                .birthDate(request.getBirthDate())\n                .weight(request.getWeight())\n                .imageUrl(request.getImageUrl()).notes",
+          "lineNumber": 30
+        },
+        {
+          "caller": "createPet",
+          "callee": "Pet.builder()\n                .ownerId(ownerId)\n                .name(request.getName())\n                .species(request.getSpecies().toUpperCase())\n                .breed(request.getBreed())\n                .birthDate(request.getBirthDate())\n                .weight(request.getWeight()).imageUrl",
+          "lineNumber": 30
+        },
+        {
+          "caller": "createPet",
+          "callee": "Pet.builder()\n                .ownerId(ownerId)\n                .name(request.getName())\n                .species(request.getSpecies().toUpperCase())\n                .breed(request.getBreed())\n                .birthDate(request.getBirthDate()).weight",
+          "lineNumber": 30
+        },
+        {
+          "caller": "createPet",
+          "callee": "Pet.builder()\n                .ownerId(ownerId)\n                .name(request.getName())\n                .species(request.getSpecies().toUpperCase())\n                .breed(request.getBreed()).birthDate",
+          "lineNumber": 30
+        },
+        {
+          "caller": "createPet",
+          "callee": "Pet.builder()\n                .ownerId(ownerId)\n                .name(request.getName())\n                .species(request.getSpecies().toUpperCase()).breed",
+          "lineNumber": 30
+        },
+        {
+          "caller": "createPet",
+          "callee": "Pet.builder()\n                .ownerId(ownerId)\n                .name(request.getName()).species",
+          "lineNumber": 30
+        },
+        {
+          "caller": "createPet",
+          "callee": "Pet.builder()\n                .ownerId(ownerId).name",
+          "lineNumber": 30
+        },
+        {
+          "caller": "createPet",
+          "callee": "Pet.builder().ownerId",
+          "lineNumber": 30
+        },
+        {
+          "caller": "createPet",
+          "callee": "Pet.builder",
+          "lineNumber": 30
+        },
+        {
+          "caller": "createPet",
+          "callee": "request.getName",
+          "lineNumber": 32
+        },
+        {
+          "caller": "createPet",
+          "callee": "request.getSpecies().toUpperCase",
+          "lineNumber": 33
+        },
+        {
+          "caller": "createPet",
+          "callee": "request.getSpecies",
+          "lineNumber": 33
+        },
+        {
+          "caller": "createPet",
+          "callee": "request.getBreed",
+          "lineNumber": 34
+        },
+        {
+          "caller": "createPet",
+          "callee": "request.getBirthDate",
+          "lineNumber": 35
+        },
+        {
+          "caller": "createPet",
+          "callee": "request.getWeight",
+          "lineNumber": 36
+        },
+        {
+          "caller": "createPet",
+          "callee": "request.getImageUrl",
+          "lineNumber": 37
+        },
+        {
+          "caller": "createPet",
+          "callee": "request.getNotes",
+          "lineNumber": 38
+        },
+        {
+          "caller": "createPet",
+          "callee": "petRepository.save",
+          "lineNumber": 41
+        },
+        {
+          "caller": "createPet",
+          "callee": "log.info",
+          "lineNumber": 42
+        },
+        {
+          "caller": "createPet",
+          "callee": "savedPet.getId",
+          "lineNumber": 42
+        },
+        {
+          "caller": "createPet",
+          "callee": "mapToResponse",
+          "lineNumber": 44
+        },
+        {
+          "caller": "getPetById",
+          "callee": "findPetById",
+          "lineNumber": 50
+        },
+        {
+          "caller": "getPetById",
+          "callee": "mapToResponse",
+          "lineNumber": 51
+        },
+        {
+          "caller": "getPetByIdForOwner",
+          "callee": "petRepository.findByIdAndOwnerId(petId, ownerId).orElseThrow",
+          "lineNumber": 57
+        },
+        {
+          "caller": "getPetByIdForOwner",
+          "callee": "petRepository.findByIdAndOwnerId",
+          "lineNumber": 57
+        },
+        {
+          "caller": "getPetByIdForOwner",
+          "callee": "new ResourceNotFoundException",
+          "lineNumber": 58
+        },
+        {
+          "caller": "getPetByIdForOwner",
+          "callee": "mapToResponse",
+          "lineNumber": 59
+        },
+        {
+          "caller": "getPetsByOwner",
+          "callee": "petRepository.findByOwnerId(ownerId, pageable).map",
+          "lineNumber": 65
+        },
+        {
+          "caller": "getPetsByOwner",
+          "callee": "petRepository.findByOwnerId",
+          "lineNumber": 65
+        },
+        {
+          "caller": "updatePet",
+          "callee": "petRepository.findByIdAndOwnerId(petId, ownerId).orElseThrow",
+          "lineNumber": 71
+        },
+        {
+          "caller": "updatePet",
+          "callee": "petRepository.findByIdAndOwnerId",
+          "lineNumber": 71
+        },
+        {
+          "caller": "updatePet",
+          "callee": "new ResourceNotFoundException",
+          "lineNumber": 72
+        },
+        {
+          "caller": "updatePet",
+          "callee": "request.getName",
+          "lineNumber": 74
+        },
+        {
+          "caller": "updatePet",
+          "callee": "pet.setName",
+          "lineNumber": 75
+        },
+        {
+          "caller": "updatePet",
+          "callee": "request.getName",
+          "lineNumber": 75
+        },
+        {
+          "caller": "updatePet",
+          "callee": "request.getBreed",
+          "lineNumber": 77
+        },
+        {
+          "caller": "updatePet",
+          "callee": "pet.setBreed",
+          "lineNumber": 78
+        },
+        {
+          "caller": "updatePet",
+          "callee": "request.getBreed",
+          "lineNumber": 78
+        },
+        {
+          "caller": "updatePet",
+          "callee": "request.getBirthDate",
+          "lineNumber": 80
+        },
+        {
+          "caller": "updatePet",
+          "callee": "pet.setBirthDate",
+          "lineNumber": 81
+        },
+        {
+          "caller": "updatePet",
+          "callee": "request.getBirthDate",
+          "lineNumber": 81
+        },
+        {
+          "caller": "updatePet",
+          "callee": "request.getWeight",
+          "lineNumber": 83
+        },
+        {
+          "caller": "updatePet",
+          "callee": "pet.setWeight",
+          "lineNumber": 84
+        },
+        {
+          "caller": "updatePet",
+          "callee": "request.getWeight",
+          "lineNumber": 84
+        },
+        {
+          "caller": "updatePet",
+          "callee": "request.getImageUrl",
+          "lineNumber": 86
+        },
+        {
+          "caller": "updatePet",
+          "callee": "pet.setImageUrl",
+          "lineNumber": 87
+        },
+        {
+          "caller": "updatePet",
+          "callee": "request.getImageUrl",
+          "lineNumber": 87
+        },
+        {
+          "caller": "updatePet",
+          "callee": "request.getNotes",
+          "lineNumber": 89
+        },
+        {
+          "caller": "updatePet",
+          "callee": "pet.setNotes",
+          "lineNumber": 90
+        },
+        {
+          "caller": "updatePet",
+          "callee": "request.getNotes",
+          "lineNumber": 90
+        },
+        {
+          "caller": "updatePet",
+          "callee": "petRepository.save",
+          "lineNumber": 93
+        },
+        {
+          "caller": "updatePet",
+          "callee": "mapToResponse",
+          "lineNumber": 94
+        },
+        {
+          "caller": "deletePet",
+          "callee": "petRepository.findByIdAndOwnerId(petId, ownerId).orElseThrow",
+          "lineNumber": 99
+        },
+        {
+          "caller": "deletePet",
+          "callee": "petRepository.findByIdAndOwnerId",
+          "lineNumber": 99
+        },
+        {
+          "caller": "deletePet",
+          "callee": "new ResourceNotFoundException",
+          "lineNumber": 100
+        },
+        {
+          "caller": "deletePet",
+          "callee": "petRepository.delete",
+          "lineNumber": 101
+        },
+        {
+          "caller": "deletePet",
+          "callee": "log.info",
+          "lineNumber": 102
+        },
+        {
+          "caller": "searchPets",
+          "callee": "petRepository.searchByName(keyword, pageable).map",
+          "lineNumber": 108
+        },
+        {
+          "caller": "searchPets",
+          "callee": "petRepository.searchByName",
+          "lineNumber": 108
+        },
+        {
+          "caller": "getAllPetsBySpecies",
+          "callee": "petRepository.findBySpecies(species.toUpperCase())\n                .stream()\n                .map(this::mapToResponse).collect",
+          "lineNumber": 115
+        },
+        {
+          "caller": "getAllPetsBySpecies",
+          "callee": "petRepository.findBySpecies(species.toUpperCase())\n                .stream().map",
+          "lineNumber": 115
+        },
+        {
+          "caller": "getAllPetsBySpecies",
+          "callee": "petRepository.findBySpecies(species.toUpperCase()).stream",
+          "lineNumber": 115
+        },
+        {
+          "caller": "getAllPetsBySpecies",
+          "callee": "petRepository.findBySpecies",
+          "lineNumber": 115
+        },
+        {
+          "caller": "getAllPetsBySpecies",
+          "callee": "species.toUpperCase",
+          "lineNumber": 115
+        },
+        {
+          "caller": "getAllPetsBySpecies",
+          "callee": "Collectors.toList",
+          "lineNumber": 118
+        },
+        {
+          "caller": "countPetsByOwner",
+          "callee": "petRepository.countByOwnerId",
+          "lineNumber": 124
+        },
+        {
+          "caller": "isOwnerOfPet",
+          "callee": "petRepository.existsByIdAndOwnerId",
+          "lineNumber": 130
+        },
+        {
+          "caller": "findPetById",
+          "callee": "petRepository.findById(id).orElseThrow",
+          "lineNumber": 135
+        },
+        {
+          "caller": "findPetById",
+          "callee": "petRepository.findById",
+          "lineNumber": 135
+        },
+        {
+          "caller": "findPetById",
+          "callee": "new ResourceNotFoundException",
+          "lineNumber": 136
+        },
+        {
+          "caller": "mapToResponse",
+          "callee": "PetResponse.builder()\n                .id(pet.getId())\n                .ownerId(pet.getOwnerId())\n                .name(pet.getName())\n                .species(pet.getSpecies())\n                .speciesDisplayName(getSpeciesDisplayName(pet.getSpecies()))\n                .breed(pet.getBreed())\n                .birthDate(pet.getBirthDate())\n                .weight(pet.getWeight())\n                .imageUrl(pet.getImageUrl())\n                .notes(pet.getNotes())\n                .createdAt(pet.getCreatedAt())\n                .updatedAt(pet.getUpdatedAt()).build",
+          "lineNumber": 140
+        },
+        {
+          "caller": "mapToResponse",
+          "callee": "PetResponse.builder()\n                .id(pet.getId())\n                .ownerId(pet.getOwnerId())\n                .name(pet.getName())\n                .species(pet.getSpecies())\n                .speciesDisplayName(getSpeciesDisplayName(pet.getSpecies()))\n                .breed(pet.getBreed())\n                .birthDate(pet.getBirthDate())\n                .weight(pet.getWeight())\n                .imageUrl(pet.getImageUrl())\n                .notes(pet.getNotes())\n                .createdAt(pet.getCreatedAt()).updatedAt",
+          "lineNumber": 140
+        },
+        {
+          "caller": "mapToResponse",
+          "callee": "PetResponse.builder()\n                .id(pet.getId())\n                .ownerId(pet.getOwnerId())\n                .name(pet.getName())\n                .species(pet.getSpecies())\n                .speciesDisplayName(getSpeciesDisplayName(pet.getSpecies()))\n                .breed(pet.getBreed())\n                .birthDate(pet.getBirthDate())\n                .weight(pet.getWeight())\n                .imageUrl(pet.getImageUrl())\n                .notes(pet.getNotes()).createdAt",
+          "lineNumber": 140
+        },
+        {
+          "caller": "mapToResponse",
+          "callee": "PetResponse.builder()\n                .id(pet.getId())\n                .ownerId(pet.getOwnerId())\n                .name(pet.getName())\n                .species(pet.getSpecies())\n                .speciesDisplayName(getSpeciesDisplayName(pet.getSpecies()))\n                .breed(pet.getBreed())\n                .birthDate(pet.getBirthDate())\n                .weight(pet.getWeight())\n                .imageUrl(pet.getImageUrl()).notes",
+          "lineNumber": 140
+        },
+        {
+          "caller": "mapToResponse",
+          "callee": "PetResponse.builder()\n                .id(pet.getId())\n                .ownerId(pet.getOwnerId())\n                .name(pet.getName())\n                .species(pet.getSpecies())\n                .speciesDisplayName(getSpeciesDisplayName(pet.getSpecies()))\n                .breed(pet.getBreed())\n                .birthDate(pet.getBirthDate())\n                .weight(pet.getWeight()).imageUrl",
+          "lineNumber": 140
+        },
+        {
+          "caller": "mapToResponse",
+          "callee": "PetResponse.builder()\n                .id(pet.getId())\n                .ownerId(pet.getOwnerId())\n                .name(pet.getName())\n                .species(pet.getSpecies())\n                .speciesDisplayName(getSpeciesDisplayName(pet.getSpecies()))\n                .breed(pet.getBreed())\n                .birthDate(pet.getBirthDate()).weight",
+          "lineNumber": 140
+        },
+        {
+          "caller": "mapToResponse",
+          "callee": "PetResponse.builder()\n                .id(pet.getId())\n                .ownerId(pet.getOwnerId())\n                .name(pet.getName())\n                .species(pet.getSpecies())\n                .speciesDisplayName(getSpeciesDisplayName(pet.getSpecies()))\n                .breed(pet.getBreed()).birthDate",
+          "lineNumber": 140
+        },
+        {
+          "caller": "mapToResponse",
+          "callee": "PetResponse.builder()\n                .id(pet.getId())\n                .ownerId(pet.getOwnerId())\n                .name(pet.getName())\n                .species(pet.getSpecies())\n                .speciesDisplayName(getSpeciesDisplayName(pet.getSpecies())).breed",
+          "lineNumber": 140
+        },
+        {
+          "caller": "mapToResponse",
+          "callee": "PetResponse.builder()\n                .id(pet.getId())\n                .ownerId(pet.getOwnerId())\n                .name(pet.getName())\n                .species(pet.getSpecies()).speciesDisplayName",
+          "lineNumber": 140
+        },
+        {
+          "caller": "mapToResponse",
+          "callee": "PetResponse.builder()\n                .id(pet.getId())\n                .ownerId(pet.getOwnerId())\n                .name(pet.getName()).species",
+          "lineNumber": 140
+        },
+        {
+          "caller": "mapToResponse",
+          "callee": "PetResponse.builder()\n                .id(pet.getId())\n                .ownerId(pet.getOwnerId()).name",
+          "lineNumber": 140
+        },
+        {
+          "caller": "mapToResponse",
+          "callee": "PetResponse.builder()\n                .id(pet.getId()).ownerId",
+          "lineNumber": 140
+        },
+        {
+          "caller": "mapToResponse",
+          "callee": "PetResponse.builder().id",
+          "lineNumber": 140
+        },
+        {
+          "caller": "mapToResponse",
+          "callee": "PetResponse.builder",
+          "lineNumber": 140
+        },
+        {
+          "caller": "mapToResponse",
+          "callee": "pet.getId",
+          "lineNumber": 141
+        },
+        {
+          "caller": "mapToResponse",
+          "callee": "pet.getOwnerId",
+          "lineNumber": 142
+        },
+        {
+          "caller": "mapToResponse",
+          "callee": "pet.getName",
+          "lineNumber": 143
+        },
+        {
+          "caller": "mapToResponse",
+          "callee": "pet.getSpecies",
+          "lineNumber": 144
+        },
+        {
+          "caller": "mapToResponse",
+          "callee": "getSpeciesDisplayName",
+          "lineNumber": 145
+        },
+        {
+          "caller": "mapToResponse",
+          "callee": "pet.getSpecies",
+          "lineNumber": 145
+        },
+        {
+          "caller": "mapToResponse",
+          "callee": "pet.getBreed",
+          "lineNumber": 146
+        },
+        {
+          "caller": "mapToResponse",
+          "callee": "pet.getBirthDate",
+          "lineNumber": 147
+        },
+        {
+          "caller": "mapToResponse",
+          "callee": "pet.getWeight",
+          "lineNumber": 148
+        },
+        {
+          "caller": "mapToResponse",
+          "callee": "pet.getImageUrl",
+          "lineNumber": 149
+        },
+        {
+          "caller": "mapToResponse",
+          "callee": "pet.getNotes",
+          "lineNumber": 150
+        },
+        {
+          "caller": "mapToResponse",
+          "callee": "pet.getCreatedAt",
+          "lineNumber": 151
+        },
+        {
+          "caller": "mapToResponse",
+          "callee": "pet.getUpdatedAt",
+          "lineNumber": 152
+        },
+        {
+          "caller": "getSpeciesDisplayName",
+          "callee": "species.toUpperCase",
+          "lineNumber": 158
+        }
+      ],
+      "metrics": {
+        "importCount": 8,
+        "exportCount": 11,
+        "functionCount": 13,
+        "classCount": 1
+      }
+    },
+    {
+      "path": "BE/src/main/java/com/petcare/modules/users/entity/User.java",
+      "language": "java",
+      "fileCategory": "code",
+      "totalLines": 34,
+      "nonEmptyLines": 27,
+      "classes": [
+        {
+          "name": "User",
+          "startLine": 7,
+          "endLine": 34,
+          "methods": [],
+          "properties": [
+            "accountId",
+            "name",
+            "avatar",
+            "organizationId",
+            "storeId"
+          ]
+        }
+      ],
+      "exports": [
+        {
+          "name": "User",
+          "line": 7,
+          "isDefault": false
+        }
+      ],
+      "metrics": {
+        "importCount": 1,
+        "exportCount": 1,
+        "functionCount": 0,
+        "classCount": 1
+      }
+    }
+  ]
+}

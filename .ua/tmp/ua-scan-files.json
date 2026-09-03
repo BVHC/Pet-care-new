@@ -1,0 +1,1073 @@
+{
+  "scriptCompleted": true,
+  "contentDigest": "0667bd51e391b245fa8030fcf6e1b536441aa4ebced764d78ff7c3d59008090e",
+  "files": [
+    {
+      "path": ".env.example",
+      "language": "config",
+      "sizeLines": 80,
+      "fileCategory": "config"
+    },
+    {
+      "path": ".github/workflows/ci.yml",
+      "language": "yaml",
+      "sizeLines": 179,
+      "fileCategory": "infra"
+    },
+    {
+      "path": ".github/workflows/docker.yml",
+      "language": "yaml",
+      "sizeLines": 97,
+      "fileCategory": "infra"
+    },
+    {
+      "path": "BE/Dockerfile",
+      "language": "dockerfile",
+      "sizeLines": 47,
+      "fileCategory": "infra"
+    },
+    {
+      "path": "BE/pom.xml",
+      "language": "xml",
+      "sizeLines": 125,
+      "fileCategory": "config"
+    },
+    {
+      "path": "BE/src/main/java/com/petcare/PetcareApplication.java",
+      "language": "java",
+      "sizeLines": 12,
+      "fileCategory": "code"
+    },
+    {
+      "path": "BE/src/main/java/com/petcare/common/config/JpaAuditingConfig.java",
+      "language": "java",
+      "sizeLines": 9,
+      "fileCategory": "code"
+    },
+    {
+      "path": "BE/src/main/java/com/petcare/common/config/SecurityConfig.java",
+      "language": "java",
+      "sizeLines": 46,
+      "fileCategory": "code"
+    },
+    {
+      "path": "BE/src/main/java/com/petcare/common/enums/AccountStatus.java",
+      "language": "java",
+      "sizeLines": 9,
+      "fileCategory": "code"
+    },
+    {
+      "path": "BE/src/main/java/com/petcare/common/enums/UserRole.java",
+      "language": "java",
+      "sizeLines": 13,
+      "fileCategory": "code"
+    },
+    {
+      "path": "BE/src/main/java/com/petcare/common/exception/BusinessException.java",
+      "language": "java",
+      "sizeLines": 35,
+      "fileCategory": "code"
+    },
+    {
+      "path": "BE/src/main/java/com/petcare/common/exception/GlobalExceptionHandler.java",
+      "language": "java",
+      "sizeLines": 53,
+      "fileCategory": "code"
+    },
+    {
+      "path": "BE/src/main/java/com/petcare/common/exception/ResourceNotFoundException.java",
+      "language": "java",
+      "sizeLines": 20,
+      "fileCategory": "code"
+    },
+    {
+      "path": "BE/src/main/java/com/petcare/common/model/ApiResponse.java",
+      "language": "java",
+      "sizeLines": 23,
+      "fileCategory": "code"
+    },
+    {
+      "path": "BE/src/main/java/com/petcare/common/model/BaseEntity.java",
+      "language": "java",
+      "sizeLines": 29,
+      "fileCategory": "code"
+    },
+    {
+      "path": "BE/src/main/java/com/petcare/common/model/PageResponse.java",
+      "language": "java",
+      "sizeLines": 26,
+      "fileCategory": "code"
+    },
+    {
+      "path": "BE/src/main/java/com/petcare/common/security/JwtAuthenticationFilter.java",
+      "language": "java",
+      "sizeLines": 57,
+      "fileCategory": "code"
+    },
+    {
+      "path": "BE/src/main/java/com/petcare/common/security/JwtTokenProvider.java",
+      "language": "java",
+      "sizeLines": 85,
+      "fileCategory": "code"
+    },
+    {
+      "path": "BE/src/main/java/com/petcare/common/security/UserPrincipal.java",
+      "language": "java",
+      "sizeLines": 62,
+      "fileCategory": "code"
+    },
+    {
+      "path": "BE/src/main/java/com/petcare/modules/auth/entity/Account.java",
+      "language": "java",
+      "sizeLines": 46,
+      "fileCategory": "code"
+    },
+    {
+      "path": "BE/src/main/java/com/petcare/modules/pets/controller/PetController.java",
+      "language": "java",
+      "sizeLines": 108,
+      "fileCategory": "code"
+    },
+    {
+      "path": "BE/src/main/java/com/petcare/modules/pets/dto/request/CreatePetRequest.java",
+      "language": "java",
+      "sizeLines": 37,
+      "fileCategory": "code"
+    },
+    {
+      "path": "BE/src/main/java/com/petcare/modules/pets/dto/request/UpdatePetRequest.java",
+      "language": "java",
+      "sizeLines": 32,
+      "fileCategory": "code"
+    },
+    {
+      "path": "BE/src/main/java/com/petcare/modules/pets/dto/response/PetResponse.java",
+      "language": "java",
+      "sizeLines": 28,
+      "fileCategory": "code"
+    },
+    {
+      "path": "BE/src/main/java/com/petcare/modules/pets/entity/Pet.java",
+      "language": "java",
+      "sizeLines": 47,
+      "fileCategory": "code"
+    },
+    {
+      "path": "BE/src/main/java/com/petcare/modules/pets/repository/PetRepository.java",
+      "language": "java",
+      "sizeLines": 38,
+      "fileCategory": "code"
+    },
+    {
+      "path": "BE/src/main/java/com/petcare/modules/pets/service/PetService.java",
+      "language": "java",
+      "sizeLines": 36,
+      "fileCategory": "code"
+    },
+    {
+      "path": "BE/src/main/java/com/petcare/modules/pets/service/impl/PetServiceImpl.java",
+      "language": "java",
+      "sizeLines": 166,
+      "fileCategory": "code"
+    },
+    {
+      "path": "BE/src/main/java/com/petcare/modules/users/entity/User.java",
+      "language": "java",
+      "sizeLines": 34,
+      "fileCategory": "code"
+    },
+    {
+      "path": "BE/src/main/resources/application-docker.yml",
+      "language": "yaml",
+      "sizeLines": 54,
+      "fileCategory": "config"
+    },
+    {
+      "path": "BE/src/main/resources/application.yml",
+      "language": "yaml",
+      "sizeLines": 43,
+      "fileCategory": "config"
+    },
+    {
+      "path": "BE/src/main/resources/db/migration/V1__init_schema.sql",
+      "language": "sql",
+      "sizeLines": 1070,
+      "fileCategory": "data"
+    },
+    {
+      "path": "BE/src/test/java/com/petcare/PetcareApplicationTests.java",
+      "language": "java",
+      "sizeLines": 15,
+      "fileCategory": "code"
+    },
+    {
+      "path": "BE/src/test/resources/application-test.yml",
+      "language": "yaml",
+      "sizeLines": 31,
+      "fileCategory": "config"
+    },
+    {
+      "path": "FE/Dockerfile",
+      "language": "dockerfile",
+      "sizeLines": 33,
+      "fileCategory": "infra"
+    },
+    {
+      "path": "FE/index.html",
+      "language": "html",
+      "sizeLines": 13,
+      "fileCategory": "markup"
+    },
+    {
+      "path": "FE/nginx.conf",
+      "language": "conf",
+      "sizeLines": 31,
+      "fileCategory": "code"
+    },
+    {
+      "path": "FE/package.json",
+      "language": "json",
+      "sizeLines": 45,
+      "fileCategory": "config"
+    },
+    {
+      "path": "FE/postcss.config.js",
+      "language": "javascript",
+      "sizeLines": 6,
+      "fileCategory": "code"
+    },
+    {
+      "path": "FE/src/app/App.tsx",
+      "language": "typescript",
+      "sizeLines": 136,
+      "fileCategory": "code"
+    },
+    {
+      "path": "FE/src/index.css",
+      "language": "css",
+      "sizeLines": 63,
+      "fileCategory": "markup"
+    },
+    {
+      "path": "FE/src/legacy/domains/appointment/models/appointment.model.ts",
+      "language": "typescript",
+      "sizeLines": 12,
+      "fileCategory": "code"
+    },
+    {
+      "path": "FE/src/legacy/domains/auth/api/auth.api.ts",
+      "language": "typescript",
+      "sizeLines": 56,
+      "fileCategory": "code"
+    },
+    {
+      "path": "FE/src/legacy/domains/auth/models/user.model.ts",
+      "language": "typescript",
+      "sizeLines": 10,
+      "fileCategory": "code"
+    },
+    {
+      "path": "FE/src/legacy/domains/auth/schemas/auth.schema.ts",
+      "language": "typescript",
+      "sizeLines": 20,
+      "fileCategory": "code"
+    },
+    {
+      "path": "FE/src/legacy/domains/auth/store/auth.store.ts",
+      "language": "typescript",
+      "sizeLines": 28,
+      "fileCategory": "code"
+    },
+    {
+      "path": "FE/src/legacy/domains/branch/models/branch.model.ts",
+      "language": "typescript",
+      "sizeLines": 8,
+      "fileCategory": "code"
+    },
+    {
+      "path": "FE/src/legacy/domains/hotel/models/hotel.model.ts",
+      "language": "typescript",
+      "sizeLines": 9,
+      "fileCategory": "code"
+    },
+    {
+      "path": "FE/src/legacy/domains/medical/models/medical.model.ts",
+      "language": "typescript",
+      "sizeLines": 8,
+      "fileCategory": "code"
+    },
+    {
+      "path": "FE/src/legacy/domains/order/api/cart.api.ts",
+      "language": "typescript",
+      "sizeLines": 28,
+      "fileCategory": "code"
+    },
+    {
+      "path": "FE/src/legacy/domains/order/api/order.api.ts",
+      "language": "typescript",
+      "sizeLines": 44,
+      "fileCategory": "code"
+    },
+    {
+      "path": "FE/src/legacy/domains/order/hooks/useCart.ts",
+      "language": "typescript",
+      "sizeLines": 37,
+      "fileCategory": "code"
+    },
+    {
+      "path": "FE/src/legacy/domains/order/hooks/useOrders.ts",
+      "language": "typescript",
+      "sizeLines": 30,
+      "fileCategory": "code"
+    },
+    {
+      "path": "FE/src/legacy/domains/order/models/order.model.ts",
+      "language": "typescript",
+      "sizeLines": 32,
+      "fileCategory": "code"
+    },
+    {
+      "path": "FE/src/legacy/domains/order/schemas/checkout.schema.ts",
+      "language": "typescript",
+      "sizeLines": 12,
+      "fileCategory": "code"
+    },
+    {
+      "path": "FE/src/legacy/domains/order/store/cart.store.ts",
+      "language": "typescript",
+      "sizeLines": 33,
+      "fileCategory": "code"
+    },
+    {
+      "path": "FE/src/legacy/domains/order/store/order.store.ts",
+      "language": "typescript",
+      "sizeLines": 52,
+      "fileCategory": "code"
+    },
+    {
+      "path": "FE/src/legacy/domains/pet/api/pet.api.ts",
+      "language": "typescript",
+      "sizeLines": 47,
+      "fileCategory": "code"
+    },
+    {
+      "path": "FE/src/legacy/domains/pet/api/pet.mock.ts",
+      "language": "typescript",
+      "sizeLines": 59,
+      "fileCategory": "code"
+    },
+    {
+      "path": "FE/src/legacy/domains/pet/hooks/usePets.ts",
+      "language": "typescript",
+      "sizeLines": 30,
+      "fileCategory": "code"
+    },
+    {
+      "path": "FE/src/legacy/domains/pet/models/pet.model.ts",
+      "language": "typescript",
+      "sizeLines": 40,
+      "fileCategory": "code"
+    },
+    {
+      "path": "FE/src/legacy/domains/product/api/product.api.ts",
+      "language": "typescript",
+      "sizeLines": 88,
+      "fileCategory": "code"
+    },
+    {
+      "path": "FE/src/legacy/domains/product/api/product.mock.ts",
+      "language": "typescript",
+      "sizeLines": 18,
+      "fileCategory": "code"
+    },
+    {
+      "path": "FE/src/legacy/domains/product/hooks/useProducts.ts",
+      "language": "typescript",
+      "sizeLines": 20,
+      "fileCategory": "code"
+    },
+    {
+      "path": "FE/src/legacy/domains/product/models/product.model.ts",
+      "language": "typescript",
+      "sizeLines": 52,
+      "fileCategory": "code"
+    },
+    {
+      "path": "FE/src/legacy/domains/review/api/review.api.ts",
+      "language": "typescript",
+      "sizeLines": 38,
+      "fileCategory": "code"
+    },
+    {
+      "path": "FE/src/legacy/domains/review/api/review.mock.ts",
+      "language": "typescript",
+      "sizeLines": 93,
+      "fileCategory": "code"
+    },
+    {
+      "path": "FE/src/legacy/domains/review/hooks/useReviews.ts",
+      "language": "typescript",
+      "sizeLines": 24,
+      "fileCategory": "code"
+    },
+    {
+      "path": "FE/src/legacy/domains/review/models/review.model.ts",
+      "language": "typescript",
+      "sizeLines": 45,
+      "fileCategory": "code"
+    },
+    {
+      "path": "FE/src/legacy/domains/review/schemas/review.schema.ts",
+      "language": "typescript",
+      "sizeLines": 22,
+      "fileCategory": "code"
+    },
+    {
+      "path": "FE/src/legacy/pages-public/AboutPage.tsx",
+      "language": "typescript",
+      "sizeLines": 109,
+      "fileCategory": "code"
+    },
+    {
+      "path": "FE/src/legacy/pages-public/HomePage.module.css",
+      "language": "css",
+      "sizeLines": 901,
+      "fileCategory": "markup"
+    },
+    {
+      "path": "FE/src/legacy/pages-public/HomePage.tsx",
+      "language": "typescript",
+      "sizeLines": 684,
+      "fileCategory": "code"
+    },
+    {
+      "path": "FE/src/legacy/pages-public/HomeRoute.tsx",
+      "language": "typescript",
+      "sizeLines": 17,
+      "fileCategory": "code"
+    },
+    {
+      "path": "FE/src/legacy/pages-public/HotelPage.tsx",
+      "language": "typescript",
+      "sizeLines": 5,
+      "fileCategory": "code"
+    },
+    {
+      "path": "FE/src/legacy/pages-public/LoginPage.tsx",
+      "language": "typescript",
+      "sizeLines": 200,
+      "fileCategory": "code"
+    },
+    {
+      "path": "FE/src/legacy/pages-public/NewsDetailPage.tsx",
+      "language": "typescript",
+      "sizeLines": 96,
+      "fileCategory": "code"
+    },
+    {
+      "path": "FE/src/legacy/pages-public/NewsPage.tsx",
+      "language": "typescript",
+      "sizeLines": 75,
+      "fileCategory": "code"
+    },
+    {
+      "path": "FE/src/legacy/pages-public/RegisterPage.tsx",
+      "language": "typescript",
+      "sizeLines": 97,
+      "fileCategory": "code"
+    },
+    {
+      "path": "FE/src/legacy/pages-public/about.mock.ts",
+      "language": "typescript",
+      "sizeLines": 13,
+      "fileCategory": "code"
+    },
+    {
+      "path": "FE/src/legacy/pages-public/home.filter.test.ts",
+      "language": "typescript",
+      "sizeLines": 19,
+      "fileCategory": "code"
+    },
+    {
+      "path": "FE/src/legacy/pages-public/home.mock.ts",
+      "language": "typescript",
+      "sizeLines": 270,
+      "fileCategory": "code"
+    },
+    {
+      "path": "FE/src/legacy/pages-public/news.filter.test.ts",
+      "language": "typescript",
+      "sizeLines": 31,
+      "fileCategory": "code"
+    },
+    {
+      "path": "FE/src/legacy/pages-public/news.mock.ts",
+      "language": "typescript",
+      "sizeLines": 488,
+      "fileCategory": "code"
+    },
+    {
+      "path": "FE/src/main.tsx",
+      "language": "typescript",
+      "sizeLines": 25,
+      "fileCategory": "code"
+    },
+    {
+      "path": "FE/src/pages/admin/DashboardPage.tsx",
+      "language": "typescript",
+      "sizeLines": 28,
+      "fileCategory": "code"
+    },
+    {
+      "path": "FE/src/pages/admin/index.ts",
+      "language": "typescript",
+      "sizeLines": 1,
+      "fileCategory": "code"
+    },
+    {
+      "path": "FE/src/pages/auth/LoginPage.tsx",
+      "language": "typescript",
+      "sizeLines": 140,
+      "fileCategory": "code"
+    },
+    {
+      "path": "FE/src/pages/auth/RegisterPage.tsx",
+      "language": "typescript",
+      "sizeLines": 161,
+      "fileCategory": "code"
+    },
+    {
+      "path": "FE/src/pages/auth/index.ts",
+      "language": "typescript",
+      "sizeLines": 2,
+      "fileCategory": "code"
+    },
+    {
+      "path": "FE/src/pages/customer/AccountPage.tsx",
+      "language": "typescript",
+      "sizeLines": 125,
+      "fileCategory": "code"
+    },
+    {
+      "path": "FE/src/pages/customer/BookingPage.tsx",
+      "language": "typescript",
+      "sizeLines": 477,
+      "fileCategory": "code"
+    },
+    {
+      "path": "FE/src/pages/customer/CartPage.tsx",
+      "language": "typescript",
+      "sizeLines": 180,
+      "fileCategory": "code"
+    },
+    {
+      "path": "FE/src/pages/customer/CheckoutPage.tsx",
+      "language": "typescript",
+      "sizeLines": 276,
+      "fileCategory": "code"
+    },
+    {
+      "path": "FE/src/pages/customer/HomePage.tsx",
+      "language": "typescript",
+      "sizeLines": 526,
+      "fileCategory": "code"
+    },
+    {
+      "path": "FE/src/pages/customer/OrderConfirmationPage.tsx",
+      "language": "typescript",
+      "sizeLines": 152,
+      "fileCategory": "code"
+    },
+    {
+      "path": "FE/src/pages/customer/OrderHistoryPage.tsx",
+      "language": "typescript",
+      "sizeLines": 106,
+      "fileCategory": "code"
+    },
+    {
+      "path": "FE/src/pages/customer/PetsPage.tsx",
+      "language": "typescript",
+      "sizeLines": 412,
+      "fileCategory": "code"
+    },
+    {
+      "path": "FE/src/pages/customer/ProductDetailPage.tsx",
+      "language": "typescript",
+      "sizeLines": 220,
+      "fileCategory": "code"
+    },
+    {
+      "path": "FE/src/pages/customer/ShopPage.tsx",
+      "language": "typescript",
+      "sizeLines": 226,
+      "fileCategory": "code"
+    },
+    {
+      "path": "FE/src/pages/customer/components/AccountSidebar.tsx",
+      "language": "typescript",
+      "sizeLines": 58,
+      "fileCategory": "code"
+    },
+    {
+      "path": "FE/src/pages/customer/index.ts",
+      "language": "typescript",
+      "sizeLines": 10,
+      "fileCategory": "code"
+    },
+    {
+      "path": "FE/src/pages/customer/productDetail.utils.ts",
+      "language": "typescript",
+      "sizeLines": 12,
+      "fileCategory": "code"
+    },
+    {
+      "path": "FE/src/pages/index.ts",
+      "language": "typescript",
+      "sizeLines": 3,
+      "fileCategory": "code"
+    },
+    {
+      "path": "FE/src/pages/staff/DoctorDashboard.tsx",
+      "language": "typescript",
+      "sizeLines": 96,
+      "fileCategory": "code"
+    },
+    {
+      "path": "FE/src/pages/staff/ReceptionDashboard.tsx",
+      "language": "typescript",
+      "sizeLines": 84,
+      "fileCategory": "code"
+    },
+    {
+      "path": "FE/src/shared/api/axios.ts",
+      "language": "typescript",
+      "sizeLines": 61,
+      "fileCategory": "code"
+    },
+    {
+      "path": "FE/src/shared/api/client.ts",
+      "language": "typescript",
+      "sizeLines": 319,
+      "fileCategory": "code"
+    },
+    {
+      "path": "FE/src/shared/api/product.api.ts",
+      "language": "typescript",
+      "sizeLines": 95,
+      "fileCategory": "code"
+    },
+    {
+      "path": "FE/src/shared/api/review.api.ts",
+      "language": "typescript",
+      "sizeLines": 34,
+      "fileCategory": "code"
+    },
+    {
+      "path": "FE/src/shared/components/Button.tsx",
+      "language": "typescript",
+      "sizeLines": 105,
+      "fileCategory": "code"
+    },
+    {
+      "path": "FE/src/shared/components/Card.tsx",
+      "language": "typescript",
+      "sizeLines": 99,
+      "fileCategory": "code"
+    },
+    {
+      "path": "FE/src/shared/components/Input.tsx",
+      "language": "typescript",
+      "sizeLines": 80,
+      "fileCategory": "code"
+    },
+    {
+      "path": "FE/src/shared/components/Select.tsx",
+      "language": "typescript",
+      "sizeLines": 85,
+      "fileCategory": "code"
+    },
+    {
+      "path": "FE/src/shared/components/index.ts",
+      "language": "typescript",
+      "sizeLines": 15,
+      "fileCategory": "code"
+    },
+    {
+      "path": "FE/src/shared/components/layout/AuthLayout.tsx",
+      "language": "typescript",
+      "sizeLines": 11,
+      "fileCategory": "code"
+    },
+    {
+      "path": "FE/src/shared/components/layout/DashboardLayout.tsx",
+      "language": "typescript",
+      "sizeLines": 72,
+      "fileCategory": "code"
+    },
+    {
+      "path": "FE/src/shared/components/layout/PublicLayout.tsx",
+      "language": "typescript",
+      "sizeLines": 24,
+      "fileCategory": "code"
+    },
+    {
+      "path": "FE/src/shared/components/layout/SiteFooter.tsx",
+      "language": "typescript",
+      "sizeLines": 79,
+      "fileCategory": "code"
+    },
+    {
+      "path": "FE/src/shared/components/layout/SiteHeader.tsx",
+      "language": "typescript",
+      "sizeLines": 253,
+      "fileCategory": "code"
+    },
+    {
+      "path": "FE/src/shared/components/layout/header.utils.ts",
+      "language": "typescript",
+      "sizeLines": 16,
+      "fileCategory": "code"
+    },
+    {
+      "path": "FE/src/shared/components/layout/index.ts",
+      "language": "typescript",
+      "sizeLines": 6,
+      "fileCategory": "code"
+    },
+    {
+      "path": "FE/src/shared/components/ui/Badge.tsx",
+      "language": "typescript",
+      "sizeLines": 45,
+      "fileCategory": "code"
+    },
+    {
+      "path": "FE/src/shared/components/ui/Button.tsx",
+      "language": "typescript",
+      "sizeLines": 52,
+      "fileCategory": "code"
+    },
+    {
+      "path": "FE/src/shared/components/ui/IconCircle.tsx",
+      "language": "typescript",
+      "sizeLines": 31,
+      "fileCategory": "code"
+    },
+    {
+      "path": "FE/src/shared/components/ui/Placeholder.tsx",
+      "language": "typescript",
+      "sizeLines": 19,
+      "fileCategory": "code"
+    },
+    {
+      "path": "FE/src/shared/components/ui/ProductCard.tsx",
+      "language": "typescript",
+      "sizeLines": 61,
+      "fileCategory": "code"
+    },
+    {
+      "path": "FE/src/shared/components/ui/StarRatingInput.tsx",
+      "language": "typescript",
+      "sizeLines": 48,
+      "fileCategory": "code"
+    },
+    {
+      "path": "FE/src/shared/components/ui/Stars.tsx",
+      "language": "typescript",
+      "sizeLines": 27,
+      "fileCategory": "code"
+    },
+    {
+      "path": "FE/src/shared/components/ui/index.ts",
+      "language": "typescript",
+      "sizeLines": 7,
+      "fileCategory": "code"
+    },
+    {
+      "path": "FE/src/shared/constants.ts",
+      "language": "typescript",
+      "sizeLines": 116,
+      "fileCategory": "code"
+    },
+    {
+      "path": "FE/src/shared/constants/routes.ts",
+      "language": "typescript",
+      "sizeLines": 55,
+      "fileCategory": "code"
+    },
+    {
+      "path": "FE/src/shared/hooks/index.ts",
+      "language": "typescript",
+      "sizeLines": 2,
+      "fileCategory": "code"
+    },
+    {
+      "path": "FE/src/shared/hooks/useDebounce.ts",
+      "language": "typescript",
+      "sizeLines": 11,
+      "fileCategory": "code"
+    },
+    {
+      "path": "FE/src/shared/hooks/useInViewOnce.ts",
+      "language": "typescript",
+      "sizeLines": 43,
+      "fileCategory": "code"
+    },
+    {
+      "path": "FE/src/shared/hooks/usePagination.ts",
+      "language": "typescript",
+      "sizeLines": 12,
+      "fileCategory": "code"
+    },
+    {
+      "path": "FE/src/shared/models/product.model.ts",
+      "language": "typescript",
+      "sizeLines": 54,
+      "fileCategory": "code"
+    },
+    {
+      "path": "FE/src/shared/services/index.ts",
+      "language": "typescript",
+      "sizeLines": 1,
+      "fileCategory": "code"
+    },
+    {
+      "path": "FE/src/shared/services/toast.service.ts",
+      "language": "typescript",
+      "sizeLines": 10,
+      "fileCategory": "code"
+    },
+    {
+      "path": "FE/src/shared/stores/auth.store.ts",
+      "language": "typescript",
+      "sizeLines": 98,
+      "fileCategory": "code"
+    },
+    {
+      "path": "FE/src/shared/stores/cart.store.ts",
+      "language": "typescript",
+      "sizeLines": 92,
+      "fileCategory": "code"
+    },
+    {
+      "path": "FE/src/shared/stores/index.ts",
+      "language": "typescript",
+      "sizeLines": 3,
+      "fileCategory": "code"
+    },
+    {
+      "path": "FE/src/shared/stores/order.store.ts",
+      "language": "typescript",
+      "sizeLines": 107,
+      "fileCategory": "code"
+    },
+    {
+      "path": "FE/src/shared/stores/ui.store.ts",
+      "language": "typescript",
+      "sizeLines": 67,
+      "fileCategory": "code"
+    },
+    {
+      "path": "FE/src/shared/types/index.ts",
+      "language": "typescript",
+      "sizeLines": 386,
+      "fileCategory": "code"
+    },
+    {
+      "path": "FE/src/shared/utils/format.ts",
+      "language": "typescript",
+      "sizeLines": 23,
+      "fileCategory": "code"
+    },
+    {
+      "path": "FE/src/shared/utils/index.ts",
+      "language": "typescript",
+      "sizeLines": 1,
+      "fileCategory": "code"
+    },
+    {
+      "path": "FE/src/shared/utils/order.utils.ts",
+      "language": "typescript",
+      "sizeLines": 68,
+      "fileCategory": "code"
+    },
+    {
+      "path": "FE/src/vite-env.d.ts",
+      "language": "typescript",
+      "sizeLines": 10,
+      "fileCategory": "code"
+    },
+    {
+      "path": "FE/tailwind.config.js",
+      "language": "javascript",
+      "sizeLines": 11,
+      "fileCategory": "code"
+    },
+    {
+      "path": "FE/tsconfig.json",
+      "language": "json",
+      "sizeLines": 26,
+      "fileCategory": "config"
+    },
+    {
+      "path": "FE/tsconfig.node.json",
+      "language": "json",
+      "sizeLines": 10,
+      "fileCategory": "config"
+    },
+    {
+      "path": "FE/vite.config.ts",
+      "language": "typescript",
+      "sizeLines": 21,
+      "fileCategory": "code"
+    },
+    {
+      "path": "README.md",
+      "language": "markdown",
+      "sizeLines": 296,
+      "fileCategory": "docs"
+    },
+    {
+      "path": "docker-compose.yml",
+      "language": "yaml",
+      "sizeLines": 101,
+      "fileCategory": "infra"
+    },
+    {
+      "path": "docs/01-business-operations.md",
+      "language": "markdown",
+      "sizeLines": 494,
+      "fileCategory": "docs"
+    },
+    {
+      "path": "docs/02-business-rules.md",
+      "language": "markdown",
+      "sizeLines": 368,
+      "fileCategory": "docs"
+    },
+    {
+      "path": "docs/03-state-machines.md",
+      "language": "markdown",
+      "sizeLines": 496,
+      "fileCategory": "docs"
+    },
+    {
+      "path": "docs/04-glossary.md",
+      "language": "markdown",
+      "sizeLines": 653,
+      "fileCategory": "docs"
+    },
+    {
+      "path": "docs/06-team-timeline.md",
+      "language": "markdown",
+      "sizeLines": 319,
+      "fileCategory": "docs"
+    },
+    {
+      "path": "docs/INDEX.md",
+      "language": "markdown",
+      "sizeLines": 178,
+      "fileCategory": "docs"
+    },
+    {
+      "path": "docs/MAPPING.md",
+      "language": "markdown",
+      "sizeLines": 243,
+      "fileCategory": "docs"
+    },
+    {
+      "path": "docs/diagrams/db-schema/database-schema.md",
+      "language": "markdown",
+      "sizeLines": 586,
+      "fileCategory": "docs"
+    },
+    {
+      "path": "docs/diagrams/db-schema/index.html",
+      "language": "html",
+      "sizeLines": 1872,
+      "fileCategory": "markup"
+    },
+    {
+      "path": "docs/diagrams/team-allocation-gantt.html",
+      "language": "html",
+      "sizeLines": 255,
+      "fileCategory": "markup"
+    },
+    {
+      "path": "plans/01-architecture-and-techstack.md",
+      "language": "markdown",
+      "sizeLines": 210,
+      "fileCategory": "docs"
+    },
+    {
+      "path": "plans/02-database-and-implementation.md",
+      "language": "markdown",
+      "sizeLines": 919,
+      "fileCategory": "docs"
+    },
+    {
+      "path": "plans/04-api-contracts.md",
+      "language": "markdown",
+      "sizeLines": 1082,
+      "fileCategory": "docs"
+    },
+    {
+      "path": "plans/06-team-and-structure.md",
+      "language": "markdown",
+      "sizeLines": 76,
+      "fileCategory": "docs"
+    },
+    {
+      "path": "plans/07-tasks-and-specs.md",
+      "language": "markdown",
+      "sizeLines": 1001,
+      "fileCategory": "docs"
+    },
+    {
+      "path": "plans/08-event-bridges.md",
+      "language": "markdown",
+      "sizeLines": 319,
+      "fileCategory": "docs"
+    },
+    {
+      "path": "plans/09-module-checklist.md",
+      "language": "markdown",
+      "sizeLines": 488,
+      "fileCategory": "docs"
+    },
+    {
+      "path": "plans/Master-Plan.md",
+      "language": "markdown",
+      "sizeLines": 265,
+      "fileCategory": "docs"
+    }
+  ],
+  "totalFiles": 173,
+  "filteredByIgnore": 0,
+  "estimatedComplexity": "large",
+  "stats": {
+    "filesScanned": 173,
+    "byCategory": {
+      "config": 8,
+      "infra": 5,
+      "code": 137,
+      "data": 1,
+      "markup": 5,
+      "docs": 17
+    },
+    "byLanguage": {
+      "config": 1,
+      "yaml": 6,
+      "dockerfile": 2,
+      "xml": 1,
+      "java": 25,
+      "sql": 1,
+      "html": 3,
+      "conf": 1,
+      "json": 3,
+      "javascript": 2,
+      "typescript": 109,
+      "css": 2,
+      "markdown": 17
+    }
+  }
+}
