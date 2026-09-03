@@ -4,7 +4,6 @@ import {
   User,
   Package,
   PawPrint,
-  Star,
   Settings,
   LogOut,
   ChevronRight,
@@ -151,7 +150,11 @@ export function AccountPage() {
                     key={item.label}
                     to={item.href || '#'}
                     onClick={() => item.href?.startsWith('#') ? setActiveTab(item.href.slice(1)) : undefined}
-                    className="flex items-center gap-3 rounded-lg px-4 py-3 text-[var(--color-text-primary)] transition-all hover:bg-[var(--color-surface-sunken)] group"
+                    className={`flex items-center gap-3 rounded-lg px-4 py-3 transition-all group ${
+                      activeTab === item.href?.slice(1)
+                        ? 'bg-[var(--color-surface-sunken)] font-bold text-[var(--color-brand-primary)]'
+                        : 'text-[var(--color-text-primary)] hover:bg-[var(--color-surface-sunken)] font-medium'
+                    }`}
                   >
                     <Icon size={20} className="text-[var(--color-brand-secondary)]" />
                     <span className="flex-1 font-medium">{item.label}</span>

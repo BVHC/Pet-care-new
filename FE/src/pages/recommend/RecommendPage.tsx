@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState } from 'react';
 import { Link } from 'react-router-dom';
 import {
   PawPrint,
@@ -8,10 +8,7 @@ import {
   ChevronRight,
   ShoppingCart,
   Package,
-  ArrowLeft,
-  Filter,
-  Heart,
-  Cat
+  Heart
 } from 'lucide-react';
 
 // Mock products data
@@ -80,7 +77,7 @@ const loadPets = (): Pet[] => {
 
 export function RecommendPage() {
   const [petType, setPetType] = useState<'dog' | 'cat'>('dog');
-  const [pets, setPets] = useState<Pet[]>(loadPets);
+  const [pets] = useState<Pet[]>(loadPets);
   const [selectedPetId, setSelectedPetId] = useState<number | null>(pets[0]?.id || null);
   const [addedToCart, setAddedToCart] = useState<number[]>([]);
 
@@ -98,11 +95,6 @@ export function RecommendPage() {
     setTimeout(() => {
       setAddedToCart(prev => prev.filter(id => id !== productId));
     }, 2000);
-  };
-
-  const colorClasses = {
-    blue: { bg: 'bg-blue-100', text: 'text-blue-600', ring: 'ring-blue-200' },
-    purple: { bg: 'bg-purple-100', text: 'text-purple-600', ring: 'ring-purple-200' },
   };
 
   return (
