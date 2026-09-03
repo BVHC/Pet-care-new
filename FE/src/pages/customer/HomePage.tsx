@@ -1,5 +1,7 @@
 import { useEffect, useRef, useState } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
+import gsap from 'gsap'
+import { ScrollTrigger } from 'gsap/ScrollTrigger'
 import {
   ChevronDown,
   ChevronUp,
@@ -13,9 +15,12 @@ import {
   ShoppingBag,
 } from 'lucide-react'
 import { toast } from 'sonner'
-import { PHOTOS, CATEGORIES, FEATURED, filterFeaturedByPetType, TESTIMONIALS, HERO_POPS, TRUST_ITEMS, STATS, STEPS, PARTNERS, FAQS, DOCTORS } from './home.mock'
+import { HeroBanner } from '@/components/customer/HeroBanner'
+import { PHOTOS, CATEGORIES, FEATURED, filterFeaturedByPetType, TESTIMONIALS, STATS, STEPS, PARTNERS, FAQS, DOCTORS } from './home.mock'
 import { NEWS_ARTICLES } from './news.mock'
 import styles from './HomePage.module.css'
+
+gsap.registerPlugin(ScrollTrigger)
 
 export function HomePage() {
   const navigate = useNavigate()
@@ -27,50 +32,94 @@ export function HomePage() {
     const el = ref.current
     if (el) el.scrollBy({ left: dir * el.clientWidth * 0.8, behavior: 'smooth' })
   }
-  const heroCopyRef = useRef<HTMLDivElement>(null)
-  const scrollHintRef = useRef<HTMLDivElement>(null)
-  const heroArtRef = useRef<HTMLDivElement>(null)
 
   useEffect(() => {
-    const el = heroArtRef.current
-    if (!el || window.matchMedia?.('(prefers-reduced-motion: reduce)').matches) return
-    const onMove = (e: MouseEvent) => {
-      const r = el.getBoundingClientRect()
-      const px = (e.clientX - r.left) / r.width - 0.5
-      const py = (e.clientY - r.top) / r.height - 0.5
-      el.style.transform = `perspective(900px) rotateY(${px * 7}deg) rotateX(${-py * 7}deg)`
-    }
-    const onLeave = () => {
-      el.style.transform = 'perspective(900px) rotateY(0deg) rotateX(0deg)'
-    }
-    el.addEventListener('mousemove', onMove)
-    el.addEventListener('mouseleave', onLeave)
-    return () => {
-      el.removeEventListener('mousemove', onMove)
-      el.removeEventListener('mouseleave', onLeave)
-    }
-  }, [])
+    if (typeof window === 'undefined') return
 
-  useEffect(() => {
-    if (window.matchMedia?.('(prefers-reduced-motion: reduce)').matches) return
-    let raf: number
-    const onScroll = () => {
-      cancelAnimationFrame(raf)
-      raf = requestAnimationFrame(() => {
-        const y = window.scrollY || 0
-        if (heroCopyRef.current) {
-          heroCopyRef.current.style.transform = `translateY(${y * 0.25}px)`
-          heroCopyRef.current.style.opacity = String(Math.max(0, 1 - y / 520))
+    const ctx = gsap.context(() => {
+      // 1. Categories Section reveal
+      gsap.fromTo('.gsap-reveal-cat',
+        { opacity: 0, y: 35 },
+        {
+          scrollTrigger: {
+            trigger: '.gsap-cat-section',
+            start: 'top 88%',
+          },
+          opacity: 1,
+          y: 0,
+          stagger: 0.06,
+          duration: 0.6,
+          ease: 'power2.out',
         }
-        if (scrollHintRef.current)
-          scrollHintRef.current.style.opacity = String(Math.max(0, 1 - y / 180))
-      })
-    }
-    window.addEventListener('scroll', onScroll, { passive: true })
-    return () => {
-      window.removeEventListener('scroll', onScroll)
-      cancelAnimationFrame(raf)
-    }
+      )
+
+      // 2. 3 Steps Section reveal
+      gsap.fromTo('.gsap-step-card',
+        { opacity: 0, y: 40, scale: 0.96 },
+        {
+          scrollTrigger: {
+            trigger: '.gsap-steps-section',
+            start: 'top 85%',
+          },
+          opacity: 1,
+          y: 0,
+          scale: 1,
+          stagger: 0.12,
+          duration: 0.7,
+          ease: 'back.out(1.2)',
+        }
+      )
+
+      // 3. Featured Products reveal
+      gsap.fromTo('.gsap-product-card',
+        { opacity: 0, y: 35 },
+        {
+          scrollTrigger: {
+            trigger: '.gsap-featured-section',
+            start: 'top 85%',
+          },
+          opacity: 1,
+          y: 0,
+          stagger: 0.08,
+          duration: 0.65,
+          ease: 'power2.out',
+        }
+      )
+
+      // 4. Doctors reveal
+      gsap.fromTo('.gsap-doctor-card',
+        { opacity: 0, y: 40 },
+        {
+          scrollTrigger: {
+            trigger: '.gsap-doctors-section',
+            start: 'top 85%',
+          },
+          opacity: 1,
+          y: 0,
+          stagger: 0.1,
+          duration: 0.7,
+          ease: 'power2.out',
+        }
+      )
+
+      // 5. Testimonials reveal
+      gsap.fromTo('.gsap-testi-card',
+        { opacity: 0, y: 35 },
+        {
+          scrollTrigger: {
+            trigger: '.gsap-testi-section',
+            start: 'top 88%',
+          },
+          opacity: 1,
+          y: 0,
+          stagger: 0.1,
+          duration: 0.7,
+          ease: 'power2.out',
+        }
+      )
+    })
+
+    return () => ctx.revert()
   }, [])
 
   const handleAddToCart = (_id: string, name: string) => {
@@ -79,100 +128,11 @@ export function HomePage() {
 
   return (
     <div className="relative bg-[var(--color-surface-page)] font-[var(--font-professional)]">
-      {/* 1. Hero */}
-      <section className={styles.hero}>
-        <div className={styles.heroPattern}></div>
-        <div className={styles.heroInner}>
-          <div className={styles.heroCopy} ref={heroCopyRef}>
-            <div className="mb-4 inline-flex items-center gap-2 rounded-full bg-blue-50 px-3.5 py-1.5 text-[13px] font-bold text-teal-600">
-              <Sparkles size={14} />
-              Hệ thống chăm sóc thú cưng toàn diện
-            </div>
-            <h1 className="mb-4 font-[var(--font-friendly)] text-[clamp(26px,2.8vw,38px)] leading-[1.25] font-extrabold text-[var(--color-text-primary)]">
-              Chăm sóc thú cưng<br />
-              toàn diện &amp; khỏe mạnh
-            </h1>
-            <p className="mb-7 max-w-[480px] text-[15px] leading-[1.6] font-medium text-[var(--color-text-secondary)]">
-              Đặt lịch khám thú y, mua sắm đồ dùng, đăng ký spa &amp; khách sạn lưu trú — mọi dịch vụ dành cho thú cưng chỉ trong một ứng dụng duy nhất.
-            </p>
-            <div className="flex flex-wrap gap-3">
-              <button
-                onClick={() => navigate('/')}
-                className="rounded-full bg-[#843122] px-6 py-3 text-[14px] font-bold text-white hover:bg-[#6a2517] transition-colors"
-              >
-                Bắt đầu ngay
-              </button>
-              <button
-                onClick={() => navigate('/')}
-                className="rounded-full border-2 border-[#843122] px-6 py-3 text-[14px] font-bold text-[#843122] hover:bg-[#843122] hover:text-white transition-colors"
-              >
-                Tôi đã có tài khoản
-              </button>
-            </div>
-            <div className="mt-8 flex flex-wrap gap-6 border-t border-black/10 pt-6">
-              {TRUST_ITEMS.map((t) => (
-                <div
-                  key={t.label}
-                  className="flex items-center gap-2 text-[13px] font-bold text-[var(--color-text-primary)] opacity-90"
-                >
-                  <t.icon size={17} className="text-[#843122]" />
-                  {t.label}
-                </div>
-              ))}
-            </div>
-          </div>
-          <div className={styles.heroArt} ref={heroArtRef}>
-            <img src={PHOTOS.shapePaw} alt="" className={`${styles.heroDoodle} ${styles.d1}`} />
-            <img src={PHOTOS.shapeBone} alt="" className={`${styles.heroDoodle} ${styles.d2}`} />
-            <img src={PHOTOS.shapeCat} alt="" className={`${styles.heroDoodle} ${styles.d3}`} />
-            <img
-              src={PHOTOS.heroDog}
-              alt="Chó khỏe mạnh được chăm sóc"
-              className={styles.heroDog}
-            />
-            <div className={styles.heroSeal}>
-              <svg viewBox="0 0 100 100" className={styles.heroSealText} aria-hidden="true">
-                <defs>
-                  <path id="sealPath" d="M50,50 m-37,0 a37,37 0 1,1 74,0 a37,37 0 1,1 -74,0" />
-                </defs>
-                <text>
-                  <textPath href="#sealPath">• YÊU THƯƠNG • KHỎE MẠNH • TẬN TÂM </textPath>
-                </text>
-              </svg>
-              <PawPrint size={26} className={styles.heroSealIcon} />
-            </div>
-            {HERO_POPS.map((p) => (
-              <div key={p.label} className={`${styles.heroPop} ${styles[p.pos]}`}>
-                <div className={styles.heroPopImg}>
-                  <img src={p.image} alt={p.label} loading="lazy" />
-                </div>
-                <div>
-                  <div className={styles.heroPopLabel}>{p.label}</div>
-                  <div className={styles.heroPopSub}>{p.sub}</div>
-                </div>
-              </div>
-            ))}
-            <div className={styles.heroAvatars}>
-              <div className={styles.heroAvatarStack}>
-                <img src="/imgs/author1.png" alt="" />
-                <img src="/imgs/author2.png" alt="" />
-                <img src="/imgs/author4.png" alt="" />
-              </div>
-              <div>
-                <div className={styles.heroAvatarCount}>12K+ khách hàng</div>
-                <div className={styles.heroAvatarSub}>tin tưởng mỗi ngày</div>
-              </div>
-            </div>
-          </div>
-        </div>
-        <div className={styles.heroScrollHint} ref={scrollHintRef}>
-          <span>Cuộn để khám phá</span>
-          <ChevronDown size={18} />
-        </div>
-      </section>
+      {/* 1. Hero - CozyPaws Style */}
+      <HeroBanner />
 
       {/* 2. Categories */}
-      <section className="px-6 pt-6 pb-12">
+      <section className="gsap-cat-section px-6 pt-6 pb-12">
         <div className={styles.wrap}>
           <div className={styles.stripHead}>
             <div className="font-[var(--font-friendly)] text-2xl font-extrabold text-[var(--color-text-primary)]">
@@ -199,7 +159,7 @@ export function HomePage() {
             {CATEGORIES.map((c) => (
               <div
                 key={c.name}
-                className={`${styles.catCard} ${styles.revealItem} flex min-w-[140px] flex-1 cursor-pointer flex-col items-center justify-center gap-3 rounded-[var(--radius-rounded)] bg-[var(--color-surface-card)] p-5 text-center shadow-[var(--shadow-1)]`}
+                className={`${styles.catCard} ${styles.revealItem} gsap-reveal-cat flex min-w-[140px] flex-1 cursor-pointer flex-col items-center justify-center gap-3 rounded-[var(--radius-rounded)] bg-[var(--color-surface-card)] p-5 text-center shadow-[var(--shadow-1)]`}
                 onClick={() => navigate(c.page === 'listing' ? '/shop' : c.page === 'booking' ? '/booking' : '/')}
               >
                 {c.image ? (
@@ -221,7 +181,7 @@ export function HomePage() {
       </section>
 
       {/* 3. 3 Steps */}
-      <section className="relative overflow-hidden px-6 py-14">
+      <section className="gsap-steps-section relative overflow-hidden px-6 py-14">
         <img
           src={PHOTOS.doodlePaw}
           alt=""
@@ -243,7 +203,7 @@ export function HomePage() {
           </div>
           <div className={styles.stepGrid}>
             {STEPS.map((s) => (
-              <div key={s.step} className={styles.stepCard}>
+              <div key={s.step} className={`${styles.stepCard} gsap-step-card`}>
                 <span className={styles.stepNum}>{s.step}</span>
                 <div className={styles.stepIcon}>
                   <s.icon size={26} />
@@ -261,7 +221,7 @@ export function HomePage() {
       </section>
 
       {/* 4. Featured Products */}
-      <section className="relative overflow-hidden bg-gray-50 px-6 py-14">
+      <section className="gsap-featured-section relative overflow-hidden bg-gray-50 px-6 py-14">
         <img
           src={PHOTOS.doodleBone}
           alt=""
@@ -291,7 +251,7 @@ export function HomePage() {
           </div>
           <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-6">
             {filterFeaturedByPetType(FEATURED, petFilter).map((p) => (
-              <div className="transition-transform hover:-translate-y-1" key={p.id}>
+              <div className="gsap-product-card transition-transform hover:-translate-y-1" key={p.id}>
                 <Link
                   to={`/shop/${p.id}`}
                   className="block w-full overflow-hidden rounded-[var(--radius-rounded)] bg-white shadow-[var(--shadow-1)]"
@@ -372,7 +332,7 @@ export function HomePage() {
       </section>
 
       {/* 6. Doctors */}
-      <section className="px-6 py-14">
+      <section className="gsap-doctors-section px-6 py-14">
         <div className={styles.wrap}>
           <div className="text-center mb-12">
             <div className="text-[12px] font-bold text-[#843122] tracking-widest uppercase flex items-center justify-center gap-2 mb-3">
@@ -386,7 +346,7 @@ export function HomePage() {
           </div>
           <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-8 text-center">
             {DOCTORS.map((d, i) => (
-              <div key={i} className={`${styles.doctorCard} ${styles.doctorCardReveal}`}>
+              <div key={i} className={`${styles.doctorCard} ${styles.doctorCardReveal} gsap-doctor-card`}>
                 <div className={styles.doctorImgWrap}>
                   <img src={d.photo} alt={d.name} className={styles.doctorImg} />
                   <img src={PHOTOS.doodlePaw} className={styles.doctorPawDecor} alt="" />
@@ -402,7 +362,7 @@ export function HomePage() {
       </section>
 
       {/* 7. Testimonials */}
-      <section className="relative overflow-hidden bg-gray-50 px-6 py-12">
+      <section className="gsap-testi-section relative overflow-hidden bg-gray-50 px-6 py-12">
         <img
           src={PHOTOS.doodleYarn}
           alt=""
@@ -427,7 +387,7 @@ export function HomePage() {
             {TESTIMONIALS.map((t) => (
               <div
                 key={t.name}
-                className={`${styles.testiCard} ${styles.testiCardReveal} rounded-[var(--radius-rounded)] bg-white p-5 shadow-[var(--shadow-1)]`}
+                className={`${styles.testiCard} ${styles.testiCardReveal} gsap-testi-card rounded-[var(--radius-rounded)] bg-white p-5 shadow-[var(--shadow-1)]`}
               >
                 <span className={styles.testiQuoteMark}>&rdquo;</span>
                 <div className="flex gap-0.5 mb-2">
