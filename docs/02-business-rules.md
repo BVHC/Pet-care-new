@@ -8,11 +8,18 @@ Tài liệu này đặc tả toàn bộ các quy tắc nghiệp vụ (Business R
 
 | ID | Quy tắc nghiệp vụ (Business Rule) | Phạm vi (Scope) |
 |---|---|---|
-| RULE-01-01 | Mỗi Account chỉ được đăng nhập khi thông tin xác thực (Credentials) hợp lệ và Account đang ở trạng thái ACTIVE. | Platform / Account |
-| RULE-01-02 | OTP chỉ được chấp nhận xác thực trong thời gian hiệu lực (TTL) quy định. | Platform / OTP |
-| RULE-01-03 | OTP phải được kiểm tra xác thực thành công trước khi hoàn tất đăng ký tài khoản hoặc kích hoạt nghiệp vụ bảo mật. | Platform / OTP |
-| RULE-01-04 | Mỗi lần yêu cầu gửi lại OTP (`ResendOTP`) phải vô hiệu hóa OTP trước đó và tạo một mã OTP mới có thời hạn hiệu lực độc lập. | Platform / OTP |
-| RULE-01-05 | Hệ thống phải giới hạn số lần gửi lại OTP và số lần thử sai OTP trong một khoảng thời gian để ngăn chặn lạm dụng. | Platform / OTP |
+| RULE-01-01 | Điều kiện tiên quyết đăng nhập (`Login`): Mỗi Account chỉ được phép đăng nhập khi thông tin xác thực (`Credentials`) hợp lệ và Account đang ở trạng thái `ACTIVE`. Mọi yêu cầu đăng nhập từ tài khoản ở trạng thái `PENDING_VERIFICATION`, `LOCKED` hoặc `DEACTIVATED` đều bị từ chối. Khi đăng nhập thành công, hệ thống phát hành mã định danh phiên làm việc (JWT/Session Token). | Platform / Account |
+| RULE-01-02 | Thời hạn hiệu lực của mã OTP (`SendRegistrationOTP`, `CheckOTP`): Mã OTP chỉ được chấp nhận xác thực trong khoảng thời gian hiệu lực (TTL) quy định là 5 phút ($\text{OTP\_TTL} = 300\text{s}$). Quá thời gian này, mã OTP tự động hết hiệu lực. | Platform / OTP |
+| RULE-01-03 | Phân định cơ chế kích hoạt tài khoản Customer vs Staff (D-04): Đối với khách hàng tự đăng ký (`RegisterAccount`), tài khoản được khởi tạo ở trạng thái `PENDING_VERIFICATION` và bắt buộc phải xác thực mã OTP thành công (`VerifyOTP`) mới được chuyển sang trạng thái `ACTIVE`. Ngoại lệ (D-04): Tài khoản nhân viên do Platform Admin hoặc Organization Admin khởi tạo trực tiếp (`CreateStaff`) được kích hoạt thẳng sang trạng thái `ACTIVE` với mật khẩu tạm thời (`temporary_password`), thiết lập cờ `must_change_password = true` yêu cầu đổi mật khẩu ở lần đăng nhập đầu tiên mà không phải qua bước xác thực OTP đăng ký. | Platform / Account / OTP |
+| RULE-01-04 | Cơ chế gửi lại mã OTP (`ResendOTP`): Mỗi lần người dùng yêu cầu gửi lại OTP, hệ thống lập tức vô hiệu hóa mã OTP đang hoạt động trước đó, áp dụng khoảng thời gian chờ tối thiểu giữa hai lần gửi liên tiếp (Rate Limit Cooldown: 60 giây) và phát sinh một mã OTP mới với thời hạn hiệu lực 5 phút độc lập. | Platform / OTP |
+| RULE-01-05 | Giới hạn chống lạm dụng & Khóa thử sai OTP (`CheckOTP`, `ResendOTP`): Hệ thống giới hạn tối đa 5 lần gửi lại OTP trong vòng 1 giờ cho cùng một số điện thoại/email, và tối đa 5 lần nhập sai mã OTP liên tiếp trong cùng một phiên xác thực. Nếu vượt quá 5 lần nhập sai, mã OTP bị vô hiệu hóa ngay lập tức và phiên xác thực bị tạm khóa 15 phút (Verification Lockout) để ngăn chặn tấn công Brute-force. | Platform / OTP |
+| RULE-01-06 | Thu hồi phiên làm việc khi đăng xuất (`Logout`): Khi Customer hoặc Staff thực hiện lệnh đăng xuất (`Logout`), hệ thống lập tức thu hồi phiên làm việc (`Session`), vô hiệu hóa Refresh Token và đưa Access Token vào danh sách hủy bỏ (Token Blacklist/Revocation), ngăn chặn hoàn toàn việc tái sử dụng token. | Platform / Account / Session |
+| RULE-01-07 | Tự động tạm khóa tài khoản do nhập sai mật khẩu (`Login`): Tài khoản người dùng có 5 lần đăng nhập thất bại liên tiếp do sai mật khẩu sẽ bị hệ thống tự động khóa tạm thời trong 15 phút (`LOCKED_TEMPORARY`) nhằm phòng chống tấn công dò quét mật khẩu. | Platform / Account |
+| RULE-01-08 | Tác vụ tự động quét mã OTP hết hạn (`ExpireOTP`): Hệ thống tự động quét và đánh dấu trạng thái `EXPIRED` đối với toàn bộ các mã OTP chưa được xác thực khi $\text{CurrentTimestamp} > \text{OTP.ExpiresAt}$. | Platform / OTP |
+
+### Quy tắc Bất biến Xác thực OTP & Khởi tạo Nhân viên (Auth & OTP Lifecycle Invariants)
+- **Vòng đời OTP Khách hàng:** $\text{RegisterAccount} → \text{PENDING\_VERIFICATION} \xrightarrow[\text{TTL } \le 5\text{m}]{\text{VerifyOTP}} \text{ACTIVE}$.
+- **Vòng đời Tài khoản Nhân viên (D-04):** $\text{CreateStaff} → \text{ACTIVE} \ (\text{must\_change\_password} = \text{true}) \xrightarrow{\text{First Login: ChangePassword}} \text{ACTIVE} \ (\text{must\_change\_password} = \text{false})$.
 
 ---
 
@@ -20,11 +27,20 @@ Tài liệu này đặc tả toàn bộ các quy tắc nghiệp vụ (Business R
 
 | ID | Quy tắc nghiệp vụ (Business Rule) | Phạm vi (Scope) |
 |---|---|---|
-| RULE-02-01 | Mỗi User chỉ được thực hiện Permission thuộc phạm vi mà User được cấp (Platform, Organization hoặc Store). | Platform / Organization / Store / User |
-| RULE-02-02 | Role chỉ có hiệu lực trong scope quản lý mà Role được gán. | Platform / Organization / Store / Role |
-| RULE-02-03 | Permission gán cho User không được vượt quá phạm vi quyền của Role hoặc phạm vi quản lý của Actor thực hiện gán quyền. | Platform / Organization / Store |
-| RULE-02-04 | Account ở trạng thái LOCKED không được phép đăng nhập hoặc thực hiện bất kỳ nghiệp vụ nào yêu cầu tài khoản hoạt động. | Platform / Account |
-| RULE-02-05 | Việc quản lý User, Role, Permission và Khóa/Mở khóa tài khoản phải tuân thủ nghiêm ngặt cấp bậc quản trị: Platform Admin quản lý toàn hệ thống; Organization Admin quản lý trong phạm vi Organization; Store Manager quản lý nhân viên trực thuộc Store. | Platform / Organization / Store |
+| RULE-02-01 | Ranh giới thực thi quyền hạn theo Scope (`ManagePermission`): Mọi Actor chỉ được thực hiện các thao tác nằm trong danh mục quyền hạn (`Permissions`) thuộc đúng phạm vi quản lý hợp lệ của mình (5 Scopes: `PLATFORM`, `ORGANIZATION`, `STORE`, `WAREHOUSE`, `CUSTOMER`). Mọi hành vi thực thi quyền ngoài Scope được gán đều bị hệ thống chặn với mã lỗi `ACCESS_DENIED_SCOPE_MISMATCH`. | Platform / Organization / Store / Warehouse / Customer |
+| RULE-02-02 | Ràng buộc phạm vi của Role (`ManageRole`): Role chỉ có hiệu lực trong phạm vi quản lý mà Role đó được gán, tuân thủ 9 Canonical Roles: `SUPER_ADMIN` (Platform); `ORGANIZATION_ADMIN`, `FINANCE_STAFF` (Organization); `STORE_MANAGER`, `RECEPTIONIST`, `VETERINARIAN`, `GROOMER` (Store); `INVENTORY_STAFF` (Store / Warehouse); `FINANCE_STAFF` (Organization / Store); `CUSTOMER` (Customer/Pet). | Platform / Organization / Store / Warehouse / Customer / Role |
+| RULE-02-03 | Ranh giới gán quyền không leo thang (`AssignPermission`, `ManageRole`): Quyền hạn gán cho người dùng không được vượt quá phạm vi thẩm quyền của Role hoặc phạm vi quản trị của Actor thực hiện gán quyền: Platform Admin quản trị toàn hệ thống; Organization Admin quản lý trong phạm vi Organization; Store Manager chỉ được phân công quyền vận hành (`AssignPermission`) cho nhân viên thuộc chi nhánh Store do mình quản lý. | Platform / Organization / Store / Warehouse |
+| RULE-02-04 | Cơ chế khóa tài khoản và thu hồi phiên tức thì (`LockAccount`, `UnlockAccount`): Khi một tài khoản bị khóa (`LOCKED`), hệ thống lập tức thu hồi toàn bộ phiên làm việc, Access Token và Refresh Token đang hoạt động của người dùng đó. Tài khoản ở trạng thái `LOCKED` tuyệt đối không được phép đăng nhập hoặc thực hiện bất kỳ thao tác nghiệp vụ nào. Khi được mở khóa (`UnlockAccount` chuyển sang `ACTIVE`), người dùng mới được phép đăng nhập lại. | Platform / Organization / Account |
+| RULE-02-05 | Phân cấp quản trị tài khoản (`ManageUser`, `LockAccount`, `UnlockAccount`, `DeactivateAccount`, `ReactivateAccount`): Việc quản lý người dùng, gán Role, phân quyền và khóa/mở khóa/vô hiệu hóa tài khoản tuân thủ nghiêm ngặt cấp bậc quản trị: Platform Admin (`SUPER_ADMIN`) có quyền trên toàn bộ User hệ thống; Organization Admin (`ORGANIZATION_ADMIN`) có quyền trên các tài khoản nhân viên và khách hàng thuộc Organization; Store Manager có quyền quản lý và điều phối nhân sự trực thuộc Store. | Platform / Organization / Store / Warehouse |
+| RULE-02-06 | Bảo vệ và quản lý hồ sơ cá nhân (`ManageCustomerProfile`): Customer có toàn quyền xem và cập nhật hồ sơ cá nhân của chính mình. Receptionist chỉ được phép tạo mới, tra cứu và cập nhật hồ sơ khách hàng tại quầy phục vụ cho các giao dịch tại Store. Nhân viên không được phép tự ý thay đổi vai trò hoặc tự nâng quyền hạn của bản thân. | Platform / Organization / Store / Customer |
+| RULE-02-07 | Vô hiệu hóa tài khoản nhân viên nghỉ việc & Tái kích hoạt (`DeactivateAccount`, `ReactivateAccount`): Khi nhân viên nghỉ việc, kết thúc hợp đồng lao động hoặc chấm dứt tư cách người dùng, Platform Admin hoặc Organization Admin thực hiện lệnh `DeactivateAccount` chuyển tài khoản từ `ACTIVE` hoặc `LOCKED` sang `DEACTIVATED`. Hệ thống lập tức thu hồi toàn bộ phiên làm việc và từ chối mọi yêu cầu đăng nhập. Khi cần thiết, quản trị viên có quyền `ReactivateAccount` chuyển trạng thái về `ACTIVE` kèm lý do giải trình bắt buộc ghi nhận vào Audit Log. | Platform / Organization / Account |
+
+### Ma trận Phạm vi Quản trị & Phân quyền IAM (IAM Hierarchy Invariant)
+- **1. Platform Scope (`PLATFORM`):** Quản trị toàn bộ Tenant (Organizations), danh mục Master Catalog, tài khoản Platform Admin.
+- **2. Organization Scope (`ORGANIZATION`):** Quản trị các Store chi nhánh trực thuộc, Warehouse trung tâm, cấu hình Role/Permission nội bộ Organization, nhân sự toàn chuỗi, chính sách tài chính toàn chuỗi. Cách ly dữ liệu 100% giữa các Organization khác nhau.
+- **3. Store Scope (`STORE`):** Quản trị vận hành cục bộ tại chi nhánh (nhân sự ca kíp, tài nguyên phòng/bàn, phân công tiếp nhận khách hàng, khám lâm sàng, tiêm phòng, grooming, bán lẻ POS, kho tại điểm bán).
+- **4. Warehouse Scope (`WAREHOUSE`):** Quản trị vận hành kho bãi độc lập / kho trung tâm chuỗi (nhập kho NCC, chuyển kho liên chi nhánh, xuất kho điều phối, kiểm kê).
+- **5. Customer Scope (`CUSTOMER`):** Tự phục vụ quản lý thông tin cá nhân, hồ sơ Pet sở hữu, lịch hẹn, đơn hàng, hóa đơn và ủy quyền chăm sóc Pet.
 
 ---
 
@@ -32,12 +48,17 @@ Tài liệu này đặc tả toàn bộ các quy tắc nghiệp vụ (Business R
 
 | ID | Quy tắc nghiệp vụ (Business Rule) | Phạm vi (Scope) |
 |---|---|---|
-| RULE-03-01 | Mỗi Store phải thuộc đúng một Organization cha duy nhất. | Organization / Store |
-| RULE-03-02 | Store chỉ được tiếp nhận khách, tạo đơn hàng và cung cấp dịch vụ khi Store đang ở trạng thái ACTIVE. | Store |
-| RULE-03-03 | Chính sách Organization chỉ áp dụng trong phạm vi Organization tương ứng; Chính sách vận hành Store chỉ áp dụng trong phạm vi Store tương ứng. | Organization / Store |
-| RULE-03-04 | Store ở trạng thái SUSPENDED hoặc DEACTIVATED không thể nhận lịch hẹn mới hoặc tạo đơn hàng mới. | Store |
-| RULE-03-05 | Service được cấu hình khả dụng cho Store chỉ có hiệu lực vận hành trong phạm vi Store đó. | Store / Service |
-| RULE-03-06 | Store chỉ được chuyển sang trạng thái ARCHIVED khi không còn bất kỳ đơn hàng, lịch hẹn hoặc nghĩa vụ tài chính nào đang mở. | Store |
+| RULE-03-01 | Ràng buộc sở hữu đơn tổ chức & Khởi tạo Store dạng Bản nháp (`CreateOrganization`, `UpdateOrganization`, `CreateStore`, `UpdateStore`): Mỗi Store bắt buộc phải thuộc về đúng một Organization cha duy nhất. Dữ liệu vận hành, đơn hàng, bệnh án và tồn kho giữa các Organization độc lập được cách ly tuyệt đối 100% (Multi-Tenancy Isolation). Khi Organization Admin khởi tạo Store mới (`CreateStore`), Store được tạo ở trạng thái `DRAFT` để chuẩn bị cấu hình giờ mở cửa, danh mục dịch vụ và tài nguyên vật tư trước khi chính thức mở cửa hoạt động. | Organization / Store |
+| RULE-03-02 | Điều kiện kích hoạt vận hành Store (`ActivateStore`): Store ở trạng thái `DRAFT` chỉ được chuyển sang trạng thái `ACTIVE` thông qua lệnh `ActivateStore` của Organization Admin khi đã hoàn tất cấu hình: (1) Giờ hoạt động hợp lệ (`OperatingHours`); (2) Ít nhất một tài nguyên cơ sở vật chất khả dụng (`StoreResource`); (3) Danh mục dịch vụ khả dụng (`StoreServiceCatalog`). Store chỉ được tiếp nhận khách hàng, nhận lịch hẹn (`BookAppointment`), xếp hàng chờ Walk-in, tạo đơn hàng (`CreateOrder`) và thực hiện dịch vụ khi Store đang ở trạng thái `ACTIVE`. | Store |
+| RULE-03-03 | Phân cấp và kế thừa chính sách (`ManageOrganizationPolicy`, `ConfigureStorePolicy`): Chính sách cấp Organization (`OrganizationPolicy`: chính sách hoàn tiền chung, thời hạn lưu trữ dữ liệu, khung bảo mật) áp dụng bắt buộc và nhất quán cho tất cả Store trực thuộc. Chính sách vận hành Store (`StorePolicy`: giờ mở cửa, ca kíp, chính sách phụ thu tại quầy) chỉ có hiệu lực trong phạm vi Store đó và không được mâu thuẫn với chính sách Organization. | Organization / Store |
+| RULE-03-04 | Ràng buộc tạm ngưng và ngưng kích hoạt Store (`SuspendStore`, `DeactivateStore`): Store khi chuyển sang trạng thái `SUSPENDED` hoặc `DEACTIVATED` sẽ bị hệ thống tự động khóa tính năng nhận lịch hẹn mới, từ chối xếp hàng Walk-in và chặn tạo đơn hàng mới. Toàn bộ các lịch hẹn và đơn hàng dở dang phải được xử lý hoàn tất hoặc hủy/hoàn cọc theo chính sách trước khi chuyển sang trạng thái tiếp theo. | Store |
+| RULE-03-05 | Phạm vi khả dụng của dịch vụ tại Store (`ConfigureStoreService`): Một Service chỉ được cung cấp và phục vụ tại Store khi Service đó đã được Store Manager cấu hình kích hoạt khả dụng (`ACTIVE`) trong danh mục dịch vụ của Store (`StoreServiceCatalog`). | Store / Service |
+| RULE-03-06 | Điều kiện bất biến đóng cửa lưu trữ Store vĩnh viễn (`ArchiveStore`): Store chỉ được phép chuyển sang trạng thái `ARCHIVED` khi thỏa mãn đồng thời toàn bộ 4 điều kiện: (1) Không còn đơn hàng nào đang mở/đang xử lý (`PENDING`, `PROCESSING`, `HELD`); (2) Không còn lịch hẹn nào đang được xếp hoặc đang phục vụ (`BOOKED`, `CONFIRMED`, `CHECKED_IN`, `IN_PROGRESS`); (3) Toàn bộ số lượng tồn kho thực tế tại kho Store bằng 0 ($\text{PhysicalQuantity} == 0$, đã chuyển kho hoặc xuất hủy); (4) Không còn công nợ tài chính, giao dịch thanh toán chưa đối soát hoặc yêu cầu hoàn tiền đang mở (`REQUESTED`, `PROCESSING`). | Store |
+| RULE-03-07 | Ràng buộc khung giờ hoạt động và ca làm việc (`ConfigureOperatingHour`): Toàn bộ lịch hẹn (`Appointment`) và tiếp đón Walk-in bắt buộc phải nằm trong khung giờ hoạt động hợp lệ (`OperatingHours`) đã cấu hình của Store. Các yêu cầu tạo lịch ngoài giờ mở cửa hoặc trong ngày đóng cửa/nghỉ lễ bị hệ thống tự động từ chối. | Store / OperatingHours |
+| RULE-03-08 | Cấu hình và kiểm soát tài nguyên cơ sở vật chất (`ConfigureStoreResource`): Store Manager có trách nhiệm cấu hình danh mục tài nguyên vật chất (Phòng khám, Bàn Grooming, Máy siêu âm/X-quang). Tổng số lượng lịch hẹn và lượt phục vụ đồng thời trong cùng một khung thời gian không được vượt quá định mức công suất tối đa của từng loại tài nguyên. | Store / StoreResource |
+
+### Máy trạng thái Vòng đời Store & Điều kiện Đóng cửa Lưu trữ (Store Lifecycle & Archival Invariant)
+- **Vòng đời Store:** $\text{DRAFT} \xrightarrow{\text{ActivateStore}} \text{ACTIVE} \underset{\text{ActivateStore}}{\overset{\text{SuspendStore}}{\rightleftharpoons}} \text{SUSPENDED} \xrightarrow{\text{DeactivateStore}} \text{DEACTIVATED} \xrightarrow[\text{Zero Active Orders, Appointments, Stock, Balances}]{\text{ArchiveStore}} \text{ARCHIVED}$.
 
 ---
 
@@ -45,12 +66,29 @@ Tài liệu này đặc tả toàn bộ các quy tắc nghiệp vụ (Business R
 
 | ID | Quy tắc nghiệp vụ (Business Rule) | Phạm vi (Scope) |
 |---|---|---|
-| RULE-04-01 | Mỗi Pet phải thuộc quyền sở hữu (PetOwnership) hoặc quyền quản lý hợp lệ của một Customer chính thức. | Customer / Pet |
-| RULE-04-02 | Caregiver chỉ được xem thông tin và thao tác với Pet khi lời mời ủy quyền đang ở trạng thái ACTIVE và trong phạm vi quyền được cấp. | Customer / Pet / Caregiver |
-| RULE-04-03 | Khi quyền Caregiver bị thu hồi (`REVOKED`) hoặc hết hạn (`EXPIRED`), Caregiver lập tức mất quyền thực hiện mọi nghiệp vụ đối với Pet đó. | Customer / Pet / Caregiver |
-| RULE-04-04 | Chỉ Customer sở hữu hợp lệ của Pet mới có quyền gửi lời mời ủy quyền (`InviteCaregiver`) hoặc thu hồi quyền ủy quyền (`RevokeCaregiver`). | Customer / Pet |
-| RULE-04-05 | Khi Caregiver chấp nhận lời mời (`AcceptCaregiverInvitation`), quan hệ ủy quyền chuyển thẳng sang trạng thái ACTIVE và có hiệu lực ngay lập tức. | Customer / Pet / Caregiver |
-| RULE-04-06 | Lời mời Caregiver ở trạng thái INVITED nếu không được chấp nhận trong thời hạn quy định sẽ tự động chuyển sang trạng thái EXPIRED. | CaregiverInvitation |
+| RULE-04-01 | Mỗi Pet phải thuộc quyền sở hữu chính thức (`PetOwnership`) của đúng một Customer (Primary Owner). Primary Owner có toàn quyền quản lý hồ sơ Pet, cập nhật thông tin định danh, chuyển giao quyền sở hữu (`ManagePetOwnership`) và gửi/thu hồi ủy quyền chăm sóc. | Customer / Pet |
+| RULE-04-02 | Hồ sơ Customer (`CustomerProfile`) được khởi tạo/cập nhật tự phục vụ bởi Customer hoặc bởi Receptionist tại quầy Store (`ManageCustomerProfile`). Receptionist chỉ được tra cứu Customer và Pet (`SearchCustomerPet`) theo các tiêu chí xác thực (Số điện thoại, CCCD/CMND, Mã Pet, Mã Customer) trong phạm vi tiếp đón phục vụ tại Store. | Customer / Receptionist / CustomerProfile |
+| RULE-04-03 | Thêm mới (`AddPet`) hoặc cập nhật hồ sơ Pet (`UpdatePet`) do Customer tự thực hiện hoặc Receptionist hỗ trợ tại quầy phải gắn liền với Customer sở hữu hợp lệ. Chỉ Primary Owner mới có quyền thay đổi thông tin định danh cốt lõi (loài, giống, ngày sinh, giới tính) hoặc chuyển giao sở hữu Pet. | Customer / Receptionist / Pet |
+| RULE-04-04 | Chỉ Primary Owner của Pet mới có quyền gửi lời mời ủy quyền chăm sóc (`InviteCaregiver`) hoặc thu hồi quyền ủy quyền (`RevokeCaregiver`). Caregiver tuyệt đối không được phép mời thêm Caregiver khác, không được chuyển nhượng quyền sở hữu Pet (`ManagePetOwnership`), và không được sửa đổi thông tin định danh cốt lõi của Pet. | Customer / Pet / Caregiver |
+| RULE-04-05 | Lời mời ủy quyền (`CaregiverInvitation`) được khởi tạo ở trạng thái `INVITED` kèm thời hạn hiệu lực xác thực (TTL quy định, mặc định 7 ngày). Nếu Caregiver không xác nhận trong thời hạn này, hệ thống tự động chuyển trạng thái sang `EXPIRED` (`ProcessInvitationExpiry`). | Customer / CaregiverInvitation / Expiry |
+| RULE-04-06 | Caregiver nhận được lời mời có quyền chấp nhận (`AcceptCaregiverInvitation`) hoặc từ chối (`RejectCaregiverInvitation`). Khi Caregiver chấp nhận, quan hệ ủy quyền (`PetCaregiverDelegation`) chuyển sang trạng thái `ACTIVE` và có hiệu lực ngay lập tức. | Customer / Caregiver / Delegation |
+| RULE-04-07 | Quan hệ ủy quyền (`PetCaregiverDelegation`) có thời hạn hiệu lực xác định (`DelegationValidityPeriod`). Khi hết hạn hiệu lực, hệ thống tự động chuyển trạng thái sang `EXPIRED` (`ProcessDelegationExpiry`) và chấm dứt mọi quyền hạn ủy quyền. | Customer / Caregiver / DelegationExpiry |
+| RULE-04-08 | Khi Primary Owner thực hiện thu hồi ủy quyền (`RevokeCaregiver`), quan hệ ủy quyền lập tức chuyển sang trạng thái `REVOKED` và có hiệu lực tức thì. Toàn bộ quyền thao tác, đặt lịch và xem thông tin Pet của Caregiver bị chấm dứt ngay lập tức. | Customer / Caregiver / Revocation |
+| RULE-04-09 | Caregiver ở trạng thái `ACTIVE` chỉ được thực hiện các thao tác trong phạm vi được ủy quyền (`PerformDelegatedAction` và `ViewPet`): xem thông tin Pet, đặt lịch hẹn (`BookAppointment`), đưa Pet đi khám/spa, tiếp nhận check-in/check-out và xem lịch sử y tế được chia sẻ. Mọi thao tác ngoài phạm vi đều bị từ chối với mã lỗi `UNAUTHORIZED_DELEGATED_ACTION`. | Customer / Caregiver / DelegatedAction |
+
+### Quy tắc Vòng đời Ủy quyền Chăm sóc Thú cưng (Pet Caregiver Delegation Lifecycle Guard)
+- **Vòng đời Lời mời Ủy quyền (Caregiver Invitation Lifecycle):**
+  - Khởi tạo: Primary Owner gọi `InviteCaregiver` → Trạng thái `INVITED` (gắn `invitation_token`, `expires_at = now() + 7 days`).
+  - Chấp thuận: Caregiver gọi `AcceptCaregiverInvitation` → Kích hoạt quan hệ `PetCaregiverDelegation` sang `ACTIVE`.
+  - Từ chối: Caregiver gọi `RejectCaregiverInvitation` → Chuyển sang `REJECTED`, hủy bỏ lời mời.
+  - Hết hạn: Hệ thống quét định kỳ `ProcessInvitationExpiry` → Nếu $\text{currentTime} > \text{expires\_at}$ và trạng thái là `INVITED` → Chuyển sang `EXPIRED`.
+- **Vòng đời Quan hệ Ủy quyền (Active Delegation Lifecycle):**
+  - Thu hồi tức thì: Primary Owner gọi `RevokeCaregiver` → Chuyển sang `REVOKED` ngay lập tức, vô hiệu hóa toàn bộ phiên làm việc của Caregiver đối với Pet.
+  - Hết hạn kỳ hạn: Hệ thống quét định kỳ `ProcessDelegationExpiry` → Nếu $\text{currentTime} > \text{delegation\_end\_date}$ → Chuyển sang `EXPIRED`.
+- **Ranh giới Phân quyền Bất biến (Delegation Boundary Invariant):**
+  $$\text{CanInviteCaregiver}(A, P) \iff A = \text{PrimaryOwner}(P)$$
+  $$\text{CanTransferOwnership}(A, P) \iff A = \text{PrimaryOwner}(P)$$
+  $$\text{CanPerformAction}(C, P, \text{action}) \iff \text{DelegationStatus}(C, P) = \text{ACTIVE} \land \text{action} \in \text{DelegatedPermissionSet}$$
 
 ---
 
@@ -58,11 +96,17 @@ Tài liệu này đặc tả toàn bộ các quy tắc nghiệp vụ (Business R
 
 | ID | Quy tắc nghiệp vụ (Business Rule) | Phạm vi (Scope) |
 |---|---|---|
-| RULE-05-01 | Product được quản lý trong phạm vi Catalog mà Product thuộc về. | Platform / Organization / Product |
-| RULE-05-02 | Service được cung cấp tại Store chỉ khi Service được cấu hình khả dụng (`ACTIVE`) tại Store đó. | Store / Service |
-| RULE-05-03 | Giá Service áp dụng tại Store phải là giá được cấu hình hợp lệ cho Store đó tại thời điểm phát sinh giao dịch. | Store / Service |
-| RULE-05-04 | Giá Product áp dụng tại Store phải là giá được cấu hình hợp lệ cho Store đó tại thời điểm phát sinh giao dịch. | Store / Product |
-| RULE-05-05 | Product thuộc Product Catalog cấp Platform; Organization chỉ được chọn và quản lý Product trong phạm vi Catalog mà Organization được cấp quyền, không tự tạo Catalog độc lập ngoài Platform. | Platform / Organization / ProductCatalog |
+| RULE-05-01 | Danh mục sản phẩm mẫu (Master Product Catalog) được quản lý tập trung ở phạm vi toàn nền tảng (`PLATFORM`) bởi Platform Admin (`ManageProductCatalog`), định nghĩa thông tin chuẩn hóa (Mã SKU, tên sản phẩm, thương hiệu, nhóm ngành hàng, quy cách đóng gói, barcode chuẩn). | Platform / ProductCatalog |
+| RULE-05-02 | Quyền sử dụng Product Catalog được Platform Admin cấp phát cho từng Organization (`GrantProductCatalogAccess`). Organization Admin chỉ được chọn, kích hoạt và quản lý các Product nằm trong phạm vi Catalog đã được cấp quyền (`ManageProduct`), tuyệt đối không được tạo Catalog sản phẩm độc lập ngoài cấu trúc Master Catalog của Platform. | Platform / Organization / Product |
+| RULE-05-03 | Danh mục dịch vụ (`ServiceCatalog`) do Organization Admin quản lý tập trung (`ManageService`), định nghĩa mã dịch vụ, tên dịch vụ, nhóm dịch vụ (Khám lâm sàng, Tiêm chủng, Phẫu thuật, Grooming/Spa), thời lượng phục vụ tiêu chuẩn (Duration) và danh mục tài nguyên cơ sở vật chất bắt buộc (`RequiredStoreResources`). | Organization / Service |
+| RULE-05-04 | Store Manager cấu hình tính khả dụng của dịch vụ tại chi nhánh (`ConfigureServiceAvailability`). Dịch vụ chỉ được cung cấp và mở cho khách hàng đặt lịch hoặc tiếp nhận tại Store khi đang ở trạng thái `ACTIVE` tại Store đó. | Store / Service / Availability |
+| RULE-05-05 | Giá dịch vụ áp dụng tại Store (`ConfigureServicePrice`) và giá sản phẩm áp dụng tại Store (`ConfigureProductPrice`) do Store Manager cấu hình dựa trên khung giá chính sách của Organization. Giá áp dụng cho giao dịch là giá niêm yết hợp lệ tại Store tại thời điểm phát sinh đơn hàng hoặc lịch hẹn. | Store / Service / Product / Price |
+| RULE-05-06 | Khách hàng (`Customer`) chỉ được xem và tra cứu danh mục sản phẩm (`ViewProduct`) và dịch vụ (`ViewService`) đang ở trạng thái `ACTIVE` và được Store chỉ định công bố khả dụng. | Customer / Store / Product / Service |
+
+### Mô hình Phân cấp Quản trị Danh mục Sản phẩm & Dịch vụ (Catalog Hierarchy & Governance Guard)
+- **Cấp 1 — Platform Master Catalog (`PLATFORM` Scope):** Platform Admin quản lý toàn bộ danh mục sản phẩm gốc, thuộc tính tiêu chuẩn, phân loại ngành hàng và cấp quyền truy cập danh mục cho các Organization qua `GrantProductCatalogAccess`.
+- **Cấp 2 — Organization Catalog & Service Definition (`ORGANIZATION` Scope):** Organization Admin tiếp nhận danh mục sản phẩm được cấp phép (`ManageProduct`), định nghĩa và chuẩn hóa danh mục dịch vụ toàn hệ thống (`ManageService`), thiết lập giá trần/giá sàn chính sách.
+- **Cấp 3 — Store Catalog Configuration & Availability Overrides (`STORE` Scope):** Store Manager kích hoạt tính khả dụng của dịch vụ (`ConfigureServiceAvailability`), cấu hình đơn giá bán lẻ sản phẩm (`ConfigureProductPrice`) và đơn giá dịch vụ (`ConfigureServicePrice`) theo đặc thù chi nhánh nhưng không vượt khung chính sách Organization.
 
 ---
 
@@ -70,24 +114,51 @@ Tài liệu này đặc tả toàn bộ các quy tắc nghiệp vụ (Business R
 
 | ID | Quy tắc nghiệp vụ (Business Rule) | Phạm vi (Scope) |
 |---|---|---|
-| RULE-06-01 | Appointment chỉ được đặt trong khoảng thời gian mà Store đang hoạt động và Service/Staff có trạng thái khả dụng (Availability). | Store / Appointment |
-| RULE-06-02 | Appointment chỉ được tạo cho Pet mà Customer hoặc Caregiver có quyền hợp lệ. | Customer / Pet / Appointment |
-| RULE-06-03 | Staff chỉ được phân công vào Appointment khi Staff thuộc Store tương ứng và không bị trùng lịch làm việc hoặc nghỉ phép. | Store / Staff / Appointment |
-| RULE-06-04 | Một Appointment chỉ có duy nhất một khung thời gian áp dụng tại một thời điểm. | Appointment |
-| RULE-06-05 | Appointment ở trạng thái CANCELLED hoặc COMPLETED không được phép thao tác thay đổi thời gian hoặc tiếp nhận dịch vụ. | Appointment |
-| RULE-06-06 | Tiếp nhận Check-in và Check-out chỉ áp dụng cho Appointment thuộc Store tương ứng. | Store / Appointment |
-| RULE-06-07 | Appointment chỉ được đặt khi Service đang khả dụng tại Store và Staff được phân công có lịch làm việc phù hợp. | Store / Service / Staff / Appointment |
-| RULE-06-08 | Hủy lịch hẹn (`CancelAppointment`) chỉ được thực hiện khi lịch hẹn đang ở trạng thái `BOOKED` hoặc `CONFIRMED` và tuân thủ thời hạn hủy tối thiểu trước giờ hẹn theo chính sách Store. | Appointment |
-| RULE-06-09 | Hệ thống hoặc Receptionist chỉ đánh dấu `NO_SHOW` khi Appointment ở trạng thái `BOOKED`/`CONFIRMED` và khách không Check-in sau khoảng thời gian ân hạn (Grace Period) quy định. | Appointment |
-| RULE-06-10 | Lịch hẹn (Appointment) chỉ được xác nhận (`CONFIRMED`) hoặc tiếp nhận khi Store đáp ứng đầy đủ cả hai điều kiện khả dụng đồng thời: (1) Staff phụ trách không bị trùng lịch làm việc/ca khám; (2) Tài nguyên chuyên dụng của Store (`StoreResource`: Phòng khám thú y, Bàn phẫu thuật/tiểu phẫu, Bàn cắt tỉa Grooming, Máy chẩn đoán hình ảnh siêu âm/X-quang) còn vị trí/công suất trống trong toàn bộ khung thời gian dự kiến thực hiện dịch vụ. | Store / StoreResource / Staff / Appointment |
+| RULE-06-01 | Khóa giữ chỗ lịch hẹn tạm thời (Pre-booking Slot Reservation 15m TTL - `HoldSlot`, `ReleaseHold`, `ExpireHold`): Khi khách hàng hoặc Tiếp tân chọn khung giờ đặt lịch, hệ thống tạm thời khóa giữ chỗ tài nguyên (`HoldSlot`) với thời hạn hiệu lực chính xác 15 phút ($\text{Hold\_TTL} = 900\text{s}$). Trong thời gian giữ chỗ, slot không thể bị chọn bởi khách hàng khác. Khách hàng/Tiếp tân có thể chủ động giải phóng (`ReleaseHold`), hoặc khi hết 15 phút chưa hoàn tất xác nhận/đặt cọc, hệ thống tự động giải phóng slot (`ExpireHold`, chuyển `HOLDING -> EXPIRED`). | Store / Appointment / HoldSlot |
+| RULE-06-02 | Điều kiện tiên quyết đặt lịch hẹn mới (`BookAppointment`): Lịch hẹn chỉ được tạo hợp lệ khi thỏa mãn đồng thời 4 điều kiện: (1) Khung giờ hẹn nằm trong giờ hoạt động (`OperatingHours`) của Store; (2) Dịch vụ yêu cầu đang ở trạng thái khả dụng (`ACTIVE`) tại Store; (3) Khách hàng hoặc Caregiver có quyền quản trị hợp lệ trên hồ sơ Pet; (4) Thỏa mãn đồng thời StoreResource Collision Guard (`RULE-06-10`) và Pet Schedule Collision Guard (`RULE-06-11`). | Store / Pet / Appointment / BookAppointment |
+| RULE-06-03 | Xác nhận và cập nhật chi tiết lịch hẹn (`ConfirmAppointment`, `UpdateAppointment`): Receptionist hoặc hệ thống xác nhận chuyển lịch hẹn từ `BOOKED` sang `CONFIRMED` khi các điều kiện tài nguyên và nhân sự được đảm bảo. Tiếp tân có quyền cập nhật chi tiết lịch hẹn (`UpdateAppointment`: điều chỉnh dịch vụ, bổ sung ghi chú thể trạng/triệu chứng) trước khi khách hàng vào tiếp nhận check-in. | Store / Receptionist / Appointment |
+| RULE-06-04 | Đổi lịch hẹn nguyên tử (Atomic Reschedule Guard - `RescheduleAppointment`): Đổi lịch chỉ áp dụng khi Appointment đang ở trạng thái `BOOKED` hoặc `CONFIRMED`. Hệ thống bắt buộc kiểm tra và khóa giữ chỗ slot mới trước; chỉ khi slot mới khả dụng và khóa thành công mới giải phóng slot cũ và cập nhật `Appointment` về `BOOKED` ở khung giờ mới. Nếu thất bại, toàn bộ giao dịch rollback hoàn toàn, giữ nguyên slot ban đầu (khách hàng không bao giờ bị mất lịch cũ khi đổi lịch thất bại). | Store / Appointment / RescheduleAppointment |
+| RULE-06-05 | Hủy lịch hẹn trước khi phục vụ (`CancelAppointment`): Khách hàng hoặc Tiếp tân được phép hủy lịch hẹn khi ở trạng thái `BOOKED`, `CONFIRMED` hoặc `CHECKED_IN` (trước khi bắt đầu phục vụ). Thao tác hủy bắt buộc phải cung cấp mã lý do hủy (`cancellation_reason`), hệ thống tự động giải phóng tài nguyên phòng/bàn (`ReleaseStoreResource`), giải phóng ca trực Staff (`ReleaseStaffSlot`) và xử lý hoàn/phạt cọc theo chính sách Store. | Store / Customer / Receptionist / CancelAppointment |
+| RULE-06-06 | Tiếp nhận Check-in và Bắt đầu phiên phục vụ (`CheckInAppointment`, `StartAppointmentService`): Tiếp tân tiếp nhận khách đến Store và thực hiện `CheckInAppointment` (chuyển `CONFIRMED -> CHECKED_IN`). Khi nhân sự chuyên môn tiếp nhận Pet vào phòng khám hoặc bàn làm đẹp, Bác sĩ thú y hoặc Groomer thực hiện `StartAppointmentService` (chuyển `CHECKED_IN -> IN_PROGRESS`). | Store / Staff / Appointment / CheckIn |
+| RULE-06-07 | Hoàn tất phiên dịch vụ và Tiếp nhận Check-out (`CheckOutAppointment`): Khi quy trình dịch vụ kết thúc, Bác sĩ/Groomer hoàn tất phiên chuyên môn, Tiếp tân thực hiện `CheckOutAppointment` chuyển trạng thái sang `COMPLETED`, giải phóng toàn bộ tài nguyên phòng/bàn (`ReleaseStoreResource`) và chuyển tiếp sang lập hóa đơn thanh toán tại quầy (`CreateInvoice`). Lịch hẹn ở trạng thái `COMPLETED` hoặc `CANCELLED` là bất biến, không thể sửa đổi thời gian hay phục vụ lại. | Store / Receptionist / Appointment / CheckOut |
+| RULE-06-08 | Dừng khẩn cấp phiên phục vụ (Emergency Abort - `AbortAppointment`): Khi phiên phục vụ đang ở trạng thái `IN_PROGRESS`, nếu phát sinh nguy cơ đe dọa tính mạng Pet hoặc sự cố an toàn nghiêm trọng, Bác sĩ thú y hoặc Groomer có quyền kích hoạt `AbortAppointment` kèm lý do dừng (`abort_reason`). Hệ thống chuyển sang `ABORTED`, lập tức giải phóng tài nguyên, tự động kích hoạt tạo biên bản sự cố y tế `ClinicalIncident` (`RULE-21-02`) hoặc sự cố spa `GroomingIncident` (`RULE-21-03`), và phát sinh yêu cầu hoàn cọc/phí dịch vụ chưa thực hiện. | Store / Veterinarian / Groomer / AbortAppointment |
+| RULE-06-09 | Xử lý khách vắng mặt và tự động giải phóng tài nguyên (No-Show Resource & Slot Release - `MarkNoShow`): Nếu khách hàng không Check-in sau khoảng thời gian ân hạn quy định (Grace Period, ví dụ: 15 phút sau giờ hẹn), Receptionist hoặc hệ thống tự động đánh dấu `MarkNoShow` (chuyển sang `NO_SHOW`). Khi đó, hệ thống lập tức kích hoạt giải phóng tài nguyên phòng/bàn (`ReleaseStoreResource`), giải phóng lịch làm việc của nhân sự (`ReleaseStaffSlot`) để phục vụ khách khác hoặc hàng đợi walk-in, đồng thời xử lý khấu trừ tiền cọc theo chính sách của Store. | Store / Appointment / Resource / Staff / MarkNoShow |
+| RULE-06-10 | Kiểm tra xung đột tài nguyên cơ sở vật chất (StoreResource Collision Guard - `CheckAvailability`): Lịch hẹn (Appointment) chỉ được xác nhận (`CONFIRMED`) hoặc tiếp nhận khi Store đáp ứng đầy đủ cả hai điều kiện khả dụng đồng thời: (1) Staff phụ trách không bị trùng lịch làm việc/ca khám; (2) Tài nguyên chuyên dụng của Store (`StoreResource`: Phòng khám thú y, Bàn phẫu thuật/tiểu phẫu, Bàn cắt tỉa Grooming, Máy chẩn đoán hình ảnh siêu âm/X-quang) còn vị trí/công suất trống trong toàn bộ khung thời gian dự kiến thực hiện dịch vụ. | Store / StoreResource / Staff / Appointment |
+| RULE-06-11 | Kiểm tra xung đột lịch thú cưng (Pet Schedule Collision Guard - `BookAppointment`, `RescheduleAppointment`): Mỗi Pet chỉ được xếp lịch và thực hiện duy nhất một cuộc hẹn (Appointment) hoặc lượt khám/grooming trực tiếp (Walk-in In-Service) trong cùng một khung thời gian trên toàn bộ hệ thống chi nhánh. Hệ thống bắt buộc từ chối mọi yêu cầu đặt lịch trùng lặp với mã lỗi `PET_SCHEDULE_COLLISION`. | Platform / Store / Pet / Appointment / Collision |
+| RULE-06-12 | Quản lý, phân công và điều phối lịch Store (`ManageStoreSchedule`, `AssignStaff`, `CoordinateSchedule`): Store Manager có toàn quyền quản lý bảng lịch làm việc chi nhánh, phân công Staff vào ca trực/lịch hẹn (`AssignStaff`) và điều phối dời ca/đổi người phụ trách (`CoordinateSchedule`). Staff chỉ được phân công khi thuộc Store và không bị trùng lịch làm việc hoặc nghỉ phép. | Store / StoreManager / Staff / Schedule |
+| RULE-06-13 | Tự động gửi thông báo nhắc lịch hẹn (`SendAppointmentReminder`): Hệ thống tự động gửi thông báo nhắc lịch hẹn cho Customer qua SMS/Push Notification trước thời điểm hẹn theo cấu hình Store (ví dụ: trước 24 giờ và trước 2 giờ). | System / Customer / Appointment / Notification |
+| RULE-06-14 | Phân quyền tra cứu lịch hẹn (`ViewAppointment`): Customer và Caregiver được ủy quyền chỉ được xem các lịch hẹn của Pet thuộc quyền quản lý của mình. Staff và Store Manager được xem toàn bộ lịch hẹn thuộc phạm vi Store chi nhánh quản lý. | Platform / Store / Customer / Appointment |
 
-### Quy tắc Kiểm tra Xung đột Tài nguyên Cơ sở Vật chất (StoreResource Collision Guard)
+### Quy tắc Khóa giữ chỗ Slot hẹn 15 phút (Pre-booking Slot Reservation Invariant)
+- Khi bắt đầu tiến trình đặt lịch: $\text{HoldSlot}(\text{slotId}, \text{userId}) → \text{HOLDING} \ (\text{TTL} = 900\text{s})$.
+- Trong thời gian 15 phút: Slot bị khóa tạm thời đối với tất cả người dùng khác.
+- Kết thúc:
+  - Nếu hoàn tất đặt chỗ/thanh toán: $\text{HOLDING} \xrightarrow{\text{BookAppointment}} \text{BOOKED}$.
+  - Nếu khách hủy: $\text{HOLDING} \xrightarrow{\text{ReleaseHold}} \text{FREE}$.
+  - Nếu quá 15 phút không hoàn tất: $\text{HOLDING} \xrightarrow{\text{ExpireHold}} \text{EXPIRED} → \text{FREE}$.
+
+### Quy tắc Kiểm tra Xung đột Tài nguyên Cơ sở Vật chất (StoreResource Collision Guard Invariant)
 - Mỗi dịch vụ (`Service`) tại Store được cấu hình danh mục tài nguyên bắt buộc (`RequiredStoreResources`, ví dụ: dịch vụ Khám bệnh cần 1 `EXAMINATION_ROOM`; dịch vụ Grooming cần 1 `GROOMING_TABLE`; dịch vụ Siêu âm cần 1 `ULTRASOUND_ROOM` + `ULTRASOUND_MACHINE`).
 - Khi thực hiện `BookAppointment`, `RescheduleAppointment` hoặc `ConfirmAppointment`, hệ thống thực hiện kiểm tra đồng thời (Composite Availability Check):
   1. $\text{StaffAvailability}(\text{staffId}, \text{timeRange}) == \text{FREE}$
   2. $\forall r \in \text{RequiredStoreResources}: \text{ActiveBookings}(r, \text{timeRange}) < \text{Capacity}(r)$
 - Nếu bất kỳ tài nguyên nào vượt quá công suất (Capacity) trong khung giờ đó, lệnh đặt lịch bị từ chối với mã lỗi `RESOURCE_CAPACITY_EXCEEDED` ngay cả khi nhân sự vẫn đang rảnh.
-- Đảm bảo tính khả thi thực tế tại chi nhánh, ngăn chặn tình trạng nhiều bác sĩ hoặc groomer cùng nhận khách nhưng thiếu phòng khám hoặc bàn cắt tỉa.
+
+### Quy tắc Kiểm tra Xung đột Lịch Thú cưng (Pet Schedule Collision Guard Invariant)
+- Nhằm ngăn chặn tình trạng một thú cưng bị xếp lịch khám và làm đẹp đồng thời ở hai phòng hoặc hai chi nhánh khác nhau trong cùng một khoảng thời gian, hệ thống quy định bất biến kiểm tra xung đột lịch:
+  $$\forall A \in \text{Appointments}(P): A.\text{status} \in \{\text{BOOKED, CONFIRMED, CHECKED\_IN, IN\_PROGRESS}\} \implies [A.T_{\text{start}}, A.T_{\text{end}}] \cap [T_{\text{start}}, T_{\text{end}}] = \emptyset$$
+- Khi phát hiện trùng lặp thời gian thực hiện của Pet $P$, hệ thống lập tức từ chối lệnh đặt lịch với mã lỗi `PET_SCHEDULE_COLLISION`.
+- Cho phép các lịch hẹn liên tiếp (Sequential Bookings) trong cùng một Store nếu các khung giờ không giao nhau và có khoảng đệm tối thiểu theo chính sách chi nhánh.
+
+### Quy tắc Đổi lịch Nguyên tử (Atomic Reschedule Guard Invariant)
+- Khi thực hiện `RescheduleAppointment`, hệ thống bắt buộc thực hiện theo cơ chế Atomic Slot Swap:
+  1. Kiểm tra và khóa giữ chỗ khung giờ mới trước (xác thực `StaffAvailability`, `StoreResource Collision Guard` và `Pet Schedule Collision Guard`).
+  2. Chỉ khi khung giờ mới hợp lệ và được khóa giữ chỗ thành công, hệ thống mới giải phóng khung giờ cũ và cập nhật `Appointment` về trạng thái `BOOKED` với thời gian mới.
+  3. Nếu khung giờ mới không khả dụng hoặc phát sinh xung đột, toàn bộ giao dịch rollback hoàn toàn, giữ nguyên vẹn lịch hẹn và khung giờ ban đầu của khách hàng (không bao giờ bị mất slot cũ khi đổi lịch thất bại).
+
+### Quy tắc Xử lý Khách Vắng mặt (No-Show Resource & Slot Release Invariant)
+- Khi lịch hẹn thỏa mãn điều kiện No-Show: $\text{CurrentTime} > A.T_{\text{start}} + \text{GracePeriod} \land A.\text{status} \in \{\text{BOOKED}, \text{CONFIRMED}\}$:
+  $$\text{MarkNoShow}(A) \implies \begin{cases} A.\text{status} \leftarrow \text{NO\_SHOW} \\ \text{ReleaseStoreResource}(A.\text{resourceId}, A.\text{timeRange}) \\ \text{ReleaseStaffSlot}(A.\text{staffId}, A.\text{timeRange}) \\ \text{ProcessDepositDeduction}(A) \end{cases}$$
 
 ---
 
@@ -95,11 +166,25 @@ Tài liệu này đặc tả toàn bộ các quy tắc nghiệp vụ (Business R
 
 | ID | Quy tắc nghiệp vụ (Business Rule) | Phạm vi (Scope) |
 |---|---|---|
-| RULE-07-01 | Mỗi lượt Walk-in và số thứ tự Queue chỉ thuộc về một Store cụ thể nơi tiếp nhận khách. | Store / WalkIn |
-| RULE-07-02 | Khách chỉ có thể được xếp vào Queue của Store nơi Walk-in được tạo. | Store / Queue / WalkIn |
-| RULE-07-03 | Mỗi lượt Walk-in đang chờ chỉ có duy nhất một vị trí `QueuePosition` tại một thời điểm. | Store / Queue |
-| RULE-07-04 | Thứ tự phục vụ trong Queue phải tuân thủ nguyên tắc FIFO (vào trước phục vụ trước) trừ trường hợp cấp cứu y tế được ưu tiên. | Store / Queue |
-| RULE-07-05 | Khi lượt khách Walk-in được tiếp nhận vào phục vụ (`CheckInWalkIn`), hệ thống tự động khởi tạo một bản ghi Appointment nội bộ (nguồn Channel = `WALK_IN`, trạng thái chuyển trực tiếp sang `IN_PROGRESS`) gắn với Store, Staff và tài nguyên `StoreResource` phục vụ để đồng nhất dữ liệu quản trị, quản lý tải nhân sự và báo cáo doanh thu/dịch vụ tập trung. | Store / WalkIn / Appointment |
+| RULE-07-01 | Tiếp nhận khách và cấp số thứ tự vào hàng đợi FIFO (`RegisterQueueEntry`, `ManageQueueOrder`): Mỗi lượt tiếp nhận Walk-in và phiếu hàng đợi (`QueueTicket`) chỉ thuộc về một Store cụ thể nơi tiếp nhận khách. Số thứ tự Queue được cấp phát tăng dần theo ngày cho từng phân loại dịch vụ chuyên môn (Khám lâm sàng, Tiêm chủng, Grooming). | Store / WalkIn / QueueTicket |
+| RULE-07-02 | Độc nhất vị trí và thứ tự phục vụ FIFO (`ManageQueueOrder`, `CoordinateQueue`): Mỗi lượt Walk-in đang chờ chỉ có duy nhất một vị trí `QueuePosition` tại một thời điểm. Thứ tự phục vụ trong Queue phải tuân thủ nguyên tắc First-In, First-Out (FIFO). Ngoại lệ duy nhất: Các ca cấp cứu y tế khẩn cấp được Bác sĩ/Tiếp tân gắn nhãn `TRIAGE_EMERGENCY` để bypass hàng đợi vào phòng cấp cứu ngay lập tức. | Store / Queue / ManageQueueOrder |
+| RULE-07-03 | Gọi số thứ tự và thông báo lượt phục vụ (`CallQueueEntry`, `SendTurnNotification`): Receptionist, Bác sĩ hoặc Groomer thực hiện gọi số thứ tự tiếp theo (`CallQueueEntry`, chuyển `WAITING -> CALLED`). Hệ thống tự động cập nhật bảng hiển thị điện tử và gửi thông báo `SendTurnNotification` qua SMS/App cho khách hàng khi đến lượt phục vụ. | Store / Staff / Queue / SendTurnNotification |
+| RULE-07-04 | Hủy lượt chờ trong hàng đợi (`CancelQueueEntry`): Khách hàng hoặc Tiếp tân có quyền hủy lượt chờ trong hàng đợi khi phiếu đang ở trạng thái `WAITING` hoặc `CALLED` (chuyển sang `CANCELLED`), giải phóng vị trí và tự động đôn thứ tự các phiếu phía sau. | Store / Customer / Receptionist / Queue |
+| RULE-07-05 | Cầu nối Dữ liệu Walk-in sang Appointment khi Bắt đầu phục vụ (Walk-in to Appointment Lifecycle Bridge - `StartQueueService`): Khi nhân sự bắt đầu phục vụ lượt khách Walk-in (`StartQueueService`, chuyển `CALLED -> IN_SERVICE`), hệ thống tự động khởi tạo ngầm một bản ghi `Appointment` nội bộ với nguồn tiếp nhận `Channel = WALK_IN`, gắn mã phiếu hàng đợi (`QueueTicketId`), nhân viên phục vụ (`StaffId`) và tài nguyên cơ sở vật chất (`StoreResourceId`). Bản ghi Appointment này được chuyển thẳng sang trạng thái `IN_PROGRESS`, cho phép các module khám bệnh, tiêm phòng, grooming, xuất hóa đơn và báo cáo doanh thu vận hành trên cùng một mô hình dữ liệu đồng nhất. | Store / WalkIn / Appointment / Bridge |
+| RULE-07-06 | Xử lý vắng mặt sau 3 lần gọi (3-Call No-Show Rule - `MarkQueueNoShow`): Khách hàng không có mặt sau 3 lần gọi số thứ tự trong hàng đợi (với khoảng giãn cách thời gian quy định giữa các lần gọi) sẽ bị Tiếp tân đánh dấu vắng mặt (`MarkQueueNoShow`), chuyển trạng thái từ `CALLED` sang `NO_SHOW`, hủy lượt chờ và tự động gọi số thứ tự tiếp theo. | Store / Receptionist / Queue / MarkQueueNoShow |
+| RULE-07-07 | Hoàn tất lượt phục vụ hàng đợi (`CompleteQueueEntry`): Khi kết thúc quy trình phục vụ, nhân sự thực hiện `CompleteQueueEntry` (chuyển `IN_SERVICE -> COMPLETED`), đồng bộ cập nhật bản ghi `Appointment` liên kết sang `COMPLETED`, giải phóng tài nguyên phòng/bàn và bàn giao cho Tiếp tân lập hóa đơn thanh toán tại quầy. | Store / Staff / Queue / CompleteQueueEntry |
+| RULE-07-08 | Điều phối và ưu tiên hàng đợi (`CoordinateQueue`): Store Manager có toàn quyền giám sát hàng đợi, thời gian chờ trung bình và thực hiện điều phối phân luồng (`CoordinateQueue`): mở thêm bàn/phòng phục vụ, điều động nhân sự hỗ trợ hoặc ưu tiên ca phục vụ đặc biệt. | Store / StoreManager / Queue |
+
+### Quy tắc Cầu nối Vòng đời Walk-in sang Appointment (Walk-in to Appointment Lifecycle Bridge Invariant)
+- **Vòng đời Phiếu Hàng đợi:** $\text{RegisterQueueEntry} → \text{WAITING} \xrightarrow{\text{CallQueueEntry}} \text{CALLED} \xrightarrow{\text{StartQueueService}} \text{IN\_SERVICE} \xrightarrow{\text{CompleteQueueEntry}} \text{COMPLETED}$.
+- **Cơ chế Cầu nối (Bridge Trigger Hook):**
+  $$\text{StartQueueService}(\text{ticketId}, \text{staffId}, \text{resourceId}) \implies \begin{cases} \text{QueueTicket}.\text{status} \leftarrow \text{IN\_SERVICE} \\ \text{CreateInternalAppointment}(\text{Channel} = \text{WALK\_IN}, \text{TicketId} = \text{ticketId}) \\ \text{Appointment}.\text{status} \leftarrow \text{IN\_PROGRESS} \end{cases}$$
+- Mọi thao tác cận lâm sàng, kê đơn, tiêm chủng, dịch vụ spa, xuất hóa đơn đều được neo vào `AppointmentId` được tạo từ cầu nối.
+
+### Quy tắc Hàng đợi FIFO và Ngoại lệ Cấp cứu (Queue FIFO & Emergency Triage Invariant)
+- **FIFO Standard Ordering:** $\forall T_1, T_2 \in \text{QueueTickets}: T_1.\text{RegisteredAt} < T_2.\text{RegisteredAt} \implies T_1.\text{Position} < T_2.\text{Position}$.
+- **Emergency Triage Bypass:** Khi ca cấp cứu đến quầy:
+  $$\text{TriageEmergency}(T) \implies T.\text{Priority} \leftarrow \text{HIGHEST} \land T.\text{Position} \leftarrow 1$$
 
 ---
 
@@ -107,12 +192,27 @@ Tài liệu này đặc tả toàn bộ các quy tắc nghiệp vụ (Business R
 
 | ID | Quy tắc nghiệp vụ (Business Rule) | Phạm vi (Scope) |
 |---|---|---|
-| RULE-08-01 | Staff chỉ được phân công làm việc vào Store mà Staff được Organization cho phép hoạt động. | Organization / Store / Staff |
-| RULE-08-02 | Lịch làm việc (`WorkSchedule`) của Staff không được phép trùng lặp giữa thời gian làm việc và thời gian nghỉ phép trong cùng một khoảng thời gian. | Store / Staff / WorkSchedule |
-| RULE-08-03 | Staff được ghi nhận vắng mặt (`StaffAbsence`) không được tiếp tục nhận phân công công việc trong khoảng thời gian vắng mặt đó. | Store / Staff |
-| RULE-08-04 | Phân công nhân sự thay thế (`StaffReplacement`) chỉ được gán cho Staff có năng lực chuyên môn tương đương và có lịch trống trong Store. | Store / Staff |
-| RULE-08-05 | Nghỉ phép (`Leave`) chỉ có hiệu lực sau khi được Store Manager phê duyệt và ghi nhận vào lịch làm việc. | Store / Staff / Leave |
-| RULE-08-06 | Nhân viên chuyên môn (Veterinarian, Groomer, Receptionist) chỉ được xem WorkSchedule của chính mình; Store Manager có quyền xem và điều phối lịch của toàn bộ nhân viên trong Store. | Store / Staff |
+| RULE-08-01 | Quản lý danh sách nhân sự toàn diện (`ManageStaff`, `CreateStaff`): Nhân viên (`Staff`) thuộc quyền quản trị của Organization. Khởi tạo tài khoản Staff do Platform Admin hoặc Organization Admin thực hiện trực tiếp (`CreateStaff`), kích hoạt trạng thái `ACTIVE` kèm mật khẩu tạm thời mà không qua quy trình OTP (theo D-04). | Organization / Platform / Staff |
+| RULE-08-02 | Phân công và cập nhật nhân sự tại Store (`AssignStaffToStore`, `UpdateStaff`): Staff chỉ được phân công làm việc và cập nhật hồ sơ vận hành tại Store mà Staff được Organization cấp quyền hoạt động. Một Staff có thể được điều động công tác giữa các Store trong cùng Organization nhưng chỉ có hiệu lực tại Store được phân công cụ thể. | Organization / Store / Staff |
+| RULE-08-03 | Ràng buộc bất biến xếp lịch làm việc (`ManageWorkSchedule`): Lịch làm việc (`WorkSchedule`) của Staff tuyệt đối không được phép trùng lặp giữa ca làm việc và thời gian nghỉ phép đã được phê duyệt (`ManageLeave`). Hệ thống bắt buộc từ chối mọi thao tác xếp ca hoặc phân công lịch hẹn giao thoa với thời gian nghỉ phép hợp lệ. | Store / Staff / WorkSchedule |
+| RULE-08-04 | Xử lý nhân sự vắng mặt đột xuất (`HandleStaffAbsence`): Khi Staff phát sinh vắng mặt đột xuất, Store Manager ghi nhận `HandleStaffAbsence`. Hệ thống lập tức đánh dấu trạng thái vắng mặt trên lịch làm việc, phát cảnh báo các cuộc hẹn/ca trực bị ảnh hưởng, và khóa toàn bộ phân công công việc mới cho Staff trong khung giờ vắng mặt. | Store / Staff / StaffAbsence |
+| RULE-08-05 | Ràng buộc điều phối nhân sự thay thế (`AssignStaffReplacement`): Phân công nhân sự thay thế chỉ hợp lệ khi nhân sự thay thế thỏa mãn đồng thời 3 điều kiện: (1) Cùng thuộc Store hoặc được điều động hợp lệ đến Store; (2) Có cùng vai trò và năng lực chuyên môn tương đương (Bác sĩ thay Bác sĩ, Groomer thay Groomer); (3) Có lịch trống (`FREE`) và không bị trùng lịch làm việc hoặc nghỉ phép trong toàn bộ khung thời gian thay thế. | Store / Staff / StaffReplacement |
+| RULE-08-06 | Phê duyệt nghỉ phép và đồng bộ lịch (`ManageLeave`): Đơn xin nghỉ phép (`Leave`) của nhân viên chỉ có hiệu lực sau khi được Store Manager phê duyệt sang trạng thái `APPROVED`. Khi phê duyệt, hệ thống tự động khóa khung giờ nghỉ trên `WorkSchedule` và giải phóng các slot chưa phân công. | Store / Staff / Leave |
+| RULE-08-07 | Phân quyền hiển thị lịch làm việc theo vai trò (`ViewWorkSchedule`): Nhân viên chuyên môn (`Veterinarian`, `Groomer`, `Receptionist`) chỉ được xem lịch làm việc cá nhân của chính mình. Store Manager có toàn quyền xem, điều phối và phân công lịch làm việc của toàn bộ nhân viên trong phạm vi Store. | Store / Staff / WorkSchedule |
+
+### Quy tắc Bất biến Điều phối Nhân sự & Xử lý Thay thế Ca trực (Workforce Scheduling & Shift Replacement Guard)
+- **Quy tắc Kiểm tra Xung đột Lịch Làm việc Nhân sự (Staff Schedule Collision Guard):**
+  - Khi phân công ca làm việc hoặc lịch hẹn cho Staff $S$ trong khung giờ $[T_{\text{start}}, T_{\text{end}}]$ tại Store:
+    $$\text{StaffStatus}(S) = \text{ACTIVE}$$
+    $$\text{ApprovedLeaves}(S) \cap [T_{\text{start}}, T_{\text{end}}] = \emptyset$$
+    $$\text{RecordedAbsences}(S) \cap [T_{\text{start}}, T_{\text{end}}] = \emptyset$$
+    $$\text{AssignedShifts}(S) \cap [T_{\text{start}}, T_{\text{end}}] = \emptyset$$
+  - Nếu vi phạm bất kỳ điều kiện nào, hệ thống từ chối phân công với mã lỗi tương ứng (`STAFF_ON_LEAVE`, `STAFF_ABSENT`, `STAFF_SHIFT_CONFLICT`).
+- **Quy tắc Thay thế Nhân sự Khẩn cấp (Emergency Shift Replacement Invariant):**
+  - Khi một ca trực phát sinh vắng mặt (`HandleStaffAbsence`), Store Manager kích hoạt `AssignStaffReplacement(originalStaffId, replacementStaffId, shiftId)`:
+    1. Kiểm tra $\text{Role}(\text{replacementStaffId}) == \text{Role}(\text{originalStaffId})$.
+    2. Kiểm tra $\text{StaffAvailability}(\text{replacementStaffId}, \text{shiftTime}) == \text{FREE}$.
+    3. Chuyển giao toàn bộ các lịch hẹn và trách nhiệm ca trực sang nhân sự thay thế, đồng thời gửi thông báo cập nhật ca trực cho nhân sự liên quan.
 
 ---
 
@@ -120,15 +220,26 @@ Tài liệu này đặc tả toàn bộ các quy tắc nghiệp vụ (Business R
 
 | ID | Quy tắc nghiệp vụ (Business Rule) | Phạm vi (Scope) |
 |---|---|---|
-| RULE-09-01 | Bệnh án (`MedicalRecord`) chỉ được tạo và cập nhật bởi Bác sĩ thú y (`Veterinarian`) có thẩm quyền chuyên môn đối với Pet đang khám. | Organization / Store / Pet / MedicalRecord |
-| RULE-09-02 | Lịch sử y tế (`MedicalHistory`) Cross-store chỉ được Bác sĩ thú y tại Store khác trong cùng Organization truy cập khi thỏa mãn một trong hai cơ chế đồng thuận: (1) Cơ chế chuẩn: Khách hàng xác thực đồng thuận thông qua mã OTP SMS gửi đến số điện thoại chủ Pet hoặc phê duyệt trên App Customer; (2) Cơ chế khẩn cấp (`EMERGENCY_OVERRIDE`): Trong trường hợp cấp cứu y tế nguy kịch, Bác sĩ được phép mở truy cập khẩn cấp, hệ thống bắt buộc ghi nhận nhật ký kiểm toán đặc biệt (`EMERGENCY_ACCESS_LOG`) và gửi thông báo tức thì đến chủ Pet. | Organization / Store / Pet / MedicalHistory / Consent |
-| RULE-09-03 | Chẩn đoán (`Diagnosis`) phải gắn liền với một phiên khám bệnh cụ thể được ghi nhận trong bệnh án. | Clinical / Pet / Diagnosis |
-| RULE-09-04 | Phác đồ điều trị (`Treatment`) phải thuộc về bệnh án của Pet tương ứng. | Clinical / Pet / Treatment |
-| RULE-09-05 | Đơn thuốc (`Prescription`) phải thuộc về bệnh án của Pet và do Bác sĩ thú y chịu trách nhiệm ký duyệt. | Clinical / Pet / Prescription |
-| RULE-09-06 | Kế hoạch tái khám (`FollowUp`) phải gắn liền với Pet và hoạt động khám chữa bệnh liên quan. | Clinical / Pet / FollowUp |
-| RULE-09-07 | Customer hoặc Caregiver chỉ được xem bệnh án và lịch sử y tế của Pet khi có quyền sở hữu hoặc ủy quyền hợp lệ. | Customer / Caregiver / MedicalHistory |
+| RULE-09-01 | Thẩm quyền tạo và quản trị hồ sơ bệnh án EMR (`ExaminePet`, `CreateMedicalRecord`, `RecordSymptom`, `RecordExaminationResult`, `UpdateMedicalRecord`): Chỉ Bác sĩ thú y (`Veterinarian`) có phân công chuyên môn tại Store mới có quyền mở phiên khám (`ExaminePet`), khởi tạo hồ sơ bệnh án (`CreateMedicalRecord`), ghi nhận triệu chứng lâm sàng (`RecordSymptom`), ghi nhận kết quả xét nghiệm/cận lâm sàng (`RecordExaminationResult`) và cập nhật hồ sơ bệnh án (`UpdateMedicalRecord`). | Store / Veterinarian / MedicalRecord |
+| RULE-09-02 | Lịch sử y tế Cross-Store và Giao thức đồng thuận 2 cơ chế (Standard OTP vs Emergency Override - `ViewMedicalHistory`, `RequestCrossStoreConsent`, `VerifyCrossStoreConsentOTP`, `RevokeCrossStoreConsent`, `EmergencyOverrideAccess`):<br>1. **Giao thức Chuẩn (Standard OTP):** Bác sĩ tại Store khác trong cùng Organization muốn truy cập EMR lịch sử của Pet phải gửi `RequestCrossStoreConsent`. Khách hàng xác thực OTP hiệu lực 5 phút ($\text{OTP\_TTL} = 300\text{s}$) qua `VerifyCrossStoreConsentOTP`, kích hoạt quyền truy cập 24 giờ ($\text{Consent\_TTL} = 24\text{h}$). Chủ Pet có quyền chủ động thu hồi (`RevokeCrossStoreConsent`) bất kỳ lúc nào.<br>2. **Giao thức Cấp cứu Khẩn cấp (Emergency Break-Glass Override):** Trong tình huống nguy kịch đe dọa tính mạng Pet mà không kịp xác thực OTP, Bác sĩ được phép kích hoạt `EmergencyOverrideAccess` kèm lý do lâm sàng bắt buộc. Hệ thống cấp quyền xem ngay (`is_emergency = true`), tự động tạo biên bản sự cố y tế `ClinicalIncident` (`RULE-21-02`), ghi nhật ký kiểm toán bất biến và gửi tin nhắn cảnh báo khẩn cấp `SendIncidentNotification` (`RULE-21-05`, `RULE-23-02`) tới Chủ pet và Store Manager. | Organization / Store / Pet / MedicalHistory / Consent |
+| RULE-09-03 | Chẩn đoán bệnh lý gắn liền phiên khám (`DiagnosePet`): Kết luận chẩn đoán (`Diagnosis`) phải gắn liền với một phiên khám lâm sàng cụ thể và làm cơ sở thiết lập phác đồ điều trị (`TreatmentPlan`: chỉ định thuốc, thủ thuật, phẫu thuật hoặc liệu trình chăm sóc đặc biệt). | Clinical / Pet / Diagnosis / Treatment |
+| RULE-09-04 | Lập phác đồ điều trị (`CreateTreatment`): Phác đồ điều trị (`Treatment`) phải thuộc về bệnh án của Pet tương ứng và làm căn cứ chỉ định dược phẩm, xét nghiệm bổ sung hoặc thủ thuật can thiệp y khoa. | Clinical / Pet / Treatment |
+| RULE-09-05 | Kê đơn thuốc và An toàn dược phẩm (`CreatePrescription`): Đơn thuốc (`Prescription`) phải thuộc về bệnh án của Pet, do Bác sĩ thú y chịu trách nhiệm ký duyệt. Đơn thuốc phải xác định rõ danh mục thuốc (SKU dược phẩm), hoạt chất, liều lượng, đường dùng, tần suất và thời gian điều trị. | Clinical / Pet / Prescription / Veterinarian |
+| RULE-09-06 | Thiết lập kế hoạch tái khám theo dõi (`CreateFollowUp`): Bác sĩ thú y có trách nhiệm tạo lịch tái khám (`FollowUp`) cho Pet sau đợt điều trị. Hệ thống tự động ghi nhận vào lịch theo dõi của Pet và gửi thông báo nhắc hẹn trước ngày tái khám. | Clinical / Pet / FollowUp / Veterinarian |
+| RULE-09-07 | Phân quyền xem lịch sử y tế của Customer và Caregiver (`ViewMedicalHistory`): Customer và Caregiver được ủy quyền chỉ được xem bệnh án và lịch sử y tế của Pet khi có quyền sở hữu hoặc ủy quyền hợp lệ trong phạm vi cho phép. | Customer / Caregiver / MedicalHistory |
+| RULE-09-08 | Phân định ranh giới Bệnh án lâm sàng EMR vs Hồ sơ tiêm phòng định kỳ (`RULE-10-07`): Dịch vụ tiêm phòng phòng bệnh định kỳ thông thường (`Routine Vaccination`) được tách rời khỏi quy trình bệnh án EMR phức tạp và ghi trực tiếp vào `VaccinationRecord` để tối ưu quy trình tiếp đón nhanh. Đối với tiêm vaccine/kháng thể trong phác đồ điều trị bệnh lý (Therapeutic Vaccination), mũi tiêm bắt buộc phải gắn liền với `MedicalRecord` và `Treatment` của phiên khám lâm sàng. | Store / Veterinarian / MedicalRecord / VaccinationRecord |
 
-- *Ghi chú phân định:* Dịch vụ tiêm phòng phòng bệnh định kỳ thông thường (`Routine Vaccination`) được tách rời khỏi `MedicalRecord` và ghi trực tiếp vào `VaccinationRecord` để tối ưu quy trình phục vụ tại điểm tiếp đón, trong khi tiêm thuốc/điều trị bệnh lý bắt buộc phải gắn với `MedicalRecord` theo `RULE-10-07`.
+### Giao thức Phân định Truy cập Bệnh án Cross-Store (Cross-Store Medical Record Consent Protocol Invariant)
+- **Cơ chế Tiêu chuẩn (Standard OTP Protocol):**
+  $$\text{RequestCrossStoreConsent} \xrightarrow{\text{OTP TTL } = 5\text{m}} \text{VerifyCrossStoreConsentOTP} \xrightarrow{\text{Access TTL } = 24\text{h}} \text{ACTIVE} \xrightarrow{\text{ProcessConsentExpiry} \ / \ \text{RevokeCrossStoreConsent}} \text{EXPIRED / REVOKED}$$
+- **Cơ chế Cấp cứu Khẩn cấp (Emergency Break-Glass Override):**
+  $$\text{EmergencyOverrideAccess}(\text{petId}, \text{medicalRecordId}, \text{clinical\_reason}) \implies \begin{cases} \text{ConsentGrant}.\text{status} \leftarrow \text{ACTIVE} \ (\text{is\_emergency} = \text{true}) \\ \text{CreateClinicalIncident}(\text{type} = \text{EMERGENCY\_OVERRIDE}, \text{severity} = \text{CRITICAL}) \\ \text{RecordAuditLog}(\text{action} = \text{EMERGENCY\_ACCESS}) \\ \text{SendIncidentNotification}(\text{Customer}, \text{StoreManager}) \end{cases}$$
+
+### Quy trình Vận hành Khám Lâm sàng & Bệnh án EMR (Clinical EMR Workflow Invariant)
+1. Khám lâm sàng: $\text{ExaminePet} → \text{RecordSymptom} → \text{RecordExaminationResult}$.
+2. Chẩn đoán & Bệnh án: $\text{UpdateMedicalRecord} → \text{DiagnosePet}$.
+3. Phác đồ & Kê đơn: $\text{CreateTreatment} → \text{CreatePrescription}$.
+4. Tái khám & Bàn giao: $\text{CreateFollowUp} → \text{CheckOutAppointment} → \text{CreateInvoice}$.
 
 ---
 
@@ -136,21 +247,29 @@ Tài liệu này đặc tả toàn bộ các quy tắc nghiệp vụ (Business R
 
 | ID | Quy tắc nghiệp vụ (Business Rule) | Phạm vi (Scope) |
 |---|---|---|
-| RULE-10-01 | Mỗi hồ sơ tiêm chủng (`Vaccination`) phải gắn với một Pet cụ thể. | Pet / Vaccination |
-| RULE-10-02 | Lô vaccine (`VaccineBatch`) được sử dụng phải thuộc về đúng danh mục Vaccine đăng ký trong kho Store. | Store / Vaccine / VaccineBatch |
-| RULE-10-03 | Vaccine đã hết hạn sử dụng (`Expired`) tuyệt đối không được phép sử dụng để tiêm phòng cho Pet. | Store / Vaccine / VaccineBatch |
-| RULE-10-04 | Lịch tiêm phòng nhắc lại (`VaccinationSchedule`) phải gắn với Pet và loại vaccine tương ứng. | Pet / VaccinationSchedule |
-| RULE-10-05 | Mũi tiêm vaccine chỉ được ghi nhận thành công khi vaccine còn hạn sử dụng và thuộc tồn kho khả dụng tại Store tiêm. | Store / Vaccine / Inventory / Vaccination |
-| RULE-10-06 | Tại thời điểm thực hiện tiêm phòng (`AdministerVaccine`), Bác sĩ thú y bắt buộc phải quét mã vạch (Barcode/QR code) của lô vaccine (`VaccineBatch`). Hệ thống tự động kiểm tra thời gian thực: (1) Lô vaccine đang ở trạng thái ACTIVE và thuộc kho khả dụng của Store; (2) Hạn sử dụng còn hiệu lực (`ExpiryDate > CurrentDate`); (3) Loại vaccine tương thích với loài và thể trạng của Pet theo phác đồ tiêm chủng. Mũi tiêm chỉ được ghi nhận khi tất cả các kiểm tra trên đều hợp lệ. | Store / Veterinarian / VaccineBatch / Vaccination |
-| RULE-10-07 | Dịch vụ tiêm phòng định kỳ thông thường (Routine Vaccination / Direct Service) được tiếp nhận trực tiếp hoặc theo lịch hẹn mà không bắt buộc tạo hồ sơ bệnh án khám bệnh phức tạp (`MedicalRecord`), Bác sĩ thú y thực hiện khám sàng lọc thể trạng nhanh và ghi nhận vào `VaccinationRecord`. Đối với tiêm vaccine trong phác đồ điều trị bệnh lý (Therapeutic Vaccination), mũi tiêm bắt buộc phải gắn liền với bệnh án (`MedicalRecord`) và phác đồ điều trị (`Treatment`) của phiên khám lâm sàng. | Store / Veterinarian / Vaccination / MedicalRecord |
+| RULE-10-01 | Định danh hồ sơ tiêm chủng thú cưng (`VaccinationRecord`, `ViewVaccinationSchedule`): Mỗi hồ sơ tiêm chủng phải gắn với một Pet cụ thể, ghi nhận đầy đủ loài, giống, tuổi, cân nặng và tiền sử dị ứng thuốc/vaccine. Customer có quyền xem toàn bộ lịch sử và kế hoạch tiêm chủng của Pet (`ViewVaccinationSchedule`). | Pet / Customer / VaccinationRecord |
+| RULE-10-02 | Quản lý danh mục vaccine và lô thuốc (`ManageVaccine`, `ManageVaccineBatch`, `ManageVaccineExpiry`): InventoryStaff quản lý danh mục vaccine, thông tin lô (Số lô `BatchNumber`, Nhà sản xuất, Ngày sản xuất, Hạn sử dụng `ExpiryDate`). Vaccine đã hết hạn sử dụng (`EXPIRED`) hoặc bị thu hồi tuyệt đối không được phép sử dụng để tiêm phòng cho Pet. | Store / Vaccine / VaccineBatch / Expiry |
+| RULE-10-03 | Kiểm tra phác đồ và tiền sử tiêm phòng (`CheckVaccinationSchedule`): Trước khi thực hiện tiêm phòng, Bác sĩ thú y bắt buộc phải kiểm tra lịch sử tiêm chủng và phác đồ khuyến nghị theo độ tuổi/loài (`CheckVaccinationSchedule`), thực hiện khám sàng lọc thể trạng (thân nhiệt, tim phổi, tri giác) để đảm bảo Pet đủ điều kiện sức khỏe tiêm phòng. | Store / Veterinarian / VaccinationSchedule |
+| RULE-10-04 | Kiểm soát hạn sử dụng và tính khả dụng của vaccine (`ManageVaccineExpiry`, `AdministerVaccine`): Mũi tiêm vaccine chỉ được ghi nhận thành công khi vaccine còn hạn sử dụng và thuộc tồn kho khả dụng tại Store tiêm. | Store / Vaccine / Inventory / Vaccination |
+| RULE-10-05 | Ghi nhận mũi tiêm và tự động trừ tồn kho thời gian thực (`RecordVaccination`): Sau khi tiêm thành công, hệ thống ghi nhận bản ghi `VaccinationRecord` (chứa mã lô, nhà sản xuất, hạn sử dụng, bác sĩ tiêm, vị trí tiêm), đồng thời tự động trừ 1 liều khỏi tồn kho khả dụng của lô vaccine tại Store. | Store / Veterinarian / Vaccination / Inventory |
+| RULE-10-06 | Điểm kiểm soát an toàn tiêm chủng tại điểm phục vụ (Point-of-Care Vaccine Safety Guard - `AdministerVaccine`, `ScheduleNextVaccination`, `SendVaccineReminder`): Tại thời điểm thực hiện tiêm phòng, Bác sĩ thú y bắt buộc phải quét mã vạch (Barcode/QR code) của lô vaccine (`VaccineBatch`). Hệ thống tự động kiểm tra thời gian thực: (1) Lô vaccine đang ở trạng thái ACTIVE và thuộc kho khả dụng của Store; (2) Hạn sử dụng còn hiệu lực ($\text{ExpiryDate} > \text{CurrentDate}$); (3) Tồn kho khả dụng của lô $\ge 1$; (4) Loại vaccine tương thích với loài và thể trạng của Pet theo phác đồ tiêm chủng. Mũi tiêm chỉ được ghi nhận khi 100% kiểm tra hợp lệ, sau đó tự động lập lịch tiêm nhắc lại (`ScheduleNextVaccination`) và gửi thông báo nhắc lịch (`SendVaccineReminder`). | Store / Veterinarian / VaccineBatch / Vaccination / SafetyGuard |
+| RULE-10-07 | Phân định dịch vụ Tiêm phòng định kỳ vs Tiêm phòng điều trị bệnh lý (Routine vs Therapeutic Vaccination Boundary): Dịch vụ tiêm phòng định kỳ thông thường (Routine Vaccination / Direct Service) được tiếp nhận trực tiếp hoặc theo lịch hẹn mà không bắt buộc tạo hồ sơ bệnh án khám bệnh phức tạp (`MedicalRecord`), Bác sĩ thú y thực hiện khám sàng lọc thể trạng nhanh và ghi nhận vào `VaccinationRecord`. Đối với tiêm vaccine trong phác đồ điều trị bệnh lý (Therapeutic Vaccination), mũi tiêm bắt buộc phải gắn liền với bệnh án (`MedicalRecord`) và phác đồ điều trị (`Treatment`) của phiên khám lâm sàng. | Store / Veterinarian / Vaccination / MedicalRecord |
 
-### Quy tắc Kiểm tra An toàn Tiêm chủng tại Điểm thực hiện (Point-of-Care Vaccine Safety Guard)
+### Quy tắc Kiểm tra An toàn Tiêm chủng tại Điểm thực hiện (Point-of-Care Vaccine Safety Guard Invariant)
 - Khi Bác sĩ gửi lệnh `AdministerVaccine` kèm `scannedBarcode`:
   1. Hệ thống giải mã barcode ra `batchNumber` và `vaccineId`.
   2. Kiểm tra `VaccineBatch.storeId == CurrentStoreId` và `VaccineBatch.status == ACTIVE`.
   3. Kiểm tra $\text{VaccineBatch.expiryDate} > \text{CurrentDate}()$. Nếu $\text{expiryDate} \le \text{CurrentDate}()$, hệ thống chặn thao tác ngay lập tức, trả về lỗi `VACCINE_BATCH_EXPIRED`, và tự động kích hoạt cảnh báo tồn kho lô hết hạn (`TriggerExpiryWarning`).
   4. Kiểm tra tồn kho khả dụng của lô: $\text{VaccineBatch.availableQuantity} \ge 1$. Khi tiêm thành công, tự động trừ 1 liều khỏi lô tồn kho.
   5. Ghi nhận thông tin định danh lô (`batchNumber`, `manufacturer`, `expiryDate`) vào bản ghi lịch sử tiêm chủng `VaccinationRecord` của Pet.
+  6. Tự động gọi `ScheduleNextVaccination` để tạo lịch tiêm nhắc lại tiếp theo và kích hoạt `SendVaccineReminder`.
+
+### Quy trình Dịch vụ Tiêm phòng Định kỳ Nhanh (Routine Fast-Track Vaccination Workflow Invariant)
+1. Tiếp nhận check-in: $\text{BookAppointment} \ / \ \text{RegisterQueueEntry} → \text{CheckInAppointment} \ / \ \text{StartQueueService}$.
+2. Sàng lọc thể trạng nhanh: Pre-vaccination screening (thân nhiệt, tri giác).
+3. Quét mã & Tiêm an toàn: $\text{AdministerVaccine}$ (tuân thủ Point-of-Care Safety Guard `RULE-10-06`).
+4. Ghi nhận & Lên lịch nhắc: $\text{RecordVaccination} → \text{ScheduleNextVaccination} → \text{SendVaccineReminder}$.
+5. Hoàn tất & Thu ngân: $\text{CheckOutAppointment} → \text{CreateInvoice}$.
 
 ---
 
@@ -158,11 +277,25 @@ Tài liệu này đặc tả toàn bộ các quy tắc nghiệp vụ (Business R
 
 | ID | Quy tắc nghiệp vụ (Business Rule) | Phạm vi (Scope) |
 |---|---|---|
-| RULE-11-01 | Dịch vụ Grooming chỉ được thực hiện cho Pet có lịch hẹn hợp lệ hoặc yêu cầu dịch vụ trực tiếp đã tiếp nhận tại Store. | Store / Pet / Grooming |
-| RULE-11-02 | Dịch vụ phát sinh (`AdditionalService`) chỉ được thêm vào khi quy trình Grooming đang ở trạng thái xử lý (`IN_PROGRESS`). | Store / Grooming |
-| RULE-11-03 | Dịch vụ phát sinh bắt buộc phải được Customer xác nhận đồng ý (`ConfirmAdditionalService`) trước khi thực hiện và tính phí. | Customer / Grooming |
-| RULE-11-04 | Phiên Grooming đã hoàn thành (`COMPLETED`) không được tiếp tục thêm dịch vụ phát sinh hoặc chỉnh sửa kết quả. | Store / Grooming |
-| RULE-11-05 | Các dịch vụ grooming và dịch vụ bổ sung phải thuộc danh mục dịch vụ đang được Store cung cấp. | Store / Service / Grooming |
+| RULE-11-01 | Đặt lịch và tiếp nhận dịch vụ Grooming (`BookAppointment`, `CheckInGrooming`, `CancelGrooming`): Dịch vụ Grooming chỉ được thực hiện cho Pet có lịch hẹn hợp lệ hoặc yêu cầu dịch vụ trực tiếp đã tiếp nhận tại Store. Khách hàng hoặc Tiếp tân có thể hủy dịch vụ trước khi phục vụ (`CancelGrooming` từ `WAITING -> CANCELLED`). | Store / Pet / Grooming / CheckIn |
+| RULE-11-02 | Kiểm tra thể trạng trước Grooming (`InspectPet`): Trước khi bắt đầu các công đoạn làm đẹp, Groomer bắt buộc phải kiểm tra thể trạng Pet (`InspectPet`: tình trạng da lông rối/bết, vết thương hở, nấm/ve rận, tính cách hung dữ/hoảng sợ) và ghi nhận biên bản kiểm tra. Nếu phát sinh vấn đề sức khỏe bất thường, Groomer có quyền yêu cầu Bác sĩ thú y hội chẩn hoặc tư vấn dịch vụ điều trị trước. | Store / Groomer / InspectPet / Grooming |
+| RULE-11-03 | Đề xuất dịch vụ phát sinh và Giao thức Hóa đơn Phụ phí độc lập (Surcharge Invoice Protocol D-02 - `AddGroomingService`, `ConfirmAdditionalService`, `RejectAdditionalService`):<br>1. Khi Groomer phát hiện cần làm thêm dịch vụ phát sinh trong quá trình phục vụ (`IN_PROGRESS`), Groomer gọi `AddGroomingService` → chuyển phiên sang `AWAITING_CUSTOMER_APPROVAL` và gửi thông báo xác nhận tới Customer.<br>2. Nếu Customer đồng ý (`ConfirmAdditionalService`): Hệ thống tự động khởi tạo một Hóa đơn Phụ phí độc lập (`Surcharge Invoice`) ở trạng thái `DRAFT` / `ISSUED` liên kết với phiên dịch vụ hiện tại và trải qua chu trình thanh toán độc lập trước khi chuyển sang `PAID` (theo D-02), tuyệt đối KHÔNG sửa đổi hóa đơn ban đầu đã thanh toán (tuân thủ Settlement Immutability D-01).<br>3. Nếu Customer từ chối (`RejectAdditionalService`): Groomer tiếp tục gói dịch vụ ban đầu mà không thực hiện hạng mục phát sinh. | Customer / Groomer / SurchargeInvoice / Grooming |
+| RULE-11-04 | Thực hiện dịch vụ và cập nhật tiến độ công đoạn (`PerformGrooming`, `UpdateGroomingResult`): Groomer thực hiện các bước theo quy trình chuẩn của gói dịch vụ (tắm rửa, sấy khô, vệ sinh tai móng, cắt tỉa tạo kiểu) và cập nhật tiến độ kết quả từng công đoạn (`UpdateGroomingResult`) trên hệ thống để chủ Pet có thể theo dõi. | Store / Groomer / PerformGrooming |
+| RULE-11-05 | Hoàn thành dịch vụ Grooming và giải phóng tài nguyên (`CompleteGrooming`): Khi kết thúc toàn bộ công đoạn làm đẹp, Groomer cập nhật ảnh hoàn thiện và thực hiện `CompleteGrooming` (chuyển sang `COMPLETED`), tự động giải phóng bàn Grooming (`ReleaseStoreResource`), và bàn giao Pet cho Tiếp tân để thực hiện check-out/bàn giao khách. Phiên Grooming ở trạng thái `COMPLETED` là bất biến, tuyệt đối không được thêm dịch vụ phát sinh hoặc chỉnh sửa kết quả. | Store / Groomer / CompleteGrooming / StoreResource |
+| RULE-11-06 | Dừng dịch vụ Grooming khẩn cấp giữa chừng và Tự động ghi nhận sự cố (Emergency Abort - `AbortGrooming`): Khi phiên đang `IN_PROGRESS`, nếu phát sinh sự cố an toàn (thú cưng hoảng loạn, cắn nhân viên, chấn thương, sốc nhiệt hoặc hư hỏng thiết bị), Groomer hoặc Store Manager thực hiện `AbortGrooming` kèm lý do dừng (`abort_reason`). Hệ thống chuyển sang `ABORTED`, tự động kích hoạt tạo biên bản sự cố `GroomingIncident` (`RULE-21-03`), gửi thông báo khẩn tới Customer (`SendIncidentNotification`), và xử lý hoàn tiền phần dịch vụ chưa thực hiện. | Store / Groomer / StoreManager / GroomingIncident / AbortGrooming |
+
+### Giao thức Xử lý Phụ phí Grooming Độc lập (Grooming Surcharge Invoice Protocol Invariant - D-02)
+- **Kích hoạt Dịch vụ Phát sinh:**
+  $$\text{IN\_PROGRESS} \xrightarrow{\text{AddGroomingService}} \text{AWAITING\_CUSTOMER\_APPROVAL}$$
+- **Khách hàng Chấp thuận (Consent Confirmed):**
+  $$\text{ConfirmAdditionalService} \implies \begin{cases} \text{CreateIndependentInvoice}(\text{Type} = \text{SURCHARGE}, \text{status} = \text{DRAFT/ISSUED}) \\ \text{LinkToCurrentGroomingSession}(\text{SessionId}) \\ \text{SessionStatus} \leftarrow \text{IN\_PROGRESS} \end{cases}$$
+- **Khách hàng Từ chối (Consent Rejected):**
+  $$\text{RejectAdditionalService} \implies \text{SessionStatus} \leftarrow \text{IN\_PROGRESS} \ (\text{Resume Base Service})$$
+- **Nguyên tắc Bất biến:** Tuyệt đối không chèn thêm Item phụ phí vào Hóa đơn gốc đã thanh toán (`PAID`), đảm bảo tính toàn vẹn của sổ cái tài chính (Financial Ledger Immutability).
+
+### Quy trình Dừng khẩn cấp & Tự động Lập biên bản Sự cố Grooming (Grooming Emergency Abort & Incident Trigger Invariant)
+- Khi phát sinh sự cố nguy hiểm:
+  $$\text{AbortGrooming}(\text{sessionId}, \text{abort\_reason}) \implies \begin{cases} \text{GroomingSession}.\text{status} \leftarrow \text{ABORTED} \\ \text{ReleaseStoreResource}(\text{groomingTableId}) \\ \text{CreateGroomingIncident}(\text{reason} = \text{abort\_reason}, \text{severity} = \text{HIGH}) \\ \text{SendIncidentNotification}(\text{Customer}, \text{StoreManager}) \\ \text{RequestPartialRefund}(\text{unconsumedServiceValue}) \end{cases}$$
 
 ---
 
@@ -170,14 +303,29 @@ Tài liệu này đặc tả toàn bộ các quy tắc nghiệp vụ (Business R
 
 | ID | Quy tắc nghiệp vụ (Business Rule) | Phạm vi (Scope) |
 |---|---|---|
-| RULE-12-01 | Tồn kho (`Inventory`) phải được theo dõi và quản lý riêng biệt theo từng Store hoặc Warehouse cụ thể. | Store / Warehouse / Inventory |
-| RULE-12-02 | Phiếu điều chỉnh tồn kho (`InventoryAdjustment`) phải gắn với Store/Warehouse phát sinh chênh lệch và phải có lý do điều chỉnh rõ ràng. | Store / Warehouse / InventoryAdjustment |
-| RULE-12-03 | Phiếu chuyển kho (`StockTransfer`) phải xác định rõ địa điểm nguồn, địa điểm đích và thuộc quyền quản lý của Organization. | Store / StockTransfer |
-| RULE-12-04 | Không được phép xuất kho hoặc chuyển kho số lượng hàng hóa vượt quá số lượng tồn kho khả dụng (`Available Quantity`). | Store / Inventory |
-| RULE-12-05 | Hàng hóa đã hết hạn sử dụng không được phép xuất bán hoặc chuyển kho sang Store khác. | Store / Inventory / Expiry |
-| RULE-12-06 | Phiếu điều chỉnh tồn kho và phiếu chuyển kho bắt buộc phải được Store Manager phê duyệt (`APPROVED`) trước khi thực hiện xuất hàng. | Store / Inventory |
-| RULE-12-07 | Chuyển kho bổ sung hàng từ Warehouse đến Store (Replenishment) chỉ hợp lệ khi Warehouse và Store nhận thuộc cùng một Organization. | Organization / Warehouse / Store / StockTransfer |
-| RULE-12-08 | Hủy phiếu chuyển kho (`CancelStockTransfer`) chỉ được thực hiện khi phiếu đang ở trạng thái `REQUESTED`. | StockTransfer |
+| RULE-12-01 | Quản lý phân định kho độc lập (`ReceiveInventory`, `IssueInventory`, `TrackInventory`): Tồn kho (`Inventory`) phải được theo dõi, phân bổ và hạch toán riêng biệt theo từng Store hoặc Warehouse cụ thể thuộc Organization. Dữ liệu tồn kho giữa các Organization độc lập được cách ly tuyệt đối 100% (Multi-Tenancy Isolation). | Store / Warehouse / Inventory |
+| RULE-12-02 | Điều chỉnh tồn kho & Kiểm kê định kỳ (`AdjustInventory`, `CountInventory`): Phiếu điều chỉnh tồn kho (`InventoryAdjustment`) phát sinh sau kiểm kê phải gắn với Store hoặc Warehouse phát sinh chênh lệch và bắt buộc phải ghi rõ lý do điều chỉnh hợp lệ (`DAMAGE`, `EXPIRY`, `THEFT`, `COUNT_VARIANCE`, `TRANSIT_VARIANCE`). | Store / Warehouse / InventoryAdjustment |
+| RULE-12-03 | Phê duyệt kép điều chỉnh tồn kho Maker-Checker (`ApproveInventoryAdjustment`): Mọi phiếu điều chỉnh tồn kho bắt buộc phải được Store Manager (phạm vi Store) hoặc Organization Admin (phạm vi Warehouse/toàn chuỗi) phê duyệt (`APPROVED`) trước khi cập nhật số lượng tồn kho sổ sách. Bắt buộc thực thi nguyên tắc Maker-Checker: Người tạo phiếu điều chỉnh (`created_by`) tuyệt đối không được là người phê duyệt (`approved_by`). Nếu `created_by == approved_by`, hệ thống chặn thao tác với mã lỗi `MAKER_CHECKER_VIOLATION`. | Store / Warehouse / InventoryAdjustment / StoreManager |
+| RULE-12-04 | Khởi tạo yêu cầu chuyển kho liên chi nhánh (`CreateStockTransfer`): Phiếu chuyển kho (`StockTransfer`) phải xác định rõ địa điểm nguồn (`source_location`), địa điểm đích (`destination_location`), danh mục hàng hóa, số lượng và thông tin lô/hạn dùng. Yêu cầu chuyển kho chỉ hợp lệ khi cả điểm xuất và điểm nhận thuộc cùng một Organization. | Organization / Store / Warehouse / StockTransfer |
+| RULE-12-05 | Kiểm tra tồn kho khả dụng & Hàng hết hạn khi xuất/chuyển kho (`IssueInventory`, `ShipStockTransfer`): Không được phép xuất bán hoặc chuyển kho số lượng hàng hóa vượt quá số lượng tồn kho khả dụng ($\text{AvailableQuantity} = \text{PhysicalQuantity} - \text{ReservedQuantity}$). Hàng hóa đã hết hạn sử dụng (`EXPIRED`) hoặc trong diện thu hồi/hư hỏng tuyệt đối không được phép xuất bán hoặc điều chuyển sang Store khác. | Store / Inventory / StockTransfer / Expiry |
+| RULE-12-06 | Phê duyệt chuyển kho Maker-Checker (`ApproveStockTransfer`, `RejectStockTransfer`): Phiếu chuyển kho bắt buộc phải được Store Manager tại điểm xuất thẩm định và phê duyệt (`APPROVED`) trước khi tiến hành xuất hàng vận chuyển (`ShipStockTransfer`). Bắt buộc thực thi nguyên tắc Maker-Checker: Người tạo yêu cầu chuyển kho (`created_by`) tuyệt đối không được là người phê duyệt (`approved_by`). Nếu `created_by == approved_by`, hệ thống chặn với mã lỗi `MAKER_CHECKER_VIOLATION`. | Store / StockTransfer / StoreManager |
+| RULE-12-07 | Vòng đời chuyển kho 2 bước & Hàng trên đường đi (`ShipStockTransfer`): Khi xuất kho chuyển hàng (`ShipStockTransfer`), số lượng xuất bị trừ khỏi tồn kho khả dụng tại điểm xuất và chuyển sang trạng thái trung gian `IN_TRANSIT`. Hàng đang `IN_TRANSIT` không được tính vào tồn kho khả dụng của điểm nhận cho đến khi điểm nhận hoàn tất xác nhận nhập kho thực tế. | Store / Warehouse / StockTransfer / Inventory |
+| RULE-12-08 | Tiếp nhận chuyển kho nguyên vẹn vs Sai lệch (`ReceiveStockTransfer`, `ReceiveStockTransferWithDiscrepancy`): Khi hàng chuyển kho đến điểm nhận: (1) Nếu hàng nguyên vẹn và đủ số lượng, Inventory Staff thực hiện `ReceiveStockTransfer`, phiếu chuyển sang `RECEIVED` và tăng ngay tồn kho khả dụng tại điểm nhận; (2) Nếu phát hiện sai lệch (`DISCREPANCY` - thiếu, thừa, hư hại), Inventory Staff thực hiện `ReceiveStockTransferWithDiscrepancy`, phiếu chuyển sang `DISCREPANCY_RECORDED`. | Store / StockTransfer / Inventory |
+| RULE-12-09 | Xử lý sai lệch chuyển kho & Hạch toán tổn thất (`ResolveStockTransferDiscrepancy`, `AdjustInventory`): Áp dụng bất biến $\text{ShippedQuantity} = \text{ReceivedQuantity} + \text{DamagedQuantity} + \text{LostQuantity}$. Store nhận lập tức nhập kho phần nguyên vẹn (`ReceivedQuantity`), chuyển phần hư hại (`DamagedQuantity`) vào khu cách ly (`DAMAGED_STOCK`), và ghi nhận phần thất thoát (`LostQuantity`) vào chi phí hao hụt vận chuyển. Store Manager tại điểm nhận bắt buộc lập và phê duyệt phiếu `InventoryAdjustment` (lý do `TRANSIT_VARIANCE`) để cân bằng sổ sách trước khi hoàn tất phiếu chuyển kho sang `RECEIVED`. | Store / Warehouse / StockTransfer / InventoryAdjustment |
+| RULE-12-10 | Hủy yêu cầu chuyển kho (`CancelStockTransfer`): Lệnh hủy phiếu chuyển kho (`CancelStockTransfer`) chỉ được thực hiện bởi Inventory Staff hoặc Store Manager khi phiếu đang ở trạng thái `REQUESTED` và chưa được phê duyệt/chưa xuất hàng. | StockTransfer / InventoryStaff / StoreManager |
+| RULE-12-11 | Quản trị Lô & Hạn sử dụng theo nguyên tắc FEFO (`TrackBatch`, `TrackExpiry`): Toàn bộ biến động hàng hóa vật tư, thuốc và vaccine phải được quản lý theo số lô (`batch_number`), ngày sản xuất (`manufacture_date`) và hạn sử dụng (`expiry_date`). Hệ thống ưu tiên xuất kho theo nguyên tắc Hết hạn trước - Xuất trước (FEFO: First Expired, First Out). | Store / Warehouse / Batch / Expiry |
+| RULE-12-12 | Cảnh báo tự động tồn kho an toàn & Hạn sử dụng (`TriggerLowStockAlert`, `TriggerExpiryWarning`): Hệ thống tự động quét và kích hoạt cảnh báo tồn kho thấp (`TriggerLowStockAlert`) khi $\text{AvailableQuantity} \le \text{SafetyStockLevel}$, và tự động kích hoạt cảnh báo hàng sắp hết hạn (`TriggerExpiryWarning`) trước thời hạn cấu hình quy định (ví dụ: 30/60/90 ngày trước `expiry_date`). | Store / Warehouse / Inventory / System |
+| RULE-12-13 | Tiếp nhận hàng bổ sung tại Warehouse trung tâm (`ManageWarehouse`, `ReceiveAtWarehouse`): Warehouse trung tâm do Organization Admin quản lý tập trung và Inventory Staff tại Warehouse tiếp nhận hàng nhập từ nhà cung cấp hoặc điều chuyển từ chuỗi, phục vụ điều phối tái bổ sung (Replenishment) cho toàn bộ các Store trực thuộc Organization. | Organization / Warehouse / Inventory |
+
+### Quy tắc Xử lý Sai lệch Chuyển kho & Tổn thất Vận chuyển (Stock Transfer Discrepancy Invariant)
+- Khi kiện hàng chuyển kho đến Store đích, nhân viên kiểm đếm số lượng thực nhận (`ReceivedQuantity`), số lượng hư hại (`DamagedQuantity`) và số lượng thất thoát (`LostQuantity`):
+  $$\text{ShippedQuantity} = \text{ReceivedQuantity} + \text{DamagedQuantity} + \text{LostQuantity}$$
+- **Nhập kho tức thì phần nguyên vẹn:** Hệ thống tăng ngay số lượng tồn kho khả dụng tại Store đích:
+  $$\text{AvailableQuantity}_{\text{dest}} += \text{ReceivedQuantity}$$
+- **Hạch toán phần hư hại & thất thoát:**
+  - $\text{DamagedQuantity}$ được chuyển vào vị trí cách ly (`DAMAGED_STOCK`) để chờ hoàn trả nhà vận chuyển hoặc tiêu hủy có biên bản.
+  - $\text{LostQuantity}$ được hạch toán vào chi phí hao hụt vận chuyển (`TRANSIT_LOSS_EXPENSE`).
+- **Phê duyệt cân bằng sổ sách (Maker-Checker):** Phiếu chuyển kho chuyển sang trạng thái `DISCREPANCY_RECORDED`. Store Manager tại điểm nhận bắt buộc lập và phê duyệt phiếu `InventoryAdjustment` (loại `TRANSIT_LOSS` hoặc `TRANSIT_DAMAGE`) tuân thủ `created_by != approved_by`. Sau khi phiếu điều chỉnh được phê duyệt (`APPROVED`), phiếu chuyển kho chính thức chuyển sang trạng thái `RECEIVED`.
 
 ---
 
@@ -185,12 +333,14 @@ Tài liệu này đặc tả toàn bộ các quy tắc nghiệp vụ (Business R
 
 | ID | Quy tắc nghiệp vụ (Business Rule) | Phạm vi (Scope) |
 |---|---|---|
-| RULE-13-01 | Yêu cầu mua hàng (`PurchaseRequest`) phải xuất phát từ Store hoặc Warehouse có nhu cầu bổ sung hàng hóa. | Organization / Store / PurchaseRequest |
-| RULE-13-02 | Đơn đặt hàng nhà cung cấp (`PurchaseOrder`) phải gắn với Supplier hợp lệ được Organization quản lý. | Organization / Supplier / PurchaseOrder |
-| RULE-13-03 | Hàng nhận từ Purchase Order chỉ được cập nhật tăng tồn kho cho đúng Store/Warehouse nhận hàng thực tế. | Store / PurchaseOrder / Inventory |
-| RULE-13-04 | Purchase Request phải được Store Manager phê duyệt (`APPROVED`) trước khi tạo Purchase Order tương ứng. | Store / PurchaseRequest |
-| RULE-13-05 | Hàng nhận từ Purchase Order làm tăng số lượng tồn kho khả dụng tại thời điểm ghi nhận tiếp nhận hàng (`ReceiveGoods`). | Store / PurchaseOrder / Inventory |
-| RULE-13-06 | Đơn đặt hàng đã hủy (`CANCELLED`) không được phép tiếp nhận hàng hoặc cập nhật tồn kho. | PurchaseOrder |
+| RULE-13-01 | Khởi tạo yêu cầu mua hàng nội bộ (`CreatePurchaseRequest`, `SubmitPurchaseRequest`): Yêu cầu mua hàng (`PurchaseRequest`) phải xuất phát từ Store hoặc Warehouse có nhu cầu bổ sung hàng hóa, xác định rõ danh mục sản phẩm/vật tư, số lượng đề xuất, đơn giá dự kiến và nhà cung cấp khuyến nghị. | Organization / Store / Warehouse / PurchaseRequest |
+| RULE-13-02 | Phê duyệt yêu cầu mua hàng Maker-Checker (`ApprovePurchaseRequest`, `RejectPurchaseRequest`): Purchase Request bắt buộc phải được Store Manager (phạm vi Store) hoặc Organization Admin (phạm vi Warehouse/toàn chuỗi) thẩm định và phê duyệt (`APPROVED`) hoặc từ chối (`REJECTED` kèm lý do) trước khi tạo Đơn đặt hàng nhà cung cấp (`PurchaseOrder`). Bắt buộc thực thi nguyên tắc Maker-Checker: Người tạo yêu cầu mua hàng (`created_by`) tuyệt đối không được là người phê duyệt (`approved_by`). Nếu `created_by == approved_by`, hệ thống chặn với mã lỗi `MAKER_CHECKER_VIOLATION`. | Store / Organization / PurchaseRequest / StoreManager |
+| RULE-13-03 | Hủy yêu cầu mua hàng (`CancelPurchaseRequest`): Inventory Staff chỉ được phép hủy Purchase Request khi đang ở trạng thái `DRAFT` hoặc `SUBMITTED` (chưa được phê duyệt). | Store / Warehouse / PurchaseRequest / InventoryStaff |
+| RULE-13-04 | Khởi tạo và theo dõi đơn đặt hàng nhà cung cấp (`CreatePurchaseOrder`, `TrackPurchaseOrder`, `ManageSupplier`): Đơn đặt hàng nhà cung cấp (`PurchaseOrder`) phải được khởi tạo từ Purchase Request đã duyệt (`APPROVED`) và gắn với Nhà cung cấp (`Supplier`) hợp lệ đang ở trạng thái `ACTIVE` do Organization Admin quản lý. | Organization / Supplier / PurchaseOrder |
+| RULE-13-05 | Kiểm tra chất lượng và tiếp nhận hàng giao từ NCC (`InspectGoods`, `ReceiveGoods`): Khi nhà cung cấp giao hàng, Inventory Staff bắt buộc thực hiện kiểm tra thực tế về số lượng, tình trạng bao bì, quy cách đóng gói và hạn sử dụng (`InspectGoods`) trước khi thực hiện ghi nhận tiếp nhận hàng (`ReceiveGoods`). Hàng hóa không đạt tiêu chuẩn bị từ chối tiếp nhận và lập biên bản trả hàng NCC. | Store / Warehouse / PurchaseOrder / InventoryStaff |
+| RULE-13-06 | Tăng tồn kho thực tế sau nhập hàng (`UpdateInventory`): Hàng nhận đạt chuẩn từ Purchase Order được hệ thống tự động cập nhật tăng số lượng tồn kho thực tế và tồn kho khả dụng tại đúng Store hoặc Warehouse nhận hàng thực tế, đồng thời lưu trữ đầy đủ thông tin số lô (`batch_number`) và hạn sử dụng (`expiry_date`). | Store / Warehouse / PurchaseOrder / Inventory |
+| RULE-13-07 | Xử lý giao hàng nhiều đợt và đóng đơn hàng giao thiếu (`CancelRemainingPurchaseOrder`): Đối với Purchase Order giao hàng nhiều đợt (`PARTIALLY_RECEIVED`), nếu nhà cung cấp không còn khả năng tiếp tục giao phần hàng còn lại, Store Manager hoặc Inventory Staff được phép kích hoạt lệnh `CancelRemainingPurchaseOrder` để hủy nghĩa vụ nhận số lượng còn thiếu và chuyển Purchase Order sang trạng thái kết thúc `CLOSED`. | Store / Warehouse / PurchaseOrder / StoreManager |
+| RULE-13-08 | Ràng buộc tính bất biến của đơn đặt hàng đã kết thúc (`CancelPurchaseOrder`, `ReceiveGoods`): Đơn đặt hàng nhà cung cấp khi đã chuyển sang trạng thái kết thúc `CANCELLED` hoặc `CLOSED` tuyệt đối không được phép tiếp nhận thêm hàng, không được điều chỉnh số lượng và không được cập nhật tăng tồn kho. | PurchaseOrder / Inventory |
 
 ---
 
@@ -198,20 +348,25 @@ Tài liệu này đặc tả toàn bộ các quy tắc nghiệp vụ (Business R
 
 | ID | Quy tắc nghiệp vụ (Business Rule) | Phạm vi (Scope) |
 |---|---|---|
-| RULE-14-01 | Mỗi Order phải thuộc về một Customer và một Store cụ thể nơi đơn hàng được tạo và bàn giao. | Store / Customer / Order |
-| RULE-14-02 | Sản phẩm trong Order phải là sản phẩm đang được Store phân phối và có tồn kho khả dụng đáp ứng đủ số lượng. | Store / Product / Order |
-| RULE-14-03 | Đơn hàng đã hủy (`CANCELLED`) không được phép tiếp tục xử lý, đóng gói hoặc bàn giao cho khách. | Order |
-| RULE-14-04 | Trạng thái OrderStatus phải phản ánh chính xác quy trình: `PENDING_PAYMENT -> PAID -> CONFIRMED -> PROCESSING -> READY -> DELIVERED`. | Order |
-| RULE-14-05 | Bàn giao đơn hàng (`CompleteStoreOrder`) chỉ được thực hiện tại Store nơi đơn hàng được xử lý và khi đơn hàng ở trạng thái `READY`. | Store / Order |
-| RULE-14-06 | Hủy đơn hàng (`CancelOrder`) chỉ được phép thực hiện khi đơn hàng đang ở trạng thái `PENDING_PAYMENT` hoặc `CONFIRMED` (chưa vào giai đoạn soạn hàng `PROCESSING`). | Order |
-| RULE-14-07 | Khi đơn hàng ở trạng thái `PENDING_PAYMENT`, hệ thống giữ chỗ số lượng tồn kho khả dụng (Reserved Quantity) tối đa trong thời gian Hold TTL là 15 phút. Quá thời hạn 15 phút khách hàng chưa hoàn tất thanh toán thành công, hệ thống tự động giải phóng số lượng tồn kho đã giữ và chuyển đơn hàng sang trạng thái `CANCELLED` (kích hoạt qua sự kiện `ProcessOrderTimeout`). | Store / Inventory / Order |
+| RULE-14-01 | Định danh và phạm vi đơn hàng (`CreateOrder`, `ViewOrder`): Mỗi Đơn hàng (`Order`) phải thuộc về một Customer xác định và gắn liền với đúng một Store cụ thể nơi đơn hàng được tạo, xử lý và bàn giao. Khách hàng có quyền tra cứu và xem chi tiết đơn hàng (`ViewOrder`) của mình. Dữ liệu đơn hàng được phân lập 100% theo Store và Organization. | Store / Customer / Order |
+| RULE-14-02 | Tính khả dụng của sản phẩm và kiểm tra tồn kho (`CreateOrder`, `CheckoutOrder`): Toàn bộ sản phẩm trong Order phải thuộc danh mục sản phẩm đang mở bán (`ACTIVE`) tại Store và có tồn kho khả dụng đáp ứng đủ số lượng đặt mua: $\text{AvailableQuantity} \ge \text{OrderQuantity}$. | Store / Product / Order |
+| RULE-14-03 | Phân định luồng hoàn tất đơn hàng theo kênh bán hàng (Order Fulfillment Split - Decision D-03):<br>1. **Kênh Bán lẻ trực tiếp tại quầy POS (`In-Store Instant Handover`):** Quy trình tinh gọn tức thời đồng bộ: `PAID -> DELIVERED` (sau khi thu ngân ghi nhận thanh toán thành công, đơn hàng lập tức chuyển sang `DELIVERED` và trừ trực tiếp `PhysicalQuantity`).<br>2. **Kênh Đặt hàng Online / App (`Staged Fulfillment`):** Quy trình tuần tự đa bước: `PENDING_PAYMENT (Hold TTL 15m) -> PAID -> CONFIRMED -> PROCESSING -> READY -> DELIVERED`. | Store / Order / POS / Customer |
+| RULE-14-04 | Phân định cơ chế giữ chỗ tồn kho (Hold TTL) và chống nghẽn theo kênh (`CheckoutOrder`, `ProcessOrderTimeout`):<br>1. **Kênh Online / App:** Khi khách hàng tiến hành checkout (`CheckoutOrder`), hệ thống áp dụng Optimistic Locking để tạm giữ tồn kho ($\text{ReservedQuantity} += \text{OrderQuantity}$) với thời hạn hiệu lực tối đa 15 phút ($\text{Hold\_TTL} = 15\text{ phút}$). Quá thời hạn 15 phút chưa thanh toán thành công, tác vụ nền `ProcessOrderTimeout` tự động hủy đơn (`CANCELLED`) và giải phóng $\text{ReservedQuantity}$.<br>2. **Kênh POS Bán lẻ tại quầy:** Giao dịch thực hiện trực tiếp tại quầy thu ngân trong cùng một ranh giới `@Transactional`, khóa phiên thu ngân tối đa 3 phút khi chờ quẹt thẻ/tiền mặt, thanh toán xong trừ trực tiếp $\text{PhysicalQuantity}$ mà không qua cơ chế giữ chỗ ảo 15 phút. | Store / Inventory / Order / POS |
+| RULE-14-05 | Xử lý đơn hàng Online tại Store (`ConfirmOrder`, `ProcessOrder`, `PrepareProductOrder`): Khi đơn hàng Online thanh toán thành công (`PAID`), hệ thống hoặc Receptionist chuyển đơn sang `CONFIRMED`. Inventory Staff hoặc nhân viên bán hàng tiếp nhận xử lý (`ProcessOrder`), soạn và đóng gói sản phẩm (`PrepareProductOrder`) chuyển đơn sang `PROCESSING`, và sau khi đóng gói xong chuyển sang `READY` để chờ khách hoặc tài xế đến nhận. | Store / Order / InventoryStaff / Receptionist |
+| RULE-14-06 | Bàn giao và hoàn thành đơn hàng tại Store (`CompleteStoreOrder`): Lệnh bàn giao đơn hàng (`CompleteStoreOrder`) đối với POS thực hiện ngay khi thanh toán (`PAID -> DELIVERED`); đối với đơn Online/Pickup thực hiện khi đơn ở trạng thái `READY` và khách hàng xuất trình mã nhận hàng hợp lệ → chuyển sang `DELIVERED`. | Store / Order / Receptionist |
+| RULE-14-07 | Quy tắc hủy đơn hàng và hoàn tiền (Cancellation & Terminal States - Decision D-03):<br>1. **Hủy trước khi bàn giao:** Khách hàng hủy đơn khi chưa thanh toán (`PENDING_PAYMENT` qua `CancelOrder`), hoặc Store Manager / Receptionist hủy đơn sau khi đã thanh toán (`PAID`/`CONFIRMED`/`PROCESSING`/`READY` qua `CancelOrderWithRefund` kèm hoàn tiền 100% và hoàn kho) → Đơn hàng chuyển sang trạng thái kết thúc duy nhất là `CANCELLED`.<br>2. **Đổi trả sau khi đã bàn giao (`DELIVERED`):** Nếu khách hàng đổi trả 100% toàn bộ đơn hàng và được hoàn tiền 100% → Đơn hàng chuyển sang trạng thái kết thúc `REFUNDED`. Nếu chỉ đổi trả một phần đơn hàng (`Partial Return`) → Đơn hàng GIỮ NGUYÊN trạng thái `DELIVERED` và cập nhật lũy kế số tiền hoàn vào thuộc tính `total_refunded_amount`. | Store / Order / Refund / TerminalState |
+| RULE-14-08 | Ràng buộc tính bất biến của đơn hàng đã hủy (`CancelOrder`): Đơn hàng khi đã chuyển sang trạng thái kết thúc `CANCELLED` là BẤT BIẾN, tuyệt đối không được phép tiếp tục xử lý, đóng gói, bàn giao cho khách hoặc khôi phục lại. | Order |
+| RULE-14-09 | Gửi thông báo trạng thái đơn hàng (`SendOrderNotification`): Hệ thống tự động gửi thông báo cho khách hàng tại các mốc chuyển trạng thái quan trọng: Đặt hàng thành công (`PENDING_PAYMENT`), Đã thanh toán (`CONFIRMED`), Đang chuẩn bị hàng (`PROCESSING`), Hàng sẵn sàng tại quầy (`READY`), Bàn giao thành công (`DELIVERED`), Hủy đơn hàng (`CANCELLED`). | Store / Order / Notification / System |
 
 ### Mô hình Khóa Tồn kho Đồng thời (Inventory Concurrency & Reservation Invariant)
 - Tồn kho của một sản phẩm tại Store được tính theo công thức:
   $$\text{AvailableQuantity} = \text{PhysicalQuantity} - \text{ReservedQuantity}$$
-- Khi tạo đơn hàng (`CreateOrder`): Hệ thống kiểm tra $\text{AvailableQuantity} \ge \text{OrderQuantity}$. Nếu thỏa mãn, áp dụng Optimistic Locking (dùng trường `version` trong DB) để tăng $\text{ReservedQuantity}$ lên tương ứng mà chưa giảm $\text{PhysicalQuantity}$.
-- Khi thanh toán thành công (`PaymentSucceeded`): Chuyển đơn sang `PAID`/`CONFIRMED`, số lượng đã giữ chuyển từ $\text{ReservedQuantity}$ sang khấu trừ chính thức khỏi $\text{PhysicalQuantity}$ khi đơn hàng vào giai đoạn đóng gói (`PROCESSING`).
-- Khi hết thời gian giữ chỗ (Hold TTL = 15 phút) hoặc khách hủy đơn (`CancelOrder`): Hệ thống tự động giảm $\text{ReservedQuantity}$, khôi phục $\text{AvailableQuantity}$, và chuyển đơn hàng sang `CANCELLED`.
+- **Đối với đơn hàng Online/App:**
+  - Khi tạo đơn hàng hoặc checkout (`CreateOrder` / `CheckoutOrder`): Hệ thống kiểm tra $\text{AvailableQuantity} \ge \text{OrderQuantity}$. Nếu thỏa mãn, áp dụng Optimistic Locking (dùng trường `version` trong DB) để tăng $\text{ReservedQuantity}$ lên tương ứng mà chưa giảm $\text{PhysicalQuantity}$.
+  - Khi thanh toán thành công (`PaymentSucceeded`): Chuyển đơn sang `PAID`/`CONFIRMED`, số lượng đã giữ chuyển từ $\text{ReservedQuantity}$ sang khấu trừ chính thức khỏi $\text{PhysicalQuantity}$ khi đơn hàng vào giai đoạn đóng gói (`PROCESSING`).
+  - Khi hết thời gian giữ chỗ (Hold TTL = 15 phút) hoặc khách hủy đơn (`CancelOrder`): Hệ thống tự động giảm $\text{ReservedQuantity}$, khôi phục $\text{AvailableQuantity}$, và chuyển đơn hàng sang `CANCELLED`.
+- **Đối với giao dịch POS tại quầy:**
+  - Giao dịch thực hiện trực tiếp tại quầy thu ngân trong cùng một ranh giới `@Transactional`. Sau khi thu ngân ấn xác nhận thu tiền thành công (`RecordCashPayment` / POS Terminal), hệ thống trực tiếp trừ $\text{PhysicalQuantity}$ và hoàn tất đơn hàng mà không trải qua bước treo giữ chỗ ảo 15 phút.
 - Ngăn ngừa hoàn toàn rủi ro Dead Inventory Lock (treo tồn kho ảo) và Race Condition khi nhiều khách hàng cùng thanh toán món hàng cuối cùng.
 
 ---
@@ -220,13 +375,14 @@ Tài liệu này đặc tả toàn bộ các quy tắc nghiệp vụ (Business R
 
 | ID | Quy tắc nghiệp vụ (Business Rule) | Phạm vi (Scope) |
 |---|---|---|
-| RULE-15-01 | Mỗi Hóa đơn (`Invoice`) phải gắn với một Customer và một Store cụ thể. | Store / Customer / Invoice |
-| RULE-15-02 | Các mục dịch vụ và sản phẩm ghi nhận trên Invoice phải thuộc phạm vi cung cấp hợp lệ của Store tại thời điểm tạo hóa đơn. | Store / Invoice |
-| RULE-15-03 | Mức giảm giá (Discount/Voucher) áp dụng trên Invoice phải thỏa mãn đầy đủ các điều kiện áp dụng và không vượt quá tổng giá trị hóa đơn. | Invoice / Discount |
-| RULE-15-04 | Invoice ở trạng thái `VOID` không được phép phát hành, thanh toán hoặc sử dụng cho bất kỳ nghiệp vụ nào. | Invoice |
-| RULE-15-05 | Invoice chỉ nhận thanh toán khi ở trạng thái `ISSUED` hoặc `PARTIALLY_PAID`, và tổng số tiền thanh toán không được vượt quá số tiền còn lại phải trả. | Invoice / Payment |
-| RULE-15-06 | Invoice chỉ ghi nhận dịch vụ, sản phẩm và chiết khấu hợp lệ thuộc phạm vi Store. | Store / Service / Product / Invoice |
-| RULE-15-07 | Invoice chỉ chuyển sang trạng thái `REFUNDED` khi toàn bộ các giao dịch Payment thuộc Invoice đó đã được hoàn tiền đầy đủ 100%. | Invoice / Refund |
+| RULE-15-01 | Định danh và phạm vi hóa đơn (`CreateInvoice`, `ViewInvoice`): Mỗi Hóa đơn (`Invoice`) phải gắn với đúng một Customer và một Store phát sinh giao dịch. Khách hàng có quyền tra cứu và xem chi tiết hóa đơn (`ViewInvoice`) của mình. Mọi dịch vụ, sản phẩm ghi nhận trên Invoice phải thuộc danh mục dịch vụ/sản phẩm hợp lệ đang mở tại Store đó tại thời điểm tạo hóa đơn. | Store / Customer / Invoice |
+| RULE-15-02 | Tính toán giá trị hóa đơn & Chiết khấu (`AddServiceToInvoice`, `AddProductToInvoice`, `ApplyDiscount`): Tổng tiền hóa đơn (`TotalAmount`) được tính toán tự động bằng tổng giá trị các dịch vụ và sản phẩm sau khi trừ chiết khấu/mã giảm giá hợp lệ: $\text{TotalAmount} = \sum(\text{ItemAmount}) - \text{DiscountAmount}$. Chiết khấu không được vượt quá tổng giá trị hóa đơn. | Store / Invoice / Discount |
+| RULE-15-03 | Phát hành hóa đơn chính thức (`IssueInvoice`): Hóa đơn ở trạng thái bản nháp (`DRAFT`) sau khi hoàn tất thêm dịch vụ/sản phẩm phải được Tiếp tân hoặc Nhân viên Tài chính phát hành chính thức (`IssueInvoice`) chuyển sang trạng thái `ISSUED`. Hóa đơn chỉ được phép tiếp nhận thanh toán khi đang ở trạng thái `ISSUED`. | Store / Invoice / FinanceStaff / Receptionist |
+| RULE-15-04 | Phân định quy tắc hủy hóa đơn theo trạng thái phát hành (Invoice Void & Discard Controls):<br>1. **Bản nháp hóa đơn tạo sai (`DRAFT`):** Được hủy bỏ qua lệnh `DiscardInvoice` → Chuyển sang `CANCELLED`.<br>2. **Hóa đơn đã phát hành chưa thanh toán (`ISSUED`):** Được vô hiệu hóa qua lệnh `VoidInvoice` → Chuyển sang `VOID` khi hủy nghĩa vụ thanh toán hoặc khách không thanh toán.<br>3. **Hóa đơn đã thanh toán (`PAID`):** TUYỆT ĐỐI CẤM thực hiện `VoidInvoice` hoặc xóa bỏ. Khi muốn hoàn lại tiền cho khách, bắt buộc phải thực hiện thông qua quy trình hoàn tiền `Refund` độc lập (`RULE-17-01`). | Invoice / FinanceStaff / Receptionist |
+| RULE-15-05 | Giao thức phát hành Hóa đơn Phụ phí phát sinh (Surcharge Invoice Protocol - Decision D-02): Khi khách hàng xác nhận đồng ý các dịch vụ làm đẹp/chăm sóc phát sinh thêm trong ca Grooming (`ConfirmAdditionalService` theo `RULE-11-03`), hệ thống phát hành một Hóa đơn Phụ phí độc lập (`IssueSurchargeInvoice`) ở trạng thái `DRAFT` / `ISSUED` liên kết với phiên dịch vụ hiện tại, không ghi đè lên hóa đơn gốc. Hóa đơn phụ phí trải qua chu trình thanh toán độc lập trước khi chuyển sang `PAID`. | Store / Grooming / Invoice / Surcharge |
+| RULE-15-06 | Tất toán hóa đơn (`PaymentSucceeded`): Invoice chỉ chuyển sang trạng thái `PAID` khi tổng các khoản thanh toán thành công (`SUCCESS`) tích lũy trên aggregate Payment đạt đủ 100% giá trị `TotalAmount` của hóa đơn. | Invoice / Payment |
+| RULE-15-07 | Tính Bất biến của việc Tất toán Hóa đơn (Settlement Immutability - Decision D-01): Hóa đơn sau khi đã chuyển sang trạng thái `PAID` sẽ **VĨNH VIỄN GIỮ NGUYÊN trạng thái `PAID`**. Mọi giao dịch hoàn tiền một phần (`Partial Refund`) hay hoàn tiền toàn phần (`Full Refund`) TUYỆT ĐỐI KHÔNG làm thay đổi trạng thái hóa đơn về `REFUNDED`, `UNPAID` hoặc `VOID`. Số tiền hoàn được ghi nhận lũy kế vào thuộc tính `total_refunded_amount` trên Invoice và đối soát chi tiết qua các bản ghi `Refund` và `Payment`. | Invoice / Refund / Settlement |
+| RULE-15-08 | Đối soát hóa đơn tài chính định kỳ (`ReconcileInvoice`): Nhân viên Tài chính (`FinanceStaff`) thực hiện đối soát định kỳ toàn bộ hóa đơn `ISSUED`, `PAID`, `VOID` với các giao dịch thanh toán thực tế và khoản hoàn tiền để đảm bảo cân đối kế toán. | Store / Organization / Invoice / FinanceStaff |
 
 ---
 
@@ -234,11 +390,13 @@ Tài liệu này đặc tả toàn bộ các quy tắc nghiệp vụ (Business R
 
 | ID | Quy tắc nghiệp vụ (Business Rule) | Phạm vi (Scope) |
 |---|---|---|
-| RULE-16-01 | Mỗi giao dịch Thanh toán (`Payment`) phải gắn với một nghĩa vụ thanh toán hoặc Invoice cụ thể. | Store / Invoice / Payment |
-| RULE-16-02 | Tổng các khoản Payment thành công (`SUCCESS`) cho một Invoice không được vượt quá tổng số tiền phải thanh toán của Invoice đó. | Invoice / Payment |
-| RULE-16-03 | Giao dịch Payment chỉ được công nhận là hợp lệ (`SUCCESS`) sau khi có xác nhận từ cổng thanh toán trực tuyến hoặc xác nhận tiền mặt từ Thu ngân. | Payment |
-| RULE-16-04 | Trạng thái PaymentStatus phải phản ánh đúng kết quả: `PENDING -> PROCESSING -> SUCCESS / FAILED / CANCELLED`. | Payment |
-| RULE-16-05 | Callback/Webhook từ cổng thanh toán chỉ được áp dụng cho giao dịch Payment khớp đúng mã giao dịch và số tiền đã đăng ký. | Payment |
+| RULE-16-01 | Định danh và ràng buộc nghĩa vụ thanh toán (`MakePayment`, `RecordCashPayment`): Mỗi giao dịch Thanh toán (`Payment`) phải gắn liền với một nghĩa vụ thanh toán hoặc Invoice cụ thể ở trạng thái `ISSUED`. Tổng các khoản thanh toán thành công (`SUCCESS`) cho một Invoice không được vượt quá tổng số tiền phải thanh toán (`TotalAmount`) của Invoice đó. | Store / Invoice / Payment |
+| RULE-16-02 | Phân định kênh thanh toán điện tử vs Tiền mặt:<br>1. **Thanh toán Điện tử (`ONLINE_GATEWAY` - VNPay, MoMo, ZaloPay, Thẻ):** Khách hàng thực hiện qua cổng thanh toán (`MakePayment`), giao dịch khởi tạo ở trạng thái `PENDING` và chuyển sang `PROCESSING`.<br>2. **Thanh toán Tiền mặt tại quầy (`CASH`):** Thu ngân tiếp nhận tiền và ghi nhận trực tiếp qua lệnh `RecordCashPayment` trong ranh giới `@Transactional` của phiên thu ngân, chuyển ngay sang `SUCCESS`. | Payment / Customer / Receptionist |
+| RULE-16-03 | Xác thực giao dịch và xử lý Webhook Idempotency (`VerifyPayment`, `ReceivePaymentCallback`): Webhook/Callback từ cổng thanh toán trực tuyến bắt buộc phải được xác thực chữ ký số (HMAC/Signature), kiểm tra khớp đúng mã giao dịch (`transaction_id`) và số tiền thanh toán (`amount`). Hệ thống thực thi cơ chế Idempotency Key để đảm bảo một Webhook nhận nhiều lần chỉ được xử lý đúng một lần duy nhất, ngăn chặn ghi nhận thanh toán trùng lặp. | Payment / PaymentGateway / System |
+| RULE-16-04 | Quyết toán và công nhận thanh toán (`SettlePayment`): Giao dịch Payment chỉ được công nhận là `SUCCESS` sau khi có xác nhận thành công từ cổng thanh toán trực tuyến hoặc xác nhận thu tiền mặt từ Thu ngân. Khi Payment đạt `SUCCESS`, hệ thống tự động phát sinh sự kiện `PaymentSucceeded` để tất toán Invoice (`PAID`) và kích hoạt hoàn tất đơn hàng/gói dịch vụ tương ứng. | Payment / FinanceStaff / System |
+| RULE-16-05 | Hủy giao dịch thanh toán chưa hoàn tất (`CancelPayment`): Cho phép hủy giao dịch thanh toán (`CancelPayment`) từ trạng thái `PENDING` hoặc `PROCESSING` khi khách hàng chủ động hủy phiên thanh toán hoặc cổng thanh toán phản hồi timeout/thất bại (`FAILED` / `CANCELLED`). | Payment / Customer / System |
+| RULE-16-06 | Biến động trạng thái Payment khi phát sinh hoàn tiền: Khi phát sinh giao dịch hoàn tiền thành công liên kết với Payment:<br>1. Nếu tổng số tiền hoàn nhỏ hơn số tiền thanh toán gốc: Payment chuyển sang trạng thái `PARTIALLY_REFUNDED`.<br>2. Nếu tổng số tiền hoàn đạt đủ 100% số tiền thanh toán gốc: Payment chuyển sang trạng thái `REFUNDED`. | Payment / Refund |
+| RULE-16-07 | Đối soát giao dịch thanh toán định kỳ (`ReconcilePayment`): Nhân viên Tài chính (`FinanceStaff`) thực hiện đối soát dữ liệu giao dịch Payment của hệ thống với sao kê ngân hàng và báo cáo đối soát từ các cổng thanh toán theo định kỳ ngày/tuần/tháng để phát hiện và xử lý chênh lệch dòng tiền. | Store / Organization / Payment / FinanceStaff |
 
 ---
 
@@ -246,13 +404,16 @@ Tài liệu này đặc tả toàn bộ các quy tắc nghiệp vụ (Business R
 
 | ID | Quy tắc nghiệp vụ (Business Rule) | Phạm vi (Scope) |
 |---|---|---|
-| RULE-17-01 | Mỗi yêu cầu Hoàn tiền (`Refund`) bắt buộc phải gắn với đúng một giao dịch `Payment` gốc đã thanh toán thành công (`SUCCESS`). | Payment / Refund |
-| RULE-17-02 | Tổng số tiền hoàn trả cho một Payment không được vượt quá số tiền đã thanh toán của chính Payment đó. | Payment / Refund |
-| RULE-17-03 | Hoàn tiền bắt buộc phải được thực hiện qua đúng kênh/cổng thanh toán hoặc phương thức thanh toán gốc của Payment tương ứng. | Payment / Refund |
-| RULE-17-04 | Xử lý hoàn tiền (`ProcessRefund`) chỉ được phép tiến hành sau khi yêu cầu hoàn tiền đã được Store Manager phê duyệt (`APPROVED`). | Refund |
-| RULE-17-05 | Trạng thái RefundStatus phải phản ánh chính xác kết quả xử lý: `REQUESTED -> APPROVED / REJECTED -> PROCESSING -> COMPLETED / FAILED`. | Refund |
-| RULE-17-06 | Từ chối hoàn tiền (`RejectRefund`) chỉ được thực hiện bởi Store Manager khi yêu cầu đang ở trạng thái `REQUESTED` và phải ghi rõ lý do từ chối. | StoreManager / Refund |
-| RULE-17-07 | Yêu cầu hoàn tiền (Refund) chỉ có hiệu lực và được hệ thống chấp nhận tiếp nhận xử lý trong thời hạn tối đa 30 ngày kể từ ngày giao dịch thanh toán gốc (`Payment`) thành công, đồng thời dịch vụ hoặc sản phẩm tương ứng chưa bị tiêu thụ/sử dụng vượt quá định mức theo Chính sách hoàn trả của Organization. | Store / Payment / Refund / Policy |
+| RULE-17-01 | Định danh và liên kết giao dịch hoàn tiền (`RequestRefund`, `CreateRefundRequest`): Mỗi yêu cầu Hoàn tiền (`Refund`) bắt buộc phải gắn với đúng một giao dịch `Payment` gốc đã thanh toán thành công (`SUCCESS`). Khách hàng có thể tự tạo yêu cầu qua App (`RequestRefund`) hoặc Tiếp tân tạo yêu cầu tại quầy Store (`CreateRefundRequest`). | Payment / Refund / Customer / Receptionist |
+| RULE-17-02 | Ràng buộc hạn mức số tiền hoàn trả: Tổng số tiền hoàn trả lũy kế cho một Payment không được vượt quá số tiền đã thanh toán của chính Payment đó: $\text{RemainingRefundableAmount} = \text{Payment.TotalAmount} - \sum(\text{CompletedRefunds}) \ge \text{RequestedRefundAmount} > 0$. | Payment / Refund |
+| RULE-17-03 | Thời hạn yêu cầu hoàn tiền 30 ngày (30-Day Refund Window): Yêu cầu hoàn tiền chỉ được hệ thống chấp nhận trong thời hạn tối đa 30 ngày kể từ ngày giao dịch thanh toán gốc (`Payment`) thành công ($\text{CurrentTimestamp} \le \text{Payment.CompletedTimestamp} + 30\text{ days}$). Quá 30 ngày, hệ thống tự động từ chối với mã lỗi `REFUND_REQUEST_WINDOW_EXPIRED`, trừ trường hợp có phê duyệt ngoại lệ đặc biệt từ Organization Admin. | Store / Payment / Refund / Policy |
+| RULE-17-04 | Thẩm định & Phê duyệt Maker-Checker hoàn tiền (`ApproveRefund`, `RejectRefund`): Yêu cầu hoàn tiền ở trạng thái `REQUESTED` bắt buộc phải được Store Manager hoặc Organization Admin thẩm định và phê duyệt (`APPROVED`) hoặc từ chối (`REJECTED` kèm lý do). BẮT BUỘC THỰC THI NGUYÊN TẮC MAKER-CHECKER: Người tạo yêu cầu hoàn tiền (`created_by`) tuyệt đối không được là người phê duyệt (`approved_by`). Nếu `created_by == approved_by`, hệ thống chặn với mã lỗi `MAKER_CHECKER_VIOLATION`. | Store / StoreManager / Refund |
+| RULE-17-05 | Phân định kênh và nhân sự thực thi chi trả tiền hoàn (`ProcessRefund`, `CompleteRefund`):<br>1. **Kênh Tiền mặt (`CASH`):** Sau khi được duyệt, Thu ngân hoặc Store Manager thực hiện chi tiền mặt trực tiếp tại quầy Store (`ProcessRefund`, `CompleteRefund`) và ký phiếu chi.<br>2. **Kênh Cổng thanh toán điện tử (`ONLINE_GATEWAY`):** Nhân viên Tài chính (`FinanceStaff`) kích hoạt lệnh hoàn tiền tự động qua API của cổng thanh toán gốc (`ProcessRefund`). | Store / FinanceStaff / Receptionist / Refund |
+| RULE-17-06 | Máy trạng thái hoàn tiền (Refund FSM Lifecycle): Trạng thái `RefundStatus` phải phản ánh chính xác kết quả xử lý: `REQUESTED -> APPROVED / REJECTED -> PROCESSING -> COMPLETED / FAILED`. | Refund |
+| RULE-17-07 | Giới hạn thử lại hoàn tiền qua cổng trực tuyến (Max 3 Retries - `RetryRefund`): Khi thực hiện hoàn tiền qua cổng thanh toán gặp lỗi kỹ thuật hoặc mạng gián đoạn, hệ thống cho phép thử lại (`RetryRefund`) tối đa 3 lần ($\text{retry\_count} \le 3$). Nếu sau 3 lần thử lại vẫn thất bại, hệ thống khóa cơ chế hoàn tiền tự động qua cổng, chuyển `RefundStatus` sang `FAILED`, kích hoạt `FailRefund` và bật cờ `requires_manual_resolution = true`. | Refund / PaymentGateway / System |
+| RULE-17-08 | Xử lý hoàn tiền thủ công ngoại lệ (`ResolveRefundManually`): Khi hoàn tiền tự động qua cổng bị `FAILED` (sau 3 lần retry) hoặc cổng thanh toán không hỗ trợ API hoàn tiền trực tiếp, Finance Staff hoặc Store Manager có thẩm quyền được phép thực hiện hoàn tiền thủ công ngoại tuyến (chuyển khoản ngân hàng trực tiếp từ tài khoản công ty hoặc chi tiền mặt tại quầy). Bắt buộc phải nhập mã giao dịch ngân hàng/đính kèm chứng từ đối soát hợp lệ để chuyển trạng thái Refund sang `COMPLETED`. | Store / StoreManager / FinanceStaff / Refund |
+| RULE-17-09 | Cập nhật sổ cái kế toán sau hoàn tiền: Khi Refund chuyển sang `COMPLETED`, hệ thống tự động: (1) Cập nhật tăng `total_refunded_amount` trên Invoice gốc (theo `RULE-15-07`); (2) Cập nhật trạng thái `Payment` sang `PARTIALLY_REFUNDED` hoặc `REFUNDED` (theo `RULE-16-06`); (3) Cập nhật `total_refunded_amount` trên Order (hoặc chuyển Order sang `REFUNDED` nếu hoàn 100% theo `RULE-14-07`). | Store / Invoice / Payment / Order / Refund |
+| RULE-17-10 | Đối soát và thông báo hoàn tiền (`ReconcileRefund`, `SendRefundNotification`): Nhân viên Tài chính định kỳ đối soát các khoản tiền hoàn trả với báo cáo cổng thanh toán và phiếu chi nội bộ. Hệ thống tự động gửi thông báo kết quả hoàn tiền (`SendRefundNotification`) tới khách hàng. | Store / Organization / Refund / Notification / System |
 
 ### Quy tắc Kiểm soát Thời hạn & Điều kiện Hoàn tiền (Refund Window & Eligibility Policy)
 - Điều kiện tiên quyết để tạo yêu cầu hoàn tiền (`RequestRefund` / `CreateRefundRequest`):
@@ -262,17 +423,27 @@ Tài liệu này đặc tả toàn bộ các quy tắc nghiệp vụ (Business R
   4. Đối với gói dịch vụ (`Package`): Áp dụng công thức hoàn tiền theo số buổi/lượt dịch vụ thực tế chưa sử dụng trừ đi phí quản lý theo chính sách gói.
 - Nếu quá hạn 30 ngày, hệ thống tự động từ chối tiếp nhận yêu cầu hoàn tiền với mã lỗi `REFUND_REQUEST_WINDOW_EXPIRED`, trừ trường hợp có phê duyệt ngoại lệ đặc biệt từ Organization Admin.
 
+### Quy tắc Xử lý Hoàn tiền Thất bại & Giới hạn Thử lại (Refund Retry & Fallback Invariant)
+- Khi thực hiện hoàn tiền qua cổng thanh toán Online gặp lỗi kỹ thuật hoặc từ chối từ nhà cung cấp:
+  $$\text{Refund.retry\_count} \le 3$$
+- Nếu $\text{retry\_count} < 3$: Hệ thống cho phép kích hoạt `RetryRefund`.
+- Nếu $\text{retry\_count} == 3$ và tiếp tục thất bại: Hệ thống chuyển trạng thái `RefundStatus` $→$ `FAILED`, khóa nút thử lại qua cổng, và bật cờ `requires_manual_resolution = true`.
+- Nhân viên Tài chính (`FinanceStaff`) hoặc Quản lý chi nhánh (`StoreManager`) tiến hành đối soát và xử lý bằng phương thức ngoại tuyến (`ResolveRefundManually`), ghi nhận mã đối soát ngân hàng và chứng từ thanh toán để đóng yêu cầu hoàn tiền (`COMPLETED`).
+
 ---
 
 ## 18. Promotion & Voucher Management
 
 | ID | Quy tắc nghiệp vụ (Business Rule) | Phạm vi (Scope) |
 |---|---|---|
-| RULE-18-01 | Promotion chỉ có hiệu lực áp dụng trong phạm vi Organization hoặc Store được cấu hình và trong khoảng thời gian diễn ra chương trình. | Organization / Store / Promotion |
-| RULE-18-02 | Voucher chỉ được áp dụng khi đơn hàng hoặc hóa đơn thỏa mãn toàn bộ điều kiện: giá trị tối thiểu, danh mục áp dụng, hạn dùng và đối tượng khách hàng. | Organization / Store / Voucher |
-| RULE-18-03 | Mỗi lượt sử dụng Voucher (`VoucherUsage`) phải được ghi nhận định danh gắn với Customer và Invoice/Order cụ thể. | Store / Customer / Voucher |
-| RULE-18-04 | Voucher không được phép sử dụng vượt quá tổng ngân sách hoặc giới hạn lượt dùng tối đa cho phép trên toàn hệ thống hoặc trên mỗi khách hàng. | Organization / Store / Voucher |
-| RULE-18-05 | Voucher chỉ được áp dụng cho Order hoặc Invoice khi thỏa mãn điều kiện và thuộc phạm vi Store áp dụng. | Store / Voucher / Order / Invoice |
+| RULE-18-01 | Quản lý chương trình khuyến mãi cấp Organization (`CreatePromotion`, `ManagePromotion`): Chương trình khuyến mãi (`Promotion`) do Organization Admin khởi tạo và quản lý, định nghĩa thời gian áp dụng, điều kiện kích hoạt, nhóm dịch vụ/sản phẩm áp dụng và tổng ngân sách khuyến mãi. | Organization / Promotion |
+| RULE-18-02 | Cấu hình phạm vi áp dụng tại chi nhánh (`ConfigureStorePromotion`): Store Manager có thẩm quyền cấu hình kích hoạt hoặc tạm dừng áp dụng Promotion tại Store của mình, tuân thủ đúng khung chính sách và hạn mức ngân sách của Organization. | Store / Promotion / StoreManager |
+| RULE-18-03 | Phát hành và quản trị Voucher (`CreateVoucher`, `ManageVoucher`): Mã ưu đãi (`Voucher`) do Organization Admin phát hành, cấu hình rõ: mã code, loại giảm giá (phần trăm % hoặc số tiền cố định), giá trị giảm tối đa, giá trị đơn hàng tối thiểu, thời hạn sử dụng và đối tượng khách hàng áp dụng. | Organization / Voucher |
+| RULE-18-04 | Xác thực điều kiện áp dụng Voucher (`ValidateVoucher`, `UseVoucher`): Voucher chỉ được áp dụng khi đơn hàng hoặc hóa đơn thỏa mãn toàn bộ điều kiện: (1) Trạng thái Voucher là `ACTIVE`; (2) Nằm trong thời hạn hiệu lực; (3) Thuộc Store đang mở áp dụng Voucher; (4) Giá trị đơn hàng $\ge \text{MinOrderAmount}$; (5) Khách hàng thuộc đối tượng được hưởng ưu đãi. | Store / Customer / Voucher / Order / Invoice |
+| RULE-18-05 | Kiểm soát ngân sách và giới hạn lượt sử dụng Voucher (`TrackVoucherUsage`): Hệ thống kiểm soát nghiêm ngặt 2 lớp giới hạn: (1) Tổng số lượt sử dụng trên toàn hệ thống không vượt quá `max_total_usage`; (2) Số lượt sử dụng của từng Customer không vượt quá `max_usage_per_customer`. Khi đạt một trong hai giới hạn, hệ thống tự động từ chối áp dụng Voucher. | Organization / Store / Voucher |
+| RULE-18-06 | Ghi nhận nhật ký sử dụng Voucher (`TrackVoucherUsage`): Mỗi lượt áp dụng Voucher thành công bắt buộc phải được ghi nhận định danh liên kết với `customer_id`, `invoice_id`/`order_id`, `discount_amount` và thời điểm sử dụng để phục vụ đối soát ngân sách. | Store / Customer / Voucher / System |
+| RULE-18-07 | Quy tắc hoàn trả Voucher khi hủy giao dịch: Khi đơn hàng hoặc hóa đơn áp dụng Voucher bị hủy hoàn toàn trước khi hoàn tất giao dịch (`CANCELLED`), hệ thống tự động hoàn trả lượt sử dụng Voucher cho khách hàng nếu Voucher đó vẫn còn trong thời hạn hiệu lực. | Store / Voucher / Order / Invoice |
+| RULE-18-08 | Ràng buộc không áp dụng đồng thời Voucher trùng lặp: Mỗi hóa đơn/đơn hàng chỉ được áp dụng tối đa 01 Voucher giảm giá trực tiếp, trừ khi chương trình khuyến mãi có cấu hình cho phép cộng dồn ưu đãi (Stackable Discounts). | Store / Voucher / Order / Invoice |
 
 ---
 
@@ -280,15 +451,16 @@ Tài liệu này đặc tả toàn bộ các quy tắc nghiệp vụ (Business R
 
 | ID | Quy tắc nghiệp vụ (Business Rule) | Phạm vi (Scope) |
 |---|---|---|
-| RULE-19-01 | Mỗi hồ sơ Hội viên (`Membership`) phải thuộc về đúng một Customer duy nhất. | Customer / Membership |
-| RULE-19-02 | Điểm tích lũy (`LoyaltyPoint`) phải thuộc về một Customer cụ thể và chỉ được sử dụng bởi chính Customer đó. | Customer / LoyaltyPoint |
-| RULE-19-03 | Không được phép trừ điểm tích lũy vượt quá số điểm khả dụng (`Available Balance`) của khách hàng. | Customer / LoyaltyPoint |
-| RULE-19-04 | Điểm tích lũy đã hết hạn (`Expired`) không còn giá trị quy đổi ưu đãi hoặc trừ tiền. | Customer / LoyaltyPoint |
-| RULE-19-05 | Việc điều chỉnh điểm tích lũy thủ công của Store Manager phải có lý do nghiệp vụ và được ghi nhận đầy đủ vào Audit Log. | Store / Customer / LoyaltyPoint |
-| RULE-19-06 | Điểm tích lũy chỉ được sử dụng cho Customer sở hữu số điểm còn hiệu lực. | Customer / LoyaltyPoint |
-| RULE-19-07 | Gia hạn hội viên (`RenewMembership`) chỉ được thực hiện khi Membership đang ở trạng thái `ACTIVE` hoặc trong thời gian ân hạn cho phép gia hạn. | Membership |
-| RULE-19-08 | Nâng cấp hạng hội viên (`UpgradeMembership`) làm chuyển trạng thái Membership cũ sang `UPGRADED` và kích hoạt Membership hạng mới tương ứng. | Membership |
-| RULE-19-09 | Gói hội viên quá thời hạn hiệu lực mà không được gia hạn sẽ tự động chuyển sang trạng thái `EXPIRED`. | Membership |
+| RULE-19-01 | Định danh và sở hữu gói hội viên (`RegisterMembership`, `ViewMembership`, `ViewLoyaltyPoint`): Mỗi hồ sơ Hội viên (`Membership`) phải thuộc về đúng một Customer duy nhất trong phạm vi Organization. Khách hàng có thể tự đăng ký, tra cứu thông tin gói hội viên (`ViewMembership`), xem điểm tích lũy (`ViewLoyaltyPoint`) hoặc được cấp hạng hội viên tự động dựa trên mức chi tiêu tích lũy. | Organization / Customer / Membership |
+| RULE-19-02 | Vòng đời và trạng thái gói hội viên (`ManageMembership`, `ProcessMembershipExpiry`): Trạng thái Membership tuân thủ: `PENDING -> ACTIVE -> EXPIRED / SUSPENDED / UPGRADED`. Membership quá thời hạn hiệu lực mà không được gia hạn sẽ tự động chuyển sang `EXPIRED`. | Organization / Membership / System |
+| RULE-19-03 | Gia hạn gói hội viên (`RenewMembership`): Khách hàng hoặc Thu ngân chỉ được thực hiện gia hạn khi Membership đang ở trạng thái `ACTIVE` hoặc trong thời gian ân hạn gia hạn (Grace Period theo chính sách của Organization). | Customer / Membership / Receptionist |
+| RULE-19-04 | Nâng cấp hạng hội viên (`UpgradeMembership`): Khi khách hàng đạt đủ điều kiện nâng hạng (chi tiêu tích lũy hoặc mua gói nâng cấp), hệ thống chuyển trạng thái Membership cũ sang `UPGRADED` và kích hoạt hồ sơ Membership ở hạng mới (`ACTIVE`) với đầy đủ quyền lợi ưu đãi tương ứng. | Organization / Customer / Membership |
+| RULE-19-05 | Tích lũy điểm thưởng tự động (`AddLoyaltyPoint`): Hệ thống tự động tính toán và cộng điểm thưởng (`LoyaltyPoint`) cho Customer sau mỗi giao dịch thanh toán hóa đơn thành công (`PaymentSucceeded`), tỷ lệ tích điểm căn cứ theo chính sách hạng hội viên của Organization. | Organization / Customer / LoyaltyPoint / System |
+| RULE-19-06 | Sử dụng và cấn trừ điểm tích lũy (`RedeemLoyaltyPoint`, `DeductLoyaltyPoint`): Điểm tích lũy chỉ được sử dụng bởi chính Customer sở hữu số điểm còn hiệu lực. Tuyệt đối không được phép trừ điểm vượt quá số điểm khả dụng ($\text{AvailableLoyaltyPoints} \ge \text{RedeemedPoints}$). Điểm quy đổi được cấn trừ trực tiếp vào giá trị thanh toán hóa đơn theo tỷ lệ quy đổi quy định. | Customer / LoyaltyPoint / Invoice |
+| RULE-19-07 | Xử lý điểm thưởng hết hạn (`ExpireLoyaltyPoint`): Điểm tích lũy có thời hạn hiệu lực theo chính sách (ví dụ: 12 tháng kể từ ngày tích lũy). Hệ thống quét định kỳ và tự động chuyển các điểm quá hạn sang trạng thái `EXPIRED`. Điểm đã hết hạn không còn giá trị quy đổi ưu đãi. | Organization / Customer / LoyaltyPoint / System |
+| RULE-19-08 | Điều chỉnh điểm tích lũy thủ công có kiểm toán (`AdjustLoyaltyPoint`): Store Manager hoặc Organization Admin chỉ được phép điều chỉnh tăng/giảm điểm tích lũy thủ công của khách hàng khi có lý do nghiệp vụ chính đáng (bồi thường sự cố, điều chỉnh sai sót kế toán). Mọi thao tác điều chỉnh thủ công BẮT BUỘC phải ghi nhận chi tiết lý do và lưu vết vào `AuditLog` (`RULE-25-01`). | Store / Organization / Customer / LoyaltyPoint / StoreManager |
+| RULE-19-09 | Khóa và đình chỉ quyền lợi hội viên: Khi tài khoản khách hàng bị khóa (`LOCKED`) hoặc phát hiện gian lận tích điểm, quyền lợi hội viên và số dư điểm thưởng bị tạm đình chỉ (`SUSPENDED`) cho đến khi có quyết định xử lý từ Organization Admin. | Organization / Customer / Membership |
+| RULE-19-10 | Cách ly dữ liệu hội viên theo Organization: Dữ liệu hạng hội viên và điểm tích lũy được quản lý độc lập theo từng Organization. Điểm tích lũy tại Organization này không được phép quy đổi hoặc sử dụng tại Organization khác. | Organization / Customer / LoyaltyPoint |
 
 ---
 
@@ -296,12 +468,25 @@ Tài liệu này đặc tả toàn bộ các quy tắc nghiệp vụ (Business R
 
 | ID | Quy tắc nghiệp vụ (Business Rule) | Phạm vi (Scope) |
 |---|---|---|
-| RULE-20-01 | Gói dịch vụ trả trước (`Package`) sau khi mua phải được gắn định danh với Customer sở hữu. | Customer / Package |
-| RULE-20-02 | Lượt sử dụng gói (`PackageUsage`) không được vượt quá số lượng quyền lợi dịch vụ còn lại trong gói. | Customer / Package |
-| RULE-20-03 | Gói dịch vụ đã hết hạn sử dụng (`EXPIRED`) không được tiếp tục cấn trừ dịch vụ. | Customer / Package |
-| RULE-20-04 | Mọi lượt sử dụng dịch vụ trong gói phải được ghi nhận định danh vào lịch sử sử dụng của Package tương ứng. | Customer / Package / PackageUsage |
-| RULE-20-05 | Quyền lợi sử dụng Package chỉ áp dụng cho chính Customer sở hữu gói hoặc thú cưng được ủy quyền hợp lệ. | Customer / Package / PackageUsage |
-| RULE-20-06 | Hủy gói dịch vụ (`CancelPackage`) chỉ được thực hiện bởi Store Manager khi gói ở trạng thái `PURCHASED`, `ACTIVATED` hoặc `PARTIALLY_CONSUMED` theo chính sách hoàn gói của Organization. | StoreManager / Package |
+| RULE-20-01 | Mua và Kích hoạt gói dịch vụ đa kênh (`PurchasePackage`, `ActivatePackage`): Gói dịch vụ trả trước (`Package`) sau khi thanh toán thành công phải được gắn định danh với Customer sở hữu và danh mục quyền lợi (`PackageBenefits`: số lượt dịch vụ, thời hạn hiệu lực). Kích hoạt gói (`PURCHASED -> ACTIVATED`): (1) Đối với mua tại quầy POS, Receptionist thực hiện `ActivatePackage` ngay sau khi thanh toán; (2) Đối với mua qua Online App, hệ thống tự động kích hoạt khi nhận Domain Event `PaymentSucceeded`; (3) Tự động kích hoạt khi khách hàng check-in sử dụng lượt dịch vụ đầu tiên tại Store. | Customer / Receptionist / System / Package |
+| RULE-20-02 | Xác nhận trừ lượt sử dụng gói tại quầy (`ConfirmPackageUsage`): Lượt sử dụng gói chỉ được xác nhận khi: (1) Gói đang ở trạng thái `ACTIVATED` hoặc `PARTIALLY_CONSUMED`; (2) Thời hạn hiệu lực còn giá trị ($\text{CurrentDate} \le \text{Package.ExpiresAt}$); (3) Số lượt còn lại $\text{RemainingQuantity} \ge \text{ConsumedQuantity}$. Khi xác nhận, hệ thống trừ số lượt khả dụng và chuyển trạng thái sang `PARTIALLY_CONSUMED` hoặc `FULLY_CONSUMED`. | Store / Receptionist / Package / PackageUsage |
+| RULE-20-03 | Tính bất biến và kiểm soát gói hết hạn (`ProcessPackageExpiry`): Gói dịch vụ quá thời hạn hiệu lực sẽ bị hệ thống tự động quét định kỳ và chuyển trạng thái sang `EXPIRED` (`ProcessPackageExpiry`). Gói đã ở trạng thái `EXPIRED` hoặc `FULLY_CONSUMED` tuyệt đối không được phép tiếp tục cấn trừ dịch vụ. | System / Package / ProcessPackageExpiry |
+| RULE-20-04 | Truy vết và ghi nhận lịch sử trừ lượt gói (`TrackPackageUsage`): Mọi lượt cấn trừ gói phải được ghi nhận định danh vào lịch sử sử dụng (`PackageUsageHistory`), bao gồm: mã giao dịch, thời điểm sử dụng, mã dịch vụ, Store thực hiện, nhân sự phục vụ và mã Pet được thụ hưởng. | System / Package / TrackPackageUsage |
+| RULE-20-05 | Quyền lợi sử dụng và Phạm vi áp dụng (`ViewPackage`, `ConfirmPackageUsage`): Quyền lợi sử dụng gói chỉ áp dụng cho chính Customer sở hữu gói hoặc thú cưng thuộc quyền sở hữu/ủy quyền hợp lệ của Customer đó theo đúng chính sách của Organization. Customer có quyền xem số dư lượt và lịch sử sử dụng gói bất kỳ lúc nào (`ViewPackage`). | Customer / Package / ViewPackage |
+| RULE-20-06 | Hủy gói dịch vụ và Cơ chế phát sinh yêu cầu hoàn tiền (`CancelPackage`): Hủy gói dịch vụ (`CancelPackage`) chỉ được thực hiện bởi Store Manager khi gói ở trạng thái `PURCHASED`, `ACTIVATED` hoặc `PARTIALLY_CONSUMED` theo chính sách hoàn gói của Organization. Khi hủy (chuyển sang `CANCELLED`), hệ thống tự động phát sinh yêu cầu hoàn tiền (`RefundRequested`) cho giá trị của các lượt dịch vụ chưa tiêu dùng theo công thức hoàn gói của Organization. | StoreManager / Package / RefundRequested / CancelPackage |
+| RULE-20-07 | Điều chỉnh số dư lượt sử dụng gói có kiểm soát (`AdjustPackage`): Store Manager có quyền điều chỉnh số lượt sử dụng còn lại của gói (`AdjustPackage`) trong các trường hợp đền bù dịch vụ, xử lý khiếu nại hoặc sửa sai sót nghiệp vụ. Thao tác điều chỉnh bắt buộc phải nhập lý do nghiệp vụ và được ghi nhận đầy đủ vào Audit Log. | Store / StoreManager / Package / AdjustPackage |
+
+### Vòng đời Gói Dịch vụ & Cơ chế Kích hoạt Đa kênh (Package Lifecycle & Multi-Channel Activation Invariant)
+- **Vòng đời Gói Dịch vụ (Package FSM):**
+  $$\text{PurchasePackage} → \text{PURCHASED} \xrightarrow{\text{ActivatePackage}} \text{ACTIVATED} \xrightarrow{\text{ConfirmPackageUsage}} \text{PARTIALLY\_CONSUMED} \xrightarrow{\text{ConfirmPackageUsage}} \text{FULLY\_CONSUMED}$$
+- **Ngoại lệ Hủy & Hết hạn:**
+  - Hủy gói: $\{\text{PURCHASED, ACTIVATED, PARTIALLY\_CONSUMED}\} \xrightarrow{\text{CancelPackage}} \text{CANCELLED} + \text{Trigger } \text{RefundRequested}$.
+  - Hết hạn: $\{\text{ACTIVATED, PARTIALLY\_CONSUMED}\} \xrightarrow{\text{ProcessPackageExpiry}} \text{EXPIRED}$.
+
+### Công thức Tính toán Hoàn tiền Gói Dịch vụ Chưa sử dụng (Package Refund Calculation Invariant)
+- Khi Store Manager thực hiện `CancelPackage` cho gói $PK$:
+  $$\text{RefundAmount} = \max\left(0, \ PK.\text{PurchasePrice} \times \frac{PK.\text{RemainingQuantity}}{PK.\text{TotalQuantity}} - \text{CancellationAdminFee}\right)$$
+- Bản ghi `RefundRequested` được tạo tự động với số tiền `RefundAmount` và chuyển vào quy trình phê duyệt Maker-Checker hoàn tiền của Store/Organization (`RULE-17-01`, `RULE-17-02`).
 
 ---
 
@@ -309,12 +494,29 @@ Tài liệu này đặc tả toàn bộ các quy tắc nghiệp vụ (Business R
 
 | ID | Quy tắc nghiệp vụ (Business Rule) | Phạm vi (Scope) |
 |---|---|---|
-| RULE-21-01 | Mỗi Sự cố (`Incident`) phải thuộc Store nơi sự cố phát sinh hoặc được tiếp nhận ghi nhận. | Store / Incident |
-| RULE-21-02 | Sự cố y tế (`ClinicalIncident`) chỉ áp dụng cho các vấn đề phát sinh trong quá trình khám, chữa bệnh hoặc tiêm phòng. | Store / ClinicalIncident |
-| RULE-21-03 | Sự cố làm đẹp (`GroomingIncident`) chỉ áp dụng cho các vấn đề phát sinh trong quá trình thực hiện dịch vụ Grooming. | Store / GroomingIncident |
-| RULE-21-04 | Hồ sơ sự cố đã đóng (`CLOSED`) không được phép chỉnh sửa hoặc tiếp tục xử lý như sự cố đang mở. | Store / Incident |
-| RULE-21-05 | Sự cố phải được phân loại mức độ nghiêm trọng (`ClassifyIncident`) trước khi thực hiện các biện pháp điều tra và khắc phục. | Store / Incident |
-| RULE-21-06 | Mọi sự cố nghiêm trọng phải được thông báo kịp thời cho Customer sở hữu Pet và báo cáo lên cấp quản lý Organization. | Store / Incident |
+| RULE-21-01 | Tiếp nhận và định danh sự cố (`RecordIncident`, `RecordClinicalIncident`, `RecordGroomingIncident`): Mỗi Sự cố (`Incident`) phải gắn liền với Store phát sinh và xác định rõ nguồn gốc tiếp nhận: sự cố vận hành/dịch vụ tại quầy (`RecordIncident`), sự cố trong khám chữa bệnh/tiêm phòng (`RecordClinicalIncident`), hoặc sự cố trong quy trình làm đẹp grooming (`RecordGroomingIncident`). | Store / Incident |
+| RULE-21-02 | Tự động lập biên bản sự cố y tế lâm sàng (`RecordClinicalIncident`): Hệ thống tự động khởi tạo bản ghi `ClinicalIncident` khi Bác sĩ thú y kích hoạt dừng khẩn cấp ca khám/phẫu thuật (`AbortAppointment` theo RULE-06-08) hoặc khi kích hoạt quyền truy cập hồ sơ bệnh án khẩn cấp (`EmergencyOverrideAccess` theo RULE-09-02, RULE-22-08), bắt buộc ghi nhận lý do lâm sàng, thời điểm kích hoạt và nhân sự thực hiện. | Store / ClinicalIncident / Veterinarian |
+| RULE-21-03 | Tự động lập biên bản sự cố làm đẹp spa (`RecordGroomingIncident`): Hệ thống tự động khởi tạo bản ghi `GroomingIncident` khi Groomer hoặc Store Manager thực hiện dừng dịch vụ làm đẹp khẩn cấp (`AbortGrooming` theo RULE-11-06 hoặc `AbortAppointment`), bắt buộc ghi nhận lý do dừng (sốc thể trạng, thú cưng hung dữ, chấn thương, sự cố thiết bị) và chuyển tiếp yêu cầu hoàn tiền phần dịch vụ chưa thực hiện. | Store / GroomingIncident / Groomer / StoreManager |
+| RULE-21-04 | Phân loại mức độ nghiêm trọng của sự cố (`ClassifyIncident`): Store Manager chịu trách nhiệm phân loại mức độ nghiêm trọng: `LOW` (Nhẹ/Nội bộ Store), `MEDIUM` (Trung bình), `HIGH` (Nghiêm trọng), `CRITICAL` (Đặc biệt nghiêm trọng). Việc phân loại phải hoàn tất trước khi tiến hành điều tra chi tiết và áp dụng biện pháp xử lý. | Store / StoreManager / Incident |
+| RULE-21-05 | Chính sách phát thông báo sự cố bắt buộc (`SendIncidentNotification`): Đối với sự cố có mức độ nghiêm trọng `HIGH` hoặc `CRITICAL`, hệ thống bắt buộc tự động gửi thông báo khẩn tới Customer sở hữu Pet và gửi cảnh báo trực tiếp lên Organization Admin. | Store / Organization / Incident / Notification |
+| RULE-21-06 | Chuyển cấp giải quyết sự cố (`EscalateIncident`): Khi sự cố vượt quá thẩm quyền xử lý tại Store hoặc phát sinh tranh chấp pháp lý/thiệt hại lớn, Store Manager thực hiện chuyển cấp xử lý sự cố (`EscalateIncident`) lên Organization Admin hoặc Platform Admin để giải quyết. | Store / Organization / Platform / Incident |
+| RULE-21-07 | Điều tra và thực thi biện pháp khắc phục (`InvestigateIncident`, `HandleIncident`): Quá trình xử lý sự cố bắt buộc ghi nhận kết quả điều tra nguyên nhân (`InvestigateIncident`), thực hiện các biện pháp khắc phục (bồi thường thiệt hại, miễn giảm phí dịch vụ, can thiệp y tế bổ sung, đào tạo lại nhân sự). | Store / Incident / HandleIncident |
+| RULE-21-08 | Điều kiện bất biến đóng hồ sơ sự cố (`CloseIncident`): Hồ sơ sự cố chỉ được đóng bởi Store Manager hoặc Organization Admin sau khi toàn bộ biện pháp khắc phục đã hoàn tất và được nghiệm thu. Hồ sơ sự cố ở trạng thái `CLOSED` là BẤT BIẾN (Immutable), tuyệt đối không được phép chỉnh sửa nội dung hoặc mở lại nếu không có phê duyệt kiểm toán đặc biệt từ cấp quản lý cấp trên. | Store / Organization / Incident / CloseIncident |
+
+### Ma trận Phân loại & Quy trình Xử lý Sự cố Tự động (Incident Severity Matrix & Automated Trigger Guard)
+- **Ma trận Cấp độ Nghiêm trọng Sự cố (Incident Severity Matrix):**
+
+| Mức độ (Severity) | Tiêu chí Định danh | Thời gian Phản hồi Tối đa | Thông báo Bắt buộc | Thẩm quyền Đóng hồ sơ |
+|---|---|---|---|---|
+| **LOW** | Sai sót vận hành nhỏ, chậm trễ lịch hẹn ngắn, khách phàn nàn nhẹ. | 24 giờ | Store Manager, Nhân sự liên quan | Store Manager |
+| **MEDIUM** | Dịch vụ phát sinh lỗi nhẹ, hư hỏng vật tư nhỏ, khách yêu cầu bồi thường cục bộ. | 12 giờ | Store Manager, Customer | Store Manager |
+| **HIGH** | Thú cưng bị trầy xước/chấn thương nhẹ, dừng ca khẩn cấp (`AbortAppointment`/`AbortGrooming`), tranh chấp thanh toán lớn. | 4 giờ | Store Manager, Customer, Organization Admin | Store Manager, Org Admin |
+| **CRITICAL** | Thú cưng gặp nguy kịch/tử vong, tai biến y khoa nghiêm trọng, truy cập khẩn cấp vượt quyền (`EmergencyOverrideAccess`), tranh chấp pháp lý. | 1 giờ | Customer, Organization Admin, Platform Admin | Organization Admin |
+
+- **Cơ chế Kích hoạt Sự cố Tự động (Automated Incident Trigger Hooks):**
+  1. `AbortAppointment(appointmentId, abort_reason)` → Tự động tạo `ClinicalIncident` (nếu dịch vụ y tế) hoặc `GroomingIncident` (nếu dịch vụ spa), gắn trạng thái `OPEN`, mức độ tối thiểu `HIGH`.
+  2. `AbortGrooming(groomingSessionId, abort_reason)` → Tự động tạo `GroomingIncident`, gắn trạng thái `OPEN`, mức độ `HIGH`, gửi thông báo tới Customer.
+  3. `EmergencyOverrideAccess(petId, medicalRecordId, clinical_reason)` → Tự động tạo `ClinicalIncident` kèm cờ `is_emergency = true`, kích hoạt `EmergencyAccessOverridden`, gửi cảnh báo `SendIncidentNotification` tới Customer và Org Admin.
 
 ---
 
@@ -322,14 +524,20 @@ Tài liệu này đặc tả toàn bộ các quy tắc nghiệp vụ (Business R
 
 | ID | Quy tắc nghiệp vụ (Business Rule) | Phạm vi (Scope) |
 |---|---|---|
-| RULE-22-01 | Quyền đồng ý (`Consent`) phải thuộc một Customer cụ thể và quy định rõ phạm vi xử lý dữ liệu được cho phép. | Organization / Customer / Consent |
-| RULE-22-02 | Consent đã bị khách hàng thu hồi (`Revoked`) lập tức vô hiệu hóa các hoạt động xử lý dữ liệu dựa trên sự đồng thuận đó. | Customer / Consent |
-| RULE-22-03 | Trích xuất dữ liệu (`DataExport`) chỉ được cung cấp trong phạm vi dữ liệu cá nhân thuộc quyền sở hữu của Customer yêu cầu. | Organization / Customer / DataExport |
-| RULE-22-04 | Xóa hoặc ẩn danh dữ liệu (`DataDeletion`) phải tuân thủ nghiêm ngặt Chính sách bảo mật (`PrivacyPolicy`) và Thời hạn lưu trữ pháp lý (`RetentionPolicy`). | Organization / Customer / DataDeletion |
-| RULE-22-05 | Chính sách lưu trữ dữ liệu (`RetentionPolicy`) của Organization áp dụng nhất quán cho tất cả các Store trực thuộc. | Organization |
-| RULE-22-06 | Chính sách bảo mật (`PrivacyPolicy`) của Organization quy định quyền và nghĩa vụ bảo vệ dữ liệu khách hàng trên toàn nền tảng. | Organization |
-| RULE-22-07 | Mọi hoạt động truy cập và xử lý dữ liệu Customer và Pet bắt buộc phải thỏa mãn cả hai điều kiện: User có Permission hợp lệ và Customer có Consent còn hiệu lực. | Organization / Customer / Pet |
-| RULE-22-08 | Đồng thuận chia sẻ dữ liệu y tế Cross-Store (`CrossStoreMedicalConsent`) phải quy định rõ thời hạn hiệu lực truy cập (mặc định 24 giờ cho một phiên khám hoặc vô thời hạn theo cấu hình của chủ Pet) và có thể bị chủ Pet thu hồi (`RevokeConsent`) bất kỳ lúc nào. | Organization / Customer / Pet / Consent |
+| RULE-22-01 | Định danh và phạm vi quyền đồng thuận (`GrantConsent`, `RevokeConsent`): Quyền đồng thuận (`Consent`) phải gắn với đúng Customer sở hữu Pet, xác định rõ ràng mục đích xử lý dữ liệu (tiếp thị, chia sẻ bệnh án, lưu trữ thông tin thanh toán) và thời hạn hiệu lực. | Organization / Customer / Consent |
+| RULE-22-02 | Thời hạn hiệu lực của OTP chia sẻ bệnh án liên chi nhánh (`RequestCrossStoreConsent`, `VerifyCrossStoreConsentOTP`): Khi Bác sĩ tại Store chi nhánh gửi yêu cầu truy cập hồ sơ bệnh án liên Store (`RequestCrossStoreConsent`), hệ thống phát sinh mã OTP xác thực gửi tới số điện thoại/App của chủ Pet. Mã OTP có thời hạn hiệu lực chính xác 5 phút ($\text{OTP\_TTL} = 300\text{s}$). Quá 5 phút không được xác thực, yêu cầu chia sẻ bệnh án tự động chuyển sang trạng thái `EXPIRED`. | Organization / Customer / Consent / OTP |
+| RULE-22-03 | Quyền chủ động thu hồi chia sẻ bệnh án (`RevokeCrossStoreConsent`): Khách hàng có quyền chủ động thu hồi quyền truy cập hồ sơ bệnh án liên chi nhánh bất kỳ lúc nào qua App cá nhân. Khi thu hồi thành công (`REVOKED`), hệ thống lập tức chấm dứt quyền xem hồ sơ bệnh án của Bác sĩ tại Store yêu cầu và vô hiệu hóa phiên truy cập dữ liệu liên quan. | Organization / Customer / Consent |
+| RULE-22-04 | Quyền yêu cầu xóa/ẩn danh dữ liệu và ưu tiên lưu trữ pháp lý (`RequestDataDeletion`, `ProcessDataDeletion`): Khách hàng có quyền gửi yêu cầu xóa hoặc ẩn danh dữ liệu cá nhân (`RequestDataDeletion`). Tuy nhiên, việc thực thi xử lý (`ProcessDataDeletion`) phải tuân thủ nghiêm ngặt Chính sách lưu trữ dữ liệu pháp lý (`RetentionPolicy`): dữ liệu hóa đơn tài chính, chứng từ kế toán và bệnh án y tế bắt buộc phải được lưu giữ đủ thời hạn luật định trước khi thực hiện xóa vĩnh viễn hoặc ẩn danh hóa. | Organization / Customer / DataDeletion |
+| RULE-22-05 | Tính nhất quán của chính sách lưu trữ dữ liệu (`ManageRetentionPolicy`): Chính sách thời hạn lưu trữ dữ liệu (`RetentionPolicy`) do Organization Admin cấu hình và áp dụng đồng bộ, nhất quán cho toàn bộ các Store trực thuộc Organization. | Organization / RetentionPolicy |
+| RULE-22-06 | Quản trị chính sách bảo mật dữ liệu (`ManagePrivacyPolicy`): Chính sách bảo mật thông tin (`PrivacyPolicy`) quy định quyền riêng tư của khách hàng và nghĩa vụ bảo mật của nhân sự trên toàn hệ thống. Mọi thay đổi chính sách bảo mật phải được thông báo tới người dùng và ghi nhận nhật ký kiểm toán. | Organization / PrivacyPolicy |
+| RULE-22-07 | Kiểm soát truy cập dữ liệu hai lớp (Dual-Gate Access Control): Mọi thao tác truy cập và xử lý dữ liệu hồ sơ cá nhân và bệnh án thú cưng bắt buộc phải thỏa mãn đồng thời hai cổng kiểm soát: (1) Actor có vai trò và Permission hợp lệ trong phạm vi quản lý; (2) Có Consent hợp lệ còn hiệu lực từ phía Customer (ngoại lệ duy nhất là giao thức cấp cứu khẩn cấp qua `EmergencyOverrideAccess` theo RULE-22-08). | Organization / Customer / Pet |
+| RULE-22-08 | Giao thức truy cập hồ sơ bệnh án Cross-Store (Standard OTP vs Emergency Override):<br>1. **Giao thức Chuẩn (Standard OTP Protocol):** Sau khi xác thực OTP thành công (`VerifyCrossStoreConsentOTP`), quyền truy cập hồ sơ bệnh án chuyển sang `ACTIVE` với thời hạn hiệu lực tối đa 24 giờ ($\text{Consent\_TTL} = 24\text{h}$).<br>2. **Giao thức Cấp cứu Khẩn cấp (Emergency Override Protocol):** Trong tình huống đe dọa tính mạng thú cưng cần tra cứu tiền sử bệnh/dị ứng ngay lập tức mà không kịp xác thực OTP từ chủ Pet, Bác sĩ thú y (`Veterinarian`) được kích hoạt `EmergencyOverrideAccess` kèm lý do lâm sàng bắt buộc. Hệ thống lập tức cấp quyền truy cập `ACTIVE` (`is_emergency = true`), đồng thời phát sinh sự kiện `EmergencyAccessOverridden`, tự động lập biên bản sự cố y tế `ClinicalIncident` (`RULE-21-02`), và gửi thông báo cảnh báo khẩn cấp `SendIncidentNotification` (`RULE-21-05`, `RULE-23-02`) tới số điện thoại/App của chủ Pet và Store Manager. | Organization / Customer / Pet / Consent / Veterinarian |
+| RULE-22-09 | Quyền trích xuất dữ liệu cá nhân (`RequestDataExport`, `ProcessDataExport`): Khách hàng có quyền yêu cầu kết xuất toàn bộ dữ liệu cá nhân và lịch sử chăm sóc Pet dưới định dạng tiêu chuẩn (JSON/PDF). Hệ thống tự động tổng hợp (`ProcessDataExport`), mã hóa gói dữ liệu và cung cấp đường dẫn tải về an toàn có thời hạn cho khách hàng. | Organization / Customer / DataExport |
+| RULE-22-10 | Tự động xử lý hết hạn quyền ủy quyền y tế (`ProcessConsentExpiry`): Hệ thống tự động quét định kỳ và chuyển trạng thái quyền truy cập hồ sơ bệnh án liên chi nhánh từ `ACTIVE` sang `EXPIRED` khi $\text{CurrentTimestamp} > \text{Consent.ActivatedAt} + 24\text{ hours}$. | Organization / Customer / Consent |
+
+### Giao thức Phân định Chia sẻ Bệnh án Cross-Store (Cross-Store Medical Record Consent Protocol)
+- **Cơ chế 1 (Tiêu chuẩn):** $\text{RequestCrossStoreConsent} \xrightarrow{\text{OTP TTL } = 5\text{m}} \text{VerifyCrossStoreConsentOTP} \xrightarrow{\text{Access TTL } = 24\text{h}} \text{ACTIVE} \xrightarrow{\text{ProcessConsentExpiry} \ / \ \text{RevokeCrossStoreConsent}} \text{EXPIRED / REVOKED}$.
+- **Cơ chế 2 (Cấp cứu Khẩn cấp):** $\text{EmergencyOverrideAccess} \xrightarrow{\text{Clinical Reason}} \text{ACTIVE} \ (\text{is\_emergency} = \text{true}) + \text{Auto-create } \text{ClinicalIncident} \ (\text{RULE-21-02}) + \text{Auto-dispatch } \text{SendIncidentNotification} \ (\text{RULE-21-05}, \text{RULE-23-02})$.
 
 ---
 
@@ -337,9 +545,12 @@ Tài liệu này đặc tả toàn bộ các quy tắc nghiệp vụ (Business R
 
 | ID | Quy tắc nghiệp vụ (Business Rule) | Phạm vi (Scope) |
 |---|---|---|
-| RULE-23-01 | Thông báo (`Notification`) gửi đi bắt buộc phải có đối tượng nhận xác định (Customer hoặc Staff). | Platform / Notification |
-| RULE-23-02 | Notification chỉ được phát sinh tự động dựa trên các sự kiện nghiệp vụ được cấp phép cấu hình thông báo. | Platform / Notification |
-| RULE-23-03 | Thông báo gửi thất bại chỉ được tự động gửi lại (`RetryNotification`) theo số lần tối đa và khoảng cách thời gian được hệ thống quy định. | Platform / Notification |
+| RULE-23-01 | Định danh người nhận và kênh gửi thông báo (`SendNotification`): Mọi Thông báo (`Notification`) phát sinh bắt buộc phải có đối tượng nhận xác định (`recipient_id` là Customer hoặc Staff) và kênh gửi cụ thể (In-App Push, SMS, Email, Webhook). | Platform / Notification |
+| RULE-23-02 | Kích hoạt thông báo tự động theo sự kiện nghiệp vụ (`SendAppointmentNotification`, `SendPaymentNotification`, `SendOrderNotification`, `SendVaccineReminder`, `SendFollowUpReminder`, `SendMembershipNotification`): Notification chỉ được phát sinh tự động dựa trên các Domain Events hợp lệ trong hệ thống: xác nhận đặt lịch, nhắc lịch hẹn trước giờ phục vụ, nhắc lịch tiêm phòng vaccine định kỳ, nhắc tái khám, xác nhận thanh toán, cập nhật trạng thái đơn hàng và cảnh báo sự cố y tế khẩn cấp (`RULE-21-05`). | Platform / Organization / Notification / System |
+| RULE-23-03 | Cơ chế gửi lại khi gặp sự cố tạm thời (`RetryNotification`): Thông báo gửi qua dịch vụ bên thứ ba (SMS Gateway, Email Provider, Push Service) gặp lỗi tạm thời (Timeout, Rate Limit) được tự động đưa vào hàng đợi gửi lại (`RetryNotification`) theo thuật toán Exponential Backoff với số lần thử lại tối đa (mặc định 3 lần). Nếu quá 3 lần vẫn thất bại, bản ghi thông báo chuyển sang trạng thái `FAILED`. | Platform / Notification / System |
+| RULE-23-04 | Tự phục vụ tra cứu thông báo (`ViewNotification`): Customer và Staff có quyền tra cứu danh sách thông báo cá nhân, đánh dấu đã đọc (`MarkAsRead`) hoặc xóa thông báo hiển thị trên ứng dụng của mình. | Platform / User / Notification |
+| RULE-23-05 | Tuân thủ chính sách đồng thuận và tùy chọn nhận tin: Hệ thống phải tôn trọng tùy chọn nhận thông báo của Customer (Opt-in / Opt-out đối với tin tiếp thị/khuyến mãi theo `RULE-22-01`). Các thông báo giao dịch cốt lõi (OTP, Xác nhận thanh toán, Cảnh báo cấp cứu y tế) là bắt buộc và không bị ảnh hưởng bởi thiết lập opt-out. | Platform / Customer / Notification |
+| RULE-23-06 | Bảo mật nội dung thông báo: Nội dung thông báo không được chứa thông tin nhạy cảm ở dạng thô (như mật khẩu, mã CVV thẻ tín dụng hoặc toàn bộ bệnh án mật). Các liên kết truy cập dữ liệu trong thông báo phải được bảo vệ bằng mã định danh an toàn có thời hạn. | Platform / Notification / Security |
 
 ---
 
@@ -347,12 +558,14 @@ Tài liệu này đặc tả toàn bộ các quy tắc nghiệp vụ (Business R
 
 | ID | Quy tắc nghiệp vụ (Business Rule) | Phạm vi (Scope) |
 |---|---|---|
-| RULE-24-01 | Báo cáo (`Report`) chỉ bao gồm các số liệu thuộc đúng phạm vi quản lý và quyền truy cập của người xem. | Platform / Organization / Store |
-| RULE-24-02 | Báo cáo doanh thu (`RevenueReport`) phải được tổng hợp từ các giao dịch tài chính hợp lệ thuộc phạm vi báo cáo. | Organization / Store / RevenueReport |
-| RULE-24-03 | Doanh thu của Organization chỉ bao gồm tổng hợp doanh thu từ các Store thuộc quyền sở hữu của Organization đó. | Organization |
-| RULE-24-04 | So sánh doanh thu giữa các Store chỉ được thực hiện giữa các Store thuộc cùng một Organization. | Organization / Store |
-| RULE-24-05 | Đối soát doanh thu (`RevenueReconciliation`) phải phản ánh sự đồng nhất giữa Hóa đơn, Giao dịch thanh toán thực tế và Khoản hoàn tiền. | Organization / Store |
-| RULE-24-06 | Báo cáo thông tin khách hàng và thú cưng chỉ được trích xuất khi tuân thủ quy định bảo vệ dữ liệu cá nhân theo RULE-22-01 và RULE-22-06. | Organization / Customer / Pet |
+| RULE-24-01 | Phân quyền truy cập báo cáo theo Scope (`ViewRevenueReport`, `ViewAppointmentReport`, `ViewServiceReport`, `ViewInventoryReport`, `ViewStaffReport`): Báo cáo thống kê và phân tích chỉ được cung cấp cho người dùng có thẩm quyền và nằm trong đúng phạm vi quản trị:<br>1. **Store Scope (`STORE_MANAGER`, `FINANCE_STAFF`):** Chỉ xem báo cáo hoạt động, doanh thu, tồn kho, hiệu suất dịch vụ và nhân sự nội bộ trong Store do mình quản lý.<br>2. **Organization Scope (`ORGANIZATION_ADMIN`, `FINANCE_STAFF`):** Xem báo cáo tổng hợp toàn chuỗi, báo cáo Warehouse trung tâm và so sánh hiệu suất giữa các Store trực thuộc.<br>3. **Platform Scope (`SUPER_ADMIN`):** Xem báo cáo tổng quan toàn bộ nền tảng SaaS (`ViewPlatformReport`). | Platform / Organization / Store |
+| RULE-24-02 | Cách ly dữ liệu báo cáo tuyệt đối giữa các Organization (Multi-Tenancy Isolation): Báo cáo doanh thu, khách hàng và vận hành giữa các Organization độc lập được cách ly 100%. Tuyệt đối không cho phép bất kỳ truy vấn hoặc tổng hợp dữ liệu chéo nào giữa các Organization khác nhau. | Platform / Organization / Report |
+| RULE-24-03 | Báo cáo tổng hợp doanh thu chuỗi (`ViewOrganizationRevenue`): Doanh thu của Organization được tính toán bằng tổng hợp chính xác doanh thu từ tất cả các Store trực thuộc Organization đó trong kỳ báo cáo. | Organization / RevenueReport |
+| RULE-24-04 | So sánh hiệu suất và doanh thu giữa các Store (`CompareStoreRevenue`): Việc so sánh doanh thu và chỉ số vận hành giữa các Store chỉ được thực hiện giữa các Store thuộc cùng một Organization. | Organization / Store / Report |
+| RULE-24-05 | Đối soát doanh thu và cân bằng dòng tiền tài chính (`ReconcileRevenue`): Báo cáo đối soát doanh thu (`RevenueReconciliation`) bắt buộc phải phản ánh sự đồng nhất giữa 3 nguồn dữ liệu: (1) Tổng giá trị Hóa đơn đã tất toán (`PAID Invoices`); (2) Tổng số tiền thực nhận từ các giao dịch thanh toán thành công (`SUCCESS Payments`); (3) Tổng các khoản tiền hoàn trả lũy kế (`total_refunded_amount` từ `COMPLETED Refunds`):<br>$$\text{NetRevenue} = \sum(\text{PaidInvoiceAmount}) - \sum(\text{TotalRefundedAmount})$$ | Organization / Store / RevenueReport / FinanceStaff |
+| RULE-24-06 | Báo cáo phân tích khách hàng và bảo vệ dữ liệu cá nhân (`ViewCustomerPetReport`): Báo cáo phân tích hành vi khách hàng và tần suất chăm sóc thú cưng chỉ được trích xuất khi tuân thủ đầy đủ các quy định về bảo vệ dữ liệu cá nhân và chính sách bảo mật theo `RULE-22-01`, `RULE-22-04` và `RULE-22-06`. | Organization / Customer / Pet / Report |
+| RULE-24-07 | Tính bất biến và trung thực của số liệu lịch sử: Dữ liệu báo cáo tài chính và vận hành các kỳ đã khóa sổ kế toán là dữ liệu bất biến (Immutable Snapshot). Mọi điều chỉnh hồi tố phải được thực hiện thông qua các bút toán điều chỉnh trong kỳ hiện tại kèm lý do kiểm toán rõ ràng. | Organization / Store / Report / Audit |
+| RULE-24-08 | Bảo vệ tài nguyên hệ thống khi trích xuất báo cáo lớn: Các báo cáo phân tích dữ liệu lớn (Big Data / Historical Analytics) phải được xử lý qua tác vụ nền bất đồng bộ (Asynchronous Background Job) hoặc đọc từ cơ sở dữ liệu bản sao (Read-Replica/Analytics DB) để không gây ảnh hưởng đến hiệu năng xử lý giao dịch thời gian thực (OLTP) của hệ thống phòng khám. | Platform / Organization / Report / System |
 
 ---
 
@@ -360,9 +573,15 @@ Tài liệu này đặc tả toàn bộ các quy tắc nghiệp vụ (Business R
 
 | ID | Quy tắc nghiệp vụ (Business Rule) | Phạm vi (Scope) |
 |---|---|---|
-| RULE-25-01 | Nhật ký kiểm toán (`AuditLog`) phải được ghi nhận tự động, bất biến và gắn đúng phạm vi hoạt động (Platform, Organization, Store). | Platform / Organization / Store |
-| RULE-25-02 | Audit Log tuyệt đối không được phép chỉnh sửa, làm sai lệch hoặc xóa bỏ thông tin truy vết hoạt động đã diễn ra trong hệ thống. | Platform / Organization / Store |
-| RULE-25-03 | Lịch sử thay đổi phân quyền (`PermissionChange`) chỉ được tra cứu bởi Actor có thẩm quyền kiểm toán tương ứng. | Platform / Organization |
-| RULE-25-04 | Lịch sử truy cập hồ sơ bệnh án (`MedicalRecordAccess`) chỉ được tra cứu trong phạm vi quản lý của người có quyền Audit. | Platform / Organization |
-| RULE-25-05 | Nhật ký giao dịch tài chính (`PaymentRefundAudit`) chỉ được tra cứu trong phạm vi phân quyền tài chính của Organization/Store. | Organization / Store |
-| RULE-25-06 | Nhật ký biến động tồn kho (`InventoryAudit`) chỉ được tra cứu trong phạm vi quản lý kho của Store/Warehouse tương ứng. | Organization / Store |
+| RULE-25-01 | Tự động ghi vết nhật ký kiểm toán đa phạm vi (`RecordAuditLog`): Mọi biến động trạng thái dữ liệu trọng yếu, giao dịch tài chính, thay đổi phân quyền IAM và truy cập bệnh án y tế phải được hệ thống ghi nhận tự động vào `AuditLog`. Bản ghi kiểm toán bắt buộc chứa: `log_id`, `actor_id`, `actor_role`, `action_command`, `entity_type`, `entity_id`, `scope_type`, `scope_id`, `previous_state`, `new_state`, `ip_address`, `client_channel`, `timestamp`. | Platform / Organization / Store |
+| RULE-25-02 | Tính bất biến tuyệt đối của nhật ký kiểm toán (Strict Immutability Invariant): Bản ghi `AuditLog` là dữ liệu chỉ ghi thêm (Append-Only) và có tính bất biến tuyệt đối. Không bất kỳ người dùng nào, kể cả `SUPER_ADMIN` (Platform Admin) hay Quản trị viên cơ sở dữ liệu, có quyền chỉnh sửa (`UPDATE`), xóa bỏ (`DELETE`) hoặc làm sai lệch dữ liệu nhật ký kiểm toán đã ghi nhận. | Platform / Organization / Store |
+| RULE-25-03 | Truy vết thay đổi phân quyền và bảo mật tài khoản (`TrackPermissionChange`): Hệ thống bắt buộc ghi nhận nhật ký kiểm toán chuyên biệt cho mọi thay đổi liên quan đến người dùng và phân quyền: khởi tạo tài khoản, đổi mật khẩu, gán/thu hồi quyền, thay đổi Role và khóa/mở khóa tài khoản (`LockAccount`/`UnlockAccount`). | Platform / Organization |
+| RULE-25-04 | Truy vết truy cập hồ sơ bệnh án và can thiệp khẩn cấp (`TrackMedicalRecordAccess`): Mọi thao tác xem, sửa, tạo bệnh án (`MedicalRecord`), đặc biệt là các hành động chia sẻ hồ sơ bệnh án liên chi nhánh và kích hoạt quyền truy cập khẩn cấp `EmergencyOverrideAccess`, bắt buộc phải được ghi nhận chi tiết danh tính Bác sĩ, thời điểm truy cập, mã hồ sơ Pet và lý do lâm sàng để phục vụ hậu kiểm y khoa. | Platform / Organization |
+| RULE-25-05 | Truy vết giao dịch tài chính, hóa đơn và hoàn tiền (`TrackPaymentRefundAudit`): Toàn bộ các sự kiện thanh toán (`Payment`), phát hành/hủy hóa đơn (`Invoice`), phê duyệt hoàn tiền (`ApproveRefund`) và xử lý hoàn tiền thủ công (`ResolveRefundManually`) bắt buộc phải ghi nhận dấu vết kiểm toán tài chính gắn liền với số tiền, phương thức, mã giao dịch đối soát và định danh nhân viên thao tác. | Organization / Store |
+| RULE-25-06 | Truy vết biến động kho hàng và phê duyệt luân chuyển (`TrackInventoryAudit`): Mọi biến động tồn kho hàng hóa (Nhập hàng NCC, Xuất bán POS, Chuyển kho liên chi nhánh `StockTransfer`, Kiểm kê cân chỉnh `InventoryAdjustment`, Xuất hủy hư hỏng `StockDisposal`) phải ghi nhận định danh người thực hiện, người phê duyệt (Maker-Checker), số lượng thay đổi trước/sau và lý do nghiệp vụ. | Organization / Store |
+| RULE-25-07 | Phân định phạm vi tra cứu nhật ký kiểm toán theo vai trò (`ViewAuditLog`): Quyền tra cứu nhật ký kiểm toán được phân định nghiêm ngặt theo cấp bậc quản trị: Platform Admin (`SUPER_ADMIN`) tra cứu toàn nền tảng; Organization Admin (`ORGANIZATION_ADMIN`) tra cứu trong phạm vi Organization; Store Manager (`STORE_MANAGER`) tra cứu trong phạm vi Store; Finance Staff và Inventory Staff chỉ được tra cứu nhật ký chuyên môn tương ứng (`TrackPaymentRefundAudit`, `TrackInventoryAudit`). | Platform / Organization / Store |
+
+### Bất biến Tính Bất khả xâm phạm của Nhật ký Kiểm toán (Audit Immutability & Forensic Integrity Invariant)
+- **Cơ chế lưu trữ:** $\text{AuditLog}$ là tập hợp dữ liệu đơn hướng $\text{Append-Only}$.
+- **Nguyên tắc bảo vệ:** $\forall L \in \text{AuditLogs}: \text{OperationsAllowed}(L) = \{\text{INSERT, SELECT}\}$, nghiêm cấm tuyệt đối $\{\text{UPDATE, DELETE, TRUNCATE, DROP}\}$.
+
