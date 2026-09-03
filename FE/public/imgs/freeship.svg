@@ -1,0 +1,18 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="440" height="88" viewBox="0 0 440 88" role="img" aria-labelledby="title desc">
+  <title id="title">100% freeship đơn hàng đầu tiên</title>
+  <desc id="desc">Ưu đãi dành cho bạn mới</desc>
+  <rect width="440" height="88" rx="0" fill="#eafcf8"/>
+  <text x="8" y="37" font-family="Arial, Helvetica, sans-serif" font-size="17" font-weight="800">
+    <tspan fill="#14b8a6">100%</tspan>
+    <tspan fill="#414545"> FREESHIP ĐƠN HÀNG ĐẦU TIÊN</tspan>
+  </text>
+  <text x="8" y="63" fill="#7b8585" font-family="Arial, Helvetica, sans-serif" font-size="16">Ưu đãi dành cho bạn mới</text>
+  <g fill="none" stroke="#85e3d3" stroke-linecap="round" stroke-linejoin="round" stroke-width="4" opacity=".95">
+    <path d="M342 36h47v28h-47z"/>
+    <path d="M389 64h21l13-13h9v13h-11"/>
+    <circle cx="357" cy="70" r="8"/>
+    <circle cx="412" cy="70" r="8"/>
+    <path d="M417 12c0 9-13 14-13 14s-13-5-13-14a7 7 0 0 1 13-4 7 7 0 0 1 13 4z"/>
+    <path d="M438 24c0 8-11 12-11 12s-11-4-11-12a6 6 0 0 1 11-3 6 6 0 0 1 11 3z"/>
+  </g>
+</svg>

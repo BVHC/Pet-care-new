@@ -1,83 +1,195 @@
-# Build output
-target/
-build/
-dist/
-*.jar
-*.war
+# ==============================================================================
+# OS & System Files
+# ==============================================================================
+.DS_Store
+.DS_Store?
+._*
+.Spotlight-V100
+.Trashes
+ehthumbs.db
+Thumbs.db
+Thumbs.db:encryptable
+desktop.ini
+$RECYCLE.BIN/
 
-# IDE
+# ==============================================================================
+# IDEs & Code Editors
+# ==============================================================================
+# JetBrains (IntelliJ IDEA, WebStorm, etc.)
 .idea/
 *.iml
-.vscode/
+*.iws
+*.ipr
+out/
+
+# Visual Studio Code
+.vscode/*
+!.vscode/settings.json
+!.vscode/tasks.json
+!.vscode/launch.json
+!.vscode/extensions.json
+*.code-workspace
+.history/
+
+# Eclipse
+.apt_generated
+.classpath
+.factorypath
+.project
+.settings/
+.springBeans
+.sts4-cache/
+
+# Other Editors & AI Tools
+*.sublime-workspace
+*.sublime-project
 *.swp
 *.swo
+*~
+.cursor/
+.windsurf/
+.fleet/
+.claude/
+.gemini/
+.agents/
+.ua/
 
-# OS
-.DS_Store
-Thumbs.db
-
-# Logs
-*.log
-logs/
-
-# Environment (NEVER commit .env files)
+# ==============================================================================
+# Environment & Secrets (NEVER commit secrets or real credentials)
+# ==============================================================================
 .env
 .env.local
+.env.development.local
+.env.test.local
+.env.production.local
 .env.*.local
 *.env
+!.env.example
+!*.env.example
 
-# Database
-*.db
-*.sqlite
-*.sqlite3
-
-# Uploads
-uploads/
-/uploads/*
-
-# Node
-node_modules/
-npm-debug.log*
-yarn-debug.log*
-yarn-error.log*
-
-# Test coverage
-coverage/
-*.lcov
-jacoco/
-.pitest/
-
-# Gradle
-.gradle/
-build/
-
-# Maven
-target/
-
-# Docker
-.dockerignore
-
-# Secrets (NEVER commit)
+# Secrets & Certificates
 **/secrets/
 **/credentials/
 *.pem
 *.key
 *.p12
+*.pfx
 *.jks
+*.keystore
+*.cer
+*.crt
 
-# Temporary files
+# ==============================================================================
+# Backend: Java / Spring Boot / Maven / Gradle
+# ==============================================================================
+# Compiled Class files
+*.class
+
+# Maven
+target/
+**/target/
+pom.xml.tag
+pom.xml.releaseBackup
+pom.xml.versionsBackup
+pom.xml.next
+release.properties
+dependency-reduced-pom.xml
+buildNumber.properties
+.mvn/timing.properties
+.mvn/wrapper/maven-wrapper.jar
+.flattened-pom.xml
+
+# Gradle
+.gradle/
+**/build/
+!src/**/build/
+
+# Package Files
+*.jar
+*.war
+*.nar
+*.ear
+*.zip
+*.tar.gz
+*.rar
+
+# Spring Boot DevTools & Profiling
+.spring-boot-devtools.properties
+jprofiler_config.xml
+
+# Database / Local SQLite / Embedded DB
+*.db
+*.sqlite
+*.sqlite3
+*.h2.db
+
+# ==============================================================================
+# Frontend: Node / Vite / React / TypeScript / Bundlers
+# ==============================================================================
+# Dependencies
+node_modules/
+**/node_modules/
+.pnpm-store/
+
+# Production / Build Output
+dist/
+**/dist/
+dist-ssr/
+build/
+**/build/
+out/
+.vite/
+**/.vite/
+.next/
+.turbo/
+.cache/
+**/.cache/
+
+# TypeScript Cache
+*.tsbuildinfo
+
+# Linter & Formatter Caches
+.eslintcache
+.stylelintcache
+.prettiercache
+
+# ==============================================================================
+# Logs & Diagnostic Outputs
+# ==============================================================================
+*.log
+logs/
+**/logs/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+lerna-debug.log*
+report.[0-9]*.[0-9]*.[0-9]*.[0-9]*.json
+
+# Process IDs
+*.pid
+*.seed
+*.pid.lock
+
+# ==============================================================================
+# Testing & Code Coverage
+# ==============================================================================
+coverage/
+**/coverage/
+*.lcov
+jacoco/
+.pitest/
+.nyc_output/
+
+# ==============================================================================
+# Uploads, Media & Temporary Storage
+# ==============================================================================
+uploads/
+**/uploads/*
+!uploads/.gitkeep
+!**/uploads/.gitkeep
+temp/
+tmp/
 *.tmp
 *.temp
 *.bak
-
-# Package files (if using npm)
-package-lock.json
-yarn.lock
-
-# FE build
-FE/dist/
-FE/.vite/
-FE/build/
-
-# OS specific
-Thumbs.db
