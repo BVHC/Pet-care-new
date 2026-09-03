@@ -1,5 +1,6 @@
 import { useEffect, useRef } from 'react'
 import { Link } from 'react-router-dom'
+import { PawPrint } from 'lucide-react'
 import gsap from 'gsap'
 import { ScrollTrigger } from 'gsap/ScrollTrigger'
 
@@ -180,7 +181,7 @@ const DesktopHero = () => (
     {/* Center Text Layer */}
     <div className="hero-center-content relative z-20 pt-10 text-center px-4 max-w-3xl mx-auto will-change-transform">
       <div className="hero-badge-elem inline-flex items-center gap-2 rounded-full bg-amber-100/70 border border-amber-200/80 px-4 py-1.5 text-[13px] font-bold text-[#843122] mb-4 shadow-xs">
-        🐾 Hệ Thống Chăm Sóc Thú Cưng Toàn Diện
+        <PawPrint size={14} strokeWidth={2.5} /> Hệ Thống Chăm Sóc Thú Cưng Toàn Diện
       </div>
       <h1 className="font-[var(--font-friendly)] text-[clamp(44px,5.2vw,72px)] leading-[1.08] tracking-tight font-black">
         <span className="hero-title-line-1 inline-block text-[#3B2A1E]">
@@ -216,7 +217,7 @@ const TabletHero = () => (
   <div className="hidden md:flex lg:hidden flex-col h-full relative min-h-[580px]">
     <div className="hero-center-content relative z-20 pt-8 text-center px-4 max-w-xl mx-auto">
       <div className="hero-badge-elem inline-flex items-center gap-1.5 rounded-full bg-amber-100/70 px-3.5 py-1 text-[12px] font-bold text-[#843122] mb-3">
-        🐾 Chăm sóc thú cưng toàn diện
+        <PawPrint size={12} strokeWidth={2.5} /> Chăm sóc thú cưng toàn diện
       </div>
       <h1 className="font-[var(--font-friendly)] text-5xl leading-[1.08] tracking-tight font-black">
         <span className="hero-title-line-1 inline-block text-[#3B2A1E]">
@@ -255,7 +256,7 @@ const MobileHero = () => (
       {/* Title Section */}
       <div className="hero-center-content text-center pt-8">
         <div className="hero-badge-elem inline-flex items-center gap-1.5 rounded-full bg-amber-100 px-3 py-1 text-[11px] font-bold text-[#843122] mb-3">
-          🐾 Chăm sóc thú cưng toàn diện
+          <PawPrint size={11} strokeWidth={2.5} /> Chăm sóc thú cưng toàn diện
         </div>
         <h1 className="font-[var(--font-friendly)] text-[#3B2A1E] text-[32px] leading-[1.15] font-black mb-2">
           Yêu Thương Trọn Vẹn

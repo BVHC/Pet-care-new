@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { Search, ShoppingCart, User, ChevronDown, LogOut, Package, Edit3,  } from 'lucide-react';
+import { Search, ShoppingCart, User, ChevronDown, LogOut, Package, Edit3 } from 'lucide-react';
 import { useAuthStore } from '../../stores/auth.store';
 import { isHeaderCollapsed, buildShopMegaMenu } from './header.utils';
 
@@ -93,10 +93,10 @@ export function SiteHeader({ cartCount = 0, onNav }: SiteHeaderProps) {
 
           {/* User Icon & Dropdown */}
           <div className="relative group cursor-pointer text-[#3B2A1E] hover:text-[#843122] transition-colors pb-4 -mb-4">
-            <User size={22} strokeWidth={2.5} onClick={() => (user ? onNav('account') : onNav('login'))} />
-            {user ? (
+            <User size={22} strokeWidth={2.5} onClick={() => onNav('account')} />
+            {(
               <div className="absolute top-[100%] right-0 hidden group-hover:flex flex-col bg-white shadow-xl p-3 rounded-b-lg border-t-2 border-[#843122] w-48 z-50 pt-3 mt-4 gap-1">
-                <div className="text-[13px] font-bold text-[#3B2A1E] mb-1 px-2 border-b pb-2">Chào, {user.name}</div>
+                <div className="text-[13px] font-bold text-[#3B2A1E] mb-1 px-2 border-b pb-2">Chào, {user?.name || 'Khách'}</div>
                 <button
                   onClick={() => onNav('account')}
                   className="flex items-center gap-2 text-[13px] text-gray-700 hover:bg-amber-50 rounded-md px-2 py-1.5 transition-colors w-full text-left font-medium"
@@ -129,7 +129,7 @@ export function SiteHeader({ cartCount = 0, onNav }: SiteHeaderProps) {
                   <LogOut size={14} /> Đăng xuất
                 </button>
               </div>
-            ) : null}
+            )}
           </div>
 
           {/* Cart Icon */}
@@ -208,7 +208,7 @@ export function SiteHeader({ cartCount = 0, onNav }: SiteHeaderProps) {
                <Search size={12} strokeWidth={3} />
              </button>
            </div>
-           <button className="text-[#3B2A1E] hover:text-[#843122] flex-shrink-0" onClick={() => (user ? onNav('account') : onNav('login'))}>
+           <button className="text-[#3B2A1E] hover:text-[#843122] flex-shrink-0" onClick={() => onNav('account')}>
              <User size={20} strokeWidth={2.5}/>
            </button>
            <div className="relative cursor-pointer text-[#3B2A1E] hover:text-[#843122] flex-shrink-0" onClick={() => onNav('cart')}>
