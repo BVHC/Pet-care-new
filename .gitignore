@@ -193,3 +193,19 @@ tmp/
 *.tmp
 *.temp
 *.bak
+<<<<<<< HEAD
+=======
+
+# Package files (if using npm)
+package-lock.json
+yarn.lock
+
+# FE build
+FE/dist/
+FE/.vite/
+FE/build/
+
+# OS specific
+Thumbs.db
+
+

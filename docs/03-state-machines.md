@@ -124,15 +124,15 @@ stateDiagram-v2
 
 | From State | Command / Trigger | Actor | Guard (RULE-ID) | To State | Domain Event | Actions / Notes |
 |---|---|---|---|---|---|---|
-| [*] | HoldSlot | Customer / Receptionist | RULE-06-01, RULE-06-07 | HOLDING | SlotHeld | Khóa tạm thời tài nguyên phòng/bàn, lịch nhân sự và lịch Pet trong 15 phút ($\text{Hold\_TTL} = 900\text{s}$). |
+| [*] | HoldSlot | Customer / Receptionist | RULE-06-01 | HOLDING | SlotHeld | Khóa tạm thời tài nguyên phòng/bàn, lịch nhân sự và lịch Pet trong 15 phút ($\text{Hold\_TTL} = 900\text{s}$). |
 | HOLDING | BookAppointment / PaymentSucceeded | Customer / Receptionist / System | RULE-06-01, RULE-06-02 | CONFIRMED | AppointmentBooked | Xác nhận hoặc hoàn tất đặt cọc/thanh toán trong thời hạn 15m; khởi tạo Aggregate `Appointment` chính thức. |
-| HOLDING | ReleaseHold | Customer / Receptionist | RULE-06-01, RULE-06-07 | RELEASED | HoldReleased | Khách hàng hoặc tiếp tân chủ động hủy phiên đặt lịch; giải phóng slot tài nguyên ngay lập tức. |
-| HOLDING | ExpireHold | System | RULE-06-01, RULE-06-07 | EXPIRED | HoldExpired | Quá thời hạn 15 phút không hoàn tất xác nhận/thanh toán; hệ thống tự động quét và giải phóng slot về trạng thái tự do (`FREE`). |
+| HOLDING | ReleaseHold | Customer / Receptionist | RULE-06-01 | RELEASED | HoldReleased | Khách hàng hoặc tiếp tân chủ động hủy phiên đặt lịch; giải phóng slot tài nguyên ngay lập tức. |
+| HOLDING | ExpireHold | System | RULE-06-01 | EXPIRED | HoldExpired | Quá thời hạn 15 phút không hoàn tất xác nhận/thanh toán; hệ thống tự động quét và giải phóng slot về trạng thái tự do (`FREE`). |
 
 - **Initial State:** `HOLDING`
 - **Terminal State:** `CONFIRMED`, `RELEASED`, `EXPIRED`
 - **Technical Invariants:**
-  1. *Khóa Giữ chỗ 15 Phút (RULE-06-01, RULE-06-07):* Slot giữ chỗ tạm thời có TTL chính xác 900 giây. Trong thời gian này, slot không thể bị chọn bởi khách hàng khác.
+  1. *Khóa Giữ chỗ 15 Phút (RULE-06-01):* Slot giữ chỗ tạm thời có TTL chính xác 900 giây. Trong thời gian này, slot không thể bị chọn bởi khách hàng khác.
   2. *Cầu nối Giữ chỗ sang Cuộc hẹn:* Khi chuyển sang `CONFIRMED`, `BookingHold` hoàn tất vai trò và phát sinh sự kiện `AppointmentBooked` để khởi tạo `Appointment`.
 
 ---
@@ -347,8 +347,8 @@ stateDiagram-v2
 |---|---|---|---|---|---|---|
 | [*] | RequestRefund | Customer | RULE-17-01, RULE-17-02, RULE-17-03 | REQUESTED | RefundRequested | Khách hàng tự gửi yêu cầu hoàn tiền qua App cá nhân trong vòng 30 ngày. |
 | [*] | CreateRefundRequest | Receptionist | RULE-17-01, RULE-17-02, RULE-17-03 | REQUESTED | RefundRequested | Tiếp tân lập yêu cầu hoàn tiền tại quầy Store theo đề nghị của khách. |
-| REQUESTED | ApproveRefund | StoreManager / OrganizationAdmin | RULE-17-02, RULE-17-04 | APPROVED | RefundApproved | Quản lý duyệt hoàn tiền; bắt buộc thực thi Maker-Checker (`created_by != approved_by`). |
-| REQUESTED | RejectRefund | StoreManager / OrganizationAdmin | RULE-17-04, RULE-17-06 | REJECTED | RefundRejected | Quản lý từ chối yêu cầu hoàn tiền kèm lý do từ chối. |
+| REQUESTED | ApproveRefund | StoreManager | RULE-17-02, RULE-17-04 | APPROVED | RefundApproved | Quản lý duyệt hoàn tiền; bắt buộc thực thi Maker-Checker (`created_by != approved_by`). |
+| REQUESTED | RejectRefund | StoreManager | RULE-17-04, RULE-17-06 | REJECTED | RefundRejected | Quản lý từ chối yêu cầu hoàn tiền kèm lý do từ chối. |
 | APPROVED | ProcessRefund | FinanceStaff / Receptionist / StoreManager | RULE-17-05 | PROCESSING | RefundProcessing | Tiền mặt: Tiếp tân/Quản lý thực hiện tại quầy; Online Gateway: Nhân viên tài chính gọi API cổng. |
 | PROCESSING | CompleteRefund | FinanceStaff / Receptionist / StoreManager / System | RULE-17-02, RULE-17-05, RULE-17-09 | COMPLETED | RefundCompleted | Bàn giao tiền mặt hoặc nhận callback thành công từ cổng; cập nhật đa aggregate. |
 | PROCESSING | FailRefund | System | RULE-17-06, RULE-17-07 | FAILED | RefundFailed | Lỗi kỹ thuật hoặc gián đoạn mạng từ cổng thanh toán; kích hoạt trạng thái lỗi tạm thời. |
@@ -451,7 +451,7 @@ stateDiagram-v2
 | [*] | CreateStockTransfer | InventoryStaff | RULE-12-04 | REQUESTED | StockTransferCreated | Khởi tạo yêu cầu chuyển kho liên chi nhánh trong cùng Organization; xác định kho xuất, kho nhận, sản phẩm và số lượng. |
 | REQUESTED | ApproveStockTransfer | StoreManager | RULE-12-06 | APPROVED | StockTransferApproved | Thẩm định và duyệt yêu cầu chuyển kho; bắt buộc thực thi Maker-Checker (`created_by != approved_by`). |
 | REQUESTED | RejectStockTransfer | StoreManager | RULE-12-06 | REJECTED | StockTransferRejected | Từ chối yêu cầu chuyển kho kèm lý do từ chối. |
-| REQUESTED | CancelStockTransfer | InventoryStaff / StoreManager | RULE-12-10 | CANCELLED | StockTransferCancelled | Hủy yêu cầu chuyển kho khi chưa được duyệt/chưa xuất hàng. |
+| REQUESTED | CancelStockTransfer | InventoryStaff | RULE-12-10 | CANCELLED | StockTransferCancelled | Hủy yêu cầu chuyển kho khi chưa được duyệt/chưa xuất hàng. |
 | APPROVED | ShipStockTransfer | InventoryStaff | RULE-12-05, RULE-12-07 | IN_TRANSIT | StockTransferShipped | Xuất kho giao hàng cho bên vận chuyển; trừ tồn kho khả dụng tại điểm xuất, chuyển sang trạng thái đang vận chuyển. |
 | IN_TRANSIT | ReceiveStockTransfer | InventoryStaff | RULE-12-08 | RECEIVED | StockTransferReceived | Điểm nhận tiếp nhận hàng đủ 100% số lượng và nguyên vẹn; tăng ngay tồn kho khả dụng tại điểm nhận. |
 | IN_TRANSIT | ReceiveStockTransferWithDiscrepancy | InventoryStaff | RULE-12-08, RULE-12-09 | DISCREPANCY_RECORDED | StockTransferDiscrepancyReported | Phát hiện hàng hư hỏng hoặc thất thoát; tăng tồn kho phần nguyên vẹn, cách ly hàng hỏng và hạch toán hao hụt. |
@@ -562,7 +562,7 @@ stateDiagram-v2
      - `AbortAppointment` → tự động tạo `ClinicalIncident` hoặc `GroomingIncident` với mức độ tối thiểu `HIGH`.
      - `AbortGrooming` → tự động tạo `GroomingIncident` với mức độ `HIGH`, phát thông báo tới Customer.
      - `EmergencyOverrideAccess` → tự động tạo `ClinicalIncident` (`is_emergency = true`, mức độ `CRITICAL`).
-  2. *Chính sách Thông báo Khẩn cấp Bắt buộc (RULE-21-05, RULE-23-02):* Sự cố mức độ `HIGH` và `CRITICAL` bắt buộc hệ thống tự động gửi thông báo khẩn cấp `SendIncidentNotification` tới Khách hàng và Organization Admin trong vòng 1-4 giờ.
+  2. *Chính sách Thông báo Khẩn cấp Bắt buộc (RULE-21-05, RULE-23-02):* Sự cố mức độ `HIGH` và `CRITICAL` bắt buộc hệ thống tự động gửi thông báo khẩn cấp `SendIncidentNotification` tới Khách hàng và Store Manager trong vòng 1-4 giờ.
   3. *Tính Bất biến Tuyệt đối của Hồ sơ Sự cố Đã đóng (RULE-21-08):* Hồ sơ sự cố ở trạng thái `CLOSED` là BẤT BIẾN (Immutable), tuyệt đối không được phép chỉnh sửa nội dung hoặc mở lại.
 
 ---
@@ -590,7 +590,7 @@ stateDiagram-v2
 | WAITING | PerformGrooming | Groomer | RULE-11-01, RULE-11-02 | IN_PROGRESS | GroomingStarted | Kiểm tra thể trạng đạt yêu cầu (không có bệnh lây nhiễm, tính cách an toàn); đưa thú cưng lên bàn grooming bắt đầu phục vụ. |
 | WAITING | InspectPet | Groomer | RULE-11-01, RULE-11-02 | REJECTED | GroomingRejected | Phát hiện bệnh truyền nhiễm nặng, ve rận nghiêm trọng, nấm lây lan hoặc thú hung dữ mất an toàn; từ chối phục vụ, chuyển bác sĩ hội chẩn. |
 | WAITING | CancelGrooming | Customer / Receptionist | RULE-11-01 | CANCELLED | GroomingCancelled | Khách hàng hoặc tiếp tân hủy phiên dịch vụ trước khi bắt đầu thực hiện; giải phóng bàn grooming và xử lý cọc. |
-| IN_PROGRESS | AddGroomingService | Groomer | RULE-11-02, RULE-11-03, RULE-11-05 | AWAITING_CUSTOMER_APPROVAL | AdditionalServiceRequested | Phát hiện lông rối nặng, nhu cầu tắm trị liệu đặc biệt hoặc dịch vụ phát sinh; tạm dừng công đoạn và gửi yêu cầu phê duyệt kèm báo giá tới khách hàng. |
+| IN_PROGRESS | AddGroomingService | Groomer | RULE-11-02, RULE-11-03 | AWAITING_CUSTOMER_APPROVAL | AdditionalServiceRequested | Phát hiện lông rối nặng, nhu cầu tắm trị liệu đặc biệt hoặc dịch vụ phát sinh; tạm dừng công đoạn và gửi yêu cầu phê duyệt kèm báo giá tới khách hàng. |
 | AWAITING_CUSTOMER_APPROVAL | ConfirmAdditionalService | Customer | RULE-11-03 (D-02) | IN_PROGRESS | AdditionalServiceConfirmed | Khách hàng chấp thuận; hệ thống tự động khởi tạo **Hóa đơn Phụ phí độc lập (Surcharge Invoice)** ở trạng thái `DRAFT`/`ISSUED` liên kết với phiên (không sửa hóa đơn gốc D-01) và tiếp tục thực hiện dịch vụ. |
 | AWAITING_CUSTOMER_APPROVAL | RejectAdditionalService | Customer | RULE-11-03 | IN_PROGRESS | AdditionalServiceRejected | Khách hàng từ chối phát sinh; Groomer tiếp tục hoàn thành các hạng mục trong gói dịch vụ cơ bản ban đầu. |
 | IN_PROGRESS | CompleteGrooming | Groomer | RULE-11-04, RULE-11-05 | COMPLETED | GroomingCompleted | Hoàn thành toàn bộ công đoạn, chụp ảnh kết quả nghiệm thu; giải phóng bàn Grooming (`ReleaseStoreResource`); bàn giao tiếp tân đóng lịch hẹn. |
@@ -688,8 +688,8 @@ Bảng ma trận dưới đây đặc tả toàn bộ các luồng liên kết s
 
 | STT | Aggregate Nguồn & Trạng thái | Aggregate Đích & Hành động / Chuyển trạng thái | Sự kiện Kích hoạt (Domain Event / Trigger Bridge) | Ràng buộc nghiệp vụ (Rule ID) | Mô tả Luồng Xử lý Nghiệp vụ |
 |---|---|---|---|---|---|
-| 1 | **BookingHold** / `HOLDING` | **StoreResource** / Khóa tạm thời slot phòng/bàn | `SlotHeld` | RULE-06-01, RULE-06-07 | Tạm giữ tài nguyên cơ sở vật chất, lịch nhân sự và lịch Pet trong 15 phút ($\text{Hold\_TTL} = 900\text{s}$). |
-| 2 | **BookingHold** / `EXPIRED` | **StoreResource** / Giải phóng slot phòng/bàn | `HoldExpired` | RULE-06-01, RULE-06-07 | Tự động giải phóng slot phòng/bàn và lịch nhân sự về trạng thái `FREE` khi hết hạn giữ chỗ 15 phút mà không xác nhận. |
+| 1 | **BookingHold** / `HOLDING` | **StoreResource** / Khóa tạm thời slot phòng/bàn | `SlotHeld` | RULE-06-01 | Tạm giữ tài nguyên cơ sở vật chất, lịch nhân sự và lịch Pet trong 15 phút ($\text{Hold\_TTL} = 900\text{s}$). |
+| 2 | **BookingHold** / `EXPIRED` | **StoreResource** / Giải phóng slot phòng/bàn | `HoldExpired` | RULE-06-01 | Tự động giải phóng slot phòng/bàn và lịch nhân sự về trạng thái `FREE` khi hết hạn giữ chỗ 15 phút mà không xác nhận. |
 | 3 | **Payment** / `SUCCESS` | **Invoice** / `FullPaymentSettled` -> `PAID` | `PaymentSucceeded` | RULE-15-06, RULE-16-04 | Cập nhật lũy kế thanh toán; khi $\sum(\text{Payment.SUCCESS}) \ge \text{Invoice.TotalAmount}$, chuyển Invoice sang `PAID`. |
 | 4 | **Payment** / `SUCCESS` | **Order** / `PAID` | `PaymentSucceeded` | RULE-14-03, RULE-14-04 | Đơn hàng Online/App chuyển sang `PAID` sau khi nhận thanh toán thành công, chuyển tiếp sang `CONFIRMED`. |
 | 5 | **Refund** / `COMPLETED` | **Payment** / `PARTIALLY_REFUNDED` hoặc `REFUNDED` | `RefundCompleted` | RULE-16-06, RULE-17-02, RULE-17-09 | Cập nhật $\text{RemainingRefundableAmount}$. Nếu bằng 0 chuyển `REFUNDED`, ngược lại chuyển `PARTIALLY_REFUNDED`. |
