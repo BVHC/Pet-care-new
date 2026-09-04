@@ -1,0 +1,162 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>UC · Inventory & Stock · Pet Care</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link href="https://fonts.googleapis.com/css2?family=Geist:wght@400;500;600;700&family=Geist+Mono:wght@400;500&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="../shared/styles.css">
+</head>
+<body>
+  <aside class="sidebar">
+    <div class="sidebar-brand"><h1>🎯 Use Cases</h1><p class="subtitle">Inventory & Stock</p></div>
+    <nav class="sidebar-nav">
+      <div class="nav-group open">
+        <div class="nav-group-header">📁 Inventory</div>
+        <div class="nav-group-content">
+          <div class="menu-item" onclick="switchDiagram('receive')"><span class="badge">UC8a</span><span>Receive Inventory</span></div>
+          <div class="menu-item" onclick="switchDiagram('transfer')"><span class="badge">UC8b</span><span>Stock Transfer</span></div>
+          <div class="menu-item" onclick="switchDiagram('alerts')"><span class="badge">UC8c</span><span>Alerts & FEFO</span></div>
+        </div>
+      </div>
+      <div class="nav-group">
+        <div class="nav-group-header">📁 Navigation</div>
+        <div class="nav-group-content">
+          <div class="menu-item" onclick="location.href='uc-procurement.html'"><span class="badge">UC9</span><span>Procurement</span></div>
+          <div class="menu-item" onclick="location.href='../index.html'"><span class="badge">↑</span><span>All</span></div>
+        </div>
+      </div>
+    </nav>
+  </aside>
+
+  <main class="main-content">
+    <div class="top-bar">
+      <div class="top-left">
+        <div class="breadcrumb"><a href="../index.html">Diagrams</a><span>/</span><span>Use Cases</span><span>/</span><span>Inventory</span></div>
+        <h1 class="top-title" id="top-title">Receive Inventory</h1>
+      </div>
+      <div class="controls">
+        <button class="control-btn" onclick="zoomIn()">🔍+</button>
+        <button class="control-btn" onclick="zoomOut()">🔍-</button>
+        <button class="control-btn" onclick="resetZoom()">Reset</button>
+      </div>
+    </div>
+    <div class="canvas-wrapper">
+      <div id="viewport"><div id="canvas-content"><svg id="main-svg" width="100%" height="100%" viewBox="0 0 1200 800"></svg></div></div>
+      <div class="zoom-indicator" id="zoom-indicator">100%</div>
+    </div>
+    <div class="footer" id="footer-desc"><strong>Domain Note:</strong> Inventory Management</div>
+  </main>
+
+  <script src="../shared/renderer.js"></script>
+  <script>
+    const DIAGRAMS = {
+      'receive': {
+        description: 'UC8a · Receive Inventory: PO → Inspect → Record Batch → FEFO',
+        actors: [
+          { name: "Inventory Staff", color: "#eb6c36" },
+          { name: "Store Manager", color: "#7b4ac7" },
+          { name: "Inventory Service", system: true, color: "#4f5d75" }
+        ],
+        useCases: [
+          { id: "UC8a-1", name: "Receive Goods", focal: true },
+          { id: "UC8a-2", name: "Inspect Goods" },
+          { id: "UC8a-3", name: "Record Batch Info" },
+          { id: "UC8a-4", name: "Calculate FEFO Date" },
+          { id: "UC8a-5", name: "Update Stock Level" },
+          { id: "UC8a-6", name: "Adjust Inventory" }
+        ],
+        relations: [
+          { actor: "Inventory Staff", uc: "UC8a-1" },
+          { actor: "Inventory Staff", uc: "UC8a-2" },
+          { actor: "Inventory Service", uc: "UC8a-3", type: "include" },
+          { actor: "Inventory Service", uc: "UC8a-4", type: "include" },
+          { actor: "Inventory Service", uc: "UC8a-5", type: "include" },
+          { actor: "Store Manager", uc: "UC8a-6" }
+        ]
+      },
+      'transfer': {
+        description: 'UC8b · Stock Transfer: REQUESTED → APPROVED → SHIPPED → IN_TRANSIT → RECEIVED',
+        actors: [
+          { name: "Inventory Staff", color: "#eb6c36" },
+          { name: "Store Manager", color: "#7b4ac7" },
+          { name: "Transfer Service", system: true, color: "#4f5d75" }
+        ],
+        useCases: [
+          { id: "UC8b-1", name: "Create Stock Transfer", focal: true },
+          { id: "UC8b-2", name: "Approve Transfer" },
+          { id: "UC8b-3", name: "Ship Stock" },
+          { id: "UC8b-4", name: "Receive Stock" },
+          { id: "UC8b-5", name: "Handle Discrepancy" },
+          { id: "UC8b-6", name: "Record Transfer" }
+        ],
+        relations: [
+          { actor: "Inventory Staff", uc: "UC8b-1" },
+          { actor: "Store Manager", uc: "UC8b-2" },
+          { actor: "Inventory Staff", uc: "UC8b-3" },
+          { actor: "Inventory Staff", uc: "UC8b-4" },
+          { actor: "Transfer Service", uc: "UC8b-5", type: "include" },
+          { actor: "Transfer Service", uc: "UC8b-6", type: "include" }
+        ]
+      },
+      'alerts': {
+        description: 'UC8c · Inventory Alerts: Low Stock, Expiry Warning, FEFO Enforcement',
+        actors: [
+          { name: "System", color: "#4f5d75" },
+          { name: "Store Manager", color: "#7b4ac7" },
+          { name: "Notification Service", system: true, color: "#4f5d75" }
+        ],
+        useCases: [
+          { id: "UC8c-1", name: "Monitor Stock Levels" },
+          { id: "UC8c-2", name: "Trigger Low Stock Alert" },
+          { id: "UC8c-3", name: "Trigger Expiry Warning" },
+          { id: "UC8c-4", name: "FEFO Picking Enforcement" },
+          { id: "UC8c-5", name: "Auto Reorder Suggestion" }
+        ],
+        relations: [
+          { actor: "System", uc: "UC8c-1" },
+          { actor: "System", uc: "UC8c-2" },
+          { actor: "System", uc: "UC8c-3" },
+          { actor: "System", uc: "UC8c-4" },
+          { actor: "Notification Service", uc: "UC8c-5", type: "include" },
+          { actor: "Store Manager", uc: "UC8c-5" }
+        ]
+      }
+    };
+
+    let currentDiagram = 'receive';
+    let zoomLevel = 1.0;
+
+    function switchDiagram(key) {
+      currentDiagram = key;
+      document.querySelectorAll('.menu-item').forEach(el => el.classList.remove('active'));
+      event.target.closest('.menu-item').classList.add('active');
+      document.getElementById('top-title').textContent = DIAGRAMS[key].useCases[0].name;
+      document.getElementById('footer-desc').innerHTML = `<strong>Domain Note:</strong> ${DIAGRAMS[key].description}`;
+      renderCurrentDiagram();
+    }
+
+    function renderCurrentDiagram() {
+      const svg = document.getElementById('main-svg');
+      svg.innerHTML = `<defs>
+        <marker id="arr" markerWidth="10" markerHeight="10" refX="9" refY="3" orient="auto"><path d="M0,0 L0,6 L9,3 z" fill="#4f5d75"/></marker>
+        <marker id="arr-blue" markerWidth="10" markerHeight="10" refX="9" refY="3" orient="auto"><path d="M0,0 L0,6 L9,3 z" fill="#2e5aa8"/></marker>
+      </defs>`;
+      const data = DIAGRAMS[currentDiagram];
+      data._type = 'usecase';
+      renderUseCase(svg, data);
+    }
+
+    function zoomIn() { zoomLevel = Math.min(2.0, zoomLevel + 0.1); applyZoom(); }
+    function zoomOut() { zoomLevel = Math.max(0.5, zoomLevel - 0.1); applyZoom(); }
+    function resetZoom() { zoomLevel = 1.0; applyZoom(); }
+    function applyZoom() {
+      document.getElementById('canvas-content').style.transform = `scale(${zoomLevel})`;
+      document.getElementById('zoom-indicator').textContent = Math.round(zoomLevel * 100) + '%';
+    }
+
+    renderCurrentDiagram();
+  </script>
+</body>
+</html>

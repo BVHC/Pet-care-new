@@ -1,0 +1,162 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>UC · Vaccination · Pet Care</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link href="https://fonts.googleapis.com/css2?family=Geist:wght@400;500;600;700&family=Geist+Mono:wght@400;500&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="../shared/styles.css">
+</head>
+<body>
+  <aside class="sidebar">
+    <div class="sidebar-brand"><h1>🎯 Use Cases</h1><p class="subtitle">Vaccination</p></div>
+    <nav class="sidebar-nav">
+      <div class="nav-group open">
+        <div class="nav-group-header">📁 Vaccination</div>
+        <div class="nav-group-content">
+          <div class="menu-item" onclick="switchDiagram('routine')"><span class="badge">UC6a</span><span>Routine Vaccination</span></div>
+          <div class="menu-item" onclick="switchDiagram('therapeutic')"><span class="badge">UC6b</span><span>Therapeutic Vaccination</span></div>
+          <div class="menu-item" onclick="switchDiagram('schedule')"><span class="badge">UC6c</span><span>Schedule & Reminder</span></div>
+        </div>
+      </div>
+      <div class="nav-group">
+        <div class="nav-group-header">📁 Navigation</div>
+        <div class="nav-group-content">
+          <div class="menu-item" onclick="location.href='uc-clinical.html'"><span class="badge">UC5</span><span>Clinical</span></div>
+          <div class="menu-item" onclick="location.href='../index.html'"><span class="badge">↑</span><span>All</span></div>
+        </div>
+      </div>
+    </nav>
+  </aside>
+
+  <main class="main-content">
+    <div class="top-bar">
+      <div class="top-left">
+        <div class="breadcrumb"><a href="../index.html">Diagrams</a><span>/</span><span>Use Cases</span><span>/</span><span>Vaccination</span></div>
+        <h1 class="top-title" id="top-title">Routine Vaccination</h1>
+      </div>
+      <div class="controls">
+        <button class="control-btn" onclick="zoomIn()">🔍+</button>
+        <button class="control-btn" onclick="zoomOut()">🔍-</button>
+        <button class="control-btn" onclick="resetZoom()">Reset</button>
+      </div>
+    </div>
+    <div class="canvas-wrapper">
+      <div id="viewport"><div id="canvas-content"><svg id="main-svg" width="100%" height="100%" viewBox="0 0 1200 800"></svg></div></div>
+      <div class="zoom-indicator" id="zoom-indicator">100%</div>
+    </div>
+    <div class="footer" id="footer-desc"><strong>Domain Note:</strong> Vaccination Management</div>
+  </main>
+
+  <script src="../shared/renderer.js"></script>
+  <script>
+    const DIAGRAMS = {
+      'routine': {
+        description: 'UC6a · Routine Vaccination: Fast-track, no complex EMR, direct to VaccinationRecord',
+        actors: [
+          { name: "Veterinarian", color: "#eb6c36" },
+          { name: "Customer", color: "#2e5aa8" },
+          { name: "Vaccine Service", system: true, color: "#4f5d75" },
+          { name: "Inventory", system: true, color: "#4f5d75" }
+        ],
+        useCases: [
+          { id: "UC6a-1", name: "Check Vaccination Schedule", focal: true },
+          { id: "UC6a-2", name: "Screening Health Status" },
+          { id: "UC6a-3", name: "Scan Vaccine Barcode" },
+          { id: "UC6a-4", name: "Verify Batch Expiry" },
+          { id: "UC6a-5", name: "Administer Vaccine" },
+          { id: "UC6a-6", name: "Record Vaccination" },
+          { id: "UC6a-7", name: "Schedule Next Dose" }
+        ],
+        relations: [
+          { actor: "Veterinarian", uc: "UC6a-1" },
+          { actor: "Vaccine Service", uc: "UC6a-2", type: "include" },
+          { actor: "Veterinarian", uc: "UC6a-3" },
+          { actor: "Vaccine Service", uc: "UC6a-4", type: "include" },
+          { actor: "Veterinarian", uc: "UC6a-5" },
+          { actor: "Vaccine Service", uc: "UC6a-6", type: "include" },
+          { actor: "Vaccine Service", uc: "UC6a-7", type: "include" }
+        ]
+      },
+      'therapeutic': {
+        description: 'UC6b · Therapeutic Vaccination: Must link to MedicalRecord & Treatment',
+        actors: [
+          { name: "Veterinarian", color: "#eb6c36" },
+          { name: "EMR Service", system: true, color: "#4f5d75" },
+          { name: "Inventory", system: true, color: "#4f5d75" }
+        ],
+        useCases: [
+          { id: "UC6b-1", name: "Link to Treatment Plan", focal: true },
+          { id: "UC6b-2", name: "Link to Medical Record" },
+          { id: "UC6b-3", name: "Scan Vaccine Barcode" },
+          { id: "UC6b-4", name: "Administer Vaccine" },
+          { id: "UC6b-5", name: "Record in EMR" }
+        ],
+        relations: [
+          { actor: "Veterinarian", uc: "UC6b-1" },
+          { actor: "EMR Service", uc: "UC6b-2", type: "include" },
+          { actor: "Veterinarian", uc: "UC6b-3" },
+          { actor: "Veterinarian", uc: "UC6b-4" },
+          { actor: "EMR Service", uc: "UC6b-5", type: "include" }
+        ]
+      },
+      'schedule': {
+        description: 'UC6c · Vaccination Schedule & Reminder',
+        actors: [
+          { name: "System", color: "#4f5d75" },
+          { name: "Customer", color: "#2e5aa8" },
+          { name: "Notification Service", system: true, color: "#4f5d75" }
+        ],
+        useCases: [
+          { id: "UC6c-1", name: "Generate Schedule" },
+          { id: "UC6c-2", name: "Calculate Next Due Date" },
+          { id: "UC6c-3", name: "Send Reminder" },
+          { id: "UC6c-4", name: "Process Expiry Warning" },
+          { id: "UC6c-5", name: "View Schedule" }
+        ],
+        relations: [
+          { actor: "System", uc: "UC6c-1" },
+          { actor: "System", uc: "UC6c-2", type: "include" },
+          { actor: "Notification Service", uc: "UC6c-3" },
+          { actor: "System", uc: "UC6c-4" },
+          { actor: "Customer", uc: "UC6c-5" }
+        ]
+      }
+    };
+
+    let currentDiagram = 'routine';
+    let zoomLevel = 1.0;
+
+    function switchDiagram(key) {
+      currentDiagram = key;
+      document.querySelectorAll('.menu-item').forEach(el => el.classList.remove('active'));
+      event.target.closest('.menu-item').classList.add('active');
+      document.getElementById('top-title').textContent = DIAGRAMS[key].useCases[0].name;
+      document.getElementById('footer-desc').innerHTML = `<strong>Domain Note:</strong> ${DIAGRAMS[key].description}`;
+      renderCurrentDiagram();
+    }
+
+    function renderCurrentDiagram() {
+      const svg = document.getElementById('main-svg');
+      svg.innerHTML = `<defs>
+        <marker id="arr" markerWidth="10" markerHeight="10" refX="9" refY="3" orient="auto"><path d="M0,0 L0,6 L9,3 z" fill="#4f5d75"/></marker>
+        <marker id="arr-blue" markerWidth="10" markerHeight="10" refX="9" refY="3" orient="auto"><path d="M0,0 L0,6 L9,3 z" fill="#2e5aa8"/></marker>
+      </defs>`;
+      const data = DIAGRAMS[currentDiagram];
+      data._type = 'usecase';
+      renderUseCase(svg, data);
+    }
+
+    function zoomIn() { zoomLevel = Math.min(2.0, zoomLevel + 0.1); applyZoom(); }
+    function zoomOut() { zoomLevel = Math.max(0.5, zoomLevel - 0.1); applyZoom(); }
+    function resetZoom() { zoomLevel = 1.0; applyZoom(); }
+    function applyZoom() {
+      document.getElementById('canvas-content').style.transform = `scale(${zoomLevel})`;
+      document.getElementById('zoom-indicator').textContent = Math.round(zoomLevel * 100) + '%';
+    }
+
+    renderCurrentDiagram();
+  </script>
+</body>
+</html>

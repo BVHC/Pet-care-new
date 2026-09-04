@@ -1,0 +1,270 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>UC · Appointment & Scheduling · Pet Care</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link href="https://fonts.googleapis.com/css2?family=Geist:wght@400;500;600;700&family=Geist+Mono:wght@400;500&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="../shared/styles.css">
+</head>
+<body>
+  <aside class="sidebar">
+    <div class="sidebar-brand">
+      <h1>🎯 Use Cases</h1>
+      <p class="subtitle">Appointment & Scheduling</p>
+    </div>
+    <nav class="sidebar-nav">
+      <div class="nav-group open">
+        <div class="nav-group-header">📁 Appointment Booking</div>
+        <div class="nav-group-content">
+          <div class="menu-item active focal" onclick="switchDiagram('slot-reservation')">
+            <span class="badge">UC2a</span>
+            <span>Slot Reservation (HoldSlot)</span>
+            <span class="status-pill focal">⭐ Key</span>
+          </div>
+          <div class="menu-item" onclick="switchDiagram('appointment-booking')">
+            <span class="badge">UC2b</span>
+            <span>Book Appointment</span>
+          </div>
+          <div class="menu-item" onclick="switchDiagram('appointment-checkin')">
+            <span class="badge">UC2c</span>
+            <span>Check-in & Check-out</span>
+          </div>
+          <div class="menu-item" onclick="switchDiagram('reschedule-cancel')">
+            <span class="badge">UC2d</span>
+            <span>Reschedule & Cancel</span>
+          </div>
+        </div>
+      </div>
+      <div class="nav-group">
+        <div class="nav-group-header">📁 Other Categories</div>
+        <div class="nav-group-content">
+          <div class="menu-item" onclick="location.href='uc-auth.html'">
+            <span class="badge">UC1</span>
+            <span>Auth & Identity</span>
+          </div>
+          <div class="menu-item" onclick="location.href='uc-queue.html'">
+            <span class="badge">UC3</span>
+            <span>Walk-in & Queue</span>
+          </div>
+          <div class="menu-item" onclick="location.href='../index.html'">
+            <span class="badge">↑</span>
+            <span>All Categories</span>
+          </div>
+        </div>
+      </div>
+    </nav>
+  </aside>
+
+  <main class="main-content">
+    <div class="top-bar">
+      <div class="top-left">
+        <div class="breadcrumb">
+          <a href="../index.html">Diagrams</a>
+          <span>/</span>
+          <span>Use Cases</span>
+          <span>/</span>
+          <span>Appointment</span>
+        </div>
+        <h1 class="top-title" id="top-title">Slot Reservation</h1>
+      </div>
+      <div class="controls">
+        <button class="control-btn" onclick="zoomIn()">🔍+</button>
+        <button class="control-btn" onclick="zoomOut()">🔍-</button>
+        <button class="control-btn" onclick="resetZoom()">Reset</button>
+      </div>
+    </div>
+
+    <div class="canvas-wrapper">
+      <div id="viewport">
+        <div id="canvas-content">
+          <svg id="main-svg" width="100%" height="100%" viewBox="0 0 1200 900"></svg>
+        </div>
+      </div>
+      <div class="zoom-indicator" id="zoom-indicator">100%</div>
+    </div>
+
+    <div class="footer" id="footer-desc">
+      <strong>Domain Note:</strong> Slot Reservation Flow
+    </div>
+  </main>
+
+  <script src="../shared/renderer.js"></script>
+  <script>
+    const DIAGRAMS = {
+      'slot-reservation': {
+        description: 'UC2a · HoldSlot: 15-minute TTL reservation, Release, Expire',
+        actors: [
+          { name: "Customer", color: "#2e5aa8" },
+          { name: "Caregiver", color: "#5b8c5a" },
+          { name: "Store App", system: true, color: "#4f5d75" },
+          { name: "Slot Service", system: true, color: "#4f5d75" }
+        ],
+        useCases: [
+          { id: "UC2a-1", name: "Hold Slot (15m TTL)", focal: true },
+          { id: "UC2a-2", name: "Release Hold" },
+          { id: "UC2a-3", name: "Expire Hold" },
+          { id: "UC2a-4", name: "Check Availability" },
+          { id: "UC2a-5", name: "Lock Resources" },
+          { id: "UC2a-6", name: "Send Notification" }
+        ],
+        relations: [
+          { actor: "Customer", uc: "UC2a-1" },
+          { actor: "Caregiver", uc: "UC2a-1" },
+          { actor: "Store App", uc: "UC2a-4", type: "include" },
+          { actor: "Slot Service", uc: "UC2a-3" },
+          { actor: "Slot Service", uc: "UC2a-5", type: "include" },
+          { actor: "Slot Service", uc: "UC2a-6" },
+          { actor: "Customer", uc: "UC2a-2" }
+        ]
+      },
+      'appointment-booking': {
+        description: 'UC2b · BookAppointment: After HoldSlot → Create Appointment → Resource Lock',
+        actors: [
+          { name: "Customer", color: "#2e5aa8" },
+          { name: "Caregiver", color: "#5b8c5a" },
+          { name: "Receptionist", color: "#eb6c36" },
+          { name: "Scheduling API", system: true, color: "#4f5d75" },
+          { name: "Inventory", system: true, color: "#4f5d75" }
+        ],
+        useCases: [
+          { id: "UC2b-1", name: "Book Appointment", focal: true },
+          { id: "UC2b-2", name: "Validate Pet Ownership" },
+          { id: "UC2b-3", name: "Check Store Hours" },
+          { id: "UC2b-4", name: "Check Staff Availability" },
+          { id: "UC2b-5", name: "Lock Store Resources" },
+          { id: "UC2b-6", name: "Lock Staff Slot" },
+          { id: "UC2b-7", name: "Check Pet Schedule Collision" },
+          { id: "UC2b-8", name: "Create Appointment Record" },
+          { id: "UC2b-9", name: "Send Confirmation" }
+        ],
+        relations: [
+          { actor: "Customer", uc: "UC2b-1" },
+          { actor: "Caregiver", uc: "UC2b-1" },
+          { actor: "Receptionist", uc: "UC2b-1" },
+          { actor: "Scheduling API", uc: "UC2b-2", type: "include" },
+          { actor: "Scheduling API", uc: "UC2b-3", type: "include" },
+          { actor: "Scheduling API", uc: "UC2b-4", type: "include" },
+          { actor: "Scheduling API", uc: "UC2b-7", type: "include" },
+          { actor: "Scheduling API", uc: "UC2b-8", type: "include" },
+          { actor: "Inventory", uc: "UC2b-5", type: "include" },
+          { actor: "Inventory", uc: "UC2b-6", type: "include" },
+          { actor: "Scheduling API", uc: "UC2b-9" }
+        ]
+      },
+      'appointment-checkin': {
+        description: 'UC2c · Confirm, CheckIn, StartService, Complete, MarkNoShow, Abort',
+        actors: [
+          { name: "Receptionist", color: "#eb6c36" },
+          { name: "Veterinarian", color: "#7b4ac7" },
+          { name: "Groomer", color: "#45a58a" },
+          { name: "System", system: true, color: "#4f5d75" }
+        ],
+        useCases: [
+          { id: "UC2c-1", name: "Confirm Appointment" },
+          { id: "UC2c-2", name: "Check In Pet", focal: true },
+          { id: "UC2c-3", name: "Start Service" },
+          { id: "UC2c-4", name: "Complete Service" },
+          { id: "UC2c-5", name: "Check Out" },
+          { id: "UC2c-6", name: "Mark No-Show" },
+          { id: "UC2c-7", name: "Abort Service" },
+          { id: "UC2c-8", name: "Release Resources" }
+        ],
+        relations: [
+          { actor: "Receptionist", uc: "UC2c-1" },
+          { actor: "Receptionist", uc: "UC2c-2" },
+          { actor: "Veterinarian", uc: "UC2c-3" },
+          { actor: "Groomer", uc: "UC2c-3" },
+          { actor: "Veterinarian", uc: "UC2c-4" },
+          { actor: "Groomer", uc: "UC2c-4" },
+          { actor: "Receptionist", uc: "UC2c-5" },
+          { actor: "Receptionist", uc: "UC2c-6" },
+          { actor: "Veterinarian", uc: "UC2c-7" },
+          { actor: "Groomer", uc: "UC2c-7" },
+          { actor: "System", uc: "UC2c-8", type: "include" }
+        ]
+      },
+      'reschedule-cancel': {
+        description: 'UC2d · Atomic Reschedule (15m lock new slot → release old) & Cancel with Refund',
+        actors: [
+          { name: "Customer", color: "#2e5aa8" },
+          { name: "Caregiver", color: "#5b8c5a" },
+          { name: "Receptionist", color: "#eb6c36" },
+          { name: "System", system: true, color: "#4f5d75" }
+        ],
+        useCases: [
+          { id: "UC2d-1", name: "Reschedule Appointment", focal: true },
+          { id: "UC2d-2", name: "Hold New Slot" },
+          { id: "UC2d-3", name: "Validate New Slot" },
+          { id: "UC2d-4", name: "Release Old Slot" },
+          { id: "UC2d-5", name: "Rollback on Failure" },
+          { id: "UC2d-6", name: "Cancel Appointment" },
+          { id: "UC2d-7", name: "Process Deposit Refund" },
+          { id: "UC2d-8", name: "Release All Resources" }
+        ],
+        relations: [
+          { actor: "Customer", uc: "UC2d-1" },
+          { actor: "Caregiver", uc: "UC2d-1" },
+          { actor: "Receptionist", uc: "UC2d-1" },
+          { actor: "System", uc: "UC2d-2", type: "include" },
+          { actor: "System", uc: "UC2d-3", type: "include" },
+          { actor: "System", uc: "UC2d-4", type: "include" },
+          { actor: "System", uc: "UC2d-5" },
+          { actor: "Customer", uc: "UC2d-6" },
+          { actor: "Caregiver", uc: "UC2d-6" },
+          { actor: "Receptionist", uc: "UC2d-6" },
+          { actor: "System", uc: "UC2d-7", type: "include" },
+          { actor: "System", uc: "UC2d-8", type: "include" }
+        ]
+      }
+    };
+
+    let currentDiagram = 'slot-reservation';
+    let zoomLevel = 1.0;
+
+    function switchDiagram(key) {
+      currentDiagram = key;
+      document.querySelectorAll('.menu-item').forEach(el => el.classList.remove('active'));
+      event.target.closest('.menu-item').classList.add('active');
+
+      const data = DIAGRAMS[key];
+      document.getElementById('top-title').textContent = data.useCases[0].name;
+      document.getElementById('footer-desc').innerHTML = `<strong>Domain Note:</strong> ${data.description}`;
+
+      renderCurrentDiagram();
+    }
+
+    function renderCurrentDiagram() {
+      const svg = document.getElementById('main-svg');
+      svg.innerHTML = `
+        <defs>
+          <marker id="arr" markerWidth="10" markerHeight="10" refX="9" refY="3" orient="auto" markerUnits="strokeWidth">
+            <path d="M0,0 L0,6 L9,3 z" fill="#4f5d75"/>
+          </marker>
+          <marker id="arr-blue" markerWidth="10" markerHeight="10" refX="9" refY="3" orient="auto" markerUnits="strokeWidth">
+            <path d="M0,0 L0,6 L9,3 z" fill="#2e5aa8"/>
+          </marker>
+          <marker id="arr-purple" markerWidth="10" markerHeight="10" refX="9" refY="3" orient="auto" markerUnits="strokeWidth">
+            <path d="M0,0 L0,6 L9,3 z" fill="#7b4ac7"/>
+          </marker>
+        </defs>
+      `;
+
+      const data = DIAGRAMS[currentDiagram];
+      data._type = 'usecase';
+      renderUseCase(svg, data);
+    }
+
+    function zoomIn() { zoomLevel = Math.min(2.0, zoomLevel + 0.1); applyZoom(); }
+    function zoomOut() { zoomLevel = Math.max(0.5, zoomLevel - 0.1); applyZoom(); }
+    function resetZoom() { zoomLevel = 1.0; applyZoom(); }
+    function applyZoom() {
+      document.getElementById('canvas-content').style.transform = `scale(${zoomLevel})`;
+      document.getElementById('zoom-indicator').textContent = Math.round(zoomLevel * 100) + '%';
+    }
+
+    renderCurrentDiagram();
+  </script>
+</body>
+</html>
