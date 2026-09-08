@@ -488,7 +488,7 @@ erDiagram
   | `quantity_required` | INT | YES | `1` | Số lượng tài nguyên cần |
 
 ### Bảng: `products`
-- **Mục đích:** Danh mục sản phẩm hàng hóa bán lẻ (Master Product Catalog).
+- **Mục đích:** Danh mục sản phẩm hàng hóa bán lẻ gốc, sở hữu và quản lý toàn quyền ở cấp Organization.
 - **Primary Key:** `id UUID DEFAULT gen_random_uuid()`
 - **Cột:**
   | Tên Cột | Kiểu Dữ liệu | Bắt buộc | Default | Mô tả |
@@ -506,6 +506,33 @@ erDiagram
   | `created_at` | TIMESTAMPTZ | YES | `CURRENT_TIMESTAMP` | Thời điểm tạo |
 - **Ràng buộc:**
   - `CONSTRAINT uq_products_org_sku UNIQUE (organization_id, sku)`
+
+### Bảng: `store_products` & `store_services`
+- **Mục đích:** Override giá bán lẻ (Product/Service) và khả dụng (Service) riêng theo từng Store (`RULE-05-04`, `RULE-05-05`, `RULE-05-07`). Bản ghi được hệ thống tự động khởi tạo, kế thừa `base_price`/`is_active` từ `products`/`services`, khi Store chuyển sang `ACTIVE`.
+- **Primary Key:** `id UUID DEFAULT gen_random_uuid()`
+- **Cột (`store_products`):**
+  | Tên Cột | Kiểu Dữ liệu | Bắt buộc | Default | Mô tả |
+  |---|---|---|---|---|
+  | `id` | UUID | YES | `gen_random_uuid()` | Khóa chính override |
+  | `store_id` | UUID | YES | - | FK -> `stores.id` ON DELETE CASCADE |
+  | `product_id` | UUID | YES | - | FK -> `products.id` ON DELETE CASCADE |
+  | `price` | DECIMAL(12,2) | YES | kế thừa `products.base_price` | Giá bán lẻ override riêng tại Store |
+  | `created_at` | TIMESTAMPTZ | YES | `CURRENT_TIMESTAMP` | Thời điểm tạo override |
+  | `updated_at` | TIMESTAMPTZ | YES | `CURRENT_TIMESTAMP` | Thời điểm cập nhật gần nhất |
+- **Cột (`store_services`):**
+  | Tên Cột | Kiểu Dữ liệu | Bắt buộc | Default | Mô tả |
+  |---|---|---|---|---|
+  | `id` | UUID | YES | `gen_random_uuid()` | Khóa chính override |
+  | `store_id` | UUID | YES | - | FK -> `stores.id` ON DELETE CASCADE |
+  | `service_id` | UUID | YES | - | FK -> `services.id` ON DELETE CASCADE |
+  | `price` | DECIMAL(12,2) | YES | kế thừa `services.base_price` | Giá dịch vụ override riêng tại Store |
+  | `is_active` | BOOLEAN | YES | kế thừa `services.is_active` | Khả dụng override riêng tại Store (`RULE-05-04`) |
+  | `created_at` | TIMESTAMPTZ | YES | `CURRENT_TIMESTAMP` | Thời điểm tạo override |
+  | `updated_at` | TIMESTAMPTZ | YES | `CURRENT_TIMESTAMP` | Thời điểm cập nhật gần nhất |
+- **Ràng buộc:**
+  - `CONSTRAINT uq_store_products_store_product UNIQUE (store_id, product_id)`
+  - `CONSTRAINT uq_store_services_store_service UNIQUE (store_id, service_id)`
+
 ## 3.3. Nhóm Bảng Thú cưng, Lịch hẹn, Ca trực & Xếp hàng (Modules 04, 06, 07 & 08)
 
 ### Bảng: `pets` & `pet_caregiver_delegations`
@@ -924,7 +951,7 @@ erDiagram
   | `id` | UUID | YES | `gen_random_uuid()` | Khóa chính giao dịch |
   | `invoice_id` | UUID | YES | - | FK -> `invoices.id` ON DELETE RESTRICT (Quan hệ 1-N `RULE-16-01`) |
   | `transaction_code` | VARCHAR(100) | YES | - | Mã giao dịch thanh toán duy nhất |
-  | `payment_method` | VARCHAR(30) | YES | `'CASH'` | `CASH`, `POS_CARD`, `ONLINE_GATEWAY` |
+  | `payment_method` | VARCHAR(30) | YES | `'CASH'` | `CASH`, `ONLINE_GATEWAY` (`RULE-16-02`) |
   | `amount` | DECIMAL(12,2) | YES | `0.00` | Số tiền thanh toán cho hóa đơn |
   | `status` | VARCHAR(30) | YES | `'PENDING'` | Enum `PaymentStatus` (`docs/03-state-machines.md#7`) |
   | `idempotency_key` | VARCHAR(100) | NO | NULL | Khóa chống trùng lặp (`RULE-16-03`) |
@@ -1182,7 +1209,7 @@ CREATE TYPE order_status_enum AS ENUM ('PENDING_PAYMENT', 'PAID', 'CONFIRMED', '
 CREATE TYPE invoice_status_enum AS ENUM ('DRAFT', 'ISSUED', 'PAID', 'VOID', 'CANCELLED');
 CREATE TYPE invoice_type_enum AS ENUM ('SERVICE_INVOICE', 'PACKAGE_INVOICE', 'SURCHARGE_INVOICE');
 CREATE TYPE payment_status_enum AS ENUM ('PENDING', 'PROCESSING', 'SUCCESS', 'FAILED', 'CANCELLED', 'PARTIALLY_REFUNDED', 'REFUNDED');
-CREATE TYPE payment_method_enum AS ENUM ('CASH', 'POS_CARD', 'ONLINE_GATEWAY');
+CREATE TYPE payment_method_enum AS ENUM ('CASH', 'ONLINE_GATEWAY');
 CREATE TYPE refund_status_enum AS ENUM ('REQUESTED', 'APPROVED', 'REJECTED', 'PROCESSING', 'COMPLETED', 'FAILED');
 
 -- 6. Inventory, Procurement & Value-Add
@@ -1212,31 +1239,31 @@ Bảng ma trận đối soát dưới đây chứng minh tính nhất quán 100%
 
 | Mã Module | 01. Nghiệp vụ (Operations) | 02. Luật & Invariants | 03. State Machines (FSM) | 04. Thuật ngữ (Glossary) | 05. Domain Model (DDD) | 06. CSDL / Bảng ERD |
 |---|---|---|---|---|---|---|
-| **01** | `RegisterAccount`, `VerifyOTP`, `CreateStaff` | `RULE-01-01` -> `RULE-01-07`, D-04 | FSM 1 (`AccountStatus`) | Section 1 (Actor & Role) | `Account`, `OtpSession` | `accounts`, `otps` |
-| **02** | `ManageUser`, `AssignPermission`, `LockAccount` | `RULE-02-01` -> `RULE-02-08` | FSM 1 (Account locking) | Section 2 (IAM & RBAC) | `UserAccount`, `Role`, `Permission` | `users`, `roles`, `permissions`, `user_roles`, `role_permissions` |
+| **01** | `RegisterAccount`, `VerifyOTP`, `CreateStaff` | `RULE-01-01` -> `RULE-01-08`, D-04 | FSM 1 (`AccountStatus`) | Section 1 (Actor & Role) | `Account`, `OtpSession` | `accounts`, `otps` |
+| **02** | `ManageUser`, `AssignPermission`, `LockAccount` | `RULE-02-01` -> `RULE-02-07` | FSM 1 (Account locking) | Section 2 (IAM & RBAC) | `UserAccount`, `Role`, `Permission` | `users`, `roles`, `permissions`, `user_roles`, `role_permissions` |
 | **03** | `CreateStore`, `ActivateStore`, `ArchiveStore` | `RULE-03-01` -> `RULE-03-08` | FSM 2 (`StoreStatus`) | Section 3 (Org & Store) | `Organization`, `Store`, `OperatingHours` | `organizations`, `stores`, `operating_hours`, `store_resources` |
-| **04** | `AddPet`, `InviteCaregiver`, `RevokeCaregiver` | `RULE-04-01` -> `RULE-04-08` | FSM 3 (`CaregiverStatus`) | Section 4 (Pet & Owner) | `CustomerProfile`, `Pet`, `CaregiverDelegation` | `pets`, `pet_caregiver_delegations` |
+| **04** | `AddPet`, `InviteCaregiver`, `RevokeCaregiver` | `RULE-04-01` -> `RULE-04-09` | FSM 3 (`CaregiverStatus`) | Section 4 (Pet & Owner) | `CustomerProfile`, `Pet`, `CaregiverDelegation` | `pets`, `pet_caregiver_delegations` |
 | **05** | `ManageService`, `ConfigureProductPrice` | `RULE-05-01` -> `RULE-05-07` | N/A (Catalog status) | Section 5 (Catalog) | `ServiceMaster`, `ProductMaster` | `services`, `products`, `service_required_resources` |
-| **06** | `HoldSlot`, `BookAppointment`, `AbortAppointment` | `RULE-06-01` -> `RULE-06-12` | FSM 4.1 & FSM 4.2 (`ApptStatus`) | Section 6 (Appointment) | `BookingHold`, `Appointment` | `booking_holds`, `appointments`, `appointment_stage_histories` |
-| **07** | `RegisterQueueEntry`, `StartQueueService` | `RULE-07-01` -> `RULE-07-07` | FSM 17 (`QueueEntryStatus`) | Section 7 (Queue) | `DailyQueue`, `QueueEntry` | `daily_queues`, `queue_entries` |
-| **08** | `ManageWorkSchedule`, `ApproveStaffAbsence` | `RULE-08-01` -> `RULE-08-07` | FSM (Absence status) | Section 8 (Workforce) | `StaffWorkSchedule`, `StaffAbsence` | `staff_work_schedules`, `shift_assignments`, `staff_absences` |
-| **09** | `CreateMedicalRecord`, `EmergencyOverrideAccess` | `RULE-09-01` -> `RULE-09-08` | N/A (24h Lock) | Section 9 (EMR) | `MedicalRecord`, `Prescription`, `Diagnosis` | `medical_records`, `diagnoses`, `prescriptions`, `prescription_items` |
-| **10** | `AdministerVaccine`, `CreateVaccineBatch` | `RULE-10-01` -> `RULE-10-06` | N/A (FEFO batch) | Section 10 (Vaccine) | `VaccineBatch`, `VaccinationRecord` | `vaccines`, `vaccine_batches`, `vaccinations`, `vaccination_schedules` |
-| **11** | `CheckInGrooming`, `ConfirmAdditionalService` | `RULE-11-01` -> `RULE-11-07`, D-02 | FSM 15 (`GroomingStatus`) | Section 11 (Grooming) | `GroomingSession`, `HealthInspection` | `grooming_sessions`, `health_inspection_reports`, `grooming_service_lines` |
-| **12** | `CreateStockTransfer`, `ShipStockTransfer` | `RULE-12-01` -> `RULE-12-12` | FSM 11 (`StockTransferStatus`) | Section 12 (Inventory) | `InventoryItem`, `StockTransfer` | `inventory_items`, `inventory_adjustments`, `stock_transfers`, `stock_transfer_lines` |
+| **06** | `HoldSlot`, `BookAppointment`, `AbortAppointment` | `RULE-06-01` -> `RULE-06-14` | FSM 4.1 & FSM 4.2 (`ApptStatus`) | Section 6 (Appointment) | `BookingHold`, `Appointment` | `booking_holds`, `appointments`, `appointment_stage_histories` |
+| **07** | `RegisterQueueEntry`, `StartQueueService` | `RULE-07-01` -> `RULE-07-08` | FSM 17 (`QueueEntryStatus`) | Section 7 (Queue) | `DailyQueue`, `QueueEntry` | `daily_queues`, `queue_entries` |
+| **08** | `ManageWorkSchedule`, `ManageLeave`, `HandleStaffAbsence` | `RULE-08-01` -> `RULE-08-07` | N/A (Absence là trường status đơn giản, chưa có FSM riêng trong `docs/03-state-machines.md`) | Section 8 (Workforce) | `StaffWorkSchedule`, `StaffAbsence` | `staff_work_schedules`, `shift_assignments`, `staff_absences` |
+| **09** | `CreateMedicalRecord`, `EmergencyOverrideAccess` | `RULE-09-01` -> `RULE-09-08` | N/A (không có FSM riêng; `MedicalRecord` không có trạng thái khóa bất biến theo giờ) | Section 9 (EMR) | `MedicalRecord`, `Prescription`, `Diagnosis` | `medical_records`, `diagnoses`, `prescriptions`, `prescription_items` |
+| **10** | `AdministerVaccine`, `ManageVaccineBatch` | `RULE-10-01` -> `RULE-10-07` | N/A (FEFO batch) | Section 10 (Vaccine) | `VaccineBatch`, `VaccinationRecord` | `vaccines`, `vaccine_batches`, `vaccinations`, `vaccination_schedules` |
+| **11** | `CheckInGrooming`, `ConfirmAdditionalService` | `RULE-11-01` -> `RULE-11-06`, D-02 | FSM 15 (`GroomingStatus`) | Section 11 (Grooming) | `GroomingSession`, `HealthInspection` | `grooming_sessions`, `health_inspection_reports`, `grooming_service_lines` |
+| **12** | `CreateStockTransfer`, `ShipStockTransfer` | `RULE-12-01` -> `RULE-12-13` | FSM 11 (`StockTransferStatus`) | Section 12 (Inventory) | `InventoryItem`, `StockTransfer` | `inventory_items`, `inventory_adjustments`, `stock_transfers`, `stock_transfer_lines` |
 | **13** | `CreatePurchaseRequest`, `CreatePurchaseOrder` | `RULE-13-01` -> `RULE-13-08` | FSM 12 & FSM 13 (`POStatus`) | Section 13 (Procurement) | `PurchaseRequest`, `PurchaseOrder` | `purchase_requests`, `purchase_orders`, `goods_receipts` |
-| **14** | `CreateOrder`, `CheckoutOrder`, `CancelOrder` | `RULE-14-01` -> `RULE-14-08`, D-03 | FSM 5 (`OrderStatus`) | Section 14 (Order) | `Order`, `OrderItem` | `orders`, `order_items`, `fulfillment_stage_logs`, `inventory_reservations` |
+| **14** | `CreateOrder`, `CheckoutOrder`, `CancelOrder` | `RULE-14-01` -> `RULE-14-09`, D-03 | FSM 5 (`OrderStatus`) | Section 14 (Order) | `Order`, `OrderItem` | `orders`, `order_items`, `fulfillment_stage_logs`, `inventory_reservations` |
 | **15** | `CreateInvoice`, `IssueInvoice`, `VoidInvoice` | `RULE-15-01` -> `RULE-15-08`, D-01 | FSM 6 (`InvoiceStatus`) | Section 15 (Billing) | `Invoice`, `InvoiceItem` | `invoices`, `invoice_items` |
 | **16** | `MakePayment`, `RecordCashPayment` | `RULE-16-01` -> `RULE-16-07` | FSM 7 (`PaymentStatus`) | Section 16 (Payment) | `Payment` (1-1 Invoice) | `payments` (khóa trực tiếp `invoice_id`) |
-| **17** | `RequestRefund`, `ApproveRefund`, `ProcessRefund` | `RULE-17-01` -> `RULE-17-09` | FSM 8 (`RefundStatus`) | Section 17 (Refund) | `Refund`, `RefundExecutionLog` | `refunds`, `refund_execution_logs` |
-| **18** | `CreateVoucher`, `ApplyVoucher` | `RULE-18-01` -> `RULE-18-08` | N/A (Stateless Rule) | Section 18 (Promotion) | `PromotionCampaign`, `Voucher` | `promotion_campaigns`, `vouchers`, `voucher_usages` |
+| **17** | `RequestRefund`, `ApproveRefund`, `ProcessRefund` | `RULE-17-01` -> `RULE-17-10` | FSM 8 (`RefundStatus`) | Section 17 (Refund) | `Refund`, `RefundExecutionLog` | `refunds`, `refund_execution_logs` |
+| **18** | `CreateVoucher`, `UseVoucher` | `RULE-18-01` -> `RULE-18-08` | N/A (Stateless Rule) | Section 18 (Promotion) | `PromotionCampaign`, `Voucher` | `promotion_campaigns`, `vouchers`, `voucher_usages` |
 | **19** | `RegisterMembership`, `UpgradeMembership` | `RULE-19-01` -> `RULE-19-10` | FSM 9 (`MembershipStatus`) | Section 19 (Membership) | `CustomerMembership`, `LoyaltyLedger` | `memberships`, `loyalty_point_ledgers` |
-| **20** | `PurchasePackage`, `ConfirmPackageUsage` | `RULE-20-01` -> `RULE-20-07` | FSM 10 (`PackageStatus`) | Section 20 (Package) | `ServicePackage`, `PackageUsage` | `service_packages`, `package_usage_records` |
+| **20** | `PurchasePackage`, `ConfirmPackageUsage` | `RULE-20-01` -> `RULE-20-08` | FSM 10 (`PackageStatus`) | Section 20 (Package) | `ServicePackage`, `PackageUsage` | `service_packages`, `package_usage_records` |
 | **21** | `RecordIncident`, `EscalateIncident`, `CloseIncident` | `RULE-21-01` -> `RULE-21-08` | FSM 14 (`IncidentStatus`) | Section 21 (Incident) | `IncidentReport`, `Investigation` | `incident_reports` |
-| **22** | `RequestCrossStoreConsent`, `VerifyConsentOTP` | `RULE-22-01` -> `RULE-22-10` | FSM 16 (`ConsentStatus`) | Section 22 (Consent) | `ClinicalConsent`, `CrossStoreGrant` | `cross_store_consents` |
+| **22** | `RequestCrossStoreConsent`, `VerifyCrossStoreConsentOTP` | `RULE-22-01` -> `RULE-22-10` | FSM 16 (`ConsentStatus`) | Section 22 (Consent) | `ClinicalConsent`, `CrossStoreGrant` | `cross_store_consents` |
 | **23** | `SendNotification`, `SendRegistrationOTP` | `RULE-23-01` -> `RULE-23-06` | N/A (Task log) | Section 23 (Notification) | `NotificationTask` | `notification_tasks`, `notification_delivery_logs` |
-| **24** | `GenerateRevenueReport`, `ExportReportData` | `RULE-24-01` -> `RULE-24-06` | N/A (Read Model) | Section 24 (Analytics) | `AnalyticsReport` | Read-only analytics views / materialized views |
-| **25** | `RecordAuditLog`, `ConfigureSystem` | `RULE-25-01` -> `RULE-25-07` | N/A (Immutable Log) | Section 25 (Audit) | `SystemAuditLog`, `TenantConfig` | `audit_logs`, `outbox_events`, `system_configs` |
+| **24** | `ViewRevenueReport`, `ReconcileRevenue` | `RULE-24-01` -> `RULE-24-08` | N/A (Read Model) | Section 24 (Analytics) | `AnalyticsReport` | Read-only analytics views / materialized views |
+| **25** | `RecordAuditLog`, `ViewAuditLog` | `RULE-25-01` -> `RULE-25-07` | N/A (Immutable Log) | Section 25 (Audit) | `SystemAuditLog`, `TenantConfig` | `audit_logs`, `outbox_events`, `system_configs` |
 
 ---
 

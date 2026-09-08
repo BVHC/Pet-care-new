@@ -12,6 +12,7 @@ stateDiagram-v2
     PENDING_VERIFICATION --> ACTIVE: VerifyOTP [Customer]
     [*] --> ACTIVE: CreateStaff [Admin Direct Provisioning, D-04]
     ACTIVE --> LOCKED: LockAccount [PlatformAdmin / OrgAdmin]
+    ACTIVE --> LOCKED: AutoLockAccount [System, RULE-01-07, 5 lần sai mật khẩu liên tiếp]
     LOCKED --> ACTIVE: UnlockAccount [PlatformAdmin / OrgAdmin]
     ACTIVE --> DEACTIVATED: DeactivateAccount [PlatformAdmin / OrgAdmin]
     LOCKED --> DEACTIVATED: DeactivateAccount [PlatformAdmin / OrgAdmin]
@@ -23,7 +24,8 @@ stateDiagram-v2
 | [*] | RegisterAccount [Customer] | Customer | RULE-01-01, RULE-01-02 | PENDING_VERIFICATION | AccountRegistered | Khởi tạo tài khoản tự phục vụ; hệ thống gửi mã OTP xác thực có thời hạn 5 phút (TTL = 300s). |
 | PENDING_VERIFICATION | VerifyOTP | Customer | RULE-01-02, RULE-01-03 | ACTIVE | AccountActivated | Xác thực OTP thành công trong thời hạn TTL; kích hoạt tài khoản chính thức. |
 | [*] | CreateStaff [Staff] | PlatformAdmin / OrganizationAdmin | RULE-01-03, RULE-02-05 (D-04) | ACTIVE | AccountActivated | Khởi tạo nhân viên trực tiếp; cấp mật khẩu tạm thời (`must_change_password = true`), bỏ qua bước xác thực OTP đăng ký (Quyết định D-04). |
-| ACTIVE | LockAccount | PlatformAdmin / OrganizationAdmin | RULE-02-04, RULE-02-05 | LOCKED | AccountLocked | Tạm khóa tài khoản; thu hồi toàn bộ session, Access Token và Refresh Token đang hoạt động (ví dụ: phát hiện nghi vấn hoặc 5 lần login sai). |
+| ACTIVE | LockAccount | PlatformAdmin / OrganizationAdmin | RULE-02-04, RULE-02-05 | LOCKED | AccountLocked | Quản trị viên chủ động tạm khóa tài khoản khi phát hiện nghi vấn; thu hồi toàn bộ session, Access Token và Refresh Token đang hoạt động. |
+| ACTIVE | AutoLockAccount | System | RULE-01-07 | LOCKED | AccountLocked | Hệ thống tự động khóa sau đúng 5 lần đăng nhập sai mật khẩu liên tiếp; thời gian khóa tối thiểu 15 phút trước khi Quản trị viên được phép `UnlockAccount` thủ công (không có cơ chế tự mở khóa sau 15 phút — xem Technical Invariant #5 bên dưới). |
 | LOCKED | UnlockAccount | PlatformAdmin / OrganizationAdmin | RULE-02-04, RULE-02-05 | ACTIVE | AccountUnlocked | Mở khóa tài khoản; cho phép người dùng đăng nhập lại vào hệ thống. |
 | ACTIVE | DeactivateAccount | PlatformAdmin / OrganizationAdmin | RULE-02-05, RULE-02-07 | DEACTIVATED | AccountDeactivated | Vô hiệu hóa tài khoản khi nhân viên nghỉ việc, chấm dứt hợp đồng; thu hồi phiên tức thì và từ chối đăng nhập vĩnh viễn. |
 | LOCKED | DeactivateAccount | PlatformAdmin / OrganizationAdmin | RULE-02-05, RULE-02-07 | DEACTIVATED | AccountDeactivated | Chuyển tài khoản bị tạm khóa sang vô hiệu hóa vĩnh viễn do chấm dứt nhân sự/tài khoản. |
@@ -36,6 +38,7 @@ stateDiagram-v2
   2. *Thu hồi Phiên Tức thì (RULE-02-04, RULE-02-07):* Lệnh `LockAccount` hoặc `DeactivateAccount` lập tức vô hiệu hóa JWT/Session Token, đưa token vào blacklist để ngăn chặn mọi truy cập trái phép.
   3. *Thời hạn OTP (RULE-01-02):* Mã OTP đăng ký hết hạn sau 300s; quá 5 lần nhập sai sẽ tạm khóa phiên xác thực 15 phút.
   4. *Ranh giới Khóa vs Vô hiệu hóa:* `LOCKED` là tạm thời (do nhập sai mật khẩu hoặc tạm đình chỉ); `DEACTIVATED` là vô hiệu hóa do nhân viên nghỉ việc hoặc chấm dứt dịch vụ.
+  5. *Khóa Tự động vs Mở khóa Thủ công (RULE-01-07):* Khoảng thời gian "tối thiểu 15 phút" trong `RULE-01-07` là ngưỡng thời gian sớm nhất mà `UnlockAccount` được phép thực thi, **không phải** một transition tự động `LOCKED -> ACTIVE`. Sơ đồ FSM không có cạnh tự động mở khóa: mọi lượt chuyển `LOCKED -> ACTIVE` bắt buộc đi qua lệnh `UnlockAccount` do Quản trị viên thực hiện.
 
 ---
 
@@ -285,12 +288,13 @@ stateDiagram-v2
 
 ```mermaid
 stateDiagram-v2
-    [*] --> PENDING: MakePayment [Customer] / RecordCashPayment [Receptionist]
-    PENDING --> PROCESSING: VerifyPayment [Online Gateway]
-    PROCESSING --> SUCCESS: ReceivePaymentCallback / SettlePayment
-    PROCESSING --> FAILED: ReceivePaymentCallback [fail]
-    PENDING --> CANCELLED: CancelPayment
-    PROCESSING --> CANCELLED: CancelPayment / GatewayTimeout
+    [*] --> PENDING: MakePayment [Online Gateway - Customer]
+    [*] --> SUCCESS: RecordCashPayment [POS Cashier Direct Settlement, RULE-16-02]
+    PENDING --> PROCESSING: VerifyPayment [System]
+    PROCESSING --> SUCCESS: ReceivePaymentCallback [Gateway Success, System, RULE-16-04]
+    PROCESSING --> FAILED: ReceivePaymentCallback [fail, System]
+    PENDING --> CANCELLED: CancelPayment [Customer / System]
+    PROCESSING --> CANCELLED: CancelPayment / GatewayTimeout [Customer / System]
     
     SUCCESS --> PARTIALLY_REFUNDED: Event: RefundCompleted [RefundAmount < TotalAmount]
     PARTIALLY_REFUNDED --> PARTIALLY_REFUNDED: Event: RefundCompleted [CumulativeRefund < TotalAmount]
@@ -301,24 +305,31 @@ stateDiagram-v2
 | From State | Command / Trigger | Actor | Guard (RULE-ID) | To State | Domain Event | Actions / Notes |
 |---|---|---|---|---|---|---|
 | [*] | MakePayment | Customer | RULE-16-01, RULE-16-02 | PENDING | PaymentCreated | Khách hàng khởi tạo giao dịch thanh toán trực tuyến qua cổng thanh toán điện tử. |
-| [*] | RecordCashPayment | Receptionist | RULE-16-01, RULE-16-02 | PENDING | PaymentCreated | Thu ngân ghi nhận giao dịch thanh toán tiền mặt tại quầy chi nhánh. |
-| PENDING | VerifyPayment | System / FinanceStaff | RULE-16-01, RULE-16-02, RULE-16-03 | PROCESSING | PaymentProcessing | Chuyển hướng sang cổng thanh toán hoặc gửi yêu cầu xác thực giao dịch. |
+| [*] | RecordCashPayment | Receptionist | RULE-16-01, RULE-16-02 | SUCCESS | PaymentSucceeded | Thu ngân ghi nhận và quyết toán tiền mặt trực tiếp tại quầy trong cùng một transaction của phiên thu ngân. |
+| PENDING | VerifyPayment | System | RULE-16-01, RULE-16-02, RULE-16-03 | PROCESSING | PaymentProcessing | Hệ thống chuyển hướng hoặc gửi yêu cầu xác thực sang cổng thanh toán trực tuyến. |
 | PROCESSING | ReceivePaymentCallback | System | RULE-16-03, RULE-16-04 | SUCCESS | PaymentSucceeded | Nhận Webhook callback thành công từ cổng thanh toán; xác thực chữ ký HMAC và Idempotency Key. |
-| PROCESSING | SettlePayment | FinanceStaff / Receptionist | RULE-16-02, RULE-16-04 | SUCCESS | PaymentSucceeded | Thu ngân hoặc nhân viên tài chính xác nhận thu tiền mặt/chuyển khoản thành công. |
 | PROCESSING | ReceivePaymentCallback [fail] | System | RULE-16-04, RULE-16-05 | FAILED | PaymentFailed | Cổng thanh toán phản hồi giao dịch thất bại (thẻ lỗi, số dư không đủ). |
-| PENDING | CancelPayment | Customer / System | RULE-16-05 | CANCELLED | PaymentCancelled | Khách hàng chủ động hủy phiên thanh toán trước khi chuyển cổng. |
-| PROCESSING | CancelPayment / GatewayTimeout | Customer / System | RULE-16-05 | CANCELLED | PaymentCancelled | Khách hủy phiên hoặc cổng thanh toán phản hồi timeout khi đang xử lý. |
+| PENDING | CancelPayment | Customer / System | RULE-16-05 | CANCELLED | PaymentCancelled | Khách hàng chủ động hủy phiên thanh toán Online trước khi chuyển cổng. |
+| PROCESSING | CancelPayment / GatewayTimeout | Customer / System | RULE-16-05 | CANCELLED | PaymentCancelled | Khách hủy phiên hoặc cổng thanh toán Online phản hồi timeout khi đang xử lý. |
 | SUCCESS | Event: RefundCompleted [một phần] | System | RULE-16-06, RULE-17-02 | PARTIALLY_REFUNDED | PaymentPartiallyRefunded | Hoàn tiền một phần; tổng số tiền hoàn tích lũy $< \text{TotalAmount}$. |
 | PARTIALLY_REFUNDED | Event: RefundCompleted [tiếp tục hoàn một phần] | System | RULE-16-06, RULE-17-02 | PARTIALLY_REFUNDED | PaymentPartiallyRefunded | Tiếp tục hoàn tiền một phần; tổng số tiền hoàn tích lũy vẫn $< \text{TotalAmount}$. |
 | PARTIALLY_REFUNDED | Event: RefundCompleted [hoàn 100%] | System | RULE-16-06, RULE-17-02 | REFUNDED | PaymentRefunded | Hoàn tất số tiền còn lại; tổng số tiền hoàn tích lũy $== \text{TotalAmount}$. |
 | SUCCESS | Event: RefundCompleted [hoàn 100% lần đầu] | System | RULE-16-06, RULE-17-01, RULE-17-02 | REFUNDED | PaymentRefunded | Hoàn tiền toàn phần 100% ngay trong lần đầu tiên. |
 
-- **Initial State:** `PENDING`
+- **Initial State:** `PENDING` (Online Gateway), `SUCCESS` (Tiền mặt trực tiếp tại quầy).
 - **Terminal State:** `FAILED`, `CANCELLED`, `REFUNDED`
 - **Trạng thái Đã quyết toán (Settled States):** `SUCCESS` và `PARTIALLY_REFUNDED` là các trạng thái thanh toán thành công có thể chuyển tiếp sang `REFUNDED` khi có các giao dịch hoàn tiền hoàn tất.
-- **Bất biến hoàn tiền một phần (Partial Refund Invariant):**
-  $$\text{RemainingRefundableAmount} = \text{TotalAmount} - \sum(\text{CompletedRefunds}) \ge 0$$
-  Mọi yêu cầu hoàn tiền `RefundRequest` bắt buộc phải thỏa mãn: $\text{RequestedRefundAmount} \le \text{RemainingRefundableAmount}$.
+- **Technical Invariants (Kênh Thanh toán & Ranh giới Hủy):**
+  1. *Phân định Kênh Thanh toán (RULE-16-02, Section 19.1):*
+     - Kênh Tiền mặt (`CASH`): Đi thẳng `[*] -> SUCCESS` trong ranh giới `@Transactional` nguyên tử của phiên thu ngân POS (bao gồm tạo Payment `SUCCESS`, Invoice `PAID`, Order `PAID`, trừ tồn kho `PhysicalQuantity`).
+     - Kênh Điện tử (`ONLINE_GATEWAY`): Đi theo chuỗi `[*] -> PENDING -> PROCESSING -> SUCCESS / FAILED / CANCELLED` do tính chất bất đồng bộ của cổng thanh toán.
+  2. *Phạm vi hiệu lực của `CancelPayment` (RULE-16-05):*
+     - Chỉ áp dụng cho kênh Thanh toán Điện tử (`ONLINE_GATEWAY`) đang ở trạng thái `PENDING` hoặc `PROCESSING`.
+     - Kênh Tiền mặt (`CASH`) không đi qua các trạng thái chờ; nếu khách đổi ý chưa thanh toán tại quầy thì phiên/hóa đơn nháp bị hủy mà không tạo ra bản ghi Payment.
+  3. *Bất biến hoàn tiền một phần (Partial Refund Invariant):*
+     $$\text{RemainingRefundableAmount} = \text{TotalAmount} - \sum(\text{CompletedRefunds}) \ge 0$$
+     Mọi yêu cầu hoàn tiền `RefundRequest` bắt buộc phải thỏa mãn: $\text{RequestedRefundAmount} \le \text{RemainingRefundableAmount}$.
+
 
 ---
 
