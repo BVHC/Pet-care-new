@@ -2,6 +2,7 @@ import { useState } from 'react';
 import { Link } from 'react-router-dom';
 import { Calendar, Dog, Cat, Home, Wifi, Car, Coffee, Shield, Star, Check } from 'lucide-react';
 import { toast } from 'sonner';
+import { StayPriceCalculator } from '@/components/customer/StayPriceCalculator';
 
 const ROOMS = [
   { id: 1, name: 'Phòng Standard', desc: 'Phòng nhỏ cho thú cưng đơn lẻ', price: 150000, icon: Home, image: 'https://images.unsplash.com/photo-1548199973-03cce0bbc87b?w=600', features: ['Giường êm', 'Bát ăn uống', 'TV'] },
@@ -112,6 +113,11 @@ export function HotelPage() {
         </div>
       </section>
 
+      {/* Interactive Stay Price Calculator */}
+      <section className="mx-auto max-w-[1000px] px-4 pt-14 sm:px-6">
+        <StayPriceCalculator />
+      </section>
+
       {/* Rooms */}
       <section className="mx-auto max-w-[1000px] px-4 py-12 sm:px-6">
         <h2 className="mb-8 text-center font-[var(--font-friendly)] text-3xl font-bold text-gray-900">Loại phòng</h2>
@@ -125,8 +131,9 @@ export function HotelPage() {
               onClick={() => setSelectedRoom(room.id === selectedRoom ? null : room.id)}
             >
               {room.popular && (
-                <div className="bg-[#843122] px-4 py-1 text-center text-sm font-bold text-white">
-                  ⭐ Phổ biến nhất
+                <div className="bg-[#843122] px-4 py-1.5 text-center text-xs font-bold text-white flex items-center justify-center gap-1.5">
+                  <Star size={13} className="fill-amber-300 text-amber-300" />
+                  <span>Phổ biến nhất</span>
                 </div>
               )}
               <div className="aspect-[4/3] bg-gray-100">

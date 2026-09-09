@@ -1,22 +1,25 @@
-import { useEffect, useRef, useState } from 'react'
+import { useEffect, useState } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
 import gsap from 'gsap'
 import { ScrollTrigger } from 'gsap/ScrollTrigger'
 import {
   ChevronDown,
   ChevronUp,
-  ChevronLeft,
-  ChevronRight,
   Sparkles,
   PawPrint,
   Calendar,
   User,
   ArrowRight,
-  ShoppingBag,
 } from 'lucide-react'
 import { toast } from 'sonner'
 import { HeroBanner } from '@/components/customer/HeroBanner'
-import { PHOTOS, CATEGORIES, FEATURED, filterFeaturedByPetType, TESTIMONIALS, STATS, STEPS, PARTNERS, FAQS, DOCTORS } from './home.mock'
+import { OurServicesStage } from '@/components/customer/OurServicesStage'
+import { StackingProcessCards } from '@/components/customer/StackingProcessCards'
+import { NoCagesPhilosophy } from '@/components/customer/NoCagesPhilosophy'
+import { TestimonialsSpeechBubble } from '@/components/customer/TestimonialsSpeechBubble'
+import { ContactVetCTA } from '@/components/customer/ContactVetCTA'
+import { InteractiveMascotCompanion } from '@/components/customer/InteractiveMascotCompanion'
+import { PHOTOS, FEATURED, filterFeaturedByPetType, STATS, PARTNERS, FAQS, DOCTORS } from './home.mock'
 import { NEWS_ARTICLES } from './news.mock'
 import styles from './HomePage.module.css'
 
@@ -24,34 +27,13 @@ gsap.registerPlugin(ScrollTrigger)
 
 export function HomePage() {
   const navigate = useNavigate()
-  const catStripRef = useRef<HTMLDivElement>(null)
   const [openFaq, setOpenFaq] = useState<number | null>(0)
   const [petFilter, setPetFilter] = useState<'all' | 'dog' | 'cat'>('all')
-
-  const scrollStrip = (ref: React.RefObject<HTMLDivElement | null>, dir: 1 | -1) => {
-    const el = ref.current
-    if (el) el.scrollBy({ left: dir * el.clientWidth * 0.8, behavior: 'smooth' })
-  }
 
   useEffect(() => {
     if (typeof window === 'undefined') return
 
     const ctx = gsap.context(() => {
-      // 1. Categories Section reveal
-      gsap.fromTo('.gsap-reveal-cat',
-        { opacity: 0, y: 35 },
-        {
-          scrollTrigger: {
-            trigger: '.gsap-cat-section',
-            start: 'top 88%',
-          },
-          opacity: 1,
-          y: 0,
-          stagger: 0.06,
-          duration: 0.6,
-          ease: 'power2.out',
-        }
-      )
 
       // 2. 3 Steps Section reveal
       gsap.fromTo('.gsap-step-card',
@@ -131,97 +113,17 @@ export function HomePage() {
       {/* 1. Hero - CozyPaws Style */}
       <HeroBanner />
 
-      {/* 2. Categories */}
-      <section className="gsap-cat-section px-6 pt-6 pb-12">
-        <div className={styles.wrap}>
-          <div className={styles.stripHead}>
-            <div className="font-[var(--font-friendly)] text-2xl font-extrabold text-[var(--color-text-primary)]">
-              Chúng tôi có thể giúp gì cho bạn?
-            </div>
-            <div className={styles.stripArrows}>
-              <button
-                className={styles.arrowBtn}
-                aria-label="Cuộn trái"
-                onClick={() => scrollStrip(catStripRef, -1)}
-              >
-                <ChevronLeft size={18} />
-              </button>
-              <button
-                className={styles.arrowBtn}
-                aria-label="Cuộn phải"
-                onClick={() => scrollStrip(catStripRef, 1)}
-              >
-                <ChevronRight size={18} />
-              </button>
-            </div>
-          </div>
-          <div className={`${styles.hScroll} flex gap-4`} ref={catStripRef}>
-            {CATEGORIES.map((c) => (
-              <div
-                key={c.name}
-                className={`${styles.catCard} ${styles.revealItem} gsap-reveal-cat flex min-w-[140px] flex-1 cursor-pointer flex-col items-center justify-center gap-3 rounded-[var(--radius-rounded)] bg-[var(--color-surface-card)] p-5 text-center shadow-[var(--shadow-1)]`}
-                onClick={() => navigate(c.page === 'listing' ? '/shop' : c.page === 'booking' ? '/booking' : '/')}
-              >
-                {c.image ? (
-                  <div className="flex h-10 w-10 items-center justify-center rounded-full bg-orange-50">
-                    <img src={c.image} alt="" className="h-6 w-6 object-contain" />
-                  </div>
-                ) : (
-                  <div className="flex h-10 w-10 items-center justify-center rounded-full bg-orange-50">
-                    <ShoppingBag size={24} className="text-[#843122]" />
-                  </div>
-                )}
-                <div className="text-[14px] font-bold text-[var(--color-text-primary)]">
-                  {c.name}
-                </div>
-              </div>
-            ))}
-          </div>
-        </div>
-      </section>
+      {/* 2. Dịch Vụ Của Chúng Tôi (Don't Board Me Panoramic Circular Stage - thay thế Categories) */}
+      <OurServicesStage />
 
-      {/* 3. 3 Steps */}
-      <section className="gsap-steps-section relative overflow-hidden px-6 py-14">
-        <img
-          src={PHOTOS.doodlePaw}
-          alt=""
-          className={styles.sectionDoodle}
-          style={{ top: 8, left: '3%', width: 56 }}
-        />
-        <img
-          src={PHOTOS.doodleCollar}
-          alt=""
-          className={styles.sectionDoodle}
-          style={{ bottom: 4, right: '4%', width: 64 }}
-        />
-        <div className={styles.wrap}>
-          <div className="mb-2 text-center text-[13px] font-bold tracking-wide text-teal-600 uppercase">
-            Đơn giản &amp; nhanh chóng
-          </div>
-          <div className="mb-10 text-center font-[var(--font-friendly)] text-[clamp(24px,3vw,32px)] font-extrabold text-[var(--color-text-primary)]">
-            Chăm sóc thú cưng chỉ trong 3 bước
-          </div>
-          <div className={styles.stepGrid}>
-            {STEPS.map((s) => (
-              <div key={s.step} className={`${styles.stepCard} gsap-step-card`}>
-                <span className={styles.stepNum}>{s.step}</span>
-                <div className={styles.stepIcon}>
-                  <s.icon size={26} />
-                </div>
-                <div className="mb-1.5 text-lg font-bold text-[var(--color-text-primary)]">
-                  {s.title}
-                </div>
-                <div className="text-sm leading-relaxed text-[var(--color-text-secondary)]">
-                  {s.desc}
-                </div>
-              </div>
-            ))}
-          </div>
-        </div>
-      </section>
+      {/* 3. 4 Bước Tận Tâm Tại PetCare (Don't Board Me Pinned Stacking Process Cards) */}
+      <StackingProcessCards />
+
+      {/* 3.1 Don't Board Me About Us Style: 100% Không Chuồng Nhốt Philosophy */}
+      <NoCagesPhilosophy />
 
       {/* 4. Featured Products */}
-      <section className="gsap-featured-section relative overflow-hidden bg-gray-50 px-6 py-14">
+      <section className="gsap-featured-section relative overflow-hidden bg-[#fdf6ec] px-6 py-14">
         <img
           src={PHOTOS.doodleBone}
           alt=""
@@ -242,7 +144,7 @@ export function HomePage() {
                 <button
                   key={f}
                   onClick={() => setPetFilter(f)}
-                  className={`px-5 py-2 rounded-full text-[13px] font-bold transition-colors ${petFilter === f ? 'bg-[#843122] text-white' : 'bg-white text-gray-600 border border-gray-300 hover:border-[#843122] hover:text-[#843122]'}`}
+                  className={`px-5 py-2 rounded-full text-[13px] font-bold transition-colors ${petFilter === f ? 'bg-[#a43324] text-white' : 'bg-white text-[#5a3a29] border border-[#a43324]/20 hover:border-[#a43324] hover:text-[#a43324]'}`}
                 >
                   {f === 'all' ? 'Tất cả' : f === 'dog' ? 'Cho Chó' : 'Cho Mèo'}
                 </button>
@@ -277,7 +179,7 @@ export function HomePage() {
                 </Link>
                 <button
                   onClick={() => handleAddToCart(p.id, p.name)}
-                  className="mt-2 w-full rounded-lg border border-[#843122] bg-[#843122] px-3 py-2 text-[13px] font-semibold text-white hover:bg-[#6a2517] transition-colors"
+                  className="mt-2 w-full rounded-lg border border-[#a43324] bg-[#a43324] px-3 py-2 text-[13px] font-semibold text-white hover:bg-[#89271b] transition-colors"
                 >
                   Thêm vào giỏ
                 </button>
@@ -287,7 +189,7 @@ export function HomePage() {
           <div className="text-center mt-10">
             <button
               onClick={() => navigate('/shop')}
-              className="rounded-full border-2 border-[#843122] px-8 py-3 font-bold text-[#843122] hover:bg-[#843122] hover:text-white transition-colors inline-flex items-center gap-2"
+              className="rounded-full border-2 border-[#a43324] px-8 py-3 font-bold text-[#a43324] hover:bg-[#a43324] hover:text-white transition-colors inline-flex items-center gap-2"
             >
               Xem tất cả sản phẩm <ArrowRight size={18} />
             </button>
@@ -332,10 +234,10 @@ export function HomePage() {
       </section>
 
       {/* 6. Doctors */}
-      <section className="gsap-doctors-section px-6 py-14">
+      <section className="gsap-doctors-section px-6 py-14 bg-[#fffaf0]">
         <div className={styles.wrap}>
           <div className="text-center mb-12">
-            <div className="text-[12px] font-bold text-[#843122] tracking-widest uppercase flex items-center justify-center gap-2 mb-3">
+            <div className="text-[12px] font-bold text-[#a43324] tracking-widest uppercase flex items-center justify-center gap-2 mb-3">
               ĐỘI NGŨ TẬN TÂM VÌ THÚ CƯNG <PawPrint size={14} />
             </div>
             <div className="font-[var(--font-friendly)] text-[clamp(32px,4vw,42px)] font-extrabold text-[var(--color-text-primary)] leading-tight">
@@ -361,63 +263,8 @@ export function HomePage() {
         </div>
       </section>
 
-      {/* 7. Testimonials */}
-      <section className="gsap-testi-section relative overflow-hidden bg-gray-50 px-6 py-12">
-        <img
-          src={PHOTOS.doodleYarn}
-          alt=""
-          className={styles.sectionDoodle}
-          style={{ top: 20, right: '5%', width: 60 }}
-        />
-        <div className={styles.wrap}>
-          <div className={styles.testiHead}>
-            <div className="font-[var(--font-friendly)] text-2xl font-extrabold text-[var(--color-text-primary)]">
-              Được yêu thích bởi cộng đồng yêu thú cưng
-            </div>
-            <div className={styles.testiRating}>
-              <div className="flex gap-0.5">
-                {[1, 2, 3, 4, 5].map(i => (
-                  <span key={i} className="text-amber-400">★</span>
-                ))}
-              </div>
-              4.9/5 · 1.567 đánh giá
-            </div>
-          </div>
-          <div className="grid grid-cols-1 gap-5 md:grid-cols-3">
-            {TESTIMONIALS.map((t) => (
-              <div
-                key={t.name}
-                className={`${styles.testiCard} ${styles.testiCardReveal} gsap-testi-card rounded-[var(--radius-rounded)] bg-white p-5 shadow-[var(--shadow-1)]`}
-              >
-                <span className={styles.testiQuoteMark}>&rdquo;</span>
-                <div className="flex gap-0.5 mb-2">
-                  {[1, 2, 3, 4, 5].map(i => (
-                    <span key={i} className="text-amber-400 text-sm">★</span>
-                  ))}
-                </div>
-                <div className="my-3 text-sm leading-relaxed text-[var(--color-text-primary)]">
-                  &ldquo;{t.quote}&rdquo;
-                </div>
-                <div className="flex items-center gap-2.5">
-                  <div className={styles.testiAvatarRing}>
-                    <img
-                      src={t.avatar}
-                      alt={t.name}
-                      className="h-9 w-9 rounded-full object-cover"
-                    />
-                  </div>
-                  <div>
-                    <div className="text-[13px] font-bold text-[var(--color-text-primary)]">
-                      {t.name}
-                    </div>
-                    <div className="text-xs text-[var(--color-text-secondary)]">{t.pet}</div>
-                  </div>
-                </div>
-              </div>
-            ))}
-          </div>
-        </div>
-      </section>
+      {/* 7. Don't Board Me Style Speech Bubble Testimonials */}
+      <TestimonialsSpeechBubble />
 
       {/* 8. Partners */}
       <section className="px-6 py-10">
@@ -477,66 +324,14 @@ export function HomePage() {
         </div>
       </section>
 
-      {/* 10. Schedule Visit */}
-      <section className="px-6 py-14">
-        <div className={styles.scheduleBanner}>
-          <div className="text-center mb-8">
-            <h2 className="font-[var(--font-friendly)] text-[clamp(28px,4vw,36px)] font-extrabold text-[var(--color-text-primary)]">
-              Đặt Lịch Ngay Hôm Nay!
-            </h2>
-          </div>
-          <div className={styles.scheduleForm}>
-            <div className={styles.formGroup}>
-              <label>Họ tên</label>
-              <input type="text" placeholder="Nhập họ tên đầy đủ" />
-            </div>
-            <div className={styles.formGroup}>
-              <label>Loại thú cưng</label>
-              <select>
-                <option>Chọn loại thú cưng</option>
-                <option>Chó</option>
-                <option>Mèo</option>
-              </select>
-            </div>
-            <div className={styles.formGroup}>
-              <label>Dịch vụ quan tâm</label>
-              <select>
-                <option>Chọn dịch vụ</option>
-                <option>Khám tổng quát</option>
-                <option>Tiêm phòng</option>
-                <option>Spa & cắt tỉa</option>
-              </select>
-            </div>
-            <div className={styles.formGroup}>
-              <label>Ngày</label>
-              <input type="date" />
-            </div>
-            <div className={styles.formGroup}>
-              <label>Giờ</label>
-              <input type="time" />
-            </div>
-            <div className={styles.formGroup}>
-              <label>Số điện thoại</label>
-              <input type="tel" placeholder="09xx xxx xxx" />
-            </div>
-          </div>
-          <div className="text-center mt-10">
-            <button
-              className="px-8 py-3.5 rounded-full bg-[#843122] text-white hover:bg-[#6a2517] transition-colors flex items-center justify-center mx-auto gap-2 font-bold text-[15px]"
-              onClick={() => navigate('/booking')}
-            >
-              Đặt Lịch Ngay <ArrowRight size={18} />
-            </button>
-          </div>
-        </div>
-      </section>
+
 
       {/* 11. News */}
-      <section className="px-6 py-14 bg-white">
+      <section className="px-6 py-14 bg-[#fdf6ec]">
         <div className={styles.wrap}>
           <div className="flex flex-col md:flex-row items-center justify-between gap-6 mb-12">
             <div>
-              <div className="text-[12px] font-bold text-[#843122] tracking-widest uppercase flex items-center gap-2 mb-2">
+              <div className="text-[12px] font-bold text-[#a43324] tracking-widest uppercase flex items-center gap-2 mb-2">
                 TIN TỨC & BÀI VIẾT <PawPrint size={14} />
               </div>
               <div className="font-[var(--font-friendly)] text-[clamp(32px,4vw,42px)] font-extrabold text-[var(--color-text-primary)] leading-tight">
@@ -544,7 +339,7 @@ export function HomePage() {
               </div>
             </div>
             <button
-              className="px-6 py-2.5 rounded-full bg-gray-100 hover:bg-[#843122] hover:text-white transition-colors flex items-center gap-2 font-bold text-[14px] text-[var(--color-text-primary)]"
+              className="px-6 py-2.5 rounded-full bg-[#faebe4] hover:bg-[#a43324] hover:text-white transition-colors flex items-center gap-2 font-bold text-[14px] text-[#a43324] border border-[#a43324]/20"
             >
               Xem Tất Cả <ArrowRight size={18} />
             </button>
@@ -561,10 +356,10 @@ export function HomePage() {
                 <div className="p-7">
                   <div className="flex items-center gap-5 text-[13px] font-semibold text-[var(--color-text-secondary)] mb-4">
                     <span className="flex items-center gap-2">
-                      <User size={16} className="text-[#843122]" /> {a.author}
+                      <User size={16} className="text-[#a43324]" /> {a.author}
                     </span>
                     <span className="flex items-center gap-2">
-                      <Calendar size={16} className="text-[#843122]" /> {a.date}
+                      <Calendar size={16} className="text-[#a43324]" /> {a.date}
                     </span>
                   </div>
                   <h3 className="font-[var(--font-friendly)] text-[22px] font-extrabold text-[var(--color-text-primary)] leading-[1.3]">
@@ -576,6 +371,12 @@ export function HomePage() {
           </div>
         </div>
       </section>
+
+      {/* 12. Don't Board Me Style Contact Vet Hotline & Booking CTA */}
+      <ContactVetCTA />
+
+      {/* Don't Board Me Interactive Mascot Assistant & Paw Particles */}
+      <InteractiveMascotCompanion />
     </div>
   )
 }

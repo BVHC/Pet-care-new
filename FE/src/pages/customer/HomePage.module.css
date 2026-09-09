@@ -325,8 +325,8 @@
 
 /* ---- stats band ---- */
 .statsBand {
-  background: linear-gradient(135deg, var(--color-teal) 0%, #00796b 100%);
-  color: var(--color-text-on-dark);
+  background: linear-gradient(135deg, #382417 0%, #29180d 100%);
+  color: #fdf6ec;
 }
 .statsBandInner {
   padding: 48px 24px;
@@ -414,8 +414,8 @@
   display: grid;
   place-items: center;
   border-radius: 16px;
-  background: var(--color-state-info-bg);
-  color: var(--color-teal);
+  background: #faebe4;
+  color: #a43324;
   margin-bottom: 16px;
 }
 
@@ -553,8 +553,8 @@
 }
 .doctorCardReveal:hover .doctorImg {
   transform: rotate(6deg);
-  border-color: var(--color-teal);
-  box-shadow: 0 8px 24px rgba(0, 150, 136, 0.25);
+  border-color: #a43324;
+  box-shadow: 0 8px 24px rgba(164, 51, 36, 0.25);
 }
 
 /* Testimonials hover: enlarge quote mark */
@@ -652,8 +652,8 @@
   margin-bottom: 10px;
   padding: 6px 14px;
   border-radius: var(--radius-pill);
-  background: var(--color-state-info-bg);
-  color: var(--color-teal);
+  background: #faebe4;
+  color: #a43324;
   font-size: 12px;
   font-weight: 800;
   letter-spacing: 0.4px;
@@ -709,8 +709,8 @@
   width: 30px;
   height: 30px;
   border-radius: 10px;
-  background: var(--color-state-info-bg);
-  color: var(--color-teal);
+  background: #faebe4;
+  color: #a43324;
 }
 
 /* ---- testimonials: badge review + quote mark ---- */
