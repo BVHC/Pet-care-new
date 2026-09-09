@@ -155,14 +155,14 @@ Hệ thống Pet Care Ecosystem thiết lập và khóa cố định các quyế
 
 | Term | Loại | Định nghĩa | Values (Status-Enum) | Deprecated synonym |
 |---|---|---|---|---|
-| ProductCatalog | Entity Candidate | Danh mục sản phẩm mẫu được quản lý ở cấp Platform. | — | Master Catalog |
+| ProductCatalog | Entity Candidate | Danh mục sản phẩm gốc, sở hữu và quản lý toàn quyền ở cấp Organization; dùng chung cho toàn bộ Store trực thuộc. | — | Master Catalog |
 | Product | Entity Candidate | Sản phẩm hàng hóa được phân phối hoặc bán lẻ trong hệ thống. | — | Item, Merchandise |
 | Service | Entity Candidate | Dịch vụ chăm sóc thú cưng (khám, tiêm, grooming) được cung cấp. | — | Service Item |
-| ServiceAvailability | Value Object Candidate | Điều kiện xác định dịch vụ có thể cung cấp tại Store hay không. | — | Availability State |
-| ProductPrice | Value Object Candidate | Giá bán của sản phẩm được cấu hình riêng tại từng Store. | — | Store Product Price |
-| ServicePrice | Value Object Candidate | Giá dịch vụ được cấu hình riêng tại từng Store. | — | Store Service Price |
-| ManageProductCatalog | Command Candidate | Thao tác Platform Admin quản lý Product Catalog mẫu. | — | — |
-| GrantProductCatalogAccess | Command Candidate | Thao tác cấp quyền sử dụng Product Catalog cho Organization. | — | — |
+| StoreServiceOverride | Entity Candidate | Bản ghi override khả dụng/giá dịch vụ riêng theo từng Store (bảng `store_services`), kế thừa mặc định từ `Service` gốc của Organization. | — | store_services |
+| StoreProductOverride | Entity Candidate | Bản ghi override giá sản phẩm riêng theo từng Store (bảng `store_products`), kế thừa mặc định từ `Product` gốc của Organization. | — | store_products |
+| ServiceAvailability | Value Object Candidate | Điều kiện xác định dịch vụ có thể cung cấp tại Store hay không, lưu trong `StoreServiceOverride.is_active`. | — | Availability State |
+| ProductPrice | Value Object Candidate | Giá bán của sản phẩm được cấu hình riêng tại từng Store, lưu trong `StoreProductOverride.price`. | — | Store Product Price |
+| ServicePrice | Value Object Candidate | Giá dịch vụ được cấu hình riêng tại từng Store, lưu trong `StoreServiceOverride.price`. | — | Store Service Price |
 | ManageProduct | Command Candidate | Thao tác quản lý sản phẩm trong phạm vi Organization. | — | — |
 | ManageService | Command Candidate | Thao tác quản lý dịch vụ trong phạm vi Organization. | — | — |
 | ConfigureServiceAvailability| Command Candidate | Thao tác cấu hình trạng thái khả dụng của Service tại Store. | — | — |
@@ -500,13 +500,12 @@ Hệ thống Pet Care Ecosystem thiết lập và khóa cố định các quyế
 | RemainingRefundableAmount| Value Object Candidate | Số tiền còn lại có thể hoàn trả của giao dịch (`TotalAmount - Sum(CompletedRefunds)`). | — | Refundable Balance |
 | CashPayment | Value Object Candidate | Phương thức thanh toán trực tiếp bằng tiền mặt tại quầy. | — | Cash Method |
 | PaymentMethod | Value Object Candidate | Phương thức thanh toán sử dụng (CASH, ONLINE_GATEWAY). | — | Channel |
-| MakePayment | Command Candidate | Thao tác khách hàng khởi tạo thanh toán qua cổng điện tử. | — | PayOnline |
-| RecordCashPayment | Command Candidate | Thao tác thu ngân ghi nhận thanh toán tiền mặt tại quầy. | — | PayCash |
-| VerifyPayment | Command Candidate | Thao tác xác minh tính hợp lệ của giao dịch thanh toán. | — | — |
-| ReceivePaymentCallback | Command Candidate | Thao tác hệ thống tiếp nhận Webhook kết quả từ cổng thanh toán. | — | HandleCallback |
-| SettlePayment | Command Candidate | Thao tác quyết toán xác nhận giao dịch thanh toán thành công (SUCCESS). | — | ConfirmPayment |
-| CancelPayment | Command Candidate | Thao tác hủy giao dịch thanh toán đang ở trạng thái PENDING hoặc PROCESSING. | — | — |
-| ReconcilePayment | Command Candidate | Thao tác đối soát giao dịch thanh toán với sổ phụ ngân hàng. | — | — |
+| MakePayment | Command Candidate | Thao tác khách hàng khởi tạo thanh toán qua cổng điện tử (`ONLINE_GATEWAY`). | — | PayOnline |
+| RecordCashPayment | Command Candidate | Thao tác thu ngân ghi nhận và quyết toán thanh toán tiền mặt tại quầy (`CASH -> SUCCESS`). | — | PayCash |
+| VerifyPayment | Command Candidate | Thao tác hệ thống chuyển hướng / xác thực giao dịch sang cổng thanh toán trực tuyến. | — | — |
+| ReceivePaymentCallback | Command Candidate | Thao tác hệ thống tiếp nhận Webhook kết quả từ cổng thanh toán và quyết toán giao dịch. | — | HandleCallback |
+| CancelPayment | Command Candidate | Thao tác hủy giao dịch thanh toán Online đang ở trạng thái PENDING hoặc PROCESSING. | — | — |
+| ReconcilePayment | Command Candidate | Thao tác đối soát giao dịch thanh toán với sổ phụ ngân hàng và báo cáo cổng thanh toán. | — | — |
 | PaymentCreated | Domain Event Candidate | Sự kiện phát sinh khi giao dịch thanh toán được khởi tạo. | — | — |
 | PaymentProcessing | Domain Event Candidate | Sự kiện phát sinh khi giao dịch đang được cổng thanh toán xử lý. | — | — |
 | PaymentSucceeded | Domain Event Candidate | Sự kiện phát sinh khi giao dịch thanh toán thành công hoàn toàn. | — | PaymentSuccess |
@@ -606,6 +605,7 @@ Hệ thống Pet Care Ecosystem thiết lập và khóa cố định các quyế
 | ConfirmPackageUsage | Command Candidate | Thao tác tiếp tân xác nhận cấn trừ lượt sử dụng dịch vụ từ gói. | — | ConsumePackage |
 | CancelPackage | Command Candidate | Thao tác Store Manager hủy gói dịch vụ theo chính sách hoàn tiền. | — | VoidPackage |
 | AdjustPackage | Command Candidate | Thao tác Store Manager điều chỉnh số lượt sử dụng còn lại trong gói. | — | — |
+| RefundPackageUnit | Command Candidate | Thao tác Store Manager hoàn lại 01 lượt gói đã bị trừ do No-Show khi khách hàng có lý do bất khả kháng chính đáng (theo `RULE-20-08`). | — | — |
 | TrackPackageUsage | Command Candidate | Thao tác theo dõi và lưu vết lịch sử trừ quyền lợi gói. | — | — |
 | ProcessPackageExpiry | Command Candidate | Thao tác hệ thống xử lý chuyển trạng thái gói đã hết hạn (EXPIRED). | — | — |
 | PackagePurchased | Domain Event Candidate | Sự kiện phát sinh khi khách hàng mua gói dịch vụ. | — | — |
@@ -767,7 +767,7 @@ graph TD
 
 | Scope Level | Định danh | Phạm vi Dữ liệu & Thẩm quyền Quản trị | Cơ chế Cách ly Kỹ thuật (Isolation Mechanism) |
 |---|---|---|---|
-| **Tier 1: PLATFORM** | `PLATFORM` | Quản trị toàn bộ nền tảng SaaS đa tổ chức; quản lý vòng đời Tenant (`Organization`); Master Product Catalog; cấu hình hệ thống và báo cáo toàn cục. | Phân quyền cấp cao nhất, không bị giới hạn bởi `organization_id` hay `store_id`. |
+| **Tier 1: PLATFORM** | `PLATFORM` | Quản trị toàn bộ nền tảng SaaS đa tổ chức; quản lý vòng đời Tenant (`Organization`); cấu hình hệ thống và báo cáo toàn cục. | Phân quyền cấp cao nhất, không bị giới hạn bởi `organization_id` hay `store_id`. |
 | **Tier 2: ORGANIZATION** | `ORGANIZATION` | Quản trị toàn bộ chuỗi chi nhánh và Warehouse trung tâm của một Tenant; bảng giá dịch vụ; chính sách chuỗi; nhân sự toàn tổ chức; đối soát tài chính chuỗi. | Tự động áp dụng Hibernate Filter `@Filter(name = "tenantFilter", condition = "organization_id = :orgId")`. Cách ly dữ liệu 100% giữa các Organization. |
 | **Tier 3: STORE** | `STORE` | Quản trị vận hành cục bộ tại Store chi nhánh: ca kíp nhân sự, đặt lịch, check-in, khám bệnh EMR, tiêm phòng, grooming, bán hàng POS, tồn kho tại điểm bán. | Áp dụng đồng thời Hibernate Filter `@Filter(name = "storeFilter", condition = "store_id = :storeId")` và `tenantFilter`. |
 | **Tier 4: WAREHOUSE** | `WAREHOUSE` | Quản trị vận hành kho bãi độc lập / kho trung tâm chuỗi: nhập kho NCC, tiếp nhận hàng mua, điều chuyển kho liên chi nhánh, xuất kho và kiểm kê tổng thể. | Áp dụng đồng thời Hibernate Filter `@Filter(name = "warehouseFilter", condition = "warehouse_id = :warehouseId")` và `tenantFilter`. |
@@ -886,9 +886,7 @@ Bảng ma trận phân quyền chi tiết cho toàn bộ 293 nghiệp vụ / Com
 | | `ProcessDelegationExpiry`   | `PLATFORM` | `System` | Quét tự động chuyển `ACTIVE` quá hạn sang `EXPIRED`. |
 | | `PerformDelegatedAction`    | `CUSTOMER` | `CUSTOMER` (Caregiver) | Thực hiện thao tác trong phạm vi quyền được ủy quyền. |
 | | `SearchCustomerPet`         | `STORE` | `RECEPTIONIST` | Tra cứu theo SĐT, mã Pet, CCCD phục vụ tại quầy. |
-| **05. Service & Product Catalog** | `ManageProductCatalog` | `PLATFORM` | `SUPER_ADMIN` | Quản lý Master Product Catalog toàn nền tảng. |
-| | `GrantProductCatalogAccess`| `PLATFORM` | `SUPER_ADMIN` | Cấp quyền sử dụng danh mục sản phẩm cho Organization. |
-| | `ManageProduct` | `ORGANIZATION` | `ORGANIZATION_ADMIN` | Quản lý sản phẩm kích hoạt trong Organization. |
+| **05. Service & Product Catalog** | `ManageProduct` | `ORGANIZATION` | `ORGANIZATION_ADMIN` | Quản lý toàn quyền danh mục sản phẩm gốc của Organization (tạo, sửa, vô hiệu hóa). |
 | | `ManageService` | `ORGANIZATION` | `ORGANIZATION_ADMIN` | Quản lý danh mục dịch vụ, thời lượng và tài nguyên cần thiết. |
 | | `ConfigureServiceAvailability` | `STORE` | `STORE_MANAGER` | Bật/tắt dịch vụ cung ứng tại Store. |
 | | `ConfigureServicePrice` | `STORE` | `STORE_MANAGER` | Cấu hình bảng giá dịch vụ áp dụng tại Store. |
@@ -1019,11 +1017,10 @@ Bảng ma trận phân quyền chi tiết cho toàn bộ 293 nghiệp vụ / Com
 | | `ReconcileInvoice` | `STORE` / `ORG` | `FINANCE_STAFF` | Đối soát hóa đơn với thanh toán và chứng từ kế toán. |
 | | `ViewInvoice` | `CUSTOMER` / `STORE` | `CUSTOMER`, `RECEPTIONIST`, `FINANCE_STAFF` | Tra cứu chi tiết hóa đơn (D-01: Giữ nguyên `PAID` khi hoàn tiền). |
 | **16. Payment** | `MakePayment` | `CUSTOMER` | `CUSTOMER` | Thanh toán trực tuyến qua cổng điện tử (VNPay/MoMo/ZaloPay). |
-| | `RecordCashPayment` | `STORE` | `RECEPTIONIST` | Ghi nhận thanh toán tiền mặt tại quầy (`CASH -> SUCCESS`). |
-| | `VerifyPayment` | `STORE` / `PLATFORM` | `FINANCE_STAFF`, `System` | Xác thực tính hợp lệ của giao dịch thanh toán. |
-| | `ReceivePaymentCallback` | `PLATFORM` | `System` | Tiếp nhận Webhook cổng thanh toán; xử lý Idempotency Key. |
-| | `SettlePayment` | `STORE` / `ORG` | `FINANCE_STAFF` | Quyết toán giao dịch thanh toán thành công (`SUCCESS`). |
-| | `CancelPayment` | `CUSTOMER` / `PLATFORM` | `CUSTOMER`, `System` | Hủy giao dịch thanh toán khi timeout hoặc khách hủy. |
+| | `RecordCashPayment` | `STORE` | `RECEPTIONIST` | Ghi nhận và quyết toán tiền mặt tại quầy (`CASH -> SUCCESS`). |
+| | `VerifyPayment` | `PLATFORM` | `System` | Hệ thống xác thực/chuyển hướng giao dịch sang cổng thanh toán. |
+| | `ReceivePaymentCallback` | `PLATFORM` | `System` | Tiếp nhận Webhook cổng thanh toán, xử lý Idempotency & quyết toán `SUCCESS`. |
+| | `CancelPayment` | `CUSTOMER` / `PLATFORM` | `CUSTOMER`, `System` | Hủy giao dịch thanh toán Online khi timeout hoặc khách hủy. |
 | | `ReconcilePayment` | `STORE` / `ORG` | `FINANCE_STAFF` | Đối soát giao dịch hệ thống với sao kê ngân hàng/cổng. |
 | **17. Refund** | `RequestRefund` | `CUSTOMER` | `CUSTOMER` | **Maker**: Khách hàng tạo yêu cầu hoàn tiền qua App. |
 | | `CreateRefundRequest` | `STORE` | `RECEPTIONIST` | **Maker**: Tiếp tân tạo yêu cầu hoàn tiền tại quầy Store. |
@@ -1062,6 +1059,7 @@ Bảng ma trận phân quyền chi tiết cho toàn bộ 293 nghiệp vụ / Com
 | | `ConfirmPackageUsage` | `STORE` | `RECEPTIONIST` | Xác nhận trừ buổi sử dụng gói khi khách check-in dịch vụ. |
 | | `CancelPackage` | `STORE` | `STORE_MANAGER` | Hủy gói theo chính sách hoàn cọc buổi chưa dùng. |
 | | `AdjustPackage` | `STORE` | `STORE_MANAGER` | Điều chỉnh số lượt sử dụng còn lại của gói kèm lý do. |
+| | `RefundPackageUnit` | `STORE` | `STORE_MANAGER` | Hoàn 01 lượt gói bị trừ do No-Show khi có lý do bất khả kháng chính đáng (`RULE-20-08`). |
 | | `TrackPackageUsage` | `STORE` | `System` | Ghi nhận nhật ký lịch sử từng lần trừ buổi gói dịch vụ. |
 | | `ProcessPackageExpiry` | `PLATFORM` | `System` | Tự động đóng gói dịch vụ khi quá thời hạn sử dụng. |
 | **21. Incident Management** | `RecordIncident` | `STORE` | `RECEPTIONIST` | Ghi nhận sự cố vận hành/dịch vụ tại quầy Store. |
@@ -1324,11 +1322,11 @@ Bảng dưới đây danh mục hóa toàn bộ các Domain Events phát sinh xu
 | **`InvoicePaid`** | `Invoice` | Event: `FullPaymentSettled` | `invoice_id`, `settled_amount`, `settled_at` | **Fulfillment / Appointment:** Xác nhận tất toán 100%; bàn giao hàng hoặc đóng lịch hẹn. |
 | **`InvoiceVoided`** | `Invoice` | `VoidInvoice` | `invoice_id`, `void_reason`, `voided_by`, `voided_at` | **Billing / Finance:** Hủy nghĩa vụ thanh toán của hóa đơn phát hành sai trước thanh toán. |
 | **`InvoiceCancelled`** | `Invoice` | `DiscardInvoice` | `invoice_id`, `discarded_by`, `discarded_at` | **Billing:** Hủy bỏ bản nháp hóa đơn tạo nhầm. |
-| **`PaymentCreated`** | `Payment` | `MakePayment` / `RecordCashPayment` | `payment_id`, `invoice_id`, `payment_method`, `amount` | **Payment Gateway / POS:** Khởi tạo phiên thanh toán trực tuyến hoặc ghi nhận tại quầy. |
+| **`PaymentCreated`** | `Payment` | `MakePayment` | `payment_id`, `invoice_id`, `payment_method`, `amount` | **Payment Gateway:** Khởi tạo phiên thanh toán trực tuyến (`PENDING`). |
 | **`PaymentProcessing`** | `Payment` | `VerifyPayment` | `payment_id`, `transaction_reference`, `gateway_url` | **Payment Gateway:** Chuyển hướng người dùng sang giao diện thanh toán của đối tác. |
-| **`PaymentSucceeded`** | `Payment` | `ReceivePaymentCallback` / `SettlePayment` | `payment_id`, `invoice_id`, `gateway_ref`, `idempotency_key` | **Invoice / Order / Booking:** Kích hoạt tất toán Invoice, xác nhận Order, hoàn tất Booking. |
+| **`PaymentSucceeded`** | `Payment` | `ReceivePaymentCallback` / `RecordCashPayment` | `payment_id`, `invoice_id`, `gateway_ref`, `idempotency_key` | **Invoice / Order / Booking:** Kích hoạt tất toán Invoice, xác nhận Order, hoàn tất Booking. |
 | **`PaymentFailed`** | `Payment` | `ReceivePaymentCallback` (failure) | `payment_id`, `error_code`, `error_message`, `failed_at` | **Notification:** Báo lỗi thanh toán cho người dùng để thực hiện lại hoặc đổi phương thức. |
-| **`PaymentCancelled`** | `Payment` | `CancelPayment` | `payment_id`, `cancelled_by`, `cancelled_at` | **Payment:** Khách hàng hủy phiên thanh toán trực tuyến. |
+| **`PaymentCancelled`** | `Payment` | `CancelPayment` | `payment_id`, `cancelled_by`, `cancelled_at` | **Payment:** Khách hàng hoặc hệ thống hủy phiên thanh toán trực tuyến. |
 | **`PaymentPartiallyRefunded`** | `Payment` | Event: `RefundCompleted` (Partial) | `payment_id`, `refunded_amount`, `cumulative_refund`, `remaining_amt` | **Invoice:** Cập nhật `total_refunded_amount` trên Invoice (Invoice giữ nguyên `PAID` D-01). |
 | **`PaymentRefunded`** | `Payment` | Event: `RefundCompleted` (100% Full) | `payment_id`, `total_refunded`, `settled_refund_at` | **Order / Invoice:** Cập nhật trạng thái Payment sang `REFUNDED`; tất toán toàn bộ tiền hoàn. |
 | **`RefundRequested`** | `Refund` | `RequestRefund` / `CreateRefundRequest` | `refund_id`, `payment_id`, `requested_amount`, `reason`, `created_by` | **StoreManager / OrgAdmin:** Đưa yêu cầu vào danh sách chờ phê duyệt Maker-Checker. |
@@ -1521,7 +1519,7 @@ Bảng ma trận dưới đây thiết lập sự liên kết và truy vết 1:1
 | **13** | **Procurement Management** | Mục 13 (13 ops: `CreatePurchaseRequest`, `ReceiveGoods`, ...) | `RULE-13-01` → `RULE-13-08` | FSM 12 (`PurchaseRequest`), FSM 13 (`PurchaseOrder`) | Section 13, 26.5, 26.6 | Maker-Checker duyệt PR; Đơn hàng giao thiếu đóng sang `CLOSED`; Đơn đã kết thúc cấm nhập thêm hàng. |
 | **14** | **Order Management (v1 In-Store Fulfillment)** | Mục 14 (10 ops: `CheckoutOrder`, `CompleteStoreOrder`, ...) | `RULE-14-01` → `RULE-14-09` | FSM 5 (`OrderStatus`) | Section 14, 26.5 | Giữ chỗ kho 15m; Hủy trước giao sang `CANCELLED`; Đổi trả 100% sau giao sang `REFUNDED`; Trả một phần giữ `DELIVERED` (D-03). |
 | **15** | **Billing & Invoice Management** | Mục 15 (10 ops: `CreateInvoice`, `IssueSurchargeInvoice`, ...) | `RULE-15-01` → `RULE-15-08` | FSM 6 (`InvoiceStatus`) | Section 15, 26.5 | Settlement Immutability (D-01): Invoice `PAID` giữ nguyên khi hoàn tiền; cấm `VoidInvoice` khi đã trả tiền; Phụ phí tạo Surcharge Invoice (D-02). |
-| **16** | **Payment Management** | Mục 16 (7 ops: `MakePayment`, `RecordCashPayment`, `ReceivePaymentCallback`, `SettlePayment`, ...) | `RULE-16-01` → `RULE-16-07` | FSM 7 (`PaymentStatus`) | Section 16, 26.5 | Idempotency Key chống trùng lặp; Hỗ trợ thanh toán từng phần; Trạng thái `PARTIALLY_REFUNDED` và `REFUNDED`. |
+| **16** | **Payment Management** | Mục 16 (6 ops: `MakePayment`, `RecordCashPayment`, `VerifyPayment`, `ReceivePaymentCallback`, `CancelPayment`, `ReconcilePayment`) | `RULE-16-01` → `RULE-16-07` | FSM 7 (`PaymentStatus`) | Section 16, 26.5 | Idempotency Key chống trùng lặp; Quyết toán tiền mặt tức thì (`CASH -> SUCCESS`); Trạng thái `PARTIALLY_REFUNDED` và `REFUNDED`. |
 | **17** | **Refund Management** | Mục 17 (11 ops: `RequestRefund`, `ApproveRefund`, `RetryRefund`, ...) | `RULE-17-01` → `RULE-17-10` | FSM 8 (`RefundStatus`) | Section 17, 26.5, 26.6 | Maker-Checker (`created_by != approved_by`); Giới hạn 30 ngày; `FAILED` hỗ trợ `RetryRefund` (max 3) hoặc `ResolveRefundManually`. |
 | **18** | **Promotion & Voucher Management** | Mục 18 (8 ops: `CreatePromotion`, `UseVoucher`, ...) | `RULE-18-01` → `RULE-18-08` | Stateless Rules Engine | Section 18, 26.5 | Đánh giá điều kiện thời gian thực tại runtime; kiểm soát ngân sách khuyến mãi và chống cộng dồn mã sai quy định. |
 | **19** | **Membership & Loyalty Management** | Mục 19 (12 ops: `RegisterMembership`, `UpgradeMembership`, `RedeemLoyaltyPoint`, `AddLoyaltyPoint`, ...) | `RULE-19-01` → `RULE-19-10` | FSM 9 (`MembershipStatus`) | Section 19, 26.5 | Nâng hạng đóng bản ghi cũ (`UPGRADED`) và tạo mới `ACTIVE`; Dữ liệu hội viên cách ly độc lập theo từng Organization. |

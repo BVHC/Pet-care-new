@@ -14,7 +14,7 @@ Hệ thống phân định rõ 11 Actors nghiệp vụ được phân bổ trên
 
 | Actor | Phạm vi (Scope) | Vai trò & Trách nhiệm chính |
 |---|---|---|
-| **Platform Admin** (`SUPER_ADMIN`) | **PLATFORM** | Quản trị toàn bộ nền tảng SaaS đa tổ chức, quản lý vòng đời Tenant (Organizations), danh mục sản phẩm mẫu và cấu hình hệ thống toàn cục. |
+| **Platform Admin** (`SUPER_ADMIN`) | **PLATFORM** | Quản trị toàn bộ nền tảng SaaS đa tổ chức, quản lý vòng đời Tenant (Organizations) và cấu hình hệ thống toàn cục. |
 | **Organization Admin** (`ORGANIZATION_ADMIN`) | **ORGANIZATION** | Quản lý Organization/chuỗi chi nhánh, Warehouse trung tâm, chính sách tổ chức, danh mục bảng giá dịch vụ và các Store trực thuộc. Cách ly dữ liệu 100% giữa các Organization. |
 | **StoreManager** (`STORE_MANAGER`) | **STORE** | Quản lý, điều phối vận hành Store chi nhánh, phân ca nhân sự, thẩm định và phê duyệt Maker-Checker (`ApproveRefund`, `ApproveStockTransfer`, `ApprovePurchaseRequest`, `ApproveInventoryAdjustment`). |
 | **Receptionist** (`RECEPTIONIST`) | **STORE** | Tiếp đón khách, quản lý đặt lịch/check-in hẹn khám, xếp hàng walk-in, tạo đơn/hóa đơn POS tại quầy, ghi nhận tiền mặt, tạo yêu cầu hoàn tiền. |
@@ -53,9 +53,11 @@ Hệ thống phân định rõ 11 Actors nghiệp vụ được phân bổ trên
 | Platform Admin | Quản lý Role nền tảng | `ManageRole` |
 | Platform Admin | Quản lý Permission nền tảng | `ManagePermission` |
 | Platform Admin | Khóa/mở khóa tài khoản toàn nền tảng | `LockAccount`, `UnlockAccount` |
+| Platform Admin | Vô hiệu hóa / Tái kích hoạt tài khoản nhân viên nghỉ việc toàn nền tảng | `DeactivateAccount`, `ReactivateAccount` |
 | Organization Admin | Quản lý người dùng trong Organization | `ManageUser` |
 | Organization Admin | Quản lý Role/Permission trong Organization | `ManageRole`, `ManagePermission` |
 | Organization Admin | Khóa/mở khóa tài khoản trong Organization | `LockAccount`, `UnlockAccount` |
+| Organization Admin | Vô hiệu hóa / Tái kích hoạt tài khoản nhân viên nghỉ việc trong Organization (`RULE-02-07`) | `DeactivateAccount`, `ReactivateAccount` |
 | StoreManager | Quản lý phân quyền Staff trong Store | `AssignPermission` |
 
 ---
@@ -110,8 +112,6 @@ Hệ thống phân định rõ 11 Actors nghiệp vụ được phân bổ trên
 
 | Actor | Nghiệp vụ | Mã Command tương ứng |
 |---|---|---|
-| Platform Admin | Quản lý Master Product Catalog | `ManageProductCatalog` |
-| Platform Admin | Cấp quyền sử dụng Catalog cho Organization | `GrantProductCatalogAccess` |
 | Organization Admin | Quản lý Product trong phạm vi Organization | `ManageProduct` |
 | Organization Admin | Quản lý Service của Organization | `ManageService` |
 | StoreManager | Cấu hình khả dụng Service tại Store | `ConfigureServiceAvailability` |
@@ -366,12 +366,12 @@ Hệ thống phân định rõ 11 Actors nghiệp vụ được phân bổ trên
 | Actor | Nghiệp vụ | Mã Command tương ứng |
 |---|---|---|
 | Customer | Thực hiện thanh toán điện tử (Online Gateway) | `MakePayment` |
-| Receptionist | Ghi nhận thanh toán tiền mặt tại quầy | `RecordCashPayment` |
-| FinanceStaff / System | Xác minh tính hợp lệ của giao dịch thanh toán | `VerifyPayment` |
-| System | Tiếp nhận Webhook/Callback từ cổng thanh toán | `ReceivePaymentCallback` |
-| FinanceStaff | Quyết toán giao dịch thanh toán (`SUCCESS`) | `SettlePayment` |
-| Customer / System | Hủy giao dịch thanh toán đang chờ hoặc quá hạn xử lý (`PENDING / PROCESSING -> CANCELLED`) | `CancelPayment` |
+| Receptionist | Ghi nhận và quyết toán thanh toán tiền mặt tại quầy (`CASH -> SUCCESS`) | `RecordCashPayment` |
+| System | Chuyển hướng / xác minh giao dịch sang cổng thanh toán trực tuyến | `VerifyPayment` |
+| System | Tiếp nhận Webhook/Callback từ cổng thanh toán và quyết toán giao dịch | `ReceivePaymentCallback` |
+| Customer / System | Hủy giao dịch thanh toán Online đang chờ hoặc quá hạn xử lý (`PENDING / PROCESSING -> CANCELLED`) | `CancelPayment` |
 | FinanceStaff | Đối soát giao dịch thanh toán với ngân hàng/cổng | `ReconcilePayment` |
+
 
 ---
 
@@ -440,6 +440,7 @@ Hệ thống phân định rõ 11 Actors nghiệp vụ được phân bổ trên
 | Receptionist | Xác nhận trừ lượt sử dụng gói tại quầy | `ConfirmPackageUsage` |
 | StoreManager | Hủy gói dịch vụ theo chính sách hoàn gói (Tạo RefundRequested) | `CancelPackage` |
 | StoreManager | Điều chỉnh lượt sử dụng còn lại của gói | `AdjustPackage` |
+| StoreManager | Hoàn lại 01 lượt gói đã bị trừ do No-Show khi có lý do bất khả kháng chính đáng (`RULE-20-08`) | `RefundPackageUnit` |
 | System | Theo dõi và ghi nhận lịch sử trừ lượt gói | `TrackPackageUsage` |
 | System | Xử lý gói dịch vụ hết hạn | `ProcessPackageExpiry` |
 
