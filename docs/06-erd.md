@@ -112,7 +112,7 @@ erDiagram
         varchar gender
         date date_of_birth
         decimal weight_kg
-        boolean is_active
+        varchar status
     }
     
     pet_caregiver_delegations {
@@ -164,13 +164,13 @@ erDiagram
     appointments ||--o| grooming_sessions : executes_spa
     
     medical_records ||--o{ diagnoses : identifies
+    medical_records ||--o{ treatments : plans
     medical_records ||--o{ prescriptions : prescribes
     prescriptions ||--o{ prescription_items : contains
     medical_records ||--o{ follow_ups : schedules
     
     pets ||--o{ vaccinations : receives
     vaccine_batches ||--o{ vaccinations : provides_dose
-    pets ||--o{ vaccination_schedules : plans_next_dose
     
     grooming_sessions ||--o{ grooming_service_lines : details_steps
     grooming_sessions ||--o| health_inspection_reports : inspects_before
@@ -198,6 +198,8 @@ erDiagram
     stores ||--o{ purchase_requests : requests_stock
     purchase_requests ||--o{ purchase_request_lines : details_request
     purchase_requests ||--o| purchase_orders : generates_po
+    organizations ||--o{ suppliers : manages
+    suppliers ||--o{ purchase_orders : fulfills
     purchase_orders ||--o{ purchase_order_lines : details_po
     purchase_orders ||--o{ goods_receipts : receives_shipment
     
@@ -287,18 +289,19 @@ erDiagram
   | Tên Cột | Kiểu Dữ liệu | Bắt buộc | Default | Mô tả |
   |---|---|---|---|---|
   | `id` | UUID | YES | `gen_random_uuid()` | Khóa chính tài khoản |
-  | `phone` | VARCHAR(20) | YES | - | Số điện thoại duy nhất dùng đăng nhập |
+  | `phone` | VARCHAR(20) | YES | - | Số điện thoại duy nhất dùng đăng nhập, cấp Platform (`RULE-01-10`) |
   | `email` | VARCHAR(100) | NO | NULL | Email liên hệ duy nhất |
   | `password_hash` | VARCHAR(255) | YES | - | Chuỗi băm mật khẩu BCrypt |
   | `status` | VARCHAR(30) | YES | `'PENDING_VERIFICATION'` | Enum `AccountStatus` (`docs/03-state-machines.md#1`) |
   | `must_change_password` | BOOLEAN | YES | `false` | Cờ ép đổi mật khẩu (Staff D-04) |
   | `failed_login_attempts` | INT | YES | `0` | Đếm số lần đăng nhập sai |
-  | `locked_until` | TIMESTAMPTZ | NO | NULL | Thời điểm mở khóa tự động |
+  | `lock_reason` | VARCHAR(30) | NO | NULL | `AUTO_FAILED_LOGIN` (có tự động mở khóa) hoặc `ADMIN_LOCK` (chỉ mở khóa thủ công) — `RULE-01-07`, `RULE-02-04` |
+  | `locked_until` | TIMESTAMPTZ | NO | NULL | Thời điểm tự động mở khóa — **CHỈ áp dụng khi `lock_reason = 'AUTO_FAILED_LOGIN'`** (`RULE-01-07`); NULL khi `lock_reason = 'ADMIN_LOCK'` (khóa này không có auto-unlock, xem `RULE-02-04`) |
   | `created_at` | TIMESTAMPTZ | YES | `CURRENT_TIMESTAMP` | Thời điểm tạo |
   | `updated_at` | TIMESTAMPTZ | YES | `CURRENT_TIMESTAMP` | Thời điểm cập nhật |
 - **Ràng buộc & Chỉ mục:**
-  - `CONSTRAINT uq_accounts_phone UNIQUE (phone)`
-  - `CONSTRAINT uq_accounts_email UNIQUE (email)`
+  - `CONSTRAINT uq_accounts_phone UNIQUE (phone)` — cấp Platform, không giới hạn theo Organization (`RULE-01-10`)
+  - `CONSTRAINT uq_accounts_email UNIQUE (email)` — cấp Platform, không giới hạn theo Organization (`RULE-01-10`)
   - `INDEX idx_accounts_status (status)`
 
 ### Bảng: `otps`
@@ -499,13 +502,17 @@ erDiagram
   | `barcode` | VARCHAR(50) | NO | NULL | Mã vạch quét POS |
   | `name` | VARCHAR(255) | YES | - | Tên sản phẩm |
   | `category` | VARCHAR(50) | YES | - | `FOOD`, `MEDICINE`, `ACCESSORY`, `HYGIENE` |
-  | `unit` | VARCHAR(20) | YES | `'ITEM'` | Đơn vị tính: `ITEM`, `BOX`, `BOTTLE`, `BAG` |
+  | `unit` | VARCHAR(20) | YES | `'ITEM'` | Đơn vị mua/bán: `ITEM`, `BOX`, `BOTTLE`, `BAG` |
+  | `is_fractional` | BOOLEAN | YES | `false` | Đánh dấu sản phẩm bị chiết rót/phân liều khi sử dụng (vd. dầu tắm spa, dung dịch tiêm) — quyết định RHD-DB-02 (`.planning/RHD-PROPOSAL.md`) |
+  | `base_unit` | VARCHAR(10) | YES | `'UNIT'` | Đơn vị nhỏ nhất dùng để lưu tồn kho (`inventory_items.quantity_*`): `UNIT`, `ML`, `MG`, `GRAM`. Sản phẩm không chiết rót (`is_fractional = false`) luôn có `base_unit = 'UNIT'` |
+  | `purchase_unit_conversion_factor` | INT | YES | `1` | Số lượng `base_unit` chứa trong 1 `unit` mua/nhập (vd. `unit = BOTTLE`, `base_unit = ML`, `factor = 500` → 1 chai = 500ml). Sản phẩm không chiết rót luôn `= 1` |
   | `base_price` | DECIMAL(12,2) | YES | `0.00` | Giá bán lẻ đề xuất |
   | `cost_price` | DECIMAL(12,2) | YES | `0.00` | Giá vốn nhập hàng |
   | `is_active` | BOOLEAN | YES | `true` | Trạng thái mở bán |
   | `created_at` | TIMESTAMPTZ | YES | `CURRENT_TIMESTAMP` | Thời điểm tạo |
 - **Ràng buộc:**
   - `CONSTRAINT uq_products_org_sku UNIQUE (organization_id, sku)`
+  - `CONSTRAINT chk_products_conversion_factor CHECK (purchase_unit_conversion_factor >= 1)`
 
 ### Bảng: `store_products` & `store_services`
 - **Mục đích:** Override giá bán lẻ (Product/Service) và khả dụng (Service) riêng theo từng Store (`RULE-05-04`, `RULE-05-05`, `RULE-05-07`). Bản ghi được hệ thống tự động khởi tạo, kế thừa `base_price`/`is_active` từ `products`/`services`, khi Store chuyển sang `ACTIVE`.
@@ -551,7 +558,7 @@ erDiagram
   | `weight_kg` | DECIMAL(5,2) | NO | NULL | Cân nặng gần nhất |
   | `microchip_number` | VARCHAR(50) | NO | NULL | Số gắn chip định danh |
   | `avatar_url` | VARCHAR(255) | NO | NULL | Ảnh thú cưng |
-  | `is_active` | BOOLEAN | YES | `true` | Cờ hoạt động |
+  | `status` | VARCHAR(30) | YES | `'ACTIVE'` | Enum `PetStatus` (`ACTIVE`, `DECEASED`, `TRANSFERRED`) — `RULE-04-11`. Thay thế cột `is_active` (đã nâng cấp từ Boolean sang Enum để phân biệt lý do ngừng hoạt động) |
   | `created_at` | TIMESTAMPTZ | YES | `CURRENT_TIMESTAMP` | Thời điểm tạo |
 - **Cột (`pet_caregiver_delegations`):**
   | Tên Cột | Kiểu Dữ liệu | Bắt buộc | Default | Mô tả |
@@ -578,6 +585,7 @@ erDiagram
   | `customer_id` | UUID | YES | - | FK -> `users.id` |
   | `pet_id` | UUID | YES | - | FK -> `pets.id` |
   | `service_id` | UUID | YES | - | FK -> `services.id` |
+  | `service_package_id` | UUID | NO | NULL | FK -> `service_packages.id` — nếu khách chọn thanh toán bằng gói dịch vụ trả trước tại thời điểm giữ chỗ (`RULE-20-09`); NULL nếu thanh toán trực tiếp |
   | `start_time` | TIMESTAMPTZ | YES | - | Bắt đầu slot |
   | `end_time` | TIMESTAMPTZ | YES | - | Kết thúc slot |
   | `status` | VARCHAR(30) | YES | `'HOLDING'` | Enum `BookingHoldStatus` (`docs/03-state-machines.md#4.1`) |
@@ -597,6 +605,7 @@ erDiagram
   | `staff_id` | UUID | NO | NULL | FK -> `users.id` |
   | `resource_id` | UUID | NO | NULL | FK -> `store_resources.id` |
   | `queue_entry_id`| UUID | NO | NULL | FK -> `queue_entries.id` (Cầu nối Walk-in `RULE-07-05`) |
+  | `service_package_id` | UUID | NO | NULL | FK -> `service_packages.id` — gói dịch vụ trả trước tài trợ lịch hẹn này, gán từ `booking_holds.service_package_id` lúc `BookAppointment` (`RULE-20-09`); NULL nếu thanh toán trực tiếp không qua gói |
   | `appointment_number`| VARCHAR(50)| YES | - | Mã số cuộc hẹn duy nhất |
   | `start_time` | TIMESTAMPTZ | YES | - | Bắt đầu dự kiến |
   | `end_time` | TIMESTAMPTZ | YES | - | Kết thúc dự kiến |
@@ -684,8 +693,8 @@ erDiagram
 
 ## 3.4. Nhóm Bảng Khám bệnh (EMR), Tiêm chủng, Grooming & Quyền riêng tư (Modules 09, 10, 11 & 22)
 
-### Bảng: `medical_records`, `diagnoses`, `prescriptions` & `prescription_items`
-- **Mục đích:** Bệnh án điện tử EMR bất biến 24h (`RULE-09-06`), chẩn đoán và đơn thuốc điều trị.
+### Bảng: `medical_records`, `diagnoses`, `treatments`, `follow_ups`, `prescriptions` & `prescription_items`
+- **Mục đích:** Bệnh án điện tử EMR với cửa sổ chỉnh sửa có kiểm soát 24h sau khi chốt phiên rồi khóa bất biến (`RULE-09-09`), chẩn đoán, phác đồ điều trị và đơn thuốc.
 - **Primary Key:** `id UUID DEFAULT gen_random_uuid()`
 - **Cột (`medical_records`):**
   | Tên Cột | Kiểu Dữ liệu | Bắt buộc | Default | Mô tả |
@@ -701,8 +710,10 @@ erDiagram
   | `temperature_celsius`| DECIMAL(4,1)| NO | NULL | Thân nhiệt |
   | `weight_kg` | DECIMAL(5,2) | YES | - | Cân nặng tại thời điểm khám |
   | `treatment_plan` | TEXT | NO | NULL | Phác đồ điều trị |
-  | `is_locked` | BOOLEAN | YES | `false` | Cờ đóng băng bệnh án sau 24h (`RULE-09-06`) |
-  | `locked_at` | TIMESTAMPTZ | NO | NULL | Thời điểm đóng băng bất biến |
+  | `status` | VARCHAR(30) | YES | `'DRAFT'` | Enum `MedicalRecordStatus` (`DRAFT`, `FINALIZED`, `LOCKED`) — `RULE-09-09` |
+  | `finalized_at` | TIMESTAMPTZ | NO | NULL | Thời điểm chốt phiên khám, gán tự động khi `Appointment` liên kết chuyển `COMPLETED` qua `CheckOutAppointment` (`RULE-09-09`) |
+  | `is_locked` | BOOLEAN | YES | `false` | Cờ khóa bất biến, tương đương `status = 'LOCKED'`; giữ để lập chỉ mục truy vấn nhanh (`RULE-09-09`) |
+  | `locked_at` | TIMESTAMPTZ | NO | NULL | Thời điểm khóa bất biến = `finalized_at + 24 giờ`, do `LockMedicalRecord` [System] ghi nhận (`RULE-09-09`) |
 - **Cột (`diagnoses`):**
   | Tên Cột | Kiểu Dữ liệu | Bắt buộc | Default | Mô tả |
   |---|---|---|---|---|
@@ -710,7 +721,33 @@ erDiagram
   | `medical_record_id`| UUID | YES | - | FK -> `medical_records.id` ON DELETE CASCADE |
   | `diagnostic_code` | VARCHAR(50) | YES | - | Mã bệnh học danh mục |
   | `description` | TEXT | YES | - | Mô tả chi tiết kết luận bệnh lý |
-- **Cột (`prescriptions` & `prescription_items`):**
+- **Cột (`treatments`)** — bổ sung Phase 4 (đóng `GAP-CLN-02`, chuẩn hóa từ `medical_records.treatment_plan` TEXT tự do, theo cùng mẫu với `diagnoses`):
+  | Tên Cột | Kiểu Dữ liệu | Bắt buộc | Default | Mô tả |
+  |---|---|---|---|---|
+  | `id` | UUID | YES | `gen_random_uuid()` | Khóa chính phác đồ điều trị |
+  | `medical_record_id`| UUID | YES | - | FK -> `medical_records.id` ON DELETE CASCADE (`RULE-09-04`) |
+  | `diagnosis_id` | UUID | NO | NULL | FK -> `diagnoses.id` (phác đồ căn cứ trên chẩn đoán nào, nếu có) |
+  | `description` | TEXT | YES | - | Mô tả phác đồ/thủ thuật can thiệp |
+  | `created_by` | UUID | YES | - | FK -> `users.id` (Veterinarian) |
+  | `created_at` | TIMESTAMPTZ | YES | `CURRENT_TIMESTAMP` | Thời điểm lập phác đồ |
+- **Cột (`follow_ups`)** — bổ sung Phase 5 Final Audit (đóng orphan reference `medical_records ||--o{ follow_ups`, chuẩn hóa theo payload `FollowUpScheduled` đã đặc tả tại `docs/04-glossary.md` §27):
+  | Tên Cột | Kiểu Dữ liệu | Bắt buộc | Default | Mô tả |
+  |---|---|---|---|---|
+  | `id` | UUID | YES | `gen_random_uuid()` | Khóa chính lịch tái khám |
+  | `medical_record_id`| UUID | YES | - | FK -> `medical_records.id` ON DELETE CASCADE (`RULE-09-06`) |
+  | `pet_id` | UUID | YES | - | FK -> `pets.id` |
+  | `scheduled_date` | DATE | YES | - | Ngày hẹn tái khám dự kiến |
+  | `veterinarian_id` | UUID | YES | - | FK -> `users.id` (Bác sĩ chỉ định tái khám) |
+  | `notes` | TEXT | NO | NULL | Lý do/ghi chú tái khám |
+  | `created_at` | TIMESTAMPTZ | YES | `CURRENT_TIMESTAMP` | Thời điểm lập lịch |
+- **Cột (`prescriptions`)** — bổ sung Phase 5 Final Audit (đóng orphan reference; trước đây chỉ có `prescription_items` được đặc tả, thiếu chính bảng cha):
+  | Tên Cột | Kiểu Dữ liệu | Bắt buộc | Default | Mô tả |
+  |---|---|---|---|---|
+  | `id` | UUID | YES | `gen_random_uuid()` | Khóa chính đơn thuốc |
+  | `medical_record_id`| UUID | YES | - | FK -> `medical_records.id` ON DELETE CASCADE (`RULE-09-05`) |
+  | `veterinarian_id` | UUID | YES | - | FK -> `users.id` (Bác sĩ ký duyệt, `RULE-09-05`) |
+  | `prescribed_at` | TIMESTAMPTZ | YES | `CURRENT_TIMESTAMP` | Thời điểm kê đơn |
+- **Cột (`prescription_items`):**
   | Tên Cột | Kiểu Dữ liệu | Bắt buộc | Default | Mô tả |
   |---|---|---|---|---|
   | `id` | UUID | YES | `gen_random_uuid()` | Khóa chính dòng đơn thuốc |
@@ -722,8 +759,8 @@ erDiagram
   | `duration_days` | INT | YES | - | Số ngày dùng |
   | `instructions` | TEXT | NO | NULL | Hướng dẫn sử dụng chi tiết |
 
-### Bảng: `vaccines`, `vaccine_batches`, `vaccinations` & `vaccination_schedules`
-- **Mục đích:** Quản lý lô vaccine theo hạn dùng (FEFO) và lịch sử tiêm chủng thú cưng (Module 10).
+### Bảng: `vaccine_batches` & `vaccinations`
+- **Mục đích:** Quản lý lô vaccine theo hạn dùng (FEFO) và lịch sử tiêm chủng thú cưng (Module 10). **Sửa Phase 5 Final Audit (đóng orphan reference):** Khái niệm "Vaccine" (danh mục) được hiện thực qua bảng `products` (category = `MEDICINE`, xem `vaccine_batches.vaccine_id FK -> products.id`) — KHÔNG có bảng `vaccines` riêng, tránh trùng lặp danh mục với Module 05. Khái niệm `VaccinationSchedule` (lịch tiêm nhắc lại) được hiện thực qua trường `vaccinations.next_due_date` của mũi tiêm gần nhất — KHÔNG có bảng `vaccination_schedules` riêng (một Pet chỉ có đúng 1 mốc nhắc tiêm kế tiếp tại một thời điểm, suy ra từ bản ghi `vaccinations` mới nhất).
 - **Primary Key:** `id UUID DEFAULT gen_random_uuid()`
 - **Cột (`vaccine_batches`):**
   | Tên Cột | Kiểu Dữ liệu | Bắt buộc | Default | Mô tả |
@@ -811,9 +848,9 @@ erDiagram
   | `id` | UUID | YES | `gen_random_uuid()` | Khóa chính |
   | `store_id` | UUID | YES | - | FK -> `stores.id` |
   | `product_id` | UUID | YES | - | FK -> `products.id` |
-  | `quantity_physical`| INT | YES | `0` | Tồn kho vật lý |
-  | `quantity_reserved`| INT | YES | `0` | Số lượng tạm giữ 15m |
-  | `quantity_available`| INT | YES | `0` | Tồn khả dụng = Physical - Reserved |
+  | `quantity_physical`| INT | YES | `0` | Tồn kho vật lý, tính theo `products.base_unit` của `product_id` (RHD-DB-02) |
+  | `quantity_reserved`| INT | YES | `0` | Số lượng tạm giữ 15m, cùng đơn vị `quantity_physical` |
+  | `quantity_available`| INT | YES | `0` | Tồn khả dụng = Physical - Reserved, cùng đơn vị `quantity_physical` |
   | `min_stock_level` | INT | YES | `5` | Ngưỡng báo động tồn thấp |
   | `version` | BIGINT | YES | `0` | Khóa lạc quan chống overselling |
 - **Cột (`inventory_adjustments`):**
@@ -864,20 +901,67 @@ erDiagram
   | `damaged_quantity` | INT | YES | `0` | Số lượng hư hại trong vận chuyển |
   | `lost_quantity` | INT | YES | `0` | Số lượng thất thoát |
 
-### Bảng: `purchase_requests`, `purchase_orders` & `goods_receipts`
+### Bảng: `suppliers`
+- **Mục đích:** Danh mục Nhà cung cấp do Organization Admin quản lý (`ManageSupplier`, `RULE-13-04`) — bổ sung sau Phase 4 Resolution (đóng `GAP-PRC-01`, thay thế cột tự do `purchase_orders.supplier_name` cũ).
+- **Primary Key:** `id UUID DEFAULT gen_random_uuid()`
+- **Cột:**
+  | Tên Cột | Kiểu Dữ liệu | Bắt buộc | Default | Mô tả |
+  |---|---|---|---|---|
+  | `id` | UUID | YES | `gen_random_uuid()` | Khóa chính nhà cung cấp |
+  | `organization_id` | UUID | YES | - | FK -> `organizations.id` |
+  | `code` | VARCHAR(50) | YES | - | Mã nhà cung cấp nội bộ (duy nhất trong Organization) |
+  | `name` | VARCHAR(255) | YES | - | Tên nhà cung cấp |
+  | `contact_phone` | VARCHAR(20) | NO | NULL | Số điện thoại liên hệ |
+  | `contact_email` | VARCHAR(100) | NO | NULL | Email liên hệ |
+  | `address` | TEXT | NO | NULL | Địa chỉ |
+  | `status` | VARCHAR(30) | YES | `'ACTIVE'` | Enum `SupplierStatus` (`ACTIVE`, `INACTIVE`) — `RULE-13-04` yêu cầu PO chỉ được tạo với Supplier `ACTIVE` |
+  | `created_at` | TIMESTAMPTZ | YES | `CURRENT_TIMESTAMP` | Thời điểm tạo |
+- **Ràng buộc:**
+  - `CONSTRAINT uq_suppliers_org_code UNIQUE (organization_id, code)`
+
+### Bảng: `purchase_requests`, `purchase_request_lines`, `purchase_orders`, `purchase_order_lines` & `goods_receipts`
 - **Mục đích:** Mua hàng từ Nhà cung cấp ngoài (Module 13).
 - **Primary Key:** `id UUID DEFAULT gen_random_uuid()`
+- **Cột (`purchase_requests`)** — bổ sung Phase 5 Final Audit (đóng orphan reference, bảng chưa từng được đặc tả dù đã có FSM 12 & `RULE-13-01`/`RULE-13-02`/`RULE-13-03`):
+  | Tên Cột | Kiểu Dữ liệu | Bắt buộc | Default | Mô tả |
+  |---|---|---|---|---|
+  | `id` | UUID | YES | `gen_random_uuid()` | Khóa chính yêu cầu mua hàng |
+  | `request_number` | VARCHAR(50) | YES | - | Mã số yêu cầu duy nhất |
+  | `store_id` | UUID | YES | - | FK -> `stores.id` (Store hoặc Warehouse đề xuất, `RULE-13-01`) |
+  | `status` | VARCHAR(30) | YES | `'DRAFT'` | Enum `PurchaseRequestStatus` (`docs/03-state-machines.md#12`) |
+  | `created_by` | UUID | YES | - | FK -> `users.id` (Maker, `RULE-13-02`) |
+  | `approved_by` | UUID | NO | NULL | FK -> `users.id` (Checker, Maker-Checker `created_by != approved_by`, `RULE-13-02`) |
+  | `rejection_reason` | TEXT | NO | NULL | Lý do từ chối nếu `REJECTED` |
+  | `created_at` | TIMESTAMPTZ | YES | `CURRENT_TIMESTAMP` | Thời điểm lập yêu cầu |
+- **Cột (`purchase_request_lines`)** — bổ sung Phase 5 Final Audit:
+  | Tên Cột | Kiểu Dữ liệu | Bắt buộc | Default | Mô tả |
+  |---|---|---|---|---|
+  | `id` | UUID | YES | `gen_random_uuid()` | Khóa chính dòng yêu cầu |
+  | `purchase_request_id`| UUID | YES | - | FK -> `purchase_requests.id` ON DELETE CASCADE |
+  | `product_id` | UUID | YES | - | FK -> `products.id` |
+  | `requested_quantity`| INT | YES | - | Số lượng đề xuất mua |
+  | `estimated_unit_price`| DECIMAL(12,2)| YES | `0.00` | Đơn giá dự kiến (`RULE-13-01`) |
 - **Cột (`purchase_orders`):**
   | Tên Cột | Kiểu Dữ liệu | Bắt buộc | Default | Mô tả |
   |---|---|---|---|---|
   | `id` | UUID | YES | `gen_random_uuid()` | Khóa chính PO |
   | `po_number` | VARCHAR(50) | YES | - | Mã số PO duy nhất |
+  | `purchase_request_id`| UUID | YES | - | FK -> `purchase_requests.id` (PO luôn khởi tạo từ PR đã `APPROVED`, `RULE-13-04`) |
   | `store_id` | UUID | YES | - | FK -> `stores.id` |
-  | `supplier_name` | VARCHAR(255) | YES | - | Tên nhà cung cấp |
+  | `supplier_id` | UUID | YES | - | FK -> `suppliers.id` (thay thế `supplier_name` tự do — `RULE-13-04`) |
   | `status` | VARCHAR(30) | YES | `'ISSUED'` | Enum `PurchaseOrderStatus` (`docs/03-state-machines.md#13`) |
   | `total_amount` | DECIMAL(14,2)| YES | `0.00` | Tổng giá trị đặt |
   | `created_by` | UUID | YES | - | FK -> `users.id` |
   | `created_at` | TIMESTAMPTZ | YES | `CURRENT_TIMESTAMP` | Thời điểm lập đơn |
+- **Cột (`purchase_order_lines`)** — bổ sung Phase 5 Final Audit:
+  | Tên Cột | Kiểu Dữ liệu | Bắt buộc | Default | Mô tả |
+  |---|---|---|---|---|
+  | `id` | UUID | YES | `gen_random_uuid()` | Khóa chính dòng đặt hàng |
+  | `purchase_order_id` | UUID | YES | - | FK -> `purchase_orders.id` ON DELETE CASCADE |
+  | `product_id` | UUID | YES | - | FK -> `products.id` |
+  | `ordered_quantity` | INT | YES | - | Số lượng đặt |
+  | `received_quantity`| INT | YES | `0` | Số lượng đã nhận lũy kế (quyết định `PARTIALLY_RECEIVED` vs `RECEIVED`, `RULE-13-06`) |
+  | `unit_price` | DECIMAL(12,2)| YES | - | Đơn giá đặt hàng |
 - **Cột (`goods_receipts`):**
   | Tên Cột | Kiểu Dữ liệu | Bắt buộc | Default | Mô tả |
   |---|---|---|---|---|
@@ -909,6 +993,15 @@ erDiagram
   | `total_refunded_amount`| DECIMAL(12,2)| YES| `0.00` | Tiền đã hoàn lũy kế |
   | `version` | BIGINT | YES | `0` | Khóa lạc quan |
   | `created_at` | TIMESTAMPTZ | YES | `CURRENT_TIMESTAMP` | Thời điểm tạo |
+- **Cột (`order_items`)** — bổ sung Phase 5 Final Audit (đóng orphan reference, hậu thuẫn `RULE-14-02` kiểm tra tồn kho theo dòng):
+  | Tên Cột | Kiểu Dữ liệu | Bắt buộc | Default | Mô tả |
+  |---|---|---|---|---|
+  | `id` | UUID | YES | `gen_random_uuid()` | Khóa chính dòng đơn hàng |
+  | `order_id` | UUID | YES | - | FK -> `orders.id` ON DELETE CASCADE |
+  | `product_id` | UUID | YES | - | FK -> `products.id` |
+  | `quantity` | INT | YES | `1` | Số lượng đặt mua |
+  | `unit_price` | DECIMAL(12,2)| YES | - | Đơn giá áp dụng (snapshot giá tại Store lúc đặt) |
+  | `line_total` | DECIMAL(12,2)| YES | - | Thành tiền = `quantity * unit_price` |
 - **Cột (`fulfillment_stage_logs`):**
   | Tên Cột | Kiểu Dữ liệu | Bắt buộc | Default | Mô tả |
   |---|---|---|---|---|
@@ -941,6 +1034,18 @@ erDiagram
   | `total_refunded_amount`| DECIMAL(12,2)| YES| `0.00` | Tiền đã hoàn lũy kế (D-01) |
   | `created_at` | TIMESTAMPTZ | YES | `CURRENT_TIMESTAMP` | Thời điểm tạo |
   | `paid_at` | TIMESTAMPTZ | NO | NULL | Thời điểm tất toán 100% |
+- **Cột (`invoice_items`)** — bổ sung Phase 5 Final Audit (đóng orphan reference, hậu thuẫn `AddServiceToInvoice`/`AddProductToInvoice`, `RULE-15-02`):
+  | Tên Cột | Kiểu Dữ liệu | Bắt buộc | Default | Mô tả |
+  |---|---|---|---|---|
+  | `id` | UUID | YES | `gen_random_uuid()` | Khóa chính dòng hóa đơn |
+  | `invoice_id` | UUID | YES | - | FK -> `invoices.id` ON DELETE CASCADE |
+  | `item_type` | VARCHAR(20) | YES | - | `SERVICE`, `PRODUCT` |
+  | `service_id` | UUID | NO | NULL | FK -> `services.id` (khi `item_type = 'SERVICE'`) |
+  | `product_id` | UUID | NO | NULL | FK -> `products.id` (khi `item_type = 'PRODUCT'`) |
+  | `description` | VARCHAR(255) | YES | - | Tên hiển thị mục hóa đơn (snapshot tại thời điểm lập) |
+  | `quantity` | INT | YES | `1` | Số lượng |
+  | `unit_price` | DECIMAL(12,2)| YES | - | Đơn giá áp dụng (snapshot giá tại Store) |
+  | `line_total` | DECIMAL(12,2)| YES | - | Thành tiền = `quantity * unit_price` |
 
 ### Bảng: `payments`
 - **Mục đích:** Xử lý giao dịch thanh toán (Mô hình `Invoice (1) <---> (0..N) Payments`, mỗi giao dịch thanh toán thuộc về 1 Invoice mục tiêu theo `RULE-16-01`, hỗ trợ Split Payment và thanh toán theo đợt cho đến khi đạt 100% `TotalAmount`).
@@ -1058,7 +1163,7 @@ erDiagram
   | `created_at` | TIMESTAMPTZ | YES | `CURRENT_TIMESTAMP` | Thời điểm ghi nhận |
 
 ### Bảng: `audit_logs`
-- **Mục đích:** Nhật ký kiểm toán bảo mật bất biến (Module 25 & `RULE-25-04`).
+- **Mục đích:** Nhật ký kiểm toán bảo mật bất biến (Module 25 & `RULE-25-04`). Bất biến tuyệt đối tối thiểu 5 năm kể từ `created_at`; sau đó chỉ purge được bởi tác vụ hệ thống `PurgeExpiredAuditLog` (`RULE-25-08`), không có thao tác thủ công.
 - **Primary Key:** `id UUID DEFAULT gen_random_uuid()`
 - **Cột:**
   | Tên Cột | Kiểu Dữ liệu | Bắt buộc | Default | Mô tả |
@@ -1077,20 +1182,23 @@ erDiagram
   | `created_at` | TIMESTAMPTZ | YES | `CURRENT_TIMESTAMP` | Thời điểm ghi nhật ký bất biến |
 
 ### Bảng: `system_configs`
-- **Mục đích:** Cấu hình tham số hệ thống toàn cục và theo từng Tenant/Store (Module 25).
+- **Mục đích:** Cấu hình tham số **chính sách kinh doanh** theo từng Tenant/Store (Module 25). **Không** dùng để override các hằng số bảo mật/giao dịch toàn nền tảng (xem ghi chú phân loại bên dưới).
 - **Primary Key:** `id UUID DEFAULT gen_random_uuid()`
 - **Cột:**
   | Tên Cột | Kiểu Dữ liệu | Bắt buộc | Default | Mô tả |
   |---|---|---|---|---|
   | `id` | UUID | YES | `gen_random_uuid()` | Khóa chính cấu hình |
-  | `organization_id` | UUID | NO | NULL | FK -> `organizations.id` (NULL = Global Platform Config) |
-  | `store_id` | UUID | NO | NULL | FK -> `stores.id` |
-  | `config_key` | VARCHAR(100) | YES | - | Khóa tham số (ví dụ: `HOLD_TTL_SECONDS`, `OTP_MAX_ATTEMPTS`) |
+  | `organization_id` | UUID | NO | NULL | FK -> `organizations.id` (NULL = Global Platform Default) |
+  | `store_id` | UUID | NO | NULL | FK -> `stores.id` (override cấp Store, ưu tiên cao hơn Organization) |
+  | `config_key` | VARCHAR(100) | YES | - | Khóa tham số chính sách kinh doanh (ví dụ: `APPOINTMENT_GRACE_PERIOD_MINUTES` mặc định `15`, `LOYALTY_POINT_EXPIRY_MONTHS` mặc định `12`, `EXPIRY_WARNING_DAYS` mặc định `30`) |
   | `config_value` | TEXT | YES | - | Giá trị tham số |
   | `value_type` | VARCHAR(30) | YES | `'STRING'` | `STRING`, `INTEGER`, `BOOLEAN`, `JSON` |
   | `updated_at` | TIMESTAMPTZ | YES | `CURRENT_TIMESTAMP` | Thời điểm cập nhật |
 - **Ràng buộc:**
   - `CONSTRAINT uq_system_configs_key UNIQUE (organization_id, store_id, config_key)`
+- **Phân loại Hằng số Cứng (Hard Constant) vs Cấu hình được (Configurable) — quyết định nghiệp vụ đã chốt:**
+  - **Hằng số cứng toàn nền tảng, KHÔNG override qua `system_configs`** (bảo mật/toàn vẹn giao dịch): OTP TTL = 300s (`RULE-01-02`), Hold Slot/Order TTL = 900s (`RULE-06-01`, `RULE-14-04`), Cross-Store Consent OTP TTL = 300s và Access TTL = 24h (`RULE-22-02`), thời gian tự động mở khóa tài khoản sau đăng nhập sai = 15 phút (`RULE-01-07`), giới hạn số lần thử OTP/đăng nhập (`RULE-01-05`, `RULE-01-07`).
+  - **Chính sách kinh doanh, cấu hình được qua `system_configs`** (Organization/Store có thể override giá trị mặc định toàn nền tảng): Grace Period No-Show (`RULE-06-09`, mặc định 15 phút), hạn hiệu lực điểm thưởng (`RULE-19-07`, mặc định 12 tháng), số ngày cảnh báo hàng sắp hết hạn (`RULE-12-12`, mặc định 30 ngày).
 
 ### Bảng: `promotion_campaigns`, `vouchers` & `voucher_usages`
 - **Mục đích:** Quản lý chương trình khuyến mãi, mã voucher giảm giá và lịch sử cấn trừ ưu đãi (Module 18).
@@ -1154,19 +1262,19 @@ erDiagram
   |---|---|---|---|---|
   | `id` | UUID | YES | `gen_random_uuid()` | Khóa chính nhật ký chuyển phát |
   | `task_id` | UUID | YES | - | FK -> `notification_tasks.id` ON DELETE CASCADE |
-  | `gateway_provider` | VARCHAR(50) | YES | - | `TWILIO`, `FCM`, `ZALO_ZNS`, `SENDGRID` |
+  | `gateway_provider` | VARCHAR(50) | YES | - | `TWILIO`, `FCM`, `SENDGRID` (Zalo ZNS ngoài phạm vi v1 — `OOS-002`) |
   | `gateway_message_id`| VARCHAR(100)| NO| NULL | Mã định danh tin nhắn từ phía Gateway |
   | `status` | VARCHAR(30) | YES | - | `SUCCESS`, `FAILED` |
   | `response_payload` | JSONB | NO | NULL | Phản hồi chi tiết từ đối tác viễn thông/cổng push |
   | `delivered_at` | TIMESTAMPTZ | YES | `CURRENT_TIMESTAMP` | Thời điểm chuyển phát |
 
 ### Bảng: `outbox_events`
-- **Mục đích:** Hàng đợi sự kiện miền giao dịch (Transactional Outbox Pattern - Chuẩn hóa 100% theo `docs/03-state-machines.md#18, #19`).
+- **Mục đích:** Hàng đợi sự kiện miền giao dịch (Transactional Outbox Pattern - Chuẩn hóa 100% theo `docs/03-state-machines.md` §20-21). Bản ghi `PUBLISHED` tự động purge sau 30 ngày kể từ `published_at` (`PurgeExpiredOutboxEvents`, `RULE-25-08`).
 - **Primary Key:** `event_id UUID DEFAULT gen_random_uuid()`
 - **Cột:**
   | Tên Cột | Kiểu Dữ liệu | Bắt buộc | Default | Mô tả |
   |---|---|---|---|---|
-  | `event_id` | UUID | YES | `gen_random_uuid()` | Khóa chính sự kiện (chuẩn hóa `docs/03-state-machines.md:764`) |
+  | `event_id` | UUID | YES | `gen_random_uuid()` | Khóa chính sự kiện (chuẩn hóa `docs/03-state-machines.md` §21.2) |
   | `aggregate_type` | VARCHAR(50) | YES | - | Tên Aggregate (`Appointment`, `Payment`, `GroomingSession`) |
   | `aggregate_id` | VARCHAR(100) | YES | - | ID của Aggregate |
   | `event_type` | VARCHAR(100) | YES | - | Tên sự kiện (`PaymentSucceeded`, `SlotHeld`, `AdditionalServiceConfirmed`) |
@@ -1175,7 +1283,7 @@ erDiagram
   | `retry_count` | INT | YES | `0` | Số lần thử lại điều phối |
   | `error_message` | TEXT | NO | NULL | Chi tiết lỗi nếu dispatch thất bại |
   | `created_at` | TIMESTAMPTZ | YES | `CURRENT_TIMESTAMP` | Thời điểm ghi nhận trong transaction |
-  | `published_at` | TIMESTAMPTZ | NO | NULL | Thời điểm dispatch thành công sang Broker (`docs/03-state-machines.md:769`) |
+  | `published_at` | TIMESTAMPTZ | NO | NULL | Thời điểm dispatch thành công sang Broker (`docs/03-state-machines.md` §21.2) |
 - **Ràng buộc & Chỉ mục:**
   - `INDEX idx_outbox_status_created (status, created_at)`
 ---
@@ -1194,6 +1302,7 @@ CREATE TYPE security_scope_enum AS ENUM ('PLATFORM', 'ORGANIZATION', 'STORE', 'W
 CREATE TYPE facility_type_enum AS ENUM ('RETAIL_STORE', 'CENTRAL_WAREHOUSE');
 CREATE TYPE store_status_enum AS ENUM ('DRAFT', 'ACTIVE', 'SUSPENDED', 'DEACTIVATED', 'ARCHIVED');
 CREATE TYPE caregiver_status_enum AS ENUM ('INVITED', 'ACTIVE', 'REJECTED', 'EXPIRED', 'REVOKED');
+CREATE TYPE pet_status_enum AS ENUM ('ACTIVE', 'DECEASED', 'TRANSFERRED');
 
 -- 3. Appointment & Queue
 CREATE TYPE booking_hold_status_enum AS ENUM ('HOLDING', 'CONFIRMED', 'RELEASED', 'EXPIRED');
@@ -1203,6 +1312,7 @@ CREATE TYPE queue_entry_status_enum AS ENUM ('WAITING', 'CALLED', 'IN_SERVICE', 
 -- 4. Grooming & Clinical
 CREATE TYPE grooming_status_enum AS ENUM ('WAITING', 'IN_PROGRESS', 'AWAITING_CUSTOMER_APPROVAL', 'COMPLETED', 'CANCELLED', 'ABORTED', 'REJECTED');
 CREATE TYPE consent_status_enum AS ENUM ('REQUESTED', 'ACTIVE', 'REVOKED', 'EXPIRED');
+CREATE TYPE medical_record_status_enum AS ENUM ('DRAFT', 'FINALIZED', 'LOCKED');
 
 -- 5. Orders, Invoices, Payments & Refunds
 CREATE TYPE order_status_enum AS ENUM ('PENDING_PAYMENT', 'PAID', 'CONFIRMED', 'PROCESSING', 'READY', 'DELIVERED', 'CANCELLED', 'REFUNDED');
@@ -1216,6 +1326,7 @@ CREATE TYPE refund_status_enum AS ENUM ('REQUESTED', 'APPROVED', 'REJECTED', 'PR
 CREATE TYPE stock_transfer_status_enum AS ENUM ('REQUESTED', 'APPROVED', 'REJECTED', 'CANCELLED', 'IN_TRANSIT', 'DISCREPANCY_RECORDED', 'RECEIVED');
 CREATE TYPE purchase_request_status_enum AS ENUM ('DRAFT', 'SUBMITTED', 'APPROVED', 'REJECTED', 'CANCELLED');
 CREATE TYPE purchase_order_status_enum AS ENUM ('ISSUED', 'PARTIALLY_RECEIVED', 'RECEIVED', 'CLOSED', 'CANCELLED');
+CREATE TYPE supplier_status_enum AS ENUM ('ACTIVE', 'INACTIVE');
 CREATE TYPE membership_status_enum AS ENUM ('ACTIVE', 'UPGRADED', 'EXPIRED');
 CREATE TYPE package_status_enum AS ENUM ('PURCHASED', 'ACTIVATED', 'PARTIALLY_CONSUMED', 'FULLY_CONSUMED', 'CANCELLED', 'EXPIRED');
 CREATE TYPE incident_status_enum AS ENUM ('RECORDED', 'CLASSIFIED', 'UNDER_INVESTIGATION', 'ESCALATED', 'RESOLVED', 'CLOSED');
@@ -1227,7 +1338,7 @@ CREATE TYPE voucher_status_enum AS ENUM ('ACTIVE', 'DISABLED', 'EXPIRED');
 CREATE TYPE notification_channel_enum AS ENUM ('IN_APP', 'SMS', 'EMAIL', 'PUSH');
 CREATE TYPE notification_status_enum AS ENUM ('PENDING', 'PROCESSING', 'SENT', 'FAILED');
 
--- 8. Outbox Transactional Dispatcher (Chuẩn hóa docs/03-state-machines.md:769)
+-- 8. Outbox Transactional Dispatcher (Chuẩn hóa docs/03-state-machines.md §21.2)
 CREATE TYPE outbox_status_enum AS ENUM ('PENDING', 'PROCESSING', 'PUBLISHED', 'FAILED');
 ```
 
@@ -1239,26 +1350,26 @@ Bảng ma trận đối soát dưới đây chứng minh tính nhất quán 100%
 
 | Mã Module | 01. Nghiệp vụ (Operations) | 02. Luật & Invariants | 03. State Machines (FSM) | 04. Thuật ngữ (Glossary) | 05. Domain Model (DDD) | 06. CSDL / Bảng ERD |
 |---|---|---|---|---|---|---|
-| **01** | `RegisterAccount`, `VerifyOTP`, `CreateStaff` | `RULE-01-01` -> `RULE-01-08`, D-04 | FSM 1 (`AccountStatus`) | Section 1 (Actor & Role) | `Account`, `OtpSession` | `accounts`, `otps` |
+| **01** | `RegisterAccount`, `VerifyOTP`, `CreateStaff` | `RULE-01-01` -> `RULE-01-10`, D-04 | FSM 1 (`AccountStatus`) | Section 1 (Actor & Role) | `Account`, `OtpSession` | `accounts`, `otps` |
 | **02** | `ManageUser`, `AssignPermission`, `LockAccount` | `RULE-02-01` -> `RULE-02-07` | FSM 1 (Account locking) | Section 2 (IAM & RBAC) | `UserAccount`, `Role`, `Permission` | `users`, `roles`, `permissions`, `user_roles`, `role_permissions` |
 | **03** | `CreateStore`, `ActivateStore`, `ArchiveStore` | `RULE-03-01` -> `RULE-03-08` | FSM 2 (`StoreStatus`) | Section 3 (Org & Store) | `Organization`, `Store`, `OperatingHours` | `organizations`, `stores`, `operating_hours`, `store_resources` |
-| **04** | `AddPet`, `InviteCaregiver`, `RevokeCaregiver` | `RULE-04-01` -> `RULE-04-09` | FSM 3 (`CaregiverStatus`) | Section 4 (Pet & Owner) | `CustomerProfile`, `Pet`, `CaregiverDelegation` | `pets`, `pet_caregiver_delegations` |
+| **04** | `AddPet`, `InviteCaregiver`, `RevokeCaregiver` | `RULE-04-01` -> `RULE-04-11` | FSM 3 (`CaregiverStatus`) | Section 4 (Pet & Owner) | `CustomerProfile`, `Pet`, `CaregiverDelegation` | `pets`, `pet_caregiver_delegations` |
 | **05** | `ManageService`, `ConfigureProductPrice` | `RULE-05-01` -> `RULE-05-07` | N/A (Catalog status) | Section 5 (Catalog) | `ServiceMaster`, `ProductMaster` | `services`, `products`, `service_required_resources` |
 | **06** | `HoldSlot`, `BookAppointment`, `AbortAppointment` | `RULE-06-01` -> `RULE-06-14` | FSM 4.1 & FSM 4.2 (`ApptStatus`) | Section 6 (Appointment) | `BookingHold`, `Appointment` | `booking_holds`, `appointments`, `appointment_stage_histories` |
 | **07** | `RegisterQueueEntry`, `StartQueueService` | `RULE-07-01` -> `RULE-07-08` | FSM 17 (`QueueEntryStatus`) | Section 7 (Queue) | `DailyQueue`, `QueueEntry` | `daily_queues`, `queue_entries` |
 | **08** | `ManageWorkSchedule`, `ManageLeave`, `HandleStaffAbsence` | `RULE-08-01` -> `RULE-08-07` | N/A (Absence là trường status đơn giản, chưa có FSM riêng trong `docs/03-state-machines.md`) | Section 8 (Workforce) | `StaffWorkSchedule`, `StaffAbsence` | `staff_work_schedules`, `shift_assignments`, `staff_absences` |
-| **09** | `CreateMedicalRecord`, `EmergencyOverrideAccess` | `RULE-09-01` -> `RULE-09-08` | N/A (không có FSM riêng; `MedicalRecord` không có trạng thái khóa bất biến theo giờ) | Section 9 (EMR) | `MedicalRecord`, `Prescription`, `Diagnosis` | `medical_records`, `diagnoses`, `prescriptions`, `prescription_items` |
-| **10** | `AdministerVaccine`, `ManageVaccineBatch` | `RULE-10-01` -> `RULE-10-07` | N/A (FEFO batch) | Section 10 (Vaccine) | `VaccineBatch`, `VaccinationRecord` | `vaccines`, `vaccine_batches`, `vaccinations`, `vaccination_schedules` |
+| **09** | `CreateMedicalRecord`, `EmergencyOverrideAccess`, `LockMedicalRecord`, `CreateTreatment`, `CreateFollowUp` | `RULE-09-01` -> `RULE-09-09` | N/A (không có mermaid FSM riêng; `MedicalRecordStatus` là vòng đời rút gọn `DRAFT -> FINALIZED -> LOCKED` mô tả bằng văn bản tại `docs/02-business-rules.md` mục 09, invariant `RULE-09-09`) | Section 9 (EMR) | `MedicalRecord`, `Prescription`, `Diagnosis`, `Treatment`, `FollowUp` | `medical_records`, `diagnoses`, `treatments`, `follow_ups`, `prescriptions`, `prescription_items` |
+| **10** | `AdministerVaccine`, `ManageVaccineBatch` | `RULE-10-01` -> `RULE-10-08` | N/A (FEFO batch) | Section 10 (Vaccine) | `VaccineBatch`, `VaccinationRecord` | `vaccine_batches`, `vaccinations` (Vaccine = `products` category `MEDICINE`; VaccinationSchedule = `vaccinations.next_due_date`) |
 | **11** | `CheckInGrooming`, `ConfirmAdditionalService` | `RULE-11-01` -> `RULE-11-06`, D-02 | FSM 15 (`GroomingStatus`) | Section 11 (Grooming) | `GroomingSession`, `HealthInspection` | `grooming_sessions`, `health_inspection_reports`, `grooming_service_lines` |
 | **12** | `CreateStockTransfer`, `ShipStockTransfer` | `RULE-12-01` -> `RULE-12-13` | FSM 11 (`StockTransferStatus`) | Section 12 (Inventory) | `InventoryItem`, `StockTransfer` | `inventory_items`, `inventory_adjustments`, `stock_transfers`, `stock_transfer_lines` |
-| **13** | `CreatePurchaseRequest`, `CreatePurchaseOrder` | `RULE-13-01` -> `RULE-13-08` | FSM 12 & FSM 13 (`POStatus`) | Section 13 (Procurement) | `PurchaseRequest`, `PurchaseOrder` | `purchase_requests`, `purchase_orders`, `goods_receipts` |
+| **13** | `CreatePurchaseRequest`, `CreatePurchaseOrder`, `ManageSupplier` | `RULE-13-01` -> `RULE-13-08` | FSM 12 & FSM 13 (`POStatus`) | Section 13 (Procurement) | `PurchaseRequest`, `PurchaseOrder`, `Supplier` | `purchase_requests`, `purchase_request_lines`, `purchase_orders`, `purchase_order_lines`, `goods_receipts`, `suppliers` |
 | **14** | `CreateOrder`, `CheckoutOrder`, `CancelOrder` | `RULE-14-01` -> `RULE-14-09`, D-03 | FSM 5 (`OrderStatus`) | Section 14 (Order) | `Order`, `OrderItem` | `orders`, `order_items`, `fulfillment_stage_logs`, `inventory_reservations` |
 | **15** | `CreateInvoice`, `IssueInvoice`, `VoidInvoice` | `RULE-15-01` -> `RULE-15-08`, D-01 | FSM 6 (`InvoiceStatus`) | Section 15 (Billing) | `Invoice`, `InvoiceItem` | `invoices`, `invoice_items` |
 | **16** | `MakePayment`, `RecordCashPayment` | `RULE-16-01` -> `RULE-16-07` | FSM 7 (`PaymentStatus`) | Section 16 (Payment) | `Payment` (1-1 Invoice) | `payments` (khóa trực tiếp `invoice_id`) |
 | **17** | `RequestRefund`, `ApproveRefund`, `ProcessRefund` | `RULE-17-01` -> `RULE-17-10` | FSM 8 (`RefundStatus`) | Section 17 (Refund) | `Refund`, `RefundExecutionLog` | `refunds`, `refund_execution_logs` |
-| **18** | `CreateVoucher`, `UseVoucher` | `RULE-18-01` -> `RULE-18-08` | N/A (Stateless Rule) | Section 18 (Promotion) | `PromotionCampaign`, `Voucher` | `promotion_campaigns`, `vouchers`, `voucher_usages` |
+| **18** | `CreateVoucher`, `UseVoucher` | `RULE-18-01` -> `RULE-18-08` | FSM 18 (`PromotionStatus`), FSM 19 (`VoucherStatus`) | Section 18 (Promotion) | `PromotionCampaign`, `Voucher` | `promotion_campaigns`, `vouchers`, `voucher_usages` |
 | **19** | `RegisterMembership`, `UpgradeMembership` | `RULE-19-01` -> `RULE-19-10` | FSM 9 (`MembershipStatus`) | Section 19 (Membership) | `CustomerMembership`, `LoyaltyLedger` | `memberships`, `loyalty_point_ledgers` |
-| **20** | `PurchasePackage`, `ConfirmPackageUsage` | `RULE-20-01` -> `RULE-20-08` | FSM 10 (`PackageStatus`) | Section 20 (Package) | `ServicePackage`, `PackageUsage` | `service_packages`, `package_usage_records` |
+| **20** | `PurchasePackage`, `ConfirmPackageUsage` | `RULE-20-01` -> `RULE-20-09` | FSM 10 (`PackageStatus`) | Section 20 (Package) | `ServicePackage`, `PackageUsage` | `service_packages`, `package_usage_records`, `booking_holds.service_package_id`, `appointments.service_package_id` |
 | **21** | `RecordIncident`, `EscalateIncident`, `CloseIncident` | `RULE-21-01` -> `RULE-21-08` | FSM 14 (`IncidentStatus`) | Section 21 (Incident) | `IncidentReport`, `Investigation` | `incident_reports` |
 | **22** | `RequestCrossStoreConsent`, `VerifyCrossStoreConsentOTP` | `RULE-22-01` -> `RULE-22-10` | FSM 16 (`ConsentStatus`) | Section 22 (Consent) | `ClinicalConsent`, `CrossStoreGrant` | `cross_store_consents` |
 | **23** | `SendNotification`, `SendRegistrationOTP` | `RULE-23-01` -> `RULE-23-06` | N/A (Task log) | Section 23 (Notification) | `NotificationTask` | `notification_tasks`, `notification_delivery_logs` |
@@ -1269,10 +1380,10 @@ Bảng ma trận đối soát dưới đây chứng minh tính nhất quán 100%
 
 # 6. Ghi nhận Vấn đề Chờ Quyết định từ Con người về Cơ sở Dữ liệu (Data / ERD Requires Human Decision Log)
 
-> **Lưu ý:** Các mục dưới đây phản ánh các tình huống kỹ thuật CSDL đang ở trạng thái **Chờ phê duyệt (Pending Decision)**, không tự ý làm thay đổi cấu trúc cốt lõi:
+> **Lưu ý:** Cả 3 mục dưới đây đã được Business Owner phê duyệt vào 2026-09-09 (xem `.planning/RHD-PROPOSAL.md`):
 
-| Mã Ghi nhận | Bảng Liên quan | Vấn đề Kiến trúc / Cơ sở Dữ liệu Cần Quyết định | Đề xuất Giải pháp Kỹ thuật (Chờ phê duyệt) |
+| Mã Ghi nhận | Bảng Liên quan | Vấn đề Kiến trúc / Cơ sở Dữ liệu Cần Quyết định | Quyết định Giải pháp Kỹ thuật |
 |---|---|---|---|
-| **RHD-DB-01** | `invoices` & `appointments` | Khi một cuộc hẹn khám bệnh phát sinh cả đơn thuốc mua tại quầy và phụ phí spa, hệ thống nên tách thành nhiều Invoice riêng hay gộp chung 1 Invoice tổng hợp với nhiều `invoice_items`? | **Đề xuất:** Tuân thủ D-02: Dịch vụ ban đầu có 1 Invoice, Đơn thuốc/Sản phẩm có 1 Invoice bán lẻ, Phụ phí phát sinh có 1 Surcharge Invoice riêng biệt để hạch toán độc lập. |
-| **RHD-DB-02** | `inventory_items` | Xử lý số lượng lẻ (Decimals) đối với các mặt hàng chiết rót (dầu tắm spa, thuốc dung dịch tiêm) hay làm tròn thành đơn vị nhỏ nhất (ml, gram)? | **Đề xuất:** Lưu trữ số nguyên theo đơn vị cơ bản nhỏ nhất (`ml` hoặc `mg`) để tránh sai số số thực dấu phẩy động (`DECIMAL` float rounding). |
-| **RHD-DB-03** | `audit_logs` & `outbox_events` | Chính sách lưu trữ dài hạn (Data Retention) và dọn dẹp (Purge) dữ liệu lịch sử bảng `outbox_events` (khi status = `PUBLISHED`) và `audit_logs`? | **Đề xuất:** Tự động xóa bản ghi outbox đã xử lý thành công sau 30 ngày (`PurgeExpiredOutboxEvents`); lưu trữ `audit_logs` tối thiểu 2 năm theo quy định kiểm toán y tế và tài chính. |
+| **RHD-DB-01** | `invoices` & `appointments` | Khi một cuộc hẹn khám bệnh phát sinh cả đơn thuốc mua tại quầy và phụ phí spa, hệ thống nên tách thành nhiều Invoice riêng hay gộp chung 1 Invoice tổng hợp với nhiều `invoice_items`? | **Đã chốt:** Tuân thủ D-02: Dịch vụ ban đầu có 1 Invoice, Đơn thuốc/Sản phẩm có 1 Invoice bán lẻ, Phụ phí phát sinh có 1 Surcharge Invoice riêng biệt để hạch toán độc lập. |
+| **RHD-DB-02** | `inventory_items`, `products` | Xử lý số lượng lẻ (Decimals) đối với các mặt hàng chiết rót (dầu tắm spa, thuốc dung dịch tiêm) hay làm tròn thành đơn vị nhỏ nhất (ml, gram)? | **Đã chốt:** Lưu trữ số nguyên theo đơn vị cơ bản nhỏ nhất (`base_unit`) để tránh sai số số thực dấu phẩy động. Hệ số quy đổi từ đơn vị mua hàng sang `base_unit` được khai báo tường minh tại `products.is_fractional` / `products.base_unit` / `products.purchase_unit_conversion_factor` (xem bảng `products` bên dưới) — không để ngầm định theo module. |
+| **RHD-DB-03** | `audit_logs`, `outbox_events` | Chính sách lưu trữ dài hạn và dọn dẹp dữ liệu vận hành: `audit_logs` có bắt buộc lưu vĩnh viễn hay có thời hạn? `outbox_events` sau khi dispatch thành công có cần dọn dẹp định kỳ để tránh phình bảng? | **Đã chốt (`RULE-25-08`):** (1) `audit_logs` lưu trữ bắt buộc tối thiểu **5 năm** kể từ `created_at` (đã điều chỉnh từ đề xuất ban đầu 2 năm để phù hợp quy định kiểm toán y tế/tài chính), bất biến tuyệt đối trong suốt thời hạn này (`RULE-25-02`); sau khi vượt mốc 5 năm, bản ghi đủ điều kiện chỉ được xóa bởi tác vụ hệ thống định kỳ `PurgeExpiredAuditLog` — không có API hay thao tác thủ công xóa ở bất kỳ vai trò nào; mỗi lần chạy purge phải tự ghi lại một bản ghi kiểm toán riêng (mã lần chạy, khoảng thời gian, số bản ghi đã xóa). (2) `outbox_events` ở trạng thái `PUBLISHED` tự động bị xóa sau 30 ngày kể từ `published_at` bởi tác vụ định kỳ `PurgeExpiredOutboxEvents`; bản ghi `PENDING`/`PROCESSING`/`FAILED` không thuộc diện purge tự động. |

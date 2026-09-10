@@ -83,7 +83,7 @@ graph TD
 | **07** | Walk-in & Queue | **DailyQueue** | `QueueEntry`, `WalkinTicket` | `QueueNumber`, `TriagePriority`, `EstimatedWaitTime` | Xếp hàng chờ tại quầy chi nhánh (FIFO), ưu tiên cấp cứu. |
 | **08** | Workforce Management | **StaffWorkSchedule** | `StaffAbsenceRequest`, `ShiftAssignment` | `ShiftWindow`, `AbsenceType`, `AbsenceStatus` | Phân ca kíp nhân sự, quản lý vắng mặt/nghỉ phép. |
 | **09** | Veterinary / Clinical (EMR) | **MedicalRecord** | `Diagnosis`, `Prescription`, `PrescriptionItem`, `FollowUpPlan` | `ChiefComplaint`, `Dosage`, `DiagnosticCode`, `TreatmentPlan` | Hồ sơ bệnh án điện tử, chẩn đoán, kê đơn thuốc, tái khám. |
-| **10** | Vaccination Management | **VaccineBatch**, **VaccinationRecord** | `VaccinationSchedule` | `BatchNumber`, `ExpiryDate`, `DoseVolume`, `NextDueDate` | Quản lý tiêm phòng, trừ kho theo số lô và hạn dùng, nhắc tiêm. |
+| **10** | Vaccination Management | **VaccineBatch**, **VaccinationRecord** | — | `BatchNumber`, `ExpiryDate`, `DoseVolume`, `NextDueDate` | Quản lý tiêm phòng, trừ kho theo số lô và hạn dùng, nhắc tiêm. |
 | **11** | Grooming Management | **GroomingSession** | `GroomingServiceLine`, `HealthInspectionReport` | `InspectionResult`, `GroomingStage`, `AddonServiceDetail` | Quy trình làm đẹp thú cưng, phụ phí phát sinh độc lập, dừng khẩn cấp. |
 | **12** | Inventory & Warehouse | **InventoryItem**, **StockTransfer** | `InventoryAdjustment`, `StockTransferLine` | `QuantityAvailable`, `QuantityPhysical`, `QuantityReserved`, `TransitVariance` | Quản lý kho, điều chuyển kho liên chi nhánh, xử lý sai lệch. |
 | **13** | Procurement Management | **PurchaseRequest**, **PurchaseOrder** | `PurchaseRequestLine`, `PurchaseOrderLine`, `GoodsReceiptRecord` | `SupplierRef`, `PoNumber`, `ReceivedQuantity`, `DamagedQuantity` | Yêu cầu mua hàng nội bộ, đặt hàng nhà cung cấp, nhập kho. |
@@ -96,7 +96,7 @@ graph TD
 | **20** | Package Management | **ServicePackage** | `PackageUsageRecord` | `PackageCode`, `TotalUnits`, `RemainingUnits`, `ValidityPeriod` | Gói dịch vụ trả trước nhiều lượt, cấn trừ và hoàn trả lượt. |
 | **21** | Incident Management | **IncidentReport** | `IncidentInvestigation`, `CorrectiveActionLog` | `IncidentSeverity`, `IncidentCategory`, `ResolutionSummary` | Ghi nhận và xử lý sự cố y tế, sự cố spa và vượt quyền cấp cứu. |
 | **22** | Consent & Data Privacy | **ClinicalConsent** | `CrossStoreConsentGrant` | `ConsentType`, `ConsentScope`, `OtpToken`, `ConsentTTL` | Quản lý đồng thuận chia sẻ bệnh án liên Store (OTP & Break-Glass). |
-| **23** | Notification Management | **NotificationTask** | `NotificationDeliveryLog` | `NotificationChannel`, `TemplateCode`, `DeliveryStatus` | Điều phối gửi thông báo đa kênh (SMS, Email, Push, Zalo ZNS). |
+| **23** | Notification Management | **NotificationTask** | `NotificationDeliveryLog` | `NotificationChannel`, `TemplateCode`, `NotificationStatus` | Điều phối gửi thông báo đa kênh (SMS, Email, Push, Zalo ZNS). |
 | **24** | Reporting & Analytics | **AnalyticsReport** | `ReportMetricData` | `DateRange`, `RevenueMetric`, `OccupancyRate` | Báo cáo doanh thu, tồn kho, công suất phòng khám chi nhánh. |
 | **25** | System Admin & Audit | **SystemAuditLog**, **TenantConfig** | `AuditRecord` | `AuditAction`, `ClientIp`, `UserAgent`, `EntitySnapshot` | Nhật ký kiểm toán bảo mật bất biến, cấu hình hệ thống toàn cục. |
 
@@ -136,9 +136,11 @@ graph TD
   - Khách hàng: `[*] -> PENDING_VERIFICATION -> ACTIVE -> LOCKED / DEACTIVATED`.
   - Nhân viên (D-04): `[*] -> ACTIVE -> LOCKED / DEACTIVATED`.
 - **Business Invariants (docs/02-business-rules.md):**
-  - `RULE-01-01`: Số điện thoại là duy nhất trong toàn hệ sinh thái.
+  - `RULE-01-01`: Điều kiện tiên quyết đăng nhập — Account chỉ đăng nhập được khi `Credentials` hợp lệ và đang ở trạng thái `ACTIVE`.
   - `RULE-01-02`: OTP hết hạn sau 300 giây; nhập sai quá 5 lần sẽ khóa phiên xác thực 15 phút.
   - `RULE-01-03`: Tài khoản Staff tạo trực tiếp được kích hoạt `ACTIVE` ngay, gán cờ `must_change_password = true`.
+  - `RULE-01-09` (bổ sung Phase 4): Mật khẩu tối thiểu 8 ký tự; không ép độ phức tạp bổ sung hay đổi định kỳ.
+  - `RULE-01-10` (bổ sung Phase 5, đóng CONTRADICTION-02/ORPHAN-01): Số điện thoại (`accounts.phone`) và email là danh tính đăng nhập duy nhất trên **toàn nền tảng** (Scope `PLATFORM`) — một Account có thể tương tác với nhiều Organization độc lập; không mâu thuẫn với cách ly dữ liệu vận hành 100% theo Organization (`RULE-02-01`, `RULE-03-01`, vốn áp dụng cho dữ liệu vận hành chứ không phải danh tính đăng nhập).
 
 ---
 
@@ -170,7 +172,7 @@ graph TD
   - `ResourceType`: `[CLINIC_ROOM, GROOMING_TABLE, ULTRASOUND_MACHINE, XRAY_MACHINE]`.
   - `TimeWindow`: Khung giờ mở/đóng (`open_time`, `close_time`, `is_closed`).
 - **Commands (docs/01-business-operations.md):**
-  - `CreateOrganization`, `UpdateOrganization`, `CreateStore`, `UpdateStore`, `ActivateStore`, `SuspendStore`, `DeactivateStore`, `ArchiveStore`, `ConfigureOperatingHour`, `ConfigureStoreService`, `ConfigureStoreResource`, `ManageOrganizationPolicy`, `ConfigureStorePolicy`
+  - `CreateOrganization`, `UpdateOrganization`, `CreateStore`, `UpdateStore`, `ActivateStore`, `SuspendStore`, `DeactivateStore`, `ArchiveStore`, `ConfigureOperatingHour`, `ConfigureStoreResource`, `ManageOrganizationPolicy`, `ConfigureStorePolicy`
 - **Domain Events (docs/03-state-machines.md):**
   - `StoreCreated`, `StoreActivated`, `StoreSuspended`, `StoreDeactivated`, `StoreArchived`
 - **State Machine Lifecycle (FSM 2 - docs/03-state-machines.md#2):**
@@ -178,7 +180,7 @@ graph TD
 - **Business Invariants (docs/02-business-rules.md):**
   - `RULE-03-01`: Mỗi Store thuộc đúng 1 Organization cha duy nhất; cách ly dữ liệu 100% giữa các Organization.
   - `RULE-03-02`: Store tạo mới ở `DRAFT`, chỉ chuyển sang `ACTIVE` khi đã cấu hình đầy đủ Giờ mở cửa, Tài nguyên và Danh mục dịch vụ.
-  - `RULE-03-06`: Lệnh `ArchiveStore` chỉ thực thi khi thỏa mãn đồng thời 4 điều kiện: 0 đơn hàng active, 0 lịch hẹn active, 0 tồn kho thực tế, 0 công nợ/yêu cầu hoàn tiền mở.
+  - `RULE-03-06`: Lệnh `ArchiveStore` chỉ thực thi khi thỏa mãn đồng thời 4 điều kiện: 0 đơn hàng active, 0 lịch hẹn active, 0 tồn kho thực tế, 0 công nợ/yêu cầu hoàn tiền mở. Sau khi Archive, dữ liệu cấu hình con trở thành bất biến chỉ đọc (bổ sung Phase 4, đóng `GAP-ORG-01`).
 
 ---
 
@@ -189,6 +191,7 @@ graph TD
 - **Value Objects:**
   - `CaregiverStatus`: `[INVITED, ACTIVE, REJECTED, EXPIRED, REVOKED]`.
   - `PetSpecies`: `[DOG, CAT, BIRD, OTHER]`.
+  - `PetStatus`: `[ACTIVE, DECEASED, TRANSFERRED]` — Terminal: `DECEASED`, `TRANSFERRED` (`RULE-04-11`).
   - `InvitationToken`: Token xác thực lời mời ủy quyền, có thời hạn hiệu lực 7 ngày (TTL = 7d).
 - **Commands (docs/01-business-operations.md):**
   - `ManageCustomerProfile`, `AddPet`, `UpdatePet`, `ViewPet`, `ManagePetOwnership`, `InviteCaregiver`, `AcceptCaregiverInvitation`, `RejectCaregiverInvitation`, `RevokeCaregiver`, `ProcessInvitationExpiry`, `ProcessDelegationExpiry`, `PerformDelegatedAction`, `SearchCustomerPet`
@@ -199,6 +202,7 @@ graph TD
 - **Business Invariants (docs/02-business-rules.md):**
   - `RULE-04-04`, `RULE-04-08`: Duy nhất Primary Owner có quyền mời/hủy Caregiver, ký phẫu thuật lớn hoặc xóa Pet. Caregiver không được mời thêm người khác.
   - `RULE-04-05`: Lời mời ủy quyền hết hạn sau 7 ngày nếu không được chấp thuận.
+  - `RULE-04-11`: `PetStatus` là `ACTIVE` mặc định; chuyển `DECEASED` khi thú cưng qua đời hoặc `TRANSFERRED` khi rời hoàn toàn hệ sinh thái (khác với chuyển chủ sở hữu nội bộ theo `RULE-04-10`, vẫn giữ `ACTIVE`). Cả hai là Terminal, chặn `BookAppointment`/`RegisterQueueEntry`/`PurchasePackage` mới.
 
 ---
 
@@ -289,26 +293,28 @@ graph TD
 ## 4.9. Module 09: Veterinary / Clinical Management (EMR)
 - **Phạm vi Bounded Context:** Hồ sơ bệnh án điện tử (EMR), khám lâm sàng, chẩn đoán, kê đơn thuốc và tái khám.
 - **Aggregate Root:** `MedicalRecord`
-- **Child Entities:** `Diagnosis`, `Prescription`, `PrescriptionItem`, `FollowUpPlan`
+- **Child Entities:** `Diagnosis`, `Treatment` (bổ sung bảng riêng ở Phase 4, đóng `GAP-CLN-02`), `Prescription`, `PrescriptionItem`, `FollowUpPlan`
 - **Value Objects:**
   - `ChiefComplaint`: Triệu chứng ban đầu khi nhập viện.
   - `DiagnosticCode`: Mã danh mục bệnh học.
   - `DosageInstruction`: Liều lượng, tần suất, thời gian dùng thuốc.
+  - `MedicalRecordStatus`: Enum `[DRAFT, FINALIZED, LOCKED]` — vòng đời chỉnh sửa của bệnh án (`RULE-09-09`).
 - **Commands (docs/01-business-operations.md):**
-  - `ExaminePet`, `RecordSymptom`, `RecordExaminationResult`, `DiagnosePet`, `CreateTreatment`, `CreatePrescription`, `CreateMedicalRecord`, `UpdateMedicalRecord`, `ViewMedicalHistory`, `CreateFollowUp`, `EmergencyOverrideAccess`
+  - `ExaminePet`, `RecordSymptom`, `RecordExaminationResult`, `DiagnosePet`, `CreateTreatment`, `CreatePrescription`, `CreateMedicalRecord`, `UpdateMedicalRecord`, `ViewMedicalHistory`, `CreateFollowUp`, `EmergencyOverrideAccess`, `LockMedicalRecord` [System]
 - **Domain Events (docs/03-state-machines.md):**
-  - `MedicalRecordCreated`, `MedicalRecordUpdated`, `PrescriptionCreated`, `TreatmentCreated`, `FollowUpScheduled`, `EmergencyAccessOverridden`
+  - `MedicalRecordCreated`, `MedicalRecordUpdated`, `MedicalRecordFinalized`, `MedicalRecordLocked`, `PrescriptionCreated`, `TreatmentCreated`, `FollowUpScheduled`, `EmergencyAccessOverridden`
 - **Business Invariants (docs/02-business-rules.md):**
   - `RULE-09-02`, `RULE-21-02`: Break-Glass Emergency Override — Truy cập khẩn cấp EMR liên chi nhánh tự động lập biên bản sự cố `ClinicalIncident` (`CRITICAL`), ghi nhật ký `audit_logs` và gửi cảnh báo khẩn cấp tức thì.
   - `RULE-09-06`: Bác sĩ thú y có trách nhiệm lập lịch tái khám (`CreateFollowUp`) cho Pet sau đợt điều trị; hệ thống tự động ghi vào lịch theo dõi của Pet và gửi thông báo nhắc hẹn trước ngày tái khám.
   - `RULE-09-08`: Phân định ranh giới bệnh án EMR (`MedicalRecord`) vs hồ sơ tiêm phòng định kỳ (`VaccinationRecord`) — chỉ tiêm vaccine điều trị bệnh lý (Therapeutic Vaccination) mới bắt buộc gắn với `MedicalRecord`/`Treatment`.
+  - `RULE-09-09`: Bệnh án tự động chốt phiên (`FINALIZED`) khi lịch hẹn liên kết `CheckOutAppointment`; trong 24h tiếp theo vẫn chỉnh sửa được nhưng phải ghi `AuditLog`; sau 24h hệ thống tự động khóa bất biến (`LOCKED`, `LockMedicalRecord`), tuyệt đối không còn chỉnh sửa được.
 
 ---
 
 ## 4.10. Module 10: Vaccination Management
 - **Phạm vi Bounded Context:** Quản lý tiêm phòng, trừ kho vaccine theo lô/hạn dùng (FEFO) và tự động nhắc lịch mũi kế tiếp.
 - **Aggregate Root:** `VaccineBatch`, `VaccinationRecord`
-- **Child Entities:** `VaccinationSchedule`
+- **Child Entities:** — (sửa Phase 5 Final Audit: `VaccinationSchedule` không phải Entity riêng có bảng vật lý — được hiện thực qua `vaccinations.next_due_date` của mũi tiêm gần nhất; xem `docs/06-erd.md`)
 - **Value Objects:**
   - `BatchNumber`: Số lô sản xuất duy nhất của vaccine.
   - `ExpiryDate`: Hạn sử dụng.
@@ -368,13 +374,14 @@ graph TD
 
 ## 4.13. Module 13: Procurement Management
 - **Phạm vi Bounded Context:** Quản lý quy trình mua hàng bổ sung tồn kho từ Nhà cung cấp (Supplier) từ Purchase Request đến Purchase Order.
-- **Aggregate Root:** `PurchaseRequest`, `PurchaseOrder`
+- **Aggregate Root:** `PurchaseRequest`, `PurchaseOrder`, `Supplier` (bổ sung Aggregate Root riêng ở Phase 4, thay thế trường tự do `supplier_name` — đóng `GAP-PRC-01`)
 - **Child Entities:** `PurchaseRequestLine`, `PurchaseOrderLine`, `GoodsReceiptRecord`
 - **Value Objects:**
   - `PurchaseRequestStatus`: `[DRAFT, SUBMITTED, APPROVED, REJECTED, CANCELLED]`.
   - `PurchaseOrderStatus`: `[ISSUED, PARTIALLY_RECEIVED, RECEIVED, CLOSED, CANCELLED]`.
+  - `SupplierStatus`: `[ACTIVE, INACTIVE]` — chỉ Supplier `ACTIVE` mới được gắn vào Purchase Order mới (`RULE-13-04`).
 - **Commands (docs/01-business-operations.md):**
-  - `CreatePurchaseRequest`, `SubmitPurchaseRequest`, `ApprovePurchaseRequest`, `RejectPurchaseRequest`, `CancelPurchaseRequest`, `CreatePurchaseOrder`, `ReceiveGoods`, `InspectGoods`, `CancelPurchaseOrder`, `CancelRemainingPurchaseOrder`
+  - `CreatePurchaseRequest`, `SubmitPurchaseRequest`, `ApprovePurchaseRequest`, `RejectPurchaseRequest`, `CancelPurchaseRequest`, `CreatePurchaseOrder`, `ReceiveGoods`, `InspectGoods`, `CancelPurchaseOrder`, `CancelRemainingPurchaseOrder`, `ManageSupplier`
 - **Domain Events (docs/03-state-machines.md):**
   - `PurchaseRequestSubmitted`, `PurchaseRequestApproved`, `PurchaseOrderCreated`, `GoodsReceived`, `PurchaseOrderRemainingCancelled`, `PurchaseOrderCancelled`
 - **State Machine Lifecycle (FSM 12 & FSM 13 - docs/03-state-machines.md#12, #13):**
@@ -472,18 +479,24 @@ graph TD
 ---
 
 ## 4.18. Module 18: Promotion & Voucher Management
-- **Phạm vi Bounded Context:** Chiến dịch khuyến mãi, mã giảm giá và kiểm tra điều kiện áp dụng tại runtime (Stateless Rule Engine).
+- **Phạm vi Bounded Context:** Chiến dịch khuyến mãi, mã giảm giá; áp dụng vào đơn hàng cụ thể tại runtime là Stateless (kiểm tra điều kiện tại checkout), nhưng bản thân đối tượng `PromotionCampaign`/`Voucher` có vòng đời trạng thái riêng (FSM 18, FSM 19 — bổ sung sau Phase 3 Traceability Audit).
 - **Aggregate Root:** `PromotionCampaign`, `Voucher`
 - **Child Entities:** `VoucherUsageRecord`
 - **Value Objects:**
   - `DiscountType`: `[PERCENTAGE, FIXED_AMOUNT]`.
   - `VoucherCode`: Chuỗi mã định danh duy nhất (ví dụ: `CHAOMUNG2026`).
+  - `PromotionStatus`: Enum `[DRAFT, ACTIVE, PAUSED, EXPIRED]` (`docs/03-state-machines.md` FSM 18).
+  - `VoucherStatus`: Enum `[ACTIVE, DISABLED, EXPIRED]` (`docs/03-state-machines.md` FSM 19).
 - **Commands (docs/01-business-operations.md):**
-  - `CreatePromotion`, `ManagePromotion`, `ConfigureStorePromotion`, `CreateVoucher`, `ManageVoucher`, `UseVoucher`, `ValidateVoucher`, `TrackVoucherUsage`
+  - `CreatePromotion`, `ManagePromotion`, `ConfigureStorePromotion`, `ProcessPromotionExpiry` [System], `CreateVoucher`, `ManageVoucher`, `ProcessVoucherExpiry` [System], `UseVoucher`, `ValidateVoucher`, `TrackVoucherUsage`
 - **Domain Events:**
-  - `PromotionCreated`, `PromotionUpdated`, `VoucherCreated`, `VoucherRedeemed`
+  - `PromotionCreated`, `PromotionActivated`, `PromotionPaused`, `PromotionExpired`, `VoucherCreated`, `VoucherDisabled`, `VoucherExpired`, `VoucherRedeemed`
+- **State Machine Lifecycle (FSM 18 & FSM 19 - docs/03-state-machines.md#18, #19):**
+  - Promotion: `[*] -> DRAFT -> ACTIVE <-> PAUSED -> EXPIRED`.
+  - Voucher: `[*] -> ACTIVE <-> DISABLED -> EXPIRED`.
 - **Business Invariants (docs/02-business-rules.md):**
   - `RULE-18-02`, `RULE-18-04`: Kiểm tra điều kiện giá trị đơn hàng tối thiểu, ngân sách chiến dịch và số lần sử dụng tối đa của từng khách hàng tại thời điểm checkout.
+  - `RULE-18-01`, `RULE-18-03`: Vòng đời đối tượng Promotion/Voucher độc lập với việc áp dụng runtime; chỉ đối tượng `ACTIVE` mới được xét áp dụng.
 
 ---
 
@@ -523,6 +536,7 @@ graph TD
   - `RULE-20-06`: Hủy gói chuyển sang `CANCELLED` và tự động tính toán hoàn tiền cho các lượt chưa tiêu dùng theo công thức:
     $$\text{RefundAmount} = \max\left(0, \text{PurchasePrice} \times \frac{\text{RemainingQuantity}}{\text{TotalQuantity}} - \text{AdminFee}\right)$$
   - `RULE-20-08`: No-Show Penalty — Khi lịch hẹn giữ chỗ bằng lượt gói bị đánh dấu `NO_SHOW`, hệ thống tự động khấu trừ 01 lượt và ghi nhận `PackageUsageRecord (consumption_type = 'NO_SHOW_PENALTY')`. Store Manager có quyền kích hoạt `RefundPackageUnit` khi có lý do bất khả kháng hợp lệ.
+  - `RULE-20-09`: Package-to-Appointment Binding at Booking Time (đã chốt) — `HoldSlot`/`BookAppointment` gán `service_package_id` lên `BookingHold`/`Appointment` khi khách chọn thanh toán bằng gói, kèm kiểm tra khả dụng sớm (gói `ACTIVATED`/`PARTIALLY_CONSUMED`, còn hạn, còn ≥1 lượt) — từ chối với `PACKAGE_BALANCE_INSUFFICIENT` nếu không đạt. Không trừ lượt ngay; lượt chỉ trừ chính thức khi `ConfirmPackageUsage` hoặc No-Show Penalty.
 
 ---
 
@@ -566,12 +580,12 @@ graph TD
 ---
 
 ## 4.23. Module 23: Notification Management
-- **Phạm vi Bounded Context:** Điều phối tin nhắn thông báo tự động đa kênh (SMS OTP, Email hóa đơn, Push App, Zalo ZNS).
+- **Phạm vi Bounded Context:** Điều phối tin nhắn thông báo tự động đa kênh (SMS OTP, Email hóa đơn, In-App, Push App). Zalo ZNS được ghi nhận trong roadmap nhưng ngoài phạm vi milestone hiện tại (chốt 2026-09-09, xem `.planning/RHD-PROPOSAL.md`).
 - **Aggregate Root:** `NotificationTask`
 - **Child Entities:** `NotificationDeliveryLog`
 - **Value Objects:**
-  - `NotificationChannel`: `[SMS, EMAIL, IN_APP_PUSH, ZALO_ZNS]`.
-  - `DeliveryStatus`: `[PENDING, SENT, DELIVERED, FAILED]`.
+  - `NotificationChannel`: `[IN_APP, PUSH, SMS, EMAIL]` (đồng bộ với `notification_channel_enum` tại `docs/06-erd.md`; `ZALO_ZNS` sẽ bổ sung sau bằng `ALTER TYPE ... ADD VALUE` khi vào scope).
+  - `NotificationStatus`: `[PENDING, PROCESSING, SENT, FAILED]` (sửa Phase 5 Final Audit — khớp `notification_status_enum` tại `docs/06-erd.md`; tên cũ `DeliveryStatus` và giá trị `DELIVERED` không khớp schema thật, đã hiệu chỉnh).
 - **Commands (docs/01-business-operations.md):**
   - `SendNotification`, `SendAppointmentNotification`, `SendAppointmentReminder`, `SendPaymentNotification`, `SendOrderNotification`, `SendIncidentNotification`, `SendVaccineReminder`, `SendFollowUpReminder`, `SendMembershipNotification`, `SendTurnNotification`, `RetryNotification`, `ViewNotification`
 - **Domain Events:**
@@ -691,7 +705,7 @@ flowchart TB
 
 # 6. Bảng Ma trận Sự kiện Miền Chéo Aggregate (26 Event Bridges)
 
-Tất cả 26 Event Bridges dưới đây liên kết trực tiếp giữa các Aggregate và vận hành thông qua bảng `outbox_events` (`docs/03-state-machines.md#18` & `#19`):
+Tất cả 26 Event Bridges dưới đây liên kết trực tiếp giữa các Aggregate và vận hành thông qua bảng `outbox_events` (`docs/03-state-machines.md#20` & `#21`):
 
 | STT | Aggregate Nguồn & Trạng thái | Domain Event | Aggregate Đích & Hành động Tiếp nhận | Ràng buộc Nghiệp vụ |
 |---|---|---|---|---|
@@ -726,11 +740,11 @@ Tất cả 26 Event Bridges dưới đây liên kết trực tiếp giữa các 
 
 # 7. Ghi nhận Vấn đề Chờ Quyết định từ Con người (Requires Human Decision Log)
 
-> **Lưu ý:** Các mục dưới đây phản ánh các tình huống nghiệp vụ đặc thù chưa được chốt cứng trong `docs/01-business-operations.md` -> `docs/04-glossary.md` và đang ở trạng thái **Chờ phê duyệt (Pending Decision)**, không tự ý làm thay đổi business logic hiện hành:
+> **Lưu ý:** Các mục dưới đây là nhật ký ghi nhận các tình huống nghiệp vụ đặc thù từng chưa được chốt cứng trong `docs/01-business-operations.md` -> `docs/04-glossary.md`. Tính đến 2026-09-09, toàn bộ 4 mục đã được Business Owner phê duyệt (xem `.planning/RHD-PROPOSAL.md`) và có `RULE-ID` chính thức tương ứng trong `docs/02-business-rules.md`.
 
-| Mã Ghi nhận | Phân hệ Liên quan | Hiện trạng Mâu thuẫn / Thiếu thông tin trong 01-04 | Đề xuất Xử lý Kỹ thuật (Chờ phê duyệt) |
+| Mã Ghi nhận | Phân hệ Liên quan | Hiện trạng Mâu thuẫn / Thiếu thông tin trong 01-04 | Quyết định Xử lý Kỹ thuật (Đã chốt) |
 |---|---|---|---|
-| **RHD-01** | 04. Customer & Pet | Khi Pet đổi chủ sở hữu chính (`ManagePetOwnership`), toàn bộ quan hệ `PetCaregiverDelegation` cũ nên bị hủy tự động hay giữ lại? | **Đề xuất:** Tự động chuyển toàn bộ Caregiver cũ sang `REVOKED` để bảo vệ quyền riêng tư của chủ sở hữu mới. |
+| **RHD-01** | 04. Customer & Pet | Khi Pet đổi chủ sở hữu chính (`ManagePetOwnership`), toàn bộ quan hệ `PetCaregiverDelegation` cũ nên bị hủy tự động hay giữ lại? | **Đã chốt (`RULE-04-10`):** Tự động chuyển toàn bộ Caregiver cũ sang `REVOKED` để bảo vệ quyền riêng tư của chủ sở hữu mới. |
 | **RHD-02** | 16. Payment & 15. Invoice | Khi khách thanh toán cả Invoice dịch vụ ban đầu và Surcharge Invoice phụ phí tại quầy, xử lý giao dịch thanh toán thế nào? | **Khẳng định theo `RULE-16-01`:** Thực hiện 2 giao dịch thanh toán độc lập (hoặc 2 bản ghi `Payment` riêng biệt cho từng `invoice_id`). Tuyệt đối không dùng quan hệ gộp N-N. |
-| **RHD-03** | 10. Vaccination & 12. Inventory | Khi một liều vaccine bị rơi vỡ/hỏng trong quá trình chuẩn bị tiêm tại Store, quy trình xử lý kho diễn ra thế nào? | **Đề xuất:** Lập phiếu `InventoryAdjustment` (lý do `DAMAGE`) và yêu cầu Store Manager duyệt Maker-Checker. |
+| **RHD-03** | 10. Vaccination & 12. Inventory | Khi một liều vaccine bị rơi vỡ/hỏng trong quá trình chuẩn bị tiêm tại Store, quy trình xử lý kho diễn ra thế nào? | **Đã chốt (`RULE-10-08`):** Lập phiếu `InventoryAdjustment` (lý do `DAMAGE`) và yêu cầu Store Manager duyệt Maker-Checker (`RULE-12-03`). |
 | **RHD-04** | 20. Package & 06. Appointment | Khi khách đặt lịch hẹn bằng lượt Package nhưng sau đó vắng mặt (`NO_SHOW`), lượt dịch vụ của gói có bị trừ không? | **Đã chốt chuẩn hóa (`RULE-20-08`):** Tự động khấu trừ 01 lượt dịch vụ của gói (`NO_SHOW_PENALTY`) để bù đắp chi phí giữ tài nguyên. Cho phép Store Manager hoàn lại lượt (`RefundPackageUnit`) khi có lý do bất khả kháng. |

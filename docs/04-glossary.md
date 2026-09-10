@@ -75,8 +75,10 @@ Hệ thống Pet Care Ecosystem thiết lập và khóa cố định các quyế
 | ManageUser | Command Candidate | Thao tác quản lý người dùng trong phạm vi quyền hạn được phép. | — | — |
 | ManageRole | Command Candidate | Thao tác quản lý vai trò trong phạm vi quyền hạn được phép. | — | — |
 | ManagePermission | Command Candidate | Thao tác quản lý quyền hạn trong phạm vi quyền hạn được phép. | — | — |
-| LockAccount | Command Candidate | Thao tác khóa tài khoản không cho phép đăng nhập hoặc thao tác. | — | SuspendAccount |
-| UnlockAccount | Command Candidate | Thao tác mở khóa tài khoản người dùng. | — | UnbanAccount |
+| LockAccount | Command Candidate | Thao tác Quản trị viên chủ động khóa tài khoản (`lock_reason = ADMIN_LOCK`), không có cơ chế tự động mở khóa (`RULE-02-04`). | — | SuspendAccount |
+| AutoLockAccount | Command Candidate | Thao tác hệ thống tự động khóa tài khoản sau 5 lần đăng nhập sai mật khẩu liên tiếp (`lock_reason = AUTO_FAILED_LOGIN`, `RULE-01-07`). | — | — |
+| UnlockAccount | Command Candidate | Thao tác Quản trị viên chủ động mở khóa tài khoản, áp dụng cho mọi `lock_reason`. | — | UnbanAccount |
+| AutoUnlockAccount | Command Candidate | Thao tác hệ thống tự động mở khóa tài khoản khi hết thời hạn 15 phút, CHỈ áp dụng cho tài khoản có `lock_reason = AUTO_FAILED_LOGIN` (`RULE-01-07`). | — | — |
 | DeactivateAccount | Command Candidate | Thao tác vô hiệu hóa tài khoản khi nhân viên nghỉ việc hoặc chấm dứt hợp đồng. | — | DisableAccount |
 | ReactivateAccount | Command Candidate | Thao tác tái kích hoạt lại tài khoản đã bị vô hiệu hóa. | — | EnableAccount |
 | AssignPermission | Command Candidate | Thao tác phân quyền cho nhân viên trong phạm vi Store/Org. | — | GrantPermission |
@@ -105,7 +107,6 @@ Hệ thống Pet Care Ecosystem thiết lập và khóa cố định các quyế
 | DeactivateStore | Command Candidate | Thao tác ngừng kích hoạt Store. | — | — |
 | ArchiveStore | Command Candidate | Thao tác lưu trữ / đóng cửa vĩnh viễn Store khi không còn nghĩa vụ mở. | — | — |
 | ConfigureOperatingHour | Command Candidate | Thao tác thiết lập khung giờ hoạt động của Store. | — | — |
-| ConfigureStoreService | Command Candidate | Thao tác cấu hình danh mục dịch vụ cung cấp tại Store. | — | — |
 | ConfigureStoreResource | Command Candidate | Thao tác cấu hình tài nguyên vật chất của Store. | — | — |
 | ConfigureStorePolicy | Command Candidate | Thao tác cấu hình chính sách vận hành tại Store. | — | — |
 | StoreCreated | Domain Event Candidate | Sự kiện phát sinh khi Store mới được tạo. | — | — |
@@ -165,7 +166,7 @@ Hệ thống Pet Care Ecosystem thiết lập và khóa cố định các quyế
 | ServicePrice | Value Object Candidate | Giá dịch vụ được cấu hình riêng tại từng Store, lưu trong `StoreServiceOverride.price`. | — | Store Service Price |
 | ManageProduct | Command Candidate | Thao tác quản lý sản phẩm trong phạm vi Organization. | — | — |
 | ManageService | Command Candidate | Thao tác quản lý dịch vụ trong phạm vi Organization. | — | — |
-| ConfigureServiceAvailability| Command Candidate | Thao tác cấu hình trạng thái khả dụng của Service tại Store. | — | — |
+| ConfigureServiceAvailability| Command Candidate | Thao tác cấu hình trạng thái khả dụng của Service tại Store (Command chính thức duy nhất cho hành vi này — đã hợp nhất với `ConfigureStoreService` trước đây của Module 03, xem `RULE-03-05`/`RULE-05-04`). | — | ConfigureStoreService |
 | ConfigureProductPrice | Command Candidate | Thao tác cấu hình giá sản phẩm tại Store. | — | — |
 | ConfigureServicePrice | Command Candidate | Thao tác cấu hình giá dịch vụ tại Store. | — | — |
 | ViewProduct | Command Candidate | Thao tác xem danh mục sản phẩm. | — | — |
@@ -275,6 +276,7 @@ Hệ thống Pet Care Ecosystem thiết lập và khóa cố định các quyế
 |---|---|---|---|---|
 | Veterinarian | Actor | Bác sĩ thú y chịu trách nhiệm khám, chẩn đoán và điều trị Pet tại Store (System Role: `VETERINARIAN`, Scope: `STORE`; truy cập bệnh án liên Store qua cơ chế Cross-Store Consent OTP hoặc Emergency Override). | — | Doctor, Vet |
 | MedicalRecord | Aggregate Candidate | Bệnh án ghi nhận toàn bộ quá trình khám chữa bệnh của Pet. | — | Clinical Record |
+| MedicalRecordStatus | Status-Enum | Trạng thái vòng đời chỉnh sửa của bệnh án: đang khám (chỉnh sửa tự do), đã chốt phiên (chỉnh sửa có kiểm soát trong 24h), đã khóa bất biến (`RULE-09-09`). | DRAFT, FINALIZED, LOCKED | — |
 | Symptom | Entity Candidate | Triệu chứng lâm sàng được ghi nhận trong quá trình khám. | — | Clinical Finding |
 | ExaminationResult | Entity Candidate | Kết quả khám tổng quát hoặc kết quả cận lâm sàng. | — | Test Result |
 | Diagnosis | Entity Candidate | Kết luận bệnh lý do Bác sĩ thú y xác định. | — | — |
@@ -296,6 +298,9 @@ Hệ thống Pet Care Ecosystem thiết lập và khóa cố định các quyế
 | VerifyCrossStoreConsentOTP | Command Candidate | Thao tác Customer hoặc Receptionist xác thực mã OTP do chủ thú cưng nhận được để kích hoạt quyền truy cập bệnh án liên Store (thời hạn hiệu lực 24h). | — | ValidateOTP, ValidateCrossStoreOTP |
 | RevokeCrossStoreConsent | Command Candidate | Thao tác Customer chủ động thu hồi quyền truy cập hồ sơ bệnh án liên Store trước khi hết hạn 24h. | — | RevokeMedicalConsent |
 | EmergencyOverrideAccess | Command Candidate | Thao tác Bác sĩ thú y kích hoạt quyền truy cập khẩn cấp hồ sơ bệnh án không cần OTP trong tình huống đe dọa tính mạng Pet (bắt buộc ghi nhận kiểm toán Audit Log và thông báo sự cố). | — | DirectAccess, EmergencyAccess, BypassConsentAccess |
+| LockMedicalRecord | Command Candidate | Thao tác hệ thống tự động khóa bất biến bệnh án khi quá 24 giờ kể từ thời điểm chốt phiên (`finalized_at`), không cho phép chỉnh sửa thêm (`RULE-09-09`). | — | — |
+| MedicalRecordFinalized | Domain Event Candidate | Sự kiện phát sinh khi bệnh án chuyển sang `FINALIZED` do lịch hẹn liên kết được `CheckOutAppointment`; mở cửa sổ chỉnh sửa có kiểm soát 24h. | — | — |
+| MedicalRecordLocked | Domain Event Candidate | Sự kiện phát sinh khi bệnh án chuyển sang `LOCKED` sau 24h kể từ khi chốt phiên; từ thời điểm này bệnh án bất biến tuyệt đối. | — | — |
 
 ---
 
@@ -307,7 +312,7 @@ Hệ thống Pet Care Ecosystem thiết lập và khóa cố định các quyế
 | Vaccine | Entity Candidate | Loại thuốc vaccine phòng bệnh cho thú cưng. | — | Vaccine Item |
 | VaccineBatch | Entity Candidate | Lô nhập vaccine cụ thể gắn với hạn sử dụng trong kho. | — | Vaccine Lot |
 | VaccineExpiry | Value Object Candidate | Hạn sử dụng của lô vaccine. | — | Expiration Date |
-| VaccinationSchedule | Entity Candidate | Lộ trình và lịch tiêm phòng nhắc lại của Pet. | — | Immunization Schedule |
+| VaccinationSchedule | Value Object Candidate | Lộ trình và lịch tiêm phòng nhắc lại của Pet — hiện thực qua `vaccinations.next_due_date` (mũi gần nhất), KHÔNG có bảng riêng (sửa Phase 5 Final Audit). | — | Immunization Schedule |
 | CheckVaccinationSchedule| Command Candidate | Thao tác kiểm tra lịch tiêm chủng của Pet. | — | — |
 | AdministerVaccine | Command Candidate | Thao tác thực hiện tiêm phòng cho Pet (quét mã vạch lô vaccine theo RULE-10-06). | — | Vaccinate |
 | RecordVaccination | Command Candidate | Thao tác ghi nhận mũi tiêm vào hồ sơ tiêm chủng. | — | — |
@@ -402,7 +407,8 @@ Hệ thống Pet Care Ecosystem thiết lập và khóa cố định các quyế
 
 | Term | Loại | Định nghĩa | Values (Status-Enum) | Deprecated synonym |
 |---|---|---|---|---|
-| Supplier | Entity Candidate | Nhà cung cấp hàng hóa / vật tư cho Organization. | — | Vendor |
+| Supplier | Aggregate Candidate | Nhà cung cấp hàng hóa / vật tư cho Organization (bảng `suppliers` riêng — bổ sung Phase 4, đóng `GAP-PRC-01`). | — | Vendor |
+| SupplierStatus | Status-Enum | Trạng thái hoạt động của nhà cung cấp; chỉ `ACTIVE` mới được gắn vào Purchase Order mới (`RULE-13-04`). | ACTIVE, INACTIVE | — |
 | PurchaseRequest | Entity Candidate | Phiếu yêu cầu mua hàng nội bộ do nhân viên kho đề xuất. | — | Procurement Request |
 | PurchaseRequestStatus | Status-Enum | Trạng thái vòng đời của phiếu yêu cầu mua hàng. | DRAFT, SUBMITTED, APPROVED, REJECTED, CANCELLED | — |
 | PurchaseOrder | Aggregate Candidate | Đơn đặt hàng chính thức gửi tới nhà cung cấp (Supplier). | — | PO |
@@ -525,6 +531,7 @@ Hệ thống Pet Care Ecosystem thiết lập và khóa cố định các quyế
 | RefundStatus | Status-Enum | Trạng thái vòng đời của một khoản hoàn tiền (`FAILED` là trạng thái xử lý sự cố có thể thử lại). | REQUESTED, APPROVED, REJECTED, PROCESSING, COMPLETED, FAILED | — |
 | RequestRefund | Command Candidate | Thao tác khách hàng gửi yêu cầu hoàn tiền cho giao dịch Payment. | — | — |
 | CreateRefundRequest | Command Candidate | Thao tác tiếp tân tạo yêu cầu hoàn tiền tại quầy cho khách. | — | — |
+| ApproveRefundWindowException | Command Candidate | Thao tác Organization Admin phê duyệt ngoại lệ cho phép tiếp nhận yêu cầu hoàn tiền đã vượt quá thời hạn 30 ngày (`RULE-17-03`), kèm lý do bắt buộc ghi vào Audit Log. | — | — |
 | ApproveRefund | Command Candidate | Thao tác Store Manager phê duyệt yêu cầu hoàn tiền. | — | — |
 | RejectRefund | Command Candidate | Thao tác Store Manager từ chối yêu cầu hoàn tiền có ghi lý do. | — | DeclineRefund |
 | ProcessRefund | Command Candidate | Thao tác Finance Staff tiến hành hoàn tiền qua cổng thanh toán/tiền mặt. | — | — |
@@ -550,18 +557,28 @@ Hệ thống Pet Care Ecosystem thiết lập và khóa cố định các quyế
 | Term | Loại | Định nghĩa | Values (Status-Enum) | Deprecated synonym |
 |---|---|---|---|---|
 | Promotion | Entity Candidate | Chương trình khuyến mãi áp dụng tự động theo điều kiện kinh doanh. | — | Promo Campaign |
+| PromotionStatus | Status-Enum | Trạng thái vòng đời của đối tượng chiến dịch khuyến mãi (`docs/03-state-machines.md` FSM 18). | DRAFT, ACTIVE, PAUSED, EXPIRED | — |
 | Voucher | Entity Candidate | Mã giảm giá có điều kiện áp dụng và giới hạn lượt sử dụng. | — | Coupon |
+| VoucherStatus | Status-Enum | Trạng thái vòng đời của mã Voucher (`docs/03-state-machines.md` FSM 19). | ACTIVE, DISABLED, EXPIRED | — |
 | VoucherUsage | Entity Candidate | Lịch sử ghi nhận một lần áp dụng mã Voucher vào đơn hàng / hóa đơn. | — | Coupon Use |
-| CreatePromotion | Command Candidate | Thao tác tạo chương trình khuyến mãi mới. | — | — |
-| ManagePromotion | Command Candidate | Thao tác quản lý và cấu hình chương trình khuyến mãi. | — | — |
+| CreatePromotion | Command Candidate | Thao tác tạo chương trình khuyến mãi mới (khởi tạo `DRAFT`). | — | — |
+| ManagePromotion | Command Candidate | Thao tác quản lý và cấu hình chương trình khuyến mãi, bao gồm kích hoạt/tạm dừng/tiếp tục (`DRAFT↔ACTIVE↔PAUSED`). | — | — |
 | ConfigureStorePromotion | Command Candidate | Thao tác cấu hình áp dụng Promotion cho Store. | — | — |
-| CreateVoucher | Command Candidate | Thao tác tạo mã Voucher mới. | — | — |
-| ManageVoucher | Command Candidate | Thao tác quản lý điều kiện và số lượng Voucher. | — | — |
+| ProcessPromotionExpiry | Command Candidate | Thao tác hệ thống tự động chuyển chiến dịch khuyến mãi sang hết hạn khi quá `end_date`. | — | — |
+| CreateVoucher | Command Candidate | Thao tác tạo mã Voucher mới (hiệu lực ngay, khởi tạo `ACTIVE`). | — | — |
+| ManageVoucher | Command Candidate | Thao tác quản lý điều kiện và số lượng Voucher, bao gồm vô hiệu hóa/kích hoạt lại (`ACTIVE↔DISABLED`). | — | — |
+| ProcessVoucherExpiry | Command Candidate | Thao tác hệ thống tự động chuyển Voucher sang hết hạn khi quá `valid_until`. | — | — |
 | UseVoucher | Command Candidate | Thao tác áp dụng mã Voucher khi thanh toán. | — | RedeemVoucher |
 | ValidateVoucher | Command Candidate | Thao tác hệ thống kiểm tra điều kiện áp dụng Voucher. | — | CheckVoucher |
 | TrackVoucherUsage | Command Candidate | Thao tác theo dõi và lưu vết lịch sử sử dụng Voucher. | — | — |
+| PromotionCreated | Domain Event Candidate | Sự kiện phát sinh khi chiến dịch khuyến mãi được khởi tạo (`DRAFT`). | — | — |
+| PromotionActivated | Domain Event Candidate | Sự kiện phát sinh khi chiến dịch chuyển sang `ACTIVE` (kích hoạt lần đầu hoặc tiếp tục sau tạm dừng). | — | — |
+| PromotionPaused | Domain Event Candidate | Sự kiện phát sinh khi chiến dịch bị tạm dừng thủ công. | — | — |
+| PromotionExpired | Domain Event Candidate | Sự kiện phát sinh khi chiến dịch tự động hết hạn. | — | — |
+| VoucherDisabled | Domain Event Candidate | Sự kiện phát sinh khi Voucher bị vô hiệu hóa thủ công. | — | — |
+| VoucherExpired | Domain Event Candidate | Sự kiện phát sinh khi Voucher tự động hết hạn. | — | — |
 
-> **Ghi chú kiến trúc (Stateless Rule Evaluation):** Promotion và Voucher vận hành theo cơ chế Stateless Rule Validation tại Runtime dựa trên hiệu lực ngày giờ, ngân sách và điều kiện áp dụng (`RULE-18-01 -> RULE-18-05`), không yêu cầu Stateful Workflow FSM.
+> **Ghi chú kiến trúc (đã cập nhật sau Phase 3 Audit):** Việc *áp dụng* Voucher/Promotion vào một đơn hàng/hóa đơn cụ thể tại checkout vẫn là Stateless Rule Validation tại Runtime (`RULE-18-01 -> RULE-18-05`, không lưu trạng thái riêng theo từng lượt áp dụng). Tuy nhiên vòng đời của **đối tượng** `PromotionCampaign`/`Voucher` (kích hoạt/tạm dừng/hết hạn) nay có FSM chính thức — xem `docs/03-state-machines.md` FSM 18 & FSM 19.
 
 ---
 
@@ -682,6 +699,7 @@ Hệ thống Pet Care Ecosystem thiết lập và khóa cố định các quyế
 | Term | Loại | Định nghĩa | Values (Status-Enum) | Deprecated synonym |
 |---|---|---|---|---|
 | Notification | Entity Candidate | Thông điệp thông báo gửi đến người dùng qua các kênh (In-app, SMS, Email). | — | System Message |
+| NotificationStatus | Status-Enum | Trạng thái xử lý tác vụ thông báo (`notification_tasks.status`) — bổ sung Phase 5 Final Audit (đóng orphan enum, khớp `notification_status_enum` đã có sẵn trong `06`). | PENDING, PROCESSING, SENT, FAILED | — |
 | SendNotification | Command Candidate | Thao tác phát thông báo chung tới người dùng. | — | PushNotification |
 | SendAppointmentNotification | Command Candidate | Thao tác gửi thông báo xác nhận đặt lịch hẹn. | — | — |
 | SendAppointmentReminder | Command Candidate | Thao tác gửi tin nhắn nhắc lịch hẹn sắp tới. | — | — |
@@ -871,7 +889,6 @@ Bảng ma trận phân quyền chi tiết cho toàn bộ 293 nghiệp vụ / Com
 | | `DeactivateStore` | `ORGANIZATION` | `ORGANIZATION_ADMIN` | Ngừng kích hoạt Store; yêu cầu xử lý xong đơn dở dang. |
 | | `ArchiveStore` | `ORGANIZATION` | `ORGANIZATION_ADMIN` | Đóng vĩnh viễn: Bắt buộc tồn kho = 0, không có nợ/lịch dở dang. |
 | | `ConfigureOperatingHour`| `STORE` | `STORE_MANAGER` | Thiết lập khung giờ mở cửa và ngày nghỉ Store. |
-| | `ConfigureStoreService` | `STORE` | `STORE_MANAGER` | Kích hoạt/tạm dừng dịch vụ khả dụng tại Store. |
 | | `ConfigureStoreResource`| `STORE` | `STORE_MANAGER` | Cấu hình định mức phòng khám, bàn grooming, thiết bị. |
 | | `ConfigureStorePolicy`  | `STORE` | `STORE_MANAGER` | Cấu hình chính sách phụ thu tại quầy của Store. |
 | **04. Customer & Pet** | `AddPet` | `CUSTOMER` / `STORE` | `CUSTOMER`, `RECEPTIONIST` | Tạo hồ sơ Pet mới gắn với Primary Owner xác định. |
@@ -888,7 +905,7 @@ Bảng ma trận phân quyền chi tiết cho toàn bộ 293 nghiệp vụ / Com
 | | `SearchCustomerPet`         | `STORE` | `RECEPTIONIST` | Tra cứu theo SĐT, mã Pet, CCCD phục vụ tại quầy. |
 | **05. Service & Product Catalog** | `ManageProduct` | `ORGANIZATION` | `ORGANIZATION_ADMIN` | Quản lý toàn quyền danh mục sản phẩm gốc của Organization (tạo, sửa, vô hiệu hóa). |
 | | `ManageService` | `ORGANIZATION` | `ORGANIZATION_ADMIN` | Quản lý danh mục dịch vụ, thời lượng và tài nguyên cần thiết. |
-| | `ConfigureServiceAvailability` | `STORE` | `STORE_MANAGER` | Bật/tắt dịch vụ cung ứng tại Store. |
+| | `ConfigureServiceAvailability` | `STORE` | `STORE_MANAGER` | Bật/tắt dịch vụ cung ứng tại Store (Command hợp nhất — thay thế `ConfigureStoreService`). |
 | | `ConfigureServicePrice` | `STORE` | `STORE_MANAGER` | Cấu hình bảng giá dịch vụ áp dụng tại Store. |
 | | `ConfigureProductPrice` | `STORE` | `STORE_MANAGER` | Cấu hình giá niêm yết bán lẻ sản phẩm tại Store. |
 | | `ViewProduct` | `CUSTOMER` / `STORE` | `CUSTOMER`, `RECEPTIONIST`, `STORE_MANAGER` | Xem danh mục sản phẩm đang mở bán. |
@@ -1024,6 +1041,7 @@ Bảng ma trận phân quyền chi tiết cho toàn bộ 293 nghiệp vụ / Com
 | | `ReconcilePayment` | `STORE` / `ORG` | `FINANCE_STAFF` | Đối soát giao dịch hệ thống với sao kê ngân hàng/cổng. |
 | **17. Refund** | `RequestRefund` | `CUSTOMER` | `CUSTOMER` | **Maker**: Khách hàng tạo yêu cầu hoàn tiền qua App. |
 | | `CreateRefundRequest` | `STORE` | `RECEPTIONIST` | **Maker**: Tiếp tân tạo yêu cầu hoàn tiền tại quầy Store. |
+| | `ApproveRefundWindowException` | `ORGANIZATION` | `ORGANIZATION_ADMIN` | Phê duyệt ngoại lệ tiếp nhận yêu cầu hoàn tiền đã vượt hạn 30 ngày (`RULE-17-03`); bắt buộc lý do, ghi Audit Log. |
 | | `ApproveRefund` | `STORE` / `ORG` | `STORE_MANAGER`, `ORGANIZATION_ADMIN` | **Checker**: Phê duyệt yêu cầu hoàn tiền (`created_by != approved_by`). |
 | | `RejectRefund` | `STORE` / `ORG` | `STORE_MANAGER`, `ORGANIZATION_ADMIN` | Từ chối yêu cầu hoàn tiền kèm lý do nghiệp vụ. |
 | | `ProcessRefund` | `STORE` / `ORG` | `FINANCE_STAFF`, `RECEPTIONIST` (Cash) | Thực thi lệnh chi trả: Thu ngân chi tiền mặt / Finance chi qua cổng. |
@@ -1034,10 +1052,12 @@ Bảng ma trận phân quyền chi tiết cho toàn bộ 293 nghiệp vụ / Com
 | | `ReconcileRefund` | `STORE` / `ORG` | `FINANCE_STAFF` | Đối soát các khoản chi hoàn tiền với cổng thanh toán và quỹ. |
 | | `SendRefundNotification` | `PLATFORM` | `System` | Gửi thông báo kết quả hoàn tiền cho khách hàng. |
 | **18. Promotion & Voucher** | `CreatePromotion` | `ORGANIZATION` | `ORGANIZATION_ADMIN` | Tạo chiến dịch khuyến mãi mới cấp Organization. |
-| | `ManagePromotion` | `ORGANIZATION` | `ORGANIZATION_ADMIN` | Quản lý thời gian, ngân sách và điều kiện khuyến mãi. |
+| | `ManagePromotion` | `ORGANIZATION` | `ORGANIZATION_ADMIN` | Quản lý thời gian, ngân sách và điều kiện khuyến mãi; kích hoạt/tạm dừng/tiếp tục (`PromotionStatus`). |
 | | `ConfigureStorePromotion` | `STORE` | `STORE_MANAGER` | Kích hoạt/tạm dừng chương trình khuyến mãi tại Store. |
+| | `ProcessPromotionExpiry` | `PLATFORM` | `System` | Tự động chuyển chiến dịch hết hạn khi quá `end_date`. |
 | | `CreateVoucher` | `ORGANIZATION` | `ORGANIZATION_ADMIN` | Phát hành mã ưu đãi Voucher cấp chuỗi. |
-| | `ManageVoucher` | `ORGANIZATION` | `ORGANIZATION_ADMIN` | Quản lý số lượng phát hành, hạn mức và điều kiện Voucher. |
+| | `ManageVoucher` | `ORGANIZATION` | `ORGANIZATION_ADMIN` | Quản lý số lượng phát hành, hạn mức và điều kiện Voucher; vô hiệu hóa/kích hoạt lại (`VoucherStatus`). |
+| | `ProcessVoucherExpiry` | `PLATFORM` | `System` | Tự động chuyển Voucher hết hạn khi quá `valid_until`. |
 | | `UseVoucher` | `CUSTOMER` / `STORE` | `CUSTOMER`, `RECEPTIONIST` | Áp dụng mã Voucher khi thanh toán đơn hàng/hóa đơn. |
 | | `ValidateVoucher` | `STORE` | `System` | Kiểm tra điều kiện hiệu lực, tồn kho và hạn mức Voucher. |
 | | `TrackVoucherUsage` | `ORGANIZATION` | `System` | Ghi nhận nhật ký sử dụng Voucher để kiểm soát ngân sách. |
@@ -1497,22 +1517,22 @@ Bảng tra cứu đối chiếu song ngữ toàn bộ 140+ thuật ngữ ngôn n
 
 Bảng ma trận dưới đây thiết lập sự liên kết và truy vết 1:1 tuyệt đối giữa cả 4 tài liệu đặc tả kiến trúc cốt lõi:
 - **`01.md`**: Business Operations Catalog (Nguồn Chân lý Vận hành - 293 Commands / 25 Modules)
-- **`02.md`**: Business Rules Catalog (Bộ Luật Nghiệp vụ Chuẩn hóa - 207 Rules / `RULE-01-01` → `RULE-25-07`)
-- **`03.md`**: State Machines & Outbox Bridges (8 Core FSMs + 9 Supporting Lifecycles + 26 Event Bridges)
+- **`02.md`**: Business Rules Catalog (Bộ Luật Nghiệp vụ Chuẩn hóa - 217 Rules / `RULE-01-01` → `RULE-25-08`, xem ghi chú đối soát số liệu tại `docs/00-requirements.md` §10.1 CONTRADICTION-06)
+- **`03.md`**: State Machines & Outbox Bridges (8 Core FSMs + 11 Supporting Lifecycles [gồm FSM 18 Promotion và FSM 19 Voucher bổ sung sau Phase 3 Traceability Audit] + 26 Event Bridges)
 - **`04.md`**: Ubiquitous Language Glossary & RBAC Governance (Sections 00 - 28)
 
 | STT | Phân hệ Nghiệp vụ (Domain Module) | 01.md (Operations) | 02.md (Business Rules) | 03.md (FSM / Event Bridges) | 04.md (Glossary & RBAC) | Ràng buộc Khóa & Quyết định Kiến trúc |
 |---|---|---|---|---|---|---|
 | **00** | **Architectural Decision Locks** | Quy định thiết kế hệ thống | Invariants toàn cục | FSM Invariants & Outbox | Section 00 | Khóa kiến trúc D-01 (Settlement Immutability), D-02 (Surcharge Invoice), D-03 (Fulfillment Split), D-04 (Staff Provisioning). |
-| **01** | **Authentication & OTP** | Mục 1 (9 ops: `RegisterAccount`, `VerifyOTP`, `CreateStaff`, `Login`, ...) | `RULE-01-01` → `RULE-01-08` | FSM 1 (`AccountStatus`: `PENDING_VERIFICATION`, `ACTIVE`, `LOCKED`, `DEACTIVATED`) | Section 01, 26.5 | OTP TTL = 300s; tối đa 5 lần thử; Direct Staff Provisioning (D-04) kích hoạt thẳng `ACTIVE`; Nhân viên nghỉ việc chuyển `DEACTIVATED`. |
+| **01** | **Authentication & OTP** | Mục 1 (9 ops: `RegisterAccount`, `VerifyOTP`, `CreateStaff`, `Login`, ...) | `RULE-01-01` → `RULE-01-10` | FSM 1 (`AccountStatus`: `PENDING_VERIFICATION`, `ACTIVE`, `LOCKED`, `DEACTIVATED`) | Section 01, 26.5 | OTP TTL = 300s; tối đa 5 lần thử; Direct Staff Provisioning (D-04) kích hoạt thẳng `ACTIVE`; Nhân viên nghỉ việc chuyển `DEACTIVATED`; mật khẩu tối thiểu 8 ký tự (`RULE-01-09`); phone/email duy nhất cấp Platform (`RULE-01-10`). |
 | **02** | **Identity & Access Management (IAM)** | Mục 2 (7 ops: `ManageUser`, `ManageRole`, `LockAccount`, `AssignPermission`, ...) | `RULE-02-01` → `RULE-02-07` | FSM 1 (`AccountStatus`) | Section 02, 26.1, 26.2 | 9 Roles chuẩn, 5 Scopes (`PLATFORM`, `ORGANIZATION`, `STORE`, `WAREHOUSE`, `CUSTOMER`); Khóa/Vô hiệu hóa tức thì thu hồi JWT blacklist (`RULE-02-04`, `RULE-02-07`). |
 | **03** | **Organization & Store Management** | Mục 3 (13 ops: `CreateOrganization`, `CreateStore`, `ActivateStore`, `ArchiveStore`, ...) | `RULE-03-01` → `RULE-03-08` | FSM 2 (`StoreStatus`: `DRAFT`, `ACTIVE`, `SUSPENDED`, `DEACTIVATED`, `ARCHIVED`) | Section 03, 26.5 | Store tạo mới ở `DRAFT` qua `CreateStore`, cấu hình xong kích hoạt sang `ACTIVE` qua `ActivateStore`. Điều kiện đóng cửa (`RULE-03-06`): 0 đơn, 0 lịch, 0 kho, 0 nợ. |
-| **04** | **Customer & Pet Management** | Mục 4 (13 ops: `AddPet`, `InviteCaregiver`, `RevokeCaregiver`, ...) | `RULE-04-01` → `RULE-04-09` | FSM 3 (`CaregiverStatus`) | Section 04, 26.3 | Caregiver Invitation TTL = 7d; chỉ Primary Owner có quyền mời/hủy ủy quyền (`RULE-04-04`); không được chuyển nhượng Pet. |
-| **05** | **Service & Product Catalog** | Mục 5 (9 ops: `ManageProduct`, `ManageService`, ...) | `RULE-05-01` → `RULE-05-06` | Catalog Lifecycle | Section 05, 26.5 | Độc lập danh mục: Tổ chức quản lý danh mục dùng chung; Store cấu hình giá và tình trạng sẵn sàng. |
+| **04** | **Customer & Pet Management** | Mục 4 (13 ops: `AddPet`, `InviteCaregiver`, `RevokeCaregiver`, ...) | `RULE-04-01` → `RULE-04-11` | FSM 3 (`CaregiverStatus`) | Section 04, 26.3 | Caregiver Invitation TTL = 7d; chỉ Primary Owner có quyền mời/hủy ủy quyền (`RULE-04-04`); không được chuyển nhượng Pet; chuyển chủ sở hữu Pet tự động thu hồi Caregiver cũ, giữ nguyên `ACTIVE` (`RULE-04-10`); `PetStatus` [ACTIVE/DECEASED/TRANSFERRED] (`RULE-04-11`). |
+| **05** | **Service & Product Catalog** | Mục 5 (9 ops: `ManageProduct`, `ManageService`, ...) | `RULE-05-01` → `RULE-05-07` | Catalog Lifecycle | Section 05, 26.5 | Độc lập danh mục: Tổ chức quản lý danh mục dùng chung; Store cấu hình giá và tình trạng sẵn sàng; Store `ACTIVE` tự động khởi tạo override giá/khả dụng kế thừa từ Organization (`RULE-05-07`). |
 | **06** | **Appointment & Scheduling** | Mục 6 (19 ops: `HoldSlot`, `BookAppointment`, `RescheduleAppointment`, `AbortAppointment`, ...) | `RULE-06-01` → `RULE-06-14` | FSM 4.1 (`BookingHold`), FSM 4.2 (`Appointment`) | Section 06, 26.5 | Hold TTL = 15m (900s); Atomic Reschedule Guard; cấm nhảy tắt `CHECKED_IN -> COMPLETED`; Triple Collision Guard. |
 | **07** | **Walk-in & Queue Management** | Mục 7 (9 ops: `RegisterQueueEntry`, `StartQueueService`, ...) | `RULE-07-01` → `RULE-07-08` | FSM 17 (`QueueEntryStatus`) | Section 07, 26.5 | Cơ chế FIFO; Ưu tiên cấp cứu bypass hàng đợi; Cầu nối Walk-in tạo `Appointment` nội bộ (`Channel=WALK_IN`, `IN_PROGRESS`). |
 | **08** | **Workforce Management** | Mục 8 (10 ops: `ManageStaff`, `CreateStaff`, `AssignStaffToStore`, `ManageWorkSchedule`, ...) | `RULE-08-01` → `RULE-08-07` | Staff Schedule Lifecycle | Section 08, 26.5 | Kiểm tra xung đột ca làm việc; phân công nhân sự chi nhánh theo phạm vi `STORE`. |
-| **09** | **Veterinary / Clinical Management** | Mục 9 (14 ops: `ExaminePet`, `CreateMedicalRecord`, `UpdateMedicalRecord`, `EmergencyOverrideAccess`, ...) | `RULE-09-01` → `RULE-09-08` | EMR & Consent Lifecycle | Section 09, 26.5, 26.7 | Bệnh án điện tử EMR bất biến sau 24h; Break-Glass Emergency Override cấp quyền trực tiếp kèm 5 tác dụng phụ bắt buộc. |
+| **09** | **Veterinary / Clinical Management** | Mục 9 (15 ops: `ExaminePet`, `CreateMedicalRecord`, `UpdateMedicalRecord`, `EmergencyOverrideAccess`, `LockMedicalRecord`, ...) | `RULE-09-01` → `RULE-09-09` | EMR & Consent Lifecycle | Section 09, 26.5, 26.7 | Bệnh án điện tử EMR chốt phiên khi `CheckOutAppointment`, cho chỉnh sửa có kiểm soát (ghi Audit Log) trong 24h rồi khóa bất biến (`RULE-09-09`); Break-Glass Emergency Override cấp quyền trực tiếp kèm 5 tác dụng phụ bắt buộc. |
 | **10** | **Vaccination Management** | Mục 10 (9 ops: `AdministerVaccine`, `RecordVaccination`, `ScheduleNextVaccination`, ...) | `RULE-10-01` → `RULE-10-07` | Vaccine Batch Lifecycle | Section 10, 26.5 | Trừ tồn kho chính xác theo số lô và hạn dùng; cảnh báo vắc xin hết hạn; tự động tạo lịch tiêm nhắc mũi tiếp theo. |
 | **11** | **Grooming Management** | Mục 11 (11 ops: `CheckInGrooming`, `PerformGrooming`, `ConfirmAdditionalService`, `AbortGrooming`, ...) | `RULE-11-01` → `RULE-11-06` | FSM 15 (`GroomingStatus`) | Section 11, 26.5 | Kiểm tra an toàn thể trạng tiền phục vụ; Phụ phí phát sinh tạo Hóa đơn Phụ phí độc lập (D-02); Dừng khẩn cấp lập `GroomingIncident`. |
 | **12** | **Inventory & Warehouse Management** | Mục 12 (17 ops: `CreateStockTransfer`, `ShipStockTransfer`, ...) | `RULE-12-01` → `RULE-12-13` | FSM 11 (`StockTransferStatus`) | Section 12, 26.5, 26.6 | Chuyển kho 2 bước (`IN_TRANSIT`); Phương trình cân bằng sai lệch; Maker-Checker duyệt điều chỉnh kho (`created_by != approved_by`). |
@@ -1520,15 +1540,15 @@ Bảng ma trận dưới đây thiết lập sự liên kết và truy vết 1:1
 | **14** | **Order Management (v1 In-Store Fulfillment)** | Mục 14 (10 ops: `CheckoutOrder`, `CompleteStoreOrder`, ...) | `RULE-14-01` → `RULE-14-09` | FSM 5 (`OrderStatus`) | Section 14, 26.5 | Giữ chỗ kho 15m; Hủy trước giao sang `CANCELLED`; Đổi trả 100% sau giao sang `REFUNDED`; Trả một phần giữ `DELIVERED` (D-03). |
 | **15** | **Billing & Invoice Management** | Mục 15 (10 ops: `CreateInvoice`, `IssueSurchargeInvoice`, ...) | `RULE-15-01` → `RULE-15-08` | FSM 6 (`InvoiceStatus`) | Section 15, 26.5 | Settlement Immutability (D-01): Invoice `PAID` giữ nguyên khi hoàn tiền; cấm `VoidInvoice` khi đã trả tiền; Phụ phí tạo Surcharge Invoice (D-02). |
 | **16** | **Payment Management** | Mục 16 (6 ops: `MakePayment`, `RecordCashPayment`, `VerifyPayment`, `ReceivePaymentCallback`, `CancelPayment`, `ReconcilePayment`) | `RULE-16-01` → `RULE-16-07` | FSM 7 (`PaymentStatus`) | Section 16, 26.5 | Idempotency Key chống trùng lặp; Quyết toán tiền mặt tức thì (`CASH -> SUCCESS`); Trạng thái `PARTIALLY_REFUNDED` và `REFUNDED`. |
-| **17** | **Refund Management** | Mục 17 (11 ops: `RequestRefund`, `ApproveRefund`, `RetryRefund`, ...) | `RULE-17-01` → `RULE-17-10` | FSM 8 (`RefundStatus`) | Section 17, 26.5, 26.6 | Maker-Checker (`created_by != approved_by`); Giới hạn 30 ngày; `FAILED` hỗ trợ `RetryRefund` (max 3) hoặc `ResolveRefundManually`. |
-| **18** | **Promotion & Voucher Management** | Mục 18 (8 ops: `CreatePromotion`, `UseVoucher`, ...) | `RULE-18-01` → `RULE-18-08` | Stateless Rules Engine | Section 18, 26.5 | Đánh giá điều kiện thời gian thực tại runtime; kiểm soát ngân sách khuyến mãi và chống cộng dồn mã sai quy định. |
+| **17** | **Refund Management** | Mục 17 (12 ops: `RequestRefund`, `ApproveRefund`, `RetryRefund`, `ApproveRefundWindowException`, ...) | `RULE-17-01` → `RULE-17-10` | FSM 8 (`RefundStatus`) | Section 17, 26.5, 26.6 | Maker-Checker (`created_by != approved_by`); Giới hạn 30 ngày, ngoại lệ do Organization Admin phê duyệt (`RULE-17-03`); `FAILED` hỗ trợ `RetryRefund` (max 3) hoặc `ResolveRefundManually`. |
+| **18** | **Promotion & Voucher Management** | Mục 18 (10 ops: `CreatePromotion`, `UseVoucher`, `ProcessPromotionExpiry`, `ProcessVoucherExpiry`, ...) | `RULE-18-01` → `RULE-18-08` | FSM 18 (`PromotionStatus`), FSM 19 (`VoucherStatus`) — vòng đời đối tượng; áp dụng runtime vẫn Stateless (`RULE-18-04`) | Section 18, 26.5 | Đánh giá điều kiện thời gian thực tại runtime; kiểm soát ngân sách khuyến mãi; tối đa 01 Voucher/hóa đơn (không cộng dồn nhiều Voucher) nhưng CHO PHÉP cộng dồn 01 Promotion + 01 Voucher (`RULE-18-08`, đã chốt). |
 | **19** | **Membership & Loyalty Management** | Mục 19 (12 ops: `RegisterMembership`, `UpgradeMembership`, `RedeemLoyaltyPoint`, `AddLoyaltyPoint`, ...) | `RULE-19-01` → `RULE-19-10` | FSM 9 (`MembershipStatus`) | Section 19, 26.5 | Nâng hạng đóng bản ghi cũ (`UPGRADED`) và tạo mới `ACTIVE`; Dữ liệu hội viên cách ly độc lập theo từng Organization. |
-| **20** | **Package Management** | Mục 20 (8 ops: `PurchasePackage`, `ConfirmPackageUsage`, ...) | `RULE-20-01` → `RULE-20-07` | FSM 10 (`PackageStatus`) | Section 20, 26.5 | Kích hoạt đa kênh; Cấn trừ lượt dịch vụ chính xác; Hủy gói tính toán hoàn tiền cho các lượt chưa tiêu dùng theo công thức. |
+| **20** | **Package Management** | Mục 20 (9 ops: `PurchasePackage`, `ConfirmPackageUsage`, `RefundPackageUnit`, ...) | `RULE-20-01` → `RULE-20-09` | FSM 10 (`PackageStatus`) | Section 20, 26.5 | Kích hoạt đa kênh; Gắn kết gói với lịch hẹn ngay lúc đặt lịch kèm kiểm tra khả dụng sớm (`RULE-20-09`); Cấn trừ lượt dịch vụ chính xác; Hủy gói tính toán hoàn tiền theo công thức; No-Show tự động trừ 1 lượt, Store Manager hoàn lại khi bất khả kháng (`RULE-20-08`). |
 | **21** | **Incident Management** | Mục 21 (9 ops: `RecordIncident`, `ClassifyIncident`, ...) | `RULE-21-01` → `RULE-21-08` | FSM 14 (`IncidentStatus`) | Section 21, 26.5 | Tự động tạo incident khi `AbortAppointment`, `AbortGrooming`, `EmergencyOverrideAccess`; Hồ sơ `CLOSED` là bất biến tuyệt đối. |
 | **22** | **Consent & Privacy Management** | Mục 22 (12 ops: `GrantConsent`, `RequestCrossStoreConsent`, `EmergencyOverrideAccess`, `ProcessDataExport`, ...) | `RULE-22-01` → `RULE-22-10` | FSM 16 (`ConsentStatus`) | Section 22, 26.5, 26.7 | Giao thức kép: OTP chuẩn TTL = 300s (Quyền 24h) & Break-Glass khẩn cấp; Quyền chủ động thu hồi tức thì của khách hàng. |
 | **23** | **Notification Management** | Mục 23 (10 ops: `SendNotification`, `SendAppointmentReminder`, `SendVaccineReminder`, `RetryNotification`, ...) | `RULE-23-01` → `RULE-23-06` | Notification Outbox | Section 23, 26.5 | Hỗ trợ SMS, Push, Email; Tự động thử lại khi lỗi mạng; Đảm bảo gửi thông báo khẩn cấp sự cố trong vòng 1-4 giờ. |
 | **24** | **Reporting & Analytics** | Mục 24 (10 ops: `ViewRevenueReport`, `ReconcileRevenue`, ...) | `RULE-24-01` → `RULE-24-08` | Financial Reporting | Section 24, 26.5 | Báo cáo doanh thu đa chiều; Đối soát chốt sổ cuối ngày; Dữ liệu thống kê phân quyền chặt chẽ theo Scope. |
 | **25** | **Audit Management** | Mục 25 (7 ops: `RecordAuditLog`, `ViewAuditLog`, `TrackMedicalRecordAccess`, `TrackPaymentRefundAudit`, ...) | `RULE-25-01` → `RULE-25-07` | Append-Only Audit Trail | Section 25, 26.5 | Ghi nhật ký kiểm toán bất biến (WORM); Lưu vết pháp y mọi hành động phân quyền, truy cập EMR và can thiệp tài chính. |
-| **26** | **RBAC Matrix & Multi-Tenancy Governance** | Toàn bộ 293 nghiệp vụ | Toàn bộ 207 Business Rules | Phân quyền Actor & FSM | Section 26.1 → 26.7 | Chuẩn hóa 9 Roles, 5 Scopes (`PLATFORM`, `ORGANIZATION`, `STORE`, `WAREHOUSE`, `CUSTOMER`), Caregiver Delegation, System Actor, Maker-Checker Segregation, Break-Glass Override. |
+| **26** | **RBAC Matrix & Multi-Tenancy Governance** | Toàn bộ 293 nghiệp vụ | Toàn bộ 217 Business Rules | Phân quyền Actor & FSM | Section 26.1 → 26.7 | Chuẩn hóa 9 Roles, 5 Scopes (`PLATFORM`, `ORGANIZATION`, `STORE`, `WAREHOUSE`, `CUSTOMER`), Caregiver Delegation, System Actor, Maker-Checker Segregation, Break-Glass Override. |
 | **27** | **Domain Events & Outbox Catalog** | Toàn bộ các sự kiện miền phát sinh | Event-Driven Invariants | 26 Event Bridges & Outbox | Section 27 | Transactional Outbox Pattern, cấu trúc bảng `outbox_events`, Idempotent Consumers, Zero Event Loss. |
-| **28** | **Bilingual Ubiquitous Language Index & Matrix** | Đối chiếu toàn bộ thuật ngữ Anh - Việt | Đối chiếu 207 Rules | Đối chiếu 17 FSMs & Trạng thái | Section 28.1 → 28.2 | Từ điển ngôn ngữ chung chuẩn hóa, Ma trận truy vết 4 chiều 100% nhất quán giữa 01.md, 02.md, 03.md và 04.md. |
+| **28** | **Bilingual Ubiquitous Language Index & Matrix** | Đối chiếu toàn bộ thuật ngữ Anh - Việt | Đối chiếu 217 Rules | Đối chiếu 19 FSMs & Trạng thái | Section 28.1 → 28.2 | Từ điển ngôn ngữ chung chuẩn hóa, Ma trận truy vết 4 chiều 100% nhất quán giữa 01.md, 02.md, 03.md và 04.md. |

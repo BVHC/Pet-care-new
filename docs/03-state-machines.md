@@ -11,9 +11,10 @@ stateDiagram-v2
     [*] --> PENDING_VERIFICATION: RegisterAccount [Customer Self-Registration]
     PENDING_VERIFICATION --> ACTIVE: VerifyOTP [Customer]
     [*] --> ACTIVE: CreateStaff [Admin Direct Provisioning, D-04]
-    ACTIVE --> LOCKED: LockAccount [PlatformAdmin / OrgAdmin]
-    ACTIVE --> LOCKED: AutoLockAccount [System, RULE-01-07, 5 lần sai mật khẩu liên tiếp]
-    LOCKED --> ACTIVE: UnlockAccount [PlatformAdmin / OrgAdmin]
+    ACTIVE --> LOCKED: LockAccount [PlatformAdmin / OrgAdmin, lock_reason = ADMIN_LOCK]
+    ACTIVE --> LOCKED: AutoLockAccount [System, RULE-01-07, 5 lần sai mật khẩu liên tiếp, lock_reason = AUTO_FAILED_LOGIN]
+    LOCKED --> ACTIVE: UnlockAccount [PlatformAdmin / OrgAdmin, mọi lock_reason]
+    LOCKED --> ACTIVE: AutoUnlockAccount [System, RULE-01-07, chỉ khi lock_reason = AUTO_FAILED_LOGIN và now() >= locked_until]
     ACTIVE --> DEACTIVATED: DeactivateAccount [PlatformAdmin / OrgAdmin]
     LOCKED --> DEACTIVATED: DeactivateAccount [PlatformAdmin / OrgAdmin]
     DEACTIVATED --> ACTIVE: ReactivateAccount [PlatformAdmin / OrgAdmin]
@@ -24,9 +25,10 @@ stateDiagram-v2
 | [*] | RegisterAccount [Customer] | Customer | RULE-01-01, RULE-01-02 | PENDING_VERIFICATION | AccountRegistered | Khởi tạo tài khoản tự phục vụ; hệ thống gửi mã OTP xác thực có thời hạn 5 phút (TTL = 300s). |
 | PENDING_VERIFICATION | VerifyOTP | Customer | RULE-01-02, RULE-01-03 | ACTIVE | AccountActivated | Xác thực OTP thành công trong thời hạn TTL; kích hoạt tài khoản chính thức. |
 | [*] | CreateStaff [Staff] | PlatformAdmin / OrganizationAdmin | RULE-01-03, RULE-02-05 (D-04) | ACTIVE | AccountActivated | Khởi tạo nhân viên trực tiếp; cấp mật khẩu tạm thời (`must_change_password = true`), bỏ qua bước xác thực OTP đăng ký (Quyết định D-04). |
-| ACTIVE | LockAccount | PlatformAdmin / OrganizationAdmin | RULE-02-04, RULE-02-05 | LOCKED | AccountLocked | Quản trị viên chủ động tạm khóa tài khoản khi phát hiện nghi vấn; thu hồi toàn bộ session, Access Token và Refresh Token đang hoạt động. |
-| ACTIVE | AutoLockAccount | System | RULE-01-07 | LOCKED | AccountLocked | Hệ thống tự động khóa sau đúng 5 lần đăng nhập sai mật khẩu liên tiếp; thời gian khóa tối thiểu 15 phút trước khi Quản trị viên được phép `UnlockAccount` thủ công (không có cơ chế tự mở khóa sau 15 phút — xem Technical Invariant #5 bên dưới). |
-| LOCKED | UnlockAccount | PlatformAdmin / OrganizationAdmin | RULE-02-04, RULE-02-05 | ACTIVE | AccountUnlocked | Mở khóa tài khoản; cho phép người dùng đăng nhập lại vào hệ thống. |
+| ACTIVE | LockAccount | PlatformAdmin / OrganizationAdmin | RULE-02-04, RULE-02-05 | LOCKED | AccountLocked | Quản trị viên chủ động tạm khóa tài khoản khi phát hiện nghi vấn (`lock_reason = ADMIN_LOCK`); thu hồi toàn bộ session, Access Token và Refresh Token đang hoạt động. Loại khóa này KHÔNG có cơ chế tự động mở khóa theo thời gian. |
+| ACTIVE | AutoLockAccount | System | RULE-01-07 | LOCKED | AccountLocked | Hệ thống tự động khóa sau đúng 5 lần đăng nhập sai mật khẩu liên tiếp (`lock_reason = AUTO_FAILED_LOGIN`), ghi `locked_until = now() + 15 phút`. Loại khóa này CÓ cơ chế tự động mở khóa — xem dòng `AutoUnlockAccount` và Technical Invariant #5 bên dưới. |
+| LOCKED | UnlockAccount | PlatformAdmin / OrganizationAdmin | RULE-02-04, RULE-02-05 | ACTIVE | AccountUnlocked | Quản trị viên chủ động mở khóa tài khoản (áp dụng cho mọi `lock_reason`, kể cả mở sớm hơn `locked_until` đối với khóa tự động). |
+| LOCKED | AutoUnlockAccount | System | RULE-01-07 | ACTIVE | AccountUnlocked | Hệ thống tự động mở khóa ngay khi $\text{CurrentTimestamp} \ge \text{locked\_until}$, CHỈ áp dụng cho tài khoản có `lock_reason = AUTO_FAILED_LOGIN`. Tài khoản có `lock_reason = ADMIN_LOCK` không đủ điều kiện transition này. |
 | ACTIVE | DeactivateAccount | PlatformAdmin / OrganizationAdmin | RULE-02-05, RULE-02-07 | DEACTIVATED | AccountDeactivated | Vô hiệu hóa tài khoản khi nhân viên nghỉ việc, chấm dứt hợp đồng; thu hồi phiên tức thì và từ chối đăng nhập vĩnh viễn. |
 | LOCKED | DeactivateAccount | PlatformAdmin / OrganizationAdmin | RULE-02-05, RULE-02-07 | DEACTIVATED | AccountDeactivated | Chuyển tài khoản bị tạm khóa sang vô hiệu hóa vĩnh viễn do chấm dứt nhân sự/tài khoản. |
 | DEACTIVATED | ReactivateAccount | PlatformAdmin / OrganizationAdmin | RULE-02-05, RULE-02-07 | ACTIVE | AccountReactivated | Tái kích hoạt tài khoản đã bị vô hiệu hóa; ghi nhận lý do giải trình bắt buộc vào Audit Log. |
@@ -38,7 +40,9 @@ stateDiagram-v2
   2. *Thu hồi Phiên Tức thì (RULE-02-04, RULE-02-07):* Lệnh `LockAccount` hoặc `DeactivateAccount` lập tức vô hiệu hóa JWT/Session Token, đưa token vào blacklist để ngăn chặn mọi truy cập trái phép.
   3. *Thời hạn OTP (RULE-01-02):* Mã OTP đăng ký hết hạn sau 300s; quá 5 lần nhập sai sẽ tạm khóa phiên xác thực 15 phút.
   4. *Ranh giới Khóa vs Vô hiệu hóa:* `LOCKED` là tạm thời (do nhập sai mật khẩu hoặc tạm đình chỉ); `DEACTIVATED` là vô hiệu hóa do nhân viên nghỉ việc hoặc chấm dứt dịch vụ.
-  5. *Khóa Tự động vs Mở khóa Thủ công (RULE-01-07):* Khoảng thời gian "tối thiểu 15 phút" trong `RULE-01-07` là ngưỡng thời gian sớm nhất mà `UnlockAccount` được phép thực thi, **không phải** một transition tự động `LOCKED -> ACTIVE`. Sơ đồ FSM không có cạnh tự động mở khóa: mọi lượt chuyển `LOCKED -> ACTIVE` bắt buộc đi qua lệnh `UnlockAccount` do Quản trị viên thực hiện.
+  5. *Khóa Tự động vs Khóa Chủ động — Hai cơ chế mở khóa riêng biệt (RULE-01-07, RULE-02-04):* Trường `lock_reason` phân biệt hai loại khóa với hai cơ chế mở khóa khác nhau:
+     - `lock_reason = AUTO_FAILED_LOGIN` (do `AutoLockAccount` sau 5 lần sai mật khẩu): CÓ cơ chế tự động mở khóa. Hệ thống ghi `locked_until = now() + 15 phút`; ngay khi $\text{CurrentTimestamp} \ge \text{locked\_until}$, tác vụ nền tự động chuyển `LOCKED -> ACTIVE` (`AutoUnlockAccount`) mà không cần thao tác thủ công. Quản trị viên vẫn có thể `UnlockAccount` sớm hơn nếu cần.
+     - `lock_reason = ADMIN_LOCK` (do Quản trị viên chủ động `LockAccount`): KHÔNG có cơ chế tự động mở khóa dưới bất kỳ hình thức nào. Mọi lượt chuyển `LOCKED -> ACTIVE` cho loại khóa này bắt buộc đi qua lệnh `UnlockAccount` do Quản trị viên thực hiện.
 
 ---
 
@@ -77,6 +81,7 @@ stateDiagram-v2
      - Không còn lịch hẹn nào đang mở hoặc đang phục vụ (`BOOKED`, `CONFIRMED`, `CHECKED_IN`, `IN_PROGRESS`).
      - Tồn kho thực tế tại Store bằng 0 ($\text{PhysicalQuantity} == 0$).
      - Không còn công nợ tài chính, giao dịch chưa đối soát hoặc yêu cầu hoàn tiền đang xử lý.
+  4. *Bất biến Dữ liệu Sau Archive (đã chốt Phase 4 — GAP-ORG-01):* `ARCHIVED` là Terminal State tuyệt đối — không có transition rời khỏi `ARCHIVED`. Toàn bộ dữ liệu cấu hình con của Store (`OperatingHours`, `StoreResource`, `store_services`, `store_products`, `StaffWorkSchedule`) trở thành bất biến chỉ đọc, không `UPDATE`/`DELETE`, chỉ phục vụ tra cứu lịch sử/audit.
 
 ---
 
@@ -400,6 +405,7 @@ stateDiagram-v2
   1. *Gia hạn Hội viên (RULE-19-03):* Khi `RenewMembership`, trạng thái giữ nguyên là `ACTIVE` và gia hạn thêm `ExpirationDate`. Phát Domain Event `MembershipRenewed`.
   2. *Nâng cấp Hạng Hội viên (RULE-19-04):* Khi `UpgradeMembership`, bản ghi gói hội viên hiện tại chuyển sang `UPGRADED` (Terminal), đồng thời hệ thống tự động khởi tạo và kích hoạt một bản ghi `Membership` mới ở trạng thái `ACTIVE` tương ứng với hạng gói nâng cấp mới (`RULE-19-04`).
   3. *Cách ly Dữ liệu Hội viên (RULE-19-10):* Dữ liệu hạng hội viên và điểm tích lũy được quản lý độc lập theo từng Organization cha; không chia sẻ chéo giữa các Organization độc lập.
+  4. *Non-Downgrade Policy (RULE-19-02, đã chốt):* Sơ đồ FSM không có cạnh hạ hạng (downgrade). Hạng hội viên là đơn điệu không giảm (monotonically non-decreasing) trong suốt vòng đời `ACTIVE`; con đường duy nhất rời khỏi một hạng là nâng cấp (`UPGRADED`, Terminal) hoặc hết hạn toàn bộ quan hệ hội viên (`EXPIRED`, Terminal).
 
 ---
 
@@ -693,7 +699,67 @@ stateDiagram-v2
 
 ---
 
-## 18. Cross-aggregate Transition Triggers & Event Bridges
+## 18. Promotion — PromotionStatus
+
+> Bổ sung sau audit Phase 3 (Traceability Audit): `promotion_campaigns.status` (`docs/06-erd.md`) đã có sẵn 4 giá trị lifecycle nhưng chưa được đặc tả FSM chính thức. Lưu ý phân biệt: FSM này mô tả vòng đời của **đối tượng chiến dịch** `PromotionCampaign` (do Organization Admin quản lý), không phải quyết định "có áp dụng Promotion vào một đơn hàng cụ thể hay không" (vẫn là Stateless Rule Validation runtime theo `RULE-18-04`).
+
+```mermaid
+stateDiagram-v2
+    [*] --> DRAFT: CreatePromotion [OrgAdmin]
+    DRAFT --> ACTIVE: ManagePromotion [OrgAdmin, kích hoạt]
+    ACTIVE --> PAUSED: ManagePromotion [OrgAdmin, tạm dừng thủ công]
+    PAUSED --> ACTIVE: ManagePromotion [OrgAdmin, tiếp tục]
+    ACTIVE --> EXPIRED: ProcessPromotionExpiry [System, end_date đã qua]
+    PAUSED --> EXPIRED: ProcessPromotionExpiry [System, end_date đã qua]
+```
+
+| From State | Command / Trigger | Actor | Guard (RULE-ID) | To State | Domain Event | Actions / Notes |
+|---|---|---|---|---|---|---|
+| [*] | CreatePromotion | OrganizationAdmin | RULE-18-01 | DRAFT | PromotionCreated | Khởi tạo chiến dịch khuyến mãi ở trạng thái bản nháp; cấu hình thời gian, ngân sách, điều kiện áp dụng. |
+| DRAFT | ManagePromotion | OrganizationAdmin | RULE-18-01, RULE-18-02 | ACTIVE | PromotionActivated | Kích hoạt chiến dịch; từ thời điểm này Store Manager có thể bật áp dụng tại Store qua `ConfigureStorePromotion`. |
+| ACTIVE | ManagePromotion | OrganizationAdmin | RULE-18-01 | PAUSED | PromotionPaused | Tạm dừng thủ công (ví dụ hết ngân sách sớm, cần điều chỉnh điều kiện); Store không còn áp dụng được chiến dịch trong lúc tạm dừng. |
+| PAUSED | ManagePromotion | OrganizationAdmin | RULE-18-01 | ACTIVE | PromotionActivated | Tiếp tục chiến dịch đang tạm dừng. |
+| ACTIVE | ProcessPromotionExpiry | System | RULE-18-01 | EXPIRED | PromotionExpired | Tác vụ nền tự động quét và đánh dấu hết hạn khi quá `end_date`. |
+| PAUSED | ProcessPromotionExpiry | System | RULE-18-01 | EXPIRED | PromotionExpired | Chiến dịch đang tạm dừng nhưng đã quá `end_date` cũng tự động chuyển hết hạn. |
+
+- **Initial State:** `DRAFT`
+- **Terminal State:** `EXPIRED`
+- **Technical Invariants:**
+  1. *Ranh giới Stateless Runtime Validation vs Object Lifecycle:* FSM này chỉ quản lý vòng đời của bản thân đối tượng `PromotionCampaign`. Việc một đơn hàng/hóa đơn cụ thể có được hưởng khuyến mãi hay không vẫn luôn được tính toán lại tại runtime (`RULE-18-04`), không lưu trạng thái riêng theo từng lượt sử dụng.
+  2. *Chỉ Promotion `ACTIVE` mới được áp dụng:* `ValidateVoucher`/luồng tính giá chỉ xét các Promotion đang ở trạng thái `ACTIVE` và đã được Store Manager bật qua `ConfigureStorePromotion` (`RULE-18-02`).
+
+---
+
+## 19. Voucher — VoucherStatus
+
+> Bổ sung sau audit Phase 3 (Traceability Audit): `vouchers.status` (`docs/06-erd.md`) đã có sẵn 3 giá trị lifecycle nhưng chưa được đặc tả FSM chính thức.
+
+```mermaid
+stateDiagram-v2
+    [*] --> ACTIVE: CreateVoucher [OrgAdmin]
+    ACTIVE --> DISABLED: ManageVoucher [OrgAdmin, vô hiệu hóa thủ công]
+    DISABLED --> ACTIVE: ManageVoucher [OrgAdmin, kích hoạt lại]
+    ACTIVE --> EXPIRED: ProcessVoucherExpiry [System, valid_until đã qua]
+    DISABLED --> EXPIRED: ProcessVoucherExpiry [System, valid_until đã qua]
+```
+
+| From State | Command / Trigger | Actor | Guard (RULE-ID) | To State | Domain Event | Actions / Notes |
+|---|---|---|---|---|---|---|
+| [*] | CreateVoucher | OrganizationAdmin | RULE-18-03 | ACTIVE | VoucherCreated | Phát hành mã Voucher mới, hiệu lực ngay khi tạo (không qua bản nháp — khác với Promotion). |
+| ACTIVE | ManageVoucher | OrganizationAdmin | RULE-18-03 | DISABLED | VoucherDisabled | Vô hiệu hóa thủ công (ví dụ phát hiện lạm dụng mã, ngừng chương trình sớm). Voucher `DISABLED` không được `UseVoucher`/`ValidateVoucher` chấp nhận. |
+| DISABLED | ManageVoucher | OrganizationAdmin | RULE-18-03 | ACTIVE | VoucherCreated | Kích hoạt lại Voucher đã vô hiệu hóa. |
+| ACTIVE | ProcessVoucherExpiry | System | RULE-18-03 | EXPIRED | VoucherExpired | Tác vụ nền tự động quét và đánh dấu hết hạn khi quá `valid_until`. |
+| DISABLED | ProcessVoucherExpiry | System | RULE-18-03 | EXPIRED | VoucherExpired | Voucher đang vô hiệu hóa nhưng đã quá `valid_until` cũng tự động chuyển hết hạn. |
+
+- **Initial State:** `ACTIVE`
+- **Terminal State:** `EXPIRED`
+- **Technical Invariants:**
+  1. *Chỉ Voucher `ACTIVE` mới được áp dụng:* `ValidateVoucher`/`UseVoucher` chỉ chấp nhận Voucher đang ở trạng thái `ACTIVE`, còn trong khung `valid_from`–`valid_until`, và chưa đạt `total_usage_limit` (`RULE-18-04`, `RULE-18-05`).
+  2. *Độc lập với lượt sử dụng:* `VoucherStatus` mô tả vòng đời của bản thân mã Voucher; mỗi lượt sử dụng cụ thể được ghi vào `voucher_usages` (không phải transition của FSM này).
+
+---
+
+## 20. Cross-aggregate Transition Triggers & Event Bridges
 
 Bảng ma trận dưới đây đặc tả toàn bộ các luồng liên kết sự kiện (Event Bridges) và chuyển trạng thái chéo giữa các Aggregates trong hệ sinh thái Pet Care:
 
@@ -728,15 +794,15 @@ Bảng ma trận dưới đây đặc tả toàn bộ các luồng liên kết s
 
 ---
 
-> **Ghi chú kiến trúc (Promotion & Voucher Management):** Promotion và Voucher vận hành theo cơ chế Stateless Rule Validation tại Runtime dựa trên hiệu lực ngày giờ, ngân sách và điều kiện áp dụng (`RULE-18-01 -> RULE-18-08`), không sử dụng FSM đa trạng thái riêng.
+> **Ghi chú kiến trúc (Promotion & Voucher Management — đã cập nhật):** Việc **áp dụng** một Voucher/Promotion vào đơn hàng/hóa đơn cụ thể tại thời điểm checkout vẫn là Stateless Rule Validation (kiểm tra điều kiện runtime theo `RULE-18-01 -> RULE-18-08`, không lưu trạng thái riêng cho từng lượt áp dụng — xem `voucher_usages`). Tuy nhiên bản thân vòng đời của **đối tượng** `PromotionCampaign` và `Voucher` (kích hoạt/tạm dừng/hết hạn) có trạng thái rõ ràng và được đặc tả chính thức tại FSM 18 và FSM 19 bên dưới.
 
 ---
 
-## 19. Kiến trúc Triển khai Event Bridges & Đảm bảo Tính nhất quán Dữ liệu (Transactional Outbox Pattern)
+## 21. Kiến trúc Triển khai Event Bridges & Đảm bảo Tính nhất quán Dữ liệu (Transactional Outbox Pattern)
 
 Nhằm đảm bảo tính nhất quán dữ liệu tuyệt đối (ACID & Eventual Consistency) giữa các Aggregates trong kiến trúc Monolith của hệ sinh thái Pet Care (đặc biệt giữa Tiền, Hóa đơn, Đơn hàng, Lịch hẹn và Tồn kho), hệ thống quy định các nguyên tắc kiến trúc sau:
 
-### 19.1. Phân định Mô hình Giao dịch
+### 21.1. Phân định Mô hình Giao dịch
 
 1. **Giao dịch Nội vùng Đồng bộ (Intra-Aggregate / Synchronous Transaction):**
    - Áp dụng cho các thao tác trực tiếp tại quầy thu ngân POS bằng tiền mặt (`RecordCashPayment`) hoặc thao tác đơn lẻ trong cùng Aggregate.
@@ -766,7 +832,7 @@ flowchart LR
     F -->|Verify Idempotency Key| J[(Idempotency Store<br/>processed_events)]
 ```
 
-### 19.2. Cấu trúc Bảng Outbox Chuẩn Hóa (`outbox_events`)
+### 21.2. Cấu trúc Bảng Outbox Chuẩn Hóa (`outbox_events`)
 
 Mọi sự kiện miền phát sinh qua ranh giới Aggregate bắt buộc phải được ghi nhận vào bảng `outbox_events` với cấu trúc sau:
 
@@ -780,9 +846,9 @@ Mọi sự kiện miền phát sinh qua ranh giới Aggregate bắt buộc phả
 | `status` | `VARCHAR(32)` | `NOT NULL` | Trạng thái xử lý sự kiện: `PENDING`, `PROCESSING`, `PUBLISHED`, `FAILED`. |
 | `retry_count` | `INTEGER` | `NOT NULL DEFAULT 0` | Số lần đã thử lại phát sự kiện khi gặp sự cố tạm thời. |
 | `created_at` | `TIMESTAMPTZ` | `NOT NULL DEFAULT NOW()` | Thời điểm tạo sự kiện trong Transaction nguồn. |
-| `processed_at` | `TIMESTAMPTZ` | `NULL` | Thời điểm sự kiện được chuyển phát thành công. |
+| `published_at` | `TIMESTAMPTZ` | `NULL` | Thời điểm sự kiện được chuyển phát thành công (khớp tên cột với `docs/06-erd.md` `outbox_events.published_at`). |
 
-### 19.3. Nguyên tắc Chuyển phát & Tiêu thụ Sự kiện (Delivery & Idempotency Rules)
+### 21.3. Nguyên tắc Chuyển phát & Tiêu thụ Sự kiện (Delivery & Idempotency Rules)
 
 1. **At-Least-Once Delivery Guarantee:** Tiến trình nền Outbox Relay Worker quét các bản ghi `PENDING` theo lô (Batch Processing) và phát đi sự kiện. Nếu Worker gặp lỗi mạng hoặc dừng đột ngột, sự kiện sẽ được quét lại ở chu kỳ tiếp theo.
 2. **Idempotent Consumer Guard:** Mọi Listener/Consumer tiếp nhận Domain Event bắt buộc phải kiểm tra khóa `event_id` hoặc `payment_transaction_id` trong bảng `processed_events` trước khi thực thi xử lý nghiệp vụ. Nếu khóa đã tồn tại (đã xử lý), Consumer bỏ qua thao tác ngay lập tức, ngăn ngừa hoàn toàn rủi ro trùng lặp dữ liệu (Double Spending / Duplicate Inventory Release).

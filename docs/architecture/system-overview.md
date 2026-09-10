@@ -4,7 +4,7 @@
 >
 > **Khác với `docs/01-06`:** Các tài liệu đó đặc tả **nghiệp vụ** (business operations, rules, FSM, domain model, ERD). Tài liệu này mô tả **cách hệ thống được triển khai về mặt kỹ thuật** — layer, luồng request, stack, deployment.
 >
-> **Nguồn:** Tổng hợp trực tiếp từ codebase (`BE/`, `FE/`, `docker-compose.yml`) tại thời điểm phân tích **2026-09-08**. Khi codebase thay đổi đáng kể, tài liệu này cần được refresh lại.
+> **Nguồn:** Tổng hợp trực tiếp từ codebase (`BE/`, `FE/`, `docker-compose.yml`) tại thời điểm phân tích **2026-09-10**. Khi codebase thay đổi đáng kể, tài liệu này cần được refresh lại.
 
 ---
 
@@ -38,7 +38,7 @@ Hệ thống là một **monorepo** gồm 2 ứng dụng triển khai độc l�
                               ▼
 ┌─────────────────────────────────────────────────────────────┐
 │                Spring Security Filter Chain                   │
-│   BE/.../common/security/JwtAuthenticationFilter.java         │
+│   BE/.../platform/security/JwtAuthenticationFilter.java       │
 └────────────────────────────┬───────────────────────────────┘
                               ▼
 ┌──────────────────┬──────────────────┬───────────────────────┐
@@ -82,38 +82,32 @@ Hệ thống là một **monorepo** gồm 2 ứng dụng triển khai độc l�
 
 ## 3. Kiến trúc Backend
 
-**Kiểu tổ chức:** package-by-feature (`modules/<feature>/`), không phải layer-first ở cấp cao nhất.
+**Kiểu tổ chức:** package-by-feature, khớp `docs/convention/backend/01-package-structure.md` — hạ tầng dùng chung nằm ở `platform/`, mỗi Bounded Context nghiệp vụ (25 module) sẽ có package con riêng dưới `module/`.
 
 ```
 BE/src/main/java/com/petcare/
 ├── PetcareApplication.java     # Spring Boot entry point
-├── common/                     # Cross-cutting, dùng chung mọi module
-│   ├── config/                 # SecurityConfig, JpaAuditingConfig
+├── platform/                   # Cross-cutting, dùng chung mọi module — ĐÃ triển khai
+│   ├── config/                 # SecurityConfig, JpaAuditingConfig (+ AuditorAware<UUID>)
 │   ├── security/                # JwtAuthenticationFilter, JwtTokenProvider, UserPrincipal
-│   ├── exception/                # BusinessException, ResourceNotFoundException, GlobalExceptionHandler
-│   ├── model/                   # ApiResponse<T>, PageResponse<T>, BaseEntity
-│   └── enums/                   # AccountStatus, UserRole
-└── modules/
-    ├── auth/entity/             # Account — CHỈ có entity, chưa có service/controller
-    ├── users/entity/            # User — CHỈ có entity, chưa có service/controller
-    └── pets/                    # Module tham chiếu — đã hoàn thiện đủ layer
-        ├── controller/
-        ├── dto/{request,response}/
-        ├── entity/
-        ├── repository/
-        └── service/{,impl}/
+│   ├── exception/                # 5 exception chuẩn + GlobalExceptionHandler (xem 04-exception-handling.md)
+│   ├── fsm/                      # StateMachineBase, Transitionable (xem 05-fsm-pattern.md)
+│   ├── model/                   # ApiResponse<T>, PageResponse<T>, ErrorResponse, BaseEntity
+│   └── enums/                   # Toàn bộ Status-Enum của 17 FSM + UserRole, SecurityScope...
+└── module/                     # CHƯA có module nghiệp vụ nào được triển khai (thư mục rỗng)
 ```
 
-**Layer trong một module hoàn chỉnh** (tham chiếu: `modules/pets/`):
+**Layer chuẩn cho một module hoàn chỉnh** (theo `docs/convention/backend/02-layering-and-dto.md`, chưa có ví dụ thực tế trong code vì `module/` hiện rỗng):
 
 | Layer | Trách nhiệm | Phụ thuộc vào |
 |---|---|---|
-| Controller | HTTP endpoint, `@Valid`, `@PreAuthorize`, định dạng response | Service interface, DTO |
-| Service / ServiceImpl | Business logic, `@Transactional`, map Entity ↔ DTO | Repository, Entity |
+| Controller | HTTP endpoint, `@Valid`, `@PreAuthorize`, trả `Response` record | Service interface, DTO |
+| Service / ServiceImpl | Business logic, RULE-ID validation, `@Transactional`, map Entity ↔ DTO qua MapStruct | Repository, Entity, TransitionHandler (nếu có FSM) |
+| TransitionHandler | Guard + transition state, extend `StateMachineBase<S>` (chỉ module có FSM) | Repository |
 | Repository | Truy cập dữ liệu (Spring Data JPA) | Entity |
-| Entity | Model JPA, kế thừa `BaseEntity` (id, createdAt, updatedAt) | — |
+| Entity | Model JPA, kế thừa `platform.model.BaseEntity` (id UUID, createdAt/updatedAt, createdBy/updatedBy, deletedAt, version) | — |
 
-**Quy ước khi thêm module mới:** tạo `modules/<feature>/` với đủ 5 subpackage như `pets/`, entity kế thừa `BaseEntity`, thêm migration Flyway mới (`V2__...sql`, không sửa `V1`). Chi tiết đầy đủ về convention code (naming, exception, FSM pattern, transaction, logging...) xem `docs/convention/backend/`.
+**Quy ước khi thêm module mới:** tạo `module/<feature>/` với đủ subpackage (`controller/service/repository/entity/dto/mapper/`, thêm `fsm/`/`exception/` nếu cần) như mô tả ở `docs/convention/backend/01-package-structure.md`, entity kế thừa `platform.model.BaseEntity`, thêm migration Flyway mới (`V2__...sql`, không sửa `V1`) đã bao gồm đủ cột audit (`created_by`, `updated_by`, `deleted_at`, `version`) khớp `BaseEntity`. Chi tiết đầy đủ về convention code (naming, exception, FSM pattern, transaction, logging...) xem `docs/convention/backend/`.
 
 **Bảo mật:** Stateless — không session server-side (`SessionCreationPolicy.STATELESS`). Mỗi request mang JWT trong header `Authorization: Bearer`; `JwtAuthenticationFilter` validate và nạp `SecurityContextHolder`; phân quyền theo role qua `@PreAuthorize`.
 
@@ -141,19 +135,18 @@ FE/src/
 
 ---
 
-## 5. Luồng xử lý request điển hình
+## 5. Luồng xử lý request điển hình (khung hạ tầng — `platform/`)
 
-Ví dụ: tạo mới một Pet (`POST /api/pets`)
+Chưa có module nghiệp vụ nào được triển khai để minh họa luồng end-to-end thực tế; khung hạ tầng đã sẵn sàng vận hành theo luồng chuẩn sau (mọi Controller module mới sẽ đi qua đúng luồng này):
 
-1. Page component gọi `apiClient.createPet(data)` (`FE/src/shared/api/client.ts`)
-2. `ApiClient.request()` gắn JWT từ `localStorage`, gọi `fetch()` tới `VITE_API_URL/api/pets`
-3. Request đi qua `JwtAuthenticationFilter` → validate JWT → nạp `SecurityContextHolder`
-4. `SecurityConfig` + `@PreAuthorize` trên `PetController` kiểm tra role
-5. `PetController.createPet()` → `PetService.createPet()` → build entity → `PetRepository.save()`
-6. Entity map ngược thành `PetResponse` DTO, bọc trong `ApiResponse`
-7. Response trả về `ApiClient`; nếu `401` → tự động refresh token và retry 1 lần
+1. `ApiClient` (FE) gắn JWT từ `localStorage`, gọi `fetch()` tới `VITE_API_URL/api/...`
+2. Request đi qua `JwtAuthenticationFilter` (`platform/security`) → gắn `traceId` vào MDC → validate JWT → nạp `UserPrincipal` vào `SecurityContextHolder`
+3. `SecurityConfig` (stateless, `@PreAuthorize` theo role) kiểm tra quyền truy cập endpoint
+4. Controller (`@Valid` DTO) → Service (business rule + `@Transactional`, dùng `AuditorAware` để tự điền `created_by`/`updated_by`) → Repository
+5. Entity map ngược thành `Response` DTO qua MapStruct, bọc trong `ApiResponse<T>` (`platform/model`)
+6. Response trả về `ApiClient`; nếu `401` → tự động refresh token và retry 1 lần
 
-**Luồng lỗi:** Exception từ controller/service → `GlobalExceptionHandler` (`@RestControllerAdvice`) → `BusinessException`/`ResourceNotFoundException` map theo HTTP status khai báo sẵn; `MethodArgumentNotValidException` → map thành field→message với HTTP 400.
+**Luồng lỗi:** Exception từ controller/service → `GlobalExceptionHandler` (`platform/exception`, `@RestControllerAdvice`) → map 1 trong 5 exception chuẩn (`BusinessRuleViolationException`, `InvalidStateTransitionException`, `ResourceNotFoundException`, `AccessDeniedScopeException`, `ConcurrencyConflictException`) sang `ErrorResponse` 6-field theo bảng ở `docs/convention/backend/04-exception-handling.md`; `MethodArgumentNotValidException` → `VALIDATION_FAILED` HTTP 400.
 
 ---
 
@@ -178,13 +171,12 @@ Biến môi trường chính: `DB_HOST/PORT/NAME/USERNAME/PASSWORD`, `REDIS_HOST
 
 > Mục này ghi nhận **hiện trạng thực tế của code**, không phải lời phê bình — dùng để biết chỗ nào "chưa xong" trước khi build tính năng mới lên trên.
 
-- **Chỉ `pets` là module hoàn thiện đầu-cuối.** `auth/` và `users/` mới có `entity/`, chưa có `service/controller/repository` — cần bổ sung theo đúng khuôn mẫu `modules/pets/`.
+- **`module/` hiện rỗng — chưa có module nghiệp vụ nào (0/25) được triển khai.** Chỉ có hạ tầng `platform/` (security, exception, FSM base, model, enums) đã sẵn sàng làm nền cho module đầu tiên. `Account`/`User`/`Pet` entity và toàn bộ layer CRUD Pet đã từng được dựng thử nghiệm rồi bị gỡ bỏ để làm sạch trước khi module hoá đúng theo `docs/convention/backend/`.
+- **Migration `V1__init_schema.sql` đã có đủ 25 bảng theo `docs/06-erd.md`**, bao gồm cột audit chuẩn (`created_by`, `updated_by`, `deleted_at`, `version`) cho `accounts`/`users`/`pets`; các bảng còn lại nên được rà soát cột audit tương tự khi entity tương ứng được triển khai.
 - **Redis đã khai báo hạ tầng nhưng chưa được BE dùng** — chưa có `RedisTemplate`/cache config nào trong code, dù dependency `spring-boot-starter-data-redis` đã có.
 - **2 HTTP client song song ở FE:** `shared/api/client.ts` (fetch-based, đầy đủ endpoint, có auto-refresh token) và `shared/api/axios.ts` + `product.api.ts`/`review.api.ts` (axios-based, chỉ phủ một phần endpoint). Trang mới cần biết đang dùng client nào — nên ưu tiên client fetch-based để có sẵn cơ chế refresh 401.
 - **2 instance `QueryClient` được tạo độc lập** ở `main.tsx` và `App.tsx` — provider trong `App.tsx` "thắng", cấu hình ở `main.tsx` thực chất không có tác dụng.
 - **Chưa có route guard xác thực ở FE:** `App.tsx` mount mọi page không điều kiện; việc kiểm tra đăng nhập/role hiện phải tự làm trong từng page/store.
-- **`PetController` đang hardcode current-user** (`getCurrentUserId()`/`getCurrentUserRole()` trả về giá trị cố định `1L`/`"CUSTOMER"`) thay vì đọc từ `SecurityContextHolder` — cần sửa trước khi JWT thật được phát hành cho nhiều user, nếu không mọi kiểm tra "chủ sở hữu" đều vô nghĩa.
-- **`GlobalExceptionHandler` lộ message exception gốc** ra response cho lỗi 500 chung — nên đổi thành log server-side + message chung chung cho client.
 
 ---
 
@@ -193,7 +185,7 @@ Biến môi trường chính: `DB_HOST/PORT/NAME/USERNAME/PASSWORD`, `REDIS_HOST
 | Tài liệu | Nội dung |
 |---|---|
 | `docs/01-business-operations.md` | Actor & nghiệp vụ (business, không phải kỹ thuật) |
-| `docs/02-business-rules.md` | ~150+ RULE-ID — mọi validation/guard trong code phải trích dẫn đúng RULE-ID |
+| `docs/02-business-rules.md` | 217 RULE-ID — mọi validation/guard trong code phải trích dẫn đúng RULE-ID |
 | `docs/03-state-machines.md` | 17 FSM — nguồn chân lý cho transition state |
 | `docs/04-glossary.md` | Ubiquitous Language — tên biến/class/API/event phải khớp |
 | `docs/05-domain-model.md` | DDD Aggregates/Entities/VO, Architectural Decision Locks D-01..D-04 |
