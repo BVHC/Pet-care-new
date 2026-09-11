@@ -6,7 +6,7 @@
 
 - Mỗi file trong `docs/` là **nguồn chân lý (source of truth)** cho đúng một loại nội dung (xem bảng dưới). Không tự suy diễn hay bịa thêm business rule, RULE-ID, hay transition FSM ngoài những gì đã đặc tả trong mermaid diagram.
 - `01`–`06` đặc tả **nghiệp vụ mục tiêu** (business/domain/schema). `architecture/system-overview.md` mô tả **hiện trạng kỹ thuật thực tế của codebase** — hai loại có thể lệch nhau tại một thời điểm; khi code vào module đã tồn tại, luôn đối chiếu cả hai trước khi bắt đầu.
-- `docs/adr/` và `docs/api/` hiện là thư mục rỗng (scaffold, chưa có nội dung) — không giả định nội dung của chúng.
+- `docs/adr/` ghi lại các **quyết định kỹ thuật** không được 00–07 quy định cụ thể (khác với `D-01`..`D-04` ở `docs/05-domain-model.md` §1 — đó là khóa quyết định kiến trúc cấp *nghiệp vụ*) — xem `docs/adr/README.md`. `docs/api/` hiện vẫn là thư mục rỗng (scaffold, chưa có nội dung) — không giả định nội dung của nó.
 
 ---
 
@@ -54,6 +54,7 @@
 | 7 | [07-requirement-traceability-matrix.md](07-requirement-traceability-matrix.md) | Ma trận truy vết đầy đủ: Requirement (00) ↔ Rule (02) ↔ Operation (01) ↔ FSM (03) ↔ Domain/ERD (05/06), theo 25 module | Tra cứu **khi** cần xác định Rule/Command/FSM/bảng ERD nào hậu thuẫn một Requirement cụ thể, hoặc ngược lại |
 | 8 | [architecture/system-overview.md](architecture/system-overview.md) | Kiến trúc kỹ thuật **thực tế của codebase** (tech stack, luồng request, layer BE/FE, deployment, known gaps) — khác với 00-07 vốn đặc tả nghiệp vụ mục tiêu | **Trước khi** viết code trong module đã có sẵn (đối chiếu pattern hiện có) hoặc khi cần biết stack/luồng request/giới hạn kỹ thuật hiện tại |
 | 9 | [convention/backend/](convention/backend/) | Backend Convention — 9 file: [package structure](convention/backend/01-package-structure.md), [layering & DTO](convention/backend/02-layering-and-dto.md), [naming](convention/backend/03-naming-convention.md), [exception handling](convention/backend/04-exception-handling.md), [FSM pattern](convention/backend/05-fsm-pattern.md), [validation](convention/backend/06-validation.md), [transaction](convention/backend/07-transaction-management.md), [logging/audit](convention/backend/08-logging-and-audit.md), [testing](convention/backend/09-testing.md) | **Trước khi** viết bất kỳ code backend nào — mọi Controller/Service/Entity/DTO/Exception/FSM handler phải tuân theo quy ước ở đây |
+| 10 | [adr/](adr/) | Architecture Decision Records — quyết định kỹ thuật không được 00-07 quy định cụ thể (ví dụ: chiến lược lưu JWT refresh token, chính sách fail-open khi Redis sập) | Tra cứu **khi** cần biết lý do đằng sau một quyết định hạ tầng đã chốt, hoặc **trước khi** tự quyết định lại một vấn đề kỹ thuật tương tự chưa được 00-07 đặc tả |
 
 ---
 

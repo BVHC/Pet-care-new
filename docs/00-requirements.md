@@ -482,7 +482,7 @@ Xem chi tiết và căn cứ tại §9.
 Chỉ liệt kê nội dung có **bằng chứng tường minh** trong 01–06 rằng nó bị loại trừ hoặc chưa đưa vào milestone hiện tại. Không suy đoán thêm.
 
 | ID | Nội dung ngoài phạm vi |
-|---|---|---|
+|---|---|
 | OOS-001 | Giao hàng qua đơn vị vận chuyển thứ ba / trạng thái "Shipped-Carrier-Delivery" cho đơn Online. Hệ thống v1 chỉ hỗ trợ mô hình nhận hàng tại Store (In-Store Pickup/Retail Handover). |
 | OOS-002 | Kênh thông báo Zalo ZNS. |
 | OOS-003 | Đa tiền tệ (Multi-currency). |

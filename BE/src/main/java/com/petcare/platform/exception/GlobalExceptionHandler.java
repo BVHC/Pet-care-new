@@ -4,6 +4,8 @@ import com.petcare.platform.model.ErrorResponse;
 import org.slf4j.MDC;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
+import org.springframework.security.access.AccessDeniedException;
+import org.springframework.security.core.AuthenticationException;
 import org.springframework.validation.FieldError;
 import org.springframework.web.bind.MethodArgumentNotValidException;
 import org.springframework.web.bind.annotation.ExceptionHandler;
@@ -41,6 +43,25 @@ public class GlobalExceptionHandler {
     @ExceptionHandler(ConcurrencyConflictException.class)
     public ResponseEntity<ErrorResponse> handleConcurrencyConflict(ConcurrencyConflictException ex) {
         return build(HttpStatus.CONFLICT, "CONCURRENCY_CONFLICT", ex.getMessage());
+    }
+
+    /**
+     * Bắt AuthenticationException ném ra trong Controller/Service (hiếm — luồng
+     * chính của filter chain không ném exception, xem RestAuthenticationEntryPoint).
+     */
+    @ExceptionHandler(AuthenticationException.class)
+    public ResponseEntity<ErrorResponse> handleAuthentication(AuthenticationException ex) {
+        return build(HttpStatus.UNAUTHORIZED, "UNAUTHORIZED", ex.getMessage());
+    }
+
+    /**
+     * Bắt từ chối @PreAuthorize (method-level) ném trong lúc controller đang chạy —
+     * khác với từ chối ở tầng FilterSecurityInterceptor (URL-pattern), vốn xảy ra
+     * trước DispatcherServlet và được RestAccessDeniedHandler xử lý riêng.
+     */
+    @ExceptionHandler(AccessDeniedException.class)
+    public ResponseEntity<ErrorResponse> handleAccessDenied(AccessDeniedException ex) {
+        return build(HttpStatus.FORBIDDEN, "ACCESS_DENIED", ex.getMessage());
     }
 
     @ExceptionHandler(MethodArgumentNotValidException.class)

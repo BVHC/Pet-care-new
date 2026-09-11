@@ -1,5 +1,7 @@
 package com.petcare.platform.security;
 
+import com.petcare.platform.enums.AccountStatus;
+import com.petcare.platform.enums.SecurityScope;
 import com.petcare.platform.enums.UserRole;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
@@ -24,11 +26,16 @@ public class UserPrincipal implements UserDetails {
     private String phone;
     private String name;
     private UserRole role;
+    private SecurityScope scope;
+    private AccountStatus accountStatus;
     private UUID organizationId;
     private UUID storeId;
 
     @Override
     public Collection<? extends GrantedAuthority> getAuthorities() {
+        if (role == null) {
+            return List.of();
+        }
         return List.of(new SimpleGrantedAuthority("ROLE_" + role.name()));
     }
 
@@ -49,7 +56,7 @@ public class UserPrincipal implements UserDetails {
 
     @Override
     public boolean isAccountNonLocked() {
-        return true;
+        return accountStatus != AccountStatus.LOCKED;
     }
 
     @Override
@@ -59,6 +66,6 @@ public class UserPrincipal implements UserDetails {
 
     @Override
     public boolean isEnabled() {
-        return true;
+        return accountStatus == AccountStatus.ACTIVE;
     }
 }
