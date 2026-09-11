@@ -4,8 +4,13 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
+import org.springframework.boot.testcontainers.service.connection.ServiceConnection;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.test.context.ActiveProfiles;
+import org.springframework.test.context.TestPropertySource;
+import org.testcontainers.containers.PostgreSQLContainer;
+import org.testcontainers.junit.jupiter.Container;
+import org.testcontainers.junit.jupiter.Testcontainers;
 
 import java.time.Instant;
 import java.util.List;
@@ -15,13 +20,21 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 /**
- * Integration test cho RefreshTokenService trên Postgres thật (application-test.yml,
- * docker-compose petcare_test db). Không có Account JPA entity nên account giả lập
- * bằng INSERT SQL trực tiếp qua JdbcTemplate.
+ * Integration test cho RefreshTokenService trên Postgres thật (Testcontainers
+ * — docs/convention/backend/09-testing.md: "Integration test: @SpringBootTest
+ * + Testcontainers"). Container tự chạy Flyway migration thật (V1/V2/V3) nên
+ * tự chứa hoàn toàn, không phụ thuộc DB dựng sẵn bên ngoài. Không có Account
+ * JPA entity nên account giả lập bằng INSERT SQL trực tiếp qua JdbcTemplate.
  */
 @SpringBootTest
 @ActiveProfiles("test")
+@Testcontainers
+@TestPropertySource(properties = {"spring.flyway.enabled=true", "spring.jpa.hibernate.ddl-auto=validate"})
 class RefreshTokenServiceIT {
+
+    @Container
+    @ServiceConnection
+    static PostgreSQLContainer<?> postgres = new PostgreSQLContainer<>("postgres:17");
 
     @Autowired
     private RefreshTokenService refreshTokenService;
@@ -74,7 +87,7 @@ class RefreshTokenServiceIT {
     @Test
     void rotate_rejectsAlreadyRevokedToken() {
         refreshTokenService.issue(accountId, "single-use-token", UUID.randomUUID(), Instant.now().plusSeconds(3600), null, null);
-        refreshTokenService.revoke("single-use-token", "LOGOUT");
+        refreshTokenService.revoke("single-use-token", RefreshTokenRevokeReason.LOGOUT);
 
         assertThatThrownBy(() -> refreshTokenService.rotate("single-use-token", "another-token", UUID.randomUUID(), Instant.now().plusSeconds(3600)))
                 .isInstanceOf(IllegalArgumentException.class);
@@ -85,7 +98,7 @@ class RefreshTokenServiceIT {
         refreshTokenService.issue(accountId, "token-1", UUID.randomUUID(), Instant.now().plusSeconds(3600), null, null);
         refreshTokenService.issue(accountId, "token-2", UUID.randomUUID(), Instant.now().plusSeconds(3600), null, null);
 
-        refreshTokenService.revokeAllForAccount(accountId, "ADMIN_LOCK");
+        refreshTokenService.revokeAllForAccount(accountId, RefreshTokenRevokeReason.LOCK_ACCOUNT);
 
         assertThat(refreshTokenRepository.findAllByAccountIdAndRevokedAtIsNull(accountId)).isEmpty();
     }

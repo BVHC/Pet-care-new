@@ -8,6 +8,7 @@ Tài liệu này ghi lại các **quyết định kỹ thuật** (không phải 
 |---|---------|-----------|------|
 | [0001](0001-jwt-refresh-token-storage-strategy.md) | Chiến lược lưu trữ JWT Refresh Token & Access Token Blacklist | Accepted | 2026-09-11 |
 | [0002](0002-jwt-blacklist-fail-open-policy.md) | Chính sách Fail-Open cho Access Token Blacklist khi Redis không khả dụng | Accepted | 2026-09-11 |
+| [0003](0003-refresh-token-cleanup-job.md) | Cron job dọn định kỳ `refresh_tokens` hết hạn/revoke lâu ngày | Accepted | 2026-09-11 |
 
 ## Bối cảnh chung
 

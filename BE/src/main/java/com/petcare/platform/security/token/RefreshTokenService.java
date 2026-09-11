@@ -43,7 +43,7 @@ public class RefreshTokenService {
         repository.save(newToken);
 
         oldToken.setRevokedAt(Instant.now());
-        oldToken.setRevokeReason("ROTATED");
+        oldToken.setRevokeReason(RefreshTokenRevokeReason.ROTATED);
         oldToken.setReplacedBy(newToken.getId());
         repository.save(oldToken);
 

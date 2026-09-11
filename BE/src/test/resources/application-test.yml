@@ -33,6 +33,8 @@ app:
     allowed-origins: http://localhost:5173,http://localhost:3000
   security:
     blacklist-fail-open: true
+  refresh-token-cleanup:
+    enabled: false
 
 server:
   port: 8081

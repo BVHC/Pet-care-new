@@ -63,10 +63,10 @@ public class TokenIssuanceFacadeImpl implements TokenIssuanceFacade {
     public void logout(String rawAccessToken, String rawRefreshToken) {
         if (rawAccessToken != null) {
             UUID jti = tokenProvider.getJti(rawAccessToken);
-            tokenBlacklistService.blacklist(jti, tokenProvider.getExpiresAt(rawAccessToken), "LOGOUT");
+            tokenBlacklistService.blacklist(jti, tokenProvider.getExpiresAt(rawAccessToken), RefreshTokenRevokeReason.LOGOUT);
         }
         if (rawRefreshToken != null) {
-            refreshTokenService.revoke(rawRefreshToken, "LOGOUT");
+            refreshTokenService.revoke(rawRefreshToken, RefreshTokenRevokeReason.LOGOUT);
         }
     }
 
