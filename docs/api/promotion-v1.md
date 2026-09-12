@@ -23,7 +23,7 @@ Envelope DECIDED theo convention `04-exception-handling`.
 
 ---
 
-## A. Confirmed Promotion API (8 endpoints)
+## A. Confirmed Promotion API (10 endpoints)
 
 | # | Endpoint (proposed) | Business operation (CONFIRMED) |
 |---|---|---|
@@ -32,9 +32,11 @@ Envelope DECIDED theo convention `04-exception-handling`.
 | 3 | `POST /promotions/{id}/activate` | `ManagePromotion` — `01#18` |
 | 4 | `POST /promotions/{id}/pause` | `ManagePromotion` — `01#18` |
 | 5 | `POST /promotions/{id}/vouchers` | `CreateVoucher` — `01#18`, RULE-18-03 |
-| 6 | `PATCH /vouchers/{id}` | `ManageVoucher` — `01#18` |
-| 7 | `PUT /stores/{id}/promotions/{pid}` | `ConfigureStorePromotion` — `01#18`, RULE-18-02 |
-| 8 | `POST /vouchers/validate` | `ValidateVoucher` — `01#18`, RULE-18-04/05 |
+| 6 | `PATCH /vouchers/{id}` | `ManageVoucher` — `01#18` (chỉ sửa field, không đổi status — A7) |
+| 7 | `POST /vouchers/{id}/activate` | `ManageVoucher` — `01#18` (đồng bộ pattern transition-riêng với Promotion — A7) |
+| 8 | `POST /vouchers/{id}/disable` | `ManageVoucher` — `01#18` (đồng bộ pattern transition-riêng với Promotion — A7) |
+| 9 | `PUT /stores/{id}/promotions/{pid}` | `ConfigureStorePromotion` — `01#18`, RULE-18-02 |
+| 10 | `POST /vouchers/validate` | `ValidateVoucher` — `01#18`, RULE-18-04/05 |
 
 ---
 
@@ -45,7 +47,8 @@ Envelope DECIDED theo convention `04-exception-handling`.
 | CreatePromotion | OrgAdmin | Trong Org | RULE-18-01 (thời gian + điều kiện + nhóm áp dụng + ngân sách) | POST | `/promotions` | Bearer | OrgAdmin Org mình | `[*] → DRAFT` | Non-idempotent | `campaignCode` unique — scope unique TBD Q10 (A1: trong Org) |
 | ManagePromotion | OrgAdmin | — | (kích hoạt/tạm dừng) | POST | `…/activate`, `…/pause` | Bearer | OrgAdmin | `DRAFT/PAUSED → ACTIVE`, `ACTIVE → PAUSED` (A2) | Idempotent | Hết hạn auto `EXPIRED` (job, không endpoint) |
 | CreateVoucher | OrgAdmin | Trong campaign ACTIVE? (A3) | RULE-18-03 (code, loại, max, min, hạn, đối tượng) | POST | `/promotions/{id}/vouchers` | Bearer | OrgAdmin | `[*] → ACTIVE` (ERD default) | 409 trùng `code` (UK CONFIRMED) | Đối tượng KH (segment) shape TBD Q11 |
-| ManageVoucher | OrgAdmin | — | (sửa/ngưng) | PATCH | `/vouchers/{id}` | Bearer | OrgAdmin | → `DISABLED` khi ngưng | Idempotent | Không xóa (đã có usage) — A4 |
+| ManageVoucher (edit) | OrgAdmin | — | (sửa field) | PATCH | `/vouchers/{id}` | Bearer | OrgAdmin | none | Idempotent | Không xóa (đã có usage) — A4. Không đổi `status` qua PATCH — A7 |
+| ManageVoucher (transition) | OrgAdmin | — | (bật/ngưng) | POST | `…/activate`, `…/disable` | Bearer | OrgAdmin | `DISABLED → ACTIVE`, `ACTIVE → DISABLED` | Idempotent | Tách khỏi PATCH để đồng bộ pattern transition-riêng dùng ở Promotion cùng module và mọi FSM khác trong bộ docs (convention 05-fsm-pattern) — A7 |
 | ConfigureStorePromotion | StoreManager | Promotion ACTIVE của Org | RULE-18-02 (bật/tắt tại Store trong khung Org) | PUT | `/stores/{id}/promotions/{pid}` | Bearer | Manager Store mình | none (flag) | Idempotent | `{enabled}` + storage TBD Q9 |
 | ValidateVoucher | (System khi checkout) | Đủ 5 điều kiện | RULE-18-04 (ACTIVE + hạn + store + min + đối tượng) + RULE-18-05 (2 caps) + RULE-18-08 (1/đơn) | POST | `/vouchers/validate` | Bearer | System/checkout flow | none (read) | Idempotent | `{code, storeId, orderAmount, orderId?/invoiceId?}` → `{valid, discountAmount?, reason?}` |
 
@@ -53,7 +56,12 @@ Envelope DECIDED theo convention `04-exception-handling`.
 scope) · A2 activate/pause là 2 transition duy nhất có op hậu thuẫn (EXPIRED auto) ·
 A3 voucher tạo trong campaign `ACTIVE` (docs không cấm tạo ở DRAFT — PROPOSED cho
 phép mọi trạng thái trừ EXPIRED, TBD Q12) · A4 voucher không xóa khi đã có usage
-(derived từ nhu cầu đối soát RULE-18-06).
+(derived từ nhu cầu đối soát RULE-18-06) · A7 `ManageVoucher` (Command đơn nhất
+trong `01#18`) được tách thành PATCH (sửa field) + `…/activate`/`…/disable`
+(transition status) thay vì gộp `status` vào PATCH, để nhất quán với pattern
+transition-riêng dùng ở Promotion cùng module và mọi FSM khác trong bộ docs
+(convention `05-fsm-pattern`) — không phát sinh Command mới, chỉ tách shape API
+của cùng 1 Command.
 
 ---
 
@@ -78,8 +86,12 @@ phép mọi trạng thái trừ EXPIRED, TBD Q12) · A4 voucher không xóa khi 
   → `ACTIVE`. Response `201 {voucherId, code, status: "ACTIVE"}`.
   Status: `201` · `400` · `401` · `403` · `404` · `409`.
 - **`PATCH /vouchers/{id}`** — `{discountValue?, maxDiscountAmount?,
-  validUntil?, status? (`ACTIVE`/`DISABLED`)}`. Không sửa `code`/`discountType`
-  khi đã có usage (A5 — derived bảo toàn đối soát). Status chuẩn.
+  validUntil?}`. Không sửa `code`/`discountType`
+  khi đã có usage (A5 — derived bảo toàn đối soát). Không đổi `status` qua PATCH
+  (A7) — dùng `…/activate`/`…/disable`. Status chuẩn.
+- **`POST /vouchers/{id}/activate`** — `{}`. `DISABLED → ACTIVE`.
+  **`POST /vouchers/{id}/disable`** — `{}`. `ACTIVE → DISABLED`. Cả hai idempotent
+  (gọi lại khi đã đúng state trả `200` state hiện tại, không lỗi). Status chuẩn + `409`.
 - **`PUT /stores/{id}/promotions/{pid}`** — `{enabled (req)}`. Storage TBD Q9.
   Response `200 {storeId, promotionId, enabled}`.
 

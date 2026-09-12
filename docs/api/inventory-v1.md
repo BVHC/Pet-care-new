@@ -95,7 +95,7 @@ thiếu format — như `appointmentNumber`).
   ≠0, +/-), reason (req: 5 giá trị CONFIRMED)}`. → `PENDING`. Status:
   `201` · `400` · `401` · `403` · `404`.
 - **`POST /inventory-adjustments/{id}/approve`** — Guards: `PENDING` +
-  `approver != created_by` (bằng nhau → `403 MAKER_CHECKER_VIOLATION` CONFIRMED).
+  `approver != created_by` (bằng nhau → `400 MAKER_CHECKER_VIOLATION` CONFIRMED — BusinessRuleViolationException theo convention 04, tách khỏi `403 ACCESS_DENIED_SCOPE_MISMATCH`).
   Approve cập nhật sổ ngay (cùng transaction). **`…/reject`** — `{reason?}` →
   `REJECTED`. Status: `200` · `401` · `403` · `404` · `409` sai trạng thái.
 

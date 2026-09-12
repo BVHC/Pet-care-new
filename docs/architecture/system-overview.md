@@ -4,7 +4,7 @@
 >
 > **Khác với `docs/01-06`:** Các tài liệu đó đặc tả **nghiệp vụ** (business operations, rules, FSM, domain model, ERD). Tài liệu này mô tả **cách hệ thống được triển khai về mặt kỹ thuật** — layer, luồng request, stack, deployment.
 >
-> **Nguồn:** Tổng hợp trực tiếp từ codebase (`BE/`, `FE/`, `docker-compose.yml`) tại thời điểm phân tích **2026-09-10**. Khi codebase thay đổi đáng kể, tài liệu này cần được refresh lại.
+> **Nguồn:** Tổng hợp trực tiếp từ codebase (`BE/`, `FE/`, `docker-compose.yml`) tại thời điểm phân tích **2026-09-12**. Khi codebase thay đổi đáng kể, tài liệu này cần được refresh lại.
 
 ---
 
@@ -17,7 +17,7 @@ Hệ thống là một **monorepo** gồm 2 ứng dụng triển khai độc l�
 | `BE/` | Spring Boot 3 (Java 21) | REST API — modular monolith, package-by-feature |
 | `FE/` | React 18 + Vite + TypeScript | SPA — giao diện khách hàng/vận hành |
 | PostgreSQL 17 | Docker (`postgres:17`) | Nguồn chân lý dữ liệu quan hệ, schema quản lý bằng Flyway |
-| Redis 7 | Docker (`redis:7-alpine`) | Hạ tầng cache — **đã khai báo nhưng chưa được code BE sử dụng** (xem §7) |
+| Redis 7 | Docker (`redis:7-alpine`) | Đã được BE sử dụng thật — access-token blacklist (`TokenBlacklistService`, xem §3/§7) |
 
 ```text
 ┌─────────────────────────────────────────────────────────────┐
@@ -88,12 +88,14 @@ Hệ thống là một **monorepo** gồm 2 ứng dụng triển khai độc l�
 BE/src/main/java/com/petcare/
 ├── PetcareApplication.java     # Spring Boot entry point
 ├── platform/                   # Cross-cutting, dùng chung mọi module — ĐÃ triển khai
-│   ├── config/                 # SecurityConfig, JpaAuditingConfig (+ AuditorAware<UUID>)
-│   ├── security/                # JwtAuthenticationFilter, JwtTokenProvider, UserPrincipal
+│   ├── config/                 # SecurityConfig, CorsConfig, JpaAuditingConfig (+ AuditorAware<UUID>), SchedulingConfig (@EnableScheduling)
+│   ├── security/                # JwtAuthenticationFilter, JwtTokenProvider, UserPrincipal, RestAuthenticationEntryPoint, RestAccessDeniedHandler, TraceIdFilter
+│   │   └── token/                # RefreshTokenEntity/Repository/Service, TokenBlacklistService (Redis, fail-open — ADR-0002), TokenIssuanceFacade(Impl), RefreshTokenCleanupJob/Service (ADR-0001/0003)
 │   ├── exception/                # 5 exception chuẩn + GlobalExceptionHandler (xem 04-exception-handling.md)
 │   ├── fsm/                      # StateMachineBase, Transitionable (xem 05-fsm-pattern.md)
 │   ├── model/                   # ApiResponse<T>, PageResponse<T>, ErrorResponse, BaseEntity
-│   └── enums/                   # Toàn bộ Status-Enum của 17 FSM + UserRole, SecurityScope...
+│   ├── outbox/                  # OutboxEvent, OutboxEventRepository
+│   └── enums/                   # Toàn bộ Status-Enum của 19 FSM + UserRole, SecurityScope...
 └── module/                     # CHƯA có module nghiệp vụ nào được triển khai (thư mục rỗng)
 ```
 
@@ -171,9 +173,9 @@ Biến môi trường chính: `DB_HOST/PORT/NAME/USERNAME/PASSWORD`, `REDIS_HOST
 
 > Mục này ghi nhận **hiện trạng thực tế của code**, không phải lời phê bình — dùng để biết chỗ nào "chưa xong" trước khi build tính năng mới lên trên.
 
-- **`module/` hiện rỗng — chưa có module nghiệp vụ nào (0/25) được triển khai.** Chỉ có hạ tầng `platform/` (security, exception, FSM base, model, enums) đã sẵn sàng làm nền cho module đầu tiên. `Account`/`User`/`Pet` entity và toàn bộ layer CRUD Pet đã từng được dựng thử nghiệm rồi bị gỡ bỏ để làm sạch trước khi module hoá đúng theo `docs/convention/backend/`.
-- **Migration `V1__init_schema.sql` đã có đủ 25 bảng theo `docs/06-erd.md`**, bao gồm cột audit chuẩn (`created_by`, `updated_by`, `deleted_at`, `version`) cho `accounts`/`users`/`pets`; các bảng còn lại nên được rà soát cột audit tương tự khi entity tương ứng được triển khai.
-- **Redis đã khai báo hạ tầng nhưng chưa được BE dùng** — chưa có `RedisTemplate`/cache config nào trong code, dù dependency `spring-boot-starter-data-redis` đã có.
+- **`module/` hiện rỗng — chưa có module nghiệp vụ nào (0/25) được triển khai.** Chỉ có hạ tầng `platform/` (security + security/token, exception, FSM base, model, outbox, enums) đã sẵn sàng làm nền cho module đầu tiên. `Account`/`User`/`Pet` entity và toàn bộ layer CRUD Pet đã từng được dựng thử nghiệm rồi bị gỡ bỏ để làm sạch trước khi module hoá đúng theo `docs/convention/backend/`.
+- **Migration đã có 3 phiên bản** (`V1__init_schema.sql`: 25 bảng theo `docs/06-erd.md`, bao gồm cột audit chuẩn `created_by`/`updated_by`/`deleted_at`/`version` cho `accounts`/`users`/`pets`; `V2__auth_session_tokens.sql`: bảng refresh token; `V3__refresh_token_cleanup_index.sql`: index phục vụ job dọn dẹp). Các bảng còn lại ngoài 3 bảng trên nên được rà soát cột audit tương tự khi entity tương ứng được triển khai.
+- **Redis đã được BE dùng thật** (không còn là hạ tầng khai báo suông) — `TokenBlacklistService` (`platform/security/token/`) dùng `StringRedisTemplate` làm access-token blacklist khi logout/revoke, với chính sách **fail-open** khi Redis lỗi/timeout (`app.security.blacklist-fail-open`, mặc định `true` — xem ADR-0002). Refresh token thì lưu ở PostgreSQL (không phải Redis), theo ADR-0001, có job định kỳ `RefreshTokenCleanupJob` (cron `0 30 2 * * *`, Asia/Ho_Chi_Minh) dọn token hết hạn/bị revoke theo ADR-0003.
 - **2 HTTP client song song ở FE:** `shared/api/client.ts` (fetch-based, đầy đủ endpoint, có auto-refresh token) và `shared/api/axios.ts` + `product.api.ts`/`review.api.ts` (axios-based, chỉ phủ một phần endpoint). Trang mới cần biết đang dùng client nào — nên ưu tiên client fetch-based để có sẵn cơ chế refresh 401.
 - **2 instance `QueryClient` được tạo độc lập** ở `main.tsx` và `App.tsx` — provider trong `App.tsx` "thắng", cấu hình ở `main.tsx` thực chất không có tác dụng.
 - **Chưa có route guard xác thực ở FE:** `App.tsx` mount mọi page không điều kiện; việc kiểm tra đăng nhập/role hiện phải tự làm trong từng page/store.
@@ -186,7 +188,7 @@ Biến môi trường chính: `DB_HOST/PORT/NAME/USERNAME/PASSWORD`, `REDIS_HOST
 |---|---|
 | `docs/01-business-operations.md` | Actor & nghiệp vụ (business, không phải kỹ thuật) |
 | `docs/02-business-rules.md` | 217 RULE-ID — mọi validation/guard trong code phải trích dẫn đúng RULE-ID |
-| `docs/03-state-machines.md` | 17 FSM — nguồn chân lý cho transition state |
+| `docs/03-state-machines.md` | 19 FSM — nguồn chân lý cho transition state |
 | `docs/04-glossary.md` | Ubiquitous Language — tên biến/class/API/event phải khớp |
 | `docs/05-domain-model.md` | DDD Aggregates/Entities/VO, Architectural Decision Locks D-01..D-04 |
 | `docs/06-erd.md` | ERD & schema — nguồn chân lý cấu trúc CSDL |
@@ -195,4 +197,4 @@ Biến môi trường chính: `DB_HOST/PORT/NAME/USERNAME/PASSWORD`, `REDIS_HOST
 
 ---
 
-*Phân tích kiến trúc: 2026-09-08*
+*Phân tích kiến trúc: 2026-09-12 (cập nhật §3/§6/§7/§8 sau đợt triển khai bảo mật/JWT — commit `6665cd0`, `1606782`)*

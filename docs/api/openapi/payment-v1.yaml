@@ -219,6 +219,11 @@ components:
         type: string
         format: uuid
   schemas:
+    Money:
+      type: string
+      pattern: '^-?\d+\.\d{2}$'
+      example: "199000.00"
+      description: Decimal string, 2 fractional digits, matching DB DECIMAL(12,2) (docs/06-erd.md) — sent/received as string to avoid IEEE-754 float rounding. Parse server-side as BigDecimal, not double.
     PaymentStatus:
       type: string
       enum: [PENDING, PROCESSING, SUCCESS, FAILED, CANCELLED, PARTIALLY_REFUNDED, REFUNDED]
@@ -239,8 +244,7 @@ components:
           type: string
           format: uuid
         amount:
-          type: number
-          minimum: 0
+          $ref: '#/components/schemas/Money'
         provider:
           $ref: '#/components/schemas/GatewayProvider'
         idempotencyKey:
@@ -254,8 +258,7 @@ components:
           type: string
           format: uuid
         amount:
-          type: number
-          minimum: 0
+          $ref: '#/components/schemas/Money'
     PaymentResponse:
       type: object
       required: [paymentId, invoiceId, transactionCode, paymentMethod, status, amount]
@@ -273,10 +276,14 @@ components:
         status:
           $ref: '#/components/schemas/PaymentStatus'
         amount:
-          type: number
+          $ref: '#/components/schemas/Money'
         gatewayUrl:
           type: string
           description: Online redirect surfaced from VerifyPayment (PROPOSED, TBD Q5 in md).
+    CallbackStatus:
+      type: string
+      enum: [SUCCESS, FAILED]
+      description: PROPOSED gateway callback outcome (TBD scheme in md Q8).
     CallbackRequest:
       type: object
       required: [provider, transactionId, status, amount, signature]
@@ -286,13 +293,12 @@ components:
         transactionId:
           type: string
         status:
-          type: string
-          enum: [SUCCESS, FAILED]
+          $ref: '#/components/schemas/CallbackStatus'
         amount:
-          type: number
+          $ref: '#/components/schemas/Money'
         signature:
           type: string
-          description: HMAC over the payload (CONFIRMED RULE-16-03; scheme TBD Q8 in md).
+          description: "HMAC over the payload (CONFIRMED RULE-16-03; scheme TBD Q8 in md). Not modeled as an OpenAPI securityScheme - this is a per-request body-signed callback, not a bearer/apiKey/OAuth flow, so the auth mechanism is verified in the field description here rather than at operation-level security (security: [] on this operation reflects only 'no bearer JWT required')."
     CallbackResponse:
       type: object
       required: [received]

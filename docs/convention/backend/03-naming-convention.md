@@ -5,7 +5,9 @@
 | Đối tượng | Quy tắc | Ví dụ |
 |---|---|---|
 | Package con trong module | Số ít, chuẩn Spring Boot | `controller`, `service`, `repository`, `entity`, `dto`, `mapper`, `fsm`, `exception` |
-| Entity | Danh từ số ít, trùng Aggregate Root trong domain model | `Appointment`, `Invoice`, `Refund` |
+| Entity | Danh từ số ít, trùng Aggregate Root trong domain model, **không thêm hậu tố `Entity`** | `Appointment`, `Invoice`, `Refund` |
+
+> Quy tắc trên áp dụng cho `module/<feature>/entity/` (25 module nghiệp vụ). Entity hạ tầng dùng chung ở `platform/` (vd `RefreshTokenEntity`) không thuộc phạm vi convention này và được phép thêm hậu tố `Entity` để tránh trùng tên với DTO/domain concept cùng tên trong cùng package.
 | DTO Request | `{Command}Request` — Command lấy đúng tên trong `01-business-operations.md`/glossary | `BookAppointmentRequest`, `ApproveRefundRequest` |
 | DTO Response | `{Entity}Response` | `AppointmentResponse`, `InvoiceResponse` |
 | Method transition FSM | **Trùng chính xác tên Command nghiệp vụ**, không tự đặt lại | `bookAppointment()`, `checkInAppointment()`, `markNoShow()`, `abortAppointment()` |

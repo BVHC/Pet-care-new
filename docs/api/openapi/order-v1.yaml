@@ -393,6 +393,11 @@ components:
         type: string
         format: uuid
   schemas:
+    Money:
+      type: string
+      pattern: '^-?\d+\.\d{2}$'
+      example: "199000.00"
+      description: Decimal string, 2 fractional digits, matching DB DECIMAL(12,2) (docs/06-erd.md) — sent/received as string to avoid IEEE-754 float rounding. Parse server-side as BigDecimal, not double.
     OrderStatus:
       type: string
       enum: [PENDING_PAYMENT, PAID, CONFIRMED, PROCESSING, READY, DELIVERED, CANCELLED, REFUNDED]
@@ -445,13 +450,13 @@ components:
         status:
           $ref: '#/components/schemas/OrderStatus'
         subtotal:
-          type: number
+          $ref: '#/components/schemas/Money'
         discountAmount:
-          type: number
+          $ref: '#/components/schemas/Money'
         totalAmount:
-          type: number
+          $ref: '#/components/schemas/Money'
         totalRefundedAmount:
-          type: number
+          $ref: '#/components/schemas/Money'
         reservedUntil:
           type: string
           format: date-time

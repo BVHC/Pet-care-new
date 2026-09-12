@@ -287,11 +287,11 @@ components:
     AccountStatus:
       type: string
       enum: [PENDING_VERIFICATION, ACTIVE, LOCKED, DEACTIVATED]
-      description: CONFIRMED (04 glossary AccountStatus).
+      description: CONFIRMED (04 glossary AccountStatus). MUST MIRROR the `AccountStatus` schema in `openapi/iam-v1.yaml` byte-for-byte (no cross-file $ref support in this repo's tooling) — if you edit one, edit the other.
     RoleCode:
       type: string
       enum: [SUPER_ADMIN, ORGANIZATION_ADMIN, STORE_MANAGER, RECEPTIONIST, VETERINARIAN, GROOMER, INVENTORY_STAFF, FINANCE_STAFF, CUSTOMER]
-      description: CONFIRMED 9 canonical roles (RULE-02-02).
+      description: CONFIRMED 9 canonical roles (RULE-02-02). MUST MIRROR the `RoleCode` schema in `openapi/iam-v1.yaml` byte-for-byte (no cross-file $ref support in this repo's tooling) — if you edit one, edit the other.
     RegisterRequest:
       type: object
       required: [phone, password, name]

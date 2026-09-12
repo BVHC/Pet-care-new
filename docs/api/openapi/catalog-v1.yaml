@@ -591,6 +591,11 @@ components:
         type: string
         format: uuid
   schemas:
+    Money:
+      type: string
+      pattern: '^-?\d+\.\d{2}$'
+      example: "199000.00"
+      description: Decimal string, 2 fractional digits, matching DB DECIMAL(12,2) (docs/06-erd.md) — sent/received as string to avoid IEEE-754 float rounding. Parse server-side as BigDecimal, not double.
     ProductCategory:
       type: string
       enum: [FOOD, MEDICINE, ACCESSORY, HYGIENE]
@@ -628,9 +633,9 @@ components:
         unit:
           $ref: '#/components/schemas/ProductUnit'
         basePrice:
-          type: number
+          $ref: '#/components/schemas/Money'
         costPrice:
-          type: number
+          $ref: '#/components/schemas/Money'
         isActive:
           type: boolean
     ProductPage:
@@ -662,11 +667,9 @@ components:
         unit:
           $ref: '#/components/schemas/ProductUnit'
         basePrice:
-          type: number
-          minimum: 0
+          $ref: '#/components/schemas/Money'
         costPrice:
-          type: number
-          minimum: 0
+          $ref: '#/components/schemas/Money'
         isActive:
           type: boolean
           default: true
@@ -682,11 +685,9 @@ components:
         unit:
           $ref: '#/components/schemas/ProductUnit'
         basePrice:
-          type: number
-          minimum: 0
+          $ref: '#/components/schemas/Money'
         costPrice:
-          type: number
-          minimum: 0
+          $ref: '#/components/schemas/Money'
         isActive:
           type: boolean
       description: SKU is immutable (PROPOSED).
@@ -717,7 +718,7 @@ components:
         category:
           $ref: '#/components/schemas/ServiceCategory'
         basePrice:
-          type: number
+          $ref: '#/components/schemas/Money'
         durationMinutes:
           type: integer
         isActive:
@@ -751,8 +752,7 @@ components:
         category:
           $ref: '#/components/schemas/ServiceCategory'
         basePrice:
-          type: number
-          minimum: 0
+          $ref: '#/components/schemas/Money'
         durationMinutes:
           type: integer
           minimum: 1
@@ -773,8 +773,7 @@ components:
         category:
           $ref: '#/components/schemas/ServiceCategory'
         basePrice:
-          type: number
-          minimum: 0
+          $ref: '#/components/schemas/Money'
         durationMinutes:
           type: integer
           minimum: 1
@@ -790,8 +789,7 @@ components:
       required: [price]
       properties:
         price:
-          type: number
-          minimum: 0
+          $ref: '#/components/schemas/Money'
     PriceResponse:
       type: object
       required: [storeId, price]
@@ -800,7 +798,7 @@ components:
           type: string
           format: uuid
         price:
-          type: number
+          $ref: '#/components/schemas/Money'
     AvailabilityRequest:
       type: object
       required: [isActive]
@@ -835,7 +833,8 @@ components:
               name:
                 type: string
               price:
-                type: number
+                allOf:
+                  - $ref: '#/components/schemas/Money'
                 description: Override price, else master base_price (CONFIRMED RULE-05-05/07).
               isActive:
                 type: boolean
@@ -861,7 +860,7 @@ components:
               name:
                 type: string
               price:
-                type: number
+                $ref: '#/components/schemas/Money'
               isActive:
                 type: boolean
                 description: Store override flag (CONFIRMED RULE-05-04).

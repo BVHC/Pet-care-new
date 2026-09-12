@@ -323,10 +323,16 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/AdjustmentResponse'
+        '400':
+          description: Maker-checker violation — approver is the same actor who created the adjustment (CONFIRMED code MAKER_CHECKER_VIOLATION, RULE-12-03, BusinessRuleViolationException per convention 04).
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
         '401':
           $ref: '#/components/responses/Unauthorized'
         '403':
-          description: Maker-checker violation or outside scope (CONFIRMED code MAKER_CHECKER_VIOLATION, RULE-12-03).
+          description: Outside scope (CONFIRMED code ACCESS_DENIED_SCOPE_MISMATCH, RULE-02-01).
           content:
             application/json:
               schema:
@@ -428,10 +434,16 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/TransferResponse'
+        '400':
+          description: Maker-checker violation — approver is the same actor who requested the transfer (CONFIRMED code MAKER_CHECKER_VIOLATION, RULE-12-06, BusinessRuleViolationException per convention 04).
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
         '401':
           $ref: '#/components/responses/Unauthorized'
         '403':
-          description: Maker-checker violation or outside origin scope (CONFIRMED code MAKER_CHECKER_VIOLATION, RULE-12-06).
+          description: Outside origin scope (CONFIRMED code ACCESS_DENIED_SCOPE_MISMATCH, RULE-02-01).
           content:
             application/json:
               schema:
@@ -968,7 +980,7 @@ components:
           example: false
         errorCode:
           type: string
-          description: MAKER_CHECKER_VIOLATION is CONFIRMED (RULE-12-03/06, 403); ACCESS_DENIED_SCOPE_MISMATCH is CONFIRMED (RULE-02-01, 403); VALIDATION_FAILED, BUSINESS_RULE_VIOLATION, INVALID_STATE_TRANSITION, RESOURCE_NOT_FOUND, CONCURRENCY_CONFLICT follow docs/convention/backend/04-exception-handling.
+          description: MAKER_CHECKER_VIOLATION is CONFIRMED (RULE-12-03/06, 400, BusinessRuleViolationException); ACCESS_DENIED_SCOPE_MISMATCH is CONFIRMED (RULE-02-01, 403); VALIDATION_FAILED, BUSINESS_RULE_VIOLATION, INVALID_STATE_TRANSITION, RESOURCE_NOT_FOUND, CONCURRENCY_CONFLICT follow docs/convention/backend/04-exception-handling.
         message:
           type: string
         statusCode:

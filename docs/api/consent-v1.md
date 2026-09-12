@@ -25,7 +25,7 @@ Envelope DECIDED theo convention `04-exception-handling`.
 
 ---
 
-## A. Confirmed Consent API (7 endpoints)
+## A. Confirmed Consent API (9 endpoints)
 
 | # | Endpoint (proposed) | Business operation (CONFIRMED) |
 |---|---|---|

@@ -216,18 +216,13 @@ paths:
   /vouchers/{id}:
     patch:
       tags: [Vouchers]
-      summary: Manage voucher (ManageVoucher)
-      description: Tunes live vouchers. Code and type freeze once used (ASSUMPTION A5 in md); deletion is refused after any usage (ASSUMPTION A4).
-      operationId: manageVoucher
+      summary: Edit voucher fields (ManageVoucher)
+      description: Tunes live vouchers. Code and type freeze once used (ASSUMPTION A5 in md); deletion is refused after any usage (ASSUMPTION A4). Does not change `status` — use `…/activate`/`…/disable` (ASSUMPTION A7 in md, mirrors the dedicated-transition-endpoint pattern used everywhere else in this contract set, including Promotion `…/activate`/`…/pause` in this same file).
+      operationId: updateVoucher
       security:
         - bearerAuth: []
       parameters:
-        - name: id
-          in: path
-          required: true
-          schema:
-            type: string
-            format: uuid
+        - $ref: '#/components/parameters/VoucherId'
       requestBody:
         required: true
         content:
@@ -253,6 +248,72 @@ paths:
                 $ref: '#/components/schemas/Error'
         '404':
           $ref: '#/components/responses/NotFound'
+  /vouchers/{id}/activate:
+    post:
+      tags: [Vouchers]
+      summary: Activate voucher (ManageVoucher)
+      description: From DISABLED to ACTIVE (ASSUMPTION A7 in md). Idempotent.
+      operationId: activateVoucher
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/VoucherId'
+      responses:
+        '200':
+          description: Voucher active (or already active).
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/VoucherResponse'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          description: Organization admins of the org only.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          description: Voucher already EXPIRED.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+  /vouchers/{id}/disable:
+    post:
+      tags: [Vouchers]
+      summary: Disable voucher (ManageVoucher)
+      description: From ACTIVE to DISABLED (ASSUMPTION A7 in md). Idempotent.
+      operationId: disableVoucher
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/VoucherId'
+      responses:
+        '200':
+          description: Voucher disabled (or already disabled).
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/VoucherResponse'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          description: Organization admins of the org only.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          description: Voucher already EXPIRED.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
   /stores/{id}/promotions/{pid}:
     put:
       tags: [StoreConfig]
@@ -328,6 +389,13 @@ components:
       description: JWT/Session Token (RULE-01-01 CONFIRMED existence; Bearer transport ASSUMPTION A2 in auth-v1).
   parameters:
     PromotionId:
+      name: id
+      in: path
+      required: true
+      schema:
+        type: string
+        format: uuid
+    VoucherId:
       name: id
       in: path
       required: true
@@ -475,8 +543,6 @@ components:
         validUntil:
           type: string
           format: date-time
-        status:
-          $ref: '#/components/schemas/VoucherStatus'
     StorePromotionRequest:
       type: object
       required: [enabled]

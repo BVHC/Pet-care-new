@@ -112,10 +112,16 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/PurchaseRequestResponse'
+        '400':
+          description: Maker-checker violation — approver is the same actor who created the request (CONFIRMED code MAKER_CHECKER_VIOLATION, RULE-13-02, BusinessRuleViolationException per convention 04).
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
         '401':
           $ref: '#/components/responses/Unauthorized'
         '403':
-          description: Maker-checker violation or outside scope (CONFIRMED code MAKER_CHECKER_VIOLATION, RULE-13-02).
+          description: Outside scope (CONFIRMED code ACCESS_DENIED_SCOPE_MISMATCH, RULE-02-01).
           content:
             application/json:
               schema:
@@ -437,6 +443,11 @@ components:
         type: string
         format: uuid
   schemas:
+    Money:
+      type: string
+      pattern: '^-?\d+\.\d{2}$'
+      example: "199000.00"
+      description: Decimal string, 2 fractional digits, matching DB DECIMAL(12,2) (docs/06-erd.md) — sent/received as string to avoid IEEE-754 float rounding. Parse server-side as BigDecimal, not double.
     PurchaseRequestStatus:
       type: string
       enum: [DRAFT, SUBMITTED, APPROVED, REJECTED, CANCELLED]
@@ -456,7 +467,7 @@ components:
           type: integer
           minimum: 1
         expectedPrice:
-          type: number
+          $ref: '#/components/schemas/Money'
         recommendedSupplier:
           type: string
     CreateRequestRequest:
@@ -503,7 +514,7 @@ components:
           type: integer
           minimum: 1
         unitPrice:
-          type: number
+          $ref: '#/components/schemas/Money'
     CreateOrderRequest:
       type: object
       required: [purchaseRequestId, supplierName]
@@ -536,7 +547,7 @@ components:
         status:
           $ref: '#/components/schemas/PurchaseOrderStatus'
         totalAmount:
-          type: number
+          $ref: '#/components/schemas/Money'
     ReceiptLine:
       type: object
       required: [productId, receivedQuantity]
@@ -618,7 +629,7 @@ components:
           example: false
         errorCode:
           type: string
-          description: MAKER_CHECKER_VIOLATION is CONFIRMED (RULE-13-02, 403); ACCESS_DENIED_SCOPE_MISMATCH is CONFIRMED (RULE-02-01, 403); VALIDATION_FAILED, BUSINESS_RULE_VIOLATION, INVALID_STATE_TRANSITION, RESOURCE_NOT_FOUND follow docs/convention/backend/04-exception-handling.
+          description: MAKER_CHECKER_VIOLATION is CONFIRMED (RULE-13-02, 400, BusinessRuleViolationException); ACCESS_DENIED_SCOPE_MISMATCH is CONFIRMED (RULE-02-01, 403); VALIDATION_FAILED, BUSINESS_RULE_VIOLATION, INVALID_STATE_TRANSITION, RESOURCE_NOT_FOUND follow docs/convention/backend/04-exception-handling.
         message:
           type: string
         statusCode:

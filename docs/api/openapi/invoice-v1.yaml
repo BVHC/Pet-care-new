@@ -366,6 +366,11 @@ components:
         type: string
         format: uuid
   schemas:
+    Money:
+      type: string
+      pattern: '^-?\d+\.\d{2}$'
+      example: "199000.00"
+      description: Decimal string, 2 fractional digits, matching DB DECIMAL(12,2) (docs/06-erd.md) — sent/received as string to avoid IEEE-754 float rounding. Parse server-side as BigDecimal, not double.
     InvoiceStatus:
       type: string
       enum: [DRAFT, ISSUED, PAID, VOID, CANCELLED]
@@ -396,25 +401,28 @@ components:
         type:
           $ref: '#/components/schemas/InvoiceType'
         taxAmount:
-          type: number
-          minimum: 0
+          allOf:
+            - $ref: '#/components/schemas/Money'
           description: Passed in, not computed (TBD Q7 in md).
+    InvoiceItemType:
+      type: string
+      enum: [SERVICE, PRODUCT]
+      description: CONFIRMED (04 glossary).
     InvoiceItem:
       type: object
       required: [itemType, refId, quantity, amount]
       properties:
         itemType:
-          type: string
-          enum: [SERVICE, PRODUCT]
+          $ref: '#/components/schemas/InvoiceItemType'
         refId:
           type: string
           format: uuid
         quantity:
           type: number
         price:
-          type: number
+          $ref: '#/components/schemas/Money'
         amount:
-          type: number
+          $ref: '#/components/schemas/Money'
     InvoiceResponse:
       type: object
       required: [invoiceId, invoiceNumber, customerId, storeId, type, status, subtotal, discountAmount, taxAmount, totalAmount, totalRefundedAmount]
@@ -435,15 +443,16 @@ components:
         status:
           $ref: '#/components/schemas/InvoiceStatus'
         subtotal:
-          type: number
+          $ref: '#/components/schemas/Money'
         discountAmount:
-          type: number
+          $ref: '#/components/schemas/Money'
         taxAmount:
-          type: number
+          $ref: '#/components/schemas/Money'
         totalAmount:
-          type: number
+          $ref: '#/components/schemas/Money'
         totalRefundedAmount:
-          type: number
+          allOf:
+            - $ref: '#/components/schemas/Money'
           description: Running refunded total; PAID never moves (CONFIRMED D-01).
         items:
           type: array
@@ -468,8 +477,7 @@ components:
       required: [itemType, refId, quantity]
       properties:
         itemType:
-          type: string
-          enum: [SERVICE, PRODUCT]
+          $ref: '#/components/schemas/InvoiceItemType'
         refId:
           type: string
           format: uuid
@@ -477,8 +485,8 @@ components:
           type: number
           minimum: 0
         price:
-          type: number
-          minimum: 0
+          allOf:
+            - $ref: '#/components/schemas/Money'
           description: Defaults to the effective catalog price (ASSUMPTION A1 in md).
     DiscountRequest:
       type: object
@@ -487,8 +495,7 @@ components:
           type: string
           description: Validated under Module 18 rules.
         discountAmount:
-          type: number
-          minimum: 0
+          $ref: '#/components/schemas/Money'
     SurchargeRequest:
       type: object
       required: [customerId, storeId, items]
