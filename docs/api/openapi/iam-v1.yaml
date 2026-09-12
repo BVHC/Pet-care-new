@@ -1,0 +1,750 @@
+# Pet Care IAM API v1 — OpenAPI 3.1 (derived strictly from docs/)
+#
+# Source of truth: docs/01-business-operations.md (01#2), docs/02-business-rules.md
+# (RULE-02-01..07), docs/03-state-machines.md (FSM-1 Account),
+# docs/04-glossary.md (02), docs/05-domain-model.md (4.2),
+# docs/06-erd.md (users/roles/permissions/role_permissions/user_roles).
+# Staff provisioning (CreateStaff) lives in auth-v1.yaml and is NOT redefined here.
+#
+# Traceability legend: CONFIRMED = in docs (source cited) / ASSUMPTION (A#) =
+# reasonable inference / TBD (Q#) = needs PO (see ../iam-v1.md section E).
+# No `servers` (base URL TBD Q1). Error envelope follows
+# docs/convention/backend/04-exception-handling. No 422 (convention uses 400).
+
+openapi: 3.1.0
+info:
+  title: Pet Care IAM API v1
+  version: 1.0.0
+  description: >-
+    Strictly derived from docs/ (01#2 operations, RULE-02-01..07, FSM-1 Account
+    lifecycle, 9 canonical roles, 5 scopes). Staff creation stays in auth-v1
+    (POST /staff-accounts). Counter-assisted customer creation reuses
+    RegisterAccount semantics (ASSUMPTION A2). Multi-role via user_roles is out
+    of v1 (ASSUMPTION A3, TBD Q4/Q5). No auto-unlock: LOCKED->ACTIVE only via
+    manual UnlockAccount (FSM-1 invariant 5).
+tags:
+  - name: Profile
+    description: Self-service profile (ManageCustomerProfile).
+  - name: UserAdmin
+    description: User search and binding management (ManageUser).
+  - name: AccessControl
+    description: Role assignment and account lifecycle (AssignPermission, Lock/Unlock/Deactivate/Reactivate).
+  - name: RoleCatalog
+    description: Role and permission catalog (ManageRole, ManagePermission).
+paths:
+  /users/me:
+    get:
+      tags: [Profile]
+      summary: Get own profile (ManageCustomerProfile, self)
+      description: CONFIRMED (RULE-02-06). Path/shape PROPOSED.
+      operationId: getOwnProfile
+      security:
+        - bearerAuth: []
+      responses:
+        '200':
+          description: Own profile.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/UserResponse'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+    patch:
+      tags: [Profile]
+      summary: Update own profile (ManageCustomerProfile, self)
+      description: CONFIRMED (RULE-02-06). Cannot change own role or scope bindings (ASSUMPTION A1).
+      operationId: updateOwnProfile
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/UpdateOwnProfileRequest'
+      responses:
+        '200':
+          description: Profile updated.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/UserResponse'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+  /customers:
+    post:
+      tags: [Profile]
+      summary: Receptionist creates customer at counter (ManageCustomerProfile)
+      description: "CONFIRMED operation (01#2, RULE-02-06). Reuses RegisterAccount semantics: PENDING_VERIFICATION plus OTP (ASSUMPTION A2). Direct-to-ACTIVE at counter is TBD Q3/Q6."
+      operationId: createCustomerAtCounter
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreateCustomerRequest'
+      responses:
+        '201':
+          description: Customer created as PENDING_VERIFICATION; OTP sent.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CreateCustomerResponse'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          description: Outside own store (CONFIRMED code ACCESS_DENIED_SCOPE_MISMATCH, RULE-02-01).
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '409':
+          description: Phone or email already exists (ERD UNIQUE).
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+  /users:
+    get:
+      tags: [UserAdmin]
+      summary: List users in scope (ManageUser)
+      description: CONFIRMED (RULE-02-05). Pagination and filters are PROPOSED (TBD Q7).
+      operationId: listUsers
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: page
+          in: query
+          required: false
+          schema:
+            type: integer
+            minimum: 1
+            default: 1
+        - name: pageSize
+          in: query
+          required: false
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 100
+            default: 20
+        - name: role
+          in: query
+          required: false
+          schema:
+            $ref: '#/components/schemas/RoleCode'
+        - name: storeId
+          in: query
+          required: false
+          schema:
+            type: string
+            format: uuid
+        - name: status
+          in: query
+          required: false
+          schema:
+            $ref: '#/components/schemas/AccountStatus'
+      responses:
+        '200':
+          description: Page of users.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/UserPage'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          description: Outside admin scope (CONFIRMED code ACCESS_DENIED_SCOPE_MISMATCH, RULE-02-01).
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+  /users/{id}:
+    get:
+      tags: [UserAdmin]
+      summary: Get user detail (ManageUser)
+      description: CONFIRMED (RULE-02-05). Path/shape PROPOSED.
+      operationId: getUser
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/UserId'
+      responses:
+        '200':
+          description: User detail.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/UserResponse'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          description: Outside admin scope (CONFIRMED code ACCESS_DENIED_SCOPE_MISMATCH, RULE-02-01).
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '404':
+          $ref: '#/components/responses/NotFound'
+    patch:
+      tags: [UserAdmin]
+      summary: Update user bindings (ManageUser)
+      description: CONFIRMED (RULE-02-05). Role changes go through role-assignment, not here.
+      operationId: updateUser
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/UserId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/UpdateUserRequest'
+      responses:
+        '200':
+          description: User updated.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/UserResponse'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          description: Outside admin scope (CONFIRMED code ACCESS_DENIED_SCOPE_MISMATCH, RULE-02-01).
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '404':
+          $ref: '#/components/responses/NotFound'
+  /users/{id}/role-assignment:
+    post:
+      tags: [AccessControl]
+      summary: Assign role and scope (AssignPermission, ManageRole)
+      description: CONFIRMED guards (RULE-02-02/03/05). Assigner must cover the granted role and scope; escalation is rejected with ACCESS_DENIED_SCOPE_MISMATCH.
+      operationId: assignRole
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/UserId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/RoleAssignmentRequest'
+      responses:
+        '200':
+          description: Role assigned.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/RoleAssignmentResponse'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          description: Escalation or outside scope (CONFIRMED code ACCESS_DENIED_SCOPE_MISMATCH, RULE-02-01/03).
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '404':
+          $ref: '#/components/responses/NotFound'
+  /users/{id}/lock:
+    post:
+      tags: [AccessControl]
+      summary: Lock account (LockAccount)
+      description: CONFIRMED (RULE-02-04/05, FSM-1). Revokes all sessions and tokens immediately. StoreManager has no such right (01#2). Idempotent.
+      operationId: lockAccount
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/UserId'
+      responses:
+        '200':
+          description: Account locked (or already locked).
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AccountLifecycleResponse'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          description: Outside admin scope (CONFIRMED code ACCESS_DENIED_SCOPE_MISMATCH, RULE-02-01).
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          description: Wrong state (e.g. already DEACTIVATED).
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+  /users/{id}/unlock:
+    post:
+      tags: [AccessControl]
+      summary: Unlock account (UnlockAccount)
+      description: CONFIRMED (RULE-02-04/05, FSM-1). Allowed only after locked_until (FSM-1 invariant 5). No auto-unlock. Idempotent.
+      operationId: unlockAccount
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/UserId'
+      responses:
+        '200':
+          description: Account unlocked (or already active).
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AccountLifecycleResponse'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          description: Outside admin scope (CONFIRMED code ACCESS_DENIED_SCOPE_MISMATCH, RULE-02-01).
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          description: Wrong state or too early (before locked_until, PROPOSED code).
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+  /users/{id}/deactivate:
+    post:
+      tags: [AccessControl]
+      summary: Deactivate account (DeactivateAccount)
+      description: CONFIRMED (RULE-02-05/07, FSM-1). From ACTIVE or LOCKED. Revokes sessions and denies login permanently until reactivation. Idempotent.
+      operationId: deactivateAccount
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/UserId'
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/DeactivateRequest'
+      responses:
+        '200':
+          description: Account deactivated (or already deactivated).
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AccountLifecycleResponse'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          description: Outside admin scope (CONFIRMED code ACCESS_DENIED_SCOPE_MISMATCH, RULE-02-01).
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          description: Wrong state for deactivation.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+  /users/{id}/reactivate:
+    post:
+      tags: [AccessControl]
+      summary: Reactivate account (ReactivateAccount)
+      description: CONFIRMED (RULE-02-05/07, FSM-1). Mandatory reason recorded to audit log. Idempotent.
+      operationId: reactivateAccount
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/UserId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ReactivateRequest'
+      responses:
+        '200':
+          description: Account reactivated (or already active).
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AccountLifecycleResponse'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          description: Outside admin scope (CONFIRMED code ACCESS_DENIED_SCOPE_MISMATCH, RULE-02-01).
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          description: Wrong state for reactivation.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+  /roles:
+    get:
+      tags: [RoleCatalog]
+      summary: List roles (ManageRole)
+      description: CONFIRMED (RULE-02-02). 9 canonical roles plus organization custom roles.
+      operationId: listRoles
+      security:
+        - bearerAuth: []
+      responses:
+        '200':
+          description: Role list.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/RoleList'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+    post:
+      tags: [RoleCatalog]
+      summary: Create custom role (ManageRole)
+      description: CONFIRMED (ERD roles with organization_id, RULE-02-02). Overwriting canonical codes is TBD Q8.
+      operationId: createRole
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreateRoleRequest'
+      responses:
+        '201':
+          description: Role created.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/RoleResponse'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          description: Outside admin scope (CONFIRMED code ACCESS_DENIED_SCOPE_MISMATCH, RULE-02-01).
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '409':
+          description: Duplicate code in scope (ERD UNIQUE organization_id plus code).
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+  /permissions:
+    get:
+      tags: [RoleCatalog]
+      summary: List permissions (ManagePermission)
+      description: CONFIRMED (RULE-02-01). Path/shape PROPOSED.
+      operationId: listPermissions
+      security:
+        - bearerAuth: []
+      responses:
+        '200':
+          description: Permission list.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PermissionList'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+      description: JWT/Session Token (RULE-01-01 CONFIRMED existence; Bearer transport ASSUMPTION A2 in auth-v1).
+  parameters:
+    UserId:
+      name: id
+      in: path
+      required: true
+      schema:
+        type: string
+        format: uuid
+  schemas:
+    RoleCode:
+      type: string
+      enum: [SUPER_ADMIN, ORGANIZATION_ADMIN, STORE_MANAGER, RECEPTIONIST, VETERINARIAN, GROOMER, INVENTORY_STAFF, FINANCE_STAFF, CUSTOMER]
+      description: CONFIRMED 9 canonical roles (RULE-02-02).
+    AccountStatus:
+      type: string
+      enum: [PENDING_VERIFICATION, ACTIVE, LOCKED, DEACTIVATED]
+      description: CONFIRMED (04 glossary AccountStatus).
+    SecurityScope:
+      type: string
+      enum: [PLATFORM, ORGANIZATION, STORE, WAREHOUSE, CUSTOMER]
+      description: CONFIRMED 5 scopes (04 glossary RoleScope).
+    Phone:
+      type: string
+      pattern: '^[0-9]{10}$'
+      description: CONFIRMED format (05#4.1).
+    UserResponse:
+      type: object
+      required: [userId, accountId, name, role, status]
+      properties:
+        userId:
+          type: string
+          format: uuid
+        accountId:
+          type: string
+          format: uuid
+        name:
+          type: string
+        role:
+          $ref: '#/components/schemas/RoleCode'
+          description: Primary role (users.role). Multi-role via user_roles is out of v1 (ASSUMPTION A3).
+        organizationId:
+          type: string
+          format: uuid
+          nullable: true
+        storeId:
+          type: string
+          format: uuid
+          nullable: true
+        status:
+          $ref: '#/components/schemas/AccountStatus'
+    UserPage:
+      type: object
+      required: [items, page, pageSize, total]
+      properties:
+        items:
+          type: array
+          items:
+            $ref: '#/components/schemas/UserResponse'
+        page:
+          type: integer
+        pageSize:
+          type: integer
+        total:
+          type: integer
+    UpdateOwnProfileRequest:
+      type: object
+      properties:
+        name:
+          type: string
+        email:
+          type: string
+          format: email
+      description: Role and scope bindings are not changeable here (ASSUMPTION A1).
+    UpdateUserRequest:
+      type: object
+      properties:
+        name:
+          type: string
+        organizationId:
+          type: string
+          format: uuid
+          nullable: true
+        storeId:
+          type: string
+          format: uuid
+          nullable: true
+      description: Role changes go through role-assignment (CONFIRMED separation).
+    CreateCustomerRequest:
+      type: object
+      required: [phone, password, name]
+      properties:
+        phone:
+          $ref: '#/components/schemas/Phone'
+        email:
+          type: string
+          format: email
+        password:
+          type: string
+        name:
+          type: string
+    CreateCustomerResponse:
+      type: object
+      required: [accountId, userId, status]
+      properties:
+        accountId:
+          type: string
+          format: uuid
+        userId:
+          type: string
+          format: uuid
+        status:
+          $ref: '#/components/schemas/AccountStatus'
+    RoleAssignmentRequest:
+      type: object
+      required: [role]
+      properties:
+        role:
+          $ref: '#/components/schemas/RoleCode'
+        organizationId:
+          type: string
+          format: uuid
+        storeId:
+          type: string
+          format: uuid
+    RoleAssignmentResponse:
+      type: object
+      required: [userId, role]
+      properties:
+        userId:
+          type: string
+          format: uuid
+        role:
+          $ref: '#/components/schemas/RoleCode'
+        organizationId:
+          type: string
+          format: uuid
+          nullable: true
+        storeId:
+          type: string
+          format: uuid
+          nullable: true
+    AccountLifecycleResponse:
+      type: object
+      required: [userId, accountId, status]
+      properties:
+        userId:
+          type: string
+          format: uuid
+        accountId:
+          type: string
+          format: uuid
+        status:
+          $ref: '#/components/schemas/AccountStatus'
+    DeactivateRequest:
+      type: object
+      properties:
+        reason:
+          type: string
+    ReactivateRequest:
+      type: object
+      required: [reason]
+      properties:
+        reason:
+          type: string
+          description: Mandatory justification recorded to audit log (CONFIRMED RULE-02-07).
+    RoleResponse:
+      type: object
+      required: [roleId, code, name, scope]
+      properties:
+        roleId:
+          type: string
+          format: uuid
+        code:
+          type: string
+        name:
+          type: string
+        scope:
+          $ref: '#/components/schemas/SecurityScope'
+        organizationId:
+          type: string
+          format: uuid
+          nullable: true
+          description: Null means global role (SUPER_ADMIN only).
+    RoleList:
+      type: object
+      required: [items]
+      properties:
+        items:
+          type: array
+          items:
+            $ref: '#/components/schemas/RoleResponse'
+    CreateRoleRequest:
+      type: object
+      required: [code, name, scope]
+      properties:
+        code:
+          type: string
+        name:
+          type: string
+        scope:
+          $ref: '#/components/schemas/SecurityScope'
+        organizationId:
+          type: string
+          format: uuid
+          description: Owning organization; omit for global (SUPER_ADMIN only).
+        permissionCodes:
+          type: array
+          items:
+            type: string
+    PermissionList:
+      type: object
+      required: [items]
+      properties:
+        items:
+          type: array
+          items:
+            type: object
+            required: [code, module]
+            properties:
+              code:
+                type: string
+              module:
+                type: string
+    Error:
+      type: object
+      required: [success, errorCode, message, statusCode, timestamp]
+      properties:
+        success:
+          type: boolean
+          example: false
+        errorCode:
+          type: string
+          description: ACCESS_DENIED_SCOPE_MISMATCH is CONFIRMED (RULE-02-01, 403); VALIDATION_FAILED, BUSINESS_RULE_VIOLATION, INVALID_STATE_TRANSITION, RESOURCE_NOT_FOUND follow docs/convention/backend/04-exception-handling; other codes are PROPOSED.
+        message:
+          type: string
+        statusCode:
+          type: integer
+        timestamp:
+          type: string
+          format: date-time
+        traceId:
+          type: string
+        details:
+          type: object
+          additionalProperties: true
+  responses:
+    BadRequest:
+      description: Validation failed.
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+    Unauthorized:
+      description: Missing or invalid authentication.
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+    NotFound:
+      description: Resource not found.
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'

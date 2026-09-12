@@ -1,0 +1,732 @@
+# Pet Care Workforce API v1 — OpenAPI 3.1 (derived strictly from docs/)
+#
+# Source of truth: docs/01-business-operations.md (01#8),
+# docs/02-business-rules.md (RULE-08-01..07 plus schedule collision guard),
+# docs/04-glossary.md (08), docs/05-domain-model.md (4.8),
+# docs/06-erd.md (staff_work_schedules/shift_assignments/staff_absences).
+# No dedicated FSM. Staff account and role provisioning lives in
+# auth-v1.yaml and iam-v1.yaml and is NOT redefined here.
+#
+# Traceability legend: CONFIRMED = in docs / ASSUMPTION (A#) = least invention /
+# TBD (Q#) = needs PO (see ../workforce-v1.md section E). No `servers` (TBD Q1).
+# Error envelope follows docs/convention/backend/04-exception-handling. No 422.
+
+openapi: 3.1.0
+info:
+  title: Pet Care Workforce API v1
+  version: 1.0.0
+  description: >-
+    Strictly derived from docs/ (01#8 operations, RULE-08-01..07). Rosters,
+    leaves, sudden absences, and replacements for store staff. Every shift
+    assignment passes the staff schedule collision guard. Leaves take effect
+    only once approved.
+tags:
+  - name: Staff
+    description: Store staffing and assignments (ManageStaff, UpdateStaff, AssignStaffToStore).
+  - name: Schedules
+    description: Rosters, shifts, and personal schedule views (ManageWorkSchedule, ViewWorkSchedule).
+  - name: Leave
+    description: Leave requests and approvals (ManageLeave).
+  - name: Absence
+    description: Sudden absences and replacements (HandleStaffAbsence, AssignStaffReplacement).
+paths:
+  /stores/{id}/staff:
+    get:
+      tags: [Staff]
+      summary: List staff of a store (ManageStaff)
+      description: CONFIRMED (RULE-08-01/02). Path/shape PROPOSED.
+      operationId: listStoreStaff
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/StoreId'
+      responses:
+        '200':
+          description: Store staff list.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/StaffList'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          description: Outside scope (CONFIRMED code ACCESS_DENIED_SCOPE_MISMATCH, RULE-02-01).
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '404':
+          $ref: '#/components/responses/NotFound'
+  /staff/{id}:
+    patch:
+      tags: [Staff]
+      summary: Update workforce fields (UpdateStaff)
+      description: Workforce fields only (staffCode per ASSUMPTION A1 in md); personal fields stay in iam-v1.
+      operationId: updateStaff
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/StaffId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/UpdateStaffRequest'
+      responses:
+        '200':
+          description: Staff updated.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/StaffResponse'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          description: StoreManager of another store (CONFIRMED code ACCESS_DENIED_SCOPE_MISMATCH, RULE-02-01).
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '404':
+          $ref: '#/components/responses/NotFound'
+  /staff/{id}/store-assignment:
+    post:
+      tags: [Staff]
+      summary: Assign staff to a store (AssignStaffToStore)
+      description: CONFIRMED (RULE-08-02). Same-organization secondment; effective at the assigned store. Parallel multi-store membership TBD Q7 in md.
+      operationId: assignStaffToStore
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/StaffId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/StoreAssignmentRequest'
+      responses:
+        '200':
+          description: Staff assigned.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/StaffResponse'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          description: Cross-organization assignment (CONFIRMED boundary, RULE-08-02).
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          description: Assignment conflict.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+  /stores/{id}/schedules:
+    post:
+      tags: [Schedules]
+      summary: Create a roster day (ManageWorkSchedule)
+      description: CONFIRMED (RULE-08-03). StoreManager only.
+      operationId: createScheduleDay
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/StoreId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreateScheduleDayRequest'
+      responses:
+        '201':
+          description: Roster day created.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ScheduleDayResponse'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          description: StoreManager of the store only.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          description: Roster day already exists (PROPOSED).
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+    get:
+      tags: [Schedules]
+      summary: View store roster (ViewWorkSchedule, manager view)
+      description: CONFIRMED scoping (RULE-08-07). StoreManager sees the whole store.
+      operationId: viewStoreSchedule
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/StoreId'
+        - name: date
+          in: query
+          required: false
+          schema:
+            type: string
+            format: date
+      responses:
+        '200':
+          description: Roster snapshot.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ScheduleDayResponse'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          description: Outside scope.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '404':
+          $ref: '#/components/responses/NotFound'
+  /schedules/{id}/shifts:
+    post:
+      tags: [Schedules]
+      summary: Add a shift (ManageWorkSchedule)
+      description: CONFIRMED collision guard (RULE-08-03 plus guard text). Rejects overlap with approved leaves, recorded absences, and assigned shifts.
+      operationId: addShift
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/AddShiftRequest'
+      responses:
+        '201':
+          description: Shift assigned.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ShiftResponse'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          description: StoreManager of the store only.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          description: Schedule collision (CONFIRMED codes STAFF_ON_LEAVE, STAFF_ABSENT, STAFF_SHIFT_CONFLICT).
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+  /staff/{id}/schedule:
+    get:
+      tags: [Schedules]
+      summary: View personal schedule (ViewWorkSchedule, self view)
+      description: CONFIRMED (RULE-08-07). Staff see only their own roster.
+      operationId: viewOwnSchedule
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/StaffId'
+        - name: from
+          in: query
+          required: false
+          schema:
+            type: string
+            format: date
+        - name: to
+          in: query
+          required: false
+          schema:
+            type: string
+            format: date
+      responses:
+        '200':
+          description: Personal roster.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PersonalSchedule'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          description: Other staff rosters are hidden (CONFIRMED, RULE-08-07).
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '404':
+          $ref: '#/components/responses/NotFound'
+  /staff/{id}/leaves:
+    post:
+      tags: [Leave]
+      summary: Request leave (ManageLeave)
+      description: CONFIRMED (RULE-08-06). Requested by the staff member (ASSUMPTION A2 in md). Takes effect only once approved.
+      operationId: requestLeave
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/StaffId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/RequestLeaveRequest'
+      responses:
+        '201':
+          description: Leave requested as PENDING.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/LeaveResponse'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          description: Requesting for someone else (PROPOSED guard, TBD Q4 in md).
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '404':
+          $ref: '#/components/responses/NotFound'
+  /leaves/{id}/approve:
+    post:
+      tags: [Leave]
+      summary: Approve leave (ManageLeave)
+      description: CONFIRMED (RULE-08-06). From PENDING. Locks the time window and frees unassigned slots (ASSUMPTION A3 in md).
+      operationId: approveLeave
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '200':
+          description: Leave approved.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/LeaveResponse'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          description: StoreManager only.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          description: Leave is no longer PENDING.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+  /leaves/{id}/reject:
+    post:
+      tags: [Leave]
+      summary: Reject leave (ManageLeave)
+      description: CONFIRMED (RULE-08-06). From PENDING.
+      operationId: rejectLeave
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '200':
+          description: Leave rejected.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/LeaveResponse'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          description: StoreManager only.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          description: Leave is no longer PENDING.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+  /staff/{id}/absences:
+    post:
+      tags: [Absence]
+      summary: Record sudden absence (HandleStaffAbsence)
+      description: CONFIRMED (RULE-08-04). Marks the roster, warns affected bookings, and blocks new assignments in the window. Each record is a distinct event (non-idempotent).
+      operationId: recordAbsence
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/StaffId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/RecordAbsenceRequest'
+      responses:
+        '201':
+          description: Absence recorded.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AbsenceResponse'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          description: StoreManager only.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '404':
+          $ref: '#/components/responses/NotFound'
+  /absences/{id}/replacement:
+    post:
+      tags: [Absence]
+      summary: Assign replacement (AssignStaffReplacement)
+      description: CONFIRMED triple check (RULE-08-05). Same store or valid secondment, same role and competence, fully free schedule.
+      operationId: assignReplacement
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ReplacementRequest'
+      responses:
+        '200':
+          description: Replacement assigned with duties handed over.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AbsenceResponse'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          description: StoreManager only.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          description: Replacement fails a condition (CONFIRMED STAFF_ON_LEAVE, STAFF_ABSENT, STAFF_SHIFT_CONFLICT; PROPOSED STAFF_ROLE_MISMATCH).
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+      description: JWT/Session Token (RULE-01-01 CONFIRMED existence; Bearer transport ASSUMPTION A2 in auth-v1).
+  parameters:
+    StoreId:
+      name: id
+      in: path
+      required: true
+      schema:
+        type: string
+        format: uuid
+    StaffId:
+      name: id
+      in: path
+      required: true
+      schema:
+        type: string
+        format: uuid
+  schemas:
+    StaffResponse:
+      type: object
+      required: [userId, name, role]
+      properties:
+        userId:
+          type: string
+          format: uuid
+        name:
+          type: string
+        role:
+          type: string
+        staffCode:
+          type: string
+        storeId:
+          type: string
+          format: uuid
+          nullable: true
+    StaffList:
+      type: object
+      required: [items]
+      properties:
+        items:
+          type: array
+          items:
+            $ref: '#/components/schemas/StaffResponse'
+    UpdateStaffRequest:
+      type: object
+      properties:
+        staffCode:
+          type: string
+      description: Workforce fields only (ASSUMPTION A1 in md).
+    StoreAssignmentRequest:
+      type: object
+      required: [storeId]
+      properties:
+        storeId:
+          type: string
+          format: uuid
+    ShiftType:
+      type: string
+      enum: [MORNING, AFTERNOON, FULL_DAY]
+      description: CONFIRMED (ERD shift_assignments).
+    CreateScheduleDayRequest:
+      type: object
+      required: [scheduleDate]
+      properties:
+        scheduleDate:
+          type: string
+          format: date
+    ScheduleDayResponse:
+      type: object
+      required: [scheduleId, storeId, scheduleDate, shifts]
+      properties:
+        scheduleId:
+          type: string
+          format: uuid
+        storeId:
+          type: string
+          format: uuid
+        scheduleDate:
+          type: string
+          format: date
+        shifts:
+          type: array
+          items:
+            $ref: '#/components/schemas/ShiftResponse'
+    AddShiftRequest:
+      type: object
+      required: [staffId, shiftType, startTime, endTime]
+      properties:
+        staffId:
+          type: string
+          format: uuid
+        shiftType:
+          $ref: '#/components/schemas/ShiftType'
+        startTime:
+          type: string
+          format: time
+        endTime:
+          type: string
+          format: time
+    ShiftResponse:
+      type: object
+      required: [shiftId, staffId, shiftType, startTime, endTime]
+      properties:
+        shiftId:
+          type: string
+          format: uuid
+        staffId:
+          type: string
+          format: uuid
+        shiftType:
+          $ref: '#/components/schemas/ShiftType'
+        startTime:
+          type: string
+          format: time
+        endTime:
+          type: string
+          format: time
+    PersonalSchedule:
+      type: object
+      required: [staffId, shifts]
+      properties:
+        staffId:
+          type: string
+          format: uuid
+        shifts:
+          type: array
+          items:
+            $ref: '#/components/schemas/ShiftResponse'
+    AbsenceType:
+      type: string
+      enum: [SICK, VACATION, UNPAID]
+      description: CONFIRMED (ERD staff_absences).
+    LeaveStatus:
+      type: string
+      enum: [PENDING, APPROVED, REJECTED]
+      description: CONFIRMED (ERD staff_absences).
+    RequestLeaveRequest:
+      type: object
+      required: [absenceType, startDate, endDate]
+      properties:
+        absenceType:
+          $ref: '#/components/schemas/AbsenceType'
+        startDate:
+          type: string
+          format: date
+        endDate:
+          type: string
+          format: date
+    LeaveResponse:
+      type: object
+      required: [leaveId, staffId, absenceType, startDate, endDate, status]
+      properties:
+        leaveId:
+          type: string
+          format: uuid
+        staffId:
+          type: string
+          format: uuid
+        absenceType:
+          $ref: '#/components/schemas/AbsenceType'
+        startDate:
+          type: string
+          format: date
+        endDate:
+          type: string
+          format: date
+        status:
+          $ref: '#/components/schemas/LeaveStatus'
+    RecordAbsenceRequest:
+      type: object
+      required: [absenceDate]
+      properties:
+        absenceDate:
+          type: string
+          format: date
+        shiftId:
+          type: string
+          format: uuid
+        note:
+          type: string
+    AbsenceResponse:
+      type: object
+      required: [absenceId, staffId]
+      properties:
+        absenceId:
+          type: string
+          format: uuid
+        staffId:
+          type: string
+          format: uuid
+        replacementStaffId:
+          type: string
+          format: uuid
+          nullable: true
+    ReplacementRequest:
+      type: object
+      required: [replacementStaffId]
+      properties:
+        replacementStaffId:
+          type: string
+          format: uuid
+    Error:
+      type: object
+      required: [success, errorCode, message, statusCode, timestamp]
+      properties:
+        success:
+          type: boolean
+          example: false
+        errorCode:
+          type: string
+          description: STAFF_ON_LEAVE, STAFF_ABSENT, and STAFF_SHIFT_CONFLICT are CONFIRMED in the RULE-08 guard text; ACCESS_DENIED_SCOPE_MISMATCH is CONFIRMED (RULE-02-01, 403); VALIDATION_FAILED, BUSINESS_RULE_VIOLATION, INVALID_STATE_TRANSITION, RESOURCE_NOT_FOUND follow docs/convention/backend/04-exception-handling; STAFF_ROLE_MISMATCH is PROPOSED.
+        message:
+          type: string
+        statusCode:
+          type: integer
+        timestamp:
+          type: string
+          format: date-time
+        traceId:
+          type: string
+        details:
+          type: object
+          additionalProperties: true
+  responses:
+    BadRequest:
+      description: Validation failed.
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+    Unauthorized:
+      description: Missing or invalid authentication.
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+    NotFound:
+      description: Resource not found.
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'

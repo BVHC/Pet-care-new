@@ -1,0 +1,1002 @@
+# Pet Care Inventory API v1 — OpenAPI 3.1 (derived strictly from docs/)
+#
+# Source of truth: docs/01-business-operations.md (01#12),
+# docs/02-business-rules.md (RULE-12-01..13 plus discrepancy invariant),
+# docs/03-state-machines.md (FSM-11), docs/04-glossary.md (12),
+# docs/05-domain-model.md (4.12),
+# docs/06-erd.md (inventory_items/reservations/adjustments/stock_transfers/lines).
+# Low-stock and expiry alerts are background jobs (no endpoints). Reservations
+# are an internal Module 14 effect (no endpoints). General batch storage is TBD.
+# The central warehouse reuses these endpoints through its store id.
+#
+# Traceability legend: CONFIRMED = in docs / ASSUMPTION (A#) = least invention /
+# TBD (Q#) = needs PO (see ../inventory-v1.md section E). No `servers` (TBD Q1).
+# Error envelope follows docs/convention/backend/04-exception-handling. No 422.
+
+openapi: 3.1.0
+info:
+  title: Pet Care Inventory API v1
+  version: 1.0.0
+  description: >-
+    Strictly derived from docs/ (01#12 operations, RULE-12-01..13, FSM-11
+    REQUESTED->APPROVED->IN_TRANSIT->RECEIVED with discrepancy handling).
+    Physical and available quantities stay consistent per store, adjustments and
+    transfers pass maker-checker, and every transfer discrepancy balances the
+    shipped-equals-received-plus-damaged-plus-lost equation.
+tags:
+  - name: Stock
+    description: Stock levels, receipts, issues, counts, batch tracking (Receive/Issue/Track/CountInventory).
+  - name: Adjustments
+    description: Maker-checker stock adjustments (AdjustInventory, ApproveInventoryAdjustment).
+  - name: Transfers
+    description: Two-step inter-store transfers with discrepancy handling (FSM-11).
+paths:
+  /stores/{id}/inventory:
+    get:
+      tags: [Stock]
+      summary: Track inventory (TrackInventory)
+      description: CONFIRMED (RULE-12-01). Available equals physical minus reserved. Filters PROPOSED.
+      operationId: trackInventory
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/StoreId'
+        - name: productId
+          in: query
+          required: false
+          schema:
+            type: string
+            format: uuid
+        - name: lowOnly
+          in: query
+          required: false
+          schema:
+            type: boolean
+          description: Available at or below min_stock_level (CONFIRMED ERD threshold).
+        - name: page
+          in: query
+          required: false
+          schema:
+            type: integer
+            minimum: 1
+            default: 1
+        - name: pageSize
+          in: query
+          required: false
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 100
+            default: 20
+      responses:
+        '200':
+          description: Page of stock rows.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/StockPage'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          description: Outside scope.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '404':
+          $ref: '#/components/responses/NotFound'
+  /stores/{id}/inventory/receive:
+    post:
+      tags: [Stock]
+      summary: Receive stock (ReceiveInventory)
+      description: Increases physical and available quantities. Batch fields are PROPOSED (storage TBD Q9 in md).
+      operationId: receiveInventory
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/StoreId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ReceiveRequest'
+      responses:
+        '200':
+          description: Stock increased.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/StockRow'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          description: Inventory staff of the store only.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '404':
+          $ref: '#/components/responses/NotFound'
+  /stores/{id}/inventory/issue:
+    post:
+      tags: [Stock]
+      summary: Issue stock (IssueInventory)
+      description: CONFIRMED guards (RULE-12-05). Never beyond available, never expired or damaged goods.
+      operationId: issueInventory
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/StoreId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/IssueRequest'
+      responses:
+        '200':
+          description: Stock decreased.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/StockRow'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          description: Inventory staff of the store only.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          description: Insufficient available quantity or expired goods (CONFIRMED RULE-12-05).
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+  /stores/{id}/inventory/count:
+    post:
+      tags: [Stock]
+      summary: Count stock (CountInventory)
+      description: CONFIRMED (RULE-12-02). A variance opens a COUNT_VARIANCE adjustment for approval (ASSUMPTION A2 in md).
+      operationId: countInventory
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/StoreId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CountRequest'
+      responses:
+        '200':
+          description: Count recorded with variance result.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CountResponse'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          description: Inventory staff of the store only.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '404':
+          $ref: '#/components/responses/NotFound'
+  /stores/{id}/inventory-batches:
+    get:
+      tags: [Stock]
+      summary: Track batches and expiries (TrackBatch, TrackExpiry, read)
+      description: Read side of RULE-12-11 FEFO tracking. Shape PROPOSED and storage TBD Q9 in md.
+      operationId: trackBatches
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/StoreId'
+        - name: productId
+          in: query
+          required: false
+          schema:
+            type: string
+            format: uuid
+        - name: expiredOnly
+          in: query
+          required: false
+          schema:
+            type: boolean
+        - name: expiringBefore
+          in: query
+          required: false
+          schema:
+            type: string
+            format: date
+      responses:
+        '200':
+          description: Batch rows (shape PROPOSED).
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/BatchList'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          description: Outside scope.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '404':
+          $ref: '#/components/responses/NotFound'
+  /stores/{id}/inventory-adjustments:
+    post:
+      tags: [Adjustments]
+      summary: Adjust stock (AdjustInventory)
+      description: CONFIRMED (RULE-12-02). Opens a PENDING slip with a mandatory valid reason.
+      operationId: adjustInventory
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/StoreId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/AdjustRequest'
+      responses:
+        '201':
+          description: Adjustment pending approval.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AdjustmentResponse'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          description: Inventory staff of the store only.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '404':
+          $ref: '#/components/responses/NotFound'
+    get:
+      tags: [Adjustments]
+      summary: List adjustments
+      description: Derived listing for approval worklists. Filters PROPOSED.
+      operationId: listAdjustments
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/StoreId'
+        - name: status
+          in: query
+          required: false
+          schema:
+            $ref: '#/components/schemas/AdjustmentStatus'
+      responses:
+        '200':
+          description: Adjustment list.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AdjustmentList'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          description: Outside scope.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '404':
+          $ref: '#/components/responses/NotFound'
+  /inventory-adjustments/{id}/approve:
+    post:
+      tags: [Adjustments]
+      summary: Approve adjustment (ApproveInventoryAdjustment)
+      description: CONFIRMED maker-checker (RULE-12-03). Approval posts to the books immediately.
+      operationId: approveAdjustment
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/AdjustmentId'
+      responses:
+        '200':
+          description: Adjustment approved and posted.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AdjustmentResponse'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          description: Maker-checker violation or outside scope (CONFIRMED code MAKER_CHECKER_VIOLATION, RULE-12-03).
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          description: Adjustment is no longer PENDING.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+  /inventory-adjustments/{id}/reject:
+    post:
+      tags: [Adjustments]
+      summary: Reject adjustment
+      description: Symmetric counterpart of approval.
+      operationId: rejectAdjustment
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/AdjustmentId'
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/RejectRequest'
+      responses:
+        '200':
+          description: Adjustment rejected.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AdjustmentResponse'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          description: Outside scope.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          description: Adjustment is no longer PENDING.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+  /stock-transfers:
+    post:
+      tags: [Transfers]
+      summary: Create transfer (CreateStockTransfer)
+      description: CONFIRMED (RULE-12-04). Both ends in one organization. Transfer numbers are server-generated (ASSUMPTION A3 in md).
+      operationId: createStockTransfer
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreateTransferRequest'
+      responses:
+        '201':
+          description: Transfer requested.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TransferResponse'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          description: Cross-organization transfer (CONFIRMED boundary, RULE-12-04).
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '404':
+          $ref: '#/components/responses/NotFound'
+  /stock-transfers/{id}/approve:
+    post:
+      tags: [Transfers]
+      summary: Approve transfer (ApproveStockTransfer)
+      description: CONFIRMED maker-checker at the origin store (RULE-12-06).
+      operationId: approveStockTransfer
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/TransferId'
+      responses:
+        '200':
+          description: Transfer approved.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TransferResponse'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          description: Maker-checker violation or outside origin scope (CONFIRMED code MAKER_CHECKER_VIOLATION, RULE-12-06).
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          description: Transfer is no longer REQUESTED.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+  /stock-transfers/{id}/reject:
+    post:
+      tags: [Transfers]
+      summary: Reject transfer (RejectStockTransfer)
+      description: CONFIRMED (RULE-12-06).
+      operationId: rejectStockTransfer
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/TransferId'
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/RejectRequest'
+      responses:
+        '200':
+          description: Transfer rejected.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TransferResponse'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          description: Outside origin scope.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          description: Transfer is no longer REQUESTED.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+  /stock-transfers/{id}/cancel:
+    post:
+      tags: [Transfers]
+      summary: Cancel transfer (CancelStockTransfer)
+      description: CONFIRMED (RULE-12-10). Creator only, REQUESTED only, before shipping.
+      operationId: cancelStockTransfer
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/TransferId'
+      responses:
+        '200':
+          description: Transfer cancelled.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TransferResponse'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          description: Creator only.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          description: Already approved or shipped.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+  /stock-transfers/{id}/ship:
+    post:
+      tags: [Transfers]
+      summary: Ship transfer (ShipStockTransfer)
+      description: CONFIRMED (RULE-12-05/07). Deducts origin availability; goods ride as IN_TRANSIT, invisible to destination availability.
+      operationId: shipStockTransfer
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/TransferId'
+      responses:
+        '200':
+          description: Transfer in transit.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TransferResponse'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          description: Origin staff only.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          description: Not APPROVED, short on availability, or expired goods (CONFIRMED RULE-12-05).
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+  /stock-transfers/{id}/receive:
+    post:
+      tags: [Transfers]
+      summary: Receive intact transfer (ReceiveStockTransfer)
+      description: CONFIRMED (RULE-12-08). Full and intact receipt raises destination availability at once.
+      operationId: receiveStockTransfer
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/TransferId'
+      responses:
+        '200':
+          description: Transfer received.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TransferResponse'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          description: Destination staff only.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          description: Not IN_TRANSIT.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+  /stock-transfers/{id}/receive-discrepancy:
+    post:
+      tags: [Transfers]
+      summary: Receive with discrepancy (ReceiveStockTransferWithDiscrepancy)
+      description: CONFIRMED equation shipped equals received plus damaged plus lost (RULE-12-08/09). Intact goods stock in at once; damaged goods are quarantined.
+      operationId: receiveTransferDiscrepancy
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/TransferId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/DiscrepancyRequest'
+      responses:
+        '200':
+          description: Discrepancy recorded.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TransferResponse'
+        '400':
+          description: Line totals do not balance the shipped equation.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          description: Destination staff only.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          description: Not IN_TRANSIT.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+  /stock-transfers/{id}/resolve-discrepancy:
+    post:
+      tags: [Transfers]
+      summary: Resolve discrepancy (ResolveStockTransferDiscrepancy)
+      description: CONFIRMED (RULE-12-09). Needs an APPROVED TRANSIT_VARIANCE adjustment balancing the books first.
+      operationId: resolveTransferDiscrepancy
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/TransferId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ResolveDiscrepancyRequest'
+      responses:
+        '200':
+          description: Transfer received after balancing.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TransferResponse'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          description: Destination manager only.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          description: Adjustment not approved, or transfer not in discrepancy.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+      description: JWT/Session Token (RULE-01-01 CONFIRMED existence; Bearer transport ASSUMPTION A2 in auth-v1).
+  parameters:
+    StoreId:
+      name: id
+      in: path
+      required: true
+      schema:
+        type: string
+        format: uuid
+    AdjustmentId:
+      name: id
+      in: path
+      required: true
+      schema:
+        type: string
+        format: uuid
+    TransferId:
+      name: id
+      in: path
+      required: true
+      schema:
+        type: string
+        format: uuid
+  schemas:
+    TransferStatus:
+      type: string
+      enum: [REQUESTED, APPROVED, REJECTED, IN_TRANSIT, RECEIVED, DISCREPANCY_RECORDED, CANCELLED]
+      description: CONFIRMED (FSM-11, 04 glossary).
+    AdjustmentStatus:
+      type: string
+      enum: [PENDING, APPROVED, REJECTED]
+      description: CONFIRMED (ERD inventory_adjustments).
+    AdjustmentReason:
+      type: string
+      enum: [DAMAGE, EXPIRY, THEFT, COUNT_VARIANCE, TRANSIT_VARIANCE]
+      description: CONFIRMED (RULE-12-02).
+    StockRow:
+      type: object
+      required: [storeId, productId, quantityPhysical, quantityReserved, quantityAvailable, minStockLevel]
+      properties:
+        storeId:
+          type: string
+          format: uuid
+        productId:
+          type: string
+          format: uuid
+        sku:
+          type: string
+        quantityPhysical:
+          type: integer
+        quantityReserved:
+          type: integer
+        quantityAvailable:
+          type: integer
+          description: Physical minus reserved (CONFIRMED RULE-12-05).
+        minStockLevel:
+          type: integer
+    StockPage:
+      type: object
+      required: [items, page, pageSize, total]
+      properties:
+        items:
+          type: array
+          items:
+            $ref: '#/components/schemas/StockRow'
+        page:
+          type: integer
+        pageSize:
+          type: integer
+        total:
+          type: integer
+    ReceiveRequest:
+      type: object
+      required: [productId, quantity]
+      properties:
+        productId:
+          type: string
+          format: uuid
+        quantity:
+          type: integer
+          minimum: 1
+        batchNumber:
+          type: string
+          description: PROPOSED (batch storage TBD Q9 in md).
+        expiryDate:
+          type: string
+          format: date
+          description: PROPOSED (batch storage TBD Q9 in md).
+    IssueRequest:
+      type: object
+      required: [productId, quantity]
+      properties:
+        productId:
+          type: string
+          format: uuid
+        quantity:
+          type: integer
+          minimum: 1
+        reason:
+          type: string
+    CountRequest:
+      type: object
+      required: [productId, countedQuantity]
+      properties:
+        productId:
+          type: string
+          format: uuid
+        countedQuantity:
+          type: integer
+          minimum: 0
+    CountResponse:
+      type: object
+      required: [storeId, productId, countedQuantity, variance]
+      properties:
+        storeId:
+          type: string
+          format: uuid
+        productId:
+          type: string
+          format: uuid
+        countedQuantity:
+          type: integer
+        variance:
+          type: integer
+        adjustmentId:
+          type: string
+          format: uuid
+          nullable: true
+          description: Opened COUNT_VARIANCE adjustment when nonzero (ASSUMPTION A2 in md).
+    BatchRow:
+      type: object
+      required: [productId]
+      properties:
+        productId:
+          type: string
+          format: uuid
+        batchNumber:
+          type: string
+        expiryDate:
+          type: string
+          format: date
+        quantity:
+          type: integer
+    BatchList:
+      type: object
+      required: [items]
+      properties:
+        items:
+          type: array
+          items:
+            $ref: '#/components/schemas/BatchRow'
+    AdjustRequest:
+      type: object
+      required: [productId, quantityAdjusted, reason]
+      properties:
+        productId:
+          type: string
+          format: uuid
+        quantityAdjusted:
+          type: integer
+          description: Signed delta, never zero.
+        reason:
+          $ref: '#/components/schemas/AdjustmentReason'
+    AdjustmentResponse:
+      type: object
+      required: [adjustmentId, storeId, productId, quantityAdjusted, reason, status]
+      properties:
+        adjustmentId:
+          type: string
+          format: uuid
+        storeId:
+          type: string
+          format: uuid
+        productId:
+          type: string
+          format: uuid
+        quantityAdjusted:
+          type: integer
+        reason:
+          $ref: '#/components/schemas/AdjustmentReason'
+        status:
+          $ref: '#/components/schemas/AdjustmentStatus'
+        createdBy:
+          type: string
+          format: uuid
+        approvedBy:
+          type: string
+          format: uuid
+          nullable: true
+    AdjustmentList:
+      type: object
+      required: [items]
+      properties:
+        items:
+          type: array
+          items:
+            $ref: '#/components/schemas/AdjustmentResponse'
+    RejectRequest:
+      type: object
+      properties:
+        reason:
+          type: string
+    TransferLine:
+      type: object
+      required: [productId, quantity]
+      properties:
+        productId:
+          type: string
+          format: uuid
+        quantity:
+          type: integer
+          minimum: 1
+    CreateTransferRequest:
+      type: object
+      required: [fromStoreId, toStoreId, lines]
+      properties:
+        fromStoreId:
+          type: string
+          format: uuid
+        toStoreId:
+          type: string
+          format: uuid
+        lines:
+          type: array
+          minItems: 1
+          items:
+            $ref: '#/components/schemas/TransferLine'
+    TransferResponse:
+      type: object
+      required: [transferId, transferNumber, fromStoreId, toStoreId, status]
+      properties:
+        transferId:
+          type: string
+          format: uuid
+        transferNumber:
+          type: string
+        fromStoreId:
+          type: string
+          format: uuid
+        toStoreId:
+          type: string
+          format: uuid
+        status:
+          $ref: '#/components/schemas/TransferStatus'
+        shippedAt:
+          type: string
+          format: date-time
+          nullable: true
+        receivedAt:
+          type: string
+          format: date-time
+          nullable: true
+    DiscrepancyLine:
+      type: object
+      required: [productId, receivedQuantity, damagedQuantity, lostQuantity]
+      properties:
+        productId:
+          type: string
+          format: uuid
+        receivedQuantity:
+          type: integer
+          minimum: 0
+        damagedQuantity:
+          type: integer
+          minimum: 0
+        lostQuantity:
+          type: integer
+          minimum: 0
+    DiscrepancyRequest:
+      type: object
+      required: [lines]
+      properties:
+        lines:
+          type: array
+          minItems: 1
+          items:
+            $ref: '#/components/schemas/DiscrepancyLine'
+    ResolveDiscrepancyRequest:
+      type: object
+      required: [adjustmentId]
+      properties:
+        adjustmentId:
+          type: string
+          format: uuid
+          description: APPROVED TRANSIT_VARIANCE adjustment (CONFIRMED RULE-12-09).
+    Error:
+      type: object
+      required: [success, errorCode, message, statusCode, timestamp]
+      properties:
+        success:
+          type: boolean
+          example: false
+        errorCode:
+          type: string
+          description: MAKER_CHECKER_VIOLATION is CONFIRMED (RULE-12-03/06, 403); ACCESS_DENIED_SCOPE_MISMATCH is CONFIRMED (RULE-02-01, 403); VALIDATION_FAILED, BUSINESS_RULE_VIOLATION, INVALID_STATE_TRANSITION, RESOURCE_NOT_FOUND, CONCURRENCY_CONFLICT follow docs/convention/backend/04-exception-handling.
+        message:
+          type: string
+        statusCode:
+          type: integer
+        timestamp:
+          type: string
+          format: date-time
+        traceId:
+          type: string
+        details:
+          type: object
+          additionalProperties: true
+  responses:
+    BadRequest:
+      description: Validation failed.
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+    Unauthorized:
+      description: Missing or invalid authentication.
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+    NotFound:
+      description: Resource not found.
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'

@@ -1,0 +1,904 @@
+# Pet Care Appointment API v1 — OpenAPI 3.1 (derived strictly from docs/)
+#
+# Source of truth: docs/01-business-operations.md (01#6),
+# docs/02-business-rules.md (RULE-06-01..14), docs/03-state-machines.md
+# (FSM-4.1 BookingHold, FSM-4.2 Appointment), docs/04-glossary.md (06),
+# docs/05-domain-model.md (4.6),
+# docs/06-erd.md (booking_holds/appointments/appointment_stage_histories).
+# ExpireHold, resource/staff release, and reminders are system-internal (no endpoints).
+# Store-wide schedule coordination belongs to Module 08. Walk-in bridging belongs
+# to Module 07 (channel WALK_IN is rejected here).
+#
+# Traceability legend: CONFIRMED = in docs / ASSUMPTION (A#) = least invention /
+# TBD (Q#) = needs PO (see ../appointment-v1.md section E). No `servers` (TBD Q1).
+# Error envelope follows docs/convention/backend/04-exception-handling. No 422.
+
+openapi: 3.1.0
+info:
+  title: Pet Care Appointment API v1
+  version: 1.0.0
+  description: >-
+    Strictly derived from docs/ (01#6 operations, RULE-06-01..14, FSM-4.1 15-minute
+    holds, FSM-4.2 appointment lifecycle). Every booking passes the triple
+    collision guard (staff, store resource, pet schedule). Rescheduling is
+    atomic with full rollback. Completed and cancelled appointments are
+    immutable, and check-in can never jump straight to completed.
+tags:
+  - name: Holds
+    description: 15-minute slot holds (HoldSlot, ReleaseHold).
+  - name: Booking
+    description: Appointment creation, views, and availability reads.
+  - name: Lifecycle
+    description: Controlled appointment state transitions (FSM-4.2).
+paths:
+  /holds:
+    post:
+      tags: [Holds]
+      summary: Hold a slot for 15 minutes (HoldSlot)
+      description: CONFIRMED (RULE-06-01, TTL 900s). Colliding holds are rejected with the triple-guard codes.
+      operationId: holdSlot
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/HoldSlotRequest'
+      responses:
+        '201':
+          description: Slot held.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HoldResponse'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          description: Pet outside caller rights.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '409':
+          description: Slot unavailable (CONFIRMED codes RESOURCE_CAPACITY_EXCEEDED or PET_SCHEDULE_COLLISION).
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+  /holds/{id}/release:
+    post:
+      tags: [Holds]
+      summary: Release a hold (ReleaseHold)
+      description: CONFIRMED (RULE-06-01). Idempotent. Expiry is a background job (no endpoint).
+      operationId: releaseHold
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/HoldId'
+      responses:
+        '200':
+          description: Hold released (or already released).
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HoldResponse'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          description: Hold is no longer HOLDING.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+  /appointments:
+    post:
+      tags: [Booking]
+      summary: Book appointment (BookAppointment)
+      description: CONFIRMED (RULE-06-01/02/10/11). All four preconditions are checked; WALK_IN channel is rejected (ASSUMPTION A1); holdId consumption is PROPOSED (ASSUMPTION A2, TBD Q11).
+      operationId: bookAppointment
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/BookAppointmentRequest'
+      responses:
+        '201':
+          description: Appointment booked.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AppointmentResponse'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          description: Pet outside caller rights (owner or ACTIVE delegated caregiver required).
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          description: A booking guard failed (CONFIRMED codes RESOURCE_CAPACITY_EXCEEDED or PET_SCHEDULE_COLLISION).
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+    get:
+      tags: [Booking]
+      summary: List appointments (ViewAppointment)
+      description: CONFIRMED scoping (RULE-06-14). Filters PROPOSED.
+      operationId: listAppointments
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: page
+          in: query
+          required: false
+          schema:
+            type: integer
+            minimum: 1
+            default: 1
+        - name: pageSize
+          in: query
+          required: false
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 100
+            default: 20
+        - name: status
+          in: query
+          required: false
+          schema:
+            $ref: '#/components/schemas/AppointmentStatus'
+        - name: petId
+          in: query
+          required: false
+          schema:
+            type: string
+            format: uuid
+        - name: from
+          in: query
+          required: false
+          schema:
+            type: string
+            format: date-time
+        - name: to
+          in: query
+          required: false
+          schema:
+            type: string
+            format: date-time
+      responses:
+        '200':
+          description: Page of appointments.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AppointmentPage'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+  /appointments/{id}:
+    get:
+      tags: [Booking]
+      summary: Get appointment detail (ViewAppointment)
+      description: CONFIRMED (RULE-06-14).
+      operationId: getAppointment
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/AppointmentId'
+      responses:
+        '200':
+          description: Appointment detail.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AppointmentResponse'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          description: Outside viewer scope (CONFIRMED, RULE-06-14).
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '404':
+          $ref: '#/components/responses/NotFound'
+    patch:
+      tags: [Lifecycle]
+      summary: Update appointment details (UpdateAppointment)
+      description: CONFIRMED (RULE-06-03). Pre-check-in service and notes only; time changes go through reschedule.
+      operationId: updateAppointment
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/AppointmentId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/UpdateAppointmentRequest'
+      responses:
+        '200':
+          description: Appointment updated.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AppointmentResponse'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          description: Receptionists only.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          description: No longer updatable (already checked in or terminal).
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+  /appointments/{id}/confirm:
+    post:
+      tags: [Lifecycle]
+      summary: Confirm appointment (ConfirmAppointment)
+      description: CONFIRMED (RULE-06-01/03/10). From BOOKED with resources and staff secured. Idempotent.
+      operationId: confirmAppointment
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/AppointmentId'
+      responses:
+        '200':
+          description: Appointment confirmed (or already confirmed).
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AppointmentResponse'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          description: Receptionists only.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          description: Wrong state or availability lost.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+  /appointments/{id}/reschedule:
+    post:
+      tags: [Lifecycle]
+      summary: Reschedule atomically (RescheduleAppointment)
+      description: CONFIRMED atomic swap (RULE-06-03/04/10/11). The new slot is locked first; the old slot survives any failure. Lands back on BOOKED.
+      operationId: rescheduleAppointment
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/AppointmentId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/RescheduleRequest'
+      responses:
+        '200':
+          description: Appointment rescheduled to BOOKED.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AppointmentResponse'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          description: Booking owner or receptionist only.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          description: Wrong state or new slot unavailable (old booking kept).
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+  /appointments/{id}/cancel:
+    post:
+      tags: [Lifecycle]
+      summary: Cancel appointment (CancelAppointment)
+      description: CONFIRMED (RULE-06-05). From BOOKED, CONFIRMED, or CHECKED_IN with a mandatory reason. Releases resources; deposit handling TBD Q8.
+      operationId: cancelAppointment
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/AppointmentId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CancelRequest'
+      responses:
+        '200':
+          description: Appointment cancelled (or already cancelled).
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AppointmentResponse'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          description: Booking owner or receptionist only.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          description: No longer cancellable (in service or terminal).
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+  /appointments/{id}/check-in:
+    post:
+      tags: [Lifecycle]
+      summary: Check in (CheckInAppointment)
+      description: CONFIRMED (RULE-06-06). From BOOKED or CONFIRMED. Receptionists only. Idempotent.
+      operationId: checkInAppointment
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/AppointmentId'
+      responses:
+        '200':
+          description: Appointment checked in.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AppointmentResponse'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          description: Receptionists only.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          description: Wrong state for check-in.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+  /appointments/{id}/start-service:
+    post:
+      tags: [Lifecycle]
+      summary: Start service (StartAppointmentService)
+      description: CONFIRMED (RULE-06-06). From CHECKED_IN by the assigned specialist. Idempotent.
+      operationId: startAppointmentService
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/AppointmentId'
+      responses:
+        '200':
+          description: Service in progress.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AppointmentResponse'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          description: Assigned specialist only.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          description: Wrong state for starting service.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+  /appointments/{id}/check-out:
+    post:
+      tags: [Lifecycle]
+      summary: Check out (CheckOutAppointment)
+      description: CONFIRMED (RULE-06-06/07). From IN_PROGRESS only, never straight from CHECKED_IN. Hands off to CreateInvoice (Module 15).
+      operationId: checkOutAppointment
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/AppointmentId'
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CheckOutRequest'
+      responses:
+        '200':
+          description: Appointment completed.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AppointmentResponse'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          description: Receptionists only.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          description: Not in progress.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+  /appointments/{id}/no-show:
+    post:
+      tags: [Lifecycle]
+      summary: Mark no-show (MarkNoShow)
+      description: CONFIRMED (RULE-06-09). Past the grace period from BOOKED or CONFIRMED. Releases resources; deposit deduction TBD Q8.
+      operationId: markNoShow
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/AppointmentId'
+      responses:
+        '200':
+          description: Appointment marked no-show.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AppointmentResponse'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          description: Receptionists only.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          description: Wrong state for no-show.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+  /appointments/{id}/abort:
+    post:
+      tags: [Lifecycle]
+      summary: Emergency abort (AbortAppointment)
+      description: CONFIRMED (RULE-06-08). From IN_PROGRESS with a mandatory reason. Raises a clinical or grooming incident and refunds the unperformed part.
+      operationId: abortAppointment
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/AppointmentId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/AbortRequest'
+      responses:
+        '200':
+          description: Appointment aborted.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AppointmentResponse'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          description: Assigned specialist only.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          description: Not in progress.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+  /appointments/{id}/assign-staff:
+    post:
+      tags: [Lifecycle]
+      summary: Assign staff (AssignStaff)
+      description: CONFIRMED (RULE-06-12). StoreManager only; staff must belong to the store with matching specialty and a free schedule.
+      operationId: assignStaff
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/AppointmentId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/AssignStaffRequest'
+      responses:
+        '200':
+          description: Staff assigned.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AppointmentResponse'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          description: StoreManager of the store only.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          description: Staff unavailable or mismatched (PROPOSED codes STAFF_ON_LEAVE, STAFF_SHIFT_CONFLICT).
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+  /stores/{id}/availability:
+    get:
+      tags: [Booking]
+      summary: Check availability (CheckAvailability, read)
+      description: System availability check exposed as a read for slot pickers (PROPOSED shape, TBD Q10). Never holds anything.
+      operationId: checkAvailability
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/StoreId'
+        - name: serviceId
+          in: query
+          required: true
+          schema:
+            type: string
+            format: uuid
+        - name: from
+          in: query
+          required: true
+          schema:
+            type: string
+            format: date-time
+        - name: to
+          in: query
+          required: true
+          schema:
+            type: string
+            format: date-time
+      responses:
+        '200':
+          description: Availability slots (shape PROPOSED).
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AvailabilityResponse'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          $ref: '#/components/responses/NotFound'
+components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+      description: JWT/Session Token (RULE-01-01 CONFIRMED existence; Bearer transport ASSUMPTION A2 in auth-v1).
+  parameters:
+    HoldId:
+      name: id
+      in: path
+      required: true
+      schema:
+        type: string
+        format: uuid
+    AppointmentId:
+      name: id
+      in: path
+      required: true
+      schema:
+        type: string
+        format: uuid
+    StoreId:
+      name: id
+      in: path
+      required: true
+      schema:
+        type: string
+        format: uuid
+  schemas:
+    AppointmentStatus:
+      type: string
+      enum: [BOOKED, CONFIRMED, CHECKED_IN, IN_PROGRESS, COMPLETED, CANCELLED, NO_SHOW, ABORTED]
+      description: CONFIRMED (FSM-4.2, 04 glossary).
+    BookingChannel:
+      type: string
+      enum: [ONLINE, PHONE]
+      description: WALK_IN is rejected on this endpoint (ASSUMPTION A1); the M07 bridge creates it internally.
+    HoldSlotRequest:
+      type: object
+      required: [storeId, petId, serviceId, startTime, endTime]
+      properties:
+        storeId:
+          type: string
+          format: uuid
+        petId:
+          type: string
+          format: uuid
+        serviceId:
+          type: string
+          format: uuid
+        staffId:
+          type: string
+          format: uuid
+        resourceId:
+          type: string
+          format: uuid
+        startTime:
+          type: string
+          format: date-time
+        endTime:
+          type: string
+          format: date-time
+    HoldResponse:
+      type: object
+      required: [holdId, status, expiresAt]
+      properties:
+        holdId:
+          type: string
+          format: uuid
+        status:
+          type: string
+          enum: [HOLDING, CONFIRMED, RELEASED, EXPIRED]
+          description: CONFIRMED (FSM-4.1).
+        expiresAt:
+          type: string
+          format: date-time
+          description: Hold TTL 15 minutes CONFIRMED (RULE-06-01).
+    BookAppointmentRequest:
+      type: object
+      required: [storeId, petId, serviceId, startTime, endTime]
+      properties:
+        storeId:
+          type: string
+          format: uuid
+        petId:
+          type: string
+          format: uuid
+        serviceId:
+          type: string
+          format: uuid
+        staffId:
+          type: string
+          format: uuid
+        startTime:
+          type: string
+          format: date-time
+        endTime:
+          type: string
+          format: date-time
+        channel:
+          $ref: '#/components/schemas/BookingChannel'
+          default: ONLINE
+        holdId:
+          type: string
+          format: uuid
+          description: Consumes a prior hold (PROPOSED mechanism, ASSUMPTION A2, TBD Q11).
+        notes:
+          type: string
+    AppointmentResponse:
+      type: object
+      required: [appointmentId, appointmentNumber, storeId, petId, serviceId, startTime, endTime, channel, status]
+      properties:
+        appointmentId:
+          type: string
+          format: uuid
+        appointmentNumber:
+          type: string
+        storeId:
+          type: string
+          format: uuid
+        petId:
+          type: string
+          format: uuid
+        serviceId:
+          type: string
+          format: uuid
+        staffId:
+          type: string
+          format: uuid
+          nullable: true
+        startTime:
+          type: string
+          format: date-time
+        endTime:
+          type: string
+          format: date-time
+        channel:
+          type: string
+        status:
+          $ref: '#/components/schemas/AppointmentStatus'
+    AppointmentPage:
+      type: object
+      required: [items, page, pageSize, total]
+      properties:
+        items:
+          type: array
+          items:
+            $ref: '#/components/schemas/AppointmentResponse'
+        page:
+          type: integer
+        pageSize:
+          type: integer
+        total:
+          type: integer
+    UpdateAppointmentRequest:
+      type: object
+      properties:
+        serviceId:
+          type: string
+          format: uuid
+        staffId:
+          type: string
+          format: uuid
+        notes:
+          type: string
+      description: Pre-check-in details only; time changes require reschedule.
+    RescheduleRequest:
+      type: object
+      required: [newStartTime, newEndTime]
+      properties:
+        newStartTime:
+          type: string
+          format: date-time
+        newEndTime:
+          type: string
+          format: date-time
+    CancelRequest:
+      type: object
+      required: [cancellationReason]
+      properties:
+        cancellationReason:
+          type: string
+          description: Mandatory (CONFIRMED RULE-06-05).
+    CheckOutRequest:
+      type: object
+      properties:
+        actualEndTime:
+          type: string
+          format: date-time
+          description: PROPOSED; recorder TBD Q5.
+    AbortRequest:
+      type: object
+      required: [abortReason]
+      properties:
+        abortReason:
+          type: string
+          description: Mandatory (CONFIRMED RULE-06-08).
+    AssignStaffRequest:
+      type: object
+      required: [staffId]
+      properties:
+        staffId:
+          type: string
+          format: uuid
+    AvailabilityResponse:
+      type: object
+      required: [slots]
+      properties:
+        slots:
+          type: array
+          items:
+            type: object
+            required: [startTime, endTime, available]
+            properties:
+              startTime:
+                type: string
+                format: date-time
+              endTime:
+                type: string
+                format: date-time
+              available:
+                type: boolean
+              staffId:
+                type: string
+                format: uuid
+              resourceId:
+                type: string
+                format: uuid
+    Error:
+      type: object
+      required: [success, errorCode, message, statusCode, timestamp]
+      properties:
+        success:
+          type: boolean
+          example: false
+        errorCode:
+          type: string
+          description: RESOURCE_CAPACITY_EXCEEDED and PET_SCHEDULE_COLLISION are CONFIRMED (RULE-06-10/11); ACCESS_DENIED_SCOPE_MISMATCH is CONFIRMED (RULE-02-01); VALIDATION_FAILED, BUSINESS_RULE_VIOLATION, INVALID_STATE_TRANSITION, RESOURCE_NOT_FOUND, CONCURRENCY_CONFLICT follow docs/convention/backend/04-exception-handling; STAFF_ON_LEAVE and STAFF_SHIFT_CONFLICT are PROPOSED.
+        message:
+          type: string
+        statusCode:
+          type: integer
+        timestamp:
+          type: string
+          format: date-time
+        traceId:
+          type: string
+        details:
+          type: object
+          additionalProperties: true
+  responses:
+    BadRequest:
+      description: Validation failed.
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+    Unauthorized:
+      description: Missing or invalid authentication.
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+    NotFound:
+      description: Resource not found.
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'

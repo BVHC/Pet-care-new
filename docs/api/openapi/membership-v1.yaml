@@ -1,0 +1,520 @@
+# Pet Care Membership API v1 — OpenAPI 3.1 (derived strictly from docs/)
+#
+# Source of truth: docs/01-business-operations.md (01#19),
+# docs/02-business-rules.md (RULE-19-01..10), docs/03-state-machines.md (FSM-9),
+# docs/04-glossary.md (19), docs/05-domain-model.md (4.19),
+# docs/06-erd.md (memberships/loyalty_point_ledgers).
+# Earning, deduction companions, and expiry sweeps are system effects and jobs
+# (no endpoints). Point-expiry bookkeeping lacks columns and stays TBD.
+# Everything isolates strictly per organization.
+#
+# Traceability legend: CONFIRMED = in docs / ASSUMPTION (A#) = least invention /
+# TBD (Q#) = needs PO (see ../membership-v1.md section E). No `servers` (TBD Q1).
+# Error envelope follows docs/convention/backend/04-exception-handling. No 422.
+
+openapi: 3.1.0
+info:
+  title: Pet Care Membership API v1
+  version: 1.0.0
+  description: >-
+    Strictly derived from docs/ (01#19 operations, RULE-19-01..10, FSM-9
+    ACTIVE->UPGRADED/EXPIRED). Memberships activate instantly with no pending
+    state, upgrades close the old record and open a new one, and every point
+    movement lands in the ledger. Locked accounts freeze all benefits.
+tags:
+  - name: Membership
+    description: Tier enrollment, views, renewal, upgrades (Register/Renew/UpgradeMembership).
+  - name: Points
+    description: Redemption, manual adjustment, ledger transparency.
+paths:
+  /memberships:
+    post:
+      tags: [Membership]
+      summary: Register membership (RegisterMembership)
+      description: CONFIRMED instant ACTIVE (RULE-19-02, no PENDING). BRONZE default and 12-month validity are PROPOSED (ASSUMPTION A1, TBD Q3/Q8 in md). One active record per person per org (ASSUMPTION A2).
+      operationId: registerMembership
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/RegisterMembershipRequest'
+      responses:
+        '201':
+          description: Membership active.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/MembershipResponse'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          description: Organization not found.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '409':
+          description: Active membership already exists (ASSUMPTION A2).
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+  /memberships/me:
+    get:
+      tags: [Membership]
+      summary: View own membership (ViewMembership)
+      description: CONFIRMED (RULE-19-01). One organization per call.
+      operationId: viewOwnMembership
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: organizationId
+          in: query
+          required: false
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '200':
+          description: Own membership with points.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/MembershipResponse'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          $ref: '#/components/responses/NotFound'
+  /memberships/{id}/points:
+    get:
+      tags: [Membership]
+      summary: View points (ViewLoyaltyPoint)
+      description: CONFIRMED (RULE-19-01). Flags suspension while LOCKED (RULE-19-09).
+      operationId: viewLoyaltyPoints
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/MembershipId'
+      responses:
+        '200':
+          description: Point balance with suspension flag.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PointsResponse'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          description: Someone else's membership.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '404':
+          $ref: '#/components/responses/NotFound'
+  /memberships/{id}/renew:
+    post:
+      tags: [Membership]
+      summary: Renew membership (RenewMembership)
+      description: CONFIRMED (RULE-19-03). From ACTIVE or the grace window. Repeat renewals return the current term instead of stacking (ASSUMPTION A3 in md).
+      operationId: renewMembership
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/MembershipId'
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/RenewRequest'
+      responses:
+        '200':
+          description: Membership renewed to ACTIVE with a new term.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/MembershipResponse'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          description: Owner or receptionist only.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          description: Not renewable (expired past grace, UPGRADED).
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+  /memberships/{id}/upgrade:
+    post:
+      tags: [Membership]
+      summary: Upgrade tier (UpgradeMembership)
+      description: CONFIRMED split (RULE-19-04). The old record terminates UPGRADED while a new ACTIVE record opens. Point carryover TBD Q10 in md.
+      operationId: upgradeMembership
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/MembershipId'
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/UpgradeRequest'
+      responses:
+        '200':
+          description: Tier upgraded with new record.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/UpgradeResponse'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          description: Owner or store manager only.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          description: Not ACTIVE or already at the target tier.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+  /memberships/{id}/redeem:
+    post:
+      tags: [Points]
+      summary: Redeem points (RedeemLoyaltyPoint)
+      description: CONFIRMED guards (RULE-19-06/09/10). Deliberately non-idempotent like vaccine administration (ASSUMPTION A4 in md). Conversion math TBD Q6 in md.
+      operationId: redeemLoyaltyPoints
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/MembershipId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/RedeemRequest'
+      responses:
+        '200':
+          description: Points deducted with ledger entry.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/RedeemResponse'
+        '400':
+          description: Over the available balance (CONFIRMED RULE-19-06).
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          description: Someone else's points, cross-org invoice, or LOCKED suspension (PROPOSED code MEMBERSHIP_SUSPENDED for the lock case).
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '404':
+          $ref: '#/components/responses/NotFound'
+  /memberships/{id}/adjust:
+    post:
+      tags: [Points]
+      summary: Adjust points manually (AdjustLoyaltyPoint)
+      description: CONFIRMED reason plus audit (RULE-19-08). Managers and organization admins only.
+      operationId: adjustLoyaltyPoints
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/MembershipId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/AdjustRequest'
+      responses:
+        '200':
+          description: Points adjusted with ledger entry.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/MembershipResponse'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          description: Managers and organization admins only.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '404':
+          $ref: '#/components/responses/NotFound'
+  /memberships/{id}/ledger:
+    get:
+      tags: [Points]
+      summary: Read the ledger (derived transparency read)
+      description: Every movement with its reference for reconciliation. Filters PROPOSED.
+      operationId: readLedger
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/MembershipId'
+        - name: page
+          in: query
+          required: false
+          schema:
+            type: integer
+            minimum: 1
+            default: 1
+        - name: pageSize
+          in: query
+          required: false
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 100
+            default: 20
+        - name: type
+          in: query
+          required: false
+          schema:
+            $ref: '#/components/schemas/LedgerType'
+      responses:
+        '200':
+          description: Page of ledger entries.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/LedgerPage'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          description: Someone else's ledger.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '404':
+          $ref: '#/components/responses/NotFound'
+components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+      description: JWT/Session Token (RULE-01-01 CONFIRMED existence; Bearer transport ASSUMPTION A2 in auth-v1).
+  parameters:
+    MembershipId:
+      name: id
+      in: path
+      required: true
+      schema:
+        type: string
+        format: uuid
+  schemas:
+    MembershipTier:
+      type: string
+      enum: [BRONZE, SILVER, GOLD, PLATINUM, DIAMOND]
+      description: CONFIRMED (ERD memberships).
+    MembershipStatus:
+      type: string
+      enum: [ACTIVE, UPGRADED, EXPIRED]
+      description: CONFIRMED (FSM-9; no PENDING).
+    LedgerType:
+      type: string
+      enum: [EARNED_INVOICE, REDEEMED_DISCOUNT, MANUAL_ADJUSTMENT]
+      description: CONFIRMED (ERD loyalty_point_ledgers).
+    RegisterMembershipRequest:
+      type: object
+      required: [organizationId]
+      properties:
+        organizationId:
+          type: string
+          format: uuid
+    MembershipResponse:
+      type: object
+      required: [membershipId, userId, organizationId, tier, status, currentPoints, validUntil]
+      properties:
+        membershipId:
+          type: string
+          format: uuid
+        userId:
+          type: string
+          format: uuid
+        organizationId:
+          type: string
+          format: uuid
+        tier:
+          $ref: '#/components/schemas/MembershipTier'
+        status:
+          $ref: '#/components/schemas/MembershipStatus'
+        currentPoints:
+          type: integer
+        validUntil:
+          type: string
+          format: date-time
+    PointsResponse:
+      type: object
+      required: [membershipId, currentPoints, suspended]
+      properties:
+        membershipId:
+          type: string
+          format: uuid
+        currentPoints:
+          type: integer
+        suspended:
+          type: boolean
+          description: True while the account is LOCKED (CONFIRMED RULE-19-09).
+    RenewRequest:
+      type: object
+      properties:
+        extendMonths:
+          type: integer
+          minimum: 1
+          default: 12
+          description: PROPOSED (term policy TBD Q3/Q8 in md).
+    UpgradeRequest:
+      type: object
+      properties:
+        newTier:
+          $ref: '#/components/schemas/MembershipTier'
+          description: PROPOSED explicit target; spend-based auto-upgrade TBD Q6 in md.
+    UpgradeResponse:
+      type: object
+      required: [oldMembershipId, newMembershipId, tier]
+      properties:
+        oldMembershipId:
+          type: string
+          format: uuid
+        newMembershipId:
+          type: string
+          format: uuid
+        tier:
+          $ref: '#/components/schemas/MembershipTier'
+    RedeemRequest:
+      type: object
+      required: [points, invoiceId]
+      properties:
+        points:
+          type: integer
+          minimum: 1
+        invoiceId:
+          type: string
+          format: uuid
+    RedeemResponse:
+      type: object
+      required: [membershipId, redeemedPoints, remainingPoints]
+      properties:
+        membershipId:
+          type: string
+          format: uuid
+        redeemedPoints:
+          type: integer
+        remainingPoints:
+          type: integer
+        discountAmount:
+          type: number
+          description: Computed under TBD conversion math (Q6/Q11 in md).
+    AdjustRequest:
+      type: object
+      required: [pointsChange, reason]
+      properties:
+        pointsChange:
+          type: integer
+          description: Signed delta, never zero.
+        reason:
+          type: string
+          description: Mandatory audited justification (CONFIRMED RULE-19-08).
+    LedgerEntry:
+      type: object
+      required: [entryId, pointsChange, transactionType, createdAt]
+      properties:
+        entryId:
+          type: string
+          format: uuid
+        pointsChange:
+          type: integer
+        transactionType:
+          $ref: '#/components/schemas/LedgerType'
+        referenceId:
+          type: string
+          format: uuid
+          nullable: true
+        createdAt:
+          type: string
+          format: date-time
+    LedgerPage:
+      type: object
+      required: [items, page, pageSize, total]
+      properties:
+        items:
+          type: array
+          items:
+            $ref: '#/components/schemas/LedgerEntry'
+        page:
+          type: integer
+        pageSize:
+          type: integer
+        total:
+          type: integer
+    Error:
+      type: object
+      required: [success, errorCode, message, statusCode, timestamp]
+      properties:
+        success:
+          type: boolean
+          example: false
+        errorCode:
+          type: string
+          description: ACCESS_DENIED_SCOPE_MISMATCH is CONFIRMED (RULE-02-01, 403); VALIDATION_FAILED, BUSINESS_RULE_VIOLATION, INVALID_STATE_TRANSITION, RESOURCE_NOT_FOUND follow docs/convention/backend/04-exception-handling; MEMBERSHIP_SUSPENDED is PROPOSED.
+        message:
+          type: string
+        statusCode:
+          type: integer
+        timestamp:
+          type: string
+          format: date-time
+        traceId:
+          type: string
+        details:
+          type: object
+          additionalProperties: true
+  responses:
+    BadRequest:
+      description: Validation failed.
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+    Unauthorized:
+      description: Missing or invalid authentication.
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+    NotFound:
+      description: Resource not found.
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'

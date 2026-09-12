@@ -1,0 +1,482 @@
+# Pet Care Consent API v1 — OpenAPI 3.1 (derived strictly from docs/)
+#
+# Source of truth: docs/01-business-operations.md (01#22),
+# docs/02-business-rules.md (RULE-22-01/04/05/06/07/09/10),
+# docs/04-glossary.md (22), docs/05-domain-model.md (4.22),
+# docs/06-erd.md (no dedicated consent tables; system_configs is a storage candidate).
+# Clinical cross-store consent lives in clinical-v1 (no duplication here).
+# Export and deletion processing are system jobs; only requests and reads live here.
+#
+# Traceability legend: CONFIRMED = in docs / ASSUMPTION (A#) = least invention /
+# TBD (Q#) = needs PO (see ../consent-v1.md section E). No `servers` (TBD Q1).
+# Error envelope follows docs/convention/backend/04-exception-handling. No 422.
+
+openapi: 3.1.0
+info:
+  title: Pet Care Consent and Privacy API v1
+  version: 1.0.0
+  description: >-
+    Strictly derived from docs/ (01#22 operations, RULE-22-01/04/05/06/07/09/10).
+    Customers grant and revoke data consents, pull time-boxed exports of their
+    data, and request deletion bounded by legal retention. Organizations
+    version privacy and retention policies with mandatory user notice.
+tags:
+  - name: Consents
+    description: Data-processing consents (GrantConsent, RevokeConsent).
+  - name: DataRights
+    description: Export and deletion requests with reads.
+  - name: Policies
+    description: Organization privacy and retention policies.
+paths:
+  /privacy/consents:
+    post:
+      tags: [Consents]
+      summary: Grant consent (GrantConsent)
+      description: CONFIRMED (RULE-22-01). Self only. Purposes from the rule examples (ASSUMPTION A2 in md). Idempotent replays return the stored grant.
+      operationId: grantConsent
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/GrantConsentRequest'
+      responses:
+        '201':
+          description: Consent granted.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ConsentResponse'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+  /privacy/consents/revoke:
+    post:
+      tags: [Consents]
+      summary: Revoke consent (RevokeConsent)
+      description: Self only. Marketing revocation doubles as opt-out for Module 23. Idempotent.
+      operationId: revokeConsent
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/RevokeConsentRequest'
+      responses:
+        '200':
+          description: Consent revoked.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ConsentResponse'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+  /privacy/consents/me:
+    get:
+      tags: [Consents]
+      summary: Read own consents (derived read)
+      description: Self only.
+      operationId: readOwnConsents
+      security:
+        - bearerAuth: []
+      responses:
+        '200':
+          description: Own consent list.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ConsentList'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+  /privacy/exports:
+    post:
+      tags: [DataRights]
+      summary: Request data export (RequestDataExport)
+      description: CONFIRMED (RULE-22-09). Opens an async packaging job. Format TBD Q5/Q11 in md.
+      operationId: requestDataExport
+      security:
+        - bearerAuth: []
+      responses:
+        '202':
+          description: Export job accepted.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ExportResponse'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+  /privacy/exports/{id}:
+    get:
+      tags: [DataRights]
+      summary: Read export result (derived read)
+      description: States PROPOSED (TBD Q9 in md). Expired links are re-requested, never extended (ASSUMPTION A1).
+      operationId: readDataExport
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/ExportId'
+      responses:
+        '200':
+          description: Export status with time-boxed link.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ExportResponse'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          description: Someone else's export.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '410':
+          description: Link expired (PROPOSED code EXPORT_LINK_EXPIRED).
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+  /privacy/deletion-requests:
+    post:
+      tags: [DataRights]
+      summary: Request data deletion (RequestDataDeletion)
+      description: CONFIRMED principle (RULE-22-04). Legal-hold data is retained and reported, never silently dropped.
+      operationId: requestDataDeletion
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/DeletionRequest'
+      responses:
+        '202':
+          description: Deletion job accepted.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DeletionResponse'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+  /privacy/deletion-requests/{id}:
+    get:
+      tags: [DataRights]
+      summary: Read deletion result (derived read)
+      description: States PROPOSED (TBD Q9 in md) with the retained-by-law list.
+      operationId: readDataDeletion
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/DeletionId'
+      responses:
+        '200':
+          description: Deletion outcome.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DeletionResponse'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          description: Someone else's request.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '404':
+          $ref: '#/components/responses/NotFound'
+  /organizations/{id}/privacy-policy:
+    put:
+      tags: [Policies]
+      summary: Manage privacy policy (ManagePrivacyPolicy)
+      description: CONFIRMED with mandatory user notice plus audit (RULE-22-06). Versioned content (ASSUMPTION A3 in md). Storage TBD Q8.
+      operationId: managePrivacyPolicy
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/OrganizationId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PolicyRequest'
+      responses:
+        '200':
+          description: Policy versioned with notice dispatched.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PolicyResponse'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          description: Organization admins of the org only.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '404':
+          $ref: '#/components/responses/NotFound'
+  /organizations/{id}/retention-policy:
+    put:
+      tags: [Policies]
+      summary: Manage retention policy (ManageRetentionPolicy)
+      description: CONFIRMED org-wide sync (RULE-22-05). Storage TBD Q8.
+      operationId: manageRetentionPolicy
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/OrganizationId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/RetentionRequest'
+      responses:
+        '200':
+          description: Retention rules stored and synced.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/RetentionResponse'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          description: Organization admins of the org only.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '404':
+          $ref: '#/components/responses/NotFound'
+components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+      description: JWT/Session Token (RULE-01-01 CONFIRMED existence; Bearer transport ASSUMPTION A2 in auth-v1).
+  parameters:
+    ExportId:
+      name: id
+      in: path
+      required: true
+      schema:
+        type: string
+        format: uuid
+    DeletionId:
+      name: id
+      in: path
+      required: true
+      schema:
+        type: string
+        format: uuid
+    OrganizationId:
+      name: id
+      in: path
+      required: true
+      schema:
+        type: string
+        format: uuid
+  schemas:
+    ConsentPurpose:
+      type: string
+      enum: [MARKETING, RECORD_SHARING, PAYMENT_STORAGE]
+      description: PROPOSED from RULE-22-01 examples (TBD Q3/Q10 in md).
+    ConsentState:
+      type: string
+      enum: [GRANTED, REVOKED]
+      description: Privacy-consent states (no FSM in docs; job states TBD Q9 in md).
+    GrantConsentRequest:
+      type: object
+      required: [purpose]
+      properties:
+        purpose:
+          $ref: '#/components/schemas/ConsentPurpose'
+        validUntil:
+          type: string
+          format: date-time
+    RevokeConsentRequest:
+      type: object
+      required: [purpose]
+      properties:
+        purpose:
+          $ref: '#/components/schemas/ConsentPurpose'
+    ConsentResponse:
+      type: object
+      required: [consentId, purpose, status]
+      properties:
+        consentId:
+          type: string
+          format: uuid
+        purpose:
+          $ref: '#/components/schemas/ConsentPurpose'
+        status:
+          $ref: '#/components/schemas/ConsentState'
+        validUntil:
+          type: string
+          format: date-time
+          nullable: true
+    ConsentList:
+      type: object
+      required: [consents]
+      properties:
+        consents:
+          type: array
+          items:
+            $ref: '#/components/schemas/ConsentResponse'
+    JobStatus:
+      type: string
+      enum: [PROCESSING, COMPLETED, FAILED]
+      description: PROPOSED async states (TBD Q9 in md).
+    ExportResponse:
+      type: object
+      required: [exportId, status]
+      properties:
+        exportId:
+          type: string
+          format: uuid
+        status:
+          $ref: '#/components/schemas/JobStatus'
+        downloadUrl:
+          type: string
+          nullable: true
+        expiresAt:
+          type: string
+          format: date-time
+          nullable: true
+    DeletionScope:
+      type: string
+      enum: [ALL, PARTIAL]
+      description: PROPOSED (TBD Q7 in md).
+    DeletionRequest:
+      type: object
+      properties:
+        scope:
+          $ref: '#/components/schemas/DeletionScope'
+          default: ALL
+        reason:
+          type: string
+    RetainedItem:
+      type: object
+      required: [dataType, reason]
+      properties:
+        dataType:
+          type: string
+        reason:
+          type: string
+    DeletionResponse:
+      type: object
+      required: [requestId, status, retained]
+      properties:
+        requestId:
+          type: string
+          format: uuid
+        status:
+          type: string
+          enum: [PROCESSING, COMPLETED, PARTIAL]
+          description: PROPOSED (TBD Q9 in md).
+        retained:
+          type: array
+          items:
+            $ref: '#/components/schemas/RetainedItem'
+    PolicyRequest:
+      type: object
+      required: [content]
+      properties:
+        content:
+          type: string
+        version:
+          type: string
+    PolicyResponse:
+      type: object
+      required: [version, effectiveAt]
+      properties:
+        version:
+          type: string
+        effectiveAt:
+          type: string
+          format: date-time
+    RetentionRule:
+      type: object
+      required: [dataType, retainDays]
+      properties:
+        dataType:
+          type: string
+        retainDays:
+          type: integer
+          minimum: 0
+    RetentionRequest:
+      type: object
+      required: [rules]
+      properties:
+        rules:
+          type: array
+          minItems: 1
+          items:
+            $ref: '#/components/schemas/RetentionRule'
+    RetentionResponse:
+      type: object
+      required: [rules]
+      properties:
+        rules:
+          type: array
+          items:
+            $ref: '#/components/schemas/RetentionRule'
+    Error:
+      type: object
+      required: [success, errorCode, message, statusCode, timestamp]
+      properties:
+        success:
+          type: boolean
+          example: false
+        errorCode:
+          type: string
+          description: ACCESS_DENIED_SCOPE_MISMATCH is CONFIRMED (RULE-02-01, 403); VALIDATION_FAILED, BUSINESS_RULE_VIOLATION, INVALID_STATE_TRANSITION, RESOURCE_NOT_FOUND follow docs/convention/backend/04-exception-handling; EXPORT_LINK_EXPIRED is PROPOSED.
+        message:
+          type: string
+        statusCode:
+          type: integer
+        timestamp:
+          type: string
+          format: date-time
+        traceId:
+          type: string
+        details:
+          type: object
+          additionalProperties: true
+  responses:
+    BadRequest:
+      description: Validation failed.
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+    Unauthorized:
+      description: Missing or invalid authentication.
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+    NotFound:
+      description: Resource not found.
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'

@@ -1,0 +1,242 @@
+# Pet Care Audit API v1 — OpenAPI 3.1 (derived strictly from docs/)
+#
+# Source of truth: docs/01-business-operations.md (01#25),
+# docs/02-business-rules.md (RULE-25-01..07 plus immutability invariant),
+# docs/04-glossary.md (25), docs/05-domain-model.md (4.25),
+# docs/06-erd.md (audit_logs). No FSM (immutable log CONFIRMED).
+# Writes belong to the system (RecordAuditLog plus specialty tracks surface as
+# read filters); this contract is read-only by design. Not even super admins
+# or DBAs may change history. Tenant configs have no operations (no endpoints).
+#
+# Traceability legend: CONFIRMED = in docs / ASSUMPTION (A#) = least invention /
+# TBD (Q#) = needs PO (see ../audit-v1.md section E). No `servers` (TBD Q1).
+# Error envelope follows docs/convention/backend/04-exception-handling.
+
+openapi: 3.1.0
+info:
+  title: Pet Care Audit API v1
+  version: 1.0.0
+  description: >-
+    Strictly derived from docs/ (01#25 operations, RULE-25-01..07). The audit
+    trail is append-only at both the database and the API layer: this contract
+    reads history scoped by role and specialty, and writes nothing, ever.
+tags:
+  - name: Audit
+    description: Scoped audit reads (ViewAuditLog with specialty tracks as filters).
+paths:
+  /audit-logs:
+    get:
+      tags: [Audit]
+      summary: Search audit trail (ViewAuditLog)
+      description: CONFIRMED scoping (RULE-25-07). Finance and inventory callers are auto-filtered to their specialties (ASSUMPTION A1 in md). Newest first (ASSUMPTION A2).
+      operationId: viewAuditLog
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: entityType
+          in: query
+          required: false
+          schema:
+            type: string
+          description: Specialty tracks surface here (TBD Q7 in md).
+        - name: action
+          in: query
+          required: false
+          schema:
+            type: string
+        - name: actorId
+          in: query
+          required: false
+          schema:
+            type: string
+            format: uuid
+        - name: from
+          in: query
+          required: false
+          schema:
+            type: string
+            format: date-time
+        - name: to
+          in: query
+          required: false
+          schema:
+            type: string
+          format: date-time
+        - name: page
+          in: query
+          required: false
+          schema:
+            type: integer
+            minimum: 1
+            default: 1
+        - name: pageSize
+          in: query
+          required: false
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 100
+            default: 20
+      responses:
+        '200':
+          description: Page of audit entries.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AuditPage'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          description: Outside caller scope or specialty.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+  /audit-logs/{id}:
+    get:
+      tags: [Audit]
+      summary: Get audit entry (derived read)
+      description: Full before and after snapshots (ERD CONFIRMED columns).
+      operationId: getAuditEntry
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/AuditId'
+      responses:
+        '200':
+          description: Audit entry detail.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AuditEntry'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          description: Outside caller scope.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '404':
+          $ref: '#/components/responses/NotFound'
+components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+      description: JWT/Session Token (RULE-01-01 CONFIRMED existence; Bearer transport ASSUMPTION A2 in auth-v1).
+  parameters:
+    AuditId:
+      name: id
+      in: path
+      required: true
+      schema:
+        type: string
+        format: uuid
+  schemas:
+    AuditEntry:
+      type: object
+      required: [logId, action, entityType, entityId, timestamp]
+      properties:
+        logId:
+          type: string
+          format: uuid
+        actorId:
+          type: string
+          format: uuid
+          nullable: true
+        actorRole:
+          type: string
+          nullable: true
+        action:
+          type: string
+        entityType:
+          type: string
+        entityId:
+          type: string
+        scopeType:
+          type: string
+          nullable: true
+        scopeId:
+          type: string
+          format: uuid
+          nullable: true
+        previousState:
+          type: object
+          additionalProperties: true
+          nullable: true
+          description: snapshot_before (name mapping TBD Q3 in md).
+        newState:
+          type: object
+          additionalProperties: true
+          nullable: true
+          description: snapshot_after (name mapping TBD Q3 in md).
+        ipAddress:
+          type: string
+          nullable: true
+        clientChannel:
+          type: string
+          nullable: true
+          description: user_agent mapping TBD Q3 in md.
+        timestamp:
+          type: string
+          format: date-time
+      description: Field names map RULE-25-01 vocabulary onto ERD columns (mapping TBD Q3 in md).
+    AuditPage:
+      type: object
+      required: [items, page, pageSize, total]
+      properties:
+        items:
+          type: array
+          items:
+            $ref: '#/components/schemas/AuditEntry'
+        page:
+          type: integer
+        pageSize:
+          type: integer
+        total:
+          type: integer
+    Error:
+      type: object
+      required: [success, errorCode, message, statusCode, timestamp]
+      properties:
+        success:
+          type: boolean
+          example: false
+        errorCode:
+          type: string
+          description: ACCESS_DENIED_SCOPE_MISMATCH is CONFIRMED (RULE-02-01, 403); VALIDATION_FAILED, BUSINESS_RULE_VIOLATION, RESOURCE_NOT_FOUND follow docs/convention/backend/04-exception-handling.
+        message:
+          type: string
+        statusCode:
+          type: integer
+        timestamp:
+          type: string
+          format: date-time
+        traceId:
+          type: string
+        details:
+          type: object
+          additionalProperties: true
+  responses:
+    BadRequest:
+      description: Validation failed.
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+    Unauthorized:
+      description: Missing or invalid authentication.
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+    NotFound:
+      description: Resource not found.
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'

@@ -1,0 +1,415 @@
+# Pet Care Queue API v1 — OpenAPI 3.1 (derived strictly from docs/)
+#
+# Source of truth: docs/01-business-operations.md (01#7),
+# docs/02-business-rules.md (RULE-07-01..08), docs/03-state-machines.md (FSM-17),
+# docs/04-glossary.md (07), docs/05-domain-model.md (4.7),
+# docs/06-erd.md (daily_queues/queue_entries).
+# Ordering, turn notifications, and the walk-in appointment bridge are effects
+# of the endpoints below (no separate endpoints). CoordinateQueue is deferred
+# (operation without defined transitions, TBD Q7 in md).
+#
+# Traceability legend: CONFIRMED = in docs / ASSUMPTION (A#) = least invention /
+# TBD (Q#) = needs PO (see ../queue-v1.md section E). No `servers` (TBD Q1).
+# Error envelope follows docs/convention/backend/04-exception-handling. No 422.
+
+openapi: 3.1.0
+info:
+  title: Pet Care Queue API v1
+  version: 1.0.0
+  description: >-
+    Strictly derived from docs/ (01#7 operations, RULE-07-01..08, FSM-17
+    WAITING->CALLED->IN_SERVICE->COMPLETED). One FIFO position per ticket with a
+    single emergency bypass. Starting service atomically bridges an internal
+    walk-in appointment. Three unanswered calls mark a no-show.
+tags:
+  - name: Queue
+    description: Daily queue registration and views.
+  - name: Tickets
+    description: Ticket lifecycle (call, serve, complete, cancel, no-show).
+paths:
+  /stores/{id}/queue-entries:
+    post:
+      tags: [Queue]
+      summary: Take a queue number (RegisterQueueEntry)
+      description: CONFIRMED (RULE-07-01/02). Numbering scheme TBD Q6 in md. Emergency priority is staff-only (ASSUMPTION A1).
+      operationId: registerQueueEntry
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/StoreId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/RegisterQueueEntryRequest'
+      responses:
+        '201':
+          description: Ticket waiting.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TicketResponse'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          description: Outside scope.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          description: Queue closed or service unavailable at the store.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+    get:
+      tags: [Queue]
+      summary: View the daily queue
+      description: Derived read for display boards (ASSUMPTION A2). FIFO ordered with emergency first.
+      operationId: viewQueue
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/StoreId'
+        - name: status
+          in: query
+          required: false
+          schema:
+            $ref: '#/components/schemas/QueueEntryStatus'
+        - name: serviceId
+          in: query
+          required: false
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '200':
+          description: Daily queue snapshot.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/QueueSnapshot'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          $ref: '#/components/responses/NotFound'
+  /queue-entries/{id}/call:
+    post:
+      tags: [Tickets]
+      summary: Call next number (CallQueueEntry)
+      description: CONFIRMED (RULE-07-03). From WAITING. Each call increments called_times and re-sends the turn notification.
+      operationId: callQueueEntry
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/TicketId'
+      responses:
+        '200':
+          description: Ticket called.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TicketResponse'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          description: Store staff only.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          description: Ticket is not WAITING.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+  /queue-entries/{id}/start-service:
+    post:
+      tags: [Tickets]
+      summary: Start serving (StartQueueService with bridge)
+      description: CONFIRMED bridge (RULE-07-05). From CALLED. Atomically creates the internal WALK_IN appointment in progress and returns its id. Replays are safe.
+      operationId: startQueueService
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/TicketId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/StartServiceRequest'
+      responses:
+        '200':
+          description: Ticket in service with bridged appointment.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TicketResponse'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          description: Assigned specialist only.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          description: Ticket is not CALLED.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+  /queue-entries/{id}/complete:
+    post:
+      tags: [Tickets]
+      summary: Complete service (CompleteQueueEntry)
+      description: CONFIRMED (RULE-07-07). From IN_SERVICE. Syncs the linked appointment to COMPLETED, frees resources, and hands off to invoicing.
+      operationId: completeQueueEntry
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/TicketId'
+      responses:
+        '200':
+          description: Ticket completed.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TicketResponse'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          description: Assigned specialist only.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          description: Ticket is not IN_SERVICE.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+  /queue-entries/{id}/cancel:
+    post:
+      tags: [Tickets]
+      summary: Cancel waiting ticket (CancelQueueEntry)
+      description: CONFIRMED (RULE-07-04). From WAITING or CALLED; later positions move up.
+      operationId: cancelQueueEntry
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/TicketId'
+      responses:
+        '200':
+          description: Ticket cancelled.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TicketResponse'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          description: Ticket owner or receptionist only.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          description: Ticket is no longer cancellable.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+  /queue-entries/{id}/no-show:
+    post:
+      tags: [Tickets]
+      summary: Mark queue no-show (MarkQueueNoShow)
+      description: CONFIRMED (RULE-07-06). From CALLED with at least 3 calls; fewer calls are rejected with a PROPOSED code.
+      operationId: markQueueNoShow
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/TicketId'
+      responses:
+        '200':
+          description: Ticket marked no-show.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TicketResponse'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          description: Receptionists only.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          description: Not CALLED, or fewer than 3 calls (PROPOSED code CALL_LIMIT_NOT_REACHED).
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+      description: JWT/Session Token (RULE-01-01 CONFIRMED existence; Bearer transport ASSUMPTION A2 in auth-v1).
+  parameters:
+    StoreId:
+      name: id
+      in: path
+      required: true
+      schema:
+        type: string
+        format: uuid
+    TicketId:
+      name: id
+      in: path
+      required: true
+      schema:
+        type: string
+        format: uuid
+  schemas:
+    QueueEntryStatus:
+      type: string
+      enum: [WAITING, CALLED, IN_SERVICE, COMPLETED, CANCELLED, NO_SHOW]
+      description: CONFIRMED (04 glossary QueueEntryStatus).
+    TriagePriority:
+      type: string
+      enum: [NORMAL, URGENT, TRIAGE_EMERGENCY]
+      description: CONFIRMED (05 domain 4.7).
+    RegisterQueueEntryRequest:
+      type: object
+      required: [serviceId]
+      properties:
+        customerId:
+          type: string
+          format: uuid
+          description: Set by receptionists for counter registration.
+        petId:
+          type: string
+          format: uuid
+        serviceId:
+          type: string
+          format: uuid
+        priority:
+          $ref: '#/components/schemas/TriagePriority'
+          default: NORMAL
+          description: Emergency priority is staff-only (ASSUMPTION A1).
+    TicketResponse:
+      type: object
+      required: [ticketId, storeId, queueNumber, status, calledTimes]
+      properties:
+        ticketId:
+          type: string
+          format: uuid
+        storeId:
+          type: string
+          format: uuid
+        queueNumber:
+          type: string
+          description: Daily number, scheme TBD Q6 in md.
+        position:
+          type: integer
+        priority:
+          $ref: '#/components/schemas/TriagePriority'
+        status:
+          $ref: '#/components/schemas/QueueEntryStatus'
+        calledTimes:
+          type: integer
+          description: Call counter, max 3 per RULE-07-06.
+        appointmentId:
+          type: string
+          format: uuid
+          nullable: true
+          description: Bridged internal appointment once service starts (CONFIRMED RULE-07-05).
+    QueueSnapshot:
+      type: object
+      required: [queueDate, isActive, entries]
+      properties:
+        queueDate:
+          type: string
+          format: date
+        isActive:
+          type: boolean
+        entries:
+          type: array
+          items:
+            $ref: '#/components/schemas/TicketResponse'
+    StartServiceRequest:
+      type: object
+      required: [staffId, resourceId]
+      properties:
+        staffId:
+          type: string
+          format: uuid
+        resourceId:
+          type: string
+          format: uuid
+      description: Ticket, staff, and resource ids feed the bridge (ASSUMPTION A3 in md).
+    Error:
+      type: object
+      required: [success, errorCode, message, statusCode, timestamp]
+      properties:
+        success:
+          type: boolean
+          example: false
+        errorCode:
+          type: string
+          description: ACCESS_DENIED_SCOPE_MISMATCH is CONFIRMED (RULE-02-01, 403); VALIDATION_FAILED, BUSINESS_RULE_VIOLATION, INVALID_STATE_TRANSITION, RESOURCE_NOT_FOUND follow docs/convention/backend/04-exception-handling; CALL_LIMIT_NOT_REACHED is PROPOSED.
+        message:
+          type: string
+        statusCode:
+          type: integer
+        timestamp:
+          type: string
+          format: date-time
+        traceId:
+          type: string
+        details:
+          type: object
+          additionalProperties: true
+  responses:
+    BadRequest:
+      description: Validation failed.
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+    Unauthorized:
+      description: Missing or invalid authentication.
+      content:
+        application/json:
+          schema:
+                $ref: '#/components/schemas/Error'
+    NotFound:
+      description: Resource not found.
+      content:
+        application/json:
+          schema:
+                $ref: '#/components/schemas/Error'

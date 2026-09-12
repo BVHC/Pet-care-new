@@ -1,0 +1,653 @@
+# Pet Care Grooming API v1 — OpenAPI 3.1 (derived strictly from docs/)
+#
+# Source of truth: docs/01-business-operations.md (01#11),
+# docs/02-business-rules.md (RULE-11-01..06 plus surcharge/abort invariants),
+# docs/03-state-machines.md (FSM-15), docs/04-glossary.md (11),
+# docs/05-domain-model.md (4.11),
+# docs/06-erd.md (grooming_sessions/health_inspection_reports/grooming_service_lines).
+# Booking flows through Module 06 (no separate booking here). Confirmed add-ons
+# mint an independent surcharge invoice internally (Module 15 effect); the original
+# invoice is never touched. Completed sessions are immutable.
+#
+# Traceability legend: CONFIRMED = in docs / ASSUMPTION (A#) = least invention /
+# TBD (Q#) = needs PO (see ../grooming-v1.md section E). No `servers` (TBD Q1).
+# Error envelope follows docs/convention/backend/04-exception-handling. No 422.
+
+openapi: 3.1.0
+info:
+  title: Pet Care Grooming API v1
+  version: 1.0.0
+  description: >-
+    Strictly derived from docs/ (01#11 operations, RULE-11-01..06, FSM-15
+    WAITING->IN_PROGRESS->COMPLETED with approval detours). Every session is
+    health-inspected before clippers come out. Add-ons pause for customer
+    approval and bill through an independent surcharge invoice. Aborts raise a
+    HIGH incident and refund the unperformed part.
+tags:
+  - name: Sessions
+    description: Grooming sessions, inspection, progress, completion, cancellation, abort.
+  - name: AddOns
+    description: Extra services with customer approval and surcharge invoicing (D-02).
+paths:
+  /grooming-sessions:
+    post:
+      tags: [Sessions]
+      summary: Check in grooming (CheckInGrooming)
+      description: CONFIRMED (RULE-11-01). One session per appointment (ERD 1:1). Walk-ins need the Module 07 bridge first (TBD Q7 in md is DECIDED by ERD).
+      operationId: checkInGrooming
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CheckInGroomingRequest'
+      responses:
+        '201':
+          description: Session waiting.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SessionResponse'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          description: Receptionists (or groomers) only.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          description: Appointment already has a session.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+  /grooming-sessions/{id}:
+    get:
+      tags: [Sessions]
+      summary: Track session progress
+      description: Derived read for owner tracking (RULE-11-04). Returns session, inspection, lines, and surcharge linkage.
+      operationId: trackGroomingSession
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/SessionId'
+      responses:
+        '200':
+          description: Session snapshot.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SessionResponse'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          description: Pet owner or store staff only.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '404':
+          $ref: '#/components/responses/NotFound'
+    patch:
+      tags: [Sessions]
+      summary: Update result progress (UpdateGroomingResult)
+      description: CONFIRMED (RULE-11-04/05). In-progress only; completed sessions are immutable. Shape PROPOSED.
+      operationId: updateGroomingResult
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/SessionId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ProgressRequest'
+      responses:
+        '200':
+          description: Progress saved.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SessionResponse'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          description: Groomers only.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          description: Session is completed or otherwise uneditable.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+  /grooming-sessions/{id}/inspect:
+    post:
+      tags: [Sessions]
+      summary: Inspect pet (InspectPet)
+      description: CONFIRMED (RULE-11-02). Accepted stays WAITING; rejected ends REJECTED. Overwrites the single inspection report (ASSUMPTION A1 in md).
+      operationId: inspectPet
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/SessionId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/InspectRequest'
+      responses:
+        '200':
+          description: Inspection recorded with resulting status.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SessionResponse'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          description: Groomers only.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          description: Session already past inspection.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+  /grooming-sessions/{id}/start:
+    post:
+      tags: [Sessions]
+      summary: Start grooming (PerformGrooming)
+      description: CONFIRMED (RULE-11-04). Requires a passed inspection (PROPOSED code INSPECTION_REQUIRED otherwise).
+      operationId: performGrooming
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/SessionId'
+      responses:
+        '200':
+          description: Session in progress.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SessionResponse'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          description: Groomers only.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          description: Not waiting or not inspected.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+  /grooming-sessions/{id}/add-ons:
+    post:
+      tags: [AddOns]
+      summary: Propose add-on (AddGroomingService)
+      description: CONFIRMED (RULE-11-03). From IN_PROGRESS. Pauses for customer approval and notifies them.
+      operationId: addGroomingService
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/SessionId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/AddOnRequest'
+      responses:
+        '201':
+          description: Add-on pending approval.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AddOnResponse'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          description: Groomers only.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          description: Session is not in progress.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+  /grooming-sessions/{id}/add-ons/{lineId}/confirm:
+    post:
+      tags: [AddOns]
+      summary: Confirm add-on (ConfirmAdditionalService)
+      description: CONFIRMED (RULE-11-03). Pet owner only. Mints (or finds) the independent surcharge invoice internally and resumes the base service.
+      operationId: confirmAdditionalService
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/SessionId'
+        - name: lineId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '200':
+          description: Add-on approved with surcharge invoice linked.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AddOnDecisionResponse'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          description: Pet owner only.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          description: Line is no longer pending.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+  /grooming-sessions/{id}/add-ons/{lineId}/reject:
+    post:
+      tags: [AddOns]
+      summary: Reject add-on (RejectAdditionalService)
+      description: CONFIRMED (RULE-11-03). Pet owner only. The base service resumes untouched.
+      operationId: rejectAdditionalService
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/SessionId'
+        - name: lineId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '200':
+          description: Add-on rejected, base service resumed.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AddOnDecisionResponse'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          description: Pet owner only.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          description: Line is no longer pending.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+  /grooming-sessions/{id}/complete:
+    post:
+      tags: [Sessions]
+      summary: Complete grooming (CompleteGrooming)
+      description: CONFIRMED (RULE-11-05). From IN_PROGRESS with no pending approvals. Frees the table and hands off to reception. Immutable afterwards.
+      operationId: completeGrooming
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/SessionId'
+      responses:
+        '200':
+          description: Session completed.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SessionResponse'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          description: Groomers only.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          description: Still in approval or wrong state.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+  /grooming-sessions/{id}/cancel:
+    post:
+      tags: [Sessions]
+      summary: Cancel grooming (CancelGrooming)
+      description: CONFIRMED (RULE-11-01). Before service only, from WAITING.
+      operationId: cancelGrooming
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/SessionId'
+      responses:
+        '200':
+          description: Session cancelled.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SessionResponse'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          description: Pet owner or receptionist only.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          description: Service already started; use abort instead.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+  /grooming-sessions/{id}/abort:
+    post:
+      tags: [Sessions]
+      summary: Emergency abort (AbortGrooming)
+      description: CONFIRMED (RULE-11-06). From IN_PROGRESS with a mandatory reason. Raises a HIGH grooming incident, notifies the customer, and refunds the unperformed part.
+      operationId: abortGrooming
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/SessionId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/AbortRequest'
+      responses:
+        '200':
+          description: Session aborted.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SessionResponse'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          description: Groomers or store managers only.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          description: Not in progress.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+      description: JWT/Session Token (RULE-01-01 CONFIRMED existence; Bearer transport ASSUMPTION A2 in auth-v1).
+  parameters:
+    SessionId:
+      name: id
+      in: path
+      required: true
+      schema:
+        type: string
+        format: uuid
+  schemas:
+    GroomingStatus:
+      type: string
+      enum: [WAITING, IN_PROGRESS, AWAITING_CUSTOMER_APPROVAL, COMPLETED, CANCELLED, ABORTED, REJECTED]
+      description: CONFIRMED (FSM-15, 04 glossary).
+    Temperament:
+      type: string
+      enum: [CALM, AGGRESSIVE, FEARFUL]
+      description: CONFIRMED (ERD health_inspection_reports).
+    CheckInGroomingRequest:
+      type: object
+      required: [appointmentId]
+      properties:
+        appointmentId:
+          type: string
+          format: uuid
+        groomerId:
+          type: string
+          format: uuid
+          description: Defaults to the caller when omitted.
+    InspectionReport:
+      type: object
+      required: [inspectionId, skinCoatCondition, earEyeCondition, temperament, isAccepted]
+      properties:
+        inspectionId:
+          type: string
+          format: uuid
+        skinCoatCondition:
+          type: string
+        earEyeCondition:
+          type: string
+        temperament:
+          $ref: '#/components/schemas/Temperament'
+        isAccepted:
+          type: boolean
+        rejectionReason:
+          type: string
+    AddOnLine:
+      type: object
+      required: [lineId, serviceId, price, customerApproved]
+      properties:
+        lineId:
+          type: string
+          format: uuid
+        serviceId:
+          type: string
+          format: uuid
+        isAddon:
+          type: boolean
+          example: true
+        price:
+          type: number
+        customerApproved:
+          type: boolean
+        note:
+          type: string
+    SessionResponse:
+      type: object
+      required: [sessionId, appointmentId, storeId, petId, status, hasSurcharge]
+      properties:
+        sessionId:
+          type: string
+          format: uuid
+        appointmentId:
+          type: string
+          format: uuid
+        storeId:
+          type: string
+          format: uuid
+        petId:
+          type: string
+          format: uuid
+        status:
+          $ref: '#/components/schemas/GroomingStatus'
+        hasSurcharge:
+          type: boolean
+        surchargeInvoiceId:
+          type: string
+          format: uuid
+          nullable: true
+        abortReason:
+          type: string
+          nullable: true
+        inspection:
+          $ref: '#/components/schemas/InspectionReport'
+        addOns:
+          type: array
+          items:
+            $ref: '#/components/schemas/AddOnLine'
+    InspectRequest:
+      type: object
+      required: [skinCoatCondition, earEyeCondition, temperament, isAccepted]
+      properties:
+        skinCoatCondition:
+          type: string
+        earEyeCondition:
+          type: string
+        temperament:
+          $ref: '#/components/schemas/Temperament'
+        isAccepted:
+          type: boolean
+        rejectionReason:
+          type: string
+          description: Required when isAccepted is false (derived).
+    ProgressRequest:
+      type: object
+      properties:
+        progressNote:
+          type: string
+        photoUrl:
+          type: string
+      description: Shape PROPOSED (RULE-11-04/05 require tracking plus a final photo).
+    AddOnRequest:
+      type: object
+      required: [serviceId, price]
+      properties:
+        serviceId:
+          type: string
+          format: uuid
+        price:
+          type: number
+          minimum: 0
+        note:
+          type: string
+    AddOnResponse:
+      type: object
+      required: [lineId, sessionId, status]
+      properties:
+        lineId:
+          type: string
+          format: uuid
+        sessionId:
+          type: string
+          format: uuid
+        status:
+          type: string
+          example: PENDING
+    AddOnDecisionResponse:
+      type: object
+      required: [lineId, approved, sessionStatus]
+      properties:
+        lineId:
+          type: string
+          format: uuid
+        approved:
+          type: boolean
+        surchargeInvoiceId:
+          type: string
+          format: uuid
+          nullable: true
+          description: Minted internally on approval (Module 15 effect, D-02).
+        sessionStatus:
+          $ref: '#/components/schemas/GroomingStatus'
+    AbortRequest:
+      type: object
+      required: [abortReason]
+      properties:
+        abortReason:
+          type: string
+          description: Mandatory (CONFIRMED RULE-11-06).
+    Error:
+      type: object
+      required: [success, errorCode, message, statusCode, timestamp]
+      properties:
+        success:
+          type: boolean
+          example: false
+        errorCode:
+          type: string
+          description: ACCESS_DENIED_SCOPE_MISMATCH is CONFIRMED (RULE-02-01, 403); VALIDATION_FAILED, BUSINESS_RULE_VIOLATION, INVALID_STATE_TRANSITION, RESOURCE_NOT_FOUND follow docs/convention/backend/04-exception-handling; INSPECTION_REQUIRED is PROPOSED.
+        message:
+          type: string
+        statusCode:
+          type: integer
+        timestamp:
+          type: string
+          format: date-time
+        traceId:
+          type: string
+        details:
+          type: object
+          additionalProperties: true
+  responses:
+    BadRequest:
+      description: Validation failed.
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+    Unauthorized:
+      description: Missing or invalid authentication.
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+    NotFound:
+      description: Resource not found.
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'

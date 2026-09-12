@@ -1,0 +1,558 @@
+# Pet Care Package API v1 — OpenAPI 3.1 (derived strictly from docs/)
+#
+# Source of truth: docs/01-business-operations.md (01#20),
+# docs/02-business-rules.md (RULE-20-01..08 plus lifecycle/refund invariants),
+# docs/03-state-machines.md (FSM-10), docs/04-glossary.md (20),
+# docs/05-domain-model.md (4.20),
+# docs/06-erd.md (service_packages/package_usage_records).
+# Automatic activation, expiry sweeps, and no-show penalties are system effects
+# and jobs (only the manual counter path has an endpoint). Consumption typing
+# and the package master lack storage and stay TBD.
+#
+# Traceability legend: CONFIRMED = in docs / ASSUMPTION (A#) = least invention /
+# TBD (Q#) = needs PO (see ../package-v1.md section E). No `servers` (TBD Q1).
+# Error envelope follows docs/convention/backend/04-exception-handling. No 422.
+
+openapi: 3.1.0
+info:
+  title: Pet Care Package API v1
+  version: 1.0.0
+  description: >-
+    Strictly derived from docs/ (01#20 operations, RULE-20-01..08, FSM-10
+    PURCHASED->ACTIVATED->PARTIALLY_CONSUMED->FULLY_CONSUMED). Prepaid bundles
+    spend down per visit, cancel into a formula refund, and lose one unit
+    automatically on no-shows that managers can gracefully give back.
+tags:
+  - name: Packages
+    description: Purchase, views, activation, usage, history (Purchase/View/Activate/Confirm/TrackPackage).
+  - name: Adjustments
+    description: Cancellation, balance tweaks, no-show grace refunds.
+paths:
+  /packages:
+    post:
+      tags: [Packages]
+      summary: Buy package (PurchasePackage)
+      description: CONFIRMED (RULE-20-01). Inline service, units, price, and expiry (no master catalog in ERD, TBD Q10 in md). Package codes are server-generated (ASSUMPTION A1).
+      operationId: purchasePackage
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/BuyPackageRequest'
+      responses:
+        '201':
+          description: Package purchased.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PackageResponse'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          $ref: '#/components/responses/NotFound'
+    get:
+      tags: [Packages]
+      summary: List own packages (ViewPackage)
+      description: CONFIRMED (RULE-20-05). Owner scope with balances.
+      operationId: listPackages
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: status
+          in: query
+          required: false
+          schema:
+            $ref: '#/components/schemas/PackageStatus'
+        - name: page
+          in: query
+          required: false
+          schema:
+            type: integer
+            minimum: 1
+            default: 1
+        - name: pageSize
+          in: query
+          required: false
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 100
+            default: 20
+      responses:
+        '200':
+          description: Page of packages.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PackagePage'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+  /packages/{id}:
+    get:
+      tags: [Packages]
+      summary: Get package detail (ViewPackage)
+      description: CONFIRMED (RULE-20-05). Owner scope.
+      operationId: getPackage
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/PackageId'
+      responses:
+        '200':
+          description: Package with balance.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PackageResponse'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          description: Someone else's package.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '404':
+          $ref: '#/components/responses/NotFound'
+  /packages/{id}/activate:
+    post:
+      tags: [Packages]
+      summary: Activate at counter (ActivatePackage, manual path)
+      description: CONFIRMED counter path (RULE-20-01). From PURCHASED. Automatic paths never touch this endpoint. Idempotent.
+      operationId: activatePackage
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/PackageId'
+      responses:
+        '200':
+          description: Package activated (or already activated).
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PackageResponse'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          description: Receptionists only.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          description: Not PURCHASED.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+  /packages/{id}/confirm-usage:
+    post:
+      tags: [Packages]
+      summary: Spend units (ConfirmPackageUsage)
+      description: CONFIRMED guards (RULE-20-02/04/05). Deliberately non-idempotent like vaccine administration. Lands PARTIALLY or FULLY consumed.
+      operationId: confirmPackageUsage
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/PackageId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ConfirmUsageRequest'
+      responses:
+        '200':
+          description: Units spent with usage record.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PackageResponse'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          description: Receptionists only, pet in caller rights.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          description: Expired, fully consumed, short on units, or out of rights.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+  /packages/{id}/usage:
+    get:
+      tags: [Packages]
+      summary: Usage history (TrackPackageUsage, read)
+      description: CONFIRMED record fields (RULE-20-04). Consumption typing PROPOSED with storage TBD Q9 in md.
+      operationId: trackPackageUsage
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/PackageId'
+        - name: page
+          in: query
+          required: false
+          schema:
+            type: integer
+            minimum: 1
+            default: 1
+        - name: pageSize
+          in: query
+          required: false
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 100
+            default: 20
+      responses:
+        '200':
+          description: Page of usage records.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/UsagePage'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          description: Someone else's package.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '404':
+          $ref: '#/components/responses/NotFound'
+  /packages/{id}/cancel:
+    post:
+      tags: [Adjustments]
+      summary: Cancel package (CancelPackage)
+      description: CONFIRMED states and automatic refund request with the formula (RULE-20-06). StoreManager only. Idempotent.
+      operationId: cancelPackage
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/PackageId'
+      responses:
+        '200':
+          description: Package cancelled with refund opened.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CancelPackageResponse'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          description: StoreManager only.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          description: Not cancellable from this state.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+  /packages/{id}/adjust:
+    post:
+      tags: [Adjustments]
+      summary: Adjust balance (AdjustPackage)
+      description: CONFIRMED reason plus audit (RULE-20-07). Accepts either absolute or delta numbers (shape TBD Q12 in md).
+      operationId: adjustPackage
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/PackageId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/AdjustPackageRequest'
+      responses:
+        '200':
+          description: Balance adjusted.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PackageResponse'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          description: StoreManager only.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '404':
+          $ref: '#/components/responses/NotFound'
+  /packages/{id}/refund-unit:
+    post:
+      tags: [Adjustments]
+      summary: Grace-refund a no-show unit (RefundPackageUnit)
+      description: CONFIRMED force-majeure path (RULE-20-08). Mandatory reason with audit. Never exceeds total units (ASSUMPTION A2 in md).
+      operationId: refundPackageUnit
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/PackageId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/RefundUnitRequest'
+      responses:
+        '200':
+          description: Unit restored.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PackageResponse'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          description: StoreManager only.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          description: Nothing to restore.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+      description: JWT/Session Token (RULE-01-01 CONFIRMED existence; Bearer transport ASSUMPTION A2 in auth-v1).
+  parameters:
+    PackageId:
+      name: id
+      in: path
+      required: true
+      schema:
+        type: string
+        format: uuid
+  schemas:
+    PackageStatus:
+      type: string
+      enum: [PURCHASED, ACTIVATED, PARTIALLY_CONSUMED, FULLY_CONSUMED, CANCELLED, EXPIRED]
+      description: CONFIRMED (FSM-10, 04 glossary).
+    BuyPackageRequest:
+      type: object
+      required: [serviceId, totalUnits, purchasePrice]
+      properties:
+        serviceId:
+          type: string
+          format: uuid
+        totalUnits:
+          type: integer
+          minimum: 1
+        purchasePrice:
+          type: number
+          minimum: 0
+        expiresAt:
+          type: string
+          format: date-time
+          description: PROPOSED required (ERD mandates it; default policy TBD Q4/Q14 in md).
+    PackageResponse:
+      type: object
+      required: [packageId, packageCode, userId, serviceId, status, totalUnits, remainingUnits, purchasePrice, expiresAt]
+      properties:
+        packageId:
+          type: string
+          format: uuid
+        packageCode:
+          type: string
+        userId:
+          type: string
+          format: uuid
+        serviceId:
+          type: string
+          format: uuid
+        status:
+          $ref: '#/components/schemas/PackageStatus'
+        totalUnits:
+          type: integer
+        remainingUnits:
+          type: integer
+        purchasePrice:
+          type: number
+        expiresAt:
+          type: string
+          format: date-time
+    PackagePage:
+      type: object
+      required: [items, page, pageSize, total]
+      properties:
+        items:
+          type: array
+          items:
+            $ref: '#/components/schemas/PackageResponse'
+        page:
+          type: integer
+        pageSize:
+          type: integer
+        total:
+          type: integer
+    ConfirmUsageRequest:
+      type: object
+      required: [appointmentId]
+      properties:
+        appointmentId:
+          type: string
+          format: uuid
+        unitsConsumed:
+          type: integer
+          minimum: 1
+          default: 1
+    UsageRecord:
+      type: object
+      required: [usageId, appointmentId, unitsConsumed, consumedAt]
+      properties:
+        usageId:
+          type: string
+          format: uuid
+        appointmentId:
+          type: string
+          format: uuid
+        unitsConsumed:
+          type: integer
+        consumptionType:
+          type: string
+          example: NORMAL
+          description: PROPOSED (NO_SHOW_PENALTY per RULE-20-08; storage TBD Q9 in md).
+        consumedAt:
+          type: string
+          format: date-time
+        storeId:
+          type: string
+          format: uuid
+        staffId:
+          type: string
+          format: uuid
+        petId:
+          type: string
+          format: uuid
+    UsagePage:
+      type: object
+      required: [items, page, pageSize, total]
+      properties:
+        items:
+          type: array
+          items:
+            $ref: '#/components/schemas/UsageRecord'
+        page:
+          type: integer
+        pageSize:
+          type: integer
+        total:
+          type: integer
+    CancelPackageResponse:
+      type: object
+      required: [packageId, status]
+      properties:
+        packageId:
+          type: string
+          format: uuid
+        status:
+          $ref: '#/components/schemas/PackageStatus'
+        refundId:
+          type: string
+          format: uuid
+          nullable: true
+        refundAmount:
+          type: number
+          nullable: true
+          description: Formula CONFIRMED; admin fee TBD Q8 in md.
+    AdjustPackageRequest:
+      type: object
+      required: [reason]
+      properties:
+        newRemainingUnits:
+          type: integer
+          minimum: 0
+        deltaUnits:
+          type: integer
+        reason:
+          type: string
+          description: Mandatory audited justification (CONFIRMED RULE-20-07).
+      description: One of the two numbers (shape TBD Q12 in md).
+    RefundUnitRequest:
+      type: object
+      required: [reason]
+      properties:
+        reason:
+          type: string
+          description: Mandatory force-majeure justification (CONFIRMED RULE-20-08).
+        penaltyUsageId:
+          type: string
+          format: uuid
+          description: Targets the penalized record (ASSUMPTION A3 in md, TBD Q13).
+    Error:
+      type: object
+      required: [success, errorCode, message, statusCode, timestamp]
+      properties:
+        success:
+          type: boolean
+          example: false
+        errorCode:
+          type: string
+          description: ACCESS_DENIED_SCOPE_MISMATCH is CONFIRMED (RULE-02-01, 403); VALIDATION_FAILED, BUSINESS_RULE_VIOLATION, INVALID_STATE_TRANSITION, RESOURCE_NOT_FOUND follow docs/convention/backend/04-exception-handling.
+        message:
+          type: string
+        statusCode:
+          type: integer
+        timestamp:
+          type: string
+          format: date-time
+        traceId:
+          type: string
+        details:
+          type: object
+          additionalProperties: true
+  responses:
+    BadRequest:
+      description: Validation failed.
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+    Unauthorized:
+      description: Missing or invalid authentication.
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+    NotFound:
+      description: Resource not found.
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'

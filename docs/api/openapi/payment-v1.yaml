@@ -1,0 +1,343 @@
+# Pet Care Payment API v1 — OpenAPI 3.1 (derived strictly from docs/)
+#
+# Source of truth: docs/01-business-operations.md (01#16),
+# docs/02-business-rules.md (RULE-16-01..07), docs/03-state-machines.md (FSM-7),
+# docs/04-glossary.md (16), docs/05-domain-model.md (4.16),
+# docs/06-erd.md (payments).
+# Redirect verification is an internal online step (surfaced as gatewayUrl).
+# Callbacks are externally invoked and signed. Reconciliation is a back-office
+# batch (no endpoint). Refund-driven states are Module 17 effects.
+#
+# Traceability legend: CONFIRMED = in docs / ASSUMPTION (A#) = least invention /
+# TBD (Q#) = needs PO (see ../payment-v1.md section E). No `servers` (TBD Q1).
+# Error envelope follows docs/convention/backend/04-exception-handling. No 422.
+
+openapi: 3.1.0
+info:
+  title: Pet Care Payment API v1
+  version: 1.0.0
+  description: >-
+    Strictly derived from docs/ (01#16 operations, RULE-16-01..07, FSM-7
+    PENDING->PROCESSING->SUCCESS with cash settling instantly). One invoice
+    takes many payments but every payment serves exactly one invoice. Gateway
+    callbacks are signature-verified and processed exactly once.
+tags:
+  - name: Payments
+    description: Online payments, instant cash settlement, signed callbacks, cancellation.
+paths:
+  /payments:
+    post:
+      tags: [Payments]
+      summary: Start online payment (MakePayment)
+      description: CONFIRMED (RULE-16-01/02). Invoice must be ISSUED with headroom left. Idempotency keys deduplicate (ASSUMPTION A2 in md).
+      operationId: makePayment
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/MakePaymentRequest'
+      responses:
+        '201':
+          description: Payment pending with gateway redirect.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PaymentResponse'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          description: Not the invoice owner.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          description: Invoice not ISSUED, or amount overruns the total (CONFIRMED RULE-16-01), or duplicate key.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+  /payments/cash:
+    post:
+      tags: [Payments]
+      summary: Record cash payment (RecordCashPayment)
+      description: CONFIRMED instant settlement (RULE-16-02/04). Receptionists inside the POS transaction. Unique transaction codes stop double tendering.
+      operationId: recordCashPayment
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CashPaymentRequest'
+      responses:
+        '201':
+          description: Cash settled with SUCCESS.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PaymentResponse'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          description: Receptionists only.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          description: Invoice not ISSUED or amount overruns the total.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+  /payments/callbacks:
+    post:
+      tags: [Payments]
+      summary: Gateway callback (ReceivePaymentCallback)
+      description: CONFIRMED verification and exactly-once processing (RULE-16-03/04). Signature-gated, amount-matched, replay-safe.
+      operationId: receivePaymentCallback
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CallbackRequest'
+      responses:
+        '200':
+          description: Callback accepted (replays return the stored outcome).
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CallbackResponse'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          description: Bad gateway signature (PROPOSED minimal disclosure).
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '404':
+          description: No matching payment.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '409':
+          description: Amount mismatch (PROPOSED code AMOUNT_MISMATCH).
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+  /payments/{id}:
+    get:
+      tags: [Payments]
+      summary: Get payment (derived read)
+      description: Minimal read for cashiers and reconciliation prep (ASSUMPTION A1 in md).
+      operationId: getPayment
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/PaymentId'
+      responses:
+        '200':
+          description: Payment detail.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PaymentResponse'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          description: Outside owner or staff scope.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '404':
+          $ref: '#/components/responses/NotFound'
+  /payments/{id}/cancel:
+    post:
+      tags: [Payments]
+      summary: Cancel payment (CancelPayment)
+      description: CONFIRMED (RULE-16-05). Online PENDING or PROCESSING only; cash has no waiting states (PROPOSED 409).
+      operationId: cancelPayment
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/PaymentId'
+      responses:
+        '200':
+          description: Payment cancelled.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PaymentResponse'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          description: Payment owner or system only.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          description: Not cancellable (cash channel or terminal state).
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+      description: JWT/Session Token (RULE-01-01 CONFIRMED existence; Bearer transport ASSUMPTION A2 in auth-v1).
+  parameters:
+    PaymentId:
+      name: id
+      in: path
+      required: true
+      schema:
+        type: string
+        format: uuid
+  schemas:
+    PaymentStatus:
+      type: string
+      enum: [PENDING, PROCESSING, SUCCESS, FAILED, CANCELLED, PARTIALLY_REFUNDED, REFUNDED]
+      description: CONFIRMED (FSM-7, 04 glossary).
+    PaymentMethod:
+      type: string
+      enum: [CASH, ONLINE_GATEWAY]
+      description: CONFIRMED (RULE-16-02; POS_CARD removed per current docs).
+    GatewayProvider:
+      type: string
+      enum: [VNPAY, MOMO, ZALOPAY, CARD]
+      description: PROPOSED from RULE-16-02 examples (TBD Q6 in md).
+    MakePaymentRequest:
+      type: object
+      required: [invoiceId, amount]
+      properties:
+        invoiceId:
+          type: string
+          format: uuid
+        amount:
+          type: number
+          minimum: 0
+        provider:
+          $ref: '#/components/schemas/GatewayProvider'
+        idempotencyKey:
+          type: string
+          description: Optional stable key; duplicates replay instead of double-charging (ASSUMPTION A2 in md).
+    CashPaymentRequest:
+      type: object
+      required: [invoiceId, amount]
+      properties:
+        invoiceId:
+          type: string
+          format: uuid
+        amount:
+          type: number
+          minimum: 0
+    PaymentResponse:
+      type: object
+      required: [paymentId, invoiceId, transactionCode, paymentMethod, status, amount]
+      properties:
+        paymentId:
+          type: string
+          format: uuid
+        invoiceId:
+          type: string
+          format: uuid
+        transactionCode:
+          type: string
+        paymentMethod:
+          $ref: '#/components/schemas/PaymentMethod'
+        status:
+          $ref: '#/components/schemas/PaymentStatus'
+        amount:
+          type: number
+        gatewayUrl:
+          type: string
+          description: Online redirect surfaced from VerifyPayment (PROPOSED, TBD Q5 in md).
+    CallbackRequest:
+      type: object
+      required: [provider, transactionId, status, amount, signature]
+      properties:
+        provider:
+          $ref: '#/components/schemas/GatewayProvider'
+        transactionId:
+          type: string
+        status:
+          type: string
+          enum: [SUCCESS, FAILED]
+        amount:
+          type: number
+        signature:
+          type: string
+          description: HMAC over the payload (CONFIRMED RULE-16-03; scheme TBD Q8 in md).
+    CallbackResponse:
+      type: object
+      required: [received]
+      properties:
+        received:
+          type: boolean
+          example: true
+    Error:
+      type: object
+      required: [success, errorCode, message, statusCode, timestamp]
+      properties:
+        success:
+          type: boolean
+          example: false
+        errorCode:
+          type: string
+          description: ACCESS_DENIED_SCOPE_MISMATCH is CONFIRMED (RULE-02-01, 403); VALIDATION_FAILED, BUSINESS_RULE_VIOLATION, INVALID_STATE_TRANSITION, RESOURCE_NOT_FOUND, CONCURRENCY_CONFLICT follow docs/convention/backend/04-exception-handling; AMOUNT_MISMATCH is PROPOSED.
+        message:
+          type: string
+        statusCode:
+          type: integer
+        timestamp:
+          type: string
+          format: date-time
+        traceId:
+          type: string
+        details:
+          type: object
+          additionalProperties: true
+  responses:
+    BadRequest:
+      description: Validation failed.
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+    Unauthorized:
+      description: Missing or invalid authentication.
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+    NotFound:
+      description: Resource not found.
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'

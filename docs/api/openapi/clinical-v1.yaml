@@ -1,0 +1,808 @@
+# Pet Care Clinical API v1 — OpenAPI 3.1 (derived strictly from docs/)
+#
+# Source of truth: docs/01-business-operations.md (01#9),
+# docs/02-business-rules.md (RULE-09-01..04 plus 09-06/08 per domain),
+# docs/03-state-machines.md (no MedicalRecord FSM per ERD matrix; consent FSM-16),
+# docs/04-glossary.md (09), docs/05-domain-model.md (4.9),
+# docs/06-erd.md (medical_records/diagnoses/prescriptions/prescription_items/cross_store_consents).
+# Routine vaccination belongs to Module 10; only therapeutic vaccination links here.
+# Cross-store reads always need a grant or an emergency override.
+# The ERD 24h record lock contradicts the current RULE-09-06 and is TBD (no lock in v1).
+#
+# Traceability legend: CONFIRMED = in docs / ASSUMPTION (A#) = least invention /
+# TBD (Q#) = needs PO (see ../clinical-v1.md section E). No `servers` (TBD Q1).
+# Error envelope follows docs/convention/backend/04-exception-handling. No 422.
+
+openapi: 3.1.0
+info:
+  title: Pet Care Clinical API v1
+  version: 1.0.0
+  description: >-
+    Strictly derived from docs/ (01#9 operations, RULE-09-01..04, dual-protocol
+    cross-store consent). Only veterinarians write clinical data. Cross-store
+    history opens for 24 hours after OTP verification, is revocable any time,
+    and breaks glass only with a mandatory clinical reason that leaves incident,
+    audit, and notification trails.
+tags:
+  - name: Records
+    description: Electronic medical records and history views.
+  - name: ClinicalWrites
+    description: Symptoms, results, diagnoses, treatments, prescriptions, follow-ups.
+  - name: Consent
+    description: Cross-store consent grants and emergency override.
+paths:
+  /medical-records:
+    post:
+      tags: [Records]
+      summary: Open examination record (ExaminePet, CreateMedicalRecord)
+      description: CONFIRMED (RULE-09-01; CreateMedicalRecord from domain 4.9). Veterinarians only. Appointment link optional (ASSUMPTION A2 in md).
+      operationId: openMedicalRecord
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/OpenRecordRequest'
+      responses:
+        '201':
+          description: Record opened.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/RecordResponse'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          description: Veterinarians only (CONFIRMED RULE-09-01).
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '404':
+          $ref: '#/components/responses/NotFound'
+  /medical-records/{id}:
+    get:
+      tags: [Records]
+      summary: View one record (ViewMedicalHistory)
+      description: Same-store vets, the pet owner, and holders of an ACTIVE cross-store grant or emergency grant.
+      operationId: viewMedicalRecord
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/RecordId'
+      responses:
+        '200':
+          description: Record detail.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/RecordResponse'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          description: No grant for this record (CONFIRMED RULE-09-02 boundary).
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '404':
+          $ref: '#/components/responses/NotFound'
+    patch:
+      tags: [Records]
+      summary: Update record (UpdateMedicalRecord)
+      description: Treating veterinarian. No 24h lock in v1 (TBD Q9 in md).
+      operationId: updateMedicalRecord
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/RecordId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/UpdateRecordRequest'
+      responses:
+        '200':
+          description: Record updated.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/RecordResponse'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          description: Treating veterinarian only.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '404':
+          $ref: '#/components/responses/NotFound'
+  /pets/{id}/medical-history:
+    get:
+      tags: [Records]
+      summary: List pet history (ViewMedicalHistory)
+      description: Same grant boundary as single-record view. Pagination PROPOSED.
+      operationId: listMedicalHistory
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+        - name: page
+          in: query
+          required: false
+          schema:
+            type: integer
+            minimum: 1
+            default: 1
+        - name: pageSize
+          in: query
+          required: false
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 100
+            default: 20
+      responses:
+        '200':
+          description: Page of records.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/RecordPage'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          description: No grant for this pet history (CONFIRMED RULE-09-02 boundary).
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '404':
+          $ref: '#/components/responses/NotFound'
+  /medical-records/{id}/symptoms:
+    post:
+      tags: [ClinicalWrites]
+      summary: Record symptom (RecordSymptom)
+      description: CONFIRMED (RULE-09-01). Veterinarians only.
+      operationId: recordSymptom
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/RecordId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/SymptomRequest'
+      responses:
+        '201':
+          description: Symptom recorded.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/EntryResponse'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          description: Veterinarians only.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '404':
+          $ref: '#/components/responses/NotFound'
+  /medical-records/{id}/examination-results:
+    post:
+      tags: [ClinicalWrites]
+      summary: Record examination result (RecordExaminationResult)
+      description: CONFIRMED (RULE-09-01). Veterinarians only.
+      operationId: recordExaminationResult
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/RecordId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ExaminationResultRequest'
+      responses:
+        '201':
+          description: Result recorded.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/EntryResponse'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          description: Veterinarians only.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '404':
+          $ref: '#/components/responses/NotFound'
+  /medical-records/{id}/diagnoses:
+    post:
+      tags: [ClinicalWrites]
+      summary: Diagnose (DiagnosePet)
+      description: CONFIRMED (RULE-09-03). Bound to this examination session and grounding for treatment.
+      operationId: diagnosePet
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/RecordId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/DiagnosisRequest'
+      responses:
+        '201':
+          description: Diagnosis recorded.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/EntryResponse'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          description: Veterinarians only.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '404':
+          $ref: '#/components/responses/NotFound'
+  /medical-records/{id}/treatments:
+    post:
+      tags: [ClinicalWrites]
+      summary: Create treatment (CreateTreatment)
+      description: CONFIRMED (RULE-09-04). Belongs to this record. Therapeutic vaccine linkage per RULE-09-08.
+      operationId: createTreatment
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/RecordId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/TreatmentRequest'
+      responses:
+        '201':
+          description: Treatment created.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/EntryResponse'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          description: Veterinarians only.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '404':
+          $ref: '#/components/responses/NotFound'
+  /medical-records/{id}/prescriptions:
+    post:
+      tags: [ClinicalWrites]
+      summary: Prescribe (CreatePrescription)
+      description: Item fields CONFIRMED per ERD (product, quantity, dosage, frequency, duration). Stock deduction TBD Q5 in md.
+      operationId: createPrescription
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/RecordId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PrescriptionRequest'
+      responses:
+        '201':
+          description: Prescription created.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/EntryResponse'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          description: Veterinarians only.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '404':
+          $ref: '#/components/responses/NotFound'
+  /medical-records/{id}/follow-ups:
+    post:
+      tags: [ClinicalWrites]
+      summary: Schedule follow-up (CreateFollowUp)
+      description: CONFIRMED duty (RULE-09-06). Triggers a reminder (Module 23 effect).
+      operationId: createFollowUp
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/RecordId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/FollowUpRequest'
+      responses:
+        '201':
+          description: Follow-up scheduled.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/EntryResponse'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          description: Veterinarians only.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '404':
+          $ref: '#/components/responses/NotFound'
+  /consents/cross-store-requests:
+    post:
+      tags: [Consent]
+      summary: Request cross-store access (RequestCrossStoreConsent)
+      description: CONFIRMED standard protocol (RULE-09-02). A 5-minute OTP goes to the pet owner.
+      operationId: requestCrossStoreConsent
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CrossStoreRequest'
+      responses:
+        '201':
+          description: Consent requested as REQUESTED.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ConsentResponse'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          description: Veterinarians only.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '404':
+          $ref: '#/components/responses/NotFound'
+  /consents/cross-store-verify:
+    post:
+      tags: [Consent]
+      summary: Verify consent OTP (VerifyCrossStoreConsentOTP)
+      description: CONFIRMED (RULE-09-02). Opens a 24-hour grant. OTP purpose is fixed to CONSENT server-side.
+      operationId: verifyCrossStoreConsentOtp
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ConsentVerifyRequest'
+      responses:
+        '200':
+          description: Grant active for 24 hours (or already active).
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ConsentResponse'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          description: Wrong OTP with attempts remaining (PROPOSED code OTP_INVALID).
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '404':
+          description: No consent request or OTP session.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '410':
+          description: OTP expired after 300s (CONFIRMED RULE-01-02).
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '409':
+          description: Already ACTIVE.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+  /consents/{id}/revoke:
+    post:
+      tags: [Consent]
+      summary: Revoke consent (RevokeCrossStoreConsent)
+      description: CONFIRMED immediate revocation any time. Pet owner only. Idempotent.
+      operationId: revokeCrossStoreConsent
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/ConsentId'
+      responses:
+        '200':
+          description: Consent revoked (or already revoked).
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ConsentResponse'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          description: Pet owner only.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '404':
+          $ref: '#/components/responses/NotFound'
+  /consents/emergency-override:
+    post:
+      tags: [Consent]
+      summary: Emergency override (EmergencyOverrideAccess)
+      description: CONFIRMED break-glass (RULE-09-02). Mandatory clinical reason. Always leaves incident, audit, and notification trails.
+      operationId: emergencyOverrideAccess
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/EmergencyOverrideRequest'
+      responses:
+        '201':
+          description: Emergency grant active.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ConsentResponse'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          description: Veterinarians only.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '404':
+          $ref: '#/components/responses/NotFound'
+components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+      description: JWT/Session Token (RULE-01-01 CONFIRMED existence; Bearer transport ASSUMPTION A2 in auth-v1).
+  parameters:
+    RecordId:
+      name: id
+      in: path
+      required: true
+      schema:
+        type: string
+        format: uuid
+    ConsentId:
+      name: id
+      in: path
+      required: true
+      schema:
+        type: string
+        format: uuid
+  schemas:
+    ConsentScope:
+      type: string
+      enum: [ALL_STORES, SPECIFIC_STORE]
+      description: CONFIRMED (ERD cross_store_consents).
+    ConsentStatus:
+      type: string
+      enum: [REQUESTED, ACTIVE, REVOKED, EXPIRED]
+      description: CONFIRMED (FSM-16, 05 domain 4.22).
+    OtpCode:
+      type: string
+      pattern: '^[0-9]{6}$'
+      description: CONFIRMED format (05#4.1).
+    OpenRecordRequest:
+      type: object
+      required: [petId, storeId, chiefComplaint, weightKg]
+      properties:
+        petId:
+          type: string
+          format: uuid
+        storeId:
+          type: string
+          format: uuid
+        appointmentId:
+          type: string
+          format: uuid
+          description: Optional out-of-schedule examinations (ASSUMPTION A2 in md).
+        recordNumber:
+          type: string
+          description: Generated server-side when omitted (ASSUMPTION A4 in md, TBD Q3).
+        chiefComplaint:
+          type: string
+        clinicalSigns:
+          type: string
+        temperatureCelsius:
+          type: number
+        weightKg:
+          type: number
+        treatmentPlan:
+          type: string
+    RecordResponse:
+      type: object
+      required: [recordId, petId, storeId, recordNumber]
+      properties:
+        recordId:
+          type: string
+          format: uuid
+        petId:
+          type: string
+          format: uuid
+        storeId:
+          type: string
+          format: uuid
+        appointmentId:
+          type: string
+          format: uuid
+          nullable: true
+        recordNumber:
+          type: string
+        chiefComplaint:
+          type: string
+    RecordPage:
+      type: object
+      required: [items, page, pageSize, total]
+      properties:
+        items:
+          type: array
+          items:
+            $ref: '#/components/schemas/RecordResponse'
+        page:
+          type: integer
+        pageSize:
+          type: integer
+        total:
+          type: integer
+    UpdateRecordRequest:
+      type: object
+      properties:
+        chiefComplaint:
+          type: string
+        clinicalSigns:
+          type: string
+        treatmentPlan:
+          type: string
+        weightKg:
+          type: number
+    SymptomRequest:
+      type: object
+      required: [description]
+      properties:
+        description:
+          type: string
+    ExaminationResultRequest:
+      type: object
+      required: [description]
+      properties:
+        resultType:
+          type: string
+        description:
+          type: string
+    DiagnosisRequest:
+      type: object
+      required: [diagnosticCode, description]
+      properties:
+        diagnosticCode:
+          type: string
+        description:
+          type: string
+    TreatmentRequest:
+      type: object
+      required: [description]
+      properties:
+        description:
+          type: string
+        therapeuticVaccineId:
+          type: string
+          format: uuid
+          description: Therapeutic vaccination only (RULE-09-08 boundary); routine vaccination belongs to Module 10.
+    PrescriptionItem:
+      type: object
+      required: [productId, quantity, dosage, frequency, durationDays]
+      properties:
+        productId:
+          type: string
+          format: uuid
+        quantity:
+          type: integer
+          minimum: 1
+        dosage:
+          type: string
+        frequency:
+          type: string
+        durationDays:
+          type: integer
+          minimum: 1
+        instructions:
+          type: string
+    PrescriptionRequest:
+      type: object
+      required: [items]
+      properties:
+        items:
+          type: array
+          minItems: 1
+          items:
+            $ref: '#/components/schemas/PrescriptionItem'
+    FollowUpRequest:
+      type: object
+      required: [followUpDate]
+      properties:
+        followUpDate:
+          type: string
+          format: date
+        note:
+          type: string
+    EntryResponse:
+      type: object
+      required: [entryId, recordId]
+      properties:
+        entryId:
+          type: string
+          format: uuid
+        recordId:
+          type: string
+          format: uuid
+    CrossStoreRequest:
+      type: object
+      required: [petId, requestingStoreId, scopeType]
+      properties:
+        petId:
+          type: string
+          format: uuid
+        requestingStoreId:
+          type: string
+          format: uuid
+        sourceStoreId:
+          type: string
+          format: uuid
+          nullable: true
+          description: Null means whole chain (organization-bounded, TBD Q8 in md).
+        scopeType:
+          $ref: '#/components/schemas/ConsentScope'
+    ConsentVerifyRequest:
+      type: object
+      required: [phone, otpCode]
+      properties:
+        phone:
+          type: string
+        otpCode:
+          $ref: '#/components/schemas/OtpCode'
+    ConsentResponse:
+      type: object
+      required: [consentId, petId, status, expiresAt]
+      properties:
+        consentId:
+          type: string
+          format: uuid
+        petId:
+          type: string
+          format: uuid
+        status:
+          $ref: '#/components/schemas/ConsentStatus'
+        isEmergency:
+          type: boolean
+        expiresAt:
+          type: string
+          format: date-time
+          description: 24-hour grant on the standard path (CONFIRMED Consent_TTL).
+    EmergencyOverrideRequest:
+      type: object
+      required: [petId, storeId, emergencyReason]
+      properties:
+        petId:
+          type: string
+          format: uuid
+        storeId:
+          type: string
+          format: uuid
+        emergencyReason:
+          type: string
+          description: Mandatory clinical reason (CONFIRMED RULE-09-02).
+    Error:
+      type: object
+      required: [success, errorCode, message, statusCode, timestamp]
+      properties:
+        success:
+          type: boolean
+          example: false
+        errorCode:
+          type: string
+          description: ACCESS_DENIED_SCOPE_MISMATCH is CONFIRMED (RULE-02-01, 403); VALIDATION_FAILED, BUSINESS_RULE_VIOLATION, INVALID_STATE_TRANSITION, RESOURCE_NOT_FOUND follow docs/convention/backend/04-exception-handling; OTP_INVALID is PROPOSED.
+        message:
+          type: string
+        statusCode:
+          type: integer
+        timestamp:
+          type: string
+          format: date-time
+        traceId:
+          type: string
+        details:
+          type: object
+          additionalProperties: true
+  responses:
+    BadRequest:
+      description: Validation failed.
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+    Unauthorized:
+      description: Missing or invalid authentication.
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+    NotFound:
+      description: Resource not found.
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'

@@ -1,0 +1,503 @@
+# Pet Care Refund API v1 — OpenAPI 3.1 (derived strictly from docs/)
+#
+# Source of truth: docs/01-business-operations.md (01#17),
+# docs/02-business-rules.md (RULE-17-01..10 plus window/retry invariants),
+# docs/03-state-machines.md (FSM-8), docs/04-glossary.md (17),
+# docs/05-domain-model.md (4.17), docs/06-erd.md (refunds/refund_execution_logs).
+# Every refund sticks to exactly one original SUCCESS payment. UNDER_REVIEW is gone;
+# FAILED is non-terminal with three gateway retries or a manual paper-trailed
+# resolution. Gateway failures are recorded by the system (no separate endpoint).
+# Reconciliation and notifications are back-office jobs and effects (no endpoints).
+#
+# Traceability legend: CONFIRMED = in docs / ASSUMPTION (A#) = least invention /
+# TBD (Q#) = needs PO (see ../refund-v1.md section E). No `servers` (TBD Q1).
+# Error envelope follows docs/convention/backend/04-exception-handling. No 422.
+
+openapi: 3.1.0
+info:
+  title: Pet Care Refund API v1
+  version: 1.0.0
+  description: >-
+    Strictly derived from docs/ (01#17 operations, RULE-17-01..10, FSM-8
+    REQUESTED->APPROVED->PROCESSING->COMPLETED). Requests stay inside the
+    30-day window and the remaining refundable cap, pass maker-checker, pay
+    out through the original channel, and sync invoice, payment, and order on
+    completion. Failed gateway payouts get three retries, then a manual trail.
+tags:
+  - name: Refunds
+    description: Refund requests, reads, maker-checker decisions.
+  - name: Execution
+    description: Channel payouts, completion sync, retries, manual resolution.
+paths:
+  /refunds:
+    post:
+      tags: [Refunds]
+      summary: Request refund (RequestRefund, CreateRefundRequest)
+      description: CONFIRMED guards (RULE-17-01/02/03). One original SUCCESS payment, inside 30 days, inside the remaining cap. Actor decides the entry path (customer app or counter).
+      operationId: requestRefund
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/RequestRefundRequest'
+      responses:
+        '201':
+          description: Refund requested.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/RefundResponse'
+        '400':
+          description: Over the remaining cap (CONFIRMED RULE-17-02).
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          description: Not the payer and not counter staff.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          description: Payment not SUCCESS, or past the 30-day window (CONFIRMED code REFUND_REQUEST_WINDOW_EXPIRED, RULE-17-03).
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+    get:
+      tags: [Refunds]
+      summary: List refunds (derived read)
+      description: Own refunds for customers, scoped worklists for staff (ASSUMPTION A2 in md). Filters PROPOSED.
+      operationId: listRefunds
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: page
+          in: query
+          required: false
+          schema:
+            type: integer
+            minimum: 1
+            default: 1
+        - name: pageSize
+          in: query
+          required: false
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 100
+            default: 20
+        - name: status
+          in: query
+          required: false
+          schema:
+            $ref: '#/components/schemas/RefundStatus'
+      responses:
+        '200':
+          description: Page of refunds.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/RefundPage'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+  /refunds/{id}:
+    get:
+      tags: [Refunds]
+      summary: Get refund detail (derived read)
+      description: Owner or scoped staff. Carries the manual-resolution flag (DECIDED per RULE-17-07).
+      operationId: getRefund
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/RefundId'
+      responses:
+        '200':
+          description: Refund detail.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/RefundResponse'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          description: Outside owner or staff scope.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '404':
+          $ref: '#/components/responses/NotFound'
+  /refunds/{id}/approve:
+    post:
+      tags: [Refunds]
+      summary: Approve refund (ApproveRefund)
+      description: CONFIRMED maker-checker (RULE-17-04). StoreManager only. Carries the 30-day exception reason for organization admins (ASSUMPTION A1 in md, TBD Q8).
+      operationId: approveRefund
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/RefundId'
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ApproveRequest'
+      responses:
+        '200':
+          description: Refund approved.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/RefundResponse'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          description: Maker-checker violation or outside scope (CONFIRMED code MAKER_CHECKER_VIOLATION, RULE-17-04).
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          description: Not REQUESTED.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+  /refunds/{id}/reject:
+    post:
+      tags: [Refunds]
+      summary: Reject refund (RejectRefund)
+      description: CONFIRMED reasoned rejection (RULE-17-04). Terminal.
+      operationId: rejectRefund
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/RefundId'
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/RejectRequest'
+      responses:
+        '200':
+          description: Refund rejected.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/RefundResponse'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          description: StoreManager only.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          description: Not REQUESTED.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+  /refunds/{id}/process:
+    post:
+      tags: [Execution]
+      summary: Pay out refund (ProcessRefund)
+      description: CONFIRMED channel split (RULE-17-05). Cash at the counter by reception or manager; gateway calls by finance. Server enforces the channel-role match (PROPOSED 403).
+      operationId: processRefund
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/RefundId'
+      responses:
+        '200':
+          description: Refund processing.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/RefundResponse'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          description: Wrong channel role.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          description: Not APPROVED.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+  /refunds/{id}/complete:
+    post:
+      tags: [Execution]
+      summary: Complete refund (CompleteRefund)
+      description: CONFIRMED multi-aggregate sync (RULE-17-09). Invoice gains refunded total while staying PAID; payment and order follow their rules.
+      operationId: completeRefund
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/RefundId'
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CompleteRequest'
+      responses:
+        '200':
+          description: Refund completed and books synced.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/RefundResponse'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          description: Wrong channel role.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          description: Not PROCESSING.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+  /refunds/{id}/retry:
+    post:
+      tags: [Execution]
+      summary: Retry gateway payout (RetryRefund)
+      description: CONFIRMED cap of three (RULE-17-07). Past the third failure the refund locks for manual resolution.
+      operationId: retryRefund
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/RefundId'
+      responses:
+        '200':
+          description: Back to PROCESSING, or locked FAILED with the manual flag.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/RefundResponse'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          description: Finance staff only.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          description: Not FAILED, or retries exhausted and locked.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+  /refunds/{id}/resolve-manual:
+    post:
+      tags: [Execution]
+      summary: Resolve manually (ResolveRefundManually)
+      description: CONFIRMED paper trail (RULE-17-08). Bank reference mandatory; closes the refund as COMPLETED with the same book sync.
+      operationId: resolveRefundManually
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/RefundId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ResolveManualRequest'
+      responses:
+        '200':
+          description: Refund manually completed.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/RefundResponse'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          description: Finance or store manager only.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          description: Automatic retries still open.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+      description: JWT/Session Token (RULE-01-01 CONFIRMED existence; Bearer transport ASSUMPTION A2 in auth-v1).
+  parameters:
+    RefundId:
+      name: id
+      in: path
+      required: true
+      schema:
+        type: string
+        format: uuid
+  schemas:
+    RefundStatus:
+      type: string
+      enum: [REQUESTED, APPROVED, REJECTED, PROCESSING, COMPLETED, FAILED]
+      description: CONFIRMED (FSM-8, 04 glossary; UNDER_REVIEW removed).
+    RequestRefundRequest:
+      type: object
+      required: [paymentId, amount, reason]
+      properties:
+        paymentId:
+          type: string
+          format: uuid
+        amount:
+          type: number
+          minimum: 0
+          description: Within the remaining refundable cap (CONFIRMED RULE-17-02).
+        reason:
+          type: string
+    RefundResponse:
+      type: object
+      required: [refundId, refundNumber, paymentId, amount, status, retryCount]
+      properties:
+        refundId:
+          type: string
+          format: uuid
+        refundNumber:
+          type: string
+        paymentId:
+          type: string
+          format: uuid
+        amount:
+          type: number
+        reason:
+          type: string
+        status:
+          $ref: '#/components/schemas/RefundStatus'
+        retryCount:
+          type: integer
+          minimum: 0
+          maximum: 3
+          description: Gateway attempts so far (CONFIRMED cap RULE-17-07).
+        requiresManualResolution:
+          type: boolean
+          description: Locked for manual handling after three failures (CONFIRMED RULE-17-07).
+    RefundPage:
+      type: object
+      required: [items, page, pageSize, total]
+      properties:
+        items:
+          type: array
+          items:
+            $ref: '#/components/schemas/RefundResponse'
+        page:
+          type: integer
+        pageSize:
+          type: integer
+        total:
+          type: integer
+    ApproveRequest:
+      type: object
+      properties:
+        exceptionReason:
+          type: string
+          description: 30-day exception path for organization admins (ASSUMPTION A1 in md, TBD Q8).
+    RejectRequest:
+      type: object
+      properties:
+        reason:
+          type: string
+    CompleteRequest:
+      type: object
+      properties:
+        note:
+          type: string
+    ResolveManualRequest:
+      type: object
+      required: [bankReference]
+      properties:
+        bankReference:
+          type: string
+          description: Mandatory bank or reconciliation proof (CONFIRMED RULE-17-08).
+        proofUrl:
+          type: string
+        note:
+          type: string
+    Error:
+      type: object
+      required: [success, errorCode, message, statusCode, timestamp]
+      properties:
+        success:
+          type: boolean
+          example: false
+        errorCode:
+          type: string
+          description: MAKER_CHECKER_VIOLATION and REFUND_REQUEST_WINDOW_EXPIRED are CONFIRMED (RULE-17-03/04); ACCESS_DENIED_SCOPE_MISMATCH is CONFIRMED (RULE-02-01, 403); VALIDATION_FAILED, BUSINESS_RULE_VIOLATION, INVALID_STATE_TRANSITION, RESOURCE_NOT_FOUND follow docs/convention/backend/04-exception-handling.
+        message:
+          type: string
+        statusCode:
+          type: integer
+        timestamp:
+          type: string
+          format: date-time
+        traceId:
+          type: string
+        details:
+          type: object
+          additionalProperties: true
+  responses:
+    BadRequest:
+      description: Validation failed.
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+    Unauthorized:
+      description: Missing or invalid authentication.
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+    NotFound:
+      description: Resource not found.
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'

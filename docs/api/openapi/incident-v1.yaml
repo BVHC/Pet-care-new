@@ -1,0 +1,500 @@
+# Pet Care Incident API v1 — OpenAPI 3.1 (derived strictly from docs/)
+#
+# Source of truth: docs/01-business-operations.md (01#21),
+# docs/02-business-rules.md (RULE-21-01..08 plus severity matrix and trigger hooks),
+# docs/03-state-machines.md (FSM-14), docs/04-glossary.md (21),
+# docs/05-domain-model.md (4.21), docs/06-erd.md (incident_reports).
+# Automatic incidents from aborts and break-glass overrides are system effects
+# (no separate endpoints). HIGH and CRITICAL incidents notify mandatorily
+# (Module 23 effect). CLOSED is absolutely immutable (no edit or reopen endpoint).
+#
+# Traceability legend: CONFIRMED = in docs / ASSUMPTION (A#) = least invention /
+# TBD (Q#) = needs PO (see ../incident-v1.md section E). No `servers` (TBD Q1).
+# Error envelope follows docs/convention/backend/04-exception-handling. No 422.
+
+openapi: 3.1.0
+info:
+  title: Pet Care Incident API v1
+  version: 1.0.0
+  description: >-
+    Strictly derived from docs/ (01#21 operations, RULE-21-01..08, FSM-14
+    RECORDED->CLASSIFIED->UNDER_INVESTIGATION->ESCALATED/RESOLVED->CLOSED).
+    Manual and automatic reports share one lifecycle: classify before
+    investigating, fix before closing, and never touch a closed file again.
+tags:
+  - name: Incidents
+    description: Recording and reads (RecordIncident family).
+  - name: Handling
+    description: Classification, investigation, escalation, resolution, closure.
+paths:
+  /incidents:
+    post:
+      tags: [Incidents]
+      summary: Record incident (RecordIncident family, manual)
+      description: CONFIRMED (RULE-21-01/02/03). Reporter follows the caller. Pure-operations categories TBD Q7 in md. Numbers are server-generated (ASSUMPTION A2).
+      operationId: recordIncident
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/RecordIncidentRequest'
+      responses:
+        '201':
+          description: Incident recorded.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/IncidentResponse'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          description: Store staff only.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '404':
+          $ref: '#/components/responses/NotFound'
+    get:
+      tags: [Incidents]
+      summary: List incidents (scoped worklist, derived read)
+      description: Platform, organization, or store scope follows the caller role. Filters PROPOSED.
+      operationId: listIncidents
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: status
+          in: query
+          required: false
+          schema:
+            $ref: '#/components/schemas/IncidentStatus'
+        - name: severity
+          in: query
+          required: false
+          schema:
+            $ref: '#/components/schemas/IncidentSeverity'
+        - name: storeId
+          in: query
+          required: false
+          schema:
+            type: string
+            format: uuid
+        - name: page
+          in: query
+          required: false
+          schema:
+            type: integer
+            minimum: 1
+            default: 1
+        - name: pageSize
+          in: query
+          required: false
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 100
+            default: 20
+      responses:
+        '200':
+          description: Page of incidents.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/IncidentPage'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+  /incidents/{id}:
+    get:
+      tags: [Incidents]
+      summary: Get incident detail (derived read)
+      description: Scoped read. Investigation history storage TBD Q9 in md.
+      operationId: getIncident
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/IncidentId'
+      responses:
+        '200':
+          description: Incident detail.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/IncidentResponse'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          description: Outside scope.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '404':
+          $ref: '#/components/responses/NotFound'
+  /incidents/{id}/classify:
+    post:
+      tags: [Handling]
+      summary: Classify severity (ClassifyIncident)
+      description: CONFIRMED (RULE-21-04). From RECORDED, before any investigation. HIGH and CRITICAL trigger mandatory notifications.
+      operationId: classifyIncident
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/IncidentId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ClassifyRequest'
+      responses:
+        '200':
+          description: Incident classified.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/IncidentResponse'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          description: StoreManager only.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          description: Past classification.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+  /incidents/{id}/investigate:
+    post:
+      tags: [Handling]
+      summary: Investigate (InvestigateIncident)
+      description: CONFIRMED cause-finding (RULE-21-07). From CLASSIFIED. Findings accumulate (ASSUMPTION A4 in md).
+      operationId: investigateIncident
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/IncidentId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/InvestigateRequest'
+      responses:
+        '200':
+          description: Investigation recorded.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/IncidentResponse'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          description: StoreManager only.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          description: Not CLASSIFIED.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+  /incidents/{id}/escalate:
+    post:
+      tags: [Handling]
+      summary: Escalate (EscalateIncident)
+      description: CONFIRMED (RULE-21-06). Beyond store authority or legal disputes, up to organization or platform admins.
+      operationId: escalateIncident
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/IncidentId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/EscalateRequest'
+      responses:
+        '200':
+          description: Incident escalated.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/IncidentResponse'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          description: StoreManager only.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          description: Not escalatable from this state.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+  /incidents/{id}/handle:
+    post:
+      tags: [Handling]
+      summary: Resolve handling (HandleIncident)
+      description: "CONFIRMED remedies (RULE-21-07). Lands RESOLVED (ASSUMPTION A6 in md): the explicit pre-close state."
+      operationId: handleIncident
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/IncidentId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/HandleRequest'
+      responses:
+        '200':
+          description: Incident resolved.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/IncidentResponse'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          description: Owning level only (ASSUMPTION A5 in md).
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          description: Not under handling.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+  /incidents/{id}/close:
+    post:
+      tags: [Handling]
+      summary: Close file (CloseIncident)
+      description: CONFIRMED immutable closure (RULE-21-08). Everything remedied and accepted; CRITICAL closes at organization level per the severity matrix.
+      operationId: closeIncident
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/IncidentId'
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CloseRequest'
+      responses:
+        '200':
+          description: Incident closed forever.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/IncidentResponse'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          description: "Manager or organization admin (CRITICAL: org admin)."
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          description: Remedies incomplete.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+      description: JWT/Session Token (RULE-01-01 CONFIRMED existence; Bearer transport ASSUMPTION A2 in auth-v1).
+  parameters:
+    IncidentId:
+      name: id
+      in: path
+      required: true
+      schema:
+        type: string
+        format: uuid
+  schemas:
+    IncidentStatus:
+      type: string
+      enum: [RECORDED, CLASSIFIED, UNDER_INVESTIGATION, ESCALATED, RESOLVED, CLOSED]
+      description: CONFIRMED (FSM-14, 04 glossary).
+    IncidentSeverity:
+      type: string
+      enum: [LOW, MEDIUM, HIGH, CRITICAL]
+      description: CONFIRMED (RULE-21-04, ERD default MEDIUM).
+    IncidentCategory:
+      type: string
+      enum: [CLINICAL_EMERGENCY, GROOMING_INJURY, BREAK_GLASS_OVERRIDE]
+      description: CONFIRMED ERD values; pure-operations mapping TBD Q7 in md.
+    EscalationScope:
+      type: string
+      enum: [ORGANIZATION, PLATFORM]
+      description: CONFIRMED targets (RULE-21-06).
+    RecordIncidentRequest:
+      type: object
+      required: [storeId, category, description]
+      properties:
+        storeId:
+          type: string
+          format: uuid
+        petId:
+          type: string
+          format: uuid
+          nullable: true
+        category:
+          $ref: '#/components/schemas/IncidentCategory'
+        description:
+          type: string
+    IncidentResponse:
+      type: object
+      required: [incidentId, incidentNumber, storeId, category, severity, status, description]
+      properties:
+        incidentId:
+          type: string
+          format: uuid
+        incidentNumber:
+          type: string
+        storeId:
+          type: string
+          format: uuid
+        petId:
+          type: string
+          format: uuid
+          nullable: true
+        category:
+          $ref: '#/components/schemas/IncidentCategory'
+        severity:
+          $ref: '#/components/schemas/IncidentSeverity'
+        status:
+          $ref: '#/components/schemas/IncidentStatus'
+        description:
+          type: string
+    IncidentPage:
+      type: object
+      required: [items, page, pageSize, total]
+      properties:
+        items:
+          type: array
+          items:
+            $ref: '#/components/schemas/IncidentResponse'
+        page:
+          type: integer
+        pageSize:
+          type: integer
+        total:
+          type: integer
+    ClassifyRequest:
+      type: object
+      required: [severity]
+      properties:
+        severity:
+          $ref: '#/components/schemas/IncidentSeverity'
+    InvestigateRequest:
+      type: object
+      required: [findings]
+      properties:
+        findings:
+          type: string
+    EscalateRequest:
+      type: object
+      required: [toScope]
+      properties:
+        toScope:
+          $ref: '#/components/schemas/EscalationScope'
+        reason:
+          type: string
+    HandleRequest:
+      type: object
+      required: [actions]
+      properties:
+        actions:
+          type: string
+        compensation:
+          type: string
+          description: TBD linkage to refunds (Q4 in md).
+    CloseRequest:
+      type: object
+      properties:
+        acceptanceNote:
+          type: string
+    Error:
+      type: object
+      required: [success, errorCode, message, statusCode, timestamp]
+      properties:
+        success:
+          type: boolean
+          example: false
+        errorCode:
+          type: string
+          description: ACCESS_DENIED_SCOPE_MISMATCH is CONFIRMED (RULE-02-01, 403); VALIDATION_FAILED, BUSINESS_RULE_VIOLATION, INVALID_STATE_TRANSITION, RESOURCE_NOT_FOUND follow docs/convention/backend/04-exception-handling.
+        message:
+          type: string
+        statusCode:
+          type: integer
+        timestamp:
+          type: string
+          format: date-time
+        traceId:
+          type: string
+        details:
+          type: object
+          additionalProperties: true
+  responses:
+    BadRequest:
+      description: Validation failed.
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+    Unauthorized:
+      description: Missing or invalid authentication.
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+    NotFound:
+      description: Resource not found.
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'

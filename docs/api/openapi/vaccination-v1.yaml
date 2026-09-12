@@ -1,0 +1,520 @@
+# Pet Care Vaccination API v1 — OpenAPI 3.1 (derived strictly from docs/)
+#
+# Source of truth: docs/01-business-operations.md (01#10),
+# docs/02-business-rules.md (RULE-10-01..07 plus safety-guard invariant),
+# docs/04-glossary.md (10), docs/05-domain-model.md (4.10),
+# docs/06-erd.md (vaccine_batches/vaccinations/vaccination_schedules).
+# No dedicated FSM (FEFO batch CONFIRMED). Vaccine masters are Module 05 products.
+# Reminders are a Module 23 effect (no endpoint). Batch ACTIVE-ness is derived
+# (unexpired plus remaining doses), not a stored column. Manufacturer storage TBD.
+#
+# Traceability legend: CONFIRMED = in docs / ASSUMPTION (A#) = least invention /
+# TBD (Q#) = needs PO (see ../vaccination-v1.md section E). No `servers` (TBD Q1).
+# Error envelope follows docs/convention/backend/04-exception-handling. No 422.
+
+openapi: 3.1.0
+info:
+  title: Pet Care Vaccination API v1
+  version: 1.0.0
+  description: >-
+    Strictly derived from docs/ (01#10 operations, RULE-10-01..07). Batches are
+    tracked first-expired-first-out. Every shot passes the four-point
+    point-of-care safety guard on a scanned barcode, deducts one dose, and
+    automatically schedules the next due date. Routine shots never need a full
+    medical record.
+tags:
+  - name: Batches
+    description: Vaccine batch intake and expiry monitoring (ManageVaccineBatch, ManageVaccineExpiry).
+  - name: Shots
+    description: Schedules, history, and barcode-guarded administration.
+paths:
+  /stores/{id}/vaccine-batches:
+    post:
+      tags: [Batches]
+      summary: Intake vaccine batch (ManageVaccineBatch)
+      description: CONFIRMED (RULE-10-02). Inventory staff only. Batch numbers are unique per store (ASSUMPTION A1 in md).
+      operationId: intakeVaccineBatch
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/StoreId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/IntakeBatchRequest'
+      responses:
+        '201':
+          description: Batch stocked.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/BatchResponse'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          description: Inventory staff only.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '404':
+          description: Vaccine product not found.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '409':
+          description: Duplicate batch number in store (ASSUMPTION A1).
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+    get:
+      tags: [Batches]
+      summary: Monitor batches (ManageVaccineExpiry)
+      description: Read-only monitoring CONFIRMED (RULE-10-02/04). Filters PROPOSED. Expired batches are never usable.
+      operationId: listVaccineBatches
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/StoreId'
+        - name: expiredOnly
+          in: query
+          required: false
+          schema:
+            type: boolean
+        - name: expiringBefore
+          in: query
+          required: false
+          schema:
+            type: string
+            format: date
+        - name: vaccineId
+          in: query
+          required: false
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '200':
+          description: Batch list with derived expiry flags.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/BatchList'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          description: Store staff only.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '404':
+          $ref: '#/components/responses/NotFound'
+  /pets/{id}/vaccination-schedule:
+    get:
+      tags: [Shots]
+      summary: Check schedule (CheckVaccinationSchedule, ViewVaccinationSchedule)
+      description: CONFIRMED (RULE-10-01/03). Vets see full history plus upcoming dues; customers see their own pets. Standard age-based protocol content TBD Q7 in md.
+      operationId: checkVaccinationSchedule
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '200':
+          description: History plus upcoming dues.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ScheduleResponse'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          description: Outside owner, caregiver, or vet scope.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '404':
+          $ref: '#/components/responses/NotFound'
+  /pets/{id}/vaccinations:
+    get:
+      tags: [Shots]
+      summary: List administered shots
+      description: Shot history with batch, expiry, administering vet, and dose. Pagination PROPOSED.
+      operationId: listVaccinations
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+        - name: page
+          in: query
+          required: false
+          schema:
+            type: integer
+            minimum: 1
+            default: 1
+        - name: pageSize
+          in: query
+          required: false
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 100
+            default: 20
+      responses:
+        '200':
+          description: Page of shots.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/VaccinationPage'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          description: Outside owner, caregiver, or vet scope.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '404':
+          $ref: '#/components/responses/NotFound'
+  /vaccinations/administer:
+    post:
+      tags: [Shots]
+      summary: Administer shot (AdministerVaccine)
+      description: CONFIRMED four-point guard (RULE-10-06). Records the shot, deducts one dose, auto-schedules the next due date, and triggers a reminder. Deliberately non-idempotent (ASSUMPTION A2 in md).
+      operationId: administerVaccine
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/AdministerRequest'
+      responses:
+        '201':
+          description: Shot recorded with next due date.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AdministerResponse'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          description: Veterinarians only.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '404':
+          description: Batch or pet not found (PROPOSED code BATCH_NOT_FOUND for unknown barcodes).
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '409':
+          description: Guard failed (PROPOSED codes INSUFFICIENT_STOCK, VACCINE_INCOMPATIBLE, WRONG_STORE_BATCH).
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '410':
+          description: Batch expired (CONFIRMED code VACCINE_BATCH_EXPIRED, RULE-10-06) and triggers the expiry warning.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+  /vaccinations/{id}/schedule-next:
+    post:
+      tags: [Shots]
+      summary: Schedule next dose (ScheduleNextVaccination, manual)
+      description: Manual scheduling next to the automatic one inside administer. One schedule per shot (ASSUMPTION A3 in md). Shape PROPOSED.
+      operationId: scheduleNextVaccination
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ScheduleNextRequest'
+      responses:
+        '200':
+          description: Next dose scheduled.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/NextScheduleResponse'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          description: Veterinarians only.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '404':
+          $ref: '#/components/responses/NotFound'
+components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+      description: JWT/Session Token (RULE-01-01 CONFIRMED existence; Bearer transport ASSUMPTION A2 in auth-v1).
+  parameters:
+    StoreId:
+      name: id
+      in: path
+      required: true
+      schema:
+        type: string
+        format: uuid
+  schemas:
+    IntakeBatchRequest:
+      type: object
+      required: [vaccineId, batchNumber, expiryDate, quantityInitial]
+      properties:
+        vaccineId:
+          type: string
+          format: uuid
+          description: Module 05 product behind the vaccine.
+        batchNumber:
+          type: string
+        manufactureDate:
+          type: string
+          format: date
+        expiryDate:
+          type: string
+          format: date
+        quantityInitial:
+          type: integer
+          minimum: 1
+    BatchResponse:
+      type: object
+      required: [batchId, storeId, batchNumber, expiryDate, quantityInitial, quantityRemaining, expired]
+      properties:
+        batchId:
+          type: string
+          format: uuid
+        storeId:
+          type: string
+          format: uuid
+        batchNumber:
+          type: string
+        expiryDate:
+          type: string
+          format: date
+        quantityInitial:
+          type: integer
+        quantityRemaining:
+          type: integer
+        expired:
+          type: boolean
+          description: Derived flag (expiryDate at or before today), not stored.
+    BatchList:
+      type: object
+      required: [items]
+      properties:
+        items:
+          type: array
+          items:
+            $ref: '#/components/schemas/BatchResponse'
+    VaccinationEntry:
+      type: object
+      required: [vaccinationId, petId, batchNumber, administeredAt]
+      properties:
+        vaccinationId:
+          type: string
+          format: uuid
+        petId:
+          type: string
+          format: uuid
+        batchNumber:
+          type: string
+        expiryDate:
+          type: string
+          format: date
+        veterinarianId:
+          type: string
+          format: uuid
+        doseVolumeMl:
+          type: number
+        administeredAt:
+          type: string
+          format: date-time
+        nextDueDate:
+          type: string
+          format: date
+          nullable: true
+    VaccinationPage:
+      type: object
+      required: [items, page, pageSize, total]
+      properties:
+        items:
+          type: array
+          items:
+            $ref: '#/components/schemas/VaccinationEntry'
+        page:
+          type: integer
+        pageSize:
+          type: integer
+        total:
+          type: integer
+    UpcomingDose:
+      type: object
+      required: [scheduleId, nextDueDate]
+      properties:
+        scheduleId:
+          type: string
+          format: uuid
+        vaccineId:
+          type: string
+          format: uuid
+        nextDueDate:
+          type: string
+          format: date
+    ScheduleResponse:
+      type: object
+      required: [petId, history, upcoming]
+      properties:
+        petId:
+          type: string
+          format: uuid
+        history:
+          type: array
+          items:
+            $ref: '#/components/schemas/VaccinationEntry'
+        upcoming:
+          type: array
+          items:
+            $ref: '#/components/schemas/UpcomingDose'
+    AdministerRequest:
+      type: object
+      required: [petId, storeId, scannedBarcode]
+      properties:
+        petId:
+          type: string
+          format: uuid
+        storeId:
+          type: string
+          format: uuid
+        scannedBarcode:
+          type: string
+          description: Decodes to batch plus vaccine (CONFIRMED guard text; encoding TBD Q3 in md).
+        doseVolumeMl:
+          type: number
+          default: 1.0
+          description: ERD default 1.00; per-vaccine default TBD Q4 in md.
+        appointmentId:
+          type: string
+          format: uuid
+    AdministerResponse:
+      type: object
+      required: [vaccinationId, petId, batchNumber]
+      properties:
+        vaccinationId:
+          type: string
+          format: uuid
+        petId:
+          type: string
+          format: uuid
+        batchNumber:
+          type: string
+        expiryDate:
+          type: string
+          format: date
+        nextDueDate:
+          type: string
+          format: date
+          nullable: true
+    ScheduleNextRequest:
+      type: object
+      required: [nextDueDate]
+      properties:
+        nextDueDate:
+          type: string
+          format: date
+    NextScheduleResponse:
+      type: object
+      required: [scheduleId, vaccinationId, nextDueDate]
+      properties:
+        scheduleId:
+          type: string
+          format: uuid
+        vaccinationId:
+          type: string
+          format: uuid
+        nextDueDate:
+          type: string
+          format: date
+    Error:
+      type: object
+      required: [success, errorCode, message, statusCode, timestamp]
+      properties:
+        success:
+          type: boolean
+          example: false
+        errorCode:
+          type: string
+          description: VACCINE_BATCH_EXPIRED is CONFIRMED (RULE-10-06, 410); ACCESS_DENIED_SCOPE_MISMATCH is CONFIRMED (RULE-02-01, 403); VALIDATION_FAILED, BUSINESS_RULE_VIOLATION, INVALID_STATE_TRANSITION, RESOURCE_NOT_FOUND follow docs/convention/backend/04-exception-handling; BATCH_NOT_FOUND, INSUFFICIENT_STOCK, VACCINE_INCOMPATIBLE, WRONG_STORE_BATCH are PROPOSED.
+        message:
+          type: string
+        statusCode:
+          type: integer
+        timestamp:
+          type: string
+          format: date-time
+        traceId:
+          type: string
+        details:
+          type: object
+          additionalProperties: true
+  responses:
+    BadRequest:
+      description: Validation failed.
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+    Unauthorized:
+      description: Missing or invalid authentication.
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+    NotFound:
+      description: Resource not found.
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'

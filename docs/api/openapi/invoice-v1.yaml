@@ -1,0 +1,553 @@
+# Pet Care Invoice API v1 — OpenAPI 3.1 (derived strictly from docs/)
+#
+# Source of truth: docs/01-business-operations.md (01#15),
+# docs/02-business-rules.md (RULE-15-01..08), docs/03-state-machines.md (FSM-6),
+# docs/04-glossary.md (15), docs/05-domain-model.md (4.15),
+# docs/06-erd.md (invoices/invoice_items).
+# Settlement (PAID) is a Module 16 effect and refunds are Module 17; settled
+# invoices stay PAID forever with a running refunded total (D-01). Reconciliation
+# is a back-office batch (no endpoint). Surcharge invoices stand independent (D-02).
+#
+# Traceability legend: CONFIRMED = in docs / ASSUMPTION (A#) = least invention /
+# TBD (Q#) = needs PO (see ../invoice-v1.md section E). No `servers` (TBD Q1).
+# Error envelope follows docs/convention/backend/04-exception-handling. No 422.
+
+openapi: 3.1.0
+info:
+  title: Pet Care Invoice API v1
+  version: 1.0.0
+  description: >-
+    Strictly derived from docs/ (01#15 operations, RULE-15-01..08, FSM-6
+    DRAFT->ISSUED->PAID). Drafts collect items and discounts, issuance opens
+    the door to payment, and paid invoices never change state again. Surcharge
+    invoices for grooming extras live entirely on their own.
+tags:
+  - name: Drafts
+    description: Draft invoices, items, discounts, views (Create/Add/Apply/ViewInvoice).
+  - name: Issuance
+    description: Issuance and independent surcharge invoices (IssueInvoice, IssueSurchargeInvoice).
+  - name: Cancellation
+    description: Draft discard and issued voiding (DiscardInvoice, VoidInvoice).
+paths:
+  /invoices:
+    post:
+      tags: [Drafts]
+      summary: Create draft invoice (CreateInvoice)
+      description: CONFIRMED (RULE-15-01). One customer and one store; lines reference the open catalog. Origin linkage TBD Q6 in md.
+      operationId: createInvoice
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreateInvoiceRequest'
+      responses:
+        '201':
+          description: Draft created.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/InvoiceResponse'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          description: Store staff only.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '404':
+          $ref: '#/components/responses/NotFound'
+    get:
+      tags: [Drafts]
+      summary: List invoices (ViewInvoice)
+      description: CONFIRMED (RULE-15-01). Customers see their own; staff see their store. Filters PROPOSED.
+      operationId: listInvoices
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: page
+          in: query
+          required: false
+          schema:
+            type: integer
+            minimum: 1
+            default: 1
+        - name: pageSize
+          in: query
+          required: false
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 100
+            default: 20
+        - name: status
+          in: query
+          required: false
+          schema:
+            $ref: '#/components/schemas/InvoiceStatus'
+        - name: customerId
+          in: query
+          required: false
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '200':
+          description: Page of invoices.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/InvoicePage'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+  /invoices/{id}:
+    get:
+      tags: [Drafts]
+      summary: Get invoice detail (ViewInvoice)
+      description: CONFIRMED (RULE-15-01). Shows the running refunded total on paid invoices (D-01).
+      operationId: getInvoice
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/InvoiceId'
+      responses:
+        '200':
+          description: Invoice detail.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/InvoiceResponse'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          description: Outside owner or store scope.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '404':
+          $ref: '#/components/responses/NotFound'
+  /invoices/{id}/items:
+    post:
+      tags: [Drafts]
+      summary: Add line item (AddServiceToInvoice, AddProductToInvoice)
+      description: CONFIRMED (RULE-15-02). Draft only. Prices snapshot from the effective catalog (ASSUMPTION A1 in md); totals recompute.
+      operationId: addInvoiceItem
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/InvoiceId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/AddItemRequest'
+      responses:
+        '200':
+          description: Item added with recomputed totals.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/InvoiceResponse'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          description: Store staff only.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          description: Invoice is not DRAFT, or the reference is not on sale.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+  /invoices/{id}/discount:
+    post:
+      tags: [Drafts]
+      summary: Apply discount (ApplyDiscount)
+      description: CONFIRMED cap (RULE-15-02). Overwrites the discount level (ASSUMPTION A2 in md); voucher stacking belongs to Module 18.
+      operationId: applyDiscount
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/InvoiceId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/DiscountRequest'
+      responses:
+        '200':
+          description: Discount applied.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/InvoiceResponse'
+        '400':
+          description: Discount exceeds the invoice total (CONFIRMED RULE-15-02).
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          description: Store staff only.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          description: Invoice is not DRAFT.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+  /invoices/{id}/issue:
+    post:
+      tags: [Issuance]
+      summary: Issue invoice (IssueInvoice)
+      description: CONFIRMED (RULE-15-03). From DRAFT. Empty invoices TBD Q8 in md. Idempotent.
+      operationId: issueInvoice
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/InvoiceId'
+      responses:
+        '200':
+          description: Invoice issued (or already issued).
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/InvoiceResponse'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          description: Store staff only.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          description: Not a draft.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+  /invoices/surcharge:
+    post:
+      tags: [Issuance]
+      summary: Issue surcharge invoice (IssueSurchargeInvoice)
+      description: CONFIRMED independent protocol (RULE-15-05, D-02). Linked to the service session, never to the original invoice.
+      operationId: issueSurchargeInvoice
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/SurchargeRequest'
+      responses:
+        '201':
+          description: Surcharge invoice created.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/InvoiceResponse'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          description: Store staff only.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '404':
+          $ref: '#/components/responses/NotFound'
+  /invoices/{id}/discard:
+    post:
+      tags: [Cancellation]
+      summary: Discard draft (DiscardInvoice)
+      description: CONFIRMED (RULE-15-04). Mistaken drafts only, from DRAFT. Idempotent.
+      operationId: discardInvoice
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/InvoiceId'
+      responses:
+        '200':
+          description: Draft discarded (or already discarded).
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/InvoiceResponse'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          description: Store staff only.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          description: Not a draft.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+  /invoices/{id}/void:
+    post:
+      tags: [Cancellation]
+      summary: Void issued invoice (VoidInvoice)
+      description: CONFIRMED (RULE-15-04/07). Issued and unpaid only; paid invoices are absolutely void-proof. Finance staff per ASSUMPTION A4 in md.
+      operationId: voidInvoice
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/InvoiceId'
+      responses:
+        '200':
+          description: Invoice voided (or already void).
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/InvoiceResponse'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          description: Finance staff only (ASSUMPTION A4, TBD Q9 in md).
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          description: Not voidable (draft or paid).
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+      description: JWT/Session Token (RULE-01-01 CONFIRMED existence; Bearer transport ASSUMPTION A2 in auth-v1).
+  parameters:
+    InvoiceId:
+      name: id
+      in: path
+      required: true
+      schema:
+        type: string
+        format: uuid
+  schemas:
+    InvoiceStatus:
+      type: string
+      enum: [DRAFT, ISSUED, PAID, VOID, CANCELLED]
+      description: CONFIRMED (FSM-6; PARTIALLY_PAID and REFUNDED are banned, D-01).
+    InvoiceType:
+      type: string
+      enum: [SERVICE_INVOICE, PACKAGE_INVOICE, SURCHARGE_INVOICE]
+      description: CONFIRMED (ERD invoices).
+    CreateInvoiceRequest:
+      type: object
+      required: [customerId, storeId]
+      properties:
+        customerId:
+          type: string
+          format: uuid
+        storeId:
+          type: string
+          format: uuid
+        appointmentId:
+          type: string
+          format: uuid
+        orderId:
+          type: string
+          format: uuid
+        packageId:
+          type: string
+          format: uuid
+        type:
+          $ref: '#/components/schemas/InvoiceType'
+        taxAmount:
+          type: number
+          minimum: 0
+          description: Passed in, not computed (TBD Q7 in md).
+    InvoiceItem:
+      type: object
+      required: [itemType, refId, quantity, amount]
+      properties:
+        itemType:
+          type: string
+          enum: [SERVICE, PRODUCT]
+        refId:
+          type: string
+          format: uuid
+        quantity:
+          type: number
+        price:
+          type: number
+        amount:
+          type: number
+    InvoiceResponse:
+      type: object
+      required: [invoiceId, invoiceNumber, customerId, storeId, type, status, subtotal, discountAmount, taxAmount, totalAmount, totalRefundedAmount]
+      properties:
+        invoiceId:
+          type: string
+          format: uuid
+        invoiceNumber:
+          type: string
+        customerId:
+          type: string
+          format: uuid
+        storeId:
+          type: string
+          format: uuid
+        type:
+          $ref: '#/components/schemas/InvoiceType'
+        status:
+          $ref: '#/components/schemas/InvoiceStatus'
+        subtotal:
+          type: number
+        discountAmount:
+          type: number
+        taxAmount:
+          type: number
+        totalAmount:
+          type: number
+        totalRefundedAmount:
+          type: number
+          description: Running refunded total; PAID never moves (CONFIRMED D-01).
+        items:
+          type: array
+          items:
+            $ref: '#/components/schemas/InvoiceItem'
+    InvoicePage:
+      type: object
+      required: [items, page, pageSize, total]
+      properties:
+        items:
+          type: array
+          items:
+            $ref: '#/components/schemas/InvoiceResponse'
+        page:
+          type: integer
+        pageSize:
+          type: integer
+        total:
+          type: integer
+    AddItemRequest:
+      type: object
+      required: [itemType, refId, quantity]
+      properties:
+        itemType:
+          type: string
+          enum: [SERVICE, PRODUCT]
+        refId:
+          type: string
+          format: uuid
+        quantity:
+          type: number
+          minimum: 0
+        price:
+          type: number
+          minimum: 0
+          description: Defaults to the effective catalog price (ASSUMPTION A1 in md).
+    DiscountRequest:
+      type: object
+      properties:
+        voucherCode:
+          type: string
+          description: Validated under Module 18 rules.
+        discountAmount:
+          type: number
+          minimum: 0
+    SurchargeRequest:
+      type: object
+      required: [customerId, storeId, items]
+      properties:
+        customerId:
+          type: string
+          format: uuid
+        storeId:
+          type: string
+          format: uuid
+        appointmentId:
+          type: string
+          format: uuid
+        groomingSessionId:
+          type: string
+          format: uuid
+        items:
+          type: array
+          minItems: 1
+          items:
+            $ref: '#/components/schemas/AddItemRequest'
+    Error:
+      type: object
+      required: [success, errorCode, message, statusCode, timestamp]
+      properties:
+        success:
+          type: boolean
+          example: false
+        errorCode:
+          type: string
+          description: ACCESS_DENIED_SCOPE_MISMATCH is CONFIRMED (RULE-02-01, 403); VALIDATION_FAILED, BUSINESS_RULE_VIOLATION, INVALID_STATE_TRANSITION, RESOURCE_NOT_FOUND follow docs/convention/backend/04-exception-handling.
+        message:
+          type: string
+        statusCode:
+          type: integer
+        timestamp:
+          type: string
+          format: date-time
+        traceId:
+          type: string
+        details:
+          type: object
+          additionalProperties: true
+  responses:
+    BadRequest:
+      description: Validation failed.
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+    Unauthorized:
+      description: Missing or invalid authentication.
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+    NotFound:
+      description: Resource not found.
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'

@@ -1,0 +1,225 @@
+# Pet Care Notification API v1 — OpenAPI 3.1 (derived strictly from docs/)
+#
+# Source of truth: docs/01-business-operations.md (01#23),
+# docs/02-business-rules.md (RULE-23-01..06), docs/04-glossary.md (23),
+# docs/05-domain-model.md (4.23),
+# docs/06-erd.md (notification_tasks/notification_delivery_logs).
+# Every send is an event-driven system effect (no manual compose endpoint).
+# Retries are a system job. Read-state storage and the full channel enum stay TBD.
+#
+# Traceability legend: CONFIRMED = in docs / ASSUMPTION (A#) = least invention /
+# TBD (Q#) = needs PO (see ../notification-v1.md section E). No `servers` (TBD Q1).
+# Error envelope follows docs/convention/backend/04-exception-handling.
+
+openapi: 3.1.0
+info:
+  title: Pet Care Notification API v1
+  version: 1.0.0
+  description: >-
+    Strictly derived from docs/ (01#23 operations, RULE-23-01..06). The
+    dispatcher only speaks when domain events tell it to, retries transient
+    failures three times, and never leaks secrets into message bodies. Users
+    get a minimal honest inbox: list, mark read, dismiss.
+tags:
+  - name: Inbox
+    description: Personal notification reads (ViewNotification).
+paths:
+  /notifications/me:
+    get:
+      tags: [Inbox]
+      summary: List own notifications (ViewNotification)
+      description: CONFIRMED (RULE-23-04). Newest first (ASSUMPTION A1 in md). Filters PROPOSED.
+      operationId: listOwnNotifications
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: unreadOnly
+          in: query
+          required: false
+          schema:
+            type: boolean
+        - name: page
+          in: query
+          required: false
+          schema:
+            type: integer
+            minimum: 1
+            default: 1
+        - name: pageSize
+          in: query
+          required: false
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 100
+            default: 20
+      responses:
+        '200':
+          description: Page of own notifications.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/InboxPage'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+  /notifications/{id}/read:
+    post:
+      tags: [Inbox]
+      summary: Mark as read (ViewNotification)
+      description: CONFIRMED (RULE-23-04). Own notifications only. Read-state storage TBD Q7 in md. Idempotent.
+      operationId: markNotificationRead
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/NotificationId'
+      responses:
+        '200':
+          description: Marked read (or already read).
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ReadResponse'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          description: Someone else's notification.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '404':
+          $ref: '#/components/responses/NotFound'
+  /notifications/{id}:
+    delete:
+      tags: [Inbox]
+      summary: Dismiss from own app (ViewNotification)
+      description: CONFIRMED display dismissal (RULE-23-04). Hides for the user only; system tasks and logs stay (ASSUMPTION A2 in md). Idempotent.
+      operationId: dismissNotification
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/NotificationId'
+      responses:
+        '204':
+          description: Dismissed (or already dismissed).
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          description: Someone else's notification.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '404':
+          $ref: '#/components/responses/NotFound'
+components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+      description: JWT/Session Token (RULE-01-01 CONFIRMED existence; Bearer transport ASSUMPTION A2 in auth-v1).
+  parameters:
+    NotificationId:
+      name: id
+      in: path
+      required: true
+      schema:
+        type: string
+        format: uuid
+  schemas:
+    NotifyChannel:
+      type: string
+      enum: [IN_APP, SMS, EMAIL, PUSH]
+      description: CONFIRMED ERD values; WEBHOOK and full Zalo naming TBD Q6 in md.
+    DeliveryStatus:
+      type: string
+      enum: [PENDING, PROCESSING, SENT, FAILED]
+      description: CONFIRMED (ERD notification_tasks).
+    InboxItem:
+      type: object
+      required: [notificationId, channel, eventType, content, status, scheduledAt]
+      properties:
+        notificationId:
+          type: string
+          format: uuid
+        channel:
+          $ref: '#/components/schemas/NotifyChannel'
+        eventType:
+          type: string
+        title:
+          type: string
+          nullable: true
+        content:
+          type: string
+          description: Secret-scrubbed per RULE-23-06.
+        status:
+          $ref: '#/components/schemas/DeliveryStatus'
+        scheduledAt:
+          type: string
+          format: date-time
+        read:
+          type: boolean
+          description: Read state (storage TBD Q7 in md).
+    InboxPage:
+      type: object
+      required: [items, page, pageSize, total]
+      properties:
+        items:
+          type: array
+          items:
+            $ref: '#/components/schemas/InboxItem'
+        page:
+          type: integer
+        pageSize:
+          type: integer
+        total:
+          type: integer
+        unreadCount:
+          type: integer
+          description: PROPOSED (TBD Q3 in md).
+    ReadResponse:
+      type: object
+      required: [notificationId, read]
+      properties:
+        notificationId:
+          type: string
+          format: uuid
+        read:
+          type: boolean
+          example: true
+    Error:
+      type: object
+      required: [success, errorCode, message, statusCode, timestamp]
+      properties:
+        success:
+          type: boolean
+          example: false
+        errorCode:
+          type: string
+          description: ACCESS_DENIED_SCOPE_MISMATCH is CONFIRMED (RULE-02-01, 403); VALIDATION_FAILED, BUSINESS_RULE_VIOLATION, RESOURCE_NOT_FOUND follow docs/convention/backend/04-exception-handling.
+        message:
+          type: string
+        statusCode:
+          type: integer
+        timestamp:
+          type: string
+          format: date-time
+        traceId:
+          type: string
+        details:
+          type: object
+          additionalProperties: true
+  responses:
+    Unauthorized:
+      description: Missing or invalid authentication.
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+    NotFound:
+      description: Resource not found.
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'

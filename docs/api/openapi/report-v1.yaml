@@ -1,0 +1,463 @@
+# Pet Care Report API v1 — OpenAPI 3.1 (derived strictly from docs/)
+#
+# Source of truth: docs/01-business-operations.md (01#24),
+# docs/02-business-rules.md (RULE-24-01..08), docs/04-glossary.md (24),
+# docs/05-domain-model.md (4.24). Read model with no dedicated ERD (CONFIRMED);
+# per-report metric sets stay TBD, so one generic shape serves all ten reads.
+# Long periods stay synchronous but capped; background export stays TBD.
+#
+# Traceability legend: CONFIRMED = in docs / ASSUMPTION (A#) = least invention /
+# TBD (Q#) = needs PO (see ../report-v1.md section E). No `servers` (TBD Q1).
+# Error envelope follows docs/convention/backend/04-exception-handling.
+
+openapi: 3.1.0
+info:
+  title: Pet Care Report API v1
+  version: 1.0.0
+  description: >-
+    Strictly derived from docs/ (01#24 operations, RULE-24-01..08). Ten
+    read-only views scoped by role, isolated per organization, with revenue
+    reconciling three sources into one net number. Closed books read as
+    immutable snapshots.
+tags:
+  - name: StoreReports
+    description: Store-scoped operations views (revenue, appointments, services, inventory, staff).
+  - name: OrgReports
+    description: Chain rollups and comparisons (organization revenue, store comparison, customer-pet).
+  - name: Finance
+    description: Revenue reconciliation with the three-source formula.
+  - name: Platform
+    description: Whole-platform overview (super admins only).
+paths:
+  /reports/revenue:
+    get:
+      tags: [StoreReports]
+      summary: Store revenue report (ViewRevenueReport)
+      description: CONFIRMED scope (RULE-24-01). Sync periods cap at 93 days (ASSUMPTION A1 in md). Generic shape (ASSUMPTION A3).
+      operationId: viewRevenueReport
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/PeriodFrom'
+        - $ref: '#/components/parameters/PeriodTo'
+        - $ref: '#/components/parameters/ScopeStore'
+      responses:
+        '200':
+          description: Revenue report.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ReportResponse'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          description: Outside store scope.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+  /reports/appointments:
+    get:
+      tags: [StoreReports]
+      summary: Appointment activity report (ViewAppointmentReport)
+      description: CONFIRMED scope (RULE-24-01). Same guards and generic shape as the revenue report.
+      operationId: viewAppointmentReport
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/PeriodFrom'
+        - $ref: '#/components/parameters/PeriodTo'
+        - $ref: '#/components/parameters/ScopeStore'
+      responses:
+        '200':
+          description: Appointment report.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ReportResponse'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          description: Outside store scope.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+  /reports/services:
+    get:
+      tags: [StoreReports]
+      summary: Service performance report (ViewServiceReport)
+      description: CONFIRMED (RULE-24-01). Store scope. Generic shape (ASSUMPTION A3 in md).
+      operationId: viewServiceReport
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/PeriodFrom'
+        - $ref: '#/components/parameters/PeriodTo'
+        - $ref: '#/components/parameters/ScopeStore'
+      responses:
+        '200':
+          description: Service report.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ReportResponse'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          description: Outside store scope.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+  /reports/inventory:
+    get:
+      tags: [StoreReports]
+      summary: Inventory report (ViewInventoryReport)
+      description: CONFIRMED (RULE-24-01). Store scope. Generic shape (ASSUMPTION A3 in md).
+      operationId: viewInventoryReport
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/PeriodFrom'
+        - $ref: '#/components/parameters/PeriodTo'
+        - $ref: '#/components/parameters/ScopeStore'
+      responses:
+        '200':
+          description: Inventory report.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ReportResponse'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          description: Outside store scope.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+  /reports/staff:
+    get:
+      tags: [StoreReports]
+      summary: Staff performance report (ViewStaffReport)
+      description: CONFIRMED (RULE-24-01). Store scope. Generic shape (ASSUMPTION A3 in md).
+      operationId: viewStaffReport
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/PeriodFrom'
+        - $ref: '#/components/parameters/PeriodTo'
+        - $ref: '#/components/parameters/ScopeStore'
+      responses:
+        '200':
+          description: Staff report.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ReportResponse'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          description: Outside store scope.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+  /reports/organization-revenue:
+    get:
+      tags: [OrgReports]
+      summary: Chain revenue rollup (ViewOrganizationRevenue)
+      description: CONFIRMED exact rollup across the caller organization (RULE-24-01/03). Cross-org reads are rejected (RULE-24-02).
+      operationId: viewOrganizationRevenue
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/PeriodFrom'
+        - $ref: '#/components/parameters/PeriodTo'
+      responses:
+        '200':
+          description: Organization revenue.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ReportResponse'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          description: Organization admins (and finance) of the org only.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+  /reports/store-comparison:
+    get:
+      tags: [OrgReports]
+      summary: Compare stores (CompareStoreRevenue)
+      description: CONFIRMED same-organization comparison (RULE-24-04). Store list defaults to the whole org (ASSUMPTION A4 in md).
+      operationId: compareStoreRevenue
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/PeriodFrom'
+        - $ref: '#/components/parameters/PeriodTo'
+        - name: storeIds
+          in: query
+          required: false
+          schema:
+            type: array
+            items:
+              type: string
+              format: uuid
+      responses:
+        '200':
+          description: Side-by-side store metrics.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ReportResponse'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          description: Cross-organization comparison is rejected (CONFIRMED RULE-24-02/04).
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+  /reports/customer-pet:
+    get:
+      tags: [OrgReports]
+      summary: Customer and pet analytics (ViewCustomerPetReport)
+      description: CONFIRMED privacy gating (RULE-24-06 with M22 rules). Blocked reads use a PROPOSED code.
+      operationId: viewCustomerPetReport
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/PeriodFrom'
+        - $ref: '#/components/parameters/PeriodTo'
+      responses:
+        '200':
+          description: Customer-pet analytics.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ReportResponse'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          description: Privacy-blocked or outside org scope (PROPOSED code PRIVACY_BLOCKED for the privacy case).
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+  /reports/revenue/reconciliation:
+    get:
+      tags: [Finance]
+      summary: Reconcile revenue (ReconcileRevenue)
+      description: CONFIRMED three-source formula (RULE-24-05). Finance staff in scope.
+      operationId: reconcileRevenue
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/PeriodFrom'
+        - $ref: '#/components/parameters/PeriodTo'
+        - $ref: '#/components/parameters/ScopeStore'
+      responses:
+        '200':
+          description: Reconciliation with the net number.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ReconciliationResponse'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          description: Finance staff in scope only.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+  /reports/platform:
+    get:
+      tags: [Platform]
+      summary: Platform overview (ViewPlatformReport)
+      description: CONFIRMED super-admin scope (RULE-24-01).
+      operationId: viewPlatformReport
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/PeriodFrom'
+        - $ref: '#/components/parameters/PeriodTo'
+      responses:
+        '200':
+          description: Platform overview.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ReportResponse'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          description: Super admins only.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+      description: JWT/Session Token (RULE-01-01 CONFIRMED existence; Bearer transport ASSUMPTION A2 in auth-v1).
+  parameters:
+    PeriodFrom:
+      name: from
+      in: query
+      required: true
+      schema:
+        type: string
+        format: date
+    PeriodTo:
+      name: to
+      in: query
+      required: true
+      schema:
+        type: string
+        format: date
+    ScopeStore:
+      name: storeId
+      in: query
+      required: false
+      schema:
+        type: string
+        format: uuid
+  schemas:
+    ReportScope:
+      type: object
+      required: [type, id]
+      properties:
+        type:
+          type: string
+          enum: [STORE, ORGANIZATION, PLATFORM]
+        id:
+          type: string
+          format: uuid
+          nullable: true
+    ReportResponse:
+      type: object
+      required: [report, period, scope, metrics]
+      properties:
+        report:
+          type: string
+          example: revenue
+        period:
+          type: object
+          required: [from, to]
+          properties:
+            from:
+              type: string
+              format: date
+            to:
+              type: string
+              format: date
+        scope:
+          $ref: '#/components/schemas/ReportScope'
+        metrics:
+          type: object
+          additionalProperties: true
+          description: Metric set TBD Q7 in md.
+        rows:
+          type: array
+          items:
+            type: object
+            additionalProperties: true
+    ReconciliationResponse:
+      type: object
+      required: [report, period, scope, paidInvoicesTotal, successPaymentsTotal, refundedTotal, netRevenue]
+      properties:
+        report:
+          type: string
+          example: revenue-reconciliation
+        period:
+          type: object
+          required: [from, to]
+          properties:
+            from:
+              type: string
+              format: date
+            to:
+              type: string
+              format: date
+        scope:
+          $ref: '#/components/schemas/ReportScope'
+        paidInvoicesTotal:
+          type: number
+        successPaymentsTotal:
+          type: number
+        refundedTotal:
+          type: number
+        netRevenue:
+          type: number
+          description: Paid invoices minus refunded total (CONFIRMED RULE-24-05).
+    Error:
+      type: object
+      required: [success, errorCode, message, statusCode, timestamp]
+      properties:
+        success:
+          type: boolean
+          example: false
+        errorCode:
+          type: string
+          description: ACCESS_DENIED_SCOPE_MISMATCH is CONFIRMED (RULE-02-01, 403); VALIDATION_FAILED, BUSINESS_RULE_VIOLATION, RESOURCE_NOT_FOUND follow docs/convention/backend/04-exception-handling; PRIVACY_BLOCKED is PROPOSED.
+        message:
+          type: string
+        statusCode:
+          type: integer
+        timestamp:
+          type: string
+          format: date-time
+        traceId:
+          type: string
+        details:
+          type: object
+          additionalProperties: true
+  responses:
+    BadRequest:
+      description: Validation failed.
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+    Unauthorized:
+      description: Missing or invalid authentication.
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+    NotFound:
+      description: Resource not found.
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'

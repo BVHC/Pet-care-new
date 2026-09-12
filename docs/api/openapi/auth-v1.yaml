@@ -19,10 +19,15 @@ info:
   description: >-
     Strictly derived from docs/ (01 operations, 02 RULE-01/02, 03 FSM-1 Account,
     04 glossary+D-04, 05 domain 4.1, 06 ERD accounts/otps/users).
-    Base URL/versioning (Q1) and envelope (Q2) are TBD: no `servers` is declared
+    Base URL/versioning (Q1) is TBD: no `servers` is declared
     (defaults to "/") and paths below are PROPOSED. Token TTLs (Q4), password
     policy (Q5) intentionally absent. No forgot/reset (unconfirmed ops). No
-    /auth/refresh endpoint (Q3: insufficient contract).
+    /auth/refresh endpoint (Q3: insufficient contract). Error envelope follows
+    docs/convention/backend/04-exception-handling
+    ({success, errorCode, message, statusCode, timestamp, traceId}); 410/423/429
+    are PROPOSED extensions not yet in that convention. LOCKED has no
+    auto-unlock: LOCKED->ACTIVE only via manual UnlockAccount (FSM-1
+    invariant #5).
 tags:
   - name: Auth
     description: Registration OTP, login, logout (docs module 01).
@@ -53,12 +58,6 @@ paths:
           $ref: '#/components/responses/BadRequest'
         '409':
           description: Phone or email already exists (ERD UNIQUE, CONFIRMED).
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/Error'
-        '429':
-          description: Abuse limit (RULE-01-05).
           content:
             application/json:
               schema:
@@ -110,7 +109,7 @@ paths:
               schema:
                 $ref: '#/components/schemas/Error'
         '423':
-          description: Verification locked 15 min after 5 wrong attempts (CONFIRMED RULE-01-05).
+          description: "Verification locked 15 min after 5 wrong attempts (CONFIRMED RULE-01-05). No auto-unlock semantics here; login LOCKED likewise needs manual UnlockAccount (FSM-1 invariant 5)."
           content:
             application/json:
               schema:
@@ -150,7 +149,13 @@ paths:
               schema:
                 $ref: '#/components/schemas/Error'
         '429':
-          description: 60s cooldown or 5/hour exceeded (CONFIRMED limits; codes PROPOSED).
+          description: 60s cooldown or 5/hour exceeded (CONFIRMED limits; codes PROPOSED, convention has no 429 mapping yet).
+          headers:
+            Retry-After:
+              description: Seconds until next resend allowed (60s cooldown, CONFIRMED duration).
+              schema:
+                type: integer
+                minimum: 1
           content:
             application/json:
               schema:
@@ -192,13 +197,13 @@ paths:
               schema:
                 $ref: '#/components/schemas/Error'
         '423':
-          description: Account LOCKED with lockedUntil (CONFIRMED RULE-01-07/02-04).
+          description: "Account LOCKED with lockedUntil (CONFIRMED RULE-01-07/02-04). Still 423 until manual UnlockAccount; locked_until is the earliest-unlock threshold, NOT auto-unlock (FSM-1 invariant 5)."
           content:
             application/json:
               schema:
                 $ref: '#/components/schemas/Error'
         '429':
-          description: Brute-force protection (thresholds TBD Q11).
+          description: Brute-force protection (PROPOSED, thresholds TBD Q11; convention has no 429 mapping yet).
           content:
             application/json:
               schema:
@@ -379,6 +384,7 @@ components:
               format: uuid
             role:
               $ref: '#/components/schemas/RoleCode'
+              description: Primary role (users.role). Multi-role via user_roles is out of v1 scope (ASSUMPTION A7).
             mustChangePassword:
               type: boolean
               description: CONFIRMED need (RULE-01-03). Enforcement TBD Q6.
@@ -436,12 +442,22 @@ components:
           example: true
     Error:
       type: object
-      required: [code, message]
+      required: [success, errorCode, message, statusCode, timestamp]
       properties:
-        code:
+        success:
+          type: boolean
+          example: false
+        errorCode:
           type: string
-          description: Only ACCESS_DENIED_SCOPE_MISMATCH is CONFIRMED (RULE-02-01); all other codes in ../auth-v1.md section C are PROPOSED.
+          description: Only ACCESS_DENIED_SCOPE_MISMATCH is CONFIRMED (RULE-02-01, 403); VALIDATION_FAILED/BUSINESS_RULE_VIOLATION/INVALID_STATE_TRANSITION/RESOURCE_NOT_FOUND/CONCURRENCY_CONFLICT follow docs/convention/backend/04-exception-handling; all other codes in ../auth-v1.md section C are PROPOSED (410/423/429 have no convention mapping yet).
         message:
+          type: string
+        statusCode:
+          type: integer
+        timestamp:
+          type: string
+          format: date-time
+        traceId:
           type: string
         details:
           type: object

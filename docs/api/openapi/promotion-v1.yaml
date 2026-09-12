@@ -1,0 +1,570 @@
+# Pet Care Promotion API v1 — OpenAPI 3.1 (derived strictly from docs/)
+#
+# Source of truth: docs/01-business-operations.md (01#18),
+# docs/02-business-rules.md (RULE-18-01..08), docs/04-glossary.md (18),
+# docs/05-domain-model.md (4.18),
+# docs/06-erd.md (promotion_campaigns/vouchers/voucher_usages).
+# No dedicated FSM (stateless rule engine CONFIRMED). Actual voucher redemption
+# happens inside Module 14/15 discounting (usage plus counter move together);
+# only validation reads live here. Per-customer caps, stackability, budgets, and
+# store mappings lack storage and stay TBD.
+#
+# Traceability legend: CONFIRMED = in docs / ASSUMPTION (A#) = least invention /
+# TBD (Q#) = needs PO (see ../promotion-v1.md section E). No `servers` (TBD Q1).
+# Error envelope follows docs/convention/backend/04-exception-handling. No 422.
+
+openapi: 3.1.0
+info:
+  title: Pet Care Promotion API v1
+  version: 1.0.0
+  description: >-
+    Strictly derived from docs/ (01#18 operations, RULE-18-01..08).
+    Organizations run campaigns, vouchers carry the discount math, stores opt
+    in, and checkout validates every condition in real time. Validation never
+    fails loudly: an unusable voucher simply comes back invalid.
+tags:
+  - name: Campaigns
+    description: Organization campaigns (CreatePromotion, ManagePromotion).
+  - name: Vouchers
+    description: Voucher issuance and management (CreateVoucher, ManageVoucher).
+  - name: StoreConfig
+    description: Per-store opt-in (ConfigureStorePromotion).
+  - name: Validation
+    description: Real-time voucher checks (ValidateVoucher).
+paths:
+  /promotions:
+    post:
+      tags: [Campaigns]
+      summary: Create campaign (CreatePromotion)
+      description: CONFIRMED (RULE-18-01). Opens DRAFT. Budget, scope, and stackability storage TBD (Q3/Q4/Q8 in md).
+      operationId: createPromotion
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreatePromotionRequest'
+      responses:
+        '201':
+          description: Campaign drafted.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PromotionResponse'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          description: Organization admins of the org only.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '409':
+          description: Duplicate campaign code (ASSUMPTION A1 in md).
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+    get:
+      tags: [Campaigns]
+      summary: List campaigns of own organization
+      description: Scope-filtered listing. Filters PROPOSED.
+      operationId: listPromotions
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: status
+          in: query
+          required: false
+          schema:
+            $ref: '#/components/schemas/CampaignStatus'
+        - name: page
+          in: query
+          required: false
+          schema:
+            type: integer
+            minimum: 1
+            default: 1
+        - name: pageSize
+          in: query
+          required: false
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 100
+            default: 20
+      responses:
+        '200':
+          description: Page of campaigns.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PromotionPage'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+  /promotions/{id}/activate:
+    post:
+      tags: [Campaigns]
+      summary: Activate campaign (ManagePromotion)
+      description: From DRAFT or PAUSED inside the validity window (ASSUMPTION A2 in md). Idempotent.
+      operationId: activatePromotion
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/PromotionId'
+      responses:
+        '200':
+          description: Campaign active (or already active).
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PromotionResponse'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          description: Organization admins of the org only.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          description: Outside the validity window or wrong state.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+  /promotions/{id}/pause:
+    post:
+      tags: [Campaigns]
+      summary: Pause campaign (ManagePromotion)
+      description: From ACTIVE to PAUSED. Idempotent.
+      operationId: pausePromotion
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/PromotionId'
+      responses:
+        '200':
+          description: Campaign paused (or already paused).
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PromotionResponse'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          description: Organization admins of the org only.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          description: Not ACTIVE.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+  /promotions/{id}/vouchers:
+    post:
+      tags: [Vouchers]
+      summary: Issue voucher (CreateVoucher)
+      description: CONFIRMED math fields (RULE-18-03). Code is globally unique (ERD). Eligibility segments TBD Q11 in md.
+      operationId: createVoucher
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/PromotionId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreateVoucherRequest'
+      responses:
+        '201':
+          description: Voucher active.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/VoucherResponse'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          description: Organization admins of the org only.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          description: Duplicate voucher code (ERD UNIQUE).
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+  /vouchers/{id}:
+    patch:
+      tags: [Vouchers]
+      summary: Manage voucher (ManageVoucher)
+      description: Tunes live vouchers. Code and type freeze once used (ASSUMPTION A5 in md); deletion is refused after any usage (ASSUMPTION A4).
+      operationId: manageVoucher
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/UpdateVoucherRequest'
+      responses:
+        '200':
+          description: Voucher updated.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/VoucherResponse'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          description: Organization admins of the org only.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '404':
+          $ref: '#/components/responses/NotFound'
+  /stores/{id}/promotions/{pid}:
+    put:
+      tags: [StoreConfig]
+      summary: Configure store promotion (ConfigureStorePromotion)
+      description: CONFIRMED operation (RULE-18-02). Opts a store in or out inside the organization frame. Storage TBD Q9 in md.
+      operationId: configureStorePromotion
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/StoreId'
+        - name: pid
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/StorePromotionRequest'
+      responses:
+        '200':
+          description: Store flag stored.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/StorePromotionResponse'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          description: StoreManager of the store only.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '404':
+          $ref: '#/components/responses/NotFound'
+  /vouchers/validate:
+    post:
+      tags: [Validation]
+      summary: Validate voucher (ValidateVoucher)
+      description: CONFIRMED five conditions plus both caps plus one-per-order (RULE-18-04/05/08). Always answers 200 with valid true or false (ASSUMPTION A6 in md) so checkout can proceed bare.
+      operationId: validateVoucher
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ValidateVoucherRequest'
+      responses:
+        '200':
+          description: Validation verdict with math or reason.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ValidateVoucherResponse'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+      description: JWT/Session Token (RULE-01-01 CONFIRMED existence; Bearer transport ASSUMPTION A2 in auth-v1).
+  parameters:
+    PromotionId:
+      name: id
+      in: path
+      required: true
+      schema:
+        type: string
+        format: uuid
+    StoreId:
+      name: id
+      in: path
+      required: true
+      schema:
+        type: string
+        format: uuid
+  schemas:
+    CampaignStatus:
+      type: string
+      enum: [DRAFT, ACTIVE, PAUSED, EXPIRED]
+      description: CONFIRMED (ERD promotion_campaigns).
+    DiscountType:
+      type: string
+      enum: [PERCENTAGE, FIXED_AMOUNT]
+      description: CONFIRMED (ERD vouchers, 04 glossary).
+    VoucherStatus:
+      type: string
+      enum: [ACTIVE, DISABLED, EXPIRED]
+      description: CONFIRMED (ERD vouchers).
+    CreatePromotionRequest:
+      type: object
+      required: [name, campaignCode, startDate, endDate]
+      properties:
+        name:
+          type: string
+        campaignCode:
+          type: string
+        startDate:
+          type: string
+          format: date-time
+        endDate:
+          type: string
+          format: date-time
+        budgetCap:
+          type: number
+          description: PROPOSED (RULE-18-01 names a budget; storage TBD Q3 in md).
+        stackable:
+          type: boolean
+          default: false
+          description: PROPOSED (RULE-18-08; storage TBD Q8 in md).
+    PromotionResponse:
+      type: object
+      required: [promotionId, organizationId, name, campaignCode, startDate, endDate, status]
+      properties:
+        promotionId:
+          type: string
+          format: uuid
+        organizationId:
+          type: string
+          format: uuid
+        name:
+          type: string
+        campaignCode:
+          type: string
+        startDate:
+          type: string
+          format: date-time
+        endDate:
+          type: string
+          format: date-time
+        status:
+          $ref: '#/components/schemas/CampaignStatus'
+    PromotionPage:
+      type: object
+      required: [items, page, pageSize, total]
+      properties:
+        items:
+          type: array
+          items:
+            $ref: '#/components/schemas/PromotionResponse'
+        page:
+          type: integer
+        pageSize:
+          type: integer
+        total:
+          type: integer
+    CreateVoucherRequest:
+      type: object
+      required: [code, discountType, discountValue, validFrom, validUntil]
+      properties:
+        code:
+          type: string
+        discountType:
+          $ref: '#/components/schemas/DiscountType'
+        discountValue:
+          type: number
+        maxDiscountAmount:
+          type: number
+        minOrderAmount:
+          type: number
+          default: 0.0
+        totalUsageLimit:
+          type: integer
+          default: 100
+        validFrom:
+          type: string
+          format: date-time
+        validUntil:
+          type: string
+          format: date-time
+        eligibleSegment:
+          type: string
+          description: PROPOSED placeholder (TBD Q11 in md).
+    VoucherResponse:
+      type: object
+      required: [voucherId, campaignId, code, discountType, discountValue, status, usedCount]
+      properties:
+        voucherId:
+          type: string
+          format: uuid
+        campaignId:
+          type: string
+          format: uuid
+        code:
+          type: string
+        discountType:
+          $ref: '#/components/schemas/DiscountType'
+        discountValue:
+          type: number
+        maxDiscountAmount:
+          type: number
+          nullable: true
+        minOrderAmount:
+          type: number
+        totalUsageLimit:
+          type: integer
+        usedCount:
+          type: integer
+        status:
+          $ref: '#/components/schemas/VoucherStatus'
+    UpdateVoucherRequest:
+      type: object
+      properties:
+        discountValue:
+          type: number
+        maxDiscountAmount:
+          type: number
+        validUntil:
+          type: string
+          format: date-time
+        status:
+          $ref: '#/components/schemas/VoucherStatus'
+    StorePromotionRequest:
+      type: object
+      required: [enabled]
+      properties:
+        enabled:
+          type: boolean
+    StorePromotionResponse:
+      type: object
+      required: [storeId, promotionId, enabled]
+      properties:
+        storeId:
+          type: string
+          format: uuid
+        promotionId:
+          type: string
+          format: uuid
+        enabled:
+          type: boolean
+    ValidateVoucherRequest:
+      type: object
+      required: [code, storeId, orderAmount]
+      properties:
+        code:
+          type: string
+        storeId:
+          type: string
+          format: uuid
+        orderAmount:
+          type: number
+        customerId:
+          type: string
+          format: uuid
+          description: Defaults to the caller.
+        orderId:
+          type: string
+          format: uuid
+        invoiceId:
+          type: string
+          format: uuid
+    ValidateVoucherResponse:
+      type: object
+      required: [valid]
+      properties:
+        valid:
+          type: boolean
+        discountAmount:
+          type: number
+        reason:
+          type: string
+          description: PROPOSED machine reason when invalid (VOUCHER_EXPIRED, MIN_NOT_MET, USAGE_LIMIT, NOT_FOR_STORE, ALREADY_USED, INACTIVE).
+    Error:
+      type: object
+      required: [success, errorCode, message, statusCode, timestamp]
+      properties:
+        success:
+          type: boolean
+          example: false
+        errorCode:
+          type: string
+          description: ACCESS_DENIED_SCOPE_MISMATCH is CONFIRMED (RULE-02-01, 403); VALIDATION_FAILED, BUSINESS_RULE_VIOLATION, INVALID_STATE_TRANSITION, RESOURCE_NOT_FOUND follow docs/convention/backend/04-exception-handling.
+        message:
+          type: string
+        statusCode:
+          type: integer
+        timestamp:
+          type: string
+          format: date-time
+        traceId:
+          type: string
+        details:
+          type: object
+          additionalProperties: true
+  responses:
+    BadRequest:
+      description: Validation failed.
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+    Unauthorized:
+      description: Missing or invalid authentication.
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+    NotFound:
+      description: Resource not found.
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'

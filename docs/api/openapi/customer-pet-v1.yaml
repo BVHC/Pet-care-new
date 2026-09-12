@@ -1,0 +1,619 @@
+# Pet Care Customer & Pet API v1 — OpenAPI 3.1 (derived strictly from docs/)
+#
+# Source of truth: docs/01-business-operations.md (01#4),
+# docs/02-business-rules.md (RULE-04-01..09), docs/03-state-machines.md (FSM-3),
+# docs/04-glossary.md (04), docs/05-domain-model.md (4.4),
+# docs/06-erd.md (pets/pet_caregiver_delegations).
+# ManageCustomerProfile lives in iam-v1.yaml and is NOT redefined here.
+# PerformDelegatedAction is a cross-cutting guard (no endpoint).
+# Expiry jobs are system-internal (no endpoints). Pet DECEASED handling is TBD (no ERD column, no op).
+#
+# Traceability legend: CONFIRMED = in docs / ASSUMPTION (A#) = least invention /
+# TBD (Q#) = needs PO (see ../customer-pet-v1.md section E). No `servers` (TBD Q1).
+# Error envelope follows docs/convention/backend/04-exception-handling. No 422.
+
+openapi: 3.1.0
+info:
+  title: Pet Care Customer and Pet API v1
+  version: 1.0.0
+  description: >-
+    Strictly derived from docs/ (01#4 operations, RULE-04-01..09, FSM-3
+    INVITED->ACTIVE/REJECTED/EXPIRED and ACTIVE->REVOKED/EXPIRED). Invitations
+    expire after 7 days (CONFIRMED). Only the primary owner invites, revokes,
+    edits core identity, or transfers ownership. Caregiver scope violations use
+    the CONFIRMED code UNAUTHORIZED_DELEGATED_ACTION.
+tags:
+  - name: Pets
+    description: Pet profiles and ownership (AddPet, ViewPet, UpdatePet, ManagePetOwnership, SearchCustomerPet).
+  - name: Delegation
+    description: Caregiver invitations and revocation (FSM-3).
+paths:
+  /pets:
+    post:
+      tags: [Pets]
+      summary: Add pet (AddPet)
+      description: CONFIRMED (RULE-04-01/03). Owner defaults to self; receptionists set ownerId for counter creation. New pets are active (ASSUMPTION A1).
+      operationId: addPet
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/AddPetRequest'
+      responses:
+        '201':
+          description: Pet created.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PetResponse'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          description: Not the owner and not counter staff.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '409':
+          description: Duplicate microchip number (ASSUMPTION A2, TBD Q10).
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+    get:
+      tags: [Pets]
+      summary: List accessible pets (ViewPet)
+      description: Own pets, delegated pets for active caregivers, counter search stays separate (TBD Q11). Pagination PROPOSED.
+      operationId: listPets
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: page
+          in: query
+          required: false
+          schema:
+            type: integer
+            minimum: 1
+            default: 1
+        - name: pageSize
+          in: query
+          required: false
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 100
+            default: 20
+      responses:
+        '200':
+          description: Page of pets.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PetPage'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+  /pets/search:
+    get:
+      tags: [Pets]
+      summary: Counter lookup (SearchCustomerPet)
+      description: CONFIRMED criteria (RULE-04-02); parameter names PROPOSED (TBD Q9). Receptionists only.
+      operationId: searchCustomerPet
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: phone
+          in: query
+          required: false
+          schema:
+            type: string
+        - name: citizenId
+          in: query
+          required: false
+          schema:
+            type: string
+        - name: petCode
+          in: query
+          required: false
+          schema:
+            type: string
+        - name: customerCode
+          in: query
+          required: false
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Matching customers and pets (shape PROPOSED).
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CounterSearchResponse'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          description: Non-receptionist (CONFIRMED scope boundary, RULE-02-01).
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+  /pets/{id}:
+    get:
+      tags: [Pets]
+      summary: View pet (ViewPet)
+      description: CONFIRMED (RULE-04-09). Out-of-scope caregivers get UNAUTHORIZED_DELEGATED_ACTION.
+      operationId: viewPet
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/PetId'
+      responses:
+        '200':
+          description: Pet detail.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PetResponse'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          description: Out of delegated scope (CONFIRMED code UNAUTHORIZED_DELEGATED_ACTION, RULE-04-09).
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '404':
+          $ref: '#/components/responses/NotFound'
+    patch:
+      tags: [Pets]
+      summary: Update pet (UpdatePet)
+      description: CONFIRMED (RULE-04-03/04). Core identity fields are primary-owner-only; the server enforces field-level authorization.
+      operationId: updatePet
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/PetId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/UpdatePetRequest'
+      responses:
+        '200':
+          description: Pet updated.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PetResponse'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          description: Core-field edit by non-owner (CONFIRMED code UNAUTHORIZED_DELEGATED_ACTION, RULE-04-04).
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '404':
+          $ref: '#/components/responses/NotFound'
+  /pets/{id}/transfer:
+    post:
+      tags: [Pets]
+      summary: Transfer ownership (ManagePetOwnership)
+      description: CONFIRMED (RULE-04-01/03). Primary owner only. New-owner identification TBD Q6; old delegations are kept until the new owner revokes (PROPOSED, TBD Q7).
+      operationId: transferPet
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/PetId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/TransferPetRequest'
+      responses:
+        '200':
+          description: Ownership transferred.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PetResponse'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          description: Non-primary-owner (CONFIRMED boundary, RULE-04-01).
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '404':
+          $ref: '#/components/responses/NotFound'
+  /pets/{id}/caregiver-invitations:
+    post:
+      tags: [Delegation]
+      summary: Invite caregiver (InviteCaregiver)
+      description: CONFIRMED (RULE-04-01/04/05, FSM-3). Primary owner only. TTL 7 days CONFIRMED. Token handover channel TBD Q12.
+      operationId: inviteCaregiver
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/PetId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/InviteCaregiverRequest'
+      responses:
+        '201':
+          description: Invitation created as INVITED.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/InvitationResponse'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          description: Non-primary-owner, or caregiver inviting others (CONFIRMED, RULE-04-04).
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          description: An ACTIVE delegation already exists for this caregiver (derived idempotency guard).
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+  /caregiver-invitations/{token}/accept:
+    post:
+      tags: [Delegation]
+      summary: Accept invitation (AcceptCaregiverInvitation)
+      description: CONFIRMED (RULE-04-05/06, FSM-3). Direct to ACTIVE, no middle approval. Idempotent.
+      operationId: acceptCaregiverInvitation
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: token
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Delegation active (or already active).
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DelegationResponse'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          description: Authenticated user does not match the invited phone (ASSUMPTION A3).
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          description: Invitation is no longer INVITED.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '410':
+          description: Invitation expired past 7-day TTL (PROPOSED code INVITATION_EXPIRED).
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+  /caregiver-invitations/{token}/reject:
+    post:
+      tags: [Delegation]
+      summary: Reject invitation (RejectCaregiverInvitation)
+      description: CONFIRMED (RULE-04-06, FSM-3).
+      operationId: rejectCaregiverInvitation
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: token
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Invitation rejected.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DelegationResponse'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          description: Invitation is no longer INVITED.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+  /pets/{id}/caregiver-revoke:
+    post:
+      tags: [Delegation]
+      summary: Revoke caregiver (RevokeCaregiver)
+      description: CONFIRMED (RULE-04-04/08, FSM-3). Takes effect immediately. Idempotent.
+      operationId: revokeCaregiver
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/PetId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/RevokeCaregiverRequest'
+      responses:
+        '200':
+          description: Delegation revoked (or already revoked).
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DelegationResponse'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          description: Non-primary-owner (CONFIRMED, RULE-04-04).
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '404':
+          $ref: '#/components/responses/NotFound'
+components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+      description: JWT/Session Token (RULE-01-01 CONFIRMED existence; Bearer transport ASSUMPTION A2 in auth-v1).
+  parameters:
+    PetId:
+      name: id
+      in: path
+      required: true
+      schema:
+        type: string
+        format: uuid
+  schemas:
+    PetSpecies:
+      type: string
+      enum: [DOG, CAT, BIRD, OTHER]
+      description: CONFIRMED (04 glossary PetSpecies).
+    PetGender:
+      type: string
+      enum: [MALE, FEMALE, UNKNOWN]
+      description: CONFIRMED (ERD pets).
+    CaregiverStatus:
+      type: string
+      enum: [INVITED, ACTIVE, REJECTED, EXPIRED, REVOKED]
+      description: CONFIRMED (FSM-3, 04 glossary).
+    PetResponse:
+      type: object
+      required: [petId, ownerId, name, species, isActive]
+      properties:
+        petId:
+          type: string
+          format: uuid
+        ownerId:
+          type: string
+          format: uuid
+        name:
+          type: string
+        species:
+          $ref: '#/components/schemas/PetSpecies'
+        breed:
+          type: string
+        gender:
+          $ref: '#/components/schemas/PetGender'
+        dateOfBirth:
+          type: string
+          format: date
+        weightKg:
+          type: number
+        microchipNumber:
+          type: string
+        isActive:
+          type: boolean
+    PetPage:
+      type: object
+      required: [items, page, pageSize, total]
+      properties:
+        items:
+          type: array
+          items:
+            $ref: '#/components/schemas/PetResponse'
+        page:
+          type: integer
+        pageSize:
+          type: integer
+        total:
+          type: integer
+    AddPetRequest:
+      type: object
+      required: [name, species]
+      properties:
+        name:
+          type: string
+        species:
+          $ref: '#/components/schemas/PetSpecies'
+        breed:
+          type: string
+        gender:
+          $ref: '#/components/schemas/PetGender'
+        dateOfBirth:
+          type: string
+          format: date
+        weightKg:
+          type: number
+        microchipNumber:
+          type: string
+        ownerId:
+          type: string
+          format: uuid
+          description: Counter creation by receptionists only; self-creation uses the caller.
+    UpdatePetRequest:
+      type: object
+      properties:
+        name:
+          type: string
+        species:
+          $ref: '#/components/schemas/PetSpecies'
+          description: Core identity, primary-owner-only (CONFIRMED RULE-04-03).
+        breed:
+          type: string
+          description: Core identity, primary-owner-only (CONFIRMED RULE-04-03).
+        gender:
+          $ref: '#/components/schemas/PetGender'
+          description: Core identity, primary-owner-only (CONFIRMED RULE-04-03).
+        dateOfBirth:
+          type: string
+          format: date
+          description: Core identity, primary-owner-only (CONFIRMED RULE-04-03).
+        weightKg:
+          type: number
+        microchipNumber:
+          type: string
+    TransferPetRequest:
+      type: object
+      required: [newOwnerId]
+      properties:
+        newOwnerId:
+          type: string
+          format: uuid
+          description: PROPOSED identification; confirmation flow TBD Q6.
+    CounterSearchResponse:
+      type: object
+      required: [customers, pets]
+      properties:
+        customers:
+          type: array
+          items:
+            type: object
+            required: [userId, name]
+            properties:
+              userId:
+                type: string
+                format: uuid
+              name:
+                type: string
+              phone:
+                type: string
+        pets:
+          type: array
+          items:
+            $ref: '#/components/schemas/PetResponse'
+    InviteCaregiverRequest:
+      type: object
+      required: [caregiverPhone]
+      properties:
+        caregiverPhone:
+          type: string
+          description: CONFIRMED (ERD caregiver_phone).
+        validUntil:
+          type: string
+          format: date-time
+          description: PROPOSED delegation end (ASSUMPTION A4, TBD Q5).
+    InvitationResponse:
+      type: object
+      required: [invitationId, petId, status, expiresAt]
+      properties:
+        invitationId:
+          type: string
+          format: uuid
+        petId:
+          type: string
+          format: uuid
+        status:
+          $ref: '#/components/schemas/CaregiverStatus'
+        expiresAt:
+          type: string
+          format: date-time
+          description: Invitation TTL 7 days CONFIRMED (RULE-04-05).
+    DelegationResponse:
+      type: object
+      required: [delegationId, petId, status]
+      properties:
+        delegationId:
+          type: string
+          format: uuid
+        petId:
+          type: string
+          format: uuid
+        status:
+          $ref: '#/components/schemas/CaregiverStatus'
+    RevokeCaregiverRequest:
+      type: object
+      required: [caregiverUserId]
+      properties:
+        caregiverUserId:
+          type: string
+          format: uuid
+    Error:
+      type: object
+      required: [success, errorCode, message, statusCode, timestamp]
+      properties:
+        success:
+          type: boolean
+          example: false
+        errorCode:
+          type: string
+          description: UNAUTHORIZED_DELEGATED_ACTION is CONFIRMED (RULE-04-09); ACCESS_DENIED_SCOPE_MISMATCH is CONFIRMED (RULE-02-01); VALIDATION_FAILED, BUSINESS_RULE_VIOLATION, INVALID_STATE_TRANSITION, RESOURCE_NOT_FOUND follow docs/convention/backend/04-exception-handling; INVITATION_EXPIRED is PROPOSED.
+        message:
+          type: string
+        statusCode:
+          type: integer
+        timestamp:
+          type: string
+          format: date-time
+        traceId:
+          type: string
+        details:
+          type: object
+          additionalProperties: true
+  responses:
+    BadRequest:
+      description: Validation failed.
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+    Unauthorized:
+      description: Missing or invalid authentication.
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+    NotFound:
+      description: Resource not found.
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'

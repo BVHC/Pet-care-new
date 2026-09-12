@@ -1,0 +1,538 @@
+# Pet Care Order API v1 — OpenAPI 3.1 (derived strictly from docs/)
+#
+# Source of truth: docs/01-business-operations.md (01#14),
+# docs/02-business-rules.md (RULE-14-01..09 plus reservation invariant),
+# docs/03-state-machines.md (FSM-5), docs/04-glossary.md (14),
+# docs/05-domain-model.md (4.14),
+# docs/06-erd.md (orders/order_items/fulfillment_stage_logs).
+# Timeouts and notifications are system jobs and effects (no endpoints).
+# Payments live in payment-v1 and refunds in refund-v1; this file only moves
+# orders and guards stock. Post-delivery returns arrive as Module 17 effects.
+#
+# Traceability legend: CONFIRMED = in docs / ASSUMPTION (A#) = least invention /
+# TBD (Q#) = needs PO (see ../order-v1.md section E). No `servers` (TBD Q1).
+# Error envelope follows docs/convention/backend/04-exception-handling. No 422.
+
+openapi: 3.1.0
+info:
+  title: Pet Care Order API v1
+  version: 1.0.0
+  description: >-
+    Strictly derived from docs/ (01#14 operations, RULE-14-01..09, FSM-5).
+    Counter orders settle instantly while online orders stage through payment,
+    confirmation, preparation, and pickup. Cancelled orders never move again,
+    and partial post-delivery returns keep the delivered state with a running
+    refunded total.
+tags:
+  - name: Orders
+    description: Order creation, checkout, views, cancellation (D-03 terminal states).
+  - name: Fulfillment
+    description: Staged store fulfillment (Confirm, Process, Prepare, Complete).
+paths:
+  /orders:
+    post:
+      tags: [Orders]
+      summary: Create order (CreateOrder)
+      description: CONFIRMED (RULE-14-01/02/04). Online orders hold stock for 15 minutes; counter orders settle and deduct physical stock in one transaction.
+      operationId: createOrder
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreateOrderRequest'
+      responses:
+        '201':
+          description: Order created (PENDING_PAYMENT online, PAID at counter).
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/OrderResponse'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          description: Outside scope.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          description: Item inactive or short on available stock (CONFIRMED RULE-14-02).
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+    get:
+      tags: [Orders]
+      summary: List own orders (ViewOrder)
+      description: CONFIRMED (RULE-14-01). Customers see their own orders. Filters PROPOSED.
+      operationId: listOrders
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: page
+          in: query
+          required: false
+          schema:
+            type: integer
+            minimum: 1
+            default: 1
+        - name: pageSize
+          in: query
+          required: false
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 100
+            default: 20
+        - name: status
+          in: query
+          required: false
+          schema:
+            $ref: '#/components/schemas/OrderStatus'
+      responses:
+        '200':
+          description: Page of orders.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/OrderPage'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+  /orders/{id}:
+    get:
+      tags: [Orders]
+      summary: Get order detail (ViewOrder)
+      description: CONFIRMED (RULE-14-01). Owner only.
+      operationId: getOrder
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/OrderId'
+      responses:
+        '200':
+          description: Order detail.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/OrderResponse'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          description: Other customers orders are hidden (CONFIRMED ownership, RULE-14-01).
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '404':
+          $ref: '#/components/responses/NotFound'
+  /orders/{id}/checkout:
+    post:
+      tags: [Orders]
+      summary: Checkout cart (CheckoutOrder)
+      description: CONFIRMED operation (RULE-14-04). Revalidates the cart and refreshes the 15-minute hold (ASSUMPTION A2 in md, TBD Q7).
+      operationId: checkoutOrder
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/OrderId'
+      responses:
+        '200':
+          description: Cart confirmed with a fresh hold.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/OrderResponse'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          description: Booking owner only.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          description: Cart invalid or hold lost.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+  /orders/{id}/cancel:
+    post:
+      tags: [Orders]
+      summary: Cancel unpaid order (CancelOrder)
+      description: CONFIRMED (RULE-14-04/07/08). From PENDING_PAYMENT only. Releases the hold and freezes the order forever.
+      operationId: cancelOrder
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/OrderId'
+      responses:
+        '200':
+          description: Order cancelled.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/OrderResponse'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          description: Booking owner or receptionist only.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          description: Already paid or terminal; use cancel-with-refund instead.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+  /orders/{id}/cancel-with-refund:
+    post:
+      tags: [Orders]
+      summary: Cancel paid order with refund (CancelOrderWithRefund)
+      description: CONFIRMED (RULE-14-07). From PAID, CONFIRMED, PROCESSING, or READY. Restocks and opens a full refund (Module 17), landing once on CANCELLED.
+      operationId: cancelOrderWithRefund
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/OrderId'
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CancelWithRefundRequest'
+      responses:
+        '200':
+          description: Order cancelled with refund opened.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CancelWithRefundResponse'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          description: Outside cancellation rights (approval TBD Q9 in md).
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          description: Not cancellable with refund from this state.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+  /orders/{id}/confirm:
+    post:
+      tags: [Fulfillment]
+      summary: Confirm order (ConfirmOrder)
+      description: CONFIRMED (RULE-14-03/05). From PAID to CONFIRMED. Receptionists (system auto-confirm TBD Q8 in md). Idempotent.
+      operationId: confirmOrder
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/OrderId'
+      responses:
+        '200':
+          description: Order confirmed.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/OrderResponse'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          description: Receptionists only.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          description: Not PAID.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+  /orders/{id}/process:
+    post:
+      tags: [Fulfillment]
+      summary: Process order (ProcessOrder)
+      description: CONFIRMED (RULE-14-05). Commits held stock to physical deduction.
+      operationId: processOrder
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/OrderId'
+      responses:
+        '200':
+          description: Order processing.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/OrderResponse'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          description: Store staff only.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          description: Not CONFIRMED.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+  /orders/{id}/prepare:
+    post:
+      tags: [Fulfillment]
+      summary: Prepare and pack (PrepareProductOrder)
+      description: CONFIRMED (RULE-14-05). To READY for pickup.
+      operationId: prepareProductOrder
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/OrderId'
+      responses:
+        '200':
+          description: Order ready.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/OrderResponse'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          description: Store staff only.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          description: Not PROCESSING.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+  /orders/{id}/complete:
+    post:
+      tags: [Fulfillment]
+      summary: Hand over order (CompleteStoreOrder)
+      description: CONFIRMED (RULE-14-03/06). Instant at the counter from PAID; online handover from READY with a pickup code (PROPOSED, storage TBD Q6 in md).
+      operationId: completeStoreOrder
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/OrderId'
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CompleteOrderRequest'
+      responses:
+        '200':
+          description: Order delivered.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/OrderResponse'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          description: Receptionists only.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          description: Not handable from this state.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+      description: JWT/Session Token (RULE-01-01 CONFIRMED existence; Bearer transport ASSUMPTION A2 in auth-v1).
+  parameters:
+    OrderId:
+      name: id
+      in: path
+      required: true
+      schema:
+        type: string
+        format: uuid
+  schemas:
+    OrderStatus:
+      type: string
+      enum: [PENDING_PAYMENT, PAID, CONFIRMED, PROCESSING, READY, DELIVERED, CANCELLED, REFUNDED]
+      description: CONFIRMED (FSM-5, 04 glossary).
+    OrderChannel:
+      type: string
+      enum: [POS_RETAIL, ONLINE_APP]
+      description: CONFIRMED (ERD orders).
+    OrderItem:
+      type: object
+      required: [productId, quantity]
+      properties:
+        productId:
+          type: string
+          format: uuid
+        quantity:
+          type: integer
+          minimum: 1
+    CreateOrderRequest:
+      type: object
+      required: [storeId, channel, items]
+      properties:
+        storeId:
+          type: string
+          format: uuid
+        channel:
+          $ref: '#/components/schemas/OrderChannel'
+        items:
+          type: array
+          minItems: 1
+          items:
+            $ref: '#/components/schemas/OrderItem'
+        voucherCode:
+          type: string
+          description: PROPOSED; validated under Module 18 rules.
+    OrderResponse:
+      type: object
+      required: [orderId, orderNumber, storeId, channel, status, subtotal, discountAmount, totalAmount, totalRefundedAmount]
+      properties:
+        orderId:
+          type: string
+          format: uuid
+        orderNumber:
+          type: string
+        storeId:
+          type: string
+          format: uuid
+        channel:
+          $ref: '#/components/schemas/OrderChannel'
+        status:
+          $ref: '#/components/schemas/OrderStatus'
+        subtotal:
+          type: number
+        discountAmount:
+          type: number
+        totalAmount:
+          type: number
+        totalRefundedAmount:
+          type: number
+        reservedUntil:
+          type: string
+          format: date-time
+          nullable: true
+          description: Online hold expiry, 15 minutes (CONFIRMED RULE-14-04).
+    OrderPage:
+      type: object
+      required: [items, page, pageSize, total]
+      properties:
+        items:
+          type: array
+          items:
+            $ref: '#/components/schemas/OrderResponse'
+        page:
+          type: integer
+        pageSize:
+          type: integer
+        total:
+          type: integer
+    CancelWithRefundRequest:
+      type: object
+      properties:
+        reason:
+          type: string
+    CancelWithRefundResponse:
+      type: object
+      required: [orderId, status]
+      properties:
+        orderId:
+          type: string
+          format: uuid
+        status:
+          $ref: '#/components/schemas/OrderStatus'
+        refundId:
+          type: string
+          format: uuid
+          nullable: true
+    CompleteOrderRequest:
+      type: object
+      properties:
+        pickupCode:
+          type: string
+          description: Online handover code (PROPOSED, storage TBD Q6 in md).
+    Error:
+      type: object
+      required: [success, errorCode, message, statusCode, timestamp]
+      properties:
+        success:
+          type: boolean
+          example: false
+        errorCode:
+          type: string
+          description: ACCESS_DENIED_SCOPE_MISMATCH is CONFIRMED (RULE-02-01, 403); VALIDATION_FAILED, BUSINESS_RULE_VIOLATION, INVALID_STATE_TRANSITION, RESOURCE_NOT_FOUND, CONCURRENCY_CONFLICT follow docs/convention/backend/04-exception-handling.
+        message:
+          type: string
+        statusCode:
+          type: integer
+        timestamp:
+          type: string
+          format: date-time
+        traceId:
+          type: string
+        details:
+          type: object
+          additionalProperties: true
+  responses:
+    BadRequest:
+      description: Validation failed.
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+    Unauthorized:
+      description: Missing or invalid authentication.
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+    NotFound:
+      description: Resource not found.
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'

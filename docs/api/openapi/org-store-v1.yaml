@@ -1,0 +1,863 @@
+# Pet Care Org & Store API v1 — OpenAPI 3.1 (derived strictly from docs/)
+#
+# Source of truth: docs/01-business-operations.md (01#3),
+# docs/02-business-rules.md (RULE-03-01..08), docs/03-state-machines.md (FSM-2 Store),
+# docs/04-glossary.md (03), docs/05-domain-model.md (4.3),
+# docs/06-erd.md (organizations/stores/operating_hours/store_resources).
+# Policy operations have no ERD backing and are out of v1 (TBD Q7).
+# Price/availability overrides belong to the Module 05 catalog contract (TBD Q8).
+#
+# Traceability legend: CONFIRMED = in docs (source cited) / ASSUMPTION (A#) =
+# reasonable inference / TBD (Q#) = needs PO (see ../org-store-v1.md section E).
+# No `servers` (base URL TBD Q1). Error envelope follows
+# docs/convention/backend/04-exception-handling. No 422 (convention uses 400).
+
+openapi: 3.1.0
+info:
+  title: Pet Care Org and Store API v1
+  version: 1.0.0
+  description: >-
+    Strictly derived from docs/ (01#3 operations, RULE-03-01..08, FSM-2 Store
+    lifecycle DRAFT->ACTIVE<->SUSPENDED/DEACTIVATED->ARCHIVED). Organization
+    creation is SUPER_ADMIN tenant provisioning (ASSUMPTION A1). Activate needs
+    hours plus resources plus service catalog (RULE-03-02, catalog check is a
+    cross-domain dependency on Module 05). Archive needs the 4 zero-conditions
+    (RULE-03-06). Policy endpoints are out of v1 (no ERD backing, TBD Q7).
+tags:
+  - name: Organizations
+    description: Tenant lifecycle (CreateOrganization, UpdateOrganization).
+  - name: Stores
+    description: Store lifecycle and configuration (FSM-2, hours, resources).
+paths:
+  /organizations:
+    post:
+      tags: [Organizations]
+      summary: Create organization (CreateOrganization)
+      description: "CONFIRMED (RULE-03-01). SUPER_ADMIN tenant provisioning (ASSUMPTION A1: 01#3 attribution to OrgAdmin cannot bootstrap)."
+      operationId: createOrganization
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreateOrganizationRequest'
+      responses:
+        '201':
+          description: Organization created.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/OrganizationResponse'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          description: Non-SUPER_ADMIN (tenant lifecycle is PLATFORM scope).
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '409':
+          description: Duplicate organization code (ERD UNIQUE).
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+    get:
+      tags: [Organizations]
+      summary: List organizations (scope-filtered)
+      description: Derived listing for tenant administration. Pagination PROPOSED (same TBD as iam-v1 Q7).
+      operationId: listOrganizations
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: page
+          in: query
+          required: false
+          schema:
+            type: integer
+            minimum: 1
+            default: 1
+        - name: pageSize
+          in: query
+          required: false
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 100
+            default: 20
+      responses:
+        '200':
+          description: Page of organizations.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/OrganizationPage'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+  /organizations/{id}:
+    get:
+      tags: [Organizations]
+      summary: Get organization detail
+      description: Path/shape PROPOSED.
+      operationId: getOrganization
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/OrganizationId'
+      responses:
+        '200':
+          description: Organization detail.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/OrganizationResponse'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          description: Outside own organization (CONFIRMED code ACCESS_DENIED_SCOPE_MISMATCH, RULE-02-01).
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '404':
+          $ref: '#/components/responses/NotFound'
+    patch:
+      tags: [Organizations]
+      summary: Update organization (UpdateOrganization)
+      description: CONFIRMED (RULE-03-01). Updatable fields TBD Q9; code treated as immutable (PROPOSED).
+      operationId: updateOrganization
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/OrganizationId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/UpdateOrganizationRequest'
+      responses:
+        '200':
+          description: Organization updated.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/OrganizationResponse'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          description: Outside own organization (CONFIRMED code ACCESS_DENIED_SCOPE_MISMATCH, RULE-02-01).
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '404':
+          $ref: '#/components/responses/NotFound'
+  /organizations/{id}/stores:
+    post:
+      tags: [Stores]
+      summary: Create store as DRAFT (CreateStore)
+      description: CONFIRMED (RULE-03-01/02, FSM-2). New stores start DRAFT and serve nothing until ActivateStore.
+      operationId: createStore
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/OrganizationId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreateStoreRequest'
+      responses:
+        '201':
+          description: Store created as DRAFT.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/StoreResponse'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          description: Outside own organization (CONFIRMED code ACCESS_DENIED_SCOPE_MISMATCH, RULE-02-01).
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          description: Duplicate store code in organization (ERD UNIQUE organization_id plus code).
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+    get:
+      tags: [Stores]
+      summary: List stores of an organization
+      description: Derived listing. Pagination PROPOSED.
+      operationId: listStores
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/OrganizationId'
+        - name: page
+          in: query
+          required: false
+          schema:
+            type: integer
+            minimum: 1
+            default: 1
+        - name: pageSize
+          in: query
+          required: false
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 100
+            default: 20
+      responses:
+        '200':
+          description: Page of stores.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/StorePage'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          description: Outside own organization (CONFIRMED code ACCESS_DENIED_SCOPE_MISMATCH, RULE-02-01).
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '404':
+          $ref: '#/components/responses/NotFound'
+  /stores/{id}:
+    get:
+      tags: [Stores]
+      summary: Get store detail
+      description: Path/shape PROPOSED.
+      operationId: getStore
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/StoreId'
+      responses:
+        '200':
+          description: Store detail.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/StoreResponse'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          description: Outside scope (CONFIRMED code ACCESS_DENIED_SCOPE_MISMATCH, RULE-02-01).
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '404':
+          $ref: '#/components/responses/NotFound'
+    patch:
+      tags: [Stores]
+      summary: Update store (UpdateStore)
+      description: CONFIRMED (01#3). StoreManager limited to operational fields (ASSUMPTION A2, TBD Q6).
+      operationId: updateStore
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/StoreId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/UpdateStoreRequest'
+      responses:
+        '200':
+          description: Store updated.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/StoreResponse'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          description: Outside scope or field (CONFIRMED code ACCESS_DENIED_SCOPE_MISMATCH, RULE-02-01).
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '404':
+          $ref: '#/components/responses/NotFound'
+  /stores/{id}/activate:
+    post:
+      tags: [Stores]
+      summary: Activate store (ActivateStore)
+      description: CONFIRMED guards (RULE-03-02/03, FSM-2). Needs valid hours, at least one available resource, and available service catalog (Module 05 cross-domain check). Idempotent.
+      operationId: activateStore
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/StoreId'
+      responses:
+        '200':
+          description: Store active (or already active).
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/StoreResponse'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          description: Outside own organization (CONFIRMED code ACCESS_DENIED_SCOPE_MISMATCH, RULE-02-01).
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          description: Wrong state or readiness conditions unmet (PROPOSED code STORE_NOT_READY with details).
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+  /stores/{id}/suspend:
+    post:
+      tags: [Stores]
+      summary: Suspend store (SuspendStore)
+      description: CONFIRMED (RULE-03-03/04, FSM-2). Only from ACTIVE. New bookings, walk-ins and orders are blocked by their owning modules. Idempotent.
+      operationId: suspendStore
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/StoreId'
+      responses:
+        '200':
+          description: Store suspended (or already suspended).
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/StoreResponse'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          description: Outside own organization (CONFIRMED code ACCESS_DENIED_SCOPE_MISMATCH, RULE-02-01).
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          description: Wrong state for suspension.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+  /stores/{id}/deactivate:
+    post:
+      tags: [Stores]
+      summary: Deactivate store (DeactivateStore)
+      description: CONFIRMED (RULE-03-03/04, FSM-2). Only from ACTIVE. Idempotent.
+      operationId: deactivateStore
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/StoreId'
+      responses:
+        '200':
+          description: Store deactivated (or already deactivated).
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/StoreResponse'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          description: Outside own organization (CONFIRMED code ACCESS_DENIED_SCOPE_MISMATCH, RULE-02-01).
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          description: Wrong state for deactivation.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+  /stores/{id}/archive:
+    post:
+      tags: [Stores]
+      summary: Archive store permanently (ArchiveStore)
+      description: CONFIRMED (RULE-03-06, FSM-2). Only from SUSPENDED or DEACTIVATED. All four zero-conditions are checked; the failing one is reported in details (PROPOSED shape).
+      operationId: archiveStore
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/StoreId'
+      responses:
+        '200':
+          description: Store archived.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/StoreResponse'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          description: Outside own organization (CONFIRMED code ACCESS_DENIED_SCOPE_MISMATCH, RULE-02-01).
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          description: Wrong state or an archival condition is unmet (details.failedCondition, PROPOSED).
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+  /stores/{id}/operating-hours:
+    put:
+      tags: [Stores]
+      summary: Configure operating hours (ConfigureOperatingHour)
+      description: CONFIRMED (RULE-03-02/07). Replace-all semantics. dayOfWeek 1 means Sunday through 7 meaning Saturday (CONFIRMED per ERD, non-ISO).
+      operationId: configureOperatingHours
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/StoreId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/OperatingHoursRequest'
+      responses:
+        '200':
+          description: Hours replaced.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/OperatingHoursResponse'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          description: Outside scope (CONFIRMED code ACCESS_DENIED_SCOPE_MISMATCH, RULE-02-01). StoreManager configurability is TBD Q5.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '404':
+          $ref: '#/components/responses/NotFound'
+  /stores/{id}/resources:
+    get:
+      tags: [Stores]
+      summary: List store resources
+      description: Derived listing over store_resources.
+      operationId: listStoreResources
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/StoreId'
+      responses:
+        '200':
+          description: Resource list.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/StoreResourceList'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          description: Outside scope (CONFIRMED code ACCESS_DENIED_SCOPE_MISMATCH, RULE-02-01).
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '404':
+          $ref: '#/components/responses/NotFound'
+    post:
+      tags: [Stores]
+      summary: Configure store resource (ConfigureStoreResource)
+      description: CONFIRMED (RULE-03-02/08). resourceCode is unique per store (ERD UNIQUE).
+      operationId: createStoreResource
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/StoreId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreateStoreResourceRequest'
+      responses:
+        '201':
+          description: Resource configured.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/StoreResourceResponse'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          description: Outside scope (CONFIRMED code ACCESS_DENIED_SCOPE_MISMATCH, RULE-02-01). StoreManager configurability is TBD Q5.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          description: Duplicate resource code in store (ERD UNIQUE store_id plus resource_code).
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+  /stores/{id}/resources/{rid}:
+    patch:
+      tags: [Stores]
+      summary: Update store resource (ConfigureStoreResource)
+      description: CONFIRMED (01#3). resourceCode is immutable (ASSUMPTION A4).
+      operationId: updateStoreResource
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/StoreId'
+        - name: rid
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/UpdateStoreResourceRequest'
+      responses:
+        '200':
+          description: Resource updated.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/StoreResourceResponse'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          description: Outside scope (CONFIRMED code ACCESS_DENIED_SCOPE_MISMATCH, RULE-02-01).
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '404':
+          $ref: '#/components/responses/NotFound'
+components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+      description: JWT/Session Token (RULE-01-01 CONFIRMED existence; Bearer transport ASSUMPTION A2 in auth-v1).
+  parameters:
+    OrganizationId:
+      name: id
+      in: path
+      required: true
+      schema:
+        type: string
+        format: uuid
+    StoreId:
+      name: id
+      in: path
+      required: true
+      schema:
+        type: string
+        format: uuid
+  schemas:
+    OrganizationStatus:
+      type: string
+      enum: [ACTIVE, SUSPENDED, INACTIVE]
+      description: CONFIRMED values in ERD organizations; no FSM exists (TBD Q3).
+    StoreStatus:
+      type: string
+      enum: [DRAFT, ACTIVE, SUSPENDED, DEACTIVATED, ARCHIVED]
+      description: CONFIRMED (FSM-2, 04 glossary StoreStatus).
+    FacilityType:
+      type: string
+      enum: [RETAIL_STORE, CENTRAL_WAREHOUSE]
+      description: CONFIRMED (ERD stores).
+    ResourceType:
+      type: string
+      enum: [CLINIC_ROOM, GROOMING_TABLE, ULTRASOUND_MACHINE, XRAY_MACHINE]
+      description: CONFIRMED (ERD store_resources plus 05 domain 4.3).
+    OrganizationResponse:
+      type: object
+      required: [organizationId, code, name, status]
+      properties:
+        organizationId:
+          type: string
+          format: uuid
+        code:
+          type: string
+        name:
+          type: string
+        status:
+          $ref: '#/components/schemas/OrganizationStatus'
+    OrganizationPage:
+      type: object
+      required: [items, page, pageSize, total]
+      properties:
+        items:
+          type: array
+          items:
+            $ref: '#/components/schemas/OrganizationResponse'
+        page:
+          type: integer
+        pageSize:
+          type: integer
+        total:
+          type: integer
+    CreateOrganizationRequest:
+      type: object
+      required: [code, name]
+      properties:
+        code:
+          type: string
+        name:
+          type: string
+        taxCode:
+          type: string
+        address:
+          type: string
+    UpdateOrganizationRequest:
+      type: object
+      properties:
+        name:
+          type: string
+        taxCode:
+          type: string
+        address:
+          type: string
+      description: Code is treated as immutable (PROPOSED, TBD Q4).
+    StoreResponse:
+      type: object
+      required: [storeId, organizationId, code, name, facilityType, status]
+      properties:
+        storeId:
+          type: string
+          format: uuid
+        organizationId:
+          type: string
+          format: uuid
+        code:
+          type: string
+        name:
+          type: string
+        facilityType:
+          $ref: '#/components/schemas/FacilityType'
+        address:
+          type: string
+        phone:
+          type: string
+        status:
+          $ref: '#/components/schemas/StoreStatus'
+    StorePage:
+      type: object
+      required: [items, page, pageSize, total]
+      properties:
+        items:
+          type: array
+          items:
+            $ref: '#/components/schemas/StoreResponse'
+        page:
+          type: integer
+        pageSize:
+          type: integer
+        total:
+          type: integer
+    CreateStoreRequest:
+      type: object
+      required: [code, name, facilityType, address, phone]
+      properties:
+        code:
+          type: string
+        name:
+          type: string
+        facilityType:
+          $ref: '#/components/schemas/FacilityType'
+        address:
+          type: string
+        phone:
+          type: string
+    UpdateStoreRequest:
+      type: object
+      properties:
+        name:
+          type: string
+        address:
+          type: string
+        phone:
+          type: string
+      description: StoreManager limited to operational fields (ASSUMPTION A2, TBD Q6).
+    OperatingHoursRequest:
+      type: object
+      required: [hours]
+      properties:
+        hours:
+          type: array
+          minItems: 1
+          maxItems: 7
+          items:
+            type: object
+            required: [dayOfWeek, isClosed]
+            properties:
+              dayOfWeek:
+                type: integer
+                minimum: 1
+                maximum: 7
+                description: 1 means Sunday through 7 meaning Saturday (CONFIRMED per ERD, non-ISO).
+              openTime:
+                type: string
+                format: time
+              closeTime:
+                type: string
+                format: time
+              isClosed:
+                type: boolean
+    OperatingHoursResponse:
+      type: object
+      required: [storeId, hours]
+      properties:
+        storeId:
+          type: string
+          format: uuid
+        hours:
+          type: array
+          items:
+            type: object
+            required: [dayOfWeek, isClosed]
+            properties:
+              dayOfWeek:
+                type: integer
+              openTime:
+                type: string
+                format: time
+              closeTime:
+                type: string
+                format: time
+              isClosed:
+                type: boolean
+    StoreResourceResponse:
+      type: object
+      required: [resourceId, storeId, resourceCode, resourceName, resourceType, isActive]
+      properties:
+        resourceId:
+          type: string
+          format: uuid
+        storeId:
+          type: string
+          format: uuid
+        resourceCode:
+          type: string
+        resourceName:
+          type: string
+        resourceType:
+          $ref: '#/components/schemas/ResourceType'
+        isActive:
+          type: boolean
+    StoreResourceList:
+      type: object
+      required: [items]
+      properties:
+        items:
+          type: array
+          items:
+            $ref: '#/components/schemas/StoreResourceResponse'
+    CreateStoreResourceRequest:
+      type: object
+      required: [resourceCode, resourceName, resourceType]
+      properties:
+        resourceCode:
+          type: string
+        resourceName:
+          type: string
+        resourceType:
+          $ref: '#/components/schemas/ResourceType'
+        isActive:
+          type: boolean
+          default: true
+    UpdateStoreResourceRequest:
+      type: object
+      properties:
+        resourceName:
+          type: string
+        isActive:
+          type: boolean
+      description: resourceCode is immutable (ASSUMPTION A4).
+    Error:
+      type: object
+      required: [success, errorCode, message, statusCode, timestamp]
+      properties:
+        success:
+          type: boolean
+          example: false
+        errorCode:
+          type: string
+          description: ACCESS_DENIED_SCOPE_MISMATCH is CONFIRMED (RULE-02-01, 403); VALIDATION_FAILED, BUSINESS_RULE_VIOLATION, INVALID_STATE_TRANSITION, RESOURCE_NOT_FOUND follow docs/convention/backend/04-exception-handling; STORE_NOT_READY and archival failedCondition details are PROPOSED.
+        message:
+          type: string
+        statusCode:
+          type: integer
+        timestamp:
+          type: string
+          format: date-time
+        traceId:
+          type: string
+        details:
+          type: object
+          additionalProperties: true
+  responses:
+    BadRequest:
+      description: Validation failed.
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+    Unauthorized:
+      description: Missing or invalid authentication.
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+    NotFound:
+      description: Resource not found.
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'

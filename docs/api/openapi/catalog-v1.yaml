@@ -1,0 +1,916 @@
+# Pet Care Catalog API v1 — OpenAPI 3.1 (derived strictly from docs/)
+#
+# Source of truth: docs/01-business-operations.md (01#5),
+# docs/02-business-rules.md (RULE-05-01..07), docs/04-glossary.md (05),
+# docs/05-domain-model.md (4.5),
+# docs/06-erd.md (services/service_required_resources/products/store_products/store_services).
+# No dedicated FSM (N/A CONFIRMED). No DELETE endpoints: hard-delete of products
+# with transactions is forbidden (RULE-05-02). Override rows are system-created
+# on ActivateStore (RULE-05-07); only PUT updates exist. Owner of
+# ConfigureServiceAvailability (settles org-store-v1 Q8 here).
+#
+# Traceability legend: CONFIRMED = in docs / ASSUMPTION (A#) = least invention /
+# TBD (Q#) = needs PO (see ../catalog-v1.md section E). No `servers` (TBD Q1).
+# Error envelope follows docs/convention/backend/04-exception-handling. No 422.
+
+openapi: 3.1.0
+info:
+  title: Pet Care Catalog API v1
+  version: 1.0.0
+  description: >-
+    Strictly derived from docs/ (01#5 operations, RULE-05-01..07). The
+    organization owns master products and services; stores only override price
+    and availability without touching master rows. Overrides are auto-created
+    when a store activates. Deactivation replaces deletion.
+tags:
+  - name: Products
+    description: Organization product masters (ManageProduct).
+  - name: Services
+    description: Organization service masters plus required resources (ManageService).
+  - name: StoreOverrides
+    description: Per-store price and availability overrides (Configure*Price, ConfigureServiceAvailability).
+  - name: Storefront
+    description: Effective catalog views for customers and staff (ViewProduct, ViewService).
+paths:
+  /products:
+    post:
+      tags: [Products]
+      summary: Create product master (ManageProduct)
+      description: CONFIRMED (RULE-05-01/02). SKU unique per organization.
+      operationId: createProduct
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreateProductRequest'
+      responses:
+        '201':
+          description: Product created.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ProductResponse'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          description: Outside own organization (CONFIRMED code ACCESS_DENIED_SCOPE_MISMATCH, RULE-02-01).
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '409':
+          description: Duplicate SKU in organization (ERD UNIQUE organization_id plus sku).
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+    get:
+      tags: [Products]
+      summary: List products of own organization
+      description: Scope-filtered listing. Pagination and filters PROPOSED.
+      operationId: listProducts
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: page
+          in: query
+          required: false
+          schema:
+            type: integer
+            minimum: 1
+            default: 1
+        - name: pageSize
+          in: query
+          required: false
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 100
+            default: 20
+        - name: category
+          in: query
+          required: false
+          schema:
+            $ref: '#/components/schemas/ProductCategory'
+        - name: activeOnly
+          in: query
+          required: false
+          schema:
+            type: boolean
+      responses:
+        '200':
+          description: Page of products.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ProductPage'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+  /products/{id}:
+    get:
+      tags: [Products]
+      summary: Get product detail
+      description: Path/shape PROPOSED.
+      operationId: getProduct
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/ProductId'
+      responses:
+        '200':
+          description: Product detail.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ProductResponse'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          description: Outside own organization (CONFIRMED code ACCESS_DENIED_SCOPE_MISMATCH, RULE-02-01).
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '404':
+          $ref: '#/components/responses/NotFound'
+    patch:
+      tags: [Products]
+      summary: Update or deactivate product (ManageProduct)
+      description: CONFIRMED (RULE-05-02). Deactivation replaces deletion; SKU immutable (PROPOSED, TBD Q3/Q8 in md).
+      operationId: updateProduct
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/ProductId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/UpdateProductRequest'
+      responses:
+        '200':
+          description: Product updated.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ProductResponse'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          description: Outside own organization (CONFIRMED code ACCESS_DENIED_SCOPE_MISMATCH, RULE-02-01).
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '404':
+          $ref: '#/components/responses/NotFound'
+  /services:
+    post:
+      tags: [Services]
+      summary: Create service master (ManageService)
+      description: CONFIRMED (RULE-05-03). Required resources declared inline (ASSUMPTION A1).
+      operationId: createService
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreateServiceRequest'
+      responses:
+        '201':
+          description: Service created.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ServiceResponse'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          description: Outside own organization (CONFIRMED code ACCESS_DENIED_SCOPE_MISMATCH, RULE-02-01).
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '409':
+          description: Duplicate service code in organization (ASSUMPTION A5; ERD states no explicit UNIQUE).
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+    get:
+      tags: [Services]
+      summary: List services of own organization
+      description: Scope-filtered listing. Pagination and filters PROPOSED.
+      operationId: listServices
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: page
+          in: query
+          required: false
+          schema:
+            type: integer
+            minimum: 1
+            default: 1
+        - name: pageSize
+          in: query
+          required: false
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 100
+            default: 20
+        - name: category
+          in: query
+          required: false
+          schema:
+            $ref: '#/components/schemas/ServiceCategory'
+        - name: activeOnly
+          in: query
+          required: false
+          schema:
+            type: boolean
+      responses:
+        '200':
+          description: Page of services.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ServicePage'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+  /services/{id}:
+    get:
+      tags: [Services]
+      summary: Get service detail with required resources
+      description: Path/shape PROPOSED.
+      operationId: getService
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/ServiceId'
+      responses:
+        '200':
+          description: Service detail.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ServiceResponse'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          description: Outside own organization (CONFIRMED code ACCESS_DENIED_SCOPE_MISMATCH, RULE-02-01).
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '404':
+          $ref: '#/components/responses/NotFound'
+    patch:
+      tags: [Services]
+      summary: Update service (ManageService)
+      description: CONFIRMED (01#5). Required resources replaced as a whole (ASSUMPTION A1).
+      operationId: updateService
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/ServiceId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/UpdateServiceRequest'
+      responses:
+        '200':
+          description: Service updated.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ServiceResponse'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          description: Outside own organization (CONFIRMED code ACCESS_DENIED_SCOPE_MISMATCH, RULE-02-01).
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '404':
+          $ref: '#/components/responses/NotFound'
+  /stores/{id}/products/{pid}/price:
+    put:
+      tags: [StoreOverrides]
+      summary: Configure product price at store (ConfigureProductPrice)
+      description: CONFIRMED (RULE-05-05/07). Idempotent. Policy price-frame enforcement TBD Q7 in md.
+      operationId: configureProductPrice
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/StoreId'
+        - name: pid
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PriceRequest'
+      responses:
+        '200':
+          description: Price overridden.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PriceResponse'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          description: Outside own store (CONFIRMED code ACCESS_DENIED_SCOPE_MISMATCH, RULE-02-01).
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '404':
+          description: Store, product, or uninitialized override (PROPOSED code OVERRIDE_NOT_INITIALIZED when the store never activated).
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+  /stores/{id}/services/{sid}/price:
+    put:
+      tags: [StoreOverrides]
+      summary: Configure service price at store (ConfigureServicePrice)
+      description: CONFIRMED (RULE-05-05/07). Idempotent.
+      operationId: configureServicePrice
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/StoreId'
+        - name: sid
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PriceRequest'
+      responses:
+        '200':
+          description: Price overridden.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PriceResponse'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          description: Outside own store (CONFIRMED code ACCESS_DENIED_SCOPE_MISMATCH, RULE-02-01).
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '404':
+          description: Store, service, or uninitialized override (PROPOSED code OVERRIDE_NOT_INITIALIZED).
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+  /stores/{id}/services/{sid}/availability:
+    put:
+      tags: [StoreOverrides]
+      summary: Configure service availability at store (ConfigureServiceAvailability)
+      description: CONFIRMED (RULE-05-04). Toggles only the store override, never the master flag. This endpoint also settles org-store-v1 Q8 as the single owner.
+      operationId: configureServiceAvailability
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/StoreId'
+        - name: sid
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/AvailabilityRequest'
+      responses:
+        '200':
+          description: Availability overridden.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AvailabilityResponse'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          description: Outside own store (CONFIRMED code ACCESS_DENIED_SCOPE_MISMATCH, RULE-02-01).
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '404':
+          description: Store, service, or uninitialized override (PROPOSED code OVERRIDE_NOT_INITIALIZED).
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+  /stores/{id}/products:
+    get:
+      tags: [Storefront]
+      summary: Effective product list at store (ViewProduct)
+      description: CONFIRMED (RULE-05-06). Effective price per override-or-master rule. Customers see active items only (server-filtered); staff see all by default (ASSUMPTION A4).
+      operationId: listStoreProducts
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/StoreId'
+        - name: page
+          in: query
+          required: false
+          schema:
+            type: integer
+            minimum: 1
+            default: 1
+        - name: pageSize
+          in: query
+          required: false
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 100
+            default: 20
+        - name: category
+          in: query
+          required: false
+          schema:
+            $ref: '#/components/schemas/ProductCategory'
+        - name: activeOnly
+          in: query
+          required: false
+          schema:
+            type: boolean
+        - name: q
+          in: query
+          required: false
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Page of effective products.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/EffectiveProductPage'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          description: Store outside caller organization (CONFIRMED code ACCESS_DENIED_SCOPE_MISMATCH, RULE-02-01).
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '404':
+          $ref: '#/components/responses/NotFound'
+  /stores/{id}/services:
+    get:
+      tags: [Storefront]
+      summary: Effective service list at store (ViewService)
+      description: CONFIRMED (RULE-05-06). Same visibility rule as products.
+      operationId: listStoreServices
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/StoreId'
+        - name: page
+          in: query
+          required: false
+          schema:
+            type: integer
+            minimum: 1
+            default: 1
+        - name: pageSize
+          in: query
+          required: false
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 100
+            default: 20
+        - name: category
+          in: query
+          required: false
+          schema:
+            $ref: '#/components/schemas/ServiceCategory'
+        - name: activeOnly
+          in: query
+          required: false
+          schema:
+            type: boolean
+        - name: q
+          in: query
+          required: false
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Page of effective services.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/EffectiveServicePage'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          description: Store outside caller organization (CONFIRMED code ACCESS_DENIED_SCOPE_MISMATCH, RULE-02-01).
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '404':
+          $ref: '#/components/responses/NotFound'
+components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+      description: JWT/Session Token (RULE-01-01 CONFIRMED existence; Bearer transport ASSUMPTION A2 in auth-v1).
+  parameters:
+    ProductId:
+      name: id
+      in: path
+      required: true
+      schema:
+        type: string
+        format: uuid
+    ServiceId:
+      name: id
+      in: path
+      required: true
+      schema:
+        type: string
+        format: uuid
+    StoreId:
+      name: id
+      in: path
+      required: true
+      schema:
+        type: string
+        format: uuid
+  schemas:
+    ProductCategory:
+      type: string
+      enum: [FOOD, MEDICINE, ACCESSORY, HYGIENE]
+      description: CONFIRMED (ERD products).
+    ProductUnit:
+      type: string
+      enum: [ITEM, BOX, BOTTLE, BAG]
+      description: CONFIRMED (ERD products).
+    ServiceCategory:
+      type: string
+      enum: [CLINICAL, VACCINATION, GROOMING, SPA]
+      description: CONFIRMED (ERD services).
+    ResourceType:
+      type: string
+      enum: [CLINIC_ROOM, GROOMING_TABLE, ULTRASOUND_MACHINE, XRAY_MACHINE]
+      description: CONFIRMED (ERD plus 05 domain 4.3).
+    ProductResponse:
+      type: object
+      required: [productId, organizationId, sku, name, category, unit, basePrice, isActive]
+      properties:
+        productId:
+          type: string
+          format: uuid
+        organizationId:
+          type: string
+          format: uuid
+        sku:
+          type: string
+        barcode:
+          type: string
+        name:
+          type: string
+        category:
+          $ref: '#/components/schemas/ProductCategory'
+        unit:
+          $ref: '#/components/schemas/ProductUnit'
+        basePrice:
+          type: number
+        costPrice:
+          type: number
+        isActive:
+          type: boolean
+    ProductPage:
+      type: object
+      required: [items, page, pageSize, total]
+      properties:
+        items:
+          type: array
+          items:
+            $ref: '#/components/schemas/ProductResponse'
+        page:
+          type: integer
+        pageSize:
+          type: integer
+        total:
+          type: integer
+    CreateProductRequest:
+      type: object
+      required: [sku, name, category, unit, basePrice]
+      properties:
+        sku:
+          type: string
+        barcode:
+          type: string
+        name:
+          type: string
+        category:
+          $ref: '#/components/schemas/ProductCategory'
+        unit:
+          $ref: '#/components/schemas/ProductUnit'
+        basePrice:
+          type: number
+          minimum: 0
+        costPrice:
+          type: number
+          minimum: 0
+        isActive:
+          type: boolean
+          default: true
+    UpdateProductRequest:
+      type: object
+      properties:
+        name:
+          type: string
+        barcode:
+          type: string
+        category:
+          $ref: '#/components/schemas/ProductCategory'
+        unit:
+          $ref: '#/components/schemas/ProductUnit'
+        basePrice:
+          type: number
+          minimum: 0
+        costPrice:
+          type: number
+          minimum: 0
+        isActive:
+          type: boolean
+      description: SKU is immutable (PROPOSED).
+    RequiredResource:
+      type: object
+      required: [resourceType, quantityRequired]
+      properties:
+        resourceType:
+          $ref: '#/components/schemas/ResourceType'
+        quantityRequired:
+          type: integer
+          minimum: 1
+          default: 1
+    ServiceResponse:
+      type: object
+      required: [serviceId, organizationId, code, name, category, basePrice, durationMinutes, isActive]
+      properties:
+        serviceId:
+          type: string
+          format: uuid
+        organizationId:
+          type: string
+          format: uuid
+        code:
+          type: string
+        name:
+          type: string
+        category:
+          $ref: '#/components/schemas/ServiceCategory'
+        basePrice:
+          type: number
+        durationMinutes:
+          type: integer
+        isActive:
+          type: boolean
+        requiredResources:
+          type: array
+          items:
+            $ref: '#/components/schemas/RequiredResource'
+    ServicePage:
+      type: object
+      required: [items, page, pageSize, total]
+      properties:
+        items:
+          type: array
+          items:
+            $ref: '#/components/schemas/ServiceResponse'
+        page:
+          type: integer
+        pageSize:
+          type: integer
+        total:
+          type: integer
+    CreateServiceRequest:
+      type: object
+      required: [code, name, category, basePrice]
+      properties:
+        code:
+          type: string
+        name:
+          type: string
+        category:
+          $ref: '#/components/schemas/ServiceCategory'
+        basePrice:
+          type: number
+          minimum: 0
+        durationMinutes:
+          type: integer
+          minimum: 1
+          default: 30
+        isActive:
+          type: boolean
+          default: true
+        requiredResources:
+          type: array
+          items:
+            $ref: '#/components/schemas/RequiredResource'
+          description: Declared inline with the service (ASSUMPTION A1).
+    UpdateServiceRequest:
+      type: object
+      properties:
+        name:
+          type: string
+        category:
+          $ref: '#/components/schemas/ServiceCategory'
+        basePrice:
+          type: number
+          minimum: 0
+        durationMinutes:
+          type: integer
+          minimum: 1
+        isActive:
+          type: boolean
+        requiredResources:
+          type: array
+          items:
+            $ref: '#/components/schemas/RequiredResource'
+          description: Replaced as a whole (ASSUMPTION A1).
+    PriceRequest:
+      type: object
+      required: [price]
+      properties:
+        price:
+          type: number
+          minimum: 0
+    PriceResponse:
+      type: object
+      required: [storeId, price]
+      properties:
+        storeId:
+          type: string
+          format: uuid
+        price:
+          type: number
+    AvailabilityRequest:
+      type: object
+      required: [isActive]
+      properties:
+        isActive:
+          type: boolean
+    AvailabilityResponse:
+      type: object
+      required: [storeId, isActive]
+      properties:
+        storeId:
+          type: string
+          format: uuid
+        serviceId:
+          type: string
+          format: uuid
+        isActive:
+          type: boolean
+    EffectiveProductPage:
+      type: object
+      required: [items, page, pageSize, total]
+      properties:
+        items:
+          type: array
+          items:
+            type: object
+            required: [productId, name, price, isActive]
+            properties:
+              productId:
+                type: string
+                format: uuid
+              name:
+                type: string
+              price:
+                type: number
+                description: Override price, else master base_price (CONFIRMED RULE-05-05/07).
+              isActive:
+                type: boolean
+        page:
+          type: integer
+        pageSize:
+          type: integer
+        total:
+          type: integer
+    EffectiveServicePage:
+      type: object
+      required: [items, page, pageSize, total]
+      properties:
+        items:
+          type: array
+          items:
+            type: object
+            required: [serviceId, name, price, isActive]
+            properties:
+              serviceId:
+                type: string
+                format: uuid
+              name:
+                type: string
+              price:
+                type: number
+              isActive:
+                type: boolean
+                description: Store override flag (CONFIRMED RULE-05-04).
+              durationMinutes:
+                type: integer
+        page:
+          type: integer
+        pageSize:
+          type: integer
+        total:
+          type: integer
+    Error:
+      type: object
+      required: [success, errorCode, message, statusCode, timestamp]
+      properties:
+        success:
+          type: boolean
+          example: false
+        errorCode:
+          type: string
+          description: ACCESS_DENIED_SCOPE_MISMATCH is CONFIRMED (RULE-02-01, 403); VALIDATION_FAILED, BUSINESS_RULE_VIOLATION, INVALID_STATE_TRANSITION, RESOURCE_NOT_FOUND follow docs/convention/backend/04-exception-handling; OVERRIDE_NOT_INITIALIZED is PROPOSED.
+        message:
+          type: string
+        statusCode:
+          type: integer
+        timestamp:
+          type: string
+          format: date-time
+        traceId:
+          type: string
+        details:
+          type: object
+          additionalProperties: true
+  responses:
+    BadRequest:
+      description: Validation failed.
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+    Unauthorized:
+      description: Missing or invalid authentication.
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+    NotFound:
+      description: Resource not found.
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
