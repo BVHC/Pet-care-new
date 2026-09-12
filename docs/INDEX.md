@@ -1,20 +1,24 @@
-# Pet Care - Tài liệu dự án
+# Pet Care — Hướng dẫn đọc tài liệu
 
-> **Version:** 1.0  
-> **Date:** 2026-08-18  
-> **Scope:** 25 modules, 17 FSMs, 6 tuần
+> **Mục đích duy nhất của file này:** giúp agent xác định nhanh nên đọc file nào trong `docs/` trước khi thực hiện một loại tác vụ cụ thể. File này **không** chứa kế hoạch triển khai, phase/sprint, timeline hay quyết định vận hành dự án — những nội dung đó (nếu cần) thuộc phạm vi quản lý dự án, nằm ngoài tài liệu kỹ thuật này.
+
+## Cách dùng tài liệu
+
+- Mỗi file trong `docs/` là **nguồn chân lý (source of truth)** cho đúng một loại nội dung (xem bảng dưới). Không tự suy diễn hay bịa thêm business rule, RULE-ID, hay transition FSM ngoài những gì đã đặc tả trong mermaid diagram.
+- `01`–`06` đặc tả **nghiệp vụ mục tiêu** (business/domain/schema). `architecture/system-overview.md` mô tả **hiện trạng kỹ thuật thực tế của codebase** — hai loại có thể lệch nhau tại một thời điểm; khi code vào module đã tồn tại, luôn đối chiếu cả hai trước khi bắt đầu.
+- `docs/adr/` ghi lại các **quyết định kỹ thuật** không được 00–07 quy định cụ thể (khác với `D-01`..`D-04` ở `docs/05-domain-model.md` §1 — đó là khóa quyết định kiến trúc cấp *nghiệp vụ*) — xem `docs/adr/README.md`. `docs/api/` hiện vẫn là thư mục rỗng (scaffold, chưa có nội dung) — không giả định nội dung của nó.
 
 ---
 
 ## 📚 Danh mục tài liệu
-
 > Danh sách dưới đối chiếu 100% với các file thực tế đang có trong `docs/` (đã loại bỏ `07-team-timeline.md` và `MAPPING.md` — hai file này không tồn tại trên đĩa). `docs/adr/` hiện là thư mục rỗng (chưa có nội dung) — khi có file, bổ sung section riêng theo đúng mẫu ở cuối file này, đừng giả định nội dung của chúng.
 
 | # | File | Mô tả | Agent nên đọc khi nào? |
 |---|------|--------|--------------------------|
+| 0 | [00-requirements.md](00-requirements.md) | Requirements Specification — nguồn chân lý (Source of Truth) cho toàn bộ Purpose/Scope/Actors/Business Goals/FR/NFR/SEC/Business Constraints/Out of Scope | **Trước khi** đọc bất kỳ file nào khác trong 01-07 — xác định đúng phạm vi và mục tiêu nghiệp vụ trước khi đi vào chi tiết Rule/Operation/FSM/Domain/ERD |
 | 1 | [01-business-operations.md](01-business-operations.md) | Danh mục nghiệp vụ + Actors (25 modules) | **Trước khi** bắt đầu bất kỳ module/feature mới — để xác định đúng Actor, phạm vi nghiệp vụ và dải RULE-ID liên quan |
-| 2 | [02-business-rules.md](02-business-rules.md) | Toàn bộ Business Rules (~150+ RULE-ID) | **Trước khi** implement bất kỳ business logic/validation nào — mọi guard/invariant trong code phải trích dẫn đúng RULE-ID từ đây |
-| 3 | [03-state-machines.md](03-state-machines.md) | FSM Specifications (17 FSM) | **Trước khi** implement transition/state của bất kỳ FSM nào — không tự suy ra transition ngoài sơ đồ mermaid đã đặc tả |
+| 2 | [02-business-rules.md](02-business-rules.md) | Toàn bộ Business Rules (217 RULE-ID) | **Trước khi** implement bất kỳ business logic/validation nào — mọi guard/invariant trong code phải trích dẫn đúng RULE-ID từ đây |
+| 3 | [03-state-machines.md](03-state-machines.md) | FSM Specifications (19 FSM) | **Trước khi** implement transition/state của bất kỳ FSM nào — không tự suy ra transition ngoài sơ đồ mermaid đã đặc tả |
 | 4 | [04-glossary.md](04-glossary.md) | Ubiquitous Language (Entity/Command/Event/Role) | Tra cứu **trước khi** đặt tên biến, class, API, DTO, event — tránh lệch thuật ngữ nghiệp vụ |
 | 5 | [05-domain-model.md](05-domain-model.md) | Domain Model (DDD Aggregates/Entities/Value Objects) | **Trước khi** thiết kế Aggregate/Entity mới hoặc cần xác định ranh giới bounded context |
 | 6 | [06-erd.md](06-erd.md) | ERD & Database Schema Spec — nguồn chân lý cấu trúc CSDL | **Trước khi** viết migration SQL, tạo bảng mới, hoặc thay đổi schema |
@@ -46,34 +50,25 @@
 | 32 | [api/notification-v1.md](api/notification-v1.md) + [api/openapi/notification-v1.yaml](api/openapi/notification-v1.yaml) | Notification API contract (Module 23, inbox read-only) | **Trước khi** implement/chấm contract notification |
 | 33 | [api/report-v1.md](api/report-v1.md) + [api/openapi/report-v1.yaml](api/openapi/report-v1.yaml) | Report API contract (Module 24, read-only) | **Trước khi** implement/chấm contract report |
 | 34 | [api/audit-v1.md](api/audit-v1.md) + [api/openapi/audit-v1.yaml](api/openapi/audit-v1.yaml) | Audit API contract (Module 25, append-only read) | **Trước khi** implement/chấm contract audit |
+| 35 | [07-requirement-traceability-matrix.md](07-requirement-traceability-matrix.md) | Ma trận truy vết đầy đủ: Requirement (00) ↔ Rule (02) ↔ Operation (01) ↔ FSM (03) ↔ Domain/ERD (05/06), theo 25 module | Tra cứu **khi** cần xác định Rule/Command/FSM/bảng ERD nào hậu thuẫn một Requirement cụ thể, hoặc ngược lại |
+| 36 | [adr/](adr/) | Architecture Decision Records — quyết định kỹ thuật không được 00-07 quy định cụ thể (ví dụ: chiến lược lưu JWT refresh token, chính sách fail-open khi Redis sập) | Tra cứu **khi** cần biết lý do đằng sau một quyết định hạ tầng đã chốt, hoặc **trước khi** tự quyết định lại một vấn đề kỹ thuật tương tự chưa được 00-07 đặc tả |
 
 ---
 
-## 🎯 Tóm tắt Project (Updated per C-565e7b1)
+## 🎯 Quy mô hệ thống
 
 | Aspect | Value |
 |--------|-------|
-| **Phases** | 4 |
-| **Tuần** | 6 |
-| **Modules** | 25 |
-| **FSMs** | 17 (Account, Store, Caregiver, Appointment/BookingHold, Order, Invoice, Payment, Refund, Membership, Package, StockTransfer, PurchaseRequest, PurchaseOrder, Incident, Grooming, Consent, QueueEntry) |
+| **Modules nghiệp vụ** | 25 |
+| **FSM (State Machines)** | 19 |
 | **Roles** | 9 (SUPER_ADMIN, ORGANIZATION_ADMIN, STORE_MANAGER, FINANCE_STAFF, INVENTORY_STAFF, RECEPTIONIST, VETERINARIAN, GROOMER, CUSTOMER) |
-| **Rules** | ~150+ |
+| **Business Rules** | 217 (RULE-ID) |
 
 ---
 
-## ⚠️ Vùng CHƯA chốt (NEEDS-DECISION)
+## 👥 Roles (9 Roles)
 
-> **Đọc mục này trước khi code.** Đây là danh sách các điểm mà tài liệu chưa có quyết định cuối cùng. Agent **không được tự suy đoán** câu trả lời — nếu công việc đụng tới một trong các mục dưới, phải dừng lại và hỏi lại người dùng/PM trước khi implement.
-
-1. **5 module chưa xếp Phase** (chi tiết ở [📦 Modules § Chưa xếp Phase](#-modules-25-modules)): Procurement (RULE-13-xx), Membership & Loyalty (RULE-19-xx), Package (RULE-20-xx), Incident (RULE-21-xx), Consent & Privacy (RULE-22-xx). Nội dung nghiệp vụ/FSM của 5 module này đã đầy đủ và ổn định trong `01`, `02`, `03` — chỉ riêng **thứ tự đưa vào sprint (Phase 1-4)** là chưa chốt.
-2. **4 câu hỏi mở ở cuối file** (xem [❓ Questions](#-questions)): git repo mới hay continue từ base, reset hay migrate database, giữ nguyên hay refactor FE, ngày demo chính thức. Đây là quyết định vận hành/triển khai, không phải quyết định nghiệp vụ, nhưng vẫn ảnh hưởng trực tiếp tới cách agent thao tác trên repo (ví dụ: có được `git init` lại hay không, có được xóa dữ liệu DB hay không).
-
----
-
-## 👥 Roles (9 Roles - FINAL per Reconciliation 2026-08-24)
-
-> **Lưu ý:** Mã vai trò chuẩn hóa là `ORGANIZATION_ADMIN` (khớp `user_role_enum` trong `docs/06-erd.md`), không phải `ORG_ADMIN`. Định danh **D-01** thuộc về Decision "Invoice Partial Refund Representation" (`docs/04-glossary.md` §0, `docs/03-state-machines.md#6`) — không liên quan đến role; dòng "Approved: D-01" trước đây gán nhầm cho mục này đã được gỡ bỏ.
+> **Lưu ý:** Mã vai trò chuẩn hóa là `ORGANIZATION_ADMIN` (khớp `user_role_enum` trong `docs/06-erd.md`), không phải `ORG_ADMIN`.
 
 ### Platform Scope
 
@@ -118,117 +113,67 @@
 
 ## 📦 Modules (25 modules)
 
-> Đối chiếu với Ma trận Đối soát 6 Chiều tại `docs/06-erd.md` §5 (bảng 25 dòng, Module 01→25). Bản trước của mục này chỉ liệt kê 20 module riêng biệt (22 dòng, do Organizations/Stores dùng chung `RULE-03-xx`) — thiếu hẳn Module 13 (Procurement), 19 (Membership & Loyalty), 20 (Package), 21 (Incident), 22 (Consent & Privacy). Đã bổ sung đủ 25 module bên dưới.
+> Đối chiếu 1:1 với 25 section trong `docs/01-business-operations.md` và Ma trận Đối soát 6 Chiều tại `docs/06-erd.md` §5. Cột **FSM** chỉ ra module nào có state machine tương ứng trong `docs/03-state-machines.md` (đọc thêm file `03` cho các module này).
 
-### Phase 1: Foundation (W1)
-
-| Module | Docs | Commands |
-|--------|-------|----------|
-| Auth + OTP | 01, 02 | RULE-01-xx |
-| Users | 01, 02 | RULE-02-xx |
-| Organizations | 01, 02 | RULE-03-xx |
-| Stores | 01, 02 | RULE-03-xx |
-| Pets | 01, 02 | RULE-04-xx |
-| Products | 01, 02 | RULE-05-xx |
-| **Inventory (FSM)** | 01, 02, 03 | RULE-12-xx |
-
-### Phase 2: Core Domain (W2)
-
-| Module | Docs | Commands |
-|--------|-------|----------|
-| **Appointments (FSM)** | 01, 02, 03 | RULE-06-xx |
-| **Orders (FSM)** | 01, 02, 03 | RULE-14-xx |
-| **Payments (FSM)** | 01, 02, 03 | RULE-16-xx |
-
-### Phase 3: Commerce (W3-W4)
-
-| Module | Docs | Commands |
-|--------|-------|----------|
-| **Invoices (FSM)** | 01, 02, 03 | RULE-15-xx |
-| **Refunds (FSM)** | 01, 02, 03 | RULE-17-xx |
-| Clinical | 01, 02 | RULE-09-xx |
-| Promotions | 01, 02 | RULE-18-xx |
-| Vaccinations | 01, 02 | RULE-10-xx |
-
-### Phase 4: Polish (W5-W6)
-
-| Module | Docs | Commands |
-|--------|-------|----------|
-| FE Integration | - | - |
-| Notifications | 01, 02 | RULE-23-xx |
-| Walk-ins | 01, 02, 03 | RULE-07-xx |
-| **Grooming (FSM)** | 01, 02, 03 | RULE-11-xx |
-| Workforce | 01, 02 | RULE-08-xx |
-| Reports | 01, 02 | RULE-24-xx |
-| Audit Logs | 01, 02 | RULE-25-xx |
-
-### Chưa xếp Phase (cần quyết định roadmap)
-
-> 5 module này tồn tại đầy đủ trong `docs/01-business-operations.md` (§13, 19-22), có Business Rules (`02`) và (trừ Procurement dùng chung FSM StockTransfer/PurchaseOrder) có FSM riêng (`03`), nhưng chưa được xếp vào Phase nào trong roadmap 6 tuần gốc. **NEEDS-DECISION** — cần Product/PM xác nhận Phase trước khi lập kế hoạch sprint.
-
-| Module | Docs | Commands | FSM liên quan |
-|--------|-------|----------|----------------|
-| Procurement | 01, 02, 03 | RULE-13-xx | PurchaseRequest, PurchaseOrder |
-| **Membership & Loyalty (FSM)** | 01, 02, 03 | RULE-19-xx | Membership |
-| **Package (FSM)** | 01, 02, 03 | RULE-20-xx | Package |
-| **Incident (FSM)** | 01, 02, 03 | RULE-21-xx | Incident |
-| **Consent & Privacy (FSM)** | 01, 02, 03 | RULE-22-xx | Consent |
+| # | Module | Docs cần đọc | Dải RULE-ID | FSM |
+|---|--------|--------------|-------------|-----|
+| 1 | Authentication & OTP | 01, 02, 03 | RULE-01-xx | Account |
+| 2 | Identity & Access Management | 01, 02 | RULE-02-xx | — |
+| 3 | Organization & Store Management | 01, 02, 03 | RULE-03-xx | Store |
+| 4 | Customer & Pet Management | 01, 02, 03 | RULE-04-xx | CaregiverInvitation/Delegation |
+| 5 | Service & Product Catalog | 01, 02 | RULE-05-xx | — |
+| 6 | Appointment & Scheduling | 01, 02, 03 | RULE-06-xx | Appointment, BookingHold |
+| 7 | Walk-in & Queue Management | 01, 02, 03 | RULE-07-xx | Walk-in Queue |
+| 8 | Workforce Management | 01, 02 | RULE-08-xx | — |
+| 9 | Veterinary / Clinical Management | 01, 02 | RULE-09-xx | — |
+| 10 | Vaccination Management | 01, 02 | RULE-10-xx | — |
+| 11 | Grooming Management | 01, 02, 03 | RULE-11-xx | Grooming |
+| 12 | Inventory & Warehouse Management | 01, 02, 03 | RULE-12-xx | StockTransfer |
+| 13 | Procurement Management | 01, 02, 03 | RULE-13-xx | PurchaseRequest, PurchaseOrder |
+| 14 | Order Management | 01, 02, 03 | RULE-14-xx | Order |
+| 15 | Billing & Invoice Management | 01, 02, 03 | RULE-15-xx | Invoice |
+| 16 | Payment Management | 01, 02, 03 | RULE-16-xx | Payment |
+| 17 | Refund Management | 01, 02, 03 | RULE-17-xx | Refund |
+| 18 | Promotion & Voucher Management | 01, 02, 03 | RULE-18-xx | Promotion, Voucher |
+| 19 | Membership & Loyalty Management | 01, 02, 03 | RULE-19-xx | Membership |
+| 20 | Package Management | 01, 02, 03 | RULE-20-xx | Package |
+| 21 | Incident Management | 01, 02, 03 | RULE-21-xx | Incident |
+| 22 | Consent & Privacy Management | 01, 02, 03 | RULE-22-xx | Consent |
+| 23 | Notification Management | 01, 02 | RULE-23-xx | — |
+| 24 | Reporting & Analytics | 01, 02 | RULE-24-xx | — |
+| 25 | Audit Management | 01, 02 | RULE-25-xx | — |
 
 ---
 
-## 🔄 FSMs (17 FSMs - per `docs/03-state-machines.md`)
+## 🔄 FSMs (19 FSMs — per `docs/03-state-machines.md`)
 
-> Số lượng FSM đã tăng từ 8 lên 17 theo `docs/03-state-machines.md` hiện hành (17 heading `## N.` từ Account đến Walk-in Queue). Bảng dưới đối chiếu lại toàn bộ; module của mỗi FSM nay đã đầy đủ trong bảng [📦 Modules](#-modules-25-modules) ở trên (kể cả 5 module bổ sung: Procurement, Membership, Package, Incident, Consent) — nhưng 5 module đó vẫn **chưa xếp Phase**, nên cột **Phase** của các FSM tương ứng bên dưới ghi "*chưa gán*" và tham chiếu tới mục "Chưa xếp Phase".
-
-### Chi tiết FSMs:
-
-| FSM | States | Docs | Phase | Notable |
-|-----|--------|------|-------|---------|
-| **Account** | PENDING_VERIFICATION → ACTIVE ⇄ LOCKED → DEACTIVATED | 03 | W1 | 4 states |
-| **Store** | DRAFT → ACTIVE ⇄ SUSPENDED/DEACTIVATED → ARCHIVED | 03 | W1 | 5 states |
-| **Caregiver** | INVITED → ACTIVE → REVOKED / EXPIRED / REJECTED | 03 | W1 (Pets) | 5 states, TTL mời 7 ngày |
-| **Appointment / BookingHold** | HOLDING(15m) → BOOKED → CONFIRMED → CHECKED_IN → IN_PROGRESS → COMPLETED / CANCELLED / NO_SHOW / ABORTED | 03 | W2 | 4+8 states, +RescheduleAppointment nguyên tử |
-| **Order** | PENDING_PAYMENT → PAID → CONFIRMED → PROCESSING → READY → DELIVERED / CANCELLED / REFUNDED | 03 | W2 | 8 states, +ProcessOrderTimeout (15m), +CancelOrderWithRefund |
-| **Payment** | PENDING → PROCESSING → SUCCESS ⇄ PARTIALLY_REFUNDED → REFUNDED / FAILED / CANCELLED | 03 | W2 | 7 states |
-| **Invoice** | DRAFT → ISSUED → PAID / VOID / CANCELLED | 03 | W3-W4 | 5 states — **KHÔNG còn** `PARTIALLY_PAID`/`REFUNDED` (Decision D-01) |
-| **Refund** | REQUESTED → APPROVED → PROCESSING → COMPLETED / FAILED / REJECTED | 03 | W3-W4 | 6 states, +RetryRefund (max 3), +30-day window |
-| **Membership** | ACTIVE → UPGRADED / EXPIRED | 03 | *chưa gán* | 3 states, module Membership & Loyalty (xem "Chưa xếp Phase") |
-| **Package** | PURCHASED → ACTIVATED → PARTIALLY_CONSUMED ⇄ → FULLY_CONSUMED / CANCELLED / EXPIRED | 03 | *chưa gán* | 6 states, module Package (xem "Chưa xếp Phase") |
-| **StockTransfer** | REQUESTED → APPROVED → IN_TRANSIT → RECEIVED / DISCREPANCY_RECORDED / REJECTED / CANCELLED | 03 | W1 (Inventory) | 7 states, Maker-Checker |
-| **PurchaseRequest** | DRAFT → SUBMITTED → APPROVED / REJECTED / CANCELLED | 03 | *chưa gán* | 5 states, module Procurement (xem "Chưa xếp Phase") |
-| **PurchaseOrder** | ISSUED → PARTIALLY_RECEIVED → RECEIVED / CLOSED / CANCELLED | 03 | *chưa gán* | 5 states, module Procurement (xem "Chưa xếp Phase") |
-| **Incident** | RECORDED → CLASSIFIED → UNDER_INVESTIGATION → ESCALATED / RESOLVED → CLOSED | 03 | *chưa gán* | 6 states, module Incident (xem "Chưa xếp Phase") |
-| **Grooming** | WAITING → IN_PROGRESS → AWAITING_CUSTOMER_APPROVAL → COMPLETED / REJECTED / CANCELLED / ABORTED | 03 | W5-W6 | 7 states |
-| **Consent** | REQUESTED → ACTIVE → REVOKED / EXPIRED (+ Break-Glass `[*] → ACTIVE`) | 03 | *chưa gán* | 4 states, module Consent & Privacy (xem "Chưa xếp Phase"), liên quan Clinical (Module 09) |
-| **Walk-in Queue** | WAITING → CALLED → IN_SERVICE → COMPLETED / NO_SHOW / CANCELLED | 03 | W5-W6 (Walk-ins) | 6 states, 3-Call No-Show Rule |
+| # | FSM | Module | States | Notable |
+|---|-----|--------|--------|---------|
+| 1 | **Account** | 01 · Authentication & OTP | PENDING_VERIFICATION → ACTIVE ⇄ LOCKED → DEACTIVATED | 4 states |
+| 2 | **Store** | 03 · Organization & Store Management | DRAFT → ACTIVE ⇄ SUSPENDED/DEACTIVATED → ARCHIVED | 5 states |
+| 3 | **CaregiverInvitation/Delegation** | 04 · Customer & Pet Management | INVITED → ACTIVE → REVOKED / EXPIRED / REJECTED | 5 states, TTL mời 7 ngày |
+| 4 | **Appointment / BookingHold** | 06 · Appointment & Scheduling | HOLDING(15m) → BOOKED → CONFIRMED → CHECKED_IN → IN_PROGRESS → COMPLETED / CANCELLED / NO_SHOW / ABORTED | 4+8 states, +RescheduleAppointment nguyên tử |
+| 5 | **Order** | 14 · Order Management | PENDING_PAYMENT → PAID → CONFIRMED → PROCESSING → READY → DELIVERED / CANCELLED / REFUNDED | 8 states, +ProcessOrderTimeout (15m), +CancelOrderWithRefund |
+| 6 | **Invoice** | 15 · Billing & Invoice Management | DRAFT → ISSUED → PAID / VOID / CANCELLED | 5 states — **KHÔNG** có `PARTIALLY_PAID`/`REFUNDED` (Decision D-01) |
+| 7 | **Payment** | 16 · Payment Management | PENDING → PROCESSING → SUCCESS ⇄ PARTIALLY_REFUNDED → REFUNDED / FAILED / CANCELLED | 7 states |
+| 8 | **Refund** | 17 · Refund Management | REQUESTED → APPROVED → PROCESSING → COMPLETED / FAILED / REJECTED | 6 states, +RetryRefund (max 3), +30-day window |
+| 9 | **Membership** | 19 · Membership & Loyalty Management | ACTIVE → UPGRADED / EXPIRED | 3 states |
+| 10 | **Package** | 20 · Package Management | PURCHASED → ACTIVATED → PARTIALLY_CONSUMED ⇄ → FULLY_CONSUMED / CANCELLED / EXPIRED | 6 states |
+| 11 | **StockTransfer** | 12 · Inventory & Warehouse Management | REQUESTED → APPROVED → IN_TRANSIT → RECEIVED / DISCREPANCY_RECORDED / REJECTED / CANCELLED | 7 states, Maker-Checker |
+| 12 | **PurchaseRequest** | 13 · Procurement Management | DRAFT → SUBMITTED → APPROVED / REJECTED / CANCELLED | 5 states |
+| 13 | **PurchaseOrder** | 13 · Procurement Management | ISSUED → PARTIALLY_RECEIVED → RECEIVED / CLOSED / CANCELLED | 5 states |
+| 14 | **Incident** | 21 · Incident Management | RECORDED → CLASSIFIED → UNDER_INVESTIGATION → ESCALATED / RESOLVED → CLOSED | 6 states |
+| 15 | **Grooming** | 11 · Grooming Management | WAITING → IN_PROGRESS → AWAITING_CUSTOMER_APPROVAL → COMPLETED / REJECTED / CANCELLED / ABORTED | 7 states |
+| 16 | **Consent** | 22 · Consent & Privacy Management | REQUESTED → ACTIVE → REVOKED / EXPIRED (+ Break-Glass `[*] → ACTIVE`) | 4 states |
+| 17 | **Walk-in Queue** | 07 · Walk-in & Queue Management | WAITING → CALLED → IN_SERVICE → COMPLETED / NO_SHOW / CANCELLED | 6 states, 3-Call No-Show Rule |
+| 18 | **Promotion** | 18 · Promotion & Voucher Management | DRAFT → ACTIVE ⇄ PAUSED → EXPIRED | 4 states, bổ sung Phase 3 Traceability Audit |
+| 19 | **Voucher** | 18 · Promotion & Voucher Management | ACTIVE ⇄ DISABLED → EXPIRED | 3 states, bổ sung Phase 3 Traceability Audit |
 
 ---
 
-## 🔗 Links
-
-### Source code
+## 🔗 Mã nguồn
 
 ```
 ../BE/                     # Backend Java Spring Boot
 ../FE/                     # Frontend (copy từ Pet-care)
 ```
-
----
-
-## 📅 Timeline
-
-| Phase | Tuần | Milestone |
-|-------|------|-----------|
-| **1. Foundation** | W1 | M1: CRUD foundation |
-| **2. Core Domain** | W2 | M2: FSMs working |
-| **3. Commerce** | W3-W4 | M3: Full commerce |
-| **4. Polish** | W5-W6 | M4: Demo ready |
-
----
-
-## ❓ Questions
-
-1. **Git repo:** Tạo mới hay continue từ base?
-2. **Database:** Reset hay migrate từ base?
-3. **FE:** Giữ nguyên hay refactor?
-4. **Demo date:** Khi nào demo?

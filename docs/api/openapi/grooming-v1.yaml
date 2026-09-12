@@ -451,6 +451,11 @@ components:
         type: string
         format: uuid
   schemas:
+    Money:
+      type: string
+      pattern: '^-?\d+\.\d{2}$'
+      example: "199000.00"
+      description: Decimal string, 2 fractional digits, matching DB DECIMAL(12,2) (docs/06-erd.md) — sent/received as string to avoid IEEE-754 float rounding. Parse server-side as BigDecimal, not double.
     GroomingStatus:
       type: string
       enum: [WAITING, IN_PROGRESS, AWAITING_CUSTOMER_APPROVAL, COMPLETED, CANCELLED, ABORTED, REJECTED]
@@ -501,7 +506,7 @@ components:
           type: boolean
           example: true
         price:
-          type: number
+          $ref: '#/components/schemas/Money'
         customerApproved:
           type: boolean
         note:
@@ -570,8 +575,7 @@ components:
           type: string
           format: uuid
         price:
-          type: number
-          minimum: 0
+          $ref: '#/components/schemas/Money'
         note:
           type: string
     AddOnResponse:

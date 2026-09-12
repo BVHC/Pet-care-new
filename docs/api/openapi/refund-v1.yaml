@@ -159,10 +159,16 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/RefundResponse'
+        '400':
+          description: Maker-checker violation — approver is the same actor who requested the refund (CONFIRMED code MAKER_CHECKER_VIOLATION, RULE-17-04, BusinessRuleViolationException per convention 04).
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
         '401':
           $ref: '#/components/responses/Unauthorized'
         '403':
-          description: Maker-checker violation or outside scope (CONFIRMED code MAKER_CHECKER_VIOLATION, RULE-17-04).
+          description: Outside scope (CONFIRMED code ACCESS_DENIED_SCOPE_MISMATCH, RULE-02-01).
           content:
             application/json:
               schema:
@@ -376,6 +382,11 @@ components:
         type: string
         format: uuid
   schemas:
+    Money:
+      type: string
+      pattern: '^-?\d+\.\d{2}$'
+      example: "199000.00"
+      description: Decimal string, 2 fractional digits, matching DB DECIMAL(12,2) (docs/06-erd.md) — sent/received as string to avoid IEEE-754 float rounding. Parse server-side as BigDecimal, not double.
     RefundStatus:
       type: string
       enum: [REQUESTED, APPROVED, REJECTED, PROCESSING, COMPLETED, FAILED]
@@ -388,8 +399,8 @@ components:
           type: string
           format: uuid
         amount:
-          type: number
-          minimum: 0
+          allOf:
+            - $ref: '#/components/schemas/Money'
           description: Within the remaining refundable cap (CONFIRMED RULE-17-02).
         reason:
           type: string
@@ -406,7 +417,7 @@ components:
           type: string
           format: uuid
         amount:
-          type: number
+          $ref: '#/components/schemas/Money'
         reason:
           type: string
         status:
@@ -469,7 +480,7 @@ components:
           example: false
         errorCode:
           type: string
-          description: MAKER_CHECKER_VIOLATION and REFUND_REQUEST_WINDOW_EXPIRED are CONFIRMED (RULE-17-03/04); ACCESS_DENIED_SCOPE_MISMATCH is CONFIRMED (RULE-02-01, 403); VALIDATION_FAILED, BUSINESS_RULE_VIOLATION, INVALID_STATE_TRANSITION, RESOURCE_NOT_FOUND follow docs/convention/backend/04-exception-handling.
+          description: MAKER_CHECKER_VIOLATION and REFUND_REQUEST_WINDOW_EXPIRED are CONFIRMED (RULE-17-03/04, 400, BusinessRuleViolationException); ACCESS_DENIED_SCOPE_MISMATCH is CONFIRMED (RULE-02-01, 403); VALIDATION_FAILED, BUSINESS_RULE_VIOLATION, INVALID_STATE_TRANSITION, RESOURCE_NOT_FOUND follow docs/convention/backend/04-exception-handling.
         message:
           type: string
         statusCode:

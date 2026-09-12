@@ -22,7 +22,7 @@ Envelope DECIDED theo convention `04-exception-handling`.
 
 ---
 
-## A. Confirmed Invoice API (10 endpoints)
+## A. Confirmed Invoice API (9 endpoints)
 
 | # | Endpoint (proposed) | Business operation (CONFIRMED) |
 |---|---|---|

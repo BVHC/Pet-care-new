@@ -21,11 +21,20 @@ spring:
     redis:
       host: localhost
       port: 6379
+      timeout: 300ms
 
 jwt:
   secret: test-secret-key-for-jwt-signing-minimum-32-characters-long
-  access-token-ttl-min: 60
+  access-token-ttl-min: 15
   refresh-token-ttl-days: 30
+
+app:
+  cors:
+    allowed-origins: http://localhost:5173,http://localhost:3000
+  security:
+    blacklist-fail-open: true
+  refresh-token-cleanup:
+    enabled: false
 
 server:
   port: 8081

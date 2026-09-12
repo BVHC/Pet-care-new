@@ -77,7 +77,6 @@ Hệ thống phân định rõ 11 Actors nghiệp vụ được phân bổ trên
 | Organization Admin | Lưu trữ / đóng cửa vĩnh viễn Store | `ArchiveStore` |
 | StoreManager | Quản lý thông tin vận hành Store | `UpdateStore` |
 | StoreManager | Cấu hình giờ hoạt động Store | `ConfigureOperatingHour` |
-| StoreManager | Cấu hình dịch vụ áp dụng tại Store | `ConfigureStoreService` |
 | StoreManager | Quản lý tài nguyên vật tư của Store | `ConfigureStoreResource` |
 | StoreManager | Quản lý chính sách vận hành Store | `ConfigureStorePolicy` |
 
@@ -216,6 +215,7 @@ Hệ thống phân định rõ 11 Actors nghiệp vụ được phân bổ trên
 | Veterinarian | Lập lịch tái khám (Follow-up) | `CreateFollowUp` |
 | Customer | Xem lịch sử y tế của Pet được phép | `ViewMedicalHistory` |
 | Caregiver | Xem lịch sử y tế của Pet được ủy quyền | `ViewMedicalHistory` |
+| System | Tự động khóa bất biến bệnh án sau 24 giờ kể từ khi chốt phiên khám (`RULE-09-09`) | `LockMedicalRecord` |
 
 - **Quy trình Khám Lâm sàng & Điều trị Bệnh lý (Clinical Medical Examination & Therapeutic Treatment Workflow):**
   1. Tiếp nhận thú cưng vào phòng khám chuyên dụng (`EXAMINATION_ROOM`).
@@ -223,6 +223,7 @@ Hệ thống phân định rõ 11 Actors nghiệp vụ được phân bổ trên
   3. Bác sĩ mở/cập nhật hồ sơ bệnh án (`UpdateMedicalRecord` / `CreateMedicalRecord`) và chẩn đoán (`DiagnosePet`).
   4. Bác sĩ lập phác đồ điều trị (`CreateTreatment`), có thể bao gồm kê đơn thuốc (`CreatePrescription`), chỉ định xét nghiệm/chẩn đoán hình ảnh, hoặc tiêm thuốc/vaccine điều trị.
   5. Đóng phiên khám, lập lịch tái khám (`CreateFollowUp`), và chuyển viện phí sang hóa đơn thanh toán.
+  6. Bệnh án tự động chốt phiên (`FINALIZED`) khi lịch hẹn được `CheckOutAppointment`; Bác sĩ còn 24 giờ để chỉnh sửa có kiểm soát trước khi hệ thống tự động khóa bất biến (`LockMedicalRecord`, `RULE-09-09`).
 
 ---
 
@@ -383,6 +384,7 @@ Hệ thống phân định rõ 11 Actors nghiệp vụ được phân bổ trên
 |---|---|---|
 | Customer | Yêu cầu hoàn tiền giao dịch thanh toán | `RequestRefund` |
 | Receptionist | Tạo yêu cầu hoàn tiền tại quầy cho khách | `CreateRefundRequest` |
+| Organization Admin | Phê duyệt ngoại lệ tiếp nhận yêu cầu hoàn tiền vượt hạn 30 ngày (`RULE-17-03`) | `ApproveRefundWindowException` |
 | StoreManager | Thẩm định và phê duyệt yêu cầu hoàn tiền | `ApproveRefund` |
 | StoreManager | Từ chối yêu cầu hoàn tiền | `RejectRefund` |
 | Receptionist / StoreManager | Xử lý chi tiền mặt hoàn trực tiếp tại quầy (cho giao dịch CASH) | `ProcessRefund`, `CompleteRefund` |
@@ -408,6 +410,8 @@ Hệ thống phân định rõ 11 Actors nghiệp vụ được phân bổ trên
 | Customer | Sử dụng mã Voucher khi thanh toán | `UseVoucher` |
 | System | Kiểm tra tính hợp lệ và điều kiện Voucher | `ValidateVoucher` |
 | System | Ghi nhận lịch sử sử dụng Voucher | `TrackVoucherUsage` |
+| System | Tự động chuyển chiến dịch khuyến mãi hết hạn khi quá `end_date` (`RULE-18-01`) | `ProcessPromotionExpiry` |
+| System | Tự động chuyển mã Voucher hết hạn khi quá `valid_until` (`RULE-18-03`) | `ProcessVoucherExpiry` |
 
 ---
 

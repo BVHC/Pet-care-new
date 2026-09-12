@@ -22,7 +22,7 @@ Envelope DECIDED theo convention `04-exception-handling`.
 
 ---
 
-## A. Confirmed Order API (11 endpoints)
+## A. Confirmed Order API (10 endpoints + 1 domain event)
 
 | # | Endpoint (proposed) | Business operation (CONFIRMED) |
 |---|---|---|

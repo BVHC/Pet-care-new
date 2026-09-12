@@ -793,9 +793,6 @@ components:
         serviceId:
           type: string
           format: uuid
-        staffId:
-          type: string
-          format: uuid
         notes:
           type: string
       description: Pre-check-in details only; time changes require reschedule.

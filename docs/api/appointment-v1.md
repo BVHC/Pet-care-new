@@ -27,7 +27,7 @@ Envelope DECIDED theo convention `04-exception-handling`.
 
 ---
 
-## A. Confirmed Appointment API (15 endpoints)
+## A. Confirmed Appointment API (16 endpoints)
 
 | # | Endpoint (proposed) | Business operation (CONFIRMED) |
 |---|---|---|
@@ -59,7 +59,7 @@ Envelope DECIDED theo convention `04-exception-handling`.
 | BookAppointment | Customer/Receptionist/Caregiver | 4 điều kiện RULE-06-02 | RULE-06-01/02/10/11 (triple guard) | POST | `/appointments` | Bearer | Quyền trên Pet (owner/caregiver ACTIVE) | `[*] → BOOKED` + `AppointmentBooked` (hold dùng → CONFIRMED hold) | Non-idempotent (slot tiêu thụ) | Fail guard nào → 409 + code tương ứng (`RESOURCE_CAPACITY_EXCEEDED` / `PET_SCHEDULE_COLLISION` CONFIRMED) |
 | ViewAppointment | Customer/Caregiver/Staff/Manager | — | RULE-06-14 (customer chỉ pet mình; staff all-store) | GET | `/appointments…` | Bearer | Scope theo role | none | Idempotent | — |
 | ConfirmAppointment | Receptionist (/System) | `BOOKED` + đủ resource/staff | RULE-06-01/03/10 | POST | `…/confirm` | Bearer | Receptionist (System auto-confirm TBD Q9) | `BOOKED → CONFIRMED` | Idempotent | — |
-| UpdateAppointment | Receptionist | Trước check-in | RULE-06-03 | PATCH | `/appointments/{id}` | Bearer | Receptionist | none (đổi service/notes) | Idempotent | Đổi giờ → dùng reschedule, không PATCH |
+| UpdateAppointment | Receptionist | Trước check-in | RULE-06-03 | PATCH | `/appointments/{id}` | Bearer | Receptionist | none (đổi service/notes) | Idempotent | Đổi giờ → dùng reschedule, không PATCH. Đổi nhân sự → dùng `…/assign-staff` (RULE-06-12 guard), không PATCH — RULE-06-03 không hậu thuẫn sửa `staffId` qua UpdateAppointment |
 | RescheduleAppointment | Customer / Receptionist | `BOOKED`/`CONFIRMED` | RULE-06-03/04/10/11 (atomic swap + rollback) | POST | `…/reschedule` | Bearer | Owner booking / receptionist | `BOOKED/CONFIRMED → BOOKED` + `AppointmentRescheduled` | Non-idempotent (giữ slot mới) | Thất bại → giữ nguyên lịch cũ (rollback CONFIRMED) |
 | CancelAppointment | Customer / Receptionist | `BOOKED`/`CONFIRMED`/`CHECKED_IN` | RULE-06-05 (`cancellation_reason` bắt buộc + release + cọc theo policy TBD Q8) | POST | `…/cancel` | Bearer | Owner / receptionist | `→ CANCELLED` + `AppointmentCancelled` | Idempotent | — |
 | CheckInAppointment | Receptionist | `BOOKED`/`CONFIRMED` | RULE-06-06 | POST | `…/check-in` | Bearer | Receptionist | `→ CHECKED_IN` | Idempotent | Từ `BOOKED` thẳng được (FSM CONFIRMED) |
@@ -105,8 +105,11 @@ A3 grace period No-Show = 15m (docs "ví dụ: 15 phút").
 ### C3. Lifecycle actions (proposed)
 
 - **`…/confirm`** — `{}`. Từ `BOOKED`, đủ resource/staff → `CONFIRMED`.
-- **`PATCH /appointments/{id}`** — `{serviceId?, notes?, staffId?}` (trước check-in;
-  đổi giờ phải reschedule). Status: `200` · `400` · `401` · `403` · `404` · `409`.
+- **`PATCH /appointments/{id}`** — `{serviceId?, notes?}` (trước check-in;
+  đổi giờ phải reschedule, đổi nhân sự phải `…/assign-staff` — RULE-06-03 chỉ hậu
+  thuẫn "điều chỉnh dịch vụ, bổ sung ghi chú", không hậu thuẫn sửa `staffId`;
+  `staffId` chỉ nên sửa qua `…/assign-staff` để luôn đi qua guard RULE-06-12).
+  Status: `200` · `400` · `401` · `403` · `404` · `409`.
 - **`…/reschedule`** — `{newStartTime (req), newEndTime (req)}`. Atomic CONFIRMED:
   khóa slot mới trước, xong mới thả cũ + về `BOOKED`; fail → rollback giữ lịch cũ.
 - **`…/cancel`** — `{cancellationReason (req CONFIRMED)}`. Từ

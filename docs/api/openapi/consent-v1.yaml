@@ -381,6 +381,10 @@ components:
           type: string
         reason:
           type: string
+    DeletionJobStatus:
+      type: string
+      enum: [PROCESSING, COMPLETED, PARTIAL]
+      description: PROPOSED async states (TBD Q9 in md).
     DeletionResponse:
       type: object
       required: [requestId, status, retained]
@@ -389,9 +393,7 @@ components:
           type: string
           format: uuid
         status:
-          type: string
-          enum: [PROCESSING, COMPLETED, PARTIAL]
-          description: PROPOSED (TBD Q9 in md).
+          $ref: '#/components/schemas/DeletionJobStatus'
         retained:
           type: array
           items:

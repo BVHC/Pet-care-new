@@ -176,11 +176,15 @@ paths:
               schema:
                 $ref: '#/components/schemas/PackageResponse'
         '400':
-          $ref: '#/components/responses/BadRequest'
+          description: Validation failed, or not enough remaining units for this usage (CONFIRMED code BUSINESS_RULE_VIOLATION, RULE-20-04/05, BusinessRuleViolationException per convention 04).
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
         '401':
           $ref: '#/components/responses/Unauthorized'
         '403':
-          description: Receptionists only, pet in caller rights.
+          description: Receptionists only, pet outside caller rights.
           content:
             application/json:
               schema:
@@ -188,7 +192,7 @@ paths:
         '404':
           $ref: '#/components/responses/NotFound'
         '409':
-          description: Expired, fully consumed, short on units, or out of rights.
+          description: Package expired or already fully consumed (state conflict, not the current PackageStatus).
           content:
             application/json:
               schema:
