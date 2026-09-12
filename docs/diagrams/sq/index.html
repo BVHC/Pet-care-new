@@ -1,0 +1,202 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Sequence Diagrams · Pet Care Ecosystem</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link href="https://fonts.googleapis.com/css2?family=Instrument+Serif:ital@0;1&family=Geist:wght@400;500;600;700&family=Geist+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="../shared/styles.css">
+</head>
+<body>
+
+  <!-- Sidebar -->
+  <aside class="sidebar">
+    <div class="sidebar-brand">
+      <div class="eyebrow">INTERACTION DOMAIN</div>
+      <h2>Sequence Diagrams</h2>
+    </div>
+    <nav class="sidebar-menu">
+
+      <!-- Navigation back to Master Portal -->
+      <div style="padding: 0 4px 10px;">
+        <a href="../index.html" class="menu-item" style="text-decoration:none; color:inherit; background:rgba(46,90,168,0.06); border:1px solid rgba(46,90,168,0.2);">
+          <div class="menu-item-left">
+            <span class="badge" style="background:#2e5aa8; color:#fff;">←</span>
+            <span style="font-weight:600; color:#2e5aa8;">Master Portal</span>
+          </div>
+          <span class="table-count-pill" style="color:#2e5aa8;">All</span>
+        </a>
+      </div>
+
+      <!-- Sequence Group -->
+      <div class="nav-group open" id="group-sq">
+        <div class="nav-group-header" onclick="toggleGroup('group-sq')">
+          <div class="nav-group-title">
+            <span class="nav-icon">⚡</span> Critical Flows (12)
+          </div>
+          <span class="chevron">▶</span>
+        </div>
+        <div class="nav-group-content">
+          <div class="menu-item active" onclick="loadDiagram('sq1', 'Sequence · Login & OTP', 'SQ1 · Customer Registration & OTP Flow')">
+            <div class="menu-item-left">
+              <span class="badge">SQ1</span> Login & OTP
+            </div>
+            <span class="table-count-pill">Flow</span>
+          </div>
+          <div class="menu-item" onclick="loadDiagram('sq2', 'Sequence · Appointment Booking', 'SQ2 · Appointment Booking Transaction')">
+            <div class="menu-item-left">
+              <span class="badge">SQ2</span> Booking Flow
+            </div>
+            <span class="table-count-pill">Flow</span>
+          </div>
+          <div class="menu-item" onclick="loadDiagram('sq3', 'Sequence · Walk-in Queue', 'SQ3 · Walk-in Queue Lifecycle')">
+            <div class="menu-item-left">
+              <span class="badge">SQ3</span> Walk-in Queue
+            </div>
+            <span class="table-count-pill">Flow</span>
+          </div>
+          <div class="menu-item" onclick="loadDiagram('sq4', 'Sequence · Payment & Webhook', 'SQ4 · Payment Gateway & Webhook')">
+            <div class="menu-item-left">
+              <span class="badge">SQ4</span> Payment Flow
+            </div>
+            <span class="table-count-pill">Flow</span>
+          </div>
+          <div class="menu-item" onclick="loadDiagram('sq5', 'Sequence · Cross-Store EMR', 'SQ5 · Cross-Store EMR Access')">
+            <div class="menu-item-left">
+              <span class="badge">SQ5</span> Cross-Store EMR
+            </div>
+            <span class="table-count-pill">Flow</span>
+          </div>
+          <div class="menu-item" onclick="loadDiagram('sq6', 'Sequence · Grooming Surcharge', 'SQ6 · Grooming + Surcharge Invoice')">
+            <div class="menu-item-left">
+              <span class="badge">SQ6</span> Grooming Surcharge
+            </div>
+            <span class="table-count-pill">Flow</span>
+          </div>
+          <div class="menu-item" onclick="loadDiagram('sq7', 'Sequence · Inventory Transfer', 'SQ7 · Inventory Transfer Lifecycle')">
+            <div class="menu-item-left">
+              <span class="badge">SQ7</span> Inventory Transfer
+            </div>
+            <span class="table-count-pill">Flow</span>
+          </div>
+          <div class="menu-item" onclick="loadDiagram('sq8', 'Sequence · Vaccination', 'SQ8 · Vaccination & Safety Check')">
+            <div class="menu-item-left">
+              <span class="badge">SQ8</span> Vaccination
+            </div>
+            <span class="table-count-pill">Flow</span>
+          </div>
+          <div class="menu-item" onclick="loadDiagram('sq9', 'Sequence · Staff Onboarding', 'SQ9 · Staff Onboarding D-04')">
+            <div class="menu-item-left">
+              <span class="badge">SQ9</span> Staff Onboarding
+            </div>
+            <span class="table-count-pill">Flow</span>
+          </div>
+          <div class="menu-item" onclick="loadDiagram('sq10', 'Sequence · Emergency Override', 'SQ10 · Emergency Override Protocol')">
+            <div class="menu-item-left">
+              <span class="badge">SQ10</span> Emergency Override
+            </div>
+            <span class="table-count-pill">Flow</span>
+          </div>
+          <div class="menu-item" onclick="loadDiagram('sq11', 'Sequence · Checkout → Confirm', 'SQ11 · UC12a Online Checkout Flow')">
+            <div class="menu-item-left">
+              <span class="badge">SQ11</span> Checkout → Confirm
+            </div>
+            <span class="table-count-pill" style="background:#eb6c36;color:#fff;">UC12a</span>
+          </div>
+          <div class="menu-item" onclick="loadDiagram('sq12', 'Sequence · Payment Failed & Retry', 'SQ12 · UC12a Payment Failure Flow')">
+            <div class="menu-item-left">
+              <span class="badge">SQ12</span> Payment Failed & Retry
+            </div>
+            <span class="table-count-pill" style="background:#eb6c36;color:#fff;">UC12a</span>
+          </div>
+        </div>
+      </div>
+
+      <!-- Other Categories -->
+      <div class="nav-group" id="group-other">
+        <div class="nav-group-header" onclick="toggleGroup('group-other')">
+          <div class="nav-group-title">
+            <span class="nav-icon">📁</span> Other Diagrams
+          </div>
+          <span class="chevron">▶</span>
+        </div>
+        <div class="nav-group-content">
+          <a href="../db-schema/index.html" class="menu-item" style="text-decoration:none; color:inherit;">
+            <div class="menu-item-left"><span class="badge">DB</span> Database Schema (5)</div>
+            <span class="table-count-pill">↗</span>
+          </a>
+          <a href="../uc/index.html" class="menu-item" style="text-decoration:none; color:inherit;">
+            <div class="menu-item-left"><span class="badge">UC</span> Use Cases (9)</div>
+            <span class="table-count-pill">↗</span>
+          </a>
+          <a href="../fsm/index.html" class="menu-item" style="text-decoration:none; color:inherit;">
+            <div class="menu-item-left"><span class="badge">FSM</span> State Machines (9)</div>
+            <span class="table-count-pill">↗</span>
+          </a>
+        </div>
+      </div>
+
+    </nav>
+  </aside>
+
+  <!-- Main Viewport Area -->
+  <main class="content-area">
+    <!-- Top Action Bar -->
+    <div class="top-bar">
+      <div class="header-titles">
+        <p class="eyebrow-top" id="top-eyebrow">Sequence · Login & OTP</p>
+        <h1 id="top-title">SQ1 · Customer Registration & OTP Flow</h1>
+      </div>
+      <div class="toolbar">
+        <button class="btn-tool" onclick="zoomIn()" title="Phóng to (+)">+ Zoom</button>
+        <span class="zoom-badge" id="zoom-text">100%</span>
+        <button class="btn-tool" onclick="zoomOut()" title="Thu nhỏ (-)">- Zoom</button>
+        <button class="btn-tool" onclick="resetZoom()" title="Khôi phục góc nhìn">⛶ Fit</button>
+        <button class="btn-tool active" id="btn-mode-pan" onclick="setInteractionMode('pan')" title="Kéo rê canvas tự do">✋ Pan Canvas</button>
+        <div class="toolbar-divider"></div>
+        <button class="btn-tool btn-download" onclick="downloadPng()" title="Tải ảnh PNG HD 2x">📥 Tải PNG (HD)</button>
+        <button class="btn-tool btn-download" onclick="downloadSvg()" title="Tải vector SVG sắc nét">📥 Tải SVG</button>
+      </div>
+    </div>
+
+    <!-- Interactive Canvas Viewport -->
+    <div class="canvas-viewport" id="viewport">
+      <svg class="diagram-canvas" id="canvas-svg" xmlns="http://www.w3.org/2000/svg">
+        <defs>
+          <marker id="arr" markerWidth="8" markerHeight="6" refX="7" refY="3" orient="auto"><polygon points="0 0, 8 3, 0 6" fill="#4f5d75"/></marker>
+          <marker id="arr-acc" markerWidth="8" markerHeight="6" refX="7" refY="3" orient="auto"><polygon points="0 0, 8 3, 0 6" fill="#eb6c36"/></marker>
+          <marker id="arr-blue" markerWidth="8" markerHeight="6" refX="7" refY="3" orient="auto"><polygon points="0 0, 8 3, 0 6" fill="#2e5aa8"/></marker>
+          <marker id="arr-dark" markerWidth="8" markerHeight="6" refX="7" refY="3" orient="auto"><polygon points="0 0, 8 3, 0 6" fill="#232733"/></marker>
+          <marker id="arr-ret" markerWidth="8" markerHeight="6" refX="7" refY="3" orient="auto"><polygon points="0 0, 8 3, 0 6" fill="#5b6579"/></marker>
+        </defs>
+        <g id="canvas-content"></g>
+      </svg>
+    </div>
+
+    <!-- Floating Footer -->
+    <div class="floating-footer">
+      <div class="info-card" id="footer-desc">
+        <strong>Domain Note:</strong> Sequence Diagram
+      </div>
+      <div class="legend-card">
+        <div class="legend-item"><span style="display:inline-block;width:12px;height:2px;background:#2d3142;"></span> Sync Call</div>
+        <div class="legend-item"><span style="display:inline-block;width:12px;height:2px;background:#2e5aa8;"></span> Async Event</div>
+        <div class="legend-item"><span style="display:inline-block;width:14px;height:0;border-top:1.5px dashed #4f5d75;"></span> Return</div>
+      </div>
+    </div>
+
+    <!-- Toast Notification -->
+    <div id="toast" class="toast-notice"></div>
+  </main>
+
+  <script src="../shared/renderer.js"></script>
+  <script src="../shared/engine.js"></script>
+  <script src="data.js"></script>
+  <script>
+    window.addEventListener('DOMContentLoaded', () => {
+      initEngine('sq1', 'Sequence · Login & OTP', 'SQ1 · Customer Registration & OTP Flow');
+    });
+  </script>
+</body>
+</html>

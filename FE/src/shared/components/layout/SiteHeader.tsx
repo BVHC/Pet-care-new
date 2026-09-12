@@ -59,7 +59,7 @@ export function SiteHeader({ cartCount = 0, onNav }: SiteHeaderProps) {
               key={l.page}
               href="#"
               onClick={(e) => { e.preventDefault(); onNav(l.page); }}
-              className="text-[13px] font-bold text-[#3B2A1E] hover:text-[#843122] transition-colors"
+              className="text-[13px] font-bold text-[#3B2A1E] hover:text-[#a43324] transition-colors"
             >
               {l.label}
             </a>
@@ -84,24 +84,24 @@ export function SiteHeader({ cartCount = 0, onNav }: SiteHeaderProps) {
             <input 
               type="text" 
               placeholder="Tìm kiếm sản phẩm..." 
-              className="w-full h-[42px] pl-4 pr-12 rounded-full border-none bg-white text-sm focus:outline-none focus:ring-2 focus:ring-[#843122]"
+              className="w-full h-[42px] pl-4 pr-12 rounded-full border-none bg-white text-sm focus:outline-none focus:ring-2 focus:ring-[#a43324]"
             />
-            <button className="absolute right-1.5 flex items-center justify-center w-8 h-8 rounded-full bg-[#6a2517] text-white hover:bg-[#4a1910] transition-colors">
+            <button className="absolute right-1.5 flex items-center justify-center w-8 h-8 rounded-full bg-[#89271b] text-white hover:bg-[#701f15] transition-colors">
               <Search size={14} strokeWidth={3} />
             </button>
           </div>
 
           {/* User Icon & Dropdown */}
-          <div className="relative group cursor-pointer text-[#3B2A1E] hover:text-[#843122] transition-colors pb-4 -mb-4">
+          <div className="relative group cursor-pointer text-[#3B2A1E] hover:text-[#a43324] transition-colors pb-4 -mb-4">
             <User size={22} strokeWidth={2.5} onClick={() => onNav('account')} />
             {(
-              <div className="absolute top-[100%] right-0 hidden group-hover:flex flex-col bg-white shadow-xl p-3 rounded-b-lg border-t-2 border-[#843122] w-48 z-50 pt-3 mt-4 gap-1">
+              <div className="absolute top-[100%] right-0 hidden group-hover:flex flex-col bg-white shadow-xl p-3 rounded-b-lg border-t-2 border-[#a43324] w-48 z-50 pt-3 mt-4 gap-1">
                 <div className="text-[13px] font-bold text-[#3B2A1E] mb-1 px-2 border-b pb-2">Chào, {user?.name || 'Khách'}</div>
                 <button
                   onClick={() => onNav('account')}
                   className="flex items-center gap-2 text-[13px] text-gray-700 hover:bg-amber-50 rounded-md px-2 py-1.5 transition-colors w-full text-left font-medium"
                 >
-                  <User size={15} className="text-[#843122]" /> Tài khoản của tôi
+                  <User size={15} className="text-[#a43324]" /> Tài khoản của tôi
                 </button>
                 <button
                   onClick={() => onNav('pets')}
@@ -113,13 +113,13 @@ export function SiteHeader({ cartCount = 0, onNav }: SiteHeaderProps) {
                   onClick={() => onNav('orders')}
                   className="flex items-center gap-2 text-[13px] text-gray-700 hover:bg-amber-50 rounded-md px-2 py-1.5 transition-colors w-full text-left font-medium"
                 >
-                  <Package size={15} className="text-[#843122]" /> Đơn hàng của tôi
+                  <Package size={15} className="text-[#a43324]" /> Đơn hàng của tôi
                 </button>
                 <button
                   onClick={() => onNav('review')}
                   className="flex items-center gap-2 text-[13px] text-gray-700 hover:bg-amber-50 rounded-md px-2 py-1.5 transition-colors w-full text-left font-medium"
                 >
-                  <Edit3 size={15} className="text-[#843122]" /> Đánh giá dịch vụ
+                  <Edit3 size={15} className="text-[#a43324]" /> Đánh giá dịch vụ
                 </button>
                 <div className="border-t my-1" />
                 <button
@@ -133,7 +133,7 @@ export function SiteHeader({ cartCount = 0, onNav }: SiteHeaderProps) {
           </div>
 
           {/* Cart Icon */}
-          <div className="relative cursor-pointer text-[#3B2A1E] hover:text-[#843122] transition-colors" onClick={() => onNav('cart')}>
+          <div className="relative cursor-pointer text-[#3B2A1E] hover:text-[#a43324] transition-colors" onClick={() => onNav('cart')}>
             <ShoppingCart size={22} strokeWidth={2.5} />
             {cartCount > 0 && (
               <span className="absolute -top-2 -right-2 flex h-4 min-w-[16px] items-center justify-center rounded-full bg-red-600 px-1 text-[10px] font-bold text-white z-10">
@@ -165,7 +165,7 @@ export function SiteHeader({ cartCount = 0, onNav }: SiteHeaderProps) {
                   e.preventDefault();
                   onNav(l.page);
                 }}
-                className="flex items-center gap-1.5 text-[14px] font-bold text-[#843122] hover:text-[#5c2116] transition-colors tracking-wide h-full whitespace-nowrap"
+                className="flex items-center gap-1.5 text-[14px] font-bold text-[#a43324] hover:text-[#701f15] transition-colors tracking-wide h-full whitespace-nowrap"
               >
                 {l.label}
                 {l.hasDropdown && <ChevronDown size={14} strokeWidth={3} className="group-hover:rotate-180 transition-transform duration-200" />}
@@ -173,7 +173,7 @@ export function SiteHeader({ cartCount = 0, onNav }: SiteHeaderProps) {
 
               {/* Mega Menu Dropdown */}
               {l.hasDropdown && (
-                <div className="absolute top-[100%] left-1/2 -translate-x-1/2 hidden group-hover:flex bg-white shadow-xl p-6 gap-10 rounded-b-lg border-t-2 border-[#843122] w-max min-w-[300px]">
+                <div className="absolute top-[100%] left-1/2 -translate-x-1/2 hidden group-hover:flex bg-white shadow-xl p-6 gap-10 rounded-b-lg border-t-2 border-[#a43324] w-max min-w-[300px]">
                   {SHOP_MEGA_MENU.map((col) => (
                     <div key={col.title}>
                       <div className="font-bold text-[#3B2A1E] mb-3 border-b border-gray-100 pb-2">{col.title}</div>
@@ -182,7 +182,7 @@ export function SiteHeader({ cartCount = 0, onNav }: SiteHeaderProps) {
                           <a 
                             key={item.label}
                             href={item.url}
-                            className="text-[13px] font-medium text-gray-500 hover:text-[#843122] transition-colors"
+                            className="text-[13px] font-medium text-gray-500 hover:text-[#a43324] transition-colors"
                           >
                             {item.label}
                           </a>
@@ -202,16 +202,16 @@ export function SiteHeader({ cartCount = 0, onNav }: SiteHeaderProps) {
              <input 
                type="text" 
                placeholder="Tìm kiếm..." 
-               className="w-full h-[36px] pl-4 pr-9 rounded-full border border-gray-200 bg-white text-[13px] focus:outline-none focus:ring-2 focus:ring-[#843122]"
+               className="w-full h-[36px] pl-4 pr-9 rounded-full border border-gray-200 bg-white text-[13px] focus:outline-none focus:ring-2 focus:ring-[#a43324]"
              />
-             <button className="absolute right-1 flex items-center justify-center w-7 h-7 rounded-full bg-[#6a2517] text-white hover:bg-[#4a1910] transition-colors">
+             <button className="absolute right-1 flex items-center justify-center w-7 h-7 rounded-full bg-[#89271b] text-white hover:bg-[#701f15] transition-colors">
                <Search size={12} strokeWidth={3} />
              </button>
            </div>
-           <button className="text-[#3B2A1E] hover:text-[#843122] flex-shrink-0" onClick={() => onNav('account')}>
+           <button className="text-[#3B2A1E] hover:text-[#a43324] flex-shrink-0" onClick={() => onNav('account')}>
              <User size={20} strokeWidth={2.5}/>
            </button>
-           <div className="relative cursor-pointer text-[#3B2A1E] hover:text-[#843122] flex-shrink-0" onClick={() => onNav('cart')}>
+           <div className="relative cursor-pointer text-[#3B2A1E] hover:text-[#a43324] flex-shrink-0" onClick={() => onNav('cart')}>
             <ShoppingCart size={20} strokeWidth={2.5} />
             {cartCount > 0 && (
               <span className="absolute -top-2 -right-2 flex h-4 min-w-[16px] items-center justify-center rounded-full bg-red-600 px-1 text-[10px] font-bold text-white z-10">

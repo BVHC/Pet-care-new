@@ -1,0 +1,446 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>UC · Đặt hàng & Thanh toán Online · Pet Care</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Instrument+Serif:ital@0;1&family=Geist:wght@400;500;600;700&family=Geist+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+  <style>
+    :root {
+      --paper: #f5f3ee;
+      --paper-2: #ebe7df;
+      --ink: #1a1d2e;
+      --muted: #4f5d75;
+      --soft: #7a8399;
+      --rule: rgba(26,29,46,0.12);
+      --rule-solid: rgba(26,29,46,0.30);
+      --accent: #c8501e;
+      --accent-tint: rgba(200,80,30,0.08);
+      --link: #2e5aa8;
+    }
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    html, body { background: var(--paper); color: var(--ink); font-family: 'Geist', sans-serif; padding: 32px; }
+    .page { max-width: 1480px; margin: 0 auto; }
+    .eyebrow {
+      font-family: 'Geist Mono', monospace;
+      font-size: 11px;
+      letter-spacing: 0.18em;
+      text-transform: uppercase;
+      color: var(--accent);
+      margin-bottom: 12px;
+    }
+    h1 {
+      font-family: 'Instrument Serif', serif;
+      font-size: 36px;
+      font-weight: 400;
+      line-height: 1.1;
+      letter-spacing: -0.01em;
+      margin-bottom: 8px;
+    }
+    .subtitle {
+      font-family: 'Geist', sans-serif;
+      font-size: 14px;
+      color: var(--muted);
+      max-width: 720px;
+      line-height: 1.5;
+      margin-bottom: 28px;
+    }
+    .meta {
+      display: flex;
+      gap: 24px;
+      font-family: 'Geist Mono', monospace;
+      font-size: 11px;
+      color: var(--soft);
+      letter-spacing: 0.05em;
+      padding-bottom: 20px;
+      border-bottom: 1px solid var(--rule);
+      margin-bottom: 32px;
+    }
+    .meta span strong { color: var(--ink); font-weight: 600; }
+
+    .diagram-frame {
+      background: #ffffff;
+      border: 1px solid var(--rule);
+      border-radius: 8px;
+      padding: 24px;
+      overflow-x: auto;
+    }
+
+    .cards {
+      display: grid;
+      grid-template-columns: 1.1fr 1fr 0.9fr;
+      gap: 16px;
+      margin-top: 32px;
+    }
+    .card {
+      background: #ffffff;
+      border: 1px solid var(--rule);
+      border-radius: 6px;
+      padding: 20px;
+    }
+    .card-eyebrow {
+      font-family: 'Geist Mono', monospace;
+      font-size: 9px;
+      letter-spacing: 0.14em;
+      text-transform: uppercase;
+      color: var(--soft);
+      margin-bottom: 12px;
+    }
+    .card h3 {
+      font-family: 'Geist', sans-serif;
+      font-size: 14px;
+      font-weight: 600;
+      margin-bottom: 10px;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+    .card-dot {
+      width: 7px;
+      height: 7px;
+      border-radius: 50%;
+      display: inline-block;
+    }
+    .dot-coral { background: var(--accent); }
+    .dot-ink { background: var(--ink); }
+    .dot-link { background: var(--link); }
+    .card ul { list-style: none; font-size: 12.5px; color: var(--muted); line-height: 1.7; }
+    .card ul li::before { content: "— "; color: var(--soft); }
+
+    .colophon {
+      margin-top: 32px;
+      padding-top: 16px;
+      border-top: 1px solid var(--rule);
+      font-family: 'Geist Mono', monospace;
+      font-size: 10px;
+      color: var(--soft);
+      letter-spacing: 0.05em;
+      display: flex;
+      justify-content: space-between;
+    }
+  </style>
+</head>
+<body>
+  <div class="page">
+    <p class="eyebrow">UC12a · Use Case Diagram</p>
+    <h1>Đặt hàng &amp; Thanh toán Online</h1>
+    <p class="subtitle">Sơ đồ use case chi tiết cho luồng checkout: khách hàng đăng nhập, đặt đơn, chọn địa chỉ giao hàng, chọn phương thức thanh toán. Hỗ trợ điều chỉnh thông tin người nhận qua extension point tại bước xác nhận đơn.</p>
+
+    <div class="meta">
+      <span><strong>Module</strong> UC12 · Payment</span>
+      <span><strong>Sub-module</strong> UC12a · Online Checkout</span>
+      <span><strong>Actors</strong> 2</span>
+      <span><strong>Use cases</strong> 6</span>
+      <span><strong>Relations</strong> 3 include · 1 extend</span>
+    </div>
+
+    <div class="diagram-frame">
+      <svg id="uc-svg" xmlns="http://www.w3.org/2000/svg" role="img" aria-labelledby="uc-pay-title uc-pay-desc" viewBox="0 0 1440 1040" width="100%" height="auto">
+        <title id="uc-pay-title">Use Case Diagram — Đặt hàng và thanh toán online</title>
+        <desc id="uc-pay-desc">Sơ đồ use case thể hiện hai tác nhân Người dùng và Khách hàng tương tác với sáu use case thuộc hệ thống Pet Care gồm: Đăng nhập, Khách hàng đăng nhập, Đặt hàng thanh toán online, Chọn phương thức thanh toán, Chọn địa chỉ nhận hàng, và Thay đổi thông tin người nhận. Use case đặt hàng bao gồm hai use case con là chọn phương thức thanh toán và chọn địa chỉ nhận hàng, đồng thời được mở rộng bởi use case thay đổi thông tin người nhận tại extension point cùng tên.</desc>
+
+        <defs>
+          <!-- UML stereotype "open triangle" arrowhead (►) for include/extend -->
+          <marker id="uml-include" viewBox="0 0 12 12" refX="11" refY="6" markerWidth="12" markerHeight="12" orient="auto">
+            <path d="M 1 1 L 11 6 L 1 11 Z" fill="none" stroke="#1a1d2e" stroke-width="1.2" stroke-linejoin="miter"/>
+          </marker>
+          <!-- UML association: simple solid line, no arrowhead -->
+          <!-- UML arrow for extension dependency (dashed open triangle) -->
+          <marker id="uml-extend" viewBox="0 0 12 12" refX="11" refY="6" markerWidth="12" markerHeight="12" orient="auto">
+            <path d="M 1 1 L 11 6 L 1 11 Z" fill="none" stroke="#c8501e" stroke-width="1.2" stroke-linejoin="miter"/>
+          </marker>
+          <!-- Actor connector: simple solid line, no arrowhead (UML association) -->
+        </defs>
+
+        <!-- Page background only (clean paper, no container bg per §5) -->
+
+        <!-- ============================================================ -->
+        <!-- SYSTEM BOUNDARY — labelled rectangle around all use cases    -->
+        <!-- ============================================================ -->
+        <g id="system-boundary">
+          <rect x="380" y="80" width="860" height="900" rx="6"
+                fill="#ffffff" stroke="#1a1d2e" stroke-width="1.4"/>
+          <!-- System name tag — UML convention: small "system" label outside top-left of rectangle -->
+          <rect x="380" y="56" width="180" height="28" fill="#f5f3ee"/>
+          <text x="386" y="74" font-family="'Geist Mono', monospace" font-size="11"
+                fill="#1a1d2e" font-weight="600" letter-spacing="0.08em">
+            «system» <tspan font-weight="400">PetCare</tspan>
+          </text>
+        </g>
+
+        <!-- ============================================================ -->
+        <!-- EXTENSION POINT NOTE (attached to base use case)             -->
+        <!-- ============================================================ -->
+        <g id="extension-point-note" transform="translate(848, 712)">
+          <rect x="0" y="0" width="296" height="100" rx="4"
+                fill="#ffffff" stroke="#c8501e" stroke-width="1.2" stroke-dasharray="3 2"/>
+          <!-- "note" stereotype tag -->
+          <rect x="0" y="0" width="80" height="18" rx="2" fill="#c8501e"/>
+          <text x="6" y="13" font-family="'Geist Mono', monospace" font-size="9"
+                fill="#ffffff" font-weight="600" letter-spacing="0.08em">«note»</text>
+          <!-- Connector from corner of note to base use case (dashed line, §6 — but geometry unavoidable, accepted pattern for UML notes) -->
+          <line x1="0" y1="60" x2="-128" y2="-72"
+                stroke="#c8501e" stroke-width="1" stroke-dasharray="3 2"/>
+          <text x="12" y="34" font-family="'Geist Mono', monospace" font-size="9"
+                fill="#c8501e" font-weight="600" letter-spacing="0.06em">EXTENSION POINTS</text>
+          <!-- Body text -->
+          <text x="12" y="54" font-family="'Geist', sans-serif" font-size="12"
+                fill="#1a1d2e">thay đổi thông tin người nhận</text>
+          <text x="12" y="72" font-family="'Geist', sans-serif" font-size="11"
+                fill="#4f5d75" font-style="italic">(tại bước xác nhận đơn,</text>
+          <text x="12" y="88" font-family="'Geist', sans-serif" font-size="11"
+                fill="#4f5d75" font-style="italic">trước khi thanh toán)</text>
+        </g>
+
+        <!-- ============================================================ -->
+        <!-- USE CASES (ellipses)                                         -->
+        <!-- Standard UML ellipse proportions: rx=ry, height = ry*2 ≈ 32-40px -->
+        <!-- For text height 12-13px, ellipse ry=22, rx=104             -->
+        <!-- ============================================================ -->
+
+        <!-- UC2: Đăng nhập (top-left, primary user flow) -->
+        <g id="uc-dangnhap" transform="translate(584, 168)">
+          <ellipse cx="0" cy="0" rx="100" ry="22" fill="#ffffff" stroke="#1a1d2e" stroke-width="1.2"/>
+          <text x="0" y="4" font-family="'Geist', sans-serif" font-size="13"
+                fill="#1a1d2e" text-anchor="middle" font-weight="600">Đăng nhập</text>
+        </g>
+
+        <!-- UC3: Khách hàng đăng nhập (top-right) -->
+        <g id="uc-khachhang-dangnhap" transform="translate(984, 168)">
+          <ellipse cx="0" cy="0" rx="128" ry="22" fill="#ffffff" stroke="#1a1d2e" stroke-width="1.2"/>
+          <text x="0" y="4" font-family="'Geist', sans-serif" font-size="13"
+                fill="#1a1d2e" text-anchor="middle" font-weight="600">Khách hàng đăng nhập</text>
+        </g>
+
+        <!-- UC1: Đặt hàng thanh toán online (focal — coral tint + coral stroke, 1 of 2 focal rule) -->
+        <g id="uc-dathang" transform="translate(784, 408)">
+          <!-- Paper mask behind to block arrow bleed-through — text spans wider than ellipse for Vietnamese phrase -->
+          <rect x="-184" y="-44" width="368" height="92" fill="#ffffff"/>
+          <ellipse cx="0" cy="0" rx="180" ry="40" fill="rgba(200,80,30,0.06)" stroke="#c8501e" stroke-width="1.8"/>
+          <text x="0" y="-6" font-family="'Geist', sans-serif" font-size="14"
+                fill="#c8501e" text-anchor="middle" font-weight="700">Đặt hàng thanh toán online</text>
+          <text x="0" y="14" font-family="'Geist Mono', monospace" font-size="9"
+                fill="#c8501e" text-anchor="middle" letter-spacing="0.06em">UC12a · MAIN FLOW</text>
+        </g>
+
+        <!-- UC4: Chọn phương thức thanh toán (right, included) -->
+        <g id="uc-ptthanhtoan" transform="translate(1090, 408)">
+          <ellipse cx="0" cy="0" rx="136" ry="28" fill="#ffffff" stroke="#1a1d2e" stroke-width="1.2"/>
+          <text x="0" y="4" font-family="'Geist', sans-serif" font-size="13"
+                fill="#1a1d2e" text-anchor="middle" font-weight="600">Chọn phương thức</text>
+          <text x="0" y="20" font-family="'Geist', sans-serif" font-size="13"
+                fill="#1a1d2e" text-anchor="middle" font-weight="600">thanh toán</text>
+        </g>
+
+        <!-- UC5: Chọn địa chỉ nhận hàng (lower-middle, included) -->
+        <g id="uc-diachi" transform="translate(784, 696)">
+          <ellipse cx="0" cy="0" rx="128" ry="28" fill="#ffffff" stroke="#1a1d2e" stroke-width="1.2"/>
+          <text x="0" y="4" font-family="'Geist', sans-serif" font-size="13"
+                fill="#1a1d2e" text-anchor="middle" font-weight="600">Chọn địa chỉ</text>
+          <text x="0" y="20" font-family="'Geist', sans-serif" font-size="13"
+                fill="#1a1d2e" text-anchor="middle" font-weight="600">nhận hàng</text>
+        </g>
+
+        <!-- UC6: Thay đổi thông tin người nhận (bottom-right, extends base) -->
+        <g id="uc-thaydoithongtin" transform="translate(1090, 560)">
+          <ellipse cx="0" cy="0" rx="140" ry="32" fill="#ffffff" stroke="#c8501e" stroke-width="1.4"/>
+          <text x="0" y="-2" font-family="'Geist', sans-serif" font-size="13"
+                fill="#1a1d2e" text-anchor="middle" font-weight="600">Thay đổi thông</text>
+          <text x="0" y="14" font-family="'Geist', sans-serif" font-size="13"
+                fill="#1a1d2e" text-anchor="middle" font-weight="600">tin người nhận.</text>
+        </g>
+
+        <!-- ============================================================ -->
+        <!-- ACTORS (stick figures — UML notation)                       -->
+        <!-- Stick: head circle r=10, body line, arm line, two leg lines -->
+        <!-- Position: actors outside system boundary on left side       -->
+        <!-- ============================================================ -->
+
+        <!-- Actor 1: Người dùng (top-left, outside boundary, associated with Đăng nhập) -->
+        <g id="actor-nguoidung" transform="translate(192, 168)">
+          <!-- head -->
+          <circle cx="0" cy="-32" r="10" fill="#ffffff" stroke="#1a1d2e" stroke-width="1.4"/>
+          <!-- body -->
+          <line x1="0" y1="-22" x2="0" y2="22" stroke="#1a1d2e" stroke-width="1.4"/>
+          <!-- arms (horizontal) -->
+          <line x1="-18" y1="-4" x2="18" y2="-4" stroke="#1a1d2e" stroke-width="1.4"/>
+          <!-- left leg -->
+          <line x1="0" y1="22" x2="-14" y2="52" stroke="#1a1d2e" stroke-width="1.4"/>
+          <!-- right leg -->
+          <line x1="0" y1="22" x2="14" y2="52" stroke="#1a1d2e" stroke-width="1.4"/>
+          <!-- actor name below -->
+          <text x="0" y="76" font-family="'Geist', sans-serif" font-size="13"
+                fill="#1a1d2e" text-anchor="middle" font-weight="600">Người dùng</text>
+        </g>
+
+        <!-- Actor 2: Khách hàng (bottom-left, outside boundary, associated with Đặt hàng) -->
+        <g id="actor-khachhang" transform="translate(192, 480)">
+          <circle cx="0" cy="-32" r="10" fill="#ffffff" stroke="#1a1d2e" stroke-width="1.4"/>
+          <line x1="0" y1="-22" x2="0" y2="22" stroke="#1a1d2e" stroke-width="1.4"/>
+          <line x1="-18" y1="-4" x2="18" y2="-4" stroke="#1a1d2e" stroke-width="1.4"/>
+          <line x1="0" y1="22" x2="-14" y2="52" stroke="#1a1d2e" stroke-width="1.4"/>
+          <line x1="0" y1="22" x2="14" y2="52" stroke="#1a1d2e" stroke-width="1.4"/>
+          <text x="0" y="76" font-family="'Geist', sans-serif" font-size="13"
+                fill="#1a1d2e" text-anchor="middle" font-weight="600">Khách hàng</text>
+        </g>
+
+        <!-- ============================================================ -->
+        <!-- CONNECTORS (UML notation, drawn BEFORE actors don't matter, -->
+        <!-- but BEFORE the focal ellipse paint order is fine here)     -->
+        <!-- Rules: dashed open-triangle arrow for «include»/«extend»,   -->
+        <!-- plain solid line for association (no arrowhead).            -->
+        <!-- ============================================================ -->
+
+        <!-- L1: Người dùng — Đăng nhập (association, plain line, no marker) -->
+        <line x1="202" y1="168" x2="484" y2="168"
+              stroke="#1a1d2e" stroke-width="1.2"/>
+
+        <!-- L2: Người dùng — Khách hàng đăng nhập (generalization, UML hollow-triangle head pointing to Khách hàng đăng nhập — represents "Người dùng is a kind of...") -->
+        <!-- Per UML: actor generalization = Người dùng specializes Khách hàng đăng nhập? No — this is "Khách hàng is a specialization of Người dùng", so arrow points to Người dùng (more general). The image shows a hollow-triangle arrow from "khách hàng đăng nhập" point to the general actor. Actually re-reading: line from Người dùng ellipse to Người dùng actor with hollow triangle head near actor. The image shows arrowhead at actor side: "khách hàng đăng nhập" → "Người dùng", meaning Người dùng is the generalization, Khách hàng đăng nhập specializes it. Draw as horizontal line from ellipse right-edge area to actor with hollow triangle. -->
+        <defs>
+          <marker id="uml-generalization" viewBox="0 0 14 14" refX="13" refY="7" markerWidth="14" markerHeight="14" orient="auto">
+            <path d="M 1 1 L 13 7 L 1 13 Z" fill="#ffffff" stroke="#1a1d2e" stroke-width="1.2" stroke-linejoin="miter"/>
+          </marker>
+        </defs>
+        <!-- Line: from "Khách hàng đăng nhập" ellipse (left edge x=856) to Người dùng actor (head x=192, y=136 — top of head is at cy-32=136, attach point on actor body ~ y=148). Use attach point on actor's right side at y=168. -->
+        <line x1="856" y1="156" x2="208" y2="156"
+              stroke="#1a1d2e" stroke-width="1.2" marker-end="url(#uml-generalization)"/>
+        <text x="532" y="148" font-family="'Geist Mono', monospace" font-size="9"
+              fill="#7a8399" text-anchor="middle">«generalization»</text>
+
+        <!-- L3: Khách hàng — Đặt hàng (association, plain line, no marker) -->
+        <line x1="202" y1="480" x2="604" y2="408"
+              stroke="#1a1d2e" stroke-width="1.2"/>
+
+        <!-- L4: Khách hàng — Chọn địa chỉ nhận hàng (association, plain line) -->
+        <line x1="202" y1="492" x2="656" y2="696"
+              stroke="#1a1d2e" stroke-width="1.2"/>
+
+        <!-- L5: Khách hàng — Thay đổi thông tin người nhận (association, plain line) -->
+        <line x1="202" y1="500" x2="950" y2="560"
+              stroke="#1a1d2e" stroke-width="1.2"/>
+
+        <!-- INCLUDE 1: Đặt hàng ← Chọn phương thức thanh toán (dashed open-triangle, arrow points from included to base) -->
+        <!-- Per UML: A «include»B means A requires B; arrow points from A (base) to B (included). Actually it's the reverse — arrow points FROM the base use case TO the included use case. -->
+        <!-- Here base = "Đặt hàng thanh toán online", included = "Chọn phương thức thanh toán". Arrow from base right side (964, 408) to included left side (954, 408). Need a small gap, so: line from (964, 408) to (954, 408) — too short. Route with elbow. Better: short straight horizontal between centers, with arrowhead at included. -->
+        <line x1="964" y1="408" x2="952" y2="408"
+              stroke="#1a1d2e" stroke-width="1.2" stroke-dasharray="6 4" marker-end="url(#uml-include)"/>
+        <text x="958" y="396" font-family="'Geist Mono', monospace" font-size="9"
+              fill="#1a1d2e" text-anchor="middle" font-weight="600">«include»</text>
+
+        <!-- INCLUDE 2: Đặt hàng ← Chọn địa chỉ nhận hàng (from base DOWN to included, dashed open-triangle) -->
+        <!-- Base ellipse: cx=784, cy=408, ry=40 → bottom edge at y=448. Included ellipse: cx=784, cy=696, ry=28 → top edge at y=668. Vertical from (784, 448) to (784, 664). -->
+        <line x1="784" y1="452" x2="784" y2="664"
+              stroke="#1a1d2e" stroke-width="1.2" stroke-dasharray="6 4" marker-end="url(#uml-include)"/>
+        <text x="800" y="566" font-family="'Geist Mono', monospace" font-size="9"
+              fill="#1a1d2e" font-weight="600">«include»</text>
+
+        <!-- EXTEND: Thay đổi thông tin người nhận → Đặt hàng (dashed open-triangle, points from extender TO base) -->
+        <!-- Extend: arrow points from extending UC to base UC. -->
+        <!-- Extender: cx=1090, cy=560, rx=140, ry=32 → left edge midpoint at (950, 560). Base ellipse: cx=784, cy=408, rx=180, ry=40 → right edge midpoint at (964, 408). -->
+        <!-- Route: from (950, 560) up-right to (964, 408) — but rule §6 #1 says no diagonal. Route via elbow: -->
+        <!-- Step: (950, 560) → (1080, 560) → (1080, 408) → (964, 408). That's too long. -->
+        <!-- Simpler: route the extend line on top of the diagram. Extender left edge at (950, 560); go up to y=460 (close to base right edge); then left to base right edge (964, 408). Vertical x=1090 (extender center) -> ... no, share x with base would require moving horizontally first. -->
+        <!-- Cleanest: horizontal from (950, 560) LEFT to a point near base right edge (964, 408) — that's diagonal. Need elbow. -->
+        <!-- Two-bend elbow: (950, 560) → (1100, 560) → (1100, 460) → (964, 460) → (964, 408). Three bends. -->
+        <!-- Better: route diagonally is a hard fail per §6 #1, so we MUST use orthogonal. The cleanest elbow: -->
+        <!-- (950, 560) → (970, 560) is tiny, then up. Easier to route along y=420 just above the Chọn PTTT line at 408: -->
+        <!-- (950, 560) → (1000, 560) [horizontal] → (1000, 380) [vertical up, passing OVER chọn PTTT which is at y=408] → (964, 380) [left] → (964, 408) [down]. 4 bends. -->
+        <!-- Simplest readable: route as an L-shape across the top of the include-arrow zone. -->
+        <!-- Extender top edge: (1090, 528). Base top-right: at y=368, x=964. -->
+        <!-- Use this: from extender midpoint-left (950, 560) → up to y=348 → right to x=964 → down to base top edge y=368. That's vertical x=950, y=560→348; then horizontal y=348, x=950→964; then vertical x=964, y=348→368. Too many bends. -->
+        <!-- Actually cleanest: extend arrow goes from extending UC toward base UC. Per UML it usually lands on base UC edge. -->
+        <!-- Let me use a simpler trajectory: from extender top (1090, 528) up to y=348, left to x=964, then straight down to base top edge (964, 368). NO DIAGONAL. That's 3 segments: vertical, horizontal, vertical. Clean. -->
+        <!-- Vertical segment: (1090, 528) → (1090, 348) -->
+        <!-- Horizontal segment: (1090, 348) → (964, 348) -->
+        <!-- Vertical segment: (964, 348) → (964, 372) (just touching base top, ry=40 → top edge at 408-40=368) -->
+        <!-- Arrowhead at (964, 372) pointing down into base. -->
+        <!-- Label «extend» on the horizontal segment at midpoint (1027, 340). -->
+        <path d="M 1090 528 L 1090 348 L 964 348 L 964 372"
+              fill="none" stroke="#c8501e" stroke-width="1.2"
+              stroke-dasharray="6 4" marker-end="url(#uml-extend)"/>
+        <rect x="988" y="332" width="80" height="14" fill="#f5f3ee"/>
+        <text x="1028" y="343" font-family="'Geist Mono', monospace" font-size="9"
+              fill="#c8501e" text-anchor="middle" font-weight="600">«extend»</text>
+
+        <!-- ============================================================ -->
+        <!-- LEGEND (horizontal strip below the system boundary)         -->
+        <!-- ============================================================ -->
+        <line x1="80" y1="1000" x2="1360" y2="1000"
+              stroke="rgba(26,29,46,0.10)" stroke-width="0.8"/>
+        <text x="80" y="1024" font-family="'Geist Mono', monospace" font-size="9"
+              fill="#4f5d75" letter-spacing="0.14em" font-weight="600">CHÚ THÍCH</text>
+
+        <!-- Item 1: association -->
+        <line x1="200" y1="1020" x2="244" y2="1020" stroke="#1a1d2e" stroke-width="1.2"/>
+        <text x="252" y="1024" font-family="'Geist Mono', monospace" font-size="9" fill="#4f5d75">association</text>
+
+        <!-- Item 2: generalization -->
+        <line x1="380" y1="1020" x2="424" y2="1020" stroke="#1a1d2e" stroke-width="1.2" marker-end="url(#uml-generalization)"/>
+        <text x="436" y="1024" font-family="'Geist Mono', monospace" font-size="9" fill="#4f5d75">generalization</text>
+
+        <!-- Item 3: include -->
+        <line x1="580" y1="1020" x2="624" y2="1020" stroke="#1a1d2e" stroke-width="1.2" stroke-dasharray="6 4" marker-end="url(#uml-include)"/>
+        <text x="636" y="1024" font-family="'Geist Mono', monospace" font-size="9" fill="#4f5d75">«include»</text>
+
+        <!-- Item 4: extend -->
+        <line x1="760" y1="1020" x2="804" y2="1020" stroke="#c8501e" stroke-width="1.2" stroke-dasharray="6 4" marker-end="url(#uml-extend)"/>
+        <text x="816" y="1024" font-family="'Geist Mono', monospace" font-size="9" fill="#4f5d75">«extend»</text>
+
+        <!-- Item 5: focal -->
+        <ellipse cx="940" cy="1020" rx="20" ry="8" fill="rgba(200,80,30,0.06)" stroke="#c8501e" stroke-width="1.4"/>
+        <text x="972" y="1024" font-family="'Geist Mono', monospace" font-size="9" fill="#4f5d75">main use case</text>
+
+        <!-- Item 6: actor -->
+        <g transform="translate(1124, 1020)">
+          <circle cx="0" cy="-6" r="3.5" fill="#ffffff" stroke="#1a1d2e" stroke-width="1"/>
+          <line x1="0" y1="-2" x2="0" y2="6" stroke="#1a1d2e" stroke-width="1"/>
+          <line x1="-6" y1="2" x2="6" y2="2" stroke="#1a1d2e" stroke-width="1"/>
+          <line x1="0" y1="6" x2="-4" y2="14" stroke="#1a1d2e" stroke-width="1"/>
+          <line x1="0" y1="6" x2="4" y2="14" stroke="#1a1d2e" stroke-width="1"/>
+        </g>
+        <text x="1148" y="1024" font-family="'Geist Mono', monospace" font-size="9" fill="#4f5d75">actor</text>
+
+      </svg>
+    </div>
+
+    <!-- Summary cards — varied widths (1.1fr 1fr 0.9fr), 3 columns -->
+    <div class="cards">
+      <div class="card">
+        <p class="card-eyebrow">FOCAL · MAIN FLOW</p>
+        <h3><span class="card-dot dot-coral"></span> Đặt hàng thanh toán online</h3>
+        <ul>
+          <li>Luồng chính, focal use case của UC12a</li>
+          <li>Bắt buộc bao gồm 2 use case con (include)</li>
+          <li>Có 1 extension point mở rộng tùy chọn</li>
+        </ul>
+      </div>
+      <div class="card">
+        <p class="card-eyebrow">INCLUDE STEREOTYPE</p>
+        <h3><span class="card-dot dot-ink"></span> Mandatory children</h3>
+        <ul>
+          <li>Chọn phương thức thanh toán — bắt buộc</li>
+          <li>Chọn địa chỉ nhận hàng — bắt buộc</li>
+          <li>Mỗi base UC phải gọi đủ các included UC</li>
+        </ul>
+      </div>
+      <div class="card">
+        <p class="card-eyebrow">EXTEND STEREOTYPE</p>
+        <h3><span class="card-dot dot-coral"></span> Optional extension</h3>
+        <ul>
+          <li>Thay đổi thông tin người nhận — tùy chọn</li>
+          <li>Kích hoạt tại extension point cùng tên</li>
+          <li>Chỉ chạy khi khách muốn sửa trước thanh toán</li>
+        </ul>
+      </div>
+    </div>
+
+    <div class="colophon">
+      <span>Pet Care · Use Case Diagram · UC12a Online Checkout</span>
+      <span>Editorial SVG · UML 2.5 notation</span>
+    </div>
+  </div>
+</body>
+</html>

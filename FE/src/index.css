@@ -1,7 +1,12 @@
-/* Font substitutions — no webfont files provided with the design brief.
-   Friendly Sans -> Baloo 2, Professional Sans -> Inter. */
-@import url('https://fonts.googleapis.com/css2?family=Baloo+2:wght@400;500;600;700;800&family=Inter:wght@400;500;600;700;800&display=swap');
+/* Font substitutions — Baloo 2, Inter, and Anton/Oswald for headline display with full Vietnamese diacritics support */
+@import url('https://fonts.googleapis.com/css2?family=Anton&family=Baloo+2:wght@400;500;600;700;800&family=Inter:wght@400;500;600;700;800&family=Oswald:wght@700;800&display=swap');
 @import 'tailwindcss';
+
+.font-bayon {
+  font-family: 'Anton', 'Oswald', -apple-system, BlinkMacSystemFont, sans-serif;
+  text-transform: uppercase;
+  letter-spacing: 0.02em;
+}
 
 @theme {
   /* ---- palette (from DESIGN tokens/colors.css) ---- */

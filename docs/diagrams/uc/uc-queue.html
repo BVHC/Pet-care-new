@@ -1,0 +1,183 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>UC · Walk-in & Queue · Pet Care</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link href="https://fonts.googleapis.com/css2?family=Geist:wght@400;500;600;700&family=Geist+Mono:wght@400;500&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="../shared/styles.css">
+</head>
+<body>
+  <aside class="sidebar">
+    <div class="sidebar-brand">
+      <h1>🎯 Use Cases</h1>
+      <p class="subtitle">Walk-in & Queue</p>
+    </div>
+    <nav class="sidebar-nav">
+      <div class="nav-group open">
+        <div class="nav-group-header">📁 Queue Management</div>
+        <div class="nav-group-content">
+          <div class="menu-item active" onclick="switchDiagram('register-queue')">
+            <span class="badge">UC3a</span>
+            <span>Register Queue Entry</span>
+          </div>
+          <div class="menu-item" onclick="switchDiagram('queue-management')">
+            <span class="badge">UC3b</span>
+            <span>Queue Lifecycle</span>
+          </div>
+          <div class="menu-item" onclick="switchDiagram('walkin-bridge')">
+            <span class="badge">UC3c</span>
+            <span>Walk-in to Appointment Bridge</span>
+          </div>
+        </div>
+      </div>
+      <div class="nav-group">
+        <div class="nav-group-header">📁 Navigation</div>
+        <div class="nav-group-content">
+          <div class="menu-item" onclick="location.href='uc-booking.html'"><span class="badge">UC2</span><span>Booking</span></div>
+          <div class="menu-item" onclick="location.href='../index.html'"><span class="badge">↑</span><span>All</span></div>
+        </div>
+      </div>
+    </nav>
+  </aside>
+
+  <main class="main-content">
+    <div class="top-bar">
+      <div class="top-left">
+        <div class="breadcrumb">
+          <a href="../index.html">Diagrams</a><span>/</span><span>Use Cases</span><span>/</span><span>Queue</span>
+        </div>
+        <h1 class="top-title" id="top-title">Register Queue Entry</h1>
+      </div>
+      <div class="controls">
+        <button class="control-btn" onclick="zoomIn()">🔍+</button>
+        <button class="control-btn" onclick="zoomOut()">🔍-</button>
+        <button class="control-btn" onclick="resetZoom()">Reset</button>
+      </div>
+    </div>
+
+    <div class="canvas-wrapper">
+      <div id="viewport">
+        <div id="canvas-content">
+          <svg id="main-svg" width="100%" height="100%" viewBox="0 0 1200 800"></svg>
+        </div>
+      </div>
+      <div class="zoom-indicator" id="zoom-indicator">100%</div>
+    </div>
+
+    <div class="footer" id="footer-desc"><strong>Domain Note:</strong> Walk-in Queue Management</div>
+  </main>
+
+  <script src="../shared/renderer.js"></script>
+  <script>
+    const DIAGRAMS = {
+      'register-queue': {
+        description: 'UC3a · Register Queue Entry: FIFO, Emergency Triage Bypass',
+        actors: [
+          { name: "Customer", color: "#2e5aa8" },
+          { name: "Receptionist", color: "#eb6c36" },
+          { name: "Queue Service", system: true, color: "#4f5d75" }
+        ],
+        useCases: [
+          { id: "UC3a-1", name: "Register Queue Entry", focal: true },
+          { id: "UC3a-2", name: "Assign Queue Number" },
+          { id: "UC3a-3", name: "Select Service Type" },
+          { id: "UC3a-4", name: "Triage Emergency" },
+          { id: "UC3a-5", name: "Cancel Queue Entry" }
+        ],
+        relations: [
+          { actor: "Customer", uc: "UC3a-1" },
+          { actor: "Receptionist", uc: "UC3a-1" },
+          { actor: "Queue Service", uc: "UC3a-2", type: "include" },
+          { actor: "Queue Service", uc: "UC3a-3", type: "include" },
+          { actor: "Receptionist", uc: "UC3a-4" },
+          { actor: "Customer", uc: "UC3a-5" }
+        ]
+      },
+      'queue-management': {
+        description: 'UC3b · Queue Lifecycle: Call → Start Service → Complete / NoShow',
+        actors: [
+          { name: "Receptionist", color: "#eb6c36" },
+          { name: "Veterinarian", color: "#7b4ac7" },
+          { name: "Groomer", color: "#45a58a" },
+          { name: "System", system: true, color: "#4f5d75" }
+        ],
+        useCases: [
+          { id: "UC3b-1", name: "Call Queue Entry" },
+          { id: "UC3b-2", name: "Send Turn Notification" },
+          { id: "UC3b-3", name: "Start Queue Service" },
+          { id: "UC3b-4", name: "Complete Queue Entry" },
+          { id: "UC3b-5", name: "Mark Queue No-Show" },
+          { id: "UC3b-6", name: "Promote Next Entry" }
+        ],
+        relations: [
+          { actor: "Receptionist", uc: "UC3b-1" },
+          { actor: "System", uc: "UC3b-2", type: "include" },
+          { actor: "Veterinarian", uc: "UC3b-3" },
+          { actor: "Groomer", uc: "UC3b-3" },
+          { actor: "Receptionist", uc: "UC3b-4" },
+          { actor: "Receptionist", uc: "UC3b-5" },
+          { actor: "System", uc: "UC3b-6", type: "include" }
+        ]
+      },
+      'walkin-bridge': {
+        description: 'UC3c · Walk-in to Appointment Bridge: StartQueueService → CreateInternalAppointment',
+        actors: [
+          { name: "Staff", color: "#7b4ac7" },
+          { name: "Queue Service", system: true, color: "#4f5d75" },
+          { name: "Appointment Service", system: true, color: "#4f5d75" }
+        ],
+        useCases: [
+          { id: "UC3c-1", name: "Start Queue Service", focal: true },
+          { id: "UC3c-2", name: "Create Internal Appointment" },
+          { id: "UC3c-3", name: "Link QueueTicketId" },
+          { id: "UC3c-4", name: "Lock Resources" },
+          { id: "UC3c-5", name: "Sync Medical Records" }
+        ],
+        relations: [
+          { actor: "Staff", uc: "UC3c-1" },
+          { actor: "Queue Service", uc: "UC3c-2", type: "include" },
+          { actor: "Queue Service", uc: "UC3c-3", type: "include" },
+          { actor: "Appointment Service", uc: "UC3c-4", type: "include" },
+          { actor: "Appointment Service", uc: "UC3c-5", type: "include" }
+        ]
+      }
+    };
+
+    let currentDiagram = 'register-queue';
+    let zoomLevel = 1.0;
+
+    function switchDiagram(key) {
+      currentDiagram = key;
+      document.querySelectorAll('.menu-item').forEach(el => el.classList.remove('active'));
+      event.target.closest('.menu-item').classList.add('active');
+      const data = DIAGRAMS[key];
+      document.getElementById('top-title').textContent = data.useCases[0].name;
+      document.getElementById('footer-desc').innerHTML = `<strong>Domain Note:</strong> ${data.description}`;
+      renderCurrentDiagram();
+    }
+
+    function renderCurrentDiagram() {
+      const svg = document.getElementById('main-svg');
+      svg.innerHTML = `<defs>
+        <marker id="arr" markerWidth="10" markerHeight="10" refX="9" refY="3" orient="auto"><path d="M0,0 L0,6 L9,3 z" fill="#4f5d75"/></marker>
+        <marker id="arr-blue" markerWidth="10" markerHeight="10" refX="9" refY="3" orient="auto"><path d="M0,0 L0,6 L9,3 z" fill="#2e5aa8"/></marker>
+      </defs>`;
+      const data = DIAGRAMS[currentDiagram];
+      data._type = 'usecase';
+      renderUseCase(svg, data);
+    }
+
+    function zoomIn() { zoomLevel = Math.min(2.0, zoomLevel + 0.1); applyZoom(); }
+    function zoomOut() { zoomLevel = Math.max(0.5, zoomLevel - 0.1); applyZoom(); }
+    function resetZoom() { zoomLevel = 1.0; applyZoom(); }
+    function applyZoom() {
+      document.getElementById('canvas-content').style.transform = `scale(${zoomLevel})`;
+      document.getElementById('zoom-indicator').textContent = Math.round(zoomLevel * 100) + '%';
+    }
+
+    renderCurrentDiagram();
+  </script>
+</body>
+</html>

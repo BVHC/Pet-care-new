@@ -1,0 +1,166 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>UC · Commerce & Order · Pet Care</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link href="https://fonts.googleapis.com/css2?family=Geist:wght@400;500;600;700&family=Geist+Mono:wght@400;500&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="../shared/styles.css">
+</head>
+<body>
+  <aside class="sidebar">
+    <div class="sidebar-brand"><h1>🎯 Use Cases</h1><p class="subtitle">Commerce & Order</p></div>
+    <nav class="sidebar-nav">
+      <div class="nav-group open">
+        <div class="nav-group-header">📁 Commerce</div>
+        <div class="nav-group-content">
+          <div class="menu-item" onclick="switchDiagram('cart')"><span class="badge">UC4a</span><span>Cart Management</span></div>
+          <div class="menu-item" onclick="switchDiagram('checkout')"><span class="badge">UC4b</span><span>Checkout & Order</span></div>
+          <div class="menu-item" onclick="switchDiagram('fulfillment')"><span class="badge">UC4c</span><span>Order Fulfillment</span></div>
+        </div>
+      </div>
+      <div class="nav-group">
+        <div class="nav-group-header">📁 Navigation</div>
+        <div class="nav-group-content">
+          <div class="menu-item" onclick="location.href='uc-billing.html'"><span class="badge">UC11</span><span>Billing</span></div>
+          <div class="menu-item" onclick="location.href='../index.html'"><span class="badge">↑</span><span>All</span></div>
+        </div>
+      </div>
+    </nav>
+  </aside>
+
+  <main class="main-content">
+    <div class="top-bar">
+      <div class="top-left">
+        <div class="breadcrumb"><a href="../index.html">Diagrams</a><span>/</span><span>Use Cases</span><span>/</span><span>Commerce</span></div>
+        <h1 class="top-title" id="top-title">Cart Management</h1>
+      </div>
+      <div class="controls">
+        <button class="control-btn" onclick="zoomIn()">🔍+</button>
+        <button class="control-btn" onclick="zoomOut()">🔍-</button>
+        <button class="control-btn" onclick="resetZoom()">Reset</button>
+      </div>
+    </div>
+    <div class="canvas-wrapper">
+      <div id="viewport"><div id="canvas-content"><svg id="main-svg" width="100%" height="100%" viewBox="0 0 1200 800"></svg></div></div>
+      <div class="zoom-indicator" id="zoom-indicator">100%</div>
+    </div>
+    <div class="footer" id="footer-desc"><strong>Domain Note:</strong> Commerce & Order Management</div>
+  </main>
+
+  <script src="../shared/renderer.js"></script>
+  <script>
+    const DIAGRAMS = {
+      'cart': {
+        description: 'UC4a · Cart Management: Add, Update, Remove items, Apply Voucher',
+        actors: [
+          { name: "Customer", color: "#2e5aa8" },
+          { name: "Cart Service", system: true, color: "#4f5d75" },
+          { name: "Inventory", system: true, color: "#4f5d75" }
+        ],
+        useCases: [
+          { id: "UC4a-1", name: "Add to Cart", focal: true },
+          { id: "UC4a-2", name: "Update Quantity" },
+          { id: "UC4a-3", name: "Remove Item" },
+          { id: "UC4a-4", name: "Apply Voucher" },
+          { id: "UC4a-5", name: "Check Stock Availability" },
+          { id: "UC4a-6", name: "Calculate Total" }
+        ],
+        relations: [
+          { actor: "Customer", uc: "UC4a-1" },
+          { actor: "Customer", uc: "UC4a-2" },
+          { actor: "Customer", uc: "UC4a-3" },
+          { actor: "Customer", uc: "UC4a-4" },
+          { actor: "Cart Service", uc: "UC4a-5", type: "include" },
+          { actor: "Cart Service", uc: "UC4a-6", type: "include" }
+        ]
+      },
+      'checkout': {
+        description: 'UC4b · Checkout: Hold Inventory (15m) → Create Order → Payment',
+        actors: [
+          { name: "Customer", color: "#2e5aa8" },
+          { name: "Receptionist", color: "#eb6c36" },
+          { name: "Order Service", system: true, color: "#4f5d75" },
+          { name: "Inventory", system: true, color: "#4f5d75" }
+        ],
+        useCases: [
+          { id: "UC4b-1", name: "Checkout", focal: true },
+          { id: "UC4b-2", name: "Reserve Inventory" },
+          { id: "UC4b-3", name: "Set Hold TTL (15m)" },
+          { id: "UC4b-4", name: "Create Order" },
+          { id: "UC4b-5", name: "Timeout Cancel" },
+          { id: "UC4b-6", name: "Release Hold" }
+        ],
+        relations: [
+          { actor: "Customer", uc: "UC4b-1" },
+          { actor: "Receptionist", uc: "UC4b-1" },
+          { actor: "Order Service", uc: "UC4b-2", type: "include" },
+          { actor: "Inventory", uc: "UC4b-3", type: "include" },
+          { actor: "Order Service", uc: "UC4b-4", type: "include" },
+          { actor: "System", uc: "UC4b-5" },
+          { actor: "Inventory", uc: "UC4b-6", type: "include" }
+        ]
+      },
+      'fulfillment': {
+        description: 'UC4c · Order Fulfillment: POS (Instant) vs Online (Staged)',
+        actors: [
+          { name: "Receptionist", color: "#eb6c36" },
+          { name: "Inventory Staff", color: "#7b4ac7" },
+          { name: "Order Service", system: true, color: "#4f5d75" }
+        ],
+        useCases: [
+          { id: "UC4c-1", name: "Process Order (Online)" },
+          { id: "UC4c-2", name: "Prepare Product" },
+          { id: "UC4c-3", name: "Mark Ready" },
+          { id: "UC4c-4", name: "Handover Order" },
+          { id: "UC4c-5", name: "Complete POS Order" },
+          { id: "UC4c-6", name: "Deduct Inventory" }
+        ],
+        relations: [
+          { actor: "Inventory Staff", uc: "UC4c-1" },
+          { actor: "Inventory Staff", uc: "UC4c-2" },
+          { actor: "Order Service", uc: "UC4c-3", type: "include" },
+          { actor: "Receptionist", uc: "UC4c-4" },
+          { actor: "Receptionist", uc: "UC4c-5" },
+          { actor: "Order Service", uc: "UC4c-6", type: "include" }
+        ]
+      }
+    };
+
+    let currentDiagram = 'cart';
+    let zoomLevel = 1.0;
+
+    function switchDiagram(key) {
+      currentDiagram = key;
+      document.querySelectorAll('.menu-item').forEach(el => el.classList.remove('active'));
+      event.target.closest('.menu-item').classList.add('active');
+      const data = DIAGRAMS[key];
+      document.getElementById('top-title').textContent = data.useCases[0].name;
+      document.getElementById('footer-desc').innerHTML = `<strong>Domain Note:</strong> ${data.description}`;
+      renderCurrentDiagram();
+    }
+
+    function renderCurrentDiagram() {
+      const svg = document.getElementById('main-svg');
+      svg.innerHTML = `<defs>
+        <marker id="arr" markerWidth="10" markerHeight="10" refX="9" refY="3" orient="auto"><path d="M0,0 L0,6 L9,3 z" fill="#4f5d75"/></marker>
+        <marker id="arr-blue" markerWidth="10" markerHeight="10" refX="9" refY="3" orient="auto"><path d="M0,0 L0,6 L9,3 z" fill="#2e5aa8"/></marker>
+      </defs>`;
+      const data = DIAGRAMS[currentDiagram];
+      data._type = 'usecase';
+      renderUseCase(svg, data);
+    }
+
+    function zoomIn() { zoomLevel = Math.min(2.0, zoomLevel + 0.1); applyZoom(); }
+    function zoomOut() { zoomLevel = Math.max(0.5, zoomLevel - 0.1); applyZoom(); }
+    function resetZoom() { zoomLevel = 1.0; applyZoom(); }
+    function applyZoom() {
+      document.getElementById('canvas-content').style.transform = `scale(${zoomLevel})`;
+      document.getElementById('zoom-indicator').textContent = Math.round(zoomLevel * 100) + '%';
+    }
+
+    renderCurrentDiagram();
+  </script>
+</body>
+</html>

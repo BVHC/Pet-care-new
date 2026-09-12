@@ -1,0 +1,691 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Use Case Diagrams (25 Modules · 62 Diagrams) · Pet Care Ecosystem</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link href="https://fonts.googleapis.com/css2?family=Instrument+Serif:ital@0;1&family=Geist:wght@400;500;600;700&family=Geist+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="../shared/styles.css">
+</head>
+<body>
+
+  <!-- Sidebar with 2-Level Sub-Accordions & Quick Filter -->
+  <aside class="sidebar">
+    <div class="sidebar-brand">
+      <div class="eyebrow">FUNCTIONAL DOMAIN · 25 MODULES</div>
+      <h2>Use Case Diagrams</h2>
+    </div>
+
+    <!-- Quick Filter Bar -->
+    <div class="sidebar-search">
+      <div class="search-input-wrapper">
+        <span class="search-icon">🔍</span>
+        <input type="text" id="sidebar-search-input" class="sidebar-search-input" placeholder="Tìm kiếm Use Case..." oninput="filterDiagrams(this.value)">
+        <button id="search-clear-btn" class="search-clear-btn" onclick="clearSearch()" title="Xóa tìm kiếm">✕</button>
+      </div>
+    </div>
+
+    <nav class="sidebar-menu">
+      <!-- 2. Use Case Diagrams Group (25 Modules + 9 Overviews) -->
+      <div class="nav-group" id="group-usecases">
+        <div class="nav-group-header" onclick="toggleGroup('group-usecases')">
+          <div class="nav-group-title">
+            <span class="nav-icon">🎯</span> Use Cases (25 Modules · 62 Diagrams)
+          </div>
+          <span class="chevron">▶</span>
+        </div>
+        <div class="nav-group-content">
+          <!-- Sub-group: Overview Domains -->
+          <div class="sub-nav-group open" id="sub-uc-overview">
+            <div class="sub-nav-header" onclick="toggleGroup('sub-uc-overview')">
+              <div class="sub-nav-title">
+                <span class="nav-icon">⭐</span> Overview Domains
+              </div>
+              <div class="sub-nav-meta">
+                <span class="table-count-pill">9 Core</span>
+                <span class="chevron-sub">▶</span>
+              </div>
+            </div>
+            <div class="sub-nav-content">
+              <div class="menu-item" onclick="loadDiagram('uc1', 'Use Case · Auth & Identity', 'UC1 · Authentication & Identity Management')"><div class="menu-item-left"><span class="badge">UC1</span> Auth & Identity</div><span class="table-count-pill">Core</span></div>
+              <div class="menu-item" onclick="loadDiagram('uc2', 'Use Case · Appointment & Scheduling', 'UC2 · Appointment Booking & Scheduling')"><div class="menu-item-left"><span class="badge">UC2</span> Appointment Booking</div><span class="table-count-pill">Core</span></div>
+              <div class="menu-item" onclick="loadDiagram('uc3', 'Use Case · Walk-in & Queue', 'UC3 · Walk-in Queue & Emergency Triage')"><div class="menu-item-left"><span class="badge">UC3</span> Walk-in Queue</div><span class="table-count-pill">Core</span></div>
+              <div class="menu-item" onclick="loadDiagram('uc4', 'Use Case · Commerce & Order', 'UC4 · Commerce & Order Management')"><div class="menu-item-left"><span class="badge">UC4</span> Commerce & Order</div><span class="table-count-pill">Core</span></div>
+              <div class="menu-item" onclick="loadDiagram('uc5', 'Use Case · Clinical & EMR', 'UC5 · Clinical Examination & EMR')"><div class="menu-item-left"><span class="badge">UC5</span> Clinical & EMR</div><span class="table-count-pill">Core</span></div>
+              <div class="menu-item" onclick="loadDiagram('uc6', 'Use Case · Grooming Service', 'UC6 · Grooming & Surcharge Workflow')"><div class="menu-item-left"><span class="badge">UC6</span> Grooming Service</div><span class="table-count-pill">Core</span></div>
+              <div class="menu-item" onclick="loadDiagram('uc7', 'Use Case · Inventory & Stock', 'UC7 · Inventory Management & Warehouse')"><div class="menu-item-left"><span class="badge">UC7</span> Inventory & Stock</div><span class="table-count-pill">Core</span></div>
+              <div class="menu-item" onclick="loadDiagram('uc8', 'Use Case · Procurement', 'UC8 · Procurement & Purchase Orders')"><div class="menu-item-left"><span class="badge">UC8</span> Procurement</div><span class="table-count-pill">Core</span></div>
+              <div class="menu-item" onclick="loadDiagram('uc9', 'Use Case · Billing & Settlement', 'UC9 · Billing, Payment & Invoicing')"><div class="menu-item-left"><span class="badge">UC9</span> Billing & Settlement</div><span class="table-count-pill">Core</span></div>
+            </div>
+          </div>
+          <!-- Sub-group: 01. Authentication & OTP -->
+          <div class="sub-nav-group" id="sub-uc-auth">
+            <div class="sub-nav-header" onclick="toggleGroup('sub-uc-auth')">
+              <div class="sub-nav-title">
+                <span class="nav-icon">🔐</span> 01. Authentication & OTP
+              </div>
+              <div class="sub-nav-meta">
+                <span class="table-count-pill">4 UC</span>
+                <span class="chevron-sub">▶</span>
+              </div>
+            </div>
+            <div class="sub-nav-content">
+              <div class="menu-item" onclick="loadDiagram('auth_customer_registration', 'Use Case · Authentication & OTP', 'UC1a - Customer Self-Registration & OTP')">
+                <div class="menu-item-left"><span class="badge">UC</span> Self-Registration</div>
+                <span class="table-count-pill">5 UC</span>
+              </div>
+              <div class="menu-item" onclick="loadDiagram('auth_customer_login', 'Use Case · Authentication & OTP', 'UC1b - Customer Login & Session')">
+                <div class="menu-item-left"><span class="badge">UC</span> Login & Session</div>
+                <span class="table-count-pill">4 UC</span>
+              </div>
+              <div class="menu-item" onclick="loadDiagram('auth_staff_onboarding', 'Use Case · Authentication & OTP', 'UC1c - Staff Direct Onboarding (D-04)')">
+                <div class="menu-item-left"><span class="badge">UC</span> Staff Onboarding</div>
+                <span class="table-count-pill">4 UC</span>
+              </div>
+              <div class="menu-item" onclick="loadDiagram('auth_account_management', 'Use Case · Authentication & OTP', 'UC1d - Account Lifecycle & Lockout')">
+                <div class="menu-item-left"><span class="badge">UC</span> Account Lifecycle</div>
+                <span class="table-count-pill">4 UC</span>
+              </div>
+            </div>
+          </div>
+          <!-- Sub-group: 02. Identity & Access (IAM) -->
+          <div class="sub-nav-group" id="sub-uc-iam">
+            <div class="sub-nav-header" onclick="toggleGroup('sub-uc-iam')">
+              <div class="sub-nav-title">
+                <span class="nav-icon">🛡️</span> 02. Identity & Access (IAM)
+              </div>
+              <div class="sub-nav-meta">
+                <span class="table-count-pill">2 UC</span>
+                <span class="chevron-sub">▶</span>
+              </div>
+            </div>
+            <div class="sub-nav-content">
+              <div class="menu-item" onclick="loadDiagram('iam_permission', 'Use Case · IAM & Permissions', 'UC2a - Permission Matrix & Scopes')">
+                <div class="menu-item-left"><span class="badge">UC</span> Permission Matrix</div>
+                <span class="table-count-pill">5 UC</span>
+              </div>
+              <div class="menu-item" onclick="loadDiagram('iam_role', 'Use Case · IAM & Permissions', 'UC2b - Role Assignment & Store Scopes')">
+                <div class="menu-item-left"><span class="badge">UC</span> Role Assignment</div>
+                <span class="table-count-pill">5 UC</span>
+              </div>
+            </div>
+          </div>
+          <!-- Sub-group: 03. Organization & Store -->
+          <div class="sub-nav-group" id="sub-uc-store">
+            <div class="sub-nav-header" onclick="toggleGroup('sub-uc-store')">
+              <div class="sub-nav-title">
+                <span class="nav-icon">🏢</span> 03. Organization & Store
+              </div>
+              <div class="sub-nav-meta">
+                <span class="table-count-pill">2 UC</span>
+                <span class="chevron-sub">▶</span>
+              </div>
+            </div>
+            <div class="sub-nav-content">
+              <div class="menu-item" onclick="loadDiagram('store_store_mgmt', 'Use Case · Organization & Store', 'UC3a - Store Provisioning & Policies')">
+                <div class="menu-item-left"><span class="badge">UC</span> Store Lifecycle</div>
+                <span class="table-count-pill">5 UC</span>
+              </div>
+              <div class="menu-item" onclick="loadDiagram('store_store_archive', 'Use Case · Organization & Store', 'UC3b - Store Suspension & Archive')">
+                <div class="menu-item-left"><span class="badge">UC</span> Suspend & Archive</div>
+                <span class="table-count-pill">4 UC</span>
+              </div>
+            </div>
+          </div>
+          <!-- Sub-group: 04. Customer & Pet Caregiver -->
+          <div class="sub-nav-group" id="sub-uc-caregiver">
+            <div class="sub-nav-header" onclick="toggleGroup('sub-uc-caregiver')">
+              <div class="sub-nav-title">
+                <span class="nav-icon">🐾</span> 04. Customer & Pet Caregiver
+              </div>
+              <div class="sub-nav-meta">
+                <span class="table-count-pill">2 UC</span>
+                <span class="chevron-sub">▶</span>
+              </div>
+            </div>
+            <div class="sub-nav-content">
+              <div class="menu-item" onclick="loadDiagram('caregiver_delegation', 'Use Case · Customer & Pet', 'UC4a - Pet Profile & Delegation Invite')">
+                <div class="menu-item-left"><span class="badge">UC</span> Delegation Invite</div>
+                <span class="table-count-pill">5 UC</span>
+              </div>
+              <div class="menu-item" onclick="loadDiagram('caregiver_access', 'Use Case · Customer & Pet', 'UC4b - Caregiver Delegated Actions')">
+                <div class="menu-item-left"><span class="badge">UC</span> Delegated Actions</div>
+                <span class="table-count-pill">4 UC</span>
+              </div>
+            </div>
+          </div>
+          <!-- Sub-group: 05. Service & Product Catalog -->
+          <div class="sub-nav-group" id="sub-uc-catalog">
+            <div class="sub-nav-header" onclick="toggleGroup('sub-uc-catalog')">
+              <div class="sub-nav-title">
+                <span class="nav-icon">📚</span> 05. Service & Product Catalog
+              </div>
+              <div class="sub-nav-meta">
+                <span class="table-count-pill">1 UC</span>
+                <span class="chevron-sub">▶</span>
+              </div>
+            </div>
+            <div class="sub-nav-content">
+              <div class="menu-item" onclick="loadDiagram('catalog_master_product', 'Use Case · Catalog Management', 'UC5a - Master Catalog & Store Pricing')">
+                <div class="menu-item-left"><span class="badge">UC</span> Master Catalog</div>
+                <span class="table-count-pill">5 UC</span>
+              </div>
+            </div>
+          </div>
+          <!-- Sub-group: 06. Appointment & Scheduling -->
+          <div class="sub-nav-group" id="sub-uc-booking">
+            <div class="sub-nav-header" onclick="toggleGroup('sub-uc-booking')">
+              <div class="sub-nav-title">
+                <span class="nav-icon">📅</span> 06. Appointment & Scheduling
+              </div>
+              <div class="sub-nav-meta">
+                <span class="table-count-pill">4 UC</span>
+                <span class="chevron-sub">▶</span>
+              </div>
+            </div>
+            <div class="sub-nav-content">
+              <div class="menu-item" onclick="loadDiagram('booking_slot_reservation', 'Use Case · Appointment & Scheduling', 'UC6a - Pre-booking Slot Reservation 15m')">
+                <div class="menu-item-left"><span class="badge">UC</span> Slot Hold 15m</div>
+                <span class="table-count-pill">5 UC</span>
+              </div>
+              <div class="menu-item" onclick="loadDiagram('booking_appointment_booking', 'Use Case · Appointment & Scheduling', 'UC6b - Appointment Confirmation Flow')">
+                <div class="menu-item-left"><span class="badge">UC</span> Booking Flow</div>
+                <span class="table-count-pill">6 UC</span>
+              </div>
+              <div class="menu-item" onclick="loadDiagram('booking_appointment_checkin', 'Use Case · Appointment & Scheduling', 'UC6c - Check-in & Service Start')">
+                <div class="menu-item-left"><span class="badge">UC</span> Check-in & Service</div>
+                <span class="table-count-pill">5 UC</span>
+              </div>
+              <div class="menu-item" onclick="loadDiagram('booking_reschedule_cancel', 'Use Case · Appointment & Scheduling', 'UC6d - Reschedule & Cancellation')">
+                <div class="menu-item-left"><span class="badge">UC</span> Reschedule & Cancel</div>
+                <span class="table-count-pill">5 UC</span>
+              </div>
+            </div>
+          </div>
+          <!-- Sub-group: 07. Walk-in & Queue Management -->
+          <div class="sub-nav-group" id="sub-uc-queue">
+            <div class="sub-nav-header" onclick="toggleGroup('sub-uc-queue')">
+              <div class="sub-nav-title">
+                <span class="nav-icon">🚶</span> 07. Walk-in & Queue Management
+              </div>
+              <div class="sub-nav-meta">
+                <span class="table-count-pill">3 UC</span>
+                <span class="chevron-sub">▶</span>
+              </div>
+            </div>
+            <div class="sub-nav-content">
+              <div class="menu-item" onclick="loadDiagram('queue_register_queue', 'Use Case · Walk-in & Queue', 'UC7a - Queue Ticket Registration (FIFO)')">
+                <div class="menu-item-left"><span class="badge">UC</span> Ticket Register</div>
+                <span class="table-count-pill">5 UC</span>
+              </div>
+              <div class="menu-item" onclick="loadDiagram('queue_queue_management', 'Use Case · Walk-in & Queue', 'UC7b - Calling, No-Show & Emergency')">
+                <div class="menu-item-left"><span class="badge">UC</span> Queue Calling</div>
+                <span class="table-count-pill">5 UC</span>
+              </div>
+              <div class="menu-item" onclick="loadDiagram('queue_walkin_bridge', 'Use Case · Walk-in & Queue', 'UC7c - Walk-in to Appointment Bridge')">
+                <div class="menu-item-left"><span class="badge">UC</span> Lifecycle Bridge</div>
+                <span class="table-count-pill">5 UC</span>
+              </div>
+            </div>
+          </div>
+          <!-- Sub-group: 08. Workforce Management -->
+          <div class="sub-nav-group" id="sub-uc-workforce">
+            <div class="sub-nav-header" onclick="toggleGroup('sub-uc-workforce')">
+              <div class="sub-nav-title">
+                <span class="nav-icon">👥</span> 08. Workforce Management
+              </div>
+              <div class="sub-nav-meta">
+                <span class="table-count-pill">2 UC</span>
+                <span class="chevron-sub">▶</span>
+              </div>
+            </div>
+            <div class="sub-nav-content">
+              <div class="menu-item" onclick="loadDiagram('workforce_schedule', 'Use Case · Workforce Management', 'UC8a - Shift Scheduling & Assignment')">
+                <div class="menu-item-left"><span class="badge">UC</span> Shift Scheduling</div>
+                <span class="table-count-pill">4 UC</span>
+              </div>
+              <div class="menu-item" onclick="loadDiagram('workforce_absence', 'Use Case · Workforce Management', 'UC8b - Absence Handling & Replacement')">
+                <div class="menu-item-left"><span class="badge">UC</span> Absence & Swap</div>
+                <span class="table-count-pill">4 UC</span>
+              </div>
+            </div>
+          </div>
+          <!-- Sub-group: 09. Veterinary & Clinical EMR -->
+          <div class="sub-nav-group" id="sub-uc-clinical">
+            <div class="sub-nav-header" onclick="toggleGroup('sub-uc-clinical')">
+              <div class="sub-nav-title">
+                <span class="nav-icon">🩺</span> 09. Veterinary & Clinical EMR
+              </div>
+              <div class="sub-nav-meta">
+                <span class="table-count-pill">4 UC</span>
+                <span class="chevron-sub">▶</span>
+              </div>
+            </div>
+            <div class="sub-nav-content">
+              <div class="menu-item" onclick="loadDiagram('clinical_clinical_examination', 'Use Case · Veterinary Clinical', 'UC9a - Examination & Diagnosis')">
+                <div class="menu-item-left"><span class="badge">UC</span> Clinical Exam</div>
+                <span class="table-count-pill">5 UC</span>
+              </div>
+              <div class="menu-item" onclick="loadDiagram('clinical_prescription', 'Use Case · Veterinary Clinical', 'UC9b - Prescription & Treatment')">
+                <div class="menu-item-left"><span class="badge">UC</span> Prescription Flow</div>
+                <span class="table-count-pill">5 UC</span>
+              </div>
+              <div class="menu-item" onclick="loadDiagram('clinical_cross_store_emr', 'Use Case · Veterinary Clinical', 'UC9c - Cross-Store EMR Consent (24h)')">
+                <div class="menu-item-left"><span class="badge">UC</span> Cross-Store Consent</div>
+                <span class="table-count-pill">5 UC</span>
+              </div>
+              <div class="menu-item" onclick="loadDiagram('clinical_emergency_override', 'Use Case · Veterinary Clinical', 'UC9d - Emergency Access Override')">
+                <div class="menu-item-left"><span class="badge">UC</span> Emergency Override</div>
+                <span class="table-count-pill">5 UC</span>
+              </div>
+            </div>
+          </div>
+          <!-- Sub-group: 10. Vaccination Management -->
+          <div class="sub-nav-group" id="sub-uc-vaccination">
+            <div class="sub-nav-header" onclick="toggleGroup('sub-uc-vaccination')">
+              <div class="sub-nav-title">
+                <span class="nav-icon">💉</span> 10. Vaccination Management
+              </div>
+              <div class="sub-nav-meta">
+                <span class="table-count-pill">3 UC</span>
+                <span class="chevron-sub">▶</span>
+              </div>
+            </div>
+            <div class="sub-nav-content">
+              <div class="menu-item" onclick="loadDiagram('vaccination_routine', 'Use Case · Vaccination Management', 'UC10a - Routine Vaccine Screening')">
+                <div class="menu-item-left"><span class="badge">UC</span> Routine Screening</div>
+                <span class="table-count-pill">5 UC</span>
+              </div>
+              <div class="menu-item" onclick="loadDiagram('vaccination_therapeutic', 'Use Case · Vaccination Management', 'UC10b - Therapeutic Treatment Injection')">
+                <div class="menu-item-left"><span class="badge">UC</span> Therapeutic Injection</div>
+                <span class="table-count-pill">5 UC</span>
+              </div>
+              <div class="menu-item" onclick="loadDiagram('vaccination_schedule', 'Use Case · Vaccination Management', 'UC10c - Auto-Recall Schedule')">
+                <div class="menu-item-left"><span class="badge">UC</span> Recall Schedule</div>
+                <span class="table-count-pill">5 UC</span>
+              </div>
+            </div>
+          </div>
+          <!-- Sub-group: 11. Grooming Management -->
+          <div class="sub-nav-group" id="sub-uc-grooming">
+            <div class="sub-nav-header" onclick="toggleGroup('sub-uc-grooming')">
+              <div class="sub-nav-title">
+                <span class="nav-icon">✂️</span> 11. Grooming Management
+              </div>
+              <div class="sub-nav-meta">
+                <span class="table-count-pill">3 UC</span>
+                <span class="chevron-sub">▶</span>
+              </div>
+            </div>
+            <div class="sub-nav-content">
+              <div class="menu-item" onclick="loadDiagram('grooming_grooming_session', 'Use Case · Grooming Service', 'UC11a - Grooming Intake & Inspection')">
+                <div class="menu-item-left"><span class="badge">UC</span> Intake Inspection</div>
+                <span class="table-count-pill">5 UC</span>
+              </div>
+              <div class="menu-item" onclick="loadDiagram('grooming_grooming_surcharge', 'Use Case · Grooming Service', 'UC11b - Add-on Surcharge Workflow (D-02)')">
+                <div class="menu-item-left"><span class="badge">UC</span> Add-on Surcharge</div>
+                <span class="table-count-pill">5 UC</span>
+              </div>
+              <div class="menu-item" onclick="loadDiagram('grooming_grooming_emergency', 'Use Case · Grooming Service', 'UC11c - Grooming Emergency Abort')">
+                <div class="menu-item-left"><span class="badge">UC</span> Emergency Abort</div>
+                <span class="table-count-pill">4 UC</span>
+              </div>
+            </div>
+          </div>
+          <!-- Sub-group: 12. Inventory & Warehouse -->
+          <div class="sub-nav-group" id="sub-uc-inventory">
+            <div class="sub-nav-header" onclick="toggleGroup('sub-uc-inventory')">
+              <div class="sub-nav-title">
+                <span class="nav-icon">📦</span> 12. Inventory & Warehouse
+              </div>
+              <div class="sub-nav-meta">
+                <span class="table-count-pill">3 UC</span>
+                <span class="chevron-sub">▶</span>
+              </div>
+            </div>
+            <div class="sub-nav-content">
+              <div class="menu-item" onclick="loadDiagram('inventory_receive', 'Use Case · Inventory & Warehouse', 'UC12a - Receiving & Stock Count')">
+                <div class="menu-item-left"><span class="badge">UC</span> Stock Receiving</div>
+                <span class="table-count-pill">6 UC</span>
+              </div>
+              <div class="menu-item" onclick="loadDiagram('inventory_transfer', 'Use Case · Inventory & Warehouse', 'UC12b - Store-to-Store Stock Transfer')">
+                <div class="menu-item-left"><span class="badge">UC</span> Transfer Workflow</div>
+                <span class="table-count-pill">6 UC</span>
+              </div>
+              <div class="menu-item" onclick="loadDiagram('inventory_alerts', 'Use Case · Inventory & Warehouse', 'UC12c - Inventory Alerts & FEFO Picking')">
+                <div class="menu-item-left"><span class="badge">UC</span> FEFO & Low Stock</div>
+                <span class="table-count-pill">5 UC</span>
+              </div>
+            </div>
+          </div>
+          <!-- Sub-group: 13. Procurement Management -->
+          <div class="sub-nav-group" id="sub-uc-procurement">
+            <div class="sub-nav-header" onclick="toggleGroup('sub-uc-procurement')">
+              <div class="sub-nav-title">
+                <span class="nav-icon">📑</span> 13. Procurement Management
+              </div>
+              <div class="sub-nav-meta">
+                <span class="table-count-pill">2 UC</span>
+                <span class="chevron-sub">▶</span>
+              </div>
+            </div>
+            <div class="sub-nav-content">
+              <div class="menu-item" onclick="loadDiagram('procurement_pr', 'Use Case · Procurement', 'UC13a - Purchase Request (PR) Approval')">
+                <div class="menu-item-left"><span class="badge">UC</span> Purchase Request</div>
+                <span class="table-count-pill">5 UC</span>
+              </div>
+              <div class="menu-item" onclick="loadDiagram('procurement_po', 'Use Case · Procurement', 'UC13b - Purchase Order (PO) & Receiving')">
+                <div class="menu-item-left"><span class="badge">UC</span> Purchase Order</div>
+                <span class="table-count-pill">6 UC</span>
+              </div>
+            </div>
+          </div>
+          <!-- Sub-group: 14. Order Management (Commerce & POS) -->
+          <div class="sub-nav-group" id="sub-uc-commerce">
+            <div class="sub-nav-header" onclick="toggleGroup('sub-uc-commerce')">
+              <div class="sub-nav-title">
+                <span class="nav-icon">🛒</span> 14. Order Management (Commerce & POS)
+              </div>
+              <div class="sub-nav-meta">
+                <span class="table-count-pill">3 UC</span>
+                <span class="chevron-sub">▶</span>
+              </div>
+            </div>
+            <div class="sub-nav-content">
+              <div class="menu-item" onclick="loadDiagram('commerce_cart', 'Use Case · Order Management', 'UC14a - Cart & Stock Hold 15m')">
+                <div class="menu-item-left"><span class="badge">UC</span> Cart Hold 15m</div>
+                <span class="table-count-pill">5 UC</span>
+              </div>
+              <div class="menu-item" onclick="loadDiagram('commerce_checkout', 'Use Case · Order Management', 'UC14b - Store Fulfillment & Pickup')">
+                <div class="menu-item-left"><span class="badge">UC</span> Store Pickup Order</div>
+                <span class="table-count-pill">5 UC</span>
+              </div>
+              <div class="menu-item" onclick="loadDiagram('commerce_fulfillment', 'Use Case · Order Management', 'UC14c - POS In-store Instant Checkout')">
+                <div class="menu-item-left"><span class="badge">UC</span> POS Instant Checkout</div>
+                <span class="table-count-pill">5 UC</span>
+              </div>
+            </div>
+          </div>
+          <!-- Sub-group: 15. Billing & Invoicing -->
+          <div class="sub-nav-group" id="sub-uc-billing">
+            <div class="sub-nav-header" onclick="toggleGroup('sub-uc-billing')">
+              <div class="sub-nav-title">
+                <span class="nav-icon">🧾</span> 15. Billing & Invoicing
+              </div>
+              <div class="sub-nav-meta">
+                <span class="table-count-pill">3 UC</span>
+                <span class="chevron-sub">▶</span>
+              </div>
+            </div>
+            <div class="sub-nav-content">
+              <div class="menu-item" onclick="loadDiagram('billing_invoice_creation', 'Use Case · Billing & Settlement', 'UC15a - Invoice Generation & Discounts')">
+                <div class="menu-item-left"><span class="badge">UC</span> Invoice Drafting</div>
+                <span class="table-count-pill">5 UC</span>
+              </div>
+              <div class="menu-item" onclick="loadDiagram('billing_invoice_settlement', 'Use Case · Billing & Settlement', 'UC15b - Invoice Paid & Immutability (D-01)')">
+                <div class="menu-item-left"><span class="badge">UC</span> Invoice Settlement</div>
+                <span class="table-count-pill">4 UC</span>
+              </div>
+              <div class="menu-item" onclick="loadDiagram('billing_invoice_void', 'Use Case · Billing & Settlement', 'UC15c - Invoice Discard & Voiding')">
+                <div class="menu-item-left"><span class="badge">UC</span> Void Invoice</div>
+                <span class="table-count-pill">4 UC</span>
+              </div>
+            </div>
+          </div>
+          <!-- Sub-group: 16. Payment Management -->
+          <div class="sub-nav-group" id="sub-uc-payment">
+            <div class="sub-nav-header" onclick="toggleGroup('sub-uc-payment')">
+              <div class="sub-nav-title">
+                <span class="nav-icon">💳</span> 16. Payment Management
+              </div>
+              <div class="sub-nav-meta">
+                <span class="table-count-pill">2 UC</span>
+                <span class="chevron-sub">▶</span>
+              </div>
+            </div>
+            <div class="sub-nav-content">
+              <div class="menu-item" onclick="loadDiagram('payment_online', 'Use Case · Payment Management', 'UC16a - Online Gateway & Webhook')">
+                <div class="menu-item-left"><span class="badge">UC</span> Online Gateway</div>
+                <span class="table-count-pill">5 UC</span>
+              </div>
+              <div class="menu-item" onclick="loadDiagram('payment_cash', 'Use Case · Payment Management', 'UC16b - Cash Payment At Counter')">
+                <div class="menu-item-left"><span class="badge">UC</span> Cash POS Payment</div>
+                <span class="table-count-pill">4 UC</span>
+              </div>
+            </div>
+          </div>
+          <!-- Sub-group: 17. Refund Management -->
+          <div class="sub-nav-group" id="sub-uc-refund">
+            <div class="sub-nav-header" onclick="toggleGroup('sub-uc-refund')">
+              <div class="sub-nav-title">
+                <span class="nav-icon">🔄</span> 17. Refund Management
+              </div>
+              <div class="sub-nav-meta">
+                <span class="table-count-pill">1 UC</span>
+                <span class="chevron-sub">▶</span>
+              </div>
+            </div>
+            <div class="sub-nav-content">
+              <div class="menu-item" onclick="loadDiagram('payment_refund', 'Use Case · Refund Management', 'UC17a - Maker-Checker Refund Workflow')">
+                <div class="menu-item-left"><span class="badge">UC</span> Maker-Checker Refund</div>
+                <span class="table-count-pill">5 UC</span>
+              </div>
+            </div>
+          </div>
+          <!-- Sub-group: 18. Promotion & Voucher -->
+          <div class="sub-nav-group" id="sub-uc-promotion">
+            <div class="sub-nav-header" onclick="toggleGroup('sub-uc-promotion')">
+              <div class="sub-nav-title">
+                <span class="nav-icon">🏷️</span> 18. Promotion & Voucher
+              </div>
+              <div class="sub-nav-meta">
+                <span class="table-count-pill">1 UC</span>
+                <span class="chevron-sub">▶</span>
+              </div>
+            </div>
+            <div class="sub-nav-content">
+              <div class="menu-item" onclick="loadDiagram('promotion_voucher', 'Use Case · Promotion & Voucher', 'UC18 - Promotion Campaign & Voucher Validation')">
+                <div class="menu-item-left"><span class="badge">UC</span> Voucher Campaigns</div>
+                <span class="table-count-pill">6 UC</span>
+              </div>
+            </div>
+          </div>
+          <!-- Sub-group: 19. Membership & Loyalty -->
+          <div class="sub-nav-group" id="sub-uc-membership">
+            <div class="sub-nav-header" onclick="toggleGroup('sub-uc-membership')">
+              <div class="sub-nav-title">
+                <span class="nav-icon">👑</span> 19. Membership & Loyalty
+              </div>
+              <div class="sub-nav-meta">
+                <span class="table-count-pill">1 UC</span>
+                <span class="chevron-sub">▶</span>
+              </div>
+            </div>
+            <div class="sub-nav-content">
+              <div class="menu-item" onclick="loadDiagram('membership_loyalty', 'Use Case · Membership & Loyalty', 'UC19 - Loyalty Points & Tier Progression')">
+                <div class="menu-item-left"><span class="badge">UC</span> Membership Tiers</div>
+                <span class="table-count-pill">6 UC</span>
+              </div>
+            </div>
+          </div>
+          <!-- Sub-group: 20. Service Packages -->
+          <div class="sub-nav-group" id="sub-uc-package">
+            <div class="sub-nav-header" onclick="toggleGroup('sub-uc-package')">
+              <div class="sub-nav-title">
+                <span class="nav-icon">🎟️</span> 20. Service Packages
+              </div>
+              <div class="sub-nav-meta">
+                <span class="table-count-pill">1 UC</span>
+                <span class="chevron-sub">▶</span>
+              </div>
+            </div>
+            <div class="sub-nav-content">
+              <div class="menu-item" onclick="loadDiagram('package_management', 'Use Case · Service Packages', 'UC20 - Prepaid Bundles & Usage Deduction')">
+                <div class="menu-item-left"><span class="badge">UC</span> Prepaid Bundles</div>
+                <span class="table-count-pill">6 UC</span>
+              </div>
+            </div>
+          </div>
+          <!-- Sub-group: 21. Incident Management -->
+          <div class="sub-nav-group" id="sub-uc-incident">
+            <div class="sub-nav-header" onclick="toggleGroup('sub-uc-incident')">
+              <div class="sub-nav-title">
+                <span class="nav-icon">⚠️</span> 21. Incident Management
+              </div>
+              <div class="sub-nav-meta">
+                <span class="table-count-pill">1 UC</span>
+                <span class="chevron-sub">▶</span>
+              </div>
+            </div>
+            <div class="sub-nav-content">
+              <div class="menu-item" onclick="loadDiagram('incident_management', 'Use Case · Incident Management', 'UC21 - Clinic & Grooming Incident Escalation')">
+                <div class="menu-item-left"><span class="badge">UC</span> Incident Escalation</div>
+                <span class="table-count-pill">6 UC</span>
+              </div>
+            </div>
+          </div>
+          <!-- Sub-group: 22. Consent & Privacy -->
+          <div class="sub-nav-group" id="sub-uc-consent">
+            <div class="sub-nav-header" onclick="toggleGroup('sub-uc-consent')">
+              <div class="sub-nav-title">
+                <span class="nav-icon">📝</span> 22. Consent & Privacy
+              </div>
+              <div class="sub-nav-meta">
+                <span class="table-count-pill">1 UC</span>
+                <span class="chevron-sub">▶</span>
+              </div>
+            </div>
+            <div class="sub-nav-content">
+              <div class="menu-item" onclick="loadDiagram('consent_privacy', 'Use Case · Consent & Privacy', 'UC22 - Cross-Store EMR Consent & GDPR')">
+                <div class="menu-item-left"><span class="badge">UC</span> Medical Consent</div>
+                <span class="table-count-pill">6 UC</span>
+              </div>
+            </div>
+          </div>
+          <!-- Sub-group: 23. Notification System -->
+          <div class="sub-nav-group" id="sub-uc-notification">
+            <div class="sub-nav-header" onclick="toggleGroup('sub-uc-notification')">
+              <div class="sub-nav-title">
+                <span class="nav-icon">🔔</span> 23. Notification System
+              </div>
+              <div class="sub-nav-meta">
+                <span class="table-count-pill">2 UC</span>
+                <span class="chevron-sub">▶</span>
+              </div>
+            </div>
+            <div class="sub-nav-content">
+              <div class="menu-item" onclick="loadDiagram('notification_dispatch', 'Use Case · Notification System', 'UC23a - Multi-channel Notification Dispatch')">
+                <div class="menu-item-left"><span class="badge">UC</span> Dispatch Engine</div>
+                <span class="table-count-pill">5 UC</span>
+              </div>
+              <div class="menu-item" onclick="loadDiagram('notification_reminder', 'Use Case · Notification System', 'UC23b - Appointment & Vaccine Auto-reminder')">
+                <div class="menu-item-left"><span class="badge">UC</span> Auto Reminders</div>
+                <span class="table-count-pill">4 UC</span>
+              </div>
+            </div>
+          </div>
+          <!-- Sub-group: 24. Reporting & Analytics -->
+          <div class="sub-nav-group" id="sub-uc-reporting">
+            <div class="sub-nav-header" onclick="toggleGroup('sub-uc-reporting')">
+              <div class="sub-nav-title">
+                <span class="nav-icon">📊</span> 24. Reporting & Analytics
+              </div>
+              <div class="sub-nav-meta">
+                <span class="table-count-pill">1 UC</span>
+                <span class="chevron-sub">▶</span>
+              </div>
+            </div>
+            <div class="sub-nav-content">
+              <div class="menu-item" onclick="loadDiagram('reporting_analytics', 'Use Case · Reporting & Analytics', 'UC24 - Revenue, Inventory & Doctor KPIs')">
+                <div class="menu-item-left"><span class="badge">UC</span> Store Analytics</div>
+                <span class="table-count-pill">6 UC</span>
+              </div>
+            </div>
+          </div>
+          <!-- Sub-group: 25. Audit Management -->
+          <div class="sub-nav-group" id="sub-uc-audit">
+            <div class="sub-nav-header" onclick="toggleGroup('sub-uc-audit')">
+              <div class="sub-nav-title">
+                <span class="nav-icon">🔍</span> 25. Audit Management
+              </div>
+              <div class="sub-nav-meta">
+                <span class="table-count-pill">1 UC</span>
+                <span class="chevron-sub">▶</span>
+              </div>
+            </div>
+            <div class="sub-nav-content">
+              <div class="menu-item" onclick="loadDiagram('audit_management', 'Use Case · Audit Management', 'UC25 - Immutable Audit Trail & Access Logs')">
+                <div class="menu-item-left"><span class="badge">UC</span> Audit Logs</div>
+                <span class="table-count-pill">6 UC</span>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </nav>
+  </aside>
+
+  <!-- Main Viewport Area -->
+  <main class="content-area">
+    <!-- Top Action Bar -->
+    <div class="top-bar">
+      <div class="header-titles">
+        <p class="eyebrow-top" id="top-eyebrow">Use Case · Auth & Identity</p>
+        <h1 id="top-title">UC1 · Authentication & Identity Management</h1>
+      </div>
+      <div class="toolbar">
+        <button class="btn-tool" onclick="zoomIn()" title="Phóng to (+)">+ Zoom</button>
+        <span class="zoom-indicator" id="zoom-text">100%</span>
+        <button class="btn-tool" onclick="zoomOut()" title="Thu nhỏ (-)">- Zoom</button>
+        <button class="btn-tool" onclick="resetZoom()" title="Vừa vặn màn hình">⤢ Fit</button>
+        <div class="tool-sep"></div>
+        <button class="btn-tool active" id="btn-mode-pan" onclick="setInteractionMode('pan')">✋ Pan Canvas</button>
+        <div class="tool-sep"></div>
+        <button class="btn-tool btn-export" onclick="downloadPng()">📥 Tải PNG (HD)</button>
+        <button class="btn-tool btn-export" onclick="downloadSvg()">📥 Tải SVG</button>
+      </div>
+    </div>
+
+    <!-- Interactive Canvas Viewport -->
+    <div class="viewport" id="viewport">
+      <svg id="canvas-svg" width="100%" height="100%">
+        <defs>
+          <pattern id="grid-pattern" width="24" height="24" patternUnits="userSpaceOnUse">
+            <circle cx="2" cy="2" r="1" fill="rgba(45, 49, 66, 0.08)"></circle>
+          </pattern>
+        </defs>
+        <rect width="100%" height="100%" fill="url(#grid-pattern)"></rect>
+        <g id="canvas-content" transform="translate(40, 30) scale(0.85)"></g>
+      </svg>
+    </div>
+
+    <!-- Bottom Status & Interactive Legend -->
+    <div class="footer-legend">
+      <div class="footer-desc" id="footer-desc">
+        <strong>Domain Note:</strong> Use Case Diagram
+      </div>
+      <div class="legend-card">
+        <div class="legend-item"><span style="display:inline-block;width:12px;height:2px;background:#eb6c36;"></span> Focal Use Case</div>
+        <div class="legend-item"><span style="display:inline-block;width:14px;height:0;border-top:1.5px dashed #2e5aa8;"></span> &laquo;include&raquo;</div>
+        <div class="legend-item"><span style="display:inline-block;width:14px;height:0;border-top:1.5px dashed #7b4ac7;"></span> &laquo;extend&raquo;</div>
+        <div class="legend-item"><span class="chip-sample" style="border-color:#4f5d75;color:#4f5d75">UC#</span> ID Chip</div>
+      </div>
+    </div>
+  </main>
+
+  <div id="toast" class="toast"></div>
+
+  <!-- Data Sources & Dependencies -->
+  <script src="data.js"></script>
+  <script src="../shared/renderer.js"></script>
+  <script src="../shared/engine.js"></script>
+
+  <!-- Initialize Engine -->
+  <script>
+    document.addEventListener('DOMContentLoaded', () => {
+      initEngine('uc1', 'Use Case · Auth & Identity', 'UC1 · Authentication & Identity Management');
+    });
+  </script>
+</body>
+</html>

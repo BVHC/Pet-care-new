@@ -1,0 +1,330 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>UC · Auth & Identity · Pet Care Ecosystem</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link href="https://fonts.googleapis.com/css2?family=Geist:wght@400;500;600;700&family=Geist+Mono:wght@400;500&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="../shared/styles.css">
+  <style>
+    .diagram-tabs {
+      display: flex;
+      gap: 8px;
+      padding: 12px 24px;
+      background: #ececef;
+      border-bottom: 1px solid var(--color-border);
+      overflow-x: auto;
+    }
+    .diagram-tab {
+      padding: 8px 16px;
+      border-radius: 6px;
+      font-size: 12px;
+      font-weight: 500;
+      cursor: pointer;
+      white-space: nowrap;
+      background: white;
+      border: 1px solid var(--color-border);
+      transition: all 0.15s;
+    }
+    .diagram-tab:hover {
+      border-color: var(--color-accent);
+    }
+    .diagram-tab.active {
+      background: var(--color-accent);
+      border-color: var(--color-accent);
+      color: white;
+    }
+    .diagram-tab.focal {
+      border-color: var(--color-accent);
+      color: var(--color-accent);
+    }
+  </style>
+</head>
+<body>
+  <!-- Sidebar -->
+  <aside class="sidebar">
+    <div class="sidebar-brand">
+      <h1>🎯 Use Cases</h1>
+      <p class="subtitle">Auth & Identity</p>
+    </div>
+    <nav class="sidebar-nav">
+      <div class="nav-group open">
+        <div class="nav-group-header" onclick="toggleGroup(this.parentElement.id)">
+          <span>📁 Auth & Identity</span>
+          <span class="chevron">▶</span>
+        </div>
+        <div class="nav-group-content">
+          <div class="menu-item active focal" onclick="switchDiagram('customer-registration')">
+            <span class="badge">UC1a</span>
+            <span>Customer Registration</span>
+            <span class="status-pill focal">⭐ Key</span>
+          </div>
+          <div class="menu-item" onclick="switchDiagram('customer-login')">
+            <span class="badge">UC1b</span>
+            <span>Customer Login</span>
+          </div>
+          <div class="menu-item" onclick="switchDiagram('staff-onboarding')">
+            <span class="badge">UC1c</span>
+            <span>Staff Onboarding D-04</span>
+          </div>
+          <div class="menu-item" onclick="switchDiagram('account-management')">
+            <span class="badge">UC1d</span>
+            <span>Account Management</span>
+          </div>
+        </div>
+      </div>
+      <div class="nav-group">
+        <div class="nav-group-header" onclick="toggleGroup(this.parentElement.id)">
+          <span>📁 Other Categories</span>
+          <span class="chevron">▶</span>
+        </div>
+        <div class="nav-group-content">
+          <div class="menu-item" onclick="location.href='uc-booking.html'">
+            <span class="badge">UC2</span>
+            <span>Booking & Scheduling</span>
+          </div>
+          <div class="menu-item" onclick="location.href='uc-clinical.html'">
+            <span class="badge">UC5</span>
+            <span>Clinical & EMR</span>
+          </div>
+          <div class="menu-item" onclick="location.href='../index.html'">
+            <span class="badge">↑</span>
+            <span>All Categories</span>
+          </div>
+        </div>
+      </div>
+    </nav>
+  </aside>
+
+  <!-- Main Content -->
+  <main class="main-content">
+    <div class="top-bar">
+      <div class="top-left">
+        <div class="breadcrumb">
+          <a href="../index.html">Diagrams</a>
+          <span>/</span>
+          <span>Use Cases</span>
+          <span>/</span>
+          <span>Auth & Identity</span>
+        </div>
+        <h1 class="top-title" id="top-title">Customer Registration</h1>
+      </div>
+      <div class="controls">
+        <button class="control-btn" onclick="zoomIn()">🔍+</button>
+        <button class="control-btn" onclick="zoomOut()">🔍-</button>
+        <button class="control-btn" onclick="resetZoom()">Reset</button>
+      </div>
+    </div>
+
+    <div class="diagram-tabs" id="diagram-tabs"></div>
+
+    <div class="canvas-wrapper">
+      <div id="viewport">
+        <div id="canvas-content">
+          <svg id="main-svg" width="100%" height="100%" viewBox="0 0 1200 800">
+            <defs>
+              <marker id="arr" markerWidth="10" markerHeight="10" refX="9" refY="3" orient="auto" markerUnits="strokeWidth">
+                <path d="M0,0 L0,6 L9,3 z" fill="#4f5d75"/>
+              </marker>
+              <marker id="arr-blue" markerWidth="10" markerHeight="10" refX="9" refY="3" orient="auto" markerUnits="strokeWidth">
+                <path d="M0,0 L0,6 L9,3 z" fill="#2e5aa8"/>
+              </marker>
+              <marker id="arr-purple" markerWidth="10" markerHeight="10" refX="9" refY="3" orient="auto" markerUnits="strokeWidth">
+                <path d="M0,0 L0,6 L9,3 z" fill="#7b4ac7"/>
+              </marker>
+            </defs>
+          </svg>
+        </div>
+      </div>
+      <div class="zoom-indicator" id="zoom-indicator">100%</div>
+    </div>
+
+    <div class="footer" id="footer-desc">
+      <strong>Domain Note:</strong> Customer Registration Flow
+    </div>
+  </main>
+
+  <script src="../shared/renderer.js"></script>
+  <script>
+    // Diagram Data
+    const DIAGRAMS = {
+      'customer-registration': {
+        description: 'UC1a · Customer Registration: Register → Send OTP → Verify → Account Active',
+        actors: [
+          { name: "Customer", color: "#2e5aa8" },
+          { name: "Frontend App", system: true, color: "#4f5d75" },
+          { name: "OTP Service", system: true, color: "#4f5d75" },
+          { name: "Database", system: true, color: "#4f5d75" }
+        ],
+        useCases: [
+          { id: "UC1a-1", name: "Register Account", focal: true },
+          { id: "UC1a-2", name: "Send OTP Code" },
+          { id: "UC1a-3", name: "Verify OTP" },
+          { id: "UC1a-4", name: "Resend OTP" },
+          { id: "UC1a-5", name: "Activate Account" },
+          { id: "UC1a-6", name: "Issue JWT Token" }
+        ],
+        relations: [
+          { actor: "Customer", uc: "UC1a-1" },
+          { actor: "Frontend App", uc: "UC1a-2", type: "include" },
+          { actor: "OTP Service", uc: "UC1a-3" },
+          { actor: "OTP Service", uc: "UC1a-4" },
+          { actor: "Database", uc: "UC1a-5" },
+          { actor: "Database", uc: "UC1a-6" }
+        ]
+      },
+      'customer-login': {
+        description: 'UC1b · Customer Login: Credentials → Validate → JWT Session',
+        actors: [
+          { name: "Customer", color: "#2e5aa8" },
+          { name: "Auth Service", system: true, color: "#4f5d75" },
+          { name: "Database", system: true, color: "#4f5d75" }
+        ],
+        useCases: [
+          { id: "UC1b-1", name: "Login", focal: true },
+          { id: "UC1b-2", name: "Validate Credentials" },
+          { id: "UC1b-3", name: "Check Account Status" },
+          { id: "UC1b-4", name: "Issue Access Token" },
+          { id: "UC1b-5", name: "Issue Refresh Token" },
+          { id: "UC1b-6", name: "Logout" },
+          { id: "UC1b-7", name: "Revoke Tokens" },
+          { id: "UC1b-8", name: "Change Password" }
+        ],
+        relations: [
+          { actor: "Customer", uc: "UC1b-1" },
+          { actor: "Customer", uc: "UC1b-6" },
+          { actor: "Customer", uc: "UC1b-8" },
+          { actor: "Auth Service", uc: "UC1b-2", type: "include" },
+          { actor: "Auth Service", uc: "UC1b-3", type: "include" },
+          { actor: "Database", uc: "UC1b-4" },
+          { actor: "Database", uc: "UC1b-5" },
+          { actor: "Database", uc: "UC1b-7" }
+        ]
+      },
+      'staff-onboarding': {
+        description: 'UC1c · Staff Onboarding D-04: CreateStaff → Active (no OTP) → First Login → Force Change Password',
+        actors: [
+          { name: "Platform Admin", color: "#7b4ac7" },
+          { name: "Admin Portal", system: true, color: "#4f5d75" },
+          { name: "Auth Service", system: true, color: "#4f5d75" },
+          { name: "Staff", color: "#eb6c36" }
+        ],
+        useCases: [
+          { id: "UC1c-1", name: "Create Staff Account", focal: true },
+          { id: "UC1c-2", name: "Generate Temp Password" },
+          { id: "UC1c-3", name: "Send Credentials" },
+          { id: "UC1c-4", name: "Set must_change=true" },
+          { id: "UC1c-5", name: "First Login" },
+          { id: "UC1c-6", name: "Force Change Password" },
+          { id: "UC1c-7", name: "Issue JWT Session" },
+          { id: "UC1c-8", name: "Assign Role" }
+        ],
+        relations: [
+          { actor: "Platform Admin", uc: "UC1c-1" },
+          { actor: "Platform Admin", uc: "UC1c-8" },
+          { actor: "Admin Portal", uc: "UC1c-2", type: "include" },
+          { actor: "Admin Portal", uc: "UC1c-3", type: "include" },
+          { actor: "Admin Portal", uc: "UC1c-4", type: "include" },
+          { actor: "Staff", uc: "UC1c-5" },
+          { actor: "Auth Service", uc: "UC1c-6", type: "include" },
+          { actor: "Auth Service", uc: "UC1c-7" }
+        ]
+      },
+      'account-management': {
+        description: 'UC1d · Account Management: Lock, Unlock, Deactivate, Reactivate',
+        actors: [
+          { name: "Platform Admin", color: "#7b4ac7" },
+          { name: "Org Admin", color: "#eb6c36" },
+          { name: "System", system: true, color: "#4f5d75" },
+          { name: "Account", color: "#4f5d75" }
+        ],
+        useCases: [
+          { id: "UC1d-1", name: "Lock Account", focal: true },
+          { id: "UC1d-2", name: "Unlock Account" },
+          { id: "UC1d-3", name: "Deactivate Account" },
+          { id: "UC1d-4", name: "Reactivate Account" },
+          { id: "UC1d-5", name: "Revoke All Sessions" },
+          { id: "UC1d-6", name: "Record Audit Log" },
+          { id: "UC1d-7", name: "Auto Lock (5 failed attempts)" }
+        ],
+        relations: [
+          { actor: "Platform Admin", uc: "UC1d-1" },
+          { actor: "Platform Admin", uc: "UC1d-2" },
+          { actor: "Platform Admin", uc: "UC1d-3" },
+          { actor: "Org Admin", uc: "UC1d-1" },
+          { actor: "Org Admin", uc: "UC1d-2" },
+          { actor: "Org Admin", uc: "UC1d-3" },
+          { actor: "Org Admin", uc: "UC1d-4" },
+          { actor: "System", uc: "UC1d-5", type: "include" },
+          { actor: "System", uc: "UC1d-6", type: "include" },
+          { actor: "System", uc: "UC1d-7" }
+        ]
+      }
+    };
+
+    let currentDiagram = 'customer-registration';
+    let zoomLevel = 1.0;
+
+    function switchDiagram(key) {
+      currentDiagram = key;
+      document.querySelectorAll('.menu-item').forEach(el => el.classList.remove('active'));
+      event.target.closest('.menu-item').classList.add('active');
+
+      const data = DIAGRAMS[key];
+      document.getElementById('top-title').textContent = data.useCases[0].name;
+      document.getElementById('footer-desc').innerHTML = `<strong>Domain Note:</strong> ${data.description}`;
+
+      renderCurrentDiagram();
+    }
+
+    function renderCurrentDiagram() {
+      const svg = document.getElementById('main-svg');
+      svg.innerHTML = `
+        <defs>
+          <marker id="arr" markerWidth="10" markerHeight="10" refX="9" refY="3" orient="auto" markerUnits="strokeWidth">
+            <path d="M0,0 L0,6 L9,3 z" fill="#4f5d75"/>
+          </marker>
+          <marker id="arr-blue" markerWidth="10" markerHeight="10" refX="9" refY="3" orient="auto" markerUnits="strokeWidth">
+            <path d="M0,0 L0,6 L9,3 z" fill="#2e5aa8"/>
+          </marker>
+          <marker id="arr-purple" markerWidth="10" markerHeight="10" refX="9" refY="3" orient="auto" markerUnits="strokeWidth">
+            <path d="M0,0 L0,6 L9,3 z" fill="#7b4ac7"/>
+          </marker>
+        </defs>
+      `;
+
+      const data = DIAGRAMS[currentDiagram];
+      data._type = 'usecase';
+      renderUseCase(svg, data);
+    }
+
+    function zoomIn() {
+      zoomLevel = Math.min(2.0, zoomLevel + 0.1);
+      applyZoom();
+    }
+
+    function zoomOut() {
+      zoomLevel = Math.max(0.5, zoomLevel - 0.1);
+      applyZoom();
+    }
+
+    function resetZoom() {
+      zoomLevel = 1.0;
+      applyZoom();
+    }
+
+    function applyZoom() {
+      document.getElementById('canvas-content').style.transform = `scale(${zoomLevel})`;
+      document.getElementById('zoom-indicator').textContent = Math.round(zoomLevel * 100) + '%';
+    }
+
+    function toggleGroup(id) {
+      document.getElementById(id).classList.toggle('open');
+    }
+
+    // Initial render
+    renderCurrentDiagram();
+  </script>
+</body>
+</html>

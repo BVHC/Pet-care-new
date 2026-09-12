@@ -1,0 +1,135 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>UC · Caregiver Delegation · Pet Care</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link href="https://fonts.googleapis.com/css2?family=Geist:wght@400;500;600;700&family=Geist+Mono:wght@400;500&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="../shared/styles.css">
+</head>
+<body>
+  <aside class="sidebar">
+    <div class="sidebar-brand"><h1>🎯 Use Cases</h1><p class="subtitle">Caregiver Delegation</p></div>
+    <nav class="sidebar-nav">
+      <div class="nav-group open">
+        <div class="nav-group-header">📁 Caregiver</div>
+        <div class="nav-group-content">
+          <div class="menu-item" onclick="switchDiagram('delegation')"><span class="badge">UC14a</span><span>Delegation Lifecycle</span></div>
+          <div class="menu-item" onclick="switchDiagram('access')"><span class="badge">UC14b</span><span>Caregiver Access</span></div>
+        </div>
+      </div>
+      <div class="nav-group">
+        <div class="nav-group-header">📁 Navigation</div>
+        <div class="nav-group-content">
+          <div class="menu-item" onclick="location.href='uc-auth.html'"><span class="badge">UC1</span><span>Auth</span></div>
+          <div class="menu-item" onclick="location.href='../index.html'"><span class="badge">↑</span><span>All</span></div>
+        </div>
+      </div>
+    </nav>
+  </aside>
+
+  <main class="main-content">
+    <div class="top-bar">
+      <div class="top-left">
+        <div class="breadcrumb"><a href="../index.html">Diagrams</a><span>/</span><span>Use Cases</span><span>/</span><span>Caregiver</span></div>
+        <h1 class="top-title" id="top-title">Delegation Lifecycle</h1>
+      </div>
+      <div class="controls">
+        <button class="control-btn" onclick="zoomIn()">🔍+</button>
+        <button class="control-btn" onclick="zoomOut()">🔍-</button>
+        <button class="control-btn" onclick="resetZoom()">Reset</button>
+      </div>
+    </div>
+    <div class="canvas-wrapper">
+      <div id="viewport"><div id="canvas-content"><svg id="main-svg" width="100%" height="100%" viewBox="0 0 1200 800"></svg></div></div>
+      <div class="zoom-indicator" id="zoom-indicator">100%</div>
+    </div>
+    <div class="footer" id="footer-desc"><strong>Domain Note:</strong> Caregiver Delegation Management</div>
+  </main>
+
+  <script src="../shared/renderer.js"></script>
+  <script>
+    const DIAGRAMS = {
+      'delegation': {
+        description: 'UC14a · Delegation Lifecycle: INVITED → ACTIVE ↔ EXPIRED/REVOKED',
+        actors: [
+          { name: "Pet Owner", color: "#2e5aa8" },
+          { name: "Caregiver", color: "#eb6c36" },
+          { name: "Delegation Service", system: true, color: "#4f5d75" }
+        ],
+        useCases: [
+          { id: "UC14a-1", name: "Invite Caregiver", focal: true },
+          { id: "UC14a-2", name: "Accept Invitation" },
+          { id: "UC14a-3", name: "Reject Invitation" },
+          { id: "UC14a-4", name: "Process Expiry" },
+          { id: "UC14a-5", name: "Revoke Delegation" },
+          { id: "UC14a-6", name: "Manage Pets" }
+        ],
+        relations: [
+          { actor: "Pet Owner", uc: "UC14a-1" },
+          { actor: "Caregiver", uc: "UC14a-2" },
+          { actor: "Caregiver", uc: "UC14a-3" },
+          { actor: "Delegation Service", uc: "UC14a-4" },
+          { actor: "Pet Owner", uc: "UC14a-5" },
+          { actor: "Caregiver", uc: "UC14a-6" }
+        ]
+      },
+      'access': {
+        description: 'UC14b · Caregiver Access: Limited, Read-only EMR, Schedule Management',
+        actors: [
+          { name: "Caregiver", color: "#eb6c36" },
+          { name: "Delegation Service", system: true, color: "#4f5d75" },
+          { name: "EMR Service", system: true, color: "#4f5d75" }
+        ],
+        useCases: [
+          { id: "UC14b-1", name: "View Pet Information" },
+          { id: "UC14b-2", name: "View Medical History" },
+          { id: "UC14b-3", name: "Book Appointment" },
+          { id: "UC14b-4", name: "Manage Vaccination Schedule" },
+          { id: "UC14b-5", name: "Receive Notifications" }
+        ],
+        relations: [
+          { actor: "Caregiver", uc: "UC14b-1" },
+          { actor: "Delegation Service", uc: "UC14b-2", type: "include" },
+          { actor: "Caregiver", uc: "UC14b-3" },
+          { actor: "Caregiver", uc: "UC14b-4" },
+          { actor: "Delegation Service", uc: "UC14b-5", type: "include" }
+        ]
+      }
+    };
+
+    let currentDiagram = 'delegation';
+    let zoomLevel = 1.0;
+
+    function switchDiagram(key) {
+      currentDiagram = key;
+      document.querySelectorAll('.menu-item').forEach(el => el.classList.remove('active'));
+      event.target.closest('.menu-item').classList.add('active');
+      document.getElementById('top-title').textContent = DIAGRAMS[key].useCases[0].name;
+      document.getElementById('footer-desc').innerHTML = `<strong>Domain Note:</strong> ${DIAGRAMS[key].description}`;
+      renderCurrentDiagram();
+    }
+
+    function renderCurrentDiagram() {
+      const svg = document.getElementById('main-svg');
+      svg.innerHTML = `<defs>
+        <marker id="arr" markerWidth="10" markerHeight="10" refX="9" refY="3" orient="auto"><path d="M0,0 L0,6 L9,3 z" fill="#4f5d75"/></marker>
+        <marker id="arr-blue" markerWidth="10" markerHeight="10" refX="9" refY="3" orient="auto"><path d="M0,0 L0,6 L9,3 z" fill="#2e5aa8"/></marker>
+      </defs>`;
+      DIAGRAMS[currentDiagram]._type = 'usecase';
+      renderUseCase(svg, DIAGRAMS[currentDiagram]);
+    }
+
+    function zoomIn() { zoomLevel = Math.min(2.0, zoomLevel + 0.1); applyZoom(); }
+    function zoomOut() { zoomLevel = Math.max(0.5, zoomLevel - 0.1); applyZoom(); }
+    function resetZoom() { zoomLevel = 1.0; applyZoom(); }
+    function applyZoom() {
+      document.getElementById('canvas-content').style.transform = `scale(${zoomLevel})`;
+      document.getElementById('zoom-indicator').textContent = Math.round(zoomLevel * 100) + '%';
+    }
+
+    renderCurrentDiagram();
+  </script>
+</body>
+</html>

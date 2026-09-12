@@ -1,0 +1,161 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>UC · Payment & Refund · Pet Care</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link href="https://fonts.googleapis.com/css2?family=Geist:wght@400;500;600;700&family=Geist+Mono:wght@400;500&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="../shared/styles.css">
+</head>
+<body>
+  <aside class="sidebar">
+    <div class="sidebar-brand"><h1>🎯 Use Cases</h1><p class="subtitle">Payment & Refund</p></div>
+    <nav class="sidebar-nav">
+      <div class="nav-group open">
+        <div class="nav-group-header">📁 Payment</div>
+        <div class="nav-group-content">
+          <div class="menu-item" onclick="switchDiagram('online')"><span class="badge">UC12a</span><span>Online Payment</span></div>
+          <div class="menu-item" onclick="switchDiagram('cash')"><span class="badge">UC12b</span><span>Cash / POS</span></div>
+          <div class="menu-item" onclick="switchDiagram('refund')"><span class="badge">UC12c</span><span>Refund Processing</span></div>
+        </div>
+      </div>
+      <div class="nav-group">
+        <div class="nav-group-header">📁 Navigation</div>
+        <div class="nav-group-content">
+          <div class="menu-item" onclick="location.href='uc-billing.html'"><span class="badge">UC11</span><span>Billing</span></div>
+          <div class="menu-item" onclick="location.href='../index.html'"><span class="badge">↑</span><span>All</span></div>
+        </div>
+      </div>
+    </nav>
+  </aside>
+
+  <main class="main-content">
+    <div class="top-bar">
+      <div class="top-left">
+        <div class="breadcrumb"><a href="../index.html">Diagrams</a><span>/</span><span>Use Cases</span><span>/</span><span>Payment</span></div>
+        <h1 class="top-title" id="top-title">Online Payment</h1>
+      </div>
+      <div class="controls">
+        <button class="control-btn" onclick="zoomIn()">🔍+</button>
+        <button class="control-btn" onclick="zoomOut()">🔍-</button>
+        <button class="control-btn" onclick="resetZoom()">Reset</button>
+      </div>
+    </div>
+    <div class="canvas-wrapper">
+      <div id="viewport"><div id="canvas-content"><svg id="main-svg" width="100%" height="100%" viewBox="0 0 1200 800"></svg></div></div>
+      <div class="zoom-indicator" id="zoom-indicator">100%</div>
+    </div>
+    <div class="footer" id="footer-desc"><strong>Domain Note:</strong> Payment Management</div>
+  </main>
+
+  <script src="../shared/renderer.js"></script>
+  <script>
+    const DIAGRAMS = {
+      'online': {
+        description: 'UC12a · Online Payment: Checkout → Gateway → Webhook → Payment Success',
+        actors: [
+          { name: "Customer", color: "#2e5aa8" },
+          { name: "Payment Gateway", color: "#4f5d75" },
+          { name: "Order Service", system: true, color: "#4f5d75" },
+          { name: "Webhook Handler", system: true, color: "#4f5d75" }
+        ],
+        useCases: [
+          { id: "UC12a-1", name: "Checkout", focal: true },
+          { id: "UC12a-2", name: "Create Payment Intent" },
+          { id: "UC12a-3", name: "Redirect to Gateway" },
+          { id: "UC12a-4", name: "Process Payment" },
+          { id: "UC12a-5", name: "Webhook Callback" },
+          { id: "UC12a-6", name: "Verify Signature" },
+          { id: "UC12a-7", name: "Update Order Status" }
+        ],
+        relations: [
+          { actor: "Customer", uc: "UC12a-1" },
+          { actor: "Order Service", uc: "UC12a-2", type: "include" },
+          { actor: "Order Service", uc: "UC12a-3", type: "include" },
+          { actor: "Payment Gateway", uc: "UC12a-4" },
+          { actor: "Payment Gateway", uc: "UC12a-5" },
+          { actor: "Webhook Handler", uc: "UC12a-6", type: "include" },
+          { actor: "Order Service", uc: "UC12a-7", type: "include" }
+        ]
+      },
+      'cash': {
+        description: 'UC12b · Cash / POS Payment: Record Cash, POS Transaction',
+        actors: [
+          { name: "Customer", color: "#2e5aa8" },
+          { name: "Receptionist", color: "#eb6c36" },
+          { name: "Payment Service", system: true, color: "#4f5d75" }
+        ],
+        useCases: [
+          { id: "UC12b-1", name: "Record Cash Payment", focal: true },
+          { id: "UC12b-2", name: "Record POS Payment" },
+          { id: "UC12b-3", name: "Issue Receipt" },
+          { id: "UC12b-4", name: "Update Invoice Status" }
+        ],
+        relations: [
+          { actor: "Customer", uc: "UC12b-1" },
+          { actor: "Receptionist", uc: "UC12b-1" },
+          { actor: "Receptionist", uc: "UC12b-2" },
+          { actor: "Payment Service", uc: "UC12b-3", type: "include" },
+          { actor: "Payment Service", uc: "UC12b-4", type: "include" }
+        ]
+      },
+      'refund': {
+        description: 'UC12c · Refund Processing: Full Refund, Partial Refund (D-01)',
+        actors: [
+          { name: "Finance Staff", color: "#7b4ac7" },
+          { name: "System", color: "#4f5d75" },
+          { name: "Payment Service", system: true, color: "#4f5d75" },
+          { name: "Invoice Service", system: true, color: "#4f5d75" }
+        ],
+        useCases: [
+          { id: "UC12c-1", name: "Process Full Refund", focal: true },
+          { id: "UC12c-2", name: "Process Partial Refund" },
+          { id: "UC12c-3", name: "Update total_refunded_amount" },
+          { id: "UC12c-4", name: "Create Refund Record" },
+          { id: "UC12c-5", name: "Send Refund Notification" }
+        ],
+        relations: [
+          { actor: "Finance Staff", uc: "UC12c-1" },
+          { actor: "Finance Staff", uc: "UC12c-2" },
+          { actor: "Invoice Service", uc: "UC12c-3", type: "include" },
+          { actor: "Payment Service", uc: "UC12c-4", type: "include" },
+          { actor: "System", uc: "UC12c-5", type: "include" }
+        ]
+      }
+    };
+
+    let currentDiagram = 'online';
+    let zoomLevel = 1.0;
+
+    function switchDiagram(key) {
+      currentDiagram = key;
+      document.querySelectorAll('.menu-item').forEach(el => el.classList.remove('active'));
+      event.target.closest('.menu-item').classList.add('active');
+      document.getElementById('top-title').textContent = DIAGRAMS[key].useCases[0].name;
+      document.getElementById('footer-desc').innerHTML = `<strong>Domain Note:</strong> ${DIAGRAMS[key].description}`;
+      renderCurrentDiagram();
+    }
+
+    function renderCurrentDiagram() {
+      const svg = document.getElementById('main-svg');
+      svg.innerHTML = `<defs>
+        <marker id="arr" markerWidth="10" markerHeight="10" refX="9" refY="3" orient="auto"><path d="M0,0 L0,6 L9,3 z" fill="#4f5d75"/></marker>
+        <marker id="arr-blue" markerWidth="10" markerHeight="10" refX="9" refY="3" orient="auto"><path d="M0,0 L0,6 L9,3 z" fill="#2e5aa8"/></marker>
+      </defs>`;
+      DIAGRAMS[currentDiagram]._type = 'usecase';
+      renderUseCase(svg, DIAGRAMS[currentDiagram]);
+    }
+
+    function zoomIn() { zoomLevel = Math.min(2.0, zoomLevel + 0.1); applyZoom(); }
+    function zoomOut() { zoomLevel = Math.max(0.5, zoomLevel - 0.1); applyZoom(); }
+    function resetZoom() { zoomLevel = 1.0; applyZoom(); }
+    function applyZoom() {
+      document.getElementById('canvas-content').style.transform = `scale(${zoomLevel})`;
+      document.getElementById('zoom-indicator').textContent = Math.round(zoomLevel * 100) + '%';
+    }
+
+    renderCurrentDiagram();
+  </script>
+</body>
+</html>

@@ -1,0 +1,230 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>UC · Grooming & Surcharge · Pet Care</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link href="https://fonts.googleapis.com/css2?family=Geist:wght@400;500;600;700&family=Geist+Mono:wght@400;500&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="../shared/styles.css">
+  <style>
+    .decision-box {
+      background: rgba(235, 108, 54, 0.1);
+      border: 2px solid var(--color-accent);
+      border-radius: 8px;
+      padding: 12px 16px;
+      margin: 12px 24px;
+      font-size: 12px;
+    }
+    .decision-box strong { color: var(--color-accent); }
+  </style>
+</head>
+<body>
+  <aside class="sidebar">
+    <div class="sidebar-brand">
+      <h1>🎯 Use Cases</h1>
+      <p class="subtitle">Grooming Service</p>
+    </div>
+    <nav class="sidebar-nav">
+      <div class="nav-group open">
+        <div class="nav-group-header">📁 Grooming Use Cases</div>
+        <div class="nav-group-content">
+          <div class="menu-item" onclick="switchDiagram('grooming-session')">
+            <span class="badge">UC7a</span>
+            <span>Grooming Session</span>
+          </div>
+          <div class="menu-item active focal" onclick="switchDiagram('grooming-surcharge')">
+            <span class="badge">UC7b</span>
+            <span>Surcharge Invoice D-02</span>
+            <span class="status-pill focal">⭐ Key</span>
+          </div>
+          <div class="menu-item" onclick="switchDiagram('grooming-emergency')">
+            <span class="badge">UC7c</span>
+            <span>Emergency Abort</span>
+          </div>
+        </div>
+      </div>
+      <div class="nav-group">
+        <div class="nav-group-header">📁 Key Decisions</div>
+        <div class="nav-group-content">
+          <div class="menu-item" style="background: var(--color-accent-subtle);">
+            <span class="badge" style="background: var(--color-accent); color: white;">D-02</span>
+            <span>Surcharge Invoice Protocol</span>
+          </div>
+          <div class="menu-item" style="font-size: 11px; color: var(--color-muted);">
+            <span>→ Independent Invoice for add-on services</span>
+          </div>
+        </div>
+      </div>
+      <div class="nav-group">
+        <div class="nav-group-header">📁 Navigation</div>
+        <div class="nav-group-content">
+          <div class="menu-item" onclick="location.href='uc-booking.html'"><span class="badge">UC2</span><span>Booking</span></div>
+          <div class="menu-item" onclick="location.href='uc-billing.html'"><span class="badge">UC11</span><span>Billing</span></div>
+          <div class="menu-item" onclick="location.href='../index.html'"><span class="badge">↑</span><span>All</span></div>
+        </div>
+      </div>
+    </nav>
+  </aside>
+
+  <main class="main-content">
+    <div class="top-bar">
+      <div class="top-left">
+        <div class="breadcrumb">
+          <a href="../index.html">Diagrams</a><span>/</span><span>Use Cases</span><span>/</span><span>Grooming</span>
+        </div>
+        <h1 class="top-title" id="top-title">Surcharge Invoice D-02</h1>
+      </div>
+      <div class="controls">
+        <button class="control-btn" onclick="zoomIn()">🔍+</button>
+        <button class="control-btn" onclick="zoomOut()">🔍-</button>
+        <button class="control-btn" onclick="resetZoom()">Reset</button>
+      </div>
+    </div>
+
+    <div class="decision-box" id="decision-box">
+      <strong>🔶 Decision D-02:</strong> Surcharge Invoice Protocol — Additional services during Grooming → <strong>Independent Invoice</strong> (not modifying original PAID invoice)
+    </div>
+
+    <div class="canvas-wrapper">
+      <div id="viewport">
+        <div id="canvas-content">
+          <svg id="main-svg" width="100%" height="100%" viewBox="0 0 1200 900"></svg>
+        </div>
+      </div>
+      <div class="zoom-indicator" id="zoom-indicator">100%</div>
+    </div>
+
+    <div class="footer" id="footer-desc"><strong>Domain Note:</strong> Grooming Surcharge Invoice Protocol</div>
+  </main>
+
+  <script src="../shared/renderer.js"></script>
+  <script>
+    const DIAGRAMS = {
+      'grooming-session': {
+        description: 'UC7a · Grooming Session: Inspect → Perform → Complete',
+        actors: [
+          { name: "Groomer", color: "#45a58a" },
+          { name: "Customer", color: "#2e5aa8" },
+          { name: "Receptionist", color: "#eb6c36" }
+        ],
+        useCases: [
+          { id: "UC7a-1", name: "Book Grooming", focal: true },
+          { id: "UC7a-2", name: "Check-in Grooming" },
+          { id: "UC7a-3", name: "Inspect Pet" },
+          { id: "UC7a-4", name: "Perform Grooming" },
+          { id: "UC7a-5", name: "Update Progress" },
+          { id: "UC7a-6", name: "Complete Grooming" },
+          { id: "UC7a-7", name: "Check-out" }
+        ],
+        relations: [
+          { actor: "Customer", uc: "UC7a-1" },
+          { actor: "Receptionist", uc: "UC7a-1" },
+          { actor: "Receptionist", uc: "UC7a-2" },
+          { actor: "Groomer", uc: "UC7a-3" },
+          { actor: "Groomer", uc: "UC7a-4" },
+          { actor: "Groomer", uc: "UC7a-5" },
+          { actor: "Groomer", uc: "UC7a-6" },
+          { actor: "Receptionist", uc: "UC7a-7" }
+        ]
+      },
+      'grooming-surcharge': {
+        description: 'UC7b · D-02 Surcharge Invoice: AddService → Await Approval → Create Independent Invoice',
+        actors: [
+          { name: "Groomer", color: "#45a58a" },
+          { name: "Customer", color: "#2e5aa8" },
+          { name: "Grooming Service", system: true, color: "#4f5d75" },
+          { name: "Invoice Service", system: true, color: "#4f5d75" }
+        ],
+        useCases: [
+          { id: "UC7b-1", name: "Add Grooming Service", focal: true },
+          { id: "UC7b-2", name: "Await Customer Approval" },
+          { id: "UC7b-3", name: "Confirm Additional Service" },
+          { id: "UC7b-4", name: "Reject Additional Service" },
+          { id: "UC7b-5", name: "Create Surcharge Invoice", type: "extend" },
+          { id: "UC7b-6", name: "Invoice → DRAFT" },
+          { id: "UC7b-7", name: "Invoice → ISSUED" },
+          { id: "UC7b-8", name: "Surcharge → PAID" },
+          { id: "UC7b-9", name: "Resume Grooming" }
+        ],
+        relations: [
+          { actor: "Groomer", uc: "UC7b-1" },
+          { actor: "Grooming Service", uc: "UC7b-2", type: "include" },
+          { actor: "Customer", uc: "UC7b-3" },
+          { actor: "Customer", uc: "UC7b-4" },
+          { actor: "Groomer", uc: "UC7b-5", type: "extend" },
+          { actor: "Invoice Service", uc: "UC7b-6", type: "include" },
+          { actor: "Invoice Service", uc: "UC7b-7", type: "include" },
+          { actor: "Invoice Service", uc: "UC7b-8", type: "include" },
+          { actor: "Grooming Service", uc: "UC7b-9" }
+        ]
+      },
+      'grooming-emergency': {
+        description: 'UC7c · Emergency Abort: Safety Issue → Abort → Create Incident → Notify',
+        actors: [
+          { name: "Groomer", color: "#45a58a" },
+          { name: "Store Manager", color: "#7b4ac7" },
+          { name: "Grooming Service", system: true, color: "#4f5d75" },
+          { name: "Notification Service", system: true, color: "#4f5d75" }
+        ],
+        useCases: [
+          { id: "UC7c-1", name: "Detect Safety Issue", focal: true },
+          { id: "UC7c-2", name: "Abort Grooming" },
+          { id: "UC7c-3", name: "Create Grooming Incident" },
+          { id: "UC7c-4", name: "Release Resources" },
+          { id: "UC7c-5", name: "Send Incident Notification" },
+          { id: "UC7c-6", name: "Process Partial Refund" }
+        ],
+        relations: [
+          { actor: "Groomer", uc: "UC7c-1" },
+          { actor: "Groomer", uc: "UC7c-2" },
+          { actor: "Grooming Service", uc: "UC7c-3", type: "include" },
+          { actor: "Grooming Service", uc: "UC7c-4", type: "include" },
+          { actor: "Notification Service", uc: "UC7c-5", type: "include" },
+          { actor: "Store Manager", uc: "UC7c-6" }
+        ]
+      }
+    };
+
+    let currentDiagram = 'grooming-surcharge';
+    let zoomLevel = 1.0;
+
+    function switchDiagram(key) {
+      currentDiagram = key;
+      document.querySelectorAll('.menu-item').forEach(el => el.classList.remove('active'));
+      event.target.closest('.menu-item').classList.add('active');
+      const data = DIAGRAMS[key];
+      document.getElementById('top-title').textContent = data.useCases[0].name;
+      document.getElementById('footer-desc').innerHTML = `<strong>Domain Note:</strong> ${data.description}`;
+
+      // Show/hide D-02 decision box
+      const decisionBox = document.getElementById('decision-box');
+      decisionBox.style.display = (key === 'grooming-surcharge') ? 'block' : 'none';
+
+      renderCurrentDiagram();
+    }
+
+    function renderCurrentDiagram() {
+      const svg = document.getElementById('main-svg');
+      svg.innerHTML = `<defs>
+        <marker id="arr" markerWidth="10" markerHeight="10" refX="9" refY="3" orient="auto" markerUnits="strokeWidth"><path d="M0,0 L0,6 L9,3 z" fill="#4f5d75"/></marker>
+        <marker id="arr-blue" markerWidth="10" markerHeight="10" refX="9" refY="3" orient="auto" markerUnits="strokeWidth"><path d="M0,0 L0,6 L9,3 z" fill="#2e5aa8"/></marker>
+        <marker id="arr-purple" markerWidth="10" markerHeight="10" refX="9" refY="3" orient="auto" markerUnits="strokeWidth"><path d="M0,0 L0,6 L9,3 z" fill="#7b4ac7"/></marker>
+      </defs>`;
+      const data = DIAGRAMS[currentDiagram];
+      data._type = 'usecase';
+      renderUseCase(svg, data);
+    }
+
+    function zoomIn() { zoomLevel = Math.min(2.0, zoomLevel + 0.1); applyZoom(); }
+    function zoomOut() { zoomLevel = Math.max(0.5, zoomLevel - 0.1); applyZoom(); }
+    function resetZoom() { zoomLevel = 1.0; applyZoom(); }
+    function applyZoom() {
+      document.getElementById('canvas-content').style.transform = `scale(${zoomLevel})`;
+      document.getElementById('zoom-indicator').textContent = Math.round(zoomLevel * 100) + '%';
+    }
+
+    renderCurrentDiagram();
+  </script>
+</body>
+</html>

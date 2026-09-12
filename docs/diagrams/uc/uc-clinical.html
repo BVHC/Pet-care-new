@@ -1,0 +1,227 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>UC · Clinical & EMR · Pet Care</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link href="https://fonts.googleapis.com/css2?family=Geist:wght@400;500;600;700&family=Geist+Mono:wght@400;500&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="../shared/styles.css">
+</head>
+<body>
+  <aside class="sidebar">
+    <div class="sidebar-brand">
+      <h1>🎯 Use Cases</h1>
+      <p class="subtitle">Clinical & EMR</p>
+    </div>
+    <nav class="sidebar-nav">
+      <div class="nav-group open">
+        <div class="nav-group-header">📁 Clinical Management</div>
+        <div class="nav-group-content">
+          <div class="menu-item" onclick="switchDiagram('clinical-examination')">
+            <span class="badge">UC5a</span>
+            <span>Examination Flow</span>
+          </div>
+          <div class="menu-item" onclick="switchDiagram('prescription')">
+            <span class="badge">UC5b</span>
+            <span>Prescription & Follow-up</span>
+          </div>
+          <div class="menu-item active focal" onclick="switchDiagram('cross-store-emr')">
+            <span class="badge">UC5c</span>
+            <span>Cross-Store EMR Consent</span>
+            <span class="status-pill focal">⭐ Key</span>
+          </div>
+          <div class="menu-item" onclick="switchDiagram('emergency-override')">
+            <span class="badge">UC5d</span>
+            <span>Emergency Override</span>
+          </div>
+        </div>
+      </div>
+      <div class="nav-group">
+        <div class="nav-group-header">📁 Navigation</div>
+        <div class="nav-group-content">
+          <div class="menu-item" onclick="location.href='uc-auth.html'"><span class="badge">UC1</span><span>Auth</span></div>
+          <div class="menu-item" onclick="location.href='uc-booking.html'"><span class="badge">UC2</span><span>Booking</span></div>
+          <div class="menu-item" onclick="location.href='../index.html'"><span class="badge">↑</span><span>All</span></div>
+        </div>
+      </div>
+    </nav>
+  </aside>
+
+  <main class="main-content">
+    <div class="top-bar">
+      <div class="top-left">
+        <div class="breadcrumb">
+          <a href="../index.html">Diagrams</a><span>/</span><span>Use Cases</span><span>/</span><span>Clinical</span>
+        </div>
+        <h1 class="top-title" id="top-title">Cross-Store EMR Consent</h1>
+      </div>
+      <div class="controls">
+        <button class="control-btn" onclick="zoomIn()">🔍+</button>
+        <button class="control-btn" onclick="zoomOut()">🔍-</button>
+        <button class="control-btn" onclick="resetZoom()">Reset</button>
+      </div>
+    </div>
+
+    <div class="canvas-wrapper">
+      <div id="viewport">
+        <div id="canvas-content">
+          <svg id="main-svg" width="100%" height="100%" viewBox="0 0 1200 900"></svg>
+        </div>
+      </div>
+      <div class="zoom-indicator" id="zoom-indicator">100%</div>
+    </div>
+
+    <div class="footer" id="footer-desc"><strong>Domain Note:</strong> Cross-Store EMR Access</div>
+  </main>
+
+  <script src="../shared/renderer.js"></script>
+  <script>
+    const DIAGRAMS = {
+      'clinical-examination': {
+        description: 'UC5a · Examination Flow: ExaminePet → RecordSymptom → RecordExaminationResult → DiagnosePet',
+        actors: [
+          { name: "Veterinarian", color: "#eb6c36" },
+          { name: "Customer", color: "#2e5aa8" },
+          { name: "EMR Service", system: true, color: "#4f5d75" }
+        ],
+        useCases: [
+          { id: "UC5a-1", name: "Examine Pet", focal: true },
+          { id: "UC5a-2", name: "Record Symptoms" },
+          { id: "UC5a-3", name: "Record Exam Results" },
+          { id: "UC5a-4", name: "Create Medical Record" },
+          { id: "UC5a-5", name: "Diagnose Pet" },
+          { id: "UC5a-6", name: "Create Treatment Plan" },
+          { id: "UC5a-7", name: "View Medical History" }
+        ],
+        relations: [
+          { actor: "Veterinarian", uc: "UC5a-1" },
+          { actor: "EMR Service", uc: "UC5a-2", type: "include" },
+          { actor: "EMR Service", uc: "UC5a-3", type: "include" },
+          { actor: "EMR Service", uc: "UC5a-4", type: "include" },
+          { actor: "Veterinarian", uc: "UC5a-5" },
+          { actor: "Veterinarian", uc: "UC5a-6" },
+          { actor: "Customer", uc: "UC5a-7" }
+        ]
+      },
+      'prescription': {
+        description: 'UC5b · Prescription: CreatePrescription → AddItems → CreateFollowUp',
+        actors: [
+          { name: "Veterinarian", color: "#eb6c36" },
+          { name: "EMR Service", system: true, color: "#4f5d75" },
+          { name: "Inventory", system: true, color: "#4f5d75" }
+        ],
+        useCases: [
+          { id: "UC5b-1", name: "Create Prescription", focal: true },
+          { id: "UC5b-2", name: "Add Prescription Items" },
+          { id: "UC5b-3", name: "Check Drug Inventory" },
+          { id: "UC5b-4", name: "Validate Dosage" },
+          { id: "UC5b-5", name: "Sign Prescription" },
+          { id: "UC5b-6", name: "Create Follow-up" },
+          { id: "UC5b-7", name: "Schedule Next Appointment" }
+        ],
+        relations: [
+          { actor: "Veterinarian", uc: "UC5b-1" },
+          { actor: "Veterinarian", uc: "UC5b-2" },
+          { actor: "EMR Service", uc: "UC5b-3", type: "include" },
+          { actor: "EMR Service", uc: "UC5b-4", type: "include" },
+          { actor: "EMR Service", uc: "UC5b-5", type: "include" },
+          { actor: "Veterinarian", uc: "UC5b-6" },
+          { actor: "EMR Service", uc: "UC5b-7", type: "include" }
+        ]
+      },
+      'cross-store-emr': {
+        description: 'UC5c · Cross-Store EMR Access: Request → OTP Consent (5m TTL) → 24h Access',
+        actors: [
+          { name: "Veterinarian (Other Store)", color: "#eb6c36" },
+          { name: "Customer", color: "#2e5aa8" },
+          { name: "EMR Service", system: true, color: "#4f5d75" },
+          { name: "OTP Service", system: true, color: "#4f5d75" }
+        ],
+        useCases: [
+          { id: "UC5c-1", name: "Request Cross-Store Consent", focal: true },
+          { id: "UC5c-2", name: "Generate OTP (TTL=5m)" },
+          { id: "UC5c-3", name: "Send OTP Notification" },
+          { id: "UC5c-4", name: "Verify OTP" },
+          { id: "UC5c-5", name: "Grant Access (24h)" },
+          { id: "UC5c-6", name: "Revoke Consent" },
+          { id: "UC5c-7", name: "Process Consent Expiry" }
+        ],
+        relations: [
+          { actor: "Veterinarian (Other Store)", uc: "UC5c-1" },
+          { actor: "EMR Service", uc: "UC5c-2", type: "include" },
+          { actor: "OTP Service", uc: "UC5c-3", type: "include" },
+          { actor: "Customer", uc: "UC5c-4" },
+          { actor: "EMR Service", uc: "UC5c-5" },
+          { actor: "Customer", uc: "UC5c-6" },
+          { actor: "EMR Service", uc: "UC5c-7" }
+        ]
+      },
+      'emergency-override': {
+        description: 'UC5d · Emergency Override: Break-Glass → Immediate Access → CreateIncident → Notify',
+        actors: [
+          { name: "Veterinarian", color: "#eb6c36" },
+          { name: "EMR Service", system: true, color: "#4f5d75" },
+          { name: "Incident Service", system: true, color: "#4f5d75" },
+          { name: "Notification Service", system: true, color: "#4f5d75" }
+        ],
+        useCases: [
+          { id: "UC5d-1", name: "Emergency Override Access", focal: true },
+          { id: "UC5d-2", name: "Record Clinical Reason" },
+          { id: "UC5d-3", name: "Create Clinical Incident" },
+          { id: "UC5d-4", name: "Set CRITICAL Severity" },
+          { id: "UC5d-5", name: "Record Audit Log" },
+          { id: "UC5d-6", name: "Send Incident Notification" },
+          { id: "UC5d-7", name: "Alert Customer" },
+          { id: "UC5d-8", name: "Alert Store Manager" }
+        ],
+        relations: [
+          { actor: "Veterinarian", uc: "UC5d-1" },
+          { actor: "EMR Service", uc: "UC5d-2", type: "include" },
+          { actor: "Incident Service", uc: "UC5d-3", type: "include" },
+          { actor: "Incident Service", uc: "UC5d-4", type: "include" },
+          { actor: "EMR Service", uc: "UC5d-5", type: "include" },
+          { actor: "Notification Service", uc: "UC5d-6", type: "include" },
+          { actor: "Notification Service", uc: "UC5d-7" },
+          { actor: "Notification Service", uc: "UC5d-8" }
+        ]
+      }
+    };
+
+    let currentDiagram = 'cross-store-emr';
+    let zoomLevel = 1.0;
+
+    function switchDiagram(key) {
+      currentDiagram = key;
+      document.querySelectorAll('.menu-item').forEach(el => el.classList.remove('active'));
+      event.target.closest('.menu-item').classList.add('active');
+      const data = DIAGRAMS[key];
+      document.getElementById('top-title').textContent = data.useCases[0].name;
+      document.getElementById('footer-desc').innerHTML = `<strong>Domain Note:</strong> ${data.description}`;
+      renderCurrentDiagram();
+    }
+
+    function renderCurrentDiagram() {
+      const svg = document.getElementById('main-svg');
+      svg.innerHTML = `<defs>
+        <marker id="arr" markerWidth="10" markerHeight="10" refX="9" refY="3" orient="auto" markerUnits="strokeWidth"><path d="M0,0 L0,6 L9,3 z" fill="#4f5d75"/></marker>
+        <marker id="arr-blue" markerWidth="10" markerHeight="10" refX="9" refY="3" orient="auto" markerUnits="strokeWidth"><path d="M0,0 L0,6 L9,3 z" fill="#2e5aa8"/></marker>
+        <marker id="arr-purple" markerWidth="10" markerHeight="10" refX="9" refY="3" orient="auto" markerUnits="strokeWidth"><path d="M0,0 L0,6 L9,3 z" fill="#7b4ac7"/></marker>
+      </defs>`;
+      const data = DIAGRAMS[currentDiagram];
+      data._type = 'usecase';
+      renderUseCase(svg, data);
+    }
+
+    function zoomIn() { zoomLevel = Math.min(2.0, zoomLevel + 0.1); applyZoom(); }
+    function zoomOut() { zoomLevel = Math.max(0.5, zoomLevel - 0.1); applyZoom(); }
+    function resetZoom() { zoomLevel = 1.0; applyZoom(); }
+    function applyZoom() {
+      document.getElementById('canvas-content').style.transform = `scale(${zoomLevel})`;
+      document.getElementById('zoom-indicator').textContent = Math.round(zoomLevel * 100) + '%';
+    }
+
+    renderCurrentDiagram();
+  </script>
+</body>
+</html>

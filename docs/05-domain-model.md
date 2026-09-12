@@ -153,7 +153,7 @@ graph TD
 - **Commands (docs/01-business-operations.md):**
   - `ManageUser`, `ManageRole`, `AssignPermission`, `ManagePermission`, `LockAccount`, `UnlockAccount`, `DeactivateAccount`, `ReactivateAccount`, `ManageCustomerProfile`
 - **Domain Events:**
-  - `RoleAssigned`, `PermissionRevoked`, `AccountSessionBlacklisted`
+  - `PermissionAssigned`, `AccountLocked`, `AccountUnlocked`
 - **Business Invariants (docs/02-business-rules.md):**
   - `RULE-02-01`: Thực thi ranh giới 5 Scopes nghiêm ngặt; từ chối quyền ngoài Scope với mã lỗi `ACCESS_DENIED_SCOPE_MISMATCH`.
   - `RULE-02-02`: Role chỉ có hiệu lực trong phạm vi quản lý hợp lệ của người được gán.
@@ -191,7 +191,7 @@ graph TD
   - `PetSpecies`: `[DOG, CAT, BIRD, OTHER]`.
   - `InvitationToken`: Token xác thực lời mời ủy quyền, có thời hạn hiệu lực 7 ngày (TTL = 7d).
 - **Commands (docs/01-business-operations.md):**
-  - `RegisterCustomer`, `UpdateCustomerProfile`, `AddPet`, `UpdatePet`, `ViewPet`, `InviteCaregiver`, `AcceptCaregiverInvitation`, `RejectCaregiverInvitation`, `RevokeCaregiver`, `ProcessInvitationExpiry`, `ProcessDelegationExpiry`, `ManagePetOwnership`, `DeactivatePet`
+  - `ManageCustomerProfile`, `AddPet`, `UpdatePet`, `ViewPet`, `ManagePetOwnership`, `InviteCaregiver`, `AcceptCaregiverInvitation`, `RejectCaregiverInvitation`, `RevokeCaregiver`, `ProcessInvitationExpiry`, `ProcessDelegationExpiry`, `PerformDelegatedAction`, `SearchCustomerPet`
 - **Domain Events (docs/03-state-machines.md):**
   - `PetAdded`, `CaregiverInvited`, `CaregiverInvitationAccepted`, `CaregiverInvitationRejected`, `CaregiverInvitationExpired`, `CaregiverRevoked`, `CaregiverDelegationExpired`
 - **State Machine Lifecycle (FSM 3 - docs/03-state-machines.md#3):**
@@ -203,25 +203,24 @@ graph TD
 ---
 
 ## 4.5. Module 05: Service & Product Catalog
-- **Phạm vi Bounded Context:** Quản lý bảng giá chuẩn, danh mục dịch vụ kỹ thuật và sản phẩm hàng hóa.
-- **Aggregate Root:** `ServiceMaster`, `ProductMaster`
+- **Phạm vi Bounded Context:** Quản lý danh mục sản phẩm/dịch vụ gốc ở cấp Organization và bản ghi override giá/khả dụng riêng theo từng Store.
+- **Aggregate Root:** `ServiceMaster`, `ProductMaster` (sở hữu bởi Organization) — `StoreServiceOverride`, `StoreProductOverride` (sở hữu bởi Store, tham chiếu tới `ServiceMaster`/`ProductMaster`)
 - **Child Entities:** `ServiceRequiredResource`, `ProductCategory`
 - **Value Objects:**
   - `Money`: Số tiền và đơn vị tiền tệ (`VND`).
   - `DurationMinutes`: Thời lượng phục vụ định mức (phút).
   - `SKU`, `Barcode`: Mã định danh hàng hóa duy nhất.
+  - `ProductPrice`, `ServicePrice`: Giá override riêng theo từng Store (`store_products.price`, `store_services.price`); khi chưa override thì kế thừa `base_price` của Organization.
+  - `ServiceAvailability`: Trạng thái khả dụng override riêng theo từng Store (`store_services.is_active`).
 - **Commands (docs/01-business-operations.md):**
-  - `ManageService` (OP-05-01: bao gồm tạo, sửa, đổi trạng thái dịch vụ)
-  - `ManageServiceCategory` (OP-05-02)
-  - `ManageProductCategory` (OP-05-03)
-  - `CreateProduct` (OP-05-04)
-  - `UpdateProduct` (OP-05-05)
-  - `ConfigureProductPrice` (OP-05-06: cấu hình giá bán lẻ tại Store)
-  - `DeleteProduct` (OP-05-07)
+  - `ManageProduct` (Organization Admin: tạo, sửa, vô hiệu hóa Product gốc — không hard-delete nếu đã phát sinh giao dịch, `RULE-05-02`)
+  - `ManageService` (Organization Admin: tạo, sửa, đổi trạng thái Service gốc của Organization)
+  - `ConfigureServiceAvailability`, `ConfigureServicePrice`, `ConfigureProductPrice` (Store Manager ghi đè giá/khả dụng riêng tại Store)
+  - `ViewProduct`, `ViewService` (Customer tra cứu danh mục đang `ACTIVE`)
 - **Domain Events:**
-  - `ServiceCreated`, `ServiceUpdated`, `ProductCreated`, `ProductPriceConfigured`
+  - `ServiceCreated`, `ServiceUpdated`, `ProductCreated`, `StoreProductPriceConfigured`, `StoreServiceAvailabilityConfigured`
 - **Business Invariants (docs/02-business-rules.md):**
-  - `RULE-05-01`, `RULE-05-04`: Tổ chức quản lý Master Catalog; Store cấu hình giá bán lẻ và tình trạng sẵn sàng cung cấp tại điểm bán.
+  - `RULE-05-01` → `RULE-05-07`: Organization sở hữu toàn quyền danh mục sản phẩm/dịch vụ gốc (không có tầng gatekeeper Platform); mỗi Product thuộc đúng một Organization (`UNIQUE(organization_id, sku)`); Store chỉ override giá/khả dụng riêng qua `store_products`/`store_services`, được khởi tạo tự động kế thừa giá trị gốc khi Store chuyển `ACTIVE`.
 
 ---
 
@@ -259,7 +258,7 @@ graph TD
   - `QueueEntryStatus`: `[WAITING, CALLED, IN_SERVICE, COMPLETED, CANCELLED, NO_SHOW]`.
   - `TriagePriority`: `[NORMAL, URGENT, TRIAGE_EMERGENCY]`.
 - **Commands (docs/01-business-operations.md):**
-  - `RegisterQueueEntry`, `CallQueueEntry`, `StartQueueService`, `CompleteQueueEntry`, `CancelQueueEntry`, `MarkQueueNoShow`, `EstimateWaitTime`, `PrioritizeEmergency`
+  - `RegisterQueueEntry`, `CallQueueEntry`, `StartQueueService`, `CompleteQueueEntry`, `CancelQueueEntry`, `MarkQueueNoShow`, `CoordinateQueue`, `ManageQueueOrder`, `SendTurnNotification`
 - **Domain Events (docs/03-state-machines.md):**
   - `QueueEntryRegistered`, `QueueEntryCalled`, `QueueServiceStarted`, `QueueEntryCompleted`, `QueueEntryCancelled`, `QueueEntryNoShow`
 - **State Machine Lifecycle (FSM 17 - docs/03-state-machines.md#17):**
@@ -280,9 +279,9 @@ graph TD
   - `AbsenceType`: `[SICK, VACATION, UNPAID]`.
   - `AbsenceStatus`: `[PENDING, APPROVED, REJECTED]`.
 - **Commands (docs/01-business-operations.md):**
-  - `ManageStaff`, `CreateStaff`, `AssignStaffToStore`, `ManageWorkSchedule`, `ManageStaffAbsence`, `ApproveStaffAbsence`, `RejectStaffAbsence`, `ConfigureStaffShift`
+  - `ManageStaff`, `CreateStaff`, `UpdateStaff`, `AssignStaffToStore`, `ManageWorkSchedule`, `ManageLeave`, `HandleStaffAbsence`, `AssignStaffReplacement`, `ViewWorkSchedule`
 - **Domain Events:**
-  - `StaffAssigned`, `WorkScheduleConfigured`, `StaffAbsenceApproved`, `StaffAbsenceRejected`
+  - `StaffAssignedToStore`, `WorkScheduleAssigned`, `LeaveApproved`, `LeaveRejected`, `StaffAbsenceRecorded`
 - **Business Invariants (docs/02-business-rules.md):**
   - `RULE-08-01`, `RULE-08-03`: Nhân viên chỉ được phân công ca trực tại Store trực thuộc; không cho phép trùng ca trực giữa các Store.
 ---
@@ -295,14 +294,14 @@ graph TD
   - `ChiefComplaint`: Triệu chứng ban đầu khi nhập viện.
   - `DiagnosticCode`: Mã danh mục bệnh học.
   - `DosageInstruction`: Liều lượng, tần suất, thời gian dùng thuốc.
-  - `EMRStatus`: `[ACTIVE, LOCKED_IMMUTABLE]`.
 - **Commands (docs/01-business-operations.md):**
-  - `ExaminePet`, `CreateMedicalRecord`, `UpdateMedicalRecord`, `CreatePrescription`, `AddPrescriptionItem`, `ScheduleFollowUp`, `ViewMedicalRecord`, `EmergencyOverrideAccess`
+  - `ExaminePet`, `RecordSymptom`, `RecordExaminationResult`, `DiagnosePet`, `CreateTreatment`, `CreatePrescription`, `CreateMedicalRecord`, `UpdateMedicalRecord`, `ViewMedicalHistory`, `CreateFollowUp`, `EmergencyOverrideAccess`
 - **Domain Events (docs/03-state-machines.md):**
-  - `MedicalRecordCreated`, `MedicalRecordFinalized`, `PrescriptionCreated`, `FollowUpScheduled`, `EmergencyAccessOverridden`
+  - `MedicalRecordCreated`, `MedicalRecordUpdated`, `PrescriptionCreated`, `TreatmentCreated`, `FollowUpScheduled`, `EmergencyAccessOverridden`
 - **Business Invariants (docs/02-business-rules.md):**
   - `RULE-09-02`, `RULE-21-02`: Break-Glass Emergency Override — Truy cập khẩn cấp EMR liên chi nhánh tự động lập biên bản sự cố `ClinicalIncident` (`CRITICAL`), ghi nhật ký `audit_logs` và gửi cảnh báo khẩn cấp tức thì.
-  - `RULE-09-06`: **24h EMR Immutability** — Bệnh án đóng băng bất biến sau 24h kể từ khi hoàn tất khám; mọi sửa đổi bổ sung sau 24h phải ghi nhận dưới dạng Phụ lục `MedicalRecordAddendum`.
+  - `RULE-09-06`: Bác sĩ thú y có trách nhiệm lập lịch tái khám (`CreateFollowUp`) cho Pet sau đợt điều trị; hệ thống tự động ghi vào lịch theo dõi của Pet và gửi thông báo nhắc hẹn trước ngày tái khám.
+  - `RULE-09-08`: Phân định ranh giới bệnh án EMR (`MedicalRecord`) vs hồ sơ tiêm phòng định kỳ (`VaccinationRecord`) — chỉ tiêm vaccine điều trị bệnh lý (Therapeutic Vaccination) mới bắt buộc gắn với `MedicalRecord`/`Treatment`.
 
 ---
 
@@ -315,9 +314,9 @@ graph TD
   - `ExpiryDate`: Hạn sử dụng.
   - `VaccineScheduleStatus`: `[SCHEDULED, COMPLETED, OVERDUE, CANCELLED]`.
 - **Commands (docs/01-business-operations.md):**
-  - `AdministerVaccine`, `RecordVaccination`, `ScheduleNextVaccination`, `CreateVaccineBatch`, `TrackVaccineExpiry`, `SendVaccinationReminder`
+  - `CheckVaccinationSchedule`, `AdministerVaccine`, `RecordVaccination`, `ScheduleNextVaccination`, `ManageVaccine`, `ManageVaccineBatch`, `ManageVaccineExpiry`, `SendVaccineReminder`
 - **Domain Events (docs/03-state-machines.md):**
-  - `VaccinationAdministered`, `VaccinationScheduleCreated`, `VaccineBatchDeducted`, `VaccineExpiredAlert`
+  - `VaccineAdministered`, `VaccinationRecorded`, `NextVaccinationScheduled`, `VaccineReminderSent`, `VaccineBatchExpired`
 - **Business Invariants (docs/02-business-rules.md):**
   - `RULE-10-02`, `RULE-12-11`: Khấu trừ tồn kho vaccine chính xác theo số lô (`batch_number`) theo nguyên tắc Hết hạn trước - Xuất trước (FEFO).
   - `RULE-10-04`: Tự động lập lịch tiêm nhắc mũi tiếp theo (`VaccinationSchedule`) sau khi hoàn tất tiêm phòng.
@@ -418,7 +417,7 @@ graph TD
   - `InvoiceStatus`: `[DRAFT, ISSUED, PAID, VOID, CANCELLED]`.
   - `InvoiceType`: `[SERVICE_INVOICE, PACKAGE_INVOICE, SURCHARGE_INVOICE]`.
 - **Commands (docs/01-business-operations.md):**
-  - `CreateInvoice`, `AddServiceToInvoice`, `AddProductToInvoice`, `ApplyDiscount`, `IssueInvoice`, `IssueSurchargeInvoice`, `CreateSurchargeInvoice`, `VoidInvoice`, `DiscardInvoice`, `ReconcileInvoice`, `ViewInvoice`
+  - `CreateInvoice`, `AddServiceToInvoice`, `AddProductToInvoice`, `ApplyDiscount`, `IssueInvoice`, `IssueSurchargeInvoice`, `VoidInvoice`, `DiscardInvoice`, `ReconcileInvoice`, `ViewInvoice`
 - **Domain Events (docs/03-state-machines.md):**
   - `InvoiceCreated`, `InvoiceIssued`, `InvoicePaid`, `InvoiceVoided`, `InvoiceCancelled`
 - **State Machine Lifecycle (FSM 6 - docs/03-state-machines.md#6):**
@@ -430,22 +429,25 @@ graph TD
 ---
 
 ## 4.16. Module 16: Payment Management
-- **Phạm vi Bounded Context:** Xử lý các giao dịch thanh toán đa kênh (Tiền mặt, Thẻ POS, Cổng trực tuyến). Mô hình thanh toán: 1 Hóa đơn có thể tiếp nhận nhiều giao dịch thanh toán (`Invoice 1 -> N Payment`), mỗi giao dịch thanh toán `Payment` chỉ phục vụ cấn trừ cho đúng 1 `Invoice` mục tiêu (`RULE-16-01`).
+- **Phạm vi Bounded Context:** Xử lý các giao dịch thanh toán đa kênh (Tiền mặt, Cổng trực tuyến). Mô hình thanh toán: 1 Hóa đơn có thể tiếp nhận nhiều giao dịch thanh toán (`Invoice 1 -> N Payment`), mỗi giao dịch thanh toán `Payment` chỉ phục vụ cấn trừ cho đúng 1 `Invoice` mục tiêu (`RULE-16-01`).
 - **Aggregate Root:** `Payment`
 - **Child Entities:** Không có (Mỗi `Payment` liên kết N-1 với 1 `Invoice`)
 - **Value Objects:**
   - `PaymentStatus`: `[PENDING, PROCESSING, SUCCESS, FAILED, CANCELLED, PARTIALLY_REFUNDED, REFUNDED]`.
-  - `PaymentMethod`: `[CASH, POS_CARD, ONLINE_GATEWAY]`.
+  - `PaymentMethod`: `[CASH, ONLINE_GATEWAY]`.
   - `IdempotencyKey`: Khóa chống trùng lặp giao dịch thanh toán.
 - **Commands (docs/01-business-operations.md):**
-  - `MakePayment`, `RecordCashPayment`, `VerifyPayment`, `ReceivePaymentCallback`, `SettlePayment`, `CancelPayment`
+  - `MakePayment`, `RecordCashPayment`, `VerifyPayment`, `ReceivePaymentCallback`, `CancelPayment`, `ReconcilePayment`
 - **Domain Events (docs/03-state-machines.md):**
   - `PaymentCreated`, `PaymentProcessing`, `PaymentSucceeded`, `PaymentFailed`, `PaymentCancelled`, `PaymentPartiallyRefunded`, `PaymentRefunded`
 - **State Machine Lifecycle (FSM 7 - docs/03-state-machines.md#7):**
-  - `[*] -> PENDING -> PROCESSING -> SUCCESS -> PARTIALLY_REFUNDED / REFUNDED`; Lỗi: `FAILED`, Hủy: `CANCELLED`.
+  - Tiền mặt tại quầy (`CASH`): `[*] -> SUCCESS -> PARTIALLY_REFUNDED / REFUNDED`.
+  - Cổng trực tuyến (`ONLINE_GATEWAY`): `[*] -> PENDING -> PROCESSING -> SUCCESS -> PARTIALLY_REFUNDED / REFUNDED`; Lỗi: `FAILED`, Hủy: `CANCELLED`.
 - **Business Invariants (docs/02-business-rules.md):**
   - `RULE-16-01`, `RULE-16-02`: Mỗi giao dịch Payment gắn liền với đúng 1 Invoice mục tiêu. Một Invoice được phép tiếp nhận nhiều Payment cho đến khi tổng số tiền thanh toán thành công đạt 100% `TotalAmount` (phát sinh sự kiện `FullPaymentSettled` chuyển Invoice sang `PAID`).
+  - `RULE-16-02`: Tiền mặt quyết toán tức thì sang `SUCCESS` trong ranh giới `@Transactional` của phiên POS.
   - `RULE-16-03`: Idempotency Key bảo vệ giao dịch không bị trừ tiền lặp lại khi mạng chập chờn.
+  - `RULE-16-05`: `CancelPayment` chỉ áp dụng cho kênh Online Gateway ở trạng thái `PENDING` hoặc `PROCESSING`.
   - `RULE-16-06`: Khi nhận sự kiện hoàn tiền `RefundCompleted`, Payment chuyển sang `PARTIALLY_REFUNDED` (nếu hoàn một phần) hoặc `REFUNDED` (nếu hoàn 100%).
 
 ---
@@ -477,9 +479,9 @@ graph TD
   - `DiscountType`: `[PERCENTAGE, FIXED_AMOUNT]`.
   - `VoucherCode`: Chuỗi mã định danh duy nhất (ví dụ: `CHAOMUNG2026`).
 - **Commands (docs/01-business-operations.md):**
-  - `CreatePromotion`, `UpdatePromotion`, `CreateVoucher`, `ValidateVoucher`, `ApplyVoucher`, `UseVoucher`, `RevokeVoucher`
+  - `CreatePromotion`, `ManagePromotion`, `ConfigureStorePromotion`, `CreateVoucher`, `ManageVoucher`, `UseVoucher`, `ValidateVoucher`, `TrackVoucherUsage`
 - **Domain Events:**
-  - `PromotionCreated`, `VoucherCreated`, `VoucherApplied`, `VoucherRedeemed`
+  - `PromotionCreated`, `PromotionUpdated`, `VoucherCreated`, `VoucherRedeemed`
 - **Business Invariants (docs/02-business-rules.md):**
   - `RULE-18-02`, `RULE-18-04`: Kiểm tra điều kiện giá trị đơn hàng tối thiểu, ngân sách chiến dịch và số lần sử dụng tối đa của từng khách hàng tại thời điểm checkout.
 
@@ -511,7 +513,7 @@ graph TD
 - **Value Objects:**
   - `PackageStatus`: `[PURCHASED, ACTIVATED, PARTIALLY_CONSUMED, FULLY_CONSUMED, CANCELLED, EXPIRED]`.
 - **Commands (docs/01-business-operations.md):**
-  - `PurchasePackage`, `ActivatePackage`, `ConfirmPackageUsage`, `CancelPackage`, `ProcessPackageExpiry`, `TransferPackage`
+  - `PurchasePackage`, `ViewPackage`, `ActivatePackage`, `ConfirmPackageUsage`, `CancelPackage`, `AdjustPackage`, `RefundPackageUnit`, `TrackPackageUsage`, `ProcessPackageExpiry`
 - **Domain Events (docs/03-state-machines.md):**
   - `PackagePurchased`, `PackageActivated`, `PackagePartiallyConsumed`, `PackageFullyConsumed`, `PackageCancelled`, `PackageExpired`
 - **State Machine Lifecycle (FSM 10 - docs/03-state-machines.md#10):**
@@ -571,9 +573,9 @@ graph TD
   - `NotificationChannel`: `[SMS, EMAIL, IN_APP_PUSH, ZALO_ZNS]`.
   - `DeliveryStatus`: `[PENDING, SENT, DELIVERED, FAILED]`.
 - **Commands (docs/01-business-operations.md):**
-  - `SendNotification`, `SendRegistrationOTP`, `SendOrderNotification`, `SendIncidentNotification`, `SendVaccinationReminder`, `SendTurnNotification`, `MarkNotificationAsRead`
+  - `SendNotification`, `SendAppointmentNotification`, `SendAppointmentReminder`, `SendPaymentNotification`, `SendOrderNotification`, `SendIncidentNotification`, `SendVaccineReminder`, `SendFollowUpReminder`, `SendMembershipNotification`, `SendTurnNotification`, `RetryNotification`, `ViewNotification`
 - **Domain Events:**
-  - `NotificationSent`, `NotificationDelivered`, `NotificationFailed`
+  - `NotificationDispatched`, `AppointmentNotification`, `PaymentNotification`, `IncidentNotification`
 - **Business Invariants (docs/02-business-rules.md):**
   - `RULE-21-05`, `RULE-23-02`: Thông báo sự cố `HIGH` và `CRITICAL` bắt buộc gửi khẩn cấp tới Khách hàng và Quản lý Store trong vòng 1-4 giờ.
 
@@ -586,9 +588,7 @@ graph TD
 - **Value Objects:**
   - `ReportType`: `[FINANCIAL_REVENUE, CLINICAL_OCCUPANCY, INVENTORY_TURNOVER, AUDIT_SUMMARY]`.
 - **Commands (docs/01-business-operations.md):**
-  - `GenerateRevenueReport`, `GenerateInventoryReport`, `GenerateClinicalReport`, `ExportReportData`
-- **Domain Events:**
-  - `ReportGenerated`, `ReportExported`
+  - `ViewRevenueReport`, `ViewAppointmentReport`, `ViewServiceReport`, `ViewInventoryReport`, `ViewStaffReport`, `ViewOrganizationRevenue`, `CompareStoreRevenue`, `ViewCustomerPetReport`, `ReconcileRevenue`, `ViewPlatformReport`
 - **Business Invariants (docs/02-business-rules.md):**
   - `RULE-24-01`: Báo cáo phân lập nghiêm ngặt theo Tenant Scope; Store Manager chỉ xem số liệu trong Store mình phụ trách.
 
@@ -601,9 +601,9 @@ graph TD
 - **Value Objects:**
   - `AuditAction`: Hành vi thực thi (ví dụ: `LOGIN`, `EMERGENCY_OVERRIDE`, `MAKER_CHECKER_APPROVE`, `PASSWORD_RESET`).
 - **Commands (docs/01-business-operations.md):**
-  - `RecordAuditLog`, `ConfigureSystem`, `ManageTenantIsolation`, `PurgeExpiredAuditLogs`
+  - `RecordAuditLog`, `ViewAuditLog`, `TrackPermissionChange`, `TrackMedicalRecordAccess`, `TrackPaymentRefundAudit`, `TrackInventoryAudit`
 - **Domain Events:**
-  - `AuditLogged`, `SystemConfigUpdated`
+  - `AuditLogRecorded`
 - **Business Invariants (docs/02-business-rules.md):**
   - `RULE-25-04`: Toàn bộ các thao tác vượt quyền cấp cứu, phê duyệt Maker-Checker và phân quyền Admin bắt buộc ghi Audit Log bất biến kèm Client IP và User Agent.
 

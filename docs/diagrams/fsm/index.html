@@ -1,0 +1,200 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>FSM State Machines · Pet Care Ecosystem</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link href="https://fonts.googleapis.com/css2?family=Instrument+Serif:ital@0;1&family=Geist:wght@400;500;600;700&family=Geist+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="../shared/styles.css">
+</head>
+<body>
+
+  <!-- Sidebar -->
+  <aside class="sidebar">
+    <div class="sidebar-brand">
+      <div class="eyebrow">LIFECYCLE DOMAIN</div>
+      <h2>FSM State Machines</h2>
+    </div>
+    <nav class="sidebar-menu">
+
+      <!-- Navigation back to Master Portal -->
+      <div style="padding: 0 4px 10px;">
+        <a href="../index.html" class="menu-item" style="text-decoration:none; color:inherit; background:rgba(46,90,168,0.06); border:1px solid rgba(46,90,168,0.2);">
+          <div class="menu-item-left">
+            <span class="badge" style="background:#2e5aa8; color:#fff;">←</span>
+            <span style="font-weight:600; color:#2e5aa8;">Master Portal</span>
+          </div>
+          <span class="table-count-pill" style="color:#2e5aa8;">All</span>
+        </a>
+      </div>
+
+      <!-- FSM Group -->
+      <div class="nav-group open" id="group-fsm">
+        <div class="nav-group-header" onclick="toggleGroup('group-fsm')">
+          <div class="nav-group-title">
+            <span class="nav-icon">🔄</span> Lifecycle FSMs (10)
+          </div>
+          <span class="chevron">▶</span>
+        </div>
+        <div class="nav-group-content">
+          <div class="menu-item active" onclick="loadDiagram('fsm1', 'FSM · Order Lifecycle', 'FSM1 · Order Lifecycle State Machine')">
+            <div class="menu-item-left">
+              <span class="badge">FSM1</span> Order Lifecycle
+            </div>
+            <span class="table-count-pill">States</span>
+          </div>
+          <div class="menu-item" onclick="loadDiagram('fsm2', 'FSM · Appointment Lifecycle', 'FSM2 · Appointment Lifecycle (8 States)')">
+            <div class="menu-item-left">
+              <span class="badge">FSM2</span> Appointment
+            </div>
+            <span class="table-count-pill">States</span>
+          </div>
+          <div class="menu-item" onclick="loadDiagram('fsm3', 'FSM · Invoice Lifecycle', 'FSM3 · Invoice State Machine (D-01)')">
+            <div class="menu-item-left">
+              <span class="badge">FSM3</span> Invoice Lifecycle
+            </div>
+            <span class="table-count-pill">States</span>
+          </div>
+          <div class="menu-item" onclick="loadDiagram('fsm4', 'FSM · Grooming Session', 'FSM4 · Grooming Session Lifecycle')">
+            <div class="menu-item-left">
+              <span class="badge">FSM4</span> Grooming Session
+            </div>
+            <span class="table-count-pill">States</span>
+          </div>
+          <div class="menu-item" onclick="loadDiagram('fsm5', 'FSM · Queue Entry', 'FSM5 · Walk-in Queue Entry Lifecycle')">
+            <div class="menu-item-left">
+              <span class="badge">FSM5</span> Queue Entry
+            </div>
+            <span class="table-count-pill">States</span>
+          </div>
+          <div class="menu-item" onclick="loadDiagram('fsm6', 'FSM · Payment Lifecycle', 'FSM6 · Payment State Machine (6 States)')">
+            <div class="menu-item-left">
+              <span class="badge">FSM6</span> Payment
+            </div>
+            <span class="table-count-pill">States</span>
+          </div>
+          <div class="menu-item" onclick="loadDiagram('fsm7', 'FSM · Stock Transfer', 'FSM7 · Stock Transfer Lifecycle')">
+            <div class="menu-item-left">
+              <span class="badge">FSM7</span> Stock Transfer
+            </div>
+            <span class="table-count-pill">States</span>
+          </div>
+          <div class="menu-item" onclick="loadDiagram('fsm8', 'FSM · Store Lifecycle', 'FSM8 · Store Lifecycle (5 States)')">
+            <div class="menu-item-left">
+              <span class="badge">FSM8</span> Store
+            </div>
+            <span class="table-count-pill">States</span>
+          </div>
+          <div class="menu-item" onclick="loadDiagram('fsm9', 'FSM · Delegation', 'FSM9 · Caregiver Delegation Lifecycle')">
+            <div class="menu-item-left">
+              <span class="badge">FSM9</span> Delegation
+            </div>
+            <span class="table-count-pill">States</span>
+          </div>
+        </div>
+      </div>
+
+      <!-- Other Categories -->
+      <div class="nav-group" id="group-other">
+        <div class="nav-group-header" onclick="toggleGroup('group-other')">
+          <div class="nav-group-title">
+            <span class="nav-icon">📁</span> Other Diagrams
+          </div>
+          <span class="chevron">▶</span>
+        </div>
+        <div class="nav-group-content">
+          <a href="../db-schema/index.html" class="menu-item" style="text-decoration:none; color:inherit;">
+            <div class="menu-item-left"><span class="badge">DB</span> Database Schema (5)</div>
+            <span class="table-count-pill">↗</span>
+          </a>
+          <a href="../uc/index.html" class="menu-item" style="text-decoration:none; color:inherit;">
+            <div class="menu-item-left"><span class="badge">UC</span> Use Cases (9)</div>
+            <span class="table-count-pill">↗</span>
+          </a>
+          <a href="../sq/index.html" class="menu-item" style="text-decoration:none; color:inherit;">
+            <div class="menu-item-left"><span class="badge">SQ</span> Sequence (12)</div>
+            <span class="table-count-pill">↗</span>
+          </a>
+        </div>
+      </div>
+      <div class="nav-group" id="group-checkout">
+        <div class="nav-group-header" onclick="toggleGroup('group-checkout')">
+          <div class="nav-group-title">
+            <span class="nav-icon">🛒</span> UC12a Checkout
+          </div>
+          <span class="chevron">▶</span>
+        </div>
+        <div class="nav-group-content">
+          <div class="menu-item" onclick="loadDiagram('fsm10', 'FSM · Order Checkout Lifecycle', 'FSM10 · UC12a Order Checkout State Machine')">
+            <div class="menu-item-left">
+              <span class="badge" style="background:#eb6c36;">FSM10</span> Order Checkout
+            </div>
+            <span class="table-count-pill" style="background:#eb6c36;color:#fff;">UC12a</span>
+          </div>
+        </div>
+      </div>
+
+    </nav>
+  </aside>
+
+  <!-- Main Viewport Area -->
+  <main class="content-area">
+    <!-- Top Action Bar -->
+    <div class="top-bar">
+      <div class="header-titles">
+        <p class="eyebrow-top" id="top-eyebrow">FSM · Order Lifecycle</p>
+        <h1 id="top-title">FSM1 · Order Lifecycle State Machine</h1>
+      </div>
+      <div class="toolbar">
+        <button class="btn-tool" onclick="zoomIn()" title="Phóng to (+)">+ Zoom</button>
+        <span class="zoom-badge" id="zoom-text">100%</span>
+        <button class="btn-tool" onclick="zoomOut()" title="Thu nhỏ (-)">- Zoom</button>
+        <button class="btn-tool" onclick="resetZoom()" title="Khôi phục góc nhìn">⛶ Fit</button>
+        <button class="btn-tool active" id="btn-mode-pan" onclick="setInteractionMode('pan')" title="Kéo rê canvas tự do">✋ Pan Canvas</button>
+        <div class="toolbar-divider"></div>
+        <button class="btn-tool btn-download" onclick="downloadPng()" title="Tải ảnh PNG HD 2x">📥 Tải PNG (HD)</button>
+        <button class="btn-tool btn-download" onclick="downloadSvg()" title="Tải vector SVG sắc nét">📥 Tải SVG</button>
+      </div>
+    </div>
+
+    <!-- Interactive Canvas Viewport -->
+    <div class="canvas-viewport" id="viewport">
+      <svg class="diagram-canvas" id="canvas-svg" xmlns="http://www.w3.org/2000/svg">
+        <defs>
+          <marker id="arr" markerWidth="8" markerHeight="6" refX="7" refY="3" orient="auto"><polygon points="0 0, 8 3, 0 6" fill="#4f5d75"/></marker>
+          <marker id="arr-acc" markerWidth="8" markerHeight="6" refX="7" refY="3" orient="auto"><polygon points="0 0, 8 3, 0 6" fill="#eb6c36"/></marker>
+          <marker id="arr-blue" markerWidth="8" markerHeight="6" refX="7" refY="3" orient="auto"><polygon points="0 0, 8 3, 0 6" fill="#2e5aa8"/></marker>
+          <marker id="arr-dark" markerWidth="8" markerHeight="6" refX="7" refY="3" orient="auto"><polygon points="0 0, 8 3, 0 6" fill="#232733"/></marker>
+          <marker id="arr-ret" markerWidth="8" markerHeight="6" refX="7" refY="3" orient="auto"><polygon points="0 0, 8 3, 0 6" fill="#5b6579"/></marker>
+        </defs>
+        <g id="canvas-content"></g>
+      </svg>
+    </div>
+
+    <!-- Floating Footer -->
+    <div class="floating-footer">
+      <div class="info-card" id="footer-desc">
+        <strong>Domain Note:</strong> FSM State Machine
+      </div>
+      <div class="legend-card">
+        <div class="legend-item"><span style="display:inline-block;width:12px;height:2px;background:#eb6c36;"></span> Focal State</div>
+        <div class="legend-item"><span style="display:inline-block;width:12px;height:2px;background:#2e5aa8;"></span> Initial State</div>
+        <div class="legend-item"><span style="display:inline-block;width:12px;height:2px;background:#4f5d75;"></span> Final State</div>
+      </div>
+    </div>
+
+    <!-- Toast Notification -->
+    <div id="toast" class="toast-notice"></div>
+  </main>
+
+  <script src="../shared/renderer.js"></script>
+  <script src="../shared/engine.js"></script>
+  <script src="data.js"></script>
+  <script>
+    window.addEventListener('DOMContentLoaded', () => {
+      initEngine('fsm1', 'FSM · Order Lifecycle', 'FSM1 · Order Lifecycle State Machine');
+    });
+  </script>
+</body>
+</html>

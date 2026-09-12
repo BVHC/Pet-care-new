@@ -1,0 +1,136 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>UC · Procurement · Pet Care</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link href="https://fonts.googleapis.com/css2?family=Geist:wght@400;500;600;700&family=Geist+Mono:wght@400;500&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="../shared/styles.css">
+</head>
+<body>
+  <aside class="sidebar">
+    <div class="sidebar-brand"><h1>🎯 Use Cases</h1><p class="subtitle">Procurement</p></div>
+    <nav class="sidebar-nav">
+      <div class="nav-group open">
+        <div class="nav-group-header">📁 Procurement</div>
+        <div class="nav-group-content">
+          <div class="menu-item" onclick="switchDiagram('pr')"><span class="badge">UC9a</span><span>Purchase Request</span></div>
+          <div class="menu-item" onclick="switchDiagram('po')"><span class="badge">UC9b</span><span>Purchase Order</span></div>
+        </div>
+      </div>
+      <div class="nav-group">
+        <div class="nav-group-header">📁 Navigation</div>
+        <div class="nav-group-content">
+          <div class="menu-item" onclick="location.href='uc-inventory.html'"><span class="badge">UC8</span><span>Inventory</span></div>
+          <div class="menu-item" onclick="location.href='../index.html'"><span class="badge">↑</span><span>All</span></div>
+        </div>
+      </div>
+    </nav>
+  </aside>
+
+  <main class="main-content">
+    <div class="top-bar">
+      <div class="top-left">
+        <div class="breadcrumb"><a href="../index.html">Diagrams</a><span>/</span><span>Use Cases</span><span>/</span><span>Procurement</span></div>
+        <h1 class="top-title" id="top-title">Purchase Request</h1>
+      </div>
+      <div class="controls">
+        <button class="control-btn" onclick="zoomIn()">🔍+</button>
+        <button class="control-btn" onclick="zoomOut()">🔍-</button>
+        <button class="control-btn" onclick="resetZoom()">Reset</button>
+      </div>
+    </div>
+    <div class="canvas-wrapper">
+      <div id="viewport"><div id="canvas-content"><svg id="main-svg" width="100%" height="100%" viewBox="0 0 1200 800"></svg></div></div>
+      <div class="zoom-indicator" id="zoom-indicator">100%</div>
+    </div>
+    <div class="footer" id="footer-desc"><strong>Domain Note:</strong> Procurement Management</div>
+  </main>
+
+  <script src="../shared/renderer.js"></script>
+  <script>
+    const DIAGRAMS = {
+      'pr': {
+        description: 'UC9a · Purchase Request: Maker-Checker, 4 eyes principle',
+        actors: [
+          { name: "Inventory Staff", color: "#eb6c36" },
+          { name: "Store Manager", color: "#7b4ac7" },
+          { name: "Procurement Service", system: true, color: "#4f5d75" }
+        ],
+        useCases: [
+          { id: "UC9a-1", name: "Create Purchase Request", focal: true },
+          { id: "UC9a-2", name: "Approve Purchase Request" },
+          { id: "UC9a-3", name: "Reject Purchase Request" },
+          { id: "UC9a-4", name: "Cancel Purchase Request" },
+          { id: "UC9a-5", name: "Auto-generate PO" }
+        ],
+        relations: [
+          { actor: "Inventory Staff", uc: "UC9a-1" },
+          { actor: "Store Manager", uc: "UC9a-2" },
+          { actor: "Store Manager", uc: "UC9a-3" },
+          { actor: "Inventory Staff", uc: "UC9a-4" },
+          { actor: "Procurement Service", uc: "UC9a-5", type: "include" }
+        ]
+      },
+      'po': {
+        description: 'UC9b · Purchase Order: Create PO → Receive Goods → Inspect → Update Inventory',
+        actors: [
+          { name: "Inventory Staff", color: "#eb6c36" },
+          { name: "Supplier", color: "#4f5d75" },
+          { name: "Procurement Service", system: true, color: "#4f5d75" },
+          { name: "Inventory", system: true, color: "#4f5d75" }
+        ],
+        useCases: [
+          { id: "UC9b-1", name: "Create Purchase Order", focal: true },
+          { id: "UC9b-2", name: "Send PO to Supplier" },
+          { id: "UC9b-3", name: "Receive Goods" },
+          { id: "UC9b-4", name: "Inspect Goods" },
+          { id: "UC9b-5", name: "Update Inventory" },
+          { id: "UC9b-6", name: "Cancel PO" }
+        ],
+        relations: [
+          { actor: "Inventory Staff", uc: "UC9b-1" },
+          { actor: "Procurement Service", uc: "UC9b-2", type: "include" },
+          { actor: "Supplier", uc: "UC9b-3" },
+          { actor: "Inventory Staff", uc: "UC9b-4" },
+          { actor: "Inventory", uc: "UC9b-5", type: "include" },
+          { actor: "Inventory Staff", uc: "UC9b-6" }
+        ]
+      }
+    };
+
+    let currentDiagram = 'pr';
+    let zoomLevel = 1.0;
+
+    function switchDiagram(key) {
+      currentDiagram = key;
+      document.querySelectorAll('.menu-item').forEach(el => el.classList.remove('active'));
+      event.target.closest('.menu-item').classList.add('active');
+      document.getElementById('top-title').textContent = DIAGRAMS[key].useCases[0].name;
+      document.getElementById('footer-desc').innerHTML = `<strong>Domain Note:</strong> ${DIAGRAMS[key].description}`;
+      renderCurrentDiagram();
+    }
+
+    function renderCurrentDiagram() {
+      const svg = document.getElementById('main-svg');
+      svg.innerHTML = `<defs>
+        <marker id="arr" markerWidth="10" markerHeight="10" refX="9" refY="3" orient="auto"><path d="M0,0 L0,6 L9,3 z" fill="#4f5d75"/></marker>
+        <marker id="arr-blue" markerWidth="10" markerHeight="10" refX="9" refY="3" orient="auto"><path d="M0,0 L0,6 L9,3 z" fill="#2e5aa8"/></marker>
+      </defs>`;
+      DIAGRAMS[currentDiagram]._type = 'usecase';
+      renderUseCase(svg, DIAGRAMS[currentDiagram]);
+    }
+
+    function zoomIn() { zoomLevel = Math.min(2.0, zoomLevel + 0.1); applyZoom(); }
+    function zoomOut() { zoomLevel = Math.max(0.5, zoomLevel - 0.1); applyZoom(); }
+    function resetZoom() { zoomLevel = 1.0; applyZoom(); }
+    function applyZoom() {
+      document.getElementById('canvas-content').style.transform = `scale(${zoomLevel})`;
+      document.getElementById('zoom-indicator').textContent = Math.round(zoomLevel * 100) + '%';
+    }
+
+    renderCurrentDiagram();
+  </script>
+</body>
+</html>

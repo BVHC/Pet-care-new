@@ -1,0 +1,135 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>UC · Store Lifecycle · Pet Care</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link href="https://fonts.googleapis.com/css2?family=Geist:wght@400;500;600;700&family=Geist+Mono:wght@400;500&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="../shared/styles.css">
+</head>
+<body>
+  <aside class="sidebar">
+    <div class="sidebar-brand"><h1>🎯 Use Cases</h1><p class="subtitle">Store Lifecycle</p></div>
+    <nav class="sidebar-nav">
+      <div class="nav-group open">
+        <div class="nav-group-header">📁 Store Management</div>
+        <div class="nav-group-content">
+          <div class="menu-item" onclick="switchDiagram('store-mgmt')"><span class="badge">UC13a</span><span>Store Management</span></div>
+          <div class="menu-item" onclick="switchDiagram('store-archive')"><span class="badge">UC13b</span><span>Store Archive</span></div>
+        </div>
+      </div>
+      <div class="nav-group">
+        <div class="nav-group-header">📁 Navigation</div>
+        <div class="nav-group-content">
+          <div class="menu-item" onclick="location.href='uc-workforce.html'"><span class="badge">UC15</span><span>Workforce</span></div>
+          <div class="menu-item" onclick="location.href='../index.html'"><span class="badge">↑</span><span>All</span></div>
+        </div>
+      </div>
+    </nav>
+  </aside>
+
+  <main class="main-content">
+    <div class="top-bar">
+      <div class="top-left">
+        <div class="breadcrumb"><a href="../index.html">Diagrams</a><span>/</span><span>Use Cases</span><span>/</span><span>Store</span></div>
+        <h1 class="top-title" id="top-title">Store Management</h1>
+      </div>
+      <div class="controls">
+        <button class="control-btn" onclick="zoomIn()">🔍+</button>
+        <button class="control-btn" onclick="zoomOut()">🔍-</button>
+        <button class="control-btn" onclick="resetZoom()">Reset</button>
+      </div>
+    </div>
+    <div class="canvas-wrapper">
+      <div id="viewport"><div id="canvas-content"><svg id="main-svg" width="100%" height="100%" viewBox="0 0 1200 800"></svg></div></div>
+      <div class="zoom-indicator" id="zoom-indicator">100%</div>
+    </div>
+    <div class="footer" id="footer-desc"><strong>Domain Note:</strong> Store Lifecycle Management</div>
+  </main>
+
+  <script src="../shared/renderer.js"></script>
+  <script>
+    const DIAGRAMS = {
+      'store-mgmt': {
+        description: 'UC13a · Store Management: DRAFT → ACTIVE ↔ SUSPENDED → DEACTIVATED → ARCHIVED',
+        actors: [
+          { name: "Org Admin", color: "#eb6c36" },
+          { name: "Platform Admin", color: "#7b4ac7" },
+          { name: "Store Manager", color: "#45a58a" },
+          { name: "System", color: "#4f5d75" }
+        ],
+        useCases: [
+          { id: "UC13a-1", name: "Create Store", focal: true },
+          { id: "UC13a-2", name: "Activate Store" },
+          { id: "UC13a-3", name: "Suspend Store" },
+          { id: "UC13a-4", name: "Reactivate Store" },
+          { id: "UC13a-5", name: "Deactivate Store" },
+          { id: "UC13a-6", name: "Update Store Info" }
+        ],
+        relations: [
+          { actor: "Org Admin", uc: "UC13a-1" },
+          { actor: "Platform Admin", uc: "UC13a-2" },
+          { actor: "Org Admin", uc: "UC13a-3" },
+          { actor: "Org Admin", uc: "UC13a-4" },
+          { actor: "Platform Admin", uc: "UC13a-5" },
+          { actor: "Store Manager", uc: "UC13a-6" }
+        ]
+      },
+      'store-archive': {
+        description: 'UC13b · Store Archive: Check Conditions → Archive Store',
+        actors: [
+          { name: "Platform Admin", color: "#7b4ac7" },
+          { name: "System", color: "#4f5d75" },
+          { name: "Finance Staff", color: "#eb6c36" }
+        ],
+        useCases: [
+          { id: "UC13b-1", name: "Check Archive Conditions" },
+          { id: "UC13b-2", name: "Verify Zero Balance" },
+          { id: "UC13b-3", name: "Archive Store" },
+          { id: "UC13b-4", name: "Export Historical Data" }
+        ],
+        relations: [
+          { actor: "Platform Admin", uc: "UC13b-1" },
+          { actor: "System", uc: "UC13b-2", type: "include" },
+          { actor: "Finance Staff", uc: "UC13b-2" },
+          { actor: "Platform Admin", uc: "UC13b-3" },
+          { actor: "System", uc: "UC13b-4", type: "include" }
+        ]
+      }
+    };
+
+    let currentDiagram = 'store-mgmt';
+    let zoomLevel = 1.0;
+
+    function switchDiagram(key) {
+      currentDiagram = key;
+      document.querySelectorAll('.menu-item').forEach(el => el.classList.remove('active'));
+      event.target.closest('.menu-item').classList.add('active');
+      document.getElementById('top-title').textContent = DIAGRAMS[key].useCases[0].name;
+      document.getElementById('footer-desc').innerHTML = `<strong>Domain Note:</strong> ${DIAGRAMS[key].description}`;
+      renderCurrentDiagram();
+    }
+
+    function renderCurrentDiagram() {
+      const svg = document.getElementById('main-svg');
+      svg.innerHTML = `<defs>
+        <marker id="arr" markerWidth="10" markerHeight="10" refX="9" refY="3" orient="auto"><path d="M0,0 L0,6 L9,3 z" fill="#4f5d75"/></marker>
+        <marker id="arr-blue" markerWidth="10" markerHeight="10" refX="9" refY="3" orient="auto"><path d="M0,0 L0,6 L9,3 z" fill="#2e5aa8"/></marker>
+      </defs>`;
+      DIAGRAMS[currentDiagram]._type = 'usecase';
+      renderUseCase(svg, DIAGRAMS[currentDiagram]);
+    }
+
+    function zoomIn() { zoomLevel = Math.min(2.0, zoomLevel + 0.1); applyZoom(); }
+    function zoomOut() { zoomLevel = Math.max(0.5, zoomLevel - 0.1); applyZoom(); }
+    function resetZoom() { zoomLevel = 1.0; applyZoom(); }
+    function applyZoom() {
+      document.getElementById('canvas-content').style.transform = `scale(${zoomLevel})`;
+      document.getElementById('zoom-indicator').textContent = Math.round(zoomLevel * 100) + '%';
+    }
+
+    renderCurrentDiagram();
+  </script>
+</body>
+</html>
