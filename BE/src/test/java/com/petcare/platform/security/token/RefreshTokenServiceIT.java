@@ -49,9 +49,12 @@ class RefreshTokenServiceIT {
 
     @BeforeEach
     void setUpAccount() {
+        // accounts.email là NOT NULL từ khi RULE-01-10 đổi danh tính chính sang email
+        // (2026-09-13) — accounts.phone giờ optional nhưng vẫn insert cho đủ dữ liệu test.
         accountId = jdbcTemplate.queryForObject(
-                "INSERT INTO accounts (phone, password_hash) VALUES (?, ?) RETURNING id",
+                "INSERT INTO accounts (email, phone, password_hash) VALUES (?, ?, ?) RETURNING id",
                 UUID.class,
+                "test-" + System.nanoTime() + "@example.com",
                 "09" + System.nanoTime() % 100_000_000L,
                 "bcrypt-hash-placeholder");
     }

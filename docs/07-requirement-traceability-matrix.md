@@ -23,7 +23,7 @@
 | REQ-ACC-011 | 02 §2 | RULE-01-07, RULE-02-04 | `UnlockAccount`, `AutoUnlockAccount` | FSM 1 | `accounts.status`, `accounts.lock_reason`, `accounts.locked_until` |
 | REQ-ACC-012 | 02 §2 | RULE-02-05, RULE-02-07 | `DeactivateAccount`, `ReactivateAccount` | FSM 1 | `accounts.status` |
 | REQ-ACC-013 | 01 §1 | RULE-01-08 | `ExpireOTP` | FSM 1 | `otps.expires_at` |
-| REQ-ACC-014 | 01 §1 | RULE-01-10 (mới — Phase 5) | `RegisterAccount`, `CreateStaff` | FSM 1 | `accounts.phone` (`uq_accounts_phone`), `accounts.email` (`uq_accounts_email`) |
+| REQ-ACC-014 | 01 §1 | RULE-01-10 (mới — Phase 5; sửa 2026-09-13: email thay phone làm danh tính chính) | `RegisterAccount`, `CreateStaff` | FSM 1 | `accounts.email` (`uq_accounts_email`, NOT NULL), `accounts.phone` (`uq_accounts_phone`, optional) |
 
 ## 2. Module 02 — Identity & Access Management
 

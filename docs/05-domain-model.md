@@ -140,7 +140,7 @@ graph TD
   - `RULE-01-02`: OTP hết hạn sau 300 giây; nhập sai quá 5 lần sẽ khóa phiên xác thực 15 phút.
   - `RULE-01-03`: Tài khoản Staff tạo trực tiếp được kích hoạt `ACTIVE` ngay, gán cờ `must_change_password = true`.
   - `RULE-01-09` (bổ sung Phase 4): Mật khẩu tối thiểu 8 ký tự; không ép độ phức tạp bổ sung hay đổi định kỳ.
-  - `RULE-01-10` (bổ sung Phase 5, đóng CONTRADICTION-02/ORPHAN-01): Số điện thoại (`accounts.phone`) và email là danh tính đăng nhập duy nhất trên **toàn nền tảng** (Scope `PLATFORM`) — một Account có thể tương tác với nhiều Organization độc lập; không mâu thuẫn với cách ly dữ liệu vận hành 100% theo Organization (`RULE-02-01`, `RULE-03-01`, vốn áp dụng cho dữ liệu vận hành chứ không phải danh tính đăng nhập).
+  - `RULE-01-10` (bổ sung Phase 5, đóng CONTRADICTION-02/ORPHAN-01; **sửa 2026-09-13**: đổi danh tính chính từ `phone` sang `email` — xem Decision Log `docs/02-business-rules.md` mục 01): Email (`accounts.email`) là danh tính đăng nhập chính, bắt buộc và duy nhất trên **toàn nền tảng** (Scope `PLATFORM`); số điện thoại (`accounts.phone`, khi có) vẫn duy nhất nhưng không còn bắt buộc, chỉ là liên hệ tùy chọn. Một Account có thể tương tác với nhiều Organization độc lập; không mâu thuẫn với cách ly dữ liệu vận hành 100% theo Organization (`RULE-02-01`, `RULE-03-01`, vốn áp dụng cho dữ liệu vận hành chứ không phải danh tính đăng nhập).
 
 ---
 
