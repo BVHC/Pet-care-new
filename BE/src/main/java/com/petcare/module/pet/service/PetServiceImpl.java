@@ -45,7 +45,7 @@ public class PetServiceImpl implements PetService {
         pet.setMicrochipNumber(req.microchipNumber());
         pet.setAvatarUrl(req.avatarUrl());
         try {
-            pet = pets.save(pet);
+            pet = pets.saveAndFlush(pet);
         } catch (DataIntegrityViolationException ex) {
             throw new BusinessRuleViolationException("RULE-04-01", "Chủ sở hữu không hợp lệ");
         }
@@ -109,9 +109,11 @@ public class PetServiceImpl implements PetService {
             pet.setAvatarUrl(req.avatarUrl());
         }
         try {
-            pet = pets.save(pet);
+            pet = pets.saveAndFlush(pet);
         } catch (ObjectOptimisticLockingFailureException ex) {
             throw new ConcurrencyConflictException("Pet", id);
+        } catch (DataIntegrityViolationException ex) {
+            throw new BusinessRuleViolationException("RULE-04-01", "Chủ sở hữu không hợp lệ");
         }
         return mapper.toResponse(pet);
     }
