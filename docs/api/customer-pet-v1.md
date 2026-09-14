@@ -67,12 +67,19 @@ CONFIRMED tồn tại nhưng độ dài mặc định TBD Q5 — PROPOSED: mời
 
 ## C. Detailed endpoint contract
 
+> **Phạm vi v1 (Pets CRUD — implemented):** chỉ C1 trừ `POST /pets/{id}/transfer`.
+> `transfer` (C1) + toàn bộ C2 (search) + C3 (caregiver delegation) = **OUT v1**
+> (theo plan `docs/superpowers/plans/2026-09-14-pets-crud.md` Global Constraints;
+> receptionist tạo hộ cũng OUT).
+
 ### C1. Pets (proposed)
 
 - **`POST /pets`** — Request `{name (req), species (req: `DOG`/`CAT`/`BIRD`/`OTHER`
   CONFIRMED), breed?, gender (`MALE`/`FEMALE`/`UNKNOWN` CONFIRMED), dateOfBirth?,
   weightKg?, microchipNumber?, ownerId? (receptionist tạo hộ — trong Store)}$.
-  Customer tự tạo thì owner = mình. Response `201 {petId, ownerId, isActive: true}`.
+  Customer tự tạo thì owner = mình. Response `201 {petId, ownerId, status: "ACTIVE"}`
+  (`status: PetStatus` enum — v1 khóa `ACTIVE` per RULE-04-11; field `isActive:boolean`
+  cũ đã bỏ vì lạc hậu so với ERD/glossary).
   Status: `201` · `400` · `401` · `403` · `409` trùng microchip (A2).
 - **`GET /pets`** — List pets của mình (customer) / được ủy quyền (caregiver thấy pets
   ACTIVE-delegated) / toàn Store (receptionist? TBD Q11 — PROPOSED: không, dùng
@@ -83,17 +90,17 @@ CONFIRMED tồn tại nhưng độ dài mặc định TBD Q5 — PROPOSED: mời
   + transfer chỉ Primary Owner; caregiver gọi với core fields → `403`
   (`UNAUTHORIZED_DELEGATED_ACTION`); receptionist sửa thông tin phi-core tại quầy.
   Status: `200` · `400` · `401` · `403` · `404`.
-- **`POST /pets/{id}/transfer`** — Request `{newOwnerId (PROPOSED; cách xác định chủ
+- **`POST /pets/{id}/transfer`** — **OUT v1.** Request `{newOwnerId (PROPOSED; cách xác định chủ
   mới TBD Q6)}`. Chỉ Primary Owner. Response `200 {petId, ownerId}`.
   Delegations cũ khi đổi chủ: TBD Q7 (PROPOSED: giữ nguyên cho đến khi chủ mới revoke).
 
-### C2. Counter search (proposed)
+### C2. Counter search — OUT v1 (proposed)
 
 - **`GET /pets/search`** — Query PROPOSED (Q9): `phone?`, `citizenId?`, `petCode?`,
   `customerCode?` (tiêu chí CONFIRMED RULE-04-02, tên param PROPOSED).
   Chỉ `RECEPTIONIST`. Response `200 {customers: [...], pets: [...]}` (shape PROPOSED).
 
-### C3. Caregiver delegation (proposed)
+### C3. Caregiver delegation — OUT v1 (proposed)
 
 - **`POST /pets/{id}/caregiver-invitations`** — Request `{caregiverPhone (req CONFIRMED),
   validUntil? (PROPOSED, A4)}`. Chỉ Primary Owner (không phải owner → 403; caregiver
