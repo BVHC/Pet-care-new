@@ -61,8 +61,8 @@ CREATE TYPE outbox_status_enum AS ENUM ('PENDING', 'PROCESSING', 'PUBLISHED', 'F
 
 CREATE TABLE accounts (
     id                     UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-    phone                  VARCHAR(20) NOT NULL,
-    email                  VARCHAR(100),
+    phone                  VARCHAR(20),
+    email                  VARCHAR(100) NOT NULL,
     password_hash          VARCHAR(255) NOT NULL,
     status                 account_status_enum NOT NULL DEFAULT 'PENDING_VERIFICATION',
     must_change_password   BOOLEAN NOT NULL DEFAULT false,
@@ -71,22 +71,33 @@ CREATE TABLE accounts (
     locked_until           TIMESTAMPTZ,
     created_at             TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
     updated_at             TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    created_by             UUID,
+    updated_by             UUID,
+    deleted_at             TIMESTAMPTZ,
+    version                BIGINT NOT NULL DEFAULT 0,
     CONSTRAINT uq_accounts_phone UNIQUE (phone),
-    CONSTRAINT uq_accounts_email UNIQUE (email)
+    CONSTRAINT uq_accounts_email UNIQUE (email),
+    CONSTRAINT fk_accounts_created_by FOREIGN KEY (created_by) REFERENCES accounts(id),
+    CONSTRAINT fk_accounts_updated_by FOREIGN KEY (updated_by) REFERENCES accounts(id)
 );
 CREATE INDEX idx_accounts_status ON accounts(status);
 
+-- otps.email (không phải phone) là khoá định danh OTP — quyết định đổi danh tính
+-- chính Auth sang email (xem docs/02-business-rules.md RULE-01-10, sửa lại).
+-- otps.locked_until: verification lockout 15 phút sau 5 lần nhập sai (RULE-01-05),
+-- cùng pattern accounts.locked_until.
 CREATE TABLE otps (
     id             UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-    phone          VARCHAR(20) NOT NULL,
+    email          VARCHAR(100) NOT NULL,
     otp_code       VARCHAR(10) NOT NULL,
     purpose        VARCHAR(50) NOT NULL DEFAULT 'REGISTRATION',
     is_used        BOOLEAN NOT NULL DEFAULT false,
     attempt_count  INT NOT NULL DEFAULT 0,
     expires_at     TIMESTAMPTZ NOT NULL,
+    locked_until   TIMESTAMPTZ,
     created_at     TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP
 );
-CREATE INDEX idx_otps_phone_purpose ON otps(phone, purpose, is_used, expires_at);
+CREATE INDEX idx_otps_email_purpose ON otps(email, purpose, is_used, expires_at);
 
 CREATE TABLE organizations (
     id          UUID PRIMARY KEY DEFAULT gen_random_uuid(),
@@ -152,9 +163,15 @@ CREATE TABLE users (
     staff_code       VARCHAR(50),
     created_at       TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
     updated_at       TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    created_by       UUID,
+    updated_by       UUID,
+    deleted_at       TIMESTAMPTZ,
+    version          BIGINT NOT NULL DEFAULT 0,
     CONSTRAINT fk_users_account FOREIGN KEY (account_id) REFERENCES accounts(id) ON DELETE RESTRICT,
     CONSTRAINT fk_users_org FOREIGN KEY (organization_id) REFERENCES organizations(id) ON DELETE SET NULL,
-    CONSTRAINT fk_users_store FOREIGN KEY (store_id) REFERENCES stores(id) ON DELETE SET NULL
+    CONSTRAINT fk_users_store FOREIGN KEY (store_id) REFERENCES stores(id) ON DELETE SET NULL,
+    CONSTRAINT fk_users_created_by FOREIGN KEY (created_by) REFERENCES accounts(id),
+    CONSTRAINT fk_users_updated_by FOREIGN KEY (updated_by) REFERENCES accounts(id)
 );
 CREATE INDEX idx_users_org_store ON users(organization_id, store_id);
 CREATE INDEX idx_users_role ON users(role);

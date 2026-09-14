@@ -6,6 +6,8 @@
 >
 > **Quy ước đọc:** 
 
+> **⚠️ Ngoại lệ đã ghi nhận (2026-09-13):** Danh tính đăng nhập chính của `Account` đã đổi từ số điện thoại sang **email** (quyết định PO, triển khai Module 01). Xem Decision Log đầy đủ tại `docs/02-business-rules.md` mục 01 (cuối, ngay sau RULE-01-10). Đây là ngoại lệ duy nhất đã biết đối với tình trạng "FROZEN" của tài liệu này tại thời điểm ghi chú.
+
 ---
 
 ## 1. Purpose
