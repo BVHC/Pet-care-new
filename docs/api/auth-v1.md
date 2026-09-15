@@ -35,7 +35,7 @@ RULE-01-10). Toàn bộ mô tả field `phone` dưới đây trong C1-C3 cần �
 
 ---
 
-## A. Confirmed Auth API (7 endpoints)
+## A. Confirmed Auth API (8 endpoints)
 
 | # | Endpoint (proposed) | Business operation (CONFIRMED) |
 |---|---|---|
@@ -45,7 +45,8 @@ RULE-01-10). Toàn bộ mô tả field `phone` dưới đây trong C1-C3 cần �
 | 4 | `POST /auth/login` | `Login` — `01#1`, RULE-01-01/07, FSM 1 guards |
 | 5 | `POST /auth/refresh` | Session/token-layer infra (không có Command Candidate riêng trong `04-glossary.md`) — ADR-0001, RULE-01-06/02-04 |
 | 6 | `POST /auth/logout` | `Logout` — `01#1`, RULE-01-06 |
-| 7 | `POST /staff-accounts` (proposed path, ranh giới Auth × IAM) | `CreateStaff` D-04 — `01#1`, RULE-01-03, RULE-02-05, FSM 1 |
+| 7 | `POST /staff-accounts` (ranh giới Auth × IAM) | `CreateStaff` D-04 — `01#1`, RULE-01-03, RULE-02-05, FSM 1 |
+| 8 | `POST /customers` (ranh giới Auth × IAM) | `ManageCustomerProfile` (Receptionist tạo Customer tại quầy) — `02`, RULE-02-06 |
 
 ---
 
@@ -59,7 +60,8 @@ RULE-01-10). Toàn bộ mô tả field `phone` dưới đây trong C1-C3 cần �
 | Login | Customer / Staff | Auth (01) | Credentials đúng, Account `ACTIVE` (hoặc `LOCKED`/`AUTO_FAILED_LOGIN` đã hết `locked_until` → auto-unlock trước khi check) | RULE-01-01 (chỉ ACTIVE + phát hành JWT/Session Token), RULE-01-07 (5 sai liên tiếp → LOCKED qua `AutoLockAccount`; `LOCKED → ACTIVE` qua `AutoUnlockAccount` khi hết `locked_until` **hoặc** qua `UnlockAccount` thủ công — FSM-1 Technical Invariant #5), RULE-02-04 (LOCKED từ chối mọi op) | POST | `/auth/login` | Public | Self (đúng credentials) | Thành công: không đổi state (trừ khi vừa auto-unlock trước đó). Thất bại lần 5 liên tiếp: `ACTIVE → LOCKED` via `AutoLockAccount`, ev `AccountLocked` | — | — | Non-idempotent (mỗi success đẻ session mới; mỗi fail đều đếm) | Identifier = email (RULE-01-10, sửa 2026-09-14, thay A1 cũ); Bearer transport ASSUMPTION A2; TTL access token = 15p (ADR-0002, CONFIRMED); `role` đơn là A7 |
 | Refresh | Customer / Staff | Auth (01), session/token layer | Refresh token hợp lệ, chưa hết hạn/chưa revoke, Account đang `ACTIVE` | ADR-0001 (rotation: 1 refresh token dùng 1 lần), RULE-01-01/07 (re-check trạng thái Account tại thời điểm refresh — chặn refresh nếu đã LOCKED/DEACTIVATED sau khi token cũ phát hành) | POST | `/auth/refresh` | Public (refresh token tự chứng thực, không cần Bearer access) | Owner (đúng userId trong refresh token) | Không đổi Account state; chỉ rotate token pair | — | — | Non-idempotent (mỗi lần gọi rotate sang cặp token mới, refresh token cũ bị revoke — reuse bị từ chối `401 INVALID_REFRESH_TOKEN`) | Không có RULE-ID/FSM riêng — thuần session/token infra (ADR-0001), giống Logout |
 | Logout | Customer / Staff | Auth (01) | Đang có session | RULE-01-06 (revoke session + refresh, blacklist access) | POST | `/auth/logout` | Bearer access | Owner session | Không đổi Account state | — | — | **Idempotent** (logout lặp lại vẫn 200) | Cơ chế định danh session từ access token + body `refreshToken?` là PROPOSED |
-| CreateStaff D-04 | PlatformAdmin / OrganizationAdmin | Auth (01) × IAM (02), Agg `Account` + `UserAccount` | Actor có quyền quản trị trên scope mục tiêu | RULE-01-03/D-04 (`→ACTIVE` + temp password + `must_change_password=true`, bỏ OTP), RULE-02-02 (9 canonical roles), RULE-02-05 (hierarchy) | POST | `/staff-accounts` | Bearer access | `SUPER_ADMIN` toàn hệ thống; `ORGANIZATION_ADMIN` trong Org mình (RULE-02-05 CONFIRMED) | `[*] → ACTIVE`, ev `AccountActivated` | — | (Có thể gửi temp password cho staff — kênh TBD Q7) | Như register: email UK → trùng = `BUSINESS_RULE_VIOLATION`/400 (RULE-01-10, sửa 2026-09-13, không dùng 409); không idempotency key trong docs | Role enum 9 giá trị CONFIRMED; tổ hợp org/store bắt buộc theo role TBD Q9; audit TBD Q10; endpoint này **chưa triển khai code** (ngoài phạm vi Module 01 lần này) |
+| CreateStaff D-04 | PlatformAdmin / OrganizationAdmin | Auth (01) × IAM (02), Agg `Account` + `UserAccount` | Actor có quyền quản trị trên scope mục tiêu | RULE-01-03/D-04 (`→ACTIVE` + temp password + `must_change_password=true`, bỏ OTP), RULE-02-02 (9 canonical roles), RULE-02-05 (hierarchy) | POST | `/staff-accounts` | Bearer access | `SUPER_ADMIN` toàn hệ thống; `ORGANIZATION_ADMIN` trong Org mình (RULE-02-05 CONFIRMED) | `[*] → ACTIVE`, ev `AccountActivated` | — | (Có thể gửi temp password cho staff — kênh TBD Q7) | Như register: email UK → trùng = `BUSINESS_RULE_VIOLATION`/400 (RULE-01-10, sửa 2026-09-13, không dùng 409); không idempotency key trong docs | Role enum 9 giá trị CONFIRMED; tổ hợp org/store bắt buộc theo role TBD Q9; audit TBD Q10; **IMPLEMENTED** (commit `8ab4c43`) |
+| CreateCustomer (ManageCustomerProfile, counter) | Receptionist | Auth (01) × IAM (02), Agg `Account` + `UserAccount` | Receptionist đã xác minh danh tính khách tại quầy | RULE-02-06 (Receptionist tạo Customer tại quầy), RULE-01-09/10 (password/email cùng chuẩn register) | POST | `/customers` | Bearer access | `RECEPTIONIST` (bất kỳ Store — Customer không gắn Store nào, RULE-02-02) | `[*] → ACTIVE`, ev `AccountActivated` | — | — | Như register: email UK → trùng = `BUSINESS_RULE_VIOLATION`/400 (RULE-01-10); không idempotency key | **DECIDED 2026-09-14 (khác RegisterAccount có chủ đích):** tạo `ACTIVE` ngay, KHÔNG qua OTP — Receptionist đã xác minh trực tiếp tại quầy (cùng tinh thần D-04); `mustChangePassword=true` vì Receptionist đặt mật khẩu hộ khách (ASSUMPTION, ngoài phạm vi D-04 gốc nhưng suy ra hợp lý cùng lý do bảo mật). Role luôn `CUSTOMER`, không nhận `organizationId`/`storeId`. **IMPLEMENTED** |
 
 **ASSUMPTIONS dùng chung:** A1 login identifier = phone hoặc email (ERD cả 2 UK;
 ops chỉ nói "Credentials") · A2 transport = Bearer JWT (RULE-01-01 chỉ nói
@@ -226,7 +228,7 @@ suy "ERD mâu thuẫn FSM-1, không có auto-unlock") là **sai**, đã sửa ·
 - **Idempotency:** idempotent.
 - **State transition:** none (chỉ session/token layer: revoke + blacklist — RULE-01-06 CONFIRMED).
 
-### C7. `POST /staff-accounts` (proposed)
+### C7. `POST /staff-accounts` (implemented, commit `8ab4c43`)
 
 - **Purpose:** Admin provisioning staff ACTIVE + temp password (D-04).
 - **Auth:** Bearer access. **Authorization:** `SUPER_ADMIN` (mọi scope) /
@@ -238,11 +240,38 @@ suy "ERD mâu thuẫn FSM-1, không có auto-unlock") là **sai**, đã sửa ·
   (flag CONFIRMED RULE-01-03).
 - **Status:** `201` · `400` · `401` · `403 ACCESS_DENIED_SCOPE_MISMATCH`
   (mã CONFIRMED từ RULE-02-01) · `400 BUSINESS_RULE_VIOLATION` trùng email/phone
-  (đồng bộ quyết định register 2026-09-13, không dùng 409 — **chưa triển khai
-  code, endpoint này ngoài phạm vi Module 01 lần triển khai này**).
+  (đồng bộ quyết định register 2026-09-13, không dùng 409).
 - **Validation:** như register + role/scope check.
 - **Idempotency:** như register (BUSINESS_RULE_VIOLATION, TBD Q8).
 - **State transition:** `[*] → ACTIVE` + `AccountActivated`.
+
+### C8. `POST /customers` (implemented — Module 02 hoàn thiện)
+
+- **Purpose:** Receptionist tạo hồ sơ Customer tại quầy (`ManageCustomerProfile`,
+  RULE-02-06). Đặt ở Auth (không phải IAM) vì thao tác tạo `Account` mới — IAM
+  không được đụng `Account` entity/repository trực tiếp (cùng lý do `POST
+  /staff-accounts` ở trên).
+- **Auth:** Bearer access. **Authorization:** `RECEPTIONIST` — bất kỳ Store nào
+  (Customer không gắn Store trong schema, nên không cần giới hạn theo Store của
+  Receptionist).
+- **Request:** `{email (req + UK — RULE-01-10), phone? (UK), password (req,
+  Receptionist đặt hộ khách), name (req)}` — cùng shape với `RegisterRequest`/
+  `CreateStaffRequest`.
+- **Response 201:** `{accountId, userId, status: "ACTIVE", mustChangePassword: true}`.
+- **DECIDED 2026-09-14 (khác register tự phục vụ có chủ đích):** account tạo
+  `ACTIVE` ngay, **không** qua OTP — Receptionist đã xác minh danh tính khách
+  trực tiếp tại quầy nên bỏ qua bước xác thực từ xa (cùng tinh thần D-04);
+  `mustChangePassword=true` để bắt khách đổi mật khẩu ở lần đăng nhập đầu
+  (ASSUMPTION, ngoài phạm vi D-04 gốc nhưng suy ra hợp lý cùng lý do bảo mật —
+  Receptionist là người đặt mật khẩu, không phải chính khách hàng).
+- **Status:** `201` · `400 VALIDATION_FAILED` · `400 BUSINESS_RULE_VIOLATION`
+  (RULE-01-09 password ngắn, RULE-01-10 email trùng) · `401` · `403` (role khác
+  RECEPTIONIST).
+- **Validation:** như register (email format + unique, password ≥ 8 ký tự).
+- **Idempotency:** như register (BUSINESS_RULE_VIOLATION khi trùng email, không
+  có idempotency key).
+- **State transition:** `[*] → ACTIVE` + `AccountActivated`. Role của `User`
+  tạo ra luôn là `CUSTOMER`, không nhận `organizationId`/`storeId` (RULE-02-02).
 
 ---
 

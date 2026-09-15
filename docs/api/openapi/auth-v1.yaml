@@ -36,6 +36,8 @@ tags:
     description: Registration OTP, login, logout (docs module 01).
   - name: StaffProvisioning
     description: CreateStaff D-04 (docs 01#1, RULE-01-03, RULE-02-05).
+  - name: CustomerProvisioning
+    description: Receptionist counter-assisted customer creation (docs 02, RULE-02-06).
 paths:
   /auth/register:
     post:
@@ -307,6 +309,43 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/Error'
+  /customers:
+    post:
+      tags: [CustomerProvisioning]
+      summary: Receptionist creates customer at counter, direct ACTIVE (ManageCustomerProfile)
+      description: >-
+        CONFIRMED operation (docs 02, RULE-02-06). DECIDED 2026-09-14 (unlike
+        self-service RegisterAccount): created directly ACTIVE, no OTP step —
+        Receptionist has already verified the customer's identity in person at
+        the counter (same spirit as CreateStaff D-04). mustChangePassword=true
+        since the Receptionist sets the password on the customer's behalf
+        (ASSUMPTION, reasoned by the same security rationale as D-04).
+      operationId: createCustomer
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreateCustomerRequest'
+      responses:
+        '201':
+          description: Customer ACTIVE.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CreateCustomerResponse'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          description: Role other than RECEPTIONIST.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
 components:
   securitySchemes:
     bearerAuth:
@@ -426,8 +465,10 @@ components:
         Quyết định 2026-09-14: KHÔNG có field `user` — userId/accountId/role đã
         có sẵn trong claim của accessToken (FE tự giải mã JWT), trả thêm ở JSON
         body là thừa và lộ thông tin không cần thiết. `mustChangePassword`
-        (RULE-01-03) cũng tạm bỏ vì chưa có consumer thật (CreateStaff/Module 02
-        chưa triển khai) — bổ sung lại khi luồng Staff first-login được xây.
+        (RULE-01-03) cũng tạm bỏ khỏi response này — FE lấy giá trị này trực
+        tiếp từ response của `CreateStaff`/`CreateCustomer` lúc tạo tài khoản;
+        bổ sung lại ở đây (claim JWT hoặc field riêng) khi luồng Staff/Customer
+        first-login-đổi-mật-khẩu được xây (TBD Q6).
     RefreshTokenRequest:
       type: object
       required: [refreshToken]
@@ -465,13 +506,14 @@ components:
           type: boolean
     CreateStaffRequest:
       type: object
-      required: [phone, password, name, role]
+      required: [email, password, name, role]
       properties:
-        phone:
-          $ref: '#/components/schemas/Phone'
         email:
           type: string
           format: email
+          description: Required + unique platform identity (RULE-01-10), matches code — the openapi doc previously said phone was required and email optional; fixed to match CreateStaffRequest.java.
+        phone:
+          $ref: '#/components/schemas/Phone'
         password:
           type: string
           description: Temporary password (CONFIRMED D-04). Policy TBD Q5.
@@ -489,6 +531,36 @@ components:
           format: uuid
           description: Scope binding; required-matrix TBD Q9.
     CreateStaffResponse:
+      type: object
+      required: [accountId, userId, status, mustChangePassword]
+      properties:
+        accountId:
+          type: string
+          format: uuid
+        userId:
+          type: string
+          format: uuid
+        status:
+          $ref: '#/components/schemas/AccountStatus'
+        mustChangePassword:
+          type: boolean
+          example: true
+    CreateCustomerRequest:
+      type: object
+      required: [email, password, name]
+      properties:
+        email:
+          type: string
+          format: email
+          description: Required + unique platform identity (RULE-01-10).
+        phone:
+          $ref: '#/components/schemas/Phone'
+        password:
+          type: string
+          description: Set by the Receptionist on the customer's behalf. Policy TBD Q5.
+        name:
+          type: string
+    CreateCustomerResponse:
       type: object
       required: [accountId, userId, status, mustChangePassword]
       properties:

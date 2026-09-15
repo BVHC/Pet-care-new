@@ -1,6 +1,8 @@
 package com.petcare.platform.exception;
 
 import com.petcare.platform.model.ErrorResponse;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.slf4j.MDC;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
@@ -19,6 +21,8 @@ import java.util.stream.Collectors;
  */
 @RestControllerAdvice
 public class GlobalExceptionHandler {
+
+    private static final Logger log = LoggerFactory.getLogger(GlobalExceptionHandler.class);
 
     /**
      * 4 handler dưới đây bắt subclass của BusinessRuleViolationException
@@ -101,9 +105,17 @@ public class GlobalExceptionHandler {
         return build(HttpStatus.BAD_REQUEST, "VALIDATION_FAILED", message);
     }
 
+    /**
+     * Exception ngoài dự kiến (không map vào handler cụ thể nào ở trên) — KHÔNG
+     * trả ex.getMessage() cho client (có thể lộ chi tiết nội bộ: SQL, stacktrace
+     * message...). Log đầy đủ kèm traceId ở server để tra cứu khi cần.
+     */
     @ExceptionHandler(Exception.class)
     public ResponseEntity<ErrorResponse> handleGeneric(Exception ex) {
-        return build(HttpStatus.INTERNAL_SERVER_ERROR, "INTERNAL_SERVER_ERROR", ex.getMessage());
+        String traceId = MDC.get("traceId");
+        log.error("Unhandled exception (traceId={})", traceId, ex);
+        return build(HttpStatus.INTERNAL_SERVER_ERROR, "INTERNAL_SERVER_ERROR",
+                "Đã xảy ra lỗi hệ thống, vui lòng thử lại sau");
     }
 
     private ResponseEntity<ErrorResponse> build(HttpStatus status, String errorCode, String message) {

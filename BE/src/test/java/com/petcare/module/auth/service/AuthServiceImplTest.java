@@ -1,5 +1,7 @@
 package com.petcare.module.auth.service;
 
+import com.petcare.module.auth.dto.CreateCustomerRequest;
+import com.petcare.module.auth.dto.CreateStaffRequest;
 import com.petcare.module.auth.dto.LoginRequest;
 import com.petcare.module.auth.dto.LoginResponse;
 import com.petcare.module.auth.dto.LogoutRequest;
@@ -21,13 +23,14 @@ import com.petcare.platform.enums.AccountStatus;
 import com.petcare.platform.enums.LockReason;
 import com.petcare.platform.enums.NotificationChannel;
 import com.petcare.platform.enums.OtpPurpose;
+import com.petcare.platform.enums.UserRole;
+import com.petcare.platform.exception.AccessDeniedScopeException;
 import com.petcare.platform.exception.AccountLockedException;
 import com.petcare.platform.exception.AccountNotActiveException;
 import com.petcare.platform.exception.BusinessRuleViolationException;
 import com.petcare.platform.exception.InvalidCredentialsException;
 import com.petcare.platform.exception.InvalidRefreshTokenException;
 import com.petcare.platform.exception.ResourceNotFoundException;
-import com.petcare.platform.outbox.OutboxEventRepository;
 import com.petcare.platform.security.JwtTokenProvider;
 import com.petcare.platform.security.UserPrincipal;
 import com.petcare.platform.security.token.IssuedTokenPair;
@@ -62,7 +65,7 @@ class AuthServiceImplTest {
     @Mock
     private OtpRepository otpRepository;
     @Mock
-    private OutboxEventRepository outboxEventRepository;
+    private AccountEventRecorder accountEventRecorder;
     @Mock
     private UserProvisioningService userProvisioningService;
     @Mock
@@ -82,9 +85,9 @@ class AuthServiceImplTest {
 
     @BeforeEach
     void setUp() {
-        authService = new AuthServiceImpl(accountRepository, otpRepository, outboxEventRepository,
+        authService = new AuthServiceImpl(accountRepository, otpRepository,
                 accountTransitionHandler, userProvisioningService, notificationService, passwordEncoder,
-                tokenIssuanceFacade, jwtTokenProvider);
+                tokenIssuanceFacade, jwtTokenProvider, accountEventRecorder);
     }
 
     private static Account activeAccount() {
@@ -160,7 +163,7 @@ class AuthServiceImplTest {
         assertThat(outcome.account().getStatus()).isEqualTo(AccountStatus.PENDING_VERIFICATION);
         assertThat(outcome.notificationTaskId()).isEqualTo(taskId);
         verify(otpRepository).save(any(Otp.class));
-        verify(outboxEventRepository).save(any());
+        verify(accountEventRecorder).record(any(), eq("AccountRegistered"), any());
     }
 
     // ---- verifyOtp ----
@@ -242,7 +245,7 @@ class AuthServiceImplTest {
 
         assertThat(result.getStatus()).isEqualTo(AccountStatus.ACTIVE);
         assertThat(otp.isUsed()).isTrue();
-        verify(outboxEventRepository).save(any());
+        verify(accountEventRecorder).record(any(), eq("AccountActivated"));
     }
 
     // ---- resendOtp ----
@@ -393,7 +396,7 @@ class AuthServiceImplTest {
         assertThat(account.getLockReason()).isNull();
         assertThat(account.getLockedUntil()).isNull();
         assertThat(account.getFailedLoginAttempts()).isEqualTo(1);
-        verify(outboxEventRepository).save(argThat(e -> "AccountUnlocked".equals(e.getEventType())));
+        verify(accountEventRecorder).record(any(), eq("AccountUnlocked"));
     }
 
     @Test
@@ -425,7 +428,7 @@ class AuthServiceImplTest {
         assertThat(account.getStatus()).isEqualTo(AccountStatus.LOCKED);
         assertThat(account.getLockReason()).isEqualTo(LockReason.AUTO_FAILED_LOGIN);
         assertThat(account.getLockedUntil()).isAfter(LocalDateTime.now());
-        verify(outboxEventRepository).save(argThat(e -> "AccountLocked".equals(e.getEventType())));
+        verify(accountEventRecorder).record(any(), eq("AccountLocked"), any());
     }
 
     @Test
@@ -449,6 +452,147 @@ class AuthServiceImplTest {
         assertThat(response.expiresIn()).isEqualTo(900L);
         verify(tokenIssuanceFacade).issueTokens(argThat(p -> p.getUserId().equals(user.getId())
                 && p.getAccountId().equals(account.getId())), eq("ua"), eq("127.0.0.1"));
+    }
+
+    // ---- createStaff ----
+
+    private static UserPrincipal admin(UserRole role, UUID organizationId, UUID storeId) {
+        return UserPrincipal.builder()
+                .userId(UUID.randomUUID())
+                .role(role)
+                .organizationId(organizationId)
+                .storeId(storeId)
+                .build();
+    }
+
+    @Test
+    void createStaff_rejectsShortPassword_RULE_01_09() {
+        var actor = admin(UserRole.SUPER_ADMIN, null, null);
+        var request = new CreateStaffRequest(
+                "staff@example.com", null, "short", "Nguyen Van B", UserRole.RECEPTIONIST,
+                UUID.randomUUID(), UUID.randomUUID());
+
+        assertThatThrownBy(() -> authService.createStaff(request, actor))
+                .isInstanceOf(BusinessRuleViolationException.class)
+                .satisfies(ex -> assertThat(((BusinessRuleViolationException) ex).getRuleId()).isEqualTo("RULE-01-09"));
+
+        verify(accountRepository, never()).save(any());
+    }
+
+    @Test
+    void createStaff_outOfScopeAndShortPassword_deniedByScopeNotPasswordRule() {
+        // Kiểm tra quyền phải chạy TRƯỚC validation nghiệp vụ khác — actor ngoài scope
+        // không được nhận nhầm BUSINESS_RULE_VIOLATION (password ngắn) che mất lỗi quyền thật.
+        UUID orgId = UUID.randomUUID();
+        var actor = admin(UserRole.STORE_MANAGER, orgId, UUID.randomUUID());
+        var request = new CreateStaffRequest(
+                "staff@example.com", null, "short", "Nguyen Van B", UserRole.STORE_MANAGER, orgId, actor.getStoreId());
+
+        assertThatThrownBy(() -> authService.createStaff(request, actor))
+                .isInstanceOf(AccessDeniedScopeException.class);
+
+        verify(accountRepository, never()).existsByEmail(any());
+        verify(accountRepository, never()).save(any());
+    }
+
+    @Test
+    void createStaff_orgAdminEscalatesToOrgAdmin_deniedByRoleScopeGuard_RULE_02_03() {
+        UUID orgId = UUID.randomUUID();
+        var actor = admin(UserRole.ORGANIZATION_ADMIN, orgId, null);
+        var request = new CreateStaffRequest(
+                "staff@example.com", null, "password123", "Nguyen Van B", UserRole.ORGANIZATION_ADMIN, orgId, null);
+
+        assertThatThrownBy(() -> authService.createStaff(request, actor))
+                .isInstanceOf(AccessDeniedScopeException.class);
+
+        verify(accountRepository, never()).save(any());
+    }
+
+    @Test
+    void createStaff_duplicateEmail_RULE_01_10() {
+        var actor = admin(UserRole.SUPER_ADMIN, null, null);
+        var request = new CreateStaffRequest(
+                EMAIL, null, "password123", "Nguyen Van B", UserRole.RECEPTIONIST, UUID.randomUUID(), UUID.randomUUID());
+        when(accountRepository.existsByEmail(EMAIL)).thenReturn(true);
+
+        assertThatThrownBy(() -> authService.createStaff(request, actor))
+                .isInstanceOf(BusinessRuleViolationException.class)
+                .satisfies(ex -> assertThat(((BusinessRuleViolationException) ex).getRuleId()).isEqualTo("RULE-01-10"));
+    }
+
+    @Test
+    void createStaff_happyPath_createsActiveAccountWithTempPassword() {
+        UUID orgId = UUID.randomUUID();
+        UUID storeId = UUID.randomUUID();
+        var actor = admin(UserRole.SUPER_ADMIN, null, null);
+        var request = new CreateStaffRequest(
+                "staff@example.com", "0912345678", "password123", "Nguyen Van B", UserRole.RECEPTIONIST, orgId, storeId);
+        when(accountRepository.existsByEmail("staff@example.com")).thenReturn(false);
+        when(passwordEncoder.encode("password123")).thenReturn("hashed");
+        when(accountRepository.save(any(Account.class))).thenAnswer(inv -> {
+            Account a = inv.getArgument(0);
+            a.setId(UUID.randomUUID());
+            return a;
+        });
+        User staffUser = new User(UUID.randomUUID(), "Nguyen Van B");
+        staffUser.setId(UUID.randomUUID());
+        when(userProvisioningService.createStaffProfile(any(), eq("Nguyen Van B"), eq(UserRole.RECEPTIONIST),
+                eq(orgId), eq(storeId))).thenReturn(staffUser);
+
+        var response = authService.createStaff(request, actor);
+
+        assertThat(response.status()).isEqualTo(AccountStatus.ACTIVE);
+        assertThat(response.mustChangePassword()).isTrue();
+        assertThat(response.userId()).isEqualTo(staffUser.getId());
+        verify(accountEventRecorder).record(any(), eq("AccountActivated"));
+        verify(accountEventRecorder).record(any(), eq("PermissionAssigned"), any());
+    }
+
+    // ---- createCustomer ----
+
+    @Test
+    void createCustomer_rejectsShortPassword_RULE_01_09() {
+        var request = new CreateCustomerRequest("customer2@example.com", null, "short", "Nguyen Thi C");
+
+        assertThatThrownBy(() -> authService.createCustomer(request))
+                .isInstanceOf(BusinessRuleViolationException.class)
+                .satisfies(ex -> assertThat(((BusinessRuleViolationException) ex).getRuleId()).isEqualTo("RULE-01-09"));
+
+        verify(accountRepository, never()).save(any());
+    }
+
+    @Test
+    void createCustomer_duplicateEmail_RULE_01_10() {
+        var request = new CreateCustomerRequest(EMAIL, null, "password123", "Nguyen Thi C");
+        when(accountRepository.existsByEmail(EMAIL)).thenReturn(true);
+
+        assertThatThrownBy(() -> authService.createCustomer(request))
+                .isInstanceOf(BusinessRuleViolationException.class)
+                .satisfies(ex -> assertThat(((BusinessRuleViolationException) ex).getRuleId()).isEqualTo("RULE-01-10"));
+
+        verify(accountRepository, never()).save(any());
+    }
+
+    @Test
+    void createCustomer_happyPath_createsActiveAccountWithTempPassword() {
+        var request = new CreateCustomerRequest("customer2@example.com", "0912345678", "password123", "Nguyen Thi C");
+        when(accountRepository.existsByEmail("customer2@example.com")).thenReturn(false);
+        when(passwordEncoder.encode("password123")).thenReturn("hashed");
+        when(accountRepository.save(any(Account.class))).thenAnswer(inv -> {
+            Account a = inv.getArgument(0);
+            a.setId(UUID.randomUUID());
+            return a;
+        });
+        User customer = new User(UUID.randomUUID(), "Nguyen Thi C");
+        customer.setId(UUID.randomUUID());
+        when(userProvisioningService.createCustomerProfile(any(), eq("Nguyen Thi C"))).thenReturn(customer);
+
+        var response = authService.createCustomer(request);
+
+        assertThat(response.status()).isEqualTo(AccountStatus.ACTIVE);
+        assertThat(response.mustChangePassword()).isTrue();
+        assertThat(response.userId()).isEqualTo(customer.getId());
+        verify(accountEventRecorder).record(any(), eq("AccountActivated"));
     }
 
     // ---- logout ----

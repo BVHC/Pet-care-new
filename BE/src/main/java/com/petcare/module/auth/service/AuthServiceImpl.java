@@ -1,5 +1,9 @@
 package com.petcare.module.auth.service;
 
+import com.petcare.module.auth.dto.CreateCustomerRequest;
+import com.petcare.module.auth.dto.CreateCustomerResponse;
+import com.petcare.module.auth.dto.CreateStaffRequest;
+import com.petcare.module.auth.dto.CreateStaffResponse;
 import com.petcare.module.auth.dto.LoginRequest;
 import com.petcare.module.auth.dto.LoginResponse;
 import com.petcare.module.auth.dto.LogoutRequest;
@@ -17,6 +21,7 @@ import com.petcare.module.auth.repository.OtpRepository;
 import com.petcare.module.iam.entity.User;
 import com.petcare.module.iam.service.UserProvisioningService;
 import com.petcare.module.notification.service.NotificationService;
+import com.petcare.platform.audit.Auditable;
 import com.petcare.platform.enums.AccountStatus;
 import com.petcare.platform.enums.LockReason;
 import com.petcare.platform.enums.NotificationChannel;
@@ -30,9 +35,8 @@ import com.petcare.platform.exception.ConcurrencyConflictException;
 import com.petcare.platform.exception.InvalidCredentialsException;
 import com.petcare.platform.exception.InvalidRefreshTokenException;
 import com.petcare.platform.exception.ResourceNotFoundException;
-import com.petcare.platform.outbox.OutboxEvent;
-import com.petcare.platform.outbox.OutboxEventRepository;
 import com.petcare.platform.security.JwtTokenProvider;
+import com.petcare.platform.security.RoleScopeGuard;
 import com.petcare.platform.security.UserPrincipal;
 import com.petcare.platform.security.token.IssuedTokenPair;
 import com.petcare.platform.security.token.TokenIssuanceFacade;
@@ -46,6 +50,7 @@ import org.springframework.transaction.annotation.Transactional;
 import java.security.SecureRandom;
 import java.time.LocalDateTime;
 import java.time.temporal.ChronoUnit;
+import java.util.Map;
 import java.util.Optional;
 import java.util.UUID;
 
@@ -69,13 +74,13 @@ public class AuthServiceImpl implements AuthService {
 
     private final AccountRepository accountRepository;
     private final OtpRepository otpRepository;
-    private final OutboxEventRepository outboxEventRepository;
     private final AccountTransitionHandler accountTransitionHandler;
     private final UserProvisioningService userProvisioningService;
     private final NotificationService notificationService;
     private final PasswordEncoder passwordEncoder;
     private final TokenIssuanceFacade tokenIssuanceFacade;
     private final JwtTokenProvider jwtTokenProvider;
+    private final AccountEventRecorder accountEventRecorder;
     private final SecureRandom secureRandom = new SecureRandom();
 
     @Override
@@ -88,15 +93,18 @@ public class AuthServiceImpl implements AuthService {
         if (accountRepository.existsByEmail(request.email())) {
             throw new BusinessRuleViolationException("RULE-01-10", "Email đã được sử dụng");
         }
+        if (hasPhone(request.phone()) && accountRepository.existsByPhone(request.phone())) {
+            throw new BusinessRuleViolationException("RULE-01-10", "Số điện thoại đã được sử dụng");
+        }
 
         Account account = new Account(request.email(), request.phone(), passwordEncoder.encode(request.password()));
         try {
             account = accountRepository.save(account);
         } catch (DataIntegrityViolationException ex) {
-            // §5.1 Concurrency: 2 request register cùng email gần như đồng thời — pre-check
-            // ở trên có thể đều thấy "chưa tồn tại" (race). UNIQUE constraint ở DB là guard
-            // thật; request thua ở đây nhận lỗi nghiệp vụ sạch thay vì 500.
-            throw new BusinessRuleViolationException("RULE-01-10", "Email đã được sử dụng");
+            // §5.1 Concurrency: 2 request register cùng email/phone gần như đồng thời —
+            // pre-check ở trên có thể đều thấy "chưa tồn tại" (race). UNIQUE constraint ở
+            // DB là guard thật; request thua ở đây nhận lỗi nghiệp vụ sạch thay vì 500.
+            throw duplicateAccountException(ex);
         }
 
         User user = userProvisioningService.createCustomerProfile(account.getId(), request.name());
@@ -106,7 +114,7 @@ public class AuthServiceImpl implements AuthService {
                 LocalDateTime.now().plusSeconds(OTP_TTL_SECONDS));
         otpRepository.save(otp);
 
-        recordOutboxEvent(account, "AccountRegistered", otp.getId());
+        accountEventRecorder.record(account, "AccountRegistered", Map.of("otpId", String.valueOf(otp.getId())));
 
         var notificationTaskId = notificationService.enqueue(user.getId(), NotificationChannel.EMAIL,
                 "OTP", buildOtpEmailContent(otpCode));
@@ -114,8 +122,19 @@ public class AuthServiceImpl implements AuthService {
         return new RegistrationOutcome(account, notificationTaskId);
     }
 
+    /**
+     * noRollbackFor: sai OTP/khóa session (RULE-01-02/05) phải commit
+     * attemptCount/lockedUntil dù method throw — mặc định Spring rollback
+     * toàn bộ transaction trên RuntimeException sẽ xóa mất counter vừa
+     * save() (bug thật, đã xảy ra). ConcurrencyConflictException/
+     * ResourceNotFoundException KHÔNG extend BusinessRuleViolationException
+     * nên vẫn rollback bình thường — bắt buộc, vì lúc đó Account activate
+     * thất bại thì otp.used=true không được phép commit riêng lẻ. Khi sửa
+     * method này, mọi save() mới đặt trước 1 throw BusinessRuleViolationException
+     * (hoặc subclass) sẽ MẶC ĐỊNH được commit — cân nhắc kỹ trước khi thêm.
+     */
     @Override
-    @Transactional
+    @Transactional(noRollbackFor = BusinessRuleViolationException.class)
     public Account verifyOtp(VerifyOtpRequest request) {
         Otp otp = otpRepository.findTopByEmailAndPurposeOrderByCreatedAtDesc(request.email(), OtpPurpose.REGISTRATION)
                 .orElseThrow(() -> new ResourceNotFoundException("Otp", request.email()));
@@ -158,7 +177,7 @@ public class AuthServiceImpl implements AuthService {
             throw new ConcurrencyConflictException("Account", account.getId());
         }
 
-        recordOutboxEvent(account, "AccountActivated", null);
+        accountEventRecorder.record(account, "AccountActivated");
         return account;
     }
 
@@ -212,8 +231,17 @@ public class AuthServiceImpl implements AuthService {
         return new RegistrationOutcome(account, notificationTaskId);
     }
 
+    /**
+     * noRollbackFor: sai mật khẩu/khóa account (RULE-01-01/07) phải commit
+     * failedLoginAttempts/status=LOCKED dù method throw — cùng lý do như
+     * verifyOtp ở trên. Không có noRollbackFor này, RULE-01-07 (khóa sau 5
+     * lần sai) không bao giờ có hiệu lực thật vì counter luôn bị rollback về
+     * giá trị cũ. ConcurrencyConflictException vẫn rollback bình thường (không
+     * extend BusinessRuleViolationException) — đúng, vì reset counter bị
+     * conflict thì không nên commit dở dang.
+     */
     @Override
-    @Transactional
+    @Transactional(noRollbackFor = BusinessRuleViolationException.class)
     public LoginResponse login(LoginRequest request, String userAgent, String ipAddress) {
         Account account = accountRepository.findByEmail(request.email())
                 .orElseThrow(InvalidCredentialsException::new);
@@ -266,6 +294,11 @@ public class AuthServiceImpl implements AuthService {
         Account account = accountRepository.findById(user.getAccountId())
                 .orElseThrow(() -> new ResourceNotFoundException("Account", user.getAccountId()));
 
+        // RULE-01-07 — cùng lý do như login(): nếu không gọi lại đây, tài khoản đã qua
+        // locked_until (AUTO_FAILED_LOGIN) nhưng chỉ dùng refresh token (không login lại)
+        // sẽ mãi bị từ chối dù lẽ ra phải tự ACTIVE.
+        maybeAutoUnlock(account);
+
         if (account.getStatus() == AccountStatus.LOCKED) {
             throw new AccountLockedException(account.getLockedUntil());
         }
@@ -303,14 +336,14 @@ public class AuthServiceImpl implements AuthService {
         account.setLockedUntil(null);
         account.setFailedLoginAttempts(0);
         accountRepository.save(account);
-        recordOutboxEvent(account, "AccountUnlocked", null);
+        accountEventRecorder.record(account, "AccountUnlocked");
     }
 
     /** RULE-01-07 (AutoLockAccount) — 5 lần sai mật khẩu liên tiếp -> LOCKED 15 phút. */
     private void registerFailedLoginAttempt(Account account) {
         account.setFailedLoginAttempts(account.getFailedLoginAttempts() + 1);
         if (account.getFailedLoginAttempts() < LOGIN_MAX_FAILED_ATTEMPTS) {
-            accountRepository.save(account);
+            saveWithConcurrencyCheck(account);
             throw new InvalidCredentialsException();
         }
 
@@ -318,9 +351,40 @@ public class AuthServiceImpl implements AuthService {
         account.setStatus(AccountStatus.LOCKED);
         account.setLockReason(LockReason.AUTO_FAILED_LOGIN);
         account.setLockedUntil(LocalDateTime.now().plusMinutes(LOGIN_LOCKOUT_MINUTES));
-        accountRepository.save(account);
-        recordOutboxEvent(account, "AccountLocked", null);
+        saveWithConcurrencyCheck(account);
+        accountEventRecorder.record(account, "AccountLocked", Map.of("lockReason", LockReason.AUTO_FAILED_LOGIN.name()));
         throw new AccountLockedException(account.getLockedUntil());
+    }
+
+    /**
+     * 2 request login sai mật khẩu gần như đồng thời có thể cùng đọc
+     * failedLoginAttempts cũ rồi cùng ghi đè — request thua cuộc phải nhận lỗi
+     * nghiệp vụ sạch (409) thay vì rơi xuống handleGeneric (500).
+     */
+    private void saveWithConcurrencyCheck(Account account) {
+        try {
+            accountRepository.save(account);
+        } catch (ObjectOptimisticLockingFailureException ex) {
+            throw new ConcurrencyConflictException("Account", account.getId());
+        }
+    }
+
+    private boolean hasPhone(String phone) {
+        return phone != null && !phone.isBlank();
+    }
+
+    /**
+     * RULE-01-10 — phân biệt email vs phone khi UNIQUE constraint ở DB chặn
+     * (race condition mà pre-check existsByEmail/existsByPhone không bắt kịp),
+     * thay vì luôn báo "Email đã được sử dụng" bất kể field nào thực sự trùng.
+     */
+    private BusinessRuleViolationException duplicateAccountException(DataIntegrityViolationException ex) {
+        Throwable cause = ex.getMostSpecificCause();
+        String detail = cause == null ? null : cause.getMessage();
+        if (detail != null && detail.contains("uq_accounts_phone")) {
+            return new BusinessRuleViolationException("RULE-01-10", "Số điện thoại đã được sử dụng");
+        }
+        return new BusinessRuleViolationException("RULE-01-10", "Email đã được sử dụng");
     }
 
     private UserPrincipal buildPrincipal(Account account, User user) {
@@ -348,6 +412,91 @@ public class AuthServiceImpl implements AuthService {
         };
     }
 
+    @Override
+    @Transactional
+    @Auditable(action = "CreateStaff")
+    public CreateStaffResponse createStaff(CreateStaffRequest request, UserPrincipal actor) {
+        // RULE-02-01/02/03 — kiểm tra thẩm quyền TRƯỚC mọi validation nghiệp vụ khác, để
+        // actor ngoài scope luôn nhận đúng ACCESS_DENIED_SCOPE_MISMATCH thay vì lỡ nhận
+        // nhầm BUSINESS_RULE_VIOLATION (vd password ngắn) rồi tưởng chỉ cần sửa password.
+        RoleScopeGuard.assertCanAssignRole(actor, request.role(), request.organizationId(), request.storeId());
+
+        // RULE-02-02 — /staff-accounts chỉ dành cho nhân sự (D-04); CUSTOMER đi qua
+        // POST /customers (Receptionist) hoặc POST /auth/register (tự đăng ký), không đi
+        // nhầm cửa này (bỏ qua OTP + mustChangePassword không phù hợp ngữ nghĩa Customer).
+        if (request.role() == UserRole.CUSTOMER) {
+            throw new BusinessRuleViolationException("RULE-02-02",
+                    "Không thể tạo Customer qua /staff-accounts, dùng POST /customers");
+        }
+
+        if (request.password().length() < PASSWORD_MIN_LENGTH) {
+            throw new BusinessRuleViolationException("RULE-01-09",
+                    "Mật khẩu phải có ít nhất " + PASSWORD_MIN_LENGTH + " ký tự");
+        }
+        if (accountRepository.existsByEmail(request.email())) {
+            throw new BusinessRuleViolationException("RULE-01-10", "Email đã được sử dụng");
+        }
+        if (hasPhone(request.phone()) && accountRepository.existsByPhone(request.phone())) {
+            throw new BusinessRuleViolationException("RULE-01-10", "Số điện thoại đã được sử dụng");
+        }
+
+        Account account = new Account(request.email(), request.phone(), passwordEncoder.encode(request.password()));
+        account.setStatus(AccountStatus.ACTIVE);
+        account.setMustChangePassword(true);
+        try {
+            account = accountRepository.save(account);
+        } catch (DataIntegrityViolationException ex) {
+            throw duplicateAccountException(ex);
+        }
+
+        User user = userProvisioningService.createStaffProfile(account.getId(), request.name(), request.role(),
+                request.organizationId(), request.storeId());
+
+        accountEventRecorder.record(account, "AccountActivated");
+        accountEventRecorder.record(account, "PermissionAssigned", Map.of("role", request.role().name()));
+
+        return new CreateStaffResponse(account.getId(), user.getId(), account.getStatus(), account.isMustChangePassword());
+    }
+
+    /**
+     * RULE-02-06 — Receptionist tạo hồ sơ customer tại quầy. ACTIVE ngay,
+     * không OTP (Receptionist đã xác minh danh tính trực tiếp) —
+     * mustChangePassword=true vì Receptionist đặt mật khẩu hộ khách (cùng
+     * tinh thần D-04, ASSUMPTION — ngoài phạm vi CreateStaff nhưng hợp lý
+     * suy ra vì lý do bảo mật tương tự). Không nhận organizationId/storeId —
+     * Customer không gắn Organization/Store (RULE-02-02).
+     */
+    @Override
+    @Transactional
+    @Auditable(action = "CreateCustomer")
+    public CreateCustomerResponse createCustomer(CreateCustomerRequest request) {
+        if (request.password().length() < PASSWORD_MIN_LENGTH) {
+            throw new BusinessRuleViolationException("RULE-01-09",
+                    "Mật khẩu phải có ít nhất " + PASSWORD_MIN_LENGTH + " ký tự");
+        }
+        if (accountRepository.existsByEmail(request.email())) {
+            throw new BusinessRuleViolationException("RULE-01-10", "Email đã được sử dụng");
+        }
+        if (hasPhone(request.phone()) && accountRepository.existsByPhone(request.phone())) {
+            throw new BusinessRuleViolationException("RULE-01-10", "Số điện thoại đã được sử dụng");
+        }
+
+        Account account = new Account(request.email(), request.phone(), passwordEncoder.encode(request.password()));
+        account.setStatus(AccountStatus.ACTIVE);
+        account.setMustChangePassword(true);
+        try {
+            account = accountRepository.save(account);
+        } catch (DataIntegrityViolationException ex) {
+            throw duplicateAccountException(ex);
+        }
+
+        User user = userProvisioningService.createCustomerProfile(account.getId(), request.name());
+
+        accountEventRecorder.record(account, "AccountActivated");
+
+        return new CreateCustomerResponse(account.getId(), user.getId(), account.getStatus(), account.isMustChangePassword());
+    }
+
     private String generateOtpCode() {
         int code = secureRandom.nextInt(1_000_000);
         return String.format("%06d", code);
@@ -356,19 +505,5 @@ public class AuthServiceImpl implements AuthService {
     private String buildOtpEmailContent(String otpCode) {
         return "Mã xác thực Pet Care của bạn là " + otpCode + ", hết hạn sau "
                 + (OTP_TTL_SECONDS / 60) + " phút. Không chia sẻ mã này cho bất kỳ ai.";
-    }
-
-    private void recordOutboxEvent(Account account, String eventType, Object extraIdForLog) {
-        OutboxEvent event = new OutboxEvent();
-        event.setAggregateType("Account");
-        event.setAggregateId(account.getId().toString());
-        event.setEventType(eventType);
-        event.setPayload(buildEventPayloadJson(account, extraIdForLog));
-        outboxEventRepository.save(event);
-    }
-
-    private String buildEventPayloadJson(Account account, Object otpId) {
-        String otpIdField = otpId == null ? "" : ",\"otpId\":\"" + otpId + "\"";
-        return "{\"accountId\":\"" + account.getId() + "\",\"email\":\"" + account.getEmail() + "\"" + otpIdField + "}";
     }
 }
