@@ -124,6 +124,7 @@ public class GlobalExceptionHandler {
     }
 
     /**
+<<<<<<< HEAD
      * Lỗi ngoài dự kiến: stacktrace đi vào log kèm traceId, client chỉ nhận một
      * câu chung. Trả ex.getMessage() ra ngoài từng làm lộ nguyên câu SQL, tên
      * bảng/constraint và cả số điện thoại của tài khoản khác khi vỡ UNIQUE.
@@ -133,6 +134,18 @@ public class GlobalExceptionHandler {
         log.error("Unhandled exception traceId={}", MDC.get("traceId"), ex);
         return build(HttpStatus.INTERNAL_SERVER_ERROR, "INTERNAL_SERVER_ERROR",
                 "Đã xảy ra lỗi hệ thống, vui lòng thử lại sau.");
+=======
+     * Exception ngoài dự kiến (không map vào handler cụ thể nào ở trên) — KHÔNG
+     * trả ex.getMessage() cho client (có thể lộ chi tiết nội bộ: SQL, stacktrace
+     * message...). Log đầy đủ kèm traceId ở server để tra cứu khi cần.
+     */
+    @ExceptionHandler(Exception.class)
+    public ResponseEntity<ErrorResponse> handleGeneric(Exception ex) {
+        String traceId = MDC.get("traceId");
+        log.error("Unhandled exception (traceId={})", traceId, ex);
+        return build(HttpStatus.INTERNAL_SERVER_ERROR, "INTERNAL_SERVER_ERROR",
+                "Đã xảy ra lỗi hệ thống, vui lòng thử lại sau");
+>>>>>>> 8bfc5bd (feat: triển khai module iam)
     }
 
     private ResponseEntity<ErrorResponse> build(HttpStatus status, String errorCode, String message) {

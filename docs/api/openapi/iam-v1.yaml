@@ -4,7 +4,9 @@
 # (RULE-02-01..07), docs/03-state-machines.md (FSM-1 Account),
 # docs/04-glossary.md (02), docs/05-domain-model.md (4.2),
 # docs/06-erd.md (users/roles/permissions/role_permissions/user_roles).
-# Staff provisioning (CreateStaff) lives in auth-v1.yaml and is NOT redefined here.
+# Staff provisioning (CreateStaff) and assisted customer creation (POST /customers)
+# both create a new Account, so they live in auth-v1.yaml and are NOT redefined here
+# (IAM must not touch the Account entity directly, see convention 01-package-structure).
 #
 # Traceability legend: CONFIRMED = in docs (source cited) / ASSUMPTION (A#) =
 # reasonable inference / TBD (Q#) = needs PO (see ../iam-v1.md section E).
@@ -17,11 +19,13 @@ info:
   version: 1.0.0
   description: >-
     Strictly derived from docs/ (01#2 operations, RULE-02-01..07, FSM-1 Account
-    lifecycle, 9 canonical roles, 5 scopes). Staff creation stays in auth-v1
-    (POST /staff-accounts). Counter-assisted customer creation reuses
-    RegisterAccount semantics (ASSUMPTION A2). Multi-role via user_roles is out
-    of v1 (ASSUMPTION A3, TBD Q4/Q5). No auto-unlock: LOCKED->ACTIVE only via
-    manual UnlockAccount (FSM-1 invariant 5).
+    lifecycle, 9 canonical roles, 5 scopes). Staff creation and counter-assisted
+    customer creation both stay in auth-v1 (POST /staff-accounts, POST
+    /customers) since both create a new Account. Multi-role via user_roles and
+    custom role creation (POST /roles) are DEFERRED, out of v1 (ASSUMPTION A3).
+    No auto-unlock: LOCKED->ACTIVE only via manual UnlockAccount; manual unlock
+    is allowed at any time regardless of lock reason (REQ-ACC-011) — it does
+    NOT wait for locked_until (that field only gates automatic unlock).
 tags:
   - name: Profile
     description: Self-service profile (ManageCustomerProfile).
@@ -73,48 +77,11 @@ paths:
           $ref: '#/components/responses/BadRequest'
         '401':
           $ref: '#/components/responses/Unauthorized'
-  /customers:
-    post:
-      tags: [Profile]
-      summary: Receptionist creates customer at counter (ManageCustomerProfile)
-      description: "CONFIRMED operation (01#2, RULE-02-06). Reuses RegisterAccount semantics: PENDING_VERIFICATION plus OTP (ASSUMPTION A2). Direct-to-ACTIVE at counter is TBD Q3/Q6."
-      operationId: createCustomerAtCounter
-      security:
-        - bearerAuth: []
-      requestBody:
-        required: true
-        content:
-          application/json:
-            schema:
-              $ref: '#/components/schemas/CreateCustomerRequest'
-      responses:
-        '201':
-          description: Customer created as PENDING_VERIFICATION; OTP sent.
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/CreateCustomerResponse'
-        '400':
-          $ref: '#/components/responses/BadRequest'
-        '401':
-          $ref: '#/components/responses/Unauthorized'
-        '403':
-          description: Outside own store (CONFIRMED code ACCESS_DENIED_SCOPE_MISMATCH, RULE-02-01).
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/Error'
-        '409':
-          description: Phone or email already exists (ERD UNIQUE).
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/Error'
   /users:
     get:
       tags: [UserAdmin]
       summary: List users in scope (ManageUser)
-      description: CONFIRMED (RULE-02-05). Pagination and filters are PROPOSED (TBD Q7).
+      description: CONFIRMED (RULE-02-05). Pagination follows the standard Spring Pageable convention (page/size/sort), not a bespoke shape.
       operationId: listUsers
       security:
         - bearerAuth: []
@@ -122,11 +89,12 @@ paths:
         - name: page
           in: query
           required: false
+          description: Zero-based page index (Spring Pageable default).
           schema:
             type: integer
-            minimum: 1
-            default: 1
-        - name: pageSize
+            minimum: 0
+            default: 0
+        - name: size
           in: query
           required: false
           schema:
@@ -134,6 +102,18 @@ paths:
             minimum: 1
             maximum: 100
             default: 20
+        - name: sort
+          in: query
+          required: false
+          schema:
+            type: string
+        - name: organizationId
+          in: query
+          required: false
+          description: SUPER_ADMIN only — optional filter by Organization. ORGANIZATION_ADMIN passing a value other than their own organizationId gets 403.
+          schema:
+            type: string
+            format: uuid
         - name: role
           in: query
           required: false
@@ -145,11 +125,6 @@ paths:
           schema:
             type: string
             format: uuid
-        - name: status
-          in: query
-          required: false
-          schema:
-            $ref: '#/components/schemas/AccountStatus'
       responses:
         '200':
           description: Page of users.
@@ -168,8 +143,14 @@ paths:
   /users/{id}:
     get:
       tags: [UserAdmin]
-      summary: Get user detail (ManageUser)
-      description: CONFIRMED (RULE-02-05). Path/shape PROPOSED.
+      summary: Get user detail (ManageUser / ManageCustomerProfile)
+      description: >-
+        CONFIRMED (RULE-02-05/06). Authorization depends on the target's role:
+        staff target -> SUPER_ADMIN (any) or ORGANIZATION_ADMIN (same
+        organization); CUSTOMER target -> SUPER_ADMIN or RECEPTIONIST (any,
+        since a Customer is not bound to any Store) — ORGANIZATION_ADMIN is
+        denied for CUSTOMER targets because Customers are not bound to any
+        Organization in the schema.
       operationId: getUser
       security:
         - bearerAuth: []
@@ -194,8 +175,15 @@ paths:
           $ref: '#/components/responses/NotFound'
     patch:
       tags: [UserAdmin]
-      summary: Update user bindings (ManageUser)
-      description: CONFIRMED (RULE-02-05). Role changes go through role-assignment, not here.
+      summary: Update user bindings or customer profile (ManageUser / ManageCustomerProfile)
+      description: >-
+        CONFIRMED (RULE-02-05/06). Same authorization split as GET (see
+        above). Two mutually-exclusive field groups depending on the target's
+        role: staff target -> organizationId/storeId only (role changes go
+        through role-assignment, not here); CUSTOMER target -> fullName/
+        gender/dateOfBirth/avatarUrl only (Receptionist counter edit).
+        Sending the wrong group for the target's role returns 400
+        BUSINESS_RULE_VIOLATION.
       operationId: updateUser
       security:
         - bearerAuth: []
@@ -243,8 +231,8 @@ paths:
             schema:
               $ref: '#/components/schemas/RoleAssignmentRequest'
       responses:
-        '201':
-          description: Role assignment created.
+        '200':
+          description: Role assignment applied (action on an existing resource, not a new one, hence 200 not 201).
           content:
             application/json:
               schema:
@@ -298,7 +286,11 @@ paths:
     post:
       tags: [AccessControl]
       summary: Unlock account (UnlockAccount)
-      description: CONFIRMED (RULE-02-04/05, FSM-1). Allowed only after locked_until (FSM-1 invariant 5). No auto-unlock. Idempotent.
+      description: >-
+        CONFIRMED (RULE-02-04/05, REQ-ACC-011). Allowed at any time regardless
+        of lock reason or locked_until — manual unlock does not wait for the
+        auto-unlock window (that only gates the system's own AutoUnlockAccount
+        on login). Idempotent.
       operationId: unlockAccount
       security:
         - bearerAuth: []
@@ -322,7 +314,7 @@ paths:
         '404':
           $ref: '#/components/responses/NotFound'
         '409':
-          description: Wrong state or too early (before locked_until, PROPOSED code).
+          description: Wrong state (e.g. account is not LOCKED) — INVALID_STATE_TRANSITION.
           content:
             application/json:
               schema:
@@ -411,7 +403,12 @@ paths:
     get:
       tags: [RoleCatalog]
       summary: List roles (ManageRole)
-      description: CONFIRMED (RULE-02-02). 9 canonical roles plus organization custom roles.
+      description: >-
+        IMPLEMENTED (RULE-02-02). Read-only in v1: returns the 9 canonical
+        roles seeded as global roles (organizationId null) via migration
+        V4__seed_iam_roles.sql. No @PreAuthorize — any authenticated actor may
+        read the catalog. Organization-scoped custom roles are DEFERRED (see
+        POST /roles below).
       operationId: listRoles
       security:
         - bearerAuth: []
@@ -427,7 +424,10 @@ paths:
     post:
       tags: [RoleCatalog]
       summary: Create custom role (ManageRole)
-      description: CONFIRMED (ERD roles with organization_id, RULE-02-02). Overwriting canonical codes is TBD Q8.
+      description: >-
+        DEFERRED — NOT IMPLEMENTED in this version. Kept here only as the
+        target design for a future iteration (ERD roles with organization_id,
+        RULE-02-02). Overwriting canonical codes is TBD Q8.
       operationId: createRole
       security:
         - bearerAuth: []
@@ -464,7 +464,10 @@ paths:
     get:
       tags: [RoleCatalog]
       summary: List permissions (ManagePermission)
-      description: CONFIRMED (RULE-02-01). Path/shape PROPOSED.
+      description: >-
+        IMPLEMENTED (RULE-02-01). Currently returns an empty array — no
+        business module has defined a real permission code yet (RBAC v1 uses
+        the single users.role column, not fine-grained permissions).
       operationId: listPermissions
       security:
         - bearerAuth: []
@@ -505,13 +508,9 @@ components:
       type: string
       enum: [PLATFORM, ORGANIZATION, STORE, WAREHOUSE, CUSTOMER]
       description: CONFIRMED 5 scopes (04 glossary RoleScope).
-    Phone:
-      type: string
-      pattern: '^[0-9]{10}$'
-      description: CONFIRMED format (05#4.1).
     UserResponse:
       type: object
-      required: [userId, accountId, name, role, status]
+      required: [userId, accountId, fullName, role, status]
       properties:
         userId:
           type: string
@@ -519,7 +518,7 @@ components:
         accountId:
           type: string
           format: uuid
-        name:
+        fullName:
           type: string
         role:
           $ref: '#/components/schemas/RoleCode'
@@ -536,66 +535,78 @@ components:
           $ref: '#/components/schemas/AccountStatus'
     UserPage:
       type: object
-      required: [items, page, pageSize, total]
+      description: Matches platform/model/PageResponse<T> (standard Spring Page wrapper), not a bespoke shape.
+      required: [content, page, size, totalElements, totalPages, first, last]
       properties:
-        items:
+        content:
           type: array
           items:
             $ref: '#/components/schemas/UserResponse'
         page:
           type: integer
-        pageSize:
+        size:
           type: integer
-        total:
+        totalElements:
           type: integer
+        totalPages:
+          type: integer
+        first:
+          type: boolean
+        last:
+          type: boolean
     UpdateOwnProfileRequest:
       type: object
       properties:
-        name:
+        fullName:
           type: string
-        email:
+          maxLength: 100
+        gender:
           type: string
-          format: email
-      description: Role and scope bindings are not changeable here (ASSUMPTION A1).
+          enum: [MALE, FEMALE, OTHER]
+        dateOfBirth:
+          type: string
+          format: date
+        avatarUrl:
+          type: string
+          maxLength: 255
+      description: Role and scope bindings are not changeable here (ASSUMPTION A1). email/phone belong to Account, out of scope here too.
     UpdateUserRequest:
       type: object
+      description: >-
+        Two mutually-exclusive field groups depending on the target's role
+        (see PATCH /users/{id} description) — sending both, or the wrong
+        group for the target, returns 400 BUSINESS_RULE_VIOLATION.
       properties:
-        name:
-          type: string
         organizationId:
           type: string
           format: uuid
           nullable: true
+          description: Staff target only. Cannot be cleared (every staff role requires it; role itself doesn't change here).
         storeId:
           type: string
           format: uuid
           nullable: true
-      description: Role changes go through role-assignment (CONFIRMED separation).
-    CreateCustomerRequest:
-      type: object
-      required: [phone, password, name]
-      properties:
-        phone:
-          $ref: '#/components/schemas/Phone'
-        email:
+          description: Staff target only. Null means "keep existing value" (partial update) — to actually clear it, use clearStoreId instead.
+        clearStoreId:
+          type: boolean
+          default: false
+          description: Staff target only. Set true to unbind the store while keeping organizationId (e.g. FINANCE_STAFF, where store is optional). Sending both a non-null storeId and clearStoreId=true is rejected as 400 BUSINESS_RULE_VIOLATION.
+        fullName:
           type: string
-          format: email
-        password:
+          maxLength: 100
+          description: CUSTOMER target only.
+        gender:
           type: string
-        name:
+          enum: [MALE, FEMALE, OTHER]
+          description: CUSTOMER target only.
+        dateOfBirth:
           type: string
-    CreateCustomerResponse:
-      type: object
-      required: [accountId, userId, status]
-      properties:
-        accountId:
+          format: date
+          description: CUSTOMER target only.
+        avatarUrl:
           type: string
-          format: uuid
-        userId:
-          type: string
-          format: uuid
-        status:
-          $ref: '#/components/schemas/AccountStatus'
+          maxLength: 255
+          description: CUSTOMER target only.
     RoleAssignmentRequest:
       type: object
       required: [role]

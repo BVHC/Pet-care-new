@@ -1,7 +1,14 @@
 package com.petcare.module.auth.controller;
 
+<<<<<<< HEAD
 import com.petcare.module.auth.dto.ForgotPasswordRequest;
 import com.petcare.module.auth.dto.ForgotPasswordResponse;
+=======
+import com.petcare.module.auth.dto.CreateCustomerRequest;
+import com.petcare.module.auth.dto.CreateCustomerResponse;
+import com.petcare.module.auth.dto.CreateStaffRequest;
+import com.petcare.module.auth.dto.CreateStaffResponse;
+>>>>>>> 8bfc5bd (feat: triển khai module iam)
 import com.petcare.module.auth.dto.LoginRequest;
 import com.petcare.module.auth.dto.LoginResponse;
 import com.petcare.module.auth.dto.LogoutRequest;
@@ -22,12 +29,15 @@ import com.petcare.module.auth.service.RegistrationOutcome;
 import com.petcare.module.notification.service.NotificationService;
 import com.petcare.platform.config.OpenApiConfig;
 import com.petcare.platform.model.ApiResponse;
+import com.petcare.platform.security.UserPrincipal;
 import io.swagger.v3.oas.annotations.security.SecurityRequirement;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
+import org.springframework.security.access.prepost.PreAuthorize;
+import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestHeader;
@@ -94,6 +104,25 @@ public class AuthController {
         RefreshTokenResponse response = authService.refresh(request, httpRequest.getHeader("User-Agent"),
                 httpRequest.getRemoteAddr());
         return ResponseEntity.ok(ApiResponse.ok(response));
+    }
+
+    @SecurityRequirement(name = OpenApiConfig.BEARER_SCHEME_NAME)
+    @PreAuthorize("hasRole('SUPER_ADMIN') or hasRole('ORGANIZATION_ADMIN')")
+    @PostMapping("/staff-accounts")
+    public ResponseEntity<ApiResponse<CreateStaffResponse>> createStaff(
+            @Valid @RequestBody CreateStaffRequest request,
+            @AuthenticationPrincipal UserPrincipal actor) {
+        CreateStaffResponse response = authService.createStaff(request, actor);
+        return ResponseEntity.status(HttpStatus.CREATED).body(ApiResponse.created(response, "success"));
+    }
+
+    @SecurityRequirement(name = OpenApiConfig.BEARER_SCHEME_NAME)
+    @PreAuthorize("hasRole('RECEPTIONIST')")
+    @PostMapping("/customers")
+    public ResponseEntity<ApiResponse<CreateCustomerResponse>> createCustomer(
+            @Valid @RequestBody CreateCustomerRequest request) {
+        CreateCustomerResponse response = authService.createCustomer(request);
+        return ResponseEntity.status(HttpStatus.CREATED).body(ApiResponse.created(response, "success"));
     }
 
     /**
