@@ -41,9 +41,17 @@ public class SecurityConfig {
                 .authenticationEntryPoint(restAuthenticationEntryPoint)
                 .accessDeniedHandler(restAccessDeniedHandler))
             .authorizeHttpRequests(auth -> auth
-                .requestMatchers("/api/auth/**").permitAll()
+                // /api/auth/logout KHÔNG nằm trong danh sách này — bắt buộc Bearer
+                // access token hợp lệ (RULE-01-06, docs/api/auth-v1.md), rơi vào
+                // anyRequest().authenticated() để tái dùng JwtAuthenticationFilter +
+                // RestAuthenticationEntryPoint (401 tự động khi thiếu/sai/blacklist).
+                .requestMatchers("/api/auth/register", "/api/auth/verify-otp", "/api/auth/otp/resend",
+                        "/api/auth/login", "/api/auth/refresh").permitAll()
                 .requestMatchers("/actuator/health").permitAll()
                 .requestMatchers("/actuator/info").permitAll()
+                // Swagger UI / OpenAPI (springdoc) — bật ở mọi môi trường theo yêu cầu, không
+                // che thông tin API; endpoint nghiệp vụ phía sau vẫn giữ nguyên rule ở trên.
+                .requestMatchers("/swagger-ui/**", "/swagger-ui.html", "/v3/api-docs/**").permitAll()
                 .anyRequest().authenticated()
             )
             .addFilterBefore(jwtAuthenticationFilter, UsernamePasswordAuthenticationFilter.class)

@@ -23,6 +23,15 @@ spring:
       port: 6379
       timeout: 300ms
 
+  mail:
+    host: localhost
+    port: 3025
+    username: test@example.com
+    password: test-app-password
+    properties:
+      mail.smtp.auth: true
+      mail.smtp.starttls.enable: true
+
 jwt:
   secret: test-secret-key-for-jwt-signing-minimum-32-characters-long
   access-token-ttl-min: 15
@@ -34,6 +43,8 @@ app:
   security:
     blacklist-fail-open: true
   refresh-token-cleanup:
+    enabled: false
+  otp-expiry:
     enabled: false
 
 server:

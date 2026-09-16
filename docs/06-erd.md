@@ -56,8 +56,8 @@ erDiagram
     
     accounts {
         uuid id PK
-        varchar phone UK
-        varchar email UK
+        varchar email UK "danh tính chính, bắt buộc — RULE-01-10 sửa 2026-09-13"
+        varchar phone UK "liên hệ tuỳ chọn"
         varchar password_hash
         varchar status
         boolean must_change_password
@@ -289,8 +289,8 @@ erDiagram
   | Tên Cột | Kiểu Dữ liệu | Bắt buộc | Default | Mô tả |
   |---|---|---|---|---|
   | `id` | UUID | YES | `gen_random_uuid()` | Khóa chính tài khoản |
-  | `phone` | VARCHAR(20) | YES | - | Số điện thoại duy nhất dùng đăng nhập, cấp Platform (`RULE-01-10`) |
-  | `email` | VARCHAR(100) | NO | NULL | Email liên hệ duy nhất |
+  | `phone` | VARCHAR(20) | NO | NULL | Số điện thoại liên hệ tùy chọn (**không còn bắt buộc** — xem `RULE-01-10`, đã sửa) |
+  | `email` | VARCHAR(100) | YES | - | **Danh tính đăng nhập chính, duy nhất cấp Platform** (`RULE-01-10`, đã sửa) |
   | `password_hash` | VARCHAR(255) | YES | - | Chuỗi băm mật khẩu BCrypt |
   | `status` | VARCHAR(30) | YES | `'PENDING_VERIFICATION'` | Enum `AccountStatus` (`docs/03-state-machines.md#1`) |
   | `must_change_password` | BOOLEAN | YES | `false` | Cờ ép đổi mật khẩu (Staff D-04) |
@@ -299,27 +299,33 @@ erDiagram
   | `locked_until` | TIMESTAMPTZ | NO | NULL | Thời điểm tự động mở khóa — **CHỈ áp dụng khi `lock_reason = 'AUTO_FAILED_LOGIN'`** (`RULE-01-07`); NULL khi `lock_reason = 'ADMIN_LOCK'` (khóa này không có auto-unlock, xem `RULE-02-04`) |
   | `created_at` | TIMESTAMPTZ | YES | `CURRENT_TIMESTAMP` | Thời điểm tạo |
   | `updated_at` | TIMESTAMPTZ | YES | `CURRENT_TIMESTAMP` | Thời điểm cập nhật |
+  | `created_by` | UUID | NO | NULL | FK -> `accounts.id`, người tạo (audit — `platform.model.BaseEntity`) |
+  | `updated_by` | UUID | NO | NULL | FK -> `accounts.id`, người cập nhật gần nhất (audit) |
+  | `deleted_at` | TIMESTAMPTZ | NO | NULL | Soft-delete (audit) |
+  | `version` | BIGINT | YES | `0` | Optimistic locking (audit) |
 - **Ràng buộc & Chỉ mục:**
-  - `CONSTRAINT uq_accounts_phone UNIQUE (phone)` — cấp Platform, không giới hạn theo Organization (`RULE-01-10`)
-  - `CONSTRAINT uq_accounts_email UNIQUE (email)` — cấp Platform, không giới hạn theo Organization (`RULE-01-10`)
+  - `CONSTRAINT uq_accounts_phone UNIQUE (phone)` — cấp Platform (cho phép nhiều NULL vì không còn bắt buộc)
+  - `CONSTRAINT uq_accounts_email UNIQUE (email)` — cấp Platform, không giới hạn theo Organization (`RULE-01-10`, đã sửa)
+  - `CONSTRAINT fk_accounts_created_by/updated_by FOREIGN KEY (...) REFERENCES accounts(id)`
   - `INDEX idx_accounts_status (status)`
 
 ### Bảng: `otps`
-- **Mục đích:** Quản lý mã OTP xác thực số điện thoại và đổi mật khẩu.
+- **Mục đích:** Quản lý mã OTP xác thực **email** và đổi mật khẩu (đổi từ số điện thoại — xem `RULE-01-10`, đã sửa).
 - **Primary Key:** `id UUID DEFAULT gen_random_uuid()`
 - **Cột:**
   | Tên Cột | Kiểu Dữ liệu | Bắt buộc | Default | Mô tả |
   |---|---|---|---|---|
   | `id` | UUID | YES | `gen_random_uuid()` | Khóa chính phiên OTP |
-  | `phone` | VARCHAR(20) | YES | - | Số điện thoại nhận mã OTP |
+  | `email` | VARCHAR(100) | YES | - | Email nhận mã OTP (đổi từ `phone`) |
   | `otp_code` | VARCHAR(10) | YES | - | Mã OTP 6 chữ số |
   | `purpose` | VARCHAR(50) | YES | `'REGISTRATION'` | Mục đích: `REGISTRATION`, `PASSWORD_RESET`, `CONSENT` |
   | `is_used` | BOOLEAN | YES | `false` | Trạng thái đã sử dụng |
-  | `attempt_count` | INT | YES | `0` | Số lần nhập thử (tối đa 5 - `RULE-01-02`) |
+  | `attempt_count` | INT | YES | `0` | Số lần nhập thử (tối đa 5 - `RULE-01-05`) |
   | `expires_at` | TIMESTAMPTZ | YES | - | Thời điểm hết hạn (TTL 300s) |
+  | `locked_until` | TIMESTAMPTZ | NO | NULL | Thời điểm hết hiệu lực khóa phiên xác thực 15 phút, set khi `attempt_count` đạt 5 (`RULE-01-05`) — cùng pattern `accounts.locked_until` |
   | `created_at` | TIMESTAMPTZ | YES | `CURRENT_TIMESTAMP` | Thời điểm gửi |
 - **Ràng buộc & Chỉ mục:**
-  - `INDEX idx_otps_phone_purpose (phone, purpose, is_used, expires_at)`
+  - `INDEX idx_otps_email_purpose (email, purpose, is_used, expires_at)`
 
 ### Bảng: `users`
 - **Mục đích:** Thông tin hồ sơ cá nhân của khách hàng và nhân viên hệ thống.
@@ -339,6 +345,10 @@ erDiagram
   | `staff_code` | VARCHAR(50) | NO | NULL | Mã nhân viên nội bộ |
   | `created_at` | TIMESTAMPTZ | YES | `CURRENT_TIMESTAMP` | Thời điểm tạo |
   | `updated_at` | TIMESTAMPTZ | YES | `CURRENT_TIMESTAMP` | Thời điểm cập nhật |
+  | `created_by` | UUID | NO | NULL | FK -> `accounts.id` (audit — `platform.model.BaseEntity`) |
+  | `updated_by` | UUID | NO | NULL | FK -> `accounts.id` (audit) |
+  | `deleted_at` | TIMESTAMPTZ | NO | NULL | Soft-delete (audit) |
+  | `version` | BIGINT | YES | `0` | Optimistic locking (audit) |
 - **Ràng buộc & Chỉ mục:**
   - `CONSTRAINT fk_users_account FOREIGN KEY (account_id) REFERENCES accounts(id) ON DELETE RESTRICT`
   - `CONSTRAINT fk_users_org FOREIGN KEY (organization_id) REFERENCES organizations(id) ON DELETE SET NULL`

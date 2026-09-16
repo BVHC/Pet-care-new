@@ -28,6 +28,9 @@ info:
     are PROPOSED extensions not yet in that convention. LOCKED has no
     auto-unlock: LOCKED->ACTIVE only via manual UnlockAccount (FSM-1
     invariant #5).
+    **Sửa 2026-09-13 (RULE-01-10):** danh tính chính đổi từ `phone` sang
+    `email` cho Register/VerifyOtp/ResendOtp — xem Decision Log
+    docs/02-business-rules.md mục 01 (cuối). `phone` chuyển thành optional.
 tags:
   - name: Auth
     description: Registration OTP, login, logout (docs module 01).
@@ -49,19 +52,21 @@ paths:
               $ref: '#/components/schemas/RegisterRequest'
       responses:
         '201':
-          description: Created as PENDING_VERIFICATION; registration OTP sent by system.
+          description: Created as PENDING_VERIFICATION; registration OTP sent via Gmail SMTP (module/notification).
           content:
             application/json:
               schema:
                 $ref: '#/components/schemas/RegisterResponse'
         '400':
           $ref: '#/components/responses/BadRequest'
-        '409':
-          description: Phone or email already exists (ERD UNIQUE, CONFIRMED).
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/Error'
+      x-decision-2026-09-13: >-
+        Email or phone already exists is BUSINESS_RULE_VIOLATION/400 (RULE-01-10),
+        NOT 409 — decided to stick to the 5 base exceptions in
+        docs/convention/backend/04-exception-handling.md rather than add a new
+        HTTP status for this one case. Same status covers the concurrent-double-
+        register race (Service catches DataIntegrityViolationException on the
+        UNIQUE constraint and re-throws the same BusinessRuleViolationException).
+        See Decision Log in docs/02-business-rules.md section 01.
   /auth/verify-otp:
     post:
       tags: [Auth]
@@ -83,33 +88,30 @@ paths:
               schema:
                 $ref: '#/components/schemas/VerifyOtpResponse'
         '400':
-          $ref: '#/components/responses/BadRequest'
-        '401':
-          description: Wrong OTP with attempts remaining (PROPOSED code OTP_INVALID).
+          description: >-
+            VALIDATION_FAILED (bad format) or BUSINESS_RULE_VIOLATION — wrong/
+            expired OTP (RULE-01-02) or verification session locked 15 min
+            after 5 wrong attempts (RULE-01-05). Decided 2026-09-13 to fold
+            wrong-code/expired/locked all into 400 BUSINESS_RULE_VIOLATION
+            (message carries the RULE-ID) instead of 401/410/423 — see
+            Decision Log docs/02-business-rules.md section 01. No separate
+            remainingAttempts/lockedUntil response fields.
           content:
             application/json:
               schema:
                 $ref: '#/components/schemas/Error'
         '404':
-          description: No OTP session/account (anti-enumeration TBD Q11).
+          description: No OTP session/account found for this email (anti-enumeration TBD Q11).
           content:
             application/json:
               schema:
                 $ref: '#/components/schemas/Error'
         '409':
-          description: Already ACTIVE (PROPOSED, derived from FSM).
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/Error'
-        '410':
-          description: OTP expired after 300s TTL (CONFIRMED RULE-01-02).
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/Error'
-        '423':
-          description: "Verification locked 15 min after 5 wrong attempts (CONFIRMED RULE-01-05). No auto-unlock semantics here; login LOCKED likewise needs manual UnlockAccount (FSM-1 invariant 5)."
+          description: >-
+            Already ACTIVE — AccountTransitionHandler (FSM-1) rejects the
+            ACTIVE->ACTIVE transition, surfaced as the standard
+            INVALID_STATE_TRANSITION (convention 04-exception-handling),
+            not a custom ACCOUNT_ALREADY_ACTIVE code.
           content:
             application/json:
               schema:
@@ -135,27 +137,19 @@ paths:
               schema:
                 $ref: '#/components/schemas/ResendOtpResponse'
         '400':
-          $ref: '#/components/responses/BadRequest'
+          description: >-
+            VALIDATION_FAILED, or BUSINESS_RULE_VIOLATION for any of: account
+            already ACTIVE (RULE-01-03, replaces ASSUMPTION A6), verification
+            session locked (RULE-01-05), 60s cooldown not elapsed (RULE-01-04),
+            or 5/hour resend limit exceeded (RULE-01-05). Decided 2026-09-13 to
+            use 400 for all of these (no 409, no 429, no Retry-After header) —
+            see Decision Log docs/02-business-rules.md section 01.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
         '404':
-          description: No pending account/OTP (Q11).
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/Error'
-        '409':
-          description: Already ACTIVE (ASSUMPTION A6).
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/Error'
-        '429':
-          description: 60s cooldown or 5/hour exceeded (CONFIRMED limits; codes PROPOSED, convention has no 429 mapping yet).
-          headers:
-            Retry-After:
-              description: Seconds until next resend allowed (60s cooldown, CONFIRMED duration).
-              schema:
-                type: integer
-                minimum: 1
+          description: No account found for this email (Q11).
           content:
             application/json:
               schema:
@@ -165,8 +159,10 @@ paths:
       tags: [Auth]
       summary: Login (Login)
       description: >-
-        CONFIRMED guards (RULE-01-01/07, RULE-02-04). Identifier phone-or-email is
-        ASSUMPTION A1; Bearer transport ASSUMPTION A2; TTLs TBD Q4 (no expiresIn emitted).
+        IMPLEMENTED 2026-09-14. CONFIRMED guards (RULE-01-01/07, RULE-02-04).
+        Identifier là email (RULE-01-10 — không còn nhận phone, thay ASSUMPTION A1
+        cũ). Response không có field `user` (quyết định 2026-09-14 — xem
+        LoginResponse) và có `expiresIn` (giây, từ access-token TTL, ADR-0002).
       operationId: login
       security: []
       requestBody:
@@ -204,6 +200,49 @@ paths:
                 $ref: '#/components/schemas/Error'
         '429':
           description: Brute-force protection (PROPOSED, thresholds TBD Q11; convention has no 429 mapping yet).
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+  /auth/refresh:
+    post:
+      tags: [Auth]
+      summary: Refresh (làm mới token pair)
+      description: >-
+        IMPLEMENTED 2026-09-14. Rotate refresh token (1-lần-dùng, ADR-0001);
+        không có RULE-ID/FSM riêng — session/token layer infra giống Logout.
+        Re-check AccountStatus tại thời điểm gọi (RULE-01-01/07).
+      operationId: refresh
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/RefreshTokenRequest'
+      responses:
+        '200':
+          description: Token pair mới; refresh token cũ đã bị revoke.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/RefreshTokenResponse'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          description: Refresh token không hợp lệ — malformed/hết hạn/sai type/không tìm thấy hoặc đã bị revoke (reuse).
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '403':
+          description: Account không còn ACTIVE (PENDING_VERIFICATION/DEACTIVATED) kể từ lúc refresh token được cấp.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '423':
+          description: Account đã bị LOCKED kể từ lúc refresh token được cấp.
           content:
             application/json:
               schema:
@@ -294,14 +333,17 @@ components:
       description: CONFIRMED 9 canonical roles (RULE-02-02). MUST MIRROR the `RoleCode` schema in `openapi/iam-v1.yaml` byte-for-byte (no cross-file $ref support in this repo's tooling) — if you edit one, edit the other.
     RegisterRequest:
       type: object
-      required: [phone, password, name]
+      required: [email, password, name]
       properties:
-        phone:
-          $ref: '#/components/schemas/Phone'
         email:
           type: string
           format: email
-          description: Optional per ERD nullable (CONFIRMED).
+          description: >-
+            Required + unique platform identity (RULE-01-10, sửa 2026-09-13 —
+            xem Decision Log docs/02-business-rules.md mục 01: đổi danh tính
+            chính từ phone sang email để dùng Gmail SMTP làm kênh gửi OTP).
+        phone:
+          $ref: '#/components/schemas/Phone'
         password:
           type: string
           description: Required (ERD password_hash NOT NULL CONFIRMED). Policy TBD Q5 — no constraints declared here by design.
@@ -319,10 +361,12 @@ components:
           $ref: '#/components/schemas/AccountStatus'
     VerifyOtpRequest:
       type: object
-      required: [phone, otpCode]
+      required: [email, otpCode]
       properties:
-        phone:
-          $ref: '#/components/schemas/Phone'
+        email:
+          type: string
+          format: email
+          description: Đổi từ phone sang email (RULE-01-10, sửa 2026-09-13).
         otpCode:
           $ref: '#/components/schemas/OtpCode'
     VerifyOtpResponse:
@@ -336,10 +380,12 @@ components:
           $ref: '#/components/schemas/AccountStatus'
     ResendOtpRequest:
       type: object
-      required: [phone]
+      required: [email]
       properties:
-        phone:
-          $ref: '#/components/schemas/Phone'
+        email:
+          type: string
+          format: email
+          description: Đổi từ phone sang email (RULE-01-10, sửa 2026-09-13).
     ResendOtpResponse:
       type: object
       required: [accountId, status]
@@ -351,43 +397,60 @@ components:
           $ref: '#/components/schemas/AccountStatus'
     LoginRequest:
       type: object
-      required: [identifier, password]
+      required: [email, password]
       properties:
-        identifier:
+        email:
           type: string
-          description: ASSUMPTION A1 — phone or email (both UNIQUE in ERD; ops say only "Credentials").
+          format: email
+          description: Danh tính đăng nhập duy nhất (RULE-01-10, sửa 2026-09-14 — thay ASSUMPTION A1 "phone or email" cũ).
         password:
           type: string
     LoginResponse:
       type: object
-      required: [accessToken, refreshToken, tokenType, user]
+      required: [accessToken, refreshToken, tokenType, expiresIn]
       properties:
         accessToken:
           type: string
-          description: CONFIRMED existence (RULE-01-01/02-04). Lifetime TBD Q4.
+          description: CONFIRMED existence (RULE-01-01/02-04).
         refreshToken:
           type: string
-          description: CONFIRMED existence (RULE-01-06/02-04). Lifetime/rotation TBD Q3/Q4.
+          description: CONFIRMED existence (RULE-01-06/02-04).
         tokenType:
           type: string
           example: Bearer
-          description: ASSUMPTION A2.
-        user:
-          type: object
-          required: [userId, accountId, role, mustChangePassword]
-          properties:
-            userId:
-              type: string
-              format: uuid
-            accountId:
-              type: string
-              format: uuid
-            role:
-              $ref: '#/components/schemas/RoleCode'
-              description: Primary role (users.role). Multi-role via user_roles is out of v1 scope (ASSUMPTION A7).
-            mustChangePassword:
-              type: boolean
-              description: CONFIRMED need (RULE-01-03). Enforcement TBD Q6.
+        expiresIn:
+          type: integer
+          format: int64
+          description: TTL access token tính bằng giây (ADR-0002, mặc định 900 = 15 phút).
+      description: >-
+        Quyết định 2026-09-14: KHÔNG có field `user` — userId/accountId/role đã
+        có sẵn trong claim của accessToken (FE tự giải mã JWT), trả thêm ở JSON
+        body là thừa và lộ thông tin không cần thiết. `mustChangePassword`
+        (RULE-01-03) cũng tạm bỏ vì chưa có consumer thật (CreateStaff/Module 02
+        chưa triển khai) — bổ sung lại khi luồng Staff first-login được xây.
+    RefreshTokenRequest:
+      type: object
+      required: [refreshToken]
+      properties:
+        refreshToken:
+          type: string
+    RefreshTokenResponse:
+      type: object
+      required: [accessToken, refreshToken, tokenType, expiresIn]
+      properties:
+        accessToken:
+          type: string
+          description: Access token mới.
+        refreshToken:
+          type: string
+          description: Refresh token mới (rotate — token cũ dùng trong request đã bị revoke, ADR-0001).
+        tokenType:
+          type: string
+          example: Bearer
+        expiresIn:
+          type: integer
+          format: int64
+          description: TTL access token tính bằng giây (ADR-0002, mặc định 900 = 15 phút).
     LogoutRequest:
       type: object
       properties:

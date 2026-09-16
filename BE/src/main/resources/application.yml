@@ -26,6 +26,18 @@ spring:
       port: 6379
       timeout: 300ms
 
+  # Gmail SMTP — dispatch NotificationTask kênh EMAIL (Module 23 tối giản,
+  # xem module/notification). MAIL_PASSWORD phải là App Password (2FA), không
+  # dùng password Gmail thật.
+  mail:
+    host: ${MAIL_HOST:smtp.gmail.com}
+    port: ${MAIL_PORT:587}
+    username: ${MAIL_USERNAME}
+    password: ${MAIL_PASSWORD}
+    properties:
+      mail.smtp.auth: true
+      mail.smtp.starttls.enable: true
+
 jwt:
   secret: ${JWT_SECRET:petcare-256-bit-secret-key-for-jwt-signing-min-32-chars}
   access-token-ttl-min: 15
@@ -44,6 +56,9 @@ app:
     batch-size: 500
     max-batches-per-run: 200
     known-security-reasons: LOGOUT,LOCK_ACCOUNT,DEACTIVATE_ACCOUNT
+  otp-expiry:
+    enabled: true
+    cron: "0 */5 * * * *"
 
 server:
   port: 8080
