@@ -2,6 +2,7 @@ package com.petcare.module.pet.service;
 
 import com.petcare.module.auth.service.AuthService;
 import com.petcare.module.pet.dto.InviteCaregiverRequest;
+import com.petcare.module.pet.dto.RevokeCaregiverRequest;
 import com.petcare.module.pet.entity.Pet;
 import com.petcare.module.pet.entity.PetCaregiverDelegation;
 import com.petcare.module.pet.exception.CaregiverInvitationConflictException;
@@ -33,6 +34,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyString;
+import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
@@ -260,5 +262,69 @@ class CaregiverDelegationServiceImplTest {
         svc.rejectCaregiverInvitation(caregiver, "raw-token");
 
         assertThat(d.getStatus()).isEqualTo(CaregiverStatus.REJECTED);
+    }
+
+    @Test
+    void revokeCaregiver_activeDelegation_becomesRevoked() {
+        PetCaregiverDelegation d = invited(UUID.randomUUID(), LocalDateTime.now().plusDays(1));
+        d.setStatus(CaregiverStatus.ACTIVE);
+        when(pets.findById(pet.getId())).thenReturn(Optional.of(pet));
+        when(delegations.findFirstByPetIdAndCaregiverEmailAndStatusInOrderByCreatedAtDesc(
+                eq(pet.getId()), eq("cg@example.com"), any())).thenReturn(Optional.of(d));
+
+        svc.revokeCaregiver(owner, pet.getId(), new RevokeCaregiverRequest("cg@example.com"));
+
+        assertThat(d.getStatus()).isEqualTo(CaregiverStatus.REVOKED);
+        verify(outbox).save(any());
+    }
+
+    /** Spec D-04 — chủ hủy lời mời đang treo. */
+    @Test
+    void revokeCaregiver_pendingInvitation_becomesRevoked() {
+        PetCaregiverDelegation d = invited(null, LocalDateTime.now().plusDays(1));
+        when(pets.findById(pet.getId())).thenReturn(Optional.of(pet));
+        when(delegations.findFirstByPetIdAndCaregiverEmailAndStatusInOrderByCreatedAtDesc(
+                eq(pet.getId()), eq("cg@example.com"), any())).thenReturn(Optional.of(d));
+
+        svc.revokeCaregiver(owner, pet.getId(), new RevokeCaregiverRequest("cg@example.com"));
+
+        assertThat(d.getStatus()).isEqualTo(CaregiverStatus.REVOKED);
+    }
+
+    /** Spec D-10 — revoke lần hai bởi owner trả 200, không ghi event lần hai. */
+    @Test
+    void revokeCaregiver_alreadyRevoked_isIdempotent() {
+        PetCaregiverDelegation d = invited(UUID.randomUUID(), LocalDateTime.now().plusDays(1));
+        d.setStatus(CaregiverStatus.REVOKED);
+        when(pets.findById(pet.getId())).thenReturn(Optional.of(pet));
+        when(delegations.findFirstByPetIdAndCaregiverEmailAndStatusInOrderByCreatedAtDesc(
+                eq(pet.getId()), eq("cg@example.com"), any())).thenReturn(Optional.of(d));
+
+        svc.revokeCaregiver(owner, pet.getId(), new RevokeCaregiverRequest("cg@example.com"));
+
+        verify(outbox, never()).save(any());
+    }
+
+    @Test
+    void revokeCaregiver_notPrimaryOwner_forbidden() {
+        UUID stranger = UUID.randomUUID();
+        when(pets.findById(pet.getId())).thenReturn(Optional.of(pet));
+        doThrow(new UnauthorizedDelegatedActionException("PET_PRIMARY_OWNER", "NOT_PRIMARY_OWNER"))
+                .when(accessGuard).requirePrimaryOwner(stranger, pet);
+
+        assertThatThrownBy(() -> svc.revokeCaregiver(stranger, pet.getId(),
+                new RevokeCaregiverRequest("cg@example.com")))
+                .isInstanceOf(UnauthorizedDelegatedActionException.class);
+    }
+
+    @Test
+    void revokeCaregiver_noDelegationForEmail_notFound() {
+        when(pets.findById(pet.getId())).thenReturn(Optional.of(pet));
+        when(delegations.findFirstByPetIdAndCaregiverEmailAndStatusInOrderByCreatedAtDesc(
+                eq(pet.getId()), eq("cg@example.com"), any())).thenReturn(Optional.empty());
+
+        assertThatThrownBy(() -> svc.revokeCaregiver(owner, pet.getId(),
+                new RevokeCaregiverRequest("cg@example.com")))
+                .isInstanceOf(ResourceNotFoundException.class);
     }
 }

@@ -32,6 +32,7 @@ import java.security.SecureRandom;
 import java.time.LocalDateTime;
 import java.util.Base64;
 import java.util.HexFormat;
+import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
 
@@ -164,8 +165,25 @@ public class CaregiverDelegationServiceImpl implements CaregiverDelegationServic
     @Override
     @Transactional
     public CaregiverDelegationResponse revokeCaregiver(UUID ownerUserId, UUID petId,
-                                                       RevokeCaregiverRequest req) {
-        throw new UnsupportedOperationException("Task 10 chưa cài đặt");
+                                                        RevokeCaregiverRequest req) {
+        Pet pet = pets.findById(petId).orElseThrow(() -> new ResourceNotFoundException("Pet", petId));
+        accessGuard.requirePrimaryOwner(ownerUserId, pet); // RULE-04-04
+
+        // INVITED + ACTIVE là bản ghi "còn sống"; REVOKED để phục vụ idempotency (D-10).
+        PetCaregiverDelegation delegation = delegations
+                .findFirstByPetIdAndCaregiverEmailAndStatusInOrderByCreatedAtDesc(petId,
+                        req.caregiverEmail(),
+                        List.of(CaregiverStatus.INVITED, CaregiverStatus.ACTIVE, CaregiverStatus.REVOKED))
+                .orElseThrow(() -> new ResourceNotFoundException("CaregiverDelegation", req.caregiverEmail()));
+
+        if (delegation.getStatus() == CaregiverStatus.REVOKED) { // spec D-10
+            return mapper.toDelegationResponse(delegation);
+        }
+
+        transitions.validateTransition(delegation.getStatus(), CaregiverStatus.REVOKED);
+        delegation.setStatus(CaregiverStatus.REVOKED); // RULE-04-08 — hiệu lực tức thì
+        writeOutbox(petId, "CaregiverRevoked", delegation.getId());
+        return mapper.toDelegationResponse(delegation);
     }
 
     void writeOutbox(UUID petId, String eventType, UUID delegationId) {
