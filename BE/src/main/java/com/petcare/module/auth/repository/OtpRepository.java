@@ -23,6 +23,13 @@ public interface OtpRepository extends JpaRepository<Otp, UUID> {
     @Lock(LockModeType.PESSIMISTIC_WRITE)
     Optional<Otp> findTopByEmailAndPurposeOrderByCreatedAtDesc(String email, OtpPurpose purpose);
 
+    /**
+     * Đọc không lock cho các điểm chỉ cần xem (test/assert) — gọi được ngoài
+     * transaction. Mọi read-modify-write nghiệp vụ (verifyOtp/resendOtp) vẫn
+     * dùng bản PESSIMISTIC_WRITE ở trên trong @Transactional.
+     */
+    Optional<Otp> findFirstByEmailAndPurposeOrderByCreatedAtDesc(String email, OtpPurpose purpose);
+
     long countByEmailAndPurposeAndCreatedAtAfter(String email, OtpPurpose purpose, LocalDateTime after);
 
     /** RULE-01-08 (ExpireOTP job) — tái dùng is_used làm "đã hết hiệu lực" (bảng otps không có cột status riêng). */

@@ -90,7 +90,7 @@ class AuthFlowIT {
                 new RegisterRequest(email, null, "password123", "Nguyen Van A"));
         assertThat(registered.account().getStatus()).isEqualTo(AccountStatus.PENDING_VERIFICATION);
 
-        Otp otp = otpRepository.findTopByEmailAndPurposeOrderByCreatedAtDesc(email, OtpPurpose.REGISTRATION).orElseThrow();
+        Otp otp = otpRepository.findFirstByEmailAndPurposeOrderByCreatedAtDesc(email, OtpPurpose.REGISTRATION).orElseThrow();
         String correctCode = otp.getOtpCode();
 
         // Sai OTP -> BUSINESS_RULE_VIOLATION, không đổi state
@@ -119,7 +119,7 @@ class AuthFlowIT {
                     () -> authService.verifyOtp(new VerifyOtpRequest(email, "000000")));
         }
 
-        Otp otp = otpRepository.findTopByEmailAndPurposeOrderByCreatedAtDesc(email, OtpPurpose.REGISTRATION).orElseThrow();
+        Otp otp = otpRepository.findFirstByEmailAndPurposeOrderByCreatedAtDesc(email, OtpPurpose.REGISTRATION).orElseThrow();
         assertThat(otp.isCurrentlyLocked()).isTrue();
 
         Otp finalOtp = otp;
@@ -143,7 +143,7 @@ class AuthFlowIT {
 
         String email = uniqueEmail();
         authService.registerAccount(new RegisterRequest(email, null, "password123", "Nguyen Van A"));
-        Otp otp = otpRepository.findTopByEmailAndPurposeOrderByCreatedAtDesc(email, OtpPurpose.REGISTRATION).orElseThrow();
+        Otp otp = otpRepository.findFirstByEmailAndPurposeOrderByCreatedAtDesc(email, OtpPurpose.REGISTRATION).orElseThrow();
         String correctCode = otp.getOtpCode();
 
         ExecutorService executor = Executors.newFixedThreadPool(2);
@@ -170,7 +170,7 @@ class AuthFlowIT {
         }
         assertThat(successCount).isEqualTo(1);
 
-        Otp finalOtp = otpRepository.findTopByEmailAndPurposeOrderByCreatedAtDesc(email, OtpPurpose.REGISTRATION).orElseThrow();
+        Otp finalOtp = otpRepository.findFirstByEmailAndPurposeOrderByCreatedAtDesc(email, OtpPurpose.REGISTRATION).orElseThrow();
         assertThat(finalOtp.isUsed()).isTrue();
     }
 
@@ -179,7 +179,7 @@ class AuthFlowIT {
         when(emailGateway.send(anyString(), anyString(), anyString())).thenReturn("msg-id");
 
         authService.registerAccount(new RegisterRequest(email, null, "password123", "Nguyen Van A"));
-        Otp otp = otpRepository.findTopByEmailAndPurposeOrderByCreatedAtDesc(email, OtpPurpose.REGISTRATION).orElseThrow();
+        Otp otp = otpRepository.findFirstByEmailAndPurposeOrderByCreatedAtDesc(email, OtpPurpose.REGISTRATION).orElseThrow();
         authService.verifyOtp(new VerifyOtpRequest(email, otp.getOtpCode()));
         return email;
     }
