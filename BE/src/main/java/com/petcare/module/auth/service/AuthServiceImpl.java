@@ -117,8 +117,13 @@ public class AuthServiceImpl implements AuthService {
         return new RegistrationOutcome(account, notificationTaskId);
     }
 
+    /**
+     * noRollbackFor: các guard-throw (sai OTP/hết hạn/lock phiên) xảy ra SAU
+     * khi attempt_count/is_used/locked_until đã save — phải commit để lần thử
+     * kế tiếp thấy đúng bộ đếm (RULE-01-02/05). Không rollback = cố ý.
+     */
     @Override
-    @Transactional
+    @Transactional(noRollbackFor = BusinessRuleViolationException.class)
     public Account verifyOtp(VerifyOtpRequest request) {
         consumeOtp(request.email(), OtpPurpose.REGISTRATION, request.otpCode());
 
@@ -158,8 +163,13 @@ public class AuthServiceImpl implements AuthService {
         return new RegistrationOutcome(account, notificationTaskId);
     }
 
+    /**
+     * noRollbackFor: failedLoginAttempts + LOCKED save trước khi ném
+     * InvalidCredentials/AccountLocked phải commit để đủ 5 lần thì khóa
+     * (RULE-01-07). Các RuntimeException bất ngờ khác vẫn rollback.
+     */
     @Override
-    @Transactional
+    @Transactional(noRollbackFor = BusinessRuleViolationException.class)
     public LoginResponse login(LoginRequest request, String userAgent, String ipAddress) {
         Account account = accountRepository.findByEmail(request.email())
                 .orElseThrow(InvalidCredentialsException::new);
