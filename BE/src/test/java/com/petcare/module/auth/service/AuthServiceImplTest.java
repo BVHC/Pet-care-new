@@ -551,4 +551,36 @@ class AuthServiceImplTest {
         when(jwtTokenProvider.getTokenType(rawToken)).thenReturn(JwtTokenProvider.TOKEN_TYPE_REFRESH);
         when(jwtTokenProvider.parseToken(rawToken)).thenReturn(UserPrincipal.builder().userId(userId).build());
     }
+
+    @Test
+    void findUserIdByActiveAccountEmail_returnsUserIdForActiveAccount() {
+        Account account = new Account();
+        account.setId(UUID.randomUUID());
+        account.setEmail("cg@example.com");
+        account.setStatus(AccountStatus.ACTIVE);
+        User user = new User(account.getId(), "Caregiver");
+        user.setId(UUID.randomUUID());
+        when(accountRepository.findByEmail("cg@example.com")).thenReturn(Optional.of(account));
+        when(userProvisioningService.findByAccountId(account.getId())).thenReturn(user);
+
+        assertThat(authService.findUserIdByActiveAccountEmail("cg@example.com")).contains(user.getId());
+    }
+
+    @Test
+    void findUserIdByActiveAccountEmail_emptyWhenNoAccount() {
+        when(accountRepository.findByEmail("nobody@example.com")).thenReturn(Optional.empty());
+
+        assertThat(authService.findUserIdByActiveAccountEmail("nobody@example.com")).isEmpty();
+    }
+
+    @Test
+    void findUserIdByActiveAccountEmail_emptyWhenAccountNotActive() {
+        Account account = new Account();
+        account.setId(UUID.randomUUID());
+        account.setEmail("pending@example.com");
+        account.setStatus(AccountStatus.PENDING_VERIFICATION);
+        when(accountRepository.findByEmail("pending@example.com")).thenReturn(Optional.of(account));
+
+        assertThat(authService.findUserIdByActiveAccountEmail("pending@example.com")).isEmpty();
+    }
 }

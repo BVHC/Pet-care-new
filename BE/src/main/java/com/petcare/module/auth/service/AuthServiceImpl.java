@@ -347,6 +347,14 @@ public class AuthServiceImpl implements AuthService {
                 .build();
     }
 
+    @Override
+    @Transactional(readOnly = true)
+    public Optional<UUID> findUserIdByActiveAccountEmail(String email) {
+        return accountRepository.findByEmail(email)
+                .filter(account -> account.getStatus() == AccountStatus.ACTIVE)
+                .map(account -> userProvisioningService.findByAccountId(account.getId()).getId());
+    }
+
     /** Bảng RBAC 5-tier (docs/INDEX.md) — role -> scope mặc định. */
     private SecurityScope deriveScope(UserRole role) {
         return switch (role) {
