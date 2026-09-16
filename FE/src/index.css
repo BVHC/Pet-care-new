@@ -28,6 +28,17 @@
   --color-brand-secondary: var(--color-warm-orange);
   --color-brand-tertiary: var(--color-soft-orange);
 
+  /* ---- thang nen homepage: 2 bac sang luan phien + 1 slab toi ---- */
+  --color-surface-1: #fdf6ec;
+  --color-surface-2: #f6e8da;
+  --color-surface-dark: #382417;
+
+  /* ---- accent thuc te cua site (thay cho brand-primary vang chua bao gio duoc dung) ---- */
+  --color-accent: #a43324;
+  --color-accent-hover: #89271b;
+  --color-accent-warm: #cf5b47;
+  --color-accent-soft: #faebe4;
+
   --color-surface-page: var(--color-off-white);
   --color-surface-card: #ffffff;
   --color-surface-sunken: var(--color-light-gray);

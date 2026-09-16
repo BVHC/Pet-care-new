@@ -47,7 +47,7 @@ const REVIEWS: ReviewItem[] = [
 
 export const TestimonialsSpeechBubble: React.FC = () => {
   return (
-    <section className="relative w-full bg-[#fdf6ec] py-16 px-6 sm:px-10 overflow-hidden">
+    <section className="relative w-full bg-[#f6e8da] py-16 px-6 sm:px-10 overflow-hidden">
       <div className="max-w-6xl mx-auto">
         {/* Header */}
         <div className="text-center mb-12">

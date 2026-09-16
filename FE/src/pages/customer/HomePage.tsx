@@ -123,7 +123,7 @@ export function HomePage() {
       <NoCagesPhilosophy />
 
       {/* 4. Featured Products */}
-      <section className="gsap-featured-section relative overflow-hidden bg-[#fdf6ec] px-6 py-14">
+      <section className="gsap-featured-section relative overflow-hidden bg-[#f6e8da] px-6 py-14">
         <img
           src={PHOTOS.doodleBone}
           alt=""
@@ -234,7 +234,7 @@ export function HomePage() {
       </section>
 
       {/* 6. Doctors */}
-      <section className="gsap-doctors-section px-6 py-14 bg-[#fffaf0]">
+      <section className="gsap-doctors-section px-6 py-14 bg-[#fdf6ec]">
         <div className={styles.wrap}>
           <div className="text-center mb-12">
             <div className="text-[12px] font-bold text-[#a43324] tracking-widest uppercase flex items-center justify-center gap-2 mb-3">
@@ -267,7 +267,7 @@ export function HomePage() {
       <TestimonialsSpeechBubble />
 
       {/* 8. Partners */}
-      <section className="px-6 py-10">
+      <section className="px-6 pt-14 pb-4 bg-[#fdf6ec]">
         <div className={styles.wrap}>
           <div className="mb-7 text-center">
             <div className={`${styles.eyebrow} ${styles.sectionEyebrow}`}>
@@ -290,7 +290,7 @@ export function HomePage() {
       </section>
 
       {/* 9. FAQ */}
-      <section className="relative overflow-hidden px-6 py-12">
+      <section className="relative overflow-hidden px-6 pt-4 pb-14 bg-[#fdf6ec]">
         <img
           src={PHOTOS.doodleBone}
           alt=""
@@ -327,7 +327,7 @@ export function HomePage() {
 
 
       {/* 11. News */}
-      <section className="px-6 py-14 bg-[#fdf6ec]">
+      <section className="px-6 py-14 bg-[#f6e8da]">
         <div className={styles.wrap}>
           <div className="flex flex-col md:flex-row items-center justify-between gap-6 mb-12">
             <div>

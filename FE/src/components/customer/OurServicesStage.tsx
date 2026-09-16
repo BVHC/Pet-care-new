@@ -16,6 +16,7 @@ interface ServiceItem {
   circleBg: string
   icon: React.ReactNode
   perk: string
+  startingPrice: string
 }
 
 const SERVICES: ServiceItem[] = [
@@ -29,6 +30,7 @@ const SERVICES: ServiceItem[] = [
     circleBg: '#fde8ec',
     icon: <Footprints size={24} />,
     perk: 'Vận động ngoài trời 45 phút mỗi ngày',
+    startingPrice: 'Từ 120.000đ / buổi',
   },
   {
     id: 'grooming',
@@ -40,6 +42,7 @@ const SERVICES: ServiceItem[] = [
     circleBg: '#eaf4fb',
     icon: <Scissors size={24} />,
     perk: 'Tặng xịt dưỡng lông thơm thảo dược 7 ngày',
+    startingPrice: 'Từ 200.000đ / lần',
   },
   {
     id: 'overnight',
@@ -51,6 +54,7 @@ const SERVICES: ServiceItem[] = [
     circleBg: '#f7d6dc',
     icon: <Moon size={24} />,
     perk: 'Live Cam FHD 24/7 trực tiếp trên điện thoại',
+    startingPrice: 'Từ 350.000đ / đêm',
   },
   {
     id: 'vet',
@@ -62,6 +66,7 @@ const SERVICES: ServiceItem[] = [
     circleBg: '#e4f8ec',
     icon: <Stethoscope size={24} />,
     perk: 'Thực đơn dinh dưỡng nấu mới 100% theo bữa',
+    startingPrice: 'Từ 500.000đ / lượt khám',
   },
 ]
 
@@ -129,41 +134,58 @@ export const OurServicesStage: React.FC = () => {
     const SCROLL_PER = 500 // px per service step
     const total = SCROLL_PER * (SERVICES.length - 1) // 1500px
 
-    stRef.current = ScrollTrigger.create({
-      trigger: section,
-      start: 'top top',
-      end: `+=${total}`,
-      pin: true,
-      scrub: 0.5,
-      snap: {
-        snapTo: 1 / (SERVICES.length - 1),
-        duration: { min: 0.2, max: 0.45 },
-        delay: 0.04,
-        ease: 'power2.inOut',
-      },
-      onUpdate: (self) => {
-        const idx = Math.min(
-          SERVICES.length - 1,
-          Math.round(self.progress * (SERVICES.length - 1))
-        )
-        setActiveIndex((prev) => (prev !== idx ? idx : prev))
-      },
-      onLeave: () => {
-        // First pass complete — unlock click mode
+    const mm = gsap.matchMedia()
+
+    mm.add('(min-width: 769px)', () => {
+      // Desktop: enable pin + scrub
+      stRef.current = ScrollTrigger.create({
+        trigger: section,
+        start: 'top top',
+        end: `+=${total}`,
+        pin: true,
+        scrub: 0.5,
+        snap: {
+          snapTo: 1 / (SERVICES.length - 1),
+          duration: { min: 0.2, max: 0.45 },
+          delay: 0.04,
+          ease: 'power2.inOut',
+        },
+        onUpdate: (self) => {
+          const idx = Math.min(
+            SERVICES.length - 1,
+            Math.round(self.progress * (SERVICES.length - 1))
+          )
+          setActiveIndex((prev) => (prev !== idx ? idx : prev))
+        },
+        onLeave: () => {
+          // First pass complete — unlock click mode
+          stRef.current?.kill()
+          stRef.current = null
+          setUnlocked(true)
+          setActiveIndex(SERVICES.length - 1)
+          // Wait for pin spacer removal + React re-render before refreshing downstream STs
+          requestAnimationFrame(() => {
+            ScrollTrigger.refresh()
+          })
+        },
+      })
+      return () => {
         stRef.current?.kill()
         stRef.current = null
-        setUnlocked(true)
-        setActiveIndex(SERVICES.length - 1)
-        // Wait for pin spacer removal + React re-render before refreshing downstream STs
-        requestAnimationFrame(() => {
-          ScrollTrigger.refresh()
-        })
-      },
+      }
+    })
+
+    mm.add('(max-width: 768px)', () => {
+      // Mobile: disable pin — use native horizontal touch-snap via CSS
+      section.style.height = 'auto'
+      section.style.minHeight = '100vh'
+      return () => {}
     })
 
     return () => {
       stRef.current?.kill()
       stRef.current = null
+      mm.revert()
     }
   }, [])
 
@@ -172,7 +194,7 @@ export const OurServicesStage: React.FC = () => {
   return (
     <section
       ref={sectionRef}
-      className="relative w-full overflow-hidden bg-[#fbeee8] select-none"
+      className="relative w-full overflow-hidden bg-[#fdf6ec] select-none"
       style={{ height: '100vh', minHeight: '660px' }}
     >
       <div className="relative w-full h-full flex flex-col justify-between pt-20 sm:pt-24 pb-4 sm:pb-5 px-4 sm:px-8 md:px-12">
@@ -290,7 +312,11 @@ export const OurServicesStage: React.FC = () => {
             </p>
           </div>
 
-          <div className="flex items-center pb-1">
+          <div className="flex flex-col items-end gap-1.5 pb-1">
+            {/* Starting Price Pill */}
+            <span className="bg-[#faebe4] text-[#a43324] text-xs font-bold px-3 py-1 rounded-full border border-[#a43324]/15 whitespace-nowrap">
+              {service.startingPrice}
+            </span>
             <Link
               to="/booking"
               className="inline-flex items-center gap-2 rounded-full bg-[#a43324] hover:bg-[#89271b] px-6 sm:px-8 py-2.5 sm:py-3 font-bayon text-lg sm:text-xl text-white uppercase tracking-wider shadow-[0_10px_22px_rgba(164,51,36,0.3)] -rotate-2 hover:rotate-0 hover:scale-105 active:scale-95 transition-all duration-200"
@@ -310,7 +336,7 @@ export const OurServicesStage: React.FC = () => {
         </div>
       </div>
 
-      {/* Seamless transition into StackingProcessCards (#faebe4) */}
+      {/* Seamless transition into StackingProcessCards (#382417 slab toi) */}
       <div className="w-full overflow-hidden leading-none absolute bottom-0 left-0 right-0 z-20 pointer-events-none">
         <svg
           viewBox="0 0 1440 32"
@@ -321,7 +347,7 @@ export const OurServicesStage: React.FC = () => {
         >
           <path
             d="M0,32 C480,0 960,0 1440,32 L1440,32 L0,32 Z"
-            fill="#faebe4"
+            fill="#382417"
           />
         </svg>
       </div>

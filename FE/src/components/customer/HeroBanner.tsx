@@ -1,620 +1,274 @@
-import { useEffect, useRef } from 'react'
-import { Link } from 'react-router-dom'
-import { PawPrint } from 'lucide-react'
-import gsap from 'gsap'
-import { ScrollTrigger } from 'gsap/ScrollTrigger'
-import { RotatingBadge } from './RotatingBadge'
+import React, { useEffect, useRef } from "react";
+import { Link } from "react-router-dom";
+import { PawPrint } from "lucide-react";
+import gsap from "gsap";
+import { ScrollTrigger } from "gsap/ScrollTrigger";
+import { GazeTrackingHeroPet } from "./GazeTrackingHeroPet";
 
-gsap.registerPlugin(ScrollTrigger)
+gsap.registerPlugin(ScrollTrigger);
 
-// Asset URLs
-const ASSETS = {
-  logo: 'https://polo-pecan-73837341.figma.site/_assets/v11/0ae29d6d9628bede667f90d57bebe81b8f1ec2bf.svg',
-  avatar: 'https://polo-pecan-73837341.figma.site/_assets/v11/e62173d41f91350a59628e8a9a55ae078a886fb9.png?w=128',
-  catHouse: 'https://polo-pecan-73837341.figma.site/_assets/v11/3e5158dad63d392ade022e81890edc9f54d750bc.png',
-  videoCard: 'https://polo-pecan-73837341.figma.site/_assets/v11/76be6ec3a93a703b15e9cc01e764a4e3f9d7d2c0.png',
-  bottomLeft: 'https://polo-pecan-73837341.figma.site/_assets/v11/8d44b25186ef45a5789c74668fb781cea4e1ff49.png',
-  bottomCenter: 'https://polo-pecan-73837341.figma.site/_assets/v11/96745c4e72ad5c5208e53a885df797fd82cd854a.png?h=1024',
-  bottomRight: 'https://polo-pecan-73837341.figma.site/_assets/v11/81bd2e7a66b58f3d8f3ad78fd1ebf01af8dfdee1.png',
-}
+const AVATARS = [
+	"https://images.unsplash.com/photo-1544005313-94ddf0286df2?w=100&auto=format&fit=crop&q=80",
+	"https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=100&auto=format&fit=crop&q=80",
+];
 
-// Colors
-const COLORS = {
-  bgCream: '#fdf6ec',
-  primary: '#a43324',
-  primaryHover: '#89271b',
-  textDark: '#3B2A1E',
-  textSub: '#70584b',
-}
+export const HeroBanner: React.FC = () => {
+	const bannerRef = useRef<HTMLDivElement>(null);
 
-// Icons
-const StarIcon = ({ size = 20, filled = false, className = '' }: { size?: number; filled?: boolean; className?: string }) => (
-  <svg width={size} height={size} viewBox="0 0 24 24" fill={filled ? "currentColor" : "none"} stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={className}>
-    <polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/>
-  </svg>
-)
+	useEffect(() => {
+		if (typeof window === "undefined") return;
 
-const ArrowUpRightIcon = ({ size = 20 }: { size?: number }) => (
-  <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-    <path d="M7 7h10v10"/><path d="M7 17 17 7"/>
-  </svg>
-)
+		const ctx = gsap.context(() => {
+			const entryTl = gsap.timeline({ defaults: { ease: "power3.out" } });
 
-const PlayIcon = ({ size = 20 }: { size?: number }) => (
-  <svg width={size} height={size} viewBox="0 0 24 24" fill="currentColor">
-    <polygon points="6 3 20 12 6 21 6 3"/>
-  </svg>
-)
+			entryTl
+				.fromTo(
+					".hero-left-wing",
+					{ opacity: 0, x: -30 },
+					{ opacity: 1, x: 0, duration: 0.7 },
+				)
+				.fromTo(
+					".hero-center-squircle",
+					{ opacity: 0, scale: 0.92, y: 25 },
+					{ opacity: 1, scale: 1, y: 0, duration: 0.8, ease: "back.out(1.15)" },
+					"-=0.5",
+				)
+				.fromTo(
+					".hero-right-wing",
+					{ opacity: 0, x: 30 },
+					{ opacity: 1, x: 0, duration: 0.7 },
+					"-=0.5",
+				)
+				.fromTo(
+					".hero-bottom-card",
+					{ opacity: 0, y: 20 },
+					{ opacity: 1, y: 0, duration: 0.5, stagger: 0.1, ease: "power2.out" },
+					"-=0.3",
+				);
+		}, bannerRef);
 
-const ArrowRightIcon = ({ size = 20 }: { size?: number }) => (
-  <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-    <path d="M5 12h14"/><path d="m12 5 7 7-7 7"/>
-  </svg>
-)
+		return () => ctx.revert();
+	}, []);
 
-const PlusIcon = ({ size = 16, className = '' }: { size?: number; className?: string }) => (
-  <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={className}>
-    <path d="M5 12h14"/><path d="M12 5v14"/>
-  </svg>
-)
+	return (
+		<div
+			ref={bannerRef}
+			className="relative w-full overflow-hidden bg-[#f6e8da] text-[#191919] pt-8 sm:pt-10 lg:pt-12 pb-8 sm:pb-10"
+		>
+			{/* Nối màu với header kem phía trên, tránh đường cắt cứng */}
+			<div className="absolute inset-x-0 top-0 h-28 bg-gradient-to-b from-[#fdf5ec] to-transparent pointer-events-none z-0" />
 
-// Floating Tennis Ball Component (Don't Board Me signature aesthetic)
-const TennisBall = ({
-  size = 56,
-  className = '',
-  style = {},
-}: {
-  size?: number
-  className?: string
-  style?: React.CSSProperties
-}) => (
-  <div
-    className={`select-none pointer-events-none will-change-transform ${className}`}
-    style={{ width: size, height: size, ...style }}
-  >
-    <svg
-      viewBox="0 0 100 100"
-      width="100%"
-      height="100%"
-      fill="none"
-      xmlns="http://www.w3.org/2000/svg"
-      className="w-full h-full drop-shadow-[0_12px_24px_rgba(56,36,23,0.22)]"
-    >
-      <circle cx="50" cy="50" r="47" fill="url(#heroTennisGrad)" stroke="#c6df11" strokeWidth="2.5" />
-      <path
-        d="M20 18 C38 32 38 68 20 82"
-        stroke="#ffffff"
-        strokeWidth="5"
-        strokeLinecap="round"
-        fill="none"
-        opacity="0.92"
-      />
-      <path
-        d="M80 18 C62 32 62 68 80 82"
-        stroke="#ffffff"
-        strokeWidth="5"
-        strokeLinecap="round"
-        fill="none"
-        opacity="0.92"
-      />
-      <defs>
-        <radialGradient id="heroTennisGrad" cx="35%" cy="30%" r="68%">
-          <stop offset="0%" stopColor="#f5ff60" />
-          <stop offset="52%" stopColor="#d2ee12" />
-          <stop offset="100%" stopColor="#9cb805" />
-        </radialGradient>
-      </defs>
-    </svg>
-  </div>
-)
+			{/* Subtle Warm Backdrop Lighting */}
+			<div className="absolute top-0 left-1/3 w-[600px] h-[500px] bg-white/40 rounded-full blur-3xl pointer-events-none -z-0" />
 
-// Product Card Component
-const ProductCard = () => (
-  <div className="hero-card-left absolute left-3 sm:left-12 top-[80px] sm:top-[50px] w-[clamp(130px,15vw,220px)] sm:w-[clamp(150px,15vw,250px)] will-change-transform">
-    <div className="relative rounded-2xl overflow-hidden shadow-lg border border-amber-100/60 bg-white">
-      <img
-        src={ASSETS.catHouse}
-        alt="Nhà cây cho mèo ấm áp"
-        className="w-full aspect-[260/257] object-cover"
-      />
-      <Link
-        to="/shop"
-        className="absolute bottom-3 right-3 w-10 h-10 rounded-full bg-[#a43324] hover:bg-[#89271b] flex items-center justify-center text-white transition-all shadow-md hover:scale-105"
-        aria-label="Xem sản phẩm"
-      >
-        <ArrowUpRightIcon size={18} />
-      </Link>
-    </div>
-    <div className="mt-2 sm:mt-3 px-1">
-      <p className="text-[#3B2A1E] text-xs sm:text-sm font-bold truncate">Nhà Cây Cho Mèo Ấm Áp</p>
-      <p className="text-[#a43324] text-sm sm:text-base font-extrabold">499.000đ</p>
-    </div>
-  </div>
-)
+			{/* Main Content Container — rộng gần full-bleed như reference */}
+			<div className="relative z-10 max-w-[1560px] mx-auto px-5 sm:px-8 lg:px-12">
+				{/* ================= 3-ZONE HERO STAGE ================= */}
+				<div className="grid grid-cols-1 lg:grid-cols-12 gap-8 lg:gap-8 items-center mb-10 sm:mb-16 lg:mb-[52px]">
+					{/* 1. LEFT WING: Headline, Subtitle, White Pill Button, 5-Star Ratings */}
+					<div className="hero-left-wing lg:col-span-4 flex flex-col justify-center order-2 lg:order-1 text-left">
+						{/* Bold Giant Title */}
+						<h1 className="font-sans text-[clamp(48px,6.6vw,124px)] font-black leading-[0.85] tracking-[-0.04em] text-[#141414] mb-5 lg:mb-6">
+							Pet
+							<br />
+							Care
+						</h1>
 
-// Video Card Component
-const VideoCard = () => (
-  <div className="hero-card-right absolute right-3 sm:right-12 top-[80px] sm:top-[50px] w-[clamp(100px,11vw,140px)] sm:w-[clamp(120px,12vw,175px)] will-change-transform">
-    <div className="relative rounded-2xl overflow-hidden shadow-lg border border-amber-100/60 bg-white">
-      <img
-        src={ASSETS.videoCard}
-        alt="Video trải nghiệm thực tế"
-        className="w-full aspect-[177/287] object-cover"
-      />
-      <button 
-        className="absolute bottom-6 left-1/2 -translate-x-1/2 w-11 h-11 rounded-full bg-[#a43324] hover:bg-[#89271b] flex items-center justify-center text-white transition-all shadow-lg hover:scale-110"
-        aria-label="Xem video review"
-      >
-        <PlayIcon size={16} />
-      </button>
-    </div>
-    <p className="mt-2 sm:mt-3 text-[#70584b] text-[10px] sm:text-xs leading-tight px-1 text-center font-medium">
-      Video review thực tế trên TikTok &amp; YouTube
-    </p>
-  </div>
-)
+						{/* Subtitle — đen đậm như reference, không phải xám nhạt */}
+						<p className="text-xl sm:text-2xl font-bold leading-[1.35] text-[#1a1a1a] mb-7 lg:mb-8 max-w-[340px]">
+							Tận tâm chăm sóc
+							<br />
+							bé cưng của bạn
+						</p>
 
-// Bottom Images Component
-const BottomImages = () => (
-  <div className="hero-bottom-wrap absolute bottom-0 left-0 right-0 z-10 flex items-end overflow-hidden pointer-events-none [&_a]:pointer-events-auto [&_button]:pointer-events-auto will-change-transform" style={{ maxHeight: 'min(440px, 52vh)' }}>
-    {/* Left Image */}
-    <div
-      className="hero-pet-1 flex-1 will-change-transform"
-      style={{ maxHeight: 'min(380px, 46vw)' }}
-    >
-      <img
-        src={ASSETS.bottomLeft}
-        alt="Thú cưng vui vẻ"
-        className="w-full h-auto block object-contain object-bottom"
-      />
-      <div className="absolute bottom-4 sm:bottom-8 left-4 sm:left-8 pointer-events-auto">
-        <div className="flex items-center gap-2 bg-black/35 backdrop-blur-sm px-3 py-1.5 rounded-full">
-          <span className="text-white font-bold text-base sm:text-lg drop-shadow">98K+</span>
-          <div className="flex -space-x-2">
-            <img src={ASSETS.avatar} alt="" className="w-7 h-7 rounded-full border-2 border-white object-cover" />
-            <div className="w-7 h-7 rounded-full bg-[#a43324] border-2 border-white flex items-center justify-center">
-              <PlusIcon size={12} className="text-white" />
-            </div>
-          </div>
-          <span className="text-white/90 text-[11px] font-semibold hidden xl:inline">Khách hàng tin chọn</span>
-        </div>
-      </div>
-    </div>
+						{/* White Pill Button with Orange Text */}
+						<div className="mb-8 lg:mb-9">
+							<Link
+								to="/booking"
+								className="inline-flex items-center justify-center rounded-full bg-white hover:bg-[#a43324] text-[#a43324] hover:text-white px-9 sm:px-10 py-4 sm:py-5 text-base sm:text-lg font-black uppercase tracking-wide shadow-sm hover:shadow-lg transition-all duration-200 hover:scale-[1.03] active:scale-95"
+							>
+								Đặt Lịch Ngay
+							</Link>
+						</div>
 
-    {/* Center Image */}
-    <div
-      className="hero-pet-2 flex-[1.265] will-change-transform"
-      style={{ maxHeight: 'min(440px, 52vw)' }}
-    >
-      <img
-        src={ASSETS.bottomCenter}
-        alt="Sản phẩm chăm sóc thú cưng"
-        className="w-full h-auto block object-contain object-bottom"
-      />
-      <div className="absolute bottom-4 sm:bottom-8 left-1/2 -translate-x-1/2 text-center pointer-events-auto w-full px-4">
-        <h3 className="text-white text-base sm:text-2xl font-bold mb-2.5 drop-shadow-[0_2px_4px_rgba(0,0,0,0.6)] font-[var(--font-friendly)]">
-          Sản Phẩm Tốt Nhất Cho Bé Cưng
-        </h3>
-        <Link
-          to="/shop"
-          className="inline-flex items-center gap-2 bg-[#a43324] hover:bg-[#89271b] text-white text-xs sm:text-sm font-bold px-5 sm:px-7 py-2.5 sm:py-3 rounded-full transition-all shadow-lg hover:shadow-xl hover:scale-105"
-        >
-          Khám Phá Cửa Hàng
-          <ArrowRightIcon size={16} />
-        </Link>
-      </div>
-    </div>
+						{/* Đánh Giá 5 Sao Trên Mọi Nền Tảng */}
+						<div className="flex items-center gap-4 mb-3">
+							<div className="w-14 h-14 rounded-2xl bg-[#a43324] text-white flex items-center justify-center shrink-0 shadow-sm">
+								<PawPrint size={26} className="fill-white text-white" />
+							</div>
+							<div className="text-[15px] sm:text-base font-black leading-[1.15] text-[#141414]">
+								Đánh Giá
+								<br />
+								5 Sao Trên
+								<br />
+								Mọi Nền Tảng
+							</div>
+						</div>
 
-    {/* Right Image */}
-    <div
-      className="hero-pet-3 flex-1 will-change-transform"
-      style={{ maxHeight: 'min(380px, 46vw)' }}
-    >
-      <img
-        src={ASSETS.bottomRight}
-        alt="Chăm sóc thú cưng chất lượng cao"
-        className="w-full h-auto block object-contain object-bottom"
-      />
-      <div className="absolute bottom-4 sm:bottom-8 right-4 sm:right-8 pointer-events-auto">
-        <div className="flex items-center gap-1.5 bg-black/35 backdrop-blur-sm px-3 py-1.5 rounded-full">
-          <StarIcon size={18} filled className="text-amber-400 drop-shadow" />
-          <span className="text-white font-bold text-base sm:text-lg drop-shadow">4.6/5</span>
-          <span className="text-white/90 text-[11px] font-semibold hidden xl:inline">Đánh giá dịch vụ</span>
-        </div>
-      </div>
-    </div>
-  </div>
-)
+						{/* Google Reviews Link */}
+						<Link
+							to="/review"
+							className="text-[15px] text-[#5a5a5a] hover:text-[#a43324] underline underline-offset-4 font-semibold transition-colors w-fit mt-1"
+						>
+							Xem tất cả đánh giá Google
+						</Link>
+					</div>
 
-// Desktop Hero Content
-const DesktopHero = () => (
-  <div className="hidden lg:flex flex-col h-full relative min-h-[680px]">
-    {/* Center Text Layer */}
-    <div className="hero-center-content relative z-20 pt-10 text-center px-4 max-w-3xl mx-auto will-change-transform">
-      <div className="hero-badge-elem inline-flex items-center gap-2 rounded-full bg-[#faebe4] border border-[#a43324]/20 px-4 py-1.5 text-[13px] font-bold text-[#a43324] mb-4 shadow-xs">
-        <PawPrint size={14} strokeWidth={2.5} /> Hệ Thống Chăm Sóc Thú Cưng Toàn Diện
-      </div>
-      <h1 className="font-[var(--font-friendly)] text-[clamp(44px,5.2vw,72px)] leading-[1.08] tracking-tight font-black">
-        <span className="hero-title-line-1 inline-block text-[#3B2A1E]">
-          Yêu Thương Trọn Vẹn
-        </span>
-        <br />
-        <span className="hero-title-line-2 inline-block text-[#a43324]">
-          Dành Cho Thú Cưng
-        </span>
-      </h1>
-      <p className="hero-sub-desc mt-3 text-[15px] font-medium text-[#70584b] max-w-lg mx-auto leading-relaxed">
-        Dịch vụ khám y tế, spa, khách sạn lưu trú và phụ kiện chính hãng chất lượng cao cho thú cưng của bạn.
-      </p>
-    </div>
+					{/* 2. CENTER STAGE: White Squircle Card + Mèo tràn xuống dưới */}
+					<div className="hero-center-squircle lg:col-span-5 flex justify-center items-center relative order-1 lg:order-2">
+						{/* Khung vòm trắng — overflow-visible để mèo bước ra khỏi khung */}
+						<div className="relative w-full max-w-[420px] sm:max-w-[560px] lg:w-auto lg:max-w-full lg:h-[clamp(320px,calc(100vh-320px),640px)] aspect-[49/54] bg-white rounded-[44px] sm:rounded-[56px] shadow-[0_24px_60px_rgba(0,0,0,0.07)] overflow-visible">
+							{/* Vòng tròn xám tạo chiều sâu — phải nhìn thấy được 2 bên đầu mèo */}
+							<div className="absolute bottom-[10%] left-1/2 -translate-x-1/2 w-[92%] aspect-square rounded-full bg-[#f1e4d3] pointer-events-none" />
 
-    {/* Floating Left Card */}
-    <div className="z-30">
-      <ProductCard />
-    </div>
+							{/* Mèo: 88% bề ngang khung để lộ vòng tròn xám 2 bên, chỉ tràn xuống đáy */}
+							<div className="absolute -bottom-[2%] left-[46%] -translate-x-1/2 w-[102%] z-20 flex justify-center items-end">
+								<GazeTrackingHeroPet className="w-full" />
+							</div>
 
-    {/* Floating Right Card */}
-    <div className="z-30">
-      <VideoCard />
-    </div>
+							{/* Orange Pill đè lên mép trái khung */}
+							<div className="absolute top-[45%] -left-[8%] sm:-left-[12%] z-30 bg-[#a43324] text-white text-base sm:text-lg font-bold px-7 sm:px-8 py-4 sm:py-5 rounded-full shadow-[0_10px_30px_rgba(164,51,36,0.32)] leading-[1.25] whitespace-nowrap text-center">
+								Bé cưng là
+								<br />
+								ưu tiên số 1
+							</div>
+						</div>
+					</div>
 
-    {/* Don't Board Me Style 360 Rotating Badge */}
-    <div className="hidden lg:block absolute bottom-12 right-10 z-30">
-      <RotatingBadge size={126} />
-    </div>
+					{/* 3. RIGHT WING: Join Circle, Vertical Orange Card, Stat */}
+					<div className="hero-right-wing lg:col-span-3 flex flex-col text-left lg:text-right justify-center lg:justify-between order-3 lg:items-end lg:h-[clamp(320px,calc(100vh-320px),640px)] lg:-mr-5 xl:-mr-10">
+						{/* Join Us — hình tròn như reference, không phải pill ngang */}
+						<div className="w-[128px] h-[128px] sm:w-[142px] sm:h-[142px] shrink-0 rounded-full bg-white shadow-[0_8px_28px_rgba(0,0,0,0.08)] flex flex-col items-center justify-center gap-1.5 mb-5 lg:mb-0 lg:mr-3">
+							<div className="flex items-center -space-x-2">
+								{AVATARS.map((src, i) => (
+									<img
+										key={i}
+										src={src}
+										alt="Khách hàng PetCare"
+										className="w-8 h-8 rounded-full border-2 border-white object-cover"
+									/>
+								))}
+								<span className="w-8 h-8 rounded-full border-2 border-white bg-[#efece8] text-[10px] font-black text-[#141414] flex items-center justify-center">
+									2K+
+								</span>
+							</div>
+							<span className="text-[14px] font-bold text-[#141414]">
+								Tham Gia
+							</span>
+						</div>
 
-    {/* Tennis Balls Hill Horizon Background (Don't Board Me signature curved sphere hill) */}
-    <div className="hero-tennis-hill absolute bottom-0 left-0 right-0 z-[5] pointer-events-none overflow-hidden flex justify-center items-end opacity-95">
-      <img
-        src="/imgs/tennis-balls-hill.svg"
-        alt=""
-        className="w-full min-w-[1280px] max-w-[1800px] h-auto object-cover object-bottom select-none translate-y-6 sm:translate-y-12"
-      />
-    </div>
+						{/* Thẻ cam dọc — bleed sát mép phải container */}
+						<div className="relative w-[176px] sm:w-[196px] lg:w-auto lg:flex-1 lg:min-h-0 aspect-[3/4] bg-[#a43324] rounded-[30px] p-2.5 shadow-sm mb-6 lg:mb-0 lg:my-4 overflow-hidden group">
+							<img
+								src="/imgs/maw-care-girl-orange.jpg"
+								alt="Nhân viên PetCare ôm mèo cưng"
+								className="w-full h-full object-cover rounded-[22px] group-hover:scale-105 transition-transform duration-500"
+							/>
+						</div>
 
-    {/* Floating Tennis Balls with Parallax Depth */}
-    <div className="hero-floating-balls pointer-events-none">
-      <TennisBall
-        size={54}
-        className="hero-ball-1 absolute left-[6%] top-[24%] z-20"
-      />
-      <TennisBall
-        size={68}
-        className="hero-ball-2 absolute right-[8%] top-[34%] z-20"
-      />
-      <TennisBall
-        size={42}
-        className="hero-ball-3 absolute left-[24%] bottom-[24%] z-20"
-      />
-      <TennisBall
-        size={34}
-        className="hero-ball-4 absolute right-[22%] top-[14%] z-20"
-      />
-    </div>
+						{/* Stat */}
+						<div className="w-fit shrink-0 text-left lg:text-right">
+							<div className="text-[15px] font-bold text-[#4d4d4d] leading-[1.25]">
+								Chủ thú cưng
+								<br />
+								tin tưởng
+							</div>
+							<div className="font-sans text-5xl sm:text-6xl font-black text-[#141414] leading-none tracking-tight mt-1">
+								2.500+
+							</div>
+						</div>
+					</div>
+				</div>
 
-    {/* Bottom Pet Images */}
-    <BottomImages />
-  </div>
-)
+				{/* ================= BOTTOM ROW: 3 thẻ dịch vụ ================= */}
+				<div className="grid grid-cols-1 md:grid-cols-3 gap-4 lg:gap-5">
+					{/* Thẻ 1: Xám trung tính — ảnh full-bleed nửa phải */}
+					<Link
+						to="/news"
+						className="hero-bottom-card group relative bg-[#d6d3cf] hover:bg-[#cdc9c5] rounded-[26px] overflow-hidden transition-colors duration-300 aspect-[2/1] flex"
+					>
+						<div className="flex flex-col justify-center gap-4 w-[54%] pl-7 lg:pl-9 pr-2 py-6">
+							<div className="text-xl lg:text-[28px] font-black text-[#141414] leading-[1.12]">
+								Cẩm Nang
+								<br />
+								Chăm Bé
+							</div>
+							<span className="text-sm lg:text-base text-[#3d3d3d] group-hover:text-[#141414] underline underline-offset-[5px] font-semibold transition-colors w-fit">
+								đọc bài viết
+							</span>
+						</div>
+						<div className="relative w-[46%]">
+							<img
+								src="/imgs/maw-care-girl-kitten.jpg"
+								alt="Chủ nuôi bế mèo con"
+								className="absolute inset-0 w-full h-full object-cover object-center group-hover:scale-[1.04] transition-transform duration-500"
+							/>
+						</div>
+					</Link>
 
-// Tablet Hero Content
-const TabletHero = () => (
-  <div className="hidden md:flex lg:hidden flex-col h-full relative min-h-[580px]">
-    <div className="hero-center-content relative z-20 pt-8 text-center px-4 max-w-xl mx-auto">
-      <div className="hero-badge-elem inline-flex items-center gap-1.5 rounded-full bg-[#faebe4] px-3.5 py-1 text-[12px] font-bold text-[#a43324] mb-3">
-        <PawPrint size={12} strokeWidth={2.5} /> Chăm sóc thú cưng toàn diện
-      </div>
-      <h1 className="font-[var(--font-friendly)] text-5xl leading-[1.08] tracking-tight font-black">
-        <span className="hero-title-line-1 inline-block text-[#3B2A1E]">
-          Yêu Thương Trọn Vẹn
-        </span>
-        <br />
-        <span className="hero-title-line-2 inline-block text-[#a43324]">
-          Dành Cho Thú Cưng
-        </span>
-      </h1>
-    </div>
+					{/* Thẻ 2: Than chì — squiggle lớn chạy tràn mép dưới */}
+					<Link
+						to="/recommend"
+						className="hero-bottom-card group relative bg-[#1c1b1f] hover:bg-[#141316] text-white rounded-[26px] overflow-hidden transition-colors duration-300 aspect-[2/1] flex"
+					>
+						<div className="flex flex-col justify-center gap-4 w-[54%] pl-7 lg:pl-9 pr-2 py-6 relative z-10">
+							<div className="text-xl lg:text-[28px] font-black text-white leading-[1.12]">
+								Gợi Ý
+								<br />
+								Dịch Vụ
+							</div>
+							<span className="text-sm lg:text-base text-white/75 group-hover:text-white underline underline-offset-[5px] font-semibold transition-colors w-fit">
+								tìm hiểu thêm
+							</span>
+						</div>
+						{/* Hai dải uốn lượn lớn, tràn qua mép trên & dưới của thẻ */}
+						<svg
+							viewBox="0 0 200 300"
+							fill="none"
+							preserveAspectRatio="xMidYMid slice"
+							className="absolute right-0 -top-[12%] h-[124%] w-[52%] pointer-events-none"
+							aria-hidden="true"
+						>
+							<path
+								d="M138,-20 C96,34 74,70 88,108 C102,146 122,168 106,206 C92,240 78,262 84,320"
+								stroke="#cf5b47"
+								strokeWidth="13"
+								strokeLinecap="round"
+							/>
+							<path
+								d="M196,16 C154,66 136,100 150,140 C164,180 182,202 164,238 C150,268 138,282 142,330"
+								stroke="#efece2"
+								strokeWidth="13"
+								strokeLinecap="round"
+							/>
+						</svg>
+					</Link>
 
-    <div className="z-30">
-      <ProductCard />
-    </div>
-    <div className="z-30">
-      <VideoCard />
-    </div>
+					{/* Thẻ 3: Coral — mèo con cutout bước ra khỏi thẻ */}
+					<Link
+						to="/hotel"
+						className="hero-bottom-card group relative bg-[#cf5b47] hover:bg-[#b94a38] text-white rounded-[26px] transition-colors duration-300 aspect-[2/1] flex overflow-visible"
+					>
+						<div className="flex flex-col justify-center gap-4 w-[54%] pl-7 lg:pl-9 pr-2 py-6 relative z-10">
+							<div className="text-xl lg:text-[28px] font-black text-white leading-[1.12]">
+								Khách Sạn
+								<br />
+								Cao Cấp
+							</div>
+							<span className="text-sm lg:text-base text-white/85 group-hover:text-white underline underline-offset-[5px] font-semibold transition-colors w-fit">
+								đặt phòng ngay
+							</span>
+						</div>
+						<img
+							src="/imgs/maw-care-kitten-cutout.png"
+							alt="Mèo con trắng tại khách sạn thú cưng PetCare"
+							className="absolute -bottom-[14%] right-1 sm:right-2 w-[46%] max-w-[210px] object-contain drop-shadow-[0_14px_24px_rgba(0,0,0,0.18)] group-hover:-translate-y-1.5 transition-transform duration-500"
+						/>
+					</Link>
+				</div>
+			</div>
+		</div>
+	);
+};
 
-    {/* Tennis Balls Hill Horizon Background */}
-    <div className="hero-tennis-hill absolute bottom-0 left-0 right-0 z-[5] pointer-events-none overflow-hidden flex justify-center items-end opacity-90">
-      <img
-        src="/imgs/tennis-balls-hill.svg"
-        alt=""
-        className="w-full min-w-[900px] h-auto object-cover object-bottom select-none translate-y-6"
-      />
-    </div>
-
-    {/* Floating Tennis Balls */}
-    <TennisBall
-      size={46}
-      className="hero-ball-1 absolute left-[4%] top-[26%] z-20"
-    />
-    <TennisBall
-      size={54}
-      className="hero-ball-2 absolute right-[5%] top-[36%] z-20"
-    />
-
-    {/* Bottom Images - Simplified */}
-    <div className="hero-bottom-wrap absolute bottom-0 left-0 right-0 z-10 flex items-end">
-      <img src={ASSETS.bottomLeft} alt="" className="w-1/3 h-auto block" />
-      <img src={ASSETS.bottomCenter} alt="" className="w-[42%] h-auto block" />
-      <img src={ASSETS.bottomRight} alt="" className="w-1/3 h-auto block" />
-    </div>
-  </div>
-)
-
-// Mobile Hero Content
-const MobileHero = () => (
-  <div className="flex md:hidden flex-col h-full relative overflow-hidden">
-    {/* Background gradient */}
-    <div className="absolute inset-0 bg-gradient-to-b from-[#fdf6ec] via-[#fdf6ec] to-[#f5e9d3] z-0" />
-
-    <div className="relative z-10 flex flex-col h-full p-4">
-      {/* Title Section */}
-      <div className="hero-center-content text-center pt-8">
-        <div className="hero-badge-elem inline-flex items-center gap-1.5 rounded-full bg-[#faebe4] px-3 py-1 text-[11px] font-bold text-[#a43324] mb-3">
-          <PawPrint size={11} strokeWidth={2.5} /> Chăm sóc thú cưng toàn diện
-        </div>
-        <h1 className="font-[var(--font-friendly)] text-[#3B2A1E] text-[32px] leading-[1.15] font-black mb-2">
-          Yêu Thương Trọn Vẹn
-          <br />
-          <span className="text-[#a43324]">Dành Cho Thú Cưng</span>
-        </h1>
-        <p className="hero-sub-desc text-[#70584b] text-xs mb-4">Sản phẩm &amp; dịch vụ cao cấp cho người bạn bốn chân</p>
-        <Link
-          to="/shop"
-          className="inline-flex items-center gap-2 bg-[#a43324] hover:bg-[#89271b] text-white text-sm font-bold px-6 py-2.5 rounded-full transition-colors shadow-md"
-        >
-          Khám Phá Cửa Hàng
-          <ArrowRightIcon size={16} />
-        </Link>
-      </div>
-
-      {/* Cards Row */}
-      <div className="flex gap-3 mt-6 flex-shrink-0">
-        {/* Product Card */}
-        <div className="hero-card-left flex-1">
-          <div className="relative rounded-xl overflow-hidden shadow-md border border-amber-100 bg-white">
-            <img
-              src={ASSETS.catHouse}
-              alt="Nhà cây cho mèo"
-              className="w-full aspect-square object-cover"
-            />
-            <button className="absolute bottom-2 right-2 w-8 h-8 rounded-full bg-[#a43324] flex items-center justify-center text-white">
-              <ArrowUpRightIcon size={14} />
-            </button>
-          </div>
-          <p className="text-[#3B2A1E] text-xs mt-2 font-bold truncate">Nhà Cây Cho Mèo</p>
-          <p className="text-[#a43324] text-xs font-black">499.000đ</p>
-        </div>
-
-        {/* Video card */}
-        <div className="hero-card-right w-[44%]">
-          <div className="relative rounded-xl overflow-hidden shadow-md border border-amber-100 bg-white">
-            <img
-              src={ASSETS.videoCard}
-              alt="Video review thú cưng"
-              className="w-full aspect-[3/4] object-cover"
-            />
-            <button className="absolute bottom-4 left-1/2 -translate-x-1/2 w-9 h-9 rounded-full bg-[#a43324] flex items-center justify-center text-white">
-              <PlayIcon size={12} />
-            </button>
-          </div>
-        </div>
-      </div>
-
-      {/* Stats Row */}
-      <div className="flex items-center justify-center gap-6 py-4 mt-auto">
-        <div className="flex items-center gap-2">
-          <span className="text-[#3B2A1E] font-extrabold text-base">98K+</span>
-          <div className="flex -space-x-2">
-            <img src={ASSETS.avatar} alt="" className="w-6 h-6 rounded-full border-2 border-white object-cover" />
-            <div className="w-6 h-6 rounded-full bg-[#a43324] border-2 border-white flex items-center justify-center">
-              <PlusIcon size={10} className="text-white" />
-            </div>
-          </div>
-        </div>
-
-        <div className="w-px h-6 bg-amber-200" />
-
-        <div className="flex items-center gap-1">
-          <StarIcon size={16} filled className="text-amber-500" />
-          <span className="text-[#3B2A1E] font-extrabold text-base">4.6/5</span>
-        </div>
-      </div>
-
-      {/* Tennis Balls Hill Horizon Background */}
-      <div className="hero-tennis-hill absolute bottom-0 left-0 right-0 z-0 pointer-events-none overflow-hidden opacity-75">
-        <img
-          src="/imgs/tennis-balls-hill.svg"
-          alt=""
-          className="w-[180%] max-w-none -translate-x-[20%] h-auto object-cover object-bottom translate-y-4"
-        />
-      </div>
-
-      {/* Bottom Images */}
-      <div className="hero-bottom-wrap flex items-end flex-shrink-0 relative z-10">
-        <img src={ASSETS.bottomLeft} alt="" className="w-1/3 h-auto block" />
-        <img src={ASSETS.bottomCenter} alt="" className="w-[42%] h-auto block" />
-        <img src={ASSETS.bottomRight} alt="" className="w-1/3 h-auto block" />
-      </div>
-    </div>
-  </div>
-)
-
-// Main HeroBanner Component
-export function HeroBanner() {
-  const bannerRef = useRef<HTMLDivElement>(null)
-
-  useEffect(() => {
-    if (typeof window === 'undefined') return
-
-    const ctx = gsap.context(() => {
-      // 1. Entry Animation: Stagger and reveal on page load
-      const entryTl = gsap.timeline({ defaults: { ease: 'power3.out' } })
-
-      entryTl
-        .fromTo(
-          '.hero-badge-elem',
-          { opacity: 0, y: -20, scale: 0.9 },
-          { opacity: 1, y: 0, scale: 1, duration: 0.6, delay: 0.1 }
-        )
-        .fromTo(
-          ['.hero-title-line-1', '.hero-title-line-2'],
-          { opacity: 0, y: 45, rotateX: 20 },
-          { opacity: 1, y: 0, rotateX: 0, duration: 0.8, stagger: 0.18 },
-          '-=0.3'
-        )
-        .fromTo(
-          '.hero-sub-desc',
-          { opacity: 0, y: 20 },
-          { opacity: 1, y: 0, duration: 0.6 },
-          '-=0.4'
-        )
-        .fromTo(
-          '.hero-card-left',
-          { opacity: 0, x: -80, rotate: -8, scale: 0.9 },
-          { opacity: 1, x: 0, rotate: 0, scale: 1, duration: 0.9, ease: 'back.out(1.3)' },
-          '-=0.5'
-        )
-        .fromTo(
-          '.hero-card-right',
-          { opacity: 0, x: 80, rotate: 8, scale: 0.9 },
-          { opacity: 1, x: 0, rotate: 0, scale: 1, duration: 0.9, ease: 'back.out(1.3)' },
-          '-=0.7'
-        )
-        .fromTo(
-          ['.hero-pet-1', '.hero-pet-2', '.hero-pet-3'],
-          { opacity: 0, y: 100, scale: 0.94 },
-          { opacity: 1, y: 0, scale: 1, duration: 0.95, stagger: 0.12, ease: 'back.out(1.4)' },
-          '-=0.6'
-        )
-        .fromTo(
-          '.hero-tennis-hill',
-          { opacity: 0, y: 60 },
-          { opacity: 0.95, y: 0, duration: 1.1, ease: 'power3.out' },
-          '-=0.9'
-        )
-        .fromTo(
-          ['.hero-ball-1', '.hero-ball-2', '.hero-ball-3', '.hero-ball-4'],
-          { opacity: 0, scale: 0, y: 30 },
-          { opacity: 1, scale: 1, y: 0, duration: 0.8, stagger: 0.1, ease: 'back.out(1.7)' },
-          '-=0.7'
-        )
-
-      // 2. Idle floating loop for floating cards (sine float physics)
-      gsap.to('.hero-card-left', {
-        y: '-=12',
-        duration: 2.8,
-        repeat: -1,
-        yoyo: true,
-        ease: 'sine.inOut',
-        delay: 1.2,
-      })
-      gsap.to('.hero-card-right', {
-        y: '+=12',
-        duration: 3.2,
-        repeat: -1,
-        yoyo: true,
-        ease: 'sine.inOut',
-        delay: 1.5,
-      })
-
-      // Floating sine animation for tennis balls
-      gsap.to('.hero-ball-1', {
-        y: '-=16',
-        rotation: 15,
-        duration: 3.2,
-        repeat: -1,
-        yoyo: true,
-        ease: 'sine.inOut',
-      })
-      gsap.to('.hero-ball-2', {
-        y: '+=18',
-        rotation: -20,
-        duration: 2.9,
-        repeat: -1,
-        yoyo: true,
-        ease: 'sine.inOut',
-        delay: 0.3,
-      })
-      gsap.to('.hero-ball-3', {
-        y: '-=12',
-        rotation: -10,
-        duration: 2.6,
-        repeat: -1,
-        yoyo: true,
-        ease: 'sine.inOut',
-        delay: 0.6,
-      })
-      gsap.to('.hero-ball-4', {
-        y: '+=10',
-        rotation: 25,
-        duration: 3.5,
-        repeat: -1,
-        yoyo: true,
-        ease: 'sine.inOut',
-        delay: 0.2,
-      })
-
-      // 3. ScrollTrigger Parallax effect on scroll
-      const scrollTl = gsap.timeline({
-        scrollTrigger: {
-          trigger: bannerRef.current,
-          start: 'top top',
-          end: 'bottom top',
-          scrub: 1.2,
-          invalidateOnRefresh: true,
-        },
-      })
-
-      scrollTl
-        .to('.hero-center-content', { y: -50, opacity: 0.1, ease: 'none' }, 0)
-        .to('.hero-card-left', { y: -90, x: -35, opacity: 0.35, ease: 'none' }, 0)
-        .to('.hero-card-right', { y: -90, x: 35, opacity: 0.35, ease: 'none' }, 0)
-        .to('.hero-ball-1', { y: -130, x: -20, ease: 'none' }, 0)
-        .to('.hero-ball-2', { y: -150, x: 25, ease: 'none' }, 0)
-        .to('.hero-ball-3', { y: -70, ease: 'none' }, 0)
-        .to('.hero-ball-4', { y: -100, ease: 'none' }, 0)
-        .to('.hero-tennis-hill', { y: 25, ease: 'none' }, 0)
-        .to('.hero-bottom-wrap', { y: 35, scale: 0.98, ease: 'none' }, 0)
-    }, bannerRef)
-
-    return () => ctx.revert()
-  }, [])
-
-  return (
-    <div ref={bannerRef} className="flex flex-col overflow-hidden relative" style={{ backgroundColor: COLORS.bgCream }}>
-      <main className="flex flex-col relative">
-        <DesktopHero />
-        <TabletHero />
-        <MobileHero />
-      </main>
-
-      {/* Seamless curved divider transitioning into OurServicesStage (#fbeee8) */}
-      <div className="w-full overflow-hidden leading-none relative z-20 pointer-events-none -mb-[1px]">
-        <svg
-          viewBox="0 0 1440 48"
-          fill="none"
-          xmlns="http://www.w3.org/2000/svg"
-          className="w-full h-8 sm:h-12 block"
-          preserveAspectRatio="none"
-        >
-          <path
-            d="M0,0 C360,48 1080,48 1440,0 L1440,48 L0,48 Z"
-            fill="#fbeee8"
-          />
-        </svg>
-      </div>
-    </div>
-  )
-}
-
-export default HeroBanner
+export default HeroBanner;

@@ -19,36 +19,36 @@ interface StepItem {
 const STEPS: StepItem[] = [
   {
     num: '01.',
-    titleLine1: 'ĐIỀN THÔNG TIN',
-    titleLine2: 'ĐẶT LỊCH HẸN',
-    desc: 'ĐIỀN THÔNG TIN THÚ CƯNG, CHỌN GÓI DỊCH VỤ VÀ TRỞ THÀNH THÀNH VIÊN THÂN THIẾT CỦA PETCARE.',
+    titleLine1: 'Điền thông tin',
+    titleLine2: '& Đặt lịch hẹn',
+    desc: 'Điền thông tin thú cưng, chọn gói dịch vụ phù hợp và trở thành thành viên thân thiết của PetCare.',
     img: '/imgs/i1.png',
     badgeNum: '1',
     badgePos: 'tab',
   },
   {
     num: '02.',
-    titleLine1: 'BÁC SĨ LIÊN HỆ',
-    titleLine2: 'XÁC NHẬN LỊCH',
-    desc: 'DỰA TRÊN HỒ SƠ BÉ, ĐỘI NGŨ BÁC SĨ & CHUYÊN VIÊN SẼ GỌI ĐIỆN TƯ VẤN LỘ TRÌNH CHU ĐÁO NHẤT.',
+    titleLine1: 'Bác sĩ liên hệ',
+    titleLine2: '& Xác nhận lịch',
+    desc: 'Dựa trên hồ sơ của bé, đội ngũ bác sĩ và chuyên viên sẽ gọi điện tư vấn lộ trình chu đáo nhất.',
     img: '/imgs/i2.png',
     badgeNum: '2',
     badgePos: 'top-left',
   },
   {
     num: '03.',
-    titleLine1: 'GẶP GỠ & KHÁM',
-    titleLine2: 'BAN ĐẦU',
-    desc: 'BÁC SĨ THÚ Y THĂM KHÁM TOÀN DIỆN, LÀM QUEN THÂN THIỆN ĐỂ BÉ LUÔN CẢM THẤY AN TOÀN NHẤT.',
+    titleLine1: 'Gặp gỡ & Khám',
+    titleLine2: 'ban đầu',
+    desc: 'Bác sĩ thú y thăm khám toàn diện, làm quen thân thiện để bé luôn cảm thấy an toàn nhất.',
     img: '/imgs/i3.png',
     badgeNum: '3',
     badgePos: 'mid-left',
   },
   {
     num: '04.',
-    titleLine1: 'TRẢI NGHIỆM',
-    titleLine2: 'DỊCH VỤ 5 SAO',
-    desc: 'BÉ NGHỈ DƯỠNG PHÒNG VIP, LIVE CAM 24/7 VÀ TRỞ VỀ NHÀ VUI KHỎE, THƠM THO TRỌN NIỀM VUI.',
+    titleLine1: 'Trải nghiệm',
+    titleLine2: 'dịch vụ 5 sao',
+    desc: 'Bé nghỉ dưỡng phòng VIP, Live Cam 24/7 và trở về nhà vui khỏe, thơm tho trọn niềm vui.',
     img: '/imgs/i4.png',
     badgeNum: '4',
     badgePos: 'top-right',
@@ -75,6 +75,7 @@ export const StackingProcessCards: React.FC = () => {
     const ctx = gsap.context(() => {
       const cards = cardsRef.current.filter(Boolean) as HTMLElement[]
       if (cards.length === 0) return
+      const container = containerRef.current
 
       // Responsive spacing multiplier
       const isLarge = window.innerWidth >= 1440
@@ -108,45 +109,75 @@ export const StackingProcessCards: React.FC = () => {
         })
       }
 
-      const tl = gsap.timeline({
-        scrollTrigger: {
-          trigger: containerRef.current,
-          start: 'top top',
-          end: '+=2200',
-          pin: true,
-          scrub: 0.7,
-          anticipatePin: 1,
-          refreshPriority: -1,
-          snap: {
-            snapTo: 1 / (STEPS.length - 1),
-            duration: { min: 0.2, max: 0.4 },
-            delay: 0.05,
-            ease: 'power2.inOut',
+      // Use matchMedia to handle mobile gracefully
+      const mm = gsap.matchMedia()
+
+      mm.add('(min-width: 769px)', () => {
+        // Desktop: enable pinned scroll animation
+        const tl = gsap.timeline({
+          scrollTrigger: {
+            trigger: container,
+            start: 'top top',
+            end: '+=2200',
+            pin: true,
+            scrub: 0.7,
+            anticipatePin: 1,
+            refreshPriority: -1,
+            snap: {
+              snapTo: 1 / (STEPS.length - 1),
+              duration: { min: 0.2, max: 0.4 },
+              delay: 0.05,
+              ease: 'power2.inOut',
+            },
+            onUpdate: (self) => {
+              const idx = Math.min(
+                STEPS.length - 1,
+                Math.floor(self.progress * STEPS.length)
+              )
+              setActiveIdx(idx)
+            },
           },
-          onUpdate: (self) => {
-            const idx = Math.min(
-              STEPS.length - 1,
-              Math.floor(self.progress * STEPS.length)
-            )
-            setActiveIdx(idx)
-          },
-        },
+        })
+
+        // Cards 1, 2, 3 slide in one by one into their fan slots
+        for (let i = 1; i < cards.length; i++) {
+          tl.to(cards[i], {
+            x: fanPositions[i].x,
+            y: fanPositions[i].y,
+            rotate: fanPositions[i].rotate,
+            scale: fanPositions[i].scale,
+            duration: 1,
+            ease: 'power2.out',
+          })
+        }
+
+        // Small pause at the end to admire the full fan
+        tl.to({}, { duration: 0.4 })
+
+        return () => {
+          tl.scrollTrigger?.kill()
+          tl.kill()
+        }
       })
 
-      // Cards 1, 2, 3 slide in one by one into their fan slots
-      for (let i = 1; i < cards.length; i++) {
-        tl.to(cards[i], {
-          x: fanPositions[i].x,
-          y: fanPositions[i].y,
-          rotate: fanPositions[i].rotate,
-          scale: fanPositions[i].scale,
-          duration: 1,
-          ease: 'power2.out',
+      mm.add('(max-width: 768px)', () => {
+        // Mobile: disable pin — reset card positions for horizontal touch-snap
+        if (container) {
+          container.style.height = 'auto'
+          container.style.minHeight = 'auto'
+        }
+        // Stack cards vertically with horizontal scroll snap
+        cards.forEach((card, i) => {
+          gsap.set(card, {
+            x: 0,
+            y: 0,
+            rotate: 0,
+            scale: 0.9,
+            zIndex: i + 10,
+          })
         })
-      }
-
-      // Small pause at the end to admire the full fan
-      tl.to({}, { duration: 0.4 })
+        return () => {}
+      })
     }, containerRef)
 
     return () => ctx.revert()
@@ -155,13 +186,14 @@ export const StackingProcessCards: React.FC = () => {
   return (
     <section
       ref={containerRef}
-      className="relative w-full bg-[#faebe4] overflow-hidden flex flex-col justify-between pt-16 sm:pt-20 pb-4"
+      className="relative w-full bg-[#382417] overflow-hidden flex flex-col justify-between pt-16 sm:pt-20 pb-4 snap-x"
       style={{ height: '100vh', minHeight: '660px' }}
+      data-scroll-snap-container
     >
       {/* ── Background Subtle Watermark Text ── */}
       <div className="absolute inset-0 flex items-center justify-center pointer-events-none select-none z-0">
         <span
-          className="font-bayon text-[#ebd1c8]/40 leading-none text-center uppercase tracking-tight"
+          className="font-bayon text-[#faebe4]/[0.07] leading-none text-center uppercase tracking-tight"
           style={{ fontSize: 'clamp(70px, 13vw, 190px)' }}
         >
           HOW IT WORKS?
@@ -179,7 +211,7 @@ export const StackingProcessCards: React.FC = () => {
             ref={(el) => {
               cardsRef.current[i] = el
             }}
-            className="absolute transition-shadow duration-300 hover:z-50 cursor-pointer"
+            className="absolute snap-center transition-shadow duration-300 hover:z-50 cursor-pointer"
             style={{
               width: 'clamp(310px, 23vw, 390px)',
               height: 'clamp(500px, 68vh, 630px)',
@@ -226,11 +258,11 @@ export const StackingProcessCards: React.FC = () => {
               <div className="w-full h-full bg-white rounded-[28px] border-2 border-white/90 shadow-[0_28px_60px_rgba(60,25,25,0.12),0_8px_20px_rgba(0,0,0,0.04)] overflow-hidden flex flex-col justify-between">
                 {/* ── Top Half: Centered Brown Headlines + Big Number + All-Caps Desc ── */}
                 <div className="flex-1 flex flex-col items-center justify-center px-6 pt-8 pb-4 text-center">
-                  {/* Title (2 lines, huge, condensed dark brown #382417) */}
-                  <h3 className="font-bayon text-[#382417] text-[28px] sm:text-[34px] leading-[0.96] uppercase tracking-tight max-w-[320px]">
+                  {/* Title (2 lines, sentence case, condensed dark brown #382417) */}
+                  <h3 className="font-bayon text-[#382417] text-[24px] sm:text-[30px] leading-[1.05] tracking-tight max-w-[320px]">
                     {step.titleLine1}
                     <br />
-                    {step.titleLine2}
+                    <span className="text-[#a43324]">{step.titleLine2}</span>
                   </h3>
 
                   {/* Big Number (Dark Brown #382417) */}
@@ -238,14 +270,14 @@ export const StackingProcessCards: React.FC = () => {
                     {step.num}
                   </div>
 
-                  {/* Description (Uppercase, centered, condensed brown) */}
-                  <p className="font-sans text-[11px] sm:text-[12px] font-bold text-[#5a3a29] leading-[1.38] uppercase tracking-wide max-w-[280px]">
+                  {/* Description (Sentence case, WCAG AA contrast, readable line-height) */}
+                  <p className="font-sans text-[12px] sm:text-[13px] font-medium text-[#5a4638] leading-[1.6] max-w-[280px] px-2">
                     {step.desc}
                   </p>
                 </div>
 
-                {/* ── Bottom Half: Soft Lavender Container with Cutout Illustration ── */}
-                <div className="w-full h-[40%] bg-[#e8def8] flex items-center justify-center p-3 shrink-0 overflow-hidden">
+                {/* ── Bottom Half: Warm Container with Cutout Illustration ── */}
+                <div className="w-full h-[40%] bg-[#f6e8da] flex items-center justify-center p-3 shrink-0 overflow-hidden">
                   <img
                     src={step.img}
                     alt={`${step.titleLine1} ${step.titleLine2}`}
@@ -267,12 +299,12 @@ export const StackingProcessCards: React.FC = () => {
               key={i}
               className={`transition-all duration-300 rounded-full ${
                 i <= activeIdx
-                  ? 'w-6 h-2 bg-[#a43324]'
-                  : 'w-2 h-2 bg-[#a43324]/30'
+                  ? 'w-6 h-2 bg-[#faebe4]'
+                  : 'w-2 h-2 bg-[#faebe4]/25'
               }`}
             />
           ))}
-          <span className="font-bayon text-[#a43324]/70 text-sm tracking-widest uppercase ml-3">
+          <span className="font-bayon text-[#faebe4]/55 text-sm tracking-widest uppercase ml-3">
             0{activeIdx + 1} / 04
           </span>
         </div>
@@ -280,10 +312,10 @@ export const StackingProcessCards: React.FC = () => {
         {/* Bottom Right: Red capsule BOOK NOW button */}
         <Link
           to="/booking"
-          className="inline-flex items-center gap-2 rounded-full bg-[#a43324] hover:bg-[#89271b] px-6 py-2.5 font-bayon text-base text-white uppercase tracking-wider shadow-[0_6px_20px_rgba(164,51,36,0.35)] transition-transform hover:scale-105 active:scale-95"
+          className="inline-flex items-center gap-2 rounded-full bg-[#faebe4] hover:bg-white px-6 py-2.5 font-bayon text-base text-[#a43324] uppercase tracking-wider shadow-[0_6px_20px_rgba(0,0,0,0.35)] transition-transform hover:scale-105 active:scale-95"
         >
           <span>ĐẶT LỊCH NGAY</span>
-          <span className="w-2 h-2 rounded-full bg-white"></span>
+          <span className="w-2 h-2 rounded-full bg-[#a43324]"></span>
         </Link>
       </div>
 
