@@ -1,4 +1,4 @@
-import React, { useState, useRef, useEffect } from 'react'
+import React, { useState, useRef, useEffect, useCallback } from 'react'
 import { PawPrint } from 'lucide-react'
 import gsap from 'gsap'
 
@@ -11,16 +11,43 @@ const DIALOGUES = [
   'Yêu thương trọn vẹn 5 sao chuẩn quốc tế!',
 ]
 
+const AUTO_DISMISS_DELAY = 4000 // 4 seconds
+
 export const InteractiveMascotCompanion: React.FC = () => {
   const [dialogueIdx, setDialogueIdx] = useState(0)
-  const [showBubble, setShowBubble] = useState(true)
+  const [showBubble, setShowBubble] = useState(false)
   const mascotRef = useRef<HTMLDivElement>(null)
   const bubbleRef = useRef<HTMLDivElement>(null)
+  const dismissTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+
+  // Clear dismiss timer
+  const clearDismissTimer = useCallback(() => {
+    if (dismissTimerRef.current) {
+      clearTimeout(dismissTimerRef.current)
+      dismissTimerRef.current = null
+    }
+  }, [])
+
+  // Auto-dismiss after 4 seconds
+  const scheduleDismiss = useCallback(() => {
+    clearDismissTimer()
+    dismissTimerRef.current = setTimeout(() => {
+      if (bubbleRef.current && showBubble) {
+        gsap.to(bubbleRef.current, {
+          scale: 0.4,
+          opacity: 0,
+          y: 10,
+          duration: 0.35,
+          ease: 'power2.in',
+          onComplete: () => setShowBubble(false),
+        })
+      }
+    }, AUTO_DISMISS_DELAY)
+  }, [showBubble, clearDismissTimer])
 
   // Paw click particles anywhere on body
   useEffect(() => {
     const handleGlobalClick = (e: MouseEvent) => {
-      // Don't trigger if clicked on buttons or links
       const target = e.target as HTMLElement
       if (target.closest('button') || target.closest('a') || target.closest('input')) return
 
@@ -59,66 +86,114 @@ export const InteractiveMascotCompanion: React.FC = () => {
     }
 
     window.addEventListener('click', handleGlobalClick)
-    return () => window.removeEventListener('click', handleGlobalClick)
-  }, [])
+    return () => {
+      window.removeEventListener('click', handleGlobalClick)
+      clearDismissTimer()
+    }
+  }, [clearDismissTimer])
 
   const handleMascotClick = (e: React.MouseEvent) => {
     e.stopPropagation()
+    clearDismissTimer()
     setDialogueIdx((prev) => (prev + 1) % DIALOGUES.length)
-    setShowBubble(true)
 
-    if (mascotRef.current) {
+    if (!showBubble && mascotRef.current) {
+      // First interaction: expand from mascot
+      setShowBubble(true)
+      requestAnimationFrame(() => {
+        if (bubbleRef.current) {
+          gsap.fromTo(
+            bubbleRef.current,
+            { scale: 0.3, opacity: 0, y: 8 },
+            { scale: 1, opacity: 1, y: 0, duration: 0.45, ease: 'back.out(2.2)' }
+          )
+        }
+        if (mascotRef.current) {
+          gsap.fromTo(
+            mascotRef.current,
+            { scale: 0.85, rotation: -8 },
+            { scale: 1, rotation: 0, duration: 0.5, ease: 'elastic.out(1.5, 0.4)' }
+          )
+        }
+      })
+    } else if (mascotRef.current) {
+      // Already showing: bounce mascot
       gsap.fromTo(
         mascotRef.current,
-        { scale: 0.85, rotation: -10 },
-        { scale: 1, rotation: 0, duration: 0.6, ease: 'elastic.out(1.5, 0.3)' }
+        { scale: 0.9, rotation: -6 },
+        { scale: 1, rotation: 0, duration: 0.4, ease: 'elastic.out(1.5, 0.4)' }
       )
     }
 
+    scheduleDismiss()
+  }
+
+  const handleDismiss = (e: React.MouseEvent) => {
+    e.stopPropagation()
+    clearDismissTimer()
     if (bubbleRef.current) {
-      gsap.fromTo(
-        bubbleRef.current,
-        { scale: 0.4, opacity: 0, y: 15 },
-        { scale: 1, opacity: 1, y: 0, duration: 0.4, ease: 'back.out(2)' }
-      )
+      gsap.to(bubbleRef.current, {
+        scale: 0.3,
+        opacity: 0,
+        y: 8,
+        duration: 0.3,
+        ease: 'power2.in',
+        onComplete: () => setShowBubble(false),
+      })
     }
   }
 
   return (
     <aside
       aria-label="Mascot trợ lý PetCare"
-      className="fixed bottom-6 right-6 z-50 flex flex-col items-end pointer-events-none select-none"
+      className="fixed bottom-24 right-6 z-50 flex flex-col items-end pointer-events-none select-none"
     >
-      {/* Speech Bubble */}
+      {/* Speech Bubble - Only shows on user interaction */}
       {showBubble && (
         <div
           ref={bubbleRef}
-          className="mb-2 max-w-[220px] rounded-2xl rounded-br-xs bg-[#faebe4] px-4 py-2.5 text-xs font-bold text-[#3B2A1E] shadow-xl border border-[#a43324]/20 pointer-events-auto transition-all"
+          className="mb-3 max-w-[240px] rounded-2xl rounded-br-sm bg-white px-4 py-3 text-xs font-semibold text-[#3B2A1E] shadow-[0_8px_30px_rgba(0,0,0,0.12)] border border-[#a43324]/15 pointer-events-auto"
+          style={{ transformOrigin: 'bottom right' }}
         >
-          <div className="flex items-start justify-between gap-1">
-            <span className="flex items-start gap-1">
+          <div className="flex items-start justify-between gap-2">
+            <div className="flex items-start gap-2">
               <PawPrint size={14} className="text-[#a43324] shrink-0 mt-0.5" />
               <span>{DIALOGUES[dialogueIdx]}</span>
-            </span>
+            </div>
             <button
-              onClick={(e) => {
-                e.stopPropagation()
-                setShowBubble(false)
-              }}
+              onClick={handleDismiss}
               aria-label="Đóng bóng thoại"
-              className="text-[#a43324]/60 hover:text-[#a43324] text-xs ml-1"
+              className="text-[#a43324]/50 hover:text-[#a43324] text-xs leading-none p-1 -mr-1 -mt-0.5"
             >
               ✕
             </button>
           </div>
+          {/* Tail pointer */}
+          <div className="absolute -bottom-2 right-5 w-4 h-4 bg-white border-r border-b border-[#a43324]/15 transform rotate-45" />
         </div>
       )}
 
-      {/* Mascot Dog Button */}
+      {/* Mascot Dog Button - Compact 48px circle */}
       <div
         ref={mascotRef}
         onClick={handleMascotClick}
-        className="w-16 h-16 sm:w-18 sm:h-18 rounded-full bg-[#faebe4] p-2.5 shadow-[0_10px_25px_rgba(164,51,36,0.25)] border-2 border-white cursor-pointer pointer-events-auto hover:scale-110 active:scale-95 transition-transform flex items-center justify-center"
+        onMouseEnter={() => {
+          if (!showBubble) {
+            setShowBubble(true)
+            requestAnimationFrame(() => {
+              if (bubbleRef.current) {
+                gsap.fromTo(
+                  bubbleRef.current,
+                  { scale: 0.3, opacity: 0, y: 8 },
+                  { scale: 1, opacity: 1, y: 0, duration: 0.4, ease: 'back.out(2.2)' }
+                )
+              }
+            })
+            scheduleDismiss()
+          }
+        }}
+        onMouseLeave={clearDismissTimer}
+        className="w-12 h-12 rounded-full bg-gradient-to-br from-[#faebe4] to-white p-1.5 shadow-[0_8px_24px_rgba(164,51,36,0.2)] border-2 border-white cursor-pointer pointer-events-auto hover:scale-110 active:scale-95 transition-transform duration-200 flex items-center justify-center"
         title="Bấm vào em nè gâu gâu!"
       >
         <img
