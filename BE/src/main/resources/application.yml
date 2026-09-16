@@ -59,6 +59,11 @@ app:
   otp-expiry:
     enabled: true
     cron: "0 */5 * * * *"
+  caregiver:
+    invitation-ttl-days: 7
+  caregiver-expiry:
+    enabled: true
+    cron: "0 */15 * * * *"
 
 server:
   port: 8080
