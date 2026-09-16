@@ -18,6 +18,9 @@ import { RecommendPage } from '../pages/recommend/RecommendPage';
 import { HotelPage } from '../pages/hotel/HotelPage';
 import { LoginPage } from '../pages/auth/LoginPage';
 import { RegisterPage } from '../pages/auth/RegisterPage';
+import { VerifyOtpPage } from '../pages/auth/VerifyOtpPage';
+import { ForgotPasswordPage } from '../pages/auth/ForgotPasswordPage';
+import { TermsPage, PrivacyPage } from '../pages/legal/LegalPage';
 import { NewsPage } from '../pages/news/NewsPage';
 import { ReviewPage } from '../pages/review/ReviewPage';
 
@@ -46,11 +49,15 @@ export function App() {
           <Route path="/hotel" element={<HotelPage />} />
           <Route path="/news" element={<NewsPage />} />
           <Route path="/review" element={<ReviewPage />} />
+          <Route path="/terms" element={<TermsPage />} />
+          <Route path="/privacy" element={<PrivacyPage />} />
         </Route>
 
         {/* Auth Routes (without header/footer layout) */}
         <Route path="/auth/login" element={<LoginPage />} />
         <Route path="/auth/register" element={<RegisterPage />} />
+        <Route path="/auth/verify-otp" element={<VerifyOtpPage />} />
+        <Route path="/auth/forgot" element={<ForgotPasswordPage />} />
       </Routes>
       <GlobalModal />
       <Toaster position="top-right" richColors />

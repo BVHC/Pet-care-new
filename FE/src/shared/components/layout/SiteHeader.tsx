@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { Search, ShoppingCart, User, ChevronDown, LogOut, Package, Edit3 } from 'lucide-react';
+import { Search, ShoppingCart, User, ChevronDown, LogOut, Package, Edit3, LogIn } from 'lucide-react';
 import { useAuthStore } from '../../stores/auth.store';
 import { isHeaderCollapsed, buildShopMegaMenu } from './header.utils';
 
@@ -33,6 +33,7 @@ interface SiteHeaderProps {
 
 export function SiteHeader({ cartCount = 0, onNav }: SiteHeaderProps) {
   const user = useAuthStore((s) => s.user);
+  const isAuthenticated = useAuthStore((s) => s.isAuthenticated);
   const logout = useAuthStore((s) => s.logout);
   const [isScrolled, setIsScrolled] = useState(false);
 
@@ -91,8 +92,26 @@ export function SiteHeader({ cartCount = 0, onNav }: SiteHeaderProps) {
             </button>
           </div>
 
-          {/* User Icon & Dropdown */}
-          <div className="relative group cursor-pointer text-[#3B2A1E] hover:text-[#a43324] transition-colors pb-4 -mb-4">
+          {/* Chua dang nhap -> loi vao /auth/login, /auth/register */}
+          {!isAuthenticated && (
+            <div className="flex items-center gap-2.5">
+              <button
+                onClick={() => onNav('login')}
+                className="text-[14px] font-bold text-[#3B2A1E] hover:text-[#a43324] transition-colors whitespace-nowrap"
+              >
+                Đăng nhập
+              </button>
+              <button
+                onClick={() => onNav('register')}
+                className="rounded-full bg-[#a43324] px-4 py-2 text-[13.5px] font-extrabold text-white transition-[background-color,transform] duration-300 ease-[cubic-bezier(0.32,0.72,0,1)] hover:bg-[#89271b] active:scale-[0.985] whitespace-nowrap"
+              >
+                Đăng ký
+              </button>
+            </div>
+          )}
+
+          {/* User Icon & Dropdown — chi hien khi da dang nhap */}
+          <div className={`relative group cursor-pointer text-[#3B2A1E] hover:text-[#a43324] transition-colors pb-4 -mb-4 ${isAuthenticated ? '' : 'hidden'}`}>
             <User size={22} strokeWidth={2.5} onClick={() => onNav('account')} />
             {(
               <div className="absolute top-[100%] right-0 hidden group-hover:flex flex-col bg-white shadow-xl p-3 rounded-b-lg border-t-2 border-[#a43324] w-48 z-50 pt-3 mt-4 gap-1">
@@ -123,7 +142,7 @@ export function SiteHeader({ cartCount = 0, onNav }: SiteHeaderProps) {
                 </button>
                 <div className="border-t my-1" />
                 <button
-                  onClick={() => { logout(); onNav('home'); }}
+                  onClick={async () => { await logout(); onNav('home'); }}
                   className="flex items-center gap-2 text-[13px] text-red-600 hover:bg-red-50 rounded-md px-2 py-1.5 transition-colors w-full text-left font-semibold"
                 >
                   <LogOut size={14} /> Đăng xuất
@@ -208,8 +227,12 @@ export function SiteHeader({ cartCount = 0, onNav }: SiteHeaderProps) {
                <Search size={12} strokeWidth={3} />
              </button>
            </div>
-           <button className="text-[#3B2A1E] hover:text-[#a43324] flex-shrink-0" onClick={() => onNav('account')}>
-             <User size={20} strokeWidth={2.5}/>
+           <button
+             className="text-[#3B2A1E] hover:text-[#a43324] flex-shrink-0"
+             title={isAuthenticated ? 'Tài khoản của tôi' : 'Đăng nhập'}
+             onClick={() => onNav(isAuthenticated ? 'account' : 'login')}
+           >
+             {isAuthenticated ? <User size={20} strokeWidth={2.5} /> : <LogIn size={20} strokeWidth={2.5} />}
            </button>
            <div className="relative cursor-pointer text-[#3B2A1E] hover:text-[#a43324] flex-shrink-0" onClick={() => onNav('cart')}>
             <ShoppingCart size={20} strokeWidth={2.5} />

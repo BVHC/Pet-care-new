@@ -2,6 +2,7 @@ package com.petcare.module.notification.gateway;
 
 import lombok.RequiredArgsConstructor;
 import org.springframework.beans.factory.annotation.Value;
+import org.springframework.boot.autoconfigure.condition.ConditionalOnExpression;
 import org.springframework.mail.SimpleMailMessage;
 import org.springframework.mail.javamail.JavaMailSender;
 import org.springframework.stereotype.Component;
@@ -11,8 +12,12 @@ import org.springframework.stereotype.Component;
  * (spring.mail.*, xem application.yml). gateway_provider ghi vào
  * notification_delivery_logs = "GMAIL_SMTP" (docs/06-erd.md §3.7 chỉ liệt kê
  * TWILIO/FCM/SENDGRID làm ví dụ, không giới hạn cứng danh sách).
+ *
+ * <p>Chỉ bật khi có spring.mail.username; để trống thì {@link LogEmailGateway}
+ * thay chỗ để máy dev chạy được mà không cần App Password Gmail.
  */
 @Component
+@ConditionalOnExpression("!'${spring.mail.username:}'.isBlank()")
 @RequiredArgsConstructor
 public class GmailSmtpEmailGateway implements EmailGateway {
 

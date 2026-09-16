@@ -1,14 +1,22 @@
+import { useEffect } from 'react';
 import { Outlet } from 'react-router-dom';
 import { SiteHeader } from './SiteHeader';
 import { SiteFooter } from './SiteFooter';
 import { NAV_TO_PATH } from '../../constants/routes';
 import { useCartStore } from '../../stores/cart.store';
+import { useAuthStore } from '../../stores/auth.store';
 import { useNavigate } from 'react-router-dom';
 
 // Layout công khai (Home, Shop, Booking...).
 export function PublicLayout() {
   const navigate = useNavigate();
   const count = useCartStore((s) => s.count());
+  const hydrate = useAuthStore((s) => s.hydrate);
+
+  // Doc lai user tu accessToken con trong localStorage (F5 / mo tab moi).
+  useEffect(() => {
+    hydrate();
+  }, [hydrate]);
 
   const onNav = (page: string) => {
     const path = NAV_TO_PATH[page] ?? '/';
