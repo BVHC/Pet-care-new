@@ -95,6 +95,7 @@ stateDiagram-v2
     [*] --> INVITED: InviteCaregiver [Primary Owner]
     INVITED --> ACTIVE: AcceptCaregiverInvitation [Caregiver]
     INVITED --> REJECTED: RejectCaregiverInvitation [Caregiver]
+    INVITED --> REVOKED: RevokeCaregiver [Primary Owner]
     INVITED --> EXPIRED: ProcessInvitationExpiry [7d TTL Expired]
     ACTIVE --> REVOKED: RevokeCaregiver [Primary Owner]
     ACTIVE --> EXPIRED: ProcessDelegationExpiry [Delegation Period Expired]
@@ -106,6 +107,7 @@ stateDiagram-v2
 | INVITED | AcceptCaregiverInvitation | Caregiver | RULE-04-05, RULE-04-06 | ACTIVE | CaregiverInvitationAccepted | Người được mời chấp thuận lời mời trong thời hạn TTL; kích hoạt quan hệ ủy quyền `ACTIVE` trực tiếp có hiệu lực ngay lập tức. |
 | INVITED | RejectCaregiverInvitation | Caregiver | RULE-04-06 | REJECTED | CaregiverInvitationRejected | Người được mời chủ động từ chối lời mời ủy quyền; hủy bỏ lời mời. |
 | INVITED | ProcessInvitationExpiry | System | RULE-04-05 | EXPIRED | CaregiverInvitationExpired | Quá thời hạn 7 ngày không được xác nhận; tác vụ nền tự động quét và đánh dấu lời mời hết hạn. |
+| INVITED | RevokeCaregiver | Customer (Primary Owner) | RULE-04-04, RULE-04-08 | REVOKED | CaregiverRevoked | Chủ sở hữu chính hủy lời mời khi người được mời chưa phản hồi; bổ sung đã duyệt 2026-09-16, xem docs/superpowers/specs/2026-09-16-caregiver-delegation-design.md D-04. |
 | ACTIVE | RevokeCaregiver | Customer (Primary Owner) | RULE-04-04, RULE-04-08 | REVOKED | CaregiverRevoked | Chủ sở hữu chính chủ động thu hồi quyền ủy quyền; lập tức chấm dứt mọi quyền xem và thao tác trên Pet của Caregiver. |
 | ACTIVE | ProcessDelegationExpiry | System | RULE-04-07 | EXPIRED | CaregiverDelegationExpired | Hết thời hạn hiệu lực ủy quyền (`DelegationValidityPeriod`); hệ thống tự động chấm dứt quyền hạn ủy quyền. |
 
