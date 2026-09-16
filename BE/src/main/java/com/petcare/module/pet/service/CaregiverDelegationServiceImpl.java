@@ -9,12 +9,14 @@ import com.petcare.module.pet.dto.CaregiverDelegationResponse;
 import com.petcare.module.pet.entity.Pet;
 import com.petcare.module.pet.entity.PetCaregiverDelegation;
 import com.petcare.module.pet.exception.CaregiverInvitationConflictException;
+import com.petcare.module.pet.exception.UnauthorizedDelegatedActionException;
 import com.petcare.module.pet.fsm.CaregiverDelegationTransitionHandler;
 import com.petcare.module.pet.mapper.CaregiverDelegationMapper;
 import com.petcare.module.pet.repository.PetCaregiverDelegationRepository;
 import com.petcare.module.pet.repository.PetRepository;
 import com.petcare.platform.enums.CaregiverStatus;
 import com.petcare.platform.enums.NotificationChannel;
+import com.petcare.platform.exception.BusinessRuleViolationException;
 import com.petcare.platform.exception.ResourceNotFoundException;
 import com.petcare.platform.outbox.OutboxEvent;
 import com.petcare.platform.outbox.OutboxEventRepository;
@@ -116,13 +118,47 @@ public class CaregiverDelegationServiceImpl implements CaregiverDelegationServic
     @Override
     @Transactional
     public CaregiverDelegationResponse acceptCaregiverInvitation(UUID actorUserId, String rawToken) {
-        throw new UnsupportedOperationException("Task 9 chưa cài đặt");
+        return respondToInvitation(actorUserId, rawToken, CaregiverStatus.ACTIVE,
+                "CaregiverInvitationAccepted");
     }
 
     @Override
     @Transactional
     public CaregiverDelegationResponse rejectCaregiverInvitation(UUID actorUserId, String rawToken) {
-        throw new UnsupportedOperationException("Task 9 chưa cài đặt");
+        return respondToInvitation(actorUserId, rawToken, CaregiverStatus.REJECTED,
+                "CaregiverInvitationRejected");
+    }
+
+    private CaregiverDelegationResponse respondToInvitation(UUID actorUserId, String rawToken,
+                                                            CaregiverStatus target, String eventType) {
+        PetCaregiverDelegation delegation = delegations.findByInvitationTokenHash(sha256Hex(rawToken))
+                .orElseThrow(() -> new ResourceNotFoundException("CaregiverInvitation", "token"));
+
+        // RULE-04-05 — tự kiểm hạn, không tin job (spec D-08).
+        if (delegation.getStatus() == CaregiverStatus.INVITED
+                && !delegation.getExpiresAt().isAfter(LocalDateTime.now())) {
+            throw new BusinessRuleViolationException("RULE-04-05", "Lời mời đã hết hạn (RULE-04-05)");
+        }
+
+        // A-03: đã gán thì bắt buộc khớp; A-02: chưa gán thì người cầm token nhận ủy quyền.
+        if (delegation.getCaregiverUserId() != null
+                && !delegation.getCaregiverUserId().equals(actorUserId)) {
+            throw new UnauthorizedDelegatedActionException("INVITED_CAREGIVER", "OTHER_USER");
+        }
+
+        // Spec D-10 — idempotent khi đã ở đúng đích và đúng chủ thể.
+        if (delegation.getStatus() == target
+                && actorUserId.equals(delegation.getCaregiverUserId())) {
+            return mapper.toDelegationResponse(delegation);
+        }
+
+        transitions.validateTransition(delegation.getStatus(), target);
+        if (delegation.getCaregiverUserId() == null) {
+            delegation.setCaregiverUserId(actorUserId);
+        }
+        delegation.setStatus(target);
+        writeOutbox(delegation.getPetId(), eventType, delegation.getId());
+        return mapper.toDelegationResponse(delegation);
     }
 
     @Override

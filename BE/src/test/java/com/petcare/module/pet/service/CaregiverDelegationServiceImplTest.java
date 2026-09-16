@@ -13,6 +13,9 @@ import com.petcare.module.pet.repository.PetRepository;
 import com.petcare.module.notification.service.NotificationService;
 import com.petcare.platform.enums.CaregiverStatus;
 import com.petcare.platform.enums.NotificationChannel;
+import com.petcare.platform.exception.BusinessRuleViolationException;
+import com.petcare.platform.exception.InvalidStateTransitionException;
+import com.petcare.platform.exception.ResourceNotFoundException;
 import com.petcare.platform.outbox.OutboxEventRepository;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -22,6 +25,7 @@ import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.dao.DataIntegrityViolationException;
 
+import java.time.LocalDateTime;
 import java.util.Optional;
 import java.util.UUID;
 
@@ -147,5 +151,114 @@ class CaregiverDelegationServiceImplTest {
                 .isNotEqualTo(outcome.response().invitationToken())
                 .hasSize(64); // SHA-256 hex
         assertThat(captor.getValue().getStatus()).isEqualTo(CaregiverStatus.INVITED);
+    }
+
+    private PetCaregiverDelegation invited(UUID caregiverUserId, LocalDateTime expiresAt) {
+        PetCaregiverDelegation d = new PetCaregiverDelegation();
+        d.setId(UUID.randomUUID());
+        d.setPetId(pet.getId());
+        d.setPrimaryOwnerId(owner);
+        d.setCaregiverUserId(caregiverUserId);
+        d.setCaregiverEmail("cg@example.com");
+        d.setInvitationTokenHash(svc.sha256Hex("raw-token"));
+        d.setStatus(CaregiverStatus.INVITED);
+        d.setExpiresAt(expiresAt);
+        return d;
+    }
+
+    @Test
+    void acceptCaregiverInvitation_boundUserAccepts_becomesActive() {
+        UUID caregiver = UUID.randomUUID();
+        PetCaregiverDelegation d = invited(caregiver, LocalDateTime.now().plusDays(1));
+        when(delegations.findByInvitationTokenHash(svc.sha256Hex("raw-token")))
+                .thenReturn(Optional.of(d));
+
+        svc.acceptCaregiverInvitation(caregiver, "raw-token");
+
+        assertThat(d.getStatus()).isEqualTo(CaregiverStatus.ACTIVE);
+        verify(outbox).save(any());
+    }
+
+    @Test
+    void acceptCaregiverInvitation_unboundInvitation_bindsAcceptingUser() {
+        UUID whoever = UUID.randomUUID();
+        PetCaregiverDelegation d = invited(null, LocalDateTime.now().plusDays(1));
+        when(delegations.findByInvitationTokenHash(svc.sha256Hex("raw-token")))
+                .thenReturn(Optional.of(d));
+
+        svc.acceptCaregiverInvitation(whoever, "raw-token");
+
+        assertThat(d.getCaregiverUserId()).isEqualTo(whoever);
+        assertThat(d.getStatus()).isEqualTo(CaregiverStatus.ACTIVE);
+    }
+
+    @Test
+    void acceptCaregiverInvitation_wrongUser_forbidden() {
+        PetCaregiverDelegation d = invited(UUID.randomUUID(), LocalDateTime.now().plusDays(1));
+        when(delegations.findByInvitationTokenHash(svc.sha256Hex("raw-token")))
+                .thenReturn(Optional.of(d));
+
+        assertThatThrownBy(() -> svc.acceptCaregiverInvitation(UUID.randomUUID(), "raw-token"))
+                .isInstanceOf(UnauthorizedDelegatedActionException.class);
+    }
+
+    @Test
+    void acceptCaregiverInvitation_unknownToken_notFound() {
+        when(delegations.findByInvitationTokenHash(anyString())).thenReturn(Optional.empty());
+
+        assertThatThrownBy(() -> svc.acceptCaregiverInvitation(UUID.randomUUID(), "nope"))
+                .isInstanceOf(ResourceNotFoundException.class);
+    }
+
+    /** Spec D-08: không tin cron, tự kiểm expires_at. */
+    @Test
+    void acceptCaregiverInvitation_pastExpiry_businessRuleViolation() {
+        UUID caregiver = UUID.randomUUID();
+        PetCaregiverDelegation d = invited(caregiver, LocalDateTime.now().minusMinutes(1));
+        when(delegations.findByInvitationTokenHash(svc.sha256Hex("raw-token")))
+                .thenReturn(Optional.of(d));
+
+        assertThatThrownBy(() -> svc.acceptCaregiverInvitation(caregiver, "raw-token"))
+                .isInstanceOf(BusinessRuleViolationException.class)
+                .hasMessageContaining("RULE-04-05");
+    }
+
+    /** Spec D-10: lặp lại accept bởi đúng người thì 200, không ghi event lần hai. */
+    @Test
+    void acceptCaregiverInvitation_alreadyActiveSameUser_isIdempotent() {
+        UUID caregiver = UUID.randomUUID();
+        PetCaregiverDelegation d = invited(caregiver, LocalDateTime.now().plusDays(1));
+        d.setStatus(CaregiverStatus.ACTIVE);
+        when(delegations.findByInvitationTokenHash(svc.sha256Hex("raw-token")))
+                .thenReturn(Optional.of(d));
+
+        svc.acceptCaregiverInvitation(caregiver, "raw-token");
+
+        assertThat(d.getStatus()).isEqualTo(CaregiverStatus.ACTIVE);
+        verify(outbox, never()).save(any());
+    }
+
+    @Test
+    void acceptCaregiverInvitation_alreadyRevoked_invalidTransition() {
+        UUID caregiver = UUID.randomUUID();
+        PetCaregiverDelegation d = invited(caregiver, LocalDateTime.now().plusDays(1));
+        d.setStatus(CaregiverStatus.REVOKED);
+        when(delegations.findByInvitationTokenHash(svc.sha256Hex("raw-token")))
+                .thenReturn(Optional.of(d));
+
+        assertThatThrownBy(() -> svc.acceptCaregiverInvitation(caregiver, "raw-token"))
+                .isInstanceOf(InvalidStateTransitionException.class);
+    }
+
+    @Test
+    void rejectCaregiverInvitation_becomesRejected() {
+        UUID caregiver = UUID.randomUUID();
+        PetCaregiverDelegation d = invited(caregiver, LocalDateTime.now().plusDays(1));
+        when(delegations.findByInvitationTokenHash(svc.sha256Hex("raw-token")))
+                .thenReturn(Optional.of(d));
+
+        svc.rejectCaregiverInvitation(caregiver, "raw-token");
+
+        assertThat(d.getStatus()).isEqualTo(CaregiverStatus.REJECTED);
     }
 }
