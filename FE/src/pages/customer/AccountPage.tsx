@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { Link } from 'react-router-dom';
+import { Link, useNavigate } from 'react-router-dom';
 import {
   User,
   Package,
@@ -20,6 +20,8 @@ import {
   HelpCircle,
   Cat
 } from 'lucide-react';
+import { toast } from 'sonner';
+import { useAuthStore } from '../../shared/stores/auth.store';
 
 // Custom Dog icon (Lucide doesn't have a dog icon)
 const DogIcon = ({ size = 16, className = '' }: { size?: number; className?: string }) => (
@@ -52,6 +54,8 @@ interface MenuItem {
 }
 
 export function AccountPage() {
+  const navigate = useNavigate();
+  const logout = useAuthStore((s) => s.logout);
   const [activeTab, setActiveTab] = useState('profile');
   const [pets, setPets] = useState<Pet[]>(MOCK_PETS);
   const [showPetForm, setShowPetForm] = useState(false);
@@ -186,7 +190,14 @@ export function AccountPage() {
                   </Link>
                 );
               })}
-              <button className="flex w-full items-center gap-3 rounded-lg px-4 py-3 text-red-500 transition-all hover:bg-red-50">
+              <button
+                onClick={async () => {
+                  await logout();
+                  toast.success('Đã đăng xuất. Hẹn gặp lại!');
+                  navigate('/', { replace: true });
+                }}
+                className="flex w-full items-center gap-3 rounded-lg px-4 py-3 text-red-500 transition-all hover:bg-red-50"
+              >
                 <LogOut size={20} />
                 <span className="font-medium">Đăng xuất</span>
               </button>

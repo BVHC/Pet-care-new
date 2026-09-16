@@ -1,5 +1,5 @@
 import { useState, type ReactNode } from 'react';
-import { Eye, EyeOff } from 'lucide-react';
+import { AlertCircle, Eye, EyeOff } from 'lucide-react';
 
 type Props = {
   label: string;
@@ -11,9 +11,23 @@ type Props = {
   placeholder?: string;
   type?: 'text' | 'tel' | 'password';
   autoComplete?: string;
+  /** thong bao loi hien ngay duoi o nhap; co loi thi vien chuyen do */
+  error?: string;
+  onBlur?: () => void;
 };
 
-export function AuthField({ label, action, icon, value, onChange, placeholder, type = 'text', autoComplete }: Props) {
+export function AuthField({
+  label,
+  action,
+  icon,
+  value,
+  onChange,
+  placeholder,
+  type = 'text',
+  autoComplete,
+  error,
+  onBlur,
+}: Props) {
   const [reveal, setReveal] = useState(false);
   const isPassword = type === 'password';
 
@@ -23,14 +37,22 @@ export function AuthField({ label, action, icon, value, onChange, placeholder, t
         <label className="text-[12px] font-bold uppercase tracking-[0.09em] text-[#7a6a5d]">{label}</label>
         {action}
       </div>
-      <div className="flex items-center gap-3 rounded-2xl border-[1.5px] border-[#e6d9c8] bg-white px-[18px] py-[15px] transition-[border-color,box-shadow] duration-300 ease-[cubic-bezier(0.32,0.72,0,1)] focus-within:border-accent focus-within:shadow-[0_0_0_4px_rgba(164,51,36,0.10)]">
+      <div
+        className={`flex items-center gap-3 rounded-2xl border-[1.5px] bg-white px-[18px] py-[15px] transition-[border-color,box-shadow] duration-300 ease-[cubic-bezier(0.32,0.72,0,1)] ${
+          error
+            ? 'border-[#d32f2f] shadow-[0_0_0_4px_rgba(211,47,47,0.10)]'
+            : 'border-[#e6d9c8] focus-within:border-accent focus-within:shadow-[0_0_0_4px_rgba(164,51,36,0.10)]'
+        }`}
+      >
         <span className="shrink-0 text-[#b3a495]">{icon}</span>
         <input
           type={isPassword && !reveal ? 'password' : type === 'password' ? 'text' : type}
           value={value}
           onChange={(e) => onChange(e.target.value)}
+          onBlur={onBlur}
           placeholder={placeholder}
           autoComplete={autoComplete}
+          aria-invalid={!!error}
           className="w-full bg-transparent text-[15px] text-[#191919] outline-none placeholder:text-[#b3a495]"
         />
         {isPassword && (
@@ -44,6 +66,12 @@ export function AuthField({ label, action, icon, value, onChange, placeholder, t
           </button>
         )}
       </div>
+      {error && (
+        <p role="alert" className="mt-2 flex items-start gap-1.5 text-[12.5px] font-semibold text-[#d32f2f]">
+          <AlertCircle size={14} strokeWidth={2.4} className="mt-[1px] shrink-0" />
+          {error}
+        </p>
+      )}
     </div>
   );
 }

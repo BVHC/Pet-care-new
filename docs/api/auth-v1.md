@@ -23,8 +23,10 @@ RULE-01-10). Toàn bộ mô tả field `phone` dưới đây trong C1-C3 cần �
 - Lock / Unlock / Deactivate thuộc IAM, không đưa vào Auth API. Ngoại lệ duy nhất:
   `AutoLockAccount` (System, RULE-01-07) là *hiệu ứng* của `Login` thất bại liên tiếp —
   contract Auth mô tả hiệu ứng này nhưng không expose endpoint riêng.
-- Forgot / Reset Password **loại khỏi v1** (ERD có `otps.purpose = PASSWORD_RESET`
-  nhưng business operations chưa xác nhận các operation này).
+- Forgot / Reset Password: **đưa vào v1 ngày 2026-09-16** (trước đó bị loại).
+  `01-business-operations.md` vẫn chưa có operation này — căn cứ duy nhất là
+  ERD `otps.purpose = PASSWORD_RESET`, nên toàn bộ contract C8/C9 mang nhãn
+  **ASSUMPTION A8**, không phải CONFIRMED. Xem Q12 mục E.
 - Verify OTP tuân FSM (`PENDING_VERIFICATION → ACTIVE`), không auto-login.
 - Resend OTP là endpoint riêng (`ResendOTP` là operation riêng).
 - Refresh token: **implemented 2026-09-14** — `POST /auth/refresh` (xem C5).
@@ -35,7 +37,7 @@ RULE-01-10). Toàn bộ mô tả field `phone` dưới đây trong C1-C3 cần �
 
 ---
 
-## A. Confirmed Auth API (7 endpoints)
+## A. Confirmed Auth API (9 endpoints)
 
 | # | Endpoint (proposed) | Business operation (CONFIRMED) |
 |---|---|---|
@@ -46,6 +48,8 @@ RULE-01-10). Toàn bộ mô tả field `phone` dưới đây trong C1-C3 cần �
 | 5 | `POST /auth/refresh` | Session/token-layer infra (không có Command Candidate riêng trong `04-glossary.md`) — ADR-0001, RULE-01-06/02-04 |
 | 6 | `POST /auth/logout` | `Logout` — `01#1`, RULE-01-06 |
 | 7 | `POST /staff-accounts` (proposed path, ranh giới Auth × IAM) | `CreateStaff` D-04 — `01#1`, RULE-01-03, RULE-02-05, FSM 1 |
+| 8 | `POST /auth/forgot-password` | **ASSUMPTION A8** — không có Command Candidate; suy từ ERD `otps.purpose = PASSWORD_RESET`, tái dùng RULE-01-02/04/05 |
+| 9 | `POST /auth/reset-password` | **ASSUMPTION A8** — cùng gốc; kiêm lối thoát khỏi `LOCKED`/`AUTO_FAILED_LOGIN` (RULE-01-07) |
 
 ---
 
@@ -60,6 +64,8 @@ RULE-01-10). Toàn bộ mô tả field `phone` dưới đây trong C1-C3 cần �
 | Refresh | Customer / Staff | Auth (01), session/token layer | Refresh token hợp lệ, chưa hết hạn/chưa revoke, Account đang `ACTIVE` | ADR-0001 (rotation: 1 refresh token dùng 1 lần), RULE-01-01/07 (re-check trạng thái Account tại thời điểm refresh — chặn refresh nếu đã LOCKED/DEACTIVATED sau khi token cũ phát hành) | POST | `/auth/refresh` | Public (refresh token tự chứng thực, không cần Bearer access) | Owner (đúng userId trong refresh token) | Không đổi Account state; chỉ rotate token pair | — | — | Non-idempotent (mỗi lần gọi rotate sang cặp token mới, refresh token cũ bị revoke — reuse bị từ chối `401 INVALID_REFRESH_TOKEN`) | Không có RULE-ID/FSM riêng — thuần session/token infra (ADR-0001), giống Logout |
 | Logout | Customer / Staff | Auth (01) | Đang có session | RULE-01-06 (revoke session + refresh, blacklist access) | POST | `/auth/logout` | Bearer access | Owner session | Không đổi Account state | — | — | **Idempotent** (logout lặp lại vẫn 200) | Cơ chế định danh session từ access token + body `refreshToken?` là PROPOSED |
 | CreateStaff D-04 | PlatformAdmin / OrganizationAdmin | Auth (01) × IAM (02), Agg `Account` + `UserAccount` | Actor có quyền quản trị trên scope mục tiêu | RULE-01-03/D-04 (`→ACTIVE` + temp password + `must_change_password=true`, bỏ OTP), RULE-02-02 (9 canonical roles), RULE-02-05 (hierarchy) | POST | `/staff-accounts` | Bearer access | `SUPER_ADMIN` toàn hệ thống; `ORGANIZATION_ADMIN` trong Org mình (RULE-02-05 CONFIRMED) | `[*] → ACTIVE`, ev `AccountActivated` | — | (Có thể gửi temp password cho staff — kênh TBD Q7) | Như register: email UK → trùng = `BUSINESS_RULE_VIOLATION`/400 (RULE-01-10, sửa 2026-09-13, không dùng 409); không idempotency key trong docs | Role enum 9 giá trị CONFIRMED; tổ hợp org/store bắt buộc theo role TBD Q9; audit TBD Q10; endpoint này **chưa triển khai code** (ngoài phạm vi Module 01 lần này) |
+| ForgotPassword (A8) | Customer / Staff | Auth (01), Agg `Account` + `Otp` | Account `ACTIVE` hoặc `LOCKED` | RULE-01-02 (TTL 300s), RULE-01-04 (cooldown 60s), RULE-01-05 (max 5/h) | POST | `/auth/forgot-password` | Public | None (anti-enumeration: không kiểm tra người gọi) | Không đổi state | Notification (OTP delivery) | OTP `PASSWORD_RESET` gửi qua email | Non-idempotent về hiệu ứng (mỗi call đẻ OTP mới), nhưng **response luôn giống nhau** | Luôn `200 {sent:true}` kể cả email lạ/`PENDING_VERIFICATION`/`DEACTIVATED` — nếu trả 404 thì lộ email nào đã đăng ký (Q11) |
+| ResetPassword (A8) | Customer / Staff | Auth (01) | OTP `PASSWORD_RESET` còn hiệu lực | RULE-01-02/05 (guard OTP), RULE-01-09 (độ dài mật khẩu), RULE-01-07 (gỡ khoá `AUTO_FAILED_LOGIN`) | POST | `/auth/reset-password` | Public (OTP tự chứng thực) | Owner (đúng email của OTP) | `LOCKED → ACTIVE` **chỉ khi** `lock_reason = AUTO_FAILED_LOGIN`; `ADMIN_LOCK` giữ nguyên | — | — | Non-idempotent (OTP đánh dấu `is_used`, gọi lại → 400) | Dùng chung helper `consumeOtp` với VerifyOTP nên thừa hưởng nguyên bộ đếm 5-lần-sai; service phải `noRollbackFor = BusinessRuleViolationException` nếu không bộ đếm bị rollback |
 
 **ASSUMPTIONS dùng chung:** A1 login identifier = phone hoặc email (ERD cả 2 UK;
 ops chỉ nói "Credentials") · A2 transport = Bearer JWT (RULE-01-01 chỉ nói
@@ -73,7 +79,10 @@ Implementation kiểm tra điều kiện auto-unlock ngay tại lần `Login`/`R
 tiếp (lazy, không cần job nền riêng) — xem C4/C5. Assumption A5 bản gốc (loại
 suy "ERD mâu thuẫn FSM-1, không có auto-unlock") là **sai**, đã sửa · A6 resend cho account đã ACTIVE
 → từ chối (hiển nhiên từ FSM) · A7 login `role` trả về là role chính
-(`users.role`); đa-role qua `user_roles` chưa đưa vào v1.
+(`users.role`); đa-role qua `user_roles` chưa đưa vào v1 · **A8 (mới
+2026-09-16)** Forgot/Reset Password là operation hợp lệ dù `01-business-operations.md`
+không liệt kê — căn cứ ERD `otps.purpose = PASSWORD_RESET` + nhu cầu thực tế của
+RULE-01-07 (tài khoản bị auto-lock cần lối thoát). Cần PO xác nhận (Q12).
 
 ---
 
@@ -244,6 +253,42 @@ suy "ERD mâu thuẫn FSM-1, không có auto-unlock") là **sai**, đã sửa ·
 - **Idempotency:** như register (BUSINESS_RULE_VIOLATION, TBD Q8).
 - **State transition:** `[*] → ACTIVE` + `AccountActivated`.
 
+### C8. `POST /auth/forgot-password` (implemented 2026-09-16 — ASSUMPTION A8)
+
+- **Purpose:** phát OTP `purpose = PASSWORD_RESET` gửi tới email.
+- **Auth:** Public. **Authorization:** không có — cố ý (xem mục Status).
+- **Request:** `{email}`. **Response 200:** `{sent: true}`.
+- **Status:** `200` cho **mọi** trường hợp — email không tồn tại, account
+  `PENDING_VERIFICATION`, `DEACTIVATED` đều trả `{sent:true}` mà không gửi gì.
+  · `400 VALIDATION_FAILED` chỉ khi email sai định dạng.
+  Lý do: trả `404`/`400` theo trạng thái account = biến endpoint thành máy dò
+  email đã đăng ký (Q11). Đây là **ngoại lệ có chủ đích** so với C2/C3 vốn trả
+  404 — chấp nhận vì C2/C3 chỉ chạy trong luồng đăng ký người gọi vừa tự tạo.
+- **Validation:** tái dùng `issueFreshOtp` — cooldown 60s (RULE-01-04), 5 lần/giờ
+  (RULE-01-05), vô hiệu OTP `PASSWORD_RESET` cũ. Guard vi phạm vẫn ném
+  `400 BUSINESS_RULE_VIOLATION` (lộ ít hơn nhiều so với lộ sự tồn tại của email).
+- **Idempotency:** non-idempotent về hiệu ứng, response bất biến.
+- **State transition:** none.
+
+### C9. `POST /auth/reset-password` (implemented 2026-09-16 — ASSUMPTION A8)
+
+- **Purpose:** đổi `password_hash` sau khi OTP `PASSWORD_RESET` hợp lệ.
+- **Auth:** Public (OTP tự chứng thực). **Authorization:** owner của OTP.
+- **Request:** `{email, otpCode (6 số), newPassword}`. **Response 200:** `{success: true}`.
+- **Status:** `200` · `400 VALIDATION_FAILED` · `400 BUSINESS_RULE_VIOLATION`
+  (sai/hết hạn OTP — RULE-01-02; khoá phiên sau 5 lần sai — RULE-01-05; mật khẩu
+  ngắn hơn ngưỡng — RULE-01-09) · `404 RESOURCE_NOT_FOUND` không có OTP/account
+  · `409 CONCURRENCY_CONFLICT` account bị sửa song song (optimistic lock).
+- **Validation:** dùng chung helper `consumeOtp` với C2 → thừa hưởng nguyên bộ
+  đếm attempt + pessimistic lock. **Bắt buộc** `@Transactional(noRollbackFor =
+  BusinessRuleViolationException.class)` như C2/C4: `attempt_count`/`locked_until`
+  được ghi *trước* khi ném guard, không commit thì RULE-01-05 không bao giờ kích hoạt.
+- **Idempotency:** non-idempotent (OTP `is_used=true`, gọi lại → 400).
+- **State transition:** `LOCKED → ACTIVE` khi `lock_reason = AUTO_FAILED_LOGIN`
+  (RULE-01-07, qua `AccountTransitionHandler`); `ADMIN_LOCK` **không** được gỡ
+  bằng đường này. `failed_login_attempts` reset 0, `must_change_password` về false.
+  Ghi outbox event `PasswordReset`.
+
 ---
 
 ## D. Security & reliability (chỉ điểm có gốc docs)
@@ -284,7 +329,8 @@ suy "ERD mâu thuẫn FSM-1, không có auto-unlock") là **sai**, đã sửa ·
 | Q8 | Idempotency keys cho register/createStaff (hiện chỉ có 409 nhờ UK) | TBD (PO) | docs không có key |
 | Q9 | Ma trận role × scope bắt buộc cho CreateStaff (role nào cần org/store, CUSTOMER có tạo qua đây không) | TBD (PO) | RULE-02-02/05 cho khung, thiếu ma trận chi tiết |
 | Q10 | Audit log cho auth (register/verify/login/createStaff) — chỉ ReactivateAccount bắt buộc reason + audit (FSM 1) | TBD (PO) | FSM 1 + Module 25 |
-| Q11 | Anti-enumeration (404 vs 401 gộp), brute-force thresholds IP-level, CAPTCHA | TBD (PO) | docs chỉ có ngưỡng phone-level |
+| Q11 | Anti-enumeration (404 vs 401 gộp), brute-force thresholds IP-level, CAPTCHA | TBD (PO) — riêng `/auth/forgot-password` đã chốt trả 200 đồng nhất (C8) | docs chỉ có ngưỡng phone-level |
+| Q12 | Forgot/Reset Password có thuộc v1 không? | **DECIDED 2026-09-16** — có, xem C8/C9, nhãn ASSUMPTION A8. Cần PO bổ sung 2 operation này vào `01-business-operations.md` để gỡ nhãn A8. Ngưỡng độ dài mật khẩu dùng RULE-01-09 | ERD `otps.purpose = PASSWORD_RESET`, RULE-01-07 |
 
 ---
 

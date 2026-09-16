@@ -8,9 +8,9 @@
 # Traceability legend: CONFIRMED = in docs (source cited) / ASSUMPTION (A#) =
 # reasonable inference, unconfirmed / TBD (Q#) = needs PO/Product (see
 # ../auth-v1.md section E). No `servers` is declared (base URL/versioning TBD Q1,
-# defaults to "/"). No token TTLs (TBD Q4), no password constraints (TBD Q5).
-# No forgot/reset endpoints (unconfirmed ops). No /auth/refresh endpoint
-# (TBD Q3: insufficient contract).
+# defaults to "/"). No token TTLs (TBD Q4).
+# Forgot/reset password: implemented 2026-09-16 (Q12 DECIDED), see /auth/forgot-password
+# and /auth/reset-password below. /auth/refresh: implemented 2026-09-14 (Q3 DECIDED).
 
 openapi: 3.1.0
 info:
@@ -21,8 +21,8 @@ info:
     04 glossary+D-04, 05 domain 4.1, 06 ERD accounts/otps/users).
     Base URL/versioning (Q1) is TBD: no `servers` is declared
     (defaults to "/") and paths below are PROPOSED. Token TTLs (Q4), password
-    policy (Q5) intentionally absent. No forgot/reset (unconfirmed ops). No
-    /auth/refresh endpoint (Q3: insufficient contract). Error envelope follows
+    policy (Q5) intentionally absent. Forgot/reset password added 2026-09-16
+    (Q12 DECIDED); /auth/refresh added 2026-09-14 (Q3 DECIDED). Error envelope follows
     docs/convention/backend/04-exception-handling
     ({success, errorCode, message, statusCode, timestamp, traceId}); 410/423/429
     are PROPOSED extensions not yet in that convention. LOCKED has no
@@ -270,6 +270,87 @@ paths:
                 $ref: '#/components/schemas/LogoutResponse'
         '401':
           $ref: '#/components/responses/Unauthorized'
+  /auth/forgot-password:
+    post:
+      tags: [Auth]
+      summary: Request password-reset OTP (ForgotPassword)
+      description: >-
+        Issues an OTP with purpose=PASSWORD_RESET reusing the registration OTP
+        rules (RULE-01-02 TTL 300s, RULE-01-04 cooldown 60s, RULE-01-05 max
+        5/hour). ASSUMPTION A8 — the operation itself is not in
+        01-business-operations.md; only the ERD enum otps.purpose=PASSWORD_RESET
+        confirms the intent (Q12 DECIDED 2026-09-16).
+      operationId: forgotPassword
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ForgotPasswordRequest'
+      responses:
+        '200':
+          description: >-
+            Always 200 with sent=true, whether or not the email exists and
+            whatever the account status is. Anti-enumeration (Q11) — a 404 here
+            would reveal which emails are registered.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ForgotPasswordResponse'
+        '400':
+          description: VALIDATION_FAILED (malformed email).
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+  /auth/reset-password:
+    post:
+      tags: [Auth]
+      summary: Reset password with OTP (ResetPassword)
+      description: >-
+        Consumes the PASSWORD_RESET OTP and replaces the password hash. Also
+        clears failed_login_attempts and lifts a LOCKED/AUTO_FAILED_LOGIN lock
+        (RULE-01-07) — this is the documented way out of an auto-lock. Does NOT
+        lift ADMIN_LOCK. ASSUMPTION A8 (Q12 DECIDED 2026-09-16).
+      operationId: resetPassword
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ResetPasswordRequest'
+      responses:
+        '200':
+          description: Password replaced, OTP marked used.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ResetPasswordResponse'
+        '400':
+          description: >-
+            VALIDATION_FAILED, or BUSINESS_RULE_VIOLATION for any of: wrong or
+            expired OTP (RULE-01-02), verification session locked after 5 wrong
+            attempts (RULE-01-05), or new password shorter than the configured
+            minimum (RULE-01-09). Same 400-for-every-guard decision as
+            /auth/verify-otp (2026-09-13).
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '404':
+          description: No PASSWORD_RESET OTP or no account for this email.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '409':
+          description: CONCURRENCY_CONFLICT — the account row changed during the reset (optimistic lock).
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
   /staff-accounts:
     post:
       tags: [StaffProvisioning]
@@ -395,6 +476,38 @@ components:
           format: uuid
         status:
           $ref: '#/components/schemas/AccountStatus'
+    ForgotPasswordRequest:
+      type: object
+      required: [email]
+      properties:
+        email:
+          type: string
+          format: email
+    ForgotPasswordResponse:
+      type: object
+      required: [sent]
+      properties:
+        sent:
+          type: boolean
+          description: Always true — see the 200 description (anti-enumeration, Q11).
+    ResetPasswordRequest:
+      type: object
+      required: [email, otpCode, newPassword]
+      properties:
+        email:
+          type: string
+          format: email
+        otpCode:
+          $ref: '#/components/schemas/OtpCode'
+        newPassword:
+          type: string
+          description: Minimum length enforced server-side (RULE-01-09). Full policy still TBD Q5.
+    ResetPasswordResponse:
+      type: object
+      required: [success]
+      properties:
+        success:
+          type: boolean
     LoginRequest:
       type: object
       required: [email, password]

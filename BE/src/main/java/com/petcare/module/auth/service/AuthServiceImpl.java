@@ -44,6 +44,7 @@ import org.springframework.orm.ObjectOptimisticLockingFailureException;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.util.StringUtils;
 
 import java.security.SecureRandom;
 import java.time.LocalDateTime;
@@ -67,6 +68,9 @@ public class AuthServiceImpl implements AuthService {
     private static final int OTP_RESEND_COOLDOWN_SECONDS = 60;
     private static final int OTP_MAX_RESEND_PER_HOUR = 5;
     private static final int PASSWORD_MIN_LENGTH = 8;
+
+    private static final String EMAIL_TAKEN = "Email đã được sử dụng";
+    private static final String PHONE_TAKEN = "Số điện thoại đã được sử dụng";
     private static final int LOGIN_MAX_FAILED_ATTEMPTS = 5;
     private static final int LOGIN_LOCKOUT_MINUTES = 15;
 
@@ -89,17 +93,25 @@ public class AuthServiceImpl implements AuthService {
                     "Mật khẩu phải có ít nhất " + PASSWORD_MIN_LENGTH + " ký tự");
         }
         if (accountRepository.existsByEmail(request.email())) {
-            throw new BusinessRuleViolationException("RULE-01-10", "Email đã được sử dụng");
+            throw new BusinessRuleViolationException("RULE-01-10", EMAIL_TAKEN);
+        }
+        // phone là optional nhưng UNIQUE ở DB — thiếu pre-check thì lỗi rơi xuống
+        // constraint và trả 500 kèm nguyên câu SQL cho client.
+        if (StringUtils.hasText(request.phone()) && accountRepository.existsByPhone(request.phone())) {
+            throw new BusinessRuleViolationException("RULE-01-10", PHONE_TAKEN);
         }
 
         Account account = new Account(request.email(), request.phone(), passwordEncoder.encode(request.password()));
         try {
-            account = accountRepository.save(account);
+            // saveAndFlush (không phải save): save() chỉ đưa entity vào persistence
+            // context, INSERT thật chạy lúc flush ở cuối transaction — tức là NGOÀI
+            // try/catch này, nên DataIntegrityViolationException thoát ra thành 500.
+            account = accountRepository.saveAndFlush(account);
         } catch (DataIntegrityViolationException ex) {
-            // §5.1 Concurrency: 2 request register cùng email gần như đồng thời — pre-check
-            // ở trên có thể đều thấy "chưa tồn tại" (race). UNIQUE constraint ở DB là guard
-            // thật; request thua ở đây nhận lỗi nghiệp vụ sạch thay vì 500.
-            throw new BusinessRuleViolationException("RULE-01-10", "Email đã được sử dụng");
+            // §5.1 Concurrency: 2 request register cùng email/phone gần như đồng thời —
+            // pre-check ở trên có thể đều thấy "chưa tồn tại" (race). UNIQUE constraint ở
+            // DB là guard thật; request thua ở đây nhận lỗi nghiệp vụ sạch thay vì 500.
+            throw new BusinessRuleViolationException("RULE-01-10", constraintMessage(ex));
         }
 
         User user = userProvisioningService.createCustomerProfile(account.getId(), request.name());
@@ -241,7 +253,7 @@ public class AuthServiceImpl implements AuthService {
     }
 
     /**
-     * C6 ForgotPassword — phát OTP mục đích PASSWORD_RESET.
+     * C8 ForgotPassword (docs/api/auth-v1.md C8, ASSUMPTION A8) — phát OTP mục đích PASSWORD_RESET.
      *
      * <p>Email lạ hoặc tài khoản chưa xác thực/đã vô hiệu hoá đều trả empty
      * thay vì ném lỗi: phản hồi phải giống hệt nhau ở mọi trường hợp, nếu
@@ -271,11 +283,15 @@ public class AuthServiceImpl implements AuthService {
     }
 
     /**
-     * C7 ResetPassword — đổi mật khẩu sau khi OTP PASSWORD_RESET hợp lệ.
+     * C9 ResetPassword (docs/api/auth-v1.md C9, ASSUMPTION A8) — đổi mật khẩu sau khi OTP PASSWORD_RESET hợp lệ.
      * Đặt lại mật khẩu cũng gỡ luôn khoá AUTO_FAILED_LOGIN.
+     *
+     * <p>noRollbackFor: consumeOtp ghi attempt_count/locked_until rồi mới ném
+     * guard — phải commit thì đủ 5 lần sai mới khoá được phiên (RULE-01-05),
+     * giống verifyOtp. Không rollback ở đây là cố ý.
      */
     @Override
-    @Transactional
+    @Transactional(noRollbackFor = BusinessRuleViolationException.class)
     public void resetPassword(ResetPasswordRequest request) {
         if (request.newPassword().length() < PASSWORD_MIN_LENGTH) {
             throw new BusinessRuleViolationException("RULE-01-09",
@@ -442,6 +458,16 @@ public class AuthServiceImpl implements AuthService {
                     SecurityScope.STORE;
             case CUSTOMER -> SecurityScope.CUSTOMER;
         };
+    }
+
+    /**
+     * Phân biệt UNIQUE nào vừa vỡ để trả đúng thông điệp cho người dùng.
+     * Chỉ đọc tên constraint — không bao giờ ghép nguyên message của DB vào
+     * response, vì nó chứa cả câu SQL lẫn giá trị của tài khoản khác.
+     */
+    private String constraintMessage(DataIntegrityViolationException ex) {
+        String raw = ex.getMostSpecificCause().getMessage();
+        return raw != null && raw.contains("uq_accounts_phone") ? PHONE_TAKEN : EMAIL_TAKEN;
     }
 
     private String generateOtpCode() {

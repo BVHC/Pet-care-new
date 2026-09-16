@@ -10,5 +10,8 @@ public interface AccountRepository extends JpaRepository<Account, UUID> {
 
     boolean existsByEmail(String email);
 
+    /** RULE-01-10: phone là UNIQUE ở DB (uq_accounts_phone) nên phải pre-check như email. */
+    boolean existsByPhone(String phone);
+
     Optional<Account> findByEmail(String email);
 }

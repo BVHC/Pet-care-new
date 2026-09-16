@@ -34,35 +34,77 @@ const STRENGTH_META = [
 ];
 
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+/** SDT VN: 0 + 9 so, cho phep khoang trang/gach khi go */
+const PHONE_RE = /^0\d{9}$/;
+
+type Field = 'name' | 'email' | 'phone' | 'password' | 'confirmPassword';
+type Errors = Partial<Record<Field, string>>;
+
+/** Validate 1 field — dung chung cho onBlur va luc submit. */
+function validateField(field: Field, f: Record<Field, string>): string | undefined {
+  switch (field) {
+    case 'name':
+      return f.name.trim() ? undefined : 'Vui lòng nhập họ tên.';
+    case 'email':
+      if (!f.email.trim()) return 'Vui lòng nhập email.';
+      return EMAIL_RE.test(f.email.trim()) ? undefined : 'Email không hợp lệ (ví dụ: ban@email.com).';
+    case 'phone':
+      if (!f.phone.trim()) return undefined; // khong bat buoc
+      return PHONE_RE.test(f.phone.replace(/[\s-]/g, '')) ? undefined : 'Số điện thoại phải gồm 10 số và bắt đầu bằng 0.';
+    case 'password':
+      if (!f.password) return 'Vui lòng nhập mật khẩu.';
+      return f.password.length >= PASSWORD_MIN ? undefined : `Mật khẩu phải có ít nhất ${PASSWORD_MIN} ký tự.`;
+    case 'confirmPassword':
+      if (!f.confirmPassword) return 'Vui lòng nhập lại mật khẩu.';
+      return f.password === f.confirmPassword ? undefined : 'Mật khẩu xác nhận chưa khớp.';
+  }
+}
+
+/**
+ * Doi loi BE thanh loi gan tren dung o nhap. BE tra 2 dang:
+ *  - BUSINESS_RULE_VIOLATION: cau tieng Viet ("Email đã được sử dụng")
+ *  - VALIDATION_FAILED: "<field>: <mo ta>" theo Bean Validation
+ */
+function fieldFromApiError(message: string): Field | null {
+  const m = message.toLowerCase();
+  if (m.startsWith('email:') || m.includes('email đã được sử dụng')) return 'email';
+  if (m.startsWith('phone:') || m.includes('số điện thoại đã được sử dụng')) return 'phone';
+  if (m.startsWith('password:') || m.includes('mật khẩu')) return 'password';
+  if (m.startsWith('name:')) return 'name';
+  return null;
+}
 
 export function RegisterPage() {
   const navigate = useNavigate();
   const register = useAuthStore((s) => s.register);
   const [form, setForm] = useState({ name: '', email: '', phone: '', password: '', confirmPassword: '' });
+  const [errors, setErrors] = useState<Errors>({});
   const [agreed, setAgreed] = useState(false);
   const [loading, setLoading] = useState(false);
+
+  /** Go chu thi xoa loi cua chinh o do — khong bat nguoi dung nhin loi cu. */
+  const setField = (field: Field, value: string) => {
+    setForm((prev) => ({ ...prev, [field]: value }));
+    setErrors((prev) => (prev[field] ? { ...prev, [field]: undefined } : prev));
+  };
+
+  const blurField = (field: Field) =>
+    setErrors((prev) => ({ ...prev, [field]: validateField(field, { ...form }) }));
 
   const strength = strengthOf(form.password);
   const mismatch = form.confirmPassword.length > 0 && form.password !== form.confirmPassword;
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!form.name || !form.email || !form.password) {
-      toast.error('Vui lòng nhập đầy đủ họ tên, email và mật khẩu!');
-      return;
-    }
-    if (!EMAIL_RE.test(form.email.trim())) {
-      toast.error('Email không hợp lệ!');
-      return;
-    }
-    if (form.password.length < PASSWORD_MIN) {
-      toast.error(`Mật khẩu phải có ít nhất ${PASSWORD_MIN} ký tự!`);
-      return;
-    }
-    if (form.password !== form.confirmPassword) {
-      toast.error('Mật khẩu xác nhận không khớp!');
-      return;
-    }
+
+    const found: Errors = {};
+    (['name', 'email', 'phone', 'password', 'confirmPassword'] as Field[]).forEach((f) => {
+      const msg = validateField(f, form);
+      if (msg) found[f] = msg;
+    });
+    setErrors(found);
+    if (Object.keys(found).length > 0) return;
+
     if (!agreed) {
       toast.error('Vui lòng đồng ý với điều khoản sử dụng!');
       return;
@@ -73,7 +115,7 @@ export function RegisterPage() {
       const email = form.email.trim();
       await register({
         email,
-        phone: form.phone.trim() || undefined,
+        phone: form.phone.replace(/[\s-]/g, '') || undefined,
         password: form.password,
         name: form.name.trim(),
       });
@@ -81,7 +123,11 @@ export function RegisterPage() {
       // BE tao account o trang thai PENDING_VERIFICATION -> bat buoc qua buoc OTP.
       navigate('/auth/verify-otp', { state: { email } });
     } catch (error) {
-      toast.error(apiErrorMessage(error, 'Đăng ký thất bại, vui lòng thử lại.'));
+      const message = apiErrorMessage(error, 'Đăng ký thất bại, vui lòng thử lại.');
+      const field = fieldFromApiError(message);
+      // Loi thuoc ve mot o cu the -> gan ngay duoi o do; con lai moi dung toast.
+      if (field) setErrors({ [field]: message });
+      else toast.error(message);
     } finally {
       setLoading(false);
     }
@@ -120,7 +166,9 @@ export function RegisterPage() {
           icon={<User size={19} strokeWidth={1.7} />}
           autoComplete="name"
           value={form.name}
-          onChange={(v) => setForm({ ...form, name: v })}
+          onChange={(v) => setField('name', v)}
+          onBlur={() => blurField('name')}
+          error={errors.name}
           placeholder="Nguyễn Văn A"
         />
         <AuthField
@@ -128,7 +176,9 @@ export function RegisterPage() {
           icon={<Mail size={19} strokeWidth={1.7} />}
           autoComplete="email"
           value={form.email}
-          onChange={(v) => setForm({ ...form, email: v })}
+          onChange={(v) => setField('email', v)}
+          onBlur={() => blurField('email')}
+          error={errors.email}
           placeholder="ban@email.com"
         />
         <AuthField
@@ -137,7 +187,9 @@ export function RegisterPage() {
           type="tel"
           autoComplete="tel"
           value={form.phone}
-          onChange={(v) => setForm({ ...form, phone: v })}
+          onChange={(v) => setField('phone', v)}
+          onBlur={() => blurField('phone')}
+          error={errors.phone}
           placeholder="0901 234 567"
           action={<span className="text-[12.5px] font-semibold text-[#a3968a]">Không bắt buộc</span>}
         />
@@ -149,7 +201,9 @@ export function RegisterPage() {
             type="password"
             autoComplete="new-password"
             value={form.password}
-            onChange={(v) => setForm({ ...form, password: v })}
+            onChange={(v) => setField('password', v)}
+            onBlur={() => blurField('password')}
+            error={errors.password}
             placeholder={`Ít nhất ${PASSWORD_MIN} ký tự`}
           />
           {/* Thanh do do manh mat khau */}
@@ -177,10 +231,11 @@ export function RegisterPage() {
             type="password"
             autoComplete="new-password"
             value={form.confirmPassword}
-            onChange={(v) => setForm({ ...form, confirmPassword: v })}
+            onChange={(v) => setField('confirmPassword', v)}
+            onBlur={() => blurField('confirmPassword')}
+            error={errors.confirmPassword ?? (mismatch ? 'Mật khẩu xác nhận chưa khớp.' : undefined)}
             placeholder="Nhập lại mật khẩu"
           />
-          {mismatch && <p className="mt-2 text-[12.5px] font-semibold text-[#d32f2f]">Mật khẩu xác nhận chưa khớp.</p>}
         </div>
 
         <label className="flex cursor-pointer items-start gap-2.5 pt-1 pb-5 text-[13.5px] leading-[1.5] text-[#7a6a5d]">

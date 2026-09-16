@@ -97,7 +97,7 @@ public class AuthController {
     }
 
     /**
-     * C6 ForgotPassword — luôn 200 kể cả email không tồn tại, để không lộ
+     * C8 ForgotPassword — luôn 200 kể cả email không tồn tại, để không lộ
      * email nào đã đăng ký (xử lý ở AuthServiceImpl.forgotPassword).
      */
     @PostMapping("/forgot-password")

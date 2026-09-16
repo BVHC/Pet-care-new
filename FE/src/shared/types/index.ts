@@ -292,7 +292,7 @@ export interface MedicalRecord {
   examinationDate: string;
   chiefComplaint?: string;
   symptoms?: string[];
-  examinationResults?: Record<string, any>;
+  examinationResults?: Record<string, unknown>;
   diagnosis?: string;
   treatmentPlan?: string;
   status: string;
