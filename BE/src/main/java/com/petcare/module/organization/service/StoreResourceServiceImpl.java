@@ -1,6 +1,7 @@
 package com.petcare.module.organization.service;
 
 import com.petcare.module.organization.dto.CreateStoreResourceRequest;
+import com.petcare.module.organization.dto.StoreResourceListResponse;
 import com.petcare.module.organization.dto.StoreResourceResponse;
 import com.petcare.module.organization.dto.UpdateStoreResourceRequest;
 import com.petcare.module.organization.entity.Store;
@@ -107,5 +108,15 @@ public class StoreResourceServiceImpl implements StoreResourceService {
 
         resource = storeResourceRepository.save(resource);
         return storeResourceMapper.toResponse(resource);
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public StoreResourceListResponse listResources(UUID storeId, UserPrincipal actor) {
+        Store store = storeRepository.findById(storeId)
+                .orElseThrow(() -> new ResourceNotFoundException("Store", storeId));
+        RoleScopeGuard.assertCanManageStore(actor, store.getOrganizationId(), storeId);
+
+        return storeResourceMapper.toListResponse(storeResourceRepository.findAllByStoreId(storeId));
     }
 }
