@@ -1,0 +1,241 @@
+/* /shop — hướng "Shelf Editorial". Chỉ chứa thứ Tailwind utility làm không gọn:
+   slab tối có hạt nhiễu, rail cuộn ngang, bóng ám sắc nâu, shimmer skeleton. */
+
+.slab {
+  position: relative;
+  overflow: hidden;
+  background: var(--color-surface-dark);
+  color: var(--color-text-on-dark);
+}
+
+/* Vệt sáng ấm lệch phải — phá độ phẳng của nền tối. */
+.slab::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background:
+    radial-gradient(60% 90% at 78% 28%, rgba(207, 91, 71, 0.34), transparent 62%),
+    radial-gradient(48% 70% at 12% 84%, rgba(164, 51, 36, 0.24), transparent 66%);
+  pointer-events: none;
+}
+
+/* Hạt nhiễu mịn phủ toàn slab. */
+.slab::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  opacity: 0.05;
+  pointer-events: none;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='160' height='160'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.85' numOctaves='3'/%3E%3C/filter%3E%3Crect width='160' height='160' filter='url(%23n)'/%3E%3C/svg%3E");
+}
+
+.slabInner {
+  position: relative;
+  z-index: 1;
+}
+
+.slabDog {
+  filter: drop-shadow(0 26px 44px rgba(0, 0, 0, 0.42));
+}
+
+.slabDoodle {
+  position: absolute;
+  opacity: 0.16;
+  pointer-events: none;
+  user-select: none;
+}
+
+/* Dải danh mục nằm trong thanh lọc dính: cuộn ngang, ẩn thanh cuộn. */
+.catStrip {
+  display: flex;
+  gap: 6px;
+  min-width: 0;
+  overflow-x: auto;
+  scrollbar-width: none;
+  scroll-snap-type: x proximity;
+  -webkit-mask-image: linear-gradient(
+    to right,
+    transparent,
+    #000 14px,
+    #000 calc(100% - 14px),
+    transparent
+  );
+  mask-image: linear-gradient(
+    to right,
+    transparent,
+    #000 14px,
+    #000 calc(100% - 14px),
+    transparent
+  );
+}
+
+.catStrip::-webkit-scrollbar {
+  display: none;
+}
+
+.catChip {
+  scroll-snap-align: start;
+  flex: 0 0 auto;
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  padding: 7px 13px 7px 9px;
+  border-radius: 999px;
+  font-size: 13px;
+  font-weight: 700;
+  white-space: nowrap;
+  color: var(--color-text-primary);
+  background: var(--color-surface-2);
+  transition:
+    background-color 0.2s ease,
+    color 0.2s ease;
+}
+
+.catChip:hover {
+  background: var(--color-accent-soft);
+  color: var(--color-accent);
+}
+
+.catChip img {
+  width: 19px;
+  height: 19px;
+  object-fit: contain;
+}
+
+.catChipActive {
+  background: var(--color-accent);
+  color: #fff;
+}
+
+/* Line-art là mực nâu đậm — đảo sang trắng khi chip đang bật. */
+.catChipActive img {
+  filter: brightness(0) invert(1);
+}
+
+/* Thanh lọc dính — có bóng khi đã dính để tách khỏi nền kem phía sau. */
+.filterBar {
+  position: sticky;
+  top: 61px;
+  z-index: 40;
+  border-bottom: 1px solid transparent;
+  background: color-mix(in srgb, var(--color-surface-page) 88%, transparent);
+  backdrop-filter: blur(10px);
+  transition:
+    box-shadow 0.25s ease,
+    border-color 0.25s ease;
+}
+
+.filterBarStuck {
+  border-bottom-color: var(--color-border-default);
+  box-shadow: 0 10px 22px -18px rgba(56, 36, 23, 0.85);
+}
+
+/* Thẻ sản phẩm: không viền, chỉ bóng ám sắc accent — nổi hẳn khi hover. */
+.card {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  border-radius: 14px;
+  overflow: hidden;
+  background: var(--color-surface-card);
+  box-shadow:
+    0 1px 2px rgba(56, 36, 23, 0.06),
+    0 8px 18px -14px rgba(56, 36, 23, 0.4);
+  transition:
+    transform 0.4s cubic-bezier(0.32, 0.72, 0, 1),
+    box-shadow 0.4s cubic-bezier(0.32, 0.72, 0, 1);
+}
+
+.card:hover {
+  transform: translateY(-5px);
+  box-shadow:
+    0 2px 4px rgba(56, 36, 23, 0.07),
+    0 26px 40px -20px rgba(164, 51, 36, 0.45);
+}
+
+.card:focus-within {
+  outline: 2px solid var(--color-accent);
+  outline-offset: 3px;
+}
+
+/* Ảnh packshot nền trắng → contain trên nền kem, không cắt cúp. */
+.cardMedia {
+  position: relative;
+  display: block;
+  aspect-ratio: 4 / 3;
+  overflow: hidden;
+  background: var(--color-surface-1);
+}
+
+.cardMedia img {
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+  padding: 8px;
+  mix-blend-mode: multiply;
+  transition: transform 0.6s cubic-bezier(0.32, 0.72, 0, 1);
+}
+
+.card:hover .cardMedia img {
+  transform: scale(1.06);
+}
+
+/* Nút thêm giỏ trượt lên từ mép dưới ảnh — phủ lên ảnh nên thân thẻ không chừa
+   khoảng trống, các thẻ trong cùng hàng vẫn thẳng nhịp. */
+.cardAction {
+  position: absolute;
+  right: 8px;
+  bottom: 8px;
+  left: 8px;
+  transform: translateY(calc(100% + 8px));
+  opacity: 0;
+  transition:
+    transform 0.4s cubic-bezier(0.32, 0.72, 0, 1),
+    opacity 0.25s ease;
+}
+
+.card:hover .cardAction,
+.card:focus-within .cardAction {
+  transform: translateY(0);
+  opacity: 1;
+}
+
+/* Thiết bị cảm ứng không có hover → hiện sẵn. */
+@media (hover: none) {
+  .cardAction {
+    transform: none;
+    opacity: 1;
+  }
+}
+
+/* Skeleton khi đổi bộ lọc. */
+.skeleton {
+  border-radius: 14px;
+  background: linear-gradient(
+    100deg,
+    var(--color-surface-2) 30%,
+    #fffaf3 48%,
+    var(--color-surface-2) 66%
+  );
+  background-size: 260% 100%;
+  animation: shimmer 1.25s linear infinite;
+}
+
+@keyframes shimmer {
+  to {
+    background-position: -160% 0;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .card,
+  .cardMedia img,
+  .cardAction,
+  .catChip {
+    transition: none;
+  }
+  .skeleton {
+    animation: none;
+  }
+}
