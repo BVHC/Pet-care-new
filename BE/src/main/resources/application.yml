@@ -32,8 +32,9 @@ spring:
   mail:
     host: ${MAIL_HOST:smtp.gmail.com}
     port: ${MAIL_PORT:587}
-    username: ${MAIL_USERNAME}
-    password: ${MAIL_PASSWORD}
+    # Bỏ trống ở máy dev -> LogEmailGateway in OTP ra console thay vì gửi SMTP.
+    username: ${MAIL_USERNAME:}
+    password: ${MAIL_PASSWORD:}
     properties:
       mail.smtp.auth: true
       mail.smtp.starttls.enable: true
@@ -44,6 +45,9 @@ jwt:
   refresh-token-ttl-days: 30
 
 app:
+  # Seed tài khoản mặc định cho dev/demo (DevAccountSeeder) — TẮT ở production.
+  dev-seed:
+    enabled: ${APP_DEV_SEED:true}
   cors:
     allowed-origins: ${CORS_ALLOWED_ORIGINS:http://localhost:5173,http://localhost:3000}
   security:
@@ -59,9 +63,14 @@ app:
   otp-expiry:
     enabled: true
     cron: "0 */5 * * * *"
+  caregiver:
+    invitation-ttl-days: 7
+  caregiver-expiry:
+    enabled: true
+    cron: "0 */15 * * * *"
 
 server:
-  port: 8080
+  port: ${SERVER_PORT:8081}
 
 management:
   endpoints:

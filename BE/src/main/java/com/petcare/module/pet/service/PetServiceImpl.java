@@ -22,6 +22,7 @@ import org.springframework.orm.ObjectOptimisticLockingFailureException;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.time.LocalDateTime;
 import java.util.UUID;
 
 @Service
@@ -32,6 +33,7 @@ public class PetServiceImpl implements PetService {
     private final PetMapper mapper;
     private final UserProvisioningService users;
     private final OutboxEventRepository outbox;
+    private final PetAccessGuard accessGuard;
 
     @Override
     @Transactional
@@ -62,16 +64,15 @@ public class PetServiceImpl implements PetService {
     @Transactional(readOnly = true)
     public PetResponse detail(UUID me, UUID id) {
         Pet pet = pets.findById(id).orElseThrow(() -> new ResourceNotFoundException("Pet", id));
-        if (!pet.getOwnerId().equals(me)) {
-            throw new AccessDeniedScopeException("PET", "OWNER");
-        }
+        accessGuard.requireCanViewPet(me, pet); // RULE-04-09
         return mapper.toResponse(pet);
     }
 
     @Override
     @Transactional(readOnly = true)
     public Page<PetResponse> list(UUID me, Pageable pageable) {
-        return pets.findByOwnerId(me, pageable).map(mapper::toResponse);
+        // RULE-04-09: pet mình sở hữu + pet được ủy quyền còn hiệu lực.
+        return pets.findAccessibleBy(me, LocalDateTime.now(), pageable).map(mapper::toResponse);
     }
 
     @Override

@@ -46,7 +46,8 @@ public class SecurityConfig {
                 // anyRequest().authenticated() để tái dùng JwtAuthenticationFilter +
                 // RestAuthenticationEntryPoint (401 tự động khi thiếu/sai/blacklist).
                 .requestMatchers("/api/auth/register", "/api/auth/verify-otp", "/api/auth/otp/resend",
-                        "/api/auth/login", "/api/auth/refresh").permitAll()
+                        "/api/auth/login", "/api/auth/refresh",
+                        "/api/auth/forgot-password", "/api/auth/reset-password").permitAll()
                 .requestMatchers("/actuator/health").permitAll()
                 .requestMatchers("/actuator/info").permitAll()
                 // Swagger UI / OpenAPI (springdoc) — bật ở mọi môi trường theo yêu cầu, không

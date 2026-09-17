@@ -1,5 +1,6 @@
 package com.petcare.module.auth.service;
 
+import com.petcare.module.auth.dto.ForgotPasswordRequest;
 import com.petcare.module.auth.dto.LoginRequest;
 import com.petcare.module.auth.dto.LoginResponse;
 import com.petcare.module.auth.dto.LogoutRequest;
@@ -8,6 +9,7 @@ import com.petcare.module.auth.dto.RefreshTokenRequest;
 import com.petcare.module.auth.dto.RefreshTokenResponse;
 import com.petcare.module.auth.dto.RegisterRequest;
 import com.petcare.module.auth.dto.ResendOtpRequest;
+import com.petcare.module.auth.dto.ResetPasswordRequest;
 import com.petcare.module.auth.dto.VerifyOtpRequest;
 import com.petcare.module.auth.entity.Account;
 import com.petcare.module.auth.entity.Otp;
@@ -42,6 +44,7 @@ import org.springframework.orm.ObjectOptimisticLockingFailureException;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.util.StringUtils;
 
 import java.security.SecureRandom;
 import java.time.LocalDateTime;
@@ -50,7 +53,8 @@ import java.util.Optional;
 import java.util.UUID;
 
 /**
- * Module 01 (Auth & OTP) — RegisterAccount + VerifyOTP + ResendOTP.
+ * Module 01 (Auth & OTP) — RegisterAccount + VerifyOTP + ResendOTP +
+ * Login/Logout/Refresh + ForgotPassword/ResetPassword.
  * Guard RULE-ID validate ở Service, ngay trước ghi dữ liệu, trong cùng
  * transaction (docs/convention/backend/06-validation.md).
  */
@@ -64,6 +68,9 @@ public class AuthServiceImpl implements AuthService {
     private static final int OTP_RESEND_COOLDOWN_SECONDS = 60;
     private static final int OTP_MAX_RESEND_PER_HOUR = 5;
     private static final int PASSWORD_MIN_LENGTH = 8;
+
+    private static final String EMAIL_TAKEN = "Email đã được sử dụng";
+    private static final String PHONE_TAKEN = "Số điện thoại đã được sử dụng";
     private static final int LOGIN_MAX_FAILED_ATTEMPTS = 5;
     private static final int LOGIN_LOCKOUT_MINUTES = 15;
 
@@ -86,17 +93,25 @@ public class AuthServiceImpl implements AuthService {
                     "Mật khẩu phải có ít nhất " + PASSWORD_MIN_LENGTH + " ký tự");
         }
         if (accountRepository.existsByEmail(request.email())) {
-            throw new BusinessRuleViolationException("RULE-01-10", "Email đã được sử dụng");
+            throw new BusinessRuleViolationException("RULE-01-10", EMAIL_TAKEN);
+        }
+        // phone là optional nhưng UNIQUE ở DB — thiếu pre-check thì lỗi rơi xuống
+        // constraint và trả 500 kèm nguyên câu SQL cho client.
+        if (StringUtils.hasText(request.phone()) && accountRepository.existsByPhone(request.phone())) {
+            throw new BusinessRuleViolationException("RULE-01-10", PHONE_TAKEN);
         }
 
         Account account = new Account(request.email(), request.phone(), passwordEncoder.encode(request.password()));
         try {
-            account = accountRepository.save(account);
+            // saveAndFlush (không phải save): save() chỉ đưa entity vào persistence
+            // context, INSERT thật chạy lúc flush ở cuối transaction — tức là NGOÀI
+            // try/catch này, nên DataIntegrityViolationException thoát ra thành 500.
+            account = accountRepository.saveAndFlush(account);
         } catch (DataIntegrityViolationException ex) {
-            // §5.1 Concurrency: 2 request register cùng email gần như đồng thời — pre-check
-            // ở trên có thể đều thấy "chưa tồn tại" (race). UNIQUE constraint ở DB là guard
-            // thật; request thua ở đây nhận lỗi nghiệp vụ sạch thay vì 500.
-            throw new BusinessRuleViolationException("RULE-01-10", "Email đã được sử dụng");
+            // §5.1 Concurrency: 2 request register cùng email/phone gần như đồng thời —
+            // pre-check ở trên có thể đều thấy "chưa tồn tại" (race). UNIQUE constraint ở
+            // DB là guard thật; request thua ở đây nhận lỗi nghiệp vụ sạch thay vì 500.
+            throw new BusinessRuleViolationException("RULE-01-10", constraintMessage(ex));
         }
 
         User user = userProvisioningService.createCustomerProfile(account.getId(), request.name());
@@ -122,33 +137,7 @@ public class AuthServiceImpl implements AuthService {
     @Override
     @Transactional(noRollbackFor = BusinessRuleViolationException.class)
     public Account verifyOtp(VerifyOtpRequest request) {
-        Otp otp = otpRepository.findTopByEmailAndPurposeOrderByCreatedAtDesc(request.email(), OtpPurpose.REGISTRATION)
-                .orElseThrow(() -> new ResourceNotFoundException("Otp", request.email()));
-
-        if (otp.isCurrentlyLocked()) {
-            throw new BusinessRuleViolationException("RULE-01-05",
-                    "Phiên xác thực OTP đang bị khoá tạm thời, vui lòng thử lại sau");
-        }
-        if (otp.isUsed() || otp.isExpired()) {
-            throw new BusinessRuleViolationException("RULE-01-02", "OTP đã hết hạn hoặc không còn hiệu lực");
-        }
-
-        if (!otp.getOtpCode().equals(request.otpCode())) {
-            otp.setAttemptCount(otp.getAttemptCount() + 1);
-            if (otp.getAttemptCount() >= OTP_MAX_ATTEMPTS) {
-                otp.setUsed(true);
-                otp.setLockedUntil(LocalDateTime.now().plusMinutes(OTP_LOCKOUT_MINUTES));
-                otpRepository.save(otp);
-                throw new BusinessRuleViolationException("RULE-01-05",
-                        "Nhập sai OTP quá " + OTP_MAX_ATTEMPTS + " lần, phiên xác thực bị khoá "
-                                + OTP_LOCKOUT_MINUTES + " phút");
-            }
-            otpRepository.save(otp);
-            throw new BusinessRuleViolationException("RULE-01-02", "Mã OTP không đúng");
-        }
-
-        otp.setUsed(true);
-        otpRepository.save(otp);
+        consumeOtp(request.email(), OtpPurpose.REGISTRATION, request.otpCode());
 
         Account account = accountRepository.findByEmail(request.email())
                 .orElseThrow(() -> new ResourceNotFoundException("Account", request.email()));
@@ -177,38 +166,7 @@ public class AuthServiceImpl implements AuthService {
                     "Tài khoản đã xác thực, không cần gửi lại OTP");
         }
 
-        Optional<Otp> currentOtp = otpRepository.findTopByEmailAndPurposeOrderByCreatedAtDesc(
-                request.email(), OtpPurpose.REGISTRATION);
-
-        if (currentOtp.isPresent()) {
-            Otp otp = currentOtp.get();
-            if (otp.isCurrentlyLocked()) {
-                throw new BusinessRuleViolationException("RULE-01-05",
-                        "Phiên xác thực OTP đang bị khoá tạm thời, vui lòng thử lại sau");
-            }
-            long secondsSinceLast = ChronoUnit.SECONDS.between(otp.getCreatedAt(), LocalDateTime.now());
-            if (secondsSinceLast < OTP_RESEND_COOLDOWN_SECONDS) {
-                throw new BusinessRuleViolationException("RULE-01-04",
-                        "Vui lòng chờ trước khi gửi lại OTP");
-            }
-        }
-
-        long resentInLastHour = otpRepository.countByEmailAndPurposeAndCreatedAtAfter(
-                request.email(), OtpPurpose.REGISTRATION, LocalDateTime.now().minusHours(1));
-        if (resentInLastHour >= OTP_MAX_RESEND_PER_HOUR) {
-            throw new BusinessRuleViolationException("RULE-01-05",
-                    "Đã vượt giới hạn gửi lại OTP trong 1 giờ");
-        }
-
-        currentOtp.filter(otp -> !otp.isUsed()).ifPresent(otp -> {
-            otp.setUsed(true);
-            otpRepository.save(otp);
-        });
-
-        String otpCode = generateOtpCode();
-        Otp newOtp = new Otp(request.email(), otpCode, OtpPurpose.REGISTRATION,
-                LocalDateTime.now().plusSeconds(OTP_TTL_SECONDS));
-        otpRepository.save(newOtp);
+        String otpCode = issueFreshOtp(request.email(), OtpPurpose.REGISTRATION);
 
         User user = userProvisioningService.findByAccountId(account.getId());
         var notificationTaskId = notificationService.enqueue(user.getId(), NotificationChannel.EMAIL,
@@ -295,6 +253,150 @@ public class AuthServiceImpl implements AuthService {
     }
 
     /**
+     * C8 ForgotPassword (docs/api/auth-v1.md C8, ASSUMPTION A8) — phát OTP mục đích PASSWORD_RESET.
+     *
+     * <p>Email lạ hoặc tài khoản chưa xác thực/đã vô hiệu hoá đều trả empty
+     * thay vì ném lỗi: phản hồi phải giống hệt nhau ở mọi trường hợp, nếu
+     * không kẻ tấn công dò được email nào có trong hệ thống.
+     */
+    @Override
+    @Transactional
+    public Optional<RegistrationOutcome> forgotPassword(ForgotPasswordRequest request) {
+        Optional<Account> found = accountRepository.findByEmail(request.email());
+        if (found.isEmpty()) {
+            return Optional.empty();
+        }
+        Account account = found.get();
+        // LOCKED vẫn cho đặt lại mật khẩu — đó chính là lối thoát khi bị khoá
+        // do nhập sai nhiều lần (RULE-01-07).
+        if (account.getStatus() != AccountStatus.ACTIVE && account.getStatus() != AccountStatus.LOCKED) {
+            return Optional.empty();
+        }
+
+        String otpCode = issueFreshOtp(request.email(), OtpPurpose.PASSWORD_RESET);
+
+        User user = userProvisioningService.findByAccountId(account.getId());
+        var notificationTaskId = notificationService.enqueue(user.getId(), NotificationChannel.EMAIL,
+                "OTP", buildResetEmailContent(otpCode));
+
+        return Optional.of(new RegistrationOutcome(account, notificationTaskId));
+    }
+
+    /**
+     * C9 ResetPassword (docs/api/auth-v1.md C9, ASSUMPTION A8) — đổi mật khẩu sau khi OTP PASSWORD_RESET hợp lệ.
+     * Đặt lại mật khẩu cũng gỡ luôn khoá AUTO_FAILED_LOGIN.
+     *
+     * <p>noRollbackFor: consumeOtp ghi attempt_count/locked_until rồi mới ném
+     * guard — phải commit thì đủ 5 lần sai mới khoá được phiên (RULE-01-05),
+     * giống verifyOtp. Không rollback ở đây là cố ý.
+     */
+    @Override
+    @Transactional(noRollbackFor = BusinessRuleViolationException.class)
+    public void resetPassword(ResetPasswordRequest request) {
+        if (request.newPassword().length() < PASSWORD_MIN_LENGTH) {
+            throw new BusinessRuleViolationException("RULE-01-09",
+                    "Mật khẩu phải có ít nhất " + PASSWORD_MIN_LENGTH + " ký tự");
+        }
+
+        consumeOtp(request.email(), OtpPurpose.PASSWORD_RESET, request.otpCode());
+
+        Account account = accountRepository.findByEmail(request.email())
+                .orElseThrow(() -> new ResourceNotFoundException("Account", request.email()));
+
+        account.setPasswordHash(passwordEncoder.encode(request.newPassword()));
+        account.setMustChangePassword(false);
+        account.setFailedLoginAttempts(0);
+        if (account.getStatus() == AccountStatus.LOCKED && account.getLockReason() == LockReason.AUTO_FAILED_LOGIN) {
+            accountTransitionHandler.validateTransition(AccountStatus.LOCKED, AccountStatus.ACTIVE);
+            account.setStatus(AccountStatus.ACTIVE);
+            account.setLockReason(null);
+            account.setLockedUntil(null);
+        }
+
+        try {
+            account = accountRepository.save(account);
+        } catch (ObjectOptimisticLockingFailureException ex) {
+            throw new ConcurrencyConflictException("Account", account.getId());
+        }
+
+        recordOutboxEvent(account, "PasswordReset", null);
+    }
+
+    /**
+     * Kiểm tra + tiêu thụ OTP mới nhất của (email, purpose): khoá tạm 15 phút
+     * sau {@value #OTP_MAX_ATTEMPTS} lần sai (RULE-01-05), hết hạn/đã dùng thì
+     * từ chối (RULE-01-02). Dùng chung cho VerifyOTP và ResetPassword.
+     */
+    private void consumeOtp(String email, OtpPurpose purpose, String otpCode) {
+        Otp otp = otpRepository.findTopByEmailAndPurposeOrderByCreatedAtDesc(email, purpose)
+                .orElseThrow(() -> new ResourceNotFoundException("Otp", email));
+
+        if (otp.isCurrentlyLocked()) {
+            throw new BusinessRuleViolationException("RULE-01-05",
+                    "Phiên xác thực OTP đang bị khoá tạm thời, vui lòng thử lại sau");
+        }
+        if (otp.isUsed() || otp.isExpired()) {
+            throw new BusinessRuleViolationException("RULE-01-02", "OTP đã hết hạn hoặc không còn hiệu lực");
+        }
+
+        if (!otp.getOtpCode().equals(otpCode)) {
+            otp.setAttemptCount(otp.getAttemptCount() + 1);
+            if (otp.getAttemptCount() >= OTP_MAX_ATTEMPTS) {
+                otp.setUsed(true);
+                otp.setLockedUntil(LocalDateTime.now().plusMinutes(OTP_LOCKOUT_MINUTES));
+                otpRepository.save(otp);
+                throw new BusinessRuleViolationException("RULE-01-05",
+                        "Nhập sai OTP quá " + OTP_MAX_ATTEMPTS + " lần, phiên xác thực bị khoá "
+                                + OTP_LOCKOUT_MINUTES + " phút");
+            }
+            otpRepository.save(otp);
+            throw new BusinessRuleViolationException("RULE-01-02", "Mã OTP không đúng");
+        }
+
+        otp.setUsed(true);
+        otpRepository.save(otp);
+    }
+
+    /**
+     * Phát OTP mới cho (email, purpose) sau khi qua cooldown
+     * {@value #OTP_RESEND_COOLDOWN_SECONDS}s (RULE-01-04) và hạn mức
+     * {@value #OTP_MAX_RESEND_PER_HOUR} lần/giờ (RULE-01-05); OTP cũ còn hiệu
+     * lực bị vô hiệu hoá. Dùng chung cho ResendOTP và ForgotPassword.
+     */
+    private String issueFreshOtp(String email, OtpPurpose purpose) {
+        Optional<Otp> currentOtp = otpRepository.findTopByEmailAndPurposeOrderByCreatedAtDesc(email, purpose);
+
+        if (currentOtp.isPresent()) {
+            Otp otp = currentOtp.get();
+            if (otp.isCurrentlyLocked()) {
+                throw new BusinessRuleViolationException("RULE-01-05",
+                        "Phiên xác thực OTP đang bị khoá tạm thời, vui lòng thử lại sau");
+            }
+            long secondsSinceLast = ChronoUnit.SECONDS.between(otp.getCreatedAt(), LocalDateTime.now());
+            if (secondsSinceLast < OTP_RESEND_COOLDOWN_SECONDS) {
+                throw new BusinessRuleViolationException("RULE-01-04",
+                        "Vui lòng chờ trước khi gửi lại OTP");
+            }
+        }
+
+        long sentInLastHour = otpRepository.countByEmailAndPurposeAndCreatedAtAfter(
+                email, purpose, LocalDateTime.now().minusHours(1));
+        if (sentInLastHour >= OTP_MAX_RESEND_PER_HOUR) {
+            throw new BusinessRuleViolationException("RULE-01-05",
+                    "Đã vượt giới hạn gửi lại OTP trong 1 giờ");
+        }
+
+        currentOtp.filter(otp -> !otp.isUsed()).ifPresent(otp -> {
+            otp.setUsed(true);
+            otpRepository.save(otp);
+        });
+
+        String otpCode = generateOtpCode();
+        otpRepository.save(new Otp(email, otpCode, purpose, LocalDateTime.now().plusSeconds(OTP_TTL_SECONDS)));
+        return otpCode;
+    }
+
+    /**
      * RULE-01-07 (AutoUnlockAccount) — chỉ áp dụng cho khóa AUTO_FAILED_LOGIN,
      * KHÔNG áp dụng cho ADMIN_LOCK (không có locked_until/không tự mở khóa).
      * Gọi ở đầu login/refresh vì đó là hành động kế tiếp tự nhiên nhất để
@@ -347,6 +449,14 @@ public class AuthServiceImpl implements AuthService {
                 .build();
     }
 
+    @Override
+    @Transactional(readOnly = true)
+    public Optional<UUID> findUserIdByActiveAccountEmail(String email) {
+        return accountRepository.findByEmail(email)
+                .filter(account -> account.getStatus() == AccountStatus.ACTIVE)
+                .map(account -> userProvisioningService.findByAccountId(account.getId()).getId());
+    }
+
     /** Bảng RBAC 5-tier (docs/INDEX.md) — role -> scope mặc định. */
     private SecurityScope deriveScope(UserRole role) {
         return switch (role) {
@@ -358,9 +468,24 @@ public class AuthServiceImpl implements AuthService {
         };
     }
 
+    /**
+     * Phân biệt UNIQUE nào vừa vỡ để trả đúng thông điệp cho người dùng.
+     * Chỉ đọc tên constraint — không bao giờ ghép nguyên message của DB vào
+     * response, vì nó chứa cả câu SQL lẫn giá trị của tài khoản khác.
+     */
+    private String constraintMessage(DataIntegrityViolationException ex) {
+        String raw = ex.getMostSpecificCause().getMessage();
+        return raw != null && raw.contains("uq_accounts_phone") ? PHONE_TAKEN : EMAIL_TAKEN;
+    }
+
     private String generateOtpCode() {
         int code = secureRandom.nextInt(1_000_000);
         return String.format("%06d", code);
+    }
+
+    private String buildResetEmailContent(String otpCode) {
+        return "Mã đặt lại mật khẩu Pet Care của bạn là " + otpCode + ", hết hạn sau "
+                + (OTP_TTL_SECONDS / 60) + " phút. Nếu bạn không yêu cầu, hãy bỏ qua email này.";
     }
 
     private String buildOtpEmailContent(String otpCode) {

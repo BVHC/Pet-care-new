@@ -127,11 +127,11 @@ class AuthServiceImplTest {
 
     @Test
     void registerAccount_rejectsDuplicateEmail_raceOnUniqueConstraint_RULE_01_10() {
-        // §5.1 Concurrency: 2 request cùng email — pre-check pass (race), DB unique constraint chặn ở save().
+        // §5.1 Concurrency: 2 request cùng email — pre-check pass (race), DB unique constraint chặn ở saveAndFlush().
         RegisterRequest request = new RegisterRequest(EMAIL, null, "password123", "Nguyen Van A");
         when(accountRepository.existsByEmail(EMAIL)).thenReturn(false);
         when(passwordEncoder.encode(anyString())).thenReturn("hashed");
-        when(accountRepository.save(any(Account.class))).thenThrow(new DataIntegrityViolationException("uq_accounts_email"));
+        when(accountRepository.saveAndFlush(any(Account.class))).thenThrow(new DataIntegrityViolationException("uq_accounts_email"));
 
         assertThatThrownBy(() -> authService.registerAccount(request))
                 .isInstanceOf(BusinessRuleViolationException.class)
@@ -143,7 +143,7 @@ class AuthServiceImplTest {
         RegisterRequest request = new RegisterRequest(EMAIL, "0912345678", "password123", "Nguyen Van A");
         when(accountRepository.existsByEmail(EMAIL)).thenReturn(false);
         when(passwordEncoder.encode("password123")).thenReturn("hashed");
-        when(accountRepository.save(any(Account.class))).thenAnswer(inv -> {
+        when(accountRepository.saveAndFlush(any(Account.class))).thenAnswer(inv -> {
             Account a = inv.getArgument(0);
             a.setId(UUID.randomUUID());
             return a;
@@ -550,5 +550,37 @@ class AuthServiceImplTest {
         when(jwtTokenProvider.validateToken(rawToken)).thenReturn(true);
         when(jwtTokenProvider.getTokenType(rawToken)).thenReturn(JwtTokenProvider.TOKEN_TYPE_REFRESH);
         when(jwtTokenProvider.parseToken(rawToken)).thenReturn(UserPrincipal.builder().userId(userId).build());
+    }
+
+    @Test
+    void findUserIdByActiveAccountEmail_returnsUserIdForActiveAccount() {
+        Account account = new Account();
+        account.setId(UUID.randomUUID());
+        account.setEmail("cg@example.com");
+        account.setStatus(AccountStatus.ACTIVE);
+        User user = new User(account.getId(), "Caregiver");
+        user.setId(UUID.randomUUID());
+        when(accountRepository.findByEmail("cg@example.com")).thenReturn(Optional.of(account));
+        when(userProvisioningService.findByAccountId(account.getId())).thenReturn(user);
+
+        assertThat(authService.findUserIdByActiveAccountEmail("cg@example.com")).contains(user.getId());
+    }
+
+    @Test
+    void findUserIdByActiveAccountEmail_emptyWhenNoAccount() {
+        when(accountRepository.findByEmail("nobody@example.com")).thenReturn(Optional.empty());
+
+        assertThat(authService.findUserIdByActiveAccountEmail("nobody@example.com")).isEmpty();
+    }
+
+    @Test
+    void findUserIdByActiveAccountEmail_emptyWhenAccountNotActive() {
+        Account account = new Account();
+        account.setId(UUID.randomUUID());
+        account.setEmail("pending@example.com");
+        account.setStatus(AccountStatus.PENDING_VERIFICATION);
+        when(accountRepository.findByEmail("pending@example.com")).thenReturn(Optional.of(account));
+
+        assertThat(authService.findUserIdByActiveAccountEmail("pending@example.com")).isEmpty();
     }
 }

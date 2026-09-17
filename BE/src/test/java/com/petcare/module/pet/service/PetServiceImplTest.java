@@ -5,12 +5,16 @@ import com.petcare.module.pet.dto.CreatePetRequest;
 import com.petcare.module.pet.dto.PetResponse;
 import com.petcare.module.pet.dto.UpdatePetRequest;
 import com.petcare.module.pet.entity.Pet;
+import com.petcare.module.pet.exception.UnauthorizedDelegatedActionException;
 import com.petcare.module.pet.mapper.PetMapper;
 import com.petcare.module.pet.repository.PetRepository;
 import com.petcare.module.iam.service.UserProvisioningService;
 import com.petcare.platform.exception.AccessDeniedScopeException;
 import com.petcare.platform.exception.ConcurrencyConflictException;
 import com.petcare.platform.outbox.OutboxEventRepository;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.PageRequest;
+import org.springframework.data.domain.Pageable;
 import org.springframework.orm.ObjectOptimisticLockingFailureException;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -18,6 +22,7 @@ import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 
+import java.time.LocalDateTime;
 import java.util.Optional;
 import java.util.UUID;
 
@@ -25,6 +30,10 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.argThat;
+import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.Mockito.doThrow;
+import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
@@ -42,6 +51,9 @@ class PetServiceImplTest {
 
     @Mock
     private PetMapper mapper;
+
+    @Mock
+    private PetAccessGuard accessGuard;
 
     @InjectMocks
     private PetServiceImpl svc;
@@ -76,10 +88,54 @@ class PetServiceImplTest {
     void detail_otherOwnersPet_forbidden() {
         Pet pet = new Pet(UUID.randomUUID(), "Milo", "DOG");
         pet.setId(UUID.randomUUID());
+        UUID stranger = UUID.randomUUID();
         when(pets.findById(pet.getId())).thenReturn(Optional.of(pet));
+        // detail() ủy quyền kiểm tra cho PetAccessGuard — guard ném subclass của
+        // AccessDeniedScopeException nên assertion cũ giữ nguyên.
+        doThrow(new UnauthorizedDelegatedActionException("PET_OWNER_OR_ACTIVE_CAREGIVER", "NOT_DELEGATED"))
+                .when(accessGuard).requireCanViewPet(stranger, pet);
 
-        assertThatThrownBy(() -> svc.detail(UUID.randomUUID(), pet.getId()))
+        assertThatThrownBy(() -> svc.detail(stranger, pet.getId()))
                 .isInstanceOf(AccessDeniedScopeException.class);
+    }
+
+    @Test
+    void detail_activeCaregiver_allowed() {
+        UUID caregiver = UUID.randomUUID();
+        Pet pet = new Pet(UUID.randomUUID(), "Mun", "DOG");
+        pet.setId(UUID.randomUUID());
+        when(pets.findById(pet.getId())).thenReturn(Optional.of(pet));
+        when(mapper.toResponse(pet)).thenReturn(mock(PetResponse.class));
+
+        svc.detail(caregiver, pet.getId());
+
+        verify(accessGuard).requireCanViewPet(caregiver, pet);
+    }
+
+    @Test
+    void detail_guardRejects_propagates403() {
+        UUID stranger = UUID.randomUUID();
+        Pet pet = new Pet(UUID.randomUUID(), "Mun", "DOG");
+        pet.setId(UUID.randomUUID());
+        when(pets.findById(pet.getId())).thenReturn(Optional.of(pet));
+        doThrow(new UnauthorizedDelegatedActionException("PET_OWNER_OR_ACTIVE_CAREGIVER", "NOT_DELEGATED"))
+                .when(accessGuard).requireCanViewPet(stranger, pet);
+
+        assertThatThrownBy(() -> svc.detail(stranger, pet.getId()))
+                .isInstanceOf(UnauthorizedDelegatedActionException.class);
+    }
+
+    @Test
+    void list_usesAccessibleQuery_notOwnerOnly() {
+        UUID me = UUID.randomUUID();
+        Pageable pageable = PageRequest.of(0, 10);
+        when(pets.findAccessibleBy(eq(me), any(LocalDateTime.class), eq(pageable)))
+                .thenReturn(Page.empty());
+
+        svc.list(me, pageable);
+
+        verify(pets).findAccessibleBy(eq(me), any(LocalDateTime.class), eq(pageable));
+        verify(pets, never()).findByOwnerId(eq(me), any(Pageable.class));
     }
 
     @Test

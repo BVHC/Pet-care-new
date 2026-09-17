@@ -46,6 +46,19 @@ app:
     enabled: false
   otp-expiry:
     enabled: false
+  caregiver:
+    invitation-ttl-days: 7
+  caregiver-expiry:
+    enabled: false
 
 server:
   port: 8081
+
+management:
+  health:
+    # Test khong co SMTP server that (spring.mail.host tro vao localhost:3025),
+    # nen mail health indicator luon DOWN va keo /actuator/health xuong 503 —
+    # lam TraceIdCorsTest (mong doi 200) fail. Health cua mail khong nam trong
+    # pham vi test traceId/CORS.
+    mail:
+      enabled: false

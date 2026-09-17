@@ -1,6 +1,10 @@
 package com.petcare.platform.exception;
 
+import com.petcare.module.pet.exception.CaregiverInvitationConflictException;
+import com.petcare.module.pet.exception.UnauthorizedDelegatedActionException;
 import com.petcare.platform.model.ErrorResponse;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.slf4j.MDC;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
@@ -19,6 +23,8 @@ import java.util.stream.Collectors;
  */
 @RestControllerAdvice
 public class GlobalExceptionHandler {
+
+    private static final Logger log = LoggerFactory.getLogger(GlobalExceptionHandler.class);
 
     /**
      * 4 handler dưới đây bắt subclass của BusinessRuleViolationException
@@ -44,6 +50,22 @@ public class GlobalExceptionHandler {
     @ExceptionHandler(InvalidRefreshTokenException.class)
     public ResponseEntity<ErrorResponse> handleInvalidRefreshToken(InvalidRefreshTokenException ex) {
         return build(HttpStatus.UNAUTHORIZED, "INVALID_REFRESH_TOKEN", ex.getMessage());
+    }
+
+    /**
+     * 2 handler dưới đây bắt subclass của module pet trước handler cha —
+     * cùng lý do với cụm auth ở trên (§4.2.2).
+     */
+    @ExceptionHandler(UnauthorizedDelegatedActionException.class)
+    public ResponseEntity<ErrorResponse> handleUnauthorizedDelegatedAction(
+            UnauthorizedDelegatedActionException ex) {
+        return build(HttpStatus.FORBIDDEN, "UNAUTHORIZED_DELEGATED_ACTION", ex.getMessage());
+    }
+
+    @ExceptionHandler(CaregiverInvitationConflictException.class)
+    public ResponseEntity<ErrorResponse> handleCaregiverInvitationConflict(
+            CaregiverInvitationConflictException ex) {
+        return build(HttpStatus.CONFLICT, "CAREGIVER_INVITATION_CONFLICT", ex.getMessage());
     }
 
     @ExceptionHandler(BusinessRuleViolationException.class)
@@ -101,9 +123,16 @@ public class GlobalExceptionHandler {
         return build(HttpStatus.BAD_REQUEST, "VALIDATION_FAILED", message);
     }
 
+    /**
+     * Lỗi ngoài dự kiến: stacktrace đi vào log kèm traceId, client chỉ nhận một
+     * câu chung. Trả ex.getMessage() ra ngoài từng làm lộ nguyên câu SQL, tên
+     * bảng/constraint và cả số điện thoại của tài khoản khác khi vỡ UNIQUE.
+     */
     @ExceptionHandler(Exception.class)
     public ResponseEntity<ErrorResponse> handleGeneric(Exception ex) {
-        return build(HttpStatus.INTERNAL_SERVER_ERROR, "INTERNAL_SERVER_ERROR", ex.getMessage());
+        log.error("Unhandled exception traceId={}", MDC.get("traceId"), ex);
+        return build(HttpStatus.INTERNAL_SERVER_ERROR, "INTERNAL_SERVER_ERROR",
+                "Đã xảy ra lỗi hệ thống, vui lòng thử lại sau.");
     }
 
     private ResponseEntity<ErrorResponse> build(HttpStatus status, String errorCode, String message) {

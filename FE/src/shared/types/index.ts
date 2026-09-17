@@ -21,17 +21,22 @@ export interface PageResponse<T> {
 }
 
 // User & Auth
+// BE dung UUID cho moi khoa chinh -> string, khong phai number.
 export interface User {
-  userId: number;
-  accountId: number;
+  userId: string;
+  accountId: string;
   name: string;
-  phone: string;
+  phone?: string;
   email?: string;
   avatar?: string;
   role: UserRole;
-  storeId?: number;
-  organizationId?: number;
+  accountStatus?: AccountStatus;
+  storeId?: string;
+  organizationId?: string;
 }
+
+/** FSM 1 (docs/03-state-machines.md) — accounts.status ben BE. */
+export type AccountStatus = 'PENDING_VERIFICATION' | 'ACTIVE' | 'LOCKED' | 'DEACTIVATED';
 
 export type UserRole =
   | 'SUPER_ADMIN'
@@ -51,14 +56,15 @@ export interface AuthTokens {
   expiresIn: number;
 }
 
+// Email la danh tinh dang nhap duy nhat (BE RULE-01-10), phone chi la lien he.
 export interface LoginRequest {
-  phone: string;
+  email: string;
   password: string;
 }
 
 export interface RegisterRequest {
-  phone: string;
-  email?: string;
+  email: string;
+  phone?: string;
   password: string;
   name: string;
 }
@@ -286,7 +292,7 @@ export interface MedicalRecord {
   examinationDate: string;
   chiefComplaint?: string;
   symptoms?: string[];
-  examinationResults?: Record<string, any>;
+  examinationResults?: Record<string, unknown>;
   diagnosis?: string;
   treatmentPlan?: string;
   status: string;

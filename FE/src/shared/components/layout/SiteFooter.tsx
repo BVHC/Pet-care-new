@@ -45,8 +45,12 @@ export function SiteFooter({ onNav }: SiteFooterProps) {
           <a href="#" onClick={go('notifications')}>Thông báo</a>
         </FooterCol>
       </div>
-      <div className="mx-auto flex max-w-6xl items-center gap-1 border-t border-[var(--color-border-default)] pt-5 text-[13px] text-[var(--color-text-secondary)]">
-        © 2026 PetCare. Thực hiện với <Heart size={14} className="fill-[#843122] text-[#843122]" /> dành cho người yêu thú cưng.
+      <div className="mx-auto flex max-w-6xl flex-wrap items-center gap-x-5 gap-y-2 border-t border-[var(--color-border-default)] pt-5 text-[13px] text-[var(--color-text-secondary)]">
+        <span className="flex items-center gap-1">
+          © 2026 PetCare. Thực hiện với <Heart size={14} className="fill-[#843122] text-[#843122]" /> dành cho người yêu thú cưng.
+        </span>
+        <a href="#" onClick={go('terms')} className="hover:text-[var(--color-accent)]">Điều khoản sử dụng</a>
+        <a href="#" onClick={go('privacy')} className="hover:text-[var(--color-accent)]">Chính sách bảo mật</a>
       </div>
     </footer>
   );
