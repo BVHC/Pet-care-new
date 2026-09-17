@@ -31,7 +31,16 @@ Every error response is the same 6-field envelope regardless of which path produ
 | `UNAUTHORIZED` | 401 | `AuthenticationException` thrown inside app code (rare — most 401s come from the filter chain, see below) |
 | `ACCESS_DENIED` | 403 | `@PreAuthorize` denies inside a running controller method |
 | `VALIDATION_FAILED` | 400 | Bean Validation (`@Valid`) fails on a request body |
+| `UNAUTHORIZED_DELEGATED_ACTION` | 403 | Caregiver delegation (M04): caller is neither the pet's Primary Owner nor an `ACTIVE` caregiver with an unexpired delegation (RULE-04-04 / RULE-04-09), or someone other than the invited caregiver tried to accept/reject an invitation |
+| `CAREGIVER_INVITATION_CONFLICT` | **409** | Caregiver delegation (M04): an `INVITED` or `ACTIVE` delegation already exists for this `(pet, caregiverEmail)` pair — enforced by the partial unique index `uq_pcd_outstanding`, not by a service-level pre-check |
 | `INTERNAL_SERVER_ERROR` | 500 | Anything uncaught. **Never an expected test outcome** — always a bug if seen |
+
+The two M04 codes above are subclasses registered ahead of their parent handler:
+`UnauthorizedDelegatedActionException extends AccessDeniedScopeException` (same 403, different
+`errorCode` — the contract pins this code to RULE-04-09) and
+`CaregiverInvitationConflictException extends BusinessRuleViolationException` (409 rather than the
+parent's 400, because a duplicate outstanding invitation is a conflict). Asserting the parent's
+`ACCESS_DENIED_SCOPE_MISMATCH` / `BUSINESS_RULE_VIOLATION` on a caregiver endpoint will fail.
 
 `INVALID_STATE_TRANSITION` and `CONCURRENCY_CONFLICT` share HTTP 409 but are different bugs — always assert `errorCode`, never status alone, on any 409 case.
 
@@ -61,4 +70,14 @@ Note: this is a **different code path** from the `ACCESS_DENIED` thrown by `@Pre
 2. **423, not 401/403, for a locked account.** Easy to get wrong by habit — most REST APIs don't use 423.
 3. **5xx is never a target status.** `INTERNAL_SERVER_ERROR` exists in this table only so a collection-wide "no response is ever ≥ 500" test has something to name; don't write a test that expects it.
 4. **`traceId` is opaque** — assert it's present and non-empty, never assert its value.
-5. When two errorCodes share an HTTP status (`INVALID_STATE_TRANSITION` / `CONCURRENCY_CONFLICT` at 409; every 401 code above), the status alone is not a valid test — pair it with `errorCode`.
+5. When two errorCodes share an HTTP status (`INVALID_STATE_TRANSITION` / `CONCURRENCY_CONFLICT` / `CAREGIVER_INVITATION_CONFLICT` at 409; `ACCESS_DENIED` / `ACCESS_DENIED_SCOPE_MISMATCH` / `UNAUTHORIZED_DELEGATED_ACTION` at 403; every 401 code above), the status alone is not a valid test — pair it with `errorCode`.
+
+## Known API-wide quirk that affects assertions on timestamps
+
+Date-time fields serialized from `LocalDateTime` (`expiresAt`, `validUntil`, `createdAt`, ...) carry
+**no timezone offset** — e.g. `"2026-09-24T08:04:50.3000598"`. A client parsing that string as local
+time (which `new Date(...)` does in JS) misreads it by its own UTC offset: on a UTC+7 machine a
+7-day expiry measures as 6.71 days. Don't "tighten" a loose tolerance on a duration assertion
+without fixing the serialization first — a tight window just encodes a guess about the server's
+timezone. Note `ErrorResponse.timestamp` is an `Instant` and *does* serialize with `Z`; the
+inconsistency is between the two types, not random.
