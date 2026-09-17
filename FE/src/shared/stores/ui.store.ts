@@ -3,7 +3,7 @@ import { create } from 'zustand';
 interface Modal {
   isOpen: boolean;
   type?: string;
-  data?: any;
+  data?: unknown;
 }
 
 interface Toast {
@@ -15,7 +15,7 @@ interface Toast {
 interface UIState {
   // Modal
   modal: Modal;
-  openModal: (type: string, data?: any) => void;
+  openModal: (type: string, data?: unknown) => void;
   closeModal: () => void;
 
   // Toasts

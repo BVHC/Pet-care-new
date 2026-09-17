@@ -1,5 +1,7 @@
 package com.petcare.module.auth.controller;
 
+import com.petcare.module.auth.dto.ForgotPasswordRequest;
+import com.petcare.module.auth.dto.ForgotPasswordResponse;
 import com.petcare.module.auth.dto.LoginRequest;
 import com.petcare.module.auth.dto.LoginResponse;
 import com.petcare.module.auth.dto.LogoutRequest;
@@ -10,6 +12,8 @@ import com.petcare.module.auth.dto.RegisterRequest;
 import com.petcare.module.auth.dto.RegisterResponse;
 import com.petcare.module.auth.dto.ResendOtpRequest;
 import com.petcare.module.auth.dto.ResendOtpResponse;
+import com.petcare.module.auth.dto.ResetPasswordRequest;
+import com.petcare.module.auth.dto.ResetPasswordResponse;
 import com.petcare.module.auth.dto.VerifyOtpRequest;
 import com.petcare.module.auth.dto.VerifyOtpResponse;
 import com.petcare.module.auth.mapper.AuthMapper;
@@ -31,7 +35,7 @@ import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 
 /**
- * docs/api/auth-v1.md C1-C5 (sửa 2026-09-13 — email thay phone, RULE-01-10).
+ * docs/api/auth-v1.md C1-C7 (sửa 2026-09-13 — email thay phone, RULE-01-10).
  * Register/VerifyOtp/ResendOtp/Login/Refresh permitAll; Logout bắt buộc
  * Bearer access token hợp lệ (SecurityConfig — RULE-01-06).
  */
@@ -90,6 +94,25 @@ public class AuthController {
         RefreshTokenResponse response = authService.refresh(request, httpRequest.getHeader("User-Agent"),
                 httpRequest.getRemoteAddr());
         return ResponseEntity.ok(ApiResponse.ok(response));
+    }
+
+    /**
+     * C8 ForgotPassword — luôn 200 kể cả email không tồn tại, để không lộ
+     * email nào đã đăng ký (xử lý ở AuthServiceImpl.forgotPassword).
+     */
+    @PostMapping("/forgot-password")
+    public ResponseEntity<ApiResponse<ForgotPasswordResponse>> forgotPassword(
+            @Valid @RequestBody ForgotPasswordRequest request) {
+        authService.forgotPassword(request)
+                .ifPresent(outcome -> dispatchNotification(outcome, request.email()));
+        return ResponseEntity.ok(ApiResponse.ok(new ForgotPasswordResponse(true)));
+    }
+
+    @PostMapping("/reset-password")
+    public ResponseEntity<ApiResponse<ResetPasswordResponse>> resetPassword(
+            @Valid @RequestBody ResetPasswordRequest request) {
+        authService.resetPassword(request);
+        return ResponseEntity.ok(ApiResponse.ok(new ResetPasswordResponse(true)));
     }
 
     /**

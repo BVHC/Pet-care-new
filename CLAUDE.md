@@ -122,7 +122,7 @@ FSM tests extend `platform/fsm/FsmTransitionTestBase` and must enumerate **every
 `FE/src/` is `app/` (router + providers) · `pages/<domain>/<Name>Page.tsx` (one file per route) · `components/customer/` · `shared/` (api, stores, components, hooks, types, utils). Server state → React Query; app state → Zustand store per domain. New page ⇒ add file + register the route in `App.tsx`.
 
 Known gaps to be aware of before adding code (from `system-overview.md` §7):
-- **Two parallel HTTP clients**: `shared/api/client.ts` (fetch, full endpoint coverage, auto 401-refresh) and `shared/api/axios.ts` + `*.api.ts` (partial). Prefer the fetch client. They even use different localStorage key names (`accessToken` vs `access_token`).
+- **One HTTP client** (resolved 2026-09-17): `shared/api/axios.ts` — an axios instance whose request interceptor attaches the bearer token and whose response interceptor refreshes once on 401 — plus per-domain modules `auth.api.ts`, `product.api.ts`, `review.api.ts`. The older fetch-based `client.ts` was deleted; token keys are now consistently `access_token` / `refresh_token`.
 - Two `QueryClient` instances are constructed (`main.tsx` and `App.tsx`); the one in `App.tsx` wins.
 - No auth route guard — every page mounts unconditionally.
 

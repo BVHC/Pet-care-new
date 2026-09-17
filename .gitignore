@@ -193,8 +193,6 @@ tmp/
 *.tmp
 *.temp
 *.bak
-<<<<<<< HEAD
-=======
 
 # Package files (if using npm)
 package-lock.json
@@ -209,4 +207,14 @@ FE/build/
 Thumbs.db
 
 
+# ==============================================================================
+# Design work-in-progress (khong day len remote)
+# ==============================================================================
+FE/design-demos/
+FE/direction-approved.md
+FE/scripts/
+
+# ==============================================================================
+# Git worktrees (SDD isolated workspaces)
+# ==============================================================================
 .worktrees/
