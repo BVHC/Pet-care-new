@@ -1,6 +1,7 @@
 package com.petcare.module.organization.service;
 
 import com.petcare.module.organization.dto.CreateStoreResourceRequest;
+import com.petcare.module.organization.dto.UpdateStoreResourceRequest;
 import com.petcare.module.organization.entity.Store;
 import com.petcare.module.organization.entity.StoreResource;
 import com.petcare.module.organization.mapper.StoreResourceMapper;
@@ -57,6 +58,12 @@ class StoreResourceServiceImplTest {
 
     private static CreateStoreResourceRequest request(String code, Boolean isActive) {
         return new CreateStoreResourceRequest(code, "Phong kham 1", ResourceType.CLINIC_ROOM, isActive);
+    }
+
+    private static StoreResource resource(UUID id, UUID storeId, String code, boolean active) {
+        StoreResource resource = new StoreResource(storeId, code, "Phong kham 1", ResourceType.CLINIC_ROOM, active);
+        resource.setId(id);
+        return resource;
     }
 
     @BeforeEach
@@ -168,5 +175,105 @@ class StoreResourceServiceImplTest {
         var response = service.createResource(storeId, request("ROOM_01", false), actor);
 
         assertThat(response.isActive()).isFalse();
+    }
+
+    @Test
+    void updateResource_storeNotFound_throwsResourceNotFound() {
+        UUID storeId = UUID.randomUUID();
+        UUID resourceId = UUID.randomUUID();
+        when(storeRepository.findById(storeId)).thenReturn(Optional.empty());
+
+        assertThatThrownBy(() -> service.updateResource(storeId, resourceId,
+                new UpdateStoreResourceRequest("Ten moi", null),
+                principal(UserRole.STORE_MANAGER, UUID.randomUUID(), storeId)))
+                .isInstanceOf(ResourceNotFoundException.class);
+    }
+
+    @Test
+    void updateResource_notOwnStore_deniedByScope() {
+        UUID storeId = UUID.randomUUID();
+        UUID resourceId = UUID.randomUUID();
+        when(storeRepository.findById(storeId)).thenReturn(Optional.of(store(storeId, StoreStatus.DRAFT)));
+        UserPrincipal actor = principal(UserRole.STORE_MANAGER, UUID.randomUUID(), UUID.randomUUID());
+
+        assertThatThrownBy(() -> service.updateResource(storeId, resourceId,
+                new UpdateStoreResourceRequest("Ten moi", null), actor))
+                .isInstanceOf(AccessDeniedScopeException.class);
+    }
+
+    @Test
+    void updateResource_archivedStore_throwsBusinessRuleViolation_RULE_03_06() {
+        UUID storeId = UUID.randomUUID();
+        UUID resourceId = UUID.randomUUID();
+        when(storeRepository.findById(storeId)).thenReturn(Optional.of(store(storeId, StoreStatus.ARCHIVED)));
+        UserPrincipal actor = principal(UserRole.STORE_MANAGER, UUID.randomUUID(), storeId);
+
+        assertThatThrownBy(() -> service.updateResource(storeId, resourceId,
+                new UpdateStoreResourceRequest("Ten moi", null), actor))
+                .isInstanceOf(BusinessRuleViolationException.class)
+                .satisfies(ex -> assertThat(((BusinessRuleViolationException) ex).getRuleId()).isEqualTo("RULE-03-06"));
+    }
+
+    @Test
+    void updateResource_resourceNotFound_throwsResourceNotFound() {
+        UUID storeId = UUID.randomUUID();
+        UUID resourceId = UUID.randomUUID();
+        when(storeRepository.findById(storeId)).thenReturn(Optional.of(store(storeId, StoreStatus.DRAFT)));
+        when(storeResourceRepository.findById(resourceId)).thenReturn(Optional.empty());
+        UserPrincipal actor = principal(UserRole.STORE_MANAGER, UUID.randomUUID(), storeId);
+
+        assertThatThrownBy(() -> service.updateResource(storeId, resourceId,
+                new UpdateStoreResourceRequest("Ten moi", null), actor))
+                .isInstanceOf(ResourceNotFoundException.class);
+    }
+
+    @Test
+    void updateResource_belongsToDifferentStore_throwsResourceNotFound() {
+        UUID storeId = UUID.randomUUID();
+        UUID otherStoreId = UUID.randomUUID();
+        UUID resourceId = UUID.randomUUID();
+        when(storeRepository.findById(storeId)).thenReturn(Optional.of(store(storeId, StoreStatus.DRAFT)));
+        when(storeResourceRepository.findById(resourceId))
+                .thenReturn(Optional.of(resource(resourceId, otherStoreId, "ROOM_01", true)));
+        UserPrincipal actor = principal(UserRole.STORE_MANAGER, UUID.randomUUID(), storeId);
+
+        assertThatThrownBy(() -> service.updateResource(storeId, resourceId,
+                new UpdateStoreResourceRequest("Ten moi", null), actor))
+                .isInstanceOf(ResourceNotFoundException.class);
+    }
+
+    @Test
+    void updateResource_partialUpdate_keepsUnspecifiedFieldsUnchanged() {
+        UUID storeId = UUID.randomUUID();
+        UUID resourceId = UUID.randomUUID();
+        when(storeRepository.findById(storeId)).thenReturn(Optional.of(store(storeId, StoreStatus.DRAFT)));
+        StoreResource existing = resource(resourceId, storeId, "ROOM_01", true);
+        when(storeResourceRepository.findById(resourceId)).thenReturn(Optional.of(existing));
+        when(storeResourceRepository.save(any(StoreResource.class))).thenAnswer(invocation -> invocation.getArgument(0));
+        UserPrincipal actor = principal(UserRole.STORE_MANAGER, UUID.randomUUID(), storeId);
+
+        var response = service.updateResource(storeId, resourceId,
+                new UpdateStoreResourceRequest(null, false), actor);
+
+        assertThat(response.isActive()).isFalse();
+        assertThat(response.resourceName()).isEqualTo("Phong kham 1"); // giữ nguyên, không gửi field này
+        assertThat(response.resourceCode()).isEqualTo("ROOM_01"); // bất biến, không có field để sửa
+    }
+
+    @Test
+    void updateResource_valid_updatesResourceName() {
+        UUID storeId = UUID.randomUUID();
+        UUID resourceId = UUID.randomUUID();
+        when(storeRepository.findById(storeId)).thenReturn(Optional.of(store(storeId, StoreStatus.DRAFT)));
+        StoreResource existing = resource(resourceId, storeId, "ROOM_01", true);
+        when(storeResourceRepository.findById(resourceId)).thenReturn(Optional.of(existing));
+        when(storeResourceRepository.save(any(StoreResource.class))).thenAnswer(invocation -> invocation.getArgument(0));
+        UserPrincipal actor = principal(UserRole.STORE_MANAGER, UUID.randomUUID(), storeId);
+
+        var response = service.updateResource(storeId, resourceId,
+                new UpdateStoreResourceRequest("Phong kham VIP", null), actor);
+
+        assertThat(response.resourceName()).isEqualTo("Phong kham VIP");
+        assertThat(response.isActive()).isTrue(); // giữ nguyên, không gửi field này
     }
 }
