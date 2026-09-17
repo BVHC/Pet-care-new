@@ -276,4 +276,52 @@ class StoreResourceServiceImplTest {
         assertThat(response.resourceName()).isEqualTo("Phong kham VIP");
         assertThat(response.isActive()).isTrue(); // giữ nguyên, không gửi field này
     }
+
+    @Test
+    void listResources_storeNotFound_throwsResourceNotFound() {
+        UUID storeId = UUID.randomUUID();
+        when(storeRepository.findById(storeId)).thenReturn(Optional.empty());
+
+        assertThatThrownBy(() -> service.listResources(storeId, principal(UserRole.SUPER_ADMIN, null, null)))
+                .isInstanceOf(ResourceNotFoundException.class);
+    }
+
+    @Test
+    void listResources_organizationAdmin_differentOrg_deniedByScope() {
+        UUID organizationId = UUID.randomUUID();
+        UUID storeId = UUID.randomUUID();
+        Store existing = store(storeId, StoreStatus.ACTIVE);
+        existing.setOrganizationId(organizationId);
+        when(storeRepository.findById(storeId)).thenReturn(Optional.of(existing));
+        UserPrincipal actor = principal(UserRole.ORGANIZATION_ADMIN, UUID.randomUUID(), null);
+
+        assertThatThrownBy(() -> service.listResources(storeId, actor))
+                .isInstanceOf(AccessDeniedScopeException.class);
+    }
+
+    @Test
+    void listResources_storeManager_differentStore_deniedByScope() {
+        UUID storeId = UUID.randomUUID();
+        when(storeRepository.findById(storeId)).thenReturn(Optional.of(store(storeId, StoreStatus.ACTIVE)));
+        UserPrincipal actor = principal(UserRole.STORE_MANAGER, UUID.randomUUID(), UUID.randomUUID());
+
+        assertThatThrownBy(() -> service.listResources(storeId, actor))
+                .isInstanceOf(AccessDeniedScopeException.class);
+    }
+
+    @Test
+    void listResources_storeManager_ownStore_returnsAllResources() {
+        UUID storeId = UUID.randomUUID();
+        Store existing = store(storeId, StoreStatus.ACTIVE);
+        when(storeRepository.findById(storeId)).thenReturn(Optional.of(existing));
+        when(storeResourceRepository.findAllByStoreId(storeId)).thenReturn(java.util.List.of(
+                resource(UUID.randomUUID(), storeId, "ROOM_01", true),
+                resource(UUID.randomUUID(), storeId, "TABLE_01", false)));
+        UserPrincipal actor = principal(UserRole.STORE_MANAGER, existing.getOrganizationId(), storeId);
+
+        var response = service.listResources(storeId, actor);
+
+        assertThat(response.items()).hasSize(2);
+        assertThat(response.items()).extracting("resourceCode").containsExactlyInAnyOrder("ROOM_01", "TABLE_01");
+    }
 }
