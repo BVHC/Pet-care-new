@@ -14,6 +14,7 @@ import com.petcare.module.auth.dto.VerifyOtpRequest;
 import com.petcare.module.auth.entity.Account;
 
 import java.util.Optional;
+import java.util.UUID;
 
 public interface AuthService {
 
@@ -37,4 +38,11 @@ public interface AuthService {
     Optional<RegistrationOutcome> forgotPassword(ForgotPasswordRequest request);
 
     void resetPassword(ResetPasswordRequest request);
+
+    /**
+     * Tra userId theo email của Account đang ACTIVE. Thuần đọc, mở ra cho module pet
+     * dùng khi mời Caregiver (spec D-02) — email thuộc bảng accounts (auth module) nên
+     * module khác không được đọc trực tiếp (01-package-structure.md).
+     */
+    Optional<UUID> findUserIdByActiveAccountEmail(String email);
 }

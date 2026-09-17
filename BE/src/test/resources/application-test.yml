@@ -46,6 +46,10 @@ app:
     enabled: false
   otp-expiry:
     enabled: false
+  caregiver:
+    invitation-ttl-days: 7
+  caregiver-expiry:
+    enabled: false
 
 server:
   port: 8081

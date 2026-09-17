@@ -241,7 +241,7 @@ paths:
     post:
       tags: [Delegation]
       summary: Invite caregiver (InviteCaregiver)
-      description: CONFIRMED (RULE-04-01/04/05, FSM-3). Primary owner only. TTL 7 days CONFIRMED. Token handover channel TBD Q12.
+      description: CONFIRMED (RULE-04-01/04/05, FSM-3). Primary owner only. TTL 7 days CONFIRMED. Token handover closed per D-02 (email if account exists, one-time token otherwise).
       operationId: inviteCaregiver
       security:
         - bearerAuth: []
@@ -273,7 +273,7 @@ paths:
         '404':
           $ref: '#/components/responses/NotFound'
         '409':
-          description: An ACTIVE delegation already exists for this caregiver (derived idempotency guard).
+          description: Outstanding INVITED invitation or ACTIVE delegation already exists for this email (errorCode CAREGIVER_INVITATION_CONFLICT).
           content:
             application/json:
               schema:
@@ -302,7 +302,7 @@ paths:
         '401':
           $ref: '#/components/responses/Unauthorized'
         '403':
-          description: Authenticated user does not match the invited phone (ASSUMPTION A3).
+          description: Authenticated user does not match the invited caregiver (email-bound invitation, spec D-01).
           content:
             application/json:
               schema:
@@ -315,8 +315,8 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/Error'
-        '410':
-          description: Invitation expired past 7-day TTL (PROPOSED code INVITATION_EXPIRED).
+        '400':
+          description: Invitation past TTL is rejected at request time (RULE-04-05, D-08).
           content:
             application/json:
               schema:
@@ -356,7 +356,7 @@ paths:
     post:
       tags: [Delegation]
       summary: Revoke caregiver (RevokeCaregiver)
-      description: CONFIRMED (RULE-04-04/08, FSM-3). Takes effect immediately. Idempotent.
+      description: CONFIRMED (RULE-04-04/08, FSM-3). Covers INVITED and ACTIVE. Takes effect immediately. Idempotent.
       operationId: revokeCaregiver
       security:
         - bearerAuth: []
@@ -532,15 +532,19 @@ components:
             $ref: '#/components/schemas/PetResponse'
     InviteCaregiverRequest:
       type: object
-      required: [caregiverPhone]
+      required: [caregiverEmail]
       properties:
+        caregiverEmail:
+          type: string
+          format: email
+          description: Invitation identity (spec D-01, RULE-01-10).
         caregiverPhone:
           type: string
-          description: CONFIRMED (ERD caregiver_phone).
+          description: Optional contact phone.
         validUntil:
           type: string
           format: date-time
-          description: PROPOSED delegation end (ASSUMPTION A4, TBD Q5).
+          description: Optional delegation end; null means indefinite (D-03, closed Q5).
     InvitationResponse:
       type: object
       required: [invitationId, petId, status, expiresAt]
@@ -557,6 +561,13 @@ components:
           type: string
           format: date-time
           description: Invitation TTL 7 days CONFIRMED (RULE-04-05).
+        validUntil:
+          type: string
+          format: date-time
+          description: Optional delegation end; null means indefinite (D-03).
+        invitationToken:
+          type: string
+          description: Present exactly once when the invitee has no account yet (D-02); absent otherwise.
     DelegationResponse:
       type: object
       required: [delegationId, petId, status]
@@ -571,11 +582,12 @@ components:
           $ref: '#/components/schemas/CaregiverStatus'
     RevokeCaregiverRequest:
       type: object
-      required: [caregiverUserId]
+      required: [caregiverEmail]
       properties:
-        caregiverUserId:
+        caregiverEmail:
           type: string
-          format: uuid
+          format: email
+          description: Covers both INVITED and ACTIVE records (spec D-04).
     Error:
       type: object
       required: [success, errorCode, message, statusCode, timestamp]
@@ -585,7 +597,7 @@ components:
           example: false
         errorCode:
           type: string
-          description: UNAUTHORIZED_DELEGATED_ACTION is CONFIRMED (RULE-04-09); ACCESS_DENIED_SCOPE_MISMATCH is CONFIRMED (RULE-02-01); VALIDATION_FAILED, BUSINESS_RULE_VIOLATION, INVALID_STATE_TRANSITION, RESOURCE_NOT_FOUND follow docs/convention/backend/04-exception-handling; INVITATION_EXPIRED is PROPOSED.
+          description: UNAUTHORIZED_DELEGATED_ACTION is CONFIRMED (RULE-04-09); CAREGIVER_INVITATION_CONFLICT is CONFIRMED (contract C3); ACCESS_DENIED_SCOPE_MISMATCH is CONFIRMED (RULE-02-01); VALIDATION_FAILED, BUSINESS_RULE_VIOLATION, INVALID_STATE_TRANSITION, RESOURCE_NOT_FOUND follow docs/convention/backend/04-exception-handling.
         message:
           type: string
         statusCode:

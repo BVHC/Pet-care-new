@@ -173,8 +173,8 @@ Biến môi trường chính: `DB_HOST/PORT/NAME/USERNAME/PASSWORD`, `REDIS_HOST
 
 > Mục này ghi nhận **hiện trạng thực tế của code**, không phải lời phê bình — dùng để biết chỗ nào "chưa xong" trước khi build tính năng mới lên trên.
 
-- **`module/` hiện rỗng — chưa có module nghiệp vụ nào (0/25) được triển khai.** Chỉ có hạ tầng `platform/` (security + security/token, exception, FSM base, model, outbox, enums) đã sẵn sàng làm nền cho module đầu tiên. `Account`/`User`/`Pet` entity và toàn bộ layer CRUD Pet đã từng được dựng thử nghiệm rồi bị gỡ bỏ để làm sạch trước khi module hoá đúng theo `docs/convention/backend/`.
-- **Migration đã có 3 phiên bản** (`V1__init_schema.sql`: 25 bảng theo `docs/06-erd.md`, bao gồm cột audit chuẩn `created_by`/`updated_by`/`deleted_at`/`version` cho `accounts`/`users`/`pets`; `V2__auth_session_tokens.sql`: bảng refresh token; `V3__refresh_token_cleanup_index.sql`: index phục vụ job dọn dẹp). Các bảng còn lại ngoài 3 bảng trên nên được rà soát cột audit tương tự khi entity tương ứng được triển khai.
+- **Đã triển khai 4 module nghiệp vụ:** `auth` (register/OTP/login/logout/refresh), `iam` (user provisioning), `notification` (enqueue/dispatch qua `EmailGateway`), `pet` (Pets CRUD + caregiver delegation FSM-3: invite/accept/reject/revoke, `PetAccessGuard`, job hết hạn 15 phút/lần). Hạ tầng `platform/` (security + security/token, exception, FSM base, model, outbox, enums) làm nền cho các module tiếp theo.
+- **Migration đã có 5 phiên bản** (`V1__init_schema.sql`: 25 bảng theo `docs/06-erd.md`, bao gồm cột audit chuẩn `created_by`/`updated_by`/`deleted_at`/`version` cho `accounts`/`users`/`pets`; `V2__auth_session_tokens.sql`: bảng refresh token; `V3__refresh_token_cleanup_index.sql`: index phục vụ job dọn dẹp; `V4__pets_audit_columns.sql`: cột audit cho `pets`; `V5__caregiver_delegations.sql`: cột audit + định danh email + `valid_until` + index cho `pet_caregiver_delegations`). Các bảng còn lại nên được rà soát cột audit tương tự khi entity tương ứng được triển khai.
 - **Redis đã được BE dùng thật** (không còn là hạ tầng khai báo suông) — `TokenBlacklistService` (`platform/security/token/`) dùng `StringRedisTemplate` làm access-token blacklist khi logout/revoke, với chính sách **fail-open** khi Redis lỗi/timeout (`app.security.blacklist-fail-open`, mặc định `true` — xem ADR-0002). Refresh token thì lưu ở PostgreSQL (không phải Redis), theo ADR-0001, có job định kỳ `RefreshTokenCleanupJob` (cron `0 30 2 * * *`, Asia/Ho_Chi_Minh) dọn token hết hạn/bị revoke theo ADR-0003.
 - **2 HTTP client song song ở FE:** `shared/api/client.ts` (fetch-based, đầy đủ endpoint, có auto-refresh token) và `shared/api/axios.ts` + `product.api.ts`/`review.api.ts` (axios-based, chỉ phủ một phần endpoint). Trang mới cần biết đang dùng client nào — nên ưu tiên client fetch-based để có sẵn cơ chế refresh 401.
 - **2 instance `QueryClient` được tạo độc lập** ở `main.tsx` và `App.tsx` — provider trong `App.tsx` "thắng", cấu hình ở `main.tsx` thực chất không có tác dụng.
@@ -197,4 +197,4 @@ Biến môi trường chính: `DB_HOST/PORT/NAME/USERNAME/PASSWORD`, `REDIS_HOST
 
 ---
 
-*Phân tích kiến trúc: 2026-09-12 (cập nhật §3/§6/§7/§8 sau đợt triển khai bảo mật/JWT — commit `6665cd0`, `1606782`)*
+*Phân tích kiến trúc: 2026-09-16 (cập nhật §7 sau đợt caregiver delegation — V5, FSM-3, 4 endpoint, job hết hạn)*

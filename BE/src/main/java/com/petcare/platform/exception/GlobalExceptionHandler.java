@@ -1,5 +1,7 @@
 package com.petcare.platform.exception;
 
+import com.petcare.module.pet.exception.CaregiverInvitationConflictException;
+import com.petcare.module.pet.exception.UnauthorizedDelegatedActionException;
 import com.petcare.platform.model.ErrorResponse;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -48,6 +50,22 @@ public class GlobalExceptionHandler {
     @ExceptionHandler(InvalidRefreshTokenException.class)
     public ResponseEntity<ErrorResponse> handleInvalidRefreshToken(InvalidRefreshTokenException ex) {
         return build(HttpStatus.UNAUTHORIZED, "INVALID_REFRESH_TOKEN", ex.getMessage());
+    }
+
+    /**
+     * 2 handler dưới đây bắt subclass của module pet trước handler cha —
+     * cùng lý do với cụm auth ở trên (§4.2.2).
+     */
+    @ExceptionHandler(UnauthorizedDelegatedActionException.class)
+    public ResponseEntity<ErrorResponse> handleUnauthorizedDelegatedAction(
+            UnauthorizedDelegatedActionException ex) {
+        return build(HttpStatus.FORBIDDEN, "UNAUTHORIZED_DELEGATED_ACTION", ex.getMessage());
+    }
+
+    @ExceptionHandler(CaregiverInvitationConflictException.class)
+    public ResponseEntity<ErrorResponse> handleCaregiverInvitationConflict(
+            CaregiverInvitationConflictException ex) {
+        return build(HttpStatus.CONFLICT, "CAREGIVER_INVITATION_CONFLICT", ex.getMessage());
     }
 
     @ExceptionHandler(BusinessRuleViolationException.class)
