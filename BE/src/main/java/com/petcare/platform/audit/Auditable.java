@@ -18,4 +18,7 @@ public @interface Auditable {
 
     /** Tên Command nghiệp vụ, khớp chính xác Ubiquitous Language (docs/04-glossary.md). */
     String action();
+
+    /** Loại resource bị tác động, vd "Account"/"User"/"Organization" — ghi vào audit_logs.resource_type. */
+    String resourceType();
 }
