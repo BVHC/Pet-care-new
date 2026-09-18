@@ -13,6 +13,18 @@ import { BookingPage } from '../pages/customer/BookingPage';
 import { PetsPage } from '../pages/customer/PetsPage';
 import { AccountPage } from '../pages/customer/AccountPage';
 import { OrderHistoryPage } from '../pages/customer/OrderHistoryPage';
+import { FavoritesPage } from '../pages/customer/FavoritesPage';
+import { NotificationsPage } from '../pages/customer/NotificationsPage';
+import { PaymentPage } from '../pages/customer/PaymentPage';
+import { SecurityPage } from '../pages/customer/SecurityPage';
+import { SettingsPage } from '../pages/customer/SettingsPage';
+import { HelpPage } from '../pages/customer/HelpPage';
+import { MembershipPage } from '../pages/customer/MembershipPage';
+import { CaregiversPage } from '../pages/customer/CaregiversPage';
+import { VouchersPage } from '../pages/customer/VouchersPage';
+import { AppointmentsPage } from '../pages/customer/AppointmentsPage';
+import { PackagesPage } from '../pages/customer/PackagesPage';
+import { ReviewsPage } from '../pages/customer/ReviewsPage';
 import { AboutPage } from '../pages/about/AboutPage';
 import { RecommendPage } from '../pages/recommend/RecommendPage';
 import { HotelPage } from '../pages/hotel/HotelPage';
@@ -22,7 +34,6 @@ import { VerifyOtpPage } from '../pages/auth/VerifyOtpPage';
 import { ForgotPasswordPage } from '../pages/auth/ForgotPasswordPage';
 import { TermsPage, PrivacyPage } from '../pages/legal/LegalPage';
 import { NewsPage } from '../pages/news/NewsPage';
-import { ReviewPage } from '../pages/review/ReviewPage';
 
 const queryClient = new QueryClient({
   defaultOptions: { queries: { staleTime: 60_000, refetchOnWindowFocus: false } },
@@ -44,11 +55,22 @@ export function App() {
           <Route path="/pets" element={<PetsPage />} />
           <Route path="/account" element={<AccountPage />} />
           <Route path="/orders" element={<OrderHistoryPage />} />
+          <Route path="/favorites" element={<FavoritesPage />} />
+          <Route path="/notifications" element={<NotificationsPage />} />
+          <Route path="/payment" element={<PaymentPage />} />
+          <Route path="/security" element={<SecurityPage />} />
+          <Route path="/settings" element={<SettingsPage />} />
+          <Route path="/help" element={<HelpPage />} />
+          <Route path="/membership" element={<MembershipPage />} />
+          <Route path="/caregivers" element={<CaregiversPage />} />
+          <Route path="/vouchers" element={<VouchersPage />} />
+          <Route path="/appointments" element={<AppointmentsPage />} />
+          <Route path="/packages" element={<PackagesPage />} />
+          <Route path="/review" element={<ReviewsPage />} />
           <Route path="/about" element={<AboutPage />} />
           <Route path="/recommend" element={<RecommendPage />} />
           <Route path="/hotel" element={<HotelPage />} />
           <Route path="/news" element={<NewsPage />} />
-          <Route path="/review" element={<ReviewPage />} />
           <Route path="/terms" element={<TermsPage />} />
           <Route path="/privacy" element={<PrivacyPage />} />
         </Route>

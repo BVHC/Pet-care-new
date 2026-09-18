@@ -1,0 +1,151 @@
+/* AccountSidebar — shared sidebar cho /account và /orders.
+   Sticky trái, user card + nav list. */
+
+.sidebar {
+  position: sticky;
+  top: 72px;
+  display: flex;
+  flex-direction: column;
+  gap: 0;
+  border-radius: 18px;
+  overflow: hidden;
+  background: var(--color-surface-card);
+  box-shadow:
+    0 1px 2px rgba(56, 36, 23, 0.06),
+    0 8px 18px -14px rgba(56, 36, 23, 0.4);
+}
+
+/* User card */
+.userCard {
+  padding: 20px;
+  background: var(--color-surface-dark);
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.userAvatar {
+  display: grid;
+  place-items: center;
+  width: 48px;
+  height: 48px;
+  border-radius: 50%;
+  background: var(--color-accent-soft);
+  color: var(--color-accent);
+  flex: 0 0 auto;
+  font-family: var(--font-friendly);
+  font-size: 20px;
+  font-weight: 800;
+}
+
+.userName {
+  font-size: 15px;
+  font-weight: 800;
+  color: #fff;
+  line-height: 1.2;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  max-width: 160px;
+}
+
+.userEmail {
+  font-size: 12px;
+  color: rgba(255, 255, 255, 0.65);
+  margin-top: 2px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  max-width: 160px;
+}
+
+/* Nav */
+.navList {
+  padding: 8px;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.navItem {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 12px;
+  border-radius: 10px;
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--color-text-secondary);
+  cursor: pointer;
+  border: none;
+  background: transparent;
+  width: 100%;
+  text-align: left;
+  text-decoration: none;
+  transition: background-color 0.2s ease, color 0.2s ease;
+}
+
+.navItem:hover {
+  background: var(--color-surface-2);
+  color: var(--color-text-primary);
+}
+
+.navItemActive {
+  background: var(--color-accent-soft);
+  color: var(--color-accent);
+}
+
+.navItemActive:hover {
+  background: var(--color-accent-soft);
+  color: var(--color-accent);
+}
+
+.navIcon {
+  flex: 0 0 auto;
+}
+
+.navLabel {
+  flex: 1;
+}
+
+.navChevron {
+  flex: 0 0 auto;
+  opacity: 0;
+  transform: translateX(-2px);
+  transition: opacity 0.2s ease, transform 0.2s ease;
+}
+
+.navItem:hover .navChevron,
+.navItemActive .navChevron {
+  opacity: 1;
+  transform: translateX(0);
+}
+
+.navBadge {
+  display: grid;
+  place-items: center;
+  min-width: 20px;
+  height: 20px;
+  border-radius: 999px;
+  background: var(--color-accent);
+  color: #fff;
+  font-size: 10px;
+  font-weight: 700;
+  padding: 0 5px;
+  flex: 0 0 auto;
+}
+
+.navDivider {
+  height: 1px;
+  background: var(--color-border-default);
+  margin: 4px 8px;
+}
+
+.navDanger {
+  color: #e53e3e;
+}
+
+.navDanger:hover {
+  background: #fff1f1;
+  color: #e53e3e;
+}

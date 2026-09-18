@@ -1,0 +1,328 @@
+/* HelpPage — Trợ giúp. */
+
+/* ================================================================
+   Hero slab.
+   ================================================================ */
+
+.slab {
+  background: var(--color-surface-dark);
+  position: relative;
+  overflow: hidden;
+  isolation: isolate;
+}
+
+.slabBg {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  z-index: 0;
+  opacity: 0.2;
+}
+
+.slabOverlay {
+  position: absolute;
+  inset: 0;
+  z-index: 1;
+  background: linear-gradient(
+    135deg,
+    rgba(56, 36, 23, 0.96) 0%,
+    rgba(56, 36, 23, 0.80) 55%,
+    rgba(56, 36, 23, 0.50) 100%
+  );
+  pointer-events: none;
+}
+
+.slabNoise {
+  position: absolute;
+  inset: 0;
+  z-index: 2;
+  opacity: 0.06;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='160' height='160'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.85' numOctaves='3'/%3E%3C/filter%3E%3Crect width='160' height='160' filter='url(%23n)'/%3E%3C/svg%3E");
+  pointer-events: none;
+}
+
+.slabContent {
+  position: relative;
+  z-index: 3;
+  padding: 28px 0 24px;
+}
+
+/* ================================================================
+   2-column layout.
+   ================================================================ */
+
+.page {
+  display: grid;
+  grid-template-columns: 260px 1fr;
+  gap: 24px;
+  align-items: start;
+}
+
+@media (max-width: 900px) {
+  .page {
+    grid-template-columns: 1fr;
+  }
+}
+
+.main {
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+}
+
+/* ================================================================
+   Search bar.
+   ================================================================ */
+
+.searchWrap {
+  position: relative;
+}
+
+.searchIcon {
+  position: absolute;
+  left: 14px;
+  top: 50%;
+  transform: translateY(-50%);
+  color: var(--color-text-secondary);
+  pointer-events: none;
+}
+
+.searchInput {
+  width: 100%;
+  border-radius: 14px;
+  border: 1.5px solid var(--color-border-default);
+  background: var(--color-surface-card);
+  padding: 12px 16px 12px 42px;
+  font-size: 14px;
+  color: var(--color-text-primary);
+  outline: none;
+  box-shadow: 0 1px 2px rgba(56, 36, 23, 0.06),
+    0 8px 18px -14px rgba(56, 36, 23, 0.4);
+  transition: border-color 0.2s ease, box-shadow 0.2s ease;
+  font-family: inherit;
+}
+
+.searchInput:focus {
+  border-color: var(--color-accent);
+  box-shadow: 0 1px 2px rgba(56, 36, 23, 0.06),
+    0 8px 18px -14px rgba(56, 36, 23, 0.4),
+    0 0 0 3px var(--color-accent-soft);
+}
+
+.searchInput::placeholder {
+  color: var(--color-text-secondary);
+  opacity: 0.7;
+}
+
+/* ================================================================
+   Category cards.
+   ================================================================ */
+
+.catGrid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 12px;
+}
+
+@media (max-width: 640px) {
+  .catGrid {
+    grid-template-columns: repeat(2, 1fr);
+  }
+}
+
+.catCard {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 10px;
+  padding: 20px 12px;
+  border-radius: 14px;
+  background: var(--color-surface-card);
+  box-shadow: 0 1px 2px rgba(56, 36, 23, 0.06),
+    0 4px 12px -8px rgba(56, 36, 23, 0.4);
+  text-align: center;
+  cursor: pointer;
+  border: 1.5px solid transparent;
+  transition: border-color 0.2s ease, transform 0.25s cubic-bezier(0.32, 0.72, 0, 1),
+    box-shadow 0.25s cubic-bezier(0.32, 0.72, 0, 1);
+  text-decoration: none;
+}
+
+.catCard:hover {
+  border-color: var(--color-accent);
+  transform: translateY(-2px);
+  box-shadow: 0 2px 4px rgba(56, 36, 23, 0.07),
+    0 12px 24px -16px rgba(164, 51, 36, 0.4);
+}
+
+.catIcon {
+  display: grid;
+  place-items: center;
+  width: 52px;
+  height: 52px;
+  border-radius: 14px;
+  flex: 0 0 auto;
+}
+
+.catIconBlue   { background: #dbeafe; color: #1d4ed8; }
+.catIconGreen  { background: #dcfce7; color: #15803d; }
+.catIconYellow { background: #fef3c7; color: #b45309; }
+.catIconPurple { background: #f3e8ff; color: #7c3aed; }
+.catIconRed    { background: #fee2e2; color: #dc2626; }
+.catIconOrange { background: #fff7ed; color: #c2410c; }
+
+.catLabel {
+  font-size: 13px;
+  font-weight: 700;
+  color: var(--color-text-primary);
+  line-height: 1.3;
+}
+
+/* ================================================================
+   FAQ section.
+   ================================================================ */
+
+.faqSection {
+  border-radius: 18px;
+  overflow: hidden;
+  background: var(--color-surface-card);
+  box-shadow: 0 1px 2px rgba(56, 36, 23, 0.06),
+    0 8px 18px -14px rgba(56, 36, 23, 0.4);
+}
+
+.faqHeader {
+  padding: 16px 20px;
+  border-bottom: 1px solid var(--color-border-default);
+}
+
+.faqTitle {
+  font-family: var(--font-friendly);
+  font-size: 18px;
+  font-weight: 800;
+  color: var(--color-text-primary);
+}
+
+.faqList {
+  display: flex;
+  flex-direction: column;
+}
+
+.faqItem {
+  padding: 16px 20px;
+  border-bottom: 1px solid var(--color-border-default);
+  cursor: pointer;
+  transition: background-color 0.2s ease;
+}
+
+.faqItem:last-child {
+  border-bottom: none;
+}
+
+.faqItem:hover {
+  background: var(--color-surface-2);
+}
+
+.faqQ {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  font-size: 14px;
+  font-weight: 700;
+  color: var(--color-text-primary);
+  line-height: 1.3;
+}
+
+.faqA {
+  font-size: 13px;
+  color: var(--color-text-secondary);
+  line-height: 1.6;
+  margin-top: 8px;
+  display: none;
+}
+
+.faqAOpen {
+  display: block;
+}
+
+.faqChevron {
+  color: var(--color-border-strong);
+  flex: 0 0 auto;
+  transition: transform 0.25s ease;
+}
+
+.faqChevronOpen {
+  transform: rotate(180deg);
+}
+
+/* ================================================================
+   Contact card.
+   ================================================================ */
+
+.contactCard {
+  border-radius: 18px;
+  overflow: hidden;
+  background: var(--color-surface-card);
+  box-shadow: 0 1px 2px rgba(56, 36, 23, 0.06),
+    0 8px 18px -14px rgba(56, 36, 23, 0.4);
+  padding: 20px;
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 14px;
+}
+
+@media (max-width: 480px) {
+  .contactCard {
+    grid-template-columns: 1fr;
+  }
+}
+
+.contactItem {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 14px;
+  border-radius: 12px;
+  border: 1.5px solid var(--color-border-default);
+  text-decoration: none;
+  transition: border-color 0.2s ease, background-color 0.2s ease;
+}
+
+.contactItem:hover {
+  border-color: var(--color-accent);
+  background: var(--color-accent-soft);
+}
+
+.contactIcon {
+  display: grid;
+  place-items: center;
+  width: 44px;
+  height: 44px;
+  border-radius: 12px;
+  flex: 0 0 auto;
+}
+
+.contactIconBlue   { background: #dbeafe; color: #1d4ed8; }
+.contactIconGreen  { background: #dcfce7; color: #15803d; }
+.contactIconOrange { background: #fff7ed; color: #c2410c; }
+
+.contactLabel {
+  font-size: 12px;
+  color: var(--color-text-secondary);
+  margin-bottom: 2px;
+}
+
+.contactValue {
+  font-size: 14px;
+  font-weight: 700;
+  color: var(--color-text-primary);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .catCard,
+  .faqChevron {
+    transition: none;
+  }
+}

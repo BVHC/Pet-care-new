@@ -1,212 +1,339 @@
-import { useState } from 'react';
-import { Link } from 'react-router-dom';
-import { Calendar, Dog, Cat, Home, Wifi, Car, Coffee, Shield, Star, Check } from 'lucide-react';
-import { toast } from 'sonner';
-import { StayPriceCalculator } from '@/components/customer/StayPriceCalculator';
+import { useState } from 'react'
+import { Link } from 'react-router-dom'
+import {
+  Bed,
+  Calendar,
+  Car,
+  Cat,
+  Check,
+
+  Dog,
+
+  MapPin,
+  Search,
+  Shield,
+  Star,
+  Utensils,
+  Wifi,
+} from 'lucide-react'
+import { toast } from 'sonner'
+import { StayPriceCalculator } from '@/components/customer/StayPriceCalculator'
+import { DatePicker } from '@/components/customer/DatePicker'
+import styles from './HotelPage.module.css'
+
+/* ================================================================
+   Data.
+   ================================================================ */
 
 const ROOMS = [
-  { id: 1, name: 'Phòng Standard', desc: 'Phòng nhỏ cho thú cưng đơn lẻ', price: 150000, icon: Home, image: 'https://images.unsplash.com/photo-1548199973-03cce0bbc87b?w=600', features: ['Giường êm', 'Bát ăn uống', 'TV'] },
-  { id: 2, name: 'Phòng Deluxe', desc: 'Phòng rộng với không gian chơi', price: 250000, icon: Home, popular: true, image: 'https://images.unsplash.com/photo-1587300003388-59208cc962cb?w=600', features: ['Giường đôi', 'Khu vực chơi', 'Camera 24/7', 'Bữa ăn sáng'] },
-  { id: 3, name: 'Phòng VIP', desc: 'Suite cao cấp với dịch vụ đặc biệt', price: 400000, icon: Star, image: 'https://images.unsplash.com/photo-1601758228041-f3b2795255f1?w=600', features: ['Phòng riêng lớn', 'Spa miễn phí', 'Camera 24/7', 'Bữa ăn cao cấp', 'Dịch vụ dắt đi dạo'] },
-];
+  {
+    id: 1,
+    name: 'Phòng Standard',
+    desc: 'Không gian yên tĩnh cho thú cưng nghỉ ngơi thoải mái',
+    price: 150_000,
+    popular: false,
+    image: '/imgs/hero-dog.png',
+    features: ['Giường êm', 'Bát ăn uống', 'Đèn ngủ'],
+  },
+  {
+    id: 2,
+    name: 'Phòng Deluxe',
+    desc: 'Phòng rộng với khu vực chơi riêng, camera 24/7',
+    price: 250_000,
+    popular: true,
+    image: '/imgs/cat-spa.png',
+    features: ['Giường đôi', 'Khu vực chơi', 'Camera 24/7', 'Bữa ăn sáng'],
+  },
+  {
+    id: 3,
+    name: 'Phòng VIP',
+    desc: 'Suite cao cấp với dịch vụ đặc biệt cho boss',
+    price: 400_000,
+    popular: false,
+    image: '/imgs/hero-dog-clean.png',
+    features: ['Phòng riêng lớn', 'Spa miễn phí', 'Camera 24/7', 'Bữa ăn cao cấp', 'Dắt đi dạo'],
+  },
+]
 
 const SERVICES = [
-  { name: 'Dắt đi dạo', price: '30.000đ/lần', icon: Dog },
-  { name: 'Spa & tắm', price: '100.000đ', icon: Coffee },
-  { name: 'Chăm sóc lông', price: '80.000đ', icon: Cat },
-  { name: 'Khám sức khỏe', price: '150.000đ', icon: Shield },
-];
+  { name: 'Dắt đi dạo', price: '30K/lần', icon: Dog },
+  { name: 'Spa & tắm', price: '100K', icon: Utensils },
+  { name: 'Chăm sóc lông', price: '80K', icon: Star },
+  { name: 'Khám sức khoẻ', price: '150K', icon: Shield },
+]
+
+const AMENITIES = [
+  { icon: Wifi, label: 'Wifi miễn phí' },
+  { icon: Car, label: 'Bãi đỗ xe' },
+  { icon: MapPin, label: 'Quận Cầu Giấy' },
+  { icon: Shield, label: 'Camera 24/7' },
+]
+
+const vnd = new Intl.NumberFormat('vi-VN', {
+  style: 'currency',
+  currency: 'VND',
+  maximumFractionDigits: 0,
+})
+
+/* ================================================================
+   Main page.
+   ================================================================ */
 
 export function HotelPage() {
-  const [checkIn, setCheckIn] = useState('');
-  const [checkOut, setCheckOut] = useState('');
-  const [petType, setPetType] = useState<'dog' | 'cat'>('dog');
-  const [selectedRoom, setSelectedRoom] = useState<number | null>(null);
+  const [petType, setPetType] = useState<'dog' | 'cat'>('dog')
+  const [checkIn, setCheckIn] = useState('')
+  const [checkOut, setCheckOut] = useState('')
+  const [selectedRoom, setSelectedRoom] = useState<number | null>(null)
 
-  const handleBook = () => {
-    if (!checkIn || !checkOut || !selectedRoom) {
-      toast.error('Vui lòng chọn đầy đủ thông tin!');
-      return;
+  const handleSearch = () => {
+    if (!checkIn || !checkOut) {
+      toast.error('Vui lòng chọn ngày nhận và trả phòng.')
+      return
     }
-    toast.success('Đặt phòng thành công! Chúng tôi sẽ liên hệ xác nhận.');
-  };
+    if (checkIn >= checkOut) {
+      toast.error('Ngày trả phòng phải sau ngày nhận phòng.')
+      return
+    }
+    toast.success('Đang tìm phòng trống...')
+  }
+
+  const handleSelectRoom = (roomId: number) => {
+    setSelectedRoom((prev) => (prev === roomId ? null : roomId))
+    const room = ROOMS.find((r) => r.id === roomId)
+    if (room) toast.info(`Đã chọn ${room.name}`)
+  }
 
   return (
-    <div>
-      {/* Hero */}
-      <section className="relative bg-gradient-to-br from-[#843122] to-[#5c2116] px-6 py-20 text-white">
-        <div className="mx-auto max-w-[1000px] text-center">
-          <div className="mb-4 inline-flex items-center gap-2 rounded-full bg-white/20 px-4 py-2 text-sm font-bold">
-            <Home size={16} /> Khách sạn thú cưng
-          </div>
-          <h1 className="font-[var(--font-friendly)] text-4xl font-extrabold sm:text-5xl">
-            Khách sạn 5 sao<br />cho thú cưng của bạn
-          </h1>
-          <p className="mt-6 text-lg opacity-90">
-            Để thú cưng của bạn tận hưởng kỳ nghỉ tuyệt vời khi bạn vắng nhà.
-            Dịch vụ cao cấp, đội ngũ chăm sóc tận tâm 24/7.
-          </p>
-          <Link
-            to="/booking"
-            className="mt-8 inline-flex items-center gap-2 rounded-full bg-white px-8 py-3 font-bold text-[#843122] hover:bg-gray-100 transition-colors"
+    <div className="bg-[var(--color-surface-page)] pb-24">
+      {/* ====== Hero ====== */}
+      <section className={styles.hero}>
+        <img
+          src="/imgs/cat-spa.png"
+          alt=""
+          className={styles.heroBg}
+          aria-hidden
+          loading="eager"
+        />
+        <div className={styles.heroOverlay} aria-hidden />
+        <div className={styles.heroNoise} aria-hidden />
+
+        <div className={`${styles.heroContent} mx-auto max-w-[1280px] px-5 sm:px-8`}>
+          {/* Breadcrumb */}
+          <nav
+            aria-label="Đường dẫn"
+            className="mb-5 text-[12.5px] text-white/50"
           >
-            <Calendar size={20} /> Đặt phòng ngay
-          </Link>
-        </div>
-      </section>
-
-      {/* Booking Form */}
-      <section className="mx-auto max-w-[1000px] -mt-8 px-4 sm:px-6">
-        <div className="rounded-2xl border border-gray-200 bg-white p-6 shadow-xl">
-          <h2 className="mb-4 font-[var(--font-friendly)] text-xl font-bold text-gray-900">Đặt phòng</h2>
-          <div className="grid gap-4 sm:grid-cols-4">
-            <div>
-              <label className="mb-2 block text-sm font-semibold text-gray-700">Loại thú cưng</label>
-              <div className="flex gap-2">
-                <button
-                  onClick={() => setPetType('dog')}
-                  className={`flex-1 flex items-center justify-center gap-2 rounded-lg border py-3 font-semibold transition-colors ${
-                    petType === 'dog' ? 'border-[#843122] bg-[#843122]/10 text-[#843122]' : 'border-gray-200'
-                  }`}
-                >
-                  <Dog size={20} /> Chó
-                </button>
-                <button
-                  onClick={() => setPetType('cat')}
-                  className={`flex-1 flex items-center justify-center gap-2 rounded-lg border py-3 font-semibold transition-colors ${
-                    petType === 'cat' ? 'border-[#843122] bg-[#843122]/10 text-[#843122]' : 'border-gray-200'
-                  }`}
-                >
-                  <Cat size={20} /> Mèo
-                </button>
-              </div>
-            </div>
-            <div>
-              <label className="mb-2 block text-sm font-semibold text-gray-700">Ngày nhận phòng</label>
-              <input
-                type="date"
-                value={checkIn}
-                onChange={(e) => setCheckIn(e.target.value)}
-                min={new Date().toISOString().split('T')[0]}
-                className="w-full rounded-lg border border-gray-200 px-4 py-3 focus:border-[#843122] focus:outline-none"
-              />
-            </div>
-            <div>
-              <label className="mb-2 block text-sm font-semibold text-gray-700">Ngày trả phòng</label>
-              <input
-                type="date"
-                value={checkOut}
-                onChange={(e) => setCheckOut(e.target.value)}
-                min={checkIn || new Date().toISOString().split('T')[0]}
-                className="w-full rounded-lg border border-gray-200 px-4 py-3 focus:border-[#843122] focus:outline-none"
-              />
-            </div>
-            <div className="flex items-end">
-              <button
-                onClick={handleBook}
-                className="w-full rounded-lg bg-[#843122] py-3 font-bold text-white hover:bg-[#6a2517] transition-colors"
-              >
-                Tìm phòng
-              </button>
-            </div>
-          </div>
-        </div>
-      </section>
-
-      {/* Interactive Stay Price Calculator */}
-      <section className="mx-auto max-w-[1000px] px-4 pt-14 sm:px-6">
-        <StayPriceCalculator />
-      </section>
-
-      {/* Rooms */}
-      <section className="mx-auto max-w-[1000px] px-4 py-12 sm:px-6">
-        <h2 className="mb-8 text-center font-[var(--font-friendly)] text-3xl font-bold text-gray-900">Loại phòng</h2>
-        <div className="grid gap-6 lg:grid-cols-3">
-          {ROOMS.map((room) => (
-            <div
-              key={room.id}
-              className={`overflow-hidden rounded-2xl border-2 bg-white shadow-sm transition-all ${
-                selectedRoom === room.id ? 'border-[#843122] shadow-lg' : 'border-transparent'
-              }`}
-              onClick={() => setSelectedRoom(room.id === selectedRoom ? null : room.id)}
+            <Link
+              to="/"
+              className="underline-offset-4 transition-colors hover:text-white hover:underline"
             >
-              {room.popular && (
-                <div className="bg-[#843122] px-4 py-1.5 text-center text-xs font-bold text-white flex items-center justify-center gap-1.5">
-                  <Star size={13} className="fill-amber-300 text-amber-300" />
-                  <span>Phổ biến nhất</span>
-                </div>
-              )}
-              <div className="aspect-[4/3] bg-gray-100">
-                <img src={room.image} alt={room.name} className="h-full w-full object-cover" />
-              </div>
-              <div className="p-6">
-                <div className="flex items-center gap-2">
-                  <room.icon size={20} className="text-[#843122]" />
-                  <h3 className="font-bold text-gray-900">{room.name}</h3>
-                </div>
-                <p className="mt-2 text-sm text-gray-600">{room.desc}</p>
-                <div className="mt-4 flex flex-wrap gap-2">
-                  {room.features.map((f) => (
-                    <span key={f} className="inline-flex items-center gap-1 rounded-full bg-gray-100 px-2 py-1 text-xs text-gray-600">
-                      <Check size={10} /> {f}
-                    </span>
-                  ))}
-                </div>
-                <div className="mt-4 flex items-center justify-between">
-                  <div>
-                    <span className="font-bold text-[#843122]">{room.price.toLocaleString('vi-VN')}đ</span>
-                    <span className="text-sm text-gray-500">/đêm</span>
-                  </div>
-                  <button
-                    onClick={(e) => { e.stopPropagation(); setSelectedRoom(room.id); toast.info(`Đã chọn ${room.name}`); }}
-                    className="rounded-lg bg-[#843122] px-4 py-2 text-sm font-bold text-white hover:bg-[#6a2517] transition-colors"
-                  >
-                    Chọn
-                  </button>
-                </div>
-              </div>
-            </div>
-          ))}
-        </div>
-      </section>
+              Trang chủ
+            </Link>
+            <span className="mx-1.5">/</span>
+            <span className="font-semibold text-white/85">Khách sạn thú cưng</span>
+          </nav>
 
-      {/* Services */}
-      <section className="bg-gray-50 px-4 py-12 sm:px-6">
-        <div className="mx-auto max-w-[1000px]">
-          <h2 className="mb-8 text-center font-[var(--font-friendly)] text-3xl font-bold text-gray-900">Dịch vụ thêm</h2>
-          <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
-            {SERVICES.map((service) => (
-              <div key={service.name} className="flex items-center gap-4 rounded-xl border border-gray-200 bg-white p-4">
-                <div className="flex h-12 w-12 items-center justify-center rounded-full bg-[#843122]/10">
-                  <service.icon size={24} className="text-[#843122]" />
-                </div>
-                <div>
-                  <div className="font-semibold text-gray-900">{service.name}</div>
-                  <div className="text-sm text-[#843122]">{service.price}</div>
-                </div>
+          {/* Heading */}
+          <div className="flex flex-wrap items-end justify-between gap-6">
+            <div>
+              <div className="mb-4 inline-flex items-center gap-2 rounded-full bg-white/10 px-4 py-1.5 text-[12.5px] font-bold text-white/80 backdrop-blur-sm">
+                <Bed size={14} />
+                Khách sạn thú cưng
               </div>
-            ))}
+              <h1 className="font-bayon text-[clamp(30px,4.5vw,58px)] leading-[1.02] font-normal text-white">
+                Nơi nghỉ ngơi tuyệt vời
+                <br />
+                cho boss yêu
+              </h1>
+              <p className="mt-4 max-w-[50ch] text-[15px] leading-relaxed text-white/65">
+                Khu nghỉ dưỡng cao cấp dành riêng cho thú cưng. Đội ngũ chăm sóc tận tâm 24/7, không gian xanh mát, dịch vụ đa dạng.
+              </p>
+            </div>
+
+            <Link
+              to="/booking"
+              className="inline-flex items-center gap-2 rounded-full bg-white px-6 py-3 text-[13.5px] font-bold text-[var(--color-accent)] transition-colors hover:bg-white/90"
+            >
+              <Calendar size={16} />
+              Đặt phòng ngay
+            </Link>
           </div>
         </div>
       </section>
 
-      {/* Amenities */}
-      <section className="mx-auto max-w-[1000px] px-4 py-12 sm:px-6">
-        <h2 className="mb-8 text-center font-[var(--font-friendly)] text-3xl font-bold text-gray-900">Tiện nghi</h2>
-        <div className="flex flex-wrap justify-center gap-6">
-          {[
-            { icon: Wifi, label: 'Wifi miễn phí' },
-            { icon: Car, label: 'Bãi đỗ xe' },
-            { icon: Coffee, label: 'Khu vực chờ' },
-            { icon: Shield, label: 'Camera 24/7' },
-          ].map((item) => (
-            <div key={item.label} className="flex items-center gap-3 text-gray-600">
-              <item.icon size={24} className="text-[#843122]" />
-              <span className="font-semibold">{item.label}</span>
+      {/* ====== Quick search card ====== */}
+      <div className="mx-auto max-w-[1280px] px-5 sm:px-8">
+        <div className={styles.searchCard}>
+          <div className={styles.searchRow}>
+            {/* Pet type */}
+            <div className={styles.field}>
+              <span className={styles.fieldLabel}>Loại thú cưng</span>
+              <div className={styles.petTypePills}>
+                {(['dog', 'cat'] as const).map((t) => (
+                  <button
+                    key={t}
+                    type="button"
+                    onClick={() => setPetType(t)}
+                    className={`${styles.petTypePill} ${petType === t ? styles.petTypePillActive : ''}`}
+                  >
+                    {t === 'dog' ? <Dog size={15} /> : <Cat size={15} />}
+                    {t === 'dog' ? 'Chó' : 'Mèo'}
+                  </button>
+                ))}
+              </div>
             </div>
-          ))}
+
+            {/* Check-in */}
+            <div className={styles.field}>
+              <span className={styles.fieldLabel}>Nhận phòng</span>
+              <DatePicker
+                id="checkIn"
+                value={checkIn || null}
+                onChange={(iso) => setCheckIn(iso)}
+                minDate={new Date().toISOString().split('T')[0]}
+                ariaLabel="Ngày nhận phòng"
+              />
+            </div>
+
+            {/* Check-out */}
+            <div className={styles.field}>
+              <span className={styles.fieldLabel}>Trả phòng</span>
+              <DatePicker
+                id="checkOut"
+                value={checkOut || null}
+                onChange={(iso) => setCheckOut(iso)}
+                minDate={checkIn || new Date().toISOString().split('T')[0]}
+                ariaLabel="Ngày trả phòng"
+              />
+            </div>
+
+            {/* Search button */}
+            <button type="button" onClick={handleSearch} className={styles.searchBtn}>
+              <Search size={16} />
+              Tìm phòng
+            </button>
+          </div>
         </div>
-      </section>
+      </div>
+
+      {/* ====== Rooms ====== */}
+      <div className="mx-auto max-w-[1280px] px-5 sm:px-8">
+        <section className={styles.section}>
+          <p className={styles.sectionLabel}>Chọn phòng</p>
+          <h2 className={styles.sectionTitle}>Loại phòng của chúng tôi</h2>
+
+          <div className={styles.roomsGrid}>
+            {ROOMS.map((room) => {
+              const active = selectedRoom === room.id
+              return (
+                <div
+                  key={room.id}
+                  className={`${styles.roomCard} ${active ? styles.roomCardActive : ''}`}
+                  onClick={() => handleSelectRoom(room.id)}
+                >
+                  <div className={styles.roomCardMedia}>
+                    <img src={room.image} alt={room.name} loading="lazy" />
+                    {room.popular && (
+                      <span className={styles.roomRibbon}>
+                        <Star size={11} className="fill-white text-white" />
+                        Phổ biến nhất
+                      </span>
+                    )}
+                  </div>
+
+                  <div className={styles.roomCardBody}>
+                    <h3 className={styles.roomName}>{room.name}</h3>
+                    <p className={styles.roomDesc}>{room.desc}</p>
+
+                    <div className={styles.roomFeatures}>
+                      {room.features.map((f) => (
+                        <span key={f} className={styles.roomFeature}>
+                          <Check size={10} />
+                          {f}
+                        </span>
+                      ))}
+                    </div>
+
+                    <div className={styles.roomFooter}>
+                      <div>
+                        <span className={styles.roomPrice}>{vnd.format(room.price)}</span>
+                        <span className={styles.roomPriceNight}>/đêm</span>
+                      </div>
+                      <button
+                        type="button"
+                        onClick={(e) => {
+                          e.stopPropagation()
+                          handleSelectRoom(room.id)
+                        }}
+                        className={`${styles.roomSelectBtn} ${active ? styles.roomSelectBtnActive : ''}`}
+                      >
+                        {active ? (
+                          <>
+                            <Check size={13} />
+                            Đã chọn
+                          </>
+                        ) : (
+                          'Chọn phòng'
+                        )}
+                      </button>
+                    </div>
+                  </div>
+                </div>
+              )
+            })}
+          </div>
+        </section>
+
+        {/* ====== Price calculator ====== */}
+        <section className={styles.calcSection}>
+          <p className={styles.sectionLabel}>Tính giá</p>
+          <h2 className={styles.sectionTitle}>Ước tính chi phí</h2>
+          <StayPriceCalculator />
+        </section>
+
+        {/* ====== Services ====== */}
+        <section className={styles.servicesSection}>
+          <p className={styles.sectionLabel}>Bổ sung</p>
+          <h2 className={styles.sectionTitle}>Dịch vụ thêm</h2>
+
+          <div className={styles.servicesGrid}>
+            {SERVICES.map((s) => {
+              const Icon = s.icon
+              return (
+                <div key={s.name} className={styles.serviceCard}>
+                  <span className={styles.serviceIcon}>
+                    <Icon size={20} />
+                  </span>
+                  <div>
+                    <div className={styles.serviceName}>{s.name}</div>
+                    <div className={styles.servicePrice}>{s.price}</div>
+                  </div>
+                </div>
+              )
+            })}
+          </div>
+        </section>
+
+        {/* ====== Amenities ====== */}
+        <section className={styles.section}>
+          <p className={styles.sectionLabel}>Tiện nghi</p>
+          <h2 className={styles.sectionTitle}>Khách sạn mang lại</h2>
+
+          <div className={styles.amenitiesGrid}>
+            {AMENITIES.map((a) => {
+              const Icon = a.icon
+              return (
+                <div key={a.label} className={styles.amenityItem}>
+                  <span className={styles.amenityIcon}>
+                    <Icon size={16} />
+                  </span>
+                  <span>{a.label}</span>
+                </div>
+              )
+            })}
+          </div>
+        </section>
+      </div>
     </div>
-  );
+  )
 }

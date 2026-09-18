@@ -1,0 +1,692 @@
+/* /recommend — "Pet Profile Panel" layout
+   Sidebar trái (pet avatar) + main phải (filter + grid).
+   Chia sẻ card/product grid với ShopPage để giữ consistency. */
+
+/* ================================================================
+   Layout 2 cột: sidebar ~260px + main linh hoạt.
+   Trên tablet: sidebar thu thành strip ngang trên cùng.
+   ================================================================ */
+
+.page {
+  display: grid;
+  grid-template-columns: 260px 1fr;
+  grid-template-rows: auto 1fr;
+  gap: 0;
+  min-height: calc(100dvh - 150px);
+  align-items: start;
+}
+
+@media (max-width: 767px) {
+  .page {
+    grid-template-columns: 1fr;
+    grid-template-rows: auto auto auto;
+  }
+}
+
+/* ================================================================
+   Sidebar — danh sách pet + pet đang chọn nổi bật.
+   ================================================================ */
+
+.sidebar {
+  grid-column: 1;
+  grid-row: 1 / 3;
+  position: sticky;
+  top: 61px;
+  max-height: calc(100dvh - 70px);
+  overflow-y: auto;
+  scrollbar-width: none;
+  border-right: 1px solid var(--color-border-default);
+  background: var(--color-surface-page);
+  padding: 0;
+}
+
+.sidebar::-webkit-scrollbar {
+  display: none;
+}
+
+@media (max-width: 767px) {
+  .sidebar {
+    grid-column: 1;
+    grid-row: 1;
+    position: static;
+    max-height: none;
+    overflow: visible;
+    border-right: none;
+    border-bottom: 1px solid var(--color-border-default);
+  }
+}
+
+/* Tiêu đề sidebar */
+.sidebarHead {
+  padding: 20px 20px 12px;
+  border-bottom: 1px solid var(--color-border-default);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.sidebarTitle {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--color-text-secondary);
+}
+
+/* Vùng scroll danh sách pet */
+.sidebarList {
+  padding: 12px 12px 20px;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+@media (max-width: 767px) {
+  .sidebarList {
+    flex-direction: row;
+    overflow-x: auto;
+    scroll-snap-type: x proximity;
+    scrollbar-width: none;
+    padding: 10px 12px;
+    gap: 8px;
+  }
+
+  .sidebarList::-webkit-scrollbar {
+    display: none;
+  }
+}
+
+/* ================================================================
+   Pet item trong sidebar — dùng chung class cho cả mobile horizontal strip.
+   ================================================================ */
+
+.petItem {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 9px 10px;
+  border-radius: 12px;
+  cursor: pointer;
+  transition:
+    background-color 0.2s ease,
+    transform 0.2s ease;
+  width: 100%;
+  background: transparent;
+  border: none;
+  text-align: left;
+}
+
+.petItem:hover {
+  background: var(--color-surface-2);
+}
+
+@media (max-width: 767px) {
+  .petItem {
+    flex-direction: column;
+    gap: 6px;
+    width: 72px;
+    flex: 0 0 auto;
+    scroll-snap-align: start;
+    padding: 8px 6px;
+    border-radius: 10px;
+  }
+}
+
+.petAvatar {
+  width: 42px;
+  height: 42px;
+  border-radius: 50%;
+  object-fit: cover;
+  flex: 0 0 auto;
+  box-shadow: 0 0 0 2px transparent;
+  transition: box-shadow 0.2s ease;
+}
+
+.petItemActive .petAvatar {
+  box-shadow: 0 0 0 3px var(--color-accent);
+}
+
+@media (max-width: 767px) {
+  .petAvatar {
+    width: 48px;
+    height: 48px;
+  }
+}
+
+.petInfo {
+  flex: 1;
+  min-width: 0;
+}
+
+@media (max-width: 767px) {
+  .petInfo {
+    text-align: center;
+  }
+}
+
+.petName {
+  font-size: 14px;
+  font-weight: 700;
+  color: var(--color-text-primary);
+  truncate: true;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  line-height: 1.3;
+}
+
+.petItemActive .petName {
+  color: var(--color-accent);
+}
+
+.petMeta {
+  font-size: 11.5px;
+  color: var(--color-text-secondary);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  margin-top: 1px;
+}
+
+/* Active dot */
+.petDot {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: var(--color-accent);
+  flex: 0 0 auto;
+  opacity: 0;
+  transition: opacity 0.2s ease;
+}
+
+.petItemActive .petDot {
+  opacity: 1;
+}
+
+@media (max-width: 767px) {
+  .petDot {
+    display: none;
+  }
+}
+
+/* ================================================================
+   Nút thêm pet mới.
+   ================================================================ */
+
+.addPetBtn {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  padding: 9px 10px;
+  border-radius: 12px;
+  border: 1.5px dashed var(--color-border-strong);
+  background: transparent;
+  color: var(--color-text-secondary);
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+  transition:
+    border-color 0.2s ease,
+    color 0.2s ease,
+    background-color 0.2s ease;
+  margin-top: 4px;
+}
+
+.addPetBtn:hover {
+  border-color: var(--color-accent);
+  color: var(--color-accent);
+  background: var(--color-accent-soft);
+}
+
+/* ================================================================
+   Featured pet — card nổi bật hiện ở đầu main.
+   ================================================================ */
+
+.featured {
+  grid-column: 2;
+  grid-row: 1;
+  padding: 24px 28px 0;
+}
+
+@media (max-width: 767px) {
+  .featured {
+    grid-column: 1;
+    grid-row: 2;
+    padding: 16px 16px 0;
+  }
+}
+
+.featuredInner {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  padding: 16px 20px;
+  border-radius: 16px;
+  background: var(--color-surface-2);
+  border: 1px solid var(--color-border-default);
+}
+
+.featuredAvatar {
+  width: 64px;
+  height: 64px;
+  border-radius: 50%;
+  object-fit: cover;
+  flex: 0 0 auto;
+  box-shadow: 0 0 0 3px var(--color-accent-soft);
+}
+
+.featuredName {
+  font-family: var(--font-friendly);
+  font-size: 22px;
+  font-weight: 800;
+  color: var(--color-text-primary);
+  line-height: 1.2;
+}
+
+.featuredBreed {
+  font-size: 13px;
+  color: var(--color-text-secondary);
+  margin-top: 2px;
+}
+
+.featuredTags {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-top: 8px;
+}
+
+.featuredTag {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 3px 9px;
+  border-radius: 999px;
+  font-size: 11.5px;
+  font-weight: 600;
+  background: var(--color-surface-card);
+  color: var(--color-text-secondary);
+  border: 1px solid var(--color-border-default);
+}
+
+.featuredMeta {
+  margin-left: auto;
+  text-align: right;
+  flex: 0 0 auto;
+}
+
+.featuredMetaLabel {
+  font-size: 11px;
+  color: var(--color-text-secondary);
+}
+
+.featuredMetaCount {
+  font-family: var(--font-friendly);
+  font-size: 22px;
+  font-weight: 800;
+  color: var(--color-accent);
+}
+
+/* ================================================================
+   Filter bar trong main — nhắc lại ShopPage nhưng nhẹ hơn.
+   ================================================================ */
+
+.filterBar {
+  grid-column: 2;
+  position: sticky;
+  top: 61px;
+  z-index: 30;
+  background: color-mix(in srgb, var(--color-surface-page) 88%, transparent);
+  backdrop-filter: blur(10px);
+  border-bottom: 1px solid transparent;
+  transition: box-shadow 0.25s ease, border-color 0.25s ease;
+  padding: 0 28px;
+}
+
+.filterBarStuck {
+  border-bottom-color: var(--color-border-default);
+  box-shadow: 0 10px 22px -18px rgba(56, 36, 23, 0.85);
+}
+
+@media (max-width: 767px) {
+  .filterBar {
+    grid-column: 1;
+    padding: 0 16px;
+  }
+}
+
+.filterInner {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 10px 0;
+  overflow-x: auto;
+  scrollbar-width: none;
+}
+
+.filterInner::-webkit-scrollbar {
+  display: none;
+}
+
+/* ================================================================
+   Segment / pill dùng chung.
+   ================================================================ */
+
+.segment {
+  display: flex;
+  border-radius: 999px;
+  background: var(--color-surface-2);
+  padding: 2px;
+  flex: 0 0 auto;
+}
+
+.segmentBtn {
+  border-radius: 999px;
+  padding: 5px 14px;
+  font-size: 12.5px;
+  font-weight: 700;
+  transition: background-color 0.2s ease, color 0.2s ease;
+  cursor: pointer;
+  border: none;
+  white-space: nowrap;
+  color: var(--color-text-secondary);
+  background: transparent;
+}
+
+.segmentBtnActive {
+  background: var(--color-accent);
+  color: #fff;
+}
+
+.sortSelect {
+  border-radius: 999px;
+  border: 1px solid var(--color-border-default);
+  background: var(--color-surface-card);
+  padding: 6px 14px;
+  font-size: 12.5px;
+  font-weight: 600;
+  color: var(--color-text-primary);
+  cursor: pointer;
+  flex: 0 0 auto;
+  appearance: none;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 24 24' fill='none' stroke='%238a7565' stroke-width='2.5' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='m6 9 6 6 6-6'/%3E%3C/svg%3E");
+  background-repeat: no-repeat;
+  background-position: right 10px center;
+  padding-right: 28px;
+}
+
+/* ================================================================
+   Main grid — sản phẩm.
+   ================================================================ */
+
+.main {
+  grid-column: 2;
+  padding: 20px 28px 32px;
+}
+
+@media (max-width: 767px) {
+  .main {
+    grid-column: 1;
+    padding: 16px 16px 32px;
+  }
+}
+
+.grid {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 12px;
+}
+
+@media (min-width: 640px) {
+  .grid {
+    grid-template-columns: repeat(3, 1fr);
+    gap: 16px;
+  }
+}
+
+@media (min-width: 1024px) {
+  .grid {
+    grid-template-columns: repeat(3, 1fr);
+    gap: 18px;
+  }
+}
+
+@media (min-width: 1280px) {
+  .grid {
+    grid-template-columns: repeat(4, 1fr);
+    gap: 18px;
+  }
+}
+
+/* ================================================================
+   Card — reuse card design từ ShopPage.
+   ================================================================ */
+
+.card {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  border-radius: 14px;
+  overflow: hidden;
+  background: var(--color-surface-card);
+  box-shadow:
+    0 1px 2px rgba(56, 36, 23, 0.06),
+    0 8px 18px -14px rgba(56, 36, 23, 0.4);
+  transition:
+    transform 0.35s cubic-bezier(0.32, 0.72, 0, 1),
+    box-shadow 0.35s cubic-bezier(0.32, 0.72, 0, 1);
+}
+
+.card:hover {
+  transform: translateY(-4px);
+  box-shadow:
+    0 2px 4px rgba(56, 36, 23, 0.07),
+    0 22px 34px -22px rgba(164, 51, 36, 0.4);
+}
+
+.card:focus-within {
+  outline: 2px solid var(--color-accent);
+  outline-offset: 3px;
+}
+
+.cardMedia {
+  position: relative;
+  display: block;
+  aspect-ratio: 4 / 3;
+  overflow: hidden;
+  background: var(--color-surface-1);
+}
+
+.cardMedia img {
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+  padding: 10px;
+  mix-blend-mode: multiply;
+  transition: transform 0.45s cubic-bezier(0.32, 0.72, 0, 1);
+}
+
+.card:hover .cardMedia img {
+  transform: scale(1.06);
+}
+
+/* Badge góc trái */
+.cardBadge {
+  position: absolute;
+  top: 2px;
+  left: 2px;
+  border-radius: 6px;
+  background: var(--color-accent);
+  padding: 2px 7px;
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: #fff;
+}
+
+/* Nút thêm giỏ — trượt lên phủ lên ảnh. */
+.cardAction {
+  position: absolute;
+  right: 8px;
+  bottom: 8px;
+  left: 8px;
+  transform: translateY(calc(100% + 8px));
+  opacity: 0;
+  transition:
+    transform 0.4s cubic-bezier(0.32, 0.72, 0, 1),
+    opacity 0.25s ease;
+}
+
+.card:hover .cardAction,
+.card:focus-within .cardAction {
+  transform: translateY(0);
+  opacity: 1;
+}
+
+@media (hover: none) {
+  .cardAction {
+    transform: none;
+    opacity: 1;
+  }
+}
+
+/* Thân card dưới ảnh */
+.cardBody {
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+  padding: 10px;
+  gap: 0;
+}
+
+.cardCategory {
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--color-text-secondary);
+  margin-bottom: 4px;
+}
+
+.cardName {
+  font-size: 13px;
+  font-weight: 700;
+  line-height: 1.3;
+  color: var(--color-text-primary);
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+  min-height: 2.6em;
+  margin-bottom: 6px;
+}
+
+.cardName:hover {
+  color: var(--color-accent);
+}
+
+.cardRating {
+  display: flex;
+  align-items: center;
+  gap: 3px;
+  font-size: 11.5px;
+  color: var(--color-text-secondary);
+}
+
+.cardRatingStrong {
+  font-weight: 600;
+  color: var(--color-text-primary);
+}
+
+.cardFooter {
+  margin-top: auto;
+  padding-top: 8px;
+  display: flex;
+  align-items: baseline;
+  gap: 6px;
+  flex-wrap: wrap;
+}
+
+.cardPrice {
+  font-family: var(--font-friendly);
+  font-size: 16px;
+  font-weight: 800;
+  color: var(--color-text-primary);
+}
+
+.cardOldPrice {
+  font-size: 11.5px;
+  color: var(--color-text-secondary);
+  text-decoration: line-through;
+}
+
+/* ================================================================
+   Skeleton.
+   ================================================================ */
+
+.skeleton {
+  border-radius: 14px;
+  background: linear-gradient(
+    100deg,
+    var(--color-surface-2) 30%,
+    #fffaf3 48%,
+    var(--color-surface-2) 66%
+  );
+  background-size: 260% 100%;
+  animation: shimmer 1.25s linear infinite;
+}
+
+@keyframes shimmer {
+  to {
+    background-position: -160% 0;
+  }
+}
+
+/* ================================================================
+   Empty state.
+   ================================================================ */
+
+.empty {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  padding: 48px 24px;
+  text-align: center;
+  background: var(--color-surface-2);
+  border-radius: 16px;
+  grid-column: 1 / -1;
+}
+
+.emptyTitle {
+  font-family: var(--font-friendly);
+  font-size: 18px;
+  font-weight: 800;
+  color: var(--color-text-primary);
+  margin-top: 16px;
+}
+
+.emptyDesc {
+  font-size: 13.5px;
+  color: var(--color-text-secondary);
+  max-width: 36ch;
+  margin-top: 6px;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .card,
+  .cardMedia img,
+  .cardAction,
+  .petItem {
+    transition: none;
+  }
+
+  .skeleton {
+    animation: none;
+  }
+}
