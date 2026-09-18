@@ -189,12 +189,113 @@ public final class RoleScopeGuard {
                 }
             }
             case STORE_MANAGER -> {
-                if (!Objects.equals(actor.getStoreId(), targetStoreId)) {
+                // Khớp với nhánh STORE_MANAGER ở assertCanAssignRole (kiểm tra cả storeId lẫn
+                // organizationId) — trước đây chỉ check storeId, cho phép actor "vượt" sang quản
+                // lý user gắn storeId trùng nhưng organizationId khác (dữ liệu không nhất quán vì
+                // Module 03/Store chưa triển khai nên storeId không tự đối chiếu ra đúng Org chủ).
+                if (!Objects.equals(actor.getStoreId(), targetStoreId)
+                        || !Objects.equals(actor.getOrganizationId(), targetOrganizationId)) {
                     throw new AccessDeniedScopeException("STORE:" + actor.getStoreId(), "STORE:" + targetStoreId);
                 }
             }
             default -> throw new AccessDeniedScopeException("SUPER_ADMIN|ORGANIZATION_ADMIN|STORE_MANAGER",
                     actor.getRole().name());
         }
+    }
+
+    /**
+     * RULE-02-05 — actor có được sửa thông tin {@code Store} này không (dùng cho
+     * {@code PATCH /stores/{id}} — {@code UpdateStore}, docs/api/org-store-v1.md B): SUPER_ADMIN
+     * toàn quyền; ORGANIZATION_ADMIN mọi Store trong Organization mình; STORE_MANAGER chỉ đúng
+     * Store mình đang quản lý. Cùng cấu trúc {@link #assertCanManageUser} (3 role được phép gọi,
+     * STORE_MANAGER phải khớp cả storeId lẫn organizationId) nhưng tách method riêng vì đây là
+     * hành động trên aggregate {@code Store} (Module 03), không phải {@code User} (Module 02) —
+     * tránh đặt tên gây hiểu nhầm dù logic giống hệt.
+     */
+    public static void assertCanManageStore(UserPrincipal actor, java.util.UUID organizationId,
+                                             java.util.UUID storeId) {
+        switch (actor.getRole()) {
+            case SUPER_ADMIN -> {
+                // Toàn quyền.
+            }
+            case ORGANIZATION_ADMIN -> {
+                if (!Objects.equals(actor.getOrganizationId(), organizationId)) {
+                    throw new AccessDeniedScopeException("ORGANIZATION:" + actor.getOrganizationId(),
+                            "ORGANIZATION:" + organizationId);
+                }
+            }
+            case STORE_MANAGER -> {
+                if (!Objects.equals(actor.getStoreId(), storeId)
+                        || !Objects.equals(actor.getOrganizationId(), organizationId)) {
+                    throw new AccessDeniedScopeException("STORE:" + actor.getStoreId(), "STORE:" + storeId);
+                }
+            }
+            default -> throw new AccessDeniedScopeException("SUPER_ADMIN|ORGANIZATION_ADMIN|STORE_MANAGER",
+                    actor.getRole().name());
+        }
+    }
+
+    /**
+     * RULE-02-05 — dành riêng cho {@code ConfigureOperatingHour} ({@code PUT
+     * /stores/{id}/operating-hours}, docs/api/org-store-v1.md — quyết định 2026-09-17): CHỈ
+     * {@code STORE_MANAGER} đúng Store mình quản lý được gọi, khác hẳn {@link #assertCanManageStore}
+     * — {@code SUPER_ADMIN}/{@code ORGANIZATION_ADMIN} KHÔNG có ngoại lệ ở đây dù toàn quyền trên
+     * mọi endpoint Store khác (bám sát literal `docs/01-business-operations.md` `01#3`, chỉ gán
+     * đúng 1 dòng StoreManager cho command này, không có OrgAdmin). {@code @PreAuthorize} ở
+     * Controller đã chặn role khác STORE_MANAGER; guard này chỉ còn cần khớp đúng storeId
+     * (defense-in-depth, không dựa hoàn toàn vào {@code @PreAuthorize}).
+     */
+    public static void assertIsOwnStoreManager(UserPrincipal actor, java.util.UUID storeId) {
+        if (actor.getRole() != UserRole.STORE_MANAGER) {
+            throw new AccessDeniedScopeException("STORE_MANAGER", actor.getRole().name());
+        }
+        if (!Objects.equals(actor.getStoreId(), storeId)) {
+            throw new AccessDeniedScopeException("STORE:" + actor.getStoreId(), "STORE:" + storeId);
+        }
+    }
+
+    /**
+     * RULE-02-05 — actor không được tự khóa/mở khóa/vô hiệu hóa/tái kích hoạt
+     * chính tài khoản của mình qua các thao tác quản trị phân cấp
+     * (LockAccount/UnlockAccount/DeactivateAccount/ReactivateAccount). "Phân
+     * cấp quản trị" ngụ ý tác động lên người khác, không phải bản thân; nếu
+     * không, actor cuối cùng còn quyền Admin của 1 Organization có thể tự khóa
+     * mình và không ai còn quyền để mở lại (tương tự tinh thần chống tự thay
+     * đổi bản thân đã áp dụng cho AssignPermission — RULE-02-06,
+     * {@link #assertNotSelfAssignment}).
+     */
+    public static void assertNotSelfLifecycleAction(UserPrincipal actor, java.util.UUID targetUserId) {
+        if (Objects.equals(actor.getUserId(), targetUserId)) {
+            throw new BusinessRuleViolationException("RULE-02-05",
+                    "Không được tự khóa/vô hiệu hóa tài khoản của chính mình");
+        }
+    }
+
+    /**
+     * RULE-02-05 — actor có được khóa/mở khóa/vô hiệu hóa/tái kích hoạt tài
+     * khoản của {@code targetRole} này không (dùng cho
+     * LockAccount/UnlockAccount/DeactivateAccount/ReactivateAccount):
+     * <ul>
+     *   <li>Target là CUSTOMER: chỉ SUPER_ADMIN — Customer không gắn
+     *   Organization trong schema hiện tại (RULE-02-02), nên ORGANIZATION_ADMIN
+     *   không có cách xác định "khách hàng thuộc Organization mình" theo đúng
+     *   tinh thần RULE-02-05 (giống lý do {@link #assertCanAccessUserRecord}
+     *   loại ORGANIZATION_ADMIN khỏi customer target). RECEPTIONIST không nằm
+     *   trong danh sách Actor của FSM-1 Lock/Unlock/Deactivate/Reactivate
+     *   (docs/03-state-machines.md) nên cũng không được gọi các thao tác này.</li>
+     *   <li>Target không phải CUSTOMER (staff): delegate
+     *   {@link #assertCanManageOrganization} — SUPER_ADMIN toàn quyền,
+     *   ORGANIZATION_ADMIN chỉ đúng Organization của target.</li>
+     * </ul>
+     */
+    public static void assertCanManageAccountLifecycle(UserPrincipal actor, UserRole targetRole,
+                                                         java.util.UUID targetOrganizationId) {
+        if (targetRole == UserRole.CUSTOMER) {
+            if (actor.getRole() == UserRole.SUPER_ADMIN) {
+                return;
+            }
+            throw new AccessDeniedScopeException("SUPER_ADMIN", actor.getRole().name());
+        }
+        assertCanManageOrganization(actor, targetOrganizationId);
     }
 }
