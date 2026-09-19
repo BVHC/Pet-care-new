@@ -69,9 +69,12 @@ class AccountLifecycleServiceImplTest {
         when(accountRepository.findById(account.getId())).thenReturn(Optional.of(account));
         when(accountRepository.save(any(Account.class))).thenAnswer(inv -> inv.getArgument(0));
 
-        var summary = service.lockAccount(account.getId());
+        UUID orgId = UUID.randomUUID();
+        UUID storeId = UUID.randomUUID();
+        var summary = service.lockAccount(account.getId(), orgId, storeId);
 
         assertThat(summary.status()).isEqualTo(AccountStatus.LOCKED);
+        assertThat(summary.previousStatus()).isEqualTo(AccountStatus.ACTIVE);
         assertThat(account.getLockReason()).isEqualTo(LockReason.ADMIN_LOCK);
         verify(tokenIssuanceFacade).revokeAllSessions(account.getId(), RefreshTokenRevokeReason.LOCK_ACCOUNT);
         verify(accountEventRecorder).record(eq(account), eq("AccountLocked"), any());
@@ -82,7 +85,8 @@ class AccountLifecycleServiceImplTest {
         Account account = account(AccountStatus.DEACTIVATED);
         when(accountRepository.findById(account.getId())).thenReturn(Optional.of(account));
 
-        assertThatThrownBy(() -> service.lockAccount(account.getId())).isInstanceOf(InvalidStateTransitionException.class);
+        assertThatThrownBy(() -> service.lockAccount(account.getId(), null, null))
+                .isInstanceOf(InvalidStateTransitionException.class);
         verify(tokenIssuanceFacade, never()).revokeAllSessions(any(), any());
     }
 
@@ -95,11 +99,26 @@ class AccountLifecycleServiceImplTest {
         when(accountRepository.findById(account.getId())).thenReturn(Optional.of(account));
         when(accountRepository.save(any(Account.class))).thenAnswer(inv -> inv.getArgument(0));
 
-        var summary = service.unlockAccount(account.getId());
+        var summary = service.unlockAccount(account.getId(), null, null);
 
         assertThat(summary.status()).isEqualTo(AccountStatus.ACTIVE);
+        assertThat(summary.previousStatus()).isEqualTo(AccountStatus.LOCKED);
         assertThat(account.getLockReason()).isNull();
         assertThat(account.getLockedUntil()).isNull();
+    }
+
+    @Test
+    void unlockAccount_deactivated_throwsInvalidTransition_notReactivatedWithoutReason() {
+        // FSM-1: DEACTIVATED -> ACTIVE chỉ hợp lệ qua ReactivateAccount (bắt buộc reason,
+        // RULE-02-07), không qua UnlockAccount — dù transition map dùng chung cho phép cặp
+        // trạng thái này (vì đó cũng là cạnh hợp lệ của ReactivateAccount).
+        Account account = account(AccountStatus.DEACTIVATED);
+        when(accountRepository.findById(account.getId())).thenReturn(Optional.of(account));
+
+        assertThatThrownBy(() -> service.unlockAccount(account.getId(), null, null))
+                .isInstanceOf(InvalidStateTransitionException.class);
+        verify(accountRepository, never()).save(any());
+        verify(accountEventRecorder, never()).record(any(), eq("AccountUnlocked"));
     }
 
     @Test
@@ -108,16 +127,17 @@ class AccountLifecycleServiceImplTest {
         when(accountRepository.findById(account.getId())).thenReturn(Optional.of(account));
         when(accountRepository.save(any(Account.class))).thenAnswer(inv -> inv.getArgument(0));
 
-        var summary = service.deactivateAccount(account.getId(), "Nghỉ việc");
+        var summary = service.deactivateAccount(account.getId(), "Nghỉ việc", null, null);
 
         assertThat(summary.status()).isEqualTo(AccountStatus.DEACTIVATED);
+        assertThat(summary.previousStatus()).isEqualTo(AccountStatus.LOCKED);
         verify(tokenIssuanceFacade).revokeAllSessions(account.getId(), RefreshTokenRevokeReason.DEACTIVATE_ACCOUNT);
     }
 
     @Test
     void reactivateAccount_missingReason_throwsBusinessRuleViolation_RULE_02_07() {
         UUID accountId = UUID.randomUUID();
-        assertThatThrownBy(() -> service.reactivateAccount(accountId, " "))
+        assertThatThrownBy(() -> service.reactivateAccount(accountId, " ", null, null))
                 .isInstanceOf(BusinessRuleViolationException.class)
                 .satisfies(ex -> assertThat(((BusinessRuleViolationException) ex).getRuleId()).isEqualTo("RULE-02-07"));
         verify(accountRepository, never()).findById(any());
@@ -129,7 +149,7 @@ class AccountLifecycleServiceImplTest {
         when(accountRepository.findById(account.getId())).thenReturn(Optional.of(account));
         when(accountRepository.save(any(Account.class))).thenAnswer(inv -> inv.getArgument(0));
 
-        var summary = service.reactivateAccount(account.getId(), "Quay lại làm việc");
+        var summary = service.reactivateAccount(account.getId(), "Quay lại làm việc", null, null);
 
         assertThat(summary.status()).isEqualTo(AccountStatus.ACTIVE);
         verify(accountEventRecorder).record(eq(account), eq("AccountReactivated"), any());
@@ -147,11 +167,93 @@ class AccountLifecycleServiceImplTest {
         when(accountRepository.findById(account.getId())).thenReturn(Optional.of(account));
         when(accountRepository.save(any(Account.class))).thenAnswer(inv -> inv.getArgument(0));
 
-        var summary = service.reactivateAccount(account.getId(), "Mở khoá lại sau xác minh");
+        var summary = service.reactivateAccount(account.getId(), "Mở khoá lại sau xác minh", null, null);
 
         assertThat(summary.status()).isEqualTo(AccountStatus.ACTIVE);
         assertThat(account.getLockReason()).isNull();
         assertThat(account.getLockedUntil()).isNull();
         assertThat(account.getFailedLoginAttempts()).isEqualTo(0);
+    }
+
+    // docs/api/iam-v1.md §B khai báo cả 4 lifecycle action là "Idempotent" — gọi lại trên
+    // account đã ở đúng trạng thái đích phải trả 200 no-op, không ném InvalidStateTransitionException.
+
+    @Test
+    void lockAccount_alreadyLocked_isIdempotent_noSideEffects() {
+        Account account = account(AccountStatus.LOCKED);
+        account.setLockReason(LockReason.AUTO_FAILED_LOGIN);
+        when(accountRepository.findById(account.getId())).thenReturn(Optional.of(account));
+
+        var summary = service.lockAccount(account.getId(), null, null);
+
+        assertThat(summary.status()).isEqualTo(AccountStatus.LOCKED);
+        assertThat(summary.previousStatus()).isEqualTo(AccountStatus.LOCKED);
+        // Không "khóa lại" — giữ nguyên lock_reason cũ, không re-revoke/re-emit event.
+        assertThat(account.getLockReason()).isEqualTo(LockReason.AUTO_FAILED_LOGIN);
+        verify(accountRepository, never()).save(any());
+        verify(tokenIssuanceFacade, never()).revokeAllSessions(any(), any());
+        verify(accountEventRecorder, never()).record(any(), eq("AccountLocked"), any());
+    }
+
+    @Test
+    void unlockAccount_alreadyActive_isIdempotent_noSideEffects() {
+        Account account = account(AccountStatus.ACTIVE);
+        when(accountRepository.findById(account.getId())).thenReturn(Optional.of(account));
+
+        var summary = service.unlockAccount(account.getId(), null, null);
+
+        assertThat(summary.status()).isEqualTo(AccountStatus.ACTIVE);
+        verify(accountRepository, never()).save(any());
+        verify(accountEventRecorder, never()).record(any(), eq("AccountUnlocked"));
+    }
+
+    @Test
+    void deactivateAccount_alreadyDeactivated_isIdempotent_noSideEffects() {
+        Account account = account(AccountStatus.DEACTIVATED);
+        when(accountRepository.findById(account.getId())).thenReturn(Optional.of(account));
+
+        var summary = service.deactivateAccount(account.getId(), "Nghỉ việc", null, null);
+
+        assertThat(summary.status()).isEqualTo(AccountStatus.DEACTIVATED);
+        verify(accountRepository, never()).save(any());
+        verify(tokenIssuanceFacade, never()).revokeAllSessions(any(), any());
+        verify(accountEventRecorder, never()).record(any(), eq("AccountDeactivated"), any());
+    }
+
+    @Test
+    void reactivateAccount_alreadyActive_isIdempotent_noSideEffects() {
+        Account account = account(AccountStatus.ACTIVE);
+        when(accountRepository.findById(account.getId())).thenReturn(Optional.of(account));
+
+        var summary = service.reactivateAccount(account.getId(), "Xac nhan lai", null, null);
+
+        assertThat(summary.status()).isEqualTo(AccountStatus.ACTIVE);
+        verify(accountRepository, never()).save(any());
+        verify(accountEventRecorder, never()).record(any(), eq("AccountReactivated"), any());
+    }
+
+    @Test
+    void reactivateAccount_fromPendingVerification_throwsInvalidTransition_doesNotBypassOtp() {
+        // FSM-1/docs/api/iam-v1.md C4: Reactivate chỉ hợp lệ từ DEACTIVATED/LOCKED. Transition
+        // map dùng chung có cạnh PENDING_VERIFICATION -> ACTIVE (của VerifyOTP) — Reactivate
+        // không được "mượn" cạnh đó để kích hoạt tài khoản chưa xác thực OTP.
+        Account account = account(AccountStatus.PENDING_VERIFICATION);
+        when(accountRepository.findById(account.getId())).thenReturn(Optional.of(account));
+
+        assertThatThrownBy(() -> service.reactivateAccount(account.getId(), "Ly do bat ky", null, null))
+                .isInstanceOf(InvalidStateTransitionException.class);
+        verify(accountRepository, never()).save(any());
+        verify(accountEventRecorder, never()).record(any(), eq("AccountReactivated"), any());
+    }
+
+    @Test
+    void reactivateAccount_alreadyActive_stillRequiresReason_RULE_02_07() {
+        // No-op không miễn trừ yêu cầu reason bắt buộc (RULE-02-07) — validate trước khi biết
+        // account đã ACTIVE hay chưa.
+        UUID accountId = UUID.randomUUID();
+
+        assertThatThrownBy(() -> service.reactivateAccount(accountId, " ", null, null))
+                .isInstanceOf(BusinessRuleViolationException.class);
+        verify(accountRepository, never()).findById(any());
     }
 }

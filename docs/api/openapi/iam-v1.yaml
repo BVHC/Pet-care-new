@@ -362,7 +362,10 @@ paths:
     post:
       tags: [AccessControl]
       summary: Reactivate account (ReactivateAccount)
-      description: CONFIRMED (RULE-02-05/07, FSM-1). Mandatory reason recorded to audit log. Idempotent.
+      description: >-
+        CONFIRMED (RULE-02-05/07, FSM-1). Valid from DEACTIVATED or LOCKED (LOCKED
+        source added 2026-09-16 — see docs/02-business-rules.md RULE-02-07 Decision
+        Log). Mandatory reason recorded to audit log. Idempotent.
       operationId: reactivateAccount
       security:
         - bearerAuth: []
@@ -520,6 +523,17 @@ components:
           format: uuid
         fullName:
           type: string
+        gender:
+          type: string
+          enum: [MALE, FEMALE, OTHER]
+          nullable: true
+        dateOfBirth:
+          type: string
+          format: date
+          nullable: true
+        avatarUrl:
+          type: string
+          nullable: true
         role:
           $ref: '#/components/schemas/RoleCode'
           description: Primary role (users.role). Multi-role via user_roles is out of v1 (ASSUMPTION A3).

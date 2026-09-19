@@ -25,15 +25,20 @@ public interface AccountLifecycleService {
      */
     Map<UUID, AccountStatus> getStatuses(Collection<UUID> accountIds);
 
-    /** RULE-02-04 — Admin chủ động khóa, thu hồi tức thì toàn bộ session. */
-    AccountSummary lockAccount(UUID accountId);
+    /**
+     * RULE-02-04 — Admin chủ động khóa, thu hồi tức thì toàn bộ session.
+     * {@code organizationId}/{@code storeId} là scope của TÀI KHOẢN BỊ KHÓA (IAM đã
+     * resolve sẵn từ {@code User}) — chỉ phục vụ ghi đúng {@code audit_logs.organization_id}/
+     * {@code store_id} (RULE-25-01), không dùng cho nghiệp vụ khóa tài khoản.
+     */
+    AccountSummary lockAccount(UUID accountId, UUID organizationId, UUID storeId);
 
     /** RULE-02-04 — Admin chủ động mở khóa (mọi lock_reason, không cần chờ locked_until). */
-    AccountSummary unlockAccount(UUID accountId);
+    AccountSummary unlockAccount(UUID accountId, UUID organizationId, UUID storeId);
 
     /** RULE-02-07 — nhân viên nghỉ việc, thu hồi session + từ chối login vĩnh viễn. */
-    AccountSummary deactivateAccount(UUID accountId, String reason);
+    AccountSummary deactivateAccount(UUID accountId, String reason, UUID organizationId, UUID storeId);
 
     /** RULE-02-07 — reason bắt buộc, ghi audit. */
-    AccountSummary reactivateAccount(UUID accountId, String reason);
+    AccountSummary reactivateAccount(UUID accountId, String reason, UUID organizationId, UUID storeId);
 }

@@ -424,6 +424,67 @@ erDiagram
   | `created_at` | TIMESTAMPTZ | YES | `CURRENT_TIMESTAMP` | Thời điểm tạo |
   | `updated_at` | TIMESTAMPTZ | YES | `CURRENT_TIMESTAMP` | Thời điểm cập nhật |
 
+### Bảng: `organization_policies`
+- **Mục đích:** Chính sách cấp Organization áp dụng bắt buộc, nhất quán cho toàn bộ Store trực
+  thuộc (RULE-03-03, RULE-03-09). Đúng 1 bản ghi hiện hành/Organization (1:1); lịch sử thay đổi
+  qua `audit_logs` chung của hệ thống, không versioning riêng bảng này.
+- **Primary Key:** `id UUID DEFAULT gen_random_uuid()`
+- **Cột:**
+  | Tên Cột | Kiểu Dữ liệu | Bắt buộc | Default | Mô tả |
+  |---|---|---|---|---|
+  | `id` | UUID | YES | `gen_random_uuid()` | Khóa chính chính sách |
+  | `organization_id` | UUID | YES | - | FK -> `organizations.id`, UNIQUE (quan hệ 1:1) |
+  | `refund_window_days` | INT | YES | `7` | Số ngày tối đa được yêu cầu hoàn tiền kể từ giao dịch (RULE-03-09) |
+  | `refund_requires_approval` | BOOLEAN | YES | `true` | Hoàn tiền vượt hạn mức cần duyệt Maker-Checker (RULE-03-09) |
+  | `data_retention_days` | INT | YES | `730` | Thời hạn lưu trữ dữ liệu vận hành, tính bằng ngày (RULE-03-09) |
+  | `security_framework_level` | VARCHAR(30) | YES | `'STANDARD'` | Enum `SecurityFrameworkLevel`: `STANDARD`, `ENHANCED`, `STRICT` |
+  | `created_at` | TIMESTAMPTZ | YES | `CURRENT_TIMESTAMP` | Thời điểm tạo |
+  | `updated_at` | TIMESTAMPTZ | YES | `CURRENT_TIMESTAMP` | Thời điểm cập nhật |
+  | `created_by` | UUID | NO | NULL | FK -> `accounts.id` |
+  | `updated_by` | UUID | NO | NULL | FK -> `accounts.id` |
+  | `version` | BIGINT | YES | `0` | Optimistic locking cho PATCH đồng thời |
+- **Ràng buộc:**
+  - `CONSTRAINT fk_org_policies_org FOREIGN KEY (organization_id) REFERENCES organizations(id) ON DELETE CASCADE`
+  - `CONSTRAINT uq_org_policies_org UNIQUE (organization_id)`
+- **Lưu ý thiết kế lệch chuẩn:** bảng dạng lai — có `created_by`/`updated_by`/`version` (giống
+  `BaseEntity`) nhưng **không có `deleted_at`** (không có khái niệm soft-delete cho 1 dòng settings
+  1:1 — xóa chỉ xảy ra qua `ON DELETE CASCADE` khi Organization bị xóa); entity Java tương ứng
+  KHÔNG extend `platform.model.BaseEntity` (plain entity + `@Version` rời, cùng kiểu
+  `OperatingHour`/`StoreResource` nhưng có thêm cột `version` mà 2 bảng đó không có, vì PATCH
+  policy có khả năng đụng độ đồng thời thực sự). Đã cân nhắc tái dùng bảng key-value có sẵn
+  `system_configs` (§3.7, Module 25 — có đúng cơ chế Organization-default/Store-override) thay vì
+  tạo bảng riêng, nhưng chọn bảng riêng để có kiểu dữ liệu chặt (INT/BOOLEAN/VARCHAR enum) thay vì
+  TEXT key-value — xem Decision Log RULE-03-03/RULE-03-09 (`docs/02-business-rules.md` mục 03).
+
+### Bảng: `store_policies`
+- **Mục đích:** Chính sách chỉ có hiệu lực trong phạm vi 1 Store, không mâu thuẫn với
+  `organization_policies` (RULE-03-03, RULE-03-10). Đúng 1 bản ghi hiện hành/Store (1:1); lịch sử
+  thay đổi qua `audit_logs` chung của hệ thống, không versioning riêng bảng này.
+- **Primary Key:** `id UUID DEFAULT gen_random_uuid()`
+- **Cột:**
+  | Tên Cột | Kiểu Dữ liệu | Bắt buộc | Default | Mô tả |
+  |---|---|---|---|---|
+  | `id` | UUID | YES | `gen_random_uuid()` | Khóa chính chính sách |
+  | `store_id` | UUID | YES | - | FK -> `stores.id`, UNIQUE (quan hệ 1:1) |
+  | `surcharge_enabled` | BOOLEAN | YES | `false` | Bật/tắt phụ thu tại quầy (RULE-03-10) |
+  | `surcharge_type` | VARCHAR(20) | NO | NULL | Enum `SurchargeType`: `PERCENTAGE`, `FIXED_AMOUNT`; bắt buộc khi `surcharge_enabled=true` |
+  | `surcharge_value` | NUMERIC(12,2) | NO | NULL | Giá trị phụ thu (≥0; 0–100 nếu `surcharge_type=PERCENTAGE`); bắt buộc khi `surcharge_enabled=true` |
+  | `created_at` | TIMESTAMPTZ | YES | `CURRENT_TIMESTAMP` | Thời điểm tạo |
+  | `updated_at` | TIMESTAMPTZ | YES | `CURRENT_TIMESTAMP` | Thời điểm cập nhật |
+  | `created_by` | UUID | NO | NULL | FK -> `accounts.id` |
+  | `updated_by` | UUID | NO | NULL | FK -> `accounts.id` |
+  | `version` | BIGINT | YES | `0` | Optimistic locking cho PATCH đồng thời |
+- **Ràng buộc:**
+  - `CONSTRAINT fk_store_policies_store FOREIGN KEY (store_id) REFERENCES stores(id) ON DELETE CASCADE`
+  - `CONSTRAINT fk_store_policies_created_by FOREIGN KEY (created_by) REFERENCES accounts(id)`
+  - `CONSTRAINT fk_store_policies_updated_by FOREIGN KEY (updated_by) REFERENCES accounts(id)`
+  - `CONSTRAINT uq_store_policies_store UNIQUE (store_id)`
+- **Lưu ý thiết kế lệch chuẩn:** mirror đúng pattern `organization_policies` — bảng dạng lai (có
+  `created_by`/`updated_by`/`version` nhưng không có `deleted_at`), entity Java tương ứng KHÔNG
+  extend `platform.model.BaseEntity`. Không chứa giờ mở cửa (xem `operating_hours`) hay ca kíp nhân
+  sự (ngoài phạm vi — Module 08). Xem Decision Log RULE-03-03/RULE-03-10 (`docs/02-business-rules.md`
+  mục 03).
+
 ### Bảng: `stores`
 - **Mục đích:** Điểm kinh doanh / Chi nhánh phòng khám & spa thú cưng hoặc Kho tổng trung tâm (Facility).
 - **Primary Key:** `id UUID DEFAULT gen_random_uuid()`
@@ -1362,7 +1423,7 @@ Bảng ma trận đối soát dưới đây chứng minh tính nhất quán 100%
 |---|---|---|---|---|---|---|
 | **01** | `RegisterAccount`, `VerifyOTP`, `CreateStaff` | `RULE-01-01` -> `RULE-01-10`, D-04 | FSM 1 (`AccountStatus`) | Section 1 (Actor & Role) | `Account`, `OtpSession` | `accounts`, `otps` |
 | **02** | `ManageUser`, `AssignPermission`, `LockAccount` | `RULE-02-01` -> `RULE-02-07` | FSM 1 (Account locking) | Section 2 (IAM & RBAC) | `UserAccount`, `Role`, `Permission` | `users`, `roles`, `permissions`, `user_roles`, `role_permissions` |
-| **03** | `CreateStore`, `ActivateStore`, `ArchiveStore` | `RULE-03-01` -> `RULE-03-08` | FSM 2 (`StoreStatus`) | Section 3 (Org & Store) | `Organization`, `Store`, `OperatingHours` | `organizations`, `stores`, `operating_hours`, `store_resources` |
+| **03** | `CreateStore`, `ActivateStore`, `ArchiveStore`, `ManageOrganizationPolicy`, `ConfigureStorePolicy` | `RULE-03-01` -> `RULE-03-10` | FSM 2 (`StoreStatus`) | Section 3 (Org & Store) | `Organization`, `Store`, `OperatingHours`, `OrganizationPolicy`, `StorePolicy` | `organizations`, `stores`, `operating_hours`, `store_resources`, `organization_policies`, `store_policies` |
 | **04** | `AddPet`, `InviteCaregiver`, `RevokeCaregiver` | `RULE-04-01` -> `RULE-04-11` | FSM 3 (`CaregiverStatus`) | Section 4 (Pet & Owner) | `CustomerProfile`, `Pet`, `CaregiverDelegation` | `pets`, `pet_caregiver_delegations` |
 | **05** | `ManageService`, `ConfigureProductPrice` | `RULE-05-01` -> `RULE-05-07` | N/A (Catalog status) | Section 5 (Catalog) | `ServiceMaster`, `ProductMaster` | `services`, `products`, `service_required_resources` |
 | **06** | `HoldSlot`, `BookAppointment`, `AbortAppointment` | `RULE-06-01` -> `RULE-06-14` | FSM 4.1 & FSM 4.2 (`ApptStatus`) | Section 6 (Appointment) | `BookingHold`, `Appointment` | `booking_holds`, `appointments`, `appointment_stage_histories` |

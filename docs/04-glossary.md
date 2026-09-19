@@ -93,13 +93,13 @@ Hệ thống Pet Care Ecosystem thiết lập và khóa cố định các quyế
 | StoreStatus | Status-Enum | Trạng thái vận hành của một Store (Khởi tạo ở DRAFT, cấu hình xong kích hoạt sang ACTIVE). | DRAFT, ACTIVE, SUSPENDED, DEACTIVATED, ARCHIVED | — |
 | Organization | Entity Candidate | Tổ chức doanh nghiệp sở hữu và quản lý một hoặc nhiều Store và Warehouse trung tâm (Tenant Entity). | — | Tenant, Chain |
 | Store | Entity Candidate | Cơ sở / chi nhánh thuộc Organization nơi dịch vụ được cung cấp trực tiếp cho khách hàng. | — | Branch, Clinic |
-| OrganizationPolicy | Entity Candidate | Chính sách quy định cách Organization vận hành và chia sẻ dữ liệu nội bộ. | — | Org Policy |
-| StorePolicy | Entity Candidate | Chính sách quy định cách Store vận hành tại chỗ. | — | Operational Policy |
+| OrganizationPolicy | Entity Candidate | Cấu hình chính sách cấp Organization áp dụng bắt buộc cho toàn bộ Store trực thuộc: chính sách hoàn tiền chung (`refundWindowDays`, `refundRequiresApproval`), thời hạn lưu trữ dữ liệu (`dataRetentionDays`), khung bảo mật (`securityFrameworkLevel`). Mỗi Organization có đúng 1 bản ghi hiện hành (RULE-03-03, RULE-03-09). | — | Org Policy |
+| StorePolicy | Entity Candidate | Cấu hình chính sách chỉ có hiệu lực trong phạm vi 1 Store, không mâu thuẫn với `OrganizationPolicy` (RULE-03-03): chính sách phụ thu tại quầy (`surchargeEnabled`, `surchargeType`, `surchargeValue`). Không bao gồm giờ mở cửa (xem `OperatingHours`) hay ca kíp nhân sự (ngoài phạm vi — Module 08 Workforce). Mỗi Store có đúng 1 bản ghi hiện hành (RULE-03-03, RULE-03-10). | — | Store Operating Policy |
 | OperatingHour | Value Object Candidate | Khung thời gian làm việc quy định của Store trong ngày/tuần. | — | Store Hours |
 | StoreResource | Entity Candidate | Tài nguyên phòng khám/bàn grooming chuyên dụng được Store quản lý để tránh xung đột lịch hẹn. | — | Facility Resource |
 | CreateOrganization | Command Candidate | Thao tác tạo Organization mới trên nền tảng. | — | — |
 | UpdateOrganization | Command Candidate | Thao tác cập nhật thông tin Organization. | — | — |
-| ManageOrganizationPolicy| Command Candidate | Thao tác quản lý chính sách của Organization. | — | — |
+| ManageOrganizationPolicy| Command Candidate | Đọc/cập nhật `OrganizationPolicy` của Organization (`refundWindowDays`, `refundRequiresApproval`, `dataRetentionDays`, `securityFrameworkLevel`) — RULE-03-09. | — | — |
 | CreateStore | Command Candidate | Thao tác tạo Store mới thuộc Organization ở trạng thái DRAFT. | — | — |
 | UpdateStore | Command Candidate | Thao tác cập nhật thông tin Store. | — | — |
 | ActivateStore | Command Candidate | Thao tác kích hoạt Store từ DRAFT, SUSPENDED hoặc DEACTIVATED sang ACTIVE để đi vào vận hành. | — | — |
@@ -108,7 +108,7 @@ Hệ thống Pet Care Ecosystem thiết lập và khóa cố định các quyế
 | ArchiveStore | Command Candidate | Thao tác lưu trữ / đóng cửa vĩnh viễn Store khi không còn nghĩa vụ mở. | — | — |
 | ConfigureOperatingHour | Command Candidate | Thao tác thiết lập khung giờ hoạt động của Store. | — | — |
 | ConfigureStoreResource | Command Candidate | Thao tác cấu hình tài nguyên vật chất của Store. | — | — |
-| ConfigureStorePolicy | Command Candidate | Thao tác cấu hình chính sách vận hành tại Store. | — | — |
+| ConfigureStorePolicy | Command Candidate | Đọc/cập nhật `StorePolicy` của Store (`surchargeEnabled`, `surchargeType`, `surchargeValue`) — RULE-03-10. Actor: CHỈ `STORE_MANAGER` đúng Store đó — không có ngoại lệ `ORGANIZATION_ADMIN`/`SUPER_ADMIN` (cùng `RoleScopeGuard.assertIsOwnStoreManager` với `ConfigureOperatingHour`/`ConfigureStoreResource`). | — | — |
 | StoreCreated | Domain Event Candidate | Sự kiện phát sinh khi Store mới được tạo. | — | — |
 | StoreActivated | Domain Event Candidate | Sự kiện phát sinh khi Store được kích hoạt hoạt động. | — | — |
 | StoreSuspended | Domain Event Candidate | Sự kiện phát sinh khi Store bị tạm đình chỉ hoạt động. | — | — |

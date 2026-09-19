@@ -60,6 +60,14 @@ public class Otp {
     @Column(name = "created_at", nullable = false, updatable = false)
     private LocalDateTime createdAt;
 
+    /**
+     * true nếu row do ResendOTP tạo, false nếu do RegisterAccount tạo — RULE-01-05
+     * đếm trực tiếp qua cột này (countByEmailAndPurposeAndResendTrueAndCreatedAtAfter),
+     * không suy luận qua tổng số row otps trừ hao OTP gốc như trước.
+     */
+    @Column(name = "is_resend", nullable = false)
+    private boolean resend = false;
+
     public Otp(String email, String otpCode, OtpPurpose purpose, LocalDateTime expiresAt) {
         this.email = email;
         this.otpCode = otpCode;

@@ -18,6 +18,7 @@ stateDiagram-v2
     ACTIVE --> DEACTIVATED: DeactivateAccount [PlatformAdmin / OrgAdmin]
     LOCKED --> DEACTIVATED: DeactivateAccount [PlatformAdmin / OrgAdmin]
     DEACTIVATED --> ACTIVE: ReactivateAccount [PlatformAdmin / OrgAdmin]
+    LOCKED --> ACTIVE: ReactivateAccount [PlatformAdmin / OrgAdmin, bổ sung 2026-09-16 — xem Decision Log RULE-02-07]
 ```
 
 | From State | Command / Trigger | Actor | Guard (RULE-ID) | To State | Domain Event | Actions / Notes |
@@ -32,6 +33,7 @@ stateDiagram-v2
 | ACTIVE | DeactivateAccount | PlatformAdmin / OrganizationAdmin | RULE-02-05, RULE-02-07 | DEACTIVATED | AccountDeactivated | Vô hiệu hóa tài khoản khi nhân viên nghỉ việc, chấm dứt hợp đồng; thu hồi phiên tức thì và từ chối đăng nhập vĩnh viễn. |
 | LOCKED | DeactivateAccount | PlatformAdmin / OrganizationAdmin | RULE-02-05, RULE-02-07 | DEACTIVATED | AccountDeactivated | Chuyển tài khoản bị tạm khóa sang vô hiệu hóa vĩnh viễn do chấm dứt nhân sự/tài khoản. |
 | DEACTIVATED | ReactivateAccount | PlatformAdmin / OrganizationAdmin | RULE-02-05, RULE-02-07 | ACTIVE | AccountReactivated | Tái kích hoạt tài khoản đã bị vô hiệu hóa; ghi nhận lý do giải trình bắt buộc vào Audit Log. |
+| LOCKED | ReactivateAccount | PlatformAdmin / OrganizationAdmin | RULE-02-05, RULE-02-07 (bổ sung 2026-09-16 — xem Decision Log RULE-02-07) | ACTIVE | AccountReactivated | Cho phép mở khóa tài khoản `LOCKED` qua chính lệnh `ReactivateAccount` khi Quản trị viên muốn bắt buộc ghi lý do giải trình vào Audit Log ngay cả với khóa tạm (khác `UnlockAccount`, vốn không yêu cầu lý do) — reset `failed_login_attempts`/`lock_reason`/`locked_until` giống `UnlockAccount`. |
 
 - **Initial State:** `PENDING_VERIFICATION` (khi khách hàng tự đăng ký qua Web/App), `ACTIVE` (khi Platform Admin hoặc Org Admin khởi tạo trực tiếp nhân viên theo Quyết định D-04).
 - **Terminal State:** `DEACTIVATED` (khi chấm dứt hợp đồng nhân viên hoặc ngừng sử dụng dịch vụ vĩnh viễn).
@@ -42,7 +44,7 @@ stateDiagram-v2
   4. *Ranh giới Khóa vs Vô hiệu hóa:* `LOCKED` là tạm thời (do nhập sai mật khẩu hoặc tạm đình chỉ); `DEACTIVATED` là vô hiệu hóa do nhân viên nghỉ việc hoặc chấm dứt dịch vụ.
   5. *Khóa Tự động vs Khóa Chủ động — Hai cơ chế mở khóa riêng biệt (RULE-01-07, RULE-02-04):* Trường `lock_reason` phân biệt hai loại khóa với hai cơ chế mở khóa khác nhau:
      - `lock_reason = AUTO_FAILED_LOGIN` (do `AutoLockAccount` sau 5 lần sai mật khẩu): CÓ cơ chế tự động mở khóa. Hệ thống ghi `locked_until = now() + 15 phút`; ngay khi $\text{CurrentTimestamp} \ge \text{locked\_until}$, tác vụ nền tự động chuyển `LOCKED -> ACTIVE` (`AutoUnlockAccount`) mà không cần thao tác thủ công. Quản trị viên vẫn có thể `UnlockAccount` sớm hơn nếu cần.
-     - `lock_reason = ADMIN_LOCK` (do Quản trị viên chủ động `LockAccount`): KHÔNG có cơ chế tự động mở khóa dưới bất kỳ hình thức nào. Mọi lượt chuyển `LOCKED -> ACTIVE` cho loại khóa này bắt buộc đi qua lệnh `UnlockAccount` do Quản trị viên thực hiện.
+     - `lock_reason = ADMIN_LOCK` (do Quản trị viên chủ động `LockAccount`): KHÔNG có cơ chế tự động mở khóa dưới bất kỳ hình thức nào. Mọi lượt chuyển `LOCKED -> ACTIVE` cho loại khóa này bắt buộc đi qua thao tác thủ công của Quản trị viên — `UnlockAccount` (không yêu cầu lý do) hoặc `ReactivateAccount` (bổ sung 2026-09-16, bắt buộc lý do giải trình ghi vào Audit Log — xem Decision Log `docs/02-business-rules.md` mục RULE-02-07); cả hai đều reset `failed_login_attempts`/`lock_reason`/`locked_until`.
 
 ---
 
@@ -81,7 +83,9 @@ stateDiagram-v2
      - Không còn lịch hẹn nào đang mở hoặc đang phục vụ (`BOOKED`, `CONFIRMED`, `CHECKED_IN`, `IN_PROGRESS`).
      - Tồn kho thực tế tại Store bằng 0 ($\text{PhysicalQuantity} == 0$).
      - Không còn công nợ tài chính, giao dịch chưa đối soát hoặc yêu cầu hoàn tiền đang xử lý.
-  4. *Bất biến Dữ liệu Sau Archive (đã chốt Phase 4 — GAP-ORG-01):* `ARCHIVED` là Terminal State tuyệt đối — không có transition rời khỏi `ARCHIVED`. Toàn bộ dữ liệu cấu hình con của Store (`OperatingHours`, `StoreResource`, `store_services`, `store_products`, `StaffWorkSchedule`) trở thành bất biến chỉ đọc, không `UPDATE`/`DELETE`, chỉ phục vụ tra cứu lịch sử/audit.
+  4. *Bất biến Dữ liệu Sau Archive (đã chốt Phase 4 — GAP-ORG-01; mở rộng 2026-09-17 — xem Decision Log RULE-03-06 `docs/02-business-rules.md` mục 03):* `ARCHIVED` là Terminal State tuyệt đối — không có transition rời khỏi `ARCHIVED`. Toàn bộ dữ liệu cấu hình con của Store (`OperatingHours`, `StoreResource`, `store_services`, `store_products`, `StaffWorkSchedule`) **và chính record `Store`** (`name`/`address`/`phone`) trở thành bất biến chỉ đọc, không `UPDATE`/`DELETE`, chỉ phục vụ tra cứu lịch sử/audit — `UpdateStore` trên Store `ARCHIVED` bị từ chối (`400 BUSINESS_RULE_VIOLATION`, RULE-03-06).
+  5. *`OrganizationPolicy` không có FSM riêng* (settings entity, cùng loại `organizations.status` — xem `docs/api/org-store-v1.md` dòng "org status; không có FSM") — chỉ có 1 bản ghi hiện hành/Organization, cập nhật in-place qua `ManageOrganizationPolicy` (RULE-03-09), không có vòng đời trạng thái.
+  6. *`StorePolicy` không có FSM riêng* (settings entity, cùng nguyên tắc với `OrganizationPolicy` ở Invariant #5) — chỉ có 1 bản ghi hiện hành/Store, cập nhật in-place qua `ConfigureStorePolicy` (RULE-03-10), không có vòng đời trạng thái; độc lập với FSM Store ở trên (Store đổi trạng thái không làm mất/reset `StorePolicy`).
 
 ---
 

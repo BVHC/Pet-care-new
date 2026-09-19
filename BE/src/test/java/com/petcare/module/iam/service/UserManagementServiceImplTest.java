@@ -12,6 +12,7 @@ import com.petcare.module.iam.repository.UserRepository;
 import com.petcare.platform.enums.AccountStatus;
 import com.petcare.platform.enums.UserRole;
 import com.petcare.platform.exception.AccessDeniedScopeException;
+import com.petcare.platform.exception.BusinessRuleViolationException;
 import com.petcare.platform.exception.ResourceNotFoundException;
 import com.petcare.platform.outbox.OutboxEventRepository;
 import com.petcare.platform.security.UserPrincipal;
@@ -179,6 +180,7 @@ class UserManagementServiceImplTest {
                 new UpdateUserRequest(null, null, false, "Ten Moi", "FEMALE", null, null));
 
         assertThat(response.fullName()).isEqualTo("Ten Moi");
+        assertThat(response.gender()).isEqualTo("FEMALE");
         assertThat(target.getGender()).isEqualTo("FEMALE");
         verify(userRepository).save(target);
     }
@@ -409,6 +411,9 @@ class UserManagementServiceImplTest {
     @Test
     void getOwnProfile_returnsCurrentProfile() {
         User user = targetUser(null, null, UserRole.CUSTOMER);
+        user.setGender("MALE");
+        user.setDateOfBirth(java.time.LocalDate.of(1995, 5, 1));
+        user.setAvatarUrl("https://example.com/avatar.png");
         when(userRepository.findById(user.getId())).thenReturn(Optional.of(user));
         when(accountLifecycleService.getSummary(user.getAccountId()))
                 .thenReturn(new AccountSummary(user.getAccountId(), AccountStatus.ACTIVE));
@@ -417,6 +422,11 @@ class UserManagementServiceImplTest {
 
         assertThat(response.userId()).isEqualTo(user.getId());
         assertThat(response.status()).isEqualTo(AccountStatus.ACTIVE);
+        // RULE-02-06 "Customer toàn quyền xem hồ sơ của chính mình" — gender/dateOfBirth/
+        // avatarUrl từng bị thiếu khỏi UserResponse (write-only qua PATCH /users/me).
+        assertThat(response.gender()).isEqualTo("MALE");
+        assertThat(response.dateOfBirth()).isEqualTo(java.time.LocalDate.of(1995, 5, 1));
+        assertThat(response.avatarUrl()).isEqualTo("https://example.com/avatar.png");
     }
 
     @Test
@@ -427,10 +437,12 @@ class UserManagementServiceImplTest {
         when(accountLifecycleService.getSummary(user.getAccountId()))
                 .thenReturn(new AccountSummary(user.getAccountId(), AccountStatus.ACTIVE));
 
-        service.updateOwnProfile(user.getId(), new UpdateOwnProfileRequest("Ten Moi", null, null, null));
+        var response = service.updateOwnProfile(user.getId(), new UpdateOwnProfileRequest("Ten Moi", null, null, null));
 
         assertThat(user.getFullName()).isEqualTo("Ten Moi");
         assertThat(user.getGender()).isEqualTo("MALE");
+        assertThat(response.fullName()).isEqualTo("Ten Moi");
+        assertThat(response.gender()).isEqualTo("MALE");
         verify(userRepository).save(user);
     }
 
@@ -442,15 +454,19 @@ class UserManagementServiceImplTest {
 
         assertThatThrownBy(() -> service.lockAccount(actor, target.getId()))
                 .isInstanceOf(AccessDeniedScopeException.class);
-        verify(accountLifecycleService, never()).lockAccount(any());
+        verify(accountLifecycleService, never()).lockAccount(any(), any(), any());
     }
 
     @Test
     void lockAccount_inScope_delegatesToAccountLifecycleService() {
         UUID orgId = UUID.randomUUID();
-        User target = targetUser(orgId);
+        // Target là staff (không phải CUSTOMER) — Customer thật luôn có organizationId = null
+        // (RULE-02-02) nên không thể "trong scope" của 1 ORGANIZATION_ADMIN qua organizationId.
+        User target = targetUser(orgId, null, UserRole.RECEPTIONIST);
         when(userRepository.findById(target.getId())).thenReturn(Optional.of(target));
-        when(accountLifecycleService.lockAccount(target.getAccountId()))
+        // organizationId/storeId truyền xuống phải khớp scope của TARGET (không phải actor) —
+        // xem AuditOrganizationId javadoc.
+        when(accountLifecycleService.lockAccount(target.getAccountId(), target.getOrganizationId(), target.getStoreId()))
                 .thenReturn(new AccountSummary(target.getAccountId(), AccountStatus.LOCKED));
         UserPrincipal actor = principal(UserRole.ORGANIZATION_ADMIN, orgId);
 
@@ -461,6 +477,66 @@ class UserManagementServiceImplTest {
     }
 
     @Test
+    void lockAccount_selfAction_deniedByBusinessRule_RULE_02_05() {
+        UUID orgId = UUID.randomUUID();
+        User target = targetUser(orgId, null, UserRole.ORGANIZATION_ADMIN);
+        when(userRepository.findById(target.getId())).thenReturn(Optional.of(target));
+        // Actor chính là target — mô phỏng 1 ORGANIZATION_ADMIN cố tự khóa tài khoản của mình.
+        UserPrincipal actor = UserPrincipal.builder().userId(target.getId())
+                .role(UserRole.ORGANIZATION_ADMIN).organizationId(orgId).build();
+
+        assertThatThrownBy(() -> service.lockAccount(actor, target.getId()))
+                .isInstanceOf(BusinessRuleViolationException.class);
+        verify(accountLifecycleService, never()).lockAccount(any(), any(), any());
+    }
+
+    @Test
+    void lockAccount_customerTarget_organizationAdmin_deniedEvenWithMatchingOrg() {
+        UUID orgId = UUID.randomUUID();
+        // Dữ liệu không thực tế (Customer thật không có organizationId) nhưng vẫn phải bị chặn:
+        // assertCanManageAccountLifecycle từ chối theo targetRole=CUSTOMER trước khi so organizationId.
+        User target = targetUser(orgId, null, UserRole.CUSTOMER);
+        when(userRepository.findById(target.getId())).thenReturn(Optional.of(target));
+        UserPrincipal actor = principal(UserRole.ORGANIZATION_ADMIN, orgId);
+
+        assertThatThrownBy(() -> service.lockAccount(actor, target.getId()))
+                .isInstanceOf(AccessDeniedScopeException.class);
+        verify(accountLifecycleService, never()).lockAccount(any(), any(), any());
+    }
+
+    @Test
+    void lockAccount_customerTarget_superAdminAllowed() {
+        User target = targetUser(null, null, UserRole.CUSTOMER);
+        when(userRepository.findById(target.getId())).thenReturn(Optional.of(target));
+        when(accountLifecycleService.lockAccount(target.getAccountId(), target.getOrganizationId(), target.getStoreId()))
+                .thenReturn(new AccountSummary(target.getAccountId(), AccountStatus.LOCKED));
+        UserPrincipal actor = principal(UserRole.SUPER_ADMIN, null);
+
+        var response = service.lockAccount(actor, target.getId());
+
+        assertThat(response.status()).isEqualTo(AccountStatus.LOCKED);
+    }
+
+    @Test
+    void lockAccount_superAdmin_passesTargetOrganizationId_notActorOrganizationId() {
+        // Bug đã sửa: SUPER_ADMIN luôn có organizationId=null (RoleScopeGuard.validateRoleScopeBinding)
+        // — nếu accountLifecycleService nhận nhầm org của actor thay vì target, audit_logs.organization_id
+        // sẽ ghi NULL dù target thuộc hẳn 1 Organization cụ thể (RULE-25-01/07).
+        UUID targetOrgId = UUID.randomUUID();
+        UUID targetStoreId = UUID.randomUUID();
+        User target = targetUser(targetOrgId, targetStoreId, UserRole.STORE_MANAGER);
+        when(userRepository.findById(target.getId())).thenReturn(Optional.of(target));
+        when(accountLifecycleService.lockAccount(target.getAccountId(), targetOrgId, targetStoreId))
+                .thenReturn(new AccountSummary(target.getAccountId(), AccountStatus.LOCKED));
+        UserPrincipal actor = principal(UserRole.SUPER_ADMIN, null);
+
+        var response = service.lockAccount(actor, target.getId());
+
+        assertThat(response.status()).isEqualTo(AccountStatus.LOCKED);
+        verify(accountLifecycleService).lockAccount(target.getAccountId(), targetOrgId, targetStoreId);
+    }
+
+    @Test
     void unlockAccount_outOfScope_deniedBeforeDelegating() {
         User target = targetUser(UUID.randomUUID());
         when(userRepository.findById(target.getId())).thenReturn(Optional.of(target));
@@ -468,7 +544,7 @@ class UserManagementServiceImplTest {
 
         assertThatThrownBy(() -> service.unlockAccount(actor, target.getId()))
                 .isInstanceOf(AccessDeniedScopeException.class);
-        verify(accountLifecycleService, never()).unlockAccount(any());
+        verify(accountLifecycleService, never()).unlockAccount(any(), any(), any());
     }
 
     @Test
@@ -479,7 +555,7 @@ class UserManagementServiceImplTest {
 
         assertThatThrownBy(() -> service.deactivateAccount(actor, target.getId(), "Nghi viec"))
                 .isInstanceOf(AccessDeniedScopeException.class);
-        verify(accountLifecycleService, never()).deactivateAccount(any(), any());
+        verify(accountLifecycleService, never()).deactivateAccount(any(), any(), any(), any());
     }
 
     @Test
@@ -490,6 +566,6 @@ class UserManagementServiceImplTest {
 
         assertThatThrownBy(() -> service.reactivateAccount(actor, target.getId(), "Quay lai lam viec"))
                 .isInstanceOf(AccessDeniedScopeException.class);
-        verify(accountLifecycleService, never()).reactivateAccount(any(), any());
+        verify(accountLifecycleService, never()).reactivateAccount(any(), any(), any(), any());
     }
 }
