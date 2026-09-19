@@ -4,6 +4,7 @@ import com.petcare.platform.enums.UserRole;
 import jakarta.validation.constraints.Email;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.NotNull;
+import jakarta.validation.constraints.Pattern;
 
 import java.util.UUID;
 
@@ -16,7 +17,8 @@ import java.util.UUID;
  */
 public record CreateStaffRequest(
         @NotBlank @Email String email,
-        String phone,
+        // VO PhoneNumber (05#4.1) — cùng ràng buộc format như RegisterRequest.phone.
+        @Pattern(regexp = "^$|^[0-9]{10}$", message = "Số điện thoại phải gồm đúng 10 chữ số") String phone,
         @NotBlank String password,
         @NotBlank String name,
         @NotNull UserRole role,

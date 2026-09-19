@@ -1,13 +1,18 @@
 package com.petcare.platform.exception;
 
+<<<<<<< HEAD
 import com.petcare.module.pet.exception.CaregiverInvitationConflictException;
 import com.petcare.module.pet.exception.UnauthorizedDelegatedActionException;
+=======
+import com.fasterxml.jackson.databind.exc.InvalidFormatException;
+>>>>>>> 1c587b4 (feat: triển khai module organization)
 import com.petcare.platform.model.ErrorResponse;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.slf4j.MDC;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
+import org.springframework.http.converter.HttpMessageNotReadableException;
 import org.springframework.security.access.AccessDeniedException;
 import org.springframework.security.core.AuthenticationException;
 import org.springframework.validation.FieldError;
@@ -15,6 +20,8 @@ import org.springframework.web.bind.MethodArgumentNotValidException;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
 
+import java.util.Arrays;
+import java.util.Objects;
 import java.util.stream.Collectors;
 
 /**
@@ -125,6 +132,7 @@ public class GlobalExceptionHandler {
 
     /**
 <<<<<<< HEAD
+<<<<<<< HEAD
      * Lỗi ngoài dự kiến: stacktrace đi vào log kèm traceId, client chỉ nhận một
      * câu chung. Trả ex.getMessage() ra ngoài từng làm lộ nguyên câu SQL, tên
      * bảng/constraint và cả số điện thoại của tài khoản khác khi vỡ UNIQUE.
@@ -135,6 +143,47 @@ public class GlobalExceptionHandler {
         return build(HttpStatus.INTERNAL_SERVER_ERROR, "INTERNAL_SERVER_ERROR",
                 "Đã xảy ra lỗi hệ thống, vui lòng thử lại sau.");
 =======
+=======
+     * Bean Validation (`@Valid`/`MethodArgumentNotValidException`) chỉ chạy SAU khi Jackson đã
+     * deserialize xong request body — 1 giá trị enum sai (vd `{"facilityType":"FOO"}`,
+     * `{"role":"UNKNOWN_ROLE"}`) làm Jackson ném lỗi ngay lúc đọc JSON, trước khi `@Valid` kịp
+     * chạy, nên rơi vào đây thay vì `handleValidation`. Không xử lý riêng thì exception này lọt
+     * xuống {@link #handleGeneric} -> `500 INTERNAL_SERVER_ERROR`, sai bản chất (đây là lỗi input
+     * của client, không phải lỗi hệ thống) — cùng nhóm `VALIDATION_FAILED`/400 với Bean Validation
+     * theo đúng tinh thần bảng mapping ở đầu file.
+     */
+    @ExceptionHandler(HttpMessageNotReadableException.class)
+    public ResponseEntity<ErrorResponse> handleMessageNotReadable(HttpMessageNotReadableException ex) {
+        return build(HttpStatus.BAD_REQUEST, "VALIDATION_FAILED", buildMessageNotReadableMessage(ex));
+    }
+
+    /**
+     * Với nguyên nhân là {@link InvalidFormatException} nhắm vào 1 enum (case phổ biến nhất:
+     * field enum sai giá trị) — trả message nêu rõ tên field + danh sách giá trị hợp lệ, cùng
+     * chất lượng thông tin như lỗi Bean Validation thông thường. Các trường hợp JSON malformed
+     * khác (sai cú pháp, sai kiểu không phải enum...) trả message chung, không lộ chi tiết parser
+     * nội bộ.
+     */
+    private String buildMessageNotReadableMessage(HttpMessageNotReadableException ex) {
+        if (ex.getCause() instanceof InvalidFormatException invalidFormatException
+                && invalidFormatException.getTargetType() != null
+                && invalidFormatException.getTargetType().isEnum()) {
+            String field = invalidFormatException.getPath().stream()
+                    .map(reference -> reference.getFieldName())
+                    .filter(Objects::nonNull)
+                    .collect(Collectors.joining("."));
+            String allowedValues = Arrays.stream(invalidFormatException.getTargetType().getEnumConstants())
+                    .map(String::valueOf)
+                    .collect(Collectors.joining(", "));
+            String fieldPrefix = field.isEmpty() ? "" : field + ": ";
+            return fieldPrefix + "giá trị '" + invalidFormatException.getValue()
+                    + "' không hợp lệ, phải là 1 trong [" + allowedValues + "]";
+        }
+        return "Dữ liệu request không hợp lệ (JSON sai định dạng)";
+    }
+
+    /**
+>>>>>>> 1c587b4 (feat: triển khai module organization)
      * Exception ngoài dự kiến (không map vào handler cụ thể nào ở trên) — KHÔNG
      * trả ex.getMessage() cho client (có thể lộ chi tiết nội bộ: SQL, stacktrace
      * message...). Log đầy đủ kèm traceId ở server để tra cứu khi cần.

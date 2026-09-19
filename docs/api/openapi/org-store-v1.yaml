@@ -1,10 +1,12 @@
 # Pet Care Org & Store API v1 — OpenAPI 3.1 (derived strictly from docs/)
 #
 # Source of truth: docs/01-business-operations.md (01#3),
-# docs/02-business-rules.md (RULE-03-01..08), docs/03-state-machines.md (FSM-2 Store),
+# docs/02-business-rules.md (RULE-03-01..10), docs/03-state-machines.md (FSM-2 Store),
 # docs/04-glossary.md (03), docs/05-domain-model.md (4.3),
-# docs/06-erd.md (organizations/stores/operating_hours/store_resources).
-# Policy operations have no ERD backing and are out of v1 (TBD Q7).
+# docs/06-erd.md (organizations/stores/operating_hours/store_resources/
+# organization_policies/store_policies).
+# Policy operations (ManageOrganizationPolicy, ConfigureStorePolicy) are RESOLVED
+# (RULE-03-09, RULE-03-10) — see /organizations/{id}/policy and /stores/{id}/policy.
 # Price/availability overrides belong to the Module 05 catalog contract (TBD Q8).
 #
 # Traceability legend: CONFIRMED = in docs (source cited) / ASSUMPTION (A#) =
@@ -17,17 +19,21 @@ info:
   title: Pet Care Org and Store API v1
   version: 1.0.0
   description: >-
-    Strictly derived from docs/ (01#3 operations, RULE-03-01..08, FSM-2 Store
+    Strictly derived from docs/ (01#3 operations, RULE-03-01..10, FSM-2 Store
     lifecycle DRAFT->ACTIVE<->SUSPENDED/DEACTIVATED->ARCHIVED). Organization
     creation is SUPER_ADMIN tenant provisioning (ASSUMPTION A1). Activate needs
     hours plus resources plus service catalog (RULE-03-02, catalog check is a
     cross-domain dependency on Module 05). Archive needs the 4 zero-conditions
-    (RULE-03-06). Policy endpoints are out of v1 (no ERD backing, TBD Q7).
+    (RULE-03-06). Policy endpoints (ManageOrganizationPolicy RULE-03-09,
+    ConfigureStorePolicy RULE-03-10) are RESOLVED — dedicated organization_policies
+    and store_policies tables, optimistic-locked GET/PATCH, lazy-create semantics.
 tags:
   - name: Organizations
     description: Tenant lifecycle (CreateOrganization, UpdateOrganization).
   - name: Stores
     description: Store lifecycle and configuration (FSM-2, hours, resources).
+  - name: Policies
+    description: Organization-level and Store-level policy settings (RULE-03-09, RULE-03-10). No FSM — single current record per Organization/Store.
 paths:
   /organizations:
     post:
@@ -159,6 +165,81 @@ paths:
                 $ref: '#/components/schemas/Error'
         '404':
           $ref: '#/components/responses/NotFound'
+  /organizations/{id}/policy:
+    get:
+      tags: [Policies]
+      summary: Get current organization policy (ManageOrganizationPolicy)
+      description: >-
+        CONFIRMED (RULE-03-09). Returns the current organization_policies record, or the
+        documented defaults (refundWindowDays=7, refundRequiresApproval=true,
+        dataRetentionDays=730, securityFrameworkLevel=STANDARD, version=0) with
+        updatedAt=null when never configured — never 404 for an existing Organization.
+      operationId: getOrganizationPolicy
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/OrganizationId'
+      responses:
+        '200':
+          description: Current (or default) organization policy.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/OrganizationPolicyResponse'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          description: Not SUPER_ADMIN or ORGANIZATION_ADMIN of this Organization (CONFIRMED code ACCESS_DENIED_SCOPE_MISMATCH, RULE-02-01). STORE_MANAGER never allowed here.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '404':
+          $ref: '#/components/responses/NotFound'
+    patch:
+      tags: [Policies]
+      summary: Update organization policy (ManageOrganizationPolicy)
+      description: >-
+        CONFIRMED (RULE-03-09). Partial update; lazy-creates the organization_policies row on
+        first write. Requires the current version for optimistic locking — mismatched or
+        stale version (including a create-race on the UNIQUE(organization_id) constraint)
+        returns 409 CONCURRENCY_CONFLICT.
+      operationId: updateOrganizationPolicy
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/OrganizationId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/UpdateOrganizationPolicyRequest'
+      responses:
+        '200':
+          description: Policy updated.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/OrganizationPolicyResponse'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          description: Not SUPER_ADMIN or ORGANIZATION_ADMIN of this Organization (CONFIRMED code ACCESS_DENIED_SCOPE_MISMATCH, RULE-02-01). STORE_MANAGER never allowed here.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          description: Concurrency conflict (optimistic lock, CONCURRENCY_CONFLICT).
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
   /organizations/{id}/stores:
     post:
       tags: [Stores]
@@ -271,7 +352,11 @@ paths:
     patch:
       tags: [Stores]
       summary: Update store (UpdateStore)
-      description: CONFIRMED (01#3). StoreManager limited to operational fields (ASSUMPTION A2, TBD Q6).
+      description: >-
+        CONFIRMED (01#3). Same 3-field shape (name/address/phone) for OrgAdmin (any Store in own
+        Org) and StoreManager (own Store only) — Q6 RESOLVED 2026-09-17, difference is Store scope
+        (RULE-02-05), not field set. Rejected with 400 when the Store is ARCHIVED (RULE-03-06,
+        extended 2026-09-17 — see docs/02-business-rules.md Decision Log §03).
       operationId: updateStore
       security:
         - bearerAuth: []
@@ -291,17 +376,29 @@ paths:
               schema:
                 $ref: '#/components/schemas/StoreResponse'
         '400':
-          $ref: '#/components/responses/BadRequest'
+          description: >-
+            Validation failed, or Store is ARCHIVED (RULE-03-06 — Terminal State, immutable
+            since 2026-09-17).
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
         '401':
           $ref: '#/components/responses/Unauthorized'
         '403':
-          description: Outside scope or field (CONFIRMED code ACCESS_DENIED_SCOPE_MISMATCH, RULE-02-01).
+          description: Outside scope (CONFIRMED code ACCESS_DENIED_SCOPE_MISMATCH, RULE-02-01).
           content:
             application/json:
               schema:
                 $ref: '#/components/schemas/Error'
         '404':
           $ref: '#/components/responses/NotFound'
+        '409':
+          description: Concurrency conflict (optimistic lock, CONCURRENCY_CONFLICT).
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
   /stores/{id}/activate:
     post:
       tags: [Stores]
@@ -438,7 +535,13 @@ paths:
     put:
       tags: [Stores]
       summary: Configure operating hours (ConfigureOperatingHour)
-      description: CONFIRMED (RULE-03-02/07). Replace-all semantics. dayOfWeek 1 means Sunday through 7 meaning Saturday (CONFIRMED per ERD, non-ISO).
+      description: >-
+        CONFIRMED (RULE-03-02/06/07). Replace-all semantics (RESOLVED 2026-09-18): deletes all
+        existing rows for the Store and re-inserts exactly the given array; a day omitted from
+        the request has no row after the call. dayOfWeek 1 means Sunday through 7 meaning
+        Saturday (CONFIRMED per ERD, non-ISO). Authorization RESOLVED 2026-09-18 (Q5/Q10): only
+        STORE_MANAGER for their own Store — no SUPER_ADMIN/ORGANIZATION_ADMIN exception. Rejected
+        with 400 when the Store is ARCHIVED (RULE-03-06).
       operationId: configureOperatingHours
       security:
         - bearerAuth: []
@@ -458,11 +561,19 @@ paths:
               schema:
                 $ref: '#/components/schemas/OperatingHoursResponse'
         '400':
-          $ref: '#/components/responses/BadRequest'
+          description: >-
+            Validation failed (duplicate dayOfWeek, missing/contradictory openTime-closeTime),
+            or Store is ARCHIVED (RULE-03-06).
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
         '401':
           $ref: '#/components/responses/Unauthorized'
         '403':
-          description: Outside scope (CONFIRMED code ACCESS_DENIED_SCOPE_MISMATCH, RULE-02-01). StoreManager configurability is TBD Q5.
+          description: >-
+            Not STORE_MANAGER of this Store (CONFIRMED code ACCESS_DENIED_SCOPE_MISMATCH,
+            RULE-02-01). SUPER_ADMIN/ORGANIZATION_ADMIN also get 403 here (RESOLVED 2026-09-18).
           content:
             application/json:
               schema:
@@ -577,6 +688,91 @@ paths:
                 $ref: '#/components/schemas/Error'
         '404':
           $ref: '#/components/responses/NotFound'
+  /stores/{id}/policy:
+    get:
+      tags: [Policies]
+      summary: Get current store policy (ConfigureStorePolicy)
+      description: >-
+        CONFIRMED (RULE-03-10). Returns the current store_policies record, or the documented
+        defaults (surchargeEnabled=false, surchargeType=null, surchargeValue=null, version=0)
+        with updatedAt=null when never configured — never 404 for an existing Store. Does not
+        cover opening hours (see /stores/{id}/operating-hours) or staff shifts (out of scope,
+        Module 08).
+      operationId: getStorePolicy
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/StoreId'
+      responses:
+        '200':
+          description: Current (or default) store policy.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/StorePolicyResponse'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          description: Outside scope (CONFIRMED code ACCESS_DENIED_SCOPE_MISMATCH, RULE-02-01). Allowed for STORE_MANAGER of this Store, ORGANIZATION_ADMIN of its Organization, and SUPER_ADMIN.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '404':
+          $ref: '#/components/responses/NotFound'
+    patch:
+      tags: [Policies]
+      summary: Update store policy (ConfigureStorePolicy)
+      description: >-
+        CONFIRMED (RULE-03-10). Partial update; lazy-creates the store_policies row on first
+        write. Requires the current version for optimistic locking — mismatched or stale
+        version (including a create-race on the UNIQUE(store_id) constraint) returns 409
+        CONCURRENCY_CONFLICT. Must not contradict OrganizationPolicy (RULE-03-03) — no
+        overlapping fields exist today, kept as an invariant for future fields on either side.
+        Authorization RESOLVED 2026-09-18: only STORE_MANAGER for their own Store — no
+        SUPER_ADMIN/ORGANIZATION_ADMIN exception, same as ConfigureOperatingHour/
+        ConfigureStoreResource (unlike the broader GET below). Rejected with 400 when the Store
+        is ARCHIVED (RULE-03-06, extended 2026-09-18 to cover StorePolicy).
+      operationId: updateStorePolicy
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/StoreId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/UpdateStorePolicyRequest'
+      responses:
+        '200':
+          description: Policy updated.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/StorePolicyResponse'
+        '400':
+          description: Validation failed, business rule violated (RULE-03-10 surcharge fields), or Store is ARCHIVED (RULE-03-06).
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          description: Not STORE_MANAGER of this Store (CONFIRMED code ACCESS_DENIED_SCOPE_MISMATCH, RULE-02-01). SUPER_ADMIN/ORGANIZATION_ADMIN also get 403 here (no exception for PATCH).
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          description: Concurrency conflict (optimistic lock, CONCURRENCY_CONFLICT).
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
 components:
   securitySchemes:
     bearerAuth:
@@ -616,6 +812,14 @@ components:
       type: string
       enum: [CLINIC_ROOM, GROOMING_TABLE, ULTRASOUND_MACHINE, XRAY_MACHINE]
       description: CONFIRMED (ERD store_resources plus 05 domain 4.3).
+    SecurityFrameworkLevel:
+      type: string
+      enum: [STANDARD, ENHANCED, STRICT]
+      description: CONFIRMED (RULE-03-09, ERD organization_policies).
+    SurchargeType:
+      type: string
+      enum: [PERCENTAGE, FIXED_AMOUNT]
+      description: CONFIRMED (RULE-03-10, ERD store_policies).
     OrganizationResponse:
       type: object
       required: [organizationId, code, name, status]
@@ -665,6 +869,52 @@ components:
         address:
           type: string
       description: Code is treated as immutable (PROPOSED, TBD Q4).
+    OrganizationPolicyResponse:
+      type: object
+      required: [organizationId, refundWindowDays, refundRequiresApproval, dataRetentionDays, securityFrameworkLevel, version]
+      properties:
+        organizationId:
+          type: string
+          format: uuid
+        refundWindowDays:
+          type: integer
+          description: CONFIRMED (RULE-03-09). Default 7 when never configured.
+        refundRequiresApproval:
+          type: boolean
+          description: CONFIRMED (RULE-03-09). Default true when never configured.
+        dataRetentionDays:
+          type: integer
+          description: CONFIRMED (RULE-03-09). Default 730 when never configured.
+        securityFrameworkLevel:
+          $ref: '#/components/schemas/SecurityFrameworkLevel'
+        version:
+          type: integer
+          format: int64
+          description: Optimistic lock token; 0 when never configured (default response).
+        updatedAt:
+          type: string
+          format: date-time
+          nullable: true
+          description: Null when the policy has never been explicitly configured (default response).
+    UpdateOrganizationPolicyRequest:
+      type: object
+      required: [version]
+      properties:
+        refundWindowDays:
+          type: integer
+        refundRequiresApproval:
+          type: boolean
+        dataRetentionDays:
+          type: integer
+        securityFrameworkLevel:
+          $ref: '#/components/schemas/SecurityFrameworkLevel'
+        version:
+          type: integer
+          format: int64
+          description: >-
+            Required. Must match the current version (0 if never configured) for the
+            optimistic-lock check (RULE-03-09); mismatch returns 409 CONCURRENCY_CONFLICT.
+      description: Partial update — omitted fields keep their current value.
     StoreResponse:
       type: object
       required: [storeId, organizationId, code, name, facilityType, status]
@@ -724,7 +974,10 @@ components:
           type: string
         phone:
           type: string
-      description: StoreManager limited to operational fields (ASSUMPTION A2, TBD Q6).
+      description: >-
+        Same shape for OrgAdmin and StoreManager (Q6 RESOLVED 2026-09-17) — actor difference is
+        Store scope (RULE-02-05), not field set. All fields optional (partial update, null =
+        unchanged); rejected with 400 if the target Store is ARCHIVED (RULE-03-06).
     OperatingHoursRequest:
       type: object
       required: [hours]
@@ -752,11 +1005,15 @@ components:
                 type: boolean
     OperatingHoursResponse:
       type: object
-      required: [storeId, hours]
+      required: [storeId, organizationId, hours]
       properties:
         storeId:
           type: string
           format: uuid
+        organizationId:
+          type: string
+          format: uuid
+          description: Organization cha của Store (derived, read-only) — cần cho audit_logs.organization_id đúng theo resource bị tác động thay vì scope actor.
         hours:
           type: array
           items:
@@ -820,6 +1077,61 @@ components:
         isActive:
           type: boolean
       description: resourceCode is immutable (ASSUMPTION A4).
+    StorePolicyResponse:
+      type: object
+      required: [storeId, organizationId, surchargeEnabled, version]
+      properties:
+        storeId:
+          type: string
+          format: uuid
+        organizationId:
+          type: string
+          format: uuid
+          description: Organization cha của Store (derived, read-only) — cần cho audit_logs.organization_id đúng theo resource bị tác động thay vì scope actor.
+        surchargeEnabled:
+          type: boolean
+          description: CONFIRMED (RULE-03-10). Default false when never configured.
+        surchargeType:
+          allOf:
+            - $ref: '#/components/schemas/SurchargeType'
+          nullable: true
+          description: Null when surchargeEnabled is false.
+        surchargeValue:
+          type: number
+          nullable: true
+          description: Backed by BigDecimal (precision 12, scale 2). Null when surchargeEnabled is false; 0-100 when surchargeType is PERCENTAGE.
+        version:
+          type: integer
+          format: int64
+          description: Optimistic lock token; 0 when never configured (default response).
+        updatedAt:
+          type: string
+          format: date-time
+          nullable: true
+          description: Null when the policy has never been explicitly configured (default response).
+    UpdateStorePolicyRequest:
+      type: object
+      required: [version]
+      properties:
+        surchargeEnabled:
+          type: boolean
+        surchargeType:
+          allOf:
+            - $ref: '#/components/schemas/SurchargeType'
+          nullable: true
+        surchargeValue:
+          type: number
+          nullable: true
+          description: Backed by BigDecimal (precision 12, scale 2).
+        version:
+          type: integer
+          format: int64
+          description: >-
+            Required. Must match the current version (0 if never configured) for the
+            optimistic-lock check (RULE-03-10); mismatch returns 409 CONCURRENCY_CONFLICT.
+      description: >-
+        Partial update — omitted fields keep their current value. surchargeType and
+        surchargeValue are required when surchargeEnabled is set to true (RULE-03-10).
     Error:
       type: object
       required: [success, errorCode, message, statusCode, timestamp]

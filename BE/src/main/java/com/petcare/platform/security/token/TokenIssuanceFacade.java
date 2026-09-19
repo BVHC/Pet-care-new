@@ -22,9 +22,18 @@ public interface TokenIssuanceFacade {
     IssuedTokenPair refreshTokens(String rawRefreshToken, UserPrincipal refreshedPrincipal,
                                    String userAgent, String ipAddress);
 
-    /** Blacklist access token jti (Redis) + revoke refresh token (DB) — RULE-01-06. */
-    void logout(String rawAccessToken, String rawRefreshToken);
+    /**
+     * Blacklist access token jti (Redis) + revoke refresh token (DB) — RULE-01-06. Nếu
+     * {@code rawRefreshToken} không được cung cấp, tự tra refresh token của phiên qua JTI của
+     * access token (RefreshTokenEntity#accessTokenJti) thay vì bỏ qua việc thu hồi.
+     * @return true nếu một refresh token thực sự bị thu hồi, false nếu không tìm thấy phiên nào.
+     */
+    boolean logout(String rawAccessToken, String rawRefreshToken);
 
-    /** Revoke toàn bộ refresh token đang active của account — RULE-02-04/07. */
+    /**
+     * Revoke toàn bộ refresh token đang active của account (DB) + blacklist access token
+     * JWT tương ứng của từng phiên (Redis, TTL xấp xỉ = accessTokenTtl kể từ lúc gọi) —
+     * RULE-02-04/07 yêu cầu thu hồi lập tức cả Access Token lẫn Refresh Token.
+     */
     void revokeAllSessions(UUID accountId, String reason);
 }

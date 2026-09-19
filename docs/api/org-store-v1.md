@@ -3,9 +3,9 @@
 > **Phạm vi:** Domain Organization & Store Management (Module 03): vòng đời Organization,
 > vòng đời Store (FSM-2), giờ hoạt động, tài nguyên vật chất.
 > **Nguồn chân lý:** `docs/01-business-operations.md` (`01#3`), `docs/02-business-rules.md`
-> (RULE-03-01→08), `docs/03-state-machines.md` (FSM-2 Store), `docs/04-glossary.md` (`03`),
+> (RULE-03-01→10), `docs/03-state-machines.md` (FSM-2 Store), `docs/04-glossary.md` (`03`),
 > `docs/05-domain-model.md` (`4.3`), `docs/06-erd.md` (`organizations`/`stores`/
-> `operating_hours`/`store_resources`).
+> `operating_hours`/`store_resources`/`organization_policies`/`store_policies`).
 > **Contract máy đọc:** [`./openapi/org-store-v1.yaml`](./openapi/org-store-v1.yaml) (OpenAPI 3.1).
 > **Skill áp dụng:** `designing-apis` — API là business contract, không phải CRUD của DB.
 
@@ -16,9 +16,9 @@ Mọi method/path/field-name/envelope trong tài liệu này đều là **PROPOS
 `docs/convention/backend/04-exception-handling`.
 
 **Đóng băng phạm vi:**
-- `ManageOrganizationPolicy` / `ConfigureStorePolicy` **loại khỏi v1**: ERD không có
-  bảng policy nào (không chỗ lưu, không shape) — tương tự cách auth-v1 loại refresh
-  endpoint. TBD Q7.
+- ~~`ManageOrganizationPolicy` / `ConfigureStorePolicy` loại khỏi v1~~ **ĐÃ GIẢI
+  (2026-09-18, xem Q7):** cả hai đều có bảng ERD riêng (`organization_policies`,
+  `store_policies`) và endpoint `GET/PATCH .../policy` — xem endpoint #17–20 ở mục A.
 - Override giá/khả dụng dịch vụ-sản phẩm (`store_products`/`store_services`,
   `ConfigureServicePrice`/`ConfigureProductPrice`/`ConfigureServiceAvailability`)
   thuộc Module 05 Catalog — contract catalog định nghĩa, ở đây chỉ tham chiếu
@@ -30,7 +30,7 @@ Mọi method/path/field-name/envelope trong tài liệu này đều là **PROPOS
 
 ---
 
-## A. Confirmed Org & Store API (12 endpoints)
+## A. Confirmed Org & Store API (20 endpoints)
 
 | # | Endpoint (proposed) | Business operation (CONFIRMED) |
 |---|---|---|
@@ -50,6 +50,10 @@ Mọi method/path/field-name/envelope trong tài liệu này đều là **PROPOS
 | 14 | `GET /stores/{id}/resources` | (list tài nguyên) |
 | 15 | `POST /stores/{id}/resources` | `ConfigureStoreResource` — `01#3`, RULE-03-02/08 |
 | 16 | `PATCH /stores/{id}/resources/{rid}` | `ConfigureStoreResource` — `01#3` |
+| 17 | `GET /organizations/{id}/policy` | (đọc `OrganizationPolicy` hiện hành, hoặc mặc định nếu chưa cấu hình) — `01#3`, RULE-03-09 |
+| 18 | `PATCH /organizations/{id}/policy` | `ManageOrganizationPolicy` — `01#3`, RULE-03-09 |
+| 19 | `GET /stores/{id}/policy` | (đọc `StorePolicy` hiện hành, hoặc mặc định nếu chưa cấu hình) — `01#3`, RULE-03-10 |
+| 20 | `PATCH /stores/{id}/policy` | `ConfigureStorePolicy` — `01#3`, RULE-03-10 |
 
 ---
 
@@ -60,19 +64,30 @@ Mọi method/path/field-name/envelope trong tài liệu này đều là **PROPOS
 | CreateOrganization | PlatformAdmin (A1) | Code unique | RULE-03-01 (1 Org cha; cách ly 100%) | POST | `/organizations` | Bearer | `SUPER_ADMIN` (tenant lifecycle là PLATFORM scope) | `[*] → ACTIVE` (org status; không có FSM) | 409 nhờ UK `code` | `01#3` ghi OrgAdmin — mâu thuẫn bootstrap, xem A1 |
 | UpdateOrganization | OrgAdmin | Org tồn tại | RULE-03-01 | PATCH | `/organizations/{id}` | Bearer | `SUPER_ADMIN` all; `ORGANIZATION_ADMIN` Org mình | none | Idempotent | Thuế/mã: sửa được gì TBD Q9 |
 | CreateStore | OrgAdmin | Org tồn tại | RULE-03-01 (đúng 1 Org cha) | POST | `/organizations/{id}/stores` | Bearer | `SUPER_ADMIN` all; `ORGANIZATION_ADMIN` Org mình | `[*] → DRAFT` + `StoreCreated` | 409 nhờ UK `(organization_id, code)` | `facilityType` CONFIRMED (`RETAIL_STORE`/`CENTRAL_WAREHOUSE`) |
-| UpdateStore | OrgAdmin / StoreManager | Store tồn tại | — | PATCH | `/stores/{id}` | Bearer | OrgAdmin (all fields); StoreManager (chỉ operational fields, A2) | none | Idempotent | Field-level scope là A2 |
+| UpdateStore | OrgAdmin / StoreManager | Store tồn tại, **chưa `ARCHIVED`** (bổ sung 2026-09-17) | RULE-03-06 (chặn khi `ARCHIVED`, xem Decision Log `docs/02-business-rules.md` mục 03) | PATCH | `/stores/{id}` | Bearer | OrgAdmin (mọi Store trong Org mình); StoreManager (chỉ Store mình quản lý) — **cùng 1 shape 3 field** (`name`/`address`/`phone`, khớp `openapi #UpdateStoreRequest`, Q6 ĐÃ GIẢI) | none | Idempotent | Khác biệt actor nằm ở **phạm vi Store** (RULE-02-05), không phải field-set — xem Decision Log Q6 dưới |
 | ActivateStore | OrgAdmin | Cấu hình đủ (RULE-03-02) | RULE-03-02/03 | POST | `/stores/{id}/activate` | Bearer | `ORGANIZATION_ADMIN` Org mình (`SUPER_ADMIN` all) | `DRAFT/SUSPENDED/DEACTIVATED → ACTIVE` + `StoreActivated` | Idempotent (đã ACTIVE vẫn 200) | Guards cần catalog module 05 (cross-domain) |
 | SuspendStore | OrgAdmin | Đang `ACTIVE` | RULE-03-03/04 (khóa booking/walk-in/order mới) | POST | `/stores/{id}/suspend` | Bearer | như trên | `ACTIVE → SUSPENDED` + `StoreSuspended` | Idempotent | Đơn/lịch dở dang xử lý theo RULE-03-04 (modules 06/14) |
 | DeactivateStore | OrgAdmin | Đang `ACTIVE` | RULE-03-03/04 | POST | `/stores/{id}/deactivate` | Bearer | như trên | `ACTIVE → DEACTIVATED` + `StoreDeactivated` | Idempotent | Như suspend + mức chặn cao hơn |
 | ArchiveStore | OrgAdmin | 4 điều kiện RULE-03-06 | RULE-03-06 | POST | `/stores/{id}/archive` | Bearer | như trên | `SUSPENDED/DEACTIVATED → ARCHIVED` + `StoreArchived` | Idempotent | Check 4 zeros cross-module (06/14/12/tài chính) |
-| ConfigureOperatingHour | OrgAdmin (/StoreManager A3) | Store tồn tại | RULE-03-02/07 | PUT | `/stores/{id}/operating-hours` | Bearer | OrgAdmin; StoreManager TBD Q10 | none | Idempotent (replace-all) | `dayOfWeek` 1=Chủ nhật→7=Thứ bảy CONFIRMED theo ERD (khác ISO, FE lưu ý) |
+| ConfigureOperatingHour | **StoreManager (chỉ, ĐÃ GIẢI Q5/Q10 — 2026-09-18)** | Store tồn tại, **chưa `ARCHIVED`** (RULE-03-06, dữ liệu cấu hình con) | RULE-03-02/06/07 | PUT | `/stores/{id}/operating-hours` | Bearer | `STORE_MANAGER` đúng Store mình quản lý — **KHÔNG** có ngoại lệ `SUPER_ADMIN`/`ORGANIZATION_ADMIN` (khác mọi endpoint Store khác), bám literal `01#3` chỉ gán đúng 1 dòng StoreManager | none | Idempotent (replace-all: xóa sạch + ghi lại đúng mảng gửi lên, ngày không gửi = chưa cấu hình) | `dayOfWeek` 1=Chủ nhật→7=Thứ bảy CONFIRMED theo ERD (khác ISO, FE lưu ý). Không trùng `dayOfWeek` trong 1 request; `openTime<closeTime` bắt buộc khi `isClosed=false`; cấm vừa `isClosed=true` vừa có giờ (RULE-03-07, derived) |
 | ConfigureStoreResource | OrgAdmin (/StoreManager A3) | Store tồn tại | RULE-03-02/08 | POST/PATCH | `/stores/{id}/resources…` | Bearer | OrgAdmin; StoreManager TBD Q10 | none | POST 409 nhờ UK `(store_id, resource_code)` | Types: `CLINIC_ROOM`, `GROOMING_TABLE`, `ULTRASOUND_MACHINE` (+`XRAY` theo domain 4.3) |
+| ManageOrganizationPolicy | OrgAdmin | Org tồn tại | RULE-03-09 | GET, PATCH | `/organizations/{id}/policy` | Bearer | `SUPER_ADMIN` all; `ORGANIZATION_ADMIN` Org mình (tái dùng `RoleScopeGuard.assertCanManageOrganization`) | none | Idempotent (PATCH); GET trả mặc định (không 404) nếu chưa từng cấu hình; lazy-create bản ghi ở lần PATCH đầu | Giải Q7 (nửa Organization); `PATCH` bắt buộc field `version` (optimistic lock, `409 CONCURRENCY_CONFLICT` nếu lệch — lần đầu dùng `ConcurrencyConflictException` trong Module 03) |
+| ConfigureStorePolicy | StoreManager (GET rộng hơn, xem ghi chú) | Store tồn tại, **chưa `ARCHIVED`** (RULE-03-06, mở rộng 2026-09-18) | RULE-03-10 | GET, PATCH | `/stores/{id}/policy` | Bearer | **GET:** `SUPER_ADMIN` all; `ORGANIZATION_ADMIN` Org mình; `STORE_MANAGER` đúng Store mình (`RoleScopeGuard.assertCanManageStore`, mirror `getStore`/`listResources`). **PATCH:** CHỈ `STORE_MANAGER` đúng Store mình quản lý (`RoleScopeGuard.assertIsOwnStoreManager`) — không ngoại lệ SUPER_ADMIN/ORGANIZATION_ADMIN, cùng `ConfigureOperatingHour`/`ConfigureStoreResource`; khác `ManageOrganizationPolicy` (chỉ 2 role Admin, không có StoreManager) | none | Idempotent (PATCH); GET trả mặc định (không 404) nếu chưa từng cấu hình; lazy-create bản ghi ở lần PATCH đầu | Giải Q7 (nửa Store); `PATCH` bắt buộc field `version` (optimistic lock, `409 CONCURRENCY_CONFLICT` nếu lệch) — mirror lazy-create semantics `ManageOrganizationPolicy` nhưng KHÁC actor cho PATCH (sửa 2026-09-18, xem Decision Log RULE-03-03/RULE-03-10); không cấu hình giờ mở cửa (`ConfigureOperatingHour`) hay ca kíp (ngoài phạm vi, Module 08) |
 
 **ASSUMPTIONS dùng chung:** A1 `POST /organizations` = `SUPER_ADMIN` (tenant lifecycle
 thuộc PLATFORM scope theo bảng Actor; `01#3` ghi OrgAdmin là mâu thuẫn bootstrap vì
-Org chưa tồn tại thì chưa có OrgAdmin) · A2 StoreManager `PATCH /stores/{id}` chỉ
-operational fields (address/phone), không đổi `code`/`organizationId` · A3 cấu hình
-giờ + resource do OrgAdmin; StoreManager có được cấu hình không TBD Q10.
+Org chưa tồn tại thì chưa có OrgAdmin) · ~~A2~~ **Q6 ĐÃ GIẢI (2026-09-17, xem mục E):**
+`PATCH /stores/{id}` chỉ 3 field `name`/`address`/`phone` (khớp `openapi
+#UpdateStoreRequest`, không có field nào khác kể cả `code`/`organizationId`/
+`facilityType`/`status`), **giống nhau cho cả OrgAdmin lẫn StoreManager** — không có
+field-level scope riêng như A2 bản cũ suy đoán; khác biệt actor nằm ở phạm vi Store
+được sửa (RULE-02-05, `RoleScopeGuard.assertCanManageStore`) · ~~A3~~ **Q5/Q10 ĐÃ
+GIẢI (2026-09-18, chỉ áp dụng cho `ConfigureOperatingHour`):** CHỈ `STORE_MANAGER`
+đúng Store mình quản lý được cấu hình giờ hoạt động — bám literal `01#3` (chỉ 1
+dòng gán StoreManager, không có OrgAdmin); `SUPER_ADMIN`/`ORGANIZATION_ADMIN`
+không có ngoại lệ ở riêng endpoint này dù toàn quyền trên mọi endpoint Store khác
+(`RoleScopeGuard.assertIsOwnStoreManager`). `ConfigureStoreResource` (Q5/Q10 phần
+resource) vẫn TBD, chưa quyết định cùng đợt này.
 
 ---
 
@@ -96,6 +111,14 @@ giờ + resource do OrgAdmin; StoreManager có được cấu hình không TBD Q
   address (req CONFIRMED), phone (req CONFIRMED)}`.
   Response `201 {storeId, organizationId, status: "DRAFT", facilityType}`.
   Status: `201` · `400` · `401` · `403` · `404` org không tồn tại · `409` trùng code trong Org.
+- **`PATCH /stores/{id}`** (`UpdateStore`, implemented — xem Decision Log Q6/Q11) — Request
+  `{name?, address?, phone?}` (đúng `openapi #UpdateStoreRequest`, field null = giữ nguyên).
+  Guard CONFIRMED (RULE-03-06, bổ sung 2026-09-17): Store đang `ARCHIVED` → `400
+  BUSINESS_RULE_VIOLATION`, không áp field nào. Authorization: `SUPER_ADMIN` (mọi Store) /
+  `ORGANIZATION_ADMIN` (mọi Store trong Org mình) / `STORE_MANAGER` (chỉ Store mình quản lý,
+  `RoleScopeGuard.assertCanManageStore`). Response `200 StoreResponse`.
+  Status: `200` · `400` validation hoặc `ARCHIVED` · `401` · `403 ACCESS_DENIED_SCOPE_MISMATCH` ·
+  `404` · `409 CONCURRENCY_CONFLICT` (optimistic lock).
 - **`POST /stores/{id}/activate`** — Guards CONFIRMED (RULE-03-02, check trước khi
   chuyển): (1) `operating_hours` hợp lệ; (2) ≥1 `store_resources` khả dụng;
   (3) danh mục dịch vụ khả dụng (module 05 — cross-domain dependency, thiếu → `409`
@@ -110,12 +133,24 @@ giờ + resource do OrgAdmin; StoreManager có được cấu hình không TBD Q
 - **Status chung lifecycle:** `200` · `401` · `403` · `404` · `409` sai trạng thái/
   thiếu điều kiện (`INVALID_STATE_TRANSITION` / `BUSINESS_RULE_VIOLATION`).
 
-### C3. Operating hours & resources (proposed)
+### C3. Operating hours & resources
 
-- **`PUT /stores/{id}/operating-hours`** — Request `{hours: [{dayOfWeek (1–7 CONFIRMED,
-  1=Chủ nhật), openTime?, closeTime?, isClosed}]}` (replace-all, idempotent).
-  Validation CONFIRMED từ ERD: UK `(store_id, day_of_week)`; `openTime < closeTime`
-  khi không đóng cửa (derived). Status: `200` · `400` · `401` · `403` · `404`.
+- **`PUT /stores/{id}/operating-hours`** (implemented) — Request `{hours: [{dayOfWeek
+  (1–7 CONFIRMED, 1=Chủ nhật), openTime?, closeTime?, isClosed}]}` (`minItems: 1`,
+  `maxItems: 7` — không bắt buộc đủ 7 ngày mỗi lần gọi).
+  **Semantics replace-all (ĐÃ GIẢI 2026-09-18):** xóa sạch toàn bộ cấu hình cũ của
+  Store rồi ghi lại đúng mảng gửi lên — ngày nào không có trong request thì **không
+  còn hàng nào** sau lệnh này (coi như chưa cấu hình), không phải upsert giữ nguyên
+  ngày thiếu. Idempotent (gọi lại cùng payload cho kết quả giống hệt).
+  **Authorization (ĐÃ GIẢI 2026-09-18, xem Q5/Q10):** CHỈ `STORE_MANAGER` đúng Store
+  mình quản lý — không có ngoại lệ `SUPER_ADMIN`/`ORGANIZATION_ADMIN`.
+  **Guard CONFIRMED:** Store đang `ARCHIVED` (RULE-03-06 — dữ liệu cấu hình con bất
+  biến) → `400 BUSINESS_RULE_VIOLATION`, không ghi gì.
+  **Validation:** không trùng `dayOfWeek` trong cùng 1 request (derived, RULE-03-07)
+  · `isClosed=false` bắt buộc có đủ `openTime`+`closeTime` và `openTime < closeTime`
+  · `isClosed=true` không được kèm `openTime`/`closeTime` (cấu hình mâu thuẫn, derived).
+  Status: `200` · `400` validation/`ARCHIVED` · `401` · `403 ACCESS_DENIED_SCOPE_MISMATCH`
+  · `404`.
 - **`POST /stores/{id}/resources`** — Request `{resourceCode (req, UK trong Store
   CONFIRMED), resourceName (req), resourceType (req CONFIRMED enum), isActive?}`.
   Response `201`. Status: `201` · `400` · `401` · `403` · `404` · `409`.
@@ -145,12 +180,13 @@ giờ + resource do OrgAdmin; StoreManager có được cấu hình không TBD Q
 | Q2 | Envelope | DECIDED theo convention | convention |
 | Q3 | Org status (`ACTIVE`/`SUSPENDED`/`INACTIVE`) có FSM không? Ai suspend Org? | TBD (PO) | ERD có status, không có FSM/op |
 | Q4 | `code` (org/store/resource) có sửa được sau tạo không? | TBD (PO) — PROPOSED immutable | ERD UK |
-| Q5 | StoreManager được cấu hình giờ/resource không (A3)? | TBD (PO) | `01#3` chỉ gán OrgAdmin cho Configure* |
-| Q6 | `UpdateStore` của StoreManager giới hạn fields nào (A2)? | TBD (PO) | `01#3` gán cả 2 actors, thiếu ranh giới |
-| Q7 | Policy storage + endpoints (`ManageOrganizationPolicy`/`ConfigureStorePolicy`) | TBD (PO/BE) — loại khỏi v1 vì ERD không có bảng | ERD |
+| Q5 | StoreManager được cấu hình giờ/resource không (A3)? | **ĐÃ GIẢI phần giờ (2026-09-18):** Có, và **chỉ** StoreManager (không OrgAdmin) — xem dòng `ConfigureOperatingHour` ở mục B. Phần `resource` (`ConfigureStoreResource`) vẫn TBD (PO) | `01#3` chỉ gán **StoreManager** cho cả 2 Configure* (ghi chú gốc ở đây từng nhầm thành OrgAdmin — đã sửa) |
+| Q6 | `UpdateStore` của StoreManager giới hạn fields nào (A2)? | **ĐÃ GIẢI (2026-09-17):** cùng 3 field `name`/`address`/`phone` như OrgAdmin (khớp `openapi #UpdateStoreRequest`, không có field-level scope riêng) — khác biệt actor nằm ở **phạm vi Store**, không phải field | `openapi/org-store-v1.yaml #UpdateStoreRequest` (schema dùng chung, không tách theo actor) |
+| Q7 | Policy storage + endpoints (`ManageOrganizationPolicy`/`ConfigureStorePolicy`) | **ĐÃ GIẢI đầy đủ cả hai nửa:** Organization (2026-09-17) — bảng `organization_policies` (RULE-03-09), endpoint `GET/PATCH /organizations/{id}/policy`; Store (2026-09-18) — bảng `store_policies` (RULE-03-10), endpoint `GET/PATCH /stores/{id}/policy` — xem dòng `ManageOrganizationPolicy`/`ConfigureStorePolicy` ở mục B | Decision Log RULE-03-03/RULE-03-09 và RULE-03-03/RULE-03-10 (`docs/02-business-rules.md` mục 03), `docs/06-erd.md` §3.2 |
 | Q8 | `ConfigureStoreService` (03) vs `ConfigureServiceAvailability` (05): một hay hai? | TBD (PO) — PROPOSED dồn về 05 | `01#3` vs `01#5` |
 | Q9 | Organization update được sửa fields nào? | TBD (PO) | docs không chi tiết |
-| Q10 | Xem Q5 (StoreManager Configure*) | TBD (PO) | — |
+| Q10 | Xem Q5 (StoreManager Configure*) | Phần `ConfigureOperatingHour` ĐÃ GIẢI (2026-09-18, xem Q5); `ConfigureStoreResource` vẫn TBD (PO) | — |
+| Q11 | `UpdateStore` có bị chặn khi Store đã `ARCHIVED` không? | **ĐÃ GIẢI (2026-09-17):** Có — mở rộng GAP-ORG-01/RULE-03-06 (trước đó chỉ khóa dữ liệu cấu hình con) sang chính record Store, nhất quán tinh thần "Terminal State tuyệt đối" | Decision Log `docs/02-business-rules.md` mục 03, `docs/03-state-machines.md` §2 Technical Invariant #4 |
 
 ---
 

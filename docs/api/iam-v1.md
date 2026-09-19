@@ -64,7 +64,7 @@ Error envelope DECIDED theo `docs/convention/backend/04-exception-handling`:
 | LockAccount | PlatformAdmin / OrgAdmin | Account `ACTIVE` | RULE-02-04 (revoke tức thì), RULE-02-05 | POST | `/users/{id}/lock` | Bearer | Admin trong scope (StoreManager KHÔNG có quyền — `01#2`) | `ACTIVE → LOCKED` + `AccountLocked` | Idempotent (đã LOCKED vẫn 200) | Thu hồi toàn bộ session/token + blacklist |
 | UnlockAccount | PlatformAdmin / OrgAdmin | Account `LOCKED` | RULE-02-04/05 | POST | `/users/{id}/unlock` | Bearer | Admin trong scope | `LOCKED → ACTIVE` + `AccountUnlocked` | Idempotent | **Không** chờ `locked_until` — Admin unlock được bất kỳ lúc nào, bất kể lý do khóa (REQ-ACC-011 CONFIRMED; bản trước của contract này ghi nhầm là phải chờ `locked_until`, chỉ áp dụng cho `AutoUnlockAccount` tự động, không áp dụng cho unlock thủ công) |
 | DeactivateAccount | PlatformAdmin / OrgAdmin | Account `ACTIVE`/`LOCKED` (nhân viên nghỉ việc) | RULE-02-05/07 (revoke + từ chối login) | POST | `/users/{id}/deactivate` | Bearer | Admin trong scope | `ACTIVE/LOCKED → DEACTIVATED` + `AccountDeactivated` | Idempotent | Vĩnh viễn cho đến khi reactivate |
-| ReactivateAccount | PlatformAdmin / OrgAdmin | Account `DEACTIVATED` + lý do bắt buộc | RULE-02-05/07 (reason + audit) | POST | `/users/{id}/reactivate` | Bearer | Admin trong scope | `DEACTIVATED → ACTIVE` + `AccountReactivated` | Idempotent | `{reason}` required CONFIRMED |
+| ReactivateAccount | PlatformAdmin / OrgAdmin | Account `DEACTIVATED` hoặc `LOCKED` + lý do bắt buộc | RULE-02-05/07 (reason + audit) | POST | `/users/{id}/reactivate` | Bearer | Admin trong scope | `DEACTIVATED/LOCKED → ACTIVE` + `AccountReactivated` | Idempotent | `{reason}` required CONFIRMED · nguồn `LOCKED` bổ sung 2026-09-16 (xem Decision Log `docs/02-business-rules.md` mục RULE-02-07) — dùng khi Admin muốn mở khóa nhưng vẫn bắt buộc ghi lý do vào Audit Log, khác `UnlockAccount` không yêu cầu lý do |
 | ManageRole/Permission (read) | Bất kỳ actor đã đăng nhập | — | RULE-02-01/02 | GET | `/roles`, `/permissions` | Bearer | authenticated (không @PreAuthorize riêng) | none | Idempotent | 9 canonical roles seed sẵn (global, `organizationId=null`); `permissions` hiện rỗng |
 | ManageRole (create custom) | OrgAdmin | Code chưa tồn tại trong Org | RULE-02-02 (scope hợp lệ) | POST | `/roles` | — | — | — | — | **DEFERRED** — chưa implement đợt này (xem Đóng băng phạm vi) |
 
@@ -88,8 +88,11 @@ Error envelope DECIDED theo `docs/convention/backend/04-exception-handling`:
   + `organizationId?` (UUID, chỉ có hiệu lực lọc thật với SUPER_ADMIN), `role?` (`RoleCode`),
   `storeId?` (UUID). Không có free-text search (`q`) — ngoài phạm vi v1 (YAGNI).
 - **Response 200:** `PageResponse<UserResponse>` — `{content: [{userId, accountId,
-  fullName, role, organizationId, storeId, status}], page, size, totalElements, ...}`
-  (shape chuẩn `platform/model/PageResponse`).
+  fullName, gender, dateOfBirth, avatarUrl, role, organizationId, storeId, status}],
+  page, size, totalElements, ...}` (shape chuẩn `platform/model/PageResponse`).
+  `gender`/`dateOfBirth`/`avatarUrl` CONFIRMED có trong response — trước đây bị bỏ sót
+  khỏi contract (client set qua `PATCH` xong không đọc lại được, vi phạm RULE-02-06
+  "Customer toàn quyền xem hồ sơ của chính mình"), đã sửa 2026-09-16.
 - **Status:** `200` · `401` · `403`.
 
 ### C2. `GET/PATCH /users/{id}` — IMPLEMENTED
@@ -139,7 +142,11 @@ Error envelope DECIDED theo `docs/convention/backend/04-exception-handling`:
 - `POST /users/{id}/deactivate` — Request `{reason?}`. Guards: từ `ACTIVE` hoặc
   `LOCKED` (RULE-02-07 CONFIRMED); revoke + từ chối login vĩnh viễn.
 - `POST /users/{id}/reactivate` — Request `{reason (required CONFIRMED)}`.
-  Guards: chỉ từ `DEACTIVATED`; ghi audit bắt buộc (RULE-02-07).
+  Guards: từ `DEACTIVATED` **hoặc `LOCKED`** (bổ sung 2026-09-16 — xem Decision Log
+  `docs/02-business-rules.md` mục RULE-02-07 và FSM-1 `docs/03-state-machines.md` §1);
+  ghi audit bắt buộc (RULE-02-07). Luôn phát `AccountReactivated` bất kể trạng thái
+  nguồn; khác `UnlockAccount` (chỉ từ `LOCKED`, không yêu cầu lý do) — dùng
+  `ReactivateAccount` khi cần bắt buộc ghi lý do vào Audit Log ngay cả với khóa tạm.
 - **Status chung:** `200` · `400` · `401` · `403` · `404` · `409` sai trạng thái
   (`INVALID_STATE_TRANSITION` theo convention).
 

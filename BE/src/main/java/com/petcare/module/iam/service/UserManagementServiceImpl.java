@@ -12,6 +12,7 @@ import com.petcare.module.iam.entity.User;
 import com.petcare.module.iam.mapper.IamMapper;
 import com.petcare.module.iam.repository.UserRepository;
 import com.petcare.module.iam.repository.UserSpecifications;
+import com.petcare.platform.audit.AuditResourceId;
 import com.petcare.platform.audit.Auditable;
 import com.petcare.platform.enums.AccountStatus;
 import com.petcare.platform.enums.UserRole;
@@ -169,8 +170,8 @@ public class UserManagementServiceImpl implements UserManagementService {
 
     @Override
     @Transactional
-    @Auditable(action = "AssignPermission")
-    public RoleAssignmentResponse assignRole(UserPrincipal actor, UUID userId, RoleAssignmentRequest request) {
+    @Auditable(action = "AssignPermission", resourceType = "User")
+    public RoleAssignmentResponse assignRole(UserPrincipal actor, @AuditResourceId UUID userId, RoleAssignmentRequest request) {
         User user = findUser(userId);
         // RULE-02-06 — chặn tự đổi role bản thân TRƯỚC mọi guard theo scope khác (actor
         // luôn "quản trị được" chính mình nên assertCanManageUser/assertCanAssignRole bên
@@ -199,7 +200,10 @@ public class UserManagementServiceImpl implements UserManagementService {
     public AccountLifecycleResponse lockAccount(UserPrincipal actor, UUID userId) {
         User user = findUser(userId);
         assertInManagementScope(actor, user);
-        AccountSummary summary = accountLifecycleService.lockAccount(user.getAccountId());
+        // organizationId/storeId truyền xuống CHỈ phục vụ audit_logs.organization_id/store_id
+        // (RULE-25-01) ghi đúng scope của user bị khóa — xem AuditOrganizationId/AuditStoreId.
+        AccountSummary summary = accountLifecycleService.lockAccount(user.getAccountId(),
+                user.getOrganizationId(), user.getStoreId());
         return new AccountLifecycleResponse(user.getId(), summary.accountId(), summary.status());
     }
 
@@ -208,7 +212,8 @@ public class UserManagementServiceImpl implements UserManagementService {
     public AccountLifecycleResponse unlockAccount(UserPrincipal actor, UUID userId) {
         User user = findUser(userId);
         assertInManagementScope(actor, user);
-        AccountSummary summary = accountLifecycleService.unlockAccount(user.getAccountId());
+        AccountSummary summary = accountLifecycleService.unlockAccount(user.getAccountId(),
+                user.getOrganizationId(), user.getStoreId());
         return new AccountLifecycleResponse(user.getId(), summary.accountId(), summary.status());
     }
 
@@ -217,7 +222,8 @@ public class UserManagementServiceImpl implements UserManagementService {
     public AccountLifecycleResponse deactivateAccount(UserPrincipal actor, UUID userId, String reason) {
         User user = findUser(userId);
         assertInManagementScope(actor, user);
-        AccountSummary summary = accountLifecycleService.deactivateAccount(user.getAccountId(), reason);
+        AccountSummary summary = accountLifecycleService.deactivateAccount(user.getAccountId(), reason,
+                user.getOrganizationId(), user.getStoreId());
         return new AccountLifecycleResponse(user.getId(), summary.accountId(), summary.status());
     }
 
@@ -226,19 +232,23 @@ public class UserManagementServiceImpl implements UserManagementService {
     public AccountLifecycleResponse reactivateAccount(UserPrincipal actor, UUID userId, String reason) {
         User user = findUser(userId);
         assertInManagementScope(actor, user);
-        AccountSummary summary = accountLifecycleService.reactivateAccount(user.getAccountId(), reason);
+        AccountSummary summary = accountLifecycleService.reactivateAccount(user.getAccountId(), reason,
+                user.getOrganizationId(), user.getStoreId());
         return new AccountLifecycleResponse(user.getId(), summary.accountId(), summary.status());
     }
 
     /**
      * Dùng cho các thao tác chỉ SUPER_ADMIN/ORGANIZATION_ADMIN được gọi
-     * (@PreAuthorize đã chặn STORE_MANAGER ở Controller) — delegate
-     * {@link RoleScopeGuard#assertCanManageOrganization}. AssignPermission
-     * dùng {@link RoleScopeGuard#assertCanManageUser} riêng vì StoreManager
-     * cũng được phép gọi.
+     * (@PreAuthorize đã chặn STORE_MANAGER ở Controller). Chặn self-action
+     * TRƯỚC (RULE-02-05 — actor không được tự khóa/vô hiệu hóa chính mình,
+     * xem {@link RoleScopeGuard#assertNotSelfLifecycleAction}), sau đó mới xét
+     * scope theo role của target ({@link RoleScopeGuard#assertCanManageAccountLifecycle}).
+     * AssignPermission dùng {@link RoleScopeGuard#assertCanManageUser} riêng
+     * vì StoreManager cũng được phép gọi.
      */
     private void assertInManagementScope(UserPrincipal actor, User target) {
-        RoleScopeGuard.assertCanManageOrganization(actor, target.getOrganizationId());
+        RoleScopeGuard.assertNotSelfLifecycleAction(actor, target.getId());
+        RoleScopeGuard.assertCanManageAccountLifecycle(actor, target.getRole(), target.getOrganizationId());
     }
 
     private void recordPermissionAssigned(User user) {

@@ -14,6 +14,16 @@ public interface RefreshTokenRepository extends JpaRepository<RefreshTokenEntity
 
     Optional<RefreshTokenEntity> findByTokenHashAndRevokedAtIsNull(String tokenHash);
 
+    /** RULE-01-06 — Logout tra refresh token của phiên hiện tại từ JTI access token. */
+    Optional<RefreshTokenEntity> findByAccessTokenJtiAndRevokedAtIsNull(UUID accessTokenJti);
+
+    /**
+     * Tra theo access_token_jti KHÔNG lọc revoked_at — dùng khi access token đưa lên đã lỗi
+     * thời (đã bị rotate) để lần theo chuỗi {@code replaced_by} tới generation đang sống của
+     * cùng phiên (xem RefreshTokenService#revokeByAccessTokenJti).
+     */
+    Optional<RefreshTokenEntity> findByAccessTokenJti(UUID accessTokenJti);
+
     List<RefreshTokenEntity> findAllByAccountIdAndRevokedAtIsNull(UUID accountId);
 
     /**

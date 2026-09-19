@@ -28,7 +28,15 @@ public class UserProvisioningServiceImpl implements UserProvisioningService {
         return userRepository.save(new User(accountId, fullName));
     }
 
-    /** Propagation.MANDATORY — cùng lý do như createCustomerProfile (AuthServiceImpl.createStaff). */
+    /**
+     * Propagation.MANDATORY — cùng lý do như createCustomerProfile (AuthServiceImpl.createStaff).
+     * saveAndFlush (không phải save thường) — bắt buộc để INSERT chạy NGAY tại đây thay vì bị
+     * Hibernate defer tới lúc transaction commit: organizationId/storeId chỉ được kiểm tra
+     * HÌNH DẠNG (RULE-02-02), không kiểm tra tồn tại thật, nên FK violation (fk_users_org/
+     * fk_users_store) là cách duy nhất bắt được org/store "ảo" — AuthServiceImpl.createStaff()
+     * cần exception này ném ra NGAY trong try/catch của nó, không phải lúc commit (lúc đó đã
+     * ra khỏi method, catch ở caller không còn tác dụng, rơi thẳng xuống handleGeneric -> 500).
+     */
     @Override
     @Transactional(propagation = Propagation.MANDATORY)
     public User createStaffProfile(UUID accountId, String fullName, UserRole role, UUID organizationId, UUID storeId) {
@@ -36,7 +44,7 @@ public class UserProvisioningServiceImpl implements UserProvisioningService {
         user.setRole(role);
         user.setOrganizationId(organizationId);
         user.setStoreId(storeId);
-        return userRepository.save(user);
+        return userRepository.saveAndFlush(user);
     }
 
     @Override

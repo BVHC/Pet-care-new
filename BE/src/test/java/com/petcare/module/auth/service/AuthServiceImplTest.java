@@ -28,8 +28,10 @@ import com.petcare.platform.exception.AccessDeniedScopeException;
 import com.petcare.platform.exception.AccountLockedException;
 import com.petcare.platform.exception.AccountNotActiveException;
 import com.petcare.platform.exception.BusinessRuleViolationException;
+import com.petcare.platform.exception.ConcurrencyConflictException;
 import com.petcare.platform.exception.InvalidCredentialsException;
 import com.petcare.platform.exception.InvalidRefreshTokenException;
+import com.petcare.platform.exception.InvalidStateTransitionException;
 import com.petcare.platform.exception.ResourceNotFoundException;
 import com.petcare.platform.security.JwtTokenProvider;
 import com.petcare.platform.security.UserPrincipal;
@@ -41,6 +43,7 @@ import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.springframework.dao.DataIntegrityViolationException;
+import org.springframework.orm.ObjectOptimisticLockingFailureException;
 import org.springframework.security.crypto.password.PasswordEncoder;
 
 import java.time.LocalDateTime;
@@ -48,11 +51,13 @@ import java.util.Optional;
 import java.util.UUID;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatCode;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.argThat;
 import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.ArgumentMatchers.isNull;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
@@ -170,6 +175,7 @@ class AuthServiceImplTest {
 
     @Test
     void verifyOtp_notFound_throwsResourceNotFound() {
+        when(accountRepository.findByEmailForUpdate(EMAIL)).thenReturn(Optional.of(new Account(EMAIL, null, "hashed")));
         when(otpRepository.findTopByEmailAndPurposeOrderByCreatedAtDesc(EMAIL, OtpPurpose.REGISTRATION))
                 .thenReturn(Optional.empty());
 
@@ -179,6 +185,7 @@ class AuthServiceImplTest {
 
     @Test
     void verifyOtp_currentlyLocked_RULE_01_05() {
+        when(accountRepository.findByEmailForUpdate(EMAIL)).thenReturn(Optional.of(new Account(EMAIL, null, "hashed")));
         Otp otp = new Otp(EMAIL, "111111", OtpPurpose.REGISTRATION, LocalDateTime.now().plusMinutes(5));
         otp.setLockedUntil(LocalDateTime.now().plusMinutes(10));
         when(otpRepository.findTopByEmailAndPurposeOrderByCreatedAtDesc(EMAIL, OtpPurpose.REGISTRATION))
@@ -191,6 +198,7 @@ class AuthServiceImplTest {
 
     @Test
     void verifyOtp_expired_RULE_01_02() {
+        when(accountRepository.findByEmailForUpdate(EMAIL)).thenReturn(Optional.of(new Account(EMAIL, null, "hashed")));
         Otp otp = new Otp(EMAIL, "111111", OtpPurpose.REGISTRATION, LocalDateTime.now().minusSeconds(1));
         when(otpRepository.findTopByEmailAndPurposeOrderByCreatedAtDesc(EMAIL, OtpPurpose.REGISTRATION))
                 .thenReturn(Optional.of(otp));
@@ -202,6 +210,7 @@ class AuthServiceImplTest {
 
     @Test
     void verifyOtp_wrongCode_belowMaxAttempts_incrementsCount_RULE_01_02() {
+        when(accountRepository.findByEmailForUpdate(EMAIL)).thenReturn(Optional.of(new Account(EMAIL, null, "hashed")));
         Otp otp = new Otp(EMAIL, "111111", OtpPurpose.REGISTRATION, LocalDateTime.now().plusMinutes(5));
         otp.setAttemptCount(2);
         when(otpRepository.findTopByEmailAndPurposeOrderByCreatedAtDesc(EMAIL, OtpPurpose.REGISTRATION))
@@ -217,6 +226,7 @@ class AuthServiceImplTest {
 
     @Test
     void verifyOtp_wrongCode_reachesMaxAttempts_locksSession_RULE_01_05() {
+        when(accountRepository.findByEmailForUpdate(EMAIL)).thenReturn(Optional.of(new Account(EMAIL, null, "hashed")));
         Otp otp = new Otp(EMAIL, "111111", OtpPurpose.REGISTRATION, LocalDateTime.now().plusMinutes(5));
         otp.setAttemptCount(4);
         when(otpRepository.findTopByEmailAndPurposeOrderByCreatedAtDesc(EMAIL, OtpPurpose.REGISTRATION))
@@ -238,7 +248,7 @@ class AuthServiceImplTest {
                 .thenReturn(Optional.of(otp));
         Account account = new Account(EMAIL, null, "hashed");
         account.setId(UUID.randomUUID());
-        when(accountRepository.findByEmail(EMAIL)).thenReturn(Optional.of(account));
+        when(accountRepository.findByEmailForUpdate(EMAIL)).thenReturn(Optional.of(account));
         when(accountRepository.save(any(Account.class))).thenAnswer(inv -> inv.getArgument(0));
 
         Account result = authService.verifyOtp(new VerifyOtpRequest(EMAIL, "111111"));
@@ -248,13 +258,60 @@ class AuthServiceImplTest {
         verify(accountEventRecorder).record(any(), eq("AccountActivated"));
     }
 
+    @Test
+    void verifyOtp_accountAlreadyActive_throwsInvalidStateTransition_notBusinessRuleViolation() {
+        // docs/api/auth-v1.md C2: verify khi Account đã ACTIVE -> 409 INVALID_STATE_TRANSITION,
+        // KHÔNG phải 400 BUSINESS_RULE_VIOLATION/RULE-01-02 — dù OTP gốc đã otp.used=true (luôn
+        // đi kèm ACTIVE trong cùng transaction lúc kích hoạt lần đầu). Guard state-transition
+        // phải chạy TRƯỚC guard otp.isUsed(), nếu không double-verify sẽ luôn bị chặn nhầm.
+        Account account = new Account(EMAIL, null, "hashed");
+        account.setStatus(AccountStatus.ACTIVE);
+        when(accountRepository.findByEmailForUpdate(EMAIL)).thenReturn(Optional.of(account));
+
+        assertThatThrownBy(() -> authService.verifyOtp(new VerifyOtpRequest(EMAIL, "111111")))
+                .isInstanceOf(InvalidStateTransitionException.class);
+
+        verify(otpRepository, never()).findTopByEmailAndPurposeOrderByCreatedAtDesc(any(), any());
+    }
+
+    @Test
+    void verifyOtp_accountLocked_throwsInvalidStateTransition_RULE_02_04() {
+        // Regression: AccountTransitionHandler khai báo LOCKED -> ACTIVE dùng chung cho
+        // UnlockAccount (RULE-02-04), nên validateTransition(LOCKED, ACTIVE) một mình sẽ KHÔNG
+        // throw. VerifyOTP chỉ hợp lệ khi nguồn là PENDING_VERIFICATION — nếu không chặn tường
+        // minh, 1 Otp còn hợp lệ có thể "mở khoá" tài khoản LOCKED bỏ qua UnlockAccount.
+        Account account = new Account(EMAIL, null, "hashed");
+        account.setStatus(AccountStatus.LOCKED);
+        when(accountRepository.findByEmailForUpdate(EMAIL)).thenReturn(Optional.of(account));
+
+        assertThatThrownBy(() -> authService.verifyOtp(new VerifyOtpRequest(EMAIL, "111111")))
+                .isInstanceOf(InvalidStateTransitionException.class);
+
+        verify(otpRepository, never()).findTopByEmailAndPurposeOrderByCreatedAtDesc(any(), any());
+    }
+
+    @Test
+    void verifyOtp_accountDeactivated_throwsInvalidStateTransition_RULE_02_07() {
+        // Regression: cùng lý do như test LOCKED ở trên nhưng cho DEACTIVATED -> ACTIVE
+        // (ReactivateAccount, RULE-02-07 bắt buộc `reason` + audit riêng "AccountReactivated").
+        // VerifyOTP không được phép tái kích hoạt tài khoản DEACTIVATED, dù OTP còn hợp lệ.
+        Account account = new Account(EMAIL, null, "hashed");
+        account.setStatus(AccountStatus.DEACTIVATED);
+        when(accountRepository.findByEmailForUpdate(EMAIL)).thenReturn(Optional.of(account));
+
+        assertThatThrownBy(() -> authService.verifyOtp(new VerifyOtpRequest(EMAIL, "111111")))
+                .isInstanceOf(InvalidStateTransitionException.class);
+
+        verify(otpRepository, never()).findTopByEmailAndPurposeOrderByCreatedAtDesc(any(), any());
+    }
+
     // ---- resendOtp ----
 
     @Test
     void resendOtp_accountAlreadyActive_RULE_01_03() {
         Account account = new Account(EMAIL, null, "hashed");
         account.setStatus(AccountStatus.ACTIVE);
-        when(accountRepository.findByEmail(EMAIL)).thenReturn(Optional.of(account));
+        when(accountRepository.findByEmailForUpdate(EMAIL)).thenReturn(Optional.of(account));
 
         assertThatThrownBy(() -> authService.resendOtp(new ResendOtpRequest(EMAIL)))
                 .isInstanceOf(BusinessRuleViolationException.class)
@@ -264,7 +321,7 @@ class AuthServiceImplTest {
     @Test
     void resendOtp_cooldownNotElapsed_RULE_01_04() {
         Account account = new Account(EMAIL, null, "hashed");
-        when(accountRepository.findByEmail(EMAIL)).thenReturn(Optional.of(account));
+        when(accountRepository.findByEmailForUpdate(EMAIL)).thenReturn(Optional.of(account));
         Otp otp = new Otp(EMAIL, "111111", OtpPurpose.REGISTRATION, LocalDateTime.now().plusMinutes(5));
         otp.setCreatedAt(LocalDateTime.now().minusSeconds(10));
         when(otpRepository.findTopByEmailAndPurposeOrderByCreatedAtDesc(EMAIL, OtpPurpose.REGISTRATION))
@@ -277,13 +334,16 @@ class AuthServiceImplTest {
 
     @Test
     void resendOtp_rateLimitExceeded_RULE_01_05() {
+        // RULE-01-05 giới hạn 5 lần GỬI LẠI/giờ. countByEmailAndPurposeAndResendTrueAndCreatedAtAfter
+        // đếm trực tiếp is_resend=true, không tính OTP gốc từ RegisterAccount -> đủ 5 lần resend
+        // trong khung giờ là chặn ngay, không cần bù trừ theo tuổi của OTP gốc.
         Account account = new Account(EMAIL, null, "hashed");
-        when(accountRepository.findByEmail(EMAIL)).thenReturn(Optional.of(account));
+        when(accountRepository.findByEmailForUpdate(EMAIL)).thenReturn(Optional.of(account));
         Otp otp = new Otp(EMAIL, "111111", OtpPurpose.REGISTRATION, LocalDateTime.now().plusMinutes(5));
         otp.setCreatedAt(LocalDateTime.now().minusMinutes(5));
         when(otpRepository.findTopByEmailAndPurposeOrderByCreatedAtDesc(EMAIL, OtpPurpose.REGISTRATION))
                 .thenReturn(Optional.of(otp));
-        when(otpRepository.countByEmailAndPurposeAndCreatedAtAfter(eq(EMAIL), eq(OtpPurpose.REGISTRATION), any()))
+        when(otpRepository.countByEmailAndPurposeAndResendTrueAndCreatedAtAfter(eq(EMAIL), eq(OtpPurpose.REGISTRATION), any()))
                 .thenReturn(5L);
 
         assertThatThrownBy(() -> authService.resendOtp(new ResendOtpRequest(EMAIL)))
@@ -292,15 +352,58 @@ class AuthServiceImplTest {
     }
 
     @Test
+    void resendOtp_originalOtpAgedOutOfWindow_stillEnforcesLimit_RULE_01_05() {
+        // Regression cho bug đã fix: trước đây countByEmailAndPurposeAndCreatedAtAfter đếm cả
+        // OTP gốc rồi cộng bù +1 vào ngưỡng, giả định OTP gốc luôn còn trong cửa sổ rolling 1h.
+        // Nếu user chờ >1h rồi mới resend dồn dập, OTP gốc văng khỏi cửa sổ nhưng ngưỡng vẫn
+        // cộng dư +1 -> cho phép lọt 6 lần resend/giờ thay vì 5. Đếm trực tiếp is_resend=true
+        // không còn phụ thuộc tuổi của OTP gốc: dù nó đã văng khỏi cửa sổ, đủ 5 resend là chặn.
+        Account account = new Account(EMAIL, null, "hashed");
+        when(accountRepository.findByEmailForUpdate(EMAIL)).thenReturn(Optional.of(account));
+        Otp otp = new Otp(EMAIL, "111111", OtpPurpose.REGISTRATION, LocalDateTime.now().plusMinutes(5));
+        otp.setCreatedAt(LocalDateTime.now().minusMinutes(5));
+        when(otpRepository.findTopByEmailAndPurposeOrderByCreatedAtDesc(EMAIL, OtpPurpose.REGISTRATION))
+                .thenReturn(Optional.of(otp));
+        when(otpRepository.countByEmailAndPurposeAndResendTrueAndCreatedAtAfter(eq(EMAIL), eq(OtpPurpose.REGISTRATION), any()))
+                .thenReturn(5L);
+
+        assertThatThrownBy(() -> authService.resendOtp(new ResendOtpRequest(EMAIL)))
+                .isInstanceOf(BusinessRuleViolationException.class)
+                .satisfies(ex -> assertThat(((BusinessRuleViolationException) ex).getRuleId()).isEqualTo("RULE-01-05"));
+    }
+
+    @Test
+    void resendOtp_fourthResendWithinHour_stillAllowed_RULE_01_05() {
+        // 4 lần resend trước đó (is_resend=true) trong 1 giờ -> lần này là resend hợp lệ thứ 5,
+        // chưa vượt hạn mức.
+        Account account = new Account(EMAIL, null, "hashed");
+        account.setId(UUID.randomUUID());
+        when(accountRepository.findByEmailForUpdate(EMAIL)).thenReturn(Optional.of(account));
+        Otp otp = new Otp(EMAIL, "111111", OtpPurpose.REGISTRATION, LocalDateTime.now().plusMinutes(5));
+        otp.setCreatedAt(LocalDateTime.now().minusMinutes(5));
+        when(otpRepository.findTopByEmailAndPurposeOrderByCreatedAtDesc(EMAIL, OtpPurpose.REGISTRATION))
+                .thenReturn(Optional.of(otp));
+        when(otpRepository.countByEmailAndPurposeAndResendTrueAndCreatedAtAfter(eq(EMAIL), eq(OtpPurpose.REGISTRATION), any()))
+                .thenReturn(4L);
+        User user = new User(account.getId(), "Nguyen Van A");
+        user.setId(UUID.randomUUID());
+        when(userProvisioningService.findByAccountId(account.getId())).thenReturn(user);
+        when(notificationService.enqueue(eq(user.getId()), eq(NotificationChannel.EMAIL), eq("OTP"), anyString()))
+                .thenReturn(UUID.randomUUID());
+
+        assertThatCode(() -> authService.resendOtp(new ResendOtpRequest(EMAIL))).doesNotThrowAnyException();
+    }
+
+    @Test
     void resendOtp_happyPath_invalidatesOldAndCreatesNew() {
         Account account = new Account(EMAIL, null, "hashed");
         account.setId(UUID.randomUUID());
-        when(accountRepository.findByEmail(EMAIL)).thenReturn(Optional.of(account));
+        when(accountRepository.findByEmailForUpdate(EMAIL)).thenReturn(Optional.of(account));
         Otp oldOtp = new Otp(EMAIL, "111111", OtpPurpose.REGISTRATION, LocalDateTime.now().plusMinutes(5));
         oldOtp.setCreatedAt(LocalDateTime.now().minusMinutes(5));
         when(otpRepository.findTopByEmailAndPurposeOrderByCreatedAtDesc(EMAIL, OtpPurpose.REGISTRATION))
                 .thenReturn(Optional.of(oldOtp));
-        when(otpRepository.countByEmailAndPurposeAndCreatedAtAfter(eq(EMAIL), eq(OtpPurpose.REGISTRATION), any()))
+        when(otpRepository.countByEmailAndPurposeAndResendTrueAndCreatedAtAfter(eq(EMAIL), eq(OtpPurpose.REGISTRATION), any()))
                 .thenReturn(1L);
         User user = new User(account.getId(), "Nguyen Van A");
         user.setId(UUID.randomUUID());
@@ -313,7 +416,7 @@ class AuthServiceImplTest {
 
         assertThat(oldOtp.isUsed()).isTrue();
         assertThat(outcome.notificationTaskId()).isEqualTo(taskId);
-        verify(otpRepository).save(argThat(o -> o != oldOtp));
+        verify(otpRepository).save(argThat(o -> o != oldOtp && o.isResend()));
     }
 
     // ---- login ----
@@ -397,6 +500,23 @@ class AuthServiceImplTest {
         assertThat(account.getLockedUntil()).isNull();
         assertThat(account.getFailedLoginAttempts()).isEqualTo(1);
         verify(accountEventRecorder).record(any(), eq("AccountUnlocked"));
+    }
+
+    @Test
+    void login_autoUnlockRacesConcurrentRequest_throwsConcurrencyConflict_notInternalError() {
+        // 2 request login/refresh gần như đồng thời cùng qua điều kiện auto-unlock (locked_until
+        // vừa hết hạn) có thể cùng đọc 1 version rồi cùng ghi đè — request thua cuộc phải nhận
+        // 409 CONCURRENCY_CONFLICT sạch (saveWithConcurrencyCheck), không phải 500 rơi từ
+        // ObjectOptimisticLockingFailureException chưa được bắt.
+        Account account = activeAccount();
+        account.setStatus(AccountStatus.LOCKED);
+        account.setLockReason(LockReason.AUTO_FAILED_LOGIN);
+        account.setLockedUntil(LocalDateTime.now().minusMinutes(1));
+        when(accountRepository.findByEmail(EMAIL)).thenReturn(Optional.of(account));
+        when(accountRepository.save(any(Account.class))).thenThrow(new ObjectOptimisticLockingFailureException(Account.class, account.getId()));
+
+        assertThatThrownBy(() -> authService.login(new LoginRequest(EMAIL, "password123"), "ua", "127.0.0.1"))
+                .isInstanceOf(ConcurrencyConflictException.class);
     }
 
     @Test
@@ -548,6 +668,53 @@ class AuthServiceImplTest {
         verify(accountEventRecorder).record(any(), eq("PermissionAssigned"), any());
     }
 
+    @Test
+    void createStaff_nonExistentStore_throwsResourceNotFound_notInternalError() {
+        // RoleScopeGuard chỉ kiểm tra HÌNH DẠNG binding (RULE-02-02), không kiểm tra storeId
+        // có thực sự tồn tại — Module 03 (Store) chưa có API tạo Store thật nên FK violation
+        // (fk_users_store) luôn xảy ra ở đây. Phải dịch thành ResourceNotFoundException (404)
+        // thay vì để DataIntegrityViolationException rơi xuống handleGeneric (500).
+        UUID orgId = UUID.randomUUID();
+        UUID storeId = UUID.randomUUID();
+        var actor = admin(UserRole.SUPER_ADMIN, null, null);
+        var request = new CreateStaffRequest(
+                "staff@example.com", null, "password123", "Nguyen Van B", UserRole.RECEPTIONIST, orgId, storeId);
+        when(accountRepository.existsByEmail("staff@example.com")).thenReturn(false);
+        when(passwordEncoder.encode("password123")).thenReturn("hashed");
+        when(accountRepository.save(any(Account.class))).thenAnswer(inv -> {
+            Account a = inv.getArgument(0);
+            a.setId(UUID.randomUUID());
+            return a;
+        });
+        when(userProvisioningService.createStaffProfile(any(), eq("Nguyen Van B"), eq(UserRole.RECEPTIONIST),
+                eq(orgId), eq(storeId))).thenThrow(new DataIntegrityViolationException("fk_users_store"));
+
+        assertThatThrownBy(() -> authService.createStaff(request, actor))
+                .isInstanceOf(ResourceNotFoundException.class)
+                .satisfies(ex -> assertThat(((ResourceNotFoundException) ex).getResourceType()).isEqualTo("Store"));
+    }
+
+    @Test
+    void createStaff_nonExistentOrganization_throwsResourceNotFound_notInternalError() {
+        UUID orgId = UUID.randomUUID();
+        var actor = admin(UserRole.SUPER_ADMIN, null, null);
+        var request = new CreateStaffRequest(
+                "staff@example.com", null, "password123", "Nguyen Van B", UserRole.ORGANIZATION_ADMIN, orgId, null);
+        when(accountRepository.existsByEmail("staff@example.com")).thenReturn(false);
+        when(passwordEncoder.encode("password123")).thenReturn("hashed");
+        when(accountRepository.save(any(Account.class))).thenAnswer(inv -> {
+            Account a = inv.getArgument(0);
+            a.setId(UUID.randomUUID());
+            return a;
+        });
+        when(userProvisioningService.createStaffProfile(any(), eq("Nguyen Van B"), eq(UserRole.ORGANIZATION_ADMIN),
+                eq(orgId), isNull())).thenThrow(new DataIntegrityViolationException("fk_users_org"));
+
+        assertThatThrownBy(() -> authService.createStaff(request, actor))
+                .isInstanceOf(ResourceNotFoundException.class)
+                .satisfies(ex -> assertThat(((ResourceNotFoundException) ex).getResourceType()).isEqualTo("Organization"));
+    }
+
     // ---- createCustomer ----
 
     @Test
@@ -599,6 +766,8 @@ class AuthServiceImplTest {
 
     @Test
     void logout_delegatesToTokenIssuanceFacade_RULE_01_06() {
+        when(tokenIssuanceFacade.logout("access-raw", "refresh-raw")).thenReturn(true);
+
         LogoutResponse response = authService.logout("access-raw", new LogoutRequest("refresh-raw"));
 
         assertThat(response.revoked()).isTrue();
@@ -606,10 +775,15 @@ class AuthServiceImplTest {
     }
 
     @Test
-    void logout_nullBody_stillRevokesAccessToken_RULE_01_06() {
+    void logout_reflectsFacadeResult_whenNoSessionFoundToRevoke_RULE_01_06() {
+        // response.revoked() phải phản ánh đúng kết quả thật từ TokenIssuanceFacade — không
+        // hard-code true nữa (trước đây luôn true kể cả khi không thu hồi được refresh token
+        // nào, xem LogoutResponse javadoc).
+        when(tokenIssuanceFacade.logout("access-raw", null)).thenReturn(false);
+
         LogoutResponse response = authService.logout("access-raw", null);
 
-        assertThat(response.revoked()).isTrue();
+        assertThat(response.revoked()).isFalse();
         verify(tokenIssuanceFacade).logout("access-raw", null);
     }
 

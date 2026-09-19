@@ -175,11 +175,15 @@ class RoleScopeGuardTest {
 
     @Test
     void assertCanManageUser_storeManager_allowedOnlyForOwnStore() {
+        UUID orgId = UUID.randomUUID();
         UUID storeId = UUID.randomUUID();
-        UserPrincipal actor = principal(UserRole.STORE_MANAGER, UUID.randomUUID(), storeId);
-        assertThatCode(() -> RoleScopeGuard.assertCanManageUser(actor, UUID.randomUUID(), storeId))
+        UserPrincipal actor = principal(UserRole.STORE_MANAGER, orgId, storeId);
+        assertThatCode(() -> RoleScopeGuard.assertCanManageUser(actor, orgId, storeId))
                 .doesNotThrowAnyException();
-        assertThatThrownBy(() -> RoleScopeGuard.assertCanManageUser(actor, UUID.randomUUID(), UUID.randomUUID()))
+        assertThatThrownBy(() -> RoleScopeGuard.assertCanManageUser(actor, orgId, UUID.randomUUID()))
+                .isInstanceOf(AccessDeniedScopeException.class);
+        assertThatThrownBy(() -> RoleScopeGuard.assertCanManageUser(actor, UUID.randomUUID(), storeId))
+                .as("khác organizationId dù cùng storeId cũng phải bị chặn")
                 .isInstanceOf(AccessDeniedScopeException.class);
     }
 
@@ -187,6 +191,82 @@ class RoleScopeGuardTest {
     void assertCanManageUser_customer_alwaysDenied() {
         UserPrincipal actor = principal(UserRole.CUSTOMER, null, null);
         assertThatThrownBy(() -> RoleScopeGuard.assertCanManageUser(actor, null, null))
+                .isInstanceOf(AccessDeniedScopeException.class);
+    }
+
+    // ---- assertCanManageStore (RULE-02-05 — UpdateStore, docs/api/org-store-v1.md B) ----
+
+    @Test
+    void assertCanManageStore_superAdmin_alwaysAllowed() {
+        UserPrincipal actor = principal(UserRole.SUPER_ADMIN, null, null);
+        assertThatCode(() -> RoleScopeGuard.assertCanManageStore(actor, UUID.randomUUID(), UUID.randomUUID()))
+                .doesNotThrowAnyException();
+    }
+
+    @Test
+    void assertCanManageStore_organizationAdmin_allowedForAnyStoreInOwnOrg() {
+        UUID orgId = UUID.randomUUID();
+        UserPrincipal actor = principal(UserRole.ORGANIZATION_ADMIN, orgId, null);
+        assertThatCode(() -> RoleScopeGuard.assertCanManageStore(actor, orgId, UUID.randomUUID()))
+                .doesNotThrowAnyException();
+        assertThatThrownBy(() -> RoleScopeGuard.assertCanManageStore(actor, UUID.randomUUID(), UUID.randomUUID()))
+                .isInstanceOf(AccessDeniedScopeException.class);
+    }
+
+    @Test
+    void assertCanManageStore_storeManager_allowedOnlyForOwnStore() {
+        UUID orgId = UUID.randomUUID();
+        UUID storeId = UUID.randomUUID();
+        UserPrincipal actor = principal(UserRole.STORE_MANAGER, orgId, storeId);
+        assertThatCode(() -> RoleScopeGuard.assertCanManageStore(actor, orgId, storeId))
+                .doesNotThrowAnyException();
+        assertThatThrownBy(() -> RoleScopeGuard.assertCanManageStore(actor, orgId, UUID.randomUUID()))
+                .isInstanceOf(AccessDeniedScopeException.class);
+        assertThatThrownBy(() -> RoleScopeGuard.assertCanManageStore(actor, UUID.randomUUID(), storeId))
+                .as("khác organizationId dù cùng storeId cũng phải bị chặn")
+                .isInstanceOf(AccessDeniedScopeException.class);
+    }
+
+    @Test
+    void assertCanManageStore_receptionist_alwaysDenied() {
+        UserPrincipal actor = principal(UserRole.RECEPTIONIST, UUID.randomUUID(), UUID.randomUUID());
+        assertThatThrownBy(() -> RoleScopeGuard.assertCanManageStore(actor, UUID.randomUUID(), UUID.randomUUID()))
+                .isInstanceOf(AccessDeniedScopeException.class);
+    }
+
+    // ---- assertIsOwnStoreManager (RULE-02-05 — ConfigureOperatingHour, chỉ STORE_MANAGER) ----
+
+    @Test
+    void assertIsOwnStoreManager_ownStore_allowed() {
+        UUID storeId = UUID.randomUUID();
+        UserPrincipal actor = principal(UserRole.STORE_MANAGER, UUID.randomUUID(), storeId);
+        assertThatCode(() -> RoleScopeGuard.assertIsOwnStoreManager(actor, storeId))
+                .doesNotThrowAnyException();
+    }
+
+    @Test
+    void assertIsOwnStoreManager_differentStore_denied() {
+        UserPrincipal actor = principal(UserRole.STORE_MANAGER, UUID.randomUUID(), UUID.randomUUID());
+        assertThatThrownBy(() -> RoleScopeGuard.assertIsOwnStoreManager(actor, UUID.randomUUID()))
+                .isInstanceOf(AccessDeniedScopeException.class);
+    }
+
+    @Test
+    void assertIsOwnStoreManager_superAdmin_stillDenied() {
+        // Khác assertCanManageStore — SUPER_ADMIN KHÔNG có ngoại lệ ở đây (quyết định 2026-09-17,
+        // bám literal docs/01-business-operations.md `01#3` chỉ gán StoreManager).
+        UUID storeId = UUID.randomUUID();
+        UserPrincipal actor = principal(UserRole.SUPER_ADMIN, null, null);
+        assertThatThrownBy(() -> RoleScopeGuard.assertIsOwnStoreManager(actor, storeId))
+                .isInstanceOf(AccessDeniedScopeException.class);
+    }
+
+    @Test
+    void assertIsOwnStoreManager_organizationAdmin_stillDenied() {
+        UUID orgId = UUID.randomUUID();
+        UUID storeId = UUID.randomUUID();
+        UserPrincipal actor = principal(UserRole.ORGANIZATION_ADMIN, orgId, null);
+        assertThatThrownBy(() -> RoleScopeGuard.assertIsOwnStoreManager(actor, storeId))
                 .isInstanceOf(AccessDeniedScopeException.class);
     }
 
@@ -226,6 +306,51 @@ class RoleScopeGuardTest {
         assertThatCode(() -> RoleScopeGuard.assertCanAccessUserRecord(actor, UserRole.RECEPTIONIST, orgId))
                 .doesNotThrowAnyException();
         assertThatThrownBy(() -> RoleScopeGuard.assertCanAccessUserRecord(actor, UserRole.RECEPTIONIST, UUID.randomUUID()))
+                .isInstanceOf(AccessDeniedScopeException.class);
+    }
+
+    // ---- assertNotSelfLifecycleAction (RULE-02-05) ----
+
+    @Test
+    void assertNotSelfLifecycleAction_sameUserId_throwsBusinessRuleViolation() {
+        UUID userId = UUID.randomUUID();
+        UserPrincipal actor = UserPrincipal.builder().userId(userId).role(UserRole.ORGANIZATION_ADMIN).build();
+        assertThatThrownBy(() -> RoleScopeGuard.assertNotSelfLifecycleAction(actor, userId))
+                .isInstanceOf(BusinessRuleViolationException.class)
+                .satisfies(ex -> org.assertj.core.api.Assertions.assertThat(((BusinessRuleViolationException) ex).getRuleId())
+                        .isEqualTo("RULE-02-05"));
+    }
+
+    @Test
+    void assertNotSelfLifecycleAction_differentUserId_doesNotThrow() {
+        UserPrincipal actor = UserPrincipal.builder().userId(UUID.randomUUID()).role(UserRole.ORGANIZATION_ADMIN).build();
+        assertThatCode(() -> RoleScopeGuard.assertNotSelfLifecycleAction(actor, UUID.randomUUID()))
+                .doesNotThrowAnyException();
+    }
+
+    // ---- assertCanManageAccountLifecycle (RULE-02-05 — Lock/Unlock/Deactivate/Reactivate) ----
+
+    @Test
+    void assertCanManageAccountLifecycle_customerTarget_onlySuperAdminAllowed() {
+        assertThatCode(() -> RoleScopeGuard.assertCanManageAccountLifecycle(
+                principal(UserRole.SUPER_ADMIN, null, null), UserRole.CUSTOMER, null))
+                .doesNotThrowAnyException();
+        assertThatThrownBy(() -> RoleScopeGuard.assertCanManageAccountLifecycle(
+                principal(UserRole.ORGANIZATION_ADMIN, UUID.randomUUID(), null), UserRole.CUSTOMER, null))
+                .as("Customer không gắn Organization trong schema hiện tại — ORGANIZATION_ADMIN không quản trị được")
+                .isInstanceOf(AccessDeniedScopeException.class);
+        assertThatThrownBy(() -> RoleScopeGuard.assertCanManageAccountLifecycle(
+                principal(UserRole.RECEPTIONIST, UUID.randomUUID(), UUID.randomUUID()), UserRole.CUSTOMER, null))
+                .isInstanceOf(AccessDeniedScopeException.class);
+    }
+
+    @Test
+    void assertCanManageAccountLifecycle_staffTarget_delegatesToAssertCanManageOrganization() {
+        UUID orgId = UUID.randomUUID();
+        UserPrincipal actor = principal(UserRole.ORGANIZATION_ADMIN, orgId, null);
+        assertThatCode(() -> RoleScopeGuard.assertCanManageAccountLifecycle(actor, UserRole.RECEPTIONIST, orgId))
+                .doesNotThrowAnyException();
+        assertThatThrownBy(() -> RoleScopeGuard.assertCanManageAccountLifecycle(actor, UserRole.RECEPTIONIST, UUID.randomUUID()))
                 .isInstanceOf(AccessDeniedScopeException.class);
     }
 }

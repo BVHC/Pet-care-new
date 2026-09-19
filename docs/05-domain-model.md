@@ -166,11 +166,13 @@ graph TD
 ## 4.3. Module 03: Organization & Store Management
 - **Phạm vi Bounded Context:** Quản trị tổ chức đa chi nhánh (Multi-Tenancy), cấu hình Store, giờ mở cửa và tài nguyên vật chất.
 - **Aggregate Root:** `Organization`, `Store`
-- **Child Entities:** `OperatingHours`, `StoreResource`, `StoreServiceCatalog`
+- **Child Entities:** `OperatingHours`, `StoreResource`, `StoreServiceCatalog`, `OrganizationPolicy`, `StorePolicy`
 - **Value Objects:**
   - `StoreStatus`: `[DRAFT, ACTIVE, SUSPENDED, DEACTIVATED, ARCHIVED]`.
   - `ResourceType`: `[CLINIC_ROOM, GROOMING_TABLE, ULTRASOUND_MACHINE, XRAY_MACHINE]`.
   - `TimeWindow`: Khung giờ mở/đóng (`open_time`, `close_time`, `is_closed`).
+  - `SecurityFrameworkLevel`: `[STANDARD, ENHANCED, STRICT]`.
+  - `SurchargeType`: `[PERCENTAGE, FIXED_AMOUNT]` — kiểu phụ thu tại quầy của `StorePolicy` (RULE-03-10).
 - **Commands (docs/01-business-operations.md):**
   - `CreateOrganization`, `UpdateOrganization`, `CreateStore`, `UpdateStore`, `ActivateStore`, `SuspendStore`, `DeactivateStore`, `ArchiveStore`, `ConfigureOperatingHour`, `ConfigureStoreResource`, `ManageOrganizationPolicy`, `ConfigureStorePolicy`
 - **Domain Events (docs/03-state-machines.md):**
@@ -180,7 +182,12 @@ graph TD
 - **Business Invariants (docs/02-business-rules.md):**
   - `RULE-03-01`: Mỗi Store thuộc đúng 1 Organization cha duy nhất; cách ly dữ liệu 100% giữa các Organization.
   - `RULE-03-02`: Store tạo mới ở `DRAFT`, chỉ chuyển sang `ACTIVE` khi đã cấu hình đầy đủ Giờ mở cửa, Tài nguyên và Danh mục dịch vụ.
+  - `RULE-03-03`: Phân cấp và kế thừa chính sách — `OrganizationPolicy` áp dụng bắt buộc cho toàn bộ Store trực thuộc; `StorePolicy` chỉ có hiệu lực trong phạm vi Store đó và không được mâu thuẫn với `OrganizationPolicy`.
   - `RULE-03-06`: Lệnh `ArchiveStore` chỉ thực thi khi thỏa mãn đồng thời 4 điều kiện: 0 đơn hàng active, 0 lịch hẹn active, 0 tồn kho thực tế, 0 công nợ/yêu cầu hoàn tiền mở. Sau khi Archive, dữ liệu cấu hình con trở thành bất biến chỉ đọc (bổ sung Phase 4, đóng `GAP-ORG-01`).
+  - `RULE-03-07`: Toàn bộ `Appointment`/Walk-in bắt buộc nằm trong khung giờ hoạt động hợp lệ (`OperatingHours`) đã cấu hình của Store.
+  - `RULE-03-08`: Tổng số lượng lịch hẹn/lượt phục vụ đồng thời trong cùng khung thời gian không được vượt quá định mức công suất tối đa của từng loại `StoreResource`.
+  - `RULE-03-09`: `OrganizationPolicy` (`refundWindowDays`, `refundRequiresApproval`, `dataRetentionDays`, `securityFrameworkLevel`) — đúng 1 bản ghi hiện hành/Organization, không versioning riêng (lịch sử qua `audit_logs`).
+  - `RULE-03-10`: `StorePolicy` (`surchargeEnabled`, `surchargeType`, `surchargeValue`) — đúng 1 bản ghi hiện hành/Store, không versioning riêng (lịch sử qua `audit_logs`); không bao gồm giờ mở cửa (`OperatingHours`/RULE-03-07) hay ca kíp nhân sự (ngoài phạm vi — Module 08).
 
 ---
 

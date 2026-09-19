@@ -2,6 +2,7 @@ package com.petcare.module.auth.dto;
 
 import jakarta.validation.constraints.Email;
 import jakarta.validation.constraints.NotBlank;
+import jakarta.validation.constraints.Pattern;
 
 /**
  * docs/api/auth-v1.md (mới, RULE-02-06 — Receptionist tạo customer tại quầy).
@@ -13,7 +14,8 @@ import jakarta.validation.constraints.NotBlank;
  */
 public record CreateCustomerRequest(
         @NotBlank @Email String email,
-        String phone,
+        // VO PhoneNumber (05#4.1) — cùng ràng buộc format như RegisterRequest.phone.
+        @Pattern(regexp = "^$|^[0-9]{10}$", message = "Số điện thoại phải gồm đúng 10 chữ số") String phone,
         @NotBlank String password,
         @NotBlank String name
 ) {

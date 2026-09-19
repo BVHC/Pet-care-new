@@ -46,7 +46,7 @@
 | REQ-ORG-004 | 03 §3 | RULE-03-02 | N/A (guard áp dụng cho `BookAppointment`, `RegisterQueueEntry`, `CreateOrder`) | FSM 2 | `stores.status` |
 | REQ-ORG-005 | 03 §3 | RULE-03-03, RULE-03-04 | `SuspendStore`, `DeactivateStore` | FSM 2 | `stores.status` |
 | REQ-ORG-006 | 03 §3 | RULE-03-06 | `ArchiveStore` | FSM 2 | `stores.status` |
-| REQ-ORG-007 | 03 §3 | RULE-03-03 | `ManageOrganizationPolicy`, `ConfigureStorePolicy` | N/A | UNTRACED (không có bảng `organization_policies`/`store_policies` trong `06`) |
+| REQ-ORG-007 | 03 §3 | RULE-03-03, RULE-03-09, RULE-03-10 | `ManageOrganizationPolicy` (đã thiết kế), `ConfigureStorePolicy` (đã thiết kế) | N/A | `organization_policies` (nửa Organization), `store_policies` (nửa Store) |
 | REQ-ORG-008 | 03 §6 | RULE-03-07 | `ConfigureOperatingHour` | N/A | `operating_hours` |
 | REQ-ORG-009 | 03 §3 | RULE-03-08 | `ConfigureStoreResource` | N/A | `store_resources` |
 
