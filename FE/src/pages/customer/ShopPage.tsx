@@ -47,6 +47,8 @@ export function ShopPage() {
   const [searchParams, setSearchParams] = useSearchParams()
   const addItem = useCartStore((s) => s.addItem)
 
+  const searchQuery = (searchParams.get('q') || '').trim().toLowerCase()
+
   const [petTypes, setPetTypes] = useState<string[]>(() => {
     const p = searchParams.get('petType')
     return p ? [p] : []
@@ -74,6 +76,7 @@ export function ShopPage() {
 
   const products = useMemo(() => {
     const list = PRODUCTS.filter((p) => {
+      if (searchQuery && !p.name.toLowerCase().includes(searchQuery)) return false
       if (petTypes.length && !petTypes.includes(p.petType)) return false
       if (categories.length && !categories.includes(p.category)) return false
       if (brands.length && !brands.includes(p.brand)) return false
@@ -94,7 +97,7 @@ export function ShopPage() {
     else list.sort((a, b) => b.sold - a.sold)
 
     return list
-  }, [petTypes, categories, brands, bands, sort])
+  }, [searchQuery, petTypes, categories, brands, bands, sort])
 
   const totalPages = Math.max(1, Math.ceil(products.length / PAGE_SIZE))
   const shown = products.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE)

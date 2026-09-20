@@ -1,0 +1,231 @@
+/* DatePicker — input hiển thị + popup lịch.
+   Tailwind + brand tokens. Popover đặt dưới input, chiếm đủ chiều ngang input. */
+
+.wrap {
+  position: relative;
+}
+
+.field {
+  width: 100%;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  border-radius: 10px;
+  border: 1.5px solid var(--color-border-default);
+  background: var(--color-surface-page);
+  padding: 10px 13px;
+  font-size: 14px;
+  color: var(--color-text-primary);
+  cursor: pointer;
+  transition: border-color 0.2s ease, box-shadow 0.2s ease;
+  outline: none;
+  text-align: left;
+  font-family: inherit;
+}
+
+.field:hover {
+  border-color: color-mix(in srgb, var(--color-accent) 50%, var(--color-border-default));
+}
+
+.field:focus,
+.fieldOpen {
+  border-color: var(--color-accent);
+  box-shadow: 0 0 0 3px var(--color-accent-soft);
+}
+
+.fieldPlaceholder {
+  color: var(--color-text-secondary);
+  opacity: 0.6;
+}
+
+.fieldIcon {
+  margin-left: auto;
+  color: var(--color-text-secondary);
+  flex: 0 0 auto;
+}
+
+/* ===== Popup ===== */
+.popover {
+  position: absolute;
+  top: calc(100% + 6px);
+  left: 0;
+  right: 0;
+  z-index: 50;
+  border-radius: 14px;
+  background: var(--color-surface-card);
+  box-shadow:
+    0 1px 2px rgba(56, 36, 23, 0.06),
+    0 20px 40px -20px rgba(56, 36, 23, 0.55);
+  border: 1px solid var(--color-border-default);
+  padding: 14px;
+  animation: popIn 0.18s cubic-bezier(0.32, 0.72, 0, 1);
+}
+
+@keyframes popIn {
+  from {
+    opacity: 0;
+    transform: translateY(-4px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+/* Header */
+.header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0 4px 10px;
+}
+
+.monthLabel {
+  font-family: var(--font-friendly);
+  font-size: 14px;
+  font-weight: 800;
+  color: var(--color-text-primary);
+  text-transform: capitalize;
+}
+
+.navBtn {
+  display: grid;
+  place-items: center;
+  width: 28px;
+  height: 28px;
+  border-radius: 8px;
+  border: none;
+  background: transparent;
+  color: var(--color-text-secondary);
+  cursor: pointer;
+  transition: background-color 0.2s ease, color 0.2s ease;
+}
+
+.navBtn:hover {
+  background: var(--color-surface-2);
+  color: var(--color-accent);
+}
+
+.navBtn:disabled {
+  opacity: 0.35;
+  cursor: not-allowed;
+}
+
+/* DOW header */
+.dowRow {
+  display: grid;
+  grid-template-columns: repeat(7, 1fr);
+  gap: 0;
+  padding: 4px 0 6px;
+  border-bottom: 1px solid var(--color-border-default);
+  margin-bottom: 4px;
+}
+
+.dowCell {
+  font-size: 11px;
+  font-weight: 700;
+  color: var(--color-text-secondary);
+  text-align: center;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  padding: 4px 0;
+}
+
+.dowCell.sun {
+  color: #e53e3e;
+}
+
+/* Calendar grid */
+.grid {
+  display: grid;
+  grid-template-columns: repeat(7, 1fr);
+  gap: 2px;
+}
+
+/* Day cell */
+.day {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  height: 32px;
+  border-radius: 8px;
+  border: none;
+  background: transparent;
+  font-size: 12.5px;
+  font-weight: 600;
+  color: var(--color-text-primary);
+  cursor: pointer;
+  transition: background-color 0.15s ease, color 0.15s ease;
+  font-family: inherit;
+}
+
+.day:hover:not(.dayDisabled) {
+  background: var(--color-accent-soft);
+  color: var(--color-accent);
+}
+
+.dayOutside {
+  color: var(--color-border-strong);
+}
+
+.dayDisabled {
+  color: var(--color-border-strong);
+  cursor: not-allowed;
+  text-decoration: line-through;
+  opacity: 0.5;
+}
+
+.dayToday {
+  font-weight: 800;
+  box-shadow: inset 0 0 0 1px var(--color-accent);
+}
+
+.daySelected {
+  background: var(--color-accent);
+  color: #fff;
+  font-weight: 700;
+}
+
+.daySelected:hover {
+  background: var(--color-accent-hover);
+  color: #fff;
+}
+
+.daySun {
+  color: #e53e3e;
+}
+
+/* Footer */
+.footer {
+  display: flex;
+  justify-content: space-between;
+  margin-top: 10px;
+  padding-top: 10px;
+  border-top: 1px solid var(--color-border-default);
+}
+
+.footerBtn {
+  font-size: 12.5px;
+  font-weight: 700;
+  color: var(--color-accent);
+  background: none;
+  border: none;
+  cursor: pointer;
+  padding: 4px 8px;
+  border-radius: 6px;
+  transition: background-color 0.2s ease;
+}
+
+.footerBtn:hover {
+  background: var(--color-accent-soft);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .popover {
+    animation: none;
+  }
+
+  .day {
+    transition: none;
+  }
+}

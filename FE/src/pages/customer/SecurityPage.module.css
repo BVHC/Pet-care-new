@@ -1,0 +1,388 @@
+/* SecurityPage — Bảo mật. */
+
+/* ================================================================
+   Hero slab.
+   ================================================================ */
+
+.slab {
+  background: var(--color-surface-dark);
+  position: relative;
+  overflow: hidden;
+  isolation: isolate;
+}
+
+.slabBg {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  z-index: 0;
+  opacity: 0.2;
+}
+
+.slabOverlay {
+  position: absolute;
+  inset: 0;
+  z-index: 1;
+  background: linear-gradient(
+    135deg,
+    rgba(56, 36, 23, 0.96) 0%,
+    rgba(56, 36, 23, 0.80) 55%,
+    rgba(56, 36, 23, 0.50) 100%
+  );
+  pointer-events: none;
+}
+
+.slabNoise {
+  position: absolute;
+  inset: 0;
+  z-index: 2;
+  opacity: 0.06;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='160' height='160'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.85' numOctaves='3'/%3E%3C/filter%3E%3Crect width='160' height='160' filter='url(%23n)'/%3E%3C/svg%3E");
+  pointer-events: none;
+}
+
+.slabContent {
+  position: relative;
+  z-index: 3;
+  padding: 28px 0 24px;
+}
+
+/* ================================================================
+   2-column layout.
+   ================================================================ */
+
+.page {
+  display: grid;
+  grid-template-columns: 260px 1fr;
+  gap: 24px;
+  align-items: start;
+}
+
+@media (max-width: 900px) {
+  .page {
+    grid-template-columns: 1fr;
+  }
+}
+
+.main {
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+}
+
+/* ================================================================
+   Section card.
+   ================================================================ */
+
+.section {
+  border-radius: 18px;
+  overflow: hidden;
+  background: var(--color-surface-card);
+  box-shadow:
+    0 1px 2px rgba(56, 36, 23, 0.06),
+    0 8px 18px -14px rgba(56, 36, 23, 0.4);
+}
+
+.sectionHeader {
+  padding: 16px 20px;
+  border-bottom: 1px solid var(--color-border-default);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.sectionTitle {
+  font-family: var(--font-friendly);
+  font-size: 18px;
+  font-weight: 800;
+  color: var(--color-text-primary);
+}
+
+.sectionBody {
+  padding: 20px;
+  display: flex;
+  flex-direction: column;
+  gap: 0;
+}
+
+/* ================================================================
+   Security item row.
+   ================================================================ */
+
+.secItem {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  padding: 16px 0;
+  border-bottom: 1px solid var(--color-border-default);
+  transition: transform 0.25s cubic-bezier(0.32, 0.72, 0, 1);
+}
+
+.secItem:last-child {
+  border-bottom: none;
+  padding-bottom: 0;
+}
+
+.secItem:first-child {
+  padding-top: 0;
+}
+
+.secIcon {
+  display: grid;
+  place-items: center;
+  width: 44px;
+  height: 44px;
+  border-radius: 12px;
+  flex: 0 0 auto;
+}
+
+.secIconPass {
+  background: #dcfce7;
+  color: #15803d;
+}
+
+.secIcon2fa {
+  background: #fef3c7;
+  color: #b45309;
+}
+
+.secIconEmail {
+  background: #dbeafe;
+  color: #1d4ed8;
+}
+
+.secIconPhone {
+  background: #f3e8ff;
+  color: #7c3aed;
+}
+
+.secIconSession {
+  background: #fee2e2;
+  color: #dc2626;
+}
+
+.secContent {
+  flex: 1;
+  min-width: 0;
+}
+
+.secTitle {
+  font-size: 14px;
+  font-weight: 700;
+  color: var(--color-text-primary);
+  margin-bottom: 3px;
+}
+
+.secDesc {
+  font-size: 13px;
+  color: var(--color-text-secondary);
+  line-height: 1.4;
+}
+
+.secMeta {
+  font-size: 12px;
+  color: #16a34a;
+  font-weight: 600;
+  margin-top: 4px;
+}
+
+.secToggle {
+  position: relative;
+  width: 44px;
+  height: 24px;
+  border-radius: 999px;
+  background: var(--color-border-default);
+  border: none;
+  cursor: pointer;
+  flex: 0 0 auto;
+  transition: background-color 0.25s ease;
+}
+
+.secToggleActive {
+  background: var(--color-accent);
+}
+
+.secToggleKnob {
+  position: absolute;
+  top: 3px;
+  left: 3px;
+  width: 18px;
+  height: 18px;
+  border-radius: 50%;
+  background: #fff;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.3);
+  transition: transform 0.25s cubic-bezier(0.32, 0.72, 0, 1);
+}
+
+.secToggleActive .secToggleKnob {
+  transform: translateX(20px);
+}
+
+.secBtn {
+  padding: 8px 16px;
+  border-radius: 10px;
+  border: 1.5px solid var(--color-border-default);
+  background: var(--color-surface-page);
+  font-size: 13px;
+  font-weight: 700;
+  color: var(--color-text-primary);
+  cursor: pointer;
+  flex: 0 0 auto;
+  white-space: nowrap;
+  transition: border-color 0.2s ease, background-color 0.2s ease, color 0.2s ease;
+}
+
+.secBtn:hover {
+  border-color: var(--color-accent);
+  color: var(--color-accent);
+  background: var(--color-accent-soft);
+}
+
+.secBtnDanger {
+  color: #dc2626;
+  border-color: #fca5a5;
+}
+
+.secBtnDanger:hover {
+  background: #fff1f1;
+  border-color: #dc2626;
+  color: #dc2626;
+}
+
+/* ================================================================
+   Password form.
+   ================================================================ */
+
+.pwForm {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  padding-top: 4px;
+}
+
+.field {
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+}
+
+.fieldLabel {
+  font-size: 12.5px;
+  font-weight: 700;
+  color: var(--color-text-secondary);
+}
+
+.fieldInput {
+  width: 100%;
+  border-radius: 10px;
+  border: 1.5px solid var(--color-border-default);
+  background: var(--color-surface-page);
+  padding: 10px 14px;
+  font-size: 14px;
+  color: var(--color-text-primary);
+  outline: none;
+  font-family: inherit;
+  transition: border-color 0.2s ease, box-shadow 0.2s ease;
+}
+
+.fieldInput:focus {
+  border-color: var(--color-accent);
+  box-shadow: 0 0 0 3px var(--color-accent-soft);
+}
+
+.fieldInput::placeholder {
+  color: var(--color-text-secondary);
+  opacity: 0.6;
+}
+
+.fieldInputError {
+  border-color: #dc2626;
+}
+
+.fieldError {
+  font-size: 12px;
+  color: #dc2626;
+  margin-top: 2px;
+}
+
+.formActions {
+  display: flex;
+  gap: 10px;
+  padding-top: 4px;
+}
+
+.btnCancel {
+  flex: 1;
+  padding: 11px;
+  border-radius: 10px;
+  border: 1.5px solid var(--color-border-default);
+  background: transparent;
+  font-size: 14px;
+  font-weight: 700;
+  color: var(--color-text-secondary);
+  cursor: pointer;
+  transition: border-color 0.2s ease;
+}
+
+.btnCancel:hover {
+  border-color: var(--color-accent);
+  color: var(--color-accent);
+}
+
+.btnSave {
+  flex: 1;
+  padding: 11px;
+  border-radius: 10px;
+  border: none;
+  background: var(--color-accent);
+  color: #fff;
+  font-size: 14px;
+  font-weight: 700;
+  cursor: pointer;
+  box-shadow: 0 6px 14px -8px rgba(164, 51, 36, 0.7);
+  transition: background-color 0.2s ease;
+}
+
+.btnSave:hover {
+  background: var(--color-accent-hover);
+}
+
+/* ================================================================
+   Privacy & Data section.
+   ================================================================ */
+
+.consentItem {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 16px;
+  padding: 14px 18px;
+  border-top: 1px solid var(--color-border-default);
+  background: var(--color-surface-page);
+  flex-wrap: wrap;
+}
+
+.consentBranch {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+}
+
+.secItemDanger {
+  border-top: 1px solid #fca5a5;
+  background: #fef2f2;
+}
+
+.secIconDanger {
+  background: #fee2e2;
+  color: #dc2626;
+}
+
+@media (max-width: 640px) {
+  .consentItem {
+    flex-direction: column;
+  }
+}

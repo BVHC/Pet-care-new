@@ -1,0 +1,216 @@
+/* SettingsPage — Cài đặt. */
+
+/* ================================================================
+   Hero slab.
+   ================================================================ */
+
+.slab {
+  background: var(--color-surface-dark);
+  position: relative;
+  overflow: hidden;
+  isolation: isolate;
+}
+
+.slabBg {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  z-index: 0;
+  opacity: 0.2;
+}
+
+.slabOverlay {
+  position: absolute;
+  inset: 0;
+  z-index: 1;
+  background: linear-gradient(
+    135deg,
+    rgba(56, 36, 23, 0.96) 0%,
+    rgba(56, 36, 23, 0.80) 55%,
+    rgba(56, 36, 23, 0.50) 100%
+  );
+  pointer-events: none;
+}
+
+.slabNoise {
+  position: absolute;
+  inset: 0;
+  z-index: 2;
+  opacity: 0.06;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='160' height='160'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.85' numOctaves='3'/%3E%3C/filter%3E%3Crect width='160' height='160' filter='url(%23n)'/%3E%3C/svg%3E");
+  pointer-events: none;
+}
+
+.slabContent {
+  position: relative;
+  z-index: 3;
+  padding: 28px 0 24px;
+}
+
+/* ================================================================
+   2-column layout.
+   ================================================================ */
+
+.page {
+  display: grid;
+  grid-template-columns: 260px 1fr;
+  gap: 24px;
+  align-items: start;
+}
+
+@media (max-width: 900px) {
+  .page {
+    grid-template-columns: 1fr;
+  }
+}
+
+.main {
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+}
+
+/* ================================================================
+   Section.
+   ================================================================ */
+
+.section {
+  border-radius: 18px;
+  overflow: hidden;
+  background: var(--color-surface-card);
+  box-shadow:
+    0 1px 2px rgba(56, 36, 23, 0.06),
+    0 8px 18px -14px rgba(56, 36, 23, 0.4);
+}
+
+.sectionHeader {
+  padding: 16px 20px;
+  border-bottom: 1px solid var(--color-border-default);
+}
+
+.sectionTitle {
+  font-family: var(--font-friendly);
+  font-size: 18px;
+  font-weight: 800;
+  color: var(--color-text-primary);
+}
+
+.sectionBody {
+  padding: 12px;
+}
+
+/* ================================================================
+   Setting row.
+   ================================================================ */
+
+.settingRow {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  padding: 14px 8px;
+  border-radius: 10px;
+  transition: background-color 0.2s ease;
+  cursor: pointer;
+}
+
+.settingRow:hover {
+  background: var(--color-surface-2);
+}
+
+.settingIcon {
+  display: grid;
+  place-items: center;
+  width: 44px;
+  height: 44px;
+  border-radius: 12px;
+  flex: 0 0 auto;
+}
+
+.settingIconBlue   { background: #dbeafe; color: #1d4ed8; }
+.settingIconGreen  { background: #dcfce7; color: #15803d; }
+.settingIconYellow { background: #fef3c7; color: #b45309; }
+.settingIconPurple { background: #f3e8ff; color: #7c3aed; }
+.settingIconRed    { background: #fee2e2; color: #dc2626; }
+.settingIconGray   { background: var(--color-surface-2); color: var(--color-text-secondary); }
+
+.settingContent {
+  flex: 1;
+  min-width: 0;
+}
+
+.settingTitle {
+  font-size: 14px;
+  font-weight: 700;
+  color: var(--color-text-primary);
+  margin-bottom: 2px;
+}
+
+.settingDesc {
+  font-size: 12.5px;
+  color: var(--color-text-secondary);
+  line-height: 1.4;
+}
+
+.settingChevron {
+  color: var(--color-border-strong);
+  flex: 0 0 auto;
+}
+
+/* ================================================================
+   Toggle.
+   ================================================================ */
+
+.toggle {
+  position: relative;
+  width: 44px;
+  height: 24px;
+  border-radius: 999px;
+  background: var(--color-border-default);
+  border: none;
+  cursor: pointer;
+  flex: 0 0 auto;
+  transition: background-color 0.25s ease;
+}
+
+.toggleActive {
+  background: var(--color-accent);
+}
+
+.toggleKnob {
+  position: absolute;
+  top: 3px;
+  left: 3px;
+  width: 18px;
+  height: 18px;
+  border-radius: 50%;
+  background: #fff;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.3);
+  transition: transform 0.25s cubic-bezier(0.32, 0.72, 0, 1);
+}
+
+.toggleActive .toggleKnob {
+  transform: translateX(20px);
+}
+
+/* ================================================================
+   Version badge.
+   ================================================================ */
+
+.versionBadge {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 16px;
+  font-size: 12.5px;
+  color: var(--color-text-secondary);
+  gap: 6px;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .settingRow,
+  .toggleKnob {
+    transition: none;
+  }
+}

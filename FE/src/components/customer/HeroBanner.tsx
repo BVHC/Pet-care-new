@@ -114,20 +114,20 @@ export const HeroBanner: React.FC = () => {
 						</Link>
 					</div>
 
-					{/* 2. CENTER STAGE: White Squircle Card + Mèo tràn xuống dưới */}
-					<div className="hero-center-squircle lg:col-span-5 flex justify-center items-center relative order-1 lg:order-2">
-						{/* Khung vòm trắng — overflow-visible để mèo bước ra khỏi khung */}
-						<div className="relative w-full max-w-[420px] sm:max-w-[560px] lg:w-auto lg:max-w-full lg:h-[clamp(320px,calc(100vh-320px),640px)] aspect-[49/54] bg-white rounded-[44px] sm:rounded-[56px] shadow-[0_24px_60px_rgba(0,0,0,0.07)] overflow-visible">
-							{/* Vòng tròn xám tạo chiều sâu — phải nhìn thấy được 2 bên đầu mèo */}
-							<div className="absolute bottom-[10%] left-1/2 -translate-x-1/2 w-[92%] aspect-square rounded-full bg-[#f1e4d3] pointer-events-none" />
+					{/* 2. CENTER STAGE: White Squircle Card + Mascot (Căn chính giữa tuyệt đối 4-4-4) */}
+					<div className="hero-center-squircle lg:col-span-4 flex justify-center items-center relative order-1 lg:order-2">
+						{/* Khung vòm trắng — overflow-visible */}
+						<div className="relative w-full max-w-[440px] sm:max-w-[480px] aspect-[49/54] bg-white rounded-[44px] sm:rounded-[56px] shadow-[0_24px_60px_rgba(0,0,0,0.07)] overflow-visible">
+							{/* Vòng tròn xám/kem tạo chiều sâu — khóa tâm tuyệt đối 50% / 50% */}
+							<div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[88%] aspect-square rounded-full bg-[#f1e4d3] pointer-events-none" />
 
-							{/* Mèo: 88% bề ngang khung để lộ vòng tròn xám 2 bên, chỉ tràn xuống đáy */}
-							<div className="absolute -bottom-[2%] left-[46%] -translate-x-1/2 w-[102%] z-20 flex justify-center items-end">
-								<GazeTrackingHeroPet className="w-full" />
+							{/* Mascot tương tác phóng to và khóa tâm tuyệt đối 50% / 50% */}
+							<div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[114%] sm:w-[122%] max-w-[580px] aspect-square z-35 flex items-center justify-center">
+								<GazeTrackingHeroPet className="w-full h-full" />
 							</div>
 
 							{/* Orange Pill đè lên mép trái khung */}
-							<div className="absolute top-[45%] -left-[8%] sm:-left-[12%] z-30 bg-[#a43324] text-white text-base sm:text-lg font-bold px-7 sm:px-8 py-4 sm:py-5 rounded-full shadow-[0_10px_30px_rgba(164,51,36,0.32)] leading-[1.25] whitespace-nowrap text-center">
+							<div className="absolute top-1/2 -left-[7%] sm:-left-[10%] -translate-y-1/2 z-100 bg-[#a43324] text-white text-base sm:text-lg font-bold px-7 sm:px-8 py-4 sm:py-5 rounded-full shadow-[0_10px_30px_rgba(164,51,36,0.32)] leading-[1.25] whitespace-nowrap text-center">
 								Bé cưng là
 								<br />
 								ưu tiên số 1
@@ -135,8 +135,8 @@ export const HeroBanner: React.FC = () => {
 						</div>
 					</div>
 
-					{/* 3. RIGHT WING: Join Circle, Vertical Orange Card, Stat */}
-					<div className="hero-right-wing lg:col-span-3 flex flex-col text-left lg:text-right justify-center lg:justify-between order-3 lg:items-end lg:h-[clamp(320px,calc(100vh-320px),640px)] lg:-mr-5 xl:-mr-10">
+					{/* 3. RIGHT WING: Join Circle, Vertical Orange Card, Stat (Đối xứng lg:col-span-4) */}
+					<div className="hero-right-wing lg:col-span-4 flex flex-col text-left lg:text-right justify-center lg:justify-between order-3 lg:items-end lg:h-[clamp(320px,calc(100vh-320px),640px)]">
 						{/* Join Us — hình tròn như reference, không phải pill ngang */}
 						<div className="w-[128px] h-[128px] sm:w-[142px] sm:h-[142px] shrink-0 rounded-full bg-white shadow-[0_8px_28px_rgba(0,0,0,0.08)] flex flex-col items-center justify-center gap-1.5 mb-5 lg:mb-0 lg:mr-3">
 							<div className="flex items-center -space-x-2">

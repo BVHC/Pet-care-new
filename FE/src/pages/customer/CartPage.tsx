@@ -1,193 +1,357 @@
-import { useState } from 'react';
-import { Link, useNavigate } from 'react-router-dom';
-import { Minus, Plus, ShoppingCart, Trash2 } from 'lucide-react';
+import { Link, useNavigate } from 'react-router-dom'
+import {
+  ChevronRight,
+  Minus,
+  Plus,
+  ShoppingBag,
+  ShoppingCart,
+  Trash2,
+} from 'lucide-react'
+import { toast } from 'sonner'
+import { useCartStore } from '../../shared/stores/cart.store'
+import styles from './CartPage.module.css'
 
-interface CartItem {
-  id: number;
-  productId: number;
-  productName: string;
-  quantity: number;
-  unitPrice: number;
-  subtotal: number;
-  image?: string;
+const vnd = new Intl.NumberFormat('vi-VN', {
+  style: 'currency',
+  currency: 'VND',
+  maximumFractionDigits: 0,
+})
+
+const FREE_SHIPPING_THRESHOLD = 300_000
+
+/* ================================================================
+   Cart item row.
+   ================================================================ */
+
+function CartItemRow({
+  item,
+  onUpdateQty,
+  onRemove,
+}: {
+  item: {
+    id: number
+    productId: number
+    productName?: string
+    quantity: number
+    unitPrice: number
+    subtotal: number
+    image?: string
+  }
+  onUpdateQty: (id: number, qty: number) => void
+  onRemove: (id: number) => void
+}) {
+  return (
+    <div className={styles.cartItem}>
+      <Link to={`/shop/${item.productId}`} className="shrink-0">
+        {item.image ? (
+          <img
+            src={item.image}
+            alt={item.productName}
+            className={styles.itemImage}
+            loading="lazy"
+          />
+        ) : (
+          <span className={styles.itemImageFallback}>
+            <ShoppingBag size={22} />
+          </span>
+        )}
+      </Link>
+
+      <div className={styles.itemInfo}>
+        <Link
+          to={`/shop/${item.productId}`}
+          className={styles.itemName}
+        >
+          {item.productName}
+        </Link>
+        <span className={styles.itemUnitPrice}>{vnd.format(item.unitPrice)} / 1</span>
+      </div>
+
+      {/* Quantity stepper */}
+      <div className={styles.qtyStepper}>
+        <button
+          type="button"
+          onClick={() => onUpdateQty(item.id, item.quantity - 1)}
+          className={styles.qtyBtn}
+          aria-label="Giảm số lượng"
+          disabled={item.quantity <= 1}
+        >
+          <Minus size={14} />
+        </button>
+        <span className={styles.qtyValue}>{item.quantity}</span>
+        <button
+          type="button"
+          onClick={() => onUpdateQty(item.id, item.quantity + 1)}
+          className={styles.qtyBtn}
+          aria-label="Tăng số lượng"
+        >
+          <Plus size={14} />
+        </button>
+      </div>
+
+      {/* Subtotal */}
+      <div className={styles.itemSubtotal}>
+        <span className={styles.itemSubtotalPrice}>{vnd.format(item.subtotal)}</span>
+        <span className={styles.itemSubtotalUnit}>/ {item.quantity} cái</span>
+      </div>
+
+      {/* Remove */}
+      <button
+        type="button"
+        onClick={() => onRemove(item.id)}
+        className={styles.removeBtn}
+        aria-label={`Xóa ${item.productName}`}
+      >
+        <Trash2 size={15} />
+      </button>
+    </div>
+  )
 }
 
-const MOCK_CART: CartItem[] = [];
+/* ================================================================
+   Order summary card.
+   ================================================================ */
 
-function formatVnd(price: number): string {
-  return new Intl.NumberFormat('vi-VN', { style: 'currency', currency: 'VND', maximumFractionDigits: 0 }).format(price);
-}
-
-export function CartPage() {
-  const navigate = useNavigate();
-  const [cart, setCart] = useState<CartItem[]>(MOCK_CART);
-
-  const subtotal = cart.reduce((sum, item) => sum + item.subtotal, 0);
-  const shipping = subtotal > 0 ? (subtotal >= 300000 ? 0 : 30000) : 0;
-  const total = subtotal + shipping;
-
-  const updateQty = (id: number, newQty: number) => {
-    if (newQty < 1) return;
-    setCart(cart.map(item =>
-      item.id === id
-        ? { ...item, quantity: newQty, subtotal: item.unitPrice * newQty }
-        : item
-    ));
-  };
-
-  const removeItem = (id: number) => {
-    setCart(cart.filter(item => item.id !== id));
-  };
+function OrderSummary({
+  subtotal,
+  onCheckout,
+  onContinue,
+}: {
+  subtotal: number
+  onCheckout: () => void
+  onContinue: () => void
+}) {
+  const shipping = subtotal >= FREE_SHIPPING_THRESHOLD ? 0 : 30000
+  const finalTotal = subtotal + shipping
+  const progress = Math.min((subtotal / FREE_SHIPPING_THRESHOLD) * 100, 100)
+  const toFreeShipping = Math.max(FREE_SHIPPING_THRESHOLD - subtotal, 0)
 
   return (
-    <div className="mx-auto max-w-[1200px] px-4 py-8 sm:px-6">
-      <nav className="mb-4 flex flex-wrap items-center gap-2 text-sm text-gray-500">
-        <Link to="/" className="hover:text-[#843122]">Trang chủ</Link>
-        <span>/</span>
-        <Link to="/shop" className="hover:text-[#843122]">Cửa hàng</Link>
-        <span>/</span>
-        <span className="font-semibold text-gray-900">Giỏ hàng</span>
-      </nav>
+    <div className={styles.summaryCard}>
+      <div className={styles.summaryHeader}>
+        <ShoppingBag size={18} className="text-[var(--color-accent)]" />
+        <h2 className={styles.summaryTitle}>Tóm tắt đơn hàng</h2>
+      </div>
 
-      <h1 className="mb-8 font-[var(--font-friendly)] text-2xl font-bold text-gray-900 sm:text-3xl">
-        Giỏ hàng của bạn
-      </h1>
-
-      {cart.length === 0 ? (
-        <div className="flex flex-col items-center gap-5 py-20 text-center">
-          <div className="flex items-center justify-center rounded-full bg-amber-100" style={{ width: 80, height: 80 }}>
-            <ShoppingCart size={36} className="text-[#843122]" />
+      <div className={styles.summaryBody}>
+        {/* Free shipping progress */}
+        <div className={styles.freeShipBar}>
+          <div className={styles.freeShipProgress}>
+            <div className={styles.freeShipFill} style={{ width: `${progress}%` }} />
           </div>
-          <div>
-            <p className="font-[var(--font-friendly)] text-lg font-bold text-gray-900">
-              Giỏ hàng của bạn đang trống
+          {subtotal >= FREE_SHIPPING_THRESHOLD ? (
+            <p className={styles.freeShipText}>
+              <strong>Đã đạt miễn phí vận chuyển!</strong>
             </p>
-            <p className="mt-1 text-sm text-gray-500">
-              Hãy thêm sản phẩm vào giỏ để tiếp tục mua sắm.
+          ) : (
+            <p className={styles.freeShipText}>
+              Thêm <strong>{vnd.format(toFreeShipping)}</strong> để được miễn phí vận chuyển
             </p>
-          </div>
-          <Link
-            to="/shop"
-            className="rounded-full bg-[#843122] px-6 py-3 text-sm font-bold text-white hover:bg-[#6a2517] transition-colors"
-          >
-            Xem sản phẩm
-          </Link>
+          )}
         </div>
-      ) : (
-        <div className="grid gap-8 lg:grid-cols-[1fr_320px]">
-          <div className="rounded-xl border border-gray-200 bg-white shadow-sm">
-            {cart.map((item, idx) => (
-              <div
-                key={item.id}
-                className={`flex items-center gap-4 p-4 sm:gap-5 sm:p-5 ${
-                  idx < cart.length - 1 ? 'border-b border-gray-100' : ''
-                }`}
-              >
-                <div className="h-20 w-20 shrink-0 overflow-hidden rounded-lg bg-gray-100">
-                  {item.image ? (
-                    <img src={item.image} alt={item.productName} className="h-full w-full object-cover" />
-                  ) : (
-                    <div className="flex h-full w-full items-center justify-center opacity-30">
-                      <ShoppingCart size={24} />
-                    </div>
-                  )}
-                </div>
 
-                <div className="flex flex-1 flex-col gap-1 min-w-0">
-                  <p className="truncate font-[var(--font-friendly)] font-semibold text-gray-900">
-                    {item.productName}
-                  </p>
-                  <p className="text-xs text-gray-500">
-                    Đơn giá: {formatVnd(item.unitPrice)}
-                  </p>
-                </div>
+        <div className={styles.summaryRow}>
+          <span className={styles.summaryRowLabel}>Tạm tính</span>
+          <span className={styles.summaryRowValue}>{vnd.format(subtotal)}</span>
+        </div>
 
-                <div className="flex shrink-0 items-center rounded-lg border border-gray-200">
-                  <button
-                    onClick={() => updateQty(item.id, item.quantity - 1)}
-                    aria-label="Giảm số lượng"
-                    className="cursor-pointer p-2 transition-colors hover:bg-gray-100 disabled:cursor-not-allowed disabled:opacity-40"
-                    disabled={item.quantity <= 1}
-                  >
-                    <Minus size={14} />
-                  </button>
-                  <span className="w-10 text-center text-sm font-semibold text-gray-900">
-                    {item.quantity}
-                  </span>
-                  <button
-                    onClick={() => updateQty(item.id, item.quantity + 1)}
-                    aria-label="Tăng số lượng"
-                    className="cursor-pointer p-2 transition-colors hover:bg-gray-100"
-                  >
-                    <Plus size={14} />
-                  </button>
-                </div>
+        <div className={styles.summaryRow}>
+          <span className={styles.summaryRowLabel}>Vận chuyển</span>
+          {shipping === 0 ? (
+            <span className={styles.summaryRowFree}>Miễn phí</span>
+          ) : (
+            <span className={styles.summaryRowValue}>{vnd.format(shipping)}</span>
+          )}
+        </div>
 
-                <div className="w-28 shrink-0 text-right font-semibold text-gray-900">
-                  {formatVnd(item.subtotal)}
-                </div>
+        <hr className={styles.summaryDivider} />
 
+        <div className={styles.summaryTotal}>
+          <span className={styles.summaryTotalLabel}>Tổng</span>
+          <span className={styles.summaryTotalValue}>{vnd.format(finalTotal)}</span>
+        </div>
+      </div>
+
+      <div className={styles.summaryActions}>
+        <button
+          type="button"
+          onClick={onCheckout}
+          className={styles.checkoutBtn}
+        >
+          <ChevronRight size={17} />
+          Thanh toán ngay
+        </button>
+        <button
+          type="button"
+          onClick={onContinue}
+          className={styles.continueBtn}
+        >
+          Tiếp tục mua sắm
+        </button>
+      </div>
+    </div>
+  )
+}
+
+/* ================================================================
+   Empty state.
+   ================================================================ */
+
+function EmptyState({ onShop }: { onShop: () => void }) {
+  return (
+    <div className={styles.emptyState}>
+      <span className={styles.emptyIcon}>
+        <ShoppingCart size={36} />
+      </span>
+      <p className={styles.emptyTitle}>Giỏ hàng trống</p>
+      <p className={styles.emptyDesc}>
+        Thêm sản phẩm vào giỏ để bắt đầu mua sắm cho boss yêu nhé.
+      </p>
+      <button
+        type="button"
+        onClick={onShop}
+        className={styles.emptyShopBtn}
+      >
+        <ShoppingBag size={16} />
+        Khám phá cửa hàng
+      </button>
+    </div>
+  )
+}
+
+/* ================================================================
+   Main page.
+   ================================================================ */
+
+export function CartPage() {
+  const navigate = useNavigate()
+  const items = useCartStore((s) => s.items)
+  const updateItem = useCartStore((s) => s.updateItem)
+  const removeItem = useCartStore((s) => s.removeItem)
+  const clearCart = useCartStore((s) => s.clearCart)
+  const subtotal = useCartStore((s) => s.subtotal)
+
+  const handleUpdateQty = (id: number, qty: number) => {
+    if (qty < 1) return
+    updateItem(id, qty)
+  }
+
+  const handleRemove = (id: number) => {
+    const item = items.find((i) => i.id === id)
+    removeItem(id)
+    if (item) toast.success(`Đã xóa "${item.productName}" khỏi giỏ`)
+  }
+
+  const handleClear = () => {
+    clearCart()
+    toast.success('Đã xóa toàn bộ giỏ hàng')
+  }
+
+  const handleCheckout = () => {
+    if (items.length === 0) {
+      toast.error('Giỏ hàng trống.')
+      return
+    }
+    navigate('/checkout')
+  }
+
+  const handleContinue = () => {
+    navigate('/shop')
+  }
+
+  const handleEmptyShop = () => {
+    navigate('/shop')
+  }
+
+  return (
+    <div className="bg-[var(--color-surface-page)] pb-24">
+      {/* ====== Hero slab ====== */}
+      <section className={styles.slab}>
+        <img
+          src="/imgs/hero-dog-clean.png"
+          alt=""
+          className={styles.slabBg}
+          aria-hidden
+          loading="eager"
+        />
+        <div className={styles.slabOverlay} aria-hidden />
+        <div className={styles.slabNoise} aria-hidden />
+
+        <div className={`${styles.slabContent} mx-auto max-w-[1280px] px-5 sm:px-8`}>
+          <nav
+            aria-label="Đường dẫn"
+            className="mb-5 text-[12.5px] text-white/50"
+          >
+            <Link
+              to="/"
+              className="underline-offset-4 transition-colors hover:text-white hover:underline"
+            >
+              Trang chủ
+            </Link>
+            <span className="mx-1.5">/</span>
+            <Link
+              to="/shop"
+              className="underline-offset-4 transition-colors hover:text-white hover:underline"
+            >
+              Cửa hàng
+            </Link>
+            <span className="mx-1.5">/</span>
+            <span className="font-semibold text-white/85">Giỏ hàng</span>
+          </nav>
+
+          <div className="flex flex-wrap items-end justify-between gap-4">
+            <h1 className="font-bayon text-[clamp(24px,3.2vw,40px)] leading-[1.02] font-normal text-white">
+              Giỏ hàng của bạn
+            </h1>
+            {items.length > 0 && (
+              <p className="text-[12.5px] text-white/60">
+                {items.reduce((s, i) => s + i.quantity, 0)} sản phẩm
+              </p>
+            )}
+          </div>
+        </div>
+      </section>
+
+      {/* ====== Content ====== */}
+      <div className="mx-auto max-w-[1280px] px-5 pt-8 sm:px-8">
+        {items.length === 0 ? (
+          <EmptyState onShop={handleEmptyShop} />
+        ) : (
+          <div className={styles.page}>
+            {/* ====== Items list ====== */}
+            <div className={styles.itemsSection}>
+              <div className={styles.itemsHeader}>
+                <span className={styles.itemsHeaderLabel}>
+                  {items.length} sản phẩm
+                </span>
                 <button
-                  onClick={() => removeItem(item.id)}
-                  aria-label={`Xoá ${item.productName} khỏi giỏ hàng`}
-                  className="cursor-pointer rounded-lg p-2 text-gray-400 transition-colors hover:bg-red-50 hover:text-red-500"
+                  type="button"
+                  onClick={handleClear}
+                  className={styles.clearBtn}
                 >
-                  <Trash2 size={16} />
+                  Xóa tất cả
                 </button>
               </div>
-            ))}
+
+              {items.map((item) => (
+                <CartItemRow
+                  key={item.id}
+                  item={item}
+                  onUpdateQty={handleUpdateQty}
+                  onRemove={handleRemove}
+                />
+              ))}
+            </div>
+
+            {/* ====== Order summary ====== */}
+            <OrderSummary
+              subtotal={subtotal}
+              onCheckout={handleCheckout}
+              onContinue={handleContinue}
+            />
           </div>
-
-          <div className="h-fit rounded-xl border border-gray-200 bg-white p-5 shadow-sm">
-            <h2 className="mb-4 font-[var(--font-friendly)] text-lg font-bold text-gray-900">
-              Tóm tắt đơn hàng
-            </h2>
-
-            <div className="flex flex-col gap-3 text-sm">
-              <div className="flex justify-between">
-                <span className="text-gray-500">Tạm tính</span>
-                <span className="font-semibold text-gray-900">{formatVnd(subtotal)}</span>
-              </div>
-              <div className="flex justify-between">
-                <span className="text-gray-500">Phí vận chuyển</span>
-                <span className={`font-semibold ${shipping === 0 ? 'text-green-600' : 'text-gray-900'}`}>
-                  {shipping === 0 ? 'Miễn phí' : formatVnd(shipping)}
-                </span>
-              </div>
-              {subtotal > 0 && subtotal < 300000 && (
-                <p className="rounded-lg bg-blue-50 px-3 py-2 text-xs text-blue-600">
-                  Thêm {formatVnd(300000 - subtotal)} để được miễn phí vận chuyển!
-                </p>
-              )}
-            </div>
-
-            <div className="my-4 border-t border-gray-100" />
-
-            <div className="mb-5 flex justify-between">
-              <span className="font-[var(--font-friendly)] font-bold text-gray-900">Tổng cộng</span>
-              <span className="font-[var(--font-friendly)] text-xl font-bold text-gray-900">
-                {formatVnd(total)}
-              </span>
-            </div>
-
-            <button
-              onClick={() => navigate('/checkout')}
-              className="w-full rounded-lg bg-[#843122] py-3 text-sm font-bold text-white hover:bg-[#6a2517] transition-colors"
-            >
-              Thanh toán
-            </button>
-
-            <div className="mt-3 text-center">
-              <Link
-                to="/shop"
-                className="text-sm font-semibold text-[#843122] hover:underline"
-              >
-                Tiếp tục mua sắm
-              </Link>
-            </div>
-          </div>
-        </div>
-      )}
+        )}
+      </div>
     </div>
-  );
+  )
 }
