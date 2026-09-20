@@ -183,10 +183,28 @@
                 09-testing.md quy ước "Unit test". Failsafe (mvn verify) chạy
                 *IT.java — "Integration test: @SpringBootTest + Testcontainers"
                 (RefreshTokenServiceIT, RefreshTokenCleanupServiceIT).
+
+                argLine pin user.timezone=Asia/Ho_Chi_Minh: JVM mặc định trên máy
+                Windows/VN resolve ra "Asia/Saigon" (alias Olson cũ), pgjdbc gửi
+                giá trị này làm "SET TimeZone" khi mở connection và Postgres 17
+                từ chối với FATAL "invalid value for parameter TimeZone" — chặn
+                mọi test Postgres (Testcontainers lẫn *IT). "Asia/Ho_Chi_Minh" là
+                tên IANA chuẩn mà @Scheduled(zone=...) trong CaregiverExpiryJob/
+                OtpExpiryJob đã dùng; áp cùng giá trị cho JVM chạy test.
             -->
             <plugin>
                 <groupId>org.apache.maven.plugins</groupId>
+                <artifactId>maven-surefire-plugin</artifactId>
+                <configuration>
+                    <argLine>-Duser.timezone=Asia/Ho_Chi_Minh</argLine>
+                </configuration>
+            </plugin>
+            <plugin>
+                <groupId>org.apache.maven.plugins</groupId>
                 <artifactId>maven-failsafe-plugin</artifactId>
+                <configuration>
+                    <argLine>-Duser.timezone=Asia/Ho_Chi_Minh</argLine>
+                </configuration>
                 <executions>
                     <execution>
                         <goals>

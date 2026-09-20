@@ -2,10 +2,16 @@ spring:
   application:
     name: petcare-api-test
 
+  # Credentials khớp docker-compose.yml service `postgres` (petcare-postgres:
+  # user postgres / password 123456). DB "petcare_test" tách riêng khỏi DB dev
+  # "petcare" trên CÙNG container — bắt buộc, vì ddl-auto: create-drop bên dưới
+  # sẽ drop/tạo lại toàn bộ schema mỗi lần chạy test; dùng chung DB "petcare"
+  # sẽ xoá dữ liệu dev thật. Tạo DB một lần: `docker compose exec postgres
+  # psql -U postgres -c "CREATE DATABASE petcare_test"`.
   datasource:
     url: jdbc:postgresql://localhost:5432/petcare_test
     username: postgres
-    password: postgres
+    password: 123456
 
   jpa:
     hibernate:
