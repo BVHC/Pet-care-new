@@ -62,7 +62,7 @@ class RefreshTokenCleanupServiceIT {
     }
 
     private UUID seedToken(Instant expiresAt, Instant revokedAt, String revokeReason) {
-        RefreshTokenEntity entity = new RefreshTokenEntity(accountId, UUID.randomUUID(),
+        RefreshTokenEntity entity = new RefreshTokenEntity(accountId, UUID.randomUUID(), UUID.randomUUID(),
                 UUID.randomUUID().toString(), Instant.now().minusSeconds(3600), expiresAt, null, null);
         entity.setRevokedAt(revokedAt);
         entity.setRevokeReason(revokeReason);

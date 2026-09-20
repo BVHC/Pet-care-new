@@ -53,6 +53,8 @@ out/
 .gemini/
 .agents/
 .ua/
+.claude/
+.planning/
 
 # ==============================================================================
 # Environment & Secrets (NEVER commit secrets or real credentials)

@@ -62,25 +62,29 @@ class RefreshTokenServiceIT {
     @Test
     void issue_persistsHashedToken_notRawToken() {
         UUID jti = UUID.randomUUID();
+        UUID accessJti = UUID.randomUUID();
         Instant expiresAt = Instant.now().plusSeconds(3600);
 
-        RefreshTokenEntity saved = refreshTokenService.issue(accountId, "raw-token-abc", jti, expiresAt, "junit-agent", "127.0.0.1");
+        RefreshTokenEntity saved = refreshTokenService.issue(accountId, "raw-token-abc", jti, accessJti, expiresAt, "junit-agent", "127.0.0.1");
 
         assertThat(saved.getId()).isNotNull();
         assertThat(saved.getTokenHash()).isNotEqualTo("raw-token-abc");
         assertThat(saved.getAccountId()).isEqualTo(accountId);
+        assertThat(saved.getAccessTokenJti()).isEqualTo(accessJti);
         assertThat(saved.isRevoked()).isFalse();
     }
 
     @Test
     void rotate_revokesOldToken_andLinksReplacedBy() {
         UUID oldJti = UUID.randomUUID();
-        refreshTokenService.issue(accountId, "old-raw-token", oldJti, Instant.now().plusSeconds(3600), null, null);
+        refreshTokenService.issue(accountId, "old-raw-token", oldJti, UUID.randomUUID(), Instant.now().plusSeconds(3600), null, null);
 
         UUID newJti = UUID.randomUUID();
-        RefreshTokenEntity rotated = refreshTokenService.rotate("old-raw-token", "new-raw-token", newJti, Instant.now().plusSeconds(3600));
+        UUID newAccessJti = UUID.randomUUID();
+        RefreshTokenEntity rotated = refreshTokenService.rotate("old-raw-token", "new-raw-token", newJti, newAccessJti, Instant.now().plusSeconds(3600));
 
         assertThat(rotated.isRevoked()).isFalse();
+        assertThat(rotated.getAccessTokenJti()).isEqualTo(newAccessJti);
 
         List<RefreshTokenEntity> stillActive = refreshTokenRepository.findAllByAccountIdAndRevokedAtIsNull(accountId);
         assertThat(stillActive).hasSize(1);
@@ -89,20 +93,99 @@ class RefreshTokenServiceIT {
 
     @Test
     void rotate_rejectsAlreadyRevokedToken() {
-        refreshTokenService.issue(accountId, "single-use-token", UUID.randomUUID(), Instant.now().plusSeconds(3600), null, null);
-        refreshTokenService.revoke("single-use-token", RefreshTokenRevokeReason.LOGOUT);
+        refreshTokenService.issue(accountId, "single-use-token", UUID.randomUUID(), UUID.randomUUID(), Instant.now().plusSeconds(3600), null, null);
+        boolean revoked = refreshTokenService.revoke("single-use-token", RefreshTokenRevokeReason.LOGOUT);
+        assertThat(revoked).isTrue();
 
-        assertThatThrownBy(() -> refreshTokenService.rotate("single-use-token", "another-token", UUID.randomUUID(), Instant.now().plusSeconds(3600)))
+        assertThatThrownBy(() -> refreshTokenService.rotate("single-use-token", "another-token", UUID.randomUUID(), UUID.randomUUID(), Instant.now().plusSeconds(3600)))
                 .isInstanceOf(IllegalArgumentException.class);
     }
 
     @Test
-    void revokeAllForAccount_revokesEveryActiveToken() {
-        refreshTokenService.issue(accountId, "token-1", UUID.randomUUID(), Instant.now().plusSeconds(3600), null, null);
-        refreshTokenService.issue(accountId, "token-2", UUID.randomUUID(), Instant.now().plusSeconds(3600), null, null);
+    void revoke_unknownToken_returnsFalse_doesNotThrow() {
+        boolean revoked = refreshTokenService.revoke("never-issued-token", RefreshTokenRevokeReason.LOGOUT);
+        assertThat(revoked).isFalse();
+    }
 
-        refreshTokenService.revokeAllForAccount(accountId, RefreshTokenRevokeReason.LOCK_ACCOUNT);
+    @Test
+    void revokeByAccessTokenJti_findsAndRevokesLinkedRefreshToken() {
+        // RULE-01-06: Logout tra ra đúng refresh token của phiên chỉ từ JTI access token,
+        // không cần client gửi kèm raw refresh token.
+        UUID accessJti = UUID.randomUUID();
+        refreshTokenService.issue(accountId, "linked-token", UUID.randomUUID(), accessJti, Instant.now().plusSeconds(3600), null, null);
+
+        boolean revoked = refreshTokenService.revokeByAccessTokenJti(accessJti, RefreshTokenRevokeReason.LOGOUT);
+
+        assertThat(revoked).isTrue();
+        assertThat(refreshTokenRepository.findAllByAccountIdAndRevokedAtIsNull(accountId)).isEmpty();
+    }
+
+    @Test
+    void revokeByAccessTokenJti_unknownJti_returnsFalse_doesNotThrow() {
+        boolean revoked = refreshTokenService.revokeByAccessTokenJti(UUID.randomUUID(), RefreshTokenRevokeReason.LOGOUT);
+        assertThat(revoked).isFalse();
+    }
+
+    @Test
+    void revokeByAccessTokenJti_staleAccessTokenAfterRotation_stillRevokesLiveGeneration() {
+        // Regression: client logout bằng access token CŨ HƠN lần rotate gần nhất của cùng
+        // phiên (JWT chưa hết hạn nên server vẫn chấp nhận nó ở endpoint khác). Row gắn với
+        // accessJti cũ đã bị revoke do ROTATED (revokedAt != null) nên
+        // findByAccessTokenJtiAndRevokedAtIsNull không còn thấy nó — phải lần theo replacedBy
+        // tới generation đang sống rồi revoke đúng row đó, nếu không refresh token thật sự
+        // đang hoạt động sẽ không bao giờ bị đụng tới (vi phạm RULE-01-06).
+        UUID staleAccessJti = UUID.randomUUID();
+        refreshTokenService.issue(accountId, "stale-gen1-raw-token", UUID.randomUUID(), staleAccessJti,
+                Instant.now().plusSeconds(3600), null, null);
+        refreshTokenService.rotate("stale-gen1-raw-token", "stale-gen2-raw-token", UUID.randomUUID(), UUID.randomUUID(),
+                Instant.now().plusSeconds(3600));
+
+        boolean revoked = refreshTokenService.revokeByAccessTokenJti(staleAccessJti, RefreshTokenRevokeReason.LOGOUT);
+
+        assertThat(revoked).isTrue();
+        assertThat(refreshTokenRepository.findAllByAccountIdAndRevokedAtIsNull(accountId)).isEmpty();
+    }
+
+    @Test
+    void revokeByAccessTokenJti_multipleRotations_walksFullChain() {
+        UUID firstAccessJti = UUID.randomUUID();
+        refreshTokenService.issue(accountId, "gen-1", UUID.randomUUID(), firstAccessJti,
+                Instant.now().plusSeconds(3600), null, null);
+        refreshTokenService.rotate("gen-1", "gen-2", UUID.randomUUID(), UUID.randomUUID(), Instant.now().plusSeconds(3600));
+        refreshTokenService.rotate("gen-2", "gen-3", UUID.randomUUID(), UUID.randomUUID(), Instant.now().plusSeconds(3600));
+
+        boolean revoked = refreshTokenService.revokeByAccessTokenJti(firstAccessJti, RefreshTokenRevokeReason.LOGOUT);
+
+        assertThat(revoked).isTrue();
+        assertThat(refreshTokenRepository.findAllByAccountIdAndRevokedAtIsNull(accountId)).isEmpty();
+    }
+
+    @Test
+    void revokeByAccessTokenJti_sessionAlreadyRevokedForOtherReason_returnsFalse_doesNotThrow() {
+        // Nếu chuỗi rotate dừng ở 1 row revoke vì lý do KHÁC ROTATED (vd LOCK_ACCOUNT), phiên
+        // đã bị vô hiệu hoá từ trước rồi — không có gì để đi tiếp/thu hồi thêm.
+        UUID staleAccessJti = UUID.randomUUID();
+        refreshTokenService.issue(accountId, "locked-raw-token", UUID.randomUUID(), staleAccessJti,
+                Instant.now().plusSeconds(3600), null, null);
+        refreshTokenService.revoke("locked-raw-token", RefreshTokenRevokeReason.LOCK_ACCOUNT);
+
+        boolean revoked = refreshTokenService.revokeByAccessTokenJti(staleAccessJti, RefreshTokenRevokeReason.LOGOUT);
+
+        assertThat(revoked).isFalse();
+    }
+
+    @Test
+    void revokeAllForAccount_revokesEveryActiveToken() {
+        UUID accessJti1 = UUID.randomUUID();
+        UUID accessJti2 = UUID.randomUUID();
+        refreshTokenService.issue(accountId, "token-1", UUID.randomUUID(), accessJti1, Instant.now().plusSeconds(3600), null, null);
+        refreshTokenService.issue(accountId, "token-2", UUID.randomUUID(), accessJti2, Instant.now().plusSeconds(3600), null, null);
+
+        // RULE-02-04/07 — caller (TokenIssuanceFacadeImpl) cần list accessTokenJti này để
+        // blacklist đúng access token đang sống của từng phiên bị revoke.
+        List<UUID> revokedAccessJtis = refreshTokenService.revokeAllForAccount(accountId, RefreshTokenRevokeReason.LOCK_ACCOUNT);
 
         assertThat(refreshTokenRepository.findAllByAccountIdAndRevokedAtIsNull(accountId)).isEmpty();
+        assertThat(revokedAccessJtis).containsExactlyInAnyOrder(accessJti1, accessJti2);
     }
 }
