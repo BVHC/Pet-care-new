@@ -1,192 +1,270 @@
 import { useState } from 'react';
-import { Card, CardContent, CardHeader, CardTitle } from '../../components/ui/card';
+import { Card, CardContent } from '../../components/ui/card';
 import { Button } from '../../components/ui/button';
 import { Badge } from '../../components/ui/badge';
 import { Input } from '../../components/ui/input';
-import { Tabs, TabsContent, TabsList, TabsTrigger } from '../../components/ui/tabs';
-import { Stethoscope, FileText, Pill, Thermometer, Heart, Save } from 'lucide-react';
+import { Search, Stethoscope, FileText, Plus, Eye, Pill, Thermometer } from 'lucide-react';
 import { cn } from '../../lib/utils';
 
-interface ExamSession {
-  id: string; customerName: string; petName: string; petType: string;
-  petAge: string; service: string; status: 'WAITING' | 'IN_PROGRESS' | 'COMPLETED';
-  checkedInAt: string;
+type ExamStatus = 'WAITING' | 'IN_PROGRESS' | 'COMPLETED';
+
+interface ExamRecord {
+  id: string;
+  examDate: string;
+  customerName: string;
+  customerPhone: string;
+  petName: string;
+  petType: string;
+  petBreed: string;
+  petAge: string;
+  symptom: string;
+  diagnosis?: string;
+  prescription?: string;
+  veterinarian: string;
+  status: ExamStatus;
+  weight?: string;
+  temperature?: string;
 }
 
-const MOCK_SESSIONS: ExamSession[] = [
-  { id: '1', customerName: 'Trần Thị B', petName: 'Chó Alaska', petType: 'Chó', petAge: '2 năm', service: 'Khám bệnh', status: 'IN_PROGRESS', checkedInAt: '10:30' },
-  { id: '2', customerName: 'Phạm Thị D', petName: 'Mèo Persian', petType: 'Mèo', petAge: '1 năm', service: 'Tái khám', status: 'WAITING', checkedInAt: '11:15' },
+const MOCK_EXAMS: ExamRecord[] = [
+  {
+    id: '1',
+    examDate: '2026-09-18 09:30',
+    customerName: 'Nguyễn Văn A',
+    customerPhone: '0901234567',
+    petName: 'Mèo Whiskas',
+    petType: 'Mèo',
+    petBreed: 'Scottish Fold',
+    petAge: '2 năm',
+    symptom: 'Ho liên tục, thở khó, bỏ ăn',
+    diagnosis: 'Viêm đường hô hấp trên',
+    prescription: 'Amoxicillin 50mg x 2 lần/ngày x 7 ngày\nThuốc ho tự nhiên\nNghỉ ngơi, giữ ấm',
+    veterinarian: 'Dr. Minh',
+    status: 'COMPLETED',
+    weight: '3.5 kg',
+    temperature: '39.2°C'
+  },
+  {
+    id: '2',
+    examDate: '2026-09-18 10:00',
+    customerName: 'Trần Thị B',
+    customerPhone: '0912345678',
+    petName: 'Chó Alaska',
+    petType: 'Chó',
+    petBreed: 'Alaska Malamute',
+    petAge: '1 năm',
+    symptom: 'Nôn mật vàng, tiêu chảy',
+    veterinarian: 'Dr. Lan',
+    status: 'IN_PROGRESS',
+    weight: '25 kg',
+    temperature: '38.5°C'
+  },
+  {
+    id: '3',
+    examDate: '2026-09-18 11:00',
+    customerName: 'Lê Văn C',
+    customerPhone: '0923456789',
+    petName: 'Chó Poodle',
+    petType: 'Chó',
+    petBreed: 'Poodle Toy',
+    petAge: '3 năm',
+    symptom: 'Gãi tai liên tục, tai có mùi',
+    veterinarian: 'Dr. Minh',
+    status: 'WAITING'
+  },
+  {
+    id: '4',
+    examDate: '2026-09-18 14:00',
+    customerName: 'Phạm Thị D',
+    customerPhone: '0934567890',
+    petName: 'Mèo Persian',
+    petType: 'Mèo',
+    petBreed: 'Persian',
+    petAge: '4 năm',
+    symptom: 'Mắt đổ ghèn, không mở được mắt',
+    veterinarian: 'Dr. Lan',
+    status: 'WAITING'
+  },
 ];
 
 export function AdminExamPage() {
-  const [selectedSession, setSelectedSession] = useState<ExamSession | null>(MOCK_SESSIONS[0]);
-  const [symptoms, setSymptoms] = useState('');
-  const [diagnosis, setDiagnosis] = useState('');
-  const [treatment, setTreatment] = useState('');
+  const [exams, setExams] = useState(MOCK_EXAMS);
+  const [searchQuery, setSearchQuery] = useState('');
+  const [selectedExam, setSelectedExam] = useState<ExamRecord | null>(null);
 
-  const activeSessions = MOCK_SESSIONS.filter(s => s.status !== 'COMPLETED');
+  const filteredExams = exams.filter(e =>
+    e.customerName.toLowerCase().includes(searchQuery.toLowerCase()) ||
+    e.petName.toLowerCase().includes(searchQuery.toLowerCase())
+  );
+
+  const startExam = (id: string) => {
+    setExams(prev => prev.map(e => e.id === id ? { ...e, status: 'IN_PROGRESS' as ExamStatus } : e));
+  };
+
+  const completeExam = (id: string) => {
+    setExams(prev => prev.map(e => e.id === id ? { ...e, status: 'COMPLETED' as ExamStatus } : e));
+  };
+
+  const waitingCount = exams.filter(e => e.status === 'WAITING').length;
+  const inProgressCount = exams.filter(e => e.status === 'IN_PROGRESS').length;
+  const completedToday = exams.filter(e => e.status === 'COMPLETED').length;
 
   return (
     <div className="space-y-6">
       <div>
-        <h1 className="text-2xl font-bold">Khám & Hồ sơ EMR</h1>
-        <p className="text-gray-500">Hồ sơ bệnh án điện tử cho bác sĩ thú y</p>
+        <h1 className="text-2xl font-semibold text-[var(--text-primary)]">Khám bệnh & EMR</h1>
+        <p className="text-[var(--text-secondary)]">Hồ sơ bệnh án điện tử và kê đơn</p>
       </div>
 
-      <div className="grid grid-cols-12 gap-6">
-        {/* Session List */}
-        <div className="col-span-4">
-          <Card>
-            <CardHeader><CardTitle className="text-lg">Phiên khám</CardTitle></CardHeader>
-            <CardContent>
-              <div className="space-y-3">
-                {activeSessions.map(session => (
-                  <div
-                    key={session.id}
-                    onClick={() => setSelectedSession(session)}
-                    className={cn(
-                      'p-3 border rounded-lg cursor-pointer transition-all',
-                      selectedSession?.id === session.id ? 'border-blue-500 bg-blue-50' : 'hover:border-gray-300'
-                    )}
-                  >
-                    <div className="flex items-center justify-between mb-2">
-                      <Badge className={session.status === 'IN_PROGRESS' ? 'bg-green-100 text-green-700' : 'bg-yellow-100 text-yellow-700'}>
-                        {session.status === 'IN_PROGRESS' ? 'Đang khám' : 'Đang chờ'}
+      {/* Stats */}
+      <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+        <Card className="card-kpi">
+          <CardContent className="p-5 flex items-center gap-4">
+            <div className="p-3 rounded-xl bg-amber-100">
+              <Stethoscope className="h-6 w-6 text-amber-600" />
+            </div>
+            <div>
+              <p className="text-2xl font-semibold text-amber-600">{waitingCount}</p>
+              <p className="text-sm text-[var(--text-secondary)]">Đang chờ khám</p>
+            </div>
+          </CardContent>
+        </Card>
+        <Card className="card-kpi">
+          <CardContent className="p-5 flex items-center gap-4">
+            <div className="p-3 rounded-xl bg-blue-100">
+              <Stethoscope className="h-6 w-6 text-blue-600" />
+            </div>
+            <div>
+              <p className="text-2xl font-semibold text-blue-600">{inProgressCount}</p>
+              <p className="text-sm text-[var(--text-secondary)]">Đang khám</p>
+            </div>
+          </CardContent>
+        </Card>
+        <Card className="card-kpi">
+          <CardContent className="p-5 flex items-center gap-4">
+            <div className="p-3 rounded-xl bg-green-100">
+              <FileText className="h-6 w-6 text-green-600" />
+            </div>
+            <div>
+              <p className="text-2xl font-semibold text-green-600">{completedToday}</p>
+              <p className="text-sm text-[var(--text-secondary)]">Đã khám hôm nay</p>
+            </div>
+          </CardContent>
+        </Card>
+        <Card className="card-kpi">
+          <CardContent className="p-5 flex items-center gap-4">
+            <div className="p-3 rounded-xl bg-purple-100">
+              <Pill className="h-6 w-6 text-purple-600" />
+            </div>
+            <div>
+              <p className="text-2xl font-semibold text-purple-600">{exams.length}</p>
+              <p className="text-sm text-[var(--text-secondary)]">Tổng ca hôm nay</p>
+            </div>
+          </CardContent>
+        </Card>
+      </div>
+
+      {/* Search */}
+      <Card className="card">
+        <CardContent className="p-4 flex items-center justify-between">
+          <div className="relative max-w-md">
+            <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-[var(--text-tertiary)]" />
+            <Input
+              placeholder="Tìm bệnh nhân..."
+              className="pl-10 input"
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+            />
+          </div>
+          <Button><Plus className="mr-2 h-4 w-4" />Thêm lịch khám</Button>
+        </CardContent>
+      </Card>
+
+      {/* Exam List */}
+      <Card className="card">
+        <CardContent className="p-0">
+          <div className="divide-y divide-[var(--border-subtle)]">
+            {filteredExams.map(exam => (
+              <div key={exam.id} className={cn(
+                'p-5 transition-colors',
+                exam.status === 'IN_PROGRESS' && 'bg-blue-50/50 border-l-4 border-l-blue-500',
+                exam.status === 'WAITING' && 'hover:bg-[var(--bg-secondary)]'
+              )}>
+                <div className="flex items-start justify-between">
+                  <div className="flex-1">
+                    <div className="flex items-center gap-3 mb-2">
+                      <h3 className="font-semibold text-[var(--text-primary)]">{exam.petName}</h3>
+                      <Badge variant="secondary" className="bg-[var(--bg-tertiary)]">{exam.petType}</Badge>
+                      <Badge className={
+                        exam.status === 'WAITING' ? 'bg-amber-100 text-amber-700' :
+                        exam.status === 'IN_PROGRESS' ? 'bg-blue-100 text-blue-700' :
+                        'bg-green-100 text-green-700'
+                      }>
+                        {exam.status === 'WAITING' ? 'Chờ khám' :
+                         exam.status === 'IN_PROGRESS' ? 'Đang khám' : 'Hoàn tất'}
                       </Badge>
-                      <span className="text-xs text-gray-500">Check-in: {session.checkedInAt}</span>
                     </div>
-                    <p className="font-medium">{session.petName}</p>
-                    <p className="text-sm text-gray-500">{session.customerName}</p>
-                    <p className="text-xs text-blue-600 mt-1">{session.service}</p>
-                  </div>
-                ))}
-                {activeSessions.length === 0 && (
-                  <p className="text-center text-gray-500 py-4">Không có phiên khám nào</p>
-                )}
-              </div>
-            </CardContent>
-          </Card>
-        </div>
 
-        {/* Exam Form */}
-        <div className="col-span-8">
-          {selectedSession ? (
-            <Card>
-              <CardHeader>
-                <div className="flex items-center justify-between">
-                  <div>
-                    <CardTitle>Hồ sơ bệnh án</CardTitle>
-                    <p className="text-sm text-gray-500 mt-1">{selectedSession.petName} • {selectedSession.petType} • {selectedSession.petAge}</p>
+                    <div className="grid grid-cols-2 md:grid-cols-4 gap-4 text-sm">
+                      <div>
+                        <p className="text-[var(--text-tertiary)]">Chủ nuôi</p>
+                        <p className="font-medium text-[var(--text-primary)]">{exam.customerName}</p>
+                      </div>
+                      <div>
+                        <p className="text-[var(--text-tertiary)]">Giống / Tuổi</p>
+                        <p className="text-[var(--text-primary)]">{exam.petBreed} / {exam.petAge}</p>
+                      </div>
+                      <div>
+                        <p className="text-[var(--text-tertiary)]">Cân nặng / Nhiệt độ</p>
+                        <p className="text-[var(--text-primary)]">{exam.weight || '-'} / {exam.temperature || '-'}</p>
+                      </div>
+                      <div>
+                        <p className="text-[var(--text-tertiary)]">Bác sĩ</p>
+                        <p className="text-[var(--text-primary)]">{exam.veterinarian}</p>
+                      </div>
+                    </div>
+
+                    <div className="mt-3">
+                      <p className="text-sm text-[var(--text-tertiary)]">Triệu chứng:</p>
+                      <p className="text-[var(--text-primary)]">{exam.symptom}</p>
+                    </div>
+
+                    {exam.diagnosis && (
+                      <div className="mt-2">
+                        <p className="text-sm text-[var(--text-tertiary)]">Chẩn đoán:</p>
+                        <p className="text-[var(--text-primary)] font-medium">{exam.diagnosis}</p>
+                      </div>
+                    )}
                   </div>
-                  <Button className="bg-green-600 hover:bg-green-700"><Save className="mr-2 h-4 w-4" />Lưu & Hoàn tất</Button>
+
+                  <div className="flex gap-2 ml-4">
+                    {exam.status === 'WAITING' && (
+                      <Button size="sm" className="bg-blue-600 hover:bg-blue-700" onClick={() => startExam(exam.id)}>
+                        Bắt đầu khám
+                      </Button>
+                    )}
+                    {exam.status === 'IN_PROGRESS' && (
+                      <>
+                        <Button size="sm" variant="outline" onClick={() => setSelectedExam(exam)}>
+                          <Eye className="mr-1 h-4 w-4" /> Chi tiết
+                        </Button>
+                        <Button size="sm" className="bg-green-600 hover:bg-green-700" onClick={() => completeExam(exam.id)}>
+                          Hoàn tất
+                        </Button>
+                      </>
+                    )}
+                    {exam.status === 'COMPLETED' && (
+                      <Button size="sm" variant="outline" onClick={() => setSelectedExam(exam)}>
+                        <FileText className="mr-1 h-4 w-4" /> Xem hồ sơ
+                      </Button>
+                    )}
+                  </div>
                 </div>
-              </CardHeader>
-              <CardContent>
-                <Tabs defaultValue="exam">
-                  <TabsList className="grid w-full grid-cols-4">
-                    <TabsTrigger value="exam">Khám bệnh</TabsTrigger>
-                    <TabsTrigger value="vitals">Sinh tồ</TabsTrigger>
-                    <TabsTrigger value="history">Lịch sử</TabsTrigger>
-                    <TabsTrigger value="prescription">Đơn thuốc</TabsTrigger>
-                  </TabsList>
-
-                  <TabsContent value="exam" className="space-y-4 mt-4">
-                    <div className="grid grid-cols-2 gap-4">
-                      <div>
-                        <label className="text-sm font-medium mb-2 block">Triệu chứng</label>
-                        <textarea
-                          className="w-full h-32 p-3 border rounded-lg text-sm"
-                          placeholder="Mô tả triệu chứng..."
-                          value={symptoms}
-                          onChange={(e) => setSymptoms(e.target.value)}
-                        />
-                      </div>
-                      <div>
-                        <label className="text-sm font-medium mb-2 block">Chẩn đoán</label>
-                        <textarea
-                          className="w-full h-32 p-3 border rounded-lg text-sm"
-                          placeholder="Kết luận chẩn đoán..."
-                          value={diagnosis}
-                          onChange={(e) => setDiagnosis(e.target.value)}
-                        />
-                      </div>
-                    </div>
-                    <div>
-                      <label className="text-sm font-medium mb-2 block">Phác đồ điều trị</label>
-                      <textarea
-                        className="w-full h-24 p-3 border rounded-lg text-sm"
-                        placeholder="Mô tả phác đồ điều trị..."
-                        value={treatment}
-                        onChange={(e) => setTreatment(e.target.value)}
-                      />
-                    </div>
-                  </TabsContent>
-
-                  <TabsContent value="vitals" className="space-y-4 mt-4">
-                    <div className="grid grid-cols-2 gap-4">
-                      <Card className="bg-blue-50 border-blue-200">
-                        <CardContent className="p-4 flex items-center gap-4">
-                          <Thermometer className="h-8 w-8 text-blue-600" />
-                          <div>
-                            <p className="text-sm text-gray-500">Nhiệt độ</p>
-                            <p className="text-2xl font-bold">38.5°C</p>
-                            <p className="text-xs text-green-600">Bình thường</p>
-                          </div>
-                        </CardContent>
-                      </Card>
-                      <Card className="bg-red-50 border-red-200">
-                        <CardContent className="p-4 flex items-center gap-4">
-                          <Heart className="h-8 w-8 text-red-600" />
-                          <div>
-                            <p className="text-sm text-gray-500">Nhịp tim</p>
-                            <p className="text-2xl font-bold">120 bpm</p>
-                            <p className="text-xs text-green-600">Bình thường</p>
-                          </div>
-                        </CardContent>
-                      </Card>
-                    </div>
-                  </TabsContent>
-
-                  <TabsContent value="history" className="mt-4">
-                    <div className="space-y-4">
-                      <Card><CardContent className="p-4">
-                        <div className="flex items-center justify-between mb-2">
-                          <div className="flex items-center gap-2"><FileText className="h-4 w-4 text-gray-400" /><span className="font-medium">2026-06-15</span></div>
-                          <span className="text-sm text-gray-500">BS. Minh</span>
-                        </div>
-                        <p className="font-medium text-blue-600">Viêm da dị ứng</p>
-                        <p className="text-sm text-gray-500 mt-1">Thuốc kháng histamin + kem bôi</p>
-                      </CardContent></Card>
-                      <Card><CardContent className="p-4">
-                        <div className="flex items-center justify-between mb-2">
-                          <div className="flex items-center gap-2"><FileText className="h-4 w-4 text-gray-400" /><span className="font-medium">2026-03-20</span></div>
-                          <span className="text-sm text-gray-500">BS. Lan</span>
-                        </div>
-                        <p className="font-medium text-blue-600">Tiêm vaccine dại</p>
-                        <p className="text-sm text-gray-500 mt-1">Vaccine dại Nobivac</p>
-                      </CardContent></Card>
-                    </div>
-                  </TabsContent>
-
-                  <TabsContent value="prescription" className="mt-4">
-                    <div className="text-center py-8 text-gray-500">
-                      <Pill className="h-12 w-12 mx-auto mb-4 opacity-50" />
-                      <p>Tính năng đơn thuốc đang được phát triển</p>
-                    </div>
-                  </TabsContent>
-                </Tabs>
-              </CardContent>
-            </Card>
-          ) : (
-            <Card>
-              <CardContent className="p-8 text-center text-gray-500">
-                <Stethoscope className="h-12 w-12 mx-auto mb-4 opacity-50" />
-                <p>Chọn một phiên khám để bắt đầu</p>
-              </CardContent>
-            </Card>
-          )}
-        </div>
-      </div>
+              </div>
+            ))}
+          </div>
+        </CardContent>
+      </Card>
     </div>
   );
 }

@@ -1,104 +1,266 @@
 import { useState } from 'react';
-import { Card, CardContent, CardHeader, CardTitle } from '../../components/ui/card';
+import { Card, CardContent } from '../../components/ui/card';
 import { Button } from '../../components/ui/button';
 import { Badge } from '../../components/ui/badge';
 import { Input } from '../../components/ui/input';
-import { Search, AlertTriangle, Syringe, Shield } from 'lucide-react';
+import { Search, Syringe, Plus, Calendar, AlertCircle } from 'lucide-react';
+import { cn } from '../../lib/utils';
+
+type VaccinationStatus = 'SCHEDULED' | 'IN_PROGRESS' | 'COMPLETED' | 'REMINDER_SENT';
 
 interface VaccinationRecord {
-  id: string; petName: string; petType: string; customerName: string;
-  vaccineName: string; batchNumber: string; injectionDate: string;
-  nextDueDate: string; veterinarian: string; status: 'DONE' | 'DUE' | 'OVERDUE';
+  id: string;
+  date: string;
+  time: string;
+  customerName: string;
+  customerPhone: string;
+  petName: string;
+  petType: string;
+  petAge: string;
+  vaccineName: string;
+  vaccineBatch: string;
+  doseNumber: number;
+  nextDoseDate?: string;
+  veterinarian: string;
+  status: VaccinationStatus;
+  notes?: string;
 }
 
-const MOCK_RECORDS: VaccinationRecord[] = [
-  { id: '1', petName: 'Chó Alaska', petType: 'Chó', customerName: 'Trần Thị B', vaccineName: 'Vaccine dại', batchNumber: 'LOT-2024-001', injectionDate: '2026-09-18', nextDueDate: '2027-09-18', veterinarian: 'Dr. Lan', status: 'DONE' },
-  { id: '2', petName: 'Mèo Persian', petType: 'Mèo', customerName: 'Phạm Thị D', vaccineName: 'Vaccine 5 bệnh', batchNumber: 'LOT-2024-002', injectionDate: '2026-06-20', nextDueDate: '2026-09-20', veterinarian: 'Dr. Minh', status: 'DUE' },
-  { id: '3', petName: 'Chó Golden', petType: 'Chó', customerName: 'Hoàng Văn E', vaccineName: 'Vaccine dại', batchNumber: 'LOT-2024-001', injectionDate: '2026-03-15', nextDueDate: '2026-09-15', veterinarian: 'Dr. Lan', status: 'OVERDUE' },
+const MOCK_VACCINATIONS: VaccinationRecord[] = [
+  {
+    id: '1',
+    date: '2026-09-18',
+    time: '09:00',
+    customerName: 'Nguyễn Văn A',
+    customerPhone: '0901234567',
+    petName: 'Mèo Whiskas',
+    petType: 'Mèo',
+    petAge: '2 năm',
+    vaccineName: 'Vaccine dại (Rabies)',
+    vaccineBatch: 'RB-2024-089',
+    doseNumber: 1,
+    nextDoseDate: '2027-09-18',
+    veterinarian: 'Dr. Minh',
+    status: 'COMPLETED',
+    notes: 'Tiêm không có phản ứng phụ'
+  },
+  {
+    id: '2',
+    date: '2026-09-18',
+    time: '10:30',
+    customerName: 'Trần Thị B',
+    customerPhone: '0912345678',
+    petName: 'Chó Alaska',
+    petType: 'Chó',
+    petAge: '1 năm',
+    vaccineName: 'Vaccine 5 bệnh (DHPP)',
+    vaccineBatch: 'DHPP-2024-156',
+    doseNumber: 2,
+    nextDoseDate: '2026-10-02',
+    veterinarian: 'Dr. Lan',
+    status: 'IN_PROGRESS'
+  },
+  {
+    id: '3',
+    date: '2026-09-18',
+    time: '14:00',
+    customerName: 'Lê Văn C',
+    customerPhone: '0923456789',
+    petName: 'Chó Poodle',
+    petType: 'Chó',
+    petAge: '3 năm',
+    vaccineName: 'Vaccine dại (Rabies)',
+    vaccineBatch: 'RB-2024-089',
+    doseNumber: 1,
+    veterinarian: 'Dr. Minh',
+    status: 'SCHEDULED'
+  },
+  {
+    id: '4',
+    date: '2026-09-17',
+    time: '15:00',
+    customerName: 'Phạm Thị D',
+    customerPhone: '0934567890',
+    petName: 'Mèo Persian',
+    petType: 'Mèo',
+    petAge: '4 năm',
+    vaccineName: 'Vaccine 3 bệnh (FVRCP)',
+    vaccineBatch: 'FVRCP-2024-078',
+    doseNumber: 1,
+    veterinarian: 'Dr. Lan',
+    status: 'REMINDER_SENT',
+    notes: 'Đã gửi nhắc hẹn qua SMS'
+  },
 ];
 
 export function AdminVaccinationPage() {
-  const [records] = useState(MOCK_RECORDS);
+  const [vaccinations, setVaccinations] = useState(MOCK_VACCINATIONS);
   const [searchQuery, setSearchQuery] = useState('');
 
-  const dueCount = records.filter(r => r.status === 'DUE').length;
-  const overdueCount = records.filter(r => r.status === 'OVERDUE').length;
-
-  const filteredRecords = records.filter(r =>
-    r.petName.toLowerCase().includes(searchQuery.toLowerCase()) ||
-    r.customerName.toLowerCase().includes(searchQuery.toLowerCase())
+  const filteredVaccinations = vaccinations.filter(v =>
+    v.customerName.toLowerCase().includes(searchQuery.toLowerCase()) ||
+    v.petName.toLowerCase().includes(searchQuery.toLowerCase()) ||
+    v.vaccineName.toLowerCase().includes(searchQuery.toLowerCase())
   );
+
+  const completedToday = vaccinations.filter(v => v.status === 'COMPLETED').length;
+  const scheduledToday = vaccinations.filter(v => v.status === 'SCHEDULED' || v.status === 'IN_PROGRESS').length;
+  const reminderSent = vaccinations.filter(v => v.status === 'REMINDER_SENT').length;
 
   return (
     <div className="space-y-6">
       <div>
-        <h1 className="text-2xl font-bold">Tiêm chủng</h1>
-        <p className="text-gray-500">Quản lý lịch tiêm vaccine và theo dõi</p>
+        <h1 className="text-2xl font-semibold text-[var(--text-primary)]">Tiêm chủng</h1>
+        <p className="text-[var(--text-secondary)]">Quản lý tiêm vaccine và lịch tiêm nhắc</p>
       </div>
 
-      {/* Alert */}
-      {overdueCount > 0 && (
-        <Card className="border-red-500 bg-red-50">
-          <CardContent className="p-4 flex items-center gap-4">
-            <AlertTriangle className="h-6 w-6 text-red-600" />
+      {/* Stats */}
+      <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+        <Card className="card-kpi">
+          <CardContent className="p-5 flex items-center gap-4">
+            <div className="p-3 rounded-xl bg-green-100">
+              <Syringe className="h-6 w-6 text-green-600" />
+            </div>
             <div>
-              <p className="font-medium text-red-700">Vaccine quá hạn</p>
-              <p className="text-sm text-red-600">{overdueCount} thú cưng cần tiêm lại</p>
+              <p className="text-2xl font-semibold text-green-600">{completedToday}</p>
+              <p className="text-sm text-[var(--text-secondary)]">Đã tiêm hôm nay</p>
             </div>
           </CardContent>
         </Card>
-      )}
-
-      {/* Stats */}
-      <div className="grid grid-cols-4 gap-4">
-        <Card><CardContent className="p-4 flex items-center gap-4"><div className="p-3 rounded-full bg-blue-100"><Syringe className="h-6 w-6 text-blue-600" /></div><div><p className="text-2xl font-bold">{records.length}</p><p className="text-sm text-gray-500">Tổng lịch tiêm</p></div></CardContent></Card>
-        <Card><CardContent className="p-4 flex items-center gap-4"><div className="p-3 rounded-full bg-green-100"><Syringe className="h-6 w-6 text-green-600" /></div><div><p className="text-2xl font-bold">{records.filter(r => r.status === 'DONE').length}</p><p className="text-sm text-gray-500">Đã tiêm</p></div></CardContent></Card>
-        <Card className="border-yellow-500"><CardContent className="p-4 flex items-center gap-4"><div className="p-3 rounded-full bg-yellow-100"><Syringe className="h-6 w-6 text-yellow-600" /></div><div><p className="text-2xl font-bold text-yellow-600">{dueCount}</p><p className="text-sm text-gray-500">Đến hạn</p></div></CardContent></Card>
-        <Card className="border-red-500"><CardContent className="p-4 flex items-center gap-4"><div className="p-3 rounded-full bg-red-100"><AlertTriangle className="h-6 w-6 text-red-600" /></div><div><p className="text-2xl font-bold text-red-600">{overdueCount}</p><p className="text-sm text-gray-500">Quá hạn</p></div></CardContent></Card>
+        <Card className="card-kpi">
+          <CardContent className="p-5 flex items-center gap-4">
+            <div className="p-3 rounded-xl bg-blue-100">
+              <Calendar className="h-6 w-6 text-blue-600" />
+            </div>
+            <div>
+              <p className="text-2xl font-semibold text-blue-600">{scheduledToday}</p>
+              <p className="text-sm text-[var(--text-secondary)]">Lịch tiêm hôm nay</p>
+            </div>
+          </CardContent>
+        </Card>
+        <Card className="card-kpi">
+          <CardContent className="p-5 flex items-center gap-4">
+            <div className="p-3 rounded-xl bg-amber-100">
+              <AlertCircle className="h-6 w-6 text-amber-600" />
+            </div>
+            <div>
+              <p className="text-2xl font-semibold text-amber-600">{reminderSent}</p>
+              <p className="text-sm text-[var(--text-secondary)]">Chờ xác nhận</p>
+            </div>
+          </CardContent>
+        </Card>
+        <Card className="card-kpi">
+          <CardContent className="p-5 flex items-center gap-4">
+            <div className="p-3 rounded-xl bg-purple-100">
+              <Syringe className="h-6 w-6 text-purple-600" />
+            </div>
+            <div>
+              <p className="text-2xl font-semibold text-purple-600">{vaccinations.length}</p>
+              <p className="text-sm text-[var(--text-secondary)]">Tổng ca tiêm</p>
+            </div>
+          </CardContent>
+        </Card>
       </div>
 
       {/* Search */}
-      <Card>
-        <CardContent className="p-4">
+      <Card className="card">
+        <CardContent className="p-4 flex items-center justify-between">
           <div className="relative max-w-md">
-            <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-gray-400" />
-            <Input placeholder="Tìm kiếm..." className="pl-10" value={searchQuery} onChange={(e) => setSearchQuery(e.target.value)} />
+            <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-[var(--text-tertiary)]" />
+            <Input
+              placeholder="Tìm theo tên, thú cưng, vaccine..."
+              className="pl-10 input"
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+            />
           </div>
+          <Button><Plus className="mr-2 h-4 w-4" />Thêm lịch tiêm</Button>
         </CardContent>
       </Card>
 
-      {/* Table */}
-      <Card>
+      {/* Vaccination List */}
+      <Card className="card">
         <CardContent className="p-0">
-          <div className="overflow-x-auto">
-            <table className="w-full">
-              <thead className="bg-gray-50">
-                <tr>
-                  <th className="px-4 py-3 text-left text-sm font-medium">Thú cưng</th>
-                  <th className="px-4 py-3 text-left text-sm font-medium">Khách hàng</th>
-                  <th className="px-4 py-3 text-left text-sm font-medium">Vaccine</th>
-                  <th className="px-4 py-3 text-left text-sm font-medium">Ngày tiêm</th>
-                  <th className="px-4 py-3 text-left text-sm font-medium">Mũi tiếp theo</th>
-                  <th className="px-4 py-3 text-left text-sm font-medium">Trạng thái</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y">
-                {filteredRecords.map(record => (
-                  <tr key={record.id} className="hover:bg-gray-50">
-                    <td className="px-4 py-3"><p className="font-medium">{record.petName}</p><p className="text-xs text-gray-500">{record.petType}</p></td>
-                    <td className="px-4 py-3">{record.customerName}</td>
-                    <td className="px-4 py-3"><p className="font-medium">{record.vaccineName}</p><p className="text-xs text-gray-500">Lô: {record.batchNumber}</p></td>
-                    <td className="px-4 py-3">{record.injectionDate}</td>
-                    <td className="px-4 py-3">{record.nextDueDate}</td>
-                    <td className="px-4 py-3">
-                      <Badge className={record.status === 'DONE' ? 'bg-green-100 text-green-700' : record.status === 'DUE' ? 'bg-yellow-100 text-yellow-700' : 'bg-red-100 text-red-700'}>
-                        {record.status === 'DONE' ? 'Đã tiêm' : record.status === 'DUE' ? 'Đến hạn' : 'Quá hạn'}
+          <div className="divide-y divide-[var(--border-subtle)]">
+            {filteredVaccinations.map(vaccination => (
+              <div key={vaccination.id} className={cn(
+                'p-5 transition-colors',
+                vaccination.status === 'IN_PROGRESS' && 'bg-blue-50/50 border-l-4 border-l-blue-500',
+                vaccination.status === 'COMPLETED' && 'bg-green-50/30'
+              )}>
+                <div className="flex items-start justify-between">
+                  <div className="flex-1">
+                    <div className="flex items-center gap-3 mb-2">
+                      <Syringe className="h-5 w-5 text-[var(--color-primary)]" />
+                      <h3 className="font-semibold text-[var(--text-primary)]">{vaccination.vaccineName}</h3>
+                      <Badge variant="secondary" className="bg-[var(--bg-tertiary)]">Mũi {vaccination.doseNumber}</Badge>
+                      <Badge className={
+                        vaccination.status === 'COMPLETED' ? 'bg-green-100 text-green-700' :
+                        vaccination.status === 'IN_PROGRESS' ? 'bg-blue-100 text-blue-700' :
+                        vaccination.status === 'REMINDER_SENT' ? 'bg-amber-100 text-amber-700' :
+                        'bg-gray-100 text-gray-700'
+                      }>
+                        {vaccination.status === 'COMPLETED' ? 'Hoàn tất' :
+                         vaccination.status === 'IN_PROGRESS' ? 'Đang tiêm' :
+                         vaccination.status === 'REMINDER_SENT' ? 'Chờ xác nhận' : 'Đã lên lịch'}
                       </Badge>
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
+                    </div>
+
+                    <div className="grid grid-cols-2 md:grid-cols-5 gap-4 text-sm">
+                      <div>
+                        <p className="text-[var(--text-tertiary)]">Thú cưng</p>
+                        <p className="font-medium text-[var(--text-primary)]">{vaccination.petName}</p>
+                        <p className="text-xs text-[var(--text-tertiary)]">{vaccination.petType} - {vaccination.petAge}</p>
+                      </div>
+                      <div>
+                        <p className="text-[var(--text-tertiary)]">Chủ nuôi</p>
+                        <p className="text-[var(--text-primary)]">{vaccination.customerName}</p>
+                        <p className="text-xs text-[var(--text-tertiary)]">{vaccination.customerPhone}</p>
+                      </div>
+                      <div>
+                        <p className="text-[var(--text-tertiary)]">Giờ tiêm</p>
+                        <p className="text-[var(--text-primary)]">{vaccination.time}</p>
+                      </div>
+                      <div>
+                        <p className="text-[var(--text-tertiary)]">Bác sĩ</p>
+                        <p className="text-[var(--text-primary)]">{vaccination.veterinarian}</p>
+                      </div>
+                      <div>
+                        <p className="text-[var(--text-tertiary)]">Lô vaccine</p>
+                        <p className="text-[var(--text-primary)] font-mono text-xs">{vaccination.vaccineBatch}</p>
+                      </div>
+                    </div>
+
+                    {vaccination.nextDoseDate && (
+                      <p className="mt-2 text-sm text-[var(--text-secondary)]">
+                        <span className="font-medium">Tiêm nhắc:</span> {vaccination.nextDoseDate}
+                      </p>
+                    )}
+
+                    {vaccination.notes && (
+                      <p className="mt-2 text-sm text-[var(--text-tertiary)] italic">
+                        Ghi chú: {vaccination.notes}
+                      </p>
+                    )}
+                  </div>
+
+                  <div className="flex gap-2 ml-4">
+                    {vaccination.status === 'SCHEDULED' && (
+                      <Button size="sm" className="bg-blue-600 hover:bg-blue-700">Bắt đầu tiêm</Button>
+                    )}
+                    {vaccination.status === 'IN_PROGRESS' && (
+                      <Button size="sm" className="bg-green-600 hover:bg-green-700">Hoàn tất tiêm</Button>
+                    )}
+                    {vaccination.status === 'REMINDER_SENT' && (
+                      <Button size="sm" variant="outline">Gửi lại nhắc</Button>
+                    )}
+                    {vaccination.status === 'COMPLETED' && (
+                      <Button size="sm" variant="outline">Xem chi tiết</Button>
+                    )}
+                  </div>
+                </div>
+              </div>
+            ))}
           </div>
         </CardContent>
       </Card>

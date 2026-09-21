@@ -377,6 +377,20 @@ body {
   transition: all 0.15s ease;
 }
 
+/* Force padding overrides when Tailwind utility classes are specified */
+.input.pl-8, input.pl-8 { padding-left: 2rem !important; }
+.input.pl-9, input.pl-9 { padding-left: 2.25rem !important; }
+.input.pl-10, input.pl-10 { padding-left: 2.5rem !important; }
+.input.pl-11, input.pl-11 { padding-left: 2.75rem !important; }
+.input.pl-12, input.pl-12 { padding-left: 3rem !important; }
+.input.pr-10, input.pr-10 { padding-right: 2.5rem !important; }
+.input.pr-12, input.pr-12 { padding-right: 3rem !important; }
+
+/* Allow clicking through search/prefix icons inside relative input wrappers */
+.relative > svg.absolute {
+  pointer-events: none;
+}
+
 .input:focus {
   outline: none;
   border-color: var(--color-primary);

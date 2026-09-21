@@ -1,4 +1,4 @@
-import { Bell, Settings, LogOut, Sun, Moon } from 'lucide-react';
+import { Bell, Settings, LogOut, Sun, Moon, PanelLeft, PanelLeftClose } from 'lucide-react';
 import { Button } from '../ui/button';
 import { useAdminSession } from '../../shared/stores/admin-session.store';
 import {
@@ -13,7 +13,12 @@ import { useNavigate } from 'react-router-dom';
 import { ROLE_LABELS } from '../../shared/types/admin';
 import { useState, useEffect } from 'react';
 
-export function AdminHeader() {
+export interface AdminHeaderProps {
+  collapsed?: boolean;
+  onToggleSidebar?: () => void;
+}
+
+export function AdminHeader({ collapsed, onToggleSidebar }: AdminHeaderProps) {
   const { user, logout } = useAdminSession();
   const navigate = useNavigate();
   const [isDark, setIsDark] = useState(false);
@@ -37,13 +42,22 @@ export function AdminHeader() {
   };
 
   return (
-    <header className="admin-header h-16 px-6 flex items-center justify-between">
-      <div className="flex items-center gap-4">
+    <header className="admin-header h-16 px-6 flex items-center justify-between border-b border-[var(--border-color)]">
+      <div className="flex items-center gap-3">
+        {onToggleSidebar && (
+          <button
+            onClick={onToggleSidebar}
+            className="p-2 rounded-xl text-[var(--text-secondary)] hover:text-[var(--text-primary)] hover:bg-[var(--bg-secondary)] transition-colors border border-[var(--border-color)] flex items-center justify-center"
+            title={collapsed ? "Mở rộng thanh menu" : "Thu gọn thanh menu"}
+          >
+            {collapsed ? <PanelLeft className="h-4 w-4" /> : <PanelLeftClose className="h-4 w-4" />}
+          </button>
+        )}
         <h2 className="text-base font-medium text-[var(--text-primary)]">
           Xin chào, <span className="font-semibold">{user?.name}</span>
         </h2>
         {user?.role && (
-          <span className="px-2.5 py-1 bg-blue-50 text-blue-600 text-xs font-medium rounded-full">
+          <span className="px-2.5 py-1 bg-blue-50 dark:bg-blue-950/50 text-blue-600 dark:text-blue-400 text-xs font-medium rounded-full">
             {ROLE_LABELS[user.role]}
           </span>
         )}
