@@ -236,6 +236,26 @@ public final class RoleScopeGuard {
     }
 
     /**
+     * RULE-05-01/06 — actor có được đọc dữ liệu Catalog (Product/Service master) của
+     * Organization này không: SUPER_ADMIN toàn quyền; ORGANIZATION_ADMIN/STORE_MANAGER chỉ
+     * đúng Organization của mình. Rộng hơn {@link #assertCanManageOrganization} (chỉ 2 role
+     * Admin) vì StoreManager cũng cần đọc danh mục gốc Organization để biết còn gì để cấu hình
+     * giá/khả dụng tại Store (RULE-05-05). Không dùng cho POST/PATCH — ManageProduct/
+     * ManageService chỉ ORGANIZATION_ADMIN (RULE-05-01), chặn ở {@code @PreAuthorize} Controller.
+     */
+    public static void assertCanViewOrganizationCatalog(UserPrincipal actor, java.util.UUID organizationId) {
+        if (actor.getRole() == UserRole.SUPER_ADMIN) {
+            return;
+        }
+        if ((actor.getRole() == UserRole.ORGANIZATION_ADMIN || actor.getRole() == UserRole.STORE_MANAGER)
+                && Objects.equals(actor.getOrganizationId(), organizationId)) {
+            return;
+        }
+        throw new AccessDeniedScopeException("ORGANIZATION:" + organizationId,
+                actor.getOrganizationId() == null ? actor.getRole().name() : "ORGANIZATION:" + actor.getOrganizationId());
+    }
+
+    /**
      * RULE-02-05 — dành riêng cho {@code ConfigureOperatingHour} ({@code PUT
      * /stores/{id}/operating-hours}, docs/api/org-store-v1.md — quyết định 2026-09-17): CHỈ
      * {@code STORE_MANAGER} đúng Store mình quản lý được gọi, khác hẳn {@link #assertCanManageStore}

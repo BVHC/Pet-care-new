@@ -141,4 +141,12 @@ public class StoreServiceImpl implements StoreService {
                 .map(storeMapper::toResponse);
         return PageResponse.of(page);
     }
+
+    @Override
+    @Transactional(readOnly = true)
+    public UUID getOrganizationIdForStore(UUID storeId) {
+        return storeRepository.findById(storeId)
+                .map(Store::getOrganizationId)
+                .orElseThrow(() -> new ResourceNotFoundException("Store", storeId));
+    }
 }

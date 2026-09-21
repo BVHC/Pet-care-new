@@ -18,4 +18,13 @@ public interface StoreService {
     StoreResponse getStore(UUID storeId, UserPrincipal actor);
 
     PageResponse<StoreResponse> listStores(UUID organizationId, UserPrincipal actor, Pageable pageable);
+
+    /**
+     * Tra cứu organizationId của Store cho module khác cần biết Store thuộc Org nào mà KHÔNG áp
+     * guard "quản trị Store" của {@link #getStore} (vd Module 05 Catalog RULE-05-06: Customer cần
+     * xem storefront tại Store nhưng {@code RoleScopeGuard#assertCanManageStore} không nhận role
+     * CUSTOMER). Không kiểm tra actor — caller tự chịu trách nhiệm authorization theo ngữ cảnh
+     * riêng của module gọi.
+     */
+    UUID getOrganizationIdForStore(UUID storeId);
 }
