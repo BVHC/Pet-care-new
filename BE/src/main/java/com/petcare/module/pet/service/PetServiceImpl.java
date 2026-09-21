@@ -2,6 +2,7 @@ package com.petcare.module.pet.service;
 
 import com.petcare.module.pet.dto.CreatePetRequest;
 import com.petcare.module.pet.dto.PetResponse;
+import com.petcare.module.pet.dto.TransferPetRequest;
 import com.petcare.module.pet.dto.UpdatePetRequest;
 import com.petcare.module.pet.entity.Pet;
 import com.petcare.module.pet.mapper.PetMapper;
@@ -34,6 +35,7 @@ public class PetServiceImpl implements PetService {
     private final UserProvisioningService users;
     private final OutboxEventRepository outbox;
     private final PetAccessGuard accessGuard;
+    private final CaregiverDelegationService caregiverDelegations;
 
     @Override
     @Transactional
@@ -109,6 +111,10 @@ public class PetServiceImpl implements PetService {
         if (req.avatarUrl() != null) {
             pet.setAvatarUrl(req.avatarUrl());
         }
+        if (req.status() != null) {
+            pet.setStatus(req.status()); // RULE-04-11 — DECEASED/TRANSFERRED là terminal, guard ở đầu method
+                                          // đã tự chặn mọi update tiếp theo, không cần enforce thêm ở đây.
+        }
         try {
             pet = pets.saveAndFlush(pet);
         } catch (ObjectOptimisticLockingFailureException ex) {
@@ -116,6 +122,41 @@ public class PetServiceImpl implements PetService {
         } catch (DataIntegrityViolationException ex) {
             throw new BusinessRuleViolationException("RULE-04-01", "Chủ sở hữu không hợp lệ");
         }
+        return mapper.toResponse(pet);
+    }
+
+    @Override
+    @Transactional
+    public PetResponse managePetOwnership(UUID me, UUID petId, TransferPetRequest req) {
+        Pet pet = pets.findById(petId).orElseThrow(() -> new ResourceNotFoundException("Pet", petId));
+        accessGuard.requirePrimaryOwner(me, pet); // RULE-04-04
+
+        UUID newOwnerId = req.newOwnerId();
+        if (newOwnerId.equals(pet.getOwnerId())) {
+            throw new BusinessRuleViolationException("RULE-04-10", "Pet đã thuộc quyền sở hữu của người dùng này");
+        }
+        users.findById(newOwnerId); // chủ mới phải tồn tại; 404 nếu không
+
+        UUID previousOwnerId = pet.getOwnerId();
+        pet.setOwnerId(newOwnerId);
+        try {
+            pet = pets.saveAndFlush(pet);
+        } catch (ObjectOptimisticLockingFailureException ex) {
+            throw new ConcurrencyConflictException("Pet", petId);
+        } catch (DataIntegrityViolationException ex) {
+            throw new BusinessRuleViolationException("RULE-04-01", "Chủ sở hữu không hợp lệ");
+        }
+
+        caregiverDelegations.revokeAllForOwnershipTransfer(petId, previousOwnerId); // RULE-04-10
+
+        OutboxEvent e = new OutboxEvent();
+        e.setAggregateType("Pet");
+        e.setAggregateId(pet.getId().toString());
+        e.setEventType("PetTransferred");
+        e.setPayload("{\"petId\":\"" + pet.getId() + "\",\"previousOwnerId\":\"" + previousOwnerId
+                + "\",\"newOwnerId\":\"" + newOwnerId + "\",\"transferredAt\":\"" + LocalDateTime.now() + "\"}");
+        outbox.save(e);
+
         return mapper.toResponse(pet);
     }
 }

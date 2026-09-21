@@ -19,6 +19,9 @@ public interface PetCaregiverDelegationRepository extends JpaRepository<PetCareg
     Optional<PetCaregiverDelegation> findFirstByPetIdAndCaregiverEmailAndStatusInOrderByCreatedAtDesc(
             UUID petId, String caregiverEmail, Collection<CaregiverStatus> statuses);
 
+    /** RULE-04-10 — toàn bộ delegation còn sống (INVITED/ACTIVE) của 1 pet, dùng khi ManagePetOwnership. */
+    List<PetCaregiverDelegation> findByPetIdAndStatusIn(UUID petId, Collection<CaregiverStatus> statuses);
+
     /**
      * "Ủy quyền còn hiệu lực" (spec D-08) — điều kiện này phải giống hệt điều kiện
      * trong PetRepository.findAccessibleBy. Sửa một chỗ thì sửa cả hai.

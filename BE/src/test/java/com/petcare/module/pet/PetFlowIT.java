@@ -10,7 +10,9 @@ import com.petcare.module.auth.repository.AccountRepository;
 import com.petcare.module.auth.repository.OtpRepository;
 import com.petcare.module.auth.service.AuthService;
 import com.petcare.module.iam.service.UserProvisioningService;
+import com.petcare.module.notification.entity.NotificationTask;
 import com.petcare.module.notification.gateway.EmailGateway;
+import com.petcare.module.notification.repository.NotificationTaskRepository;
 import com.petcare.platform.enums.OtpPurpose;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -72,6 +74,9 @@ class PetFlowIT {
 
     @Autowired
     private UserProvisioningService users;
+
+    @Autowired
+    private NotificationTaskRepository notificationTasks;
 
     @MockitoBean
     private EmailGateway emailGateway;
@@ -142,5 +147,106 @@ class PetFlowIT {
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("{\"name\":\"Hijacked\"}"))
                 .andExpect(status().isForbidden());
+    }
+
+    /** Khớp CaregiverFlowIT — đọc raw token từ notification_tasks vì B đã có tài khoản (spec D-02). */
+    private String capturedInvitationToken(UUID caregiverUserId) {
+        NotificationTask task = notificationTasks
+                .findTopByRecipientUserIdOrderByCreatedAtDesc(caregiverUserId).orElseThrow();
+        String marker = "Mã lời mời: ";
+        return task.getContent().substring(task.getContent().indexOf(marker) + marker.length()).trim();
+    }
+
+    /**
+     * RULE-04-10: A tạo pet -> mời B làm caregiver (ACTIVE) -> A chuyển chủ cho C ->
+     * C xem được pet (ownerId=C, status vẫn ACTIVE) -> delegation của B bị REVOKED ngay ->
+     * A (chủ cũ) mất quyền truy cập.
+     */
+    @Test
+    @Transactional
+    void transferOwnership_revokesOldOwnerCaregivers_endToEnd() throws Exception {
+        String emailA = "petowner-" + System.nanoTime() + "@example.com";
+        String emailB = "petcare-" + System.nanoTime() + "@example.com";
+        String emailC = "petnew-" + System.nanoTime() + "@example.com";
+        String tokenA = registerAndLogin(emailA);
+        String tokenB = registerAndLogin(emailB);
+        String tokenC = registerAndLogin(emailC);
+        String ownerC = ownerOf(emailC).toString();
+
+        MvcResult created = mvc.perform(post("/api/pets")
+                        .header("Authorization", "Bearer " + tokenA)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"name\":\"Mun\",\"species\":\"DOG\"}"))
+                .andExpect(status().isCreated())
+                .andReturn();
+        String petId = objectMapper.readTree(created.getResponse().getContentAsString())
+                .get("data").get("id").asText();
+
+        mvc.perform(post("/api/pets/{id}/caregiver-invitations", petId)
+                        .header("Authorization", "Bearer " + tokenA)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"caregiverEmail\":\"" + emailB + "\"}"))
+                .andExpect(status().isCreated());
+        String rawToken = capturedInvitationToken(ownerOf(emailB));
+        mvc.perform(post("/api/caregiver-invitations/{token}/accept", rawToken)
+                        .header("Authorization", "Bearer " + tokenB))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.status").value("ACTIVE"));
+
+        mvc.perform(post("/api/pets/{id}/transfer", petId)
+                        .header("Authorization", "Bearer " + tokenA)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"newOwnerId\":\"" + ownerC + "\"}"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.ownerId").value(ownerC))
+                .andExpect(jsonPath("$.data.status").value("ACTIVE"));
+
+        // RULE-04-10 — B mất quyền ngay lập tức, không đợi tick cron nào.
+        mvc.perform(get("/api/pets/{id}", petId)
+                        .header("Authorization", "Bearer " + tokenB))
+                .andExpect(status().isForbidden());
+
+        mvc.perform(get("/api/pets/{id}", petId)
+                        .header("Authorization", "Bearer " + tokenC))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.ownerId").value(ownerC));
+
+        // A (chủ cũ) không còn là Primary Owner -> mất quyền update.
+        mvc.perform(patch("/api/pets/{id}", petId)
+                        .header("Authorization", "Bearer " + tokenA)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"name\":\"Hijacked\"}"))
+                .andExpect(status().isForbidden());
+    }
+
+    /** RULE-04-11: đổi PetStatus qua UpdatePet, terminal state chặn mọi update sau đó. */
+    @Test
+    @Transactional
+    void updatePet_setStatusDeceased_thenRejectsFurtherUpdates() throws Exception {
+        String email = "petdeceased-" + System.nanoTime() + "@example.com";
+        String token = registerAndLogin(email);
+
+        MvcResult created = mvc.perform(post("/api/pets")
+                        .header("Authorization", "Bearer " + token)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"name\":\"Old Boy\",\"species\":\"CAT\"}"))
+                .andExpect(status().isCreated())
+                .andReturn();
+        String petId = objectMapper.readTree(created.getResponse().getContentAsString())
+                .get("data").get("id").asText();
+
+        mvc.perform(patch("/api/pets/{id}", petId)
+                        .header("Authorization", "Bearer " + token)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"status\":\"DECEASED\"}"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.status").value("DECEASED"));
+
+        mvc.perform(patch("/api/pets/{id}", petId)
+                        .header("Authorization", "Bearer " + token)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"name\":\"Should Not Apply\"}"))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.errorCode").value("BUSINESS_RULE_VIOLATION"));
     }
 }

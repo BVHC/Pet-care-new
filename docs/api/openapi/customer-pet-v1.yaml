@@ -1,12 +1,13 @@
 # Pet Care Customer & Pet API v1 — OpenAPI 3.1 (derived strictly from docs/)
 #
 # Source of truth: docs/01-business-operations.md (01#4),
-# docs/02-business-rules.md (RULE-04-01..09), docs/03-state-machines.md (FSM-3),
+# docs/02-business-rules.md (RULE-04-01..11), docs/03-state-machines.md (FSM-3),
 # docs/04-glossary.md (04), docs/05-domain-model.md (4.4),
 # docs/06-erd.md (pets/pet_caregiver_delegations).
 # ManageCustomerProfile lives in iam-v1.yaml and is NOT redefined here.
 # PerformDelegatedAction is a cross-cutting guard (no endpoint).
-# Expiry jobs are system-internal (no endpoints). Pet DECEASED handling is TBD (no ERD column, no op).
+# Expiry jobs are system-internal (no endpoints). Pet DECEASED/TRANSFERRED handling
+# is CONFIRMED implemented via PATCH /pets/{id} `status` field (RULE-04-11).
 #
 # Traceability legend: CONFIRMED = in docs / ASSUMPTION (A#) = least invention /
 # TBD (Q#) = needs PO (see ../customer-pet-v1.md section E). No `servers` (TBD Q1).
@@ -17,7 +18,7 @@ info:
   title: Pet Care Customer and Pet API v1
   version: 1.0.0
   description: >-
-    Strictly derived from docs/ (01#4 operations, RULE-04-01..09, FSM-3
+    Strictly derived from docs/ (01#4 operations, RULE-04-01..11, FSM-3
     INVITED->ACTIVE/REJECTED/EXPIRED and ACTIVE->REVOKED/EXPIRED). Invitations
     expire after 7 days (CONFIRMED). Only the primary owner invites, revokes,
     edits core identity, or transfers ownership. Caregiver scope violations use
@@ -171,7 +172,11 @@ paths:
     patch:
       tags: [Pets]
       summary: Update pet (UpdatePet)
-      description: CONFIRMED (RULE-04-03/04). Core identity fields are primary-owner-only; the server enforces field-level authorization.
+      description: >-
+        CONFIRMED (RULE-04-03/04/11). Core identity fields are primary-owner-only; the
+        server enforces field-level authorization. Optional `status` field lets the
+        Primary Owner set DECEASED/TRANSFERRED (terminal — blocks all further PATCH
+        until the pet is ACTIVE again, which this endpoint cannot do).
       operationId: updatePet
       security:
         - bearerAuth: []
@@ -206,7 +211,13 @@ paths:
     post:
       tags: [Pets]
       summary: Transfer ownership (ManagePetOwnership)
-      description: CONFIRMED (RULE-04-01/03). Primary owner only. New-owner identification TBD Q6; old delegations are kept until the new owner revokes (PROPOSED, TBD Q7).
+      description: >-
+        CONFIRMED (RULE-04-10). Primary owner only; transferring to the pet's current
+        owner is rejected (400 RULE-04-10). New owner identified by `newOwnerId` (UUID),
+        no confirmation flow (closed Q6). All of the previous owner's INVITED/ACTIVE
+        PetCaregiverDelegation rows are automatically revoked in the same transaction
+        (closed Q7, supersedes the earlier PROPOSED "kept" decision). PetStatus stays
+        ACTIVE — this never sets TRANSFERRED (that's RULE-04-11's separate concept).
       operationId: transferPet
       security:
         - bearerAuth: []
@@ -230,7 +241,7 @@ paths:
         '401':
           $ref: '#/components/responses/Unauthorized'
         '403':
-          description: Non-primary-owner (CONFIRMED boundary, RULE-04-01).
+          description: Non-primary-owner (CONFIRMED boundary, RULE-04-04).
           content:
             application/json:
               schema:
@@ -415,9 +426,13 @@ components:
       type: string
       enum: [INVITED, ACTIVE, REJECTED, EXPIRED, REVOKED]
       description: CONFIRMED (FSM-3, 04 glossary).
+    PetStatus:
+      type: string
+      enum: [ACTIVE, DECEASED, TRANSFERRED]
+      description: CONFIRMED (RULE-04-11). DECEASED/TRANSFERRED là terminal — chặn mọi PATCH tiếp theo.
     PetResponse:
       type: object
-      required: [petId, ownerId, name, species, isActive]
+      required: [petId, ownerId, name, species, status]
       properties:
         petId:
           type: string
@@ -440,8 +455,10 @@ components:
           type: number
         microchipNumber:
           type: string
-        isActive:
-          type: boolean
+        avatarUrl:
+          type: string
+        status:
+          $ref: '#/components/schemas/PetStatus'
     PetPage:
       type: object
       required: [items, page, pageSize, total]
@@ -501,6 +518,11 @@ components:
           type: number
         microchipNumber:
           type: string
+        status:
+          $ref: '#/components/schemas/PetStatus'
+          description: >-
+            CONFIRMED (RULE-04-11). Chỉ Primary Owner đổi được, chỉ khi Pet đang ACTIVE;
+            chỉ cho phép chuyển sang DECEASED/TRANSFERRED (terminal).
     TransferPetRequest:
       type: object
       required: [newOwnerId]
@@ -508,7 +530,7 @@ components:
         newOwnerId:
           type: string
           format: uuid
-          description: PROPOSED identification; confirmation flow TBD Q6.
+          description: CONFIRMED (RULE-04-10) — new owner's user id trực tiếp, không cần xác nhận (đóng Q6).
     CounterSearchResponse:
       type: object
       required: [customers, pets]

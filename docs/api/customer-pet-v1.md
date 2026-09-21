@@ -4,7 +4,7 @@
 > sở hữu, ủy quyền Caregiver (FSM-3). `ManageCustomerProfile` đã nằm ở
 > [`iam-v1.md`](./iam-v1.md) (self + quầy), không định nghĩa lại ở đây.
 > **Nguồn chân lý:** `docs/01-business-operations.md` (`01#4`), `docs/02-business-rules.md`
-> (RULE-04-01→09), `docs/03-state-machines.md` (FSM-3 Caregiver), `docs/04-glossary.md`
+> (RULE-04-01→11), `docs/03-state-machines.md` (FSM-3 Caregiver), `docs/04-glossary.md`
 > (`04`), `docs/05-domain-model.md` (`4.4`), `docs/06-erd.md` (`pets`/
 > `pet_caregiver_delegations`).
 > **Contract máy đọc:** [`./openapi/customer-pet-v1.yaml`](./openapi/customer-pet-v1.yaml).
@@ -20,10 +20,12 @@ Envelope DECIDED theo convention `04-exception-handling`.
   không phải endpoint — các module khác enforce.
 - `ProcessInvitationExpiry` / `ProcessDelegationExpiry` là system-internal (job nền),
   không expose API (như `ExpireOTP`).
-- Trạng thái Pet `DECEASED`/`TRANSFERRED` (glossary `PetStatus`) không có cột ERD
-  (`pets` chỉ có `is_active`) và không có op xử lý pet chết → TBD Q8, loại khỏi v1.
-- `ManagePetOwnership` v1 chỉ bao phủ chuyển giao sở hữu (`TRANSFERRED` theo nghĩa
-  đổi chủ, giữ nguyên bản ghi Pet).
+- Trạng thái Pet `DECEASED`/`TRANSFERRED` (`PetStatus` enum, cột `pets.status`) —
+  **CONFIRMED implemented** qua `PATCH /pets/{id}` (field `status`, RULE-04-11).
+  Đóng Q4/Q8.
+- `ManagePetOwnership` (`POST /pets/{id}/transfer`) chỉ đổi `owner_id` nội bộ —
+  `PetStatus` giữ nguyên `ACTIVE`, KHÔNG chuyển sang `TRANSFERRED` (RULE-04-10, phân
+  định rạch ròi với PetStatus.TRANSFERRED ở RULE-04-11 — 2 khái niệm độc lập).
 
 ---
 
@@ -35,7 +37,7 @@ Envelope DECIDED theo convention `04-exception-handling`.
 | 2 | `GET /pets` | (list pets thuộc quyền) |
 | 3 | `GET /pets/{id}` | `ViewPet` — `01#4`, RULE-04-09 |
 | 4 | `PATCH /pets/{id}` | `UpdatePet` — `01#4`, RULE-04-03/04 |
-| 5 | `POST /pets/{id}/transfer` | `ManagePetOwnership` (chuyển giao sở hữu) — `01#4`, RULE-04-01/03 |
+| 5 | `POST /pets/{id}/transfer` | `ManagePetOwnership` (chuyển giao sở hữu) — `01#4`, RULE-04-10 |
 | 6 | `GET /pets/search` | `SearchCustomerPet` (receptionist tra cứu) — `01#4`, RULE-04-02 |
 | 7 | `POST /pets/{id}/caregiver-invitations` | `InviteCaregiver` (→ INVITED, TTL 7d) — `01#4`, RULE-04-04/05, FSM-3 |
 | 8 | `POST /caregiver-invitations/{token}/accept` | `AcceptCaregiverInvitation` (→ ACTIVE) — `01#4`, RULE-04-05/06, FSM-3 |
@@ -50,8 +52,8 @@ Envelope DECIDED theo convention `04-exception-handling`.
 |---|---|---|---|---|---|---|---|---|---|---|
 | AddPet | Customer / Receptionist | Gắn với Customer sở hữu hợp lệ | RULE-04-01/03 | POST | `/pets` | Bearer | Owner (hoặc receptionist tại quầy) | `[*] → ACTIVE` (pet mới; A1 — docs không nêu state khởi tạo) | 409 nếu trùng microchip (A2) | Species/breed/dob/gender bắt buộc theo ERD (gender default UNKNOWN) |
 | ViewPet | Customer / Caregiver / Receptionist | Quyền xem | RULE-04-09 (caregiver trong phạm vi) | GET | `/pets`, `/pets/{id}` | Bearer | Owner / active-caregiver / receptionist | none | Idempotent | Caregiver ngoài phạm vi → `UNAUTHORIZED_DELEGATED_ACTION` |
-| UpdatePet | Customer (/Receptionist hỗ trợ) | Pet tồn tại | RULE-04-03 (core identity chỉ Primary Owner), RULE-04-04 (caregiver cấm sửa core) | PATCH | `/pets/{id}` | Bearer | Field-level theo actor (server enforce) | none | Idempotent | Core = species/breed/dob/gender CONFIRMED |
-| ManagePetOwnership | Primary Owner | Pet + chủ mới hợp lệ | RULE-04-01/03 | POST | `/pets/{id}/transfer` | Bearer | Chỉ Primary Owner | (chủ đổi; mọi delegation cũ? TBD Q7) | Idempotent | Cơ chế xác định chủ mới TBD Q6 |
+| UpdatePet | Customer (/Receptionist hỗ trợ) | Pet tồn tại và đang `ACTIVE` | RULE-04-03 (core identity chỉ Primary Owner), RULE-04-04 (caregiver cấm sửa core), RULE-04-11 (`status` → `DECEASED`/`TRANSFERRED`, terminal) | PATCH | `/pets/{id}` | Bearer | Field-level theo actor (server enforce) | `ACTIVE → DECEASED` / `ACTIVE → TRANSFERRED` (terminal, chặn mọi update sau đó — `400 RULE-04-11`) | Idempotent khi không đổi status | Core = species/breed/dob/gender CONFIRMED; `status` optional field CONFIRMED |
+| ManagePetOwnership | Primary Owner | Pet + chủ mới hợp lệ | RULE-04-10 | POST | `/pets/{id}/transfer` | Bearer | Chỉ Primary Owner | Đổi `owner_id`, `PetStatus` giữ ACTIVE; toàn bộ delegation `INVITED`/`ACTIVE` của chủ cũ tự động `REVOKED` (CONFIRMED, đóng Q7) | Không idempotent — transfer cho chính chủ hiện tại bị từ chối `400 RULE-04-10` | Chủ mới xác định bằng `newOwnerId` UUID trực tiếp, không cần xác nhận (CONFIRMED, đóng Q6) |
 | SearchCustomerPet | Receptionist | Tại quầy | RULE-04-02 (theo SĐT/CCCD/mã Pet/mã Customer) | GET | `/pets/search` | Bearer | `RECEPTIONIST` | none | Idempotent | Params PROPOSED (Q9) |
 | InviteCaregiver | Primary Owner | Là chủ chính | RULE-04-01/04/05 | POST | `/pets/{id}/caregiver-invitations` | Bearer | Chỉ Primary Owner (`CanInviteCaregiver` invariant) | `[*] → INVITED` + `CaregiverInvited` (`expires_at = +7d` CONFIRMED) | 409 nếu đã có ACTIVE delegation cho caregiver đó (derived) | `caregiver_user_id` NULL được (mời bằng SĐT, ERD CONFIRMED) |
 | Accept/RejectCaregiverInvitation | Caregiver | Lời mời còn `INVITED` + hạn | RULE-04-05/06 | POST | `/caregiver-invitations/{token}/accept`, `…/reject` | Bearer | Đúng người được mời (khớp SĐT, A3) | `INVITED → ACTIVE` / `→ REJECTED` | Idempotent (đã ACTIVE vẫn 200) | Kích hoạt trực tiếp ACTIVE, không duyệt trung gian (FSM-3 note) |
@@ -69,8 +71,9 @@ CONFIRMED tồn tại nhưng độ dài mặc định TBD Q5 — PROPOSED: mời
 
 ## C. Detailed endpoint contract
 
-> **Phạm vi v1 (Pets CRUD — implemented):** chỉ C1 trừ `POST /pets/{id}/transfer`.
-> `transfer` (C1) + toàn bộ C2 (search) = **OUT v1**
+> **Phạm vi v1 (Pets CRUD — implemented):** toàn bộ C1, bao gồm cả
+> `POST /pets/{id}/transfer` (implemented 2026-09-21, RULE-04-10) và field `status`
+> của `PATCH /pets/{id}` (RULE-04-11). Toàn bộ C2 (search) vẫn **OUT v1**
 > (theo plan `docs/superpowers/plans/2026-09-14-pets-crud.md` Global Constraints;
 > receptionist tạo hộ cũng OUT).
 
@@ -91,10 +94,17 @@ CONFIRMED tồn tại nhưng độ dài mặc định TBD Q5 — PROPOSED: mời
 - **`PATCH /pets/{id}`** — Field-level CONFIRMED: core identity (species/breed/dob/gender)
   + transfer chỉ Primary Owner; caregiver gọi với core fields → `403`
   (`UNAUTHORIZED_DELEGATED_ACTION`); receptionist sửa thông tin phi-core tại quầy.
+  Field `status?` (CONFIRMED, RULE-04-11) — Primary Owner đổi Pet sang `DECEASED` hoặc
+  `TRANSFERRED`; cả 2 là terminal, mọi `PATCH` sau đó (kể cả field khác) bị từ chối
+  `400 RULE-04-11` cho tới khi nào Pet còn `ACTIVE`.
   Status: `200` · `400` · `401` · `403` · `404`.
-- **`POST /pets/{id}/transfer`** — **OUT v1.** Request `{newOwnerId (PROPOSED; cách xác định chủ
-  mới TBD Q6)}`. Chỉ Primary Owner. Response `200 {petId, ownerId}`.
-  Delegations cũ khi đổi chủ: TBD Q7 (PROPOSED: giữ nguyên cho đến khi chủ mới revoke).
+- **`POST /pets/{id}/transfer`** — **Implemented** (RULE-04-10). Request
+  `{newOwnerId}` (UUID, CONFIRMED — đóng Q6, không cần chủ mới xác nhận). Chỉ Primary
+  Owner; transfer cho chính chủ hiện tại → `400 RULE-04-10`. Response `200 PetResponse`
+  (`ownerId` đã đổi, `status` giữ nguyên `ACTIVE`).
+  Toàn bộ `PetCaregiverDelegation` đang `INVITED`/`ACTIVE` của chủ cũ tự động chuyển
+  `REVOKED` ngay lập tức, cùng transaction (CONFIRMED — đóng Q7, ghi đè quyết định
+  PROPOSED "giữ nguyên" trước đây; RULE-04-10 + RHD-01 là nguồn chân lý).
 
 ### C2. Counter search — OUT v1 (proposed)
 
@@ -142,11 +152,11 @@ CONFIRMED tồn tại nhưng độ dài mặc định TBD Q5 — PROPOSED: mời
 | Q1 | Base URL + versioning | TBD (PO, chung) | — |
 | Q2 | Envelope | DECIDED theo convention | convention |
 | Q3 | State khởi tạo Pet (A1) | TBD (PO) — ERD chỉ có `is_active` | ERD vs glossary `PetStatus` |
-| Q4 | Xử lý pet chết (`DECEASED`): op nào, cột nào? | TBD (PO) — loại khỏi v1 | glossary có enum, ERD+ops không có |
+| Q4 | Xử lý pet chết (`DECEASED`): op nào, cột nào? | ĐÓNG (RULE-04-11: qua `PATCH /pets/{id}` field `status`, cột `pets.status`) | glossary có enum, nay đã có op + cột |
 | Q5 | `DelegationValidityPeriod` mặc định bao lâu? `validUntil?` có cho truyền không? | ĐÓNG (D-03: validUntil tùy chọn, NULL = vô thời hạn) | docs nêu tên, thiếu số |
-| Q6 | `transfer` xác định chủ mới bằng gì (userId/phone)? Chủ mới có phải xác nhận không? | TBD (PO) | docs không chi tiết |
-| Q7 | Delegations cũ khi đổi chủ: giữ hay hủy? | TBD (PO) — PROPOSED giữ | docs không nêu |
-| Q8 | Xem Q4 (DECEASED) | TBD (PO) | — |
+| Q6 | `transfer` xác định chủ mới bằng gì (userId/phone)? Chủ mới có phải xác nhận không? | ĐÓNG (RULE-04-10: `newOwnerId` UUID trực tiếp, không cần xác nhận) | implemented 2026-09-21 |
+| Q7 | Delegations cũ khi đổi chủ: giữ hay hủy? | ĐÓNG (RULE-04-10 + RHD-01: tự động `REVOKED` toàn bộ `INVITED`/`ACTIVE` của chủ cũ) | implemented 2026-09-21, thay thế PROPOSED "giữ" trước đây |
+| Q8 | Xem Q4 (DECEASED) | ĐÓNG — xem Q4 | — |
 | Q9 | Tên param search (`phone/citizenId/petCode/customerCode`) | TBD (BE) — PROPOSED | RULE-04-02 cho tiêu chí, thiếu tên |
 | Q10 | Microchip unique toàn hệ thống (A2)? | TBD (PO) | ERD không UK |
 | Q11 | Receptionist có `GET /pets` list-all không hay chỉ search? | TBD (PO) — PROPOSED chỉ search | RULE-04-02 (tra cứu theo tiêu chí) |

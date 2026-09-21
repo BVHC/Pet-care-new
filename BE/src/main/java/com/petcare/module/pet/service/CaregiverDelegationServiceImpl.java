@@ -30,6 +30,7 @@ import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
 import java.security.SecureRandom;
 import java.time.LocalDateTime;
+import java.util.ArrayList;
 import java.util.Base64;
 import java.util.HexFormat;
 import java.util.List;
@@ -184,6 +185,25 @@ public class CaregiverDelegationServiceImpl implements CaregiverDelegationServic
         delegation.setStatus(CaregiverStatus.REVOKED); // RULE-04-08 — hiệu lực tức thì
         writeOutbox(petId, "CaregiverRevoked", delegation.getId());
         return mapper.toDelegationResponse(delegation);
+    }
+
+    @Override
+    @Transactional
+    public List<CaregiverDelegationResponse> revokeAllForOwnershipTransfer(UUID petId, UUID previousOwnerId) {
+        List<PetCaregiverDelegation> live = delegations.findByPetIdAndStatusIn(petId,
+                List.of(CaregiverStatus.INVITED, CaregiverStatus.ACTIVE));
+
+        List<CaregiverDelegationResponse> revoked = new ArrayList<>();
+        for (PetCaregiverDelegation d : live) {
+            if (!d.getPrimaryOwnerId().equals(previousOwnerId)) {
+                continue; // defensive — chỉ đụng vào delegation của đúng chủ cũ
+            }
+            transitions.validateTransition(d.getStatus(), CaregiverStatus.REVOKED);
+            d.setStatus(CaregiverStatus.REVOKED);
+            writeOutbox(petId, "CaregiverRevoked", d.getId());
+            revoked.add(mapper.toDelegationResponse(d));
+        }
+        return revoked;
     }
 
     void writeOutbox(UUID petId, String eventType, UUID delegationId) {

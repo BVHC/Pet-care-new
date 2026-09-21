@@ -1,9 +1,14 @@
 package com.petcare.module.pet.controller;
 
+import com.fasterxml.jackson.databind.ObjectMapper;
+import com.petcare.module.pet.dto.PetResponse;
+import com.petcare.module.pet.dto.TransferPetRequest;
+import com.petcare.module.pet.dto.UpdatePetRequest;
 import com.petcare.module.pet.service.PetService;
 import com.petcare.platform.config.CorsConfig;
 import com.petcare.platform.config.SecurityConfig;
 import com.petcare.platform.enums.AccountStatus;
+import com.petcare.platform.enums.PetStatus;
 import com.petcare.platform.enums.SecurityScope;
 import com.petcare.platform.enums.UserRole;
 import com.petcare.platform.exception.AccessDeniedScopeException;
@@ -29,10 +34,13 @@ import java.util.UUID;
 
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 import static org.springframework.security.test.web.servlet.request.SecurityMockMvcRequestPostProcessors.authentication;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.patch;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
+import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
 @WebMvcTest(PetController.class)
@@ -43,6 +51,9 @@ class PetControllerTest {
 
     @Autowired
     MockMvc mvc;
+
+    @Autowired
+    ObjectMapper objectMapper;
 
     @MockitoBean
     PetService svc;
@@ -106,5 +117,49 @@ class PetControllerTest {
 
         mvc.perform(get("/api/pets"))
                 .andExpect(status().isUnauthorized());
+    }
+
+    @Test
+    void transfer_authenticated_delegatesToService() throws Exception {
+        UUID me = UUID.randomUUID();
+        UUID id = UUID.randomUUID();
+        UUID newOwnerId = UUID.randomUUID();
+        PetResponse response = new PetResponse(id, newOwnerId, "Milo", "DOG", null, null,
+                null, null, null, null, PetStatus.ACTIVE);
+        when(svc.managePetOwnership(eq(me), eq(id), any(TransferPetRequest.class))).thenReturn(response);
+
+        mvc.perform(post("/api/pets/{id}/transfer", id)
+                        .with(authentication(auth(me)))
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(new TransferPetRequest(newOwnerId))))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.ownerId").value(newOwnerId.toString()));
+
+        verify(svc).managePetOwnership(eq(me), eq(id), any(TransferPetRequest.class));
+    }
+
+    @Test
+    void transfer_missingNewOwnerId_400() throws Exception {
+        mvc.perform(post("/api/pets/{id}/transfer", UUID.randomUUID())
+                        .with(authentication(auth(UUID.randomUUID())))
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{}"))
+                .andExpect(status().isBadRequest());
+    }
+
+    @Test
+    void update_withStatusField_delegatesToService() throws Exception {
+        UUID me = UUID.randomUUID();
+        UUID id = UUID.randomUUID();
+        PetResponse response = new PetResponse(id, me, "Milo", "DOG", null, null,
+                null, null, null, null, PetStatus.DECEASED);
+        when(svc.update(eq(me), eq(id), any(UpdatePetRequest.class))).thenReturn(response);
+
+        mvc.perform(patch("/api/pets/{id}", id)
+                        .with(authentication(auth(me)))
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"status\":\"DECEASED\"}"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.status").value("DECEASED"));
     }
 }
