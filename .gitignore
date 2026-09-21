@@ -55,6 +55,7 @@ out/
 .ua/
 .claude/
 .planning/
+docs/superpowers/
 
 # ==============================================================================
 # Environment & Secrets (NEVER commit secrets or real credentials)
