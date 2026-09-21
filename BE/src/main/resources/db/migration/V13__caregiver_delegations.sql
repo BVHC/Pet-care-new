@@ -1,6 +1,7 @@
--- V5: Caregiver delegation (M04, FSM-3) — bổ sung cột audit khớp platform.model.BaseEntity
--- (bảng V1 thiếu cả created_at), đổi định danh lời mời sang email theo RULE-01-10
--- (xem spec D-01), và thêm valid_until cho RULE-04-07 (spec D-03).
+-- V13 (đổi số từ V5 gốc — trùng version với V5__organization_audit_columns.sql khi merge
+-- PR #4/manh, xem V12 cho V4 cùng lý do): Caregiver delegation (M04, FSM-3) — bổ sung cột
+-- audit khớp platform.model.BaseEntity (bảng V1 thiếu cả created_at), đổi định danh lời mời
+-- sang email theo RULE-01-10 (xem spec D-01), và thêm valid_until cho RULE-04-07 (spec D-03).
 -- Bảng chưa từng có code nào ghi vào nên rỗng trên mọi môi trường — đổi cột an toàn.
 ALTER TABLE pet_caregiver_delegations
     ADD COLUMN caregiver_email VARCHAR(100) NOT NULL,

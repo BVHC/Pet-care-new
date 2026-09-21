@@ -1,11 +1,8 @@
 package com.petcare.platform.exception;
 
-<<<<<<< HEAD
+import com.fasterxml.jackson.databind.exc.InvalidFormatException;
 import com.petcare.module.pet.exception.CaregiverInvitationConflictException;
 import com.petcare.module.pet.exception.UnauthorizedDelegatedActionException;
-=======
-import com.fasterxml.jackson.databind.exc.InvalidFormatException;
->>>>>>> 1c587b4 (feat: triển khai module organization)
 import com.petcare.platform.model.ErrorResponse;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -131,19 +128,6 @@ public class GlobalExceptionHandler {
     }
 
     /**
-<<<<<<< HEAD
-<<<<<<< HEAD
-     * Lỗi ngoài dự kiến: stacktrace đi vào log kèm traceId, client chỉ nhận một
-     * câu chung. Trả ex.getMessage() ra ngoài từng làm lộ nguyên câu SQL, tên
-     * bảng/constraint và cả số điện thoại của tài khoản khác khi vỡ UNIQUE.
-     */
-    @ExceptionHandler(Exception.class)
-    public ResponseEntity<ErrorResponse> handleGeneric(Exception ex) {
-        log.error("Unhandled exception traceId={}", MDC.get("traceId"), ex);
-        return build(HttpStatus.INTERNAL_SERVER_ERROR, "INTERNAL_SERVER_ERROR",
-                "Đã xảy ra lỗi hệ thống, vui lòng thử lại sau.");
-=======
-=======
      * Bean Validation (`@Valid`/`MethodArgumentNotValidException`) chỉ chạy SAU khi Jackson đã
      * deserialize xong request body — 1 giá trị enum sai (vd `{"facilityType":"FOO"}`,
      * `{"role":"UNKNOWN_ROLE"}`) làm Jackson ném lỗi ngay lúc đọc JSON, trước khi `@Valid` kịp
@@ -183,7 +167,6 @@ public class GlobalExceptionHandler {
     }
 
     /**
->>>>>>> 1c587b4 (feat: triển khai module organization)
      * Exception ngoài dự kiến (không map vào handler cụ thể nào ở trên) — KHÔNG
      * trả ex.getMessage() cho client (có thể lộ chi tiết nội bộ: SQL, stacktrace
      * message...). Log đầy đủ kèm traceId ở server để tra cứu khi cần.
@@ -193,8 +176,7 @@ public class GlobalExceptionHandler {
         String traceId = MDC.get("traceId");
         log.error("Unhandled exception (traceId={})", traceId, ex);
         return build(HttpStatus.INTERNAL_SERVER_ERROR, "INTERNAL_SERVER_ERROR",
-                "Đã xảy ra lỗi hệ thống, vui lòng thử lại sau");
->>>>>>> 8bfc5bd (feat: triển khai module iam)
+                "Đã xảy ra lỗi hệ thống, vui lòng thử lại sau.");
     }
 
     private ResponseEntity<ErrorResponse> build(HttpStatus status, String errorCode, String message) {
