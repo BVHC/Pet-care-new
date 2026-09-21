@@ -1,4 +1,5 @@
--- V4: bổ sung audit columns cho pets khớp platform.model.BaseEntity (accounts/users đã đủ ở V1).
+-- V12 (đổi số từ V4 gốc — trùng version với V4__seed_iam_roles.sql khi merge PR #4/manh):
+-- bổ sung audit columns cho pets khớp platform.model.BaseEntity (accounts/users đã đủ ở V1).
 ALTER TABLE pets
     ADD COLUMN updated_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
     ADD COLUMN created_by UUID REFERENCES accounts(id),

@@ -19,6 +19,7 @@ import com.petcare.platform.enums.OtpPurpose;
 import com.petcare.platform.exception.AccountLockedException;
 import com.petcare.platform.exception.BusinessRuleViolationException;
 import com.petcare.platform.exception.InvalidCredentialsException;
+import com.petcare.platform.exception.InvalidStateTransitionException;
 import com.petcare.platform.exception.InvalidRefreshTokenException;
 import com.petcare.platform.security.token.RefreshTokenRepository;
 import org.junit.jupiter.api.Test;
@@ -152,7 +153,11 @@ class AuthFlowIT {
             tasks.add(() -> {
                 try {
                     return Optional.of(authService.verifyOtp(new VerifyOtpRequest(email, correctCode)).getStatus());
-                } catch (BusinessRuleViolationException ex) {
+                } catch (BusinessRuleViolationException | InvalidStateTransitionException ex) {
+                    // Race thua cuộc: request đến sau khi Account đã ACTIVE có thể nhận
+                    // BusinessRuleViolationException (OTP đã dùng) HOẶC InvalidStateTransitionException
+                    // (account không còn PENDING_VERIFICATION) tuỳ thời điểm chính xác 2 thread
+                    // đan xen — cả 2 đều là "đã thua cuộc", không phải lỗi thật.
                     return Optional.empty();
                 }
             });

@@ -1,14 +1,11 @@
 package com.petcare.module.auth.controller;
 
-<<<<<<< HEAD
-import com.petcare.module.auth.dto.ForgotPasswordRequest;
-import com.petcare.module.auth.dto.ForgotPasswordResponse;
-=======
 import com.petcare.module.auth.dto.CreateCustomerRequest;
 import com.petcare.module.auth.dto.CreateCustomerResponse;
 import com.petcare.module.auth.dto.CreateStaffRequest;
 import com.petcare.module.auth.dto.CreateStaffResponse;
->>>>>>> 8bfc5bd (feat: triển khai module iam)
+import com.petcare.module.auth.dto.ForgotPasswordRequest;
+import com.petcare.module.auth.dto.ForgotPasswordResponse;
 import com.petcare.module.auth.dto.LoginRequest;
 import com.petcare.module.auth.dto.LoginResponse;
 import com.petcare.module.auth.dto.LogoutRequest;

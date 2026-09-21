@@ -1,13 +1,10 @@
 package com.petcare.module.auth.service;
 
-<<<<<<< HEAD
-import com.petcare.module.auth.dto.ForgotPasswordRequest;
-=======
 import com.petcare.module.auth.dto.CreateCustomerRequest;
 import com.petcare.module.auth.dto.CreateCustomerResponse;
 import com.petcare.module.auth.dto.CreateStaffRequest;
 import com.petcare.module.auth.dto.CreateStaffResponse;
->>>>>>> 8bfc5bd (feat: triển khai module iam)
+import com.petcare.module.auth.dto.ForgotPasswordRequest;
 import com.petcare.module.auth.dto.LoginRequest;
 import com.petcare.module.auth.dto.LoginResponse;
 import com.petcare.module.auth.dto.LogoutRequest;
@@ -52,7 +49,6 @@ import org.springframework.orm.ObjectOptimisticLockingFailureException;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
-import org.springframework.util.StringUtils;
 
 import java.security.SecureRandom;
 import java.time.LocalDateTime;
@@ -102,18 +98,8 @@ public class AuthServiceImpl implements AuthService {
             throw new BusinessRuleViolationException("RULE-01-09",
                     "Mật khẩu phải có ít nhất " + PASSWORD_MIN_LENGTH + " ký tự");
         }
-<<<<<<< HEAD
-        if (accountRepository.existsByEmail(request.email())) {
-            throw new BusinessRuleViolationException("RULE-01-10", EMAIL_TAKEN);
-        }
-        // phone là optional nhưng UNIQUE ở DB — thiếu pre-check thì lỗi rơi xuống
-        // constraint và trả 500 kèm nguyên câu SQL cho client.
-        if (StringUtils.hasText(request.phone()) && accountRepository.existsByPhone(request.phone())) {
-            throw new BusinessRuleViolationException("RULE-01-10", PHONE_TAKEN);
-=======
         if (accountRepository.existsByEmail(email)) {
-            throw new BusinessRuleViolationException("RULE-01-10", "Email đã được sử dụng");
->>>>>>> 1c587b4 (feat: triển khai module organization)
+            throw new BusinessRuleViolationException("RULE-01-10", EMAIL_TAKEN);
         }
         if (hasPhone(request.phone()) && accountRepository.existsByPhone(request.phone())) {
             throw new BusinessRuleViolationException("RULE-01-10", "Số điện thoại đã được sử dụng");
@@ -129,11 +115,7 @@ public class AuthServiceImpl implements AuthService {
             // §5.1 Concurrency: 2 request register cùng email/phone gần như đồng thời —
             // pre-check ở trên có thể đều thấy "chưa tồn tại" (race). UNIQUE constraint ở
             // DB là guard thật; request thua ở đây nhận lỗi nghiệp vụ sạch thay vì 500.
-<<<<<<< HEAD
-            throw new BusinessRuleViolationException("RULE-01-10", constraintMessage(ex));
-=======
             throw duplicateAccountException(ex);
->>>>>>> 8bfc5bd (feat: triển khai module iam)
         }
 
         User user = userProvisioningService.createCustomerProfile(account.getId(), request.name());
@@ -152,11 +134,6 @@ public class AuthServiceImpl implements AuthService {
     }
 
     /**
-<<<<<<< HEAD
-     * noRollbackFor: các guard-throw (sai OTP/hết hạn/lock phiên) xảy ra SAU
-     * khi attempt_count/is_used/locked_until đã save — phải commit để lần thử
-     * kế tiếp thấy đúng bộ đếm (RULE-01-02/05). Không rollback = cố ý.
-=======
      * noRollbackFor: sai OTP/khóa session (RULE-01-02/05) phải commit
      * attemptCount/lockedUntil dù method throw — mặc định Spring rollback
      * toàn bộ transaction trên RuntimeException sẽ xóa mất counter vừa
@@ -166,14 +143,10 @@ public class AuthServiceImpl implements AuthService {
      * thất bại thì otp.used=true không được phép commit riêng lẻ. Khi sửa
      * method này, mọi save() mới đặt trước 1 throw BusinessRuleViolationException
      * (hoặc subclass) sẽ MẶC ĐỊNH được commit — cân nhắc kỹ trước khi thêm.
->>>>>>> 8bfc5bd (feat: triển khai module iam)
      */
     @Override
     @Transactional(noRollbackFor = BusinessRuleViolationException.class)
     public Account verifyOtp(VerifyOtpRequest request) {
-<<<<<<< HEAD
-        consumeOtp(request.email(), OtpPurpose.REGISTRATION, request.otpCode());
-=======
         String email = normalizeEmail(request.email());
         // Khoá Account TRƯỚC Otp — cùng thứ tự khoá với resendOtp() (xem
         // AccountRepository#findByEmailForUpdate) để không đảo ngược lock order giữa 2
@@ -229,7 +202,6 @@ public class AuthServiceImpl implements AuthService {
 
         otp.setUsed(true);
         otpRepository.save(otp);
->>>>>>> 1c587b4 (feat: triển khai module organization)
 
         account.setStatus(AccountStatus.ACTIVE);
         try {
@@ -260,9 +232,6 @@ public class AuthServiceImpl implements AuthService {
                     "Tài khoản đã xác thực, không cần gửi lại OTP");
         }
 
-<<<<<<< HEAD
-        String otpCode = issueFreshOtp(request.email(), OtpPurpose.REGISTRATION);
-=======
         Optional<Otp> currentOtp = otpRepository.findTopByEmailAndPurposeOrderByCreatedAtDesc(
                 email, OtpPurpose.REGISTRATION);
 
@@ -299,7 +268,6 @@ public class AuthServiceImpl implements AuthService {
                 LocalDateTime.now().plusSeconds(OTP_TTL_SECONDS));
         newOtp.setResend(true);
         otpRepository.save(newOtp);
->>>>>>> 1c587b4 (feat: triển khai module organization)
 
         User user = userProvisioningService.findByAccountId(account.getId());
         var notificationTaskId = notificationService.enqueue(user.getId(), NotificationChannel.EMAIL,
@@ -309,11 +277,6 @@ public class AuthServiceImpl implements AuthService {
     }
 
     /**
-<<<<<<< HEAD
-     * noRollbackFor: failedLoginAttempts + LOCKED save trước khi ném
-     * InvalidCredentials/AccountLocked phải commit để đủ 5 lần thì khóa
-     * (RULE-01-07). Các RuntimeException bất ngờ khác vẫn rollback.
-=======
      * noRollbackFor: sai mật khẩu/khóa account (RULE-01-01/07) phải commit
      * failedLoginAttempts/status=LOCKED dù method throw — cùng lý do như
      * verifyOtp ở trên. Không có noRollbackFor này, RULE-01-07 (khóa sau 5
@@ -321,7 +284,6 @@ public class AuthServiceImpl implements AuthService {
      * giá trị cũ. ConcurrencyConflictException vẫn rollback bình thường (không
      * extend BusinessRuleViolationException) — đúng, vì reset counter bị
      * conflict thì không nên commit dở dang.
->>>>>>> 8bfc5bd (feat: triển khai module iam)
      */
     @Override
     @Transactional(noRollbackFor = BusinessRuleViolationException.class)
@@ -467,7 +429,7 @@ public class AuthServiceImpl implements AuthService {
             throw new ConcurrencyConflictException("Account", account.getId());
         }
 
-        recordOutboxEvent(account, "PasswordReset", null);
+        accountEventRecorder.record(account, "PasswordReset");
     }
 
     /**
@@ -664,16 +626,6 @@ public class AuthServiceImpl implements AuthService {
         };
     }
 
-<<<<<<< HEAD
-    /**
-     * Phân biệt UNIQUE nào vừa vỡ để trả đúng thông điệp cho người dùng.
-     * Chỉ đọc tên constraint — không bao giờ ghép nguyên message của DB vào
-     * response, vì nó chứa cả câu SQL lẫn giá trị của tài khoản khác.
-     */
-    private String constraintMessage(DataIntegrityViolationException ex) {
-        String raw = ex.getMostSpecificCause().getMessage();
-        return raw != null && raw.contains("uq_accounts_phone") ? PHONE_TAKEN : EMAIL_TAKEN;
-=======
     @Override
     @Transactional
     @Auditable(action = "CreateStaff", resourceType = "Account")
@@ -781,7 +733,6 @@ public class AuthServiceImpl implements AuthService {
         accountEventRecorder.record(account, "AccountActivated");
 
         return new CreateCustomerResponse(account.getId(), user.getId(), account.getStatus(), account.isMustChangePassword());
->>>>>>> 8bfc5bd (feat: triển khai module iam)
     }
 
     private String generateOtpCode() {

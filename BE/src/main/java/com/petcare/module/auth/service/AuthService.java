@@ -1,13 +1,10 @@
 package com.petcare.module.auth.service;
 
-<<<<<<< HEAD
-import com.petcare.module.auth.dto.ForgotPasswordRequest;
-=======
 import com.petcare.module.auth.dto.CreateCustomerRequest;
 import com.petcare.module.auth.dto.CreateCustomerResponse;
 import com.petcare.module.auth.dto.CreateStaffRequest;
 import com.petcare.module.auth.dto.CreateStaffResponse;
->>>>>>> 8bfc5bd (feat: triển khai module iam)
+import com.petcare.module.auth.dto.ForgotPasswordRequest;
 import com.petcare.module.auth.dto.LoginRequest;
 import com.petcare.module.auth.dto.LoginResponse;
 import com.petcare.module.auth.dto.LogoutRequest;
@@ -38,7 +35,12 @@ public interface AuthService {
 
     RefreshTokenResponse refresh(RefreshTokenRequest request, String userAgent, String ipAddress);
 
-<<<<<<< HEAD
+    /** CreateStaff — D-04, RULE-01-03/02-01/02-02/02-03/02-05 (docs/api/auth-v1.md C7). */
+    CreateStaffResponse createStaff(CreateStaffRequest request, UserPrincipal actor);
+
+    /** Receptionist tạo customer tại quầy — RULE-02-06, ACTIVE ngay không OTP. */
+    CreateCustomerResponse createCustomer(CreateCustomerRequest request);
+
     /**
      * Gửi OTP đặt lại mật khẩu. Trả {@link Optional#empty()} khi email không
      * tồn tại / không đủ điều kiện — controller vẫn trả 200 để không lộ email
@@ -54,11 +56,4 @@ public interface AuthService {
      * module khác không được đọc trực tiếp (01-package-structure.md).
      */
     Optional<UUID> findUserIdByActiveAccountEmail(String email);
-=======
-    /** CreateStaff — D-04, RULE-01-03/02-01/02-02/02-03/02-05 (docs/api/auth-v1.md C7). */
-    CreateStaffResponse createStaff(CreateStaffRequest request, UserPrincipal actor);
-
-    /** Receptionist tạo customer tại quầy — RULE-02-06, ACTIVE ngay không OTP. */
-    CreateCustomerResponse createCustomer(CreateCustomerRequest request);
->>>>>>> 8bfc5bd (feat: triển khai module iam)
 }
