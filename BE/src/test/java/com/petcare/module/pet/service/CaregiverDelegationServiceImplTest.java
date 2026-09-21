@@ -9,6 +9,7 @@ import com.petcare.module.pet.exception.CaregiverInvitationConflictException;
 import com.petcare.module.pet.exception.UnauthorizedDelegatedActionException;
 import com.petcare.module.pet.fsm.CaregiverDelegationTransitionHandler;
 import com.petcare.module.pet.mapper.CaregiverDelegationMapper;
+import com.petcare.module.pet.dto.CaregiverDelegationResponse;
 import com.petcare.module.pet.repository.PetCaregiverDelegationRepository;
 import com.petcare.module.pet.repository.PetRepository;
 import com.petcare.module.notification.service.NotificationService;
@@ -27,6 +28,7 @@ import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.dao.DataIntegrityViolationException;
 
 import java.time.LocalDateTime;
+import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
 
@@ -37,6 +39,7 @@ import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
@@ -326,5 +329,50 @@ class CaregiverDelegationServiceImplTest {
         assertThatThrownBy(() -> svc.revokeCaregiver(owner, pet.getId(),
                 new RevokeCaregiverRequest("cg@example.com")))
                 .isInstanceOf(ResourceNotFoundException.class);
+    }
+
+    /** RULE-04-10 — thu hồi hàng loạt khi ManagePetOwnership. */
+    @Test
+    void revokeAllForOwnershipTransfer_revokesActiveAndInvited_forOldOwnerOnly() {
+        PetCaregiverDelegation active = invited(UUID.randomUUID(), LocalDateTime.now().plusDays(1));
+        active.setStatus(CaregiverStatus.ACTIVE);
+        PetCaregiverDelegation stillInvited = invited(null, LocalDateTime.now().plusDays(1));
+        when(delegations.findByPetIdAndStatusIn(pet.getId(),
+                List.of(CaregiverStatus.INVITED, CaregiverStatus.ACTIVE)))
+                .thenReturn(List.of(active, stillInvited));
+
+        List<CaregiverDelegationResponse> out = svc.revokeAllForOwnershipTransfer(pet.getId(), owner);
+
+        assertThat(active.getStatus()).isEqualTo(CaregiverStatus.REVOKED);
+        assertThat(stillInvited.getStatus()).isEqualTo(CaregiverStatus.REVOKED);
+        assertThat(out).hasSize(2);
+        verify(outbox, times(2)).save(any());
+    }
+
+    @Test
+    void revokeAllForOwnershipTransfer_onlyTargetsGivenPreviousOwnerId() {
+        PetCaregiverDelegation otherOwnersDelegation = invited(UUID.randomUUID(), LocalDateTime.now().plusDays(1));
+        otherOwnersDelegation.setPrimaryOwnerId(UUID.randomUUID()); // chủ khác, không phải `owner`
+        when(delegations.findByPetIdAndStatusIn(pet.getId(),
+                List.of(CaregiverStatus.INVITED, CaregiverStatus.ACTIVE)))
+                .thenReturn(List.of(otherOwnersDelegation));
+
+        List<CaregiverDelegationResponse> out = svc.revokeAllForOwnershipTransfer(pet.getId(), owner);
+
+        assertThat(otherOwnersDelegation.getStatus()).isEqualTo(CaregiverStatus.INVITED);
+        assertThat(out).isEmpty();
+        verify(outbox, never()).save(any());
+    }
+
+    @Test
+    void revokeAllForOwnershipTransfer_noLiveDelegations_returnsEmptyNoOutbox() {
+        when(delegations.findByPetIdAndStatusIn(pet.getId(),
+                List.of(CaregiverStatus.INVITED, CaregiverStatus.ACTIVE)))
+                .thenReturn(List.of());
+
+        List<CaregiverDelegationResponse> out = svc.revokeAllForOwnershipTransfer(pet.getId(), owner);
+
+        assertThat(out).isEmpty();
+        verify(outbox, never()).save(any());
     }
 }

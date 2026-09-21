@@ -2,6 +2,7 @@ package com.petcare.module.pet.controller;
 
 import com.petcare.module.pet.dto.CreatePetRequest;
 import com.petcare.module.pet.dto.PetResponse;
+import com.petcare.module.pet.dto.TransferPetRequest;
 import com.petcare.module.pet.dto.UpdatePetRequest;
 import com.petcare.module.pet.service.PetService;
 import com.petcare.platform.config.OpenApiConfig;
@@ -62,5 +63,13 @@ public class PetController {
             @AuthenticationPrincipal UserPrincipal me, @PathVariable UUID id,
             @Valid @RequestBody UpdatePetRequest req) {
         return ResponseEntity.ok(ApiResponse.ok(svc.update(me.getUserId(), id, req)));
+    }
+
+    @PostMapping("/{id}/transfer")
+    @PreAuthorize("isAuthenticated()")
+    public ResponseEntity<ApiResponse<PetResponse>> transfer(
+            @AuthenticationPrincipal UserPrincipal me, @PathVariable UUID id,
+            @Valid @RequestBody TransferPetRequest req) {
+        return ResponseEntity.ok(ApiResponse.ok(svc.managePetOwnership(me.getUserId(), id, req)));
     }
 }
