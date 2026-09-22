@@ -1,24 +1,33 @@
 package com.petcare.module.organization.service;
 
+import com.petcare.module.catalog.service.ServiceCatalogService;
+import com.petcare.module.catalog.service.StoreOverrideService;
 import com.petcare.module.organization.dto.CreateStoreRequest;
 import com.petcare.module.organization.dto.UpdateStoreRequest;
+import com.petcare.module.organization.entity.OperatingHour;
 import com.petcare.module.organization.entity.Store;
+import com.petcare.module.organization.fsm.StoreTransitionHandler;
 import com.petcare.module.organization.mapper.StoreMapper;
 import com.petcare.module.organization.mapper.StoreMapperImpl;
+import com.petcare.module.organization.repository.OperatingHourRepository;
 import com.petcare.module.organization.repository.OrganizationRepository;
 import com.petcare.module.organization.repository.StoreRepository;
+import com.petcare.module.organization.repository.StoreResourceRepository;
 import com.petcare.platform.enums.FacilityType;
 import com.petcare.platform.enums.StoreStatus;
 import com.petcare.platform.enums.UserRole;
 import com.petcare.platform.exception.AccessDeniedScopeException;
 import com.petcare.platform.exception.BusinessRuleViolationException;
 import com.petcare.platform.exception.ConcurrencyConflictException;
+import com.petcare.platform.exception.InvalidStateTransitionException;
 import com.petcare.platform.exception.ResourceNotFoundException;
 import com.petcare.platform.model.PageResponse;
 import com.petcare.platform.security.UserPrincipal;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.EnumSource;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.dao.DataIntegrityViolationException;
@@ -27,6 +36,8 @@ import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Pageable;
 import org.springframework.orm.ObjectOptimisticLockingFailureException;
 
+import java.time.LocalTime;
+import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
 
@@ -36,6 +47,7 @@ import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
 
 /** docs/02-business-rules.md RULE-03-01, RULE-02-01/05 (cách ly tenant). */
@@ -46,8 +58,21 @@ class StoreServiceImplTest {
     private StoreRepository storeRepository;
     @Mock
     private OrganizationRepository organizationRepository;
+    @Mock
+    private OperatingHourRepository operatingHourRepository;
+    @Mock
+    private StoreResourceRepository storeResourceRepository;
+    @Mock
+    private ServiceCatalogService serviceCatalogService;
+    @Mock
+    private StoreOverrideService storeOverrideService;
+    @Mock
+    private StoreEventRecorder storeEventRecorder;
 
     private final StoreMapper storeMapper = new StoreMapperImpl();
+    // Instance thật (không mock) — muốn kiểm chứng luôn cả logic FSM thật khi test activateStore,
+    // cùng cách storeMapper dùng StoreMapperImpl thật ở trên.
+    private final StoreTransitionHandler storeTransitionHandler = new StoreTransitionHandler();
 
     private StoreServiceImpl service;
 
@@ -72,7 +97,25 @@ class StoreServiceImplTest {
 
     @BeforeEach
     void setUp() {
-        service = new StoreServiceImpl(storeRepository, organizationRepository, storeMapper);
+        service = new StoreServiceImpl(storeRepository, organizationRepository, storeMapper,
+                storeTransitionHandler, operatingHourRepository, storeResourceRepository,
+                serviceCatalogService, storeOverrideService, storeEventRecorder);
+    }
+
+    private static OperatingHour openHour(UUID storeId) {
+        return new OperatingHour(storeId, 2, LocalTime.of(8, 0), LocalTime.of(18, 0), false);
+    }
+
+    private static OperatingHour closedHour(UUID storeId) {
+        return new OperatingHour(storeId, 2, null, null, true);
+    }
+
+    /** Đủ điều kiện RULE-03-02 cho storeId — dùng trong test "thành công"/idempotent. */
+    private void mockAllActivationGuardsSatisfied(UUID storeId, UUID organizationId) {
+        when(operatingHourRepository.findAllByStoreIdOrderByDayOfWeek(storeId))
+                .thenReturn(List.of(openHour(storeId)));
+        when(storeResourceRepository.existsByStoreIdAndActiveTrue(storeId)).thenReturn(true);
+        when(serviceCatalogService.hasActiveService(organizationId)).thenReturn(true);
     }
 
     @Test
@@ -216,7 +259,7 @@ class StoreServiceImplTest {
         UUID storeId = UUID.randomUUID();
         Store existing = store(storeId, organizationId, "HN01");
         when(storeRepository.findById(storeId)).thenReturn(Optional.of(existing));
-        when(storeRepository.save(any(Store.class))).thenAnswer(invocation -> invocation.getArgument(0));
+        when(storeRepository.saveAndFlush(any(Store.class))).thenAnswer(invocation -> invocation.getArgument(0));
 
         var response = service.updateStore(storeId, new UpdateStoreRequest("Chi nhanh moi", "456 Nguyen Hue", "0987654321"),
                 principal(UserRole.ORGANIZATION_ADMIN, organizationId));
@@ -244,7 +287,7 @@ class StoreServiceImplTest {
         UUID storeId = UUID.randomUUID();
         Store existing = store(storeId, organizationId, "HN01");
         when(storeRepository.findById(storeId)).thenReturn(Optional.of(existing));
-        when(storeRepository.save(any(Store.class))).thenAnswer(invocation -> invocation.getArgument(0));
+        when(storeRepository.saveAndFlush(any(Store.class))).thenAnswer(invocation -> invocation.getArgument(0));
 
         var response = service.updateStore(storeId, new UpdateStoreRequest(null, "456 Nguyen Hue", null),
                 principal(UserRole.STORE_MANAGER, organizationId, storeId));
@@ -268,7 +311,7 @@ class StoreServiceImplTest {
                 principal(UserRole.SUPER_ADMIN, null)))
                 .isInstanceOf(BusinessRuleViolationException.class)
                 .satisfies(ex -> assertThat(((BusinessRuleViolationException) ex).getRuleId()).isEqualTo("RULE-03-06"));
-        verify(storeRepository, never()).save(any());
+        verify(storeRepository, never()).saveAndFlush(any());
     }
 
     @Test
@@ -291,7 +334,7 @@ class StoreServiceImplTest {
         UUID organizationId = UUID.randomUUID();
         UUID storeId = UUID.randomUUID();
         when(storeRepository.findById(storeId)).thenReturn(Optional.of(store(storeId, organizationId, "HN01")));
-        when(storeRepository.save(any(Store.class)))
+        when(storeRepository.saveAndFlush(any(Store.class)))
                 .thenThrow(new ObjectOptimisticLockingFailureException(Store.class, storeId));
 
         assertThatThrownBy(() -> service.updateStore(storeId, new UpdateStoreRequest("Ten moi", null, null),
@@ -331,5 +374,394 @@ class StoreServiceImplTest {
 
         assertThat(page.totalElements()).isEqualTo(1);
         assertThat(page.content()).hasSize(1);
+    }
+
+    // ---- activateStore (RULE-03-02, FSM-2) ----
+
+    @Test
+    void activateStore_notFound_throwsResourceNotFound() {
+        UUID storeId = UUID.randomUUID();
+        when(storeRepository.findById(storeId)).thenReturn(Optional.empty());
+
+        assertThatThrownBy(() -> service.activateStore(storeId, principal(UserRole.SUPER_ADMIN, null)))
+                .isInstanceOf(ResourceNotFoundException.class);
+    }
+
+    @Test
+    void activateStore_actorOutsideScope_deniedByScope() {
+        UUID organizationId = UUID.randomUUID();
+        UUID storeId = UUID.randomUUID();
+        when(storeRepository.findById(storeId)).thenReturn(Optional.of(store(storeId, organizationId, "HN01")));
+        UserPrincipal actor = principal(UserRole.ORGANIZATION_ADMIN, UUID.randomUUID());
+
+        assertThatThrownBy(() -> service.activateStore(storeId, actor))
+                .isInstanceOf(AccessDeniedScopeException.class);
+    }
+
+    @Test
+    void activateStore_storeManager_ownStore_stillDeniedByScope() {
+        // RULE-03-02/FSM-2 — actor CHỈ OrganizationAdmin, không nhận STORE_MANAGER dù đúng Store
+        // mình quản lý (khác UpdateStore).
+        UUID organizationId = UUID.randomUUID();
+        UUID storeId = UUID.randomUUID();
+        when(storeRepository.findById(storeId)).thenReturn(Optional.of(store(storeId, organizationId, "HN01")));
+        UserPrincipal actor = principal(UserRole.STORE_MANAGER, organizationId, storeId);
+
+        assertThatThrownBy(() -> service.activateStore(storeId, actor))
+                .isInstanceOf(AccessDeniedScopeException.class);
+    }
+
+    @ParameterizedTest
+    @EnumSource(value = StoreStatus.class, names = {"DRAFT", "SUSPENDED", "DEACTIVATED"})
+    void activateStore_organizationAdmin_ownOrg_fromValidSourceState_activates(StoreStatus from) {
+        UUID organizationId = UUID.randomUUID();
+        UUID storeId = UUID.randomUUID();
+        Store existing = store(storeId, organizationId, "HN01");
+        existing.setStatus(from);
+        when(storeRepository.findById(storeId)).thenReturn(Optional.of(existing));
+        mockAllActivationGuardsSatisfied(storeId, organizationId);
+        when(storeRepository.saveAndFlush(any(Store.class))).thenAnswer(invocation -> invocation.getArgument(0));
+
+        var response = service.activateStore(storeId, principal(UserRole.ORGANIZATION_ADMIN, organizationId));
+
+        assertThat(response.status()).isEqualTo(StoreStatus.ACTIVE);
+        verify(storeOverrideService).initializeOverridesForStore(organizationId, storeId);
+        verify(storeEventRecorder).record(existing, "StoreActivated");
+    }
+
+    @Test
+    void activateStore_superAdmin_anyOrg_activates() {
+        UUID organizationId = UUID.randomUUID();
+        UUID storeId = UUID.randomUUID();
+        Store existing = store(storeId, organizationId, "HN01");
+        existing.setStatus(StoreStatus.DRAFT);
+        when(storeRepository.findById(storeId)).thenReturn(Optional.of(existing));
+        mockAllActivationGuardsSatisfied(storeId, organizationId);
+        when(storeRepository.saveAndFlush(any(Store.class))).thenAnswer(invocation -> invocation.getArgument(0));
+
+        var response = service.activateStore(storeId, principal(UserRole.SUPER_ADMIN, null));
+
+        assertThat(response.status()).isEqualTo(StoreStatus.ACTIVE);
+    }
+
+    @Test
+    void activateStore_alreadyActive_idempotent_noGuardOrSideEffectInteractions() {
+        UUID organizationId = UUID.randomUUID();
+        UUID storeId = UUID.randomUUID();
+        Store existing = store(storeId, organizationId, "HN01");
+        existing.setStatus(StoreStatus.ACTIVE);
+        when(storeRepository.findById(storeId)).thenReturn(Optional.of(existing));
+
+        var response = service.activateStore(storeId, principal(UserRole.ORGANIZATION_ADMIN, organizationId));
+
+        assertThat(response.status()).isEqualTo(StoreStatus.ACTIVE);
+        verify(storeRepository, never()).saveAndFlush(any());
+        verifyNoInteractions(operatingHourRepository, storeResourceRepository, serviceCatalogService,
+                storeOverrideService, storeEventRecorder);
+    }
+
+    @Test
+    void activateStore_missingOperatingHours_empty_throwsBusinessRuleViolation_RULE_03_02() {
+        UUID organizationId = UUID.randomUUID();
+        UUID storeId = UUID.randomUUID();
+        when(storeRepository.findById(storeId)).thenReturn(Optional.of(store(storeId, organizationId, "HN01")));
+        when(operatingHourRepository.findAllByStoreIdOrderByDayOfWeek(storeId)).thenReturn(List.of());
+        // storeResourceRepository/serviceCatalogService KHÔNG được mock ở đây — guard operating
+        // hours throw sớm nhất (thứ tự (1)->(2)->(3) trong StoreServiceImpl.activateStore), 2 mock
+        // kia sẽ không bao giờ được gọi tới; mock thừa sẽ bị MockitoExtension strict-stub bắt lỗi.
+
+        assertThatThrownBy(() -> service.activateStore(storeId, principal(UserRole.ORGANIZATION_ADMIN, organizationId)))
+                .isInstanceOf(BusinessRuleViolationException.class)
+                .satisfies(ex -> assertThat(((BusinessRuleViolationException) ex).getRuleId()).isEqualTo("RULE-03-02"));
+        verify(storeRepository, never()).saveAndFlush(any());
+    }
+
+    @Test
+    void activateStore_operatingHoursAllClosed_throwsBusinessRuleViolation_RULE_03_02() {
+        UUID organizationId = UUID.randomUUID();
+        UUID storeId = UUID.randomUUID();
+        when(storeRepository.findById(storeId)).thenReturn(Optional.of(store(storeId, organizationId, "HN01")));
+        when(operatingHourRepository.findAllByStoreIdOrderByDayOfWeek(storeId))
+                .thenReturn(List.of(closedHour(storeId)));
+
+        assertThatThrownBy(() -> service.activateStore(storeId, principal(UserRole.ORGANIZATION_ADMIN, organizationId)))
+                .isInstanceOf(BusinessRuleViolationException.class)
+                .satisfies(ex -> assertThat(((BusinessRuleViolationException) ex).getRuleId()).isEqualTo("RULE-03-02"));
+    }
+
+    @Test
+    void activateStore_noActiveResource_throwsBusinessRuleViolation_RULE_03_02() {
+        UUID organizationId = UUID.randomUUID();
+        UUID storeId = UUID.randomUUID();
+        when(storeRepository.findById(storeId)).thenReturn(Optional.of(store(storeId, organizationId, "HN01")));
+        when(operatingHourRepository.findAllByStoreIdOrderByDayOfWeek(storeId))
+                .thenReturn(List.of(openHour(storeId)));
+        when(storeResourceRepository.existsByStoreIdAndActiveTrue(storeId)).thenReturn(false);
+        // serviceCatalogService KHÔNG mock — guard (2) throw trước khi guard (3) chạy tới.
+
+        assertThatThrownBy(() -> service.activateStore(storeId, principal(UserRole.ORGANIZATION_ADMIN, organizationId)))
+                .isInstanceOf(BusinessRuleViolationException.class)
+                .satisfies(ex -> assertThat(((BusinessRuleViolationException) ex).getRuleId()).isEqualTo("RULE-03-02"));
+    }
+
+    @Test
+    void activateStore_noActiveCatalogService_throwsBusinessRuleViolation_RULE_03_02() {
+        UUID organizationId = UUID.randomUUID();
+        UUID storeId = UUID.randomUUID();
+        when(storeRepository.findById(storeId)).thenReturn(Optional.of(store(storeId, organizationId, "HN01")));
+        when(operatingHourRepository.findAllByStoreIdOrderByDayOfWeek(storeId))
+                .thenReturn(List.of(openHour(storeId)));
+        when(storeResourceRepository.existsByStoreIdAndActiveTrue(storeId)).thenReturn(true);
+        when(serviceCatalogService.hasActiveService(organizationId)).thenReturn(false);
+
+        assertThatThrownBy(() -> service.activateStore(storeId, principal(UserRole.ORGANIZATION_ADMIN, organizationId)))
+                .isInstanceOf(BusinessRuleViolationException.class)
+                .satisfies(ex -> assertThat(((BusinessRuleViolationException) ex).getRuleId()).isEqualTo("RULE-03-02"));
+    }
+
+    @Test
+    void activateStore_archivedStore_throwsInvalidStateTransition() {
+        // ARCHIVED không nằm trong {DRAFT,SUSPENDED,DEACTIVATED} — storeTransitionHandler tự chặn
+        // (409), dù guard RULE-03-02 (400) đã chạy qua trước đó theo đúng thứ tự guard-trước-FSM.
+        UUID organizationId = UUID.randomUUID();
+        UUID storeId = UUID.randomUUID();
+        Store archived = store(storeId, organizationId, "HN01");
+        archived.setStatus(StoreStatus.ARCHIVED);
+        when(storeRepository.findById(storeId)).thenReturn(Optional.of(archived));
+        mockAllActivationGuardsSatisfied(storeId, organizationId);
+
+        assertThatThrownBy(() -> service.activateStore(storeId, principal(UserRole.ORGANIZATION_ADMIN, organizationId)))
+                .isInstanceOf(InvalidStateTransitionException.class);
+        verify(storeRepository, never()).saveAndFlush(any());
+    }
+
+    @Test
+    void activateStore_concurrentModification_throwsConcurrencyConflict() {
+        UUID organizationId = UUID.randomUUID();
+        UUID storeId = UUID.randomUUID();
+        when(storeRepository.findById(storeId)).thenReturn(Optional.of(store(storeId, organizationId, "HN01")));
+        mockAllActivationGuardsSatisfied(storeId, organizationId);
+        when(storeRepository.saveAndFlush(any(Store.class)))
+                .thenThrow(new ObjectOptimisticLockingFailureException(Store.class, storeId));
+
+        assertThatThrownBy(() -> service.activateStore(storeId, principal(UserRole.ORGANIZATION_ADMIN, organizationId)))
+                .isInstanceOf(ConcurrencyConflictException.class);
+        verify(storeOverrideService, never()).initializeOverridesForStore(any(), any());
+    }
+
+    // ---- suspendStore (RULE-03-04, FSM-2) ----
+
+    @Test
+    void suspendStore_notFound_throwsResourceNotFound() {
+        UUID storeId = UUID.randomUUID();
+        when(storeRepository.findById(storeId)).thenReturn(Optional.empty());
+
+        assertThatThrownBy(() -> service.suspendStore(storeId, principal(UserRole.SUPER_ADMIN, null)))
+                .isInstanceOf(ResourceNotFoundException.class);
+    }
+
+    @Test
+    void suspendStore_actorOutsideScope_deniedByScope() {
+        UUID organizationId = UUID.randomUUID();
+        UUID storeId = UUID.randomUUID();
+        when(storeRepository.findById(storeId)).thenReturn(Optional.of(store(storeId, organizationId, "HN01")));
+        UserPrincipal actor = principal(UserRole.ORGANIZATION_ADMIN, UUID.randomUUID());
+
+        assertThatThrownBy(() -> service.suspendStore(storeId, actor))
+                .isInstanceOf(AccessDeniedScopeException.class);
+    }
+
+    @Test
+    void suspendStore_storeManager_ownStore_stillDeniedByScope() {
+        // RULE-03-04/FSM-2 — actor CHỈ OrganizationAdmin, không nhận STORE_MANAGER dù đúng Store
+        // mình quản lý (cùng activateStore).
+        UUID organizationId = UUID.randomUUID();
+        UUID storeId = UUID.randomUUID();
+        when(storeRepository.findById(storeId)).thenReturn(Optional.of(store(storeId, organizationId, "HN01")));
+        UserPrincipal actor = principal(UserRole.STORE_MANAGER, organizationId, storeId);
+
+        assertThatThrownBy(() -> service.suspendStore(storeId, actor))
+                .isInstanceOf(AccessDeniedScopeException.class);
+    }
+
+    @Test
+    void suspendStore_organizationAdmin_ownOrg_fromActive_suspends() {
+        UUID organizationId = UUID.randomUUID();
+        UUID storeId = UUID.randomUUID();
+        Store existing = store(storeId, organizationId, "HN01");
+        existing.setStatus(StoreStatus.ACTIVE);
+        when(storeRepository.findById(storeId)).thenReturn(Optional.of(existing));
+        when(storeRepository.saveAndFlush(any(Store.class))).thenAnswer(invocation -> invocation.getArgument(0));
+
+        var response = service.suspendStore(storeId, principal(UserRole.ORGANIZATION_ADMIN, organizationId));
+
+        assertThat(response.status()).isEqualTo(StoreStatus.SUSPENDED);
+        verify(storeEventRecorder).record(existing, "StoreSuspended");
+    }
+
+    @Test
+    void suspendStore_superAdmin_anyOrg_suspends() {
+        UUID organizationId = UUID.randomUUID();
+        UUID storeId = UUID.randomUUID();
+        Store existing = store(storeId, organizationId, "HN01");
+        existing.setStatus(StoreStatus.ACTIVE);
+        when(storeRepository.findById(storeId)).thenReturn(Optional.of(existing));
+        when(storeRepository.saveAndFlush(any(Store.class))).thenAnswer(invocation -> invocation.getArgument(0));
+
+        var response = service.suspendStore(storeId, principal(UserRole.SUPER_ADMIN, null));
+
+        assertThat(response.status()).isEqualTo(StoreStatus.SUSPENDED);
+    }
+
+    @Test
+    void suspendStore_alreadySuspended_idempotent_noGuardOrSideEffectInteractions() {
+        UUID organizationId = UUID.randomUUID();
+        UUID storeId = UUID.randomUUID();
+        Store existing = store(storeId, organizationId, "HN01");
+        existing.setStatus(StoreStatus.SUSPENDED);
+        when(storeRepository.findById(storeId)).thenReturn(Optional.of(existing));
+
+        var response = service.suspendStore(storeId, principal(UserRole.ORGANIZATION_ADMIN, organizationId));
+
+        assertThat(response.status()).isEqualTo(StoreStatus.SUSPENDED);
+        verify(storeRepository, never()).saveAndFlush(any());
+        verifyNoInteractions(storeEventRecorder);
+    }
+
+    @ParameterizedTest
+    @EnumSource(value = StoreStatus.class, names = {"DRAFT", "DEACTIVATED", "ARCHIVED"})
+    void suspendStore_wrongSourceState_throwsInvalidStateTransition(StoreStatus from) {
+        UUID organizationId = UUID.randomUUID();
+        UUID storeId = UUID.randomUUID();
+        Store existing = store(storeId, organizationId, "HN01");
+        existing.setStatus(from);
+        when(storeRepository.findById(storeId)).thenReturn(Optional.of(existing));
+
+        assertThatThrownBy(() -> service.suspendStore(storeId, principal(UserRole.ORGANIZATION_ADMIN, organizationId)))
+                .isInstanceOf(InvalidStateTransitionException.class);
+        verify(storeRepository, never()).saveAndFlush(any());
+    }
+
+    @Test
+    void suspendStore_concurrentModification_throwsConcurrencyConflict() {
+        UUID organizationId = UUID.randomUUID();
+        UUID storeId = UUID.randomUUID();
+        Store existing = store(storeId, organizationId, "HN01");
+        existing.setStatus(StoreStatus.ACTIVE);
+        when(storeRepository.findById(storeId)).thenReturn(Optional.of(existing));
+        when(storeRepository.saveAndFlush(any(Store.class)))
+                .thenThrow(new ObjectOptimisticLockingFailureException(Store.class, storeId));
+
+        assertThatThrownBy(() -> service.suspendStore(storeId, principal(UserRole.ORGANIZATION_ADMIN, organizationId)))
+                .isInstanceOf(ConcurrencyConflictException.class);
+        verify(storeEventRecorder, never()).record(any(), any());
+    }
+
+    // ---- deactivateStore (RULE-03-04, FSM-2) ----
+
+    @Test
+    void deactivateStore_notFound_throwsResourceNotFound() {
+        UUID storeId = UUID.randomUUID();
+        when(storeRepository.findById(storeId)).thenReturn(Optional.empty());
+
+        assertThatThrownBy(() -> service.deactivateStore(storeId, principal(UserRole.SUPER_ADMIN, null)))
+                .isInstanceOf(ResourceNotFoundException.class);
+    }
+
+    @Test
+    void deactivateStore_actorOutsideScope_deniedByScope() {
+        UUID organizationId = UUID.randomUUID();
+        UUID storeId = UUID.randomUUID();
+        when(storeRepository.findById(storeId)).thenReturn(Optional.of(store(storeId, organizationId, "HN01")));
+        UserPrincipal actor = principal(UserRole.ORGANIZATION_ADMIN, UUID.randomUUID());
+
+        assertThatThrownBy(() -> service.deactivateStore(storeId, actor))
+                .isInstanceOf(AccessDeniedScopeException.class);
+    }
+
+    @Test
+    void deactivateStore_storeManager_ownStore_stillDeniedByScope() {
+        // RULE-03-04/FSM-2 — actor CHỈ OrganizationAdmin, không nhận STORE_MANAGER dù đúng Store
+        // mình quản lý (cùng activateStore/suspendStore).
+        UUID organizationId = UUID.randomUUID();
+        UUID storeId = UUID.randomUUID();
+        when(storeRepository.findById(storeId)).thenReturn(Optional.of(store(storeId, organizationId, "HN01")));
+        UserPrincipal actor = principal(UserRole.STORE_MANAGER, organizationId, storeId);
+
+        assertThatThrownBy(() -> service.deactivateStore(storeId, actor))
+                .isInstanceOf(AccessDeniedScopeException.class);
+    }
+
+    @Test
+    void deactivateStore_organizationAdmin_ownOrg_fromActive_deactivates() {
+        UUID organizationId = UUID.randomUUID();
+        UUID storeId = UUID.randomUUID();
+        Store existing = store(storeId, organizationId, "HN01");
+        existing.setStatus(StoreStatus.ACTIVE);
+        when(storeRepository.findById(storeId)).thenReturn(Optional.of(existing));
+        when(storeRepository.saveAndFlush(any(Store.class))).thenAnswer(invocation -> invocation.getArgument(0));
+
+        var response = service.deactivateStore(storeId, principal(UserRole.ORGANIZATION_ADMIN, organizationId));
+
+        assertThat(response.status()).isEqualTo(StoreStatus.DEACTIVATED);
+        verify(storeEventRecorder).record(existing, "StoreDeactivated");
+    }
+
+    @Test
+    void deactivateStore_superAdmin_anyOrg_deactivates() {
+        UUID organizationId = UUID.randomUUID();
+        UUID storeId = UUID.randomUUID();
+        Store existing = store(storeId, organizationId, "HN01");
+        existing.setStatus(StoreStatus.ACTIVE);
+        when(storeRepository.findById(storeId)).thenReturn(Optional.of(existing));
+        when(storeRepository.saveAndFlush(any(Store.class))).thenAnswer(invocation -> invocation.getArgument(0));
+
+        var response = service.deactivateStore(storeId, principal(UserRole.SUPER_ADMIN, null));
+
+        assertThat(response.status()).isEqualTo(StoreStatus.DEACTIVATED);
+    }
+
+    @Test
+    void deactivateStore_alreadyDeactivated_idempotent_noGuardOrSideEffectInteractions() {
+        UUID organizationId = UUID.randomUUID();
+        UUID storeId = UUID.randomUUID();
+        Store existing = store(storeId, organizationId, "HN01");
+        existing.setStatus(StoreStatus.DEACTIVATED);
+        when(storeRepository.findById(storeId)).thenReturn(Optional.of(existing));
+
+        var response = service.deactivateStore(storeId, principal(UserRole.ORGANIZATION_ADMIN, organizationId));
+
+        assertThat(response.status()).isEqualTo(StoreStatus.DEACTIVATED);
+        verify(storeRepository, never()).saveAndFlush(any());
+        verifyNoInteractions(storeEventRecorder);
+    }
+
+    @ParameterizedTest
+    @EnumSource(value = StoreStatus.class, names = {"DRAFT", "SUSPENDED", "ARCHIVED"})
+    void deactivateStore_wrongSourceState_throwsInvalidStateTransition(StoreStatus from) {
+        UUID organizationId = UUID.randomUUID();
+        UUID storeId = UUID.randomUUID();
+        Store existing = store(storeId, organizationId, "HN01");
+        existing.setStatus(from);
+        when(storeRepository.findById(storeId)).thenReturn(Optional.of(existing));
+
+        assertThatThrownBy(() -> service.deactivateStore(storeId, principal(UserRole.ORGANIZATION_ADMIN, organizationId)))
+                .isInstanceOf(InvalidStateTransitionException.class);
+        verify(storeRepository, never()).saveAndFlush(any());
+    }
+
+    @Test
+    void deactivateStore_concurrentModification_throwsConcurrencyConflict() {
+        UUID organizationId = UUID.randomUUID();
+        UUID storeId = UUID.randomUUID();
+        Store existing = store(storeId, organizationId, "HN01");
+        existing.setStatus(StoreStatus.ACTIVE);
+        when(storeRepository.findById(storeId)).thenReturn(Optional.of(existing));
+        when(storeRepository.saveAndFlush(any(Store.class)))
+                .thenThrow(new ObjectOptimisticLockingFailureException(Store.class, storeId));
+
+        assertThatThrownBy(() -> service.deactivateStore(storeId, principal(UserRole.ORGANIZATION_ADMIN, organizationId)))
+                .isInstanceOf(ConcurrencyConflictException.class);
+        verify(storeEventRecorder, never()).record(any(), any());
     }
 }

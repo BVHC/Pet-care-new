@@ -11,4 +11,7 @@ public interface StoreResourceRepository extends JpaRepository<StoreResource, UU
     boolean existsByStoreIdAndResourceCode(UUID storeId, String resourceCode);
 
     List<StoreResource> findAllByStoreId(UUID storeId);
+
+    // RULE-03-02 (ActivateStore, điều kiện 2) — ít nhất 1 tài nguyên đang active.
+    boolean existsByStoreIdAndActiveTrue(UUID storeId);
 }

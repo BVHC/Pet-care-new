@@ -402,8 +402,14 @@ paths:
   /stores/{id}/activate:
     post:
       tags: [Stores]
-      summary: Activate store (ActivateStore)
-      description: CONFIRMED guards (RULE-03-02/03, FSM-2). Needs valid hours, at least one available resource, and available service catalog (Module 05 cross-domain check). Idempotent.
+      summary: Activate store (ActivateStore, implemented)
+      description: >-
+        CONFIRMED guards (RULE-03-02, FSM-2; implemented — see docs/api/org-store-v1.md
+        Decision Log Q12). Only from DRAFT/SUSPENDED/DEACTIVATED. Needs valid operating
+        hours, at least one active StoreResource, and at least one active Service in the
+        Organization's catalog (Module 05 cross-domain, via ServiceCatalogService).
+        Idempotent (already ACTIVE returns 200 no-op). On success, also initializes
+        catalog overrides for the store and records a StoreActivated outbox event.
       operationId: activateStore
       security:
         - bearerAuth: []
@@ -411,15 +417,21 @@ paths:
         - $ref: '#/components/parameters/StoreId'
       responses:
         '200':
-          description: Store active (or already active).
+          description: Store active (or already active, idempotent no-op).
           content:
             application/json:
               schema:
                 $ref: '#/components/schemas/StoreResponse'
+        '400':
+          description: RULE-03-02 not satisfied (missing/invalid operating hours, no active resource, or no active service in catalog) — CONFIRMED code BUSINESS_RULE_VIOLATION.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
         '401':
           $ref: '#/components/responses/Unauthorized'
         '403':
-          description: Outside own organization (CONFIRMED code ACCESS_DENIED_SCOPE_MISMATCH, RULE-02-01).
+          description: Outside own organization, or actor is not OrganizationAdmin/SUPER_ADMIN (CONFIRMED code ACCESS_DENIED_SCOPE_MISMATCH, RULE-02-01).
           content:
             application/json:
               schema:
@@ -427,7 +439,7 @@ paths:
         '404':
           $ref: '#/components/responses/NotFound'
         '409':
-          description: Wrong state or readiness conditions unmet (PROPOSED code STORE_NOT_READY with details).
+          description: Store status is not DRAFT/SUSPENDED/DEACTIVATED (e.g. ARCHIVED) — CONFIRMED code INVALID_STATE_TRANSITION; or concurrency conflict (CONCURRENCY_CONFLICT).
           content:
             application/json:
               schema:

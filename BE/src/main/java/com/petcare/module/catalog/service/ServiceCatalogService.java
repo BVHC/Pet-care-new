@@ -23,4 +23,12 @@ public interface ServiceCatalogService {
     ServiceResponse getService(UUID serviceId, UserPrincipal actor);
 
     PageResponse<ServiceResponse> listServices(UserPrincipal actor, Pageable pageable);
+
+    /**
+     * RULE-03-02 (ActivateStore, Module 03, điều kiện 3 — "danh mục dịch vụ khả dụng") — điểm
+     * tích hợp cross-module để {@code StoreServiceImpl.activateStore} kiểm tra Organization có
+     * ít nhất 1 {@link com.petcare.module.catalog.entity.Service} đang active hay chưa, KHÔNG
+     * đi qua repository (CLAUDE.md: module không import entity/repository của module khác).
+     */
+    boolean hasActiveService(UUID organizationId);
 }

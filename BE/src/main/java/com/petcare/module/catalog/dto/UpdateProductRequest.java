@@ -16,8 +16,8 @@ public record UpdateProductRequest(
         @Size(max = 50) String barcode,
         ProductCategory category,
         ProductUnit unit,
-        @Pattern(regexp = "^-?\\d+\\.\\d{2}$", message = "basePrice phải là chuỗi thập phân 2 chữ số, vd 199000.00") String basePrice,
-        @Pattern(regexp = "^-?\\d+\\.\\d{2}$", message = "costPrice phải là chuỗi thập phân 2 chữ số, vd 199000.00") String costPrice,
+        @Pattern(regexp = "^\\d+\\.\\d{2}$", message = "basePrice phải là chuỗi thập phân 2 chữ số, không âm, vd 199000.00") String basePrice,
+        @Pattern(regexp = "^\\d+\\.\\d{2}$", message = "costPrice phải là chuỗi thập phân 2 chữ số, không âm, vd 199000.00") String costPrice,
         Boolean isActive
 ) {
 }

@@ -119,10 +119,21 @@ resource) vẫn TBD, chưa quyết định cùng đợt này.
   `RoleScopeGuard.assertCanManageStore`). Response `200 StoreResponse`.
   Status: `200` · `400` validation hoặc `ARCHIVED` · `401` · `403 ACCESS_DENIED_SCOPE_MISMATCH` ·
   `404` · `409 CONCURRENCY_CONFLICT` (optimistic lock).
-- **`POST /stores/{id}/activate`** — Guards CONFIRMED (RULE-03-02, check trước khi
-  chuyển): (1) `operating_hours` hợp lệ; (2) ≥1 `store_resources` khả dụng;
-  (3) danh mục dịch vụ khả dụng (module 05 — cross-domain dependency, thiếu → `409`
-  PROPOSED `STORE_NOT_READY`). Không thỏa → `409`, không đổi state.
+- **`POST /stores/{id}/activate`** (`ActivateStore`, implemented — xem Decision Log
+  Q12) — Guards CONFIRMED (RULE-03-02, check trước khi chuyển): (1) `operating_hours`
+  hợp lệ (có cấu hình, không phải toàn bộ ngày `isClosed=true` — ASSUMPTION, RULE-03-02
+  không định nghĩa chi tiết "hợp lệ"); (2) ≥1 `store_resources` đang `isActive=true`;
+  (3) Organization có ≥1 `services.is_active=true` trong danh mục (module 05 —
+  cross-domain, qua `ServiceCatalogService#hasActiveService`). Không thỏa bất kỳ điều
+  kiện nào → **`400 BUSINESS_RULE_VIOLATION` (RULE-03-02)** (**ĐÃ GIẢI 2026-09-22, xem
+  Q12** — sửa lại từ đề xuất `409 STORE_NOT_READY` ban đầu ở version trước của file
+  này). Nguồn `from` không thuộc `{DRAFT, SUSPENDED, DEACTIVATED}` (VD: `ARCHIVED`) →
+  `409 INVALID_STATE_TRANSITION` qua `StoreTransitionHandler` (FSM guard, tách biệt
+  guard RULE-03-02). Idempotent: Store đã `ACTIVE` → `200` no-op, không re-check guard,
+  không gọi lại `initializeOverridesForStore`. Actor CHỈ `ORGANIZATION_ADMIN` Org mình
+  (`SUPER_ADMIN` all) — không có `STORE_MANAGER`. Khi thành công: khởi tạo override
+  giá/khả dụng catalog cho Store (`StoreOverrideService#initializeOverridesForStore`,
+  cùng transaction) + ghi Outbox event `StoreActivated`.
 - **`POST /stores/{id}/suspend` / `/deactivate`** — Guards: chỉ từ `ACTIVE`
   (FSM-2 CONFIRMED). Hiệu ứng RULE-03-04 (khóa nhận mới) do các modules 06/07/14
   enforce — store contract chỉ đổi state + event.
@@ -187,6 +198,7 @@ resource) vẫn TBD, chưa quyết định cùng đợt này.
 | Q9 | Organization update được sửa fields nào? | TBD (PO) | docs không chi tiết |
 | Q10 | Xem Q5 (StoreManager Configure*) | Phần `ConfigureOperatingHour` ĐÃ GIẢI (2026-09-18, xem Q5); `ConfigureStoreResource` vẫn TBD (PO) | — |
 | Q11 | `UpdateStore` có bị chặn khi Store đã `ARCHIVED` không? | **ĐÃ GIẢI (2026-09-17):** Có — mở rộng GAP-ORG-01/RULE-03-06 (trước đó chỉ khóa dữ liệu cấu hình con) sang chính record Store, nhất quán tinh thần "Terminal State tuyệt đối" | Decision Log `docs/02-business-rules.md` mục 03, `docs/03-state-machines.md` §2 Technical Invariant #4 |
+| Q12 | `ActivateStore` guard RULE-03-02 không thỏa: `409 STORE_NOT_READY` (đề xuất ban đầu) hay dùng exception chung? | **ĐÃ GIẢI (2026-09-22):** `400 BUSINESS_RULE_VIOLATION` (RULE-03-02) — dùng thẳng `BusinessRuleViolationException` có sẵn, KHÔNG tạo `STORE_NOT_READY` mới. Lý do: (1) nhất quán với RULE-03-06 đã code trong `UpdateStore` (cùng module, cùng dạng "thiếu điều kiện" → 400, không phải 409); (2) `docs/convention/backend/04-exception-handling.md` cố định RULE-ID → 400, tạo exception riêng chỉ khi thoả ≥1 tiêu chí ở §4.2 — trường hợp này không thoả (không cần field đặc thù, không cần retry logic, và "HTTP status khác" bản thân nó không phải lý do đủ khi status hiện tại đã đúng convention). `409` vẫn dùng cho FSM guard (nguồn `from` không hợp lệ, VD `ARCHIVED`) — 2 loại lỗi khác nhau, không gộp | Decision Log này; `docs/convention/backend/04-exception-handling.md` §4.1/4.2; `StoreServiceImpl.updateStore` (RULE-03-06, cùng pattern) |
 
 ---
 

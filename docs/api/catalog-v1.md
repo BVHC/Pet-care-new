@@ -95,7 +95,9 @@ A3 catalog xem cần đăng nhập (docs không nói public; Bearer để enforc
   Response `200 {storeId, serviceId, isActive}`.
 - **Status chung:** `200` · `400` · `401` · `403` ngoài Store · `404`.
 - Khung giá chính sách Org (RULE-05-05 "không vượt khung") chưa số hóa → TBD Q7
-  (hiện chỉ validate `price ≥ 0`).
+  (hiện chỉ validate `price ≥ 0`; áp dụng đồng nhất cho `basePrice`/`costPrice` gốc ở
+  `POST/PATCH /products`, `/services` — `Money` trong file này là non-negative,
+  khác `Money` chung ở invoice/refund/payment).
 
 ### C3. Storefront views (proposed)
 

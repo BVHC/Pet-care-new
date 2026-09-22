@@ -593,9 +593,9 @@ components:
   schemas:
     Money:
       type: string
-      pattern: '^-?\d+\.\d{2}$'
+      pattern: '^\d+\.\d{2}$'
       example: "199000.00"
-      description: Decimal string, 2 fractional digits, matching DB DECIMAL(12,2) (docs/06-erd.md) — sent/received as string to avoid IEEE-754 float rounding. Parse server-side as BigDecimal, not double.
+      description: Decimal string, 2 fractional digits, non-negative, matching DB DECIMAL(12,2) (docs/06-erd.md) — sent/received as string to avoid IEEE-754 float rounding. Parse server-side as BigDecimal, not double. Catalog-scoped (all usages in this file are prices/costs); unlike the generic Money type in invoice/refund/payment contracts, negative values are never valid here.
     ProductCategory:
       type: string
       enum: [FOOD, MEDICINE, ACCESSORY, HYGIENE]
