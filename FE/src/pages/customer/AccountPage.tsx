@@ -44,7 +44,7 @@ export function AccountPage() {
             <span className="mx-1.5">/</span>
             <span className="font-semibold text-white/85">Tài khoản</span>
           </nav>
-          <h1 className="font-bayon text-[clamp(22px,3vw,36px)] leading-[1.02] font-normal text-white">
+          <h1 className="font-friendly font-extrabold text-[clamp(22px,3vw,36px)] leading-[1.05] text-white">
             Tài khoản của tôi
           </h1>
         </div>

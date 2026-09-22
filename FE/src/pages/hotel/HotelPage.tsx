@@ -140,7 +140,7 @@ export function HotelPage() {
                 <Bed size={14} />
                 Khách sạn thú cưng
               </div>
-              <h1 className="font-bayon text-[clamp(30px,4.5vw,58px)] leading-[1.02] font-normal text-white">
+              <h1 className="font-friendly font-extrabold text-[clamp(30px,4.5vw,58px)] leading-[1.05] text-white">
                 Nơi nghỉ ngơi tuyệt vời
                 <br />
                 cho boss yêu

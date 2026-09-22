@@ -54,7 +54,7 @@ export const TestimonialsSpeechBubble: React.FC = () => {
           <div className="inline-flex items-center gap-2 rounded-full bg-[#faebe4] px-4 py-1.5 text-xs font-black uppercase tracking-widest text-accent mb-3 border border-accent/15">
             <Heart size={14} className="fill-current" /> Đánh Giá Từ Khách Hàng (Reviews)
           </div>
-          <h2 className="font-bayon text-[#3B2A1E] text-4xl sm:text-5xl md:text-6xl uppercase tracking-tight leading-[0.92]">
+          <h2 className="font-friendly font-extrabold text-[#3B2A1E] text-4xl sm:text-5xl md:text-6xl uppercase tracking-tight leading-[1.05]">
             HÀI LÒNG 100% TỪ HƠN 2.500+ CHỦ NUÔI
           </h2>
           <p className="mt-3 text-sm sm:text-base text-[#70584b] font-semibold max-w-xl mx-auto">
@@ -80,7 +80,7 @@ export const TestimonialsSpeechBubble: React.FC = () => {
                 </div>
 
                 {/* Review Title */}
-                <h3 className="font-bayon text-xl sm:text-2xl text-[#3B2A1E] uppercase leading-snug mb-3">
+                <h3 className="font-friendly font-bold text-xl sm:text-2xl text-[#3B2A1E] uppercase leading-snug mb-3">
                   "{rev.title}"
                 </h3>
 

@@ -150,7 +150,7 @@ export function VerifyOtpPage() {
               value={digit}
               onChange={(e) => handleChange(i, e.target.value)}
               onKeyDown={(e) => handleKeyDown(i, e)}
-              className="font-bayon h-[62px] w-full rounded-2xl border-[1.5px] border-[#e6d9c8] bg-white text-center text-[26px] text-[#191919] transition-[border-color,box-shadow] duration-300 ease-[cubic-bezier(0.32,0.72,0,1)] focus:border-accent focus:shadow-[0_0_0_4px_rgba(164,51,36,0.10)] focus:outline-none"
+              className="font-friendly font-bold h-[62px] w-full rounded-2xl border-[1.5px] border-[#e6d9c8] bg-white text-center text-[26px] text-[#191919] transition-[border-color,box-shadow] duration-300 ease-[cubic-bezier(0.32,0.72,0,1)] focus:border-accent focus:shadow-[0_0_0_4px_rgba(164,51,36,0.10)] focus:outline-none"
             />
           ))}
         </div>

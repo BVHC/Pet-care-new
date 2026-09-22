@@ -122,7 +122,7 @@ export function AboutPage() {
         <div className="mx-auto grid max-w-[1100px] grid-cols-2 gap-8 text-center text-white sm:grid-cols-4">
           {STATS.map((s) => (
             <div key={s.label}>
-              <div className="font-bayon text-4xl font-normal leading-none">{s.value}</div>
+              <div className="font-friendly font-extrabold text-4xl leading-none">{s.value}</div>
               <div className="mt-2 text-[13.5px] text-white/85">{s.label}</div>
             </div>
           ))}
@@ -132,7 +132,7 @@ export function AboutPage() {
       {/* Values */}
       <section className="mx-auto max-w-[1100px] px-5 py-20 sm:px-8">
         <header className="mb-12 text-center">
-          <h2 className="font-bayon text-[clamp(28px,4vw,42px)] leading-[1.05] font-normal text-(--color-text-primary)">
+          <h2 className="font-friendly font-extrabold text-[clamp(28px,4vw,42px)] leading-[1.05] text-(--color-text-primary)">
             Giá trị cốt lõi
           </h2>
           <p className="mt-3 text-(--color-text-secondary)">Những giá trị chúng tôi luôn theo đuổi</p>
@@ -147,7 +147,7 @@ export function AboutPage() {
               <div className="mx-auto mb-4 flex h-14 w-14 items-center justify-center rounded-full bg-(--color-accent-soft) text-accent">
                 <v.icon size={26} />
               </div>
-              <h3 className="font-bayon text-lg font-normal text-(--color-text-primary)">{v.title}</h3>
+              <h3 className="font-friendly font-bold text-lg text-(--color-text-primary)">{v.title}</h3>
               <p className="mt-2 text-[13.5px] leading-relaxed text-(--color-text-secondary)">{v.desc}</p>
             </div>
           ))}
@@ -158,7 +158,7 @@ export function AboutPage() {
       <section className="bg-(--color-surface-1) px-5 py-20 sm:px-8">
         <div className="mx-auto max-w-[1100px]">
           <header className="mb-12 text-center">
-            <h2 className="font-bayon text-[clamp(28px,4vw,42px)] leading-[1.05] font-normal text-(--color-text-primary)">
+            <h2 className="font-friendly font-extrabold text-[clamp(28px,4vw,42px)] leading-[1.05] text-(--color-text-primary)">
               Dịch vụ của chúng tôi
             </h2>
             <p className="mt-3 text-(--color-text-secondary)">Tất cả dịch vụ chăm sóc thú cưng tại một nơi duy nhất</p>
@@ -174,7 +174,7 @@ export function AboutPage() {
                   <s.icon size={24} />
                 </div>
                 <div>
-                  <h3 className="font-bayon text-lg font-normal text-(--color-text-primary)">{s.title}</h3>
+                  <h3 className="font-friendly font-bold text-lg text-(--color-text-primary)">{s.title}</h3>
                   <p className="mt-2 text-[13.5px] leading-relaxed text-(--color-text-secondary)">{s.desc}</p>
                 </div>
               </div>
@@ -186,7 +186,7 @@ export function AboutPage() {
       {/* Team */}
       <section className="mx-auto max-w-[1100px] px-5 py-20 sm:px-8">
         <header className="mb-12 text-center">
-          <h2 className="font-bayon text-[clamp(28px,4vw,42px)] leading-[1.05] font-normal text-(--color-text-primary)">
+          <h2 className="font-friendly font-extrabold text-[clamp(28px,4vw,42px)] leading-[1.05] text-(--color-text-primary)">
             Đội ngũ chuyên gia
           </h2>
           <p className="mt-3 text-(--color-text-secondary)">Những người bạn đồng hành của thú cưng</p>
@@ -201,7 +201,7 @@ export function AboutPage() {
               <div className="mx-auto mb-4 h-32 w-32 overflow-hidden rounded-full border-4 border-white shadow-lg">
                 <img src={m.image} alt={m.name} className="h-full w-full object-cover" />
               </div>
-              <h3 className="font-bayon text-base font-normal text-(--color-text-primary)">{m.name}</h3>
+              <h3 className="font-friendly font-bold text-base text-(--color-text-primary)">{m.name}</h3>
               <p className="text-[13px] font-semibold text-accent">{m.role}</p>
               <p className="mt-1 flex items-center justify-center gap-1 text-[12px] text-(--color-text-secondary)">
                 <Calendar size={12} /> {m.exp}
@@ -215,7 +215,7 @@ export function AboutPage() {
       <section className="bg-(--color-surface-1) px-5 py-20 sm:px-8">
         <div className="mx-auto max-w-[1100px]">
           <header className="mb-12 text-center">
-            <h2 className="font-bayon text-[clamp(28px,4vw,42px)] leading-[1.05] font-normal text-(--color-text-primary)">
+            <h2 className="font-friendly font-extrabold text-[clamp(28px,4vw,42px)] leading-[1.05] text-(--color-text-primary)">
               Liên hệ với chúng tôi
             </h2>
             <p className="mt-3 text-(--color-text-secondary)">Sẵn sàng hỗ trợ bạn và thú cưng 24/7</p>
@@ -250,7 +250,7 @@ export function AboutPage() {
                   <c.icon size={22} />
                 </div>
                 <div>
-                  <h3 className="font-bayon text-base font-normal text-(--color-text-primary)">{c.title}</h3>
+                  <h3 className="font-friendly font-bold text-base text-(--color-text-primary)">{c.title}</h3>
                   {c.lines.map((l) => (
                     <p key={l} className="text-[13.5px] text-(--color-text-primary)">{l}</p>
                   ))}

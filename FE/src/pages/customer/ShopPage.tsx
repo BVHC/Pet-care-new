@@ -383,51 +383,64 @@ function PageBtn({
 
 function ShopHero({ total }: { total: number }) {
   return (
-    <section className={`${styles.slab} px-5 py-7 sm:px-8`}>
-      <img
-        src="/imgs/download3.png"
-        alt=""
-        className={styles.slabDoodle}
-        style={{ top: 12, left: '3%', width: 44 }}
+    <section className="relative overflow-hidden bg-gradient-to-b from-[#fdf8f3] via-[#fbf3e8] to-[#f6ebd9] border-b border-[#ebdccb] px-5 py-7 sm:px-8 sm:py-9">
+      {/* Decorative ambient glow */}
+      <div
+        aria-hidden
+        className="pointer-events-none absolute -right-16 -top-16 h-56 w-56 rounded-full bg-accent/6 blur-3xl"
+      />
+      <div
+        aria-hidden
+        className="pointer-events-none absolute left-1/4 -bottom-12 h-44 w-44 rounded-full bg-[#ffc107]/10 blur-2xl"
       />
 
-      <div
-        className={`${styles.slabInner} mx-auto flex w-full max-w-[1440px] flex-wrap items-end justify-between gap-x-8 gap-y-3`}
-      >
+      <div className="relative z-10 mx-auto flex w-full max-w-[1440px] flex-wrap items-end justify-between gap-x-8 gap-y-4">
         <div>
-          <nav aria-label="Đường dẫn" className="mb-2 text-[12.5px] text-white/50">
+          <nav aria-label="Đường dẫn" className="mb-2 flex items-center gap-1.5 text-[12.5px] font-medium text-[#8a7565]">
             <Link
               to="/"
-              className="underline-offset-4 transition-colors hover:text-white hover:underline"
+              className="underline-offset-4 transition-colors hover:text-accent hover:underline"
             >
               Trang chủ
             </Link>
-            <span className="mx-1.5">/</span>
-            <span className="font-semibold text-white/85">Danh mục sản phẩm</span>
+            <span className="text-[#8a7565]/40">/</span>
+            <span className="font-bold text-[#3b2a1e]">Danh mục sản phẩm</span>
           </nav>
 
-          <h1 className="font-bayon text-[clamp(26px,3.4vw,40px)] leading-[1.02] font-normal text-white">
-            Cửa hàng của boss
-          </h1>
+          <div className="flex flex-wrap items-center gap-3">
+            <h1 className="font-friendly font-extrabold text-[clamp(28px,3.4vw,42px)] leading-tight text-[#3b2a1e]">
+              Cửa hàng của boss
+            </h1>
+            <span className="inline-flex items-center gap-1.5 rounded-full bg-[#faebe4] px-3 py-1 text-xs font-bold text-accent border border-accent/15 shadow-2xs">
+              <PawPrint size={13} className="fill-current" /> Chính hãng 100%
+            </span>
+          </div>
+          <p className="mt-1 text-[13px] sm:text-sm text-[#70584b] font-medium max-w-xl">
+            Thức ăn hạt, phụ kiện, đồ chơi & dinh dưỡng cao cấp được bác sĩ thú y khuyên dùng.
+          </p>
         </div>
 
-        <p className="flex flex-wrap items-center gap-x-4 gap-y-1 pb-1 text-[12.5px] text-white/60">
-          <span className="inline-flex items-center gap-1.5">
-            <PawPrint size={13} className="text-(--color-accent-warm)" />
-            <span className="tabular-nums">{total}</span> sản phẩm
-          </span>
-          <span aria-hidden className="text-white/25">
-            ·
-          </span>
-          <span className="tabular-nums">4.9/5 hài lòng</span>
-          <span aria-hidden className="text-white/25">
-            ·
-          </span>
-          <span className="inline-flex items-center gap-1.5">
-            <Truck size={13} />
-            Giao 2 giờ nội thành
-          </span>
-        </p>
+        {/* Highlight trust badges */}
+        <div className="flex flex-wrap items-center gap-2 sm:gap-2.5 pb-0.5">
+          <div className="inline-flex items-center gap-1.5 rounded-full bg-white/90 px-3.5 py-1.5 text-[12.5px] font-bold text-[#3b2a1e] shadow-xs border border-[#ebdccb]/80 backdrop-blur-xs">
+            <PawPrint size={14} className="text-accent" />
+            <span>
+              <span className="tabular-nums font-extrabold text-accent">{total}</span> sản phẩm
+            </span>
+          </div>
+
+          <div className="inline-flex items-center gap-1.5 rounded-full bg-white/90 px-3.5 py-1.5 text-[12.5px] font-bold text-[#3b2a1e] shadow-xs border border-[#ebdccb]/80 backdrop-blur-xs">
+            <Star size={14} className="fill-amber-400 text-amber-400" />
+            <span>
+              <span className="tabular-nums font-extrabold">4.9/5</span> hài lòng
+            </span>
+          </div>
+
+          <div className="inline-flex items-center gap-1.5 rounded-full bg-white/90 px-3.5 py-1.5 text-[12.5px] font-bold text-[#3b2a1e] shadow-xs border border-[#ebdccb]/80 backdrop-blur-xs">
+            <Truck size={14} className="text-emerald-600" />
+            <span>Giao 2 giờ nội thành</span>
+          </div>
+        </div>
       </div>
     </section>
   )

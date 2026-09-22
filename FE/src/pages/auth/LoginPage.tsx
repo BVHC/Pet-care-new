@@ -60,7 +60,7 @@ export function LoginPage() {
         <div className="flex gap-9">
           {STATS.map((s) => (
             <div key={s.label}>
-              <b className="font-bayon block text-[26px] font-normal text-surface-1 sm:text-[30px]">{s.value}</b>
+              <b className="font-friendly font-extrabold block text-[26px] text-surface-1 sm:text-[30px]">{s.value}</b>
               <span className="text-[12px] font-semibold uppercase tracking-[0.06em] text-[#fdf6ec]/55">{s.label}</span>
             </div>
           ))}

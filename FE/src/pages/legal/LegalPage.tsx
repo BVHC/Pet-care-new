@@ -32,7 +32,7 @@ function LegalShell({
           <span className="mt-6 flex w-fit items-center rounded-full bg-accent-soft px-3.5 py-[7px] text-[11px] font-extrabold uppercase tracking-[0.16em] text-accent">
             {eyebrow}
           </span>
-          <h1 className="font-bayon mt-4 text-[40px] leading-[1.02] text-[#191919] sm:text-[54px]">{title}</h1>
+          <h1 className="font-friendly font-extrabold mt-4 text-[40px] leading-[1.05] text-[#191919] sm:text-[54px]">{title}</h1>
           <p className="mt-4 max-w-[62ch] text-[15.5px] leading-[1.7] text-[#7a6a5d]">{lead}</p>
           <p className="mt-5 text-[13px] font-semibold text-[#a3968a]">Cập nhật lần cuối: {UPDATED}</p>
         </div>

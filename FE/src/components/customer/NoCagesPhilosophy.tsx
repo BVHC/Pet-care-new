@@ -12,7 +12,7 @@ export const NoCagesPhilosophy: React.FC = () => {
             <div className="inline-flex items-center gap-2 rounded-full bg-[#faebe4] px-4 py-1.5 text-xs font-black uppercase tracking-widest text-accent mb-4 border border-accent/15">
               <Heart size={14} className="fill-current" /> Triết Lý PetCare (About Us)
             </div>
-            <h2 className="font-bayon text-[#3B2A1E] text-4xl sm:text-5xl md:text-6xl leading-[0.92] tracking-tight uppercase mb-6">
+            <h2 className="font-friendly font-extrabold text-[#3B2A1E] text-4xl sm:text-5xl md:text-6xl leading-[1.05] tracking-tight uppercase mb-6">
               100% TỰ DO — NÓI KHÔNG VỚI CHUỒNG NHỐT!
             </h2>
             <p className="text-base sm:text-lg text-[#70584b] font-medium leading-relaxed mb-6">
@@ -70,8 +70,10 @@ export const NoCagesPhilosophy: React.FC = () => {
                 <div className="inline-block bg-[#fff500] text-accent font-black text-xs px-3 py-1 rounded-full uppercase tracking-wider mb-2">
                   Tiêu Chuẩn 5 Sao
                 </div>
-                <div className="font-bayon text-2xl sm:text-3xl leading-tight">
-                  KHÔNG GIAN NHƯ NGÔI NHÀ THỨ HAI CỦA BÉ
+                <div className="font-friendly font-bold text-2xl sm:text-3xl leading-tight">
+                  KHÔNG GIAN NHƯ NGÔI NHÀ
+                  <br />
+                  <span className="text-amber-300">THỨ HAI CỦA BÉ</span>
                 </div>
               </div>
             </div>

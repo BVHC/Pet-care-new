@@ -38,7 +38,7 @@ export function AuthShell({ image, tag, headline, lead, stageFooter, title, subt
           <span className="inline-flex items-center rounded-full bg-[#fdf6ec]/[0.13] px-3.5 py-[7px] text-[11px] font-extrabold uppercase tracking-[0.16em] text-surface-1">
             {tag}
           </span>
-          <h1 className="font-bayon mt-5 text-[38px] leading-[0.96] text-surface-1 sm:text-[52px] lg:text-[60px]">
+          <h1 className="font-friendly font-extrabold mt-5 text-[38px] leading-[1.05] text-surface-1 sm:text-[52px] lg:text-[60px]">
             {headline}
           </h1>
           <p className="mt-4 max-w-[42ch] text-[15px] leading-[1.65] text-[#fdf6ec]/70">{lead}</p>

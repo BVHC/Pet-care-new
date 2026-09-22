@@ -82,7 +82,7 @@ export const StayPriceCalculator: React.FC = () => {
           <div className="inline-flex items-center gap-2 text-[12px] font-extrabold uppercase tracking-widest text-accent mb-1">
             <Sparkles size={14} /> Dự Toán Chi Phí Khách Sạn Thú Cưng
           </div>
-          <h3 className="font-bayon text-[32px] sm:text-[38px] text-[#3B2A1E] leading-tight">
+          <h3 className="font-friendly font-bold text-[32px] sm:text-[38px] text-[#3B2A1E] leading-tight">
             GỬI CÀNG DÀI NGÀY — ƯU ĐÃI CÀNG LỚN!
           </h3>
         </div>
@@ -91,7 +91,7 @@ export const StayPriceCalculator: React.FC = () => {
           <div className="flex items-baseline gap-1 sm:justify-end">
             <span
               ref={priceRef}
-              className="font-bayon text-4xl sm:text-5xl text-accent inline-block will-change-transform"
+              className="font-friendly font-extrabold text-4xl sm:text-5xl text-accent inline-block will-change-transform"
             >
               {currentPlan.price}
             </span>

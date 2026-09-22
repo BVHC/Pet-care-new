@@ -30,7 +30,7 @@ export const ContactVetCTA: React.FC = () => {
           <div className="inline-block bg-[#faebe4] text-accent border border-accent/20 font-black text-xs px-3.5 py-1 rounded-full uppercase tracking-wider mb-3">
             Hỗ Trợ 24/7 (Contact Us)
           </div>
-          <h2 className="font-bayon text-[#fdf6ec] text-4xl sm:text-5xl md:text-6xl uppercase tracking-tight leading-[0.92]">
+          <h2 className="font-friendly font-extrabold text-[#fdf6ec] text-4xl sm:text-5xl md:text-6xl uppercase tracking-tight leading-[1.05]">
             BẠN CẦN TƯ VẤN LỊCH TRÌNH RIÊNG CHO BÉ?
           </h2>
           <p className="mt-2 text-sm sm:text-base text-[#e2d5cc] max-w-xl">
@@ -87,7 +87,7 @@ export const ContactVetCTA: React.FC = () => {
 
           <Link
             to="/booking"
-            className="w-full sm:w-auto inline-flex items-center justify-center gap-2 rounded-full bg-accent text-white px-8 py-4 font-bayon text-xl uppercase tracking-wider shadow-[0_8px_25px_rgba(164,51,36,0.35)] hover:bg-accent-hover hover:scale-105 active:scale-95 transition-all"
+            className="w-full sm:w-auto inline-flex items-center justify-center gap-2 rounded-full bg-accent text-white px-8 py-4 font-friendly font-bold text-xl uppercase tracking-wider shadow-[0_8px_25px_rgba(164,51,36,0.35)] hover:bg-accent-hover hover:scale-105 active:scale-95 transition-all"
           >
             <span>ĐẶT LỊCH NGAY</span>
             <ArrowRight size={18} />

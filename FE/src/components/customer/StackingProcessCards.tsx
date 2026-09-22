@@ -193,7 +193,7 @@ export const StackingProcessCards: React.FC = () => {
       {/* ── Background Subtle Watermark Text ── */}
       <div className="absolute inset-0 flex items-center justify-center pointer-events-none select-none z-0">
         <span
-          className="font-bayon text-[#faebe4]/[0.07] leading-none text-center uppercase tracking-tight"
+          className="font-friendly font-extrabold text-[#faebe4]/[0.07] leading-none text-center uppercase tracking-tight"
           style={{ fontSize: 'clamp(70px, 13vw, 190px)' }}
         >
           HOW IT WORKS?
@@ -225,31 +225,31 @@ export const StackingProcessCards: React.FC = () => {
                 <>
                   {/* White Top Tab: PROCESS */}
                   <div className="absolute -top-6 left-8 bg-white rounded-t-xl px-4 py-1 border-t border-x border-white/80 shadow-[0_-4px_10px_rgba(0,0,0,0.03)] z-30">
-                    <span className="font-bayon text-[11px] tracking-widest text-[#382417]">
+                    <span className="font-friendly font-bold text-[11px] tracking-widest text-[#382417]">
                       QUY TRÌNH
                     </span>
                   </div>
                   {/* Terracotta Coral Badge 1 at bottom-left */}
-                  <div className="absolute bottom-16 -left-3.5 w-8 h-8 rounded-full bg-[#cf5b47] text-white font-bayon text-sm flex items-center justify-center shadow-lg border-2 border-white z-30">
+                  <div className="absolute bottom-16 -left-3.5 w-8 h-8 rounded-full bg-[#cf5b47] text-white font-friendly font-bold text-sm flex items-center justify-center shadow-lg border-2 border-white z-30">
                     1
                   </div>
                 </>
               )}
 
               {step.badgePos === 'top-left' && (
-                <div className="absolute -top-3.5 -left-3.5 w-8 h-8 rounded-full bg-[#cf5b47] text-white font-bayon text-sm flex items-center justify-center shadow-lg border-2 border-white z-30">
+                <div className="absolute -top-3.5 -left-3.5 w-8 h-8 rounded-full bg-[#cf5b47] text-white font-friendly font-bold text-sm flex items-center justify-center shadow-lg border-2 border-white z-30">
                   2
                 </div>
               )}
 
               {step.badgePos === 'mid-left' && (
-                <div className="absolute top-1/2 -translate-y-1/2 -left-3.5 w-8 h-8 rounded-full bg-[#cf5b47] text-white font-bayon text-sm flex items-center justify-center shadow-lg border-2 border-white z-30">
+                <div className="absolute top-1/2 -translate-y-1/2 -left-3.5 w-8 h-8 rounded-full bg-[#cf5b47] text-white font-friendly font-bold text-sm flex items-center justify-center shadow-lg border-2 border-white z-30">
                   3
                 </div>
               )}
 
               {step.badgePos === 'top-right' && (
-                <div className="absolute -top-4 -right-4 w-10 h-10 rounded-full bg-[#ffe600] text-[#222] font-bayon text-base flex items-center justify-center shadow-xl border-2 border-white z-30 animate-pulse">
+                <div className="absolute -top-4 -right-4 w-10 h-10 rounded-full bg-[#ffe600] text-[#222] font-friendly font-bold text-base flex items-center justify-center shadow-xl border-2 border-white z-30 animate-pulse">
                   4
                 </div>
               )}
@@ -259,14 +259,14 @@ export const StackingProcessCards: React.FC = () => {
                 {/* ── Top Half: Centered Brown Headlines + Big Number + All-Caps Desc ── */}
                 <div className="flex-1 flex flex-col items-center justify-center px-6 pt-8 pb-4 text-center">
                   {/* Title (2 lines, sentence case, condensed dark brown #382417) */}
-                  <h3 className="font-bayon text-[#382417] text-[24px] sm:text-[30px] leading-[1.05] tracking-tight max-w-[320px]">
+                  <h3 className="font-friendly font-bold text-[#382417] text-[24px] sm:text-[30px] leading-[1.1] tracking-tight max-w-[320px]">
                     {step.titleLine1}
                     <br />
                     <span className="text-accent">{step.titleLine2}</span>
                   </h3>
 
                   {/* Big Number (Dark Brown #382417) */}
-                  <div className="font-bayon text-[#382417] text-[54px] sm:text-[66px] leading-none my-3 select-none tracking-tight">
+                  <div className="font-friendly font-extrabold text-[#382417] text-[54px] sm:text-[66px] leading-none my-3 select-none tracking-tight">
                     {step.num}
                   </div>
 
@@ -304,7 +304,7 @@ export const StackingProcessCards: React.FC = () => {
               }`}
             />
           ))}
-          <span className="font-bayon text-[#faebe4]/55 text-sm tracking-widest uppercase ml-3">
+          <span className="font-friendly font-bold text-[#faebe4]/55 text-sm tracking-widest uppercase ml-3">
             0{activeIdx + 1} / 04
           </span>
         </div>
@@ -312,7 +312,7 @@ export const StackingProcessCards: React.FC = () => {
         {/* Bottom Right: Red capsule BOOK NOW button */}
         <Link
           to="/booking"
-          className="inline-flex items-center gap-2 rounded-full bg-[#faebe4] hover:bg-white px-6 py-2.5 font-bayon text-base text-accent uppercase tracking-wider shadow-[0_6px_20px_rgba(0,0,0,0.35)] transition-transform hover:scale-105 active:scale-95"
+          className="inline-flex items-center gap-2 rounded-full bg-[#faebe4] hover:bg-white px-6 py-2.5 font-friendly font-bold text-base text-accent uppercase tracking-wider shadow-[0_6px_20px_rgba(0,0,0,0.35)] transition-transform hover:scale-105 active:scale-95"
         >
           <span>ĐẶT LỊCH NGAY</span>
           <span className="w-2 h-2 rounded-full bg-accent"></span>

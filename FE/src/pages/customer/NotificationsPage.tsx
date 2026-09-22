@@ -132,7 +132,7 @@ export function NotificationsPage() {
             <span className="font-semibold text-white/85">Thông báo</span>
           </nav>
           <div className="flex flex-wrap items-end justify-between gap-4">
-            <h1 className="font-bayon text-[clamp(22px,3vw,36px)] leading-[1.02] font-normal text-white">
+            <h1 className="font-friendly font-extrabold text-[clamp(22px,3vw,36px)] leading-[1.05] text-white">
               Thông báo
             </h1>
             {unreadCount > 0 && (

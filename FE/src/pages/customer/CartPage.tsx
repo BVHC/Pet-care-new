@@ -300,7 +300,7 @@ export function CartPage() {
           </nav>
 
           <div className="flex flex-wrap items-end justify-between gap-4">
-            <h1 className="font-bayon text-[clamp(24px,3.2vw,40px)] leading-[1.02] font-normal text-white">
+            <h1 className="font-friendly font-extrabold text-[clamp(24px,3.2vw,40px)] leading-[1.05] text-white">
               Giỏ hàng của bạn
             </h1>
             {items.length > 0 && (

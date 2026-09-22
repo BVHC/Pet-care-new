@@ -234,7 +234,7 @@ export function BookingPage() {
           </nav>
 
           <div className="max-w-[680px]">
-            <h1 className="font-bayon text-[clamp(28px,4vw,52px)] leading-[1.02] font-normal text-white">
+            <h1 className="font-friendly font-extrabold text-[clamp(28px,4vw,52px)] leading-[1.05] text-white">
               Đặt lịch khám cho boss
             </h1>
             <p className="mt-4 max-w-[50ch] text-[15px] leading-relaxed text-white/70">

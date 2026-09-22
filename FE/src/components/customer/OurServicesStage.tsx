@@ -202,7 +202,7 @@ export const OurServicesStage: React.FC = () => {
         {/* 1. TOP HEADER */}
         <div className="relative text-center w-full z-10 shrink-0">
           <div className="relative inline-block">
-            <h2 className="font-bayon text-accent text-[clamp(26px,3.8vw,52px)] leading-[0.95] tracking-normal uppercase">
+            <h2 className="font-friendly font-extrabold text-accent text-[clamp(26px,3.8vw,52px)] leading-[1.05] tracking-normal uppercase">
               DỊCH VỤ CỦA CHÚNG TÔI
             </h2>
             {/* Tennis ball */}
@@ -234,7 +234,7 @@ export const OurServicesStage: React.FC = () => {
           <div className="absolute left-0 sm:left-2 top-0 sm:top-2 z-20 pointer-events-none">
             <div
               ref={numRef}
-              className="font-bayon text-accent text-[48px] sm:text-[68px] md:text-[84px] leading-none tracking-tighter opacity-90"
+              className="font-friendly font-extrabold text-accent text-[48px] sm:text-[68px] md:text-[84px] leading-none tracking-tighter opacity-90"
             >
               {service.num}
             </div>
@@ -300,7 +300,7 @@ export const OurServicesStage: React.FC = () => {
             </div>
             <h3
               ref={titleRef}
-              className="font-bayon text-accent text-[22px] sm:text-[30px] md:text-[36px] leading-[0.95] tracking-tight uppercase"
+              className="font-friendly font-bold text-accent text-[22px] sm:text-[30px] md:text-[36px] leading-[1.05] tracking-tight uppercase"
             >
               {service.title}
             </h3>
@@ -319,7 +319,7 @@ export const OurServicesStage: React.FC = () => {
             </span>
             <Link
               to="/booking"
-              className="inline-flex items-center gap-2 rounded-full bg-accent hover:bg-accent-hover px-6 sm:px-8 py-2.5 sm:py-3 font-bayon text-lg sm:text-xl text-white uppercase tracking-wider shadow-[0_10px_22px_rgba(164,51,36,0.3)] -rotate-2 hover:rotate-0 hover:scale-105 active:scale-95 transition-all duration-200"
+              className="inline-flex items-center gap-2 rounded-full bg-accent hover:bg-accent-hover px-6 sm:px-8 py-2.5 sm:py-3 font-friendly font-bold text-lg sm:text-xl text-white uppercase tracking-wider shadow-[0_10px_22px_rgba(164,51,36,0.3)] -rotate-2 hover:rotate-0 hover:scale-105 active:scale-95 transition-all duration-200"
             >
               <span>ĐẶT LỊCH NGAY</span>
               <ArrowRight size={16} className="rotate-2" />

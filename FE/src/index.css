@@ -61,6 +61,7 @@
   /* Typography */
   --font-friendly: 'Baloo 2', ui-rounded, 'Segoe UI', sans-serif;
   --font-professional: 'Inter', -apple-system, 'Segoe UI', sans-serif;
+  --font-bayon: 'Baloo 2', ui-rounded, 'Segoe UI', sans-serif;
 
   /* Radius */
   --radius-sm: 6px;
@@ -750,3 +751,10 @@ body {
   align-items: center;
   justify-content: space-between;
 }
+
+/* Fallback alias for legacy font-bayon classes to use Baloo 2 */
+.font-bayon {
+  font-family: var(--font-friendly), sans-serif;
+  letter-spacing: 0.01em;
+}
+

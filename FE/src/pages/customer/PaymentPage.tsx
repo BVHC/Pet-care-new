@@ -75,7 +75,7 @@ export function PaymentPage() {
             <span className="mx-1.5">/</span>
             <span className="font-semibold text-white/85">Thanh toán</span>
           </nav>
-          <h1 className="font-bayon text-[clamp(22px,3vw,36px)] leading-[1.02] font-normal text-white">
+          <h1 className="font-friendly font-extrabold text-[clamp(22px,3vw,36px)] leading-[1.05] text-white">
             Phương thức thanh toán
           </h1>
         </div>
