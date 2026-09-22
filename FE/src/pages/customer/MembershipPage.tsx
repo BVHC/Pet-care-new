@@ -92,7 +92,7 @@ export function MembershipPage() {
   const fmtVnd = (n: number) => n.toLocaleString('vi-VN') + 'đ'
 
   return (
-    <div className="bg-[var(--color-surface-page)] pb-24">
+    <div className="bg-(--color-surface-page) pb-24">
       <CommonPageHero
         eyebrow="Hội viên PetCare"
         title="Chương trình hội viên & Điểm thưởng"
@@ -109,10 +109,10 @@ export function MembershipPage() {
           <div className="min-w-0 space-y-10">
             {/* Tier + Points hero */}
             <div className="grid gap-5 lg:grid-cols-[1fr_280px]">
-              <div className="relative overflow-hidden rounded-3xl border border-[var(--color-border-default)] bg-gradient-to-br from-[var(--color-surface-card)] via-[var(--color-surface-card)] to-[var(--color-accent-soft)] p-7 shadow-[0_4px_16px_-8px_rgba(164,51,36,0.4)]">
-                <div className="absolute right-0 top-0 h-40 w-40 rounded-full bg-[var(--color-accent-soft)] blur-3xl" aria-hidden />
+              <div className="relative overflow-hidden rounded-3xl border border-(--color-border-default) bg-linear-to-br from-(--color-surface-card) via-(--color-surface-card) to-(--color-accent-soft) p-7 shadow-[0_4px_16px_-8px_rgba(164,51,36,0.4)]">
+                <div className="absolute right-0 top-0 h-40 w-40 rounded-full bg-(--color-accent-soft) blur-3xl" aria-hidden />
                 <div className="relative">
-                  <div className="mb-2 flex items-center gap-2 text-[12px] font-bold uppercase tracking-wider text-[var(--color-accent)]">
+                  <div className="mb-2 flex items-center gap-2 text-[12px] font-bold uppercase tracking-wider text-accent">
                     <Sparkles size={14} /> Hạng hiện tại
                   </div>
                   <div className="flex items-center gap-4">
@@ -123,10 +123,10 @@ export function MembershipPage() {
                       <currentTier.icon size={32} className="text-white" />
                     </div>
                     <div>
-                      <div className="font-[var(--font-friendly)] text-3xl font-extrabold text-[var(--color-text-primary)]">
+                      <div className="font-friendly text-3xl font-extrabold text-(--color-text-primary)">
                         {currentTier.name}
                       </div>
-                      <div className="text-[13px] text-[var(--color-text-secondary)]">
+                      <div className="text-[13px] text-(--color-text-secondary)">
                         Tổng chi tiêu: {fmtVnd(lifetimeSpend)}
                       </div>
                     </div>
@@ -134,15 +134,15 @@ export function MembershipPage() {
 
                   {nextTier && (
                     <div className="mt-6">
-                      <div className="mb-2 flex items-center justify-between text-[12.5px] text-[var(--color-text-secondary)]">
+                      <div className="mb-2 flex items-center justify-between text-[12.5px] text-(--color-text-secondary)">
                         <span>Còn {fmtVnd(nextTier.threshold - lifetimeSpend)} để lên hạng {nextTier.name}</span>
-                        <span className="font-bold text-[var(--color-accent)]">
+                        <span className="font-bold text-accent">
                           {Math.round((lifetimeSpend / nextTier.threshold) * 100)}%
                         </span>
                       </div>
-                      <div className="h-2 overflow-hidden rounded-full bg-[var(--color-surface-2)]">
+                      <div className="h-2 overflow-hidden rounded-full bg-(--color-surface-2)">
                         <div
-                          className="h-full rounded-full bg-gradient-to-r from-[var(--color-accent)] to-[var(--color-accent-hover)]"
+                          className="h-full rounded-full bg-linear-to-r from-accent to-accent-hover"
                           style={{ width: `${(lifetimeSpend / nextTier.threshold) * 100}%` }}
                         />
                       </div>
@@ -151,21 +151,21 @@ export function MembershipPage() {
                 </div>
               </div>
 
-              <div className="flex flex-col rounded-3xl border border-[var(--color-border-default)] bg-[var(--color-surface-card)] p-7 shadow-[0_1px_2px_rgba(56,36,23,0.06),0_8px_18px_-14px_rgba(56,36,23,0.4)]">
-                <div className="mb-2 flex items-center gap-2 text-[12px] font-bold uppercase tracking-wider text-[var(--color-accent)]">
+              <div className="flex flex-col rounded-3xl border border-(--color-border-default) bg-(--color-surface-card) p-7 shadow-[0_1px_2px_rgba(56,36,23,0.06),0_8px_18px_-14px_rgba(56,36,23,0.4)]">
+                <div className="mb-2 flex items-center gap-2 text-[12px] font-bold uppercase tracking-wider text-accent">
                   <Gift size={14} /> Điểm thưởng
                 </div>
-                <div className="font-[var(--font-friendly)] text-4xl font-extrabold text-[var(--color-text-primary)]">
+                <div className="font-friendly text-4xl font-extrabold text-(--color-text-primary)">
                   {totalPoints.toLocaleString('vi-VN')}
-                  <span className="ml-1 text-base font-normal text-[var(--color-text-secondary)]">điểm</span>
+                  <span className="ml-1 text-base font-normal text-(--color-text-secondary)">điểm</span>
                 </div>
-                <div className="mt-1 text-[12.5px] text-[var(--color-text-secondary)]">
+                <div className="mt-1 text-[12.5px] text-(--color-text-secondary)">
                   Tương đương {(totalPoints * 50).toLocaleString('vi-VN')}đ
                 </div>
-                <button className="mt-4 inline-flex w-fit items-center gap-1 text-[13px] font-bold text-[var(--color-accent)] transition-colors hover:text-[var(--color-accent-hover)]">
+                <button className="mt-4 inline-flex w-fit items-center gap-1 text-[13px] font-bold text-accent transition-colors hover:text-(--color-accent-hover)">
                   Đổi điểm ngay <ChevronRight size={14} />
                 </button>
-                <div className="mt-4 flex items-center gap-2 border-t border-[var(--color-border-default)] pt-4 text-[12px] text-[var(--color-text-secondary)]">
+                <div className="mt-4 flex items-center gap-2 border-t border-(--color-border-default) pt-4 text-[12px] text-(--color-text-secondary)">
                   <TrendingUp size={14} className="text-emerald-600" />
                   <span>+1.5x hệ số tích điểm hạng Vàng</span>
                 </div>
@@ -175,10 +175,10 @@ export function MembershipPage() {
             {/* Tiers */}
             <div>
               <header className="mb-6 text-center">
-                <h2 className="font-[var(--font-friendly)] text-[clamp(24px,3vw,36px)] font-extrabold text-[var(--color-text-primary)]">
+                <h2 className="font-friendly text-[clamp(24px,3vw,36px)] font-extrabold text-(--color-text-primary)">
                   Bảng hạng &amp; Quyền lợi
                 </h2>
-                <p className="mt-1 text-[13px] text-[var(--color-text-secondary)]">
+                <p className="mt-1 text-[13px] text-(--color-text-secondary)">
                   Hạng chỉ tăng — không bao giờ bị hạ xuống.
                 </p>
               </header>
@@ -190,12 +190,12 @@ export function MembershipPage() {
                       key={tier.id}
                       className={`relative overflow-hidden rounded-3xl border-2 p-6 transition-all ${
                         isCurrent
-                          ? 'border-[var(--color-accent)] bg-[var(--color-surface-card)] shadow-[0_8px_24px_-12px_rgba(164,51,36,0.5)]'
-                          : 'border-[var(--color-border-default)] bg-[var(--color-surface-card)] hover:border-[var(--color-accent)]'
+                          ? 'border-(--color-accent) bg-(--color-surface-card) shadow-[0_8px_24px_-12px_rgba(164,51,36,0.5)]'
+                          : 'border-(--color-border-default) bg-(--color-surface-card) hover:border-(--color-accent)'
                       }`}
                     >
                       {isCurrent && (
-                        <span className="absolute right-4 top-4 rounded-full bg-[var(--color-accent)] px-2.5 py-0.5 text-[10px] font-extrabold uppercase tracking-wider text-white">
+                        <span className="absolute right-4 top-4 rounded-full bg-accent px-2.5 py-0.5 text-[10px] font-extrabold uppercase tracking-wider text-white">
                           Hạng của bạn
                         </span>
                       )}
@@ -205,15 +205,15 @@ export function MembershipPage() {
                       >
                         <tier.icon size={28} className="text-white" />
                       </div>
-                      <h3 className="font-[var(--font-friendly)] text-2xl font-extrabold text-[var(--color-text-primary)]">
+                      <h3 className="font-friendly text-2xl font-extrabold text-(--color-text-primary)">
                         {tier.name}
                       </h3>
-                      <p className="mt-1 text-[12px] text-[var(--color-text-secondary)]">
+                      <p className="mt-1 text-[12px] text-(--color-text-secondary)">
                         {tier.threshold === 0 ? 'Hạng khởi điểm' : `Từ ${fmtVnd(tier.threshold)} tổng chi tiêu`}
                       </p>
                       <ul className="mt-4 space-y-2">
                         {tier.perks.map((perk) => (
-                          <li key={perk} className="flex items-start gap-2 text-[13px] text-[var(--color-text-primary)]">
+                          <li key={perk} className="flex items-start gap-2 text-[13px] text-(--color-text-primary)">
                             <Check size={16} className="mt-0.5 shrink-0 text-emerald-600" />
                             <span>{perk}</span>
                           </li>
@@ -228,16 +228,16 @@ export function MembershipPage() {
             {/* Point history */}
             <div>
               <header className="mb-5 flex items-center justify-between">
-                <h2 className="font-[var(--font-friendly)] text-2xl font-extrabold text-[var(--color-text-primary)]">
+                <h2 className="font-friendly text-2xl font-extrabold text-(--color-text-primary)">
                   Lịch sử điểm thưởng
                 </h2>
-                <button className="text-[13px] font-bold text-[var(--color-accent)] transition-colors hover:text-[var(--color-accent-hover)]">
+                <button className="text-[13px] font-bold text-accent transition-colors hover:text-(--color-accent-hover)">
                   Xem tất cả
                 </button>
               </header>
-              <div className="overflow-hidden rounded-2xl border border-[var(--color-border-default)] bg-[var(--color-surface-card)] shadow-[0_1px_2px_rgba(56,36,23,0.06),0_4px_12px_-8px_rgba(56,36,23,0.4)]">
+              <div className="overflow-hidden rounded-2xl border border-(--color-border-default) bg-(--color-surface-card) shadow-[0_1px_2px_rgba(56,36,23,0.06),0_4px_12px_-8px_rgba(56,36,23,0.4)]">
                 <table className="w-full text-left text-[13.5px]">
-                  <thead className="bg-[var(--color-surface-2)] text-[12px] font-bold uppercase tracking-wider text-[var(--color-text-secondary)]">
+                  <thead className="bg-(--color-surface-2) text-[12px] font-bold uppercase tracking-wider text-(--color-text-secondary)">
                     <tr>
                       <th className="px-5 py-3.5">Ngày</th>
                       <th className="px-5 py-3.5">Mô tả</th>
@@ -246,11 +246,11 @@ export function MembershipPage() {
                   </thead>
                   <tbody>
                     {POINT_HISTORY.map((row) => (
-                      <tr key={row.id} className="border-t border-[var(--color-border-default)]">
-                        <td className="px-5 py-3.5 text-[var(--color-text-secondary)]">{row.date}</td>
-                        <td className="px-5 py-3.5 text-[var(--color-text-primary)]">{row.desc}</td>
+                      <tr key={row.id} className="border-t border-(--color-border-default)">
+                        <td className="px-5 py-3.5 text-(--color-text-secondary)">{row.date}</td>
+                        <td className="px-5 py-3.5 text-(--color-text-primary)">{row.desc}</td>
                         <td className={`px-5 py-3.5 text-right font-bold ${
-                          row.type === 'earn' ? 'text-emerald-600' : 'text-[var(--color-accent)]'
+                          row.type === 'earn' ? 'text-emerald-600' : 'text-accent'
                         }`}>
                           {row.points > 0 ? '+' : ''}{row.points.toLocaleString('vi-VN')}
                         </td>

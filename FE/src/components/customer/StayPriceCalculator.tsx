@@ -75,11 +75,11 @@ export const StayPriceCalculator: React.FC = () => {
   }
 
   return (
-    <div className="w-full max-w-4xl mx-auto rounded-[32px] bg-white p-6 sm:p-10 shadow-[0_18px_50px_rgba(164,51,36,0.08)] border border-[#a43324]/20 relative overflow-hidden">
+    <div className="w-full max-w-4xl mx-auto rounded-[32px] bg-white p-6 sm:p-10 shadow-[0_18px_50px_rgba(164,51,36,0.08)] border border-accent/20 relative overflow-hidden">
       {/* Decorative Top Accent */}
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-b border-[#a43324]/10 pb-6 mb-6">
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-b border-accent/10 pb-6 mb-6">
         <div>
-          <div className="inline-flex items-center gap-2 text-[12px] font-extrabold uppercase tracking-widest text-[#a43324] mb-1">
+          <div className="inline-flex items-center gap-2 text-[12px] font-extrabold uppercase tracking-widest text-accent mb-1">
             <Sparkles size={14} /> Dự Toán Chi Phí Khách Sạn Thú Cưng
           </div>
           <h3 className="font-bayon text-[32px] sm:text-[38px] text-[#3B2A1E] leading-tight">
@@ -91,15 +91,15 @@ export const StayPriceCalculator: React.FC = () => {
           <div className="flex items-baseline gap-1 sm:justify-end">
             <span
               ref={priceRef}
-              className="font-bayon text-4xl sm:text-5xl text-[#a43324] inline-block will-change-transform"
+              className="font-bayon text-4xl sm:text-5xl text-accent inline-block will-change-transform"
             >
               {currentPlan.price}
             </span>
             <span className="text-sm font-semibold text-gray-500">{currentPlan.unit}</span>
           </div>
           {currentPlan.badge && (
-            <span className="inline-flex items-center gap-1.5 mt-1 text-[11px] font-extrabold uppercase tracking-wider bg-[#faebe4] text-[#a43324] border border-[#a43324]/20 px-3 py-0.5 rounded-full shadow-xs">
-              {currentPlan.isVip ? <Crown size={12} className="text-amber-600 shrink-0" /> : <Gift size={12} className="text-[#a43324] shrink-0" />}
+            <span className="inline-flex items-center gap-1.5 mt-1 text-[11px] font-extrabold uppercase tracking-wider bg-[#faebe4] text-accent border border-accent/20 px-3 py-0.5 rounded-full shadow-xs">
+              {currentPlan.isVip ? <Crown size={12} className="text-amber-600 shrink-0" /> : <Gift size={12} className="text-accent shrink-0" />}
               <span>{currentPlan.badge}</span>
             </span>
           )}
@@ -110,7 +110,7 @@ export const StayPriceCalculator: React.FC = () => {
       <div className="mb-6">
         <div className="flex justify-between items-center text-sm font-bold text-gray-700 mb-2">
           <span>Thời gian lưu trú dự kiến:</span>
-          <span className="text-[#a43324] font-extrabold text-base">{currentPlan.days}</span>
+          <span className="text-accent font-extrabold text-base">{currentPlan.days}</span>
         </div>
         <input
           type="range"
@@ -124,7 +124,7 @@ export const StayPriceCalculator: React.FC = () => {
         />
         <div className="flex justify-between text-[11px] font-bold text-gray-400 mt-2 px-1">
           <span>1 Ngày</span>
-          <span className={sliderVal === 2 ? 'text-[#a43324] font-black' : ''}>3 Ngày</span>
+          <span className={sliderVal === 2 ? 'text-accent font-black' : ''}>3 Ngày</span>
           <span>7 Ngày</span>
           <span>15 Ngày</span>
           <span>30 Ngày VIP</span>
@@ -142,7 +142,7 @@ export const StayPriceCalculator: React.FC = () => {
       {/* Feature Highlights Grid */}
       <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 mb-8">
         {currentPlan.highlights.map((h, i) => (
-          <div key={i} className="flex items-start gap-2 text-xs font-semibold text-gray-700 bg-[#fdf6ec]/80 border border-[#a43324]/10 rounded-xl p-3">
+          <div key={i} className="flex items-start gap-2 text-xs font-semibold text-gray-700 bg-[#fdf6ec]/80 border border-accent/10 rounded-xl p-3">
             <CheckCircle2 size={16} className="text-emerald-500 shrink-0 mt-0.5" />
             <span>{h}</span>
           </div>
@@ -150,14 +150,14 @@ export const StayPriceCalculator: React.FC = () => {
       </div>
 
       {/* Action CTA */}
-      <div className="flex flex-col sm:flex-row items-center justify-between gap-4 pt-4 border-t border-[#a43324]/10">
+      <div className="flex flex-col sm:flex-row items-center justify-between gap-4 pt-4 border-t border-accent/10">
         <div className="text-xs text-gray-500 flex items-center gap-2">
-          <Calendar size={15} className="text-[#a43324]" />
+          <Calendar size={15} className="text-accent" />
           <span>Hỗ trợ nhận phòng 24/7 • Giữ phòng trước không mất phí cọc</span>
         </div>
         <Link
           to="/booking"
-          className="w-full sm:w-auto inline-flex items-center justify-center gap-2 rounded-full bg-[#a43324] px-8 py-3 text-sm font-extrabold text-white uppercase tracking-wider shadow-[0_8px_20px_rgba(164,51,36,0.25)] hover:bg-[#89271b] hover:scale-105 active:scale-95 transition-all"
+          className="w-full sm:w-auto inline-flex items-center justify-center gap-2 rounded-full bg-accent px-8 py-3 text-sm font-extrabold text-white uppercase tracking-wider shadow-[0_8px_20px_rgba(164,51,36,0.25)] hover:bg-accent-hover hover:scale-105 active:scale-95 transition-all"
         >
           Đặt Phòng Cho Bé Ngay <ArrowRight size={16} />
         </Link>

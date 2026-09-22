@@ -39,7 +39,7 @@ const MOCK_NOTIFS: Notification[] = [
   {
     id: 2,
     type: 'promo',
-    title: '🎉 Sale 20% cho thức ăn thú cưng',
+    title: 'Sale 20% cho thức ăn thú cưng',
     body: 'Chương trình khuyến mãi đặc biệt dành riêng cho bạn — giảm 20% cho tất cả sản phẩm thức ăn. Chỉ áp dụng đến hết tuần này!',
     time: '1 ngày trước',
     unread: true,
@@ -116,7 +116,7 @@ export function NotificationsPage() {
   const unreadCount = MOCK_NOTIFS.filter((n) => n.unread).length
 
   return (
-    <div className="bg-[var(--color-surface-page)] pb-24">
+    <div className="bg-(--color-surface-page) pb-24">
       {/* hero slab */}
       <section className={styles.slab}>
         <img src="/imgs/hero-dog-clean.png" alt="" className={styles.slabBg} aria-hidden loading="eager" />

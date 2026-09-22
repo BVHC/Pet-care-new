@@ -50,7 +50,7 @@ export function SecurityPage() {
   }
 
   return (
-    <div className="bg-[var(--color-surface-page)] pb-24">
+    <div className="bg-(--color-surface-page) pb-24">
       {/* hero slab */}
       <section className={styles.slab}>
         <img src="/imgs/hero-dog-clean.png" alt="" className={styles.slabBg} aria-hidden loading="eager" />
@@ -167,7 +167,7 @@ export function SecurityPage() {
                     <div className={styles.secDesc}>
                       Nhận mã OTP qua SMS mỗi khi đăng nhập từ thiết bị mới.
                     </div>
-                    {twoFa && <div className={styles.secMeta}>✓ Đã bật</div>}
+                    {twoFa && <div className={styles.secMeta}><CheckCircle size={13} className="inline mr-1 text-emerald-600 align-[-1px]" />Đã bật</div>}
                   </div>
                   <button
                     type="button"
@@ -209,7 +209,7 @@ export function SecurityPage() {
                   <div className={styles.secContent}>
                     <div className={styles.secTitle}>0901 234 567</div>
                     <div className={styles.secDesc}>Dùng để nhận mã OTP và thông báo</div>
-                    {twoFa && <div className={styles.secMeta}>✓ Đã liên kết 2FA</div>}
+                    {twoFa && <div className={styles.secMeta}><CheckCircle size={13} className="inline mr-1 text-emerald-600 align-[-1px]" />Đã liên kết 2FA</div>}
                   </div>
                   <button type="button" className={`${styles.secBtn} ${styles.secBtnDanger}`}>
                     Thay đổi
@@ -233,7 +233,7 @@ export function SecurityPage() {
                     <div className={styles.secDesc}>
                       Gửi email + SMS khi có đăng nhập từ thiết bị hoặc IP lạ.
                     </div>
-                    {loginAlert && <div className={styles.secMeta}>✓ Đã bật</div>}
+                    {loginAlert && <div className={styles.secMeta}><CheckCircle size={13} className="inline mr-1 text-emerald-600 align-[-1px]" />Đã bật</div>}
                   </div>
                   <button
                     type="button"
@@ -354,11 +354,11 @@ export function SecurityPage() {
                 ].map((b) => (
                   <div key={b.branch} className={styles.consentItem}>
                     <div className={styles.consentBranch}>
-                      <MapPin size={14} className="shrink-0 text-[var(--color-accent)]" />
+                      <MapPin size={14} className="shrink-0 text-accent" />
                       <div>
-                        <div className="text-[13px] font-bold text-[var(--color-text-primary)]">{b.branch}</div>
-                        <div className="text-[11.5px] text-[var(--color-text-secondary)]">{b.address}</div>
-                        <div className="mt-0.5 text-[11px] text-[var(--color-text-secondary)]">Cấp quyền: {b.granted}</div>
+                        <div className="text-[13px] font-bold text-(--color-text-primary)">{b.branch}</div>
+                        <div className="text-[11.5px] text-(--color-text-secondary)">{b.address}</div>
+                        <div className="mt-0.5 text-[11px] text-(--color-text-secondary)">Cấp quyền: {b.granted}</div>
                       </div>
                     </div>
                     <button

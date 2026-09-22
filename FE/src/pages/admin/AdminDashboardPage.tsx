@@ -2,8 +2,8 @@ import { Card, CardContent, CardHeader, CardTitle } from '../../components/ui/ca
 import { useAdminSession } from '../../shared/stores/admin-session.store';
 import { cn } from '../../lib/utils';
 import {
-  Calendar, DollarSign, Clock, AlertTriangle, TrendingUp,
-  ShoppingBag, Users, BarChart3, Activity
+  Calendar, DollarSign, Clock, AlertTriangle,
+  ShoppingBag, Users
 } from 'lucide-react';
 
 export function AdminDashboardPage() {
@@ -35,8 +35,8 @@ export function AdminDashboardPage() {
     <div className="space-y-6">
       {/* Header */}
       <div>
-        <h1 className="text-2xl font-semibold text-[var(--text-primary)]">Bảng điều khiển</h1>
-        <p className="text-[var(--text-secondary)]">Xin chào {user?.name}, chào mừng đến với Pet Care Admin</p>
+        <h1 className="text-2xl font-semibold text-(--text-primary)">Bảng điều khiển</h1>
+        <p className="text-(--text-secondary)">Xin chào {user?.name}, chào mừng đến với Pet Care Admin</p>
       </div>
 
       {/* Stats Grid */}
@@ -61,8 +61,8 @@ export function AdminDashboardPage() {
                   )} />
                 </div>
                 <div className="flex-1 min-w-0">
-                  <p className="text-2xl font-semibold text-[var(--text-primary)]">{stat.value}</p>
-                  <p className="text-sm text-[var(--text-secondary)]">{stat.label}</p>
+                  <p className="text-2xl font-semibold text-(--text-primary)">{stat.value}</p>
+                  <p className="text-sm text-(--text-secondary)">{stat.label}</p>
                 </div>
                 {stat.change && (
                   <span className="text-xs font-medium text-green-600 bg-green-50 px-2 py-1 rounded-full">
@@ -87,10 +87,10 @@ export function AdminDashboardPage() {
               {services.map((service) => (
                 <div key={service.label}>
                   <div className="flex justify-between text-sm mb-1.5">
-                    <span className="text-[var(--text-primary)]">{service.label}</span>
-                    <span className="font-medium text-[var(--text-secondary)]">{service.value} lịch</span>
+                    <span className="text-(--text-primary)">{service.label}</span>
+                    <span className="font-medium text-(--text-secondary)">{service.value} lịch</span>
                   </div>
-                  <div className="h-2 bg-[var(--bg-tertiary)] rounded-full overflow-hidden">
+                  <div className="h-2 bg-(--bg-tertiary) rounded-full overflow-hidden">
                     <div
                       className={cn('h-full rounded-full', service.color)}
                       style={{ width: `${(service.value / 24) * 100}%` }}
@@ -112,17 +112,17 @@ export function AdminDashboardPage() {
               {activities.map((item, idx) => (
                 <div key={idx} className="flex items-center gap-3 py-2">
                   <div className={cn(
-                    'w-2 h-2 rounded-full flex-shrink-0',
+                    'w-2 h-2 rounded-full shrink-0',
                     item.type === 'success' && 'bg-green-500',
                     item.type === 'info' && 'bg-blue-500',
                     item.type === 'warning' && 'bg-amber-500',
                     item.type === 'error' && 'bg-red-500'
                   )} />
                   <div className="flex-1 min-w-0">
-                    <p className="text-sm font-medium text-[var(--text-primary)]">{item.action}</p>
-                    <p className="text-xs text-[var(--text-tertiary)] truncate">{item.detail}</p>
+                    <p className="text-sm font-medium text-(--text-primary)">{item.action}</p>
+                    <p className="text-xs text-(--text-tertiary) truncate">{item.detail}</p>
                   </div>
-                  <span className="text-xs text-[var(--text-tertiary)] flex-shrink-0">{item.time}</span>
+                  <span className="text-xs text-(--text-tertiary) shrink-0">{item.time}</span>
                 </div>
               ))}
             </div>
@@ -148,16 +148,16 @@ export function AdminDashboardPage() {
   );
 }
 
-function QuickAction({ icon: Icon, label, href, color }: { icon: any; label: string; href: string; color: string }) {
+function QuickAction({ icon: Icon, label, href, color }: { icon: React.ComponentType<{ className?: string }>; label: string; href: string; color: string }) {
   return (
     <a
       href={href}
-      className="flex flex-col items-center justify-center p-4 bg-[var(--bg-secondary)] rounded-xl hover:bg-[var(--bg-tertiary)] transition-colors"
+      className="flex flex-col items-center justify-center p-4 bg-(--bg-secondary) rounded-xl hover:bg-(--bg-tertiary) transition-colors"
     >
       <div className={cn('p-3 rounded-lg mb-2', color)}>
         <Icon className="h-5 w-5 text-white" />
       </div>
-      <span className="text-sm font-medium text-[var(--text-primary)]">{label}</span>
+      <span className="text-sm font-medium text-(--text-primary)">{label}</span>
     </a>
   );
 }

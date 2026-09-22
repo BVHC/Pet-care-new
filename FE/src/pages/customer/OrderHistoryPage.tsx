@@ -49,38 +49,38 @@ function RefundModal({ order, onClose }: { order: Order; onClose: () => void }) 
 
   return (
     <div className="fixed inset-0 z-[100] flex items-end justify-center bg-black/50 p-4 sm:items-center" onClick={(e) => e.target === e.currentTarget && onClose()}>
-      <div className="w-full max-w-lg overflow-hidden rounded-3xl border border-[var(--color-border-default)] bg-white shadow-[0_24px_64px_-16px_rgba(56,36,23,0.5)]">
-        <div className="flex items-center justify-between border-b border-[var(--color-border-default)] px-6 py-4">
+      <div className="w-full max-w-lg overflow-hidden rounded-3xl border border-(--color-border-default) bg-white shadow-[0_24px_64px_-16px_rgba(56,36,23,0.5)]">
+        <div className="flex items-center justify-between border-b border-(--color-border-default) px-6 py-4">
           <div className="flex items-center gap-2">
-            <DollarSign size={18} className="text-[var(--color-accent)]" />
-            <h2 className="font-[var(--font-friendly)] text-lg font-extrabold text-[var(--color-text-primary)]">Yêu cầu hoàn tiền</h2>
+            <DollarSign size={18} className="text-accent" />
+            <h2 className="font-friendly text-lg font-extrabold text-(--color-text-primary)">Yêu cầu hoàn tiền</h2>
           </div>
-          <button onClick={onClose} className="text-[var(--color-text-secondary)] hover:text-[var(--color-text-primary)]"><X size={20} /></button>
+          <button onClick={onClose} className="text-(--color-text-secondary) hover:text-(--color-text-primary)"><X size={20} /></button>
         </div>
 
         {!submitted ? (
           <div className="p-6 space-y-4">
             {/* Order info */}
-            <div className="rounded-xl border border-[var(--color-border-default)] bg-[var(--color-surface-2)] p-3">
+            <div className="rounded-xl border border-(--color-border-default) bg-(--color-surface-2) p-3">
               <div className="flex items-center justify-between">
-                <span className="text-[12px] font-bold text-[var(--color-text-secondary)]">{order.id}</span>
-                <span className="font-[var(--font-friendly)] text-base font-extrabold text-[var(--color-accent)]">{vnd.format(order.total)}</span>
+                <span className="text-[12px] font-bold text-(--color-text-secondary)">{order.id}</span>
+                <span className="font-friendly text-base font-extrabold text-accent">{vnd.format(order.total)}</span>
               </div>
-              <div className="mt-1 text-[11.5px] text-[var(--color-text-secondary)]">
+              <div className="mt-1 text-[11.5px] text-(--color-text-secondary)">
                 {order.items.map((i) => i.name).join(', ')}
               </div>
             </div>
 
             {/* Reason */}
             <div>
-              <label className="mb-2 block text-[12.5px] font-bold text-[var(--color-text-primary)]">Lý do hoàn tiền *</label>
+              <label className="mb-2 block text-[12.5px] font-bold text-(--color-text-primary)">Lý do hoàn tiền *</label>
               <div className="space-y-1.5">
                 {reasons.map((r) => (
                   <label key={r}
-                    className={`flex cursor-pointer items-center gap-2.5 rounded-xl border px-3 py-2.5 text-[13px] transition-all ${reason === r ? 'border-[var(--color-accent)] bg-[var(--color-accent-soft)]' : 'border-[var(--color-border-default)] hover:bg-[var(--color-surface-2)]'}`}>
+                    className={`flex cursor-pointer items-center gap-2.5 rounded-xl border px-3 py-2.5 text-[13px] transition-all ${reason === r ? 'border-(--color-accent) bg-(--color-accent-soft)' : 'border-(--color-border-default) hover:bg-(--color-surface-2)'}`}>
                     <input type="radio" name="refund-reason" value={r} checked={reason === r} onChange={() => setReason(r)}
-                      className="accent-[var(--color-accent)]" />
-                    <span className={reason === r ? 'font-bold text-[var(--color-accent)]' : 'text-[var(--color-text-primary)]'}>{r}</span>
+                      className="accent-(--color-accent)" />
+                    <span className={reason === r ? 'font-bold text-accent' : 'text-(--color-text-primary)'}>{r}</span>
                   </label>
                 ))}
               </div>
@@ -88,10 +88,10 @@ function RefundModal({ order, onClose }: { order: Order; onClose: () => void }) 
 
             {/* Images */}
             <div>
-              <label className="mb-2 block text-[12.5px] font-bold text-[var(--color-text-primary)]">Hình ảnh đính kèm (tùy chọn)</label>
+              <label className="mb-2 block text-[12.5px] font-bold text-(--color-text-primary)">Hình ảnh đính kèm (tùy chọn)</label>
               <div className="flex flex-wrap gap-2">
                 {images.map((src, i) => (
-                  <div key={i} className="relative h-16 w-16 overflow-hidden rounded-xl border border-[var(--color-border-default)]">
+                  <div key={i} className="relative h-16 w-16 overflow-hidden rounded-xl border border-(--color-border-default)">
                     <img src={src} alt="" className="h-full w-full object-cover" />
                     <button onClick={() => handleRemoveImage(i)}
                       className="absolute -right-1 -top-1 flex h-5 w-5 items-center justify-center rounded-full bg-red-500 text-white">
@@ -101,12 +101,12 @@ function RefundModal({ order, onClose }: { order: Order; onClose: () => void }) 
                 ))}
                 {images.length < 3 && (
                   <button onClick={handleImageAdd}
-                    className="flex h-16 w-16 items-center justify-center rounded-xl border-2 border-dashed border-[var(--color-border-default)] text-[var(--color-text-secondary)] hover:border-[var(--color-accent)] hover:text-[var(--color-accent)]">
+                    className="flex h-16 w-16 items-center justify-center rounded-xl border-2 border-dashed border-(--color-border-default) text-(--color-text-secondary) hover:border-(--color-accent) hover:text-accent">
                     <Upload size={18} />
                   </button>
                 )}
               </div>
-              <p className="mt-1 text-[11px] text-[var(--color-text-secondary)]">Tối đa 3 hình · JPG, PNG</p>
+              <p className="mt-1 text-[11px] text-(--color-text-secondary)">Tối đa 3 hình · JPG, PNG</p>
             </div>
 
             {/* Policy */}
@@ -115,9 +115,9 @@ function RefundModal({ order, onClose }: { order: Order; onClose: () => void }) 
             </div>
 
             <div className="flex gap-2">
-              <button onClick={onClose} className="flex-1 rounded-xl border border-[var(--color-border-default)] py-2.5 text-[13px] font-bold text-[var(--color-text-secondary)] transition-colors hover:bg-[var(--color-surface-2)]">Hủy</button>
+              <button onClick={onClose} className="flex-1 rounded-xl border border-(--color-border-default) py-2.5 text-[13px] font-bold text-(--color-text-secondary) transition-colors hover:bg-(--color-surface-2)">Hủy</button>
               <button onClick={handleSubmit} disabled={!reason}
-                className="flex-1 flex items-center justify-center gap-1.5 rounded-xl bg-[var(--color-accent)] py-2.5 text-[13px] font-bold text-white transition-colors hover:bg-[var(--color-accent-hover)] disabled:cursor-not-allowed disabled:opacity-50">
+                className="flex-1 flex items-center justify-center gap-1.5 rounded-xl bg-accent py-2.5 text-[13px] font-bold text-white transition-colors hover:bg-(--color-accent-hover) disabled:cursor-not-allowed disabled:opacity-50">
                 <DollarSign size={14} /> Gửi yêu cầu
               </button>
             </div>
@@ -127,12 +127,12 @@ function RefundModal({ order, onClose }: { order: Order; onClose: () => void }) 
             <div className="mx-auto mb-4 flex h-16 w-16 items-center justify-center rounded-full bg-emerald-100">
               <CheckCircle size={32} className="text-emerald-600" />
             </div>
-            <h3 className="font-[var(--font-friendly)] text-xl font-extrabold text-[var(--color-text-primary)]">Yêu cầu đã được gửi!</h3>
-            <p className="mt-2 text-[13px] text-[var(--color-text-secondary)]">
+            <h3 className="font-friendly text-xl font-extrabold text-(--color-text-primary)">Yêu cầu đã được gửi!</h3>
+            <p className="mt-2 text-[13px] text-(--color-text-secondary)">
               Yêu cầu hoàn tiền cho đơn {order.id} đã được gửi. PetCare sẽ xử lý trong 3–5 ngày làm việc.
             </p>
             <button onClick={onClose}
-              className="mt-6 inline-flex items-center gap-1.5 rounded-full bg-[var(--color-accent)] px-6 py-2.5 text-[13px] font-bold text-white transition-colors hover:bg-[var(--color-accent-hover)]">
+              className="mt-6 inline-flex items-center gap-1.5 rounded-full bg-accent px-6 py-2.5 text-[13px] font-bold text-white transition-colors hover:bg-(--color-accent-hover)">
               Đã hiểu <ChevronRight size={14} />
             </button>
           </div>
@@ -345,7 +345,7 @@ export function OrderHistoryPage() {
   }
 
   return (
-    <div className="bg-[var(--color-surface-page)] pb-24">
+    <div className="bg-(--color-surface-page) pb-24">
       {/* ====== Hero slab ====== */}
       <section className={styles.slab}>
         <img

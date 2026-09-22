@@ -51,7 +51,7 @@ export const TestimonialsSpeechBubble: React.FC = () => {
       <div className="max-w-6xl mx-auto">
         {/* Header */}
         <div className="text-center mb-12">
-          <div className="inline-flex items-center gap-2 rounded-full bg-[#faebe4] px-4 py-1.5 text-xs font-black uppercase tracking-widest text-[#a43324] mb-3 border border-[#a43324]/15">
+          <div className="inline-flex items-center gap-2 rounded-full bg-[#faebe4] px-4 py-1.5 text-xs font-black uppercase tracking-widest text-accent mb-3 border border-accent/15">
             <Heart size={14} className="fill-current" /> Đánh Giá Từ Khách Hàng (Reviews)
           </div>
           <h2 className="font-bayon text-[#3B2A1E] text-4xl sm:text-5xl md:text-6xl uppercase tracking-tight leading-[0.92]">
@@ -99,7 +99,7 @@ export const TestimonialsSpeechBubble: React.FC = () => {
                 />
                 <div>
                   <div className="font-bold text-sm text-[#3B2A1E]">{rev.parent}</div>
-                  <div className="text-xs font-semibold text-[#a43324]">{rev.pet}</div>
+                  <div className="text-xs font-semibold text-accent">{rev.pet}</div>
                 </div>
               </div>
             </div>

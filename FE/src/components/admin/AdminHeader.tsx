@@ -42,18 +42,18 @@ export function AdminHeader({ collapsed, onToggleSidebar }: AdminHeaderProps) {
   };
 
   return (
-    <header className="admin-header h-16 px-6 flex items-center justify-between border-b border-[var(--border-color)]">
+    <header className="admin-header h-16 px-6 flex items-center justify-between border-b border-(--border-color)">
       <div className="flex items-center gap-3">
         {onToggleSidebar && (
           <button
             onClick={onToggleSidebar}
-            className="p-2 rounded-xl text-[var(--text-secondary)] hover:text-[var(--text-primary)] hover:bg-[var(--bg-secondary)] transition-colors border border-[var(--border-color)] flex items-center justify-center"
+            className="p-2 rounded-xl text-(--text-secondary) hover:text-(--text-primary) hover:bg-(--bg-secondary) transition-colors border border-(--border-color) flex items-center justify-center"
             title={collapsed ? "Mở rộng thanh menu" : "Thu gọn thanh menu"}
           >
             {collapsed ? <PanelLeft className="h-4 w-4" /> : <PanelLeftClose className="h-4 w-4" />}
           </button>
         )}
-        <h2 className="text-base font-medium text-[var(--text-primary)]">
+        <h2 className="text-base font-medium text-(--text-primary)">
           Xin chào, <span className="font-semibold">{user?.name}</span>
         </h2>
         {user?.role && (
@@ -75,7 +75,7 @@ export function AdminHeader({ collapsed, onToggleSidebar }: AdminHeaderProps) {
 
         {/* Notifications */}
         <Button variant="ghost" size="icon" className="relative">
-          <Bell className="h-5 w-5 text-[var(--text-secondary)]" />
+          <Bell className="h-5 w-5 text-(--text-secondary)" />
           <span className="absolute top-1 right-1 w-2 h-2 bg-red-500 rounded-full"></span>
         </Button>
 
@@ -83,17 +83,17 @@ export function AdminHeader({ collapsed, onToggleSidebar }: AdminHeaderProps) {
         <DropdownMenu>
           <DropdownMenuTrigger asChild>
             <Button variant="ghost" size="icon">
-              <Settings className="h-5 w-5 text-[var(--text-secondary)]" />
+              <Settings className="h-5 w-5 text-(--text-secondary)" />
             </Button>
           </DropdownMenuTrigger>
           <DropdownMenuContent align="end" className="dropdown-content w-56">
             <DropdownMenuLabel className="p-3">
               <div>
-                <p className="font-semibold text-[var(--text-primary)]">{user?.name}</p>
-                <p className="text-xs text-[var(--text-secondary)]">{user?.email}</p>
+                <p className="font-semibold text-(--text-primary)">{user?.name}</p>
+                <p className="text-xs text-(--text-secondary)">{user?.email}</p>
               </div>
             </DropdownMenuLabel>
-            <DropdownMenuSeparator className="border-[var(--border-color)]" />
+            <DropdownMenuSeparator className="border-(--border-color)" />
             <DropdownMenuItem className="dropdown-item">
               <Settings className="h-4 w-4" />
               Cài đặt
@@ -102,7 +102,7 @@ export function AdminHeader({ collapsed, onToggleSidebar }: AdminHeaderProps) {
               {isDark ? <Sun className="h-4 w-4" /> : <Moon className="h-4 w-4" />}
               {isDark ? 'Chế độ sáng' : 'Chế độ tối'}
             </DropdownMenuItem>
-            <DropdownMenuSeparator className="border-[var(--border-color)]" />
+            <DropdownMenuSeparator className="border-(--border-color)" />
             <DropdownMenuItem onClick={handleLogout} className="dropdown-item text-red-500">
               <LogOut className="h-4 w-4" />
               Đăng xuất

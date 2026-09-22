@@ -104,7 +104,7 @@ export function HotelPage() {
   }
 
   return (
-    <div className="bg-[var(--color-surface-page)] pb-24">
+    <div className="bg-(--color-surface-page) pb-24">
       {/* ====== Hero ====== */}
       <section className={styles.hero}>
         <img
@@ -152,7 +152,7 @@ export function HotelPage() {
 
             <Link
               to="/booking"
-              className="inline-flex items-center gap-2 rounded-full bg-white px-6 py-3 text-[13.5px] font-bold text-[var(--color-accent)] transition-colors hover:bg-white/90"
+              className="inline-flex items-center gap-2 rounded-full bg-white px-6 py-3 text-[13.5px] font-bold text-accent transition-colors hover:bg-white/90"
             >
               <Calendar size={16} />
               Đặt phòng ngay

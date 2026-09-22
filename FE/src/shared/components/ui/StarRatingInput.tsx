@@ -39,7 +39,7 @@ export const StarRatingInput: React.FC<StarRatingInputProps> = ({
   return (
     <div className="flex flex-col gap-1.5">
       {label && (
-        <span className="text-sm font-semibold text-[var(--color-text-primary)]">
+        <span className="text-sm font-semibold text-(--color-text-primary)">
           {label}
         </span>
       )}

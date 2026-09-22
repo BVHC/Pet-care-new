@@ -62,7 +62,7 @@ export function CheckoutPage() {
         <span className="font-semibold text-gray-900">Thanh toán</span>
       </nav>
 
-      <h1 className="mb-8 font-[var(--font-friendly)] text-2xl font-bold text-gray-900 sm:text-3xl">
+      <h1 className="mb-8 font-friendly text-2xl font-bold text-gray-900 sm:text-3xl">
         Thanh toán
       </h1>
 
@@ -71,7 +71,7 @@ export function CheckoutPage() {
           <div className="flex flex-col gap-6">
             {/* Thông tin giao hàng */}
             <section className="rounded-xl border border-gray-200 bg-white p-5 shadow-sm">
-              <h2 className="mb-5 font-[var(--font-friendly)] text-lg font-bold text-gray-900">
+              <h2 className="mb-5 font-friendly text-lg font-bold text-gray-900">
                 Thông tin giao hàng
               </h2>
 
@@ -144,7 +144,7 @@ export function CheckoutPage() {
 
             {/* Phương thức thanh toán */}
             <section className="rounded-xl border border-gray-200 bg-white p-5 shadow-sm">
-              <h2 className="mb-4 font-[var(--font-friendly)] text-lg font-bold text-gray-900">
+              <h2 className="mb-4 font-friendly text-lg font-bold text-gray-900">
                 Phương thức thanh toán
               </h2>
 
@@ -182,7 +182,7 @@ export function CheckoutPage() {
 
           {/* Tóm tắt đơn hàng */}
           <div className="h-fit rounded-xl border border-gray-200 bg-white p-5 shadow-sm">
-            <h2 className="mb-4 font-[var(--font-friendly)] text-lg font-bold text-gray-900">
+            <h2 className="mb-4 font-friendly text-lg font-bold text-gray-900">
               Tóm tắt đơn hàng
             </h2>
 
@@ -218,8 +218,8 @@ export function CheckoutPage() {
             <div className="my-4 border-t border-gray-100" />
 
             <div className="mb-5 flex justify-between">
-              <span className="font-[var(--font-friendly)] font-bold text-gray-900">Tổng cộng</span>
-              <span className="font-[var(--font-friendly)] text-xl font-bold text-gray-900">
+              <span className="font-friendly font-bold text-gray-900">Tổng cộng</span>
+              <span className="font-friendly text-xl font-bold text-gray-900">
                 {formatVnd(total)}
               </span>
             </div>

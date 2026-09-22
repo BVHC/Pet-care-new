@@ -262,7 +262,7 @@ export const StackingProcessCards: React.FC = () => {
                   <h3 className="font-bayon text-[#382417] text-[24px] sm:text-[30px] leading-[1.05] tracking-tight max-w-[320px]">
                     {step.titleLine1}
                     <br />
-                    <span className="text-[#a43324]">{step.titleLine2}</span>
+                    <span className="text-accent">{step.titleLine2}</span>
                   </h3>
 
                   {/* Big Number (Dark Brown #382417) */}
@@ -312,10 +312,10 @@ export const StackingProcessCards: React.FC = () => {
         {/* Bottom Right: Red capsule BOOK NOW button */}
         <Link
           to="/booking"
-          className="inline-flex items-center gap-2 rounded-full bg-[#faebe4] hover:bg-white px-6 py-2.5 font-bayon text-base text-[#a43324] uppercase tracking-wider shadow-[0_6px_20px_rgba(0,0,0,0.35)] transition-transform hover:scale-105 active:scale-95"
+          className="inline-flex items-center gap-2 rounded-full bg-[#faebe4] hover:bg-white px-6 py-2.5 font-bayon text-base text-accent uppercase tracking-wider shadow-[0_6px_20px_rgba(0,0,0,0.35)] transition-transform hover:scale-105 active:scale-95"
         >
           <span>ĐẶT LỊCH NGAY</span>
-          <span className="w-2 h-2 rounded-full bg-[#a43324]"></span>
+          <span className="w-2 h-2 rounded-full bg-accent"></span>
         </Link>
       </div>
 

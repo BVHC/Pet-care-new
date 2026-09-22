@@ -1,5 +1,6 @@
 import React from 'react'
 import { Link } from 'react-router-dom'
+import { PawPrint } from 'lucide-react'
 
 interface RotatingBadgeProps {
   text?: string
@@ -9,7 +10,7 @@ interface RotatingBadgeProps {
 }
 
 export const RotatingBadge: React.FC<RotatingBadgeProps> = ({
-  text = 'PETCARE 5★ • LIVE CAM 24/7 • BOOK NOW • ',
+  text = 'PETCARE 5-STAR • LIVE CAM 24/7 • BOOK NOW • ',
   to = '/booking',
   className = '',
   size = 130,
@@ -40,8 +41,8 @@ export const RotatingBadge: React.FC<RotatingBadgeProps> = ({
           <textPath href="#badgeCirclePath">{text}</textPath>
         </text>
       </svg>
-      <span className="text-2xl transition-transform duration-300 group-hover:rotate-12 group-hover:scale-125">
-        🐾
+      <span className="transition-transform duration-300 group-hover:rotate-12 group-hover:scale-125 text-[#e33529]">
+        <PawPrint className="w-7 h-7" />
       </span>
     </Link>
   )

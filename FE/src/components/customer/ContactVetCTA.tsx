@@ -27,7 +27,7 @@ export const ContactVetCTA: React.FC = () => {
     <section className="relative w-full bg-[#382417] py-14 px-6 sm:px-10 text-white overflow-hidden select-none">
       <div className="max-w-6xl mx-auto flex flex-col lg:flex-row items-center justify-between gap-8">
         <div className="flex-1">
-          <div className="inline-block bg-[#faebe4] text-[#a43324] border border-[#a43324]/20 font-black text-xs px-3.5 py-1 rounded-full uppercase tracking-wider mb-3">
+          <div className="inline-block bg-[#faebe4] text-accent border border-accent/20 font-black text-xs px-3.5 py-1 rounded-full uppercase tracking-wider mb-3">
             Hỗ Trợ 24/7 (Contact Us)
           </div>
           <h2 className="font-bayon text-[#fdf6ec] text-4xl sm:text-5xl md:text-6xl uppercase tracking-tight leading-[0.92]">
@@ -87,7 +87,7 @@ export const ContactVetCTA: React.FC = () => {
 
           <Link
             to="/booking"
-            className="w-full sm:w-auto inline-flex items-center justify-center gap-2 rounded-full bg-[#a43324] text-white px-8 py-4 font-bayon text-xl uppercase tracking-wider shadow-[0_8px_25px_rgba(164,51,36,0.35)] hover:bg-[#89271b] hover:scale-105 active:scale-95 transition-all"
+            className="w-full sm:w-auto inline-flex items-center justify-center gap-2 rounded-full bg-accent text-white px-8 py-4 font-bayon text-xl uppercase tracking-wider shadow-[0_8px_25px_rgba(164,51,36,0.35)] hover:bg-accent-hover hover:scale-105 active:scale-95 transition-all"
           >
             <span>ĐẶT LỊCH NGAY</span>
             <ArrowRight size={18} />

@@ -112,23 +112,23 @@ export function AdminLoginPage() {
   const IconComponent = meta.icon;
 
   return (
-    <div className="min-h-screen flex items-center justify-center p-6 bg-[var(--bg-secondary)]">
+    <div className="min-h-screen flex items-center justify-center p-6 bg-(--bg-secondary)">
       {/* Background Decoration */}
       <div className="fixed inset-0 -z-10 overflow-hidden pointer-events-none">
-        <div className="absolute top-0 right-0 w-[600px] h-[600px] bg-gradient-to-bl from-blue-500/5 to-transparent rounded-full blur-3xl" />
-        <div className="absolute bottom-0 left-0 w-[600px] h-[600px] bg-gradient-to-tr from-indigo-500/5 to-transparent rounded-full blur-3xl" />
+        <div className="absolute top-0 right-0 w-[600px] h-[600px] bg-linear-to-bl from-blue-500/5 to-transparent rounded-full blur-3xl" />
+        <div className="absolute bottom-0 left-0 w-[600px] h-[600px] bg-linear-to-tr from-indigo-500/5 to-transparent rounded-full blur-3xl" />
       </div>
 
       <div className="w-full max-w-5xl">
         {/* Theme Toggle & Header */}
         <div className="flex items-center justify-between mb-8">
           <div className="flex items-center gap-3">
-            <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-blue-500 to-indigo-600 flex items-center justify-center shadow-lg">
+            <div className="w-10 h-10 rounded-xl bg-linear-to-br from-blue-500 to-indigo-600 flex items-center justify-center shadow-lg">
               <PawPrint className="h-5 w-5 text-white" />
             </div>
             <div>
-              <h1 className="font-semibold text-[var(--text-primary)]">Pet Care</h1>
-              <p className="text-xs text-[var(--text-secondary)]">Admin Panel</p>
+              <h1 className="font-semibold text-(--text-primary)">Pet Care</h1>
+              <p className="text-xs text-(--text-secondary)">Admin Panel</p>
             </div>
           </div>
 
@@ -141,12 +141,12 @@ export function AdminLoginPage() {
         </div>
 
         {/* Main Card */}
-        <div className="bg-[var(--bg-primary)] rounded-2xl border border-[var(--border-color)] shadow-lg overflow-hidden">
+        <div className="bg-(--bg-primary) rounded-2xl border border-(--border-color) shadow-lg overflow-hidden">
           <div className="grid grid-cols-1 lg:grid-cols-5">
 
             {/* Left Panel - Role Selection */}
-            <div className="lg:col-span-2 bg-[var(--bg-secondary)] p-6 border-b lg:border-b-0 lg:border-r border-[var(--border-color)]">
-              <h2 className="text-sm font-semibold text-[var(--text-secondary)] uppercase tracking-wider mb-4">
+            <div className="lg:col-span-2 bg-(--bg-secondary) p-6 border-b lg:border-b-0 lg:border-r border-(--border-color)">
+              <h2 className="text-sm font-semibold text-(--text-secondary) uppercase tracking-wider mb-4">
                 Chọn vai trò demo
               </h2>
 
@@ -164,27 +164,27 @@ export function AdminLoginPage() {
                       className={cn(
                         'w-full flex items-center gap-3 p-3 rounded-xl transition-all text-left',
                         isSelected
-                          ? 'bg-[var(--color-primary-light)] border-2 border-[var(--color-primary)]'
-                          : 'bg-transparent hover:bg-[var(--bg-tertiary)] border-2 border-transparent'
+                          ? 'bg-(--color-primary-light) border-2 border-(--color-primary)'
+                          : 'bg-transparent hover:bg-(--bg-tertiary) border-2 border-transparent'
                       )}
                     >
                       <div className={cn(
-                        'w-9 h-9 rounded-lg flex items-center justify-center flex-shrink-0 transition-colors',
-                        isSelected ? 'bg-[var(--color-primary)]' : 'bg-[var(--bg-tertiary)]'
+                        'w-9 h-9 rounded-lg flex items-center justify-center shrink-0 transition-colors',
+                        isSelected ? 'bg-(--color-primary)' : 'bg-(--bg-tertiary)'
                       )}>
-                        <RIcon className={cn('h-4 w-4', isSelected ? 'text-white' : 'text-[var(--text-secondary)]')} />
+                        <RIcon className={cn('h-4 w-4', isSelected ? 'text-white' : 'text-(--text-secondary)')} />
                       </div>
                       <div className="flex-1 min-w-0">
                         <p className={cn(
                           'font-medium text-sm truncate',
-                          isSelected ? 'text-[var(--color-primary-dark)]' : 'text-[var(--text-primary)]'
+                          isSelected ? 'text-(--color-primary-dark)' : 'text-(--text-primary)'
                         )}>
                           {userObj?.name}
                         </p>
-                        <p className="text-xs text-[var(--text-tertiary)]">{ROLE_LABELS[role]}</p>
+                        <p className="text-xs text-(--text-tertiary)">{ROLE_LABELS[role]}</p>
                       </div>
                       {isSelected && (
-                        <CheckCircle2 className="h-4 w-4 text-[var(--color-primary)] flex-shrink-0" />
+                        <CheckCircle2 className="h-4 w-4 text-(--color-primary) shrink-0" />
                       )}
                     </button>
                   );
@@ -219,26 +219,26 @@ export function AdminLoginPage() {
                     selectedRole === 'FINANCE_STAFF' ? 'text-teal-500' : 'text-gray-500'
                   )} />
                 </div>
-                <h2 className="text-2xl font-semibold text-[var(--text-primary)] mb-1">
+                <h2 className="text-2xl font-semibold text-(--text-primary) mb-1">
                   {selectedUser?.name}
                 </h2>
-                <p className="text-[var(--text-secondary)]">
+                <p className="text-(--text-secondary)">
                   {meta.subtitle}
                 </p>
               </div>
 
               {/* Permissions */}
               <div className="mb-8">
-                <h3 className="text-sm font-semibold text-[var(--text-secondary)] uppercase tracking-wider mb-3">
+                <h3 className="text-sm font-semibold text-(--text-secondary) uppercase tracking-wider mb-3">
                   Quyền hạn
                 </h3>
                 <ul className="space-y-2.5">
                   {meta.permissions.map((perm, idx) => (
                     <li key={idx} className="flex items-start gap-3">
-                      <div className="w-5 h-5 rounded-full bg-[var(--color-success-light)] flex items-center justify-center flex-shrink-0 mt-0.5">
-                        <CheckCircle2 className="h-3 w-3 text-[var(--color-success)]" />
+                      <div className="w-5 h-5 rounded-full bg-(--color-success-light) flex items-center justify-center shrink-0 mt-0.5">
+                        <CheckCircle2 className="h-3 w-3 text-(--color-success)" />
                       </div>
-                      <span className="text-[var(--text-primary)]">{perm}</span>
+                      <span className="text-(--text-primary)">{perm}</span>
                     </li>
                   ))}
                 </ul>
@@ -249,7 +249,7 @@ export function AdminLoginPage() {
                 onClick={handleLogin}
                 className={cn(
                   'w-full py-3.5 rounded-xl font-semibold text-white transition-all',
-                  'bg-[var(--color-primary)] hover:bg-[var(--color-primary-hover)]',
+                  'bg-(--color-primary) hover:bg-(--color-primary-hover)',
                   'shadow-lg shadow-blue-500/20',
                   'flex items-center justify-center gap-2'
                 )}
@@ -259,7 +259,7 @@ export function AdminLoginPage() {
               </button>
 
               {/* Footer */}
-              <p className="text-center text-xs text-[var(--text-tertiary)] mt-6">
+              <p className="text-center text-xs text-(--text-tertiary) mt-6">
                 Demo mode - Không cần mật khẩu
               </p>
             </div>
@@ -270,7 +270,7 @@ export function AdminLoginPage() {
         <div className="text-center mt-6">
           <Link
             to="/"
-            className="inline-flex items-center gap-2 text-sm text-[var(--text-secondary)] hover:text-[var(--text-primary)] transition-colors"
+            className="inline-flex items-center gap-2 text-sm text-(--text-secondary) hover:text-(--text-primary) transition-colors"
           >
             ← Quay về trang chủ
           </Link>

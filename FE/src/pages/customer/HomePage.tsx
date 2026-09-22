@@ -10,6 +10,7 @@ import {
   Calendar,
   User,
   ArrowRight,
+  Star,
 } from 'lucide-react'
 import { toast } from 'sonner'
 import { HeroBanner } from '@/components/customer/HeroBanner'
@@ -18,7 +19,6 @@ import { StackingProcessCards } from '@/components/customer/StackingProcessCards
 import { NoCagesPhilosophy } from '@/components/customer/NoCagesPhilosophy'
 import { TestimonialsSpeechBubble } from '@/components/customer/TestimonialsSpeechBubble'
 import { ContactVetCTA } from '@/components/customer/ContactVetCTA'
-import { InteractiveMascotCompanion } from '@/components/customer/InteractiveMascotCompanion'
 import { PHOTOS, FEATURED, filterFeaturedByPetType, STATS, PARTNERS, FAQS, DOCTORS } from './home.mock'
 import { NEWS_ARTICLES } from './news.mock'
 import styles from './HomePage.module.css'
@@ -109,7 +109,7 @@ export function HomePage() {
   }
 
   return (
-    <div className="relative bg-[var(--color-surface-page)] font-[var(--font-professional)]">
+    <div className="relative bg-(--color-surface-page) font-professional">
       {/* 1. Hero - CozyPaws Style */}
       <HeroBanner />
 
@@ -136,7 +136,7 @@ export function HomePage() {
               <Sparkles size={13} />
               SẢN PHẨM BÁN CHẠY
             </div>
-            <div className="font-[var(--font-friendly)] text-[clamp(32px,4vw,42px)] font-extrabold text-[var(--color-text-primary)] mb-6">
+            <div className="font-friendly text-[clamp(32px,4vw,42px)] font-extrabold text-(--color-text-primary) mb-6">
               Sản Phẩm Nổi Bật
             </div>
             <div className="flex justify-center gap-2">
@@ -144,7 +144,7 @@ export function HomePage() {
                 <button
                   key={f}
                   onClick={() => setPetFilter(f)}
-                  className={`px-5 py-2 rounded-full text-[13px] font-bold transition-colors ${petFilter === f ? 'bg-[#a43324] text-white' : 'bg-white text-[#5a3a29] border border-[#a43324]/20 hover:border-[#a43324] hover:text-[#a43324]'}`}
+                  className={`px-5 py-2 rounded-full text-[13px] font-bold transition-colors ${petFilter === f ? 'bg-accent text-white' : 'bg-white text-[#5a3a29] border border-accent/20 hover:border-accent hover:text-accent'}`}
                 >
                   {f === 'all' ? 'Tất cả' : f === 'dog' ? 'Cho Chó' : 'Cho Mèo'}
                 </button>
@@ -156,9 +156,9 @@ export function HomePage() {
               <div className="gsap-product-card transition-transform hover:-translate-y-1" key={p.id}>
                 <Link
                   to={`/shop/${p.id}`}
-                  className="block w-full overflow-hidden rounded-[var(--radius-rounded)] bg-white shadow-[var(--shadow-1)]"
+                  className="block w-full overflow-hidden rounded-(--radius-rounded) bg-white shadow-(--shadow-1)"
                 >
-                  <div className="relative aspect-[4/3] bg-gray-100">
+                  <div className="relative aspect-4/3 bg-gray-100">
                     <img src={p.image} alt={p.name} className="h-full w-full object-cover" />
                     {p.badge && (
                       <span className="absolute top-2 left-2 rounded-full bg-amber-400 px-2 py-0.5 text-[11px] font-bold text-white">
@@ -172,14 +172,15 @@ export function HomePage() {
                     <div className="flex items-center justify-between">
                       <span className="text-base font-bold text-gray-900">{p.price}</span>
                       <span className="flex items-center gap-1 text-sm text-gray-500">
-                        ★ {p.rating}
+                        <Star className="h-3.5 w-3.5 fill-amber-400 text-amber-400" />
+                        {p.rating}
                       </span>
                     </div>
                   </div>
                 </Link>
                 <button
                   onClick={() => handleAddToCart(p.id, p.name)}
-                  className="mt-2 w-full rounded-lg border border-[#a43324] bg-[#a43324] px-3 py-2 text-[13px] font-semibold text-white hover:bg-[#89271b] transition-colors"
+                  className="mt-2 w-full rounded-lg border border-accent bg-accent px-3 py-2 text-[13px] font-semibold text-white hover:bg-accent-hover transition-colors"
                 >
                   Thêm vào giỏ
                 </button>
@@ -189,7 +190,7 @@ export function HomePage() {
           <div className="text-center mt-10">
             <button
               onClick={() => navigate('/shop')}
-              className="rounded-full border-2 border-[#a43324] px-8 py-3 font-bold text-[#a43324] hover:bg-[#a43324] hover:text-white transition-colors inline-flex items-center gap-2"
+              className="rounded-full border-2 border-accent px-8 py-3 font-bold text-accent hover:bg-accent hover:text-white transition-colors inline-flex items-center gap-2"
             >
               Xem tất cả sản phẩm <ArrowRight size={18} />
             </button>
@@ -208,7 +209,7 @@ export function HomePage() {
               <div className="mb-2 text-[12px] font-bold tracking-widest uppercase opacity-90">
                 Sự tin tưởng của bạn là ưu tiên của chúng tôi
               </div>
-              <div className="font-[var(--font-friendly)] text-[clamp(24px,3vw,32px)] font-extrabold leading-tight">
+              <div className="font-friendly text-[clamp(24px,3vw,32px)] font-extrabold leading-tight">
                 Chăm sóc chuyên nghiệp, chất lượng được đảm bảo
               </div>
             </div>
@@ -237,10 +238,10 @@ export function HomePage() {
       <section className="gsap-doctors-section px-6 py-14 bg-[#fdf6ec]">
         <div className={styles.wrap}>
           <div className="text-center mb-12">
-            <div className="text-[12px] font-bold text-[#a43324] tracking-widest uppercase flex items-center justify-center gap-2 mb-3">
+            <div className="text-[12px] font-bold text-accent tracking-widest uppercase flex items-center justify-center gap-2 mb-3">
               ĐỘI NGŨ TẬN TÂM VÌ THÚ CƯNG <PawPrint size={14} />
             </div>
-            <div className="font-[var(--font-friendly)] text-[clamp(32px,4vw,42px)] font-extrabold text-[var(--color-text-primary)] leading-tight">
+            <div className="font-friendly text-[clamp(32px,4vw,42px)] font-extrabold text-(--color-text-primary) leading-tight">
               Gặp Gỡ Đội Ngũ
               <br />
               Bác Sĩ Chuyên Môn
@@ -253,10 +254,10 @@ export function HomePage() {
                   <img src={d.photo} alt={d.name} className={styles.doctorImg} />
                   <img src={PHOTOS.doodlePaw} className={styles.doctorPawDecor} alt="" />
                 </div>
-                <h4 className="font-[var(--font-friendly)] text-[22px] font-bold text-[var(--color-text-primary)] mt-5 mb-1">
+                <h4 className="font-friendly text-[22px] font-bold text-(--color-text-primary) mt-5 mb-1">
                   {d.name}
                 </h4>
-                <p className="text-[14px] text-[var(--color-text-secondary)]">{d.role}</p>
+                <p className="text-[14px] text-(--color-text-secondary)">{d.role}</p>
               </div>
             ))}
           </div>
@@ -298,10 +299,10 @@ export function HomePage() {
           style={{ top: 6, right: '6%', width: 48, transform: 'rotate(-20deg)' }}
         />
         <div className={styles.wrap}>
-          <div className="mb-2 text-center font-[var(--font-friendly)] text-[clamp(24px,3vw,32px)] font-extrabold text-[var(--color-text-primary)]">
+          <div className="mb-2 text-center font-friendly text-[clamp(24px,3vw,32px)] font-extrabold text-(--color-text-primary)">
             Câu hỏi thường gặp
           </div>
-          <div className="mb-8 text-center text-sm text-[var(--color-text-secondary)]">
+          <div className="mb-8 text-center text-sm text-(--color-text-secondary)">
             Chưa tìm thấy câu trả lời? Liên hệ đội hỗ trợ của chúng tôi bất cứ lúc nào.
           </div>
           <div className={styles.faqList}>
@@ -331,15 +332,15 @@ export function HomePage() {
         <div className={styles.wrap}>
           <div className="flex flex-col md:flex-row items-center justify-between gap-6 mb-12">
             <div>
-              <div className="text-[12px] font-bold text-[#a43324] tracking-widest uppercase flex items-center gap-2 mb-2">
+              <div className="text-[12px] font-bold text-accent tracking-widest uppercase flex items-center gap-2 mb-2">
                 TIN TỨC & BÀI VIẾT <PawPrint size={14} />
               </div>
-              <div className="font-[var(--font-friendly)] text-[clamp(32px,4vw,42px)] font-extrabold text-[var(--color-text-primary)] leading-tight">
+              <div className="font-friendly text-[clamp(32px,4vw,42px)] font-extrabold text-(--color-text-primary) leading-tight">
                 Bài Viết Mới Nhất
               </div>
             </div>
             <button
-              className="px-6 py-2.5 rounded-full bg-[#faebe4] hover:bg-[#a43324] hover:text-white transition-colors flex items-center gap-2 font-bold text-[14px] text-[#a43324] border border-[#a43324]/20"
+              className="px-6 py-2.5 rounded-full bg-[#faebe4] hover:bg-accent hover:text-white transition-colors flex items-center gap-2 font-bold text-[14px] text-accent border border-accent/20"
             >
               Xem Tất Cả <ArrowRight size={18} />
             </button>
@@ -354,15 +355,15 @@ export function HomePage() {
                   </div>
                 </div>
                 <div className="p-7">
-                  <div className="flex items-center gap-5 text-[13px] font-semibold text-[var(--color-text-secondary)] mb-4">
+                  <div className="flex items-center gap-5 text-[13px] font-semibold text-(--color-text-secondary) mb-4">
                     <span className="flex items-center gap-2">
-                      <User size={16} className="text-[#a43324]" /> {a.author}
+                      <User size={16} className="text-accent" /> {a.author}
                     </span>
                     <span className="flex items-center gap-2">
-                      <Calendar size={16} className="text-[#a43324]" /> {a.date}
+                      <Calendar size={16} className="text-accent" /> {a.date}
                     </span>
                   </div>
-                  <h3 className="font-[var(--font-friendly)] text-[22px] font-extrabold text-[var(--color-text-primary)] leading-[1.3]">
+                  <h3 className="font-friendly text-[22px] font-extrabold text-(--color-text-primary) leading-[1.3]">
                     {a.title}
                   </h3>
                 </div>
@@ -374,9 +375,6 @@ export function HomePage() {
 
       {/* 12. Don't Board Me Style Contact Vet Hotline & Booking CTA */}
       <ContactVetCTA />
-
-      {/* Don't Board Me Interactive Mascot Assistant & Paw Particles */}
-      <InteractiveMascotCompanion />
     </div>
   )
 }

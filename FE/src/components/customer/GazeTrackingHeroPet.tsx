@@ -320,7 +320,7 @@ export const GazeTrackingHeroPet: React.FC<GazeTrackingHeroPetProps> = ({
 				});
 			}
 		},
-		[activePet, currentPreset, resetIdleTimer, switchPetWithAnimation],
+		[activePet, resetIdleTimer, switchPetWithAnimation],
 	);
 
 	return (
@@ -330,7 +330,7 @@ export const GazeTrackingHeroPet: React.FC<GazeTrackingHeroPetProps> = ({
 			{/* Speech Dialogue Bubble on Click / Auto-switch */}
 			{dialogue && (
 				<div className="absolute top-1.5 sm:top-3.5 left-1/2 -translate-x-1/2 z-50 bg-white/95 backdrop-blur-md text-[#1a1a1a] text-xs sm:text-[13.5px] font-bold px-4 py-2.5 rounded-2xl shadow-xl border border-orange-200 pointer-events-none text-center whitespace-nowrap max-w-[92%] leading-snug animate-bounce flex items-center justify-center gap-2">
-					<Sparkles size={16} className="text-[#a43324] shrink-0" />
+					<Sparkles size={16} className="text-accent shrink-0" />
 					<span>{dialogue}</span>
 					<div className="absolute -bottom-2 left-1/2 -translate-x-1/2 w-0 h-0 border-x-6 border-x-transparent border-t-6 border-t-white" />
 				</div>
@@ -345,13 +345,13 @@ export const GazeTrackingHeroPet: React.FC<GazeTrackingHeroPetProps> = ({
 				>
 					<Heart
 						size={32}
-						className="text-[#a43324] fill-[#a43324] drop-shadow-md"
+						className="text-accent fill-accent drop-shadow-md"
 					/>
 				</div>
 			))}
 
 			{/* Bóng tiếp xúc nền mềm mại dưới chân */}
-			<div className="absolute bottom-[8%] left-1/2 -translate-x-1/2 w-[72%] h-7 bg-gradient-to-t from-black/22 via-black/8 to-transparent rounded-[100%] blur-md pointer-events-none z-0" />
+			<div className="absolute bottom-[8%] left-1/2 -translate-x-1/2 w-[72%] h-7 bg-linear-to-t from-black/22 via-black/8 to-transparent rounded-[100%] blur-md pointer-events-none z-0" />
 
 			{/* Mascot Button to và căn chính xác giữa khung */}
 			<button

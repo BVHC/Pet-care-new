@@ -10,6 +10,9 @@ export type Role =
   | 'FINANCE_STAFF'
   | 'CUSTOMER';
 
+// Alias for UserRole
+export type UserRole = Role;
+
 export interface SessionUser {
   id: string;
   email: string;

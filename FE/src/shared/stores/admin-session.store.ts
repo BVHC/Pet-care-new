@@ -1,6 +1,6 @@
 import { create } from 'zustand';
 import { persist } from 'zustand/middleware';
-import type { SessionUser, Role } from '../types/admin';
+import type { SessionUser } from '../types/admin';
 
 interface AdminSessionState {
   user: SessionUser | null;

@@ -192,7 +192,7 @@ export function DatePicker({
         aria-label={ariaLabel ?? placeholder}
         className={`${styles.field} ${open ? styles.fieldOpen : ''}`}
       >
-        <Calendar size={15} className="text-[var(--color-text-secondary)]" />
+        <Calendar size={15} className="text-(--color-text-secondary)" />
         <span className={value ? '' : styles.fieldPlaceholder}>
           {value ? formatDisplay(value) : placeholder}
         </span>

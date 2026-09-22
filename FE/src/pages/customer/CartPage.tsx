@@ -129,7 +129,7 @@ function OrderSummary({
   return (
     <div className={styles.summaryCard}>
       <div className={styles.summaryHeader}>
-        <ShoppingBag size={18} className="text-[var(--color-accent)]" />
+        <ShoppingBag size={18} className="text-accent" />
         <h2 className={styles.summaryTitle}>Tóm tắt đơn hàng</h2>
       </div>
 
@@ -264,7 +264,7 @@ export function CartPage() {
   }
 
   return (
-    <div className="bg-[var(--color-surface-page)] pb-24">
+    <div className="bg-(--color-surface-page) pb-24">
       {/* ====== Hero slab ====== */}
       <section className={styles.slab}>
         <img

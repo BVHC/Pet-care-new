@@ -11,7 +11,7 @@ export function OrderConfirmationPage() {
         <div className="mx-auto mb-6 flex h-20 w-20 items-center justify-center rounded-full bg-green-100">
           <CheckCircle size={40} className="text-green-600" />
         </div>
-        <h1 className="font-[var(--font-friendly)] text-3xl font-bold text-gray-900 sm:text-4xl">
+        <h1 className="font-friendly text-3xl font-bold text-gray-900 sm:text-4xl">
           Đặt hàng thành công!
         </h1>
         <p className="mt-3 text-gray-600">
@@ -25,7 +25,7 @@ export function OrderConfirmationPage() {
 
       {/* Order Summary */}
       <div className="mt-10 rounded-xl border border-gray-200 bg-white p-6 shadow-sm">
-        <h2 className="mb-4 font-[var(--font-friendly)] text-lg font-bold text-gray-900">Chi tiết đơn hàng</h2>
+        <h2 className="mb-4 font-friendly text-lg font-bold text-gray-900">Chi tiết đơn hàng</h2>
         <div className="space-y-4">
           <div className="flex items-center gap-4">
             <div className="flex h-12 w-12 items-center justify-center rounded-full bg-amber-50">
@@ -50,7 +50,7 @@ export function OrderConfirmationPage() {
 
       {/* Address */}
       <div className="mt-6 rounded-xl border border-gray-200 bg-white p-6 shadow-sm">
-        <h2 className="mb-4 font-[var(--font-friendly)] text-lg font-bold text-gray-900">Địa chỉ giao hàng</h2>
+        <h2 className="mb-4 font-friendly text-lg font-bold text-gray-900">Địa chỉ giao hàng</h2>
         <p className="text-gray-600">
           Nguyễn Văn A<br />
           123 Đường ABC, Phường XYZ<br />

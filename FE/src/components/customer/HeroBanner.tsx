@@ -56,7 +56,7 @@ export const HeroBanner: React.FC = () => {
 			className="relative w-full overflow-hidden bg-[#f6e8da] text-[#191919] pt-8 sm:pt-10 lg:pt-12 pb-8 sm:pb-10"
 		>
 			{/* Nối màu với header kem phía trên, tránh đường cắt cứng */}
-			<div className="absolute inset-x-0 top-0 h-28 bg-gradient-to-b from-[#fdf5ec] to-transparent pointer-events-none z-0" />
+			<div className="absolute inset-x-0 top-0 h-28 bg-linear-to-b from-[#fdf5ec] to-transparent pointer-events-none z-0" />
 
 			{/* Subtle Warm Backdrop Lighting */}
 			<div className="absolute top-0 left-1/3 w-[600px] h-[500px] bg-white/40 rounded-full blur-3xl pointer-events-none -z-0" />
@@ -85,7 +85,7 @@ export const HeroBanner: React.FC = () => {
 						<div className="mb-8 lg:mb-9">
 							<Link
 								to="/booking"
-								className="inline-flex items-center justify-center rounded-full bg-white hover:bg-[#a43324] text-[#a43324] hover:text-white px-9 sm:px-10 py-4 sm:py-5 text-base sm:text-lg font-black uppercase tracking-wide shadow-sm hover:shadow-lg transition-all duration-200 hover:scale-[1.03] active:scale-95"
+								className="inline-flex items-center justify-center rounded-full bg-white hover:bg-accent text-accent hover:text-white px-9 sm:px-10 py-4 sm:py-5 text-base sm:text-lg font-black uppercase tracking-wide shadow-sm hover:shadow-lg transition-all duration-200 hover:scale-[1.03] active:scale-95"
 							>
 								Đặt Lịch Ngay
 							</Link>
@@ -93,7 +93,7 @@ export const HeroBanner: React.FC = () => {
 
 						{/* Đánh Giá 5 Sao Trên Mọi Nền Tảng */}
 						<div className="flex items-center gap-4 mb-3">
-							<div className="w-14 h-14 rounded-2xl bg-[#a43324] text-white flex items-center justify-center shrink-0 shadow-sm">
+							<div className="w-14 h-14 rounded-2xl bg-accent text-white flex items-center justify-center shrink-0 shadow-sm">
 								<PawPrint size={26} className="fill-white text-white" />
 							</div>
 							<div className="text-[15px] sm:text-base font-black leading-[1.15] text-[#141414]">
@@ -108,7 +108,7 @@ export const HeroBanner: React.FC = () => {
 						{/* Google Reviews Link */}
 						<Link
 							to="/review"
-							className="text-[15px] text-[#5a5a5a] hover:text-[#a43324] underline underline-offset-4 font-semibold transition-colors w-fit mt-1"
+							className="text-[15px] text-[#5a5a5a] hover:text-accent underline underline-offset-4 font-semibold transition-colors w-fit mt-1"
 						>
 							Xem tất cả đánh giá Google
 						</Link>
@@ -127,7 +127,7 @@ export const HeroBanner: React.FC = () => {
 							</div>
 
 							{/* Orange Pill đè lên mép trái khung */}
-							<div className="absolute top-1/2 -left-[7%] sm:-left-[10%] -translate-y-1/2 z-100 bg-[#a43324] text-white text-base sm:text-lg font-bold px-7 sm:px-8 py-4 sm:py-5 rounded-full shadow-[0_10px_30px_rgba(164,51,36,0.32)] leading-[1.25] whitespace-nowrap text-center">
+							<div className="absolute top-1/2 -left-[7%] sm:-left-[10%] -translate-y-1/2 z-100 bg-accent text-white text-base sm:text-lg font-bold px-7 sm:px-8 py-4 sm:py-5 rounded-full shadow-[0_10px_30px_rgba(164,51,36,0.32)] leading-[1.25] whitespace-nowrap text-center">
 								Bé cưng là
 								<br />
 								ưu tiên số 1
@@ -158,7 +158,7 @@ export const HeroBanner: React.FC = () => {
 						</div>
 
 						{/* Thẻ cam dọc — bleed sát mép phải container */}
-						<div className="relative w-[176px] sm:w-[196px] lg:w-auto lg:flex-1 lg:min-h-0 aspect-[3/4] bg-[#a43324] rounded-[30px] p-2.5 shadow-sm mb-6 lg:mb-0 lg:my-4 overflow-hidden group">
+						<div className="relative w-[176px] sm:w-[196px] lg:w-auto lg:flex-1 lg:min-h-0 aspect-[3/4] bg-accent rounded-[30px] p-2.5 shadow-sm mb-6 lg:mb-0 lg:my-4 overflow-hidden group">
 							<img
 								src="/imgs/maw-care-girl-orange.jpg"
 								alt="Nhân viên PetCare ôm mèo cưng"

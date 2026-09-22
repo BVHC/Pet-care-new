@@ -221,3 +221,8 @@ FE/scripts/
 # Git worktrees (SDD isolated workspaces)
 # ==============================================================================
 .worktrees/
+
+# Docs temporary & superpowers
+docs/superpowers/
+~$*
+

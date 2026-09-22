@@ -60,6 +60,7 @@ import { AdminAuditPage } from '../pages/admin/AdminAuditPage';
 import { AdminUsersPage } from '../pages/admin/AdminUsersPage';
 import { AdminTenantsPage } from '../pages/admin/AdminTenantsPage';
 import { AdminOrdersPage } from '../pages/admin/AdminOrdersPage';
+import { AdminAIPage } from '../pages/admin/AdminAIPage';
 
 const queryClient = new QueryClient({
   defaultOptions: { queries: { staleTime: 60_000, refetchOnWindowFocus: false } },
@@ -134,6 +135,7 @@ export function App() {
           <Route path="/admin/audit" element={<AdminAuditPage />} />
           <Route path="/admin/users" element={<AdminUsersPage />} />
           <Route path="/admin/tenants" element={<AdminTenantsPage />} />
+          <Route path="/admin/ai" element={<AdminAIPage />} />
         </Route>
       </Routes>
       <GlobalModal />

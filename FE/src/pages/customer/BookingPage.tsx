@@ -134,7 +134,7 @@ function SuccessModal({
         <button
           onClick={onClose}
           aria-label="Đóng"
-          className="absolute top-4 right-4 rounded-full p-1.5 text-[var(--color-text-secondary)] hover:bg-[var(--color-surface-2)] transition-colors"
+          className="absolute top-4 right-4 rounded-full p-1.5 text-(--color-text-secondary) hover:bg-(--color-surface-2) transition-colors"
         >
           <X size={18} />
         </button>
@@ -208,7 +208,7 @@ export function BookingPage() {
   }
 
   return (
-    <div className="bg-[var(--color-surface-page)] pb-24">
+    <div className="bg-(--color-surface-page) pb-24">
       {/* ====== Hero ====== */}
       <section className={styles.hero}>
         <img
@@ -316,7 +316,7 @@ export function BookingPage() {
             <div className={styles.formCard}>
               {/* Form header */}
               <div className={styles.formHeader}>
-                <ClipboardCheck size={20} className="text-[var(--color-accent)]" />
+                <ClipboardCheck size={20} className="text-accent" />
                 <h2 className={styles.formTitle}>Thông tin đặt lịch</h2>
               </div>
 

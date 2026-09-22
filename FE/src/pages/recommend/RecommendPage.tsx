@@ -178,7 +178,7 @@ function FilterBar({
 
           <Link
             to={`/shop?petType=${petType}`}
-            className="ml-auto mr-1 shrink-0 whitespace-nowrap rounded-full bg-[var(--color-accent-soft)] px-3.5 py-2 text-[12px] font-bold text-[var(--color-accent)] transition-colors hover:bg-[var(--color-accent)] hover:text-white"
+            className="ml-auto mr-1 shrink-0 whitespace-nowrap rounded-full bg-(--color-accent-soft) px-3.5 py-2 text-[12px] font-bold text-accent transition-colors hover:bg-accent hover:text-white"
           >
             Xem tất cả →
           </Link>
@@ -211,7 +211,7 @@ function RecProductCard({
         <div className={styles.cardAction}>
           <button
             onClick={() => onAdd(p)}
-            className="flex w-full items-center justify-center gap-1.5 rounded-lg bg-[var(--color-accent)] px-2 py-2 text-[12.5px] font-bold text-white shadow-[0_8px_16px_-8px_rgba(164,51,36,0.8)] transition-colors hover:bg-[var(--color-accent-hover)] active:scale-[0.985]"
+            className="flex w-full items-center justify-center gap-1.5 rounded-lg bg-accent px-2 py-2 text-[12.5px] font-bold text-white shadow-[0_8px_16px_-8px_rgba(164,51,36,0.8)] transition-colors hover:bg-(--color-accent-hover) active:scale-[0.985]"
           >
             <Plus size={14} strokeWidth={2.5} />
             Thêm vào giỏ
@@ -229,7 +229,7 @@ function RecProductCard({
         <div className={styles.cardRating}>
           <Star
             size={11}
-            className="fill-[var(--color-brand-primary)] text-[var(--color-brand-primary)]"
+            className="fill-(--color-brand-primary) text-(--color-brand-primary)"
           />
           <span className={styles.cardRatingStrong}>{p.rating.toFixed(1)}</span>
           <span>· đã bán {soldFmt.format(p.sold)}</span>
@@ -298,15 +298,15 @@ export function RecommendPage() {
   }
 
   return (
-    <div className="bg-[var(--color-surface-page)] pb-24">
+    <div className="bg-(--color-surface-page) pb-24">
       {/* Breadcrumb */}
       <div className="mx-auto max-w-[1280px] px-5 py-4 sm:px-8">
-        <nav aria-label="Đường dẫn" className="flex items-center gap-1.5 text-[12.5px] text-[var(--color-text-secondary)]">
-          <Link to="/" className="underline-offset-4 transition-colors hover:text-[var(--color-text-primary)] hover:underline">
+        <nav aria-label="Đường dẫn" className="flex items-center gap-1.5 text-[12.5px] text-(--color-text-secondary)">
+          <Link to="/" className="underline-offset-4 transition-colors hover:text-(--color-text-primary) hover:underline">
             Trang chủ
           </Link>
           <ChevronRight size={13} />
-          <span className="font-semibold text-[var(--color-text-primary)]">Gợi ý sản phẩm</span>
+          <span className="font-semibold text-(--color-text-primary)">Gợi ý sản phẩm</span>
         </nav>
       </div>
 
@@ -321,7 +321,7 @@ export function RecommendPage() {
             </span>
             <Link
               to="/account#pets"
-              className="text-[11.5px] font-semibold text-[var(--color-accent)] underline-offset-4 transition-colors hover:text-[var(--color-accent-hover)] hover:underline"
+              className="text-[11.5px] font-semibold text-accent underline-offset-4 transition-colors hover:text-(--color-accent-hover) hover:underline"
             >
               Quản lý
             </Link>
@@ -356,14 +356,14 @@ export function RecommendPage() {
           <div className={styles.main}>
             {products.length === 0 ? (
               <div className={styles.empty}>
-                <Search size={48} strokeWidth={1.5} className="text-[var(--color-border-strong)]" />
+                <Search size={48} strokeWidth={1.5} className="text-(--color-border-strong)" />
                 <p className={styles.emptyTitle}>Chưa có gợi ý cho pet này</p>
                 <p className={styles.emptyDesc}>
                   Thêm thú cưng của bạn để nhận gợi ý sản phẩm phù hợp.
                 </p>
                 <Link
                   to="/account#pets"
-                  className="mt-4 rounded-full bg-[var(--color-accent)] px-6 py-2.5 text-[13px] font-bold text-white transition-colors hover:bg-[var(--color-accent-hover)]"
+                  className="mt-4 rounded-full bg-accent px-6 py-2.5 text-[13px] font-bold text-white transition-colors hover:bg-(--color-accent-hover)"
                 >
                   Thêm thú cưng
                 </Link>

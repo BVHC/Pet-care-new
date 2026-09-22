@@ -79,7 +79,7 @@ export function ProductDetailPage() {
         {/* Thông tin */}
         <div>
           <div className="text-sm text-gray-500">{product.category} · Cho {product.petType === 'dog' ? 'Chó' : 'Mèo'}</div>
-          <h1 className="mt-2 font-[var(--font-friendly)] text-3xl font-bold text-gray-900">{product.name}</h1>
+          <h1 className="mt-2 font-friendly text-3xl font-bold text-gray-900">{product.name}</h1>
 
           <div className="mt-3 flex items-center gap-2">
             <div className="flex gap-0.5">
@@ -91,7 +91,7 @@ export function ProductDetailPage() {
           </div>
 
           <div className="mt-6 flex items-end gap-3">
-            <span className="font-[var(--font-friendly)] text-3xl font-bold text-[#843122]">{formatVnd(product.price)}</span>
+            <span className="font-friendly text-3xl font-bold text-[#843122]">{formatVnd(product.price)}</span>
             {product.originalPrice && (
               <span className="text-lg text-gray-400 line-through">{formatVnd(product.originalPrice)}</span>
             )}

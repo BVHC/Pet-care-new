@@ -15,9 +15,9 @@ const sizeClasses = {
 };
 
 const variantClasses = {
-  primary: 'bg-[var(--color-surface-card)] text-[var(--color-text-primary)]',
-  secondary: 'bg-[var(--color-surface-sunken)] text-[var(--color-text-secondary)]',
-  brand: 'bg-[var(--color-brand-primary)] text-[var(--color-text-on-brand)]',
+  primary: 'bg-(--color-surface-card) text-(--color-text-primary)',
+  secondary: 'bg-(--color-surface-sunken) text-(--color-text-secondary)',
+  brand: 'bg-(--color-brand-primary) text-(--color-text-on-brand)',
 };
 
 export function IconCircle({ icon, image, size = 'medium', variant = 'primary', className = '' }: IconCircleProps) {

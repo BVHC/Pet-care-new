@@ -7,7 +7,7 @@ import {
   Crown, Warehouse, Truck, Boxes, ClipboardList, ShieldAlert,
   BarChart3, Activity, Building2, UserCog, ChevronDown,
   ChevronRight, LogOut, PanelLeftClose, PanelLeft,
-  Package
+  Package, Bot
 } from 'lucide-react';
 import { useState } from 'react';
 import type { Role } from '../../shared/types/admin';
@@ -29,6 +29,7 @@ const ALL_ROLES: Role[] = [
   'VETERINARIAN', 'GROOMER', 'INVENTORY_STAFF', 'FINANCE_STAFF',
 ];
 
+// eslint-disable-next-line react-refresh/only-export-components
 export const ADMIN_MENU: MenuSection[] = [
   {
     section: 'Tổng quan',
@@ -80,10 +81,12 @@ export const ADMIN_MENU: MenuSection[] = [
     items: [
       { path: '/admin/tenants', label: 'Tổ chức', icon: Building2, roles: ['SUPER_ADMIN', 'ORG_ADMIN', 'STORE_MANAGER'] },
       { path: '/admin/users', label: 'Người dùng', icon: UserCog, roles: ['SUPER_ADMIN', 'ORG_ADMIN', 'STORE_MANAGER'] },
+      { path: '/admin/ai', label: 'Trí tuệ nhân tạo', icon: Bot, roles: ['SUPER_ADMIN', 'ORG_ADMIN', 'STORE_MANAGER', 'VETERINARIAN'] },
     ],
   },
 ];
 
+// eslint-disable-next-line react-refresh/only-export-components
 export function routeAllowed(path: string, role: Role): boolean {
   if (role === 'SUPER_ADMIN' || role === 'STORE_MANAGER') return true;
   for (const section of ADMIN_MENU) {
@@ -133,29 +136,29 @@ export function AdminSidebar({ collapsed: propCollapsed, onToggle }: AdminSideba
 
   return (
     <aside className={cn(
-      "admin-sidebar h-screen flex flex-col transition-all duration-300 select-none flex-shrink-0 border-r border-[var(--border-color)]",
+      "admin-sidebar h-screen flex flex-col transition-all duration-300 select-none shrink-0 border-r border-(--border-color)",
       isCollapsed ? "w-16" : "w-64"
     )}>
       {/* Logo & Toggle Header */}
       <div className={cn(
-        "p-4 border-b border-[var(--border-color)] flex items-center justify-between",
+        "p-4 border-b border-(--border-color) flex items-center justify-between",
         isCollapsed && "p-3 justify-center"
       )}>
         <Link to="/admin/dashboard" className={cn("flex items-center gap-3", isCollapsed && "justify-center")}>
-          <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-blue-500 to-blue-600 flex items-center justify-center shadow-md flex-shrink-0">
+          <div className="w-10 h-10 rounded-xl bg-linear-to-br from-blue-500 to-blue-600 flex items-center justify-center shadow-md shrink-0">
             <span className="text-white font-bold text-lg">PC</span>
           </div>
           {!isCollapsed && (
             <div>
-              <h1 className="font-semibold text-base text-[var(--text-primary)] leading-tight">Pet Care</h1>
-              <p className="text-xs text-[var(--text-secondary)]">Admin Portal</p>
+              <h1 className="font-semibold text-base text-(--text-primary) leading-tight">Pet Care</h1>
+              <p className="text-xs text-(--text-secondary)">Admin Portal</p>
             </div>
           )}
         </Link>
         {!isCollapsed && (
           <button
             onClick={handleToggleCollapse}
-            className="p-1.5 rounded-lg text-[var(--text-tertiary)] hover:text-[var(--text-secondary)] hover:bg-[var(--bg-secondary)] transition-colors"
+            className="p-1.5 rounded-lg text-(--text-tertiary) hover:text-(--text-secondary) hover:bg-(--bg-secondary) transition-colors"
             title="Thu gọn sidebar"
           >
             <PanelLeftClose className="h-4 w-4" />
@@ -171,7 +174,7 @@ export function AdminSidebar({ collapsed: propCollapsed, onToggle }: AdminSideba
             <button
               onClick={() => toggleSection(section.section)}
               className={cn(
-                "flex items-center justify-between w-full text-[11px] font-semibold text-[var(--text-tertiary)] uppercase tracking-wider px-3 py-1.5 hover:text-[var(--text-secondary)] transition-colors",
+                "flex items-center justify-between w-full text-[11px] font-semibold text-(--text-tertiary) uppercase tracking-wider px-3 py-1.5 hover:text-(--text-secondary) transition-colors",
                 isCollapsed && "justify-center px-0 py-2"
               )}
               title={isCollapsed ? section.section : undefined}
@@ -186,7 +189,7 @@ export function AdminSidebar({ collapsed: propCollapsed, onToggle }: AdminSideba
                   )}
                 </>
               ) : (
-                <div className="w-1.5 h-1.5 rounded-full bg-[var(--text-tertiary)] opacity-60" />
+                <div className="w-1.5 h-1.5 rounded-full bg-(--text-tertiary) opacity-60" />
               )}
             </button>
 
@@ -203,12 +206,12 @@ export function AdminSidebar({ collapsed: propCollapsed, onToggle }: AdminSideba
                           'nav-item flex items-center gap-3 px-3 py-2 rounded-xl text-sm font-medium transition-colors',
                           isActive
                             ? 'bg-blue-600 text-white shadow-sm font-semibold'
-                            : 'text-[var(--text-secondary)] hover:text-[var(--text-primary)] hover:bg-[var(--bg-secondary)]',
+                            : 'text-(--text-secondary) hover:text-(--text-primary) hover:bg-(--bg-secondary)',
                           isCollapsed && 'justify-center px-2 py-2.5'
                         )}
                         title={isCollapsed ? item.label : undefined}
                       >
-                        <item.icon className="h-[18px] w-[18px] flex-shrink-0" />
+                        <item.icon className="h-[18px] w-[18px] shrink-0" />
                         {!isCollapsed && <span className="truncate">{item.label}</span>}
                       </Link>
                     </li>
@@ -221,12 +224,12 @@ export function AdminSidebar({ collapsed: propCollapsed, onToggle }: AdminSideba
       </nav>
 
       {/* Bottom Actions */}
-      <div className={cn("p-3 border-t border-[var(--border-color)] space-y-2", isCollapsed && "flex flex-col items-center p-2")}>
+      <div className={cn("p-3 border-t border-(--border-color) space-y-2", isCollapsed && "flex flex-col items-center p-2")}>
         {/* Collapse Toggle when in collapsed mode */}
         {isCollapsed && (
           <button
             onClick={handleToggleCollapse}
-            className="p-2 rounded-lg text-[var(--text-tertiary)] hover:text-[var(--text-primary)] hover:bg-[var(--bg-secondary)] transition-colors w-full flex justify-center"
+            className="p-2 rounded-lg text-(--text-tertiary) hover:text-(--text-primary) hover:bg-(--bg-secondary) transition-colors w-full flex justify-center"
             title="Mở rộng sidebar"
           >
             <PanelLeft className="h-5 w-5" />
@@ -235,20 +238,20 @@ export function AdminSidebar({ collapsed: propCollapsed, onToggle }: AdminSideba
       </div>
 
       {/* User Info */}
-      <div className={cn("p-4 border-t border-[var(--border-color)]", isCollapsed && "p-2 flex justify-center")}>
+      <div className={cn("p-4 border-t border-(--border-color)", isCollapsed && "p-2 flex justify-center")}>
         <div className={cn("flex items-center gap-3", isCollapsed && "flex-col")}>
-          <div className="w-10 h-10 rounded-full bg-gradient-to-br from-blue-500 to-indigo-600 flex items-center justify-center text-white font-semibold text-sm flex-shrink-0">
+          <div className="w-10 h-10 rounded-full bg-linear-to-br from-blue-500 to-indigo-600 flex items-center justify-center text-white font-semibold text-sm shrink-0">
             {user.name.charAt(0).toUpperCase()}
           </div>
           {!isCollapsed ? (
             <>
               <div className="flex-1 min-w-0">
-                <p className="text-sm font-medium text-[var(--text-primary)] truncate">{user.name}</p>
-                <p className="text-xs text-[var(--text-secondary)] truncate">{user.role.replace('_', ' ')}</p>
+                <p className="text-sm font-medium text-(--text-primary) truncate">{user.name}</p>
+                <p className="text-xs text-(--text-secondary) truncate">{user.role.replace('_', ' ')}</p>
               </div>
               <button
                 onClick={logout}
-                className="p-2 text-[var(--text-tertiary)] hover:text-red-500 hover:bg-red-50 rounded-lg transition-colors"
+                className="p-2 text-(--text-tertiary) hover:text-red-500 hover:bg-red-50 rounded-lg transition-colors"
                 title="Đăng xuất"
               >
                 <LogOut className="h-4 w-4" />
@@ -257,7 +260,7 @@ export function AdminSidebar({ collapsed: propCollapsed, onToggle }: AdminSideba
           ) : (
             <button
               onClick={logout}
-              className="p-1.5 text-[var(--text-tertiary)] hover:text-red-500 hover:bg-red-50 rounded-lg transition-colors"
+              className="p-1.5 text-(--text-tertiary) hover:text-red-500 hover:bg-red-50 rounded-lg transition-colors"
               title="Đăng xuất"
             >
               <LogOut className="h-4 w-4" />

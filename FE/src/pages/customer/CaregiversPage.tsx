@@ -91,7 +91,7 @@ export function CaregiversPage() {
   }
 
   return (
-    <div className="bg-[var(--color-surface-page)] pb-24">
+    <div className="bg-(--color-surface-page) pb-24">
       <CommonPageHero
         eyebrow="Ủy quyền chăm sóc"
         title="Người chăm sóc thú cưng"
@@ -124,13 +124,13 @@ export function CaregiversPage() {
               ].map((b) => (
                 <div
                   key={b.title}
-                  className="rounded-2xl border border-[var(--color-border-default)] bg-[var(--color-surface-card)] p-5 shadow-[0_1px_2px_rgba(56,36,23,0.06),0_4px_12px_-8px_rgba(56,36,23,0.4)]"
+                  className="rounded-2xl border border-(--color-border-default) bg-(--color-surface-card) p-5 shadow-[0_1px_2px_rgba(56,36,23,0.06),0_4px_12px_-8px_rgba(56,36,23,0.4)]"
                 >
-                  <div className="mb-3 flex h-10 w-10 items-center justify-center rounded-xl bg-[var(--color-accent-soft)] text-[var(--color-accent)]">
+                  <div className="mb-3 flex h-10 w-10 items-center justify-center rounded-xl bg-(--color-accent-soft) text-accent">
                     <b.icon size={20} />
                   </div>
-                  <h3 className="text-[14px] font-bold text-[var(--color-text-primary)]">{b.title}</h3>
-                  <p className="mt-1 text-[12.5px] leading-relaxed text-[var(--color-text-secondary)]">{b.desc}</p>
+                  <h3 className="text-[14px] font-bold text-(--color-text-primary)">{b.title}</h3>
+                  <p className="mt-1 text-[12.5px] leading-relaxed text-(--color-text-secondary)">{b.desc}</p>
                 </div>
               ))}
             </div>
@@ -138,12 +138,12 @@ export function CaregiversPage() {
             {/* Caregivers list */}
             <div>
               <header className="mb-6 flex items-center justify-between">
-                <h2 className="font-[var(--font-friendly)] text-2xl font-extrabold text-[var(--color-text-primary)]">
+                <h2 className="font-friendly text-2xl font-extrabold text-(--color-text-primary)">
                   Danh sách ({CAREGIVERS.length})
                 </h2>
                 <button
                   onClick={() => setShowInvite(true)}
-                  className="inline-flex items-center gap-1.5 rounded-full bg-[var(--color-accent)] px-4 py-2 text-[13px] font-bold text-white transition-colors hover:bg-[var(--color-accent-hover)]"
+                  className="inline-flex items-center gap-1.5 rounded-full bg-accent px-4 py-2 text-[13px] font-bold text-white transition-colors hover:bg-(--color-accent-hover)"
                 >
                   <Plus size={15} /> Mời thêm
                 </button>
@@ -153,16 +153,16 @@ export function CaregiversPage() {
                 {CAREGIVERS.map((c) => (
                   <div
                     key={c.id}
-                    className="overflow-hidden rounded-2xl border border-[var(--color-border-default)] bg-[var(--color-surface-card)] shadow-[0_1px_2px_rgba(56,36,23,0.06),0_4px_12px_-8px_rgba(56,36,23,0.4)]"
+                    className="overflow-hidden rounded-2xl border border-(--color-border-default) bg-(--color-surface-card) shadow-[0_1px_2px_rgba(56,36,23,0.06),0_4px_12px_-8px_rgba(56,36,23,0.4)]"
                   >
                     <div className="flex flex-wrap items-start gap-4 p-5">
-                      <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-full bg-[var(--color-accent-soft)] font-[var(--font-friendly)] text-xl font-bold text-[var(--color-accent)]">
+                      <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-full bg-(--color-accent-soft) font-friendly text-xl font-bold text-accent">
                         {c.name.charAt(0)}
                       </div>
 
                       <div className="flex-1 min-w-0">
                         <div className="flex flex-wrap items-center gap-2">
-                          <h3 className="text-[15px] font-bold text-[var(--color-text-primary)]">{c.name}</h3>
+                          <h3 className="text-[15px] font-bold text-(--color-text-primary)">{c.name}</h3>
                           {c.status === 'active' && (
                             <span className="rounded-full bg-emerald-100 px-2.5 py-0.5 text-[10.5px] font-bold uppercase tracking-wider text-emerald-700">
                               Đang hoạt động
@@ -179,16 +179,16 @@ export function CaregiversPage() {
                             </span>
                           )}
                         </div>
-                        <p className="mt-0.5 flex items-center gap-1 text-[12.5px] text-[var(--color-text-secondary)]">
+                        <p className="mt-0.5 flex items-center gap-1 text-[12.5px] text-(--color-text-secondary)">
                           <Mail size={12} /> {c.email}
                         </p>
 
                         <div className="mt-3 flex flex-wrap items-center gap-3 text-[12px]">
-                          <div className="flex items-center gap-1.5 text-[var(--color-text-secondary)]">
+                          <div className="flex items-center gap-1.5 text-(--color-text-secondary)">
                             <PawPrint size={12} />
                             <span>Chăm sóc:</span>
                             {c.pets.map((p, i) => (
-                              <span key={p.name} className="inline-flex items-center gap-0.5 font-bold text-[var(--color-text-primary)]">
+                              <span key={p.name} className="inline-flex items-center gap-0.5 font-bold text-(--color-text-primary)">
                                 {p.type === 'dog' ? <Dog size={12} /> : <Cat size={12} />}
                                 {p.name}
                                 {i < c.pets.length - 1 && <span className="ml-1 mr-1">,</span>}
@@ -198,12 +198,12 @@ export function CaregiversPage() {
                         </div>
 
                         {c.status === 'active' && c.grantedAt && c.expiresAt && (
-                          <p className="mt-2 text-[11.5px] text-[var(--color-text-secondary)]">
+                          <p className="mt-2 text-[11.5px] text-(--color-text-secondary)">
                             Cấp ngày {c.grantedAt} · Hết hạn {c.expiresAt}
                           </p>
                         )}
                         {c.status === 'pending' && c.invitedAt && (
-                          <p className="mt-2 text-[11.5px] text-[var(--color-text-secondary)]">
+                          <p className="mt-2 text-[11.5px] text-(--color-text-secondary)">
                             Đã mời ngày {c.invitedAt} · Lời mời hết hạn sau{' '}
                             {7 - Math.floor((Date.now() - new Date('2026-08-22').getTime()) / 86400000)} ngày
                           </p>
@@ -212,17 +212,17 @@ export function CaregiversPage() {
 
                       <div className="flex shrink-0 items-center gap-2">
                         {c.status === 'active' ? (
-                          <button className="rounded-lg border border-[var(--color-border-default)] px-3 py-1.5 text-[12.5px] font-bold text-[var(--color-accent)] transition-colors hover:bg-[var(--color-accent-soft)]">
+                          <button className="rounded-lg border border-(--color-border-default) px-3 py-1.5 text-[12.5px] font-bold text-accent transition-colors hover:bg-(--color-accent-soft)">
                             Thu hồi
                           </button>
                         ) : c.status === 'pending' ? (
                           <>
-                            <button className="rounded-lg border border-[var(--color-border-default)] px-3 py-1.5 text-[12.5px] font-bold text-[var(--color-text-secondary)] hover:bg-[var(--color-surface-2)]">
+                            <button className="rounded-lg border border-(--color-border-default) px-3 py-1.5 text-[12.5px] font-bold text-(--color-text-secondary) hover:bg-(--color-surface-2)">
                               Hủy lời mời
                             </button>
                             <button
                               onClick={handleCopyLink}
-                              className="inline-flex items-center gap-1 rounded-lg border border-[var(--color-border-default)] px-3 py-1.5 text-[12.5px] font-bold text-[var(--color-accent)] hover:bg-[var(--color-accent-soft)]"
+                              className="inline-flex items-center gap-1 rounded-lg border border-(--color-border-default) px-3 py-1.5 text-[12.5px] font-bold text-accent hover:bg-(--color-accent-soft)"
                             >
                               {linkCopied ? <Check size={12} /> : <Copy size={12} />}
                               {linkCopied ? 'Đã sao chép' : 'Sao chép link'}
@@ -246,47 +246,47 @@ export function CaregiversPage() {
           onClick={() => setShowInvite(false)}
         >
           <div
-            className="w-full max-w-md overflow-hidden rounded-3xl border border-[var(--color-border-default)] bg-[var(--color-surface-card)] shadow-[0_24px_64px_-16px_rgba(56,36,23,0.5)]"
+            className="w-full max-w-md overflow-hidden rounded-3xl border border-(--color-border-default) bg-(--color-surface-card) shadow-[0_24px_64px_-16px_rgba(56,36,23,0.5)]"
             onClick={(e) => e.stopPropagation()}
           >
-            <div className="flex items-center justify-between border-b border-[var(--color-border-default)] px-6 py-4">
-              <h2 className="font-[var(--font-friendly)] text-lg font-extrabold text-[var(--color-text-primary)]">
+            <div className="flex items-center justify-between border-b border-(--color-border-default) px-6 py-4">
+              <h2 className="font-friendly text-lg font-extrabold text-(--color-text-primary)">
                 Mời người chăm sóc
               </h2>
               <button
                 onClick={() => setShowInvite(false)}
-                className="text-[var(--color-text-secondary)] transition-colors hover:text-[var(--color-text-primary)]"
+                className="text-(--color-text-secondary) transition-colors hover:text-(--color-text-primary)"
               >
                 <X size={20} />
               </button>
             </div>
 
             <div className="p-6">
-              <p className="mb-4 text-[13px] text-[var(--color-text-secondary)]">
+              <p className="mb-4 text-[13px] text-(--color-text-secondary)">
                 Người được mời sẽ nhận email xác nhận. Lời mời có hiệu lực 7 ngày.
               </p>
 
               <label className="mb-4 block">
-                <span className="mb-1.5 block text-[12.5px] font-bold text-[var(--color-text-primary)]">
+                <span className="mb-1.5 block text-[12.5px] font-bold text-(--color-text-primary)">
                   Email người được mời
                 </span>
                 <div className="relative">
                   <Mail
                     size={15}
-                    className="absolute left-3 top-1/2 -translate-y-1/2 text-[var(--color-text-secondary)]"
+                    className="absolute left-3 top-1/2 -translate-y-1/2 text-(--color-text-secondary)"
                   />
                   <input
                     type="email"
                     value={email}
                     onChange={(e) => setEmail(e.target.value)}
                     placeholder="email@example.com"
-                    className="w-full rounded-xl border border-[var(--color-border-default)] bg-[var(--color-surface-card)] py-2.5 pl-9 pr-3 text-[13.5px] text-[var(--color-text-primary)] outline-none focus:border-[var(--color-accent)] focus:ring-2 focus:ring-[var(--color-accent-soft)]"
+                    className="w-full rounded-xl border border-(--color-border-default) bg-(--color-surface-card) py-2.5 pl-9 pr-3 text-[13.5px] text-(--color-text-primary) outline-none focus:border-(--color-accent) focus:ring-2 focus:ring-(--color-accent-soft)"
                   />
                 </div>
               </label>
 
               <div className="mb-5">
-                <span className="mb-2 block text-[12.5px] font-bold text-[var(--color-text-primary)]">
+                <span className="mb-2 block text-[12.5px] font-bold text-(--color-text-primary)">
                   Thú cưng được ủy quyền
                 </span>
                 <div className="space-y-1.5">
@@ -295,18 +295,18 @@ export function CaregiversPage() {
                       key={p.id}
                       className={`flex cursor-pointer items-center gap-3 rounded-xl border px-3 py-2.5 transition-all ${
                         selectedPets.includes(p.id)
-                          ? 'border-[var(--color-accent)] bg-[var(--color-accent-soft)]'
-                          : 'border-[var(--color-border-default)] hover:bg-[var(--color-surface-2)]'
+                          ? 'border-(--color-accent) bg-(--color-accent-soft)'
+                          : 'border-(--color-border-default) hover:bg-(--color-surface-2)'
                       }`}
                     >
                       <input
                         type="checkbox"
                         checked={selectedPets.includes(p.id)}
                         onChange={() => togglePet(p.id)}
-                        className="h-4 w-4 accent-[var(--color-accent)]"
+                        className="h-4 w-4 accent-(--color-accent)"
                       />
                       {p.type === 'dog' ? <Dog size={16} /> : <Cat size={16} />}
-                      <span className="text-[13.5px] font-semibold text-[var(--color-text-primary)]">{p.name}</span>
+                      <span className="text-[13.5px] font-semibold text-(--color-text-primary)">{p.name}</span>
                     </label>
                   ))}
                 </div>
@@ -319,14 +319,14 @@ export function CaregiversPage() {
               <div className="mt-5 flex gap-2">
                 <button
                   onClick={() => setShowInvite(false)}
-                  className="flex-1 rounded-xl border border-[var(--color-border-default)] py-2.5 text-[13px] font-bold text-[var(--color-text-secondary)] transition-colors hover:bg-[var(--color-surface-2)]"
+                  className="flex-1 rounded-xl border border-(--color-border-default) py-2.5 text-[13px] font-bold text-(--color-text-secondary) transition-colors hover:bg-(--color-surface-2)"
                 >
                   Hủy
                 </button>
                 <button
                   onClick={handleSendInvite}
                   disabled={!email || selectedPets.length === 0}
-                  className="flex flex-1 items-center justify-center gap-1.5 rounded-xl bg-[var(--color-accent)] py-2.5 text-[13px] font-bold text-white transition-colors hover:bg-[var(--color-accent-hover)] disabled:cursor-not-allowed disabled:opacity-50"
+                  className="flex flex-1 items-center justify-center gap-1.5 rounded-xl bg-accent py-2.5 text-[13px] font-bold text-white transition-colors hover:bg-(--color-accent-hover) disabled:cursor-not-allowed disabled:opacity-50"
                 >
                   <Send size={14} /> Gửi lời mời
                 </button>

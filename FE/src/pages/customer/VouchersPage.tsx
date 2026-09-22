@@ -104,7 +104,7 @@ export function VouchersPage() {
   const fmtVnd = (n: number) => n.toLocaleString('vi-VN') + 'đ'
 
   return (
-    <div className="bg-[var(--color-surface-page)] pb-24">
+    <div className="bg-(--color-surface-page) pb-24">
       <CommonPageHero
         eyebrow="Kho voucher"
         title="Mã giảm giá của bạn"
@@ -117,21 +117,21 @@ export function VouchersPage() {
           <AccountSidebar active="vouchers" />
           <div className="min-w-0 space-y-6">
             {/* Tabs */}
-            <div className="inline-flex rounded-full border border-[var(--color-border-default)] bg-[var(--color-surface-card)] p-1 shadow-[0_1px_2px_rgba(56,36,23,0.06)]">
+            <div className="inline-flex rounded-full border border-(--color-border-default) bg-(--color-surface-card) p-1 shadow-[0_1px_2px_rgba(56,36,23,0.06)]">
               {TABS.map((t) => (
                 <button
                   key={t.id}
                   onClick={() => setTab(t.id)}
                   className={`flex items-center gap-2 rounded-full px-5 py-2 text-[13px] font-bold transition-all ${
                     tab === t.id
-                      ? 'bg-[var(--color-accent)] text-white shadow-[0_4px_12px_-6px_rgba(164,51,36,0.7)]'
-                      : 'text-[var(--color-text-secondary)] hover:text-[var(--color-text-primary)]'
+                      ? 'bg-accent text-white shadow-[0_4px_12px_-6px_rgba(164,51,36,0.7)]'
+                      : 'text-(--color-text-secondary) hover:text-(--color-text-primary)'
                   }`}
                 >
                   {t.label}
                   <span
                     className={`rounded-full px-2 py-0.5 text-[10.5px] font-bold ${
-                      tab === t.id ? 'bg-white/20 text-white' : 'bg-[var(--color-surface-2)] text-[var(--color-text-secondary)]'
+                      tab === t.id ? 'bg-white/20 text-white' : 'bg-(--color-surface-2) text-(--color-text-secondary)'
                     }`}
                   >
                     {t.count}
@@ -142,9 +142,9 @@ export function VouchersPage() {
 
             {/* Voucher list */}
             {filtered.length === 0 ? (
-              <div className="rounded-3xl border border-dashed border-[var(--color-border-default)] bg-[var(--color-surface-card)] p-12 text-center">
-                <Ticket size={36} className="mx-auto text-[var(--color-text-secondary)] opacity-40" />
-                <p className="mt-3 text-[14px] text-[var(--color-text-secondary)]">
+              <div className="rounded-3xl border border-dashed border-(--color-border-default) bg-(--color-surface-card) p-12 text-center">
+                <Ticket size={36} className="mx-auto text-(--color-text-secondary) opacity-40" />
+                <p className="mt-3 text-[14px] text-(--color-text-secondary)">
                   Chưa có voucher nào trong mục này.
                 </p>
               </div>
@@ -157,22 +157,22 @@ export function VouchersPage() {
                       key={v.id}
                       className={`flex flex-col overflow-hidden rounded-2xl border ${
                         inactive
-                          ? 'border-[var(--color-border-default)] bg-[var(--color-surface-1)] opacity-60'
-                          : 'border-[var(--color-border-default)] bg-[var(--color-surface-card)] shadow-[0_1px_2px_rgba(56,36,23,0.06),0_4px_12px_-8px_rgba(56,36,23,0.4)] hover:shadow-[0_2px_4px_rgba(56,36,23,0.07),0_12px_28px_-16px_rgba(164,51,36,0.4)]'
+                          ? 'border-(--color-border-default) bg-(--color-surface-1) opacity-60'
+                          : 'border-(--color-border-default) bg-(--color-surface-card) shadow-[0_1px_2px_rgba(56,36,23,0.06),0_4px_12px_-8px_rgba(56,36,23,0.4)] hover:shadow-[0_2px_4px_rgba(56,36,23,0.07),0_12px_28px_-16px_rgba(164,51,36,0.4)]'
                       } sm:flex-row`}
                     >
                       {/* Left: discount badge */}
                       <div
                         className={`relative flex shrink-0 items-center justify-center px-6 py-5 text-center sm:w-44 ${
                           inactive
-                            ? 'bg-[var(--color-surface-2)] text-[var(--color-text-secondary)]'
-                            : 'bg-gradient-to-br from-[var(--color-accent)] to-[var(--color-accent-hover)] text-white'
+                            ? 'bg-(--color-surface-2) text-(--color-text-secondary)'
+                            : 'bg-linear-to-br from-accent to-accent-hover text-white'
                         }`}
                       >
-                        <div className="absolute -right-3 top-1/2 hidden h-6 w-6 -translate-y-1/2 rounded-full bg-[var(--color-surface-page)] sm:block" />
-                        <div className="absolute -left-3 top-1/2 hidden h-6 w-6 -translate-y-1/2 rounded-full bg-[var(--color-surface-page)] sm:block" />
+                        <div className="absolute -right-3 top-1/2 hidden h-6 w-6 -translate-y-1/2 rounded-full bg-(--color-surface-page) sm:block" />
+                        <div className="absolute -left-3 top-1/2 hidden h-6 w-6 -translate-y-1/2 rounded-full bg-(--color-surface-page) sm:block" />
                         <div>
-                          <div className="font-[var(--font-friendly)] text-3xl font-extrabold leading-none">
+                          <div className="font-friendly text-3xl font-extrabold leading-none">
                             {v.discount}
                           </div>
                           <div className="mt-1 text-[10.5px] font-bold uppercase tracking-wider opacity-85">
@@ -181,27 +181,27 @@ export function VouchersPage() {
                         </div>
                       </div>
 
-                      <div className="border-dashed border-[var(--color-border-default)] sm:border-l" />
+                      <div className="border-dashed border-(--color-border-default) sm:border-l" />
 
                       {/* Right: details */}
                       <div className="flex flex-1 items-start justify-between gap-4 p-5">
                         <div className="min-w-0 flex-1">
-                          <h3 className="text-[15px] font-bold text-[var(--color-text-primary)]">{v.title}</h3>
-                          <p className="mt-1 text-[12.5px] leading-relaxed text-[var(--color-text-secondary)]">
+                          <h3 className="text-[15px] font-bold text-(--color-text-primary)">{v.title}</h3>
+                          <p className="mt-1 text-[12.5px] leading-relaxed text-(--color-text-secondary)">
                             {v.desc}
                           </p>
-                          <div className="mt-3 flex flex-wrap items-center gap-x-4 gap-y-1 text-[11.5px] text-[var(--color-text-secondary)]">
+                          <div className="mt-3 flex flex-wrap items-center gap-x-4 gap-y-1 text-[11.5px] text-(--color-text-secondary)">
                             <span>
-                              Đơn tối thiểu: <strong className="text-[var(--color-text-primary)]">{fmtVnd(v.minOrder)}</strong>
+                              Đơn tối thiểu: <strong className="text-(--color-text-primary)">{fmtVnd(v.minOrder)}</strong>
                             </span>
                             <span>·</span>
                             <span>
-                              HSD: <strong className="text-[var(--color-text-primary)]">{v.expiresAt}</strong>
+                              HSD: <strong className="text-(--color-text-primary)">{v.expiresAt}</strong>
                             </span>
                           </div>
-                          <div className="mt-3 inline-flex items-center gap-2 rounded-lg border border-dashed border-[var(--color-border-default)] bg-[var(--color-surface-2)] px-3 py-1.5">
-                            <Ticket size={13} className="text-[var(--color-accent)]" />
-                            <code className="font-mono text-[12.5px] font-bold tracking-wide text-[var(--color-text-primary)]">
+                          <div className="mt-3 inline-flex items-center gap-2 rounded-lg border border-dashed border-(--color-border-default) bg-(--color-surface-2) px-3 py-1.5">
+                            <Ticket size={13} className="text-accent" />
+                            <code className="font-mono text-[12.5px] font-bold tracking-wide text-(--color-text-primary)">
                               {v.code}
                             </code>
                           </div>
@@ -210,13 +210,13 @@ export function VouchersPage() {
                         {v.status === 'available' ? (
                           <button
                             onClick={() => handleCopy(v.id, v.code)}
-                            className="inline-flex shrink-0 items-center gap-1.5 self-start rounded-lg border border-[var(--color-border-default)] px-3 py-1.5 text-[12.5px] font-bold text-[var(--color-accent)] transition-colors hover:bg-[var(--color-accent-soft)]"
+                            className="inline-flex shrink-0 items-center gap-1.5 self-start rounded-lg border border-(--color-border-default) px-3 py-1.5 text-[12.5px] font-bold text-accent transition-colors hover:bg-(--color-accent-soft)"
                           >
                             {copiedId === v.id ? <Check size={13} /> : <Copy size={13} />}
                             {copiedId === v.id ? 'Đã sao chép' : 'Sao chép'}
                           </button>
                         ) : (
-                          <span className="shrink-0 self-start rounded-full bg-[var(--color-surface-2)] px-2.5 py-1 text-[10.5px] font-bold uppercase tracking-wider text-[var(--color-text-secondary)]">
+                          <span className="shrink-0 self-start rounded-full bg-(--color-surface-2) px-2.5 py-1 text-[10.5px] font-bold uppercase tracking-wider text-(--color-text-secondary)">
                             {v.status === 'used' ? 'Đã dùng' : 'Hết hạn'}
                           </span>
                         )}

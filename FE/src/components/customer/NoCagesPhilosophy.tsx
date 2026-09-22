@@ -9,7 +9,7 @@ export const NoCagesPhilosophy: React.FC = () => {
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-12 items-center">
           {/* Left Column: Bold Philosophy Typography */}
           <div>
-            <div className="inline-flex items-center gap-2 rounded-full bg-[#faebe4] px-4 py-1.5 text-xs font-black uppercase tracking-widest text-[#a43324] mb-4 border border-[#a43324]/15">
+            <div className="inline-flex items-center gap-2 rounded-full bg-[#faebe4] px-4 py-1.5 text-xs font-black uppercase tracking-widest text-accent mb-4 border border-accent/15">
               <Heart size={14} className="fill-current" /> Triết Lý PetCare (About Us)
             </div>
             <h2 className="font-bayon text-[#3B2A1E] text-4xl sm:text-5xl md:text-6xl leading-[0.92] tracking-tight uppercase mb-6">
@@ -25,7 +25,7 @@ export const NoCagesPhilosophy: React.FC = () => {
             {/* Value Badges */}
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 mb-8">
               <div className="flex items-center gap-3 bg-white p-3.5 rounded-2xl shadow-sm border border-amber-50">
-                <div className="w-10 h-10 rounded-xl bg-[#faebe4] text-[#a43324] flex items-center justify-center shrink-0">
+                <div className="w-10 h-10 rounded-xl bg-[#faebe4] text-accent flex items-center justify-center shrink-0">
                   <ShieldCheck size={20} />
                 </div>
                 <div>
@@ -47,7 +47,7 @@ export const NoCagesPhilosophy: React.FC = () => {
 
             <Link
               to="/about"
-              className="inline-flex items-center gap-2 rounded-full bg-[#a43324] px-7 py-3 text-sm font-bold text-white uppercase tracking-wider hover:bg-[#89271b] transition-all shadow-md"
+              className="inline-flex items-center gap-2 rounded-full bg-accent px-7 py-3 text-sm font-bold text-white uppercase tracking-wider hover:bg-accent-hover transition-all shadow-md"
             >
               Tìm Hiểu Thêm Về Chúng Tôi <ArrowRight size={16} />
             </Link>
@@ -59,15 +59,15 @@ export const NoCagesPhilosophy: React.FC = () => {
               <img
                 src="/imgs/1618027531_13_p_sobaka_i_chelovek_sobaki_krasivo_foto_14_d47fd511c1.jpg"
                 alt="Chăm sóc thú cưng tận tâm"
-                className="w-full aspect-[4/3] object-cover"
+                className="w-full aspect-4/3 object-cover"
                 onError={(e) => {
                   // Fallback
                   e.currentTarget.src = '/imgs/dog_3344414_1920_1200x675_2dccbb4050.jpg'
                 }}
               />
-              <div className="absolute inset-0 bg-gradient-to-t from-black/60 via-transparent to-transparent" />
+              <div className="absolute inset-0 bg-linear-to-t from-black/60 via-transparent to-transparent" />
               <div className="absolute bottom-6 left-6 right-6 text-white">
-                <div className="inline-block bg-[#fff500] text-[#a43324] font-black text-xs px-3 py-1 rounded-full uppercase tracking-wider mb-2">
+                <div className="inline-block bg-[#fff500] text-accent font-black text-xs px-3 py-1 rounded-full uppercase tracking-wider mb-2">
                   Tiêu Chuẩn 5 Sao
                 </div>
                 <div className="font-bayon text-2xl sm:text-3xl leading-tight">
@@ -84,7 +84,7 @@ export const NoCagesPhilosophy: React.FC = () => {
                 className="w-11 h-11 object-contain"
               />
               <div>
-                <div className="font-black text-xs text-[#a43324]">100% CUN CÚN HÀI LÒNG</div>
+                <div className="font-black text-xs text-accent">100% CUN CÚN HÀI LÒNG</div>
                 <div className="text-[11px] text-gray-500">Hơn 2.500+ lượt gửi mỗi năm</div>
               </div>
             </div>

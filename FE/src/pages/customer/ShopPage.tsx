@@ -188,7 +188,7 @@ export function ShopPage() {
   }
 
   return (
-    <div className="bg-[var(--color-surface-page)]">
+    <div className="bg-(--color-surface-page)">
       <ShopHero total={PRODUCTS.length} />
 
       <FilterBar
@@ -210,12 +210,12 @@ export function ShopPage() {
       <main className="mx-auto w-full max-w-[1440px] px-5 pb-24 sm:px-8">
         {activeChips.length > 0 && (
           <div className="flex flex-wrap items-center gap-2 py-5">
-            <span className="text-[13px] text-[var(--color-text-secondary)]">Đang lọc:</span>
+            <span className="text-[13px] text-(--color-text-secondary)">Đang lọc:</span>
             {activeChips.map((chip) => (
               <button
                 key={chip.key}
                 onClick={chip.clear}
-                className="inline-flex items-center gap-1.5 rounded-full bg-[var(--color-accent-soft)] py-1.5 pr-2.5 pl-3 text-[13px] font-semibold text-[var(--color-accent)] transition-colors hover:bg-[var(--color-accent)] hover:text-white focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--color-accent)]"
+                className="inline-flex items-center gap-1.5 rounded-full bg-(--color-accent-soft) py-1.5 pr-2.5 pl-3 text-[13px] font-semibold text-accent transition-colors hover:bg-accent hover:text-white focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-(--color-accent)"
               >
                 {chip.label}
                 <X size={13} strokeWidth={2.5} />
@@ -223,7 +223,7 @@ export function ShopPage() {
             ))}
             <button
               onClick={clearAll}
-              className="ml-1 text-[13px] font-semibold text-[var(--color-text-secondary)] underline-offset-4 hover:text-[var(--color-accent)] hover:underline"
+              className="ml-1 text-[13px] font-semibold text-(--color-text-secondary) underline-offset-4 hover:text-accent hover:underline"
             >
               Xoá hết
             </button>
@@ -310,9 +310,9 @@ function Pagination({
   return (
     <nav
       aria-label="Phân trang"
-      className="mt-10 flex flex-col items-center gap-4 border-t border-[var(--color-border-default)] pt-8"
+      className="mt-10 flex flex-col items-center gap-4 border-t border-(--color-border-default) pt-8"
     >
-      <p className="text-[13px] text-[var(--color-text-secondary)] tabular-nums">
+      <p className="text-[13px] text-(--color-text-secondary) tabular-nums">
         {from}–{to} trên {total} sản phẩm
       </p>
 
@@ -324,7 +324,7 @@ function Pagination({
 
           {pageWindow(page, totalPages).map((n, i) =>
             n === 'gap' ? (
-              <span key={`gap-${i}`} className="px-1 text-[var(--color-text-secondary)]">
+              <span key={`gap-${i}`} className="px-1 text-(--color-text-secondary)">
                 …
               </span>
             ) : (
@@ -332,10 +332,10 @@ function Pagination({
                 key={n}
                 onClick={() => onChange(n)}
                 aria-current={n === page ? 'page' : undefined}
-                className={`h-9 min-w-9 rounded-full px-3 text-[13px] font-bold tabular-nums transition-colors focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--color-accent)] ${
+                className={`h-9 min-w-9 rounded-full px-3 text-[13px] font-bold tabular-nums transition-colors focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-(--color-accent) ${
                   n === page
-                    ? 'bg-[var(--color-accent)] text-white'
-                    : 'bg-white text-[var(--color-text-primary)] ring-1 ring-[var(--color-border-default)] ring-inset hover:text-[var(--color-accent)]'
+                    ? 'bg-accent text-white'
+                    : 'bg-white text-(--color-text-primary) ring-1 ring-(--color-border-default) ring-inset hover:text-accent'
                 }`}
               >
                 {n}
@@ -372,7 +372,7 @@ function PageBtn({
       onClick={onClick}
       disabled={disabled}
       aria-label={label}
-      className="grid h-9 w-9 place-items-center rounded-full bg-white text-[var(--color-text-primary)] ring-1 ring-[var(--color-border-default)] ring-inset transition-colors hover:text-[var(--color-accent)] disabled:pointer-events-none disabled:opacity-35 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--color-accent)]"
+      className="grid h-9 w-9 place-items-center rounded-full bg-white text-(--color-text-primary) ring-1 ring-(--color-border-default) ring-inset transition-colors hover:text-accent disabled:pointer-events-none disabled:opacity-35 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-(--color-accent)"
     >
       {children}
     </button>
@@ -413,7 +413,7 @@ function ShopHero({ total }: { total: number }) {
 
         <p className="flex flex-wrap items-center gap-x-4 gap-y-1 pb-1 text-[12.5px] text-white/60">
           <span className="inline-flex items-center gap-1.5">
-            <PawPrint size={13} className="text-[var(--color-accent-warm)]" />
+            <PawPrint size={13} className="text-(--color-accent-warm)" />
             <span className="tabular-nums">{total}</span> sản phẩm
           </span>
           <span aria-hidden className="text-white/25">
@@ -486,7 +486,7 @@ function FilterBar({
         <div className="mx-auto flex max-w-[1440px] items-center gap-3 px-5 py-2.5 sm:px-8">
           <button
             onClick={onOpenDrawer}
-            className="inline-flex shrink-0 items-center gap-2 rounded-full border border-[var(--color-border-default)] bg-white px-4 py-2 text-[13px] font-bold text-[var(--color-text-primary)] lg:hidden"
+            className="inline-flex shrink-0 items-center gap-2 rounded-full border border-(--color-border-default) bg-white px-4 py-2 text-[13px] font-bold text-(--color-text-primary) lg:hidden"
           >
             <SlidersHorizontal size={15} />
             Bộ lọc{activeCount > 0 && ` (${activeCount})`}
@@ -505,7 +505,7 @@ function FilterBar({
                   key={c.id}
                   onClick={() => onCategory(c.id)}
                   aria-pressed={active}
-                  className={`${styles.catChip} ${active ? styles.catChipActive : ''} focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--color-accent)]`}
+                  className={`${styles.catChip} ${active ? styles.catChipActive : ''} focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-(--color-accent)`}
                 >
                   <img src={c.photo} alt="" loading="lazy" />
                   {c.label}
@@ -515,7 +515,7 @@ function FilterBar({
           </div>
 
           <div className="hidden shrink-0 items-center gap-2 lg:flex">
-            <span className="h-6 w-px bg-[var(--color-border-default)]" />
+            <span className="h-6 w-px bg-(--color-border-default)" />
 
             <DropdownFilter
               label="Giá"
@@ -537,14 +537,14 @@ function FilterBar({
           </div>
 
           <div className="ml-auto flex shrink-0 items-center gap-3">
-            <span className="hidden text-[13px] text-[var(--color-text-secondary)] tabular-nums xl:inline">
+            <span className="hidden text-[13px] text-(--color-text-secondary) tabular-nums xl:inline">
               {count} sản phẩm
             </span>
             <select
               value={sort}
               onChange={(e) => onSort(e.target.value)}
               aria-label="Sắp xếp"
-              className="cursor-pointer rounded-full border border-[var(--color-border-default)] bg-white px-3.5 py-2 text-[13px] font-semibold text-[var(--color-text-primary)] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--color-accent)]"
+              className="cursor-pointer rounded-full border border-(--color-border-default) bg-white px-3.5 py-2 text-[13px] font-semibold text-(--color-text-primary) focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-(--color-accent)"
             >
               {SORT_OPTIONS.map((o) => (
                 <option key={o.id} value={o.id}>
@@ -618,7 +618,7 @@ function DropdownFilter({
               <button
                 key={it.id}
                 onClick={() => onToggle(it.id)}
-                className={`flex items-center gap-2.5 rounded-xl px-2.5 py-2 text-left text-[13px] font-semibold transition-colors ${active ? 'bg-[var(--color-accent-soft)] text-[var(--color-accent)]' : 'text-[var(--color-text-primary)] hover:bg-[var(--color-surface-2)]'}`}
+                className={`flex items-center gap-2.5 rounded-xl px-2.5 py-2 text-left text-[13px] font-semibold transition-colors ${active ? 'bg-(--color-accent-soft) text-accent' : 'text-(--color-text-primary) hover:bg-(--color-surface-2)'}`}
               >
                 {it.logo && (
                   <img
@@ -649,7 +649,7 @@ function SegmentGroup({
   onToggle: (id: string) => void
 }) {
   return (
-    <div className="flex rounded-full bg-[var(--color-surface-2)] p-1">
+    <div className="flex rounded-full bg-(--color-surface-2) p-1">
       {items.map((it) => {
         const active = selected.includes(it.id)
         return (
@@ -657,7 +657,7 @@ function SegmentGroup({
             key={it.id}
             onClick={() => onToggle(it.id)}
             aria-pressed={active}
-            className={`rounded-full px-4 py-1.5 text-[13px] font-bold transition-colors ${active ? 'bg-[var(--color-accent)] text-white' : 'text-[var(--color-text-secondary)] hover:text-[var(--color-text-primary)]'}`}
+            className={`rounded-full px-4 py-1.5 text-[13px] font-bold transition-colors ${active ? 'bg-accent text-white' : 'text-(--color-text-secondary) hover:text-(--color-text-primary)'}`}
           >
             {it.label}
           </button>
@@ -680,10 +680,10 @@ function FilterPill({
     <button
       onClick={onClick}
       aria-pressed={active}
-      className={`inline-flex items-center gap-1.5 rounded-full px-3.5 py-2 text-[13px] font-semibold transition-colors focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--color-accent)] ${
+      className={`inline-flex items-center gap-1.5 rounded-full px-3.5 py-2 text-[13px] font-semibold transition-colors focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-(--color-accent) ${
         active
-          ? 'bg-[var(--color-accent)] text-white'
-          : 'bg-white text-[var(--color-text-secondary)] ring-1 ring-[var(--color-border-default)] ring-inset hover:text-[var(--color-text-primary)]'
+          ? 'bg-accent text-white'
+          : 'bg-white text-(--color-text-secondary) ring-1 ring-(--color-border-default) ring-inset hover:text-(--color-text-primary)'
       }`}
     >
       {children}
@@ -704,7 +704,7 @@ function ProductCard({ product: p, onAdd }: { product: ShopProduct; onAdd: (p: S
         </Link>
 
         {p.badge && (
-          <span className="absolute top-2 left-2 rounded bg-[var(--color-accent)] px-1.5 py-0.5 text-[10px] font-bold tracking-wide text-white uppercase">
+          <span className="absolute top-2 left-2 rounded bg-accent px-1.5 py-0.5 text-[10px] font-bold tracking-wide text-white uppercase">
             {p.badge}
           </span>
         )}
@@ -712,7 +712,7 @@ function ProductCard({ product: p, onAdd }: { product: ShopProduct; onAdd: (p: S
         <div className={styles.cardAction}>
           <button
             onClick={() => onAdd(p)}
-            className="flex w-full items-center justify-center gap-1.5 rounded-lg bg-[var(--color-accent)] px-2 py-2 text-[12.5px] font-bold text-white shadow-[0_10px_20px_-10px_rgba(164,51,36,0.8)] transition-colors hover:bg-[var(--color-accent-hover)] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--color-accent)] active:scale-[0.985]"
+            className="flex w-full items-center justify-center gap-1.5 rounded-lg bg-accent px-2 py-2 text-[12.5px] font-bold text-white shadow-[0_10px_20px_-10px_rgba(164,51,36,0.8)] transition-colors hover:bg-(--color-accent-hover) focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-(--color-accent) active:scale-[0.985]"
           >
             <Plus size={14} strokeWidth={2.5} />
             Thêm vào giỏ
@@ -721,23 +721,23 @@ function ProductCard({ product: p, onAdd }: { product: ShopProduct; onAdd: (p: S
       </div>
 
       <div className="flex flex-1 flex-col p-3">
-        <p className="mb-1 truncate text-[10px] font-semibold tracking-[0.1em] text-[var(--color-text-secondary)] uppercase">
+        <p className="mb-1 truncate text-[10px] font-semibold tracking-[0.1em] text-(--color-text-secondary) uppercase">
           {CATEGORY_LABELS[p.category]}
           {brand && ` · ${brand.label}`}
         </p>
 
         <h3 className="mb-1.5 line-clamp-2 min-h-[2.6em] text-[13px] leading-[1.3] font-bold">
-          <Link to={`/shop/${p.id}`} className="hover:text-[var(--color-accent)]">
+          <Link to={`/shop/${p.id}`} className="hover:text-accent">
             {p.name}
           </Link>
         </h3>
 
-        <div className="flex items-center gap-1 text-[11.5px] text-[var(--color-text-secondary)]">
+        <div className="flex items-center gap-1 text-[11.5px] text-(--color-text-secondary)">
           <Star
             size={11}
-            className="fill-[var(--color-brand-primary)] text-[var(--color-brand-primary)]"
+            className="fill-(--color-brand-primary) text-(--color-brand-primary)"
           />
-          <span className="font-semibold text-[var(--color-text-primary)]">
+          <span className="font-semibold text-(--color-text-primary)">
             {p.rating.toFixed(1)}
           </span>
           <span aria-hidden>·</span>
@@ -745,11 +745,11 @@ function ProductCard({ product: p, onAdd }: { product: ShopProduct; onAdd: (p: S
         </div>
 
         <div className="mt-auto flex min-h-[24px] flex-wrap items-baseline gap-x-1.5 pt-3">
-          <span className="font-[var(--font-friendly)] text-[16px] font-extrabold tabular-nums">
+          <span className="font-friendly text-[16px] font-extrabold tabular-nums">
             {vnd.format(p.price)}
           </span>
           {p.oldPrice && (
-            <span className="text-[11.5px] text-[var(--color-text-secondary)] line-through tabular-nums">
+            <span className="text-[11.5px] text-(--color-text-secondary) line-through tabular-nums">
               {vnd.format(p.oldPrice)}
             </span>
           )}
@@ -773,17 +773,17 @@ function ProductGridSkeleton() {
 
 function EmptyState({ onClear }: { onClear: () => void }) {
   return (
-    <div className="flex flex-col items-center rounded-3xl bg-[var(--color-surface-2)] px-6 py-20 text-center">
+    <div className="flex flex-col items-center rounded-3xl bg-(--color-surface-2) px-6 py-20 text-center">
       <img src="/imgs/download11.png" alt="" className="mb-5 w-16 opacity-40" />
-      <p className="font-[var(--font-friendly)] text-[20px] font-extrabold">
+      <p className="font-friendly text-[20px] font-extrabold">
         Chưa có sản phẩm nào khớp
       </p>
-      <p className="mt-2 max-w-[42ch] text-[14px] text-[var(--color-text-secondary)]">
+      <p className="mt-2 max-w-[42ch] text-[14px] text-(--color-text-secondary)">
         Bộ lọc hiện tại hơi hẹp. Bỏ bớt một vài điều kiện để xem thêm lựa chọn cho boss nhà bạn.
       </p>
       <button
         onClick={onClear}
-        className="mt-6 rounded-full bg-[var(--color-accent)] px-6 py-2.5 text-[13px] font-bold text-white transition-colors hover:bg-[var(--color-accent-hover)]"
+        className="mt-6 rounded-full bg-accent px-6 py-2.5 text-[13px] font-bold text-white transition-colors hover:bg-(--color-accent-hover)"
       >
         Xoá bộ lọc
       </button>
@@ -836,11 +836,11 @@ function FilterDrawer({
       <div className="absolute inset-0 bg-[#382417]/55" onClick={onClose} />
       <div className="absolute inset-x-0 bottom-0 max-h-[86vh] overflow-y-auto rounded-t-3xl bg-white p-6 pb-28">
         <div className="mb-6 flex items-center justify-between">
-          <span className="font-[var(--font-friendly)] text-[18px] font-extrabold">Bộ lọc</span>
+          <span className="font-friendly text-[18px] font-extrabold">Bộ lọc</span>
           <button
             onClick={onClose}
             aria-label="Đóng bộ lọc"
-            className="rounded-full p-1.5 hover:bg-[var(--color-surface-2)]"
+            className="rounded-full p-1.5 hover:bg-(--color-surface-2)"
           >
             <X size={20} />
           </button>
@@ -878,16 +878,16 @@ function FilterDrawer({
           ))}
         </DrawerGroup>
 
-        <div className="fixed inset-x-0 bottom-0 flex gap-3 border-t border-[var(--color-border-default)] bg-white p-4">
+        <div className="fixed inset-x-0 bottom-0 flex gap-3 border-t border-(--color-border-default) bg-white p-4">
           <button
             onClick={onClear}
-            className="flex-1 rounded-full border border-[var(--color-border-default)] py-3 text-[14px] font-bold text-[var(--color-text-primary)]"
+            className="flex-1 rounded-full border border-(--color-border-default) py-3 text-[14px] font-bold text-(--color-text-primary)"
           >
             Xoá hết
           </button>
           <button
             onClick={onClose}
-            className="flex-[1.6] rounded-full bg-[var(--color-accent)] py-3 text-[14px] font-bold text-white active:scale-[0.985]"
+            className="flex-[1.6] rounded-full bg-accent py-3 text-[14px] font-bold text-white active:scale-[0.985]"
           >
             Xem {resultCount} sản phẩm
           </button>
@@ -900,7 +900,7 @@ function FilterDrawer({
 function DrawerGroup({ title, children }: { title: string; children: React.ReactNode }) {
   return (
     <section className="mb-7">
-      <h4 className="mb-3 text-[12px] font-bold tracking-[0.14em] text-[var(--color-text-secondary)] uppercase">
+      <h4 className="mb-3 text-[12px] font-bold tracking-[0.14em] text-(--color-text-secondary) uppercase">
         {title}
       </h4>
       <div className="flex flex-wrap gap-2">{children}</div>
@@ -923,8 +923,8 @@ function DrawerPill({
       aria-pressed={active}
       className={`rounded-full px-4 py-2 text-[13px] font-semibold transition-colors ${
         active
-          ? 'bg-[var(--color-accent)] text-white'
-          : 'bg-[var(--color-surface-2)] text-[var(--color-text-primary)]'
+          ? 'bg-accent text-white'
+          : 'bg-(--color-surface-2) text-(--color-text-primary)'
       }`}
     >
       {children}

@@ -6,6 +6,7 @@ import { NAV_TO_PATH } from '../../constants/routes';
 import { useCartStore } from '../../stores/cart.store';
 import { useAuthStore } from '../../stores/auth.store';
 import { useNavigate } from 'react-router-dom';
+import { InteractiveMascotCompanion } from '../../../components/customer/InteractiveMascotCompanion';
 
 // Layout công khai (Home, Shop, Booking...).
 export function PublicLayout() {
@@ -24,12 +25,13 @@ export function PublicLayout() {
   };
 
   return (
-    <div className="min-h-screen flex flex-col bg-[var(--color-surface-page)]">
+    <div className="min-h-screen flex flex-col bg-(--color-surface-page)">
       <SiteHeader currentPage="home" cartCount={count} onNav={onNav} />
       <main className="flex-1 pt-[150px]">
         <Outlet />
       </main>
       <SiteFooter onNav={onNav} />
+      <InteractiveMascotCompanion />
     </div>
   );
 }

@@ -216,12 +216,12 @@ function PetModal({
       className="fixed inset-0 z-[100] flex items-end justify-center bg-black/50 p-4 sm:items-center"
       onClick={(e) => e.target === e.currentTarget && onClose()}
     >
-      <div className="w-full max-w-md overflow-hidden rounded-3xl border border-[var(--color-border-default)] bg-white shadow-[0_24px_64px_-16px_rgba(56,36,23,0.5)]">
-        <div className="flex items-center justify-between border-b border-[var(--color-border-default)] px-6 py-4">
-          <h2 className="font-[var(--font-friendly)] text-lg font-extrabold text-[var(--color-text-primary)]">
+      <div className="w-full max-w-md overflow-hidden rounded-3xl border border-(--color-border-default) bg-white shadow-[0_24px_64px_-16px_rgba(56,36,23,0.5)]">
+        <div className="flex items-center justify-between border-b border-(--color-border-default) px-6 py-4">
+          <h2 className="font-friendly text-lg font-extrabold text-(--color-text-primary)">
             {editing ? 'Sửa thú cưng' : 'Thêm thú cưng'}
           </h2>
-          <button onClick={onClose} className="text-[var(--color-text-secondary)] hover:text-[var(--color-text-primary)]">
+          <button onClick={onClose} className="text-(--color-text-secondary) hover:text-(--color-text-primary)">
             <X size={20} />
           </button>
         </div>
@@ -232,14 +232,14 @@ function PetModal({
           {/* Avatar upload */}
           <div className="flex flex-col items-center">
             <div
-              className="relative h-24 w-24 cursor-pointer overflow-hidden rounded-full border-2 border-dashed border-[var(--color-border-default)] bg-[var(--color-surface-2)] transition-colors hover:border-[var(--color-accent)]"
+              className="relative h-24 w-24 cursor-pointer overflow-hidden rounded-full border-2 border-dashed border-(--color-border-default) bg-(--color-surface-2) transition-colors hover:border-(--color-accent)"
               onClick={() => fileRef.current?.click()}
             >
               {preview ? (
                 <img src={preview} alt="Pet preview" className="h-full w-full object-cover" />
               ) : (
                 <div className="flex h-full w-full items-center justify-center">
-                  <Camera size={28} className="text-[var(--color-text-secondary)] opacity-50" />
+                  <Camera size={28} className="text-(--color-text-secondary) opacity-50" />
                 </div>
               )}
               <div className="absolute inset-0 flex items-end justify-center bg-black/40 opacity-0 transition-opacity hover:opacity-100">
@@ -253,20 +253,20 @@ function PetModal({
               className="hidden"
               onChange={handleFileChange}
             />
-            <p className="mt-2 text-[11px] text-[var(--color-text-secondary)]">JPG, PNG · tối đa 5 MB</p>
+            <p className="mt-2 text-[11px] text-(--color-text-secondary)">JPG, PNG · tối đa 5 MB</p>
           </div>
 
           <div>
-            <label className="mb-1 block text-[12.5px] font-bold text-[var(--color-text-primary)]">Tên</label>
+            <label className="mb-1 block text-[12.5px] font-bold text-(--color-text-primary)">Tên</label>
             <input
               value={form.name}
               onChange={(e) => set({ name: e.target.value })}
               placeholder="VD: Milo"
-              className="w-full rounded-xl border border-[var(--color-border-default)] bg-white px-3.5 py-2.5 text-[13.5px] text-[var(--color-text-primary)] outline-none focus:border-[var(--color-accent)] focus:ring-2 focus:ring-[var(--color-accent-soft)]"
+              className="w-full rounded-xl border border-(--color-border-default) bg-white px-3.5 py-2.5 text-[13.5px] text-(--color-text-primary) outline-none focus:border-(--color-accent) focus:ring-2 focus:ring-(--color-accent-soft)"
             />
           </div>
           <div>
-            <label className="mb-1.5 block text-[12.5px] font-bold text-[var(--color-text-primary)]">Loại</label>
+            <label className="mb-1.5 block text-[12.5px] font-bold text-(--color-text-primary)">Loại</label>
             <div className="flex gap-2">
               {(['dog', 'cat'] as const).map((t) => (
                 <button
@@ -275,8 +275,8 @@ function PetModal({
                   onClick={() => set({ type: t })}
                   className={`flex flex-1 items-center justify-center gap-1.5 rounded-xl border py-2.5 text-[13px] font-bold transition-all ${
                     form.type === t
-                      ? 'border-[var(--color-accent)] bg-[var(--color-accent-soft)] text-[var(--color-accent)]'
-                      : 'border-[var(--color-border-default)] text-[var(--color-text-secondary)] hover:bg-[var(--color-surface-2)]'
+                      ? 'border-(--color-accent) bg-(--color-accent-soft) text-accent'
+                      : 'border-(--color-border-default) text-(--color-text-secondary) hover:bg-(--color-surface-2)'
                   }`}
                 >
                   {t === 'dog' ? <Dog size={15} /> : <Cat size={15} />}
@@ -286,31 +286,31 @@ function PetModal({
             </div>
           </div>
           <div>
-            <label className="mb-1 block text-[12.5px] font-bold text-[var(--color-text-primary)]">Giống</label>
+            <label className="mb-1 block text-[12.5px] font-bold text-(--color-text-primary)">Giống</label>
             <input
               value={form.breed}
               onChange={(e) => set({ breed: e.target.value })}
               placeholder="VD: Golden Retriever"
-              className="w-full rounded-xl border border-[var(--color-border-default)] bg-white px-3.5 py-2.5 text-[13.5px] text-[var(--color-text-primary)] outline-none focus:border-[var(--color-accent)] focus:ring-2 focus:ring-[var(--color-accent-soft)]"
+              className="w-full rounded-xl border border-(--color-border-default) bg-white px-3.5 py-2.5 text-[13.5px] text-(--color-text-primary) outline-none focus:border-(--color-accent) focus:ring-2 focus:ring-(--color-accent-soft)"
             />
           </div>
           <div className="grid grid-cols-2 gap-3">
             <div>
-              <label className="mb-1 block text-[12.5px] font-bold text-[var(--color-text-primary)]">Tuổi</label>
+              <label className="mb-1 block text-[12.5px] font-bold text-(--color-text-primary)">Tuổi</label>
               <input
                 value={form.age}
                 onChange={(e) => set({ age: e.target.value })}
                 placeholder="VD: 3 tuổi"
-                className="w-full rounded-xl border border-[var(--color-border-default)] bg-white px-3.5 py-2.5 text-[13.5px] text-[var(--color-text-primary)] outline-none focus:border-[var(--color-accent)] focus:ring-2 focus:ring-[var(--color-accent-soft)]"
+                className="w-full rounded-xl border border-(--color-border-default) bg-white px-3.5 py-2.5 text-[13.5px] text-(--color-text-primary) outline-none focus:border-(--color-accent) focus:ring-2 focus:ring-(--color-accent-soft)"
               />
             </div>
             <div>
-              <label className="mb-1 block text-[12.5px] font-bold text-[var(--color-text-primary)]">Cân nặng</label>
+              <label className="mb-1 block text-[12.5px] font-bold text-(--color-text-primary)">Cân nặng</label>
               <input
                 value={form.weight}
                 onChange={(e) => set({ weight: e.target.value })}
                 placeholder="VD: 25 kg"
-                className="w-full rounded-xl border border-[var(--color-border-default)] bg-white px-3.5 py-2.5 text-[13.5px] text-[var(--color-text-primary)] outline-none focus:border-[var(--color-accent)] focus:ring-2 focus:ring-[var(--color-accent-soft)]"
+                className="w-full rounded-xl border border-(--color-border-default) bg-white px-3.5 py-2.5 text-[13.5px] text-(--color-text-primary) outline-none focus:border-(--color-accent) focus:ring-2 focus:ring-(--color-accent-soft)"
               />
             </div>
           </div>
@@ -318,13 +318,13 @@ function PetModal({
             <button
               type="button"
               onClick={onClose}
-              className="flex-1 rounded-xl border border-[var(--color-border-default)] py-2.5 text-[13px] font-bold text-[var(--color-text-secondary)] transition-colors hover:bg-[var(--color-surface-2)]"
+              className="flex-1 rounded-xl border border-(--color-border-default) py-2.5 text-[13px] font-bold text-(--color-text-secondary) transition-colors hover:bg-(--color-surface-2)"
             >
               Hủy
             </button>
             <button
               type="submit"
-              className="flex-1 rounded-xl bg-[var(--color-accent)] py-2.5 text-[13px] font-bold text-white transition-colors hover:bg-[var(--color-accent-hover)]"
+              className="flex-1 rounded-xl bg-accent py-2.5 text-[13px] font-bold text-white transition-colors hover:bg-(--color-accent-hover)"
             >
               {editing ? 'Lưu thay đổi' : 'Thêm thú cưng'}
             </button>
@@ -384,16 +384,16 @@ export function PetsPage() {
       <div className="mb-5 flex items-center gap-3">
         <img src={selectedPet.image} alt={selectedPet.name} className="h-12 w-12 rounded-full object-cover" />
         <div>
-          <div className="text-[14px] font-bold text-[var(--color-text-primary)]">{selectedPet.name}</div>
-          <div className="text-[12px] text-[var(--color-text-secondary)]">{selectedPet.breed}</div>
+          <div className="text-[14px] font-bold text-(--color-text-primary)">{selectedPet.name}</div>
+          <div className="text-[12px] text-(--color-text-secondary)">{selectedPet.breed}</div>
         </div>
       </div>
       {orders.length === 0 ? (
         <EmptyState icon={Calendar} msg="Chưa có đơn hàng nào cho thú cưng này." />
       ) : (
-        <div className="overflow-hidden rounded-2xl border border-[var(--color-border-default)] bg-white shadow-[0_1px_2px_rgba(56,36,23,0.06),0_4px_12px_-8px_rgba(56,36,23,0.4)]">
+        <div className="overflow-hidden rounded-2xl border border-(--color-border-default) bg-white shadow-[0_1px_2px_rgba(56,36,23,0.06),0_4px_12px_-8px_rgba(56,36,23,0.4)]">
           <table className="w-full text-left text-[13px]">
-            <thead className="bg-[var(--color-surface-2)] text-[11.5px] font-bold uppercase tracking-wider text-[var(--color-text-secondary)]">
+            <thead className="bg-(--color-surface-2) text-[11.5px] font-bold uppercase tracking-wider text-(--color-text-secondary)">
               <tr>
                 <th className="px-5 py-3.5">Ngày</th>
                 <th className="px-5 py-3.5">Dịch vụ</th>
@@ -405,10 +405,10 @@ export function PetsPage() {
               {orders.map((o) => {
                 const b = statusBadge(o.status)
                 return (
-                  <tr key={o.id} className="border-t border-[var(--color-border-default)]">
-                    <td className="px-5 py-3.5 text-[var(--color-text-secondary)]">{o.date}</td>
-                    <td className="px-5 py-3.5 font-semibold text-[var(--color-text-primary)]">{o.service}</td>
-                    <td className="px-5 py-3.5 font-bold text-[var(--color-text-primary)]">
+                  <tr key={o.id} className="border-t border-(--color-border-default)">
+                    <td className="px-5 py-3.5 text-(--color-text-secondary)">{o.date}</td>
+                    <td className="px-5 py-3.5 font-semibold text-(--color-text-primary)">{o.service}</td>
+                    <td className="px-5 py-3.5 font-bold text-(--color-text-primary)">
                       {o.status === 'cancelled' ? '—' : fmtVnd(o.total)}
                     </td>
                     <td className="px-5 py-3.5">
@@ -429,8 +429,8 @@ export function PetsPage() {
       <div className="mb-5 flex items-center gap-3">
         <img src={selectedPet.image} alt={selectedPet.name} className="h-12 w-12 rounded-full object-cover" />
         <div>
-          <div className="text-[14px] font-bold text-[var(--color-text-primary)]">{selectedPet.name}</div>
-          <div className="text-[12px] text-[var(--color-text-secondary)]">{selectedPet.breed}</div>
+          <div className="text-[14px] font-bold text-(--color-text-primary)">{selectedPet.name}</div>
+          <div className="text-[12px] text-(--color-text-secondary)">{selectedPet.breed}</div>
         </div>
       </div>
       {records.length === 0 ? (
@@ -438,27 +438,27 @@ export function PetsPage() {
       ) : (
         <div className="space-y-4">
           {records.map((r) => (
-            <div key={r.id} className="overflow-hidden rounded-2xl border border-[var(--color-border-default)] bg-white shadow-[0_1px_2px_rgba(56,36,23,0.06),0_4px_12px_-8px_rgba(56,36,23,0.4)]">
-              <div className="flex items-center justify-between border-b border-[var(--color-border-default)] bg-[var(--color-surface-2)] px-5 py-3">
-                <div className="flex items-center gap-2 text-[12.5px] font-bold text-[var(--color-text-secondary)]">
+            <div key={r.id} className="overflow-hidden rounded-2xl border border-(--color-border-default) bg-white shadow-[0_1px_2px_rgba(56,36,23,0.06),0_4px_12px_-8px_rgba(56,36,23,0.4)]">
+              <div className="flex items-center justify-between border-b border-(--color-border-default) bg-(--color-surface-2) px-5 py-3">
+                <div className="flex items-center gap-2 text-[12.5px] font-bold text-(--color-text-secondary)">
                   <Calendar size={14} /> {r.date}
                 </div>
-                <div className="flex items-center gap-2 text-[12px] text-[var(--color-text-secondary)]">
+                <div className="flex items-center gap-2 text-[12px] text-(--color-text-secondary)">
                   <Stethoscope size={14} /> {r.clinic}
                 </div>
               </div>
               <div className="p-5">
                 <div className="mb-2">
-                  <span className="text-[11px] font-bold uppercase tracking-wider text-[var(--color-text-secondary)]">Chẩn đoán</span>
-                  <p className="mt-0.5 text-[14px] font-bold text-[var(--color-text-primary)]">{r.diagnosis}</p>
+                  <span className="text-[11px] font-bold uppercase tracking-wider text-(--color-text-secondary)">Chẩn đoán</span>
+                  <p className="mt-0.5 text-[14px] font-bold text-(--color-text-primary)">{r.diagnosis}</p>
                 </div>
                 <div className="mb-2">
-                  <span className="text-[11px] font-bold uppercase tracking-wider text-[var(--color-text-secondary)]">Điều trị</span>
-                  <p className="mt-0.5 text-[13px] text-[var(--color-text-primary)]">{r.treatment}</p>
+                  <span className="text-[11px] font-bold uppercase tracking-wider text-(--color-text-secondary)">Điều trị</span>
+                  <p className="mt-0.5 text-[13px] text-(--color-text-primary)">{r.treatment}</p>
                 </div>
                 <div className="mb-2">
-                  <span className="text-[11px] font-bold uppercase tracking-wider text-[var(--color-text-secondary)]">Bác sĩ</span>
-                  <p className="mt-0.5 text-[13px] text-[var(--color-text-primary)]">{r.vet}</p>
+                  <span className="text-[11px] font-bold uppercase tracking-wider text-(--color-text-secondary)">Bác sĩ</span>
+                  <p className="mt-0.5 text-[13px] text-(--color-text-primary)">{r.vet}</p>
                 </div>
                 {r.notes && (
                   <div className="rounded-xl border border-amber-200 bg-amber-50 p-3 text-[12.5px] text-amber-800">
@@ -478,8 +478,8 @@ export function PetsPage() {
       <div className="mb-5 flex items-center gap-3">
         <img src={selectedPet.image} alt={selectedPet.name} className="h-12 w-12 rounded-full object-cover" />
         <div>
-          <div className="text-[14px] font-bold text-[var(--color-text-primary)]">{selectedPet.name}</div>
-          <div className="text-[12px] text-[var(--color-text-secondary)]">{selectedPet.breed}</div>
+          <div className="text-[14px] font-bold text-(--color-text-primary)">{selectedPet.name}</div>
+          <div className="text-[12px] text-(--color-text-secondary)">{selectedPet.breed}</div>
         </div>
       </div>
       {vacs.length === 0 ? (
@@ -489,24 +489,24 @@ export function PetsPage() {
           {vacs.map((v) => {
             const b = vacBadge(v.status)
             return (
-              <div key={v.id} className="flex items-center gap-4 overflow-hidden rounded-2xl border border-[var(--color-border-default)] bg-white p-4 shadow-[0_1px_2px_rgba(56,36,23,0.06),0_4px_12px_-8px_rgba(56,36,23,0.4)]">
-                <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-xl bg-[var(--color-accent-soft)]">
-                  <Syringe size={22} className="text-[var(--color-accent)]" />
+              <div key={v.id} className="flex items-center gap-4 overflow-hidden rounded-2xl border border-(--color-border-default) bg-white p-4 shadow-[0_1px_2px_rgba(56,36,23,0.06),0_4px_12px_-8px_rgba(56,36,23,0.4)]">
+                <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-xl bg-(--color-accent-soft)">
+                  <Syringe size={22} className="text-accent" />
                 </div>
                 <div className="min-w-0 flex-1">
                   <div className="flex flex-wrap items-center gap-2">
-                    <span className="text-[14px] font-bold text-[var(--color-text-primary)]">{v.name}</span>
+                    <span className="text-[14px] font-bold text-(--color-text-primary)">{v.name}</span>
                     <span className={`rounded-full px-2.5 py-0.5 text-[10.5px] font-bold ${b.cls}`}>{b.label}</span>
                   </div>
-                  <div className="mt-1 flex flex-wrap gap-x-4 text-[12px] text-[var(--color-text-secondary)]">
-                    <span>Tiêm: <strong className="text-[var(--color-text-primary)]">{v.date}</strong></span>
-                    <span>Lần tiếp: <strong className="text-[var(--color-text-primary)]">{v.nextDate}</strong></span>
+                  <div className="mt-1 flex flex-wrap gap-x-4 text-[12px] text-(--color-text-secondary)">
+                    <span>Tiêm: <strong className="text-(--color-text-primary)">{v.date}</strong></span>
+                    <span>Lần tiếp: <strong className="text-(--color-text-primary)">{v.nextDate}</strong></span>
                     <span>Batch: <code className="font-mono text-[11px]">{v.batch}</code></span>
                   </div>
                 </div>
                 {v.status === 'upcoming' && (
                   <div className="shrink-0">
-                    <button className="rounded-full border border-[var(--color-accent)] px-3.5 py-1.5 text-[12px] font-bold text-[var(--color-accent)] transition-colors hover:bg-[var(--color-accent-soft)]">
+                    <button className="rounded-full border border-(--color-accent) px-3.5 py-1.5 text-[12px] font-bold text-accent transition-colors hover:bg-(--color-accent-soft)">
                       Đặt lịch
                     </button>
                   </div>
@@ -522,12 +522,12 @@ export function PetsPage() {
   const petsTab = () => (
     <div>
       <div className="mb-6 flex items-center justify-between">
-        <h2 className="font-[var(--font-friendly)] text-2xl font-extrabold text-[var(--color-text-primary)]">
+        <h2 className="font-friendly text-2xl font-extrabold text-(--color-text-primary)">
           Thú cưng ({pets.length})
         </h2>
         <button
           onClick={openAdd}
-          className="inline-flex items-center gap-1.5 rounded-full bg-[var(--color-accent)] px-4 py-2 text-[13px] font-bold text-white transition-colors hover:bg-[var(--color-accent-hover)]"
+          className="inline-flex items-center gap-1.5 rounded-full bg-accent px-4 py-2 text-[13px] font-bold text-white transition-colors hover:bg-(--color-accent-hover)"
         >
           <Plus size={15} /> Thêm thú cưng
         </button>
@@ -538,20 +538,20 @@ export function PetsPage() {
       ) : (
         <div className="grid gap-5 sm:grid-cols-2 lg:grid-cols-3">
           {pets.map((p) => (
-            <div key={p.id} className="overflow-hidden rounded-2xl border border-[var(--color-border-default)] bg-white shadow-[0_1px_2px_rgba(56,36,23,0.06),0_4px_12px_-8px_rgba(56,36,23,0.4)]">
-              <div className="relative h-36 overflow-hidden bg-[var(--color-surface-2)]">
+            <div key={p.id} className="overflow-hidden rounded-2xl border border-(--color-border-default) bg-white shadow-[0_1px_2px_rgba(56,36,23,0.06),0_4px_12px_-8px_rgba(56,36,23,0.4)]">
+              <div className="relative h-36 overflow-hidden bg-(--color-surface-2)">
                 <img src={p.image} alt={p.name} className="h-full w-full object-cover" />
                 <div className="absolute right-2 top-2 flex gap-1.5">
                   <button
                     onClick={() => openEdit(p)}
-                    className="flex h-8 w-8 items-center justify-center rounded-full bg-white/90 text-[var(--color-text-secondary)] shadow-sm hover:bg-white hover:text-[var(--color-accent)]"
+                    className="flex h-8 w-8 items-center justify-center rounded-full bg-white/90 text-(--color-text-secondary) shadow-sm hover:bg-white hover:text-accent"
                     aria-label={`Sửa ${p.name}`}
                   >
                     <Edit2 size={13} />
                   </button>
                   <button
                     onClick={() => handleDelete(p.id)}
-                    className="flex h-8 w-8 items-center justify-center rounded-full bg-white/90 text-[var(--color-text-secondary)] shadow-sm hover:bg-white hover:text-red-500"
+                    className="flex h-8 w-8 items-center justify-center rounded-full bg-white/90 text-(--color-text-secondary) shadow-sm hover:bg-white hover:text-red-500"
                     aria-label={`Xóa ${p.name}`}
                   >
                     <Trash2 size={13} />
@@ -560,15 +560,15 @@ export function PetsPage() {
               </div>
               <div className="p-4">
                 <div className="mb-2">
-                  <h3 className="text-[15px] font-bold text-[var(--color-text-primary)]">{p.name}</h3>
-                  <p className="text-[12px] text-[var(--color-text-secondary)]">{p.breed}</p>
+                  <h3 className="text-[15px] font-bold text-(--color-text-primary)">{p.name}</h3>
+                  <p className="text-[12px] text-(--color-text-secondary)">{p.breed}</p>
                 </div>
                 <div className="mb-3 flex flex-wrap gap-2 text-[11.5px]">
-                  <span className="inline-flex items-center gap-1 rounded-full bg-[var(--color-surface-2)] px-2.5 py-0.5 font-medium text-[var(--color-text-secondary)]">
+                  <span className="inline-flex items-center gap-1 rounded-full bg-(--color-surface-2) px-2.5 py-0.5 font-medium text-(--color-text-secondary)">
                     {p.type === 'dog' ? <Dog size={10} /> : <Cat size={10} />}
                     {p.age}
                   </span>
-                  <span className="inline-flex items-center gap-1 rounded-full bg-[var(--color-surface-2)] px-2.5 py-0.5 font-medium text-[var(--color-text-secondary)]">
+                  <span className="inline-flex items-center gap-1 rounded-full bg-(--color-surface-2) px-2.5 py-0.5 font-medium text-(--color-text-secondary)">
                     <Activity size={10} /> {p.weight}
                   </span>
                 </div>
@@ -576,8 +576,8 @@ export function PetsPage() {
                   onClick={() => setSelectedPet(p)}
                   className={`w-full rounded-xl border py-2 text-[12.5px] font-bold transition-all ${
                     selectedPet.id === p.id
-                      ? 'border-[var(--color-accent)] bg-[var(--color-accent)] text-white'
-                      : 'border-[var(--color-border-default)] text-[var(--color-text-secondary)] hover:border-[var(--color-accent)] hover:text-[var(--color-accent)]'
+                      ? 'border-(--color-accent) bg-accent text-white'
+                      : 'border-(--color-border-default) text-(--color-text-secondary) hover:border-(--color-accent) hover:text-accent'
                   }`}
                 >
                   {selectedPet.id === p.id ? 'Đang chọn' : 'Chọn thú cưng'}
@@ -591,7 +591,7 @@ export function PetsPage() {
   )
 
   return (
-    <div className="bg-[var(--color-surface-page)] pb-24">
+    <div className="bg-(--color-surface-page) pb-24">
       <CommonPageHero
         eyebrow="Hồ sơ thú cưng"
         title="Quản lý thú cưng của bạn"
@@ -605,7 +605,7 @@ export function PetsPage() {
 
           <div className="min-w-0 space-y-6">
             {/* Tab bar */}
-            <div className="flex items-center gap-1 overflow-x-auto rounded-2xl border border-[var(--color-border-default)] bg-white p-1.5 shadow-[0_1px_2px_rgba(56,36,23,0.06)]">
+            <div className="flex items-center gap-1 overflow-x-auto rounded-2xl border border-(--color-border-default) bg-white p-1.5 shadow-[0_1px_2px_rgba(56,36,23,0.06)]">
               {TABS.map((t) => {
                 const active = tab === t.id
                 return (
@@ -614,8 +614,8 @@ export function PetsPage() {
                     onClick={() => setTab(t.id)}
                     className={`flex shrink-0 items-center gap-2 rounded-xl px-4 py-2.5 text-[13px] font-bold transition-all ${
                       active
-                        ? 'bg-[var(--color-accent)] text-white shadow-[0_4px_12px_-6px_rgba(164,51,36,0.7)]'
-                        : 'text-[var(--color-text-secondary)] hover:bg-[var(--color-surface-2)] hover:text-[var(--color-text-primary)]'
+                        ? 'bg-accent text-white shadow-[0_4px_12px_-6px_rgba(164,51,36,0.7)]'
+                        : 'text-(--color-text-secondary) hover:bg-(--color-surface-2) hover:text-(--color-text-primary)'
                     }`}
                   >
                     <t.icon size={15} />
@@ -652,9 +652,9 @@ export function PetsPage() {
 
 function EmptyState({ icon: Icon, msg }: { icon: React.ElementType; msg: string }) {
   return (
-    <div className="rounded-2xl border border-dashed border-[var(--color-border-default)] bg-white p-12 text-center">
-      <Icon size={36} className="mx-auto mb-3 text-[var(--color-text-secondary)] opacity-40" />
-      <p className="text-[13px] text-[var(--color-text-secondary)]">{msg}</p>
+    <div className="rounded-2xl border border-dashed border-(--color-border-default) bg-white p-12 text-center">
+      <Icon size={36} className="mx-auto mb-3 text-(--color-text-secondary) opacity-40" />
+      <p className="text-[13px] text-(--color-text-secondary)">{msg}</p>
     </div>
   )
 }

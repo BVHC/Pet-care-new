@@ -17,11 +17,11 @@ const SIZE_CLASSES: Record<Size, string> = {
 
 const VARIANT_CLASSES: Record<Variant, string> = {
   primary:
-    'bg-[var(--color-brand-primary)] text-[var(--color-text-on-brand)] border-[var(--color-brand-primary)] hover:bg-[var(--color-brand-primary-hover)] active:bg-[var(--color-brand-primary-active)]',
+    'bg-(--color-brand-primary) text-(--color-text-on-brand) border-(--color-brand-primary) hover:bg-(--color-brand-primary-hover) active:bg-(--color-brand-primary-active)',
   secondary:
-    'bg-[var(--color-surface-card)] text-[var(--color-text-primary)] border-[var(--color-border-strong)] hover:bg-[var(--color-surface-sunken)]',
+    'bg-(--color-surface-card) text-(--color-text-primary) border-(--color-border-strong) hover:bg-(--color-surface-sunken)',
   tertiary:
-    'bg-transparent text-[var(--color-teal)] border-transparent hover:underline px-2',
+    'bg-transparent text-(--color-teal) border-transparent hover:underline px-2',
 };
 
 export function Button({
@@ -37,7 +37,7 @@ export function Button({
     <button
       disabled={disabled}
       className={[
-        'inline-flex items-center justify-center gap-2 rounded-[var(--radius-rounded)] border font-semibold font-[var(--font-professional)] transition-colors',
+        'inline-flex items-center justify-center gap-2 rounded-(--radius-rounded) border font-semibold font-professional transition-colors',
         SIZE_CLASSES[size],
         VARIANT_CLASSES[variant],
         fullWidth ? 'w-full' : '',

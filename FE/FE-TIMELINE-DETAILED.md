@@ -14,10 +14,57 @@
 | Nhóm Phân Hệ | Tổng số màn/task | ✅ Đã hoàn thành (UI + API) | 🟡 Đã hoàn thành UI (Mock/Store) | ⏳ Chưa làm (0%) | Tỷ lệ khả dụng UI |
 |---|:---:|:---:|:---:|:---:|:---:|
 | **1. Khung & Xác thực (Foundation & Auth)** | 5 | 5 | 0 | 0 | **100%** |
-| **2. Cổng Khách Hàng (Customer Web B2C)** | 16 | 3 | 13 | 0 | **100% (Xong toàn bộ UI)** |
-| **3. Cổng Nhân Viên & Quản Trị (Back-Office B2B)**| 11 | 0 | 11 | 0 | **100% (Xong toàn bộ 22 màn UI Mock/Store)** |
+| **2. Cổng Khách Hàng (Customer Web B2C)** | 16 | 3 | 13 | 0 | **100% (Xong toàn bộ UI + Modals)** |
+| **3. Cổng Nhân Viên & Quản Trị (Back-Office B2B)**| 11 | 0 | 11 | 0 | **100% (Xong toàn bộ 22 màn UI + Modals)** |
 | **4. Tích Hợp & Polish (Integration & Demo)** | 4 | 0 | 0 | 4 | **0%** |
 | **TỔNG CỘNG** | **36** | **8** | **24** | **4** | **~89% UI Tổng Thể (32/36 màn)** |
+
+---
+
+## 🆕 MODAL SYSTEM (Shared Components - 21/09/2026)
+
+> **File:** `src/components/ui/modal-templates.tsx`
+
+### Modal Templates Available:
+| Component | Mục đích | Props chính |
+|---|---|---|
+| `Modal` | Base modal wrapper | `open`, `onOpenChange`, `children` |
+| `ConfirmModal` | Xác nhận hành động (Danger/Warning/Info/Success) | `type`, `title`, `description`, `onConfirm` |
+| `FormModal` | Form nhập liệu (Add/Edit) | `title`, `children`, `onSubmit`, `submitText` |
+| `DetailModal` | Xem chi tiết (View/Edit/Delete) | `title`, `children`, `onEdit`, `onDelete` |
+| `InfoRow` | Row thông tin trong Detail | `label`, `value` |
+| `StatusBadge` | Badge trạng thái | `status`, `variant` |
+
+### Pages đã update với Modals (Hoàn thành 22/09/2026):
+| Page | Modals đã thêm |
+|---|---|
+| `AdminUsersPage.tsx` | DetailModal, FormModal, ConfirmModal ✅ |
+| `AdminTenantsPage.tsx` | DetailModal, FormModal, ConfirmModal ✅ |
+| `AdminOrdersPage.tsx` | DetailModal, ConfirmModal ✅ |
+| `AdminInvoicesPage.tsx` | DetailModal, ConfirmModal ✅ |
+| `AdminPaymentsPage.tsx` | DetailModal ✅ |
+| `AdminRefundsPage.tsx` | DetailModal, ConfirmModal ✅ |
+| `AdminWarehousePage.tsx` | DetailModal, FormModal, ConfirmModal ✅ |
+| `AdminPurchasingPage.tsx` | DetailModal, ConfirmModal ✅ |
+| `AdminVaccinesPage.tsx` | DetailModal, FormModal ✅ |
+| `AdminWorkforcePage.tsx` | DetailModal, FormModal ✅ |
+| `AdminExamPage.tsx` | DetailModal, FormModal ✅ |
+| `AdminGroomingPage.tsx` | DetailModal, FormModal ✅ |
+| `AdminAppointmentsPage.tsx` | DetailModal, ConfirmModal, FormModal ✅ |
+| `AdminQueuePage.tsx` | DetailModal, ConfirmModal, FormModal ✅ |
+| `AdminVaccinationPage.tsx` | DetailModal, ConfirmModal, FormModal ✅ |
+| `AdminPromotionsPage.tsx` | DetailModal, ConfirmModal, FormModal ✅ |
+| `AdminIncidentsPage.tsx` | DetailModal, ConfirmModal, FormModal ✅ |
+| `AdminMembershipPage.tsx` | DetailModal, ConfirmModal, FormModal ✅ |
+| `AdminAuditPage.tsx` | DetailModal, FormModal ✅ |
+| `AdminReportsPage.tsx` | DetailModal, FormModal ✅ |
+| `AdminPOSPage.tsx` | DetailModal, ConfirmModal, FormModal ✅ |
+
+### Modal System hoàn thành:
+- **Total: 21/21 Admin pages** đã tích hợp Modal System ✅
+- **Template components:** `Modal`, `ConfirmModal`, `FormModal`, `DetailModal`, `InfoRow`
+- **Variants:** Danger, Warning, Info, Success confirmations
+- **Features:** Responsive, keyboard accessible, animations
 
 ---
 

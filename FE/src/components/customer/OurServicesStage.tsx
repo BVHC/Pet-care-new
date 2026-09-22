@@ -202,7 +202,7 @@ export const OurServicesStage: React.FC = () => {
         {/* 1. TOP HEADER */}
         <div className="relative text-center w-full z-10 shrink-0">
           <div className="relative inline-block">
-            <h2 className="font-bayon text-[#a43324] text-[clamp(26px,3.8vw,52px)] leading-[0.95] tracking-normal uppercase">
+            <h2 className="font-bayon text-accent text-[clamp(26px,3.8vw,52px)] leading-[0.95] tracking-normal uppercase">
               DỊCH VỤ CỦA CHÚNG TÔI
             </h2>
             {/* Tennis ball */}
@@ -217,7 +217,7 @@ export const OurServicesStage: React.FC = () => {
 
           {/* Scroll hint — fade out after first service */}
           <div
-            className="mt-1 flex items-center justify-center gap-1.5 text-[#a43324]/70 text-[10px] sm:text-[11px] font-semibold tracking-widest uppercase transition-opacity duration-500"
+            className="mt-1 flex items-center justify-center gap-1.5 text-accent/70 text-[10px] sm:text-[11px] font-semibold tracking-widest uppercase transition-opacity duration-500"
             style={{ opacity: activeIndex === 0 ? 1 : 0 }}
           >
             <span>Cuộn để khám phá</span>
@@ -234,7 +234,7 @@ export const OurServicesStage: React.FC = () => {
           <div className="absolute left-0 sm:left-2 top-0 sm:top-2 z-20 pointer-events-none">
             <div
               ref={numRef}
-              className="font-bayon text-[#a43324] text-[48px] sm:text-[68px] md:text-[84px] leading-none tracking-tighter opacity-90"
+              className="font-bayon text-accent text-[48px] sm:text-[68px] md:text-[84px] leading-none tracking-tighter opacity-90"
             >
               {service.num}
             </div>
@@ -256,7 +256,7 @@ export const OurServicesStage: React.FC = () => {
 
           {/* Right: icon dots + connecting line */}
           <div className="absolute right-0 sm:right-2 top-1/2 -translate-y-1/2 z-20 flex flex-col gap-2.5 sm:gap-3 items-center">
-            <div className="absolute inset-x-1/2 top-5 bottom-5 -translate-x-1/2 w-[1.5px] bg-[#a43324]/20 -z-10 rounded-full" />
+            <div className="absolute inset-x-1/2 top-5 bottom-5 -translate-x-1/2 w-[1.5px] bg-accent/20 -z-10 rounded-full" />
             {SERVICES.map((s, idx) => {
               const isActive = idx === activeIndex
               return (
@@ -277,8 +277,8 @@ export const OurServicesStage: React.FC = () => {
                   aria-label={`Dịch vụ ${s.title}`}
                   className={`rounded-full flex items-center justify-center transition-all duration-300 shadow-md ${
                     isActive
-                      ? 'w-10 h-10 sm:w-11 sm:h-11 bg-[#a43324] text-white ring-2 ring-white scale-110'
-                      : 'w-8 h-8 sm:w-9 sm:h-9 bg-white/90 text-[#a43324] hover:bg-white hover:scale-105 border border-[#a43324]/20'
+                      ? 'w-10 h-10 sm:w-11 sm:h-11 bg-accent text-white ring-2 ring-white scale-110'
+                      : 'w-8 h-8 sm:w-9 sm:h-9 bg-white/90 text-accent hover:bg-white hover:scale-105 border border-accent/20'
                   }`}
                 >
                   {s.icon}
@@ -289,18 +289,18 @@ export const OurServicesStage: React.FC = () => {
         </div>
 
         {/* 3. BOTTOM: info + CTA */}
-        <div className="relative w-full max-w-6xl mx-auto flex flex-col md:flex-row md:items-end justify-between gap-2.5 sm:gap-3 z-20 pt-2 border-t border-[#a43324]/15 shrink-0">
+        <div className="relative w-full max-w-6xl mx-auto flex flex-col md:flex-row md:items-end justify-between gap-2.5 sm:gap-3 z-20 pt-2 border-t border-accent/15 shrink-0">
           <div className="max-w-lg">
             <div
               ref={perkRef}
-              className="inline-flex items-center gap-1.5 px-3 py-1 bg-white/95 rounded-full text-[10px] sm:text-[11px] font-black tracking-wider text-[#a43324] uppercase mb-1.5 shadow-sm border border-[#a43324]/10"
+              className="inline-flex items-center gap-1.5 px-3 py-1 bg-white/95 rounded-full text-[10px] sm:text-[11px] font-black tracking-wider text-accent uppercase mb-1.5 shadow-sm border border-accent/10"
             >
               <Sparkles size={12} className="text-amber-500 shrink-0" />
               <span>{service.perk}</span>
             </div>
             <h3
               ref={titleRef}
-              className="font-bayon text-[#a43324] text-[22px] sm:text-[30px] md:text-[36px] leading-[0.95] tracking-tight uppercase"
+              className="font-bayon text-accent text-[22px] sm:text-[30px] md:text-[36px] leading-[0.95] tracking-tight uppercase"
             >
               {service.title}
             </h3>
@@ -314,12 +314,12 @@ export const OurServicesStage: React.FC = () => {
 
           <div className="flex flex-col items-end gap-1.5 pb-1">
             {/* Starting Price Pill */}
-            <span className="bg-[#faebe4] text-[#a43324] text-xs font-bold px-3 py-1 rounded-full border border-[#a43324]/15 whitespace-nowrap">
+            <span className="bg-[#faebe4] text-accent text-xs font-bold px-3 py-1 rounded-full border border-accent/15 whitespace-nowrap">
               {service.startingPrice}
             </span>
             <Link
               to="/booking"
-              className="inline-flex items-center gap-2 rounded-full bg-[#a43324] hover:bg-[#89271b] px-6 sm:px-8 py-2.5 sm:py-3 font-bayon text-lg sm:text-xl text-white uppercase tracking-wider shadow-[0_10px_22px_rgba(164,51,36,0.3)] -rotate-2 hover:rotate-0 hover:scale-105 active:scale-95 transition-all duration-200"
+              className="inline-flex items-center gap-2 rounded-full bg-accent hover:bg-accent-hover px-6 sm:px-8 py-2.5 sm:py-3 font-bayon text-lg sm:text-xl text-white uppercase tracking-wider shadow-[0_10px_22px_rgba(164,51,36,0.3)] -rotate-2 hover:rotate-0 hover:scale-105 active:scale-95 transition-all duration-200"
             >
               <span>ĐẶT LỊCH NGAY</span>
               <ArrowRight size={16} className="rotate-2" />
@@ -328,9 +328,9 @@ export const OurServicesStage: React.FC = () => {
         </div>
 
         {/* 4. Bottom progress bar */}
-        <div className="absolute bottom-0 left-0 right-0 h-1 bg-[#a43324]/15 z-30">
+        <div className="absolute bottom-0 left-0 right-0 h-1 bg-accent/15 z-30">
           <div
-            className="h-full bg-[#a43324] transition-all duration-300 ease-out"
+            className="h-full bg-accent transition-all duration-300 ease-out"
             style={{ width: `${((activeIndex + 1) / SERVICES.length) * 100}%` }}
           />
         </div>

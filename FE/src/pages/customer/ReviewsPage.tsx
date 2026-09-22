@@ -172,23 +172,23 @@ function WriteReviewModal({ onClose }: { onClose: () => void }) {
 
   return (
     <div className="fixed inset-0 z-[100] flex items-end justify-center bg-black/50 p-4 sm:items-center" onClick={(e) => e.target === e.currentTarget && onClose()}>
-      <div className="w-full max-w-lg overflow-hidden rounded-3xl border border-[var(--color-border-default)] bg-white shadow-[0_24px_64px_-16px_rgba(56,36,23,0.5)]">
-        <div className="flex items-center justify-between border-b border-[var(--color-border-default)] px-6 py-4">
-          <h2 className="font-[var(--font-friendly)] text-lg font-extrabold text-[var(--color-text-primary)]">
+      <div className="w-full max-w-lg overflow-hidden rounded-3xl border border-(--color-border-default) bg-white shadow-[0_24px_64px_-16px_rgba(56,36,23,0.5)]">
+        <div className="flex items-center justify-between border-b border-(--color-border-default) px-6 py-4">
+          <h2 className="font-friendly text-lg font-extrabold text-(--color-text-primary)">
             {submitted ? 'Cảm ơn bạn!' : 'Viết đánh giá dịch vụ'}
           </h2>
-          <button onClick={onClose} className="text-[var(--color-text-secondary)] hover:text-[var(--color-text-primary)]"><X size={20} /></button>
+          <button onClick={onClose} className="text-(--color-text-secondary) hover:text-(--color-text-primary)"><X size={20} /></button>
         </div>
 
         {!submitted ? (
           <div className="p-6 space-y-4">
             {/* Service */}
             <div>
-              <label className="mb-2 block text-[12.5px] font-bold text-[var(--color-text-primary)]">Dịch vụ đã sử dụng *</label>
+              <label className="mb-2 block text-[12.5px] font-bold text-(--color-text-primary)">Dịch vụ đã sử dụng *</label>
               <div className="flex flex-wrap gap-2">
                 {['Khám bệnh', 'Spa & Grooming', 'Tiêm phòng', 'Lưu trú', 'Hotel', 'Khác'].map((s) => (
                   <button key={s} onClick={() => setService(s)}
-                    className={`rounded-full border px-3 py-1.5 text-[12.5px] font-semibold transition-all ${service === s ? 'border-[var(--color-accent)] bg-[var(--color-accent)] text-white' : 'border-[var(--color-border-default)] text-[var(--color-text-primary)] hover:border-[var(--color-accent)] hover:text-[var(--color-accent)]'}`}>
+                    className={`rounded-full border px-3 py-1.5 text-[12.5px] font-semibold transition-all ${service === s ? 'border-(--color-accent) bg-accent text-white' : 'border-(--color-border-default) text-(--color-text-primary) hover:border-(--color-accent) hover:text-accent'}`}>
                     {s}
                   </button>
                 ))}
@@ -197,8 +197,8 @@ function WriteReviewModal({ onClose }: { onClose: () => void }) {
 
             {/* Branch */}
             <div>
-              <label className="mb-2 block text-[12.5px] font-bold text-[var(--color-text-primary)]">Chi nhánh</label>
-              <select className="w-full rounded-xl border border-[var(--color-border-default)] bg-white px-3.5 py-2.5 text-[13.5px] text-[var(--color-text-primary)] outline-none focus:border-[var(--color-accent)] focus:ring-2 focus:ring-[var(--color-accent-soft)]">
+              <label className="mb-2 block text-[12.5px] font-bold text-(--color-text-primary)">Chi nhánh</label>
+              <select className="w-full rounded-xl border border-(--color-border-default) bg-white px-3.5 py-2.5 text-[13.5px] text-(--color-text-primary) outline-none focus:border-(--color-accent) focus:ring-2 focus:ring-(--color-accent-soft)">
                 <option value="">Chọn chi nhánh</option>
                 {branches.map((b) => <option key={b} value={b}>{b}</option>)}
               </select>
@@ -206,7 +206,7 @@ function WriteReviewModal({ onClose }: { onClose: () => void }) {
 
             {/* Rating */}
             <div>
-              <label className="mb-2 block text-[12.5px] font-bold text-[var(--color-text-primary)]">Đánh giá của bạn *</label>
+              <label className="mb-2 block text-[12.5px] font-bold text-(--color-text-primary)">Đánh giá của bạn *</label>
               <div className="flex items-center gap-1">
                 {[1, 2, 3, 4, 5].map((star) => (
                   <button key={star} onClick={() => setRating(star)} onMouseEnter={() => setHoverRating(star)} onMouseLeave={() => setHoverRating(0)}
@@ -220,18 +220,18 @@ function WriteReviewModal({ onClose }: { onClose: () => void }) {
 
             {/* Text */}
             <div>
-              <label className="mb-2 block text-[12.5px] font-bold text-[var(--color-text-primary)]">Chia sẻ trải nghiệm * <span className="font-normal text-[var(--color-text-secondary)]">(ít nhất 10 ký tự)</span></label>
+              <label className="mb-2 block text-[12.5px] font-bold text-(--color-text-primary)">Chia sẻ trải nghiệm * <span className="font-normal text-(--color-text-secondary)">(ít nhất 10 ký tự)</span></label>
               <textarea value={text} onChange={(e) => setText(e.target.value)} rows={4} placeholder="Mô tả chi tiết trải nghiệm của bạn với dịch vụ..."
-                className="w-full resize-none rounded-xl border border-[var(--color-border-default)] bg-white px-3.5 py-2.5 text-[13.5px] text-[var(--color-text-primary)] outline-none focus:border-[var(--color-accent)] focus:ring-2 focus:ring-[var(--color-accent-soft)]" />
-              <p className="mt-1 text-right text-[11px] text-[var(--color-text-secondary)]">{text.length} ký tự</p>
+                className="w-full resize-none rounded-xl border border-(--color-border-default) bg-white px-3.5 py-2.5 text-[13.5px] text-(--color-text-primary) outline-none focus:border-(--color-accent) focus:ring-2 focus:ring-(--color-accent-soft)" />
+              <p className="mt-1 text-right text-[11px] text-(--color-text-secondary)">{text.length} ký tự</p>
             </div>
 
             {/* Images */}
             <div>
-              <label className="mb-2 block text-[12.5px] font-bold text-[var(--color-text-primary)]">Hình ảnh (tùy chọn)</label>
+              <label className="mb-2 block text-[12.5px] font-bold text-(--color-text-primary)">Hình ảnh (tùy chọn)</label>
               <div className="flex flex-wrap gap-2">
                 {images.map((src, i) => (
-                  <div key={i} className="relative h-16 w-16 overflow-hidden rounded-xl border border-[var(--color-border-default)]">
+                  <div key={i} className="relative h-16 w-16 overflow-hidden rounded-xl border border-(--color-border-default)">
                     <img src={src} alt="" className="h-full w-full object-cover" />
                     <button onClick={() => setImages((p) => p.filter((_, j) => j !== i))}
                       className="absolute -right-1 -top-1 flex h-5 w-5 items-center justify-center rounded-full bg-red-500 text-white">
@@ -241,7 +241,7 @@ function WriteReviewModal({ onClose }: { onClose: () => void }) {
                 ))}
                 {images.length < 4 && (
                   <button onClick={handleImageAdd}
-                    className="flex h-16 w-16 items-center justify-center rounded-xl border-2 border-dashed border-[var(--color-border-default)] text-[var(--color-text-secondary)] hover:border-[var(--color-accent)] hover:text-[var(--color-accent)]">
+                    className="flex h-16 w-16 items-center justify-center rounded-xl border-2 border-dashed border-(--color-border-default) text-(--color-text-secondary) hover:border-(--color-accent) hover:text-accent">
                     <Camera size={18} />
                   </button>
                 )}
@@ -253,9 +253,9 @@ function WriteReviewModal({ onClose }: { onClose: () => void }) {
             </div>
 
             <div className="flex gap-2">
-              <button onClick={onClose} className="flex-1 rounded-xl border border-[var(--color-border-default)] py-2.5 text-[13px] font-bold text-[var(--color-text-secondary)] transition-colors hover:bg-[var(--color-surface-2)]">Hủy</button>
+              <button onClick={onClose} className="flex-1 rounded-xl border border-(--color-border-default) py-2.5 text-[13px] font-bold text-(--color-text-secondary) transition-colors hover:bg-(--color-surface-2)">Hủy</button>
               <button onClick={handleSubmit} disabled={!canSubmit}
-                className="flex-1 flex items-center justify-center gap-1.5 rounded-xl bg-[var(--color-accent)] py-2.5 text-[13px] font-bold text-white transition-colors hover:bg-[var(--color-accent-hover)] disabled:cursor-not-allowed disabled:opacity-50">
+                className="flex-1 flex items-center justify-center gap-1.5 rounded-xl bg-accent py-2.5 text-[13px] font-bold text-white transition-colors hover:bg-(--color-accent-hover) disabled:cursor-not-allowed disabled:opacity-50">
                 <Edit3 size={14} /> Gửi đánh giá
               </button>
             </div>
@@ -265,10 +265,10 @@ function WriteReviewModal({ onClose }: { onClose: () => void }) {
             <div className="mx-auto mb-4 flex h-16 w-16 items-center justify-center rounded-full bg-emerald-100">
               <Star size={32} className="fill-amber-400 text-amber-400" />
             </div>
-            <h3 className="font-[var(--font-friendly)] text-xl font-extrabold text-[var(--color-text-primary)]">Cảm ơn bạn đã đánh giá!</h3>
-            <p className="mt-2 text-[13px] text-[var(--color-text-secondary)]">Đánh giá của bạn giúp PetCare cải thiện dịch vụ mỗi ngày. Cảm ơn sự đóng góp của bạn!</p>
+            <h3 className="font-friendly text-xl font-extrabold text-(--color-text-primary)">Cảm ơn bạn đã đánh giá!</h3>
+            <p className="mt-2 text-[13px] text-(--color-text-secondary)">Đánh giá của bạn giúp PetCare cải thiện dịch vụ mỗi ngày. Cảm ơn sự đóng góp của bạn!</p>
             <button onClick={onClose}
-              className="mt-6 inline-flex items-center gap-1.5 rounded-full bg-[var(--color-accent)] px-6 py-2.5 text-[13px] font-bold text-white transition-colors hover:bg-[var(--color-accent-hover)]">
+              className="mt-6 inline-flex items-center gap-1.5 rounded-full bg-accent px-6 py-2.5 text-[13px] font-bold text-white transition-colors hover:bg-(--color-accent-hover)">
               Đã hiểu <ChevronLeft size={14} />
             </button>
           </div>
@@ -286,13 +286,13 @@ function RatingBar({ stars, count, total }: { stars: number; count: number; tota
   const pct = total > 0 ? Math.round((count / total) * 100) : 0
   return (
     <div className="flex items-center gap-2 text-[12.5px]">
-      <span className="flex w-10 items-center gap-1 font-semibold text-[var(--color-text-primary)]">
+      <span className="flex w-10 items-center gap-1 font-semibold text-(--color-text-primary)">
         {stars} <Star size={12} className="fill-amber-400 text-amber-400" />
       </span>
       <div className="h-2 flex-1 overflow-hidden rounded-full bg-gray-200">
         <div className="h-full rounded-full bg-amber-400" style={{ width: `${pct}%` }} />
       </div>
-      <span className="w-8 text-right text-[var(--color-text-secondary)]">{count}</span>
+      <span className="w-8 text-right text-(--color-text-secondary)">{count}</span>
     </div>
   )
 }
@@ -312,7 +312,7 @@ export function ReviewsPage() {
     : SERVICE_REVIEWS.filter((r) => r.service.includes(serviceFilter.replace('Spa & Grooming', 'Spa').replace('Khám bệnh', 'Khám')))
 
   return (
-    <div className="bg-[var(--color-surface-page)] pb-24">
+    <div className="bg-(--color-surface-page) pb-24">
       <CommonPageHero
         eyebrow="Đánh giá dịch vụ"
         title="Đánh giá từ khách hàng"
@@ -323,17 +323,17 @@ export function ReviewsPage() {
       <div className="mx-auto max-w-[1280px] px-5 pt-8 sm:px-8 space-y-8">
 
         {/* Google stars summary */}
-        <div className="overflow-hidden rounded-3xl border border-[var(--color-border-default)] bg-white shadow-[0_1px_2px_rgba(56,36,23,0.06),0_4px_12px_-8px_rgba(56,36,23,0.4)]">
+        <div className="overflow-hidden rounded-3xl border border-(--color-border-default) bg-white shadow-[0_1px_2px_rgba(56,36,23,0.06),0_4px_12px_-8px_rgba(56,36,23,0.4)]">
           <div className="flex flex-wrap items-center gap-8 p-8">
             {/* Overall score */}
             <div className="flex flex-col items-center gap-1 text-center">
-              <div className="font-[var(--font-friendly)] text-6xl font-extrabold text-[var(--color-text-primary)]">{GOOGLE_STATS.overall}</div>
+              <div className="font-friendly text-6xl font-extrabold text-(--color-text-primary)">{GOOGLE_STATS.overall}</div>
               <div className="flex gap-0.5">
                 {[1,2,3,4,5].map((s) => (
                   <Star key={s} size={16} className={s <= 5 ? 'fill-amber-400 text-amber-400' : 'text-gray-300'} />
                 ))}
               </div>
-              <div className="text-[13px] text-[var(--color-text-secondary)]">{GOOGLE_STATS.total.toLocaleString()} đánh giá trên Google</div>
+              <div className="text-[13px] text-(--color-text-secondary)">{GOOGLE_STATS.total.toLocaleString()} đánh giá trên Google</div>
               <div className="mt-2 flex items-center gap-1 rounded-full bg-[#4285f4] px-3 py-1 text-[11.5px] font-bold text-white">
                 <svg viewBox="0 0 24 24" className="h-3.5 w-3.5" fill="currentColor"><path d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z" /><path d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z" /><path d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.07H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.93l2.85-2.22.81-.62z" /><path d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z" /></svg>
                 Google
@@ -355,7 +355,7 @@ export function ReviewsPage() {
                 Đánh giá PetCare trên Google
               </button>
               <button onClick={() => setShowWriteModal(true)}
-                className="inline-flex items-center gap-2 rounded-full border border-[var(--color-border-default)] px-5 py-2.5 text-[13px] font-bold text-[var(--color-text-primary)] transition-colors hover:border-[var(--color-accent)] hover:text-[var(--color-accent)]">
+                className="inline-flex items-center gap-2 rounded-full border border-(--color-border-default) px-5 py-2.5 text-[13px] font-bold text-(--color-text-primary) transition-colors hover:border-(--color-accent) hover:text-accent">
                 <Edit3 size={14} /> Viết đánh giá dịch vụ
               </button>
             </div>
@@ -363,14 +363,14 @@ export function ReviewsPage() {
         </div>
 
         {/* Tabs */}
-        <div className="flex items-center gap-1 overflow-x-auto rounded-2xl border border-[var(--color-border-default)] bg-white p-1.5 shadow-[0_1px_2px_rgba(56,36,23,0.06)]">
+        <div className="flex items-center gap-1 overflow-x-auto rounded-2xl border border-(--color-border-default) bg-white p-1.5 shadow-[0_1px_2px_rgba(56,36,23,0.06)]">
           <button onClick={() => setTab('google')}
-            className={`flex shrink-0 items-center gap-2 rounded-xl px-5 py-2.5 text-[13px] font-bold transition-all ${tab === 'google' ? 'bg-[var(--color-accent)] text-white shadow-[0_4px_12px_-6px_rgba(164,51,36,0.7)]' : 'text-[var(--color-text-secondary)] hover:bg-[var(--color-surface-2)] hover:text-[var(--color-text-primary)]'}`}>
+            className={`flex shrink-0 items-center gap-2 rounded-xl px-5 py-2.5 text-[13px] font-bold transition-all ${tab === 'google' ? 'bg-accent text-white shadow-[0_4px_12px_-6px_rgba(164,51,36,0.7)]' : 'text-(--color-text-secondary) hover:bg-(--color-surface-2) hover:text-(--color-text-primary)'}`}>
             <svg viewBox="0 0 24 24" className={`h-4 w-4 ${tab === 'google' ? '' : 'text-[#4285f4]'}`} fill="currentColor"><path d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z" /><path d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z" /><path d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.07H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.93l2.85-2.22.81-.62z" /><path d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z" /></svg>
             Đánh giá Google
           </button>
           <button onClick={() => setTab('service')}
-            className={`flex shrink-0 items-center gap-2 rounded-xl px-5 py-2.5 text-[13px] font-bold transition-all ${tab === 'service' ? 'bg-[var(--color-accent)] text-white shadow-[0_4px_12px_-6px_rgba(164,51,36,0.7)]' : 'text-[var(--color-text-secondary)] hover:bg-[var(--color-surface-2)] hover:text-[var(--color-text-primary)]'}`}>
+            className={`flex shrink-0 items-center gap-2 rounded-xl px-5 py-2.5 text-[13px] font-bold transition-all ${tab === 'service' ? 'bg-accent text-white shadow-[0_4px_12px_-6px_rgba(164,51,36,0.7)]' : 'text-(--color-text-secondary) hover:bg-(--color-surface-2) hover:text-(--color-text-primary)'}`}>
             <MessageSquare size={15} />
             Đánh giá dịch vụ
           </button>
@@ -380,16 +380,16 @@ export function ReviewsPage() {
         {tab === 'google' && (
           <div className="space-y-4">
             {GOOGLE_REVIEWS.map((r) => (
-              <div key={r.id} className="overflow-hidden rounded-2xl border border-[var(--color-border-default)] bg-white shadow-[0_1px_2px_rgba(56,36,23,0.06),0_4px_12px_-8px_rgba(56,36,23,0.4)]">
+              <div key={r.id} className="overflow-hidden rounded-2xl border border-(--color-border-default) bg-white shadow-[0_1px_2px_rgba(56,36,23,0.06),0_4px_12px_-8px_rgba(56,36,23,0.4)]">
                 <div className="flex items-start gap-3 p-5">
-                  <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-[var(--color-accent-soft)] text-[14px] font-bold text-[var(--color-accent)]">
+                  <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-(--color-accent-soft) text-[14px] font-bold text-accent">
                     {r.avatar}
                   </div>
                   <div className="min-w-0 flex-1">
                     <div className="flex flex-wrap items-center justify-between gap-2">
                       <div>
-                        <div className="text-[13.5px] font-bold text-[var(--color-text-primary)]">{r.name}</div>
-                        <div className="mt-0.5 flex items-center gap-2 text-[11.5px] text-[var(--color-text-secondary)]">
+                        <div className="text-[13.5px] font-bold text-(--color-text-primary)">{r.name}</div>
+                        <div className="mt-0.5 flex items-center gap-2 text-[11.5px] text-(--color-text-secondary)">
                           <div className="flex gap-0.5">
                             {Array.from({ length: 5 }, (_, i) => (
                               <Star key={i} size={11} className={i < r.rating ? 'fill-amber-400 text-amber-400' : 'text-gray-300'} />
@@ -403,16 +403,16 @@ export function ReviewsPage() {
                           </span>
                         </div>
                       </div>
-                      <button className="flex h-7 w-7 items-center justify-center rounded-full text-[var(--color-text-secondary)] hover:bg-[var(--color-surface-2)]">
+                      <button className="flex h-7 w-7 items-center justify-center rounded-full text-(--color-text-secondary) hover:bg-(--color-surface-2)">
                         <MoreHorizontal size={15} />
                       </button>
                     </div>
-                    <p className="mt-2.5 text-[13.5px] leading-relaxed text-[var(--color-text-primary)]">{r.text}</p>
+                    <p className="mt-2.5 text-[13.5px] leading-relaxed text-(--color-text-primary)">{r.text}</p>
                     <div className="mt-3 flex items-center gap-4">
-                      <button className="flex items-center gap-1.5 text-[12px] font-semibold text-[var(--color-text-secondary)] transition-colors hover:text-[var(--color-accent)]">
+                      <button className="flex items-center gap-1.5 text-[12px] font-semibold text-(--color-text-secondary) transition-colors hover:text-accent">
                         <ThumbsUp size={13} /> Hữu ích ({r.helpful})
                       </button>
-                      <button className="text-[12px] font-semibold text-[var(--color-text-secondary)] transition-colors hover:text-[var(--color-accent)]">
+                      <button className="text-[12px] font-semibold text-(--color-text-secondary) transition-colors hover:text-accent">
                         Trả lời
                       </button>
                     </div>
@@ -428,46 +428,46 @@ export function ReviewsPage() {
           <>
             {/* Filters */}
             <div className="flex flex-wrap items-center gap-3">
-              <div className="flex items-center gap-2 overflow-x-auto rounded-xl border border-[var(--color-border-default)] bg-white p-1.5">
+              <div className="flex items-center gap-2 overflow-x-auto rounded-xl border border-(--color-border-default) bg-white p-1.5">
                 {SERVICES.map((s) => (
                   <button key={s} onClick={() => setServiceFilter(s)}
-                    className={`shrink-0 rounded-lg px-3.5 py-1.5 text-[12px] font-semibold transition-all ${serviceFilter === s ? 'bg-[var(--color-accent)] text-white' : 'text-[var(--color-text-secondary)] hover:bg-[var(--color-surface-2)]'}`}>
+                    className={`shrink-0 rounded-lg px-3.5 py-1.5 text-[12px] font-semibold transition-all ${serviceFilter === s ? 'bg-accent text-white' : 'text-(--color-text-secondary) hover:bg-(--color-surface-2)'}`}>
                     {s}
                   </button>
                 ))}
               </div>
-              <div className="flex items-center gap-2 rounded-xl border border-[var(--color-border-default)] bg-white px-3 py-1.5">
-                <Filter size={13} className="text-[var(--color-text-secondary)]" />
+              <div className="flex items-center gap-2 rounded-xl border border-(--color-border-default) bg-white px-3 py-1.5">
+                <Filter size={13} className="text-(--color-text-secondary)" />
                 <select value={sortBy} onChange={(e) => setSortBy(e.target.value)}
-                  className="bg-transparent text-[12px] font-semibold text-[var(--color-text-primary)] outline-none">
+                  className="bg-transparent text-[12px] font-semibold text-(--color-text-primary) outline-none">
                   {SORT_OPTIONS.map((o) => <option key={o} value={o}>{o}</option>)}
                 </select>
               </div>
               <button onClick={() => setShowWriteModal(true)}
-                className="ml-auto flex shrink-0 items-center gap-1.5 rounded-full bg-[var(--color-accent)] px-4 py-2 text-[12.5px] font-bold text-white transition-colors hover:bg-[var(--color-accent-hover)]">
+                className="ml-auto flex shrink-0 items-center gap-1.5 rounded-full bg-accent px-4 py-2 text-[12.5px] font-bold text-white transition-colors hover:bg-(--color-accent-hover)">
                 <Edit3 size={13} /> Viết đánh giá
               </button>
             </div>
 
             <div className="space-y-4">
               {filteredService.map((r) => (
-                <div key={r.id} className="overflow-hidden rounded-2xl border border-[var(--color-border-default)] bg-white shadow-[0_1px_2px_rgba(56,36,23,0.06),0_4px_12px_-8px_rgba(56,36,23,0.4)]">
+                <div key={r.id} className="overflow-hidden rounded-2xl border border-(--color-border-default) bg-white shadow-[0_1px_2px_rgba(56,36,23,0.06),0_4px_12px_-8px_rgba(56,36,23,0.4)]">
                   <div className="flex items-start gap-3 p-5">
-                    <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-[var(--color-accent-soft)] text-[14px] font-bold text-[var(--color-accent)]">
+                    <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-(--color-accent-soft) text-[14px] font-bold text-accent">
                       {r.authorAvatar}
                     </div>
                     <div className="min-w-0 flex-1">
                       <div className="flex flex-wrap items-center justify-between gap-2">
                         <div>
-                          <div className="text-[13.5px] font-bold text-[var(--color-text-primary)]">{r.author}</div>
-                          <div className="mt-0.5 flex flex-wrap items-center gap-2 text-[11.5px] text-[var(--color-text-secondary)]">
+                          <div className="text-[13.5px] font-bold text-(--color-text-primary)">{r.author}</div>
+                          <div className="mt-0.5 flex flex-wrap items-center gap-2 text-[11.5px] text-(--color-text-secondary)">
                             <div className="flex gap-0.5">
                               {Array.from({ length: 5 }, (_, i) => (
                                 <Star key={i} size={11} className={i < r.rating ? 'fill-amber-400 text-amber-400' : 'text-gray-300'} />
                               ))}
                             </div>
                             <span>·</span>
-                            <span className="rounded-full bg-[var(--color-accent-soft)] px-2 py-0.5 text-[10.5px] font-bold text-[var(--color-accent)]">{r.service}</span>
+                            <span className="rounded-full bg-(--color-accent-soft) px-2 py-0.5 text-[10.5px] font-bold text-accent">{r.service}</span>
                             <span>·</span>
                             <span className="flex items-center gap-1">
                               <MapPin size={10} /> {r.branch}
@@ -478,11 +478,11 @@ export function ReviewsPage() {
                             </span>
                           </div>
                         </div>
-                        <button className="flex h-7 w-7 items-center justify-center rounded-full text-[var(--color-text-secondary)] hover:bg-[var(--color-surface-2)]">
+                        <button className="flex h-7 w-7 items-center justify-center rounded-full text-(--color-text-secondary) hover:bg-(--color-surface-2)">
                           <MoreHorizontal size={15} />
                         </button>
                       </div>
-                      <p className="mt-2.5 text-[13.5px] leading-relaxed text-[var(--color-text-primary)]">{r.text}</p>
+                      <p className="mt-2.5 text-[13.5px] leading-relaxed text-(--color-text-primary)">{r.text}</p>
 
                       {r.images && r.images.length > 0 && (
                         <div className="mt-3 flex gap-2">
@@ -493,7 +493,7 @@ export function ReviewsPage() {
                       )}
 
                       <div className="mt-3 flex items-center gap-4">
-                        <button className="flex items-center gap-1.5 text-[12px] font-semibold text-[var(--color-text-secondary)] transition-colors hover:text-[var(--color-accent)]">
+                        <button className="flex items-center gap-1.5 text-[12px] font-semibold text-(--color-text-secondary) transition-colors hover:text-accent">
                           <ThumbsUp size={13} /> Hữu ích ({r.helpful})
                         </button>
                       </div>
@@ -503,11 +503,11 @@ export function ReviewsPage() {
               ))}
 
               {filteredService.length === 0 && (
-                <div className="rounded-3xl border border-dashed border-[var(--color-border-default)] bg-white p-16 text-center">
-                  <MessageSquare size={48} className="mx-auto mb-4 text-[var(--color-text-secondary)] opacity-30" />
-                  <p className="text-[15px] font-bold text-[var(--color-text-secondary)]">Chưa có đánh giá nào cho dịch vụ này</p>
-                  <p className="mt-1 text-[13px] text-[var(--color-text-secondary)]">Hãy là người đầu tiên chia sẻ trải nghiệm!</p>
-                  <button onClick={() => setShowWriteModal(true)} className="mt-5 inline-flex items-center gap-1.5 rounded-full bg-[var(--color-accent)] px-5 py-2.5 text-[13px] font-bold text-white">
+                <div className="rounded-3xl border border-dashed border-(--color-border-default) bg-white p-16 text-center">
+                  <MessageSquare size={48} className="mx-auto mb-4 text-(--color-text-secondary) opacity-30" />
+                  <p className="text-[15px] font-bold text-(--color-text-secondary)">Chưa có đánh giá nào cho dịch vụ này</p>
+                  <p className="mt-1 text-[13px] text-(--color-text-secondary)">Hãy là người đầu tiên chia sẻ trải nghiệm!</p>
+                  <button onClick={() => setShowWriteModal(true)} className="mt-5 inline-flex items-center gap-1.5 rounded-full bg-accent px-5 py-2.5 text-[13px] font-bold text-white">
                     <Edit3 size={14} /> Viết đánh giá đầu tiên
                   </button>
                 </div>

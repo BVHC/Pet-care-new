@@ -5,8 +5,8 @@ export function Placeholder({ title }: { title: string }) {
   return (
     <div className="flex flex-col items-center justify-center gap-2 py-24 text-center">
       <Hammer size={28} className="opacity-40" />
-      <h1 className="font-[var(--font-friendly)] text-xl font-bold text-[var(--color-text-primary)]">{title}</h1>
-      <p className="text-sm text-[var(--color-text-secondary)]">Trang đang được xây dựng.</p>
+      <h1 className="font-friendly text-xl font-bold text-(--color-text-primary)">{title}</h1>
+      <p className="text-sm text-(--color-text-secondary)">Trang đang được xây dựng.</p>
     </div>
   );
 }

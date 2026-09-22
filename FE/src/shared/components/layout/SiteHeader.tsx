@@ -147,7 +147,7 @@ export function SiteHeader({ cartCount = 0, onNav }: SiteHeaderProps) {
 
   return (
     <header
-      className={`fixed top-0 left-0 right-0 z-50 flex flex-col border-b border-[var(--color-border-default)] transition-all duration-300 bg-[#FDF6EC] ${
+      className={`fixed top-0 left-0 right-0 z-50 flex flex-col border-b border-(--color-border-default) transition-all duration-300 bg-[#FDF6EC] ${
         isScrolled ? 'shadow-md' : ''
       }`}
     >
@@ -164,7 +164,7 @@ export function SiteHeader({ cartCount = 0, onNav }: SiteHeaderProps) {
               key={l.page}
               href="#"
               onClick={(e) => { e.preventDefault(); onNav(l.page) }}
-              className="text-[13px] font-bold text-[#3B2A1E] hover:text-[#a43324] transition-colors whitespace-nowrap"
+              className="text-[13px] font-bold text-[#3B2A1E] hover:text-accent transition-colors whitespace-nowrap"
             >
               {l.label}
             </a>
@@ -173,10 +173,10 @@ export function SiteHeader({ cartCount = 0, onNav }: SiteHeaderProps) {
 
         {/* Logo */}
         <div
-          className="flex justify-center cursor-pointer flex-shrink-0 items-center px-4"
+          className="flex justify-center cursor-pointer shrink-0 items-center px-4"
           onClick={() => onNav('home')}
         >
-          <div className="font-[var(--font-friendly)] font-black text-[32px] text-[#202945] tracking-tight flex items-center gap-2">
+          <div className="font-friendly font-black text-[32px] text-[#202945] tracking-tight flex items-center gap-2">
             <img src="/imgs/DogSticker.svg" alt="PetCare Logo" className="h-9 w-auto object-contain" />
             PetCare
           </div>
@@ -191,7 +191,7 @@ export function SiteHeader({ cartCount = 0, onNav }: SiteHeaderProps) {
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
               placeholder="Tìm kiếm sản phẩm..."
-              className="w-full h-[42px] pl-4 pr-12 rounded-full border border-gray-200 bg-white text-sm placeholder:text-gray-400 focus:outline-none focus:ring-2 focus:ring-[#a43324] shadow-xs"
+              className="w-full h-[42px] pl-4 pr-12 rounded-full border border-gray-200 bg-white text-sm placeholder:text-gray-400 focus:outline-none focus:ring-2 focus:ring-accent shadow-xs"
             />
             <button
               type="submit"
@@ -205,13 +205,13 @@ export function SiteHeader({ cartCount = 0, onNav }: SiteHeaderProps) {
             <div className="flex items-center gap-2.5 shrink-0">
               <button
                 onClick={() => onNav('login')}
-                className="text-[14px] font-bold text-[#3B2A1E] hover:text-[#a43324] transition-colors whitespace-nowrap cursor-pointer"
+                className="text-[14px] font-bold text-[#3B2A1E] hover:text-accent transition-colors whitespace-nowrap cursor-pointer"
               >
                 Đăng nhập
               </button>
               <button
                 onClick={() => onNav('register')}
-                className="rounded-full bg-[#a43324] px-4 py-2 text-[13.5px] font-extrabold text-white transition-[background-color,transform] duration-300 ease-[cubic-bezier(0.32,0.72,0,1)] hover:bg-[#89271b] active:scale-[0.985] whitespace-nowrap cursor-pointer"
+                className="rounded-full bg-accent px-4 py-2 text-[13.5px] font-extrabold text-white transition-[background-color,transform] duration-300 ease-[cubic-bezier(0.32,0.72,0,1)] hover:bg-accent-hover active:scale-[0.985] whitespace-nowrap cursor-pointer"
               >
                 Đăng ký
               </button>
@@ -221,7 +221,7 @@ export function SiteHeader({ cartCount = 0, onNav }: SiteHeaderProps) {
             <div ref={userMenuRef} className="relative shrink-0">
               <button
                 onClick={triggerUserMenu}
-                className="flex items-center gap-2 cursor-pointer text-[#3B2A1E] hover:text-[#a43324] transition-colors py-2"
+                className="flex items-center gap-2 cursor-pointer text-[#3B2A1E] hover:text-accent transition-colors py-2"
                 aria-expanded={userMenuOpen}
                 aria-haspopup="true"
               >
@@ -237,19 +237,19 @@ export function SiteHeader({ cartCount = 0, onNav }: SiteHeaderProps) {
               </button>
 
               {userMenuOpen && (
-                <div className="absolute right-0 top-[calc(100%+8px)] w-[240px] overflow-hidden rounded-2xl border border-[var(--color-border-default)] bg-white shadow-[0_24px_64px_-16px_rgba(56,36,23,0.35)] z-[70]">
-                  <div className="border-b border-[var(--color-border-default)] px-4 py-3">
-                    <div className="text-[13px] font-bold text-[var(--color-text-primary)] truncate">
+                <div className="absolute right-0 top-[calc(100%+8px)] w-[240px] overflow-hidden rounded-2xl border border-(--color-border-default) bg-white shadow-[0_24px_64px_-16px_rgba(56,36,23,0.35)] z-[70]">
+                  <div className="border-b border-(--color-border-default) px-4 py-3">
+                    <div className="text-[13px] font-bold text-(--color-text-primary) truncate">
                       {user?.name || 'Khách'}
                     </div>
-                    <div className="text-[11.5px] text-[var(--color-text-secondary)] truncate">
+                    <div className="text-[11.5px] text-(--color-text-secondary) truncate">
                       {user?.email}
                     </div>
                   </div>
                   <div className="py-1.5">
                     {USER_DROPDOWN_AUTHED.map((item, i) =>
                       item.divider ? (
-                        <div key={`div-${i}`} className="my-1 border-t border-[var(--color-border-default)]" />
+                        <div key={`div-${i}`} className="my-1 border-t border-(--color-border-default)" />
                       ) : (
                         <button
                           key={item.label}
@@ -257,13 +257,13 @@ export function SiteHeader({ cartCount = 0, onNav }: SiteHeaderProps) {
                           className={`flex w-full items-center gap-3 px-4 py-2.5 text-left text-[13px] font-medium transition-colors cursor-pointer ${
                             item.page === '__logout__'
                               ? 'text-red-600 hover:bg-red-50'
-                              : 'text-[var(--color-text-primary)] hover:bg-[var(--color-surface-2)]'
+                              : 'text-(--color-text-primary) hover:bg-(--color-surface-2)'
                           }`}
                         >
-                          {item.icon && <item.icon size={16} className={item.page === '__logout__' ? '' : 'text-[var(--color-accent)] shrink-0'} />}
+                          {item.icon && <item.icon size={16} className={item.page === '__logout__' ? '' : 'text-accent shrink-0'} />}
                           {item.label}
                           {item.badge && (
-                            <span className="ml-auto rounded-full bg-[var(--color-accent)] px-1.5 py-0.5 text-[10px] font-bold text-white">
+                            <span className="ml-auto rounded-full bg-accent px-1.5 py-0.5 text-[10px] font-bold text-white">
                               {item.badge}
                             </span>
                           )}
@@ -281,7 +281,7 @@ export function SiteHeader({ cartCount = 0, onNav }: SiteHeaderProps) {
             <NotificationBell />
           </div>
           <div
-            className="relative cursor-pointer text-[#3B2A1E] hover:text-[#a43324] transition-colors shrink-0"
+            className="relative cursor-pointer text-[#3B2A1E] hover:text-accent transition-colors shrink-0"
             onClick={() => onNav('cart')}
           >
             <ShoppingCart size={22} strokeWidth={2.5} />
@@ -298,7 +298,7 @@ export function SiteHeader({ cartCount = 0, onNav }: SiteHeaderProps) {
       <div className={`flex items-center px-8 lg:px-12 transition-all duration-300 relative z-20 ${isScrolled ? 'h-[60px]' : 'h-[50px]'}`}>
         {/* Mini logo (visible on scroll) */}
         <div
-          className={`flex-shrink-0 cursor-pointer font-[var(--font-friendly)] font-black text-xl text-[#202945] tracking-tight flex items-center gap-1.5 transition-all duration-300 ${
+          className={`shrink-0 cursor-pointer font-friendly font-black text-xl text-[#202945] tracking-tight flex items-center gap-1.5 transition-all duration-300 ${
             isScrolled ? 'w-[160px] lg:w-[180px] opacity-100 overflow-visible' : 'w-0 opacity-0 overflow-hidden pointer-events-none'
           }`}
           onClick={() => onNav('home')}
@@ -314,7 +314,7 @@ export function SiteHeader({ cartCount = 0, onNav }: SiteHeaderProps) {
               <a
                 href="#"
                 onClick={(e) => { e.preventDefault(); onNav(l.page) }}
-                className="flex items-center gap-1.5 text-[14px] font-bold text-[#a43324] hover:text-[#701f15] transition-colors tracking-wide h-full whitespace-nowrap"
+                className="flex items-center gap-1.5 text-[14px] font-bold text-accent hover:text-[#701f15] transition-colors tracking-wide h-full whitespace-nowrap"
               >
                 {l.label}
                 {l.hasDropdown && (
@@ -323,7 +323,7 @@ export function SiteHeader({ cartCount = 0, onNav }: SiteHeaderProps) {
               </a>
 
               {l.hasDropdown && (
-                <div className="absolute top-[100%] left-1/2 -translate-x-1/2 hidden group-hover:flex bg-white shadow-xl p-6 gap-10 rounded-b-lg border-t-2 border-[#a43324] w-max min-w-[300px]">
+                <div className="absolute top-[100%] left-1/2 -translate-x-1/2 hidden group-hover:flex bg-white shadow-xl p-6 gap-10 rounded-b-lg border-t-2 border-accent w-max min-w-[300px]">
                   {SHOP_MEGA_MENU.map((col) => (
                     <div key={col.title}>
                       <div className="font-bold text-[#3B2A1E] mb-3 border-b border-gray-100 pb-2">{col.title}</div>
@@ -332,7 +332,7 @@ export function SiteHeader({ cartCount = 0, onNav }: SiteHeaderProps) {
                           <a
                             key={item.label}
                             href={item.url}
-                            className="text-[13px] font-medium text-gray-500 hover:text-[#a43324] transition-colors"
+                            className="text-[13px] font-medium text-gray-500 hover:text-accent transition-colors"
                           >
                             {item.label}
                           </a>
@@ -348,7 +348,7 @@ export function SiteHeader({ cartCount = 0, onNav }: SiteHeaderProps) {
 
         {/* Right: Search mini + User + Bell + Cart */}
         <div
-          className={`flex items-center justify-end gap-3.5 sm:gap-4 transition-all duration-300 flex-shrink-0 ${
+          className={`flex items-center justify-end gap-3.5 sm:gap-4 transition-all duration-300 shrink-0 ${
             isScrolled ? 'w-auto min-w-[280px] sm:min-w-[340px] opacity-100 pr-2 overflow-visible' : 'w-0 opacity-0 pr-0 overflow-hidden pointer-events-none'
           }`}
         >
@@ -358,7 +358,7 @@ export function SiteHeader({ cartCount = 0, onNav }: SiteHeaderProps) {
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
               placeholder="Tìm kiếm..."
-              className="w-full h-[36px] pl-3.5 pr-9 rounded-full border border-gray-200 bg-white text-[13px] placeholder:text-gray-400 focus:outline-none focus:ring-2 focus:ring-[#a43324] transition-all"
+              className="w-full h-[36px] pl-3.5 pr-9 rounded-full border border-gray-200 bg-white text-[13px] placeholder:text-gray-400 focus:outline-none focus:ring-2 focus:ring-accent transition-all"
             />
             <button
               type="submit"
@@ -369,7 +369,7 @@ export function SiteHeader({ cartCount = 0, onNav }: SiteHeaderProps) {
           </form>
 
           <button
-            className="text-[#3B2A1E] hover:text-[#a43324] flex-shrink-0 cursor-pointer"
+            className="text-[#3B2A1E] hover:text-accent shrink-0 cursor-pointer"
             title={isAuthenticated ? 'Tài khoản của tôi' : 'Đăng nhập'}
             onClick={() => onNav(isAuthenticated ? 'account' : 'login')}
           >
@@ -380,12 +380,12 @@ export function SiteHeader({ cartCount = 0, onNav }: SiteHeaderProps) {
             )}
           </button>
 
-          <div className="flex-shrink-0">
+          <div className="shrink-0">
             <NotificationBell />
           </div>
 
           <div
-            className="relative cursor-pointer text-[#3B2A1E] hover:text-[#a43324] flex-shrink-0"
+            className="relative cursor-pointer text-[#3B2A1E] hover:text-accent shrink-0"
             onClick={() => onNav('cart')}
           >
             <ShoppingCart size={20} strokeWidth={2.5} />
