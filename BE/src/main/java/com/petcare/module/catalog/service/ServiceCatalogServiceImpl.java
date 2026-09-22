@@ -127,6 +127,12 @@ public class ServiceCatalogServiceImpl implements ServiceCatalogService {
         return PageResponse.of(page);
     }
 
+    @Override
+    @Transactional(readOnly = true)
+    public boolean hasActiveService(UUID organizationId) {
+        return serviceRepository.existsByOrganizationIdAndIsActiveTrue(organizationId);
+    }
+
     private List<ServiceRequiredResource> saveRequiredResources(UUID serviceId, List<RequiredResourceItem> items) {
         if (items == null || items.isEmpty()) {
             return List.of();

@@ -17,7 +17,7 @@ import java.util.List;
 public record UpdateServiceRequest(
         @Size(max = 255) @Pattern(regexp = ".*\\S.*", message = "name không được để trống") String name,
         ServiceCategory category,
-        @Pattern(regexp = "^-?\\d+\\.\\d{2}$", message = "basePrice phải là chuỗi thập phân 2 chữ số, vd 199000.00") String basePrice,
+        @Pattern(regexp = "^\\d+\\.\\d{2}$", message = "basePrice phải là chuỗi thập phân 2 chữ số, không âm, vd 199000.00") String basePrice,
         @Min(1) Integer durationMinutes,
         Boolean isActive,
         @Valid List<RequiredResourceItem> requiredResources

@@ -182,4 +182,21 @@ class ServiceCatalogServiceImplTest {
 
         assertThat(response.isActive()).isFalse();
     }
+
+    @Test
+    void hasActiveService_organizationHasActiveService_returnsTrue() {
+        // RULE-03-02 (ActivateStore, Module 03, điều kiện 3) — điểm tích hợp cross-module.
+        UUID organizationId = UUID.randomUUID();
+        when(serviceRepository.existsByOrganizationIdAndIsActiveTrue(organizationId)).thenReturn(true);
+
+        assertThat(serviceCatalogService.hasActiveService(organizationId)).isTrue();
+    }
+
+    @Test
+    void hasActiveService_organizationHasNoActiveService_returnsFalse() {
+        UUID organizationId = UUID.randomUUID();
+        when(serviceRepository.existsByOrganizationIdAndIsActiveTrue(organizationId)).thenReturn(false);
+
+        assertThat(serviceCatalogService.hasActiveService(organizationId)).isFalse();
+    }
 }

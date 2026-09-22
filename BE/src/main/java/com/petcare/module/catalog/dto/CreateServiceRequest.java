@@ -20,7 +20,7 @@ public record CreateServiceRequest(
         @NotBlank @Size(max = 50) String code,
         @NotBlank @Size(max = 255) String name,
         @NotNull ServiceCategory category,
-        @NotBlank @Pattern(regexp = "^-?\\d+\\.\\d{2}$", message = "basePrice phải là chuỗi thập phân 2 chữ số, vd 199000.00") String basePrice,
+        @NotBlank @Pattern(regexp = "^\\d+\\.\\d{2}$", message = "basePrice phải là chuỗi thập phân 2 chữ số, không âm, vd 199000.00") String basePrice,
         @Min(1) Integer durationMinutes,
         Boolean isActive,
         @Valid List<RequiredResourceItem> requiredResources

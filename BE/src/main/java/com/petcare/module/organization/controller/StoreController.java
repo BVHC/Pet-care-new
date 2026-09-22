@@ -29,7 +29,8 @@ import java.util.UUID;
  * Module 03 (Organization & Store Management) — docs/api/org-store-v1.md §A/C2
  * (CreateStore + list/detail derived). RULE-03-01: mỗi Store thuộc đúng 1
  * Organization cha; cách ly tenant enforce ở Service qua RoleScopeGuard.
- * Không có StoreManager ở 3 endpoint này (khớp contract — chỉ OrgAdmin/SUPER_ADMIN).
+ * Không có StoreManager ở 5 endpoint này (createStore/listStores/activateStore/suspendStore/
+ * deactivateStore — khớp contract, chỉ OrgAdmin/SUPER_ADMIN).
  */
 @RestController
 @RequiredArgsConstructor
@@ -76,5 +77,32 @@ public class StoreController {
             @AuthenticationPrincipal UserPrincipal actor, @PathVariable("id") UUID storeId,
             @Valid @RequestBody UpdateStoreRequest request) {
         return ResponseEntity.ok(ApiResponse.ok(storeService.updateStore(storeId, request, actor)));
+    }
+
+    // ActivateStore — docs/api/org-store-v1.md C2, RULE-03-02, FSM-2. CHỈ OrgAdmin (SUPER_ADMIN
+    // toàn quyền) — không có STORE_MANAGER, khác UpdateStore.
+    @PreAuthorize("hasRole('SUPER_ADMIN') or hasRole('ORGANIZATION_ADMIN')")
+    @PostMapping("/api/stores/{id}/activate")
+    public ResponseEntity<ApiResponse<StoreResponse>> activateStore(
+            @AuthenticationPrincipal UserPrincipal actor, @PathVariable("id") UUID storeId) {
+        return ResponseEntity.ok(ApiResponse.ok(storeService.activateStore(storeId, actor)));
+    }
+
+    // SuspendStore — docs/api/org-store-v1.md C2, RULE-03-04, FSM-2. CHỈ OrgAdmin (SUPER_ADMIN
+    // toàn quyền) — không có STORE_MANAGER, cùng activateStore. Không request body.
+    @PreAuthorize("hasRole('SUPER_ADMIN') or hasRole('ORGANIZATION_ADMIN')")
+    @PostMapping("/api/stores/{id}/suspend")
+    public ResponseEntity<ApiResponse<StoreResponse>> suspendStore(
+            @AuthenticationPrincipal UserPrincipal actor, @PathVariable("id") UUID storeId) {
+        return ResponseEntity.ok(ApiResponse.ok(storeService.suspendStore(storeId, actor)));
+    }
+
+    // DeactivateStore — docs/api/org-store-v1.md C2, RULE-03-04, FSM-2. CHỈ OrgAdmin (SUPER_ADMIN
+    // toàn quyền) — không có STORE_MANAGER, cùng activateStore/suspendStore. Không request body.
+    @PreAuthorize("hasRole('SUPER_ADMIN') or hasRole('ORGANIZATION_ADMIN')")
+    @PostMapping("/api/stores/{id}/deactivate")
+    public ResponseEntity<ApiResponse<StoreResponse>> deactivateStore(
+            @AuthenticationPrincipal UserPrincipal actor, @PathVariable("id") UUID storeId) {
+        return ResponseEntity.ok(ApiResponse.ok(storeService.deactivateStore(storeId, actor)));
     }
 }
