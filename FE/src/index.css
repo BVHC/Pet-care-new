@@ -12,6 +12,41 @@
   --color-soft-orange: #ffb74d;
   --color-accent: #a43324;
   --color-accent-hover: #89271b;
+  --color-accent-warm: #cf5b47;
+  --color-accent-soft: #faebe4;
+
+  /* Surface tokens (Khách hàng) */
+  --color-surface-1: #fdf6ec;
+  --color-surface-2: #f6e8da;
+  --color-surface-dark: #382417;
+  --color-surface-page: #fdf6ec;
+  --color-surface-card: #ffffff;
+  --color-surface-sunken: #fbeedd;
+
+  /* Border tokens (Khách hàng) */
+  --color-border-default: #eadfcf;
+  --color-border-strong: #bdbdbd;
+  --color-border-focus: #00bcd4;
+
+  /* Text & Palette (Khách hàng) */
+  --color-dark-gray: #3b2a1e;
+  --color-mid-gray: #8a7565;
+  --color-light-gray: #fbeedd;
+  --color-off-white: #fdf6ec;
+  --color-border-gray: #eadfcf;
+  --color-teal: #009688;
+  --color-sky-blue: #00bcd4;
+  --color-deep-red: #d32f2f;
+
+  --color-brand-primary: #ffc107;
+  --color-brand-primary-hover: #ffb300;
+  --color-brand-primary-active: #ffa000;
+  --color-brand-secondary: #ff9800;
+  --color-brand-tertiary: #ffb74d;
+
+  --color-text-on-brand: var(--color-dark-gray);
+  --color-text-on-dark: var(--color-off-white);
+  --color-text-link: var(--color-teal);
 
   /* Surfaces - Light Mode */
   --color-bg-primary: #ffffff;
@@ -121,6 +156,19 @@
   --admin-sidebar-active: #eff6ff;
   --admin-sidebar-active-text: #3b82f6;
   --admin-header-bg: #ffffff;
+
+  /* Customer Site Surfaces & Tokens */
+  --color-surface-1: #fdf6ec;
+  --color-surface-2: #f6e8da;
+  --color-surface-dark: #382417;
+  --color-surface-page: #fdf6ec;
+  --color-surface-card: #ffffff;
+  --color-surface-sunken: #fbeedd;
+  --color-accent-soft: #faebe4;
+  --color-accent-warm: #cf5b47;
+  --color-border-default: #eadfcf;
+  --color-border-strong: #bdbdbd;
+  --color-border-focus: #00bcd4;
 }
 
 /* Dark Mode */

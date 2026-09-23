@@ -145,12 +145,12 @@ export function AdminSidebar({ collapsed: propCollapsed, onToggle }: AdminSideba
         isCollapsed && "p-3 justify-center"
       )}>
         <Link to="/admin/dashboard" className={cn("flex items-center gap-3", isCollapsed && "justify-center")}>
-          <div className="w-10 h-10 rounded-xl bg-linear-to-br from-blue-500 to-blue-600 flex items-center justify-center shadow-md shrink-0">
-            <span className="text-white font-bold text-lg">PC</span>
+          <div className="w-10 h-10 rounded-xl bg-amber-50 dark:bg-amber-950/30 border border-amber-200/60 dark:border-amber-800/40 flex items-center justify-center shadow-xs shrink-0 p-1">
+            <img src="/imgs/CatSticker.svg" alt="Pet Care Logo" className="w-8 h-8 object-contain" />
           </div>
           {!isCollapsed && (
             <div>
-              <h1 className="font-semibold text-base text-(--text-primary) leading-tight">Pet Care</h1>
+              <h1 className="font-semibold text-base text-(--text-primary) leading-tight font-friendly">Pet Care</h1>
               <p className="text-xs text-(--text-secondary)">Admin Portal</p>
             </div>
           )}
