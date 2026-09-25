@@ -19,4 +19,12 @@ public interface ProductService {
     ProductResponse getProduct(UUID productId, UserPrincipal actor);
 
     PageResponse<ProductResponse> listProducts(UserPrincipal actor, Pageable pageable);
+
+    /**
+     * Đọc Product không qua actor-guard — dùng cho module khác cần dữ liệu Product (vd Inventory
+     * xác minh Product cùng Organization với Store trước khi Receive/Issue, RULE-12-01), cùng
+     * kiểu {@code StoreService#getOrganizationIdForStore} (đã có tiền lệ cross-module ở
+     * {@code StorefrontServiceImpl}). Không dùng cho Controller — không kiểm tra quyền xem.
+     */
+    ProductResponse getProductForCrossModule(UUID productId);
 }

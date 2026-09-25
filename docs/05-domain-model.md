@@ -359,7 +359,8 @@ graph TD
 ## 4.12. Module 12: Inventory & Warehouse Management
 - **Phạm vi Bounded Context:** Quản trị tồn kho tại Store/Warehouse, chuyển kho 2 bước liên chi nhánh và cân bằng sai lệch hao hụt.
 - **Aggregate Root:** `InventoryItem`, `StockTransfer`
-- **Child Entities:** `InventoryAdjustment`, `StockTransferLine`
+- **Child Entities:** `InventoryAdjustment`, `InventoryBatch` (V15 — chi tiết theo lô cho
+  `RULE-12-11` FEFO, xem `docs/06-erd.md` §3.5 bảng `inventory_batches`), `StockTransferLine`
 - **Value Objects:**
   - `StockTransferStatus`: `[REQUESTED, APPROVED, REJECTED, CANCELLED, IN_TRANSIT, DISCREPANCY_RECORDED, RECEIVED]`.
   - `AdjustmentReason`: `[DAMAGE, EXPIRY, THEFT, COUNT_VARIANCE, TRANSIT_VARIANCE]`.
@@ -367,11 +368,23 @@ graph TD
 - **Commands (docs/01-business-operations.md):**
   - `ReceiveInventory`, `IssueInventory`, `TrackInventory`, `AdjustInventory`, `ApproveInventoryAdjustment`, `CountInventory`, `CreateStockTransfer`, `ApproveStockTransfer`, `RejectStockTransfer`, `CancelStockTransfer`, `ShipStockTransfer`, `ReceiveStockTransfer`, `ReceiveStockTransferWithDiscrepancy`, `ResolveStockTransferDiscrepancy`, `TrackBatch`, `TrackExpiry`, `TriggerLowStockAlert`
 - **Domain Events (docs/03-state-machines.md):**
-  - `InventoryAdjusted`, `StockTransferCreated`, `StockTransferApproved`, `StockTransferShipped`, `StockTransferReceived`, `StockTransferDiscrepancyReported`, `StockTransferDiscrepancyResolved`
+  - `InventoryAdjusted`, `LowStockAlertTriggered` (docs/04-glossary.md — `TriggerLowStockAlert`,
+    background job side-effect, không có endpoint riêng), `StockTransferCreated`,
+    `StockTransferApproved`, `StockTransferShipped`, `StockTransferReceived`,
+    `StockTransferDiscrepancyReported`, `StockTransferDiscrepancyResolved`
 - **State Machine Lifecycle (FSM 11 - docs/03-state-machines.md#11):**
   - `[*] -> REQUESTED -> APPROVED -> IN_TRANSIT -> RECEIVED / DISCREPANCY_RECORDED`; `DISCREPANCY_RECORDED -> RECEIVED` (sau khi duyệt điều chỉnh kho).
 - **Business Invariants (docs/02-business-rules.md):**
+  - `RULE-12-01`: Tồn kho theo dõi/phân bổ riêng biệt theo từng Store/Warehouse, cách ly tuyệt
+    đối giữa các Organization (Multi-Tenancy Isolation).
+  - `RULE-12-02`: Phiếu điều chỉnh (`InventoryAdjustment`) phải gắn Store/Warehouse và lý do hợp
+    lệ (`DAMAGE`/`EXPIRY`/`THEFT`/`COUNT_VARIANCE`/`TRANSIT_VARIANCE`).
   - `RULE-12-03`, `RULE-12-06`: Maker-Checker bắt buộc cho Điều chỉnh kho và Chuyển kho (`created_by != approved_by`).
+  - `RULE-12-11`: FEFO — biến động hàng hóa quản lý theo `batch_number`/`manufacture_date`/
+    `expiry_date` (`InventoryBatch`); xuất kho ưu tiên lô hết hạn sớm nhất trước.
+  - `RULE-12-12`: `TriggerLowStockAlert` — cảnh báo tự động khi `AvailableQuantity ≤
+    min_stock_level`; side-effect edge-triggered trong Receive/Issue/ApproveInventoryAdjustment
+    (không phải endpoint riêng, xem `docs/api/inventory-v1.md` "Đóng băng phạm vi").
   - `RULE-12-07`: Vòng đời chuyển kho 2 bước — hàng `IN_TRANSIT` bị trừ khỏi kho xuất nhưng chưa cộng vào kho nhận cho đến khi xác nhận thực tế.
   - `RULE-12-08`, `RULE-12-09`: **Phương trình Cân bằng Sai lệch Chuyển kho:**
     $$\text{ShippedQuantity} = \text{ReceivedQuantity} + \text{DamagedQuantity} + \text{LostQuantity}$$

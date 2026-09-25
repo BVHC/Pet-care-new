@@ -924,18 +924,60 @@ erDiagram
   | `quantity_available`| INT | YES | `0` | Tồn khả dụng = Physical - Reserved, cùng đơn vị `quantity_physical` |
   | `min_stock_level` | INT | YES | `5` | Ngưỡng báo động tồn thấp |
   | `version` | BIGINT | YES | `0` | Khóa lạc quan chống overselling |
-- **Cột (`inventory_adjustments`):**
+  | `created_at` | TIMESTAMPTZ | YES | `CURRENT_TIMESTAMP` | Thời điểm tạo (V15) |
+  | `updated_at` | TIMESTAMPTZ | YES | `CURRENT_TIMESTAMP` | Thời điểm cập nhật gần nhất (V15) |
+  | `created_by` | UUID | NO | NULL | FK -> `accounts.id` (BaseEntity audit trail, V15) |
+  | `updated_by` | UUID | NO | NULL | FK -> `accounts.id` (BaseEntity audit trail, V15) |
+  | `deleted_at` | TIMESTAMPTZ | NO | NULL | Soft-delete (BaseEntity, V15) |
+
+  Ràng buộc `UNIQUE (store_id, product_id)` (V15) — mỗi Store/Warehouse chỉ có đúng 1 dòng rollup
+  tồn kho cho mỗi Product (RULE-12-01), chặn race điều kiện 2 lệnh `ReceiveInventory` đầu tiên
+  đồng thời tạo trùng dòng.
+- **Cột (`inventory_adjustments`):** KHÔNG áp BaseEntity đầy đủ — `created_by`/`approved_by` là
+  cặp định danh Maker-Checker nghiệp vụ (`RULE-12-03`) trỏ `users.id`, khác không gian với audit
+  trail chung (`accounts.id`); phiếu chỉ có 2 hành động approve/reject, không có thao tác sửa nội
+  dung hay soft-delete nào khác nên không cần `updated_by`/`deleted_at`.
   | Tên Cột | Kiểu Dữ liệu | Bắt buộc | Default | Mô tả |
   |---|---|---|---|---|
   | `id` | UUID | YES | `gen_random_uuid()` | Khóa chính phiếu điều chỉnh |
   | `store_id` | UUID | YES | - | FK -> `stores.id` |
   | `product_id` | UUID | YES | - | FK -> `products.id` |
   | `quantity_adjusted`| INT | YES | - | Số lượng điều chỉnh (+ hoặc -) |
-  | `reason` | VARCHAR(50) | YES | - | `DAMAGE`, `EXPIRY`, `THEFT`, `TRANSIT_VARIANCE` |
+  | `reason` | VARCHAR(50) | YES | - | `DAMAGE`, `EXPIRY`, `THEFT`, `COUNT_VARIANCE`, `TRANSIT_VARIANCE` |
   | `status` | VARCHAR(30) | YES | `'PENDING'` | `PENDING`, `APPROVED`, `REJECTED` |
   | `created_by` | UUID | YES | - | FK -> `users.id` |
   | `approved_by` | UUID | NO | NULL | FK -> `users.id` (Maker-Checker `RULE-12-03`) |
   | `created_at` | TIMESTAMPTZ | YES | `CURRENT_TIMESTAMP` | Thời điểm lập phiếu |
+  | `decided_at` | TIMESTAMPTZ | NO | NULL | Thời điểm approve/reject (V15) |
+  | `version` | BIGINT | YES | `0` (V15) | Khóa lạc quan chống race double-approve |
+
+### Bảng: `inventory_batches`
+- **Mục đích:** Chi tiết tồn kho theo lô/hạn dùng cho toàn bộ hàng hóa (`RULE-12-11` FEFO —
+  First-Expired-First-Out). ERD trước V15 chỉ có `vaccine_batches` (Module 10, scoped
+  `products.category = 'MEDICINE'`), không có cơ chế lô chung. `inventory_items` vẫn là rollup
+  tổng dùng cho `TrackInventory` + khóa lạc quan chống overselling; `inventory_batches` là bảng
+  con nhiều dòng dùng để chọn đúng lô hết hạn sớm nhất khi `IssueInventory` (không thể làm được
+  với cột đơn trên `inventory_items` vì có thể có nhiều lô tồn song song của cùng Store+Product)
+  và cho `TrackBatch`/`TrackExpiry`.
+- **Primary Key:** `id UUID DEFAULT gen_random_uuid()`
+- **Cột:**
+  | Tên Cột | Kiểu Dữ liệu | Bắt buộc | Default | Mô tả |
+  |---|---|---|---|---|
+  | `id` | UUID | YES | `gen_random_uuid()` | Khóa chính |
+  | `store_id` | UUID | YES | - | FK -> `stores.id` |
+  | `product_id` | UUID | YES | - | FK -> `products.id` |
+  | `batch_number` | VARCHAR(100) | YES | - | Số lô (RULE-12-11 bắt buộc theo dõi) |
+  | `manufacture_date` | DATE | NO | NULL | Ngày sản xuất — NULL với hàng không có hạn dùng (vd `ACCESSORY`) |
+  | `expiry_date` | DATE | NO | NULL | Hạn sử dụng — NULL = không hết hạn, xếp cuối cùng khi FEFO |
+  | `quantity` | INT | YES | `0` | Số lượng còn lại của lô (`>= 0`) |
+  | `created_at` | TIMESTAMPTZ | YES | `CURRENT_TIMESTAMP` | Thời điểm nhập lô |
+  | `updated_at` | TIMESTAMPTZ | YES | `CURRENT_TIMESTAMP` | Thời điểm cập nhật gần nhất |
+  | `created_by` | UUID | NO | NULL | FK -> `accounts.id` |
+  | `updated_by` | UUID | NO | NULL | FK -> `accounts.id` |
+  | `version` | BIGINT | YES | `0` | Khóa lạc quan — Receive/Issue đồng thời trên cùng lô |
+
+  Ràng buộc `UNIQUE (store_id, product_id, batch_number)` — `ReceiveInventory` lặp lại cùng lô
+  tự cộng dồn `quantity` thay vì tạo dòng trùng.
 - **Cột (`inventory_reservations`):**
   | Tên Cột | Kiểu Dữ liệu | Bắt buộc | Default | Mô tả |
   |---|---|---|---|---|

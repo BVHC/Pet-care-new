@@ -256,6 +256,38 @@ public final class RoleScopeGuard {
     }
 
     /**
+     * RULE-12-01 — actor có được vận hành tồn kho (Receive/Issue/Track/Adjust/Count) của Store
+     * này không: SUPER_ADMIN toàn quyền; ORGANIZATION_ADMIN mọi Store trong Organization mình;
+     * STORE_MANAGER/INVENTORY_STAFF chỉ đúng Store mình gắn. Rộng hơn {@link #assertCanManageStore}
+     * (không có INVENTORY_STAFF — role vận hành kho chính theo docs/01-business-operations.md
+     * §12) nhưng cùng cấu trúc org/store binding. Approve/RejectInventoryAdjustment KHÔNG dùng
+     * method này — tái dùng {@link #assertCanManageStore} (RULE-12-03 chỉ StoreManager/OrgAdmin
+     * được duyệt, không cho InventoryStaff tự duyệt phiếu chính mình tạo).
+     */
+    public static void assertCanOperateStoreInventory(UserPrincipal actor, java.util.UUID organizationId,
+                                                        java.util.UUID storeId) {
+        switch (actor.getRole()) {
+            case SUPER_ADMIN -> {
+                // Toàn quyền.
+            }
+            case ORGANIZATION_ADMIN -> {
+                if (!Objects.equals(actor.getOrganizationId(), organizationId)) {
+                    throw new AccessDeniedScopeException("ORGANIZATION:" + actor.getOrganizationId(),
+                            "ORGANIZATION:" + organizationId);
+                }
+            }
+            case STORE_MANAGER, INVENTORY_STAFF -> {
+                if (!Objects.equals(actor.getStoreId(), storeId)
+                        || !Objects.equals(actor.getOrganizationId(), organizationId)) {
+                    throw new AccessDeniedScopeException("STORE:" + actor.getStoreId(), "STORE:" + storeId);
+                }
+            }
+            default -> throw new AccessDeniedScopeException(
+                    "SUPER_ADMIN|ORGANIZATION_ADMIN|STORE_MANAGER|INVENTORY_STAFF", actor.getRole().name());
+        }
+    }
+
+    /**
      * RULE-02-05 — dành riêng cho {@code ConfigureOperatingHour} ({@code PUT
      * /stores/{id}/operating-hours}, docs/api/org-store-v1.md — quyết định 2026-09-17): CHỈ
      * {@code STORE_MANAGER} đúng Store mình quản lý được gọi, khác hẳn {@link #assertCanManageStore}

@@ -123,4 +123,12 @@ public class ProductServiceImpl implements ProductService {
                 .map(productMapper::toResponse);
         return PageResponse.of(page);
     }
+
+    @Override
+    @Transactional(readOnly = true)
+    public ProductResponse getProductForCrossModule(UUID productId) {
+        Product product = productRepository.findById(productId)
+                .orElseThrow(() -> new ResourceNotFoundException("Product", productId));
+        return productMapper.toResponse(product);
+    }
 }
