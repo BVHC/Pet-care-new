@@ -43,10 +43,13 @@ import java.util.Objects;
 import java.util.UUID;
 
 /**
- * Module 14 — CreateOrder/CheckoutOrder/ViewOrder/CancelOrder (RULE-14-01/02/03/04/07/08, D-03).
- * D-03 split: Online -> PENDING_PAYMENT + reserveStock (RULE-14-04 giữ chỗ 15 phút); POS ->
- * PAID + deductPhysicalForOrder (trừ physical trực tiếp, không giữ chỗ). CheckoutOrder không đổi
- * state (A2, docs/api/order-v1.md) — chỉ refresh {@code reservedUntil}, không qua FSM.
+ * Module 14 — CreateOrder/CheckoutOrder/ViewOrder/CancelOrder (RULE-14-01/02/03/04/07/08, D-03) +
+ * ConfirmOrder/ProcessOrder/PrepareProductOrder/CompleteStoreOrder (RULE-14-03/05/06).
+ * D-03 split: Online -> PENDING_PAYMENT + reserveStock (RULE-14-04 giữ chỗ 15 phút) -> CONFIRMED
+ * -> PROCESSING (commitReservation: reserve -> physical) -> READY -> DELIVERED; POS -> PAID +
+ * deductPhysicalForOrder (trừ physical trực tiếp, không giữ chỗ) -> DELIVERED tức thời.
+ * CheckoutOrder không đổi state (A2, docs/api/order-v1.md) — chỉ refresh {@code reservedUntil},
+ * không qua FSM. {@code CancelOrderWithRefund} vẫn ngoài phạm vi — phụ thuộc Refund M17.
  */
 @Service
 @RequiredArgsConstructor
@@ -181,6 +184,86 @@ public class OrderServiceImpl implements OrderService {
         inventoryItemService.releaseReservation(order.getId());
         orderEventRecorder.recordOrderCancelled(order);
 
+        return buildResponse(order);
+    }
+
+    @Override
+    @Transactional
+    @Auditable(action = "ConfirmOrder", resourceType = "Order")
+    public OrderResponse confirmOrder(@AuditResourceId UUID orderId, UserPrincipal actor) {
+        Order order = loadOrder(orderId);
+        UUID organizationId = storeService.getOrganizationIdForStore(order.getStoreId());
+        RoleScopeGuard.assertCanOperateStoreOrder(actor, organizationId, order.getStoreId());
+
+        // RULE-14-03 — ConfirmOrder là nhánh rẽ Online staged fulfillment; POS không bao giờ rời
+        // khỏi đường instant PAID->DELIVERED.
+        if (order.getChannel() != OrderChannel.ONLINE_APP) {
+            throw new BusinessRuleViolationException("RULE-14-03", "ConfirmOrder chỉ áp dụng cho đơn Online");
+        }
+
+        orderTransitionHandler.validateTransition(order.getStatus(), OrderStatus.CONFIRMED);
+        order.setStatus(OrderStatus.CONFIRMED);
+        order = saveAndFlush(order);
+
+        orderEventRecorder.recordOrderConfirmed(order);
+        return buildResponse(order);
+    }
+
+    @Override
+    @Transactional
+    @Auditable(action = "ProcessOrder", resourceType = "Order")
+    public OrderResponse processOrder(@AuditResourceId UUID orderId, UserPrincipal actor) {
+        Order order = loadOrder(orderId);
+        UUID organizationId = storeService.getOrganizationIdForStore(order.getStoreId());
+        RoleScopeGuard.assertCanProcessStoreOrder(actor, organizationId, order.getStoreId());
+
+        orderTransitionHandler.validateTransition(order.getStatus(), OrderStatus.PROCESSING);
+        order.setStatus(OrderStatus.PROCESSING);
+        order = saveAndFlush(order);
+
+        inventoryItemService.commitReservation(order.getId()); // RULE-14-05 invariant: reserve -> physical
+        orderEventRecorder.recordOrderProcessed(order);
+        return buildResponse(order);
+    }
+
+    @Override
+    @Transactional
+    @Auditable(action = "PrepareProductOrder", resourceType = "Order")
+    public OrderResponse prepareProductOrder(@AuditResourceId UUID orderId, UserPrincipal actor) {
+        Order order = loadOrder(orderId);
+        UUID organizationId = storeService.getOrganizationIdForStore(order.getStoreId());
+        RoleScopeGuard.assertCanOperateStoreInventory(actor, organizationId, order.getStoreId());
+
+        orderTransitionHandler.validateTransition(order.getStatus(), OrderStatus.READY);
+        order.setStatus(OrderStatus.READY);
+        order = saveAndFlush(order);
+        // Không đụng inventory — physical đã trừ chính thức ở ProcessOrder; đây chỉ là soạn/đóng gói.
+
+        orderEventRecorder.recordProductOrderPrepared(order);
+        return buildResponse(order);
+    }
+
+    @Override
+    @Transactional
+    @Auditable(action = "CompleteStoreOrder", resourceType = "Order")
+    public OrderResponse completeStoreOrder(@AuditResourceId UUID orderId, UserPrincipal actor) {
+        Order order = loadOrder(orderId);
+        UUID organizationId = storeService.getOrganizationIdForStore(order.getStoreId());
+        RoleScopeGuard.assertCanOperateStoreOrder(actor, organizationId, order.getStoreId());
+
+        // RULE-14-03/06 — PAID->DELIVERED chỉ dành cho POS instant handover; đơn Online đang PAID
+        // phải đi qua staged confirm/process/prepare, không được nhảy thẳng sang complete.
+        if (order.getStatus() == OrderStatus.PAID && order.getChannel() != OrderChannel.POS_RETAIL) {
+            throw new BusinessRuleViolationException("RULE-14-03", "CompleteStoreOrder từ PAID chỉ dành cho đơn POS");
+        }
+
+        orderTransitionHandler.validateTransition(order.getStatus(), OrderStatus.DELIVERED);
+        order.setStatus(OrderStatus.DELIVERED);
+        order = saveAndFlush(order);
+
+        // Pickup code (RULE-14-06 nhánh Online) cố ý bỏ qua theo phạm vi đã chốt — không đọc
+        // request body, không lưu/tra mã. docs/api/order-v1.md Q6 vẫn TBD.
+        orderEventRecorder.recordOrderDelivered(order);
         return buildResponse(order);
     }
 

@@ -44,7 +44,7 @@ import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
-/** docs/02-business-rules.md RULE-14-01, RULE-14-02, RULE-14-04, RULE-14-07/08 (D-03). */
+/** docs/02-business-rules.md RULE-14-01→08 (D-03). */
 @ExtendWith(MockitoExtension.class)
 class OrderServiceImplTest {
 
@@ -326,6 +326,187 @@ class OrderServiceImplTest {
         assertThatThrownBy(() -> service.cancelOrder(order.getId(), customer))
                 .isInstanceOf(InvalidStateTransitionException.class);
         verify(inventoryItemService, never()).releaseReservation(any());
+    }
+
+    @Test
+    void confirmOrder_receptionistFromPaidOnline_transitionsToConfirmed_emitsEvent() {
+        UUID organizationId = UUID.randomUUID();
+        UUID storeId = UUID.randomUUID();
+        Order order = order(storeId, UUID.randomUUID(), OrderChannel.ONLINE_APP, OrderStatus.PAID);
+        when(orderRepository.findById(order.getId())).thenReturn(Optional.of(order));
+        when(storeService.getOrganizationIdForStore(storeId)).thenReturn(organizationId);
+        when(orderRepository.saveAndFlush(any(Order.class))).thenAnswer(inv -> inv.getArgument(0));
+        when(orderItemRepository.findAllByOrderId(order.getId())).thenReturn(List.of());
+
+        var response = service.confirmOrder(order.getId(), principal(UserRole.RECEPTIONIST, organizationId, storeId));
+
+        assertThat(response.status()).isEqualTo(OrderStatus.CONFIRMED);
+        verify(orderEventRecorder).recordOrderConfirmed(any(Order.class));
+    }
+
+    @Test
+    void confirmOrder_posChannel_throwsBusinessRuleViolation_RULE_14_03() {
+        UUID organizationId = UUID.randomUUID();
+        UUID storeId = UUID.randomUUID();
+        Order order = order(storeId, UUID.randomUUID(), OrderChannel.POS_RETAIL, OrderStatus.PAID);
+        when(orderRepository.findById(order.getId())).thenReturn(Optional.of(order));
+        when(storeService.getOrganizationIdForStore(storeId)).thenReturn(organizationId);
+
+        assertThatThrownBy(() -> service.confirmOrder(order.getId(), principal(UserRole.RECEPTIONIST, organizationId, storeId)))
+                .isInstanceOf(BusinessRuleViolationException.class)
+                .satisfies(ex -> assertThat(((BusinessRuleViolationException) ex).getRuleId()).isEqualTo("RULE-14-03"));
+    }
+
+    @Test
+    void confirmOrder_wrongRole_throwsAccessDeniedScope() {
+        UUID storeId = UUID.randomUUID();
+        Order order = order(storeId, UUID.randomUUID(), OrderChannel.ONLINE_APP, OrderStatus.PAID);
+        when(orderRepository.findById(order.getId())).thenReturn(Optional.of(order));
+        when(storeService.getOrganizationIdForStore(storeId)).thenReturn(UUID.randomUUID());
+
+        assertThatThrownBy(() -> service.confirmOrder(order.getId(), principal(UserRole.CUSTOMER, null, null)))
+                .isInstanceOf(AccessDeniedScopeException.class);
+    }
+
+    @Test
+    void confirmOrder_wrongState_throwsInvalidStateTransition() {
+        UUID organizationId = UUID.randomUUID();
+        UUID storeId = UUID.randomUUID();
+        Order order = order(storeId, UUID.randomUUID(), OrderChannel.ONLINE_APP, OrderStatus.CONFIRMED);
+        when(orderRepository.findById(order.getId())).thenReturn(Optional.of(order));
+        when(storeService.getOrganizationIdForStore(storeId)).thenReturn(organizationId);
+
+        assertThatThrownBy(() -> service.confirmOrder(order.getId(), principal(UserRole.RECEPTIONIST, organizationId, storeId)))
+                .isInstanceOf(InvalidStateTransitionException.class);
+    }
+
+    @Test
+    void processOrder_receptionistOrInventoryStaff_transitionsToProcessing_commitsReservation() {
+        UUID organizationId = UUID.randomUUID();
+        UUID storeId = UUID.randomUUID();
+        Order order = order(storeId, UUID.randomUUID(), OrderChannel.ONLINE_APP, OrderStatus.CONFIRMED);
+        when(orderRepository.findById(order.getId())).thenReturn(Optional.of(order));
+        when(storeService.getOrganizationIdForStore(storeId)).thenReturn(organizationId);
+        when(orderRepository.saveAndFlush(any(Order.class))).thenAnswer(inv -> inv.getArgument(0));
+        when(orderItemRepository.findAllByOrderId(order.getId())).thenReturn(List.of());
+
+        var response = service.processOrder(order.getId(), principal(UserRole.INVENTORY_STAFF, organizationId, storeId));
+
+        assertThat(response.status()).isEqualTo(OrderStatus.PROCESSING);
+        verify(inventoryItemService).commitReservation(order.getId());
+        verify(orderEventRecorder).recordOrderProcessed(any(Order.class));
+    }
+
+    @Test
+    void processOrder_customerActor_throwsAccessDeniedScope() {
+        UUID storeId = UUID.randomUUID();
+        Order order = order(storeId, UUID.randomUUID(), OrderChannel.ONLINE_APP, OrderStatus.CONFIRMED);
+        when(orderRepository.findById(order.getId())).thenReturn(Optional.of(order));
+        when(storeService.getOrganizationIdForStore(storeId)).thenReturn(UUID.randomUUID());
+
+        assertThatThrownBy(() -> service.processOrder(order.getId(), principal(UserRole.CUSTOMER, null, null)))
+                .isInstanceOf(AccessDeniedScopeException.class);
+        verify(inventoryItemService, never()).commitReservation(any());
+    }
+
+    @Test
+    void processOrder_wrongState_throwsInvalidStateTransition() {
+        UUID organizationId = UUID.randomUUID();
+        UUID storeId = UUID.randomUUID();
+        Order order = order(storeId, UUID.randomUUID(), OrderChannel.ONLINE_APP, OrderStatus.PENDING_PAYMENT);
+        when(orderRepository.findById(order.getId())).thenReturn(Optional.of(order));
+        when(storeService.getOrganizationIdForStore(storeId)).thenReturn(organizationId);
+
+        assertThatThrownBy(() -> service.processOrder(order.getId(), principal(UserRole.RECEPTIONIST, organizationId, storeId)))
+                .isInstanceOf(InvalidStateTransitionException.class);
+        verify(inventoryItemService, never()).commitReservation(any());
+    }
+
+    @Test
+    void prepareProductOrder_inventoryStaff_transitionsToReady_emitsEvent() {
+        UUID organizationId = UUID.randomUUID();
+        UUID storeId = UUID.randomUUID();
+        Order order = order(storeId, UUID.randomUUID(), OrderChannel.ONLINE_APP, OrderStatus.PROCESSING);
+        when(orderRepository.findById(order.getId())).thenReturn(Optional.of(order));
+        when(storeService.getOrganizationIdForStore(storeId)).thenReturn(organizationId);
+        when(orderRepository.saveAndFlush(any(Order.class))).thenAnswer(inv -> inv.getArgument(0));
+        when(orderItemRepository.findAllByOrderId(order.getId())).thenReturn(List.of());
+
+        var response = service.prepareProductOrder(order.getId(), principal(UserRole.INVENTORY_STAFF, organizationId, storeId));
+
+        assertThat(response.status()).isEqualTo(OrderStatus.READY);
+        verify(inventoryItemService, never()).commitReservation(any());
+        verify(inventoryItemService, never()).deductPhysicalForOrder(any(), any(), anyInt());
+        verify(orderEventRecorder).recordProductOrderPrepared(any(Order.class));
+    }
+
+    @Test
+    void prepareProductOrder_receptionistActor_throwsAccessDeniedScope() {
+        UUID organizationId = UUID.randomUUID();
+        UUID storeId = UUID.randomUUID();
+        Order order = order(storeId, UUID.randomUUID(), OrderChannel.ONLINE_APP, OrderStatus.PROCESSING);
+        when(orderRepository.findById(order.getId())).thenReturn(Optional.of(order));
+        when(storeService.getOrganizationIdForStore(storeId)).thenReturn(organizationId);
+
+        assertThatThrownBy(() -> service.prepareProductOrder(order.getId(), principal(UserRole.RECEPTIONIST, organizationId, storeId)))
+                .isInstanceOf(AccessDeniedScopeException.class);
+    }
+
+    @Test
+    void completeStoreOrder_posFromPaid_transitionsToDelivered_emitsEvent() {
+        UUID organizationId = UUID.randomUUID();
+        UUID storeId = UUID.randomUUID();
+        Order order = order(storeId, UUID.randomUUID(), OrderChannel.POS_RETAIL, OrderStatus.PAID);
+        when(orderRepository.findById(order.getId())).thenReturn(Optional.of(order));
+        when(storeService.getOrganizationIdForStore(storeId)).thenReturn(organizationId);
+        when(orderRepository.saveAndFlush(any(Order.class))).thenAnswer(inv -> inv.getArgument(0));
+        when(orderItemRepository.findAllByOrderId(order.getId())).thenReturn(List.of());
+
+        var response = service.completeStoreOrder(order.getId(), principal(UserRole.RECEPTIONIST, organizationId, storeId));
+
+        assertThat(response.status()).isEqualTo(OrderStatus.DELIVERED);
+        verify(orderEventRecorder).recordOrderDelivered(any(Order.class));
+    }
+
+    @Test
+    void completeStoreOrder_onlineFromReady_transitionsToDelivered_emitsEvent() {
+        UUID organizationId = UUID.randomUUID();
+        UUID storeId = UUID.randomUUID();
+        Order order = order(storeId, UUID.randomUUID(), OrderChannel.ONLINE_APP, OrderStatus.READY);
+        when(orderRepository.findById(order.getId())).thenReturn(Optional.of(order));
+        when(storeService.getOrganizationIdForStore(storeId)).thenReturn(organizationId);
+        when(orderRepository.saveAndFlush(any(Order.class))).thenAnswer(inv -> inv.getArgument(0));
+        when(orderItemRepository.findAllByOrderId(order.getId())).thenReturn(List.of());
+
+        var response = service.completeStoreOrder(order.getId(), principal(UserRole.RECEPTIONIST, organizationId, storeId));
+
+        assertThat(response.status()).isEqualTo(OrderStatus.DELIVERED);
+        verify(orderEventRecorder).recordOrderDelivered(any(Order.class));
+    }
+
+    @Test
+    void completeStoreOrder_onlineFromPaid_throwsBusinessRuleViolation_RULE_14_03() {
+        UUID organizationId = UUID.randomUUID();
+        UUID storeId = UUID.randomUUID();
+        Order order = order(storeId, UUID.randomUUID(), OrderChannel.ONLINE_APP, OrderStatus.PAID);
+        when(orderRepository.findById(order.getId())).thenReturn(Optional.of(order));
+        when(storeService.getOrganizationIdForStore(storeId)).thenReturn(organizationId);
+
+        assertThatThrownBy(() -> service.completeStoreOrder(order.getId(), principal(UserRole.RECEPTIONIST, organizationId, storeId)))
+                .isInstanceOf(BusinessRuleViolationException.class)
+                .satisfies(ex -> assertThat(((BusinessRuleViolationException) ex).getRuleId()).isEqualTo("RULE-14-03"));
+    }
+
+    @Test
+    void completeStoreOrder_wrongState_throwsInvalidStateTransition() {
+        UUID organizationId = UUID.randomUUID();
+        UUID storeId = UUID.randomUUID();
+        Order order = order(storeId, UUID.randomUUID(), OrderChannel.ONLINE_APP, OrderStatus.CONFIRMED);
+        when(orderRepository.findById(order.getId())).thenReturn(Optional.of(order));
+        when(storeService.getOrganizationIdForStore(storeId)).thenReturn(organizationId);
+
+        assertThatThrownBy(() -> service.completeStoreOrder(order.getId(), principal(UserRole.RECEPTIONIST, organizationId, storeId)))
+                .isInstanceOf(InvalidStateTransitionException.class);
     }
 
     @Test

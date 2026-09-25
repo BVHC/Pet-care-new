@@ -55,4 +55,14 @@ public interface InventoryItemService {
      * đây là lý do tách method riêng thay vì tái dùng {@code issueInventory} thẳng.
      */
     void deductPhysicalForOrder(UUID storeId, UUID productId, int quantity);
+
+    /**
+     * Cross-module (Module 14 Order, RULE-14-05) — ProcessOrder (CONFIRMED->PROCESSING): chuyển
+     * toàn bộ reservation {@code HELD} của 1 Order thành khấu trừ physical chính thức qua FEFO
+     * ({@code quantityPhysical -= qty}, {@code quantityReserved -= qty}; {@code quantityAvailable}
+     * GIỮ NGUYÊN vì đã trừ sẵn lúc {@link #reserveStock} — physical và reserved giảm cùng lượng
+     * nên available bảo toàn). Reservation chuyển {@code COMMITTED}. Idempotent — không có
+     * reservation {@code HELD} nào (đơn không phải Online, hoặc đã commit trước) thì no-op.
+     */
+    void commitReservation(UUID orderId);
 }

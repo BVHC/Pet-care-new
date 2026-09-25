@@ -25,4 +25,15 @@ public interface InventoryReservationRepository extends JpaRepository<InventoryR
     @Query("UPDATE InventoryReservation r SET r.status = com.petcare.platform.enums.ReservationStatus.RELEASED "
             + "WHERE r.id = :id AND r.status = com.petcare.platform.enums.ReservationStatus.HELD")
     int releaseIfHeld(@Param("id") UUID id);
+
+    /**
+     * Conditional transition HELD -> COMMITTED, trả về số dòng bị ảnh hưởng (0 hoặc 1). Dùng bởi
+     * {@code InventoryItemService#commitReservation} (RULE-14-05, ProcessOrder CONFIRMED->
+     * PROCESSING) — cùng lý do atomic ở tầng DB như {@link #releaseIfHeld}, chống double-commit
+     * nếu bị gọi lại (idempotency khi retry).
+     */
+    @Modifying
+    @Query("UPDATE InventoryReservation r SET r.status = com.petcare.platform.enums.ReservationStatus.COMMITTED "
+            + "WHERE r.id = :id AND r.status = com.petcare.platform.enums.ReservationStatus.HELD")
+    int commitIfHeld(@Param("id") UUID id);
 }

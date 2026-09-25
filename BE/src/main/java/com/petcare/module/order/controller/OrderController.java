@@ -24,11 +24,14 @@ import org.springframework.web.bind.annotation.RestController;
 import java.util.UUID;
 
 /**
- * Module 14 — docs/api/order-v1.md C1-C3 (CreateOrder/CheckoutOrder/ViewOrder/CancelOrder,
- * RULE-14-01→04/07/08, D-03). CreateOrder mở cho CUSTOMER (Online) lẫn RECEPTIONIST/STORE_MANAGER/
+ * Module 14 — docs/api/order-v1.md C1-C4 (CreateOrder/CheckoutOrder/ViewOrder/CancelOrder,
+ * RULE-14-01→04/07/08, D-03) + ConfirmOrder/ProcessOrder/PrepareProductOrder/CompleteStoreOrder
+ * (RULE-14-03/05/06). CreateOrder mở cho CUSTOMER (Online) lẫn RECEPTIONIST/STORE_MANAGER/
  * ORGANIZATION_ADMIN/SUPER_ADMIN (POS) — Service tự phân nhánh guard theo channel
  * ({@code resolveCustomerId}). Checkout/View chỉ CUSTOMER (+ SUPER_ADMIN bypass ở View). Cancel mở
- * cho cả 2 phía (Customer chủ đơn hoặc staff tại Store).
+ * cho cả 2 phía (Customer chủ đơn hoặc staff tại Store). Confirm/Complete: Receptionist (+
+ * Store/Org/SuperAdmin). Process: Receptionist hoặc InventoryStaff (RULE-14-05 nêu đích danh cả
+ * 2). Prepare: InventoryStaff.
  */
 @RestController
 @RequiredArgsConstructor
@@ -73,5 +76,37 @@ public class OrderController {
     public ResponseEntity<ApiResponse<OrderResponse>> cancelOrder(
             @AuthenticationPrincipal UserPrincipal actor, @PathVariable("id") UUID orderId) {
         return ResponseEntity.ok(ApiResponse.ok(orderService.cancelOrder(orderId, actor)));
+    }
+
+    @PreAuthorize("hasRole('RECEPTIONIST') or hasRole('STORE_MANAGER') or hasRole('ORGANIZATION_ADMIN') "
+            + "or hasRole('SUPER_ADMIN')")
+    @PostMapping("/api/orders/{id}/confirm")
+    public ResponseEntity<ApiResponse<OrderResponse>> confirmOrder(
+            @AuthenticationPrincipal UserPrincipal actor, @PathVariable("id") UUID orderId) {
+        return ResponseEntity.ok(ApiResponse.ok(orderService.confirmOrder(orderId, actor)));
+    }
+
+    @PreAuthorize("hasRole('RECEPTIONIST') or hasRole('INVENTORY_STAFF') or hasRole('STORE_MANAGER') "
+            + "or hasRole('ORGANIZATION_ADMIN') or hasRole('SUPER_ADMIN')")
+    @PostMapping("/api/orders/{id}/process")
+    public ResponseEntity<ApiResponse<OrderResponse>> processOrder(
+            @AuthenticationPrincipal UserPrincipal actor, @PathVariable("id") UUID orderId) {
+        return ResponseEntity.ok(ApiResponse.ok(orderService.processOrder(orderId, actor)));
+    }
+
+    @PreAuthorize("hasRole('INVENTORY_STAFF') or hasRole('STORE_MANAGER') or hasRole('ORGANIZATION_ADMIN') "
+            + "or hasRole('SUPER_ADMIN')")
+    @PostMapping("/api/orders/{id}/prepare")
+    public ResponseEntity<ApiResponse<OrderResponse>> prepareProductOrder(
+            @AuthenticationPrincipal UserPrincipal actor, @PathVariable("id") UUID orderId) {
+        return ResponseEntity.ok(ApiResponse.ok(orderService.prepareProductOrder(orderId, actor)));
+    }
+
+    @PreAuthorize("hasRole('RECEPTIONIST') or hasRole('STORE_MANAGER') or hasRole('ORGANIZATION_ADMIN') "
+            + "or hasRole('SUPER_ADMIN')")
+    @PostMapping("/api/orders/{id}/complete")
+    public ResponseEntity<ApiResponse<OrderResponse>> completeStoreOrder(
+            @AuthenticationPrincipal UserPrincipal actor, @PathVariable("id") UUID orderId) {
+        return ResponseEntity.ok(ApiResponse.ok(orderService.completeStoreOrder(orderId, actor)));
     }
 }

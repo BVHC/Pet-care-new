@@ -319,6 +319,37 @@ public final class RoleScopeGuard {
     }
 
     /**
+     * RULE-14-05 — actor có được ProcessOrder (CONFIRMED->PROCESSING) của Store này không:
+     * SUPER_ADMIN toàn quyền; ORGANIZATION_ADMIN mọi Store trong Organization mình;
+     * STORE_MANAGER/RECEPTIONIST/INVENTORY_STAFF chỉ đúng Store mình gắn. Không tái dùng được
+     * {@link #assertCanOperateStoreOrder} (thiếu INVENTORY_STAFF) lẫn
+     * {@link #assertCanOperateStoreInventory} (thiếu RECEPTIONIST) vì RULE-14-05 nêu đích danh cả
+     * 2 actor riêng cho ProcessOrder ("Receptionist/InventoryStaff").
+     */
+    public static void assertCanProcessStoreOrder(UserPrincipal actor, java.util.UUID organizationId,
+                                                    java.util.UUID storeId) {
+        switch (actor.getRole()) {
+            case SUPER_ADMIN -> {
+                // Toàn quyền.
+            }
+            case ORGANIZATION_ADMIN -> {
+                if (!Objects.equals(actor.getOrganizationId(), organizationId)) {
+                    throw new AccessDeniedScopeException("ORGANIZATION:" + actor.getOrganizationId(),
+                            "ORGANIZATION:" + organizationId);
+                }
+            }
+            case STORE_MANAGER, RECEPTIONIST, INVENTORY_STAFF -> {
+                if (!Objects.equals(actor.getStoreId(), storeId)
+                        || !Objects.equals(actor.getOrganizationId(), organizationId)) {
+                    throw new AccessDeniedScopeException("STORE:" + actor.getStoreId(), "STORE:" + storeId);
+                }
+            }
+            default -> throw new AccessDeniedScopeException(
+                    "SUPER_ADMIN|ORGANIZATION_ADMIN|STORE_MANAGER|RECEPTIONIST|INVENTORY_STAFF", actor.getRole().name());
+        }
+    }
+
+    /**
      * RULE-14-01 — actor CUSTOMER có phải chủ sở hữu Order này không (dùng cho CreateOrder Online/
      * CheckoutOrder/ViewOrder/CancelOrder phía khách hàng): SUPER_ADMIN bypass (đồng nhất mọi guard
      * khác trong class này); còn lại bắt buộc {@code actor.getUserId() == customerId}. Method đơn

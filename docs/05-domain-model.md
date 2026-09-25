@@ -450,19 +450,24 @@ graph TD
 - **Business Invariants (docs/02-business-rules.md):**
   - `RULE-14-03`, `RULE-14-04`: **Fulfillment Split (Decision D-03)** — POS trừ kho trực tiếp trong single transaction; Online áp dụng Optimistic Locking tạm giữ tồn kho 15 phút.
   - `RULE-14-07`: Đổi trả sau khi đã giao hàng (`DELIVERED`): nếu hoàn 100% chuyển sang `REFUNDED`; nếu đổi trả một phần (`Partial Return`) giữ nguyên `DELIVERED` và cộng dồn `total_refunded_amount`.
-- **Phạm vi đã triển khai (task "Order: entity + Cart + migration"):** chỉ `CreateOrder`/
-  `CheckoutOrder`/`ViewOrder`/`CancelOrder` (slice `[*] -> PENDING_PAYMENT`/`[*] -> PAID` +
-  `PENDING_PAYMENT -> CANCELLED` của FSM 5). `CancelOrderWithRefund`/`ConfirmOrder`/`ProcessOrder`/
-  `PrepareProductOrder`/`CompleteStoreOrder` để task sau — phụ thuộc Payment (M16)/Refund (M17)
-  chưa tồn tại; `FulfillmentStageLog`/`fulfillment_stage_logs` chưa có code path ghi (gắn với
-  `ProcessOrder`/`PrepareProductOrder`/`CompleteStoreOrder`). "Giỏ hàng" không phải Aggregate/bảng
-  riêng — đã rà soát `docs/06-erd.md`/`docs/04-glossary.md`, không có `Cart`/`carts`; concept này
-  được thỏa trực tiếp bởi `Order` ở trạng thái trước `CANCELLED`/thanh toán (`CreateOrder` Online
-  tạo thẳng `PENDING_PAYMENT` + giữ chỗ, không qua bước persist trung gian nào khác).
-- **Mở rộng cross-module Module 12 (Inventory) cho RULE-14-04:** `InventoryItemService` có thêm 3
+- **Phạm vi đã triển khai:** `CreateOrder`/`CheckoutOrder`/`ViewOrder`/`CancelOrder` (task "Order:
+  entity + Cart + migration") + `ConfirmOrder`/`ProcessOrder`/`PrepareProductOrder`/
+  `CompleteStoreOrder` (slice `[*] -> PENDING_PAYMENT`/`[*] -> PAID -> CONFIRMED -> PROCESSING ->
+  READY -> DELIVERED` + `PENDING_PAYMENT -> CANCELLED` + `PAID -> DELIVERED` của FSM 5) — các
+  command này chỉ cần đơn đã ở `PAID`, không phụ thuộc Payment M16 thật (POS luôn `PAID` ngay lúc
+  tạo; Online tới `PAID` khi Payment M16 gắn `PaymentSucceeded`, vẫn ngoài phạm vi). `CancelOrderWithRefund`
+  để task sau — phụ thuộc Refund (M17) chưa tồn tại; `FulfillmentStageLog`/`fulfillment_stage_logs`
+  chưa có code path ghi — quyết định có chủ đích, theo đúng tiền lệ `appointment_stage_histories`
+  (Module 09) cũng có từ V1 nhưng chưa từng được ghi, để dành tới khi có task đọc lại (report/audit).
+  "Giỏ hàng" không phải Aggregate/bảng riêng — đã rà soát `docs/06-erd.md`/`docs/04-glossary.md`,
+  không có `Cart`/`carts`; concept này được thỏa trực tiếp bởi `Order` ở trạng thái trước
+  `CANCELLED`/thanh toán (`CreateOrder` Online tạo thẳng `PENDING_PAYMENT` + giữ chỗ, không qua bước
+  persist trung gian nào khác).
+- **Mở rộng cross-module Module 12 (Inventory) cho RULE-14-04/05:** `InventoryItemService` có thêm 4
   method cross-module không qua actor guard — `reserveStock`/`releaseReservation`/
-  `deductPhysicalForOrder` — và entity con mới `InventoryReservation` (sống trong module Inventory,
-  không phải Order, vì vòng đời gắn với optimistic-lock trên `InventoryItem`; xem §4.12).
+  `deductPhysicalForOrder`/`commitReservation` (RULE-14-05: `ProcessOrder` chuyển reservation `HELD`
+  thành khấu trừ physical chính thức) — và entity con mới `InventoryReservation` (sống trong module
+  Inventory, không phải Order, vì vòng đời gắn với optimistic-lock trên `InventoryItem`; xem §4.12).
 
 ---
 

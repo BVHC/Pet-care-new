@@ -198,6 +198,26 @@ public class InventoryItemServiceImpl implements InventoryItemService {
                 productService.getProductForCrossModule(productId).sku());
     }
 
+    @Override
+    @Transactional
+    public void commitReservation(UUID orderId) {
+        List<InventoryReservation> held = inventoryReservationRepository.findAllByOrderIdAndStatus(orderId, ReservationStatus.HELD);
+        for (InventoryReservation reservation : held) {
+            // Conditional update chống double-commit nếu bị gọi lại — cùng idiom releaseReservation().
+            if (inventoryReservationRepository.commitIfHeld(reservation.getId()) == 0) {
+                continue;
+            }
+            InventoryItem item = inventoryItemRepository.findById(reservation.getInventoryItemId())
+                    .orElseThrow(() -> new ResourceNotFoundException("InventoryItem", reservation.getInventoryItemId()));
+            inventoryBatchService.issueFefo(item.getStoreId(), item.getProductId(), reservation.getQuantity());
+            item.setQuantityPhysical(item.getQuantityPhysical() - reservation.getQuantity());
+            item.setQuantityReserved(item.getQuantityReserved() - reservation.getQuantity());
+            saveItemOrThrow(item);
+            // quantityAvailable KHÔNG đổi — đã trừ sẵn lúc reserveStock; physical và reserved giảm
+            // cùng lượng nên available bảo toàn, ngưỡng low-stock không thể lật trạng thái ở đây.
+        }
+    }
+
     private InventoryItem saveItemOrThrow(InventoryItem item) {
         try {
             return inventoryItemRepository.saveAndFlush(item);

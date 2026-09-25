@@ -20,11 +20,13 @@ Envelope DECIDED theo convention `04-exception-handling`.
 - Voucher/loyalty trừ trên đơn: validate thuộc M18/M19 — `voucherCode?` nhận vào
   (PROPOSED) và tính `discountAmount` theo đó, chi tiết xem 2 contract kia.
 
-**Đã triển khai (task "Order: entity + Cart + migration"):** chỉ #1 `CreateOrder`, #2
-`CheckoutOrder`, #3/#4 `ViewOrder`, #5 `CancelOrder` (bảng §A bên dưới). #6-#10
-(`CancelOrderWithRefund`/`ConfirmOrder`/`ProcessOrder`/`PrepareProductOrder`/`CompleteStoreOrder`)
-**NGOÀI PHẠM VI — để task sau**, phụ thuộc Payment (M16)/Refund (M17) chưa tồn tại; chữ ký request/
-response giữ nguyên PROPOSED làm tài liệu tham khảo, chưa có controller/service thật phía sau.
+**Đã triển khai:** #1 `CreateOrder`, #2 `CheckoutOrder`, #3/#4 `ViewOrder`, #5 `CancelOrder` (task
+"Order: entity + Cart + migration") + #7 `ConfirmOrder`, #8 `ProcessOrder`, #9 `PrepareProductOrder`,
+#10 `CompleteStoreOrder` (bảng §A bên dưới) — không cần Payment M16 thật, chỉ cần đơn đã ở `PAID`
+(POS luôn `PAID` ngay lúc tạo; Online tới `PAID` khi Payment M16 gắn `PaymentSucceeded`, phần đó vẫn
+TBD). #6 `CancelOrderWithRefund` **NGOÀI PHẠM VI — để task sau**, phụ thuộc Refund (M17) chưa tồn
+tại; chữ ký request/response giữ nguyên PROPOSED làm tài liệu tham khảo, chưa có controller/service
+thật phía sau.
 
 ---
 
@@ -38,10 +40,10 @@ response giữ nguyên PROPOSED làm tài liệu tham khảo, chưa có controll
 | 4 | `GET /orders/{id}` | `ViewOrder` (detail) |
 | 5 | `POST /orders/{id}/cancel` | `CancelOrder` (chưa trả → CANCELLED + nhả kho) — `01#14`, RULE-14-04/07/08 |
 | 6 | `POST /orders/{id}/cancel-with-refund` | **NGOÀI PHẠM VI** — `CancelOrderWithRefund` (→ CANCELLED + hoàn 100%) — `01#14`, RULE-14-07 |
-| 7 | `POST /orders/{id}/confirm` | **NGOÀI PHẠM VI** — `ConfirmOrder` (PAID → CONFIRMED) — `01#14`, RULE-14-03/05 |
-| 8 | `POST /orders/{id}/process` | **NGOÀI PHẠM VI** — `ProcessOrder` (→ PROCESSING) — `01#14`, RULE-14-05 |
-| 9 | `POST /orders/{id}/prepare` | **NGOÀI PHẠM VI** — `PrepareProductOrder` (→ READY) — `01#14`, RULE-14-05 |
-| 10 | `POST /orders/{id}/complete` | **NGOÀI PHẠM VI** — `CompleteStoreOrder` (→ DELIVERED) — `01#14`, RULE-14-03/06 |
+| 7 | `POST /orders/{id}/confirm` | `ConfirmOrder` (PAID → CONFIRMED) — `01#14`, RULE-14-03/05 |
+| 8 | `POST /orders/{id}/process` | `ProcessOrder` (→ PROCESSING) — `01#14`, RULE-14-05 |
+| 9 | `POST /orders/{id}/prepare` | `PrepareProductOrder` (→ READY) — `01#14`, RULE-14-05 |
+| 10 | `POST /orders/{id}/complete` | `CompleteStoreOrder` (→ DELIVERED) — `01#14`, RULE-14-03/06 |
 | 11 | (event) | Đổi trả 100% sau giao → `REFUNDED` (effect của M17, không endpoint) |
 
 ---
@@ -55,10 +57,10 @@ response giữ nguyên PROPOSED làm tài liệu tham khảo, chưa có controll
 | ViewOrder | Customer | Đơn mình | RULE-14-01 | GET | `/orders…` | Bearer | Owner (staff xem theo M25/report sau) | none | Idempotent | — |
 | CancelOrder | Customer / Receptionist | `PENDING_PAYMENT` | RULE-14-04/07/08 (nhả reserve + CANCELLED bất biến) | POST | `…/cancel` | Bearer | Owner / receptionist | `PENDING_PAYMENT → CANCELLED` | Idempotent | Đã trả tiền → dùng cancel-with-refund |
 | CancelOrderWithRefund **(NGOÀI PHẠM VI)** | Customer / Manager / Receptionist | `PAID`/`CONFIRMED`/`PROCESSING`/`READY` | RULE-14-07 (hoàn 100% + hoàn kho → CANCELLED duy nhất) | POST | `…/cancel-with-refund` | Bearer | Theo actor + policy (A3) | `→ CANCELLED` + sinh refund request M17 | Idempotent (hoàn lại request cũ) | `{reason}` PROPOSED bắt buộc mềm — chưa implement, phụ thuộc Refund M17 |
-| ConfirmOrder **(NGOÀI PHẠM VI)** | Receptionist (/System) | `PAID` | RULE-14-03/05 | POST | `…/confirm` | Bearer | Receptionist | `PAID → CONFIRMED` | Idempotent | System auto-confirm khi nào TBD Q8 — chưa implement, phụ thuộc Payment M16 |
-| ProcessOrder **(NGOÀI PHẠM VI)** | Receptionist / InventoryStaff | `CONFIRMED` | RULE-14-05 | POST | `…/process` | Bearer | Staff Store | `CONFIRMED → PROCESSING` | Idempotent | Physical trừ chính thức tại đây (invariant: reserve → physical khi vào đóng gói) — chưa implement |
-| PrepareProductOrder **(NGOÀI PHẠM VI)** | InventoryStaff | `PROCESSING` | RULE-14-05 (+ RULE-12-04 xuất kho) | POST | `…/prepare` | Bearer | Staff Store | `PROCESSING → READY` | Idempotent | — chưa implement |
-| CompleteStoreOrder **(NGOÀI PHẠM VI)** | Receptionist | POS: `PAID`; Online: `READY` + mã nhận hàng | RULE-14-03/06 (POS instant; Online cần pickup code) | POST | `…/complete` | Bearer | Receptionist | `PAID/READY → DELIVERED` | Idempotent | `pickupCode?` PROPOSED + storage TBD Q6 — chưa implement, phụ thuộc Payment M16 |
+| ConfirmOrder | Receptionist (/System) | `PAID` (Online) | RULE-14-03/05 | POST | `…/confirm` | Bearer | Receptionist | `PAID → CONFIRMED` | Idempotent | System auto-confirm khi nào TBD Q8 — actor-triggered (Receptionist) đã implement |
+| ProcessOrder | Receptionist / InventoryStaff | `CONFIRMED` | RULE-14-05 | POST | `…/process` | Bearer | Staff Store | `CONFIRMED → PROCESSING` | Idempotent | Physical trừ chính thức tại đây (invariant: reserve → physical khi vào đóng gói) — `InventoryItemService#commitReservation` |
+| PrepareProductOrder | InventoryStaff | `PROCESSING` | RULE-14-05 (+ RULE-12-04 xuất kho) | POST | `…/prepare` | Bearer | Staff Store | `PROCESSING → READY` | Idempotent | Không đụng inventory — physical đã trừ ở ProcessOrder |
+| CompleteStoreOrder | Receptionist | POS: `PAID`; Online: `READY` | RULE-14-03/06 (POS instant; Online staged) | POST | `…/complete` | Bearer | Receptionist | `PAID/READY → DELIVERED` | Idempotent | `pickupCode?` PROPOSED + storage TBD Q6 — cố ý bỏ qua trong v1, không đọc/xác thực mã |
 
 **ASSUMPTIONS dùng chung:** A1 `orderNumber` BE sinh unique (ERD có cột, thiếu format) ·
 A2 checkout giữ nguyên `PENDING_PAYMENT` + refresh TTL 15m (docs không tách rõ
@@ -102,15 +104,20 @@ trả cần policy duyệt? Docs gán cả 3 actors — v1 cho phép cả 3, TBD
   refundId?}`.
 - **Status:** `200` · `401` · `403` · `404` · `409` sai trạng thái.
 
-### C4. Fulfillment (proposed) — NGOÀI PHẠM VI, để task sau (phụ thuộc Payment M16/Refund M17)
+### C4. Fulfillment (proposed)
 
-- **`…/confirm`** — Từ `PAID` → `CONFIRMED`. **`…/process`** — → `PROCESSING`
-  (trừ physical chính thức). **`…/prepare`** — → `READY`.
-- **`…/complete`** — POS: từ `PAID` (instant handover). Online: từ `READY` +
-  `{pickupCode?}` (PROPOSED, storage TBD Q6). → `DELIVERED`.
+- **`…/confirm`** — Từ `PAID` (chỉ đơn Online, RULE-14-03) → `CONFIRMED`; đơn POS gọi → `400
+  RULE-14-03`. **`…/process`** — Từ `CONFIRMED` → `PROCESSING` (trừ physical chính thức qua
+  `InventoryItemService#commitReservation`, reserve → physical). **`…/prepare`** — Từ `PROCESSING`
+  → `READY`, không đụng inventory.
+- **`…/complete`** — POS: từ `PAID` (instant handover). Online: từ `READY` (pickup code KHÔNG được
+  đọc/xác thực trong v1 — Q6 vẫn TBD). Online đang `PAID` gọi complete (bỏ qua confirm/process/
+  prepare) → `400 RULE-14-03`. → `DELIVERED`.
 - Đổi trả sau giao: M17 `COMPLETED` → order `REFUNDED` (100%) hoặc cộng dồn
-  `total_refunded_amount` (một phần, giữ `DELIVERED`) — effects, không endpoint.
-- **Status chung:** `200` · `401` · `403` · `404` · `409`.
+  `total_refunded_amount` (một phần, giữ `DELIVERED`) — effects, không endpoint, vẫn ngoài phạm vi
+  (phụ thuộc Refund M17).
+- **Status chung:** `200` · `401` · `403` · `404` · `409` (sai state) · `400` (RULE-14-03 sai
+  channel/state combo).
 
 ---
 

@@ -390,6 +390,56 @@ class InventoryItemServiceImplTest {
         verifyNoInteractions(inventoryBatchService);
     }
 
+    @Test
+    void commitReservation_held_decreasesPhysicalAndReserved_availableUnchanged_marksCommitted() {
+        UUID orderId = UUID.randomUUID();
+        UUID storeId = UUID.randomUUID();
+        UUID productId = UUID.randomUUID();
+        InventoryItem existing = existingItem(storeId, productId, 20, 8, 12, 5);
+        InventoryReservation reservation = new InventoryReservation(orderId, existing.getId(), 8, LocalDateTime.now());
+        reservation.setId(UUID.randomUUID());
+        when(inventoryReservationRepository.findAllByOrderIdAndStatus(orderId, ReservationStatus.HELD))
+                .thenReturn(List.of(reservation));
+        when(inventoryReservationRepository.commitIfHeld(reservation.getId())).thenReturn(1);
+        when(inventoryItemRepository.findById(existing.getId())).thenReturn(Optional.of(existing));
+        when(inventoryItemRepository.saveAndFlush(any(InventoryItem.class))).thenAnswer(invocation -> invocation.getArgument(0));
+
+        service.commitReservation(orderId);
+
+        assertThat(existing.getQuantityPhysical()).isEqualTo(12);
+        assertThat(existing.getQuantityReserved()).isEqualTo(0);
+        assertThat(existing.getQuantityAvailable()).isEqualTo(12);
+        verify(inventoryBatchService).issueFefo(storeId, productId, 8);
+    }
+
+    @Test
+    void commitReservation_alreadyCommittedByRace_noOp() {
+        UUID orderId = UUID.randomUUID();
+        UUID storeId = UUID.randomUUID();
+        UUID productId = UUID.randomUUID();
+        InventoryItem existing = existingItem(storeId, productId, 20, 8, 12, 5);
+        InventoryReservation reservation = new InventoryReservation(orderId, existing.getId(), 8, LocalDateTime.now());
+        reservation.setId(UUID.randomUUID());
+        when(inventoryReservationRepository.findAllByOrderIdAndStatus(orderId, ReservationStatus.HELD))
+                .thenReturn(List.of(reservation));
+        when(inventoryReservationRepository.commitIfHeld(reservation.getId())).thenReturn(0);
+
+        service.commitReservation(orderId);
+
+        verify(inventoryItemRepository, never()).findById(any());
+        verifyNoInteractions(inventoryBatchService);
+    }
+
+    @Test
+    void commitReservation_noneHeld_noOp() {
+        UUID orderId = UUID.randomUUID();
+        when(inventoryReservationRepository.findAllByOrderIdAndStatus(orderId, ReservationStatus.HELD)).thenReturn(List.of());
+
+        service.commitReservation(orderId);
+
+        verifyNoInteractions(inventoryItemRepository, inventoryBatchService);
+    }
+
     private static InventoryItem existingItem(UUID storeId, UUID productId, int physical, int reserved,
                                                int available, int minStockLevel) {
         InventoryItem item = new InventoryItem(storeId, productId);

@@ -10,10 +10,13 @@ import com.petcare.module.iam.entity.User;
 import com.petcare.module.iam.repository.UserRepository;
 import com.petcare.module.organization.entity.Organization;
 import com.petcare.module.organization.entity.Store;
+import com.petcare.module.order.entity.Order;
+import com.petcare.module.order.repository.OrderRepository;
 import com.petcare.module.organization.repository.OrganizationRepository;
 import com.petcare.module.organization.repository.StoreRepository;
 import com.petcare.platform.enums.AccountStatus;
 import com.petcare.platform.enums.FacilityType;
+import com.petcare.platform.enums.OrderStatus;
 import com.petcare.platform.enums.ProductCategory;
 import com.petcare.platform.enums.ProductUnit;
 import com.petcare.platform.enums.SecurityScope;
@@ -83,6 +86,8 @@ class OrderFulfillmentSplitIT {
     private UserRepository userRepository;
     @Autowired
     private OutboxEventRepository outboxEventRepository;
+    @Autowired
+    private OrderRepository orderRepository;
 
     private String token(UserRole role, UUID organizationId, UUID storeId, UUID[] userIdOut) {
         UUID accountId = accountRepository.save(new Account(role + "-" + System.nanoTime() + "@example.com", null, "hash")).getId();
@@ -203,6 +208,107 @@ class OrderFulfillmentSplitIT {
         // CancelOrder trên đơn POS (PAID, không phải PENDING_PAYMENT) -> 409.
         mvc.perform(post("/api/orders/{id}/cancel", posOrderId).header("Authorization", "Bearer " + receptionistToken))
                 .andExpect(status().isConflict());
+    }
+
+    /**
+     * ConfirmOrder/ProcessOrder/PrepareProductOrder/CompleteStoreOrder (RULE-14-03/05/06). Đơn
+     * Online: CreateOrder thật (giữ chỗ thật qua reserveStock) -> set thẳng PAID qua
+     * {@code OrderRepository} (bypass FSM, mô phỏng PaymentSucceeded — Payment M16 chưa tồn tại,
+     * ngoài phạm vi task) -> confirm -> process (RULE-14-05: reserve -> physical, quantityAvailable
+     * bảo toàn) -> prepare -> complete. Đơn POS: complete tức thời từ PAID; đồng thời 2 negative
+     * (confirm trên đơn POS PAID -> RULE-14-03, prepare bằng token Receptionist -> 403 role).
+     */
+    @Test
+    void onlineStagedFulfillment_confirmProcessPrepareComplete_thenPosInstantComplete() throws Exception {
+        Organization organization = organizationRepository.save(
+                new Organization("ORG-" + System.nanoTime(), "Test Org", null, "123 Test St"));
+        Store store = storeRepository.save(new Store(organization.getId(), "ST-" + System.nanoTime(), "Test Store",
+                FacilityType.RETAIL_STORE, "456 Test St", "0901234567"));
+        Product product = productRepository.save(new Product(organization.getId(), "SKU-" + System.nanoTime(), null,
+                "San pham test", ProductCategory.FOOD, ProductUnit.ITEM, new BigDecimal("10000.00"),
+                new BigDecimal("8000.00"), true));
+
+        UUID[] posCustomerUserId = new UUID[1];
+        String customerToken = token(UserRole.CUSTOMER, null, null, null);
+        token(UserRole.CUSTOMER, null, null, posCustomerUserId);
+        String receptionistToken = token(UserRole.RECEPTIONIST, organization.getId(), store.getId(), null);
+        String staffToken = token(UserRole.INVENTORY_STAFF, organization.getId(), store.getId(), null);
+
+        mvc.perform(post("/api/stores/{id}/inventory/receive", store.getId())
+                        .header("Authorization", "Bearer " + staffToken)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"productId\":\"" + product.getId() + "\",\"quantity\":20,\"batchNumber\":\"B1\"}"))
+                .andExpect(status().isOk());
+
+        // CreateOrder Online (giữ chỗ thật 5) -> set thẳng PAID (bypass FSM, mô phỏng PaymentSucceeded).
+        MvcResult created = mvc.perform(post("/api/orders")
+                        .header("Authorization", "Bearer " + customerToken)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"storeId\":\"" + store.getId() + "\",\"channel\":\"ONLINE_APP\","
+                                + "\"items\":[{\"productId\":\"" + product.getId() + "\",\"quantity\":5}]}"))
+                .andExpect(status().isCreated())
+                .andExpect(jsonPath("$.data.status").value("PENDING_PAYMENT"))
+                .andReturn();
+        String orderId = extractJsonField(created, "orderId");
+        Order order = orderRepository.findById(UUID.fromString(orderId)).orElseThrow();
+        order.setStatus(OrderStatus.PAID);
+        orderRepository.saveAndFlush(order);
+
+        mvc.perform(post("/api/orders/{id}/confirm", orderId).header("Authorization", "Bearer " + receptionistToken))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.status").value("CONFIRMED"));
+
+        mvc.perform(post("/api/orders/{id}/process", orderId).header("Authorization", "Bearer " + staffToken))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.status").value("PROCESSING"));
+        mvc.perform(get("/api/stores/{id}/inventory", store.getId())
+                        .header("Authorization", "Bearer " + staffToken)
+                        .param("productId", product.getId().toString()))
+                .andExpect(jsonPath("$.data.content[0].quantityReserved").value(0))
+                .andExpect(jsonPath("$.data.content[0].quantityPhysical").value(15))
+                .andExpect(jsonPath("$.data.content[0].quantityAvailable").value(15));
+
+        mvc.perform(post("/api/orders/{id}/prepare", orderId).header("Authorization", "Bearer " + staffToken))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.status").value("READY"));
+        mvc.perform(get("/api/stores/{id}/inventory", store.getId())
+                        .header("Authorization", "Bearer " + staffToken)
+                        .param("productId", product.getId().toString()))
+                .andExpect(jsonPath("$.data.content[0].quantityPhysical").value(15))
+                .andExpect(jsonPath("$.data.content[0].quantityAvailable").value(15));
+
+        mvc.perform(post("/api/orders/{id}/complete", orderId).header("Authorization", "Bearer " + receptionistToken))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.status").value("DELIVERED"));
+
+        var events = outboxEventRepository.findAll().stream()
+                .filter(e -> "Order".equals(e.getAggregateType()) && orderId.equals(e.getAggregateId()))
+                .toList();
+        assertThat(events).extracting("eventType").contains(
+                "OrderCreated", "OrderConfirmed", "OrderProcessed", "ProductOrderPrepared", "OrderDelivered");
+
+        // CreateOrder POS -> PAID tức thời. Negative: confirm trên đơn POS PAID (RULE-14-03), prepare
+        // bằng token Receptionist (403 role) — cả 2 fail trước khi đụng inventory.
+        MvcResult posCreated = mvc.perform(post("/api/orders")
+                        .header("Authorization", "Bearer " + receptionistToken)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"storeId\":\"" + store.getId() + "\",\"channel\":\"POS_RETAIL\","
+                                + "\"customerId\":\"" + posCustomerUserId[0] + "\","
+                                + "\"items\":[{\"productId\":\"" + product.getId() + "\",\"quantity\":1}]}"))
+                .andExpect(status().isCreated())
+                .andExpect(jsonPath("$.data.status").value("PAID"))
+                .andReturn();
+        String posOrderId = extractJsonField(posCreated, "orderId");
+
+        mvc.perform(post("/api/orders/{id}/confirm", posOrderId).header("Authorization", "Bearer " + receptionistToken))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.errorCode").value("BUSINESS_RULE_VIOLATION"));
+        mvc.perform(post("/api/orders/{id}/prepare", posOrderId).header("Authorization", "Bearer " + receptionistToken))
+                .andExpect(status().isForbidden());
+
+        mvc.perform(post("/api/orders/{id}/complete", posOrderId).header("Authorization", "Bearer " + receptionistToken))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.status").value("DELIVERED"));
     }
 
     private String extractJsonField(MvcResult result, String field) throws Exception {

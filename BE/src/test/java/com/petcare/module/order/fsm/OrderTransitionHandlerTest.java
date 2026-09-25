@@ -7,10 +7,10 @@ import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.CsvSource;
 
 /**
- * FSM-5 (docs/03-state-machines.md §5) — CHỈ slice có call site thật trong phạm vi task Module 14
- * hiện tại (xem javadoc {@link OrderTransitionHandler}): đủ 64 cặp (8x8, gồm cả self-pair) — 1
- * valid, 63 invalid cho {@code Map.of(PENDING_PAYMENT, Set.of(CANCELLED))}. Không phải toàn bộ
- * FSM-5 8 state đầy đủ — các cạnh khác chưa có call site (ConfirmOrder/ProcessOrder/... để task sau).
+ * FSM-5 (docs/03-state-machines.md §5) — slice có call site thật trong phạm vi Module 14 hiện tại
+ * (xem javadoc {@link OrderTransitionHandler}): đủ 64 cặp (8x8, gồm cả self-pair) — 6 valid, 58
+ * invalid. Không phải toàn bộ FSM-5 8 state đầy đủ — cạnh {@code CancelOrderWithRefund}/
+ * {@code RefundCompleted} chưa có call site (phụ thuộc Refund M17, để task sau).
  */
 class OrderTransitionHandlerTest extends FsmTransitionTestBase<OrderStatus> {
 
@@ -22,6 +22,11 @@ class OrderTransitionHandlerTest extends FsmTransitionTestBase<OrderStatus> {
     @ParameterizedTest
     @CsvSource({
             "PENDING_PAYMENT,CANCELLED",
+            "PAID,CONFIRMED",
+            "PAID,DELIVERED",
+            "CONFIRMED,PROCESSING",
+            "PROCESSING,READY",
+            "READY,DELIVERED",
     })
     void validTransitions(OrderStatus from, OrderStatus to) {
         assertValidTransition(from, to);
@@ -38,16 +43,13 @@ class OrderTransitionHandlerTest extends FsmTransitionTestBase<OrderStatus> {
             "PENDING_PAYMENT,REFUNDED",
             "PAID,PENDING_PAYMENT",
             "PAID,PAID",
-            "PAID,CONFIRMED",
             "PAID,PROCESSING",
             "PAID,READY",
-            "PAID,DELIVERED",
             "PAID,CANCELLED",
             "PAID,REFUNDED",
             "CONFIRMED,PENDING_PAYMENT",
             "CONFIRMED,PAID",
             "CONFIRMED,CONFIRMED",
-            "CONFIRMED,PROCESSING",
             "CONFIRMED,READY",
             "CONFIRMED,DELIVERED",
             "CONFIRMED,CANCELLED",
@@ -56,7 +58,6 @@ class OrderTransitionHandlerTest extends FsmTransitionTestBase<OrderStatus> {
             "PROCESSING,PAID",
             "PROCESSING,CONFIRMED",
             "PROCESSING,PROCESSING",
-            "PROCESSING,READY",
             "PROCESSING,DELIVERED",
             "PROCESSING,CANCELLED",
             "PROCESSING,REFUNDED",
@@ -65,7 +66,6 @@ class OrderTransitionHandlerTest extends FsmTransitionTestBase<OrderStatus> {
             "READY,CONFIRMED",
             "READY,PROCESSING",
             "READY,READY",
-            "READY,DELIVERED",
             "READY,CANCELLED",
             "READY,REFUNDED",
             "DELIVERED,PENDING_PAYMENT",

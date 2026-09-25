@@ -245,8 +245,7 @@ paths:
       tags: [Fulfillment]
       summary: Confirm order (ConfirmOrder)
       description: >-
-        NOT IMPLEMENTED — future task (depends on Payment Module 16, which does not exist yet).
-        CONFIRMED shape only (RULE-14-03/05): from PAID to CONFIRMED. Receptionists (system
+        RULE-14-03/05: Online order only, from PAID to CONFIRMED. Receptionists (system
         auto-confirm TBD Q8 in md). Idempotent.
       operationId: confirmOrder
       security:
@@ -280,9 +279,7 @@ paths:
     post:
       tags: [Fulfillment]
       summary: Process order (ProcessOrder)
-      description: >-
-        NOT IMPLEMENTED — future task. CONFIRMED shape only (RULE-14-05): commits held stock to
-        physical deduction.
+      description: 'RULE-14-05: from CONFIRMED to PROCESSING. Commits held stock to physical deduction.'
       operationId: processOrder
       security:
         - bearerAuth: []
@@ -315,7 +312,7 @@ paths:
     post:
       tags: [Fulfillment]
       summary: Prepare and pack (PrepareProductOrder)
-      description: 'NOT IMPLEMENTED — future task. CONFIRMED shape only (RULE-14-05): to READY for pickup.'
+      description: 'RULE-14-05: from PROCESSING to READY for pickup.'
       operationId: prepareProductOrder
       security:
         - bearerAuth: []
@@ -349,9 +346,8 @@ paths:
       tags: [Fulfillment]
       summary: Hand over order (CompleteStoreOrder)
       description: >-
-        NOT IMPLEMENTED — future task (depends on Payment Module 16). CONFIRMED shape only
-        (RULE-14-03/06): instant at the counter from PAID; online handover from READY with a
-        pickup code (PROPOSED, storage TBD Q6 in md).
+        RULE-14-03/06: instant at the counter from PAID (POS); online handover from READY. Pickup
+        code (PROPOSED, storage TBD Q6 in md) is NOT read or verified in v1.
       operationId: completeStoreOrder
       security:
         - bearerAuth: []
