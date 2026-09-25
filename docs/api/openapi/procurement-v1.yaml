@@ -3,40 +3,50 @@
 # Source of truth: docs/01-business-operations.md (01#13),
 # docs/02-business-rules.md (RULE-13-01..08), docs/03-state-machines.md
 # (FSM-12 PurchaseRequest, FSM-13 PurchaseOrder), docs/04-glossary.md (13),
-# docs/05-domain-model.md (4.13), docs/06-erd.md (purchase_orders/goods_receipts;
-# purchase_requests lack column specs, storage TBD).
-# Supplier master has no ERD table: orders carry a free-text supplier name and
-# supplier management stays out of v1. Stock increases are a ReceiveGoods effect.
-# Closed and cancelled orders are absolutely immutable.
+# docs/05-domain-model.md (4.13), docs/06-erd.md (suppliers/purchase_requests/
+# purchase_request_lines/purchase_orders/purchase_order_lines/goods_receipts —
+# full schema since V1, audit columns added V16).
+# IMPLEMENTED (BE-2, RULE-13-01..04): PurchaseRequest CRUD + CreatePurchaseOrder/
+# TrackPurchaseOrder + Supplier CRUD (real `suppliers` table, not free text).
+# NOT IMPLEMENTED — future task (RULE-13-05..08, needs Inventory integration):
+# InspectGoods/ReceiveGoods/CancelPurchaseOrder/CancelRemainingPurchaseOrder.
+# Stock increases are a ReceiveGoods effect (still no endpoint).
+# Closed and cancelled orders are absolutely immutable (once those commands land).
 #
 # Traceability legend: CONFIRMED = in docs / ASSUMPTION (A#) = least invention /
 # TBD (Q#) = needs PO (see ../procurement-v1.md section E). No `servers` (TBD Q1).
-# Error envelope follows docs/convention/backend/04-exception-handling. No 422.
+# Error envelope follows docs/convention/backend/04-exception-handling. No 422 —
+# BusinessRuleViolationException is always 400, never 409 (409 is reserved for
+# InvalidStateTransition/ConcurrencyConflict).
 
 openapi: 3.1.0
 info:
   title: Pet Care Procurement API v1
   version: 1.0.0
   description: >-
-    Strictly derived from docs/ (01#13 operations, RULE-13-01..08, FSM-12
-    DRAFT->SUBMITTED->APPROVED and FSM-13 ISSUED->PARTIALLY_RECEIVED->RECEIVED).
-    Internal requests pass maker-checker before becoming supplier orders.
-    Deliveries are inspected before anything touches stock, and finished orders
-    never change again.
+    Strictly derived from docs/ (01#13 operations, RULE-13-01..04 implemented;
+    RULE-13-05..08 designed but not built yet). Internal requests pass
+    maker-checker before becoming supplier orders, which are only ever created
+    from an APPROVED request against an ACTIVE Supplier. Inspection, receiving,
+    and terminal order closure (FSM-13 beyond ISSUED) are a future task.
 tags:
   - name: Requests
     description: Internal purchase requests (Create/Submit/Approve/Reject/CancelPurchaseRequest).
   - name: Orders
     description: Supplier orders, inspection, receipts, and terminal closure.
+  - name: Suppliers
+    description: Supplier master data (ManageSupplier, RULE-13-04, Organization Admin only).
 paths:
-  /purchase-requests:
+  /stores/{id}/purchase-requests:
     post:
       tags: [Requests]
       summary: Create purchase request (CreatePurchaseRequest)
-      description: CONFIRMED (RULE-13-01). Opens DRAFT. Shape PROPOSED and storage TBD Q9 in md.
+      description: CONFIRMED (RULE-13-01). Opens DRAFT. storeId comes from the path, not the body.
       operationId: createPurchaseRequest
       security:
         - bearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/StoreId'
       requestBody:
         required: true
         content:
@@ -66,7 +76,7 @@ paths:
     post:
       tags: [Requests]
       summary: Submit request (SubmitPurchaseRequest)
-      description: From DRAFT to SUBMITTED. Creator only. Idempotent.
+      description: From DRAFT to SUBMITTED. Store-scoped (4-role, not creator-restricted, same as Module 12). Non-idempotent — 409 if not DRAFT.
       operationId: submitPurchaseRequest
       security:
         - bearerAuth: []
@@ -82,7 +92,7 @@ paths:
         '401':
           $ref: '#/components/responses/Unauthorized'
         '403':
-          description: Creator only.
+          description: Outside store scope.
           content:
             application/json:
               schema:
@@ -138,14 +148,14 @@ paths:
     post:
       tags: [Requests]
       summary: Reject request (RejectPurchaseRequest)
-      description: CONFIRMED (RULE-13-02, reasoned).
+      description: CONFIRMED (RULE-13-02) — reason is mandatory ("REJECTED kèm lý do").
       operationId: rejectPurchaseRequest
       security:
         - bearerAuth: []
       parameters:
         - $ref: '#/components/parameters/RequestId'
       requestBody:
-        required: false
+        required: true
         content:
           application/json:
             schema:
@@ -177,7 +187,7 @@ paths:
     post:
       tags: [Requests]
       summary: Cancel request (CancelPurchaseRequest)
-      description: CONFIRMED (RULE-13-03). DRAFT or SUBMITTED only, creator only.
+      description: CONFIRMED (RULE-13-03). DRAFT or SUBMITTED only (FSM-12 guards it), store-scoped (not creator-restricted).
       operationId: cancelPurchaseRequest
       security:
         - bearerAuth: []
@@ -193,7 +203,7 @@ paths:
         '401':
           $ref: '#/components/responses/Unauthorized'
         '403':
-          description: Creator only.
+          description: Outside store scope.
           content:
             application/json:
               schema:
@@ -210,7 +220,7 @@ paths:
     post:
       tags: [Orders]
       summary: Create supplier order (CreatePurchaseOrder)
-      description: CONFIRMED (RULE-13-04). From an APPROVED request. Supplier is free text until a master exists (ASSUMPTION A1 in md). Numbers are server-generated (ASSUMPTION A2).
+      description: CONFIRMED (RULE-13-04). From an APPROVED request, real supplierId (not free text — Q8 resolved). Lines are copied 1:1 from the request, not supplied by the client (ASSUMPTION A5). Numbers are server-generated (ASSUMPTION A2).
       operationId: createPurchaseOrder
       security:
         - bearerAuth: []
@@ -228,7 +238,11 @@ paths:
               schema:
                 $ref: '#/components/schemas/PurchaseOrderResponse'
         '400':
-          $ref: '#/components/responses/BadRequest'
+          description: Validation failed, request not APPROVED, or supplier not ACTIVE / wrong organization (CONFIRMED RULE-13-04, BUSINESS_RULE_VIOLATION per convention 04 — not 409).
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
         '401':
           $ref: '#/components/responses/Unauthorized'
         '403':
@@ -239,12 +253,6 @@ paths:
                 $ref: '#/components/schemas/Error'
         '404':
           $ref: '#/components/responses/NotFound'
-        '409':
-          description: Request not APPROVED.
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/Error'
   /purchase-orders/{id}:
     get:
       tags: [Orders]
@@ -275,8 +283,8 @@ paths:
   /purchase-orders/{id}/inspect:
     post:
       tags: [Orders]
-      summary: Inspect delivery (InspectGoods)
-      description: CONFIRMED mandatory pre-receipt inspection (RULE-13-05). Failed goods are refused with a return record (shape TBD Q10 in md).
+      summary: 'NOT IMPLEMENTED — future task: Inspect delivery (InspectGoods)'
+      description: NOT IMPLEMENTED — RULE-13-05..08 need Inventory integration, deferred to a future task. Design kept PROPOSED for reference. Failed goods are refused with a return record (shape TBD Q10 in md).
       operationId: inspectGoods
       security:
         - bearerAuth: []
@@ -316,8 +324,8 @@ paths:
   /purchase-orders/{id}/receive:
     post:
       tags: [Orders]
-      summary: Receive goods (ReceiveGoods)
-      description: CONFIRMED (RULE-13-05/06/08). Requires inspection, refuses finished orders, raises physical and available stock with batch and expiry tracking.
+      summary: 'NOT IMPLEMENTED — future task: Receive goods (ReceiveGoods)'
+      description: NOT IMPLEMENTED — RULE-13-05..08 need Inventory integration, deferred to a future task. Design kept PROPOSED for reference. Requires inspection, refuses finished orders, raises physical and available stock with batch and expiry tracking.
       operationId: receiveGoods
       security:
         - bearerAuth: []
@@ -357,8 +365,8 @@ paths:
   /purchase-orders/{id}/cancel:
     post:
       tags: [Orders]
-      summary: Cancel order (CancelPurchaseOrder)
-      description: Before any delivery. Finished-order immutability CONFIRMED (RULE-13-08).
+      summary: 'NOT IMPLEMENTED — future task: Cancel order (CancelPurchaseOrder)'
+      description: NOT IMPLEMENTED — RULE-13-08 needs Inventory integration, deferred to a future task. Design kept PROPOSED for reference. Before any delivery; finished-order immutability CONFIRMED (RULE-13-08).
       operationId: cancelPurchaseOrder
       security:
         - bearerAuth: []
@@ -390,8 +398,8 @@ paths:
   /purchase-orders/{id}/cancel-remaining:
     post:
       tags: [Orders]
-      summary: Close short delivery (CancelRemainingPurchaseOrder)
-      description: CONFIRMED (RULE-13-07). From PARTIALLY_RECEIVED to CLOSED when the supplier cannot deliver the rest.
+      summary: 'NOT IMPLEMENTED — future task: Close short delivery (CancelRemainingPurchaseOrder)'
+      description: NOT IMPLEMENTED — RULE-13-07 needs Inventory integration, deferred to a future task. Design kept PROPOSED for reference. From PARTIALLY_RECEIVED to CLOSED when the supplier cannot deliver the rest.
       operationId: cancelRemainingPurchaseOrder
       security:
         - bearerAuth: []
@@ -420,6 +428,129 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/Error'
+  /suppliers:
+    post:
+      tags: [Suppliers]
+      summary: Create supplier (ManageSupplier)
+      description: CONFIRMED (RULE-13-04). Organization Admin only — organizationId is derived from actor.getOrganizationId(), same as POST /products.
+      operationId: createSupplier
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreateSupplierRequest'
+      responses:
+        '201':
+          description: Supplier created (ACTIVE).
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SupplierResponse'
+        '400':
+          description: Duplicate code within the Organization (CONFIRMED RULE-13-04, BUSINESS_RULE_VIOLATION).
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          description: Organization Admin only.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+    get:
+      tags: [Suppliers]
+      summary: List suppliers
+      operationId: listSuppliers
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/PageParam'
+        - $ref: '#/components/parameters/SizeParam'
+      responses:
+        '200':
+          description: Page of suppliers.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SupplierPage'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          description: Organization Admin only.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+  /suppliers/{id}:
+    patch:
+      tags: [Suppliers]
+      summary: Update supplier (ManageSupplier)
+      description: Partial update — null fields keep their current value. status toggles ACTIVE/INACTIVE.
+      operationId: updateSupplier
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/SupplierId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/UpdateSupplierRequest'
+      responses:
+        '200':
+          description: Supplier updated.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SupplierResponse'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          description: Organization Admin only.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          description: Stale version (ConcurrencyConflictException).
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+    get:
+      tags: [Suppliers]
+      summary: Get supplier
+      operationId: getSupplier
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/SupplierId'
+      responses:
+        '200':
+          description: Supplier detail.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SupplierResponse'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          description: Organization Admin only.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '404':
+          $ref: '#/components/responses/NotFound'
 components:
   securitySchemes:
     bearerAuth:
@@ -428,6 +559,13 @@ components:
       bearerFormat: JWT
       description: JWT/Session Token (RULE-01-01 CONFIRMED existence; Bearer transport ASSUMPTION A2 in auth-v1).
   parameters:
+    StoreId:
+      name: id
+      in: path
+      required: true
+      schema:
+        type: string
+        format: uuid
     RequestId:
       name: id
       in: path
@@ -442,6 +580,32 @@ components:
       schema:
         type: string
         format: uuid
+    SupplierId:
+      name: id
+      in: path
+      required: true
+      schema:
+        type: string
+        format: uuid
+    PageParam:
+      name: page
+      in: query
+      required: false
+      description: CONFIRMED — plain Spring Pageable, 0-indexed (platform convention, matches the already-corrected Inventory contract).
+      schema:
+        type: integer
+        minimum: 0
+        default: 0
+    SizeParam:
+      name: size
+      in: query
+      required: false
+      description: CONFIRMED — plain Spring Pageable (platform convention).
+      schema:
+        type: integer
+        minimum: 1
+        maximum: 100
+        default: 20
   schemas:
     Money:
       type: string
@@ -455,91 +619,219 @@ components:
     PurchaseOrderStatus:
       type: string
       enum: [ISSUED, PARTIALLY_RECEIVED, RECEIVED, CLOSED, CANCELLED]
-      description: CONFIRMED (FSM-13, 04 glossary).
+      description: CONFIRMED (FSM-13, 04 glossary). This scope slice only ever reaches ISSUED.
+    SupplierStatus:
+      type: string
+      enum: [ACTIVE, INACTIVE]
+      description: CONFIRMED (RULE-13-04, ERD supplier_status_enum).
+    CreateSupplierRequest:
+      type: object
+      required: [code, name]
+      properties:
+        code:
+          type: string
+          maxLength: 50
+        name:
+          type: string
+          maxLength: 255
+        contactPhone:
+          type: string
+          maxLength: 20
+        contactEmail:
+          type: string
+          format: email
+          maxLength: 100
+        address:
+          type: string
+    UpdateSupplierRequest:
+      type: object
+      description: Partial update — omitted/null fields keep their current value.
+      properties:
+        name:
+          type: string
+          maxLength: 255
+        contactPhone:
+          type: string
+          maxLength: 20
+        contactEmail:
+          type: string
+          format: email
+          maxLength: 100
+        address:
+          type: string
+        status:
+          $ref: '#/components/schemas/SupplierStatus'
+    SupplierResponse:
+      type: object
+      required: [supplierId, organizationId, code, name, status]
+      properties:
+        supplierId:
+          type: string
+          format: uuid
+        organizationId:
+          type: string
+          format: uuid
+        code:
+          type: string
+        name:
+          type: string
+        contactPhone:
+          type: string
+          nullable: true
+        contactEmail:
+          type: string
+          nullable: true
+        address:
+          type: string
+          nullable: true
+        status:
+          $ref: '#/components/schemas/SupplierStatus'
+    SupplierPage:
+      type: object
+      description: Platform PageResponse<SupplierResponse> envelope (CONFIRMED convention — every shipped module reuses this shape).
+      required: [content, page, size, totalElements, totalPages, first, last]
+      properties:
+        content:
+          type: array
+          items:
+            $ref: '#/components/schemas/SupplierResponse'
+        page:
+          type: integer
+        size:
+          type: integer
+        totalElements:
+          type: integer
+        totalPages:
+          type: integer
+        first:
+          type: boolean
+        last:
+          type: boolean
     RequestLine:
       type: object
-      required: [productId, quantity]
+      required: [productId, requestedQuantity, estimatedUnitPrice]
       properties:
         productId:
           type: string
           format: uuid
-        quantity:
+        sku:
+          type: string
+          description: Response-only, enriched cross-module from Catalog.
+        requestedQuantity:
           type: integer
           minimum: 1
-        expectedPrice:
+        estimatedUnitPrice:
           $ref: '#/components/schemas/Money'
-        recommendedSupplier:
+        recommendedSupplierName:
           type: string
+          nullable: true
+          description: Free-text advisory (RULE-13-01) — NOT a Supplier FK. The real Supplier is attached at CreatePurchaseOrder time.
     CreateRequestRequest:
       type: object
-      required: [storeId, lines]
+      required: [lines]
       properties:
-        storeId:
-          type: string
-          format: uuid
         lines:
           type: array
           minItems: 1
           items:
             $ref: '#/components/schemas/RequestLine'
+      description: storeId comes from the path, not the body.
     PurchaseRequestResponse:
       type: object
-      required: [requestId, storeId, status]
+      required: [requestId, requestNumber, storeId, status, createdBy, lines, createdAt]
       properties:
         requestId:
           type: string
           format: uuid
+        requestNumber:
+          type: string
         storeId:
           type: string
           format: uuid
         status:
           $ref: '#/components/schemas/PurchaseRequestStatus'
+        createdBy:
+          type: string
+          format: uuid
+        approvedBy:
+          type: string
+          format: uuid
+          nullable: true
+        rejectionReason:
+          type: string
+          nullable: true
         lines:
           type: array
           items:
             $ref: '#/components/schemas/RequestLine'
+        createdAt:
+          type: string
+          format: date-time
+        submittedAt:
+          type: string
+          format: date-time
+          nullable: true
+        decidedAt:
+          type: string
+          format: date-time
+          nullable: true
+        cancelledAt:
+          type: string
+          format: date-time
+          nullable: true
     RejectRequest:
       type: object
+      required: [reason]
       properties:
         reason:
           type: string
+          description: CONFIRMED mandatory (RULE-13-02 — "REJECTED kèm lý do").
     OrderLine:
       type: object
-      required: [productId, quantity]
+      required: [productId, orderedQuantity, receivedQuantity, unitPrice]
       properties:
         productId:
           type: string
           format: uuid
-        quantity:
+        sku:
+          type: string
+          description: Response-only, enriched cross-module from Catalog.
+        orderedQuantity:
           type: integer
           minimum: 1
+        receivedQuantity:
+          type: integer
+          description: Always 0 in this scope slice — ReceiveGoods (RULE-13-05..08) is not implemented yet.
         unitPrice:
           $ref: '#/components/schemas/Money'
     CreateOrderRequest:
       type: object
-      required: [purchaseRequestId, supplierName]
+      required: [purchaseRequestId, supplierId]
       properties:
         purchaseRequestId:
           type: string
           format: uuid
-        supplierName:
+        supplierId:
           type: string
-          description: Free text until a supplier master exists (ASSUMPTION A1 in md).
-        lines:
-          type: array
-          items:
-            $ref: '#/components/schemas/OrderLine'
-          description: Defaults to the approved request lines (ASSUMPTION A5 in md).
+          format: uuid
+          description: CONFIRMED — real Supplier FK (Q8 resolved), not free text.
+      description: Lines are NOT accepted here — copied 1:1 from the approved PurchaseRequest (ASSUMPTION A5).
     PurchaseOrderResponse:
       type: object
-      required: [orderId, poNumber, storeId, supplierName, status, totalAmount]
+      required: [orderId, poNumber, purchaseRequestId, storeId, supplierId, supplierName, status, totalAmount, createdBy, createdAt, lines]
       properties:
         orderId:
           type: string
           format: uuid
         poNumber:
           type: string
+        purchaseRequestId:
+          type: string
+          format: uuid
         storeId:
+          type: string
+          format: uuid
+        supplierId:
           type: string
           format: uuid
         supplierName:
@@ -548,6 +840,16 @@ components:
           $ref: '#/components/schemas/PurchaseOrderStatus'
         totalAmount:
           $ref: '#/components/schemas/Money'
+        createdBy:
+          type: string
+          format: uuid
+        createdAt:
+          type: string
+          format: date-time
+        lines:
+          type: array
+          items:
+            $ref: '#/components/schemas/OrderLine'
     ReceiptLine:
       type: object
       required: [productId, receivedQuantity]

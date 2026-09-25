@@ -403,12 +403,24 @@ graph TD
 - **Commands (docs/01-business-operations.md):**
   - `CreatePurchaseRequest`, `SubmitPurchaseRequest`, `ApprovePurchaseRequest`, `RejectPurchaseRequest`, `CancelPurchaseRequest`, `CreatePurchaseOrder`, `ReceiveGoods`, `InspectGoods`, `CancelPurchaseOrder`, `CancelRemainingPurchaseOrder`, `ManageSupplier`
 - **Domain Events (docs/03-state-machines.md):**
-  - `PurchaseRequestSubmitted`, `PurchaseRequestApproved`, `PurchaseOrderCreated`, `GoodsReceived`, `PurchaseOrderRemainingCancelled`, `PurchaseOrderCancelled`
+  - `PurchaseRequestCreated`, `PurchaseRequestSubmitted`, `PurchaseRequestApproved`,
+    `PurchaseRequestRejected`, `PurchaseRequestCancelled`, `PurchaseOrderCreated`, `GoodsReceived`,
+    `PurchaseOrderRemainingCancelled`, `PurchaseOrderCancelled`, `SupplierCreated`, `SupplierUpdated`
+    (2 event Supplier cuối KHÔNG có trong Domain Event Catalog docs/04-glossary.md — bổ sung đối
+    xứng cho `ManageSupplier` CRUD, cùng tinh thần `LowStockAlertTriggered` ở Module 12).
 - **State Machine Lifecycle (FSM 12 & FSM 13 - docs/03-state-machines.md#12, #13):**
   - PurchaseRequest: `[*] -> DRAFT -> SUBMITTED -> APPROVED / REJECTED / CANCELLED`.
-  - PurchaseOrder: `[*] -> ISSUED -> PARTIALLY_RECEIVED / RECEIVED / CLOSED / CANCELLED`.
+  - PurchaseOrder: `[*] -> ISSUED -> PARTIALLY_RECEIVED / RECEIVED / CLOSED / CANCELLED`. Triển khai
+    hiện tại (BE-2, RULE-13-01→04) chỉ làm tới `[*] -> ISSUED`; `InspectGoods`/`ReceiveGoods`/
+    `CancelPurchaseOrder`/`CancelRemainingPurchaseOrder` (RULE-13-05→08) để dành task sau (cần tích
+    hợp Inventory — `UpdateInventory`).
 - **Business Invariants (docs/02-business-rules.md):**
+  - `RULE-13-01`: PurchaseRequest phải xuất phát từ Store/Warehouse, xác định rõ sản phẩm/vật tư,
+    số lượng đề xuất, đơn giá dự kiến và nhà cung cấp khuyến nghị.
   - `RULE-13-02`: Maker-Checker bắt buộc khi phê duyệt Purchase Request (`created_by != approved_by`).
+  - `RULE-13-03`: Inventory Staff chỉ được hủy Purchase Request khi `DRAFT`/`SUBMITTED`.
+  - `RULE-13-04`: PurchaseOrder khởi tạo từ PurchaseRequest đã `APPROVED`, gắn Supplier `ACTIVE` do
+    Organization Admin quản lý.
   - `RULE-13-05`: Bắt buộc kiểm tra thực tế hàng hóa (`InspectGoods`) trước khi kích hoạt `ReceiveGoods`.
   - `RULE-13-07`, `RULE-13-08`: Đơn hàng ở trạng thái `CLOSED` hoặc `CANCELLED` là bất biến, tuyệt đối không nhập thêm hàng.
 

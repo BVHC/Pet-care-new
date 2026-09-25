@@ -1029,6 +1029,11 @@ erDiagram
   | `address` | TEXT | NO | NULL | Địa chỉ |
   | `status` | VARCHAR(30) | YES | `'ACTIVE'` | Enum `SupplierStatus` (`ACTIVE`, `INACTIVE`) — `RULE-13-04` yêu cầu PO chỉ được tạo với Supplier `ACTIVE` |
   | `created_at` | TIMESTAMPTZ | YES | `CURRENT_TIMESTAMP` | Thời điểm tạo |
+  | `updated_at` | TIMESTAMPTZ | YES | `CURRENT_TIMESTAMP` | Thời điểm cập nhật gần nhất (V16) |
+  | `created_by` | UUID | NO | NULL | FK -> `accounts.id` (BaseEntity audit trail, V16) |
+  | `updated_by` | UUID | NO | NULL | FK -> `accounts.id` (BaseEntity audit trail, V16) |
+  | `deleted_at` | TIMESTAMPTZ | NO | NULL | Soft-delete (BaseEntity, V16) |
+  | `version` | BIGINT | YES | `0` (V16) | Khóa lạc quan — Supplier là Aggregate Root CRUD thuần, không Maker-Checker |
 - **Ràng buộc:**
   - `CONSTRAINT uq_suppliers_org_code UNIQUE (organization_id, code)`
 
@@ -1046,6 +1051,13 @@ erDiagram
   | `approved_by` | UUID | NO | NULL | FK -> `users.id` (Checker, Maker-Checker `created_by != approved_by`, `RULE-13-02`) |
   | `rejection_reason` | TEXT | NO | NULL | Lý do từ chối nếu `REJECTED` |
   | `created_at` | TIMESTAMPTZ | YES | `CURRENT_TIMESTAMP` | Thời điểm lập yêu cầu |
+  | `submitted_at` | TIMESTAMPTZ | NO | NULL | Thời điểm `SubmitPurchaseRequest` (V16) |
+  | `decided_at` | TIMESTAMPTZ | NO | NULL | Thời điểm approve/reject, dùng chung 2 nhánh (V16) |
+  | `cancelled_at` | TIMESTAMPTZ | NO | NULL | Thời điểm `CancelPurchaseRequest` (V16) |
+  | `version` | BIGINT | YES | `0` (V16) | Khóa lạc quan chống race double-approve/double-cancel |
+
+  Không áp `BaseEntity` đầy đủ — `created_by`/`approved_by` là cặp định danh Maker-Checker nghiệp
+  vụ (`RULE-13-02`) trỏ `users.id`, khác không gian với audit trail chung (`accounts.id`).
 - **Cột (`purchase_request_lines`)** — bổ sung Phase 5 Final Audit:
   | Tên Cột | Kiểu Dữ liệu | Bắt buộc | Default | Mô tả |
   |---|---|---|---|---|
@@ -1054,6 +1066,7 @@ erDiagram
   | `product_id` | UUID | YES | - | FK -> `products.id` |
   | `requested_quantity`| INT | YES | - | Số lượng đề xuất mua |
   | `estimated_unit_price`| DECIMAL(12,2)| YES | `0.00` | Đơn giá dự kiến (`RULE-13-01`) |
+  | `recommended_supplier_name`| VARCHAR(255) | NO | NULL | Nhà cung cấp khuyến nghị (`RULE-13-01`) — gợi ý tự do, KHÔNG phải FK; Supplier thật gắn ở `purchase_orders.supplier_id` (V16) |
 - **Cột (`purchase_orders`):**
   | Tên Cột | Kiểu Dữ liệu | Bắt buộc | Default | Mô tả |
   |---|---|---|---|---|
@@ -1066,6 +1079,7 @@ erDiagram
   | `total_amount` | DECIMAL(14,2)| YES | `0.00` | Tổng giá trị đặt |
   | `created_by` | UUID | YES | - | FK -> `users.id` |
   | `created_at` | TIMESTAMPTZ | YES | `CURRENT_TIMESTAMP` | Thời điểm lập đơn |
+  | `version` | BIGINT | YES | `0` (V16) | Khóa lạc quan — dọn đường cho ReceiveGoods/CancelPurchaseOrder (RULE-13-05→08, task sau) |
 - **Cột (`purchase_order_lines`)** — bổ sung Phase 5 Final Audit:
   | Tên Cột | Kiểu Dữ liệu | Bắt buộc | Default | Mô tả |
   |---|---|---|---|---|
