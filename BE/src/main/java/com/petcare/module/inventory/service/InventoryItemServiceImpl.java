@@ -10,11 +10,14 @@ import com.petcare.module.inventory.dto.InventoryItemResponse;
 import com.petcare.module.inventory.dto.IssueInventoryRequest;
 import com.petcare.module.inventory.dto.ReceiveInventoryRequest;
 import com.petcare.module.inventory.entity.InventoryItem;
+import com.petcare.module.inventory.entity.InventoryReservation;
 import com.petcare.module.inventory.mapper.InventoryItemMapper;
 import com.petcare.module.inventory.repository.InventoryItemRepository;
+import com.petcare.module.inventory.repository.InventoryReservationRepository;
 import com.petcare.module.organization.service.StoreService;
 import com.petcare.platform.audit.Auditable;
 import com.petcare.platform.enums.AdjustmentReason;
+import com.petcare.platform.enums.ReservationStatus;
 import com.petcare.platform.exception.BusinessRuleViolationException;
 import com.petcare.platform.exception.ConcurrencyConflictException;
 import com.petcare.platform.exception.ResourceNotFoundException;
@@ -29,6 +32,8 @@ import org.springframework.orm.ObjectOptimisticLockingFailureException;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.time.LocalDateTime;
+import java.util.List;
 import java.util.Objects;
 import java.util.UUID;
 
@@ -41,6 +46,7 @@ import java.util.UUID;
 public class InventoryItemServiceImpl implements InventoryItemService {
 
     private final InventoryItemRepository inventoryItemRepository;
+    private final InventoryReservationRepository inventoryReservationRepository;
     private final InventoryItemMapper inventoryItemMapper;
     private final InventoryBatchService inventoryBatchService;
     private final InventoryAdjustmentService inventoryAdjustmentService;
@@ -123,19 +129,81 @@ public class InventoryItemServiceImpl implements InventoryItemService {
         int beforeAvailable = item.getQuantityAvailable();
         item.setQuantityPhysical(item.getQuantityPhysical() - request.quantity());
         item.setQuantityAvailable(item.getQuantityAvailable() - request.quantity());
-        try {
-            // saveAndFlush — chính optimistic-lock trên dòng InventoryItem này chặn oversell khi 2
-            // lệnh IssueInventory chạy đồng thời (mỗi lệnh có thể thấy "đủ hàng" trước khi lệnh kia
-            // commit); saveAndFlush ép flush ngay để bắt được conflict tại đây, cùng pattern
-            // StoreServiceImpl.updateStore.
-            item = inventoryItemRepository.saveAndFlush(item);
-        } catch (ObjectOptimisticLockingFailureException ex) {
-            throw new ConcurrencyConflictException("InventoryItem", item.getId());
-        }
+        // saveAndFlush — chính optimistic-lock trên dòng InventoryItem này chặn oversell khi 2 lệnh
+        // IssueInventory chạy đồng thời (mỗi lệnh có thể thấy "đủ hàng" trước khi lệnh kia commit);
+        // saveAndFlush ép flush ngay để bắt được conflict tại đây, cùng pattern StoreServiceImpl.updateStore.
+        item = saveItemOrThrow(item);
 
         inventoryEventRecorder.maybeRecordLowStockAlert(item, beforeAvailable, product.sku());
 
         return inventoryItemMapper.toResponse(item, product.sku());
+    }
+
+    @Override
+    @Transactional
+    public void reserveStock(UUID storeId, UUID productId, int quantity, UUID orderId, LocalDateTime expiresAt) {
+        InventoryItem item = inventoryItemRepository.findByStoreIdAndProductId(storeId, productId)
+                .orElseThrow(() -> new ResourceNotFoundException("InventoryItem", productId));
+        if (item.getQuantityAvailable() < quantity) {
+            throw new BusinessRuleViolationException("RULE-14-02", "Không đủ tồn kho khả dụng để giữ chỗ");
+        }
+
+        int beforeAvailable = item.getQuantityAvailable();
+        item.setQuantityReserved(item.getQuantityReserved() + quantity);
+        item.setQuantityAvailable(beforeAvailable - quantity);
+        item = saveItemOrThrow(item);
+
+        inventoryEventRecorder.maybeRecordLowStockAlert(item, beforeAvailable,
+                productService.getProductForCrossModule(productId).sku());
+
+        inventoryReservationRepository.save(new InventoryReservation(orderId, item.getId(), quantity, expiresAt));
+    }
+
+    @Override
+    @Transactional
+    public void releaseReservation(UUID orderId) {
+        List<InventoryReservation> held = inventoryReservationRepository.findAllByOrderIdAndStatus(orderId, ReservationStatus.HELD);
+        for (InventoryReservation reservation : held) {
+            // Conditional update chống double-release khi CancelOrder và ProcessOrderTimeout race
+            // nhau: 0 dòng bị ảnh hưởng nghĩa là reservation đã được lệnh khác release trước —
+            // bỏ qua, không cộng lại quantityAvailable lần 2.
+            if (inventoryReservationRepository.releaseIfHeld(reservation.getId()) == 0) {
+                continue;
+            }
+            InventoryItem item = inventoryItemRepository.findById(reservation.getInventoryItemId())
+                    .orElseThrow(() -> new ResourceNotFoundException("InventoryItem", reservation.getInventoryItemId()));
+            item.setQuantityReserved(item.getQuantityReserved() - reservation.getQuantity());
+            item.setQuantityAvailable(item.getQuantityAvailable() + reservation.getQuantity());
+            saveItemOrThrow(item);
+        }
+    }
+
+    @Override
+    @Transactional
+    public void deductPhysicalForOrder(UUID storeId, UUID productId, int quantity) {
+        InventoryItem item = inventoryItemRepository.findByStoreIdAndProductId(storeId, productId)
+                .orElseThrow(() -> new ResourceNotFoundException("InventoryItem", productId));
+        if (item.getQuantityAvailable() < quantity) {
+            throw new BusinessRuleViolationException("RULE-14-02", "Không đủ tồn kho khả dụng");
+        }
+
+        inventoryBatchService.issueFefo(storeId, productId, quantity);
+
+        int beforeAvailable = item.getQuantityAvailable();
+        item.setQuantityPhysical(item.getQuantityPhysical() - quantity);
+        item.setQuantityAvailable(beforeAvailable - quantity);
+        item = saveItemOrThrow(item);
+
+        inventoryEventRecorder.maybeRecordLowStockAlert(item, beforeAvailable,
+                productService.getProductForCrossModule(productId).sku());
+    }
+
+    private InventoryItem saveItemOrThrow(InventoryItem item) {
+        try {
+            return inventoryItemRepository.saveAndFlush(item);
+        } catch (ObjectOptimisticLockingFailureException ex) {
+            throw new ConcurrencyConflictException("InventoryItem", item.getId());
+        }
     }
 
     @Override

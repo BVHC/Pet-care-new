@@ -19,4 +19,12 @@ public interface StorefrontService {
     PageResponse<EffectiveProductResponse> listStoreProducts(UUID storeId, UserPrincipal actor, Boolean activeOnly, Pageable pageable);
 
     PageResponse<EffectiveServiceResponse> listStoreServices(UUID storeId, UserPrincipal actor, Boolean activeOnly, Pageable pageable);
+
+    /**
+     * Cross-module (Module 14 Order, RULE-14-01) — giá hiệu lực 1 Product tại Store (override nếu
+     * có, else {@code products.base_price}), dùng snapshot {@code unit_price} lúc CreateOrder.
+     * Không qua actor guard — caller (Order) đã tự authorize actor ở tầng của mình trước khi gọi,
+     * cùng convention {@code ProductService#getProductForCrossModule}.
+     */
+    String getEffectiveProductPrice(UUID storeId, UUID productId);
 }

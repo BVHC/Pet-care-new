@@ -987,6 +987,15 @@ erDiagram
   | `quantity` | INT | YES | - | Số lượng tạm giữ |
   | `status` | VARCHAR(30) | YES | `'HELD'` | `HELD`, `COMMITTED`, `RELEASED` |
   | `expires_at` | TIMESTAMPTZ | YES | - | Hết hạn giữ slot tồn kho (Now + 15m) |
+  | `version` | BIGINT | YES | `0` | V17 — khóa lạc quan trên chính dòng reservation |
+
+  Chống double-release khi `CancelOrder` (customer/receptionist) và `ProcessOrderTimeout` (job
+  nền) race nhau: `InventoryItemService#releaseReservation` dùng conditional
+  `UPDATE ... WHERE status='HELD'` (native, atomic ở tầng DB) thay vì optimistic-lock retry trên
+  `version` — cột `version` vẫn thêm theo đúng chuẩn mọi bảng có mutation trong hệ thống, dự
+  phòng cho task sau nếu cần retry thật. `COMMITTED` (chuyển reserve thành trừ physical chính
+  thức lúc `ProcessOrder`) chưa có code path ghi — ngoài phạm vi task Module 14 hiện tại.
+  **Chỉ mục (V17):** `idx_inventory_reservations_order (order_id)` — phục vụ `releaseReservation`.
 
 ### Bảng: `stock_transfers` & `stock_transfer_lines`
 - **Mục đích:** Điều chuyển kho liên chi nhánh 2 bước và cân bằng sai lệch vận chuyển (`RULE-12-08`).
@@ -1119,7 +1128,11 @@ erDiagram
   | `total_amount` | DECIMAL(12,2) | YES | `0.00` | Tổng thanh toán sau giảm |
   | `total_refunded_amount`| DECIMAL(12,2)| YES| `0.00` | Tiền đã hoàn lũy kế |
   | `version` | BIGINT | YES | `0` | Khóa lạc quan |
+  | `reserved_until` | TIMESTAMPTZ | NO | NULL | V17 — hạn giữ chỗ 15 phút (RULE-14-04), chỉ set cho đơn Online; POS luôn NULL |
+  | `cancelled_at` | TIMESTAMPTZ | NO | NULL | V17 — mốc `CancelOrder`/`ProcessOrderTimeout` |
   | `created_at` | TIMESTAMPTZ | YES | `CURRENT_TIMESTAMP` | Thời điểm tạo |
+- **Chỉ mục (V17):** `idx_orders_customer (customer_id)` — phục vụ `ViewOrder` list;
+  `idx_orders_status_reserved_until (status, reserved_until)` — phục vụ `ProcessOrderTimeoutJob`.
 - **Cột (`order_items`)** — bổ sung Phase 5 Final Audit (đóng orphan reference, hậu thuẫn `RULE-14-02` kiểm tra tồn kho theo dòng):
   | Tên Cột | Kiểu Dữ liệu | Bắt buộc | Default | Mô tả |
   |---|---|---|---|---|

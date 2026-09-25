@@ -288,6 +288,53 @@ public final class RoleScopeGuard {
     }
 
     /**
+     * RULE-14-01 — actor có được vận hành Order (CreateOrder POS/CancelOrder phía nhân viên) của
+     * Store này không: SUPER_ADMIN toàn quyền; ORGANIZATION_ADMIN mọi Store trong Organization
+     * mình; STORE_MANAGER/RECEPTIONIST chỉ đúng Store mình gắn. Cùng cấu trúc
+     * {@link #assertCanOperateStoreInventory} nhưng đổi INVENTORY_STAFF -> RECEPTIONIST — actor
+     * vận hành Order tại quầy theo docs/01-business-operations.md §14 là Receptionist, không phải
+     * InventoryStaff, nên không tái dùng được method Inventory (set role khác nhau).
+     */
+    public static void assertCanOperateStoreOrder(UserPrincipal actor, java.util.UUID organizationId,
+                                                    java.util.UUID storeId) {
+        switch (actor.getRole()) {
+            case SUPER_ADMIN -> {
+                // Toàn quyền.
+            }
+            case ORGANIZATION_ADMIN -> {
+                if (!Objects.equals(actor.getOrganizationId(), organizationId)) {
+                    throw new AccessDeniedScopeException("ORGANIZATION:" + actor.getOrganizationId(),
+                            "ORGANIZATION:" + organizationId);
+                }
+            }
+            case STORE_MANAGER, RECEPTIONIST -> {
+                if (!Objects.equals(actor.getStoreId(), storeId)
+                        || !Objects.equals(actor.getOrganizationId(), organizationId)) {
+                    throw new AccessDeniedScopeException("STORE:" + actor.getStoreId(), "STORE:" + storeId);
+                }
+            }
+            default -> throw new AccessDeniedScopeException(
+                    "SUPER_ADMIN|ORGANIZATION_ADMIN|STORE_MANAGER|RECEPTIONIST", actor.getRole().name());
+        }
+    }
+
+    /**
+     * RULE-14-01 — actor CUSTOMER có phải chủ sở hữu Order này không (dùng cho CreateOrder Online/
+     * CheckoutOrder/ViewOrder/CancelOrder phía khách hàng): SUPER_ADMIN bypass (đồng nhất mọi guard
+     * khác trong class này); còn lại bắt buộc {@code actor.getUserId() == customerId}. Method đơn
+     * giản kiểu {@link #assertNotSelfAssignment} — không cần org/store scoping vì CUSTOMER không
+     * gắn Organization/Store (RULE-02-02).
+     */
+    public static void assertIsOrderOwner(UserPrincipal actor, java.util.UUID customerId) {
+        if (actor.getRole() == UserRole.SUPER_ADMIN) {
+            return;
+        }
+        if (!Objects.equals(actor.getUserId(), customerId)) {
+            throw new AccessDeniedScopeException("CUSTOMER:" + customerId, "CUSTOMER:" + actor.getUserId());
+        }
+    }
+
+    /**
      * RULE-02-05 — dành riêng cho {@code ConfigureOperatingHour} ({@code PUT
      * /stores/{id}/operating-hours}, docs/api/org-store-v1.md — quyết định 2026-09-17): CHỈ
      * {@code STORE_MANAGER} đúng Store mình quản lý được gọi, khác hẳn {@link #assertCanManageStore}

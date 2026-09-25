@@ -56,6 +56,8 @@ app:
     invitation-ttl-days: 7
   caregiver-expiry:
     enabled: false
+  order-timeout:
+    enabled: false
 
 server:
   port: 8081

@@ -10,6 +10,7 @@ import com.petcare.module.catalog.repository.ServiceRepository;
 import com.petcare.module.catalog.repository.StoreProductOverrideRepository;
 import com.petcare.module.catalog.repository.StoreServiceOverrideRepository;
 import com.petcare.platform.enums.UserRole;
+import com.petcare.platform.exception.ResourceNotFoundException;
 import com.petcare.platform.model.PageResponse;
 import com.petcare.platform.security.RoleScopeGuard;
 import com.petcare.platform.security.UserPrincipal;
@@ -78,6 +79,17 @@ public class StorefrontServiceImpl implements StorefrontService {
                 .toList();
 
         return PageResponse.of(paginate(items, pageable));
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public String getEffectiveProductPrice(UUID storeId, UUID productId) {
+        Product product = productRepository.findById(productId)
+                .orElseThrow(() -> new ResourceNotFoundException("Product", productId));
+        BigDecimal price = storeProductOverrideRepository.findByStoreIdAndProductId(storeId, productId)
+                .map(StoreProductOverride::getPrice)
+                .orElse(product.getBasePrice());
+        return formatMoney(price);
     }
 
     private void assertViewable(UserPrincipal actor, UUID organizationId, UUID storeId) {

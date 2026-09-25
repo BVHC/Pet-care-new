@@ -68,6 +68,9 @@ app:
   caregiver-expiry:
     enabled: true
     cron: "0 */15 * * * *"
+  order-timeout:
+    enabled: true
+    cron: "0 * * * * *"
 
 server:
   port: ${SERVER_PORT:8081}

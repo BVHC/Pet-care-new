@@ -8,14 +8,17 @@ import com.petcare.module.inventory.dto.InventoryAdjustmentResponse;
 import com.petcare.module.inventory.dto.IssueInventoryRequest;
 import com.petcare.module.inventory.dto.ReceiveInventoryRequest;
 import com.petcare.module.inventory.entity.InventoryItem;
+import com.petcare.module.inventory.entity.InventoryReservation;
 import com.petcare.module.inventory.mapper.InventoryItemMapper;
 import com.petcare.module.inventory.mapper.InventoryItemMapperImpl;
 import com.petcare.module.inventory.repository.InventoryItemRepository;
+import com.petcare.module.inventory.repository.InventoryReservationRepository;
 import com.petcare.module.organization.service.StoreService;
 import com.petcare.platform.enums.AdjustmentReason;
 import com.petcare.platform.enums.InventoryAdjustmentStatus;
 import com.petcare.platform.enums.ProductCategory;
 import com.petcare.platform.enums.ProductUnit;
+import com.petcare.platform.enums.ReservationStatus;
 import com.petcare.platform.enums.UserRole;
 import com.petcare.platform.exception.AccessDeniedScopeException;
 import com.petcare.platform.exception.BusinessRuleViolationException;
@@ -32,6 +35,7 @@ import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Pageable;
 import org.springframework.orm.ObjectOptimisticLockingFailureException;
 
+import java.time.LocalDateTime;
 import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
@@ -40,6 +44,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
@@ -50,6 +55,8 @@ class InventoryItemServiceImplTest {
 
     @Mock
     private InventoryItemRepository inventoryItemRepository;
+    @Mock
+    private InventoryReservationRepository inventoryReservationRepository;
     @Mock
     private InventoryBatchService inventoryBatchService;
     @Mock
@@ -77,8 +84,9 @@ class InventoryItemServiceImplTest {
 
     @BeforeEach
     void setUp() {
-        service = new InventoryItemServiceImpl(inventoryItemRepository, inventoryItemMapper, inventoryBatchService,
-                inventoryAdjustmentService, storeService, productService, inventoryEventRecorder);
+        service = new InventoryItemServiceImpl(inventoryItemRepository, inventoryReservationRepository,
+                inventoryItemMapper, inventoryBatchService, inventoryAdjustmentService, storeService, productService,
+                inventoryEventRecorder);
     }
 
     @Test
@@ -260,6 +268,126 @@ class InventoryItemServiceImplTest {
 
         assertThat(response.variance()).isEqualTo(-3);
         assertThat(response.adjustmentId()).isEqualTo(adjustmentId);
+    }
+
+    @Test
+    void reserveStock_sufficientAvailable_increasesReserved_createsReservation() {
+        UUID storeId = UUID.randomUUID();
+        UUID productId = UUID.randomUUID();
+        UUID orderId = UUID.randomUUID();
+        InventoryItem existing = existingItem(storeId, productId, 20, 0, 20, 5);
+        LocalDateTime expiresAt = LocalDateTime.now().plusMinutes(15);
+        when(inventoryItemRepository.findByStoreIdAndProductId(storeId, productId)).thenReturn(Optional.of(existing));
+        when(inventoryItemRepository.saveAndFlush(any(InventoryItem.class))).thenAnswer(invocation -> invocation.getArgument(0));
+        when(productService.getProductForCrossModule(productId)).thenReturn(product(productId, UUID.randomUUID(), "SKU01"));
+
+        service.reserveStock(storeId, productId, 8, orderId, expiresAt);
+
+        assertThat(existing.getQuantityReserved()).isEqualTo(8);
+        assertThat(existing.getQuantityAvailable()).isEqualTo(12);
+        verify(inventoryReservationRepository).save(any(InventoryReservation.class));
+    }
+
+    @Test
+    void reserveStock_insufficientAvailable_throwsBusinessRuleViolation_RULE_14_02() {
+        UUID storeId = UUID.randomUUID();
+        UUID productId = UUID.randomUUID();
+        InventoryItem existing = existingItem(storeId, productId, 5, 0, 5, 5);
+        when(inventoryItemRepository.findByStoreIdAndProductId(storeId, productId)).thenReturn(Optional.of(existing));
+
+        assertThatThrownBy(() -> service.reserveStock(storeId, productId, 10, UUID.randomUUID(), LocalDateTime.now().plusMinutes(15)))
+                .isInstanceOf(BusinessRuleViolationException.class)
+                .satisfies(ex -> assertThat(((BusinessRuleViolationException) ex).getRuleId()).isEqualTo("RULE-14-02"));
+        verifyNoInteractions(inventoryReservationRepository);
+    }
+
+    @Test
+    void reserveStock_staleVersion_throwsConcurrencyConflict() {
+        UUID storeId = UUID.randomUUID();
+        UUID productId = UUID.randomUUID();
+        InventoryItem existing = existingItem(storeId, productId, 20, 0, 20, 5);
+        when(inventoryItemRepository.findByStoreIdAndProductId(storeId, productId)).thenReturn(Optional.of(existing));
+        when(inventoryItemRepository.saveAndFlush(any(InventoryItem.class)))
+                .thenThrow(new ObjectOptimisticLockingFailureException(InventoryItem.class, existing.getId()));
+
+        assertThatThrownBy(() -> service.reserveStock(storeId, productId, 5, UUID.randomUUID(), LocalDateTime.now().plusMinutes(15)))
+                .isInstanceOf(ConcurrencyConflictException.class);
+    }
+
+    @Test
+    void releaseReservation_held_decreasesReserved_increasesAvailable_marksReleased() {
+        UUID orderId = UUID.randomUUID();
+        UUID storeId = UUID.randomUUID();
+        UUID productId = UUID.randomUUID();
+        InventoryItem existing = existingItem(storeId, productId, 20, 8, 12, 5);
+        InventoryReservation reservation = new InventoryReservation(orderId, existing.getId(), 8, LocalDateTime.now());
+        reservation.setId(UUID.randomUUID());
+        when(inventoryReservationRepository.findAllByOrderIdAndStatus(orderId, ReservationStatus.HELD))
+                .thenReturn(List.of(reservation));
+        when(inventoryReservationRepository.releaseIfHeld(reservation.getId())).thenReturn(1);
+        when(inventoryItemRepository.findById(existing.getId())).thenReturn(Optional.of(existing));
+        when(inventoryItemRepository.saveAndFlush(any(InventoryItem.class))).thenAnswer(invocation -> invocation.getArgument(0));
+
+        service.releaseReservation(orderId);
+
+        assertThat(existing.getQuantityReserved()).isEqualTo(0);
+        assertThat(existing.getQuantityAvailable()).isEqualTo(20);
+    }
+
+    @Test
+    void releaseReservation_alreadyReleasedByRace_noOp() {
+        UUID orderId = UUID.randomUUID();
+        UUID storeId = UUID.randomUUID();
+        UUID productId = UUID.randomUUID();
+        InventoryItem existing = existingItem(storeId, productId, 20, 8, 12, 5);
+        InventoryReservation reservation = new InventoryReservation(orderId, existing.getId(), 8, LocalDateTime.now());
+        reservation.setId(UUID.randomUUID());
+        when(inventoryReservationRepository.findAllByOrderIdAndStatus(orderId, ReservationStatus.HELD))
+                .thenReturn(List.of(reservation));
+        when(inventoryReservationRepository.releaseIfHeld(reservation.getId())).thenReturn(0);
+
+        service.releaseReservation(orderId);
+
+        verify(inventoryItemRepository, never()).findById(any());
+    }
+
+    @Test
+    void releaseReservation_noneHeld_noOp() {
+        UUID orderId = UUID.randomUUID();
+        when(inventoryReservationRepository.findAllByOrderIdAndStatus(orderId, ReservationStatus.HELD)).thenReturn(List.of());
+
+        service.releaseReservation(orderId);
+
+        verifyNoInteractions(inventoryItemRepository);
+    }
+
+    @Test
+    void deductPhysicalForOrder_sufficientStock_decreasesPhysicalAndAvailable() {
+        UUID storeId = UUID.randomUUID();
+        UUID productId = UUID.randomUUID();
+        InventoryItem existing = existingItem(storeId, productId, 20, 0, 20, 5);
+        when(inventoryItemRepository.findByStoreIdAndProductId(storeId, productId)).thenReturn(Optional.of(existing));
+        when(inventoryItemRepository.saveAndFlush(any(InventoryItem.class))).thenAnswer(invocation -> invocation.getArgument(0));
+        when(productService.getProductForCrossModule(productId)).thenReturn(product(productId, UUID.randomUUID(), "SKU01"));
+
+        service.deductPhysicalForOrder(storeId, productId, 6);
+
+        assertThat(existing.getQuantityPhysical()).isEqualTo(14);
+        assertThat(existing.getQuantityAvailable()).isEqualTo(14);
+        verify(inventoryBatchService).issueFefo(storeId, productId, 6);
+    }
+
+    @Test
+    void deductPhysicalForOrder_insufficientAvailable_throwsBusinessRuleViolation_RULE_14_02() {
+        UUID storeId = UUID.randomUUID();
+        UUID productId = UUID.randomUUID();
+        InventoryItem existing = existingItem(storeId, productId, 5, 0, 5, 5);
+        when(inventoryItemRepository.findByStoreIdAndProductId(storeId, productId)).thenReturn(Optional.of(existing));
+
+        assertThatThrownBy(() -> service.deductPhysicalForOrder(storeId, productId, 10))
+                .isInstanceOf(BusinessRuleViolationException.class)
+                .satisfies(ex -> assertThat(((BusinessRuleViolationException) ex).getRuleId()).isEqualTo("RULE-14-02"));
+        verifyNoInteractions(inventoryBatchService);
     }
 
     private static InventoryItem existingItem(UUID storeId, UUID productId, int physical, int reserved,

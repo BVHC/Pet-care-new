@@ -360,13 +360,18 @@ graph TD
 - **Phạm vi Bounded Context:** Quản trị tồn kho tại Store/Warehouse, chuyển kho 2 bước liên chi nhánh và cân bằng sai lệch hao hụt.
 - **Aggregate Root:** `InventoryItem`, `StockTransfer`
 - **Child Entities:** `InventoryAdjustment`, `InventoryBatch` (V15 — chi tiết theo lô cho
-  `RULE-12-11` FEFO, xem `docs/06-erd.md` §3.5 bảng `inventory_batches`), `StockTransferLine`
+  `RULE-12-11` FEFO, xem `docs/06-erd.md` §3.5 bảng `inventory_batches`), `StockTransferLine`,
+  `InventoryReservation` (V17 — giữ chỗ 15 phút cho Module 14 Order, RULE-14-04; xem
+  `docs/06-erd.md` §3.5 bảng `inventory_reservations`)
 - **Value Objects:**
   - `StockTransferStatus`: `[REQUESTED, APPROVED, REJECTED, CANCELLED, IN_TRANSIT, DISCREPANCY_RECORDED, RECEIVED]`.
   - `AdjustmentReason`: `[DAMAGE, EXPIRY, THEFT, COUNT_VARIANCE, TRANSIT_VARIANCE]`.
   - `QuantityAvailable`, `QuantityPhysical`, `QuantityReserved`.
 - **Commands (docs/01-business-operations.md):**
   - `ReceiveInventory`, `IssueInventory`, `TrackInventory`, `AdjustInventory`, `ApproveInventoryAdjustment`, `CountInventory`, `CreateStockTransfer`, `ApproveStockTransfer`, `RejectStockTransfer`, `CancelStockTransfer`, `ShipStockTransfer`, `ReceiveStockTransfer`, `ReceiveStockTransferWithDiscrepancy`, `ResolveStockTransferDiscrepancy`, `TrackBatch`, `TrackExpiry`, `TriggerLowStockAlert`
+  - Cross-module cho Module 14 Order (V17, không phải command/endpoint riêng của Inventory —
+    `InventoryItemService` expose thêm, không qua actor guard, caller tự authorize): `reserveStock`,
+    `releaseReservation`, `deductPhysicalForOrder`.
 - **Domain Events (docs/03-state-machines.md):**
   - `InventoryAdjusted`, `LowStockAlertTriggered` (docs/04-glossary.md — `TriggerLowStockAlert`,
     background job side-effect, không có endpoint riêng), `StockTransferCreated`,
@@ -445,6 +450,19 @@ graph TD
 - **Business Invariants (docs/02-business-rules.md):**
   - `RULE-14-03`, `RULE-14-04`: **Fulfillment Split (Decision D-03)** — POS trừ kho trực tiếp trong single transaction; Online áp dụng Optimistic Locking tạm giữ tồn kho 15 phút.
   - `RULE-14-07`: Đổi trả sau khi đã giao hàng (`DELIVERED`): nếu hoàn 100% chuyển sang `REFUNDED`; nếu đổi trả một phần (`Partial Return`) giữ nguyên `DELIVERED` và cộng dồn `total_refunded_amount`.
+- **Phạm vi đã triển khai (task "Order: entity + Cart + migration"):** chỉ `CreateOrder`/
+  `CheckoutOrder`/`ViewOrder`/`CancelOrder` (slice `[*] -> PENDING_PAYMENT`/`[*] -> PAID` +
+  `PENDING_PAYMENT -> CANCELLED` của FSM 5). `CancelOrderWithRefund`/`ConfirmOrder`/`ProcessOrder`/
+  `PrepareProductOrder`/`CompleteStoreOrder` để task sau — phụ thuộc Payment (M16)/Refund (M17)
+  chưa tồn tại; `FulfillmentStageLog`/`fulfillment_stage_logs` chưa có code path ghi (gắn với
+  `ProcessOrder`/`PrepareProductOrder`/`CompleteStoreOrder`). "Giỏ hàng" không phải Aggregate/bảng
+  riêng — đã rà soát `docs/06-erd.md`/`docs/04-glossary.md`, không có `Cart`/`carts`; concept này
+  được thỏa trực tiếp bởi `Order` ở trạng thái trước `CANCELLED`/thanh toán (`CreateOrder` Online
+  tạo thẳng `PENDING_PAYMENT` + giữ chỗ, không qua bước persist trung gian nào khác).
+- **Mở rộng cross-module Module 12 (Inventory) cho RULE-14-04:** `InventoryItemService` có thêm 3
+  method cross-module không qua actor guard — `reserveStock`/`releaseReservation`/
+  `deductPhysicalForOrder` — và entity con mới `InventoryReservation` (sống trong module Inventory,
+  không phải Order, vì vòng đời gắn với optimistic-lock trên `InventoryItem`; xem §4.12).
 
 ---
 
