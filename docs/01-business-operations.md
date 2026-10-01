@@ -1,540 +1,251 @@
-# Pet Care Ecosystem — Business Operations Catalog
+# Pet Care Ecosystem — Use Case Catalog (bản gọn, v15)
 
-> Mục đích: Liệt kê **các nghiệp vụ chính** và **actor chính** của hệ thống chăm sóc thú cưng đa cửa hàng.
->
-> Tài liệu này trả lời: **Ai thực hiện nghiệp vụ gì?** (Actor ↔ Business Operation Mapping).
->
-> Tất cả các nghiệp vụ trong tài liệu này đồng bộ 1:1 với các Command Candidate trong Ubiquitous Language Glossary và State Machine Specifications.
+> Danh sách use case và tác vụ hệ thống của web Pet Care. Gồm **89 mã use case** (UC01–UC89; còn hiệu lực 85 sau khi bỏ UC18, UC19, UC20, UC41) + **21 tác vụ hệ thống** (không vẽ trên sơ đồ use case).
 
 ---
 
-# 0. Actors chính & Phạm vi Quyền lực (Scopes)
+# 0. Actors
 
-Hệ thống phân định rõ 11 Actors nghiệp vụ được phân bổ trên 5 cấp phạm vi quản trị Multi-tenancy (**PLATFORM**, **ORGANIZATION**, **STORE**, **WAREHOUSE**, **CUSTOMER**) cùng cơ chế Ủy quyền dữ liệu (**Pet Delegation**):
-
-| Actor | Phạm vi (Scope) | Vai trò & Trách nhiệm chính |
+| Mã | Actor | Vai trò |
 |---|---|---|
-| **Platform Admin** (`SUPER_ADMIN`) | **PLATFORM** | Quản trị toàn bộ nền tảng SaaS đa tổ chức, quản lý vòng đời Tenant (Organizations) và cấu hình hệ thống toàn cục. |
-| **Organization Admin** (`ORGANIZATION_ADMIN`) | **ORGANIZATION** | Quản lý Organization/chuỗi chi nhánh, Warehouse trung tâm, chính sách tổ chức, danh mục bảng giá dịch vụ và các Store trực thuộc. Cách ly dữ liệu 100% giữa các Organization. |
-| **StoreManager** (`STORE_MANAGER`) | **STORE** | Quản lý, điều phối vận hành Store chi nhánh, phân ca nhân sự, thẩm định và phê duyệt Maker-Checker (`ApproveRefund`, `ApproveStockTransfer`, `ApprovePurchaseRequest`, `ApproveInventoryAdjustment`). |
-| **Receptionist** (`RECEPTIONIST`) | **STORE** | Tiếp đón khách, quản lý đặt lịch/check-in hẹn khám, xếp hàng walk-in, tạo đơn/hóa đơn POS tại quầy, ghi nhận tiền mặt, tạo yêu cầu hoàn tiền. |
-| **Veterinarian** (`VETERINARIAN`) | **STORE** | Khám bệnh, chẩn đoán, điều trị, kê đơn thuốc, thực hiện tiêm phòng vaccine và quản lý hồ sơ bệnh án thú cưng (`MedicalRecord`). |
-| **Groomer** (`GROOMER`) | **STORE** | Kiểm tra thể trạng trước grooming, thực hiện dịch vụ làm đẹp/spa thú cưng, đề xuất dịch vụ phát sinh thêm. |
-| **InventoryStaff** | **STORE / WAREHOUSE** | *Vai trò vận hành kho:* Nhập, xuất, kiểm kê, tạo phiếu điều chỉnh, điều phối chuyển kho và tiếp nhận hàng hóa mua từ nhà cung cấp. |
-| **FinanceStaff** | **ORGANIZATION / STORE** | *Vai trò vận hành tài chính:* Phát hành hóa đơn chính thức, đối soát doanh thu/hóa đơn, thực thi lệnh chi tiền hoàn (`ProcessRefund`, `CompleteRefund`) và đối soát thanh toán. |
-| **Customer** (`CUSTOMER`) | **CUSTOMER** | Chủ thú cưng: đăng ký tài khoản, quản lý hồ sơ Pet, đặt lịch hẹn, mua hàng online, thanh toán điện tử, gửi yêu cầu hoàn tiền và quản lý ủy quyền chăm sóc. |
-| **Caregiver** | **Pet Delegation** | Người được ủy quyền chăm sóc: tài khoản `CUSTOMER` được chủ pet ủy quyền thông qua quan hệ `PetCaregiverDelegation` để thay mặt đặt lịch, đưa pet đi khám/spa trong phạm vi hiệu lực. |
-| **System** | **Automated Runtime** | Tác vụ nền tự động: gửi thông báo, nhắc lịch tiêm, kiểm tra hết hạn (OTP, Order timeout 15p, Package, Voucher), tiếp nhận webhook cổng thanh toán. |
+| A01 | GUEST | Khách vãng lai, chưa đăng nhập. Được xem thông tin công khai (dịch vụ, chi nhánh kèm số điện thoại, bác sĩ, sản phẩm, bài viết) và đăng ký tài khoản. Muốn đặt lịch phải đăng ký tài khoản (UC01) hoặc nhờ lễ tân đặt hộ (UC39). |
+| A02 | CUSTOMER | Chủ thú cưng đã có tài khoản; chỉ truy cập được dữ liệu của chính mình. **Trong phạm vi đồ án:** quản lý hồ sơ cá nhân và thú cưng, đặt lịch khám và lưu trú, xem hồ sơ sức khỏe và nhật ký chăm sóc của thú, nhận nhắc lịch hẹn, tái chủng, tái khám, gửi feedback. **Hướng phát triển (tầng 3):** mua hàng online, khiếu nại, bình luận bài viết. |
+| A03 | ADMIN | Quản trị kỹ thuật của hệ thống: tạo tài khoản SUPER_MANAGER, khóa/mở khóa người dùng, cấu hình tham số và mẫu thông báo, xem audit. Không tham gia nghiệp vụ phòng khám và bán hàng. |
+| A04 | SUPER_MANAGER | Quản lý cấp chuỗi, phạm vi mọi chi nhánh. **Trong phạm vi đồ án:** quản lý chi nhánh (tạo, kích hoạt, cờ cấp cứu ngoài giờ); quản lý danh mục sản phẩm, dịch vụ, giá, loại vaccine và phác đồ tiêm chủng; tạo, đổi chức vụ, điều chuyển, vô hiệu hóa nhân viên; quản lý nội dung trang và đăng bài viết; xem feedback; xem báo cáo toàn chuỗi. **Hướng phát triển (tầng 3):** tạm ngừng / đóng chi nhánh, phí vận chuyển, duyệt bài viết của VET, xử lý khiếu nại. |
+| A05 | BRANCH_MANAGER | Quản lý một chi nhánh, chỉ thao tác trên dữ liệu của chi nhánh mình. **Trong phạm vi đồ án:** tạo và vô hiệu hóa nhân viên cấp dưới; cấu hình giờ mở cửa, ngày nghỉ, quota lịch hẹn; bật/tắt dịch vụ tại chi nhánh; quản lý chuồng; nhập kho, điều chỉnh tồn, đặt tồn tối thiểu; hủy Order khách không thanh toán; đối soát ca thu ngân; gán lại lượt đã gọi khi nhân viên phụ trách bị khóa; xem feedback và báo cáo chi nhánh. **Hướng phát triển (tầng 3):** phân ca và duyệt nghỉ, gộp hồ sơ khách trùng, duyệt trả hàng, chuyển kho, kiểm kê, xử lý khiếu nại. |
+| A06 | RECEPTIONIST | Lễ tân kiêm thu ngân tại một chi nhánh, là đầu mối vận hành hằng ngày. **Trong phạm vi đồ án:** tiếp nhận khách, điều phối hàng đợi, đặt lịch hộ khách, quản lý hồ sơ khách tại quầy, bán hàng, thu tiền, nhận/trả thú lưu trú, thực hiện Care Task gọi điện chăm sóc khách. **Hướng phát triển (tầng 3):** xử lý và giao đơn online, tạo yêu cầu trả hàng, tạo khiếu nại thay khách. |
+| A07 | VET | Bác sĩ thú y tại một chi nhánh. **Trong phạm vi đồ án:** khám, chẩn đoán, kê đơn, hẹn tái khám, tiêm chủng, cập nhật và bổ sung bệnh án, ghi nhật ký chăm sóc thú lưu trú; có hồ sơ giới thiệu hiển thị công khai. **Hướng phát triển (tầng 3):** phẫu thuật, khám tại nhà, điều trị nội trú, viết bài chuyên môn, truy vết lô. |
+| A08 | CARETAKER | Nhân viên chăm sóc tại một chi nhánh; chỉ được xem bệnh án, không được sửa. **Trong phạm vi đồ án:** thực hiện dịch vụ thẩm mỹ (tắm, cắt tỉa), nhận thú lưu trú, ghi nhật ký chăm sóc thú lưu trú. **Hướng phát triển (tầng 3):** chăm sóc thú nội trú. |
+| S01 | System | Tự động chạy các tác vụ định kỳ và tác vụ kích hoạt theo sự kiện (mục B): nhắc lịch, hủy đơn quá hạn, cảnh báo tồn kho, sinh Care Task… |
+| S02 | Payment Gateway | *(Tầng 3)* Cổng thanh toán bên ngoài. Xử lý thanh toán online, hoàn tiền, trả kết quả giao dịch về hệ thống. |
+| S03 | Email / Push Provider | Dịch vụ gửi email (OTP, thông báo) và push notification bên ngoài. |
 
 ---
 
-# 1. Authentication & OTP
+# A. Danh sách use case
 
-| Actor | Nghiệp vụ | Mã Command tương ứng |
+## 1. Tài khoản & xác thực
+
+| Mã | Use case | Actor |
 |---|---|---|
-| Customer | Đăng ký tài khoản tự phục vụ | `RegisterAccount` |
-| System | Gửi OTP xác thực đăng ký | `SendRegistrationOTP` |
-| Customer | Yêu cầu gửi lại OTP | `ResendOTP` |
-| Customer | Xác thực mã OTP (kích hoạt ACTIVE) | `VerifyOTP` |
-| Platform Admin / Organization Admin | Khởi tạo tài khoản Staff trực tiếp (kích hoạt ACTIVE với mật khẩu tạm, không qua OTP - D-04) | `CreateStaff` |
-| System | Kiểm tra tính hợp lệ của OTP | `CheckOTP` |
-| System | Xử lý OTP hết hạn | `ExpireOTP` |
-| Customer / Staff | Đăng nhập hệ thống | `Login` |
-| Customer / Staff | Đăng xuất khỏi hệ thống | `Logout` |
+| UC01 | Đăng ký tài khoản | A01 |
+| UC02 | Xác thực OTP (gồm gửi lại OTP) «include» | A01–A08 |
+| UC03 | Đăng nhập / đăng xuất | A02–A08 |
+| UC04 | Quên mật khẩu | A02–A08 |
+| UC05 | Đổi mật khẩu | A02–A08 |
+| UC06 | Quản lý hồ sơ cá nhân (không gồm email, SĐT; gồm sổ địa chỉ giao hàng; với A07 gồm thông tin giới thiệu hiển thị công khai: ảnh, chuyên môn, mô tả ngắn) | A02–A08 |
+| UC07 | Liên kết tài khoản với hồ sơ khách có sẵn (gắn tài khoản chờ liên kết vào hồ sơ tại quầy, không gộp dữ liệu — BR-TK-19) | A02 |
+
+## 2. Quản trị hệ thống
+
+| Mã | Use case | Actor |
+|---|---|---|
+| UC08 | Quản lý tài khoản nhân viên (tạo, gán chi nhánh & chức vụ, đổi chức vụ, điều chuyển, vô hiệu hóa, kích hoạt lại, sửa email/SĐT) | A03, A04, A05 (phạm vi theo BR-QT-01, BR-QT-07) |
+| UC09 | Khóa / mở khóa người dùng | A03 |
+| UC10 | Cấu hình tham số hệ thống & mẫu thông báo | A03 |
+| UC11 | Xem nhật ký audit | A03 |
+
+## 3. Chi nhánh
+
+| Mã | Use case | Actor |
+|---|---|---|
+| UC12 | Quản lý chi nhánh (tạo, cập nhật, kích hoạt, bật cờ nhận cấp cứu ngoài giờ) | A04 |
+| UC13 | Tạm ngừng / đóng cửa chi nhánh (gồm chuyển giao tồn đọng) | A04 |
+| UC14 | Cấu hình giờ mở cửa (tối đa 2 khoảng mỗi ngày) & ngày nghỉ | A05 |
+
+## 4. Thông tin công khai
+
+| Mã | Use case | Actor |
+|---|---|---|
+| UC15 | Xem dịch vụ, chi nhánh (gồm số điện thoại, chi nhánh nhận cấp cứu 24/7) & đội ngũ bác sĩ | A01, A02 |
+| UC16 | Xem & tìm kiếm sản phẩm | A01, A02 |
+| UC17 | Xem bài viết | A01, A02 |
+| ~~UC18~~ | ~~Gửi liên hệ~~ — bỏ ở v13, khách hỏi qua số điện thoại chi nhánh hiển thị ở UC15. Giữ mã đến khi đánh số lại một lần. | — |
+| ~~UC19~~ | ~~Xem đánh giá công khai~~ — bỏ ở v10, feedback không công khai (UC83, UC84). Giữ mã đến khi đánh số lại một lần. | — |
+| ~~UC20~~ | ~~Xử lý liên hệ~~ — bỏ ở v13 cùng UC18. | — |
+| UC21 | Quản lý nội dung trang (banner trang chủ, giới thiệu, chính sách, FAQ) | A04 |
+
+## 5. Khách hàng & thú cưng
+
+| Mã | Use case | Actor |
+|---|---|---|
+| UC22 | Quản lý hồ sơ khách tại quầy (tạo, cập nhật, sửa email/SĐT tài khoản khách, liên kết hồ sơ với tài khoản tại quầy) | A06 |
+| UC23 | Tra cứu khách & thú cưng | A06, A07, A08 |
+| UC24 | Quản lý thú cưng (thêm, cập nhật, đánh dấu đã mất, xóa thú chưa phát sinh giao dịch) | A02, A06 |
+| UC25 | Xem hồ sơ sức khỏe thú cưng | A02 |
+| UC26 | Chuyển chủ thú cưng | A06 |
+| UC27 | Gộp hồ sơ khách trùng | A05 |
+
+## 6. Sản phẩm & dịch vụ
+
+| Mã | Use case | Actor |
+|---|---|---|
+| UC28 | Quản lý danh mục sản phẩm | A04 |
+| UC29 | Quản lý sản phẩm (tạo, cập nhật, đổi giá, ngừng kinh doanh; sản phẩm vaccine gắn loại vaccine — BR-SP-07) | A04 |
+| UC30 | Quản lý dịch vụ (tạo, cập nhật, đổi giá, ngừng; gồm loại chuồng lưu trú — BR-SP-04; loại Khám/Tiêm của dịch vụ — BR-SP-06; định mức vật tư thuộc tầng 3) | A04 |
+| UC31 | Quản lý loại vaccine & phác đồ tiêm chủng (phác đồ theo loại vaccine, gồm cờ bắt buộc khi lưu trú — BR-SP-02, BR-SP-07) | A04 |
+| UC32 | Cấu hình phí vận chuyển & phí khám tại nhà | A04 |
+| UC33 | Bật / tắt dịch vụ tại chi nhánh | A05 |
+
+## 7. Nhân sự (phạm vi mở rộng)
+
+| Mã | Use case | Actor |
+|---|---|---|
+| UC34 | Quản lý ca làm việc (định nghĩa ca, phân ca, xem nhân viên chi nhánh) | A05 |
+| UC35 | Xem lịch làm việc của tôi | A06, A07, A08 |
+| UC36 | Gửi / rút yêu cầu nghỉ, đổi ca | A06, A07, A08 |
+| UC37 | Duyệt yêu cầu nghỉ, đổi ca | A05 |
+| UC38 | Ghi nhận vắng đột xuất | A05 |
+
+## 8. Lịch hẹn
+
+| Mã | Use case | Actor |
+|---|---|---|
+| UC39 | Đặt lịch hẹn (gồm xem khung giờ trống) | A02, A06 |
+| UC40 | Quản lý lịch hẹn (xem danh sách, đổi khung giờ trong cùng chi nhánh, hủy) | A02, A06 |
+| ~~UC41~~ | ~~Phân công nhân sự cho lịch hẹn~~ — bỏ ở v8, nhân viên được gán khi tiếp nhận (UC45). Giữ mã đến khi chốt phạm vi rồi đánh số lại một lần. | — |
+| UC42 | Thiết lập quota lịch hẹn (quota mặc định theo nhóm dịch vụ; quota riêng cho từng khung giờ, cho phép 0 để khóa khung — BR-LH-03) | A05 |
+| UC43 | Đặt lịch khám tại nhà | A02, A06 |
+
+## 9. Tiếp nhận & hàng đợi
+
+| Mã | Use case | Actor |
+|---|---|---|
+| UC44 | Tiếp nhận khách (check-in lịch hẹn, khách không hẹn trước; tạo Lượt tiếp nhận và mở Order) | A06 |
+| UC45 | Điều phối hàng đợi (gán nhân viên — ưu tiên nhân viên đang online, sắp thứ tự, hủy lượt khách bỏ về; gán lại lượt đã gọi khi người phụ trách bị khóa — BR-TN-08) | A06, A05 (gán lại lượt đã gọi) |
+| UC46 | Xem hàng đợi của tôi & gọi lượt | A07, A08 |
+| UC47 | Xác định ca cấp cứu | A07, A06 |
+
+## 10. Khám & điều trị
+
+| Mã | Use case | Actor |
+|---|---|---|
+| UC48 | Khám bệnh (khám, chẩn đoán, xét nghiệm, kê đơn, hẹn tái khám — BR-KB-06, hoàn tất) | A07 |
+| UC49 | Tiêm chủng (chọn loại vaccine theo phác đồ rồi chọn sản phẩm còn tồn; lượt tiêm riêng, hoặc tiêm ngay trong lượt khám trên cùng Visit; VET được chọn mũi thứ khác với gợi ý; xóa mũi ghi nhầm khi lượt còn mở; chỉ ghi nhận mũi tiêm tại hệ thống — BR-KB-04, BR-KB-05) | A07 |
+| UC50 | Phẫu thuật (lập cam kết, thực hiện) | A07, A06 |
+| UC51 | Khám tại nhà | A07 |
+| UC52 | Thực hiện dịch vụ thẩm mỹ | A08 |
+| UC53 | Xem & bổ sung bệnh án | A07, A08 (chỉ xem) |
+
+## 11. Lưu trú & nội trú
+
+| Mã | Use case | Actor |
+|---|---|---|
+| UC54 | Quản lý chuồng (tạo chuồng theo loại chuồng, đổi trạng thái `AVAILABLE` / `MAINTENANCE`) | A05 |
+| UC55 | Nhập / xuất viện (gồm chuyển từ lưu trú sang điều trị) | A07 |
+| UC56 | Điều trị nội trú (ra y lệnh, theo dõi hậu phẫu) | A07 |
+| UC57 | Ghi nhật ký chăm sóc | A08, A07 |
+| UC58 | Đặt chỗ lưu trú theo loại chuồng (đặt, hủy, gia hạn) | A02, A06 |
+| UC59 | Nhận / trả thú cưng lưu trú (kiểm tra tiêm phòng khi nhận; thu tiền trước khi trả; hủy phiên trả thú khi khách không thanh toán; kết thúc lưu trú khi thú mất) | A06, A08 (A08 chỉ nhận thú) |
+| UC60 | Xem lưu trú & nhật ký chăm sóc của thú cưng | A02 |
+
+## 12. Bán hàng & đơn hàng
+
+| Mã | Use case | Actor |
+|---|---|---|
+| UC61 | Quản lý giỏ hàng | A02 |
+| UC62 | Đặt hàng online | A02 |
+| UC63 | Thanh toán online | A02, S02 |
+| UC64 | Quản lý đơn hàng của tôi (xem, theo dõi giao hàng, hủy, xác nhận đã nhận) | A02 |
+| UC65 | Xử lý & giao đơn online (xử lý, bàn giao, cập nhật trạng thái, giao thất bại) | A06 |
+| UC66 | Bán hàng & chốt Order tại quầy (tạo, xóa dòng, chốt, hủy; BRANCH_MANAGER hủy Order `PENDING` khách không thanh toán — BR-BH-05) | A06, A05 |
+| UC67 | Thêm dịch vụ / hàng vào Order | A06, A07, A08 |
+| UC68 | Tạo yêu cầu trả hàng | A06 |
+| UC69 | Duyệt yêu cầu trả hàng | A05 |
+
+## 13. Thu ngân
+
+| Mã | Use case | Actor |
+|---|---|---|
+| UC70 | Thu tiền tại quầy (thu xong mới giao hàng — BR-BH-06) | A06 |
+| UC71 | Mở / chốt ca thu ngân (ca thường trong giờ mở cửa; ca ngoài giờ để thu tiền cấp cứu ở chi nhánh có cờ cấp cứu; hệ thống tự chốt ca chưa chốt — BR-CN-05, BR-TG-05) | A06 |
+| UC72 | Đối soát ca thu ngân | A05 |
+
+## 14. Kho
+
+| Mã | Use case | Actor |
+|---|---|---|
+| UC73 | Quản lý nhà cung cấp | A05 |
+| UC74 | Nhập kho (tạo, sửa phiếu nháp, xác nhận, hủy phiếu nhập; ghi số lô & hạn dùng với sản phẩm quản lý hạn dùng) | A05 |
+| UC75 | Xem tồn kho (theo lô, hạn dùng) & thiết lập tồn tối thiểu | A05, A06 (chỉ xem) |
+| UC76 | Điều chỉnh tồn kho (hỏng, hết hạn, lệch kiểm đếm) | A05 |
+| UC77 | Chuyển kho (tạo, hủy, xác nhận nhận hàng) | A05 |
+| UC78 | Kiểm kê kho | A05 |
+| UC79 | Truy vết lô hàng | A05, A07 |
+
+## 15. Bài viết
+
+| Mã | Use case | Actor |
+|---|---|---|
+| UC80 | Soạn & gửi duyệt bài viết | A07 |
+| UC81 | Quản lý bài viết, chuyên mục & bình luận (soạn, duyệt, gỡ bài, ẩn bình luận) | A04 |
+| UC82 | Bình luận bài viết (đăng, sửa, xóa của mình) | A02 |
+
+## 16. Feedback & khiếu nại
+
+| Mã | Use case | Actor |
+|---|---|---|
+| UC83 | Gửi feedback (về dịch vụ tại chi nhánh hoặc website; không công khai) | A02 |
+| UC84 | Xem & xử lý feedback | A04, A05 (chi nhánh mình) |
+| UC85 | Gửi & theo dõi khiếu nại (tạo, xem, đóng / mở lại) | A02, A06 (tạo thay khách) |
+| UC86 | Xử lý khiếu nại | A05, A04 |
+
+## 17. Chăm sóc khách hàng & thông báo
+
+| Mã | Use case | Actor |
+|---|---|---|
+| UC87 | Thực hiện Care Task (thực hiện, hủy) | A06 |
+| UC88 | Xem thông báo & cài đặt nhận thông báo | A02–A08 (cài đặt: A02) |
+
+## 18. Báo cáo
+
+| Mã | Use case | Actor |
+|---|---|---|
+| UC89 | Xem báo cáo | A04, A05 |
 
 ---
 
-# 2. Identity & Access Management
+# B. Tác vụ hệ thống
 
-| Actor | Nghiệp vụ | Mã Command tương ứng |
+Các mục dưới đây do hệ thống tự chạy theo thời gian hoặc theo sự kiện, không phải mục tiêu của một actor. Mô tả chúng trong phần đặc tả kỹ thuật (background job / event handler). Nếu muốn thể hiện trên sơ đồ, có thể dùng actor "Thời gian" cho ST03 và ST04.
+
+| Mã | Tác vụ | Kích hoạt bởi / liên quan |
 |---|---|---|
-| Customer | Quản lý thông tin cá nhân | `ManageCustomerProfile` |
-| Platform Admin | Quản lý người dùng toàn nền tảng | `ManageUser` |
-| Platform Admin | Quản lý Role nền tảng | `ManageRole` |
-| Platform Admin | Quản lý Permission nền tảng | `ManagePermission` |
-| Platform Admin | Khóa/mở khóa tài khoản toàn nền tảng | `LockAccount`, `UnlockAccount` |
-| Platform Admin | Vô hiệu hóa / Tái kích hoạt tài khoản nhân viên nghỉ việc toàn nền tảng | `DeactivateAccount`, `ReactivateAccount` |
-| Organization Admin | Quản lý người dùng trong Organization | `ManageUser` |
-| Organization Admin | Quản lý Role/Permission trong Organization | `ManageRole`, `ManagePermission` |
-| Organization Admin | Khóa/mở khóa tài khoản trong Organization | `LockAccount`, `UnlockAccount` |
-| Organization Admin | Vô hiệu hóa / Tái kích hoạt tài khoản nhân viên nghỉ việc trong Organization (`RULE-02-07`) | `DeactivateAccount`, `ReactivateAccount` |
-| StoreManager | Quản lý phân quyền Staff trong Store | `AssignPermission` |
+| ST01 | Khóa tạm tài khoản do đăng nhập sai | UC03 |
+| ST02 | Dọn tài khoản chưa xác thực | Định kỳ |
+| ST03 | Nhắc lịch hẹn | Định kỳ |
+| ST04 | Nhắc tái chủng & nhắc tái khám | Định kỳ, dựa trên UC31, UC48, UC49 |
+| ST05 | Chuyển lịch hẹn & đặt chỗ lưu trú sang NO_SHOW | Định kỳ |
+| ST06 | Giữ hàng (đơn online) & trừ kho theo FEFO (vaccine khi tiêm; hàng, thuốc khi Order `PAID`) | UC49 (vaccine), UC62, UC65, UC66, UC70 |
+| ST07 | Trừ vật tư tiêu hao | UC48, UC52 |
+| ST08 | Cảnh báo tồn kho dưới ngưỡng & lô sắp / đã hết hạn | Định kỳ |
+| ST09 | Tính phí vận chuyển | UC62, dùng cấu hình phí từ UC32 |
+| ST10 | Hủy đơn chưa thanh toán | Định kỳ |
+| ST11 | Hết hạn giao dịch thanh toán | Định kỳ |
+| ST12 | Tự xác nhận đã nhận hàng | Định kỳ |
+| ST13 | Tự chốt ca thu ngân chưa chốt & cảnh báo Order `PENDING` quá hạn | Ca thường: cuối ngày, theo giờ đóng cửa chi nhánh. Ca ngoài giờ: khi đến giờ mở cửa kế tiếp của chi nhánh |
+| ST14 | Đối soát cổng thanh toán | Hằng ngày |
+| ST15 | Đánh dấu lưu trú quá hạn đón (OVERDUE) | Định kỳ |
+| ST16 | Leo thang khiếu nại quá hạn | Định kỳ |
+| ST17 | Tự đóng khiếu nại | Định kỳ |
+| ST18 | Sinh Care Task | ST04 (nhắc tái chủng / tái khám với hồ sơ không có email; quá hạn tái chủng), ST15 (quá hạn đón) |
+| ST19 | Tự hủy Care Task khi thú cưng đã mất | UC24 |
+| ST20 | Gửi thông báo & thử lại khi thất bại | Mọi sự kiện cần thông báo |
+| ST21 | Hoàn tiền online qua cổng thanh toán | UC64, UC69 |
 
 ---
 
-# 3. Organization & Store Management
+# C. Quan hệ include / extend chính
 
-| Actor | Nghiệp vụ | Mã Command tương ứng |
+| Use case gốc | Quan hệ | Use case liên quan |
 |---|---|---|
-| Organization Admin | Tạo Organization | `CreateOrganization` |
-| Organization Admin | Cập nhật thông tin Organization | `UpdateOrganization` |
-| Organization Admin | Quản lý chính sách Organization | `ManageOrganizationPolicy` |
-| Organization Admin | Tạo Store mới | `CreateStore` |
-| Organization Admin | Cập nhật thông tin Store | `UpdateStore` |
-| Organization Admin | Kích hoạt Store hoạt động | `ActivateStore` |
-| Organization Admin | Tạm ngưng hoạt động Store | `SuspendStore` |
-| Organization Admin | Ngừng kích hoạt Store | `DeactivateStore` |
-| Organization Admin | Lưu trữ / đóng cửa vĩnh viễn Store | `ArchiveStore` |
-| StoreManager | Quản lý thông tin vận hành Store | `UpdateStore` |
-| StoreManager | Cấu hình giờ hoạt động Store | `ConfigureOperatingHour` |
-| StoreManager | Quản lý tài nguyên vật tư của Store | `ConfigureStoreResource` |
-| StoreManager | Quản lý chính sách vận hành Store | `ConfigureStorePolicy` |
-
----
-
-# 4. Customer & Pet Management
-
-| Actor | Nghiệp vụ | Mã Command tương ứng |
-|---|---|---|
-| Customer | Quản lý hồ sơ Customer | `ManageCustomerProfile` |
-| Customer | Thêm Pet vào danh sách | `AddPet` |
-| Customer | Cập nhật thông tin Pet | `UpdatePet` |
-| Customer | Xem thông tin Pet | `ViewPet` |
-| Customer | Quản lý quyền sở hữu Pet | `ManagePetOwnership` |
-| Customer | Gửi lời mời ủy quyền Caregiver | `InviteCaregiver` |
-| Customer | Thu hồi quyền ủy quyền Caregiver | `RevokeCaregiver` |
-| Caregiver | Chấp nhận lời mời ủy quyền (kích hoạt ACTIVE) | `AcceptCaregiverInvitation` |
-| Caregiver | Từ chối lời mời ủy quyền | `RejectCaregiverInvitation` |
-| System | Xử lý lời mời ủy quyền hết hạn (INVITED -> EXPIRED) | `ProcessInvitationExpiry` |
-| System | Xử lý quan hệ ủy quyền Caregiver hết hạn hiệu lực (ACTIVE -> EXPIRED) | `ProcessDelegationExpiry` |
-| Caregiver | Xem thông tin Pet được ủy quyền | `ViewPet` |
-| Caregiver | Thực hiện thao tác được ủy quyền | `PerformDelegatedAction` |
-| Receptionist | Tạo Customer tại quầy | `ManageCustomerProfile` |
-| Receptionist | Cập nhật thông tin Customer | `ManageCustomerProfile` |
-| Receptionist | Tạo hồ sơ Pet tại quầy | `AddPet` |
-| Receptionist | Cập nhật hồ sơ Pet | `UpdatePet` |
-| Receptionist | Tra cứu Customer và Pet | `SearchCustomerPet` |
-
----
-
-# 5. Service & Product Catalog
-
-| Actor | Nghiệp vụ | Mã Command tương ứng |
-|---|---|---|
-| Organization Admin | Quản lý Product trong phạm vi Organization | `ManageProduct` |
-| Organization Admin | Quản lý Service của Organization | `ManageService` |
-| StoreManager | Cấu hình khả dụng Service tại Store | `ConfigureServiceAvailability` |
-| StoreManager | Cấu hình giá Service tại Store | `ConfigureServicePrice` |
-| StoreManager | Cấu hình giá Product tại Store | `ConfigureProductPrice` |
-| Customer | Xem danh mục Product | `ViewProduct` |
-| Customer | Xem danh mục Service | `ViewService` |
-
----
-
-# 6. Appointment & Scheduling
-
-| Actor | Nghiệp vụ | Mã Command tương ứng |
-|---|---|---|
-| Customer / Receptionist | Khóa giữ chỗ slot hẹn trước 15 phút (Pre-booking Slot Reservation 15m TTL) | `HoldSlot` |
-| Customer / Receptionist | Giải phóng slot giữ chỗ | `ReleaseHold` |
-| System | Xử lý hết hạn giữ chỗ 15 phút (HOLDING -> EXPIRED) | `ExpireHold` |
-| Customer | Đặt lịch hẹn mới | `BookAppointment` |
-| Customer | Xem thông tin lịch hẹn | `ViewAppointment` |
-| Customer | Hủy lịch hẹn | `CancelAppointment` |
-| Customer | Đổi thời gian lịch hẹn | `RescheduleAppointment` |
-| Caregiver | Đặt lịch hẹn cho Pet được ủy quyền | `BookAppointment` |
-| Receptionist | Tạo lịch hẹn tại quầy/qua điện thoại | `BookAppointment` |
-| Receptionist / System | Xác nhận lịch hẹn | `ConfirmAppointment` |
-| Receptionist | Cập nhật chi tiết lịch hẹn | `UpdateAppointment` |
-| Receptionist | Hủy lịch hẹn (trước khi vào phục vụ) | `CancelAppointment` |
-| Receptionist | Đổi lịch hẹn | `RescheduleAppointment` |
-| Receptionist | Tiếp nhận check-in lịch hẹn | `CheckInAppointment` |
-| Veterinarian / Groomer | Bắt đầu thực hiện dịch vụ theo lịch hẹn | `StartAppointmentService` |
-| Veterinarian / Groomer | Dừng khẩn cấp phiên phục vụ (Abort) kèm lý do | `AbortAppointment` |
-| Receptionist | Tiếp nhận check-out hoàn tất lịch hẹn | `CheckOutAppointment` |
-| Receptionist / System | Đánh dấu khách vắng mặt (No-Show) | `MarkNoShow` |
-| StoreManager | Quản lý lịch Store | `ManageStoreSchedule` |
-| StoreManager | Phân công Staff vào ca/lịch hẹn | `AssignStaff` |
-| StoreManager | Điều phối lịch Store | `CoordinateSchedule` |
-| System | Kiểm tra thời gian trống & Xung đột lịch (Staff, Resource, Pet Collision) | `CheckAvailability` |
-| System | Gửi thông báo nhắc lịch hẹn | `SendAppointmentReminder` |
-
-- **Quy tắc Kiểm tra Xung đột Lịch Thú cưng (Pet Schedule Collision Guard, RULE-06-11):**
-  - Khi thực hiện `BookAppointment`, hệ thống kiểm tra đảm bảo Pet không có bất kỳ lịch hẹn nào khác đang ở trạng thái `BOOKED`, `CONFIRMED`, `CHECKED_IN`, hoặc `IN_PROGRESS` giao thoa với khung giờ dự kiến trên toàn bộ hệ thống chi nhánh.
-- **Quy tắc Đổi lịch Nguyên tử (Atomic Reschedule Guard, RULE-06-03, RULE-06-10, RULE-06-11):**
-  - Khi `RescheduleAppointment`, hệ thống kiểm tra và khóa giữ chỗ khung giờ mới trước. Chỉ khi khung giờ mới thành công mới giải phóng khung giờ cũ và chuyển về `BOOKED`. Nếu thất bại, giao dịch rollback giữ nguyên lịch cũ.
-- **Xử lý Khách Vắng mặt (No-Show Resource & Slot Release, RULE-06-09):**
-  - Khi đánh dấu `MarkNoShow`, hệ thống lập tức giải phóng tài nguyên phòng/bàn (`ReleaseStoreResource`), giải phóng ca làm việc nhân sự (`ReleaseStaffSlot`) và xử lý phạt cọc theo chính sách.
-
----
-
-# 7. Walk-in & Queue Management
-
-| Actor | Nghiệp vụ | Mã Command tương ứng |
-|---|---|---|
-| Customer / Receptionist | Tiếp nhận khách và cấp số thứ tự vào hàng đợi FIFO | `RegisterQueueEntry` |
-| Receptionist / Veterinarian / Groomer | Gọi số thứ tự tiếp theo vào phòng khám/bàn grooming | `CallQueueEntry` |
-| Veterinarian / Groomer | Bắt đầu phục vụ khách hàng đợi (chuyển sang IN_SERVICE & tạo Appointment) | `StartQueueService` |
-| Veterinarian / Groomer | Hoàn tất lượt phục vụ hàng đợi (chuyển sang COMPLETED) | `CompleteQueueEntry` |
-| Receptionist | Đánh dấu khách không có mặt sau 3 lần gọi (chuyển sang NO_SHOW) | `MarkQueueNoShow` |
-| Customer / Receptionist | Hủy lượt chờ trong hàng đợi (chuyển sang CANCELLED) | `CancelQueueEntry` |
-| StoreManager | Điều phối hàng đợi Queue | `CoordinateQueue` |
-| System | Quản lý thứ tự số thứ tự Queue FIFO | `ManageQueueOrder` |
-| System | Gửi thông báo khi đến lượt phục vụ | `SendTurnNotification` |
-
-- **Cơ chế Cầu nối Dữ liệu Walk-in sang Appointment (Walk-in to Appointment Lifecycle Bridge):**
-  - Khi bắt đầu phục vụ (`StartQueueService`), hệ thống tự động khởi tạo một bản ghi `Appointment` nội bộ với kênh tiếp nhận `Channel = WALK_IN`, gắn mã phiếu hàng đợi (`QueueTicketId`), nhân viên phục vụ (`StaffId`) và tài nguyên cơ sở vật chất (`StoreResourceId`).
-  - Bản ghi Appointment này được chuyển thẳng sang trạng thái `IN_PROGRESS`, cho phép các module khám bệnh, tiêm phòng, grooming, xuất hóa đơn và báo cáo doanh thu vận hành trên cùng một mô hình dữ liệu đồng nhất.
-
----
-
-# 8. Workforce Management
-
-| Actor | Nghiệp vụ | Mã Command tương ứng |
-|---|---|---|
-| Organization Admin | Quản lý danh sách Staff toàn Organization | `ManageStaff` |
-| Organization Admin / Platform Admin | Khởi tạo tài khoản Staff trực tiếp (ACTIVE, mật khẩu tạm) | `CreateStaff` |
-| StoreManager | Cập nhật hồ sơ Staff | `UpdateStaff` |
-| StoreManager | Phân công Staff vào Store | `AssignStaffToStore` |
-| StoreManager | Quản lý lịch làm việc (Work Schedule) | `ManageWorkSchedule` |
-| StoreManager | Quản lý và phê duyệt nghỉ phép (Leave) | `ManageLeave` |
-| StoreManager | Ghi nhận Staff vắng mặt đột xuất | `HandleStaffAbsence` |
-| StoreManager | Phân công Staff thay thế | `AssignStaffReplacement` |
-| Veterinarian | Xem lịch làm việc của bản thân | `ViewWorkSchedule` |
-| Groomer | Xem lịch làm việc của bản thân | `ViewWorkSchedule` |
-| Receptionist | Xem lịch làm việc của bản thân | `ViewWorkSchedule` |
-
----
-
-# 9. Veterinary / Clinical Management
-
-| Actor | Nghiệp vụ | Mã Command tương ứng |
-|---|---|---|
-| Veterinarian | Khám lâm sàng thú cưng | `ExaminePet` |
-| Veterinarian | Ghi nhận triệu chứng lâm sàng | `RecordSymptom` |
-| Veterinarian | Ghi nhận kết quả kiểm tra/xét nghiệm | `RecordExaminationResult` |
-| Veterinarian | Xác định chẩn đoán bệnh lý | `DiagnosePet` |
-| Veterinarian | Lập phác đồ điều trị (Treatment) | `CreateTreatment` |
-| Veterinarian | Kê đơn thuốc (Prescription) | `CreatePrescription` |
-| Veterinarian | Cập nhật bệnh án (Medical Record) | `UpdateMedicalRecord` |
-| Veterinarian | Xem lịch sử y tế trong Store | `ViewMedicalHistory` |
-| Veterinarian | Yêu cầu quyền truy cập lịch sử y tế Cross-store | `RequestCrossStoreConsent` |
-| Customer / Receptionist | Xác thực mã OTP (hiệu lực 5 phút) kích hoạt quyền truy cập bệnh án Cross-Store có hiệu lực 24 giờ | `VerifyCrossStoreConsentOTP` |
-| Customer | Chủ động thu hồi quyền chia sẻ bệnh án Cross-Store | `RevokeCrossStoreConsent` |
-| Veterinarian | Kích hoạt truy cập khẩn cấp hồ sơ bệnh án (Emergency Override) | `EmergencyOverrideAccess` |
-| Veterinarian | Lập lịch tái khám (Follow-up) | `CreateFollowUp` |
-| Customer | Xem lịch sử y tế của Pet được phép | `ViewMedicalHistory` |
-| Caregiver | Xem lịch sử y tế của Pet được ủy quyền | `ViewMedicalHistory` |
-| System | Tự động khóa bất biến bệnh án sau 24 giờ kể từ khi chốt phiên khám (`RULE-09-09`) | `LockMedicalRecord` |
-
-- **Quy trình Khám Lâm sàng & Điều trị Bệnh lý (Clinical Medical Examination & Therapeutic Treatment Workflow):**
-  1. Tiếp nhận thú cưng vào phòng khám chuyên dụng (`EXAMINATION_ROOM`).
-  2. Bác sĩ thực hiện khám chuyên sâu (`ExaminePet`, `RecordSymptom`, `RecordExaminationResult`).
-  3. Bác sĩ mở/cập nhật hồ sơ bệnh án (`UpdateMedicalRecord` / `CreateMedicalRecord`) và chẩn đoán (`DiagnosePet`).
-  4. Bác sĩ lập phác đồ điều trị (`CreateTreatment`), có thể bao gồm kê đơn thuốc (`CreatePrescription`), chỉ định xét nghiệm/chẩn đoán hình ảnh, hoặc tiêm thuốc/vaccine điều trị.
-  5. Đóng phiên khám, lập lịch tái khám (`CreateFollowUp`), và chuyển viện phí sang hóa đơn thanh toán.
-  6. Bệnh án tự động chốt phiên (`FINALIZED`) khi lịch hẹn được `CheckOutAppointment`; Bác sĩ còn 24 giờ để chỉnh sửa có kiểm soát trước khi hệ thống tự động khóa bất biến (`LockMedicalRecord`, `RULE-09-09`).
-
----
-
-# 10. Vaccination Management
-
-| Actor | Nghiệp vụ | Mã Command tương ứng |
-|---|---|---|
-| Veterinarian | Kiểm tra phác đồ tiêm vaccine | `CheckVaccinationSchedule` |
-| Veterinarian | Quét mã vạch và thực hiện tiêm phòng vaccine | `AdministerVaccine` |
-| Veterinarian | Ghi nhận mũi tiêm vào hồ sơ | `RecordVaccination` |
-| Veterinarian | Thiết lập lịch tiêm nhắc lại tiếp theo | `ScheduleNextVaccination` |
-| InventoryStaff | Quản lý danh mục vaccine | `ManageVaccine` |
-| InventoryStaff | Quản lý lô vaccine (Batch) | `ManageVaccineBatch` |
-| InventoryStaff | Theo dõi hạn sử dụng vaccine (Expiry) | `ManageVaccineExpiry` |
-| System | Gửi thông báo nhắc tiêm phòng | `SendVaccineReminder` |
-| Customer | Xem lịch sử và lịch hẹn tiêm phòng | `ViewVaccinationSchedule` |
-
-- **Quy trình Dịch vụ Tiêm phòng Định kỳ Nhanh (Routine / Direct Vaccination Service Workflow):**
-  1. Khách hàng đặt lịch hẹn (`BookAppointment`) hoặc đến trực tiếp (`RegisterQueueEntry`).
-  2. Tiếp nhận check-in tại quầy (`CheckInAppointment` / `StartQueueService`).
-  3. Bác sĩ thú y thực hiện khám sàng lọc thể trạng nhanh (Pre-vaccination Screening) mà không cần tạo bệnh án phức tạp (`MedicalRecord`).
-  4. Bác sĩ quét mã vạch (Barcode/QR code) của lọ vaccine (`AdministerVaccine` theo `RULE-10-06`). Hệ thống tự động xác thực hạn sử dụng và tồn kho thời gian thực.
-  5. Hệ thống ghi nhận `RecordVaccination` vào hồ sơ tiêm chủng của Pet, tự động trừ tồn kho khả dụng của lô vaccine, và tự động lập lịch tiêm nhắc lại (`ScheduleNextVaccination`).
-  6. Tiếp tân hoàn tất check-out (`CheckOutAppointment`) và tạo hóa đơn thanh toán tại quầy (`CreateInvoice`).
-
----
-
-# 11. Grooming Management
-
-| Actor | Nghiệp vụ | Mã Command tương ứng |
-|---|---|---|
-| Customer | Đặt dịch vụ Grooming | `BookAppointment` |
-| Receptionist | Tiếp nhận và check-in dịch vụ Grooming | `CheckInGrooming` |
-| Customer / Receptionist | Hủy dịch vụ Grooming trước khi phục vụ (`WAITING -> CANCELLED`) | `CancelGrooming` |
-| Groomer | Kiểm tra thể trạng trước Grooming | `InspectPet` |
-| Groomer | Thực hiện dịch vụ Grooming | `PerformGrooming` |
-| Groomer | Cập nhật kết quả quá trình Grooming | `UpdateGroomingResult` |
-| Groomer | Đề xuất dịch vụ phát sinh thêm | `AddGroomingService` |
-| Customer | Xác nhận đồng ý dịch vụ phát sinh (Tạo Hóa đơn Phụ phí, D-02) | `ConfirmAdditionalService` |
-| Customer | Từ chối dịch vụ phát sinh | `RejectAdditionalService` |
-| Groomer / StoreManager | Dừng khẩn cấp dịch vụ Grooming khi đang phục vụ (IN_PROGRESS -> ABORTED, tạo GroomingIncident) | `AbortGrooming` |
-| Groomer | Hoàn thành dịch vụ Grooming | `CompleteGrooming` |
-
----
-
-# 12. Inventory & Warehouse Management
-
-| Actor | Nghiệp vụ | Mã Command tương ứng |
-|---|---|---|
-| InventoryStaff | Nhập kho hàng hóa | `ReceiveInventory` |
-| InventoryStaff | Xuất kho hàng hóa | `IssueInventory` |
-| InventoryStaff | Tạo phiếu điều chỉnh tồn kho | `AdjustInventory` |
-| InventoryStaff | Kiểm kê kho định kỳ | `CountInventory` |
-| InventoryStaff | Theo dõi số lượng tồn kho khả dụng | `TrackInventory` |
-| InventoryStaff | Theo dõi lô hàng (Batch) | `TrackBatch` |
-| InventoryStaff | Theo dõi hạn sử dụng (Expiry) | `TrackExpiry` |
-| InventoryStaff | Tạo yêu cầu chuyển kho (Store↔Store, Warehouse→Store) | `CreateStockTransfer` |
-| StoreManager | Phê duyệt yêu cầu chuyển kho | `ApproveStockTransfer` |
-| StoreManager | Từ chối yêu cầu chuyển kho | `RejectStockTransfer` |
-| InventoryStaff | Hủy yêu cầu chuyển kho chưa duyệt | `CancelStockTransfer` |
-| InventoryStaff | Xuất kho chuyển hàng (vận chuyển) | `ShipStockTransfer` |
-| InventoryStaff | Nhận hàng và nhập kho chuyển đến (Ghi nhận nguyên vẹn) | `ReceiveStockTransfer` |
-| InventoryStaff | Nhận hàng phát hiện thừa/thiếu/hư hỏng chuyển sang `DISCREPANCY` | `ReceiveStockTransferWithDiscrepancy` |
-| StoreManager | Xử lý chênh lệch chuyển kho bằng phiếu điều chỉnh và hoàn tất nhận hàng | `ResolveStockTransferDiscrepancy` |
-| StoreManager | Lập phiếu điều chỉnh xử lý hàng sai lệch/hư hại vận chuyển (`TRANSIT_LOSS`) | `AdjustInventory` |
-| StoreManager | Phê duyệt điều chỉnh tồn kho | `ApproveInventoryAdjustment` |
-| Organization Admin | Quản lý Warehouse trung tâm | `ManageWarehouse` |
-| InventoryStaff | Nhập kho tại Warehouse | `ReceiveAtWarehouse` |
-| System | Cảnh báo tồn kho dưới ngưỡng an toàn (Low Stock) | `TriggerLowStockAlert` |
-| System | Cảnh báo hàng sắp hết hạn (Expiry Warning) | `TriggerExpiryWarning` |
-
----
-
-# 13. Procurement Management
-
-| Actor | Nghiệp vụ | Mã Command tương ứng |
-|---|---|---|
-| InventoryStaff | Tạo yêu cầu mua hàng (Purchase Request) | `CreatePurchaseRequest` |
-| InventoryStaff | Gửi yêu cầu mua hàng để phê duyệt | `SubmitPurchaseRequest` |
-| StoreManager | Phê duyệt yêu cầu mua hàng | `ApprovePurchaseRequest` |
-| StoreManager | Từ chối yêu cầu mua hàng | `RejectPurchaseRequest` |
-| InventoryStaff | Hủy yêu cầu mua hàng | `CancelPurchaseRequest` |
-| InventoryStaff | Tạo đơn đặt hàng nhà cung cấp (Purchase Order) | `CreatePurchaseOrder` |
-| InventoryStaff | Theo dõi trạng thái đơn đặt hàng | `TrackPurchaseOrder` |
-| InventoryStaff | Tiếp nhận hàng giao từ nhà cung cấp | `ReceiveGoods` |
-| InventoryStaff | Kiểm tra chất lượng và số lượng hàng nhận | `InspectGoods` |
-| InventoryStaff / StoreManager | Hủy đơn đặt hàng nhà cung cấp chưa giao | `CancelPurchaseOrder` |
-| InventoryStaff / StoreManager | Hủy phần hàng còn lại của đơn giao thiếu (`PARTIALLY_RECEIVED -> CLOSED`) | `CancelRemainingPurchaseOrder` |
-| InventoryStaff | Cập nhật tăng tồn kho sau mua hàng | `UpdateInventory` |
-| Organization Admin | Quản lý danh sách nhà cung cấp (Supplier) | `ManageSupplier` |
-
----
-
-# 14. Order Management (v1 Store Fulfillment)
-
-| Actor | Nghiệp vụ | Mã Command tương ứng |
-|---|---|---|
-| Customer | Tạo đơn hàng bán lẻ (Online / App) | `CreateOrder` |
-| Customer | Xác nhận giỏ hàng thanh toán (Hold TTL 15 phút) | `CheckoutOrder` |
-| Customer | Xem thông tin đơn hàng | `ViewOrder` |
-| Customer | Hủy đơn hàng chưa thanh toán (`CANCELLED`) | `CancelOrder` |
-| StoreManager / Receptionist | Hủy đơn hàng sau xác nhận kèm hoàn tiền và hoàn kho (`CANCELLED`) | `CancelOrderWithRefund` |
-| Receptionist | Tạo và thanh toán đơn hàng trực tiếp tại quầy POS (`PAID -> DELIVERED`) | `CreateOrder` |
-| Receptionist / System | Xác nhận đơn hàng đã thanh toán (Đơn Online/Pickup) | `ConfirmOrder` |
-| Receptionist | Tiếp nhận và xử lý đơn hàng tại Store | `ProcessOrder` |
-| InventoryStaff | Soạn và đóng gói sản phẩm bán lẻ | `PrepareProductOrder` |
-| Receptionist | Bàn giao và hoàn thành đơn hàng tại quầy | `CompleteStoreOrder` |
-| System | Tự động hủy đơn quá hạn 15p chưa thanh toán và giải phóng kho | `ProcessOrderTimeout` |
-| System | Gửi thông báo trạng thái đơn hàng | `SendOrderNotification` |
-
-- **Phân định Luồng Hoàn tất & Kết thúc Đơn hàng (Order Fulfillment & Terminal States, RULE-14-04, RULE-14-06, D-03):**
-  - *Bán lẻ POS tại quầy:* `PAID -> DELIVERED` (Bàn giao tức thời sau khi thu tiền thành công).
-  - *Đặt hàng Online/App:* `PENDING_PAYMENT -> PAID -> CONFIRMED -> PROCESSING -> READY -> DELIVERED`.
-  - *Trạng thái Hủy:* Mọi đơn hủy trước khi giao (dù chưa thanh toán hay đã thanh toán và hoàn tiền) đều chuyển sang `CANCELLED`.
-  - *Trạng thái Hoàn trả:* `REFUNDED` là trạng thái kết thúc áp dụng khi đơn đã giao (`DELIVERED`) được đổi trả và hoàn lại 100% giá trị tiền. Trường hợp đổi trả một phần (`Partial Return`), đơn hàng giữ nguyên `DELIVERED` và cập nhật `total_refunded_amount`.
-
----
-
-# 15. Billing & Invoice Management
-
-| Actor | Nghiệp vụ | Mã Command tương ứng |
-|---|---|---|
-| Receptionist / FinanceStaff | Tạo bản nháp hóa đơn (Draft Invoice) | `CreateInvoice` |
-| Receptionist / FinanceStaff | Hủy bỏ bản nháp hóa đơn tạo sai (`DRAFT -> CANCELLED`) | `DiscardInvoice` |
-| Receptionist | Thêm mục dịch vụ vào hóa đơn | `AddServiceToInvoice` |
-| Receptionist | Thêm mục sản phẩm vào hóa đơn | `AddProductToInvoice` |
-| Receptionist | Áp dụng mã giảm giá / khuyến mãi | `ApplyDiscount` |
-| FinanceStaff / Receptionist | Phát hành hóa đơn chính thức (Issue) | `IssueInvoice` |
-| Receptionist / FinanceStaff | Phát hành hóa đơn phụ phí phát sinh (Surcharge Invoice D-02) | `IssueSurchargeInvoice` |
-| FinanceStaff | Hủy vô hiệu hóa đơn đã phát hành chưa thanh toán (`ISSUED -> VOID`) | `VoidInvoice` |
-| FinanceStaff | Thực hiện đối soát hóa đơn định kỳ | `ReconcileInvoice` |
-| Customer | Xem thông tin hóa đơn | `ViewInvoice` |
-
-- **Tính Bất biến Tất toán Hóa đơn (Settlement Immutability, D-01):**
-  - Khi khách hàng thanh toán đủ 100%, Invoice chuyển sang `PAID`. Khi phát sinh hoàn tiền một phần hoặc toàn phần, Invoice giữ nguyên trạng thái `PAID`, số tiền hoàn được phản ánh lũy kế qua trường `total_refunded_amount`.
-
----
-
-# 16. Payment Management
-
-| Actor | Nghiệp vụ | Mã Command tương ứng |
-|---|---|---|
-| Customer | Thực hiện thanh toán điện tử (Online Gateway) | `MakePayment` |
-| Receptionist | Ghi nhận và quyết toán thanh toán tiền mặt tại quầy (`CASH -> SUCCESS`) | `RecordCashPayment` |
-| System | Chuyển hướng / xác minh giao dịch sang cổng thanh toán trực tuyến | `VerifyPayment` |
-| System | Tiếp nhận Webhook/Callback từ cổng thanh toán và quyết toán giao dịch | `ReceivePaymentCallback` |
-| Customer / System | Hủy giao dịch thanh toán Online đang chờ hoặc quá hạn xử lý (`PENDING / PROCESSING -> CANCELLED`) | `CancelPayment` |
-| FinanceStaff | Đối soát giao dịch thanh toán với ngân hàng/cổng | `ReconcilePayment` |
-
-
----
-
-# 17. Refund Management
-
-> Theo quyết định nghiệp vụ đã duyệt: Hoàn tiền được tạo theo từng giao dịch `Payment` gốc cụ thể.
-
-| Actor | Nghiệp vụ | Mã Command tương ứng |
-|---|---|---|
-| Customer | Yêu cầu hoàn tiền giao dịch thanh toán | `RequestRefund` |
-| Receptionist | Tạo yêu cầu hoàn tiền tại quầy cho khách | `CreateRefundRequest` |
-| Organization Admin | Phê duyệt ngoại lệ tiếp nhận yêu cầu hoàn tiền vượt hạn 30 ngày (`RULE-17-03`) | `ApproveRefundWindowException` |
-| StoreManager | Thẩm định và phê duyệt yêu cầu hoàn tiền | `ApproveRefund` |
-| StoreManager | Từ chối yêu cầu hoàn tiền | `RejectRefund` |
-| Receptionist / StoreManager | Xử lý chi tiền mặt hoàn trực tiếp tại quầy (cho giao dịch CASH) | `ProcessRefund`, `CompleteRefund` |
-| FinanceStaff | Tiến hành xử lý hoàn tiền qua cổng thanh toán điện tử | `ProcessRefund` |
-| FinanceStaff / System | Ghi nhận giao dịch hoàn tiền thành công (`COMPLETED`) | `CompleteRefund` |
-| FinanceStaff / System | Thử lại hoàn tiền qua cổng (tối đa 3 lần) | `RetryRefund` |
-| FinanceStaff / StoreManager | Xử lý hoàn tiền thủ công ngoại lệ (chuyển khoản/tiền mặt khi cổng lỗi) | `ResolveRefundManually` |
-| System | Ghi nhận lỗi xử lý hoàn tiền từ cổng (`FAILED`) | `FailRefund` |
-| FinanceStaff | Đối soát các khoản tiền hoàn trả | `ReconcileRefund` |
-| System | Gửi thông báo kết quả hoàn tiền cho khách | `SendRefundNotification` |
-
----
-
-# 18. Promotion & Voucher Management
-
-| Actor | Nghiệp vụ | Mã Command tương ứng |
-|---|---|---|
-| Organization Admin | Tạo chương trình khuyến mãi (Promotion) | `CreatePromotion` |
-| Organization Admin | Quản lý chương trình khuyến mãi | `ManagePromotion` |
-| StoreManager | Cấu hình áp dụng Promotion cho Store | `ConfigureStorePromotion` |
-| Organization Admin | Tạo mã Voucher ưu đãi | `CreateVoucher` |
-| Organization Admin | Quản lý phát hành và điều kiện Voucher | `ManageVoucher` |
-| Customer | Sử dụng mã Voucher khi thanh toán | `UseVoucher` |
-| System | Kiểm tra tính hợp lệ và điều kiện Voucher | `ValidateVoucher` |
-| System | Ghi nhận lịch sử sử dụng Voucher | `TrackVoucherUsage` |
-| System | Tự động chuyển chiến dịch khuyến mãi hết hạn khi quá `end_date` (`RULE-18-01`) | `ProcessPromotionExpiry` |
-| System | Tự động chuyển mã Voucher hết hạn khi quá `valid_until` (`RULE-18-03`) | `ProcessVoucherExpiry` |
-
----
-
-# 19. Membership & Loyalty Management
-
-| Actor | Nghiệp vụ | Mã Command tương ứng |
-|---|---|---|
-| Customer | Đăng ký gói hội viên (Membership) | `RegisterMembership` |
-| Customer | Xem thông tin gói hội viên | `ViewMembership` |
-| Customer | Gia hạn gói hội viên | `RenewMembership` |
-| Customer / StoreManager | Nâng cấp hạng gói hội viên | `UpgradeMembership` |
-| StoreManager | Quản lý thông tin gói hội viên | `ManageMembership` |
-| System | Xử lý gói hội viên hết hạn | `ProcessMembershipExpiry` |
-| Customer | Xem điểm tích lũy (Loyalty Points) | `ViewLoyaltyPoint` |
-| Customer | Sử dụng điểm đổi ưu đãi / giảm giá | `RedeemLoyaltyPoint` |
-| System | Tích lũy điểm sau giao dịch thành công | `AddLoyaltyPoint` |
-| System | Trừ điểm khi đổi thưởng | `DeductLoyaltyPoint` |
-| System | Xử lý điểm thưởng hết hạn | `ExpireLoyaltyPoint` |
-| StoreManager | Điều chỉnh điểm tích lũy thủ công có lý do | `AdjustLoyaltyPoint` |
-
----
-
-# 20. Package Management
-
-| Actor | Nghiệp vụ | Mã Command tương ứng |
-|---|---|---|
-| Customer | Mua gói dịch vụ trả trước (Package) | `PurchasePackage` |
-| Customer | Xem số dư và lịch sử dùng gói | `ViewPackage` |
-| Receptionist / Customer / System | Kích hoạt gói dịch vụ (Tại quầy POS, qua PaymentSucceeded, hoặc tự động kích hoạt khi khách check-in sử dụng lượt đầu tiên) | `ActivatePackage` |
-| Receptionist | Xác nhận trừ lượt sử dụng gói tại quầy | `ConfirmPackageUsage` |
-| StoreManager | Hủy gói dịch vụ theo chính sách hoàn gói (Tạo RefundRequested) | `CancelPackage` |
-| StoreManager | Điều chỉnh lượt sử dụng còn lại của gói | `AdjustPackage` |
-| StoreManager | Hoàn lại 01 lượt gói đã bị trừ do No-Show khi có lý do bất khả kháng chính đáng (`RULE-20-08`) | `RefundPackageUnit` |
-| System | Theo dõi và ghi nhận lịch sử trừ lượt gói | `TrackPackageUsage` |
-| System | Xử lý gói dịch vụ hết hạn | `ProcessPackageExpiry` |
-
----
-
-# 21. Incident Management
-
-| Actor | Nghiệp vụ | Mã Command tương ứng |
-|---|---|---|
-| Receptionist | Ghi nhận sự cố vận hành/dịch vụ tại quầy | `RecordIncident` |
-| Veterinarian | Ghi nhận sự cố trong khám/chữa bệnh hoặc hủy ca cấp cứu | `RecordClinicalIncident` |
-| Groomer | Ghi nhận sự cố trong quá trình Grooming hoặc hủy ca | `RecordGroomingIncident` |
-| StoreManager | Phân loại mức độ nghiêm trọng của sự cố | `ClassifyIncident` |
-| StoreManager | Điều tra nguyên nhân sự cố | `InvestigateIncident` |
-| StoreManager | Chuyển cấp xử lý sự cố (Escalate) | `EscalateIncident` |
-| StoreManager | Thực hiện biện pháp khắc phục/xử lý | `HandleIncident` |
-| StoreManager | Đóng hồ sơ sự cố sau khi hoàn tất | `CloseIncident` |
-| System | Gửi thông báo về sự cố cho khách hàng và Admin | `SendIncidentNotification` |
-
----
-
-# 22. Consent & Privacy Management
-
-| Actor | Nghiệp vụ | Mã Command tương ứng |
-|---|---|---|
-| Customer | Cấp quyền đồng ý xử lý dữ liệu (Consent) | `GrantConsent` |
-| Customer | Thu hồi quyền đồng ý xử lý dữ liệu | `RevokeConsent` |
-| Veterinarian | Yêu cầu quyền truy cập hồ sơ bệnh án Cross-Store | `RequestCrossStoreConsent` |
-| Customer / Receptionist | Xác nhận mã OTP (hiệu lực 5 phút) kích hoạt quyền truy cập bệnh án Cross-Store có hiệu lực 24 giờ | `VerifyCrossStoreConsentOTP` |
-| Customer | Chủ động thu hồi quyền chia sẻ bệnh án Cross-Store | `RevokeCrossStoreConsent` |
-| Veterinarian | Kích hoạt quyền truy cập khẩn cấp hồ sơ bệnh án Cross-store (`is_emergency = true`) | `EmergencyOverrideAccess` |
-| Customer | Yêu cầu trích xuất dữ liệu cá nhân | `RequestDataExport` |
-| Customer | Yêu cầu xóa/ẩn danh dữ liệu cá nhân | `RequestDataDeletion` |
-| Organization Admin | Cấu hình chính sách bảo mật (Privacy Policy) | `ManagePrivacyPolicy` |
-| Organization Admin | Cấu hình thời hạn lưu trữ (Retention Policy) | `ManageRetentionPolicy` |
-| System | Tự động xử lý gói trích xuất dữ liệu | `ProcessDataExport` |
-| System | Tự động xóa hoặc ẩn danh dữ liệu theo quy định | `ProcessDataDeletion` |
-| System | Tự động xử lý hết hạn quyền ủy quyền y tế (Quá 24h TTL) | `ProcessConsentExpiry` |
-
-- **Cơ chế Đồng thuận Chia sẻ Dữ liệu Bệnh án Cross-Store (Cross-Store Medical Record Consent Protocol):**
-  - *Cơ chế 1 (Tiêu chuẩn):* Bác sĩ gửi yêu cầu (`RequestCrossStoreConsent`), hệ thống phát sinh mã OTP (hiệu lực 5 phút) gửi về số điện thoại hoặc thông báo App của Customer sở hữu Pet. Khách hàng/Tiếp tân nhập mã xác thực (`VerifyCrossStoreConsentOTP`) để mở khóa quyền xem hồ sơ bệnh án trong thời hạn tối đa 24 giờ (`24h TTL`).
-  - *Cơ chế 2 (Cấp cứu Khẩn cấp):* Trong tình huống cấp cứu nguy kịch cần tra cứu tiền sử bệnh/dị ứng ngay lập tức, Bác sĩ kích hoạt `EmergencyOverrideAccess` kèm lý do lâm sàng. Hệ thống mở quyền truy cập `ACTIVE` tức thì (`is_emergency = true`), đồng thời kích hoạt `EmergencyAccessOverridden` tự động lập biên bản sự cố y tế `ClinicalIncident` và gửi thông báo cảnh báo `SendIncidentNotification` tới chủ Pet và Store Manager.
-
----
-
-# 23. Notification Management
-
-| Actor | Nghiệp vụ | Mã Command tương ứng |
-|---|---|---|
-| System | Gửi thông báo chung | `SendNotification` |
-| System | Gửi thông báo xác nhận lịch hẹn | `SendAppointmentNotification` |
-| System | Gửi tin nhắn nhắc lịch hẹn sắp tới | `SendAppointmentReminder` |
-| System | Gửi thông báo kết quả thanh toán | `SendPaymentNotification` |
-| System | Gửi thông báo cập nhật trạng thái đơn hàng | `SendOrderNotification` |
-| System | Gửi nhắc lịch tiêm vaccine định kỳ | `SendVaccineReminder` |
-| System | Gửi nhắc lịch tái khám thú cưng | `SendFollowUpReminder` |
-| System | Gửi thông báo quyền lợi hội viên | `SendMembershipNotification` |
-| System | Gửi lại thông báo khi gặp lỗi tạm thời | `RetryNotification` |
-| Customer | Xem danh sách thông báo đã nhận | `ViewNotification` |
-
----
-
-# 24. Reporting & Analytics
-
-| Actor | Nghiệp vụ | Mã Command tương ứng |
-|---|---|---|
-| StoreManager | Xem báo cáo doanh thu Store | `ViewRevenueReport` |
-| StoreManager | Xem báo cáo hoạt động lịch hẹn | `ViewAppointmentReport` |
-| StoreManager | Xem báo cáo hiệu suất dịch vụ | `ViewServiceReport` |
-| StoreManager | Xem báo cáo tồn kho và biến động hàng | `ViewInventoryReport` |
-| StoreManager | Xem báo cáo hiệu suất nhân sự | `ViewStaffReport` |
-| Organization Admin | Xem báo cáo tổng hợp doanh thu Organization | `ViewOrganizationRevenue` |
-| Organization Admin | Xem báo cáo so sánh doanh thu giữa các Store | `CompareStoreRevenue` |
-| Organization Admin | Xem báo cáo phân tích khách hàng và thú cưng | `ViewCustomerPetReport` |
-| FinanceStaff | Thực hiện đối soát doanh thu chi tiết | `ReconcileRevenue` |
-| Platform Admin | Xem báo cáo tổng quan toàn nền tảng | `ViewPlatformReport` |
-
----
-
-# 25. Audit Management
-
-| Actor | Nghiệp vụ | Mã Command tương ứng |
-|---|---|---|
-| System | Ghi nhận nhật ký kiểm toán bất biến | `RecordAuditLog` |
-| Platform Admin | Tra cứu Audit Log toàn nền tảng | `ViewAuditLog` |
-| Organization Admin | Tra cứu Audit Log phạm vi Organization | `ViewAuditLog` |
-| StoreManager | Tra cứu Audit Log trong phạm vi Store | `ViewAuditLog` |
-| Platform Admin | Truy vết lịch sử thay đổi phân quyền toàn hệ thống | `TrackPermissionChange` |
-| Organization Admin | Truy vết lịch sử thay đổi phân quyền trong Org | `TrackPermissionChange` |
-| Platform Admin | Truy vết lịch sử truy cập hồ sơ bệnh án toàn hệ thống | `TrackMedicalRecordAccess` |
-| Organization Admin | Truy vết lịch sử truy cập hồ sơ bệnh án trong Org | `TrackMedicalRecordAccess` |
-| FinanceStaff | Truy vết nhật ký giao dịch tài chính (Payment/Refund) | `TrackPaymentRefundAudit` |
-| InventoryStaff | Truy vết nhật ký biến động kho hàng | `TrackInventoryAudit` |
+| UC01 Đăng ký, UC04 Quên mật khẩu, UC07 Liên kết tài khoản | «include» | UC02 Xác thực OTP |
+| UC08 Quản lý tài khoản nhân viên, UC22 Quản lý hồ sơ khách tại quầy (khi sửa email) | «extend» | UC02 Xác thực OTP |
+| UC44 Tiếp nhận khách (khách chưa có hồ sơ) | «extend» | UC22 Quản lý hồ sơ khách tại quầy |
+| UC48 Khám bệnh | «extend» | UC50 Phẫu thuật *(tầng 3)*, UC55 Nhập viện *(tầng 3)* |
+| UC50 Phẫu thuật, UC55 Nhập viện *(tầng 3)* | «extend» | UC67 Thêm dịch vụ / hàng vào Order |
+| UC62 Đặt hàng online *(tầng 3)* | «include» | UC63 Thanh toán online |
+| UC66 Chốt Order tại quầy | «include» | UC70 Thu tiền tại quầy |
+| UC59 Nhận / trả thú lưu trú (khi trả thú — BR-LT-09) | «include» | UC70 Thu tiền tại quầy |
+| UC59 Nhận thú lưu trú (chưa đủ tiêm phòng — BR-LT-05) | «extend» | UC44 Tiếp nhận khách (tiêm trước khi nhận) |
+| UC57 Ghi nhật ký chăm sóc (mục bất thường — BR-LT-12) | «extend» | UC44 Tiếp nhận khách, UC47 Xác định ca cấp cứu |

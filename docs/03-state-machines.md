@@ -1,861 +1,252 @@
-# State Machine — Pet Care Ecosystem
+# Pet Care Ecosystem — State Machine
 
-Tài liệu này đặc tả toàn bộ các Finite State Machine (FSM), trạng thái (States), lệnh kích hoạt (Commands), tác nhân (Actors), điều kiện bảo vệ (Guards/RULE-ID) và sự kiện miền (Domain Events) trong hệ thống Pet Care Ecosystem.
+> Mô tả trạng thái và vòng đời của các đối tượng nghiệp vụ. Đi kèm `business-rules.md`, `use-case.md`, `domain-model.md`, `erd.md`. **Thứ tự nguồn gốc khi mâu thuẫn:** `business-rules.md` → `state-machine.md` → `domain-model.md` → `erd.md`; file này phải được sửa theo business-rules.
 
----
+## Quy ước
 
-## 1. Account — AccountStatus
+- **Phạm vi file:** chỉ gồm đối tượng có chuyển trạng thái kèm điều kiện phức tạp hoặc kéo theo đối tượng khác. Đối tượng có vòng đời tuyến tính đơn giản (Bài viết — BR-BV-02, Feedback — BR-DG-04) xem trực tiếp trong business-rules. Liên hệ đã bỏ ở v13. Bệnh án không có trạng thái riêng (khóa khi Visit `COMPLETED`).
+- **Whitelist:** mọi chuyển trạng thái không có trong bảng đều bị từ chối.
+- **Loại trạng thái:** `INIT` khởi tạo · `MID` trung gian · `FINAL` trạng thái cuối, không chuyển tiếp.
+- **Người kích hoạt:** mã actor (`A06`), tác vụ hệ thống (`ST05`), hoặc `SYS ← <Đối tượng>#<số>` khi là hệ quả của một chuyển trạng thái khác.
+- **Hệ quả liên đối tượng chỉ ghi ở đối tượng phát ra sự kiện.** Đối tượng bị kéo theo ghi `SYS ← …` để trỏ về nguồn. Các thay đổi trong cùng một sự kiện thực hiện trong **một transaction**.
+- **Chuyển `X → X`** là thao tác không đổi trạng thái nhưng có điều kiện riêng (đổi giờ, gán lại, gia hạn).
+- Tên bảng/cột (`appointments.status`…) là gợi ý đặt tên; giá trị trạng thái là enum dùng trong code.
+- **[CFG]** là tham số cấu hình (BR-QT-13); 🆕 là đề xuất chưa được duyệt riêng.
 
-```mermaid
-stateDiagram-v2
-    [*] --> PENDING_VERIFICATION: RegisterAccount [Customer Self-Registration]
-    PENDING_VERIFICATION --> ACTIVE: VerifyOTP [Customer]
-    [*] --> ACTIVE: CreateStaff [Admin Direct Provisioning, D-04]
-    ACTIVE --> LOCKED: LockAccount [PlatformAdmin / OrgAdmin, lock_reason = ADMIN_LOCK]
-    ACTIVE --> LOCKED: AutoLockAccount [System, RULE-01-07, 5 lần sai mật khẩu liên tiếp, lock_reason = AUTO_FAILED_LOGIN]
-    LOCKED --> ACTIVE: UnlockAccount [PlatformAdmin / OrgAdmin, mọi lock_reason]
-    LOCKED --> ACTIVE: AutoUnlockAccount [System, RULE-01-07, chỉ khi lock_reason = AUTO_FAILED_LOGIN và now() >= locked_until]
-    ACTIVE --> DEACTIVATED: DeactivateAccount [PlatformAdmin / OrgAdmin]
-    LOCKED --> DEACTIVATED: DeactivateAccount [PlatformAdmin / OrgAdmin]
-    DEACTIVATED --> ACTIVE: ReactivateAccount [PlatformAdmin / OrgAdmin]
-    LOCKED --> ACTIVE: ReactivateAccount [PlatformAdmin / OrgAdmin, bổ sung 2026-09-16 — xem Decision Log RULE-02-07]
-```
-
-| From State | Command / Trigger | Actor | Guard (RULE-ID) | To State | Domain Event | Actions / Notes |
-|---|---|---|---|---|---|---|
-| [*] | RegisterAccount [Customer] | Customer | RULE-01-01, RULE-01-02 | PENDING_VERIFICATION | AccountRegistered | Khởi tạo tài khoản tự phục vụ; hệ thống gửi mã OTP xác thực có thời hạn 5 phút (TTL = 300s). |
-| PENDING_VERIFICATION | VerifyOTP | Customer | RULE-01-02, RULE-01-03 | ACTIVE | AccountActivated | Xác thực OTP thành công trong thời hạn TTL; kích hoạt tài khoản chính thức. |
-| [*] | CreateStaff [Staff] | PlatformAdmin / OrganizationAdmin | RULE-01-03, RULE-02-05 (D-04) | ACTIVE | AccountActivated | Khởi tạo nhân viên trực tiếp; cấp mật khẩu tạm thời (`must_change_password = true`), bỏ qua bước xác thực OTP đăng ký (Quyết định D-04). |
-| ACTIVE | LockAccount | PlatformAdmin / OrganizationAdmin | RULE-02-04, RULE-02-05 | LOCKED | AccountLocked | Quản trị viên chủ động tạm khóa tài khoản khi phát hiện nghi vấn (`lock_reason = ADMIN_LOCK`); thu hồi toàn bộ session, Access Token và Refresh Token đang hoạt động. Loại khóa này KHÔNG có cơ chế tự động mở khóa theo thời gian. |
-| ACTIVE | AutoLockAccount | System | RULE-01-07 | LOCKED | AccountLocked | Hệ thống tự động khóa sau đúng 5 lần đăng nhập sai mật khẩu liên tiếp (`lock_reason = AUTO_FAILED_LOGIN`), ghi `locked_until = now() + 15 phút`. Loại khóa này CÓ cơ chế tự động mở khóa — xem dòng `AutoUnlockAccount` và Technical Invariant #5 bên dưới. |
-| LOCKED | UnlockAccount | PlatformAdmin / OrganizationAdmin | RULE-02-04, RULE-02-05 | ACTIVE | AccountUnlocked | Quản trị viên chủ động mở khóa tài khoản (áp dụng cho mọi `lock_reason`, kể cả mở sớm hơn `locked_until` đối với khóa tự động). |
-| LOCKED | AutoUnlockAccount | System | RULE-01-07 | ACTIVE | AccountUnlocked | Hệ thống tự động mở khóa ngay khi $\text{CurrentTimestamp} \ge \text{locked\_until}$, CHỈ áp dụng cho tài khoản có `lock_reason = AUTO_FAILED_LOGIN`. Tài khoản có `lock_reason = ADMIN_LOCK` không đủ điều kiện transition này. |
-| ACTIVE | DeactivateAccount | PlatformAdmin / OrganizationAdmin | RULE-02-05, RULE-02-07 | DEACTIVATED | AccountDeactivated | Vô hiệu hóa tài khoản khi nhân viên nghỉ việc, chấm dứt hợp đồng; thu hồi phiên tức thì và từ chối đăng nhập vĩnh viễn. |
-| LOCKED | DeactivateAccount | PlatformAdmin / OrganizationAdmin | RULE-02-05, RULE-02-07 | DEACTIVATED | AccountDeactivated | Chuyển tài khoản bị tạm khóa sang vô hiệu hóa vĩnh viễn do chấm dứt nhân sự/tài khoản. |
-| DEACTIVATED | ReactivateAccount | PlatformAdmin / OrganizationAdmin | RULE-02-05, RULE-02-07 | ACTIVE | AccountReactivated | Tái kích hoạt tài khoản đã bị vô hiệu hóa; ghi nhận lý do giải trình bắt buộc vào Audit Log. |
-| LOCKED | ReactivateAccount | PlatformAdmin / OrganizationAdmin | RULE-02-05, RULE-02-07 (bổ sung 2026-09-16 — xem Decision Log RULE-02-07) | ACTIVE | AccountReactivated | Cho phép mở khóa tài khoản `LOCKED` qua chính lệnh `ReactivateAccount` khi Quản trị viên muốn bắt buộc ghi lý do giải trình vào Audit Log ngay cả với khóa tạm (khác `UnlockAccount`, vốn không yêu cầu lý do) — reset `failed_login_attempts`/`lock_reason`/`locked_until` giống `UnlockAccount`. |
-
-- **Initial State:** `PENDING_VERIFICATION` (khi khách hàng tự đăng ký qua Web/App), `ACTIVE` (khi Platform Admin hoặc Org Admin khởi tạo trực tiếp nhân viên theo Quyết định D-04).
-- **Terminal State:** `DEACTIVATED` (khi chấm dứt hợp đồng nhân viên hoặc ngừng sử dụng dịch vụ vĩnh viễn).
-- **Technical Invariants:**
-  1. *Phân định Kích hoạt D-04:* Khách hàng bắt buộc qua `PENDING_VERIFICATION -> VerifyOTP -> ACTIVE`. Tài khoản Staff tạo bởi Admin kích hoạt thẳng sang `ACTIVE` với cờ `must_change_password = true`.
-  2. *Thu hồi Phiên Tức thì (RULE-02-04, RULE-02-07):* Lệnh `LockAccount` hoặc `DeactivateAccount` lập tức vô hiệu hóa JWT/Session Token, đưa token vào blacklist để ngăn chặn mọi truy cập trái phép.
-  3. *Thời hạn OTP (RULE-01-02):* Mã OTP đăng ký hết hạn sau 300s; quá 5 lần nhập sai sẽ tạm khóa phiên xác thực 15 phút.
-  4. *Ranh giới Khóa vs Vô hiệu hóa:* `LOCKED` là tạm thời (do nhập sai mật khẩu hoặc tạm đình chỉ); `DEACTIVATED` là vô hiệu hóa do nhân viên nghỉ việc hoặc chấm dứt dịch vụ.
-  5. *Khóa Tự động vs Khóa Chủ động — Hai cơ chế mở khóa riêng biệt (RULE-01-07, RULE-02-04):* Trường `lock_reason` phân biệt hai loại khóa với hai cơ chế mở khóa khác nhau:
-     - `lock_reason = AUTO_FAILED_LOGIN` (do `AutoLockAccount` sau 5 lần sai mật khẩu): CÓ cơ chế tự động mở khóa. Hệ thống ghi `locked_until = now() + 15 phút`; ngay khi $\text{CurrentTimestamp} \ge \text{locked\_until}$, tác vụ nền tự động chuyển `LOCKED -> ACTIVE` (`AutoUnlockAccount`) mà không cần thao tác thủ công. Quản trị viên vẫn có thể `UnlockAccount` sớm hơn nếu cần.
-     - `lock_reason = ADMIN_LOCK` (do Quản trị viên chủ động `LockAccount`): KHÔNG có cơ chế tự động mở khóa dưới bất kỳ hình thức nào. Mọi lượt chuyển `LOCKED -> ACTIVE` cho loại khóa này bắt buộc đi qua thao tác thủ công của Quản trị viên — `UnlockAccount` (không yêu cầu lý do) hoặc `ReactivateAccount` (bổ sung 2026-09-16, bắt buộc lý do giải trình ghi vào Audit Log — xem Decision Log `docs/02-business-rules.md` mục RULE-02-07); cả hai đều reset `failed_login_attempts`/`lock_reason`/`locked_until`.
+| # | Đối tượng | Bảng.cột | Module | Tầng |
+|---|---|---|---|---|
+| 1 | Tài khoản | `accounts.status`, `accounts.is_locked` | TK, QT | 1 |
+| 2 | Chi nhánh | `branches.status` | CN | 1 |
+| 3 | Lịch hẹn | `appointments.status` | LH | 1 |
+| 4 | Visit | `visits.status` | TN, KB | 1 |
+| 5 | Order | `orders.status` (+ `orders.source`) | BH, TG | 1 |
+| 6 | Đặt chỗ lưu trú | `boarding_bookings.status` | LT | 2 |
+| 7 | Chuồng | `kennels.status` | LT | 2 |
+| 8 | Ca thu ngân | `cashier_shifts.status` | TG | 1 |
+| 9 | Phiếu nhập kho | `stock_receipts.status` | KO | 2 |
+| 10 | Care Task | `care_tasks.status` | TB | 1 |
 
 ---
 
-## 2. Store — StoreStatus
+## 1. Tài khoản
+`accounts.status` + `accounts.is_locked` · TK, QT · Tầng 1
 
-```mermaid
-stateDiagram-v2
-    [*] --> DRAFT: CreateStore [OrgAdmin]
-    DRAFT --> ACTIVE: ActivateStore [OrgAdmin, Guard: Configured Operating Hours & Resources]
-    ACTIVE --> SUSPENDED: SuspendStore [OrgAdmin]
-    SUSPENDED --> ACTIVE: ActivateStore [OrgAdmin]
-    ACTIVE --> DEACTIVATED: DeactivateStore [OrgAdmin]
-    DEACTIVATED --> ACTIVE: ActivateStore [OrgAdmin]
-    DEACTIVATED --> ARCHIVED: ArchiveStore [OrgAdmin, Guard RULE-03-06]
-    SUSPENDED --> ARCHIVED: ArchiveStore [OrgAdmin, Guard RULE-03-06]
-```
+Trạng thái `LOCKED` trong business-rules được cài bằng cờ `is_locked = true`, độc lập với `status`. Vì vậy mở khóa tự trở về trạng thái trước đó (BR-QT-12). Các trường phụ không phải trạng thái: `locked_until` (khóa tạm do đăng nhập sai, ST01), `pending_customer_id` (chờ liên kết, BR-TK-19), `must_change_password` (BR-TK-17).
 
-| From State | Command / Trigger | Actor | Guard (RULE-ID) | To State | Domain Event | Actions / Notes |
-|---|---|---|---|---|---|---|
-| [*] | CreateStore | OrganizationAdmin | RULE-03-01 | DRAFT | StoreCreated | Khởi tạo chi nhánh Store mới ở trạng thái bản nháp (`DRAFT`); chờ cấu hình giờ mở cửa, danh mục dịch vụ và tài nguyên cơ sở vật chất. |
-| DRAFT | ActivateStore | OrganizationAdmin | RULE-03-02, RULE-03-07, RULE-03-08 | ACTIVE | StoreActivated | Kích hoạt Store chính thức đi vào vận hành sau khi đã hoàn tất cấu hình giờ hoạt động (`OperatingHours`), tài nguyên phòng/bàn (`StoreResource`) và danh mục dịch vụ. |
-| ACTIVE | SuspendStore | OrganizationAdmin | RULE-03-03, RULE-03-04 | SUSPENDED | StoreSuspended | Tạm ngưng hoạt động; hệ thống tự động khóa tính năng nhận lịch hẹn mới, chặn xếp hàng Walk-in và chặn tạo đơn hàng mới. |
-| SUSPENDED | ActivateStore | OrganizationAdmin | RULE-03-02, RULE-03-03 | ACTIVE | StoreActivated | Tái kích hoạt chi nhánh; khôi phục khả năng tiếp nhận lịch hẹn, bán hàng và phục vụ dịch vụ. |
-| ACTIVE | DeactivateStore | OrganizationAdmin | RULE-03-03, RULE-03-04 | DEACTIVATED | StoreDeactivated | Ngừng kích hoạt Store; yêu cầu xử lý hoàn tất hoặc hủy/hoàn cọc các đơn hàng và lịch hẹn đang mở trước khi chuyển trạng thái tiếp theo. |
-| DEACTIVATED | ActivateStore | OrganizationAdmin | RULE-03-02, RULE-03-03 | ACTIVE | StoreActivated | Mở lại Store từ trạng thái ngừng kích hoạt. |
-| DEACTIVATED | ArchiveStore | OrganizationAdmin | RULE-03-06 | ARCHIVED | StoreArchived | Đóng cửa lưu trữ Store vĩnh viễn khi thỏa mãn đồng thời 4 điều kiện bất biến (0 active orders, 0 active appointments, 0 physical stock, 0 unsettled debts/refunds). |
-| SUSPENDED | ArchiveStore | OrganizationAdmin | RULE-03-06 | ARCHIVED | StoreArchived | Đóng cửa lưu trữ Store vĩnh viễn từ trạng thái tạm ngưng khi thỏa mãn đồng thời 4 điều kiện bất biến (RULE-03-06). |
-
-- **Initial State:** `DRAFT` (Store mới khởi tạo cần hoàn tất cấu hình trước khi mở cửa đón khách)
-- **Terminal State:** `ARCHIVED`
-- **Technical Invariants:**
-  1. *Độc quyền Tổ chức & Cách ly Dữ liệu (RULE-03-01):* Mỗi Store bắt buộc thuộc đúng một Organization cha duy nhất; dữ liệu cách ly 100% (Multi-Tenancy Isolation).
-  2. *Quy trình Kích hoạt từ DRAFT (RULE-03-02):* Store mới tạo ở trạng thái `DRAFT` không được phép nhận lịch hẹn hoặc tạo đơn hàng cho đến khi OrgAdmin gọi `ActivateStore` sau khi đã cấu hình đầy đủ giờ hoạt động và tài nguyên.
-  3. *Điều kiện Bất biến Lưu trữ Đóng cửa (Store Archival Invariant - RULE-03-06):* Lệnh `ArchiveStore` chỉ được thực thi khi:
-     - Không còn đơn hàng nào đang mở/đang xử lý (`PENDING_PAYMENT`, `PAID`, `PROCESSING`, `READY`).
-     - Không còn lịch hẹn nào đang mở hoặc đang phục vụ (`BOOKED`, `CONFIRMED`, `CHECKED_IN`, `IN_PROGRESS`).
-     - Tồn kho thực tế tại Store bằng 0 ($\text{PhysicalQuantity} == 0$).
-     - Không còn công nợ tài chính, giao dịch chưa đối soát hoặc yêu cầu hoàn tiền đang xử lý.
-  4. *Bất biến Dữ liệu Sau Archive (đã chốt Phase 4 — GAP-ORG-01; mở rộng 2026-09-17 — xem Decision Log RULE-03-06 `docs/02-business-rules.md` mục 03):* `ARCHIVED` là Terminal State tuyệt đối — không có transition rời khỏi `ARCHIVED`. Toàn bộ dữ liệu cấu hình con của Store (`OperatingHours`, `StoreResource`, `store_services`, `store_products`, `StaffWorkSchedule`) **và chính record `Store`** (`name`/`address`/`phone`) trở thành bất biến chỉ đọc, không `UPDATE`/`DELETE`, chỉ phục vụ tra cứu lịch sử/audit — `UpdateStore` trên Store `ARCHIVED` bị từ chối (`400 BUSINESS_RULE_VIOLATION`, RULE-03-06).
-  5. *`OrganizationPolicy` không có FSM riêng* (settings entity, cùng loại `organizations.status` — xem `docs/api/org-store-v1.md` dòng "org status; không có FSM") — chỉ có 1 bản ghi hiện hành/Organization, cập nhật in-place qua `ManageOrganizationPolicy` (RULE-03-09), không có vòng đời trạng thái.
-  6. *`StorePolicy` không có FSM riêng* (settings entity, cùng nguyên tắc với `OrganizationPolicy` ở Invariant #5) — chỉ có 1 bản ghi hiện hành/Store, cập nhật in-place qua `ConfigureStorePolicy` (RULE-03-10), không có vòng đời trạng thái; độc lập với FSM Store ở trên (Store đổi trạng thái không làm mất/reset `StorePolicy`).
-
----
-
-## 3. CaregiverInvitation / Delegation — CaregiverStatus
-
-> `Caregiver` là Actor. `CaregiverStatus` đặc tả vòng đời của lời mời ủy quyền (`CaregiverInvitation`) và quan hệ ủy quyền chăm sóc thú cưng (`PetCaregiverDelegation`).
-> Theo quyết định nghiệp vụ đã duyệt: `AcceptCaregiverInvitation` kích hoạt trạng thái `ACTIVE` trực tiếp, không qua bước duyệt trung gian.
-
-```mermaid
-stateDiagram-v2
-    [*] --> INVITED: InviteCaregiver [Primary Owner]
-    INVITED --> ACTIVE: AcceptCaregiverInvitation [Caregiver]
-    INVITED --> REJECTED: RejectCaregiverInvitation [Caregiver]
-    INVITED --> REVOKED: RevokeCaregiver [Primary Owner]
-    INVITED --> EXPIRED: ProcessInvitationExpiry [7d TTL Expired]
-    ACTIVE --> REVOKED: RevokeCaregiver [Primary Owner]
-    ACTIVE --> EXPIRED: ProcessDelegationExpiry [Delegation Period Expired]
-```
-
-| From State | Command / Trigger | Actor | Guard (RULE-ID) | To State | Domain Event | Actions / Notes |
-|---|---|---|---|---|---|---|
-| [*] | InviteCaregiver | Customer (Primary Owner) | RULE-04-01, RULE-04-04 | INVITED | CaregiverInvited | Khởi tạo lời mời ủy quyền chăm sóc Pet; hệ thống tạo `invitation_token` với thời hạn hiệu lực 7 ngày (TTL = 7 ngày). |
-| INVITED | AcceptCaregiverInvitation | Caregiver | RULE-04-05, RULE-04-06 | ACTIVE | CaregiverInvitationAccepted | Người được mời chấp thuận lời mời trong thời hạn TTL; kích hoạt quan hệ ủy quyền `ACTIVE` trực tiếp có hiệu lực ngay lập tức. |
-| INVITED | RejectCaregiverInvitation | Caregiver | RULE-04-06 | REJECTED | CaregiverInvitationRejected | Người được mời chủ động từ chối lời mời ủy quyền; hủy bỏ lời mời. |
-| INVITED | ProcessInvitationExpiry | System | RULE-04-05 | EXPIRED | CaregiverInvitationExpired | Quá thời hạn 7 ngày không được xác nhận; tác vụ nền tự động quét và đánh dấu lời mời hết hạn. |
-| INVITED | RevokeCaregiver | Customer (Primary Owner) | RULE-04-04, RULE-04-08 | REVOKED | CaregiverRevoked | Chủ sở hữu chính hủy lời mời khi người được mời chưa phản hồi; bổ sung đã duyệt 2026-09-16, xem docs/superpowers/specs/2026-09-16-caregiver-delegation-design.md D-04. |
-| ACTIVE | RevokeCaregiver | Customer (Primary Owner) | RULE-04-04, RULE-04-08 | REVOKED | CaregiverRevoked | Chủ sở hữu chính chủ động thu hồi quyền ủy quyền; lập tức chấm dứt mọi quyền xem và thao tác trên Pet của Caregiver. |
-| ACTIVE | ProcessDelegationExpiry | System | RULE-04-07 | EXPIRED | CaregiverDelegationExpired | Hết thời hạn hiệu lực ủy quyền (`DelegationValidityPeriod`); hệ thống tự động chấm dứt quyền hạn ủy quyền. |
-
-- **Initial State:** `INVITED`
-- **Terminal State:** `REJECTED`, `EXPIRED`, `REVOKED`
-- **Technical Invariants:**
-  1. *Quyền Khởi tạo & Thu hồi Độc quyền của Primary Owner (RULE-04-04, RULE-04-08):* Chỉ có Primary Owner của Pet mới có quyền gửi lời mời (`InviteCaregiver`) hoặc thu hồi quyền ủy quyền (`RevokeCaregiver`). Caregiver tuyệt đối không được phép mời thêm Caregiver khác, không được chuyển nhượng quyền sở hữu Pet (`ManagePetOwnership`), và không được sửa đổi thông tin định danh cốt lõi của Pet.
-  2. *Ranh giới Quyền hạn của Active Caregiver (RULE-04-09):* Khi ở trạng thái `ACTIVE`, Caregiver được phép: xem thông tin Pet, đặt lịch hẹn (`BookAppointment`), đưa Pet đi khám/spa, tiếp nhận check-in/check-out và xem lịch sử y tế được chia sẻ.
-  3. *Thời hạn Lời mời vs Thời hạn Ủy quyền:* Lời mời có TTL 7 ngày (`RULE-04-05`). Khi chuyển sang `ACTIVE`, quan hệ ủy quyền duy trì đến ngày kết thúc ủy quyền (`DelegationValidityPeriod` theo `RULE-04-07`).
-
----
-
-## 4. Appointment & BookingHold — AppointmentStatus & BookingHoldStatus
-
-### 4.1. BookingHold — BookingHoldStatus (Pre-booking Slot Reservation 15m TTL)
-
-```mermaid
-stateDiagram-v2
-    [*] --> HOLDING: HoldSlot [Customer / Receptionist]
-    HOLDING --> CONFIRMED: BookAppointment / PaymentSucceeded
-    HOLDING --> RELEASED: ReleaseHold [User Cancels]
-    HOLDING --> EXPIRED: ExpireHold [15m TTL Timeout]
-```
-
-| From State | Command / Trigger | Actor | Guard (RULE-ID) | To State | Domain Event | Actions / Notes |
-|---|---|---|---|---|---|---|
-| [*] | HoldSlot | Customer / Receptionist | RULE-06-01 | HOLDING | SlotHeld | Khóa tạm thời tài nguyên phòng/bàn, lịch nhân sự và lịch Pet trong 15 phút ($\text{Hold\_TTL} = 900\text{s}$). |
-| HOLDING | BookAppointment / PaymentSucceeded | Customer / Receptionist / System | RULE-06-01, RULE-06-02 | CONFIRMED | AppointmentBooked | Xác nhận hoặc hoàn tất đặt cọc/thanh toán trong thời hạn 15m; khởi tạo Aggregate `Appointment` chính thức. |
-| HOLDING | ReleaseHold | Customer / Receptionist | RULE-06-01 | RELEASED | HoldReleased | Khách hàng hoặc tiếp tân chủ động hủy phiên đặt lịch; giải phóng slot tài nguyên ngay lập tức. |
-| HOLDING | ExpireHold | System | RULE-06-01 | EXPIRED | HoldExpired | Quá thời hạn 15 phút không hoàn tất xác nhận/thanh toán; hệ thống tự động quét và giải phóng slot về trạng thái tự do (`FREE`). |
-
-- **Initial State:** `HOLDING`
-- **Terminal State:** `CONFIRMED`, `RELEASED`, `EXPIRED`
-- **Technical Invariants:**
-  1. *Khóa Giữ chỗ 15 Phút (RULE-06-01):* Slot giữ chỗ tạm thời có TTL chính xác 900 giây. Trong thời gian này, slot không thể bị chọn bởi khách hàng khác.
-  2. *Cầu nối Giữ chỗ sang Cuộc hẹn:* Khi chuyển sang `CONFIRMED`, `BookingHold` hoàn tất vai trò và phát sinh sự kiện `AppointmentBooked` để khởi tạo `Appointment`.
-
----
-
-### 4.2. Appointment — AppointmentStatus
-
-```mermaid
-stateDiagram-v2
-    [*] --> BOOKED: BookAppointment
-    BOOKED --> CONFIRMED: ConfirmAppointment
-    BOOKED --> CHECKED_IN: CheckInAppointment
-    CONFIRMED --> CHECKED_IN: CheckInAppointment
-    BOOKED --> BOOKED: RescheduleAppointment [Atomic Guard]
-    CONFIRMED --> BOOKED: RescheduleAppointment [Atomic Guard]
-    CHECKED_IN --> IN_PROGRESS: StartAppointmentService
-    IN_PROGRESS --> COMPLETED: CheckOutAppointment
-    BOOKED --> CANCELLED: CancelAppointment
-    CONFIRMED --> CANCELLED: CancelAppointment
-    CHECKED_IN --> CANCELLED: CancelAppointment
-    BOOKED --> NO_SHOW: MarkNoShow [Auto Release Slot]
-    CONFIRMED --> NO_SHOW: MarkNoShow [Auto Release Slot]
-    IN_PROGRESS --> ABORTED: AbortAppointment [Emergency Abort]
-```
-
-| From State | Command / Trigger | Actor | Guard (RULE-ID) | To State | Domain Event | Actions / Notes |
-|---|---|---|---|---|---|---|
-| [*] | BookAppointment | Customer / Receptionist / Caregiver | RULE-06-01, RULE-06-02, RULE-06-10, RULE-06-11 | BOOKED | AppointmentBooked | Khởi tạo lịch hẹn mới thỏa mãn đồng thời: Store đang `ACTIVE`, nằm trong giờ mở cửa, và vượt qua kiểm tra xung đột 3 chiều (Staff, StoreResource, Pet Schedule). |
-| BOOKED | ConfirmAppointment | Receptionist / System | RULE-06-01, RULE-06-03, RULE-06-10 | CONFIRMED | AppointmentConfirmed | Tiếp tân hoặc hệ thống xác nhận lịch hẹn khi đảm bảo đủ nhân sự trực ca và công suất phòng/bàn. |
-| BOOKED | CheckInAppointment | Receptionist | RULE-06-06 | CHECKED_IN | AppointmentCheckedIn | Tiếp tân tiếp nhận khách đến Store trực tiếp từ trạng thái `BOOKED`. |
-| CONFIRMED | CheckInAppointment | Receptionist | RULE-06-06 | CHECKED_IN | AppointmentCheckedIn | Tiếp tân tiếp nhận khách đến Store đúng lịch hẹn đã xác nhận. |
-| BOOKED | RescheduleAppointment | Customer / Receptionist | RULE-06-03, RULE-06-04, RULE-06-10, RULE-06-11 | BOOKED | AppointmentRescheduled | Đổi lịch hẹn nguyên tử (Atomic Reschedule): Khóa giữ chỗ khung giờ mới trước, chỉ giải phóng slot cũ khi slot mới thành công; rollback toàn phần nếu thất bại. |
-| CONFIRMED | RescheduleAppointment | Customer / Receptionist | RULE-06-03, RULE-06-04, RULE-06-10, RULE-06-11 | BOOKED | AppointmentRescheduled | Đổi lịch hẹn nguyên tử từ `CONFIRMED`: Khóa slot mới, giải phóng slot cũ, đưa về `BOOKED` để tái xác nhận. |
-| CHECKED_IN | StartAppointmentService | Veterinarian / Groomer | RULE-06-06, RULE-09-01, RULE-11-01 | IN_PROGRESS | AppointmentStarted | Bác sĩ hoặc Groomer tiếp nhận Pet vào phòng khám/bàn làm đẹp bắt đầu phục vụ chuyên môn. |
-| IN_PROGRESS | CheckOutAppointment | Receptionist | RULE-06-06, RULE-06-07, RULE-09-06, RULE-11-04 | COMPLETED | AppointmentCompleted | Hoàn tất phiên dịch vụ y tế/spa; giải phóng tài nguyên phòng/bàn (`ReleaseStoreResource`); chuyển tiếp sang lập hóa đơn thanh toán tại quầy (`CreateInvoice`). |
-| BOOKED | CancelAppointment | Customer / Receptionist | RULE-06-05, RULE-06-08 | CANCELLED | AppointmentCancelled | Khách hoặc tiếp tân hủy lịch trước giờ hẹn; yêu cầu nhập lý do hủy (`cancellation_reason`); tự động giải phóng tài nguyên và xử lý cọc. |
-| CONFIRMED | CancelAppointment | Customer / Receptionist | RULE-06-05, RULE-06-08 | CANCELLED | AppointmentCancelled | Hủy lịch đã xác nhận; yêu cầu `cancellation_reason`; giải phóng tài nguyên phòng/bàn và ca làm việc; hoàn cọc theo chính sách Store. |
-| CHECKED_IN | CancelAppointment | Receptionist / Customer | RULE-06-05, RULE-06-08 | CANCELLED | AppointmentCancelled | Khách hủy sau khi đã check-in nhưng chưa bắt đầu phục vụ; giải phóng tài nguyên; xử lý hoàn cọc. |
-| BOOKED | MarkNoShow | Receptionist / System | RULE-06-09 | NO_SHOW | AppointmentNoShow | Khách quá hạn ân hạn (Grace Period 15 phút) không đến; tự động giải phóng tài nguyên phòng/bàn (`ReleaseStoreResource`) và lịch nhân sự (`ReleaseStaffSlot`); khấu trừ tiền cọc. |
-| CONFIRMED | MarkNoShow | Receptionist / System | RULE-06-09 | NO_SHOW | AppointmentNoShow | Khách đã xác nhận nhưng quá giờ ân hạn không đến; lập tức giải phóng phòng/bàn và lịch nhân sự; phạt cọc theo chính sách chi nhánh. |
-| IN_PROGRESS | AbortAppointment | Veterinarian / Groomer | RULE-06-08, RULE-21-01, RULE-21-02, RULE-21-03 | ABORTED | AppointmentAborted | Dừng phục vụ khẩn cấp do sốc y tế, thú cưng hung dữ, hoặc sự cố an toàn; giải phóng tài nguyên; tự động kích hoạt lập biên bản sự cố (`ClinicalIncident` / `GroomingIncident`) và yêu cầu hoàn tiền phần chưa thực hiện. |
-
-- **Initial State:** `BOOKED`
-- **Terminal State:** `COMPLETED`, `CANCELLED`, `NO_SHOW`, `ABORTED`
-- **Technical Invariants:**
-  1. *Cấm Tuyệt đối Bước nhảy Tắt (No Direct Checkout Invariant):* Nghiêm cấm hoàn toàn chuyển trạng thái trực tiếp `CHECKED_IN -> COMPLETED` mà không qua `IN_PROGRESS`. Mọi lịch hẹn hoàn tất bắt buộc phải có thời gian phục vụ thực tế và nhật ký chuyên môn hợp lệ.
-  2. *Quy tắc Đổi lịch Nguyên tử (Atomic Reschedule Guard - RULE-06-04):*
-     - Bắt buộc kiểm tra và khóa giữ chỗ khung giờ mới trước (thỏa mãn `StaffAvailability`, `StoreResource Collision Guard` và `Pet Schedule Collision Guard`).
-     - Chỉ khi khóa thành công slot mới mới thực hiện giải phóng slot cũ và cập nhật `Appointment` về `BOOKED`.
-     - Nếu slot mới bị trùng/xung đột, giao dịch rollback toàn phần giữ nguyên lịch hẹn ban đầu (khách hàng không bao giờ bị mất slot cũ khi đổi lịch thất bại).
-  3. *Quy tắc Giải phóng Tài nguyên khi Vắng mặt (No-Show Resource & Slot Release - RULE-06-09):* Khi đánh dấu `MarkNoShow`, hệ thống lập tức gọi `ReleaseStoreResource` và `ReleaseStaffSlot` để giải phóng công suất cho khách khác hoặc hàng đợi Walk-in.
-  4. *Kiểm tra Xung đột Lịch Tam diện (Triple Collision Guard - RULE-06-10, RULE-06-11):*
-     $$\forall A \in \text{Appointments}(P): A.\text{status} \in \{\text{BOOKED, CONFIRMED, CHECKED\_IN, IN\_PROGRESS}\} \implies [A.T_{\text{start}}, A.T_{\text{end}}] \cap [T_{\text{start}}, T_{\text{end}}] = \emptyset$$
-  5. *Giao thức Dừng Khẩn cấp (Emergency Abort Protocol - RULE-06-08, RULE-21-01):* `AbortAppointment` bắt buộc cung cấp `abort_reason`, phát sự kiện `AppointmentAborted`, tạo bản ghi Incident loại `HIGH`/`CRITICAL`, và phát sinh yêu cầu hoàn tiền cho các hạng mục chưa thực hiện.
-
----
-
-## 5. Order — OrderStatus (v1 In-Store Fulfillment)
-
-> Theo quyết định kiến trúc đã duyệt cho v1 (Decision D-03): Loại bỏ trạng thái `SHIPPED`. Hệ thống hỗ trợ hoàn thành đơn hàng tại cửa hàng (In-Store Pickup / Retail Handover).
-
-```mermaid
-stateDiagram-v2
-    [*] --> PENDING_PAYMENT: CheckoutOrder [Online / App]
-    [*] --> PAID: CreateOrder [POS Cashier Session]
-    
-    PENDING_PAYMENT --> PAID: PaymentSucceeded
-    PENDING_PAYMENT --> CANCELLED: CancelOrder / ProcessOrderTimeout [15m TTL]
-    
-    PAID --> DELIVERED: CompleteStoreOrder [POS Instant Handover]
-    PAID --> CONFIRMED: ConfirmOrder [Staged Fulfillment]
-    
-    CONFIRMED --> PROCESSING: ProcessOrder
-    PROCESSING --> READY: PrepareProductOrder
-    READY --> DELIVERED: CompleteStoreOrder
-    
-    PAID --> CANCELLED: CancelOrderWithRefund
-    CONFIRMED --> CANCELLED: CancelOrderWithRefund
-    PROCESSING --> CANCELLED: CancelOrderWithRefund
-    READY --> CANCELLED: CancelOrderWithRefund
-    
-    DELIVERED --> REFUNDED: RefundCompleted [100% Full Return]
-```
-
-| From State | Command / Trigger | Actor | Guard (RULE-ID) | To State | Domain Event | Actions / Notes |
-|---|---|---|---|---|---|---|
-| [*] | CheckoutOrder / CreateOrder [Online / App] | Customer / Receptionist | RULE-14-01, RULE-14-02, RULE-14-04 | PENDING_PAYMENT | OrderCreated | Khách hàng hoặc tiếp tân tạo đơn hàng Online/App; giữ chỗ tồn kho 15 phút ($\text{Hold\_TTL} = 900\text{s}$). |
-| [*] | CreateOrder [POS Counter Cashier Session] | Receptionist | RULE-14-01, RULE-14-02, RULE-14-03, RULE-14-04 | PAID | OrderPaid | Thanh toán trực tiếp tại quầy qua phiên thu ngân thời gian thực trong cùng ranh giới transaction. |
-| PENDING_PAYMENT | Event: PaymentSucceeded | System | RULE-14-04, RULE-16-04 | PAID | OrderPaid | Nhận xác nhận thanh toán thành công từ cổng thanh toán trực tuyến. |
-| PENDING_PAYMENT | CancelOrder | Customer / Receptionist | RULE-14-04, RULE-14-07 | CANCELLED | OrderCancelled | Khách hàng hoặc tiếp tân chủ động hủy đơn hàng chưa thanh toán; giải phóng tồn kho giữ chỗ. |
-| PENDING_PAYMENT | ProcessOrderTimeout | System | RULE-14-04, RULE-14-07 | CANCELLED | OrderTimedOut | Quá thời hạn 15 phút không thanh toán; tác vụ nền tự động hủy đơn và giải phóng $\text{ReservedQuantity}$. |
-| PAID | CompleteStoreOrder [POS Instant] | Receptionist | RULE-14-03, RULE-14-06 | DELIVERED | OrderDelivered | Bàn giao sản phẩm tại quầy ngay sau khi thu tiền thành công (In-Store Instant Handover). |
-| PAID | ConfirmOrder [Staged] | Receptionist / System | RULE-14-03, RULE-14-05 | CONFIRMED | OrderConfirmed | Tiếp tân xác nhận đơn hàng Online đã thanh toán để chuyển bộ phận kho chuẩn bị hàng. |
-| CONFIRMED | ProcessOrder | Receptionist / InventoryStaff | RULE-14-05 | PROCESSING | OrderProcessed | Nhân viên kho/bán hàng tiếp nhận xử lý đơn hàng, bắt đầu soạn hàng. |
-| PROCESSING | PrepareProductOrder | InventoryStaff | RULE-12-04, RULE-14-05 | READY | ProductOrderPrepared | Soạn hàng và đóng gói hoàn tất; chuyển đơn sang trạng thái sẵn sàng bàn giao cho khách. |
-| READY | CompleteStoreOrder | Receptionist | RULE-14-05, RULE-14-06 | DELIVERED | OrderDelivered | Khách xuất trình mã nhận hàng tại Store; tiếp tân bàn giao sản phẩm và hoàn tất đơn hàng. |
-| PAID | CancelOrderWithRefund | Customer / StoreManager / Receptionist | RULE-14-07, RULE-17-01 | CANCELLED | OrderCancelledWithRefund | Khách hủy đơn sau khi thanh toán trước khi xác nhận; kích hoạt hoàn tiền 100% và hoàn kho. |
-| CONFIRMED | CancelOrderWithRefund | StoreManager / Receptionist | RULE-14-07, RULE-17-01 | CANCELLED | OrderCancelledWithRefund | Hủy đơn đã xác nhận; kích hoạt tạo yêu cầu hoàn tiền 100% và giải phóng tồn kho. |
-| PROCESSING | CancelOrderWithRefund | StoreManager / Receptionist | RULE-14-07, RULE-17-01 | CANCELLED | OrderCancelledWithRefund | Hủy đơn đang soạn (hết hàng/hỏng hàng); kích hoạt tạo yêu cầu hoàn tiền 100% và hoàn kho. |
-| READY | CancelOrderWithRefund | StoreManager / Receptionist | RULE-14-07, RULE-17-01 | CANCELLED | OrderCancelledWithRefund | Khách từ chối nhận/quá hạn nhận hàng; kích hoạt tạo yêu cầu hoàn tiền và nhập lại hàng vào kho. |
-| DELIVERED | Event: RefundCompleted [100% Full Return] | System | RULE-14-07, RULE-17-01, RULE-17-02 | REFUNDED | OrderRefunded | Đổi trả toàn bộ sản phẩm và hoàn tiền 100% sau khi đã bàn giao hàng thành công. |
-
-- **Initial State:** `PENDING_PAYMENT` (Online/App Checkout), `PAID` (POS Counter Synchronous Checkout).
-- **Terminal State:** `DELIVERED` (Đã giao hàng thành công), `CANCELLED` (Hủy trước giao hàng, kích hoạt hoàn tiền nếu đã thanh toán và giải phóng kho), `REFUNDED` (Đã nhận hàng sau đó đổi trả và hoàn tiền 100%).
-- **Technical Invariants (Decision D-03):**
-  1. *Đơn hàng Online/App:* Khi qua bước `CheckoutOrder` chuyển sang `PENDING_PAYMENT` với thời hạn giữ chỗ (Reserved Quantity) 15 phút (`RULE-14-04`). Nếu quá hạn chưa thanh toán, hệ thống tự động kích hoạt `ProcessOrderTimeout` hủy đơn (`CANCELLED`) và giải phóng kho.
-  2. *Đơn hàng tại quầy POS:* Thực hiện trực tiếp bởi Receptionist trong phiên thu ngân đồng bộ, thanh toán tiền mặt/quẹt thẻ chuyển thẳng sang `PAID` và bàn giao ngay tại quầy (`DELIVERED`).
-  3. *Phân định rõ các trạng thái kết thúc (Terminal States):*
-     - Đơn hủy trước khi hoàn tất giao hàng (dù chưa trả tiền hay đã trả tiền và kích hoạt hoàn tiền) đều chuyển sang `CANCELLED` (Terminal, `RULE-14-07`, `RULE-14-08`).
-     - Trạng thái `REFUNDED` là trạng thái kết thúc đặc thù áp dụng cho đơn hàng đã hoàn tất giao hàng (`DELIVERED`) sau đó phát sinh đổi trả và hoàn lại 100% giá trị tiền đơn hàng.
-     - Trường hợp đổi trả hoàn tiền một phần (`Partial Return`), đơn hàng **GIỮ NGUYÊN** trạng thái `DELIVERED` và cập nhật lũy kế `total_refunded_amount`.
-
----
-
-## 6. Invoice — InvoiceStatus
-
-> Theo Quyết định Kiến trúc Khóa D-01 & D-02:
-> 1. `InvoiceStatus` tuân thủ nghiêm ngặt tập giá trị `[DRAFT, ISSUED, PAID, VOID, CANCELLED]`. Loại bỏ hoàn toàn trạng thái `PARTIALLY_PAID` và `REFUNDED` trên Hóa đơn.
-> 2. **Tính bất biến của việc tất toán hóa đơn (Settlement Immutability - Decision D-01):** Hóa đơn sau khi đã chuyển sang `PAID` sẽ **VĨNH VIỄN GIỮ NGUYÊN trạng thái `PAID`** khi có phát sinh hoàn tiền (một phần hoặc toàn phần). Số tiền hoàn và công nợ thực tế được quản lý lũy kế qua thuộc tính `total_refunded_amount`, đối soát qua các thực thể `Payment` (`PARTIALLY_REFUNDED` / `REFUNDED`) và `Refund` (`COMPLETED`).
-> 3. **Hóa đơn Phụ phí phát sinh độc lập (Surcharge Invoice - Decision D-02):** Khi phát sinh dịch vụ/phụ phí ngoài dự kiến trong phiên Grooming/Khám bệnh (`ConfirmAdditionalService`), hệ thống tạo một Hóa đơn Phụ phí độc lập (`Surcharge Invoice`) đi qua vòng đời `DRAFT -> ISSUED -> PAID`, tuyệt đối không ghi đè hay chèn mục vào hóa đơn gốc đã thanh toán.
-
-```mermaid
-stateDiagram-v2
-    [*] --> DRAFT: CreateInvoice / IssueSurchargeInvoice [D-02]
-    DRAFT --> ISSUED: IssueInvoice
-    DRAFT --> CANCELLED: DiscardInvoice [Draft Discarded]
-    ISSUED --> PAID: Event: FullPaymentSettled
-    ISSUED --> VOID: VoidInvoice [Unpaid Invalidation]
-```
-
-| From State | Command / Trigger | Actor | Guard (RULE-ID) | To State | Domain Event | Actions / Notes |
-|---|---|---|---|---|---|---|
-| [*] | CreateInvoice | Receptionist / FinanceStaff | RULE-15-01, RULE-15-02 | DRAFT | InvoiceCreated | Khởi tạo bản nháp hóa đơn thanh toán cho dịch vụ hoặc sản phẩm tại Store. |
-| [*] | IssueSurchargeInvoice [D-02 Surcharge] | Receptionist / FinanceStaff | RULE-11-03, RULE-15-05 | DRAFT | InvoiceCreated | Khởi tạo Hóa đơn Phụ phí độc lập khi khách hàng duyệt dịch vụ phát sinh trong ca Grooming/Khám. |
-| DRAFT | IssueInvoice | FinanceStaff / Receptionist | RULE-15-01, RULE-15-02, RULE-15-03 | ISSUED | InvoiceIssued | Phát hành hóa đơn chính thức; hóa đơn ở trạng thái này mới được phép tiếp nhận thanh toán. |
-| DRAFT | DiscardInvoice | Receptionist / FinanceStaff | RULE-15-04 | CANCELLED | InvoiceCancelled | Hủy bản nháp hóa đơn tạo sai; chuyển sang `CANCELLED`. |
-| ISSUED | Event: FullPaymentSettled | System | RULE-15-06, RULE-16-04 | PAID | InvoicePaid | Tổng các khoản thanh toán thành công tích lũy đạt đủ 100% `TotalAmount`; tất toán hóa đơn. |
-| ISSUED | VoidInvoice | FinanceStaff | RULE-15-04 | VOID | InvoiceVoided | Hủy hóa đơn đã phát hành nhưng chưa thanh toán; vô hiệu hóa nghĩa vụ thanh toán. |
-
-- **Initial State:** `DRAFT`
-- **Terminal State:** `PAID`, `VOID`, `CANCELLED`
-- **Technical Invariants (Decisions D-01 & D-02):**
-  1. Hóa đơn ở trạng thái `ISSUED` cho phép nhận nhiều lần thanh toán qua aggregate `Payment`. Hóa đơn chỉ chuyển sang `PAID` khi sự kiện `FullPaymentSettled` xác nhận tổng số tiền thanh toán thành công tích lũy đạt 100% `TotalAmount` (`RULE-15-06`).
-  2. **Tuyệt đối cấm `VoidInvoice` đối với hóa đơn đã `PAID` (`RULE-15-04`, `RULE-15-07`).** Khi muốn trả lại tiền cho khách, bắt buộc phải kích hoạt quy trình hoàn tiền qua aggregate `Refund` độc lập.
-  3. Bản nháp hóa đơn hủy bỏ chuyển sang `CANCELLED` (synonym: `InvoiceDraftDiscarded`). Hóa đơn đã phát hành nhưng hủy bỏ nghĩa vụ thanh toán chuyển sang `VOID`.
-  4. Các trạng thái `PARTIALLY_PAID` và `REFUNDED` bị cấm hoàn toàn trên `InvoiceStatus`.
-
----
-
-## 7. Payment — PaymentStatus
-
-```mermaid
-stateDiagram-v2
-    [*] --> PENDING: MakePayment [Online Gateway - Customer]
-    [*] --> SUCCESS: RecordCashPayment [POS Cashier Direct Settlement, RULE-16-02]
-    PENDING --> PROCESSING: VerifyPayment [System]
-    PROCESSING --> SUCCESS: ReceivePaymentCallback [Gateway Success, System, RULE-16-04]
-    PROCESSING --> FAILED: ReceivePaymentCallback [fail, System]
-    PENDING --> CANCELLED: CancelPayment [Customer / System]
-    PROCESSING --> CANCELLED: CancelPayment / GatewayTimeout [Customer / System]
-    
-    SUCCESS --> PARTIALLY_REFUNDED: Event: RefundCompleted [RefundAmount < TotalAmount]
-    PARTIALLY_REFUNDED --> PARTIALLY_REFUNDED: Event: RefundCompleted [CumulativeRefund < TotalAmount]
-    PARTIALLY_REFUNDED --> REFUNDED: Event: RefundCompleted [CumulativeRefund == TotalAmount]
-    SUCCESS --> REFUNDED: Event: RefundCompleted [100% Full Refund]
-```
-
-| From State | Command / Trigger | Actor | Guard (RULE-ID) | To State | Domain Event | Actions / Notes |
-|---|---|---|---|---|---|---|
-| [*] | MakePayment | Customer | RULE-16-01, RULE-16-02 | PENDING | PaymentCreated | Khách hàng khởi tạo giao dịch thanh toán trực tuyến qua cổng thanh toán điện tử. |
-| [*] | RecordCashPayment | Receptionist | RULE-16-01, RULE-16-02 | SUCCESS | PaymentSucceeded | Thu ngân ghi nhận và quyết toán tiền mặt trực tiếp tại quầy trong cùng một transaction của phiên thu ngân. |
-| PENDING | VerifyPayment | System | RULE-16-01, RULE-16-02, RULE-16-03 | PROCESSING | PaymentProcessing | Hệ thống chuyển hướng hoặc gửi yêu cầu xác thực sang cổng thanh toán trực tuyến. |
-| PROCESSING | ReceivePaymentCallback | System | RULE-16-03, RULE-16-04 | SUCCESS | PaymentSucceeded | Nhận Webhook callback thành công từ cổng thanh toán; xác thực chữ ký HMAC và Idempotency Key. |
-| PROCESSING | ReceivePaymentCallback [fail] | System | RULE-16-04, RULE-16-05 | FAILED | PaymentFailed | Cổng thanh toán phản hồi giao dịch thất bại (thẻ lỗi, số dư không đủ). |
-| PENDING | CancelPayment | Customer / System | RULE-16-05 | CANCELLED | PaymentCancelled | Khách hàng chủ động hủy phiên thanh toán Online trước khi chuyển cổng. |
-| PROCESSING | CancelPayment / GatewayTimeout | Customer / System | RULE-16-05 | CANCELLED | PaymentCancelled | Khách hủy phiên hoặc cổng thanh toán Online phản hồi timeout khi đang xử lý. |
-| SUCCESS | Event: RefundCompleted [một phần] | System | RULE-16-06, RULE-17-02 | PARTIALLY_REFUNDED | PaymentPartiallyRefunded | Hoàn tiền một phần; tổng số tiền hoàn tích lũy $< \text{TotalAmount}$. |
-| PARTIALLY_REFUNDED | Event: RefundCompleted [tiếp tục hoàn một phần] | System | RULE-16-06, RULE-17-02 | PARTIALLY_REFUNDED | PaymentPartiallyRefunded | Tiếp tục hoàn tiền một phần; tổng số tiền hoàn tích lũy vẫn $< \text{TotalAmount}$. |
-| PARTIALLY_REFUNDED | Event: RefundCompleted [hoàn 100%] | System | RULE-16-06, RULE-17-02 | REFUNDED | PaymentRefunded | Hoàn tất số tiền còn lại; tổng số tiền hoàn tích lũy $== \text{TotalAmount}$. |
-| SUCCESS | Event: RefundCompleted [hoàn 100% lần đầu] | System | RULE-16-06, RULE-17-01, RULE-17-02 | REFUNDED | PaymentRefunded | Hoàn tiền toàn phần 100% ngay trong lần đầu tiên. |
-
-- **Initial State:** `PENDING` (Online Gateway), `SUCCESS` (Tiền mặt trực tiếp tại quầy).
-- **Terminal State:** `FAILED`, `CANCELLED`, `REFUNDED`
-- **Trạng thái Đã quyết toán (Settled States):** `SUCCESS` và `PARTIALLY_REFUNDED` là các trạng thái thanh toán thành công có thể chuyển tiếp sang `REFUNDED` khi có các giao dịch hoàn tiền hoàn tất.
-- **Technical Invariants (Kênh Thanh toán & Ranh giới Hủy):**
-  1. *Phân định Kênh Thanh toán (RULE-16-02, Section 19.1):*
-     - Kênh Tiền mặt (`CASH`): Đi thẳng `[*] -> SUCCESS` trong ranh giới `@Transactional` nguyên tử của phiên thu ngân POS (bao gồm tạo Payment `SUCCESS`, Invoice `PAID`, Order `PAID`, trừ tồn kho `PhysicalQuantity`).
-     - Kênh Điện tử (`ONLINE_GATEWAY`): Đi theo chuỗi `[*] -> PENDING -> PROCESSING -> SUCCESS / FAILED / CANCELLED` do tính chất bất đồng bộ của cổng thanh toán.
-  2. *Phạm vi hiệu lực của `CancelPayment` (RULE-16-05):*
-     - Chỉ áp dụng cho kênh Thanh toán Điện tử (`ONLINE_GATEWAY`) đang ở trạng thái `PENDING` hoặc `PROCESSING`.
-     - Kênh Tiền mặt (`CASH`) không đi qua các trạng thái chờ; nếu khách đổi ý chưa thanh toán tại quầy thì phiên/hóa đơn nháp bị hủy mà không tạo ra bản ghi Payment.
-  3. *Bất biến hoàn tiền một phần (Partial Refund Invariant):*
-     $$\text{RemainingRefundableAmount} = \text{TotalAmount} - \sum(\text{CompletedRefunds}) \ge 0$$
-     Mọi yêu cầu hoàn tiền `RefundRequest` bắt buộc phải thỏa mãn: $\text{RequestedRefundAmount} \le \text{RemainingRefundableAmount}$.
-
-
----
-
-## 8. Refund — RefundStatus
-
-> Theo quyết định nghiệp vụ đã duyệt:
-> 1. Mỗi `Refund` gắn với đúng một giao dịch `Payment` gốc cụ thể và hoàn tiền theo phương thức thanh toán gốc:
->    - Đối với thanh toán Tiền mặt (`CASH`): Hoàn tiền mặt trực tiếp tại quầy (`Receptionist / StoreManager` thực hiện `ProcessRefund` -> `CompleteRefund` tức thì).
->    - Đối với thanh toán Điện tử (`ONLINE_GATEWAY`): Hoàn tiền qua API cổng thanh toán (`FinanceStaff` kích hoạt lệnh gọi cổng).
-> 2. **Loại bỏ hoàn toàn trạng thái `UNDER_REVIEW`:** Quy trình Maker-Checker chuyển thẳng: `REQUESTED -> APPROVED / REJECTED`.
-> 3. **Trạng thái `FAILED` là Non-terminal State:** Hệ thống hỗ trợ thử lại qua cổng (`RetryRefund`, tối đa 3 lần theo `RULE-17-07`) hoặc xử lý ngoại tuyến/chuyển khoản thủ công (`ResolveRefundManually` theo `RULE-17-08`).
-
-```mermaid
-stateDiagram-v2
-    [*] --> REQUESTED: RequestRefund [Customer] / CreateRefundRequest [Receptionist]
-    REQUESTED --> APPROVED: ApproveRefund [StoreManager - Maker-Checker]
-    REQUESTED --> REJECTED: RejectRefund [StoreManager]
-    APPROVED --> PROCESSING: ProcessRefund [Cash: Receptionist/StoreManager; Gateway: FinanceStaff]
-    PROCESSING --> COMPLETED: CompleteRefund [Cash Handover / Gateway Success]
-    PROCESSING --> FAILED: FailRefund [Gateway Technical Failure]
-    FAILED --> PROCESSING: RetryRefund [FinanceStaff/System - Max 3 Retries]
-    FAILED --> COMPLETED: ResolveRefundManually [FinanceStaff/StoreManager - Offline Settlement]
-```
-
-| From State | Command / Trigger | Actor | Guard (RULE-ID) | To State | Domain Event | Actions / Notes |
-|---|---|---|---|---|---|---|
-| [*] | RequestRefund | Customer | RULE-17-01, RULE-17-02, RULE-17-03 | REQUESTED | RefundRequested | Khách hàng tự gửi yêu cầu hoàn tiền qua App cá nhân trong vòng 30 ngày. |
-| [*] | CreateRefundRequest | Receptionist | RULE-17-01, RULE-17-02, RULE-17-03 | REQUESTED | RefundRequested | Tiếp tân lập yêu cầu hoàn tiền tại quầy Store theo đề nghị của khách. |
-| REQUESTED | ApproveRefund | StoreManager | RULE-17-02, RULE-17-04 | APPROVED | RefundApproved | Quản lý duyệt hoàn tiền; bắt buộc thực thi Maker-Checker (`created_by != approved_by`). |
-| REQUESTED | RejectRefund | StoreManager | RULE-17-04, RULE-17-06 | REJECTED | RefundRejected | Quản lý từ chối yêu cầu hoàn tiền kèm lý do từ chối. |
-| APPROVED | ProcessRefund | FinanceStaff / Receptionist / StoreManager | RULE-17-05 | PROCESSING | RefundProcessing | Tiền mặt: Tiếp tân/Quản lý thực hiện tại quầy; Online Gateway: Nhân viên tài chính gọi API cổng. |
-| PROCESSING | CompleteRefund | FinanceStaff / Receptionist / StoreManager / System | RULE-17-02, RULE-17-05, RULE-17-09 | COMPLETED | RefundCompleted | Bàn giao tiền mặt hoặc nhận callback thành công từ cổng; cập nhật đa aggregate. |
-| PROCESSING | FailRefund | System | RULE-17-06, RULE-17-07 | FAILED | RefundFailed | Lỗi kỹ thuật hoặc gián đoạn mạng từ cổng thanh toán; kích hoạt trạng thái lỗi tạm thời. |
-| FAILED | RetryRefund | FinanceStaff / System | RULE-17-07 | PROCESSING | RefundProcessing | Thử lại hoàn tiền qua cổng trực tuyến; giới hạn tối đa 3 lần ($\text{retry\_count} \le 3$). |
-| FAILED | ResolveRefundManually | FinanceStaff / StoreManager | RULE-17-08, RULE-17-09 | COMPLETED | RefundCompleted | Chuyển khoản trực tiếp/tiền mặt đối soát thủ công kèm mã chứng từ ngân hàng. |
-
-- **Initial State:** `REQUESTED`
-- **Terminal State:** `COMPLETED`, `REJECTED`
-- **Non-Terminal State:** `FAILED` (Hỗ trợ khôi phục qua `RetryRefund` tối đa 3 lần hoặc giải quyết thủ công `ResolveRefundManually`).
-- **Technical Invariants (Maker-Checker & Gateway Retry):**
-  1. **Nguyên tắc Maker-Checker (`RULE-17-04`):** Người lập yêu cầu hoàn tiền (`created_by`) tuyệt đối không được là người phê duyệt (`approved_by`). Nếu `created_by == approved_by`, hệ thống chặn với mã lỗi `MAKER_CHECKER_VIOLATION`.
-  2. **Thời hạn yêu cầu hoàn tiền (`RULE-17-03`):** Tối đa 30 ngày kể từ ngày giao dịch thanh toán gốc thành công.
-  3. **Đồng bộ đa Aggregate khi hoàn tiền hoàn tất (`RULE-17-09`):**
-     - Cập nhật tăng `total_refunded_amount` trên Invoice gốc (giữ nguyên Invoice `PAID` theo Decision D-01).
-     - Cập nhật trạng thái `Payment` sang `PARTIALLY_REFUNDED` hoặc `REFUNDED` (theo `RULE-16-06`).
-     - Cập nhật `total_refunded_amount` trên Order (hoặc chuyển Order sang `REFUNDED` nếu hoàn 100% theo `RULE-14-07`).
-
-## 9. Membership — MembershipStatus
-
-```mermaid
-stateDiagram-v2
-    [*] --> ACTIVE: RegisterMembership [Customer]
-    ACTIVE --> ACTIVE: RenewMembership [Customer / Receptionist]
-    ACTIVE --> UPGRADED: UpgradeMembership [Customer / StoreManager]
-    ACTIVE --> EXPIRED: ProcessMembershipExpiry [System]
-```
-
-| From State | Command / Trigger | Actor | Guard (RULE-ID) | To State | Domain Event | Actions / Notes |
-|---|---|---|---|---|---|---|
-| [*] | RegisterMembership | Customer | RULE-19-01 | ACTIVE | MembershipCreated | Đăng ký gói hội viên mới hoặc tự động cấp hạng hội viên dựa trên mức chi tiêu tích lũy. |
-| ACTIVE | RenewMembership | Customer / Receptionist | RULE-19-01, RULE-19-03 | ACTIVE | MembershipRenewed | Gia hạn gói hội viên đang hoạt động; gia hạn thêm `ExpirationDate` và duy trì quyền lợi hiện có. |
-| ACTIVE | UpgradeMembership | Customer / StoreManager | RULE-19-01, RULE-19-04 | UPGRADED | MembershipUpgraded | Nâng cấp lên hạng hội viên cao hơn; đóng bản ghi gói cũ (`UPGRADED`) và tự động khởi tạo bản ghi mới ở trạng thái `ACTIVE`. |
-| ACTIVE | ProcessMembershipExpiry | System | RULE-19-02, RULE-19-09 | EXPIRED | MembershipExpired | Quá thời hạn hiệu lực mà không được gia hạn; tác vụ nền tự động đánh dấu gói hội viên hết hạn. |
-
-- **Initial State:** `ACTIVE`
-- **Terminal State:** `UPGRADED`, `EXPIRED`
-- **Technical Invariants:**
-  1. *Gia hạn Hội viên (RULE-19-03):* Khi `RenewMembership`, trạng thái giữ nguyên là `ACTIVE` và gia hạn thêm `ExpirationDate`. Phát Domain Event `MembershipRenewed`.
-  2. *Nâng cấp Hạng Hội viên (RULE-19-04):* Khi `UpgradeMembership`, bản ghi gói hội viên hiện tại chuyển sang `UPGRADED` (Terminal), đồng thời hệ thống tự động khởi tạo và kích hoạt một bản ghi `Membership` mới ở trạng thái `ACTIVE` tương ứng với hạng gói nâng cấp mới (`RULE-19-04`).
-  3. *Cách ly Dữ liệu Hội viên (RULE-19-10):* Dữ liệu hạng hội viên và điểm tích lũy được quản lý độc lập theo từng Organization cha; không chia sẻ chéo giữa các Organization độc lập.
-  4. *Non-Downgrade Policy (RULE-19-02, đã chốt):* Sơ đồ FSM không có cạnh hạ hạng (downgrade). Hạng hội viên là đơn điệu không giảm (monotonically non-decreasing) trong suốt vòng đời `ACTIVE`; con đường duy nhất rời khỏi một hạng là nâng cấp (`UPGRADED`, Terminal) hoặc hết hạn toàn bộ quan hệ hội viên (`EXPIRED`, Terminal).
-
----
-
-## 10. Package — PackageStatus
-
-```mermaid
-stateDiagram-v2
-    [*] --> PURCHASED: PurchasePackage [Customer]
-    PURCHASED --> ACTIVATED: ActivatePackage / PaymentSucceeded / First CheckIn
-    PURCHASED --> CANCELLED: CancelPackage [StoreManager]
-    ACTIVATED --> PARTIALLY_CONSUMED: ConfirmPackageUsage [Remaining > 0]
-    ACTIVATED --> FULLY_CONSUMED: ConfirmPackageUsage [Remaining == 0]
-    PARTIALLY_CONSUMED --> PARTIALLY_CONSUMED: ConfirmPackageUsage [Remaining > 0]
-    PARTIALLY_CONSUMED --> FULLY_CONSUMED: ConfirmPackageUsage [Remaining == 0]
-    ACTIVATED --> CANCELLED: CancelPackage [StoreManager]
-    PARTIALLY_CONSUMED --> CANCELLED: CancelPackage [StoreManager]
-    ACTIVATED --> EXPIRED: ProcessPackageExpiry [System]
-    PARTIALLY_CONSUMED --> EXPIRED: ProcessPackageExpiry [System]
-```
-
-| From State | Command / Trigger | Actor | Guard (RULE-ID) | To State | Domain Event | Actions / Notes |
-|---|---|---|---|---|---|---|
-| [*] | PurchasePackage | Customer | RULE-20-01 | PURCHASED | PackagePurchased | Khách hàng mua gói dịch vụ trả trước nhiều lượt; khởi tạo ở trạng thái đã mua. |
-| PURCHASED | ActivatePackage / Event: PaymentSucceeded / Event: AppointmentCheckedIn | Receptionist / Customer / System | RULE-20-01 | ACTIVATED | PackageActivated | Kích hoạt đa kênh: (1) Tiếp tân kích hoạt tại quầy POS; (2) Kích hoạt tự động qua `PaymentSucceeded`; (3) Kích hoạt khi khách check-in sử dụng lượt đầu tiên. |
-| PURCHASED | CancelPackage | StoreManager | RULE-20-06 | CANCELLED | PackageCancelled | Quản lý chi nhánh hủy gói dịch vụ chưa kích hoạt; kích hoạt tạo yêu cầu hoàn tiền 100% (`RefundRequested`). |
-| ACTIVATED | ConfirmPackageUsage | Receptionist | RULE-20-02, RULE-20-04, RULE-20-05 | PARTIALLY_CONSUMED | PackagePartiallyConsumed | Xác nhận sử dụng lượt dịch vụ tại Store; số lượt còn lại $\text{RemainingQuantity} > 0$. |
-| ACTIVATED | ConfirmPackageUsage | Receptionist | RULE-20-02, RULE-20-04, RULE-20-05 | FULLY_CONSUMED | PackageFullyConsumed | Xác nhận sử dụng lượt dịch vụ cuối cùng; số lượt còn lại $\text{RemainingQuantity} == 0$. |
-| PARTIALLY_CONSUMED | ConfirmPackageUsage | Receptionist | RULE-20-02, RULE-20-04, RULE-20-05 | PARTIALLY_CONSUMED | PackagePartiallyConsumed | Tiếp tục sử dụng lượt dịch vụ; số lượt còn lại vẫn $> 0$. |
-| PARTIALLY_CONSUMED | ConfirmPackageUsage | Receptionist | RULE-20-02, RULE-20-04, RULE-20-05 | FULLY_CONSUMED | PackageFullyConsumed | Sử dụng hết toàn bộ số lượt dịch vụ trong gói; kết thúc vòng đời tiêu dùng. |
-| ACTIVATED | CancelPackage | StoreManager | RULE-20-06 | CANCELLED | PackageCancelled | Hủy gói đang kích hoạt; tự động tính toán giá trị các lượt chưa sử dụng và phát sinh `RefundRequested`. |
-| PARTIALLY_CONSUMED | CancelPackage | StoreManager | RULE-20-06 | CANCELLED | PackageCancelled | Hủy gói đang sử dụng dở dang; tự động tính toán giá trị còn lại và phát sinh `RefundRequested`. |
-| ACTIVATED | ProcessPackageExpiry | System | RULE-20-03 | EXPIRED | PackageExpired | Quá thời hạn hiệu lực gói dịch vụ; tác vụ nền tự động chuyển sang hết hạn. |
-| PARTIALLY_CONSUMED | ProcessPackageExpiry | System | RULE-20-03 | EXPIRED | PackageExpired | Gói chưa dùng hết nhưng quá thời hạn hiệu lực; tự động khóa số lượt còn lại và chuyển sang hết hạn. |
-
-- **Initial State:** `PURCHASED`
-- **Terminal State:** `FULLY_CONSUMED`, `CANCELLED`, `EXPIRED`
-- **Technical Invariants:**
-  1. *Cơ chế Kích hoạt Đa kênh (RULE-20-01):* (1) Kích hoạt tại quầy POS bởi Receptionist; (2) Tự động kích hoạt khi nhận Domain Event `PaymentSucceeded`; (3) Tự động kích hoạt khi khách hàng check-in sử dụng lượt đầu tiên.
-  2. *Hủy Gói & Công thức Hoàn tiền Chưa Tiêu dùng (RULE-20-06):* Hủy gói chuyển sang `CANCELLED` và tự động phát sinh yêu cầu hoàn tiền `RefundRequested` cho các lượt chưa tiêu dùng:
-     $$\text{RefundAmount} = \max\left(0, \ PK.\text{PurchasePrice} \times \frac{PK.\text{RemainingQuantity}}{PK.\text{TotalQuantity}} - \text{CancellationAdminFee}\right)$$
-
----
-
-## 11. StockTransfer — StockTransferStatus
-
-```mermaid
-stateDiagram-v2
-    [*] --> REQUESTED: CreateStockTransfer [InventoryStaff]
-    REQUESTED --> APPROVED: ApproveStockTransfer [StoreManager - Maker-Checker]
-    REQUESTED --> REJECTED: RejectStockTransfer [StoreManager]
-    REQUESTED --> CANCELLED: CancelStockTransfer [InventoryStaff]
-    APPROVED --> IN_TRANSIT: ShipStockTransfer [InventoryStaff]
-    IN_TRANSIT --> RECEIVED: ReceiveStockTransfer [Full & Intact]
-    IN_TRANSIT --> DISCREPANCY_RECORDED: ReceiveStockTransferWithDiscrepancy [Damaged / Lost]
-    DISCREPANCY_RECORDED --> RECEIVED: ResolveStockTransferDiscrepancy [InventoryAdjustment Approved]
-```
-
-| From State | Command / Trigger | Actor | Guard (RULE-ID) | To State | Domain Event | Actions / Notes |
-|---|---|---|---|---|---|---|
-| [*] | CreateStockTransfer | InventoryStaff | RULE-12-04 | REQUESTED | StockTransferCreated | Khởi tạo yêu cầu chuyển kho liên chi nhánh trong cùng Organization; xác định kho xuất, kho nhận, sản phẩm và số lượng. |
-| REQUESTED | ApproveStockTransfer | StoreManager | RULE-12-06 | APPROVED | StockTransferApproved | Thẩm định và duyệt yêu cầu chuyển kho; bắt buộc thực thi Maker-Checker (`created_by != approved_by`). |
-| REQUESTED | RejectStockTransfer | StoreManager | RULE-12-06 | REJECTED | StockTransferRejected | Từ chối yêu cầu chuyển kho kèm lý do từ chối. |
-| REQUESTED | CancelStockTransfer | InventoryStaff | RULE-12-10 | CANCELLED | StockTransferCancelled | Hủy yêu cầu chuyển kho khi chưa được duyệt/chưa xuất hàng. |
-| APPROVED | ShipStockTransfer | InventoryStaff | RULE-12-05, RULE-12-07 | IN_TRANSIT | StockTransferShipped | Xuất kho giao hàng cho bên vận chuyển; trừ tồn kho khả dụng tại điểm xuất, chuyển sang trạng thái đang vận chuyển. |
-| IN_TRANSIT | ReceiveStockTransfer | InventoryStaff | RULE-12-08 | RECEIVED | StockTransferReceived | Điểm nhận tiếp nhận hàng đủ 100% số lượng và nguyên vẹn; tăng ngay tồn kho khả dụng tại điểm nhận. |
-| IN_TRANSIT | ReceiveStockTransferWithDiscrepancy | InventoryStaff | RULE-12-08, RULE-12-09 | DISCREPANCY_RECORDED | StockTransferDiscrepancyReported | Phát hiện hàng hư hỏng hoặc thất thoát; tăng tồn kho phần nguyên vẹn, cách ly hàng hỏng và hạch toán hao hụt. |
-| DISCREPANCY_RECORDED | ResolveStockTransferDiscrepancy | StoreManager | RULE-12-03, RULE-12-09 | RECEIVED | StockTransferDiscrepancyResolved | Store Manager tại điểm nhận duyệt phiếu `InventoryAdjustment` (Maker-Checker, lý do `TRANSIT_VARIANCE`), đóng hoàn tất phiếu chuyển kho. |
-
-- **Initial State:** `REQUESTED`
-- **Terminal State:** `RECEIVED`, `REJECTED`, `CANCELLED`
-- **Technical Invariants:**
-  1. *Phê duyệt Maker-Checker (RULE-12-06):* Người tạo yêu cầu chuyển kho (`created_by`) tuyệt đối không được là người phê duyệt (`approved_by`). Nếu `created_by == approved_by`, hệ thống chặn với mã lỗi `MAKER_CHECKER_VIOLATION`.
-  2. *Vòng đời Chuyển kho 2 Bước & Hàng Đang đi (RULE-12-07):* Xuất kho trừ tồn khả dụng nguồn và chuyển sang `IN_TRANSIT`. Hàng `IN_TRANSIT` không được tính vào tồn kho khả dụng của điểm nhận cho đến khi điểm nhận xác nhận nhập kho thực tế.
-  3. *Phương trình Cân bằng & Xử lý Sai lệch Chuyển kho (RULE-12-08, RULE-12-09):*
-     $$\text{ShippedQuantity} = \text{ReceivedQuantity} + \text{DamagedQuantity} + \text{LostQuantity}$$
-     - $\text{ReceivedQuantity}$: Tăng ngay tồn kho khả dụng tại Store đích ($\text{AvailableQuantity}_{\text{dest}} += \text{ReceivedQuantity}$).
-     - $\text{DamagedQuantity}$: Chuyển vào khu cách ly chờ xử lý/hủy (`DAMAGED_STOCK`).
-     - $\text{LostQuantity}$: Hạch toán vào chi phí hao hụt vận chuyển (`TRANSIT_LOSS_EXPENSE`).
-     - Store Manager tại điểm nhận lập và phê duyệt phiếu `InventoryAdjustment` (Maker-Checker, lý do `TRANSIT_VARIANCE`), sau đó chuyển phiếu sang `RECEIVED` hoàn tất (không cộng tồn lần 2).
-
----
-
-## 12. PurchaseRequest — PurchaseRequestStatus
-
-```mermaid
-stateDiagram-v2
-    [*] --> DRAFT: CreatePurchaseRequest [InventoryStaff]
-    DRAFT --> SUBMITTED: SubmitPurchaseRequest [InventoryStaff]
-    SUBMITTED --> APPROVED: ApprovePurchaseRequest [StoreManager/OrgAdmin - Maker-Checker]
-    SUBMITTED --> REJECTED: RejectPurchaseRequest [StoreManager/OrgAdmin]
-    DRAFT --> CANCELLED: CancelPurchaseRequest [InventoryStaff]
-    SUBMITTED --> CANCELLED: CancelPurchaseRequest [InventoryStaff]
-```
-
-| From State | Command / Trigger | Actor | Guard (RULE-ID) | To State | Domain Event | Actions / Notes |
-|---|---|---|---|---|---|---|
-| [*] | CreatePurchaseRequest | InventoryStaff | RULE-13-01 | DRAFT | PurchaseRequestCreated | Khởi tạo bản nháp yêu cầu mua hàng nội bộ bổ sung hàng hóa/vật tư cho Store hoặc Warehouse. |
-| DRAFT | SubmitPurchaseRequest | InventoryStaff | RULE-13-01 | SUBMITTED | PurchaseRequestSubmitted | Gửi yêu cầu mua hàng lên cấp quản lý để thẩm định và phê duyệt. |
-| SUBMITTED | ApprovePurchaseRequest | StoreManager / OrganizationAdmin | RULE-13-02 | APPROVED | PurchaseRequestApproved | Phê duyệt yêu cầu mua hàng; bắt buộc thực thi nguyên tắc Maker-Checker (`created_by != approved_by`); làm căn cứ tạo Purchase Order. |
-| SUBMITTED | RejectPurchaseRequest | StoreManager / OrganizationAdmin | RULE-13-02 | REJECTED | PurchaseRequestRejected | Từ chối yêu cầu mua hàng kèm lý do từ chối. |
-| DRAFT | CancelPurchaseRequest | InventoryStaff | RULE-13-03 | CANCELLED | PurchaseRequestCancelled | Hủy bản nháp yêu cầu mua hàng trước khi gửi duyệt. |
-| SUBMITTED | CancelPurchaseRequest | InventoryStaff | RULE-13-03 | CANCELLED | PurchaseRequestCancelled | Hủy yêu cầu mua hàng đã gửi duyệt khi chưa được cấp quản lý phê duyệt. |
-
-- **Initial State:** `DRAFT` (hoặc `SUBMITTED` nếu tạo và gửi trực tiếp)
-- **Terminal State:** `APPROVED`, `REJECTED`, `CANCELLED`
-- **Technical Invariants:**
-  1. *Phê duyệt Maker-Checker (RULE-13-02):* Người tạo yêu cầu mua hàng (`created_by`) tuyệt đối không được là người phê duyệt (`approved_by`). Nếu `created_by == approved_by`, hệ thống chặn với mã lỗi `MAKER_CHECKER_VIOLATION`.
-  2. *Ràng buộc Hủy Yêu cầu (RULE-13-03):* Lệnh hủy chỉ áp dụng khi Purchase Request đang ở `DRAFT` hoặc `SUBMITTED`.
-
----
-
-## 13. PurchaseOrder — PurchaseOrderStatus
-
-```mermaid
-stateDiagram-v2
-    [*] --> ISSUED: CreatePurchaseOrder [InventoryStaff]
-    ISSUED --> PARTIALLY_RECEIVED: ReceiveGoods [Partial Delivery]
-    ISSUED --> RECEIVED: ReceiveGoods [Full Delivery]
-    PARTIALLY_RECEIVED --> PARTIALLY_RECEIVED: ReceiveGoods [Subsequent Partial Delivery]
-    PARTIALLY_RECEIVED --> RECEIVED: ReceiveGoods [Remaining Delivery Complete]
-    PARTIALLY_RECEIVED --> CLOSED: CancelRemainingPurchaseOrder [Remaining Cancelled]
-    ISSUED --> CANCELLED: CancelPurchaseOrder [StoreManager/InventoryStaff]
-```
-
-| From State | Command / Trigger | Actor | Guard (RULE-ID) | To State | Domain Event | Actions / Notes |
-|---|---|---|---|---|---|---|
-| [*] | CreatePurchaseOrder | InventoryStaff | RULE-13-04 | ISSUED | PurchaseOrderCreated | Khởi tạo đơn đặt hàng chính thức gửi Nhà cung cấp (`Supplier`) từ Purchase Request đã được duyệt (`APPROVED`). |
-| ISSUED | ReceiveGoods | InventoryStaff | RULE-13-05, RULE-13-06 | PARTIALLY_RECEIVED | GoodsReceived | Tiếp nhận đợt giao hàng đầu tiên nhưng chưa đủ số lượng đơn hàng (sau khi thực hiện `InspectGoods`); tăng tồn kho thực nhận. |
-| ISSUED | ReceiveGoods | InventoryStaff | RULE-13-05, RULE-13-06 | RECEIVED | GoodsReceived | Tiếp nhận đủ 100% số lượng đơn đặt hàng ngay đợt đầu tiên (sau khi thực hiện `InspectGoods`); tăng tồn kho thực tế và khả dụng. |
-| PARTIALLY_RECEIVED | ReceiveGoods | InventoryStaff | RULE-13-05, RULE-13-06 | PARTIALLY_RECEIVED | GoodsReceived | Tiếp tục nhận thêm một phần hàng hóa trong các đợt giao tiếp theo; cập nhật tăng tồn kho phần thực nhận. |
-| PARTIALLY_RECEIVED | ReceiveGoods | InventoryStaff | RULE-13-05, RULE-13-06 | RECEIVED | GoodsReceived | Tiếp nhận đủ toàn bộ số lượng hàng còn lại; hoàn tất đơn đặt hàng. |
-| PARTIALLY_RECEIVED | CancelRemainingPurchaseOrder | StoreManager / InventoryStaff | RULE-13-07 | CLOSED | PurchaseOrderRemainingCancelled | Nhà cung cấp không thể tiếp tục giao phần thiếu; thống nhất hủy phần còn lại, đóng đơn hàng mà không ảnh hưởng phần đã nhập kho. |
-| ISSUED | CancelPurchaseOrder | StoreManager / InventoryStaff | RULE-13-08 | CANCELLED | PurchaseOrderCancelled | Hủy toàn bộ đơn đặt hàng khi nhà cung cấp chưa giao bất kỳ đợt hàng nào. |
-
-- **Initial State:** `ISSUED`
-- **Terminal State:** `RECEIVED`, `CLOSED`, `CANCELLED`
-- **Technical Invariants:**
-  1. *Kiểm tra Chất lượng Tiền điều kiện (InspectGoods Guard - RULE-13-05):* Inventory Staff bắt buộc thực hiện kiểm tra thực tế về số lượng, tình trạng bao bì, quy cách và hạn dùng (`InspectGoods`) trước khi kích hoạt `ReceiveGoods` để cập nhật tăng tồn kho.
-  2. *Đóng Đơn hàng Giao thiếu (Partial Close Invariant - RULE-13-07):* Trạng thái `CLOSED` thể hiện đơn hàng đã tiếp nhận một phần hàng hóa thực tế và hủy nghĩa vụ giao phần còn thiếu, giải phóng cam kết đặt hàng.
-  3. *Tính Bất biến của Đơn hàng Đã kết thúc (RULE-13-08):* Đơn đặt hàng khi đã ở `CANCELLED` hoặc `CLOSED` tuyệt đối không được phép tiếp nhận thêm hàng, không điều chỉnh số lượng và không cập nhật tăng tồn kho.
-
----
-
-## 14. Incident — IncidentStatus
-
-```mermaid
-stateDiagram-v2
-    [*] --> RECORDED: RecordIncident / RecordClinicalIncident / RecordGroomingIncident
-    RECORDED --> CLASSIFIED: ClassifyIncident [StoreManager]
-    CLASSIFIED --> UNDER_INVESTIGATION: InvestigateIncident [StoreManager]
-    UNDER_INVESTIGATION --> ESCALATED: EscalateIncident [StoreManager]
-    UNDER_INVESTIGATION --> RESOLVED: HandleIncident [StoreManager]
-    ESCALATED --> RESOLVED: HandleIncident [OrgAdmin / StoreManager]
-    RESOLVED --> CLOSED: CloseIncident [StoreManager / OrgAdmin]
-```
-
-| From State | Command / Trigger | Actor | Guard (RULE-ID) | To State | Domain Event | Actions / Notes |
-|---|---|---|---|---|---|---|
-| [*] | RecordIncident / RecordClinicalIncident / RecordGroomingIncident | Staff / Veterinarian / Groomer | RULE-21-01, RULE-21-02, RULE-21-03 | RECORDED | IncidentRecorded | Tiếp nhận và ghi nhận sự cố vận hành, sự cố y tế lâm sàng hoặc sự cố spa/grooming. |
-| RECORDED | ClassifyIncident | StoreManager | RULE-21-04 | CLASSIFIED | IncidentClassified | Quản lý chi nhánh đánh giá và phân loại mức độ nghiêm trọng: `LOW`, `MEDIUM`, `HIGH`, `CRITICAL`. |
-| CLASSIFIED | InvestigateIncident | StoreManager | RULE-21-07 | UNDER_INVESTIGATION | IncidentInvestigated | Tiến hành điều tra nguyên nhân gốc rễ, phỏng vấn nhân sự và thu thập bằng chứng/camera. |
-| UNDER_INVESTIGATION | EscalateIncident | StoreManager | RULE-21-06 | ESCALATED | IncidentEscalated | Chuyển cấp xử lý lên Organization Admin hoặc Platform Admin khi vượt quá thẩm quyền chi nhánh hoặc phát sinh tranh chấp pháp lý lớn. |
-| UNDER_INVESTIGATION | HandleIncident | StoreManager | RULE-21-07 | RESOLVED | IncidentResolved | Thực thi các biện pháp khắc phục (bồi thường, miễn giảm phí dịch vụ, điều trị y tế bổ sung) tại cấp Store. |
-| ESCALATED | HandleIncident | OrganizationAdmin / StoreManager | RULE-21-07 | RESOLVED | IncidentResolved | Thực thi giải pháp khắc phục sau khi được cấp Organization/Platform chỉ đạo xử lý. |
-| RESOLVED | CloseIncident | StoreManager / OrganizationAdmin | RULE-21-08 | CLOSED | IncidentClosed | Nghiệm thu toàn bộ biện pháp khắc phục và chính thức đóng hồ sơ sự cố; hồ sơ chuyển sang trạng thái bất biến. |
-
-- **Initial State:** `RECORDED`
-- **Terminal State:** `CLOSED`
-- **Technical Invariants:**
-  1. *Cơ chế Kích hoạt Sự cố Tự động (Automated Incident Trigger Hooks - RULE-21-01, RULE-21-02, RULE-21-03):*
-     - `AbortAppointment` → tự động tạo `ClinicalIncident` hoặc `GroomingIncident` với mức độ tối thiểu `HIGH`.
-     - `AbortGrooming` → tự động tạo `GroomingIncident` với mức độ `HIGH`, phát thông báo tới Customer.
-     - `EmergencyOverrideAccess` → tự động tạo `ClinicalIncident` (`is_emergency = true`, mức độ `CRITICAL`).
-  2. *Chính sách Thông báo Khẩn cấp Bắt buộc (RULE-21-05, RULE-23-02):* Sự cố mức độ `HIGH` và `CRITICAL` bắt buộc hệ thống tự động gửi thông báo khẩn cấp `SendIncidentNotification` tới Khách hàng và Store Manager trong vòng 1-4 giờ.
-  3. *Tính Bất biến Tuyệt đối của Hồ sơ Sự cố Đã đóng (RULE-21-08):* Hồ sơ sự cố ở trạng thái `CLOSED` là BẤT BIẾN (Immutable), tuyệt đối không được phép chỉnh sửa nội dung hoặc mở lại.
-
----
-
-## 15. Grooming — GroomingStatus
-
-> `GroomingStatus` đặc tả toàn bộ vòng đời của một phiên dịch vụ Grooming / Spa thú cưng tại Store, bao gồm quy trình kiểm tra thể trạng, phát sinh dịch vụ thêm, phê duyệt đồng thuận từ khách hàng và tạo Hóa đơn Phụ phí độc lập (Quyết định D-02).
-
-```mermaid
-stateDiagram-v2
-    [*] --> WAITING: CheckInGrooming [Receptionist]
-    WAITING --> IN_PROGRESS: PerformGrooming [Health & Safety OK]
-    WAITING --> REJECTED: InspectPet [Safety/Contagion Risk]
-    WAITING --> CANCELLED: CancelGrooming [Customer / Receptionist]
-    IN_PROGRESS --> AWAITING_CUSTOMER_APPROVAL: AddGroomingService [Add-on Discovered]
-    AWAITING_CUSTOMER_APPROVAL --> IN_PROGRESS: ConfirmAdditionalService [Creates Surcharge Invoice D-02]
-    AWAITING_CUSTOMER_APPROVAL --> IN_PROGRESS: RejectAdditionalService [Resume Base Service]
-    IN_PROGRESS --> COMPLETED: CompleteGrooming [Service Finalized]
-    IN_PROGRESS --> ABORTED: AbortGrooming [Emergency Stoppage]
-```
-
-| From State | Command / Trigger | Actor | Guard (RULE-ID) | To State | Domain Event | Actions / Notes |
-|---|---|---|---|---|---|---|
-| [*] | CheckInGrooming | Receptionist | RULE-11-01 | WAITING | GroomingCheckedIn | Tiếp nhận và check-in thú cưng tại quầy spa/grooming chi nhánh; xếp vào danh sách chờ thực hiện. |
-| WAITING | PerformGrooming | Groomer | RULE-11-01, RULE-11-02 | IN_PROGRESS | GroomingStarted | Kiểm tra thể trạng đạt yêu cầu (không có bệnh lây nhiễm, tính cách an toàn); đưa thú cưng lên bàn grooming bắt đầu phục vụ. |
-| WAITING | InspectPet | Groomer | RULE-11-01, RULE-11-02 | REJECTED | GroomingRejected | Phát hiện bệnh truyền nhiễm nặng, ve rận nghiêm trọng, nấm lây lan hoặc thú hung dữ mất an toàn; từ chối phục vụ, chuyển bác sĩ hội chẩn. |
-| WAITING | CancelGrooming | Customer / Receptionist | RULE-11-01 | CANCELLED | GroomingCancelled | Khách hàng hoặc tiếp tân hủy phiên dịch vụ trước khi bắt đầu thực hiện; giải phóng bàn grooming và xử lý cọc. |
-| IN_PROGRESS | AddGroomingService | Groomer | RULE-11-02, RULE-11-03 | AWAITING_CUSTOMER_APPROVAL | AdditionalServiceRequested | Phát hiện lông rối nặng, nhu cầu tắm trị liệu đặc biệt hoặc dịch vụ phát sinh; tạm dừng công đoạn và gửi yêu cầu phê duyệt kèm báo giá tới khách hàng. |
-| AWAITING_CUSTOMER_APPROVAL | ConfirmAdditionalService | Customer | RULE-11-03 (D-02) | IN_PROGRESS | AdditionalServiceConfirmed | Khách hàng chấp thuận; hệ thống tự động khởi tạo **Hóa đơn Phụ phí độc lập (Surcharge Invoice)** ở trạng thái `DRAFT`/`ISSUED` liên kết với phiên (không sửa hóa đơn gốc D-01) và tiếp tục thực hiện dịch vụ. |
-| AWAITING_CUSTOMER_APPROVAL | RejectAdditionalService | Customer | RULE-11-03 | IN_PROGRESS | AdditionalServiceRejected | Khách hàng từ chối phát sinh; Groomer tiếp tục hoàn thành các hạng mục trong gói dịch vụ cơ bản ban đầu. |
-| IN_PROGRESS | CompleteGrooming | Groomer | RULE-11-04, RULE-11-05 | COMPLETED | GroomingCompleted | Hoàn thành toàn bộ công đoạn, chụp ảnh kết quả nghiệm thu; giải phóng bàn Grooming (`ReleaseStoreResource`); bàn giao tiếp tân đóng lịch hẹn. |
-| IN_PROGRESS | AbortGrooming | Groomer / StoreManager | RULE-11-06, RULE-21-03 | ABORTED | GroomingAborted | Dừng dịch vụ khẩn cấp do thú cưng hoảng loạn, cắn nhân viên, chấn thương hoặc sốc nhiệt; giải phóng bàn grooming; tự động lập biên bản `GroomingIncident` và yêu cầu hoàn cọc/tiền phần chưa thực hiện. |
-
-- **Initial State:** `WAITING`
-- **Terminal State:** `COMPLETED`, `CANCELLED`, `ABORTED`, `REJECTED`
-- **Technical Invariants:**
-  1. *Giao thức Hóa đơn Phụ phí Độc lập (Surcharge Invoice Protocol - Quyết định D-02 & D-01):*
-     - Khi `ConfirmAdditionalService` được kích hoạt, hệ thống tạo một Hóa đơn Phụ phí độc lập (`Surcharge Invoice`) ở trạng thái `DRAFT`/`ISSUED` gắn liền với `GroomingSessionId` và `AppointmentId`.
-     - Tuyệt đối **KHÔNG** chỉnh sửa số tiền hay chèn thêm dòng item vào Hóa đơn gốc đã thanh toán (`PAID`), đảm bảo tính bất biến tài chính (Settlement Immutability D-01).
-  2. *Điểm Kiểm soát Thể trạng & Từ chối Tiền phục vụ (Pre-service Safety Inspection - RULE-11-02):*
-     - Lệnh `InspectPet` đánh giá điều kiện da lông và hành vi. Nếu không đạt, chuyển thẳng sang trạng thái kết thúc `REJECTED`, ngăn ngừa lây nhiễm chéo hoặc tai nạn lao động.
-  3. *Quy trình Dừng khẩn cấp & Tự động Lập biên bản Sự cố (Emergency Abort & Incident Protocol - RULE-11-06, RULE-21-03):*
-     $$\text{AbortGrooming}(\text{sessionId}, \text{abort\_reason}) \implies \begin{cases} \text{GroomingSession}.\text{status} \leftarrow \text{ABORTED} \\ \text{ReleaseStoreResource}(\text{groomingTableId}) \\ \text{CreateGroomingIncident}(\text{reason} = \text{abort\_reason}, \text{severity} = \text{HIGH}) \\ \text{SendIncidentNotification}(\text{Customer}, \text{StoreManager}) \\ \text{RequestPartialRefund}(\text{unconsumedServiceValue}) \end{cases}$$
-
----
-
-## 16. Consent — ConsentStatus (Cross-Store Medical Consent)
-
-> `ConsentStatus` đặc tả vòng đời của yêu cầu ủy quyền chia sẻ hồ sơ bệnh án thú cưng liên chi nhánh giữa các Store (`Cross-Store Clinical Consent`).
-> Hệ thống áp dụng cơ chế đồng thuận 2 giao thức (Dual-Protocol Mechanism):
-> 1. **Giao thức Tiêu chuẩn (Standard OTP):** Mã OTP ủy quyền có thời hạn 5 phút ($\text{OTP\_TTL} = 300\text{s}$); khi xác thực thành công (`ACTIVE`), quyền truy cập có thời hạn tối đa 24 giờ ($\text{Consent\_TTL} = 24\text{h}$). Chủ nuôi có quyền thu hồi trước hạn (`REVOKED`).
-> 2. **Giao thức Cấp cứu Khẩn cấp (Break-Glass Emergency Override):** Trong tình huống nguy kịch đe dọa tính mạng thú cưng, Bác sĩ thú y được cấp quyền truy cập `ACTIVE` trực tiếp (`is_emergency = true`), đồng thời hệ thống tự động lập biên bản sự cố y tế `ClinicalIncident` (`RULE-21-02`), phát thông báo khẩn cấp `SendIncidentNotification` (`RULE-21-05`, `RULE-23-02`) và ghi nhật ký kiểm toán bất biến (`RULE-25-04`).
-
-```mermaid
-stateDiagram-v2
-    [*] --> REQUESTED: RequestCrossStoreConsent [Veterinarian]
-    REQUESTED --> ACTIVE: VerifyCrossStoreConsentOTP [Customer / 5m OTP TTL]
-    REQUESTED --> EXPIRED: ProcessConsentExpiry [5m OTP Timeout]
-    ACTIVE --> REVOKED: RevokeCrossStoreConsent [Customer]
-    ACTIVE --> EXPIRED: ProcessConsentExpiry [24h TTL Expired]
-    [*] --> ACTIVE: EmergencyOverrideAccess [Veterinarian - Break-Glass Override]
-```
-
-| From State | Command / Trigger | Actor | Guard (RULE-ID) | To State | Domain Event | Actions / Notes |
-|---|---|---|---|---|---|---|
-| [*] | RequestCrossStoreConsent | Veterinarian | RULE-09-02, RULE-22-01, RULE-22-02 | REQUESTED | CrossStoreConsentRequested | Bác sĩ tại Store chi nhánh gửi yêu cầu truy cập EMR liên Store; hệ thống gửi mã OTP xác thực có thời hạn 5 phút tới chủ Pet. |
-| REQUESTED | VerifyCrossStoreConsentOTP | Customer / Receptionist | RULE-22-02, RULE-22-08 | ACTIVE | CrossStoreConsentGranted | Chủ Pet xác thực OTP hợp lệ trong vòng 5 phút; kích hoạt quyền xem hồ sơ bệnh án liên Store trong 24 giờ ($\text{Consent\_TTL} = 24\text{h}$). |
-| REQUESTED | ProcessConsentExpiry | System | RULE-22-02 | EXPIRED | CrossStoreConsentExpired | Quá thời hạn 5 phút không được xác thực OTP; tác vụ nền tự động đánh dấu yêu cầu hết hạn. |
-| ACTIVE | RevokeCrossStoreConsent | Customer | RULE-22-03 | REVOKED | CrossStoreConsentRevoked | Chủ nuôi chủ động thu hồi quyền chia sẻ bệnh án trước hạn qua App; hệ thống lập tức chấm dứt quyền truy cập của bác sĩ Store yêu cầu. |
-| ACTIVE | ProcessConsentExpiry | System | RULE-22-08, RULE-22-10 | EXPIRED | CrossStoreConsentExpired | Hết thời hạn 24 giờ kể từ thời điểm kích hoạt; tác vụ nền tự động khóa quyền truy cập bệnh án liên Store. |
-| [*] | EmergencyOverrideAccess | Veterinarian | RULE-09-02, RULE-21-02, RULE-22-08 | ACTIVE | EmergencyAccessOverridden | Bác sĩ kích hoạt quyền truy cập khẩn cấp (Break-Glass) khi Pet nguy kịch; cấp quyền `ACTIVE` trực tiếp (`is_emergency = true`), tự động tạo `ClinicalIncident` và gửi cảnh báo khẩn cấp. |
-
-- **Initial State:** `REQUESTED` (Quy trình tiêu chuẩn), `ACTIVE` (Giao thức cấp cứu khẩn cấp Break-Glass).
-- **Terminal State:** `REVOKED`, `EXPIRED`
-- **Technical Invariants:**
-  1. *Giao thức Chuẩn Xác thực OTP (Standard OTP Protocol - RULE-22-02, RULE-22-08):* OTP có thời hạn 5 phút ($\text{OTP\_TTL} = 300\text{s}$). Khi xác thực thành công, quyền truy cập EMR có thời hạn tối đa 24 giờ ($\text{Consent\_TTL} = 24\text{h}$).
-  2. *Giao thức Cấp cứu Vượt quyền (Emergency Break-Glass Override Protocol - RULE-09-02, RULE-21-02, RULE-22-08):*
-     $$\text{EmergencyOverrideAccess}(\text{petId}, \text{medicalRecordId}, \text{clinical\_reason}) \implies \begin{cases} \text{ConsentGrant}.\text{status} \leftarrow \text{ACTIVE} \ (\text{is\_emergency} = \text{true}) \\ \text{CreateClinicalIncident}(\text{type} = \text{EMERGENCY\_OVERRIDE}, \text{severity} = \text{CRITICAL}) \\ \text{RecordAuditLog}(\text{action} = \text{EMERGENCY\_ACCESS}, \text{actor} = \text{Veterinarian}) \\ \text{SendIncidentNotification}(\text{Customer}, \text{StoreManager}) \end{cases}$$
-  3. *Quyền Chủ động Thu hồi Tức thì (RULE-22-03):* Chủ pet có thể thu hồi bất kỳ lúc nào; hệ thống lập tức chấm dứt phiên truy cập EMR của Store yêu cầu.
-
----
-
-## 17. Walk-in Queue — QueueEntryStatus (Walk-in & Queue Management)
-
-> `QueueEntryStatus` đặc tả vòng đời của lượt chờ khám/grooming trực tiếp tại cửa hàng (Walk-in Queue) theo cơ chế FIFO có ưu tiên cấp cứu.
-> Cầu nối dữ liệu: Khi nhân sự bắt đầu phục vụ (`StartQueueService`), hệ thống tự động khởi tạo ngầm một bản ghi `Appointment` nội bộ với nguồn tiếp nhận `Channel = WALK_IN` ở trạng thái `IN_PROGRESS` (`RULE-07-05`).
-
-```mermaid
-stateDiagram-v2
-    [*] --> WAITING: RegisterQueueEntry [Receptionist / Customer]
-    WAITING --> CALLED: CallQueueEntry [Receptionist / Vet / Groomer]
-    CALLED --> IN_SERVICE: StartQueueService [Walk-in to Appointment Bridge]
-    CALLED --> NO_SHOW: MarkQueueNoShow [3-Call No-Show Rule]
-    IN_SERVICE --> COMPLETED: CompleteQueueEntry [Service Finalized]
-    WAITING --> CANCELLED: CancelQueueEntry [Customer / Receptionist]
-    CALLED --> CANCELLED: CancelQueueEntry [Customer / Receptionist]
-```
-
-| From State | Command / Trigger | Actor | Guard (RULE-ID) | To State | Domain Event | Actions / Notes |
-|---|---|---|---|---|---|---|
-| [*] | RegisterQueueEntry | Customer / Receptionist | RULE-07-01 | WAITING | QueueEntryRegistered | Tiếp nhận khách Walk-in tại quầy Store; cấp số thứ tự hàng đợi FIFO theo ngày cho từng phân loại chuyên môn. |
-| WAITING | CallQueueEntry | Receptionist / Veterinarian / Groomer | RULE-07-02, RULE-07-03 | CALLED | QueueEntryCalled | Gọi số thứ tự tiếp theo vào phòng khám hoặc bàn làm đẹp; cập nhật bảng hiển thị điện tử và gửi thông báo `SendTurnNotification`. |
-| CALLED | StartQueueService | Veterinarian / Groomer | RULE-07-05, RULE-09-01, RULE-11-01 | IN_SERVICE | QueueServiceStarted | Bắt đầu phục vụ chuyên môn; **tự động kích hoạt Cầu nối Walk-in tạo Appointment nội bộ (`Channel = WALK_IN`, `Status = IN_PROGRESS`)**. |
-| CALLED | MarkQueueNoShow | Receptionist | RULE-07-06 | NO_SHOW | QueueEntryNoShow | Khách hàng không có mặt sau 3 lần gọi số thứ tự giãn cách theo quy định; hủy lượt chờ và tự động gọi số tiếp theo. |
-| IN_SERVICE | CompleteQueueEntry | Veterinarian / Groomer | RULE-07-07, RULE-06-06, RULE-11-04 | COMPLETED | QueueEntryCompleted | Hoàn tất dịch vụ; đồng bộ chuyển bản ghi `Appointment` nội bộ sang `COMPLETED`, giải phóng tài nguyên phòng/bàn và chuyển sang thu ngân. |
-| WAITING | CancelQueueEntry | Customer / Receptionist | RULE-07-04 | CANCELLED | QueueEntryCancelled | Khách hàng hoặc tiếp tân chủ động hủy lượt chờ khi đang trong hàng đợi; tự động đôn thứ tự các phiếu phía sau. |
-| CALLED | CancelQueueEntry | Customer / Receptionist | RULE-07-04 | CANCELLED | QueueEntryCancelled | Hủy lượt chờ sau khi đã gọi số nhưng chưa bắt đầu phục vụ; giải phóng lượt phục vụ. |
-
-- **Initial State:** `WAITING`
-- **Terminal State:** `COMPLETED`, `CANCELLED`, `NO_SHOW`
-- **Technical Invariants:**
-  1. *Cầu nối Vòng đời Walk-in sang Appointment (Walk-in to Appointment Lifecycle Bridge - RULE-07-05):*
-     $$\text{StartQueueService}(\text{ticketId}, \text{staffId}, \text{resourceId}) \implies \begin{cases} \text{QueueTicket}.\text{status} \leftarrow \text{IN\_SERVICE} \\ \text{CreateInternalAppointment}(\text{Channel} = \text{WALK\_IN}, \text{TicketId} = \text{ticketId}) \\ \text{Appointment}.\text{status} \leftarrow \text{IN\_PROGRESS} \end{cases}$$
-     Bản ghi Appointment nội bộ này liên kết trực tiếp với `QueueTicketId`, `StaffId` và `StoreResourceId`, cho phép các module EMR, Tiêm chủng, Grooming, Hóa đơn và Báo cáo doanh thu vận hành trên cùng một mô hình dữ liệu đồng nhất.
-  2. *Thứ tự Hàng đợi FIFO & Phân luồng Cấp cứu (RULE-07-02):* Thứ tự phục vụ tuân thủ nghiêm ngặt FIFO ($\text{RegisteredAt}$). Riêng ca cấp cứu y tế (`TRIAGE_EMERGENCY`) được gắn quyền ưu tiên cao nhất, bypass hàng đợi vào phòng cấp cứu ngay lập tức.
-  3. *Quy tắc Xử lý Vắng mặt sau 3 lần gọi (3-Call No-Show Rule - RULE-07-06):* Quá 3 lần gọi không có mặt → chuyển sang `NO_SHOW`.
-
----
-
-## 18. Promotion — PromotionStatus
-
-> Bổ sung sau audit Phase 3 (Traceability Audit): `promotion_campaigns.status` (`docs/06-erd.md`) đã có sẵn 4 giá trị lifecycle nhưng chưa được đặc tả FSM chính thức. Lưu ý phân biệt: FSM này mô tả vòng đời của **đối tượng chiến dịch** `PromotionCampaign` (do Organization Admin quản lý), không phải quyết định "có áp dụng Promotion vào một đơn hàng cụ thể hay không" (vẫn là Stateless Rule Validation runtime theo `RULE-18-04`).
-
-```mermaid
-stateDiagram-v2
-    [*] --> DRAFT: CreatePromotion [OrgAdmin]
-    DRAFT --> ACTIVE: ManagePromotion [OrgAdmin, kích hoạt]
-    ACTIVE --> PAUSED: ManagePromotion [OrgAdmin, tạm dừng thủ công]
-    PAUSED --> ACTIVE: ManagePromotion [OrgAdmin, tiếp tục]
-    ACTIVE --> EXPIRED: ProcessPromotionExpiry [System, end_date đã qua]
-    PAUSED --> EXPIRED: ProcessPromotionExpiry [System, end_date đã qua]
-```
-
-| From State | Command / Trigger | Actor | Guard (RULE-ID) | To State | Domain Event | Actions / Notes |
-|---|---|---|---|---|---|---|
-| [*] | CreatePromotion | OrganizationAdmin | RULE-18-01 | DRAFT | PromotionCreated | Khởi tạo chiến dịch khuyến mãi ở trạng thái bản nháp; cấu hình thời gian, ngân sách, điều kiện áp dụng. |
-| DRAFT | ManagePromotion | OrganizationAdmin | RULE-18-01, RULE-18-02 | ACTIVE | PromotionActivated | Kích hoạt chiến dịch; từ thời điểm này Store Manager có thể bật áp dụng tại Store qua `ConfigureStorePromotion`. |
-| ACTIVE | ManagePromotion | OrganizationAdmin | RULE-18-01 | PAUSED | PromotionPaused | Tạm dừng thủ công (ví dụ hết ngân sách sớm, cần điều chỉnh điều kiện); Store không còn áp dụng được chiến dịch trong lúc tạm dừng. |
-| PAUSED | ManagePromotion | OrganizationAdmin | RULE-18-01 | ACTIVE | PromotionActivated | Tiếp tục chiến dịch đang tạm dừng. |
-| ACTIVE | ProcessPromotionExpiry | System | RULE-18-01 | EXPIRED | PromotionExpired | Tác vụ nền tự động quét và đánh dấu hết hạn khi quá `end_date`. |
-| PAUSED | ProcessPromotionExpiry | System | RULE-18-01 | EXPIRED | PromotionExpired | Chiến dịch đang tạm dừng nhưng đã quá `end_date` cũng tự động chuyển hết hạn. |
-
-- **Initial State:** `DRAFT`
-- **Terminal State:** `EXPIRED`
-- **Technical Invariants:**
-  1. *Ranh giới Stateless Runtime Validation vs Object Lifecycle:* FSM này chỉ quản lý vòng đời của bản thân đối tượng `PromotionCampaign`. Việc một đơn hàng/hóa đơn cụ thể có được hưởng khuyến mãi hay không vẫn luôn được tính toán lại tại runtime (`RULE-18-04`), không lưu trạng thái riêng theo từng lượt sử dụng.
-  2. *Chỉ Promotion `ACTIVE` mới được áp dụng:* `ValidateVoucher`/luồng tính giá chỉ xét các Promotion đang ở trạng thái `ACTIVE` và đã được Store Manager bật qua `ConfigureStorePromotion` (`RULE-18-02`).
-
----
-
-## 19. Voucher — VoucherStatus
-
-> Bổ sung sau audit Phase 3 (Traceability Audit): `vouchers.status` (`docs/06-erd.md`) đã có sẵn 3 giá trị lifecycle nhưng chưa được đặc tả FSM chính thức.
-
-```mermaid
-stateDiagram-v2
-    [*] --> ACTIVE: CreateVoucher [OrgAdmin]
-    ACTIVE --> DISABLED: ManageVoucher [OrgAdmin, vô hiệu hóa thủ công]
-    DISABLED --> ACTIVE: ManageVoucher [OrgAdmin, kích hoạt lại]
-    ACTIVE --> EXPIRED: ProcessVoucherExpiry [System, valid_until đã qua]
-    DISABLED --> EXPIRED: ProcessVoucherExpiry [System, valid_until đã qua]
-```
-
-| From State | Command / Trigger | Actor | Guard (RULE-ID) | To State | Domain Event | Actions / Notes |
-|---|---|---|---|---|---|---|
-| [*] | CreateVoucher | OrganizationAdmin | RULE-18-03 | ACTIVE | VoucherCreated | Phát hành mã Voucher mới, hiệu lực ngay khi tạo (không qua bản nháp — khác với Promotion). |
-| ACTIVE | ManageVoucher | OrganizationAdmin | RULE-18-03 | DISABLED | VoucherDisabled | Vô hiệu hóa thủ công (ví dụ phát hiện lạm dụng mã, ngừng chương trình sớm). Voucher `DISABLED` không được `UseVoucher`/`ValidateVoucher` chấp nhận. |
-| DISABLED | ManageVoucher | OrganizationAdmin | RULE-18-03 | ACTIVE | VoucherCreated | Kích hoạt lại Voucher đã vô hiệu hóa. |
-| ACTIVE | ProcessVoucherExpiry | System | RULE-18-03 | EXPIRED | VoucherExpired | Tác vụ nền tự động quét và đánh dấu hết hạn khi quá `valid_until`. |
-| DISABLED | ProcessVoucherExpiry | System | RULE-18-03 | EXPIRED | VoucherExpired | Voucher đang vô hiệu hóa nhưng đã quá `valid_until` cũng tự động chuyển hết hạn. |
-
-- **Initial State:** `ACTIVE`
-- **Terminal State:** `EXPIRED`
-- **Technical Invariants:**
-  1. *Chỉ Voucher `ACTIVE` mới được áp dụng:* `ValidateVoucher`/`UseVoucher` chỉ chấp nhận Voucher đang ở trạng thái `ACTIVE`, còn trong khung `valid_from`–`valid_until`, và chưa đạt `total_usage_limit` (`RULE-18-04`, `RULE-18-05`).
-  2. *Độc lập với lượt sử dụng:* `VoucherStatus` mô tả vòng đời của bản thân mã Voucher; mỗi lượt sử dụng cụ thể được ghi vào `voucher_usages` (không phải transition của FSM này).
-
----
-
-## 20. Cross-aggregate Transition Triggers & Event Bridges
-
-Bảng ma trận dưới đây đặc tả toàn bộ các luồng liên kết sự kiện (Event Bridges) và chuyển trạng thái chéo giữa các Aggregates trong hệ sinh thái Pet Care:
-
-| STT | Aggregate Nguồn & Trạng thái | Aggregate Đích & Hành động / Chuyển trạng thái | Sự kiện Kích hoạt (Domain Event / Trigger Bridge) | Ràng buộc nghiệp vụ (Rule ID) | Mô tả Luồng Xử lý Nghiệp vụ |
-|---|---|---|---|---|---|
-| 1 | **BookingHold** / `HOLDING` | **StoreResource** / Khóa tạm thời slot phòng/bàn | `SlotHeld` | RULE-06-01 | Tạm giữ tài nguyên cơ sở vật chất, lịch nhân sự và lịch Pet trong 15 phút ($\text{Hold\_TTL} = 900\text{s}$). |
-| 2 | **BookingHold** / `EXPIRED` | **StoreResource** / Giải phóng slot phòng/bàn | `HoldExpired` | RULE-06-01 | Tự động giải phóng slot phòng/bàn và lịch nhân sự về trạng thái `FREE` khi hết hạn giữ chỗ 15 phút mà không xác nhận. |
-| 3 | **Payment** / `SUCCESS` | **Invoice** / `FullPaymentSettled` -> `PAID` | `PaymentSucceeded` | RULE-15-06, RULE-16-04 | Cập nhật lũy kế thanh toán; khi $\sum(\text{Payment.SUCCESS}) \ge \text{Invoice.TotalAmount}$, chuyển Invoice sang `PAID`. |
-| 4 | **Payment** / `SUCCESS` | **Order** / `PAID` | `PaymentSucceeded` | RULE-14-03, RULE-14-04 | Đơn hàng Online/App chuyển sang `PAID` sau khi nhận thanh toán thành công, chuyển tiếp sang `CONFIRMED`. |
-| 5 | **Refund** / `COMPLETED` | **Payment** / `PARTIALLY_REFUNDED` hoặc `REFUNDED` | `RefundCompleted` | RULE-16-06, RULE-17-02, RULE-17-09 | Cập nhật $\text{RemainingRefundableAmount}$. Nếu bằng 0 chuyển `REFUNDED`, ngược lại chuyển `PARTIALLY_REFUNDED`. |
-| 6 | **Refund** / `COMPLETED` | **Order** / `REFUNDED` (hoặc giữ nguyên `DELIVERED`) | `RefundCompleted` | RULE-14-07, RULE-17-02, RULE-17-09 (D-03) | Hoàn tiền đơn đã giao: Nếu hoàn 100% chuyển Order sang `REFUNDED`. Nếu hoàn một phần (Partial Return), giữ nguyên `DELIVERED` và cập nhật `total_refunded_amount`. |
-| 7 | **Refund** / `COMPLETED` | **Invoice** / Cập nhật `total_refunded_amount` | `RefundCompleted` | RULE-15-07, RULE-17-09 (D-01) | Cập nhật lũy kế tiền hoàn trên Invoice; Invoice **VĨNH VIỄN GIỮ NGUYÊN trạng thái `PAID`** (Settlement Immutability D-01). |
-| 8 | **Order** / `CANCELLED` (`ProcessOrderTimeout`) | **Inventory** / Giải phóng $\text{ReservedQuantity}$ | `OrderTimedOut` | RULE-14-04, RULE-14-07, RULE-12-04 | Quá 15 phút chưa thanh toán Online → Hủy đơn, giải phóng số lượng giữ chỗ ảo về lại tồn kho khả dụng. |
-| 9 | **Order** / `CANCELLED` (`CancelOrderWithRefund`) | **Refund** / `REQUESTED` & **Inventory** / Hoàn kho | `OrderCancelledWithRefund` | RULE-14-03, RULE-14-07, RULE-17-01 | Đơn đã thanh toán bị hủy trước giao hàng → Tạo yêu cầu hoàn tiền 100% (`RefundRequested`) và nhập lại hàng vào tồn kho thực tế. |
-| 10 | **Appointment** / `ABORTED` | **Incident** / `RECORDED` & **Refund** / `REQUESTED` | `AppointmentAborted` | RULE-06-08, RULE-21-01, RULE-21-02 | Dừng khám/phẫu thuật khẩn cấp → Lập biên bản `ClinicalIncident` (`CRITICAL`), giải phóng tài nguyên, tạo `RefundRequested` cho phần chưa thực hiện. |
-| 11 | **Grooming** / `AWAITING_CUSTOMER_APPROVAL` (`ConfirmAdditionalService`) | **Invoice** / Tạo Hóa đơn Phụ phí độc lập | `AdditionalServiceConfirmed` | RULE-11-03, RULE-15-05 (D-02, D-01) | Khách duyệt dịch vụ phát sinh → Tạo Hóa đơn Phụ phí độc lập (`Surcharge Invoice`) ở trạng thái `DRAFT`/`ISSUED` gắn với phiên (không sửa hóa đơn gốc). |
-| 12 | **Grooming** / `COMPLETED` | **Appointment** / `CheckOutAppointment` | `GroomingCompleted` | RULE-11-04, RULE-11-05, RULE-06-06 | Phiên làm đẹp hoàn tất → Giải phóng bàn Grooming, chuyển lịch hẹn sang `COMPLETED` để tiếp tân thực hiện đóng lịch và xuất hóa đơn. |
-| 13 | **Grooming** / `ABORTED` | **Incident** / `RECORDED` & **Refund** / `REQUESTED` | `GroomingAborted` | RULE-11-06, RULE-21-03, RULE-17-01 | Dừng spa khẩn cấp do thú hoảng loạn/cắn → Lập biên bản `GroomingIncident` (`HIGH`), giải phóng bàn spa, tạo yêu cầu hoàn tiền phần chưa thực hiện. |
-| 14 | **Walk-in Queue** / `CALLED` (`StartQueueService`) | **Appointment** / Khởi tạo `Channel=WALK_IN`, `IN_PROGRESS` | `QueueServiceStarted` | RULE-07-05, RULE-09-01, RULE-11-01 | Bắt đầu phục vụ khách Walk-in → Tự động tạo bản ghi `Appointment` nội bộ ở trạng thái `IN_PROGRESS` gắn với `QueueTicketId`. |
-| 15 | **Consent** / `ACTIVE` (`VerifyCrossStoreConsentOTP`) | **MedicalRecord** / Cho phép truy cập EMR liên Store | `CrossStoreConsentGranted` | RULE-22-02, RULE-22-08 | Xác thực OTP thành công → Cấp quyền truy cập xem bệnh án liên chi nhánh trong 24 giờ. |
-| 16 | **Consent** / `EXPIRED` (`ProcessConsentExpiry`) | **MedicalRecord** / Khóa quyền truy cập EMR liên Store | `CrossStoreConsentExpired` | RULE-22-08, RULE-22-10 | Hết hạn TTL 24h → Tác vụ nền tự động khóa quyền truy cập bệnh án liên Store. |
-| 17 | **Consent** / `ACTIVE` (`EmergencyOverrideAccess`) | **Incident** / `RECORDED` & **Notification** / Gửi cảnh báo | `EmergencyAccessOverridden` | RULE-09-02, RULE-21-02, RULE-21-05, RULE-23-02 | Bác sĩ truy cập khẩn cấp → Cấp quyền EMR ngay, lập biên bản `ClinicalIncident` (`CRITICAL`) và gửi tin nhắn cảnh báo tức thì tới Chủ pet và Store Manager. |
-| 18 | **StockTransfer** / `IN_TRANSIT` | **Inventory** (Kho xuất) / Khấu trừ tồn khả dụng | `StockTransferShipped` | RULE-12-05, RULE-12-07 | Xuất hàng chuyển kho → Trừ tồn khả dụng kho xuất, chuyển số lượng sang trạng thái `IN_TRANSIT`. |
-| 19 | **StockTransfer** / `RECEIVED` (đủ hàng) | **Inventory** (Kho nhận) / Tăng tồn khả dụng | `StockTransferReceived` | RULE-12-03, RULE-12-08 | Tiếp nhận đủ hàng nguyên vẹn → Tăng tồn khả dụng kho đích theo `ShippedQuantity`. |
-| 20 | **StockTransfer** / `DISCREPANCY_RECORDED` | **Inventory** / Nhập kho phần nguyên vẹn & Lập `InventoryAdjustment` | `StockTransferDiscrepancyReported` | RULE-12-08, RULE-12-09 | Phát hiện hàng hỏng/thiếu → Nhập ngay tồn khả dụng phần nguyên vẹn `ReceivedQuantity`, cách ly `DamagedQuantity` (`DAMAGED_STOCK`), hạch toán `LostQuantity`, lập phiếu điều chỉnh kho. |
-| 21 | **StockTransfer** / `RECEIVED` (sau điều chỉnh) | **StockTransfer** / `DISCREPANCY_RECORDED` -> `RECEIVED` | `StockTransferDiscrepancyResolved` | RULE-12-03, RULE-12-09 | Phê duyệt phiếu kiểm kê điều chỉnh → Đóng hoàn tất phiếu chuyển kho (không tăng tồn lặp lại). |
-| 22 | **Membership** / `UPGRADED` (`UpgradeMembership`) | **Membership** / Kích hoạt bản ghi hạng mới `ACTIVE` | `MembershipUpgraded` | RULE-19-04, RULE-19-08 | Nâng cấp hội viên → Đóng bản ghi gói cũ (`UPGRADED`) và tự động tạo mới bản ghi Membership hạng cao hơn (`ACTIVE`). |
-| 23 | **PurchaseOrder** / `RECEIVED` | **Inventory** / Tăng tồn kho thực tế & khả dụng | `GoodsReceived` | RULE-13-05, RULE-13-06 | Tiếp nhận hàng đạt chuẩn từ PO → Tăng tồn kho thực tế và khả dụng tại kho nhận, lưu vết lô và hạn sử dụng. |
-| 24 | **PurchaseOrder** / `CLOSED` | **Procurement** / Giải phóng cam kết đặt hàng | `PurchaseOrderRemainingCancelled` | RULE-13-07, RULE-13-08 | Hủy phần hàng giao thiếu → Đóng PO (`CLOSED`), giải phóng cam kết công nợ cho số lượng chưa giao. |
-| 25 | **Package** / `ACTIVATED` / `PARTIALLY_CONSUMED` | **Appointment** / Cấn trừ lượt dịch vụ | `PackagePartiallyConsumed` / `PackageFullyConsumed` | RULE-20-02, RULE-20-05 | Khách sử dụng lượt gói → Trừ lượt khả dụng, ghi nhận `PackageUsageHistory`, chuyển lịch hẹn tương ứng sang hoàn tất. |
-| 26 | **Package** / `CANCELLED` (`CancelPackage`) | **Refund** / `REQUESTED` | `PackageCancelled` | RULE-20-06, RULE-17-01 | Quản lý hủy gói → Tự động tính giá trị lượt chưa dùng theo công thức và tạo yêu cầu hoàn tiền `RefundRequested`. |
-
----
-
-> **Ghi chú kiến trúc (Promotion & Voucher Management — đã cập nhật):** Việc **áp dụng** một Voucher/Promotion vào đơn hàng/hóa đơn cụ thể tại thời điểm checkout vẫn là Stateless Rule Validation (kiểm tra điều kiện runtime theo `RULE-18-01 -> RULE-18-08`, không lưu trạng thái riêng cho từng lượt áp dụng — xem `voucher_usages`). Tuy nhiên bản thân vòng đời của **đối tượng** `PromotionCampaign` và `Voucher` (kích hoạt/tạm dừng/hết hạn) có trạng thái rõ ràng và được đặc tả chính thức tại FSM 18 và FSM 19 bên dưới.
-
----
-
-## 21. Kiến trúc Triển khai Event Bridges & Đảm bảo Tính nhất quán Dữ liệu (Transactional Outbox Pattern)
-
-Nhằm đảm bảo tính nhất quán dữ liệu tuyệt đối (ACID & Eventual Consistency) giữa các Aggregates trong kiến trúc Monolith của hệ sinh thái Pet Care (đặc biệt giữa Tiền, Hóa đơn, Đơn hàng, Lịch hẹn và Tồn kho), hệ thống quy định các nguyên tắc kiến trúc sau:
-
-### 21.1. Phân định Mô hình Giao dịch
-
-1. **Giao dịch Nội vùng Đồng bộ (Intra-Aggregate / Synchronous Transaction):**
-   - Áp dụng cho các thao tác trực tiếp tại quầy thu ngân POS bằng tiền mặt (`RecordCashPayment`) hoặc thao tác đơn lẻ trong cùng Aggregate.
-   - Tiếp tân thực hiện ghi nhận trong cùng một ranh giới `@Transactional` duy nhất bao gồm: Cập nhật Payment (`SUCCESS`), cập nhật Invoice (`PAID`), cập nhật Order (`PAID`) và trừ tồn kho trực tiếp `PhysicalQuantity`.
-
-2. **Giao dịch Ngoại vùng Bất đồng bộ (Cross-Aggregate / Event-Driven via Transactional Outbox):**
-   - Áp dụng cho các sự kiện kích hoạt chéo Aggregate hoặc phát sinh từ bên ngoài: Webhook cổng thanh toán Online, Cron Job hủy timeout đơn hàng 15 phút, yêu cầu hoàn tiền tự động qua cổng thanh toán, duyệt phụ phí grooming tạo Hóa đơn Phụ phí, hủy gói dịch vụ trả trước, cảnh báo sự cố y tế khẩn cấp.
-   - **BẮT BUỘC** sử dụng **Transactional Outbox Pattern** để đảm bảo không mất mát sự kiện (Zero Event Loss).
-
-```mermaid
-flowchart LR
-    subgraph Local_ACID_Transaction ["Local ACID Transaction Boundary"]
-        A[Business Operation<br/>Source Aggregate State Change] -->|Commit in same TX| B[(Database Table<br/>Aggregate Entity)]
-        A -->|Commit in same TX| C[(Database Table<br/>outbox_events)]
-    end
-    
-    C -->|Polling / CDC| D[Outbox Relay Worker<br/>Scheduled Job]
-    D -->|At-Least-Once Dispatch| E[Internal Event Broker<br/>ApplicationEventPublisher]
-    
-    subgraph Idempotent_Consumers ["Idempotent Event Consumers"]
-        E --> F[OrderPaidListener]
-        E --> G[ReleaseReservedInventoryListener]
-        E --> H[RefundRequestedListener]
-        E --> I[SendIncidentNotificationListener]
-    end
-    
-    F -->|Verify Idempotency Key| J[(Idempotency Store<br/>processed_events)]
-```
-
-### 21.2. Cấu trúc Bảng Outbox Chuẩn Hóa (`outbox_events`)
-
-Mọi sự kiện miền phát sinh qua ranh giới Aggregate bắt buộc phải được ghi nhận vào bảng `outbox_events` với cấu trúc sau:
-
-| Tên Cột | Kiểu Dữ Liệu | Ràng Buộc | Mô Tả |
+| Trạng thái | Loại | Ý nghĩa | Ràng buộc khi ở trạng thái này |
 |---|---|---|---|
-| `event_id` | `UUID` | `PRIMARY KEY` | Khóa định danh duy nhất toàn cục của sự kiện, dùng làm Idempotency Key cho Consumer. |
-| `aggregate_type` | `VARCHAR(64)` | `NOT NULL` | Phân loại Aggregate nguồn (ví dụ: `ORDER`, `PAYMENT`, `INVOICE`, `APPOINTMENT`, `GROOMING`, `CONSENT`, `PACKAGE`, `STOCK_TRANSFER`). |
-| `aggregate_id` | `VARCHAR(64)` | `NOT NULL` | Khóa chính định danh thực thể Aggregate phát sinh sự kiện. |
-| `event_type` | `VARCHAR(128)` | `NOT NULL` | Tên Domain Event chuẩn (ví dụ: `PaymentSucceeded`, `OrderTimedOut`, `RefundCompleted`, `EmergencyAccessOverridden`). |
-| `payload` | `JSONB` | `NOT NULL` | Toàn bộ dữ liệu chi tiết của sự kiện (dạng JSON có cấu trúc). |
-| `status` | `VARCHAR(32)` | `NOT NULL` | Trạng thái xử lý sự kiện: `PENDING`, `PROCESSING`, `PUBLISHED`, `FAILED`. |
-| `retry_count` | `INTEGER` | `NOT NULL DEFAULT 0` | Số lần đã thử lại phát sự kiện khi gặp sự cố tạm thời. |
-| `created_at` | `TIMESTAMPTZ` | `NOT NULL DEFAULT NOW()` | Thời điểm tạo sự kiện trong Transaction nguồn. |
-| `published_at` | `TIMESTAMPTZ` | `NULL` | Thời điểm sự kiện được chuyển phát thành công (khớp tên cột với `docs/06-erd.md` `outbox_events.published_at`). |
+| `PENDING` | INIT | Đã đăng ký, chưa xác thực OTP | Không đăng nhập được; đăng nhập thì chuyển sang màn hình OTP. Không dùng Quên mật khẩu |
+| `ACTIVE` | MID | Đang hoạt động | Nếu `is_locked` hoặc còn `locked_until` thì không đăng nhập được. Có `pending_customer_id` thì ẩn chức năng cần hồ sơ khách |
+| `DISABLED` | MID | Nhân viên bị vô hiệu hóa | Không đăng nhập được; dữ liệu lịch sử giữ nguyên. Không phải trạng thái cuối |
 
-### 21.3. Nguyên tắc Chuyển phát & Tiêu thụ Sự kiện (Delivery & Idempotency Rules)
+| # | Từ → Sang | Sự kiện | Người kích hoạt | Điều kiện | Hệ quả | Nguồn |
+|---|---|---|---|---|---|---|
+| 1 | — → `PENDING` | Đăng ký | A01 | Email, SĐT không trùng tài khoản khác; tích ≥ 18 tuổi và đồng ý điều khoản; mật khẩu hợp lệ | Gửi OTP. SĐT trùng hồ sơ khách chưa liên kết: gán `pending_customer_id`, không tạo hồ sơ. Ngược lại: tạo hồ sơ khách gắn tài khoản | BR-TK-01, 02, 03 · UC01 |
+| 2 | `PENDING` → `ACTIVE` | Xác thực OTP | A01 | OTP đúng, còn hạn, chưa quá 5 lần sai | Có `pending_customer_id`: đề nghị liên kết hồ sơ | BR-TK-05, 06, 19 · UC02 |
+| 3 | `PENDING` → *(xóa)* | Quá 24h **[CFG]** chưa xác thực | ST02 | — | Xóa tài khoản để email, SĐT đăng ký lại được | BR-TK-08 |
+| 4 | — → `ACTIVE` | Tạo tài khoản nhân viên | A03, A04, A05 | Đúng phân cấp tạo; A05–A08 phải có đúng 1 chi nhánh `DRAFT`/`ACTIVE` | `must_change_password = true`; sinh mật khẩu ngẫu nhiên gửi email | BR-QT-01, 02, 03 · UC08 |
+| 5 | `ACTIVE` → `DISABLED` | Vô hiệu hóa | A03, A04, A05 | Là nhân viên trong phạm vi; không phải chính mình; `is_locked = false`; không có Visit được gán chưa kết thúc, không có ca thu ngân `OPEN`; không phải BRANCH_MANAGER `ACTIVE` cuối cùng của chi nhánh `ACTIVE` | Hủy mọi phiên | BR-QT-04, 07, 08, 09, 12 · UC08 |
+| 6 | `DISABLED` → `ACTIVE` | Kích hoạt lại | A03, A04, A05 | Cùng phạm vi với vô hiệu hóa; `is_locked = false`; chi nhánh hợp lệ | `must_change_password = true`; cấp mật khẩu tạm mới | BR-QT-10 · UC08 |
+| 7 | `is_locked`: false → true | Khóa | A03 | Không phải chính mình; có lý do | Hủy mọi phiên. Liệt kê quy trình dở dang; Visit `IN_PROGRESS` đánh dấu cần gán lại. Thông báo BRANCH_MANAGER (nhân viên), SUPER_MANAGER (người bị khóa là BRANCH_MANAGER) hoặc lễ tân (khách). Ghi audit | BR-QT-11, BR-TN-08 · UC09 |
+| 8 | `is_locked`: true → false | Mở khóa | A03 | Có lý do | `status` giữ nguyên giá trị trước khi khóa. Ghi audit | BR-QT-11, 12 · UC09 |
 
-1. **At-Least-Once Delivery Guarantee:** Tiến trình nền Outbox Relay Worker quét các bản ghi `PENDING` theo lô (Batch Processing) và phát đi sự kiện. Nếu Worker gặp lỗi mạng hoặc dừng đột ngột, sự kiện sẽ được quét lại ở chu kỳ tiếp theo.
-2. **Idempotent Consumer Guard:** Mọi Listener/Consumer tiếp nhận Domain Event bắt buộc phải kiểm tra khóa `event_id` hoặc `payment_transaction_id` trong bảng `processed_events` trước khi thực thi xử lý nghiệp vụ. Nếu khóa đã tồn tại (đã xử lý), Consumer bỏ qua thao tác ngay lập tức, ngăn ngừa hoàn toàn rủi ro trùng lặp dữ liệu (Double Spending / Duplicate Inventory Release).
-3. **Nghiêm cấm In-Memory Listener thuần túy:** Tuyệt đối **KHÔNG** sử dụng `@TransactionalEventListener(phase = AFTER_COMMIT)` phát trực tiếp trong bộ nhớ mà không lưu vết Outbox, nhằm loại bỏ triệt để rủi ro mất mát sự kiện khi ứng dụng bị dừng hoặc crash ngay sau khi commit transaction nguồn.
+## 2. Chi nhánh
+`branches.status` · CN · Tầng 1
+
+| Trạng thái | Loại | Ý nghĩa | Ràng buộc khi ở trạng thái này |
+|---|---|---|---|
+| `DRAFT` | INIT | Đang chuẩn bị | Không hiển thị công khai; được gán nhân viên và cấu hình giờ mở cửa |
+| `ACTIVE` | MID | Đang hoạt động | Hiển thị công khai; nhận đặt lịch, lưu trú, tiếp nhận. Luôn có ≥ 1 BRANCH_MANAGER `ACTIVE` (trừ trường hợp bị khóa, BR-QT-04) |
+
+Tạm ngừng / đóng cửa (UC13) thuộc tầng 3. Cờ nhận cấp cứu ngoài giờ là thuộc tính, không phải trạng thái.
+
+| # | Từ → Sang | Sự kiện | Người kích hoạt | Điều kiện | Hệ quả | Nguồn |
+|---|---|---|---|---|---|---|
+| 1 | — → `DRAFT` | Tạo chi nhánh | A04 | Có tên, địa chỉ, SĐT, tọa độ | — | BR-CN-01 · UC12 |
+| 2 | `DRAFT` → `ACTIVE` | Kích hoạt | A04 | Có ≥ 1 BRANCH_MANAGER; đã cấu hình giờ mở cửa | Hiển thị công khai; bắt đầu sinh khung giờ đặt lịch | BR-CN-01, BR-QT-04 · UC12 |
+
+## 3. Lịch hẹn
+`appointments.status` · LH · Tầng 1
+
+| Trạng thái | Loại | Ý nghĩa | Ràng buộc khi ở trạng thái này |
+|---|---|---|---|
+| `BOOKED` | INIT | Đã đặt, chờ khách đến | Chiếm quota. Đổi khung giờ tối đa 3 lần **[CFG]** |
+| `CHECKED_IN` | MID | Đã tiếp nhận, có Visit | Không đổi giờ; khách không tự hủy |
+| `COMPLETED` | FINAL | Lượt đã hoàn tất | Không phụ thuộc thanh toán |
+| `CANCELLED` | FINAL | Đã hủy | Có cờ `late_cancel` |
+| `NO_SHOW` | FINAL | Không đến | Tính vào hạn chế đặt online (BR-LH-09) |
+
+| # | Từ → Sang | Sự kiện | Người kích hoạt | Điều kiện | Hệ quả | Nguồn |
+|---|---|---|---|---|---|---|
+| 1 | — → `BOOKED` | Đặt lịch | A02, A06 | Dịch vụ nhóm Khám/Tiêm hoặc Thẩm mỹ, đang bật tại chi nhánh `ACTIVE`; khung còn quota; khách: trước ≥ 24h, xa nhất 30 ngày, không bị hạn chế online, tài khoản đã liên kết hồ sơ; thú ≤ 2 lịch `BOOKED`, không trùng nhóm trong ngày, không trùng khung; thú chưa mất | — | BR-LH-01…05, 09 · UC39 |
+| 2 | `BOOKED` → `BOOKED` | Đổi khung giờ | A02, A06 | Cùng chi nhánh; khách: trước ≥ 12h và khung mới thỏa BR-LH-04; còn lượt đổi; khung mới còn quota | Tăng số lần đổi; giữ mã lịch hẹn | BR-LH-06 · UC40 |
+| 3 | `BOOKED` → `CHECKED_IN` | Tiếp nhận | SYS ← Visit#1 | — | — | BR-TN-01, 02 |
+| 4 | `BOOKED` → `CANCELLED` | Khách / lễ tân hủy | A02, A06 | Trước giờ hẹn | `late_cancel = true` nếu còn < 12h **[CFG]** | BR-LH-07 · UC40 |
+| 5 | `BOOKED` → `CANCELLED` | Phòng khám hủy | SYS ← ngày nghỉ / thu hẹp giờ hủy hàng loạt (UC14), thú đã mất, chuyển chủ | — | `late_cancel = false`; không tính lần đổi; thông báo khách | BR-LH-10, BR-CN-04, BR-KH-05, 08 |
+| 6 | `BOOKED` → `NO_SHOW` | Quá giờ hẹn 30 phút **[CFG]** | ST05 | Chưa check-in | — | BR-LH-08 |
+| 7 | `CHECKED_IN` → `COMPLETED` | Hoàn tất lượt | SYS ← Visit#5 | — | — | BR-LH-11 |
+| 8 | `CHECKED_IN` → `CANCELLED` | Hủy lượt khách bỏ về | SYS ← Visit#6 | — | `late_cancel = false` | BR-TN-07 |
+
+## 4. Visit
+`visits.status` · TN, KB · Tầng 1
+
+| Trạng thái | Loại | Ý nghĩa | Ràng buộc khi ở trạng thái này |
+|---|---|---|---|
+| `WAITING` | INIT | Trong hàng đợi, chưa gọi | `assignee_id` có thể trống; lễ tân gán / gán lại tự do; hủy được |
+| `IN_PROGRESS` | MID | Nhân viên phụ trách đã gọi lượt | Không hủy được. Chỉ gán lại khi người phụ trách không còn `ACTIVE`. VET ghi bệnh án, kê đơn, tiêm |
+| `COMPLETED` | FINAL | Hoàn tất | Bệnh án khóa, chỉ thêm bản bổ sung (ghi audit) |
+| `CANCELLED` | FINAL | Hủy khi chưa gọi | — |
+
+| # | Từ → Sang | Sự kiện | Người kích hoạt | Điều kiện | Hệ quả | Nguồn |
+|---|---|---|---|---|---|---|
+| 1 | — → `WAITING` | Tiếp nhận (check-in lịch hẹn hoặc walk-in) | A06 | Đã chọn 1 thú, thú chưa mất; chi nhánh `ACTIVE` và trong giờ mở cửa, hoặc ngoài giờ có cờ cấp cứu và đánh dấu cấp cứu. Có lịch hẹn: lịch `BOOKED`, đúng chi nhánh, đúng ngày, sớm nhất 30 phút **[CFG]** trước giờ hẹn | Lịch hẹn → `CHECKED_IN` (nếu có). Order (nguồn Visit) → `OPEN` kèm 1 dòng dịch vụ tự sinh, snapshot giá. Xếp hàng đợi: cấp cứu → lịch hẹn → walk-in; trễ 15–30 phút xếp như walk-in | BR-TN-01…04, BR-CN-05 · UC44 |
+| 2 | `WAITING` → `WAITING` | Gán / gán lại nhân viên | A06 | Nhân viên `ACTIVE` của chi nhánh, đúng chức vụ (VET: Khám/Tiêm; CARETAKER: Thẩm mỹ) | Cảnh báo nếu offline, không chặn | BR-TN-05, 06, 08 · UC45 |
+| 3 | `WAITING` → `IN_PROGRESS` | Gọi lượt | A07, A08 | Lượt được gán cho chính người gọi | — | BR-TN-05 · UC46 |
+| 4 | `IN_PROGRESS` → `IN_PROGRESS` | Gán lại lượt đã gọi | A05 (A04 nếu chi nhánh không còn BRANCH_MANAGER `ACTIVE`) | Người phụ trách hiện tại không còn `ACTIVE`; người mới đúng chức vụ; có lý do | Bệnh án cũ giữ nguyên kèm tên người ghi; quyền xóa dòng Order của người cũ chuyển cho người mới. Ghi audit | BR-TN-08 · UC45 |
+| 5 | `IN_PROGRESS` → `COMPLETED` | Hoàn tất lượt | Nhân viên phụ trách | Có dịch vụ loại Khám: bắt buộc có chẩn đoán. Chỉ có dịch vụ loại Tiêm: có ≥ 1 mũi tiêm. Thẩm mỹ: không điều kiện thêm | Lịch hẹn → `COMPLETED` (nếu có). Order → `PENDING`. Bệnh án khóa | BR-KB-01, 02, BR-SP-06 · UC48, UC49, UC52 |
+| 6 | `WAITING` → `CANCELLED` | Hủy lượt khách bỏ về | A06 | Lượt chưa được gọi | Order → `CANCELLED` (kèm dòng tự sinh). Lịch hẹn → `CANCELLED`, `late_cancel = false` | BR-TN-07 · UC45 |
+
+Sự kiện trong `IN_PROGRESS` không đổi trạng thái nhưng có hệ quả: ghi nhận mũi tiêm thì trừ kho vaccine ngay theo FEFO, sinh dòng Order vaccine, ghi ngày tái chủng và hủy nhắc / Care Task tái chủng của mũi cũ cùng loại vaccine (BR-KB-04, BR-TB-03); **xóa mũi tiêm ghi nhầm** thì hoàn kho vào đúng lô và xóa dòng Order vaccine trong cùng transaction (BR-KB-04); ghi ngày tái khám (BR-KB-06); kê đơn thiếu tồn thì VET chọn giảm số lượng hoặc **mua ngoài** (BR-KB-03).
+
+## 5. Order
+`orders.status` + `orders.source` (`VISIT` / `RETAIL` / `BOARDING`) · BH, TG · Tầng 1
+
+| Trạng thái | Loại | Ý nghĩa | Ràng buộc khi ở trạng thái này |
+|---|---|---|---|
+| `OPEN` | INIT (`VISIT`, `RETAIL`) | Đang thêm dòng | Dòng chỉ xóa bởi người đã thêm (lễ tân xóa được dòng bán lẻ); dòng vaccine không xóa trực tiếp, chỉ xóa kèm khi xóa mũi tiêm (BR-BH-02, BR-KB-04). Giá snapshot khi thêm dòng |
+| `PENDING` | MID; INIT với `BOARDING` | Đã chốt, chờ thu tiền | Dòng dịch vụ, thuốc bị khóa; lễ tân chỉ thêm / xóa dòng bán lẻ. **Chưa giao hàng.** Không tự hủy |
+| `PAID` | FINAL | Đã thu tiền | Kho đã trừ; được giao hàng / thú. Không hủy, không hoàn tiền (tầng 1) |
+| `CANCELLED` | FINAL | Đã hủy | Hủy từ `PENDING` bắt buộc có `cancel_reason` |
+
+| # | Từ → Sang | Sự kiện | Người kích hoạt | Điều kiện | Hệ quả | Nguồn |
+|---|---|---|---|---|---|---|
+| 1 | — → `OPEN` (`VISIT`) | Tiếp nhận | SYS ← Visit#1 | — | — | BR-BH-01, BR-TN-01 |
+| 2 | — → `OPEN` (`RETAIL`) | Tạo đơn bán lẻ | A06 | — | Thêm dòng: cảnh báo nếu thiếu tồn khả dụng; không cho thêm thuốc kê đơn | BR-BH-01, 04, BR-SP-01 · UC66 |
+| 3 | — → `PENDING` (`BOARDING`) | Bắt đầu trả thú / kết thúc do thú mất | SYS ← Đặt chỗ#9, #11 | Đặt chỗ chưa có Order `BOARDING` ở `PENDING`; nếu có thì dùng lại và tính lại số đêm | — | BR-BH-01, BR-LT-09, 12 |
+| 4 | `OPEN` → `PENDING` (`VISIT`) | Hoàn tất lượt | SYS ← Visit#5 | — | — | BR-KB-02 |
+| 5 | `OPEN` → `PENDING` (`RETAIL`) | Chốt đơn | A06 | Có ≥ 1 dòng | — | BR-BH-01 · UC66 |
+| 6 | `OPEN` → `CANCELLED` (`VISIT`) | Hủy lượt | SYS ← Visit#6 | — | — | BR-TN-07 |
+| 7 | `OPEN` → `CANCELLED` (`RETAIL`) | Hủy đơn chưa chốt | A06 | — | — | BR-BH-01 · UC66 |
+| 8 | `PENDING` → `PAID` | Thu tiền | A06 | Lễ tân có ca `OPEN` của chính mình; số tiền = tổng Order; tồn khả dụng đủ cho mọi dòng hàng, thuốc (bỏ qua vaccine). Thu gộp được nhiều Order của cùng khách, cùng chi nhánh | Trừ kho FEFO (ST06) cùng transaction với kiểm tra tồn; ghi giao dịch vào ca; ghi audit; được giao hàng | BR-TG-01…04, BR-BH-04, 06 · UC70 |
+| 9 | `PENDING` → `CANCELLED` (`BOARDING`) | Hủy phiên trả thú | A06 | Thú còn trong chuồng (đặt chỗ `CHECKED_IN`/`OVERDUE`); có lý do | Đặt chỗ giữ nguyên trạng thái, tiếp tục tính đêm. Ghi audit | BR-LT-09 · UC59 |
+| 10 | `PENDING` → `CANCELLED` | Hủy Order khách không thanh toán | A05 | Nguồn `VISIT` / `RETAIL`, hoặc `BOARDING` khi thú không còn trong chuồng; có lý do | Không đổi kho, bệnh án, lịch hẹn, lưu trú. Tính là thất thu (BR-BC-02). Ghi audit | BR-BH-05 · UC66 |
+
+Trong `PENDING`, thiếu tồn lúc thu: từ chối thu; dòng bán lẻ thì lễ tân xóa / giảm, dòng thuốc kê đơn thì chuyển sang mua ngoài (ghi audit). Không đổi trạng thái (BR-BH-04).
+
+## 6. Đặt chỗ lưu trú
+`boarding_bookings.status` · LT · Tầng 2
+
+| Trạng thái | Loại | Ý nghĩa | Ràng buộc khi ở trạng thái này |
+|---|---|---|---|
+| `BOOKED` | INIT | Đã đặt theo loại chuồng | Chiếm sức chứa các đêm từ ngày nhận đến ngày trả dự kiến. Đơn giá theo đêm đã snapshot |
+| `CHECKED_IN` | MID | Thú đang ở một chuồng cụ thể | Nhật ký chăm sóc ≥ 1 mục/ngày **[CFG]**. Order lưu trú không bị BRANCH_MANAGER hủy |
+| `OVERDUE` | MID | Quá hạn đón | Vẫn tính đêm; chiếm chỗ đêm hiện tại + 2 đêm **[CFG]**; thông báo khách mỗi ngày. Không gia hạn |
+| `CHECKED_OUT` | FINAL | Kết thúc lưu trú | Có `end_reason`: `TRẢ_THÚ` hoặc `THÚ_MẤT` |
+| `CANCELLED` | FINAL | Đã hủy | Có cờ `late_cancel` |
+| `NO_SHOW` | FINAL | Không đến nhận | Tính vào hạn chế đặt online (BR-LH-09) |
+
+| # | Từ → Sang | Sự kiện | Người kích hoạt | Điều kiện | Hệ quả | Nguồn |
+|---|---|---|---|---|---|---|
+| 1 | — → `BOOKED` | Đặt chỗ | A02, A06 | Loại chuồng đang bật tại chi nhánh `ACTIVE`; thú đúng loài, cân nặng ≤ tối đa; 1–30 đêm **[CFG]**; còn sức chứa mọi đêm; khách: trước ≥ 1 ngày, xa nhất 60 ngày **[CFG]**, không bị hạn chế online; ngày nhận / trả không phải ngày nghỉ; không chồng ngày với đặt chỗ khác của thú; thú chưa mất | Snapshot giá đêm. Dự kiến thiếu mũi tiêm bắt buộc vào ngày nhận: cảnh báo, gợi ý đặt lịch tiêm | BR-LT-02…05, BR-LH-09 · UC58 |
+| 2 | `BOOKED`/`CHECKED_IN` → (giữ nguyên) | Gia hạn ngày trả | A02, A06 | Trước ngày trả dự kiến; còn chỗ các đêm thêm; tổng ≤ 30 đêm | — | BR-LT-06 · UC58 |
+| 3 | `BOOKED` → `CHECKED_IN` | Nhận thú | A06, A08 | Trong giờ mở cửa; đủ mũi bắt buộc khi lưu trú, chưa quá ngày tái chủng (chỉ tính mũi tiêm tại hệ thống); có chuồng `AVAILABLE` **đúng loại đã đặt** (không gán loại khác); nhập cân nặng. Nhận sớm được nếu còn chỗ | Chuồng → `OCCUPIED`. Ghi tình trạng lúc nhận; cân nặng vào lịch sử. Thiếu tiêm: từ chối, lễ tân tiếp nhận walk-in để tiêm trước. Hết chuồng đúng loại: từ chối nhận, xử lý theo #5 | BR-LT-05, 08, BR-KH-04 · UC59 |
+| 4 | `BOOKED` → `CANCELLED` | Khách / lễ tân hủy | A02, A06 | Trước ngày nhận | `late_cancel = true` nếu còn < 24h **[CFG]** | BR-LT-06 · UC58 |
+| 5 | `BOOKED` → `CANCELLED` | Phòng khám hủy | SYS ← không còn chuồng `AVAILABLE` đúng loại lúc nhận, ngày nghỉ hủy hàng loạt, thú đã mất, chuyển chủ | — | `late_cancel = false`; thông báo khách; hết chuồng thì thông báo BRANCH_MANAGER | BR-LT-08, BR-LH-10, BR-KH-05, 08 |
+| 6 | `BOOKED` → `NO_SHOW` | Hết giờ làm việc ngày nhận | ST05 | Chưa nhận thú | — | BR-LT-06 |
+| 7 | `CHECKED_IN` → `OVERDUE` | Quá giờ trả quy định 12:00 **[CFG]** của ngày trả dự kiến | ST15 | Chưa trả, chưa gia hạn | Thông báo khách mỗi ngày. Quá ≥ 1 ngày: Care Task gọi điện (ST18). Quá ≥ 7 ngày: thông báo BRANCH_MANAGER. Thiếu chỗ cho đặt chỗ nhận trong 2 ngày tới: cảnh báo lễ tân | BR-LT-03, 10 |
+| 8 | `CHECKED_IN`/`OVERDUE` → (giữ nguyên) | Ghi nhật ký đánh dấu bất thường | A07, A08 | — | Thông báo ngay khách và lễ tân; lễ tân tiếp nhận walk-in hoặc cấp cứu để VET khám | BR-LT-11, 12 · UC57 |
+| 9 | `CHECKED_IN`/`OVERDUE` → (giữ nguyên) | Bắt đầu trả thú | A06 | Trong giờ mở cửa | Order (`BOARDING`) → `PENDING`: số đêm = ngày trả − ngày nhận thực tế, tối thiểu 1; trả sau giờ quy định +1 đêm | BR-LT-04, 09 · UC59 |
+| 10 | `CHECKED_IN`/`OVERDUE` → `CHECKED_OUT` | Giao thú (`TRẢ_THÚ`) | A06 | Order lưu trú đã `PAID` — không có ngoại lệ | Chuồng → `AVAILABLE` | BR-LT-09, BR-BH-06 · UC59 |
+| 11 | `CHECKED_IN`/`OVERDUE` → `CHECKED_OUT` | Thú mất (`THÚ_MẤT`) | A06 | Ghi rõ diễn biến | Chuồng → `AVAILABLE`. Order (`BOARDING`) → `PENDING`, tính đến ngày mất. Sau đó mới cho đánh dấu thú đã mất (BR-KH-05) | BR-LT-12 · UC59 |
+
+## 7. Chuồng
+`kennels.status` · LT · Tầng 2
+
+| Trạng thái | Loại | Ý nghĩa | Ràng buộc khi ở trạng thái này |
+|---|---|---|---|
+| `AVAILABLE` | INIT | Trống, sẵn sàng | Tính vào sức chứa của loại chuồng |
+| `OCCUPIED` | MID | Đang có 1 thú | Tính vào sức chứa. Không chuyển bảo trì, không xóa |
+| `MAINTENANCE` | MID | Ngừng sử dụng | Không tính vào sức chứa |
+
+Chuồng **không được gán khi đặt chỗ**; chỉ gán lúc nhận thú (Đặt chỗ#3) và phải **đúng loại chuồng đã đặt**. Xóa chuồng chỉ khi không `OCCUPIED`.
+
+| # | Từ → Sang | Sự kiện | Người kích hoạt | Điều kiện | Hệ quả | Nguồn |
+|---|---|---|---|---|---|---|
+| 1 | — → `AVAILABLE` | Tạo chuồng | A05 | Mã duy nhất trong chi nhánh; thuộc 1 loại chuồng | Tăng sức chứa | BR-LT-01, BR-SP-04 · UC54 |
+| 2 | `AVAILABLE` → `OCCUPIED` | Nhận thú | SYS ← Đặt chỗ#3 | — | — | BR-LT-08 |
+| 3 | `OCCUPIED` → `AVAILABLE` | Kết thúc lưu trú | SYS ← Đặt chỗ#10, #11 | — | — | BR-LT-09, 12 |
+| 4 | `AVAILABLE` → `MAINTENANCE` | Chuyển bảo trì | A05 | — | Giảm sức chứa. Nếu thiếu chỗ cho đặt chỗ đã có: cảnh báo kèm danh sách, không tự hủy | BR-LT-01 · UC54 |
+| 5 | `MAINTENANCE` → `AVAILABLE` | Hết bảo trì | A05 | — | Tăng sức chứa | BR-LT-01 · UC54 |
+
+## 8. Ca thu ngân
+`cashier_shifts.status` (+ `cashier_shifts.is_after_hours`) · TG · Tầng 1
+
+Có hai loại ca, phân biệt bằng cờ `is_after_hours` đặt lúc mở ca và không đổi: **ca thường** (trong giờ mở cửa) và **ca ngoài giờ** (thu tiền ca cấp cứu ở chi nhánh có cờ nhận cấp cứu ngoài giờ). Hai loại có cùng trạng thái, chỉ khác điều kiện mở và thời điểm tự chốt.
+
+| Trạng thái | Loại | Ý nghĩa | Ràng buộc khi ở trạng thái này |
+|---|---|---|---|
+| `OPEN` | INIT | Lễ tân đang thu tiền | Mỗi lễ tân tối đa 1 ca `OPEN` (tính chung hai loại). Chặn vô hiệu hóa tài khoản lễ tân. Ca ngoài giờ được kéo qua nửa đêm, thuộc ngày mở ca |
+| `CLOSED` | MID | Đã chốt | Không thu thêm. Có số tiền thực đếm, hoặc `auto_closed = true` |
+| `RECONCILED` | FINAL | Đã đối soát | Chênh lệch và ghi chú đã ghi nhận |
+
+| # | Từ → Sang | Sự kiện | Người kích hoạt | Điều kiện | Hệ quả | Nguồn |
+|---|---|---|---|---|---|---|
+| 1 | — → `OPEN` | Mở ca thường | A06 | Trong khoảng giờ mở cửa hôm nay; không phải ngày nghỉ; chưa có ca `OPEN` của mình | `is_after_hours = false` | BR-TG-01, 05 · UC71 |
+| 2 | — → `OPEN` | Mở ca ngoài giờ | A06 | Chi nhánh có cờ nhận cấp cứu ngoài giờ; đang ngoài giờ mở cửa hoặc trong ngày nghỉ; chưa có ca `OPEN` của mình | `is_after_hours = true` | BR-CN-05, BR-TG-01, 05 · UC71 |
+| 3 | `OPEN` → `CLOSED` | Chốt ca | A06 | Nhập số tiền thực đếm | Tổng hợp giao dịch theo phương thức | BR-TG-05 · UC71 |
+| 4 | `OPEN` → `CLOSED` | Tự chốt ca thường | ST13 | `is_after_hours = false`; quá giờ đóng của khoảng giờ cuối trong ngày + 30 phút **[CFG]** | `auto_closed = true`; thông báo BRANCH_MANAGER | BR-TG-05 |
+| 5 | `OPEN` → `CLOSED` | Tự chốt ca ngoài giờ | ST13 | `is_after_hours = true`; đến giờ bắt đầu của khoảng giờ mở cửa kế tiếp của chi nhánh | `auto_closed = true`; thông báo BRANCH_MANAGER | BR-TG-05 |
+| 6 | `CLOSED` → `RECONCILED` | Đối soát | A05 | Có số tiền thực đếm (BRANCH_MANAGER nhập nếu ca tự chốt) | Ghi chênh lệch + ghi chú; ghi audit | BR-TG-04, 05 · UC72 |
+
+## 9. Phiếu nhập kho
+`stock_receipts.status` · KO · Tầng 2
+
+| Trạng thái | Loại | Ý nghĩa | Ràng buộc khi ở trạng thái này |
+|---|---|---|---|
+| `DRAFT` | INIT | Đang soạn | Sửa tự do; chưa ảnh hưởng tồn |
+| `CONFIRMED` | MID | Đã cộng tồn | Không sửa được |
+| `CANCELLED` | FINAL | Đã hủy | Không xóa cứng, giữ dãy số phiếu liên tục |
+
+| # | Từ → Sang | Sự kiện | Người kích hoạt | Điều kiện | Hệ quả | Nguồn |
+|---|---|---|---|---|---|---|
+| 1 | — → `DRAFT` | Tạo phiếu | A05 | — | — | BR-KO-03 · UC74 |
+| 2 | `DRAFT` → `CONFIRMED` | Xác nhận | A05 | Nhà cung cấp đang hợp tác; mỗi dòng số lượng > 0, có giá nhập; sản phẩm quản lý hạn dùng có số lô và hạn dùng sau ngày nhập | Cộng tồn theo lô | BR-KO-02, 03, BR-SP-05 · UC74 |
+| 3 | `DRAFT` → `CANCELLED` | Hủy phiếu nháp | A05 | — | Không đổi tồn | BR-KO-03 · UC74 |
+| 4 | `CONFIRMED` → `CANCELLED` | Hủy phiếu đã xác nhận | A05 | Tồn hiện tại của từng lô ≥ số lượng trên phiếu | Trừ lại tồn; ghi audit. Không đủ tồn: hướng dẫn dùng điều chỉnh tồn (BR-KO-06) | BR-KO-04 · UC74 |
+
+## 10. Care Task 🆕
+`care_tasks.status` (+ `care_tasks.type`: `TÁI_CHỦNG` / `QUÁ_HẠN_TÁI_CHỦNG` / `TÁI_KHÁM` / `QUÁ_HẠN_ĐÓN`) · TB · Tầng 1
+
+| Trạng thái | Loại | Ý nghĩa | Ràng buộc khi ở trạng thái này |
+|---|---|---|---|
+| `OPEN` | INIT | Chờ lễ tân chi nhánh phụ trách gọi điện (chỉ A06 thực hiện) | Hiển thị trong danh sách việc của chi nhánh |
+| `DONE` | FINAL | Đã thực hiện | Có `result`: `LIÊN_HỆ_ĐƯỢC` / `KHÔNG_LIÊN_LẠC_ĐƯỢC`, kèm ghi chú |
+| `CANCELLED` | FINAL | Đã hủy | Có lý do |
+
+| # | Từ → Sang | Sự kiện | Người kích hoạt | Điều kiện | Hệ quả | Nguồn |
+|---|---|---|---|---|---|---|
+| 1 | — → `OPEN` | Sinh task | ST18 | Một trong: đến hạn nhắc tái chủng (`TÁI_CHỦNG`) hoặc tái khám (`TÁI_KHÁM`) và hồ sơ không có email; quá ngày tái chủng 7 ngày **[CFG]** chưa tiêm lại (`QUÁ_HẠN_TÁI_CHỦNG`, tối đa 1 task/mũi); đặt chỗ `OVERDUE` ≥ 1 ngày **[CFG]** (`QUÁ_HẠN_ĐÓN`) | Giao cho lễ tân chi nhánh phụ trách: chi nhánh tiêm gần nhất cùng loại vaccine / chi nhánh của Visit có hẹn tái khám / chi nhánh lưu trú | BR-TB-02, 04, 06, BR-LT-10 |
+| 2 | `OPEN` → `DONE` | Thực hiện | A06 | Chọn kết quả, nhập ghi chú | Không liên lạc được: không sinh task gọi lại | BR-TB-05 · UC87 |
+| 3 | `OPEN` → `CANCELLED` | Hủy thủ công | A06 | Có lý do | — | BR-TB-05 · UC87 |
+| 4 | `OPEN` → `CANCELLED` | Thú đã mất | ST19 | — | — | BR-TB-03, BR-KH-05 |
+| 5 | `OPEN` → `CANCELLED` | Mũi đã được tiêm lại | SYS ← Visit (ghi nhận mũi tiêm) | Task loại `TÁI_CHỦNG` / `QUÁ_HẠN_TÁI_CHỦNG` của mũi cũ; mũi mới cùng loại vaccine | — | BR-TB-03, 05 |
+| 6 | `OPEN` → `CANCELLED` | Nhắc tái khám bị hủy | SYS ← Lịch hẹn#1, Visit#1 | Task loại `TÁI_KHÁM`; từ ngày lập hẹn, thú có lịch hẹn nhóm Khám/Tiêm `BOOKED` hoặc Visit mới có dịch vụ loại Khám | — | BR-TB-05, 06 |
+
+---
+
+## Phụ lục: chuỗi tác động chính
+
+| Sự kiện nguồn | Kéo theo |
+|---|---|
+| Visit#1 Tiếp nhận | Lịch hẹn → `CHECKED_IN`; Order (`VISIT`) → `OPEN` |
+| Visit#5 Hoàn tất | Lịch hẹn → `COMPLETED`; Order → `PENDING`; bệnh án khóa |
+| Visit#6 Hủy lượt | Lịch hẹn → `CANCELLED`; Order → `CANCELLED` |
+| Visit — ghi nhận mũi tiêm (`IN_PROGRESS`) | Trừ kho FEFO; dòng Order vaccine; Care Task tái chủng của mũi cũ cùng loại → `CANCELLED` |
+| Visit — xóa mũi tiêm ghi nhầm (`IN_PROGRESS`) | Hoàn kho đúng lô; xóa dòng Order vaccine |
+| Lịch hẹn#1 / Visit#1 có dịch vụ Khám | Care Task `TÁI_KHÁM` của thú → `CANCELLED`; hủy nhắc tái khám |
+| Order#8 Thu tiền | Trừ kho FEFO; giao dịch vào ca thu ngân; cho phép giao hàng / giao thú (Đặt chỗ#10) |
+| Đặt chỗ#3 Nhận thú | Chuồng → `OCCUPIED` |
+| Đặt chỗ#9 Bắt đầu trả thú | Order (`BOARDING`) → `PENDING` |
+| Đặt chỗ#10, #11 Kết thúc lưu trú | Chuồng → `AVAILABLE`; (#11) Order (`BOARDING`) → `PENDING` |
+| Thú cưng đánh dấu đã mất (BR-KH-05) | Lịch hẹn, Đặt chỗ `BOOKED` → `CANCELLED` (không tính hủy muộn); Care Task → `CANCELLED`; hủy nhắc tái chủng, tái khám |
+| Chuyển chủ thú cưng (BR-KH-08) | Lịch hẹn, Đặt chỗ `BOOKED` → `CANCELLED` (không tính hủy muộn); nhắc tái chủng, tái khám đi theo thú sang chủ mới |
