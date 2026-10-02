@@ -7,10 +7,11 @@ import {
   Crown, Warehouse, Truck, Boxes, ClipboardList, ShieldAlert,
   BarChart3, Activity, Building2, UserCog, ChevronDown,
   ChevronRight, LogOut, PanelLeftClose, PanelLeft,
-  Package, Bot
+  Package, Bot, ConciergeBell
 } from 'lucide-react';
 import { useState } from 'react';
 import type { Role } from '../../shared/types/admin';
+import { WORKSPACE_PATHS, WORKSPACE_ROLES, getUserRoles } from '../../shared/constants/workspaces';
 
 export interface MenuItem {
   path: string;
@@ -31,6 +32,14 @@ const ALL_ROLES: Role[] = [
 
 // eslint-disable-next-line react-refresh/only-export-components
 export const ADMIN_MENU: MenuSection[] = [
+  {
+    section: 'Bàn làm việc',
+    items: [
+      { path: WORKSPACE_PATHS.reception, label: 'Quầy lễ tân', icon: ConciergeBell, roles: [...WORKSPACE_ROLES.reception] },
+      { path: WORKSPACE_PATHS.doctor, label: 'Phòng khám', icon: Stethoscope, roles: [...WORKSPACE_ROLES.doctor] },
+      { path: WORKSPACE_PATHS.grooming, label: 'Khu grooming', icon: Scissors, roles: [...WORKSPACE_ROLES.grooming] },
+    ],
+  },
   {
     section: 'Tổng quan',
     items: [
@@ -87,12 +96,12 @@ export const ADMIN_MENU: MenuSection[] = [
 ];
 
 // eslint-disable-next-line react-refresh/only-export-components
-export function routeAllowed(path: string, role: Role): boolean {
-  if (role === 'SUPER_ADMIN' || role === 'STORE_MANAGER') return true;
+export function routeAllowed(path: string, roles: Role[]): boolean {
+  if (roles.includes('SUPER_ADMIN') || roles.includes('STORE_MANAGER')) return true;
   for (const section of ADMIN_MENU) {
     for (const item of section.items) {
       if (path === item.path || path.startsWith(item.path + '/')) {
-        return item.roles.includes(role);
+        return item.roles.some((r) => roles.includes(r));
       }
     }
   }
@@ -131,7 +140,7 @@ export function AdminSidebar({ collapsed: propCollapsed, onToggle }: AdminSideba
 
   const visibleSections = ADMIN_MENU.map((section) => ({
     ...section,
-    items: section.items.filter((item) => item.roles.includes(user.role)),
+    items: section.items.filter((item) => item.roles.some((r) => getUserRoles(user).includes(r))),
   })).filter((section) => section.items.length > 0);
 
   return (

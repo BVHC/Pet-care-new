@@ -1,0 +1,293 @@
+/* Staff workspaces — tokens live on :root so portalled dialogs and sheets inherit them.
+   Each workspace is a "zone" with its own wayfinding colour, set as <html data-ws-zone>. */
+
+:root {
+  --ws-canvas: #f2f4f2;
+  --ws-surface: #ffffff;
+  --ws-raised: #f7f8f7;
+  --ws-ink: #18201c;
+  --ws-ink-2: #46504b;
+  --ws-ink-3: #66716b;
+  --ws-line: #e0e5e1;
+  --ws-line-strong: #c7cec9;
+  --ws-focus: #1d4ed8;
+
+  /* Zone accent — admin slate by default. */
+  --ws-accent: #3f4a5a;
+  --ws-accent-ink: #3f4a5a;
+  --ws-accent-soft: #eaedf1;
+
+  /* Status tones: always paired with a text label, never colour alone. */
+  --ws-wait-bg: #fbf0d2;
+  --ws-wait-ink: #7f4d00;
+  --ws-busy-bg: #e2e8ff;
+  --ws-busy-ink: #2d3c9e;
+  --ws-ready-bg: #d9f1e3;
+  --ws-ready-ink: #0f5d36;
+  --ws-done-bg: #eceeec;
+  --ws-done-ink: #48514c;
+  --ws-urgent-bg: #fbe1dd;
+  --ws-urgent-ink: #a01f17;
+
+  --ws-shadow-lift: 0 14px 30px -12px rgba(18, 28, 23, 0.32);
+}
+
+:root[data-ws-zone='reception'] {
+  --ws-accent: #2453c2;
+  --ws-accent-ink: #2453c2;
+  --ws-accent-soft: #e6edfc;
+}
+:root[data-ws-zone='doctor'] {
+  --ws-accent: #0b7566;
+  --ws-accent-ink: #0b7566;
+  --ws-accent-soft: #ddf2ed;
+}
+:root[data-ws-zone='grooming'] {
+  --ws-accent: #8a3aa3;
+  --ws-accent-ink: #8a3aa3;
+  --ws-accent-soft: #f3e7f7;
+}
+
+:root.dark {
+  color-scheme: dark;
+  --ws-canvas: #0f1311;
+  --ws-surface: #161b18;
+  --ws-raised: #1c231f;
+  --ws-ink: #e5eae7;
+  --ws-ink-2: #b2bcb6;
+  --ws-ink-3: #8c968f;
+  --ws-line: #27302b;
+  --ws-line-strong: #36403a;
+  --ws-focus: #93b2ff;
+  --ws-accent: #4b5869;
+  --ws-accent-ink: #b9c3d1;
+  --ws-accent-soft: #232a33;
+  --ws-wait-bg: #3a2c0c;
+  --ws-wait-ink: #f6cf7a;
+  --ws-busy-bg: #1f2650;
+  --ws-busy-ink: #b3c0ff;
+  --ws-ready-bg: #12331f;
+  --ws-ready-ink: #8fdcae;
+  --ws-done-bg: #222824;
+  --ws-done-ink: #a9b2ac;
+  --ws-urgent-bg: #43160f;
+  --ws-urgent-ink: #ffb4a8;
+  --ws-shadow-lift: 0 16px 34px -10px rgba(0, 0, 0, 0.7);
+}
+:root.dark[data-ws-zone='reception'] {
+  --ws-accent: #2f61d6;
+  --ws-accent-ink: #9db6f7;
+  --ws-accent-soft: #1a2546;
+}
+:root.dark[data-ws-zone='doctor'] {
+  --ws-accent: #0d7f6f;
+  --ws-accent-ink: #79d6c4;
+  --ws-accent-soft: #10302a;
+}
+:root.dark[data-ws-zone='grooming'] {
+  --ws-accent: #9447ae;
+  --ws-accent-ink: #dba6ec;
+  --ws-accent-soft: #2f1a37;
+}
+
+.ws {
+  background: var(--ws-canvas);
+  color: var(--ws-ink);
+  font-family: 'Inter', -apple-system, 'Segoe UI', sans-serif;
+  font-feature-settings: 'cv11', 'ss01';
+}
+
+.ws :focus-visible,
+.ws-portal :focus-visible {
+  outline: 2px solid var(--ws-focus);
+  outline-offset: 2px;
+}
+
+.ws-num {
+  font-variant-numeric: tabular-nums;
+}
+
+/* The queue ticket — the number staff call out ("số 12"), shared by every workspace.
+   Notched like a torn paper stub. */
+.ws-ticket {
+  --notch: 5px;
+  display: inline-flex;
+  flex-shrink: 0;
+  align-items: center;
+  justify-content: center;
+  min-width: 2.6rem;
+  height: 2.6rem;
+  padding: 0 0.45rem;
+  border-radius: 7px;
+  background: var(--ws-accent-soft);
+  color: var(--ws-accent-ink);
+  font-family: 'Oswald', 'Arial Narrow', sans-serif;
+  font-weight: 700;
+  font-size: 1.25rem;
+  line-height: 1;
+  font-variant-numeric: tabular-nums;
+  letter-spacing: 0.01em;
+  -webkit-mask:
+    radial-gradient(circle var(--notch) at 0 50%, transparent 96%, #000) left / 51% 100% no-repeat,
+    radial-gradient(circle var(--notch) at 100% 50%, transparent 96%, #000) right / 51% 100% no-repeat;
+  mask:
+    radial-gradient(circle var(--notch) at 0 50%, transparent 96%, #000) left / 51% 100% no-repeat,
+    radial-gradient(circle var(--notch) at 100% 50%, transparent 96%, #000) right / 51% 100% no-repeat;
+}
+.ws-ticket[data-size='sm'] {
+  --notch: 4px;
+  min-width: 2.1rem;
+  height: 2.1rem;
+  font-size: 1.05rem;
+}
+.ws-ticket[data-size='lg'] {
+  --notch: 8px;
+  min-width: 4.25rem;
+  height: 4.25rem;
+  font-size: 2.4rem;
+  border-radius: 10px;
+}
+.ws-ticket[data-tone='urgent'] {
+  background: var(--ws-urgent-bg);
+  color: var(--ws-urgent-ink);
+}
+.ws-ticket[data-tone='muted'] {
+  background: var(--ws-done-bg);
+  color: var(--ws-done-ink);
+}
+
+.ws-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.3rem;
+  padding: 0.12rem 0.5rem;
+  border-radius: 999px;
+  font-size: 0.75rem;
+  font-weight: 600;
+  line-height: 1.35;
+  white-space: nowrap;
+  background: var(--ws-done-bg);
+  color: var(--ws-done-ink);
+}
+.ws-chip[data-tone='wait'] { background: var(--ws-wait-bg); color: var(--ws-wait-ink); }
+.ws-chip[data-tone='busy'] { background: var(--ws-busy-bg); color: var(--ws-busy-ink); }
+.ws-chip[data-tone='ready'] { background: var(--ws-ready-bg); color: var(--ws-ready-ink); }
+.ws-chip[data-tone='urgent'] { background: var(--ws-urgent-bg); color: var(--ws-urgent-ink); }
+.ws-chip[data-tone='accent'] { background: var(--ws-accent-soft); color: var(--ws-accent-ink); }
+
+.ws-kbd {
+  display: inline-flex;
+  align-items: center;
+  padding: 0 0.3rem;
+  min-width: 1.25rem;
+  height: 1.15rem;
+  border: 1px solid var(--ws-line-strong);
+  border-bottom-width: 2px;
+  border-radius: 4px;
+  font-size: 0.68rem;
+  font-weight: 600;
+  color: var(--ws-ink-2);
+  background: var(--ws-surface);
+  font-variant-numeric: tabular-nums;
+}
+
+.ws-skel {
+  border-radius: 6px;
+  background: linear-gradient(90deg, var(--ws-line) 0%, var(--ws-raised) 50%, var(--ws-line) 100%);
+  background-size: 200% 100%;
+  animation: ws-shimmer 1.3s linear infinite;
+}
+@keyframes ws-shimmer {
+  from { background-position: 200% 0; }
+  to { background-position: -200% 0; }
+}
+
+/* A ticket that just entered a list — the one orchestrated motion in the workspaces. */
+.ws-fresh {
+  animation: ws-fresh 1.8s ease-out;
+}
+@keyframes ws-fresh {
+  0% { background-color: var(--ws-accent-soft); box-shadow: inset 3px 0 0 var(--ws-accent); }
+  100% { background-color: transparent; box-shadow: inset 3px 0 0 transparent; }
+}
+
+/* Grooming board drag feedback */
+.ws-card-dragging {
+  position: relative;
+  z-index: 40;
+  box-shadow: var(--ws-shadow-lift);
+  cursor: grabbing;
+  pointer-events: none;
+}
+.ws-column[data-drop='ok'] {
+  outline: 2px dashed var(--ws-accent);
+  outline-offset: -4px;
+  background: var(--ws-accent-soft);
+}
+.ws-column[data-drop='no'] {
+  opacity: 0.5;
+}
+.ws-shake {
+  animation: ws-shake 0.32s ease-in-out;
+}
+@keyframes ws-shake {
+  25% { transform: translateX(-4px); }
+  75% { transform: translateX(4px); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .ws-skel,
+  .ws-fresh,
+  .ws-shake {
+    animation: none;
+  }
+}
+
+/* Nav swatch: each workspace keeps its own colour, whichever zone is active. */
+.ws-swatch {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 1.75rem;
+  height: 1.75rem;
+  flex-shrink: 0;
+  border-radius: 7px;
+  color: #fff;
+  background: #3f4a5a;
+}
+.ws-swatch[data-zone='reception'] { background: #2453c2; }
+.ws-swatch[data-zone='doctor'] { background: #0b7566; }
+.ws-swatch[data-zone='grooming'] { background: #8a3aa3; }
+
+/* Drag ghost lives in a portal outside .ws, so it sets its own type. */
+.ws-ghost {
+  position: fixed;
+  z-index: 60;
+  pointer-events: none;
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+  padding: 0.55rem 0.8rem 0.55rem 0.55rem;
+  border-radius: 10px;
+  border: 1px solid var(--ws-line-strong);
+  background: var(--ws-surface);
+  color: var(--ws-ink);
+  box-shadow: var(--ws-shadow-lift);
+  font: 600 0.9rem/1.2 'Inter', -apple-system, 'Segoe UI', sans-serif;
+  transform: rotate(-2deg);
+}
+
+/* SOAP section letters — the record really is this sequence. */
+.ws-soap-letter {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 1.5rem;
+  height: 1.5rem;
+  border-radius: 6px;
+  background: var(--ws-accent-soft);
+  color: var(--ws-accent-ink);
+  font-family: 'Oswald', 'Arial Narrow', sans-serif;
+  font-weight: 700;
+  font-size: 0.85rem;
+}

@@ -3,6 +3,7 @@ import { useAdminSession } from '../../shared/stores/admin-session.store';
 import { AdminSidebar, routeAllowed } from './AdminLayout';
 import { AdminHeader } from './AdminHeader';
 import { useState } from 'react';
+import { getUserRoles } from '../../shared/constants/workspaces';
 
 export function AdminLayout() {
   const { isAuthenticated, user } = useAdminSession();
@@ -25,7 +26,7 @@ export function AdminLayout() {
   }
 
   // Check role-based route permission
-  if (!routeAllowed(location.pathname, user.role)) {
+  if (!routeAllowed(location.pathname, getUserRoles(user))) {
     return <Navigate to="/admin/dashboard" replace />;
   }
 
