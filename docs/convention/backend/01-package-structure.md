@@ -5,8 +5,8 @@
 Package theo **feature/module**, khớp 1:1 với 25 Bounded Context đã đặc tả ở `05-domain-model.md`. Mỗi module có layer con riêng; hạ tầng dùng chung nằm ở `platform/`.
 
 ```
-com.petcare.backend
-├── platform/               # security(JWT/RBAC/scope filter), exception, audit, fsm, outbox, config
+com.petcare
+├── platform/               # security(JWT/RBAC/scope filter), exception, audit, fsm, outbox, config (gồm TraceIdFilter), model (envelope, base entity)
 └── module/
     ├── appointment/
     │   ├── controller/ service/ repository/ entity/ dto/

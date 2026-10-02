@@ -14,6 +14,9 @@ spring:
       hibernate:
         format_sql: true
         dialect: org.hibernate.dialect.PostgreSQLDialect
+        # TIMESTAMPTZ đọc/ghi theo UTC, không phụ thuộc timezone JVM (platform/config/TimeConfig).
+        jdbc:
+          time_zone: UTC
 
   flyway:
     enabled: true

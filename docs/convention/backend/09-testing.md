@@ -9,37 +9,41 @@
 
 Repository CRUD thuần không bắt buộc test riêng.
 
-## Base test class cho 17 FSM
+## Base test class cho FSM
+
+`src/test/java/com/petcare/platform/fsm/FsmTransitionTestBase<S>` — lớp con khai báo một **bản sao độc lập** của bảng chuyển trạng thái trong `03-state-machines.md` (không đọc lại từ handler, nếu không test sẽ tự khẳng định chính nó). Base tự sinh test cho **mọi** cặp `from × to` của enum và mọi trạng thái khởi tạo, nên không thể bỏ sót cặp nào.
 
 ```java
 public abstract class FsmTransitionTestBase<S extends Enum<S>> {
     protected abstract StateMachineBase<S> handler();
+    protected abstract Class<S> stateType();
+    protected abstract Map<S, Set<S>> expectedTransitions();   // bảng 03, gồm cả X → X
+    protected abstract Set<S> expectedInitialStates();         // các dòng "— → X"
 
-    protected void assertValidTransition(S from, S to) {
-        assertDoesNotThrow(() -> handler().validateTransition(from, to));
-    }
+    protected void assertValidTransition(S from, S to) { ... }
+    protected void assertInvalidTransition(S from, S to) { ... }
 
-    protected void assertInvalidTransition(S from, S to) {
-        assertThrows(InvalidStateTransitionException.class, () -> handler().validateTransition(from, to));
-    }
+    @TestFactory Stream<DynamicTest> everyTransitionPairMatchesSpec() { ... }  // hợp lệ ⇔ có trong expectedTransitions
+    @TestFactory Stream<DynamicTest> everyInitialStateMatchesSpec() { ... }
 }
 
 class AppointmentTransitionHandlerTest extends FsmTransitionTestBase<AppointmentStatus> {
 
+    @Override protected StateMachineBase<AppointmentStatus> handler() { return new AppointmentTransitionHandler(); }
+    @Override protected Class<AppointmentStatus> stateType() { return AppointmentStatus.class; }
+
     @Override
-    protected StateMachineBase<AppointmentStatus> handler() { return new AppointmentTransitionHandler(); }
+    protected Map<AppointmentStatus, Set<AppointmentStatus>> expectedTransitions() {
+        return Map.of(
+            BOOKED,     Set.of(BOOKED, CHECKED_IN, CANCELLED, NO_SHOW),   // #2, #3, #4/#5, #6
+            CHECKED_IN, Set.of(COMPLETED, CANCELLED));                     // #7, #8
+    }
 
-    @ParameterizedTest
-    @CsvSource({ "BOOKED,CONFIRMED", "CHECKED_IN,IN_PROGRESS", "IN_PROGRESS,COMPLETED" })
-    void validTransitions(AppointmentStatus from, AppointmentStatus to) { assertValidTransition(from, to); }
-
-    @ParameterizedTest
-    @CsvSource({ "CHECKED_IN,COMPLETED" }) // No Direct Checkout Invariant
-    void invalidTransitions(AppointmentStatus from, AppointmentStatus to) { assertInvalidTransition(from, to); }
+    @Override protected Set<AppointmentStatus> expectedInitialStates() { return Set.of(BOOKED); }  // #1
 }
 ```
 
-Mỗi FSM class con liệt kê **đầy đủ** cặp (from, to) hợp lệ/không hợp lệ theo đúng bảng mermaid trong `03-state-machines.md` — không được bỏ sót cặp nào.
+Lớp con chỉ khai báo bảng; thêm `@Test` riêng cho guard nghiệp vụ (mã `BR-…`) của từng thao tác.
 
 ---
 
