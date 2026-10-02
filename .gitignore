@@ -203,6 +203,8 @@ yarn.lock
 
 # FE build
 FE/dist/
+FE/test-results/
+FE/playwright-report/
 FE/.vite/
 FE/build/
 

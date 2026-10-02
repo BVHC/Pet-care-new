@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
 import { DEMO_USERS, ROLE_LABELS, type Role } from '../../shared/types/admin';
+import { WORKSPACE_PATHS, getDefaultWorkspace } from '../../shared/constants/workspaces';
 import { useAdminSession } from '../../shared/stores/admin-session.store';
 import { cn } from '../../lib/utils';
 import {
@@ -103,7 +104,8 @@ export function AdminLoginPage() {
     const user = DEMO_USERS.find(u => u.role === selectedRole);
     if (user) {
       login(user);
-      navigate('/admin/dashboard');
+      const home = getDefaultWorkspace(user);
+      navigate(home ? WORKSPACE_PATHS[home] : '/admin/dashboard');
     }
   };
 

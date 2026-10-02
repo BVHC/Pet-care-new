@@ -1,3 +1,4 @@
+import { lazy } from 'react';
 import { Routes, Route, Navigate } from 'react-router-dom';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { Toaster } from 'sonner';
@@ -34,6 +35,14 @@ import { VerifyOtpPage } from '../pages/auth/VerifyOtpPage';
 import { ForgotPasswordPage } from '../pages/auth/ForgotPasswordPage';
 import { TermsPage, PrivacyPage } from '../pages/legal/LegalPage';
 import { NewsPage } from '../pages/news/NewsPage';
+
+// Staff workspaces (lazy: each workspace is its own chunk)
+import { WorkspaceLayout } from '../components/staff/WorkspaceLayout';
+import { StaffHome, WorkspaceRoute } from '../components/staff/WorkspaceRoute';
+import { WORKSPACE_PATHS } from '../shared/constants/workspaces';
+const ReceptionWorkspacePage = lazy(() => import('../pages/staff/ReceptionWorkspacePage').then((m) => ({ default: m.ReceptionWorkspacePage })));
+const DoctorWorkspacePage = lazy(() => import('../pages/staff/DoctorWorkspacePage').then((m) => ({ default: m.DoctorWorkspacePage })));
+const GroomingWorkspacePage = lazy(() => import('../pages/staff/GroomingWorkspacePage').then((m) => ({ default: m.GroomingWorkspacePage })));
 
 // Admin imports
 import { AdminLayout } from '../components/admin/AdminLayoutWrapper';
@@ -108,9 +117,16 @@ export function App() {
         <Route path="/auth/verify-otp" element={<VerifyOtpPage />} />
         <Route path="/auth/forgot" element={<ForgotPasswordPage />} />
 
+        {/* Staff workspaces */}
+        <Route path="/staff" element={<StaffHome />} />
+        <Route element={<WorkspaceLayout />}>
+          <Route path={WORKSPACE_PATHS.reception} element={<WorkspaceRoute workspace="reception"><ReceptionWorkspacePage /></WorkspaceRoute>} />
+          <Route path={WORKSPACE_PATHS.doctor} element={<WorkspaceRoute workspace="doctor"><DoctorWorkspacePage /></WorkspaceRoute>} />
+          <Route path={WORKSPACE_PATHS.grooming} element={<WorkspaceRoute workspace="grooming"><GroomingWorkspacePage /></WorkspaceRoute>} />
+        </Route>
+
         {/* Admin Routes */}
         <Route path="/admin" element={<Navigate to="/admin/dashboard" replace />} />
-        <Route path="/staff" element={<Navigate to="/admin/dashboard" replace />} />
         <Route path="/admin/login" element={<AdminLoginPage />} />
         <Route element={<AdminLayout />}>
           <Route path="/admin/dashboard" element={<AdminDashboardPage />} />
