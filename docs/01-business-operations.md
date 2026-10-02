@@ -1,4 +1,4 @@
-# Pet Care Ecosystem — Use Case Catalog (bản gọn, v15)
+# Pet Care Ecosystem — Use Case Catalog
 
 > Danh sách use case và tác vụ hệ thống của web Pet Care. Gồm **89 mã use case** (UC01–UC89; còn hiệu lực 85 sau khi bỏ UC18, UC19, UC20, UC41) + **21 tác vụ hệ thống** (không vẽ trên sơ đồ use case).
 
@@ -33,14 +33,14 @@
 | UC03 | Đăng nhập / đăng xuất | A02–A08 |
 | UC04 | Quên mật khẩu | A02–A08 |
 | UC05 | Đổi mật khẩu | A02–A08 |
-| UC06 | Quản lý hồ sơ cá nhân (không gồm email, SĐT; gồm sổ địa chỉ giao hàng; với A07 gồm thông tin giới thiệu hiển thị công khai: ảnh, chuyên môn, mô tả ngắn) | A02–A08 |
-| UC07 | Liên kết tài khoản với hồ sơ khách có sẵn (gắn tài khoản chờ liên kết vào hồ sơ tại quầy, không gộp dữ liệu — BR-TK-19) | A02 |
+| UC06 | Quản lý hồ sơ cá nhân (gồm SĐT; không gồm email — BR-TK-15; gồm sổ địa chỉ giao hàng; với A07 gồm thông tin giới thiệu hiển thị công khai: ảnh, chuyên môn, mô tả ngắn) | A02–A08 |
+| UC07 | Liên kết tài khoản với hồ sơ khách có sẵn (khi SĐT khai trùng hồ sơ tại quầy chưa liên kết: chọn hồ sơ và xác thực OTP gửi tới email hồ sơ, hoặc chọn "Không phải tôi"; gắn tài khoản vào hồ sơ tại quầy, không gộp dữ liệu — BR-TK-19) | A02 |
 
 ## 2. Quản trị hệ thống
 
 | Mã | Use case | Actor |
 |---|---|---|
-| UC08 | Quản lý tài khoản nhân viên (tạo, gán chi nhánh & chức vụ, đổi chức vụ, điều chuyển, vô hiệu hóa, kích hoạt lại, sửa email/SĐT) | A03, A04, A05 (phạm vi theo BR-QT-01, BR-QT-07) |
+| UC08 | Quản lý tài khoản nhân viên (tạo, gán chi nhánh & chức vụ, đổi chức vụ, điều chuyển, vô hiệu hóa, kích hoạt lại, sửa email) | A03, A04, A05 (phạm vi theo BR-QT-01, BR-QT-07) |
 | UC09 | Khóa / mở khóa người dùng | A03 |
 | UC10 | Cấu hình tham số hệ thống & mẫu thông báo | A03 |
 | UC11 | Xem nhật ký audit | A03 |
@@ -69,8 +69,8 @@
 
 | Mã | Use case | Actor |
 |---|---|---|
-| UC22 | Quản lý hồ sơ khách tại quầy (tạo, cập nhật, sửa email/SĐT tài khoản khách, liên kết hồ sơ với tài khoản tại quầy) | A06 |
-| UC23 | Tra cứu khách & thú cưng | A06, A07, A08 |
+| UC22 | Quản lý hồ sơ khách tại quầy (tạo, cập nhật, cảnh báo nghi trùng SĐT — BR-KH-10; sửa email tài khoản khách, gồm khôi phục tài khoản khi khách mất email — BR-TK-16; liên kết hồ sơ với tài khoản tại quầy — BR-TK-19; CCCD chỉ kiểm tra trực tiếp, không lưu) | A06 |
+| UC23 | Tra cứu khách & thú cưng (theo SĐT, họ tên, email, tên thú; một SĐT có thể ra nhiều hồ sơ — BR-KH-10) | A06, A07, A08 |
 | UC24 | Quản lý thú cưng (thêm, cập nhật, đánh dấu đã mất, xóa thú chưa phát sinh giao dịch) | A02, A06 |
 | UC25 | Xem hồ sơ sức khỏe thú cưng | A02 |
 | UC26 | Chuyển chủ thú cưng | A06 |

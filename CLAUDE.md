@@ -4,9 +4,9 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project
 
-Pet Care 2.0 — multi-store pet shop management (vet clinic / grooming / retail). Monorepo: `BE/` (Java 21 + Spring Boot 3.5, Maven) and `FE/` (React 18 + Vite + TypeScript). PostgreSQL 17 + Redis 7 via `docker-compose.yml`. Documentation is Vietnamese, code and identifiers are English.
+Pet Care — multi-branch pet clinic management (exam/vaccination, grooming, boarding, counter sales, cashier, inventory, customer care). Monorepo: `BE/` (Java 21 + Spring Boot 3.5, Maven) and `FE/` (React 18 + Vite + TypeScript). PostgreSQL 17 + Redis 7 via `docker-compose.yml`. Documentation is Vietnamese, code and identifiers are English.
 
-The spec (`docs/`) describes 25 business modules; **the code implements 4 so far** (`auth`, `iam`, `notification`, `pet`). Treat `docs/` as the target design, not as a description of what exists.
+**State as of 2026-10-02:** the spec was redesigned (v16) and the backend was reset to a bare skeleton — only `PetcareApplication` and a `contextLoads` test remain. There is no `platform/`, no `module/`, no Flyway migration yet. Earlier modules (`auth`, `iam`, `notification`, `pet`, order, inventory, procurement…) were removed together with the old API contracts, ADRs and diagrams. Everything is to be rebuilt from `docs/01`–`05`.
 
 ## Commands
 
@@ -18,118 +18,114 @@ docker compose up -d postgres redis      # just the dependencies for local dev
 
 # Backend
 mvn clean compile -DskipTests
-mvn spring-boot:run                      # http://localhost:8080, Swagger at /swagger-ui.html
+mvn spring-boot:run                      # port 8081 by default (SERVER_PORT); Docker profile uses 8080
 mvn test                                 # Surefire: *Test.java / *Tests.java
 mvn verify                               # Failsafe: *IT.java (adds integration tests)
-mvn test -Dtest=PetServiceImplTest                       # one unit test class
-mvn test -Dtest=PetServiceImplTest#update_nonOwner_forbidden   # one method
-mvn verify -Dit.test=PetFlowIT -Dtest=none -Dsurefire.failIfNoSpecifiedTests=false  # one IT only
+mvn test -Dtest=SomeServiceTest#someMethod                                         # one test
+mvn verify -Dit.test=SomeFlowIT -Dtest=none -Dsurefire.failIfNoSpecifiedTests=false  # one IT only
 
 # Frontend
-npm ci && npm run dev                    # http://localhost:5173, proxies /api -> :8080
+npm ci && npm run dev                    # http://localhost:5173, proxies /api -> VITE_API_URL or :8080
 npm run build                            # tsc && vite build
 npm run lint                             # eslint, --max-warnings 0
 npx tsc --noEmit                         # there is no `npm run typecheck` script
-
-# API contract validation (repo root)
-node docs/api/check-contracts.mjs        # validates docs/api/openapi/*.yaml
 ```
 
-**Docker is required for most tests.** Every `*IT` plus `PetRepositoryTest` spins up `postgres:17` through Testcontainers with `@ServiceConnection`. `PetRepositoryTest` ends in `Test`, so a bare `mvn test` already needs Docker running.
+**Tests need a running Postgres.** `PetcareApplicationTests` uses the `test` profile: real Postgres at `localhost:5432/petcare_test` (create it once: `docker compose exec postgres psql -U postgres -c "CREATE DATABASE petcare_test"`), `ddl-auto: create-drop`, Flyway disabled. Testcontainers is still in `pom.xml` for future `*IT` classes.
 
 ## Documentation is the source of truth — read before coding
 
-Each `docs/` file owns exactly one kind of truth. Never invent a rule, RULE-ID, FSM edge, or enum value that isn't in these files; when information is missing, record it as an assumption/TBD rather than making something up.
+Start at `docs/INDEX.md`: it maps every module to the exact line ranges in each spec file, so read only the slice you need. Never invent a rule, transition, model, column or enum value that isn't in these files; when information is missing, record it as an assumption/TBD.
 
-| Need | File |
-|---|---|
-| Scope, actors, requirements | `docs/00-requirements.md` |
-| Business operations, command names per actor | `docs/01-business-operations.md` |
-| 217 business rules (`RULE-XX-YY`) | `docs/02-business-rules.md` |
-| 19 FSMs (mermaid transition diagrams) | `docs/03-state-machines.md` |
-| Ubiquitous Language — naming for classes/DTOs/events | `docs/04-glossary.md` |
-| Aggregates + decision locks D-01..D-04 | `docs/05-domain-model.md` |
-| ERD / schema truth for migrations | `docs/06-erd.md` |
-| Backend code conventions (9 files) | `docs/convention/backend/` |
-| API contract method + V1–V5 checklist | `docs/api/00-method.md` |
-| Per-module API contracts | `docs/api/<module>-v1.md` + `docs/api/openapi/<module>-v1.yaml` |
-| Infra decisions already settled | `docs/adr/` |
-| **Actual** technical state of the codebase | `docs/architecture/system-overview.md` |
+| Need | File | Priority on conflict |
+|---|---|---|
+| Business rules `BR-<MODULE>-<n>` (139 codes, 134 active) | `docs/02-business-rules.md` | 1 (highest) |
+| State machines — 10 objects, numbered transition tables (`Visit#5`) | `docs/03-state-machines.md` | 2 |
+| Domain model — 52 models, ROOT/PART/REF/LOG, 10 cross-cutting principles | `docs/04-domain-model.md` | 3 |
+| ERD — 55 tables, types, keys, indexes, enum ASCII codes | `docs/05-erd.md` | 4 |
+| Actors A01–A08, use cases UC01–UC89, system tasks ST01–ST21 | `docs/01-business-operations.md` | must match rules |
+| Backend code conventions (9 files) | `docs/convention/backend/` | |
 
-`docs/INDEX.md` maps task type → which file to open first.
+Module codes: TK, QT, CN, CK, KH, SP, NS, LH, TN, KB, LT, BH, TG, KO, BV, DG, TB, BC. Each has a **tier**: 1 full, 2 thin, 3 diagram-only (no rules/models — don't build). The tier-3 UC/ST list is in `docs/INDEX.md`.
 
-Note: `docs/architecture/system-overview.md` §7 is dated 2026-09-12 and still claims `module/` is empty. It is stale — `auth`, `iam`, `notification`, and `pet` modules now exist, and migrations run to `V4`. Trust the code over that section, and refresh it when making significant architectural changes.
+`docs/architecture/system-overview.md`, `docs/api/INDEX.md`, `docs/adr/INDEX.md`, `docs/diagrams/INDEX.md` are currently empty placeholders.
 
-## Backend architecture
+### Where `docs/convention/backend/` is stale
+
+The conventions predate the v16 spec. Follow them for structure, but override these points:
+- Rule IDs are `BR-TK-19` style, not `RULE-06-11`. Cite them as a string constant passed to the exception: `new BusinessRuleViolationException("BR-LH-05", ...)`.
+- FSM whitelists come from the numbered transition tables in `03-state-machines.md` (columns *Từ → Sang*, *Người kích hoạt*, *Điều kiện*, *Hệ quả*), not from mermaid diagrams. `X → X` rows are guarded operations that keep the state.
+- `03-naming-convention.md` requires names to match an Actor↔Command table in `01-business-operations.md` and a glossary. Neither exists any more: 01 lists Vietnamese use cases only. Naming of commands/transition methods is TBD — propose English names and ask.
+- `04-exception-handling.md` / `09-testing.md` examples reference old modules (Refund, Atomic Reschedule); the mechanics still apply.
+
+## Backend architecture (target, per conventions)
 
 ### Package layout
 
 ```
 com.petcare/
 ├── platform/          # cross-cutting infra; must NOT depend on any module/*
-│   ├── config/        # SecurityConfig, CorsConfig, JpaAuditingConfig, SchedulingConfig, OpenApiConfig
-│   ├── security/      # JwtAuthenticationFilter, TraceIdFilter, UserPrincipal, token/ (refresh + Redis blacklist)
-│   ├── exception/     # 5 standard exceptions + GlobalExceptionHandler
-│   ├── fsm/           # Transitionable, StateMachineBase
-│   ├── model/         # ApiResponse<T>, PageResponse<T>, ErrorResponse, BaseEntity
-│   ├── outbox/        # OutboxEvent (transactional outbox)
-│   └── enums/         # every FSM status enum + UserRole, SecurityScope, ...
+│                      # security (JWT/RBAC/branch scope), exception, audit, fsm, config, model (envelopes)
 └── module/<feature>/  # controller/ service/ repository/ entity/ dto/ mapper/ [fsm/] [exception/]
 ```
 
-One package per bounded context. **A module must not import another module's `entity` or `repository`** — go through the other module's `service` (see `PetServiceImpl` → `UserProvisioningService`).
+One package per bounded context. **A module must not import another module's `entity` or `repository`** — go through the other module's `service`.
 
 ### Request flow
 
-`Controller (@Valid, @PreAuthorize)` → `Service (@Transactional, business rules)` → `[TransitionHandler]` → `Repository`. Controllers hold no business logic and never see a RULE-ID. Entities never leave a controller; Entity↔DTO mapping goes through MapStruct (`@Mapper(componentModel = "spring")`), DTOs are Java records.
+`Controller (@Valid, @PreAuthorize)` → `Service (@Transactional, business rules)` → `[TransitionHandler]` → `Repository`. Controllers hold no business logic and never see a rule ID. Entities never leave a controller; Entity↔DTO mapping goes through MapStruct (`@Mapper(componentModel = "spring")`), DTOs are Java records.
 
 ### Response envelopes
 
-Success: `ApiResponse<T>{ data, message, code }` — payload is always one level deep in `data`. Lists nest `PageResponse<T>` inside `data`.
+Success: `ApiResponse<T>{ data, message, code }` — payload one level deep in `data`; lists nest `PageResponse<T>` inside `data`.
 
-Errors: a completely different shape, `ErrorResponse{ success:false, errorCode, message, statusCode, timestamp, traceId }`, all 6 fields always present, produced only by `GlobalExceptionHandler`. `traceId` comes from MDC, set by `TraceIdFilter`.
+Errors: `ErrorResponse{ success:false, errorCode, message, statusCode, timestamp, traceId }`, all 6 fields always present, produced only by `GlobalExceptionHandler`; `traceId` from MDC.
 
-Exception → errorCode → HTTP mapping is fixed by `docs/convention/backend/04-exception-handling.md`; the five base exceptions are `BusinessRuleViolationException` (400), `InvalidStateTransitionException` (409), `ResourceNotFoundException` (404), `AccessDeniedScopeException` (403), `ConcurrencyConflictException` (409). **No 422 — conflicts are 409.** Only subclass a base exception when it carries ≥2 extra fields, needs a different HTTP status, or has special FSM/TTL retry semantics; state which criterion in the PR.
+Exception → errorCode → HTTP mapping is fixed by `docs/convention/backend/04-exception-handling.md`: `BusinessRuleViolationException` (400), `InvalidStateTransitionException` (409), `ResourceNotFoundException` (404), `AccessDeniedScopeException` (403), `ConcurrencyConflictException` (409). **No 422 — conflicts are 409.** Only subclass a base exception when it carries ≥2 extra fields, needs a different HTTP status, or has special FSM/TTL retry semantics; state which criterion in the PR.
 
 ### FSM pattern
 
-Hand-rolled enum + transition map, not Spring StateMachine. A `{Entity}TransitionHandler extends StateMachineBase<S>` declares `allowedTransitions()` copied **exactly** from the mermaid diagram in `docs/03-state-machines.md` — never add an edge by inference. Business guards (RULE-ID → `BusinessRuleViolationException`) are checked *before* `validateTransition()` (→ `InvalidStateTransitionException`).
+Hand-rolled enum + transition map, not Spring StateMachine. A `{Entity}TransitionHandler extends StateMachineBase<S>` declares `allowedTransitions()` copied **exactly** from the state-machine table — never add an edge by inference. Business guards (rule ID → `BusinessRuleViolationException`) run *before* `validateTransition()` (→ `InvalidStateTransitionException`). Some lifecycles are rule-only, not in 03: Article (BR-BV-02), Feedback (BR-DG-04). Account lock is a separate `is_locked` flag, independent of `status`.
 
-Transition method names must match the command name in `docs/01-business-operations.md` character-for-character (`checkInAppointment()`, not `checkIn()`).
+### Persistence
 
-### Entities, persistence, events
+Schema follows `docs/05-erd.md` §0, not the removed code:
+- PK `id BIGINT GENERATED ALWAYS AS IDENTITY` (1–1 tables reuse the FK as PK); FK named `<singular>_id`, default `ON DELETE RESTRICT`.
+- ROOT/PART/REF tables get `created_at`, `updated_at` (`TIMESTAMPTZ`); LOG tables only `created_at` and are insert-only. `created_by`/`updated_by` only where the ERD lists them.
+- Money `BIGINT` (VND), business dates `DATE` (Asia/Ho_Chi_Minh), weight `NUMERIC(6,2)`, status/type `VARCHAR(30)` + `CHECK`.
+- Vietnamese enum values in the spec (`TÁI_CHỦNG`, `KHÁM`, `ĐÃ_XEM`…) map to ASCII codes (`VACCINE_DUE`, `EXAM`, `SEEN`…) per the table in erd §0 — use the ASCII codes in DB and code.
+- No hard delete of business data except the cases the rules allow (BR-KH-06, BR-TK-08, BR-TK-19, BR-BV-02, BR-KB-04); the app deletes children in the same transaction, no `CASCADE`.
 
-Business entities extend `platform.model.BaseEntity`: UUID id, `createdAt`/`updatedAt`, `createdBy`/`updatedBy` (filled by `AuditorAware`), `deletedAt` (soft delete), `@Version` (optimistic locking). Entity classes take no `Entity` suffix (`Pet`, `Invoice`) — that suffix is reserved for shared infra entities in `platform/` such as `RefreshTokenEntity`.
+Flyway owns the schema (`BE/src/main/resources/db/migration/`, `ddl-auto=validate` in the default profile). Add `V{n}__*.sql`; never edit an applied migration.
 
-Schema is owned by Flyway (`BE/src/main/resources/db/migration/`, currently `V1`–`V4`) with `ddl-auto=validate`. Add a new `V{n}__*.sql`; never edit an applied migration. New tables need the four audit columns plus `version` to match `BaseEntity`.
+Cross-aggregate consequences (state-machine *Phụ lục*) run in **one transaction**, coordinated by the service of the aggregate that emits the event (domain-model principle 6). Outgoing email/notifications go through the `notification_outbox` table with retry (ST20).
 
-Cross-aggregate events go through the transactional outbox (`OutboxEventRepository`) written in the same transaction as the state change.
+`@Transactional` belongs on Service/TransitionHandler and spans one complete use case — not on controllers or repositories.
 
-`@Transactional` belongs on Service/TransitionHandler and spans one complete use case — not on controllers or repositories. The documented exception is batched cleanup jobs (`RefreshTokenCleanupService`, ADR-0003).
+### Auth (spec)
 
-### Auth
-
-Stateless JWT. `/api/auth/{register,verify-otp,otp/resend,login,refresh}`, `/actuator/{health,info}` and Swagger are public; everything else (including `/api/auth/logout`) requires a Bearer token. Access tokens are blacklisted in Redis on logout with a **fail-open** policy when Redis is down (`app.security.blacklist-fail-open`, ADR-0002); refresh tokens live in PostgreSQL (ADR-0001) and are cleaned by a nightly job (ADR-0003). Method-level `@PreAuthorize` is enabled.
+Email is the only account identifier (OTP-verified); phone is not unique anywhere and CCCD is never stored (BR-TK-01, 16, BR-KH-10). Customer is the root entity; Account is optional and linked via `customers.account_id` (BR-TK-19). Roles are a fixed enum: `CUSTOMER`, `ADMIN`, `SUPER_MANAGER`, `BRANCH_MANAGER`, `RECEPTIONIST`, `VET`, `CARETAKER`; A05–A08 are scoped to one branch. `application.yml` still carries `jwt.*` and `app.*` keys (refresh-token cleanup, otp-expiry, caregiver, order-timeout, `blacklist-fail-open`) left over from the removed implementation — reuse or prune them when auth is rebuilt.
 
 ## Testing conventions
 
-Unit tests (`*Test`) are mandatory for any Service/TransitionHandler carrying a business rule or guard — JUnit 5 + Mockito. Integration tests (`*IT`) are mandatory for every FSM and for complex business APIs — `@SpringBootTest` + Testcontainers on real Postgres (no H2), with `spring.flyway.enabled=true` and `ddl-auto=validate` so the real `V1..Vn` schema is exercised. Plain repository CRUD needs no dedicated test.
+Unit tests (`*Test`) are mandatory for any Service/TransitionHandler carrying a business rule or guard — JUnit 5 + Mockito. Integration tests (`*IT`) are mandatory for every FSM and for complex business APIs — `@SpringBootTest` on real Postgres (no H2), exercising the real Flyway schema. Plain repository CRUD needs no dedicated test.
 
-FSM tests extend `platform/fsm/FsmTransitionTestBase` and must enumerate **every** valid and invalid (from, to) pair from the mermaid diagram — no omissions.
+FSM tests must enumerate **every** valid and invalid (from, to) pair from the state-machine table — no omissions.
 
 ## Frontend notes
 
-`FE/src/` is `app/` (router + providers) · `pages/<domain>/<Name>Page.tsx` (one file per route) · `components/customer/` · `shared/` (api, stores, components, hooks, types, utils). Server state → React Query; app state → Zustand store per domain. New page ⇒ add file + register the route in `App.tsx`.
+`FE/src/` is `app/` (router + providers) · `pages/<domain>/<Name>Page.tsx` (one file per route; `admin/`, `auth/`, `customer/`, `hotel/`, `news/`…) · `components/{admin,customer,ui}/` · `shared/` (api, stores, components, hooks, types, utils, services, models). Server state → React Query; app state → Zustand store per domain. New page ⇒ add file + register the route in `App.tsx`.
 
-Known gaps to be aware of before adding code (from `system-overview.md` §7):
-- **One HTTP client** (resolved 2026-09-17): `shared/api/axios.ts` — an axios instance whose request interceptor attaches the bearer token and whose response interceptor refreshes once on 401 — plus per-domain modules `auth.api.ts`, `product.api.ts`, `review.api.ts`. The older fetch-based `client.ts` was deleted; token keys are now consistently `access_token` / `refresh_token`.
+The FE was built against the old spec — many admin pages (tenants, promotions, membership, refunds, incidents…) cover features that are out of scope or tier 3 in v16. Check `docs/INDEX.md` before wiring a page to an API.
+
+Known gaps:
+- One HTTP client: `shared/api/axios.ts` (bearer token interceptor, one refresh retry on 401) plus `auth.api.ts`, `product.api.ts`, `review.api.ts`. Token keys `access_token` / `refresh_token`.
 - Two `QueryClient` instances are constructed (`main.tsx` and `App.tsx`); the one in `App.tsx` wins.
 - No auth route guard — every page mounts unconditionally.
 
 ## Gotchas
 
-- **Two OpenAPI sources that disagree.** `docs/api/openapi/*.yaml` is the hand-written target design: paths omit the `/api` prefix and there is no `servers:` block, so importing them into a client produces 404s. `/v3/api-docs` (springdoc, runtime) reflects only the controllers that exist today. Use the yaml for direction, the runtime spec for anything runnable.
-- Writing or changing an API contract means running the full V1–V5 checklist in `docs/api/00-method.md`, including `node docs/api/check-contracts.mjs`, before claiming a module is done.
-- Guard/validation code should cite its RULE-ID as a string constant passed to the exception (`new BusinessRuleViolationException("RULE-04-01", ...)`).
-- Skills live in both `.claude/skills/` and `.opencode/skills/` as copies (symlinks need admin on this machine) — edit both when changing one.
+- **Port mismatch.** `mvn spring-boot:run` listens on 8081 (`SERVER_PORT` default), but the Vite proxy defaults to 8080 (Docker). Set `VITE_API_URL` or `SERVER_PORT=8080` when running BE locally.
+- CI (`.github/workflows/ci.yml`) runs `mvn flyway:migrate` + `mvn test` against a Postgres service with password `postgres`, while `application-test.yml` uses `123456`.
+- Skills live in `.opencode/skills/` (`designing-apis`, `postman-api-testing`); there is no `.claude/skills/` copy at the moment.
 - `hs_err_pid*.log` / `replay_pid*.log` in the repo root and `BE/` are JVM crash dumps, not source. `.ua/` is gitignored tooling scratch.

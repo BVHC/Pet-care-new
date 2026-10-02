@@ -31,19 +31,19 @@
 ## 1. Tài khoản
 `accounts.status` + `accounts.is_locked` · TK, QT · Tầng 1
 
-Trạng thái `LOCKED` trong business-rules được cài bằng cờ `is_locked = true`, độc lập với `status`. Vì vậy mở khóa tự trở về trạng thái trước đó (BR-QT-12). Các trường phụ không phải trạng thái: `locked_until` (khóa tạm do đăng nhập sai, ST01), `pending_customer_id` (chờ liên kết, BR-TK-19), `must_change_password` (BR-TK-17).
+Trạng thái `LOCKED` trong business-rules được cài bằng cờ `is_locked = true`, độc lập với `status`. Vì vậy mở khóa tự trở về trạng thái trước đó (BR-QT-12). Các trường phụ không phải trạng thái: `locked_until` (khóa tạm do đăng nhập sai, ST01), `must_change_password` (BR-TK-17). *(v16)* Bỏ `pending_customer_id`: tài khoản khách luôn có hồ sơ online; trạng thái chờ liên kết là cờ `link_decision_pending` trên hồ sơ khách (BR-TK-19).
 
 | Trạng thái | Loại | Ý nghĩa | Ràng buộc khi ở trạng thái này |
 |---|---|---|---|
 | `PENDING` | INIT | Đã đăng ký, chưa xác thực OTP | Không đăng nhập được; đăng nhập thì chuyển sang màn hình OTP. Không dùng Quên mật khẩu |
-| `ACTIVE` | MID | Đang hoạt động | Nếu `is_locked` hoặc còn `locked_until` thì không đăng nhập được. Có `pending_customer_id` thì ẩn chức năng cần hồ sơ khách |
+| `ACTIVE` | MID | Đang hoạt động | Nếu `is_locked` hoặc còn `locked_until` thì không đăng nhập được. Hồ sơ khách còn cờ `link_decision_pending` thì ẩn chức năng cần hồ sơ khách |
 | `DISABLED` | MID | Nhân viên bị vô hiệu hóa | Không đăng nhập được; dữ liệu lịch sử giữ nguyên. Không phải trạng thái cuối |
 
 | # | Từ → Sang | Sự kiện | Người kích hoạt | Điều kiện | Hệ quả | Nguồn |
 |---|---|---|---|---|---|---|
-| 1 | — → `PENDING` | Đăng ký | A01 | Email, SĐT không trùng tài khoản khác; tích ≥ 18 tuổi và đồng ý điều khoản; mật khẩu hợp lệ | Gửi OTP. SĐT trùng hồ sơ khách chưa liên kết: gán `pending_customer_id`, không tạo hồ sơ. Ngược lại: tạo hồ sơ khách gắn tài khoản | BR-TK-01, 02, 03 · UC01 |
-| 2 | `PENDING` → `ACTIVE` | Xác thực OTP | A01 | OTP đúng, còn hạn, chưa quá 5 lần sai | Có `pending_customer_id`: đề nghị liên kết hồ sơ | BR-TK-05, 06, 19 · UC02 |
-| 3 | `PENDING` → *(xóa)* | Quá 24h **[CFG]** chưa xác thực | ST02 | — | Xóa tài khoản để email, SĐT đăng ký lại được | BR-TK-08 |
+| 1 | — → `PENDING` | Đăng ký | A01 | Email không trùng tài khoản khác; tích ≥ 18 tuổi và đồng ý điều khoản; mật khẩu hợp lệ. SĐT không bắt buộc, không kiểm tra trùng | Gửi OTP. Tạo hồ sơ khách online gắn tài khoản (họ tên, SĐT nếu có) | BR-TK-01, 02, 03, BR-KH-01 · UC01 |
+| 2 | `PENDING` → `ACTIVE` | Xác thực OTP | A01 | OTP đúng, còn hạn, chưa quá 5 lần sai | SĐT của hồ sơ online trùng ít nhất 1 hồ sơ tại quầy chưa liên kết: đặt `link_decision_pending = true` và đề nghị liên kết | BR-TK-05, 06, 19 · UC02 |
+| 3 | `PENDING` → *(xóa)* | Quá 24h **[CFG]** chưa xác thực | ST02 | — | Xóa tài khoản và hồ sơ online tạo kèm để email đăng ký lại được | BR-TK-08 |
 | 4 | — → `ACTIVE` | Tạo tài khoản nhân viên | A03, A04, A05 | Đúng phân cấp tạo; A05–A08 phải có đúng 1 chi nhánh `DRAFT`/`ACTIVE` | `must_change_password = true`; sinh mật khẩu ngẫu nhiên gửi email | BR-QT-01, 02, 03 · UC08 |
 | 5 | `ACTIVE` → `DISABLED` | Vô hiệu hóa | A03, A04, A05 | Là nhân viên trong phạm vi; không phải chính mình; `is_locked = false`; không có Visit được gán chưa kết thúc, không có ca thu ngân `OPEN`; không phải BRANCH_MANAGER `ACTIVE` cuối cùng của chi nhánh `ACTIVE` | Hủy mọi phiên | BR-QT-04, 07, 08, 09, 12 · UC08 |
 | 6 | `DISABLED` → `ACTIVE` | Kích hoạt lại | A03, A04, A05 | Cùng phạm vi với vô hiệu hóa; `is_locked = false`; chi nhánh hợp lệ | `must_change_password = true`; cấp mật khẩu tạm mới | BR-QT-10 · UC08 |
@@ -225,7 +225,7 @@ Có hai loại ca, phân biệt bằng cờ `is_after_hours` đặt lúc mở ca
 
 | # | Từ → Sang | Sự kiện | Người kích hoạt | Điều kiện | Hệ quả | Nguồn |
 |---|---|---|---|---|---|---|
-| 1 | — → `OPEN` | Sinh task | ST18 | Một trong: đến hạn nhắc tái chủng (`TÁI_CHỦNG`) hoặc tái khám (`TÁI_KHÁM`) và hồ sơ không có email; quá ngày tái chủng 7 ngày **[CFG]** chưa tiêm lại (`QUÁ_HẠN_TÁI_CHỦNG`, tối đa 1 task/mũi); đặt chỗ `OVERDUE` ≥ 1 ngày **[CFG]** (`QUÁ_HẠN_ĐÓN`) | Giao cho lễ tân chi nhánh phụ trách: chi nhánh tiêm gần nhất cùng loại vaccine / chi nhánh của Visit có hẹn tái khám / chi nhánh lưu trú | BR-TB-02, 04, 06, BR-LT-10 |
+| 1 | — → `OPEN` | Sinh task | ST18 | Một trong: đến hạn nhắc tái chủng (`TÁI_CHỦNG`) hoặc tái khám (`TÁI_KHÁM`) và hồ sơ không có email; quá ngày tái chủng 7 ngày **[CFG]** chưa tiêm lại và hồ sơ có SĐT (`QUÁ_HẠN_TÁI_CHỦNG`, tối đa 1 task/mũi); đặt chỗ `OVERDUE` ≥ 1 ngày **[CFG]** (`QUÁ_HẠN_ĐÓN`) | Giao cho lễ tân chi nhánh phụ trách: chi nhánh tiêm gần nhất cùng loại vaccine / chi nhánh của Visit có hẹn tái khám / chi nhánh lưu trú | BR-TB-02, 04, 06, BR-LT-10 |
 | 2 | `OPEN` → `DONE` | Thực hiện | A06 | Chọn kết quả, nhập ghi chú | Không liên lạc được: không sinh task gọi lại | BR-TB-05 · UC87 |
 | 3 | `OPEN` → `CANCELLED` | Hủy thủ công | A06 | Có lý do | — | BR-TB-05 · UC87 |
 | 4 | `OPEN` → `CANCELLED` | Thú đã mất | ST19 | — | — | BR-TB-03, BR-KH-05 |

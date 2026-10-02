@@ -38,7 +38,7 @@
 
 **Ký hiệu trong bảng cột:** `PK` khóa chính · `FK→bảng` khóa ngoại · `NN` NOT NULL · `UQ` unique · `?` cho phép NULL.
 
-**Xóa dữ liệu:** mọi khóa ngoại mặc định `ON DELETE RESTRICT`. Chỉ các trường hợp xóa cứng mà business rules cho phép mới xóa thật (BR-KH-06, BR-TK-08, BR-BV-02, BR-KB-04); khi đó ứng dụng xóa các bản ghi con trong cùng transaction, không dựa vào `CASCADE`.
+**Xóa dữ liệu:** mọi khóa ngoại mặc định `ON DELETE RESTRICT`. Chỉ các trường hợp xóa cứng mà business rules cho phép mới xóa thật (BR-KH-06, BR-TK-08, BR-TK-19, BR-BV-02, BR-KB-04); khi đó ứng dụng xóa các bản ghi con trong cùng transaction, không dựa vào `CASCADE`.
 
 ---
 
@@ -82,7 +82,7 @@ erDiagram
 |---|---|---|---|
 | id | BIGINT | PK | |
 | email | VARCHAR(255) | NN, UQ | Lưu chữ thường. Tên đăng nhập (BR-TK-01) |
-| phone | VARCHAR(15) | NN, UQ | Chuẩn hóa dạng `0xxxxxxxxx` |
+| phone | VARCHAR(15) | ? | Chuẩn hóa dạng `0xxxxxxxxx`. Chỉ dùng cho nhân viên; SĐT của khách nằm ở `customers.phone`. Không duy nhất (BR-TK-01, v16) |
 | password_hash | VARCHAR(255) | NN | bcrypt/argon2 |
 | role | VARCHAR(30) | NN, CHECK | `CUSTOMER`, `ADMIN`, `SUPER_MANAGER`, `BRANCH_MANAGER`, `RECEPTIONIST`, `VET`, `CARETAKER` |
 | status | VARCHAR(20) | NN, CHECK | `PENDING`, `ACTIVE`, `DISABLED` |
@@ -92,11 +92,10 @@ erDiagram
 | failed_login_count | INT | NN, DEFAULT 0 | Đếm lần sai liên tiếp |
 | first_failed_login_at | TIMESTAMPTZ | ? | Mốc đầu của cửa sổ 15 phút |
 | must_change_password | BOOLEAN | NN, DEFAULT false | BR-TK-17, BR-QT-10 |
-| pending_customer_id | BIGINT | ?, FK→customers | Hồ sơ chờ liên kết (BR-TK-19) |
 | last_seen_at | TIMESTAMPTZ | ? | Trạng thái online (BR-TN-06) |
 | notification_settings | JSONB | NN, DEFAULT '{}' | Cài đặt nhận thông báo của khách (UC88) [ERD] |
 
-- `CHECK (role = 'CUSTOMER' OR pending_customer_id IS NULL)`
+- `CHECK ((role = 'CUSTOMER') = (phone IS NULL))` — nhân viên bắt buộc có SĐT, tài khoản khách không lưu SĐT (BR-TK-01)
 - `CHECK (status <> 'DISABLED' OR role <> 'CUSTOMER')` — chỉ nhân viên bị vô hiệu hóa (BR-QT-07)
 - Index: `(status, created_at)` cho ST02 dọn tài khoản `PENDING`
 
@@ -135,12 +134,14 @@ Ràng buộc "A05–A08 phải có chi nhánh" kiểm tra ở ứng dụng vì `
 | account_id | BIGINT | ?, FK→accounts | |
 | purpose | VARCHAR(20) | NN, CHECK | `REGISTER`, `RESET_PASSWORD`, `CHANGE_EMAIL`, `LINK_PROFILE` |
 | target_email | VARCHAR(255) | NN | Email nhận mã (BR-TK-04) |
+| customer_id | BIGINT | ?, FK→customers | Hồ sơ tại quầy cần liên kết, chỉ khi `purpose = 'LINK_PROFILE'` (BR-TK-19) |
 | code_hash | VARCHAR(255) | NN | Không lưu mã gốc |
 | expires_at | TIMESTAMPTZ | NN | Chốt hạn lúc sinh, nên đổi [CFG] không ảnh hưởng (BR-QT-13) |
 | failed_attempts | INT | NN, DEFAULT 0 | Tối đa 5 [CFG] (BR-TK-06) |
 | consumed_at | TIMESTAMPTZ | ? | Đã dùng |
 | invalidated_at | TIMESTAMPTZ | ? | Bị thay bởi mã mới cùng mục đích (BR-TK-05) |
 
+- `CHECK ((purpose = 'LINK_PROFILE') = (customer_id IS NOT NULL))`
 - Index: `(target_email, created_at)` để đếm quota 5 mã/giờ và khoảng cách 60 giây (BR-TK-07)
 - Là LOG nhưng cho phép cập nhật `failed_attempts`, `consumed_at`, `invalidated_at` [ERD]
 
@@ -290,13 +291,17 @@ Quota riêng của một khung giờ cụ thể, ghi đè quota mặc định (B
 | id | BIGINT | PK | |
 | account_id | BIGINT | ?, UQ, FK→accounts | Liên kết tài khoản (BR-TK-19, BR-KH-01) |
 | full_name | VARCHAR(100) | NN | |
-| phone | VARCHAR(15) | NN, UQ | Duy nhất trong tập hồ sơ (BR-TK-01) |
+| phone | VARCHAR(15) | ? | Không duy nhất (BR-KH-01, BR-KH-10, v16). Bắt buộc với hồ sơ tại quầy |
 | email | VARCHAR(255) | ? | Không bắt buộc với hồ sơ tại quầy; quyết định kênh nhắc (BR-TB-02) |
 | avatar_url | VARCHAR(500) | ? | |
 | created_channel | VARCHAR(10) | NN, CHECK | `ONLINE`, `COUNTER` |
 | created_by | BIGINT | ?, FK→accounts | Lễ tân tạo tại quầy |
+| link_decision_pending | BOOLEAN | NN, DEFAULT false | Hồ sơ online chờ khách quyết định liên kết vào hồ sơ tại quầy (BR-TK-19) |
 
-- Index: `(email)` để tra cứu; `(full_name)` dùng cho tìm kiếm (UC23)
+- `CHECK (created_channel = 'ONLINE' OR phone IS NOT NULL)` — hồ sơ tại quầy bắt buộc có SĐT (BR-KH-01)
+- `CHECK (created_channel = 'COUNTER' OR account_id IS NOT NULL)` — hồ sơ online luôn gắn tài khoản
+- `CHECK (created_channel = 'ONLINE' OR NOT link_decision_pending)`
+- Index: `(phone)` tra cứu và tìm hồ sơ trùng SĐT (BR-KH-10, BR-TK-19), không unique; `(email)` để tra cứu; `(full_name)` dùng cho tìm kiếm (UC23)
 
 ### `addresses` — PART của Customer
 
@@ -1071,7 +1076,7 @@ Tổng: 55 bảng = 52 model + 3 bảng con tách ra (`care_log_addenda`, `stock
 
 ## 13. Nhật ký quyết định
 
-Các câu hỏi mở của bản v14 đã được chốt ở v15 như sau.
+Mục 1–4: các câu hỏi mở của bản v14, chốt ở v15. Mục 5: thay đổi ở v16.
 
 | # | Vấn đề | Quyết định | Ảnh hưởng tới bảng |
 |---|---|---|---|
@@ -1079,3 +1084,4 @@ Các câu hỏi mở của bản v14 đã được chốt ở v15 như sau.
 | 2 | Báo cáo công suất chuồng | Bỏ báo cáo; tình trạng chuồng xem trực tiếp ở UC54 (BR-BC-03) | Không cần lịch sử trạng thái `kennels` |
 | 3 | Mũi tiêm ngoài hệ thống | Không ghi nhận. Hệ thống chỉ tin dữ liệu tiêm do chính hệ thống ghi nhận; tiền sử do chủ khai ghi trong bệnh án (bỏ BR-KB-05) | `vaccinations` bỏ `is_external`, `external_brand`, `external_place`; `protocol_id`, `product_id`, `stock_lot_id`, `order_line_id`, `next_due_date` thành NOT NULL |
 | 4 | Thu tiền cấp cứu ngoài giờ | Thu như bình thường, giá như trong giờ, qua ca thu ngân ngoài giờ; ca tự chốt khi đến giờ mở cửa kế tiếp (BR-CN-05, BR-TG-05) | `cashier_shifts` thêm `is_after_hours` |
+| 5 | Định danh bằng SĐT chưa xác thực (v16) | Email là định danh duy nhất. SĐT không duy nhất ở mọi nơi, không bắt buộc với tài khoản và hồ sơ online; liên kết hồ sơ chuyển thành gợi ý sau khi xác thực email (BR-TK-01, 15, 16, 19, BR-KH-01, 10). CCCD không lưu | `accounts`: bỏ `UQ` của `phone`, `phone` chỉ dùng cho nhân viên, bỏ `pending_customer_id`. `customers`: bỏ `UQ` của `phone`, `phone` cho phép NULL với hồ sơ online, thêm `link_decision_pending`. `otp_tokens`: thêm `customer_id` |

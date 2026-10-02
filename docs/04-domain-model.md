@@ -1,6 +1,6 @@
 # Pet Care Ecosystem — Domain Model
 
-> Danh sách domain model của hệ thống, đi kèm `business-rules.md`, `use-case.md`, `state-machine.md`, `erd.md` (v15). File này chỉ mô tả **model nào tồn tại, nghĩa là gì, quan hệ với model nào, rule nào chi phối**. Thuộc tính chi tiết, kiểu dữ liệu, khóa và index thuộc `erd.md`.
+> Danh sách domain model của hệ thống, đi kèm `business-rules.md`, `use-case.md`, `state-machine.md`, `erd.md` (v16). File này chỉ mô tả **model nào tồn tại, nghĩa là gì, quan hệ với model nào, rule nào chi phối**. Thuộc tính chi tiết, kiểu dữ liệu, khóa và index thuộc `erd.md`.
 >
 > Khi có mâu thuẫn: `business-rules.md` là nguồn gốc → `state-machine.md` → file này → `erd.md`.
 
@@ -19,7 +19,7 @@
 ## Nguyên tắc xuyên suốt
 
 1. **Customer là thực thể gốc, Account là phần gắn thêm.** Mọi dữ liệu nghiệp vụ (Pet, Appointment, Order…) trỏ tới Customer, không trỏ tới Account. Liên kết tài khoản chỉ là gán `Customer.account_id` (BR-TK-19, BR-KH-01).
-2. **Không xóa cứng dữ liệu nghiệp vụ.** Dùng trạng thái cuối hoặc cờ: Pet đã mất, Supplier ngừng hợp tác, Order/StockReceipt `CANCELLED`, Article `HIDDEN`. Ngoại lệ: Pet chưa phát sinh giao dịch (BR-KH-06), Account `PENDING` quá hạn (BR-TK-08), Article chưa từng xuất bản.
+2. **Không xóa cứng dữ liệu nghiệp vụ.** Dùng trạng thái cuối hoặc cờ: Pet đã mất, Supplier ngừng hợp tác, Order/StockReceipt `CANCELLED`, Article `HIDDEN`. Ngoại lệ: Pet chưa phát sinh giao dịch (BR-KH-06), Account `PENDING` quá hạn cùng hồ sơ online tạo kèm (BR-TK-08), hồ sơ online chưa phát sinh dữ liệu khi liên kết vào hồ sơ tại quầy (BR-TK-19), Article chưa từng xuất bản.
 3. **Snapshot giá.** `OrderLine` chốt đơn giá lúc thêm dòng (BR-BH-03); `BoardingBooking` chốt giá đêm lúc đặt (BR-LT-02). Không tính tiền từ giá hiện tại.
 4. **Mọi sản phẩm đều tồn theo lô.** Sản phẩm không quản lý hạn dùng có đúng 1 `StockLot` không số lô, không hạn. Nhờ vậy kiểm tra tồn khả dụng, trừ kho FEFO, điều chỉnh, hủy phiếu nhập dùng chung một cách cài đặt (BR-KO-01, 05).
 5. **Mọi thay đổi tồn kho sinh `StockMovement`.** `StockLot.quantity` là số dư; `StockMovement` là lịch sử để truy vết.
@@ -27,6 +27,7 @@
 7. **Vaccine tính theo loại, không theo nhãn hàng.** Phác đồ, khớp mũi tiêm lại, điều kiện lưu trú, nhắc và báo cáo đều dùng `VaccineType`; `Product` chỉ là nhãn hàng dùng để trừ kho và tính tiền (BR-SP-07).
 8. **Phạm vi theo chi nhánh.** Model có `branch_id` bị giới hạn theo chi nhánh của nhân viên (A05–A08). Customer, Pet, danh mục sản phẩm/dịch vụ, Supplier dùng chung toàn chuỗi.
 9. **Chỉ tin dữ liệu tiêm chủng do hệ thống ghi nhận.** Mũi tiêm ở nơi khác không được ghi nhận, vì không kiểm chứng được loại, lô, bảo quản và ngày tiêm. Gợi ý mũi, ngày tái chủng, điều kiện lưu trú, nhắc và báo cáo chỉ dùng `Vaccination` của hệ thống; tiền sử do chủ khai ghi dạng văn bản trong bệnh án (BR-KB-05).
+10. *(v16)* **Định danh chỉ dựa trên dữ liệu đã xác thực.** Email (xác thực bằng OTP) là định danh duy nhất của tài khoản. SĐT là thông tin liên lạc và khóa tra cứu, không duy nhất. CCCD chỉ được lễ tân kiểm tra trực tiếp, hệ thống không lưu (BR-TK-01, 16, BR-KH-10).
 
 ---
 
@@ -34,9 +35,9 @@
 
 | Model | Loại | Thuộc | Ý nghĩa | Quan hệ chính | SM | Rule then chốt | Tầng |
 |---|---|---|---|---|---|---|---|
-| Account | ROOT | | Tài khoản đăng nhập của khách và nhân viên. Role là enum cố định: `CUSTOMER`, `ADMIN`, `SUPER_MANAGER`, `BRANCH_MANAGER`, `RECEPTIONIST`, `VET`, `CARETAKER` | 1–1? StaffProfile; 1–1? Customer (qua `Customer.account_id`); n–1? Customer chờ liên kết | #1 | Khóa là cờ `is_locked` độc lập với `status`. BR-TK-01, 08, 09, 11, 17, 19; BR-QT-01, 07, 11, 12 | 1 |
+| Account | ROOT | | Tài khoản đăng nhập của khách và nhân viên. Role là enum cố định: `CUSTOMER`, `ADMIN`, `SUPER_MANAGER`, `BRANCH_MANAGER`, `RECEPTIONIST`, `VET`, `CARETAKER` | 1–1? StaffProfile; 1–1? Customer (qua `Customer.account_id`) | #1 | Khóa là cờ `is_locked` độc lập với `status`. Email là định danh duy nhất; SĐT chỉ bắt buộc với nhân viên, không duy nhất. BR-TK-01, 08, 09, 11, 17, 19; BR-QT-01, 07, 11, 12 | 1 |
 | StaffProfile | PART | Account | Thông tin nhân viên: chi nhánh làm việc, hồ sơ giới thiệu công khai của VET | n–1? Branch (null với ADMIN, SUPER_MANAGER) | | BR-QT-03, BR-TK-20 | 1 |
-| OtpToken | LOG | | Mã OTP gửi email theo mục đích (đăng ký, quên mật khẩu, đổi email, liên kết hồ sơ) | n–1? Account | | Sinh mã mới thì vô hiệu mã cũ cùng mục đích. BR-TK-04…07 | 1 |
+| OtpToken | LOG | | Mã OTP gửi email theo mục đích (đăng ký, quên mật khẩu, đổi email, liên kết hồ sơ) | n–1? Account; n–1? Customer (hồ sơ tại quầy cần liên kết) | | Sinh mã mới thì vô hiệu mã cũ cùng mục đích. BR-TK-04…07 | 1 |
 | Session | PART | Account | Phiên đăng nhập, dùng để hủy mọi phiên khi khóa, vô hiệu hóa, đổi/đặt lại mật khẩu | n–1 Account | | BR-TK-11, 13, 14 | 1 |
 | AuditLog | LOG | | Nhật ký thao tác nhạy cảm: người, thời điểm, hành động, đối tượng, giá trị trước/sau | n–1 Account (người thực hiện) | | Chỉ ADMIN xem; không sửa/xóa. BR-QT-15, 16 | 1 |
 | SystemConfig | REF | | Tham số [CFG] kèm khoảng hợp lệ min–max | | | Giá trị mới chỉ áp dụng cho giao dịch tạo sau. BR-QT-13 | 1 |
@@ -57,7 +58,7 @@
 
 | Model | Loại | Thuộc | Ý nghĩa | Quan hệ chính | SM | Rule then chốt | Tầng |
 |---|---|---|---|---|---|---|---|
-| Customer | ROOT | | Hồ sơ chủ thú cưng, dùng chung toàn chuỗi; tạo khi đăng ký online hoặc tại quầy | 1–1? Account; 1–n Pet, Address, Appointment, Order | | SĐT duy nhất trong tập hồ sơ. BR-TK-01, 19; BR-KH-01 | 1 |
+| Customer | ROOT | | Hồ sơ chủ thú cưng, dùng chung toàn chuỗi. Nguồn online (tạo khi đăng ký, có cờ chờ quyết định liên kết) hoặc tại quầy | 1–1? Account; 1–n Pet, Address, Appointment, Order | | *(v16)* SĐT không duy nhất; bắt buộc với hồ sơ tại quầy, không bắt buộc với hồ sơ online. Hồ sơ online chưa phát sinh dữ liệu bị xóa khi liên kết vào hồ sơ tại quầy. BR-TK-19; BR-KH-01, 10 | 1 |
 | Address | PART | Customer | Sổ địa chỉ | | | Tối đa 5, đúng 1 mặc định. BR-TK-18 | 1 |
 | Pet | ROOT | | Thú cưng; có ngày mất (đã mất thì chỉ đọc) | n–1 Customer (chủ hiện tại); 1–n WeightRecord, Vaccination, Visit, BoardingBooking | | Khóa loài khi đã có bệnh án/mũi tiêm. Chuyển chủ chỉ đổi chủ hiện tại; Order cũ giữ `customer_id` của chủ cũ. BR-KH-02, 03, 05, 06, 08 | 1 |
 | WeightRecord | LOG | | Một lần đo cân nặng (VET khi khám, người nhận thú lưu trú, hoặc chủ tự khai) | n–1 Pet; n–1? Visit; n–1? BoardingBooking | | Cân nặng hiện tại = bản ghi mới nhất. BR-KH-04 | 1 |
