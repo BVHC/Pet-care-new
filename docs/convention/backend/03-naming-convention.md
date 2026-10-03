@@ -1,22 +1,36 @@
-[← Backend Convention Index](../backend-convention.md)
+[← Backend Convention Index](INDEX.md)
 
 # 3. Naming Convention
+
+Code và định danh viết tiếng Anh; tài liệu, message trả client và comment viết tiếng Việt.
 
 | Đối tượng | Quy tắc | Ví dụ |
 |---|---|---|
 | Package con trong module | Số ít, chuẩn Spring Boot | `controller`, `service`, `repository`, `entity`, `dto`, `mapper`, `fsm`, `exception` |
-| Entity | Danh từ số ít, trùng Aggregate Root trong domain model, **không thêm hậu tố `Entity`** | `Appointment`, `Invoice`, `Refund` |
+| Entity | Tên model ở `04-domain-model.md` (PascalCase), **không hậu tố `Entity`**. Bảng tương ứng: erd §12 | `Appointment`, `Visit`, `CashierShift` |
+| Entity của `platform/` | Được thêm hậu tố `Entity` để không trùng tên khái niệm | `AuditLogEntity` |
+| Enum trạng thái / loại | `{Entity}Status`, `{Entity}{Thuộc tính}`; hằng số là mã ASCII của erd | `AppointmentStatus.NO_SHOW`, `CareTaskType.VACCINE_DUE` |
+| Field entity | camelCase của tên cột | `slot_date` → `slotDate`, `reschedule_count` → `rescheduleCount` |
+| DTO request | `{Command}Request` | `BookAppointmentRequest` |
+| DTO response | `{Entity}Response`; bản rút gọn hoặc bản cho khách thêm hậu tố mô tả | `AppointmentResponse`, `MedicalRecordCustomerResponse` |
+| Method transition / use case | Tên command (xem dưới) | |
+| Method service khác | Verb + Noun tiếng Anh | `findById()`, `calculateNights()` |
+| Hằng số | `UPPER_SNAKE_CASE` | `MAX_ADDRESSES` |
+| Mã rule | Chuỗi `"BR-<MÃ>-<số>"` truyền thẳng vào `BusinessRuleViolationException` tại chỗ kiểm tra, đúng mã trong `02-business-rules.md` | `"BR-LH-05"` |
+| Mã action audit | `<ĐỐI_TƯỢNG>_<QUÁ_KHỨ>`, hằng số do module giữ (một lớp `…AuditActions` mỗi module) | `ACCOUNT_LOCKED`, `ORDER_PAID` |
+| Khóa `system_configs` | `<nhóm>.<tên>` chữ thường | `otp.ttl_minutes`, `appointment.max_reschedules` (erd L170) |
 
-> Quy tắc trên áp dụng cho `module/<feature>/entity/` (25 module nghiệp vụ). Entity hạ tầng dùng chung ở `platform/` (vd `RefreshTokenEntity`) không thuộc phạm vi convention này và được phép thêm hậu tố `Entity` để tránh trùng tên với DTO/domain concept cùng tên trong cùng package.
-| DTO Request | `{Command}Request` — Command lấy đúng tên trong `01-business-operations.md`/glossary | `BookAppointmentRequest`, `ApproveRefundRequest` |
-| DTO Response | `{Entity}Response` | `AppointmentResponse`, `InvoiceResponse` |
-| Method transition FSM | **Trùng chính xác tên Command nghiệp vụ**, không tự đặt lại | `bookAppointment()`, `checkInAppointment()`, `markNoShow()`, `abortAppointment()` |
-| Method Service khác | Verb + Noun, tiếng Anh | `findById()`, `calculateTotalAmount()` |
-| Hằng số | `UPPER_SNAKE_CASE` | `HOLD_TTL_SECONDS`, `MAX_OTP_RETRY` |
-| RULE-ID trong code | Truyền dạng String hằng vào exception, không hard-code rải rác | `"RULE-06-11"` |
+## Tên command
 
-**Bắt buộc:** tên method transition phải khớp 100% với Command trong bảng Actor↔Command của `01-business-operations.md`. Không dùng tên tự sáng tác (vd không dùng `startService()` thay cho `startAppointmentService()`).
+Đặc tả v16 **không có** bảng Actor↔Command hay glossary tiếng Anh: `01-business-operations.md` chỉ liệt kê use case tiếng Việt. Tên command chốt theo cách sau:
+
+1. Nguồn: cột *Sự kiện* của bảng chuyển trạng thái (`03-state-machines.md`) hoặc tên use case/thao tác trong `01`, `02`.
+2. Đặt tên: động từ + danh từ tiếng Anh, camelCase, một tên cho một dòng bảng (hoặc một thao tác). Dòng do `SYS ← …` kích hoạt cũng có tên riêng, vì service của aggregate phát sự kiện gọi tới nó.
+3. Danh sách tên đề xuất nằm trong plan của module, **người dùng duyệt trước khi code**. Không tự đặt tên rồi dùng luôn.
+4. Javadoc của method ghi dòng nguồn, ví dụ `/** Lịch hẹn#2 — đổi khung giờ (BR-LH-06). */`.
+
+Cùng một tên được dùng cho method service, method TransitionHandler (nếu có) và DTO request (`{Command}Request`).
 
 ---
 
-[← 2. Layering & DTO](02-layering-and-dto.md) · [Backend Convention Index](../backend-convention.md) · [Tiếp: 4. Exception & Error Handling →](04-exception-handling.md)
+[← 2. Layering & DTO](02-layering-and-dto.md) · [Backend Convention Index](INDEX.md) · [Tiếp: 4. Exception & Error Handling →](04-exception-handling.md)

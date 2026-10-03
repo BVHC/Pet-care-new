@@ -1,13 +1,20 @@
-[← Backend Convention Index](../backend-convention.md)
+[← Backend Convention Index](INDEX.md)
 
 # 9. Testing
 
-| Loại test | Bắt buộc cho | Công cụ |
-|---|---|---|
-| Unit test | Mọi Service / TransitionHandler chứa business rule hoặc guard | JUnit 5 + Mockito |
-| Integration test | Mọi FSM (verify đúng bảng transition trong `03-state-machines.md`) + API có nghiệp vụ phức tạp (Atomic Reschedule, Refund Maker-Checker) | `@SpringBootTest` + Testcontainers |
+| Loại test | Bắt buộc cho | Công cụ | Tên file · lệnh chạy |
+|---|---|---|---|
+| Unit test | Mọi Service / TransitionHandler chứa business rule hoặc guard | JUnit 5 + Mockito (+ `spring-security-test` khi cần principal) | `*Test.java` · `mvn test` (Surefire) |
+| Integration test | Mọi FSM (đúng bảng chuyển trạng thái của `03-state-machines.md`) + API có nghiệp vụ phức tạp (hệ quả liên aggregate, thu tiền + trừ kho, quota/sức chứa khi chạy đồng thời) | `@SpringBootTest` + Testcontainers Postgres 17 | `*IT.java` · `mvn verify` (Failsafe) |
 
-Repository CRUD thuần không bắt buộc test riêng.
+Repository CRUD thuần không bắt buộc test riêng. Một test: `mvn test -Dtest=XxxTest#method`; một IT: `mvn verify -Dit.test=XxxIT -Dtest=none -Dsurefire.failIfNoSpecifiedTests=false`.
+
+## Môi trường
+
+- **Cần Docker đang chạy.** Test chạm DB khai báo `@ActiveProfiles("test")` và `@Import(TestcontainersConfiguration.class)`: mỗi lượt chạy có một container `postgres:17` sạch, Flyway áp migration thật, Hibernate `ddl-auto=validate`. Không dùng H2, không cần DB cục bộ.
+- Surefire/Failsafe ép JVM `-Duser.timezone=Asia/Ho_Chi_Minh`. Test không được dựa vào timezone JVM: thay bean `Clock` bằng `Clock.fixed(…, TimeConfig.BUSINESS_ZONE)` cho mọi rule phụ thuộc thời gian (hạn đặt 24h, cửa sổ check-in, OTP hết hạn…). Riêng `created_at`/`updated_at` do Hibernate đặt theo giờ JVM nên `Clock.fixed` không điều khiển được (system-overview §7).
+- `audit_logs` không xóa được (trigger BR-QT-16), nên IT không dọn bảng này: mỗi test đánh dấu bản ghi của mình (ví dụ `reason` là UUID) rồi truy vấn theo dấu đó, như `AuditRecorderIT`.
+- Unit test của service dùng mock `AuditRecorder` và kiểm tra `AuditEntry` được truyền vào. IT gọi qua service có `@Transactional`, vì `record()` là `MANDATORY` và sẽ lỗi nếu gọi ngoài transaction.
 
 ## Base test class cho FSM
 
@@ -43,8 +50,12 @@ class AppointmentTransitionHandlerTest extends FsmTransitionTestBase<Appointment
 }
 ```
 
-Lớp con chỉ khai báo bảng; thêm `@Test` riêng cho guard nghiệp vụ (mã `BR-…`) của từng thao tác.
+Base chỉ phủ whitelist trạng thái. Ngoài ra mỗi FSM cần:
+
+- `@Test` riêng cho **từng guard** `BR-…` của từng thao tác: một case vi phạm (đúng mã rule trong message) và một case biên hợp lệ.
+- Với trường hợp đặc biệt ở [05](05-fsm-pattern.md): guard theo `source` của Order, cờ `is_locked` của Tài khoản.
+- Một IT cho mỗi chuỗi hệ quả ở Phụ lục 03 mà module tham gia: sau thao tác, kiểm tra trạng thái của **mọi** aggregate bị kéo theo, và kiểm tra rollback toàn bộ khi một bước giữa chừng lỗi.
 
 ---
 
-[← 8. Logging & Audit](08-logging-and-audit.md) · [Backend Convention Index](../backend-convention.md)
+[← 8. Logging & Audit](08-logging-and-audit.md) · [Backend Convention Index](INDEX.md)

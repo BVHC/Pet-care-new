@@ -8,7 +8,7 @@
 | Phần | Trạng thái |
 |---|---|
 | Đặc tả | v16, đầy đủ ở `docs/01`–`05` |
-| Backend | Đã có tầng `platform/` (config, exception, FSM base, envelope, security tạm). **Chưa có module nghiệp vụ, entity hay controller nào** |
+| Backend | Đã có tầng `platform/` (config, exception, FSM base, envelope, security tạm, audit). **Chưa có module nghiệp vụ hay controller nào**; entity duy nhất là `AuditLogEntity` của platform |
 | Database | `V1__init_schema.sql`: đủ 55 bảng của erd (mục 4b). Chưa có dữ liệu seed |
 | Frontend | Dựng theo đặc tả cũ. Màn hình nhân viên chạy trên dữ liệu giả trong trình duyệt, chưa gọi BE thật |
 
@@ -48,12 +48,15 @@ Stack: Java 21, Spring Boot 3.5.15, Spring Security, Data JPA, Validation, AOP, 
 | Base entity | `platform/model/TimestampedEntity`, `CreatedAtEntity` | ROOT, PART, REF kế thừa `TimestampedEntity`; LOG kế thừa `CreatedAtEntity`. **Không chứa `id`**, mỗi entity tự khai báo khóa chính |
 | Security (tạm) | `platform/security/SecurityConfig`, `RestAuthenticationEntryPoint`, `RestAccessDeniedHandler` | Stateless; CSRF, form login, basic auth và logout tắt. Chỉ mở `/actuator/health/**`, `/actuator/info`, `/v3/api-docs/**`, `/swagger-ui/**`. **Mọi endpoint khác trả 401** cho tới khi có JWT. Lỗi 401/403 đi qua `HandlerExceptionResolver` về `GlobalExceptionHandler` |
 | Logging | `resources/logback-spring.xml` | Profile `docker` log JSON (Logstash); profile khác log dạng chữ kèm `[traceId]` |
+| Audit | `platform/audit/AuditRecorder`, `AuditEntry`, `AuditPrincipal`, `AuditLogEntity`, `AuditLogRepository` | Điểm duy nhất ghi `audit_logs` (ADR-0001, convention 08 §8.2–8.3). `record()` `MANDATORY` (cùng tx nghiệp vụ); `recordIndependently()` `REQUIRES_NEW` chỉ cho sự kiện thất bại, ghi lỗi thì log `AUDIT_WRITE_FAILED`. Snapshot là record/Map, cấm entity và khóa nhạy cảm. Actor lấy từ principal `AuditPrincipal` (TK phải implement), không có → hệ thống. Repository chỉ có `save` |
+| IP client | `application.yml` `server.forward-headers-strategy: native` | Tomcat `RemoteIpValve` tin `X-Forwarded-For` từ dải nội bộ (ADR-0002); `getRemoteAddr()` là IP client khi đi qua nginx |
 
 Test hiện có (`BE/src/test/java/com/petcare/`):
 - `PetcareApplicationTests` (`contextLoads` trên Testcontainers: chứng minh Flyway + `validate` khởi động được).
 - `SchemaMigrationIT` (Failsafe, `mvn verify`): đối chiếu catalog với erd/03 — đủ 55 bảng, cột chung theo loại bảng, FK `RESTRICT`, `id` identity ALWAYS, enum `VARCHAR(30)` + mã ASCII, kiểu tiền/giờ/cân nặng/mã chứng từ, tập trạng thái của 15 cột = state machine; hành vi trigger audit, EXCLUDE lưu trú, phiếu thu 0đ.
 - `TestcontainersConfiguration`: `@Import` vào mọi `@SpringBootTest` cần DB.
 - `TraceIdFilterTest`, `GlobalExceptionHandlerTest`, `StateMachineBaseTest`, `SecurityConfigTest`.
+- `platform/audit/AuditRecorderTest` (validate entry, khóa nhạy cảm, actor, IP, ghi độc lập lỗi) và `AuditRecorderIT` (Failsafe, `RANDOM_PORT`: commit/rollback cùng tx, `MANDATORY` ngoài tx, `REQUIRES_NEW` sống sót khi tx ngoài rollback, không FK actor, có `RemoteIpValve`). `audit_logs` không xóa được nên mỗi IT đánh dấu bản ghi bằng `reason` UUID thay vì dọn bảng.
 - **`platform/fsm/FsmTransitionTestBase<S>`**: lớp cha bắt buộc cho test FSM. Lớp con khai báo `handler()`, `stateType()`, `expectedTransitions()`, `expectedInitialStates()`, chép độc lập từ bảng 03. Base tự sinh test cho mọi cặp from × to.
 
 ## 4. Backend — chưa có (phải xây)
@@ -61,7 +64,7 @@ Test hiện có (`BE/src/test/java/com/petcare/`):
 | Hạng mục | Nguồn đặc tả | Ghi chú |
 |---|---|---|
 | Xác thực JWT, phiên (`sessions`), OTP, RBAC 7 role, phạm vi chi nhánh A05–A08 | BR-TK, BR-QT; erd §1 | Thay `SecurityConfig` tạm. Hiện chưa có lớp nào đọc các key `jwt.*` |
-| `@Auditable` + `AuditAspect` → `audit_logs` | convention 08 §8.2; phạm vi BR-QT-15, 16 | Ví dụ trong convention (Refund, Maker-Checker) đã lỗi thời |
+| Màn hình xem audit (UC11) và gọi `AuditRecorder` ở từng thao tác | convention 08 §8.3; BR-QT-15, 16 | Hạ tầng ghi đã có (mục 3). UC11 cần repository đọc riêng trong module QT |
 | `notification_outbox` + gửi email/push và thử lại | ST20; erd §11 | Chưa có lớp gửi email nào. `notification_outbox.template_code` có FK tới `notification_templates`, nên phải seed mẫu trước khi ghi outbox |
 | Job định kỳ ST01–ST20 (tầng 1–2) | 01 mục B | Chưa có `@Scheduled` nào |
 | Seed `system_configs`, `notification_templates`, ADMIN đầu tiên | BR-QT-13, 14; erd L166–195 | Docs chưa có nội dung mẫu, khoảng min–max của phần lớn [CFG], và cách tạo ADMIN đầu tiên — làm cùng TK/QT |
@@ -119,5 +122,7 @@ Hệ quả liên aggregate (Phụ lục của 03) chạy trong cùng transaction
 | `application*.yml` | `jwt.*` vẫn chưa có code đọc (giữ cho TK). Các key cũ khác đã xóa. `management.health.mail.enabled=false` cho tới khi có ST20 (SMTP chưa cấu hình làm health 503) — nhớ bật lại |
 | `.github/workflows/ci.yml` | Bước `mvn flyway:migrate` không có plugin Flyway trong `pom.xml` → fail. Service Postgres và cờ `-Dflyway.*` giờ thừa (test dùng Testcontainers; runner GitHub có Docker). Trigger `main, develop` trong khi nhánh làm việc là `dev`. Lint chạy với `\|\| true` |
 | `BE/BE-TIMELINE.md` | Tiến độ của bản trước khi reset (25 module, `docs/00-requirements.md`), đã lỗi thời |
-| `docs/convention/backend/` | Link `../backend-convention.md` không tồn tại; 07 trỏ tới ADR `0003-…` chưa có; 03 đòi bảng Actor↔Command đã bỏ (tên command là TBD) |
-| `docs/api/`, `docs/adr/`, `docs/diagrams/` | Đang trống |
+| `docs/convention/backend/` | Đã cập nhật theo v16 (2026-10-03). Còn TBD, liệt kê ở `INDEX.md` của thư mục đó: tên command, cách trả cảnh báo không chặn, chiến lược khóa đồng thời, cách đọc [CFG] |
+| `docs/api/`, `docs/diagrams/` | Đang trống. `docs/adr/` có ADR-0001 (audit), ADR-0002 (IP client) |
+| `platform/model/CreatedAtEntity`, `TimestampedEntity` | `created_at`/`updated_at` do `@CreationTimestamp`/`@UpdateTimestamp` đặt theo giờ JVM, không qua bean `Clock` → test với `Clock.fixed` không điều khiển được các cột này |
+| `server.forward-headers-strategy: native` | Dải proxy tin cậy gồm cả gateway Docker `172.x`: ở dev (gọi thẳng `:8080`, hoặc browser trên host qua nginx) client giả được `X-Forwarded-For`. Môi trường thật: không publish 8080 hoặc thu hẹp `server.tomcat.remoteip.internal-proxies` (ADR-0002) |

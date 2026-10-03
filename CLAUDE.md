@@ -6,7 +6,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 Pet Care — multi-branch pet clinic management (exam/vaccination, grooming, boarding, counter sales, cashier, inventory, customer care). Monorepo: `BE/` (Java 21 + Spring Boot 3.5, Maven) and `FE/` (React 18 + Vite + TypeScript). PostgreSQL 17 + Redis 7 via `docker-compose.yml`. Documentation is Vietnamese, code and identifiers are English.
 
-**State as of 2026-10-03 (commit `aa209a2`):** the spec was redesigned (v16) and the backend was reset, then the shared `platform/` layer was rebuilt (see *What `platform/` already provides* below). The full v16 schema exists as one Flyway migration, `V1__init_schema.sql` (all 55 ERD tables, no seed data). There is still **no `module/`, no entity, no controller**. Earlier modules (`auth`, `iam`, `notification`, `pet`, order, inventory, procurement…) were removed together with the old API contracts, ADRs and diagrams; all business features are to be rebuilt from `docs/01`–`05`. `docs/architecture/system-overview.md` is the detailed, file-by-file snapshot of what exists — update it when adding a module or infrastructure.
+**State as of 2026-10-03 (commit `aa209a2`):** the spec was redesigned (v16) and the backend was reset, then the shared `platform/` layer was rebuilt (see *What `platform/` already provides* below). The full v16 schema exists as one Flyway migration, `V1__init_schema.sql` (all 55 ERD tables, no seed data). There is still **no `module/`, no business entity, no controller** (the only entity is `platform/audit/AuditLogEntity`). Earlier modules (`auth`, `iam`, `notification`, `pet`, order, inventory, procurement…) were removed together with the old API contracts, ADRs and diagrams; all business features are to be rebuilt from `docs/01`–`05`. `docs/architecture/system-overview.md` is the detailed, file-by-file snapshot of what exists — update it when adding a module or infrastructure.
 
 ## Commands
 
@@ -32,7 +32,7 @@ npm run lint                             # eslint, --max-warnings 0
 npx tsc --noEmit                         # there is no `npm run typecheck` script
 ```
 
-**Tests need Docker running.** Every `@SpringBootTest` that touches the DB uses the `test` profile and `@Import(TestcontainersConfiguration.class)` (`BE/src/test/java/com/petcare/`): a fresh `postgres:17` container per run via `@ServiceConnection`, Flyway applies the real migrations, `ddl-auto=validate`. No local `petcare_test` DB is needed. Surefire/Failsafe pin the JVM to `-Duser.timezone=Asia/Ho_Chi_Minh`. Existing tests: `PetcareApplicationTests` (context + Flyway), `SchemaMigrationIT` (`mvn verify`; checks the catalog against erd/03 — table set, timestamps, FK `RESTRICT`, identity, enum `VARCHAR(30)`, state sets, audit trigger, boarding EXCLUDE), `TraceIdFilterTest`, `GlobalExceptionHandlerTest`, `StateMachineBaseTest`, `SecurityConfigTest`.
+**Tests need Docker running.** Every `@SpringBootTest` that touches the DB uses the `test` profile and `@Import(TestcontainersConfiguration.class)` (`BE/src/test/java/com/petcare/`): a fresh `postgres:17` container per run via `@ServiceConnection`, Flyway applies the real migrations, `ddl-auto=validate`. No local `petcare_test` DB is needed. Surefire/Failsafe pin the JVM to `-Duser.timezone=Asia/Ho_Chi_Minh`. Existing tests: `PetcareApplicationTests` (context + Flyway), `SchemaMigrationIT` (`mvn verify`; checks the catalog against erd/03 — table set, timestamps, FK `RESTRICT`, identity, enum `VARCHAR(30)`, state sets, audit trigger, boarding EXCLUDE), `TraceIdFilterTest`, `GlobalExceptionHandlerTest`, `StateMachineBaseTest`, `SecurityConfigTest`, `AuditRecorderTest`, `AuditRecorderIT` (`audit_logs` can't be cleaned between tests — trigger — so ITs tag their rows with a random `reason`).
 
 ## Documentation is the source of truth — read before coding
 
@@ -49,16 +49,14 @@ Start at `docs/INDEX.md`: it maps every module to the exact line ranges in each 
 
 Module codes: TK, QT, CN, CK, KH, SP, NS, LH, TN, KB, LT, BH, TG, KO, BV, DG, TB, BC. Each has a **tier**: 1 full, 2 thin, 3 diagram-only (no rules/models — don't build). The tier-3 UC/ST list is in `docs/INDEX.md`.
 
-`docs/architecture/system-overview.md` describes the actual codebase state (runtime, what exists, what is missing, config debt). `docs/api/INDEX.md`, `docs/adr/INDEX.md`, `docs/diagrams/INDEX.md` are still empty placeholders.
+`docs/architecture/system-overview.md` describes the actual codebase state (runtime, what exists, what is missing, config debt). `docs/api/INDEX.md`, `docs/diagrams/INDEX.md` are still empty placeholders. `docs/adr/INDEX.md` lists the technical decisions not covered by `docs/01`–`05` (ADR-0001 audit recording, ADR-0002 client IP behind proxy); record every newly agreed architecture decision there as `docs/adr/000n-<slug>.md` (immutable once Accepted; supersede instead of editing).
 
-### Where `docs/convention/backend/` is stale
+### Backend conventions
 
-The conventions predate the v16 spec. Follow them for structure, but override these points:
-- Rule IDs are `BR-TK-19` style, not `RULE-06-11`. Cite them as a string constant passed to the exception: `new BusinessRuleViolationException("BR-LH-05", ...)`.
-- FSM whitelists come from the numbered transition tables in `03-state-machines.md` (columns *Từ → Sang*, *Người kích hoạt*, *Điều kiện*, *Hệ quả*), not from mermaid diagrams. `X → X` rows are guarded operations that keep the state.
-- `03-naming-convention.md` requires names to match an Actor↔Command table in `01-business-operations.md` and a glossary. Neither exists any more: 01 lists Vietnamese use cases only. Naming of commands/transition methods is TBD — propose English names and ask.
-- `04-exception-handling.md` / `09-testing.md` examples reference old modules (Refund, Atomic Reschedule); the mechanics still apply.
-- `07-transaction-management.md` points to ADR `0003-refresh-token-cleanup-job.md`, which no longer exists; `08-logging-and-audit.md` lists Maker-Checker commands that are gone — audit scope is BR-QT-15. Every file links to `../backend-convention.md`, which does not exist.
+`docs/convention/backend/` (index: `INDEX.md`) was rewritten for v16 on 2026-10-03 and matches `platform/`. Still open there, listed in its *Còn TBD* table — don't decide these silently:
+- Command / FSM transition method names: no Actor↔Command table exists; propose English names (from the *Sự kiện* column of 03) in the module plan and ask (03-naming).
+- How "cảnh báo, không chặn" rules return warnings to the client (06) and the locking strategy for quota / kennel capacity / stock (07 §7.3): both need an ADR first.
+- Package name per module (01) and reading `system_configs` [CFG] values (06): decide with the first module that needs them.
 
 ## Backend architecture (target, per conventions)
 
@@ -86,8 +84,10 @@ One package per bounded context. **A module must not import another module's `en
 | Trace id | `TraceIdFilter` (first filter) sets MDC `traceId` and header `X-Trace-Id`; read it via `TraceContext.current()` |
 | API docs | springdoc at `/v3/api-docs`, `/swagger-ui.html`; bearer scheme name `OpenApiConfig.BEARER_SCHEME` |
 | Security | `SecurityConfig` is **temporary**: stateless, only health/info and API docs are public, **every other path returns 401** until JWT is built (module TK). 401/403 from the filter chain are forwarded to `GlobalExceptionHandler` via `RestAuthenticationEntryPoint` / `RestAccessDeniedHandler` |
+| Audit (BR-QT-15, 16) | `platform/audit/AuditRecorder` — call it explicitly from the service, no AOP: `record(AuditEntry.of("ACTION").entity("table", id).before(snap).after(snap).reason(r))` inside the use-case `@Transactional` (`MANDATORY`); `recordIndependently(...)` (`REQUIRES_NEW`) only for failure events that must survive rollback (`LOGIN_FAILED`, BR-QT-01 403). Snapshots are records/Maps, never entities; keys like password/otp/token/secret/cccd/pin are rejected. Actor comes from a principal implementing `AuditPrincipal` (TK's principal must). What to audit: convention 08 §8.3; design: ADR-0001 |
+| Client IP | `server.forward-headers-strategy: native` → `request.getRemoteAddr()` is the client IP behind nginx (ADR-0002) |
 
-Not built yet: JWT/session/OTP, RBAC + branch scope, `@Auditable`/`AuditAspect`, `notification_outbox` sender, any `@Scheduled` job (ST01–ST20), locking strategy for quota/capacity/stock (needs an ADR first). Redis and SMTP are configured but unused.
+Not built yet: JWT/session/OTP, RBAC + branch scope, `notification_outbox` sender, any `@Scheduled` job (ST01–ST20), locking strategy for quota/capacity/stock (needs an ADR first). Redis and SMTP are configured but unused.
 
 ### Request flow
 

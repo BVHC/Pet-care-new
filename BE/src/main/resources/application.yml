@@ -51,6 +51,9 @@ app:
 
 server:
   port: ${SERVER_PORT:8081}
+  # Sau nginx (FE/nginx.conf đặt X-Forwarded-For): Tomcat RemoteIpValve chỉ tin header từ proxy thuộc dải nội bộ,
+  # nên request.getRemoteAddr() là IP client thật — audit_logs.ip_address dùng giá trị này (docs/adr/0002).
+  forward-headers-strategy: native
 
 management:
   endpoints:
