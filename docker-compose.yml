@@ -2,8 +2,6 @@
 # Pet-care Docker Compose
 # ===========================================
 
-version: '3.8'
-
 services:
   # ===========================================
   # PostgreSQL Database
@@ -12,9 +10,10 @@ services:
     image: postgres:17
     container_name: petcare-postgres
     environment:
-      POSTGRES_USER: postgres
-      POSTGRES_PASSWORD: 123456
-      POSTGRES_DB: petcare
+      # Chỉ có hiệu lực khi volume postgres_data được tạo mới
+      POSTGRES_USER: ${DB_USERNAME:-postgres}
+      POSTGRES_PASSWORD: ${DB_PASSWORD:-123456}
+      POSTGRES_DB: ${DB_NAME:-petcare}
     ports:
       - "5432:5432"
     volumes:
@@ -53,16 +52,18 @@ services:
       SPRING_PROFILES_ACTIVE: docker
       DB_HOST: postgres
       DB_PORT: 5432
-      DB_NAME: petcare
-      DB_USERNAME: postgres
-      DB_PASSWORD: 123456
+      DB_NAME: ${DB_NAME:-petcare}
+      DB_USERNAME: ${DB_USERNAME:-postgres}
+      DB_PASSWORD: ${DB_PASSWORD:-123456}
       REDIS_HOST: redis
       REDIS_PORT: 6379
-      JWT_SECRET: ${JWT_SECRET:-petcare-256-bit-secret-key-for-jwt-signing-min-32-chars}
+      # Không có mặc định (application-docker.yml cũng vậy): thiếu thì compose dừng ngay.
+      JWT_SECRET: ${JWT_SECRET:?JWT_SECRET chưa đặt - sao chép .env.example thành .env}
       MAIL_HOST: ${MAIL_HOST:-smtp.gmail.com}
       MAIL_PORT: ${MAIL_PORT:-587}
-      MAIL_USERNAME: ${MAIL_USERNAME}
-      MAIL_PASSWORD: ${MAIL_PASSWORD}
+      MAIL_USERNAME: ${MAIL_USERNAME:-}
+      MAIL_PASSWORD: ${MAIL_PASSWORD:-}
+      CORS_ALLOWED_ORIGINS: ${CORS_ALLOWED_ORIGINS:-http://localhost:3000}
     ports:
       - "8080:8080"
     depends_on:

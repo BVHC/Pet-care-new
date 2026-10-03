@@ -30,7 +30,7 @@ Các file tham chiếu nhau bằng tên gọi tắt (cột 1).
 | Enum tiếng Việt → mã ASCII trong DB/code | erd L28–37 |
 | Sơ đồ ER luồng chính (mermaid) | erd L45–73 |
 | Đối chiếu model → bảng | erd L1043–1073 |
-| Nhật ký quyết định v15–v16 | erd L1077–1087 |
+| Nhật ký quyết định v15–v16 và migration V1 | erd L1077–1092 |
 | Danh sách actor | use-case L7–21 |
 | Tác vụ hệ thống ST01–ST21 | use-case L208–234 |
 | Quan hệ include / extend | use-case L238–251 |

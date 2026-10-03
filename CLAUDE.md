@@ -6,7 +6,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 Pet Care — multi-branch pet clinic management (exam/vaccination, grooming, boarding, counter sales, cashier, inventory, customer care). Monorepo: `BE/` (Java 21 + Spring Boot 3.5, Maven) and `FE/` (React 18 + Vite + TypeScript). PostgreSQL 17 + Redis 7 via `docker-compose.yml`. Documentation is Vietnamese, code and identifiers are English.
 
-**State as of 2026-10-02:** the spec was redesigned (v16) and the backend was reset to a bare skeleton — only `PetcareApplication` and a `contextLoads` test remain. There is no `platform/`, no `module/`, no Flyway migration yet. Earlier modules (`auth`, `iam`, `notification`, `pet`, order, inventory, procurement…) were removed together with the old API contracts, ADRs and diagrams. Everything is to be rebuilt from `docs/01`–`05`.
+**State as of 2026-10-03 (commit `aa209a2`):** the spec was redesigned (v16) and the backend was reset, then the shared `platform/` layer was rebuilt (see *What `platform/` already provides* below). The full v16 schema exists as one Flyway migration, `V1__init_schema.sql` (all 55 ERD tables, no seed data). There is still **no `module/`, no entity, no controller**. Earlier modules (`auth`, `iam`, `notification`, `pet`, order, inventory, procurement…) were removed together with the old API contracts, ADRs and diagrams; all business features are to be rebuilt from `docs/01`–`05`. `docs/architecture/system-overview.md` is the detailed, file-by-file snapshot of what exists — update it when adding a module or infrastructure.
 
 ## Commands
 
@@ -14,6 +14,7 @@ All Maven commands run from `BE/`; npm commands from `FE/`.
 
 ```bash
 # Infra (from repo root) — Postgres + Redis + BE + FE
+cp .env.example .env                     # once: compose has no JWT_SECRET default and refuses to run without it
 docker compose up -d postgres redis      # just the dependencies for local dev
 
 # Backend
@@ -31,7 +32,7 @@ npm run lint                             # eslint, --max-warnings 0
 npx tsc --noEmit                         # there is no `npm run typecheck` script
 ```
 
-**Tests need a running Postgres.** `PetcareApplicationTests` uses the `test` profile: real Postgres at `localhost:5432/petcare_test` (create it once: `docker compose exec postgres psql -U postgres -c "CREATE DATABASE petcare_test"`), `ddl-auto: create-drop`, Flyway disabled. Testcontainers is still in `pom.xml` for future `*IT` classes.
+**Tests need Docker running.** Every `@SpringBootTest` that touches the DB uses the `test` profile and `@Import(TestcontainersConfiguration.class)` (`BE/src/test/java/com/petcare/`): a fresh `postgres:17` container per run via `@ServiceConnection`, Flyway applies the real migrations, `ddl-auto=validate`. No local `petcare_test` DB is needed. Surefire/Failsafe pin the JVM to `-Duser.timezone=Asia/Ho_Chi_Minh`. Existing tests: `PetcareApplicationTests` (context + Flyway), `SchemaMigrationIT` (`mvn verify`; checks the catalog against erd/03 — table set, timestamps, FK `RESTRICT`, identity, enum `VARCHAR(30)`, state sets, audit trigger, boarding EXCLUDE), `TraceIdFilterTest`, `GlobalExceptionHandlerTest`, `StateMachineBaseTest`, `SecurityConfigTest`.
 
 ## Documentation is the source of truth — read before coding
 
@@ -48,7 +49,7 @@ Start at `docs/INDEX.md`: it maps every module to the exact line ranges in each 
 
 Module codes: TK, QT, CN, CK, KH, SP, NS, LH, TN, KB, LT, BH, TG, KO, BV, DG, TB, BC. Each has a **tier**: 1 full, 2 thin, 3 diagram-only (no rules/models — don't build). The tier-3 UC/ST list is in `docs/INDEX.md`.
 
-`docs/architecture/system-overview.md`, `docs/api/INDEX.md`, `docs/adr/INDEX.md`, `docs/diagrams/INDEX.md` are currently empty placeholders.
+`docs/architecture/system-overview.md` describes the actual codebase state (runtime, what exists, what is missing, config debt). `docs/api/INDEX.md`, `docs/adr/INDEX.md`, `docs/diagrams/INDEX.md` are still empty placeholders.
 
 ### Where `docs/convention/backend/` is stale
 
@@ -57,6 +58,7 @@ The conventions predate the v16 spec. Follow them for structure, but override th
 - FSM whitelists come from the numbered transition tables in `03-state-machines.md` (columns *Từ → Sang*, *Người kích hoạt*, *Điều kiện*, *Hệ quả*), not from mermaid diagrams. `X → X` rows are guarded operations that keep the state.
 - `03-naming-convention.md` requires names to match an Actor↔Command table in `01-business-operations.md` and a glossary. Neither exists any more: 01 lists Vietnamese use cases only. Naming of commands/transition methods is TBD — propose English names and ask.
 - `04-exception-handling.md` / `09-testing.md` examples reference old modules (Refund, Atomic Reschedule); the mechanics still apply.
+- `07-transaction-management.md` points to ADR `0003-refresh-token-cleanup-job.md`, which no longer exists; `08-logging-and-audit.md` lists Maker-Checker commands that are gone — audit scope is BR-QT-15. Every file links to `../backend-convention.md`, which does not exist.
 
 ## Backend architecture (target, per conventions)
 
@@ -70,6 +72,22 @@ com.petcare/
 ```
 
 One package per bounded context. **A module must not import another module's `entity` or `repository`** — go through the other module's `service`.
+
+### What `platform/` already provides (reuse, don't re-create)
+
+| Need | Use |
+|---|---|
+| Rule / state / not-found / scope / concurrency errors | `platform/exception`: `BusinessRuleViolationException(ruleId, msg)` (appends `" (BR-…)"` itself), `InvalidStateTransitionException`, `ResourceNotFoundException`, `AccessDeniedScopeException`, `ConcurrencyConflictException`, all extending `PlatformException` with an `ErrorCode` (12 codes, HTTP status built in) |
+| Error envelope | `GlobalExceptionHandler` already maps every `PlatformException`, Bean Validation, malformed request, Spring Security 401/403 and DB lock/constraint errors (→ 409, generic message). Don't add handlers per module |
+| Success envelope | `platform/model`: `ApiResponse.ok(data)`, `ok(data, msg)`, `created(data, msg)`; `PageResponse.of(Page)` (0-based `page`) |
+| FSM | `platform/fsm`: `Transitionable<S>` + `StateMachineBase<S>` (`validateTransition`, `validateInitial`, `canTransition`). Tests extend `src/test/.../platform/fsm/FsmTransitionTestBase<S>` and declare an independent copy of the 03 table |
+| Timestamps on entities | `TimestampedEntity` (ROOT/PART/REF: `created_at`, `updated_at`) or `CreatedAtEntity` (LOG). Neither declares `id` — each entity declares its own PK |
+| Current time | Inject the `Clock` bean (`TimeConfig`, zone `TimeConfig.BUSINESS_ZONE` = Asia/Ho_Chi_Minh): `Instant.now(clock)` for instants, `LocalDate.now(clock)` for business dates. Never call `now()` without the clock; tests use `Clock.fixed` |
+| Trace id | `TraceIdFilter` (first filter) sets MDC `traceId` and header `X-Trace-Id`; read it via `TraceContext.current()` |
+| API docs | springdoc at `/v3/api-docs`, `/swagger-ui.html`; bearer scheme name `OpenApiConfig.BEARER_SCHEME` |
+| Security | `SecurityConfig` is **temporary**: stateless, only health/info and API docs are public, **every other path returns 401** until JWT is built (module TK). 401/403 from the filter chain are forwarded to `GlobalExceptionHandler` via `RestAuthenticationEntryPoint` / `RestAccessDeniedHandler` |
+
+Not built yet: JWT/session/OTP, RBAC + branch scope, `@Auditable`/`AuditAspect`, `notification_outbox` sender, any `@Scheduled` job (ST01–ST20), locking strategy for quota/capacity/stock (needs an ADR first). Redis and SMTP are configured but unused.
 
 ### Request flow
 
@@ -96,7 +114,7 @@ Schema follows `docs/05-erd.md` §0, not the removed code:
 - Vietnamese enum values in the spec (`TÁI_CHỦNG`, `KHÁM`, `ĐÃ_XEM`…) map to ASCII codes (`VACCINE_DUE`, `EXAM`, `SEEN`…) per the table in erd §0 — use the ASCII codes in DB and code.
 - No hard delete of business data except the cases the rules allow (BR-KH-06, BR-TK-08, BR-TK-19, BR-BV-02, BR-KB-04); the app deletes children in the same transaction, no `CASCADE`.
 
-Flyway owns the schema (`BE/src/main/resources/db/migration/`, `ddl-auto=validate` in the default profile). Add `V{n}__*.sql`; never edit an applied migration.
+Flyway owns the schema (`BE/src/main/resources/db/migration/`, `ddl-auto=validate` in the default profile; `baseline-on-migrate` is off on purpose). `V1__init_schema.sql` is the whole v16 schema: constraint names `ck_`/`uq_`/`ix_`/`ex_<table>_…`, FKs auto-named. Add `V{n}__*.sql` for changes; never edit an applied migration. Deliberate deviations from the ERD, recorded in erd §13 items 6–10: `audit_logs` is insert-only via trigger (UPDATE/DELETE/TRUNCATE raise `BR-QT-16`), every enum column is `VARCHAR(30)`, `btree_gist` extension for the boarding-overlap `EXCLUDE`, `audit_logs.actor_account_id` has **no FK** (always also write `actor_email`), `payments.amount >= 0`. Hard-delete order under `RESTRICT` (children first, same transaction) is listed in `docs/architecture/system-overview.md` §4b — e.g. BR-KB-04 deletes `vaccinations` before its `order_lines`. A dev volume left from the pre-reset schema makes the backend refuse to start; reset with `docker compose down -v` (ask first — it wipes dev data).
 
 Cross-aggregate consequences (state-machine *Phụ lục*) run in **one transaction**, coordinated by the service of the aggregate that emits the event (domain-model principle 6). Outgoing email/notifications go through the `notification_outbox` table with retry (ST20).
 
@@ -104,7 +122,7 @@ Cross-aggregate consequences (state-machine *Phụ lục*) run in **one transact
 
 ### Auth (spec)
 
-Email is the only account identifier (OTP-verified); phone is not unique anywhere and CCCD is never stored (BR-TK-01, 16, BR-KH-10). Customer is the root entity; Account is optional and linked via `customers.account_id` (BR-TK-19). Roles are a fixed enum: `CUSTOMER`, `ADMIN`, `SUPER_MANAGER`, `BRANCH_MANAGER`, `RECEPTIONIST`, `VET`, `CARETAKER`; A05–A08 are scoped to one branch. `application.yml` still carries `jwt.*` and `app.*` keys (refresh-token cleanup, otp-expiry, caregiver, order-timeout, `blacklist-fail-open`) left over from the removed implementation — reuse or prune them when auth is rebuilt.
+Email is the only account identifier (OTP-verified); phone is not unique anywhere and CCCD is never stored (BR-TK-01, 16, BR-KH-10). Customer is the root entity; Account is optional and linked via `customers.account_id` (BR-TK-19). Roles are a fixed enum: `CUSTOMER`, `ADMIN`, `SUPER_MANAGER`, `BRANCH_MANAGER`, `RECEPTIONIST`, `VET`, `CARETAKER`; A05–A08 are scoped to one branch. `jwt.*` (secret, TTLs) is kept in `application*.yml` for the coming auth module but no code reads it yet; the other leftover keys of the removed implementation were deleted. `app.cors.allowed-origins` is live (`CorsProperties`). Config reads env vars `DB_*`, `REDIS_*`, `JWT_SECRET`, `MAIL_*`, `CORS_ALLOWED_ORIGINS`, `SERVER_PORT` (template: root `.env.example`, which docker compose reads as `.env`; Spring itself does not read `.env`). `system_configs`, `notification_templates` and the first ADMIN are not seeded yet.
 
 ## Testing conventions
 
@@ -114,18 +132,20 @@ FSM tests must enumerate **every** valid and invalid (from, to) pair from the st
 
 ## Frontend notes
 
-`FE/src/` is `app/` (router + providers) · `pages/<domain>/<Name>Page.tsx` (one file per route; `admin/`, `auth/`, `customer/`, `hotel/`, `news/`…) · `components/{admin,customer,ui}/` · `shared/` (api, stores, components, hooks, types, utils, services, models). Server state → React Query; app state → Zustand store per domain. New page ⇒ add file + register the route in `App.tsx`.
+`FE/src/` is `app/` (`App.tsx` router + providers, `GlobalModal.tsx`) · `pages/<domain>/<Name>Page.tsx` (one file per route; `admin/`, `auth/`, `customer/`, `staff/`, `hotel/`, `news/`…) · `components/{admin,customer,staff,ui}/` · `shared/` (api, stores, components, hooks, types, utils, services, models). Server state → React Query; app state → Zustand store per domain. New page ⇒ add file + register the route in `src/app/App.tsx`. Tests: Vitest (`npm run test`, files `src/**/*.test.{ts,tsx}`), Playwright (`npm run test:e2e`).
 
-The FE was built against the old spec — many admin pages (tenants, promotions, membership, refunds, incidents…) cover features that are out of scope or tier 3 in v16. Check `docs/INDEX.md` before wiring a page to an API.
+The FE was built against the old spec — many routes (shop/cart/checkout/payment, membership, vouchers, caregivers, and admin tenants, promotions, refunds, incidents, workforce, AI…) cover features that are out of scope or tier 3 in v16. Check `docs/INDEX.md` before wiring a page to an API.
 
 Known gaps:
-- One HTTP client: `shared/api/axios.ts` (bearer token interceptor, one refresh retry on 401) plus `auth.api.ts`, `product.api.ts`, `review.api.ts`. Token keys `access_token` / `refresh_token`.
-- Two `QueryClient` instances are constructed (`main.tsx` and `App.tsx`); the one in `App.tsx` wins.
+- One HTTP client: `shared/api/axios.ts` (base URL `VITE_API_URL`, default `http://localhost:8081`; bearer token interceptor, one refresh retry on 401). Token keys `access_token` / `refresh_token`. `auth.api.ts`, `product.api.ts`, `review.api.ts` call endpoints of the removed BE — none of them exist now.
+- Staff workspaces (`pages/staff/*Workspace`) use `shared/api/clinic.api.ts`, which answers from **`clinic-db.ts`, an in-browser mock store in `localStorage`** (rule ids from spec v13). Replace function by function with axios calls once the BE endpoint exists; the mock keeps the BE error envelope shape.
+- Two `QueryClient` instances are constructed (`main.tsx` and `app/App.tsx`); the one in `App.tsx` wins.
 - No auth route guard — every page mounts unconditionally.
 
 ## Gotchas
 
-- **Port mismatch.** `mvn spring-boot:run` listens on 8081 (`SERVER_PORT` default), but the Vite proxy defaults to 8080 (Docker). Set `VITE_API_URL` or `SERVER_PORT=8080` when running BE locally.
-- CI (`.github/workflows/ci.yml`) runs `mvn flyway:migrate` + `mvn test` against a Postgres service with password `postgres`, while `application-test.yml` uses `123456`.
+- **Port mismatch.** `mvn spring-boot:run` listens on 8081 (`SERVER_PORT` default) and axios defaults to 8081, but the Vite `/api` proxy defaults to 8080 (Docker; nginx in the FE image proxies `/api/` → `backend:8080/api/`). Set `VITE_API_URL` consistently when running BE locally.
+- **CI is broken for BE** (`.github/workflows/ci.yml`): the `mvn flyway:migrate` step has no Flyway Maven plugin in `pom.xml`; its Postgres service and `-Dflyway.*` flags are now unnecessary (tests use Testcontainers). It triggers on `main, develop`, but the working branch is `dev`. FE lint runs with `|| true`.
+- Stale file from the pre-reset codebase: `BE/BE-TIMELINE.md` (25 modules, `docs/00-requirements.md`) contradicts v16 — don't use it as a source.
 - Skills live in `.opencode/skills/` (`designing-apis`, `postman-api-testing`); there is no `.claude/skills/` copy at the moment.
 - `hs_err_pid*.log` / `replay_pid*.log` in the repo root and `BE/` are JVM crash dumps, not source. `.ua/` is gitignored tooling scratch.

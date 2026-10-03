@@ -1,27 +1,9 @@
+# Profile test. DataSource do Testcontainers cấp (com.petcare.TestcontainersConfiguration,
+# @ServiceConnection, postgres:17): mỗi lần chạy là một DB sạch, Flyway áp migration thật,
+# Hibernate ddl-auto=validate kế thừa từ application.yml. Cần Docker đang chạy.
 spring:
   application:
     name: petcare-api-test
-
-  # Credentials khớp docker-compose.yml service `postgres` (petcare-postgres:
-  # user postgres / password 123456). DB "petcare_test" tách riêng khỏi DB dev
-  # "petcare" trên CÙNG container — bắt buộc, vì ddl-auto: create-drop bên dưới
-  # sẽ drop/tạo lại toàn bộ schema mỗi lần chạy test; dùng chung DB "petcare"
-  # sẽ xoá dữ liệu dev thật. Tạo DB một lần: `docker compose exec postgres
-  # psql -U postgres -c "CREATE DATABASE petcare_test"`.
-  datasource:
-    url: jdbc:postgresql://localhost:5432/petcare_test
-    username: postgres
-    password: 123456
-
-  jpa:
-    hibernate:
-      ddl-auto: create-drop
-    properties:
-      hibernate:
-        dialect: org.hibernate.dialect.PostgreSQLDialect
-
-  flyway:
-    enabled: false
 
   data:
     redis:
@@ -29,6 +11,7 @@ spring:
       port: 6379
       timeout: 300ms
 
+  # SMTP giả: test không bao giờ gửi mail thật.
   mail:
     host: localhost
     port: 3025
@@ -46,27 +29,5 @@ jwt:
 app:
   cors:
     allowed-origins: http://localhost:5173,http://localhost:3000
-  security:
-    blacklist-fail-open: true
-  refresh-token-cleanup:
-    enabled: false
-  otp-expiry:
-    enabled: false
-  caregiver:
-    invitation-ttl-days: 7
-  caregiver-expiry:
-    enabled: false
-  order-timeout:
-    enabled: false
 
-server:
-  port: 8081
-
-management:
-  health:
-    # Test khong co SMTP server that (spring.mail.host tro vao localhost:3025),
-    # nen mail health indicator luon DOWN va keo /actuator/health xuong 503 —
-    # lam TraceIdCorsTest (mong doi 200) fail. Health cua mail khong nam trong
-    # pham vi test traceId/CORS.
-    mail:
-      enabled: false
+# management.health.mail.enabled=false kế thừa từ application.yml.
