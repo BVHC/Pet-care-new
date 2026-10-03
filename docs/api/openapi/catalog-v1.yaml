@@ -1,0 +1,1412 @@
+# Pet Care Catalog API v1 — OpenAPI 3.1, sinh từ khai báo; không sửa tay, sửa khai báo rồi sinh lại.
+# Module SP (và phần sản phẩm / dịch vụ của CK) · owner BE-2
+# Nguồn: 01 UC15, UC16, UC28–UC31; 02 BR-SP-01…07, BR-CK-01…03; 04 §4; 05 §4 (product_categories, products, services, kennel_types, vaccine_types, vaccination_protocols)
+# Truy vết: CONFIRMED = có trong docs · ASSUMPTION (A#) · TBD (Q#) — xem file .md cùng tên.
+
+openapi: "3.1.0"
+info:
+  title: "Pet Care Catalog API v1"
+  version: "1.0.0"
+  description: "Module SP (và phần sản phẩm / dịch vụ của CK) · owner BE-2. Nguồn: 01 UC15, UC16, UC28–UC31; 02 BR-SP-01…07, BR-CK-01…03; 04 §4; 05 §4 (product_categories, products, services, kennel_types, vaccine_types, vaccination_protocols). Chi tiết và truy vết: ../catalog-v1.md"
+servers:
+  - url: "/api"
+    description: "Mọi path bên dưới nằm sau tiền tố /api"
+tags:
+  - name: "Product categories"
+    description: "Danh mục sản phẩm (UC28)"
+  - name: Products
+    description: "Sản phẩm, thuốc, vaccine (UC29)"
+  - name: Services
+    description: "Dịch vụ và loại chuồng (UC30)"
+  - name: Vaccines
+    description: "Loại vaccine và phác đồ (UC31)"
+  - name: Public
+    description: "Dịch vụ, sản phẩm cho khách xem (UC15, UC16)"
+paths:
+  "/product-categories":
+    get:
+      tags: ["Product categories"]
+      summary: "Danh mục sản phẩm"
+      description: "UC28 · —. Actor: A04–A08. Quyền: Mọi nhân viên. Chuyển trạng thái: —."
+      operationId: listProductCategories
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: isActive
+          in: query
+          required: false
+          schema:
+            type: boolean
+      responses:
+        "200":
+          description: OK
+          content:
+            "application/json":
+              schema:
+                type: object
+                required: [data, message, code]
+                properties:
+                  data:
+                    type: array
+                    items:
+                      $ref: "#/components/schemas/ProductCategory"
+                  message:
+                    type: string
+                  code:
+                    type: integer
+                    description: "HTTP status của kết quả, ví dụ 200, 201"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+    post:
+      tags: ["Product categories"]
+      summary: "Tạo danh mục"
+      description: "UC28 · —. Actor: A04. Quyền: Chỉ SUPER_MANAGER. Chuyển trạng thái: —."
+      operationId: createProductCategory
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          "application/json":
+            schema:
+              $ref: "#/components/schemas/ProductCategoryRequest"
+      responses:
+        "201":
+          description: "Đã tạo"
+          content:
+            "application/json":
+              schema:
+                type: object
+                required: [data, message, code]
+                properties:
+                  data:
+                    $ref: "#/components/schemas/ProductCategory"
+                  message:
+                    type: string
+                  code:
+                    type: integer
+                    description: "HTTP status của kết quả, ví dụ 200, 201"
+        "400":
+          description: "Tên trùng"
+          content:
+            "application/json":
+              schema:
+                $ref: "#/components/schemas/Error"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+  "/product-categories/{categoryId}":
+    patch:
+      tags: ["Product categories"]
+      summary: "Sửa / ẩn danh mục"
+      description: "UC28 · —. Actor: A04. Quyền: Chỉ SUPER_MANAGER. Chuyển trạng thái: —."
+      operationId: updateProductCategory
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: "#/components/parameters/CategoryId"
+      requestBody:
+        required: true
+        content:
+          "application/json":
+            schema:
+              $ref: "#/components/schemas/UpdateProductCategoryRequest"
+      responses:
+        "200":
+          description: OK
+          content:
+            "application/json":
+              schema:
+                type: object
+                required: [data, message, code]
+                properties:
+                  data:
+                    $ref: "#/components/schemas/ProductCategory"
+                  message:
+                    type: string
+                  code:
+                    type: integer
+                    description: "HTTP status của kết quả, ví dụ 200, 201"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+  "/products":
+    get:
+      tags: [Products]
+      summary: "Danh sách sản phẩm"
+      description: "UC29, UC66 · BR-SP-01. Actor: A04–A08. Quyền: Mọi nhân viên. Chuyển trạng thái: —."
+      operationId: listProducts
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: q
+          in: query
+          required: false
+          schema:
+            type: string
+          description: "Tên hoặc SKU"
+        - name: categoryId
+          in: query
+          required: false
+          schema:
+            type: integer
+            format: int64
+        - name: productType
+          in: query
+          required: false
+          schema:
+            type: string
+            enum: [GOODS, DRUG, VACCINE]
+        - name: vaccineTypeId
+          in: query
+          required: false
+          schema:
+            type: integer
+            format: int64
+        - name: isActive
+          in: query
+          required: false
+          schema:
+            type: boolean
+        - name: retailOnly
+          in: query
+          required: false
+          schema:
+            type: boolean
+          description: "Bỏ thuốc kê đơn, dùng ở POS (A4)"
+        - $ref: "#/components/parameters/Page"
+        - $ref: "#/components/parameters/Size"
+      responses:
+        "200":
+          description: OK
+          content:
+            "application/json":
+              schema:
+                type: object
+                required: [data, message, code]
+                properties:
+                  data:
+                    allOf:
+                      - $ref: "#/components/schemas/PageMeta"
+                      - type: object
+                        required: [content]
+                        properties:
+                          content:
+                            type: array
+                            items:
+                              $ref: "#/components/schemas/Product"
+                  message:
+                    type: string
+                  code:
+                    type: integer
+                    description: "HTTP status của kết quả, ví dụ 200, 201"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+    post:
+      tags: [Products]
+      summary: "Tạo sản phẩm"
+      description: "UC29 · BR-SP-01, 05, 07. Actor: A04. Quyền: Chỉ SUPER_MANAGER. Chuyển trạng thái: —."
+      operationId: createProduct
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          "application/json":
+            schema:
+              $ref: "#/components/schemas/CreateProductRequest"
+      responses:
+        "201":
+          description: "Đã tạo"
+          content:
+            "application/json":
+              schema:
+                type: object
+                required: [data, message, code]
+                properties:
+                  data:
+                    $ref: "#/components/schemas/Product"
+                  message:
+                    type: string
+                  code:
+                    type: integer
+                    description: "HTTP status của kết quả, ví dụ 200, 201"
+        "400":
+          description: "SKU trùng · `BR-SP-01` cờ kê đơn trên loại khác DRUG · `BR-SP-05` thuốc kê đơn / vaccine tắt quản lý hạn dùng · `BR-SP-07` vaccine chưa gắn loại vaccine"
+          content:
+            "application/json":
+              schema:
+                $ref: "#/components/schemas/Error"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+  "/products/{productId}":
+    get:
+      tags: [Products]
+      summary: "Chi tiết sản phẩm"
+      description: "UC29 · —. Actor: A04–A08. Quyền: Mọi nhân viên. Chuyển trạng thái: —."
+      operationId: getProduct
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: "#/components/parameters/ProductId"
+      responses:
+        "200":
+          description: OK
+          content:
+            "application/json":
+              schema:
+                type: object
+                required: [data, message, code]
+                properties:
+                  data:
+                    $ref: "#/components/schemas/Product"
+                  message:
+                    type: string
+                  code:
+                    type: integer
+                    description: "HTTP status của kết quả, ví dụ 200, 201"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+    patch:
+      tags: [Products]
+      summary: "Sửa sản phẩm / đổi giá / ngừng kinh doanh"
+      description: "UC29 · BR-SP-01, 05, 07, BR-BH-03, BR-QT-15. Actor: A04. Quyền: Chỉ SUPER_MANAGER. Chuyển trạng thái: —. Đổi giá ghi audit, không ảnh hưởng dòng Order đã có."
+      operationId: updateProduct
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: "#/components/parameters/ProductId"
+      requestBody:
+        required: true
+        content:
+          "application/json":
+            schema:
+              $ref: "#/components/schemas/UpdateProductRequest"
+      responses:
+        "200":
+          description: OK
+          content:
+            "application/json":
+              schema:
+                type: object
+                required: [data, message, code]
+                properties:
+                  data:
+                    $ref: "#/components/schemas/Product"
+                  message:
+                    type: string
+                  code:
+                    type: integer
+                    description: "HTTP status của kết quả, ví dụ 200, 201"
+        "400":
+          description: "`BR-SP-05` tắt quản lý hạn dùng khi còn tồn ở bất kỳ chi nhánh nào · `BR-SP-01`, `BR-SP-07` như khi tạo"
+          content:
+            "application/json":
+              schema:
+                $ref: "#/components/schemas/Error"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+  "/services":
+    get:
+      tags: [Services]
+      summary: "Danh sách dịch vụ"
+      description: "UC30 · BR-SP-04, 06. Actor: A04–A08. Quyền: Mọi nhân viên. Chuyển trạng thái: —."
+      operationId: listServices
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: group
+          in: query
+          required: false
+          schema:
+            type: string
+            enum: [MEDICAL, GROOMING, BOARDING]
+        - name: isActive
+          in: query
+          required: false
+          schema:
+            type: boolean
+      responses:
+        "200":
+          description: OK
+          content:
+            "application/json":
+              schema:
+                type: object
+                required: [data, message, code]
+                properties:
+                  data:
+                    type: array
+                    items:
+                      $ref: "#/components/schemas/Service"
+                  message:
+                    type: string
+                  code:
+                    type: integer
+                    description: "HTTP status của kết quả, ví dụ 200, 201"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+    post:
+      tags: [Services]
+      summary: "Tạo dịch vụ / loại chuồng"
+      description: "UC30 · BR-SP-04, 06. Actor: A04. Quyền: Chỉ SUPER_MANAGER. Chuyển trạng thái: —."
+      operationId: createService
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          "application/json":
+            schema:
+              $ref: "#/components/schemas/CreateServiceRequest"
+      responses:
+        "201":
+          description: "Đã tạo"
+          content:
+            "application/json":
+              schema:
+                type: object
+                required: [data, message, code]
+                properties:
+                  data:
+                    $ref: "#/components/schemas/Service"
+                  message:
+                    type: string
+                  code:
+                    type: integer
+                    description: "HTTP status của kết quả, ví dụ 200, 201"
+        "400":
+          description: "`BR-SP-06` nhóm MEDICAL chưa chọn loại · `BR-SP-04` loại chuồng thiếu loài hoặc giá ≤ 0 · tên trùng"
+          content:
+            "application/json":
+              schema:
+                $ref: "#/components/schemas/Error"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+  "/services/{serviceId}":
+    get:
+      tags: [Services]
+      summary: "Chi tiết dịch vụ"
+      description: "UC30 · —. Actor: A04–A08. Quyền: Mọi nhân viên. Chuyển trạng thái: —."
+      operationId: getService
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: "#/components/parameters/ServiceId"
+      responses:
+        "200":
+          description: OK
+          content:
+            "application/json":
+              schema:
+                type: object
+                required: [data, message, code]
+                properties:
+                  data:
+                    $ref: "#/components/schemas/Service"
+                  message:
+                    type: string
+                  code:
+                    type: integer
+                    description: "HTTP status của kết quả, ví dụ 200, 201"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+    patch:
+      tags: [Services]
+      summary: "Sửa dịch vụ / đổi giá / ngừng"
+      description: "UC30 · BR-SP-04, 06, BR-BH-03, BR-QT-15. Actor: A04. Quyền: Chỉ SUPER_MANAGER. Chuyển trạng thái: —. Đổi giá ghi audit; giá đêm đã snapshot ở đặt chỗ lưu trú không đổi (BR-LT-02)."
+      operationId: updateService
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: "#/components/parameters/ServiceId"
+      requestBody:
+        required: true
+        content:
+          "application/json":
+            schema:
+              $ref: "#/components/schemas/UpdateServiceRequest"
+      responses:
+        "200":
+          description: OK
+          content:
+            "application/json":
+              schema:
+                type: object
+                required: [data, message, code]
+                properties:
+                  data:
+                    $ref: "#/components/schemas/Service"
+                  message:
+                    type: string
+                  code:
+                    type: integer
+                    description: "HTTP status của kết quả, ví dụ 200, 201"
+        "400":
+          description: "`BR-SP-06`, `BR-SP-04` như khi tạo · đổi nhóm (A1)"
+          content:
+            "application/json":
+              schema:
+                $ref: "#/components/schemas/Error"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+  "/vaccine-types":
+    get:
+      tags: [Vaccines]
+      summary: "Danh sách loại vaccine"
+      description: "UC31, UC49 · BR-SP-07. Actor: A04–A08. Quyền: Mọi nhân viên. Chuyển trạng thái: —."
+      operationId: listVaccineTypes
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: species
+          in: query
+          required: false
+          schema:
+            type: string
+            enum: [DOG, CAT, OTHER]
+        - name: isActive
+          in: query
+          required: false
+          schema:
+            type: boolean
+      responses:
+        "200":
+          description: OK
+          content:
+            "application/json":
+              schema:
+                type: object
+                required: [data, message, code]
+                properties:
+                  data:
+                    type: array
+                    items:
+                      $ref: "#/components/schemas/VaccineType"
+                  message:
+                    type: string
+                  code:
+                    type: integer
+                    description: "HTTP status của kết quả, ví dụ 200, 201"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+    post:
+      tags: [Vaccines]
+      summary: "Tạo loại vaccine"
+      description: "UC31 · BR-SP-07. Actor: A04. Quyền: Chỉ SUPER_MANAGER. Chuyển trạng thái: —."
+      operationId: createVaccineType
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          "application/json":
+            schema:
+              $ref: "#/components/schemas/VaccineTypeRequest"
+      responses:
+        "201":
+          description: "Đã tạo"
+          content:
+            "application/json":
+              schema:
+                type: object
+                required: [data, message, code]
+                properties:
+                  data:
+                    $ref: "#/components/schemas/VaccineType"
+                  message:
+                    type: string
+                  code:
+                    type: integer
+                    description: "HTTP status của kết quả, ví dụ 200, 201"
+        "400":
+          description: "Trùng tên trong cùng loài"
+          content:
+            "application/json":
+              schema:
+                $ref: "#/components/schemas/Error"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+  "/vaccine-types/{vaccineTypeId}":
+    patch:
+      tags: [Vaccines]
+      summary: "Sửa / ngừng loại vaccine"
+      description: "UC31 · BR-SP-07. Actor: A04. Quyền: Chỉ SUPER_MANAGER. Chuyển trạng thái: —."
+      operationId: updateVaccineType
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: "#/components/parameters/VaccineTypeId"
+      requestBody:
+        required: true
+        content:
+          "application/json":
+            schema:
+              $ref: "#/components/schemas/UpdateVaccineTypeRequest"
+      responses:
+        "200":
+          description: OK
+          content:
+            "application/json":
+              schema:
+                type: object
+                required: [data, message, code]
+                properties:
+                  data:
+                    $ref: "#/components/schemas/VaccineType"
+                  message:
+                    type: string
+                  code:
+                    type: integer
+                    description: "HTTP status của kết quả, ví dụ 200, 201"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+    delete:
+      tags: [Vaccines]
+      summary: "Xóa loại vaccine chưa dùng"
+      description: "UC31 · BR-SP-07. Actor: A04. Quyền: Chỉ SUPER_MANAGER. Chuyển trạng thái: —."
+      operationId: deleteVaccineType
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: "#/components/parameters/VaccineTypeId"
+      responses:
+        "204":
+          description: "Không có nội dung"
+        "400":
+          description: "`BR-SP-07` đã có phác đồ, sản phẩm hoặc mũi tiêm — chỉ ngừng sử dụng"
+          content:
+            "application/json":
+              schema:
+                $ref: "#/components/schemas/Error"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+  "/vaccination-protocols":
+    get:
+      tags: [Vaccines]
+      summary: "Phác đồ tiêm chủng"
+      description: "UC31, UC49 · BR-SP-02. Actor: A04–A08. Quyền: Mọi nhân viên. Chuyển trạng thái: —."
+      operationId: listVaccinationProtocols
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: species
+          in: query
+          required: false
+          schema:
+            type: string
+            enum: [DOG, CAT, OTHER]
+        - name: vaccineTypeId
+          in: query
+          required: false
+          schema:
+            type: integer
+            format: int64
+        - name: isActive
+          in: query
+          required: false
+          schema:
+            type: boolean
+      responses:
+        "200":
+          description: OK
+          content:
+            "application/json":
+              schema:
+                type: object
+                required: [data, message, code]
+                properties:
+                  data:
+                    type: array
+                    items:
+                      $ref: "#/components/schemas/VaccinationProtocol"
+                  message:
+                    type: string
+                  code:
+                    type: integer
+                    description: "HTTP status của kết quả, ví dụ 200, 201"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+    post:
+      tags: [Vaccines]
+      summary: "Thêm dòng phác đồ"
+      description: "UC31 · BR-SP-02, 07. Actor: A04. Quyền: Chỉ SUPER_MANAGER. Chuyển trạng thái: —."
+      operationId: createVaccinationProtocol
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          "application/json":
+            schema:
+              $ref: "#/components/schemas/CreateProtocolRequest"
+      responses:
+        "201":
+          description: "Đã tạo"
+          content:
+            "application/json":
+              schema:
+                type: object
+                required: [data, message, code]
+                properties:
+                  data:
+                    $ref: "#/components/schemas/VaccinationProtocol"
+                  message:
+                    type: string
+                  code:
+                    type: integer
+                    description: "HTTP status của kết quả, ví dụ 200, 201"
+        "400":
+          description: "`BR-SP-02` thiếu trường hoặc khoảng cách ≤ 0 · trùng (loài, loại vaccine, mũi) · loài khác loài của loại vaccine"
+          content:
+            "application/json":
+              schema:
+                $ref: "#/components/schemas/Error"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+  "/vaccination-protocols/{protocolId}":
+    patch:
+      tags: [Vaccines]
+      summary: "Sửa dòng phác đồ"
+      description: "UC31 · BR-SP-02, 03. Actor: A04. Quyền: Chỉ SUPER_MANAGER. Chuyển trạng thái: —. Ngày tái chủng đã tính giữ nguyên (BR-SP-03)."
+      operationId: updateVaccinationProtocol
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: "#/components/parameters/ProtocolId"
+      requestBody:
+        required: true
+        content:
+          "application/json":
+            schema:
+              $ref: "#/components/schemas/UpdateProtocolRequest"
+      responses:
+        "200":
+          description: OK
+          content:
+            "application/json":
+              schema:
+                type: object
+                required: [data, message, code]
+                properties:
+                  data:
+                    $ref: "#/components/schemas/VaccinationProtocol"
+                  message:
+                    type: string
+                  code:
+                    type: integer
+                    description: "HTTP status của kết quả, ví dụ 200, 201"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+  "/public/services":
+    get:
+      tags: [Public]
+      summary: "Dịch vụ công khai"
+      description: "UC15 · BR-CK-01, 02, BR-SP-04. Actor: A01, A02. Quyền: Public. Chuyển trạng thái: —. Chỉ dịch vụ đang kinh doanh và bật ở ≥ 1 chi nhánh ACTIVE."
+      operationId: listPublicServices
+      security: []
+      parameters:
+        - name: group
+          in: query
+          required: false
+          schema:
+            type: string
+            enum: [MEDICAL, GROOMING, BOARDING]
+        - name: branchId
+          in: query
+          required: false
+          schema:
+            type: integer
+            format: int64
+      responses:
+        "200":
+          description: OK
+          content:
+            "application/json":
+              schema:
+                type: object
+                required: [data, message, code]
+                properties:
+                  data:
+                    type: array
+                    items:
+                      $ref: "#/components/schemas/PublicService"
+                  message:
+                    type: string
+                  code:
+                    type: integer
+                    description: "HTTP status của kết quả, ví dụ 200, 201"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+  "/public/product-categories":
+    get:
+      tags: [Public]
+      summary: "Danh mục sản phẩm công khai"
+      description: "UC16 · BR-CK-01. Actor: A01, A02. Quyền: Public. Chuyển trạng thái: —."
+      operationId: listPublicProductCategories
+      security: []
+      responses:
+        "200":
+          description: OK
+          content:
+            "application/json":
+              schema:
+                type: object
+                required: [data, message, code]
+                properties:
+                  data:
+                    type: array
+                    items:
+                      $ref: "#/components/schemas/ProductCategory"
+                  message:
+                    type: string
+                  code:
+                    type: integer
+                    description: "HTTP status của kết quả, ví dụ 200, 201"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+  "/public/products":
+    get:
+      tags: [Public]
+      summary: "Xem & tìm sản phẩm"
+      description: "UC16 · BR-CK-01, 02, 03, BR-SP-01. Actor: A01, A02. Quyền: Public. Chuyển trạng thái: —."
+      operationId: listPublicProducts
+      security: []
+      parameters:
+        - name: q
+          in: query
+          required: false
+          schema:
+            type: string
+        - name: categoryId
+          in: query
+          required: false
+          schema:
+            type: integer
+            format: int64
+        - name: branchId
+          in: query
+          required: false
+          schema:
+            type: integer
+            format: int64
+          description: "Chỉ sản phẩm còn hàng tại chi nhánh"
+        - $ref: "#/components/parameters/Page"
+        - $ref: "#/components/parameters/Size"
+      responses:
+        "200":
+          description: OK
+          content:
+            "application/json":
+              schema:
+                type: object
+                required: [data, message, code]
+                properties:
+                  data:
+                    allOf:
+                      - $ref: "#/components/schemas/PageMeta"
+                      - type: object
+                        required: [content]
+                        properties:
+                          content:
+                            type: array
+                            items:
+                              $ref: "#/components/schemas/PublicProduct"
+                  message:
+                    type: string
+                  code:
+                    type: integer
+                    description: "HTTP status của kết quả, ví dụ 200, 201"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+  "/public/products/{productId}":
+    get:
+      tags: [Public]
+      summary: "Chi tiết sản phẩm công khai"
+      description: "UC16 · BR-CK-01, 03, BR-SP-01. Actor: A01, A02. Quyền: Public. Chuyển trạng thái: —. Thuốc kê đơn hoặc ngừng kinh doanh trả 404."
+      operationId: getPublicProduct
+      security: []
+      parameters:
+        - $ref: "#/components/parameters/ProductId"
+      responses:
+        "200":
+          description: OK
+          content:
+            "application/json":
+              schema:
+                type: object
+                required: [data, message, code]
+                properties:
+                  data:
+                    $ref: "#/components/schemas/PublicProduct"
+                  message:
+                    type: string
+                  code:
+                    type: integer
+                    description: "HTTP status của kết quả, ví dụ 200, 201"
+        "404":
+          $ref: "#/components/responses/NotFound"
+components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      description: "Access token trả về từ POST /auth/login, gắn với một phiên (sessions). Phiên bị hủy thì token hết hiệu lực ngay (BR-TK-11, 13, 14)."
+  parameters:
+    Page:
+      name: page
+      in: query
+      required: false
+      schema:
+        type: integer
+        minimum: 0
+        default: 0
+      description: "Số trang, bắt đầu từ 0"
+    Size:
+      name: size
+      in: query
+      required: false
+      schema:
+        type: integer
+        minimum: 1
+        maximum: 100
+        default: 20
+    CategoryId:
+      name: categoryId
+      in: path
+      required: true
+      schema:
+        type: integer
+        format: int64
+    ProductId:
+      name: productId
+      in: path
+      required: true
+      schema:
+        type: integer
+        format: int64
+    ServiceId:
+      name: serviceId
+      in: path
+      required: true
+      schema:
+        type: integer
+        format: int64
+    VaccineTypeId:
+      name: vaccineTypeId
+      in: path
+      required: true
+      schema:
+        type: integer
+        format: int64
+    ProtocolId:
+      name: protocolId
+      in: path
+      required: true
+      schema:
+        type: integer
+        format: int64
+  schemas:
+    Error:
+      type: object
+      description: "Envelope lỗi duy nhất, do GlobalExceptionHandler (platform/exception) sinh. Vi phạm business rule: errorCode = BUSINESS_RULE_VIOLATION, message kết thúc bằng mã rule, ví dụ \"… (BR-LH-05)\"."
+      required: [success, errorCode, message, statusCode, timestamp, traceId]
+      properties:
+        success:
+          type: boolean
+          enum: [false]
+        errorCode:
+          type: string
+          enum: [BUSINESS_RULE_VIOLATION, INVALID_STATE_TRANSITION, RESOURCE_NOT_FOUND, ACCESS_DENIED_SCOPE_MISMATCH, CONCURRENCY_CONFLICT, VALIDATION_FAILED, MALFORMED_REQUEST, METHOD_NOT_ALLOWED, UNSUPPORTED_MEDIA_TYPE, UNAUTHENTICATED, ACCESS_DENIED, INTERNAL_ERROR]
+          description: platform/exception/ErrorCode
+        message:
+          type: string
+          description: "Thông điệp tiếng Việt hiển thị được; với BUSINESS_RULE_VIOLATION kết thúc bằng \" (BR-…)\""
+        statusCode:
+          type: integer
+        timestamp:
+          type: string
+          format: date-time
+        traceId:
+          type: string
+    PageMeta:
+      type: object
+      required: [page, size, totalElements, totalPages]
+      properties:
+        page:
+          type: integer
+        size:
+          type: integer
+        totalElements:
+          type: integer
+          format: int64
+        totalPages:
+          type: integer
+    Species:
+      type: string
+      enum: [DOG, CAT, OTHER]
+    ServiceGroup:
+      type: string
+      enum: [MEDICAL, GROOMING, BOARDING]
+      description: "Khám/Tiêm, Thẩm mỹ, Lưu trú (05 §0)"
+    MedicalType:
+      type: string
+      enum: [EXAM, VACCINE]
+      description: "Chỉ nhóm MEDICAL (BR-SP-06)"
+    ProductType:
+      type: string
+      enum: [GOODS, DRUG, VACCINE]
+    ProductCategory:
+      type: object
+      required: [categoryId, name, isActive]
+      properties:
+        categoryId:
+          type: integer
+          format: int64
+        name:
+          type: string
+          maxLength: 100
+        isActive:
+          type: boolean
+    ProductCategoryRequest:
+      type: object
+      required: [name]
+      properties:
+        name:
+          type: string
+          maxLength: 100
+    UpdateProductCategoryRequest:
+      type: object
+      properties:
+        name:
+          type: [string, "null"]
+          maxLength: 100
+        isActive:
+          type: [boolean, "null"]
+    Product:
+      type: object
+      required: [productId, categoryId, sku, name, productType, isPrescription, tracksExpiry, unit, price, isActive]
+      properties:
+        productId:
+          type: integer
+          format: int64
+        categoryId:
+          type: integer
+          format: int64
+        sku:
+          type: string
+          maxLength: 50
+        name:
+          type: string
+          maxLength: 200
+        productType:
+          $ref: "#/components/schemas/ProductType"
+        isPrescription:
+          type: boolean
+        tracksExpiry:
+          type: boolean
+        vaccineTypeId:
+          type: [integer, "null"]
+          format: int64
+        unit:
+          type: string
+          maxLength: 20
+        price:
+          type: integer
+          format: int64
+          minimum: 0
+          description: VND
+        description:
+          type: [string, "null"]
+        imageUrl:
+          type: [string, "null"]
+          maxLength: 500
+        isActive:
+          type: boolean
+    CreateProductRequest:
+      type: object
+      required: [categoryId, sku, name, productType, isPrescription, tracksExpiry, unit, price]
+      properties:
+        categoryId:
+          type: integer
+          format: int64
+        sku:
+          type: string
+          maxLength: 50
+        name:
+          type: string
+          maxLength: 200
+        productType:
+          $ref: "#/components/schemas/ProductType"
+        isPrescription:
+          type: boolean
+          description: "Chỉ DRUG (BR-SP-01)"
+        tracksExpiry:
+          type: boolean
+          description: "Bắt buộc true với thuốc kê đơn và vaccine (BR-SP-05)"
+        vaccineTypeId:
+          type: [integer, "null"]
+          format: int64
+          description: "Bắt buộc với VACCINE (BR-SP-07)"
+        unit:
+          type: string
+          maxLength: 20
+        price:
+          type: integer
+          format: int64
+          minimum: 0
+          description: VND
+        description:
+          type: [string, "null"]
+        imageUrl:
+          type: [string, "null"]
+          maxLength: 500
+    UpdateProductRequest:
+      type: object
+      properties:
+        categoryId:
+          type: [integer, "null"]
+          format: int64
+        name:
+          type: [string, "null"]
+          maxLength: 200
+        isPrescription:
+          type: [boolean, "null"]
+        tracksExpiry:
+          type: [boolean, "null"]
+        vaccineTypeId:
+          type: [integer, "null"]
+          format: int64
+        unit:
+          type: [string, "null"]
+          maxLength: 20
+        price:
+          type: [integer, "null"]
+          format: int64
+          minimum: 0
+          description: VND
+        description:
+          type: [string, "null"]
+        imageUrl:
+          type: [string, "null"]
+          maxLength: 500
+        isActive:
+          type: [boolean, "null"]
+          description: "false = ngừng kinh doanh (A2)"
+    KennelTypeSpec:
+      type: object
+      description: "Chỉ với dịch vụ nhóm BOARDING (BR-SP-04)"
+      required: [species, maxWeightKg]
+      properties:
+        species:
+          $ref: "#/components/schemas/Species"
+        maxWeightKg:
+          type: number
+          description: "> 0"
+    Service:
+      type: object
+      required: [serviceId, name, group, price, priceIsFrom, isActive]
+      properties:
+        serviceId:
+          type: integer
+          format: int64
+        name:
+          type: string
+          maxLength: 150
+        group:
+          $ref: "#/components/schemas/ServiceGroup"
+        medicalType:
+          $ref: "#/components/schemas/MedicalType"
+        price:
+          type: integer
+          format: int64
+          minimum: 0
+          description: "Với BOARDING là giá theo đêm"
+        priceIsFrom:
+          type: boolean
+          description: "Hiển thị \"Từ X đ\" (BR-CK-02)"
+        description:
+          type: [string, "null"]
+        isActive:
+          type: boolean
+        kennelType:
+          $ref: "#/components/schemas/KennelTypeSpec"
+    CreateServiceRequest:
+      type: object
+      required: [name, group, price]
+      properties:
+        name:
+          type: string
+          maxLength: 150
+        group:
+          $ref: "#/components/schemas/ServiceGroup"
+        medicalType:
+          $ref: "#/components/schemas/MedicalType"
+        price:
+          type: integer
+          format: int64
+          minimum: 0
+          description: "> 0 với BOARDING (BR-SP-04)"
+        priceIsFrom:
+          type: [boolean, "null"]
+        description:
+          type: [string, "null"]
+        kennelType:
+          $ref: "#/components/schemas/KennelTypeSpec"
+    UpdateServiceRequest:
+      type: object
+      properties:
+        name:
+          type: [string, "null"]
+          maxLength: 150
+        medicalType:
+          $ref: "#/components/schemas/MedicalType"
+        price:
+          type: [integer, "null"]
+          format: int64
+          minimum: 0
+          description: VND
+        priceIsFrom:
+          type: [boolean, "null"]
+        description:
+          type: [string, "null"]
+        isActive:
+          type: [boolean, "null"]
+          description: "false = ngừng (A2)"
+        kennelType:
+          $ref: "#/components/schemas/KennelTypeSpec"
+    VaccineType:
+      type: object
+      required: [vaccineTypeId, name, species, isActive]
+      properties:
+        vaccineTypeId:
+          type: integer
+          format: int64
+        name:
+          type: string
+          maxLength: 100
+        species:
+          $ref: "#/components/schemas/Species"
+        isActive:
+          type: boolean
+    VaccineTypeRequest:
+      type: object
+      required: [name, species]
+      properties:
+        name:
+          type: string
+          maxLength: 100
+        species:
+          $ref: "#/components/schemas/Species"
+    UpdateVaccineTypeRequest:
+      type: object
+      properties:
+        name:
+          type: [string, "null"]
+          maxLength: 100
+        isActive:
+          type: [boolean, "null"]
+    VaccinationProtocol:
+      type: object
+      required: [protocolId, species, vaccineTypeId, doseNumber, intervalDays, minAgeWeeks, requiredForBoarding, isActive]
+      properties:
+        protocolId:
+          type: integer
+          format: int64
+        species:
+          $ref: "#/components/schemas/Species"
+        vaccineTypeId:
+          type: integer
+          format: int64
+        doseNumber:
+          type: integer
+          format: int32
+        intervalDays:
+          type: integer
+          format: int32
+          description: "Khoảng cách tới mũi kế (ngày)"
+        minAgeWeeks:
+          type: integer
+          format: int32
+        requiredForBoarding:
+          type: boolean
+        isActive:
+          type: boolean
+    CreateProtocolRequest:
+      type: object
+      required: [species, vaccineTypeId, doseNumber, intervalDays, minAgeWeeks, requiredForBoarding]
+      properties:
+        species:
+          $ref: "#/components/schemas/Species"
+        vaccineTypeId:
+          type: integer
+          format: int64
+        doseNumber:
+          type: integer
+          format: int32
+          description: "≥ 1"
+        intervalDays:
+          type: integer
+          format: int32
+          description: "> 0 (BR-SP-02)"
+        minAgeWeeks:
+          type: integer
+          format: int32
+          description: "≥ 0"
+        requiredForBoarding:
+          type: boolean
+    UpdateProtocolRequest:
+      type: object
+      description: "Chỉ áp dụng cho mũi tiêm sau thời điểm sửa (BR-SP-03)"
+      properties:
+        intervalDays:
+          type: [integer, "null"]
+          format: int32
+        minAgeWeeks:
+          type: [integer, "null"]
+          format: int32
+        requiredForBoarding:
+          type: [boolean, "null"]
+        isActive:
+          type: [boolean, "null"]
+    PublicService:
+      type: object
+      required: [serviceId, name, group, price, priceIsFrom, branchIds]
+      properties:
+        serviceId:
+          type: integer
+          format: int64
+        name:
+          type: string
+        group:
+          $ref: "#/components/schemas/ServiceGroup"
+        price:
+          type: integer
+          format: int64
+          minimum: 0
+          description: VND
+        priceIsFrom:
+          type: boolean
+        description:
+          type: [string, "null"]
+        kennelType:
+          $ref: "#/components/schemas/KennelTypeSpec"
+        branchIds:
+          type: array
+          items:
+            type: integer
+            format: int64
+          description: "Chi nhánh ACTIVE đang bật dịch vụ (BR-CK-01)"
+    PublicProduct:
+      type: object
+      required: [productId, name, categoryId, categoryName, price, unit, inStockBranchIds]
+      properties:
+        productId:
+          type: integer
+          format: int64
+        name:
+          type: string
+        categoryId:
+          type: integer
+          format: int64
+        categoryName:
+          type: string
+        price:
+          type: integer
+          format: int64
+          minimum: 0
+          description: VND
+        unit:
+          type: string
+        description:
+          type: [string, "null"]
+        imageUrl:
+          type: [string, "null"]
+          maxLength: 500
+        inStockBranchIds:
+          type: array
+          items:
+            type: integer
+            format: int64
+          description: "Chi nhánh có tồn khả dụng > 0, không kèm số lượng (BR-CK-03)"
+  responses:
+    BadRequest:
+      description: "VALIDATION_FAILED / MALFORMED_REQUEST: dữ liệu không hợp lệ · BUSINESS_RULE_VIOLATION: vi phạm rule, message kết thúc bằng mã rule \"(BR-…)\"."
+      content:
+        "application/json":
+          schema:
+            $ref: "#/components/schemas/Error"
+    Unauthorized:
+      description: "UNAUTHENTICATED: chưa đăng nhập hoặc phiên đã hết hạn / bị hủy."
+      content:
+        "application/json":
+          schema:
+            $ref: "#/components/schemas/Error"
+    Forbidden:
+      description: "ACCESS_DENIED: sai vai trò · ACCESS_DENIED_SCOPE_MISMATCH: ngoài phạm vi (chi nhánh, chủ sở hữu). Message chung, không lộ cấu trúc phân quyền."
+      content:
+        "application/json":
+          schema:
+            $ref: "#/components/schemas/Error"
+    NotFound:
+      description: "Không tìm thấy (RESOURCE_NOT_FOUND)."
+      content:
+        "application/json":
+          schema:
+            $ref: "#/components/schemas/Error"

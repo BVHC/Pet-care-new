@@ -1,0 +1,726 @@
+# Pet Care Appointment API v1 — OpenAPI 3.1, sinh từ khai báo; không sửa tay, sửa khai báo rồi sinh lại.
+# Module LH · owner BE-1
+# Nguồn: 01 UC39, UC40; 02 BR-LH-01…12, BR-TK-19, BR-KH-05, BR-TB-01, 06; 03 #3 Lịch hẹn; 04 §5; 05 §5 (appointments, booking_restrictions)
+# Truy vết: CONFIRMED = có trong docs · ASSUMPTION (A#) · TBD (Q#) — xem file .md cùng tên.
+
+openapi: "3.1.0"
+info:
+  title: "Pet Care Appointment API v1"
+  version: "1.0.0"
+  description: "Module LH · owner BE-1. Nguồn: 01 UC39, UC40; 02 BR-LH-01…12, BR-TK-19, BR-KH-05, BR-TB-01, 06; 03 #3 Lịch hẹn; 04 §5; 05 §5 (appointments, booking_restrictions). Chi tiết và truy vết: ../appointment-v1.md"
+servers:
+  - url: "/api"
+    description: "Mọi path bên dưới nằm sau tiền tố /api"
+tags:
+  - name: Slots
+    description: "Khung giờ trống (UC39)"
+  - name: Appointments
+    description: "Đặt, xem, đổi, hủy lịch hẹn (UC39, UC40)"
+  - name: "Booking restrictions"
+    description: "Hạn chế đặt online (BR-LH-09)"
+paths:
+  "/branches/{branchId}/available-slots":
+    get:
+      tags: [Slots]
+      summary: "Xem khung giờ trống"
+      description: "UC39 · BR-LH-01, 02, 03, 04. Actor: A02, A06. Quyền: Khách; lễ tân chi nhánh. Chuyển trạng thái: —. Ngày nghỉ hoặc ngày không có giờ mở cửa trả mảng rỗng (A1)."
+      operationId: listAvailableSlots
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: "#/components/parameters/BranchId"
+        - name: serviceId
+          in: query
+          required: true
+          schema:
+            type: integer
+            format: int64
+        - name: date
+          in: query
+          required: true
+          schema:
+            type: string
+            format: date
+      responses:
+        "200":
+          description: OK
+          content:
+            "application/json":
+              schema:
+                type: object
+                required: [data, message, code]
+                properties:
+                  data:
+                    type: array
+                    items:
+                      $ref: "#/components/schemas/Slot"
+                  message:
+                    type: string
+                  code:
+                    type: integer
+                    description: "HTTP status của kết quả, ví dụ 200, 201"
+        "400":
+          description: "`BR-LH-01` dịch vụ không đặt được tại chi nhánh"
+          content:
+            "application/json":
+              schema:
+                $ref: "#/components/schemas/Error"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+  "/appointments":
+    post:
+      tags: [Appointments]
+      summary: "Đặt lịch hẹn"
+      description: "UC39 · BR-LH-01…05, 09, BR-KH-05, BR-TK-19. Actor: A02, A06. Quyền: Khách: thú của mình · lễ tân: chi nhánh mình. Chuyển trạng thái: — → BOOKED (Lịch hẹn#1); nhóm MEDICAL → Care Task#6. Khách → channel ONLINE, lễ tân → COUNTER (A2). Nhóm MEDICAL: hủy nhắc tái khám đang chờ của thú (BR-TB-06)."
+      operationId: bookAppointment
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          "application/json":
+            schema:
+              $ref: "#/components/schemas/BookAppointmentRequest"
+      responses:
+        "201":
+          description: "Đã tạo"
+          content:
+            "application/json":
+              schema:
+                type: object
+                required: [data, message, code]
+                properties:
+                  data:
+                    $ref: "#/components/schemas/Appointment"
+                  message:
+                    type: string
+                  code:
+                    type: integer
+                    description: "HTTP status của kết quả, ví dụ 200, 201"
+        "400":
+          description: "`BR-LH-01` dịch vụ không đặt được / đang tắt tại chi nhánh, chi nhánh chưa ACTIVE · `BR-LH-02` khung không hợp lệ · `BR-LH-03` khung đã đủ quota · `BR-LH-04` ngoài khoảng 24 giờ – 30 ngày [CFG] (khách) hoặc khung đã bắt đầu (lễ tân) · `BR-LH-05` thú đã có 2 lịch BOOKED, trùng nhóm trong ngày hoặc trùng khung · `BR-LH-09` khách đang bị hạn chế đặt online · `BR-KH-05` thú đã mất · `BR-TK-19` hồ sơ còn chờ quyết định liên kết"
+          content:
+            "application/json":
+              schema:
+                $ref: "#/components/schemas/Error"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          description: "Thú không thuộc khách / chi nhánh ngoài phạm vi"
+          content:
+            "application/json":
+              schema:
+                $ref: "#/components/schemas/Error"
+        "404":
+          $ref: "#/components/responses/NotFound"
+    get:
+      tags: [Appointments]
+      summary: "Danh sách lịch hẹn"
+      description: "UC40, UC44 · BR-LH-11, BR-TN-02. Actor: A02, A05, A06. Quyền: Khách: lịch của mình · nhân viên: chi nhánh mình. Chuyển trạng thái: —."
+      operationId: listAppointments
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: branchId
+          in: query
+          required: false
+          schema:
+            type: integer
+            format: int64
+        - name: date
+          in: query
+          required: false
+          schema:
+            type: string
+            format: date
+        - name: from
+          in: query
+          required: false
+          schema:
+            type: string
+            format: date
+        - name: to
+          in: query
+          required: false
+          schema:
+            type: string
+            format: date
+        - name: status
+          in: query
+          required: false
+          schema:
+            type: string
+            enum: [BOOKED, CHECKED_IN, COMPLETED, CANCELLED, NO_SHOW]
+        - name: petId
+          in: query
+          required: false
+          schema:
+            type: integer
+            format: int64
+        - name: customerId
+          in: query
+          required: false
+          schema:
+            type: integer
+            format: int64
+        - name: checkInReady
+          in: query
+          required: false
+          schema:
+            type: boolean
+          description: "Chỉ lịch BOOKED hôm nay trong cửa sổ check-in (A3)"
+        - $ref: "#/components/parameters/Page"
+        - $ref: "#/components/parameters/Size"
+      responses:
+        "200":
+          description: OK
+          content:
+            "application/json":
+              schema:
+                type: object
+                required: [data, message, code]
+                properties:
+                  data:
+                    allOf:
+                      - $ref: "#/components/schemas/PageMeta"
+                      - type: object
+                        required: [content]
+                        properties:
+                          content:
+                            type: array
+                            items:
+                              $ref: "#/components/schemas/Appointment"
+                  message:
+                    type: string
+                  code:
+                    type: integer
+                    description: "HTTP status của kết quả, ví dụ 200, 201"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+  "/appointments/{appointmentId}":
+    get:
+      tags: [Appointments]
+      summary: "Chi tiết lịch hẹn"
+      description: "UC40 · —. Actor: A02, A05, A06, A07, A08. Quyền: Khách: lịch của mình · nhân viên chi nhánh. Chuyển trạng thái: —."
+      operationId: getAppointment
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: "#/components/parameters/AppointmentId"
+      responses:
+        "200":
+          description: OK
+          content:
+            "application/json":
+              schema:
+                type: object
+                required: [data, message, code]
+                properties:
+                  data:
+                    $ref: "#/components/schemas/Appointment"
+                  message:
+                    type: string
+                  code:
+                    type: integer
+                    description: "HTTP status của kết quả, ví dụ 200, 201"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+  "/appointments/{appointmentId}/reschedule":
+    post:
+      tags: [Appointments]
+      summary: "Đổi khung giờ"
+      description: "UC40 · BR-LH-03, 04, 05, 06. Actor: A02, A06. Quyền: Khách: lịch của mình · lễ tân chi nhánh. Chuyển trạng thái: BOOKED → BOOKED (Lịch hẹn#2). Cùng chi nhánh, cùng thú, cùng dịch vụ; muốn đổi khác thì hủy rồi đặt lại. Giữ mã lịch hẹn."
+      operationId: rescheduleAppointment
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: "#/components/parameters/AppointmentId"
+      requestBody:
+        required: true
+        content:
+          "application/json":
+            schema:
+              $ref: "#/components/schemas/RescheduleRequest"
+      responses:
+        "200":
+          description: OK
+          content:
+            "application/json":
+              schema:
+                type: object
+                required: [data, message, code]
+                properties:
+                  data:
+                    $ref: "#/components/schemas/Appointment"
+                  message:
+                    type: string
+                  code:
+                    type: integer
+                    description: "HTTP status của kết quả, ví dụ 200, 201"
+        "400":
+          description: "`BR-LH-06` hết lượt đổi (3 [CFG]) hoặc khách đổi khi còn < 12 giờ · `BR-LH-04`, `BR-LH-03`, `BR-LH-05` với khung mới"
+          content:
+            "application/json":
+              schema:
+                $ref: "#/components/schemas/Error"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "409":
+          description: "Lịch không còn BOOKED"
+          content:
+            "application/json":
+              schema:
+                $ref: "#/components/schemas/Error"
+  "/appointments/{appointmentId}/cancel":
+    post:
+      tags: [Appointments]
+      summary: "Hủy lịch hẹn"
+      description: "UC40 · BR-LH-07, 09. Actor: A02, A06. Quyền: Khách: lịch của mình · lễ tân chi nhánh. Chuyển trạng thái: BOOKED → CANCELLED (Lịch hẹn#4). Còn < 12 giờ [CFG] → lateCancel = true và đánh giá hạn chế đặt online (BR-LH-09)."
+      operationId: cancelAppointment
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: "#/components/parameters/AppointmentId"
+      requestBody:
+        required: true
+        content:
+          "application/json":
+            schema:
+              $ref: "#/components/schemas/CancelAppointmentRequest"
+      responses:
+        "200":
+          description: OK
+          content:
+            "application/json":
+              schema:
+                type: object
+                required: [data, message, code]
+                properties:
+                  data:
+                    $ref: "#/components/schemas/Appointment"
+                  message:
+                    type: string
+                  code:
+                    type: integer
+                    description: "HTTP status của kết quả, ví dụ 200, 201"
+        "400":
+          description: "Đã qua giờ hẹn"
+          content:
+            "application/json":
+              schema:
+                $ref: "#/components/schemas/Error"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "409":
+          description: "Lịch không còn BOOKED"
+          content:
+            "application/json":
+              schema:
+                $ref: "#/components/schemas/Error"
+  "/me/booking-restriction":
+    get:
+      tags: ["Booking restrictions"]
+      summary: "Tình trạng hạn chế đặt online của tôi"
+      description: "UC39, UC58 · BR-LH-09. Actor: A02. Quyền: Khách đang đăng nhập. Chuyển trạng thái: —. FE hiển thị lý do và ngày hết hạn chế."
+      operationId: getMyBookingRestriction
+      security:
+        - bearerAuth: []
+      responses:
+        "200":
+          description: OK
+          content:
+            "application/json":
+              schema:
+                type: object
+                required: [data, message, code]
+                properties:
+                  data:
+                    $ref: "#/components/schemas/RestrictionStatus"
+                  message:
+                    type: string
+                  code:
+                    type: integer
+                    description: "HTTP status của kết quả, ví dụ 200, 201"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+  "/customers/{customerId}/booking-restriction":
+    get:
+      tags: ["Booking restrictions"]
+      summary: "Tình trạng hạn chế đặt online của khách"
+      description: "UC39 · BR-LH-09. Actor: A05, A06. Quyền: Nhân viên. Chuyển trạng thái: —."
+      operationId: getCustomerBookingRestriction
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: "#/components/parameters/CustomerId"
+      responses:
+        "200":
+          description: OK
+          content:
+            "application/json":
+              schema:
+                type: object
+                required: [data, message, code]
+                properties:
+                  data:
+                    $ref: "#/components/schemas/RestrictionStatus"
+                  message:
+                    type: string
+                  code:
+                    type: integer
+                    description: "HTTP status của kết quả, ví dụ 200, 201"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+  "/customers/{customerId}/booking-restriction/lift":
+    post:
+      tags: ["Booking restrictions"]
+      summary: "Gỡ hạn chế sớm"
+      description: "UC39 · BR-LH-09, BR-QT-15. Actor: A05, A06. Quyền: Lễ tân, BRANCH_MANAGER. Chuyển trạng thái: —. Ghi audit."
+      operationId: liftBookingRestriction
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: "#/components/parameters/CustomerId"
+      requestBody:
+        required: true
+        content:
+          "application/json":
+            schema:
+              $ref: "#/components/schemas/LiftRestrictionRequest"
+      responses:
+        "200":
+          description: OK
+          content:
+            "application/json":
+              schema:
+                type: object
+                required: [data, message, code]
+                properties:
+                  data:
+                    $ref: "#/components/schemas/RestrictionStatus"
+                  message:
+                    type: string
+                  code:
+                    type: integer
+                    description: "HTTP status của kết quả, ví dụ 200, 201"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "409":
+          description: "Khách không đang bị hạn chế"
+          content:
+            "application/json":
+              schema:
+                $ref: "#/components/schemas/Error"
+components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      description: "Access token trả về từ POST /auth/login, gắn với một phiên (sessions). Phiên bị hủy thì token hết hiệu lực ngay (BR-TK-11, 13, 14)."
+  parameters:
+    Page:
+      name: page
+      in: query
+      required: false
+      schema:
+        type: integer
+        minimum: 0
+        default: 0
+      description: "Số trang, bắt đầu từ 0"
+    Size:
+      name: size
+      in: query
+      required: false
+      schema:
+        type: integer
+        minimum: 1
+        maximum: 100
+        default: 20
+    BranchId:
+      name: branchId
+      in: path
+      required: true
+      schema:
+        type: integer
+        format: int64
+    AppointmentId:
+      name: appointmentId
+      in: path
+      required: true
+      schema:
+        type: integer
+        format: int64
+    CustomerId:
+      name: customerId
+      in: path
+      required: true
+      schema:
+        type: integer
+        format: int64
+  schemas:
+    Error:
+      type: object
+      description: "Envelope lỗi duy nhất, do GlobalExceptionHandler (platform/exception) sinh. Vi phạm business rule: errorCode = BUSINESS_RULE_VIOLATION, message kết thúc bằng mã rule, ví dụ \"… (BR-LH-05)\"."
+      required: [success, errorCode, message, statusCode, timestamp, traceId]
+      properties:
+        success:
+          type: boolean
+          enum: [false]
+        errorCode:
+          type: string
+          enum: [BUSINESS_RULE_VIOLATION, INVALID_STATE_TRANSITION, RESOURCE_NOT_FOUND, ACCESS_DENIED_SCOPE_MISMATCH, CONCURRENCY_CONFLICT, VALIDATION_FAILED, MALFORMED_REQUEST, METHOD_NOT_ALLOWED, UNSUPPORTED_MEDIA_TYPE, UNAUTHENTICATED, ACCESS_DENIED, INTERNAL_ERROR]
+          description: platform/exception/ErrorCode
+        message:
+          type: string
+          description: "Thông điệp tiếng Việt hiển thị được; với BUSINESS_RULE_VIOLATION kết thúc bằng \" (BR-…)\""
+        statusCode:
+          type: integer
+        timestamp:
+          type: string
+          format: date-time
+        traceId:
+          type: string
+    PageMeta:
+      type: object
+      required: [page, size, totalElements, totalPages]
+      properties:
+        page:
+          type: integer
+        size:
+          type: integer
+        totalElements:
+          type: integer
+          format: int64
+        totalPages:
+          type: integer
+    AppointmentStatus:
+      type: string
+      enum: [BOOKED, CHECKED_IN, COMPLETED, CANCELLED, NO_SHOW]
+      description: "03 #3"
+    Slot:
+      type: object
+      required: [slotStart, slotEnd, quota, booked, status]
+      properties:
+        slotStart:
+          type: string
+          pattern: "^[0-2][0-9]:[0-5][0-9]$"
+          example: "08:30"
+        slotEnd:
+          type: string
+          pattern: "^[0-2][0-9]:[0-5][0-9]$"
+          example: "08:30"
+          description: "slotStart + 30 phút"
+        quota:
+          type: integer
+          format: int32
+        booked:
+          type: integer
+          format: int32
+          description: "Lịch BOOKED, CHECKED_IN, COMPLETED của khung (BR-LH-03)"
+        status:
+          type: string
+          enum: [AVAILABLE, FULL]
+          description: "FULL hiển thị 'Hết chỗ'; quota 0 cũng là FULL"
+    BookAppointmentRequest:
+      type: object
+      required: [petId, branchId, serviceId, slotDate, slotStart]
+      properties:
+        petId:
+          type: integer
+          format: int64
+        branchId:
+          type: integer
+          format: int64
+        serviceId:
+          type: integer
+          format: int64
+          description: "Nhóm MEDICAL hoặc GROOMING (BR-LH-01)"
+        slotDate:
+          type: string
+          format: date
+        slotStart:
+          type: string
+          pattern: "^[0-2][0-9]:[0-5][0-9]$"
+          example: "08:30"
+        note:
+          type: [string, "null"]
+          maxLength: 500
+    Appointment:
+      type: object
+      required: [appointmentId, code, customerId, customerName, petId, petName, branchId, branchName, serviceId, serviceName, serviceGroup, slotDate, slotStart, status, channel, rescheduleCount, lateCancel, canReschedule, canCancel]
+      properties:
+        appointmentId:
+          type: integer
+          format: int64
+        code:
+          type: string
+          description: "Giữ nguyên khi đổi lịch (BR-LH-06)"
+        customerId:
+          type: integer
+          format: int64
+        customerName:
+          type: string
+        petId:
+          type: integer
+          format: int64
+        petName:
+          type: string
+        branchId:
+          type: integer
+          format: int64
+        branchName:
+          type: string
+        serviceId:
+          type: integer
+          format: int64
+        serviceName:
+          type: string
+        serviceGroup:
+          type: string
+          enum: [MEDICAL, GROOMING]
+        slotDate:
+          type: string
+          format: date
+        slotStart:
+          type: string
+          pattern: "^[0-2][0-9]:[0-5][0-9]$"
+          example: "08:30"
+        status:
+          $ref: "#/components/schemas/AppointmentStatus"
+        channel:
+          type: string
+          enum: [ONLINE, COUNTER]
+        rescheduleCount:
+          type: integer
+          format: int32
+          description: "Tối đa 3 [CFG]"
+        lateCancel:
+          type: boolean
+        cancelSource:
+          type: [string, "null"]
+          enum: [CUSTOMER, STAFF, CLINIC, null]
+        cancelReason:
+          type: [string, "null"]
+        cancelledAt:
+          type: [string, "null"]
+          format: date-time
+        note:
+          type: [string, "null"]
+        visitId:
+          type: [integer, "null"]
+          format: int64
+          description: "Visit tạo khi check-in"
+        canReschedule:
+          type: boolean
+          description: "Theo vai trò người xem: còn lượt, còn đủ 12 giờ với khách (BR-LH-06)"
+        canCancel:
+          type: boolean
+    RescheduleRequest:
+      type: object
+      required: [slotDate, slotStart]
+      properties:
+        slotDate:
+          type: string
+          format: date
+        slotStart:
+          type: string
+          pattern: "^[0-2][0-9]:[0-5][0-9]$"
+          example: "08:30"
+    CancelAppointmentRequest:
+      type: object
+      properties:
+        reason:
+          type: [string, "null"]
+          maxLength: 300
+    BookingRestriction:
+      type: object
+      required: [restrictionId, customerId, startsAt, endsAt, violationCount]
+      properties:
+        restrictionId:
+          type: integer
+          format: int64
+        customerId:
+          type: integer
+          format: int64
+        startsAt:
+          type: string
+          format: date-time
+        endsAt:
+          type: string
+          format: date-time
+        violationCount:
+          type: integer
+          format: int32
+          description: "Số NO_SHOW + hủy muộn trong 90 ngày [CFG] lúc bị hạn chế"
+    RestrictionStatus:
+      type: object
+      required: [restricted]
+      properties:
+        restricted:
+          type: boolean
+        restriction:
+          $ref: "#/components/schemas/BookingRestriction"
+    LiftRestrictionRequest:
+      type: object
+      required: [reason]
+      properties:
+        reason:
+          type: string
+          maxLength: 300
+  responses:
+    BadRequest:
+      description: "VALIDATION_FAILED / MALFORMED_REQUEST: dữ liệu không hợp lệ · BUSINESS_RULE_VIOLATION: vi phạm rule, message kết thúc bằng mã rule \"(BR-…)\"."
+      content:
+        "application/json":
+          schema:
+            $ref: "#/components/schemas/Error"
+    Unauthorized:
+      description: "UNAUTHENTICATED: chưa đăng nhập hoặc phiên đã hết hạn / bị hủy."
+      content:
+        "application/json":
+          schema:
+            $ref: "#/components/schemas/Error"
+    Forbidden:
+      description: "ACCESS_DENIED: sai vai trò · ACCESS_DENIED_SCOPE_MISMATCH: ngoài phạm vi (chi nhánh, chủ sở hữu). Message chung, không lộ cấu trúc phân quyền."
+      content:
+        "application/json":
+          schema:
+            $ref: "#/components/schemas/Error"
+    NotFound:
+      description: "Không tìm thấy (RESOURCE_NOT_FOUND)."
+      content:
+        "application/json":
+          schema:
+            $ref: "#/components/schemas/Error"

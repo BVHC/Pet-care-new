@@ -1,0 +1,1553 @@
+# Pet Care Boarding API v1 — OpenAPI 3.1, sinh từ khai báo; không sửa tay, sửa khai báo rồi sinh lại.
+# Module LT (tầng 2) · owner BE-2
+# Nguồn: 01 UC54, UC57–UC60; 02 BR-LT-01…12, BR-LH-09, BR-KH-04, 05, BR-SP-04, BR-BH-06, BR-TK-19; 03 #6 Đặt chỗ lưu trú, #7 Chuồng (+ Order#3); 04 §7; 05 §7 (kennels, boarding_bookings, boarding_check_ins, care_logs, care_log_addenda)
+# Truy vết: CONFIRMED = có trong docs · ASSUMPTION (A#) · TBD (Q#) — xem file .md cùng tên.
+
+openapi: "3.1.0"
+info:
+  title: "Pet Care Boarding API v1"
+  version: "1.0.0"
+  description: "Module LT (tầng 2) · owner BE-2. Nguồn: 01 UC54, UC57–UC60; 02 BR-LT-01…12, BR-LH-09, BR-KH-04, 05, BR-SP-04, BR-BH-06, BR-TK-19; 03 #6 Đặt chỗ lưu trú, #7 Chuồng (+ Order#3); 04 §7; 05 §7 (kennels, boarding_bookings, boarding_check_ins, care_logs, care_log_addenda). Chi tiết và truy vết: ../boarding-v1.md"
+servers:
+  - url: "/api"
+    description: "Mọi path bên dưới nằm sau tiền tố /api"
+tags:
+  - name: Kennels
+    description: "Chuồng (UC54)"
+  - name: Availability
+    description: "Sức chứa theo đêm (BR-LT-03)"
+  - name: Bookings
+    description: "Đặt chỗ, gia hạn, hủy (UC58)"
+  - name: Stay
+    description: "Nhận thú, trả thú, thú mất (UC59)"
+  - name: "Care logs"
+    description: "Nhật ký chăm sóc (UC57, UC60)"
+paths:
+  "/kennels":
+    get:
+      tags: [Kennels]
+      summary: "Danh sách chuồng của chi nhánh"
+      description: "UC54, UC59 · BR-LT-01. Actor: A05, A06, A08. Quyền: Nhân viên chi nhánh. Chuyển trạng thái: —."
+      operationId: listKennels
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: kennelTypeId
+          in: query
+          required: false
+          schema:
+            type: integer
+            format: int64
+        - name: status
+          in: query
+          required: false
+          schema:
+            type: string
+            enum: [AVAILABLE, OCCUPIED, MAINTENANCE]
+      responses:
+        "200":
+          description: OK
+          content:
+            "application/json":
+              schema:
+                type: object
+                required: [data, message, code]
+                properties:
+                  data:
+                    type: array
+                    items:
+                      $ref: "#/components/schemas/Kennel"
+                  message:
+                    type: string
+                  code:
+                    type: integer
+                    description: "HTTP status của kết quả, ví dụ 200, 201"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+    post:
+      tags: [Kennels]
+      summary: "Tạo chuồng"
+      description: "UC54 · BR-LT-01, BR-SP-04. Actor: A05. Quyền: BRANCH_MANAGER chi nhánh. Chuyển trạng thái: — → AVAILABLE (Chuồng#1)."
+      operationId: createKennel
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          "application/json":
+            schema:
+              $ref: "#/components/schemas/CreateKennelRequest"
+      responses:
+        "201":
+          description: "Đã tạo"
+          content:
+            "application/json":
+              schema:
+                type: object
+                required: [data, message, code]
+                properties:
+                  data:
+                    $ref: "#/components/schemas/Kennel"
+                  message:
+                    type: string
+                  code:
+                    type: integer
+                    description: "HTTP status của kết quả, ví dụ 200, 201"
+        "400":
+          description: "`BR-LT-01` mã trùng trong chi nhánh · loại chuồng không phải dịch vụ BOARDING đang bật"
+          content:
+            "application/json":
+              schema:
+                $ref: "#/components/schemas/Error"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+  "/kennels/{kennelId}":
+    patch:
+      tags: [Kennels]
+      summary: "Sửa mã / ghi chú chuồng"
+      description: "UC54 · BR-LT-01. Actor: A05. Quyền: BRANCH_MANAGER chi nhánh. Chuyển trạng thái: —."
+      operationId: updateKennel
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: "#/components/parameters/KennelId"
+      requestBody:
+        required: true
+        content:
+          "application/json":
+            schema:
+              $ref: "#/components/schemas/UpdateKennelRequest"
+      responses:
+        "200":
+          description: OK
+          content:
+            "application/json":
+              schema:
+                type: object
+                required: [data, message, code]
+                properties:
+                  data:
+                    $ref: "#/components/schemas/Kennel"
+                  message:
+                    type: string
+                  code:
+                    type: integer
+                    description: "HTTP status của kết quả, ví dụ 200, 201"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+    delete:
+      tags: [Kennels]
+      summary: "Xóa chuồng"
+      description: "UC54 · BR-LT-01. Actor: A05. Quyền: BRANCH_MANAGER chi nhánh. Chuyển trạng thái: —."
+      operationId: deleteKennel
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: "#/components/parameters/KennelId"
+      responses:
+        "204":
+          description: "Không có nội dung"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "409":
+          description: "Chuồng đang OCCUPIED"
+          content:
+            "application/json":
+              schema:
+                $ref: "#/components/schemas/Error"
+  "/kennels/{kennelId}/start-maintenance":
+    post:
+      tags: [Kennels]
+      summary: "Chuyển chuồng sang bảo trì"
+      description: "UC54 · BR-LT-01, 03. Actor: A05. Quyền: BRANCH_MANAGER chi nhánh. Chuyển trạng thái: AVAILABLE → MAINTENANCE (Chuồng#4)."
+      operationId: startKennelMaintenance
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: "#/components/parameters/KennelId"
+      responses:
+        "200":
+          description: OK
+          content:
+            "application/json":
+              schema:
+                type: object
+                required: [data, message, code]
+                properties:
+                  data:
+                    $ref: "#/components/schemas/MaintenanceResult"
+                  message:
+                    type: string
+                  code:
+                    type: integer
+                    description: "HTTP status của kết quả, ví dụ 200, 201"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "409":
+          description: "Chuồng không AVAILABLE (OCCUPIED không chuyển được)"
+          content:
+            "application/json":
+              schema:
+                $ref: "#/components/schemas/Error"
+  "/kennels/{kennelId}/end-maintenance":
+    post:
+      tags: [Kennels]
+      summary: "Hết bảo trì"
+      description: "UC54 · BR-LT-01. Actor: A05. Quyền: BRANCH_MANAGER chi nhánh. Chuyển trạng thái: MAINTENANCE → AVAILABLE (Chuồng#5)."
+      operationId: endKennelMaintenance
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: "#/components/parameters/KennelId"
+      responses:
+        "200":
+          description: OK
+          content:
+            "application/json":
+              schema:
+                type: object
+                required: [data, message, code]
+                properties:
+                  data:
+                    $ref: "#/components/schemas/Kennel"
+                  message:
+                    type: string
+                  code:
+                    type: integer
+                    description: "HTTP status của kết quả, ví dụ 200, 201"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "409":
+          description: "Chuồng không MAINTENANCE"
+          content:
+            "application/json":
+              schema:
+                $ref: "#/components/schemas/Error"
+  "/branches/{branchId}/boarding-availability":
+    get:
+      tags: [Availability]
+      summary: "Xem còn chỗ theo đêm"
+      description: "UC58 · BR-LT-01, 02, 03, 04. Actor: A02, A06. Quyền: Khách đã đăng nhập; lễ tân. Chuyển trạng thái: —. A1."
+      operationId: getBoardingAvailability
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: "#/components/parameters/BranchId"
+        - name: kennelTypeId
+          in: query
+          required: true
+          schema:
+            type: integer
+            format: int64
+        - name: checkInDate
+          in: query
+          required: true
+          schema:
+            type: string
+            format: date
+        - name: checkOutDate
+          in: query
+          required: true
+          schema:
+            type: string
+            format: date
+      responses:
+        "200":
+          description: OK
+          content:
+            "application/json":
+              schema:
+                type: object
+                required: [data, message, code]
+                properties:
+                  data:
+                    $ref: "#/components/schemas/BoardingAvailability"
+                  message:
+                    type: string
+                  code:
+                    type: integer
+                    description: "HTTP status của kết quả, ví dụ 200, 201"
+        "400":
+          description: "`BR-LT-02` quá 30 đêm [CFG] hoặc ngày trả không sau ngày nhận · loại chuồng không bật tại chi nhánh"
+          content:
+            "application/json":
+              schema:
+                $ref: "#/components/schemas/Error"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+  "/boarding-bookings":
+    post:
+      tags: [Bookings]
+      summary: "Đặt chỗ lưu trú"
+      description: "UC58 · BR-LT-02…05, BR-LH-09, BR-KH-05, BR-TK-19. Actor: A02, A06. Quyền: Khách: thú của mình · lễ tân chi nhánh. Chuyển trạng thái: — → BOOKED (Đặt chỗ#1). Snapshot giá đêm. Thiếu mũi bắt buộc dự kiến: cảnh báo, không chặn."
+      operationId: createBoardingBooking
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          "application/json":
+            schema:
+              $ref: "#/components/schemas/CreateBookingRequest"
+      responses:
+        "201":
+          description: "Đã tạo"
+          content:
+            "application/json":
+              schema:
+                type: object
+                required: [data, message, code]
+                properties:
+                  data:
+                    $ref: "#/components/schemas/BookingResult"
+                  message:
+                    type: string
+                  code:
+                    type: integer
+                    description: "HTTP status của kết quả, ví dụ 200, 201"
+        "400":
+          description: "`BR-LT-02` thú sai loài / quá cân nặng tối đa / ngoài 1–30 đêm [CFG] / chồng ngày với đặt chỗ khác · `BR-LT-03` hết chỗ (message ghi các đêm thiếu) · `BR-LT-04` khách đặt ngoài khoảng 1–60 ngày [CFG], ngày nhận / trả là ngày nghỉ · `BR-LH-09` đang bị hạn chế đặt online · `BR-KH-05` thú đã mất · `BR-TK-19` hồ sơ chờ liên kết · loại chuồng không bật tại chi nhánh ACTIVE"
+          content:
+            "application/json":
+              schema:
+                $ref: "#/components/schemas/Error"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+    get:
+      tags: [Bookings]
+      summary: "Danh sách đặt chỗ"
+      description: "UC58, UC59, UC60 · BR-LT-07, 11. Actor: A02, A05, A06, A07, A08. Quyền: Khách: của mình · nhân viên chi nhánh. Chuyển trạng thái: —."
+      operationId: listBoardingBookings
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: status
+          in: query
+          required: false
+          schema:
+            type: string
+            enum: [BOOKED, CHECKED_IN, OVERDUE, CHECKED_OUT, CANCELLED, NO_SHOW]
+        - name: petId
+          in: query
+          required: false
+          schema:
+            type: integer
+            format: int64
+        - name: customerId
+          in: query
+          required: false
+          schema:
+            type: integer
+            format: int64
+        - name: from
+          in: query
+          required: false
+          schema:
+            type: string
+            format: date
+        - name: to
+          in: query
+          required: false
+          schema:
+            type: string
+            format: date
+        - name: inStay
+          in: query
+          required: false
+          schema:
+            type: boolean
+          description: "CHECKED_IN hoặc OVERDUE"
+        - name: missingCareLogToday
+          in: query
+          required: false
+          schema:
+            type: boolean
+        - $ref: "#/components/parameters/Page"
+        - $ref: "#/components/parameters/Size"
+      responses:
+        "200":
+          description: OK
+          content:
+            "application/json":
+              schema:
+                type: object
+                required: [data, message, code]
+                properties:
+                  data:
+                    allOf:
+                      - $ref: "#/components/schemas/PageMeta"
+                      - type: object
+                        required: [content]
+                        properties:
+                          content:
+                            type: array
+                            items:
+                              $ref: "#/components/schemas/Booking"
+                  message:
+                    type: string
+                  code:
+                    type: integer
+                    description: "HTTP status của kết quả, ví dụ 200, 201"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+  "/boarding-bookings/{bookingId}":
+    get:
+      tags: [Bookings]
+      summary: "Chi tiết đặt chỗ"
+      description: "UC58, UC60 · —. Actor: A02, A05–A08. Quyền: Khách: của mình · nhân viên chi nhánh. Chuyển trạng thái: —."
+      operationId: getBoardingBooking
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: "#/components/parameters/BookingId"
+      responses:
+        "200":
+          description: OK
+          content:
+            "application/json":
+              schema:
+                type: object
+                required: [data, message, code]
+                properties:
+                  data:
+                    $ref: "#/components/schemas/Booking"
+                  message:
+                    type: string
+                  code:
+                    type: integer
+                    description: "HTTP status của kết quả, ví dụ 200, 201"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+  "/boarding-bookings/{bookingId}/extend":
+    post:
+      tags: [Bookings]
+      summary: "Gia hạn ngày trả"
+      description: "UC58 · BR-LT-02, 03, 06. Actor: A02, A06. Quyền: Khách: thú của mình · lễ tân chi nhánh. Chuyển trạng thái: BOOKED / CHECKED_IN giữ nguyên (Đặt chỗ#2)."
+      operationId: extendBoardingBooking
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: "#/components/parameters/BookingId"
+      requestBody:
+        required: true
+        content:
+          "application/json":
+            schema:
+              $ref: "#/components/schemas/ExtendBookingRequest"
+      responses:
+        "200":
+          description: OK
+          content:
+            "application/json":
+              schema:
+                type: object
+                required: [data, message, code]
+                properties:
+                  data:
+                    $ref: "#/components/schemas/Booking"
+                  message:
+                    type: string
+                  code:
+                    type: integer
+                    description: "HTTP status của kết quả, ví dụ 200, 201"
+        "400":
+          description: "`BR-LT-06` đã qua ngày trả dự kiến · `BR-LT-03` hết chỗ các đêm thêm · `BR-LT-02` vượt 30 đêm"
+          content:
+            "application/json":
+              schema:
+                $ref: "#/components/schemas/Error"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "409":
+          description: "Đặt chỗ OVERDUE (không gia hạn) hoặc đã kết thúc"
+          content:
+            "application/json":
+              schema:
+                $ref: "#/components/schemas/Error"
+  "/boarding-bookings/{bookingId}/cancel":
+    post:
+      tags: [Bookings]
+      summary: "Hủy đặt chỗ"
+      description: "UC58 · BR-LT-06, BR-LH-09. Actor: A02, A06. Quyền: Khách: thú của mình · lễ tân chi nhánh. Chuyển trạng thái: BOOKED → CANCELLED (Đặt chỗ#4). Còn < 24 giờ [CFG] trước ngày nhận → hủy muộn, đánh giá hạn chế đặt online (BR-LH-09)."
+      operationId: cancelBoardingBooking
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: "#/components/parameters/BookingId"
+      requestBody:
+        required: true
+        content:
+          "application/json":
+            schema:
+              $ref: "#/components/schemas/CancelBookingRequest"
+      responses:
+        "200":
+          description: OK
+          content:
+            "application/json":
+              schema:
+                type: object
+                required: [data, message, code]
+                properties:
+                  data:
+                    $ref: "#/components/schemas/Booking"
+                  message:
+                    type: string
+                  code:
+                    type: integer
+                    description: "HTTP status của kết quả, ví dụ 200, 201"
+        "400":
+          description: "Đã tới ngày nhận"
+          content:
+            "application/json":
+              schema:
+                $ref: "#/components/schemas/Error"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "409":
+          description: "Đặt chỗ không còn BOOKED"
+          content:
+            "application/json":
+              schema:
+                $ref: "#/components/schemas/Error"
+  "/boarding-bookings/{bookingId}/check-in-readiness":
+    get:
+      tags: [Stay]
+      summary: "Kiểm tra điều kiện nhận thú"
+      description: "UC59 · BR-LT-04, 05, 08. Actor: A06, A08. Quyền: Lễ tân, CARETAKER chi nhánh. Chuyển trạng thái: —."
+      operationId: getCheckInReadiness
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: "#/components/parameters/BookingId"
+      responses:
+        "200":
+          description: OK
+          content:
+            "application/json":
+              schema:
+                type: object
+                required: [data, message, code]
+                properties:
+                  data:
+                    $ref: "#/components/schemas/CheckInReadiness"
+                  message:
+                    type: string
+                  code:
+                    type: integer
+                    description: "HTTP status của kết quả, ví dụ 200, 201"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "409":
+          description: "Đặt chỗ không còn BOOKED"
+          content:
+            "application/json":
+              schema:
+                $ref: "#/components/schemas/Error"
+  "/boarding-bookings/{bookingId}/check-in":
+    post:
+      tags: [Stay]
+      summary: "Nhận thú"
+      description: "UC59 · BR-LT-04, 05, 08, BR-KH-04. Actor: A06, A08. Quyền: Lễ tân, CARETAKER chi nhánh. Chuyển trạng thái: BOOKED → CHECKED_IN (Đặt chỗ#3) · Chuồng#2 (→ OCCUPIED). Cân nặng ghi vào lịch sử (source INTAKE); nhận sớm được nếu còn chỗ."
+      operationId: checkInBoarding
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: "#/components/parameters/BookingId"
+      requestBody:
+        required: true
+        content:
+          "application/json":
+            schema:
+              $ref: "#/components/schemas/CheckInRequest"
+      responses:
+        "200":
+          description: OK
+          content:
+            "application/json":
+              schema:
+                type: object
+                required: [data, message, code]
+                properties:
+                  data:
+                    $ref: "#/components/schemas/Booking"
+                  message:
+                    type: string
+                  code:
+                    type: integer
+                    description: "HTTP status của kết quả, ví dụ 200, 201"
+        "400":
+          description: "`BR-LT-05` thiếu / quá hạn mũi bắt buộc (lễ tân tiếp nhận walk-in để tiêm trước) · `BR-LT-08` chuồng không AVAILABLE hoặc sai loại, thiếu cân nặng · `BR-LT-04` ngoài giờ mở cửa · `BR-LT-03` nhận sớm khi hết chỗ"
+          content:
+            "application/json":
+              schema:
+                $ref: "#/components/schemas/Error"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "409":
+          description: "Đặt chỗ không còn BOOKED"
+          content:
+            "application/json":
+              schema:
+                $ref: "#/components/schemas/Error"
+  "/boarding-bookings/{bookingId}/cancel-no-kennel":
+    post:
+      tags: [Stay]
+      summary: "Hủy vì không còn chuồng đúng loại lúc nhận"
+      description: "UC59 · BR-LT-08, BR-LH-09. Actor: A06. Quyền: Lễ tân chi nhánh. Chuyển trạng thái: BOOKED → CANCELLED (Đặt chỗ#5, phòng khám hủy). Không tính hủy muộn; thông báo khách và BRANCH_MANAGER (A3)."
+      operationId: cancelBoardingNoKennel
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: "#/components/parameters/BookingId"
+      responses:
+        "200":
+          description: OK
+          content:
+            "application/json":
+              schema:
+                type: object
+                required: [data, message, code]
+                properties:
+                  data:
+                    $ref: "#/components/schemas/Booking"
+                  message:
+                    type: string
+                  code:
+                    type: integer
+                    description: "HTTP status của kết quả, ví dụ 200, 201"
+        "400":
+          description: "Vẫn còn chuồng AVAILABLE đúng loại"
+          content:
+            "application/json":
+              schema:
+                $ref: "#/components/schemas/Error"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "409":
+          description: "Đặt chỗ không còn BOOKED"
+          content:
+            "application/json":
+              schema:
+                $ref: "#/components/schemas/Error"
+  "/boarding-bookings/{bookingId}/start-checkout":
+    post:
+      tags: [Stay]
+      summary: "Bắt đầu trả thú"
+      description: "UC59 · BR-LT-04, 09, BR-BH-01. Actor: A06. Quyền: Chỉ lễ tân chi nhánh. Chuyển trạng thái: CHECKED_IN / OVERDUE giữ nguyên (Đặt chỗ#9) · Order#3 (BOARDING → PENDING). Đã có Order BOARDING PENDING thì dùng lại và tính lại số đêm. Tiếp theo: `POST /payments`."
+      operationId: startBoardingCheckout
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: "#/components/parameters/BookingId"
+      responses:
+        "200":
+          description: OK
+          content:
+            "application/json":
+              schema:
+                type: object
+                required: [data, message, code]
+                properties:
+                  data:
+                    $ref: "#/components/schemas/CheckoutStarted"
+                  message:
+                    type: string
+                  code:
+                    type: integer
+                    description: "HTTP status của kết quả, ví dụ 200, 201"
+        "400":
+          description: "`BR-LT-04` ngoài giờ mở cửa"
+          content:
+            "application/json":
+              schema:
+                $ref: "#/components/schemas/Error"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "409":
+          description: "Thú không còn trong chuồng"
+          content:
+            "application/json":
+              schema:
+                $ref: "#/components/schemas/Error"
+  "/boarding-bookings/{bookingId}/hand-over":
+    post:
+      tags: [Stay]
+      summary: "Giao thú (trả thú)"
+      description: "UC59 · BR-LT-09, BR-BH-06. Actor: A06. Quyền: Chỉ lễ tân chi nhánh. Chuyển trạng thái: CHECKED_IN / OVERDUE → CHECKED_OUT, RETURNED (Đặt chỗ#10) · Chuồng#3."
+      operationId: handOverBoardingPet
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: "#/components/parameters/BookingId"
+      responses:
+        "200":
+          description: OK
+          content:
+            "application/json":
+              schema:
+                type: object
+                required: [data, message, code]
+                properties:
+                  data:
+                    $ref: "#/components/schemas/Booking"
+                  message:
+                    type: string
+                  code:
+                    type: integer
+                    description: "HTTP status của kết quả, ví dụ 200, 201"
+        "400":
+          description: "`BR-LT-09` Order lưu trú chưa PAID — không có ngoại lệ"
+          content:
+            "application/json":
+              schema:
+                $ref: "#/components/schemas/Error"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "409":
+          description: "Thú không còn trong chuồng"
+          content:
+            "application/json":
+              schema:
+                $ref: "#/components/schemas/Error"
+  "/boarding-bookings/{bookingId}/end-deceased":
+    post:
+      tags: [Stay]
+      summary: "Kết thúc lưu trú do thú mất"
+      description: "UC59 · BR-LT-12, BR-KH-05. Actor: A06. Quyền: Chỉ lễ tân chi nhánh. Chuyển trạng thái: CHECKED_IN / OVERDUE → CHECKED_OUT, PET_DECEASED (Đặt chỗ#11) · Chuồng#3 · Order#3 (tính đến ngày mất). Sau đó mới đánh dấu thú đã mất (`POST /pets/{petId}/mark-deceased`). Order xử lý như PENDING thường."
+      operationId: endBoardingDeceased
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: "#/components/parameters/BookingId"
+      requestBody:
+        required: true
+        content:
+          "application/json":
+            schema:
+              $ref: "#/components/schemas/DeceasedEndRequest"
+      responses:
+        "200":
+          description: OK
+          content:
+            "application/json":
+              schema:
+                type: object
+                required: [data, message, code]
+                properties:
+                  data:
+                    $ref: "#/components/schemas/CheckoutStarted"
+                  message:
+                    type: string
+                  code:
+                    type: integer
+                    description: "HTTP status của kết quả, ví dụ 200, 201"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "409":
+          description: "Thú không còn trong chuồng"
+          content:
+            "application/json":
+              schema:
+                $ref: "#/components/schemas/Error"
+  "/boarding-bookings/{bookingId}/care-logs":
+    get:
+      tags: ["Care logs"]
+      summary: "Xem nhật ký chăm sóc"
+      description: "UC57, UC60 · BR-LT-11. Actor: A02, A05–A08. Quyền: Khách: thú của mình · nhân viên chi nhánh. Chuyển trạng thái: —. Khách xem ngay khi được ghi."
+      operationId: listCareLogs
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: "#/components/parameters/BookingId"
+      responses:
+        "200":
+          description: OK
+          content:
+            "application/json":
+              schema:
+                type: object
+                required: [data, message, code]
+                properties:
+                  data:
+                    type: array
+                    items:
+                      $ref: "#/components/schemas/CareLog"
+                  message:
+                    type: string
+                  code:
+                    type: integer
+                    description: "HTTP status của kết quả, ví dụ 200, 201"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+    post:
+      tags: ["Care logs"]
+      summary: "Ghi nhật ký chăm sóc"
+      description: "UC57 · BR-LT-11, 12. Actor: A07, A08. Quyền: CARETAKER, VET chi nhánh. Chuyển trạng thái: CHECKED_IN / OVERDUE giữ nguyên (Đặt chỗ#8 nếu bất thường). Bất thường: thông báo CARE_LOG_ABNORMAL cho khách và lễ tân."
+      operationId: createCareLog
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: "#/components/parameters/BookingId"
+      requestBody:
+        required: true
+        content:
+          "application/json":
+            schema:
+              $ref: "#/components/schemas/CareLogRequest"
+      responses:
+        "201":
+          description: "Đã tạo"
+          content:
+            "application/json":
+              schema:
+                type: object
+                required: [data, message, code]
+                properties:
+                  data:
+                    $ref: "#/components/schemas/CareLog"
+                  message:
+                    type: string
+                  code:
+                    type: integer
+                    description: "HTTP status của kết quả, ví dụ 200, 201"
+        "400":
+          description: "Quá 5 ảnh [CFG]"
+          content:
+            "application/json":
+              schema:
+                $ref: "#/components/schemas/Error"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "409":
+          description: "Thú không đang lưu trú"
+          content:
+            "application/json":
+              schema:
+                $ref: "#/components/schemas/Error"
+  "/care-logs/{careLogId}":
+    patch:
+      tags: ["Care logs"]
+      summary: "Sửa nhật ký trong 1 giờ"
+      description: "UC57 · BR-LT-11. Actor: A07, A08. Quyền: Người ghi, trong 1 giờ [CFG]. Chuyển trạng thái: —."
+      operationId: updateCareLog
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: "#/components/parameters/CareLogId"
+      requestBody:
+        required: true
+        content:
+          "application/json":
+            schema:
+              $ref: "#/components/schemas/UpdateCareLogRequest"
+      responses:
+        "200":
+          description: OK
+          content:
+            "application/json":
+              schema:
+                type: object
+                required: [data, message, code]
+                properties:
+                  data:
+                    $ref: "#/components/schemas/CareLog"
+                  message:
+                    type: string
+                  code:
+                    type: integer
+                    description: "HTTP status của kết quả, ví dụ 200, 201"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "409":
+          description: "`BR-LT-11` đã quá thời hạn sửa — dùng bản bổ sung"
+          content:
+            "application/json":
+              schema:
+                $ref: "#/components/schemas/Error"
+  "/care-logs/{careLogId}/addenda":
+    post:
+      tags: ["Care logs"]
+      summary: "Thêm bản bổ sung nhật ký"
+      description: "UC57 · BR-LT-11. Actor: A07, A08. Quyền: CARETAKER, VET chi nhánh (A4). Chuyển trạng thái: —."
+      operationId: addCareLogAddendum
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: "#/components/parameters/CareLogId"
+      requestBody:
+        required: true
+        content:
+          "application/json":
+            schema:
+              $ref: "#/components/schemas/AddendumRequest"
+      responses:
+        "201":
+          description: "Đã tạo"
+          content:
+            "application/json":
+              schema:
+                type: object
+                required: [data, message, code]
+                properties:
+                  data:
+                    $ref: "#/components/schemas/CareLogAddendum"
+                  message:
+                    type: string
+                  code:
+                    type: integer
+                    description: "HTTP status của kết quả, ví dụ 200, 201"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      description: "Access token trả về từ POST /auth/login, gắn với một phiên (sessions). Phiên bị hủy thì token hết hiệu lực ngay (BR-TK-11, 13, 14)."
+  parameters:
+    Page:
+      name: page
+      in: query
+      required: false
+      schema:
+        type: integer
+        minimum: 0
+        default: 0
+      description: "Số trang, bắt đầu từ 0"
+    Size:
+      name: size
+      in: query
+      required: false
+      schema:
+        type: integer
+        minimum: 1
+        maximum: 100
+        default: 20
+    KennelId:
+      name: kennelId
+      in: path
+      required: true
+      schema:
+        type: integer
+        format: int64
+    BranchId:
+      name: branchId
+      in: path
+      required: true
+      schema:
+        type: integer
+        format: int64
+    BookingId:
+      name: bookingId
+      in: path
+      required: true
+      schema:
+        type: integer
+        format: int64
+    CareLogId:
+      name: careLogId
+      in: path
+      required: true
+      schema:
+        type: integer
+        format: int64
+  schemas:
+    Error:
+      type: object
+      description: "Envelope lỗi duy nhất, do GlobalExceptionHandler (platform/exception) sinh. Vi phạm business rule: errorCode = BUSINESS_RULE_VIOLATION, message kết thúc bằng mã rule, ví dụ \"… (BR-LH-05)\"."
+      required: [success, errorCode, message, statusCode, timestamp, traceId]
+      properties:
+        success:
+          type: boolean
+          enum: [false]
+        errorCode:
+          type: string
+          enum: [BUSINESS_RULE_VIOLATION, INVALID_STATE_TRANSITION, RESOURCE_NOT_FOUND, ACCESS_DENIED_SCOPE_MISMATCH, CONCURRENCY_CONFLICT, VALIDATION_FAILED, MALFORMED_REQUEST, METHOD_NOT_ALLOWED, UNSUPPORTED_MEDIA_TYPE, UNAUTHENTICATED, ACCESS_DENIED, INTERNAL_ERROR]
+          description: platform/exception/ErrorCode
+        message:
+          type: string
+          description: "Thông điệp tiếng Việt hiển thị được; với BUSINESS_RULE_VIOLATION kết thúc bằng \" (BR-…)\""
+        statusCode:
+          type: integer
+        timestamp:
+          type: string
+          format: date-time
+        traceId:
+          type: string
+    PageMeta:
+      type: object
+      required: [page, size, totalElements, totalPages]
+      properties:
+        page:
+          type: integer
+        size:
+          type: integer
+        totalElements:
+          type: integer
+          format: int64
+        totalPages:
+          type: integer
+    KennelStatus:
+      type: string
+      enum: [AVAILABLE, OCCUPIED, MAINTENANCE]
+      description: "03 #7"
+    BookingStatus:
+      type: string
+      enum: [BOOKED, CHECKED_IN, OVERDUE, CHECKED_OUT, CANCELLED, NO_SHOW]
+      description: "03 #6"
+    Kennel:
+      type: object
+      required: [kennelId, branchId, kennelTypeId, kennelTypeName, code, status]
+      properties:
+        kennelId:
+          type: integer
+          format: int64
+        branchId:
+          type: integer
+          format: int64
+        kennelTypeId:
+          type: integer
+          format: int64
+        kennelTypeName:
+          type: string
+        code:
+          type: string
+          maxLength: 20
+        status:
+          $ref: "#/components/schemas/KennelStatus"
+        note:
+          type: [string, "null"]
+          maxLength: 300
+        currentBookingId:
+          type: [integer, "null"]
+          format: int64
+          description: "Khi OCCUPIED"
+    CreateKennelRequest:
+      type: object
+      required: [kennelTypeId, code]
+      properties:
+        kennelTypeId:
+          type: integer
+          format: int64
+          description: "Loại chuồng đang bật tại chi nhánh"
+        code:
+          type: string
+          maxLength: 20
+          description: "Duy nhất trong chi nhánh (BR-LT-01)"
+        note:
+          type: [string, "null"]
+          maxLength: 300
+    UpdateKennelRequest:
+      type: object
+      properties:
+        code:
+          type: [string, "null"]
+          maxLength: 20
+        note:
+          type: [string, "null"]
+          maxLength: 300
+    AffectedBookingBrief:
+      type: object
+      required: [bookingId, code, checkInDate, checkOutDate, petName]
+      properties:
+        bookingId:
+          type: integer
+          format: int64
+        code:
+          type: string
+        checkInDate:
+          type: string
+          format: date
+        checkOutDate:
+          type: string
+          format: date
+        petName:
+          type: string
+    MaintenanceResult:
+      type: object
+      required: [kennel, shortageBookings]
+      properties:
+        kennel:
+          $ref: "#/components/schemas/Kennel"
+        shortageBookings:
+          type: array
+          items:
+            $ref: "#/components/schemas/AffectedBookingBrief"
+          description: "Đặt chỗ thiếu chỗ sau khi giảm sức chứa — cảnh báo, không tự hủy (BR-LT-01)"
+    NightAvailability:
+      type: object
+      required: [date, capacity, occupied, remaining]
+      properties:
+        date:
+          type: string
+          format: date
+        capacity:
+          type: integer
+          format: int32
+        occupied:
+          type: integer
+          format: int32
+        remaining:
+          type: integer
+          format: int32
+    BoardingAvailability:
+      type: object
+      required: [kennelTypeId, nightlyPrice, nights, available]
+      properties:
+        kennelTypeId:
+          type: integer
+          format: int64
+        nightlyPrice:
+          type: integer
+          format: int64
+          minimum: 0
+          description: VND
+        nights:
+          type: array
+          items:
+            $ref: "#/components/schemas/NightAvailability"
+        available:
+          type: boolean
+          description: "Mọi đêm còn chỗ"
+    VaccineGap:
+      type: object
+      required: [vaccineTypeId, vaccineTypeName]
+      properties:
+        vaccineTypeId:
+          type: integer
+          format: int64
+        vaccineTypeName:
+          type: string
+        lastAdministeredOn:
+          type: [string, "null"]
+          format: date
+          description: "null = chưa từng tiêm tại hệ thống"
+        nextDueDate:
+          type: [string, "null"]
+          format: date
+    CreateBookingRequest:
+      type: object
+      required: [petId, branchId, kennelTypeId, checkInDate, checkOutDate]
+      properties:
+        petId:
+          type: integer
+          format: int64
+        branchId:
+          type: integer
+          format: int64
+        kennelTypeId:
+          type: integer
+          format: int64
+        checkInDate:
+          type: string
+          format: date
+        checkOutDate:
+          type: string
+          format: date
+    Booking:
+      type: object
+      required: [bookingId, code, customerId, customerName, petId, petName, branchId, kennelTypeId, kennelTypeName, checkInDate, checkOutDate, nightlyPrice, status, channel, lateCancel, missingCareLogToday]
+      properties:
+        bookingId:
+          type: integer
+          format: int64
+        code:
+          type: string
+        customerId:
+          type: integer
+          format: int64
+        customerName:
+          type: string
+        petId:
+          type: integer
+          format: int64
+        petName:
+          type: string
+        branchId:
+          type: integer
+          format: int64
+        kennelTypeId:
+          type: integer
+          format: int64
+        kennelTypeName:
+          type: string
+        kennelId:
+          type: [integer, "null"]
+          format: int64
+        kennelCode:
+          type: [string, "null"]
+        checkInDate:
+          type: string
+          format: date
+        checkOutDate:
+          type: string
+          format: date
+          description: "Ngày trả dự kiến"
+        actualCheckInAt:
+          type: [string, "null"]
+          format: date-time
+        actualCheckOutAt:
+          type: [string, "null"]
+          format: date-time
+        nightlyPrice:
+          type: integer
+          format: int64
+          minimum: 0
+          description: "Snapshot lúc đặt (BR-LT-02)"
+        status:
+          $ref: "#/components/schemas/BookingStatus"
+        endReason:
+          type: [string, "null"]
+          enum: [RETURNED, PET_DECEASED, null]
+        channel:
+          type: string
+          enum: [ONLINE, COUNTER]
+        lateCancel:
+          type: boolean
+        cancelSource:
+          type: [string, "null"]
+          enum: [CUSTOMER, STAFF, CLINIC, null]
+        cancelReason:
+          type: [string, "null"]
+        overdueSince:
+          type: [string, "null"]
+          format: date-time
+        activeOrderId:
+          type: [integer, "null"]
+          format: int64
+          description: "Order BOARDING OPEN/PENDING nếu có"
+        missingCareLogToday:
+          type: boolean
+          description: "Đang lưu trú mà hôm nay chưa có nhật ký (BR-LT-11)"
+    BookingResult:
+      type: object
+      required: [booking, vaccineWarnings]
+      properties:
+        booking:
+          $ref: "#/components/schemas/Booking"
+        vaccineWarnings:
+          type: array
+          items:
+            $ref: "#/components/schemas/VaccineGap"
+          description: "Dự kiến chưa đạt mũi bắt buộc vào ngày nhận — cảnh báo, gợi ý đặt lịch tiêm (BR-LT-05)"
+    ExtendBookingRequest:
+      type: object
+      required: [checkOutDate]
+      properties:
+        checkOutDate:
+          type: string
+          format: date
+          description: "Sau ngày trả hiện tại, tổng ≤ 30 đêm [CFG]"
+    CancelBookingRequest:
+      type: object
+      properties:
+        reason:
+          type: [string, "null"]
+          maxLength: 300
+    CheckInReadiness:
+      type: object
+      required: [vaccineGaps, availableKennels, withinOpeningHours, canCheckIn]
+      properties:
+        vaccineGaps:
+          type: array
+          items:
+            $ref: "#/components/schemas/VaccineGap"
+          description: "Rỗng mới nhận được (BR-LT-05)"
+        availableKennels:
+          type: array
+          items:
+            $ref: "#/components/schemas/Kennel"
+          description: "Chuồng AVAILABLE đúng loại đã đặt"
+        withinOpeningHours:
+          type: boolean
+        canCheckIn:
+          type: boolean
+    CheckInRequest:
+      type: object
+      required: [kennelId, weightKg, healthCondition, emergencyPhone]
+      properties:
+        kennelId:
+          type: integer
+          format: int64
+          description: "AVAILABLE, đúng loại đã đặt (BR-LT-08)"
+        weightKg:
+          type: number
+          description: "> 0, bắt buộc"
+        healthCondition:
+          type: string
+          description: "Tình trạng quan sát được"
+        belongings:
+          type: [string, "null"]
+        dietInstructions:
+          type: [string, "null"]
+        emergencyPhone:
+          type: string
+          pattern: "^0[0-9]{9,10}$"
+          maxLength: 15
+          description: "SĐT liên hệ khẩn, dùng cho Care Task quá hạn đón (BR-TB-05)"
+    CheckoutStarted:
+      type: object
+      required: [booking, orderId, nights, amount]
+      properties:
+        booking:
+          $ref: "#/components/schemas/Booking"
+        orderId:
+          type: integer
+          format: int64
+        nights:
+          type: integer
+          format: int32
+          description: "Tối thiểu 1; trả sau 12:00 [CFG] +1 đêm"
+        amount:
+          type: integer
+          format: int64
+          minimum: 0
+          description: VND
+    DeceasedEndRequest:
+      type: object
+      required: [note]
+      properties:
+        note:
+          type: string
+          description: "Ghi rõ diễn biến (BR-LT-12)"
+    CareLogAddendum:
+      type: object
+      required: [addendumId, content, createdBy, createdAt]
+      properties:
+        addendumId:
+          type: integer
+          format: int64
+        content:
+          type: string
+        createdBy:
+          type: integer
+          format: int64
+        createdAt:
+          type: string
+          format: date-time
+    CareLog:
+      type: object
+      required: [careLogId, bookingId, logDate, photoUrls, isAbnormal, recordedBy, recordedByName, createdAt, editableUntil, addenda]
+      properties:
+        careLogId:
+          type: integer
+          format: int64
+        bookingId:
+          type: integer
+          format: int64
+        logDate:
+          type: string
+          format: date
+        eating:
+          type: [string, "null"]
+          maxLength: 300
+        drinking:
+          type: [string, "null"]
+          maxLength: 300
+        hygiene:
+          type: [string, "null"]
+          maxLength: 300
+        activity:
+          type: [string, "null"]
+          maxLength: 300
+        note:
+          type: [string, "null"]
+        photoUrls:
+          type: array
+          items:
+            type: string
+        isAbnormal:
+          type: boolean
+        recordedBy:
+          type: integer
+          format: int64
+        recordedByName:
+          type: string
+        createdAt:
+          type: string
+          format: date-time
+        editableUntil:
+          type: string
+          format: date-time
+          description: "created_at + 1 giờ [CFG]"
+        addenda:
+          type: array
+          items:
+            $ref: "#/components/schemas/CareLogAddendum"
+    CareLogRequest:
+      type: object
+      required: [photoUrls]
+      properties:
+        logDate:
+          type: [string, "null"]
+          format: date
+          description: "Mặc định hôm nay"
+        eating:
+          type: [string, "null"]
+          maxLength: 300
+        drinking:
+          type: [string, "null"]
+          maxLength: 300
+        hygiene:
+          type: [string, "null"]
+          maxLength: 300
+        activity:
+          type: [string, "null"]
+          maxLength: 300
+        note:
+          type: [string, "null"]
+        photoUrls:
+          type: array
+          items:
+            type: string
+          description: "Tối đa 5 [CFG] (A5)"
+        isAbnormal:
+          type: [boolean, "null"]
+          description: "true → thông báo ngay khách và lễ tân (BR-LT-12)"
+    UpdateCareLogRequest:
+      type: object
+      properties:
+        eating:
+          type: [string, "null"]
+          maxLength: 300
+        drinking:
+          type: [string, "null"]
+          maxLength: 300
+        hygiene:
+          type: [string, "null"]
+          maxLength: 300
+        activity:
+          type: [string, "null"]
+          maxLength: 300
+        note:
+          type: [string, "null"]
+        photoUrls:
+          type: array
+          items:
+            type: string
+    AddendumRequest:
+      type: object
+      required: [content]
+      properties:
+        content:
+          type: string
+  responses:
+    BadRequest:
+      description: "VALIDATION_FAILED / MALFORMED_REQUEST: dữ liệu không hợp lệ · BUSINESS_RULE_VIOLATION: vi phạm rule, message kết thúc bằng mã rule \"(BR-…)\"."
+      content:
+        "application/json":
+          schema:
+            $ref: "#/components/schemas/Error"
+    Unauthorized:
+      description: "UNAUTHENTICATED: chưa đăng nhập hoặc phiên đã hết hạn / bị hủy."
+      content:
+        "application/json":
+          schema:
+            $ref: "#/components/schemas/Error"
+    Forbidden:
+      description: "ACCESS_DENIED: sai vai trò · ACCESS_DENIED_SCOPE_MISMATCH: ngoài phạm vi (chi nhánh, chủ sở hữu). Message chung, không lộ cấu trúc phân quyền."
+      content:
+        "application/json":
+          schema:
+            $ref: "#/components/schemas/Error"
+    NotFound:
+      description: "Không tìm thấy (RESOURCE_NOT_FOUND)."
+      content:
+        "application/json":
+          schema:
+            $ref: "#/components/schemas/Error"

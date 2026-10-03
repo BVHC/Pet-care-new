@@ -1,0 +1,1294 @@
+# Pet Care Customer & Pet API v1 — OpenAPI 3.1, sinh từ khai báo; không sửa tay, sửa khai báo rồi sinh lại.
+# Module KH (và phần hồ sơ khách của UC06) · owner BE-2
+# Nguồn: 01 UC06, UC22–UC26; 02 BR-KH-01…10, BR-TK-15, 18, 19; 04 §3; 05 §3 (customers, addresses, pets, weight_records)
+# Truy vết: CONFIRMED = có trong docs · ASSUMPTION (A#) · TBD (Q#) — xem file .md cùng tên.
+
+openapi: "3.1.0"
+info:
+  title: "Pet Care Customer & Pet API v1"
+  version: "1.0.0"
+  description: "Module KH (và phần hồ sơ khách của UC06) · owner BE-2. Nguồn: 01 UC06, UC22–UC26; 02 BR-KH-01…10, BR-TK-15, 18, 19; 04 §3; 05 §3 (customers, addresses, pets, weight_records). Chi tiết và truy vết: ../customer-v1.md"
+servers:
+  - url: "/api"
+    description: "Mọi path bên dưới nằm sau tiền tố /api"
+tags:
+  - name: "My profile"
+    description: "Hồ sơ khách và sổ địa chỉ của khách đang đăng nhập (UC06)"
+  - name: Customers
+    description: "Lễ tân quản lý và tra cứu hồ sơ khách (UC22, UC23)"
+  - name: Pets
+    description: "Thú cưng (UC24, UC26)"
+  - name: Weights
+    description: "Lịch sử cân nặng (BR-KH-04)"
+paths:
+  "/me/customer-profile":
+    get:
+      tags: ["My profile"]
+      summary: "Hồ sơ khách của tôi"
+      description: "UC06 · BR-KH-01, BR-TK-15. Actor: A02. Quyền: Khách đang đăng nhập. Chuyển trạng thái: —."
+      operationId: getMyCustomerProfile
+      security:
+        - bearerAuth: []
+      responses:
+        "200":
+          description: OK
+          content:
+            "application/json":
+              schema:
+                type: object
+                required: [data, message, code]
+                properties:
+                  data:
+                    $ref: "#/components/schemas/CustomerProfile"
+                  message:
+                    type: string
+                  code:
+                    type: integer
+                    description: "HTTP status của kết quả, ví dụ 200, 201"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+    patch:
+      tags: ["My profile"]
+      summary: "Sửa hồ sơ khách của tôi"
+      description: "UC06 · BR-TK-15, BR-KH-01. Actor: A02. Quyền: Khách đang đăng nhập. Chuyển trạng thái: —. Không trả cảnh báo nghi trùng cho khách (A1)."
+      operationId: updateMyCustomerProfile
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          "application/json":
+            schema:
+              $ref: "#/components/schemas/UpdateMyCustomerProfileRequest"
+      responses:
+        "200":
+          description: OK
+          content:
+            "application/json":
+              schema:
+                type: object
+                required: [data, message, code]
+                properties:
+                  data:
+                    $ref: "#/components/schemas/CustomerProfile"
+                  message:
+                    type: string
+                  code:
+                    type: integer
+                    description: "HTTP status của kết quả, ví dụ 200, 201"
+        "400":
+          description: "`BR-TK-15` cố sửa email · dữ liệu không hợp lệ"
+          content:
+            "application/json":
+              schema:
+                $ref: "#/components/schemas/Error"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+  "/me/addresses":
+    get:
+      tags: ["My profile"]
+      summary: "Sổ địa chỉ"
+      description: "UC06 · BR-TK-18. Actor: A02. Quyền: Khách đang đăng nhập. Chuyển trạng thái: —."
+      operationId: listMyAddresses
+      security:
+        - bearerAuth: []
+      responses:
+        "200":
+          description: OK
+          content:
+            "application/json":
+              schema:
+                type: object
+                required: [data, message, code]
+                properties:
+                  data:
+                    type: array
+                    items:
+                      $ref: "#/components/schemas/Address"
+                  message:
+                    type: string
+                  code:
+                    type: integer
+                    description: "HTTP status của kết quả, ví dụ 200, 201"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+    post:
+      tags: ["My profile"]
+      summary: "Thêm địa chỉ"
+      description: "UC06 · BR-TK-18. Actor: A02. Quyền: Khách đang đăng nhập. Chuyển trạng thái: —."
+      operationId: createMyAddress
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          "application/json":
+            schema:
+              $ref: "#/components/schemas/AddressRequest"
+      responses:
+        "201":
+          description: "Đã tạo"
+          content:
+            "application/json":
+              schema:
+                type: object
+                required: [data, message, code]
+                properties:
+                  data:
+                    $ref: "#/components/schemas/Address"
+                  message:
+                    type: string
+                  code:
+                    type: integer
+                    description: "HTTP status của kết quả, ví dụ 200, 201"
+        "400":
+          description: "`BR-TK-18` đã đủ 5 địa chỉ [CFG]"
+          content:
+            "application/json":
+              schema:
+                $ref: "#/components/schemas/Error"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+  "/me/addresses/{addressId}":
+    patch:
+      tags: ["My profile"]
+      summary: "Sửa địa chỉ"
+      description: "UC06 · BR-TK-18. Actor: A02. Quyền: Chủ địa chỉ. Chuyển trạng thái: —."
+      operationId: updateMyAddress
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: "#/components/parameters/AddressId"
+      requestBody:
+        required: true
+        content:
+          "application/json":
+            schema:
+              $ref: "#/components/schemas/UpdateAddressRequest"
+      responses:
+        "200":
+          description: OK
+          content:
+            "application/json":
+              schema:
+                type: object
+                required: [data, message, code]
+                properties:
+                  data:
+                    $ref: "#/components/schemas/Address"
+                  message:
+                    type: string
+                  code:
+                    type: integer
+                    description: "HTTP status của kết quả, ví dụ 200, 201"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+    delete:
+      tags: ["My profile"]
+      summary: "Xóa địa chỉ"
+      description: "UC06 · BR-TK-18. Actor: A02. Quyền: Chủ địa chỉ. Chuyển trạng thái: —."
+      operationId: deleteMyAddress
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: "#/components/parameters/AddressId"
+      responses:
+        "204":
+          description: "Không có nội dung"
+        "400":
+          description: "`BR-TK-18` không xóa địa chỉ mặc định khi còn địa chỉ khác"
+          content:
+            "application/json":
+              schema:
+                $ref: "#/components/schemas/Error"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+  "/me/addresses/{addressId}/set-default":
+    post:
+      tags: ["My profile"]
+      summary: "Đặt địa chỉ mặc định"
+      description: "UC06 · BR-TK-18. Actor: A02. Quyền: Chủ địa chỉ. Chuyển trạng thái: —. Bỏ cờ mặc định của địa chỉ cũ trong cùng transaction."
+      operationId: setDefaultAddress
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: "#/components/parameters/AddressId"
+      responses:
+        "200":
+          description: OK
+          content:
+            "application/json":
+              schema:
+                type: object
+                required: [data, message, code]
+                properties:
+                  data:
+                    $ref: "#/components/schemas/Address"
+                  message:
+                    type: string
+                  code:
+                    type: integer
+                    description: "HTTP status của kết quả, ví dụ 200, 201"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+  "/customers":
+    get:
+      tags: [Customers]
+      summary: "Tra cứu khách & thú cưng"
+      description: "UC23 · BR-KH-01, 10. Actor: A06, A07, A08. Quyền: Nhân viên mọi chi nhánh. Chuyển trạng thái: —. Cần ít nhất một điều kiện tìm."
+      operationId: searchCustomers
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: phone
+          in: query
+          required: false
+          schema:
+            type: string
+          description: "Khớp đúng SĐT đã chuẩn hóa"
+        - name: name
+          in: query
+          required: false
+          schema:
+            type: string
+          description: "Họ tên chứa chuỗi"
+        - name: email
+          in: query
+          required: false
+          schema:
+            type: string
+        - name: petName
+          in: query
+          required: false
+          schema:
+            type: string
+        - $ref: "#/components/parameters/Page"
+        - $ref: "#/components/parameters/Size"
+      responses:
+        "200":
+          description: OK
+          content:
+            "application/json":
+              schema:
+                type: object
+                required: [data, message, code]
+                properties:
+                  data:
+                    allOf:
+                      - $ref: "#/components/schemas/PageMeta"
+                      - type: object
+                        required: [content]
+                        properties:
+                          content:
+                            type: array
+                            items:
+                              $ref: "#/components/schemas/CustomerSearchItem"
+                  message:
+                    type: string
+                  code:
+                    type: integer
+                    description: "HTTP status của kết quả, ví dụ 200, 201"
+        "400":
+          description: "Không có điều kiện tìm nào"
+          content:
+            "application/json":
+              schema:
+                $ref: "#/components/schemas/Error"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+    post:
+      tags: [Customers]
+      summary: "Tạo hồ sơ khách tại quầy"
+      description: "UC22, UC44 · BR-KH-01, 10. Actor: A06. Quyền: Lễ tân. Chuyển trạng thái: —. SĐT trùng hồ sơ khác: vẫn tạo, trả danh sách nghi trùng (BR-KH-10)."
+      operationId: createCounterCustomer
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          "application/json":
+            schema:
+              $ref: "#/components/schemas/CreateCounterCustomerRequest"
+      responses:
+        "201":
+          description: "Đã tạo"
+          content:
+            "application/json":
+              schema:
+                type: object
+                required: [data, message, code]
+                properties:
+                  data:
+                    $ref: "#/components/schemas/CustomerWriteResult"
+                  message:
+                    type: string
+                  code:
+                    type: integer
+                    description: "HTTP status của kết quả, ví dụ 200, 201"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+  "/customers/{customerId}":
+    get:
+      tags: [Customers]
+      summary: "Chi tiết hồ sơ khách kèm thú cưng"
+      description: "UC22, UC23 · BR-KH-01. Actor: A06, A07, A08. Quyền: Nhân viên. Chuyển trạng thái: —."
+      operationId: getCustomer
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: "#/components/parameters/CustomerId"
+      responses:
+        "200":
+          description: OK
+          content:
+            "application/json":
+              schema:
+                type: object
+                required: [data, message, code]
+                properties:
+                  data:
+                    $ref: "#/components/schemas/CustomerDetail"
+                  message:
+                    type: string
+                  code:
+                    type: integer
+                    description: "HTTP status của kết quả, ví dụ 200, 201"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+    patch:
+      tags: [Customers]
+      summary: "Sửa hồ sơ khách"
+      description: "UC22 · BR-KH-01, 10, BR-TK-16. Actor: A06. Quyền: Lễ tân. Chuyển trạng thái: —."
+      operationId: updateCustomer
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: "#/components/parameters/CustomerId"
+      requestBody:
+        required: true
+        content:
+          "application/json":
+            schema:
+              $ref: "#/components/schemas/UpdateCustomerRequest"
+      responses:
+        "200":
+          description: OK
+          content:
+            "application/json":
+              schema:
+                type: object
+                required: [data, message, code]
+                properties:
+                  data:
+                    $ref: "#/components/schemas/CustomerWriteResult"
+                  message:
+                    type: string
+                  code:
+                    type: integer
+                    description: "HTTP status của kết quả, ví dụ 200, 201"
+        "400":
+          description: "Sửa email khi hồ sơ đã gắn tài khoản (dùng identity, A5) · thiếu SĐT với hồ sơ tại quầy (BR-KH-01)"
+          content:
+            "application/json":
+              schema:
+                $ref: "#/components/schemas/Error"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+  "/customers/{customerId}/pets":
+    post:
+      tags: [Pets]
+      summary: "Lễ tân thêm thú cưng cho khách"
+      description: "UC24 · BR-KH-02. Actor: A06. Quyền: Lễ tân. Chuyển trạng thái: —."
+      operationId: createPetForCustomer
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: "#/components/parameters/CustomerId"
+      requestBody:
+        required: true
+        content:
+          "application/json":
+            schema:
+              $ref: "#/components/schemas/CreatePetRequest"
+      responses:
+        "201":
+          description: "Đã tạo"
+          content:
+            "application/json":
+              schema:
+                type: object
+                required: [data, message, code]
+                properties:
+                  data:
+                    $ref: "#/components/schemas/PetWriteResult"
+                  message:
+                    type: string
+                  code:
+                    type: integer
+                    description: "HTTP status của kết quả, ví dụ 200, 201"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+  "/me/pets":
+    get:
+      tags: [Pets]
+      summary: "Thú cưng của tôi"
+      description: "UC24 · BR-KH-05, BR-TK-19. Actor: A02. Quyền: Khách đang đăng nhập. Chuyển trạng thái: —."
+      operationId: listMyPets
+      security:
+        - bearerAuth: []
+      responses:
+        "200":
+          description: OK
+          content:
+            "application/json":
+              schema:
+                type: object
+                required: [data, message, code]
+                properties:
+                  data:
+                    type: array
+                    items:
+                      $ref: "#/components/schemas/PetResponse"
+                  message:
+                    type: string
+                  code:
+                    type: integer
+                    description: "HTTP status của kết quả, ví dụ 200, 201"
+        "400":
+          description: "`BR-TK-19` hồ sơ còn chờ quyết định liên kết"
+          content:
+            "application/json":
+              schema:
+                $ref: "#/components/schemas/Error"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+    post:
+      tags: [Pets]
+      summary: "Thêm thú cưng"
+      description: "UC24 · BR-KH-02, BR-TK-19. Actor: A02. Quyền: Khách đang đăng nhập. Chuyển trạng thái: —."
+      operationId: createMyPet
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          "application/json":
+            schema:
+              $ref: "#/components/schemas/CreatePetRequest"
+      responses:
+        "201":
+          description: "Đã tạo"
+          content:
+            "application/json":
+              schema:
+                type: object
+                required: [data, message, code]
+                properties:
+                  data:
+                    $ref: "#/components/schemas/PetWriteResult"
+                  message:
+                    type: string
+                  code:
+                    type: integer
+                    description: "HTTP status của kết quả, ví dụ 200, 201"
+        "400":
+          description: "Ngày sinh ở tương lai · thiếu trường bắt buộc (BR-KH-02) · `BR-TK-19` hồ sơ còn chờ quyết định liên kết"
+          content:
+            "application/json":
+              schema:
+                $ref: "#/components/schemas/Error"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+  "/pets/{petId}":
+    get:
+      tags: [Pets]
+      summary: "Chi tiết thú cưng"
+      description: "UC24 · BR-KH-03, 06, 08. Actor: A02, A06, A07, A08. Quyền: Chủ hiện tại; nhân viên mọi chi nhánh. Chuyển trạng thái: —."
+      operationId: getPet
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: "#/components/parameters/PetId"
+      responses:
+        "200":
+          description: OK
+          content:
+            "application/json":
+              schema:
+                type: object
+                required: [data, message, code]
+                properties:
+                  data:
+                    $ref: "#/components/schemas/PetResponse"
+                  message:
+                    type: string
+                  code:
+                    type: integer
+                    description: "HTTP status của kết quả, ví dụ 200, 201"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+    patch:
+      tags: [Pets]
+      summary: "Sửa thông tin thú cưng"
+      description: "UC24 · BR-KH-02, 03, 05. Actor: A02, A06. Quyền: Khách là chủ hiện tại · A06. Chuyển trạng thái: —."
+      operationId: updatePet
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: "#/components/parameters/PetId"
+      requestBody:
+        required: true
+        content:
+          "application/json":
+            schema:
+              $ref: "#/components/schemas/UpdatePetRequest"
+      responses:
+        "200":
+          description: OK
+          content:
+            "application/json":
+              schema:
+                type: object
+                required: [data, message, code]
+                properties:
+                  data:
+                    $ref: "#/components/schemas/PetWriteResult"
+                  message:
+                    type: string
+                  code:
+                    type: integer
+                    description: "HTTP status của kết quả, ví dụ 200, 201"
+        "400":
+          description: "`BR-KH-03` đổi loài khi đã có bệnh án / mũi tiêm · `BR-KH-05` thú đã mất (chỉ đọc)"
+          content:
+            "application/json":
+              schema:
+                $ref: "#/components/schemas/Error"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+    delete:
+      tags: [Pets]
+      summary: "Xóa thú cưng chưa phát sinh giao dịch"
+      description: "UC24 · BR-KH-06. Actor: A02, A06. Quyền: Khách là chủ hiện tại · A06. Chuyển trạng thái: —."
+      operationId: deletePet
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: "#/components/parameters/PetId"
+      responses:
+        "204":
+          description: "Không có nội dung"
+        "400":
+          description: "`BR-KH-06` đã có lịch hẹn, đặt chỗ, Visit hoặc Order — dùng đánh dấu đã mất"
+          content:
+            "application/json":
+              schema:
+                $ref: "#/components/schemas/Error"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+  "/pets/{petId}/mark-deceased":
+    post:
+      tags: [Pets]
+      summary: "Đánh dấu thú đã mất"
+      description: "UC24, ST19 · BR-KH-05, BR-LT-12, BR-TB-03. Actor: A02, A06. Quyền: Khách là chủ hiện tại · A06. Chuyển trạng thái: Phát PetDeceasedEvent → Lịch hẹn#5, Đặt chỗ#5, Care Task#4."
+      operationId: markPetDeceased
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: "#/components/parameters/PetId"
+      requestBody:
+        required: true
+        content:
+          "application/json":
+            schema:
+              $ref: "#/components/schemas/MarkDeceasedRequest"
+      responses:
+        "200":
+          description: OK
+          content:
+            "application/json":
+              schema:
+                type: object
+                required: [data, message, code]
+                properties:
+                  data:
+                    $ref: "#/components/schemas/PetResponse"
+                  message:
+                    type: string
+                  code:
+                    type: integer
+                    description: "HTTP status của kết quả, ví dụ 200, 201"
+        "400":
+          description: "`BR-KH-05` thú có Visit mở hoặc đang lưu trú (kết thúc lưu trú trước theo BR-LT-12) · chưa xác nhận"
+          content:
+            "application/json":
+              schema:
+                $ref: "#/components/schemas/Error"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "409":
+          description: "Thú đã được đánh dấu đã mất (không hoàn tác)"
+          content:
+            "application/json":
+              schema:
+                $ref: "#/components/schemas/Error"
+  "/pets/{petId}/transfer-owner":
+    post:
+      tags: [Pets]
+      summary: "Chuyển chủ thú cưng"
+      description: "UC26 · BR-KH-08. Actor: A06. Quyền: Lễ tân. Chuyển trạng thái: Phát PetOwnerTransferredEvent → Lịch hẹn#5, Đặt chỗ#5; Care Task OPEN sang chủ mới. Order cũ giữ chủ cũ; ghi audit."
+      operationId: transferPetOwner
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: "#/components/parameters/PetId"
+      requestBody:
+        required: true
+        content:
+          "application/json":
+            schema:
+              $ref: "#/components/schemas/TransferOwnerRequest"
+      responses:
+        "200":
+          description: OK
+          content:
+            "application/json":
+              schema:
+                type: object
+                required: [data, message, code]
+                properties:
+                  data:
+                    $ref: "#/components/schemas/PetResponse"
+                  message:
+                    type: string
+                  code:
+                    type: integer
+                    description: "HTTP status của kết quả, ví dụ 200, 201"
+        "400":
+          description: "`BR-KH-08` thú có Visit mở, Order PENDING hoặc đang lưu trú · chưa xác nhận chủ cũ · `BR-KH-05` thú đã mất"
+          content:
+            "application/json":
+              schema:
+                $ref: "#/components/schemas/Error"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+  "/pets/{petId}/weights":
+    get:
+      tags: [Weights]
+      summary: "Lịch sử cân nặng"
+      description: "UC24, UC25 · BR-KH-04, 07. Actor: A02, A06, A07, A08. Quyền: Chủ hiện tại; nhân viên. Chuyển trạng thái: —. Mới nhất trước."
+      operationId: listPetWeights
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: "#/components/parameters/PetId"
+      responses:
+        "200":
+          description: OK
+          content:
+            "application/json":
+              schema:
+                type: object
+                required: [data, message, code]
+                properties:
+                  data:
+                    type: array
+                    items:
+                      $ref: "#/components/schemas/WeightRecord"
+                  message:
+                    type: string
+                  code:
+                    type: integer
+                    description: "HTTP status của kết quả, ví dụ 200, 201"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+    post:
+      tags: [Weights]
+      summary: "Chủ tự khai cân nặng"
+      description: "UC24 · BR-KH-04. Actor: A02. Quyền: Khách là chủ hiện tại. Chuyển trạng thái: —. source = OWNER (đánh dấu chủ tự khai)."
+      operationId: addOwnerWeight
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: "#/components/parameters/PetId"
+      requestBody:
+        required: true
+        content:
+          "application/json":
+            schema:
+              $ref: "#/components/schemas/AddWeightRequest"
+      responses:
+        "201":
+          description: "Đã tạo"
+          content:
+            "application/json":
+              schema:
+                type: object
+                required: [data, message, code]
+                properties:
+                  data:
+                    $ref: "#/components/schemas/WeightRecord"
+                  message:
+                    type: string
+                  code:
+                    type: integer
+                    description: "HTTP status của kết quả, ví dụ 200, 201"
+        "400":
+          description: "`BR-KH-04` cân nặng ≤ 0 · `BR-KH-05` thú đã mất"
+          content:
+            "application/json":
+              schema:
+                $ref: "#/components/schemas/Error"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      description: "Access token trả về từ POST /auth/login, gắn với một phiên (sessions). Phiên bị hủy thì token hết hiệu lực ngay (BR-TK-11, 13, 14)."
+  parameters:
+    Page:
+      name: page
+      in: query
+      required: false
+      schema:
+        type: integer
+        minimum: 0
+        default: 0
+      description: "Số trang, bắt đầu từ 0"
+    Size:
+      name: size
+      in: query
+      required: false
+      schema:
+        type: integer
+        minimum: 1
+        maximum: 100
+        default: 20
+    CustomerId:
+      name: customerId
+      in: path
+      required: true
+      schema:
+        type: integer
+        format: int64
+    PetId:
+      name: petId
+      in: path
+      required: true
+      schema:
+        type: integer
+        format: int64
+    AddressId:
+      name: addressId
+      in: path
+      required: true
+      schema:
+        type: integer
+        format: int64
+  schemas:
+    Error:
+      type: object
+      description: "Envelope lỗi duy nhất, do GlobalExceptionHandler (platform/exception) sinh. Vi phạm business rule: errorCode = BUSINESS_RULE_VIOLATION, message kết thúc bằng mã rule, ví dụ \"… (BR-LH-05)\"."
+      required: [success, errorCode, message, statusCode, timestamp, traceId]
+      properties:
+        success:
+          type: boolean
+          enum: [false]
+        errorCode:
+          type: string
+          enum: [BUSINESS_RULE_VIOLATION, INVALID_STATE_TRANSITION, RESOURCE_NOT_FOUND, ACCESS_DENIED_SCOPE_MISMATCH, CONCURRENCY_CONFLICT, VALIDATION_FAILED, MALFORMED_REQUEST, METHOD_NOT_ALLOWED, UNSUPPORTED_MEDIA_TYPE, UNAUTHENTICATED, ACCESS_DENIED, INTERNAL_ERROR]
+          description: platform/exception/ErrorCode
+        message:
+          type: string
+          description: "Thông điệp tiếng Việt hiển thị được; với BUSINESS_RULE_VIOLATION kết thúc bằng \" (BR-…)\""
+        statusCode:
+          type: integer
+        timestamp:
+          type: string
+          format: date-time
+        traceId:
+          type: string
+    PageMeta:
+      type: object
+      required: [page, size, totalElements, totalPages]
+      properties:
+        page:
+          type: integer
+        size:
+          type: integer
+        totalElements:
+          type: integer
+          format: int64
+        totalPages:
+          type: integer
+    Species:
+      type: string
+      enum: [DOG, CAT, OTHER]
+      description: "Chó, Mèo, Khác (BR-KH-02)"
+    CustomerProfile:
+      type: object
+      required: [customerId, fullName, createdChannel, hasAccount, linkDecisionPending]
+      properties:
+        customerId:
+          type: integer
+          format: int64
+        fullName:
+          type: string
+          maxLength: 100
+        phone:
+          type: [string, "null"]
+          pattern: "^0[0-9]{9,10}$"
+          maxLength: 15
+          description: "Bắt buộc với hồ sơ tại quầy"
+        email:
+          type: [string, "null"]
+          format: email
+          maxLength: 255
+        avatarUrl:
+          type: [string, "null"]
+          maxLength: 500
+        createdChannel:
+          type: string
+          enum: [ONLINE, COUNTER]
+        hasAccount:
+          type: boolean
+        linkDecisionPending:
+          type: boolean
+    UpdateMyCustomerProfileRequest:
+      type: object
+      description: "Email không tự sửa được (BR-TK-15)"
+      properties:
+        fullName:
+          type: [string, "null"]
+          maxLength: 100
+        phone:
+          type: [string, "null"]
+          pattern: "^0[0-9]{9,10}$"
+          maxLength: 15
+        avatarUrl:
+          type: [string, "null"]
+          maxLength: 500
+    Address:
+      type: object
+      required: [addressId, receiverName, receiverPhone, addressLine, province, isDefault]
+      properties:
+        addressId:
+          type: integer
+          format: int64
+        receiverName:
+          type: string
+          maxLength: 100
+        receiverPhone:
+          type: string
+          pattern: "^0[0-9]{9,10}$"
+          maxLength: 15
+        addressLine:
+          type: string
+          maxLength: 300
+        ward:
+          type: [string, "null"]
+          maxLength: 100
+        province:
+          type: string
+          maxLength: 100
+        isDefault:
+          type: boolean
+    AddressRequest:
+      type: object
+      required: [receiverName, receiverPhone, addressLine, province]
+      properties:
+        receiverName:
+          type: string
+          maxLength: 100
+        receiverPhone:
+          type: string
+          pattern: "^0[0-9]{9,10}$"
+          maxLength: 15
+        addressLine:
+          type: string
+          maxLength: 300
+        ward:
+          type: [string, "null"]
+          maxLength: 100
+        province:
+          type: string
+          maxLength: 100
+        isDefault:
+          type: [boolean, "null"]
+          description: "Địa chỉ đầu tiên luôn là mặc định"
+    UpdateAddressRequest:
+      type: object
+      properties:
+        receiverName:
+          type: [string, "null"]
+          maxLength: 100
+        receiverPhone:
+          type: [string, "null"]
+          pattern: "^0[0-9]{9,10}$"
+          maxLength: 15
+        addressLine:
+          type: [string, "null"]
+          maxLength: 300
+        ward:
+          type: [string, "null"]
+          maxLength: 100
+        province:
+          type: [string, "null"]
+          maxLength: 100
+    PetBrief:
+      type: object
+      required: [petId, name, species, deceased]
+      properties:
+        petId:
+          type: integer
+          format: int64
+        name:
+          type: string
+        species:
+          $ref: "#/components/schemas/Species"
+        deceased:
+          type: boolean
+    CustomerSearchItem:
+      type: object
+      description: "Một SĐT có thể ra nhiều hồ sơ; nhân viên chọn theo họ tên, email che và thú cưng (BR-KH-10)"
+      required: [customerId, fullName, createdChannel, hasAccount, pets]
+      properties:
+        customerId:
+          type: integer
+          format: int64
+        fullName:
+          type: string
+        phone:
+          type: [string, "null"]
+          pattern: "^0[0-9]{9,10}$"
+          maxLength: 15
+        maskedEmail:
+          type: [string, "null"]
+        createdChannel:
+          type: string
+          enum: [ONLINE, COUNTER]
+        hasAccount:
+          type: boolean
+        pets:
+          type: array
+          items:
+            $ref: "#/components/schemas/PetBrief"
+    CreateCounterCustomerRequest:
+      type: object
+      required: [fullName, phone]
+      properties:
+        fullName:
+          type: string
+          maxLength: 100
+        phone:
+          type: string
+          pattern: "^0[0-9]{9,10}$"
+          maxLength: 15
+          description: "Bắt buộc (BR-KH-01), không duy nhất"
+        email:
+          type: [string, "null"]
+          format: email
+          maxLength: 255
+    UpdateCustomerRequest:
+      type: object
+      properties:
+        fullName:
+          type: [string, "null"]
+          maxLength: 100
+        phone:
+          type: [string, "null"]
+          pattern: "^0[0-9]{9,10}$"
+          maxLength: 15
+        email:
+          type: [string, "null"]
+          format: email
+          maxLength: 255
+          description: "Chỉ khi hồ sơ chưa gắn tài khoản (A5)"
+    CustomerWriteResult:
+      type: object
+      required: [customer, duplicatePhoneProfiles]
+      properties:
+        customer:
+          $ref: "#/components/schemas/CustomerProfile"
+        duplicatePhoneProfiles:
+          type: array
+          items:
+            $ref: "#/components/schemas/CustomerSearchItem"
+          description: "Cảnh báo nghi trùng, không chặn (BR-KH-10)"
+    CustomerDetail:
+      type: object
+      required: [customer, pets]
+      properties:
+        customer:
+          $ref: "#/components/schemas/CustomerProfile"
+        pets:
+          type: array
+          items:
+            $ref: "#/components/schemas/PetResponse"
+    PetResponse:
+      type: object
+      required: [petId, customerId, name, species, sex, birthDateEstimated, speciesLocked, deletable]
+      properties:
+        petId:
+          type: integer
+          format: int64
+        customerId:
+          type: integer
+          format: int64
+          description: "Chủ hiện tại"
+        name:
+          type: string
+          maxLength: 100
+        species:
+          $ref: "#/components/schemas/Species"
+        sex:
+          type: string
+          enum: [MALE, FEMALE, UNKNOWN]
+        breed:
+          type: [string, "null"]
+          maxLength: 100
+        birthDate:
+          type: [string, "null"]
+          format: date
+        birthDateEstimated:
+          type: boolean
+        color:
+          type: [string, "null"]
+          maxLength: 50
+        isNeutered:
+          type: [boolean, "null"]
+        photoUrl:
+          type: [string, "null"]
+          maxLength: 500
+        deceasedOn:
+          type: [string, "null"]
+          format: date
+        speciesLocked:
+          type: boolean
+          description: "Đã có bệnh án hoặc mũi tiêm (BR-KH-03)"
+        currentWeightKg:
+          type: [number, "null"]
+          description: "Bản ghi cân mới nhất (BR-KH-04)"
+        deletable:
+          type: boolean
+          description: "Chưa phát sinh lịch hẹn, đặt chỗ, Visit, Order (BR-KH-06)"
+    CreatePetRequest:
+      type: object
+      required: [name, species, sex]
+      properties:
+        name:
+          type: string
+          maxLength: 100
+        species:
+          $ref: "#/components/schemas/Species"
+        sex:
+          type: string
+          enum: [MALE, FEMALE, UNKNOWN]
+        breed:
+          type: [string, "null"]
+          maxLength: 100
+        birthDate:
+          type: [string, "null"]
+          format: date
+          description: "Không ở tương lai"
+        birthDateEstimated:
+          type: [boolean, "null"]
+        color:
+          type: [string, "null"]
+          maxLength: 50
+        isNeutered:
+          type: [boolean, "null"]
+        photoUrl:
+          type: [string, "null"]
+          maxLength: 500
+    UpdatePetRequest:
+      type: object
+      properties:
+        name:
+          type: [string, "null"]
+          maxLength: 100
+        species:
+          $ref: "#/components/schemas/Species"
+        sex:
+          type: [string, "null"]
+          enum: [MALE, FEMALE, UNKNOWN, null]
+        breed:
+          type: [string, "null"]
+          maxLength: 100
+        birthDate:
+          type: [string, "null"]
+          format: date
+        birthDateEstimated:
+          type: [boolean, "null"]
+        color:
+          type: [string, "null"]
+          maxLength: 50
+        isNeutered:
+          type: [boolean, "null"]
+        photoUrl:
+          type: [string, "null"]
+          maxLength: 500
+    PetWriteResult:
+      type: object
+      required: [pet, duplicateNameWarning]
+      properties:
+        pet:
+          $ref: "#/components/schemas/PetResponse"
+        duplicateNameWarning:
+          type: boolean
+          description: "Chủ đã có thú cùng tên, cùng loài — cảnh báo, không chặn (BR-KH-02)"
+    MarkDeceasedRequest:
+      type: object
+      required: [deceasedOn, confirmed]
+      properties:
+        deceasedOn:
+          type: string
+          format: date
+          description: "Không ở tương lai"
+        confirmed:
+          type: boolean
+          description: "Phải true (A3)"
+    TransferOwnerRequest:
+      type: object
+      required: [newCustomerId, previousOwnerConfirmed]
+      properties:
+        newCustomerId:
+          type: integer
+          format: int64
+          description: "Chủ mới đã có hồ sơ (BR-KH-08)"
+        previousOwnerConfirmed:
+          type: boolean
+          description: "Phải true (A4)"
+    WeightRecord:
+      type: object
+      required: [weightRecordId, weightKg, source, measuredAt]
+      properties:
+        weightRecordId:
+          type: integer
+          format: int64
+        weightKg:
+          type: number
+        source:
+          type: string
+          enum: [VET, INTAKE, OWNER]
+        visitId:
+          type: [integer, "null"]
+          format: int64
+        boardingBookingId:
+          type: [integer, "null"]
+          format: int64
+        measuredAt:
+          type: string
+          format: date-time
+    AddWeightRequest:
+      type: object
+      required: [weightKg]
+      properties:
+        weightKg:
+          type: number
+          description: "> 0 (BR-KH-04)"
+        measuredAt:
+          type: [string, "null"]
+          format: date-time
+          description: "Mặc định là lúc gửi"
+  responses:
+    BadRequest:
+      description: "VALIDATION_FAILED / MALFORMED_REQUEST: dữ liệu không hợp lệ · BUSINESS_RULE_VIOLATION: vi phạm rule, message kết thúc bằng mã rule \"(BR-…)\"."
+      content:
+        "application/json":
+          schema:
+            $ref: "#/components/schemas/Error"
+    Unauthorized:
+      description: "UNAUTHENTICATED: chưa đăng nhập hoặc phiên đã hết hạn / bị hủy."
+      content:
+        "application/json":
+          schema:
+            $ref: "#/components/schemas/Error"
+    Forbidden:
+      description: "ACCESS_DENIED: sai vai trò · ACCESS_DENIED_SCOPE_MISMATCH: ngoài phạm vi (chi nhánh, chủ sở hữu). Message chung, không lộ cấu trúc phân quyền."
+      content:
+        "application/json":
+          schema:
+            $ref: "#/components/schemas/Error"
+    NotFound:
+      description: "Không tìm thấy (RESOURCE_NOT_FOUND)."
+      content:
+        "application/json":
+          schema:
+            $ref: "#/components/schemas/Error"

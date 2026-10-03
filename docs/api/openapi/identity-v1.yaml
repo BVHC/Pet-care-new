@@ -1,0 +1,2144 @@
+# Pet Care Identity API v1 — OpenAPI 3.1, sinh từ khai báo; không sửa tay, sửa khai báo rồi sinh lại.
+# Module TK, QT · owner BE-1
+# Nguồn: 01 UC01–UC11, UC22 (phần tài khoản); 02 BR-TK-01…20, BR-QT-01…16; 03 #1 Tài khoản; 04 §1; 05 §1 (accounts, staff_profiles, sessions, otp_tokens, audit_logs, system_configs, notification_templates)
+# Truy vết: CONFIRMED = có trong docs · ASSUMPTION (A#) · TBD (Q#) — xem file .md cùng tên.
+
+openapi: "3.1.0"
+info:
+  title: "Pet Care Identity API v1"
+  version: "1.0.0"
+  description: "Module TK, QT · owner BE-1. Nguồn: 01 UC01–UC11, UC22 (phần tài khoản); 02 BR-TK-01…20, BR-QT-01…16; 03 #1 Tài khoản; 04 §1; 05 §1 (accounts, staff_profiles, sessions, otp_tokens, audit_logs, system_configs, notification_templates). Chi tiết và truy vết: ../identity-v1.md"
+servers:
+  - url: "/api"
+    description: "Mọi path bên dưới nằm sau tiền tố /api"
+tags:
+  - name: Auth
+    description: "Đăng ký, OTP, đăng nhập, mật khẩu (UC01–UC05)"
+  - name: Me
+    description: "Thông tin và hồ sơ của người đang đăng nhập (UC05, UC06)"
+  - name: "Profile link"
+    description: "Liên kết tài khoản với hồ sơ khách có sẵn (UC07, BR-TK-19)"
+  - name: Staff
+    description: "Quản lý tài khoản nhân viên (UC08)"
+  - name: "Customer account"
+    description: "Lễ tân xử lý tài khoản của khách tại quầy (UC22)"
+  - name: Accounts
+    description: "Khóa / mở khóa mọi tài khoản (UC09)"
+  - name: Configuration
+    description: "Tham số [CFG] và mẫu thông báo (UC10)"
+  - name: Audit
+    description: "Nhật ký audit (UC11)"
+  - name: Public
+    description: "Hồ sơ bác sĩ công khai (UC15)"
+paths:
+  "/auth/register":
+    post:
+      tags: [Auth]
+      summary: "Đăng ký tài khoản"
+      description: "UC01 · BR-TK-01, 02, 03, 04, BR-KH-01. Actor: A01. Quyền: Public. Chuyển trạng thái: — → PENDING (Tài khoản#1); tạo hồ sơ online. Gửi OTP_REGISTER qua outbox."
+      operationId: registerAccount
+      security: []
+      requestBody:
+        required: true
+        content:
+          "application/json":
+            schema:
+              $ref: "#/components/schemas/RegisterRequest"
+      responses:
+        "201":
+          description: "Đã tạo"
+          content:
+            "application/json":
+              schema:
+                type: object
+                required: [data, message, code]
+                properties:
+                  data:
+                    $ref: "#/components/schemas/RegistrationResponse"
+                  message:
+                    type: string
+                  code:
+                    type: integer
+                    description: "HTTP status của kết quả, ví dụ 200, 201"
+        "400":
+          description: "`BR-TK-01` email đã được sử dụng · `BR-TK-02` chưa xác nhận ≥ 18 tuổi / điều khoản · `BR-TK-03` mật khẩu yếu"
+          content:
+            "application/json":
+              schema:
+                $ref: "#/components/schemas/Error"
+  "/auth/register/verify":
+    post:
+      tags: [Auth]
+      summary: "Xác thực OTP đăng ký"
+      description: "UC02 · BR-TK-05, 06, 19. Actor: A01. Quyền: Public. Chuyển trạng thái: PENDING → ACTIVE (Tài khoản#2). Không tự đăng nhập (A2)."
+      operationId: verifyRegistration
+      security: []
+      requestBody:
+        required: true
+        content:
+          "application/json":
+            schema:
+              $ref: "#/components/schemas/VerifyOtpRequest"
+      responses:
+        "200":
+          description: OK
+          content:
+            "application/json":
+              schema:
+                type: object
+                required: [data, message, code]
+                properties:
+                  data:
+                    $ref: "#/components/schemas/VerificationResponse"
+                  message:
+                    type: string
+                  code:
+                    type: integer
+                    description: "HTTP status của kết quả, ví dụ 200, 201"
+        "400":
+          description: "`BR-TK-05` mã sai / hết hạn · `BR-TK-06` sai quá 5 lần, mã bị hủy"
+          content:
+            "application/json":
+              schema:
+                $ref: "#/components/schemas/Error"
+        "404":
+          description: "Không có tài khoản PENDING với email này"
+          content:
+            "application/json":
+              schema:
+                $ref: "#/components/schemas/Error"
+  "/auth/register/resend-otp":
+    post:
+      tags: [Auth]
+      summary: "Gửi lại OTP đăng ký"
+      description: "UC02 · BR-TK-04, 05, 07. Actor: A01. Quyền: Public. Chuyển trạng thái: —. Mã cũ cùng mục đích mất hiệu lực (BR-TK-05)."
+      operationId: resendRegistrationOtp
+      security: []
+      requestBody:
+        required: true
+        content:
+          "application/json":
+            schema:
+              $ref: "#/components/schemas/EmailRequest"
+      responses:
+        "200":
+          description: OK
+          content:
+            "application/json":
+              schema:
+                type: object
+                required: [data, message, code]
+                properties:
+                  data:
+                    $ref: "#/components/schemas/OtpSentResponse"
+                  message:
+                    type: string
+                  code:
+                    type: integer
+                    description: "HTTP status của kết quả, ví dụ 200, 201"
+        "400":
+          description: "`BR-TK-07` chưa đủ 60 giây hoặc vượt 5 mã/giờ"
+          content:
+            "application/json":
+              schema:
+                $ref: "#/components/schemas/Error"
+        "404":
+          description: "Không có tài khoản PENDING với email này"
+          content:
+            "application/json":
+              schema:
+                $ref: "#/components/schemas/Error"
+  "/auth/login":
+    post:
+      tags: [Auth]
+      summary: "Đăng nhập"
+      description: "UC03 · BR-TK-08, 09, 10, 11, 17, BR-QT-15. Actor: A02–A08. Quyền: Public. Chuyển trạng thái: —. Ghi audit thành công và thất bại."
+      operationId: login
+      security: []
+      requestBody:
+        required: true
+        content:
+          "application/json":
+            schema:
+              $ref: "#/components/schemas/LoginRequest"
+      responses:
+        "200":
+          description: OK
+          content:
+            "application/json":
+              schema:
+                type: object
+                required: [data, message, code]
+                properties:
+                  data:
+                    $ref: "#/components/schemas/LoginResponse"
+                  message:
+                    type: string
+                  code:
+                    type: integer
+                    description: "HTTP status của kết quả, ví dụ 200, 201"
+        "400":
+          description: "`BR-TK-08` tài khoản chưa xác thực → FE chuyển màn OTP · `BR-TK-09` đang khóa tạm, message có giờ thử lại · `BR-TK-11` tài khoản bị khóa / vô hiệu hóa"
+          content:
+            "application/json":
+              schema:
+                $ref: "#/components/schemas/Error"
+        "401":
+          description: "Sai email hoặc mật khẩu — thông điệp chung (BR-TK-10); sai lần thứ 5 trong 15 phút [CFG] kích hoạt ST01"
+          content:
+            "application/json":
+              schema:
+                $ref: "#/components/schemas/Error"
+  "/auth/logout":
+    post:
+      tags: [Auth]
+      summary: "Đăng xuất"
+      description: "UC03 · BR-TK-11, BR-TN-06. Actor: A02–A08. Quyền: Người đang đăng nhập. Chuyển trạng thái: —. Hủy phiên hiện tại; nhân viên chuyển offline ngay."
+      operationId: logout
+      security:
+        - bearerAuth: []
+      responses:
+        "204":
+          description: "Không có nội dung"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+  "/auth/password/forgot":
+    post:
+      tags: [Auth]
+      summary: "Quên mật khẩu — gửi OTP"
+      description: "UC04 · BR-TK-04, 07, 10, 12. Actor: A02–A08. Quyền: Public. Chuyển trạng thái: —. Luôn trả 202 cùng nội dung, kể cả email không tồn tại hoặc tài khoản không đủ điều kiện BR-TK-12 (không gửi mã). Gửi lại = gọi lại endpoint này (A7)."
+      operationId: forgotPassword
+      security: []
+      requestBody:
+        required: true
+        content:
+          "application/json":
+            schema:
+              $ref: "#/components/schemas/EmailRequest"
+      responses:
+        "202":
+          description: "Đã nhận"
+          content:
+            "application/json":
+              schema:
+                type: object
+                required: [data, message, code]
+                properties:
+                  data:
+                    $ref: "#/components/schemas/OtpSentResponse"
+                  message:
+                    type: string
+                  code:
+                    type: integer
+                    description: "HTTP status của kết quả, ví dụ 200, 201"
+        "400":
+          description: "Email sai định dạng"
+          content:
+            "application/json":
+              schema:
+                $ref: "#/components/schemas/Error"
+  "/auth/password/reset":
+    post:
+      tags: [Auth]
+      summary: "Đặt lại mật khẩu bằng OTP"
+      description: "UC04 · BR-TK-03, 05, 06, 13. Actor: A02–A08. Quyền: Public. Chuyển trạng thái: —. Thành công: hủy mọi phiên, gỡ khóa tạm, gửi email PASSWORD_CHANGED (BR-TK-13)."
+      operationId: resetPassword
+      security: []
+      requestBody:
+        required: true
+        content:
+          "application/json":
+            schema:
+              $ref: "#/components/schemas/ResetPasswordRequest"
+      responses:
+        "204":
+          description: "Không có nội dung"
+        "400":
+          description: "`BR-TK-05` mã sai / hết hạn · `BR-TK-06` sai quá 5 lần, mã bị hủy · `BR-TK-03` mật khẩu không hợp lệ"
+          content:
+            "application/json":
+              schema:
+                $ref: "#/components/schemas/Error"
+  "/me":
+    get:
+      tags: [Me]
+      summary: "Thông tin người đang đăng nhập"
+      description: "UC06 · BR-TK-17, 19. Actor: A02–A08. Quyền: Người đang đăng nhập. Chuyển trạng thái: —."
+      operationId: getMe
+      security:
+        - bearerAuth: []
+      responses:
+        "200":
+          description: OK
+          content:
+            "application/json":
+              schema:
+                type: object
+                required: [data, message, code]
+                properties:
+                  data:
+                    $ref: "#/components/schemas/MeResponse"
+                  message:
+                    type: string
+                  code:
+                    type: integer
+                    description: "HTTP status của kết quả, ví dụ 200, 201"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+  "/me/password":
+    post:
+      tags: [Me]
+      summary: "Đổi mật khẩu"
+      description: "UC05 · BR-TK-03, 09, 14, 17. Actor: A02–A08. Quyền: Người đang đăng nhập. Chuyển trạng thái: —. Đăng xuất mọi phiên khác; gỡ `mustChangePassword`."
+      operationId: changePassword
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          "application/json":
+            schema:
+              $ref: "#/components/schemas/ChangePasswordRequest"
+      responses:
+        "204":
+          description: "Không có nội dung"
+        "400":
+          description: "`BR-TK-14` mật khẩu hiện tại sai (tính vào bộ đếm BR-TK-09) · `BR-TK-03` mật khẩu mới không hợp lệ hoặc trùng mật khẩu cũ"
+          content:
+            "application/json":
+              schema:
+                $ref: "#/components/schemas/Error"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+  "/me/staff-profile":
+    patch:
+      tags: [Me]
+      summary: "Sửa hồ sơ nhân viên của tôi"
+      description: "UC06 · BR-TK-15, 20. Actor: A03–A08. Quyền: Nhân viên đang đăng nhập; specialty, bio chỉ VET. Chuyển trạng thái: —."
+      operationId: updateMyStaffProfile
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          "application/json":
+            schema:
+              $ref: "#/components/schemas/UpdateStaffProfileRequest"
+      responses:
+        "200":
+          description: OK
+          content:
+            "application/json":
+              schema:
+                type: object
+                required: [data, message, code]
+                properties:
+                  data:
+                    $ref: "#/components/schemas/StaffProfile"
+                  message:
+                    type: string
+                  code:
+                    type: integer
+                    description: "HTTP status của kết quả, ví dụ 200, 201"
+        "400":
+          description: "`BR-TK-20` mô tả ngắn vượt 500 ký tự [CFG] · `BR-TK-15` cố sửa email"
+          content:
+            "application/json":
+              schema:
+                $ref: "#/components/schemas/Error"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+  "/me/link-candidates":
+    get:
+      tags: ["Profile link"]
+      summary: "Danh sách hồ sơ tại quầy có thể liên kết"
+      description: "UC07 · BR-TK-19, BR-KH-10. Actor: A02. Quyền: Khách đang đăng nhập. Chuyển trạng thái: —. Chỉ trả hồ sơ COUNTER chưa liên kết, họ tên đã che."
+      operationId: listLinkCandidates
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: phone
+          in: query
+          required: false
+          schema:
+            type: string
+            pattern: "^0[0-9]{9,10}$"
+            maxLength: 15
+          description: "SĐT của hồ sơ tại quầy (UC07 khi không có cờ); bỏ trống = SĐT đã khai trên hồ sơ online"
+      responses:
+        "200":
+          description: OK
+          content:
+            "application/json":
+              schema:
+                type: object
+                required: [data, message, code]
+                properties:
+                  data:
+                    type: array
+                    items:
+                      $ref: "#/components/schemas/LinkCandidate"
+                  message:
+                    type: string
+                  code:
+                    type: integer
+                    description: "HTTP status của kết quả, ví dụ 200, 201"
+        "400":
+          description: "`BR-TK-19` hồ sơ online đã phát sinh dữ liệu, không liên kết được"
+          content:
+            "application/json":
+              schema:
+                $ref: "#/components/schemas/Error"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+  "/me/link/otp":
+    post:
+      tags: ["Profile link"]
+      summary: "Gửi OTP tới email hồ sơ tại quầy"
+      description: "UC07 · BR-TK-04, 07, 19. Actor: A02. Quyền: Khách đang đăng nhập. Chuyển trạng thái: —."
+      operationId: sendLinkOtp
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          "application/json":
+            schema:
+              $ref: "#/components/schemas/LinkOtpRequest"
+      responses:
+        "200":
+          description: OK
+          content:
+            "application/json":
+              schema:
+                type: object
+                required: [data, message, code]
+                properties:
+                  data:
+                    $ref: "#/components/schemas/OtpSentResponse"
+                  message:
+                    type: string
+                  code:
+                    type: integer
+                    description: "HTTP status của kết quả, ví dụ 200, 201"
+        "400":
+          description: "`BR-TK-19` hồ sơ không có email (ra quầy) hoặc hồ sơ online đã có dữ liệu · `BR-TK-07` gửi quá nhanh / quá 5 mã/giờ"
+          content:
+            "application/json":
+              schema:
+                $ref: "#/components/schemas/Error"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "404":
+          $ref: "#/components/responses/NotFound"
+  "/me/link/confirm":
+    post:
+      tags: ["Profile link"]
+      summary: "Xác nhận liên kết"
+      description: "UC07 · BR-TK-05, 06, 19. Actor: A02. Quyền: Khách đang đăng nhập. Chuyển trạng thái: —. Gắn tài khoản vào hồ sơ tại quầy, xóa hồ sơ online, email hồ sơ theo email tài khoản, ghi audit."
+      operationId: confirmLink
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          "application/json":
+            schema:
+              $ref: "#/components/schemas/LinkConfirmRequest"
+      responses:
+        "200":
+          description: OK
+          content:
+            "application/json":
+              schema:
+                type: object
+                required: [data, message, code]
+                properties:
+                  data:
+                    $ref: "#/components/schemas/LinkResult"
+                  message:
+                    type: string
+                  code:
+                    type: integer
+                    description: "HTTP status của kết quả, ví dụ 200, 201"
+        "400":
+          description: "`BR-TK-05` mã sai / hết hạn · `BR-TK-06` sai quá 5 lần, mã bị hủy · `BR-TK-19` hồ sơ online đã phát sinh dữ liệu"
+          content:
+            "application/json":
+              schema:
+                $ref: "#/components/schemas/Error"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "404":
+          $ref: "#/components/responses/NotFound"
+  "/me/link/decline":
+    post:
+      tags: ["Profile link"]
+      summary: "Chọn \"Không phải tôi\""
+      description: "UC07 · BR-TK-19. Actor: A02. Quyền: Khách đang đăng nhập. Chuyển trạng thái: —."
+      operationId: declineLink
+      security:
+        - bearerAuth: []
+      responses:
+        "204":
+          description: "Không có nội dung"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "409":
+          description: "Hồ sơ không còn cờ chờ quyết định"
+          content:
+            "application/json":
+              schema:
+                $ref: "#/components/schemas/Error"
+  "/staff":
+    get:
+      tags: [Staff]
+      summary: "Danh sách nhân viên"
+      description: "UC08 · BR-QT-01, 07. Actor: A03, A04, A05. Quyền: ADMIN: SUPER_MANAGER · SUPER_MANAGER: A05–A08 · BRANCH_MANAGER: A06–A08 chi nhánh mình. Chuyển trạng thái: —."
+      operationId: listStaff
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: branchId
+          in: query
+          required: false
+          schema:
+            type: integer
+            format: int64
+        - name: role
+          in: query
+          required: false
+          schema:
+            type: string
+            enum: [SUPER_MANAGER, BRANCH_MANAGER, RECEPTIONIST, VET, CARETAKER]
+        - name: status
+          in: query
+          required: false
+          schema:
+            type: string
+            enum: [ACTIVE, DISABLED]
+        - name: q
+          in: query
+          required: false
+          schema:
+            type: string
+          description: "Tìm theo họ tên, email"
+        - $ref: "#/components/parameters/Page"
+        - $ref: "#/components/parameters/Size"
+      responses:
+        "200":
+          description: OK
+          content:
+            "application/json":
+              schema:
+                type: object
+                required: [data, message, code]
+                properties:
+                  data:
+                    allOf:
+                      - $ref: "#/components/schemas/PageMeta"
+                      - type: object
+                        required: [content]
+                        properties:
+                          content:
+                            type: array
+                            items:
+                              $ref: "#/components/schemas/StaffResponse"
+                  message:
+                    type: string
+                  code:
+                    type: integer
+                    description: "HTTP status của kết quả, ví dụ 200, 201"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+    post:
+      tags: [Staff]
+      summary: "Tạo tài khoản nhân viên"
+      description: "UC08 · BR-QT-01, 02, 03, BR-TK-01, 17. Actor: A03, A04, A05. Quyền: Theo BR-QT-01. Chuyển trạng thái: — → ACTIVE (Tài khoản#4). Sinh mật khẩu ngẫu nhiên gửi STAFF_TEMP_PASSWORD; người tạo không thấy mật khẩu; mustChangePassword = true."
+      operationId: createStaff
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          "application/json":
+            schema:
+              $ref: "#/components/schemas/CreateStaffRequest"
+      responses:
+        "201":
+          description: "Đã tạo"
+          content:
+            "application/json":
+              schema:
+                type: object
+                required: [data, message, code]
+                properties:
+                  data:
+                    $ref: "#/components/schemas/StaffResponse"
+                  message:
+                    type: string
+                  code:
+                    type: integer
+                    description: "HTTP status của kết quả, ví dụ 200, 201"
+        "400":
+          description: "`BR-TK-01` email đã dùng · `BR-QT-03` thiếu chi nhánh hoặc chi nhánh không DRAFT/ACTIVE"
+          content:
+            "application/json":
+              schema:
+                $ref: "#/components/schemas/Error"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          description: "`BR-QT-01` chức vụ / chi nhánh ngoài quyền (ghi audit)"
+          content:
+            "application/json":
+              schema:
+                $ref: "#/components/schemas/Error"
+  "/staff/{id}":
+    get:
+      tags: [Staff]
+      summary: "Chi tiết nhân viên"
+      description: "UC08 · BR-QT-01, 07. Actor: A03, A04, A05. Quyền: Trong phạm vi như listStaff. Chuyển trạng thái: —."
+      operationId: getStaff
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: "#/components/parameters/StaffId"
+      responses:
+        "200":
+          description: OK
+          content:
+            "application/json":
+              schema:
+                type: object
+                required: [data, message, code]
+                properties:
+                  data:
+                    $ref: "#/components/schemas/StaffResponse"
+                  message:
+                    type: string
+                  code:
+                    type: integer
+                    description: "HTTP status của kết quả, ví dụ 200, 201"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+  "/staff/{id}/change-role":
+    post:
+      tags: [Staff]
+      summary: "Đổi chức vụ"
+      description: "UC08 · BR-QT-04, 05. Actor: A04. Quyền: Chỉ SUPER_MANAGER. Chuyển trạng thái: —."
+      operationId: changeStaffRole
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: "#/components/parameters/StaffId"
+      requestBody:
+        required: true
+        content:
+          "application/json":
+            schema:
+              $ref: "#/components/schemas/ChangeRoleRequest"
+      responses:
+        "200":
+          description: OK
+          content:
+            "application/json":
+              schema:
+                type: object
+                required: [data, message, code]
+                properties:
+                  data:
+                    $ref: "#/components/schemas/StaffResponse"
+                  message:
+                    type: string
+                  code:
+                    type: integer
+                    description: "HTTP status của kết quả, ví dụ 200, 201"
+        "400":
+          description: "`BR-QT-04` là BRANCH_MANAGER ACTIVE cuối cùng của chi nhánh ACTIVE"
+          content:
+            "application/json":
+              schema:
+                $ref: "#/components/schemas/Error"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+  "/staff/{id}/transfer":
+    post:
+      tags: [Staff]
+      summary: "Điều chuyển chi nhánh"
+      description: "UC08 · BR-QT-03, 04, 06, 08. Actor: A04. Quyền: Chỉ SUPER_MANAGER. Chuyển trạng thái: —."
+      operationId: transferStaff
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: "#/components/parameters/StaffId"
+      requestBody:
+        required: true
+        content:
+          "application/json":
+            schema:
+              $ref: "#/components/schemas/TransferStaffRequest"
+      responses:
+        "200":
+          description: OK
+          content:
+            "application/json":
+              schema:
+                type: object
+                required: [data, message, code]
+                properties:
+                  data:
+                    $ref: "#/components/schemas/StaffResponse"
+                  message:
+                    type: string
+                  code:
+                    type: integer
+                    description: "HTTP status của kết quả, ví dụ 200, 201"
+        "400":
+          description: "`BR-QT-08` còn Visit được gán chưa xong / ca thu ngân OPEN (message liệt kê) · `BR-QT-04` BRANCH_MANAGER cuối cùng · `BR-QT-03` chi nhánh không hợp lệ"
+          content:
+            "application/json":
+              schema:
+                $ref: "#/components/schemas/Error"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+  "/staff/{id}/disable":
+    post:
+      tags: [Staff]
+      summary: "Vô hiệu hóa nhân viên"
+      description: "UC08 · BR-QT-04, 07, 08, 09, 12, BR-TK-11. Actor: A03, A04, A05. Quyền: Theo BR-QT-07; không tự vô hiệu hóa mình. Chuyển trạng thái: ACTIVE → DISABLED (Tài khoản#5). Hủy mọi phiên (BR-QT-09)."
+      operationId: disableStaff
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: "#/components/parameters/StaffId"
+      responses:
+        "200":
+          description: OK
+          content:
+            "application/json":
+              schema:
+                type: object
+                required: [data, message, code]
+                properties:
+                  data:
+                    $ref: "#/components/schemas/StaffResponse"
+                  message:
+                    type: string
+                  code:
+                    type: integer
+                    description: "HTTP status của kết quả, ví dụ 200, 201"
+        "400":
+          description: "`BR-QT-08` còn quy trình dở dang (message liệt kê) · `BR-QT-12` đang bị khóa, cần mở khóa trước · `BR-QT-04` BRANCH_MANAGER cuối cùng"
+          content:
+            "application/json":
+              schema:
+                $ref: "#/components/schemas/Error"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          description: "`BR-QT-07` ngoài phạm vi hoặc chính mình"
+          content:
+            "application/json":
+              schema:
+                $ref: "#/components/schemas/Error"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "409":
+          $ref: "#/components/responses/Conflict"
+  "/staff/{id}/reactivate":
+    post:
+      tags: [Staff]
+      summary: "Kích hoạt lại nhân viên"
+      description: "UC08 · BR-QT-02, 03, 10, 12. Actor: A03, A04, A05. Quyền: Cùng phạm vi với vô hiệu hóa. Chuyển trạng thái: DISABLED → ACTIVE (Tài khoản#6). Cấp mật khẩu tạm mới, mustChangePassword = true."
+      operationId: reactivateStaff
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: "#/components/parameters/StaffId"
+      requestBody:
+        required: true
+        content:
+          "application/json":
+            schema:
+              $ref: "#/components/schemas/ReactivateStaffRequest"
+      responses:
+        "200":
+          description: OK
+          content:
+            "application/json":
+              schema:
+                type: object
+                required: [data, message, code]
+                properties:
+                  data:
+                    $ref: "#/components/schemas/StaffResponse"
+                  message:
+                    type: string
+                  code:
+                    type: integer
+                    description: "HTTP status của kết quả, ví dụ 200, 201"
+        "400":
+          description: "`BR-QT-10` đang bị khóa · `BR-QT-03` chi nhánh không hợp lệ"
+          content:
+            "application/json":
+              schema:
+                $ref: "#/components/schemas/Error"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "409":
+          $ref: "#/components/responses/Conflict"
+  "/staff/{id}/resend-initial-password":
+    post:
+      tags: [Staff]
+      summary: "Gửi lại mật khẩu ban đầu"
+      description: "UC08 · BR-QT-02. Actor: A03, A04, A05. Quyền: Người có quyền tạo tài khoản đó (BR-QT-01). Chuyển trạng thái: —. Sinh mật khẩu mới, mã cũ hết hiệu lực."
+      operationId: resendInitialPassword
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: "#/components/parameters/StaffId"
+      responses:
+        "204":
+          description: "Không có nội dung"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "409":
+          description: "Nhân viên đã đổi mật khẩu lần đầu"
+          content:
+            "application/json":
+              schema:
+                $ref: "#/components/schemas/Error"
+  "/staff/{id}/email-change":
+    post:
+      tags: [Staff]
+      summary: "Sửa email nhân viên — gửi OTP tới email mới"
+      description: "UC08 · BR-TK-04, 07, 16, BR-QT-01. Actor: A03, A04, A05. Quyền: Cấp trên theo BR-QT-01. Chuyển trạng thái: —."
+      operationId: startStaffEmailChange
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: "#/components/parameters/StaffId"
+      requestBody:
+        required: true
+        content:
+          "application/json":
+            schema:
+              $ref: "#/components/schemas/EmailChangeRequest"
+      responses:
+        "200":
+          description: OK
+          content:
+            "application/json":
+              schema:
+                type: object
+                required: [data, message, code]
+                properties:
+                  data:
+                    $ref: "#/components/schemas/OtpSentResponse"
+                  message:
+                    type: string
+                  code:
+                    type: integer
+                    description: "HTTP status của kết quả, ví dụ 200, 201"
+        "400":
+          description: "`BR-TK-01` email mới đã dùng · `BR-TK-07` gửi quá nhanh"
+          content:
+            "application/json":
+              schema:
+                $ref: "#/components/schemas/Error"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+  "/staff/{id}/email-change/confirm":
+    post:
+      tags: [Staff]
+      summary: "Sửa email nhân viên — xác nhận OTP"
+      description: "UC08 · BR-TK-05, 06, 16. Actor: A03, A04, A05. Quyền: Cấp trên theo BR-QT-01. Chuyển trạng thái: —. Ghi audit; gửi EMAIL_CHANGED_NOTICE tới email cũ và mới."
+      operationId: confirmStaffEmailChange
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: "#/components/parameters/StaffId"
+      requestBody:
+        required: true
+        content:
+          "application/json":
+            schema:
+              $ref: "#/components/schemas/OtpCodeRequest"
+      responses:
+        "200":
+          description: OK
+          content:
+            "application/json":
+              schema:
+                type: object
+                required: [data, message, code]
+                properties:
+                  data:
+                    $ref: "#/components/schemas/StaffResponse"
+                  message:
+                    type: string
+                  code:
+                    type: integer
+                    description: "HTTP status của kết quả, ví dụ 200, 201"
+        "400":
+          description: "`BR-TK-05` mã sai / hết hạn · `BR-TK-06` sai quá 5 lần, mã bị hủy"
+          content:
+            "application/json":
+              schema:
+                $ref: "#/components/schemas/Error"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+  "/customers/{customerId}/account-email-change":
+    post:
+      tags: ["Customer account"]
+      summary: "Sửa email tài khoản khách / khôi phục tài khoản — gửi OTP"
+      description: "UC22 · BR-TK-01, 04, 07, 16, BR-KH-10. Actor: A06. Quyền: Lễ tân. Chuyển trạng thái: —."
+      operationId: startCustomerEmailChange
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: "#/components/parameters/CustomerId"
+      requestBody:
+        required: true
+        content:
+          "application/json":
+            schema:
+              $ref: "#/components/schemas/CustomerEmailChangeRequest"
+      responses:
+        "200":
+          description: OK
+          content:
+            "application/json":
+              schema:
+                type: object
+                required: [data, message, code]
+                properties:
+                  data:
+                    $ref: "#/components/schemas/OtpSentResponse"
+                  message:
+                    type: string
+                  code:
+                    type: integer
+                    description: "HTTP status của kết quả, ví dụ 200, 201"
+        "400":
+          description: "Hồ sơ chưa gắn tài khoản · `BR-TK-01` email mới đã dùng · `BR-TK-07` gửi quá nhanh"
+          content:
+            "application/json":
+              schema:
+                $ref: "#/components/schemas/Error"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+  "/customers/{customerId}/account-email-change/confirm":
+    post:
+      tags: ["Customer account"]
+      summary: "Sửa email tài khoản khách — xác nhận OTP"
+      description: "UC22 · BR-TK-05, 06, 16. Actor: A06. Quyền: Lễ tân. Chuyển trạng thái: —. Ghi audit kèm phương thức xác minh; gửi EMAIL_CHANGED_NOTICE tới email cũ và mới."
+      operationId: confirmCustomerEmailChange
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: "#/components/parameters/CustomerId"
+      requestBody:
+        required: true
+        content:
+          "application/json":
+            schema:
+              $ref: "#/components/schemas/OtpCodeRequest"
+      responses:
+        "204":
+          description: "Không có nội dung"
+        "400":
+          description: "`BR-TK-05` mã sai / hết hạn · `BR-TK-06` sai quá 5 lần, mã bị hủy"
+          content:
+            "application/json":
+              schema:
+                $ref: "#/components/schemas/Error"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+  "/customers/{customerId}/link-account":
+    post:
+      tags: ["Customer account"]
+      summary: "Liên kết hồ sơ tại quầy với tài khoản"
+      description: "UC22 · BR-TK-16, 19. Actor: A06. Quyền: Lễ tân. Chuyển trạng thái: —. Không cần OTP: lễ tân đã đối chiếu CCCD. Ghi audit."
+      operationId: linkAccountAtCounter
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: "#/components/parameters/CustomerId"
+      requestBody:
+        required: true
+        content:
+          "application/json":
+            schema:
+              $ref: "#/components/schemas/CounterLinkRequest"
+      responses:
+        "200":
+          description: OK
+          content:
+            "application/json":
+              schema:
+                type: object
+                required: [data, message, code]
+                properties:
+                  data:
+                    $ref: "#/components/schemas/LinkResult"
+                  message:
+                    type: string
+                  code:
+                    type: integer
+                    description: "HTTP status của kết quả, ví dụ 200, 201"
+        "400":
+          description: "`BR-TK-19` hồ sơ không phải COUNTER / đã liên kết / hồ sơ online đã phát sinh dữ liệu"
+          content:
+            "application/json":
+              schema:
+                $ref: "#/components/schemas/Error"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+  "/accounts":
+    get:
+      tags: [Accounts]
+      summary: "Tìm tài khoản (khách và nhân viên)"
+      description: "UC09 · BR-QT-11. Actor: A03. Quyền: Chỉ ADMIN. Chuyển trạng thái: —."
+      operationId: listAccounts
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: q
+          in: query
+          required: false
+          schema:
+            type: string
+          description: "Tìm theo email"
+        - name: role
+          in: query
+          required: false
+          schema:
+            type: string
+            enum: [CUSTOMER, ADMIN, SUPER_MANAGER, BRANCH_MANAGER, RECEPTIONIST, VET, CARETAKER]
+        - name: isLocked
+          in: query
+          required: false
+          schema:
+            type: boolean
+        - $ref: "#/components/parameters/Page"
+        - $ref: "#/components/parameters/Size"
+      responses:
+        "200":
+          description: OK
+          content:
+            "application/json":
+              schema:
+                type: object
+                required: [data, message, code]
+                properties:
+                  data:
+                    allOf:
+                      - $ref: "#/components/schemas/PageMeta"
+                      - type: object
+                        required: [content]
+                        properties:
+                          content:
+                            type: array
+                            items:
+                              $ref: "#/components/schemas/AccountSummary"
+                  message:
+                    type: string
+                  code:
+                    type: integer
+                    description: "HTTP status của kết quả, ví dụ 200, 201"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+  "/accounts/{id}/lock":
+    post:
+      tags: [Accounts]
+      summary: "Khóa tài khoản"
+      description: "UC09 · BR-QT-04, 11, 12, BR-TN-08, BR-TK-11. Actor: A03. Quyền: Chỉ ADMIN; không khóa chính mình. Chuyển trạng thái: is_locked false → true (Tài khoản#7). Hủy mọi phiên; Visit IN_PROGRESS đánh dấu cần gán lại; thông báo theo BR-QT-11 (khách: lễ tân các chi nhánh có việc dở — 06 Q2); ghi audit."
+      operationId: lockAccount
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: "#/components/parameters/AccountId"
+      requestBody:
+        required: true
+        content:
+          "application/json":
+            schema:
+              $ref: "#/components/schemas/ReasonRequest"
+      responses:
+        "200":
+          description: OK
+          content:
+            "application/json":
+              schema:
+                type: object
+                required: [data, message, code]
+                properties:
+                  data:
+                    $ref: "#/components/schemas/LockResult"
+                  message:
+                    type: string
+                  code:
+                    type: integer
+                    description: "HTTP status của kết quả, ví dụ 200, 201"
+        "400":
+          description: "Thiếu lý do · khóa chính mình"
+          content:
+            "application/json":
+              schema:
+                $ref: "#/components/schemas/Error"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "409":
+          description: "Đã bị khóa"
+          content:
+            "application/json":
+              schema:
+                $ref: "#/components/schemas/Error"
+  "/accounts/{id}/unlock":
+    post:
+      tags: [Accounts]
+      summary: "Mở khóa tài khoản"
+      description: "UC09 · BR-QT-11, 12. Actor: A03. Quyền: Chỉ ADMIN. Chuyển trạng thái: is_locked true → false (Tài khoản#8). status giữ nguyên giá trị trước khi khóa; ghi audit."
+      operationId: unlockAccount
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: "#/components/parameters/AccountId"
+      requestBody:
+        required: true
+        content:
+          "application/json":
+            schema:
+              $ref: "#/components/schemas/ReasonRequest"
+      responses:
+        "200":
+          description: OK
+          content:
+            "application/json":
+              schema:
+                type: object
+                required: [data, message, code]
+                properties:
+                  data:
+                    $ref: "#/components/schemas/AccountSummary"
+                  message:
+                    type: string
+                  code:
+                    type: integer
+                    description: "HTTP status của kết quả, ví dụ 200, 201"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "409":
+          description: "Không bị khóa"
+          content:
+            "application/json":
+              schema:
+                $ref: "#/components/schemas/Error"
+  "/system-configs":
+    get:
+      tags: [Configuration]
+      summary: "Danh sách tham số [CFG]"
+      description: "UC10 · BR-QT-13. Actor: A03. Quyền: Chỉ ADMIN. Chuyển trạng thái: —."
+      operationId: listSystemConfigs
+      security:
+        - bearerAuth: []
+      responses:
+        "200":
+          description: OK
+          content:
+            "application/json":
+              schema:
+                type: object
+                required: [data, message, code]
+                properties:
+                  data:
+                    type: array
+                    items:
+                      $ref: "#/components/schemas/SystemConfig"
+                  message:
+                    type: string
+                  code:
+                    type: integer
+                    description: "HTTP status của kết quả, ví dụ 200, 201"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+  "/system-configs/{key}":
+    put:
+      tags: [Configuration]
+      summary: "Sửa tham số"
+      description: "UC10 · BR-QT-13, 15. Actor: A03. Quyền: Chỉ ADMIN. Chuyển trạng thái: —. Chỉ áp dụng cho giao dịch tạo sau; ghi audit."
+      operationId: updateSystemConfig
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: "#/components/parameters/ConfigKey"
+      requestBody:
+        required: true
+        content:
+          "application/json":
+            schema:
+              $ref: "#/components/schemas/UpdateConfigRequest"
+      responses:
+        "200":
+          description: OK
+          content:
+            "application/json":
+              schema:
+                type: object
+                required: [data, message, code]
+                properties:
+                  data:
+                    $ref: "#/components/schemas/SystemConfig"
+                  message:
+                    type: string
+                  code:
+                    type: integer
+                    description: "HTTP status của kết quả, ví dụ 200, 201"
+        "400":
+          description: "`BR-QT-13` ngoài khoảng hợp lệ, message ghi khoảng cho phép"
+          content:
+            "application/json":
+              schema:
+                $ref: "#/components/schemas/Error"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+  "/notification-templates":
+    get:
+      tags: [Configuration]
+      summary: "Danh sách mẫu thông báo"
+      description: "UC10 · BR-QT-14. Actor: A03. Quyền: Chỉ ADMIN. Chuyển trạng thái: —."
+      operationId: listNotificationTemplates
+      security:
+        - bearerAuth: []
+      responses:
+        "200":
+          description: OK
+          content:
+            "application/json":
+              schema:
+                type: object
+                required: [data, message, code]
+                properties:
+                  data:
+                    type: array
+                    items:
+                      $ref: "#/components/schemas/NotificationTemplate"
+                  message:
+                    type: string
+                  code:
+                    type: integer
+                    description: "HTTP status của kết quả, ví dụ 200, 201"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+  "/notification-templates/{code}":
+    put:
+      tags: [Configuration]
+      summary: "Sửa nội dung mẫu"
+      description: "UC10 · BR-QT-14, 15. Actor: A03. Quyền: Chỉ ADMIN. Chuyển trạng thái: —. Không có endpoint thêm / xóa mẫu."
+      operationId: updateNotificationTemplate
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: "#/components/parameters/TemplateCode"
+      requestBody:
+        required: true
+        content:
+          "application/json":
+            schema:
+              $ref: "#/components/schemas/UpdateTemplateRequest"
+      responses:
+        "200":
+          description: OK
+          content:
+            "application/json":
+              schema:
+                type: object
+                required: [data, message, code]
+                properties:
+                  data:
+                    $ref: "#/components/schemas/NotificationTemplate"
+                  message:
+                    type: string
+                  code:
+                    type: integer
+                    description: "HTTP status của kết quả, ví dụ 200, 201"
+        "400":
+          description: "`BR-QT-14` dùng biến không tồn tại hoặc thiếu biến bắt buộc (message chỉ rõ biến)"
+          content:
+            "application/json":
+              schema:
+                $ref: "#/components/schemas/Error"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+  "/notification-templates/{code}/restore-default":
+    post:
+      tags: [Configuration]
+      summary: "Khôi phục mẫu mặc định"
+      description: "UC10 · BR-QT-14, 15. Actor: A03. Quyền: Chỉ ADMIN. Chuyển trạng thái: —."
+      operationId: restoreNotificationTemplate
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: "#/components/parameters/TemplateCode"
+      responses:
+        "200":
+          description: OK
+          content:
+            "application/json":
+              schema:
+                type: object
+                required: [data, message, code]
+                properties:
+                  data:
+                    $ref: "#/components/schemas/NotificationTemplate"
+                  message:
+                    type: string
+                  code:
+                    type: integer
+                    description: "HTTP status của kết quả, ví dụ 200, 201"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+  "/audit-logs":
+    get:
+      tags: [Audit]
+      summary: "Xem nhật ký audit"
+      description: "UC11 · BR-QT-15, 16. Actor: A03. Quyền: Chỉ ADMIN. Chuyển trạng thái: —. Chỉ đọc; không có endpoint sửa / xóa (BR-QT-16)."
+      operationId: listAuditLogs
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: actorAccountId
+          in: query
+          required: false
+          schema:
+            type: integer
+            format: int64
+        - name: action
+          in: query
+          required: false
+          schema:
+            type: string
+        - name: entityType
+          in: query
+          required: false
+          schema:
+            type: string
+        - name: entityId
+          in: query
+          required: false
+          schema:
+            type: integer
+            format: int64
+        - name: from
+          in: query
+          required: false
+          schema:
+            type: string
+            format: date-time
+        - name: to
+          in: query
+          required: false
+          schema:
+            type: string
+            format: date-time
+        - $ref: "#/components/parameters/Page"
+        - $ref: "#/components/parameters/Size"
+      responses:
+        "200":
+          description: OK
+          content:
+            "application/json":
+              schema:
+                type: object
+                required: [data, message, code]
+                properties:
+                  data:
+                    allOf:
+                      - $ref: "#/components/schemas/PageMeta"
+                      - type: object
+                        required: [content]
+                        properties:
+                          content:
+                            type: array
+                            items:
+                              $ref: "#/components/schemas/AuditLogEntry"
+                  message:
+                    type: string
+                  code:
+                    type: integer
+                    description: "HTTP status của kết quả, ví dụ 200, 201"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+  "/public/vets":
+    get:
+      tags: [Public]
+      summary: "Đội ngũ bác sĩ"
+      description: "UC15 · BR-TK-20, BR-CK-01. Actor: A01, A02. Quyền: Public. Chuyển trạng thái: —. Chỉ VET ACTIVE, không khóa."
+      operationId: listPublicVets
+      security: []
+      parameters:
+        - name: branchId
+          in: query
+          required: false
+          schema:
+            type: integer
+            format: int64
+      responses:
+        "200":
+          description: OK
+          content:
+            "application/json":
+              schema:
+                type: object
+                required: [data, message, code]
+                properties:
+                  data:
+                    type: array
+                    items:
+                      $ref: "#/components/schemas/PublicVet"
+                  message:
+                    type: string
+                  code:
+                    type: integer
+                    description: "HTTP status của kết quả, ví dụ 200, 201"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      description: "Access token trả về từ POST /auth/login, gắn với một phiên (sessions). Phiên bị hủy thì token hết hiệu lực ngay (BR-TK-11, 13, 14)."
+  parameters:
+    Page:
+      name: page
+      in: query
+      required: false
+      schema:
+        type: integer
+        minimum: 0
+        default: 0
+      description: "Số trang, bắt đầu từ 0"
+    Size:
+      name: size
+      in: query
+      required: false
+      schema:
+        type: integer
+        minimum: 1
+        maximum: 100
+        default: 20
+    StaffId:
+      name: id
+      in: path
+      required: true
+      schema:
+        type: integer
+        format: int64
+      description: "accountId của nhân viên"
+    AccountId:
+      name: id
+      in: path
+      required: true
+      schema:
+        type: integer
+        format: int64
+    CustomerId:
+      name: customerId
+      in: path
+      required: true
+      schema:
+        type: integer
+        format: int64
+    ConfigKey:
+      name: key
+      in: path
+      required: true
+      schema:
+        type: string
+      description: "Ví dụ otp.ttl_minutes"
+    TemplateCode:
+      name: code
+      in: path
+      required: true
+      schema:
+        type: string
+      description: "Ví dụ VACCINE_REMINDER"
+  schemas:
+    Error:
+      type: object
+      description: "Envelope lỗi duy nhất, do GlobalExceptionHandler (platform/exception) sinh. Vi phạm business rule: errorCode = BUSINESS_RULE_VIOLATION, message kết thúc bằng mã rule, ví dụ \"… (BR-LH-05)\"."
+      required: [success, errorCode, message, statusCode, timestamp, traceId]
+      properties:
+        success:
+          type: boolean
+          enum: [false]
+        errorCode:
+          type: string
+          enum: [BUSINESS_RULE_VIOLATION, INVALID_STATE_TRANSITION, RESOURCE_NOT_FOUND, ACCESS_DENIED_SCOPE_MISMATCH, CONCURRENCY_CONFLICT, VALIDATION_FAILED, MALFORMED_REQUEST, METHOD_NOT_ALLOWED, UNSUPPORTED_MEDIA_TYPE, UNAUTHENTICATED, ACCESS_DENIED, INTERNAL_ERROR]
+          description: platform/exception/ErrorCode
+        message:
+          type: string
+          description: "Thông điệp tiếng Việt hiển thị được; với BUSINESS_RULE_VIOLATION kết thúc bằng \" (BR-…)\""
+        statusCode:
+          type: integer
+        timestamp:
+          type: string
+          format: date-time
+        traceId:
+          type: string
+    PageMeta:
+      type: object
+      required: [page, size, totalElements, totalPages]
+      properties:
+        page:
+          type: integer
+        size:
+          type: integer
+        totalElements:
+          type: integer
+          format: int64
+        totalPages:
+          type: integer
+    Role:
+      type: string
+      enum: [CUSTOMER, ADMIN, SUPER_MANAGER, BRANCH_MANAGER, RECEPTIONIST, VET, CARETAKER]
+      description: "Role cố định (04 §1)"
+    AccountStatus:
+      type: string
+      enum: [PENDING, ACTIVE, DISABLED]
+      description: "03 #1; khóa là cờ isLocked riêng"
+    RegisterRequest:
+      type: object
+      required: [email, password, fullName, isAdult, termsAccepted]
+      properties:
+        email:
+          type: string
+          format: email
+          maxLength: 255
+          description: "Định danh duy nhất, lưu chữ thường (BR-TK-01)"
+        password:
+          type: string
+          description: "≥ 8 ký tự [CFG], có chữ và số (BR-TK-03)"
+        fullName:
+          type: string
+          maxLength: 100
+          description: "Họ tên của hồ sơ online (BR-KH-01)"
+        phone:
+          type: [string, "null"]
+          pattern: "^0[0-9]{9,10}$"
+          maxLength: 15
+          description: "Không bắt buộc, không kiểm trùng (BR-TK-01, v16)"
+        isAdult:
+          type: boolean
+          description: "Phải true (BR-TK-02)"
+        termsAccepted:
+          type: boolean
+          description: "Phải true (BR-TK-02)"
+    RegistrationResponse:
+      type: object
+      required: [accountId, email, status, otpResendAvailableAt]
+      properties:
+        accountId:
+          type: integer
+          format: int64
+        email:
+          type: string
+          format: email
+          maxLength: 255
+        status:
+          type: string
+          enum: [PENDING]
+        otpResendAvailableAt:
+          type: string
+          format: date-time
+          description: "Mốc được gửi lại OTP (BR-TK-07)"
+    VerifyOtpRequest:
+      type: object
+      required: [email, code]
+      properties:
+        email:
+          type: string
+          format: email
+          maxLength: 255
+        code:
+          type: string
+          description: "6 chữ số (BR-TK-05)"
+    VerificationResponse:
+      type: object
+      required: [accountId, status, linkDecisionPending]
+      properties:
+        accountId:
+          type: integer
+          format: int64
+        status:
+          type: string
+          enum: [ACTIVE]
+        linkDecisionPending:
+          type: boolean
+          description: "true nếu SĐT trùng hồ sơ tại quầy chưa liên kết → mở màn hình liên kết (BR-TK-19)"
+    EmailRequest:
+      type: object
+      required: [email]
+      properties:
+        email:
+          type: string
+          format: email
+          maxLength: 255
+    OtpSentResponse:
+      type: object
+      required: [resendAvailableAt]
+      properties:
+        resendAvailableAt:
+          type: string
+          format: date-time
+          description: "Mốc được gửi lại (BR-TK-07)"
+        maskedEmail:
+          type: [string, "null"]
+          description: "Email nhận mã đã che, chỉ có ở luồng liên kết hồ sơ"
+    LoginRequest:
+      type: object
+      required: [email, password]
+      properties:
+        email:
+          type: string
+          format: email
+          maxLength: 255
+        password:
+          type: string
+    AccountSummary:
+      type: object
+      required: [id, email, role, status, isLocked, mustChangePassword]
+      properties:
+        id:
+          type: integer
+          format: int64
+        email:
+          type: string
+          format: email
+          maxLength: 255
+        role:
+          $ref: "#/components/schemas/Role"
+        status:
+          $ref: "#/components/schemas/AccountStatus"
+        isLocked:
+          type: boolean
+        mustChangePassword:
+          type: boolean
+    LoginResponse:
+      type: object
+      required: [accessToken, expiresAt, account, linkDecisionPending]
+      properties:
+        accessToken:
+          type: string
+          description: "Bearer token gắn với một phiên (A1)"
+        expiresAt:
+          type: string
+          format: date-time
+        account:
+          $ref: "#/components/schemas/AccountSummary"
+        linkDecisionPending:
+          type: boolean
+          description: "Khách còn cờ chờ quyết định liên kết thì FE nhắc lại lời đề nghị (BR-TK-19)"
+    ResetPasswordRequest:
+      type: object
+      required: [email, code, newPassword]
+      properties:
+        email:
+          type: string
+          format: email
+          maxLength: 255
+        code:
+          type: string
+        newPassword:
+          type: string
+    ChangePasswordRequest:
+      type: object
+      required: [currentPassword, newPassword]
+      properties:
+        currentPassword:
+          type: string
+        newPassword:
+          type: string
+    StaffProfile:
+      type: object
+      required: [accountId, fullName, phone]
+      properties:
+        accountId:
+          type: integer
+          format: int64
+        fullName:
+          type: string
+          maxLength: 100
+        avatarUrl:
+          type: [string, "null"]
+          maxLength: 500
+        phone:
+          type: string
+          pattern: "^0[0-9]{9,10}$"
+          maxLength: 15
+        branchId:
+          type: [integer, "null"]
+          format: int64
+          description: "null với ADMIN, SUPER_MANAGER (BR-QT-03)"
+        specialty:
+          type: [string, "null"]
+          maxLength: 200
+          description: "Chỉ VET (BR-TK-20)"
+        bio:
+          type: [string, "null"]
+          maxLength: 500
+          description: "Chỉ VET, ≤ 500 ký tự [CFG]"
+    MeResponse:
+      type: object
+      required: [account, linkDecisionPending]
+      properties:
+        account:
+          $ref: "#/components/schemas/AccountSummary"
+        staffProfile:
+          $ref: "#/components/schemas/StaffProfile"
+        customerId:
+          type: [integer, "null"]
+          format: int64
+          description: "Hồ sơ khách gắn tài khoản (chỉ CUSTOMER)"
+        linkDecisionPending:
+          type: boolean
+    UpdateStaffProfileRequest:
+      type: object
+      properties:
+        fullName:
+          type: [string, "null"]
+          maxLength: 100
+        avatarUrl:
+          type: [string, "null"]
+          maxLength: 500
+        phone:
+          type: [string, "null"]
+          pattern: "^0[0-9]{9,10}$"
+          maxLength: 15
+        specialty:
+          type: [string, "null"]
+          maxLength: 200
+          description: "Chỉ VET"
+        bio:
+          type: [string, "null"]
+          maxLength: 500
+          description: "Chỉ VET"
+    LinkCandidate:
+      type: object
+      required: [customerId, maskedFullName, hasEmail]
+      properties:
+        customerId:
+          type: integer
+          format: int64
+        maskedFullName:
+          type: string
+          description: "Ví dụ Ng*** V** A (BR-TK-19)"
+        hasEmail:
+          type: boolean
+          description: "false: không liên kết online được, hướng dẫn ra quầy"
+    LinkOtpRequest:
+      type: object
+      required: [customerId]
+      properties:
+        customerId:
+          type: integer
+          format: int64
+          description: "Hồ sơ tại quầy chọn từ danh sách gợi ý"
+    LinkConfirmRequest:
+      type: object
+      required: [customerId, code]
+      properties:
+        customerId:
+          type: integer
+          format: int64
+        code:
+          type: string
+    LinkResult:
+      type: object
+      required: [customerId]
+      properties:
+        customerId:
+          type: integer
+          format: int64
+          description: "Hồ sơ khách mà tài khoản đang gắn sau khi liên kết"
+    StaffResponse:
+      type: object
+      required: [accountId, email, phone, fullName, role, status, isLocked, mustChangePassword, online]
+      properties:
+        accountId:
+          type: integer
+          format: int64
+        email:
+          type: string
+          format: email
+          maxLength: 255
+        phone:
+          type: string
+          pattern: "^0[0-9]{9,10}$"
+          maxLength: 15
+        fullName:
+          type: string
+          maxLength: 100
+        role:
+          $ref: "#/components/schemas/Role"
+        status:
+          $ref: "#/components/schemas/AccountStatus"
+        isLocked:
+          type: boolean
+        branchId:
+          type: [integer, "null"]
+          format: int64
+        specialty:
+          type: [string, "null"]
+        bio:
+          type: [string, "null"]
+        mustChangePassword:
+          type: boolean
+        online:
+          type: boolean
+          description: "Thao tác trong 10 phút [CFG] gần nhất (BR-TN-06)"
+    CreateStaffRequest:
+      type: object
+      required: [email, phone, fullName, role]
+      properties:
+        email:
+          type: string
+          format: email
+          maxLength: 255
+        phone:
+          type: string
+          pattern: "^0[0-9]{9,10}$"
+          maxLength: 15
+          description: "Bắt buộc với nhân viên (BR-TK-01)"
+        fullName:
+          type: string
+          maxLength: 100
+        role:
+          type: string
+          enum: [SUPER_MANAGER, BRANCH_MANAGER, RECEPTIONIST, VET, CARETAKER]
+          description: "Theo phân cấp BR-QT-01"
+        branchId:
+          type: [integer, "null"]
+          format: int64
+          description: "Bắt buộc với BRANCH_MANAGER…CARETAKER; chi nhánh DRAFT/ACTIVE (BR-QT-03)"
+    ChangeRoleRequest:
+      type: object
+      required: [role]
+      properties:
+        role:
+          type: string
+          enum: [BRANCH_MANAGER, RECEPTIONIST, VET, CARETAKER]
+          description: BR-QT-05
+    TransferStaffRequest:
+      type: object
+      required: [branchId]
+      properties:
+        branchId:
+          type: integer
+          format: int64
+    ReactivateStaffRequest:
+      type: object
+      properties:
+        branchId:
+          type: [integer, "null"]
+          format: int64
+          description: "Gán lại chi nhánh nếu cần (BR-QT-10)"
+    EmailChangeRequest:
+      type: object
+      required: [newEmail]
+      properties:
+        newEmail:
+          type: string
+          format: email
+          maxLength: 255
+    OtpCodeRequest:
+      type: object
+      required: [code]
+      properties:
+        code:
+          type: string
+    CustomerEmailChangeRequest:
+      type: object
+      required: [newEmail, verificationMethod]
+      properties:
+        newEmail:
+          type: string
+          format: email
+          maxLength: 255
+        verificationMethod:
+          type: string
+          enum: [ID_CARD_IN_PERSON]
+          description: "Lễ tân đã đối chiếu CCCD với họ tên hồ sơ; không lưu CCCD (BR-TK-16, A6)"
+    CounterLinkRequest:
+      type: object
+      required: [accountEmail, verificationMethod]
+      properties:
+        accountEmail:
+          type: string
+          format: email
+          maxLength: 255
+          description: "Email tài khoản online của khách"
+        verificationMethod:
+          type: string
+          enum: [ID_CARD_IN_PERSON]
+          description: "BR-TK-19, A6"
+    ReasonRequest:
+      type: object
+      required: [reason]
+      properties:
+        reason:
+          type: string
+          maxLength: 500
+          description: "Bắt buộc (BR-QT-11)"
+    PendingWorkItem:
+      type: object
+      required: [type, entityId, branchId, needsReassign]
+      properties:
+        type:
+          type: string
+          enum: [VISIT_IN_PROGRESS, VISIT_WAITING, CASHIER_SHIFT_OPEN, APPOINTMENT_BOOKED, BOARDING_ACTIVE, ORDER_UNPAID]
+        entityId:
+          type: integer
+          format: int64
+        branchId:
+          type: integer
+          format: int64
+        needsReassign:
+          type: boolean
+          description: "true với Visit IN_PROGRESS (BR-TN-08)"
+    LockResult:
+      type: object
+      required: [account, pendingWork]
+      properties:
+        account:
+          $ref: "#/components/schemas/AccountSummary"
+        pendingWork:
+          type: array
+          items:
+            $ref: "#/components/schemas/PendingWorkItem"
+          description: "Quy trình dở dang hiển thị sau khi khóa (BR-QT-11)"
+    SystemConfig:
+      type: object
+      required: [key, value, valueType, description]
+      properties:
+        key:
+          type: string
+        value:
+          type: string
+        valueType:
+          type: string
+          enum: [INT, DECIMAL, BOOL, TIME]
+        minValue:
+          type: [string, "null"]
+        maxValue:
+          type: [string, "null"]
+        unit:
+          type: [string, "null"]
+        description:
+          type: string
+    UpdateConfigRequest:
+      type: object
+      required: [value]
+      properties:
+        value:
+          type: string
+          description: "Phải nằm trong [minValue, maxValue] (BR-QT-13)"
+    NotificationTemplate:
+      type: object
+      required: [code, channel, body, allowedVars, requiredVars, isDefault]
+      properties:
+        code:
+          type: string
+        channel:
+          type: string
+          enum: [EMAIL, IN_APP]
+        subject:
+          type: [string, "null"]
+        body:
+          type: string
+        allowedVars:
+          type: array
+          items:
+            type: string
+        requiredVars:
+          type: array
+          items:
+            type: string
+        isDefault:
+          type: boolean
+          description: "Nội dung đang trùng bản mặc định"
+    UpdateTemplateRequest:
+      type: object
+      required: [body]
+      properties:
+        subject:
+          type: [string, "null"]
+          maxLength: 255
+        body:
+          type: string
+          description: "Chỉ dùng biến trong allowedVars, đủ requiredVars (BR-QT-14)"
+    AuditLogEntry:
+      type: object
+      required: [id, action, createdAt]
+      properties:
+        id:
+          type: integer
+          format: int64
+        actorAccountId:
+          type: [integer, "null"]
+          format: int64
+        actorEmail:
+          type: [string, "null"]
+        action:
+          type: string
+        entityType:
+          type: [string, "null"]
+        entityId:
+          type: [integer, "null"]
+          format: int64
+        beforeData:
+          type: [object, "null"]
+          additionalProperties: true
+        afterData:
+          type: [object, "null"]
+          additionalProperties: true
+        reason:
+          type: [string, "null"]
+        ipAddress:
+          type: [string, "null"]
+        createdAt:
+          type: string
+          format: date-time
+    PublicVet:
+      type: object
+      required: [accountId, fullName, branchId, branchName]
+      properties:
+        accountId:
+          type: integer
+          format: int64
+        fullName:
+          type: string
+        avatarUrl:
+          type: [string, "null"]
+          maxLength: 500
+        specialty:
+          type: [string, "null"]
+        bio:
+          type: [string, "null"]
+        branchId:
+          type: integer
+          format: int64
+        branchName:
+          type: string
+  responses:
+    BadRequest:
+      description: "VALIDATION_FAILED / MALFORMED_REQUEST: dữ liệu không hợp lệ · BUSINESS_RULE_VIOLATION: vi phạm rule, message kết thúc bằng mã rule \"(BR-…)\"."
+      content:
+        "application/json":
+          schema:
+            $ref: "#/components/schemas/Error"
+    Unauthorized:
+      description: "UNAUTHENTICATED: chưa đăng nhập hoặc phiên đã hết hạn / bị hủy."
+      content:
+        "application/json":
+          schema:
+            $ref: "#/components/schemas/Error"
+    Forbidden:
+      description: "ACCESS_DENIED: sai vai trò · ACCESS_DENIED_SCOPE_MISMATCH: ngoài phạm vi (chi nhánh, chủ sở hữu). Message chung, không lộ cấu trúc phân quyền."
+      content:
+        "application/json":
+          schema:
+            $ref: "#/components/schemas/Error"
+    NotFound:
+      description: "Không tìm thấy (RESOURCE_NOT_FOUND)."
+      content:
+        "application/json":
+          schema:
+            $ref: "#/components/schemas/Error"
+    Conflict:
+      description: "INVALID_STATE_TRANSITION: trạng thái hiện tại không cho phép thao tác · CONCURRENCY_CONFLICT: xung đột cập nhật đồng thời."
+      content:
+        "application/json":
+          schema:
+            $ref: "#/components/schemas/Error"

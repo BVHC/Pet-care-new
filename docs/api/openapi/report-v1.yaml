@@ -1,0 +1,738 @@
+# Pet Care Report API v1 — OpenAPI 3.1, sinh từ khai báo; không sửa tay, sửa khai báo rồi sinh lại.
+# Module BC (tầng 2) · owner BE-2 (số liệu lịch hẹn, tiêm chủng do BE-1 cung cấp qua *ReportApi)
+# Nguồn: 01 UC89; 02 BR-BC-01…04, BR-BH-05, BR-KO-07, BR-DG-03; 04 *Ngoài phạm vi* (báo cáo không có model); 06-module-contracts §8 Q3
+# Truy vết: CONFIRMED = có trong docs · ASSUMPTION (A#) · TBD (Q#) — xem file .md cùng tên.
+
+openapi: "3.1.0"
+info:
+  title: "Pet Care Report API v1"
+  version: "1.0.0"
+  description: "Module BC (tầng 2) · owner BE-2 (số liệu lịch hẹn, tiêm chủng do BE-1 cung cấp qua *ReportApi). Nguồn: 01 UC89; 02 BR-BC-01…04, BR-BH-05, BR-KO-07, BR-DG-03; 04 *Ngoài phạm vi* (báo cáo không có model); 06-module-contracts §8 Q3. Chi tiết và truy vết: ../report-v1.md"
+servers:
+  - url: "/api"
+    description: "Mọi path bên dưới nằm sau tiền tố /api"
+tags:
+  - name: Reports
+    description: "Báo cáo (UC89)"
+paths:
+  "/reports/revenue":
+    get:
+      tags: [Reports]
+      summary: "Doanh thu theo nguồn"
+      description: "UC89 · BR-BC-01, 02, 03. Actor: A04, A05. Quyền: SUPER_MANAGER: toàn chuỗi · BRANCH_MANAGER: chi nhánh mình. Chuyển trạng thái: —."
+      operationId: getRevenueReport
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: branchId
+          in: query
+          required: false
+          schema:
+            type: integer
+            format: int64
+          description: "SUPER_MANAGER: bỏ trống = toàn chuỗi · BRANCH_MANAGER: luôn là chi nhánh mình"
+        - name: from
+          in: query
+          required: true
+          schema:
+            type: string
+            format: date
+        - name: to
+          in: query
+          required: true
+          schema:
+            type: string
+            format: date
+          description: "Kỳ ≤ 12 tháng [CFG]"
+      responses:
+        "200":
+          description: OK
+          content:
+            "application/json":
+              schema:
+                type: object
+                required: [data, message, code]
+                properties:
+                  data:
+                    $ref: "#/components/schemas/RevenueReport"
+                  message:
+                    type: string
+                  code:
+                    type: integer
+                    description: "HTTP status của kết quả, ví dụ 200, 201"
+        "400":
+          description: "`BR-BC-01` kỳ vượt 12 tháng [CFG] hoặc from > to"
+          content:
+            "application/json":
+              schema:
+                $ref: "#/components/schemas/Error"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          description: "`BR-BC-01` chi nhánh ngoài phạm vi"
+          content:
+            "application/json":
+              schema:
+                $ref: "#/components/schemas/Error"
+  "/reports/lost-revenue":
+    get:
+      tags: [Reports]
+      summary: "Thất thu"
+      description: "UC89 · BR-BC-01, 02, BR-BH-05. Actor: A04, A05. Quyền: SUPER_MANAGER: toàn chuỗi · BRANCH_MANAGER: chi nhánh mình. Chuyển trạng thái: —."
+      operationId: getLostRevenueReport
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: branchId
+          in: query
+          required: false
+          schema:
+            type: integer
+            format: int64
+          description: "SUPER_MANAGER: bỏ trống = toàn chuỗi · BRANCH_MANAGER: luôn là chi nhánh mình"
+        - name: from
+          in: query
+          required: true
+          schema:
+            type: string
+            format: date
+        - name: to
+          in: query
+          required: true
+          schema:
+            type: string
+            format: date
+          description: "Kỳ ≤ 12 tháng [CFG]"
+      responses:
+        "200":
+          description: OK
+          content:
+            "application/json":
+              schema:
+                type: object
+                required: [data, message, code]
+                properties:
+                  data:
+                    $ref: "#/components/schemas/LostRevenueReport"
+                  message:
+                    type: string
+                  code:
+                    type: integer
+                    description: "HTTP status của kết quả, ví dụ 200, 201"
+        "400":
+          description: "`BR-BC-01` kỳ vượt 12 tháng [CFG] hoặc from > to"
+          content:
+            "application/json":
+              schema:
+                $ref: "#/components/schemas/Error"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          description: "`BR-BC-01` chi nhánh ngoài phạm vi"
+          content:
+            "application/json":
+              schema:
+                $ref: "#/components/schemas/Error"
+  "/reports/completed-services":
+    get:
+      tags: [Reports]
+      summary: "Lượt dịch vụ hoàn tất"
+      description: "UC89 · BR-BC-01, 03. Actor: A04, A05. Quyền: SUPER_MANAGER: toàn chuỗi · BRANCH_MANAGER: chi nhánh mình. Chuyển trạng thái: —."
+      operationId: getCompletedServicesReport
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: branchId
+          in: query
+          required: false
+          schema:
+            type: integer
+            format: int64
+          description: "SUPER_MANAGER: bỏ trống = toàn chuỗi · BRANCH_MANAGER: luôn là chi nhánh mình"
+        - name: from
+          in: query
+          required: true
+          schema:
+            type: string
+            format: date
+        - name: to
+          in: query
+          required: true
+          schema:
+            type: string
+            format: date
+          description: "Kỳ ≤ 12 tháng [CFG]"
+      responses:
+        "200":
+          description: OK
+          content:
+            "application/json":
+              schema:
+                type: object
+                required: [data, message, code]
+                properties:
+                  data:
+                    $ref: "#/components/schemas/CompletedServicesReport"
+                  message:
+                    type: string
+                  code:
+                    type: integer
+                    description: "HTTP status của kết quả, ví dụ 200, 201"
+        "400":
+          description: "`BR-BC-01` kỳ vượt 12 tháng [CFG] hoặc from > to"
+          content:
+            "application/json":
+              schema:
+                $ref: "#/components/schemas/Error"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          description: "`BR-BC-01` chi nhánh ngoài phạm vi"
+          content:
+            "application/json":
+              schema:
+                $ref: "#/components/schemas/Error"
+  "/reports/no-show":
+    get:
+      tags: [Reports]
+      summary: "Tỷ lệ NO_SHOW và hủy muộn"
+      description: "UC89 · BR-BC-01, 03. Actor: A04, A05. Quyền: SUPER_MANAGER: toàn chuỗi · BRANCH_MANAGER: chi nhánh mình. Chuyển trạng thái: —."
+      operationId: getNoShowReport
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: branchId
+          in: query
+          required: false
+          schema:
+            type: integer
+            format: int64
+          description: "SUPER_MANAGER: bỏ trống = toàn chuỗi · BRANCH_MANAGER: luôn là chi nhánh mình"
+        - name: from
+          in: query
+          required: true
+          schema:
+            type: string
+            format: date
+        - name: to
+          in: query
+          required: true
+          schema:
+            type: string
+            format: date
+          description: "Kỳ ≤ 12 tháng [CFG]"
+      responses:
+        "200":
+          description: OK
+          content:
+            "application/json":
+              schema:
+                type: object
+                required: [data, message, code]
+                properties:
+                  data:
+                    $ref: "#/components/schemas/NoShowReport"
+                  message:
+                    type: string
+                  code:
+                    type: integer
+                    description: "HTTP status của kết quả, ví dụ 200, 201"
+        "400":
+          description: "`BR-BC-01` kỳ vượt 12 tháng [CFG] hoặc from > to"
+          content:
+            "application/json":
+              schema:
+                $ref: "#/components/schemas/Error"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          description: "`BR-BC-01` chi nhánh ngoài phạm vi"
+          content:
+            "application/json":
+              schema:
+                $ref: "#/components/schemas/Error"
+  "/reports/revaccination-return":
+    get:
+      tags: [Reports]
+      summary: "Tỷ lệ quay lại tái chủng"
+      description: "UC89 · BR-BC-01, 03, 04. Actor: A04, A05. Quyền: SUPER_MANAGER: toàn chuỗi · BRANCH_MANAGER: chi nhánh mình. Chuyển trạng thái: —."
+      operationId: getRevaccinationReport
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: branchId
+          in: query
+          required: false
+          schema:
+            type: integer
+            format: int64
+          description: "SUPER_MANAGER: bỏ trống = toàn chuỗi · BRANCH_MANAGER: luôn là chi nhánh mình"
+        - name: from
+          in: query
+          required: true
+          schema:
+            type: string
+            format: date
+        - name: to
+          in: query
+          required: true
+          schema:
+            type: string
+            format: date
+          description: "Kỳ ≤ 12 tháng [CFG]"
+      responses:
+        "200":
+          description: OK
+          content:
+            "application/json":
+              schema:
+                type: object
+                required: [data, message, code]
+                properties:
+                  data:
+                    $ref: "#/components/schemas/RevaccinationReport"
+                  message:
+                    type: string
+                  code:
+                    type: integer
+                    description: "HTTP status của kết quả, ví dụ 200, 201"
+        "400":
+          description: "`BR-BC-01` kỳ vượt 12 tháng [CFG] hoặc from > to"
+          content:
+            "application/json":
+              schema:
+                $ref: "#/components/schemas/Error"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          description: "`BR-BC-01` chi nhánh ngoài phạm vi"
+          content:
+            "application/json":
+              schema:
+                $ref: "#/components/schemas/Error"
+  "/reports/stock-alerts":
+    get:
+      tags: [Reports]
+      summary: "Tồn dưới ngưỡng và lô sắp / đã hết hạn"
+      description: "UC89 · BR-BC-01, 03, BR-KO-07. Actor: A04, A05. Quyền: SUPER_MANAGER: toàn chuỗi · BRANCH_MANAGER: chi nhánh mình. Chuyển trạng thái: —."
+      operationId: getStockAlertReport
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: branchId
+          in: query
+          required: false
+          schema:
+            type: integer
+            format: int64
+        - name: withinDays
+          in: query
+          required: false
+          schema:
+            type: integer
+            format: int32
+          description: "Mặc định 30 [CFG] (A2)"
+      responses:
+        "200":
+          description: OK
+          content:
+            "application/json":
+              schema:
+                type: object
+                required: [data, message, code]
+                properties:
+                  data:
+                    $ref: "#/components/schemas/StockAlertReport"
+                  message:
+                    type: string
+                  code:
+                    type: integer
+                    description: "HTTP status của kết quả, ví dụ 200, 201"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          description: "`BR-BC-01` chi nhánh ngoài phạm vi"
+          content:
+            "application/json":
+              schema:
+                $ref: "#/components/schemas/Error"
+  "/reports/feedback":
+    get:
+      tags: [Reports]
+      summary: "Feedback theo chi nhánh"
+      description: "UC89 · BR-BC-01, 03, BR-DG-03. Actor: A04, A05. Quyền: SUPER_MANAGER: toàn chuỗi · BRANCH_MANAGER: chi nhánh mình. Chuyển trạng thái: —."
+      operationId: getFeedbackReport
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: branchId
+          in: query
+          required: false
+          schema:
+            type: integer
+            format: int64
+          description: "SUPER_MANAGER: bỏ trống = toàn chuỗi · BRANCH_MANAGER: luôn là chi nhánh mình"
+        - name: from
+          in: query
+          required: true
+          schema:
+            type: string
+            format: date
+        - name: to
+          in: query
+          required: true
+          schema:
+            type: string
+            format: date
+          description: "Kỳ ≤ 12 tháng [CFG]"
+      responses:
+        "200":
+          description: OK
+          content:
+            "application/json":
+              schema:
+                type: object
+                required: [data, message, code]
+                properties:
+                  data:
+                    $ref: "#/components/schemas/FeedbackReport"
+                  message:
+                    type: string
+                  code:
+                    type: integer
+                    description: "HTTP status của kết quả, ví dụ 200, 201"
+        "400":
+          description: "`BR-BC-01` kỳ vượt 12 tháng [CFG] hoặc from > to"
+          content:
+            "application/json":
+              schema:
+                $ref: "#/components/schemas/Error"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          description: "`BR-BC-01` chi nhánh ngoài phạm vi"
+          content:
+            "application/json":
+              schema:
+                $ref: "#/components/schemas/Error"
+components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      description: "Access token trả về từ POST /auth/login, gắn với một phiên (sessions). Phiên bị hủy thì token hết hiệu lực ngay (BR-TK-11, 13, 14)."
+  parameters: {}
+  schemas:
+    Error:
+      type: object
+      description: "Envelope lỗi duy nhất, do GlobalExceptionHandler (platform/exception) sinh. Vi phạm business rule: errorCode = BUSINESS_RULE_VIOLATION, message kết thúc bằng mã rule, ví dụ \"… (BR-LH-05)\"."
+      required: [success, errorCode, message, statusCode, timestamp, traceId]
+      properties:
+        success:
+          type: boolean
+          enum: [false]
+        errorCode:
+          type: string
+          enum: [BUSINESS_RULE_VIOLATION, INVALID_STATE_TRANSITION, RESOURCE_NOT_FOUND, ACCESS_DENIED_SCOPE_MISMATCH, CONCURRENCY_CONFLICT, VALIDATION_FAILED, MALFORMED_REQUEST, METHOD_NOT_ALLOWED, UNSUPPORTED_MEDIA_TYPE, UNAUTHENTICATED, ACCESS_DENIED, INTERNAL_ERROR]
+          description: platform/exception/ErrorCode
+        message:
+          type: string
+          description: "Thông điệp tiếng Việt hiển thị được; với BUSINESS_RULE_VIOLATION kết thúc bằng \" (BR-…)\""
+        statusCode:
+          type: integer
+        timestamp:
+          type: string
+          format: date-time
+        traceId:
+          type: string
+    RevenueRow:
+      type: object
+      required: [branchId, branchName, source, orderCount, amount]
+      properties:
+        branchId:
+          type: integer
+          format: int64
+        branchName:
+          type: string
+        source:
+          type: string
+          enum: [VISIT, RETAIL, BOARDING]
+        orderCount:
+          type: integer
+          format: int32
+        amount:
+          type: integer
+          format: int64
+          minimum: 0
+          description: VND
+    RevenueReport:
+      type: object
+      description: "BR-BC-02: Order PAID có thời điểm thanh toán trong kỳ, theo đơn giá snapshot"
+      required: [from, to, rows, totalAmount]
+      properties:
+        from:
+          type: string
+          format: date
+        to:
+          type: string
+          format: date
+        rows:
+          type: array
+          items:
+            $ref: "#/components/schemas/RevenueRow"
+        totalAmount:
+          type: integer
+          format: int64
+          minimum: 0
+          description: VND
+    LostRevenueRow:
+      type: object
+      required: [orderId, orderCode, branchId, source, amount, reason, cancelledAt]
+      properties:
+        orderId:
+          type: integer
+          format: int64
+        orderCode:
+          type: string
+        branchId:
+          type: integer
+          format: int64
+        source:
+          type: string
+          enum: [VISIT, RETAIL, BOARDING]
+        amount:
+          type: integer
+          format: int64
+          minimum: 0
+          description: VND
+        reason:
+          type: string
+        cancelledAt:
+          type: string
+          format: date-time
+    LostRevenueReport:
+      type: object
+      description: "BR-BC-02: chỉ Order hủy theo BR-BH-05 (UNPAID); hủy phiên trả thú không tính"
+      required: [from, to, rows, count, totalAmount]
+      properties:
+        from:
+          type: string
+          format: date
+        to:
+          type: string
+          format: date
+        rows:
+          type: array
+          items:
+            $ref: "#/components/schemas/LostRevenueRow"
+        count:
+          type: integer
+          format: int32
+        totalAmount:
+          type: integer
+          format: int64
+          minimum: 0
+          description: VND
+    ServiceCountRow:
+      type: object
+      required: [branchId, serviceGroup, serviceId, serviceName, count]
+      properties:
+        branchId:
+          type: integer
+          format: int64
+        serviceGroup:
+          type: string
+          enum: [MEDICAL, GROOMING]
+        serviceId:
+          type: integer
+          format: int64
+        serviceName:
+          type: string
+        count:
+          type: integer
+          format: int32
+    CompletedServicesReport:
+      type: object
+      required: [from, to, rows]
+      properties:
+        from:
+          type: string
+          format: date
+        to:
+          type: string
+          format: date
+        rows:
+          type: array
+          items:
+            $ref: "#/components/schemas/ServiceCountRow"
+    NoShowRow:
+      type: object
+      required: [branchId, dueCount, noShowCount, lateCancelCount, noShowRate, lateCancelRate]
+      properties:
+        branchId:
+          type: integer
+          format: int64
+        dueCount:
+          type: integer
+          format: int32
+          description: "Lịch hẹn có khung giờ trong kỳ"
+        noShowCount:
+          type: integer
+          format: int32
+        lateCancelCount:
+          type: integer
+          format: int32
+        noShowRate:
+          type: number
+        lateCancelRate:
+          type: number
+    NoShowReport:
+      type: object
+      required: [from, to, rows]
+      properties:
+        from:
+          type: string
+          format: date
+        to:
+          type: string
+          format: date
+        rows:
+          type: array
+          items:
+            $ref: "#/components/schemas/NoShowRow"
+    ReturnRateRow:
+      type: object
+      required: [branchId, vaccineTypeId, vaccineTypeName, dueCount, returnedCount, rate]
+      properties:
+        branchId:
+          type: integer
+          format: int64
+          description: "Chi nhánh của mũi trước"
+        vaccineTypeId:
+          type: integer
+          format: int64
+        vaccineTypeName:
+          type: string
+        dueCount:
+          type: integer
+          format: int32
+        returnedCount:
+          type: integer
+          format: int32
+        rate:
+          type: number
+    RevaccinationReport:
+      type: object
+      description: "BR-BC-04: đo khách quay lại tiêm đúng hạn tại hệ thống"
+      required: [from, to, rows]
+      properties:
+        from:
+          type: string
+          format: date
+        to:
+          type: string
+          format: date
+        rows:
+          type: array
+          items:
+            $ref: "#/components/schemas/ReturnRateRow"
+    LowStockRow:
+      type: object
+      required: [branchId, productId, productName, availableQuantity, minQuantity]
+      properties:
+        branchId:
+          type: integer
+          format: int64
+        productId:
+          type: integer
+          format: int64
+        productName:
+          type: string
+        availableQuantity:
+          type: integer
+          format: int32
+        minQuantity:
+          type: integer
+          format: int32
+    ExpiringLotRow:
+      type: object
+      required: [branchId, productId, productName, stockLotId, expiryDate, quantity, expired]
+      properties:
+        branchId:
+          type: integer
+          format: int64
+        productId:
+          type: integer
+          format: int64
+        productName:
+          type: string
+        stockLotId:
+          type: integer
+          format: int64
+        lotNumber:
+          type: [string, "null"]
+        expiryDate:
+          type: string
+          format: date
+        quantity:
+          type: integer
+          format: int32
+        expired:
+          type: boolean
+    StockAlertReport:
+      type: object
+      required: [lowStock, expiringLots]
+      properties:
+        lowStock:
+          type: array
+          items:
+            $ref: "#/components/schemas/LowStockRow"
+        expiringLots:
+          type: array
+          items:
+            $ref: "#/components/schemas/ExpiringLotRow"
+    FeedbackStatRow:
+      type: object
+      required: [count]
+      properties:
+        branchId:
+          type: [integer, "null"]
+          format: int64
+          description: "null = feedback không gắn chi nhánh (chỉ SUPER_MANAGER thấy)"
+        branchName:
+          type: [string, "null"]
+        count:
+          type: integer
+          format: int32
+        averageRating:
+          type: [number, "null"]
+          description: "Chỉ tính feedback có chấm điểm"
+    FeedbackReport:
+      type: object
+      required: [from, to, rows]
+      properties:
+        from:
+          type: string
+          format: date
+        to:
+          type: string
+          format: date
+        rows:
+          type: array
+          items:
+            $ref: "#/components/schemas/FeedbackStatRow"
+  responses:
+    BadRequest:
+      description: "VALIDATION_FAILED / MALFORMED_REQUEST: dữ liệu không hợp lệ · BUSINESS_RULE_VIOLATION: vi phạm rule, message kết thúc bằng mã rule \"(BR-…)\"."
+      content:
+        "application/json":
+          schema:
+            $ref: "#/components/schemas/Error"
+    Unauthorized:
+      description: "UNAUTHENTICATED: chưa đăng nhập hoặc phiên đã hết hạn / bị hủy."
+      content:
+        "application/json":
+          schema:
+            $ref: "#/components/schemas/Error"

@@ -1,0 +1,1301 @@
+# Pet Care Content & Feedback API v1 — OpenAPI 3.1, sinh từ khai báo; không sửa tay, sửa khai báo rồi sinh lại.
+# Module CK (nội dung trang), BV, DG (tầng 2) · owner BE-2
+# Nguồn: 01 UC17, UC21, UC81, UC83, UC84; 02 BR-CK-01, BR-BV-01…04, BR-DG-01…04, BR-TK-19; 04 §10; 05 §10 (page_contents, article_categories, articles, feedbacks)
+# Truy vết: CONFIRMED = có trong docs · ASSUMPTION (A#) · TBD (Q#) — xem file .md cùng tên.
+
+openapi: "3.1.0"
+info:
+  title: "Pet Care Content & Feedback API v1"
+  version: "1.0.0"
+  description: "Module CK (nội dung trang), BV, DG (tầng 2) · owner BE-2. Nguồn: 01 UC17, UC21, UC81, UC83, UC84; 02 BR-CK-01, BR-BV-01…04, BR-DG-01…04, BR-TK-19; 04 §10; 05 §10 (page_contents, article_categories, articles, feedbacks). Chi tiết và truy vết: ../content-v1.md"
+servers:
+  - url: "/api"
+    description: "Mọi path bên dưới nằm sau tiền tố /api"
+tags:
+  - name: Pages
+    description: "Nội dung trang (UC21)"
+  - name: "Article categories"
+    description: "Chuyên mục bài viết (UC81)"
+  - name: Articles
+    description: "Bài viết (UC81)"
+  - name: Public
+    description: "Trang, bài viết công khai (UC17)"
+  - name: Feedback
+    description: "Feedback của khách (UC83, UC84)"
+paths:
+  "/page-contents":
+    get:
+      tags: [Pages]
+      summary: "Danh sách nội dung trang"
+      description: "UC21 · —. Actor: A04. Quyền: Chỉ SUPER_MANAGER. Chuyển trạng thái: —."
+      operationId: listPageContents
+      security:
+        - bearerAuth: []
+      responses:
+        "200":
+          description: OK
+          content:
+            "application/json":
+              schema:
+                type: object
+                required: [data, message, code]
+                properties:
+                  data:
+                    type: array
+                    items:
+                      $ref: "#/components/schemas/PageContent"
+                  message:
+                    type: string
+                  code:
+                    type: integer
+                    description: "HTTP status của kết quả, ví dụ 200, 201"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+  "/page-contents/{key}":
+    put:
+      tags: [Pages]
+      summary: "Sửa nội dung trang"
+      description: "UC21 · —. Actor: A04. Quyền: Chỉ SUPER_MANAGER. Chuyển trạng thái: —."
+      operationId: updatePageContent
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: "#/components/parameters/PageKey"
+      requestBody:
+        required: true
+        content:
+          "application/json":
+            schema:
+              $ref: "#/components/schemas/UpdatePageContentRequest"
+      responses:
+        "200":
+          description: OK
+          content:
+            "application/json":
+              schema:
+                type: object
+                required: [data, message, code]
+                properties:
+                  data:
+                    $ref: "#/components/schemas/PageContent"
+                  message:
+                    type: string
+                  code:
+                    type: integer
+                    description: "HTTP status của kết quả, ví dụ 200, 201"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+  "/article-categories":
+    get:
+      tags: ["Article categories"]
+      summary: "Danh sách chuyên mục"
+      description: "UC81 · BR-BV-04. Actor: A04. Quyền: Chỉ SUPER_MANAGER. Chuyển trạng thái: —."
+      operationId: listArticleCategories
+      security:
+        - bearerAuth: []
+      responses:
+        "200":
+          description: OK
+          content:
+            "application/json":
+              schema:
+                type: object
+                required: [data, message, code]
+                properties:
+                  data:
+                    type: array
+                    items:
+                      $ref: "#/components/schemas/ArticleCategory"
+                  message:
+                    type: string
+                  code:
+                    type: integer
+                    description: "HTTP status của kết quả, ví dụ 200, 201"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+    post:
+      tags: ["Article categories"]
+      summary: "Tạo chuyên mục"
+      description: "UC81 · BR-BV-04. Actor: A04. Quyền: Chỉ SUPER_MANAGER. Chuyển trạng thái: —."
+      operationId: createArticleCategory
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          "application/json":
+            schema:
+              $ref: "#/components/schemas/ArticleCategoryRequest"
+      responses:
+        "201":
+          description: "Đã tạo"
+          content:
+            "application/json":
+              schema:
+                type: object
+                required: [data, message, code]
+                properties:
+                  data:
+                    $ref: "#/components/schemas/ArticleCategory"
+                  message:
+                    type: string
+                  code:
+                    type: integer
+                    description: "HTTP status của kết quả, ví dụ 200, 201"
+        "400":
+          description: "Tên hoặc slug trùng"
+          content:
+            "application/json":
+              schema:
+                $ref: "#/components/schemas/Error"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+  "/article-categories/{categoryId}":
+    patch:
+      tags: ["Article categories"]
+      summary: "Sửa / ẩn chuyên mục"
+      description: "UC81 · BR-BV-04. Actor: A04. Quyền: Chỉ SUPER_MANAGER. Chuyển trạng thái: —. Chuyên mục ẩn không hiện ở bộ lọc công khai; bài trong đó vẫn truy cập được theo đường dẫn."
+      operationId: updateArticleCategory
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: "#/components/parameters/ArticleCategoryId"
+      requestBody:
+        required: true
+        content:
+          "application/json":
+            schema:
+              $ref: "#/components/schemas/UpdateArticleCategoryRequest"
+      responses:
+        "200":
+          description: OK
+          content:
+            "application/json":
+              schema:
+                type: object
+                required: [data, message, code]
+                properties:
+                  data:
+                    $ref: "#/components/schemas/ArticleCategory"
+                  message:
+                    type: string
+                  code:
+                    type: integer
+                    description: "HTTP status của kết quả, ví dụ 200, 201"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+    delete:
+      tags: ["Article categories"]
+      summary: "Xóa chuyên mục rỗng"
+      description: "UC81 · BR-BV-04. Actor: A04. Quyền: Chỉ SUPER_MANAGER. Chuyển trạng thái: —."
+      operationId: deleteArticleCategory
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: "#/components/parameters/ArticleCategoryId"
+      responses:
+        "204":
+          description: "Không có nội dung"
+        "400":
+          description: "`BR-BV-04` còn bài viết (message ghi số bài) — chỉ ẩn"
+          content:
+            "application/json":
+              schema:
+                $ref: "#/components/schemas/Error"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+  "/articles":
+    get:
+      tags: [Articles]
+      summary: "Danh sách bài viết"
+      description: "UC81 · BR-BV-02. Actor: A04. Quyền: Chỉ SUPER_MANAGER. Chuyển trạng thái: —."
+      operationId: listArticles
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: status
+          in: query
+          required: false
+          schema:
+            type: string
+            enum: [DRAFT, PUBLISHED, HIDDEN]
+        - name: categoryId
+          in: query
+          required: false
+          schema:
+            type: integer
+            format: int64
+        - name: q
+          in: query
+          required: false
+          schema:
+            type: string
+        - $ref: "#/components/parameters/Page"
+        - $ref: "#/components/parameters/Size"
+      responses:
+        "200":
+          description: OK
+          content:
+            "application/json":
+              schema:
+                type: object
+                required: [data, message, code]
+                properties:
+                  data:
+                    allOf:
+                      - $ref: "#/components/schemas/PageMeta"
+                      - type: object
+                        required: [content]
+                        properties:
+                          content:
+                            type: array
+                            items:
+                              $ref: "#/components/schemas/ArticleSummary"
+                  message:
+                    type: string
+                  code:
+                    type: integer
+                    description: "HTTP status của kết quả, ví dụ 200, 201"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+    post:
+      tags: [Articles]
+      summary: "Soạn bài viết"
+      description: "UC81 · BR-BV-01. Actor: A04. Quyền: Chỉ SUPER_MANAGER. Chuyển trạng thái: — → DRAFT."
+      operationId: createArticle
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          "application/json":
+            schema:
+              $ref: "#/components/schemas/CreateArticleRequest"
+      responses:
+        "201":
+          description: "Đã tạo"
+          content:
+            "application/json":
+              schema:
+                type: object
+                required: [data, message, code]
+                properties:
+                  data:
+                    $ref: "#/components/schemas/Article"
+                  message:
+                    type: string
+                  code:
+                    type: integer
+                    description: "HTTP status của kết quả, ví dụ 200, 201"
+        "400":
+          description: "`BR-BV-01` slug trùng, thiếu tiêu đề / chuyên mục / nội dung"
+          content:
+            "application/json":
+              schema:
+                $ref: "#/components/schemas/Error"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+  "/articles/{articleId}":
+    get:
+      tags: [Articles]
+      summary: "Chi tiết bài viết"
+      description: "UC81 · —. Actor: A04. Quyền: Chỉ SUPER_MANAGER. Chuyển trạng thái: —."
+      operationId: getArticle
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: "#/components/parameters/ArticleId"
+      responses:
+        "200":
+          description: OK
+          content:
+            "application/json":
+              schema:
+                type: object
+                required: [data, message, code]
+                properties:
+                  data:
+                    $ref: "#/components/schemas/Article"
+                  message:
+                    type: string
+                  code:
+                    type: integer
+                    description: "HTTP status của kết quả, ví dụ 200, 201"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+    patch:
+      tags: [Articles]
+      summary: "Sửa bài viết"
+      description: "UC81 · BR-BV-01. Actor: A04. Quyền: Chỉ SUPER_MANAGER. Chuyển trạng thái: —."
+      operationId: updateArticle
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: "#/components/parameters/ArticleId"
+      requestBody:
+        required: true
+        content:
+          "application/json":
+            schema:
+              $ref: "#/components/schemas/UpdateArticleRequest"
+      responses:
+        "200":
+          description: OK
+          content:
+            "application/json":
+              schema:
+                type: object
+                required: [data, message, code]
+                properties:
+                  data:
+                    $ref: "#/components/schemas/Article"
+                  message:
+                    type: string
+                  code:
+                    type: integer
+                    description: "HTTP status của kết quả, ví dụ 200, 201"
+        "400":
+          description: "`BR-BV-01` đổi slug sau lần xuất bản đầu · slug trùng"
+          content:
+            "application/json":
+              schema:
+                $ref: "#/components/schemas/Error"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+    delete:
+      tags: [Articles]
+      summary: "Xóa bài chưa từng xuất bản"
+      description: "UC81 · BR-BV-02. Actor: A04. Quyền: Chỉ SUPER_MANAGER. Chuyển trạng thái: —."
+      operationId: deleteArticle
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: "#/components/parameters/ArticleId"
+      responses:
+        "204":
+          description: "Không có nội dung"
+        "400":
+          description: "`BR-BV-02` bài đã từng xuất bản — chỉ ẩn"
+          content:
+            "application/json":
+              schema:
+                $ref: "#/components/schemas/Error"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+  "/articles/{articleId}/publish":
+    post:
+      tags: [Articles]
+      summary: "Xuất bản / hiện lại bài"
+      description: "UC81 · BR-BV-02. Actor: A04. Quyền: Chỉ SUPER_MANAGER. Chuyển trạng thái: DRAFT / HIDDEN → PUBLISHED. Lần xuất bản đầu ghi firstPublishedAt và khóa slug."
+      operationId: publishArticle
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: "#/components/parameters/ArticleId"
+      responses:
+        "200":
+          description: OK
+          content:
+            "application/json":
+              schema:
+                type: object
+                required: [data, message, code]
+                properties:
+                  data:
+                    $ref: "#/components/schemas/Article"
+                  message:
+                    type: string
+                  code:
+                    type: integer
+                    description: "HTTP status của kết quả, ví dụ 200, 201"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "409":
+          description: "Bài đang PUBLISHED"
+          content:
+            "application/json":
+              schema:
+                $ref: "#/components/schemas/Error"
+  "/articles/{articleId}/hide":
+    post:
+      tags: [Articles]
+      summary: "Gỡ (ẩn) bài"
+      description: "UC81 · BR-BV-02. Actor: A04. Quyền: Chỉ SUPER_MANAGER. Chuyển trạng thái: PUBLISHED → HIDDEN."
+      operationId: hideArticle
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: "#/components/parameters/ArticleId"
+      responses:
+        "200":
+          description: OK
+          content:
+            "application/json":
+              schema:
+                type: object
+                required: [data, message, code]
+                properties:
+                  data:
+                    $ref: "#/components/schemas/Article"
+                  message:
+                    type: string
+                  code:
+                    type: integer
+                    description: "HTTP status của kết quả, ví dụ 200, 201"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "409":
+          description: "Bài không PUBLISHED"
+          content:
+            "application/json":
+              schema:
+                $ref: "#/components/schemas/Error"
+  "/public/pages/{key}":
+    get:
+      tags: [Public]
+      summary: "Nội dung trang công khai"
+      description: "UC15–UC17 · —. Actor: A01, A02. Quyền: Public. Chuyển trạng thái: —."
+      operationId: getPublicPage
+      security: []
+      parameters:
+        - $ref: "#/components/parameters/PageKey"
+      responses:
+        "200":
+          description: OK
+          content:
+            "application/json":
+              schema:
+                type: object
+                required: [data, message, code]
+                properties:
+                  data:
+                    $ref: "#/components/schemas/PageContent"
+                  message:
+                    type: string
+                  code:
+                    type: integer
+                    description: "HTTP status của kết quả, ví dụ 200, 201"
+        "404":
+          $ref: "#/components/responses/NotFound"
+  "/public/article-categories":
+    get:
+      tags: [Public]
+      summary: "Chuyên mục công khai"
+      description: "UC17 · BR-BV-03, 04. Actor: A01, A02. Quyền: Public. Chuyển trạng thái: —. Bỏ chuyên mục ẩn."
+      operationId: listPublicArticleCategories
+      security: []
+      responses:
+        "200":
+          description: OK
+          content:
+            "application/json":
+              schema:
+                type: object
+                required: [data, message, code]
+                properties:
+                  data:
+                    type: array
+                    items:
+                      $ref: "#/components/schemas/PublicArticleCategory"
+                  message:
+                    type: string
+                  code:
+                    type: integer
+                    description: "HTTP status của kết quả, ví dụ 200, 201"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+  "/public/articles":
+    get:
+      tags: [Public]
+      summary: "Danh sách bài viết"
+      description: "UC17 · BR-BV-03, BR-CK-01. Actor: A01, A02. Quyền: Public. Chuyển trạng thái: —. Chỉ PUBLISHED, mới nhất trước."
+      operationId: listPublicArticles
+      security: []
+      parameters:
+        - name: categorySlug
+          in: query
+          required: false
+          schema:
+            type: string
+        - $ref: "#/components/parameters/Page"
+        - $ref: "#/components/parameters/Size"
+      responses:
+        "200":
+          description: OK
+          content:
+            "application/json":
+              schema:
+                type: object
+                required: [data, message, code]
+                properties:
+                  data:
+                    allOf:
+                      - $ref: "#/components/schemas/PageMeta"
+                      - type: object
+                        required: [content]
+                        properties:
+                          content:
+                            type: array
+                            items:
+                              $ref: "#/components/schemas/PublicArticleCard"
+                  message:
+                    type: string
+                  code:
+                    type: integer
+                    description: "HTTP status của kết quả, ví dụ 200, 201"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+  "/public/articles/{slug}":
+    get:
+      tags: [Public]
+      summary: "Đọc bài viết"
+      description: "UC17 · BR-BV-03. Actor: A01, A02. Quyền: Public. Chuyển trạng thái: —."
+      operationId: getPublicArticle
+      security: []
+      parameters:
+        - $ref: "#/components/parameters/Slug"
+      responses:
+        "200":
+          description: OK
+          content:
+            "application/json":
+              schema:
+                type: object
+                required: [data, message, code]
+                properties:
+                  data:
+                    $ref: "#/components/schemas/PublicArticle"
+                  message:
+                    type: string
+                  code:
+                    type: integer
+                    description: "HTTP status của kết quả, ví dụ 200, 201"
+        "404":
+          description: "Không có, hoặc bài DRAFT / HIDDEN (BR-BV-03)"
+          content:
+            "application/json":
+              schema:
+                $ref: "#/components/schemas/Error"
+  "/me/feedbacks":
+    post:
+      tags: [Feedback]
+      summary: "Gửi feedback"
+      description: "UC83 · BR-DG-01, 02, BR-TK-19. Actor: A02. Quyền: Chỉ CUSTOMER. Chuyển trạng thái: — → NEW."
+      operationId: submitFeedback
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          "application/json":
+            schema:
+              $ref: "#/components/schemas/CreateFeedbackRequest"
+      responses:
+        "201":
+          description: "Đã tạo"
+          content:
+            "application/json":
+              schema:
+                type: object
+                required: [data, message, code]
+                properties:
+                  data:
+                    $ref: "#/components/schemas/MyFeedback"
+                  message:
+                    type: string
+                  code:
+                    type: integer
+                    description: "HTTP status của kết quả, ví dụ 200, 201"
+        "400":
+          description: "`BR-DG-01` nội dung ngoài 10–2000 ký tự, thiếu chi nhánh khi BRANCH_SERVICE, điểm ngoài 1–5, vượt 5 feedback / ngày [CFG] (message ghi thời điểm gửi tiếp) · `BR-TK-19` hồ sơ còn chờ quyết định liên kết"
+          content:
+            "application/json":
+              schema:
+                $ref: "#/components/schemas/Error"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+    get:
+      tags: [Feedback]
+      summary: "Feedback tôi đã gửi"
+      description: "UC83 · BR-DG-02, 04. Actor: A02. Quyền: Chỉ CUSTOMER. Chuyển trạng thái: —. Không sửa, không xóa."
+      operationId: listMyFeedbacks
+      security:
+        - bearerAuth: []
+      responses:
+        "200":
+          description: OK
+          content:
+            "application/json":
+              schema:
+                type: object
+                required: [data, message, code]
+                properties:
+                  data:
+                    type: array
+                    items:
+                      $ref: "#/components/schemas/MyFeedback"
+                  message:
+                    type: string
+                  code:
+                    type: integer
+                    description: "HTTP status của kết quả, ví dụ 200, 201"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+  "/feedbacks":
+    get:
+      tags: [Feedback]
+      summary: "Danh sách feedback"
+      description: "UC84 · BR-DG-02, 03. Actor: A04, A05. Quyền: SUPER_MANAGER: tất cả · BRANCH_MANAGER: chi nhánh mình. Chuyển trạng thái: —."
+      operationId: listFeedbacks
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: branchId
+          in: query
+          required: false
+          schema:
+            type: integer
+            format: int64
+        - name: status
+          in: query
+          required: false
+          schema:
+            type: string
+            enum: [NEW, SEEN, RESOLVED]
+        - name: topic
+          in: query
+          required: false
+          schema:
+            type: string
+            enum: [BRANCH_SERVICE, WEBSITE, OTHER]
+        - name: from
+          in: query
+          required: false
+          schema:
+            type: string
+            format: date
+        - name: to
+          in: query
+          required: false
+          schema:
+            type: string
+            format: date
+        - $ref: "#/components/parameters/Page"
+        - $ref: "#/components/parameters/Size"
+      responses:
+        "200":
+          description: OK
+          content:
+            "application/json":
+              schema:
+                type: object
+                required: [data, message, code]
+                properties:
+                  data:
+                    allOf:
+                      - $ref: "#/components/schemas/PageMeta"
+                      - type: object
+                        required: [content]
+                        properties:
+                          content:
+                            type: array
+                            items:
+                              $ref: "#/components/schemas/Feedback"
+                  message:
+                    type: string
+                  code:
+                    type: integer
+                    description: "HTTP status của kết quả, ví dụ 200, 201"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+  "/feedbacks/{feedbackId}":
+    get:
+      tags: [Feedback]
+      summary: "Xem feedback"
+      description: "UC84 · BR-DG-03, 04. Actor: A04, A05. Quyền: Như listFeedbacks. Chuyển trạng thái: NEW → SEEN khi mở lần đầu (A2)."
+      operationId: getFeedback
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: "#/components/parameters/FeedbackId"
+      responses:
+        "200":
+          description: OK
+          content:
+            "application/json":
+              schema:
+                type: object
+                required: [data, message, code]
+                properties:
+                  data:
+                    $ref: "#/components/schemas/Feedback"
+                  message:
+                    type: string
+                  code:
+                    type: integer
+                    description: "HTTP status của kết quả, ví dụ 200, 201"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+  "/feedbacks/{feedbackId}/resolve":
+    post:
+      tags: [Feedback]
+      summary: "Đánh dấu đã xử lý"
+      description: "UC84 · BR-DG-04. Actor: A04, A05. Quyền: Như listFeedbacks. Chuyển trạng thái: SEEN → RESOLVED."
+      operationId: resolveFeedback
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: "#/components/parameters/FeedbackId"
+      requestBody:
+        required: true
+        content:
+          "application/json":
+            schema:
+              $ref: "#/components/schemas/ResolveFeedbackRequest"
+      responses:
+        "200":
+          description: OK
+          content:
+            "application/json":
+              schema:
+                type: object
+                required: [data, message, code]
+                properties:
+                  data:
+                    $ref: "#/components/schemas/Feedback"
+                  message:
+                    type: string
+                  code:
+                    type: integer
+                    description: "HTTP status của kết quả, ví dụ 200, 201"
+        "400":
+          description: "`BR-DG-04` thiếu ghi chú"
+          content:
+            "application/json":
+              schema:
+                $ref: "#/components/schemas/Error"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "409":
+          description: "Đã RESOLVED"
+          content:
+            "application/json":
+              schema:
+                $ref: "#/components/schemas/Error"
+components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      description: "Access token trả về từ POST /auth/login, gắn với một phiên (sessions). Phiên bị hủy thì token hết hiệu lực ngay (BR-TK-11, 13, 14)."
+  parameters:
+    Page:
+      name: page
+      in: query
+      required: false
+      schema:
+        type: integer
+        minimum: 0
+        default: 0
+      description: "Số trang, bắt đầu từ 0"
+    Size:
+      name: size
+      in: query
+      required: false
+      schema:
+        type: integer
+        minimum: 1
+        maximum: 100
+        default: 20
+    PageKey:
+      name: key
+      in: path
+      required: true
+      schema:
+        type: string
+        enum: [HOME_BANNER, ABOUT, POLICY, FAQ]
+    ArticleCategoryId:
+      name: categoryId
+      in: path
+      required: true
+      schema:
+        type: integer
+        format: int64
+    ArticleId:
+      name: articleId
+      in: path
+      required: true
+      schema:
+        type: integer
+        format: int64
+    Slug:
+      name: slug
+      in: path
+      required: true
+      schema:
+        type: string
+    FeedbackId:
+      name: feedbackId
+      in: path
+      required: true
+      schema:
+        type: integer
+        format: int64
+  schemas:
+    Error:
+      type: object
+      description: "Envelope lỗi duy nhất, do GlobalExceptionHandler (platform/exception) sinh. Vi phạm business rule: errorCode = BUSINESS_RULE_VIOLATION, message kết thúc bằng mã rule, ví dụ \"… (BR-LH-05)\"."
+      required: [success, errorCode, message, statusCode, timestamp, traceId]
+      properties:
+        success:
+          type: boolean
+          enum: [false]
+        errorCode:
+          type: string
+          enum: [BUSINESS_RULE_VIOLATION, INVALID_STATE_TRANSITION, RESOURCE_NOT_FOUND, ACCESS_DENIED_SCOPE_MISMATCH, CONCURRENCY_CONFLICT, VALIDATION_FAILED, MALFORMED_REQUEST, METHOD_NOT_ALLOWED, UNSUPPORTED_MEDIA_TYPE, UNAUTHENTICATED, ACCESS_DENIED, INTERNAL_ERROR]
+          description: platform/exception/ErrorCode
+        message:
+          type: string
+          description: "Thông điệp tiếng Việt hiển thị được; với BUSINESS_RULE_VIOLATION kết thúc bằng \" (BR-…)\""
+        statusCode:
+          type: integer
+        timestamp:
+          type: string
+          format: date-time
+        traceId:
+          type: string
+    PageMeta:
+      type: object
+      required: [page, size, totalElements, totalPages]
+      properties:
+        page:
+          type: integer
+        size:
+          type: integer
+        totalElements:
+          type: integer
+          format: int64
+        totalPages:
+          type: integer
+    PageContent:
+      type: object
+      required: [key, content, updatedAt]
+      properties:
+        key:
+          type: string
+          enum: [HOME_BANNER, ABOUT, POLICY, FAQ]
+        title:
+          type: [string, "null"]
+          maxLength: 250
+        content:
+          type: object
+          additionalProperties: true
+          description: A3
+        updatedAt:
+          type: string
+          format: date-time
+    UpdatePageContentRequest:
+      type: object
+      required: [content]
+      properties:
+        title:
+          type: [string, "null"]
+          maxLength: 250
+        content:
+          type: object
+          additionalProperties: true
+    ArticleCategory:
+      type: object
+      required: [categoryId, name, slug, isHidden, articleCount]
+      properties:
+        categoryId:
+          type: integer
+          format: int64
+        name:
+          type: string
+          maxLength: 100
+        slug:
+          type: string
+          maxLength: 120
+        isHidden:
+          type: boolean
+        articleCount:
+          type: integer
+          format: int32
+    ArticleCategoryRequest:
+      type: object
+      required: [name, slug]
+      properties:
+        name:
+          type: string
+          maxLength: 100
+        slug:
+          type: string
+          maxLength: 120
+    UpdateArticleCategoryRequest:
+      type: object
+      properties:
+        name:
+          type: [string, "null"]
+          maxLength: 100
+        isHidden:
+          type: [boolean, "null"]
+    PublicArticleCategory:
+      type: object
+      required: [categoryId, name, slug]
+      properties:
+        categoryId:
+          type: integer
+          format: int64
+        name:
+          type: string
+        slug:
+          type: string
+    Article:
+      type: object
+      required: [articleId, categoryId, title, slug, content, authorDisplayName, status, createdAt, updatedAt]
+      properties:
+        articleId:
+          type: integer
+          format: int64
+        categoryId:
+          type: integer
+          format: int64
+        title:
+          type: string
+          maxLength: 250
+        slug:
+          type: string
+          maxLength: 270
+        coverImageUrl:
+          type: [string, "null"]
+          maxLength: 500
+        summary:
+          type: [string, "null"]
+          maxLength: 500
+        content:
+          type: string
+          description: "HTML đã lọc"
+        authorDisplayName:
+          type: string
+          maxLength: 100
+        status:
+          type: string
+          enum: [DRAFT, PUBLISHED, HIDDEN]
+        firstPublishedAt:
+          type: [string, "null"]
+          format: date-time
+          description: "Khác null: slug khóa, không xóa được"
+        createdAt:
+          type: string
+          format: date-time
+        updatedAt:
+          type: string
+          format: date-time
+    ArticleSummary:
+      type: object
+      required: [articleId, categoryId, title, slug, status, updatedAt]
+      properties:
+        articleId:
+          type: integer
+          format: int64
+        categoryId:
+          type: integer
+          format: int64
+        title:
+          type: string
+        slug:
+          type: string
+        status:
+          type: string
+          enum: [DRAFT, PUBLISHED, HIDDEN]
+        firstPublishedAt:
+          type: [string, "null"]
+          format: date-time
+        updatedAt:
+          type: string
+          format: date-time
+    CreateArticleRequest:
+      type: object
+      required: [categoryId, title, slug, content, authorDisplayName]
+      properties:
+        categoryId:
+          type: integer
+          format: int64
+        title:
+          type: string
+          maxLength: 250
+        slug:
+          type: string
+          maxLength: 270
+          description: "Duy nhất toàn hệ thống (BR-BV-01)"
+        coverImageUrl:
+          type: [string, "null"]
+          maxLength: 500
+        summary:
+          type: [string, "null"]
+          maxLength: 500
+        content:
+          type: string
+        authorDisplayName:
+          type: string
+          maxLength: 100
+    UpdateArticleRequest:
+      type: object
+      properties:
+        categoryId:
+          type: [integer, "null"]
+          format: int64
+        title:
+          type: [string, "null"]
+          maxLength: 250
+        slug:
+          type: [string, "null"]
+          maxLength: 270
+          description: "Không đổi được sau lần xuất bản đầu"
+        coverImageUrl:
+          type: [string, "null"]
+          maxLength: 500
+        summary:
+          type: [string, "null"]
+          maxLength: 500
+        content:
+          type: [string, "null"]
+        authorDisplayName:
+          type: [string, "null"]
+          maxLength: 100
+    PublicArticleCard:
+      type: object
+      required: [articleId, title, slug, categoryName, categorySlug, authorDisplayName, publishedAt]
+      properties:
+        articleId:
+          type: integer
+          format: int64
+        title:
+          type: string
+        slug:
+          type: string
+        categoryName:
+          type: string
+        categorySlug:
+          type: string
+        coverImageUrl:
+          type: [string, "null"]
+          maxLength: 500
+        summary:
+          type: [string, "null"]
+        authorDisplayName:
+          type: string
+        publishedAt:
+          type: string
+          format: date-time
+    PublicArticle:
+      type: object
+      required: [articleId, title, slug, categoryName, categorySlug, content, authorDisplayName, publishedAt]
+      properties:
+        articleId:
+          type: integer
+          format: int64
+        title:
+          type: string
+        slug:
+          type: string
+        categoryName:
+          type: string
+        categorySlug:
+          type: string
+        coverImageUrl:
+          type: [string, "null"]
+          maxLength: 500
+        summary:
+          type: [string, "null"]
+        content:
+          type: string
+        authorDisplayName:
+          type: string
+        publishedAt:
+          type: string
+          format: date-time
+    CreateFeedbackRequest:
+      type: object
+      required: [topic, content]
+      properties:
+        topic:
+          type: string
+          enum: [BRANCH_SERVICE, WEBSITE, OTHER]
+        branchId:
+          type: [integer, "null"]
+          format: int64
+          description: "Bắt buộc khi BRANCH_SERVICE"
+        rating:
+          type: [integer, "null"]
+          format: int32
+          description: "1–5"
+        content:
+          type: string
+          maxLength: 2000
+          description: "10–2000 ký tự"
+    MyFeedback:
+      type: object
+      required: [feedbackId, topic, content, status, createdAt]
+      properties:
+        feedbackId:
+          type: integer
+          format: int64
+        topic:
+          type: string
+          enum: [BRANCH_SERVICE, WEBSITE, OTHER]
+        branchId:
+          type: [integer, "null"]
+          format: int64
+        rating:
+          type: [integer, "null"]
+          format: int32
+        content:
+          type: string
+        status:
+          type: string
+          enum: [NEW, SEEN, RESOLVED]
+          description: "Khách chỉ thấy trạng thái (BR-DG-04)"
+        createdAt:
+          type: string
+          format: date-time
+    Feedback:
+      type: object
+      required: [feedbackId, customerId, customerName, topic, content, status, createdAt]
+      properties:
+        feedbackId:
+          type: integer
+          format: int64
+        customerId:
+          type: integer
+          format: int64
+        customerName:
+          type: string
+        topic:
+          type: string
+          enum: [BRANCH_SERVICE, WEBSITE, OTHER]
+        branchId:
+          type: [integer, "null"]
+          format: int64
+        branchName:
+          type: [string, "null"]
+        rating:
+          type: [integer, "null"]
+          format: int32
+        content:
+          type: string
+        status:
+          type: string
+          enum: [NEW, SEEN, RESOLVED]
+        seenAt:
+          type: [string, "null"]
+          format: date-time
+        resolvedBy:
+          type: [integer, "null"]
+          format: int64
+        resolvedAt:
+          type: [string, "null"]
+          format: date-time
+        resolutionNote:
+          type: [string, "null"]
+          description: "Nội bộ"
+        createdAt:
+          type: string
+          format: date-time
+    ResolveFeedbackRequest:
+      type: object
+      required: [resolutionNote]
+      properties:
+        resolutionNote:
+          type: string
+          description: "Bắt buộc (BR-DG-04)"
+  responses:
+    BadRequest:
+      description: "VALIDATION_FAILED / MALFORMED_REQUEST: dữ liệu không hợp lệ · BUSINESS_RULE_VIOLATION: vi phạm rule, message kết thúc bằng mã rule \"(BR-…)\"."
+      content:
+        "application/json":
+          schema:
+            $ref: "#/components/schemas/Error"
+    Unauthorized:
+      description: "UNAUTHENTICATED: chưa đăng nhập hoặc phiên đã hết hạn / bị hủy."
+      content:
+        "application/json":
+          schema:
+            $ref: "#/components/schemas/Error"
+    Forbidden:
+      description: "ACCESS_DENIED: sai vai trò · ACCESS_DENIED_SCOPE_MISMATCH: ngoài phạm vi (chi nhánh, chủ sở hữu). Message chung, không lộ cấu trúc phân quyền."
+      content:
+        "application/json":
+          schema:
+            $ref: "#/components/schemas/Error"
+    NotFound:
+      description: "Không tìm thấy (RESOURCE_NOT_FOUND)."
+      content:
+        "application/json":
+          schema:
+            $ref: "#/components/schemas/Error"

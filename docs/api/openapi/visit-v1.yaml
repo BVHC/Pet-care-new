@@ -1,0 +1,1494 @@
+# Pet Care Visit & Clinical API v1 — OpenAPI 3.1, sinh từ khai báo; không sửa tay, sửa khai báo rồi sinh lại.
+# Module TN, KB · owner BE-1
+# Nguồn: 01 UC25, UC44–UC49, UC52, UC53; 02 BR-TN-01…09, BR-KB-01…06, BR-KH-04, 05, 07, BR-CN-05, BR-BH-02; 03 #4 Visit (+ Lịch hẹn#3, #7, #8, Order#1, #4, #6, Care Task#5, #6); 04 §6; 05 §6 (visits, visit_assignments, medical_records, medical_record_addenda, prescription_items, vaccinations)
+# Truy vết: CONFIRMED = có trong docs · ASSUMPTION (A#) · TBD (Q#) — xem file .md cùng tên.
+
+openapi: "3.1.0"
+info:
+  title: "Pet Care Visit & Clinical API v1"
+  version: "1.0.0"
+  description: "Module TN, KB · owner BE-1. Nguồn: 01 UC25, UC44–UC49, UC52, UC53; 02 BR-TN-01…09, BR-KB-01…06, BR-KH-04, 05, 07, BR-CN-05, BR-BH-02; 03 #4 Visit (+ Lịch hẹn#3, #7, #8, Order#1, #4, #6, Care Task#5, #6); 04 §6; 05 §6 (visits, visit_assignments, medical_records, medical_record_addenda, prescription_items, vaccinations). Chi tiết và truy vết: ../visit-v1.md"
+servers:
+  - url: "/api"
+    description: "Mọi path bên dưới nằm sau tiền tố /api"
+tags:
+  - name: Queue
+    description: "Tiếp nhận và hàng đợi (UC44–UC47)"
+  - name: Completion
+    description: "Hoàn tất, hủy lượt (UC45, UC48, UC49, UC52)"
+  - name: "Medical record"
+    description: "Bệnh án, cân nặng, bản bổ sung (UC48, UC53)"
+  - name: Prescriptions
+    description: "Kê đơn (UC48, BR-KB-03)"
+  - name: Vaccinations
+    description: "Tiêm chủng (UC49, BR-KB-04)"
+  - name: "Health record"
+    description: "Hồ sơ sức khỏe thú cưng (UC25, UC53)"
+paths:
+  "/visits":
+    post:
+      tags: [Queue]
+      summary: "Tiếp nhận (check-in lịch hẹn / walk-in / cấp cứu)"
+      description: "UC44, UC47 · BR-TN-01…04, BR-CN-05, BR-LH-01, BR-KH-05. Actor: A06. Quyền: Lễ tân; chi nhánh của lễ tân. Chuyển trạng thái: — → WAITING (Visit#1) · Lịch hẹn#3 · Order#1 (OPEN + dòng dịch vụ tự sinh) · có dịch vụ Khám → Care Task#6. Trễ 15–30 phút [CFG] xếp như walk-in. Khách mang nhiều thú thì tạo nhiều Visit."
+      operationId: checkInVisit
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          "application/json":
+            schema:
+              $ref: "#/components/schemas/CreateVisitRequest"
+      responses:
+        "201":
+          description: "Đã tạo"
+          content:
+            "application/json":
+              schema:
+                type: object
+                required: [data, message, code]
+                properties:
+                  data:
+                    $ref: "#/components/schemas/Visit"
+                  message:
+                    type: string
+                  code:
+                    type: integer
+                    description: "HTTP status của kết quả, ví dụ 200, 201"
+        "400":
+          description: "`BR-TN-01` thú đã mất / walk-in thiếu dịch vụ · `BR-TN-02` ngoài cửa sổ check-in · `BR-CN-05` ngoài giờ mà chi nhánh không có cờ hoặc chưa đánh dấu cấp cứu · `BR-CN-01` chi nhánh chưa ACTIVE · `BR-LH-01` dịch vụ đang tắt"
+          content:
+            "application/json":
+              schema:
+                $ref: "#/components/schemas/Error"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "409":
+          description: "Lịch hẹn không còn BOOKED (đã check-in / NO_SHOW: tiếp nhận như walk-in, BR-TN-03)"
+          content:
+            "application/json":
+              schema:
+                $ref: "#/components/schemas/Error"
+    get:
+      tags: [Queue]
+      summary: "Hàng đợi của chi nhánh"
+      description: "UC45 · BR-TN-04, 09. Actor: A05, A06, A07, A08. Quyền: Nhân viên chi nhánh. Chuyển trạng thái: —. A1."
+      operationId: listQueue
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: date
+          in: query
+          required: false
+          schema:
+            type: string
+            format: date
+          description: "Mặc định hôm nay"
+        - name: status
+          in: query
+          required: false
+          schema:
+            type: string
+            enum: [WAITING, IN_PROGRESS, COMPLETED, CANCELLED]
+        - name: serviceGroup
+          in: query
+          required: false
+          schema:
+            type: string
+            enum: [MEDICAL, GROOMING]
+        - name: assigneeId
+          in: query
+          required: false
+          schema:
+            type: integer
+            format: int64
+        - name: needsReassign
+          in: query
+          required: false
+          schema:
+            type: boolean
+      responses:
+        "200":
+          description: OK
+          content:
+            "application/json":
+              schema:
+                type: object
+                required: [data, message, code]
+                properties:
+                  data:
+                    type: array
+                    items:
+                      $ref: "#/components/schemas/Visit"
+                  message:
+                    type: string
+                  code:
+                    type: integer
+                    description: "HTTP status của kết quả, ví dụ 200, 201"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+  "/me/queue":
+    get:
+      tags: [Queue]
+      summary: "Hàng đợi của tôi"
+      description: "UC46 · BR-TN-05. Actor: A07, A08. Quyền: VET, CARETAKER. Chuyển trạng thái: —. Visit WAITING / IN_PROGRESS gán cho tôi."
+      operationId: listMyQueue
+      security:
+        - bearerAuth: []
+      responses:
+        "200":
+          description: OK
+          content:
+            "application/json":
+              schema:
+                type: object
+                required: [data, message, code]
+                properties:
+                  data:
+                    type: array
+                    items:
+                      $ref: "#/components/schemas/Visit"
+                  message:
+                    type: string
+                  code:
+                    type: integer
+                    description: "HTTP status của kết quả, ví dụ 200, 201"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+  "/visits/{visitId}":
+    get:
+      tags: [Queue]
+      summary: "Chi tiết lượt"
+      description: "UC45, UC46 · —. Actor: A05–A08. Quyền: Nhân viên chi nhánh. Chuyển trạng thái: —."
+      operationId: getVisit
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: "#/components/parameters/VisitId"
+      responses:
+        "200":
+          description: OK
+          content:
+            "application/json":
+              schema:
+                type: object
+                required: [data, message, code]
+                properties:
+                  data:
+                    $ref: "#/components/schemas/Visit"
+                  message:
+                    type: string
+                  code:
+                    type: integer
+                    description: "HTTP status của kết quả, ví dụ 200, 201"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+  "/visits/{visitId}/assign":
+    post:
+      tags: [Queue]
+      summary: "Gán / gán lại nhân viên (lượt chưa gọi)"
+      description: "UC45 · BR-TN-05, 06, 08. Actor: A06. Quyền: Lễ tân chi nhánh. Chuyển trạng thái: WAITING → WAITING (Visit#2). Dòng dịch vụ tự sinh chuyển quyền cho người được gán."
+      operationId: assignVisit
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: "#/components/parameters/VisitId"
+      requestBody:
+        required: true
+        content:
+          "application/json":
+            schema:
+              $ref: "#/components/schemas/AssignRequest"
+      responses:
+        "200":
+          description: OK
+          content:
+            "application/json":
+              schema:
+                type: object
+                required: [data, message, code]
+                properties:
+                  data:
+                    $ref: "#/components/schemas/AssignResult"
+                  message:
+                    type: string
+                  code:
+                    type: integer
+                    description: "HTTP status của kết quả, ví dụ 200, 201"
+        "400":
+          description: "`BR-TN-05` nhân viên không ACTIVE, khác chi nhánh hoặc sai chức vụ"
+          content:
+            "application/json":
+              schema:
+                $ref: "#/components/schemas/Error"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "409":
+          description: "Lượt đã được gọi"
+          content:
+            "application/json":
+              schema:
+                $ref: "#/components/schemas/Error"
+  "/visits/{visitId}/move":
+    post:
+      tags: [Queue]
+      summary: "Sắp lại thứ tự hàng đợi"
+      description: "UC45 · BR-TN-04. Actor: A06. Quyền: Lễ tân chi nhánh. Chuyển trạng thái: —. A3. Trả hàng đợi sau khi sắp."
+      operationId: moveVisitInQueue
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: "#/components/parameters/VisitId"
+      requestBody:
+        required: true
+        content:
+          "application/json":
+            schema:
+              $ref: "#/components/schemas/MoveVisitRequest"
+      responses:
+        "200":
+          description: OK
+          content:
+            "application/json":
+              schema:
+                type: object
+                required: [data, message, code]
+                properties:
+                  data:
+                    type: array
+                    items:
+                      $ref: "#/components/schemas/Visit"
+                  message:
+                    type: string
+                  code:
+                    type: integer
+                    description: "HTTP status của kết quả, ví dụ 200, 201"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "409":
+          description: "Lượt đã được gọi"
+          content:
+            "application/json":
+              schema:
+                $ref: "#/components/schemas/Error"
+  "/visits/{visitId}/mark-emergency":
+    post:
+      tags: [Queue]
+      summary: "Xác định ca cấp cứu"
+      description: "UC47 · BR-TN-04. Actor: A06, A07. Quyền: Nhân viên chi nhánh. Chuyển trạng thái: —. Lượt lên đầu hàng đợi (A2)."
+      operationId: markVisitEmergency
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: "#/components/parameters/VisitId"
+      responses:
+        "200":
+          description: OK
+          content:
+            "application/json":
+              schema:
+                type: object
+                required: [data, message, code]
+                properties:
+                  data:
+                    $ref: "#/components/schemas/Visit"
+                  message:
+                    type: string
+                  code:
+                    type: integer
+                    description: "HTTP status của kết quả, ví dụ 200, 201"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "409":
+          description: "Lượt đã được gọi hoặc đã là cấp cứu"
+          content:
+            "application/json":
+              schema:
+                $ref: "#/components/schemas/Error"
+  "/visits/{visitId}/call":
+    post:
+      tags: [Queue]
+      summary: "Gọi lượt"
+      description: "UC46 · BR-TN-05, 09. Actor: A07, A08. Quyền: Người được gán lượt. Chuyển trạng thái: WAITING → IN_PROGRESS (Visit#3)."
+      operationId: callVisit
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: "#/components/parameters/VisitId"
+      responses:
+        "200":
+          description: OK
+          content:
+            "application/json":
+              schema:
+                type: object
+                required: [data, message, code]
+                properties:
+                  data:
+                    $ref: "#/components/schemas/Visit"
+                  message:
+                    type: string
+                  code:
+                    type: integer
+                    description: "HTTP status của kết quả, ví dụ 200, 201"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          description: "`BR-TN-05` lượt không gán cho người gọi"
+          content:
+            "application/json":
+              schema:
+                $ref: "#/components/schemas/Error"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "409":
+          description: "Lượt không còn WAITING"
+          content:
+            "application/json":
+              schema:
+                $ref: "#/components/schemas/Error"
+  "/visits/{visitId}/reassign":
+    post:
+      tags: [Queue]
+      summary: "Gán lại lượt đã gọi"
+      description: "UC45 · BR-TN-05, 08, BR-QT-15. Actor: A05 (A04 khi chi nhánh không còn BRANCH_MANAGER ACTIVE). Quyền: BRANCH_MANAGER chi nhánh; SUPER_MANAGER theo điều kiện. Chuyển trạng thái: IN_PROGRESS → IN_PROGRESS (Visit#4). Bệnh án giữ nguyên kèm tên người ghi; quyền xóa dòng Order chuyển cho người mới; ghi audit."
+      operationId: reassignCalledVisit
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: "#/components/parameters/VisitId"
+      requestBody:
+        required: true
+        content:
+          "application/json":
+            schema:
+              $ref: "#/components/schemas/ReassignRequest"
+      responses:
+        "200":
+          description: OK
+          content:
+            "application/json":
+              schema:
+                type: object
+                required: [data, message, code]
+                properties:
+                  data:
+                    $ref: "#/components/schemas/Visit"
+                  message:
+                    type: string
+                  code:
+                    type: integer
+                    description: "HTTP status của kết quả, ví dụ 200, 201"
+        "400":
+          description: "`BR-TN-08` người phụ trách vẫn ACTIVE · thiếu lý do · `BR-TN-05` người mới sai chức vụ"
+          content:
+            "application/json":
+              schema:
+                $ref: "#/components/schemas/Error"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "409":
+          description: "Lượt không IN_PROGRESS"
+          content:
+            "application/json":
+              schema:
+                $ref: "#/components/schemas/Error"
+  "/visits/{visitId}/complete":
+    post:
+      tags: [Completion]
+      summary: "Hoàn tất lượt"
+      description: "UC48, UC49, UC52 · BR-KB-01, 02, BR-SP-06, BR-LH-11. Actor: A07, A08. Quyền: Người được gán lượt. Chuyển trạng thái: IN_PROGRESS → COMPLETED (Visit#5) · Lịch hẹn#7 · Order#4 (→ PENDING) · bệnh án khóa."
+      operationId: completeVisit
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: "#/components/parameters/VisitId"
+      responses:
+        "200":
+          description: OK
+          content:
+            "application/json":
+              schema:
+                type: object
+                required: [data, message, code]
+                properties:
+                  data:
+                    $ref: "#/components/schemas/Visit"
+                  message:
+                    type: string
+                  code:
+                    type: integer
+                    description: "HTTP status của kết quả, ví dụ 200, 201"
+        "400":
+          description: "`BR-KB-02` có dịch vụ loại Khám mà chưa có chẩn đoán · chỉ có dịch vụ loại Tiêm mà chưa ghi mũi nào"
+          content:
+            "application/json":
+              schema:
+                $ref: "#/components/schemas/Error"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "409":
+          description: "Lượt không IN_PROGRESS"
+          content:
+            "application/json":
+              schema:
+                $ref: "#/components/schemas/Error"
+  "/visits/{visitId}/cancel":
+    post:
+      tags: [Completion]
+      summary: "Hủy lượt khách bỏ về"
+      description: "UC45 · BR-TN-07. Actor: A06. Quyền: Lễ tân chi nhánh. Chuyển trạng thái: WAITING → CANCELLED (Visit#6) · Lịch hẹn#8 · Order#6. Lịch hẹn → CANCELLED, không tính hủy muộn."
+      operationId: cancelVisit
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: "#/components/parameters/VisitId"
+      requestBody:
+        required: true
+        content:
+          "application/json":
+            schema:
+              $ref: "#/components/schemas/CancelVisitRequest"
+      responses:
+        "200":
+          description: OK
+          content:
+            "application/json":
+              schema:
+                type: object
+                required: [data, message, code]
+                properties:
+                  data:
+                    $ref: "#/components/schemas/Visit"
+                  message:
+                    type: string
+                  code:
+                    type: integer
+                    description: "HTTP status của kết quả, ví dụ 200, 201"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "409":
+          description: "`BR-TN-07` lượt đã được gọi — nhân viên hoàn tất theo BR-KB-02"
+          content:
+            "application/json":
+              schema:
+                $ref: "#/components/schemas/Error"
+  "/visits/{visitId}/medical-record":
+    get:
+      tags: ["Medical record"]
+      summary: "Xem bệnh án của lượt"
+      description: "UC48, UC53 · BR-KB-01. Actor: A07, A08. Quyền: VET, CARETAKER chi nhánh (CARETAKER chỉ xem). Chuyển trạng thái: —."
+      operationId: getMedicalRecord
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: "#/components/parameters/VisitId"
+      responses:
+        "200":
+          description: OK
+          content:
+            "application/json":
+              schema:
+                type: object
+                required: [data, message, code]
+                properties:
+                  data:
+                    $ref: "#/components/schemas/MedicalRecord"
+                  message:
+                    type: string
+                  code:
+                    type: integer
+                    description: "HTTP status của kết quả, ví dụ 200, 201"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          description: "Không có Visit hoặc Visit nhóm GROOMING (không có bệnh án)"
+          content:
+            "application/json":
+              schema:
+                $ref: "#/components/schemas/Error"
+    put:
+      tags: ["Medical record"]
+      summary: "Ghi bệnh án / hẹn tái khám"
+      description: "UC48 · BR-KB-01, 06. Actor: A07. Quyền: VET được gán lượt. Chuyển trạng thái: —."
+      operationId: updateMedicalRecord
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: "#/components/parameters/VisitId"
+      requestBody:
+        required: true
+        content:
+          "application/json":
+            schema:
+              $ref: "#/components/schemas/UpdateMedicalRecordRequest"
+      responses:
+        "200":
+          description: OK
+          content:
+            "application/json":
+              schema:
+                type: object
+                required: [data, message, code]
+                properties:
+                  data:
+                    $ref: "#/components/schemas/MedicalRecord"
+                  message:
+                    type: string
+                  code:
+                    type: integer
+                    description: "HTTP status của kết quả, ví dụ 200, 201"
+        "400":
+          description: "`BR-KB-06` ngày tái khám không sau ngày khám hoặc quá 180 ngày [CFG]"
+          content:
+            "application/json":
+              schema:
+                $ref: "#/components/schemas/Error"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "409":
+          description: "Lượt không IN_PROGRESS — bệnh án đã khóa, dùng bản bổ sung"
+          content:
+            "application/json":
+              schema:
+                $ref: "#/components/schemas/Error"
+  "/visits/{visitId}/weight":
+    post:
+      tags: ["Medical record"]
+      summary: "Ghi cân nặng khi khám"
+      description: "UC48 · BR-KH-04. Actor: A07. Quyền: VET được gán lượt. Chuyển trạng thái: —. source = VET (A8)."
+      operationId: recordVisitWeight
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: "#/components/parameters/VisitId"
+      requestBody:
+        required: true
+        content:
+          "application/json":
+            schema:
+              $ref: "#/components/schemas/RecordWeightRequest"
+      responses:
+        "201":
+          description: "Đã tạo"
+          content:
+            "application/json":
+              schema:
+                type: object
+                required: [data, message, code]
+                properties:
+                  data:
+                    $ref: "#/components/schemas/WeightRecordRef"
+                  message:
+                    type: string
+                  code:
+                    type: integer
+                    description: "HTTP status của kết quả, ví dụ 200, 201"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "409":
+          description: "Lượt không IN_PROGRESS"
+          content:
+            "application/json":
+              schema:
+                $ref: "#/components/schemas/Error"
+  "/visits/{visitId}/medical-record/addenda":
+    post:
+      tags: ["Medical record"]
+      summary: "Thêm bản bổ sung bệnh án"
+      description: "UC53 · BR-KB-01, BR-QT-15. Actor: A07. Quyền: VET chi nhánh nơi khám (A7). Chuyển trạng thái: —. Không sửa / xóa nội dung cũ; ghi audit."
+      operationId: addMedicalRecordAddendum
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: "#/components/parameters/VisitId"
+      requestBody:
+        required: true
+        content:
+          "application/json":
+            schema:
+              $ref: "#/components/schemas/AddendumRequest"
+      responses:
+        "201":
+          description: "Đã tạo"
+          content:
+            "application/json":
+              schema:
+                type: object
+                required: [data, message, code]
+                properties:
+                  data:
+                    $ref: "#/components/schemas/Addendum"
+                  message:
+                    type: string
+                  code:
+                    type: integer
+                    description: "HTTP status của kết quả, ví dụ 200, 201"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "409":
+          description: "Visit chưa COMPLETED — sửa trực tiếp bệnh án"
+          content:
+            "application/json":
+              schema:
+                $ref: "#/components/schemas/Error"
+  "/visits/{visitId}/prescriptions":
+    post:
+      tags: [Prescriptions]
+      summary: "Kê đơn một dòng thuốc"
+      description: "UC48, UC67 · BR-KB-03, BR-SP-01, BR-BH-02. Actor: A07. Quyền: VET được gán lượt. Chuyển trạng thái: —. Đủ tồn → sinh 1 dòng Order DRUG; mua ngoài → không sinh dòng; không tách dòng."
+      operationId: addPrescriptionItem
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: "#/components/parameters/VisitId"
+      requestBody:
+        required: true
+        content:
+          "application/json":
+            schema:
+              $ref: "#/components/schemas/AddPrescriptionRequest"
+      responses:
+        "201":
+          description: "Đã tạo"
+          content:
+            "application/json":
+              schema:
+                type: object
+                required: [data, message, code]
+                properties:
+                  data:
+                    $ref: "#/components/schemas/PrescriptionItem"
+                  message:
+                    type: string
+                  code:
+                    type: integer
+                    description: "HTTP status của kết quả, ví dụ 200, 201"
+        "400":
+          description: "`BR-KB-03` thiếu tồn khả dụng (message ghi số tồn hiện có) — gửi lại kèm shortageResolution · sản phẩm không phải thuốc kê đơn"
+          content:
+            "application/json":
+              schema:
+                $ref: "#/components/schemas/Error"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "409":
+          description: "Lượt không IN_PROGRESS"
+          content:
+            "application/json":
+              schema:
+                $ref: "#/components/schemas/Error"
+  "/visits/{visitId}/prescriptions/{itemId}":
+    delete:
+      tags: [Prescriptions]
+      summary: "Xóa dòng đơn thuốc"
+      description: "UC48 · BR-KB-03, BR-BH-02. Actor: A07. Quyền: VET được gán lượt. Chuyển trạng thái: —. Xóa kèm dòng Order DRUG tương ứng."
+      operationId: removePrescriptionItem
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: "#/components/parameters/VisitId"
+        - $ref: "#/components/parameters/PrescriptionItemId"
+      responses:
+        "204":
+          description: "Không có nội dung"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "409":
+          description: "Lượt không IN_PROGRESS"
+          content:
+            "application/json":
+              schema:
+                $ref: "#/components/schemas/Error"
+  "/visits/{visitId}/vaccination-options":
+    get:
+      tags: [Vaccinations]
+      summary: "Gợi ý mũi và sản phẩm vaccine"
+      description: "UC49 · BR-KB-04, BR-SP-02, 07, BR-KO-01. Actor: A07. Quyền: VET được gán lượt. Chuyển trạng thái: —."
+      operationId: getVaccinationOptions
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: "#/components/parameters/VisitId"
+        - name: vaccineTypeId
+          in: query
+          required: true
+          schema:
+            type: integer
+            format: int64
+          description: "Loại vaccine đúng loài của thú"
+      responses:
+        "200":
+          description: OK
+          content:
+            "application/json":
+              schema:
+                type: object
+                required: [data, message, code]
+                properties:
+                  data:
+                    $ref: "#/components/schemas/VaccinationOptions"
+                  message:
+                    type: string
+                  code:
+                    type: integer
+                    description: "HTTP status của kết quả, ví dụ 200, 201"
+        "400":
+          description: "Loại vaccine không áp dụng cho loài của thú"
+          content:
+            "application/json":
+              schema:
+                $ref: "#/components/schemas/Error"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+  "/visits/{visitId}/vaccinations":
+    post:
+      tags: [Vaccinations]
+      summary: "Ghi nhận mũi tiêm"
+      description: "UC49, ST06 · BR-KB-04, BR-KO-05, BR-TB-03. Actor: A07. Quyền: VET được gán lượt. Chuyển trạng thái: IN_PROGRESS giữ nguyên · dòng Order VACCINE · trừ kho FEFO · Care Task#5. Ngày tiêm = hôm nay (A6). Chưa đủ tuổi: cảnh báo trong warnings, không chặn."
+      operationId: recordVaccination
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: "#/components/parameters/VisitId"
+      requestBody:
+        required: true
+        content:
+          "application/json":
+            schema:
+              $ref: "#/components/schemas/RecordVaccinationRequest"
+      responses:
+        "201":
+          description: "Đã tạo"
+          content:
+            "application/json":
+              schema:
+                type: object
+                required: [data, message, code]
+                properties:
+                  data:
+                    $ref: "#/components/schemas/RecordVaccinationResult"
+                  message:
+                    type: string
+                  code:
+                    type: integer
+                    description: "HTTP status của kết quả, ví dụ 200, 201"
+        "400":
+          description: "`BR-KB-04` sản phẩm không thuộc loại vaccine, không còn tồn khả dụng, hoặc mũi không thuộc phác đồ đúng loài"
+          content:
+            "application/json":
+              schema:
+                $ref: "#/components/schemas/Error"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "409":
+          description: "Lượt không IN_PROGRESS"
+          content:
+            "application/json":
+              schema:
+                $ref: "#/components/schemas/Error"
+  "/visits/{visitId}/vaccinations/{vaccinationId}":
+    delete:
+      tags: [Vaccinations]
+      summary: "Xóa mũi tiêm ghi nhầm"
+      description: "UC49 · BR-KB-04. Actor: A07. Quyền: VET đã ghi mũi đó. Chuyển trạng thái: —. Hoàn kho đúng lô, xóa dòng Order vaccine trong cùng transaction."
+      operationId: deleteVaccination
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: "#/components/parameters/VisitId"
+        - $ref: "#/components/parameters/VaccinationId"
+      responses:
+        "204":
+          description: "Không có nội dung"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "409":
+          description: "Visit đã COMPLETED — sai sót ghi bằng bản bổ sung"
+          content:
+            "application/json":
+              schema:
+                $ref: "#/components/schemas/Error"
+  "/pets/{petId}/health-record":
+    get:
+      tags: ["Health record"]
+      summary: "Hồ sơ sức khỏe thú cưng"
+      description: "UC25, UC53 · BR-KH-07, BR-KB-01, 04, 06. Actor: A02, A06, A07, A08. Quyền: Khách là chủ hiện tại; nhân viên. Chuyển trạng thái: —. Khách không nhận internalNote và bản bổ sung nội bộ. Chỉ mũi tiêm tại hệ thống."
+      operationId: getPetHealthRecord
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: "#/components/parameters/PetId"
+      responses:
+        "200":
+          description: OK
+          content:
+            "application/json":
+              schema:
+                type: object
+                required: [data, message, code]
+                properties:
+                  data:
+                    $ref: "#/components/schemas/HealthRecord"
+                  message:
+                    type: string
+                  code:
+                    type: integer
+                    description: "HTTP status của kết quả, ví dụ 200, 201"
+        "400":
+          description: "`BR-TK-19` hồ sơ còn chờ quyết định liên kết"
+          content:
+            "application/json":
+              schema:
+                $ref: "#/components/schemas/Error"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          description: "Không phải chủ hiện tại"
+          content:
+            "application/json":
+              schema:
+                $ref: "#/components/schemas/Error"
+        "404":
+          $ref: "#/components/responses/NotFound"
+components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      description: "Access token trả về từ POST /auth/login, gắn với một phiên (sessions). Phiên bị hủy thì token hết hiệu lực ngay (BR-TK-11, 13, 14)."
+  parameters:
+    VisitId:
+      name: visitId
+      in: path
+      required: true
+      schema:
+        type: integer
+        format: int64
+    PetId:
+      name: petId
+      in: path
+      required: true
+      schema:
+        type: integer
+        format: int64
+    PrescriptionItemId:
+      name: itemId
+      in: path
+      required: true
+      schema:
+        type: integer
+        format: int64
+    VaccinationId:
+      name: vaccinationId
+      in: path
+      required: true
+      schema:
+        type: integer
+        format: int64
+  schemas:
+    Error:
+      type: object
+      description: "Envelope lỗi duy nhất, do GlobalExceptionHandler (platform/exception) sinh. Vi phạm business rule: errorCode = BUSINESS_RULE_VIOLATION, message kết thúc bằng mã rule, ví dụ \"… (BR-LH-05)\"."
+      required: [success, errorCode, message, statusCode, timestamp, traceId]
+      properties:
+        success:
+          type: boolean
+          enum: [false]
+        errorCode:
+          type: string
+          enum: [BUSINESS_RULE_VIOLATION, INVALID_STATE_TRANSITION, RESOURCE_NOT_FOUND, ACCESS_DENIED_SCOPE_MISMATCH, CONCURRENCY_CONFLICT, VALIDATION_FAILED, MALFORMED_REQUEST, METHOD_NOT_ALLOWED, UNSUPPORTED_MEDIA_TYPE, UNAUTHENTICATED, ACCESS_DENIED, INTERNAL_ERROR]
+          description: platform/exception/ErrorCode
+        message:
+          type: string
+          description: "Thông điệp tiếng Việt hiển thị được; với BUSINESS_RULE_VIOLATION kết thúc bằng \" (BR-…)\""
+        statusCode:
+          type: integer
+        timestamp:
+          type: string
+          format: date-time
+        traceId:
+          type: string
+    VisitStatus:
+      type: string
+      enum: [WAITING, IN_PROGRESS, COMPLETED, CANCELLED]
+      description: "03 #4"
+    PriorityClass:
+      type: string
+      enum: [EMERGENCY, APPOINTMENT, WALK_IN]
+      description: "BR-TN-03, 04"
+    CreateVisitRequest:
+      type: object
+      required: [petId]
+      properties:
+        petId:
+          type: integer
+          format: int64
+        appointmentId:
+          type: [integer, "null"]
+          format: int64
+          description: "Có = check-in lịch hẹn; không = walk-in"
+        serviceId:
+          type: [integer, "null"]
+          format: int64
+          description: "Bắt buộc với walk-in; có lịch hẹn thì lấy dịch vụ của lịch"
+        isEmergency:
+          type: [boolean, "null"]
+          description: "Bắt buộc true khi tiếp nhận ngoài giờ (BR-CN-05)"
+    Visit:
+      type: object
+      required: [visitId, code, branchId, customerId, customerName, petId, petName, species, serviceGroup, status, priorityClass, queueSortKey, needsReassign, orderId, checkedInAt]
+      properties:
+        visitId:
+          type: integer
+          format: int64
+        code:
+          type: string
+        branchId:
+          type: integer
+          format: int64
+        customerId:
+          type: integer
+          format: int64
+        customerName:
+          type: string
+        petId:
+          type: integer
+          format: int64
+        petName:
+          type: string
+        species:
+          type: string
+          enum: [DOG, CAT, OTHER]
+        appointmentId:
+          type: [integer, "null"]
+          format: int64
+        serviceGroup:
+          type: string
+          enum: [MEDICAL, GROOMING]
+        status:
+          $ref: "#/components/schemas/VisitStatus"
+        priorityClass:
+          $ref: "#/components/schemas/PriorityClass"
+        queueSortKey:
+          type: string
+          format: date-time
+        assigneeId:
+          type: [integer, "null"]
+          format: int64
+        assigneeName:
+          type: [string, "null"]
+        needsReassign:
+          type: boolean
+          description: "Người phụ trách bị khóa (BR-QT-11, BR-TN-08)"
+        orderId:
+          type: integer
+          format: int64
+        checkedInAt:
+          type: string
+          format: date-time
+        calledAt:
+          type: [string, "null"]
+          format: date-time
+        completedAt:
+          type: [string, "null"]
+          format: date-time
+        cancelledAt:
+          type: [string, "null"]
+          format: date-time
+        cancelReason:
+          type: [string, "null"]
+    AssignRequest:
+      type: object
+      required: [assigneeId]
+      properties:
+        assigneeId:
+          type: integer
+          format: int64
+          description: "VET cho MEDICAL, CARETAKER cho GROOMING (BR-TN-05)"
+    AssignResult:
+      type: object
+      required: [visit, assigneeOffline]
+      properties:
+        visit:
+          $ref: "#/components/schemas/Visit"
+        assigneeOffline:
+          type: boolean
+          description: "true = đã cảnh báo người được gán đang offline, không chặn (BR-TN-06)"
+    MoveVisitRequest:
+      type: object
+      required: [placeBeforeVisitId]
+      properties:
+        placeBeforeVisitId:
+          type: integer
+          format: int64
+          description: "Visit WAITING cùng chi nhánh (A3)"
+    ReassignRequest:
+      type: object
+      required: [assigneeId, reason]
+      properties:
+        assigneeId:
+          type: integer
+          format: int64
+        reason:
+          type: string
+          maxLength: 300
+          description: "Bắt buộc (BR-TN-08)"
+    CancelVisitRequest:
+      type: object
+      properties:
+        reason:
+          type: [string, "null"]
+          maxLength: 300
+    PrescriptionItem:
+      type: object
+      required: [itemId, productId, productName, quantity, dosageInstructions, isExternalPurchase]
+      properties:
+        itemId:
+          type: integer
+          format: int64
+        productId:
+          type: integer
+          format: int64
+        productName:
+          type: string
+        quantity:
+          type: integer
+          format: int32
+        dosageInstructions:
+          type: string
+          maxLength: 500
+        isExternalPurchase:
+          type: boolean
+          description: "Mua ngoài: vẫn in trên đơn, không sinh dòng Order"
+        externalReason:
+          type: [string, "null"]
+          enum: [OUT_OF_STOCK_AT_PRESCRIBE, OUT_OF_STOCK_AT_PAYMENT, null]
+        orderLineId:
+          type: [integer, "null"]
+          format: int64
+    Addendum:
+      type: object
+      required: [addendumId, content, isInternal, createdBy, createdByName, createdAt]
+      properties:
+        addendumId:
+          type: integer
+          format: int64
+        content:
+          type: string
+        isInternal:
+          type: boolean
+        createdBy:
+          type: integer
+          format: int64
+        createdByName:
+          type: string
+        createdAt:
+          type: string
+          format: date-time
+    VaccinationRecord:
+      type: object
+      required: [vaccinationId, visitId, branchId, vaccineTypeId, vaccineTypeName, protocolId, doseNumber, productId, productName, administeredOn, nextDueDate, superseded, recordedBy, orderLineId]
+      properties:
+        vaccinationId:
+          type: integer
+          format: int64
+        visitId:
+          type: integer
+          format: int64
+        branchId:
+          type: integer
+          format: int64
+        vaccineTypeId:
+          type: integer
+          format: int64
+        vaccineTypeName:
+          type: string
+        protocolId:
+          type: integer
+          format: int64
+        doseNumber:
+          type: integer
+          format: int32
+        productId:
+          type: integer
+          format: int64
+        productName:
+          type: string
+        lotNumber:
+          type: [string, "null"]
+        expiryDate:
+          type: [string, "null"]
+          format: date
+        administeredOn:
+          type: string
+          format: date
+        nextDueDate:
+          type: string
+          format: date
+          description: "= ngày tiêm + khoảng cách của mũi trong phác đồ (BR-KB-04)"
+        superseded:
+          type: boolean
+          description: "Đã có mũi mới hơn cùng loại vaccine (BR-TB-03)"
+        recordedBy:
+          type: integer
+          format: int64
+        orderLineId:
+          type: integer
+          format: int64
+    MedicalRecord:
+      type: object
+      required: [visitId, locked, prescriptions, vaccinations, addenda]
+      properties:
+        visitId:
+          type: integer
+          format: int64
+        examination:
+          type: [string, "null"]
+        diagnosis:
+          type: [string, "null"]
+        treatmentPlan:
+          type: [string, "null"]
+        internalNote:
+          type: [string, "null"]
+          description: "Chỉ nhân viên"
+        followUpDate:
+          type: [string, "null"]
+          format: date
+        locked:
+          type: boolean
+          description: "Visit COMPLETED: chỉ thêm bản bổ sung (BR-KB-01)"
+        lastEditedBy:
+          type: [integer, "null"]
+          format: int64
+        prescriptions:
+          type: array
+          items:
+            $ref: "#/components/schemas/PrescriptionItem"
+        vaccinations:
+          type: array
+          items:
+            $ref: "#/components/schemas/VaccinationRecord"
+        addenda:
+          type: array
+          items:
+            $ref: "#/components/schemas/Addendum"
+    UpdateMedicalRecordRequest:
+      type: object
+      properties:
+        examination:
+          type: [string, "null"]
+          description: "Gồm tiền sử tiêm do chủ khai (04 nguyên tắc 9)"
+        diagnosis:
+          type: [string, "null"]
+        treatmentPlan:
+          type: [string, "null"]
+        internalNote:
+          type: [string, "null"]
+        followUpDate:
+          type: [string, "null"]
+          format: date
+          description: "Sau ngày khám, xa nhất 180 ngày [CFG] (BR-KB-06)"
+    RecordWeightRequest:
+      type: object
+      required: [weightKg]
+      properties:
+        weightKg:
+          type: number
+          description: "> 0 (BR-KH-04)"
+    WeightRecordRef:
+      type: object
+      required: [weightRecordId, weightKg, measuredAt]
+      properties:
+        weightRecordId:
+          type: integer
+          format: int64
+        weightKg:
+          type: number
+        measuredAt:
+          type: string
+          format: date-time
+    AddendumRequest:
+      type: object
+      required: [content]
+      properties:
+        content:
+          type: string
+        isInternal:
+          type: [boolean, "null"]
+          description: "Bổ sung cho ghi chú nội bộ, khách không thấy"
+    AddPrescriptionRequest:
+      type: object
+      required: [productId, quantity, dosageInstructions]
+      properties:
+        productId:
+          type: integer
+          format: int64
+          description: "Thuốc kê đơn (BR-KB-03, BR-SP-01)"
+        quantity:
+          type: integer
+          format: int32
+          description: "> 0"
+        dosageInstructions:
+          type: string
+          maxLength: 500
+        shortageResolution:
+          type: [string, "null"]
+          enum: [REDUCE_TO_AVAILABLE, EXTERNAL_PURCHASE, null]
+          description: "Chỉ gửi khi lần trước bị từ chối vì thiếu tồn (A5)"
+    VaccineProductOption:
+      type: object
+      required: [productId, name, availableQuantity]
+      properties:
+        productId:
+          type: integer
+          format: int64
+        name:
+          type: string
+        availableQuantity:
+          type: integer
+          format: int32
+    VaccinationOptions:
+      type: object
+      required: [vaccineTypeId, protocol, products, underMinAge]
+      properties:
+        vaccineTypeId:
+          type: integer
+          format: int64
+        protocol:
+          type: array
+          items:
+            $ref: "#/components/schemas/ProtocolDoseOption"
+          description: "Các mũi trong phác đồ của loài"
+        suggestedProtocolId:
+          type: [integer, "null"]
+          format: int64
+          description: "Gợi ý theo lịch sử tiêm cùng loại tại hệ thống, chỉ tham khảo (BR-KB-04)"
+        lastDose:
+          $ref: "#/components/schemas/VaccinationRecord"
+        products:
+          type: array
+          items:
+            $ref: "#/components/schemas/VaccineProductOption"
+          description: "Chỉ sản phẩm thuộc loại còn tồn khả dụng tại chi nhánh"
+        underMinAge:
+          type: boolean
+          description: "Thú chưa đủ tuổi tối thiểu của mũi gợi ý — cảnh báo, không chặn"
+    ProtocolDoseOption:
+      type: object
+      required: [protocolId, doseNumber, intervalDays, minAgeWeeks, requiredForBoarding]
+      properties:
+        protocolId:
+          type: integer
+          format: int64
+        doseNumber:
+          type: integer
+          format: int32
+        intervalDays:
+          type: integer
+          format: int32
+        minAgeWeeks:
+          type: integer
+          format: int32
+        requiredForBoarding:
+          type: boolean
+    RecordVaccinationRequest:
+      type: object
+      required: [vaccineTypeId, protocolId, productId]
+      properties:
+        vaccineTypeId:
+          type: integer
+          format: int64
+        protocolId:
+          type: integer
+          format: int64
+          description: "Mũi VET chọn, có thể khác gợi ý"
+        productId:
+          type: integer
+          format: int64
+          description: "Vaccine thuộc loại đã chọn, còn tồn khả dụng"
+    RecordVaccinationResult:
+      type: object
+      required: [vaccination, warnings]
+      properties:
+        vaccination:
+          $ref: "#/components/schemas/VaccinationRecord"
+        warnings:
+          type: array
+          items:
+            type: string
+          description: "Ví dụ UNDER_MIN_AGE"
+    HealthVisitEntry:
+      type: object
+      required: [visitId, visitDate, branchName, serviceGroup, prescriptions, addenda]
+      properties:
+        visitId:
+          type: integer
+          format: int64
+        visitDate:
+          type: string
+          format: date
+        branchName:
+          type: string
+        serviceGroup:
+          type: string
+          enum: [MEDICAL, GROOMING]
+        examination:
+          type: [string, "null"]
+        diagnosis:
+          type: [string, "null"]
+        treatmentPlan:
+          type: [string, "null"]
+        internalNote:
+          type: [string, "null"]
+          description: "Chỉ trả cho nhân viên"
+        followUpDate:
+          type: [string, "null"]
+          format: date
+        prescriptions:
+          type: array
+          items:
+            $ref: "#/components/schemas/PrescriptionItem"
+        addenda:
+          type: array
+          items:
+            $ref: "#/components/schemas/Addendum"
+          description: "Khách không thấy bản isInternal"
+    UpcomingVaccination:
+      type: object
+      required: [vaccineTypeId, vaccineTypeName, nextDueDate]
+      properties:
+        vaccineTypeId:
+          type: integer
+          format: int64
+        vaccineTypeName:
+          type: string
+        nextDueDate:
+          type: string
+          format: date
+    HealthRecord:
+      type: object
+      required: [petId, visits, vaccinations, upcomingVaccinations]
+      properties:
+        petId:
+          type: integer
+          format: int64
+        visits:
+          type: array
+          items:
+            $ref: "#/components/schemas/HealthVisitEntry"
+        vaccinations:
+          type: array
+          items:
+            $ref: "#/components/schemas/VaccinationRecord"
+        upcomingVaccinations:
+          type: array
+          items:
+            $ref: "#/components/schemas/UpcomingVaccination"
+          description: "Mũi chưa bị thay thế"
+        upcomingFollowUpDate:
+          type: [string, "null"]
+          format: date
+  responses:
+    BadRequest:
+      description: "VALIDATION_FAILED / MALFORMED_REQUEST: dữ liệu không hợp lệ · BUSINESS_RULE_VIOLATION: vi phạm rule, message kết thúc bằng mã rule \"(BR-…)\"."
+      content:
+        "application/json":
+          schema:
+            $ref: "#/components/schemas/Error"
+    Unauthorized:
+      description: "UNAUTHENTICATED: chưa đăng nhập hoặc phiên đã hết hạn / bị hủy."
+      content:
+        "application/json":
+          schema:
+            $ref: "#/components/schemas/Error"
+    Forbidden:
+      description: "ACCESS_DENIED: sai vai trò · ACCESS_DENIED_SCOPE_MISMATCH: ngoài phạm vi (chi nhánh, chủ sở hữu). Message chung, không lộ cấu trúc phân quyền."
+      content:
+        "application/json":
+          schema:
+            $ref: "#/components/schemas/Error"
+    NotFound:
+      description: "Không tìm thấy (RESOURCE_NOT_FOUND)."
+      content:
+        "application/json":
+          schema:
+            $ref: "#/components/schemas/Error"

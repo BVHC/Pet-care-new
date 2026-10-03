@@ -1,0 +1,1516 @@
+# Pet Care Sales & Cashier API v1 — OpenAPI 3.1, sinh từ khai báo; không sửa tay, sửa khai báo rồi sinh lại.
+# Module BH, TG · owner BE-2
+# Nguồn: 01 UC66, UC67, UC70–UC72; 02 BR-BH-01…06, BR-TG-01…05, BR-TN-01, 08, BR-KB-03, 04, BR-LT-09, BR-SP-01, BR-QT-15; 03 #5 Order, #8 Ca thu ngân; 04 §8; 05 §8 (orders, order_lines, payments, cashier_shifts)
+# Truy vết: CONFIRMED = có trong docs · ASSUMPTION (A#) · TBD (Q#) — xem file .md cùng tên.
+
+openapi: "3.1.0"
+info:
+  title: "Pet Care Sales & Cashier API v1"
+  version: "1.0.0"
+  description: "Module BH, TG · owner BE-2. Nguồn: 01 UC66, UC67, UC70–UC72; 02 BR-BH-01…06, BR-TG-01…05, BR-TN-01, 08, BR-KB-03, 04, BR-LT-09, BR-SP-01, BR-QT-15; 03 #5 Order, #8 Ca thu ngân; 04 §8; 05 §8 (orders, order_lines, payments, cashier_shifts). Chi tiết và truy vết: ../sales-v1.md"
+servers:
+  - url: "/api"
+    description: "Mọi path bên dưới nằm sau tiền tố /api"
+tags:
+  - name: Orders
+    description: "Order và dòng Order (UC66, UC67)"
+  - name: Payments
+    description: "Thu tiền tại quầy, thu gộp (UC70)"
+  - name: "Cashier shifts"
+    description: "Mở / chốt ca, đối soát (UC71, UC72)"
+paths:
+  "/orders":
+    post:
+      tags: [Orders]
+      summary: "Tạo Order bán lẻ"
+      description: "UC66 · BR-BH-01. Actor: A06. Quyền: Lễ tân. Chuyển trạng thái: — → OPEN, RETAIL (Order#2)."
+      operationId: createRetailOrder
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          "application/json":
+            schema:
+              $ref: "#/components/schemas/CreateRetailOrderRequest"
+      responses:
+        "201":
+          description: "Đã tạo"
+          content:
+            "application/json":
+              schema:
+                type: object
+                required: [data, message, code]
+                properties:
+                  data:
+                    $ref: "#/components/schemas/Order"
+                  message:
+                    type: string
+                  code:
+                    type: integer
+                    description: "HTTP status của kết quả, ví dụ 200, 201"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+    get:
+      tags: [Orders]
+      summary: "Danh sách Order"
+      description: "UC66, UC70, ST13 · BR-BH-05. Actor: A05, A06, A07, A08. Quyền: Nhân viên chi nhánh của Order. Chuyển trạng thái: —."
+      operationId: listOrders
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: status
+          in: query
+          required: false
+          schema:
+            type: string
+            enum: [OPEN, PENDING, PAID, CANCELLED]
+        - name: source
+          in: query
+          required: false
+          schema:
+            type: string
+            enum: [VISIT, RETAIL, BOARDING]
+        - name: customerId
+          in: query
+          required: false
+          schema:
+            type: integer
+            format: int64
+        - name: visitId
+          in: query
+          required: false
+          schema:
+            type: integer
+            format: int64
+        - name: boardingBookingId
+          in: query
+          required: false
+          schema:
+            type: integer
+            format: int64
+        - name: date
+          in: query
+          required: false
+          schema:
+            type: string
+            format: date
+        - name: pendingOverdue
+          in: query
+          required: false
+          schema:
+            type: boolean
+          description: "PENDING quá 1 ngày [CFG] — danh sách ST13 cho quản lý (BR-BH-05)"
+        - $ref: "#/components/parameters/Page"
+        - $ref: "#/components/parameters/Size"
+      responses:
+        "200":
+          description: OK
+          content:
+            "application/json":
+              schema:
+                type: object
+                required: [data, message, code]
+                properties:
+                  data:
+                    allOf:
+                      - $ref: "#/components/schemas/PageMeta"
+                      - type: object
+                        required: [content]
+                        properties:
+                          content:
+                            type: array
+                            items:
+                              $ref: "#/components/schemas/OrderSummary"
+                  message:
+                    type: string
+                  code:
+                    type: integer
+                    description: "HTTP status của kết quả, ví dụ 200, 201"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+  "/orders/{orderId}":
+    get:
+      tags: [Orders]
+      summary: "Chi tiết Order"
+      description: "UC66, UC67, UC70 · BR-BH-02, 06. Actor: A05, A06, A07, A08. Quyền: Nhân viên chi nhánh của Order. Chuyển trạng thái: —."
+      operationId: getOrder
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: "#/components/parameters/OrderId"
+      responses:
+        "200":
+          description: OK
+          content:
+            "application/json":
+              schema:
+                type: object
+                required: [data, message, code]
+                properties:
+                  data:
+                    $ref: "#/components/schemas/Order"
+                  message:
+                    type: string
+                  code:
+                    type: integer
+                    description: "HTTP status của kết quả, ví dụ 200, 201"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+  "/orders/{orderId}/lines":
+    post:
+      tags: [Orders]
+      summary: "Thêm dịch vụ / hàng vào Order"
+      description: "UC66, UC67 · BR-BH-02, 03, 04, BR-SP-01. Actor: A06, A07, A08. Quyền: Lễ tân: GOODS; VET: SERVICE nhóm MEDICAL của Visit mình; CARETAKER: SERVICE nhóm GROOMING của Visit mình. Chuyển trạng thái: —. Giá snapshot lúc thêm. Thiếu tồn bán lẻ: cảnh báo, không chặn."
+      operationId: addOrderLine
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: "#/components/parameters/OrderId"
+      requestBody:
+        required: true
+        content:
+          "application/json":
+            schema:
+              $ref: "#/components/schemas/AddOrderLineRequest"
+      responses:
+        "201":
+          description: "Đã tạo"
+          content:
+            "application/json":
+              schema:
+                type: object
+                required: [data, message, code]
+                properties:
+                  data:
+                    $ref: "#/components/schemas/AddOrderLineResult"
+                  message:
+                    type: string
+                  code:
+                    type: integer
+                    description: "HTTP status của kết quả, ví dụ 200, 201"
+        "400":
+          description: "`BR-SP-01` thuốc kê đơn (dùng kê đơn) · sản phẩm / dịch vụ ngừng kinh doanh"
+          content:
+            "application/json":
+              schema:
+                $ref: "#/components/schemas/Error"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          description: "`BR-BH-02` vai trò không được thêm loại dòng này"
+          content:
+            "application/json":
+              schema:
+                $ref: "#/components/schemas/Error"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "409":
+          description: "Order không OPEN (khi PENDING chỉ lễ tân thêm GOODS) / đã PAID, CANCELLED"
+          content:
+            "application/json":
+              schema:
+                $ref: "#/components/schemas/Error"
+  "/orders/{orderId}/lines/{lineId}":
+    patch:
+      tags: [Orders]
+      summary: "Sửa dòng (giảm số lượng / đổi dịch vụ tự sinh)"
+      description: "UC66, UC67 · BR-BH-02, 03, 04, BR-TN-01. Actor: A06, A07, A08. Quyền: Chủ dòng (ownerAccountId). Chuyển trạng thái: —."
+      operationId: updateOrderLine
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: "#/components/parameters/OrderId"
+        - $ref: "#/components/parameters/LineId"
+      requestBody:
+        required: true
+        content:
+          "application/json":
+            schema:
+              $ref: "#/components/schemas/UpdateOrderLineRequest"
+      responses:
+        "200":
+          description: OK
+          content:
+            "application/json":
+              schema:
+                type: object
+                required: [data, message, code]
+                properties:
+                  data:
+                    $ref: "#/components/schemas/Order"
+                  message:
+                    type: string
+                  code:
+                    type: integer
+                    description: "HTTP status của kết quả, ví dụ 200, 201"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          description: "`BR-BH-02` không phải chủ dòng, hoặc dòng dịch vụ / thuốc đã khóa khi PENDING"
+          content:
+            "application/json":
+              schema:
+                $ref: "#/components/schemas/Error"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "409":
+          description: "Order đã PAID / CANCELLED"
+          content:
+            "application/json":
+              schema:
+                $ref: "#/components/schemas/Error"
+    delete:
+      tags: [Orders]
+      summary: "Xóa dòng"
+      description: "UC66, UC67 · BR-BH-02, BR-KB-04. Actor: A06, A07, A08. Quyền: Chủ dòng (ownerAccountId). Chuyển trạng thái: —."
+      operationId: deleteOrderLine
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: "#/components/parameters/OrderId"
+        - $ref: "#/components/parameters/LineId"
+      responses:
+        "200":
+          description: OK
+          content:
+            "application/json":
+              schema:
+                type: object
+                required: [data, message, code]
+                properties:
+                  data:
+                    $ref: "#/components/schemas/Order"
+                  message:
+                    type: string
+                  code:
+                    type: integer
+                    description: "HTTP status của kết quả, ví dụ 200, 201"
+        "400":
+          description: "`BR-BH-02` dòng VACCINE không xóa trực tiếp (xóa mũi tiêm) · dòng DRUG xóa qua đơn thuốc"
+          content:
+            "application/json":
+              schema:
+                $ref: "#/components/schemas/Error"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          description: "`BR-BH-02` không phải chủ dòng"
+          content:
+            "application/json":
+              schema:
+                $ref: "#/components/schemas/Error"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "409":
+          description: "Order đã PAID / CANCELLED"
+          content:
+            "application/json":
+              schema:
+                $ref: "#/components/schemas/Error"
+  "/orders/{orderId}/close":
+    post:
+      tags: [Orders]
+      summary: "Chốt Order bán lẻ"
+      description: "UC66 · BR-BH-01. Actor: A06. Quyền: Lễ tân. Chuyển trạng thái: OPEN → PENDING, RETAIL (Order#5)."
+      operationId: closeRetailOrder
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: "#/components/parameters/OrderId"
+      responses:
+        "200":
+          description: OK
+          content:
+            "application/json":
+              schema:
+                type: object
+                required: [data, message, code]
+                properties:
+                  data:
+                    $ref: "#/components/schemas/Order"
+                  message:
+                    type: string
+                  code:
+                    type: integer
+                    description: "HTTP status của kết quả, ví dụ 200, 201"
+        "400":
+          description: "`BR-BH-01` Order chưa có dòng nào"
+          content:
+            "application/json":
+              schema:
+                $ref: "#/components/schemas/Error"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "409":
+          description: "Không phải Order RETAIL OPEN"
+          content:
+            "application/json":
+              schema:
+                $ref: "#/components/schemas/Error"
+  "/orders/{orderId}/cancel":
+    post:
+      tags: [Orders]
+      summary: "Hủy Order bán lẻ chưa chốt"
+      description: "UC66 · BR-BH-01. Actor: A06. Quyền: Lễ tân. Chuyển trạng thái: OPEN → CANCELLED, RETAIL (Order#7)."
+      operationId: cancelRetailOrder
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: "#/components/parameters/OrderId"
+      responses:
+        "200":
+          description: OK
+          content:
+            "application/json":
+              schema:
+                type: object
+                required: [data, message, code]
+                properties:
+                  data:
+                    $ref: "#/components/schemas/Order"
+                  message:
+                    type: string
+                  code:
+                    type: integer
+                    description: "HTTP status của kết quả, ví dụ 200, 201"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "409":
+          description: "Không phải Order RETAIL OPEN"
+          content:
+            "application/json":
+              schema:
+                $ref: "#/components/schemas/Error"
+  "/orders/{orderId}/abort-checkout":
+    post:
+      tags: [Orders]
+      summary: "Hủy phiên trả thú (khách không thanh toán)"
+      description: "UC59 · BR-LT-09, BR-QT-15. Actor: A06. Quyền: Lễ tân. Chuyển trạng thái: PENDING → CANCELLED, BOARDING (Order#9). cancelType = CHECKOUT_ABORTED, không tính thất thu. Đặt chỗ giữ trạng thái, tiếp tục tính đêm. Ghi audit."
+      operationId: abortBoardingCheckout
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: "#/components/parameters/OrderId"
+      requestBody:
+        required: true
+        content:
+          "application/json":
+            schema:
+              $ref: "#/components/schemas/ReasonRequest"
+      responses:
+        "200":
+          description: OK
+          content:
+            "application/json":
+              schema:
+                type: object
+                required: [data, message, code]
+                properties:
+                  data:
+                    $ref: "#/components/schemas/Order"
+                  message:
+                    type: string
+                  code:
+                    type: integer
+                    description: "HTTP status của kết quả, ví dụ 200, 201"
+        "400":
+          description: "`BR-LT-09` thiếu lý do · thú không còn trong chuồng (dùng cancel-unpaid)"
+          content:
+            "application/json":
+              schema:
+                $ref: "#/components/schemas/Error"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "409":
+          description: "Không phải Order BOARDING PENDING"
+          content:
+            "application/json":
+              schema:
+                $ref: "#/components/schemas/Error"
+  "/orders/{orderId}/cancel-unpaid":
+    post:
+      tags: [Orders]
+      summary: "Hủy Order khách không thanh toán"
+      description: "UC66 · BR-BH-05, BR-BC-02, BR-QT-15. Actor: A05. Quyền: Chỉ BRANCH_MANAGER chi nhánh. Chuyển trạng thái: PENDING → CANCELLED (Order#10). cancelType = UNPAID (thất thu). Không đổi kho, bệnh án, lịch hẹn, lưu trú. Ghi audit."
+      operationId: cancelUnpaidOrder
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: "#/components/parameters/OrderId"
+      requestBody:
+        required: true
+        content:
+          "application/json":
+            schema:
+              $ref: "#/components/schemas/ReasonRequest"
+      responses:
+        "200":
+          description: OK
+          content:
+            "application/json":
+              schema:
+                type: object
+                required: [data, message, code]
+                properties:
+                  data:
+                    $ref: "#/components/schemas/Order"
+                  message:
+                    type: string
+                  code:
+                    type: integer
+                    description: "HTTP status của kết quả, ví dụ 200, 201"
+        "400":
+          description: "`BR-BH-05` thiếu lý do · Order BOARDING khi thú còn trong chuồng (xử lý theo BR-LT-09)"
+          content:
+            "application/json":
+              schema:
+                $ref: "#/components/schemas/Error"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "409":
+          description: "Order không PENDING"
+          content:
+            "application/json":
+              schema:
+                $ref: "#/components/schemas/Error"
+  "/orders/{orderId}/lines/{lineId}/move-to-external-purchase":
+    post:
+      tags: [Orders]
+      summary: "Chuyển dòng thuốc kê đơn sang mua ngoài khi thiếu tồn lúc thu"
+      description: "UC70 · BR-BH-04, BR-KB-03, BR-QT-15. Actor: A06. Quyền: Lễ tân. Chuyển trạng thái: —. Dòng bị xóa khỏi Order, vẫn in trên đơn thuốc (external_reason = OUT_OF_STOCK_AT_PAYMENT). Ghi audit."
+      operationId: moveDrugLineToExternalPurchase
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: "#/components/parameters/OrderId"
+        - $ref: "#/components/parameters/LineId"
+      responses:
+        "200":
+          description: OK
+          content:
+            "application/json":
+              schema:
+                type: object
+                required: [data, message, code]
+                properties:
+                  data:
+                    $ref: "#/components/schemas/Order"
+                  message:
+                    type: string
+                  code:
+                    type: integer
+                    description: "HTTP status của kết quả, ví dụ 200, 201"
+        "400":
+          description: "Dòng không phải DRUG hoặc tồn vẫn đủ"
+          content:
+            "application/json":
+              schema:
+                $ref: "#/components/schemas/Error"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "409":
+          description: "Order không PENDING"
+          content:
+            "application/json":
+              schema:
+                $ref: "#/components/schemas/Error"
+  "/customers/{customerId}/payable-orders":
+    get:
+      tags: [Payments]
+      summary: "Order PENDING của khách tại chi nhánh"
+      description: "UC70 · BR-TG-01, 03. Actor: A06. Quyền: Lễ tân chi nhánh. Chuyển trạng thái: —. Dùng để chọn Order thu gộp."
+      operationId: listPayableOrders
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: "#/components/parameters/CustomerId"
+      responses:
+        "200":
+          description: OK
+          content:
+            "application/json":
+              schema:
+                type: object
+                required: [data, message, code]
+                properties:
+                  data:
+                    type: array
+                    items:
+                      $ref: "#/components/schemas/OrderSummary"
+                  message:
+                    type: string
+                  code:
+                    type: integer
+                    description: "HTTP status của kết quả, ví dụ 200, 201"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+  "/payments/preview":
+    post:
+      tags: [Payments]
+      summary: "Xem trước khi thu (tổng tiền, dòng thiếu tồn)"
+      description: "UC70 · BR-TG-02, 03, BR-BH-04. Actor: A06. Quyền: Lễ tân chi nhánh. Chuyển trạng thái: —. Không ghi gì (A2)."
+      operationId: previewPayment
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          "application/json":
+            schema:
+              $ref: "#/components/schemas/PaymentPreviewRequest"
+      responses:
+        "200":
+          description: OK
+          content:
+            "application/json":
+              schema:
+                type: object
+                required: [data, message, code]
+                properties:
+                  data:
+                    $ref: "#/components/schemas/PaymentPreview"
+                  message:
+                    type: string
+                  code:
+                    type: integer
+                    description: "HTTP status của kết quả, ví dụ 200, 201"
+        "400":
+          description: "`BR-TG-03` Order khác khách / khác chi nhánh · `BR-TG-01` có Order không PENDING"
+          content:
+            "application/json":
+              schema:
+                $ref: "#/components/schemas/Error"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+  "/payments":
+    post:
+      tags: [Payments]
+      summary: "Thu tiền"
+      description: "UC70, ST06 · BR-TG-01…04, BR-BH-04, 06, BR-KO-05. Actor: A06. Quyền: Lễ tân có ca OPEN của chính mình. Chuyển trạng thái: PENDING → PAID (Order#8) cho mọi Order trong phiếu. Trừ kho FEFO cùng transaction; ghi vào ca; ghi audit."
+      operationId: collectPayment
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          "application/json":
+            schema:
+              $ref: "#/components/schemas/CreatePaymentRequest"
+      responses:
+        "201":
+          description: "Đã tạo"
+          content:
+            "application/json":
+              schema:
+                type: object
+                required: [data, message, code]
+                properties:
+                  data:
+                    $ref: "#/components/schemas/Payment"
+                  message:
+                    type: string
+                  code:
+                    type: integer
+                    description: "HTTP status của kết quả, ví dụ 200, 201"
+        "400":
+          description: "`BR-TG-01` chưa mở ca · `BR-TG-02` số tiền khác tổng · `BR-TG-03` Order khác khách / chi nhánh · `BR-BH-04` thiếu tồn (gọi preview để xem dòng thiếu)"
+          content:
+            "application/json":
+              schema:
+                $ref: "#/components/schemas/Error"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "409":
+          description: "Có Order không còn PENDING · xung đột đồng thời"
+          content:
+            "application/json":
+              schema:
+                $ref: "#/components/schemas/Error"
+  "/payments/{paymentId}":
+    get:
+      tags: [Payments]
+      summary: "Chi tiết phiếu thu"
+      description: "UC70 · —. Actor: A05, A06. Quyền: Nhân viên chi nhánh. Chuyển trạng thái: —."
+      operationId: getPayment
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: "#/components/parameters/PaymentId"
+      responses:
+        "200":
+          description: OK
+          content:
+            "application/json":
+              schema:
+                type: object
+                required: [data, message, code]
+                properties:
+                  data:
+                    $ref: "#/components/schemas/Payment"
+                  message:
+                    type: string
+                  code:
+                    type: integer
+                    description: "HTTP status của kết quả, ví dụ 200, 201"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+  "/cashier-shifts":
+    post:
+      tags: ["Cashier shifts"]
+      summary: "Mở ca thu ngân"
+      description: "UC71 · BR-TG-01, 05, BR-CN-05. Actor: A06. Quyền: Lễ tân. Chuyển trạng thái: — → OPEN (Ca thu ngân#1 ca thường / #2 ca ngoài giờ)."
+      operationId: openCashierShift
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          "application/json":
+            schema:
+              $ref: "#/components/schemas/OpenShiftRequest"
+      responses:
+        "201":
+          description: "Đã tạo"
+          content:
+            "application/json":
+              schema:
+                type: object
+                required: [data, message, code]
+                properties:
+                  data:
+                    $ref: "#/components/schemas/CashierShift"
+                  message:
+                    type: string
+                  code:
+                    type: integer
+                    description: "HTTP status của kết quả, ví dụ 200, 201"
+        "400":
+          description: "`BR-TG-05` ca thường ngoài giờ mở cửa / ngày nghỉ; ca ngoài giờ trong giờ mở cửa · `BR-CN-05` chi nhánh không có cờ cấp cứu ngoài giờ"
+          content:
+            "application/json":
+              schema:
+                $ref: "#/components/schemas/Error"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "409":
+          description: "Đã có ca OPEN của mình"
+          content:
+            "application/json":
+              schema:
+                $ref: "#/components/schemas/Error"
+    get:
+      tags: ["Cashier shifts"]
+      summary: "Danh sách ca"
+      description: "UC72 · BR-TG-05. Actor: A05. Quyền: BRANCH_MANAGER chi nhánh. Chuyển trạng thái: —."
+      operationId: listCashierShifts
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: status
+          in: query
+          required: false
+          schema:
+            type: string
+            enum: [OPEN, CLOSED, RECONCILED]
+        - name: businessDate
+          in: query
+          required: false
+          schema:
+            type: string
+            format: date
+        - name: cashierId
+          in: query
+          required: false
+          schema:
+            type: integer
+            format: int64
+        - $ref: "#/components/parameters/Page"
+        - $ref: "#/components/parameters/Size"
+      responses:
+        "200":
+          description: OK
+          content:
+            "application/json":
+              schema:
+                type: object
+                required: [data, message, code]
+                properties:
+                  data:
+                    allOf:
+                      - $ref: "#/components/schemas/PageMeta"
+                      - type: object
+                        required: [content]
+                        properties:
+                          content:
+                            type: array
+                            items:
+                              $ref: "#/components/schemas/CashierShift"
+                  message:
+                    type: string
+                  code:
+                    type: integer
+                    description: "HTTP status của kết quả, ví dụ 200, 201"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+  "/me/cashier-shift":
+    get:
+      tags: ["Cashier shifts"]
+      summary: "Ca đang mở của tôi"
+      description: "UC70, UC71 · BR-TG-01. Actor: A06. Quyền: Lễ tân. Chuyển trạng thái: —."
+      operationId: getMyCurrentShift
+      security:
+        - bearerAuth: []
+      responses:
+        "200":
+          description: OK
+          content:
+            "application/json":
+              schema:
+                type: object
+                required: [data, message, code]
+                properties:
+                  data:
+                    $ref: "#/components/schemas/CurrentShift"
+                  message:
+                    type: string
+                  code:
+                    type: integer
+                    description: "HTTP status của kết quả, ví dụ 200, 201"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+  "/cashier-shifts/{shiftId}/close":
+    post:
+      tags: ["Cashier shifts"]
+      summary: "Chốt ca"
+      description: "UC71 · BR-TG-05. Actor: A06. Quyền: Lễ tân chủ ca. Chuyển trạng thái: OPEN → CLOSED (Ca thu ngân#3). Tổng hợp giao dịch theo phương thức."
+      operationId: closeCashierShift
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: "#/components/parameters/ShiftId"
+      requestBody:
+        required: true
+        content:
+          "application/json":
+            schema:
+              $ref: "#/components/schemas/CloseShiftRequest"
+      responses:
+        "200":
+          description: OK
+          content:
+            "application/json":
+              schema:
+                type: object
+                required: [data, message, code]
+                properties:
+                  data:
+                    $ref: "#/components/schemas/CashierShift"
+                  message:
+                    type: string
+                  code:
+                    type: integer
+                    description: "HTTP status của kết quả, ví dụ 200, 201"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "409":
+          description: "Ca không OPEN"
+          content:
+            "application/json":
+              schema:
+                $ref: "#/components/schemas/Error"
+  "/cashier-shifts/{shiftId}":
+    get:
+      tags: ["Cashier shifts"]
+      summary: "Chi tiết ca"
+      description: "UC71, UC72 · BR-TG-05. Actor: A05, A06. Quyền: BRANCH_MANAGER chi nhánh; lễ tân chủ ca. Chuyển trạng thái: —."
+      operationId: getCashierShift
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: "#/components/parameters/ShiftId"
+      responses:
+        "200":
+          description: OK
+          content:
+            "application/json":
+              schema:
+                type: object
+                required: [data, message, code]
+                properties:
+                  data:
+                    $ref: "#/components/schemas/CashierShift"
+                  message:
+                    type: string
+                  code:
+                    type: integer
+                    description: "HTTP status của kết quả, ví dụ 200, 201"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+  "/cashier-shifts/{shiftId}/reconcile":
+    post:
+      tags: ["Cashier shifts"]
+      summary: "Đối soát ca"
+      description: "UC72 · BR-TG-04, 05, BR-QT-15. Actor: A05. Quyền: BRANCH_MANAGER chi nhánh. Chuyển trạng thái: CLOSED → RECONCILED (Ca thu ngân#6). Ghi chênh lệch và ghi chú (cả sai sót sau khi thu, BR-TG-04); ghi audit."
+      operationId: reconcileCashierShift
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: "#/components/parameters/ShiftId"
+      requestBody:
+        required: true
+        content:
+          "application/json":
+            schema:
+              $ref: "#/components/schemas/ReconcileShiftRequest"
+      responses:
+        "200":
+          description: OK
+          content:
+            "application/json":
+              schema:
+                type: object
+                required: [data, message, code]
+                properties:
+                  data:
+                    $ref: "#/components/schemas/CashierShift"
+                  message:
+                    type: string
+                  code:
+                    type: integer
+                    description: "HTTP status của kết quả, ví dụ 200, 201"
+        "400":
+          description: "`BR-TG-05` ca tự chốt chưa nhập số tiền thực đếm"
+          content:
+            "application/json":
+              schema:
+                $ref: "#/components/schemas/Error"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "409":
+          description: "Ca không CLOSED"
+          content:
+            "application/json":
+              schema:
+                $ref: "#/components/schemas/Error"
+components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      description: "Access token trả về từ POST /auth/login, gắn với một phiên (sessions). Phiên bị hủy thì token hết hiệu lực ngay (BR-TK-11, 13, 14)."
+  parameters:
+    Page:
+      name: page
+      in: query
+      required: false
+      schema:
+        type: integer
+        minimum: 0
+        default: 0
+      description: "Số trang, bắt đầu từ 0"
+    Size:
+      name: size
+      in: query
+      required: false
+      schema:
+        type: integer
+        minimum: 1
+        maximum: 100
+        default: 20
+    OrderId:
+      name: orderId
+      in: path
+      required: true
+      schema:
+        type: integer
+        format: int64
+    LineId:
+      name: lineId
+      in: path
+      required: true
+      schema:
+        type: integer
+        format: int64
+    PaymentId:
+      name: paymentId
+      in: path
+      required: true
+      schema:
+        type: integer
+        format: int64
+    ShiftId:
+      name: shiftId
+      in: path
+      required: true
+      schema:
+        type: integer
+        format: int64
+    CustomerId:
+      name: customerId
+      in: path
+      required: true
+      schema:
+        type: integer
+        format: int64
+  schemas:
+    Error:
+      type: object
+      description: "Envelope lỗi duy nhất, do GlobalExceptionHandler (platform/exception) sinh. Vi phạm business rule: errorCode = BUSINESS_RULE_VIOLATION, message kết thúc bằng mã rule, ví dụ \"… (BR-LH-05)\"."
+      required: [success, errorCode, message, statusCode, timestamp, traceId]
+      properties:
+        success:
+          type: boolean
+          enum: [false]
+        errorCode:
+          type: string
+          enum: [BUSINESS_RULE_VIOLATION, INVALID_STATE_TRANSITION, RESOURCE_NOT_FOUND, ACCESS_DENIED_SCOPE_MISMATCH, CONCURRENCY_CONFLICT, VALIDATION_FAILED, MALFORMED_REQUEST, METHOD_NOT_ALLOWED, UNSUPPORTED_MEDIA_TYPE, UNAUTHENTICATED, ACCESS_DENIED, INTERNAL_ERROR]
+          description: platform/exception/ErrorCode
+        message:
+          type: string
+          description: "Thông điệp tiếng Việt hiển thị được; với BUSINESS_RULE_VIOLATION kết thúc bằng \" (BR-…)\""
+        statusCode:
+          type: integer
+        timestamp:
+          type: string
+          format: date-time
+        traceId:
+          type: string
+    PageMeta:
+      type: object
+      required: [page, size, totalElements, totalPages]
+      properties:
+        page:
+          type: integer
+        size:
+          type: integer
+        totalElements:
+          type: integer
+          format: int64
+        totalPages:
+          type: integer
+    OrderSource:
+      type: string
+      enum: [VISIT, RETAIL, BOARDING]
+    OrderStatus:
+      type: string
+      enum: [OPEN, PENDING, PAID, CANCELLED]
+      description: "03 #5"
+    OrderLine:
+      type: object
+      required: [lineId, lineType, description, quantity, unitPrice, lineTotal, isAutoGenerated, addedBy, ownerAccountId, canEdit, canDelete]
+      properties:
+        lineId:
+          type: integer
+          format: int64
+        lineType:
+          type: string
+          enum: [SERVICE, GOODS, DRUG, VACCINE, BOARDING]
+        serviceId:
+          type: [integer, "null"]
+          format: int64
+        productId:
+          type: [integer, "null"]
+          format: int64
+        description:
+          type: string
+          description: "Tên lúc thêm dòng"
+        quantity:
+          type: integer
+          format: int32
+          description: "Với BOARDING là số đêm"
+        unitPrice:
+          type: integer
+          format: int64
+          minimum: 0
+          description: "Snapshot (BR-BH-03)"
+        lineTotal:
+          type: integer
+          format: int64
+          minimum: 0
+          description: VND
+        isAutoGenerated:
+          type: boolean
+        addedBy:
+          type: integer
+          format: int64
+        ownerAccountId:
+          type: integer
+          format: int64
+          description: "Người có quyền xóa (BR-BH-02, BR-TN-08)"
+        canEdit:
+          type: boolean
+          description: "Theo người đang xem"
+        canDelete:
+          type: boolean
+          description: "Theo người đang xem; dòng VACCINE luôn false"
+    Order:
+      type: object
+      required: [orderId, code, source, status, customerId, customerName, branchId, totalAmount, lines, createdAt, deliveryAllowed]
+      properties:
+        orderId:
+          type: integer
+          format: int64
+        code:
+          type: string
+        source:
+          $ref: "#/components/schemas/OrderSource"
+        status:
+          $ref: "#/components/schemas/OrderStatus"
+        customerId:
+          type: integer
+          format: int64
+        customerName:
+          type: string
+        branchId:
+          type: integer
+          format: int64
+        visitId:
+          type: [integer, "null"]
+          format: int64
+        boardingBookingId:
+          type: [integer, "null"]
+          format: int64
+        totalAmount:
+          type: integer
+          format: int64
+          minimum: 0
+          description: VND
+        lines:
+          type: array
+          items:
+            $ref: "#/components/schemas/OrderLine"
+        createdAt:
+          type: string
+          format: date-time
+        pendingAt:
+          type: [string, "null"]
+          format: date-time
+        paidAt:
+          type: [string, "null"]
+          format: date-time
+        paymentId:
+          type: [integer, "null"]
+          format: int64
+        cancelType:
+          type: [string, "null"]
+          enum: [VISIT_CANCELLED, RETAIL_UNCLOSED, CHECKOUT_ABORTED, UNPAID, null]
+        cancelReason:
+          type: [string, "null"]
+        cancelledAt:
+          type: [string, "null"]
+          format: date-time
+        deliveryAllowed:
+          type: boolean
+          description: "true chỉ khi PAID (BR-BH-06)"
+    OrderSummary:
+      type: object
+      required: [orderId, code, source, status, customerId, customerName, branchId, totalAmount, createdAt]
+      properties:
+        orderId:
+          type: integer
+          format: int64
+        code:
+          type: string
+        source:
+          $ref: "#/components/schemas/OrderSource"
+        status:
+          $ref: "#/components/schemas/OrderStatus"
+        customerId:
+          type: integer
+          format: int64
+        customerName:
+          type: string
+        branchId:
+          type: integer
+          format: int64
+        totalAmount:
+          type: integer
+          format: int64
+          minimum: 0
+          description: VND
+        createdAt:
+          type: string
+          format: date-time
+        pendingAt:
+          type: [string, "null"]
+          format: date-time
+        paidAt:
+          type: [string, "null"]
+          format: date-time
+    CreateRetailOrderRequest:
+      type: object
+      required: [customerId]
+      properties:
+        customerId:
+          type: integer
+          format: int64
+          description: A1
+    AddOrderLineRequest:
+      type: object
+      required: [lineType, quantity]
+      properties:
+        lineType:
+          type: string
+          enum: [SERVICE, GOODS]
+        serviceId:
+          type: [integer, "null"]
+          format: int64
+          description: "SERVICE: nhóm khớp vai trò (VET: MEDICAL, CARETAKER: GROOMING)"
+        productId:
+          type: [integer, "null"]
+          format: int64
+          description: "GOODS: không phải thuốc kê đơn (BR-SP-01)"
+        quantity:
+          type: integer
+          format: int32
+          description: "> 0"
+    StockWarning:
+      type: object
+      required: [productId, requested, available]
+      properties:
+        productId:
+          type: integer
+          format: int64
+        requested:
+          type: integer
+          format: int32
+        available:
+          type: integer
+          format: int32
+    AddOrderLineResult:
+      type: object
+      description: "stockWarning có khi hàng bán lẻ thiếu tồn khả dụng — cảnh báo, không chặn (BR-BH-04)"
+      required: [order, lineId]
+      properties:
+        order:
+          $ref: "#/components/schemas/Order"
+        lineId:
+          type: integer
+          format: int64
+        stockWarning:
+          $ref: "#/components/schemas/StockWarning"
+    UpdateOrderLineRequest:
+      type: object
+      properties:
+        quantity:
+          type: [integer, "null"]
+          format: int32
+          description: "Giảm dòng bán lẻ (BR-BH-04)"
+        serviceId:
+          type: [integer, "null"]
+          format: int64
+          description: "Người được gán lượt đổi dịch vụ của dòng tự sinh (BR-TN-01, A5)"
+    ReasonRequest:
+      type: object
+      required: [reason]
+      properties:
+        reason:
+          type: string
+          maxLength: 300
+    ShortageLine:
+      type: object
+      required: [orderId, lineId, lineType, productId, productName, requested, available]
+      properties:
+        orderId:
+          type: integer
+          format: int64
+        lineId:
+          type: integer
+          format: int64
+        lineType:
+          type: string
+          enum: [GOODS, DRUG]
+        productId:
+          type: integer
+          format: int64
+        productName:
+          type: string
+        requested:
+          type: integer
+          format: int32
+        available:
+          type: integer
+          format: int32
+    PaymentPreviewRequest:
+      type: object
+      required: [orderIds]
+      properties:
+        orderIds:
+          type: array
+          items:
+            type: integer
+            format: int64
+          description: "Các Order PENDING cùng khách, cùng chi nhánh (BR-TG-03)"
+    PaymentPreview:
+      type: object
+      required: [customerId, branchId, totalAmount, shortages]
+      properties:
+        customerId:
+          type: integer
+          format: int64
+        branchId:
+          type: integer
+          format: int64
+        totalAmount:
+          type: integer
+          format: int64
+          minimum: 0
+          description: VND
+        shortages:
+          type: array
+          items:
+            $ref: "#/components/schemas/ShortageLine"
+          description: "Rỗng mới thu được; bỏ qua dòng VACCINE (BR-BH-04)"
+    CreatePaymentRequest:
+      type: object
+      required: [orderIds, method, amount]
+      properties:
+        orderIds:
+          type: array
+          items:
+            type: integer
+            format: int64
+        method:
+          type: string
+          enum: [CASH, TRANSFER]
+        amount:
+          type: integer
+          format: int64
+          minimum: 0
+          description: "Phải bằng tổng các Order (BR-TG-02)"
+    Payment:
+      type: object
+      required: [paymentId, code, branchId, customerId, cashierShiftId, method, amount, receivedBy, paidAt, orders]
+      properties:
+        paymentId:
+          type: integer
+          format: int64
+        code:
+          type: string
+          description: "Số phiếu thu"
+        branchId:
+          type: integer
+          format: int64
+        customerId:
+          type: integer
+          format: int64
+        cashierShiftId:
+          type: integer
+          format: int64
+        method:
+          type: string
+          enum: [CASH, TRANSFER]
+        amount:
+          type: integer
+          format: int64
+          minimum: 0
+          description: VND
+        receivedBy:
+          type: integer
+          format: int64
+        paidAt:
+          type: string
+          format: date-time
+        orders:
+          type: array
+          items:
+            $ref: "#/components/schemas/OrderSummary"
+    CashierShift:
+      type: object
+      required: [shiftId, branchId, cashierId, cashierName, isAfterHours, businessDate, status, openedAt, autoClosed, paymentCount]
+      properties:
+        shiftId:
+          type: integer
+          format: int64
+        branchId:
+          type: integer
+          format: int64
+        cashierId:
+          type: integer
+          format: int64
+        cashierName:
+          type: string
+        isAfterHours:
+          type: boolean
+          description: "Ca ngoài giờ thu tiền cấp cứu (BR-CN-05)"
+        businessDate:
+          type: string
+          format: date
+        status:
+          type: string
+          enum: [OPEN, CLOSED, RECONCILED]
+        openedAt:
+          type: string
+          format: date-time
+        closedAt:
+          type: [string, "null"]
+          format: date-time
+        autoClosed:
+          type: boolean
+          description: ST13
+        expectedCash:
+          type: [integer, "null"]
+          format: int64
+          minimum: 0
+          description: VND
+        expectedTransfer:
+          type: [integer, "null"]
+          format: int64
+          minimum: 0
+          description: VND
+        countedCash:
+          type: [integer, "null"]
+          format: int64
+          minimum: 0
+          description: VND
+        difference:
+          type: [integer, "null"]
+          format: int64
+          description: "countedCash − expectedCash (VND), có thể âm"
+        reconcileNote:
+          type: [string, "null"]
+        reconciledBy:
+          type: [integer, "null"]
+          format: int64
+        reconciledAt:
+          type: [string, "null"]
+          format: date-time
+        paymentCount:
+          type: integer
+          format: int32
+    OpenShiftRequest:
+      type: object
+      required: [afterHours]
+      properties:
+        afterHours:
+          type: boolean
+          description: "false = ca thường, true = ca ngoài giờ (BR-TG-05)"
+    CurrentShift:
+      type: object
+      required: [open]
+      properties:
+        open:
+          type: boolean
+        shift:
+          $ref: "#/components/schemas/CashierShift"
+    CloseShiftRequest:
+      type: object
+      required: [countedCash]
+      properties:
+        countedCash:
+          type: integer
+          format: int64
+          minimum: 0
+          description: "Tiền mặt thực đếm (A4)"
+    ReconcileShiftRequest:
+      type: object
+      required: [note]
+      properties:
+        countedCash:
+          type: [integer, "null"]
+          format: int64
+          minimum: 0
+          description: "Bắt buộc với ca tự chốt (BR-TG-05)"
+        note:
+          type: string
+          description: "Ghi chú chênh lệch"
+  responses:
+    BadRequest:
+      description: "VALIDATION_FAILED / MALFORMED_REQUEST: dữ liệu không hợp lệ · BUSINESS_RULE_VIOLATION: vi phạm rule, message kết thúc bằng mã rule \"(BR-…)\"."
+      content:
+        "application/json":
+          schema:
+            $ref: "#/components/schemas/Error"
+    Unauthorized:
+      description: "UNAUTHENTICATED: chưa đăng nhập hoặc phiên đã hết hạn / bị hủy."
+      content:
+        "application/json":
+          schema:
+            $ref: "#/components/schemas/Error"
+    Forbidden:
+      description: "ACCESS_DENIED: sai vai trò · ACCESS_DENIED_SCOPE_MISMATCH: ngoài phạm vi (chi nhánh, chủ sở hữu). Message chung, không lộ cấu trúc phân quyền."
+      content:
+        "application/json":
+          schema:
+            $ref: "#/components/schemas/Error"
+    NotFound:
+      description: "Không tìm thấy (RESOURCE_NOT_FOUND)."
+      content:
+        "application/json":
+          schema:
+            $ref: "#/components/schemas/Error"

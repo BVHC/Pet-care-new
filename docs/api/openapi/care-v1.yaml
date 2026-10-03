@@ -1,0 +1,610 @@
+# Pet Care Care & Notification API v1 — OpenAPI 3.1, sinh từ khai báo; không sửa tay, sửa khai báo rồi sinh lại.
+# Module TB · owner BE-1
+# Nguồn: 01 UC87, UC88; 02 BR-TB-01…06, BR-LT-10; 03 #10 Care Task; 04 §11; 05 §11 (care_tasks, notifications, notification_outbox, accounts.notification_settings)
+# Truy vết: CONFIRMED = có trong docs · ASSUMPTION (A#) · TBD (Q#) — xem file .md cùng tên.
+
+openapi: "3.1.0"
+info:
+  title: "Pet Care Care & Notification API v1"
+  version: "1.0.0"
+  description: "Module TB · owner BE-1. Nguồn: 01 UC87, UC88; 02 BR-TB-01…06, BR-LT-10; 03 #10 Care Task; 04 §11; 05 §11 (care_tasks, notifications, notification_outbox, accounts.notification_settings). Chi tiết và truy vết: ../care-v1.md"
+servers:
+  - url: "/api"
+    description: "Mọi path bên dưới nằm sau tiền tố /api"
+tags:
+  - name: "Care tasks"
+    description: "Việc gọi điện chăm sóc khách (UC87)"
+  - name: Notifications
+    description: "Thông báo trong ứng dụng và cài đặt (UC88)"
+paths:
+  "/care-tasks":
+    get:
+      tags: ["Care tasks"]
+      summary: "Danh sách việc gọi điện của chi nhánh"
+      description: "UC87 · BR-TB-05, BR-LT-10. Actor: A06. Quyền: Lễ tân chi nhánh được giao. Chuyển trạng thái: —. Mặc định OPEN, sắp theo dueDate."
+      operationId: listCareTasks
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: status
+          in: query
+          required: false
+          schema:
+            type: string
+            enum: [OPEN, DONE, CANCELLED]
+        - name: type
+          in: query
+          required: false
+          schema:
+            type: string
+            enum: [VACCINE_DUE, VACCINE_OVERDUE, FOLLOW_UP_DUE, PICKUP_OVERDUE]
+        - name: dueFrom
+          in: query
+          required: false
+          schema:
+            type: string
+            format: date
+        - name: dueTo
+          in: query
+          required: false
+          schema:
+            type: string
+            format: date
+        - $ref: "#/components/parameters/Page"
+        - $ref: "#/components/parameters/Size"
+      responses:
+        "200":
+          description: OK
+          content:
+            "application/json":
+              schema:
+                type: object
+                required: [data, message, code]
+                properties:
+                  data:
+                    allOf:
+                      - $ref: "#/components/schemas/PageMeta"
+                      - type: object
+                        required: [content]
+                        properties:
+                          content:
+                            type: array
+                            items:
+                              $ref: "#/components/schemas/CareTask"
+                  message:
+                    type: string
+                  code:
+                    type: integer
+                    description: "HTTP status của kết quả, ví dụ 200, 201"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+  "/care-tasks/{careTaskId}":
+    get:
+      tags: ["Care tasks"]
+      summary: "Chi tiết Care Task"
+      description: "UC87 · BR-TB-05. Actor: A06. Quyền: Lễ tân chi nhánh được giao. Chuyển trạng thái: —."
+      operationId: getCareTask
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: "#/components/parameters/CareTaskId"
+      responses:
+        "200":
+          description: OK
+          content:
+            "application/json":
+              schema:
+                type: object
+                required: [data, message, code]
+                properties:
+                  data:
+                    $ref: "#/components/schemas/CareTask"
+                  message:
+                    type: string
+                  code:
+                    type: integer
+                    description: "HTTP status của kết quả, ví dụ 200, 201"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+  "/care-tasks/{careTaskId}/complete":
+    post:
+      tags: ["Care tasks"]
+      summary: "Ghi kết quả gọi điện"
+      description: "UC87 · BR-TB-05. Actor: A06. Quyền: Lễ tân chi nhánh được giao. Chuyển trạng thái: OPEN → DONE (Care Task#2). Không liên lạc được: không sinh task gọi lại."
+      operationId: completeCareTask
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: "#/components/parameters/CareTaskId"
+      requestBody:
+        required: true
+        content:
+          "application/json":
+            schema:
+              $ref: "#/components/schemas/CompleteCareTaskRequest"
+      responses:
+        "200":
+          description: OK
+          content:
+            "application/json":
+              schema:
+                type: object
+                required: [data, message, code]
+                properties:
+                  data:
+                    $ref: "#/components/schemas/CareTask"
+                  message:
+                    type: string
+                  code:
+                    type: integer
+                    description: "HTTP status của kết quả, ví dụ 200, 201"
+        "400":
+          description: "`BR-TB-05` chưa chọn kết quả / thiếu ghi chú"
+          content:
+            "application/json":
+              schema:
+                $ref: "#/components/schemas/Error"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "409":
+          description: "Task không OPEN"
+          content:
+            "application/json":
+              schema:
+                $ref: "#/components/schemas/Error"
+  "/care-tasks/{careTaskId}/cancel":
+    post:
+      tags: ["Care tasks"]
+      summary: "Hủy Care Task"
+      description: "UC87 · BR-TB-05. Actor: A06. Quyền: Lễ tân chi nhánh được giao. Chuyển trạng thái: OPEN → CANCELLED (Care Task#3)."
+      operationId: cancelCareTask
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: "#/components/parameters/CareTaskId"
+      requestBody:
+        required: true
+        content:
+          "application/json":
+            schema:
+              $ref: "#/components/schemas/CancelCareTaskRequest"
+      responses:
+        "200":
+          description: OK
+          content:
+            "application/json":
+              schema:
+                type: object
+                required: [data, message, code]
+                properties:
+                  data:
+                    $ref: "#/components/schemas/CareTask"
+                  message:
+                    type: string
+                  code:
+                    type: integer
+                    description: "HTTP status của kết quả, ví dụ 200, 201"
+        "400":
+          description: "Thiếu lý do"
+          content:
+            "application/json":
+              schema:
+                $ref: "#/components/schemas/Error"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "409":
+          description: "Task không OPEN"
+          content:
+            "application/json":
+              schema:
+                $ref: "#/components/schemas/Error"
+  "/me/notifications":
+    get:
+      tags: [Notifications]
+      summary: "Thông báo của tôi"
+      description: "UC88 · —. Actor: A02–A08. Quyền: Người đang đăng nhập. Chuyển trạng thái: —. Mới nhất trước."
+      operationId: listMyNotifications
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: unreadOnly
+          in: query
+          required: false
+          schema:
+            type: boolean
+        - $ref: "#/components/parameters/Page"
+        - $ref: "#/components/parameters/Size"
+      responses:
+        "200":
+          description: OK
+          content:
+            "application/json":
+              schema:
+                type: object
+                required: [data, message, code]
+                properties:
+                  data:
+                    allOf:
+                      - $ref: "#/components/schemas/PageMeta"
+                      - type: object
+                        required: [content]
+                        properties:
+                          content:
+                            type: array
+                            items:
+                              $ref: "#/components/schemas/Notification"
+                  message:
+                    type: string
+                  code:
+                    type: integer
+                    description: "HTTP status của kết quả, ví dụ 200, 201"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+  "/me/notifications/unread-count":
+    get:
+      tags: [Notifications]
+      summary: "Số thông báo chưa đọc"
+      description: "UC88 · —. Actor: A02–A08. Quyền: Người đang đăng nhập. Chuyển trạng thái: —. A3."
+      operationId: countMyUnreadNotifications
+      security:
+        - bearerAuth: []
+      responses:
+        "200":
+          description: OK
+          content:
+            "application/json":
+              schema:
+                type: object
+                required: [data, message, code]
+                properties:
+                  data:
+                    $ref: "#/components/schemas/UnreadCount"
+                  message:
+                    type: string
+                  code:
+                    type: integer
+                    description: "HTTP status của kết quả, ví dụ 200, 201"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+  "/me/notifications/{notificationId}/read":
+    post:
+      tags: [Notifications]
+      summary: "Đánh dấu đã đọc"
+      description: "UC88 · —. Actor: A02–A08. Quyền: Chủ thông báo. Chuyển trạng thái: —."
+      operationId: markNotificationRead
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: "#/components/parameters/NotificationId"
+      responses:
+        "204":
+          description: "Không có nội dung"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "404":
+          $ref: "#/components/responses/NotFound"
+  "/me/notifications/read-all":
+    post:
+      tags: [Notifications]
+      summary: "Đánh dấu tất cả đã đọc"
+      description: "UC88 · —. Actor: A02–A08. Quyền: Người đang đăng nhập. Chuyển trạng thái: —."
+      operationId: markAllNotificationsRead
+      security:
+        - bearerAuth: []
+      responses:
+        "204":
+          description: "Không có nội dung"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+  "/me/notification-settings":
+    get:
+      tags: [Notifications]
+      summary: "Cài đặt nhận thông báo"
+      description: "UC88 · BR-TB-02. Actor: A02. Quyền: Chỉ CUSTOMER. Chuyển trạng thái: —."
+      operationId: getMyNotificationSettings
+      security:
+        - bearerAuth: []
+      responses:
+        "200":
+          description: OK
+          content:
+            "application/json":
+              schema:
+                type: object
+                required: [data, message, code]
+                properties:
+                  data:
+                    $ref: "#/components/schemas/NotificationSettings"
+                  message:
+                    type: string
+                  code:
+                    type: integer
+                    description: "HTTP status của kết quả, ví dụ 200, 201"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+    put:
+      tags: [Notifications]
+      summary: "Sửa cài đặt nhận thông báo"
+      description: "UC88 · BR-TB-02. Actor: A02. Quyền: Chỉ CUSTOMER. Chuyển trạng thái: —. A1, A2; nội dung chờ Q1."
+      operationId: updateMyNotificationSettings
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          "application/json":
+            schema:
+              $ref: "#/components/schemas/NotificationSettings"
+      responses:
+        "200":
+          description: OK
+          content:
+            "application/json":
+              schema:
+                type: object
+                required: [data, message, code]
+                properties:
+                  data:
+                    $ref: "#/components/schemas/NotificationSettings"
+                  message:
+                    type: string
+                  code:
+                    type: integer
+                    description: "HTTP status của kết quả, ví dụ 200, 201"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      description: "Access token trả về từ POST /auth/login, gắn với một phiên (sessions). Phiên bị hủy thì token hết hiệu lực ngay (BR-TK-11, 13, 14)."
+  parameters:
+    Page:
+      name: page
+      in: query
+      required: false
+      schema:
+        type: integer
+        minimum: 0
+        default: 0
+      description: "Số trang, bắt đầu từ 0"
+    Size:
+      name: size
+      in: query
+      required: false
+      schema:
+        type: integer
+        minimum: 1
+        maximum: 100
+        default: 20
+    CareTaskId:
+      name: careTaskId
+      in: path
+      required: true
+      schema:
+        type: integer
+        format: int64
+    NotificationId:
+      name: notificationId
+      in: path
+      required: true
+      schema:
+        type: integer
+        format: int64
+  schemas:
+    Error:
+      type: object
+      description: "Envelope lỗi duy nhất, do GlobalExceptionHandler (platform/exception) sinh. Vi phạm business rule: errorCode = BUSINESS_RULE_VIOLATION, message kết thúc bằng mã rule, ví dụ \"… (BR-LH-05)\"."
+      required: [success, errorCode, message, statusCode, timestamp, traceId]
+      properties:
+        success:
+          type: boolean
+          enum: [false]
+        errorCode:
+          type: string
+          enum: [BUSINESS_RULE_VIOLATION, INVALID_STATE_TRANSITION, RESOURCE_NOT_FOUND, ACCESS_DENIED_SCOPE_MISMATCH, CONCURRENCY_CONFLICT, VALIDATION_FAILED, MALFORMED_REQUEST, METHOD_NOT_ALLOWED, UNSUPPORTED_MEDIA_TYPE, UNAUTHENTICATED, ACCESS_DENIED, INTERNAL_ERROR]
+          description: platform/exception/ErrorCode
+        message:
+          type: string
+          description: "Thông điệp tiếng Việt hiển thị được; với BUSINESS_RULE_VIOLATION kết thúc bằng \" (BR-…)\""
+        statusCode:
+          type: integer
+        timestamp:
+          type: string
+          format: date-time
+        traceId:
+          type: string
+    PageMeta:
+      type: object
+      required: [page, size, totalElements, totalPages]
+      properties:
+        page:
+          type: integer
+        size:
+          type: integer
+        totalElements:
+          type: integer
+          format: int64
+        totalPages:
+          type: integer
+    CareTaskType:
+      type: string
+      enum: [VACCINE_DUE, VACCINE_OVERDUE, FOLLOW_UP_DUE, PICKUP_OVERDUE]
+      description: "TÁI_CHỦNG, QUÁ_HẠN_TÁI_CHỦNG, TÁI_KHÁM, QUÁ_HẠN_ĐÓN (05 §0)"
+    CareTask:
+      type: object
+      required: [careTaskId, type, status, branchId, customerId, customerName, petId, petName, dueDate, context, createdAt]
+      properties:
+        careTaskId:
+          type: integer
+          format: int64
+        type:
+          $ref: "#/components/schemas/CareTaskType"
+        status:
+          type: string
+          enum: [OPEN, DONE, CANCELLED]
+        branchId:
+          type: integer
+          format: int64
+        customerId:
+          type: integer
+          format: int64
+        customerName:
+          type: string
+        phoneToCall:
+          type: [string, "null"]
+          pattern: "^0[0-9]{9,10}$"
+          maxLength: 15
+          description: BR-TB-05
+        petId:
+          type: integer
+          format: int64
+        petName:
+          type: string
+        vaccinationId:
+          type: [integer, "null"]
+          format: int64
+        medicalRecordVisitId:
+          type: [integer, "null"]
+          format: int64
+        boardingBookingId:
+          type: [integer, "null"]
+          format: int64
+        dueDate:
+          type: string
+          format: date
+          description: "Ngày tái chủng / tái khám / ngày quá hạn"
+        context:
+          type: string
+          description: "Mô tả ngắn: tên loại vaccine, ngày tái khám, mã đặt chỗ…"
+        result:
+          type: [string, "null"]
+          enum: [REACHED, UNREACHABLE, null]
+        note:
+          type: [string, "null"]
+        cancelReason:
+          type: [string, "null"]
+        handledBy:
+          type: [integer, "null"]
+          format: int64
+        handledAt:
+          type: [string, "null"]
+          format: date-time
+        createdAt:
+          type: string
+          format: date-time
+    CompleteCareTaskRequest:
+      type: object
+      required: [result, note]
+      properties:
+        result:
+          type: string
+          enum: [REACHED, UNREACHABLE]
+          description: "LIÊN_HỆ_ĐƯỢC / KHÔNG_LIÊN_LẠC_ĐƯỢC"
+        note:
+          type: string
+    CancelCareTaskRequest:
+      type: object
+      required: [reason]
+      properties:
+        reason:
+          type: string
+          maxLength: 300
+    Notification:
+      type: object
+      required: [notificationId, type, title, body, createdAt]
+      properties:
+        notificationId:
+          type: integer
+          format: int64
+        type:
+          type: string
+          description: "Ví dụ VACCINE_REMINDER, CARE_LOG_ABNORMAL"
+        title:
+          type: string
+        body:
+          type: string
+        linkUrl:
+          type: [string, "null"]
+          maxLength: 500
+          description: "Ví dụ link form đặt lịch điền sẵn (BR-TB-01, 06)"
+        readAt:
+          type: [string, "null"]
+          format: date-time
+        createdAt:
+          type: string
+          format: date-time
+    UnreadCount:
+      type: object
+      required: [count]
+      properties:
+        count:
+          type: integer
+          format: int32
+    ChannelToggle:
+      type: object
+      required: [email, inApp]
+      properties:
+        email:
+          type: boolean
+        inApp:
+          type: boolean
+    NotificationSettings:
+      type: object
+      description: "Đề xuất, xem A1 / Q1"
+      required: [appointmentReminder, vaccineReminder, followUpReminder]
+      properties:
+        appointmentReminder:
+          $ref: "#/components/schemas/ChannelToggle"
+        vaccineReminder:
+          $ref: "#/components/schemas/ChannelToggle"
+        followUpReminder:
+          $ref: "#/components/schemas/ChannelToggle"
+  responses:
+    BadRequest:
+      description: "VALIDATION_FAILED / MALFORMED_REQUEST: dữ liệu không hợp lệ · BUSINESS_RULE_VIOLATION: vi phạm rule, message kết thúc bằng mã rule \"(BR-…)\"."
+      content:
+        "application/json":
+          schema:
+            $ref: "#/components/schemas/Error"
+    Unauthorized:
+      description: "UNAUTHENTICATED: chưa đăng nhập hoặc phiên đã hết hạn / bị hủy."
+      content:
+        "application/json":
+          schema:
+            $ref: "#/components/schemas/Error"
+    Forbidden:
+      description: "ACCESS_DENIED: sai vai trò · ACCESS_DENIED_SCOPE_MISMATCH: ngoài phạm vi (chi nhánh, chủ sở hữu). Message chung, không lộ cấu trúc phân quyền."
+      content:
+        "application/json":
+          schema:
+            $ref: "#/components/schemas/Error"
+    NotFound:
+      description: "Không tìm thấy (RESOURCE_NOT_FOUND)."
+      content:
+        "application/json":
+          schema:
+            $ref: "#/components/schemas/Error"

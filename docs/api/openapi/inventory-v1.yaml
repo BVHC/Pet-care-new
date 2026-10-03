@@ -1,0 +1,1182 @@
+# Pet Care Inventory API v1 — OpenAPI 3.1, sinh từ khai báo; không sửa tay, sửa khai báo rồi sinh lại.
+# Module KO (tầng 2) · owner BE-2
+# Nguồn: 01 UC73–UC76; 02 BR-KO-01…07, BR-SP-05, BR-QT-15; 03 #9 Phiếu nhập kho; 04 §9; 05 §9 (suppliers, inventory_items, stock_lots, stock_receipts, stock_receipt_lines, stock_adjustments, stock_adjustment_lines, stock_movements)
+# Truy vết: CONFIRMED = có trong docs · ASSUMPTION (A#) · TBD (Q#) — xem file .md cùng tên.
+
+openapi: "3.1.0"
+info:
+  title: "Pet Care Inventory API v1"
+  version: "1.0.0"
+  description: "Module KO (tầng 2) · owner BE-2. Nguồn: 01 UC73–UC76; 02 BR-KO-01…07, BR-SP-05, BR-QT-15; 03 #9 Phiếu nhập kho; 04 §9; 05 §9 (suppliers, inventory_items, stock_lots, stock_receipts, stock_receipt_lines, stock_adjustments, stock_adjustment_lines, stock_movements). Chi tiết và truy vết: ../inventory-v1.md"
+servers:
+  - url: "/api"
+    description: "Mọi path bên dưới nằm sau tiền tố /api"
+tags:
+  - name: Suppliers
+    description: "Nhà cung cấp (UC73)"
+  - name: "Stock receipts"
+    description: "Phiếu nhập kho (UC74)"
+  - name: Inventory
+    description: "Tồn kho, lô, tồn tối thiểu (UC75)"
+  - name: Adjustments
+    description: "Điều chỉnh tồn (UC76)"
+paths:
+  "/suppliers":
+    get:
+      tags: [Suppliers]
+      summary: "Danh sách nhà cung cấp"
+      description: "UC73, UC74 · BR-KO-02. Actor: A05. Quyền: BRANCH_MANAGER. Chuyển trạng thái: —."
+      operationId: listSuppliers
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: isActive
+          in: query
+          required: false
+          schema:
+            type: boolean
+        - name: q
+          in: query
+          required: false
+          schema:
+            type: string
+      responses:
+        "200":
+          description: OK
+          content:
+            "application/json":
+              schema:
+                type: object
+                required: [data, message, code]
+                properties:
+                  data:
+                    type: array
+                    items:
+                      $ref: "#/components/schemas/Supplier"
+                  message:
+                    type: string
+                  code:
+                    type: integer
+                    description: "HTTP status của kết quả, ví dụ 200, 201"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+    post:
+      tags: [Suppliers]
+      summary: "Thêm nhà cung cấp"
+      description: "UC73 · BR-KO-02. Actor: A05. Quyền: BRANCH_MANAGER (A1). Chuyển trạng thái: —."
+      operationId: createSupplier
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          "application/json":
+            schema:
+              $ref: "#/components/schemas/SupplierRequest"
+      responses:
+        "201":
+          description: "Đã tạo"
+          content:
+            "application/json":
+              schema:
+                type: object
+                required: [data, message, code]
+                properties:
+                  data:
+                    $ref: "#/components/schemas/Supplier"
+                  message:
+                    type: string
+                  code:
+                    type: integer
+                    description: "HTTP status của kết quả, ví dụ 200, 201"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+  "/suppliers/{supplierId}":
+    patch:
+      tags: [Suppliers]
+      summary: "Sửa / ngừng hợp tác nhà cung cấp"
+      description: "UC73 · BR-KO-02. Actor: A05. Quyền: BRANCH_MANAGER (A1). Chuyển trạng thái: —. Ngừng hợp tác thì không chọn được ở phiếu nhập mới."
+      operationId: updateSupplier
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: "#/components/parameters/SupplierId"
+      requestBody:
+        required: true
+        content:
+          "application/json":
+            schema:
+              $ref: "#/components/schemas/UpdateSupplierRequest"
+      responses:
+        "200":
+          description: OK
+          content:
+            "application/json":
+              schema:
+                type: object
+                required: [data, message, code]
+                properties:
+                  data:
+                    $ref: "#/components/schemas/Supplier"
+                  message:
+                    type: string
+                  code:
+                    type: integer
+                    description: "HTTP status của kết quả, ví dụ 200, 201"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+    delete:
+      tags: [Suppliers]
+      summary: "Xóa nhà cung cấp chưa có phiếu nhập"
+      description: "UC73 · BR-KO-02. Actor: A05. Quyền: BRANCH_MANAGER (A1). Chuyển trạng thái: —."
+      operationId: deleteSupplier
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: "#/components/parameters/SupplierId"
+      responses:
+        "204":
+          description: "Không có nội dung"
+        "400":
+          description: "`BR-KO-02` đã có phiếu nhập — chỉ ngừng hợp tác"
+          content:
+            "application/json":
+              schema:
+                $ref: "#/components/schemas/Error"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+  "/stock-receipts":
+    get:
+      tags: ["Stock receipts"]
+      summary: "Danh sách phiếu nhập"
+      description: "UC74 · BR-KO-03. Actor: A05. Quyền: BRANCH_MANAGER chi nhánh. Chuyển trạng thái: —."
+      operationId: listStockReceipts
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: status
+          in: query
+          required: false
+          schema:
+            type: string
+            enum: [DRAFT, CONFIRMED, CANCELLED]
+        - name: from
+          in: query
+          required: false
+          schema:
+            type: string
+            format: date
+        - name: to
+          in: query
+          required: false
+          schema:
+            type: string
+            format: date
+        - name: supplierId
+          in: query
+          required: false
+          schema:
+            type: integer
+            format: int64
+        - $ref: "#/components/parameters/Page"
+        - $ref: "#/components/parameters/Size"
+      responses:
+        "200":
+          description: OK
+          content:
+            "application/json":
+              schema:
+                type: object
+                required: [data, message, code]
+                properties:
+                  data:
+                    allOf:
+                      - $ref: "#/components/schemas/PageMeta"
+                      - type: object
+                        required: [content]
+                        properties:
+                          content:
+                            type: array
+                            items:
+                              $ref: "#/components/schemas/StockReceiptSummary"
+                  message:
+                    type: string
+                  code:
+                    type: integer
+                    description: "HTTP status của kết quả, ví dụ 200, 201"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+    post:
+      tags: ["Stock receipts"]
+      summary: "Tạo phiếu nhập nháp"
+      description: "UC74 · BR-KO-03. Actor: A05. Quyền: BRANCH_MANAGER chi nhánh. Chuyển trạng thái: — → DRAFT (Phiếu nhập#1). Chưa ảnh hưởng tồn."
+      operationId: createStockReceipt
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          "application/json":
+            schema:
+              $ref: "#/components/schemas/StockReceiptRequest"
+      responses:
+        "201":
+          description: "Đã tạo"
+          content:
+            "application/json":
+              schema:
+                type: object
+                required: [data, message, code]
+                properties:
+                  data:
+                    $ref: "#/components/schemas/StockReceipt"
+                  message:
+                    type: string
+                  code:
+                    type: integer
+                    description: "HTTP status của kết quả, ví dụ 200, 201"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+  "/stock-receipts/{receiptId}":
+    get:
+      tags: ["Stock receipts"]
+      summary: "Chi tiết phiếu nhập"
+      description: "UC74 · BR-KO-03. Actor: A05. Quyền: BRANCH_MANAGER chi nhánh. Chuyển trạng thái: —."
+      operationId: getStockReceipt
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: "#/components/parameters/ReceiptId"
+      responses:
+        "200":
+          description: OK
+          content:
+            "application/json":
+              schema:
+                type: object
+                required: [data, message, code]
+                properties:
+                  data:
+                    $ref: "#/components/schemas/StockReceipt"
+                  message:
+                    type: string
+                  code:
+                    type: integer
+                    description: "HTTP status của kết quả, ví dụ 200, 201"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+    put:
+      tags: ["Stock receipts"]
+      summary: "Sửa phiếu nháp"
+      description: "UC74 · BR-KO-03. Actor: A05. Quyền: BRANCH_MANAGER chi nhánh. Chuyển trạng thái: —. A2."
+      operationId: updateStockReceipt
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: "#/components/parameters/ReceiptId"
+      requestBody:
+        required: true
+        content:
+          "application/json":
+            schema:
+              $ref: "#/components/schemas/StockReceiptRequest"
+      responses:
+        "200":
+          description: OK
+          content:
+            "application/json":
+              schema:
+                type: object
+                required: [data, message, code]
+                properties:
+                  data:
+                    $ref: "#/components/schemas/StockReceipt"
+                  message:
+                    type: string
+                  code:
+                    type: integer
+                    description: "HTTP status của kết quả, ví dụ 200, 201"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "409":
+          description: "Phiếu không còn DRAFT"
+          content:
+            "application/json":
+              schema:
+                $ref: "#/components/schemas/Error"
+  "/stock-receipts/{receiptId}/confirm":
+    post:
+      tags: ["Stock receipts"]
+      summary: "Xác nhận phiếu nhập"
+      description: "UC74 · BR-KO-02, 03, BR-SP-05. Actor: A05. Quyền: BRANCH_MANAGER chi nhánh. Chuyển trạng thái: DRAFT → CONFIRMED (Phiếu nhập#2). Cộng tồn theo lô; cùng số lô và hạn thì cộng vào lô cũ."
+      operationId: confirmStockReceipt
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: "#/components/parameters/ReceiptId"
+      responses:
+        "200":
+          description: OK
+          content:
+            "application/json":
+              schema:
+                type: object
+                required: [data, message, code]
+                properties:
+                  data:
+                    $ref: "#/components/schemas/StockReceipt"
+                  message:
+                    type: string
+                  code:
+                    type: integer
+                    description: "HTTP status của kết quả, ví dụ 200, 201"
+        "400":
+          description: "`BR-KO-02` nhà cung cấp ngừng hợp tác · `BR-KO-03` dòng số lượng ≤ 0 / thiếu giá nhập / thiếu số lô, hạn dùng hoặc hạn không sau ngày nhập"
+          content:
+            "application/json":
+              schema:
+                $ref: "#/components/schemas/Error"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "409":
+          description: "Phiếu không còn DRAFT"
+          content:
+            "application/json":
+              schema:
+                $ref: "#/components/schemas/Error"
+  "/stock-receipts/{receiptId}/cancel":
+    post:
+      tags: ["Stock receipts"]
+      summary: "Hủy phiếu nhập"
+      description: "UC74 · BR-KO-03, 04, 06, BR-QT-15. Actor: A05. Quyền: BRANCH_MANAGER chi nhánh. Chuyển trạng thái: DRAFT → CANCELLED (Phiếu nhập#3) · CONFIRMED → CANCELLED (Phiếu nhập#4). Phiếu CONFIRMED: trừ lại tồn, ghi audit. Không xóa cứng phiếu."
+      operationId: cancelStockReceipt
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: "#/components/parameters/ReceiptId"
+      requestBody:
+        required: true
+        content:
+          "application/json":
+            schema:
+              $ref: "#/components/schemas/CancelReceiptRequest"
+      responses:
+        "200":
+          description: OK
+          content:
+            "application/json":
+              schema:
+                type: object
+                required: [data, message, code]
+                properties:
+                  data:
+                    $ref: "#/components/schemas/StockReceipt"
+                  message:
+                    type: string
+                  code:
+                    type: integer
+                    description: "HTTP status của kết quả, ví dụ 200, 201"
+        "400":
+          description: "`BR-KO-04` tồn hiện tại của lô không đủ để trừ lại — dùng phiếu điều chỉnh (BR-KO-06)"
+          content:
+            "application/json":
+              schema:
+                $ref: "#/components/schemas/Error"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "409":
+          description: "Phiếu đã CANCELLED"
+          content:
+            "application/json":
+              schema:
+                $ref: "#/components/schemas/Error"
+  "/inventory":
+    get:
+      tags: [Inventory]
+      summary: "Xem tồn kho chi nhánh"
+      description: "UC75 · BR-KO-01, 07. Actor: A05, A06, A07, A08. Quyền: Nhân viên chi nhánh (chỉ BRANCH_MANAGER sửa). Chuyển trạng thái: —."
+      operationId: listInventory
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: q
+          in: query
+          required: false
+          schema:
+            type: string
+          description: "Tên hoặc SKU"
+        - name: productType
+          in: query
+          required: false
+          schema:
+            type: string
+            enum: [GOODS, DRUG, VACCINE]
+        - name: belowMin
+          in: query
+          required: false
+          schema:
+            type: boolean
+        - name: expiringWithinDays
+          in: query
+          required: false
+          schema:
+            type: integer
+            format: int32
+          description: "Có lô sắp hết hạn trong N ngày"
+        - $ref: "#/components/parameters/Page"
+        - $ref: "#/components/parameters/Size"
+      responses:
+        "200":
+          description: OK
+          content:
+            "application/json":
+              schema:
+                type: object
+                required: [data, message, code]
+                properties:
+                  data:
+                    allOf:
+                      - $ref: "#/components/schemas/PageMeta"
+                      - type: object
+                        required: [content]
+                        properties:
+                          content:
+                            type: array
+                            items:
+                              $ref: "#/components/schemas/InventoryItem"
+                  message:
+                    type: string
+                  code:
+                    type: integer
+                    description: "HTTP status của kết quả, ví dụ 200, 201"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+  "/inventory/{productId}":
+    get:
+      tags: [Inventory]
+      summary: "Tồn của một sản phẩm"
+      description: "UC75, UC66, UC48 · BR-KO-01. Actor: A05, A06, A07, A08. Quyền: Nhân viên chi nhánh. Chuyển trạng thái: —. Dùng ở POS / kê đơn / tiêm để xem tồn khả dụng."
+      operationId: getInventoryItem
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: "#/components/parameters/ProductId"
+      responses:
+        "200":
+          description: OK
+          content:
+            "application/json":
+              schema:
+                type: object
+                required: [data, message, code]
+                properties:
+                  data:
+                    $ref: "#/components/schemas/InventoryItem"
+                  message:
+                    type: string
+                  code:
+                    type: integer
+                    description: "HTTP status của kết quả, ví dụ 200, 201"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+  "/inventory/{productId}/lots":
+    get:
+      tags: [Inventory]
+      summary: "Tồn theo lô, hạn dùng"
+      description: "UC75, UC76 · BR-KO-01, 05. Actor: A05, A06. Quyền: Nhân viên chi nhánh. Chuyển trạng thái: —. Sắp theo hạn dùng tăng dần (thứ tự FEFO)."
+      operationId: listStockLots
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: "#/components/parameters/ProductId"
+      responses:
+        "200":
+          description: OK
+          content:
+            "application/json":
+              schema:
+                type: object
+                required: [data, message, code]
+                properties:
+                  data:
+                    type: array
+                    items:
+                      $ref: "#/components/schemas/StockLot"
+                  message:
+                    type: string
+                  code:
+                    type: integer
+                    description: "HTTP status của kết quả, ví dụ 200, 201"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+  "/inventory/{productId}/min-quantity":
+    put:
+      tags: [Inventory]
+      summary: "Đặt tồn tối thiểu"
+      description: "UC75 · BR-KO-07. Actor: A05. Quyền: BRANCH_MANAGER chi nhánh. Chuyển trạng thái: —."
+      operationId: setMinQuantity
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: "#/components/parameters/ProductId"
+      requestBody:
+        required: true
+        content:
+          "application/json":
+            schema:
+              $ref: "#/components/schemas/SetMinQuantityRequest"
+      responses:
+        "200":
+          description: OK
+          content:
+            "application/json":
+              schema:
+                type: object
+                required: [data, message, code]
+                properties:
+                  data:
+                    $ref: "#/components/schemas/InventoryItem"
+                  message:
+                    type: string
+                  code:
+                    type: integer
+                    description: "HTTP status của kết quả, ví dụ 200, 201"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+  "/stock-adjustments":
+    post:
+      tags: [Adjustments]
+      summary: "Lập phiếu điều chỉnh tồn"
+      description: "UC76 · BR-KO-01, 06, BR-QT-15. Actor: A05. Quyền: BRANCH_MANAGER chi nhánh. Chuyển trạng thái: —. Hiệu lực ngay, ghi movement ADJUSTMENT và audit. A4."
+      operationId: createStockAdjustment
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          "application/json":
+            schema:
+              $ref: "#/components/schemas/StockAdjustmentRequest"
+      responses:
+        "201":
+          description: "Đã tạo"
+          content:
+            "application/json":
+              schema:
+                type: object
+                required: [data, message, code]
+                properties:
+                  data:
+                    $ref: "#/components/schemas/StockAdjustment"
+                  message:
+                    type: string
+                  code:
+                    type: integer
+                    description: "HTTP status của kết quả, ví dụ 200, 201"
+        "400":
+          description: "`BR-KO-06` thiếu lý do / ghi chú khi OTHER · giảm quá tồn của lô · `BR-KO-01` tồn âm"
+          content:
+            "application/json":
+              schema:
+                $ref: "#/components/schemas/Error"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+    get:
+      tags: [Adjustments]
+      summary: "Danh sách phiếu điều chỉnh"
+      description: "UC76 · BR-KO-06. Actor: A05. Quyền: BRANCH_MANAGER chi nhánh. Chuyển trạng thái: —."
+      operationId: listStockAdjustments
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: from
+          in: query
+          required: false
+          schema:
+            type: string
+            format: date
+        - name: to
+          in: query
+          required: false
+          schema:
+            type: string
+            format: date
+        - $ref: "#/components/parameters/Page"
+        - $ref: "#/components/parameters/Size"
+      responses:
+        "200":
+          description: OK
+          content:
+            "application/json":
+              schema:
+                type: object
+                required: [data, message, code]
+                properties:
+                  data:
+                    allOf:
+                      - $ref: "#/components/schemas/PageMeta"
+                      - type: object
+                        required: [content]
+                        properties:
+                          content:
+                            type: array
+                            items:
+                              $ref: "#/components/schemas/StockAdjustment"
+                  message:
+                    type: string
+                  code:
+                    type: integer
+                    description: "HTTP status của kết quả, ví dụ 200, 201"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+  "/stock-adjustments/{adjustmentId}":
+    get:
+      tags: [Adjustments]
+      summary: "Chi tiết phiếu điều chỉnh"
+      description: "UC76 · BR-KO-06. Actor: A05. Quyền: BRANCH_MANAGER chi nhánh. Chuyển trạng thái: —."
+      operationId: getStockAdjustment
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: "#/components/parameters/AdjustmentId"
+      responses:
+        "200":
+          description: OK
+          content:
+            "application/json":
+              schema:
+                type: object
+                required: [data, message, code]
+                properties:
+                  data:
+                    $ref: "#/components/schemas/StockAdjustment"
+                  message:
+                    type: string
+                  code:
+                    type: integer
+                    description: "HTTP status của kết quả, ví dụ 200, 201"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      description: "Access token trả về từ POST /auth/login, gắn với một phiên (sessions). Phiên bị hủy thì token hết hiệu lực ngay (BR-TK-11, 13, 14)."
+  parameters:
+    Page:
+      name: page
+      in: query
+      required: false
+      schema:
+        type: integer
+        minimum: 0
+        default: 0
+      description: "Số trang, bắt đầu từ 0"
+    Size:
+      name: size
+      in: query
+      required: false
+      schema:
+        type: integer
+        minimum: 1
+        maximum: 100
+        default: 20
+    SupplierId:
+      name: supplierId
+      in: path
+      required: true
+      schema:
+        type: integer
+        format: int64
+    ReceiptId:
+      name: receiptId
+      in: path
+      required: true
+      schema:
+        type: integer
+        format: int64
+    ProductId:
+      name: productId
+      in: path
+      required: true
+      schema:
+        type: integer
+        format: int64
+    AdjustmentId:
+      name: adjustmentId
+      in: path
+      required: true
+      schema:
+        type: integer
+        format: int64
+  schemas:
+    Error:
+      type: object
+      description: "Envelope lỗi duy nhất, do GlobalExceptionHandler (platform/exception) sinh. Vi phạm business rule: errorCode = BUSINESS_RULE_VIOLATION, message kết thúc bằng mã rule, ví dụ \"… (BR-LH-05)\"."
+      required: [success, errorCode, message, statusCode, timestamp, traceId]
+      properties:
+        success:
+          type: boolean
+          enum: [false]
+        errorCode:
+          type: string
+          enum: [BUSINESS_RULE_VIOLATION, INVALID_STATE_TRANSITION, RESOURCE_NOT_FOUND, ACCESS_DENIED_SCOPE_MISMATCH, CONCURRENCY_CONFLICT, VALIDATION_FAILED, MALFORMED_REQUEST, METHOD_NOT_ALLOWED, UNSUPPORTED_MEDIA_TYPE, UNAUTHENTICATED, ACCESS_DENIED, INTERNAL_ERROR]
+          description: platform/exception/ErrorCode
+        message:
+          type: string
+          description: "Thông điệp tiếng Việt hiển thị được; với BUSINESS_RULE_VIOLATION kết thúc bằng \" (BR-…)\""
+        statusCode:
+          type: integer
+        timestamp:
+          type: string
+          format: date-time
+        traceId:
+          type: string
+    PageMeta:
+      type: object
+      required: [page, size, totalElements, totalPages]
+      properties:
+        page:
+          type: integer
+        size:
+          type: integer
+        totalElements:
+          type: integer
+          format: int64
+        totalPages:
+          type: integer
+    Supplier:
+      type: object
+      required: [supplierId, name, phone, isActive]
+      properties:
+        supplierId:
+          type: integer
+          format: int64
+        name:
+          type: string
+          maxLength: 200
+        phone:
+          type: string
+          pattern: "^0[0-9]{9,10}$"
+          maxLength: 15
+        address:
+          type: [string, "null"]
+          maxLength: 300
+        isActive:
+          type: boolean
+          description: "false = ngừng hợp tác (BR-KO-02)"
+    SupplierRequest:
+      type: object
+      required: [name, phone]
+      properties:
+        name:
+          type: string
+          maxLength: 200
+        phone:
+          type: string
+          pattern: "^0[0-9]{9,10}$"
+          maxLength: 15
+        address:
+          type: [string, "null"]
+          maxLength: 300
+    UpdateSupplierRequest:
+      type: object
+      properties:
+        name:
+          type: [string, "null"]
+          maxLength: 200
+        phone:
+          type: [string, "null"]
+          pattern: "^0[0-9]{9,10}$"
+          maxLength: 15
+        address:
+          type: [string, "null"]
+          maxLength: 300
+        isActive:
+          type: [boolean, "null"]
+    ReceiptLineRequest:
+      type: object
+      required: [productId, quantity, unitCost]
+      properties:
+        productId:
+          type: integer
+          format: int64
+        quantity:
+          type: integer
+          format: int32
+          description: "> 0"
+        unitCost:
+          type: integer
+          format: int64
+          minimum: 0
+          description: "Giá nhập"
+        lotNumber:
+          type: [string, "null"]
+          maxLength: 50
+          description: "Bắt buộc nếu sản phẩm quản lý hạn dùng (BR-SP-05)"
+        expiryDate:
+          type: [string, "null"]
+          format: date
+          description: "Bắt buộc nếu quản lý hạn dùng, sau ngày nhập"
+    StockReceiptRequest:
+      type: object
+      required: [supplierId, receiptDate, lines]
+      properties:
+        supplierId:
+          type: integer
+          format: int64
+          description: "Đang hợp tác"
+        receiptDate:
+          type: string
+          format: date
+        note:
+          type: [string, "null"]
+        lines:
+          type: array
+          items:
+            $ref: "#/components/schemas/ReceiptLineRequest"
+    ReceiptLine:
+      type: object
+      required: [lineId, productId, productName, quantity, unitCost]
+      properties:
+        lineId:
+          type: integer
+          format: int64
+        productId:
+          type: integer
+          format: int64
+        productName:
+          type: string
+        quantity:
+          type: integer
+          format: int32
+        unitCost:
+          type: integer
+          format: int64
+          minimum: 0
+          description: VND
+        lotNumber:
+          type: [string, "null"]
+        expiryDate:
+          type: [string, "null"]
+          format: date
+        stockLotId:
+          type: [integer, "null"]
+          format: int64
+          description: "Gán khi xác nhận"
+    StockReceipt:
+      type: object
+      required: [receiptId, code, branchId, supplierId, supplierName, receiptDate, status, lines, createdBy]
+      properties:
+        receiptId:
+          type: integer
+          format: int64
+        code:
+          type: string
+          description: "Dãy số liên tục"
+        branchId:
+          type: integer
+          format: int64
+        supplierId:
+          type: integer
+          format: int64
+        supplierName:
+          type: string
+        receiptDate:
+          type: string
+          format: date
+        status:
+          type: string
+          enum: [DRAFT, CONFIRMED, CANCELLED]
+        note:
+          type: [string, "null"]
+        lines:
+          type: array
+          items:
+            $ref: "#/components/schemas/ReceiptLine"
+        createdBy:
+          type: integer
+          format: int64
+        confirmedBy:
+          type: [integer, "null"]
+          format: int64
+        confirmedAt:
+          type: [string, "null"]
+          format: date-time
+        cancelledBy:
+          type: [integer, "null"]
+          format: int64
+        cancelledAt:
+          type: [string, "null"]
+          format: date-time
+        cancelReason:
+          type: [string, "null"]
+    StockReceiptSummary:
+      type: object
+      required: [receiptId, code, supplierName, receiptDate, status, lineCount, totalCost]
+      properties:
+        receiptId:
+          type: integer
+          format: int64
+        code:
+          type: string
+        supplierName:
+          type: string
+        receiptDate:
+          type: string
+          format: date
+        status:
+          type: string
+          enum: [DRAFT, CONFIRMED, CANCELLED]
+        lineCount:
+          type: integer
+          format: int32
+        totalCost:
+          type: integer
+          format: int64
+          minimum: 0
+          description: VND
+    CancelReceiptRequest:
+      type: object
+      properties:
+        reason:
+          type: [string, "null"]
+          maxLength: 300
+    InventoryItem:
+      type: object
+      required: [productId, productName, sku, unit, productType, tracksExpiry, totalQuantity, availableQuantity, minQuantity, belowMin, expiredQuantity]
+      properties:
+        productId:
+          type: integer
+          format: int64
+        productName:
+          type: string
+        sku:
+          type: string
+        unit:
+          type: string
+        productType:
+          type: string
+          enum: [GOODS, DRUG, VACCINE]
+        tracksExpiry:
+          type: boolean
+        totalQuantity:
+          type: integer
+          format: int32
+          description: "Tổng các lô"
+        availableQuantity:
+          type: integer
+          format: int32
+          description: "Tổng lô chưa hết hạn (BR-KO-01)"
+        minQuantity:
+          type: integer
+          format: int32
+        belowMin:
+          type: boolean
+        nearestExpiryDate:
+          type: [string, "null"]
+          format: date
+        expiredQuantity:
+          type: integer
+          format: int32
+          description: "Tồn ở lô đã hết hạn, cần điều chỉnh lý do hết hạn (BR-KO-07)"
+    StockLot:
+      type: object
+      required: [stockLotId, quantity, isDefault, expired]
+      properties:
+        stockLotId:
+          type: integer
+          format: int64
+        lotNumber:
+          type: [string, "null"]
+        expiryDate:
+          type: [string, "null"]
+          format: date
+        quantity:
+          type: integer
+          format: int32
+        isDefault:
+          type: boolean
+          description: "Lô duy nhất của sản phẩm không quản lý hạn dùng"
+        expired:
+          type: boolean
+    SetMinQuantityRequest:
+      type: object
+      required: [minQuantity]
+      properties:
+        minQuantity:
+          type: integer
+          format: int32
+          description: "≥ 0"
+    AdjustmentLineRequest:
+      type: object
+      required: [stockLotId, quantityDelta]
+      properties:
+        stockLotId:
+          type: integer
+          format: int64
+        quantityDelta:
+          type: integer
+          format: int32
+          description: "≠ 0; âm = giảm, dương = tăng"
+    StockAdjustmentRequest:
+      type: object
+      required: [reason, lines]
+      properties:
+        reason:
+          type: string
+          enum: [DAMAGED, EXPIRED, COUNT_MISMATCH, OTHER]
+        note:
+          type: [string, "null"]
+          description: "Bắt buộc khi OTHER"
+        lines:
+          type: array
+          items:
+            $ref: "#/components/schemas/AdjustmentLineRequest"
+    AdjustmentLine:
+      type: object
+      required: [stockLotId, productId, productName, quantityDelta, balanceAfter]
+      properties:
+        stockLotId:
+          type: integer
+          format: int64
+        productId:
+          type: integer
+          format: int64
+        productName:
+          type: string
+        lotNumber:
+          type: [string, "null"]
+        quantityDelta:
+          type: integer
+          format: int32
+        balanceAfter:
+          type: integer
+          format: int32
+    StockAdjustment:
+      type: object
+      required: [adjustmentId, code, branchId, reason, lines, createdBy, createdAt]
+      properties:
+        adjustmentId:
+          type: integer
+          format: int64
+        code:
+          type: string
+        branchId:
+          type: integer
+          format: int64
+        reason:
+          type: string
+          enum: [DAMAGED, EXPIRED, COUNT_MISMATCH, OTHER]
+        note:
+          type: [string, "null"]
+        lines:
+          type: array
+          items:
+            $ref: "#/components/schemas/AdjustmentLine"
+        createdBy:
+          type: integer
+          format: int64
+        createdAt:
+          type: string
+          format: date-time
+  responses:
+    BadRequest:
+      description: "VALIDATION_FAILED / MALFORMED_REQUEST: dữ liệu không hợp lệ · BUSINESS_RULE_VIOLATION: vi phạm rule, message kết thúc bằng mã rule \"(BR-…)\"."
+      content:
+        "application/json":
+          schema:
+            $ref: "#/components/schemas/Error"
+    Unauthorized:
+      description: "UNAUTHENTICATED: chưa đăng nhập hoặc phiên đã hết hạn / bị hủy."
+      content:
+        "application/json":
+          schema:
+            $ref: "#/components/schemas/Error"
+    Forbidden:
+      description: "ACCESS_DENIED: sai vai trò · ACCESS_DENIED_SCOPE_MISMATCH: ngoài phạm vi (chi nhánh, chủ sở hữu). Message chung, không lộ cấu trúc phân quyền."
+      content:
+        "application/json":
+          schema:
+            $ref: "#/components/schemas/Error"
+    NotFound:
+      description: "Không tìm thấy (RESOURCE_NOT_FOUND)."
+      content:
+        "application/json":
+          schema:
+            $ref: "#/components/schemas/Error"

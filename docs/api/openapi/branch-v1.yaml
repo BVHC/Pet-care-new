@@ -1,0 +1,1249 @@
+# Pet Care Branch API v1 — OpenAPI 3.1, sinh từ khai báo; không sửa tay, sửa khai báo rồi sinh lại.
+# Module CN (và cấu hình quota UC42, bật/tắt dịch vụ UC33) · owner BE-2
+# Nguồn: 01 UC12, UC14, UC15, UC33, UC42; 02 BR-CN-01…05, BR-LH-01, 03, 10, BR-QT-04, BR-CK-01; 03 #2 Chi nhánh; 04 §2; 05 §2 (branches, opening_hours, holidays, branch_services, branch_quota_defaults, slot_quotas)
+# Truy vết: CONFIRMED = có trong docs · ASSUMPTION (A#) · TBD (Q#) — xem file .md cùng tên.
+
+openapi: "3.1.0"
+info:
+  title: "Pet Care Branch API v1"
+  version: "1.0.0"
+  description: "Module CN (và cấu hình quota UC42, bật/tắt dịch vụ UC33) · owner BE-2. Nguồn: 01 UC12, UC14, UC15, UC33, UC42; 02 BR-CN-01…05, BR-LH-01, 03, 10, BR-QT-04, BR-CK-01; 03 #2 Chi nhánh; 04 §2; 05 §2 (branches, opening_hours, holidays, branch_services, branch_quota_defaults, slot_quotas). Chi tiết và truy vết: ../branch-v1.md"
+servers:
+  - url: "/api"
+    description: "Mọi path bên dưới nằm sau tiền tố /api"
+tags:
+  - name: Branches
+    description: "Chi nhánh (UC12)"
+  - name: "Opening hours"
+    description: "Giờ mở cửa và ngày nghỉ (UC14)"
+  - name: "Branch services"
+    description: "Bật / tắt dịch vụ tại chi nhánh (UC33)"
+  - name: Quotas
+    description: "Quota lịch hẹn (UC42)"
+  - name: Public
+    description: "Chi nhánh công khai (UC15)"
+paths:
+  "/branches":
+    get:
+      tags: [Branches]
+      summary: "Danh sách chi nhánh"
+      description: "UC12 · BR-CN-01. Actor: A03–A08. Quyền: SUPER_MANAGER, ADMIN: tất cả · nhân viên chi nhánh: chi nhánh mình. Chuyển trạng thái: —."
+      operationId: listBranches
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: status
+          in: query
+          required: false
+          schema:
+            type: string
+            enum: [DRAFT, ACTIVE]
+      responses:
+        "200":
+          description: OK
+          content:
+            "application/json":
+              schema:
+                type: object
+                required: [data, message, code]
+                properties:
+                  data:
+                    type: array
+                    items:
+                      $ref: "#/components/schemas/Branch"
+                  message:
+                    type: string
+                  code:
+                    type: integer
+                    description: "HTTP status của kết quả, ví dụ 200, 201"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+    post:
+      tags: [Branches]
+      summary: "Tạo chi nhánh"
+      description: "UC12 · BR-CN-01, 05. Actor: A04. Quyền: Chỉ SUPER_MANAGER. Chuyển trạng thái: — → DRAFT (Chi nhánh#1)."
+      operationId: createBranch
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          "application/json":
+            schema:
+              $ref: "#/components/schemas/CreateBranchRequest"
+      responses:
+        "201":
+          description: "Đã tạo"
+          content:
+            "application/json":
+              schema:
+                type: object
+                required: [data, message, code]
+                properties:
+                  data:
+                    $ref: "#/components/schemas/Branch"
+                  message:
+                    type: string
+                  code:
+                    type: integer
+                    description: "HTTP status của kết quả, ví dụ 200, 201"
+        "400":
+          description: "`BR-CN-01` thiếu tên, địa chỉ, SĐT hoặc tọa độ · tên trùng"
+          content:
+            "application/json":
+              schema:
+                $ref: "#/components/schemas/Error"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+  "/branches/{branchId}":
+    get:
+      tags: [Branches]
+      summary: "Chi tiết chi nhánh"
+      description: "UC12 · —. Actor: A03–A08. Quyền: Như listBranches. Chuyển trạng thái: —."
+      operationId: getBranch
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: "#/components/parameters/BranchId"
+      responses:
+        "200":
+          description: OK
+          content:
+            "application/json":
+              schema:
+                type: object
+                required: [data, message, code]
+                properties:
+                  data:
+                    $ref: "#/components/schemas/Branch"
+                  message:
+                    type: string
+                  code:
+                    type: integer
+                    description: "HTTP status của kết quả, ví dụ 200, 201"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+    patch:
+      tags: [Branches]
+      summary: "Sửa chi nhánh / bật cờ cấp cứu ngoài giờ"
+      description: "UC12 · BR-CN-01, 05. Actor: A04. Quyền: Chỉ SUPER_MANAGER. Chuyển trạng thái: —."
+      operationId: updateBranch
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: "#/components/parameters/BranchId"
+      requestBody:
+        required: true
+        content:
+          "application/json":
+            schema:
+              $ref: "#/components/schemas/UpdateBranchRequest"
+      responses:
+        "200":
+          description: OK
+          content:
+            "application/json":
+              schema:
+                type: object
+                required: [data, message, code]
+                properties:
+                  data:
+                    $ref: "#/components/schemas/Branch"
+                  message:
+                    type: string
+                  code:
+                    type: integer
+                    description: "HTTP status của kết quả, ví dụ 200, 201"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+  "/branches/{branchId}/activate":
+    post:
+      tags: [Branches]
+      summary: "Kích hoạt chi nhánh"
+      description: "UC12 · BR-CN-01, BR-QT-04. Actor: A04. Quyền: Chỉ SUPER_MANAGER. Chuyển trạng thái: DRAFT → ACTIVE (Chi nhánh#2). Từ đây hiển thị công khai và sinh khung giờ đặt lịch."
+      operationId: activateBranch
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: "#/components/parameters/BranchId"
+      responses:
+        "200":
+          description: OK
+          content:
+            "application/json":
+              schema:
+                type: object
+                required: [data, message, code]
+                properties:
+                  data:
+                    $ref: "#/components/schemas/Branch"
+                  message:
+                    type: string
+                  code:
+                    type: integer
+                    description: "HTTP status của kết quả, ví dụ 200, 201"
+        "400":
+          description: "`BR-QT-04` chưa có BRANCH_MANAGER · `BR-CN-01` chưa cấu hình giờ mở cửa (message ghi điều kiện còn thiếu)"
+          content:
+            "application/json":
+              schema:
+                $ref: "#/components/schemas/Error"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "409":
+          description: "Chi nhánh đã ACTIVE"
+          content:
+            "application/json":
+              schema:
+                $ref: "#/components/schemas/Error"
+  "/branches/{branchId}/opening-hours":
+    get:
+      tags: ["Opening hours"]
+      summary: "Giờ mở cửa (bản đang áp dụng và các bản tương lai)"
+      description: "UC14 · BR-CN-02, 04. Actor: A04–A08. Quyền: Nhân viên chi nhánh; SUPER_MANAGER. Chuyển trạng thái: —."
+      operationId: getOpeningHours
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: "#/components/parameters/BranchId"
+      responses:
+        "200":
+          description: OK
+          content:
+            "application/json":
+              schema:
+                type: object
+                required: [data, message, code]
+                properties:
+                  data:
+                    type: array
+                    items:
+                      $ref: "#/components/schemas/OpeningHoursVersion"
+                  message:
+                    type: string
+                  code:
+                    type: integer
+                    description: "HTTP status của kết quả, ví dụ 200, 201"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+    put:
+      tags: ["Opening hours"]
+      summary: "Đặt giờ mở cửa từ một ngày hiệu lực"
+      description: "UC14 · BR-CN-02, 04, BR-LH-10. Actor: A05. Quyền: BRANCH_MANAGER của chi nhánh. Chuyển trạng thái: Nếu cancelAffected: phát BranchClinicCancellationEvent → Lịch hẹn#5, Đặt chỗ#5. Ghi đè bản cùng ngày hiệu lực nếu đã có."
+      operationId: setOpeningHours
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: "#/components/parameters/BranchId"
+      requestBody:
+        required: true
+        content:
+          "application/json":
+            schema:
+              $ref: "#/components/schemas/SetOpeningHoursRequest"
+      responses:
+        "200":
+          description: OK
+          content:
+            "application/json":
+              schema:
+                type: object
+                required: [data, message, code]
+                properties:
+                  data:
+                    $ref: "#/components/schemas/OpeningHoursVersion"
+                  message:
+                    type: string
+                  code:
+                    type: integer
+                    description: "HTTP status của kết quả, ví dụ 200, 201"
+        "400":
+          description: "`BR-CN-02` khoảng chồng nhau, giờ mở ≥ giờ đóng, quá 2 khoảng · `BR-CN-04` ngày hiệu lực trước ngày mai, hoặc có lịch / đặt chỗ bị ảnh hưởng mà chưa chọn hủy hàng loạt"
+          content:
+            "application/json":
+              schema:
+                $ref: "#/components/schemas/Error"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+  "/branches/{branchId}/opening-hours/impact":
+    post:
+      tags: ["Opening hours"]
+      summary: "Xem trước lịch hẹn / đặt chỗ bị ảnh hưởng khi đổi giờ"
+      description: "UC14 · BR-CN-04, BR-LH-10. Actor: A05. Quyền: BRANCH_MANAGER của chi nhánh. Chuyển trạng thái: —. Không ghi gì (A1)."
+      operationId: previewOpeningHoursImpact
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: "#/components/parameters/BranchId"
+      requestBody:
+        required: true
+        content:
+          "application/json":
+            schema:
+              $ref: "#/components/schemas/OpeningHoursImpactRequest"
+      responses:
+        "200":
+          description: OK
+          content:
+            "application/json":
+              schema:
+                type: object
+                required: [data, message, code]
+                properties:
+                  data:
+                    $ref: "#/components/schemas/ScheduleImpact"
+                  message:
+                    type: string
+                  code:
+                    type: integer
+                    description: "HTTP status của kết quả, ví dụ 200, 201"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+  "/branches/{branchId}/holidays":
+    get:
+      tags: ["Opening hours"]
+      summary: "Danh sách ngày nghỉ"
+      description: "UC14 · BR-CN-03. Actor: A04–A08. Quyền: Nhân viên chi nhánh; SUPER_MANAGER. Chuyển trạng thái: —."
+      operationId: listHolidays
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: "#/components/parameters/BranchId"
+        - name: from
+          in: query
+          required: false
+          schema:
+            type: string
+            format: date
+        - name: to
+          in: query
+          required: false
+          schema:
+            type: string
+            format: date
+      responses:
+        "200":
+          description: OK
+          content:
+            "application/json":
+              schema:
+                type: object
+                required: [data, message, code]
+                properties:
+                  data:
+                    type: array
+                    items:
+                      $ref: "#/components/schemas/Holiday"
+                  message:
+                    type: string
+                  code:
+                    type: integer
+                    description: "HTTP status của kết quả, ví dụ 200, 201"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+    post:
+      tags: ["Opening hours"]
+      summary: "Thêm ngày nghỉ"
+      description: "UC14 · BR-CN-03, BR-LH-10, BR-LT-04. Actor: A05. Quyền: BRANCH_MANAGER của chi nhánh. Chuyển trạng thái: Nếu cancelAffected: phát BranchClinicCancellationEvent → Lịch hẹn#5, Đặt chỗ#5. Lịch bị hủy không tính hủy muộn, không tính lần đổi; khách được thông báo."
+      operationId: createHoliday
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: "#/components/parameters/BranchId"
+      requestBody:
+        required: true
+        content:
+          "application/json":
+            schema:
+              $ref: "#/components/schemas/CreateHolidayRequest"
+      responses:
+        "201":
+          description: "Đã tạo"
+          content:
+            "application/json":
+              schema:
+                type: object
+                required: [data, message, code]
+                properties:
+                  data:
+                    $ref: "#/components/schemas/Holiday"
+                  message:
+                    type: string
+                  code:
+                    type: integer
+                    description: "HTTP status của kết quả, ví dụ 200, 201"
+        "400":
+          description: "`BR-LH-10` ngày còn lịch BOOKED / nhận-trả lưu trú BOOKED mà chưa chọn hủy hàng loạt · ngày đã là ngày nghỉ · ngày trong quá khứ"
+          content:
+            "application/json":
+              schema:
+                $ref: "#/components/schemas/Error"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+  "/branches/{branchId}/holidays/impact":
+    post:
+      tags: ["Opening hours"]
+      summary: "Xem trước lịch hẹn / đặt chỗ bị ảnh hưởng của một ngày nghỉ"
+      description: "UC14 · BR-CN-03, BR-LH-10. Actor: A05. Quyền: BRANCH_MANAGER của chi nhánh. Chuyển trạng thái: —. Không ghi gì (A1)."
+      operationId: previewHolidayImpact
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: "#/components/parameters/BranchId"
+      requestBody:
+        required: true
+        content:
+          "application/json":
+            schema:
+              $ref: "#/components/schemas/HolidayImpactRequest"
+      responses:
+        "200":
+          description: OK
+          content:
+            "application/json":
+              schema:
+                type: object
+                required: [data, message, code]
+                properties:
+                  data:
+                    $ref: "#/components/schemas/ScheduleImpact"
+                  message:
+                    type: string
+                  code:
+                    type: integer
+                    description: "HTTP status của kết quả, ví dụ 200, 201"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+  "/branches/{branchId}/holidays/{holidayId}":
+    delete:
+      tags: ["Opening hours"]
+      summary: "Xóa ngày nghỉ tương lai"
+      description: "UC14 · BR-CN-03. Actor: A05. Quyền: BRANCH_MANAGER của chi nhánh. Chuyển trạng thái: —. Không khôi phục lịch đã hủy (A3)."
+      operationId: deleteHoliday
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: "#/components/parameters/BranchId"
+        - $ref: "#/components/parameters/HolidayId"
+      responses:
+        "204":
+          description: "Không có nội dung"
+        "400":
+          description: "Ngày nghỉ đã qua hoặc là hôm nay"
+          content:
+            "application/json":
+              schema:
+                $ref: "#/components/schemas/Error"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+  "/branches/{branchId}/services":
+    get:
+      tags: ["Branch services"]
+      summary: "Dịch vụ tại chi nhánh (kể cả loại chuồng)"
+      description: "UC33 · BR-LH-01, BR-SP-04. Actor: A04–A08. Quyền: Nhân viên chi nhánh; SUPER_MANAGER. Chuyển trạng thái: —."
+      operationId: listBranchServices
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: "#/components/parameters/BranchId"
+      responses:
+        "200":
+          description: OK
+          content:
+            "application/json":
+              schema:
+                type: object
+                required: [data, message, code]
+                properties:
+                  data:
+                    type: array
+                    items:
+                      $ref: "#/components/schemas/BranchServiceItem"
+                  message:
+                    type: string
+                  code:
+                    type: integer
+                    description: "HTTP status của kết quả, ví dụ 200, 201"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+  "/branches/{branchId}/services/{serviceId}":
+    put:
+      tags: ["Branch services"]
+      summary: "Bật / tắt dịch vụ tại chi nhánh"
+      description: "UC33 · BR-LH-01, BR-SP-04. Actor: A05. Quyền: BRANCH_MANAGER của chi nhánh. Chuyển trạng thái: —. Tắt dịch vụ chỉ chặn đặt mới; lịch và đặt chỗ đã có giữ nguyên."
+      operationId: setBranchService
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: "#/components/parameters/BranchId"
+        - $ref: "#/components/parameters/ServiceId"
+      requestBody:
+        required: true
+        content:
+          "application/json":
+            schema:
+              $ref: "#/components/schemas/SetBranchServiceRequest"
+      responses:
+        "200":
+          description: OK
+          content:
+            "application/json":
+              schema:
+                type: object
+                required: [data, message, code]
+                properties:
+                  data:
+                    $ref: "#/components/schemas/BranchServiceItem"
+                  message:
+                    type: string
+                  code:
+                    type: integer
+                    description: "HTTP status của kết quả, ví dụ 200, 201"
+        "400":
+          description: "Dịch vụ đã ngừng kinh doanh"
+          content:
+            "application/json":
+              schema:
+                $ref: "#/components/schemas/Error"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+  "/branches/{branchId}/quota-defaults":
+    get:
+      tags: [Quotas]
+      summary: "Quota mặc định theo nhóm dịch vụ"
+      description: "UC42 · BR-LH-03. Actor: A05, A06. Quyền: Nhân viên chi nhánh. Chuyển trạng thái: —."
+      operationId: listQuotaDefaults
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: "#/components/parameters/BranchId"
+      responses:
+        "200":
+          description: OK
+          content:
+            "application/json":
+              schema:
+                type: object
+                required: [data, message, code]
+                properties:
+                  data:
+                    type: array
+                    items:
+                      $ref: "#/components/schemas/QuotaDefault"
+                  message:
+                    type: string
+                  code:
+                    type: integer
+                    description: "HTTP status của kết quả, ví dụ 200, 201"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+  "/branches/{branchId}/quota-defaults/{serviceGroup}":
+    put:
+      tags: [Quotas]
+      summary: "Đặt quota mặc định"
+      description: "UC42 · BR-LH-03. Actor: A05. Quyền: BRANCH_MANAGER của chi nhánh. Chuyển trạng thái: —. Giảm quota không ảnh hưởng lịch đã đặt, chỉ chặn đặt mới."
+      operationId: setQuotaDefault
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: "#/components/parameters/BranchId"
+        - $ref: "#/components/parameters/ServiceGroupPath"
+      requestBody:
+        required: true
+        content:
+          "application/json":
+            schema:
+              $ref: "#/components/schemas/SetQuotaDefaultRequest"
+      responses:
+        "200":
+          description: OK
+          content:
+            "application/json":
+              schema:
+                type: object
+                required: [data, message, code]
+                properties:
+                  data:
+                    $ref: "#/components/schemas/QuotaDefault"
+                  message:
+                    type: string
+                  code:
+                    type: integer
+                    description: "HTTP status của kết quả, ví dụ 200, 201"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+  "/branches/{branchId}/slot-quotas":
+    get:
+      tags: [Quotas]
+      summary: "Quota riêng của các khung"
+      description: "UC42 · BR-LH-03. Actor: A05, A06. Quyền: Nhân viên chi nhánh. Chuyển trạng thái: —."
+      operationId: listSlotQuotas
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: "#/components/parameters/BranchId"
+        - name: from
+          in: query
+          required: true
+          schema:
+            type: string
+            format: date
+        - name: to
+          in: query
+          required: true
+          schema:
+            type: string
+            format: date
+        - name: serviceGroup
+          in: query
+          required: false
+          schema:
+            type: string
+            enum: [MEDICAL, GROOMING]
+      responses:
+        "200":
+          description: OK
+          content:
+            "application/json":
+              schema:
+                type: object
+                required: [data, message, code]
+                properties:
+                  data:
+                    type: array
+                    items:
+                      $ref: "#/components/schemas/SlotQuota"
+                  message:
+                    type: string
+                  code:
+                    type: integer
+                    description: "HTTP status của kết quả, ví dụ 200, 201"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+    put:
+      tags: [Quotas]
+      summary: "Đặt quota riêng cho một khung (0 = khóa khung)"
+      description: "UC42 · BR-LH-02, 03. Actor: A05. Quyền: BRANCH_MANAGER của chi nhánh. Chuyển trạng thái: —. Tạo mới hoặc ghi đè quota riêng của khung."
+      operationId: setSlotQuota
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: "#/components/parameters/BranchId"
+      requestBody:
+        required: true
+        content:
+          "application/json":
+            schema:
+              $ref: "#/components/schemas/SetSlotQuotaRequest"
+      responses:
+        "200":
+          description: OK
+          content:
+            "application/json":
+              schema:
+                type: object
+                required: [data, message, code]
+                properties:
+                  data:
+                    $ref: "#/components/schemas/SlotQuota"
+                  message:
+                    type: string
+                  code:
+                    type: integer
+                    description: "HTTP status của kết quả, ví dụ 200, 201"
+        "400":
+          description: "`BR-LH-02` khung không nằm trong giờ mở cửa ngày đó · quota < 0"
+          content:
+            "application/json":
+              schema:
+                $ref: "#/components/schemas/Error"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+  "/branches/{branchId}/slot-quotas/{slotQuotaId}":
+    delete:
+      tags: [Quotas]
+      summary: "Bỏ quota riêng, về quota mặc định"
+      description: "UC42 · BR-LH-03. Actor: A05. Quyền: BRANCH_MANAGER của chi nhánh. Chuyển trạng thái: —. A4."
+      operationId: deleteSlotQuota
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: "#/components/parameters/BranchId"
+        - $ref: "#/components/parameters/SlotQuotaId"
+      responses:
+        "204":
+          description: "Không có nội dung"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+  "/public/branches":
+    get:
+      tags: [Public]
+      summary: "Chi nhánh công khai"
+      description: "UC15 · BR-CK-01, BR-CN-05. Actor: A01, A02. Quyền: Public. Chuyển trạng thái: —."
+      operationId: listPublicBranches
+      security: []
+      parameters:
+        - name: acceptsAfterHoursEmergency
+          in: query
+          required: false
+          schema:
+            type: boolean
+          description: "Lọc chi nhánh nhận cấp cứu 24/7"
+      responses:
+        "200":
+          description: OK
+          content:
+            "application/json":
+              schema:
+                type: object
+                required: [data, message, code]
+                properties:
+                  data:
+                    type: array
+                    items:
+                      $ref: "#/components/schemas/PublicBranch"
+                  message:
+                    type: string
+                  code:
+                    type: integer
+                    description: "HTTP status của kết quả, ví dụ 200, 201"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+  "/public/branches/{branchId}":
+    get:
+      tags: [Public]
+      summary: "Chi tiết chi nhánh công khai"
+      description: "UC15 · BR-CK-01. Actor: A01, A02. Quyền: Public. Chuyển trạng thái: —. Chi nhánh DRAFT trả 404."
+      operationId: getPublicBranch
+      security: []
+      parameters:
+        - $ref: "#/components/parameters/BranchId"
+      responses:
+        "200":
+          description: OK
+          content:
+            "application/json":
+              schema:
+                type: object
+                required: [data, message, code]
+                properties:
+                  data:
+                    $ref: "#/components/schemas/PublicBranch"
+                  message:
+                    type: string
+                  code:
+                    type: integer
+                    description: "HTTP status của kết quả, ví dụ 200, 201"
+        "404":
+          $ref: "#/components/responses/NotFound"
+components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      description: "Access token trả về từ POST /auth/login, gắn với một phiên (sessions). Phiên bị hủy thì token hết hiệu lực ngay (BR-TK-11, 13, 14)."
+  parameters:
+    BranchId:
+      name: branchId
+      in: path
+      required: true
+      schema:
+        type: integer
+        format: int64
+    HolidayId:
+      name: holidayId
+      in: path
+      required: true
+      schema:
+        type: integer
+        format: int64
+    ServiceId:
+      name: serviceId
+      in: path
+      required: true
+      schema:
+        type: integer
+        format: int64
+    ServiceGroupPath:
+      name: serviceGroup
+      in: path
+      required: true
+      schema:
+        type: string
+        enum: [MEDICAL, GROOMING]
+    SlotQuotaId:
+      name: slotQuotaId
+      in: path
+      required: true
+      schema:
+        type: integer
+        format: int64
+  schemas:
+    Error:
+      type: object
+      description: "Envelope lỗi duy nhất, do GlobalExceptionHandler (platform/exception) sinh. Vi phạm business rule: errorCode = BUSINESS_RULE_VIOLATION, message kết thúc bằng mã rule, ví dụ \"… (BR-LH-05)\"."
+      required: [success, errorCode, message, statusCode, timestamp, traceId]
+      properties:
+        success:
+          type: boolean
+          enum: [false]
+        errorCode:
+          type: string
+          enum: [BUSINESS_RULE_VIOLATION, INVALID_STATE_TRANSITION, RESOURCE_NOT_FOUND, ACCESS_DENIED_SCOPE_MISMATCH, CONCURRENCY_CONFLICT, VALIDATION_FAILED, MALFORMED_REQUEST, METHOD_NOT_ALLOWED, UNSUPPORTED_MEDIA_TYPE, UNAUTHENTICATED, ACCESS_DENIED, INTERNAL_ERROR]
+          description: platform/exception/ErrorCode
+        message:
+          type: string
+          description: "Thông điệp tiếng Việt hiển thị được; với BUSINESS_RULE_VIOLATION kết thúc bằng \" (BR-…)\""
+        statusCode:
+          type: integer
+        timestamp:
+          type: string
+          format: date-time
+        traceId:
+          type: string
+    BranchStatus:
+      type: string
+      enum: [DRAFT, ACTIVE]
+      description: "03 #2"
+    Branch:
+      type: object
+      required: [branchId, name, address, phone, latitude, longitude, status, acceptsAfterHoursEmergency]
+      properties:
+        branchId:
+          type: integer
+          format: int64
+        name:
+          type: string
+          maxLength: 150
+        address:
+          type: string
+          maxLength: 300
+        phone:
+          type: string
+          pattern: "^0[0-9]{9,10}$"
+          maxLength: 15
+        latitude:
+          type: number
+        longitude:
+          type: number
+        status:
+          $ref: "#/components/schemas/BranchStatus"
+        acceptsAfterHoursEmergency:
+          type: boolean
+          description: BR-CN-05
+        activatedAt:
+          type: [string, "null"]
+          format: date-time
+    CreateBranchRequest:
+      type: object
+      required: [name, address, phone, latitude, longitude]
+      properties:
+        name:
+          type: string
+          maxLength: 150
+        address:
+          type: string
+          maxLength: 300
+        phone:
+          type: string
+          pattern: "^0[0-9]{9,10}$"
+          maxLength: 15
+        latitude:
+          type: number
+        longitude:
+          type: number
+        acceptsAfterHoursEmergency:
+          type: [boolean, "null"]
+    UpdateBranchRequest:
+      type: object
+      properties:
+        name:
+          type: [string, "null"]
+          maxLength: 150
+        address:
+          type: [string, "null"]
+          maxLength: 300
+        phone:
+          type: [string, "null"]
+          pattern: "^0[0-9]{9,10}$"
+          maxLength: 15
+        latitude:
+          type: [number, "null"]
+        longitude:
+          type: [number, "null"]
+        acceptsAfterHoursEmergency:
+          type: [boolean, "null"]
+    TimeRange:
+      type: object
+      required: [open, close]
+      properties:
+        open:
+          type: string
+          pattern: "^[0-2][0-9]:[0-5][0-9]$"
+          example: "08:30"
+        close:
+          type: string
+          pattern: "^[0-2][0-9]:[0-5][0-9]$"
+          example: "08:30"
+          description: "> open"
+    DayHours:
+      type: object
+      required: [dayOfWeek, ranges]
+      properties:
+        dayOfWeek:
+          type: integer
+          format: int32
+          description: "1 = Thứ Hai … 7 = Chủ nhật (ISO)"
+        ranges:
+          type: array
+          items:
+            $ref: "#/components/schemas/TimeRange"
+          description: "0–2 khoảng không chồng nhau; rỗng = nghỉ cố định (BR-CN-02)"
+    OpeningHoursVersion:
+      type: object
+      required: [effectiveFrom, days]
+      properties:
+        effectiveFrom:
+          type: string
+          format: date
+        days:
+          type: array
+          items:
+            $ref: "#/components/schemas/DayHours"
+          description: "Đủ 7 ngày"
+    SetOpeningHoursRequest:
+      type: object
+      required: [effectiveFrom, days]
+      properties:
+        effectiveFrom:
+          type: string
+          format: date
+          description: "Sớm nhất là ngày mai khi đổi giờ (BR-CN-04, A2)"
+        days:
+          type: array
+          items:
+            $ref: "#/components/schemas/DayHours"
+          description: "Đủ 7 ngày (A5)"
+        cancelAffected:
+          type: [boolean, "null"]
+          description: "true = hủy hàng loạt lịch / đặt chỗ bị ảnh hưởng (BR-CN-04, BR-LH-10)"
+    OpeningHoursImpactRequest:
+      type: object
+      required: [effectiveFrom, days]
+      properties:
+        effectiveFrom:
+          type: string
+          format: date
+        days:
+          type: array
+          items:
+            $ref: "#/components/schemas/DayHours"
+    AffectedAppointment:
+      type: object
+      required: [appointmentId, code, slotDate, slotStart, petName, customerName]
+      properties:
+        appointmentId:
+          type: integer
+          format: int64
+        code:
+          type: string
+        slotDate:
+          type: string
+          format: date
+        slotStart:
+          type: string
+          pattern: "^[0-2][0-9]:[0-5][0-9]$"
+          example: "08:30"
+        petName:
+          type: string
+        customerName:
+          type: string
+        customerPhone:
+          type: [string, "null"]
+          pattern: "^0[0-9]{9,10}$"
+          maxLength: 15
+    AffectedBoarding:
+      type: object
+      required: [bookingId, code, checkInDate, checkOutDate, petName, customerName]
+      properties:
+        bookingId:
+          type: integer
+          format: int64
+        code:
+          type: string
+        checkInDate:
+          type: string
+          format: date
+        checkOutDate:
+          type: string
+          format: date
+        petName:
+          type: string
+        customerName:
+          type: string
+        customerPhone:
+          type: [string, "null"]
+          pattern: "^0[0-9]{9,10}$"
+          maxLength: 15
+    ScheduleImpact:
+      type: object
+      description: "Danh sách hiển thị trước khi quyết định; khách không có email để lễ tân gọi điện (06 Q4)"
+      required: [appointments, boardingBookings]
+      properties:
+        appointments:
+          type: array
+          items:
+            $ref: "#/components/schemas/AffectedAppointment"
+          description: "Lịch BOOKED rơi ra ngoài giờ / vào ngày nghỉ"
+        boardingBookings:
+          type: array
+          items:
+            $ref: "#/components/schemas/AffectedBoarding"
+          description: "Đặt chỗ BOOKED có ngày nhận hoặc trả rơi vào ngày nghỉ"
+    Holiday:
+      type: object
+      required: [holidayId, holidayDate]
+      properties:
+        holidayId:
+          type: integer
+          format: int64
+        holidayDate:
+          type: string
+          format: date
+        reason:
+          type: [string, "null"]
+          maxLength: 200
+    HolidayImpactRequest:
+      type: object
+      required: [holidayDate]
+      properties:
+        holidayDate:
+          type: string
+          format: date
+    CreateHolidayRequest:
+      type: object
+      required: [holidayDate]
+      properties:
+        holidayDate:
+          type: string
+          format: date
+          description: "Ngày trong tương lai"
+        reason:
+          type: [string, "null"]
+          maxLength: 200
+        cancelAffected:
+          type: [boolean, "null"]
+          description: "true = hủy hàng loạt (BR-LH-10)"
+    BranchServiceItem:
+      type: object
+      required: [serviceId, name, group, enabled]
+      properties:
+        serviceId:
+          type: integer
+          format: int64
+        name:
+          type: string
+        group:
+          type: string
+          enum: [MEDICAL, GROOMING, BOARDING]
+        enabled:
+          type: boolean
+    SetBranchServiceRequest:
+      type: object
+      required: [enabled]
+      properties:
+        enabled:
+          type: boolean
+    QuotaDefault:
+      type: object
+      required: [serviceGroup]
+      properties:
+        serviceGroup:
+          type: string
+          enum: [MEDICAL, GROOMING]
+        defaultQuota:
+          type: [integer, "null"]
+          format: int32
+          description: "null = chưa cấu hình, hiệu lực là 1 (BR-LH-03)"
+    SetQuotaDefaultRequest:
+      type: object
+      required: [defaultQuota]
+      properties:
+        defaultQuota:
+          type: integer
+          format: int32
+          description: "≥ 0"
+    SlotQuota:
+      type: object
+      required: [slotQuotaId, serviceGroup, slotDate, slotStart, quota]
+      properties:
+        slotQuotaId:
+          type: integer
+          format: int64
+        serviceGroup:
+          type: string
+          enum: [MEDICAL, GROOMING]
+        slotDate:
+          type: string
+          format: date
+        slotStart:
+          type: string
+          pattern: "^[0-2][0-9]:[0-5][0-9]$"
+          example: "08:30"
+          description: "Khung 30 phút bắt đầu lúc này"
+        quota:
+          type: integer
+          format: int32
+          description: "0 = khóa khung"
+    SetSlotQuotaRequest:
+      type: object
+      required: [serviceGroup, slotDate, slotStart, quota]
+      properties:
+        serviceGroup:
+          type: string
+          enum: [MEDICAL, GROOMING]
+        slotDate:
+          type: string
+          format: date
+        slotStart:
+          type: string
+          pattern: "^[0-2][0-9]:[0-5][0-9]$"
+          example: "08:30"
+        quota:
+          type: integer
+          format: int32
+          description: "≥ 0"
+    PublicBranch:
+      type: object
+      required: [branchId, name, address, phone, latitude, longitude, acceptsAfterHoursEmergency, weeklyHours]
+      properties:
+        branchId:
+          type: integer
+          format: int64
+        name:
+          type: string
+        address:
+          type: string
+        phone:
+          type: string
+          pattern: "^0[0-9]{9,10}$"
+          maxLength: 15
+        latitude:
+          type: number
+        longitude:
+          type: number
+        acceptsAfterHoursEmergency:
+          type: boolean
+          description: "Hiển thị nhận cấp cứu 24/7 (BR-CN-05)"
+        weeklyHours:
+          type: array
+          items:
+            $ref: "#/components/schemas/DayHours"
+          description: "Giờ đang áp dụng"
+  responses:
+    BadRequest:
+      description: "VALIDATION_FAILED / MALFORMED_REQUEST: dữ liệu không hợp lệ · BUSINESS_RULE_VIOLATION: vi phạm rule, message kết thúc bằng mã rule \"(BR-…)\"."
+      content:
+        "application/json":
+          schema:
+            $ref: "#/components/schemas/Error"
+    Unauthorized:
+      description: "UNAUTHENTICATED: chưa đăng nhập hoặc phiên đã hết hạn / bị hủy."
+      content:
+        "application/json":
+          schema:
+            $ref: "#/components/schemas/Error"
+    Forbidden:
+      description: "ACCESS_DENIED: sai vai trò · ACCESS_DENIED_SCOPE_MISMATCH: ngoài phạm vi (chi nhánh, chủ sở hữu). Message chung, không lộ cấu trúc phân quyền."
+      content:
+        "application/json":
+          schema:
+            $ref: "#/components/schemas/Error"
+    NotFound:
+      description: "Không tìm thấy (RESOURCE_NOT_FOUND)."
+      content:
+        "application/json":
+          schema:
+            $ref: "#/components/schemas/Error"
