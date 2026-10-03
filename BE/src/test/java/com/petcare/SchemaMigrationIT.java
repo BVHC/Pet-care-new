@@ -1,0 +1,434 @@
+package com.petcare;
+
+import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
+
+import java.sql.SQLException;
+import java.time.LocalDate;
+import java.util.HashMap;
+import java.util.LinkedHashMap;
+import java.util.List;
+import java.util.Map;
+import java.util.Set;
+import java.util.TreeSet;
+import java.util.concurrent.atomic.AtomicInteger;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
+
+import org.junit.jupiter.api.Test;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.boot.test.context.SpringBootTest;
+import org.springframework.context.annotation.Import;
+import org.springframework.core.NestedExceptionUtils;
+import org.springframework.dao.DataAccessException;
+import org.springframework.jdbc.core.JdbcTemplate;
+import org.springframework.test.context.ActiveProfiles;
+
+/**
+ * Kiểm tra schema do Flyway tạo trên Postgres 17 thật so với docs/05-erd.md và docs/03-state-machines.md.
+ * Mọi giá trị kỳ vọng là bản sao độc lập chép từ docs, không đọc lại từ V1__init_schema.sql — nếu không,
+ * test sẽ tự khẳng định chính nó.
+ */
+@SpringBootTest
+@ActiveProfiles("test")
+@Import(TestcontainersConfiguration.class)
+class SchemaMigrationIT {
+
+    /** erd §12 (L1043–1073): 52 model + 3 bảng con = 55 bảng. */
+    private static final Set<String> ERD_TABLES = Set.of(
+            "accounts", "staff_profiles", "otp_tokens", "sessions", "audit_logs", "system_configs",
+            "notification_templates", "branches", "opening_hours", "holidays", "branch_services",
+            "branch_quota_defaults", "slot_quotas", "customers", "addresses", "pets", "weight_records",
+            "product_categories", "products", "services", "kennel_types", "vaccine_types", "vaccination_protocols",
+            "appointments", "booking_restrictions", "visits", "visit_assignments", "medical_records",
+            "medical_record_addenda", "prescription_items", "vaccinations", "kennels", "boarding_bookings",
+            "boarding_check_ins", "care_logs", "care_log_addenda", "orders", "order_lines", "payments",
+            "cashier_shifts", "suppliers", "inventory_items", "stock_lots", "stock_receipts", "stock_receipt_lines",
+            "stock_adjustments", "stock_adjustment_lines", "stock_movements", "article_categories", "articles",
+            "page_contents", "feedbacks", "care_tasks", "notifications", "notification_outbox");
+
+    /** Bảng loại LOG trong erd: chỉ có {@code created_at} (erd §0 L14). */
+    private static final Set<String> LOG_TABLES = Set.of(
+            "otp_tokens", "audit_logs", "weight_records", "visit_assignments", "medical_record_addenda",
+            "care_log_addenda", "stock_movements", "notification_outbox");
+
+    /** Bảng có khóa chính khác {@code id}: 1–1 dùng FK làm PK, PK ghép, PK chuỗi. */
+    private static final Set<String> TABLES_WITHOUT_ID = Set.of(
+            "staff_profiles", "kennel_types", "medical_records", "boarding_check_ins",
+            "branch_services", "branch_quota_defaults", "system_configs", "notification_templates", "page_contents");
+
+    /** erd §0 L20: tiền là BIGINT. */
+    private static final List<String> MONEY_COLUMNS = List.of(
+            "products.price", "services.price", "boarding_bookings.nightly_price", "orders.total_amount",
+            "order_lines.unit_price", "order_lines.line_total", "cashier_shifts.expected_cash",
+            "cashier_shifts.expected_transfer", "cashier_shifts.counted_cash", "cashier_shifts.difference",
+            "payments.amount", "stock_receipt_lines.unit_cost");
+
+    /** erd §0 L23: giờ trong ngày là TIME. */
+    private static final List<String> TIME_COLUMNS = List.of(
+            "opening_hours.open_1", "opening_hours.close_1", "opening_hours.open_2", "opening_hours.close_2",
+            "slot_quotas.slot_start", "appointments.slot_start");
+
+    /** erd §0 L26: mã chứng từ hiển thị VARCHAR(20) UNIQUE. */
+    private static final List<String> DOCUMENT_CODE_TABLES = List.of(
+            "appointments", "visits", "boarding_bookings", "orders", "payments", "stock_receipts", "stock_adjustments");
+
+    /** Tập trạng thái theo docs/03-state-machines.md (SM#1–#10) và 02 (BR-BV-02, BR-DG-04), mã ASCII theo erd L28–37. */
+    private static final Map<String, Set<String>> STATE_COLUMNS = new LinkedHashMap<>();
+
+    static {
+        STATE_COLUMNS.put("accounts.role", Set.of("CUSTOMER", "ADMIN", "SUPER_MANAGER", "BRANCH_MANAGER",
+                "RECEPTIONIST", "VET", "CARETAKER"));
+        STATE_COLUMNS.put("accounts.status", Set.of("PENDING", "ACTIVE", "DISABLED"));
+        STATE_COLUMNS.put("branches.status", Set.of("DRAFT", "ACTIVE"));
+        STATE_COLUMNS.put("appointments.status", Set.of("BOOKED", "CHECKED_IN", "COMPLETED", "CANCELLED", "NO_SHOW"));
+        STATE_COLUMNS.put("visits.status", Set.of("WAITING", "IN_PROGRESS", "COMPLETED", "CANCELLED"));
+        STATE_COLUMNS.put("orders.status", Set.of("OPEN", "PENDING", "PAID", "CANCELLED"));
+        STATE_COLUMNS.put("orders.source", Set.of("VISIT", "RETAIL", "BOARDING"));
+        STATE_COLUMNS.put("boarding_bookings.status", Set.of("BOOKED", "CHECKED_IN", "OVERDUE", "CHECKED_OUT",
+                "CANCELLED", "NO_SHOW"));
+        STATE_COLUMNS.put("kennels.status", Set.of("AVAILABLE", "OCCUPIED", "MAINTENANCE"));
+        STATE_COLUMNS.put("cashier_shifts.status", Set.of("OPEN", "CLOSED", "RECONCILED"));
+        STATE_COLUMNS.put("stock_receipts.status", Set.of("DRAFT", "CONFIRMED", "CANCELLED"));
+        STATE_COLUMNS.put("care_tasks.status", Set.of("OPEN", "DONE", "CANCELLED"));
+        STATE_COLUMNS.put("care_tasks.task_type", Set.of("VACCINE_DUE", "VACCINE_OVERDUE", "FOLLOW_UP_DUE",
+                "PICKUP_OVERDUE"));
+        STATE_COLUMNS.put("articles.status", Set.of("DRAFT", "PUBLISHED", "HIDDEN"));
+        STATE_COLUMNS.put("feedbacks.status", Set.of("NEW", "SEEN", "RESOLVED"));
+    }
+
+    private static final String SINGLE_COLUMN_CHECKS = """
+            SELECT c.conrelid::regclass::text AS tbl, a.attname AS col, pg_get_constraintdef(c.oid) AS def
+            FROM pg_constraint c
+            JOIN pg_attribute a ON a.attrelid = c.conrelid AND a.attnum = c.conkey[1]
+            WHERE c.contype = 'c' AND c.connamespace = 'public'::regnamespace AND array_length(c.conkey, 1) = 1
+            """;
+
+    /** Postgres hiển thị {@code col IN (...)} của cột VARCHAR thành {@code col::text = ANY ((ARRAY[...])::text[])}. */
+    private static final Pattern ENUM_CHECK = Pattern.compile("= ANY \\(+ARRAY\\[");
+
+    private static final Pattern CHECK_LITERAL = Pattern.compile("'([^']+)'::");
+
+    private static final AtomicInteger SEQ = new AtomicInteger();
+
+    @Autowired
+    private JdbcTemplate jdbc;
+
+    // ---------------------------------------------------------------- D0–D5, D8, D9: catalog
+
+    @Test
+    void flywayAppliedOnlyV1Successfully() {
+        List<Map<String, Object>> rows = jdbc.queryForList(
+                "SELECT version, success FROM flyway_schema_history WHERE version IS NOT NULL");
+
+        assertThat(rows).hasSize(1);
+        assertThat(rows.get(0)).containsEntry("version", "1").containsEntry("success", true);
+    }
+
+    @Test
+    void createsExactlyTheErdTables() {
+        List<String> tables = jdbc.queryForList("""
+                SELECT table_name FROM information_schema.tables
+                WHERE table_schema = 'public' AND table_type = 'BASE TABLE' AND table_name <> 'flyway_schema_history'
+                """, String.class);
+
+        assertThat(ERD_TABLES).hasSize(55);
+        assertThat(tables).containsExactlyInAnyOrderElementsOf(ERD_TABLES);
+    }
+
+    @Test
+    void commonTimestampColumnsMatchTableKind() {
+        assertThat(LOG_TABLES).hasSize(8);
+        for (String table : ERD_TABLES) {
+            Map<String, Column> columns = columns(table);
+            assertCommonTimestamp(table, columns.get("created_at"));
+            if (LOG_TABLES.contains(table)) {
+                assertThat(columns).as("%s là LOG, không có updated_at", table).doesNotContainKey("updated_at");
+            } else {
+                assertCommonTimestamp(table, columns.get("updated_at"));
+            }
+        }
+    }
+
+    @Test
+    void everyForeignKeyIsOnDeleteRestrict() {
+        List<Map<String, Object>> foreignKeys = jdbc.queryForList("""
+                SELECT conname, confdeltype::text AS on_delete FROM pg_constraint
+                WHERE contype = 'f' AND connamespace = 'public'::regnamespace
+                """);
+
+        assertThat(foreignKeys).isNotEmpty();
+        assertThat(foreignKeys).allSatisfy(fk ->
+                assertThat(fk.get("on_delete")).as("%s phải ON DELETE RESTRICT", fk.get("conname")).isEqualTo("r"));
+        // [ERD 9] audit_logs.actor_account_id không có FK
+        Integer auditForeignKeys = jdbc.queryForObject(
+                "SELECT count(*) FROM pg_constraint WHERE contype = 'f' AND conrelid = 'audit_logs'::regclass",
+                Integer.class);
+        assertThat(auditForeignKeys).isZero();
+    }
+
+    @Test
+    void surrogateIdsAreIdentityAlways() {
+        assertThat(ERD_TABLES).containsAll(TABLES_WITHOUT_ID);
+        for (String table : ERD_TABLES) {
+            Column id = columns(table).get("id");
+            if (TABLES_WITHOUT_ID.contains(table)) {
+                assertThat(id).as("%s không có cột id", table).isNull();
+            } else {
+                assertThat(id).as("%s.id", table).isNotNull();
+                assertThat(id.dataType()).as("%s.id", table).isEqualTo("bigint");
+                assertThat(id.identity()).as("%s.id", table).isEqualTo("YES");
+                assertThat(id.identityGeneration()).as("%s.id", table).isEqualTo("ALWAYS");
+            }
+        }
+    }
+
+    @Test
+    void enumCheckColumnsAreVarchar30() {
+        List<Map<String, Object>> enumChecks = jdbc.queryForList(SINGLE_COLUMN_CHECKS).stream()
+                .filter(row -> ENUM_CHECK.matcher((String) row.get("def")).find())
+                .toList();
+
+        assertThat(enumChecks).isNotEmpty();
+        for (Map<String, Object> check : enumChecks) {
+            String table = (String) check.get("tbl");
+            String column = (String) check.get("col");
+            Column info = columns(table).get(column);
+            assertThat(info.dataType()).as("%s.%s", table, column).isEqualTo("character varying");
+            assertThat(info.maxLength()).as("%s.%s", table, column).isEqualTo(30);
+        }
+
+        List<String> allCheckDefinitions = jdbc.queryForList("""
+                SELECT pg_get_constraintdef(oid) FROM pg_constraint
+                WHERE contype = 'c' AND connamespace = 'public'::regnamespace
+                """, String.class);
+        assertThat(allCheckDefinitions).allSatisfy(def ->
+                assertThat(def.chars().allMatch(ch -> ch < 128)).as("CHECK chỉ dùng mã ASCII: %s", def).isTrue());
+    }
+
+    @Test
+    void columnTypesFollowErdConventions() {
+        List<String> forbidden = jdbc.queryForList("""
+                SELECT table_name || '.' || column_name FROM information_schema.columns
+                WHERE table_schema = 'public' AND table_name <> 'flyway_schema_history'
+                  AND data_type IN ('timestamp without time zone', 'json', 'real', 'double precision', 'money')
+                """, String.class);
+        assertThat(forbidden).isEmpty();
+
+        for (String money : MONEY_COLUMNS) {
+            assertThat(column(money).dataType()).as(money).isEqualTo("bigint");
+        }
+        for (String weight : List.of("weight_records.weight_kg", "kennel_types.max_weight_kg")) {
+            Column info = column(weight);
+            assertThat(info.dataType()).as(weight).isEqualTo("numeric");
+            assertThat(info.precision()).as(weight).isEqualTo(6);
+            assertThat(info.scale()).as(weight).isEqualTo(2);
+        }
+        for (String time : TIME_COLUMNS) {
+            assertThat(column(time).dataType()).as(time).isEqualTo("time without time zone");
+        }
+        for (String table : DOCUMENT_CODE_TABLES) {
+            Column code = columns(table).get("code");
+            assertThat(code.dataType()).as("%s.code", table).isEqualTo("character varying");
+            assertThat(code.maxLength()).as("%s.code", table).isEqualTo(20);
+            Integer uniques = jdbc.queryForObject("""
+                    SELECT count(*) FROM pg_constraint c
+                    JOIN pg_attribute a ON a.attrelid = c.conrelid AND a.attnum = c.conkey[1]
+                    WHERE c.contype = 'u' AND c.conrelid = ?::regclass
+                      AND array_length(c.conkey, 1) = 1 AND a.attname = 'code'
+                    """, Integer.class, table);
+            assertThat(uniques).as("%s.code UNIQUE", table).isEqualTo(1);
+        }
+    }
+
+    @Test
+    void stateColumnsMatchStateMachines() {
+        Map<String, Set<String>> actual = new HashMap<>();
+        for (Map<String, Object> check : jdbc.queryForList(SINGLE_COLUMN_CHECKS)) {
+            String def = (String) check.get("def");
+            if (!ENUM_CHECK.matcher(def).find()) {
+                continue;
+            }
+            Set<String> values = new TreeSet<>();
+            Matcher matcher = CHECK_LITERAL.matcher(def);
+            while (matcher.find()) {
+                values.add(matcher.group(1));
+            }
+            actual.put(check.get("tbl") + "." + check.get("col"), values);
+        }
+
+        STATE_COLUMNS.forEach((column, expected) ->
+                assertThat(actual.get(column)).as(column).containsExactlyInAnyOrderElementsOf(expected));
+    }
+
+    // ---------------------------------------------------------------- D6, D7, D10: hành vi ràng buộc
+
+    @Test
+    void auditLogsAreInsertOnly() {
+        Long id = jdbc.queryForObject(
+                "INSERT INTO audit_logs (actor_email, action) VALUES ('it@petcare.test', 'IT_AUDIT') RETURNING id",
+                Long.class);
+
+        assertThatThrownBy(() -> jdbc.update("UPDATE audit_logs SET reason = 'sửa' WHERE id = ?", id))
+                .isInstanceOf(DataAccessException.class)
+                .satisfies(ex -> assertThat(rootMessage(ex)).contains("BR-QT-16"));
+        assertThatThrownBy(() -> jdbc.update("DELETE FROM audit_logs WHERE id = ?", id))
+                .isInstanceOf(DataAccessException.class)
+                .satisfies(ex -> assertThat(rootMessage(ex)).contains("BR-QT-16"));
+        assertThatThrownBy(() -> jdbc.execute("TRUNCATE audit_logs"))
+                .isInstanceOf(DataAccessException.class)
+                .satisfies(ex -> assertThat(rootMessage(ex)).contains("BR-QT-16"));
+
+        Map<String, Object> row = jdbc.queryForMap("SELECT action, reason FROM audit_logs WHERE id = ?", id);
+        assertThat(row).containsEntry("action", "IT_AUDIT").containsEntry("reason", null);
+    }
+
+    @Test
+    void boardingBookingsRejectOverlappingStayOfSamePet() {
+        long staff = staffAccount();
+        long branch = branch();
+        long customer = counterCustomer();
+        long pet = pet(customer);
+        long kennelType = kennelType();
+        LocalDate in = LocalDate.of(2026, 11, 1);
+
+        booking(pet, customer, branch, kennelType, in, in.plusDays(4), "BOOKED", staff);
+
+        // Chồng ngày với đặt chỗ đang chiếm chỗ của cùng thú (BR-LT-02)
+        assertThatThrownBy(() -> booking(pet, customer, branch, kennelType, in.plusDays(2), in.plusDays(6),
+                "BOOKED", staff))
+                .isInstanceOf(DataAccessException.class)
+                .satisfies(ex -> assertThat(sqlState(ex)).isEqualTo("23P01"));
+        // Nối tiếp: ngày nhận = ngày trả của đặt chỗ trước
+        booking(pet, customer, branch, kennelType, in.plusDays(4), in.plusDays(7), "BOOKED", staff);
+        // Đặt chỗ CANCELLED không chiếm chỗ
+        booking(pet, customer, branch, kennelType, in.plusDays(1), in.plusDays(3), "CANCELLED", staff);
+        // Thú khác cùng ngày
+        booking(pet(customer), customer, branch, kennelType, in, in.plusDays(4), "BOOKED", staff);
+    }
+
+    @Test
+    void zeroAmountPaymentIsAllowed() {
+        long cashier = staffAccount();
+        long branch = branch();
+        long customer = counterCustomer();
+        long shift = jdbc.queryForObject("""
+                INSERT INTO cashier_shifts (branch_id, cashier_id, business_date, status, opened_at)
+                VALUES (?, ?, ?, 'OPEN', now()) RETURNING id
+                """, Long.class, branch, cashier, LocalDate.of(2026, 11, 1));
+
+        // [ERD 10] Order 0đ vẫn thu được (BR-TG-02)
+        payment(branch, customer, shift, cashier, 0);
+
+        assertThatThrownBy(() -> payment(branch, customer, shift, cashier, -1))
+                .isInstanceOf(DataAccessException.class)
+                .satisfies(ex -> assertThat(sqlState(ex)).isEqualTo("23514"));
+    }
+
+    // ---------------------------------------------------------------- fixture
+
+    private long staffAccount() {
+        return jdbc.queryForObject("""
+                INSERT INTO accounts (email, phone, password_hash, role, status)
+                VALUES (?, '0900000000', 'hash', 'RECEPTIONIST', 'ACTIVE') RETURNING id
+                """, Long.class, "it-" + SEQ.incrementAndGet() + "@petcare.test");
+    }
+
+    private long branch() {
+        return jdbc.queryForObject("""
+                INSERT INTO branches (name, address, phone, latitude, longitude, status)
+                VALUES (?, 'Địa chỉ', '0280000000', 10.762622, 106.660172, 'ACTIVE') RETURNING id
+                """, Long.class, "IT chi nhánh " + SEQ.incrementAndGet());
+    }
+
+    private long counterCustomer() {
+        return jdbc.queryForObject("""
+                INSERT INTO customers (full_name, phone, created_channel) VALUES ('Khách IT', '0911111111', 'COUNTER')
+                RETURNING id
+                """, Long.class);
+    }
+
+    private long pet(long customer) {
+        return jdbc.queryForObject("""
+                INSERT INTO pets (customer_id, name, species, sex) VALUES (?, ?, 'DOG', 'MALE') RETURNING id
+                """, Long.class, customer, "Thú IT " + SEQ.incrementAndGet());
+    }
+
+    private long kennelType() {
+        long service = jdbc.queryForObject("""
+                INSERT INTO services (name, service_group, price) VALUES (?, 'BOARDING', 200000) RETURNING id
+                """, Long.class, "Chuồng IT " + SEQ.incrementAndGet());
+        jdbc.update("INSERT INTO kennel_types (service_id, species, max_weight_kg) VALUES (?, 'DOG', 20.00)", service);
+        return service;
+    }
+
+    private void booking(long pet, long customer, long branch, long kennelType, LocalDate checkIn, LocalDate checkOut,
+            String status, long bookedBy) {
+        jdbc.update("""
+                INSERT INTO boarding_bookings (code, customer_id, pet_id, branch_id, kennel_type_id, check_in_date,
+                                               check_out_date, nightly_price, status, channel, booked_by)
+                VALUES (?, ?, ?, ?, ?, ?, ?, 200000, ?, 'COUNTER', ?)
+                """, "LT-IT-" + SEQ.incrementAndGet(), customer, pet, branch, kennelType, checkIn, checkOut, status,
+                bookedBy);
+    }
+
+    private void payment(long branch, long customer, long shift, long cashier, long amount) {
+        jdbc.update("""
+                INSERT INTO payments (code, branch_id, customer_id, cashier_shift_id, method, amount, received_by, paid_at)
+                VALUES (?, ?, ?, ?, 'CASH', ?, ?, now())
+                """, "PT-IT-" + SEQ.incrementAndGet(), branch, customer, shift, amount, cashier);
+    }
+
+    // ---------------------------------------------------------------- catalog helpers
+
+    private record Column(String dataType, String nullable, String defaultValue, Integer maxLength,
+            Integer precision, Integer scale, String identity, String identityGeneration) {
+    }
+
+    private Map<String, Column> columns(String table) {
+        Map<String, Column> result = new HashMap<>();
+        jdbc.query("""
+                SELECT column_name, data_type, is_nullable, column_default, character_maximum_length,
+                       numeric_precision, numeric_scale, is_identity, identity_generation
+                FROM information_schema.columns WHERE table_schema = 'public' AND table_name = ?
+                """, rs -> {
+            result.put(rs.getString("column_name"), new Column(
+                    rs.getString("data_type"),
+                    rs.getString("is_nullable"),
+                    rs.getString("column_default"),
+                    (Integer) rs.getObject("character_maximum_length"),
+                    (Integer) rs.getObject("numeric_precision"),
+                    (Integer) rs.getObject("numeric_scale"),
+                    rs.getString("is_identity"),
+                    rs.getString("identity_generation")));
+        }, table);
+        return result;
+    }
+
+    private Column column(String qualified) {
+        String[] parts = qualified.split("\\.");
+        Column info = columns(parts[0]).get(parts[1]);
+        assertThat(info).as(qualified).isNotNull();
+        return info;
+    }
+
+    private static void assertCommonTimestamp(String table, Column column) {
+        assertThat(column).as("%s phải có cột thời gian chung", table).isNotNull();
+        assertThat(column.dataType()).as(table).isEqualTo("timestamp with time zone");
+        assertThat(column.nullable()).as(table).isEqualTo("NO");
+        assertThat(column.defaultValue()).as(table).isEqualTo("now()");
+    }
+
+    private static String rootMessage(Throwable ex) {
+        return NestedExceptionUtils.getMostSpecificCause(ex).getMessage();
+    }
+
+    private static String sqlState(Throwable ex) {
+        for (Throwable cause = ex; cause != null; cause = cause.getCause()) {
+            if (cause instanceof SQLException sql && sql.getSQLState() != null) {
+                return sql.getSQLState();
+            }
+        }
+        return null;
+    }
+}

@@ -22,7 +22,7 @@
 | Ngày nghiệp vụ (ngày hẹn, ngày tiêm, ngày nhận/trả) | `DATE` | Hiểu theo giờ Việt Nam (BR-BC-01) |
 | Giờ trong ngày | `TIME` | Giờ mở cửa, khung giờ |
 | Cân nặng | `NUMERIC(6,2)` | kg, 2 chữ số lẻ |
-| Trạng thái, loại | `VARCHAR(30)` + `CHECK` | Dễ thêm giá trị hơn kiểu ENUM của DB |
+| Trạng thái, loại | `VARCHAR(30)` + `CHECK` | Dễ thêm giá trị hơn kiểu ENUM của DB. Áp dụng cho mọi cột có `CHECK` danh sách giá trị; độ dài ghi ở từng bảng bên dưới chỉ để tham khảo (*Nhật ký quyết định* mục 7) |
 | Mã chứng từ hiển thị | `VARCHAR(20)` `UNIQUE` | Tách khỏi `id` nội bộ, ví dụ `LH-260115-0007` |
 
 **Enum dùng mã ASCII [ERD].** Một số giá trị trong `state-machine.md` có dấu tiếng Việt. Trong DB và code dùng mã ASCII theo bảng dưới; giao diện hiển thị nhãn tiếng Việt.
@@ -150,7 +150,7 @@ Ràng buộc "A05–A08 phải có chi nhánh" kiểm tra ở ứng dụng vì `
 | Cột | Kiểu | Ràng buộc | Ghi chú |
 |---|---|---|---|
 | id | BIGINT | PK | |
-| actor_account_id | BIGINT | ?, FK→accounts | NULL khi đăng nhập thất bại với email không tồn tại |
+| actor_account_id | BIGINT | ? | Không đặt FK (*Nhật ký quyết định* mục 9). NULL khi đăng nhập thất bại với email không tồn tại |
 | actor_email | VARCHAR(255) | ? | Email nhập vào khi đăng nhập thất bại |
 | action | VARCHAR(50) | NN | Ví dụ `LOGIN_FAILED`, `PRICE_CHANGED`, `ORDER_PAID` |
 | entity_type | VARCHAR(50) | ? | Tên bảng |
@@ -160,7 +160,7 @@ Ràng buộc "A05–A08 phải có chi nhánh" kiểm tra ở ứng dụng vì `
 | reason | TEXT | ? | Lý do bắt buộc với khóa, hủy Order, gán lại lượt… |
 | ip_address | VARCHAR(45) | ? | |
 
-- Chỉ INSERT. Thu hồi quyền `UPDATE`, `DELETE` trên bảng này với user của ứng dụng (BR-QT-16)
+- Chỉ INSERT: trigger chặn `UPDATE`, `DELETE`, `TRUNCATE` với mọi user, kể cả owner (BR-QT-16, *Nhật ký quyết định* mục 6)
 - Index: `(entity_type, entity_id)`, `(actor_account_id, created_at)`, `(created_at)`
 
 ### `system_configs` — REF
@@ -574,7 +574,7 @@ Quota riêng của một khung giờ cụ thể, ghi đè quota mặc định (B
 | dosage_instructions | VARCHAR(500) | NN | Liều dùng, in trên đơn |
 | is_external_purchase | BOOLEAN | NN, DEFAULT false | Mua ngoài |
 | order_line_id | BIGINT | ?, UQ, FK→order_lines | |
-| external_reason | VARCHAR(20) | ?, CHECK | `OUT_OF_STOCK_AT_PRESCRIBE`, `OUT_OF_STOCK_AT_PAYMENT` (BR-BH-04) [ERD] |
+| external_reason | VARCHAR(30) | ?, CHECK | `OUT_OF_STOCK_AT_PRESCRIBE`, `OUT_OF_STOCK_AT_PAYMENT` (BR-BH-04) [ERD] |
 
 - `CHECK (is_external_purchase = (order_line_id IS NULL))` — không tách một dòng thành hai phần
 
@@ -601,7 +601,7 @@ Quota riêng của một khung giờ cụ thể, ghi đè quota mặc định (B
 - Chỉ có mũi tiêm tại hệ thống; mũi tiêm ở nơi khác không được ghi nhận (nguyên tắc 9 của domain model, BR-KB-05)
 - Index: `(pet_id, vaccine_type_id, administered_on DESC)` — mũi gần nhất cùng loại (gợi ý mũi kế, BR-LT-05, BR-TB-02)
 - Index cho ST04: `(next_due_date) WHERE superseded_at IS NULL`
-- Xóa cứng được khi Visit còn `IN_PROGRESS` (BR-KB-04): trong cùng transaction hoàn kho đúng `stock_lot_id`, ghi `stock_movements`, xóa `order_lines`, rồi xóa dòng này.
+- Xóa cứng được khi Visit còn `IN_PROGRESS` (BR-KB-04): trong cùng transaction hoàn kho đúng `stock_lot_id`, ghi `stock_movements`, xóa dòng này, rồi xóa `order_lines` (dòng này giữ FK tới `order_lines` nên phải xóa trước).
 
 ---
 
@@ -654,7 +654,7 @@ Quota riêng của một khung giờ cụ thể, ghi đè quota mặc định (B
 - `CHECK (status NOT IN ('CHECKED_IN','OVERDUE','CHECKED_OUT') OR kennel_id IS NOT NULL)`
 - `UNIQUE (kennel_id) WHERE status IN ('CHECKED_IN','OVERDUE')` — 1 chuồng chứa 1 thú
 - Index sức chứa: `(branch_id, kennel_type_id, status, check_in_date, check_out_date)`
-- Không chồng ngày cho cùng thú (BR-LT-02): PostgreSQL dùng `EXCLUDE USING gist (pet_id WITH =, daterange(check_in_date, check_out_date) WITH &&) WHERE (status IN ('BOOKED','CHECKED_IN','OVERDUE'))`; MySQL kiểm tra ở ứng dụng.
+- Không chồng ngày cho cùng thú (BR-LT-02): PostgreSQL dùng `EXCLUDE USING gist (pet_id WITH =, daterange(check_in_date, check_out_date) WITH &&) WHERE (status IN ('BOOKED','CHECKED_IN','OVERDUE'))`, cần extension `btree_gist` (*Nhật ký quyết định* mục 8); MySQL kiểm tra ở ứng dụng.
 - Đúng loại chuồng: ứng dụng kiểm tra `kennels.kennel_type_id = boarding_bookings.kennel_type_id` khi gán.
 
 ### `boarding_check_ins` — PART của BoardingBooking
@@ -794,7 +794,7 @@ Domain model gộp "bản bổ sung" vào CareLog; tách thành bảng con để
 | customer_id | BIGINT | NN, FK→customers | Thu gộp chỉ cùng khách, cùng chi nhánh (BR-TG-03) |
 | cashier_shift_id | BIGINT | NN, FK→cashier_shifts | |
 | method | VARCHAR(10) | NN, CHECK | `CASH`, `TRANSFER` |
-| amount | BIGINT | NN, CHECK > 0 | = tổng các Order (BR-TG-02) |
+| amount | BIGINT | NN, CHECK ≥ 0 | = tổng các Order (BR-TG-02); cho phép 0 (*Nhật ký quyết định* mục 10) |
 | received_by | BIGINT | NN, FK→accounts | |
 | paid_at | TIMESTAMPTZ | NN | |
 
@@ -1076,7 +1076,7 @@ Tổng: 55 bảng = 52 model + 3 bảng con tách ra (`care_log_addenda`, `stock
 
 ## 13. Nhật ký quyết định
 
-Mục 1–4: các câu hỏi mở của bản v14, chốt ở v15. Mục 5: thay đổi ở v16.
+Mục 1–4: các câu hỏi mở của bản v14, chốt ở v15. Mục 5: thay đổi ở v16. Mục 6–10: quyết định khi viết migration `V1__init_schema.sql` (2026-10-03).
 
 | # | Vấn đề | Quyết định | Ảnh hưởng tới bảng |
 |---|---|---|---|
@@ -1085,3 +1085,8 @@ Mục 1–4: các câu hỏi mở của bản v14, chốt ở v15. Mục 5: thay
 | 3 | Mũi tiêm ngoài hệ thống | Không ghi nhận. Hệ thống chỉ tin dữ liệu tiêm do chính hệ thống ghi nhận; tiền sử do chủ khai ghi trong bệnh án (bỏ BR-KB-05) | `vaccinations` bỏ `is_external`, `external_brand`, `external_place`; `protocol_id`, `product_id`, `stock_lot_id`, `order_line_id`, `next_due_date` thành NOT NULL |
 | 4 | Thu tiền cấp cứu ngoài giờ | Thu như bình thường, giá như trong giờ, qua ca thu ngân ngoài giờ; ca tự chốt khi đến giờ mở cửa kế tiếp (BR-CN-05, BR-TG-05) | `cashier_shifts` thêm `is_after_hours` |
 | 5 | Định danh bằng SĐT chưa xác thực (v16) | Email là định danh duy nhất. SĐT không duy nhất ở mọi nơi, không bắt buộc với tài khoản và hồ sơ online; liên kết hồ sơ chuyển thành gợi ý sau khi xác thực email (BR-TK-01, 15, 16, 19, BR-KH-01, 10). CCCD không lưu | `accounts`: bỏ `UQ` của `phone`, `phone` chỉ dùng cho nhân viên, bỏ `pending_customer_id`. `customers`: bỏ `UQ` của `phone`, `phone` cho phép NULL với hồ sơ online, thêm `link_decision_pending`. `otp_tokens`: thêm `customer_id` |
+| 6 | `audit_logs` chỉ thêm mới (BR-QT-16) | Ứng dụng kết nối bằng owner của DB nên không thu hồi quyền được; dùng trigger `BEFORE UPDATE OR DELETE` và `BEFORE TRUNCATE` ném lỗi, có hiệu lực với mọi user | `audit_logs`: trigger `trg_audit_logs_no_update_delete`, `trg_audit_logs_no_truncate` |
+| 7 | Độ dài cột trạng thái/loại | §0 ghi `VARCHAR(30)` nhưng từng bảng ghi 10–20, và `external_reason VARCHAR(20)` không chứa nổi `OUT_OF_STOCK_AT_PRESCRIBE` (25 ký tự). Thống nhất `VARCHAR(30)` cho mọi cột có `CHECK` danh sách giá trị | Mọi cột enum |
+| 8 | `EXCLUDE` chồng ngày lưu trú | `pet_id WITH =` trong index gist cần extension `btree_gist` | Migration chạy `CREATE EXTENSION IF NOT EXISTS btree_gist` (cần quyền owner/superuser) |
+| 9 | FK của `audit_logs.actor_account_id` | BR-QT-15 ghi audit cả đăng nhập thất bại nên có thể trỏ tới tài khoản `PENDING`; BR-TK-08 buộc xóa tài khoản đó sau 24h, trong khi BR-QT-16 cấm xóa audit. Bỏ FK để audit tồn tại độc lập với vòng đời tài khoản; ứng dụng luôn ghi kèm `actor_email` | `audit_logs.actor_account_id` không có FK |
+| 10 | Phiếu thu 0đ | Giá dịch vụ/sản phẩm cho phép 0 và BR-TG-02 buộc số thu = tổng Order, nên Order 0đ phải thu được (vẫn qua ca thu ngân, có audit) | `payments.amount CHECK ≥ 0` (trước: `> 0`) |

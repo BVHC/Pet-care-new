@@ -30,7 +30,7 @@ Các file tham chiếu nhau bằng tên gọi tắt (cột 1).
 | Enum tiếng Việt → mã ASCII trong DB/code | erd L28–37 |
 | Sơ đồ ER luồng chính (mermaid) | erd L45–73 |
 | Đối chiếu model → bảng | erd L1043–1073 |
-| Nhật ký quyết định v15–v16 | erd L1077–1087 |
+| Nhật ký quyết định v15–v16 và migration V1 | erd L1077–1092 |
 | Danh sách actor | use-case L7–21 |
 | Tác vụ hệ thống ST01–ST21 | use-case L208–234 |
 | Quan hệ include / extend | use-case L238–251 |
@@ -95,8 +95,8 @@ Câu hỏi chạm nhiều đối tượng (ví dụ "hoàn tất lượt khám k
 |---|---|
 | Quy ước code backend (package, layering/DTO, naming, exception, FSM, validation, transaction, logging/audit, testing) | `convention/backend/01…09-*.md` |
 | Hợp đồng API | `api/INDEX.md` *(đang trống)* |
-| Quyết định hạ tầng đã chốt | `adr/INDEX.md` *(đang trống)* |
+| Quyết định kỹ thuật đã chốt (ADR) | `adr/INDEX.md` — ADR-0001 ghi audit, ADR-0002 IP client sau proxy |
 | Sơ đồ | `diagrams/INDEX.md` *(đang trống)* |
-| Trạng thái kỹ thuật thực tế của codebase | `architecture/system-overview.md` *(đang trống)* |
+| Trạng thái kỹ thuật thực tế của codebase | `architecture/system-overview.md` |
 
-`convention/backend/` viết trước bản v16: vẫn dùng mã `RULE-XX-YY` và nhắc tới sơ đồ mermaid, bảng Actor↔Command, glossary (đều không còn). Mã rule đúng là `BR-…`; whitelist FSM lấy từ bảng chuyển trạng thái của state-machine.
+`convention/backend/` đã cập nhật theo v16 (mục lục `convention/backend/INDEX.md`, gồm bảng các điểm còn TBD: tên command, cách trả cảnh báo, chiến lược khóa đồng thời).
