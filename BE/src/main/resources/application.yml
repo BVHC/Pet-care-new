@@ -40,10 +40,10 @@ spring:
       mail.smtp.auth: true
       mail.smtp.starttls.enable: true
 
+# Khóa HS256 ký access token (platform/security/JwtProperties, docs/adr/0003), tối thiểu 32 byte.
+# Hạn phiên không cấu hình ở đây mà là tham số [CFG] session.ttl_hours; không có refresh token.
 jwt:
   secret: ${JWT_SECRET:petcare-256-bit-secret-key-for-jwt-signing-min-32-chars}
-  access-token-ttl-min: 15
-  refresh-token-ttl-days: 30
 
 app:
   cors:

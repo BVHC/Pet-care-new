@@ -27,7 +27,7 @@ npx --yes @redocly/cli@1 lint docs/api/openapi/*.yaml   # kiểm tra chuẩn Ope
 ### 3.1 Địa chỉ và xác thực
 - `servers: /api`. Path trong yaml **không** có tiền tố `/api`; gọi thật là `/api/<path>`. Phiên bản nằm ở tên file (`-v1`), không nằm trong path.
 - Bearer token trả về từ `POST /auth/login`, gắn 1-1 với một phiên (`sessions`). Phiên bị hủy (khóa, vô hiệu hóa, đổi / đặt lại mật khẩu) thì token hết hiệu lực ngay ở request kế tiếp.
-- Không cần đăng nhập: `/auth/register…`, `/auth/login`, `/auth/password/…` và mọi `/public/…`.
+- Không cần đăng nhập: `/auth/register…`, `/auth/login`, `/auth/password/…` và mọi `/public/…`. Các path này luôn xử lý như chưa đăng nhập: token gửi kèm bị bỏ qua (ADR-0005).
 
 ### 3.2 Đặt tên đường dẫn
 - Resource số nhiều, kebab-case: `/boarding-bookings`, `/stock-receipts`.
@@ -37,7 +37,7 @@ npx --yes @redocly/cli@1 lint docs/api/openapi/*.yaml   # kiểm tra chuẩn Ope
 - Thao tác xem trước không ghi gì đặt tên `…/impact`, `…/preview`, `…/readiness`.
 
 ### 3.3 Phạm vi chi nhánh
-Nhân viên A05–A08 chỉ làm việc trên chi nhánh của mình (04 nguyên tắc 8). Endpoint của dữ liệu theo chi nhánh **tự lấy chi nhánh của người gọi**; tham số `branchId` (nếu có) chỉ có tác dụng với SUPER_MANAGER / ADMIN. Truyền chi nhánh khác trả 403. Customer, Pet, danh mục, nhà cung cấp dùng chung toàn chuỗi.
+Nhân viên A05–A08 chỉ làm việc trên chi nhánh của mình (04 nguyên tắc 8). Endpoint của dữ liệu theo chi nhánh **tự lấy chi nhánh của người gọi**; tham số `branchId` (nếu có) chỉ có tác dụng với SUPER_MANAGER / ADMIN. Truyền chi nhánh khác trả 403. Customer, Pet, danh mục, nhà cung cấp dùng chung toàn chuỗi. Khách (A02) không có phạm vi chi nhánh: endpoint dùng chung với nhân viên trả cho khách đúng dữ liệu của mình, còn chi nhánh khách chọn khi đặt lịch / đặt lưu trú / gửi feedback là đích, không phải phạm vi (ADR-0006).
 
 ### 3.4 Response thành công
 Khớp `platform/model/ApiResponse`, `PageResponse`:

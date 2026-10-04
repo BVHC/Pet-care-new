@@ -20,7 +20,6 @@ Quy ước code cho `BE/` (Java 21, Spring Boot 3.5). Nghiệp vụ lấy từ `
 
 | Việc | Ở đâu | Cách chốt |
 |---|---|---|
-| Tên package của từng module | 01 | Chốt khi tạo module, ghi vào `system-overview.md` §3 |
 | Tên method transition / command | 03 | Đề xuất trong plan của module, người dùng duyệt |
 | Cách trả "cảnh báo, không chặn" về client | 06 | ADR |
 | Chiến lược khóa cho quota, sức chứa chuồng, trừ kho | 07 | ADR |

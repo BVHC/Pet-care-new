@@ -19,7 +19,9 @@
 
 **Lỗi nghiệp vụ** do bên sở hữu ném, kèm mã rule `BR-…` của rule bị vi phạm; bên gọi không bắt để "sửa" mà để lỗi đi lên tới use case. Riêng `StockApi.issueForSale` trả về danh sách thiếu thay vì ném lỗi, vì lễ tân cần biết từng dòng thiếu (BR-BH-04).
 
-**Đọc tham số [CFG]:** convention 06 để TBD "đọc `system_configs` thế nào, quyết định cùng module đầu tiên cần dùng". `SystemConfigApi` trong identity là **PROPOSED**; chốt khi BE-1 làm module identity.
+**Đọc tham số [CFG]:** đã chốt ở ADR-0004 và đã có implementation. Inject `identity.api.SystemConfigApi` và đọc `getInt/getDecimal/getBool/getTime(ConfigKey.X)`. Danh mục là enum `identity.api.ConfigKey` (52 tham số, seed ở `V2__seed_system_configs.sql`). Cần tham số mới thì thêm hằng số + migration seed, báo BE-1.
+
+**Người đang đăng nhập và phạm vi chi nhánh:** `platform.security.BranchScope` (ADR-0003). `current().accountId()` là actor truyền vào các interface có tham số `actorId`; `resolve` / `check` dùng cho dữ liệu có `branch_id`.
 
 **Thông báo và audit** luôn ghi trong transaction nghiệp vụ: `NotificationApi.enqueue` chỉ ghi `notification_outbox`, worker ST20 gửi sau. Audit dùng `platform.audit.AuditRecorder.record` (ADR-0001, đã có trong `platform/`), chỉ INSERT.
 
@@ -32,7 +34,7 @@
 
 | Module (package) | Mã | Model (04) | Owner | `api/` công bố |
 |---|---|---|---|---|
-| `identity` | TK, QT | Account, StaffProfile, OtpToken, Session, AuditLog, SystemConfig, NotificationTemplate | BE-1 | `StaffDirectoryApi`, `SystemConfigApi` (PROPOSED, xem §1), `NotificationTemplateCode`, `Role`, `AccountLockedEvent` |
+| `identity` | TK, QT | Account, StaffProfile, OtpToken, Session, AuditLog, SystemConfig, NotificationTemplate | BE-1 | `StaffDirectoryApi`, `SystemConfigApi` + `ConfigKey`, `ConfigValueType` (ADR-0004, xem §1), `NotificationTemplateCode`, `Role`, `AccountLockedEvent` |
 | `branch` | CN | Branch, OpeningHours, Holiday, BranchService, BranchQuotaDefault, SlotQuota | BE-2 | `BranchQueryApi`, `BranchClinicCancellationEvent` |
 | `customer` | KH | Customer, Address, Pet, WeightRecord | BE-2 | `CustomerApi`, `CustomerQueryApi`, `PetApi`, `PetQueryApi`, `Species`, `WeightSource`, `PetDeceasedEvent`, `PetOwnerTransferredEvent` |
 | `catalog` | SP | ProductCategory, Product, Service, KennelType, VaccineType, VaccinationProtocol | BE-2 | `CatalogQueryApi`, `ServiceGroup`, `MedicalType`, `ProductType` |
@@ -112,7 +114,7 @@ Mũi tên `A → B.m()`: module A gọi method m của module B. Cột *Chuyển
 | sales · Mở ca, ST13 | `BranchQueryApi.openingRangesOn`, `isHoliday`, `nextOpeningStart`, `findBranch` | BR-TG-05, BR-CN-05 |
 | content · Trang công khai | `BranchQueryApi.listActiveBranches`, `StaffDirectoryApi.listPublicVets`, `StockQueryApi.branchIdsWithAvailableStock` | BR-CK-01, 03 |
 | report · Xem báo cáo (UC89) | `SalesReportApi`, `AppointmentReportApi`, `VaccinationReportApi`, `StockReportApi`, `FeedbackReportApi` | BR-BC-01…04, §8 Q3 |
-| mọi module | `AuditRecorder.record` (platform), `SystemConfigApi.get*`, `NotificationApi.enqueue`, `StaffDirectoryApi.findActiveStaffIds` (người nhận thông báo) | BR-QT-13, 15 |
+| mọi module | `AuditRecorder.record` (platform), `BranchScope` (platform), `SystemConfigApi.get*(ConfigKey)`, `NotificationApi.enqueue`, `StaffDirectoryApi.findActiveStaffIds` (người nhận thông báo) | BR-QT-13, 15 |
 
 ## 5. Hai luồng cần làm đúng thứ tự
 
@@ -137,7 +139,7 @@ Bên sở hữu phải có implementation thật trước ngày bên gọi bắt
 
 | Interface | Owner · xong | Bên gọi · bắt đầu | Ghi chú |
 |---|---|---|---|
-| `SystemConfigApi` | BE-1 · 06/10 | mọi module | Audit đã có sẵn ở `platform/audit` |
+| `SystemConfigApi` | BE-1 · 06/10 — **đã giao 04/10** | mọi module | Chữ ký đổi từ `String key` sang `ConfigKey` (ADR-0004). Audit có sẵn ở `platform/audit`; xác thực, `BranchScope` ở `platform/security` (ADR-0003) |
 | `NotificationApi` | BE-1 · 07/10 | mọi module | |
 | `CustomerApi` (create/flag/delete) | BE-2 · **07/10** | identity 07/10 | ⚠ Timeline xếp KH 12–13/10. BE-2 làm riêng 3 method này sáng 07/10, hoặc BE-1 dùng placeholder và chưa demo được đăng ký tới 13/10 |
 | `CatalogQueryApi` | BE-2 · 07/10 | appointment 15/10, visit 20/10 | |

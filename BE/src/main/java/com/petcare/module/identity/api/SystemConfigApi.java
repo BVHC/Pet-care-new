@@ -4,16 +4,18 @@ import java.math.BigDecimal;
 import java.time.LocalTime;
 
 /**
- * Owner: identity (QT) · BE-1. Đọc tham số [CFG] (BR-QT-13), key dạng {@code otp.ttl_minutes}.
- * Giá trị mới chỉ áp dụng cho giao dịch tạo sau: caller tự chốt giá trị vào bản ghi khi cần.
+ * Owner: identity (QT) · BE-1. Đọc tham số [CFG] (BR-QT-13) từ cache trong bộ nhớ (docs/adr/0004).
+ * Giá trị mới chỉ áp dụng cho giao dịch tạo sau: caller tự chốt giá trị vào bản ghi khi cần
+ * (ví dụ {@code sessions.expires_at}, {@code otp_tokens.expires_at}).
+ * Gọi getter không đúng {@link ConfigKey#type()} là lỗi lập trình → {@link IllegalArgumentException}.
  */
 public interface SystemConfigApi {
 
-    int getInt(String key);
+    int getInt(ConfigKey key);
 
-    BigDecimal getDecimal(String key);
+    BigDecimal getDecimal(ConfigKey key);
 
-    boolean getBool(String key);
+    boolean getBool(ConfigKey key);
 
-    LocalTime getTime(String key);
+    LocalTime getTime(ConfigKey key);
 }

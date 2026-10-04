@@ -33,8 +33,8 @@ public AppointmentResponse bookAppointment(BookAppointmentRequest req) {
 
 ## Tham số [CFG]
 
-- Con số ghi **[CFG]** trong đặc tả là giá trị mặc định; ADMIN đổi được (BR-QT-13). Không hard-code trong code nghiệp vụ. Cơ chế đọc `system_configs` **chưa có**, chốt cùng module QT.
-- Giá trị phải "chỉ áp dụng cho giao dịch tạo sau" thì chốt vào bản ghi lúc tạo, như `otp_tokens.expires_at` (erd L139, L179).
+- Con số ghi **[CFG]** trong đặc tả là giá trị mặc định; ADMIN đổi được (BR-QT-13). Không hard-code trong code nghiệp vụ: inject `identity.api.SystemConfigApi` và đọc bằng `getInt/getDecimal/getBool/getTime(ConfigKey.X)` ([ADR-0004](../../adr/0004-system-config-reading.md)). Danh mục đầy đủ là enum `ConfigKey`, seed ở `V2__seed_system_configs.sql`; tham số mới = hằng số mới + migration seed mới.
+- Giá trị phải "chỉ áp dụng cho giao dịch tạo sau" thì chốt vào bản ghi lúc tạo, như `otp_tokens.expires_at` (erd L139, L179), `sessions.expires_at` (ADR-0003).
 
 ## Cảnh báo, không chặn
 

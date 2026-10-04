@@ -117,12 +117,13 @@ class SchemaMigrationIT {
     // ---------------------------------------------------------------- D0–D5, D8, D9: catalog
 
     @Test
-    void flywayAppliedOnlyV1Successfully() {
+    void flywayAppliedAllMigrationsSuccessfully() {
         List<Map<String, Object>> rows = jdbc.queryForList(
-                "SELECT version, success FROM flyway_schema_history WHERE version IS NOT NULL");
+                "SELECT version, success FROM flyway_schema_history WHERE version IS NOT NULL ORDER BY installed_rank");
 
-        assertThat(rows).hasSize(1);
-        assertThat(rows.get(0)).containsEntry("version", "1").containsEntry("success", true);
+        // V1 schema, V2 seed system_configs (docs/adr/0004)
+        assertThat(rows).extracting(row -> row.get("version")).containsExactly("1", "2");
+        assertThat(rows).allSatisfy(row -> assertThat(row).containsEntry("success", true));
     }
 
     @Test
