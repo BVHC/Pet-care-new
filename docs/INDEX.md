@@ -94,8 +94,9 @@ Câu hỏi chạm nhiều đối tượng (ví dụ "hoàn tất lượt khám k
 | Cần | Mở |
 |---|---|
 | Quy ước code backend (package, layering/DTO, naming, exception, FSM, validation, transaction, logging/audit, testing) | `convention/backend/01…09-*.md` |
-| Hợp đồng API | `api/INDEX.md` *(đang trống)* |
-| Quyết định kỹ thuật đã chốt (ADR) | `adr/INDEX.md` — ADR-0001 ghi audit, ADR-0002 IP client sau proxy |
+| Hợp đồng FE ↔ BE (HTTP) | `api/INDEX.md` — 12 contract v1, sinh từ `api/generator/` |
+| Hợp đồng giữa module BE | `06-module-contracts.md` |
+| Quyết định kỹ thuật đã chốt (ADR) | `adr/INDEX.md` — ADR-0001 ghi audit, 0002 IP client sau proxy, 0003 xác thực JWT + phiên / phân quyền / phạm vi chi nhánh, 0004 đọc [CFG], 0005 path public luôn ẩn danh, 0006 phạm vi dữ liệu của khách (CUSTOMER), 0007 job định kỳ `@Scheduled`, 0008 dọn phiên hết hạn |
 | Sơ đồ | `diagrams/INDEX.md` *(đang trống)* |
 | Trạng thái kỹ thuật thực tế của codebase | `architecture/system-overview.md` |
 

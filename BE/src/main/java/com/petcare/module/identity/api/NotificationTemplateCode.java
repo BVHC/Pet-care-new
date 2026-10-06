@@ -1,8 +1,8 @@
 package com.petcare.module.identity.api;
 
 /**
- * Owner: identity (QT, NotificationTemplate) · BE-1 seed toàn bộ; module gửi dùng hằng số này khi gọi
- * {@code NotificationApi.enqueue}. Mỗi mã một kênh ({@code notification_templates.channel}); sự kiện gửi cả email
+ * Owner: identity (QT, NotificationTemplate) · nội dung mẫu seed dần, cùng PR với lần gửi đầu tiên dùng mẫu (06 §8 Q4);
+ * module gửi dùng hằng số này khi gọi {@code NotificationApi.enqueue}. Mỗi mã một kênh ({@code notification_templates.channel}); sự kiện gửi cả email
  * lẫn trong app có hai mã, mã trong app thêm hậu tố {@code _APP}. Thêm mã mới = thêm hằng số + migration seed.
  * Danh sách đầy đủ và kênh xem 06-module-contracts §8 Q4.
  */

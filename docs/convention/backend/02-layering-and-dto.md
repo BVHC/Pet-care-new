@@ -18,7 +18,19 @@ Lỗi bất kỳ → GlobalExceptionHandler → ErrorResponse
 | **TransitionHandler** | Whitelist chuyển trạng thái chép từ bảng 03 và các thao tác chuyển trạng thái của aggregate (xem [05](05-fsm-pattern.md)) | Gọi sang module khác |
 | **Repository** | `JpaRepository` (hoặc `Repository` hẹp hơn khi cần chặn thao tác, như `AuditLogRepository` chỉ có `save`) | Logic nghiệp vụ |
 
-Phạm vi chi nhánh (A05–A08 chỉ thao tác trên dữ liệu chi nhánh mình, domain-model nguyên tắc 8): vi phạm thì ném `AccessDeniedScopeException` (403, client nhận message chung). Cơ chế lấy chi nhánh của người đăng nhập và nơi kiểm tra **chưa chốt**, làm cùng module TK.
+Tiền tố `/api`: mỗi controller nghiệp vụ tự ghi trong `@RequestMapping("/api/…")`, path còn lại đúng như `docs/api/*` (ADR-0003). Phân quyền theo role: `@PreAuthorize("hasRole('…')")` ở method controller; path public chỉ là các path liệt kê trong `SecurityConfig.PUBLIC_PATHS`. Path public luôn ẩn danh, kể cả khi client gửi token (ADR-0005), nên controller của path public không đọc người đang đăng nhập; audit ở đó tự ghi actor bằng `AuditEntry.actor(…)`.
+
+Phạm vi chi nhánh (A05–A08 chỉ thao tác trên dữ liệu chi nhánh mình, domain-model nguyên tắc 8): service gọi `platform/security/BranchScope` (ADR-0003, ADR-0006), **chỉ** với model có `branch_id` — Customer, Pet, danh mục, nhà cung cấp dùng chung toàn chuỗi thì không gọi.
+- **Khách (CUSTOMER, `AccessScope.OWNER`) không đi qua `BranchScope`.** Gọi `resolve`/`check` với khách luôn trả 403 (ADR-0006). Endpoint dùng chung khách–nhân viên rẽ nhánh theo `branchScope.current().accessScope()`:
+  - dữ liệu của khách (lịch hẹn, đặt chỗ, nhật ký chăm sóc…) → khách lọc theo chủ sở hữu, nhân viên dùng `resolve`/`check`;
+  - chi nhánh là **đích** khách chọn (xem khung giờ trống, xem còn chỗ, đặt lịch, đặt lưu trú, gửi feedback) → khách không kiểm tra phạm vi (chỉ kiểm tra chi nhánh `ACTIVE`, thú là của mình…), nhân viên dùng `check(branchId)`.
+
+  Mỗi endpoint dùng chung phải có IT gọi bằng token khách.
+- Truy vấn danh sách / thống kê: `Long branchId = branchScope.resolve(request.branchId())` — A05–A08 nhận chi nhánh của mình (truyền chi nhánh khác → 403), ADMIN/SUPER_MANAGER nhận đúng giá trị truyền vào (`null` = toàn chuỗi).
+- Một bản ghi đã tải: `branchScope.check(entity.getBranchId())` — A05–A08 gặp bản ghi chi nhánh khác hoặc không gắn chi nhánh → 403. Thứ tự: quyền (role) → tồn tại (404) → phạm vi (403) → guard nghiệp vụ (400) → chuyển trạng thái (409).
+- Người thực hiện (actor, người thêm dòng…): `branchScope.current().accountId()`.
+
+Vi phạm phạm vi ném `AccessDeniedScopeException` (403, client nhận message chung).
 
 ## DTO
 

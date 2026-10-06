@@ -23,11 +23,13 @@ spring:
 
 jwt:
   secret: test-secret-key-for-jwt-signing-minimum-32-characters-long
-  access-token-ttl-min: 15
-  refresh-token-ttl-days: 30
 
 app:
   cors:
     allowed-origins: http://localhost:5173,http://localhost:3000
+  # Không job nào tự chạy trong test (docs/adr/0007); IT gọi job trực tiếp.
+  jobs:
+    session-cleanup:
+      cron: "-"
 
 # management.health.mail.enabled=false kế thừa từ application.yml.

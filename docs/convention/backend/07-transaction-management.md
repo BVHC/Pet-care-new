@@ -20,8 +20,28 @@ VisitService.checkIn…()                      @Transactional — Visit#1
  └─ CareTaskService.…()                      Care Task#6 (nếu có dịch vụ Khám)
 ```
 
-- Bên bị kéo theo cung cấp method trên service của mình; bên phát sự kiện gọi tới. Không gọi thẳng repository của module khác ([01](01-package-structure.md)).
+- Bên bị kéo theo cung cấp method trên service của mình, qua interface trong `api/` khi khác module (`06-module-contracts.md` §1); bên phát sự kiện gọi tới. Không gọi thẳng repository của module khác ([01](01-package-structure.md)).
 - Thông báo email/in-app: INSERT vào `notification_outbox` trong cùng transaction, worker ST20 gửi sau (erd L1039). Rollback nghiệp vụ thì không có thông báo nào được gửi. Worker gửi **chưa có**; `notification_outbox.template_code` có FK nên phải seed `notification_templates` trước.
+
+### Hệ quả 1–n: sự kiện đồng bộ
+
+Hệ quả 1–1 (biết trước bên bị kéo theo) gọi interface như trên. Khi một sự kiện lan ra **nhiều module** thì dùng sự kiện đồng bộ (`06-module-contracts.md` §1, §3): `PetDeceasedEvent`, `PetOwnerTransferredEvent`, `BranchClinicCancellationEvent`, `AccountLockedEvent`.
+
+```
+CustomerService.markPetDeceased…()            @Transactional — BR-KH-05
+ ├─ kiểm guard, ghi pets.deceased_on
+ └─ publishEvent(PetDeceasedEvent)            đồng bộ, cùng thread, cùng transaction
+     ├─ appointment/listener/PetDeceasedListener → AppointmentService.…()   @Transactional(MANDATORY)
+     ├─ boarding/listener/PetDeceasedListener    → BoardingService.…()      @Transactional(MANDATORY)
+     └─ care/listener/PetDeceasedListener        → CareTaskService.…()      @Transactional(MANDATORY)
+```
+
+- **Bên phát:** record `{Việc}Event` nằm trong `api/` của module phát. Gọi `ApplicationEventPublisher.publishEvent(...)` **bên trong** method `@Transactional` của use case, **sau khi** đã kiểm guard và đổi trạng thái của chính mình (06 §3: bên nhận không kiểm lại điều kiện).
+- **Bên nhận:** `module/<m>/listener/{TênSựKiện}Listener`, một method `@EventListener` chỉ gọi service của module mình, không chứa logic (như Job). Method service đó đặt `@Transactional(propagation = MANDATORY)`: phát sự kiện ngoài transaction thì lỗi ngay thay vì mỗi listener tự commit riêng.
+- **Lỗi ở listener** đi ngược qua `publishEvent` tới bên phát và rollback **toàn bộ** use case. Listener không `try/catch` để nuốt lỗi.
+- **Cấm:** `@TransactionalEventListener` (mọi phase, kể cả `AFTER_COMMIT`), `@Async` hoặc multicaster bất đồng bộ, `REQUIRES_NEW` trong chuỗi listener, gửi email/push trực tiếp (dùng `NotificationApi.enqueue` → outbox, như trên).
+- Các listener của cùng một sự kiện phải độc lập với nhau; không dựa vào thứ tự chạy.
+- Cơ chế (cùng thread, cùng transaction, rollback khi listener lỗi, lỗi khi phát ngoài transaction) được chứng minh ở `DomainEventTransactionIT` ([09](09-testing.md)).
 
 ## 7.3. Khóa đồng thời — chưa chốt, cần ADR
 
@@ -41,8 +61,9 @@ Khi DB chặn, `GlobalExceptionHandler` trả 409 `CONCURRENCY_CONFLICT` với m
 
 ## 7.4. Job định kỳ (ST01–ST20)
 
-- **Chưa có job nào.** Job chạy không có người đăng nhập: audit ghi actor là hệ thống ([08](08-logging-and-audit.md)); thời gian lấy từ bean `Clock`.
-- Job xử lý nhiều bản ghi (ST05 chuyển `NO_SHOW`, ST15 `OVERDUE`, ST02 dọn tài khoản `PENDING`…) được phép tách transaction theo từng bản ghi hoặc từng lô thay vì bao cả lượt chạy, để một bản ghi lỗi không rollback cả lượt và không giữ khóa lâu. Mỗi bản ghi vẫn là một use case trọn vẹn (gồm cả hệ quả liên aggregate). Cách chia, lịch chạy và việc chống chạy trùng khi có nhiều instance ghi vào ADR khi cài job đầu tiên.
+- Cơ chế đã chốt ở [ADR-0007](../../adr/0007-scheduled-jobs.md): `@Scheduled` (bật ở `platform/config/SchedulingConfig`), job ở `module/<m>/job/{Việc}Job`, cron `app.jobs.<job>.cron` theo giờ Việt Nam (`"-"` để tắt, profile test tắt hết), giả định một instance nên job phải idempotent. Job hiện có: `identity/job/SessionCleanupJob` ([ADR-0008](../../adr/0008-session-cleanup.md)). Chưa có job ST nào.
+- Job chạy không có người đăng nhập: audit ghi actor là hệ thống ([08](08-logging-and-audit.md)); thời gian lấy từ bean `Clock`.
+- Job xử lý nhiều bản ghi (ST05 chuyển `NO_SHOW`, ST15 `OVERDUE`, ST02 dọn tài khoản `PENDING`…) tách transaction theo từng bản ghi hoặc từng lô ở service, không bao cả lượt chạy (job **không** `@Transactional`), để một bản ghi lỗi không rollback cả lượt và không giữ khóa lâu. Mỗi bản ghi vẫn là một use case trọn vẹn (gồm cả hệ quả liên aggregate). Lỗi được log và xử lý bù ở lượt sau.
 
 ---
 
