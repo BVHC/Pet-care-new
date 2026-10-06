@@ -221,7 +221,7 @@ Báo cáo (2) đếm theo dòng dịch vụ trong Order, vì dịch vụ thực 
 
 ### Q4. Mã mẫu thông báo: chốt danh sách ngay, liệt kê theo rule
 
-**Quyết định.** Danh sách mẫu chốt từ bây giờ, nằm ở `identity.api.NotificationTemplateCode` và được identity seed một lần (BR-QT-14: mẫu do hệ thống định sẵn, không thêm/xóa qua giao diện). Cách đặt mã:
+**Quyết định.** Danh sách mẫu chốt từ bây giờ, nằm ở `identity.api.NotificationTemplateCode` (BR-QT-14: mẫu do hệ thống định sẵn, không thêm/xóa qua giao diện). Nội dung mẫu được **seed dần** (chốt 06/10/2026): mỗi mẫu được seed bằng migration trong cùng PR với lời gọi `NotificationApi.enqueue` đầu tiên dùng nó (`notification_outbox.template_code` có FK nên thiếu mẫu thì ghi outbox lỗi), báo số version Flyway cho bên kia trước, và đặt `body = default_body`, `subject = default_subject` để UC10 khôi phục được mẫu mặc định. Cách đặt mã:
 - Mỗi mã một kênh, vì `notification_templates.channel` là một giá trị.
 - Sự kiện gửi khách cả email lẫn trong app thì có hai mã, mã trong app thêm hậu tố `_APP`.
 

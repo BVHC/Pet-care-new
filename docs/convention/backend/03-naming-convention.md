@@ -6,7 +6,9 @@ Code và định danh viết tiếng Anh; tài liệu, message trả client và 
 
 | Đối tượng | Quy tắc | Ví dụ |
 |---|---|---|
-| Package con trong module | Số ít, chuẩn Spring Boot | `controller`, `service`, `repository`, `entity`, `dto`, `mapper`, `fsm`, `job`, `exception` |
+| Package con trong module | Số ít, chuẩn Spring Boot | `controller`, `service`, `repository`, `entity`, `dto`, `mapper`, `fsm`, `job`, `listener`, `exception` |
+| Sự kiện đồng bộ | Record `{Việc}Event` trong `api/` của module phát (06 §3) | `PetDeceasedEvent` |
+| Listener sự kiện | `{TênSựKiện}Listener` (bỏ hậu tố `Event`) trong `listener/` của module nhận, method `on({TênSựKiện}Event)`; mỗi module một listener cho mỗi sự kiện (07 §7.2) | `appointment/listener/PetDeceasedListener` |
 | Job định kỳ | `{Việc}Job`, method `run()`; property `app.jobs.<việc-kebab>.*`, record `{Việc}Properties`; mã log `<VIỆC>` / `<VIỆC>_FAILED` (ADR-0007) | `SessionCleanupJob`, `app.jobs.session-cleanup.cron`, `SESSION_CLEANUP` |
 | Entity | Tên model ở `04-domain-model.md` (PascalCase), **không hậu tố `Entity`**. Bảng tương ứng: erd §12 | `Appointment`, `Visit`, `CashierShift` |
 | Entity của `platform/` | Được thêm hậu tố `Entity` để không trùng tên khái niệm | `AuditLogEntity` |

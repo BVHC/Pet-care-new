@@ -19,6 +19,7 @@ com.petcare
         ├── mapper/           # MapStruct interface
         ├── fsm/              # {Entity}TransitionHandler — chỉ khi đối tượng có bảng trong 03-state-machines.md
         ├── job/              # {Việc}Job — job định kỳ @Scheduled, gọi service (ADR-0007)
+        ├── listener/         # {TênSựKiện}Listener — nhận sự kiện đồng bộ của module khác, gọi service (07 §7.2)
         └── exception/        # CHỈ khi thỏa tiêu chí ở 04-exception-handling.md §4.2
 ```
 
@@ -35,7 +36,7 @@ Một module = một mã module trong Bảng 2 của `docs/INDEX.md` (TK, QT, CN
 ## Quy tắc phụ thuộc
 
 - Module **không import `entity`/`repository` của module khác**. Muốn đọc hoặc ghi dữ liệu của module khác thì gọi `service` của module đó.
-- Hệ quả liên aggregate (Phụ lục của `03-state-machines.md`) do service của aggregate phát sự kiện gọi sang service của aggregate bị kéo theo, trong cùng transaction (xem [07](07-transaction-management.md)).
+- Hệ quả liên aggregate (Phụ lục của `03-state-machines.md`) do service của aggregate phát sự kiện gọi sang service của aggregate bị kéo theo, trong cùng transaction; hệ quả lan ra nhiều module dùng sự kiện đồng bộ, nhận ở `listener/` (xem [07](07-transaction-management.md) §7.2).
 - `platform/` không phụ thuộc ngược vào `module/*`. Khi platform cần thông tin của module thì khai báo interface trong platform để module implement, như `AuditPrincipal` (module TK implement).
 
 ---

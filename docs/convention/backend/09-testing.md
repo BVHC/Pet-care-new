@@ -56,6 +56,13 @@ Base chỉ phủ whitelist trạng thái. Ngoài ra mỗi FSM cần:
 - Với trường hợp đặc biệt ở [05](05-fsm-pattern.md): guard theo `source` của Order, cờ `is_locked` của Tài khoản.
 - Một IT cho mỗi chuỗi hệ quả ở Phụ lục 03 mà module tham gia: sau thao tác, kiểm tra trạng thái của **mọi** aggregate bị kéo theo, và kiểm tra rollback toàn bộ khi một bước giữa chừng lỗi.
 
+## Sự kiện đồng bộ
+
+- Cơ chế của [07](07-transaction-management.md) §7.2 (listener chạy cùng thread và cùng transaction với bên phát, listener lỗi thì rollback cả use case, phát ngoài transaction thì lỗi) đã được chứng minh **một lần** ở `src/test/java/com/petcare/DomainEventTransactionIT`. Module không viết lại test cho cơ chế.
+- Unit test service bên phát: mock `ApplicationEventPublisher`, verify đúng record sự kiện được phát sau khi đổi trạng thái; case guard vi phạm thì verify **không** phát.
+- Unit test listener: verify gọi đúng method service của module mình với dữ liệu lấy từ sự kiện.
+- IT chuỗi hệ quả (bullet cuối mục trên) vẫn bắt buộc cho từng sự kiện thật: kiểm tra mọi module nhận đã đổi dữ liệu, và rollback toàn bộ khi một listener lỗi.
+
 ---
 
 [← 8. Logging & Audit](08-logging-and-audit.md) · [Backend Convention Index](INDEX.md)

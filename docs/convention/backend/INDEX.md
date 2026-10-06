@@ -12,7 +12,7 @@ Quy ước code cho `BE/` (Java 21, Spring Boot 3.5). Nghiệp vụ lấy từ `
 | 4 | [04-exception-handling.md](04-exception-handling.md) | 5 exception dùng chung, `ErrorCode`, `ErrorResponse` |
 | 5 | [05-fsm-pattern.md](05-fsm-pattern.md) | `StateMachineBase`, chép bảng 03 thành transition map |
 | 6 | [06-validation.md](06-validation.md) | Bean Validation ở controller, rule `BR-…` ở service; cảnh báo không chặn |
-| 7 | [07-transaction-management.md](07-transaction-management.md) | Ranh giới transaction, hệ quả liên aggregate, outbox, khóa đồng thời |
+| 7 | [07-transaction-management.md](07-transaction-management.md) | Ranh giới transaction, hệ quả liên aggregate, sự kiện đồng bộ, outbox, khóa đồng thời |
 | 8 | [08-logging-and-audit.md](08-logging-and-audit.md) | Application log, `AuditRecorder`, danh mục thao tác phải audit |
 | 9 | [09-testing.md](09-testing.md) | Unit / integration test, Testcontainers, `FsmTransitionTestBase` |
 
