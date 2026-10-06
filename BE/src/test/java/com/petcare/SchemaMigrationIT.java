@@ -262,6 +262,26 @@ class SchemaMigrationIT {
                 assertThat(actual.get(column)).as(column).containsExactlyInAnyOrderElementsOf(expected));
     }
 
+    /**
+     * erd §1 {@code sessions} (L121, L127): {@code token_hash} UNIQUE; index các phiên còn hiệu lực theo tài khoản
+     * ({@code (account_id) WHERE revoked_at IS NULL}). Không dựa vào tên index vì erd không đặt tên.
+     */
+    @Test
+    void sessionsHaveUniqueTokenHashAndActiveSessionIndex() {
+        Integer uniques = jdbc.queryForObject("""
+                SELECT count(*) FROM pg_constraint c
+                JOIN pg_attribute a ON a.attrelid = c.conrelid AND a.attnum = c.conkey[1]
+                WHERE c.contype = 'u' AND c.conrelid = 'sessions'::regclass
+                  AND array_length(c.conkey, 1) = 1 AND a.attname = 'token_hash'
+                """, Integer.class);
+        assertThat(uniques).as("sessions.token_hash UNIQUE").isEqualTo(1);
+
+        List<String> indexes = jdbc.queryForList(
+                "SELECT indexdef FROM pg_indexes WHERE schemaname = 'public' AND tablename = 'sessions'", String.class);
+        assertThat(indexes).as("sessions index (account_id) WHERE revoked_at IS NULL")
+                .anySatisfy(def -> assertThat(def).contains("(account_id)").contains("WHERE (revoked_at IS NULL)"));
+    }
+
     // ---------------------------------------------------------------- D6, D7, D10: hành vi ràng buộc
 
     @Test

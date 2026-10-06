@@ -7,12 +7,20 @@ import java.time.Duration;
 import java.time.Instant;
 import java.time.ZoneId;
 import java.util.HashMap;
+import java.util.List;
 import java.util.Map;
 import java.util.UUID;
+import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
+import java.util.concurrent.Future;
+import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicInteger;
 
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.CsvSource;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.boot.test.context.TestConfiguration;
@@ -29,6 +37,7 @@ import org.springframework.http.ResponseEntity;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.security.core.Authentication;
+import org.springframework.security.core.GrantedAuthority;
 import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.test.context.ActiveProfiles;
 import org.springframework.transaction.PlatformTransactionManager;
@@ -40,12 +49,14 @@ import org.springframework.web.bind.annotation.RestController;
 
 import com.petcare.TestcontainersConfiguration;
 import com.petcare.module.identity.entity.Account;
+import com.petcare.module.identity.job.SessionCleanupJob;
 import com.petcare.module.identity.repository.AccountRepository;
 import com.petcare.module.identity.repository.SessionRepository;
 import com.petcare.module.identity.service.SessionService;
 import com.petcare.module.identity.service.SessionService.OpenedSession;
 import com.petcare.platform.audit.AuditEntry;
 import com.petcare.platform.audit.AuditRecorder;
+import com.petcare.platform.security.AccessScope;
 import com.petcare.platform.security.BranchScope;
 import com.petcare.platform.security.SecurityPrincipal;
 
@@ -132,6 +143,19 @@ class AuthenticationIT {
             return "ok";
         }
 
+        @GetMapping("/api/test/super-manager-only")
+        @PreAuthorize("hasRole('SUPER_MANAGER')")
+        String superManagerOnly() {
+            return "ok";
+        }
+
+        /** Quyền filter gắn cho request hiện tại. */
+        @GetMapping("/api/test/authorities")
+        List<String> authorities() {
+            return SecurityContextHolder.getContext().getAuthentication().getAuthorities().stream()
+                    .map(GrantedAuthority::getAuthority).toList();
+        }
+
         @GetMapping("/api/test/branch")
         Long branch(@RequestParam(required = false) Long branchId) {
             return scope.resolve(branchId);
@@ -181,6 +205,9 @@ class AuthenticationIT {
 
     @Autowired
     private EntityManager entityManager;
+
+    @Autowired
+    private SessionCleanupJob cleanupJob;
 
     private TransactionTemplate tx;
     private long branchA;
@@ -297,6 +324,35 @@ class AuthenticationIT {
         });
     }
 
+    /**
+     * Hủy phiên chỉ chạm phiên còn hiệu lực ({@code revoked_at IS NULL}): gọi lại không ghi đè thời điểm hủy đầu
+     * tiên, nên lịch sử phiên giữ đúng lúc bị hủy (BR-TK-11, 13, 14). {@code updated_at} do câu UPDATE đặt từ
+     * {@link Clock}, nên dòng không bị chạm lại thì giữ nguyên.
+     */
+    @Test
+    void revokeIsIdempotentAndKeepsFirstRevokedAt() {
+        OpenedSession a = open(vet);
+        OpenedSession b = open(vet);
+        OpenedSession c = open(vet);
+        Instant firstRevoke = T0;
+        Instant secondRevoke = T0.plus(Duration.ofHours(1));
+
+        tx.executeWithoutResult(status -> sessions.revoke(a.sessionId()));
+        clock.advance(Duration.ofHours(1));
+        tx.executeWithoutResult(status -> {
+            sessions.revoke(a.sessionId());
+            sessions.revokeAll(vet);
+        });
+        clock.advance(Duration.ofHours(1));
+        tx.executeWithoutResult(status -> sessions.revokeOthers(vet, c.sessionId()));
+
+        assertThat(sessionTime(a, "revoked_at")).isEqualTo(firstRevoke);
+        assertThat(sessionTime(a, "updated_at")).isEqualTo(firstRevoke);
+        assertThat(sessionTime(b, "revoked_at")).isEqualTo(secondRevoke);
+        assertThat(sessionTime(c, "revoked_at")).isEqualTo(secondRevoke);
+        assertThat(sessionTime(c, "updated_at")).isEqualTo(secondRevoke);
+    }
+
     @Test
     void expiredSessionRejected() {
         OpenedSession session = open(vet);
@@ -306,6 +362,38 @@ class AuthenticationIT {
 
         clock.set(T0.plus(Duration.ofHours(12)));
         assertError(get("/api/test/whoami", session.accessToken()), HttpStatus.UNAUTHORIZED, "UNAUTHENTICATED");
+    }
+
+    // ---------------------------------------------------------------- job dọn phiên (docs/adr/0008)
+
+    /** Job chỉ xóa phiên đã hết hạn quá 30 ngày: phiên đang dùng vẫn qua được xác thực sau khi job chạy. */
+    @Test
+    void sessionCleanupKeepsLiveSessionWorking() {
+        OpenedSession old = open(vet);
+        clock.advance(Duration.ofDays(31));
+        OpenedSession live = open(vet);
+
+        cleanupJob.run();
+
+        assertThat(sessionExists(old)).as("hết hạn từ T0+12h, quá 30 ngày").isFalse();
+        assertThat(sessionExists(live)).isTrue();
+        assertThat(get("/api/test/whoami", live.accessToken()).getStatusCode()).isEqualTo(HttpStatus.OK);
+    }
+
+    /** BR-TK-11, 13, 14: phiên đã hủy bị từ chối khi dòng còn trong DB và vẫn bị từ chối sau khi job xóa dòng. */
+    @Test
+    void revokedSessionStaysRejectedBeforeAndAfterCleanup() {
+        OpenedSession revoked = open(vet);
+        tx.executeWithoutResult(status -> sessions.revoke(revoked.sessionId()));
+
+        cleanupJob.run();
+        assertThat(sessionExists(revoked)).as("hủy gần đây: chưa bị xóa").isTrue();
+        assertError(get("/api/test/whoami", revoked.accessToken()), HttpStatus.UNAUTHORIZED, "UNAUTHENTICATED");
+
+        clock.advance(Duration.ofDays(31));
+        cleanupJob.run();
+        assertThat(sessionExists(revoked)).isFalse();
+        assertError(get("/api/test/whoami", revoked.accessToken()), HttpStatus.UNAUTHORIZED, "UNAUTHENTICATED");
     }
 
     @Test
@@ -322,6 +410,16 @@ class AuthenticationIT {
         OpenedSession session = open(vet);
 
         jdbc.update("UPDATE accounts SET status = 'DISABLED' WHERE id = ?", vet);
+
+        assertError(get("/api/test/whoami", session.accessToken()), HttpStatus.UNAUTHORIZED, "UNAUTHENTICATED");
+    }
+
+    /** 03 §1: tài khoản PENDING không đăng nhập được; phiên nào đó còn sót cũng không được dùng. */
+    @Test
+    void pendingAccountSessionRejected() {
+        OpenedSession session = open(vet);
+
+        jdbc.update("UPDATE accounts SET status = 'PENDING' WHERE id = ?", vet);
 
         assertError(get("/api/test/whoami", session.accessToken()), HttpStatus.UNAUTHORIZED, "UNAUTHENTICATED");
     }
@@ -371,6 +469,78 @@ class AuthenticationIT {
         assertError(get("/api/test/branch", token), HttpStatus.FORBIDDEN, "ACCESS_DENIED_SCOPE_MISMATCH");
         assertError(get("/api/test/branch?branchId=" + branchA, token), HttpStatus.FORBIDDEN,
                 "ACCESS_DENIED_SCOPE_MISMATCH");
+    }
+
+    /**
+     * Ma trận 7 role qua DB + HTTP thật. Cột phạm vi là bản chép độc lập từ 04 nguyên tắc 8, 01 A02–A08 và
+     * docs/adr/0006, không đọc lại từ {@code AccountPrincipal}. Mỗi role chỉ có đúng một quyền {@code ROLE_<role>},
+     * không có kế thừa giữa role: ADMIN không có quyền của SUPER_MANAGER (01 A03 không tham gia nghiệp vụ phòng khám)
+     * và ngược lại.
+     */
+    @ParameterizedTest
+    @CsvSource({
+            "CUSTOMER,       OWNER",
+            "ADMIN,          CHAIN",
+            "SUPER_MANAGER,  CHAIN",
+            "BRANCH_MANAGER, BRANCH",
+            "RECEPTIONIST,   BRANCH",
+            "VET,            BRANCH",
+            "CARETAKER,      BRANCH"})
+    void eachRoleHasOnlyItsOwnAuthorityAndScope(String role, AccessScope scope) {
+        long account = switch (scope) {
+            case OWNER -> customerAccount();
+            case CHAIN -> staff(role, null);
+            case BRANCH -> staff(role, branchA);
+        };
+        String token = open(account).accessToken();
+
+        assertThat(getList("/api/test/authorities", token)).containsExactly("ROLE_" + role);
+        assertAllowedOnlyFor("/api/test/admin-only", token, role, "ADMIN");
+        assertAllowedOnlyFor("/api/test/super-manager-only", token, role, "SUPER_MANAGER");
+
+        switch (scope) {
+            case CHAIN -> {
+                assertThat(getLong("/api/test/branch?branchId=" + branchB, token)).isEqualTo(branchB);
+                assertThat(getLong("/api/test/branch", token)).isNull();
+            }
+            case BRANCH -> {
+                assertThat(getLong("/api/test/branch", token)).isEqualTo(branchA);
+                assertError(get("/api/test/branch?branchId=" + branchB, token), HttpStatus.FORBIDDEN,
+                        "ACCESS_DENIED_SCOPE_MISMATCH");
+            }
+            case OWNER -> {
+                assertError(get("/api/test/branch", token), HttpStatus.FORBIDDEN, "ACCESS_DENIED_SCOPE_MISMATCH");
+                assertError(get("/api/test/branch?branchId=" + branchA, token), HttpStatus.FORBIDDEN,
+                        "ACCESS_DENIED_SCOPE_MISMATCH");
+            }
+        }
+    }
+
+    /** Role đọc từ DB mỗi request nên quyết định {@code @PreAuthorize} đổi theo ngay, cả hai chiều. */
+    @Test
+    void roleChangeChangesAuthorizationOnNextRequest() {
+        String token = open(vet).accessToken();
+        assertError(get("/api/test/admin-only", token), HttpStatus.FORBIDDEN, "ACCESS_DENIED");
+
+        jdbc.update("UPDATE accounts SET role = 'ADMIN' WHERE id = ?", vet);
+        assertThat(getText("/api/test/admin-only", token).getStatusCode()).isEqualTo(HttpStatus.OK);
+
+        jdbc.update("UPDATE accounts SET role = 'VET' WHERE id = ?", vet);
+        assertError(get("/api/test/admin-only", token), HttpStatus.FORBIDDEN, "ACCESS_DENIED");
+    }
+
+    /**
+     * BR-QT-03: A05–A08 thuộc đúng một chi nhánh. Nhân viên thiếu dòng {@code staff_profiles} (LEFT JOIN trả
+     * {@code branch_id} NULL) là dữ liệu sai: truy vấn theo chi nhánh lỗi 500, không bao giờ coi là toàn chuỗi.
+     */
+    @Test
+    void branchStaffWithoutStaffProfileNeverGetsChainWideData() {
+        String token = open(staffWithoutProfile("RECEPTIONIST")).accessToken();
+
+        assertThat(get("/api/test/whoami", token).getBody()).containsEntry("branchId", null);
+        assertError(get("/api/test/branch", token), HttpStatus.INTERNAL_SERVER_ERROR, "INTERNAL_ERROR");
+        assertError(get("/api/test/branch?branchId=" + branchB, token), HttpStatus.INTERNAL_SERVER_ERROR,
+                "INTERNAL_ERROR");
     }
 
     @Test
@@ -441,6 +611,44 @@ class AuthenticationIT {
         assertThat(lastSeen(vet)).isEqualTo(T0.plusSeconds(61));
     }
 
+    /**
+     * docs/adr/0003 (BR-TN-06): ghi {@code last_seen_at} dùng {@code FOR UPDATE SKIP LOCKED}, nên khi dòng
+     * {@code accounts} đang bị transaction khác khóa (khóa tài khoản, đổi mật khẩu…) request không phải chờ mà bỏ qua
+     * lần ghi đó. Hết khóa thì ghi bình thường.
+     */
+    @Test
+    void lastSeenUpdateNeverBlocksRequestWhenAccountRowIsLocked() throws Exception {
+        String token = open(vet).accessToken();
+        CountDownLatch locked = new CountDownLatch(1);
+        CountDownLatch release = new CountDownLatch(1);
+        ExecutorService pool = Executors.newFixedThreadPool(2);
+        Future<?> holder = pool.submit(() -> tx.executeWithoutResult(status -> {
+            jdbc.queryForObject("SELECT id FROM accounts WHERE id = ? FOR UPDATE", Long.class, vet);
+            locked.countDown();
+            try {
+                release.await(30, TimeUnit.SECONDS);
+            } catch (InterruptedException ex) {
+                Thread.currentThread().interrupt();
+            }
+        }));
+        try {
+            assertThat(locked.await(10, TimeUnit.SECONDS)).as("row lock acquired").isTrue();
+
+            Future<ResponseEntity<Map<String, Object>>> call = pool.submit(() -> get("/api/test/whoami", token));
+
+            assertThat(call.get(5, TimeUnit.SECONDS).getStatusCode()).isEqualTo(HttpStatus.OK);
+            assertThat(lastSeen(vet)).isNull();
+        } finally {
+            release.countDown();
+            holder.get(30, TimeUnit.SECONDS);
+            pool.shutdown();
+            assertThat(pool.awaitTermination(30, TimeUnit.SECONDS)).isTrue();
+        }
+
+        get("/api/test/whoami", token);
+        assertThat(lastSeen(vet)).isEqualTo(T0);
+    }
+
     @Test
     void customerLastSeenNotRecorded() {
         get("/api/test/whoami", open(customer).accessToken());
@@ -501,6 +709,23 @@ class AuthenticationIT {
         return response.getBody();
     }
 
+    private List<String> getList(String path, String token) {
+        ResponseEntity<List<String>> response = http.exchange(path, HttpMethod.GET, new HttpEntity<>(bearer(token)),
+                new ParameterizedTypeReference<>() {
+                });
+        assertThat(response.getStatusCode()).isEqualTo(HttpStatus.OK);
+        return response.getBody();
+    }
+
+    /** 200 khi {@code role} đúng là {@code allowedRole}, ngược lại 403 {@code ACCESS_DENIED}. */
+    private void assertAllowedOnlyFor(String path, String token, String role, String allowedRole) {
+        if (role.equals(allowedRole)) {
+            assertThat(getText(path, token).getStatusCode()).as("%s as %s", path, role).isEqualTo(HttpStatus.OK);
+        } else {
+            assertError(get(path, token), HttpStatus.FORBIDDEN, "ACCESS_DENIED");
+        }
+    }
+
     private static HttpHeaders bearer(String token) {
         HttpHeaders headers = new HttpHeaders();
         if (token != null) {
@@ -524,6 +749,17 @@ class AuthenticationIT {
         return value == null ? null : value.toInstant();
     }
 
+    private boolean sessionExists(OpenedSession session) {
+        return jdbc.queryForObject("SELECT count(*) FROM sessions WHERE id = ?", Long.class,
+                session.sessionId()) == 1;
+    }
+
+    private Instant sessionTime(OpenedSession session, String column) {
+        java.sql.Timestamp value = jdbc.queryForObject("SELECT " + column + " FROM sessions WHERE id = ?",
+                java.sql.Timestamp.class, session.sessionId());
+        return value == null ? null : value.toInstant();
+    }
+
     private String email(long accountId) {
         return jdbc.queryForObject("SELECT email FROM accounts WHERE id = ?", String.class, accountId);
     }
@@ -544,6 +780,15 @@ class AuthenticationIT {
         jdbc.update("INSERT INTO staff_profiles (account_id, full_name, branch_id) VALUES (?, 'Nhân viên IT', ?)",
                 id, branchId);
         return id;
+    }
+
+    /** Tài khoản nhân viên thiếu dòng {@code staff_profiles} — dữ liệu sai, chỉ dùng để kiểm hành vi phòng thủ. */
+    private long staffWithoutProfile(String role) {
+        return jdbc.queryForObject("""
+                INSERT INTO accounts (email, phone, password_hash, role, status)
+                VALUES (?, '0900000000', 'hash', ?, 'ACTIVE') RETURNING id
+                """, Long.class, "auth-it-np-" + SEQ.incrementAndGet() + "-" + UUID.randomUUID() + "@petcare.test",
+                role);
     }
 
     private long customerAccount() {

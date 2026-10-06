@@ -14,7 +14,10 @@ import org.springframework.context.annotation.Configuration;
 @Configuration
 public class TimeConfig {
 
-    public static final ZoneId BUSINESS_ZONE = ZoneId.of("Asia/Ho_Chi_Minh");
+    /** Dạng chuỗi cho chỗ cần hằng số lúc biên dịch, ví dụ {@code @Scheduled(zone = ...)} (docs/adr/0007). */
+    public static final String BUSINESS_ZONE_ID = "Asia/Ho_Chi_Minh";
+
+    public static final ZoneId BUSINESS_ZONE = ZoneId.of(BUSINESS_ZONE_ID);
 
     @Bean
     public Clock clock() {

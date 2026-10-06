@@ -15,6 +15,7 @@ import com.petcare.module.identity.entity.Session;
  * {@code flushAutomatically} đẩy thay đổi đang chờ của use case xuống DB trước UPDATE hàng loạt. <b>Không</b>
  * {@code clearAutomatically}: clear sẽ detach entity mà use case đã nạp (ví dụ {@code Account} khi đổi mật khẩu),
  * làm thay đổi sau lời gọi revoke mất âm thầm. Không cần clear vì việc đọc phiên ({@link #findAuthView}) luôn đọc DB.
+ * Phiên hết hạn quá thời gian lưu bị job xóa bằng {@link #deleteExpiredBefore} (docs/adr/0008).
  */
 public interface SessionRepository extends JpaRepository<Session, Long> {
 
@@ -51,4 +52,19 @@ public interface SessionRepository extends JpaRepository<Session, Long> {
             """)
     int revokeAllByAccountExcept(@Param("accountId") Long accountId, @Param("keepSessionId") Long keepSessionId,
             @Param("now") Instant now);
+
+    /**
+     * Một lô của job dọn phiên (docs/adr/0008). Điều kiện chỉ theo {@code expires_at}: phiên đã hủy cũng có
+     * {@code expires_at ≤ created_at + session.ttl_hours}. {@code SKIP LOCKED}: không chờ dòng mà use case khác đang khóa
+     * (các câu revoke ở trên cũng chạm dòng đã hết hạn chưa hủy), nên không thể có chu trình deadlock; dòng bị bỏ qua
+     * được xóa ở lượt sau. Native vì JPQL không có {@code LIMIT}/{@code SKIP LOCKED} trong subquery.
+     */
+    @Modifying
+    @Query(value = """
+            DELETE FROM sessions WHERE id IN (
+                SELECT id FROM sessions WHERE expires_at < :cutoff
+                ORDER BY id LIMIT :limit
+                FOR UPDATE SKIP LOCKED)
+            """, nativeQuery = true)
+    int deleteExpiredBefore(@Param("cutoff") Instant cutoff, @Param("limit") int limit);
 }

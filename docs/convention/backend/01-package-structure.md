@@ -18,10 +18,11 @@ com.petcare
         ├── controller/ service/ repository/ entity/ dto/
         ├── mapper/           # MapStruct interface
         ├── fsm/              # {Entity}TransitionHandler — chỉ khi đối tượng có bảng trong 03-state-machines.md
+        ├── job/              # {Việc}Job — job định kỳ @Scheduled, gọi service (ADR-0007)
         └── exception/        # CHỈ khi thỏa tiêu chí ở 04-exception-handling.md §4.2
 ```
 
-`platform/` hiện có gì: `docs/architecture/system-overview.md` §3. Chưa có: JWT/RBAC/phạm vi chi nhánh, gửi `notification_outbox`, job `@Scheduled`.
+`platform/` hiện có gì: `docs/architecture/system-overview.md` §3 (gồm xác thực JWT/RBAC/phạm vi chi nhánh và `SchedulingConfig` bật `@Scheduled`). Chưa có: gửi `notification_outbox`, job ST.
 
 ## Module
 

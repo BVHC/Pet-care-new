@@ -6,7 +6,8 @@ Code và định danh viết tiếng Anh; tài liệu, message trả client và 
 
 | Đối tượng | Quy tắc | Ví dụ |
 |---|---|---|
-| Package con trong module | Số ít, chuẩn Spring Boot | `controller`, `service`, `repository`, `entity`, `dto`, `mapper`, `fsm`, `exception` |
+| Package con trong module | Số ít, chuẩn Spring Boot | `controller`, `service`, `repository`, `entity`, `dto`, `mapper`, `fsm`, `job`, `exception` |
+| Job định kỳ | `{Việc}Job`, method `run()`; property `app.jobs.<việc-kebab>.*`, record `{Việc}Properties`; mã log `<VIỆC>` / `<VIỆC>_FAILED` (ADR-0007) | `SessionCleanupJob`, `app.jobs.session-cleanup.cron`, `SESSION_CLEANUP` |
 | Entity | Tên model ở `04-domain-model.md` (PascalCase), **không hậu tố `Entity`**. Bảng tương ứng: erd §12 | `Appointment`, `Visit`, `CashierShift` |
 | Entity của `platform/` | Được thêm hậu tố `Entity` để không trùng tên khái niệm | `AuditLogEntity` |
 | Enum trạng thái / loại | `{Entity}Status`, `{Entity}{Thuộc tính}`; hằng số là mã ASCII của erd | `AppointmentStatus.NO_SHOW`, `CareTaskType.VACCINE_DUE` |

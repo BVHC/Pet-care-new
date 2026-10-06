@@ -41,8 +41,9 @@ Khi DB chặn, `GlobalExceptionHandler` trả 409 `CONCURRENCY_CONFLICT` với m
 
 ## 7.4. Job định kỳ (ST01–ST20)
 
-- **Chưa có job nào.** Job chạy không có người đăng nhập: audit ghi actor là hệ thống ([08](08-logging-and-audit.md)); thời gian lấy từ bean `Clock`.
-- Job xử lý nhiều bản ghi (ST05 chuyển `NO_SHOW`, ST15 `OVERDUE`, ST02 dọn tài khoản `PENDING`…) được phép tách transaction theo từng bản ghi hoặc từng lô thay vì bao cả lượt chạy, để một bản ghi lỗi không rollback cả lượt và không giữ khóa lâu. Mỗi bản ghi vẫn là một use case trọn vẹn (gồm cả hệ quả liên aggregate). Cách chia, lịch chạy và việc chống chạy trùng khi có nhiều instance ghi vào ADR khi cài job đầu tiên.
+- Cơ chế đã chốt ở [ADR-0007](../../adr/0007-scheduled-jobs.md): `@Scheduled` (bật ở `platform/config/SchedulingConfig`), job ở `module/<m>/job/{Việc}Job`, cron `app.jobs.<job>.cron` theo giờ Việt Nam (`"-"` để tắt, profile test tắt hết), giả định một instance nên job phải idempotent. Job hiện có: `identity/job/SessionCleanupJob` ([ADR-0008](../../adr/0008-session-cleanup.md)). Chưa có job ST nào.
+- Job chạy không có người đăng nhập: audit ghi actor là hệ thống ([08](08-logging-and-audit.md)); thời gian lấy từ bean `Clock`.
+- Job xử lý nhiều bản ghi (ST05 chuyển `NO_SHOW`, ST15 `OVERDUE`, ST02 dọn tài khoản `PENDING`…) tách transaction theo từng bản ghi hoặc từng lô ở service, không bao cả lượt chạy (job **không** `@Transactional`), để một bản ghi lỗi không rollback cả lượt và không giữ khóa lâu. Mỗi bản ghi vẫn là một use case trọn vẹn (gồm cả hệ quả liên aggregate). Lỗi được log và xử lý bù ở lượt sau.
 
 ---
 

@@ -18,7 +18,7 @@ import com.petcare.platform.security.JwtTokenService;
 /**
  * Mở và hủy phiên đăng nhập (docs/adr/0003). Mọi hàm chạy trong transaction của use case gọi tới (đăng nhập,
  * đăng xuất, đổi/đặt lại mật khẩu, khóa, vô hiệu hóa) nên đặt {@code MANDATORY}. Hủy phiên chỉ đặt
- * {@code revoked_at}; phiên không bao giờ bị xóa.
+ * {@code revoked_at}; dòng hết hạn quá thời gian lưu do {@link SessionCleanupService} xóa (docs/adr/0008).
  */
 @Service
 public class SessionService {

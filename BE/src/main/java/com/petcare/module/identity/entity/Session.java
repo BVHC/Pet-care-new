@@ -17,7 +17,8 @@ import lombok.NoArgsConstructor;
 /**
  * Bảng {@code sessions} (erd §1, PART của Account). Mỗi access token gắn với đúng một phiên: {@code id} là claim
  * {@code sid}, {@code tokenHash} = SHA-256 của claim {@code jti} (docs/adr/0003); không lưu token gốc. Hủy phiên chỉ
- * đặt {@code revokedAt}, không xóa (04 nguyên tắc 2). {@code expiresAt} chốt lúc tạo theo [CFG] (BR-QT-13).
+ * đặt {@code revokedAt}; dòng hết hạn quá thời gian lưu bị job xóa (docs/adr/0008). {@code expiresAt} chốt lúc tạo
+ * theo [CFG] (BR-QT-13).
  */
 @Getter
 @Entity

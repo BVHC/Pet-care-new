@@ -64,6 +64,8 @@ services:
       MAIL_USERNAME: ${MAIL_USERNAME:-}
       MAIL_PASSWORD: ${MAIL_PASSWORD:-}
       CORS_ALLOWED_ORIGINS: ${CORS_ALLOWED_ORIGINS:-http://localhost:3000}
+      # Lịch job dọn phiên (docs/adr/0008); mặc định trùng application.yml.
+      APP_JOBS_SESSION_CLEANUP_CRON: ${SESSION_CLEANUP_CRON:-0 0 3 * * *}
     ports:
       - "8080:8080"
     depends_on:

@@ -1,14 +1,14 @@
 # System Overview — trạng thái kỹ thuật thực tế
 
 > Mô tả **codebase hiện có**, không phải thiết kế mục tiêu. Nghiệp vụ xem `docs/01`–`05` (tra qua `docs/INDEX.md`); quy ước code xem `docs/convention/backend/`.
-> Cập nhật: 2026-10-05, trên commit `2415a0b` (nhánh `manh`) + xác thực JWT/phiên, phân quyền, phạm vi chi nhánh, đọc [CFG] (ADR-0003, ADR-0004), path public ẩn danh (ADR-0005), phạm vi khách (ADR-0006); chưa commit. Khi thêm module, hạ tầng hoặc migration, sửa mục 3, 4 và 5.
+> Cập nhật: 2026-10-06, trên commit `40a0ab2` (nhánh `manh`): xác thực JWT/phiên, phân quyền, phạm vi chi nhánh, đọc [CFG] (ADR-0003, ADR-0004), path public ẩn danh (ADR-0005), phạm vi khách (ADR-0006); chưa commit: job định kỳ (ADR-0007) và dọn phiên (ADR-0008). Khi thêm module, hạ tầng hoặc migration, sửa mục 3, 4 và 5.
 
 ## 1. Tóm tắt
 
 | Phần | Trạng thái |
 |---|---|
 | Đặc tả | v16, đầy đủ ở `docs/01`–`05`; hợp đồng giữa module `docs/06-module-contracts.md`; hợp đồng FE↔BE `docs/api/` |
-| Backend | Tầng `platform/` (config, exception, FSM base, envelope, security, audit). Module `identity` mới có hạ tầng xác thực (phiên, principal, BR-TK-17) và đọc [CFG]; `module/*/api/` của 11 module là interface hợp đồng (06), chưa có implementation. **Chưa có controller nghiệp vụ nào** |
+| Backend | Tầng `platform/` (config, exception, FSM base, envelope, security, audit). Module `identity` mới có hạ tầng xác thực (phiên, principal, BR-TK-17), đọc [CFG] và job dọn phiên (job `@Scheduled` đầu tiên, ADR-0007/0008); `module/*/api/` của 11 module là interface hợp đồng (06), chưa có implementation. **Chưa có controller nghiệp vụ nào** |
 | Database | `V1__init_schema.sql`: đủ 55 bảng của erd. `V2__seed_system_configs.sql`: 52 tham số [CFG] (mục 4b). Chưa seed `notification_templates`, ADMIN đầu tiên |
 | Frontend | Dựng theo đặc tả cũ. Màn hình nhân viên chạy trên dữ liệu giả trong trình duyệt, chưa gọi BE thật |
 
@@ -26,8 +26,8 @@ Trình duyệt ──► FE (Vite :5173 khi dev | nginx :3000 trong Docker, /api
 | Môi trường | Cách chạy | BE port | Profile | DB |
 |---|---|---|---|---|
 | Dev | `docker compose up -d postgres redis` + `mvn spring-boot:run` (trong `BE/`) | `8081` (`SERVER_PORT`) | default | `${DB_HOST:localhost}:${DB_PORT:5432}/${DB_NAME:petcare}`, `postgres/123456`, Flyway bật, `ddl-auto=validate` |
-| Docker | `docker compose up -d --build` | `8080` | `docker` | `postgres:5432/petcare`; log JSON; biến lấy từ `.env` gốc (mẫu `.env.example`). **`JWT_SECRET` không có mặc định**: thiếu `.env` thì mọi lệnh `docker compose`, kể cả chỉ dựng postgres/redis ở dòng Dev, đều dừng |
-| Test | `mvn test` / `mvn verify` | — | `test` | **Testcontainers** `postgres:17` (`com.petcare.TestcontainersConfiguration`, `@ServiceConnection`): DB sạch mỗi lần chạy, Flyway áp migration thật, `ddl-auto=validate`. **Cần Docker đang chạy.** Surefire/Failsafe ép JVM `Asia/Ho_Chi_Minh` |
+| Docker | `docker compose up -d --build` | `8080` | `docker` | `postgres:5432/petcare`; log JSON; biến lấy từ `.env` gốc (mẫu `.env.example`). **`JWT_SECRET` không có mặc định**: thiếu `.env` thì mọi lệnh `docker compose`, kể cả chỉ dựng postgres/redis ở dòng Dev, đều dừng. Lịch job dọn phiên: `SESSION_CLEANUP_CRON` (mặc định `0 0 3 * * *`) |
+| Test | `mvn test` / `mvn verify` | — | `test` | **Testcontainers** `postgres:17` (`com.petcare.TestcontainersConfiguration`, `@ServiceConnection`): DB sạch mỗi lần chạy, Flyway áp migration thật, `ddl-auto=validate`. **Cần Docker đang chạy.** Surefire/Failsafe ép JVM `Asia/Ho_Chi_Minh`. `application-test.yml` đặt cron mọi job là `"-"`: không job nào tự chạy |
 
 Stack: Java 21, Spring Boot 3.5.15, Spring Security, Data JPA, Validation, AOP, Actuator, Mail, Redis, springdoc-openapi, Flyway, jjwt, MapStruct, Lombok, logstash-logback-encoder. Test: JUnit 5, Mockito, spring-security-test, Testcontainers 1.21.4. Flyway 11.7.2.
 
@@ -50,6 +50,8 @@ Stack: Java 21, Spring Boot 3.5.15, Spring Security, Data JPA, Validation, AOP, 
 | Phạm vi chi nhánh | `platform/security/BranchScope`, `AccessScope` | ADR-0003, ADR-0006. `SecurityPrincipal.accessScope()`: `CHAIN` (ADMIN, SUPER_MANAGER), `BRANCH` (A05–A08), `OWNER` (CUSTOMER). Service tự gọi với dữ liệu có `branch_id`: `resolve(requested)` (BRANCH → chi nhánh của mình, khác → 403; CHAIN → giữ nguyên, `null` = toàn chuỗi), `check(resourceBranchId)` (BRANCH: khác hoặc `null` → 403); OWNER luôn 403 — dữ liệu của khách lọc theo chủ sở hữu (convention 02). `current()` lấy principal |
 | Module identity — xác thực | `module/identity/entity/{Account, AccountStatus, StaffProfile, Session}`, `repository/{AccountRepository, SessionRepository, SessionAuthView}`, `service/{AccountPrincipal, SessionAuthenticationService, SessionService, JtiHasher}`, `controller/{MustChangePasswordInterceptor, IdentityWebConfig}` | Package `identity` (06 §2). Một query JOIN `sessions`+`accounts`+`staff_profiles` mỗi request; phiên hợp lệ khi khớp `sub`, `token_hash = SHA-256(jti)`, chưa hủy, chưa hết hạn, `ACTIVE`, không khóa (không xét `locked_until`). Role/chi nhánh/cờ đổi mật khẩu đọc từ DB mỗi request. `SessionService.open/revoke/revokeAll/revokeOthers` (`MANDATORY`; UPDATE hàng loạt có flush nhưng không clear persistence context, để không detach entity của use case gọi tới). Nhân viên: `last_seen_at` ghi tối đa 1 lần/60 giây, `FOR UPDATE SKIP LOCKED` (BR-TN-06). Interceptor BR-TK-17 cho `/api/**`, miễn `GET /api/me`, `POST /api/me/password`, `POST /api/auth/logout` (path public không bao giờ có principal, ADR-0005). Entity chỉ mới đọc; chuyển trạng thái tài khoản làm ở task TK/QT sau |
 | Module identity — [CFG] | `module/identity/api/{ConfigKey, ConfigValueType, SystemConfigApi}`, `entity/SystemConfig`, `repository/SystemConfigRepository`, `service/SystemConfigService` | ADR-0004. `SystemConfigApi.getInt/getDecimal/getBool/getTime(ConfigKey)`, sai kiểu → `IllegalArgumentException`. Cache trong bộ nhớ, nạp lúc khởi động và fail-fast (thiếu khóa, sai kiểu, không parse được, ngoài min–max → app dừng). `reload()` cho task UC10. Thêm tham số = hằng `ConfigKey` + migration mới |
+| Job định kỳ | `platform/config/SchedulingConfig` (`@EnableScheduling`), `TimeConfig.BUSINESS_ZONE_ID` | ADR-0007. Scheduler mặc định 1 thread, giả định một instance, job idempotent. Job ở `module/<m>/job/{Việc}Job`, cron `app.jobs.<job>.cron` theo giờ VN, `"-"` tắt (profile test tắt hết). Transaction theo lô ở service; lỗi log `<JOB>_FAILED`, không ném |
+| Module identity — dọn phiên | `module/identity/job/{SessionCleanupJob, SessionCleanupProperties}`, `service/SessionCleanupService`, `SessionRepository.deleteExpiredBefore` | ADR-0008. 03:00 hằng ngày xóa `sessions` có `expires_at < now − 30 ngày` (phủ cả phiên đã hủy), lô 1000, mỗi lô một transaction, `FOR UPDATE SKIP LOCKED` để không deadlock với revoke. Không audit. Property `app.jobs.session-cleanup.{cron, retention-days, batch-size}`; Docker: `SESSION_CLEANUP_CRON` |
 | Hợp đồng module | `module/<11 module>/api/` | Interface, record, enum, sự kiện theo `docs/06-module-contracts.md`; ngoài identity (`SystemConfigApi`) chưa có implementation |
 | Logging | `resources/logback-spring.xml` | Profile `docker` log JSON (Logstash); profile khác log dạng chữ kèm `[traceId]` |
 | Audit | `platform/audit/AuditRecorder`, `AuditEntry`, `AuditPrincipal`, `AuditLogEntity`, `AuditLogRepository` | Điểm duy nhất ghi `audit_logs` (ADR-0001, convention 08 §8.2–8.3). `record()` `MANDATORY` (cùng tx nghiệp vụ); `recordIndependently()` `REQUIRES_NEW` chỉ cho sự kiện thất bại, ghi lỗi thì log `AUDIT_WRITE_FAILED`. Snapshot là record/Map, cấm entity và khóa nhạy cảm. Actor lấy từ principal `AuditPrincipal` (TK phải implement), không có → hệ thống. Repository chỉ có `save` |
@@ -57,10 +59,11 @@ Stack: Java 21, Spring Boot 3.5.15, Spring Security, Data JPA, Validation, AOP, 
 
 Test hiện có (`BE/src/test/java/com/petcare/`):
 - `PetcareApplicationTests` (`contextLoads` trên Testcontainers: chứng minh Flyway + `validate` khởi động được).
-- `SchemaMigrationIT` (Failsafe, `mvn verify`): đối chiếu catalog với erd/03 — đủ 55 bảng, cột chung theo loại bảng, FK `RESTRICT`, `id` identity ALWAYS, enum `VARCHAR(30)` + mã ASCII, kiểu tiền/giờ/cân nặng/mã chứng từ, tập trạng thái của 15 cột = state machine; hành vi trigger audit, EXCLUDE lưu trú, phiếu thu 0đ.
+- `SchemaMigrationIT` (Failsafe, `mvn verify`): đối chiếu catalog với erd/03 — đủ 55 bảng, cột chung theo loại bảng, FK `RESTRICT`, `id` identity ALWAYS, enum `VARCHAR(30)` + mã ASCII, kiểu tiền/giờ/cân nặng/mã chứng từ, tập trạng thái của 15 cột = state machine; `sessions` có `token_hash` UNIQUE và index `(account_id) WHERE revoked_at IS NULL`; hành vi trigger audit, EXCLUDE lưu trú, phiếu thu 0đ.
 - `TestcontainersConfiguration`: `@Import` vào mọi `@SpringBootTest` cần DB.
 - `TraceIdFilterTest`, `GlobalExceptionHandlerTest`, `StateMachineBaseTest`, `SecurityConfigTest` (401 envelope, token rác không chạm DB, path public, CORS; `SessionAuthenticator` là mock).
-- Xác thực (ADR-0003): `platform/security/JwtTokenServiceTest`, `JwtAuthenticationFilterTest`, `BranchScopeTest`; `module/identity/service/AccountPrincipalTest`, `SessionAuthenticationServiceTest`, `SessionServiceTest`; `controller/MustChangePasswordInterceptorTest`; `module/identity/AuthenticationIT` (Failsafe, `RANDOM_PORT`, `Clock` dịch được, controller thăm dò trong test: phiên hợp lệ/hủy/hết hạn, khóa, vô hiệu hóa, khóa tạm, 403 role và 403 phạm vi, đổi role/điều chuyển có hiệu lực ngay, BR-TK-17, path public luôn ẩn danh kể cả khi còn cờ đổi mật khẩu, khách gọi phạm vi chi nhánh → 403, revoke không detach entity, `last_seen_at`, actor audit, path public, logout cần đăng nhập).
+- Xác thực (ADR-0003): `platform/security/JwtTokenServiceTest`, `JwtAuthenticationFilterTest`, `BranchScopeTest`; `module/identity/service/AccountPrincipalTest`, `SessionAuthenticationServiceTest`, `SessionServiceTest`; `controller/MustChangePasswordInterceptorTest`; `module/identity/AuthenticationIT` (Failsafe, `RANDOM_PORT`, `Clock` dịch được, controller thăm dò trong test: phiên hợp lệ/hủy/hết hạn, khóa, vô hiệu hóa, PENDING, khóa tạm, hủy phiên lần hai không ghi đè `revoked_at`; ma trận 7 role (đúng một quyền `ROLE_<role>`, không kế thừa quyền giữa role, phạm vi CHAIN/BRANCH/OWNER qua DB thật), 403 role và 403 phạm vi, nhân viên thiếu `staff_profiles` → 500 chứ không ra dữ liệu toàn chuỗi, đổi role/điều chuyển có hiệu lực ngay (cả quyết định `@PreAuthorize`), BR-TK-17, path public luôn ẩn danh kể cả khi còn cờ đổi mật khẩu, khách gọi phạm vi chi nhánh → 403, revoke không detach entity, `last_seen_at` (kể cả dòng `accounts` đang bị khóa: `SKIP LOCKED` không chặn request), actor audit, path public, logout cần đăng nhập).
+- Dọn phiên (ADR-0007, 0008): `module/identity/job/SessionCleanupJobTest` (mốc cắt, vòng lặp lô, lỗi không ném, MDC, zone/cron, job không `@Transactional`), `SessionCleanupPropertiesTest` (bind `application.yml`, fail-fast), `module/identity/SessionCleanupIT` (xóa đúng/giữ đúng, biên `<`, lô, lô lỗi giữ lô trước, `SKIP LOCKED`, không audit, profile test không lên lịch), `SessionCleanupScheduleIT` (có cron → `CronTask` được đăng ký), và 2 case trong `AuthenticationIT` (phiên sống vẫn dùng được, phiên đã hủy vẫn 401 trước/sau khi xóa).
 - [CFG] (ADR-0004): `module/identity/api/ConfigKeyTest`, `service/SystemConfigServiceTest`, `module/identity/SystemConfigIT` (seed V2 khớp bảng kỳ vọng chép độc lập).
 - `platform/audit/AuditRecorderTest` (validate entry, khóa nhạy cảm, actor, IP, ghi độc lập lỗi) và `AuditRecorderIT` (Failsafe, `RANDOM_PORT`: commit/rollback cùng tx, `MANDATORY` ngoài tx, `REQUIRES_NEW` sống sót khi tx ngoài rollback, không FK actor, có `RemoteIpValve`). `audit_logs` không xóa được nên mỗi IT đánh dấu bản ghi bằng `reason` UUID thay vì dọn bảng.
 - **`platform/fsm/FsmTransitionTestBase<S>`**: lớp cha bắt buộc cho test FSM. Lớp con khai báo `handler()`, `stateType()`, `expectedTransitions()`, `expectedInitialStates()`, chép độc lập từ bảng 03. Base tự sinh test cho mọi cặp from × to.
@@ -72,7 +75,7 @@ Test hiện có (`BE/src/test/java/com/petcare/`):
 | Endpoint TK/QT: đăng ký + OTP, đăng nhập/đăng xuất, mật khẩu, quản lý nhân viên, khóa/mở khóa, sửa [CFG] (UC10) | BR-TK, BR-QT; identity-v1 | Hạ tầng đã có (mục 3, ADR-0003/0004). Ràng buộc cho các task này ghi ở ADR-0003 *Hệ quả* và ADR-0004 *TBD* |
 | Màn hình xem audit (UC11) và gọi `AuditRecorder` ở từng thao tác | convention 08 §8.3; BR-QT-15, 16 | Hạ tầng ghi đã có (mục 3). UC11 cần repository đọc riêng trong module QT |
 | `notification_outbox` + gửi email/push và thử lại | ST20; erd §11 | Chưa có lớp gửi email nào. `notification_outbox.template_code` có FK tới `notification_templates`, nên phải seed mẫu trước khi ghi outbox |
-| Job định kỳ ST01–ST20 (tầng 1–2) | 01 mục B | Chưa có `@Scheduled` nào |
+| Job định kỳ ST01–ST20 (tầng 1–2) | 01 mục B | Hạ tầng và mẫu đã có (ADR-0007, job dọn phiên); chưa có job ST nào |
 | Seed `notification_templates`, ADMIN đầu tiên | BR-QT-14; erd L181–195; 06 §8 Q4 | Docs chưa có nội dung mẫu và cách tạo ADMIN đầu tiên — làm cùng TK/QT. (`system_configs` đã seed ở V2) |
 | Implementation của `module/<feature>/` | Bảng 2 của `docs/INDEX.md`; `docs/06-module-contracts.md` | Mới có `api/` (hợp đồng) của 11 module và phần hạ tầng của identity. Không làm module tầng 3 |
 | Cơ chế TTL/khóa đồng thời (quota khung giờ, sức chứa chuồng, trừ kho khi thu) | convention 07 nói thuộc `docs/architecture/` | **Chưa quyết định**: cần ADR trước khi cài |
@@ -109,6 +112,15 @@ Lỗi bất kỳ → GlobalExceptionHandler → ErrorResponse{success,errorCode,
 
 Hệ quả liên aggregate (Phụ lục của 03) chạy trong cùng transaction, do service của aggregate phát sự kiện điều phối. Module chỉ gọi module khác qua service; `platform/` không import `module/`.
 
+Job định kỳ (ADR-0007), không đi qua filter nên không có principal (audit ghi actor hệ thống):
+
+```
+Scheduler (1 thread, @Scheduled cron app.jobs.<job>.cron, zone Asia/Ho_Chi_Minh)
+  → {Việc}Job.run()  (module/<m>/job; không @Transactional; MDC traceId = job-<uuid>; thời điểm từ Clock)
+  → Service (@Transactional theo từng bản ghi / lô) → Repository
+Lỗi → log <JOB>_FAILED, không ném; lượt sau xử lý bù. Hết lượt → log INFO <JOB> kèm số bản ghi
+```
+
 ## 6. Frontend (`FE/`)
 
 - **Stack:** React 18, Vite, TypeScript, React Router 6, React Query 5, Zustand, react-hook-form + zod, Tailwind 4 + Radix, Vitest, Playwright.
@@ -133,10 +145,9 @@ Hệ quả liên aggregate (Phụ lục của 03) chạy trong cùng transaction
 |---|---|
 | `application*.yml` | Chỉ còn `jwt.secret` (đọc bởi `JwtProperties`); `access-token-ttl-min`, `refresh-token-ttl-days` đã xóa vì hạn phiên là [CFG] `session.ttl_hours` và không có refresh token (ADR-0003). `management.health.mail.enabled=false` cho tới khi có ST20 (SMTP chưa cấu hình làm health 503) — nhớ bật lại |
 | `FE/src/shared/api/axios.ts` | Khi 401 vẫn gọi `/api/auth/refresh` (không tồn tại, contract A1) và lưu `refresh_token`. Sửa khi nối FE với đăng nhập |
-| `sessions` | Phiên không bao giờ bị xóa (04 nguyên tắc 2), bảng chỉ tăng; dọn dữ liệu cần ADR mới |
 | `.github/workflows/ci.yml` | Bước `mvn flyway:migrate` không có plugin Flyway trong `pom.xml` → fail. Service Postgres và cờ `-Dflyway.*` giờ thừa (test dùng Testcontainers; runner GitHub có Docker). Trigger `main, develop` trong khi nhánh làm việc là `dev`. Lint chạy với `\|\| true` |
 | `BE/BE-TIMELINE.md` | Tiến độ của bản trước khi reset (25 module, `docs/00-requirements.md`), đã lỗi thời |
 | `docs/convention/backend/` | Đã cập nhật theo v16. Còn TBD, liệt kê ở `INDEX.md` của thư mục đó: tên command, cách trả cảnh báo không chặn, chiến lược khóa đồng thời |
-| `docs/api/`, `docs/diagrams/` | `docs/api/` có 12 contract v1 sinh từ `generator/`. `docs/diagrams/` đang trống. `docs/adr/` có ADR-0001 (audit), 0002 (IP client), 0003 (JWT + phiên, RBAC, phạm vi chi nhánh), 0004 (đọc [CFG]), 0005 (path public ẩn danh), 0006 (phạm vi khách) |
+| `docs/api/`, `docs/diagrams/` | `docs/api/` có 12 contract v1 sinh từ `generator/`. `docs/diagrams/` đang trống. `docs/adr/` có ADR-0001 (audit), 0002 (IP client), 0003 (JWT + phiên, RBAC, phạm vi chi nhánh), 0004 (đọc [CFG]), 0005 (path public ẩn danh), 0006 (phạm vi khách), 0007 (job định kỳ), 0008 (dọn phiên) |
 | `platform/model/CreatedAtEntity`, `TimestampedEntity` | `created_at`/`updated_at` do `@CreationTimestamp`/`@UpdateTimestamp` đặt theo giờ JVM, không qua bean `Clock` → test với `Clock.fixed` không điều khiển được các cột này |
 | `server.forward-headers-strategy: native` | Dải proxy tin cậy gồm cả gateway Docker `172.x`: ở dev (gọi thẳng `:8080`, hoặc browser trên host qua nginx) client giả được `X-Forwarded-For`. Môi trường thật: không publish 8080 hoặc thu hẹp `server.tomcat.remoteip.internal-proxies` (ADR-0002) |
