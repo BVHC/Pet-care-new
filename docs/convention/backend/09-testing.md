@@ -12,7 +12,7 @@ Repository CRUD thuần không bắt buộc test riêng. Một test: `mvn test -
 ## Môi trường
 
 - **Cần Docker đang chạy.** Test chạm DB khai báo `@ActiveProfiles("test")` và `@Import(TestcontainersConfiguration.class)`: mỗi lượt chạy có một container `postgres:17` sạch, Flyway áp migration thật, Hibernate `ddl-auto=validate`. Không dùng H2, không cần DB cục bộ.
-- Surefire/Failsafe ép JVM `-Duser.timezone=Asia/Ho_Chi_Minh`. Test không được dựa vào timezone JVM: thay bean `Clock` bằng `Clock.fixed(…, TimeConfig.BUSINESS_ZONE)` cho mọi rule phụ thuộc thời gian (hạn đặt 24h, cửa sổ check-in, OTP hết hạn…). Riêng `created_at`/`updated_at` do Hibernate đặt theo giờ JVM nên `Clock.fixed` không điều khiển được (system-overview §7).
+- Surefire/Failsafe ép JVM `-Duser.timezone=Asia/Ho_Chi_Minh`. Test không được dựa vào timezone JVM: thay bean `Clock` bằng `Clock.fixed(…, TimeConfig.BUSINESS_ZONE)` cho mọi rule phụ thuộc thời gian (hạn đặt 24h, cửa sổ check-in, OTP hết hạn…). `created_at`/`updated_at` do JPA Auditing đặt từ cùng bean `Clock` ([ADR-0015](../../adr/0015-entity-timestamps-from-clock.md)) nên cũng đi theo clock của test; dòng chèn bằng SQL lấy `DEFAULT now()` của DB.
 - `audit_logs` không xóa được (trigger BR-QT-16), nên IT không dọn bảng này: mỗi test đánh dấu bản ghi của mình (ví dụ `reason` là UUID) rồi truy vấn theo dấu đó, như `AuditRecorderIT`.
 - Unit test của service dùng mock `AuditRecorder` và kiểm tra `AuditEntry` được truyền vào. IT gọi qua service có `@Transactional`, vì `record()` là `MANDATORY` và sẽ lỗi nếu gọi ngoài transaction.
 

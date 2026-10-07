@@ -419,7 +419,9 @@ class AuthenticationIT {
     void pendingAccountSessionRejected() {
         OpenedSession session = open(vet);
 
-        jdbc.update("UPDATE accounts SET status = 'PENDING' WHERE id = ?", vet);
+        // ck_accounts_pending_expiry (V5): PENDING phải có hạn xác thực
+        jdbc.update("UPDATE accounts SET status = 'PENDING', pending_expires_at = now() + interval '1 day' WHERE id = ?",
+                vet);
 
         assertError(get("/api/test/whoami", session.accessToken()), HttpStatus.UNAUTHORIZED, "UNAUTHENTICATED");
     }

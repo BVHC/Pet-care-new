@@ -21,7 +21,7 @@ VisitService.checkIn…()                      @Transactional — Visit#1
 ```
 
 - Bên bị kéo theo cung cấp method trên service của mình, qua interface trong `api/` khi khác module (`06-module-contracts.md` §1); bên phát sự kiện gọi tới. Không gọi thẳng repository của module khác ([01](01-package-structure.md)).
-- Thông báo email/in-app: INSERT vào `notification_outbox` trong cùng transaction, worker ST20 gửi sau (erd L1039). Rollback nghiệp vụ thì không có thông báo nào được gửi. Worker gửi **chưa có**; `notification_outbox.template_code` có FK nên phải seed `notification_templates` trước.
+- Thông báo email/in-app: INSERT vào `notification_outbox` trong cùng transaction, worker ST20 gửi sau (erd L1039). Rollback nghiệp vụ thì không có thông báo nào được gửi. Worker ST20 gửi email ([ADR-0012](../../adr/0012-notification-outbox-sender.md)) và giao thông báo IN_APP vào `notifications` ([ADR-0014](../../adr/0014-in-app-notification-delivery.md)); `notification_outbox.template_code` có FK nên phải seed `notification_templates` trước. Người nhận theo kênh và chống gửi trùng phía ghi: ADR-0012 và `06-module-contracts.md` §1.
 
 ### Hệ quả 1–n: sự kiện đồng bộ
 
@@ -56,12 +56,13 @@ Chiến lược khóa (pessimistic `FOR UPDATE`, advisory lock, optimistic `@Ver
 | Một lễ tân một ca `OPEN` | BR-TG-05 | Partial unique `cashier_id` | — |
 | Thú không trùng khung / không chồng ngày lưu trú | BR-LH-05, BR-LT-02 | Partial unique / `EXCLUDE` | — |
 | Một chuồng một thú | BR-LT-08 | Partial unique `kennel_id` | — |
+| Luồng OTP: quota gửi, bộ đếm sai, mã mới vô hiệu mã cũ | BR-TK-05, 06, 07 | Không (quota là phép đếm) | **Đã chốt — [ADR-0011](../../adr/0011-otp-flow-locking.md):** `SELECT … FOR UPDATE` dòng `accounts` trước mọi đọc/ghi `otp_tokens`; ST02 dùng `SKIP LOCKED` |
 
 Khi DB chặn, `GlobalExceptionHandler` trả 409 `CONCURRENCY_CONFLICT` với message chung. Service vẫn phải kiểm tra trước để trả đúng mã rule trong trường hợp thường ([06](06-validation.md)).
 
 ## 7.4. Job định kỳ (ST01–ST20)
 
-- Cơ chế đã chốt ở [ADR-0007](../../adr/0007-scheduled-jobs.md): `@Scheduled` (bật ở `platform/config/SchedulingConfig`), job ở `module/<m>/job/{Việc}Job`, cron `app.jobs.<job>.cron` theo giờ Việt Nam (`"-"` để tắt, profile test tắt hết), giả định một instance nên job phải idempotent. Job hiện có: `identity/job/SessionCleanupJob` ([ADR-0008](../../adr/0008-session-cleanup.md)). Chưa có job ST nào.
+- Cơ chế đã chốt ở [ADR-0007](../../adr/0007-scheduled-jobs.md): `@Scheduled` (bật ở `platform/config/SchedulingConfig`), job ở `module/<m>/job/{Việc}Job`, cron `app.jobs.<job>.cron` theo giờ Việt Nam (`"-"` để tắt, profile test tắt hết), giả định một instance nên job phải idempotent. Job hiện có: `identity/job/SessionCleanupJob` (dọn phiên, [ADR-0008](../../adr/0008-session-cleanup.md)), `identity/job/PendingAccountCleanupJob` (ST02, [ADR-0013](../../adr/0013-pending-account-cleanup.md)), `care/job/PriorityNotificationJob` + `NotificationOutboxJob` (ST20 email, [ADR-0012](../../adr/0012-notification-outbox-sender.md)), `care/job/InAppNotificationJob` (ST20 IN_APP, [ADR-0014](../../adr/0014-in-app-notification-delivery.md)), `care/job/NotificationOutboxCleanupJob` (dọn outbox đã xử lý, [ADR-0016](../../adr/0016-notification-outbox-cleanup.md)). Luồng NORMAL của ST20 xử lý theo lô trên một kết nối SMTP ([ADR-0017](../../adr/0017-notification-normal-lane-batching.md)). Scheduler 4 thread. Các ST khác chưa có.
 - Job chạy không có người đăng nhập: audit ghi actor là hệ thống ([08](08-logging-and-audit.md)); thời gian lấy từ bean `Clock`.
 - Job xử lý nhiều bản ghi (ST05 chuyển `NO_SHOW`, ST15 `OVERDUE`, ST02 dọn tài khoản `PENDING`…) tách transaction theo từng bản ghi hoặc từng lô ở service, không bao cả lượt chạy (job **không** `@Transactional`), để một bản ghi lỗi không rollback cả lượt và không giữ khóa lâu. Mỗi bản ghi vẫn là một use case trọn vẹn (gồm cả hệ quả liên aggregate). Lỗi được log và xử lý bù ở lượt sau.
 

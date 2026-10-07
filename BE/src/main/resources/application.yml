@@ -29,16 +29,28 @@ spring:
       port: ${REDIS_PORT:6379}
       timeout: 300ms
 
-  # Gmail SMTP. Chưa có code gửi mail; cấu hình giữ cho worker gửi notification_outbox (ST20).
-  # MAIL_PASSWORD phải là Gmail App Password (bật 2FA), không dùng mật khẩu Gmail thật.
+  # SMTP cho worker ST20 (docs/adr/0012). Mặc định trỏ Mailpit của docker-compose (dev, không xác thực, UI :8025).
+  # Gmail / nhà cung cấp thật: đặt MAIL_HOST, MAIL_PORT, MAIL_USERNAME, MAIL_PASSWORD, MAIL_SMTP_AUTH=true,
+  # MAIL_SMTP_STARTTLS=true (Gmail: MAIL_PASSWORD là App Password). Timeout bắt buộc: JavaMail mặc định chờ vô hạn,
+  # mà worker gửi trong transaction DB.
   mail:
-    host: ${MAIL_HOST:smtp.gmail.com}
-    port: ${MAIL_PORT:587}
+    host: ${MAIL_HOST:localhost}
+    port: ${MAIL_PORT:1025}
     username: ${MAIL_USERNAME:}
     password: ${MAIL_PASSWORD:}
     properties:
-      mail.smtp.auth: true
-      mail.smtp.starttls.enable: true
+      mail.smtp.auth: ${MAIL_SMTP_AUTH:false}
+      mail.smtp.starttls.enable: ${MAIL_SMTP_STARTTLS:false}
+      mail.smtp.connectiontimeout: ${MAIL_CONNECTION_TIMEOUT_MS:5000}
+      mail.smtp.timeout: ${MAIL_TIMEOUT_MS:10000}
+      mail.smtp.writetimeout: ${MAIL_WRITE_TIMEOUT_MS:10000}
+
+  # Scheduler @Scheduled (docs/adr/0007): 4 thread để 3 luồng ST20 (email HIGH, NORMAL — docs/adr/0012; IN_APP —
+  # docs/adr/0014) chạy song song với nhau và với job khác (ST02 tới 60 s); một job vẫn không chồng lên chính nó.
+  task:
+    scheduling:
+      pool:
+        size: 4
 
 # Khóa HS256 ký access token (platform/security/JwtProperties, docs/adr/0003), tối thiểu 32 byte.
 # Hạn phiên không cấu hình ở đây mà là tham số [CFG] session.ttl_hours; không có refresh token.
@@ -55,6 +67,37 @@ app:
       cron: "0 0 3 * * *"
       retention-days: 30
       batch-size: 1000
+    # Xóa tài khoản PENDING quá hạn — ST02 (docs/adr/0013). Hạn là [CFG] account.pending_ttl_hours, chốt lúc đăng ký.
+    pending-account-cleanup:
+      cron: "${PENDING_ACCOUNT_CLEANUP_CRON:0 */15 * * * *}"
+      batch-size: 200
+      time-budget: 60s
+      slow-warn: 1s
+    # ST20 từ notification_outbox. Email (docs/adr/0012): hai luồng priority (OTP, mật khẩu tạm) và thường.
+    # IN_APP (docs/adr/0014): giao vào bảng notifications, job riêng, không qua SMTP.
+    notification-outbox:
+      cron: "${NOTIFICATION_OUTBOX_CRON:*/10 * * * * *}"
+      priority-cron: "${NOTIFICATION_OUTBOX_PRIORITY_CRON:*/5 * * * * *}"
+      time-budget: 8s
+      priority-time-budget: 4s
+      max-attempts: 5
+      initial-backoff: 1m
+      mail-from: ${MAIL_FROM:no-reply@petcare.local}
+      lag-warn: 15m
+      lag-warn-priority: 60s
+      in-app-cron: "${NOTIFICATION_IN_APP_CRON:*/5 * * * * *}"
+      in-app-time-budget: 4s
+      lag-warn-in-app: 60s
+      # Luồng NORMAL gửi theo lô trên một kết nối SMTP (docs/adr/0017); budget tối đa 15s.
+      normal-batch-size: 20
+      normal-batch-send-budget: 10s
+    # Xóa dòng notification_outbox đã xử lý (docs/adr/0016): SENT sau 30 ngày, FAILED sau 90 ngày (tính từ created_at).
+    # 03:40 để không trùng dọn phiên (03:00) và các mốc 15 phút của ST02.
+    notification-outbox-cleanup:
+      cron: "${NOTIFICATION_OUTBOX_CLEANUP_CRON:0 40 3 * * *}"
+      sent-retention-days: 30
+      failed-retention-days: 90
+      batch-size: 1000
 
 server:
   port: ${SERVER_PORT:8081}
@@ -70,9 +113,3 @@ management:
   endpoint:
     health:
       show-details: when-authorized
-  health:
-    # Chưa có code gửi mail và MAIL_USERNAME/MAIL_PASSWORD mặc định trống: mail health indicator
-    # luôn DOWN, kéo /actuator/health xuống 503 và healthcheck Docker báo unhealthy.
-    # Bật lại khi có worker gửi notification_outbox (ST20).
-    mail:
-      enabled: false

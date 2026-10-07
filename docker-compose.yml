@@ -41,6 +41,17 @@ services:
       retries: 5
 
   # ===========================================
+  # Mailpit — SMTP giả cho dev (docs/adr/0012)
+  # ===========================================
+  # Nhận mọi email worker ST20 gửi, xem ở http://localhost:8025. Dùng SMTP thật thì đặt MAIL_* trong .env.
+  mailpit:
+    image: axllent/mailpit:latest
+    container_name: petcare-mailpit
+    ports:
+      - "1025:1025"
+      - "8025:8025"
+
+  # ===========================================
   # Backend API
   # ===========================================
   backend:
@@ -59,13 +70,25 @@ services:
       REDIS_PORT: 6379
       # Không có mặc định (application-docker.yml cũng vậy): thiếu thì compose dừng ngay.
       JWT_SECRET: ${JWT_SECRET:?JWT_SECRET chưa đặt - sao chép .env.example thành .env}
-      MAIL_HOST: ${MAIL_HOST:-smtp.gmail.com}
-      MAIL_PORT: ${MAIL_PORT:-587}
+      # SMTP của worker ST20 (docs/adr/0012). Mặc định Mailpit; Gmail / nhà cung cấp thật: đặt MAIL_* trong .env.
+      MAIL_HOST: ${MAIL_HOST:-mailpit}
+      MAIL_PORT: ${MAIL_PORT:-1025}
       MAIL_USERNAME: ${MAIL_USERNAME:-}
       MAIL_PASSWORD: ${MAIL_PASSWORD:-}
+      MAIL_SMTP_AUTH: ${MAIL_SMTP_AUTH:-false}
+      MAIL_SMTP_STARTTLS: ${MAIL_SMTP_STARTTLS:-false}
+      MAIL_FROM: ${MAIL_FROM:-no-reply@petcare.local}
       CORS_ALLOWED_ORIGINS: ${CORS_ALLOWED_ORIGINS:-http://localhost:3000}
       # Lịch job dọn phiên (docs/adr/0008); mặc định trùng application.yml.
       APP_JOBS_SESSION_CLEANUP_CRON: ${SESSION_CLEANUP_CRON:-0 0 3 * * *}
+      # Lịch ST02 dọn tài khoản PENDING quá hạn (docs/adr/0013); mặc định trùng application.yml.
+      PENDING_ACCOUNT_CLEANUP_CRON: ${PENDING_ACCOUNT_CLEANUP_CRON:-0 */15 * * * *}
+      # Lịch ba luồng ST20: email HIGH, NORMAL (docs/adr/0012), IN_APP (docs/adr/0014); mặc định trùng application.yml.
+      NOTIFICATION_OUTBOX_CRON: ${NOTIFICATION_OUTBOX_CRON:-*/10 * * * * *}
+      NOTIFICATION_OUTBOX_PRIORITY_CRON: ${NOTIFICATION_OUTBOX_PRIORITY_CRON:-*/5 * * * * *}
+      NOTIFICATION_IN_APP_CRON: ${NOTIFICATION_IN_APP_CRON:-*/5 * * * * *}
+      # Lịch dọn notification_outbox đã xử lý (docs/adr/0016); mặc định trùng application.yml.
+      NOTIFICATION_OUTBOX_CLEANUP_CRON: ${NOTIFICATION_OUTBOX_CLEANUP_CRON:-0 40 3 * * *}
     ports:
       - "8080:8080"
     depends_on:
@@ -73,6 +96,8 @@ services:
         condition: service_healthy
       redis:
         condition: service_healthy
+      mailpit:
+        condition: service_started
     healthcheck:
       test: ["CMD-SHELL", "wget --quiet --tries=1 --spider http://localhost:8080/actuator/health || exit 1"]
       interval: 30s

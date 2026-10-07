@@ -4,6 +4,8 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 import java.sql.SQLException;
+import java.sql.Timestamp;
+import java.time.Instant;
 import java.time.LocalDate;
 import java.util.HashMap;
 import java.util.LinkedHashMap;
@@ -121,8 +123,11 @@ class SchemaMigrationIT {
         List<Map<String, Object>> rows = jdbc.queryForList(
                 "SELECT version, success FROM flyway_schema_history WHERE version IS NOT NULL ORDER BY installed_rank");
 
-        // V1 schema, V2 seed system_configs (docs/adr/0004)
-        assertThat(rows).extracting(row -> row.get("version")).containsExactly("1", "2");
+        // V1 schema, V2 seed system_configs (docs/adr/0004), V3 seed mẫu OTP_REGISTER (06 §8 Q4),
+        // V4 index luồng gửi + câu chào OTP_REGISTER (docs/adr/0012), V5 hạn PENDING cho ST02 (docs/adr/0013),
+        // V6 index partial luồng IN_APP (docs/adr/0014), V7 index cho FK trỏ tới accounts (docs/adr/0018)
+        assertThat(rows).extracting(row -> row.get("version"))
+                .containsExactly("1", "2", "3", "4", "5", "6", "7");
         assertThat(rows).allSatisfy(row -> assertThat(row).containsEntry("success", true));
     }
 
@@ -282,6 +287,77 @@ class SchemaMigrationIT {
                 .anySatisfy(def -> assertThat(def).contains("(account_id)").contains("WHERE (revoked_at IS NULL)"));
     }
 
+    /**
+     * V5, erd §13 mục 12 (docs/adr/0013): {@code accounts.pending_expires_at} có giá trị ⇔ {@code PENDING}; index
+     * partial cho query của ST02; index {@code otp_tokens(account_id)} cho câu xóa và kiểm FK khi xóa tài khoản.
+     */
+    @Test
+    void accountsPendingExpiryIsSetExactlyForPendingAccounts() {
+        Timestamp expiry = Timestamp.from(Instant.parse("2026-11-01T00:00:00Z"));
+        assertThat(column("accounts.pending_expires_at").dataType()).isEqualTo("timestamp with time zone");
+
+        assertThatThrownBy(() -> customerAccount("PENDING", null))
+                .as("PENDING thiếu hạn").isInstanceOf(DataAccessException.class)
+                .satisfies(ex -> assertThat(sqlState(ex)).isEqualTo("23514"));
+        assertThatThrownBy(() -> customerAccount("ACTIVE", expiry))
+                .as("ACTIVE còn hạn").isInstanceOf(DataAccessException.class)
+                .satisfies(ex -> assertThat(sqlState(ex)).isEqualTo("23514"));
+        customerAccount("PENDING", expiry);
+        customerAccount("ACTIVE", null);
+
+        assertThat(jdbc.queryForList(
+                "SELECT indexdef FROM pg_indexes WHERE schemaname = 'public' AND tablename = 'accounts'", String.class))
+                .anySatisfy(def -> assertThat(def).contains("(pending_expires_at)")
+                        .contains("WHERE ((status)::text = 'PENDING'::text)"));
+        assertThat(jdbc.queryForList(
+                "SELECT indexdef FROM pg_indexes WHERE schemaname = 'public' AND tablename = 'otp_tokens'", String.class))
+                .anySatisfy(def -> assertThat(def).endsWith("(account_id)"));
+    }
+
+    /**
+     * V6, erd §13 mục 13 (docs/adr/0014): index partial cho luồng IN_APP của ST20 — chỉ dòng IN_APP chưa giao, để câu
+     * chọn không đọc qua tồn đọng email.
+     */
+    @Test
+    void notificationOutboxHasPartialIndexForInAppLane() {
+        assertThat(jdbc.queryForList("SELECT indexdef FROM pg_indexes WHERE schemaname = 'public' AND indexname = ?",
+                String.class, "ix_notification_outbox_in_app_due"))
+                .singleElement().asString()
+                .contains("ON public.notification_outbox")
+                .contains("(next_attempt_at, id)")
+                .contains("WHERE (((status)::text = 'PENDING'::text) AND ((channel)::text = 'IN_APP'::text))");
+    }
+
+    /**
+     * V7 (docs/adr/0018, nợ D009): mỗi cột FK trỏ tới {@code accounts} là cột đầu của một index mà câu kiểm FK
+     * ({@code WHERE <cột> = $1}) dùng được — index không partial, hoặc partial đúng {@code <cột> IS NOT NULL}. Thiếu thì
+     * xóa một tài khoản (ST02) quét toàn bảng đó. Chặn cả cột FK mới thêm sau này.
+     */
+    @Test
+    void everyForeignKeyToAccountsHasUsableIndex() {
+        List<String> foreignKeys = jdbc.queryForList("""
+                SELECT c.conrelid::regclass || '.' || a.attname
+                FROM pg_constraint c
+                JOIN pg_attribute a ON a.attrelid = c.conrelid AND a.attnum = c.conkey[1]
+                WHERE c.contype = 'f' AND c.confrelid = 'accounts'::regclass
+                """, String.class);
+        assertThat(foreignKeys).as("số cột FK trỏ tới accounts (V1: 43 cột ở 34 bảng)").hasSize(43);
+
+        List<String> unindexed = jdbc.queryForList("""
+                SELECT c.conrelid::regclass || '.' || a.attname
+                FROM pg_constraint c
+                JOIN pg_attribute a ON a.attrelid = c.conrelid AND a.attnum = c.conkey[1]
+                WHERE c.contype = 'f' AND c.confrelid = 'accounts'::regclass
+                  AND NOT EXISTS (
+                      SELECT 1 FROM pg_index i
+                      WHERE i.indrelid = c.conrelid AND i.indkey[0] = c.conkey[1]
+                        AND (i.indpred IS NULL
+                             OR pg_get_expr(i.indpred, i.indrelid) = '(' || a.attname || ' IS NOT NULL)'))
+                ORDER BY 1
+                """, String.class);
+        assertThat(unindexed).as("cột FK → accounts không có index dùng được cho phép kiểm FK").isEmpty();
+    }
+
     // ---------------------------------------------------------------- D6, D7, D10: hành vi ràng buộc
 
     @Test
@@ -353,6 +429,13 @@ class SchemaMigrationIT {
                 INSERT INTO accounts (email, phone, password_hash, role, status)
                 VALUES (?, '0900000000', 'hash', 'RECEPTIONIST', 'ACTIVE') RETURNING id
                 """, Long.class, "it-" + SEQ.incrementAndGet() + "@petcare.test");
+    }
+
+    private long customerAccount(String status, Timestamp pendingExpiresAt) {
+        return jdbc.queryForObject("""
+                INSERT INTO accounts (email, password_hash, role, status, pending_expires_at)
+                VALUES (?, 'hash', 'CUSTOMER', ?, ?) RETURNING id
+                """, Long.class, "it-" + SEQ.incrementAndGet() + "@petcare.test", status, pendingExpiresAt);
     }
 
     private long branch() {

@@ -24,8 +24,9 @@ import lombok.NoArgsConstructor;
 
 /**
  * Bảng {@code accounts} (erd §1, ROOT · SM #1). Tài khoản đăng nhập của khách và nhân viên; email là định danh duy
- * nhất (BR-TK-01). Khóa ({@code is_locked}) độc lập với {@code status} (BR-QT-11, 12). Chuyển trạng thái (đăng ký,
- * vô hiệu hóa, khóa…) làm ở các task TK/QT sau; hiện entity chỉ được đọc khi xác thực phiên.
+ * nhất (BR-TK-01). Khóa ({@code is_locked}) độc lập với {@code status} (BR-QT-11, 12). Đã có: đăng ký
+ * (Tài khoản#1), xác thực OTP (#2), xóa tài khoản {@code PENDING} quá hạn (#3, ST02 — xóa cứng bằng SQL ở
+ * {@code AccountRepository}); các chuyển trạng thái khác (vô hiệu hóa, khóa…) làm ở các task TK/QT sau.
  */
 @Getter
 @Entity
@@ -78,4 +79,35 @@ public class Account extends TimestampedEntity {
     @JdbcTypeCode(SqlTypes.JSON)
     @Column(name = "notification_settings", nullable = false)
     private Map<String, Object> notificationSettings = new HashMap<>();
+
+    /**
+     * Hạn xác thực của tài khoản {@code PENDING}, chốt lúc đăng ký (BR-TK-08, BR-QT-13); quá hạn thì ST02 xóa
+     * (docs/adr/0013). Có giá trị ⇔ {@code PENDING} (CHECK {@code ck_accounts_pending_expiry}).
+     */
+    @Column(name = "pending_expires_at")
+    private Instant pendingExpiresAt;
+
+    /**
+     * Tài khoản#1 — đăng ký: tài khoản khách {@code PENDING}. Không lưu SĐT: SĐT của khách nằm ở hồ sơ khách
+     * (BR-TK-01, CHECK {@code ck_accounts_phone_by_role}). {@code email} đã chuẩn hóa chữ thường.
+     * {@code pendingExpiresAt} = thời điểm đăng ký + {@code account.pending_ttl_hours} [CFG].
+     */
+    public static Account registerCustomer(String email, String passwordHash, Instant pendingExpiresAt) {
+        Account account = new Account();
+        account.email = email;
+        account.passwordHash = passwordHash;
+        account.role = Role.CUSTOMER;
+        account.status = AccountStatus.PENDING;
+        account.pendingExpiresAt = pendingExpiresAt;
+        return account;
+    }
+
+    /**
+     * Tài khoản#2 — xác thực OTP: {@code PENDING → ACTIVE}, bỏ hạn xác thực. Service đã gọi
+     * {@code validateTransition} trước.
+     */
+    public void verify() {
+        this.status = AccountStatus.ACTIVE;
+        this.pendingExpiresAt = null;
+    }
 }
