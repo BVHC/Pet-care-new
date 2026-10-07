@@ -23,7 +23,7 @@ com.petcare
         └── exception/        # CHỈ khi thỏa tiêu chí ở 04-exception-handling.md §4.2
 ```
 
-`platform/` hiện có gì: `docs/architecture/system-overview.md` §3 (gồm xác thực JWT/RBAC/phạm vi chi nhánh và `SchedulingConfig` bật `@Scheduled`). Chưa có: gửi `notification_outbox`, job ST.
+`platform/` hiện có gì: `docs/architecture/system-overview.md` §3 (gồm xác thực JWT/RBAC/phạm vi chi nhánh và `SchedulingConfig` bật `@Scheduled`). Job ST đã có: ST02 dọn tài khoản `PENDING` quá hạn (`identity/job`, ADR-0013), ST20 gửi email và giao thông báo IN_APP từ `notification_outbox` (`care/job`, ADR-0012, ADR-0014); các ST khác chưa có.
 
 ## Module
 

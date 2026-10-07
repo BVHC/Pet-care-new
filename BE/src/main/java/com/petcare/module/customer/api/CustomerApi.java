@@ -15,7 +15,13 @@ public interface CustomerApi {
      */
     boolean flagLinkDecisionIfPhoneMatches(Long accountId);
 
-    /** Tài khoản#3 (ST02): xóa hồ sơ online tạo kèm tài khoản PENDING quá hạn (BR-TK-08). */
+    /**
+     * Tài khoản#3 (ST02): xóa hồ sơ online tạo kèm tài khoản PENDING quá hạn (BR-TK-08). Identity đã khóa dòng
+     * {@code accounts} và xóa {@code otp_tokens}; xóa {@code accounts} sau lời gọi này. Phải {@code MANDATORY} và
+     * không có tác dụng nằm ngoài transaction ({@code REQUIRES_NEW}, {@code @Async}, {@code AFTER_COMMIT},
+     * {@code recordIndependently}): transaction lỗi thì ST02 làm lại ở lượt sau, tác dụng ngoài sẽ bị lặp
+     * (docs/adr/0013).
+     */
     void deleteOnlineProfileOfUnverifiedAccount(Long accountId);
 
     /**

@@ -35,7 +35,7 @@ paths:
     post:
       tags: [Auth]
       summary: "Đăng ký tài khoản"
-      description: "UC01 · BR-TK-01, 02, 03, 04, BR-KH-01. Actor: A01. Quyền: Public. Chuyển trạng thái: — → PENDING (Tài khoản#1); tạo hồ sơ online. Gửi OTP_REGISTER qua outbox."
+      description: "UC01 · BR-TK-01, 02, 03, 04, 05, 07, BR-KH-01. Actor: A01. Quyền: Public. Chuyển trạng thái: — → PENDING (Tài khoản#1); tạo hồ sơ online. Gửi OTP_REGISTER qua outbox (A8)."
       operationId: registerAccount
       security: []
       requestBody:
@@ -61,7 +61,13 @@ paths:
                     type: integer
                     description: "HTTP status của kết quả, ví dụ 200, 201"
         "400":
-          description: "`BR-TK-01` email đã được sử dụng · `BR-TK-02` chưa xác nhận ≥ 18 tuổi / điều khoản · `BR-TK-03` mật khẩu yếu"
+          description: "`BR-TK-01` email đã được sử dụng · `BR-TK-02` chưa xác nhận ≥ 18 tuổi / điều khoản · `BR-TK-03` mật khẩu yếu hoặc quá 72 byte · `BR-TK-07` email đã nhận quá 5 mã OTP/giờ [CFG]"
+          content:
+            "application/json":
+              schema:
+                $ref: "#/components/schemas/Error"
+        "409":
+          description: "`CONCURRENCY_CONFLICT` hai request đăng ký cùng email cùng lúc"
           content:
             "application/json":
               schema:
@@ -1599,7 +1605,7 @@ components:
           description: "Định danh duy nhất, lưu chữ thường (BR-TK-01)"
         password:
           type: string
-          description: "≥ 8 ký tự [CFG], có chữ và số (BR-TK-03)"
+          description: "≥ 8 ký tự [CFG], có chữ và số, ≤ 72 byte UTF-8 (BR-TK-03, ADR-0009)"
         fullName:
           type: string
           maxLength: 100

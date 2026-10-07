@@ -94,10 +94,13 @@ erDiagram
 | must_change_password | BOOLEAN | NN, DEFAULT false | BR-TK-17, BR-QT-10 |
 | last_seen_at | TIMESTAMPTZ | ? | Trạng thái online (BR-TN-06) |
 | notification_settings | JSONB | NN, DEFAULT '{}' | Cài đặt nhận thông báo của khách (UC88) [ERD] |
+| pending_expires_at | TIMESTAMPTZ | ? | Hạn xác thực của tài khoản `PENDING` = lúc đăng ký + `account.pending_ttl_hours` [CFG], chốt theo BR-QT-13; ST02 xóa khi `now >= pending_expires_at` (BR-TK-08). Xác thực thì về NULL [ERD] (V5, §13 mục 12) |
 
 - `CHECK ((role = 'CUSTOMER') = (phone IS NULL))` — nhân viên bắt buộc có SĐT, tài khoản khách không lưu SĐT (BR-TK-01)
 - `CHECK (status <> 'DISABLED' OR role <> 'CUSTOMER')` — chỉ nhân viên bị vô hiệu hóa (BR-QT-07)
-- Index: `(status, created_at)` cho ST02 dọn tài khoản `PENDING`
+- `CHECK ((status = 'PENDING') = (pending_expires_at IS NOT NULL))` — có hạn ⇔ `PENDING` (V5)
+- Index: `(status, created_at)` (V1, dự kiến cho ST02; từ V5 ST02 dùng index dưới, index này không còn query nào dùng)
+- Index: `(pending_expires_at) WHERE status = 'PENDING'` cho ST02 dọn tài khoản `PENDING` (V5)
 
 ### `staff_profiles` — PART của Account
 
@@ -125,6 +128,7 @@ Ràng buộc "A05–A08 phải có chi nhánh" kiểm tra ở ứng dụng vì `
 | revoked_at | TIMESTAMPTZ | ? | Hủy phiên khi khóa, vô hiệu hóa, đổi/đặt lại mật khẩu (BR-TK-11, 13, 14) |
 
 - Index: `(account_id) WHERE revoked_at IS NULL`
+- Index: `(account_id)` — kiểm FK khi xóa `accounts` (V7, ADR-0018)
 
 ### `otp_tokens` — LOG
 
@@ -143,6 +147,7 @@ Ràng buộc "A05–A08 phải có chi nhánh" kiểm tra ở ứng dụng vì `
 
 - `CHECK ((purpose = 'LINK_PROFILE') = (customer_id IS NOT NULL))`
 - Index: `(target_email, created_at)` để đếm quota 5 mã/giờ và khoảng cách 60 giây (BR-TK-07)
+- Index: `(account_id)` cho ST02 xóa mã của tài khoản `PENDING` và kiểm FK khi xóa `accounts` (V5)
 - Là LOG nhưng cho phép cập nhật `failed_attempts`, `consumed_at`, `invalidated_at` [ERD]
 
 ### `audit_logs` — LOG
@@ -178,6 +183,8 @@ Ràng buộc "A05–A08 phải có chi nhánh" kiểm tra ở ứng dụng vì `
 
 "Chỉ áp dụng cho giao dịch tạo sau" (BR-QT-13) cài bằng cách chốt giá trị vào giao dịch lúc tạo khi cần, ví dụ `otp_tokens.expires_at`. Lịch sử đổi tham số nằm trong `audit_logs`.
 
+- Index: `(updated_by) WHERE updated_by IS NOT NULL` — kiểm FK khi xóa `accounts` (V7, ADR-0018)
+
 ### `notification_templates` — REF
 
 | Cột | Kiểu | Ràng buộc | Ghi chú |
@@ -195,6 +202,8 @@ Ràng buộc "A05–A08 phải có chi nhánh" kiểm tra ở ứng dụng vì `
 Dữ liệu seed sẵn; ứng dụng không có chức năng thêm hay xóa mẫu.
 
 ---
+
+- Index: `(updated_by) WHERE updated_by IS NOT NULL` — kiểm FK khi xóa `accounts` (V7, ADR-0018)
 
 ## 2. Chi nhánh (CN)
 
@@ -244,6 +253,7 @@ Mỗi dòng là giờ mở cửa của **một thứ trong tuần** theo một *
 | created_by | BIGINT | NN, FK→accounts | |
 
 - `UNIQUE (branch_id, holiday_date)`
+- Index: `(created_by)` — kiểm FK khi xóa `accounts` (V7, ADR-0018)
 
 ### `branch_services` — PART của Branch
 
@@ -264,6 +274,8 @@ Quota mặc định của một nhóm dịch vụ tại chi nhánh, áp dụng c
 | default_quota | SMALLINT | NN, CHECK ≥ 0 | |
 | updated_by | BIGINT | NN, FK→accounts | |
 
+- Index: `(updated_by)` — kiểm FK khi xóa `accounts` (V7, ADR-0018)
+
 ### `slot_quotas` — PART của Branch
 
 Quota riêng của một khung giờ cụ thể, ghi đè quota mặc định (BR-LH-03). Quota của khung = `slot_quotas.quota` nếu có dòng, nếu không thì `branch_quota_defaults.default_quota`, nếu không thì 1.
@@ -281,6 +293,8 @@ Quota riêng của một khung giờ cụ thể, ghi đè quota mặc định (B
 - `UNIQUE (branch_id, service_group, slot_date, slot_start)`
 
 ---
+
+- Index: `(updated_by)` — kiểm FK khi xóa `accounts` (V7, ADR-0018)
 
 ## 3. Khách hàng & thú cưng (KH)
 
@@ -302,6 +316,7 @@ Quota riêng của một khung giờ cụ thể, ghi đè quota mặc định (B
 - `CHECK (created_channel = 'COUNTER' OR account_id IS NOT NULL)` — hồ sơ online luôn gắn tài khoản
 - `CHECK (created_channel = 'ONLINE' OR NOT link_decision_pending)`
 - Index: `(phone)` tra cứu và tìm hồ sơ trùng SĐT (BR-KH-10, BR-TK-19), không unique; `(email)` để tra cứu; `(full_name)` dùng cho tìm kiếm (UC23)
+- Index: `(created_by) WHERE created_by IS NOT NULL` — kiểm FK khi xóa `accounts` (V7, ADR-0018)
 
 ### `addresses` — PART của Customer
 
@@ -354,6 +369,8 @@ Quota riêng của một khung giờ cụ thể, ghi đè quota mặc định (B
 - Index: `(pet_id, measured_at DESC)` — cân nặng hiện tại là bản ghi đầu tiên
 
 ---
+
+- Index: `(recorded_by) WHERE recorded_by IS NOT NULL` — kiểm FK khi xóa `accounts` (V7, ADR-0018)
 
 ## 4. Danh mục sản phẩm & dịch vụ (SP)
 
@@ -475,6 +492,8 @@ Quota riêng của một khung giờ cụ thể, ghi đè quota mặc định (B
 
 **Quota tính những lịch nào [ERD]:** lịch đã `CHECKED_IN`/`COMPLETED` vẫn chiếm quota của khung đó; `CANCELLED`, `NO_SHOW` trả lại quota. Đếm quota và INSERT phải trong cùng transaction có khóa (ví dụ `SELECT … FOR UPDATE` trên dòng `branches`, hoặc advisory lock theo `branch_id + service_group + slot`) để hai khách không cùng lấy khung cuối.
 
+- Index: `(booked_by)` — kiểm FK khi xóa `accounts` (V7, ADR-0018)
+
 ### `booking_restrictions` — ROOT
 
 | Cột | Kiểu | Ràng buộc | Ghi chú |
@@ -492,6 +511,8 @@ Quota riêng của một khung giờ cụ thể, ghi đè quota mặc định (B
 - Khách đang bị hạn chế ⇔ có dòng `starts_at ≤ now() < ends_at AND lifted_at IS NULL`
 
 ---
+
+- Index: `(lifted_by) WHERE lifted_by IS NOT NULL` — kiểm FK khi xóa `accounts` (V7, ADR-0018)
 
 ## 6. Tiếp nhận & khám (TN, KB)
 
@@ -521,6 +542,7 @@ Quota riêng của một khung giờ cụ thể, ghi đè quota mặc định (B
 - `CHECK (status = 'WAITING' OR status = 'CANCELLED' OR assignee_id IS NOT NULL)`
 - Index hàng đợi: `(branch_id, status, priority_class, queue_sort_key)`
 - Index: `(assignee_id, status)`; `(pet_id, checked_in_at DESC)`
+- Index: `(checked_in_by)` — kiểm FK khi xóa `accounts` (V7, ADR-0018)
 
 ### `visit_assignments` — LOG
 
@@ -534,6 +556,8 @@ Quota riêng của một khung giờ cụ thể, ghi đè quota mặc định (B
 | visit_status_at_assign | VARCHAR(15) | NN | `WAITING` hoặc `IN_PROGRESS` |
 | reason | VARCHAR(300) | ? | Bắt buộc khi gán lại lượt đã gọi (BR-TN-08) |
 | assignee_was_offline | BOOLEAN | NN, DEFAULT false | Đã cảnh báo, không chặn (BR-TN-06) |
+
+- Index: `(from_account_id) WHERE from_account_id IS NOT NULL`, `(to_account_id)`, `(assigned_by)` — kiểm FK khi xóa `accounts` (V7, ADR-0018)
 
 ### `medical_records` — PART của Visit
 
@@ -552,6 +576,7 @@ Quota riêng của một khung giờ cụ thể, ghi đè quota mặc định (B
 
 - Index: `(follow_up_date) WHERE follow_up_date IS NOT NULL AND follow_up_reminded_at IS NULL AND follow_up_cancelled_at IS NULL` cho ST04
 - Người ghi từng phần khi gán lại lượt (BR-TN-08) lấy từ `audit_logs` [ERD]
+- Index: `(last_edited_by) WHERE last_edited_by IS NOT NULL` — kiểm FK khi xóa `accounts` (V7, ADR-0018)
 
 ### `medical_record_addenda` — LOG
 
@@ -562,6 +587,8 @@ Quota riêng của một khung giờ cụ thể, ghi đè quota mặc định (B
 | content | TEXT | NN | |
 | is_internal | BOOLEAN | NN, DEFAULT false | Bổ sung cho ghi chú nội bộ thì khách không thấy [ERD] |
 | created_by | BIGINT | NN, FK→accounts | |
+
+- Index: `(created_by)` — kiểm FK khi xóa `accounts` (V7, ADR-0018)
 
 ### `prescription_items` — PART của MedicalRecord
 
@@ -604,6 +631,8 @@ Quota riêng của một khung giờ cụ thể, ghi đè quota mặc định (B
 - Xóa cứng được khi Visit còn `IN_PROGRESS` (BR-KB-04): trong cùng transaction hoàn kho đúng `stock_lot_id`, ghi `stock_movements`, xóa dòng này, rồi xóa `order_lines` (dòng này giữ FK tới `order_lines` nên phải xóa trước).
 
 ---
+
+- Index: `(recorded_by)` — kiểm FK khi xóa `accounts` (V7, ADR-0018)
 
 ## 7. Lưu trú (LT) — tầng 2
 
@@ -656,6 +685,7 @@ Quota riêng của một khung giờ cụ thể, ghi đè quota mặc định (B
 - Index sức chứa: `(branch_id, kennel_type_id, status, check_in_date, check_out_date)`
 - Không chồng ngày cho cùng thú (BR-LT-02): PostgreSQL dùng `EXCLUDE USING gist (pet_id WITH =, daterange(check_in_date, check_out_date) WITH &&) WHERE (status IN ('BOOKED','CHECKED_IN','OVERDUE'))`, cần extension `btree_gist` (*Nhật ký quyết định* mục 8); MySQL kiểm tra ở ứng dụng.
 - Đúng loại chuồng: ứng dụng kiểm tra `kennels.kennel_type_id = boarding_bookings.kennel_type_id` khi gán.
+- Index: `(booked_by)` — kiểm FK khi xóa `accounts` (V7, ADR-0018)
 
 ### `boarding_check_ins` — PART của BoardingBooking
 
@@ -669,6 +699,8 @@ Quota riêng của một khung giờ cụ thể, ghi đè quota mặc định (B
 | emergency_phone | VARCHAR(15) | NN | |
 | received_by | BIGINT | NN, FK→accounts | Lễ tân hoặc CARETAKER |
 | received_at | TIMESTAMPTZ | NN | |
+
+- Index: `(received_by)` — kiểm FK khi xóa `accounts` (V7, ADR-0018)
 
 ### `care_logs` — PART của BoardingBooking
 
@@ -688,6 +720,7 @@ Quota riêng của một khung giờ cụ thể, ghi đè quota mặc định (B
 
 - Index: `(boarding_booking_id, log_date)`
 - Sửa được trong 1 giờ [CFG] tính từ `created_at`; sau đó chỉ thêm `care_log_addenda`
+- Index: `(recorded_by)` — kiểm FK khi xóa `accounts` (V7, ADR-0018)
 
 ### `care_log_addenda` — LOG (thuộc CareLog)
 
@@ -701,6 +734,8 @@ Quota riêng của một khung giờ cụ thể, ghi đè quota mặc định (B
 Domain model gộp "bản bổ sung" vào CareLog; tách thành bảng con để giữ nguyên tắc chỉ thêm, không sửa [ERD].
 
 ---
+
+- Index: `(created_by)` — kiểm FK khi xóa `accounts` (V7, ADR-0018)
 
 ## 8. Bán hàng & thu ngân (BH, TG)
 
@@ -734,6 +769,8 @@ Domain model gộp "bản bổ sung" vào CareLog; tách thành bảng con để
 
 **Thất thu (BR-BC-02)** = Order có `cancel_type = 'UNPAID'`. Order có `cancel_type = 'CHECKOUT_ABORTED'` không tính thất thu. Đây là lý do cần cột `cancel_type` thay vì suy ra từ người hủy.
 
+- Index: `(created_by)`, `(cancelled_by) WHERE cancelled_by IS NOT NULL` — kiểm FK khi xóa `accounts` (V7, ADR-0018)
+
 ### `order_lines` — PART của Order
 
 | Cột | Kiểu | Ràng buộc | Ghi chú |
@@ -756,6 +793,7 @@ Domain model gộp "bản bổ sung" vào CareLog; tách thành bảng con để
 - `CHECK (line_total = quantity * unit_price)`
 - Dòng tự sinh có `owner_account_id` = nhân viên được gán lượt (cập nhật khi gán), để VET đổi/xóa được theo BR-TN-01.
 - Liên kết 1–1 với đơn thuốc và mũi tiêm đặt FK ở phía `prescription_items.order_line_id` và `vaccinations.order_line_id`, không đặt ngược lại ở `order_lines`, để tránh vòng khóa ngoại [ERD].
+- Index: `(added_by)`, `(owner_account_id)` — kiểm FK khi xóa `accounts` (V7, ADR-0018)
 
 ### `cashier_shifts` — ROOT · SM #8
 
@@ -783,6 +821,7 @@ Domain model gộp "bản bổ sung" vào CareLog; tách thành bảng con để
 - `CHECK (status <> 'CLOSED' OR auto_closed OR counted_cash IS NOT NULL)`
 - Index cho ST13: `(branch_id, is_after_hours) WHERE status = 'OPEN'`
 - Điều kiện mở ca (trong/ngoài giờ mở cửa, cờ cấp cứu của chi nhánh) kiểm tra ở ứng dụng vì phụ thuộc `opening_hours`, `holidays`.
+- Index: `(cashier_id)`, `(reconciled_by) WHERE reconciled_by IS NOT NULL` — kiểm FK khi xóa `accounts` (V7, ADR-0018)
 
 ### `payments` — ROOT
 
@@ -802,6 +841,8 @@ Domain model gộp "bản bổ sung" vào CareLog; tách thành bảng con để
 - Thu tiền là một transaction: khóa các `orders` (`FOR UPDATE`), kiểm tra `PENDING` và cùng khách/chi nhánh, khóa `stock_lots` liên quan, kiểm tra tồn, INSERT `payments`, cập nhật `orders`, trừ `stock_lots`, ghi `stock_movements`, ghi `audit_logs` (BR-BH-04, BR-TG-04).
 
 ---
+
+- Index: `(received_by)` — kiểm FK khi xóa `accounts` (V7, ADR-0018)
 
 ## 9. Kho (KO) — tầng 2
 
@@ -861,6 +902,8 @@ Domain model gộp "bản bổ sung" vào CareLog; tách thành bảng con để
 | cancelled_at | TIMESTAMPTZ | ? | |
 | cancel_reason | VARCHAR(300) | ? | |
 
+- Index: `(created_by)`, `(confirmed_by) WHERE confirmed_by IS NOT NULL`, `(cancelled_by) WHERE cancelled_by IS NOT NULL` — kiểm FK khi xóa `accounts` (V7, ADR-0018)
+
 ### `stock_receipt_lines` — PART của StockReceipt
 
 | Cột | Kiểu | Ràng buộc | Ghi chú |
@@ -887,6 +930,7 @@ Domain model gộp "bản bổ sung" vào CareLog; tách thành bảng con để
 
 - `CHECK (reason <> 'OTHER' OR note IS NOT NULL)`
 - Không có trạng thái: lưu là có hiệu lực ngay.
+- Index: `(created_by)` — kiểm FK khi xóa `accounts` (V7, ADR-0018)
 
 ### `stock_adjustment_lines` — PART của StockAdjustment
 
@@ -914,6 +958,8 @@ Domain model gộp "bản bổ sung" vào CareLog; tách thành bảng con để
 - Mọi cập nhật `stock_lots.quantity` phải INSERT một dòng ở đây trong cùng transaction (nguyên tắc 5 của domain model).
 
 ---
+
+- Index: `(created_by)` — kiểm FK khi xóa `accounts` (V7, ADR-0018)
 
 ## 10. Nội dung & feedback (BV, CK, DG) — tầng 2
 
@@ -943,6 +989,7 @@ Domain model gộp "bản bổ sung" vào CareLog; tách thành bảng con để
 | created_by | BIGINT | NN, FK→accounts | SUPER_MANAGER |
 
 - Index: `(status, first_published_at DESC)`; `(category_id, status)`
+- Index: `(created_by)` — kiểm FK khi xóa `accounts` (V7, ADR-0018)
 
 ### `page_contents` — REF
 
@@ -952,6 +999,8 @@ Domain model gộp "bản bổ sung" vào CareLog; tách thành bảng con để
 | title | VARCHAR(250) | ? | |
 | content | JSONB | NN | Cấu trúc tùy trang: danh sách banner, câu hỏi FAQ… |
 | updated_by | BIGINT | ?, FK→accounts | |
+
+- Index: `(updated_by) WHERE updated_by IS NOT NULL` — kiểm FK khi xóa `accounts` (V7, ADR-0018)
 
 ### `feedbacks` — ROOT
 
@@ -975,6 +1024,8 @@ Domain model gộp "bản bổ sung" vào CareLog; tách thành bảng con để
 - Index: `(customer_id, created_at)` cho giới hạn 5/ngày; `(branch_id, status)`
 
 ---
+
+- Index: `(resolved_by) WHERE resolved_by IS NOT NULL` — kiểm FK khi xóa `accounts` (V7, ADR-0018)
 
 ## 11. Chăm sóc khách & thông báo (TB)
 
@@ -1004,6 +1055,7 @@ Domain model gộp "bản bổ sung" vào CareLog; tách thành bảng con để
 - `UNIQUE (vaccination_id) WHERE task_type = 'VACCINE_OVERDUE'` — tối đa 1 task quá hạn/mũi (BR-TB-04)
 - `UNIQUE (boarding_booking_id) WHERE task_type = 'PICKUP_OVERDUE'` [ERD]
 - Index: `(branch_id, status, due_date)` — danh sách việc của lễ tân
+- Index: `(handled_by) WHERE handled_by IS NOT NULL` — kiểm FK khi xóa `accounts` (V7, ADR-0018)
 
 ### `notifications` — ROOT
 
@@ -1036,9 +1088,12 @@ Domain model gộp "bản bổ sung" vào CareLog; tách thành bảng con để
 | sent_at | TIMESTAMPTZ | ? | |
 
 - Index: `(status, next_attempt_at)` cho ST20
+- Index partial `(next_attempt_at, id) WHERE status = 'PENDING' AND channel = 'IN_APP'` cho luồng IN_APP của ST20 (V6, mục 13 Nhật ký quyết định)
 - Ghi outbox trong cùng transaction với sự kiện nghiệp vụ, worker gửi sau. Nhờ vậy rollback nghiệp vụ thì không gửi nhầm thông báo.
 
 ---
+
+- Index: `(recipient_account_id) WHERE recipient_account_id IS NOT NULL` — kiểm FK khi xóa `accounts` (V7, ADR-0018)
 
 ## 12. Đối chiếu domain model → bảng
 
@@ -1076,7 +1131,7 @@ Tổng: 55 bảng = 52 model + 3 bảng con tách ra (`care_log_addenda`, `stock
 
 ## 13. Nhật ký quyết định
 
-Mục 1–4: các câu hỏi mở của bản v14, chốt ở v15. Mục 5: thay đổi ở v16. Mục 6–10: quyết định khi viết migration `V1__init_schema.sql` (2026-10-03).
+Mục 1–4: các câu hỏi mở của bản v14, chốt ở v15. Mục 5: thay đổi ở v16. Mục 6–10: quyết định khi viết migration `V1__init_schema.sql` (2026-10-03). Mục 11: worker ST20 (2026-10-07). Mục 12: ST02 (2026-10-07). Mục 13: ST20 kênh IN_APP (2026-10-07).
 
 | # | Vấn đề | Quyết định | Ảnh hưởng tới bảng |
 |---|---|---|---|
@@ -1090,3 +1145,7 @@ Mục 1–4: các câu hỏi mở của bản v14, chốt ở v15. Mục 5: thay
 | 8 | `EXCLUDE` chồng ngày lưu trú | `pet_id WITH =` trong index gist cần extension `btree_gist` | Migration chạy `CREATE EXTENSION IF NOT EXISTS btree_gist` (cần quyền owner/superuser) |
 | 9 | FK của `audit_logs.actor_account_id` | BR-QT-15 ghi audit cả đăng nhập thất bại nên có thể trỏ tới tài khoản `PENDING`; BR-TK-08 buộc xóa tài khoản đó sau 24h, trong khi BR-QT-16 cấm xóa audit. Bỏ FK để audit tồn tại độc lập với vòng đời tài khoản; ứng dụng luôn ghi kèm `actor_email` | `audit_logs.actor_account_id` không có FK |
 | 10 | Phiếu thu 0đ | Giá dịch vụ/sản phẩm cho phép 0 và BR-TG-02 buộc số thu = tổng Order, nên Order 0đ phải thu được (vẫn qua ca thu ngân, có audit) | `payments.amount CHECK ≥ 0` (trước: `> 0`) |
+| 11 | `notification_outbox` (LOG) được cập nhật; index cho luồng gửi | Worker ST20 (ADR-0012) cập nhật `status`, `attempts`, `next_attempt_at`, `last_error`, `sent_at` và xóa khóa nhạy cảm (mã OTP, mật khẩu tạm) khỏi `payload` khi dòng vào `SENT`/`FAILED`; các cột còn lại ghi một lần. Thêm index cho luồng OTP để không quét qua tồn đọng thư hàng loạt | `notification_outbox`: index `(status, template_code, next_attempt_at)` (V4) |
+| 12 | Hạn của tài khoản `PENDING` (BR-TK-08, ST02) | BR-QT-13 (ưu tiên cao hơn erd) buộc chốt hạn lúc đăng ký: đổi [CFG] `account.pending_ttl_hours` không được làm đổi hạn của tài khoản đang chờ. Thêm cột snapshot như `sessions.expires_at`, `otp_tokens.expires_at` (ADR-0013) | `accounts`: thêm `pending_expires_at`, CHECK có hạn ⇔ `PENDING`, index partial `(pending_expires_at) WHERE status = 'PENDING'`. `otp_tokens`: index `(account_id)` (V5) |
+| 13 | Giao thông báo kênh IN_APP (ST20, UC88) | Erd không nói `notifications.type`, `title` lấy từ đâu, và index V1 `(status, next_attempt_at)` không có `channel` nên câu chọn IN_APP phải đọc qua tồn đọng email (ADR-0014) | `notifications.type` = mã mẫu bỏ hậu tố `_APP`; `title` = `subject` của mẫu (mẫu IN_APP bắt buộc có `subject`, quá 200 ký tự thì cắt). `notification_outbox`: index partial `(next_attempt_at, id) WHERE status = 'PENDING' AND channel = 'IN_APP'` (V6) |
+| 14 | Index cho cột FK trỏ tới `accounts` | Xóa một dòng `accounts` (ST02, BR-TK-08) kiểm FK `RESTRICT` ở 43 cột / 34 bảng; 38 cột không có index dùng được → quét toàn bảng mỗi cột (ADR-0018, trả nợ D009). Erd không liệt kê index cho các cột `*_by` | V7: index `(<cột>)` cho cột NOT NULL, partial `(<cột>) WHERE <cột> IS NOT NULL` cho cột nullable, ở 34 bảng (dòng `- Index:` ghi "V7, ADR-0018" trong từng bảng) |

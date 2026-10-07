@@ -17,7 +17,7 @@
 
 | # | Endpoint | Thao tác | Use case | Rule |
 |---|---|---|---|---|
-| 1 | `POST /auth/register` | Đăng ký tài khoản | UC01 | BR-TK-01, 02, 03, 04, BR-KH-01 |
+| 1 | `POST /auth/register` | Đăng ký tài khoản | UC01 | BR-TK-01, 02, 03, 04, 05, 07, BR-KH-01 |
 | 2 | `POST /auth/register/verify` | Xác thực OTP đăng ký | UC02 | BR-TK-05, 06, 19 |
 | 3 | `POST /auth/register/resend-otp` | Gửi lại OTP đăng ký | UC02 | BR-TK-04, 05, 07 |
 | 4 | `POST /auth/login` | Đăng nhập | UC03 | BR-TK-08, 09, 10, 11, 17, BR-QT-15 |
@@ -61,7 +61,7 @@
 
 | Thao tác | Actor | Quyền / phạm vi | Chuyển trạng thái | Idempotent | Ghi chú |
 |---|---|---|---|---|---|
-| Đăng ký tài khoản | A01 | Public | — → PENDING (Tài khoản#1); tạo hồ sơ online | — | Gửi OTP_REGISTER qua outbox. |
+| Đăng ký tài khoản | A01 | Public | — → PENDING (Tài khoản#1); tạo hồ sơ online | — | Gửi OTP_REGISTER qua outbox (A8). |
 | Xác thực OTP đăng ký | A01 | Public | PENDING → ACTIVE (Tài khoản#2) | — | Không tự đăng nhập (A2). |
 | Gửi lại OTP đăng ký | A01 | Public | — | — | Mã cũ cùng mục đích mất hiệu lực (BR-TK-05). |
 | Đăng nhập | A02–A08 | Public | — | — | Ghi audit thành công và thất bại. |
@@ -105,7 +105,7 @@
 
 ### Auth
 
-- **`POST /auth/register`** — Đăng ký tài khoản. Public. Request `RegisterRequest`. Response `201` `RegistrationResponse`. Lỗi: `400` `BR-TK-01` email đã được sử dụng · `BR-TK-02` chưa xác nhận ≥ 18 tuổi / điều khoản · `BR-TK-03` mật khẩu yếu.
+- **`POST /auth/register`** — Đăng ký tài khoản. Public. Request `RegisterRequest`. Response `201` `RegistrationResponse`. Lỗi: `400` `BR-TK-01` email đã được sử dụng · `BR-TK-02` chưa xác nhận ≥ 18 tuổi / điều khoản · `BR-TK-03` mật khẩu yếu hoặc quá 72 byte · `BR-TK-07` email đã nhận quá 5 mã OTP/giờ [CFG] · `409` `CONCURRENCY_CONFLICT` hai request đăng ký cùng email cùng lúc.
 - **`POST /auth/register/verify`** — Xác thực OTP đăng ký. Public. Request `VerifyOtpRequest`. Response `200` `VerificationResponse`. Lỗi: `400` `BR-TK-05` mã sai / hết hạn · `BR-TK-06` sai quá 5 lần, mã bị hủy · `404` Không có tài khoản PENDING với email này.
 - **`POST /auth/register/resend-otp`** — Gửi lại OTP đăng ký. Public. Request `EmailRequest`. Response `200` `OtpSentResponse`. Lỗi: `400` `BR-TK-07` chưa đủ 60 giây hoặc vượt 5 mã/giờ · `404` Không có tài khoản PENDING với email này.
 - **`POST /auth/login`** — Đăng nhập. Public. Request `LoginRequest`. Response `200` `LoginResponse`. Lỗi: `400` `BR-TK-08` tài khoản chưa xác thực → FE chuyển màn OTP · `BR-TK-09` đang khóa tạm, message có giờ thử lại · `BR-TK-11` tài khoản bị khóa / vô hiệu hóa · `401` Sai email hoặc mật khẩu — thông điệp chung (BR-TK-10); sai lần thứ 5 trong 15 phút [CFG] kích hoạt ST01.
@@ -228,6 +228,7 @@ Trường có `?` là không bắt buộc / có thể null. Kiểu `email`, `dat
 | A5 | Khách tự sửa họ tên, SĐT, ảnh ở module customer; identity chỉ sửa hồ sơ nhân viên | BR-TK-15: với khách, họ tên và SĐT là thông tin của hồ sơ khách |
 | A6 | `verificationMethod` khi sửa email hộ / liên kết tại quầy chỉ có `ID_CARD_IN_PERSON` | BR-TK-16: audit chỉ ghi phương thức xác minh, docs chỉ nêu CCCD |
 | A7 | Gửi lại OTP quên mật khẩu = gọi lại `POST /auth/password/forgot` (cùng quota BR-TK-07) | Tránh endpoint thứ hai lộ trạng thái tài khoản |
+| A8 | BR-TK-04 'gửi thất bại thì báo lỗi': đăng ký trả 201 khi đã ghi `notification_outbox`; gửi thất bại do ST20 thử lại, người dùng gửi lại bằng `POST /auth/register/resend-otp` | 06-module-contracts §1: `NotificationApi.enqueue` chỉ ghi outbox; convention 07 §7.2 cấm gửi trực tiếp trong use case |
 
 | ID | Câu hỏi | Trạng thái | Gốc |
 |---|---|---|---|

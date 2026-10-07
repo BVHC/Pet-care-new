@@ -11,7 +11,8 @@ spring:
       port: 6379
       timeout: 300ms
 
-  # SMTP giả: test không bao giờ gửi mail thật.
+  # SMTP giả: test không bao giờ gửi mail thật. Cổng 3025 = GreenMail (ServerSetupTest.SMTP) mà
+  # NotificationOutboxIT dựng; test khác không gửi mail. Timeout ngắn cho case SMTP treo.
   mail:
     host: localhost
     port: 3025
@@ -20,6 +21,9 @@ spring:
     properties:
       mail.smtp.auth: true
       mail.smtp.starttls.enable: true
+      mail.smtp.connectiontimeout: 2000
+      mail.smtp.timeout: 3000
+      mail.smtp.writetimeout: 3000
 
 jwt:
   secret: test-secret-key-for-jwt-signing-minimum-32-characters-long
@@ -31,5 +35,17 @@ app:
   jobs:
     session-cleanup:
       cron: "-"
+    pending-account-cleanup:
+      cron: "-"
+    notification-outbox:
+      cron: "-"
+      priority-cron: "-"
+      in-app-cron: "-"
+    notification-outbox-cleanup:
+      cron: "-"
 
-# management.health.mail.enabled=false kế thừa từ application.yml.
+# Mail health indicator tắt: test không có SMTP chạy thường trực (GreenMail chỉ bật trong NotificationOutboxIT).
+management:
+  health:
+    mail:
+      enabled: false

@@ -38,6 +38,7 @@ m = Module(
         ("A5", "Khách tự sửa họ tên, SĐT, ảnh ở module customer; identity chỉ sửa hồ sơ nhân viên", "BR-TK-15: với khách, họ tên và SĐT là thông tin của hồ sơ khách"),
         ("A6", "`verificationMethod` khi sửa email hộ / liên kết tại quầy chỉ có `ID_CARD_IN_PERSON`", "BR-TK-16: audit chỉ ghi phương thức xác minh, docs chỉ nêu CCCD"),
         ("A7", "Gửi lại OTP quên mật khẩu = gọi lại `POST /auth/password/forgot` (cùng quota BR-TK-07)", "Tránh endpoint thứ hai lộ trạng thái tài khoản"),
+        ("A8", "BR-TK-04 'gửi thất bại thì báo lỗi': đăng ký trả 201 khi đã ghi `notification_outbox`; gửi thất bại do ST20 thử lại, người dùng gửi lại bằng `POST /auth/register/resend-otp`", "06-module-contracts §1: `NotificationApi.enqueue` chỉ ghi outbox; convention 07 §7.2 cấm gửi trực tiếp trong use case"),
     ],
     questions=[
         ("Q1", "Thời hạn phiên đăng nhập bao lâu, có thêm vào [CFG] không, có cần refresh token cho app không?", "Đã chốt (ADR-0003): hạn tuyệt đối `session.ttl_hours` [CFG], mặc định 12 giờ (1–72), không gia hạn, không refresh token; `exp` của token = `expiresAt`", "Docs không quy định (A1)"),
@@ -60,7 +61,7 @@ m.schema("Role", None, enum=ROLES.split(","), desc="Role cố định (04 §1)")
 m.schema("AccountStatus", None, enum=["PENDING", "ACTIVE", "DISABLED"], desc="03 #1; khóa là cờ isLocked riêng")
 m.schema("RegisterRequest", {
     "email": "email|Định danh duy nhất, lưu chữ thường (BR-TK-01)",
-    "password": "string|≥ 8 ký tự [CFG], có chữ và số (BR-TK-03)",
+    "password": "string|≥ 8 ký tự [CFG], có chữ và số, ≤ 72 byte UTF-8 (BR-TK-03, ADR-0009)",
     "fullName": "string:100|Họ tên của hồ sơ online (BR-KH-01)",
     "phone": "phone?|Không bắt buộc, không kiểm trùng (BR-TK-01, v16)",
     "isAdult": "bool|Phải true (BR-TK-02)",
@@ -174,10 +175,11 @@ m.schema("PublicVet", {
 # ---------------- operations
 OTP_ERR = "`BR-TK-05` mã sai / hết hạn · `BR-TK-06` sai quá 5 lần, mã bị hủy"
 m.op("post", "/auth/register", "registerAccount", "Đăng ký tài khoản", "Auth", "UC01",
-     "BR-TK-01, 02, 03, 04, BR-KH-01", "A01", "Public", "— → PENDING (Tài khoản#1); tạo hồ sơ online",
-     body="RegisterRequest", resp="RegistrationResponse", status=201, public=True, errors=(400,),
-     err_desc={400: "`BR-TK-01` email đã được sử dụng · `BR-TK-02` chưa xác nhận ≥ 18 tuổi / điều khoản · `BR-TK-03` mật khẩu yếu"},
-     notes="Gửi OTP_REGISTER qua outbox.")
+     "BR-TK-01, 02, 03, 04, 05, 07, BR-KH-01", "A01", "Public", "— → PENDING (Tài khoản#1); tạo hồ sơ online",
+     body="RegisterRequest", resp="RegistrationResponse", status=201, public=True, errors=(400, 409),
+     err_desc={400: "`BR-TK-01` email đã được sử dụng · `BR-TK-02` chưa xác nhận ≥ 18 tuổi / điều khoản · `BR-TK-03` mật khẩu yếu hoặc quá 72 byte · `BR-TK-07` email đã nhận quá 5 mã OTP/giờ [CFG]",
+               409: "`CONCURRENCY_CONFLICT` hai request đăng ký cùng email cùng lúc"},
+     notes="Gửi OTP_REGISTER qua outbox (A8).")
 m.op("post", "/auth/register/verify", "verifyRegistration", "Xác thực OTP đăng ký", "Auth", "UC02",
      "BR-TK-05, 06, 19", "A01", "Public", "PENDING → ACTIVE (Tài khoản#2)",
      body="VerifyOtpRequest", resp="VerificationResponse", public=True, errors=(400, 404),
