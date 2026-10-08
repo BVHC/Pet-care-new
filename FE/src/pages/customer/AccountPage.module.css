@@ -385,6 +385,198 @@
 }
 
 /* ================================================================
+   Tabs (staff users).
+   ================================================================ */
+
+.tabs {
+  display: flex;
+  gap: 0.25rem;
+  border-bottom: 1px solid var(--color-border-default);
+  margin-bottom: 0.5rem;
+}
+
+.tab {
+  padding: 0.625rem 1rem;
+  font-size: 0.875rem;
+  font-weight: 500;
+  color: var(--color-text-secondary);
+  background: transparent;
+  border: none;
+  border-bottom: 2px solid transparent;
+  cursor: pointer;
+  transition: all 0.15s;
+  margin-bottom: -1px;
+}
+
+.tab:hover {
+  color: var(--color-text-primary);
+}
+
+.tabActive {
+  color: var(--color-accent);
+  border-bottom-color: var(--color-accent);
+}
+
+/* ================================================================
+   Not authenticated box.
+   ================================================================ */
+
+.notAuthBox {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.875rem;
+  max-width: 28rem;
+  margin: 2rem auto;
+  padding: 3rem 2rem;
+  text-align: center;
+  background: var(--color-surface-card);
+  border-radius: 1rem;
+  box-shadow:
+    0 1px 2px rgba(56, 36, 23, 0.06),
+    0 8px 18px -14px rgba(56, 36, 23, 0.4);
+}
+
+.notAuthIcon {
+  display: grid;
+  place-items: center;
+  width: 4.5rem;
+  height: 4.5rem;
+  border-radius: 50%;
+  background: var(--color-accent-soft);
+  color: var(--color-accent);
+}
+
+.notAuthTitle {
+  font-family: var(--font-friendly);
+  font-size: 1.25rem;
+  font-weight: 800;
+  color: var(--color-text-primary);
+}
+
+.notAuthText {
+  font-size: 0.875rem;
+  line-height: 1.5;
+  color: var(--color-text-secondary);
+}
+
+.notAuthBtn {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+  margin-top: 0.5rem;
+  padding: 0.75rem 1.5rem;
+  font-size: 0.9375rem;
+  font-weight: 700;
+  color: #fff;
+  background: var(--color-accent);
+  border: none;
+  border-radius: 0.625rem;
+  cursor: pointer;
+  box-shadow: 0 6px 14px -8px rgba(164, 51, 36, 0.7);
+  transition: background-color 0.2s, transform 0.15s;
+}
+
+.notAuthBtn:hover {
+  background: var(--color-accent-hover);
+  transform: translateY(-1px);
+}
+
+.notAuthBtn:active {
+  transform: scale(0.985);
+}
+
+/* ================================================================
+   Loading & error states.
+   ================================================================ */
+
+.loadingState {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.75rem;
+  padding: 4rem 2rem;
+  color: var(--color-text-muted);
+  font-size: 0.9375rem;
+}
+
+.errorState {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 1rem;
+  padding: 4rem 2rem;
+  text-align: center;
+  color: var(--color-text-muted);
+}
+
+.retryBtn {
+  padding: 0.625rem 1.25rem;
+  font-size: 0.875rem;
+  font-weight: 600;
+  color: var(--color-accent);
+  background: transparent;
+  border: 1.5px solid var(--color-accent);
+  border-radius: 0.5rem;
+  cursor: pointer;
+  transition: all 0.15s;
+}
+
+.retryBtn:hover {
+  background: var(--color-accent-soft);
+}
+
+.spinner {
+  animation: spin 1s linear infinite;
+}
+
+@keyframes spin {
+  from { transform: rotate(0deg); }
+  to { transform: rotate(360deg); }
+}
+
+/* ================================================================
+   Role badge.
+   ================================================================ */
+
+.roleBadge {
+  font-size: 0.75rem;
+  font-weight: 600;
+  color: var(--color-accent);
+  background: var(--color-accent-soft);
+  padding: 0.25rem 0.625rem;
+  border-radius: 999px;
+}
+
+/* ================================================================
+   Readonly field.
+   ================================================================ */
+
+.readonly {
+  font-size: 0.6875rem;
+  font-weight: 400;
+  color: var(--color-text-muted);
+  margin-left: 0.25rem;
+}
+
+.readonlyInput {
+  background: var(--color-surface-1);
+  cursor: not-allowed;
+  color: var(--color-text-secondary);
+}
+
+/* ================================================================
+   Avatar image.
+   ================================================================ */
+
+.avatarImg {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  border-radius: 50%;
+}
+
+/* ================================================================
    Pets section.
    ================================================================ */
 

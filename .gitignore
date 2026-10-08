@@ -228,3 +228,10 @@ FE/scripts/
 docs/superpowers/
 ~$*
 
+# ==============================================================================
+# Graphify Knowledge Graph (local only - never commit)
+# ==============================================================================
+.graphify/
+graphify-out/
+*.graph.json
+

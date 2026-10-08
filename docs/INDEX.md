@@ -25,7 +25,7 @@ Các file tham chiếu nhau bằng tên gọi tắt (cột 1).
 | Quy ước trạng thái, whitelist, `SYS ←`, bảng 10 đối tượng → `bảng.cột` | state-machine L5–27 |
 | Chuỗi tác động liên đối tượng (sự kiện → hệ quả) | state-machine L237–253 (*Phụ lục*) |
 | Loại model ROOT/PART/REF/LOG; 10 nguyên tắc xuyên suốt | domain-model L7–30 |
-| Ngoài phạm vi (tầng 3); nguồn số liệu báo cáo | domain-model L143–147 |
+| Nguồn số liệu báo cáo | domain-model L143–147 |
 | Kiểu dữ liệu, cột chung, quy tắc xóa | erd L8–41 |
 | Enum tiếng Việt → mã ASCII trong DB/code | erd L28–37 |
 | Sơ đồ ER luồng chính (mermaid) | erd L45–73 |
@@ -47,7 +47,6 @@ Tầng: **1** làm đầy đủ · **2** bản mỏng · **3** chỉ giữ trên
 | CK | Thông tin công khai (trang public, hiển thị giá) | 1 | L71–79 (5) | UC15–21 · L56–66 | — | L130 (PageContent) | L947–955 (`page_contents`) | — |
 | KH | Khách hàng & thú cưng (customer, pet, SĐT, tra cứu, nghi trùng, cân nặng, chuyển chủ) | 1 | L81–96 (10) | UC22–27 · L68–77 | — | L57–64 | L285–357 | ST19 |
 | SP | Sản phẩm & dịch vụ (product, service, loại vaccine, phác đồ, loại chuồng) | 1 | L98–110 (7) | UC28–33 · L79–88 | — | L66–75 | L358–443 | — |
-| NS | Nhân sự (ca làm, nghỉ phép) | 3 | L112–114 | UC34–38 · L90–98 | — | — | — | — |
 | LH | Lịch hẹn (appointment, quota, khung giờ, no-show, hạn chế đặt) | 1 | L116–133 (12) | UC39–43 · L100–108 | #3 Lịch hẹn · L68–88 | L77–82 | L444–495 | ST03, ST05 |
 | TN | Tiếp nhận & hàng đợi (check-in, visit, queue, gán nhân viên) | 1 | L135–149 (9) | UC44–47 · L110–117 | #4 Visit · L90–109 | L84–93 (chung KB) | L496–607 (chung KB) | — |
 | KB | Khám & điều trị (bệnh án, kê đơn, tiêm chủng, tái khám) | 1 | L151–162 (6) | UC48–53 · L119–128 | #4 Visit · L90–109 | L84–93 | L496–607 | ST04, ST06 |
@@ -59,8 +58,10 @@ Tầng: **1** làm đầy đủ · **2** bản mỏng · **3** chỉ giữ trên
 | DG | Feedback & khiếu nại | 2 | L232–241 (4) | UC83–86 · L184–191 | — (vòng đời ở BR-DG-04) | L131 (Feedback) | L956–978 | — |
 | TB | Chăm sóc KH & thông báo (nhắc tái chủng/tái khám, Care Task, notification) | 1 | L243–254 (6) | UC87–88 · L193–198 | #10 Care Task · L217–233 | L133–139 | L979–1042 | ST04, ST18, ST19, ST20 |
 | BC | Báo cáo | 2 | L256–263 (4) | UC89 · L200–204 | — | L147 (không có model) | — (tính từ bảng nghiệp vụ) | — |
+| NS | Nhân sự (ca làm, nghỉ phép) | 3 | L112–114 | UC34–38 · L90–98 | — | — | — | — |
+| AI | Trí tuệ nhân tạo & đề xuất thông minh (chatbot RAG+LLM, recommendation engine) | Giai đoạn 2 | — | — | — | — | — |
 
-**Tầng 3 — không cài:** UC13, UC27, UC32, UC34–38, UC43, UC50, UC51, UC55, UC56, UC61–65, UC68, UC69, UC77–79, UC80, UC82, UC85, UC86 · ST07, ST09–ST12, ST14, ST16, ST17, ST21.
+**Tầng 3 — Giai đoạn 2 (11–12/2026):** UC13, UC27, UC32, UC34–38, UC43, UC50, UC51, UC55, UC56, UC61–65, UC68, UC69, UC77–79, UC80, UC82, UC85, UC86 · ST07, ST09–ST12, ST14, ST16, ST17, ST21. Quy tắc nghiệp vụ, FSM, model và API được đặc tả bổ sung đầu Giai đoạn 2.
 
 ## 3. Tra theo mã định danh
 
