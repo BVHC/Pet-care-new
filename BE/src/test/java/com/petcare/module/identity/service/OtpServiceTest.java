@@ -220,6 +220,135 @@ class OtpServiceTest {
         assertThat(otp.getInvalidatedAt()).isEqualTo(NOW);
     }
 
+    // ---------------------------------------------------------------- UC04: BCrypt ngoài transaction (docs/adr/0023)
+
+    @Test
+    void prepareHashesCodeOfConfiguredLengthAndMasksIt() {
+        when(configs.getInt(ConfigKey.OTP_CODE_LENGTH)).thenReturn(8);
+
+        OtpService.PreparedOtp prepared = service.prepare();
+
+        assertThat(prepared.code()).matches("\\d{8}");
+        assertThat(encoder.matches(prepared.code(), prepared.codeHash())).isTrue();
+        assertThat(prepared.toString()).doesNotContain(prepared.code()).doesNotContain(prepared.codeHash());
+        verify(otps, never()).save(any());
+    }
+
+    @Test
+    void issuePreparedStoresGivenHashAfterQuotaAndInvalidation() {
+        OtpService.PreparedOtp prepared = new OtpService.PreparedOtp("246810", encoder.encode("246810"));
+
+        IssuedOtp issued = service.issuePrepared(9L, OtpPurpose.RESET_PASSWORD, EMAIL, prepared);
+
+        InOrder order = inOrder(otps);
+        order.verify(otps).findTopByTargetEmailOrderByCreatedAtDesc(EMAIL);
+        order.verify(otps).invalidateActive(EMAIL, OtpPurpose.RESET_PASSWORD, NOW);
+        order.verify(otps).save(any(OtpToken.class));
+        assertThat(saved().getCodeHash()).isEqualTo(prepared.codeHash());
+        assertThat(saved().getPurpose()).isEqualTo(OtpPurpose.RESET_PASSWORD);
+        assertThat(saved().getExpiresAt()).isEqualTo(NOW.plusSeconds(5 * 60));
+        assertThat(issued.code()).isEqualTo("246810");
+        assertThat(issued.resendAvailableAt()).isEqualTo(NOW.plusSeconds(60));
+        assertThat(issued.ttlMinutes()).isEqualTo(5);
+    }
+
+    @Test
+    void issuePreparedEnforcesQuotaBeforeAnyWrite() {
+        when(otps.findTopByTargetEmailOrderByCreatedAtDesc(EMAIL)).thenReturn(Optional.of(sentAt(NOW.minusSeconds(10))));
+
+        assertThatThrownBy(() -> service.issuePrepared(9L, OtpPurpose.RESET_PASSWORD, EMAIL,
+                new OtpService.PreparedOtp("246810", "hash")))
+                .isInstanceOf(BusinessRuleViolationException.class)
+                .hasMessageEndingWith("(BR-TK-07)");
+        verify(otps, never()).invalidateActive(anyString(), any(), any());
+        verify(otps, never()).save(any());
+    }
+
+    @Test
+    void findActiveReturnsRecordWithoutFilteringExpiry() {
+        OtpToken otp = resetOtp(41L, "123456", NOW);
+
+        assertThat(service.findActive(9L, OtpPurpose.RESET_PASSWORD, EMAIL))
+                .hasValueSatisfying(active -> {
+                    assertThat(active.id()).isEqualTo(41L);
+                    assertThat(active.codeHash()).isEqualTo(otp.getCodeHash());
+                    assertThat(active.expiresAt()).isEqualTo(NOW);
+                    assertThat(active.toString()).doesNotContain(otp.getCodeHash());
+                });
+    }
+
+    @Test
+    void settleMatchedConsumesTheSameCode() {
+        OtpToken otp = resetOtp(41L, "123456", NOW.plusSeconds(60));
+
+        service.settleCheckedOtp(9L, OtpPurpose.RESET_PASSWORD, EMAIL, 41L, true);
+
+        assertThat(otp.getConsumedAt()).isEqualTo(NOW);
+        assertThat(otp.getFailedAttempts()).isZero();
+    }
+
+    @Test
+    void settleWrongCountsOneFailure() {
+        OtpToken otp = resetOtp(41L, "123456", NOW.plusSeconds(60));
+
+        assertSettleRejected(41L, false, "OTP không đúng hoặc đã hết hạn (BR-TK-05)");
+        assertThat(otp.getFailedAttempts()).isEqualTo(1);
+        assertThat(otp.getConsumedAt()).isNull();
+    }
+
+    @Test
+    void settleFifthWrongCancelsTheCode() {
+        OtpToken otp = resetOtp(41L, "123456", NOW.plusSeconds(60));
+        ReflectionTestUtils.setField(otp, "failedAttempts", 4);
+
+        assertSettleRejected(41L, false,
+                "Nhập sai mã OTP quá 5 lần, mã đã bị hủy. Vui lòng yêu cầu mã mới (BR-TK-06)");
+        assertThat(otp.getInvalidatedAt()).isEqualTo(NOW);
+    }
+
+    @Test
+    void settleRejectsWithoutCountingWhenCodeWasReplacedSinceRead() {
+        OtpToken newer = resetOtp(42L, "999999", NOW.plusSeconds(60));
+
+        assertSettleRejected(41L, false, "OTP không đúng hoặc đã hết hạn (BR-TK-05)");
+        assertThat(newer.getFailedAttempts()).as("lần so thuộc mã cũ, không phạt mã mới").isZero();
+        assertSettleRejected(41L, true, "OTP không đúng hoặc đã hết hạn (BR-TK-05)");
+        assertThat(newer.getConsumedAt()).isNull();
+    }
+
+    @Test
+    void settleRejectsExpiredCodeWithoutCounting() {
+        OtpToken otp = resetOtp(41L, "123456", NOW);
+
+        assertSettleRejected(41L, true, "OTP không đúng hoặc đã hết hạn (BR-TK-05)");
+        assertSettleRejected(41L, false, "OTP không đúng hoặc đã hết hạn (BR-TK-05)");
+        assertThat(otp.getFailedAttempts()).isZero();
+        assertThat(otp.getConsumedAt()).isNull();
+    }
+
+    @Test
+    void settleRejectsWhenNoActiveCode() {
+        when(otps.findTopByAccountIdAndPurposeAndTargetEmailAndConsumedAtIsNullAndInvalidatedAtIsNullOrderByIdDesc(
+                9L, OtpPurpose.RESET_PASSWORD, EMAIL)).thenReturn(Optional.empty());
+
+        assertSettleRejected(41L, true, "OTP không đúng hoặc đã hết hạn (BR-TK-05)");
+    }
+
+    private OtpToken resetOtp(long id, String code, Instant expiresAt) {
+        OtpToken otp = new OtpToken(9L, OtpPurpose.RESET_PASSWORD, EMAIL, encoder.encode(code), expiresAt);
+        ReflectionTestUtils.setField(otp, "id", id);
+        when(otps.findTopByAccountIdAndPurposeAndTargetEmailAndConsumedAtIsNullAndInvalidatedAtIsNullOrderByIdDesc(
+                9L, OtpPurpose.RESET_PASSWORD, EMAIL)).thenReturn(Optional.of(otp));
+        return otp;
+    }
+
+    private void assertSettleRejected(long otpId, boolean matched, String message) {
+        assertThatThrownBy(() -> service.settleCheckedOtp(9L, OtpPurpose.RESET_PASSWORD, EMAIL, otpId, matched))
+                .as("docs/adr/0010: từ chối là OtpRejectedException để bộ đếm được commit")
+                .isExactlyInstanceOf(OtpRejectedException.class)
+                .hasMessage(message);
+    }
+
     private OtpToken activeOtp(String code, Instant expiresAt) {
         OtpToken otp = new OtpToken(9L, OtpPurpose.REGISTER, EMAIL, encoder.encode(code), expiresAt);
         when(otps.findTopByAccountIdAndPurposeAndTargetEmailAndConsumedAtIsNullAndInvalidatedAtIsNullOrderByIdDesc(

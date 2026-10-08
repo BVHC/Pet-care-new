@@ -212,7 +212,7 @@ paths:
     post:
       tags: [Auth]
       summary: "Quên mật khẩu — gửi OTP"
-      description: "UC04 · BR-TK-04, 07, 10, 12. Actor: A02–A08. Quyền: Public. Chuyển trạng thái: —. Luôn trả 202 cùng nội dung, kể cả email không tồn tại hoặc tài khoản không đủ điều kiện BR-TK-12 (không gửi mã). Gửi lại = gọi lại endpoint này (A7)."
+      description: "UC04 · BR-TK-04, 07, 10, 12. Actor: A02–A08. Quyền: Public. Chuyển trạng thái: —. Luôn trả 202 cùng nội dung (BR-TK-10), kể cả email không tồn tại, tài khoản không đủ điều kiện BR-TK-12 (`PENDING`, bị khóa, `DISABLED` — không gửi mã), đã chạm quota BR-TK-07 (không gửi mã, `resendAvailableAt` vẫn = now + 60 giây [CFG]). Tài khoản đang khóa tạm BR-TK-09 vẫn nhận mã. Gửi lại = gọi lại endpoint này (A7). ADR-0023."
       operationId: forgotPassword
       security: []
       requestBody:
@@ -238,7 +238,7 @@ paths:
                     type: integer
                     description: "HTTP status của kết quả, ví dụ 200, 201"
         "400":
-          description: "Email sai định dạng"
+          description: "`VALIDATION_FAILED` email trống / sai định dạng / quá 255 ký tự"
           content:
             "application/json":
               schema:
@@ -247,7 +247,7 @@ paths:
     post:
       tags: [Auth]
       summary: "Đặt lại mật khẩu bằng OTP"
-      description: "UC04 · BR-TK-03, 05, 06, 13. Actor: A02–A08. Quyền: Public. Chuyển trạng thái: —. Thành công: hủy mọi phiên, gỡ khóa tạm, gửi email PASSWORD_CHANGED (BR-TK-13)."
+      description: "UC04 · BR-TK-03, 05, 06, 13. Actor: A02–A08. Quyền: Public. Chuyển trạng thái: —. Thứ tự kiểm: hình thức → chính sách mật khẩu BR-TK-03 → mã BR-TK-05/06 → trùng mật khẩu hiện tại BR-TK-03. Thành công: hủy mọi phiên, gỡ khóa tạm, gỡ bắt đổi mật khẩu lần đầu BR-TK-17, chuyển offline (BR-TN-06), gửi email PASSWORD_CHANGED (BR-TK-13); không audit. ADR-0023."
       operationId: resetPassword
       security: []
       requestBody:
@@ -260,7 +260,7 @@ paths:
         "204":
           description: "Không có nội dung"
         "400":
-          description: "`BR-TK-05` mã sai / hết hạn · `BR-TK-06` sai quá 5 lần, mã bị hủy · `BR-TK-03` mật khẩu không hợp lệ"
+          description: "`BR-TK-05` mã sai / hết hạn · `BR-TK-06` sai quá 5 lần, mã bị hủy — cũng là lỗi cho email không có tài khoản, tài khoản không đủ điều kiện BR-TK-12 hoặc chưa có mã (BR-TK-10) · `BR-TK-03` mật khẩu mới không hợp lệ (kiểm trước mã, không tiêu lượt nhập) hoặc trùng mật khẩu hiện tại (chỉ kiểm khi mã đúng; mã vẫn dùng lại được)"
           content:
             "application/json":
               schema:

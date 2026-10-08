@@ -48,8 +48,18 @@ public interface AccountRepository extends JpaRepository<Account, Long> {
     Optional<AccountPasswordState> findPasswordStateById(@Param("id") Long id);
 
     /**
-     * Đăng nhập, đổi mật khẩu — sau khi so BCrypt: {@code SELECT … FOR UPDATE} theo {@code id} để đọc lại trạng thái
-     * và ghi bộ đếm dưới khóa (docs/adr/0019 mục 4, docs/adr/0022). Rỗng = tài khoản vừa bị xóa (ST02) giữa bước đọc và bước khóa.
+     * Đặt lại mật khẩu, bước đọc không khóa (docs/adr/0023): trạng thái và hash theo email đã chuẩn hóa chữ thường.
+     * Projection, không nạp entity — xem {@link AccountResetState}. Dùng {@code uq_accounts_email}.
+     */
+    @Query("""
+            SELECT new com.petcare.module.identity.repository.AccountResetState(a.id, a.status, a.locked, a.passwordHash)
+            FROM Account a WHERE a.email = :email
+            """)
+    Optional<AccountResetState> findResetStateByEmail(@Param("email") String email);
+
+    /**
+     * Đăng nhập, đổi mật khẩu, đặt lại mật khẩu — sau khi so BCrypt: {@code SELECT … FOR UPDATE} theo {@code id} để
+     * đọc lại trạng thái và ghi bộ đếm dưới khóa (docs/adr/0019 mục 4, docs/adr/0022, docs/adr/0023). Rỗng = tài khoản vừa bị xóa (ST02) giữa bước đọc và bước khóa.
      */
     @Lock(LockModeType.PESSIMISTIC_WRITE)
     @Query("SELECT a FROM Account a WHERE a.id = :id")

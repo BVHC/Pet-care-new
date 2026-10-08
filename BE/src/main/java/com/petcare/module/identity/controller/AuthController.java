@@ -8,16 +8,19 @@ import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.ResponseStatus;
 import org.springframework.web.bind.annotation.RestController;
 
+import com.petcare.module.identity.dto.ForgotPasswordRequest;
 import com.petcare.module.identity.dto.LoginRequest;
 import com.petcare.module.identity.dto.LoginResponse;
 import com.petcare.module.identity.dto.OtpSentResponse;
 import com.petcare.module.identity.dto.RegisterAccountRequest;
 import com.petcare.module.identity.dto.RegistrationResponse;
 import com.petcare.module.identity.dto.ResendRegistrationOtpRequest;
+import com.petcare.module.identity.dto.ResetPasswordRequest;
 import com.petcare.module.identity.dto.VerificationResponse;
 import com.petcare.module.identity.dto.VerifyAccountRequest;
 import com.petcare.module.identity.service.LoginService;
 import com.petcare.module.identity.service.LogoutService;
+import com.petcare.module.identity.service.PasswordResetService;
 import com.petcare.module.identity.service.RegistrationService;
 import com.petcare.platform.model.ApiResponse;
 
@@ -35,11 +38,14 @@ public class AuthController {
     private final RegistrationService registrations;
     private final LoginService logins;
     private final LogoutService logouts;
+    private final PasswordResetService passwordResets;
 
-    public AuthController(RegistrationService registrations, LoginService logins, LogoutService logouts) {
+    public AuthController(RegistrationService registrations, LoginService logins, LogoutService logouts,
+            PasswordResetService passwordResets) {
         this.registrations = registrations;
         this.logins = logins;
         this.logouts = logouts;
+        this.passwordResets = passwordResets;
     }
 
     @PostMapping("/register")
@@ -77,5 +83,23 @@ public class AuthController {
     @ResponseStatus(HttpStatus.NO_CONTENT)
     public void logout() {
         logouts.logout();
+    }
+
+    /**
+     * UC04 — quên mật khẩu (docs/adr/0023). 202 cùng một body ở mọi trường hợp, kể cả email không có tài khoản
+     * (BR-TK-10; docs/api/00-method.md §3.4). Gửi lại mã = gọi lại endpoint này.
+     */
+    @PostMapping("/password/forgot")
+    @ResponseStatus(HttpStatus.ACCEPTED)
+    public ApiResponse<OtpSentResponse> forgotPassword(@Valid @RequestBody ForgotPasswordRequest request) {
+        return ApiResponse.accepted(passwordResets.requestPasswordReset(request),
+                "Nếu email đã đăng ký, mã OTP đã được gửi tới hộp thư");
+    }
+
+    /** UC04 — đặt lại mật khẩu bằng OTP (docs/adr/0023). 204 không có body; mọi phiên cũ bị hủy (BR-TK-13). */
+    @PostMapping("/password/reset")
+    @ResponseStatus(HttpStatus.NO_CONTENT)
+    public void resetPassword(@Valid @RequestBody ResetPasswordRequest request) {
+        passwordResets.resetPassword(request);
     }
 }

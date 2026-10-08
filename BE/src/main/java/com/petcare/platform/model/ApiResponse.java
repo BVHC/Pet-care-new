@@ -17,4 +17,9 @@ public record ApiResponse<T>(T data, String message, int code) {
     public static <T> ApiResponse<T> created(T data, String message) {
         return new ApiResponse<>(data, message, 201);
     }
+
+    /** HTTP 202: yêu cầu đã nhận nhưng không tiết lộ kết quả, ví dụ quên mật khẩu (docs/api/00-method.md §3.4). */
+    public static <T> ApiResponse<T> accepted(T data, String message) {
+        return new ApiResponse<>(data, message, 202);
+    }
 }

@@ -27,7 +27,8 @@ import lombok.NoArgsConstructor;
  * Bảng {@code accounts} (erd §1, ROOT · SM #1). Tài khoản đăng nhập của khách và nhân viên; email là định danh duy
  * nhất (BR-TK-01). Khóa ({@code is_locked}) độc lập với {@code status} (BR-QT-11, 12). Đã có: đăng ký
  * (Tài khoản#1), xác thực OTP (#2), xóa tài khoản {@code PENDING} quá hạn (#3, ST02 — xóa cứng bằng SQL ở
- * {@code AccountRepository}), bộ đếm đăng nhập sai và khóa tạm (BR-TK-09, ST01 — trường phụ, không phải trạng thái), đổi mật khẩu (BR-TK-14);
+ * {@code AccountRepository}), bộ đếm đăng nhập sai và khóa tạm (BR-TK-09, ST01 — trường phụ, không phải trạng thái), đổi mật khẩu (BR-TK-14),
+ * đặt lại mật khẩu (BR-TK-13);
  * các chuyển trạng thái khác (vô hiệu hóa, khóa…) làm ở các task TK/QT sau.
  */
 @Getter
@@ -154,6 +155,22 @@ public class Account extends TimestampedEntity {
         this.passwordHash = newPasswordHash;
         this.mustChangePassword = false;
         recordSuccessfulLogin(now);
+    }
+
+    /**
+     * UC04 — đặt lại mật khẩu bằng OTP (BR-TK-13; docs/adr/0023): hash mới, gỡ bắt đổi mật khẩu lần đầu (BR-TK-17,
+     * docs/adr/0019 *Hệ quả*), xóa bộ đếm sai và <b>gỡ khóa tạm</b> kể cả khi còn hạn (BR-TK-13). Đặt
+     * {@code last_seen_at = NULL} vì mọi phiên bị hủy cùng lúc — "đăng xuất thì chuyển offline ngay" (BR-TN-06), như
+     * đăng xuất (docs/adr/0021). Caller giữ khóa dòng và hủy phiên sau lệnh này (thứ tự {@code accounts → sessions}).
+     * Không đổi {@code status}: không phải chuyển trạng thái của SM #1.
+     */
+    public void resetPassword(String newPasswordHash) {
+        this.passwordHash = newPasswordHash;
+        this.mustChangePassword = false;
+        this.failedLoginCount = 0;
+        this.firstFailedLoginAt = null;
+        this.lockedUntil = null;
+        this.lastSeenAt = null;
     }
 
     /**

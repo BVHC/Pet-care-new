@@ -150,6 +150,37 @@ class AccountTest {
         assertThat(account.isLocked()).isFalse();
     }
 
+    // ---------------------------------------------------------------- đặt lại mật khẩu (BR-TK-13; docs/adr/0023)
+
+    @Test
+    void resetPasswordClearsActiveTemporaryLockCounterMustChangeAndOnlineStatus() {
+        Account account = withCounter(3, T0);
+        ReflectionTestUtils.setField(account, "status", AccountStatus.ACTIVE);
+        ReflectionTestUtils.setField(account, "mustChangePassword", true);
+        ReflectionTestUtils.setField(account, "lockedUntil", T0.plus(LOCK));
+        ReflectionTestUtils.setField(account, "lastSeenAt", T0.minusSeconds(30));
+
+        account.resetPassword("new-hash");
+
+        assertThat(account.getPasswordHash()).isEqualTo("new-hash");
+        assertThat(account.isMustChangePassword()).isFalse();
+        assertThat(account.getFailedLoginCount()).isZero();
+        assertThat(account.getFirstFailedLoginAt()).isNull();
+        assertThat(account.getLockedUntil()).as("BR-TK-13: gỡ khóa tạm còn hạn").isNull();
+        assertThat(account.getLastSeenAt()).as("BR-TN-06: mọi phiên bị hủy nên offline ngay").isNull();
+    }
+
+    @Test
+    void resetPasswordDoesNotTouchStatusOrAdminLock() {
+        Account account = account();
+        ReflectionTestUtils.setField(account, "status", AccountStatus.ACTIVE);
+
+        account.resetPassword("new-hash");
+
+        assertThat(account.getStatus()).isEqualTo(AccountStatus.ACTIVE);
+        assertThat(account.isLocked()).isFalse();
+    }
+
     private static Account account() {
         return Account.registerCustomer("khach@petcare.test", "hash", T0.plus(Duration.ofHours(24)));
     }
