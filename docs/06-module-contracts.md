@@ -84,6 +84,7 @@ Mũi tên `A → B.m()`: module A gọi method m của module B. Cột *Chuyển
 | identity · Đăng ký (Tài khoản#1) | `CustomerApi.createOnlineProfile` | BR-KH-01 |
 | identity · Xác thực OTP (Tài khoản#2) | `CustomerApi.flagLinkDecisionIfPhoneMatches` — identity đã gọi từ 06/10 (`RegistrationService.verifyAccount`, sau khi dùng mã và chuyển `ACTIVE`, cùng transaction) | BR-TK-19 |
 | identity · ST02 (Tài khoản#3) | `CustomerApi.deleteOnlineProfileOfUnverifiedAccount` | BR-TK-08 |
+| identity · Đăng nhập (UC03) | `CustomerQueryApi.findCustomerIdByAccountId` → `findContact(...).linkDecisionPending()` — chỉ tài khoản `CUSTOMER`, nhánh mật khẩu đúng và hợp lệ; identity đã gọi từ 08/10 (`LoginAttemptService`, docs/adr/0019) | BR-TK-19 |
 | identity · Liên kết hồ sơ (UC07, UC22) | `CustomerApi.linkAccountToCounterProfile` / `declineLink`; customer tự kiểm dữ liệu qua `AppointmentQueryApi`, `BoardingQueryApi`, `OrderQueryApi`, `FeedbackQueryApi` `.existsByCustomer` | BR-TK-19 |
 | identity · Vô hiệu hóa, điều chuyển (Tài khoản#5) | `VisitQueryApi.findUnfinishedVisitIdsAssignedTo`, `CashierShiftQueryApi.hasOpenShift`, `BranchQueryApi.findBranch` (BRANCH_MANAGER cuối của chi nhánh `ACTIVE`) | BR-QT-04, 06, 08 |
 | identity · Tạo nhân viên, kích hoạt lại | `BranchQueryApi.findBranch` (chi nhánh `DRAFT`/`ACTIVE`) | BR-QT-03, 10 |
@@ -140,12 +141,12 @@ Bên sở hữu phải có implementation thật trước ngày bên gọi bắt
 | Interface | Owner · xong | Bên gọi · bắt đầu | Ghi chú |
 |---|---|---|---|
 | `SystemConfigApi` | BE-1 · 06/10 — **đã giao 04/10** | mọi module | Chữ ký đổi từ `String key` sang `ConfigKey` (ADR-0004). Audit có sẵn ở `platform/audit`; xác thực, `BranchScope` ở `platform/security` (ADR-0003) |
-| `NotificationApi` | BE-1 · 07/10 — **đã giao 06/10** | mọi module | `care/service/NotificationService` ghi `notification_outbox`; worker ST20 gửi email từ 07/10 (ADR-0012) và giao thông báo IN_APP vào `notifications` (ADR-0014, 07/10). Mẫu đã seed: `OTP_REGISTER` (V3, câu chào sửa ở V4) |
+| `NotificationApi` | BE-1 · 07/10 — **đã giao 06/10** | mọi module | `care/service/NotificationService` ghi `notification_outbox`; worker ST20 gửi email từ 07/10 (ADR-0012) và giao thông báo IN_APP vào `notifications` (ADR-0014, 07/10). Mẫu đã seed: `OTP_REGISTER` (V3, câu chào sửa ở V4); `OTP_PASSWORD_RESET`, `LOGIN_LOCKED_WARNING`, `PASSWORD_CHANGED` (V8, task 07 — ADR-0019) |
 | `CustomerApi` (create/flag/delete) | BE-2 · **07/10** | identity 07/10 | ⚠ Timeline xếp KH 12–13/10. **06/10: BE-1 đã commit `customer/service/CustomerApiPlaceholder`** (ném lỗi) để đăng ký chạy được; `POST /api/auth/register` trả 500 tới khi BE-2 thay bằng bản thật (nợ D001). Câu hỏi cho BE-2: `createOnlineProfile` không nhận `email` trong khi BR-KH-01 ghi hồ sơ online "email lấy theo tài khoản" — chọn thêm tham số hay đọc qua tài khoản, ghi lại ở đây |
 | `CatalogQueryApi` | BE-2 · 07/10 | appointment 15/10, visit 20/10 | |
 | `BranchQueryApi` | BE-2 · 09/10 | identity 12/10, appointment 15/10 | |
 | `StaffDirectoryApi.countBranchManagers` | BE-1 · **08/10** | branch kích hoạt 08/10 | ⚠ QT xếp 12–13/10; method này chỉ là một câu đếm, BE-1 làm sớm |
-| `PetQueryApi`, `PetApi`, `CustomerQueryApi` | BE-2 · 13/10 | appointment 15/10 | |
+| `PetQueryApi`, `PetApi`, `CustomerQueryApi` | BE-2 · 13/10 | appointment 15/10; identity 08/10 | **08/10: BE-1 đã thêm `customer/service/CustomerQueryApiPlaceholder`** (ném lỗi, chưa commit). Đăng nhập (`POST /api/auth/login`, có từ 08/10 — `identity/service/LoginAttemptService`) gọi `findCustomerIdByAccountId` → `findContact(...).linkDecisionPending()` với tài khoản `CUSTOMER` → khách đăng nhập trả 500 tới khi BE-2 thay bằng bản thật (nợ D010); nhân viên không ảnh hưởng |
 | `StockQueryApi`, `StockApi` | BE-2 · 15/10 | sales 20/10, visit 23/10 | |
 | `VisitOrderApi` | BE-2 · 16/10 | visit 20/10 | |
 | `AppointmentApi`, `AppointmentQueryApi` | BE-1 · 16/10 | visit 20/10; branch (hủy hàng loạt) nối thật 19/10 | |

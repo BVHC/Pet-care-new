@@ -64,8 +64,8 @@
 | Đăng ký tài khoản | A01 | Public | — → PENDING (Tài khoản#1); tạo hồ sơ online | — | Gửi OTP_REGISTER qua outbox (A8). |
 | Xác thực OTP đăng ký | A01 | Public | PENDING → ACTIVE (Tài khoản#2) | — | Không tự đăng nhập (A2). |
 | Gửi lại OTP đăng ký | A01 | Public | — | — | Mã cũ cùng mục đích mất hiệu lực (BR-TK-05). |
-| Đăng nhập | A02–A08 | Public | — | — | Ghi audit thành công và thất bại. |
-| Đăng xuất | A02–A08 | Người đang đăng nhập | — | — | Hủy phiên hiện tại; nhân viên chuyển offline ngay. |
+| Đăng nhập | A02–A08 | Public | — | — | Ghi audit thành công và thất bại (ADR-0019). `account.mustChangePassword = true` vẫn đăng nhập được (BR-TK-17). Request sai hình thức (400 `VALIDATION_FAILED` / `MALFORMED_REQUEST`) không tính là một lần đăng nhập sai. |
+| Đăng xuất | A02–A08 | Người đang đăng nhập | — | — | Hủy phiên hiện tại; nhân viên chuyển offline ngay (ADR-0021). Body không được đọc. Gọi lại sau khi thành công → 401. Request cùng token đang chạy vẫn hoàn tất (§3.1 của `00-method`). Không ghi audit (ADR-0019). |
 | Quên mật khẩu — gửi OTP | A02–A08 | Public | — | — | Luôn trả 202 cùng nội dung, kể cả email không tồn tại hoặc tài khoản không đủ điều kiện BR-TK-12 (không gửi mã). Gửi lại = gọi lại endpoint này (A7). |
 | Đặt lại mật khẩu bằng OTP | A02–A08 | Public | — | — | Thành công: hủy mọi phiên, gỡ khóa tạm, gửi email PASSWORD_CHANGED (BR-TK-13). |
 | Thông tin người đang đăng nhập | A02–A08 | Người đang đăng nhập | — | — | — |
@@ -108,7 +108,7 @@
 - **`POST /auth/register`** — Đăng ký tài khoản. Public. Request `RegisterRequest`. Response `201` `RegistrationResponse`. Lỗi: `400` `BR-TK-01` email đã được sử dụng · `BR-TK-02` chưa xác nhận ≥ 18 tuổi / điều khoản · `BR-TK-03` mật khẩu yếu hoặc quá 72 byte · `BR-TK-07` email đã nhận quá 5 mã OTP/giờ [CFG] · `409` `CONCURRENCY_CONFLICT` hai request đăng ký cùng email cùng lúc.
 - **`POST /auth/register/verify`** — Xác thực OTP đăng ký. Public. Request `VerifyOtpRequest`. Response `200` `VerificationResponse`. Lỗi: `400` `BR-TK-05` mã sai / hết hạn · `BR-TK-06` sai quá 5 lần, mã bị hủy · `404` Không có tài khoản PENDING với email này.
 - **`POST /auth/register/resend-otp`** — Gửi lại OTP đăng ký. Public. Request `EmailRequest`. Response `200` `OtpSentResponse`. Lỗi: `400` `BR-TK-07` chưa đủ 60 giây hoặc vượt 5 mã/giờ · `404` Không có tài khoản PENDING với email này.
-- **`POST /auth/login`** — Đăng nhập. Public. Request `LoginRequest`. Response `200` `LoginResponse`. Lỗi: `400` `BR-TK-08` tài khoản chưa xác thực → FE chuyển màn OTP · `BR-TK-09` đang khóa tạm, message có giờ thử lại · `BR-TK-11` tài khoản bị khóa / vô hiệu hóa · `401` Sai email hoặc mật khẩu — thông điệp chung (BR-TK-10); sai lần thứ 5 trong 15 phút [CFG] kích hoạt ST01.
+- **`POST /auth/login`** — Đăng nhập. Public. Request `LoginRequest`. Response `200` `LoginResponse`. Lỗi: `400` Chỉ khi mật khẩu đúng (ADR-0019): `BR-TK-08` tài khoản chưa xác thực → FE chuyển màn OTP · `BR-TK-09` đang khóa tạm, message có giờ thử lại (`HH:mm dd/MM/yyyy`) · `BR-TK-11` tài khoản bị khóa / vô hiệu hóa · `401` Sai email hoặc mật khẩu — thông điệp chung "Email hoặc mật khẩu không đúng" (BR-TK-10); sai lần thứ 5 trong 15 phút [CFG] kích hoạt ST01 (khóa tạm + email cảnh báo); sai trong lúc khóa không đếm.
 - **`POST /auth/logout`** — Đăng xuất. Response `204` rỗng. Lỗi: `401`.
 - **`POST /auth/password/forgot`** — Quên mật khẩu — gửi OTP. Public. Request `EmailRequest`. Response `202` `OtpSentResponse`. Lỗi: `400` Email sai định dạng.
 - **`POST /auth/password/reset`** — Đặt lại mật khẩu bằng OTP. Public. Request `ResetPasswordRequest`. Response `204` rỗng. Lỗi: `400` `BR-TK-05` mã sai / hết hạn · `BR-TK-06` sai quá 5 lần, mã bị hủy · `BR-TK-03` mật khẩu không hợp lệ.
@@ -233,7 +233,7 @@ Trường có `?` là không bắt buộc / có thể null. Kiểu `email`, `dat
 | ID | Câu hỏi | Trạng thái | Gốc |
 |---|---|---|---|
 | Q1 | Thời hạn phiên đăng nhập bao lâu, có thêm vào [CFG] không, có cần refresh token cho app không? | Đã chốt (ADR-0003): hạn tuyệt đối `session.ttl_hours` [CFG], mặc định 12 giờ (1–72), không gia hạn, không refresh token; `exp` của token = `expiresAt` | Docs không quy định (A1) |
-| Q2 | Lỗi `BR-TK-09` (khóa tạm, kèm giờ thử lại) cho biết email tồn tại, lệch với tinh thần BR-TK-10. Chấp nhận như BR-TK-09 yêu cầu? | TBD (PO), tạm theo BR-TK-09 | BR-TK-09 vs BR-TK-10 |
+| Q2 | Lỗi `BR-TK-09` (khóa tạm, kèm giờ thử lại) cho biết email tồn tại, lệch với tinh thần BR-TK-10. Chấp nhận như BR-TK-09 yêu cầu? | Đã chốt (ADR-0019): BR-TK-08/09/11 chỉ trả khi mật khẩu đúng; mật khẩu sai luôn 401 chung, nên người không biết mật khẩu không phân biệt được email có tồn tại, đang khóa hay chưa xác thực | BR-TK-09 vs BR-TK-10 |
 
 ---
 

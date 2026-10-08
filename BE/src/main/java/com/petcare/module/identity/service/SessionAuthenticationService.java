@@ -66,7 +66,7 @@ public class SessionAuthenticationService implements SessionAuthenticator {
     private void touchLastSeen(SessionAuthView view, Instant now) {
         Instant threshold = now.minus(LAST_SEEN_THROTTLE);
         if (view.lastSeenAt() == null || view.lastSeenAt().isBefore(threshold)) {
-            accounts.touchLastSeen(view.accountId(), now, threshold);
+            accounts.touchLastSeen(view.accountId(), view.sessionId(), now, threshold);
         }
     }
 }

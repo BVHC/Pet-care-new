@@ -159,7 +159,7 @@ class SessionAuthenticationServiceTest {
 
         service.authenticate(CLAIMS);
 
-        verify(accounts).touchLastSeen(ACCOUNT, NOW, NOW.minusSeconds(60));
+        verify(accounts).touchLastSeen(ACCOUNT, SESSION, NOW, NOW.minusSeconds(60));
     }
 
     @Test
@@ -168,7 +168,7 @@ class SessionAuthenticationServiceTest {
 
         service.authenticate(CLAIMS);
 
-        verify(accounts).touchLastSeen(ACCOUNT, NOW, NOW.minusSeconds(60));
+        verify(accounts).touchLastSeen(ACCOUNT, SESSION, NOW, NOW.minusSeconds(60));
     }
 
     @Test
@@ -177,7 +177,7 @@ class SessionAuthenticationServiceTest {
 
         service.authenticate(CLAIMS);
 
-        verify(accounts, never()).touchLastSeen(anyLong(), any(), any());
+        verify(accounts, never()).touchLastSeen(anyLong(), anyLong(), any(), any());
     }
 
     @Test
@@ -186,7 +186,7 @@ class SessionAuthenticationServiceTest {
 
         service.authenticate(CLAIMS);
 
-        verify(accounts, never()).touchLastSeen(anyLong(), any(), any());
+        verify(accounts, never()).touchLastSeen(anyLong(), anyLong(), any(), any());
     }
 
     @Test
@@ -195,7 +195,7 @@ class SessionAuthenticationServiceTest {
 
         service.authenticate(CLAIMS);
 
-        verify(accounts, never()).touchLastSeen(anyLong(), any(), any());
+        verify(accounts, never()).touchLastSeen(anyLong(), anyLong(), any(), any());
     }
 
     private void given(ViewBuilder builder) {

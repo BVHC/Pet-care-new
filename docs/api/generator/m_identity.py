@@ -42,7 +42,7 @@ m = Module(
     ],
     questions=[
         ("Q1", "Thời hạn phiên đăng nhập bao lâu, có thêm vào [CFG] không, có cần refresh token cho app không?", "Đã chốt (ADR-0003): hạn tuyệt đối `session.ttl_hours` [CFG], mặc định 12 giờ (1–72), không gia hạn, không refresh token; `exp` của token = `expiresAt`", "Docs không quy định (A1)"),
-        ("Q2", "Lỗi `BR-TK-09` (khóa tạm, kèm giờ thử lại) cho biết email tồn tại, lệch với tinh thần BR-TK-10. Chấp nhận như BR-TK-09 yêu cầu?", "TBD (PO), tạm theo BR-TK-09", "BR-TK-09 vs BR-TK-10"),
+        ("Q2", "Lỗi `BR-TK-09` (khóa tạm, kèm giờ thử lại) cho biết email tồn tại, lệch với tinh thần BR-TK-10. Chấp nhận như BR-TK-09 yêu cầu?", "Đã chốt (ADR-0019): BR-TK-08/09/11 chỉ trả khi mật khẩu đúng; mật khẩu sai luôn 401 chung, nên người không biết mật khẩu không phân biệt được email có tồn tại, đang khóa hay chưa xác thực", "BR-TK-09 vs BR-TK-10"),
     ],
 )
 
@@ -191,11 +191,11 @@ m.op("post", "/auth/register/resend-otp", "resendRegistrationOtp", "Gửi lại 
 m.op("post", "/auth/login", "login", "Đăng nhập", "Auth", "UC03",
      "BR-TK-08, 09, 10, 11, 17, BR-QT-15", "A02–A08", "Public", "—", body="LoginRequest", resp="LoginResponse",
      public=True, errors=(400, 401),
-     err_desc={400: "`BR-TK-08` tài khoản chưa xác thực → FE chuyển màn OTP · `BR-TK-09` đang khóa tạm, message có giờ thử lại · `BR-TK-11` tài khoản bị khóa / vô hiệu hóa",
-               401: "Sai email hoặc mật khẩu — thông điệp chung (BR-TK-10); sai lần thứ 5 trong 15 phút [CFG] kích hoạt ST01"},
-     notes="Ghi audit thành công và thất bại.")
+     err_desc={400: "Chỉ khi mật khẩu đúng (ADR-0019): `BR-TK-08` tài khoản chưa xác thực → FE chuyển màn OTP · `BR-TK-09` đang khóa tạm, message có giờ thử lại (`HH:mm dd/MM/yyyy`) · `BR-TK-11` tài khoản bị khóa / vô hiệu hóa",
+               401: "Sai email hoặc mật khẩu — thông điệp chung \"Email hoặc mật khẩu không đúng\" (BR-TK-10); sai lần thứ 5 trong 15 phút [CFG] kích hoạt ST01 (khóa tạm + email cảnh báo); sai trong lúc khóa không đếm"},
+     notes="Ghi audit thành công và thất bại (ADR-0019). `account.mustChangePassword = true` vẫn đăng nhập được (BR-TK-17). Request sai hình thức (400 `VALIDATION_FAILED` / `MALFORMED_REQUEST`) không tính là một lần đăng nhập sai.")
 m.op("post", "/auth/logout", "logout", "Đăng xuất", "Auth", "UC03", "BR-TK-11, BR-TN-06", "A02–A08",
-     "Người đang đăng nhập", "—", status=204, errors=(401,), notes="Hủy phiên hiện tại; nhân viên chuyển offline ngay.")
+     "Người đang đăng nhập", "—", status=204, errors=(401,), notes="Hủy phiên hiện tại; nhân viên chuyển offline ngay (ADR-0021). Body không được đọc. Gọi lại sau khi thành công → 401. Request cùng token đang chạy vẫn hoàn tất (§3.1 của `00-method`). Không ghi audit (ADR-0019).")
 m.op("post", "/auth/password/forgot", "forgotPassword", "Quên mật khẩu — gửi OTP", "Auth", "UC04",
      "BR-TK-04, 07, 10, 12", "A02–A08", "Public", "—", body="EmailRequest", resp="OtpSentResponse", status=202,
      public=True, errors=(400,), err_desc={400: "Email sai định dạng"},

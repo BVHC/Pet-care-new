@@ -8,6 +8,10 @@ spring:
     password: ${DB_PASSWORD:123456}
 
   jpa:
+    # Tắt Open Session In View (docs/adr/0020): Spring giữ connection tới khi EntityManager đóng
+    # (DELAYED_ACQUISITION_AND_HOLD), nên với OSIV mỗi request giữ connection tới lúc trả response — kể cả lúc so
+    # BCrypt của đăng nhập (docs/adr/0019 mục 4). Entity không rời service (convention 02) nên không cần lazy-load ở web.
+    open-in-view: false
     hibernate:
       ddl-auto: validate
     properties:
