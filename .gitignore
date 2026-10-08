@@ -235,3 +235,12 @@ docs/superpowers/
 graphify-out/
 *.graph.json
 
+# ==============================================================================
+# Graphify Knowledge Graph (local only - never commit)
+# ==============================================================================
+.graphify/
+graphify-out/
+*.graph.json
+
+
+docs/dept

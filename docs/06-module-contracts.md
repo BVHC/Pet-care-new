@@ -23,7 +23,7 @@
 
 **Người đang đăng nhập và phạm vi chi nhánh:** `platform.security.BranchScope` (ADR-0003). `current().accountId()` là actor truyền vào các interface có tham số `actorId`; `resolve` / `check` dùng cho dữ liệu có `branch_id`.
 
-**Thông báo và audit** luôn ghi trong transaction nghiệp vụ: `NotificationApi.enqueue` chỉ ghi `notification_outbox`, worker ST20 gửi sau. Audit dùng `platform.audit.AuditRecorder.record` (ADR-0001, đã có trong `platform/`), chỉ INSERT.
+**Thông báo và audit** luôn ghi trong transaction nghiệp vụ: `NotificationApi.enqueue` chỉ ghi `notification_outbox`, worker ST20 gửi sau (ADR-0012). Người nhận theo kênh: `EMAIL` bắt buộc `recipientEmail` (địa chỉ chốt lúc sự kiện), `IN_APP` bắt buộc `recipientAccountId`; tài khoản `PENDING` không truyền `recipientAccountId`. Outbox không chống use case chạy hai lần: use case tự chống lặp (rule/FSM; job nhắc đặt cờ "đã nhắc" cùng transaction với `enqueue`). Biến chứa bí mật đặt tên có `otp`/`mat_khau`/`password`/`token`/`secret` để bị xóa sau khi gửi. Audit dùng `platform.audit.AuditRecorder.record` (ADR-0001, đã có trong `platform/`), chỉ INSERT.
 
 **Làm song song với stub.**
 - Bên gọi viết unit test với Mockito trên interface, không chờ bên sở hữu.
@@ -34,7 +34,7 @@
 
 | Module (package) | Mã | Model (04) | Owner | `api/` công bố |
 |---|---|---|---|---|
-| `identity` | TK, QT | Account, StaffProfile, OtpToken, Session, AuditLog, SystemConfig, NotificationTemplate | BE-1 | `StaffDirectoryApi`, `SystemConfigApi` + `ConfigKey`, `ConfigValueType` (ADR-0004, xem §1), `NotificationTemplateCode`, `Role`, `AccountLockedEvent` |
+| `identity` | TK, QT | Account, StaffProfile, OtpToken, Session, AuditLog, SystemConfig, NotificationTemplate | BE-1 | `StaffDirectoryApi`, `SystemConfigApi` + `ConfigKey`, `ConfigValueType` (ADR-0004, xem §1), `NotificationTemplateCode`, `NotificationTemplateQueryApi` (đọc mẫu cho ST20, ADR-0012), `Role`, `AccountLockedEvent` |
 | `branch` | CN | Branch, OpeningHours, Holiday, BranchService, BranchQuotaDefault, SlotQuota | BE-2 | `BranchQueryApi`, `BranchClinicCancellationEvent` |
 | `customer` | KH | Customer, Address, Pet, WeightRecord | BE-2 | `CustomerApi`, `CustomerQueryApi`, `PetApi`, `PetQueryApi`, `Species`, `WeightSource`, `PetDeceasedEvent`, `PetOwnerTransferredEvent` |
 | `catalog` | SP | ProductCategory, Product, Service, KennelType, VaccineType, VaccinationProtocol | BE-2 | `CatalogQueryApi`, `ServiceGroup`, `MedicalType`, `ProductType` |
@@ -82,7 +82,7 @@ Mũi tên `A → B.m()`: module A gọi method m của module B. Cột *Chuyển
 | Bên gọi · ngữ cảnh | Gọi | Nguồn |
 |---|---|---|
 | identity · Đăng ký (Tài khoản#1) | `CustomerApi.createOnlineProfile` | BR-KH-01 |
-| identity · Xác thực OTP (Tài khoản#2) | `CustomerApi.flagLinkDecisionIfPhoneMatches` | BR-TK-19 |
+| identity · Xác thực OTP (Tài khoản#2) | `CustomerApi.flagLinkDecisionIfPhoneMatches` — identity đã gọi từ 06/10 (`RegistrationService.verifyAccount`, sau khi dùng mã và chuyển `ACTIVE`, cùng transaction) | BR-TK-19 |
 | identity · ST02 (Tài khoản#3) | `CustomerApi.deleteOnlineProfileOfUnverifiedAccount` | BR-TK-08 |
 | identity · Liên kết hồ sơ (UC07, UC22) | `CustomerApi.linkAccountToCounterProfile` / `declineLink`; customer tự kiểm dữ liệu qua `AppointmentQueryApi`, `BoardingQueryApi`, `OrderQueryApi`, `FeedbackQueryApi` `.existsByCustomer` | BR-TK-19 |
 | identity · Vô hiệu hóa, điều chuyển (Tài khoản#5) | `VisitQueryApi.findUnfinishedVisitIdsAssignedTo`, `CashierShiftQueryApi.hasOpenShift`, `BranchQueryApi.findBranch` (BRANCH_MANAGER cuối của chi nhánh `ACTIVE`) | BR-QT-04, 06, 08 |
@@ -140,8 +140,8 @@ Bên sở hữu phải có implementation thật trước ngày bên gọi bắt
 | Interface | Owner · xong | Bên gọi · bắt đầu | Ghi chú |
 |---|---|---|---|
 | `SystemConfigApi` | BE-1 · 06/10 — **đã giao 04/10** | mọi module | Chữ ký đổi từ `String key` sang `ConfigKey` (ADR-0004). Audit có sẵn ở `platform/audit`; xác thực, `BranchScope` ở `platform/security` (ADR-0003) |
-| `NotificationApi` | BE-1 · 07/10 | mọi module | |
-| `CustomerApi` (create/flag/delete) | BE-2 · **07/10** | identity 07/10 | ⚠ Timeline xếp KH 12–13/10. BE-2 làm riêng 3 method này sáng 07/10, hoặc BE-1 dùng placeholder và chưa demo được đăng ký tới 13/10 |
+| `NotificationApi` | BE-1 · 07/10 — **đã giao 06/10** | mọi module | `care/service/NotificationService` ghi `notification_outbox`; worker ST20 gửi email từ 07/10 (ADR-0012) và giao thông báo IN_APP vào `notifications` (ADR-0014, 07/10). Mẫu đã seed: `OTP_REGISTER` (V3, câu chào sửa ở V4) |
+| `CustomerApi` (create/flag/delete) | BE-2 · **07/10** | identity 07/10 | ⚠ Timeline xếp KH 12–13/10. **06/10: BE-1 đã commit `customer/service/CustomerApiPlaceholder`** (ném lỗi) để đăng ký chạy được; `POST /api/auth/register` trả 500 tới khi BE-2 thay bằng bản thật (nợ D001). Câu hỏi cho BE-2: `createOnlineProfile` không nhận `email` trong khi BR-KH-01 ghi hồ sơ online "email lấy theo tài khoản" — chọn thêm tham số hay đọc qua tài khoản, ghi lại ở đây |
 | `CatalogQueryApi` | BE-2 · 07/10 | appointment 15/10, visit 20/10 | |
 | `BranchQueryApi` | BE-2 · 09/10 | identity 12/10, appointment 15/10 | |
 | `StaffDirectoryApi.countBranchManagers` | BE-1 · **08/10** | branch kích hoạt 08/10 | ⚠ QT xếp 12–13/10; method này chỉ là một câu đếm, BE-1 làm sớm |
@@ -253,7 +253,7 @@ Báo cáo (2) đếm theo dòng dịch vụ trong Order, vì dịch vụ thực 
 | `PENDING_ORDERS_DIGEST_APP` | Trong app | BRANCH_MANAGER | BR-BH-05, ST13 |
 | `STOCK_ALERT_DIGEST_APP` | Trong app | BRANCH_MANAGER | BR-KO-07, ST08 |
 
-Biến của từng mẫu (`allowed_vars`, `required_vars`) do module gửi đề xuất trong PR đầu tiên dùng mẫu đó. Thiếu mẫu thì thêm hằng số kèm migration seed, không tạo mẫu qua giao diện.
+Biến của từng mẫu (`allowed_vars`, `required_vars`) do module gửi đề xuất trong PR đầu tiên dùng mẫu đó. Mẫu `_APP` (kênh `IN_APP`) bắt buộc có `subject` — thành `notifications.title`, quá 200 ký tự bị cắt; `notifications.type` là mã mẫu bỏ hậu tố `_APP` (ADR-0014). Thiếu mẫu thì thêm hằng số kèm migration seed, không tạo mẫu qua giao diện.
 
 ### Cần sửa ở tài liệu gốc
 

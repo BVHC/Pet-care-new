@@ -23,7 +23,7 @@ Chỉ tạo subclass riêng (kế thừa từ 1 trong 5 exception trên, đặt 
 1. Cần mang ≥ 2 field đặc thù mà base không diễn tả được, và caller hoặc client cần đọc chúng.
    Ví dụ giả định: lỗi thiếu tồn lúc thu tiền cần trả danh sách dòng thiếu (BR-BH-04 "chỉ rõ dòng thiếu").
 2. Cần được xử lý khác default ở `GlobalExceptionHandler` (HTTP status khác, header khác...).
-3. Liên quan FSM có TTL/concurrency đặc biệt cần logic retry/rollback riêng. *(Chưa có trường hợp nào; cơ chế khóa đồng thời còn chờ ADR, xem [07](07-transaction-management.md).)*
+3. Liên quan FSM có TTL/concurrency đặc biệt cần logic retry/rollback riêng. *(Ví dụ: `identity/exception/OtpRejectedException` — nhập sai OTP phải commit bộ đếm `failed_attempts` dù request lỗi, nên mọi `@Transactional` nó đi qua khai báo `noRollbackFor` ([ADR-0010](../../adr/0010-otp-verification-failure-commit.md)). Khóa đồng thời của luồng OTP: [ADR-0011](../../adr/0011-otp-flow-locking.md), xem [07](07-transaction-management.md) §7.3.)*
 
 **Không thoả tiêu chí nào → bắt buộc dùng exception chung**, không tạo class mới. Mọi exception riêng phải ghi rõ lý do (số tiêu chí) trong Javadoc và mô tả PR. Nếu cần thêm trường vào `ErrorResponse` (tiêu chí 1, 2) thì phải sửa `platform/` và ghi ADR, vì envelope lỗi là hợp đồng chung với FE.
 
