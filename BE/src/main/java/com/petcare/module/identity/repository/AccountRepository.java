@@ -38,8 +38,18 @@ public interface AccountRepository extends JpaRepository<Account, Long> {
     Optional<AccountCredential> findCredentialByEmail(@Param("email") String email);
 
     /**
-     * Đăng nhập, sau khi so BCrypt: {@code SELECT … FOR UPDATE} theo {@code id} để đọc lại trạng thái và ghi bộ đếm
-     * dưới khóa (docs/adr/0019 mục 4). Rỗng = tài khoản vừa bị xóa (ST02) giữa bước đọc và bước khóa.
+     * Đổi mật khẩu, bước đọc không khóa (docs/adr/0022): {@code password_hash} và {@code locked_until} của tài khoản
+     * đang đăng nhập. Projection, không nạp entity — cùng lý do {@link AccountCredential}.
+     */
+    @Query("""
+            SELECT new com.petcare.module.identity.repository.AccountPasswordState(a.passwordHash, a.lockedUntil)
+            FROM Account a WHERE a.id = :id
+            """)
+    Optional<AccountPasswordState> findPasswordStateById(@Param("id") Long id);
+
+    /**
+     * Đăng nhập, đổi mật khẩu — sau khi so BCrypt: {@code SELECT … FOR UPDATE} theo {@code id} để đọc lại trạng thái
+     * và ghi bộ đếm dưới khóa (docs/adr/0019 mục 4, docs/adr/0022). Rỗng = tài khoản vừa bị xóa (ST02) giữa bước đọc và bước khóa.
      */
     @Lock(LockModeType.PESSIMISTIC_WRITE)
     @Query("SELECT a FROM Account a WHERE a.id = :id")

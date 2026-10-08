@@ -122,6 +122,34 @@ class AccountTest {
         assertThat(account.getLockedUntil()).isNull();
     }
 
+    // ---------------------------------------------------------------- đổi mật khẩu (BR-TK-14, 17; docs/adr/0022)
+
+    @Test
+    void changePasswordSetsHashClearsMustChangeAndCounter() {
+        Account account = withCounter(3, T0);
+        ReflectionTestUtils.setField(account, "mustChangePassword", true);
+        ReflectionTestUtils.setField(account, "lockedUntil", T0.minusSeconds(1));
+
+        account.changePassword("new-hash", T0);
+
+        assertThat(account.getPasswordHash()).isEqualTo("new-hash");
+        assertThat(account.isMustChangePassword()).isFalse();
+        assertThat(account.getFailedLoginCount()).isZero();
+        assertThat(account.getFirstFailedLoginAt()).isNull();
+        assertThat(account.getLockedUntil()).as("khóa đã hết hạn bị xóa").isNull();
+    }
+
+    @Test
+    void changePasswordDoesNotTouchStatusOrAdminLock() {
+        Account account = account();
+        ReflectionTestUtils.setField(account, "status", AccountStatus.ACTIVE);
+
+        account.changePassword("new-hash", T0);
+
+        assertThat(account.getStatus()).isEqualTo(AccountStatus.ACTIVE);
+        assertThat(account.isLocked()).isFalse();
+    }
+
     private static Account account() {
         return Account.registerCustomer("khach@petcare.test", "hash", T0.plus(Duration.ofHours(24)));
     }

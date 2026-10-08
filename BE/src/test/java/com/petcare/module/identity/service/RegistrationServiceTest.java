@@ -72,7 +72,8 @@ class RegistrationServiceTest {
     private final SystemConfigApi configs = mock(SystemConfigApi.class);
     private final PasswordEncoder encoder = new BCryptPasswordEncoder(4);
     private final RegistrationService service = new RegistrationService(accounts, new AccountTransitionHandler(),
-            customers, otps, notifications, configs, encoder, Mappers.getMapper(RegistrationMapper.class),
+            customers, otps, notifications, configs, encoder, new PasswordPolicy(configs),
+            Mappers.getMapper(RegistrationMapper.class),
             Clock.fixed(NOW, TimeConfig.BUSINESS_ZONE));
 
     @BeforeEach

@@ -69,7 +69,7 @@
 | Quên mật khẩu — gửi OTP | A02–A08 | Public | — | — | Luôn trả 202 cùng nội dung, kể cả email không tồn tại hoặc tài khoản không đủ điều kiện BR-TK-12 (không gửi mã). Gửi lại = gọi lại endpoint này (A7). |
 | Đặt lại mật khẩu bằng OTP | A02–A08 | Public | — | — | Thành công: hủy mọi phiên, gỡ khóa tạm, gửi email PASSWORD_CHANGED (BR-TK-13). |
 | Thông tin người đang đăng nhập | A02–A08 | Người đang đăng nhập | — | — | — |
-| Đổi mật khẩu | A02–A08 | Người đang đăng nhập | — | — | Đăng xuất mọi phiên khác; gỡ `mustChangePassword`. |
+| Đổi mật khẩu | A02–A08 | Người đang đăng nhập | — | — | Đăng xuất mọi phiên khác, phiên đang dùng giữ nguyên; gỡ `mustChangePassword`; xóa bộ đếm đăng nhập sai. Không gửi email. Request sai hình thức (400 `VALIDATION_FAILED` / `MALFORMED_REQUEST`) không tính là một lần nhập sai (ADR-0022). |
 | Sửa hồ sơ nhân viên của tôi | A03–A08 | Nhân viên đang đăng nhập; specialty, bio chỉ VET | — | — | — |
 | Danh sách hồ sơ tại quầy có thể liên kết | A02 | Khách đang đăng nhập | — | — | Chỉ trả hồ sơ COUNTER chưa liên kết, họ tên đã che. |
 | Gửi OTP tới email hồ sơ tại quầy | A02 | Khách đang đăng nhập | — | — | — |
@@ -115,7 +115,7 @@
 ### Me
 
 - **`GET /me`** — Thông tin người đang đăng nhập. Response `200` `MeResponse`. Lỗi: `401`.
-- **`POST /me/password`** — Đổi mật khẩu. Request `ChangePasswordRequest`. Response `204` rỗng. Lỗi: `400` `BR-TK-14` mật khẩu hiện tại sai (tính vào bộ đếm BR-TK-09) · `BR-TK-03` mật khẩu mới không hợp lệ hoặc trùng mật khẩu cũ · `401`.
+- **`POST /me/password`** — Đổi mật khẩu. Request `ChangePasswordRequest`. Response `204` rỗng. Lỗi: `400` `BR-TK-14` mật khẩu hiện tại sai (tính vào bộ đếm BR-TK-09; lần chạm ngưỡng khóa tạm đăng nhập, message kèm giờ mở khóa) · `BR-TK-03` mật khẩu mới không hợp lệ hoặc trùng mật khẩu cũ (chỉ kiểm khi mật khẩu hiện tại đúng) · `BR-TK-09` đang khóa tạm, message có giờ thử lại · `BR-TK-11` tài khoản vừa bị khóa / vô hiệu hóa · `401`.
 - **`PATCH /me/staff-profile`** — Sửa hồ sơ nhân viên của tôi. Request `UpdateStaffProfileRequest`. Response `200` `StaffProfile`. Lỗi: `400` `BR-TK-20` mô tả ngắn vượt 500 ký tự [CFG] · `BR-TK-15` cố sửa email · `401` · `403`.
 ### Profile link
 

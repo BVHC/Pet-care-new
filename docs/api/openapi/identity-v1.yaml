@@ -295,7 +295,7 @@ paths:
     post:
       tags: [Me]
       summary: "Đổi mật khẩu"
-      description: "UC05 · BR-TK-03, 09, 14, 17. Actor: A02–A08. Quyền: Người đang đăng nhập. Chuyển trạng thái: —. Đăng xuất mọi phiên khác; gỡ `mustChangePassword`."
+      description: "UC05 · BR-TK-03, 09, 14, 17. Actor: A02–A08. Quyền: Người đang đăng nhập. Chuyển trạng thái: —. Đăng xuất mọi phiên khác, phiên đang dùng giữ nguyên; gỡ `mustChangePassword`; xóa bộ đếm đăng nhập sai. Không gửi email. Request sai hình thức (400 `VALIDATION_FAILED` / `MALFORMED_REQUEST`) không tính là một lần nhập sai (ADR-0022)."
       operationId: changePassword
       security:
         - bearerAuth: []
@@ -309,7 +309,7 @@ paths:
         "204":
           description: "Không có nội dung"
         "400":
-          description: "`BR-TK-14` mật khẩu hiện tại sai (tính vào bộ đếm BR-TK-09) · `BR-TK-03` mật khẩu mới không hợp lệ hoặc trùng mật khẩu cũ"
+          description: "`BR-TK-14` mật khẩu hiện tại sai (tính vào bộ đếm BR-TK-09; lần chạm ngưỡng khóa tạm đăng nhập, message kèm giờ mở khóa) · `BR-TK-03` mật khẩu mới không hợp lệ hoặc trùng mật khẩu cũ (chỉ kiểm khi mật khẩu hiện tại đúng) · `BR-TK-09` đang khóa tạm, message có giờ thử lại · `BR-TK-11` tài khoản vừa bị khóa / vô hiệu hóa"
           content:
             "application/json":
               schema:

@@ -8,6 +8,11 @@ public final class IdentityAuditActions {
 
     public static final String LOGIN_SUCCEEDED = "LOGIN_SUCCEEDED";
     public static final String LOGIN_FAILED = "LOGIN_FAILED";
+    /**
+     * Lần nhập sai mật khẩu hiện tại ở đổi mật khẩu (BR-TK-14) kích hoạt khóa tạm BR-TK-09 (docs/adr/0019 mục 6,
+     * docs/adr/0022). Lần sai chưa chạm ngưỡng và đổi thành công không audit.
+     */
+    public static final String ACCOUNT_TEMPORARILY_LOCKED = "ACCOUNT_TEMPORARILY_LOCKED";
 
     /** {@code LOGIN_FAILED.reason}: email không khớp tài khoản nào (kể cả vừa bị ST02 xóa). */
     public static final String REASON_UNKNOWN_EMAIL = "UNKNOWN_EMAIL";

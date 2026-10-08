@@ -209,8 +209,8 @@ m.op("get", "/me", "getMe", "Thông tin người đang đăng nhập", "Me", "UC
      "Người đang đăng nhập", resp="MeResponse", errors=(401,))
 m.op("post", "/me/password", "changePassword", "Đổi mật khẩu", "Me", "UC05", "BR-TK-03, 09, 14, 17", "A02–A08",
      "Người đang đăng nhập", body="ChangePasswordRequest", status=204, errors=(400, 401),
-     err_desc={400: "`BR-TK-14` mật khẩu hiện tại sai (tính vào bộ đếm BR-TK-09) · `BR-TK-03` mật khẩu mới không hợp lệ hoặc trùng mật khẩu cũ"},
-     notes="Đăng xuất mọi phiên khác; gỡ `mustChangePassword`.")
+     err_desc={400: "`BR-TK-14` mật khẩu hiện tại sai (tính vào bộ đếm BR-TK-09; lần chạm ngưỡng khóa tạm đăng nhập, message kèm giờ mở khóa) · `BR-TK-03` mật khẩu mới không hợp lệ hoặc trùng mật khẩu cũ (chỉ kiểm khi mật khẩu hiện tại đúng) · `BR-TK-09` đang khóa tạm, message có giờ thử lại · `BR-TK-11` tài khoản vừa bị khóa / vô hiệu hóa"},
+     notes="Đăng xuất mọi phiên khác, phiên đang dùng giữ nguyên; gỡ `mustChangePassword`; xóa bộ đếm đăng nhập sai. Không gửi email. Request sai hình thức (400 `VALIDATION_FAILED` / `MALFORMED_REQUEST`) không tính là một lần nhập sai (ADR-0022).")
 m.op("patch", "/me/staff-profile", "updateMyStaffProfile", "Sửa hồ sơ nhân viên của tôi", "Me", "UC06",
      "BR-TK-15, 20", "A03–A08", "Nhân viên đang đăng nhập; specialty, bio chỉ VET", body="UpdateStaffProfileRequest",
      resp="StaffProfile", errors=(400, 401, 403), err_desc={400: "`BR-TK-20` mô tả ngắn vượt 500 ký tự [CFG] · `BR-TK-15` cố sửa email"})

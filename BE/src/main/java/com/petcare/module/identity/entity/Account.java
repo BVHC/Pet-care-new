@@ -27,7 +27,7 @@ import lombok.NoArgsConstructor;
  * Bảng {@code accounts} (erd §1, ROOT · SM #1). Tài khoản đăng nhập của khách và nhân viên; email là định danh duy
  * nhất (BR-TK-01). Khóa ({@code is_locked}) độc lập với {@code status} (BR-QT-11, 12). Đã có: đăng ký
  * (Tài khoản#1), xác thực OTP (#2), xóa tài khoản {@code PENDING} quá hạn (#3, ST02 — xóa cứng bằng SQL ở
- * {@code AccountRepository}), bộ đếm đăng nhập sai và khóa tạm (BR-TK-09, ST01 — trường phụ, không phải trạng thái);
+ * {@code AccountRepository}), bộ đếm đăng nhập sai và khóa tạm (BR-TK-09, ST01 — trường phụ, không phải trạng thái), đổi mật khẩu (BR-TK-14);
  * các chuyển trạng thái khác (vô hiệu hóa, khóa…) làm ở các task TK/QT sau.
  */
 @Getter
@@ -143,6 +143,17 @@ public class Account extends TimestampedEntity {
         failedLoginCount = 0;
         firstFailedLoginAt = null;
         return true;
+    }
+
+    /**
+     * UC05 — đổi mật khẩu thành công (BR-TK-14, 17; docs/adr/0022): hash mới, gỡ bắt đổi mật khẩu lần đầu, xóa bộ đếm
+     * sai như đăng nhập thành công. Caller đã kiểm {@link #isTemporarilyLocked} dưới khóa dòng, nên {@code locked_until}
+     * còn lại (nếu có) đã hết hạn và bị xóa. Không đổi {@code status}: không phải chuyển trạng thái của SM #1.
+     */
+    public void changePassword(String newPasswordHash, Instant now) {
+        this.passwordHash = newPasswordHash;
+        this.mustChangePassword = false;
+        recordSuccessfulLogin(now);
     }
 
     /**
