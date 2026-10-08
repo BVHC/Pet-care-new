@@ -34,8 +34,10 @@ import lombok.extern.slf4j.Slf4j;
  *   <li>{@link #record} — mặc định. Bắt buộc chạy trong transaction của use case ({@code MANDATORY}): nghiệp vụ
  *       rollback thì audit cũng mất, ghi audit lỗi thì nghiệp vụ rollback (erd L802).</li>
  *   <li>{@link #recordIndependently} — chỉ cho sự kiện <b>thất bại</b> mà nghiệp vụ sẽ rollback nhưng audit phải còn
- *       ({@code LOGIN_FAILED}, từ chối 403 theo BR-QT-01). Transaction riêng ({@code REQUIRES_NEW}); nếu chính lệnh
- *       ghi lỗi thì log ERROR và nuốt lỗi để client vẫn nhận lỗi gốc.</li>
+ *       ({@code LOGIN_FAILED} khi đăng nhập trả 400 BR-TK-08/09/11 — gọi sau khi transaction đã rollback, xem
+ *       docs/adr/0019 mục 6; nhánh 401 dùng {@link #record} vì transaction vẫn commit; từ chối 403 theo BR-QT-01).
+ *       Transaction riêng ({@code REQUIRES_NEW}); nếu chính lệnh ghi lỗi thì log ERROR và nuốt lỗi để client vẫn
+ *       nhận lỗi gốc.</li>
  * </ul>
  *
  * Entry sai (action/entityType sai mẫu, snapshot là entity hoặc chứa khóa nhạy cảm, actor thiếu email) là lỗi lập

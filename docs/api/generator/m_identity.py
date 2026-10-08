@@ -42,7 +42,7 @@ m = Module(
     ],
     questions=[
         ("Q1", "Thời hạn phiên đăng nhập bao lâu, có thêm vào [CFG] không, có cần refresh token cho app không?", "Đã chốt (ADR-0003): hạn tuyệt đối `session.ttl_hours` [CFG], mặc định 12 giờ (1–72), không gia hạn, không refresh token; `exp` của token = `expiresAt`", "Docs không quy định (A1)"),
-        ("Q2", "Lỗi `BR-TK-09` (khóa tạm, kèm giờ thử lại) cho biết email tồn tại, lệch với tinh thần BR-TK-10. Chấp nhận như BR-TK-09 yêu cầu?", "TBD (PO), tạm theo BR-TK-09", "BR-TK-09 vs BR-TK-10"),
+        ("Q2", "Lỗi `BR-TK-09` (khóa tạm, kèm giờ thử lại) cho biết email tồn tại, lệch với tinh thần BR-TK-10. Chấp nhận như BR-TK-09 yêu cầu?", "Đã chốt (ADR-0019): BR-TK-08/09/11 chỉ trả khi mật khẩu đúng; mật khẩu sai luôn 401 chung, nên người không biết mật khẩu không phân biệt được email có tồn tại, đang khóa hay chưa xác thực", "BR-TK-09 vs BR-TK-10"),
     ],
 )
 
@@ -191,26 +191,26 @@ m.op("post", "/auth/register/resend-otp", "resendRegistrationOtp", "Gửi lại 
 m.op("post", "/auth/login", "login", "Đăng nhập", "Auth", "UC03",
      "BR-TK-08, 09, 10, 11, 17, BR-QT-15", "A02–A08", "Public", "—", body="LoginRequest", resp="LoginResponse",
      public=True, errors=(400, 401),
-     err_desc={400: "`BR-TK-08` tài khoản chưa xác thực → FE chuyển màn OTP · `BR-TK-09` đang khóa tạm, message có giờ thử lại · `BR-TK-11` tài khoản bị khóa / vô hiệu hóa",
-               401: "Sai email hoặc mật khẩu — thông điệp chung (BR-TK-10); sai lần thứ 5 trong 15 phút [CFG] kích hoạt ST01"},
-     notes="Ghi audit thành công và thất bại.")
+     err_desc={400: "Chỉ khi mật khẩu đúng (ADR-0019): `BR-TK-08` tài khoản chưa xác thực → FE chuyển màn OTP · `BR-TK-09` đang khóa tạm, message có giờ thử lại (`HH:mm dd/MM/yyyy`) · `BR-TK-11` tài khoản bị khóa / vô hiệu hóa",
+               401: "Sai email hoặc mật khẩu — thông điệp chung \"Email hoặc mật khẩu không đúng\" (BR-TK-10); sai lần thứ 5 trong 15 phút [CFG] kích hoạt ST01 (khóa tạm + email cảnh báo); sai trong lúc khóa không đếm"},
+     notes="Ghi audit thành công và thất bại (ADR-0019). `account.mustChangePassword = true` vẫn đăng nhập được (BR-TK-17). Request sai hình thức (400 `VALIDATION_FAILED` / `MALFORMED_REQUEST`) không tính là một lần đăng nhập sai.")
 m.op("post", "/auth/logout", "logout", "Đăng xuất", "Auth", "UC03", "BR-TK-11, BR-TN-06", "A02–A08",
-     "Người đang đăng nhập", "—", status=204, errors=(401,), notes="Hủy phiên hiện tại; nhân viên chuyển offline ngay.")
+     "Người đang đăng nhập", "—", status=204, errors=(401,), notes="Hủy phiên hiện tại; nhân viên chuyển offline ngay (ADR-0021). Body không được đọc. Gọi lại sau khi thành công → 401. Request cùng token đang chạy vẫn hoàn tất (§3.1 của `00-method`). Không ghi audit (ADR-0019).")
 m.op("post", "/auth/password/forgot", "forgotPassword", "Quên mật khẩu — gửi OTP", "Auth", "UC04",
      "BR-TK-04, 07, 10, 12", "A02–A08", "Public", "—", body="EmailRequest", resp="OtpSentResponse", status=202,
-     public=True, errors=(400,), err_desc={400: "Email sai định dạng"},
-     notes="Luôn trả 202 cùng nội dung, kể cả email không tồn tại hoặc tài khoản không đủ điều kiện BR-TK-12 (không gửi mã). Gửi lại = gọi lại endpoint này (A7).")
+     public=True, errors=(400,), err_desc={400: "`VALIDATION_FAILED` email trống / sai định dạng / quá 255 ký tự"},
+     notes="Luôn trả 202 cùng nội dung (BR-TK-10), kể cả email không tồn tại, tài khoản không đủ điều kiện BR-TK-12 (`PENDING`, bị khóa, `DISABLED` — không gửi mã), đã chạm quota BR-TK-07 (không gửi mã, `resendAvailableAt` vẫn = now + 60 giây [CFG]). Tài khoản đang khóa tạm BR-TK-09 vẫn nhận mã. Gửi lại = gọi lại endpoint này (A7). ADR-0023.")
 m.op("post", "/auth/password/reset", "resetPassword", "Đặt lại mật khẩu bằng OTP", "Auth", "UC04",
      "BR-TK-03, 05, 06, 13", "A02–A08", "Public", "—", body="ResetPasswordRequest", status=204, public=True,
-     errors=(400,), err_desc={400: OTP_ERR + " · `BR-TK-03` mật khẩu không hợp lệ"},
-     notes="Thành công: hủy mọi phiên, gỡ khóa tạm, gửi email PASSWORD_CHANGED (BR-TK-13).")
+     errors=(400,), err_desc={400: OTP_ERR + " — cũng là lỗi cho email không có tài khoản, tài khoản không đủ điều kiện BR-TK-12 hoặc chưa có mã (BR-TK-10) · `BR-TK-03` mật khẩu mới không hợp lệ (kiểm trước mã, không tiêu lượt nhập) hoặc trùng mật khẩu hiện tại (chỉ kiểm khi mã đúng; mã vẫn dùng lại được)"},
+     notes="Thứ tự kiểm: hình thức → chính sách mật khẩu BR-TK-03 → mã BR-TK-05/06 → trùng mật khẩu hiện tại BR-TK-03. Thành công: hủy mọi phiên, gỡ khóa tạm, gỡ bắt đổi mật khẩu lần đầu BR-TK-17, chuyển offline (BR-TN-06), gửi email PASSWORD_CHANGED (BR-TK-13); không audit. ADR-0023.")
 
 m.op("get", "/me", "getMe", "Thông tin người đang đăng nhập", "Me", "UC06", "BR-TK-17, 19", "A02–A08",
      "Người đang đăng nhập", resp="MeResponse", errors=(401,))
 m.op("post", "/me/password", "changePassword", "Đổi mật khẩu", "Me", "UC05", "BR-TK-03, 09, 14, 17", "A02–A08",
      "Người đang đăng nhập", body="ChangePasswordRequest", status=204, errors=(400, 401),
-     err_desc={400: "`BR-TK-14` mật khẩu hiện tại sai (tính vào bộ đếm BR-TK-09) · `BR-TK-03` mật khẩu mới không hợp lệ hoặc trùng mật khẩu cũ"},
-     notes="Đăng xuất mọi phiên khác; gỡ `mustChangePassword`.")
+     err_desc={400: "`BR-TK-14` mật khẩu hiện tại sai (tính vào bộ đếm BR-TK-09; lần chạm ngưỡng khóa tạm đăng nhập, message kèm giờ mở khóa) · `BR-TK-03` mật khẩu mới không hợp lệ hoặc trùng mật khẩu cũ (chỉ kiểm khi mật khẩu hiện tại đúng) · `BR-TK-09` đang khóa tạm, message có giờ thử lại · `BR-TK-11` tài khoản vừa bị khóa / vô hiệu hóa"},
+     notes="Đăng xuất mọi phiên khác, phiên đang dùng giữ nguyên; gỡ `mustChangePassword`; xóa bộ đếm đăng nhập sai. Không gửi email. Request sai hình thức (400 `VALIDATION_FAILED` / `MALFORMED_REQUEST`) không tính là một lần nhập sai (ADR-0022).")
 m.op("patch", "/me/staff-profile", "updateMyStaffProfile", "Sửa hồ sơ nhân viên của tôi", "Me", "UC06",
      "BR-TK-15, 20", "A03–A08", "Nhân viên đang đăng nhập; specialty, bio chỉ VET", body="UpdateStaffProfileRequest",
      resp="StaffProfile", errors=(400, 401, 403), err_desc={400: "`BR-TK-20` mô tả ngắn vượt 500 ký tự [CFG] · `BR-TK-15` cố sửa email"})

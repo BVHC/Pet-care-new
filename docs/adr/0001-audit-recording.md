@@ -1,6 +1,6 @@
 # ADR-0001: Ghi audit nghiệp vụ bằng `AuditRecorder` tường minh
 
-- **Trạng thái:** Accepted
+- **Trạng thái:** Accepted (mục 3 phần `LOGIN_FAILED` → 0019)
 - **Ngày:** 2026-10-03
 - **Liên quan:** BR-QT-15, BR-QT-16, BR-QT-01, BR-TK-16 (`docs/02-business-rules.md`); `docs/05-erd.md` bảng `audit_logs` (L148–164), L802 (thu tiền), §13 mục 6 và 9; ADR-0002 (IP)
 - **Triển khai:** `BE/src/main/java/com/petcare/platform/audit/` (`AuditRecorder`, `AuditEntry`, `AuditPrincipal`, `AuditLogEntity`, `AuditLogRepository`); test `AuditRecorderTest`, `AuditRecorderIT`; quy ước dùng ở `docs/convention/backend/08-logging-and-audit.md` §8.2–8.3

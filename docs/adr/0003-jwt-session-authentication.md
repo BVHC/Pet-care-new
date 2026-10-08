@@ -1,6 +1,6 @@
 # ADR-0003: Xác thực bằng JWT HS256 gắn phiên DB, RBAC 7 role và phạm vi chi nhánh
 
-- **Trạng thái:** Accepted — mục 4, 9 superseded by ADR-0005; mục 8 superseded by ADR-0006; mục 2 (phần "không bao giờ xóa") superseded by ADR-0008
+- **Trạng thái:** Accepted — mục 4, 9 superseded by ADR-0005; mục 8 superseded by ADR-0006; mục 2 (phần "không bao giờ xóa") superseded by ADR-0008; mục 10 (câu UPDATE `last_seen_at`) superseded by ADR-0021
 - **Ngày:** 2026-10-04
 - **Liên quan:**
   - `docs/02-business-rules.md`: BR-TK-09, 11, 13, 14, 17; BR-QT-01, 03, 05, 06, 07, 11, 12, 13; BR-TN-06; BR-DG-03; BR-BC-01.

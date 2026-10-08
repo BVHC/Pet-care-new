@@ -37,7 +37,7 @@ public AccountResponse lockAccount(Long accountId, String reason) {
 | Hàm | Khi nào | Transaction |
 |---|---|---|
 | `record(entry)` | Mặc định, cho mọi thao tác thành công | `MANDATORY`: phải gọi trong `@Transactional` của use case. Nghiệp vụ rollback thì audit mất theo; ghi audit lỗi thì nghiệp vụ rollback. Gọi ngoài transaction → `IllegalTransactionStateException` |
-| `recordIndependently(entry)` | **Chỉ** sự kiện thất bại mà audit phải còn dù nghiệp vụ rollback: `LOGIN_FAILED`, từ chối 403 theo BR-QT-01 | `REQUIRES_NEW` (cần connection thứ hai). Ghi lỗi → log `ERROR AUDIT_WRITE_FAILED` kèm entry, không ném, client nhận lỗi gốc |
+| `recordIndependently(entry)` | **Chỉ** sự kiện thất bại mà audit phải còn dù nghiệp vụ rollback: `LOGIN_FAILED` khi bị từ chối 400 BR-TK-08/09/11 (nhánh 401 dùng `record` vì transaction vẫn commit — [ADR-0019](../../adr/0019-login-failure-lockout.md)), từ chối 403 theo BR-QT-01 | `REQUIRES_NEW` (cần connection thứ hai). Ghi lỗi → log `ERROR AUDIT_WRITE_FAILED` kèm entry, không ném, client nhận lỗi gốc |
 
 Quy tắc của `AuditEntry` (vi phạm là lỗi lập trình → `IllegalArgumentException`/`IllegalStateException` → 500, ở cả hai hàm):
 - `action`: hằng số `UPPER_SNAKE` do module giữ, khớp `^[A-Z][A-Z0-9_]{2,49}$`, dạng `<ĐỐI_TƯỢNG>_<QUÁ_KHỨ>` (`ACCOUNT_LOCKED`, `ORDER_PAID`).
@@ -55,8 +55,8 @@ Nguồn: BR-QT-15 và mọi chỗ đặc tả ghi "ghi audit". Mã action do mod
 
 | Nhóm BR-QT-15 | Thao tác (nguồn) | Module | Hàm | Mã |
 |---|---|---|---|---|
-| Đăng nhập | Đăng nhập thành công (UC03) | TK | `record` | *(TK đặt)* |
-| | Đăng nhập thất bại (UC03, BR-TK-09) | TK | `recordIndependently` | `LOGIN_FAILED` |
+| Đăng nhập | Đăng nhập thành công (UC03) | TK | `record` | `LOGIN_SUCCEEDED` |
+| | Đăng nhập thất bại (UC03, BR-TK-09, 10), kể cả email không tồn tại; khóa tạm ST01 nằm trong before/after | TK | `record` khi trả 401 (sai thông tin — transaction commit nhờ `noRollbackFor`); `recordIndependently` khi 400 BR-TK-08/09/11 ([ADR-0019](../../adr/0019-login-failure-lockout.md)) | `LOGIN_FAILED` |
 | Thao tác quản trị | Tạo, đổi chức vụ, điều chuyển, vô hiệu hóa, kích hoạt lại nhân viên (UC08) | QT | `record` | *(QT đặt)* |
 | | Từ chối do vượt phân cấp, 403 (BR-QT-01) | QT | `recordIndependently` | *(QT đặt)* |
 | | Khóa / mở khóa (BR-QT-11; Tài khoản #7, #8) | QT | `record` | *(QT đặt)* |
@@ -72,6 +72,7 @@ Nguồn: BR-QT-15 và mọi chỗ đặc tả ghi "ghi audit". Mã action do mod
 | Sửa bệnh án | Bản bổ sung bệnh án sau khi khóa (BR-KB-01) | KB | `record` | *(KB đặt)* |
 | Ngoài BR-QT-15 (rule riêng bắt ghi audit) | Sửa hộ email / khôi phục tài khoản (BR-TK-16) | TK | `record` | *(TK đặt)* |
 | | Liên kết hồ sơ khách (BR-TK-19) | TK | `record` | *(TK đặt)* |
+| | Khóa tạm do sai mật khẩu hiện tại khi đổi mật khẩu (BR-TK-14 → BR-TK-09; người dùng chọn thêm, [ADR-0019](../../adr/0019-login-failure-lockout.md) mục 6) | TK | `record` | `ACCOUNT_TEMPORARILY_LOCKED` |
 | | Gỡ hạn chế đặt online sớm (BR-LH-09) | LH | `record` | *(LH đặt)* |
 | | Chuyển chủ thú cưng (BR-KH-08) | KH | `record` | *(KH đặt)* |
 | | Gán lại lượt đã gọi (BR-TN-08; Visit #4) | TN | `record` | *(TN đặt)* |

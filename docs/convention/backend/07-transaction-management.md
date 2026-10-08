@@ -6,6 +6,8 @@
 
 - `@Transactional` đặt ở **Service / TransitionHandler**, bao trọn **một use case hoàn chỉnh**: kiểm tra rule, đổi trạng thái, hệ quả, audit, outbox đều nằm trong cùng một transaction.
 - Không đặt `@Transactional` ở Controller hoặc Repository.
+- Open Session In View đã tắt (`spring.jpa.open-in-view: false`, [ADR-0020](../../adr/0020-disable-open-in-view.md)): connection chỉ bị giữ trong transaction; đọc entity / map sang DTO phải xong trong transaction của service.
+- **Ngoại lệ có chủ đích — đăng nhập, đổi mật khẩu, quên / đặt lại mật khẩu** ([ADR-0019](../../adr/0019-login-failure-lockout.md) mục 4, [ADR-0022](../../adr/0022-change-password.md) mục 1, [ADR-0023](../../adr/0023-password-reset.md) mục 3): `identity/service/LoginService`, `ChangePasswordService`, `PasswordResetService` không `@Transactional`, đọc hash trong transaction readOnly ngắn rồi chạy BCrypt khi không giữ connection; mọi kiểm tra rule dẫn tới ghi (khóa dòng, bộ đếm, mã OTP, phiên, audit, outbox) nằm trọn trong một transaction của `LoginAttemptService` / `ChangePasswordAttemptService` / `PasswordResetAttemptService`. Exception đi qua một method `MANDATORY` có proxy đã đánh dấu transaction rollback-only: muốn nuốt lỗi đó (ví dụ BR-TK-07 ở quên mật khẩu) thì bắt ở facade, sau khi transaction kết thúc. Chỉ dùng cách tách này cho bước CPU nặng không cần dữ liệu khóa (như BCrypt); quyết định ghi luôn dựa trên dữ liệu đọc lại dưới khóa.
 - Service được gọi từ service khác dùng propagation mặc định (`REQUIRED`) để tham gia transaction của bên gọi. Không dùng `REQUIRES_NEW` trong nghiệp vụ; ngoại lệ duy nhất hiện có là `AuditRecorder.recordIndependently()` ([08](08-logging-and-audit.md)).
 
 ## 7.2. Hệ quả liên aggregate
@@ -56,6 +58,7 @@ Chiến lược khóa (pessimistic `FOR UPDATE`, advisory lock, optimistic `@Ver
 | Một lễ tân một ca `OPEN` | BR-TG-05 | Partial unique `cashier_id` | — |
 | Thú không trùng khung / không chồng ngày lưu trú | BR-LH-05, BR-LT-02 | Partial unique / `EXCLUDE` | — |
 | Một chuồng một thú | BR-LT-08 | Partial unique `kennel_id` | — |
+| Hủy phiên: đăng xuất, đổi / đặt lại mật khẩu, khóa, vô hiệu hóa; trạng thái online `last_seen_at` | BR-TK-11, 13, 14, BR-TN-06, BR-QT-09 | Không | **Đã chốt — [ADR-0021](../../adr/0021-logout-session-lock-order.md):** khóa / ghi dòng `accounts` **trước** rồi mới `UPDATE sessions` (không deadlock); `touchLastSeen` chỉ ghi khi phiên chưa hủy, `SKIP LOCKED` |
 | Luồng OTP: quota gửi, bộ đếm sai, mã mới vô hiệu mã cũ | BR-TK-05, 06, 07 | Không (quota là phép đếm) | **Đã chốt — [ADR-0011](../../adr/0011-otp-flow-locking.md):** `SELECT … FOR UPDATE` dòng `accounts` trước mọi đọc/ghi `otp_tokens`; ST02 dùng `SKIP LOCKED` |
 
 Khi DB chặn, `GlobalExceptionHandler` trả 409 `CONCURRENCY_CONFLICT` với message chung. Service vẫn phải kiểm tra trước để trả đúng mã rule trong trường hợp thường ([06](06-validation.md)).

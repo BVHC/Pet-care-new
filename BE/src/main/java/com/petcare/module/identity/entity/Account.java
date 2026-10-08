@@ -1,5 +1,6 @@
 package com.petcare.module.identity.entity;
 
+import java.time.Duration;
 import java.time.Instant;
 import java.util.HashMap;
 import java.util.Map;
@@ -26,7 +27,9 @@ import lombok.NoArgsConstructor;
  * Bảng {@code accounts} (erd §1, ROOT · SM #1). Tài khoản đăng nhập của khách và nhân viên; email là định danh duy
  * nhất (BR-TK-01). Khóa ({@code is_locked}) độc lập với {@code status} (BR-QT-11, 12). Đã có: đăng ký
  * (Tài khoản#1), xác thực OTP (#2), xóa tài khoản {@code PENDING} quá hạn (#3, ST02 — xóa cứng bằng SQL ở
- * {@code AccountRepository}); các chuyển trạng thái khác (vô hiệu hóa, khóa…) làm ở các task TK/QT sau.
+ * {@code AccountRepository}), bộ đếm đăng nhập sai và khóa tạm (BR-TK-09, ST01 — trường phụ, không phải trạng thái), đổi mật khẩu (BR-TK-14),
+ * đặt lại mật khẩu (BR-TK-13);
+ * các chuyển trạng thái khác (vô hiệu hóa, khóa…) làm ở các task TK/QT sau.
  */
 @Getter
 @Entity
@@ -109,5 +112,76 @@ public class Account extends TimestampedEntity {
     public void verify() {
         this.status = AccountStatus.ACTIVE;
         this.pendingExpiresAt = null;
+    }
+
+    /**
+     * BR-TK-09 (ST01): đang khóa tạm khi {@code now < locked_until}; đúng mốc {@code locked_until} là đã hết khóa
+     * (docs/adr/0019 mục 2).
+     */
+    public boolean isTemporarilyLocked(Instant now) {
+        return lockedUntil != null && now.isBefore(lockedUntil);
+    }
+
+    /**
+     * BR-TK-09: một lần sai mật khẩu, cửa sổ cố định tính từ lần sai đầu (docs/adr/0019 mục 2). Hết cửa sổ
+     * ({@code now − first ≥ window}) thì bắt đầu cửa sổ mới. Chạm {@code maxAttempts} thì khóa tạm tới
+     * {@code now + lockDuration} (chốt vào dòng, BR-QT-13) và xóa bộ đếm. Caller không gọi khi đang khóa tạm (lần sai
+     * lúc khóa không đếm). Dùng chung cho đăng nhập và đổi mật khẩu (BR-TK-14).
+     *
+     * @return {@code true} nếu lần sai này vừa kích hoạt khóa tạm
+     */
+    public boolean recordFailedLogin(Instant now, Duration window, int maxAttempts, Duration lockDuration) {
+        if (firstFailedLoginAt == null || !now.isBefore(firstFailedLoginAt.plus(window))) {
+            failedLoginCount = 1;
+            firstFailedLoginAt = now;
+        } else {
+            failedLoginCount++;
+        }
+        if (failedLoginCount < maxAttempts) {
+            return false;
+        }
+        lockedUntil = now.plus(lockDuration);
+        failedLoginCount = 0;
+        firstFailedLoginAt = null;
+        return true;
+    }
+
+    /**
+     * UC05 — đổi mật khẩu thành công (BR-TK-14, 17; docs/adr/0022): hash mới, gỡ bắt đổi mật khẩu lần đầu, xóa bộ đếm
+     * sai như đăng nhập thành công. Caller đã kiểm {@link #isTemporarilyLocked} dưới khóa dòng, nên {@code locked_until}
+     * còn lại (nếu có) đã hết hạn và bị xóa. Không đổi {@code status}: không phải chuyển trạng thái của SM #1.
+     */
+    public void changePassword(String newPasswordHash, Instant now) {
+        this.passwordHash = newPasswordHash;
+        this.mustChangePassword = false;
+        recordSuccessfulLogin(now);
+    }
+
+    /**
+     * UC04 — đặt lại mật khẩu bằng OTP (BR-TK-13; docs/adr/0023): hash mới, gỡ bắt đổi mật khẩu lần đầu (BR-TK-17,
+     * docs/adr/0019 *Hệ quả*), xóa bộ đếm sai và <b>gỡ khóa tạm</b> kể cả khi còn hạn (BR-TK-13). Đặt
+     * {@code last_seen_at = NULL} vì mọi phiên bị hủy cùng lúc — "đăng xuất thì chuyển offline ngay" (BR-TN-06), như
+     * đăng xuất (docs/adr/0021). Caller giữ khóa dòng và hủy phiên sau lệnh này (thứ tự {@code accounts → sessions}).
+     * Không đổi {@code status}: không phải chuyển trạng thái của SM #1.
+     */
+    public void resetPassword(String newPasswordHash) {
+        this.passwordHash = newPasswordHash;
+        this.mustChangePassword = false;
+        this.failedLoginCount = 0;
+        this.firstFailedLoginAt = null;
+        this.lockedUntil = null;
+        this.lastSeenAt = null;
+    }
+
+    /**
+     * Đăng nhập thành công: xóa bộ đếm sai và khóa tạm đã hết hạn (docs/adr/0019 mục 2). Caller đã kiểm
+     * {@link #isTemporarilyLocked} trước, nên {@code locked_until} còn lại (nếu có) luôn ≤ {@code now}.
+     */
+    public void recordSuccessfulLogin(Instant now) {
+        failedLoginCount = 0;
+        firstFailedLoginAt = null;
+        if (lockedUntil != null && !now.isBefore(lockedUntil)) {
+            lockedUntil = null;
+        }
     }
 }

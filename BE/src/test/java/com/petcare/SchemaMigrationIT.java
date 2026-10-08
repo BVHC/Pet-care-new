@@ -125,9 +125,10 @@ class SchemaMigrationIT {
 
         // V1 schema, V2 seed system_configs (docs/adr/0004), V3 seed mẫu OTP_REGISTER (06 §8 Q4),
         // V4 index luồng gửi + câu chào OTP_REGISTER (docs/adr/0012), V5 hạn PENDING cho ST02 (docs/adr/0013),
-        // V6 index partial luồng IN_APP (docs/adr/0014), V7 index cho FK trỏ tới accounts (docs/adr/0018)
+        // V6 index partial luồng IN_APP (docs/adr/0014), V7 index cho FK trỏ tới accounts (docs/adr/0018),
+        // V8 seed mẫu OTP_PASSWORD_RESET, LOGIN_LOCKED_WARNING, PASSWORD_CHANGED (docs/adr/0019)
         assertThat(rows).extracting(row -> row.get("version"))
-                .containsExactly("1", "2", "3", "4", "5", "6", "7");
+                .containsExactly("1", "2", "3", "4", "5", "6", "7", "8");
         assertThat(rows).allSatisfy(row -> assertThat(row).containsEntry("success", true));
     }
 
@@ -326,6 +327,40 @@ class SchemaMigrationIT {
                 .contains("ON public.notification_outbox")
                 .contains("(next_attempt_at, id)")
                 .contains("WHERE (((status)::text = 'PENDING'::text) AND ((channel)::text = 'IN_APP'::text))");
+    }
+
+    /**
+     * V3, V4, V8 (06-module-contracts §8 Q4, BR-QT-14): mẫu seed bằng migration khôi phục được về mặc định
+     * ({@code body = default_body}, {@code subject = default_subject}), biến bắt buộc nằm trong biến cho phép và có mặt
+     * trong nội dung, mẫu OTP bắt buộc {@code {ma_otp}}. Mẫu {@code IT_*} do các IT khác chèn nên bị loại.
+     */
+    @Test
+    void seededNotificationTemplatesAreRestorableAndConsistent() {
+        String seeded = "code NOT LIKE 'IT\\_%'";
+
+        assertThat(jdbc.queryForList("SELECT code FROM notification_templates WHERE " + seeded, String.class))
+                .containsExactlyInAnyOrder("OTP_REGISTER", "OTP_PASSWORD_RESET", "LOGIN_LOCKED_WARNING",
+                        "PASSWORD_CHANGED");
+        assertThat(jdbc.queryForList("""
+                SELECT code FROM notification_templates
+                WHERE %s AND (body <> default_body OR subject IS DISTINCT FROM default_subject)
+                """.formatted(seeded), String.class))
+                .as("mẫu không khôi phục được về mặc định").isEmpty();
+        assertThat(jdbc.queryForList("""
+                SELECT code FROM notification_templates
+                WHERE %s AND NOT (allowed_vars @> required_vars)
+                """.formatted(seeded), String.class))
+                .as("biến bắt buộc ngoài biến cho phép").isEmpty();
+        assertThat(jdbc.queryForList("""
+                SELECT t.code || ':' || v FROM notification_templates t, jsonb_array_elements_text(t.required_vars) v
+                WHERE t.%s AND position('{' || v || '}' IN t.body) = 0
+                """.formatted(seeded), String.class))
+                .as("biến bắt buộc không có trong nội dung").isEmpty();
+        assertThat(jdbc.queryForList("""
+                SELECT code FROM notification_templates
+                WHERE %s AND code LIKE 'OTP\\_%%' AND NOT (required_vars @> '["ma_otp"]'::jsonb)
+                """.formatted(seeded), String.class))
+                .as("mẫu OTP thiếu biến bắt buộc ma_otp").isEmpty();
     }
 
     /**

@@ -36,7 +36,8 @@ Vi phạm phạm vi ném `AccessDeniedScopeException` (403, client nhận messag
 
 - **Cấm** trả `@Entity` qua controller, kể cả lồng trong DTO.
 - DTO là **Java record**, tên theo [03](03-naming-convention.md).
-- Mapping Entity ↔ DTO dùng **MapStruct** (`@Mapper(componentModel = "spring")`), không viết mapper tay.
+- Mapping Entity ↔ DTO dùng **MapStruct** (`@Mapper(componentModel = "spring")`), không viết mapper tay — kể cả response dựng từ value object không phải entity (ví dụ `RegistrationMapper.toOtpSentResponse(IssuedOtp)`, `PasswordResetMapper.toOtpSentResponse(Instant, String)`): service không `new …Response(…)`.
+- Mapping Entity → DTO chạy **trong transaction của service**: Open Session In View đã tắt ([ADR-0020](../../adr/0020-disable-open-in-view.md)), controller không còn `EntityManager` mở.
 - Trường chỉ nhân viên được xem (ví dụ `medical_records.internal_note`, `feedbacks.resolution_note` — BR-KB-01, BR-KH-07, BR-DG-04) dùng **DTO riêng cho khách**, không dựa vào việc set `null`.
 
 ```java
@@ -65,6 +66,8 @@ public interface AppointmentMapper {
 |---|---|
 | Một đối tượng | `ApiResponse.ok(dto)` hoặc `ApiResponse.ok(dto, "message")` |
 | Tạo mới (HTTP 201) | `ApiResponse.created(dto, "message")` và `@ResponseStatus(HttpStatus.CREATED)` |
+| Đã nhận, không tiết lộ kết quả (HTTP 202, ví dụ quên mật khẩu — `00-method` §3.4) | `ApiResponse.accepted(dto, "message")` và `@ResponseStatus(HttpStatus.ACCEPTED)` |
+| Không có body (HTTP 204) | Method controller trả `void` + `@ResponseStatus(HttpStatus.NO_CONTENT)`, không bọc `ApiResponse` |
 | Danh sách | `ApiResponse.ok(PageResponse.of(page))`, `page` đánh số từ 0 |
 
 Payload luôn nằm một cấp trong `data`. Lỗi không bao giờ tạo ở controller: ném exception, `GlobalExceptionHandler` dựng `ErrorResponse` ([04](04-exception-handling.md)).

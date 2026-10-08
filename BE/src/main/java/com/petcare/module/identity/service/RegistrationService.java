@@ -1,6 +1,5 @@
 package com.petcare.module.identity.service;
 
-import java.nio.charset.StandardCharsets;
 import java.time.Clock;
 import java.time.Duration;
 import java.time.Instant;
@@ -34,7 +33,6 @@ import com.petcare.module.identity.repository.AccountRepository;
 import com.petcare.module.identity.service.OtpService.IssuedOtp;
 import com.petcare.platform.exception.BusinessRuleViolationException;
 import com.petcare.platform.exception.ResourceNotFoundException;
-import com.petcare.platform.security.PasswordConfig;
 
 import lombok.extern.slf4j.Slf4j;
 
@@ -55,12 +53,13 @@ public class RegistrationService {
     private final NotificationApi notifications;
     private final SystemConfigApi configs;
     private final PasswordEncoder passwordEncoder;
+    private final PasswordPolicy passwordPolicy;
     private final RegistrationMapper mapper;
     private final Clock clock;
 
     public RegistrationService(AccountRepository accounts, AccountTransitionHandler transitions,
             CustomerApi customers, OtpService otps, NotificationApi notifications, SystemConfigApi configs,
-            PasswordEncoder passwordEncoder, RegistrationMapper mapper, Clock clock) {
+            PasswordEncoder passwordEncoder, PasswordPolicy passwordPolicy, RegistrationMapper mapper, Clock clock) {
         this.accounts = accounts;
         this.transitions = transitions;
         this.customers = customers;
@@ -68,6 +67,7 @@ public class RegistrationService {
         this.notifications = notifications;
         this.configs = configs;
         this.passwordEncoder = passwordEncoder;
+        this.passwordPolicy = passwordPolicy;
         this.mapper = mapper;
         this.clock = clock;
     }
@@ -86,7 +86,7 @@ public class RegistrationService {
             throw new BusinessRuleViolationException("BR-TK-02",
                     "Bạn cần xác nhận đủ 18 tuổi và đồng ý điều khoản sử dụng");
         }
-        checkPasswordPolicy(request.password());
+        passwordPolicy.check(request.password());
         if (accounts.existsByEmail(email)) {
             throw new BusinessRuleViolationException("BR-TK-01",
                     "Email đã được sử dụng. Vui lòng đăng nhập hoặc dùng chức năng quên mật khẩu");
@@ -153,22 +153,5 @@ public class RegistrationService {
         return accounts.findByEmailForUpdate(email)
                 .filter(found -> found.getStatus() == AccountStatus.PENDING)
                 .orElseThrow(() -> new ResourceNotFoundException("tài khoản chờ xác thực", email));
-    }
-
-    /** BR-TK-03: tối thiểu {@code password.min_length} [CFG] ký tự, có cả chữ và số; tối đa 72 byte (docs/adr/0009). */
-    private void checkPasswordPolicy(String password) {
-        int minLength = configs.getInt(ConfigKey.PASSWORD_MIN_LENGTH);
-        if (password.codePointCount(0, password.length()) < minLength) {
-            throw new BusinessRuleViolationException("BR-TK-03",
-                    "Mật khẩu phải có ít nhất " + minLength + " ký tự");
-        }
-        if (password.codePoints().noneMatch(Character::isLetter)
-                || password.codePoints().noneMatch(Character::isDigit)) {
-            throw new BusinessRuleViolationException("BR-TK-03", "Mật khẩu phải có cả chữ và số");
-        }
-        if (password.getBytes(StandardCharsets.UTF_8).length > PasswordConfig.BCRYPT_MAX_BYTES) {
-            throw new BusinessRuleViolationException("BR-TK-03",
-                    "Mật khẩu quá dài (tối đa " + PasswordConfig.BCRYPT_MAX_BYTES + " byte)");
-        }
     }
 }
