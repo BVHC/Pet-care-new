@@ -35,6 +35,13 @@ public interface OtpTokenRepository extends JpaRepository<OtpToken, Long> {
     Optional<OtpToken> findTopByAccountIdAndPurposeAndTargetEmailAndConsumedAtIsNullAndInvalidatedAtIsNullOrderByIdDesc(
             Long accountId, OtpPurpose purpose, String targetEmail);
 
+    /**
+     * Như method trên, thêm hồ sơ cần liên kết ({@code LINK_PROFILE}, BR-TK-19): mã gửi cho hồ sơ A không dùng được để
+     * liên kết hồ sơ B dù hai hồ sơ cùng email ({@code customers.email} không duy nhất) — docs/adr/0025.
+     */
+    Optional<OtpToken> findTopByAccountIdAndPurposeAndTargetEmailAndCustomerIdAndConsumedAtIsNullAndInvalidatedAtIsNullOrderByIdDesc(
+            Long accountId, OtpPurpose purpose, String targetEmail, Long customerId);
+
     /** BR-TK-05: sinh mã mới thì mã cũ cùng mục đích, cùng email, chưa dùng mất hiệu lực ngay. */
     @Modifying(flushAutomatically = true)
     @Query("""
@@ -43,6 +50,20 @@ public interface OtpTokenRepository extends JpaRepository<OtpToken, Long> {
               AND o.consumedAt IS NULL AND o.invalidatedAt IS NULL
             """)
     int invalidateActive(@Param("email") String email, @Param("purpose") OtpPurpose purpose,
+            @Param("now") Instant now);
+
+    /**
+     * BR-TK-05 cho {@code LINK_PROFILE} (docs/adr/0025): mã mới chỉ hủy mã còn hiệu lực của <b>chính tài khoản đó</b>
+     * (mọi hồ sơ), không hủy mã tài khoản khác xin cho cùng email hồ sơ. Nhờ vậy mọi lệnh ghi lên mã của một tài khoản
+     * đều nằm dưới khóa dòng {@code accounts} của tài khoản đó (docs/adr/0011). Dùng index {@code ix_otp_tokens_account_id}.
+     */
+    @Modifying(flushAutomatically = true)
+    @Query("""
+            UPDATE OtpToken o SET o.invalidatedAt = :now
+            WHERE o.accountId = :accountId AND o.purpose = :purpose
+              AND o.consumedAt IS NULL AND o.invalidatedAt IS NULL
+            """)
+    int invalidateActiveForAccount(@Param("accountId") Long accountId, @Param("purpose") OtpPurpose purpose,
             @Param("now") Instant now);
 
     /**

@@ -126,9 +126,10 @@ class SchemaMigrationIT {
         // V1 schema, V2 seed system_configs (docs/adr/0004), V3 seed mẫu OTP_REGISTER (06 §8 Q4),
         // V4 index luồng gửi + câu chào OTP_REGISTER (docs/adr/0012), V5 hạn PENDING cho ST02 (docs/adr/0013),
         // V6 index partial luồng IN_APP (docs/adr/0014), V7 index cho FK trỏ tới accounts (docs/adr/0018),
-        // V8 seed mẫu OTP_PASSWORD_RESET, LOGIN_LOCKED_WARNING, PASSWORD_CHANGED (docs/adr/0019)
+        // V8 seed mẫu OTP_PASSWORD_RESET, LOGIN_LOCKED_WARNING, PASSWORD_CHANGED (docs/adr/0019),
+        // V9 mẫu OTP_PROFILE_LINK + index otp_tokens.customer_id (docs/adr/0025)
         assertThat(rows).extracting(row -> row.get("version"))
-                .containsExactly("1", "2", "3", "4", "5", "6", "7", "8");
+                .containsExactly("1", "2", "3", "4", "5", "6", "7", "8", "9");
         assertThat(rows).allSatisfy(row -> assertThat(row).containsEntry("success", true));
     }
 
@@ -330,7 +331,7 @@ class SchemaMigrationIT {
     }
 
     /**
-     * V3, V4, V8 (06-module-contracts §8 Q4, BR-QT-14): mẫu seed bằng migration khôi phục được về mặc định
+     * V3, V4, V8, V9 (06-module-contracts §8 Q4, BR-QT-14): mẫu seed bằng migration khôi phục được về mặc định
      * ({@code body = default_body}, {@code subject = default_subject}), biến bắt buộc nằm trong biến cho phép và có mặt
      * trong nội dung, mẫu OTP bắt buộc {@code {ma_otp}}. Mẫu {@code IT_*} do các IT khác chèn nên bị loại.
      */
@@ -340,7 +341,7 @@ class SchemaMigrationIT {
 
         assertThat(jdbc.queryForList("SELECT code FROM notification_templates WHERE " + seeded, String.class))
                 .containsExactlyInAnyOrder("OTP_REGISTER", "OTP_PASSWORD_RESET", "LOGIN_LOCKED_WARNING",
-                        "PASSWORD_CHANGED");
+                        "PASSWORD_CHANGED", "OTP_PROFILE_LINK");
         assertThat(jdbc.queryForList("""
                 SELECT code FROM notification_templates
                 WHERE %s AND (body <> default_body OR subject IS DISTINCT FROM default_subject)
@@ -391,6 +392,31 @@ class SchemaMigrationIT {
                 ORDER BY 1
                 """, String.class);
         assertThat(unindexed).as("cột FK → accounts không có index dùng được cho phép kiểm FK").isEmpty();
+    }
+
+    /**
+     * V9 (docs/adr/0025): {@code otp_tokens.customer_id} có index dùng được cho kiểm FK khi xóa hồ sơ online (BR-TK-19,
+     * ST02). Các cột FK → {@code customers} còn thiếu index là đúng danh sách nợ D013; trả nợ (hoặc thêm cột FK mới) thì
+     * sửa danh sách này cùng sổ nợ.
+     */
+    @Test
+    void foreignKeysToCustomersWithoutUsableIndexAreExactlyDebtD013() {
+        List<String> unindexed = jdbc.queryForList("""
+                SELECT c.conrelid::regclass || '.' || a.attname
+                FROM pg_constraint c
+                JOIN pg_attribute a ON a.attrelid = c.conrelid AND a.attnum = c.conkey[1]
+                WHERE c.contype = 'f' AND c.confrelid = 'customers'::regclass
+                  AND NOT EXISTS (
+                      SELECT 1 FROM pg_index i
+                      WHERE i.indrelid = c.conrelid AND i.indkey[0] = c.conkey[1]
+                        AND (i.indpred IS NULL
+                             OR pg_get_expr(i.indpred, i.indrelid) = '(' || a.attname || ' IS NOT NULL)'))
+                ORDER BY 1
+                """, String.class);
+
+        assertThat(unindexed).doesNotContain("otp_tokens.customer_id")
+                .as("nợ D013").containsExactlyInAnyOrder("addresses.customer_id", "boarding_bookings.customer_id",
+                        "care_tasks.customer_id", "payments.customer_id", "visits.customer_id");
     }
 
     // ---------------------------------------------------------------- D6, D7, D10: hành vi ràng buộc
