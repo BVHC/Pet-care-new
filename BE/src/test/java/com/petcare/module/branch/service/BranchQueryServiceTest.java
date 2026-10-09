@@ -28,7 +28,14 @@ import com.petcare.module.branch.api.BranchQueryApi.BranchStatus;
 import com.petcare.module.branch.api.BranchQueryApi.BranchSummary;
 import com.petcare.module.branch.api.BranchQueryApi.TimeRange;
 import com.petcare.module.branch.entity.Branch;
-import com.petcare.module.branch.repository.BranchLookupRepository;
+import com.petcare.module.branch.entity.BranchQuotaDefault;
+import com.petcare.module.branch.entity.BranchQuotaDefaultId;
+import com.petcare.module.branch.entity.BranchServiceSetting;
+import com.petcare.module.branch.entity.BranchServiceSettingId;
+import com.petcare.module.branch.entity.SlotQuota;
+import com.petcare.module.branch.repository.BranchQuotaDefaultRepository;
+import com.petcare.module.branch.repository.BranchServiceSettingRepository;
+import com.petcare.module.branch.repository.SlotQuotaRepository;
 import com.petcare.module.branch.repository.BranchRepository;
 import com.petcare.module.branch.repository.HolidayRepository;
 import com.petcare.module.branch.schedule.BranchSchedule;
@@ -44,14 +51,16 @@ class BranchQueryServiceTest {
 
     @Mock BranchRepository branches;
     @Mock HolidayRepository holidays;
-    @Mock BranchLookupRepository lookup;
+    @Mock BranchServiceSettingRepository serviceSettings;
+    @Mock BranchQuotaDefaultRepository quotaDefaults;
+    @Mock SlotQuotaRepository slotQuotas;
     @Mock ScheduleLoader scheduleLoader;
 
     BranchQueryService service;
 
     @BeforeEach
     void setUp() {
-        service = new BranchQueryService(branches, holidays, lookup, scheduleLoader);
+        service = new BranchQueryService(branches, holidays, serviceSettings, quotaDefaults, slotQuotas, scheduleLoader);
     }
 
     private static BranchSchedule schedule() {
@@ -111,22 +120,31 @@ class BranchQueryServiceTest {
 
     @Test
     void serviceEnablementIsReadFromBranchServices() {
-        when(lookup.isServiceEnabled(3L, 7L)).thenReturn(true);
-        when(lookup.findActiveBranchIdsEnablingService(7L)).thenReturn(List.of(3L, 4L));
+        when(serviceSettings.findById(new BranchServiceSettingId(3L, 7L)))
+                .thenReturn(Optional.of(new BranchServiceSetting(3L, 7L, true)));
+        when(serviceSettings.findById(new BranchServiceSettingId(3L, 8L))).thenReturn(Optional.empty());
+        when(serviceSettings.findById(new BranchServiceSettingId(3L, 9L)))
+                .thenReturn(Optional.of(new BranchServiceSetting(3L, 9L, false)));
+        when(serviceSettings.findActiveBranchIdsEnabling(7L)).thenReturn(List.of(3L, 4L));
 
         assertThat(service.isServiceEnabled(3L, 7L)).isTrue();
-        assertThat(service.isServiceEnabled(3L, 8L)).isFalse();
+        assertThat(service.isServiceEnabled(3L, 8L)).isFalse();     // chưa có dòng = chưa bật
+        assertThat(service.isServiceEnabled(3L, 9L)).isFalse();     // đã tắt
         assertThat(service.findActiveBranchIdsEnablingService(7L)).containsExactly(3L, 4L);
     }
 
     @Test
     void quotaPrefersTheSlotThenTheDefaultThenOne_BR_LH_03() {
         LocalTime nine = LocalTime.of(9, 0);
-        when(lookup.findSlotQuota(3L, "MEDICAL", MON, nine)).thenReturn(Optional.of(0));
-        when(lookup.findSlotQuota(3L, "GROOMING", MON, nine)).thenReturn(Optional.empty());
-        when(lookup.findDefaultQuota(3L, "GROOMING")).thenReturn(Optional.of(4));
-        when(lookup.findSlotQuota(3L, "MEDICAL", TUE, nine)).thenReturn(Optional.empty());
-        when(lookup.findDefaultQuota(3L, "MEDICAL")).thenReturn(Optional.empty());
+        when(slotQuotas.findByBranchIdAndServiceGroupAndSlotDateAndSlotStart(3L, ServiceGroup.MEDICAL, MON, nine))
+                .thenReturn(Optional.of(new SlotQuota(3L, ServiceGroup.MEDICAL, MON, nine, 0, 1L)));
+        when(slotQuotas.findByBranchIdAndServiceGroupAndSlotDateAndSlotStart(3L, ServiceGroup.GROOMING, MON, nine))
+                .thenReturn(Optional.empty());
+        when(quotaDefaults.findById(new BranchQuotaDefaultId(3L, ServiceGroup.GROOMING)))
+                .thenReturn(Optional.of(new BranchQuotaDefault(3L, ServiceGroup.GROOMING, 4, 1L)));
+        when(slotQuotas.findByBranchIdAndServiceGroupAndSlotDateAndSlotStart(3L, ServiceGroup.MEDICAL, TUE, nine))
+                .thenReturn(Optional.empty());
+        when(quotaDefaults.findById(new BranchQuotaDefaultId(3L, ServiceGroup.MEDICAL))).thenReturn(Optional.empty());
 
         assertThat(service.quotaFor(3L, ServiceGroup.MEDICAL, MON, nine)).isZero();      // 0 = khóa khung, vẫn thắng
         assertThat(service.quotaFor(3L, ServiceGroup.GROOMING, MON, nine)).isEqualTo(4);
@@ -137,6 +155,6 @@ class BranchQueryServiceTest {
     void boardingHasNoSlotQuota() {
         assertThatThrownBy(() -> service.quotaFor(3L, ServiceGroup.BOARDING, MON, LocalTime.of(9, 0)))
                 .isInstanceOf(IllegalArgumentException.class);
-        verifyNoInteractions(lookup);
+        verifyNoInteractions(slotQuotas, quotaDefaults);
     }
 }

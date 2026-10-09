@@ -12,8 +12,12 @@ import org.springframework.transaction.annotation.Transactional;
 
 import com.petcare.module.branch.api.BranchQueryApi;
 import com.petcare.module.branch.entity.Branch;
-import com.petcare.module.branch.repository.BranchLookupRepository;
+import com.petcare.module.branch.entity.BranchServiceSettingId;
+import com.petcare.module.branch.repository.BranchQuotaDefaultRepository;
+import com.petcare.module.branch.entity.BranchQuotaDefaultId;
 import com.petcare.module.branch.repository.BranchRepository;
+import com.petcare.module.branch.repository.BranchServiceSettingRepository;
+import com.petcare.module.branch.repository.SlotQuotaRepository;
 import com.petcare.module.branch.repository.HolidayRepository;
 import com.petcare.module.catalog.api.ServiceGroup;
 
@@ -27,14 +31,19 @@ public class BranchQueryService implements BranchQueryApi {
 
     private final BranchRepository branches;
     private final HolidayRepository holidays;
-    private final BranchLookupRepository lookup;
+    private final BranchServiceSettingRepository serviceSettings;
+    private final BranchQuotaDefaultRepository quotaDefaults;
+    private final SlotQuotaRepository slotQuotas;
     private final ScheduleLoader scheduleLoader;
 
-    public BranchQueryService(BranchRepository branches, HolidayRepository holidays, BranchLookupRepository lookup,
-            ScheduleLoader scheduleLoader) {
+    public BranchQueryService(BranchRepository branches, HolidayRepository holidays,
+            BranchServiceSettingRepository serviceSettings, BranchQuotaDefaultRepository quotaDefaults,
+            SlotQuotaRepository slotQuotas, ScheduleLoader scheduleLoader) {
         this.branches = branches;
         this.holidays = holidays;
-        this.lookup = lookup;
+        this.serviceSettings = serviceSettings;
+        this.quotaDefaults = quotaDefaults;
+        this.slotQuotas = slotQuotas;
         this.scheduleLoader = scheduleLoader;
     }
 
@@ -72,12 +81,13 @@ public class BranchQueryService implements BranchQueryApi {
 
     @Override
     public boolean isServiceEnabled(Long branchId, Long serviceId) {
-        return lookup.isServiceEnabled(branchId, serviceId);
+        return serviceSettings.findById(new BranchServiceSettingId(branchId, serviceId))
+                .map(setting -> setting.isEnabled()).orElse(false);
     }
 
     @Override
     public List<Long> findActiveBranchIdsEnablingService(Long serviceId) {
-        return lookup.findActiveBranchIdsEnablingService(serviceId);
+        return serviceSettings.findActiveBranchIdsEnabling(serviceId);
     }
 
     /** Quota theo khung chỉ có với Khám/Tiêm và Thẩm mỹ; Lưu trú không có khung giờ nên là lỗi lập trình. */
@@ -86,8 +96,10 @@ public class BranchQueryService implements BranchQueryApi {
         if (group == ServiceGroup.BOARDING) {
             throw new IllegalArgumentException("Nhóm Lưu trú không có quota theo khung giờ");
         }
-        return lookup.findSlotQuota(branchId, group.name(), slotDate, slotStart)
-                .or(() -> lookup.findDefaultQuota(branchId, group.name()))
+        return slotQuotas.findByBranchIdAndServiceGroupAndSlotDateAndSlotStart(branchId, group, slotDate, slotStart)
+                .map(slot -> slot.getQuota())
+                .or(() -> quotaDefaults.findById(new BranchQuotaDefaultId(branchId, group))
+                        .map(entry -> entry.getDefaultQuota()))
                 .orElse(FALLBACK_QUOTA);
     }
 

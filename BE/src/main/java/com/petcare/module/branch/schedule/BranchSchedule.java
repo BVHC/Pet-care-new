@@ -118,6 +118,20 @@ public final class BranchSchedule {
                 .anyMatch(r -> from >= r.open().toSecondOfDay() && to <= r.close().toSecondOfDay());
     }
 
+    /**
+     * {@code start} đúng là một khung mà appointment sẽ sinh (BR-LH-02): khung 30 phút nằm trọn trong một khoảng và
+     * bắt đầu đúng bước 30 phút tính từ giờ mở của khoảng đó (mở 08:15 thì khung là 08:15, 08:45...). Dùng cho quota
+     * riêng của khung (BR-LH-03), vì quota của một giờ lẻ không bao giờ được áp dụng.
+     */
+    public boolean isGeneratedSlot(LocalDate date, LocalTime start) {
+        int step = SLOT_MINUTES * 60;
+        int from = start.toSecondOfDay();
+        return rangesOn(date).stream().anyMatch(r -> {
+            int open = r.open().toSecondOfDay();
+            return from >= open && from + step <= r.close().toSecondOfDay() && (from - open) % step == 0;
+        });
+    }
+
     /** Lịch hẹn BOOKED không còn khung hợp lệ dưới lịch này (BR-CN-04, BR-LH-10). */
     public boolean appointmentAffected(LocalDate slotDate, LocalTime slotStart) {
         return !slotFits(slotDate, slotStart);

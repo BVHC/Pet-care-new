@@ -10,6 +10,9 @@ final class BranchAccess {
     static final String STAFF_READ =
             "hasAnyRole('ADMIN','SUPER_MANAGER','BRANCH_MANAGER','RECEPTIONIST','VET','CARETAKER')";
 
+    /** Quota lịch hẹn (UC42): chỉ A05, A06 xem (branch-v1 mục B). */
+    static final String QUOTA_READ = "hasAnyRole('BRANCH_MANAGER','RECEPTIONIST')";
+
     static final String SUPER_MANAGER_WRITE = "hasRole('SUPER_MANAGER')";
 
     static final String BRANCH_MANAGER_WRITE = "hasRole('BRANCH_MANAGER')";

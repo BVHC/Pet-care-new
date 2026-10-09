@@ -4,6 +4,7 @@ import java.util.Collection;
 import java.util.List;
 import java.util.Optional;
 
+import org.springframework.data.domain.Sort;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -46,6 +47,12 @@ public class CatalogQueryService implements CatalogQueryApi {
             return List.of();
         }
         return services.findAllById(serviceIds).stream().map(CatalogQueryService::toInfo).toList();
+    }
+
+    @Override
+    public List<ServiceInfo> listActiveServices() {
+        return services.findAll((root, query, cb) -> cb.isTrue(root.get("active")), Sort.by("name")).stream()
+                .map(CatalogQueryService::toInfo).toList();
     }
 
     @Override

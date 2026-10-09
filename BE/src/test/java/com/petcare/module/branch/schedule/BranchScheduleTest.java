@@ -187,6 +187,32 @@ class BranchScheduleTest {
     }
 
     @Test
+    void generatedSlotsStartOnThirtyMinuteStepsFromTheRangeOpening() {
+        List<TimeRange> day = List.of(range("08:15", "12:15"), range("14:00", "19:00"));
+        BranchSchedule schedule = schedule(Set.of(), new Version(LocalDate.of(2026, 1, 1), Map.of(1, day)));
+
+        assertThat(schedule.isGeneratedSlot(MON, LocalTime.of(8, 15))).isTrue();
+        assertThat(schedule.isGeneratedSlot(MON, LocalTime.of(8, 45))).isTrue();
+        assertThat(schedule.isGeneratedSlot(MON, LocalTime.of(11, 45))).isTrue();     // kết thúc đúng 12:15
+        assertThat(schedule.isGeneratedSlot(MON, LocalTime.of(14, 0))).isTrue();      // bước tính lại ở khoảng thứ hai
+        assertThat(schedule.isGeneratedSlot(MON, LocalTime.of(18, 30))).isTrue();
+        assertThat(schedule.isGeneratedSlot(MON, LocalTime.of(8, 30))).isFalse();     // lệch bước so với 08:15
+        assertThat(schedule.isGeneratedSlot(MON, LocalTime.of(9, 10))).isFalse();
+        assertThat(schedule.isGeneratedSlot(MON, LocalTime.of(12, 0))).isFalse();     // vắt qua 12:15
+        assertThat(schedule.isGeneratedSlot(MON, LocalTime.of(14, 15))).isFalse();
+        assertThat(schedule.isGeneratedSlot(MON, LocalTime.of(18, 45))).isFalse();    // kết thúc sau 19:00
+        assertThat(schedule.isGeneratedSlot(TUE, LocalTime.of(9, 0))).isFalse();      // thứ Ba không có giờ
+    }
+
+    @Test
+    void noSlotIsGeneratedOnAHoliday() {
+        BranchSchedule schedule = schedule(Set.of(MON), split());
+
+        assertThat(schedule.isGeneratedSlot(MON, LocalTime.of(9, 0))).isFalse();
+        assertThat(schedule.isGeneratedSlot(TUE, LocalTime.of(9, 0))).isTrue();
+    }
+
+    @Test
     void appointmentIsAffectedWhenItsSlotNoLongerFits() {
         BranchSchedule narrowed = schedule(Set.of(), split()).withVersion(
                 new Version(LocalDate.of(2026, 10, 20), Map.of(
