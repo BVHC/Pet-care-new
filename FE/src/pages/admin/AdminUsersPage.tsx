@@ -4,7 +4,7 @@ import { Badge } from '../../components/ui/badge';
 import { Button } from '../../components/ui/button';
 import { Input } from '../../components/ui/input';
 import { Search, Plus, Eye, Edit, Trash2, Lock, Unlock } from 'lucide-react';
-import { ROLE_LABELS, UserRole } from '../../shared/types/admin';
+import { ROLE_LABELS, type Role } from '../../shared/types/auth';
 import { cn } from '../../lib/utils';
 import {
   ConfirmModal,
@@ -23,7 +23,7 @@ interface User {
   name: string;
   email: string;
   phone: string;
-  role: UserRole;
+  role: Role;
   organization: string;
   status: 'ACTIVE' | 'INACTIVE';
   lastLogin: string;
@@ -35,7 +35,7 @@ interface UserFormData {
   name: string;
   email: string;
   phone: string;
-  role: UserRole;
+  role: Role;
   organization: string;
 }
 
@@ -44,25 +44,19 @@ interface UserFormData {
    ================================================================ */
 
 const MOCK_USERS: User[] = [
-  { id: '1', name: 'Super Admin', email: 'admin@petcare.vn', phone: '0901234567', role: 'SUPER_ADMIN', organization: 'Pet Care VN', status: 'ACTIVE', lastLogin: '2026-09-18 15:30', createdAt: '2026-01-01' },
-  { id: '2', name: 'Nguyễn Văn A', email: 'nva@petcare.vn', phone: '0912345678', role: 'STORE_MANAGER', organization: 'Pet Care VN', status: 'ACTIVE', lastLogin: '2026-09-18 14:00', createdAt: '2026-03-15' },
+  { id: '1', name: 'Quản trị hệ thống', email: 'admin@petcare.vn', phone: '0901234567', role: 'ADMIN', organization: 'Pet Care VN', status: 'ACTIVE', lastLogin: '2026-09-18 15:30', createdAt: '2026-01-01' },
+  { id: '2', name: 'Nguyễn Văn A', email: 'nva@petcare.vn', phone: '0912345678', role: 'BRANCH_MANAGER', organization: 'Pet Care VN', status: 'ACTIVE', lastLogin: '2026-09-18 14:00', createdAt: '2026-03-15' },
   { id: '3', name: 'Trần Thị B', email: 'ttb@petcare.vn', phone: '0923456789', role: 'RECEPTIONIST', organization: 'Pet Care VN', status: 'ACTIVE', lastLogin: '2026-09-18 12:30', createdAt: '2026-03-20' },
-  { id: '4', name: 'Lê Văn C', email: 'lvc@petcare.vn', phone: '0934567890', role: 'VETERINARIAN', organization: 'Pet Care VN', status: 'ACTIVE', lastLogin: '2026-09-17 18:00', createdAt: '2026-04-01' },
-  { id: '5', name: 'Phạm Thị D', email: 'ptd@petcare.vn', phone: '0945678901', role: 'GROOMER', organization: 'Pet Care VN', status: 'ACTIVE', lastLogin: '2026-09-17 17:30', createdAt: '2026-04-15' },
-  { id: '6', name: 'Hoàng Văn E', email: 'hve@petcare.vn', phone: '0956789012', role: 'INVENTORY_STAFF', organization: 'Pet Care VN', status: 'INACTIVE', lastLogin: '2026-09-10 10:00', createdAt: '2026-05-01' },
-  { id: '7', name: 'Vũ Thị F', email: 'vtf@petcare.vn', phone: '0967890123', role: 'FINANCE_STAFF', organization: 'Pet Care VN', status: 'ACTIVE', lastLogin: '2026-09-18 11:00', createdAt: '2026-05-15' },
+  { id: '4', name: 'Lê Văn C', email: 'lvc@petcare.vn', phone: '0934567890', role: 'VET', organization: 'Pet Care VN', status: 'ACTIVE', lastLogin: '2026-09-17 18:00', createdAt: '2026-04-01' },
+  { id: '5', name: 'Phạm Thị D', email: 'ptd@petcare.vn', phone: '0945678901', role: 'CARETAKER', organization: 'Pet Care VN', status: 'ACTIVE', lastLogin: '2026-09-17 17:30', createdAt: '2026-04-15' },
+  { id: '6', name: 'Hoàng Văn E', email: 'hve@petcare.vn', phone: '0956789012', role: 'SUPER_MANAGER', organization: 'Pet Care VN', status: 'INACTIVE', lastLogin: '2026-09-10 10:00', createdAt: '2026-05-01' },
+  { id: '7', name: 'Vũ Thị F', email: 'vtf@petcare.vn', phone: '0967890123', role: 'RECEPTIONIST', organization: 'Pet Care VN', status: 'ACTIVE', lastLogin: '2026-09-18 11:00', createdAt: '2026-05-15' },
 ];
 
-const ROLES: { value: UserRole; label: string }[] = [
-  { value: 'SUPER_ADMIN', label: 'Super Admin' },
-  { value: 'ORG_ADMIN', label: 'Org Admin' },
-  { value: 'STORE_MANAGER', label: 'Quản lý cửa hàng' },
-  { value: 'RECEPTIONIST', label: 'Lễ tân' },
-  { value: 'VETERINARIAN', label: 'Bác sĩ thú y' },
-  { value: 'GROOMER', label: 'KTV Grooming' },
-  { value: 'INVENTORY_STAFF', label: 'Nhân viên kho' },
-  { value: 'FINANCE_STAFF', label: 'Nhân viên tài chính' },
-];
+// CreateStaffRequest.role (identity-v1): ADMIN không tạo qua API.
+const ROLES: { value: Role; label: string }[] = (
+  ['SUPER_MANAGER', 'BRANCH_MANAGER', 'RECEPTIONIST', 'VET', 'CARETAKER'] as const
+).map((value) => ({ value, label: ROLE_LABELS[value] }));
 
 /* ================================================================
    Components.
@@ -70,14 +64,12 @@ const ROLES: { value: UserRole; label: string }[] = [
 
 function RoleBadge({ role }: { role: string }) {
   const colors: Record<string, string> = {
-    SUPER_ADMIN: 'bg-red-100 text-red-700',
-    ORG_ADMIN: 'bg-purple-100 text-purple-700',
-    STORE_MANAGER: 'bg-blue-100 text-blue-700',
+    ADMIN: 'bg-red-100 text-red-700',
+    SUPER_MANAGER: 'bg-purple-100 text-purple-700',
+    BRANCH_MANAGER: 'bg-blue-100 text-blue-700',
     RECEPTIONIST: 'bg-cyan-100 text-cyan-700',
-    VETERINARIAN: 'bg-green-100 text-green-700',
-    GROOMER: 'bg-pink-100 text-pink-700',
-    INVENTORY_STAFF: 'bg-amber-100 text-amber-700',
-    FINANCE_STAFF: 'bg-teal-100 text-teal-700',
+    VET: 'bg-green-100 text-green-700',
+    CARETAKER: 'bg-pink-100 text-pink-700',
   };
   return <Badge className={cn('text-xs', colors[role] || 'bg-gray-100 text-gray-700')}>{ROLE_LABELS[role as keyof typeof ROLE_LABELS] || role}</Badge>;
 }
@@ -385,7 +377,7 @@ export function AdminUsersPage() {
             <select
               className="w-full h-10 px-3 rounded-lg border border-(--color-border-default) bg-white text-sm focus:outline-none focus:ring-2 focus:ring-accent"
               value={formData.role}
-              onChange={(e) => setFormData({ ...formData, role: e.target.value as UserRole })}
+              onChange={(e) => setFormData({ ...formData, role: e.target.value as Role })}
             >
               {ROLES.map(r => (
                 <option key={r.value} value={r.value}>{r.label}</option>

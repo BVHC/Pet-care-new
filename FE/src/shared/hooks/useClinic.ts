@@ -3,8 +3,8 @@
 import { keepPreviousData, useMutation, useQuery, useQueryClient, type QueryKey } from '@tanstack/react-query';
 import { toast } from 'sonner';
 import { formatCurrency } from '../../lib/utils';
+import { ApiError } from '../api/api-error';
 import {
-  ApiError,
   clinicApi,
   type AddLineInput,
   type CheckInInput,
@@ -64,12 +64,14 @@ export const useCurrentShift = (receptionistId: string) =>
 
 // ---------- commands ----------
 
+/** Message hiển thị; mã rule ở cuối message (00-method §3.5) tách ra, xem `notifyError`. */
 export function errorMessage(error: unknown): string {
+  if (error instanceof ApiError && error.ruleId) return error.message.replace(` (${error.ruleId})`, '');
   return error instanceof Error && error.message ? error.message : 'Không thực hiện được. Thử lại sau ít phút.';
 }
 
 export function notifyError(error: unknown) {
-  const rule = error instanceof ApiError && error.errorCode.startsWith('BR-') ? error.errorCode : null;
+  const rule = error instanceof ApiError ? error.ruleId : null;
   toast.error(errorMessage(error), rule ? { description: `Quy tắc ${rule}` } : undefined);
 }
 

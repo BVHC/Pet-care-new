@@ -1,122 +1,211 @@
-# Pet Care Ecosystem - Team Timeline
+# Pet Care Ecosystem — Team Timeline
 
-> Nguồn: `docs/timeline_petcare_v15.xlsx` + kiểm tra thực tế trong `BE/` và `FE/`. Cập nhật: 2026-10-07.
+> **Kế hoạch:** `docs/timeline_petcare_v15.xlsx` (mô tả task, ngày, người làm; mã UC/ST theo sheet "Đối chiếu phạm vi").
+> **Trạng thái:** đối chiếu code trên nhánh `dev` (commit `0d45292`) với hợp đồng `docs/api/*-v1.md`. Cập nhật: 2026-10-09.
 
+## Tổng quan
 
-## Tổng quan trạng thái
+Giai đoạn 1 (05–30/10, đang cuối W1): **7/50 DONE** · 15 IN_PROGRESS · 28 NOT_STARTED. Giai đoạn 2 (02/11–31/12): 37 task T51–T87, chưa bắt đầu.
 
+| Ai | Phụ trách | DONE | IN_PROGRESS | NOT_STARTED |
+|---|---|---|---|---|
+| BE-1 · Mạnh | identity, appointment, visit, care | 3 | 0 | 12 |
+| BE-2 · Dũng | branch, catalog, customer, sales, inventory, boarding, content, report | 2 | 0 | 13 |
+| FE-1 · Hiến | toàn bộ giao diện | 1 | 14 | 2 |
+| Cả nhóm | thiết kế, demo | 1 | 1 | 1 |
 
-Tiến độ: **23/50 task** (46%) - W1 (07-09/10/2026).
-
+- **Trễ hạn** (hạn trước 09/10, chưa DONE): T1, T10, T12. **Hạn 09/10, chưa xong:** T8, T11, T13.
+- **Đang chặn:**
+  - Đăng ký và đăng nhập của **khách** trả 500 trên app thật: identity gọi `CustomerApi` / `CustomerQueryApi`, nhưng module customer mới có placeholder ném lỗi (nợ D001, D010). Theo `06-module-contracts.md` §6, BE-2 giao `CustomerApi` hạn 07/10, `CustomerQueryApi` hạn 13/10. Nhân viên đăng nhập bình thường.
+  - BE-1 chưa giao `StaffDirectoryApi.countBranchManagers` (hạn 08/10, §6), cần cho kích hoạt chi nhánh (T10).
+  - DB mới chưa có tài khoản nào đăng nhập được: ADMIN không seed (dev tự tạo bằng SQL, theo `docs/architecture/system-overview.md`), API tạo nhân viên (T14) chưa có.
+  - FE gọi API xác thực sai hợp đồng (T12) nên đăng ký, OTP, quên mật khẩu chưa chạy với BE thật.
+- **Test BE** (`mvn test`, 09/10): 645/646 unit test pass. Lỗi còn lại là `PetcareApplicationTests`, cần Docker (Docker chưa bật khi chạy). Integration test (`*IT`, Testcontainers) chưa chạy.
 
 | Trạng thái | Ý nghĩa |
 |---|---|
-| **DONE** | Có code thực tế trong `BE/` hoặc `FE/` |
-| **IN_PROGRESS** | Đang làm dở |
-| **NOT_STARTED** | Chưa có code |
+| **DONE** | Đủ mọi hạng mục trong mô tả task, đúng hợp đồng `docs/api/*-v1.md`. BE: có endpoint/job và test. FE: màn hình gọi API thật |
+| **IN_PROGRESS** | Có một phần; phần còn thiếu ghi ở cột "Hiện trạng" |
+| **NOT_STARTED** | Chưa có code. Interface `module/*/api` và lớp `*Placeholder` thuộc T2, không tính |
+
+- Nhiều màn hình FE có sẵn từ code cũ (trước khi làm lại theo spec v16), chạy dữ liệu giả `FE/src/shared/api/clinic-db.ts` với role cũ: tính **IN_PROGRESS**.
+- Đổi trạng thái thì ghi bằng chứng (endpoint, job, test, màn hình) vào cột "Hiện trạng".
 
 ## Milestone
 
+| Mốc | Hạn | Nội dung | Tình trạng |
+|---|---|---|---|
+| M0 | 06/10 | Hợp đồng giữa module + khung BE/FE + schema (T1–T5) | Chưa đạt: còn T1 |
+| M1 | 09/10 | Nền tảng W1 — Tài khoản, Danh mục, Chi nhánh (T6–T13) | Chưa đạt: xong T6, T7, T9; còn T8, T10–T13 |
+| M2 | 16/10 | Dữ liệu nền W2 — Quản trị, Khách & thú, Kho, Order lõi, Lịch hẹn (T14–T24) | Chưa tới hạn |
+| M3 | 23/10 | Luồng chính W3 — Visit, Khám, Tiêm, Thu ngân, đặt chỗ lưu trú, nội dung công khai (T25–T37) | Chưa tới hạn |
+| M4 | 30/10 | Sẵn sàng demo W4 — Kê đơn, Care Task, Lưu trú, Báo cáo, test FSM + E2E (T38–T50) | Chưa tới hạn |
+| M5 | 11/12 | Tầng 3 + AI — Giai đoạn 2 (T51–T83) | Chưa bắt đầu |
+| M5d | 31/12 | Hoàn thiện đồ án: kiểm thử tổng thể, sản phẩm, báo cáo (T84–T87) | Chưa bắt đầu |
 
-| Milestone | Ngay | Ghi chú |
-|---|---|---|
-| M0: Hợp đồng giữa module + khung | 06/10 | |
-| M1: Nền tảng | 09/10 | Tài khoản, Danh mục, Chi nhánh |
-| M2: Dữ liệu nền | 16/10 | Quản trị, Lịch hẹn, KH, Kho |
-| M3: Luồng khám & bán hàng | 23/10 | Visit, Khám, Tiem, Order |
-| M4: Sẵn sàng demo | 30/10 | Lưu trú, CSKH, Báo cáo, E2E |
-| M5: Tầng 3 + AI | 11/12 | Giai đoạn 2 |
+## Phạm vi
 
-## GD 0 - Thiết kế & Setup (05-06/10)
+- UC gốc: `docs/01-business-operations.md` — 89 mã UC01–UC89, bỏ UC18, UC19, UC20, UC41 → **85 UC**, cùng 21 tác vụ hệ thống ST01–ST21.
+- **Giai đoạn 1 (các bảng dưới): 58 UC + 12 ST** (ST01–ST06, ST08, ST13, ST15, ST18–ST20). Mã UC, ST, rule của từng task ghi trong ngoặc ở cột "Công việc".
+- **Giai đoạn 2: 27 UC tầng 3 + 9 ST + phân hệ AI**, task T51–T87 ở cuối file.
 
+## GĐ 0 — Thiết kế & Setup (05–06/10)
 
-| # | Công việc | Ai | Trạng thái | Test |
-|---|---|---|---|---|
-| T1 | Chốt kiến trúc & tech stack mới (làm lại từ đầu, không dùng code/tài liệu cũ), q | Cả nhóm | **NOT_STARTED** | _(chưa có test hint)_ |
-| T2 | Hợp đồng giữa module (để BE-1/BE-2 làm song song): danh sách sự kiện liên đối tư | Cả nhóm | **NOT_STARTED** | _(chưa có test hint)_ |
-| T3 | Khởi tạo dự án BE mới + xác thực & phân quyền 7 role, giới hạn theo chi nhánh, b | BE-1 (Backend) | **NOT_STARTED** | _(chưa có test hint)_ |
-| T4 | Schema DB toàn bộ theo 05-erd §1–11 + seed dữ liệu nền (ADMIN, cấu hình mặc định | BE-2 (Backend) | **NOT_STARTED** | _(chưa có test hint)_ |
-| T5 | Khởi tạo dự án FE mới: design system, router, chặn route theo role, layout Publi | FE-1 (Frontend) | **NOT_STARTED** | _(chưa có test hint)_ |
-## W1 - Nền tảng (07-09/10)
+| # | Công việc | Ai | Ngày | Trạng thái | Hiện trạng | Test |
+|---|---|---|---|---|---|---|
+| T1 | Chốt kiến trúc & tech stack mới (làm lại từ đầu, không dùng code/tài liệu cũ), quy ước code, ranh giới 17 module; review 01–05, duyệt rule 🆕 & giá trị [CFG] | Cả nhóm | 05/10 | **IN_PROGRESS** | Có kiến trúc (`docs/architecture/system-overview.md`), ADR 0001–0023, quy ước BE (`docs/convention/backend/`), ranh giới module (`06-module-contracts.md`), [CFG] min–max đã duyệt. Còn: `02-business-rules.md` mới chốt TK, QT (✅), các module khác vẫn 📝; rule 🆕 chưa duyệt (BR-SP-07, LH-12, TN-02, TN-07, BH-02, KB-06, TB-04→06, Care Task); chưa có quy ước FE | Stack + convention backend 01–09 được chốt; 17 phân hệ map vào 12 package (06 §2), chỉ import `module.<x>.api`; rule 🆕 (BR-SP-07, LH-12, TN-02, TN-07, BH-02, KB-06, TB-04→06) được duyệt; [CFG] có mặc định + min–max (BR-QT-13) |
+| T2 | Hợp đồng giữa module (để BE-1/BE-2 làm song song): danh sách sự kiện liên đối tượng theo phụ lục 03 + interface dịch vụ chéo (mở Order cho Visit, thêm dòng thuốc/vaccine, xuất FEFO, kiểm tra mũi bắt buộc khi lưu trú…) | Cả nhóm | 05/10 | **DONE** | `06-module-contracts.md`: 4 sự kiện, chuỗi tác động theo phụ lục 03, hạn giao interface (§6); 45 file interface trong `module/*/api` (11 module) | 06-module-contracts: §3 đủ 4 sự kiện, §4 đủ interface (`VisitOrderApi`, `StockApi` FEFO, `VaccinationQueryApi`…), §6 có hạn giao; bên chưa cài dùng `*Placeholder` ném `UnsupportedOperationException`, không trả giá trị giả |
+| T3 | Khởi tạo dự án BE mới + xác thực & phân quyền 7 role, giới hạn theo chi nhánh, bảng sessions + khung ghi audit + đọc tham số [CFG] _(BR-TK-11, BR-QT-13, 15, 16)_ | BE-1 | 06/10 | **DONE** | `platform/security` (JWT + phiên DB, 7 role, `BranchScope`), `platform/audit` + trigger chặn sửa/xóa audit, `SystemConfigService` đọc [CFG]. Test: `SecurityConfigTest`, `BranchScopeTest`, `AuthenticationIT`, `AuditRecorderIT`, `SystemConfigIT` | Không token → 401 UNAUTHENTICATED; sai role → 403 ACCESS_DENIED; NV truyền branchId khác → 403 ACCESS_DENIED_SCOPE_MISMATCH; phiên hủy → token chết ngay (BR-TK-11); audit chỉ INSERT (BR-QT-16); [CFG] đọc qua `SystemConfigApi` |
+| T4 | Schema DB toàn bộ theo 05-erd §1–11 + seed dữ liệu nền (ADMIN, cấu hình mặc định, mẫu thông báo) + khung phát/nhận sự kiện trong 1 transaction _(nguyên tắc 6, 04)_ | BE-2 | 06/10 | **DONE** | V1 tạo 55 bảng theo 05-erd §1–11 (`SchemaMigrationIT`); V2 seed 52 tham số [CFG]; sự kiện trong 1 transaction (`DomainEventTransactionIT`). Đổi phạm vi theo docs: ADMIN **không** seed (dev tự tạo bằng SQL — `system-overview.md`); mẫu thông báo seed dần theo tính năng (06 §8 Q4, đã có 4/30) | Flyway migrate sạch trên DB trống, đủ bảng 05-erd §1–11; `system_configs` có min–max; mẫu thông báo có `default_body`; `@EventListener` ném lỗi → rollback cả giao dịch bên phát (nguyên tắc 6) |
+| T5 | Khởi tạo dự án FE mới: design system, router, chặn route theo role, layout Public / Khách / Nhân viên / Admin, lớp mock API theo hợp đồng | FE-1 | 06/10 | **DONE** | _(09/10, working tree chưa commit)_ 7 role v16 (`shared/types/auth.ts`); một phiên `session.store` lấy role, `mustChangePassword` từ `LoginResponse`, 401 → hết phiên, 400 BR-TK-17 → ép đổi MK (`axios.ts`, bỏ refresh token); guard `RequireRole` (chưa đăng nhập → Đăng nhập, BR-TK-17 → `/auth/change-password`, sai role → 403) cho 4 khu trong `App.tsx`: Public, Khách (A02), bàn làm việc nhân viên, Admin (role từng trang theo actor UC, bỏ quyền vượt của quản lý); lớp mock theo hợp đồng `shared/api/mock` (axios adapter, envelope §3.4–3.5, mock identity: login, logout, `GET /me`, `POST /me/password`, 8 tài khoản demo), `ApiError` 6 trường + `ruleId`; lỗi `clinic.api` đổi theo §3.5. Mock bật khi `npm run dev`, `VITE_API_MOCK=false` để gọi BE thật. Test: `App.routes.test`, `RequireRole.test`, `session.store.test`, `mock-api.test`, `api-error.test`, `ChangePasswordPage.test`, `workspaces.test`, `clinic.api.test` (vitest 230/230) | Chưa đăng nhập vào route riêng → về Đăng nhập; sai role → trang 403; mock trả đúng envelope `{data,message,code}` và lỗi 6 trường (00-method §3.4–3.5), đọc mã BR cuối message; `mustChangePassword` → ép màn đổi MK (BR-TK-17) |
 
+## W1 — Nền tảng (07–09/10)
 
-| # | Công việc | Ai | Trạng thái | Test |
-|---|---|---|---|---|
-| T6 | Tài khoản: Đăng ký + OTP (gửi, gửi lại, xác thực) + hàng đợi gửi email Notificat | BE-1 | **DONE** | POST /api/auth/register (>=18 tuoi, email unique) -> nhận OTP -> verify -> tài khoản ACTIVE. Thu: đăng ký duới 18 tuổi -> 400. |
-| T7 | Tài khoản: Đăng nhập/đăng xuất + ST01 khóa tạm + Quên/Đổi mật khẩu + bắt đổi MK  | BE-1 | **DONE** | POST /api/auth/login -> JWT + session -> POST /api/auth/logout. OTP sai 5 lần -> ST01 khóa 15 phút. Thu: login với tài khoản bị khóa -> 423. |
-| T8 | Tài khoản: Hồ sơ cá nhân + sổ địa chỉ + hồ sơ công khai VET + liên kết hồ sơ khá | BE-1 | **NOT_STARTED** | PUT /api/accounts/{id}/profile -> sổ địa chỉ (tối đa 5). Thu: sửa email hộ khách (A06) -> được. Sửa email chính mình -> 403. |
-| T9 | Danh mục: danh mục SP, sản phẩm (thuốc kê đơn, hạn dùng), dịch vụ (nhóm, loại Kh | BE-2 | **NOT_STARTED** | CRUD danh mục: danh mục -> sản phẩm (thuốc kê đơn) -> dịch vụ (nhóm Khám/Tiêm/Thẩm mỹ/Lưu trú) -> loại vaccine -> phác đồ. |
-| T10 | Chi nhánh: tạo/kích hoạt, giờ mở cửa (2 khoảng/ngày, ngày hiệu lực), ngày nghỉ & | BE-2 | **DONE** | POST /api/branches -> kích hoạt (cần BRANCH_MANAGER + giờ mở cửa). Thu: kích hoạt khi chưa có quản lý chi nhánh -> 400. |
-| T11 | Chi nhánh: bật/tắt dịch vụ tại chi nhánh + quota mặc định theo nhóm & quota từng | BE-2 | **DONE** | PUT /api/branches/{id}/services (bật/tắt dịch vụ). PUT /api/branches/{id}/quota (quota theo nhóm dịch vụ x khung giờ). Thu: quota = 0 -> khung bị khóa. |
-| T12 | FE: Đăng ký (≥18 tuổi, điều khoản), OTP (đếm ngược 60s), Đăng nhập, Quên/Đổi mật | FE-1 | **DONE** | FE: form đăng ký -> gọi T6. OTP -> gọi T6. Thu: gửi OTP nhiều lần -> rate limit 5 lần/15 phút. |
-| T13 | FE: Hồ sơ cá nhân + sổ địa chỉ + hồ sơ giới thiệu VET + màn hình liên kết hồ sơ | FE-1 | **DONE** | FE: trang hồ sơ cá nhân -> gọi T8. Liên kết tài khoản T7. Thu: số điện thoại trùng -> cảnh báo nghi trùng. |
-## W2 - Dữ liệu nền & Lịch hẹn (12-16/10)
+| # | Công việc | Ai | Ngày | Trạng thái | Hiện trạng | Test |
+|---|---|---|---|---|---|---|
+| T6 | Tài khoản: Đăng ký + OTP (gửi, gửi lại, xác thực) + hàng đợi gửi email NotificationOutbox & ST20 thử lại + ST02 dọn tài khoản PENDING _(UC01, UC02 · ST02, ST20 · BR-TK-01→08, BR-QT-14)_ | BE-1 | 07/10 | **DONE** | `POST /api/auth/register`, `/register/verify`, `/register/resend-otp`; ST02 `PendingAccountCleanupJob`; ST20 ba luồng gửi (email ưu tiên, email thường, IN_APP). IT: `RegistrationIT`, `RegistrationVerificationIT`, `RegistrationResendIT`, `PendingAccountCleanupIT`, `NotificationOutboxIT`. ⚠ Chạy thật: đăng ký/xác thực trả 500 tới khi có `CustomerApi` (T17, nợ D001) | `POST /api/auth/register` → 201 PENDING (email trùng → 400 BR-TK-01), …/register/verify → ACTIVE, …/register/resend-otp < 60 giây → 400 BR-TK-07; ST02: PENDING quá 24h → xóa TK + hồ sơ online (BR-TK-08); ST20 gửi lỗi thì thử lại |
+| T7 | Tài khoản: Đăng nhập/đăng xuất + ST01 khóa tạm + Quên/Đổi mật khẩu + bắt đổi MK lần đầu _(UC03–05 · ST01 · BR-TK-09→14, 17)_ | BE-1 | 08/10 | **DONE** | `POST /api/auth/login` (ST01 khóa tạm + email cảnh báo), `/logout`, `/password/forgot`, `/password/reset`, `POST /api/me/password`, chặn BR-TK-17 (`MustChangePasswordInterceptor`). IT: `LoginIT`, `LogoutIT`, `PasswordResetIT`, `ChangePasswordIT`. ⚠ Khách đăng nhập trả 500 tới khi có `CustomerQueryApi` (T17, nợ D010) | `POST /api/auth/login`, `POST /api/auth/password/forgot` (luôn 202), …/reset, `POST /api/me/password`; sai MK → 401 chung (BR-TK-10); sai 5 lần/15 phút → ST01 khóa tạm, MK đúng vẫn 400 BR-TK-09; `mustChangePassword` → 400 BR-TK-17 |
+| T8 | Tài khoản: Hồ sơ cá nhân + sổ địa chỉ + hồ sơ công khai VET + liên kết hồ sơ khách có sẵn (OTP email hồ sơ) _(UC06, UC07 · BR-TK-15, 18, 19, 20)_ | BE-1 | 09/10 | **NOT_STARTED** | Chưa có `GET /api/me`, `PATCH /api/me/staff-profile`, `/api/me/link-*`, `GET /api/public/vets`. Sổ địa chỉ + hồ sơ khách (`/me/addresses`, `/me/customer-profile`) nằm trong customer-v1, module của BE-2: cần chốt ai làm | `GET /api/me`, `PATCH /api/me/staff-profile`, `GET /api/public/vets`, `POST /api/me/addresses`, `GET /api/me/link-candidates` → `POST /api/me/link/otp` → …/confirm; sửa email → 400 BR-TK-15; hồ sơ online đã có dữ liệu → 400 BR-TK-19 |
+| T9 | Danh mục: danh mục SP, sản phẩm (thuốc kê đơn, hạn dùng), dịch vụ (nhóm, loại Khám/Tiêm), loại chuồng, loại vaccine & phác đồ _(UC28–31 · BR-SP-01→07)_ | BE-2 | 07/10 | **DONE** | 18 endpoint nhân viên (catalog-v1 #1–18): `/api/product-categories`, `/api/products`, `/api/services` (gồm loại chuồng), `/api/vaccine-types`, `/api/vaccination-protocols`. IT `CatalogAdminIT` + 6 unit test. Endpoint công khai #19–22 thuộc T32. ⚠ Tắt `tracksExpiry` và xóa loại vaccine trả 500 tới khi có T18, T28 | `POST /api/products`, `POST /api/services` (loại chuồng = BOARDING + kennelType), `POST /api/vaccine-types`, `POST /api/vaccination-protocols`; thuốc kê đơn/vaccine tắt hạn dùng → 400 BR-SP-05; MEDICAL thiếu loại → 400 BR-SP-06 |
+| T10 | Chi nhánh: tạo/kích hoạt, giờ mở cửa (2 khoảng/ngày, ngày hiệu lực), ngày nghỉ & thu hẹp giờ (phát sự kiện hủy hàng loạt), cờ cấp cứu ngoài giờ _(UC12, UC14 · BR-CN-01→05, BR-QT-04)_ | BE-2 | 08/10 | **NOT_STARTED** | Chỉ có interface `branch/api`. Kích hoạt cần `StaffDirectoryApi.countBranchManagers` (BE-1, hạn 08/10, chưa có) | `POST /api/branches` → DRAFT; `POST /api/branches/{branchId}/activate` thiếu BRANCH_MANAGER → 400 BR-QT-04; `PUT …/opening-hours` chồng/quá 2 khoảng → 400 BR-CN-02; `POST …/holidays` + cancelAffected → `BranchClinicCancellationEvent` |
+| T11 | Chi nhánh: bật/tắt dịch vụ tại chi nhánh + quota mặc định theo nhóm & quota từng khung giờ _(UC33, UC42 · BR-LH-01, 03, BR-SP-04)_ | BE-2 | 09/10 | **NOT_STARTED** | Chưa có code | `PUT /api/branches/{branchId}/services/{serviceId}`, …/quota-defaults/{serviceGroup}, …/slot-quotas (quota 0 = khóa khung, chưa cấu hình = 1); khung ngoài giờ mở cửa → 400 BR-LH-02; dịch vụ đã ngừng KD → 400 |
+| T12 | FE: Đăng ký (≥18 tuổi, điều khoản), OTP (đếm ngược 60s), Đăng nhập, Quên/Đổi mật khẩu, bắt đổi MK lần đầu _(UC01–05 · BR-TK-10)_ | FE-1 | 07–08/10 | **IN_PROGRESS** | Có màn Đăng ký, OTP, Đăng nhập, Quên MK (`pages/auth`) nhưng lệch hợp đồng: OTP và quên MK gọi sai path (`/verify-otp`, `/otp/resend`, `/forgot-password`, `/reset-password` → 404) và gửi `otpCode` thay `code`; đăng ký gửi `name`, thiếu `isAdult`/`termsAccepted` (→ 400), không có ô ≥ 18 tuổi; đổi MK (`SecurityPage`) chưa gọi API. Đã xong ở T5: đăng nhập / đăng xuất theo `LoginResponse`, màn bắt đổi MK lần đầu (`/auth/change-password`) | `POST /api/auth/register`, …/register/verify, …/register/resend-otp, …/login, …/password/forgot, …/password/reset, `POST /api/me/password`; Gửi lại khóa 60s đếm ngược (BR-TK-07); login/quên MK chỉ hiện câu chung (BR-TK-10) |
+| T13 | FE: Hồ sơ cá nhân + sổ địa chỉ + hồ sơ giới thiệu VET + màn hình liên kết hồ sơ _(UC06, UC07 · BR-TK-19)_ | FE-1 | 09/10 | **IN_PROGRESS** | Có `/account` (`AccountPage`, `AddressBook`, `VetProfile`, `ProfileLinking`) nhưng chưa chạy: BE chưa có endpoint (T8). Lỗi: khách thấy form hồ sơ 2 lần và lưu qua `/me/staff-profile` (đúng: `/me/customer-profile`); sổ địa chỉ sai shape và method so với customer-v1; màn liên kết chỉ hiện khi có cờ (BR-TK-19 cho khách không cờ tự liên kết); chưa ẩn chức năng khi còn cờ | `GET /api/me`, `PATCH /api/me/customer-profile`, …/staff-profile, `/api/me/addresses`, `GET /api/me/link-candidates`, `POST /api/me/link/otp`, …/confirm, …/decline; email chỉ đọc (BR-TK-15); chờ liên kết → ẩn thú, đặt lịch (BR-TK-19) |
 
+## W2 — Dữ liệu nền & Lịch hẹn (12–16/10)
 
-| # | Công việc | Ai | Trạng thái | Test |
-|---|---|---|---|---|
-| T14 | Quản trị: tài khoản nhân viên (tạo theo phân cấp, đổi chức vụ, điều chuyển, vô h | BE-1 | **DONE** | POST /api/accounts (SUPER_MANAGER tạo BRANCH_MANAGER). PUT /api/accounts/{id}/role -> đổi chức vụ. Thu: ADMIN đổi chức vụ BRANCH_MANAGER -> 403. |
-| T15 | Quản trị: API cấu hình tham số [CFG] (min–max) + mẫu thông báo (khôi phục mặc đị | BE-1 | **DONE** | GET/PUT /api/system-configs. GET /api/audit-logs. Thu: ADMIN đổi tham số -> audit ghi. Đọc audit khi không phải ADMIN -> 403. |
-| T16 | Lịch hẹn: sinh khung 30 phút theo giờ mở cửa/ngày nghỉ, tính quota, đặt lịch (kh | BE-1 | **DONE** | POST /api/appointments (đặt lịch) -> sinh slot. GET /api/appointments/slots. Thu: đặt khi quota = 0 -> 400. Đặt khi khung đầy -> 400. |
-| T17 | Khách hàng & thú cưng: hồ sơ tại quầy, tra cứu, thú cưng (khóa loài), cân nặng,  | BE-2 | **DONE** | POST /api/customers -> tạo hồ sơ. POST /api/pets -> thêm thú cưng. GET /api/pets?q= (tra cứu). Thu: số điện thoại trùng -> cảnh báo. |
-| T18 | Kho: nhà cung cấp, tồn theo lô + StockMovement, phiếu nhập kho, dịch vụ xuất FEF | BE-2 | **DONE** | POST /api/stocks/inbound. GET /api/stocks?q=. PUT /api/stocks/{id}/min-stock. Thu: nhập kho với số lô trùng -> tạo lô mới hay cộng dồn. |
-| T19 | Order lõi: FSM, dòng Order snapshot giá, quyền thêm/xóa dòng theo người thêm + A | BE-2 | **DONE** | POST /api/orders (Order lõi). Thu: tạo Order không có dòng -> 400. |
-| T20 | FE: Quản lý chi nhánh + giờ mở cửa + ngày nghỉ + dịch vụ tại chi nhánh + quota | FE-1 | **NOT_STARTED** | FE: trang quản lý chi nhánh -> gọi T10, T11. Cấu hình giờ mở cửa, ngày nghỉ. |
-| T21 | FE: Quản lý danh mục SP/DV, loại chuồng, loại vaccine & phác đồ | FE-1 | **NOT_STARTED** | FE: trang danh mục sản phẩm -> gọi T9. Thu: tạo sản phẩm thuốc kê đơn -> hiển thị cảnh báo. |
-| T22 | FE Admin: tài khoản nhân viên, khóa/mở khóa, cấu hình tham số, mẫu thông báo, au | FE-1 | **NOT_STARTED** | FE: trang quản trị -> gọi T14, T15. Thu: non-admin truy cập -> redirect login. |
-| T23 | FE: Hồ sơ khách tại quầy, tra cứu khách & thú, quản lý thú cưng (khách + lễ tân) | FE-1 | **NOT_STARTED** | FE: trang khách hàng tại quầy -> gọi T17. Thu: tạo hồ sơ trùng SĐT -> cảnh báo. |
-| T24 | FE: Kho: nhà cung cấp, phiếu nhập, tồn theo lô/hạn dùng, điều chỉnh tồn, tồn tối | FE-1 | **DONE** | FE: trang kho -> gọi T18. Thu: lễ tân xem tồn kho -> được. Lễ tân sửa tồn kho -> 403. |
-## W3 - Luồng khám & bán hàng (19-23/10)
+| # | Công việc | Ai | Ngày | Trạng thái | Hiện trạng | Test |
+|---|---|---|---|---|---|---|
+| T14 | Quản trị: tài khoản nhân viên (tạo theo phân cấp, đổi chức vụ, điều chuyển, vô hiệu hóa/kích hoạt lại, sửa email/SĐT) + khóa/mở khóa _(UC08, UC09 · BR-QT-01→12, BR-TK-16)_ | BE-1 | 12–13/10 | **NOT_STARTED** | Chỉ có `AccountLockedEvent` + bảng chuyển FSM. Chưa có `/api/staff/**`, `/api/accounts` (tìm, khóa, mở khóa) | `POST /api/staff` (ngoài phân cấp → 403 BR-QT-01), `POST /api/staff/{id}/disable` (còn Visit/ca OPEN → 400 BR-QT-08), …/change-role, …/transfer, …/reactivate; `POST /api/accounts/{id}/lock` → hủy phiên + pendingWork, …/unlock |
+| T15 | Quản trị: API cấu hình tham số [CFG] (min–max) + mẫu thông báo (khôi phục mặc định) + xem audit + thông báo trong app _(UC10, UC11, UC88 · BR-QT-13→16)_ | BE-1 | 14/10 | **NOT_STARTED** | Chưa có `/api/system-configs`, `/api/notification-templates`, `/api/audit-logs`, `/api/me/notifications`. Luồng ST20 IN_APP đã ghi bảng `notifications` (T6) | `PUT /api/system-configs/{key}` ngoài min–max → 400 BR-QT-13; `PUT /api/notification-templates/{code}` biến lạ/thiếu → 400 BR-QT-14; `POST …/{code}/restore-default`; `GET /api/audit-logs` (chỉ ADMIN); `GET /api/me/notifications` |
+| T16 | Lịch hẹn: sinh khung 30 phút theo giờ mở cửa/ngày nghỉ, tính quota, đặt lịch (khách/lễ tân), đổi khung, hủy (cờ hủy muộn) _(UC39, UC40 · BR-LH-01→07)_ | BE-1 | 15–16/10 | **NOT_STARTED** | Chỉ có interface `appointment/api` | `GET /api/branches/{branchId}/available-slots`, `POST /api/appointments` → BOOKED, `POST /api/appointments/{appointmentId}/reschedule`, …/cancel (< 12h → lateCancel=true); hết quota → 400 BR-LH-03; đổi lần 4 → 400 BR-LH-06 |
+| T17 | Khách hàng & thú cưng: hồ sơ tại quầy, tra cứu, thú cưng (khóa loài), cân nặng, đánh dấu đã mất & chuyển chủ (phát sự kiện), xóa thú chưa giao dịch, hồ sơ sức khỏe cho khách _(UC22–26 · BR-KH-01→08)_ | BE-2 | 12–13/10 | **NOT_STARTED** | Chỉ có placeholder ném lỗi (`CustomerApiPlaceholder`, `CustomerQueryApiPlaceholder`). ⚠ Đang chặn đăng ký/đăng nhập của khách (nợ D001, D010); hạn giao `CustomerApi` 07/10, `CustomerQueryApi` 13/10 (06 §6) | `POST /api/customers` (SĐT trùng → vẫn 201 + duplicatePhoneProfiles), `POST /api/pets/{petId}/mark-deceased` → `PetDeceasedEvent`, …/transfer-owner; đổi loài khi có bệnh án → 400 BR-KH-03; xóa thú đã có giao dịch → 400 BR-KH-06 |
+| T18 | Kho: nhà cung cấp, tồn theo lô + StockMovement, phiếu nhập kho, dịch vụ xuất FEFO / hoàn lô, điều chỉnh tồn, tồn tối thiểu, xem tồn _(UC73–76 · BR-KO-01→07)_ | BE-2 | 14–15/10 | **NOT_STARTED** | Chỉ có `StockQueryApiPlaceholder` | `POST /api/stock-receipts` → DRAFT, …/{receiptId}/confirm (thiếu lô/hạn → 400 BR-KO-03), …/{receiptId}/cancel (lô không đủ tồn → 400 BR-KO-04), `POST /api/stock-adjustments`, `GET /api/inventory`; FEFO/hoàn lô là `StockApi` nội bộ |
+| T19 | Order lõi: FSM, dòng Order snapshot giá, quyền thêm/xóa dòng theo người thêm + API cho BE-1 (mở Order VISIT, thêm dòng thuốc/vaccine, chuyển PENDING/CANCELLED) _(UC67 · BR-BH-01→03)_ | BE-2 | 16/10 | **NOT_STARTED** | Chỉ có interface `sales/api` | `POST /api/orders/{orderId}/lines` (giá snapshot), `DELETE /api/orders/{orderId}/lines/{lineId}`: không phải chủ dòng → 403 BR-BH-02, dòng VACCINE → 400 BR-BH-02; BE-1 dùng `VisitOrderApi` (openForVisit, addDrugLine…) |
+| T20 | FE: Quản lý chi nhánh + giờ mở cửa + ngày nghỉ + dịch vụ tại chi nhánh + quota _(UC12, UC14, UC33, UC42)_ | FE-1 | 12/10 | **NOT_STARTED** | Không có màn chi nhánh, giờ mở cửa, ngày nghỉ, quota (`/admin/tenants` là mock đa tổ chức của code cũ) | `/api/branches`; gốc `/api/branches/{branchId}`: /activate, /opening-hours(/impact), /holidays(/impact), /services, /quota-defaults, /slot-quotas; hiện DS bị ảnh hưởng, tick cancelAffected (BR-LH-10); ≤ 2 khoảng/ngày (BR-CN-02) |
+| T21 | FE: Quản lý danh mục SP/DV, loại chuồng, loại vaccine & phác đồ _(UC28–31)_ | FE-1 | 13/10 | **NOT_STARTED** | Chưa có màn quản lý danh mục dù BE (T9) đã có API. `/admin/vaccines` là mock tồn lô vaccine, không phải UC31 | GET/POST `/api/product-categories`, `/api/products`, `/api/services` (loại chuồng = BOARDING), `/api/vaccine-types`, `/api/vaccination-protocols` (+PATCH); MEDICAL bắt chọn EXAM/VACCINE (BR-SP-06); VACCINE bắt gắn loại (BR-SP-07) |
+| T22 | FE Admin: tài khoản nhân viên, khóa/mở khóa, cấu hình tham số, mẫu thông báo, audit log _(UC08–11)_ | FE-1 | 14/10 | **IN_PROGRESS** | `/admin/users`, `/admin/audit` chạy mock + role cũ. Thiếu đổi chức vụ, điều chuyển, vô hiệu hóa/kích hoạt lại, gửi lại MK, sửa email; chưa có màn tham số [CFG] và mẫu thông báo | `/api/staff` (+/{id}/change-role, /transfer, /disable, /reactivate), `/api/accounts/{id}/lock`, …/unlock, `/api/system-configs`, `/api/notification-templates`, `/api/audit-logs`; ẩn role vượt cấp (BR-QT-01); khóa bắt lý do (BR-QT-11) |
+| T23 | FE: Hồ sơ khách tại quầy, tra cứu khách & thú, quản lý thú cưng (khách + lễ tân), hồ sơ sức khỏe, chuyển chủ _(UC22–26)_ | FE-1 | 15/10 | **IN_PROGRESS** | `/pets` và tra khách trong `CheckInDialog` chạy mock. Thiếu tạo/sửa hồ sơ khách tại quầy, đánh dấu đã mất, cân nặng, chuyển chủ | `/api/customers`, `POST /api/customers/{customerId}/pets`, `/api/me/pets`, `PATCH /api/pets/{petId}` (+ /mark-deceased, /transfer-owner, /health-record); loài khóa khi speciesLocked (BR-KH-03); đã mất: xác nhận 2 bước (BR-KH-05) |
+| T24 | FE: Kho: nhà cung cấp, phiếu nhập, tồn theo lô/hạn dùng, điều chỉnh tồn, tồn tối thiểu _(UC73–76)_ | FE-1 | 16/10 | **IN_PROGRESS** | `/admin/warehouse`, `/admin/purchasing`, `/admin/vaccines` chạy mock, mô hình đơn mua cũ. Thiếu nhà cung cấp, trạng thái phiếu nhập DRAFT/CONFIRMED/CANCELLED | `/api/suppliers`; `/api/stock-receipts` (+/{receiptId}/confirm, /cancel); `/api/inventory` (+/{productId}/lots, /min-quantity); `/api/stock-adjustments`; SP có hạn bắt nhập lô/hạn (BR-KO-03); OTHER bắt ghi chú (BR-KO-06) |
 
+## W3 — Luồng khám & bán hàng (19–23/10)
 
-| # | Công việc | Ai | Trạng thái | Test |
-|---|---|---|---|---|
-| T25 | Lịch hẹn: ST05 NO_SHOW, hạn chế đặt online (gỡ sớm), ST03 nhắc lịch, nhận sự kiệ | BE-1 | **DONE** | ST05: quá giờ hẹn 30 phút -> Appointment BOOKED -> NO_SHOW. BR-LH-09: 3 lần NO_SHOW/hủy muộn trong 90 ngày -> hạn chế đặt online 30 ngày. |
-| T26 | Tiếp nhận: Visit (check-in, walk-in, cấp cứu ngoài giờ), thứ tự hàng đợi, gán/gá | BE-1 | **NOT_STARTED** | POST /api/visits (check-in). GET /api/visits/queue. PUT /api/visits/{id}/queue (gọi lượt). Thu: check-in trước 30 phút -> 400. |
-| T27 | Khám: bệnh án, chẩn đoán, ghi chú nội bộ, hoàn tất lượt (điều kiện theo loại Khá | BE-1 | **DONE** | POST /api/medical-records -> bệnh án. POST /api/prescriptions -> kê đơn. Thu: hoàn tất khi chưa có chẩn đoán -> 400. Kê đơn thiếu tồn -> giảm SL hoặc "mua ngoài". |
-| T28 | Tiêm chủng: ghi mũi theo phác đồ (trừ kho FEFO, dòng Order vaccine, ngày tái chủ | BE-1 | **NOT_STARTED** | POST /api/vaccinations -> ghi mũi tiêm. Thu: chọn vaccine hết tồn -> 400. Xóa mũi khi lượt đã hoàn tất -> 400. |
-| T29 | Order bán lẻ tại quầy: tạo, thêm hàng (cảnh báo thiếu tồn, chặn thuốc kê đơn), c | BE-2 | **NOT_STARTED** | POST /api/orders/{id}/lines -> thêm dòng. DELETE /api/orders/{id}/lines/{lineId}. Thu: lễ tân thêm thuốc kê đơn -> 400. Bác sĩ thêm dịch vụ -> được. |
-| T30 | Thu ngân: ca thường/ngoài giờ, thu tiền gộp + trừ kho FEFO, đối soát, ST13 tự ch | BE-2 | **NOT_STARTED** | POST /api/cashier-sessions -> mở ca. POST /api/cashier-sessions/{id}/close -> chốt ca. Thu: chốt ca khi đang đóng -> 400. |
-| T31 | Lưu trú: chuồng (tạo, bảo trì), đặt chỗ theo loại chuồng (sức chứa theo đêm, sna | BE-2 | **NOT_STARTED** | POST /api/boardings -> đặt chỗ. Thu: đặt khi chuồng đầy -> 400. Đặt với thú chưa tiêm đủ -> cảnh báo. |
-| T32 | Thông tin công khai + Bài viết + Feedback: dịch vụ, chi nhánh, bác sĩ, sản phẩm  | BE-2 | **NOT_STARTED** | FE: trang công khai -> gọi T9, T10. Bài viết -> gọi T9. Feedback -> POST /api/feedback. |
-| T33 | FE: Đặt lịch (chọn khung trống), lịch hẹn của tôi, lễ tân đặt hộ / đổi / hủy | FE-1 | **DONE** | FE: trang đặt lịch -> gọi T16. Thu: đổi giờ 4 lần -> lần 4 bị từ chối. Hủy dưới 12 giờ -> ghi hủy muộn. |
-| T34 | FE: Trung tâm thông báo & cài đặt nhận thông báo + bán lẻ tại quầy (POS) | FE-1 | **NOT_STARTED** | FE: trang thông báo -> GET /api/notifications. Thu: non-auth -> 401. |
-| T35 | FE: Thu tiền (gộp Order), mở/chốt ca, đối soát ca | FE-1 | **DONE** | FE: trang thanh toán -> gọi T30. Thu: thu gộp 2 Order -> một lần thu. Chuyển khoản sai mã -> chưa PAID. |
-| T36 | FE: Tiếp nhận & hàng đợi (lễ tân), hàng đợi của tôi & gọi lượt (VET/CARETAKER),  | FE-1 | **DONE** | FE: trang tiếp nhận -> gọi T26. Thu: check-in lịch không tồn tại -> 404. |
-| T37 | FE: Màn hình khám VET (bệnh án, chẩn đoán, tiêm chủng, hoàn tất) + màn hình thẩm | FE-1 | **DONE** | FE: trang bác sĩ -> gọi T27, T28. Thu: hoàn tất lượt khi chưa có chẩn đoán -> nút bị disabled. |
-## W4 - Lưu trú, CSKH, Báo cáo (26-29/10)
+| # | Công việc | Ai | Ngày | Trạng thái | Hiện trạng | Test |
+|---|---|---|---|---|---|---|
+| T25 | Lịch hẹn: ST05 NO_SHOW, hạn chế đặt online (gỡ sớm), ST03 nhắc lịch, nhận sự kiện hủy hàng loạt (ngày nghỉ, thú mất, chuyển chủ) _(ST03, ST05 · BR-LH-08→12)_ | BE-1 | 19/10 | **NOT_STARTED** | Chưa có job ST03, ST05; chưa có `@EventListener` nào | ST05: quá giờ hẹn 30 phút → NO_SHOW; 3 NO_SHOW/hủy muộn/90 ngày → đặt online 400 BR-LH-09; `POST /api/customers/{customerId}/booking-restriction/lift` (không hạn chế → 409); ST03 nhắc trước 24h; sự kiện → CANCELLED (CLINIC) |
+| T26 | Tiếp nhận: Visit (check-in, walk-in, cấp cứu ngoài giờ), thứ tự hàng đợi, gán/gán lại, gọi lượt, hủy lượt khách bỏ về _(UC44–47 · BR-TN-01→09)_ | BE-1 | 20–21/10 | **NOT_STARTED** | Chưa có code | `POST /api/visits` → WAITING + lịch CHECKED_IN + Order OPEN; `POST /api/visits/{visitId}/assign`, …/move, …/mark-emergency, …/call, …/reassign, …/cancel; ngoài cửa sổ check-in → 400 BR-TN-02; hủy lượt đã gọi → 409 BR-TN-07 |
+| T27 | Khám: bệnh án, chẩn đoán, ghi chú nội bộ, hoàn tất lượt (điều kiện theo loại Khám/Tiêm/Thẩm mỹ), khóa bệnh án + bản bổ sung _(UC48, UC52, UC53 · BR-KB-01, 02, BR-SP-06)_ | BE-1 | 22/10 | **NOT_STARTED** | Chưa có code | `PUT /api/visits/{visitId}/medical-record`, `POST /api/visits/{visitId}/complete` → lịch COMPLETED, Order PENDING, khóa bệnh án; Khám thiếu chẩn đoán → 400 BR-KB-02; sửa sau COMPLETED → 409, dùng …/medical-record/addenda |
+| T28 | Tiêm chủng: ghi mũi theo phác đồ (trừ kho FEFO, dòng Order vaccine, ngày tái chủng), xóa mũi ghi nhầm + interface "đủ mũi bắt buộc" cho Lưu trú _(UC49 · ST06 · BR-KB-04, BR-SP-07)_ | BE-1 | 23/10 | **NOT_STARTED** | Chỉ có `VaccinationQueryApiPlaceholder` | `POST /api/visits/{visitId}/vaccinations` → trừ FEFO + dòng VACCINE + nextDueDate; hết tồn khả dụng → 400 BR-KB-04; `DELETE …/vaccinations/{vaccinationId}` khi COMPLETED → 409; `VaccinationQueryApi.findBoardingVaccineGaps` |
+| T29 | Order bán lẻ tại quầy: tạo, thêm hàng (cảnh báo thiếu tồn, chặn thuốc kê đơn), chốt, hủy; BRANCH_MANAGER hủy Order PENDING _(UC66 · BR-BH-04, 05, 06)_ | BE-2 | 19/10 | **NOT_STARTED** | Chưa có code | `POST /api/orders` → RETAIL OPEN; …/{orderId}/lines thiếu tồn → 201 + stockWarning, thuốc kê đơn → 400 BR-SP-01; …/{orderId}/close, …/{orderId}/cancel; …/{orderId}/cancel-unpaid (BRANCH_MANAGER) thiếu lý do → 400 BR-BH-05 |
+| T30 | Thu ngân: ca thường/ngoài giờ, thu tiền gộp + trừ kho FEFO, đối soát, ST13 tự chốt ca & cảnh báo Order PENDING quá hạn _(UC70–72 · ST06, ST13 · BR-TG-01→05, BR-CN-05)_ | BE-2 | 20–21/10 | **NOT_STARTED** | Chưa có code (gồm ST13) | `POST /api/cashier-shifts` (+/{shiftId}/close, /reconcile); `POST /api/payments` (gộp → PAID, trừ FEFO): chưa mở ca → 400 BR-TG-01, tiền ≠ tổng → 400 BR-TG-02; ST13: quá giờ đóng +30 phút → tự CLOSED, báo Order PENDING > 1 ngày |
+| T31 | Lưu trú: chuồng (tạo, bảo trì), đặt chỗ theo loại chuồng (sức chứa theo đêm, snapshot giá), gia hạn, hủy, ST05 NO_SHOW _(UC54, UC58 · ST05 · BR-LT-01→07)_ | BE-2 | 22/10 | **NOT_STARTED** | Chưa có code | `POST /api/boarding-bookings` → BOOKED (snapshot giá đêm), …/extend, …/cancel; hết chỗ → 400 BR-LT-03; quá cân/sai loài → 400 BR-LT-02; `POST /api/kennels/{kennelId}/start-maintenance`; ST05: hết giờ ngày nhận → NO_SHOW |
+| T32 | Thông tin công khai + Bài viết + Feedback: dịch vụ, chi nhánh, bác sĩ, sản phẩm còn hàng theo chi nhánh, nội dung trang, chuyên mục/bài viết, feedback _(UC15–17, UC21, UC81, UC83, UC84 · BR-CK-01→03, BR-BV-01→04, BR-DG-01→04)_ | BE-2 | 23/10 | **NOT_STARTED** | Chưa có code (gồm catalog-v1 #19–22 và `GET /api/public/vets`) | `GET /api/public/products` (inStockBranchIds, không thuốc kê đơn), `GET /api/public/articles/{slug}` (DRAFT/HIDDEN → 404, BR-BV-03), `POST /api/articles/{articleId}/publish`, `POST /api/me/feedbacks`: > 5/ngày → 400 BR-DG-01 |
+| T33 | FE: Đặt lịch (chọn khung trống), lịch hẹn của tôi, lễ tân đặt hộ / đổi / hủy _(UC39, UC40)_ | FE-1 | 19/10 | **IN_PROGRESS** | `/booking` (dịch vụ, khung giờ hardcode), `/appointments`, `/admin/appointments` chạy mock; chưa gọi API khung giờ; lễ tân chưa đổi lịch được | `GET /api/branches/{branchId}/available-slots` → `POST /api/appointments`; `/api/appointments`, …/{appointmentId}/reschedule, …/cancel; `/api/me/booking-restriction`; FULL → "Hết chỗ" (BR-LH-03); hạn chế → ẩn đặt online (BR-LH-09) |
+| T34 | FE: Trung tâm thông báo & cài đặt nhận thông báo + bán lẻ tại quầy (POS) _(UC88, UC66, UC67)_ | FE-1 | 20/10 | **IN_PROGRESS** | `/notifications`, chuông, `/settings`, `/admin/pos` chạy mock; chưa có trung tâm thông báo cho nhân viên; POS chưa theo Order v16 | `GET /api/me/notifications` (+/unread-count, /read-all), GET/PUT `/api/me/notification-settings`; POS: `GET /api/products?retailOnly=true`, `POST /api/orders`, …/{orderId}/lines, …/close; stockWarning chỉ cảnh báo (BR-BH-04) |
+| T35 | FE: Thu tiền (gộp Order), mở/chốt ca, đối soát ca _(UC70–72)_ | FE-1 | 21/10 | **IN_PROGRESS** | Thu tiền gộp + mở ca trong `CheckoutPanel` chạy mock; thiếu chốt ca, đối soát | `GET /api/me/cashier-shift`, `POST /api/cashier-shifts`, …/{shiftId}/close, …/reconcile; `GET /api/customers/{customerId}/payable-orders` → `POST /api/payments/preview` → `POST /api/payments`; chưa mở ca → ẩn thu tiền (BR-TG-01) |
+| T36 | FE: Tiếp nhận & hàng đợi (lễ tân), hàng đợi của tôi & gọi lượt (VET/CARETAKER), cấp cứu _(UC44–47)_ | FE-1 | 22/10 | **IN_PROGRESS** | `/staff/reception`, `/staff/doctor`, `/staff/grooming` đủ luồng trên mock `clinic-db.ts`; chặn route theo role cũ | `GET /api/appointments?checkInReady=true`, `/api/visits`, `POST /api/visits/{visitId}/assign`, …/move, …/mark-emergency, …/cancel, …/call; `GET /api/me/queue`; chỉ hiện NV đúng chức vụ (BR-TN-05); offline chỉ cảnh báo (BR-TN-06) |
+| T37 | FE: Màn hình khám VET (bệnh án, chẩn đoán, tiêm chủng, hoàn tất) + màn hình thẩm mỹ CARETAKER + xem bệnh án _(UC48, UC49, UC52, UC53)_ | FE-1 | 23/10 | **IN_PROGRESS** | `SoapPanel` (bệnh án, chẩn đoán, ghi chú nội bộ, hoàn tất, khóa) chạy mock; tiêm chỉ là dòng hàng (thiếu phác đồ, mũi, ngày tái chủng); thiếu bản bổ sung (UC53) | `/api/visits/{visitId}`: /medical-record (GET/PUT, /addenda), /weight, /vaccination-options, /vaccinations, /complete; `GET /api/pets/{petId}/health-record`; khóa → chỉ "Thêm bổ sung" (BR-KB-01); COMPLETED ẩn xóa mũi (BR-KB-04) |
 
+## W4 — Lưu trú, CSKH, Báo cáo (26–29/10)
 
-| # | Công việc | Ai | Trạng thái | Test |
-|---|---|---|---|---|
-| T38 | Khám: kê đơn (thiếu tồn → giảm SL hoặc mua ngoài, sinh dòng Order thuốc), hẹn tá | BE-1 | **DONE** | PUT /api/prescriptions/{id}/external -> "mua ngoài". Thu: kê đơn khi tồn đủ -> bình thường. |
-| T39 | Care Task + ST04 nhắc tái chủng/tái khám + ST18 sinh task + ST19 hủy khi thú mất | BE-1 | **DONE** | GET /api/care-tasks -> danh sách. PUT /api/care-tasks/{id} -> cập nhật kết quả. Thu: lễ tân khác chi nhánh -> 403. |
-| T40 | Nối thật các interface chéo (chặn vô hiệu hóa, khóa → gán lại Visit) + integrati | Cả nhóm | **NOT_STARTED** | Integration test: stub -> implementation thật. Thu: T26 gọi T19 (Order lõi BE-2) -> không lỗi. |
-| T41 | E2E luồng chính: đặt lịch → tiếp nhận → khám/tiêm → Order → thu tiền → nhắc tái  | Cả nhóm | **NOT_STARTED** | E2E script (Playwright/Cypress): đặt lịch -> check-in -> khám -> thu tiền -> nhắc tái chủng. Thu: toàn bộ luồn không lỗi. |
-| T42 | Lưu trú: nhận thú (kiểm tra mũi bắt buộc qua interface BE-1, chuồng đúng loại, c | BE-2 | **NOT_STARTED** | POST /api/boardings/{id}/checkin -> nhận thú. Thu: nhận thú chưa tiêm đủ -> 400. Nhận thú khi chuồng đầy -> 400. |
-| T43 | Lưu trú: bắt đầu trả thú → Order BOARDING, giao thú khi PAID, hủy phiên trả thú, | BE-2 | **NOT_STARTED** | POST /api/boardings/{id}/checkout -> trả thú. Thu: trả khi chưa thanh toán -> 400. Thú mất -> kết thúc lưu trú. |
-| T44 | Báo cáo chi nhánh/toàn chuỗi (doanh thu, thất thu, tỷ lệ quay lại tái chủng…) +  | BE-2 | **DONE** | GET /api/reports/revenue. GET /api/reports/no-show. Thu: BRANCH_MANAGER lọc chi nhánh khác -> 403. SUPER_MANAGER lọc toàn chuỗi -> được. |
-| T45 | Integration test FSM: Chi nhánh, Order, Ca thu ngân, Phiếu nhập, Đặt chỗ, Chuồng | BE-2 | **NOT_STARTED** | FSM integration test: mỗi chuyển trạng thái hợp lệ / không hợp lệ. Ví dụ: Lịch hẹn BOOKED->CANCELLED chỉ khi đủ điều kiện hủy. |
-| T46 | FE: Kê đơn (mua ngoài) & hẹn tái khám + trang công khai (dịch vụ, chi nhánh, bác | FE-1 | **NOT_STARTED** | FE: trang kê đơn -> gọi T27. Thu: kê đơn khi tồn đủ -> bình thường. Kê đơn khi thiếu tồn -> hiển thị cảnh báo. |
-| T47 | FE: Quản lý nội dung trang, chuyên mục & bài viết, gửi/xem feedback + Care Task  | FE-1 | **NOT_STARTED** | FE: trang nội dung -> gọi T9 (bài viết). Thu: tạo bài viết -> chờ duyệt. |
-| T48 | FE: Lưu trú: chuồng, đặt chỗ, nhận/trả thú, nhật ký chăm sóc; khách xem lưu trú  | FE-1 | **NOT_STARTED** | FE: trang lưu trú -> gọi T31, T42, T43. Thu: đặt chỗ -> nhận thú -> trả thú. |
-| T49 | FE: Báo cáo + tích hợp API thật toàn bộ luồng, fix UI | FE-1 | **DONE** | FE: trang báo cáo -> gọi T44. Biểu đồ doanh thu, NO_SHOW. Thu: đổi chi nhánh -> biểu đồ cập nhật. |
-## Demo & Ban giao (30/10)
+| # | Công việc | Ai | Ngày | Trạng thái | Hiện trạng | Test |
+|---|---|---|---|---|---|---|
+| T38 | Khám: kê đơn (thiếu tồn → giảm SL hoặc mua ngoài, sinh dòng Order thuốc), hẹn tái khám _(UC48 · BR-KB-03, 06)_ | BE-1 | 26/10 | **NOT_STARTED** | Chưa có code | `POST /api/visits/{visitId}/prescriptions`: đủ tồn → dòng Order DRUG; thiếu → 400 BR-KB-03 kèm số tồn, gửi lại shortageResolution (mua ngoài: không sinh dòng); `PUT …/medical-record` followUpDate > 180 ngày → 400 BR-KB-06 |
+| T39 | Care Task + ST04 nhắc tái chủng/tái khám + ST18 sinh task + ST19 hủy khi thú mất + hủy nhắc khi đã tiêm lại / đặt lịch khám _(UC87 · ST04, ST18, ST19 · BR-TB-01→06, BR-LT-10)_ | BE-1 | 27/10 | **NOT_STARTED** | Chỉ có interface `CareTaskApi` | `POST /api/care-tasks/{careTaskId}/complete` (thiếu kết quả → 400 BR-TB-05); ST04 nhắc trước 7 ngày tái chủng / 3 ngày tái khám, không email → ST18 sinh task; quá hạn 7 ngày → VACCINE_OVERDUE; ST19 thú mất → hủy task |
+| T40 | Nối thật các interface chéo (chặn vô hiệu hóa, khóa → gán lại Visit) + integration test FSM: Tài khoản, Lịch hẹn, Visit, Care Task (đủ cặp hợp lệ/không hợp lệ) | BE-1 | 28/10 | **NOT_STARTED** | Chỉ có unit test bảng chuyển FSM Tài khoản (`AccountTransitionHandlerTest`, làm cùng T6); chưa có IT cho Lịch hẹn, Visit, Care Task; interface chéo chưa nối thật | Đủ 28 chuyển (TK 8, LH 8, Visit 6, Care Task 6), cặp ngoài bảng → 409 INVALID_STATE_TRANSITION; nối thật: disable khi còn Visit gán → 400 BR-QT-08; lock → needsReassign=true → `POST /api/visits/{visitId}/reassign` |
+| T41 | E2E luồng chính: đặt lịch → tiếp nhận → khám/tiêm → Order → thu tiền → nhắc tái chủng + fix bug | BE-1 | 29/10 | **NOT_STARTED** | Chưa có E2E | `POST /api/appointments` → `POST /api/visits` (lịch CHECKED_IN, Order OPEN) → …/call → …/vaccinations (trừ FEFO, dòng VACCINE) → …/complete (lịch COMPLETED, Order PENDING) → `POST /api/payments` (PAID) → ST04 nhắc trước 7 ngày |
+| T42 | Lưu trú: nhận thú (kiểm tra mũi bắt buộc qua interface BE-1, chuồng đúng loại, cân nặng), nhật ký chăm sóc + bổ sung, báo bất thường _(UC57, UC59, UC60 · BR-LT-05, 08, 11, 12)_ | BE-2 | 26/10 | **NOT_STARTED** | Chưa có code | `POST /api/boarding-bookings/{bookingId}/check-in` → CHECKED_IN, chuồng OCCUPIED: thiếu mũi bắt buộc → 400 BR-LT-05, sai loại chuồng/thiếu cân → 400 BR-LT-08; `POST …/care-logs` (isAbnormal → báo khách + lễ tân) |
+| T43 | Lưu trú: bắt đầu trả thú → Order BOARDING, giao thú khi PAID, hủy phiên trả thú, thú mất, ST15 OVERDUE (phát sự kiện cho Care Task) _(UC59 · ST15 · BR-LT-09, 10, 12)_ | BE-2 | 27/10 | **NOT_STARTED** | Chưa có code (gồm ST15) | `POST /api/boarding-bookings/{bookingId}/start-checkout` → Order BOARDING PENDING; …/hand-over chưa PAID → 400 BR-LT-09; …/end-deceased; `/api/orders/{orderId}/abort-checkout`; ST15: quá 12:00 ngày trả → OVERDUE, ≥ 1 ngày → task |
+| T44 | Báo cáo chi nhánh/toàn chuỗi (doanh thu, thất thu, tỷ lệ quay lại tái chủng…) + ST08 cảnh báo tồn dưới ngưỡng, lô sắp/đã hết hạn _(UC89 · ST08 · BR-BC-01→04, BR-KO-07)_ | BE-2 | 28/10 | **NOT_STARTED** | Chưa có package `module/report`, chỉ có interface `*ReportApi`; chưa có ST08 | `GET /api/reports/revenue`, …/lost-revenue, …/revaccination-return (+4 báo cáo); kỳ > 12 tháng → 400 BR-BC-01; BRANCH_MANAGER xem chi nhánh khác → 403 BR-BC-01; ST08 hằng ngày báo tồn < min, lô hết hạn trong 30 ngày / đã hết hạn |
+| T45 | Integration test FSM: Chi nhánh, Order, Ca thu ngân, Phiếu nhập, Đặt chỗ, Chuồng + E2E bán lẻ & lưu trú + fix bug | BE-2 | 29/10 | **NOT_STARTED** | Chưa có test FSM cho Chi nhánh, Order, Ca thu ngân, Phiếu nhập, Đặt chỗ, Chuồng | Đủ 38 chuyển (CN 2, Order 10, Ca 6, Phiếu nhập 4, Đặt chỗ 11, Chuồng 5), ngoài bảng → 409 INVALID_STATE_TRANSITION; E2E bán lẻ orders → lines → close → payments (PAID, trừ kho); lưu trú check-in → start-checkout → payments → hand-over |
+| T46 | FE: Kê đơn (mua ngoài) & hẹn tái khám + trang công khai (dịch vụ, chi nhánh, bác sĩ, sản phẩm, bài viết) _(UC48, UC15–17)_ | FE-1 | 26/10 | **IN_PROGRESS** | Ngày tái khám + cảnh báo tồn trong `SoapPanel` chạy mock; trang công khai dùng dữ liệu tĩnh (`home.mock`, `shop.mock`). Thiếu kê đơn có cấu trúc, mua ngoài, trang chi nhánh, bác sĩ từ `/api/public/vets` | `POST /api/visits/{visitId}/prescriptions` (400 BR-KB-03 → hiện tồn, chọn giảm SL/mua ngoài), `PUT …/medical-record` followUpDate; `GET /api/public/services`, …/branches, …/vets, …/products, …/articles; giá "Từ X đ" (BR-CK-02) |
+| T47 | FE: Quản lý nội dung trang, chuyên mục & bài viết, gửi/xem feedback + Care Task của lễ tân _(UC21, UC81, UC83, UC84, UC87)_ | FE-1 | 27/10 | **IN_PROGRESS** | Chỉ có form feedback mock (`/review`, gần UC83). Chưa có UC21, UC81, UC84, UC87 | `/api/page-contents`, `/api/article-categories`, `/api/articles` (+publish/hide), `/api/me/feedbacks`, `/api/feedbacks` (+resolve), `/api/care-tasks` (+complete/cancel); slug khóa sau xuất bản (BR-BV-01); task bắt chọn kết quả (BR-TB-05) |
+| T48 | FE: Lưu trú: chuồng, đặt chỗ, nhận/trả thú, nhật ký chăm sóc; khách xem lưu trú & nhật ký _(UC54, UC57–60)_ | FE-1 | 28/10 | **IN_PROGRESS** | Chỉ có `/hotel` (phòng mock + tính giá). Chưa có chuồng, nhận/trả thú, nhật ký chăm sóc, khách xem lưu trú | `/api/kennels`; `/api/branches/{branchId}/boarding-availability` → `/api/boarding-bookings` (+/{bookingId}/check-in-readiness, /check-in, /start-checkout, /hand-over, /care-logs); PAID mới giao thú (BR-LT-09) |
+| T49 | FE: Báo cáo + tích hợp API thật toàn bộ luồng, fix UI _(UC89)_ | FE-1 | 29/10 | **IN_PROGRESS** | `/admin/reports` số liệu hardcode. Ngoài auth (lệch hợp đồng) và hồ sơ (T13), chưa màn nào gọi BE thật | `GET /api/reports/revenue`, …/lost-revenue, …/completed-services, …/no-show, …/revaccination-return, …/stock-alerts, …/feedback; kỳ ≤ 12 tháng, BRANCH_MANAGER không chọn chi nhánh khác (BR-BC-01); tắt mock, mọi màn gọi API thật |
 
+## Demo & Bàn giao (30/10)
 
-| # | Công việc | Ai | Trạng thái | Test |
-|---|---|---|---|---|
-| T50 | Tổng duyệt demo + bàn giao + đóng milestone (cả nhóm) | Cả nhóm | **NOT_STARTED** | _(chưa có test hint)_ |
+| # | Công việc | Ai | Ngày | Trạng thái | Hiện trạng | Test |
+|---|---|---|---|---|---|---|
+| T50 | Tổng duyệt demo + bàn giao + đóng milestone (cả nhóm) | Cả nhóm | 30/10 | **NOT_STARTED** | — | Demo trên dữ liệu seed: luồng chính (T41), bán lẻ + lưu trú (T45) không lỗi; `mvn clean verify` xanh; `check-contracts.mjs` → ALL CONTRACTS PASS; không còn `*Placeholder`; đủ 58 UC + 12 ST; đóng M4, bàn giao tài liệu |
 
-## Giai đoạn 2 - Tầng 3 & AI (11-12/2026)
+## Giai đoạn 2 — Tầng 3 & AI (02/11–31/12/2026)
 
+> **Kế hoạch:** đề cương `DeCuongDoAn.md` mục 2.2.2, 2.2.4, 2.4.2–2.4.5 (phạm vi, phân công, mốc M5 11/12, hoàn thiện 14–31/12). Ngày của từng task xếp theo tuần thứ 2–thứ 6.
+> **Phạm vi** (`docs/INDEX.md`): **27 UC** — BE-1 (12): UC34–38, UC43, UC50, UC51, UC55, UC56, UC85, UC86 · BE-2 (15): UC13, UC27, UC32, UC61–65, UC68, UC69, UC77–79, UC80, UC82. **9 ST** — BE-1: ST07, ST16, ST17 · BE-2: ST09–ST12, ST14, ST21. **Phân hệ AI** (cả nhóm): chatbot tư vấn sức khỏe – dinh dưỡng (RAG + LLM), gợi ý cá nhân hóa. FE-1 làm toàn bộ giao diện.
 
-> Chưa bắt đầu. TODO: bổ sung chi tiết khi bat dau Giai đoạn 2.
+- Tầng 3 mới đặc tả ở mức use case (chưa có BR, FSM, model, API): đặc tả ở M5a rồi mới cài đặt. Cột Test là tiêu chí nghiệm thu theo use case; thêm endpoint khi có hợp đồng (T51–T53).
+- Trạng thái: chưa bắt đầu. UI cũ chạy mock (`/shop`, `/cart`, `/checkout`, `/orders`, `/admin/orders`, `/admin/refunds`, `/admin/workforce`, `/admin/ai`, `/recommend`, khung chat mascot) chưa tính vì làm trước đặc tả tầng 3.
+- **Điều chỉnh so với đề cương:**
+  - Cấu hình phí vận chuyển, phí khám tại nhà và định mức vật tư (UC32, T62) là việc đầu tiên của BE-2 (16/11), vì khám tại nhà (T60) và ST07 (T71) cần; đề cương xếp mục này cuối danh sách BE-2.
+  - Phân hệ AI vẫn là việc cả nhóm nhưng do **FE-1 (Hiến)** dẫn chính (T53, T56, T77, T78) để dễ theo dõi; BE-1 hỗ trợ dữ liệu lịch tiêm (module `visit`), BE-2 hỗ trợ dữ liệu danh mục, thú cưng, lưu trú, bán hàng.
+  - Thêm T83 tổng duyệt GĐ2 và đóng M5 (11/12), tương tự T50 của GĐ1.
+- **Rủi ro cần xử lý sớm:**
+  - GĐ1 đang trễ (7/50 DONE ngày 09/10): phần chưa xong sẽ lấn sang tháng 11, chốt lại khi đóng M4 (30/10).
+  - Cổng thanh toán VNPay, ZaloPay hoặc MoMo chạy sandbox: đăng ký tài khoản test trong M5a.
+  - AI: chọn LLM, embedding, vector store và chi phí / khóa API ở T53, ghi ADR.
+  - Flyway: số `V{n}` dùng chung giữa BE-1 và BE-2, chốt ở T55 trước khi tạo migration tầng 3.
 
+| Mốc | Thời gian | Nội dung | Task |
+|---|---|---|---|
+| M5a | 02–13/11 | Đặc tả bổ sung tầng 3 + AI, hợp đồng chéo, schema, spike AI | T51–T57 |
+| M5b | 16–27/11 | Nhân sự, khám tại nhà, phẫu thuật; thương mại điện tử, thanh toán online | T58–T68 |
+| M5c | 30/11–11/12 | Nội trú, khiếu nại, ST07; trả hàng – hoàn tiền, kho mở rộng, chi nhánh – khách – bài viết; chatbot, gợi ý; test tầng 3. **M5 (11/12): hoàn thành tầng 3 và AI** | T69–T83 |
+| M5d | 14–31/12 | Hoàn thiện đồ án: kiểm thử tổng thể, hoàn thiện sản phẩm, báo cáo | T84–T87 |
 
-| Moc | Thời gian | Nội dung chính |
-|---|---|---|
-| M5a: Đặc tả bổ sung | 02-14/11 | BR, FSM, model, API tang 3 |
-| M5b: Nhan su + TMĐT | 16-28/11 | Ca lam viec, gio hang, dat hang, thanh toan online |
-| M5c: Noi tru, Khiếu nại, AI | 01-11/12 | Nhập/xuất viện, khieu nai, chatbot RAG+LLM, recommendation |
-| M5d: Hoan thien | 14-31/12 | Kiểm thử tổng thể, demo, báo cáo đồ án |
+### M5a — Đặc tả bổ sung & khung (02–13/11)
+
+| # | Công việc | Ai | Ngày | Trạng thái | Hiện trạng | Test |
+|---|---|---|---|---|---|---|
+| T51 | Đặc tả bổ sung phần BE-1: quy tắc nghiệp vụ, máy trạng thái, mô hình dữ liệu, ERD, API cho Nhân sự, khám tại nhà, phẫu thuật, nội trú, khiếu nại _(UC34–38, UC43, UC50, UC51, UC55, UC56, UC85, UC86 · ST07, ST16, ST17)_ | BE-1 | 02–06/11 | **NOT_STARTED** | Mới có use case trong `01-business-operations.md` | Mỗi UC có BR; FSM có bảng chuyển trạng thái đánh số; model + bảng ERD; endpoint khai báo trong generator `docs/api`, `check-contracts.mjs` PASS |
+| T52 | Đặc tả bổ sung phần BE-2: quy tắc nghiệp vụ, máy trạng thái, mô hình dữ liệu, ERD, API cho thương mại điện tử & thanh toán online, trả hàng – hoàn tiền, kho mở rộng, chi nhánh, gộp hồ sơ khách, phí vận chuyển – phí khám tại nhà – định mức vật tư, bài viết của bác sĩ & bình luận _(UC13, UC27, UC32, UC61–65, UC68, UC69, UC77–79, UC80, UC82 · ST09–ST12, ST14, ST21)_ | BE-2 | 02–06/11 | **NOT_STARTED** | Mới có use case trong `01-business-operations.md` | Mỗi UC có BR; FSM có bảng chuyển trạng thái đánh số; model + bảng ERD; endpoint khai báo trong generator `docs/api`, `check-contracts.mjs` PASS |
+| T53 | Đặc tả phân hệ AI: phạm vi câu hỏi của chatbot, nguồn tri thức cho RAG, chọn LLM – embedding – vector store, dữ liệu và cách tính gợi ý, API chatbot & gợi ý | FE-1 (dẫn), cả nhóm | 02–06/11 | **NOT_STARTED** | Chưa có trong đặc tả v16 (đề cương 2.2.2) | ADR chốt LLM, embedding, vector store, chi phí; chốt cách xử lý câu hỏi ngoài phạm vi; API chatbot, gợi ý có trong `docs/api` |
+| T54 | Review chéo & duyệt đặc tả tầng 3 + AI; cập nhật `docs/INDEX.md`, `06-module-contracts.md` | Cả nhóm | 09/11 | **NOT_STARTED** | — | Rule mới được duyệt (bỏ 🆕); 06 có interface + sự kiện chéo tầng 3 kèm hạn giao; không còn TBD chặn cài đặt |
+| T55 | Hợp đồng chéo tầng 3 trong `module/*/api` (trừ vật tư tiêu hao, phí khám tại nhà, nhập viện từ lưu trú — đề cương 2.4.4) + migration schema các bảng mới | Cả nhóm | 10–11/11 | **NOT_STARTED** | Cần T54 | Interface mới có placeholder ném lỗi; migration chạy sạch trên DB trống, `SchemaMigrationIT` khớp ERD bổ sung; số `V{n}` đã chốt giữa BE-1, BE-2 |
+| T56 | Spike AI: dựng knowledge base (tài liệu chăm sóc, dinh dưỡng, phác đồ tiêm từ danh mục) + pipeline RAG thử nghiệm | FE-1 (dẫn), cả nhóm | 09–13/11 | **NOT_STARTED** | `/admin/ai` là UI cũ quản lý tài liệu tri thức (mock) | Bộ câu hỏi mẫu được trả lời đúng theo tài liệu nguồn; đo thời gian phản hồi; kết quả bổ sung vào ADR của T53 |
+| T57 | FE: thiết kế màn hình tầng 3 + khung route, mock API theo hợp đồng tầng 3; gỡ các trang cũ ngoài phạm vi | FE-1 | 02–13/11 | **NOT_STARTED** | Có UI cũ chạy mock (ghi chú đầu mục) | Có thiết kế cho màn hình của 27 UC; route chặn theo 7 role; mock trả envelope `{data,message,code}` đúng hợp đồng |
+
+### M5b — Nhân sự, khám tại nhà, thương mại điện tử (16–27/11)
+
+| # | Công việc | Ai | Ngày | Trạng thái | Hiện trạng | Test |
+|---|---|---|---|---|---|---|
+| T58 | Nhân sự: định nghĩa ca, phân ca, xem nhân viên chi nhánh; lịch làm việc của tôi _(UC34, UC35)_ | BE-1 | 16–18/11 | **NOT_STARTED** | Module mới | BRANCH_MANAGER phân ca cho nhân viên chi nhánh mình (chi nhánh khác → 403); A06–A08 chỉ xem lịch của mình |
+| T59 | Nhân sự: gửi / rút yêu cầu nghỉ, đổi ca; duyệt; ghi nhận vắng đột xuất _(UC36–38)_ | BE-1 | 19–20/11 | **NOT_STARTED** | — | Nhân viên gửi/rút yêu cầu → quản lý chi nhánh duyệt hoặc từ chối; vắng đột xuất ghi theo ca; chuyển trạng thái đúng FSM đặc tả ở T51 |
+| T60 | Khám tại nhà: đặt lịch (khách đặt hoặc lễ tân đặt hộ, phí khám tại nhà theo cấu hình), thực hiện khám tại nhà _(UC43, UC51)_ | BE-1 | 23–25/11 | **NOT_STARTED** | Cần T62 (phí khám tại nhà) | Đặt lịch khám tại nhà có phí lấy từ cấu hình UC32; VET thực hiện lịch khám tại nhà (UC51) |
+| T61 | Phẫu thuật: phát sinh từ lượt khám, lễ tân lập cam kết, thực hiện _(UC50)_ | BE-1 | 26–27/11 | **NOT_STARTED** | — | Phẫu thuật mở từ lượt khám (UC48 «extend» UC50); có cam kết trước khi thực hiện; dịch vụ phẫu thuật thêm vào Order (UC50 «extend» UC67) |
+| T62 | Danh mục mở rộng: phí vận chuyển, phí khám tại nhà; định mức vật tư tiêu hao của dịch vụ _(UC32, mở rộng UC30)_ — làm trước vì T60 và ST07 (T71) cần | BE-2 | 16/11 | **NOT_STARTED** | — | SUPER_MANAGER cấu hình phí vận chuyển, phí khám tại nhà; khai báo định mức vật tư cho dịch vụ; interface đọc phí và định mức cho BE-1 |
+| T63 | Thương mại điện tử: giỏ hàng, đặt hàng online (chọn địa chỉ từ sổ địa chỉ, ST09 tính phí vận chuyển), đơn hàng của tôi _(UC61, UC62, UC64 · ST09)_ | BE-2 | 17–19/11 | **NOT_STARTED** | Cần sổ địa chỉ (GĐ1, T8) | Giỏ hàng không nhận thuốc kê đơn (BR-SP-01); phải đăng nhập mới mua; đơn có phí vận chuyển theo UC32; khách xem, theo dõi, hủy đơn, xác nhận đã nhận |
+| T64 | Thương mại điện tử: xử lý & giao đơn online; ST10 tự hủy đơn chưa thanh toán; ST12 tự xác nhận đã nhận hàng _(UC65 · ST10, ST12)_ | BE-2 | 20–23/11 | **NOT_STARTED** | — | Lễ tân xử lý, bàn giao, cập nhật trạng thái, ghi nhận giao thất bại; đơn chưa thanh toán quá hạn → tự hủy (ST10); đơn đã giao quá hạn → tự xác nhận đã nhận (ST12) |
+| T65 | Thanh toán online qua cổng VNPay, ZaloPay hoặc MoMo (sandbox); ST11 hết hạn giao dịch; ST14 đối soát cổng _(UC63 · ST11, ST14)_ | BE-2 | 24–27/11 | **NOT_STARTED** | Cần tài khoản sandbox của cổng | Thanh toán sandbox thành công → đơn đã thanh toán; kết quả giao dịch trả về được xác thực; giao dịch quá hạn → hết hạn (ST11); đối soát hằng ngày (ST14) |
+| T66 | FE: Nhân sự — phân ca, lịch làm việc của tôi, yêu cầu nghỉ / đổi ca, duyệt, vắng đột xuất _(UC34–38)_ | FE-1 | 16–20/11 | **NOT_STARTED** | Có UI cũ `/admin/workforce` (ca làm việc, nghỉ phép — mock) | Phân ca theo chi nhánh; nhân viên xem lịch, gửi yêu cầu; quản lý duyệt; gọi API thật của T58, T59 |
+| T67 | FE: Cửa hàng online — giỏ hàng, đặt hàng, thanh toán, đơn hàng của tôi _(UC61–64)_ | FE-1 | 23–25/11 | **NOT_STARTED** | Có UI cũ `/shop`, `/cart`, `/checkout`, `/orders` (mock) | Không hiện thuốc kê đơn; chọn địa chỉ từ sổ địa chỉ, hiện phí vận chuyển; chuyển sang cổng sandbox rồi nhận kết quả; gọi API thật của T63–T65 |
+| T68 | FE: Xử lý & giao đơn (lễ tân), khám tại nhà, phẫu thuật _(UC65, UC43, UC51, UC50)_ | FE-1 | 26–27/11 | **NOT_STARTED** | Có UI cũ `/admin/orders` (mock) | Lễ tân cập nhật trạng thái giao, ghi giao thất bại; đặt lịch khám tại nhà có phí; lập cam kết phẫu thuật; gọi API thật của T60, T61, T64 |
+
+### M5c — Nội trú, khiếu nại, kho, trả hàng, AI (30/11–11/12)
+
+| # | Công việc | Ai | Ngày | Trạng thái | Hiện trạng | Test |
+|---|---|---|---|---|---|---|
+| T69 | Nội trú: nhập / xuất viện (gồm chuyển thú từ lưu trú sang điều trị), điều trị nội trú — ra y lệnh, theo dõi hậu phẫu _(UC55, UC56)_ | BE-1 | 30/11–02/12 | **NOT_STARTED** | Cần lưu trú GĐ1 (T31, T42) | Nhập viện từ lượt khám hoặc từ lưu trú (phối hợp LT của BE-2); y lệnh, theo dõi hậu phẫu; dịch vụ nội trú thêm vào Order (UC55 «extend» UC67); xuất viện |
+| T70 | Khiếu nại: khách gửi & theo dõi (lễ tân tạo thay khách), quản lý xử lý; ST16 leo thang quá hạn; ST17 tự đóng _(UC85, UC86 · ST16, ST17)_ | BE-1 | 03–07/12 | **NOT_STARTED** | — | Khách tạo, xem, đóng hoặc mở lại; BRANCH_MANAGER (chi nhánh mình) và SUPER_MANAGER xử lý; quá hạn → leo thang (ST16); hết hạn → tự đóng (ST17) |
+| T71 | Tự trừ vật tư tiêu hao theo định mức khi hoàn tất khám, dịch vụ thẩm mỹ _(ST07)_ | BE-1 | 08/12 | **NOT_STARTED** | Cần T62 (định mức), kho GĐ1 (T18) | Hoàn tất khám (UC48) / thẩm mỹ (UC52) → trừ vật tư theo định mức của dịch vụ qua interface kho của BE-2; thiếu tồn xử lý theo BR đặc tả ở T51 |
+| T72 | Integration test FSM tầng 3 phần BE-1 + nối thật interface chéo (trừ vật tư, phí khám tại nhà, nhập viện từ lưu trú) | BE-1 | 09–10/12 | **NOT_STARTED** | — | Đủ cặp chuyển hợp lệ / không hợp lệ cho mọi FSM tầng 3 của BE-1, ngoài bảng → 409 INVALID_STATE_TRANSITION; interface chéo chạy thật, bỏ placeholder |
+| T73 | Trả hàng – hoàn tiền: lễ tân tạo yêu cầu trả hàng, quản lý chi nhánh duyệt; ST21 hoàn tiền online qua cổng _(UC68, UC69 · ST21)_ | BE-2 | 30/11–02/12 | **NOT_STARTED** | Cần T65 (cổng thanh toán) | Yêu cầu trả hàng → BRANCH_MANAGER duyệt hoặc từ chối; hủy đơn online đã thanh toán (UC64) hoặc duyệt trả hàng → hoàn tiền qua cổng sandbox (ST21) |
+| T74 | Kho mở rộng: chuyển kho, kiểm kê, truy vết lô _(UC77–79)_ | BE-2 | 03–04/12 | **NOT_STARTED** | Cần kho GĐ1 (T18) | Chuyển kho: tạo, hủy, xác nhận nhận hàng, tồn hai chi nhánh khớp; kiểm kê kho chi nhánh mình; truy vết lô (BRANCH_MANAGER, VET) |
+| T75 | Chi nhánh, khách, bài viết mở rộng: tạm ngừng / đóng cửa chi nhánh kèm chuyển giao tồn đọng, gộp hồ sơ khách trùng, bài viết của bác sĩ gửi duyệt, bình luận _(UC13, UC27, UC80, UC82, mở rộng UC81)_ | BE-2 | 07–08/12 | **NOT_STARTED** | — | Tạm ngừng / đóng chi nhánh chuyển giao việc tồn đọng; gộp các hồ sơ trùng của cùng một khách; VET gửi bài → SUPER_MANAGER duyệt; khách bình luận, SUPER_MANAGER ẩn bình luận |
+| T76 | Integration test FSM tầng 3 phần BE-2 + E2E mua online | BE-2 | 09–10/12 | **NOT_STARTED** | — | Đủ cặp chuyển cho mọi FSM tầng 3 của BE-2; E2E giỏ hàng → đặt hàng → thanh toán sandbox → giao → nhận → trả hàng → hoàn tiền |
+| T77 | AI: chatbot tư vấn sức khỏe – dinh dưỡng (RAG + LLM): câu hỏi chăm sóc thường gặp, hướng dẫn chăm sóc cơ bản, tra cứu lịch tiêm của thú | FE-1 (dẫn), cả nhóm | 30/11–04/12 | **NOT_STARTED** | Cần T56; dữ liệu tiêm GĐ1 (T28) | A01, A02 hỏi đáp; trả lời dựa trên knowledge base; A02 tra lịch tiêm của thú mình, chỉ dùng mũi tiêm tại hệ thống (nguyên tắc 9, `04-domain-model.md`); câu hỏi ngoài phạm vi → hướng dẫn đặt lịch khám |
+| T78 | AI: gợi ý cá nhân hóa dịch vụ thẩm mỹ, lưu trú và sản phẩm theo loài, giống, độ tuổi, cân nặng, lịch sử dùng dịch vụ | FE-1 (dẫn), cả nhóm | 07–09/12 | **NOT_STARTED** | Cần dữ liệu thú cưng (T17), danh mục (T9), lịch sử khám & lưu trú | A02 nhận gợi ý theo đặc điểm thú của mình; không gợi ý thuốc kê đơn (BR-SP-01); đổi loài / tuổi / cân nặng thì gợi ý đổi theo |
+| T79 | FE: Nội trú (nhập / xuất viện, y lệnh) + trả hàng – hoàn tiền _(UC55, UC56, UC68, UC69)_ | FE-1 | 30/11–02/12 | **NOT_STARTED** | Có UI cũ `/admin/refunds` (duyệt hoàn tiền — mock) | VET nhập / xuất viện, ra y lệnh; lễ tân tạo yêu cầu trả hàng, quản lý duyệt; gọi API thật của T69, T73 |
+| T80 | FE: Kho mở rộng (chuyển kho, kiểm kê, truy vết lô) + tạm ngừng / đóng chi nhánh, gộp hồ sơ khách, cấu hình phí & định mức _(UC77–79, UC13, UC27, UC32)_ | FE-1 | 03–04/12 | **NOT_STARTED** | — | Gọi API thật của T62, T74, T75; chức năng ngoài quyền bị ẩn theo role |
+| T81 | FE: Khiếu nại (khách, lễ tân, quản lý) + bài viết của bác sĩ, duyệt bài, bình luận _(UC85, UC86, UC80, UC82)_ | FE-1 | 07–08/12 | **NOT_STARTED** | — | Khách tạo / đóng / mở lại khiếu nại, lễ tân tạo thay khách, quản lý xử lý; VET gửi bài, SUPER_MANAGER duyệt, khách bình luận; gọi API thật của T70, T75 |
+| T82 | FE: Chatbot tư vấn + khu vực gợi ý dịch vụ, sản phẩm | FE-1 | 09–10/12 | **NOT_STARTED** | Có UI cũ: khung chat mascot `InteractiveMascotCompanion`, `/recommend` (mock) | Chatbot trên cổng công khai và khách hàng; khu vực gợi ý theo thú cưng; gọi API thật của T77, T78; AI lỗi → hiện thông báo, không chặn trang |
+| T83 | Tổng duyệt GĐ2 + đóng M5 | Cả nhóm | 11/12 | **NOT_STARTED** | — | Demo không lỗi: mua online → thanh toán sandbox → giao; khám tại nhà; phẫu thuật → nội trú; khiếu nại; chatbot; gợi ý; đủ 27 UC + 9 ST |
+
+### M5d — Hoàn thiện đồ án (14–31/12)
+
+| # | Công việc | Ai | Ngày | Trạng thái | Hiện trạng | Test |
+|---|---|---|---|---|---|---|
+| T84 | Kiểm thử tổng thể GĐ1 + GĐ2 (gồm chatbot và gợi ý), sửa lỗi | Cả nhóm | 14–18/12 | **NOT_STARTED** | — | `mvn clean verify` xanh (Docker bật); E2E luồng chính GĐ1 + GĐ2; đủ 85 UC + 21 ST; bộ câu hỏi kiểm thử chatbot, đánh giá gợi ý |
+| T85 | Hoàn thiện sản phẩm: dữ liệu demo, triển khai bản demo bằng Docker Compose, hướng dẫn cài đặt & sử dụng | Cả nhóm | 21–25/12 | **NOT_STARTED** | — | `docker compose up` chạy được trên máy sạch; dữ liệu demo đủ 7 role; không còn `*Placeholder` |
+| T86 | Viết báo cáo đồ án: phân tích, thiết kế, cài đặt, kiểm thử, phân hệ AI | Cả nhóm | 14–31/12 | **NOT_STARTED** | — | Đủ các chương; số liệu kiểm thử lấy từ T84; tham chiếu bộ đặc tả v16 |
+| T87 | Tổng duyệt demo cuối, nộp báo cáo, đóng đồ án | Cả nhóm | 28–31/12 | **NOT_STARTED** | — | Demo toàn hệ thống không lỗi; nộp báo cáo; bàn giao mã nguồn và tài liệu |

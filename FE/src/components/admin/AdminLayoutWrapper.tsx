@@ -1,12 +1,11 @@
-import { Outlet, Navigate, useLocation } from 'react-router-dom';
-import { useAdminSession } from '../../shared/stores/admin-session.store';
-import { AdminSidebar, routeAllowed } from './AdminLayout';
+import { Outlet, useLocation } from 'react-router-dom';
+import { AdminSidebar, rolesForPath } from './AdminLayout';
 import { AdminHeader } from './AdminHeader';
 import { useState } from 'react';
-import { getUserRoles } from '../../shared/constants/workspaces';
+import { RequireRole } from '../../shared/components/auth/RequireRole';
+import { ROUTES } from '../../shared/constants/routes';
 
 export function AdminLayout() {
-  const { isAuthenticated, user } = useAdminSession();
   const location = useLocation();
   const [collapsed, setCollapsed] = useState(() => {
     return localStorage.getItem('sidebar-collapsed') === 'true';
@@ -20,25 +19,17 @@ export function AdminLayout() {
     });
   };
 
-  // Redirect to login if not authenticated
-  if (!isAuthenticated || !user) {
-    return <Navigate to="/admin/login" state={{ from: location }} replace />;
-  }
-
-  // Check role-based route permission
-  if (!routeAllowed(location.pathname, getUserRoles(user))) {
-    return <Navigate to="/admin/dashboard" replace />;
-  }
-
   return (
-    <div className="flex h-screen bg-gray-50 dark:bg-slate-900 overflow-hidden">
-      <AdminSidebar collapsed={collapsed} onToggle={toggleSidebar} />
-      <div className="flex-1 flex flex-col min-w-0 overflow-hidden">
-        <AdminHeader collapsed={collapsed} onToggleSidebar={toggleSidebar} />
-        <main className="flex-1 overflow-y-auto p-6">
-          <Outlet />
-        </main>
+    <RequireRole roles={rolesForPath(location.pathname)} loginPath={ROUTES.staffLogin}>
+      <div className="flex h-screen bg-gray-50 dark:bg-slate-900 overflow-hidden">
+        <AdminSidebar collapsed={collapsed} onToggle={toggleSidebar} />
+        <div className="flex-1 flex flex-col min-w-0 overflow-hidden">
+          <AdminHeader collapsed={collapsed} onToggleSidebar={toggleSidebar} />
+          <main className="flex-1 overflow-y-auto p-6">
+            <Outlet />
+          </main>
+        </div>
       </div>
-    </div>
+    </RequireRole>
   );
 }

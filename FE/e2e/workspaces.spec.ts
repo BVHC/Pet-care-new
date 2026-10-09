@@ -1,12 +1,12 @@
 import { expect, test } from '@playwright/test';
-import { DESK, GROOMER, MANAGER, VET_AT_DESK, signIn } from './session';
+import { CARETAKER, DESK, MANAGER, VET, signIn, switchTo } from './session';
 
 test('desk to exam room to cashier: one visit end to end', async ({ page }) => {
-  await signIn(page, VET_AT_DESK); // multi-role: a vet who also staffs the desk
+  await signIn(page, DESK);
   await page.goto('/staff/reception');
   await expect(page.getByRole('heading', { name: 'Quầy lễ tân' })).toBeVisible();
 
-  // Check in Lucky's appointment and assign it to me.
+  // Check in Lucky's appointment and assign it to the vet.
   await page.getByRole('listitem').filter({ hasText: 'Lucky' }).getByRole('button', { name: 'Tiếp nhận' }).click();
   const dialog = page.getByRole('dialog');
   await dialog.getByLabel('Người phụ trách').selectOption('5');
@@ -14,9 +14,8 @@ test('desk to exam room to cashier: one visit end to end', async ({ page }) => {
   await expect(page.getByText('Đã tiếp nhận Lucky, số 9')).toBeVisible();
   await expect(page.getByRole('dialog')).toHaveCount(0); // shortcuts stay off while a dialog is open
 
-  // Exam room: the new visit is in my queue.
-  await page.keyboard.press('Alt+2');
-  await expect(page).toHaveURL(/\/staff\/doctor$/);
+  // Exam room: the vet finds the new visit in their queue.
+  await switchTo(page, VET, '/staff/doctor');
   const queue = page.getByRole('region', { name: 'Hàng chờ khám' });
   await queue.getByRole('listitem').filter({ hasText: 'Lucky' }).getByRole('button', { name: 'Gọi vào khám' }).click();
   await expect(page.getByRole('heading', { level: 2, name: 'Lucky', exact: true })).toBeVisible();
@@ -28,8 +27,8 @@ test('desk to exam room to cashier: one visit end to end', async ({ page }) => {
   await page.getByRole('button', { name: /Hoàn tất, chuyển thu ngân/ }).click();
   await expect(page.getByText('Đã chuyển Lucky sang quầy thu ngân')).toBeVisible();
 
-  // Cashier: Lucky's order is waiting; open the shift and collect.
-  await page.keyboard.press('Alt+1');
+  // Cashier: back at the desk, Lucky's order is waiting; open the shift and collect.
+  await switchTo(page, DESK, '/staff/reception');
   await page.getByRole('tab', { name: /Chờ thu/ }).click();
   await page.getByRole('listitem').filter({ hasText: 'Lucky' }).getByRole('button', { name: 'Thu tiền' }).click();
   await page.getByRole('button', { name: 'Mở ca thu ngân' }).click();
@@ -38,7 +37,7 @@ test('desk to exam room to cashier: one visit end to end', async ({ page }) => {
 });
 
 test('groomer moves cards along the board and is refused going backwards', async ({ page }) => {
-  await signIn(page, GROOMER);
+  await signIn(page, CARETAKER);
   await page.goto('/staff/grooming');
   const waiting = page.getByRole('list', { name: 'Chờ làm' });
   const doing = page.getByRole('list', { name: 'Đang làm' });
@@ -84,13 +83,36 @@ test('counter sale with the keyboard only', async ({ page }) => {
   await expect(page.getByRole('dialog')).toContainText('Đã thu 36.000');
 });
 
-test('route guard sends staff to a workspace their roles cover', async ({ page }) => {
-  await signIn(page, GROOMER);
+test('a caretaker gets 403 in the exam room and a way back to grooming', async ({ page }) => {
+  await signIn(page, CARETAKER);
   await page.goto('/staff/doctor');
+  await expect(page.getByRole('heading', { name: 'Bạn không có quyền vào trang này' })).toBeVisible();
+  await page.getByRole('link', { name: 'Về trang của tôi' }).click();
   await expect(page).toHaveURL(/\/staff\/grooming$/);
 });
 
-test('/staff opens the default workspace of the primary role', async ({ page }) => {
+test('a visitor signs in on the demo login and lands back on the workspace', async ({ page }) => {
+  await page.goto('/staff/reception');
+  await expect(page).toHaveURL(/\/admin\/login$/);
+  await page.getByRole('button', { name: /Lan Chi/ }).click();
+  await page.getByRole('button', { name: 'Đăng nhập với vai trò Lễ tân' }).click();
+  await expect(page).toHaveURL(/\/staff\/reception$/);
+  await expect(page.getByRole('heading', { name: 'Quầy lễ tân' })).toBeVisible();
+});
+
+test('a new staff member changes the temporary password before working (BR-TK-17)', async ({ page }) => {
+  await page.goto('/admin/login');
+  await page.getByRole('button', { name: /Lễ tân mới/ }).click();
+  await page.getByRole('button', { name: 'Đăng nhập với vai trò Lễ tân' }).click();
+  await expect(page).toHaveURL(/\/auth\/change-password$/);
+  await page.getByPlaceholder('Nhập mật khẩu hiện tại').fill('Petcare123');
+  await page.getByPlaceholder('Ít nhất 8 ký tự, có chữ và số').fill('MatKhauMoi1');
+  await page.getByPlaceholder('Nhập lại mật khẩu mới').fill('MatKhauMoi1');
+  await page.getByRole('button', { name: 'Đổi mật khẩu' }).click();
+  await expect(page).toHaveURL(/\/staff\/reception$/);
+});
+
+test('/staff opens the home of the role', async ({ page }) => {
   await signIn(page, MANAGER);
   await page.goto('/staff');
   await expect(page).toHaveURL(/\/admin\/dashboard$/);

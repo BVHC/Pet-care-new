@@ -1,11 +1,12 @@
 import { useState } from 'react';
-import { Link, useNavigate } from 'react-router-dom';
+import { Link, useLocation, useNavigate } from 'react-router-dom';
 import { Mail, Lock } from 'lucide-react';
 import { toast } from 'sonner';
 import { AuthShell } from './AuthShell';
 import { AuthField, GoogleButton, SubmitButton, OrDivider } from './AuthField';
-import { useAuthStore } from '../../shared/stores/auth.store';
-import { apiErrorMessage } from '../../shared/api/auth.api';
+import { useSession } from '../../shared/stores/session.store';
+import { toApiError } from '../../shared/api/api-error';
+import { homePathFor } from '../../shared/constants/workspaces';
 
 const STATS = [
   { value: '2.500+', label: 'Chủ nuôi' },
@@ -15,7 +16,9 @@ const STATS = [
 
 export function LoginPage() {
   const navigate = useNavigate();
-  const login = useAuthStore((s) => s.login);
+  // Guard route gui kem trang dang mo do (RequireRole).
+  const from = (useLocation().state as { from?: string } | null)?.from;
+  const login = useSession((s) => s.login);
   const [form, setForm] = useState({ email: '', password: '' });
   const [loading, setLoading] = useState(false);
 
@@ -27,14 +30,14 @@ export function LoginPage() {
     }
     setLoading(true);
     try {
-      await login({ email: form.email.trim(), password: form.password });
+      const account = await login({ email: form.email.trim(), password: form.password });
       toast.success('Đăng nhập thành công!');
-      navigate('/');
+      navigate(from ?? homePathFor(account.role));
     } catch (error) {
-      const message = apiErrorMessage(error, 'Đăng nhập thất bại, vui lòng thử lại.');
-      toast.error(message);
-      // Account PENDING_VERIFICATION -> dua thang sang buoc nhap OTP.
-      if (message.includes('xác thực')) {
+      const err = toApiError(error);
+      toast.error(err.message);
+      // BR-TK-08: tai khoan chua xac thuc -> dua sang buoc nhap OTP (00-method §3.5).
+      if (err.ruleId === 'BR-TK-08') {
         navigate('/auth/verify-otp', { state: { email: form.email.trim() } });
       }
     } finally {

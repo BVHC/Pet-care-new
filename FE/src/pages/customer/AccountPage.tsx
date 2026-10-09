@@ -14,17 +14,14 @@ import { AddressBook } from '@/components/customer/AddressBook';
 import { VetProfile } from '@/components/customer/VetProfile';
 import { ProfileLinking } from '@/components/customer/ProfileLinking';
 import { getMe, updateStaffProfile } from '@/shared/api/profile.api';
-import type { MeResponse, Role } from '@/shared/models/profile.model';
-import { ROLE_DISPLAY, isStaffUser, isVetUser } from '@/shared/models/profile.model';
-import { useAuthStore } from '@/shared/stores/auth.store';
+import type { MeResponse } from '@/shared/models/profile.model';
+import { isVetUser } from '@/shared/models/profile.model';
+import { useAccount } from '@/shared/stores/session.store';
+import { ROLE_LABELS, isStaff, type Role } from '@/shared/types/auth';
 import { ROUTES } from '@/shared/constants/routes';
 import styles from './AccountPage.module.css';
 
 // Role helpers
-function isStaff(r: Role): boolean {
-  return isStaffUser(r);
-}
-
 function isVet(r: Role): boolean {
   return isVetUser(r);
 }
@@ -84,7 +81,7 @@ function ProfileForm({ me, onSaved }: ProfileFormProps) {
     <section className={styles.section} id="profile">
       <div className={styles.sectionHeader}>
         <h2 className={styles.sectionTitle}>Thông tin cá nhân</h2>
-        <span className={styles.roleBadge}>{ROLE_DISPLAY[account.role]}</span>
+        <span className={styles.roleBadge}>{ROLE_LABELS[account.role]}</span>
       </div>
 
       <form onSubmit={handleSubmit} className={styles.profileBody} noValidate>
@@ -163,7 +160,7 @@ function ProfileForm({ me, onSaved }: ProfileFormProps) {
 
 export function AccountPage() {
   const navigate = useNavigate();
-  const isAuthenticated = useAuthStore((s) => s.isAuthenticated);
+  const isAuthenticated = !!useAccount();
   const [me, setMe] = useState<MeResponse | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);

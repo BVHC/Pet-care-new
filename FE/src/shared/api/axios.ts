@@ -1,6 +1,14 @@
 import axios from 'axios'
+import { ruleIdOf } from './api-error'
+import { installMockApi } from './mock/mock-api'
 
 const API_BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:8081'
+
+/**
+ * Mock theo hợp đồng (./mock): mặc định bật khi `npm run dev`, tắt khi build.
+ * Gọi BE thật lúc dev: đặt `VITE_API_MOCK=false` trong FE/.env.
+ */
+export const API_MOCK = (import.meta.env.VITE_API_MOCK ?? String(import.meta.env.DEV)) === 'true'
 
 export const apiClient = axios.create({
   baseURL: API_BASE_URL,
@@ -10,52 +18,37 @@ export const apiClient = axios.create({
   },
 })
 
-// Request interceptor
-apiClient.interceptors.request.use(
-  (config) => {
-    const token = localStorage.getItem('access_token')
-    if (token) {
-      config.headers.Authorization = `Bearer ${token}`
-    }
-    return config
-  },
-  (error) => {
-    return Promise.reject(error)
+if (API_MOCK) installMockApi(apiClient)
+
+interface AuthHooks {
+  token: () => string | null
+  /** BE trả 401: phiên bị hủy / hết hạn. */
+  onUnauthorized: () => void
+  /** BE trả 400 BR-TK-17: phải đổi mật khẩu trước. */
+  onMustChangePassword: () => void
+}
+
+let auth: AuthHooks = { token: () => null, onUnauthorized: () => {}, onMustChangePassword: () => {} }
+
+/** Store phiên tự gắn vào đây, tránh vòng import axios ↔ store. */
+export function bindAuth(hooks: AuthHooks) {
+  auth = hooks
+}
+
+apiClient.interceptors.request.use((config) => {
+  const token = auth.token()
+  if (token) config.headers.Authorization = `Bearer ${token}`
+  return config
+})
+
+// Không có refresh token (ADR-0003): 401 là hết phiên, guard route sẽ đưa về trang đăng nhập.
+apiClient.interceptors.response.use(undefined, (error) => {
+  const status = error.response?.status
+  if (status === 401) auth.onUnauthorized()
+  if (status === 400 && ruleIdOf(String(error.response?.data?.message ?? '')) === 'BR-TK-17') {
+    auth.onMustChangePassword()
   }
-)
-
-// Response interceptor
-apiClient.interceptors.response.use(
-  (response) => response,
-  async (error) => {
-    const originalRequest = error.config
-
-    if (error.response?.status === 401 && !originalRequest._retry) {
-      originalRequest._retry = true
-
-      const refreshToken = localStorage.getItem('refresh_token')
-      if (refreshToken) {
-        try {
-          const response = await axios.post(`${API_BASE_URL}/api/auth/refresh`, {
-            refreshToken,
-          })
-
-          const { accessToken, refreshToken: newRefreshToken } = response.data.data
-          localStorage.setItem('access_token', accessToken)
-          localStorage.setItem('refresh_token', newRefreshToken)
-
-          originalRequest.headers.Authorization = `Bearer ${accessToken}`
-          return apiClient(originalRequest)
-        } catch (refreshError) {
-          localStorage.removeItem('access_token')
-          localStorage.removeItem('refresh_token')
-          window.location.href = '/auth/login'
-        }
-      }
-    }
-
-    return Promise.reject(error)
-  }
-)
+  return Promise.reject(error)
+})
 
 export default apiClient

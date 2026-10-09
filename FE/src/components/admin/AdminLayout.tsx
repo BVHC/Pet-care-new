@@ -1,5 +1,5 @@
 import { Link, useLocation } from 'react-router-dom';
-import { useAdminSession } from '../../shared/stores/admin-session.store';
+import { useSession, useSessionUser } from '../../shared/stores/session.store';
 import { cn } from '../../lib/utils';
 import {
   LayoutDashboard, ShoppingBag, CalendarClock, ListOrdered,
@@ -10,14 +10,14 @@ import {
   Package, Bot, ConciergeBell
 } from 'lucide-react';
 import { useState } from 'react';
-import type { Role } from '../../shared/types/admin';
-import { WORKSPACE_PATHS, WORKSPACE_ROLES, getUserRoles } from '../../shared/constants/workspaces';
+import { ROLE_LABELS, STAFF_ROLES, type Role } from '../../shared/types/auth';
+import { WORKSPACE_PATHS, WORKSPACE_ROLES, homePathFor } from '../../shared/constants/workspaces';
 
 export interface MenuItem {
   path: string;
   label: string;
   icon: React.ElementType;
-  roles: Role[];
+  roles: readonly Role[];
 }
 
 export interface MenuSection {
@@ -25,87 +25,82 @@ export interface MenuSection {
   items: MenuItem[];
 }
 
-const ALL_ROLES: Role[] = [
-  'SUPER_ADMIN', 'ORG_ADMIN', 'STORE_MANAGER', 'RECEPTIONIST',
-  'VETERINARIAN', 'GROOMER', 'INVENTORY_STAFF', 'FINANCE_STAFF',
-];
-
+// Role theo actor của UC (docs/01-business-operations.md). A03 ADMIN chỉ quản trị kỹ thuật.
+// Trang không có UC tương ứng ở v16 (đánh dấu "ngoài phạm vi") tạm để SUPER_MANAGER, gỡ ở T57.
 // eslint-disable-next-line react-refresh/only-export-components
 export const ADMIN_MENU: MenuSection[] = [
   {
     section: 'Bàn làm việc',
     items: [
-      { path: WORKSPACE_PATHS.reception, label: 'Quầy lễ tân', icon: ConciergeBell, roles: [...WORKSPACE_ROLES.reception] },
-      { path: WORKSPACE_PATHS.doctor, label: 'Phòng khám', icon: Stethoscope, roles: [...WORKSPACE_ROLES.doctor] },
-      { path: WORKSPACE_PATHS.grooming, label: 'Khu grooming', icon: Scissors, roles: [...WORKSPACE_ROLES.grooming] },
+      { path: WORKSPACE_PATHS.reception, label: 'Quầy lễ tân', icon: ConciergeBell, roles: WORKSPACE_ROLES.reception },
+      { path: WORKSPACE_PATHS.doctor, label: 'Phòng khám', icon: Stethoscope, roles: WORKSPACE_ROLES.doctor },
+      { path: WORKSPACE_PATHS.grooming, label: 'Khu grooming', icon: Scissors, roles: WORKSPACE_ROLES.grooming },
     ],
   },
   {
     section: 'Tổng quan',
     items: [
-      { path: '/admin/dashboard', label: 'Bảng điều khiển', icon: LayoutDashboard, roles: ALL_ROLES },
+      { path: '/admin/dashboard', label: 'Bảng điều khiển', icon: LayoutDashboard, roles: WORKSPACE_ROLES.admin },
     ],
   },
   {
     section: 'Nghiệp vụ',
     items: [
-      { path: '/admin/pos', label: 'Quầy POS', icon: ShoppingBag, roles: ['SUPER_ADMIN', 'STORE_MANAGER', 'RECEPTIONIST'] },
-      { path: '/admin/appointments', label: 'Lịch hẹn', icon: CalendarClock, roles: ['SUPER_ADMIN', 'STORE_MANAGER', 'RECEPTIONIST', 'VETERINARIAN'] },
-      { path: '/admin/queue', label: 'Hàng chờ', icon: ListOrdered, roles: ['SUPER_ADMIN', 'STORE_MANAGER', 'RECEPTIONIST', 'VETERINARIAN', 'GROOMER'] },
-      { path: '/admin/exam', label: 'Khám & EMR', icon: Stethoscope, roles: ['SUPER_ADMIN', 'STORE_MANAGER', 'VETERINARIAN'] },
-      { path: '/admin/vaccination', label: 'Tiêm chủng', icon: Syringe, roles: ['SUPER_ADMIN', 'STORE_MANAGER', 'VETERINARIAN'] },
-      { path: '/admin/grooming', label: 'Grooming', icon: Scissors, roles: ['SUPER_ADMIN', 'STORE_MANAGER', 'RECEPTIONIST', 'GROOMER'] },
-      { path: '/admin/orders', label: 'Đơn online', icon: Package, roles: ['SUPER_ADMIN', 'STORE_MANAGER', 'RECEPTIONIST'] },
+      { path: '/admin/pos', label: 'Quầy POS', icon: ShoppingBag, roles: ['RECEPTIONIST', 'BRANCH_MANAGER'] }, // UC66
+      { path: '/admin/appointments', label: 'Lịch hẹn', icon: CalendarClock, roles: ['RECEPTIONIST'] }, // UC39, UC40
+      { path: '/admin/queue', label: 'Hàng chờ', icon: ListOrdered, roles: ['RECEPTIONIST', 'BRANCH_MANAGER', 'VET', 'CARETAKER'] }, // UC45, UC46
+      { path: '/admin/exam', label: 'Khám & EMR', icon: Stethoscope, roles: ['VET'] }, // UC48
+      { path: '/admin/vaccination', label: 'Tiêm chủng', icon: Syringe, roles: ['VET'] }, // UC49
+      { path: '/admin/grooming', label: 'Grooming', icon: Scissors, roles: ['CARETAKER'] }, // UC52
+      { path: '/admin/orders', label: 'Đơn online', icon: Package, roles: ['RECEPTIONIST'] }, // UC65 (tầng 3)
     ],
   },
   {
     section: 'Thương mại',
     items: [
-      { path: '/admin/invoices', label: 'Hóa đơn', icon: Receipt, roles: ['SUPER_ADMIN', 'STORE_MANAGER', 'ORG_ADMIN', 'RECEPTIONIST', 'FINANCE_STAFF'] },
-      { path: '/admin/payments', label: 'Thanh toán', icon: Scale, roles: ['SUPER_ADMIN', 'STORE_MANAGER', 'ORG_ADMIN', 'RECEPTIONIST', 'FINANCE_STAFF'] },
-      { path: '/admin/refunds', label: 'Hoàn tiền', icon: Scale, roles: ['SUPER_ADMIN', 'STORE_MANAGER', 'ORG_ADMIN', 'RECEPTIONIST', 'FINANCE_STAFF'] },
-      { path: '/admin/promotions', label: 'Khuyến mãi', icon: BadgePercent, roles: ['SUPER_ADMIN', 'ORG_ADMIN', 'STORE_MANAGER'] },
-      { path: '/admin/membership', label: 'Thành viên', icon: Crown, roles: ['SUPER_ADMIN', 'ORG_ADMIN', 'STORE_MANAGER', 'RECEPTIONIST'] },
+      { path: '/admin/invoices', label: 'Hóa đơn', icon: Receipt, roles: ['RECEPTIONIST', 'BRANCH_MANAGER'] }, // UC70, UC72
+      { path: '/admin/payments', label: 'Thanh toán', icon: Scale, roles: ['RECEPTIONIST', 'BRANCH_MANAGER'] }, // UC70–72
+      { path: '/admin/refunds', label: 'Hoàn tiền', icon: Scale, roles: ['RECEPTIONIST', 'BRANCH_MANAGER'] }, // UC68 (tầng 3)
+      { path: '/admin/promotions', label: 'Khuyến mãi', icon: BadgePercent, roles: ['SUPER_MANAGER'] }, // ngoài phạm vi
+      { path: '/admin/membership', label: 'Thành viên', icon: Crown, roles: ['SUPER_MANAGER'] }, // ngoài phạm vi
     ],
   },
   {
     section: 'Kho & Mua hàng',
     items: [
-      { path: '/admin/warehouse', label: 'Kho hàng', icon: Warehouse, roles: ['SUPER_ADMIN', 'ORG_ADMIN', 'STORE_MANAGER', 'INVENTORY_STAFF'] },
-      { path: '/admin/purchasing', label: 'Mua hàng', icon: Truck, roles: ['SUPER_ADMIN', 'ORG_ADMIN', 'STORE_MANAGER', 'INVENTORY_STAFF'] },
-      { path: '/admin/vaccines', label: 'Vaccine', icon: Boxes, roles: ['SUPER_ADMIN', 'STORE_MANAGER', 'INVENTORY_STAFF', 'VETERINARIAN'] },
+      { path: '/admin/warehouse', label: 'Kho hàng', icon: Warehouse, roles: ['BRANCH_MANAGER', 'RECEPTIONIST'] }, // UC75 (A06 chỉ xem), UC76
+      { path: '/admin/purchasing', label: 'Mua hàng', icon: Truck, roles: ['BRANCH_MANAGER'] }, // UC73, UC74
+      { path: '/admin/vaccines', label: 'Vaccine', icon: Boxes, roles: ['BRANCH_MANAGER', 'RECEPTIONIST'] }, // UC75
     ],
   },
   {
     section: 'Quản trị',
     items: [
-      { path: '/admin/workforce', label: 'Nhân sự', icon: ClipboardList, roles: ['SUPER_ADMIN', 'ORG_ADMIN', 'STORE_MANAGER'] },
-      { path: '/admin/incidents', label: 'Sự cố', icon: ShieldAlert, roles: ['SUPER_ADMIN', 'ORG_ADMIN', 'STORE_MANAGER', 'VETERINARIAN'] },
-      { path: '/admin/reports', label: 'Báo cáo', icon: BarChart3, roles: ['SUPER_ADMIN', 'ORG_ADMIN', 'STORE_MANAGER', 'FINANCE_STAFF', 'INVENTORY_STAFF', 'VETERINARIAN'] },
-      { path: '/admin/audit', label: 'Kiểm toán', icon: Activity, roles: ['SUPER_ADMIN', 'ORG_ADMIN', 'STORE_MANAGER', 'FINANCE_STAFF'] },
+      { path: '/admin/workforce', label: 'Nhân sự', icon: ClipboardList, roles: ['BRANCH_MANAGER'] }, // UC34–38 (tầng 3)
+      { path: '/admin/incidents', label: 'Sự cố', icon: ShieldAlert, roles: ['SUPER_MANAGER', 'BRANCH_MANAGER'] }, // UC86 (tầng 3)
+      { path: '/admin/reports', label: 'Báo cáo', icon: BarChart3, roles: ['SUPER_MANAGER', 'BRANCH_MANAGER'] }, // UC89
+      { path: '/admin/audit', label: 'Kiểm toán', icon: Activity, roles: ['ADMIN'] }, // UC11
     ],
   },
   {
     section: 'Hệ thống',
     items: [
-      { path: '/admin/tenants', label: 'Tổ chức', icon: Building2, roles: ['SUPER_ADMIN', 'ORG_ADMIN', 'STORE_MANAGER'] },
-      { path: '/admin/users', label: 'Người dùng', icon: UserCog, roles: ['SUPER_ADMIN', 'ORG_ADMIN', 'STORE_MANAGER'] },
-      { path: '/admin/ai', label: 'Trí tuệ nhân tạo', icon: Bot, roles: ['SUPER_ADMIN', 'ORG_ADMIN', 'STORE_MANAGER', 'VETERINARIAN'] },
+      { path: '/admin/tenants', label: 'Tổ chức', icon: Building2, roles: ['SUPER_MANAGER'] }, // ngoài phạm vi (chi nhánh: T20)
+      { path: '/admin/users', label: 'Người dùng', icon: UserCog, roles: ['ADMIN', 'SUPER_MANAGER', 'BRANCH_MANAGER'] }, // UC08, UC09
+      { path: '/admin/ai', label: 'Trí tuệ nhân tạo', icon: Bot, roles: ['SUPER_MANAGER'] }, // tầng 3, chưa đặc tả
     ],
   },
 ];
 
+/** Role được mở một trang admin; trang không có trong menu chỉ cần là nhân viên. */
 // eslint-disable-next-line react-refresh/only-export-components
-export function routeAllowed(path: string, roles: Role[]): boolean {
-  if (roles.includes('SUPER_ADMIN') || roles.includes('STORE_MANAGER')) return true;
+export function rolesForPath(path: string): readonly Role[] {
   for (const section of ADMIN_MENU) {
     for (const item of section.items) {
-      if (path === item.path || path.startsWith(item.path + '/')) {
-        return item.roles.some((r) => roles.includes(r));
-      }
+      if (path === item.path || path.startsWith(item.path + '/')) return item.roles;
     }
   }
-  return true;
+  return STAFF_ROLES;
 }
 
 export interface AdminSidebarProps {
@@ -114,7 +109,8 @@ export interface AdminSidebarProps {
 }
 
 export function AdminSidebar({ collapsed: propCollapsed, onToggle }: AdminSidebarProps) {
-  const { user, logout } = useAdminSession();
+  const user = useSessionUser();
+  const logout = useSession((s) => s.logout);
   const location = useLocation();
   const [expandedSections, setExpandedSections] = useState<Record<string, boolean>>(
     Object.fromEntries(ADMIN_MENU.map(s => [s.section, true]))
@@ -140,7 +136,7 @@ export function AdminSidebar({ collapsed: propCollapsed, onToggle }: AdminSideba
 
   const visibleSections = ADMIN_MENU.map((section) => ({
     ...section,
-    items: section.items.filter((item) => item.roles.some((r) => getUserRoles(user).includes(r))),
+    items: section.items.filter((item) => item.roles.includes(user.role)),
   })).filter((section) => section.items.length > 0);
 
   return (
@@ -153,7 +149,7 @@ export function AdminSidebar({ collapsed: propCollapsed, onToggle }: AdminSideba
         "p-4 border-b border-(--border-color) flex items-center justify-between",
         isCollapsed && "p-3 justify-center"
       )}>
-        <Link to="/admin/dashboard" className={cn("flex items-center gap-3", isCollapsed && "justify-center")}>
+        <Link to={homePathFor(user.role)} className={cn("flex items-center gap-3", isCollapsed && "justify-center")}>
           <div className="w-10 h-10 rounded-xl bg-amber-50 dark:bg-amber-950/30 border border-amber-200/60 dark:border-amber-800/40 flex items-center justify-center shadow-xs shrink-0 p-1">
             <img src="/imgs/CatSticker.svg" alt="Pet Care Logo" className="w-8 h-8 object-contain" />
           </div>
@@ -256,7 +252,7 @@ export function AdminSidebar({ collapsed: propCollapsed, onToggle }: AdminSideba
             <>
               <div className="flex-1 min-w-0">
                 <p className="text-sm font-medium text-(--text-primary) truncate">{user.name}</p>
-                <p className="text-xs text-(--text-secondary) truncate">{user.role.replace('_', ' ')}</p>
+                <p className="text-xs text-(--text-secondary) truncate">{ROLE_LABELS[user.role]}</p>
               </div>
               <button
                 onClick={logout}

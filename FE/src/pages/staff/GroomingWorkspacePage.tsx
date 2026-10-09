@@ -1,6 +1,5 @@
 import { GroomingBoard } from '../../components/staff/grooming/GroomingBoard';
 import { WorkspaceHeader } from '../../components/staff/ui';
-import { getUserRoles } from '../../shared/constants/workspaces';
 import { useTodayVisits } from '../../shared/hooks/useClinic';
 import { useStaffUser } from '../../shared/hooks/useStaffUser';
 import { useGroomingStore } from '../../shared/stores/grooming.store';
@@ -16,7 +15,7 @@ export function GroomingWorkspacePage() {
   const user = useStaffUser();
   const stored = useGroomingStore((s) => s.scope);
   const setScope = useGroomingStore((s) => s.setScope);
-  const scope: BoardScope = stored ?? (getUserRoles(user).includes('GROOMER') ? 'mine' : 'all');
+  const scope: BoardScope = stored ?? (user.role === 'CARETAKER' ? 'mine' : 'all');
   const visits = useTodayVisits();
   const mineActive =
     visits.data?.filter(

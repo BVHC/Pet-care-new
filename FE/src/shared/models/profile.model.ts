@@ -3,7 +3,7 @@
 // Theo identity-v1.md và BR-TK-15, BR-TK-18, BR-TK-19
 // ===========================================
 
-import type { UserRole, AccountStatus } from '../types';
+import type { AccountSummary, Role } from '../types/auth';
 
 // === Me Response ===
 
@@ -13,16 +13,6 @@ export interface MeResponse {
   staffProfile?: StaffProfile;
   customerId?: number;
   linkDecisionPending: boolean;
-}
-
-/** BE AccountSummary */
-export interface AccountSummary {
-  id: number;
-  email: string;
-  role: Role;
-  status: AccountStatus;
-  isLocked: boolean;
-  mustChangePassword: boolean;
 }
 
 /** BE StaffProfile - hồ sơ nhân viên */
@@ -35,16 +25,6 @@ export interface StaffProfile {
   specialty?: string; // Chuyên môn VET
   bio?: string; // Mô tả ngắn VET (BR-TK-20: tối đa 500 ký tự)
 }
-
-/** Role enum - theo docs identity-v1.md */
-export type Role =
-  | 'CUSTOMER'
-  | 'ADMIN'
-  | 'SUPER_MANAGER'
-  | 'BRANCH_MANAGER'
-  | 'RECEPTIONIST'
-  | 'VET'
-  | 'CARETAKER';
 
 // === Staff Profile Update ===
 
@@ -144,22 +124,6 @@ export interface PublicVet {
 }
 
 // === Helper types ===
-
-/** Display name cho role */
-export const ROLE_DISPLAY: Record<Role, string> = {
-  CUSTOMER: 'Khách hàng',
-  ADMIN: 'Quản trị',
-  SUPER_MANAGER: 'Quản lý chuỗi',
-  BRANCH_MANAGER: 'Quản lý chi nhánh',
-  RECEPTIONIST: 'Lễ tân',
-  VET: 'Bác sĩ thú y',
-  CARETAKER: 'Nhân viên chăm sóc',
-};
-
-/** Check nếu user là nhân viên (có hồ sơ staff) */
-export function isStaffUser(role: Role): boolean {
-  return ['ADMIN', 'SUPER_MANAGER', 'BRANCH_MANAGER', 'RECEPTIONIST', 'VET', 'CARETAKER'].includes(role);
-}
 
 /** Check nếu user là VET (có hồ sơ giới thiệu công khai) */
 export function isVetUser(role: Role): boolean {

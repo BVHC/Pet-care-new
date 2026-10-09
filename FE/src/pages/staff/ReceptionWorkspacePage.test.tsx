@@ -5,12 +5,12 @@ import { MemoryRouter } from 'react-router-dom';
 import { beforeEach, describe, expect, it } from 'vitest';
 import { clinicApi } from '../../shared/api/clinic.api';
 import { loadDb, resetClinicDb, seedClinicDb } from '../../shared/api/clinic-db';
-import { useAdminSession } from '../../shared/stores/admin-session.store';
+import { useSession } from '../../shared/stores/session.store';
 import { usePosStore } from '../../shared/stores/pos.store';
 import { ReceptionWorkspacePage } from './ReceptionWorkspacePage';
 
 // Seed: order-2 is Tiêu's exam (customer c5), PENDING.
-const DESK = { id: '4', email: 'reception@store1.vn', name: 'Lan Chi', role: 'RECEPTIONIST' as const, organizationId: 'org-1' };
+const DESK = { id: 4, email: 'reception@store1.vn', role: 'RECEPTIONIST' as const, status: 'ACTIVE' as const, isLocked: false, mustChangePassword: false };
 
 function renderDesk() {
   const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
@@ -25,7 +25,7 @@ function renderDesk() {
 
 beforeEach(() => {
   resetClinicDb(seedClinicDb());
-  useAdminSession.setState({ user: DESK, isAuthenticated: true });
+  useSession.setState({ token: 'mock-token-4', expiresAt: null, account: DESK, fullName: 'Lan Chi' });
   usePosStore.getState().clear();
 });
 

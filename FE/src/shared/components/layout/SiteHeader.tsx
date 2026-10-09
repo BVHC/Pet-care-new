@@ -20,7 +20,7 @@ import {
   User,
 } from 'lucide-react'
 import type { LucideIcon } from 'lucide-react'
-import { useAuthStore } from '../../stores/auth.store'
+import { useSession, useSessionUser } from '../../stores/session.store'
 import { isHeaderCollapsed, buildShopMegaMenu } from './header.utils'
 import { NotificationBell } from './NotificationBell'
 
@@ -90,9 +90,9 @@ const USER_DROPDOWN_AUTHED: DropdownItem[] = [
 
 export function SiteHeader({ cartCount = 0, onNav }: SiteHeaderProps) {
   const navigate = useNavigate()
-  const user = useAuthStore((s) => s.user)
-  const isAuthenticated = useAuthStore((s) => s.isAuthenticated)
-  const logout = useAuthStore((s) => s.logout)
+  const user = useSessionUser()
+  const isAuthenticated = !!user
+  const logout = useSession((s) => s.logout)
   const [isScrolled, setIsScrolled] = useState(false)
   const [userMenuOpen, setUserMenuOpen] = useState(false)
   const [searchQuery, setSearchQuery] = useState('')

@@ -1,4 +1,4 @@
-import { ALL_STAFF_ROLES, type Role, type SessionUser } from '../types/admin';
+import type { Role } from '../types/auth';
 
 export type Workspace = 'reception' | 'doctor' | 'grooming' | 'admin';
 
@@ -19,39 +19,33 @@ export const WORKSPACE_LABELS: Record<Workspace, string> = {
   admin: 'Quản trị',
 };
 
+/** Theo actor của UC (01-business-operations): ADMIN (A03) không làm nghiệp vụ phòng khám. */
 export const WORKSPACE_ROLES: Record<Workspace, readonly Role[]> = {
-  reception: ['RECEPTIONIST', 'STORE_MANAGER', 'SUPER_ADMIN'],
-  doctor: ['VETERINARIAN', 'STORE_MANAGER', 'SUPER_ADMIN'],
-  grooming: ['GROOMER', 'STORE_MANAGER', 'SUPER_ADMIN'],
-  admin: ALL_STAFF_ROLES,
+  reception: ['RECEPTIONIST', 'BRANCH_MANAGER'], // UC44–45, UC66, UC70; A05 gán lại lượt (UC45)
+  doctor: ['VET'], // UC48, UC49
+  grooming: ['CARETAKER'], // UC52
+  admin: ['SUPER_MANAGER', 'BRANCH_MANAGER', 'RECEPTIONIST', 'VET', 'CARETAKER'],
 };
 
 const HOME_BY_ROLE: Partial<Record<Role, Workspace>> = {
   RECEPTIONIST: 'reception',
-  VETERINARIAN: 'doctor',
-  GROOMER: 'grooming',
+  VET: 'doctor',
+  CARETAKER: 'grooming',
 };
 
-/** Primary role first; sessions persisted before multi-role only carry `role`. */
-export function getUserRoles(user: SessionUser): Role[] {
-  const others = (user.roles ?? []).filter((r) => r !== user.role);
-  return [user.role, ...new Set(others)];
+export function canAccessWorkspace(role: Role, workspace: Workspace): boolean {
+  return WORKSPACE_ROLES[workspace].includes(role);
 }
 
-export function canAccessWorkspace(user: SessionUser, workspace: Workspace): boolean {
-  return getUserRoles(user).some((r) => WORKSPACE_ROLES[workspace].includes(r));
+export function getAccessibleWorkspaces(role: Role): Workspace[] {
+  return WORKSPACE_ORDER.filter((ws) => canAccessWorkspace(role, ws));
 }
 
-export function getAccessibleWorkspaces(user: SessionUser): Workspace[] {
-  return WORKSPACE_ORDER.filter((ws) => canAccessWorkspace(user, ws));
-}
-
-export function getDefaultWorkspace(user: SessionUser): Workspace | null {
-  const accessible = getAccessibleWorkspaces(user);
-  if (accessible.length === 0) return null;
-  const home = HOME_BY_ROLE[user.role];
-  if (home && accessible.includes(home)) return home;
-  return accessible.includes('admin') ? 'admin' : accessible[0];
+/** Trang đầu tiên sau khi đăng nhập. */
+export function homePathFor(role: Role): string {
+  if (role === 'CUSTOMER') return '/';
+  if (role === 'ADMIN') return '/admin/users';
+  return WORKSPACE_PATHS[HOME_BY_ROLE[role] ?? 'admin'];
 }
 
 export function workspaceForPath(pathname: string): Workspace | null {

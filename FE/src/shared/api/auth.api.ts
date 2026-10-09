@@ -1,14 +1,10 @@
 // ===========================================
 // Auth API — tang HTTP duy nhat, dung axios instance chung (./axios).
-// Map 1-1 voi BE AuthController (@RequestMapping "/api/auth").
+// Theo docs/api/identity-v1.md. Login, logout, doi mat khau da dung hop dong;
+// cac endpoint dang ky / OTP / quen mat khau con lech (sua o T12).
 // ===========================================
 import { apiClient } from './axios';
-import type { User, UserRole, AccountStatus } from '../types';
-
-export interface LoginPayload {
-  email: string;
-  password: string;
-}
+import type { AccountStatus, ChangePasswordRequest, LoginRequest, LoginResponse } from '../types/auth';
 
 /** BE RegisterRequest: email bat buoc, phone tuy chon (RULE-01-10). */
 export interface RegisterPayload {
@@ -18,63 +14,9 @@ export interface RegisterPayload {
   name: string;
 }
 
-/** BE LoginResponse — khong co field `user`, thong tin nam trong claim cua accessToken. */
-export interface TokenPair {
-  accessToken: string;
-  refreshToken: string;
-  tokenType: string;
-  expiresIn: number;
-}
-
 export interface RegisterResult {
   accountId: string;
   status: AccountStatus;
-}
-
-// ─── Token storage (mot bo key duy nhat, khop voi interceptor trong ./axios) ───
-
-const ACCESS_KEY = 'access_token';
-const REFRESH_KEY = 'refresh_token';
-
-export const tokenStore = {
-  access: () => localStorage.getItem(ACCESS_KEY),
-  refresh: () => localStorage.getItem(REFRESH_KEY),
-  save: (t: TokenPair) => {
-    localStorage.setItem(ACCESS_KEY, t.accessToken);
-    localStorage.setItem(REFRESH_KEY, t.refreshToken);
-  },
-  clear: () => {
-    localStorage.removeItem(ACCESS_KEY);
-    localStorage.removeItem(REFRESH_KEY);
-  },
-};
-
-// ─── JWT decode ───
-
-/**
- * Doc claim tu accessToken. BE dat: sub=userId, accountId, phone, name, role,
- * scope, accountStatus, organizationId, storeId (JwtTokenProvider).
- * Chi decode, KHONG verify chu ky — chu ky do BE kiem tra o moi request.
- */
-export function decodeUser(accessToken: string): User | null {
-  try {
-    const b64 = accessToken.split('.')[1].replace(/-/g, '+').replace(/_/g, '/');
-    const bytes = Uint8Array.from(atob(b64), (ch) => ch.charCodeAt(0));
-    const c = JSON.parse(new TextDecoder().decode(bytes));
-    if (!c.sub) return null;
-    return {
-      userId: c.sub,
-      accountId: c.accountId ?? '',
-      name: c.name ?? '',
-      phone: c.phone ?? undefined,
-      role: (c.role as UserRole) ?? 'CUSTOMER',
-      accountStatus: c.accountStatus as AccountStatus | undefined,
-      organizationId: c.organizationId ?? undefined,
-      storeId: c.storeId ?? undefined,
-    };
-  } catch {
-    return null;
-  }
 }
 
 /** Lay message loi that tu ApiResponse cua BE, khong nuot thanh "Network Error". */
@@ -86,7 +28,8 @@ export function apiErrorMessage(error: unknown, fallback: string): string {
 // ─── Endpoints ───
 
 export const authApi = {
-  login: async (payload: LoginPayload): Promise<TokenPair> =>
+  /** Token chi mang sub/sid/jti (ADR-0003): role, mustChangePassword doc tu `account`. */
+  login: async (payload: LoginRequest): Promise<LoginResponse> =>
     (await apiClient.post('/api/auth/login', payload)).data.data,
 
   register: async (payload: RegisterPayload): Promise<RegisterResult> =>
@@ -107,7 +50,12 @@ export const authApi = {
   resetPassword: async (email: string, otpCode: string, newPassword: string): Promise<void> => {
     await apiClient.post('/api/auth/reset-password', { email, otpCode, newPassword });
   },
-  logout: async (refreshToken: string | null): Promise<void> => {
-    await apiClient.post('/api/auth/logout', refreshToken ? { refreshToken } : {});
+  logout: async (): Promise<void> => {
+    await apiClient.post('/api/auth/logout');
+  },
+
+  /** 204; BE giu phien hien tai, huy cac phien khac va go mustChangePassword. */
+  changePassword: async (payload: ChangePasswordRequest): Promise<void> => {
+    await apiClient.post('/api/me/password', payload);
   },
 };

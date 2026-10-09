@@ -1,5 +1,5 @@
 import { Suspense, useEffect, useState } from 'react';
-import { Navigate, NavLink, Outlet, useLocation, useNavigate } from 'react-router-dom';
+import { NavLink, Outlet, useLocation, useNavigate } from 'react-router-dom';
 import {
   ConciergeBell,
   Keyboard,
@@ -16,13 +16,13 @@ import {
 import './workspace.css';
 import { cn } from '../../lib/utils';
 import { Sheet, SheetContent, SheetTitle } from '../ui/sheet';
-import { useAdminSession } from '../../shared/stores/admin-session.store';
-import { ROLE_LABELS, type SessionUser } from '../../shared/types/admin';
+import { ROUTES } from '../../shared/constants/routes';
+import { useSession, useSessionUser } from '../../shared/stores/session.store';
+import { ROLE_LABELS, type SessionUser } from '../../shared/types/auth';
 import {
   WORKSPACE_LABELS,
   WORKSPACE_PATHS,
   getAccessibleWorkspaces,
-  getUserRoles,
   workspaceForPath,
   type Workspace,
 } from '../../shared/constants/workspaces';
@@ -44,19 +44,16 @@ const ICONS: Record<Workspace, LucideIcon> = {
   admin: LayoutDashboard,
 };
 
-/** Shell for front-line staff: one workspace at a time, the others one keystroke away. */
+/** Shell for front-line staff: one workspace at a time, the others one keystroke away. Guarded by RequireRole. */
 export function WorkspaceLayout() {
-  const user = useAdminSession((s) => s.user);
-  const isAuthenticated = useAdminSession((s) => s.isAuthenticated);
-  const location = useLocation();
-  if (!isAuthenticated || !user) return <Navigate to="/admin/login" state={{ from: location }} replace />;
-  return <WorkspaceShell user={user} />;
+  const user = useSessionUser();
+  return user && <WorkspaceShell user={user} />;
 }
 
 function WorkspaceShell({ user }: { user: SessionUser }) {
   const location = useLocation();
   const navigate = useNavigate();
-  const workspaces = getAccessibleWorkspaces(user);
+  const workspaces = getAccessibleWorkspaces(user.role);
   const current = workspaceForPath(location.pathname);
   const [helpOpen, setHelpOpen] = useState(false);
   const [menuOpen, setMenuOpen] = useState(false);
@@ -175,7 +172,7 @@ function Sidebar({
   onNavigate: () => void;
 }) {
   const navigate = useNavigate();
-  const logout = useAdminSession((s) => s.logout);
+  const logout = useSession((s) => s.logout);
   const arrivals = useArrivals();
   const visits = useTodayVisits();
   const pending = usePendingOrders();
@@ -255,7 +252,7 @@ function Sidebar({
 
       <div className="mt-auto border-t border-(--ws-line) p-3">
         <p className="truncate text-sm font-semibold">{user.name}</p>
-        <p className="truncate text-xs text-(--ws-ink-3)">{getUserRoles(user).map((r) => ROLE_LABELS[r]).join(', ')}</p>
+        <p className="truncate text-xs text-(--ws-ink-3)">{ROLE_LABELS[user.role]}</p>
         <div className="mt-2 flex items-center gap-1">
           <button type="button" className={iconButton} onClick={onToggleTheme} aria-label={dark ? 'Chế độ sáng' : 'Chế độ tối'} title={dark ? 'Chế độ sáng' : 'Chế độ tối'}>
             {dark ? <Sun className="h-4 w-4" /> : <Moon className="h-4 w-4" />}
@@ -279,9 +276,9 @@ function Sidebar({
           <button
             type="button"
             className={cn(iconButton, 'ml-auto hover:text-(--ws-urgent-ink)')}
-            onClick={() => {
-              logout();
-              navigate('/admin/login');
+            onClick={async () => {
+              await logout();
+              navigate(ROUTES.staffLogin);
             }}
             aria-label="Đăng xuất"
             title="Đăng xuất"

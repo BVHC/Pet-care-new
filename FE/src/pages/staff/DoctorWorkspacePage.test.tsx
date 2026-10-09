@@ -4,12 +4,12 @@ import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { MemoryRouter } from 'react-router-dom';
 import { beforeEach, describe, expect, it } from 'vitest';
 import { loadDb, resetClinicDb, seedClinicDb } from '../../shared/api/clinic-db';
-import { useAdminSession } from '../../shared/stores/admin-session.store';
+import { useSession } from '../../shared/stores/session.store';
 import { useConsultationStore } from '../../shared/stores/consultation.store';
 import { DoctorWorkspacePage } from './DoctorWorkspacePage';
 
 // Seed: vet '5' is examining Mochi (visit-5, skin exam, no diagnosis yet) and has Miu waiting.
-const VET = { id: '5', email: 'doctor@store1.vn', name: 'BS. Minh Anh', role: 'VETERINARIAN' as const, organizationId: 'org-1' };
+const VET = { id: 5, email: 'doctor@store1.vn', role: 'VET' as const, status: 'ACTIVE' as const, isLocked: false, mustChangePassword: false };
 
 function renderExamRoom() {
   const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
@@ -24,7 +24,7 @@ function renderExamRoom() {
 
 beforeEach(() => {
   resetClinicDb(seedClinicDb());
-  useAdminSession.setState({ user: VET, isAuthenticated: true });
+  useSession.setState({ token: 'mock-token-5', expiresAt: null, account: VET, fullName: 'BS. Minh Anh' });
   useConsultationStore.setState({ drafts: {}, activeVisitId: null });
 });
 

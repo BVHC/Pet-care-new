@@ -1,6 +1,7 @@
 // ===========================================
 // Shared Types - Pet-care Frontend
 // ===========================================
+import type { Role } from './auth';
 
 // API Response wrapper
 export interface ApiResponse<T> {
@@ -20,8 +21,8 @@ export interface PageResponse<T> {
   last: boolean;
 }
 
-// User & Auth
-// BE dung UUID cho moi khoa chinh -> string, khong phai number.
+// User (model cũ, dùng trong Appointment / MedicalRecord bên dưới).
+// Tài khoản & phiên theo identity-v1 nằm ở ./auth.
 export interface User {
   userId: string;
   accountId: string;
@@ -29,44 +30,7 @@ export interface User {
   phone?: string;
   email?: string;
   avatar?: string;
-  role: UserRole;
-  accountStatus?: AccountStatus;
-  storeId?: string;
-  organizationId?: string;
-}
-
-/** FSM 1 (docs/03-state-machines.md) — accounts.status ben BE. */
-export type AccountStatus = 'PENDING_VERIFICATION' | 'ACTIVE' | 'LOCKED' | 'DEACTIVATED';
-
-export type UserRole =
-  | 'SUPER_ADMIN'
-  | 'ORG_ADMIN'
-  | 'STORE_MANAGER'
-  | 'FINANCE_STAFF'
-  | 'INVENTORY_STAFF'
-  | 'RECEPTIONIST'
-  | 'VETERINARIAN'
-  | 'GROOMER'
-  | 'CUSTOMER';
-
-export interface AuthTokens {
-  accessToken: string;
-  refreshToken: string;
-  tokenType: string;
-  expiresIn: number;
-}
-
-// Email la danh tinh dang nhap duy nhat (BE RULE-01-10), phone chi la lien he.
-export interface LoginRequest {
-  email: string;
-  password: string;
-}
-
-export interface RegisterRequest {
-  email: string;
-  phone?: string;
-  password: string;
-  name: string;
+  role: Role;
 }
 
 // Pet

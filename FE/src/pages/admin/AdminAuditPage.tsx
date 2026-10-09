@@ -15,9 +15,9 @@ interface AuditLog {
 }
 
 const MOCK_AUDIT: AuditLog[] = [
-  { id: '1', timestamp: '2026-09-18 15:30:25', user: 'admin', role: 'SUPER_ADMIN', action: 'LOGIN', module: 'Auth', description: 'Đăng nhập hệ thống', ipAddress: '192.168.1.100' },
-  { id: '2', timestamp: '2026-09-18 15:32:10', user: 'admin', role: 'SUPER_ADMIN', action: 'CREATE', module: 'Invoice', description: 'Tạo hóa đơn INV-2026-001', ipAddress: '192.168.1.100', details: 'Số tiền: 550,000 VNĐ' },
-  { id: '3', timestamp: '2026-09-18 14:45:00', user: 'nva', role: 'STORE_MANAGER', action: 'APPROVE', module: 'Refund', description: 'Duyệt hoàn tiền REF-2026-001', ipAddress: '192.168.1.105', details: 'Số tiền: 200,000 VNĐ' },
+  { id: '1', timestamp: '2026-09-18 15:30:25', user: 'admin', role: 'ADMIN', action: 'LOGIN', module: 'Auth', description: 'Đăng nhập hệ thống', ipAddress: '192.168.1.100' },
+  { id: '2', timestamp: '2026-09-18 15:32:10', user: 'admin', role: 'ADMIN', action: 'CREATE', module: 'Invoice', description: 'Tạo hóa đơn INV-2026-001', ipAddress: '192.168.1.100', details: 'Số tiền: 550,000 VNĐ' },
+  { id: '3', timestamp: '2026-09-18 14:45:00', user: 'nva', role: 'BRANCH_MANAGER', action: 'APPROVE', module: 'Refund', description: 'Duyệt hoàn tiền REF-2026-001', ipAddress: '192.168.1.105', details: 'Số tiền: 200,000 VNĐ' },
   { id: '4', timestamp: '2026-09-18 14:30:15', user: 'ttb', role: 'RECEPTIONIST', action: 'CREATE', module: 'Appointment', description: 'Tạo lịch hẹn mới', ipAddress: '192.168.1.110', details: 'Khách hàng: Nguyễn Văn A' },
 ];
 

@@ -63,7 +63,7 @@ const PRODUCTS: Product[] = [
   { id: 'p-vac-cat4', name: 'Vaccine 4 bệnh mèo Felocell', category: 'MEDICINE', price: 200_000, stock: 20, unit: 'liều', prescriptionOnly: true, vaccineType: '4 bệnh mèo' },
 ];
 
-// Staff ids '3'..'6' are the demo login accounts (DEMO_USERS) so "assigned to me" works.
+// Staff ids '3'..'6' are the mock login accounts (api/mock/identity.mock.ts) so "assigned to me" works.
 const STAFF: Staff[] = [
   { id: '5', name: 'BS. Minh Anh', position: 'VET' },
   { id: 'vet-2', name: 'BS. Quốc Bảo', position: 'VET' },

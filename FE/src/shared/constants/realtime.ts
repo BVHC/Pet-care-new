@@ -1,4 +1,4 @@
-import { ApiError } from '../api/clinic.api';
+import { ApiError } from '../api/api-error';
 
 /**
  * Queues refresh by polling. Plan decision: polling first, WebSocket/SSE once a clinic

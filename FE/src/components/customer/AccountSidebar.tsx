@@ -17,7 +17,7 @@ import {
   User,
 } from 'lucide-react'
 import { toast } from 'sonner'
-import { useAuthStore } from '../../shared/stores/auth.store'
+import { useSession, useSessionUser } from '../../shared/stores/session.store'
 import styles from './AccountSidebar.module.css'
 
 /* ================================================================
@@ -114,9 +114,10 @@ export function AccountSidebar({
   userEmail,
 }: AccountSidebarProps) {
   const navigate = useNavigate()
-  const logout = useAuthStore((s) => s.logout)
-  const authName = useAuthStore((s) => s.user?.name) ?? 'Khách'
-  const authEmail = useAuthStore((s) => s.user?.email) ?? ''
+  const logout = useSession((s) => s.logout)
+  const user = useSessionUser()
+  const authName = user?.name ?? 'Khách'
+  const authEmail = user?.email ?? ''
 
   const displayName = userName ?? authName
   const displayEmail = userEmail ?? authEmail

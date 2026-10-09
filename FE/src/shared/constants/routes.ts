@@ -7,6 +7,7 @@ export const ROUTES = {
   register: '/auth/register',
   verifyOtp: '/auth/verify-otp',
   forgotPassword: '/auth/forgot',
+  changePassword: '/auth/change-password', // BR-TK-17: bắt đổi mật khẩu
   shop: '/shop',
   productDetail: '/shop/:productId',
   cart: '/cart',
@@ -44,6 +45,7 @@ export const ROUTES = {
 
   // admin
   admin: '/admin',
+  staffLogin: '/admin/login',
 } as const;
 
 export type RouteKey = keyof typeof ROUTES;

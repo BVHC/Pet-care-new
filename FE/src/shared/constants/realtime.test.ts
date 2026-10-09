@@ -1,10 +1,10 @@
 import { describe, expect, it } from 'vitest';
-import { ApiError } from '../api/clinic.api';
+import { ApiError } from '../api/api-error';
 import { liveQuery, retryDelay, shouldRetry } from './realtime';
 
 describe('live query policy', () => {
   it('does not retry business rule errors', () => {
-    expect(shouldRetry(0, new ApiError('BR-TN-05', 'Lượt chưa được gán', 400))).toBe(false);
+    expect(shouldRetry(0, new ApiError('BUSINESS_RULE_VIOLATION', 'Lượt chưa được gán (BR-TN-05)', 400))).toBe(false);
   });
 
   it('retries network failures up to three times', () => {

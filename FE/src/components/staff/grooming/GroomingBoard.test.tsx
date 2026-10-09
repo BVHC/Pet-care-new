@@ -2,7 +2,8 @@ import { render, screen, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
-import { ApiError, clinicApi } from '../../../shared/api/clinic.api';
+import { ApiError } from '../../../shared/api/api-error';
+import { clinicApi } from '../../../shared/api/clinic.api';
 import { resetClinicDb, seedClinicDb } from '../../../shared/api/clinic-db';
 import { GroomingBoard } from './GroomingBoard';
 
@@ -37,7 +38,7 @@ describe('grooming board (useKanban)', () => {
   });
 
   it('puts the card back when the server refuses the move', async () => {
-    vi.spyOn(clinicApi, 'callVisit').mockRejectedValue(new ApiError('BR-TN-05', 'Lượt này đã gán cho nhân viên khác.', 400));
+    vi.spyOn(clinicApi, 'callVisit').mockRejectedValue(new ApiError('BUSINESS_RULE_VIOLATION', 'Lượt này đã gán cho nhân viên khác. (BR-TN-05)', 400));
     const user = userEvent.setup();
     renderBoard();
 

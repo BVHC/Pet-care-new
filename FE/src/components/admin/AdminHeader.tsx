@@ -1,6 +1,6 @@
 import { Bell, Settings, LogOut, Sun, Moon, PanelLeft, PanelLeftClose } from 'lucide-react';
 import { Button } from '../ui/button';
-import { useAdminSession } from '../../shared/stores/admin-session.store';
+import { useSession, useSessionUser } from '../../shared/stores/session.store';
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -10,7 +10,8 @@ import {
   DropdownMenuTrigger,
 } from '../ui/dropdown-menu';
 import { useNavigate } from 'react-router-dom';
-import { ROLE_LABELS } from '../../shared/types/admin';
+import { ROUTES } from '../../shared/constants/routes';
+import { ROLE_LABELS } from '../../shared/types/auth';
 import { useState, useEffect } from 'react';
 
 export interface AdminHeaderProps {
@@ -19,7 +20,8 @@ export interface AdminHeaderProps {
 }
 
 export function AdminHeader({ collapsed, onToggleSidebar }: AdminHeaderProps) {
-  const { user, logout } = useAdminSession();
+  const user = useSessionUser();
+  const logout = useSession((s) => s.logout);
   const navigate = useNavigate();
   const [isDark, setIsDark] = useState(false);
 
@@ -30,9 +32,9 @@ export function AdminHeader({ collapsed, onToggleSidebar }: AdminHeaderProps) {
     }
   }, []);
 
-  const handleLogout = () => {
-    logout();
-    navigate('/admin/login');
+  const handleLogout = async () => {
+    await logout();
+    navigate(ROUTES.staffLogin);
   };
 
   const toggleTheme = () => {

@@ -1,6 +1,6 @@
 import { Link } from 'react-router-dom';
 import { Card, CardContent, CardHeader, CardTitle } from '../../components/ui/card';
-import { useAdminSession } from '../../shared/stores/admin-session.store';
+import { useAccount } from '../../shared/stores/session.store';
 import { cn, formatCurrency } from '../../lib/utils';
 import {
   AlertTriangle, Calendar, Clock, ConciergeBell, DollarSign, RotateCw, Scissors, Stethoscope, Wallet,
@@ -33,7 +33,7 @@ const WORKSPACE_ICON: Record<Exclude<Workspace, 'admin'>, typeof ConciergeBell> 
 };
 
 export function AdminDashboardPage() {
-  const { user } = useAdminSession();
+  const account = useAccount();
   const summary = useDashboardSummary();
   const s = summary.data;
 
@@ -45,7 +45,7 @@ export function AdminDashboardPage() {
   ];
 
   const kindTotal = s ? Object.values(s.byKind).reduce((a, b) => a + b, 0) : 0;
-  const workspaces = (user ? getAccessibleWorkspaces(user) : []).filter(
+  const workspaces = (account ? getAccessibleWorkspaces(account.role) : []).filter(
     (ws): ws is Exclude<Workspace, 'admin'> => ws !== 'admin',
   );
 

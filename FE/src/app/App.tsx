@@ -33,13 +33,17 @@ import { LoginPage } from '../pages/auth/LoginPage';
 import { RegisterPage } from '../pages/auth/RegisterPage';
 import { VerifyOtpPage } from '../pages/auth/VerifyOtpPage';
 import { ForgotPasswordPage } from '../pages/auth/ForgotPasswordPage';
+import { ChangePasswordPage } from '../pages/auth/ChangePasswordPage';
 import { TermsPage, PrivacyPage } from '../pages/legal/LegalPage';
 import { NewsPage } from '../pages/news/NewsPage';
+import { RequireRole } from '../shared/components/auth/RequireRole';
+import { ROUTES } from '../shared/constants/routes';
+import { useAccount } from '../shared/stores/session.store';
+import { ALL_ROLES, STAFF_ROLES } from '../shared/types/auth';
 
 // Staff workspaces (lazy: each workspace is its own chunk)
 import { WorkspaceLayout } from '../components/staff/WorkspaceLayout';
-import { StaffHome, WorkspaceRoute } from '../components/staff/WorkspaceRoute';
-import { WORKSPACE_PATHS } from '../shared/constants/workspaces';
+import { WORKSPACE_PATHS, WORKSPACE_ROLES, homePathFor } from '../shared/constants/workspaces';
 const ReceptionWorkspacePage = lazy(() => import('../pages/staff/ReceptionWorkspacePage').then((m) => ({ default: m.ReceptionWorkspacePage })));
 const DoctorWorkspacePage = lazy(() => import('../pages/staff/DoctorWorkspacePage').then((m) => ({ default: m.DoctorWorkspacePage })));
 const GroomingWorkspacePage = lazy(() => import('../pages/staff/GroomingWorkspacePage').then((m) => ({ default: m.GroomingWorkspacePage })));
@@ -75,40 +79,65 @@ const queryClient = new QueryClient({
   defaultOptions: { queries: { staleTime: 60_000, refetchOnWindowFocus: false } },
 });
 
+/** Nhân viên tuyến đầu: có ít nhất một bàn làm việc. */
+const FRONT_LINE_ROLES = [...new Set([...WORKSPACE_ROLES.reception, ...WORKSPACE_ROLES.doctor, ...WORKSPACE_ROLES.grooming])];
+
+/** /staff, /admin → trang đầu của role. */
+function StaffHome() {
+  const account = useAccount();
+  return <Navigate to={account ? homePathFor(account.role) : ROUTES.staffLogin} replace />;
+}
+
+const staffOnly = (roles: typeof STAFF_ROLES, page: React.ReactNode) => (
+  <RequireRole roles={roles} loginPath={ROUTES.staffLogin}>
+    {page}
+  </RequireRole>
+);
+
 export function App() {
   return (
     <QueryClientProvider client={queryClient}>
       <Routes>
-        {/* Public Layout */}
+        {/* Public: header/footer công khai */}
         <Route element={<PublicLayout />}>
           <Route path="/" element={<HomePage />} />
+          <Route path="/about" element={<AboutPage />} />
+          <Route path="/hotel" element={<HotelPage />} />
+          <Route path="/news" element={<NewsPage />} />
+          <Route path="/help" element={<HelpPage />} />
+          <Route path="/terms" element={<TermsPage />} />
+          <Route path="/privacy" element={<PrivacyPage />} />
+
+          {/* Mọi role đã đăng nhập: hồ sơ cá nhân (UC06), đổi mật khẩu (UC05) */}
+          <Route element={<RequireRole roles={ALL_ROLES} />}>
+            <Route path="/account" element={<AccountPage />} />
+            <Route path="/security" element={<SecurityPage />} />
+          </Route>
+
+          {/* Khu khách hàng (A02) */}
+          <Route element={<RequireRole roles={['CUSTOMER']} />}>
+            <Route path="/booking" element={<BookingPage />} />
+            <Route path="/pets" element={<PetsPage />} />
+            <Route path="/appointments" element={<AppointmentsPage />} />
+            <Route path="/notifications" element={<NotificationsPage />} />
+            <Route path="/settings" element={<SettingsPage />} />
+            <Route path="/review" element={<ReviewsPage />} />
+          </Route>
+
+          {/* Trang của spec cũ, ngoài phạm vi GĐ1 v16 (gỡ ở T57) */}
           <Route path="/shop" element={<ShopPage />} />
           <Route path="/shop/:id" element={<ProductDetailPage />} />
           <Route path="/cart" element={<CartPage />} />
           <Route path="/checkout" element={<CheckoutPage />} />
           <Route path="/order/:id" element={<OrderConfirmationPage />} />
-          <Route path="/booking" element={<BookingPage />} />
-          <Route path="/pets" element={<PetsPage />} />
-          <Route path="/account" element={<AccountPage />} />
           <Route path="/orders" element={<OrderHistoryPage />} />
           <Route path="/favorites" element={<FavoritesPage />} />
-          <Route path="/notifications" element={<NotificationsPage />} />
           <Route path="/payment" element={<PaymentPage />} />
-          <Route path="/security" element={<SecurityPage />} />
-          <Route path="/settings" element={<SettingsPage />} />
-          <Route path="/help" element={<HelpPage />} />
           <Route path="/membership" element={<MembershipPage />} />
           <Route path="/caregivers" element={<CaregiversPage />} />
           <Route path="/vouchers" element={<VouchersPage />} />
-          <Route path="/appointments" element={<AppointmentsPage />} />
           <Route path="/packages" element={<PackagesPage />} />
-          <Route path="/review" element={<ReviewsPage />} />
-          <Route path="/about" element={<AboutPage />} />
           <Route path="/recommend" element={<RecommendPage />} />
-          <Route path="/hotel" element={<HotelPage />} />
-          <Route path="/news" element={<NewsPage />} />
-          <Route path="/terms" element={<TermsPage />} />
-          <Route path="/privacy" element={<PrivacyPage />} />
         </Route>
 
         {/* Auth Routes (without header/footer layout) */}
@@ -116,18 +145,19 @@ export function App() {
         <Route path="/auth/register" element={<RegisterPage />} />
         <Route path="/auth/verify-otp" element={<VerifyOtpPage />} />
         <Route path="/auth/forgot" element={<ForgotPasswordPage />} />
+        <Route path={ROUTES.changePassword} element={<ChangePasswordPage />} />
 
         {/* Staff workspaces */}
-        <Route path="/staff" element={<StaffHome />} />
-        <Route element={<WorkspaceLayout />}>
-          <Route path={WORKSPACE_PATHS.reception} element={<WorkspaceRoute workspace="reception"><ReceptionWorkspacePage /></WorkspaceRoute>} />
-          <Route path={WORKSPACE_PATHS.doctor} element={<WorkspaceRoute workspace="doctor"><DoctorWorkspacePage /></WorkspaceRoute>} />
-          <Route path={WORKSPACE_PATHS.grooming} element={<WorkspaceRoute workspace="grooming"><GroomingWorkspacePage /></WorkspaceRoute>} />
+        <Route path="/staff" element={staffOnly(STAFF_ROLES, <StaffHome />)} />
+        <Route element={staffOnly(FRONT_LINE_ROLES, <WorkspaceLayout />)}>
+          <Route path={WORKSPACE_PATHS.reception} element={staffOnly(WORKSPACE_ROLES.reception, <ReceptionWorkspacePage />)} />
+          <Route path={WORKSPACE_PATHS.doctor} element={staffOnly(WORKSPACE_ROLES.doctor, <DoctorWorkspacePage />)} />
+          <Route path={WORKSPACE_PATHS.grooming} element={staffOnly(WORKSPACE_ROLES.grooming, <GroomingWorkspacePage />)} />
         </Route>
 
         {/* Admin Routes */}
-        <Route path="/admin" element={<Navigate to="/admin/dashboard" replace />} />
-        <Route path="/admin/login" element={<AdminLoginPage />} />
+        <Route path="/admin" element={staffOnly(STAFF_ROLES, <StaffHome />)} />
+        <Route path={ROUTES.staffLogin} element={<AdminLoginPage />} />
         <Route element={<AdminLayout />}>
           <Route path="/admin/dashboard" element={<AdminDashboardPage />} />
           <Route path="/admin/pos" element={<AdminPOSPage />} />

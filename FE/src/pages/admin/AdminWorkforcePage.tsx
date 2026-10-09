@@ -4,7 +4,7 @@ import { Button } from '../../components/ui/button';
 import { Badge } from '../../components/ui/badge';
 import { Input } from '../../components/ui/input';
 import { Search, Plus, Users, Clock, UserCheck, AlertTriangle, Eye } from 'lucide-react';
-import { ROLE_LABELS } from '../../shared/types/admin';
+import { ROLE_LABELS } from '../../shared/types/auth';
 import { DetailModal, FormModal, InfoRow } from '../../components/ui/modal-templates';
 
 interface Staff {
@@ -14,10 +14,10 @@ interface Staff {
 }
 
 const MOCK_STAFF: Staff[] = [
-  { id: '1', name: 'Nguyễn Văn A', email: 'nva@petcare.vn', phone: '0901234567', role: 'STORE_MANAGER', department: 'Quản lý', status: 'WORKING', shift: 'MORNING', checkInTime: '08:00' },
+  { id: '1', name: 'Nguyễn Văn A', email: 'nva@petcare.vn', phone: '0901234567', role: 'BRANCH_MANAGER', department: 'Quản lý', status: 'WORKING', shift: 'MORNING', checkInTime: '08:00' },
   { id: '2', name: 'Trần Thị B', email: 'ttb@petcare.vn', phone: '0912345678', role: 'RECEPTIONIST', department: 'Lễ tân', status: 'WORKING', shift: 'MORNING', checkInTime: '08:05' },
-  { id: '3', name: 'Lê Văn C', email: 'lvc@petcare.vn', phone: '0923456789', role: 'VETERINARIAN', department: 'Y tế', status: 'WORKING', shift: 'MORNING', checkInTime: '08:15' },
-  { id: '4', name: 'Phạm Thị D', email: 'ptd@petcare.vn', phone: '0934567890', role: 'GROOMER', department: 'Grooming', status: 'ON_LEAVE', shift: 'AFTERNOON' },
+  { id: '3', name: 'Lê Văn C', email: 'lvc@petcare.vn', phone: '0923456789', role: 'VET', department: 'Y tế', status: 'WORKING', shift: 'MORNING', checkInTime: '08:15' },
+  { id: '4', name: 'Phạm Thị D', email: 'ptd@petcare.vn', phone: '0934567890', role: 'CARETAKER', department: 'Grooming', status: 'ON_LEAVE', shift: 'AFTERNOON' },
 ];
 
 function StatusBadgeLocal({ status }: { status: Staff['status'] }) {
@@ -95,7 +95,7 @@ export function AdminWorkforcePage() {
           <div><label className="block text-sm font-medium mb-1.5">Họ tên *</label><Input placeholder="Nguyễn Văn A" /></div>
           <div><label className="block text-sm font-medium mb-1.5">Email *</label><Input type="email" placeholder="email@petcare.vn" /></div>
           <div><label className="block text-sm font-medium mb-1.5">Số điện thoại</label><Input placeholder="0901234567" /></div>
-          <div><label className="block text-sm font-medium mb-1.5">Vai trò *</label><select className="w-full h-10 px-3 rounded-lg border border-(--color-border-default) bg-white text-sm focus:outline-none focus:ring-2 focus:ring-accent"><option>STORE_MANAGER</option><option>RECEPTIONIST</option><option>VETERINARIAN</option><option>GROOMER</option></select></div>
+          <div><label className="block text-sm font-medium mb-1.5">Vai trò *</label><select className="w-full h-10 px-3 rounded-lg border border-(--color-border-default) bg-white text-sm focus:outline-none focus:ring-2 focus:ring-accent"><option>BRANCH_MANAGER</option><option>RECEPTIONIST</option><option>VET</option><option>CARETAKER</option></select></div>
           <div><label className="block text-sm font-medium mb-1.5">Bộ phận</label><Input placeholder="Quản lý" /></div>
           <div><label className="block text-sm font-medium mb-1.5">Ca làm việc</label><select className="w-full h-10 px-3 rounded-lg border border-(--color-border-default) bg-white text-sm focus:outline-none focus:ring-2 focus:ring-accent"><option value="MORNING">Ca Sáng</option><option value="AFTERNOON">Ca Chiều</option><option value="EVENING">Ca Tối</option></select></div>
         </div>

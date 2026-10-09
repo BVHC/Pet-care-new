@@ -1,88 +1,81 @@
 import { useState, useEffect } from 'react';
-import { useNavigate, Link } from 'react-router-dom';
-import { DEMO_USERS, ROLE_LABELS, type Role } from '../../shared/types/admin';
-import { WORKSPACE_PATHS, getDefaultWorkspace } from '../../shared/constants/workspaces';
-import { useAdminSession } from '../../shared/stores/admin-session.store';
+import { useNavigate, Link, Navigate, useLocation } from 'react-router-dom';
+import { toast } from 'sonner';
+import { API_MOCK } from '../../shared/api/axios';
+import { toApiError } from '../../shared/api/api-error';
+import { MOCK_ACCOUNTS, MOCK_PASSWORD } from '../../shared/api/mock/identity.mock';
+import { ROUTES } from '../../shared/constants/routes';
+import { homePathFor } from '../../shared/constants/workspaces';
+import { useSession } from '../../shared/stores/session.store';
+import { ROLE_LABELS, type Role } from '../../shared/types/auth';
 import { cn } from '../../lib/utils';
 import {
   PawPrint, ShieldCheck, Building2, Crown,
-  Stethoscope, Scissors, Boxes, Receipt,
+  Stethoscope, Scissors, Receipt,
   Sparkles, CheckCircle2, Sun, Moon, ArrowRight
 } from 'lucide-react';
 
 interface RoleMeta {
-  role: Role;
   icon: React.ElementType;
   subtitle: string;
   permissions: string[];
+  tone: string;
 }
 
+// Theo mô tả actor A02–A08 (docs/01-business-operations.md).
 const ROLE_METAS: Record<Role, RoleMeta> = {
-  SUPER_ADMIN: {
-    role: 'SUPER_ADMIN',
+  ADMIN: {
     icon: ShieldCheck,
-    subtitle: 'Quản trị hệ sinh thái tối cao',
-    permissions: ['Quản lý toàn bộ hệ thống', 'Truy cập tất cả 22 trang nghiệp vụ', 'Multi-tenancy'],
+    subtitle: 'Quản trị kỹ thuật, không làm nghiệp vụ phòng khám',
+    permissions: ['Tài khoản, khóa / mở khóa người dùng', 'Tham số hệ thống & mẫu thông báo', 'Nhật ký audit'],
+    tone: 'bg-red-100 text-red-500',
   },
-  ORG_ADMIN: {
-    role: 'ORG_ADMIN',
+  SUPER_MANAGER: {
     icon: Building2,
-    subtitle: 'Quản trị tổ chức & thương mại',
-    permissions: ['Cấu hình khuyến mãi & voucher', 'Báo cáo chuỗi', 'Nhật ký kiểm toán'],
+    subtitle: 'Quản lý cấp chuỗi, mọi chi nhánh',
+    permissions: ['Chi nhánh, danh mục, giá, phác đồ tiêm', 'Nhân viên toàn chuỗi', 'Nội dung trang & báo cáo toàn chuỗi'],
+    tone: 'bg-purple-100 text-purple-500',
   },
-  STORE_MANAGER: {
-    role: 'STORE_MANAGER',
+  BRANCH_MANAGER: {
     icon: Crown,
-    subtitle: 'Quản lý vận hành chi nhánh',
-    permissions: ['Full access cửa hàng', 'Duyệt hoàn tiền Maker-Checker', 'Điều phối nhân sự'],
+    subtitle: 'Quản lý một chi nhánh',
+    permissions: ['Giờ mở cửa, quota lịch hẹn, chuồng', 'Nhập kho & đối soát ca thu ngân', 'Báo cáo chi nhánh'],
+    tone: 'bg-blue-100 text-blue-500',
   },
   RECEPTIONIST: {
-    role: 'RECEPTIONIST',
     icon: Receipt,
-    subtitle: 'Tiếp đón, Bán lẻ POS & Thu ngân',
-    permissions: ['Quầy POS', 'Check-in lịch hẹn', 'Hàng chờ Walk-in'],
+    subtitle: 'Lễ tân kiêm thu ngân',
+    permissions: ['Tiếp nhận & điều phối hàng đợi', 'Bán hàng, thu tiền', 'Nhận / trả thú lưu trú'],
+    tone: 'bg-cyan-100 text-cyan-500',
   },
-  VETERINARIAN: {
-    role: 'VETERINARIAN',
+  VET: {
     icon: Stethoscope,
-    subtitle: 'Bác sĩ thú y & Bệnh án EMR',
-    permissions: ['Khám bệnh lâm sàng', 'Hồ sơ EMR', 'Tiêm chủng'],
+    subtitle: 'Bác sĩ thú y',
+    permissions: ['Khám, chẩn đoán, kê đơn', 'Tiêm chủng', 'Bệnh án & nhật ký chăm sóc'],
+    tone: 'bg-green-100 text-green-500',
   },
-  GROOMER: {
-    role: 'GROOMER',
+  CARETAKER: {
     icon: Scissors,
-    subtitle: 'Chăm sóc & Dịch vụ Grooming Spa',
-    permissions: ['Bảng điều phối grooming', 'Cập nhật tiến trình Spa'],
-  },
-  INVENTORY_STAFF: {
-    role: 'INVENTORY_STAFF',
-    icon: Boxes,
-    subtitle: 'Quản lý kho hàng & Mua hàng',
-    permissions: ['Nhập - Xuất - Tồn kho', 'Đơn mua hàng NCC', 'Vaccine & hạn dùng'],
-  },
-  FINANCE_STAFF: {
-    role: 'FINANCE_STAFF',
-    icon: Receipt,
-    subtitle: 'Kế toán, Hóa đơn & Đối soát',
-    permissions: ['Quản lý hóa đơn', 'Đối soát thanh toán', 'Xử lý hoàn tiền'],
+    subtitle: 'Nhân viên chăm sóc',
+    permissions: ['Dịch vụ thẩm mỹ', 'Nhận thú lưu trú', 'Nhật ký chăm sóc'],
+    tone: 'bg-pink-100 text-pink-500',
   },
   CUSTOMER: {
-    role: 'CUSTOMER',
     icon: Sparkles,
-    subtitle: 'Khách hàng B2C',
-    permissions: ['Portal mua sắm', 'Đặt lịch dịch vụ'],
+    subtitle: 'Chủ thú cưng',
+    permissions: ['Hồ sơ & thú cưng', 'Đặt lịch khám, lưu trú', 'Gửi feedback'],
+    tone: 'bg-amber-100 text-amber-500',
   },
 };
 
-const SELECTABLE_ROLES: Role[] = [
-  'SUPER_ADMIN', 'ORG_ADMIN', 'STORE_MANAGER', 'RECEPTIONIST',
-  'VETERINARIAN', 'GROOMER', 'INVENTORY_STAFF', 'FINANCE_STAFF',
-];
-
+/** Đăng nhập nhanh bằng tài khoản demo của lớp mock API; tắt mock thì dùng trang đăng nhập thật. */
 export function AdminLoginPage() {
   const navigate = useNavigate();
-  const { login } = useAdminSession();
-  const [selectedRole, setSelectedRole] = useState<Role>('STORE_MANAGER');
+  const location = useLocation();
+  const from = (location.state as { from?: string } | null)?.from;
+  const login = useSession((s) => s.login);
+  const [selectedEmail, setSelectedEmail] = useState('manager@store1.vn');
+  const [loading, setLoading] = useState(false);
   const [isDark, setIsDark] = useState(false);
 
   useEffect(() => {
@@ -94,24 +87,29 @@ export function AdminLoginPage() {
     }
   }, []);
 
+  if (!API_MOCK) return <Navigate to={ROUTES.login} replace state={location.state} />;
+
   const toggleTheme = () => {
     setIsDark(!isDark);
     document.documentElement.classList.toggle('dark');
     localStorage.setItem('theme', !isDark ? 'dark' : 'light');
   };
 
-  const handleLogin = () => {
-    const user = DEMO_USERS.find(u => u.role === selectedRole);
-    if (user) {
-      login(user);
-      const home = getDefaultWorkspace(user);
-      navigate(home ? WORKSPACE_PATHS[home] : '/admin/dashboard');
+  const selected = MOCK_ACCOUNTS.find((a) => a.email === selectedEmail) ?? MOCK_ACCOUNTS[0];
+  const meta = ROLE_METAS[selected.role];
+  const IconComponent = meta.icon;
+
+  const handleLogin = async () => {
+    setLoading(true);
+    try {
+      const account = await login({ email: selected.email, password: MOCK_PASSWORD });
+      navigate(from ?? homePathFor(account.role));
+    } catch (error) {
+      toast.error(toApiError(error).message);
+    } finally {
+      setLoading(false);
     }
   };
-
-  const selectedUser = DEMO_USERS.find(u => u.role === selectedRole);
-  const meta = ROLE_METAS[selectedRole];
-  const IconComponent = meta.icon;
 
   return (
     <div className="min-h-screen flex items-center justify-center p-6 bg-(--bg-secondary)">
@@ -146,23 +144,21 @@ export function AdminLoginPage() {
         <div className="bg-(--bg-primary) rounded-2xl border border-(--border-color) shadow-lg overflow-hidden">
           <div className="grid grid-cols-1 lg:grid-cols-5">
 
-            {/* Left Panel - Role Selection */}
+            {/* Left Panel - Account Selection */}
             <div className="lg:col-span-2 bg-(--bg-secondary) p-6 border-b lg:border-b-0 lg:border-r border-(--border-color)">
               <h2 className="text-sm font-semibold text-(--text-secondary) uppercase tracking-wider mb-4">
-                Chọn vai trò demo
+                Chọn tài khoản demo
               </h2>
 
               <div className="space-y-1.5">
-                {SELECTABLE_ROLES.map((role) => {
-                  const isSelected = selectedRole === role;
-                  const roleMeta = ROLE_METAS[role];
-                  const RIcon = roleMeta.icon;
-                  const userObj = DEMO_USERS.find(u => u.role === role);
+                {MOCK_ACCOUNTS.map((account) => {
+                  const isSelected = selected.email === account.email;
+                  const RIcon = ROLE_METAS[account.role].icon;
 
                   return (
                     <button
-                      key={role}
-                      onClick={() => setSelectedRole(role)}
+                      key={account.email}
+                      onClick={() => setSelectedEmail(account.email)}
                       className={cn(
                         'w-full flex items-center gap-3 p-3 rounded-xl transition-all text-left',
                         isSelected
@@ -181,9 +177,12 @@ export function AdminLoginPage() {
                           'font-medium text-sm truncate',
                           isSelected ? 'text-(--color-primary-dark)' : 'text-(--text-primary)'
                         )}>
-                          {userObj?.name}
+                          {account.fullName}
                         </p>
-                        <p className="text-xs text-(--text-tertiary)">{ROLE_LABELS[role]}</p>
+                        <p className="text-xs text-(--text-tertiary)">
+                          {ROLE_LABELS[account.role]}
+                          {account.mustChangePassword && ' · phải đổi mật khẩu'}
+                        </p>
                       </div>
                       {isSelected && (
                         <CheckCircle2 className="h-4 w-4 text-(--color-primary) shrink-0" />
@@ -198,34 +197,14 @@ export function AdminLoginPage() {
             <div className="lg:col-span-3 p-8 lg:p-10">
               {/* Selected Role Display */}
               <div className="mb-8">
-                <div className={cn(
-                  'w-14 h-14 rounded-xl flex items-center justify-center mb-4 transition-colors',
-                  selectedRole === 'SUPER_ADMIN' ? 'bg-red-100' :
-                  selectedRole === 'ORG_ADMIN' ? 'bg-purple-100' :
-                  selectedRole === 'STORE_MANAGER' ? 'bg-blue-100' :
-                  selectedRole === 'RECEPTIONIST' ? 'bg-cyan-100' :
-                  selectedRole === 'VETERINARIAN' ? 'bg-green-100' :
-                  selectedRole === 'GROOMER' ? 'bg-pink-100' :
-                  selectedRole === 'INVENTORY_STAFF' ? 'bg-amber-100' :
-                  selectedRole === 'FINANCE_STAFF' ? 'bg-teal-100' : 'bg-gray-100'
-                )}>
-                  <IconComponent className={cn(
-                    'h-7 w-7',
-                    selectedRole === 'SUPER_ADMIN' ? 'text-red-500' :
-                    selectedRole === 'ORG_ADMIN' ? 'text-purple-500' :
-                    selectedRole === 'STORE_MANAGER' ? 'text-blue-500' :
-                    selectedRole === 'RECEPTIONIST' ? 'text-cyan-500' :
-                    selectedRole === 'VETERINARIAN' ? 'text-green-500' :
-                    selectedRole === 'GROOMER' ? 'text-pink-500' :
-                    selectedRole === 'INVENTORY_STAFF' ? 'text-amber-500' :
-                    selectedRole === 'FINANCE_STAFF' ? 'text-teal-500' : 'text-gray-500'
-                  )} />
+                <div className={cn('w-14 h-14 rounded-xl flex items-center justify-center mb-4 transition-colors', meta.tone)}>
+                  <IconComponent className="h-7 w-7" />
                 </div>
                 <h2 className="text-2xl font-semibold text-(--text-primary) mb-1">
-                  {selectedUser?.name}
+                  {selected.fullName}
                 </h2>
                 <p className="text-(--text-secondary)">
-                  {meta.subtitle}
+                  {meta.subtitle} · {selected.email}
                 </p>
               </div>
 
@@ -249,20 +228,21 @@ export function AdminLoginPage() {
               {/* Login Button */}
               <button
                 onClick={handleLogin}
+                disabled={loading}
                 className={cn(
                   'w-full py-3.5 rounded-xl font-semibold text-white transition-all',
-                  'bg-(--color-primary) hover:bg-(--color-primary-hover)',
+                  'bg-(--color-primary) hover:bg-(--color-primary-hover) disabled:opacity-60',
                   'shadow-lg shadow-blue-500/20',
                   'flex items-center justify-center gap-2'
                 )}
               >
-                <span>Đăng nhập với vai trò {ROLE_LABELS[selectedRole]}</span>
+                <span>Đăng nhập với vai trò {ROLE_LABELS[selected.role]}</span>
                 <ArrowRight className="h-4 w-4" />
               </button>
 
               {/* Footer */}
               <p className="text-center text-xs text-(--text-tertiary) mt-6">
-                Demo mode - Không cần mật khẩu
+                Tài khoản của lớp mock API · mật khẩu chung {MOCK_PASSWORD}
               </p>
             </div>
           </div>
