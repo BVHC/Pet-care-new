@@ -115,7 +115,10 @@ m.schema("LinkCandidate", {
     "customerId": "int64", "maskedFullName": "string|Ví dụ Ng*** V** A (BR-TK-19)",
     "hasEmail": "bool|false: không liên kết online được, hướng dẫn ra quầy",
 })
-m.schema("LinkOtpRequest", {"customerId": "int64|Hồ sơ tại quầy chọn từ danh sách gợi ý"})
+m.schema("LinkOtpRequest", {
+    "customerId": "int64|Hồ sơ tại quầy chọn từ danh sách gợi ý",
+    "phone": "phone?|SĐT đã dùng ở `GET /me/link-candidates`; bỏ trống = SĐT đã khai trên hồ sơ online. Chỉ gửi mã khi `customerId` là ứng viên của SĐT này (ADR-0027)",
+})
 m.schema("LinkConfirmRequest", {"customerId": "int64", "code": "string"})
 m.schema("LinkResult", {"customerId": "int64|Hồ sơ khách mà tài khoản đang gắn sau khi liên kết"})
 m.schema("StaffResponse", {
@@ -223,17 +226,22 @@ m.op("patch", "/me/staff-profile", "updateMyStaffProfile", "Sửa hồ sơ nhân
 m.op("get", "/me/link-candidates", "listLinkCandidates", "Danh sách hồ sơ tại quầy có thể liên kết", "Profile link",
      "UC07", "BR-TK-19, BR-KH-10", "A02", "Khách đang đăng nhập", resp="array:LinkCandidate",
      query=["phone=phone|SĐT của hồ sơ tại quầy (UC07 khi không có cờ); bỏ trống = SĐT đã khai trên hồ sơ online"],
-     errors=(400, 401, 403), err_desc={400: "`BR-TK-19` hồ sơ online đã phát sinh dữ liệu, không liên kết được"},
-     notes="Chỉ trả hồ sơ COUNTER chưa liên kết, họ tên đã che.")
+     errors=(400, 401, 403), err_desc={400: "`BR-TK-19` hồ sơ online đã phát sinh dữ liệu, hoặc tài khoản đã liên kết hồ sơ tại quầy · `VALIDATION_FAILED` `phone` sai định dạng"},
+     notes="Chỉ trả hồ sơ COUNTER chưa liên kết, họ tên đã che; không có thì mảng rỗng (ADR-0027).")
 m.op("post", "/me/link/otp", "sendLinkOtp", "Gửi OTP tới email hồ sơ tại quầy", "Profile link", "UC07",
      "BR-TK-04, 07, 19", "A02", "Khách đang đăng nhập", body="LinkOtpRequest", resp="OtpSentResponse",
-     errors=(400, 401, 404), err_desc={400: "`BR-TK-19` hồ sơ không có email (ra quầy) hoặc hồ sơ online đã có dữ liệu · `BR-TK-07` gửi quá nhanh / quá 5 mã/giờ"})
+     errors=(400, 401, 403, 404), err_desc={400: "`BR-TK-19` hồ sơ không có email (ra quầy), hồ sơ online đã có dữ liệu hoặc tài khoản đã liên kết · `BR-TK-11` tài khoản vừa bị khóa · `BR-TK-07` gửi quá nhanh / quá 5 mã/giờ",
+                                          404: "Hồ sơ không tồn tại hoặc không phải ứng viên của SĐT (một thông báo chung)"},
+     notes="Thứ tự kiểm: BR-TK-11 → 404 → BR-TK-19 → BR-TK-07. Mã gửi tới email ghi trong hồ sơ tại quầy (BR-TK-04); gọi lại = gửi lại (BR-TK-07, mã mới hủy mã liên kết cũ của tài khoản). `maskedEmail` là email đó đã che (ADR-0027).")
 m.op("post", "/me/link/confirm", "confirmLink", "Xác nhận liên kết", "Profile link", "UC07",
      "BR-TK-05, 06, 19", "A02", "Khách đang đăng nhập", body="LinkConfirmRequest", resp="LinkResult",
-     errors=(400, 401, 404), err_desc={400: OTP_ERR + " · `BR-TK-19` hồ sơ online đã phát sinh dữ liệu"},
-     notes="Gắn tài khoản vào hồ sơ tại quầy, xóa hồ sơ online, email hồ sơ theo email tài khoản, ghi audit.")
+     errors=(400, 401, 403, 404), err_desc={400: OTP_ERR + " (sai mã vẫn được tính) · `BR-TK-19` hồ sơ online đã phát sinh dữ liệu / tài khoản đã liên kết / hồ sơ tại quầy vừa được liên kết hoặc đổi email — mã vẫn dùng lại được · `BR-TK-11` tài khoản vừa bị khóa",
+                                          404: "Hồ sơ không tồn tại"},
+     notes="Gắn tài khoản vào hồ sơ tại quầy, xóa hồ sơ online cùng sổ địa chỉ của nó, email hồ sơ theo email tài khoản, SĐT giữ nguyên, ghi audit `CUSTOMER_PROFILE_LINKED` (ADR-0027). Sau lỗi mạng, đọc lại `GET /me` để biết đã liên kết chưa.")
 m.op("post", "/me/link/decline", "declineLink", "Chọn \"Không phải tôi\"", "Profile link", "UC07", "BR-TK-19",
-     "A02", "Khách đang đăng nhập", status=204, errors=(401, 409), err_desc={409: "Hồ sơ không còn cờ chờ quyết định"})
+     "A02", "Khách đang đăng nhập", status=204, errors=(400, 401, 403, 409),
+     err_desc={400: "`BR-TK-11` tài khoản vừa bị khóa", 409: "`INVALID_STATE_TRANSITION` hồ sơ không còn cờ chờ quyết định"},
+     notes="Không audit (ADR-0027).")
 
 m.op("get", "/staff", "listStaff", "Danh sách nhân viên", "Staff", "UC08", "BR-QT-01, 07", "A03, A04, A05",
      "ADMIN: SUPER_MANAGER · SUPER_MANAGER: A05–A08 · BRANCH_MANAGER: A06–A08 chi nhánh mình", resp="StaffResponse",
