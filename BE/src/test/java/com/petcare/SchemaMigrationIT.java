@@ -127,9 +127,10 @@ class SchemaMigrationIT {
         // V4 index luồng gửi + câu chào OTP_REGISTER (docs/adr/0012), V5 hạn PENDING cho ST02 (docs/adr/0013),
         // V6 index partial luồng IN_APP (docs/adr/0014), V7 index cho FK trỏ tới accounts (docs/adr/0018),
         // V8 seed mẫu OTP_PASSWORD_RESET, LOGIN_LOCKED_WARNING, PASSWORD_CHANGED (docs/adr/0019),
-        // V9 mẫu OTP_PROFILE_LINK + index otp_tokens.customer_id (docs/adr/0025)
+        // V9 mẫu OTP_PROFILE_LINK + index otp_tokens.customer_id (docs/adr/0025),
+        // V10 index addresses.customer_id (docs/adr/0028)
         assertThat(rows).extracting(row -> row.get("version"))
-                .containsExactly("1", "2", "3", "4", "5", "6", "7", "8", "9");
+                .containsExactly("1", "2", "3", "4", "5", "6", "7", "8", "9", "10");
         assertThat(rows).allSatisfy(row -> assertThat(row).containsEntry("success", true));
     }
 
@@ -396,8 +397,8 @@ class SchemaMigrationIT {
 
     /**
      * V9 (docs/adr/0025): {@code otp_tokens.customer_id} có index dùng được cho kiểm FK khi xóa hồ sơ online (BR-TK-19,
-     * ST02). Các cột FK → {@code customers} còn thiếu index là đúng danh sách nợ D013; trả nợ (hoặc thêm cột FK mới) thì
-     * sửa danh sách này cùng sổ nợ.
+     * ST02); V10 (docs/adr/0028): {@code addresses.customer_id} cũng có. Các cột FK → {@code customers} còn thiếu index
+     * là đúng danh sách nợ D013; trả nợ (hoặc thêm cột FK mới) thì sửa danh sách này cùng sổ nợ.
      */
     @Test
     void foreignKeysToCustomersWithoutUsableIndexAreExactlyDebtD013() {
@@ -414,8 +415,8 @@ class SchemaMigrationIT {
                 ORDER BY 1
                 """, String.class);
 
-        assertThat(unindexed).doesNotContain("otp_tokens.customer_id")
-                .as("nợ D013").containsExactlyInAnyOrder("addresses.customer_id", "boarding_bookings.customer_id",
+        assertThat(unindexed).doesNotContain("otp_tokens.customer_id", "addresses.customer_id")
+                .as("nợ D013").containsExactlyInAnyOrder("boarding_bookings.customer_id",
                         "care_tasks.customer_id", "payments.customer_id", "visits.customer_id");
     }
 

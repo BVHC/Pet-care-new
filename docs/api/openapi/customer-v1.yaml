@@ -79,7 +79,7 @@ paths:
                     type: integer
                     description: "HTTP status của kết quả, ví dụ 200, 201"
         "400":
-          description: "`BR-TK-15` cố sửa email · dữ liệu không hợp lệ"
+          description: "`BR-TK-15` cố sửa email · `BR-KH-01` xóa SĐT của hồ sơ tại quầy · dữ liệu không hợp lệ"
           content:
             "application/json":
               schema:
@@ -92,7 +92,7 @@ paths:
     get:
       tags: ["My profile"]
       summary: "Sổ địa chỉ"
-      description: "UC06 · BR-TK-18. Actor: A02. Quyền: Khách đang đăng nhập. Chuyển trạng thái: —."
+      description: "UC06 · BR-TK-18. Actor: A02. Quyền: Khách đang đăng nhập. Chuyển trạng thái: —. Mặc định trước, rồi theo thứ tự thêm (A7)."
       operationId: listMyAddresses
       security:
         - bearerAuth: []
@@ -121,7 +121,7 @@ paths:
     post:
       tags: ["My profile"]
       summary: "Thêm địa chỉ"
-      description: "UC06 · BR-TK-18. Actor: A02. Quyền: Khách đang đăng nhập. Chuyển trạng thái: —."
+      description: "UC06 · BR-TK-18. Actor: A02. Quyền: Khách đang đăng nhập. Chuyển trạng thái: —. Sổ rỗng thì địa chỉ đầu luôn là mặc định (A6)."
       operationId: createMyAddress
       security:
         - bearerAuth: []
@@ -225,7 +225,7 @@ paths:
     post:
       tags: ["My profile"]
       summary: "Đặt địa chỉ mặc định"
-      description: "UC06 · BR-TK-18. Actor: A02. Quyền: Chủ địa chỉ. Chuyển trạng thái: —. Bỏ cờ mặc định của địa chỉ cũ trong cùng transaction."
+      description: "UC06 · BR-TK-18. Actor: A02. Quyền: Chủ địa chỉ. Chuyển trạng thái: —. Bỏ cờ mặc định của địa chỉ cũ trong cùng transaction; đã là mặc định thì trả về như cũ."
       operationId: setDefaultAddress
       security:
         - bearerAuth: []
@@ -920,6 +920,7 @@ components:
           type: [string, "null"]
           format: email
           maxLength: 255
+          description: "Ở /me/customer-profile là email tài khoản (A9)"
         avatarUrl:
           type: [string, "null"]
           maxLength: 500
@@ -932,18 +933,20 @@ components:
           type: boolean
     UpdateMyCustomerProfileRequest:
       type: object
-      description: "Email không tự sửa được (BR-TK-15)"
+      description: "Email không tự sửa được (BR-TK-15); gửi `email` → 400 BR-TK-15"
       properties:
         fullName:
           type: [string, "null"]
           maxLength: 100
+          description: "null = giữ; không được rỗng"
         phone:
           type: [string, "null"]
-          pattern: "^0[0-9]{9,10}$"
           maxLength: 15
+          description: "`0xxxxxxxxx` (10 số); null = giữ; chuỗi rỗng = xóa — hồ sơ tại quầy không xóa được (BR-KH-01)"
         avatarUrl:
           type: [string, "null"]
           maxLength: 500
+          description: "`https://…`; null = giữ; chuỗi rỗng = xóa (docs/adr/0028)"
     Address:
       type: object
       required: [addressId, receiverName, receiverPhone, addressLine, province, isDefault]
@@ -956,7 +959,7 @@ components:
           maxLength: 100
         receiverPhone:
           type: string
-          pattern: "^0[0-9]{9,10}$"
+          pattern: "^0[0-9]{9}$"
           maxLength: 15
         addressLine:
           type: string
@@ -978,7 +981,7 @@ components:
           maxLength: 100
         receiverPhone:
           type: string
-          pattern: "^0[0-9]{9,10}$"
+          pattern: "^0[0-9]{9}$"
           maxLength: 15
         addressLine:
           type: string
@@ -991,26 +994,32 @@ components:
           maxLength: 100
         isDefault:
           type: [boolean, "null"]
-          description: "Địa chỉ đầu tiên luôn là mặc định"
+          description: "Địa chỉ đầu tiên luôn là mặc định (A6)"
     UpdateAddressRequest:
       type: object
+      description: "Cờ mặc định chỉ đổi qua set-default"
       properties:
         receiverName:
           type: [string, "null"]
           maxLength: 100
+          description: "null = giữ; không được rỗng"
         receiverPhone:
           type: [string, "null"]
-          pattern: "^0[0-9]{9,10}$"
+          pattern: "^0[0-9]{9}$"
           maxLength: 15
+          description: "null = giữ"
         addressLine:
           type: [string, "null"]
           maxLength: 300
+          description: "null = giữ; không được rỗng"
         ward:
           type: [string, "null"]
           maxLength: 100
+          description: "null = giữ; chuỗi rỗng = xóa"
         province:
           type: [string, "null"]
           maxLength: 100
+          description: "null = giữ; không được rỗng"
     PetBrief:
       type: object
       required: [petId, name, species, deceased]

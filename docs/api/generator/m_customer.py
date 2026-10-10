@@ -30,6 +30,10 @@ m = Module(
         ("A3", "Xác nhận 2 bước khi đánh dấu đã mất làm ở giao diện; API yêu cầu `confirmed = true`", "BR-KH-05 'xác nhận 2 bước'"),
         ("A4", "Chuyển chủ yêu cầu `previousOwnerConfirmed = true` do lễ tân tích", "BR-KH-08 'khi chủ cũ có mặt hoặc đã xác nhận' — hệ thống không có kênh xác nhận riêng"),
         ("A5", "Email hồ sơ chỉ sửa trực tiếp được khi hồ sơ chưa gắn tài khoản; hồ sơ có tài khoản thì email theo tài khoản (sửa ở identity)", "BR-TK-16, BR-TK-19: email hồ sơ cập nhật theo email tài khoản"),
+        ("A6", "Sổ địa chỉ đang rỗng thì địa chỉ thêm vào luôn là mặc định, kể cả khi gửi `isDefault = false`; xóa địa chỉ mặc định duy nhất được phép (sổ thành rỗng)", "BR-TK-18 'đúng 1 địa chỉ mặc định'; docs/adr/0028"),
+        ("A7", "`GET /me/addresses` trả mảng: địa chỉ mặc định trước, rồi theo thứ tự thêm", "Docs không quy định thứ tự; docs/adr/0028"),
+        ("A8", "Địa chỉ của khách khác trả 404 cùng message với id không tồn tại", "Không lộ id đang có; docs/adr/0028"),
+        ("A9", "`CustomerProfile.email` ở `/me/customer-profile` là email của tài khoản đang đăng nhập", "BR-KH-01 'email lấy theo tài khoản', A5; docs/adr/0028"),
     ],
     questions=[
         ("Q1", "Ảnh đại diện / ảnh thú cưng tải lên bằng cơ chế nào (upload trực tiếp, presigned URL)? Contract chỉ nhận URL.", "TBD (BE + FE)", "05 chỉ có cột `*_url`"),
@@ -43,23 +47,27 @@ m.param("AddressId", "addressId", "path", "int64")
 m.schema("Species", None, enum=["DOG", "CAT", "OTHER"], desc="Chó, Mèo, Khác (BR-KH-02)")
 m.schema("CustomerProfile", {
     "customerId": "int64", "fullName": "string:100", "phone": "phone?|Bắt buộc với hồ sơ tại quầy",
-    "email": "email?", "avatarUrl": "url?", "createdChannel": "enum:ONLINE,COUNTER",
+    "email": "email?|Ở /me/customer-profile là email tài khoản (A9)", "avatarUrl": "url?", "createdChannel": "enum:ONLINE,COUNTER",
     "hasAccount": "bool", "linkDecisionPending": "bool",
 })
-m.schema("UpdateMyCustomerProfileRequest", {"fullName": "string:100?", "phone": "phone?", "avatarUrl": "url?"},
-         required=[], desc="Email không tự sửa được (BR-TK-15)")
+m.schema("UpdateMyCustomerProfileRequest", {
+    "fullName": "string:100?|null = giữ; không được rỗng",
+    "phone": "string:15?|`0xxxxxxxxx` (10 số); null = giữ; chuỗi rỗng = xóa — hồ sơ tại quầy không xóa được (BR-KH-01)",
+    "avatarUrl": "string:500?|`https://…`; null = giữ; chuỗi rỗng = xóa (docs/adr/0028)",
+}, required=[], desc="Email không tự sửa được (BR-TK-15); gửi `email` → 400 BR-TK-15")
 m.schema("Address", {
-    "addressId": "int64", "receiverName": "string:100", "receiverPhone": "phone", "addressLine": "string:300",
+    "addressId": "int64", "receiverName": "string:100", "receiverPhone": "mobile", "addressLine": "string:300",
     "ward": "string:100?", "province": "string:100", "isDefault": "bool",
 })
 m.schema("AddressRequest", {
-    "receiverName": "string:100", "receiverPhone": "phone", "addressLine": "string:300", "ward": "string:100?",
-    "province": "string:100", "isDefault": "bool?|Địa chỉ đầu tiên luôn là mặc định",
+    "receiverName": "string:100", "receiverPhone": "mobile", "addressLine": "string:300", "ward": "string:100?",
+    "province": "string:100", "isDefault": "bool?|Địa chỉ đầu tiên luôn là mặc định (A6)",
 })
 m.schema("UpdateAddressRequest", {
-    "receiverName": "string:100?", "receiverPhone": "phone?", "addressLine": "string:300?", "ward": "string:100?",
-    "province": "string:100?",
-}, required=[])
+    "receiverName": "string:100?|null = giữ; không được rỗng", "receiverPhone": "mobile?|null = giữ",
+    "addressLine": "string:300?|null = giữ; không được rỗng", "ward": "string:100?|null = giữ; chuỗi rỗng = xóa",
+    "province": "string:100?|null = giữ; không được rỗng",
+}, required=[], desc="Cờ mặc định chỉ đổi qua set-default")
 m.schema("PetBrief", {"petId": "int64", "name": "string", "species": "ref:Species", "deceased": "bool"})
 m.schema("CustomerSearchItem", {
     "customerId": "int64", "fullName": "string", "phone": "phone?", "maskedEmail": "string?",
@@ -114,13 +122,14 @@ m.op("get", "/me/customer-profile", "getMyCustomerProfile", "Hồ sơ khách c�
      "BR-KH-01, BR-TK-15", "A02", "Khách đang đăng nhập", resp="CustomerProfile", errors=(401, 403))
 m.op("patch", "/me/customer-profile", "updateMyCustomerProfile", "Sửa hồ sơ khách của tôi", "My profile", "UC06",
      "BR-TK-15, BR-KH-01", "A02", "Khách đang đăng nhập", body="UpdateMyCustomerProfileRequest",
-     resp="CustomerProfile", errors=(400, 401, 403), err_desc={400: "`BR-TK-15` cố sửa email · dữ liệu không hợp lệ"},
+     resp="CustomerProfile", errors=(400, 401, 403),
+     err_desc={400: "`BR-TK-15` cố sửa email · `BR-KH-01` xóa SĐT của hồ sơ tại quầy · dữ liệu không hợp lệ"},
      notes="Không trả cảnh báo nghi trùng cho khách (A1).")
 m.op("get", "/me/addresses", "listMyAddresses", "Sổ địa chỉ", "My profile", "UC06", "BR-TK-18", "A02",
-     "Khách đang đăng nhập", resp="array:Address", errors=(401, 403))
+     "Khách đang đăng nhập", resp="array:Address", errors=(401, 403), notes="Mặc định trước, rồi theo thứ tự thêm (A7).")
 m.op("post", "/me/addresses", "createMyAddress", "Thêm địa chỉ", "My profile", "UC06", "BR-TK-18", "A02",
      "Khách đang đăng nhập", body="AddressRequest", resp="Address", status=201, errors=(400, 401, 403),
-     err_desc={400: "`BR-TK-18` đã đủ 5 địa chỉ [CFG]"})
+     err_desc={400: "`BR-TK-18` đã đủ 5 địa chỉ [CFG]"}, notes="Sổ rỗng thì địa chỉ đầu luôn là mặc định (A6).")
 m.op("patch", "/me/addresses/{addressId}", "updateMyAddress", "Sửa địa chỉ", "My profile", "UC06", "BR-TK-18",
      "A02", "Chủ địa chỉ", body="UpdateAddressRequest", resp="Address", path_params=["AddressId"],
      errors=(400, 401, 403, 404))
@@ -129,7 +138,7 @@ m.op("delete", "/me/addresses/{addressId}", "deleteMyAddress", "Xóa địa ch�
      err_desc={400: "`BR-TK-18` không xóa địa chỉ mặc định khi còn địa chỉ khác"})
 m.op("post", "/me/addresses/{addressId}/set-default", "setDefaultAddress", "Đặt địa chỉ mặc định", "My profile",
      "UC06", "BR-TK-18", "A02", "Chủ địa chỉ", resp="Address", path_params=["AddressId"], errors=(401, 403, 404),
-     notes="Bỏ cờ mặc định của địa chỉ cũ trong cùng transaction.")
+     notes="Bỏ cờ mặc định của địa chỉ cũ trong cùng transaction; đã là mặc định thì trả về như cũ.")
 
 m.op("get", "/customers", "searchCustomers", "Tra cứu khách & thú cưng", "Customers", "UC23", "BR-KH-01, 10",
      "A06, A07, A08", "Nhân viên mọi chi nhánh", resp="CustomerSearchItem", page=True, errors=(400, 401, 403),

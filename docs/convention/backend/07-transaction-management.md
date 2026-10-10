@@ -60,6 +60,7 @@ Chiến lược khóa (pessimistic `FOR UPDATE`, advisory lock, optimistic `@Ver
 | Một chuồng một thú | BR-LT-08 | Partial unique `kennel_id` | — |
 | Hủy phiên: đăng xuất, đổi / đặt lại mật khẩu, khóa, vô hiệu hóa; trạng thái online `last_seen_at` | BR-TK-11, 13, 14, BR-TN-06, BR-QT-09 | Không | **Đã chốt — [ADR-0021](../../adr/0021-logout-session-lock-order.md):** khóa / ghi dòng `accounts` **trước** rồi mới `UPDATE sessions` (không deadlock); `touchLastSeen` chỉ ghi khi phiên chưa hủy, `SKIP LOCKED` |
 | Luồng OTP: quota gửi, bộ đếm sai, mã mới vô hiệu mã cũ | BR-TK-05, 06, 07 | Không (quota là phép đếm) | **Đã chốt — [ADR-0011](../../adr/0011-otp-flow-locking.md):** `SELECT … FOR UPDATE` dòng `accounts` trước mọi đọc/ghi `otp_tokens`; ST02 dùng `SKIP LOCKED` |
+| Sổ địa chỉ: tối đa N địa chỉ [CFG], đúng 1 mặc định; khách tự sửa hồ sơ | BR-TK-18, BR-TK-15 | Partial unique `uq_addresses_default_per_customer` (không deferrable), không chặn phép đếm | **Đã chốt — [ADR-0028](../../adr/0028-customer-profile-address-book.md):** mọi lệnh ghi khóa dòng `customers` của chủ (`FOR NO KEY UPDATE`) trước, thứ tự `customers → addresses`, không khóa `accounts`; gỡ cờ mặc định cũ bằng UPDATE chạy ngay trước khi ghi cờ mới |
 
 Khi DB chặn, `GlobalExceptionHandler` trả 409 `CONCURRENCY_CONFLICT` với message chung. Service vẫn phải kiểm tra trước để trả đúng mã rule trong trường hợp thường ([06](06-validation.md)).
 

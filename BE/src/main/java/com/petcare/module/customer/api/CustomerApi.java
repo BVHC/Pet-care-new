@@ -20,7 +20,8 @@ public interface CustomerApi {
      * {@code accounts} và xóa {@code otp_tokens}; xóa {@code accounts} sau lời gọi này. Phải {@code MANDATORY} và
      * không có tác dụng nằm ngoài transaction ({@code REQUIRES_NEW}, {@code @Async}, {@code AFTER_COMMIT},
      * {@code recordIndependently}): transaction lỗi thì ST02 làm lại ở lượt sau, tác dụng ngoài sẽ bị lặp
-     * (docs/adr/0013).
+     * (docs/adr/0013). Xóa {@code addresses} của hồ sơ trước khi xóa hồ sơ (FK {@code RESTRICT}): hiện tài khoản
+     * {@code PENDING} không đăng nhập được nên không thêm được địa chỉ, nhưng sổ địa chỉ có từ 10/10 (docs/adr/0028).
      */
     void deleteOnlineProfileOfUnverifiedAccount(Long accountId);
 

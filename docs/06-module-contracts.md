@@ -163,6 +163,8 @@ Bên sở hữu phải có implementation thật trước ngày bên gọi bắt
 | `SalesReportApi`, `StockReportApi`, `FeedbackReportApi` | BE-2 · 28/10 | report 28/10 | Cùng ngày với task Báo cáo của BE-2 |
 | `AppointmentReportApi`, `VaccinationReportApi` | BE-1 · **27/10** | report 28/10 | ⚠ Timeline chưa có dòng này cho BE-1; mỗi interface chỉ 1 query, gộp vào ngày 27/10 |
 
+**Module customer — khung entity do BE-1 tạo (10/10, docs/adr/0028).** Để làm UC06 phía khách (customer-v1 #1–7: `/me/customer-profile`, `/me/addresses…`), BE-1 đã tạo trong `module/customer`: entity `Customer` (đủ mọi cột của `customers`), `CustomerChannel`, `Address` (cột `is_default` ↔ field `defaultAddress`), `CustomerRepository`, `AddressRepository`, controller `MyCustomerController`, service `MyCustomerProfileService`, `AddressBookService`, migration V10 (`ix_addresses_customer_id`). Việc cho BE-2 (T17): **mở rộng các entity này, không tạo entity thứ hai cho cùng bảng**; mọi luồng ghi `customers` / `addresses` (UC22) khóa theo thứ tự `customers → addresses`, đi sau `accounts` nếu có; `CustomerProfile.email` ở `/me` là email tài khoản; `deleteOnlineProfileOfUnverifiedAccount` (ST02) và `linkAccountToCounterProfile` (UC07) phải xóa `addresses` của hồ sơ online trước khi xóa hồ sơ. `CustomerApi`, `CustomerQueryApi` vẫn là placeholder (D001, D010).
+
 ## 7. Giả định đã dùng — cần xác nhận
 
 | # | Giả định | Vì sao |
@@ -172,7 +174,7 @@ Bên sở hữu phải có implementation thật trước ngày bên gọi bắt
 | G3 | Nhắc tái chủng của thú đã mất: ST04 bỏ qua thú có `pets.deceased_on`, không có cột hủy riêng | `vaccinations` chỉ có `due_reminded_at`, `superseded_at` (erd), trong khi BR-KH-05 yêu cầu hủy nhắc |
 | G4 | Mỗi mũi tiêm là 1 dòng VACCINE số lượng 1 | BR-KB-04 "mỗi mũi tiêm sinh 1 dòng Order"; tài liệu không nói số lượng |
 | G5 | "Visit mới có dịch vụ loại Khám" (Care Task#6) xét tại Visit#1 theo dịch vụ tự sinh | 03 ghi người kích hoạt là `Visit#1` |
-| G6 | **Cần BE-2 xác nhận (10/10):** hệ thống chưa có quy tắc định dạng SĐT / URL chung. identity dùng kiểu `mobile` (`^0[0-9]{9}$`, theo erd `accounts.phone`) cho SĐT nhân viên và chỉ nhận `https://` cho `avatarUrl` nhân viên (ADR-0026); kiểu `phone` dùng chung vẫn là `^0[0-9]{9,10}$`. Hiện `CreateBranchRequest` / `UpdateBranchRequest` không kiểm định dạng SĐT; `avatarUrl` của khách (customer-v1) và `imageUrl` của catalog chưa kiểm `https`. Đề nghị dùng chung hai kiểu `mobile` / `https_url` của `docs/api/generator/lib.py` khi BE-2 cài các endpoint đó | Ảnh hiện ở trang công khai; SĐT khách dùng để đối chiếu (BR-TK-19, BR-KH-10) nên cần cùng một dạng chuẩn |
+| G6 | **Cần BE-2 xác nhận (10/10):** hệ thống chưa có quy tắc định dạng SĐT / URL chung. identity dùng kiểu `mobile` (`^0[0-9]{9}$`, theo erd `accounts.phone`) cho SĐT nhân viên và chỉ nhận `https://` cho `avatarUrl` nhân viên (ADR-0026); kiểu `phone` dùng chung vẫn là `^0[0-9]{9,10}$`. Hiện `CreateBranchRequest` / `UpdateBranchRequest` không kiểm định dạng SĐT; `avatarUrl` của khách (customer-v1) và `imageUrl` của catalog chưa kiểm `https`. Đề nghị dùng chung hai kiểu `mobile` / `https_url` của `docs/api/generator/lib.py` khi BE-2 cài các endpoint đó Phía `/me` của customer đã theo (10/10, docs/adr/0028): request `phone` / `receiverPhone` kiểu `mobile`, `avatarUrl` chỉ `https://`; response `CustomerProfile.phone` / `avatarUrl` giữ kiểu chung để không sai với hồ sơ tại quầy 10–11 số | Ảnh hiện ở trang công khai; SĐT khách dùng để đối chiếu (BR-TK-19, BR-KH-10) nên cần cùng một dạng chuẩn |
 
 ## 8. Quyết định bổ sung (Q1–Q4)
 
