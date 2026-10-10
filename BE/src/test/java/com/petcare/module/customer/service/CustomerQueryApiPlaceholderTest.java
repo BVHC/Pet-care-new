@@ -20,5 +20,7 @@ class CustomerQueryApiPlaceholderTest {
                 .isInstanceOf(UnsupportedOperationException.class);
         assertThatThrownBy(() -> placeholder.findLinkCandidates("0901234567"))
                 .isInstanceOf(UnsupportedOperationException.class);
+        assertThatThrownBy(() -> placeholder.checkOnlineProfileLinkable(1L))
+                .isInstanceOf(UnsupportedOperationException.class);
     }
 }

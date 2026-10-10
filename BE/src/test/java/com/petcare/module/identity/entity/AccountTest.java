@@ -1,12 +1,15 @@
 package com.petcare.module.identity.entity;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 import java.time.Duration;
 import java.time.Instant;
 
 import org.junit.jupiter.api.Test;
 import org.springframework.test.util.ReflectionTestUtils;
+
+import com.petcare.module.identity.api.Role;
 
 /**
  * BR-TK-09 (ST01) trên {@link Account} — cửa sổ cố định tính từ lần sai đầu, chạm ngưỡng thì khóa tạm, chỉ đăng nhập
@@ -179,6 +182,45 @@ class AccountTest {
 
         assertThat(account.getStatus()).isEqualTo(AccountStatus.ACTIVE);
         assertThat(account.isLocked()).isFalse();
+    }
+
+    // ---------------------------------------------------------------- SĐT nhân viên (UC06, BR-TK-01)
+
+    @Test
+    void changeStaffPhoneReplacesPhoneOnly() {
+        Account account = staff("0901234567");
+
+        account.changeStaffPhone("0987654321");
+
+        assertThat(account.getPhone()).isEqualTo("0987654321");
+        assertThat(account.getRole()).isEqualTo(Role.VET);
+        assertThat(account.getStatus()).isEqualTo(AccountStatus.ACTIVE);
+    }
+
+    @Test
+    void changeStaffPhoneRejectsNull() {
+        Account account = staff("0901234567");
+
+        assertThatThrownBy(() -> account.changeStaffPhone(null)).isInstanceOf(IllegalStateException.class)
+                .hasMessageContaining("BR-TK-01");
+        assertThat(account.getPhone()).isEqualTo("0901234567");
+    }
+
+    @Test
+    void changeStaffPhoneRejectsCustomerAccount() {
+        Account customer = account();
+
+        assertThatThrownBy(() -> customer.changeStaffPhone("0987654321")).isInstanceOf(IllegalStateException.class);
+        assertThat(customer.getPhone()).isNull();
+    }
+
+    private static Account staff(String phone) {
+        Account account = account();
+        ReflectionTestUtils.setField(account, "role", Role.VET);
+        ReflectionTestUtils.setField(account, "status", AccountStatus.ACTIVE);
+        ReflectionTestUtils.setField(account, "pendingExpiresAt", null);
+        ReflectionTestUtils.setField(account, "phone", phone);
+        return account;
     }
 
     private static Account account() {

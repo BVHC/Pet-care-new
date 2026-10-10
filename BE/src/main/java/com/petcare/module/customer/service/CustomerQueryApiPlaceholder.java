@@ -34,4 +34,9 @@ public class CustomerQueryApiPlaceholder implements CustomerQueryApi {
     public List<LinkCandidate> findLinkCandidates(String phone) {
         throw new UnsupportedOperationException(MESSAGE);
     }
+
+    @Override
+    public OnlineProfileLinkability checkOnlineProfileLinkable(Long accountId) {
+        throw new UnsupportedOperationException(MESSAGE);
+    }
 }

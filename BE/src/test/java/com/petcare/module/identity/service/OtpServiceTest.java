@@ -334,6 +334,125 @@ class OtpServiceTest {
         assertSettleRejected(41L, true, "OTP không đúng hoặc đã hết hạn (BR-TK-05)");
     }
 
+    // --- LINK_PROFILE: mã gắn đúng hồ sơ, không chỉ đúng tài khoản (docs/adr/0025) ---
+
+    @Test
+    void issuePreparedForLinkProfileStoresCustomerAndInvalidatesOnlyOwnAccountCodes() {
+        OtpService.PreparedOtp prepared = new OtpService.PreparedOtp("246810", encoder.encode("246810"));
+
+        service.issuePrepared(9L, OtpPurpose.LINK_PROFILE, EMAIL, 77L, prepared);
+
+        InOrder order = inOrder(otps);
+        order.verify(otps).findTopByTargetEmailOrderByCreatedAtDesc(EMAIL);
+        order.verify(otps).invalidateActiveForAccount(9L, OtpPurpose.LINK_PROFILE, NOW);
+        order.verify(otps).save(any(OtpToken.class));
+        verify(otps, never()).invalidateActive(anyString(), any(), any());
+        assertThat(saved().getAccountId()).isEqualTo(9L);
+        assertThat(saved().getCustomerId()).isEqualTo(77L);
+        assertThat(saved().getPurpose()).isEqualTo(OtpPurpose.LINK_PROFILE);
+        assertThat(saved().getCodeHash()).isEqualTo(prepared.codeHash());
+    }
+
+    @Test
+    void issuePreparedWithoutCustomerKeepsEmailScopedInvalidation() {
+        service.issuePrepared(9L, OtpPurpose.RESET_PASSWORD, EMAIL, new OtpService.PreparedOtp("246810", "hash"));
+
+        verify(otps).invalidateActive(EMAIL, OtpPurpose.RESET_PASSWORD, NOW);
+        verify(otps, never()).invalidateActiveForAccount(any(), any(), any());
+    }
+
+    @Test
+    void linkProfileWithoutCustomerIsRejectedBeforeAnyReadOrWrite() {
+        OtpService.PreparedOtp prepared = new OtpService.PreparedOtp("246810", "hash");
+
+        assertThatThrownBy(() -> service.issueOtp(9L, OtpPurpose.LINK_PROFILE, EMAIL))
+                .isInstanceOf(IllegalArgumentException.class);
+        assertThatThrownBy(() -> service.issuePrepared(9L, OtpPurpose.LINK_PROFILE, EMAIL, prepared))
+                .isInstanceOf(IllegalArgumentException.class);
+        assertThatThrownBy(() -> service.consumeOtp(9L, OtpPurpose.LINK_PROFILE, EMAIL, "123456"))
+                .isInstanceOf(IllegalArgumentException.class);
+        assertThatThrownBy(() -> service.findActive(9L, OtpPurpose.LINK_PROFILE, EMAIL))
+                .isInstanceOf(IllegalArgumentException.class);
+        assertThatThrownBy(() -> service.settleCheckedOtp(9L, OtpPurpose.LINK_PROFILE, EMAIL, 41L, false))
+                .isInstanceOf(IllegalArgumentException.class);
+        verifyNoOtpReadOrWrite();
+    }
+
+    @Test
+    void customerOnOtherPurposeIsRejectedBeforeAnyReadOrWrite() {
+        OtpService.PreparedOtp prepared = new OtpService.PreparedOtp("246810", "hash");
+
+        assertThatThrownBy(() -> service.issuePrepared(9L, OtpPurpose.RESET_PASSWORD, EMAIL, 77L, prepared))
+                .isInstanceOf(IllegalArgumentException.class);
+        assertThatThrownBy(() -> service.findActive(9L, OtpPurpose.REGISTER, EMAIL, 77L))
+                .isInstanceOf(IllegalArgumentException.class);
+        assertThatThrownBy(() -> service.settleCheckedOtp(9L, OtpPurpose.RESET_PASSWORD, EMAIL, 77L, 41L, false))
+                .isInstanceOf(IllegalArgumentException.class);
+        verifyNoOtpReadOrWrite();
+    }
+
+    @Test
+    void findActiveWithCustomerReadsOnlyThatProfilesCode() {
+        OtpToken otp = linkOtp(41L, 77L, "123456", NOW.plusSeconds(60));
+
+        assertThat(service.findActive(9L, OtpPurpose.LINK_PROFILE, EMAIL, 77L))
+                .hasValueSatisfying(active -> assertThat(active.id()).isEqualTo(otp.getId()));
+        assertThat(service.findActive(9L, OtpPurpose.LINK_PROFILE, EMAIL, 78L))
+                .as("hồ sơ khác cùng email: không thấy mã của hồ sơ 77").isEmpty();
+        verify(otps, never())
+                .findTopByAccountIdAndPurposeAndTargetEmailAndConsumedAtIsNullAndInvalidatedAtIsNullOrderByIdDesc(
+                        any(), any(), any());
+    }
+
+    @Test
+    void settleForOtherCustomerRejectsWithoutTouchingThatCode() {
+        OtpToken otp = linkOtp(41L, 77L, "123456", NOW.plusSeconds(60));
+
+        assertLinkSettleRejected(78L, 41L, false, "OTP không đúng hoặc đã hết hạn (BR-TK-05)");
+        assertLinkSettleRejected(78L, 41L, true, "OTP không đúng hoặc đã hết hạn (BR-TK-05)");
+        assertThat(otp.getFailedAttempts()).as("thử ở hồ sơ 78 không phạt mã của hồ sơ 77").isZero();
+        assertThat(otp.getConsumedAt()).isNull();
+    }
+
+    @Test
+    void settleForSameCustomerCountsWrongAndConsumesRight() {
+        OtpToken otp = linkOtp(41L, 77L, "123456", NOW.plusSeconds(60));
+
+        assertLinkSettleRejected(77L, 41L, false, "OTP không đúng hoặc đã hết hạn (BR-TK-05)");
+        assertThat(otp.getFailedAttempts()).isEqualTo(1);
+
+        service.settleCheckedOtp(9L, OtpPurpose.LINK_PROFILE, EMAIL, 77L, 41L, true);
+        assertThat(otp.getConsumedAt()).isEqualTo(NOW);
+    }
+
+    private OtpToken linkOtp(long id, long customerId, String code, Instant expiresAt) {
+        OtpToken otp = new OtpToken(9L, OtpPurpose.LINK_PROFILE, EMAIL, customerId, encoder.encode(code), expiresAt);
+        ReflectionTestUtils.setField(otp, "id", id);
+        when(otps.findTopByAccountIdAndPurposeAndTargetEmailAndCustomerIdAndConsumedAtIsNullAndInvalidatedAtIsNullOrderByIdDesc(
+                9L, OtpPurpose.LINK_PROFILE, EMAIL, customerId)).thenReturn(Optional.of(otp));
+        return otp;
+    }
+
+    private void assertLinkSettleRejected(long customerId, long otpId, boolean matched, String message) {
+        assertThatThrownBy(() -> service.settleCheckedOtp(9L, OtpPurpose.LINK_PROFILE, EMAIL, customerId, otpId,
+                matched))
+                .isExactlyInstanceOf(OtpRejectedException.class)
+                .hasMessage(message);
+    }
+
+    private void verifyNoOtpReadOrWrite() {
+        verify(otps, never()).findTopByTargetEmailOrderByCreatedAtDesc(anyString());
+        verify(otps, never()).invalidateActive(anyString(), any(), any());
+        verify(otps, never()).invalidateActiveForAccount(any(), any(), any());
+        verify(otps, never()).save(any());
+        verify(otps, never())
+                .findTopByAccountIdAndPurposeAndTargetEmailAndConsumedAtIsNullAndInvalidatedAtIsNullOrderByIdDesc(
+                        any(), any(), any());
+        verify(otps, never())
+                .findTopByAccountIdAndPurposeAndTargetEmailAndCustomerIdAndConsumedAtIsNullAndInvalidatedAtIsNullOrderByIdDesc(
+                        any(), any(), any(), any());
+    }
+
     private OtpToken resetOtp(long id, String code, Instant expiresAt) {
         OtpToken otp = new OtpToken(9L, OtpPurpose.RESET_PASSWORD, EMAIL, encoder.encode(code), expiresAt);
         ReflectionTestUtils.setField(otp, "id", id);

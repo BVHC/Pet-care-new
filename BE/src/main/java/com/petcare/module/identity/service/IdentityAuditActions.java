@@ -13,6 +13,14 @@ public final class IdentityAuditActions {
      * docs/adr/0022). Lần sai chưa chạm ngưỡng và đổi thành công không audit.
      */
     public static final String ACCOUNT_TEMPORARILY_LOCKED = "ACCOUNT_TEMPORARILY_LOCKED";
+    /**
+     * Khách tự liên kết tài khoản vào hồ sơ tại quầy bằng OTP gửi tới email hồ sơ (BR-TK-19, UC07; docs/adr/0027).
+     * {@code entity = customers/<hồ sơ tại quầy>}, before/after có {@code verificationMethod}.
+     */
+    public static final String CUSTOMER_PROFILE_LINKED = "CUSTOMER_PROFILE_LINKED";
+
+    /** {@code verificationMethod} của {@code CUSTOMER_PROFILE_LINKED} khi khách tự liên kết (mã gửi tới email hồ sơ). */
+    public static final String VERIFICATION_EMAIL_CODE = "EMAIL_CODE";
 
     /** {@code LOGIN_FAILED.reason}: email không khớp tài khoản nào (kể cả vừa bị ST02 xóa). */
     public static final String REASON_UNKNOWN_EMAIL = "UNKNOWN_EMAIL";

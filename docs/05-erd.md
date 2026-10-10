@@ -38,7 +38,7 @@
 
 **Ký hiệu trong bảng cột:** `PK` khóa chính · `FK→bảng` khóa ngoại · `NN` NOT NULL · `UQ` unique · `?` cho phép NULL.
 
-**Xóa dữ liệu:** mọi khóa ngoại mặc định `ON DELETE RESTRICT`. Chỉ các trường hợp xóa cứng mà business rules cho phép mới xóa thật (BR-KH-06, BR-TK-08, BR-TK-19, BR-BV-02, BR-KB-04); khi đó ứng dụng xóa các bản ghi con trong cùng transaction, không dựa vào `CASCADE`.
+**Xóa dữ liệu:** mọi khóa ngoại mặc định `ON DELETE RESTRICT`. Chỉ các trường hợp xóa cứng mà business rules cho phép mới xóa thật (BR-KH-06, BR-TK-08, BR-TK-18, BR-TK-19, BR-BV-02, BR-KB-04); khi đó ứng dụng xóa các bản ghi con trong cùng transaction, không dựa vào `CASCADE`.
 
 ---
 
@@ -148,6 +148,7 @@ Ràng buộc "A05–A08 phải có chi nhánh" kiểm tra ở ứng dụng vì `
 - `CHECK ((purpose = 'LINK_PROFILE') = (customer_id IS NOT NULL))`
 - Index: `(target_email, created_at)` để đếm quota 5 mã/giờ và khoảng cách 60 giây (BR-TK-07)
 - Index: `(account_id)` cho ST02 xóa mã của tài khoản `PENDING` và kiểm FK khi xóa `accounts` (V5)
+- Index partial `(customer_id) WHERE customer_id IS NOT NULL` — kiểm FK khi xóa `customers` (hồ sơ online lúc liên kết BR-TK-19, ST02) (V9, mục 15 Nhật ký quyết định, ADR-0025)
 - Là LOG nhưng cho phép cập nhật `failed_attempts`, `consumed_at`, `invalidated_at` [ERD]
 
 ### `audit_logs` — LOG
@@ -332,6 +333,8 @@ Quota riêng của một khung giờ cụ thể, ghi đè quota mặc định (B
 | is_default | BOOLEAN | NN, DEFAULT false | |
 
 - `UNIQUE (customer_id) WHERE is_default` — đúng 1 địa chỉ mặc định (BR-TK-18). Giới hạn 5 địa chỉ [CFG] kiểm tra ở ứng dụng.
+- Index: `(customer_id)` — đọc / đếm sổ địa chỉ theo chủ và kiểm FK khi xóa `customers` (V10, mục 16 Nhật ký quyết định).
+- Xóa cứng được (BR-TK-18: khách xóa địa chỉ; không bảng nào có FK trỏ tới `addresses`).
 
 ### `pets` — ROOT
 
@@ -1131,7 +1134,7 @@ Tổng: 55 bảng = 52 model + 3 bảng con tách ra (`care_log_addenda`, `stock
 
 ## 13. Nhật ký quyết định
 
-Mục 1–4: các câu hỏi mở của bản v14, chốt ở v15. Mục 5: thay đổi ở v16. Mục 6–10: quyết định khi viết migration `V1__init_schema.sql` (2026-10-03). Mục 11: worker ST20 (2026-10-07). Mục 12: ST02 (2026-10-07). Mục 13: ST20 kênh IN_APP (2026-10-07).
+Mục 1–4: các câu hỏi mở của bản v14, chốt ở v15. Mục 5: thay đổi ở v16. Mục 6–10: quyết định khi viết migration `V1__init_schema.sql` (2026-10-03). Mục 11: worker ST20 (2026-10-07). Mục 12: ST02 (2026-10-07). Mục 13: ST20 kênh IN_APP (2026-10-07). Mục 15: OTP liên kết hồ sơ (2026-10-09). Mục 16: sổ địa chỉ (2026-10-10).
 
 | # | Vấn đề | Quyết định | Ảnh hưởng tới bảng |
 |---|---|---|---|
@@ -1149,3 +1152,5 @@ Mục 1–4: các câu hỏi mở của bản v14, chốt ở v15. Mục 5: thay
 | 12 | Hạn của tài khoản `PENDING` (BR-TK-08, ST02) | BR-QT-13 (ưu tiên cao hơn erd) buộc chốt hạn lúc đăng ký: đổi [CFG] `account.pending_ttl_hours` không được làm đổi hạn của tài khoản đang chờ. Thêm cột snapshot như `sessions.expires_at`, `otp_tokens.expires_at` (ADR-0013) | `accounts`: thêm `pending_expires_at`, CHECK có hạn ⇔ `PENDING`, index partial `(pending_expires_at) WHERE status = 'PENDING'`. `otp_tokens`: index `(account_id)` (V5) |
 | 13 | Giao thông báo kênh IN_APP (ST20, UC88) | Erd không nói `notifications.type`, `title` lấy từ đâu, và index V1 `(status, next_attempt_at)` không có `channel` nên câu chọn IN_APP phải đọc qua tồn đọng email (ADR-0014) | `notifications.type` = mã mẫu bỏ hậu tố `_APP`; `title` = `subject` của mẫu (mẫu IN_APP bắt buộc có `subject`, quá 200 ký tự thì cắt). `notification_outbox`: index partial `(next_attempt_at, id) WHERE status = 'PENDING' AND channel = 'IN_APP'` (V6) |
 | 14 | Index cho cột FK trỏ tới `accounts` | Xóa một dòng `accounts` (ST02, BR-TK-08) kiểm FK `RESTRICT` ở 43 cột / 34 bảng; 38 cột không có index dùng được → quét toàn bảng mỗi cột (ADR-0018, trả nợ D009). Erd không liệt kê index cho các cột `*_by` | V7: index `(<cột>)` cho cột NOT NULL, partial `(<cột>) WHERE <cột> IS NOT NULL` cho cột nullable, ở 34 bảng (dòng `- Index:` ghi "V7, ADR-0018" trong từng bảng) |
+| 15 | OTP liên kết hồ sơ (`LINK_PROFILE`, BR-TK-19) | Mã gắn `(account_id, customer_id, target_email)`; xác thực lọc theo cả `customer_id` vì `customers.email` không duy nhất; mã mới hủy mã `LINK_PROFILE` cũ theo tài khoản, không theo email (ADR-0025). Cột `customer_id` (FK → `customers`) chưa có index cho kiểm FK khi xóa hồ sơ online. Các FK khác trỏ tới `customers` thiếu index: nợ D013 | `otp_tokens`: index partial `ix_otp_tokens_customer_id (customer_id) WHERE customer_id IS NOT NULL` (V9). `notification_templates`: seed `OTP_PROFILE_LINK` (V9) |
+| 16 | Sổ địa chỉ tự sửa (UC06, BR-TK-18) | §0 không liệt kê BR-TK-18 trong danh sách xóa cứng, dù UC06 / BR-TK-18 cho khách xóa địa chỉ và `addresses` không có cột trạng thái; không bảng nào có FK trỏ tới `addresses`. Chốt **xóa cứng**, thêm BR-TK-18 vào §0. Đọc / đếm theo chủ cần index (ADR-0028) | `addresses`: index `ix_addresses_customer_id (customer_id)` (V10) — trả phần `addresses` của nợ D013 |

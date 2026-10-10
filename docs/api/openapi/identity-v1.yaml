@@ -320,7 +320,7 @@ paths:
     patch:
       tags: [Me]
       summary: "Sửa hồ sơ nhân viên của tôi"
-      description: "UC06 · BR-TK-15, 20. Actor: A03–A08. Quyền: Nhân viên đang đăng nhập; specialty, bio chỉ VET. Chuyển trạng thái: —."
+      description: "UC06 · BR-TK-15, 20. Actor: A03–A08. Quyền: Nhân viên đang đăng nhập; specialty, bio chỉ VET. Chuyển trạng thái: —. null = giữ nguyên; chuỗi rỗng = xóa (`avatarUrl`, `specialty`, `bio`). Thứ tự kiểm: hình thức → BR-TK-15 → BR-TK-11 → 403 → BR-TK-20 (chỉ khi gửi `bio`). Field khác (`role`, `branchId`…) bị bỏ qua. Không audit (ADR-0026)."
       operationId: updateMyStaffProfile
       security:
         - bearerAuth: []
@@ -347,7 +347,7 @@ paths:
                     type: integer
                     description: "HTTP status của kết quả, ví dụ 200, 201"
         "400":
-          description: "`BR-TK-20` mô tả ngắn vượt 500 ký tự [CFG] · `BR-TK-15` cố sửa email"
+          description: "`BR-TK-15` body có `email` (email không tự sửa được) · `BR-TK-11` tài khoản vừa bị khóa / vô hiệu hóa · `BR-TK-20` mô tả ngắn vượt 500 ký tự [CFG] · `BR-TK-17` chưa đổi mật khẩu lần đầu · `VALIDATION_FAILED` họ tên / SĐT rỗng, SĐT khác 10 số, `avatarUrl` không phải `https://`"
           content:
             "application/json":
               schema:
@@ -355,12 +355,16 @@ paths:
         "401":
           $ref: "#/components/responses/Unauthorized"
         "403":
-          $ref: "#/components/responses/Forbidden"
+          description: "`ACCESS_DENIED` tài khoản khách · `ACCESS_DENIED_SCOPE_MISMATCH` không phải VET mà gửi `specialty` / `bio`"
+          content:
+            "application/json":
+              schema:
+                $ref: "#/components/schemas/Error"
   "/me/link-candidates":
     get:
       tags: ["Profile link"]
       summary: "Danh sách hồ sơ tại quầy có thể liên kết"
-      description: "UC07 · BR-TK-19, BR-KH-10. Actor: A02. Quyền: Khách đang đăng nhập. Chuyển trạng thái: —. Chỉ trả hồ sơ COUNTER chưa liên kết, họ tên đã che."
+      description: "UC07 · BR-TK-19, BR-KH-10. Actor: A02. Quyền: Khách đang đăng nhập. Chuyển trạng thái: —. Chỉ trả hồ sơ COUNTER chưa liên kết, họ tên đã che; không có thì mảng rỗng (ADR-0027)."
       operationId: listLinkCandidates
       security:
         - bearerAuth: []
@@ -392,7 +396,7 @@ paths:
                     type: integer
                     description: "HTTP status của kết quả, ví dụ 200, 201"
         "400":
-          description: "`BR-TK-19` hồ sơ online đã phát sinh dữ liệu, không liên kết được"
+          description: "`BR-TK-19` hồ sơ online đã phát sinh dữ liệu, hoặc tài khoản đã liên kết hồ sơ tại quầy · `VALIDATION_FAILED` `phone` sai định dạng"
           content:
             "application/json":
               schema:
@@ -405,7 +409,7 @@ paths:
     post:
       tags: ["Profile link"]
       summary: "Gửi OTP tới email hồ sơ tại quầy"
-      description: "UC07 · BR-TK-04, 07, 19. Actor: A02. Quyền: Khách đang đăng nhập. Chuyển trạng thái: —."
+      description: "UC07 · BR-TK-04, 07, 19. Actor: A02. Quyền: Khách đang đăng nhập. Chuyển trạng thái: —. Thứ tự kiểm: BR-TK-11 → 404 → BR-TK-19 → BR-TK-07. Mã gửi tới email ghi trong hồ sơ tại quầy (BR-TK-04); gọi lại = gửi lại (BR-TK-07, mã mới hủy mã liên kết cũ của tài khoản). `maskedEmail` là email đó đã che (ADR-0027)."
       operationId: sendLinkOtp
       security:
         - bearerAuth: []
@@ -432,20 +436,26 @@ paths:
                     type: integer
                     description: "HTTP status của kết quả, ví dụ 200, 201"
         "400":
-          description: "`BR-TK-19` hồ sơ không có email (ra quầy) hoặc hồ sơ online đã có dữ liệu · `BR-TK-07` gửi quá nhanh / quá 5 mã/giờ"
+          description: "`BR-TK-19` hồ sơ không có email (ra quầy), hồ sơ online đã có dữ liệu hoặc tài khoản đã liên kết · `BR-TK-11` tài khoản vừa bị khóa · `BR-TK-07` gửi quá nhanh / quá 5 mã/giờ"
           content:
             "application/json":
               schema:
                 $ref: "#/components/schemas/Error"
         "401":
           $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
         "404":
-          $ref: "#/components/responses/NotFound"
+          description: "Hồ sơ không tồn tại hoặc không phải ứng viên của SĐT (một thông báo chung)"
+          content:
+            "application/json":
+              schema:
+                $ref: "#/components/schemas/Error"
   "/me/link/confirm":
     post:
       tags: ["Profile link"]
       summary: "Xác nhận liên kết"
-      description: "UC07 · BR-TK-05, 06, 19. Actor: A02. Quyền: Khách đang đăng nhập. Chuyển trạng thái: —. Gắn tài khoản vào hồ sơ tại quầy, xóa hồ sơ online, email hồ sơ theo email tài khoản, ghi audit."
+      description: "UC07 · BR-TK-05, 06, 19. Actor: A02. Quyền: Khách đang đăng nhập. Chuyển trạng thái: —. Gắn tài khoản vào hồ sơ tại quầy, xóa hồ sơ online cùng sổ địa chỉ của nó, email hồ sơ theo email tài khoản, SĐT giữ nguyên, ghi audit `CUSTOMER_PROFILE_LINKED` (ADR-0027). Sau lỗi mạng, đọc lại `GET /me` để biết đã liên kết chưa."
       operationId: confirmLink
       security:
         - bearerAuth: []
@@ -472,30 +482,44 @@ paths:
                     type: integer
                     description: "HTTP status của kết quả, ví dụ 200, 201"
         "400":
-          description: "`BR-TK-05` mã sai / hết hạn · `BR-TK-06` sai quá 5 lần, mã bị hủy · `BR-TK-19` hồ sơ online đã phát sinh dữ liệu"
+          description: "`BR-TK-05` mã sai / hết hạn · `BR-TK-06` sai quá 5 lần, mã bị hủy (sai mã vẫn được tính) · `BR-TK-19` hồ sơ online đã phát sinh dữ liệu / tài khoản đã liên kết / hồ sơ tại quầy vừa được liên kết hoặc đổi email — mã vẫn dùng lại được · `BR-TK-11` tài khoản vừa bị khóa"
           content:
             "application/json":
               schema:
                 $ref: "#/components/schemas/Error"
         "401":
           $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
         "404":
-          $ref: "#/components/responses/NotFound"
+          description: "Hồ sơ không tồn tại"
+          content:
+            "application/json":
+              schema:
+                $ref: "#/components/schemas/Error"
   "/me/link/decline":
     post:
       tags: ["Profile link"]
       summary: "Chọn \"Không phải tôi\""
-      description: "UC07 · BR-TK-19. Actor: A02. Quyền: Khách đang đăng nhập. Chuyển trạng thái: —."
+      description: "UC07 · BR-TK-19. Actor: A02. Quyền: Khách đang đăng nhập. Chuyển trạng thái: —. Không audit (ADR-0027)."
       operationId: declineLink
       security:
         - bearerAuth: []
       responses:
         "204":
           description: "Không có nội dung"
+        "400":
+          description: "`BR-TK-11` tài khoản vừa bị khóa"
+          content:
+            "application/json":
+              schema:
+                $ref: "#/components/schemas/Error"
         "401":
           $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
         "409":
-          description: "Hồ sơ không còn cờ chờ quyết định"
+          description: "`INVALID_STATE_TRANSITION` hồ sơ không còn cờ chờ quyết định"
           content:
             "application/json":
               schema:
@@ -1459,7 +1483,7 @@ paths:
     get:
       tags: [Public]
       summary: "Đội ngũ bác sĩ"
-      description: "UC15 · BR-TK-20, BR-CK-01. Actor: A01, A02. Quyền: Public. Chuyển trạng thái: —. Chỉ VET ACTIVE, không khóa."
+      description: "UC15 · BR-TK-20, BR-CK-01. Actor: A01, A02. Quyền: Public. Chuyển trạng thái: —. Chỉ VET ACTIVE, không khóa (khóa tạm vẫn hiện), thuộc chi nhánh ACTIVE; `branchId` không phải chi nhánh ACTIVE → mảng rỗng. Sắp theo họ tên (ADR-0026)."
       operationId: listPublicVets
       security: []
       parameters:
@@ -1758,10 +1782,11 @@ components:
           maxLength: 100
         avatarUrl:
           type: [string, "null"]
+          pattern: "^https://\\S+$"
           maxLength: 500
         phone:
           type: string
-          pattern: "^0[0-9]{9,10}$"
+          pattern: "^0[0-9]{9}$"
           maxLength: 15
         branchId:
           type: [integer, "null"]
@@ -1795,21 +1820,24 @@ components:
         fullName:
           type: [string, "null"]
           maxLength: 100
+          description: "null = giữ; không được rỗng"
         avatarUrl:
           type: [string, "null"]
           maxLength: 500
+          description: "`https://…`; null = giữ; chuỗi rỗng = xóa (ADR-0026)"
         phone:
           type: [string, "null"]
-          pattern: "^0[0-9]{9,10}$"
+          pattern: "^0[0-9]{9}$"
           maxLength: 15
+          description: "null = giữ; nhân viên luôn có SĐT, không xóa được (BR-TK-01)"
         specialty:
           type: [string, "null"]
           maxLength: 200
-          description: "Chỉ VET"
+          description: "Chỉ VET; null = giữ; chuỗi rỗng = xóa"
         bio:
           type: [string, "null"]
           maxLength: 500
-          description: "Chỉ VET"
+          description: "Chỉ VET; null = giữ; chuỗi rỗng = xóa; ≤ vet.bio_max_length [CFG], vượt → BR-TK-20"
     LinkCandidate:
       type: object
       required: [customerId, maskedFullName, hasEmail]
@@ -1831,6 +1859,11 @@ components:
           type: integer
           format: int64
           description: "Hồ sơ tại quầy chọn từ danh sách gợi ý"
+        phone:
+          type: [string, "null"]
+          pattern: "^0[0-9]{9,10}$"
+          maxLength: 15
+          description: "SĐT đã dùng ở `GET /me/link-candidates`; bỏ trống = SĐT đã khai trên hồ sơ online. Chỉ gửi mã khi `customerId` là ứng viên của SĐT này (ADR-0027)"
     LinkConfirmRequest:
       type: object
       required: [customerId, code]
@@ -1861,7 +1894,7 @@ components:
           maxLength: 255
         phone:
           type: string
-          pattern: "^0[0-9]{9,10}$"
+          pattern: "^0[0-9]{9}$"
           maxLength: 15
         fullName:
           type: string
@@ -1894,7 +1927,7 @@ components:
           maxLength: 255
         phone:
           type: string
-          pattern: "^0[0-9]{9,10}$"
+          pattern: "^0[0-9]{9}$"
           maxLength: 15
           description: "Bắt buộc với nhân viên (BR-TK-01)"
         fullName:
@@ -2107,6 +2140,7 @@ components:
           type: string
         avatarUrl:
           type: [string, "null"]
+          pattern: "^https://\\S+$"
           maxLength: 500
         specialty:
           type: [string, "null"]
@@ -2117,6 +2151,7 @@ components:
           format: int64
         branchName:
           type: string
+          description: "Tên chi nhánh ACTIVE (BR-CK-01)"
   responses:
     BadRequest:
       description: "VALIDATION_FAILED / MALFORMED_REQUEST: dữ liệu không hợp lệ · BUSINESS_RULE_VIOLATION: vi phạm rule, message kết thúc bằng mã rule \"(BR-…)\"."
