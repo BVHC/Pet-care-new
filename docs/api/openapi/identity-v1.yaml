@@ -320,7 +320,7 @@ paths:
     patch:
       tags: [Me]
       summary: "Sửa hồ sơ nhân viên của tôi"
-      description: "UC06 · BR-TK-15, 20. Actor: A03–A08. Quyền: Nhân viên đang đăng nhập; specialty, bio chỉ VET. Chuyển trạng thái: —."
+      description: "UC06 · BR-TK-15, 20. Actor: A03–A08. Quyền: Nhân viên đang đăng nhập; specialty, bio chỉ VET. Chuyển trạng thái: —. null = giữ nguyên; chuỗi rỗng = xóa (`avatarUrl`, `specialty`, `bio`). Thứ tự kiểm: hình thức → BR-TK-15 → BR-TK-11 → 403 → BR-TK-20 (chỉ khi gửi `bio`). Field khác (`role`, `branchId`…) bị bỏ qua. Không audit (ADR-0026)."
       operationId: updateMyStaffProfile
       security:
         - bearerAuth: []
@@ -347,7 +347,7 @@ paths:
                     type: integer
                     description: "HTTP status của kết quả, ví dụ 200, 201"
         "400":
-          description: "`BR-TK-20` mô tả ngắn vượt 500 ký tự [CFG] · `BR-TK-15` cố sửa email"
+          description: "`BR-TK-15` body có `email` (email không tự sửa được) · `BR-TK-11` tài khoản vừa bị khóa / vô hiệu hóa · `BR-TK-20` mô tả ngắn vượt 500 ký tự [CFG] · `BR-TK-17` chưa đổi mật khẩu lần đầu · `VALIDATION_FAILED` họ tên / SĐT rỗng, SĐT khác 10 số, `avatarUrl` không phải `https://`"
           content:
             "application/json":
               schema:
@@ -355,7 +355,11 @@ paths:
         "401":
           $ref: "#/components/responses/Unauthorized"
         "403":
-          $ref: "#/components/responses/Forbidden"
+          description: "`ACCESS_DENIED` tài khoản khách · `ACCESS_DENIED_SCOPE_MISMATCH` không phải VET mà gửi `specialty` / `bio`"
+          content:
+            "application/json":
+              schema:
+                $ref: "#/components/schemas/Error"
   "/me/link-candidates":
     get:
       tags: ["Profile link"]
@@ -1459,7 +1463,7 @@ paths:
     get:
       tags: [Public]
       summary: "Đội ngũ bác sĩ"
-      description: "UC15 · BR-TK-20, BR-CK-01. Actor: A01, A02. Quyền: Public. Chuyển trạng thái: —. Chỉ VET ACTIVE, không khóa."
+      description: "UC15 · BR-TK-20, BR-CK-01. Actor: A01, A02. Quyền: Public. Chuyển trạng thái: —. Chỉ VET ACTIVE, không khóa (khóa tạm vẫn hiện), thuộc chi nhánh ACTIVE; `branchId` không phải chi nhánh ACTIVE → mảng rỗng. Sắp theo họ tên (ADR-0026)."
       operationId: listPublicVets
       security: []
       parameters:
@@ -1758,10 +1762,11 @@ components:
           maxLength: 100
         avatarUrl:
           type: [string, "null"]
+          pattern: "^https://\\S+$"
           maxLength: 500
         phone:
           type: string
-          pattern: "^0[0-9]{9,10}$"
+          pattern: "^0[0-9]{9}$"
           maxLength: 15
         branchId:
           type: [integer, "null"]
@@ -1795,21 +1800,24 @@ components:
         fullName:
           type: [string, "null"]
           maxLength: 100
+          description: "null = giữ; không được rỗng"
         avatarUrl:
           type: [string, "null"]
           maxLength: 500
+          description: "`https://…`; null = giữ; chuỗi rỗng = xóa (ADR-0026)"
         phone:
           type: [string, "null"]
-          pattern: "^0[0-9]{9,10}$"
+          pattern: "^0[0-9]{9}$"
           maxLength: 15
+          description: "null = giữ; nhân viên luôn có SĐT, không xóa được (BR-TK-01)"
         specialty:
           type: [string, "null"]
           maxLength: 200
-          description: "Chỉ VET"
+          description: "Chỉ VET; null = giữ; chuỗi rỗng = xóa"
         bio:
           type: [string, "null"]
           maxLength: 500
-          description: "Chỉ VET"
+          description: "Chỉ VET; null = giữ; chuỗi rỗng = xóa; ≤ vet.bio_max_length [CFG], vượt → BR-TK-20"
     LinkCandidate:
       type: object
       required: [customerId, maskedFullName, hasEmail]
@@ -1861,7 +1869,7 @@ components:
           maxLength: 255
         phone:
           type: string
-          pattern: "^0[0-9]{9,10}$"
+          pattern: "^0[0-9]{9}$"
           maxLength: 15
         fullName:
           type: string
@@ -1894,7 +1902,7 @@ components:
           maxLength: 255
         phone:
           type: string
-          pattern: "^0[0-9]{9,10}$"
+          pattern: "^0[0-9]{9}$"
           maxLength: 15
           description: "Bắt buộc với nhân viên (BR-TK-01)"
         fullName:
@@ -2107,6 +2115,7 @@ components:
           type: string
         avatarUrl:
           type: [string, "null"]
+          pattern: "^https://\\S+$"
           maxLength: 500
         specialty:
           type: [string, "null"]
@@ -2117,6 +2126,7 @@ components:
           format: int64
         branchName:
           type: string
+          description: "Tên chi nhánh ACTIVE (BR-CK-01)"
   responses:
     BadRequest:
       description: "VALIDATION_FAILED / MALFORMED_REQUEST: dữ liệu không hợp lệ · BUSINESS_RULE_VIOLATION: vi phạm rule, message kết thúc bằng mã rule \"(BR-…)\"."

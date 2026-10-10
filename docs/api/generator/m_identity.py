@@ -95,7 +95,7 @@ m.schema("LoginResponse", {
 m.schema("ResetPasswordRequest", {"email": "email", "code": "string", "newPassword": "string"})
 m.schema("ChangePasswordRequest", {"currentPassword": "string", "newPassword": "string"})
 m.schema("StaffProfile", {
-    "accountId": "int64", "fullName": "string:100", "avatarUrl": "url?", "phone": "phone",
+    "accountId": "int64", "fullName": "string:100", "avatarUrl": "https_url?", "phone": "mobile",
     "branchId": "int64?|null với ADMIN, SUPER_MANAGER (BR-QT-03)",
     "specialty": "string:200?|Chỉ VET (BR-TK-20)", "bio": "string:500?|Chỉ VET, ≤ 500 ký tự [CFG]",
 })
@@ -106,8 +106,10 @@ m.schema("MeResponse", {
     "linkDecisionPending": "bool",
 }, required=["account", "linkDecisionPending"])
 m.schema("UpdateStaffProfileRequest", {
-    "fullName": "string:100?", "avatarUrl": "url?", "phone": "phone?",
-    "specialty": "string:200?|Chỉ VET", "bio": "string:500?|Chỉ VET",
+    "fullName": "string:100?|null = giữ; không được rỗng", "avatarUrl": "string:500?|`https://…`; null = giữ; chuỗi rỗng = xóa (ADR-0026)",
+    "phone": "mobile?|null = giữ; nhân viên luôn có SĐT, không xóa được (BR-TK-01)",
+    "specialty": "string:200?|Chỉ VET; null = giữ; chuỗi rỗng = xóa",
+    "bio": "string:500?|Chỉ VET; null = giữ; chuỗi rỗng = xóa; ≤ vet.bio_max_length [CFG], vượt → BR-TK-20",
 }, required=[])
 m.schema("LinkCandidate", {
     "customerId": "int64", "maskedFullName": "string|Ví dụ Ng*** V** A (BR-TK-19)",
@@ -117,13 +119,13 @@ m.schema("LinkOtpRequest", {"customerId": "int64|Hồ sơ tại quầy chọn t�
 m.schema("LinkConfirmRequest", {"customerId": "int64", "code": "string"})
 m.schema("LinkResult", {"customerId": "int64|Hồ sơ khách mà tài khoản đang gắn sau khi liên kết"})
 m.schema("StaffResponse", {
-    "accountId": "int64", "email": "email", "phone": "phone", "fullName": "string:100",
+    "accountId": "int64", "email": "email", "phone": "mobile", "fullName": "string:100",
     "role": "ref:Role", "status": "ref:AccountStatus", "isLocked": "bool", "branchId": "int64?",
     "specialty": "string?", "bio": "string?", "mustChangePassword": "bool",
     "online": "bool|Thao tác trong 10 phút [CFG] gần nhất (BR-TN-06)",
 })
 m.schema("CreateStaffRequest", {
-    "email": "email", "phone": "phone|Bắt buộc với nhân viên (BR-TK-01)", "fullName": "string:100",
+    "email": "email", "phone": "mobile|Bắt buộc với nhân viên (BR-TK-01)", "fullName": "string:100",
     "role": f"enum:{STAFF_ROLES}|Theo phân cấp BR-QT-01",
     "branchId": "int64?|Bắt buộc với BRANCH_MANAGER…CARETAKER; chi nhánh DRAFT/ACTIVE (BR-QT-03)",
 })
@@ -168,8 +170,8 @@ m.schema("AuditLogEntry", {
     "reason": "string?", "ipAddress": "string?", "createdAt": "datetime",
 })
 m.schema("PublicVet", {
-    "accountId": "int64", "fullName": "string", "avatarUrl": "url?", "specialty": "string?", "bio": "string?",
-    "branchId": "int64", "branchName": "string",
+    "accountId": "int64", "fullName": "string", "avatarUrl": "https_url?", "specialty": "string?", "bio": "string?",
+    "branchId": "int64", "branchName": "string|Tên chi nhánh ACTIVE (BR-CK-01)",
 })
 
 # ---------------- operations
@@ -213,7 +215,10 @@ m.op("post", "/me/password", "changePassword", "Đổi mật khẩu", "Me", "UC0
      notes="Đăng xuất mọi phiên khác, phiên đang dùng giữ nguyên; gỡ `mustChangePassword`; xóa bộ đếm đăng nhập sai. Không gửi email. Request sai hình thức (400 `VALIDATION_FAILED` / `MALFORMED_REQUEST`) không tính là một lần nhập sai (ADR-0022).")
 m.op("patch", "/me/staff-profile", "updateMyStaffProfile", "Sửa hồ sơ nhân viên của tôi", "Me", "UC06",
      "BR-TK-15, 20", "A03–A08", "Nhân viên đang đăng nhập; specialty, bio chỉ VET", body="UpdateStaffProfileRequest",
-     resp="StaffProfile", errors=(400, 401, 403), err_desc={400: "`BR-TK-20` mô tả ngắn vượt 500 ký tự [CFG] · `BR-TK-15` cố sửa email"})
+     resp="StaffProfile", errors=(400, 401, 403),
+     err_desc={400: "`BR-TK-15` body có `email` (email không tự sửa được) · `BR-TK-11` tài khoản vừa bị khóa / vô hiệu hóa · `BR-TK-20` mô tả ngắn vượt 500 ký tự [CFG] · `BR-TK-17` chưa đổi mật khẩu lần đầu · `VALIDATION_FAILED` họ tên / SĐT rỗng, SĐT khác 10 số, `avatarUrl` không phải `https://`",
+               403: "`ACCESS_DENIED` tài khoản khách · `ACCESS_DENIED_SCOPE_MISMATCH` không phải VET mà gửi `specialty` / `bio`"},
+     notes="null = giữ nguyên; chuỗi rỗng = xóa (`avatarUrl`, `specialty`, `bio`). Thứ tự kiểm: hình thức → BR-TK-15 → BR-TK-11 → 403 → BR-TK-20 (chỉ khi gửi `bio`). Field khác (`role`, `branchId`…) bị bỏ qua. Không audit (ADR-0026).")
 
 m.op("get", "/me/link-candidates", "listLinkCandidates", "Danh sách hồ sơ tại quầy có thể liên kết", "Profile link",
      "UC07", "BR-TK-19, BR-KH-10", "A02", "Khách đang đăng nhập", resp="array:LinkCandidate",
@@ -326,4 +331,4 @@ m.op("get", "/audit-logs", "listAuditLogs", "Xem nhật ký audit", "Audit", "UC
 
 m.op("get", "/public/vets", "listPublicVets", "Đội ngũ bác sĩ", "Public", "UC15", "BR-TK-20, BR-CK-01", "A01, A02",
      "Public", resp="array:PublicVet", public=True, errors=(400,), query=["branchId=int64"],
-     notes="Chỉ VET ACTIVE, không khóa.")
+     notes="Chỉ VET ACTIVE, không khóa (khóa tạm vẫn hiện), thuộc chi nhánh ACTIVE; `branchId` không phải chi nhánh ACTIVE → mảng rỗng. Sắp theo họ tên (ADR-0026).")

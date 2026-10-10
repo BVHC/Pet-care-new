@@ -70,7 +70,7 @@
 | Đặt lại mật khẩu bằng OTP | A02–A08 | Public | — | — | Thứ tự kiểm: hình thức → chính sách mật khẩu BR-TK-03 → mã BR-TK-05/06 → trùng mật khẩu hiện tại BR-TK-03. Thành công: hủy mọi phiên, gỡ khóa tạm, gỡ bắt đổi mật khẩu lần đầu BR-TK-17, chuyển offline (BR-TN-06), gửi email PASSWORD_CHANGED (BR-TK-13); không audit. ADR-0023. |
 | Thông tin người đang đăng nhập | A02–A08 | Người đang đăng nhập | — | — | — |
 | Đổi mật khẩu | A02–A08 | Người đang đăng nhập | — | — | Đăng xuất mọi phiên khác, phiên đang dùng giữ nguyên; gỡ `mustChangePassword`; xóa bộ đếm đăng nhập sai. Không gửi email. Request sai hình thức (400 `VALIDATION_FAILED` / `MALFORMED_REQUEST`) không tính là một lần nhập sai (ADR-0022). |
-| Sửa hồ sơ nhân viên của tôi | A03–A08 | Nhân viên đang đăng nhập; specialty, bio chỉ VET | — | — | — |
+| Sửa hồ sơ nhân viên của tôi | A03–A08 | Nhân viên đang đăng nhập; specialty, bio chỉ VET | — | — | null = giữ nguyên; chuỗi rỗng = xóa (`avatarUrl`, `specialty`, `bio`). Thứ tự kiểm: hình thức → BR-TK-15 → BR-TK-11 → 403 → BR-TK-20 (chỉ khi gửi `bio`). Field khác (`role`, `branchId`…) bị bỏ qua. Không audit (ADR-0026). |
 | Danh sách hồ sơ tại quầy có thể liên kết | A02 | Khách đang đăng nhập | — | — | Chỉ trả hồ sơ COUNTER chưa liên kết, họ tên đã che. |
 | Gửi OTP tới email hồ sơ tại quầy | A02 | Khách đang đăng nhập | — | — | — |
 | Xác nhận liên kết | A02 | Khách đang đăng nhập | — | — | Gắn tài khoản vào hồ sơ tại quầy, xóa hồ sơ online, email hồ sơ theo email tài khoản, ghi audit. |
@@ -97,7 +97,7 @@
 | Sửa nội dung mẫu | A03 | Chỉ ADMIN | — | — | Không có endpoint thêm / xóa mẫu. |
 | Khôi phục mẫu mặc định | A03 | Chỉ ADMIN | — | — | — |
 | Xem nhật ký audit | A03 | Chỉ ADMIN | — | — | Chỉ đọc; không có endpoint sửa / xóa (BR-QT-16). |
-| Đội ngũ bác sĩ | A01, A02 | Public | — | — | Chỉ VET ACTIVE, không khóa. |
+| Đội ngũ bác sĩ | A01, A02 | Public | — | — | Chỉ VET ACTIVE, không khóa (khóa tạm vẫn hiện), thuộc chi nhánh ACTIVE; `branchId` không phải chi nhánh ACTIVE → mảng rỗng. Sắp theo họ tên (ADR-0026). |
 
 ---
 
@@ -116,7 +116,7 @@
 
 - **`GET /me`** — Thông tin người đang đăng nhập. Response `200` `MeResponse`. Lỗi: `401`.
 - **`POST /me/password`** — Đổi mật khẩu. Request `ChangePasswordRequest`. Response `204` rỗng. Lỗi: `400` `BR-TK-14` mật khẩu hiện tại sai (tính vào bộ đếm BR-TK-09; lần chạm ngưỡng khóa tạm đăng nhập, message kèm giờ mở khóa) · `BR-TK-03` mật khẩu mới không hợp lệ hoặc trùng mật khẩu cũ (chỉ kiểm khi mật khẩu hiện tại đúng) · `BR-TK-09` đang khóa tạm, message có giờ thử lại · `BR-TK-11` tài khoản vừa bị khóa / vô hiệu hóa · `401`.
-- **`PATCH /me/staff-profile`** — Sửa hồ sơ nhân viên của tôi. Request `UpdateStaffProfileRequest`. Response `200` `StaffProfile`. Lỗi: `400` `BR-TK-20` mô tả ngắn vượt 500 ký tự [CFG] · `BR-TK-15` cố sửa email · `401` · `403`.
+- **`PATCH /me/staff-profile`** — Sửa hồ sơ nhân viên của tôi. Request `UpdateStaffProfileRequest`. Response `200` `StaffProfile`. Lỗi: `400` `BR-TK-15` body có `email` (email không tự sửa được) · `BR-TK-11` tài khoản vừa bị khóa / vô hiệu hóa · `BR-TK-20` mô tả ngắn vượt 500 ký tự [CFG] · `BR-TK-17` chưa đổi mật khẩu lần đầu · `VALIDATION_FAILED` họ tên / SĐT rỗng, SĐT khác 10 số, `avatarUrl` không phải `https://` · `401` · `403` `ACCESS_DENIED` tài khoản khách · `ACCESS_DENIED_SCOPE_MISMATCH` không phải VET mà gửi `specialty` / `bio`.
 ### Profile link
 
 - **`GET /me/link-candidates`** — Danh sách hồ sơ tại quầy có thể liên kết. Query: `phone?`. Response `200` mảng `LinkCandidate`. Lỗi: `400` `BR-TK-19` hồ sơ online đã phát sinh dữ liệu, không liên kết được · `401` · `403`.

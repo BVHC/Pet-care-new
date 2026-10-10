@@ -1,6 +1,6 @@
 # ADR-0024: `StaffDirectoryApi` — "đang hoạt động", "online", đếm BRANCH_MANAGER
 
-- **Trạng thái:** Accepted
+- **Trạng thái:** Accepted — mục 5 superseded by ADR-0026
 - **Ngày:** 2026-10-09
 - **Liên quan:**
   - BR-QT-04 (≥ 1 BRANCH_MANAGER `ACTIVE`; ngoại lệ quản lý cuối cùng bị khóa), BR-CN-01, Chi nhánh#2; BR-TN-05, 06 (gán lượt, online); BR-TK-20, BR-CK-01 (VET công khai, UC15); BR-QT-11 (khóa là cờ `is_locked` riêng, 03 #1).
