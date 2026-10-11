@@ -20,7 +20,7 @@ class CustomerApiPlaceholderTest {
                 .isInstanceOf(UnsupportedOperationException.class);
         assertThatThrownBy(() -> placeholder.deleteOnlineProfileOfUnverifiedAccount(1L))
                 .isInstanceOf(UnsupportedOperationException.class);
-        assertThatThrownBy(() -> placeholder.linkAccountToCounterProfile(1L, 2L, "a@petcare.test", 3L))
+        assertThatThrownBy(() -> placeholder.linkAccountToCounterProfile(1L, 2L, "c@petcare.test", "a@petcare.test"))
                 .isInstanceOf(UnsupportedOperationException.class);
         assertThatThrownBy(() -> placeholder.declineLink(1L))
                 .isInstanceOf(UnsupportedOperationException.class);

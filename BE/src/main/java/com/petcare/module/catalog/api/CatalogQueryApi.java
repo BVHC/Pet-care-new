@@ -27,6 +27,9 @@ public interface CatalogQueryApi {
 
     List<ServiceInfo> findServices(Collection<Long> serviceIds);
 
+    /** Mọi dịch vụ đang kinh doanh (kể cả loại chuồng), theo tên: branch UC33 ghép với cờ bật / tắt tại chi nhánh. */
+    List<ServiceInfo> listActiveServices();
+
     Optional<ProductInfo> findProduct(Long productId);
 
     Optional<KennelTypeInfo> findKennelType(Long serviceId);

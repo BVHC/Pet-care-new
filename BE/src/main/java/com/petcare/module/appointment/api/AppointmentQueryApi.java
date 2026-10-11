@@ -7,8 +7,9 @@ import java.util.List;
 /** Owner: appointment (LH) · BE-1. */
 public interface AppointmentQueryApi {
 
-    record BookedSlot(Long appointmentId, Long branchId, Long petId, Long customerId, LocalDate slotDate,
-                      LocalTime slotStart) {}
+    /** {@code code} là mã lịch hẹn hiển thị cho lễ tân khi liệt kê lịch bị ảnh hưởng (branch UC14). */
+    record BookedSlot(Long appointmentId, String code, Long branchId, Long petId, Long customerId,
+                      LocalDate slotDate, LocalTime slotStart) {}
 
     /** Lịch BOOKED từ {@code fromDate} của chi nhánh, để branch tính danh sách bị ảnh hưởng (BR-CN-04, BR-LH-10). */
     List<BookedSlot> findBookedFrom(Long branchId, LocalDate fromDate);

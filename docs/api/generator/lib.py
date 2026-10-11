@@ -96,12 +96,16 @@ def _type(t):
         "string": {"type": "string"},
         "email": {"type": "string", "format": "email", "maxLength": 255},
         "phone": {"type": "string", "pattern": "^0[0-9]{9,10}$", "maxLength": 15},
+        # SĐT nhân viên: dạng chuẩn 10 số của erd accounts.phone (ADR-0026)
+        "mobile": {"type": "string", "pattern": "^0[0-9]{9}$", "maxLength": 15},
         "date": {"type": "string", "format": "date"},
         "time": {"type": "string", "pattern": "^[0-2][0-9]:[0-5][0-9]$", "example": "08:30"},
         "datetime": {"type": "string", "format": "date-time"},
         "bool": {"type": "boolean"},
         "object": {"type": "object", "additionalProperties": True},
         "url": {"type": "string", "maxLength": 500},
+        # Ảnh hiện ở trang công khai: chỉ https (ADR-0026)
+        "https_url": {"type": "string", "pattern": "^https://\S+$", "maxLength": 500},
     }[t]
 
 

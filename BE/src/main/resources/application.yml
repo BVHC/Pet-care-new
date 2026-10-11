@@ -17,9 +17,9 @@ spring:
     properties:
       hibernate:
         format_sql: true
-        # TIMESTAMPTZ đọc/ghi theo UTC, không phụ thuộc timezone JVM (platform/config/TimeConfig).
-        jdbc:
-          time_zone: UTC
+        # Không đặt hibernate.jdbc.time_zone: với UTC, LocalTime của cột TIME (opening_hours, slot_quotas,
+        # appointments) bị lưu lệch giờ khi JVM không chạy UTC (08:00 thành 00:00 ở Asia/Ho_Chi_Minh). TIMESTAMPTZ
+        # lưu Instant nên không cần cấu hình này (EntityTimestampsIT, AuditRecorderIT chạy ở Asia/Ho_Chi_Minh).
 
   # Flyway sở hữu schema (db/migration/V{n}__*.sql). Không bật baseline-on-migrate:
   # DB đã có bảng mà chưa có lịch sử Flyway phải báo lỗi, không được âm thầm bỏ qua V1.

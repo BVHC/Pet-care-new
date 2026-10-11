@@ -10,6 +10,7 @@ import org.springframework.data.jpa.repository.Modifying;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 
+import com.petcare.module.identity.api.Role;
 import com.petcare.module.identity.entity.Account;
 
 import jakarta.persistence.LockModeType;
@@ -130,4 +131,20 @@ public interface AccountRepository extends JpaRepository<Account, Long> {
     @Modifying
     @Query(value = "DELETE FROM accounts WHERE id = :id AND status = 'PENDING'", nativeQuery = true)
     int deletePendingById(@Param("id") long id);
+
+    /**
+     * {@code StaffDirectoryApi.findActiveSuperManagerIds} (docs/adr/0024): tài khoản theo role đang hoạt động
+     * ({@code ACTIVE}, không bị khóa), không cần {@code staff_profiles}. Projection, không nạp entity.
+     */
+    @Query("""
+            SELECT a.id FROM Account a
+            WHERE a.role = :role
+              AND a.status = com.petcare.module.identity.entity.AccountStatus.ACTIVE AND a.locked = false
+            ORDER BY a.id
+            """)
+    List<Long> findActiveIdsByRole(@Param("role") Role role);
+
+    /** {@code StaffDirectoryApi.findEmail}: mọi trạng thái, mọi role. Projection, không nạp entity. */
+    @Query("SELECT a.email FROM Account a WHERE a.id = :id")
+    Optional<String> findEmailById(@Param("id") Long id);
 }

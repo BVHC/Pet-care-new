@@ -31,8 +31,8 @@ public class CustomerApiPlaceholder implements CustomerApi {
     }
 
     @Override
-    public void linkAccountToCounterProfile(Long accountId, Long counterCustomerId, String accountEmail,
-            Long actorId) {
+    public void linkAccountToCounterProfile(Long accountId, Long counterCustomerId, String expectedCounterEmail,
+            String accountEmail) {
         throw new UnsupportedOperationException(MESSAGE);
     }
 

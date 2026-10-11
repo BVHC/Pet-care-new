@@ -79,6 +79,7 @@ public class OtpService {
      */
     @Transactional(propagation = Propagation.MANDATORY)
     public IssuedOtp issueOtp(Long accountId, OtpPurpose purpose, String targetEmail) {
+        checkCustomerMatchesPurpose(purpose, null);
         Instant now = Instant.now(clock);
         Duration interval = Duration.ofSeconds(configs.getInt(ConfigKey.OTP_RESEND_INTERVAL_SECONDS));
         checkSendQuota(targetEmail, now, interval);
@@ -102,6 +103,7 @@ public class OtpService {
      */
     @Transactional(propagation = Propagation.MANDATORY, noRollbackFor = OtpRejectedException.class)
     public void consumeOtp(Long accountId, OtpPurpose purpose, String targetEmail, String code) {
+        checkCustomerMatchesPurpose(purpose, null);
         Instant now = Instant.now(clock);
         OtpToken otp = otps
                 .findTopByAccountIdAndPurposeAndTargetEmailAndConsumedAtIsNullAndInvalidatedAtIsNullOrderByIdDesc(
@@ -130,15 +132,33 @@ public class OtpService {
      */
     @Transactional(propagation = Propagation.MANDATORY)
     public IssuedOtp issuePrepared(Long accountId, OtpPurpose purpose, String targetEmail, PreparedOtp prepared) {
+        return issuePrepared(accountId, purpose, targetEmail, null, prepared);
+    }
+
+    /**
+     * Bản có hồ sơ cần liên kết ({@code LINK_PROFILE}, BR-TK-19 — docs/adr/0025): {@code customerId} bắt buộc với
+     * {@code LINK_PROFILE}, cấm với mục đích khác (lỗi lập trình → {@link IllegalArgumentException} trước mọi lệnh ghi).
+     * Với {@code LINK_PROFILE} mã cũ bị hủy theo <b>tài khoản</b> thay vì theo email: tài khoản khác xin mã cho cùng hồ sơ
+     * không hủy được mã của tài khoản này, và mọi lệnh ghi lên mã của tài khoản nằm dưới khóa dòng {@code accounts} của
+     * chính nó (docs/adr/0011).
+     */
+    @Transactional(propagation = Propagation.MANDATORY)
+    public IssuedOtp issuePrepared(Long accountId, OtpPurpose purpose, String targetEmail, Long customerId,
+            PreparedOtp prepared) {
+        checkCustomerMatchesPurpose(purpose, customerId);
         Instant now = Instant.now(clock);
         Duration interval = Duration.ofSeconds(configs.getInt(ConfigKey.OTP_RESEND_INTERVAL_SECONDS));
         checkSendQuota(targetEmail, now, interval);
 
-        otps.invalidateActive(targetEmail, purpose, now);
+        if (customerId != null) {
+            otps.invalidateActiveForAccount(accountId, purpose, now);
+        } else {
+            otps.invalidateActive(targetEmail, purpose, now);
+        }
 
         int ttlMinutes = configs.getInt(ConfigKey.OTP_TTL_MINUTES);
         Instant expiresAt = now.plus(Duration.ofMinutes(ttlMinutes));
-        otps.save(new OtpToken(accountId, purpose, targetEmail, prepared.codeHash(), expiresAt));
+        otps.save(new OtpToken(accountId, purpose, targetEmail, customerId, prepared.codeHash(), expiresAt));
         return new IssuedOtp(prepared.code(), expiresAt, now.plus(interval), ttlMinutes);
     }
 
@@ -148,9 +168,14 @@ public class OtpService {
      */
     @Transactional(propagation = Propagation.MANDATORY)
     public Optional<ActiveOtp> findActive(Long accountId, OtpPurpose purpose, String targetEmail) {
-        return otps
-                .findTopByAccountIdAndPurposeAndTargetEmailAndConsumedAtIsNullAndInvalidatedAtIsNullOrderByIdDesc(
-                        accountId, purpose, targetEmail)
+        return findActive(accountId, purpose, targetEmail, null);
+    }
+
+    /** Như trên, lọc thêm theo hồ sơ cần liên kết ({@code LINK_PROFILE}, docs/adr/0025). */
+    @Transactional(propagation = Propagation.MANDATORY)
+    public Optional<ActiveOtp> findActive(Long accountId, OtpPurpose purpose, String targetEmail, Long customerId) {
+        checkCustomerMatchesPurpose(purpose, customerId);
+        return findLatestActive(accountId, purpose, targetEmail, customerId)
                 .map(otp -> new ActiveOtp(otp.getId(), otp.getCodeHash(), otp.getExpiresAt()));
     }
 
@@ -168,10 +193,20 @@ public class OtpService {
     @Transactional(propagation = Propagation.MANDATORY, noRollbackFor = OtpRejectedException.class)
     public void settleCheckedOtp(Long accountId, OtpPurpose purpose, String targetEmail, Long otpId,
             boolean matched) {
+        settleCheckedOtp(accountId, purpose, targetEmail, null, otpId, matched);
+    }
+
+    /**
+     * Như trên, lọc thêm theo hồ sơ cần liên kết ({@code LINK_PROFILE}, docs/adr/0025): {@code otpId} của hồ sơ khác
+     * → BR-TK-05 không đếm, bộ đếm của mã hồ sơ kia giữ nguyên. Use case gọi thẳng method này nên nó phải tự mang
+     * {@code noRollbackFor}; gọi nội bộ từ bản trên thì proxy của bản trên áp dụng.
+     */
+    @Transactional(propagation = Propagation.MANDATORY, noRollbackFor = OtpRejectedException.class)
+    public void settleCheckedOtp(Long accountId, OtpPurpose purpose, String targetEmail, Long customerId, Long otpId,
+            boolean matched) {
+        checkCustomerMatchesPurpose(purpose, customerId);
         Instant now = Instant.now(clock);
-        OtpToken otp = otps
-                .findTopByAccountIdAndPurposeAndTargetEmailAndConsumedAtIsNullAndInvalidatedAtIsNullOrderByIdDesc(
-                        accountId, purpose, targetEmail)
+        OtpToken otp = findLatestActive(accountId, purpose, targetEmail, customerId)
                 .filter(active -> active.getId().equals(otpId) && !active.isExpiredAt(now))
                 .orElseThrow(() -> new OtpRejectedException("BR-TK-05", INVALID_OTP_MESSAGE));
 
@@ -179,6 +214,28 @@ public class OtpService {
             throw recordWrongCode(otp, now);
         }
         otp.consume(now);
+    }
+
+    private Optional<OtpToken> findLatestActive(Long accountId, OtpPurpose purpose, String targetEmail,
+            Long customerId) {
+        if (customerId == null) {
+            return otps.findTopByAccountIdAndPurposeAndTargetEmailAndConsumedAtIsNullAndInvalidatedAtIsNullOrderByIdDesc(
+                    accountId, purpose, targetEmail);
+        }
+        return otps
+                .findTopByAccountIdAndPurposeAndTargetEmailAndCustomerIdAndConsumedAtIsNullAndInvalidatedAtIsNullOrderByIdDesc(
+                        accountId, purpose, targetEmail, customerId);
+    }
+
+    /**
+     * Cùng điều kiện với CHECK {@code ck_otp_tokens_link_customer} (V1): {@code LINK_PROFILE} ⇔ có {@code customerId}.
+     * Chặn ở đây để lỗi lập trình hiện ra trước mọi lệnh ghi, không phải lúc flush (docs/adr/0025).
+     */
+    private static void checkCustomerMatchesPurpose(OtpPurpose purpose, Long customerId) {
+        if ((purpose == OtpPurpose.LINK_PROFILE) != (customerId != null)) {
+            throw new IllegalArgumentException("customerId bắt buộc với LINK_PROFILE và chỉ dùng cho LINK_PROFILE: purpose="
+                    + purpose + ", customerId=" + customerId);
+        }
     }
 
     /** BR-TK-05, 06: một lần nhập sai; trả exception để caller ném sau khi bộ đếm đã nằm trong persistence context. */

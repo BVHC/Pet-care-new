@@ -39,4 +39,20 @@ public class StaffProfile extends TimestampedEntity {
 
     @Column(name = "bio")
     private String bio;
+
+    /**
+     * UC06 — nhân viên tự sửa hồ sơ (BR-TK-15, 20; docs/adr/0026). Nhận <b>giá trị cuối</b> của cả bốn trường: service
+     * đã quyết giữ / xóa / đổi và kiểm phạm vi (chỉ VET sửa {@code specialty}, {@code bio}) cùng độ dài [CFG]; ở đây
+     * không đoán {@code null} hay chuỗi rỗng. {@code branchId} không đổi được ở đây (điều chuyển là UC08). Caller giữ
+     * khóa dòng {@code accounts} từ trước khi đọc hồ sơ.
+     */
+    public void updateSelfProfile(String newFullName, String newAvatarUrl, String newSpecialty, String newBio) {
+        if (newFullName == null || newFullName.isBlank()) {
+            throw new IllegalArgumentException("full_name is required");
+        }
+        this.fullName = newFullName;
+        this.avatarUrl = newAvatarUrl;
+        this.specialty = newSpecialty;
+        this.bio = newBio;
+    }
 }

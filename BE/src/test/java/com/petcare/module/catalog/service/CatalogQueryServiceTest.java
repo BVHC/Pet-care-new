@@ -1,6 +1,7 @@
 package com.petcare.module.catalog.service;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
 
@@ -69,6 +70,17 @@ class CatalogQueryServiceTest {
         assertThat(info.price()).isEqualTo(50_000);
         assertThat(info.active()).isTrue();
         assertThat(service.findService(2L)).isEmpty();
+    }
+
+    @Test
+    void listsOnlyActiveServicesByName() {
+        when(services.findAll(any(org.springframework.data.jpa.domain.Specification.class),
+                any(org.springframework.data.domain.Sort.class)))
+                .thenReturn(List.of(service(1, ServiceGroup.MEDICAL, MedicalType.EXAM, 50_000, true),
+                        service(2, ServiceGroup.BOARDING, null, 150_000, true)));
+
+        assertThat(service.listActiveServices()).extracting(ServiceInfo::serviceId).containsExactly(1L, 2L);
+        assertThat(service.listActiveServices().get(1).group()).isEqualTo(ServiceGroup.BOARDING);
     }
 
     @Test

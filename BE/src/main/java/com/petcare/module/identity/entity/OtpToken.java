@@ -61,9 +61,19 @@ public class OtpToken extends CreatedAtEntity {
     private Instant invalidatedAt;
 
     public OtpToken(Long accountId, OtpPurpose purpose, String targetEmail, String codeHash, Instant expiresAt) {
+        this(accountId, purpose, targetEmail, null, codeHash, expiresAt);
+    }
+
+    /**
+     * {@code customerId} chỉ có với {@code LINK_PROFILE} (hồ sơ tại quầy cần liên kết, BR-TK-19); CHECK
+     * {@code ck_otp_tokens_link_customer} chặn ở DB, {@code OtpService} chặn trước đó (docs/adr/0025).
+     */
+    public OtpToken(Long accountId, OtpPurpose purpose, String targetEmail, Long customerId, String codeHash,
+            Instant expiresAt) {
         this.accountId = accountId;
         this.purpose = purpose;
         this.targetEmail = targetEmail;
+        this.customerId = customerId;
         this.codeHash = codeHash;
         this.expiresAt = expiresAt;
     }

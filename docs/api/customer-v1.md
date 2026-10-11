@@ -49,11 +49,11 @@
 |---|---|---|---|---|---|
 | Hồ sơ khách của tôi | A02 | Khách đang đăng nhập | — | — | — |
 | Sửa hồ sơ khách của tôi | A02 | Khách đang đăng nhập | — | — | Không trả cảnh báo nghi trùng cho khách (A1). |
-| Sổ địa chỉ | A02 | Khách đang đăng nhập | — | — | — |
-| Thêm địa chỉ | A02 | Khách đang đăng nhập | — | — | — |
+| Sổ địa chỉ | A02 | Khách đang đăng nhập | — | — | Mặc định trước, rồi theo thứ tự thêm (A7). |
+| Thêm địa chỉ | A02 | Khách đang đăng nhập | — | — | Sổ rỗng thì địa chỉ đầu luôn là mặc định (A6). |
 | Sửa địa chỉ | A02 | Chủ địa chỉ | — | — | — |
 | Xóa địa chỉ | A02 | Chủ địa chỉ | — | — | — |
-| Đặt địa chỉ mặc định | A02 | Chủ địa chỉ | — | — | Bỏ cờ mặc định của địa chỉ cũ trong cùng transaction. |
+| Đặt địa chỉ mặc định | A02 | Chủ địa chỉ | — | — | Bỏ cờ mặc định của địa chỉ cũ trong cùng transaction; đã là mặc định thì trả về như cũ. |
 | Tra cứu khách & thú cưng | A06, A07, A08 | Nhân viên mọi chi nhánh | — | — | Cần ít nhất một điều kiện tìm. |
 | Tạo hồ sơ khách tại quầy | A06 | Lễ tân | — | — | SĐT trùng hồ sơ khác: vẫn tạo, trả danh sách nghi trùng (BR-KH-10). |
 | Chi tiết hồ sơ khách kèm thú cưng | A06, A07, A08 | Nhân viên | — | — | — |
@@ -76,7 +76,7 @@
 ### My profile
 
 - **`GET /me/customer-profile`** — Hồ sơ khách của tôi. Response `200` `CustomerProfile`. Lỗi: `401` · `403`.
-- **`PATCH /me/customer-profile`** — Sửa hồ sơ khách của tôi. Request `UpdateMyCustomerProfileRequest`. Response `200` `CustomerProfile`. Lỗi: `400` `BR-TK-15` cố sửa email · dữ liệu không hợp lệ · `401` · `403`.
+- **`PATCH /me/customer-profile`** — Sửa hồ sơ khách của tôi. Request `UpdateMyCustomerProfileRequest`. Response `200` `CustomerProfile`. Lỗi: `400` `BR-TK-15` cố sửa email · `BR-KH-01` xóa SĐT của hồ sơ tại quầy · dữ liệu không hợp lệ · `401` · `403`.
 - **`GET /me/addresses`** — Sổ địa chỉ. Response `200` mảng `Address`. Lỗi: `401` · `403`.
 - **`POST /me/addresses`** — Thêm địa chỉ. Request `AddressRequest`. Response `201` `Address`. Lỗi: `400` `BR-TK-18` đã đủ 5 địa chỉ [CFG] · `401` · `403`.
 - **`PATCH /me/addresses/{addressId}`** — Sửa địa chỉ. Request `UpdateAddressRequest`. Response `200` `Address`. Lỗi: `400` · `401` · `403` · `404`.
@@ -109,10 +109,10 @@ Trường có `?` là không bắt buộc / có thể null. Kiểu `email`, `dat
 
 - **`Species`** — enum: `DOG`, `CAT`, `OTHER`. Chó, Mèo, Khác (BR-KH-02)
 - **`CustomerProfile`** — {`customerId`: int64, `fullName`: string, `phone?`: string, `email?`: email, `avatarUrl?`: string, `createdChannel`: ONLINE|COUNTER, `hasAccount`: boolean, `linkDecisionPending`: boolean}
-- **`UpdateMyCustomerProfileRequest`** — {`fullName?`: string, `phone?`: string, `avatarUrl?`: string} — Email không tự sửa được (BR-TK-15)
+- **`UpdateMyCustomerProfileRequest`** — {`fullName?`: string, `phone?`: string, `avatarUrl?`: string} — Email không tự sửa được (BR-TK-15); gửi `email` → 400 BR-TK-15
 - **`Address`** — {`addressId`: int64, `receiverName`: string, `receiverPhone`: string, `addressLine`: string, `ward?`: string, `province`: string, `isDefault`: boolean}
 - **`AddressRequest`** — {`receiverName`: string, `receiverPhone`: string, `addressLine`: string, `ward?`: string, `province`: string, `isDefault?`: boolean}
-- **`UpdateAddressRequest`** — {`receiverName?`: string, `receiverPhone?`: string, `addressLine?`: string, `ward?`: string, `province?`: string}
+- **`UpdateAddressRequest`** — {`receiverName?`: string, `receiverPhone?`: string, `addressLine?`: string, `ward?`: string, `province?`: string} — Cờ mặc định chỉ đổi qua set-default
 - **`PetBrief`** — {`petId`: int64, `name`: string, `species`: Species, `deceased`: boolean}
 - **`CustomerSearchItem`** — {`customerId`: int64, `fullName`: string, `phone?`: string, `maskedEmail?`: string, `createdChannel`: ONLINE|COUNTER, `hasAccount`: boolean, `pets`: [PetBrief]} — Một SĐT có thể ra nhiều hồ sơ; nhân viên chọn theo họ tên, email che và thú cưng (BR-KH-10)
 - **`CreateCounterCustomerRequest`** — {`fullName`: string, `phone`: string, `email?`: email}
@@ -149,6 +149,10 @@ Trường có `?` là không bắt buộc / có thể null. Kiểu `email`, `dat
 | A3 | Xác nhận 2 bước khi đánh dấu đã mất làm ở giao diện; API yêu cầu `confirmed = true` | BR-KH-05 'xác nhận 2 bước' |
 | A4 | Chuyển chủ yêu cầu `previousOwnerConfirmed = true` do lễ tân tích | BR-KH-08 'khi chủ cũ có mặt hoặc đã xác nhận' — hệ thống không có kênh xác nhận riêng |
 | A5 | Email hồ sơ chỉ sửa trực tiếp được khi hồ sơ chưa gắn tài khoản; hồ sơ có tài khoản thì email theo tài khoản (sửa ở identity) | BR-TK-16, BR-TK-19: email hồ sơ cập nhật theo email tài khoản |
+| A6 | Sổ địa chỉ đang rỗng thì địa chỉ thêm vào luôn là mặc định, kể cả khi gửi `isDefault = false`; xóa địa chỉ mặc định duy nhất được phép (sổ thành rỗng) | BR-TK-18 'đúng 1 địa chỉ mặc định'; docs/adr/0028 |
+| A7 | `GET /me/addresses` trả mảng: địa chỉ mặc định trước, rồi theo thứ tự thêm | Docs không quy định thứ tự; docs/adr/0028 |
+| A8 | Địa chỉ của khách khác trả 404 cùng message với id không tồn tại | Không lộ id đang có; docs/adr/0028 |
+| A9 | `CustomerProfile.email` ở `/me/customer-profile` là email của tài khoản đang đăng nhập | BR-KH-01 'email lấy theo tài khoản', A5; docs/adr/0028 |
 
 | ID | Câu hỏi | Trạng thái | Gốc |
 |---|---|---|---|

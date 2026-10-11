@@ -14,7 +14,9 @@ public interface BoardingQueryApi {
     record StaySummary(Long bookingId, Long branchId, Long customerId, Long petId, StayStatus status,
                        String emergencyPhone) {}
 
-    record BookedStay(Long bookingId, Long petId, Long customerId, LocalDate checkInDate, LocalDate checkOutDate) {}
+    /** {@code code} là mã đặt chỗ hiển thị cho lễ tân khi liệt kê đặt chỗ bị ảnh hưởng (branch UC14). */
+    record BookedStay(Long bookingId, String code, Long petId, Long customerId, LocalDate checkInDate,
+                      LocalDate checkOutDate) {}
 
     Optional<StaySummary> findBooking(Long bookingId);
 

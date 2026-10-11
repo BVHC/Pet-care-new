@@ -184,4 +184,19 @@ public class Account extends TimestampedEntity {
             lockedUntil = null;
         }
     }
+
+    /**
+     * UC06 — nhân viên tự sửa SĐT (BR-TK-15). Nhân viên luôn có SĐT, khách không lưu SĐT ở tài khoản (BR-TK-01, CHECK
+     * {@code ck_accounts_phone_by_role}): gọi với tài khoản khách hoặc {@code null} là lỗi lập trình. Định dạng đã kiểm
+     * ở request; không kiểm trùng (SĐT không duy nhất, v16). Caller giữ khóa dòng (docs/adr/0026).
+     */
+    public void changeStaffPhone(String newPhone) {
+        if (role == Role.CUSTOMER) {
+            throw new IllegalStateException("Customer account " + id + " has no account phone (BR-TK-01)");
+        }
+        if (newPhone == null) {
+            throw new IllegalStateException("Staff account " + id + " must keep a phone (BR-TK-01)");
+        }
+        this.phone = newPhone;
+    }
 }
