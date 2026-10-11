@@ -20,6 +20,7 @@ export function Modal({ open, onOpenChange, children, className }: ModalProps) {
   return (
     <div
       data-state={open ? "open" : "closed"}
+      aria-hidden={!open}
       className={cn(
         "fixed inset-0 z-[100] flex items-center justify-center bg-black/50 p-4 transition-all duration-200",
         open ? "opacity-100 pointer-events-auto" : "opacity-0 pointer-events-none"
@@ -27,6 +28,8 @@ export function Modal({ open, onOpenChange, children, className }: ModalProps) {
       onClick={(e) => e.target === e.currentTarget && onOpenChange(false)}
     >
       <div
+        role="dialog"
+        aria-modal="true"
         className={cn(
           "relative w-full max-h-[90vh] overflow-auto rounded-2xl border border-(--color-border-default) bg-white shadow-2xl transition-all duration-200",
           open ? "scale-100 translate-y-0" : "scale-95 translate-y-4",
@@ -54,7 +57,9 @@ export function ModalHeader({
       {children}
       {onClose && (
         <button
+          type="button"
           onClick={onClose}
+          aria-label="Đóng"
           className="rounded-lg p-1.5 text-(--color-text-secondary) hover:bg-(--color-surface-2) hover:text-(--color-text-primary) transition-colors"
         >
           <X size={18} />

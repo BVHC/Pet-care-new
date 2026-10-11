@@ -10,15 +10,13 @@ export interface ApiResponse<T> {
   code: number;
 }
 
-// Pagination
+// Pagination — BE platform/model/PageResponse (00-method §3.4), `page` bắt đầu từ 0.
 export interface PageResponse<T> {
   content: T[];
   page: number;
   size: number;
   totalElements: number;
   totalPages: number;
-  first: boolean;
-  last: boolean;
 }
 
 // User (model cũ, dùng trong Appointment / MedicalRecord bên dưới).

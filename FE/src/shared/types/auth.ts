@@ -47,6 +47,46 @@ export interface ChangePasswordRequest {
   newPassword: string;
 }
 
+/** BR-TK-02: phải tick cả hai ô. */
+export interface RegisterRequest {
+  email: string;
+  password: string;
+  fullName: string;
+  phone?: string;
+  isAdult: boolean;
+  termsAccepted: boolean;
+}
+
+export interface RegistrationResponse {
+  accountId: number;
+  email: string;
+  status: 'PENDING';
+  otpResendAvailableAt: string;
+}
+
+export interface VerifyOtpRequest {
+  email: string;
+  code: string;
+}
+
+export interface VerificationResponse {
+  accountId: number;
+  status: 'ACTIVE';
+  linkDecisionPending: boolean;
+}
+
+/** Quên mật khẩu luôn trả `maskedEmail: null` (BR-TK-10). */
+export interface OtpSentResponse {
+  resendAvailableAt: string;
+  maskedEmail?: string | null;
+}
+
+export interface ResetPasswordRequest {
+  email: string;
+  code: string;
+  newPassword: string;
+}
+
 /** Người đang đăng nhập, dạng UI nhân viên dùng (`id` dạng chuỗi như mã nhân viên của clinic-db). */
 export interface SessionUser {
   id: string;

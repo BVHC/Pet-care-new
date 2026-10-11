@@ -9,6 +9,7 @@ import { toApiError } from '../../shared/api/api-error';
 import { ROUTES } from '../../shared/constants/routes';
 import { homePathFor } from '../../shared/constants/workspaces';
 import { useAccount, useSession } from '../../shared/stores/session.store';
+import { passwordPolicyError } from '../../shared/utils/password';
 
 // Màn bắt đổi mật khẩu (BR-TK-17): guard đưa vào đây khi account.mustChangePassword.
 export function ChangePasswordPage() {
@@ -26,6 +27,8 @@ export function ChangePasswordPage() {
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!form.current || !form.next) return setError('Nhập mật khẩu hiện tại và mật khẩu mới.');
+    const policy = passwordPolicyError(form.next);
+    if (policy) return setError(policy);
     if (form.next !== form.confirm) return setError('Mật khẩu nhập lại không khớp.');
     setError('');
     setLoading(true);

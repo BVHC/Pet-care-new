@@ -3,7 +3,7 @@
 import { keepPreviousData, useMutation, useQuery, useQueryClient, type QueryKey } from '@tanstack/react-query';
 import { toast } from 'sonner';
 import { formatCurrency } from '../../lib/utils';
-import { ApiError } from '../api/api-error';
+import { ApiError, plainMessage } from '../api/api-error';
 import {
   clinicApi,
   type AddLineInput,
@@ -66,7 +66,7 @@ export const useCurrentShift = (receptionistId: string) =>
 
 /** Message hiển thị; mã rule ở cuối message (00-method §3.5) tách ra, xem `notifyError`. */
 export function errorMessage(error: unknown): string {
-  if (error instanceof ApiError && error.ruleId) return error.message.replace(` (${error.ruleId})`, '');
+  if (error instanceof ApiError) return plainMessage(error);
   return error instanceof Error && error.message ? error.message : 'Không thực hiện được. Thử lại sau ít phút.';
 }
 

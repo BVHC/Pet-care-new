@@ -67,6 +67,18 @@ describe('route guards', () => {
     expect(screen.queryByRole('heading', { name: 'Bạn không có quyền vào trang này' })).not.toBeInTheDocument();
   });
 
+  it('lets the chain manager manage the catalog (UC28–UC31)', async () => {
+    await signInAs('chuoi@petcare.vn');
+    open('/admin/catalog');
+    expect(await screen.findByRole('heading', { name: 'Sản phẩm & dịch vụ' })).toBeInTheDocument();
+  });
+
+  it('keeps other staff out of catalog management', async () => {
+    await signInAs('reception@store1.vn');
+    open('/admin/catalog/products');
+    expect(await forbidden()).toBeInTheDocument();
+  });
+
   it('forces the password change before any page (BR-TK-17)', async () => {
     await signInAs('newstaff@store1.vn');
     open('/staff/reception');

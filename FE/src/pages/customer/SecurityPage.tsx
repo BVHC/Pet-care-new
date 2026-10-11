@@ -17,6 +17,10 @@ import {
 } from 'lucide-react'
 import { toast } from 'sonner'
 import { AccountSidebar } from '@/components/customer/AccountSidebar'
+import { authApi } from '@/shared/api/auth.api'
+import { plainMessage, toApiError } from '@/shared/api/api-error'
+import { useSession } from '@/shared/stores/session.store'
+import { passwordPolicyError } from '@/shared/utils/password'
 import styles from './SecurityPage.module.css'
 
 /* ================================================================
@@ -29,24 +33,37 @@ export function SecurityPage() {
   const [showPwForm, setShowPwForm] = useState(false)
   const [pwForm, setPwForm] = useState({ current: '', next: '', confirm: '' })
   const [pwError, setPwError] = useState('')
+  const [pwSaving, setPwSaving] = useState(false)
+  const setMustChangePassword = useSession((s) => s.setMustChangePassword)
 
   const set = (patch: Partial<typeof pwForm>) =>
     setPwForm((f) => ({ ...f, ...patch }))
 
-  const handleChangePw = (e: React.FormEvent) => {
+  // UC05: POST /api/me/password. BE giu phien nay, dang xuat moi phien khac.
+  const handleChangePw = async (e: React.FormEvent) => {
     e.preventDefault()
     setPwError('')
-    if (pwForm.next.length < 8) {
-      setPwError('Mật khẩu mới phải có ít nhất 8 ký tự.')
+    const invalid =
+      (!pwForm.current && 'Nhập mật khẩu hiện tại.') ||
+      passwordPolicyError(pwForm.next) ||
+      (pwForm.next !== pwForm.confirm && 'Mật khẩu xác nhận không khớp.')
+    if (invalid) {
+      setPwError(invalid)
       return
     }
-    if (pwForm.next !== pwForm.confirm) {
-      setPwError('Mật khẩu xác nhận không khớp.')
-      return
+    setPwSaving(true)
+    try {
+      await authApi.changePassword({ currentPassword: pwForm.current, newPassword: pwForm.next })
+      setMustChangePassword(false)
+      toast.success('Đổi mật khẩu thành công! Các thiết bị khác đã được đăng xuất.')
+      setPwForm({ current: '', next: '', confirm: '' })
+      setShowPwForm(false)
+    } catch (err) {
+      // BR-TK-14 sai mat khau hien tai, BR-TK-03 mat khau moi khong hop le, BR-TK-09 dang khoa tam.
+      setPwError(plainMessage(toApiError(err)))
+    } finally {
+      setPwSaving(false)
     }
-    toast.success('Đổi mật khẩu thành công!')
-    setPwForm({ current: '', next: '', confirm: '' })
-    setShowPwForm(false)
   }
 
   return (
@@ -120,7 +137,7 @@ export function SecurityPage() {
                         type="password"
                         value={pwForm.next}
                         onChange={(e) => set({ next: e.target.value })}
-                        placeholder="Ít nhất 8 ký tự"
+                        placeholder="Ít nhất 8 ký tự, có chữ và số"
                         className={styles.fieldInput}
                       />
                     </div>
@@ -143,8 +160,8 @@ export function SecurityPage() {
                       >
                         Hủy
                       </button>
-                      <button type="submit" className={styles.btnSave}>
-                        Lưu mật khẩu
+                      <button type="submit" className={styles.btnSave} disabled={pwSaving}>
+                        {pwSaving ? 'Đang lưu...' : 'Lưu mật khẩu'}
                       </button>
                     </div>
                   </form>

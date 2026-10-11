@@ -74,6 +74,7 @@ import { AdminUsersPage } from '../pages/admin/AdminUsersPage';
 import { AdminTenantsPage } from '../pages/admin/AdminTenantsPage';
 import { AdminOrdersPage } from '../pages/admin/AdminOrdersPage';
 import { AdminAIPage } from '../pages/admin/AdminAIPage';
+import { AdminCatalogPage } from '../pages/admin/AdminCatalogPage';
 
 const queryClient = new QueryClient({
   defaultOptions: { queries: { staleTime: 60_000, refetchOnWindowFocus: false } },
@@ -160,6 +161,7 @@ export function App() {
         <Route path={ROUTES.staffLogin} element={<AdminLoginPage />} />
         <Route element={<AdminLayout />}>
           <Route path="/admin/dashboard" element={<AdminDashboardPage />} />
+          <Route path="/admin/catalog/:tab?" element={<AdminCatalogPage />} />
           <Route path="/admin/pos" element={<AdminPOSPage />} />
           <Route path="/admin/appointments" element={<AdminAppointmentsPage />} />
           <Route path="/admin/queue" element={<AdminQueuePage />} />

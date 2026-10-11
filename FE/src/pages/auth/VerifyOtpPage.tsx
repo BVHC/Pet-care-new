@@ -4,11 +4,13 @@ import { MailCheck, ShieldCheck, Timer } from 'lucide-react';
 import { toast } from 'sonner';
 import { AuthShell } from './AuthShell';
 import { SubmitButton } from './AuthField';
-import { useAuthStore } from '../../shared/stores/auth.store';
-import { apiErrorMessage } from '../../shared/api/auth.api';
+import { authApi } from '../../shared/api/auth.api';
+import { plainMessage, toApiError } from '../../shared/api/api-error';
 
 const OTP_LENGTH = 6;
-const RESEND_COOLDOWN = 60;
+
+/** So giay con lai toi `resendAvailableAt` cua BE (BR-TK-07, khoang cach la [CFG]). */
+const secondsUntil = (iso?: string) => (iso ? Math.max(0, Math.ceil((Date.parse(iso) - Date.now()) / 1000)) : 0);
 
 const STEPS = [
   { icon: MailCheck, text: 'Mã gồm 6 chữ số vừa được gửi tới email của bạn' },
@@ -19,17 +21,17 @@ const STEPS = [
 export function VerifyOtpPage() {
   const navigate = useNavigate();
   const location = useLocation();
-  const verifyOtp = useAuthStore((s) => s.verifyOtp);
-  const resendOtp = useAuthStore((s) => s.resendOtp);
 
   // Email do RegisterPage/LoginPage chuyen sang qua router state; fallback
-  // ?email= de link van mo lai duoc sau khi F5.
+  // ?email= de link van mo lai duoc sau khi F5. Tu LoginPage (BR-TK-08) khong co resendAvailableAt.
   const [searchParams] = useSearchParams();
-  const email = (location.state as { email?: string } | null)?.email ?? searchParams.get('email') ?? '';
+  const state = location.state as { email?: string; resendAvailableAt?: string } | null;
+  const email = state?.email ?? searchParams.get('email') ?? '';
 
   const [digits, setDigits] = useState<string[]>(Array(OTP_LENGTH).fill(''));
   const [loading, setLoading] = useState(false);
-  const [cooldown, setCooldown] = useState(0);
+  const [error, setError] = useState('');
+  const [cooldown, setCooldown] = useState(() => secondsUntil(state?.resendAvailableAt));
   const inputs = useRef<Array<HTMLInputElement | null>>([]);
 
   // Khong co email thi khong xac thuc duoc -> quay ve dang ky.
@@ -86,12 +88,14 @@ export function VerifyOtpPage() {
       return;
     }
     setLoading(true);
+    setError('');
     try {
-      await verifyOtp(email, code);
+      await authApi.verifyRegistration(email, code);
       toast.success('Xác thực thành công! Mời bạn đăng nhập.');
       navigate('/auth/login', { replace: true });
-    } catch (error) {
-      toast.error(apiErrorMessage(error, 'Mã OTP không đúng hoặc đã hết hạn.'));
+    } catch (err) {
+      // BR-TK-05 sai / het han, BR-TK-06 sai qua 5 lan (phai gui lai ma), 404 khong co tai khoan cho xac thuc.
+      setError(plainMessage(toApiError(err)));
       writeDigits(Array(OTP_LENGTH).fill(''));
     } finally {
       setLoading(false);
@@ -100,12 +104,13 @@ export function VerifyOtpPage() {
 
   const handleResend = async () => {
     if (cooldown > 0) return;
+    setError('');
     try {
-      await resendOtp(email);
-      setCooldown(RESEND_COOLDOWN);
+      const res = await authApi.resendRegistrationOtp(email);
+      setCooldown(secondsUntil(res.resendAvailableAt));
       toast.success('Đã gửi lại mã OTP.');
-    } catch (error) {
-      toast.error(apiErrorMessage(error, 'Gửi lại mã thất bại, vui lòng thử lại sau.'));
+    } catch (err) {
+      setError(plainMessage(toApiError(err)));
     }
   };
 
@@ -154,6 +159,12 @@ export function VerifyOtpPage() {
             />
           ))}
         </div>
+
+        {error && (
+          <p role="alert" className="mt-4 text-[13px] font-semibold text-[#d32f2f]">
+            {error}
+          </p>
+        )}
 
         <div className="mt-5 mb-7 flex items-center justify-between text-[13.5px]">
           <span className="text-[#7a6a5d]">Không nhận được mã?</span>

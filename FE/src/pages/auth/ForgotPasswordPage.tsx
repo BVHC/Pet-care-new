@@ -4,12 +4,15 @@ import { Mail, Lock, ShieldCheck, KeyRound, Timer, LifeBuoy } from 'lucide-react
 import { toast } from 'sonner';
 import { AuthShell } from './AuthShell';
 import { AuthField, SubmitButton } from './AuthField';
-import { useAuthStore } from '../../shared/stores/auth.store';
-import { apiErrorMessage } from '../../shared/api/auth.api';
+import { authApi } from '../../shared/api/auth.api';
+import { plainMessage, toApiError } from '../../shared/api/api-error';
+import { useSession } from '../../shared/stores/session.store';
+import { passwordPolicyError } from '../../shared/utils/password';
 
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-const PASSWORD_MIN = 8; // khop RULE-01-09 ben BE
-const RESEND_COOLDOWN = 60; // khop RULE-01-04
+
+/** So giay con lai toi `resendAvailableAt` cua BE (BR-TK-07). */
+const secondsUntil = (iso: string) => Math.max(0, Math.ceil((Date.parse(iso) - Date.now()) / 1000));
 
 const NOTES = [
   { icon: Mail, text: 'Mã 6 số được gửi tới đúng email đã đăng ký' },
@@ -19,8 +22,7 @@ const NOTES = [
 
 export function ForgotPasswordPage() {
   const navigate = useNavigate();
-  const forgotPassword = useAuthStore((s) => s.forgotPassword);
-  const resetPassword = useAuthStore((s) => s.resetPassword);
+  const clearSession = useSession((s) => s.clear);
 
   const [step, setStep] = useState<'email' | 'reset'>('email');
   const [email, setEmail] = useState('');
@@ -28,6 +30,7 @@ export function ForgotPasswordPage() {
   const [password, setPassword] = useState('');
   const [confirm, setConfirm] = useState('');
   const [loading, setLoading] = useState(false);
+  const [error, setError] = useState('');
   const [cooldown, setCooldown] = useState(0);
 
   useEffect(() => {
@@ -38,22 +41,23 @@ export function ForgotPasswordPage() {
 
   const mismatch = confirm.length > 0 && password !== confirm;
 
-  // BE luon tra 200 du email co ton tai hay khong -> khong bao "email khong ton tai".
+  // BE luon tra 202 cung mot noi dung du email co ton tai hay khong (BR-TK-10).
   const sendCode = async () => {
     const value = email.trim();
     if (!EMAIL_RE.test(value)) {
-      toast.error('Email không hợp lệ!');
+      setError('Email không hợp lệ.');
       return;
     }
     setLoading(true);
+    setError('');
     try {
-      await forgotPassword(value);
+      const res = await authApi.forgotPassword(value);
       setEmail(value);
       setStep('reset');
-      setCooldown(RESEND_COOLDOWN);
+      setCooldown(secondsUntil(res.resendAvailableAt));
       toast.success('Nếu email đã đăng ký, mã đặt lại vừa được gửi tới hộp thư.');
-    } catch (error) {
-      toast.error(apiErrorMessage(error, 'Không gửi được mã, vui lòng thử lại.'));
+    } catch (err) {
+      setError(plainMessage(toApiError(err)));
     } finally {
       setLoading(false);
     }
@@ -65,25 +69,25 @@ export function ForgotPasswordPage() {
       await sendCode();
       return;
     }
-    if (otpCode.trim().length !== 6) {
-      toast.error('Mã xác thực gồm 6 chữ số!');
-      return;
-    }
-    if (password.length < PASSWORD_MIN) {
-      toast.error(`Mật khẩu mới phải có ít nhất ${PASSWORD_MIN} ký tự!`);
-      return;
-    }
-    if (password !== confirm) {
-      toast.error('Mật khẩu xác nhận không khớp!');
+    const invalid =
+      (otpCode.trim().length !== 6 && 'Mã xác thực gồm 6 chữ số.') ||
+      passwordPolicyError(password) ||
+      (password !== confirm && 'Mật khẩu xác nhận không khớp.');
+    if (invalid) {
+      setError(invalid);
       return;
     }
     setLoading(true);
+    setError('');
     try {
-      await resetPassword(email, otpCode.trim(), password);
+      await authApi.resetPassword({ email, code: otpCode.trim(), newPassword: password });
+      // BE huy moi phien cua tai khoan: bo luon phien dang luu o may nay.
+      clearSession();
       toast.success('Đổi mật khẩu thành công! Mời bạn đăng nhập lại.');
       navigate('/auth/login', { replace: true });
-    } catch (error) {
-      toast.error(apiErrorMessage(error, 'Mã không đúng hoặc đã hết hạn.'));
+    } catch (err) {
+      // BR-TK-05 ma sai / het han, BR-TK-06 sai qua 5 lan, BR-TK-03 mat khau moi khong hop le.
+      setError(plainMessage(toApiError(err)));
     } finally {
       setLoading(false);
     }
@@ -166,7 +170,7 @@ export function ForgotPasswordPage() {
               autoComplete="new-password"
               value={password}
               onChange={setPassword}
-              placeholder={`Ít nhất ${PASSWORD_MIN} ký tự`}
+              placeholder="Ít nhất 8 ký tự, có chữ và số"
             />
             <div>
               <AuthField
@@ -183,6 +187,12 @@ export function ForgotPasswordPage() {
               )}
             </div>
           </>
+        )}
+
+        {error && (
+          <p role="alert" className="text-[13px] font-semibold text-[#d32f2f]">
+            {error}
+          </p>
         )}
 
         <div className="pt-4">

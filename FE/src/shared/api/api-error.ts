@@ -53,6 +53,29 @@ export class ApiError extends Error implements ErrorResponse {
   }
 }
 
+/**
+ * Message để hiện cho người dùng: bỏ đuôi `(BR-…)` (mã rule vẫn đọc được qua `ruleId`)
+ * và bỏ tên trường của lỗi validation.
+ */
+export function plainMessage(error: ApiError): string {
+  if (error.ruleId) return error.message.replace(` (${error.ruleId})`, '');
+  const fields = Object.values(fieldErrorsOf(error));
+  return fields.length ? fields.join('. ') : error.message;
+}
+
+const FIELD_ERROR = /^([A-Za-z][\w.]*): (.+)$/;
+
+/** Lỗi theo trường của VALIDATION_FAILED; BE ghép dạng `"email: …; phone: …"`. */
+export function fieldErrorsOf(error: ApiError): Record<string, string> {
+  if (error.errorCode !== 'VALIDATION_FAILED') return {};
+  const fields: Record<string, string> = {};
+  for (const part of error.message.split('; ')) {
+    const m = FIELD_ERROR.exec(part.trim());
+    if (m) fields[m[1]] = m[2];
+  }
+  return fields;
+}
+
 function isErrorResponse(data: unknown): data is ErrorResponse {
   const d = data as Partial<ErrorResponse> | null;
   return typeof d?.errorCode === 'string' && typeof d.message === 'string';

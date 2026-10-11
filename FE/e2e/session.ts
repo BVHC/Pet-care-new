@@ -1,6 +1,6 @@
 import type { Page } from '@playwright/test';
 
-type Role = 'RECEPTIONIST' | 'VET' | 'CARETAKER' | 'BRANCH_MANAGER';
+type Role = 'SUPER_MANAGER' | 'RECEPTIONIST' | 'VET' | 'CARETAKER' | 'BRANCH_MANAGER';
 
 interface DemoAccount {
   id: number;
@@ -11,6 +11,7 @@ interface DemoAccount {
 
 // Same accounts as MOCK_ACCOUNTS in src/shared/api/mock/identity.mock.ts (`npm run dev` runs the contract mock).
 // Ids 3–6 are also the staff ids of clinic-db, so "assigned to me" works.
+export const CHAIN_MANAGER: DemoAccount = { id: 2, email: 'chuoi@petcare.vn', fullName: 'Đỗ Thanh Hà', role: 'SUPER_MANAGER' };
 export const MANAGER: DemoAccount = { id: 3, email: 'manager@store1.vn', fullName: 'Hoàng Nam', role: 'BRANCH_MANAGER' };
 export const DESK: DemoAccount = { id: 4, email: 'reception@store1.vn', fullName: 'Lan Chi', role: 'RECEPTIONIST' };
 export const VET: DemoAccount = { id: 5, email: 'doctor@store1.vn', fullName: 'BS. Minh Anh', role: 'VET' };

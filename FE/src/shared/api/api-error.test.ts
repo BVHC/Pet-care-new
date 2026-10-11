@@ -1,6 +1,6 @@
 import { AxiosError, AxiosHeaders, type AxiosResponse, type InternalAxiosRequestConfig } from 'axios';
 import { describe, expect, it } from 'vitest';
-import { ApiError, ruleIdOf, toApiError } from './api-error';
+import { ApiError, fieldErrorsOf, plainMessage, ruleIdOf, toApiError } from './api-error';
 
 const config = { headers: new AxiosHeaders() } as InternalAxiosRequestConfig;
 
@@ -62,5 +62,46 @@ describe('toApiError', () => {
   it('passes an ApiError through untouched', () => {
     const original = new ApiError('RESOURCE_NOT_FOUND', 'Không tìm thấy lượt tiếp nhận.', 404);
     expect(toApiError(original)).toBe(original);
+  });
+});
+
+describe('fieldErrorsOf (BE GlobalExceptionHandler: "field: message; field: message")', () => {
+  it('maps each Bean Validation error to its field', () => {
+    const err = new ApiError(
+      'VALIDATION_FAILED',
+      'email: Email không đúng định dạng; phone: Số điện thoại phải có dạng 0xxxxxxxxx',
+      400,
+    );
+    expect(fieldErrorsOf(err)).toEqual({
+      email: 'Email không đúng định dạng',
+      phone: 'Số điện thoại phải có dạng 0xxxxxxxxx',
+    });
+  });
+
+  it('returns nothing for a validation error that names no field', () => {
+    expect(fieldErrorsOf(new ApiError('VALIDATION_FAILED', 'SKU đã tồn tại', 400))).toEqual({});
+  });
+
+  it('returns nothing for a business rule error', () => {
+    const err = new ApiError('BUSINESS_RULE_VIOLATION', 'Email đã được sử dụng: hãy đăng nhập (BR-TK-01)', 400);
+    expect(fieldErrorsOf(err)).toEqual({});
+  });
+});
+
+describe('plainMessage', () => {
+  it('drops the rule code that ends a business rule message', () => {
+    const err = new ApiError('BUSINESS_RULE_VIOLATION', 'Mật khẩu hiện tại không đúng (BR-TK-14)', 400);
+    expect(plainMessage(err)).toBe('Mật khẩu hiện tại không đúng');
+  });
+
+  it('lists validation messages without the field names', () => {
+    const err = new ApiError('VALIDATION_FAILED', 'sku: SKU không được để trống; price: Thiếu giá', 400);
+    expect(plainMessage(err)).toBe('SKU không được để trống. Thiếu giá');
+  });
+
+  it('keeps other messages as they are', () => {
+    expect(plainMessage(new ApiError('UNAUTHENTICATED', 'Email hoặc mật khẩu không đúng', 401))).toBe(
+      'Email hoặc mật khẩu không đúng',
+    );
   });
 });

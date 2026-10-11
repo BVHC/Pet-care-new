@@ -4,8 +4,9 @@ import { Mail, Phone, Lock, User, ShieldCheck, Check } from 'lucide-react';
 import { toast } from 'sonner';
 import { AuthShell } from './AuthShell';
 import { AuthField, GoogleButton, SubmitButton, OrDivider } from './AuthField';
-import { useAuthStore } from '../../shared/stores/auth.store';
-import { apiErrorMessage } from '../../shared/api/auth.api';
+import { authApi } from '../../shared/api/auth.api';
+import { fieldErrorsOf, plainMessage, toApiError } from '../../shared/api/api-error';
+import { passwordPolicyError } from '../../shared/utils/password';
 
 const PERKS = [
   'Đặt phòng nghỉ dưỡng chỉ trong 30 giây',
@@ -13,7 +14,7 @@ const PERKS = [
   'Giảm 10% cho lần đặt phòng đầu tiên',
 ];
 
-/** BE tu choi mat khau < 8 ky tu (RULE-01-09) nen FE chan cung nguong nay. */
+/** Nguong do do manh; chinh sach mat khau nam o passwordPolicyError (BR-TK-03). */
 const PASSWORD_MIN = 8;
 
 /** 0 = trong, 1 yeu, 2 trung binh, 3 manh */
@@ -53,33 +54,26 @@ function validateField(field: Field, f: Record<Field, string>): string | undefin
       return PHONE_RE.test(f.phone.replace(/[\s-]/g, '')) ? undefined : 'Số điện thoại phải gồm 10 số và bắt đầu bằng 0.';
     case 'password':
       if (!f.password) return 'Vui lòng nhập mật khẩu.';
-      return f.password.length >= PASSWORD_MIN ? undefined : `Mật khẩu phải có ít nhất ${PASSWORD_MIN} ký tự.`;
+      return passwordPolicyError(f.password) ?? undefined;
     case 'confirmPassword':
       if (!f.confirmPassword) return 'Vui lòng nhập lại mật khẩu.';
       return f.password === f.confirmPassword ? undefined : 'Mật khẩu xác nhận chưa khớp.';
   }
 }
 
-/**
- * Doi loi BE thanh loi gan tren dung o nhap. BE tra 2 dang:
- *  - BUSINESS_RULE_VIOLATION: cau tieng Viet ("Email đã được sử dụng")
- *  - VALIDATION_FAILED: "<field>: <mo ta>" theo Bean Validation
- */
-function fieldFromApiError(message: string): Field | null {
-  const m = message.toLowerCase();
-  if (m.startsWith('email:') || m.includes('email đã được sử dụng')) return 'email';
-  if (m.startsWith('phone:') || m.includes('số điện thoại đã được sử dụng')) return 'phone';
-  if (m.startsWith('password:') || m.includes('mật khẩu')) return 'password';
-  if (m.startsWith('name:')) return 'name';
-  return null;
-}
+/** Truong cua RegisterRequest (identity-v1) -> o nhap tren form. */
+const FIELD_OF: Record<string, Field> = { email: 'email', fullName: 'name', phone: 'phone', password: 'password' };
+/** Loi rule gan vao o nhap; rule khac hien o cuoi form. */
+const RULE_FIELD: Record<string, Field> = { 'BR-TK-01': 'email', 'BR-TK-03': 'password' };
+const CONSENT_REQUIRED = 'Bạn cần xác nhận đủ 18 tuổi và đồng ý điều khoản sử dụng';
 
 export function RegisterPage() {
   const navigate = useNavigate();
-  const register = useAuthStore((s) => s.register);
   const [form, setForm] = useState({ name: '', email: '', phone: '', password: '', confirmPassword: '' });
   const [errors, setErrors] = useState<Errors>({});
+  const [isAdult, setIsAdult] = useState(false);
   const [agreed, setAgreed] = useState(false);
+  const [formError, setFormError] = useState('');
   const [loading, setLoading] = useState(false);
 
   /** Go chu thi xoa loi cua chinh o do — khong bat nguoi dung nhin loi cu. */
@@ -103,31 +97,40 @@ export function RegisterPage() {
       if (msg) found[f] = msg;
     });
     setErrors(found);
+    setFormError('');
     if (Object.keys(found).length > 0) return;
 
-    if (!agreed) {
-      toast.error('Vui lòng đồng ý với điều khoản sử dụng!');
+    // BR-TK-02: bat buoc tick ca hai o.
+    if (!isAdult || !agreed) {
+      setFormError(CONSENT_REQUIRED);
       return;
     }
 
     setLoading(true);
     try {
       const email = form.email.trim();
-      await register({
+      const res = await authApi.register({
         email,
-        phone: form.phone.replace(/[\s-]/g, '') || undefined,
         password: form.password,
-        name: form.name.trim(),
+        fullName: form.name.trim(),
+        phone: form.phone.replace(/[\s-]/g, '') || undefined,
+        isAdult,
+        termsAccepted: agreed,
       });
       toast.success('Đã gửi mã OTP tới email của bạn!');
-      // BE tao account o trang thai PENDING_VERIFICATION -> bat buoc qua buoc OTP.
-      navigate('/auth/verify-otp', { state: { email } });
+      // Tai khoan PENDING -> bat buoc qua buoc OTP; dem nguoc gui lai theo BE (BR-TK-07).
+      navigate('/auth/verify-otp', { state: { email, resendAvailableAt: res.otpResendAvailableAt } });
     } catch (error) {
-      const message = apiErrorMessage(error, 'Đăng ký thất bại, vui lòng thử lại.');
-      const field = fieldFromApiError(message);
-      // Loi thuoc ve mot o cu the -> gan ngay duoi o do; con lai moi dung toast.
-      if (field) setErrors({ [field]: message });
-      else toast.error(message);
+      const err = toApiError(error);
+      const byField: Errors = {};
+      for (const [name, message] of Object.entries(fieldErrorsOf(err))) {
+        if (FIELD_OF[name]) byField[FIELD_OF[name]] = message;
+      }
+      const ruleField = err.ruleId ? RULE_FIELD[err.ruleId] : undefined;
+      if (ruleField) byField[ruleField] = plainMessage(err);
+      // Loi thuoc ve mot o cu the -> gan ngay duoi o do; con lai hien o cuoi form.
+      if (Object.keys(byField).length > 0) setErrors(byField);
+      else setFormError(plainMessage(err));
     } finally {
       setLoading(false);
     }
@@ -204,7 +207,7 @@ export function RegisterPage() {
             onChange={(v) => setField('password', v)}
             onBlur={() => blurField('password')}
             error={errors.password}
-            placeholder={`Ít nhất ${PASSWORD_MIN} ký tự`}
+            placeholder={`Ít nhất ${PASSWORD_MIN} ký tự, có chữ và số`}
           />
           {/* Thanh do do manh mat khau */}
           <div className="mt-2.5 flex items-center gap-2.5">
@@ -238,11 +241,27 @@ export function RegisterPage() {
           />
         </div>
 
-        <label className="flex cursor-pointer items-start gap-2.5 pt-1 pb-5 text-[13.5px] leading-[1.5] text-[#7a6a5d]">
+        <label className="flex cursor-pointer items-start gap-2.5 pt-1 text-[13.5px] leading-[1.5] text-[#7a6a5d]">
+          <input
+            type="checkbox"
+            checked={isAdult}
+            onChange={(e) => {
+              setIsAdult(e.target.checked);
+              setFormError('');
+            }}
+            className="mt-0.5 h-4 w-4 shrink-0 accent-[#a43324]"
+          />
+          <span>Tôi xác nhận đã đủ 18 tuổi</span>
+        </label>
+
+        <label className="flex cursor-pointer items-start gap-2.5 pb-5 text-[13.5px] leading-[1.5] text-[#7a6a5d]">
           <input
             type="checkbox"
             checked={agreed}
-            onChange={(e) => setAgreed(e.target.checked)}
+            onChange={(e) => {
+              setAgreed(e.target.checked);
+              setFormError('');
+            }}
             className="mt-0.5 h-4 w-4 shrink-0 accent-[#a43324]"
           />
           <span>
@@ -256,6 +275,12 @@ export function RegisterPage() {
             </Link>
           </span>
         </label>
+
+        {formError && (
+          <p role="alert" className="-mt-2 pb-2 text-[13px] font-semibold text-[#d32f2f]">
+            {formError}
+          </p>
+        )}
 
         <SubmitButton loading={loading}>{loading ? 'Đang tạo tài khoản...' : 'Tạo tài khoản'}</SubmitButton>
       </form>

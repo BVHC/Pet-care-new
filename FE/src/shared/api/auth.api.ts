@@ -1,57 +1,45 @@
 // ===========================================
 // Auth API — tang HTTP duy nhat, dung axios instance chung (./axios).
-// Theo docs/api/identity-v1.md. Login, logout, doi mat khau da dung hop dong;
-// cac endpoint dang ky / OTP / quen mat khau con lech (sua o T12).
+// Theo docs/api/identity-v1.md (UC01–UC05).
 // ===========================================
 import { apiClient } from './axios';
-import type { AccountStatus, ChangePasswordRequest, LoginRequest, LoginResponse } from '../types/auth';
-
-/** BE RegisterRequest: email bat buoc, phone tuy chon (RULE-01-10). */
-export interface RegisterPayload {
-  email: string;
-  phone?: string;
-  password: string;
-  name: string;
-}
-
-export interface RegisterResult {
-  accountId: string;
-  status: AccountStatus;
-}
-
-/** Lay message loi that tu ApiResponse cua BE, khong nuot thanh "Network Error". */
-export function apiErrorMessage(error: unknown, fallback: string): string {
-  const res = (error as { response?: { data?: { message?: string } } })?.response;
-  return res?.data?.message || fallback;
-}
-
-// ─── Endpoints ───
+import type {
+  ChangePasswordRequest,
+  LoginRequest,
+  LoginResponse,
+  OtpSentResponse,
+  RegisterRequest,
+  RegistrationResponse,
+  ResetPasswordRequest,
+  VerificationResponse,
+} from '../types/auth';
 
 export const authApi = {
+  /** 201, tai khoan PENDING; ma OTP gui qua email (BR-TK-04). */
+  register: async (payload: RegisterRequest): Promise<RegistrationResponse> =>
+    (await apiClient.post('/api/auth/register', payload)).data.data,
+
+  verifyRegistration: async (email: string, code: string): Promise<VerificationResponse> =>
+    (await apiClient.post('/api/auth/register/verify', { email, code })).data.data,
+
+  resendRegistrationOtp: async (email: string): Promise<OtpSentResponse> =>
+    (await apiClient.post('/api/auth/register/resend-otp', { email })).data.data,
+
   /** Token chi mang sub/sid/jti (ADR-0003): role, mustChangePassword doc tu `account`. */
   login: async (payload: LoginRequest): Promise<LoginResponse> =>
     (await apiClient.post('/api/auth/login', payload)).data.data,
 
-  register: async (payload: RegisterPayload): Promise<RegisterResult> =>
-    (await apiClient.post('/api/auth/register', payload)).data.data,
-
-  verifyOtp: async (email: string, otpCode: string): Promise<void> => {
-    await apiClient.post('/api/auth/verify-otp', { email, otpCode });
-  },
-
-  resendOtp: async (email: string): Promise<void> => {
-    await apiClient.post('/api/auth/otp/resend', { email });
-  },
-
-  /** Luon 200 ke ca email khong ton tai — BE co tinh khong tiet lo email nao da dang ky. */
-  forgotPassword: async (email: string): Promise<void> => {
-    await apiClient.post('/api/auth/forgot-password', { email });
-  },
-  resetPassword: async (email: string, otpCode: string, newPassword: string): Promise<void> => {
-    await apiClient.post('/api/auth/reset-password', { email, otpCode, newPassword });
-  },
   logout: async (): Promise<void> => {
     await apiClient.post('/api/auth/logout');
+  },
+
+  /** Luon 202 cung mot noi dung, du email co ton tai hay khong (BR-TK-10). */
+  forgotPassword: async (email: string): Promise<OtpSentResponse> =>
+    (await apiClient.post('/api/auth/password/forgot', { email })).data.data,
+
+  /** 204; BE huy moi phien cua tai khoan (BR-TK-13). */
+  resetPassword: async (payload: ResetPasswordRequest): Promise<void> => {
+    await apiClient.post('/api/auth/password/reset', payload);
   },
 
   /** 204; BE giu phien hien tai, huy cac phien khac va go mustChangePassword. */

@@ -7,7 +7,7 @@ import {
   Crown, Warehouse, Truck, Boxes, ClipboardList, ShieldAlert,
   BarChart3, Activity, Building2, UserCog, ChevronDown,
   ChevronRight, LogOut, PanelLeftClose, PanelLeft,
-  Package, Bot, ConciergeBell
+  Package, Bot, ConciergeBell, Tags
 } from 'lucide-react';
 import { useState } from 'react';
 import { ROLE_LABELS, STAFF_ROLES, type Role } from '../../shared/types/auth';
@@ -63,6 +63,12 @@ export const ADMIN_MENU: MenuSection[] = [
       { path: '/admin/refunds', label: 'Hoàn tiền', icon: Scale, roles: ['RECEPTIONIST', 'BRANCH_MANAGER'] }, // UC68 (tầng 3)
       { path: '/admin/promotions', label: 'Khuyến mãi', icon: BadgePercent, roles: ['SUPER_MANAGER'] }, // ngoài phạm vi
       { path: '/admin/membership', label: 'Thành viên', icon: Crown, roles: ['SUPER_MANAGER'] }, // ngoài phạm vi
+    ],
+  },
+  {
+    section: 'Danh mục',
+    items: [
+      { path: '/admin/catalog', label: 'Sản phẩm & dịch vụ', icon: Tags, roles: ['SUPER_MANAGER'] }, // UC28–UC31
     ],
   },
   {
