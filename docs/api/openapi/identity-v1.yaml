@@ -528,7 +528,7 @@ paths:
     get:
       tags: [Staff]
       summary: "Danh sách nhân viên"
-      description: "UC08 · BR-QT-01, 07. Actor: A03, A04, A05. Quyền: ADMIN: SUPER_MANAGER · SUPER_MANAGER: A05–A08 · BRANCH_MANAGER: A06–A08 chi nhánh mình. Chuyển trạng thái: —."
+      description: "UC08 · BR-QT-01, 07. Actor: A03, A04, A05. Quyền: ADMIN: SUPER_MANAGER · SUPER_MANAGER: A05–A08 · BRANCH_MANAGER: A06–A08 chi nhánh mình. Chuyển trạng thái: —. Lọc `role` ngoài phạm vi xem → trang rỗng; ADMIN gửi `branchId` → rỗng (SUPER_MANAGER không thuộc chi nhánh). Không gửi `status` = ACTIVE và DISABLED. `q` không phân biệt hoa thường. ADR-0030."
       operationId: listStaff
       security:
         - bearerAuth: []
@@ -583,14 +583,24 @@ paths:
                   code:
                     type: integer
                     description: "HTTP status của kết quả, ví dụ 200, 201"
+        "400":
+          description: "tham số sai kiểu · `branchId` ≤ 0"
+          content:
+            "application/json":
+              schema:
+                $ref: "#/components/schemas/Error"
         "401":
           $ref: "#/components/responses/Unauthorized"
         "403":
-          $ref: "#/components/responses/Forbidden"
+          description: "BRANCH_MANAGER gửi `branchId` của chi nhánh khác (không ghi audit)"
+          content:
+            "application/json":
+              schema:
+                $ref: "#/components/schemas/Error"
     post:
       tags: [Staff]
       summary: "Tạo tài khoản nhân viên"
-      description: "UC08 · BR-QT-01, 02, 03, BR-TK-01, 17. Actor: A03, A04, A05. Quyền: Theo BR-QT-01. Chuyển trạng thái: — → ACTIVE (Tài khoản#4). Sinh mật khẩu ngẫu nhiên gửi STAFF_TEMP_PASSWORD; người tạo không thấy mật khẩu; mustChangePassword = true."
+      description: "UC08 · BR-QT-01, 02, 03, BR-TK-01, 17. Actor: A03, A04, A05. Quyền: Theo BR-QT-01. Chuyển trạng thái: — → ACTIVE (Tài khoản#4). Sinh mật khẩu ngẫu nhiên gửi STAFF_TEMP_PASSWORD; người tạo không thấy mật khẩu; mustChangePassword = true. BRANCH_MANAGER không gửi `branchId` = chi nhánh của mình. Sau lỗi mạng, đọc lại `GET /staff?q=<email>` để biết đã tạo chưa (gửi lại nhận `BR-TK-01`). ADR-0030."
       operationId: createStaff
       security:
         - bearerAuth: []
@@ -617,7 +627,7 @@ paths:
                     type: integer
                     description: "HTTP status của kết quả, ví dụ 200, 201"
         "400":
-          description: "`BR-TK-01` email đã dùng · `BR-QT-03` thiếu chi nhánh hoặc chi nhánh không DRAFT/ACTIVE"
+          description: "`BR-TK-01` email đã dùng · `BR-QT-03` thiếu chi nhánh, chi nhánh không tồn tại, hoặc SUPER_MANAGER kèm `branchId`"
           content:
             "application/json":
               schema:
@@ -626,6 +636,12 @@ paths:
           $ref: "#/components/responses/Unauthorized"
         "403":
           description: "`BR-QT-01` chức vụ / chi nhánh ngoài quyền (ghi audit)"
+          content:
+            "application/json":
+              schema:
+                $ref: "#/components/schemas/Error"
+        "409":
+          description: "hai request cùng email chạy song song"
           content:
             "application/json":
               schema:
@@ -656,12 +672,22 @@ paths:
                   code:
                     type: integer
                     description: "HTTP status của kết quả, ví dụ 200, 201"
+        "400":
+          $ref: "#/components/responses/BadRequest"
         "401":
           $ref: "#/components/responses/Unauthorized"
         "403":
-          $ref: "#/components/responses/Forbidden"
+          description: "ngoài phạm vi xem (không ghi audit)"
+          content:
+            "application/json":
+              schema:
+                $ref: "#/components/schemas/Error"
         "404":
-          $ref: "#/components/responses/NotFound"
+          description: "không có, hoặc là tài khoản khách (cùng message)"
+          content:
+            "application/json":
+              schema:
+                $ref: "#/components/schemas/Error"
   "/staff/{id}/change-role":
     post:
       tags: [Staff]
@@ -844,7 +870,7 @@ paths:
     post:
       tags: [Staff]
       summary: "Gửi lại mật khẩu ban đầu"
-      description: "UC08 · BR-QT-02. Actor: A03, A04, A05. Quyền: Người có quyền tạo tài khoản đó (BR-QT-01). Chuyển trạng thái: —. Sinh mật khẩu mới, mã cũ hết hiệu lực."
+      description: "UC08 · BR-QT-02. Actor: A03, A04, A05. Quyền: Người có quyền tạo tài khoản đó (BR-QT-01). Chuyển trạng thái: —. Sinh mật khẩu mới, mã cũ hết hiệu lực. Chỉ khi ACTIVE và chưa đổi mật khẩu lần đầu (đang bị khóa vẫn được). Hủy mọi phiên, xóa bộ đếm đăng nhập sai và khóa tạm, nhân viên chuyển offline; ghi audit. ADR-0030."
       operationId: resendInitialPassword
       security:
         - bearerAuth: []
@@ -856,11 +882,19 @@ paths:
         "401":
           $ref: "#/components/responses/Unauthorized"
         "403":
-          $ref: "#/components/responses/Forbidden"
+          description: "`BR-QT-01` ngoài phân cấp hoặc chính mình (ghi audit)"
+          content:
+            "application/json":
+              schema:
+                $ref: "#/components/schemas/Error"
         "404":
-          $ref: "#/components/responses/NotFound"
+          description: "không có, hoặc là tài khoản khách"
+          content:
+            "application/json":
+              schema:
+                $ref: "#/components/schemas/Error"
         "409":
-          description: "Nhân viên đã đổi mật khẩu lần đầu"
+          description: "Nhân viên đã đổi mật khẩu lần đầu, hoặc tài khoản đang DISABLED"
           content:
             "application/json":
               schema:

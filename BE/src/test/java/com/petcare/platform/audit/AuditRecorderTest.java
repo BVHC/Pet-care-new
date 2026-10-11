@@ -166,14 +166,18 @@ class AuditRecorderTest {
 
     @ParameterizedTest
     @ValueSource(strings = {"password", "passwordHash", "password_hash", "newPasswd", "otp", "otpCode", "OTPCode",
-            "token", "tokenHash", "refresh_token", "clientSecret", "cccd", "cccdNumber", "pin", "PIN"})
+            "token", "tokenHash", "refresh_token", "clientSecret", "cccd", "cccdNumber", "pin", "PIN",
+            // identity TemporaryPasswordGenerator.TemporaryPassword (docs/adr/0029 mục 5): lọt vào snapshot thì bị chặn
+            "plainPassword"})
     void detectsSensitiveKeyNames(String key) {
         assertThat(AuditRecorder.isSensitiveKey(key)).isTrue();
     }
 
     @ParameterizedTest
     @ValueSource(strings = {"spinach", "topping", "pinned", "hotpot", "status", "email", "phone", "lockedReason",
-            "tokenizer", "verificationMethod"})
+            "tokenizer", "verificationMethod",
+            // khóa của STAFF_ACTION_DENIED (identity QtAuditActions, docs/adr/0029 mục 2)
+            "action", "targetRole", "targetBranchId", "requestedRole", "requestedBranchId"})
     void allowsHarmlessKeysContainingSensitiveSubstrings(String key) {
         assertThat(AuditRecorder.isSensitiveKey(key)).isFalse();
     }

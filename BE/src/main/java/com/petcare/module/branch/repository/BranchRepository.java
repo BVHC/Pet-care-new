@@ -25,4 +25,14 @@ public interface BranchRepository extends JpaRepository<Branch, Long>, JpaSpecif
     @Lock(LockModeType.PESSIMISTIC_WRITE)
     @Query("SELECT b FROM Branch b WHERE b.id = :id")
     Optional<Branch> findByIdForUpdate(@Param("id") Long id);
+
+    /**
+     * Khóa dòng chi nhánh cho luồng quản trị nhân viên của identity ({@code BranchApi}, docs/adr/0029, nợ D014) và trả
+     * {@code status} vừa đọc dưới khóa. Native, trả giá trị vô hướng: không nạp entity, nên không bao giờ trả lại một
+     * {@code Branch} cũ đã nằm sẵn trong persistence context (ví dụ do {@code BranchQueryApi.findBranch} nạp trước
+     * trong cùng transaction) và commit không thể sinh {@code UPDATE branches}. Cùng chế độ khóa với
+     * {@link #findByIdForUpdate} ({@code FOR NO KEY UPDATE}).
+     */
+    @Query(value = "SELECT status FROM branches WHERE id = :id FOR NO KEY UPDATE", nativeQuery = true)
+    Optional<String> lockStatusForStaffChange(@Param("id") Long id);
 }

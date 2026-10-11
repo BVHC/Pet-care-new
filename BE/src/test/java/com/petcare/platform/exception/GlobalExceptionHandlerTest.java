@@ -47,6 +47,19 @@ class GlobalExceptionHandlerTest {
     record PetRequest(@NotNull Long petId) {
     }
 
+    /**
+     * Dạng của subclass mang dữ liệu audit trong module (ví dụ identity {@code StaffHierarchyDeniedException},
+     * docs/adr/0029): phải đi qua cùng handler với lớp cha và chỉ trả message chung.
+     */
+    static class AuditedScopeException extends AccessDeniedScopeException {
+
+        final String auditDetail = "STAFF_ACTION_DENIED targetRole=VET targetBranchId=20";
+
+        AuditedScopeException() {
+            super("STAFF_HIERARCHY DISABLE", "BRANCH_MANAGER");
+        }
+    }
+
     @RestController
     @RequestMapping("/t")
     static class ThrowingController {
@@ -71,6 +84,11 @@ class GlobalExceptionHandlerTest {
         @GetMapping("/scope")
         void scope() {
             throw new AccessDeniedScopeException("BRANCH:1", "BRANCH:2");
+        }
+
+        @GetMapping("/scope-subclass")
+        void scopeSubclass() {
+            throw new AuditedScopeException();
         }
 
         @GetMapping("/concurrency")
@@ -156,6 +174,14 @@ class GlobalExceptionHandlerTest {
     void scopeMismatchHidesScopeDetails() throws Exception {
         expectError(mvc.perform(get("/t/scope")), ErrorCode.ACCESS_DENIED_SCOPE_MISMATCH)
                 .andExpect(jsonPath("$.message", not(containsString("BRANCH"))));
+    }
+
+    @Test
+    void scopeMismatchSubclassHidesAuditDetails() throws Exception {
+        expectError(mvc.perform(get("/t/scope-subclass")), ErrorCode.ACCESS_DENIED_SCOPE_MISMATCH)
+                .andExpect(jsonPath("$.message").value("Không có quyền truy cập dữ liệu này"))
+                .andExpect(jsonPath("$.message", not(containsString("STAFF"))))
+                .andExpect(jsonPath("$.message", not(containsString("VET"))));
     }
 
     @Test

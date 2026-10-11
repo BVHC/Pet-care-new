@@ -41,6 +41,25 @@ public class StaffProfile extends TimestampedEntity {
     private String bio;
 
     /**
+     * Tài khoản#4 — hồ sơ của tài khoản nhân viên vừa tạo (UC08; docs/adr/0030). {@code branchId} là chi nhánh hiệu
+     * lực, service đã kiểm BR-QT-03 ({@code null} với SUPER_MANAGER, bắt buộc với A05–A08). Ảnh, chuyên môn, mô tả để
+     * trống: nhân viên tự điền (UC06).
+     */
+    public static StaffProfile create(Long accountId, String fullName, Long branchId) {
+        if (accountId == null) {
+            throw new IllegalArgumentException("account_id is required");
+        }
+        if (fullName == null || fullName.isBlank()) {
+            throw new IllegalArgumentException("full_name is required");
+        }
+        StaffProfile profile = new StaffProfile();
+        profile.accountId = accountId;
+        profile.fullName = fullName;
+        profile.branchId = branchId;
+        return profile;
+    }
+
+    /**
      * UC06 — nhân viên tự sửa hồ sơ (BR-TK-15, 20; docs/adr/0026). Nhận <b>giá trị cuối</b> của cả bốn trường: service
      * đã quyết giữ / xóa / đổi và kiểm phạm vi (chỉ VET sửa {@code specialty}, {@code bio}) cùng độ dài [CFG]; ở đây
      * không đoán {@code null} hay chuỗi rỗng. {@code branchId} không đổi được ở đây (điều chuyển là UC08). Caller giữ

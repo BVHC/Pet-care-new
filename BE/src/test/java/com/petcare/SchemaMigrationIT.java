@@ -128,9 +128,10 @@ class SchemaMigrationIT {
         // V6 index partial luồng IN_APP (docs/adr/0014), V7 index cho FK trỏ tới accounts (docs/adr/0018),
         // V8 seed mẫu OTP_PASSWORD_RESET, LOGIN_LOCKED_WARNING, PASSWORD_CHANGED (docs/adr/0019),
         // V9 mẫu OTP_PROFILE_LINK + index otp_tokens.customer_id (docs/adr/0025),
-        // V10 index addresses.customer_id (docs/adr/0028)
+        // V10 index addresses.customer_id (docs/adr/0028),
+        // V11 mẫu STAFF_TEMP_PASSWORD, OTP_EMAIL_CHANGE, EMAIL_CHANGED_NOTICE (docs/adr/0029)
         assertThat(rows).extracting(row -> row.get("version"))
-                .containsExactly("1", "2", "3", "4", "5", "6", "7", "8", "9", "10");
+                .containsExactly("1", "2", "3", "4", "5", "6", "7", "8", "9", "10", "11");
         assertThat(rows).allSatisfy(row -> assertThat(row).containsEntry("success", true));
     }
 
@@ -332,7 +333,7 @@ class SchemaMigrationIT {
     }
 
     /**
-     * V3, V4, V8, V9 (06-module-contracts §8 Q4, BR-QT-14): mẫu seed bằng migration khôi phục được về mặc định
+     * V3, V4, V8, V9, V11 (06-module-contracts §8 Q4, BR-QT-14): mẫu seed bằng migration khôi phục được về mặc định
      * ({@code body = default_body}, {@code subject = default_subject}), biến bắt buộc nằm trong biến cho phép và có mặt
      * trong nội dung, mẫu OTP bắt buộc {@code {ma_otp}}. Mẫu {@code IT_*} do các IT khác chèn nên bị loại.
      */
@@ -342,7 +343,8 @@ class SchemaMigrationIT {
 
         assertThat(jdbc.queryForList("SELECT code FROM notification_templates WHERE " + seeded, String.class))
                 .containsExactlyInAnyOrder("OTP_REGISTER", "OTP_PASSWORD_RESET", "LOGIN_LOCKED_WARNING",
-                        "PASSWORD_CHANGED", "OTP_PROFILE_LINK");
+                        "PASSWORD_CHANGED", "OTP_PROFILE_LINK", "STAFF_TEMP_PASSWORD", "OTP_EMAIL_CHANGE",
+                        "EMAIL_CHANGED_NOTICE");
         assertThat(jdbc.queryForList("""
                 SELECT code FROM notification_templates
                 WHERE %s AND (body <> default_body OR subject IS DISTINCT FROM default_subject)

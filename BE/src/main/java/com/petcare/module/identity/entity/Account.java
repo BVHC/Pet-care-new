@@ -106,6 +106,46 @@ public class Account extends TimestampedEntity {
     }
 
     /**
+     * Tài khoản#4 — tạo tài khoản nhân viên (UC08; BR-QT-01, 02, BR-TK-01, 17; docs/adr/0030): {@code ACTIVE} ngay,
+     * bắt buộc đổi mật khẩu ở lần đăng nhập đầu, có SĐT (CHECK {@code ck_accounts_phone_by_role}). {@code email} đã
+     * chuẩn hóa chữ thường; {@code passwordHash} là BCrypt của mật khẩu tạm do hệ thống sinh. Service đã kiểm phân
+     * cấp, BR-QT-03, BR-TK-01 và gọi {@code validateInitial(ACTIVE)} trước.
+     */
+    public static Account createStaff(String email, String phone, String passwordHash, Role role) {
+        if (role == Role.CUSTOMER) {
+            throw new IllegalArgumentException("Staff account cannot have role CUSTOMER");
+        }
+        if (phone == null) {
+            throw new IllegalArgumentException("Staff account must have a phone (BR-TK-01)");
+        }
+        Account account = new Account();
+        account.email = email;
+        account.phone = phone;
+        account.passwordHash = passwordHash;
+        account.role = role;
+        account.status = AccountStatus.ACTIVE;
+        account.mustChangePassword = true;
+        return account;
+    }
+
+    /**
+     * UC08 — gửi lại mật khẩu ban đầu (BR-QT-02; docs/adr/0030): hash của mật khẩu tạm mới, mật khẩu cũ hết hiệu lực.
+     * Như đặt lại mật khẩu (BR-TK-13): xóa bộ đếm sai và khóa tạm, {@code last_seen_at = NULL} vì mọi phiên bị hủy cùng
+     * lúc (BR-TN-06). Vẫn bắt đổi mật khẩu lần đầu. Caller giữ khóa dòng, đã kiểm {@code ACTIVE} và
+     * {@code must_change_password}, rồi hủy phiên sau lệnh này (thứ tự {@code accounts → sessions}).
+     */
+    public void reissueInitialPassword(String newPasswordHash) {
+        if (role == Role.CUSTOMER || status != AccountStatus.ACTIVE || !mustChangePassword) {
+            throw new IllegalStateException("Account " + id + " cannot receive a new initial password");
+        }
+        this.passwordHash = newPasswordHash;
+        this.failedLoginCount = 0;
+        this.firstFailedLoginAt = null;
+        this.lockedUntil = null;
+        this.lastSeenAt = null;
+    }
+
+    /**
      * Tài khoản#2 — xác thực OTP: {@code PENDING → ACTIVE}, bỏ hạn xác thực. Service đã gọi
      * {@code validateTransition} trước.
      */

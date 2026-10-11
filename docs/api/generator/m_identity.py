@@ -245,16 +245,21 @@ m.op("post", "/me/link/decline", "declineLink", "Chọn \"Không phải tôi\"",
 
 m.op("get", "/staff", "listStaff", "Danh sách nhân viên", "Staff", "UC08", "BR-QT-01, 07", "A03, A04, A05",
      "ADMIN: SUPER_MANAGER · SUPER_MANAGER: A05–A08 · BRANCH_MANAGER: A06–A08 chi nhánh mình", resp="StaffResponse",
-     page=True, errors=(401, 403),
-     query=["branchId=int64", f"role=enum:{STAFF_ROLES}", "status=enum:ACTIVE,DISABLED", "q=string|Tìm theo họ tên, email", "page", "size"])
+     page=True, errors=(400, 401, 403),
+     err_desc={400: "tham số sai kiểu · `branchId` ≤ 0",
+               403: "BRANCH_MANAGER gửi `branchId` của chi nhánh khác (không ghi audit)"},
+     query=["branchId=int64", f"role=enum:{STAFF_ROLES}", "status=enum:ACTIVE,DISABLED", "q=string|Tìm theo họ tên, email", "page", "size"],
+     notes="Lọc `role` ngoài phạm vi xem → trang rỗng; ADMIN gửi `branchId` → rỗng (SUPER_MANAGER không thuộc chi nhánh). Không gửi `status` = ACTIVE và DISABLED. `q` không phân biệt hoa thường. ADR-0030.")
 m.op("post", "/staff", "createStaff", "Tạo tài khoản nhân viên", "Staff", "UC08", "BR-QT-01, 02, 03, BR-TK-01, 17",
      "A03, A04, A05", "Theo BR-QT-01", "— → ACTIVE (Tài khoản#4)", body="CreateStaffRequest", resp="StaffResponse",
-     status=201, errors=(400, 401, 403),
-     err_desc={400: "`BR-TK-01` email đã dùng · `BR-QT-03` thiếu chi nhánh hoặc chi nhánh không DRAFT/ACTIVE",
-               403: "`BR-QT-01` chức vụ / chi nhánh ngoài quyền (ghi audit)"},
-     notes="Sinh mật khẩu ngẫu nhiên gửi STAFF_TEMP_PASSWORD; người tạo không thấy mật khẩu; mustChangePassword = true.")
+     status=201, errors=(400, 401, 403, 409),
+     err_desc={400: "`BR-TK-01` email đã dùng · `BR-QT-03` thiếu chi nhánh, chi nhánh không tồn tại, hoặc SUPER_MANAGER kèm `branchId`",
+               403: "`BR-QT-01` chức vụ / chi nhánh ngoài quyền (ghi audit)",
+               409: "hai request cùng email chạy song song"},
+     notes="Sinh mật khẩu ngẫu nhiên gửi STAFF_TEMP_PASSWORD; người tạo không thấy mật khẩu; mustChangePassword = true. BRANCH_MANAGER không gửi `branchId` = chi nhánh của mình. Sau lỗi mạng, đọc lại `GET /staff?q=<email>` để biết đã tạo chưa (gửi lại nhận `BR-TK-01`). ADR-0030.")
 m.op("get", "/staff/{id}", "getStaff", "Chi tiết nhân viên", "Staff", "UC08", "BR-QT-01, 07", "A03, A04, A05",
-     "Trong phạm vi như listStaff", resp="StaffResponse", path_params=["StaffId"], errors=(401, 403, 404))
+     "Trong phạm vi như listStaff", resp="StaffResponse", path_params=["StaffId"], errors=(400, 401, 403, 404),
+     err_desc={403: "ngoài phạm vi xem (không ghi audit)", 404: "không có, hoặc là tài khoản khách (cùng message)"})
 m.op("post", "/staff/{id}/change-role", "changeStaffRole", "Đổi chức vụ", "Staff", "UC08", "BR-QT-04, 05", "A04",
      "Chỉ SUPER_MANAGER", body="ChangeRoleRequest", resp="StaffResponse", path_params=["StaffId"],
      errors=(400, 401, 403, 404), err_desc={400: "`BR-QT-04` là BRANCH_MANAGER ACTIVE cuối cùng của chi nhánh ACTIVE"})
@@ -275,8 +280,10 @@ m.op("post", "/staff/{id}/reactivate", "reactivateStaff", "Kích hoạt lại nh
      notes="Cấp mật khẩu tạm mới, mustChangePassword = true.")
 m.op("post", "/staff/{id}/resend-initial-password", "resendInitialPassword", "Gửi lại mật khẩu ban đầu", "Staff",
      "UC08", "BR-QT-02", "A03, A04, A05", "Người có quyền tạo tài khoản đó (BR-QT-01)", status=204,
-     path_params=["StaffId"], errors=(401, 403, 404, 409), err_desc={409: "Nhân viên đã đổi mật khẩu lần đầu"},
-     notes="Sinh mật khẩu mới, mã cũ hết hiệu lực.")
+     path_params=["StaffId"], errors=(401, 403, 404, 409),
+     err_desc={403: "`BR-QT-01` ngoài phân cấp hoặc chính mình (ghi audit)", 404: "không có, hoặc là tài khoản khách",
+               409: "Nhân viên đã đổi mật khẩu lần đầu, hoặc tài khoản đang DISABLED"},
+     notes="Sinh mật khẩu mới, mã cũ hết hiệu lực. Chỉ khi ACTIVE và chưa đổi mật khẩu lần đầu (đang bị khóa vẫn được). Hủy mọi phiên, xóa bộ đếm đăng nhập sai và khóa tạm, nhân viên chuyển offline; ghi audit. ADR-0030.")
 m.op("post", "/staff/{id}/email-change", "startStaffEmailChange", "Sửa email nhân viên — gửi OTP tới email mới",
      "Staff", "UC08", "BR-TK-04, 07, 16, BR-QT-01", "A03, A04, A05", "Cấp trên theo BR-QT-01",
      body="EmailChangeRequest", resp="OtpSentResponse", path_params=["StaffId"], errors=(400, 401, 403, 404),

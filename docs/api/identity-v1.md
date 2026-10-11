@@ -75,14 +75,14 @@
 | Gửi OTP tới email hồ sơ tại quầy | A02 | Khách đang đăng nhập | — | — | Thứ tự kiểm: BR-TK-11 → 404 → BR-TK-19 → BR-TK-07. Mã gửi tới email ghi trong hồ sơ tại quầy (BR-TK-04); gọi lại = gửi lại (BR-TK-07, mã mới hủy mã liên kết cũ của tài khoản). `maskedEmail` là email đó đã che (ADR-0027). |
 | Xác nhận liên kết | A02 | Khách đang đăng nhập | — | — | Gắn tài khoản vào hồ sơ tại quầy, xóa hồ sơ online cùng sổ địa chỉ của nó, email hồ sơ theo email tài khoản, SĐT giữ nguyên, ghi audit `CUSTOMER_PROFILE_LINKED` (ADR-0027). Sau lỗi mạng, đọc lại `GET /me` để biết đã liên kết chưa. |
 | Chọn "Không phải tôi" | A02 | Khách đang đăng nhập | — | — | Không audit (ADR-0027). |
-| Danh sách nhân viên | A03, A04, A05 | ADMIN: SUPER_MANAGER · SUPER_MANAGER: A05–A08 · BRANCH_MANAGER: A06–A08 chi nhánh mình | — | — | — |
-| Tạo tài khoản nhân viên | A03, A04, A05 | Theo BR-QT-01 | — → ACTIVE (Tài khoản#4) | — | Sinh mật khẩu ngẫu nhiên gửi STAFF_TEMP_PASSWORD; người tạo không thấy mật khẩu; mustChangePassword = true. |
+| Danh sách nhân viên | A03, A04, A05 | ADMIN: SUPER_MANAGER · SUPER_MANAGER: A05–A08 · BRANCH_MANAGER: A06–A08 chi nhánh mình | — | — | Lọc `role` ngoài phạm vi xem → trang rỗng; ADMIN gửi `branchId` → rỗng (SUPER_MANAGER không thuộc chi nhánh). Không gửi `status` = ACTIVE và DISABLED. `q` không phân biệt hoa thường. ADR-0030. |
+| Tạo tài khoản nhân viên | A03, A04, A05 | Theo BR-QT-01 | — → ACTIVE (Tài khoản#4) | — | Sinh mật khẩu ngẫu nhiên gửi STAFF_TEMP_PASSWORD; người tạo không thấy mật khẩu; mustChangePassword = true. BRANCH_MANAGER không gửi `branchId` = chi nhánh của mình. Sau lỗi mạng, đọc lại `GET /staff?q=<email>` để biết đã tạo chưa (gửi lại nhận `BR-TK-01`). ADR-0030. |
 | Chi tiết nhân viên | A03, A04, A05 | Trong phạm vi như listStaff | — | — | — |
 | Đổi chức vụ | A04 | Chỉ SUPER_MANAGER | — | — | — |
 | Điều chuyển chi nhánh | A04 | Chỉ SUPER_MANAGER | — | — | — |
 | Vô hiệu hóa nhân viên | A03, A04, A05 | Theo BR-QT-07; không tự vô hiệu hóa mình | ACTIVE → DISABLED (Tài khoản#5) | — | Hủy mọi phiên (BR-QT-09). |
 | Kích hoạt lại nhân viên | A03, A04, A05 | Cùng phạm vi với vô hiệu hóa | DISABLED → ACTIVE (Tài khoản#6) | — | Cấp mật khẩu tạm mới, mustChangePassword = true. |
-| Gửi lại mật khẩu ban đầu | A03, A04, A05 | Người có quyền tạo tài khoản đó (BR-QT-01) | — | — | Sinh mật khẩu mới, mã cũ hết hiệu lực. |
+| Gửi lại mật khẩu ban đầu | A03, A04, A05 | Người có quyền tạo tài khoản đó (BR-QT-01) | — | — | Sinh mật khẩu mới, mã cũ hết hiệu lực. Chỉ khi ACTIVE và chưa đổi mật khẩu lần đầu (đang bị khóa vẫn được). Hủy mọi phiên, xóa bộ đếm đăng nhập sai và khóa tạm, nhân viên chuyển offline; ghi audit. ADR-0030. |
 | Sửa email nhân viên — gửi OTP tới email mới | A03, A04, A05 | Cấp trên theo BR-QT-01 | — | — | — |
 | Sửa email nhân viên — xác nhận OTP | A03, A04, A05 | Cấp trên theo BR-QT-01 | — | — | Ghi audit; gửi EMAIL_CHANGED_NOTICE tới email cũ và mới. |
 | Sửa email tài khoản khách / khôi phục tài khoản — gửi OTP | A06 | Lễ tân | — | — | — |
@@ -125,14 +125,14 @@
 - **`POST /me/link/decline`** — Chọn "Không phải tôi". Response `204` rỗng. Lỗi: `400` `BR-TK-11` tài khoản vừa bị khóa · `401` · `403` · `409` `INVALID_STATE_TRANSITION` hồ sơ không còn cờ chờ quyết định.
 ### Staff
 
-- **`GET /staff`** — Danh sách nhân viên. Query: `branchId?`, `role?`, `status?`, `q?`, `page?`, `size?`. Response `200` trang `StaffResponse`. Lỗi: `401` · `403`.
-- **`POST /staff`** — Tạo tài khoản nhân viên. Request `CreateStaffRequest`. Response `201` `StaffResponse`. Lỗi: `400` `BR-TK-01` email đã dùng · `BR-QT-03` thiếu chi nhánh hoặc chi nhánh không DRAFT/ACTIVE · `401` · `403` `BR-QT-01` chức vụ / chi nhánh ngoài quyền (ghi audit).
-- **`GET /staff/{id}`** — Chi tiết nhân viên. Response `200` `StaffResponse`. Lỗi: `401` · `403` · `404`.
+- **`GET /staff`** — Danh sách nhân viên. Query: `branchId?`, `role?`, `status?`, `q?`, `page?`, `size?`. Response `200` trang `StaffResponse`. Lỗi: `400` tham số sai kiểu · `branchId` ≤ 0 · `401` · `403` BRANCH_MANAGER gửi `branchId` của chi nhánh khác (không ghi audit).
+- **`POST /staff`** — Tạo tài khoản nhân viên. Request `CreateStaffRequest`. Response `201` `StaffResponse`. Lỗi: `400` `BR-TK-01` email đã dùng · `BR-QT-03` thiếu chi nhánh, chi nhánh không tồn tại, hoặc SUPER_MANAGER kèm `branchId` · `401` · `403` `BR-QT-01` chức vụ / chi nhánh ngoài quyền (ghi audit) · `409` hai request cùng email chạy song song.
+- **`GET /staff/{id}`** — Chi tiết nhân viên. Response `200` `StaffResponse`. Lỗi: `400` · `401` · `403` ngoài phạm vi xem (không ghi audit) · `404` không có, hoặc là tài khoản khách (cùng message).
 - **`POST /staff/{id}/change-role`** — Đổi chức vụ. Request `ChangeRoleRequest`. Response `200` `StaffResponse`. Lỗi: `400` `BR-QT-04` là BRANCH_MANAGER ACTIVE cuối cùng của chi nhánh ACTIVE · `401` · `403` · `404`.
 - **`POST /staff/{id}/transfer`** — Điều chuyển chi nhánh. Request `TransferStaffRequest`. Response `200` `StaffResponse`. Lỗi: `400` `BR-QT-08` còn Visit được gán chưa xong / ca thu ngân OPEN (message liệt kê) · `BR-QT-04` BRANCH_MANAGER cuối cùng · `BR-QT-03` chi nhánh không hợp lệ · `401` · `403` · `404`.
 - **`POST /staff/{id}/disable`** — Vô hiệu hóa nhân viên. Response `200` `StaffResponse`. Lỗi: `400` `BR-QT-08` còn quy trình dở dang (message liệt kê) · `BR-QT-12` đang bị khóa, cần mở khóa trước · `BR-QT-04` BRANCH_MANAGER cuối cùng · `401` · `403` `BR-QT-07` ngoài phạm vi hoặc chính mình · `404` · `409`.
 - **`POST /staff/{id}/reactivate`** — Kích hoạt lại nhân viên. Request `ReactivateStaffRequest`. Response `200` `StaffResponse`. Lỗi: `400` `BR-QT-10` đang bị khóa · `BR-QT-03` chi nhánh không hợp lệ · `401` · `403` · `404` · `409`.
-- **`POST /staff/{id}/resend-initial-password`** — Gửi lại mật khẩu ban đầu. Response `204` rỗng. Lỗi: `401` · `403` · `404` · `409` Nhân viên đã đổi mật khẩu lần đầu.
+- **`POST /staff/{id}/resend-initial-password`** — Gửi lại mật khẩu ban đầu. Response `204` rỗng. Lỗi: `401` · `403` `BR-QT-01` ngoài phân cấp hoặc chính mình (ghi audit) · `404` không có, hoặc là tài khoản khách · `409` Nhân viên đã đổi mật khẩu lần đầu, hoặc tài khoản đang DISABLED.
 - **`POST /staff/{id}/email-change`** — Sửa email nhân viên — gửi OTP tới email mới. Request `EmailChangeRequest`. Response `200` `OtpSentResponse`. Lỗi: `400` `BR-TK-01` email mới đã dùng · `BR-TK-07` gửi quá nhanh · `401` · `403` · `404`.
 - **`POST /staff/{id}/email-change/confirm`** — Sửa email nhân viên — xác nhận OTP. Request `OtpCodeRequest`. Response `200` `StaffResponse`. Lỗi: `400` `BR-TK-05` mã sai / hết hạn · `BR-TK-06` sai quá 5 lần, mã bị hủy · `401` · `403` · `404`.
 ### Customer account
