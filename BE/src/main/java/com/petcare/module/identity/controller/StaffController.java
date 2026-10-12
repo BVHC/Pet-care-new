@@ -12,8 +12,10 @@ import org.springframework.web.bind.annotation.ResponseStatus;
 import org.springframework.web.bind.annotation.RestController;
 
 import com.petcare.module.identity.api.Role;
+import com.petcare.module.identity.dto.ChangeRoleRequest;
 import com.petcare.module.identity.dto.CreateStaffRequest;
 import com.petcare.module.identity.dto.StaffResponse;
+import com.petcare.module.identity.dto.TransferStaffRequest;
 import com.petcare.module.identity.entity.AccountStatus;
 import com.petcare.module.identity.service.StaffAdminService;
 import com.petcare.module.identity.service.StaffQueryService;
@@ -24,16 +26,18 @@ import jakarta.validation.Valid;
 import jakarta.validation.constraints.Positive;
 
 /**
- * {@code /api/staff/**} của identity-v1 — quản lý tài khoản nhân viên (UC08; docs/adr/0029, 0030). Chỉ ADMIN,
- * SUPER_MANAGER, BRANCH_MANAGER (role khác → 403 {@code ACCESS_DENIED}, không audit); phạm vi chi tiết và phân cấp
- * kiểm ở service. Bị chặn khi người gọi còn phải đổi mật khẩu lần đầu (BR-TK-17, {@code MustChangePasswordInterceptor}).
- * Hiện có: danh sách (#15), tạo (#16), chi tiết (#17), gửi lại mật khẩu ban đầu (#22).
+ * {@code /api/staff/**} của identity-v1 — quản lý tài khoản nhân viên (UC08; docs/adr/0029, 0030, 0031). Chỉ ADMIN,
+ * SUPER_MANAGER, BRANCH_MANAGER (role khác → 403 {@code ACCESS_DENIED}, không audit); đổi chức vụ và điều chuyển chỉ
+ * SUPER_MANAGER (BR-QT-05, 06). Phạm vi chi tiết và phân cấp kiểm ở service. Bị chặn khi người gọi còn phải đổi mật
+ * khẩu lần đầu (BR-TK-17, {@code MustChangePasswordInterceptor}). Hiện có: danh sách (#15), tạo (#16), chi tiết (#17),
+ * đổi chức vụ (#18), điều chuyển (#19), gửi lại mật khẩu ban đầu (#22).
  */
 @RestController
 @RequestMapping("/api/staff")
 public class StaffController {
 
     static final String STAFF_ADMINS = "hasAnyRole('ADMIN', 'SUPER_MANAGER', 'BRANCH_MANAGER')";
+    static final String SUPER_MANAGER_ONLY = "hasRole('SUPER_MANAGER')";
 
     private final StaffQueryService staffQueries;
     private final StaffAdminService staffAdmin;
@@ -69,6 +73,21 @@ public class StaffController {
     @PreAuthorize(STAFF_ADMINS)
     public ApiResponse<StaffResponse> get(@PathVariable Long id) {
         return ApiResponse.ok(staffQueries.getStaff(id));
+    }
+
+    /** identity-v1 #18 (BR-QT-04, 05). Chức vụ mới trùng chức vụ hiện tại → 200 không đổi gì (docs/adr/0031). */
+    @PostMapping("/{id}/change-role")
+    @PreAuthorize(SUPER_MANAGER_ONLY)
+    public ApiResponse<StaffResponse> changeRole(@PathVariable Long id, @Valid @RequestBody ChangeRoleRequest request) {
+        return ApiResponse.ok(staffAdmin.changeStaffRole(id, request), "Đã đổi chức vụ");
+    }
+
+    /** identity-v1 #19 (BR-QT-03, 04, 06, 08). Đã ở chi nhánh đích → 200 không đổi gì (docs/adr/0031). */
+    @PostMapping("/{id}/transfer")
+    @PreAuthorize(SUPER_MANAGER_ONLY)
+    public ApiResponse<StaffResponse> transfer(@PathVariable Long id,
+            @Valid @RequestBody TransferStaffRequest request) {
+        return ApiResponse.ok(staffAdmin.transferStaff(id, request), "Đã điều chuyển nhân viên");
     }
 
     /** identity-v1 #22. 204 không body (docs/api/00-method.md §3.4). */

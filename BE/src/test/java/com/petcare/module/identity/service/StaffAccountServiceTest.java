@@ -26,6 +26,7 @@ import org.mockito.InOrder;
 import org.springframework.beans.BeanUtils;
 import org.springframework.test.util.ReflectionTestUtils;
 
+import com.petcare.module.branch.api.BranchApi;
 import com.petcare.module.branch.api.BranchQueryApi;
 import com.petcare.module.branch.api.BranchQueryApi.BranchStatus;
 import com.petcare.module.branch.api.BranchQueryApi.BranchSummary;
@@ -46,6 +47,8 @@ import com.petcare.module.identity.repository.AccountRepository;
 import com.petcare.module.identity.repository.StaffDetailRow;
 import com.petcare.module.identity.repository.StaffProfileRepository;
 import com.petcare.module.identity.service.TemporaryPasswordGenerator.TemporaryPassword;
+import com.petcare.module.sales.api.CashierShiftQueryApi;
+import com.petcare.module.visit.api.VisitQueryApi;
 import com.petcare.platform.audit.AuditEntry;
 import com.petcare.platform.audit.AuditRecorder;
 import com.petcare.platform.exception.BusinessRuleViolationException;
@@ -77,9 +80,12 @@ class StaffAccountServiceTest {
     private final AuditRecorder audit = mock(AuditRecorder.class);
     private final StaffPresence presence = mock(StaffPresence.class);
     private final StaffAdminMapper mapper = Mappers.getMapper(StaffAdminMapper.class);
+    private final BranchApi branchLocks = mock(BranchApi.class);
+    private final VisitQueryApi visitQueries = mock(VisitQueryApi.class);
+    private final CashierShiftQueryApi cashierShifts = mock(CashierShiftQueryApi.class);
     private final StaffAccountService service = new StaffAccountService(accounts, staffProfiles,
             new AccountTransitionHandler(), new StaffHierarchyPolicy(), branchScope, branches, sessions, notifications,
-            audit, mapper, presence);
+            audit, mapper, presence, branchLocks, visitQueries, cashierShifts);
 
     @BeforeEach
     void setUp() {
@@ -123,7 +129,7 @@ class StaffAccountServiceTest {
         assertThat(account.getValue().isMustChangePassword()).isTrue();
         assertThat(profile.getValue().getFullName()).isEqualTo("Quản lý chuỗi");
         assertThat(profile.getValue().getBranchId()).isNull();
-        verifyNoInteractions(branches, sessions);
+        verifyNoInteractions(branches, sessions, branchLocks, visitQueries, cashierShifts);
     }
 
     @Test

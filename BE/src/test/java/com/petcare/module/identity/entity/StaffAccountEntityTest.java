@@ -8,14 +8,15 @@ import java.time.Instant;
 
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.CsvSource;
 import org.junit.jupiter.params.provider.EnumSource;
 import org.springframework.test.util.ReflectionTestUtils;
 
 import com.petcare.module.identity.api.Role;
 
 /**
- * Tài khoản#4 và gửi lại mật khẩu ban đầu trên entity (BR-QT-02, BR-TK-01, 17; docs/adr/0030): giá trị hệ thống tự đặt
- * khi tạo, những gì {@code reissueInitialPassword} xóa / giữ, và các lời gọi sai bị chặn.
+ * Tài khoản#4, gửi lại mật khẩu ban đầu, đổi chức vụ, điều chuyển trên entity (BR-QT-02, 03, 05, 06, BR-TK-01, 17, 20;
+ * docs/adr/0030, 0031): giá trị hệ thống tự đặt khi tạo, những gì mỗi method đổi / giữ, và các lời gọi sai bị chặn.
  */
 class StaffAccountEntityTest {
 
@@ -99,5 +100,71 @@ class StaffAccountEntityTest {
     void staffProfileCreateRejectsMissingAccountOrBlankName() {
         assertThatThrownBy(() -> StaffProfile.create(null, "A", 1L)).isInstanceOf(IllegalArgumentException.class);
         assertThatThrownBy(() -> StaffProfile.create(1L, "  ", 1L)).isInstanceOf(IllegalArgumentException.class);
+    }
+
+    @ParameterizedTest(name = "{0} → {1}")
+    @CsvSource({"BRANCH_MANAGER, VET", "VET, BRANCH_MANAGER", "RECEPTIONIST, CARETAKER", "CARETAKER, RECEPTIONIST"})
+    void changeStaffRoleChangesOnlyRole(Role from, Role to) {
+        Account account = Account.createStaff("nv@petcare.test", "0901234567", "hash", from);
+        ReflectionTestUtils.setField(account, "status", AccountStatus.DISABLED);
+        ReflectionTestUtils.setField(account, "locked", true);
+        ReflectionTestUtils.setField(account, "lastSeenAt", T0);
+
+        account.changeStaffRole(to);
+
+        assertThat(account.getRole()).isEqualTo(to);
+        assertThat(account.getStatus()).isEqualTo(AccountStatus.DISABLED);
+        assertThat(account.isLocked()).isTrue();
+        assertThat(account.isMustChangePassword()).isTrue();
+        assertThat(account.getPasswordHash()).isEqualTo("hash");
+        assertThat(account.getLastSeenAt()).isEqualTo(T0);
+        assertThat(account.getEmail()).isEqualTo("nv@petcare.test");
+        assertThat(account.getPhone()).isEqualTo("0901234567");
+    }
+
+    @Test
+    void changeStaffRoleRefusesRolesOutsideBranchStaff() {
+        Account vet = Account.createStaff("a@b.c", "0901234567", "h", Role.VET);
+        Account superManager = Account.createStaff("s@b.c", "0901234567", "h", Role.SUPER_MANAGER);
+        Account customer = Account.registerCustomer("c@b.c", "h", T0);
+
+        for (Role target : new Role[] {Role.ADMIN, Role.SUPER_MANAGER, Role.CUSTOMER, null}) {
+            assertThatThrownBy(() -> vet.changeStaffRole(target)).as(String.valueOf(target))
+                    .isInstanceOf(IllegalStateException.class);
+        }
+        assertThatThrownBy(() -> superManager.changeStaffRole(Role.VET)).isInstanceOf(IllegalStateException.class);
+        assertThatThrownBy(() -> customer.changeStaffRole(Role.VET)).isInstanceOf(IllegalStateException.class);
+        assertThat(vet.getRole()).isEqualTo(Role.VET);
+        assertThat(superManager.getRole()).isEqualTo(Role.SUPER_MANAGER);
+    }
+
+    @Test
+    void transferToChangesOnlyBranchAndRejectsNull() {
+        StaffProfile profile = StaffProfile.create(9L, "Bác sĩ An", 3L);
+        profile.updateSelfProfile("Bác sĩ An", "https://img.test/a.png", "Nội khoa", "Mô tả");
+
+        profile.transferTo(4L);
+
+        assertThat(profile.getBranchId()).isEqualTo(4L);
+        assertThat(profile.getFullName()).isEqualTo("Bác sĩ An");
+        assertThat(profile.getAvatarUrl()).isEqualTo("https://img.test/a.png");
+        assertThat(profile.getSpecialty()).isEqualTo("Nội khoa");
+        assertThat(profile.getBio()).isEqualTo("Mô tả");
+        assertThatThrownBy(() -> profile.transferTo(null)).isInstanceOf(IllegalArgumentException.class);
+        assertThat(profile.getBranchId()).isEqualTo(4L);
+    }
+
+    @Test
+    void clearVetProfileClearsOnlySpecialtyAndBio() {
+        StaffProfile profile = StaffProfile.create(9L, "Bác sĩ An", 3L);
+        profile.updateSelfProfile("Bác sĩ An", "https://img.test/a.png", "Nội khoa", "Mô tả");
+
+        profile.clearVetProfile();
+
+        assertThat(profile.getSpecialty()).isNull();
+        assertThat(profile.getBio()).isNull();
+        assertThat(profile.getAvatarUrl()).isEqualTo("https://img.test/a.png");
+        assertThat(profile.getFullName()).isEqualTo("Bác sĩ An");
+        assertThat(profile.getBranchId()).isEqualTo(3L);
     }
 }

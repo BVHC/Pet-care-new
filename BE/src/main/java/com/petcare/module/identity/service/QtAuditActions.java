@@ -27,6 +27,18 @@ public final class QtAuditActions {
      */
     public static final String STAFF_INITIAL_PASSWORD_RESENT = "STAFF_INITIAL_PASSWORD_RESENT";
 
+    /**
+     * Đổi chức vụ (BR-QT-05, 15; docs/adr/0031). {@code entity = accounts/<id>}; {@code before}, {@code after} =
+     * {@code role, specialty, bio} (VET đổi sang chức vụ khác thì {@code specialty}, {@code bio} thành {@code null}).
+     */
+    public static final String STAFF_ROLE_CHANGED = "STAFF_ROLE_CHANGED";
+
+    /**
+     * Điều chuyển nhân viên (BR-QT-06, 15; docs/adr/0031). {@code entity = accounts/<id>}; {@code before},
+     * {@code after} = {@code branchId}.
+     */
+    public static final String STAFF_TRANSFERRED = "STAFF_TRANSFERRED";
+
     private QtAuditActions() {
     }
 }

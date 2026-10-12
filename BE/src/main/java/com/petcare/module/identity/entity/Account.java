@@ -2,8 +2,10 @@ package com.petcare.module.identity.entity;
 
 import java.time.Duration;
 import java.time.Instant;
+import java.util.EnumSet;
 import java.util.HashMap;
 import java.util.Map;
+import java.util.Set;
 
 import org.hibernate.annotations.JdbcTypeCode;
 import org.hibernate.type.SqlTypes;
@@ -28,7 +30,7 @@ import lombok.NoArgsConstructor;
  * nhất (BR-TK-01). Khóa ({@code is_locked}) độc lập với {@code status} (BR-QT-11, 12). Đã có: đăng ký
  * (Tài khoản#1), xác thực OTP (#2), xóa tài khoản {@code PENDING} quá hạn (#3, ST02 — xóa cứng bằng SQL ở
  * {@code AccountRepository}), bộ đếm đăng nhập sai và khóa tạm (BR-TK-09, ST01 — trường phụ, không phải trạng thái), đổi mật khẩu (BR-TK-14),
- * đặt lại mật khẩu (BR-TK-13);
+ * đặt lại mật khẩu (BR-TK-13), tạo nhân viên (#4), đổi chức vụ (UC08);
  * các chuyển trạng thái khác (vô hiệu hóa, khóa…) làm ở các task TK/QT sau.
  */
 @Getter
@@ -36,6 +38,10 @@ import lombok.NoArgsConstructor;
 @Table(name = "accounts")
 @NoArgsConstructor(access = AccessLevel.PROTECTED)
 public class Account extends TimestampedEntity {
+
+    /** A05–A08: nhóm chức vụ được đổi qua lại (BR-QT-05). */
+    private static final Set<Role> BRANCH_STAFF_ROLES =
+            EnumSet.of(Role.BRANCH_MANAGER, Role.RECEPTIONIST, Role.VET, Role.CARETAKER);
 
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
@@ -143,6 +149,18 @@ public class Account extends TimestampedEntity {
         this.firstFailedLoginAt = null;
         this.lockedUntil = null;
         this.lastSeenAt = null;
+    }
+
+    /**
+     * UC08 — đổi chức vụ (BR-QT-05; docs/adr/0031): chỉ trong nhóm A05–A08, cả chức vụ cũ lẫn mới. Không đổi
+     * {@code status}, khóa, mật khẩu, phiên: role được đọc lại từ DB ở mỗi request (docs/adr/0003). Caller giữ khóa dòng,
+     * đã kiểm phân cấp và BR-QT-04, và chỉ gọi khi chức vụ mới khác chức vụ hiện tại.
+     */
+    public void changeStaffRole(Role newRole) {
+        if (!BRANCH_STAFF_ROLES.contains(role) || !BRANCH_STAFF_ROLES.contains(newRole)) {
+            throw new IllegalStateException("Account " + id + " cannot change role " + role + " -> " + newRole);
+        }
+        this.role = newRole;
     }
 
     /**

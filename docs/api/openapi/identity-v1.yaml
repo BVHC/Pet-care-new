@@ -692,7 +692,7 @@ paths:
     post:
       tags: [Staff]
       summary: "Đổi chức vụ"
-      description: "UC08 · BR-QT-04, 05. Actor: A04. Quyền: Chỉ SUPER_MANAGER. Chuyển trạng thái: —."
+      description: "UC08 · BR-QT-04, 05. Actor: A04. Quyền: Chỉ SUPER_MANAGER. Chuyển trạng thái: —. Trùng chức vụ hiện tại → 200 không đổi gì. Được cả khi nhân viên DISABLED / bị khóa. VET đổi sang chức vụ khác thì specialty, bio bị xóa. Không hủy phiên: request kế tiếp của nhân viên dùng chức vụ mới. ADR-0031."
       operationId: changeStaffRole
       security:
         - bearerAuth: []
@@ -729,14 +729,28 @@ paths:
         "401":
           $ref: "#/components/responses/Unauthorized"
         "403":
-          $ref: "#/components/responses/Forbidden"
+          description: "người bị tác động ngoài A05–A08 hoặc chính mình (ghi audit)"
+          content:
+            "application/json":
+              schema:
+                $ref: "#/components/schemas/Error"
         "404":
-          $ref: "#/components/responses/NotFound"
+          description: "không có, hoặc là tài khoản khách"
+          content:
+            "application/json":
+              schema:
+                $ref: "#/components/schemas/Error"
+        "409":
+          description: "chi nhánh của nhân viên vừa bị đổi bởi thao tác khác"
+          content:
+            "application/json":
+              schema:
+                $ref: "#/components/schemas/Error"
   "/staff/{id}/transfer":
     post:
       tags: [Staff]
       summary: "Điều chuyển chi nhánh"
-      description: "UC08 · BR-QT-03, 04, 06, 08. Actor: A04. Quyền: Chỉ SUPER_MANAGER. Chuyển trạng thái: —."
+      description: "UC08 · BR-QT-03, 04, 06, 08. Actor: A04. Quyền: Chỉ SUPER_MANAGER. Chuyển trạng thái: —. Đã ở chi nhánh đích → 200 không đổi gì. Được cả khi nhân viên DISABLED / bị khóa. Không hủy phiên: request kế tiếp của nhân viên dùng chi nhánh mới. ADR-0031, ADR-0032."
       operationId: transferStaff
       security:
         - bearerAuth: []
@@ -765,7 +779,7 @@ paths:
                     type: integer
                     description: "HTTP status của kết quả, ví dụ 200, 201"
         "400":
-          description: "`BR-QT-08` còn Visit được gán chưa xong / ca thu ngân OPEN (message liệt kê) · `BR-QT-04` BRANCH_MANAGER cuối cùng · `BR-QT-03` chi nhánh không hợp lệ"
+          description: "`BR-QT-08` còn Visit được gán chưa xong / ca thu ngân OPEN (message liệt kê) · `BR-QT-04` BRANCH_MANAGER cuối cùng · `BR-QT-03` chi nhánh không hợp lệ · `branchId` số thực → `MALFORMED_REQUEST`"
           content:
             "application/json":
               schema:
@@ -773,9 +787,23 @@ paths:
         "401":
           $ref: "#/components/responses/Unauthorized"
         "403":
-          $ref: "#/components/responses/Forbidden"
+          description: "người bị tác động ngoài A05–A08 hoặc chính mình (ghi audit)"
+          content:
+            "application/json":
+              schema:
+                $ref: "#/components/schemas/Error"
         "404":
-          $ref: "#/components/responses/NotFound"
+          description: "không có, hoặc là tài khoản khách"
+          content:
+            "application/json":
+              schema:
+                $ref: "#/components/schemas/Error"
+        "409":
+          description: "chi nhánh của nhân viên vừa bị đổi bởi thao tác khác"
+          content:
+            "application/json":
+              schema:
+                $ref: "#/components/schemas/Error"
   "/staff/{id}/disable":
     post:
       tags: [Staff]

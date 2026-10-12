@@ -19,16 +19,22 @@ import org.junit.jupiter.api.Test;
 import org.mockito.InOrder;
 import org.springframework.transaction.annotation.Transactional;
 
+import com.petcare.module.identity.dto.ChangeRoleRequest;
 import com.petcare.module.identity.dto.CreateStaffRequest;
+import com.petcare.module.identity.dto.StaffResponse;
+import com.petcare.module.identity.dto.TransferStaffRequest;
 import com.petcare.module.identity.exception.StaffHierarchyDeniedException;
 import com.petcare.module.identity.service.TemporaryPasswordGenerator.TemporaryPassword;
 import com.petcare.platform.audit.AuditEntry;
 import com.petcare.platform.audit.AuditRecorder;
 import com.petcare.platform.exception.BusinessRuleViolationException;
+import com.petcare.platform.exception.ConcurrencyConflictException;
 import com.petcare.platform.exception.InvalidStateTransitionException;
+import com.petcare.platform.exception.ResourceNotFoundException;
 
 /**
- * Facade quản trị nhân viên (docs/adr/0029 mục 2, docs/adr/0030): sinh mật khẩu trước transaction; chỉ lỗi vượt phân
+ * Facade quản trị nhân viên (docs/adr/0029 mục 2, docs/adr/0030, 0031): sinh mật khẩu trước transaction (tạo, gửi lại;
+ * đổi chức vụ, điều chuyển không cần mật khẩu); chỉ lỗi vượt phân
  * cấp được ghi audit, bằng {@code recordIndependently}, sau khi service đã ném (tức transaction đã rollback), rồi ném
  * lại đúng instance đó. Facade không được có {@code @Transactional}.
  */
@@ -91,6 +97,61 @@ class StaffAdminServiceTest {
 
         assertThatThrownBy(() -> facade.createStaff(REQUEST)).isInstanceOf(BusinessRuleViolationException.class);
         assertThatThrownBy(() -> facade.resendInitialPassword(7L)).isInstanceOf(InvalidStateTransitionException.class);
+        verifyNoInteractions(audit);
+    }
+
+    @Test
+    void changeRoleAndTransferPassThroughWithoutPasswordOrAudit() {
+        ChangeRoleRequest changeRole = new ChangeRoleRequest("VET");
+        TransferStaffRequest transfer = new TransferStaffRequest(4L);
+        StaffResponse response = mock(StaffResponse.class);
+        when(staffAccounts.changeStaffRole(7L, changeRole)).thenReturn(response);
+        when(staffAccounts.transferStaff(7L, transfer)).thenReturn(response);
+
+        assertThat(facade.changeStaffRole(7L, changeRole)).isSameAs(response);
+        assertThat(facade.transferStaff(7L, transfer)).isSameAs(response);
+        verifyNoInteractions(generator, audit);
+    }
+
+    @Test
+    void changeRoleAndTransferHierarchyDenialIsAuditedAfterThrowThenRethrownAsIs() {
+        ChangeRoleRequest changeRole = new ChangeRoleRequest("VET");
+        TransferStaffRequest transfer = new TransferStaffRequest(4L);
+        AuditEntry entry = AuditEntry.of(QtAuditActions.STAFF_ACTION_DENIED);
+        StaffHierarchyDeniedException denied = new StaffHierarchyDeniedException("STAFF_HIERARCHY CHANGE_ROLE",
+                "SUPER_MANAGER", entry);
+        when(staffAccounts.changeStaffRole(7L, changeRole)).thenThrow(denied);
+        when(staffAccounts.transferStaff(7L, transfer)).thenThrow(denied);
+
+        assertThatThrownBy(() -> facade.changeStaffRole(7L, changeRole)).isSameAs(denied);
+        assertThatThrownBy(() -> facade.transferStaff(7L, transfer)).isSameAs(denied);
+
+        InOrder order = inOrder(staffAccounts, audit);
+        order.verify(staffAccounts).changeStaffRole(7L, changeRole);
+        order.verify(audit).recordIndependently(entry);
+        order.verify(staffAccounts).transferStaff(7L, transfer);
+        order.verify(audit).recordIndependently(entry);
+        verify(audit, org.mockito.Mockito.never()).record(any());
+        verifyNoInteractions(generator);
+    }
+
+    @Test
+    void changeRoleAndTransferOtherErrorsAreNotAudited() {
+        when(staffAccounts.changeStaffRole(anyLong(), any()))
+                .thenThrow(new BusinessRuleViolationException("BR-QT-04", "x"))
+                .thenThrow(new ResourceNotFoundException("nhân viên", 7L));
+        when(staffAccounts.transferStaff(anyLong(), any()))
+                .thenThrow(new ConcurrencyConflictException("nhân viên", 7L))
+                .thenThrow(new UnsupportedOperationException("placeholder"));
+
+        assertThatThrownBy(() -> facade.changeStaffRole(7L, new ChangeRoleRequest("VET")))
+                .isInstanceOf(BusinessRuleViolationException.class);
+        assertThatThrownBy(() -> facade.changeStaffRole(7L, new ChangeRoleRequest("VET")))
+                .isInstanceOf(ResourceNotFoundException.class);
+        assertThatThrownBy(() -> facade.transferStaff(7L, new TransferStaffRequest(4L)))
+                .isInstanceOf(ConcurrencyConflictException.class);
+        assertThatThrownBy(() -> facade.transferStaff(7L, new TransferStaffRequest(4L)))
+                .isInstanceOf(UnsupportedOperationException.class);
         verifyNoInteractions(audit);
     }
 }

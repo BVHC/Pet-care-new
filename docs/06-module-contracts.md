@@ -87,8 +87,8 @@ Mũi tên `A → B.m()`: module A gọi method m của module B. Cột *Chuyển
 | identity · Đăng nhập (UC03) | `CustomerQueryApi.findCustomerIdByAccountId` → `findContact(...).linkDecisionPending()` — chỉ tài khoản `CUSTOMER`, nhánh mật khẩu đúng và hợp lệ; identity đã gọi từ 08/10 (`LoginAttemptService`, docs/adr/0019) | BR-TK-19 |
 | identity · Thông tin người đang đăng nhập (`GET /me`, UC06) | `CustomerQueryApi.findCustomerIdByAccountId` → `findContact(...).linkDecisionPending()` — chỉ tài khoản `CUSTOMER`; identity gọi từ 09/10 (`MeService`), placeholder → 500 (D010) | BR-KH-01, BR-TK-19 |
 | identity · Liên kết hồ sơ (UC07, UC22) | `CustomerApi.linkAccountToCounterProfile(accountId, counterCustomerId, expectedCounterEmail, accountEmail)` / `declineLink` — **chữ ký đổi 10/10** (bỏ `actorId`, thêm email đã nhận mã; docs/adr/0027 mục 2): customer khóa hồ sơ tại quầy + hồ sơ online, kiểm lại dưới khóa, chỉ ném BR-TK-19, xóa `addresses` của hồ sơ online → hồ sơ online + `flush()` → gán hồ sơ tại quầy, không audit (identity ghi `CUSTOMER_PROFILE_LINKED`); customer tự kiểm dữ liệu qua `AppointmentQueryApi`, `BoardingQueryApi`, `OrderQueryApi`, `FeedbackQueryApi` `.existsByCustomer`. identity gọi từ 10/10 (`LinkProfileAttemptService`, sau khi khóa `accounts` và tiêu mã OTP) | BR-TK-19 |
-| identity · Vô hiệu hóa, điều chuyển (Tài khoản#5) | `VisitQueryApi.findUnfinishedVisitIdsAssignedTo`, `CashierShiftQueryApi.hasOpenShift`, `BranchQueryApi.findBranch` (BRANCH_MANAGER cuối của chi nhánh `ACTIVE`) | BR-QT-04, 06, 08 |
-| identity · Đổi chức vụ, điều chuyển, vô hiệu hóa, kích hoạt lại, khóa (UC08, UC09) | `BranchApi.lockForStaffChange` — khóa `branches` (id tăng dần) **trước** `accounts`, rồi mới đếm BRANCH_MANAGER (ADR-0029, nợ D014) | BR-QT-04 |
+| identity · Vô hiệu hóa, điều chuyển (Tài khoản#5) | `VisitQueryApi.findUnfinishedVisitIdsAssignedTo`, `CashierShiftQueryApi.hasOpenShift` (điều chuyển gọi từ 12/10 — `StaffAccountService.checkNoPendingWork`, sau mọi guard khác, mọi chức vụ; docs/adr/0031), trạng thái chi nhánh đọc dưới khóa từ `BranchApi.lockForStaffChange` (BRANCH_MANAGER cuối của chi nhánh `ACTIVE`). **Nghĩa vụ cho bên tạo việc dở (docs/adr/0031 mục 9):** visit gán lượt (Visit#2, #4) và sales mở ca thu ngân phải `SELECT … FROM accounts WHERE id = <nhân viên> FOR SHARE` rồi kiểm chi nhánh / chức vụ / trạng thái dưới khóa đó — FK chỉ lấy `FOR KEY SHARE`, không chặn điều chuyển / vô hiệu hóa | BR-QT-04, 06, 08 |
+| identity · Đổi chức vụ, điều chuyển, vô hiệu hóa, kích hoạt lại, khóa (UC08, UC09) | `BranchApi.lockForStaffChange` — khóa `branches` (id tăng dần) **trước** `accounts`, rồi mới đếm BRANCH_MANAGER (ADR-0029, nợ D014). Đổi chức vụ, điều chuyển gọi từ 12/10 (`StaffAccountService.lockTarget`, ADR-0031) | BR-QT-04 |
 | identity · Tạo nhân viên, kích hoạt lại | `BranchQueryApi.findBranch` (chi nhánh `DRAFT`/`ACTIVE`) | BR-QT-03, 10 |
 | identity · Khóa tài khoản khách (Tài khoản#7) | `CustomerQueryApi.findCustomerIdByAccountId` → `AppointmentQueryApi.findBookedByCustomer`, `BoardingQueryApi.findActiveStaysByCustomer`, `OrderQueryApi.findUnpaidOrdersByCustomer` → `StaffDirectoryApi.findActiveStaffIds(…, RECEPTIONIST)` | BR-QT-11, §8 Q2 |
 | identity · Gợi ý liên kết hồ sơ (UC07) | `CustomerQueryApi.findLinkCandidates` (không bao giờ null) và **`checkOnlineProfileLinkable(accountId)` → `LINKABLE / ALREADY_LINKED / HAS_DATA` (thêm 10/10, docs/adr/0027 mục 4)**; identity gọi ở `/me/link-candidates`, `/me/link/otp` | BR-TK-19 |
@@ -156,7 +156,7 @@ Bên sở hữu phải có implementation thật trước ngày bên gọi bắt
 | `BookingRestrictionApi` | BE-1 · 19/10 | boarding 22/10 | |
 | `VisitQueryApi` | BE-1 · 21/10 | identity, customer, sales dùng placeholder tới 21/10 | Guard vô hiệu hóa / chuyển chủ chỉ kiểm thật được từ 22/10. **11/10: BE-1 thêm `visit/service/VisitQueryApiPlaceholder`** (ném lỗi; điều chuyển / vô hiệu hóa nhân viên T14 trả 500 tới khi có bản thật — nợ D016) |
 | `CashierShiftQueryApi` | BE-2 · 21/10 | identity (placeholder tới 21/10) | **11/10: BE-1 thêm `sales/service/CashierShiftQueryApiPlaceholder`** (ném lỗi, ADR-0029, nợ D016) — BE-2 xóa lớp này cùng test của nó khi cài thật, **không tạo thêm placeholder thứ hai** (trùng bean) |
-| `BranchApi.lockForStaffChange` | BE-2 (BE-1 cài thay 11/10) | identity T14 phần 2, 3, 5 (12–14/10) | **11/10: BE-1 đã cài** `branch/api/BranchApi` + `branch/service/BranchStaffLockService` + `BranchRepository.lockStatusForStaffChange` (native `SELECT status … FOR NO KEY UPDATE`, không nạp entity), như tiền lệ ADR-0028. `MANDATORY`, chặn transaction `readOnly`, khóa theo id tăng dần, id lạ vắng khỏi map. BE-2 giữ quyền sở hữu; đổi chữ ký thì báo BE-1 (ADR-0029, nợ D014) |
+| `BranchApi.lockForStaffChange` | BE-2 (BE-1 cài thay 11/10) | identity T14 phần 2, 3, 5 (12–14/10) | **11/10: BE-1 đã cài** `branch/api/BranchApi` + `branch/service/BranchStaffLockService` + `BranchRepository.lockStatusForStaffChange` (native `SELECT status … FOR NO KEY UPDATE`, không nạp entity), như tiền lệ ADR-0028. `MANDATORY`, chặn transaction `readOnly`, khóa theo id tăng dần, id lạ vắng khỏi map. BE-2 giữ quyền sở hữu; đổi chữ ký thì báo BE-1 (ADR-0029, nợ D014). **12/10:** identity T14 phần 2 đã dùng (ADR-0031) |
 | `BoardingQueryApi` | BE-2 · 22/10 | branch, customer, appointment (placeholder tới 22/10) | **09/10: BE-2 thêm `boarding/service/BoardingQueryApiPlaceholder`** (ném lỗi); `BookedStay` có thêm `code` (mã đặt chỗ, ngay sau `bookingId`). |
 | `VaccinationQueryApi` | BE-1 · 23/10 | boarding nhận thú 26/10 | |
 | `PrescriptionApi` | BE-1 · 26/10 | sales (luồng thiếu thuốc lúc thu nối thật 28/10) | |
@@ -178,7 +178,7 @@ Bên sở hữu phải có implementation thật trước ngày bên gọi bắt
 | G5 | "Visit mới có dịch vụ loại Khám" (Care Task#6) xét tại Visit#1 theo dịch vụ tự sinh | 03 ghi người kích hoạt là `Visit#1` |
 | G6 | **Cần BE-2 xác nhận (10/10):** hệ thống chưa có quy tắc định dạng SĐT / URL chung. identity dùng kiểu `mobile` (`^0[0-9]{9}$`, theo erd `accounts.phone`) cho SĐT nhân viên và chỉ nhận `https://` cho `avatarUrl` nhân viên (ADR-0026); kiểu `phone` dùng chung vẫn là `^0[0-9]{9,10}$`. Hiện `CreateBranchRequest` / `UpdateBranchRequest` không kiểm định dạng SĐT; `avatarUrl` của khách (customer-v1) và `imageUrl` của catalog chưa kiểm `https`. Đề nghị dùng chung hai kiểu `mobile` / `https_url` của `docs/api/generator/lib.py` khi BE-2 cài các endpoint đó Phía `/me` của customer đã theo (10/10, docs/adr/0028): request `phone` / `receiverPhone` kiểu `mobile`, `avatarUrl` chỉ `https://`; response `CustomerProfile.phone` / `avatarUrl` giữ kiểu chung để không sai với hồ sơ tại quầy 10–11 số | Ảnh hiện ở trang công khai; SĐT khách dùng để đối chiếu (BR-TK-19, BR-KH-10) nên cần cùng một dạng chuẩn |
 
-## 8. Quyết định bổ sung (Q1–Q4)
+## 8. Quyết định bổ sung (Q1–Q5)
 
 Bốn điểm tài liệu 01–05 chưa quy định, đã chốt ngày 03/10/2026. Q1 và Q2 là **quyết định nghiệp vụ**: cần chép ngược vào 02 / 03 / 05 ở lần sửa tài liệu kế tiếp để bộ tài liệu gốc tự đủ (xem "Cần sửa ở tài liệu gốc").
 
@@ -262,6 +262,12 @@ Báo cáo (2) đếm theo dòng dịch vụ trong Order, vì dịch vụ thực 
 | `STOCK_ALERT_DIGEST_APP` | Trong app | BRANCH_MANAGER | BR-KO-07, ST08 |
 
 Biến của từng mẫu (`allowed_vars`, `required_vars`) do module gửi đề xuất trong PR đầu tiên dùng mẫu đó. Mẫu `_APP` (kênh `IN_APP`) bắt buộc có `subject` — thành `notifications.title`, quá 200 ký tự bị cắt; `notifications.type` là mã mẫu bỏ hậu tố `_APP` (ADR-0014). Thiếu mẫu thì thêm hằng số kèm migration seed, không tạo mẫu qua giao diện.
+
+### Q5. JSON: số thực không được ép thành số nguyên (12/10/2026, docs/adr/0032)
+
+**Quyết định.** `spring.jackson.deserialization.accept-float-as-int: false` trong `application.yml` (toàn app, mọi module). Số thực — kể cả `5.0` — gửi vào trường `int` / `long` / `Integer` / `Long` của request trả 400 `MALFORMED_REQUEST` thay vì bị cắt âm thầm (`{"branchId": 1.9}` từng thành `1`). Trường `BigDecimal` / `double` không bị ảnh hưởng.
+
+**BE-2 cần biết.** IT của module mình không được gửi số thực vào trường số nguyên (hiện không có: `mvn clean verify` 12/10 xanh). Không cần sửa code.
 
 ### Cần sửa ở tài liệu gốc
 

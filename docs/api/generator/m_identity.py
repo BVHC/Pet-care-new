@@ -262,11 +262,20 @@ m.op("get", "/staff/{id}", "getStaff", "Chi tiết nhân viên", "Staff", "UC08"
      err_desc={403: "ngoài phạm vi xem (không ghi audit)", 404: "không có, hoặc là tài khoản khách (cùng message)"})
 m.op("post", "/staff/{id}/change-role", "changeStaffRole", "Đổi chức vụ", "Staff", "UC08", "BR-QT-04, 05", "A04",
      "Chỉ SUPER_MANAGER", body="ChangeRoleRequest", resp="StaffResponse", path_params=["StaffId"],
-     errors=(400, 401, 403, 404), err_desc={400: "`BR-QT-04` là BRANCH_MANAGER ACTIVE cuối cùng của chi nhánh ACTIVE"})
+     errors=(400, 401, 403, 404, 409),
+     err_desc={400: "`BR-QT-04` là BRANCH_MANAGER ACTIVE cuối cùng của chi nhánh ACTIVE",
+               403: "người bị tác động ngoài A05–A08 hoặc chính mình (ghi audit)",
+               404: "không có, hoặc là tài khoản khách",
+               409: "chi nhánh của nhân viên vừa bị đổi bởi thao tác khác"},
+     notes="Trùng chức vụ hiện tại → 200 không đổi gì. Được cả khi nhân viên DISABLED / bị khóa. VET đổi sang chức vụ khác thì specialty, bio bị xóa. Không hủy phiên: request kế tiếp của nhân viên dùng chức vụ mới. ADR-0031.")
 m.op("post", "/staff/{id}/transfer", "transferStaff", "Điều chuyển chi nhánh", "Staff", "UC08", "BR-QT-03, 04, 06, 08",
      "A04", "Chỉ SUPER_MANAGER", body="TransferStaffRequest", resp="StaffResponse", path_params=["StaffId"],
-     errors=(400, 401, 403, 404),
-     err_desc={400: "`BR-QT-08` còn Visit được gán chưa xong / ca thu ngân OPEN (message liệt kê) · `BR-QT-04` BRANCH_MANAGER cuối cùng · `BR-QT-03` chi nhánh không hợp lệ"})
+     errors=(400, 401, 403, 404, 409),
+     err_desc={400: "`BR-QT-08` còn Visit được gán chưa xong / ca thu ngân OPEN (message liệt kê) · `BR-QT-04` BRANCH_MANAGER cuối cùng · `BR-QT-03` chi nhánh không hợp lệ · `branchId` số thực → `MALFORMED_REQUEST`",
+               403: "người bị tác động ngoài A05–A08 hoặc chính mình (ghi audit)",
+               404: "không có, hoặc là tài khoản khách",
+               409: "chi nhánh của nhân viên vừa bị đổi bởi thao tác khác"},
+     notes="Đã ở chi nhánh đích → 200 không đổi gì. Được cả khi nhân viên DISABLED / bị khóa. Không hủy phiên: request kế tiếp của nhân viên dùng chi nhánh mới. ADR-0031, ADR-0032.")
 m.op("post", "/staff/{id}/disable", "disableStaff", "Vô hiệu hóa nhân viên", "Staff", "UC08",
      "BR-QT-04, 07, 08, 09, 12, BR-TK-11", "A03, A04, A05", "Theo BR-QT-07; không tự vô hiệu hóa mình",
      "ACTIVE → DISABLED (Tài khoản#5)", resp="StaffResponse", path_params=["StaffId"], errors=(400, 401, 403, 404, 409),
