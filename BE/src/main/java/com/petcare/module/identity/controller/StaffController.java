@@ -14,6 +14,7 @@ import org.springframework.web.bind.annotation.RestController;
 import com.petcare.module.identity.api.Role;
 import com.petcare.module.identity.dto.ChangeRoleRequest;
 import com.petcare.module.identity.dto.CreateStaffRequest;
+import com.petcare.module.identity.dto.ReactivateStaffRequest;
 import com.petcare.module.identity.dto.StaffResponse;
 import com.petcare.module.identity.dto.TransferStaffRequest;
 import com.petcare.module.identity.entity.AccountStatus;
@@ -26,11 +27,11 @@ import jakarta.validation.Valid;
 import jakarta.validation.constraints.Positive;
 
 /**
- * {@code /api/staff/**} của identity-v1 — quản lý tài khoản nhân viên (UC08; docs/adr/0029, 0030, 0031). Chỉ ADMIN,
+ * {@code /api/staff/**} của identity-v1 — quản lý tài khoản nhân viên (UC08; docs/adr/0029, 0030, 0031, 0033). Chỉ ADMIN,
  * SUPER_MANAGER, BRANCH_MANAGER (role khác → 403 {@code ACCESS_DENIED}, không audit); đổi chức vụ và điều chuyển chỉ
  * SUPER_MANAGER (BR-QT-05, 06). Phạm vi chi tiết và phân cấp kiểm ở service. Bị chặn khi người gọi còn phải đổi mật
  * khẩu lần đầu (BR-TK-17, {@code MustChangePasswordInterceptor}). Hiện có: danh sách (#15), tạo (#16), chi tiết (#17),
- * đổi chức vụ (#18), điều chuyển (#19), gửi lại mật khẩu ban đầu (#22).
+ * đổi chức vụ (#18), điều chuyển (#19), vô hiệu hóa (#20), kích hoạt lại (#21), gửi lại mật khẩu ban đầu (#22).
  */
 @RestController
 @RequestMapping("/api/staff")
@@ -88,6 +89,27 @@ public class StaffController {
     public ApiResponse<StaffResponse> transfer(@PathVariable Long id,
             @Valid @RequestBody TransferStaffRequest request) {
         return ApiResponse.ok(staffAdmin.transferStaff(id, request), "Đã điều chuyển nhân viên");
+    }
+
+    /**
+     * identity-v1 #20 (Tài khoản#5; BR-QT-04, 07, 08, 09, 12, BR-TK-11). Không body. Hủy mọi phiên của nhân viên;
+     * đã {@code DISABLED} → 409 (docs/adr/0033).
+     */
+    @PostMapping("/{id}/disable")
+    @PreAuthorize(STAFF_ADMINS)
+    public ApiResponse<StaffResponse> disable(@PathVariable Long id) {
+        return ApiResponse.ok(staffAdmin.disableStaff(id), "Đã vô hiệu hóa nhân viên");
+    }
+
+    /**
+     * identity-v1 #21 (Tài khoản#6; BR-QT-02, 03, 10, 12). Body không bắt buộc: thiếu = giữ chi nhánh hiện tại. Mật khẩu
+     * tạm mới gửi qua email, response không có mật khẩu; đang {@code ACTIVE} → 409 (docs/adr/0033).
+     */
+    @PostMapping("/{id}/reactivate")
+    @PreAuthorize(STAFF_ADMINS)
+    public ApiResponse<StaffResponse> reactivate(@PathVariable Long id,
+            @Valid @RequestBody(required = false) ReactivateStaffRequest request) {
+        return ApiResponse.ok(staffAdmin.reactivateStaff(id, request), "Đã kích hoạt lại nhân viên");
     }
 
     /** identity-v1 #22. 204 không body (docs/api/00-method.md §3.4). */

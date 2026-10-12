@@ -154,6 +154,84 @@ class StaffAccountEntityTest {
         assertThat(profile.getBranchId()).isEqualTo(4L);
     }
 
+    /** Tài khoản#5 (docs/adr/0033): chỉ đổi {@code status} và đưa offline; mật khẩu, cờ, chức vụ giữ nguyên. */
+    @ParameterizedTest
+    @EnumSource(value = Role.class, names = {"CUSTOMER", "ADMIN"}, mode = EnumSource.Mode.EXCLUDE)
+    void disableSetsDisabledAndOfflineOnly(Role role) {
+        Account account = Account.createStaff("nv@petcare.test", "0901234567", "hash", role);
+        ReflectionTestUtils.setField(account, "lastSeenAt", T0);
+        ReflectionTestUtils.setField(account, "failedLoginCount", 2);
+        ReflectionTestUtils.setField(account, "mustChangePassword", false);
+
+        account.disable();
+
+        assertThat(account.getStatus()).isEqualTo(AccountStatus.DISABLED);
+        assertThat(account.getLastSeenAt()).isNull();
+        assertThat(account.getRole()).isEqualTo(role);
+        assertThat(account.getPasswordHash()).isEqualTo("hash");
+        assertThat(account.isMustChangePassword()).isFalse();
+        assertThat(account.getFailedLoginCount()).isEqualTo(2);
+        assertThat(account.isLocked()).isFalse();
+    }
+
+    @Test
+    void disableRefusesCustomerNonActiveOrLockedAccount() {
+        Account customer = Account.registerCustomer("c@b.c", "h", T0);
+        ReflectionTestUtils.setField(customer, "status", AccountStatus.ACTIVE);
+        Account disabled = Account.createStaff("d@b.c", "0901234567", "h", Role.VET);
+        ReflectionTestUtils.setField(disabled, "status", AccountStatus.DISABLED);
+        Account locked = Account.createStaff("l@b.c", "0901234567", "h", Role.VET);
+        ReflectionTestUtils.setField(locked, "locked", true);
+
+        for (Account account : new Account[] {customer, disabled, locked}) {
+            AccountStatus before = account.getStatus();
+            assertThatThrownBy(account::disable).isInstanceOf(IllegalStateException.class);
+            assertThat(account.getStatus()).isEqualTo(before);
+        }
+    }
+
+    /** Tài khoản#6 (docs/adr/0033): mật khẩu tạm mới, bắt đổi mật khẩu, xóa bộ đếm / khóa tạm, offline. */
+    @Test
+    void reactivateSetsActiveNewHashMustChangeAndClearsCountersAndPresence() {
+        Account account = Account.createStaff("nv@petcare.test", "0901234567", "old", Role.CARETAKER);
+        ReflectionTestUtils.setField(account, "status", AccountStatus.DISABLED);
+        ReflectionTestUtils.setField(account, "mustChangePassword", false);
+        ReflectionTestUtils.setField(account, "failedLoginCount", 4);
+        ReflectionTestUtils.setField(account, "firstFailedLoginAt", T0);
+        ReflectionTestUtils.setField(account, "lockedUntil", T0.plus(Duration.ofMinutes(15)));
+        ReflectionTestUtils.setField(account, "lastSeenAt", T0);
+
+        account.reactivate("new");
+
+        assertThat(account.getStatus()).isEqualTo(AccountStatus.ACTIVE);
+        assertThat(account.getPasswordHash()).isEqualTo("new");
+        assertThat(account.isMustChangePassword()).isTrue();
+        assertThat(account.getFailedLoginCount()).isZero();
+        assertThat(account.getFirstFailedLoginAt()).isNull();
+        assertThat(account.getLockedUntil()).isNull();
+        assertThat(account.getLastSeenAt()).isNull();
+        assertThat(account.getRole()).isEqualTo(Role.CARETAKER);
+        assertThat(account.getEmail()).isEqualTo("nv@petcare.test");
+        assertThat(account.isLocked()).isFalse();
+    }
+
+    @Test
+    void reactivateRefusesCustomerNonDisabledOrLockedAccount() {
+        Account customer = Account.registerCustomer("c@b.c", "h", T0);
+        ReflectionTestUtils.setField(customer, "status", AccountStatus.DISABLED);
+        Account active = Account.createStaff("a@b.c", "0901234567", "h", Role.VET);
+        Account locked = Account.createStaff("l@b.c", "0901234567", "h", Role.VET);
+        ReflectionTestUtils.setField(locked, "status", AccountStatus.DISABLED);
+        ReflectionTestUtils.setField(locked, "locked", true);
+
+        for (Account account : new Account[] {customer, active, locked}) {
+            AccountStatus before = account.getStatus();
+            assertThatThrownBy(() -> account.reactivate("new")).isInstanceOf(IllegalStateException.class);
+            assertThat(account.getStatus()).isEqualTo(before);
+            assertThat(account.getPasswordHash()).isEqualTo("h");
+        }
+    }
+
     @Test
     void clearVetProfileClearsOnlySpecialtyAndBio() {
         StaffProfile profile = StaffProfile.create(9L, "Bác sĩ An", 3L);

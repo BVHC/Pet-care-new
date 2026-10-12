@@ -808,7 +808,7 @@ paths:
     post:
       tags: [Staff]
       summary: "Vô hiệu hóa nhân viên"
-      description: "UC08 · BR-QT-04, 07, 08, 09, 12, BR-TK-11. Actor: A03, A04, A05. Quyền: Theo BR-QT-07; không tự vô hiệu hóa mình. Chuyển trạng thái: ACTIVE → DISABLED (Tài khoản#5). Hủy mọi phiên (BR-QT-09)."
+      description: "UC08 · BR-QT-04, 07, 08, 09, 12, BR-TK-11. Actor: A03, A04, A05. Quyền: Theo BR-QT-07; không tự vô hiệu hóa mình. Chuyển trạng thái: ACTIVE → DISABLED (Tài khoản#5). Không body. Hủy mọi phiên, nhân viên chuyển offline ngay (BR-QT-09, BR-TK-11, BR-TN-06); không gửi email; dữ liệu lịch sử giữ nguyên. SUPER_MANAGER không kiểm BR-QT-08. Tạm thời A05–A08 trả 500 tới khi visit / sales có bản thật (D016, 21/10). Bấm lại sau lỗi mạng nhận 409 → đọc lại `GET /staff/{id}`. ADR-0033."
       operationId: disableStaff
       security:
         - bearerAuth: []
@@ -831,7 +831,7 @@ paths:
                     type: integer
                     description: "HTTP status của kết quả, ví dụ 200, 201"
         "400":
-          description: "`BR-QT-08` còn quy trình dở dang (message liệt kê) · `BR-QT-12` đang bị khóa, cần mở khóa trước · `BR-QT-04` BRANCH_MANAGER cuối cùng"
+          description: "`BR-QT-12` đang bị khóa, cần mở khóa trước · `BR-QT-04` BRANCH_MANAGER ACTIVE cuối cùng của chi nhánh ACTIVE · `BR-QT-08` còn Visit được gán chưa xong / ca thu ngân OPEN (message liệt kê) · `id` sai kiểu"
           content:
             "application/json":
               schema:
@@ -839,20 +839,28 @@ paths:
         "401":
           $ref: "#/components/responses/Unauthorized"
         "403":
-          description: "`BR-QT-07` ngoài phạm vi hoặc chính mình"
+          description: "ngoài phạm vi BR-QT-07 hoặc chính mình (ghi audit, message chung)"
           content:
             "application/json":
               schema:
                 $ref: "#/components/schemas/Error"
         "404":
-          $ref: "#/components/responses/NotFound"
+          description: "không có, hoặc là tài khoản khách"
+          content:
+            "application/json":
+              schema:
+                $ref: "#/components/schemas/Error"
         "409":
-          $ref: "#/components/responses/Conflict"
+          description: "đã DISABLED (`INVALID_STATE_TRANSITION`) · chi nhánh của nhân viên vừa bị đổi bởi thao tác khác (`CONCURRENCY_CONFLICT`)"
+          content:
+            "application/json":
+              schema:
+                $ref: "#/components/schemas/Error"
   "/staff/{id}/reactivate":
     post:
       tags: [Staff]
       summary: "Kích hoạt lại nhân viên"
-      description: "UC08 · BR-QT-02, 03, 10, 12. Actor: A03, A04, A05. Quyền: Cùng phạm vi với vô hiệu hóa. Chuyển trạng thái: DISABLED → ACTIVE (Tài khoản#6). Cấp mật khẩu tạm mới, mustChangePassword = true."
+      description: "UC08 · BR-QT-02, 03, 10, 12. Actor: A03, A04, A05. Quyền: Cùng phạm vi với vô hiệu hóa. Chuyển trạng thái: DISABLED → ACTIVE (Tài khoản#6). Body không bắt buộc: thiếu / `{}` / `branchId` null = giữ chi nhánh hiện tại. Sinh mật khẩu tạm mới gửi STAFF_TEMP_PASSWORD (response không có mật khẩu), mustChangePassword = true, xóa bộ đếm đăng nhập sai và khóa tạm, hủy mọi phiên. Bấm lại sau lỗi mạng nhận 409 (không gửi thêm mật khẩu) → đọc lại `GET /staff/{id}`. ADR-0033, ADR-0032."
       operationId: reactivateStaff
       security:
         - bearerAuth: []
@@ -881,7 +889,7 @@ paths:
                     type: integer
                     description: "HTTP status của kết quả, ví dụ 200, 201"
         "400":
-          description: "`BR-QT-10` đang bị khóa · `BR-QT-03` chi nhánh không hợp lệ"
+          description: "`BR-QT-10` đang bị khóa, cần mở khóa trước · `BR-QT-03` chi nhánh không tồn tại, hoặc SUPER_MANAGER kèm `branchId` · `branchId` ≤ 0 (`VALIDATION_FAILED`) / số thực (`MALFORMED_REQUEST`)"
           content:
             "application/json":
               schema:
@@ -889,11 +897,23 @@ paths:
         "401":
           $ref: "#/components/responses/Unauthorized"
         "403":
-          $ref: "#/components/responses/Forbidden"
+          description: "ngoài phạm vi BR-QT-10 (như vô hiệu hóa), chính mình, hoặc BRANCH_MANAGER gửi chi nhánh khác chi nhánh mình (ghi audit, message chung)"
+          content:
+            "application/json":
+              schema:
+                $ref: "#/components/schemas/Error"
         "404":
-          $ref: "#/components/responses/NotFound"
+          description: "không có, hoặc là tài khoản khách"
+          content:
+            "application/json":
+              schema:
+                $ref: "#/components/schemas/Error"
         "409":
-          $ref: "#/components/responses/Conflict"
+          description: "đang ACTIVE (`INVALID_STATE_TRANSITION`)"
+          content:
+            "application/json":
+              schema:
+                $ref: "#/components/schemas/Error"
   "/staff/{id}/resend-initial-password":
     post:
       tags: [Staff]
@@ -2235,12 +2255,6 @@ components:
             $ref: "#/components/schemas/Error"
     NotFound:
       description: "Không tìm thấy (RESOURCE_NOT_FOUND)."
-      content:
-        "application/json":
-          schema:
-            $ref: "#/components/schemas/Error"
-    Conflict:
-      description: "INVALID_STATE_TRANSITION: trạng thái hiện tại không cho phép thao tác · CONCURRENCY_CONFLICT: xung đột cập nhật đồng thời."
       content:
         "application/json":
           schema:

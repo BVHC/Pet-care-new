@@ -33,4 +33,13 @@ public class AccountTransitionHandler extends StateMachineBase<AccountStatus> {
         return Set.of(PENDING,                  // #1 đăng ký
                 ACTIVE);                        // #4 tạo tài khoản nhân viên
     }
+
+    /**
+     * Tên hiện trong message 409 ({@code InvalidStateTransitionException}) mà client nhận — tên nghiệp vụ, không lộ tên
+     * lớp (docs/adr/0033).
+     */
+    @Override
+    protected String fsmName() {
+        return "tài khoản";
+    }
 }

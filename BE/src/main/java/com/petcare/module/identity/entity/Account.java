@@ -30,8 +30,8 @@ import lombok.NoArgsConstructor;
  * nhất (BR-TK-01). Khóa ({@code is_locked}) độc lập với {@code status} (BR-QT-11, 12). Đã có: đăng ký
  * (Tài khoản#1), xác thực OTP (#2), xóa tài khoản {@code PENDING} quá hạn (#3, ST02 — xóa cứng bằng SQL ở
  * {@code AccountRepository}), bộ đếm đăng nhập sai và khóa tạm (BR-TK-09, ST01 — trường phụ, không phải trạng thái), đổi mật khẩu (BR-TK-14),
- * đặt lại mật khẩu (BR-TK-13), tạo nhân viên (#4), đổi chức vụ (UC08);
- * các chuyển trạng thái khác (vô hiệu hóa, khóa…) làm ở các task TK/QT sau.
+ * đặt lại mật khẩu (BR-TK-13), tạo nhân viên (#4), đổi chức vụ (UC08), vô hiệu hóa (#5), kích hoạt lại (#6);
+ * khóa / mở khóa (#7, #8) làm ở task QT sau.
  */
 @Getter
 @Entity
@@ -161,6 +161,39 @@ public class Account extends TimestampedEntity {
             throw new IllegalStateException("Account " + id + " cannot change role " + role + " -> " + newRole);
         }
         this.role = newRole;
+    }
+
+    /**
+     * Tài khoản#5 — vô hiệu hóa nhân viên (BR-QT-07, 09; docs/adr/0033): {@code ACTIVE → DISABLED}. Đặt
+     * {@code last_seen_at = NULL} vì mọi phiên bị hủy cùng lúc — chuyển offline ngay (BR-TN-06, docs/adr/0030 *Hệ quả*).
+     * Dữ liệu khác giữ nguyên (BR-QT-09). Caller giữ khóa dòng, đã kiểm phân cấp, BR-QT-12, 04, 08 và
+     * {@code validateTransition}, rồi hủy phiên sau lệnh này (thứ tự {@code accounts → sessions}).
+     */
+    public void disable() {
+        if (role == Role.CUSTOMER || status != AccountStatus.ACTIVE || locked) {
+            throw new IllegalStateException("Account " + id + " cannot be disabled");
+        }
+        this.status = AccountStatus.DISABLED;
+        this.lastSeenAt = null;
+    }
+
+    /**
+     * Tài khoản#6 — kích hoạt lại nhân viên (BR-QT-10; docs/adr/0033): {@code DISABLED → ACTIVE} với mật khẩu tạm mới
+     * (BR-QT-02), bắt đổi mật khẩu như lần đầu (BR-TK-17). Như gửi lại mật khẩu ban đầu: xóa bộ đếm sai và khóa tạm,
+     * {@code last_seen_at = NULL} vì mọi phiên bị hủy. Caller giữ khóa dòng, đã kiểm phân cấp, BR-QT-10, 03 và
+     * {@code validateTransition}, rồi hủy phiên sau lệnh này.
+     */
+    public void reactivate(String newPasswordHash) {
+        if (role == Role.CUSTOMER || status != AccountStatus.DISABLED || locked) {
+            throw new IllegalStateException("Account " + id + " cannot be reactivated");
+        }
+        this.status = AccountStatus.ACTIVE;
+        this.passwordHash = newPasswordHash;
+        this.mustChangePassword = true;
+        this.failedLoginCount = 0;
+        this.firstFailedLoginAt = null;
+        this.lockedUntil = null;
+        this.lastSeenAt = null;
     }
 
     /**

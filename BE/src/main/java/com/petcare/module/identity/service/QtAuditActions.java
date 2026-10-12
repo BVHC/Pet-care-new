@@ -39,6 +39,18 @@ public final class QtAuditActions {
      */
     public static final String STAFF_TRANSFERRED = "STAFF_TRANSFERRED";
 
+    /**
+     * Vô hiệu hóa nhân viên (Tài khoản#5, BR-QT-07, 09, 15; docs/adr/0033). {@code entity = accounts/<id>};
+     * {@code before}, {@code after} = {@code status}.
+     */
+    public static final String STAFF_DISABLED = "STAFF_DISABLED";
+
+    /**
+     * Kích hoạt lại nhân viên (Tài khoản#6, BR-QT-10, 15; docs/adr/0033). {@code entity = accounts/<id>};
+     * {@code before}, {@code after} = {@code status, branchId}. Không có mật khẩu tạm (bí mật, chỉ ở outbox).
+     */
+    public static final String STAFF_REACTIVATED = "STAFF_REACTIVATED";
+
     private QtAuditActions() {
     }
 }

@@ -21,6 +21,7 @@ import org.springframework.transaction.annotation.Transactional;
 
 import com.petcare.module.identity.dto.ChangeRoleRequest;
 import com.petcare.module.identity.dto.CreateStaffRequest;
+import com.petcare.module.identity.dto.ReactivateStaffRequest;
 import com.petcare.module.identity.dto.StaffResponse;
 import com.petcare.module.identity.dto.TransferStaffRequest;
 import com.petcare.module.identity.exception.StaffHierarchyDeniedException;
@@ -152,6 +153,72 @@ class StaffAdminServiceTest {
                 .isInstanceOf(ConcurrencyConflictException.class);
         assertThatThrownBy(() -> facade.transferStaff(7L, new TransferStaffRequest(4L)))
                 .isInstanceOf(UnsupportedOperationException.class);
+        verifyNoInteractions(audit);
+    }
+
+    // ---------------------------------------------------------------- #20, #21 (docs/adr/0033)
+
+    @Test
+    void disablePassesThroughWithoutPasswordOrAudit() {
+        StaffResponse response = mock(StaffResponse.class);
+        when(staffAccounts.disableStaff(7L)).thenReturn(response);
+
+        assertThat(facade.disableStaff(7L)).isSameAs(response);
+        verifyNoInteractions(generator, audit);
+    }
+
+    @Test
+    void reactivatePreparesPasswordBeforeTransactionAndPassesRequestThroughIncludingNull() {
+        StaffResponse response = mock(StaffResponse.class);
+        ReactivateStaffRequest request = new ReactivateStaffRequest(4L);
+        when(staffAccounts.reactivateStaff(7L, request, TEMP)).thenReturn(response);
+        when(staffAccounts.reactivateStaff(8L, null, TEMP)).thenReturn(response);
+
+        assertThat(facade.reactivateStaff(7L, request)).isSameAs(response);
+        assertThat(facade.reactivateStaff(8L, null)).isSameAs(response);
+
+        InOrder order = inOrder(generator, staffAccounts);
+        order.verify(generator).prepare();
+        order.verify(staffAccounts).reactivateStaff(7L, request, TEMP);
+        order.verify(generator).prepare();
+        order.verify(staffAccounts).reactivateStaff(8L, null, TEMP);
+        verifyNoInteractions(audit);
+    }
+
+    @Test
+    void disableAndReactivateHierarchyDenialIsAuditedAfterThrowThenRethrownAsIs() {
+        AuditEntry entry = AuditEntry.of(QtAuditActions.STAFF_ACTION_DENIED);
+        StaffHierarchyDeniedException denied = new StaffHierarchyDeniedException("STAFF_HIERARCHY DISABLE",
+                "BRANCH_MANAGER", entry);
+        when(staffAccounts.disableStaff(7L)).thenThrow(denied);
+        when(staffAccounts.reactivateStaff(7L, null, TEMP)).thenThrow(denied);
+
+        assertThatThrownBy(() -> facade.disableStaff(7L)).isSameAs(denied);
+        assertThatThrownBy(() -> facade.reactivateStaff(7L, null)).isSameAs(denied);
+
+        InOrder order = inOrder(staffAccounts, audit);
+        order.verify(staffAccounts).disableStaff(7L);
+        order.verify(audit).recordIndependently(entry);
+        order.verify(staffAccounts).reactivateStaff(7L, null, TEMP);
+        order.verify(audit).recordIndependently(entry);
+        verify(audit, org.mockito.Mockito.never()).record(any());
+    }
+
+    @Test
+    void disableAndReactivateOtherErrorsAreNotAudited() {
+        when(staffAccounts.disableStaff(anyLong()))
+                .thenThrow(new BusinessRuleViolationException("BR-QT-12", "x"))
+                .thenThrow(new InvalidStateTransitionException("tài khoản", "DISABLED", "DISABLED"))
+                .thenThrow(new UnsupportedOperationException("placeholder"));
+        when(staffAccounts.reactivateStaff(anyLong(), any(), any()))
+                .thenThrow(new BusinessRuleViolationException("BR-QT-10", "x"))
+                .thenThrow(new ResourceNotFoundException("nhân viên", 7L));
+
+        assertThatThrownBy(() -> facade.disableStaff(7L)).isInstanceOf(BusinessRuleViolationException.class);
+        assertThatThrownBy(() -> facade.disableStaff(7L)).isInstanceOf(InvalidStateTransitionException.class);
+        assertThatThrownBy(() -> facade.disableStaff(7L)).isInstanceOf(UnsupportedOperationException.class);
+        assertThatThrownBy(() -> facade.reactivateStaff(7L, null)).isInstanceOf(BusinessRuleViolationException.class);
+        assertThatThrownBy(() -> facade.reactivateStaff(7L, null)).isInstanceOf(ResourceNotFoundException.class);
         verifyNoInteractions(audit);
     }
 }

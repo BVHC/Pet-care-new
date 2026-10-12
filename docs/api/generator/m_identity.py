@@ -279,14 +279,19 @@ m.op("post", "/staff/{id}/transfer", "transferStaff", "Điều chuyển chi nhá
 m.op("post", "/staff/{id}/disable", "disableStaff", "Vô hiệu hóa nhân viên", "Staff", "UC08",
      "BR-QT-04, 07, 08, 09, 12, BR-TK-11", "A03, A04, A05", "Theo BR-QT-07; không tự vô hiệu hóa mình",
      "ACTIVE → DISABLED (Tài khoản#5)", resp="StaffResponse", path_params=["StaffId"], errors=(400, 401, 403, 404, 409),
-     err_desc={400: "`BR-QT-08` còn quy trình dở dang (message liệt kê) · `BR-QT-12` đang bị khóa, cần mở khóa trước · `BR-QT-04` BRANCH_MANAGER cuối cùng",
-               403: "`BR-QT-07` ngoài phạm vi hoặc chính mình"},
-     notes="Hủy mọi phiên (BR-QT-09).")
+     err_desc={400: "`BR-QT-12` đang bị khóa, cần mở khóa trước · `BR-QT-04` BRANCH_MANAGER ACTIVE cuối cùng của chi nhánh ACTIVE · `BR-QT-08` còn Visit được gán chưa xong / ca thu ngân OPEN (message liệt kê) · `id` sai kiểu",
+               403: "ngoài phạm vi BR-QT-07 hoặc chính mình (ghi audit, message chung)",
+               404: "không có, hoặc là tài khoản khách",
+               409: "đã DISABLED (`INVALID_STATE_TRANSITION`) · chi nhánh của nhân viên vừa bị đổi bởi thao tác khác (`CONCURRENCY_CONFLICT`)"},
+     notes="Không body. Hủy mọi phiên, nhân viên chuyển offline ngay (BR-QT-09, BR-TK-11, BR-TN-06); không gửi email; dữ liệu lịch sử giữ nguyên. SUPER_MANAGER không kiểm BR-QT-08. Tạm thời A05–A08 trả 500 tới khi visit / sales có bản thật (D016, 21/10). Bấm lại sau lỗi mạng nhận 409 → đọc lại `GET /staff/{id}`. ADR-0033.")
 m.op("post", "/staff/{id}/reactivate", "reactivateStaff", "Kích hoạt lại nhân viên", "Staff", "UC08",
      "BR-QT-02, 03, 10, 12", "A03, A04, A05", "Cùng phạm vi với vô hiệu hóa", "DISABLED → ACTIVE (Tài khoản#6)",
      body="ReactivateStaffRequest", resp="StaffResponse", path_params=["StaffId"], errors=(400, 401, 403, 404, 409),
-     err_desc={400: "`BR-QT-10` đang bị khóa · `BR-QT-03` chi nhánh không hợp lệ"},
-     notes="Cấp mật khẩu tạm mới, mustChangePassword = true.")
+     err_desc={400: "`BR-QT-10` đang bị khóa, cần mở khóa trước · `BR-QT-03` chi nhánh không tồn tại, hoặc SUPER_MANAGER kèm `branchId` · `branchId` ≤ 0 (`VALIDATION_FAILED`) / số thực (`MALFORMED_REQUEST`)",
+               403: "ngoài phạm vi BR-QT-10 (như vô hiệu hóa), chính mình, hoặc BRANCH_MANAGER gửi chi nhánh khác chi nhánh mình (ghi audit, message chung)",
+               404: "không có, hoặc là tài khoản khách",
+               409: "đang ACTIVE (`INVALID_STATE_TRANSITION`)"},
+     notes="Body không bắt buộc: thiếu / `{}` / `branchId` null = giữ chi nhánh hiện tại. Sinh mật khẩu tạm mới gửi STAFF_TEMP_PASSWORD (response không có mật khẩu), mustChangePassword = true, xóa bộ đếm đăng nhập sai và khóa tạm, hủy mọi phiên. Bấm lại sau lỗi mạng nhận 409 (không gửi thêm mật khẩu) → đọc lại `GET /staff/{id}`. ADR-0033, ADR-0032.")
 m.op("post", "/staff/{id}/resend-initial-password", "resendInitialPassword", "Gửi lại mật khẩu ban đầu", "Staff",
      "UC08", "BR-QT-02", "A03, A04, A05", "Người có quyền tạo tài khoản đó (BR-QT-01)", status=204,
      path_params=["StaffId"], errors=(401, 403, 404, 409),

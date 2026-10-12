@@ -27,10 +27,10 @@ import com.petcare.TestcontainersConfiguration;
 import com.petcare.module.identity.service.SessionService;
 
 /**
- * T14 phần 2 trên đúng bean của app thật: {@code VisitQueryApi}, {@code CashierShiftQueryApi} còn là placeholder ném
- * lỗi (nợ D016). Điều chuyển tới bước BR-QT-08 → 500, rollback, không ghi gì; các nhánh lỗi đứng trước BR-QT-08 và
- * đổi chức vụ (không gọi hai interface, docs/adr/0031 Q4) vẫn chạy đúng. Khi hai interface có bản thật, test 500 phải
- * đổi thành ca thành công (D016 *Cách trả*).
+ * T14 phần 2, 3 trên đúng bean của app thật: {@code VisitQueryApi}, {@code CashierShiftQueryApi} còn là placeholder
+ * ném lỗi (nợ D016). Điều chuyển / vô hiệu hóa A05–A08 tới bước BR-QT-08 → 500, rollback, không ghi gì; các nhánh lỗi
+ * đứng trước BR-QT-08, đổi chức vụ (docs/adr/0031 Q4), vô hiệu hóa SUPER_MANAGER (docs/adr/0033 Q2) và kích hoạt lại
+ * vẫn chạy đúng. Khi hai interface có bản thật, test 500 phải đổi thành ca thành công (D016 *Cách trả*).
  */
 @SpringBootTest(webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT)
 @ActiveProfiles("test")
@@ -101,6 +101,61 @@ class StaffTransferPlaceholderIT {
                 .isEqualTo("CARETAKER");
     }
 
+    /** T14 phần 3 (docs/adr/0033): vô hiệu hóa A05–A08 tới bước BR-QT-08 → 500, rollback, phiên còn sống. */
+    @Test
+    void disableBranchStaffReachingPendingWorkGuardIs500AndWritesNothing() {
+        long vet = staff("VET", branchA);
+        String vetToken = tokenOf(vet);
+
+        ResponseEntity<Map<String, Object>> response = post("/api/staff/" + vet + "/disable", null);
+
+        assertThat(response.getStatusCode()).isEqualTo(HttpStatus.INTERNAL_SERVER_ERROR);
+        assertThat(response.getBody()).containsEntry("errorCode", "INTERNAL_ERROR");
+        assertThat(jdbc.queryForObject("SELECT status FROM accounts WHERE id = ?", String.class, vet))
+                .isEqualTo("ACTIVE");
+        assertThat(jdbc.queryForObject("""
+                SELECT count(*) FROM sessions WHERE account_id = ? AND revoked_at IS NULL""", Long.class, vet))
+                .isEqualTo(1L);
+        assertThat(jdbc.queryForObject("""
+                SELECT count(*) FROM audit_logs WHERE action = 'STAFF_DISABLED' AND entity_id = ?""", Long.class,
+                vet)).isZero();
+        assertThat(vetToken).isNotBlank();
+    }
+
+    /** Q2: SUPER_MANAGER không hỏi hai placeholder → ADMIN vô hiệu hóa / kích hoạt lại được ngay trên app thật. */
+    @Test
+    void adminDisablesAndReactivatesSuperManagerOnRealBeans() {
+        long admin = staff("ADMIN", null);
+        long target = staff("SUPER_MANAGER", null);
+
+        ResponseEntity<Map<String, Object>> disabled = postAs(admin, "/api/staff/" + target + "/disable", null);
+        assertThat(disabled.getStatusCode()).as("%s", disabled.getBody()).isEqualTo(HttpStatus.OK);
+        assertThat(jdbc.queryForObject("SELECT status FROM accounts WHERE id = ?", String.class, target))
+                .isEqualTo("DISABLED");
+
+        ResponseEntity<Map<String, Object>> reactivated = postAs(admin, "/api/staff/" + target + "/reactivate", null);
+        assertThat(reactivated.getStatusCode()).as("%s", reactivated.getBody()).isEqualTo(HttpStatus.OK);
+        assertThat(jdbc.queryForObject("SELECT status FROM accounts WHERE id = ?", String.class, target))
+                .isEqualTo("ACTIVE");
+    }
+
+    /** Lỗi trước BR-QT-08, người đã DISABLED (409) và kích hoạt lại không chạm placeholder. */
+    @Test
+    void disableErrorsBeforeGuardAndReactivateWorkOnRealBeans() {
+        long only = staff("BRANCH_MANAGER", branchA);
+        long vet = staff("VET", branchA);
+        jdbc.update("UPDATE accounts SET status = 'DISABLED' WHERE id = ?", vet);
+
+        assertBadRequestEndingWith(post("/api/staff/" + only + "/disable", null), "BR-QT-04");
+        assertThat(post("/api/staff/" + vet + "/disable", null).getStatusCode()).isEqualTo(HttpStatus.CONFLICT);
+        ResponseEntity<Map<String, Object>> reactivated = post("/api/staff/" + vet + "/reactivate",
+                Map.of("branchId", branchB));
+        assertThat(reactivated.getStatusCode()).as("%s", reactivated.getBody()).isEqualTo(HttpStatus.OK);
+        assertThat(jdbc.queryForMap("""
+                SELECT a.status, sp.branch_id FROM accounts a JOIN staff_profiles sp ON sp.account_id = a.id
+                WHERE a.id = ?""", vet)).containsEntry("status", "ACTIVE").containsEntry("branch_id", branchB);
+    }
+
     private long branch() {
         return jdbc.queryForObject("""
                 INSERT INTO branches (name, address, phone, latitude, longitude, status)
@@ -119,10 +174,17 @@ class StaffTransferPlaceholderIT {
     }
 
     private ResponseEntity<Map<String, Object>> post(String path, Object body) {
-        String token = tx.execute(status -> sessions.open(superManager, "203.0.113.9", "PlaceholderIT")).accessToken();
+        return postAs(superManager, path, body);
+    }
+
+    private ResponseEntity<Map<String, Object>> postAs(long actor, String path, Object body) {
         HttpHeaders headers = new HttpHeaders();
-        headers.setBearerAuth(token);
+        headers.setBearerAuth(tokenOf(actor));
         return http.exchange(path, HttpMethod.POST, new HttpEntity<>(body, headers), MAP);
+    }
+
+    private String tokenOf(long accountId) {
+        return tx.execute(status -> sessions.open(accountId, "203.0.113.9", "PlaceholderIT")).accessToken();
     }
 
     private static void assertBadRequestEndingWith(ResponseEntity<Map<String, Object>> response, String ruleId) {

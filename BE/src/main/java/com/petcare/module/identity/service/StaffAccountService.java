@@ -24,6 +24,7 @@ import com.petcare.module.identity.api.NotificationTemplateCode;
 import com.petcare.module.identity.api.Role;
 import com.petcare.module.identity.dto.ChangeRoleRequest;
 import com.petcare.module.identity.dto.CreateStaffRequest;
+import com.petcare.module.identity.dto.ReactivateStaffRequest;
 import com.petcare.module.identity.dto.StaffResponse;
 import com.petcare.module.identity.dto.TransferStaffRequest;
 import com.petcare.module.identity.entity.Account;
@@ -50,8 +51,8 @@ import com.petcare.platform.security.BranchScope;
 import lombok.extern.slf4j.Slf4j;
 
 /**
- * UC08 — phần ghi của tạo nhân viên, gửi lại mật khẩu ban đầu, đổi chức vụ, điều chuyển (identity-v1 #16, #22, #18,
- * #19; docs/adr/0029, 0030, 0031). Mỗi
+ * UC08 — phần ghi của tạo nhân viên, gửi lại mật khẩu ban đầu, đổi chức vụ, điều chuyển, vô hiệu hóa, kích hoạt lại
+ * (identity-v1 #16, #22, #18, #19, #20, #21; docs/adr/0029, 0030, 0031, 0033). Mỗi
  * method một transaction trọn use case; chỉ được gọi từ {@link StaffAdminService} (facade không transaction, nơi đã
  * sinh mật khẩu tạm và BCrypt ngoài transaction). Thứ tự kiểm theo docs/adr/0029 mục 3: tồn tại (404) → phân cấp (403,
  * audit do facade ghi sau rollback) → BR (400) → trạng thái (409); mọi lỗi ném trước lệnh ghi đầu tiên. Không bắt
@@ -226,7 +227,7 @@ public class StaffAccountService {
             throw new BusinessRuleViolationException("BR-QT-03", "Chi nhánh không tồn tại");
         }
         checkNotLastBranchManager(account, branchId, target.lockedStatus(branchId), "Không điều chuyển được");
-        checkNoPendingWork(accountId);
+        checkNoPendingWork(accountId, "Không điều chuyển được");
 
         profile.transferTo(newBranchId);
         audit.record(AuditEntry.of(QtAuditActions.STAFF_TRANSFERRED).entity("accounts", accountId)
@@ -235,6 +236,121 @@ public class StaffAccountService {
 
         log.info("STAFF_TRANSFERRED accountId={} from={} to={}", accountId, branchId, newBranchId);
         return currentResponse(accountId);
+    }
+
+    /**
+     * Tài khoản#5 — vô hiệu hóa nhân viên (BR-QT-04, 07, 08, 09, 12, BR-TK-11; docs/adr/0033). Khóa {@code branches}
+     * (chi nhánh hiện tại; SUPER_MANAGER không có) → {@code accounts} → đọc {@code staff_profiles}, rồi: phân cấp (403,
+     * audit do facade) → BR-QT-12 → chỉ khi {@code ACTIVE}: chi nhánh vừa đổi (409) → BR-QT-04 (đếm dưới khóa chi
+     * nhánh, trả nợ D014) → BR-QT-08 (cuối cùng, bỏ qua với SUPER_MANAGER; placeholder → 500, nợ D016) →
+     * {@code validateTransition} (409 nếu đã {@code DISABLED}). Hủy mọi phiên, chuyển offline; không gửi email.
+     */
+    @Transactional
+    public StaffResponse disableStaff(Long accountId) {
+        LockedStaff target = lockTarget(accountId, null);
+        Account account = target.account();
+        StaffProfile profile = target.profile();
+
+        policy.check(Actor.of(branchScope.current()), StaffHierarchyPolicy.Request.on(
+                StaffAction.DISABLE, accountId, account.getRole(), profile.getBranchId()));
+        Long branchId = account.getRole() == Role.SUPER_MANAGER ? null : requireBranch(account, profile);
+        if (account.isLocked()) {
+            throw new BusinessRuleViolationException("BR-QT-12",
+                    "Tài khoản đang bị khóa, cần mở khóa trước khi vô hiệu hóa");
+        }
+        // Chỉ cạnh ACTIVE → DISABLED mới có hai guard này (người đã DISABLED rơi xuống 409). branchId null ⇔
+        // SUPER_MANAGER: không thuộc chi nhánh nào, không bao giờ được gán lượt hay mở ca (docs/adr/0033 Q2).
+        if (account.getStatus() == AccountStatus.ACTIVE && branchId != null) {
+            if (target.branchMoved()) {
+                throw new ConcurrencyConflictException("nhân viên", accountId);
+            }
+            checkNotLastBranchManager(account, branchId, target.lockedStatus(branchId), "Không vô hiệu hóa được");
+            checkNoPendingWork(accountId, "Không vô hiệu hóa được");
+        }
+        AccountStatus before = account.getStatus();
+        transitions.validateTransition(before, AccountStatus.DISABLED);
+
+        account.disable();
+        sessions.revokeAll(accountId);
+        audit.record(AuditEntry.of(QtAuditActions.STAFF_DISABLED).entity("accounts", accountId)
+                .before(statusSnapshot(before, null, false)).after(statusSnapshot(account.getStatus(), null, false)));
+        staffProfiles.flush();
+
+        log.info("STAFF_DISABLED accountId={} role={} branchId={}", accountId, account.getRole(), branchId);
+        return currentResponse(accountId);
+    }
+
+    /**
+     * Tài khoản#6 — kích hoạt lại nhân viên (BR-QT-02, 03, 10, 12, BR-TK-17; docs/adr/0033). Khóa {@code accounts}
+     * trước mọi lệnh đọc khác (như gửi lại mật khẩu ban đầu); không khóa {@code branches}: kích hoạt lại chỉ làm tăng số
+     * BRANCH_MANAGER (docs/adr/0029 mục 5). Thứ tự: phân cấp (403) → BR-QT-10 đang bị khóa → BR-QT-03 →
+     * {@code validateTransition} (409 nếu đang {@code ACTIVE}). Mật khẩu tạm mới (BCrypt đã chạy ở facade), bắt đổi
+     * mật khẩu, có thể gán lại chi nhánh; hủy mọi phiên; gửi email mật khẩu cùng transaction.
+     */
+    @Transactional
+    public StaffResponse reactivateStaff(Long accountId, ReactivateStaffRequest request, TemporaryPassword password) {
+        Long requestedBranchId = request == null ? null : request.branchId();
+        Account account = accounts.findByIdForUpdate(accountId)
+                .filter(found -> found.getRole() != Role.CUSTOMER)
+                .orElseThrow(() -> new ResourceNotFoundException("nhân viên", accountId));
+        StaffProfile profile = staffProfiles.findById(accountId)
+                .orElseThrow(() -> new IllegalStateException("Staff account " + accountId + " has no staff_profiles"));
+
+        policy.check(Actor.of(branchScope.current()), StaffHierarchyPolicy.Request.reactivate(
+                accountId, account.getRole(), profile.getBranchId(), requestedBranchId));
+        if (account.isLocked()) {
+            throw new BusinessRuleViolationException("BR-QT-10", "Tài khoản đang bị khóa, cần mở khóa trước");
+        }
+        Long oldBranchId = profile.getBranchId();
+        Long newBranchId = reactivationBranch(account, profile, requestedBranchId);
+        AccountStatus before = account.getStatus();
+        transitions.validateTransition(before, AccountStatus.ACTIVE);
+
+        account.reactivate(password.passwordHash());
+        if (!Objects.equals(oldBranchId, newBranchId)) {
+            profile.transferTo(newBranchId);
+        }
+        sessions.revokeAll(accountId);
+        sendTemporaryPassword(account.getEmail(), profile.getFullName(), password);
+        audit.record(AuditEntry.of(QtAuditActions.STAFF_REACTIVATED).entity("accounts", accountId)
+                .before(statusSnapshot(before, oldBranchId, true))
+                .after(statusSnapshot(account.getStatus(), newBranchId, true)));
+        staffProfiles.flush();
+
+        log.info("STAFF_REACTIVATED accountId={} role={} branchId={}", accountId, account.getRole(), newBranchId);
+        return currentResponse(accountId);
+    }
+
+    /**
+     * BR-QT-03 khi kích hoạt lại (BR-QT-10 "có thể gán lại chi nhánh"): SUPER_MANAGER không gắn chi nhánh; A05–A08 giữ
+     * chi nhánh cũ nếu không gửi, chi nhánh mới phải tồn tại (tầng 1 chi nhánh không bị xóa, nên chi nhánh cũ luôn hợp
+     * lệ). Kiểm sau phân cấp để người không có quyền không dò được chi nhánh.
+     */
+    private Long reactivationBranch(Account account, StaffProfile profile, Long requestedBranchId) {
+        if (account.getRole() == Role.SUPER_MANAGER) {
+            if (requestedBranchId != null) {
+                throw new BusinessRuleViolationException("BR-QT-03", "Quản lý cấp chuỗi không thuộc chi nhánh nào");
+            }
+            return null;
+        }
+        Long currentBranchId = requireBranch(account, profile);
+        if (requestedBranchId == null || requestedBranchId.equals(currentBranchId)) {
+            return currentBranchId;
+        }
+        if (branches.findBranch(requestedBranchId).isEmpty()) {
+            throw new BusinessRuleViolationException("BR-QT-03", "Chi nhánh không tồn tại");
+        }
+        return requestedBranchId;
+    }
+
+    /** Snapshot audit của vô hiệu hóa ({@code status}) / kích hoạt lại ({@code status, branchId}). */
+    private static Map<String, Object> statusSnapshot(AccountStatus status, Long branchId, boolean withBranch) {
+        Map<String, Object> snapshot = new LinkedHashMap<>();
+        snapshot.put("status", status.name());
+        if (withBranch) {
+            snapshot.put("branchId", branchId);
+        }
+        return snapshot;
     }
 
     /** Người bị tác động đã khóa: entity đọc sau khóa, các chi nhánh đã khóa, chi nhánh có đổi so với lần đọc trước. */
@@ -299,11 +415,12 @@ public class StaffAccountService {
     }
 
     /**
-     * BR-QT-08 (BR-QT-06 "phải thỏa BR-QT-08 trước khi điều chuyển"): không còn lượt tiếp nhận được gán chưa kết thúc,
-     * không còn ca thu ngân {@code OPEN}. Hỏi cả hai với mọi chức vụ (đổi chức vụ không chặn việc dở, docs/adr/0031) và
-     * liệt kê đủ việc dở. Hai interface còn là placeholder ném lỗi (nợ D016).
+     * BR-QT-08 (vô hiệu hóa; BR-QT-06 "phải thỏa BR-QT-08 trước khi điều chuyển"): không còn lượt tiếp nhận được gán
+     * chưa kết thúc, không còn ca thu ngân {@code OPEN}. Hỏi cả hai với mọi chức vụ A05–A08 (đổi chức vụ không chặn việc
+     * dở, docs/adr/0031) và liệt kê đủ việc dở; {@code action} là đầu câu message. Hai interface còn là placeholder ném
+     * lỗi (nợ D016).
      */
-    private void checkNoPendingWork(Long accountId) {
+    private void checkNoPendingWork(Long accountId, String action) {
         List<Long> visitIds = visitQueries.findUnfinishedVisitIdsAssignedTo(accountId);
         boolean openShift = cashierShifts.hasOpenShift(accountId);
         List<String> pending = new ArrayList<>();
@@ -315,8 +432,7 @@ public class StaffAccountService {
             pending.add("còn ca thu ngân đang mở");
         }
         if (!pending.isEmpty()) {
-            throw new BusinessRuleViolationException("BR-QT-08",
-                    "Không điều chuyển được: " + String.join("; ", pending));
+            throw new BusinessRuleViolationException("BR-QT-08", action + ": " + String.join("; ", pending));
         }
     }
 
