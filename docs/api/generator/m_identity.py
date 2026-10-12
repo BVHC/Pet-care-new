@@ -301,11 +301,18 @@ m.op("post", "/staff/{id}/resend-initial-password", "resendInitialPassword", "G�
 m.op("post", "/staff/{id}/email-change", "startStaffEmailChange", "Sửa email nhân viên — gửi OTP tới email mới",
      "Staff", "UC08", "BR-TK-04, 07, 16, BR-QT-01", "A03, A04, A05", "Cấp trên theo BR-QT-01",
      body="EmailChangeRequest", resp="OtpSentResponse", path_params=["StaffId"], errors=(400, 401, 403, 404),
-     err_desc={400: "`BR-TK-01` email mới đã dùng · `BR-TK-07` gửi quá nhanh"})
+     err_desc={400: "`BR-TK-01` email mới đã dùng (kể cả tài khoản PENDING) hoặc trùng email hiện tại · `BR-TK-07` gửi lại trong 60 giây / quá 5 mã/giờ [CFG] tới email đó · `VALIDATION_FAILED` `newEmail` trống / sai định dạng / quá 255 ký tự",
+               403: "ngoài phân cấp BR-QT-01 hoặc chính mình (ghi audit, message chung)",
+               404: "không có, hoặc là tài khoản khách (cùng message)"},
+     notes="Email mới được chuẩn hóa chữ thường. Mã gửi tới email mới (BR-TK-04), `maskedEmail` = null. Được với mọi trạng thái (DISABLED, đang bị khóa). Mỗi nhân viên tối đa một mã đổi email còn hiệu lực: gửi mã mới (kể cả tới email khác) hủy mã cũ của nhân viên đó; tài khoản khác xin mã tới cùng email không hủy được mã này. Không ghi audit ở bước này. Gửi lại = gọi lại endpoint. ADR-0034.")
 m.op("post", "/staff/{id}/email-change/confirm", "confirmStaffEmailChange", "Sửa email nhân viên — xác nhận OTP",
-     "Staff", "UC08", "BR-TK-05, 06, 16", "A03, A04, A05", "Cấp trên theo BR-QT-01", body="OtpCodeRequest",
-     resp="StaffResponse", path_params=["StaffId"], errors=(400, 401, 403, 404), err_desc={400: OTP_ERR},
-     notes="Ghi audit; gửi EMAIL_CHANGED_NOTICE tới email cũ và mới.")
+     "Staff", "UC08", "BR-TK-01, 05, 06, 16", "A03, A04, A05", "Cấp trên theo BR-QT-01", body="OtpCodeRequest",
+     resp="StaffResponse", path_params=["StaffId"], errors=(400, 401, 403, 404, 409),
+     err_desc={400: OTP_ERR + " (sai mã vẫn được tính) · không còn mã đang mở → `BR-TK-05` · `BR-TK-01` email mới vừa được tài khoản khác dùng (mã vẫn dùng lại được) · `VALIDATION_FAILED` `code` trống / không phải 1–8 chữ số",
+               403: "ngoài phân cấp BR-QT-01 hoặc chính mình — kiểm trước khi tra mã và lại dưới khóa (ghi audit, message chung)",
+               404: "không có, hoặc là tài khoản khách (cùng message)",
+               409: "`CONCURRENCY_CONFLICT` hai lần xác nhận khác nhân viên cùng một email mới chạy song song"},
+     notes="Email mới lấy từ mã đang mở của nhân viên. Đổi email, gửi EMAIL_CHANGED_NOTICE tới email cũ và mới, ghi audit `STAFF_EMAIL_CHANGED` (before/after email, `verificationMethod = EMAIL_CODE`). Trạng thái, khóa, mật khẩu không đổi; không hủy phiên. Bấm lại sau lỗi mạng nhận `BR-TK-05` → đọc lại `GET /staff/{id}`. Nhân viên chưa đổi mật khẩu lần đầu (`mustChangePassword`) thì gọi tiếp `POST /staff/{id}/resend-initial-password` để mật khẩu tạm đi tới email mới. ADR-0034.")
 
 m.op("post", "/customers/{customerId}/account-email-change", "startCustomerEmailChange",
      "Sửa email tài khoản khách / khôi phục tài khoản — gửi OTP", "Customer account", "UC22",

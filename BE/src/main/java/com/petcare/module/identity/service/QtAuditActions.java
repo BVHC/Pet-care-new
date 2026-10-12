@@ -51,6 +51,13 @@ public final class QtAuditActions {
      */
     public static final String STAFF_REACTIVATED = "STAFF_REACTIVATED";
 
+    /**
+     * Sửa hộ email nhân viên sau khi email mới xác thực OTP (BR-TK-16, BR-QT-15; docs/adr/0034). Chỉ ghi khi xác nhận
+     * thành công (bước gửi mã không đổi dữ liệu). {@code entity = accounts/<id>}; {@code before} = {@code email};
+     * {@code after} = {@code email, verificationMethod} ({@code EMAIL_CODE}). Không có mã OTP.
+     */
+    public static final String STAFF_EMAIL_CHANGED = "STAFF_EMAIL_CHANGED";
+
     private QtAuditActions() {
     }
 }

@@ -245,4 +245,41 @@ class StaffAccountEntityTest {
         assertThat(profile.getFullName()).isEqualTo("Bác sĩ An");
         assertThat(profile.getBranchId()).isEqualTo(3L);
     }
+
+    /** BR-TK-16 (docs/adr/0034): chỉ đổi email — trạng thái, khóa, mật khẩu, cờ, bộ đếm, last_seen giữ nguyên. */
+    @ParameterizedTest
+    @CsvSource({"ACTIVE, false", "DISABLED, true"})
+    void changeEmailChangesOnlyEmail(AccountStatus status, boolean locked) {
+        Account account = Account.createStaff("cu@petcare.test", "0901234567", "hash", Role.VET);
+        ReflectionTestUtils.setField(account, "status", status);
+        ReflectionTestUtils.setField(account, "locked", locked);
+        ReflectionTestUtils.setField(account, "failedLoginCount", 2);
+        ReflectionTestUtils.setField(account, "lockedUntil", T0);
+        ReflectionTestUtils.setField(account, "lastSeenAt", T0);
+
+        account.changeEmail("moi@petcare.test");
+
+        assertThat(account.getEmail()).isEqualTo("moi@petcare.test");
+        assertThat(account.getStatus()).isEqualTo(status);
+        assertThat(account.isLocked()).isEqualTo(locked);
+        assertThat(account.getPasswordHash()).isEqualTo("hash");
+        assertThat(account.isMustChangePassword()).isTrue();
+        assertThat(account.getFailedLoginCount()).isEqualTo(2);
+        assertThat(account.getLockedUntil()).isEqualTo(T0);
+        assertThat(account.getLastSeenAt()).isEqualTo(T0);
+        assertThat(account.getPhone()).isEqualTo("0901234567");
+        assertThat(account.getRole()).isEqualTo(Role.VET);
+    }
+
+    @Test
+    void changeEmailRefusesBlankEmailAndPendingAccount() {
+        Account staff = Account.createStaff("cu@petcare.test", "0901234567", "hash", Role.VET);
+        assertThatThrownBy(() -> staff.changeEmail(null)).isInstanceOf(IllegalArgumentException.class);
+        assertThatThrownBy(() -> staff.changeEmail("  ")).isInstanceOf(IllegalArgumentException.class);
+        assertThat(staff.getEmail()).isEqualTo("cu@petcare.test");
+
+        Account pending = Account.registerCustomer("kh@petcare.test", "hash", T0.plus(Duration.ofHours(24)));
+        assertThatThrownBy(() -> pending.changeEmail("moi@petcare.test")).isInstanceOf(IllegalStateException.class);
+        assertThat(pending.getEmail()).isEqualTo("kh@petcare.test");
+    }
 }

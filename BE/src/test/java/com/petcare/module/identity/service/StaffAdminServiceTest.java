@@ -7,24 +7,33 @@ import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.inOrder;
 import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
 
 import java.lang.reflect.Method;
 import java.util.Arrays;
+import java.util.Optional;
 
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.mockito.InOrder;
+import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.transaction.annotation.Transactional;
 
 import com.petcare.module.identity.dto.ChangeRoleRequest;
 import com.petcare.module.identity.dto.CreateStaffRequest;
+import com.petcare.module.identity.dto.EmailChangeRequest;
+import com.petcare.module.identity.dto.OtpCodeRequest;
+import com.petcare.module.identity.dto.OtpSentResponse;
 import com.petcare.module.identity.dto.ReactivateStaffRequest;
 import com.petcare.module.identity.dto.StaffResponse;
 import com.petcare.module.identity.dto.TransferStaffRequest;
 import com.petcare.module.identity.exception.StaffHierarchyDeniedException;
+import com.petcare.module.identity.service.OtpService.PreparedOtp;
+import com.petcare.module.identity.service.StaffEmailChangeService.EmailChangeAttempt;
+import com.petcare.module.identity.service.StaffEmailChangeService.EmailChangeCode;
 import com.petcare.module.identity.service.TemporaryPasswordGenerator.TemporaryPassword;
 import com.petcare.platform.audit.AuditEntry;
 import com.petcare.platform.audit.AuditRecorder;
@@ -47,7 +56,11 @@ class StaffAdminServiceTest {
     private final StaffAccountService staffAccounts = mock(StaffAccountService.class);
     private final TemporaryPasswordGenerator generator = mock(TemporaryPasswordGenerator.class);
     private final AuditRecorder audit = mock(AuditRecorder.class);
-    private final StaffAdminService facade = new StaffAdminService(staffAccounts, generator, audit);
+    private final StaffEmailChangeService emailChanges = mock(StaffEmailChangeService.class);
+    private final OtpService otps = mock(OtpService.class);
+    private final PasswordEncoder passwordEncoder = mock(PasswordEncoder.class);
+    private final StaffAdminService facade = new StaffAdminService(staffAccounts, generator, audit, emailChanges,
+            otps, passwordEncoder);
 
     @BeforeEach
     void setUp() {
@@ -219,6 +232,98 @@ class StaffAdminServiceTest {
         assertThatThrownBy(() -> facade.disableStaff(7L)).isInstanceOf(UnsupportedOperationException.class);
         assertThatThrownBy(() -> facade.reactivateStaff(7L, null)).isInstanceOf(BusinessRuleViolationException.class);
         assertThatThrownBy(() -> facade.reactivateStaff(7L, null)).isInstanceOf(ResourceNotFoundException.class);
+        verifyNoInteractions(audit);
+    }
+
+    // ---------------------------------------------------------------- #23, #24 (docs/adr/0034)
+
+    private static final PreparedOtp PREPARED = new PreparedOtp("123456", "$2a$otp");
+    private static final EmailChangeCode CODE = new EmailChangeCode(41L, "new@petcare.test", "$2a$code");
+
+    @Test
+    void startEmailChangePreparesCodeBeforeTransactionAndPassesItThrough() {
+        OtpSentResponse sent = new OtpSentResponse(java.time.Instant.EPOCH, null);
+        when(otps.prepare()).thenReturn(PREPARED);
+        when(emailChanges.issueEmailChangeOtp(7L, " New@PetCare.test ", PREPARED)).thenReturn(sent);
+
+        assertThat(facade.startEmailChange(7L, new EmailChangeRequest(" New@PetCare.test "))).isSameAs(sent);
+
+        InOrder order = inOrder(otps, emailChanges);
+        order.verify(otps).prepare();
+        order.verify(emailChanges).issueEmailChangeOtp(7L, " New@PetCare.test ", PREPARED);
+        verifyNoInteractions(audit, generator, staffAccounts, passwordEncoder);
+    }
+
+    @Test
+    void confirmReadsCodeThenMatchesOutsideTransactionThenApplies() {
+        StaffResponse response = mock(StaffResponse.class);
+        when(emailChanges.findEmailChangeCode(7L)).thenReturn(Optional.of(CODE));
+        when(passwordEncoder.matches("654321", "$2a$code")).thenReturn(false);
+        when(emailChanges.applyEmailChange(7L, new EmailChangeAttempt(41L, "new@petcare.test", false)))
+                .thenReturn(response);
+
+        assertThat(facade.confirmEmailChange(7L, new OtpCodeRequest("654321"))).isSameAs(response);
+
+        InOrder order = inOrder(emailChanges, passwordEncoder);
+        order.verify(emailChanges).findEmailChangeCode(7L);
+        order.verify(passwordEncoder).matches("654321", "$2a$code");
+        order.verify(emailChanges).applyEmailChange(7L, new EmailChangeAttempt(41L, "new@petcare.test", false));
+        verifyNoInteractions(audit, otps);
+    }
+
+    @Test
+    void confirmWithoutOpenCodeIsBrTk05AndNeverMatchesNorApplies() {
+        when(emailChanges.findEmailChangeCode(7L)).thenReturn(Optional.empty());
+
+        assertThatThrownBy(() -> facade.confirmEmailChange(7L, new OtpCodeRequest("123456")))
+                .isInstanceOf(BusinessRuleViolationException.class)
+                .hasMessage(OtpService.INVALID_OTP_MESSAGE + " (BR-TK-05)");
+
+        verify(emailChanges, never()).applyEmailChange(anyLong(), any());
+        verifyNoInteractions(passwordEncoder, audit);
+    }
+
+    @Test
+    void emailChangeHierarchyDenialIsAuditedAfterThrowAtEveryStepThenRethrownAsIs() {
+        AuditEntry entry = AuditEntry.of(QtAuditActions.STAFF_ACTION_DENIED);
+        StaffHierarchyDeniedException denied = new StaffHierarchyDeniedException("STAFF_HIERARCHY CHANGE_EMAIL",
+                "VET", entry);
+        when(otps.prepare()).thenReturn(PREPARED);
+        when(emailChanges.issueEmailChangeOtp(anyLong(), any(), any())).thenThrow(denied);
+        when(emailChanges.findEmailChangeCode(7L)).thenThrow(denied);
+        when(emailChanges.findEmailChangeCode(8L)).thenReturn(Optional.of(CODE));
+        when(passwordEncoder.matches(any(), any())).thenReturn(true);
+        when(emailChanges.applyEmailChange(anyLong(), any())).thenThrow(denied);
+
+        assertThatThrownBy(() -> facade.startEmailChange(7L, new EmailChangeRequest("n@x.vn"))).isSameAs(denied);
+        assertThatThrownBy(() -> facade.confirmEmailChange(7L, new OtpCodeRequest("1"))).isSameAs(denied);
+        assertThatThrownBy(() -> facade.confirmEmailChange(8L, new OtpCodeRequest("1"))).isSameAs(denied);
+
+        verify(audit, org.mockito.Mockito.times(3)).recordIndependently(entry);
+        verify(audit, never()).record(any());
+        // 403 ở bước đọc: không so mã, không sang bước ghi
+        verify(emailChanges, never()).applyEmailChange(org.mockito.ArgumentMatchers.eq(7L), any());
+    }
+
+    @Test
+    void emailChangeOtherErrorsAreNotAudited() {
+        when(otps.prepare()).thenReturn(PREPARED);
+        when(emailChanges.issueEmailChangeOtp(anyLong(), any(), any()))
+                .thenThrow(new BusinessRuleViolationException("BR-TK-07", "x"))
+                .thenThrow(new ResourceNotFoundException("nhân viên", 7L));
+        when(emailChanges.findEmailChangeCode(7L)).thenReturn(Optional.of(CODE));
+        when(emailChanges.applyEmailChange(anyLong(), any()))
+                .thenThrow(new com.petcare.module.identity.exception.OtpRejectedException("BR-TK-05", "x"))
+                .thenThrow(new BusinessRuleViolationException("BR-TK-01", "x"));
+
+        assertThatThrownBy(() -> facade.startEmailChange(7L, new EmailChangeRequest("n@x.vn")))
+                .isInstanceOf(BusinessRuleViolationException.class);
+        assertThatThrownBy(() -> facade.startEmailChange(7L, new EmailChangeRequest("n@x.vn")))
+                .isInstanceOf(ResourceNotFoundException.class);
+        assertThatThrownBy(() -> facade.confirmEmailChange(7L, new OtpCodeRequest("1")))
+                .isInstanceOf(com.petcare.module.identity.exception.OtpRejectedException.class);
+        assertThatThrownBy(() -> facade.confirmEmailChange(7L, new OtpCodeRequest("1")))
+                .isInstanceOf(BusinessRuleViolationException.class);
         verifyNoInteractions(audit);
     }
 }

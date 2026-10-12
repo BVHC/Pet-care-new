@@ -290,4 +290,20 @@ public class Account extends TimestampedEntity {
         }
         this.phone = newPhone;
     }
+
+    /**
+     * BR-TK-16 — người có thẩm quyền sửa hộ email sau khi email mới đã xác thực OTP (docs/adr/0034). Chỉ đổi
+     * {@code email}: trạng thái, khóa, mật khẩu, phiên giữ nguyên (đổi email không phải chuyển trạng thái của 03 §1).
+     * {@code newEmail} đã chuẩn hóa chữ thường; caller giữ khóa dòng, đã kiểm phân cấp, mã OTP và BR-TK-01
+     * ({@code uq_accounts_email} là chốt cuối). Tài khoản {@code PENDING} chưa xác thực email nên không đổi được.
+     */
+    public void changeEmail(String newEmail) {
+        if (newEmail == null || newEmail.isBlank()) {
+            throw new IllegalArgumentException("Account " + id + " needs a non-blank email (BR-TK-01)");
+        }
+        if (status == AccountStatus.PENDING) {
+            throw new IllegalStateException("Pending account " + id + " cannot change email");
+        }
+        this.email = newEmail;
+    }
 }

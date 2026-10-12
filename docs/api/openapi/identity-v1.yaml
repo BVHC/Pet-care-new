@@ -951,7 +951,7 @@ paths:
     post:
       tags: [Staff]
       summary: "Sửa email nhân viên — gửi OTP tới email mới"
-      description: "UC08 · BR-TK-04, 07, 16, BR-QT-01. Actor: A03, A04, A05. Quyền: Cấp trên theo BR-QT-01. Chuyển trạng thái: —."
+      description: "UC08 · BR-TK-04, 07, 16, BR-QT-01. Actor: A03, A04, A05. Quyền: Cấp trên theo BR-QT-01. Chuyển trạng thái: —. Email mới được chuẩn hóa chữ thường. Mã gửi tới email mới (BR-TK-04), `maskedEmail` = null. Được với mọi trạng thái (DISABLED, đang bị khóa). Mỗi nhân viên tối đa một mã đổi email còn hiệu lực: gửi mã mới (kể cả tới email khác) hủy mã cũ của nhân viên đó; tài khoản khác xin mã tới cùng email không hủy được mã này. Không ghi audit ở bước này. Gửi lại = gọi lại endpoint. ADR-0034."
       operationId: startStaffEmailChange
       security:
         - bearerAuth: []
@@ -980,7 +980,7 @@ paths:
                     type: integer
                     description: "HTTP status của kết quả, ví dụ 200, 201"
         "400":
-          description: "`BR-TK-01` email mới đã dùng · `BR-TK-07` gửi quá nhanh"
+          description: "`BR-TK-01` email mới đã dùng (kể cả tài khoản PENDING) hoặc trùng email hiện tại · `BR-TK-07` gửi lại trong 60 giây / quá 5 mã/giờ [CFG] tới email đó · `VALIDATION_FAILED` `newEmail` trống / sai định dạng / quá 255 ký tự"
           content:
             "application/json":
               schema:
@@ -988,14 +988,22 @@ paths:
         "401":
           $ref: "#/components/responses/Unauthorized"
         "403":
-          $ref: "#/components/responses/Forbidden"
+          description: "ngoài phân cấp BR-QT-01 hoặc chính mình (ghi audit, message chung)"
+          content:
+            "application/json":
+              schema:
+                $ref: "#/components/schemas/Error"
         "404":
-          $ref: "#/components/responses/NotFound"
+          description: "không có, hoặc là tài khoản khách (cùng message)"
+          content:
+            "application/json":
+              schema:
+                $ref: "#/components/schemas/Error"
   "/staff/{id}/email-change/confirm":
     post:
       tags: [Staff]
       summary: "Sửa email nhân viên — xác nhận OTP"
-      description: "UC08 · BR-TK-05, 06, 16. Actor: A03, A04, A05. Quyền: Cấp trên theo BR-QT-01. Chuyển trạng thái: —. Ghi audit; gửi EMAIL_CHANGED_NOTICE tới email cũ và mới."
+      description: "UC08 · BR-TK-01, 05, 06, 16. Actor: A03, A04, A05. Quyền: Cấp trên theo BR-QT-01. Chuyển trạng thái: —. Email mới lấy từ mã đang mở của nhân viên. Đổi email, gửi EMAIL_CHANGED_NOTICE tới email cũ và mới, ghi audit `STAFF_EMAIL_CHANGED` (before/after email, `verificationMethod = EMAIL_CODE`). Trạng thái, khóa, mật khẩu không đổi; không hủy phiên. Bấm lại sau lỗi mạng nhận `BR-TK-05` → đọc lại `GET /staff/{id}`. Nhân viên chưa đổi mật khẩu lần đầu (`mustChangePassword`) thì gọi tiếp `POST /staff/{id}/resend-initial-password` để mật khẩu tạm đi tới email mới. ADR-0034."
       operationId: confirmStaffEmailChange
       security:
         - bearerAuth: []
@@ -1024,7 +1032,7 @@ paths:
                     type: integer
                     description: "HTTP status của kết quả, ví dụ 200, 201"
         "400":
-          description: "`BR-TK-05` mã sai / hết hạn · `BR-TK-06` sai quá 5 lần, mã bị hủy"
+          description: "`BR-TK-05` mã sai / hết hạn · `BR-TK-06` sai quá 5 lần, mã bị hủy (sai mã vẫn được tính) · không còn mã đang mở → `BR-TK-05` · `BR-TK-01` email mới vừa được tài khoản khác dùng (mã vẫn dùng lại được) · `VALIDATION_FAILED` `code` trống / không phải 1–8 chữ số"
           content:
             "application/json":
               schema:
@@ -1032,9 +1040,23 @@ paths:
         "401":
           $ref: "#/components/responses/Unauthorized"
         "403":
-          $ref: "#/components/responses/Forbidden"
+          description: "ngoài phân cấp BR-QT-01 hoặc chính mình — kiểm trước khi tra mã và lại dưới khóa (ghi audit, message chung)"
+          content:
+            "application/json":
+              schema:
+                $ref: "#/components/schemas/Error"
         "404":
-          $ref: "#/components/responses/NotFound"
+          description: "không có, hoặc là tài khoản khách (cùng message)"
+          content:
+            "application/json":
+              schema:
+                $ref: "#/components/schemas/Error"
+        "409":
+          description: "`CONCURRENCY_CONFLICT` hai lần xác nhận khác nhân viên cùng một email mới chạy song song"
+          content:
+            "application/json":
+              schema:
+                $ref: "#/components/schemas/Error"
   "/customers/{customerId}/account-email-change":
     post:
       tags: ["Customer account"]

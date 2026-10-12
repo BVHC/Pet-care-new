@@ -14,6 +14,9 @@ import org.springframework.web.bind.annotation.RestController;
 import com.petcare.module.identity.api.Role;
 import com.petcare.module.identity.dto.ChangeRoleRequest;
 import com.petcare.module.identity.dto.CreateStaffRequest;
+import com.petcare.module.identity.dto.EmailChangeRequest;
+import com.petcare.module.identity.dto.OtpCodeRequest;
+import com.petcare.module.identity.dto.OtpSentResponse;
 import com.petcare.module.identity.dto.ReactivateStaffRequest;
 import com.petcare.module.identity.dto.StaffResponse;
 import com.petcare.module.identity.dto.TransferStaffRequest;
@@ -27,11 +30,13 @@ import jakarta.validation.Valid;
 import jakarta.validation.constraints.Positive;
 
 /**
- * {@code /api/staff/**} của identity-v1 — quản lý tài khoản nhân viên (UC08; docs/adr/0029, 0030, 0031, 0033). Chỉ ADMIN,
+ * {@code /api/staff/**} của identity-v1 — quản lý tài khoản nhân viên (UC08; docs/adr/0029, 0030, 0031, 0033, 0034).
+ * Chỉ ADMIN,
  * SUPER_MANAGER, BRANCH_MANAGER (role khác → 403 {@code ACCESS_DENIED}, không audit); đổi chức vụ và điều chuyển chỉ
  * SUPER_MANAGER (BR-QT-05, 06). Phạm vi chi tiết và phân cấp kiểm ở service. Bị chặn khi người gọi còn phải đổi mật
  * khẩu lần đầu (BR-TK-17, {@code MustChangePasswordInterceptor}). Hiện có: danh sách (#15), tạo (#16), chi tiết (#17),
- * đổi chức vụ (#18), điều chuyển (#19), vô hiệu hóa (#20), kích hoạt lại (#21), gửi lại mật khẩu ban đầu (#22).
+ * đổi chức vụ (#18), điều chuyển (#19), vô hiệu hóa (#20), kích hoạt lại (#21), gửi lại mật khẩu ban đầu (#22), sửa
+ * email (#23 gửi OTP, #24 xác nhận).
  */
 @RestController
 @RequestMapping("/api/staff")
@@ -110,6 +115,28 @@ public class StaffController {
     public ApiResponse<StaffResponse> reactivate(@PathVariable Long id,
             @Valid @RequestBody(required = false) ReactivateStaffRequest request) {
         return ApiResponse.ok(staffAdmin.reactivateStaff(id, request), "Đã kích hoạt lại nhân viên");
+    }
+
+    /**
+     * identity-v1 #23 (BR-TK-01, 04, 07, 16, BR-QT-01). Gửi OTP tới email mới; mọi trạng thái của nhân viên, không audit
+     * (docs/adr/0034).
+     */
+    @PostMapping("/{id}/email-change")
+    @PreAuthorize(STAFF_ADMINS)
+    public ApiResponse<OtpSentResponse> startEmailChange(@PathVariable Long id,
+            @Valid @RequestBody EmailChangeRequest request) {
+        return ApiResponse.ok(staffAdmin.startEmailChange(id, request), "Đã gửi mã xác thực tới email mới");
+    }
+
+    /**
+     * identity-v1 #24 (BR-TK-01, 05, 06, 16). Đổi email, thông báo tới email cũ và mới, ghi audit; không hủy phiên
+     * (docs/adr/0034).
+     */
+    @PostMapping("/{id}/email-change/confirm")
+    @PreAuthorize(STAFF_ADMINS)
+    public ApiResponse<StaffResponse> confirmEmailChange(@PathVariable Long id,
+            @Valid @RequestBody OtpCodeRequest request) {
+        return ApiResponse.ok(staffAdmin.confirmEmailChange(id, request), "Đã đổi email nhân viên");
     }
 
     /** identity-v1 #22. 204 không body (docs/api/00-method.md §3.4). */
