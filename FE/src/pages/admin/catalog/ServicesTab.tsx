@@ -17,7 +17,7 @@ import {
   type ServiceGroup,
   type Species,
 } from '../../../shared/types/catalog';
-import { ActiveBadge, Checkbox, EmptyRow, Field, FormError, NoticeBar, selectClass, type Notice } from './ui';
+import { ActiveBadge, Checkbox, EmptyRow, Field, FormError, NoticeBar, selectClass, type Notice } from '../../../components/admin/form-ui';
 
 const GROUPS = Object.keys(SERVICE_GROUP_LABELS) as ServiceGroup[];
 const SPECIES = Object.keys(SPECIES_LABELS) as Species[];

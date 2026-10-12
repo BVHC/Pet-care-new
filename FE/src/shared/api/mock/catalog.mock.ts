@@ -13,7 +13,7 @@ import type {
   VaccinationProtocol,
   VaccineType,
 } from '../../types/catalog';
-import { fail, invalid, isText, noContent, ok, ruleFail, type Check, type MockHandler, type MockReply } from './envelope';
+import { denied, fail, invalid, isText, noContent, notFound, ok, ruleFail, type Check, type MockHandler, type MockReply } from './envelope';
 
 interface State {
   seq: number;
@@ -97,6 +97,9 @@ function load(): State {
   }
 }
 
+/** Dịch vụ của danh mục, cho mock module khác đọc chéo (như CatalogQueryApi). */
+export const catalogServices = (): Service[] => load().services;
+
 function save(s: State) {
   try {
     localStorage.setItem(STATE_KEY, JSON.stringify(s));
@@ -108,7 +111,6 @@ function save(s: State) {
 // ─── Quyền (catalog-v1 §B, BE CatalogAccess) ───
 
 const STAFF_READ: readonly Role[] = ['SUPER_MANAGER', 'BRANCH_MANAGER', 'RECEPTIONIST', 'VET', 'CARETAKER'];
-const denied = () => fail('ACCESS_DENIED', 'Bạn không có quyền thực hiện thao tác này', 403);
 const read = (h: MockHandler): MockHandler => (req) => (STAFF_READ.includes(req.account!.role) ? h(req) : denied());
 const write = (h: MockHandler): MockHandler => (req) => (req.account!.role === 'SUPER_MANAGER' ? h(req) : denied());
 
@@ -121,7 +123,6 @@ const isInt = (v: unknown): v is number => typeof v === 'number' && Number.isInt
 const isBool = (v: unknown): v is boolean => typeof v === 'boolean';
 const same = (a: string, b: string) => a.trim().toLowerCase() === b.trim().toLowerCase();
 const byName = <T extends { name: string }>(a: T, b: T) => a.name.localeCompare(b.name, 'vi');
-const notFound = (what: string, id: string | number) => fail('RESOURCE_NOT_FOUND', `Không tìm thấy ${what} #${id}`, 404);
 
 const priceChecks = (price: unknown, required: boolean): Check[] => [
   ['price', 'Thiếu giá', required && !isInt(price)],

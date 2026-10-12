@@ -9,7 +9,7 @@ import { catalogApi } from '../../../shared/api/catalog.api';
 import { plainMessage, toApiError } from '../../../shared/api/api-error';
 import { useCatalogMutation, useVaccineTypes } from '../../../shared/hooks/useCatalog';
 import { SPECIES_LABELS, type Species, type VaccineType } from '../../../shared/types/catalog';
-import { ActiveBadge, EmptyRow, Field, FormError, NoticeBar, selectClass, type Notice } from './ui';
+import { ActiveBadge, EmptyRow, Field, FormError, NoticeBar, selectClass, type Notice } from '../../../components/admin/form-ui';
 
 const SPECIES = Object.keys(SPECIES_LABELS) as Species[];
 

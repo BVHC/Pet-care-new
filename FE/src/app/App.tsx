@@ -38,7 +38,7 @@ import { TermsPage, PrivacyPage } from '../pages/legal/LegalPage';
 import { NewsPage } from '../pages/news/NewsPage';
 import { RequireRole } from '../shared/components/auth/RequireRole';
 import { ROUTES } from '../shared/constants/routes';
-import { useAccount } from '../shared/stores/session.store';
+import { useAccount, useSession } from '../shared/stores/session.store';
 import { ALL_ROLES, STAFF_ROLES } from '../shared/types/auth';
 
 // Staff workspaces (lazy: each workspace is its own chunk)
@@ -71,13 +71,20 @@ import { AdminIncidentsPage } from '../pages/admin/AdminIncidentsPage';
 import { AdminReportsPage } from '../pages/admin/AdminReportsPage';
 import { AdminAuditPage } from '../pages/admin/AdminAuditPage';
 import { AdminUsersPage } from '../pages/admin/AdminUsersPage';
-import { AdminTenantsPage } from '../pages/admin/AdminTenantsPage';
 import { AdminOrdersPage } from '../pages/admin/AdminOrdersPage';
 import { AdminAIPage } from '../pages/admin/AdminAIPage';
 import { AdminCatalogPage } from '../pages/admin/AdminCatalogPage';
+import { AdminBranchesPage } from '../pages/admin/AdminBranchesPage';
+import { AdminBranchDetailPage } from '../pages/admin/AdminBranchDetailPage';
 
 const queryClient = new QueryClient({
   defaultOptions: { queries: { staleTime: 60_000, refetchOnWindowFocus: false } },
+});
+
+// Đổi người dùng trong cùng tab (đăng nhập, đăng xuất, hết phiên) thì bỏ dữ liệu đã tải của người trước,
+// nếu không người sau thấy dữ liệu theo quyền của người trước tới khi cache hết hạn.
+useSession.subscribe((state, previous) => {
+  if (state.account?.id !== previous.account?.id) queryClient.clear();
 });
 
 /** Nhân viên tuyến đầu: có ít nhất một bàn làm việc. */
@@ -162,6 +169,8 @@ export function App() {
         <Route element={<AdminLayout />}>
           <Route path="/admin/dashboard" element={<AdminDashboardPage />} />
           <Route path="/admin/catalog/:tab?" element={<AdminCatalogPage />} />
+          <Route path="/admin/branches" element={<AdminBranchesPage />} />
+          <Route path="/admin/branches/:branchId/:tab?" element={<AdminBranchDetailPage />} />
           <Route path="/admin/pos" element={<AdminPOSPage />} />
           <Route path="/admin/appointments" element={<AdminAppointmentsPage />} />
           <Route path="/admin/queue" element={<AdminQueuePage />} />
@@ -182,7 +191,6 @@ export function App() {
           <Route path="/admin/reports" element={<AdminReportsPage />} />
           <Route path="/admin/audit" element={<AdminAuditPage />} />
           <Route path="/admin/users" element={<AdminUsersPage />} />
-          <Route path="/admin/tenants" element={<AdminTenantsPage />} />
           <Route path="/admin/ai" element={<AdminAIPage />} />
         </Route>
       </Routes>

@@ -8,7 +8,7 @@ import { catalogApi } from '../../../shared/api/catalog.api';
 import { plainMessage, toApiError } from '../../../shared/api/api-error';
 import { useCatalogMutation, useCategories } from '../../../shared/hooks/useCatalog';
 import type { ProductCategory } from '../../../shared/types/catalog';
-import { ActiveBadge, EmptyRow, Field, FormError, NoticeBar, type Notice } from './ui';
+import { ActiveBadge, EmptyRow, Field, FormError, NoticeBar, type Notice } from '../../../components/admin/form-ui';
 
 /** UC28 — danh mục sản phẩm: tạo, đổi tên, ẩn / hiện (không xóa, catalog-v1 A2). */
 export function CategoriesTab() {

@@ -142,7 +142,7 @@ describe('who may read and write (catalog-v1 §B)', () => {
     const auth = await as('doctor@store1.vn');
     expect((await client.get('/api/services', auth)).status).toBe(200);
     const res = await failure(client.post('/api/product-categories', { name: 'Mới' }, auth));
-    expect(res.data).toMatchObject({ errorCode: 'ACCESS_DENIED', statusCode: 403 });
+    expect(res.data).toMatchObject({ errorCode: 'ACCESS_DENIED', statusCode: 403, message: 'Không có quyền thực hiện thao tác này' });
   });
 
   it('keeps the technical admin out of the catalog', async () => {

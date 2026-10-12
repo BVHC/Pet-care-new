@@ -68,7 +68,10 @@ describe('mock API envelope (00-method §3.4–3.5)', () => {
   it('refuses a protected path without a token', async () => {
     const res = await failure(client.get('/api/me'));
     expect(res.status).toBe(401);
-    expect(res.data.errorCode).toBe('UNAUTHENTICATED');
+    expect(res.data).toMatchObject({
+      errorCode: 'UNAUTHENTICATED',
+      message: 'Chưa đăng nhập hoặc phiên đăng nhập đã hết hạn',
+    });
   });
 
   it('answers 404 for a path that has no mock yet', async () => {
@@ -85,8 +88,10 @@ describe('mustChangePassword (BR-TK-17)', () => {
 
     const blocked = await failure(client.get('/api/visits', bearer(token)));
     expect(blocked.status).toBe(400);
-    expect(blocked.data.errorCode).toBe('BUSINESS_RULE_VIOLATION');
-    expect(ruleIdOf(blocked.data.message)).toBe('BR-TK-17');
+    expect(blocked.data).toMatchObject({
+      errorCode: 'BUSINESS_RULE_VIOLATION',
+      message: 'Bạn cần đổi mật khẩu trước khi sử dụng chức năng khác (BR-TK-17)',
+    });
 
     expect((await client.get('/api/me', bearer(token))).data.data.account.mustChangePassword).toBe(true);
     expect((await client.post('/api/auth/logout', null, bearer(token))).status).toBe(204);
@@ -238,5 +243,16 @@ describe('forgot / reset password (UC04)', () => {
     await forgot('doctor@store1.vn');
     const res = await failure(reset('doctor@store1.vn', MOCK_OTP_CODE, 'abc'));
     expect(ruleIdOf(res.data.message)).toBe('BR-TK-03');
+  });
+});
+
+describe('GET /me — chi nhánh của nhân viên', () => {
+  it('gives each branch staff member the branch of their account and chain roles none', async () => {
+    const branchOf = async (email: string) =>
+      (await client.get('/api/me', bearer(await tokenOf(email)))).data.data.staffProfile.branchId ?? null;
+
+    expect(await branchOf('manager@store1.vn')).toBe(1);
+    expect(await branchOf('manager2@store2.vn')).toBe(2);
+    expect(await branchOf('chuoi@petcare.vn')).toBeNull();
   });
 });

@@ -39,6 +39,14 @@ export function fail(errorCode: ErrorCode, message: string, status: number): Moc
 /** Như BE: mã rule nối vào cuối message. */
 export const ruleFail = (ruleId: string, message: string) => fail('BUSINESS_RULE_VIOLATION', `${message} (${ruleId})`, 400);
 
+/** Sai role (`@PreAuthorize`). */
+export const denied = () => fail('ACCESS_DENIED', 'Không có quyền thực hiện thao tác này', 403);
+
+/** Ngoài phạm vi chi nhánh (BranchScope). */
+export const scopeDenied = () => fail('ACCESS_DENIED_SCOPE_MISMATCH', 'Không có quyền truy cập dữ liệu này', 403);
+
+export const notFound = (type: string, id: string | number) => fail('RESOURCE_NOT_FOUND', `Không tìm thấy ${type} #${id}`, 404);
+
 // ─── Kiểm dữ liệu vào như Bean Validation của BE: "field: message; field: message" ───
 
 export const isText = (v: unknown): v is string => typeof v === 'string' && v.trim() !== '';

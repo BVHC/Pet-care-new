@@ -15,19 +15,29 @@ export interface MockAccount {
   role: Role;
   fullName: string;
   mustChangePassword?: boolean;
+  /** Chi nhánh làm việc của A05–A08 (staff_profiles.branch_id); ADMIN, SUPER_MANAGER, khách không có. */
+  branchId?: number;
 }
 
-/** Id 3–6 trùng mã nhân viên trong clinic-db để "lượt của tôi" ở bàn làm việc khớp. */
+/** Id 3–6 trùng mã nhân viên trong clinic-db để "lượt của tôi" ở bàn làm việc khớp. Chi nhánh: branch.mock.ts. */
 export const MOCK_ACCOUNTS: readonly MockAccount[] = [
   { id: 1, email: 'admin@petcare.vn', role: 'ADMIN', fullName: 'Quản trị hệ thống' },
   { id: 2, email: 'chuoi@petcare.vn', role: 'SUPER_MANAGER', fullName: 'Đỗ Thanh Hà' },
-  { id: 3, email: 'manager@store1.vn', role: 'BRANCH_MANAGER', fullName: 'Hoàng Nam' },
-  { id: 4, email: 'reception@store1.vn', role: 'RECEPTIONIST', fullName: 'Lan Chi' },
-  { id: 5, email: 'doctor@store1.vn', role: 'VET', fullName: 'BS. Minh Anh' },
-  { id: 6, email: 'caretaker@store1.vn', role: 'CARETAKER', fullName: 'Thu Hà' },
+  { id: 3, email: 'manager@store1.vn', role: 'BRANCH_MANAGER', fullName: 'Hoàng Nam', branchId: 1 },
+  { id: 4, email: 'reception@store1.vn', role: 'RECEPTIONIST', fullName: 'Lan Chi', branchId: 1 },
+  { id: 5, email: 'doctor@store1.vn', role: 'VET', fullName: 'BS. Minh Anh', branchId: 1 },
+  { id: 6, email: 'caretaker@store1.vn', role: 'CARETAKER', fullName: 'Thu Hà', branchId: 1 },
   { id: 7, email: 'khach@petcare.vn', role: 'CUSTOMER', fullName: 'Nguyễn Thu Trang' },
-  { id: 8, email: 'newstaff@store1.vn', role: 'RECEPTIONIST', fullName: 'Lễ tân mới', mustChangePassword: true },
+  { id: 8, email: 'newstaff@store1.vn', role: 'RECEPTIONIST', fullName: 'Lễ tân mới', mustChangePassword: true, branchId: 1 },
+  { id: 9, email: 'manager2@store2.vn', role: 'BRANCH_MANAGER', fullName: 'Phạm Minh Đức', branchId: 2 },
 ];
+
+/** Chi nhánh của nhân viên A05–A08; undefined với ADMIN, SUPER_MANAGER và khách. */
+export const branchIdOf = (accountId: number) => MOCK_ACCOUNTS.find((a) => a.id === accountId)?.branchId;
+
+/** Như StaffDirectoryApi.countBranchManagers: đếm cả quản lý đang bị khóa. */
+export const countBranchManagers = (branchId: number) =>
+  MOCK_ACCOUNTS.filter((a) => a.role === 'BRANCH_MANAGER' && a.branchId === branchId).length;
 
 const RESEND_SECONDS = 60; // BR-TK-07, mặc định [CFG]
 const MAX_FAILED_OTP = 5; // BR-TK-06, mặc định [CFG]
@@ -306,7 +316,7 @@ const me: MockHandler = ({ account }) => {
             accountId: a.id,
             fullName: a.fullName,
             phone: '0900000000',
-            ...(a.role !== 'ADMIN' && a.role !== 'SUPER_MANAGER' && { branchId: 1 }),
+            ...(branchIdOf(a.id) !== undefined && { branchId: branchIdOf(a.id) }),
           },
         }
       : { customerId: a.id }),

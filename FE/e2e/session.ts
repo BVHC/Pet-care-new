@@ -16,6 +16,8 @@ export const MANAGER: DemoAccount = { id: 3, email: 'manager@store1.vn', fullNam
 export const DESK: DemoAccount = { id: 4, email: 'reception@store1.vn', fullName: 'Lan Chi', role: 'RECEPTIONIST' };
 export const VET: DemoAccount = { id: 5, email: 'doctor@store1.vn', fullName: 'BS. Minh Anh', role: 'VET' };
 export const CARETAKER: DemoAccount = { id: 6, email: 'caretaker@store1.vn', fullName: 'Thu Hà', role: 'CARETAKER' };
+/** Quản lý của chi nhánh 2 (DRAFT, chưa có giờ mở cửa) trong mock branch. */
+export const MANAGER2: DemoAccount = { id: 9, email: 'manager2@store2.vn', fullName: 'Phạm Minh Đức', role: 'BRANCH_MANAGER' };
 
 /** What session.store persists under `petcare-session`, with a token the mock accepts. */
 function persistedSession(a: DemoAccount): string {

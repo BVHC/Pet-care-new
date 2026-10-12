@@ -91,7 +91,7 @@ export const ADMIN_MENU: MenuSection[] = [
   {
     section: 'Hệ thống',
     items: [
-      { path: '/admin/tenants', label: 'Tổ chức', icon: Building2, roles: ['SUPER_MANAGER'] }, // ngoài phạm vi (chi nhánh: T20)
+      { path: '/admin/branches', label: 'Chi nhánh', icon: Building2, roles: ['SUPER_MANAGER', 'BRANCH_MANAGER'] }, // UC12, UC14, UC33, UC42
       { path: '/admin/users', label: 'Người dùng', icon: UserCog, roles: ['ADMIN', 'SUPER_MANAGER', 'BRANCH_MANAGER'] }, // UC08, UC09
       { path: '/admin/ai', label: 'Trí tuệ nhân tạo', icon: Bot, roles: ['SUPER_MANAGER'] }, // tầng 3, chưa đặc tả
     ],

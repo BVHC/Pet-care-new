@@ -18,7 +18,7 @@ import {
   type ProductType,
   type VaccineType,
 } from '../../../shared/types/catalog';
-import { ActiveBadge, Checkbox, EmptyRow, Field, FormError, NoticeBar, selectClass, type Notice } from './ui';
+import { ActiveBadge, Checkbox, EmptyRow, Field, FormError, NoticeBar, selectClass, type Notice } from '../../../components/admin/form-ui';
 
 const PAGE_SIZE = 20;
 const TYPES = Object.keys(PRODUCT_TYPE_LABELS) as ProductType[];

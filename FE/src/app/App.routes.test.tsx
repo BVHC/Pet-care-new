@@ -79,6 +79,40 @@ describe('route guards', () => {
     expect(await forbidden()).toBeInTheDocument();
   });
 
+  it('opens branch management for the chain manager (UC12)', async () => {
+    await signInAs('chuoi@petcare.vn');
+    open('/admin/branches');
+    expect(await screen.findByRole('heading', { name: 'Chi nhánh' })).toBeInTheDocument();
+  });
+
+  it('takes a branch manager to the configuration of their branch (UC14, UC33, UC42)', async () => {
+    await signInAs('manager@store1.vn');
+    open('/admin/branches');
+    expect(await screen.findByRole('heading', { name: 'PetCare Cầu Giấy' })).toBeInTheDocument();
+    expect(await screen.findByRole('tab', { name: 'Quota lịch hẹn' })).toBeInTheDocument();
+  });
+
+  it("never shows the previous user's data to the next user in the same tab", async () => {
+    await signInAs('chuoi@petcare.vn');
+    const first = render(
+      <MemoryRouter initialEntries={['/admin/branches']}>
+        <App />
+      </MemoryRouter>,
+    );
+    expect(await screen.findByRole('button', { name: 'Cấu hình PetCare Long Biên' })).toBeInTheDocument();
+    first.unmount();
+
+    await signInAs('manager@store1.vn');
+    open('/admin/branches');
+    expect(await screen.findByRole('heading', { name: 'PetCare Cầu Giấy' })).toBeInTheDocument();
+  });
+
+  it('keeps a receptionist out of branch management', async () => {
+    await signInAs('reception@store1.vn');
+    open('/admin/branches');
+    expect(await forbidden()).toBeInTheDocument();
+  });
+
   it('forces the password change before any page (BR-TK-17)', async () => {
     await signInAs('newstaff@store1.vn');
     open('/staff/reception');

@@ -4,11 +4,12 @@
 // Khóa route là `METHOD /api/path`, đoạn `:ten` là tham số path.
 import { AxiosError, type AxiosAdapter, type AxiosInstance, type AxiosResponse } from 'axios';
 import type { AccountSummary } from '../../types/auth';
+import { branchRoutes } from './branch.mock';
 import { catalogRoutes } from './catalog.mock';
 import { fail, ruleFail, type MockHandler, type MockReply } from './envelope';
 import { accountForToken, identityRoutes } from './identity.mock';
 
-const ROUTES: Record<string, MockHandler> = { ...identityRoutes, ...catalogRoutes };
+const ROUTES: Record<string, MockHandler> = { ...identityRoutes, ...catalogRoutes, ...branchRoutes };
 
 const COMPILED = Object.entries(ROUTES).map(([key, handler]) => {
   const [method, path] = key.split(' ');
@@ -42,9 +43,9 @@ function route(method: string, path: string, body: unknown, token: string | null
   let account: AccountSummary | null = null;
   if (!PUBLIC_PATH.test(path)) {
     account = token ? accountForToken(token) : null;
-    if (!account) return fail('UNAUTHENTICATED', 'Chưa đăng nhập hoặc phiên đăng nhập đã hết hạn.', 401);
+    if (!account) return fail('UNAUTHENTICATED', 'Chưa đăng nhập hoặc phiên đăng nhập đã hết hạn', 401);
     if (account.mustChangePassword && !ALLOWED_BEFORE_PASSWORD_CHANGE.has(key)) {
-      return ruleFail('BR-TK-17', 'Bạn cần đổi mật khẩu trước khi tiếp tục');
+      return ruleFail('BR-TK-17', 'Bạn cần đổi mật khẩu trước khi sử dụng chức năng khác');
     }
   }
   const found = findRoute(method, path);

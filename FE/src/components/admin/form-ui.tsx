@@ -1,8 +1,8 @@
 import { useId, type ReactNode } from 'react';
-import { StatusBadge } from '../../../components/ui/modal-templates';
-import { cn } from '../../../lib/utils';
+import { StatusBadge } from '../ui/modal-templates';
+import { cn } from '../../lib/utils';
 
-// Phần form và bảng dùng chung cho các tab danh mục (T21).
+// Phần form và bảng dùng chung cho các màn quản trị (danh mục T21, chi nhánh T20).
 
 export const selectClass =
   'w-full h-10 px-3 rounded-lg border border-(--color-border-default) bg-white text-sm focus:outline-none focus:ring-2 focus:ring-accent disabled:bg-(--bg-tertiary) disabled:opacity-70';
