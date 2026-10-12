@@ -14,6 +14,7 @@ import java.util.Collection;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Optional;
 import java.util.Set;
 import java.util.UUID;
 import java.util.concurrent.Callable;
@@ -55,7 +56,10 @@ import org.springframework.transaction.support.TransactionTemplate;
 import com.petcare.TestcontainersConfiguration;
 import com.petcare.module.identity.service.SessionService;
 import com.petcare.module.sales.api.CashierShiftQueryApi;
+import com.petcare.module.sales.api.CashierShiftQueryApi.OpenShift;
 import com.petcare.module.visit.api.VisitQueryApi;
+import com.petcare.module.visit.api.VisitQueryApi.AssignedVisit;
+import com.petcare.module.visit.api.VisitQueryApi.VisitStatus;
 import com.zaxxer.hikari.HikariDataSource;
 
 /**
@@ -129,8 +133,8 @@ class StaffDisableReactivateIT {
         branchA = branch("ACTIVE");
         branchB = branch("ACTIVE");
         superManager = staff("SUPER_MANAGER", null);
-        doReturn(List.of()).when(visitQueries).findUnfinishedVisitIdsAssignedTo(anyLong());
-        doReturn(false).when(cashierShifts).hasOpenShift(anyLong());
+        doReturn(List.of()).when(visitQueries).findUnfinishedVisitsAssignedTo(anyLong());
+        doReturn(Optional.empty()).when(cashierShifts).findOpenShift(anyLong());
     }
 
     // ================================================================ #20 vô hiệu hóa — thành công
@@ -252,10 +256,10 @@ class StaffDisableReactivateIT {
     void pendingWorkIsBrQt08ListingEverythingAndWritesNothing(String visitIds, boolean openShift, String message) {
         long receptionist = staff("RECEPTIONIST", branchA);
         String receptionistToken = token(receptionist);
-        List<Long> visits = visitIds == null ? List.of()
-                : java.util.Arrays.stream(visitIds.split(",")).map(Long::valueOf).toList();
-        doReturn(visits).when(visitQueries).findUnfinishedVisitIdsAssignedTo(receptionist);
-        doReturn(openShift).when(cashierShifts).hasOpenShift(receptionist);
+        List<AssignedVisit> visits = visitIds == null ? List.of()
+                : java.util.Arrays.stream(visitIds.split(",")).map(Long::valueOf).map(id -> waitingVisit(id)).toList();
+        doReturn(visits).when(visitQueries).findUnfinishedVisitsAssignedTo(receptionist);
+        doReturn(openShift(openShift)).when(cashierShifts).findOpenShift(receptionist);
         Timestamp updated = updatedAt("accounts", "id", receptionist);
 
         ResponseEntity<Map<String, Object>> response = disable(token(superManager), receptionist);
@@ -1133,5 +1137,15 @@ class StaffDisableReactivateIT {
                 .containsEntry("statusCode", status.value());
         assertThat((String) response.getBody().get("message")).isNotBlank();
         assertThat((String) response.getBody().get("traceId")).isNotBlank();
+    }
+
+    /** Stub của {@code VisitQueryApi.findUnfinishedVisitsAssignedTo}: BR-QT-08 chỉ cần id của lượt. */
+    private static AssignedVisit waitingVisit(long visitId) {
+        return new AssignedVisit(visitId, 1L, VisitStatus.WAITING);
+    }
+
+    /** Stub của {@code CashierShiftQueryApi.findOpenShift}: BR-QT-08 chỉ cần có hay không có ca. */
+    private static Optional<OpenShift> openShift(boolean open) {
+        return open ? Optional.of(new OpenShift(77L, 1L)) : Optional.empty();
     }
 }

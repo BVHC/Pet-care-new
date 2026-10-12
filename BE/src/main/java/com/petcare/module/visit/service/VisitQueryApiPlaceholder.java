@@ -10,8 +10,8 @@ import com.petcare.module.visit.api.VisitQueryApi;
 /**
  * Giữ chỗ cho {@link VisitQueryApi} tới khi module visit (BE-1, T26, hạn giao 21/10 — 06 §6) cài thật — nợ D016
  * (docs/dept/INDEX.md). Theo 06-module-contracts §1: mọi method ném lỗi, không trả giá trị "an toàn" (ví dụ danh sách
- * Visit dở dang rỗng sẽ cho vô hiệu hóa đi qua sai BR-QT-08). Hệ quả: điều chuyển và vô hiệu hóa nhân viên (T14,
- * docs/adr/0029) trả 500 trên app thật tới khi có bản thật. BE-1 xóa lớp này (cùng
+ * Visit dở dang rỗng sẽ cho vô hiệu hóa đi qua sai BR-QT-08). Hệ quả: điều chuyển, vô hiệu hóa và khóa nhân viên
+ * A05–A08 (T14, docs/adr/0029, 0035) trả 500 trên app thật tới khi có bản thật. BE-1 xóa lớp này (cùng
  * {@code VisitQueryApiPlaceholderTest}) khi thêm implementation thật.
  */
 @Service
@@ -25,7 +25,7 @@ public class VisitQueryApiPlaceholder implements VisitQueryApi {
     }
 
     @Override
-    public List<Long> findUnfinishedVisitIdsAssignedTo(Long accountId) {
+    public List<AssignedVisit> findUnfinishedVisitsAssignedTo(Long accountId) {
         throw new UnsupportedOperationException(MESSAGE);
     }
 

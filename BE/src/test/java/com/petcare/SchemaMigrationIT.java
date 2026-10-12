@@ -129,9 +129,10 @@ class SchemaMigrationIT {
         // V8 seed mẫu OTP_PASSWORD_RESET, LOGIN_LOCKED_WARNING, PASSWORD_CHANGED (docs/adr/0019),
         // V9 mẫu OTP_PROFILE_LINK + index otp_tokens.customer_id (docs/adr/0025),
         // V10 index addresses.customer_id (docs/adr/0028),
-        // V11 mẫu STAFF_TEMP_PASSWORD, OTP_EMAIL_CHANGE, EMAIL_CHANGED_NOTICE (docs/adr/0029)
+        // V11 mẫu STAFF_TEMP_PASSWORD, OTP_EMAIL_CHANGE, EMAIL_CHANGED_NOTICE (docs/adr/0029),
+        // V12 mẫu ACCOUNT_LOCKED_FOLLOW_UP_APP, LAST_BRANCH_MANAGER_LOCKED_APP (docs/adr/0035)
         assertThat(rows).extracting(row -> row.get("version"))
-                .containsExactly("1", "2", "3", "4", "5", "6", "7", "8", "9", "10", "11");
+                .containsExactly("1", "2", "3", "4", "5", "6", "7", "8", "9", "10", "11", "12");
         assertThat(rows).allSatisfy(row -> assertThat(row).containsEntry("success", true));
     }
 
@@ -333,7 +334,7 @@ class SchemaMigrationIT {
     }
 
     /**
-     * V3, V4, V8, V9, V11 (06-module-contracts §8 Q4, BR-QT-14): mẫu seed bằng migration khôi phục được về mặc định
+     * V3, V4, V8, V9, V11, V12 (06-module-contracts §8 Q4, BR-QT-14): mẫu seed bằng migration khôi phục được về mặc định
      * ({@code body = default_body}, {@code subject = default_subject}), biến bắt buộc nằm trong biến cho phép và có mặt
      * trong nội dung, mẫu OTP bắt buộc {@code {ma_otp}}. Mẫu {@code IT_*} do các IT khác chèn nên bị loại.
      */
@@ -344,7 +345,7 @@ class SchemaMigrationIT {
         assertThat(jdbc.queryForList("SELECT code FROM notification_templates WHERE " + seeded, String.class))
                 .containsExactlyInAnyOrder("OTP_REGISTER", "OTP_PASSWORD_RESET", "LOGIN_LOCKED_WARNING",
                         "PASSWORD_CHANGED", "OTP_PROFILE_LINK", "STAFF_TEMP_PASSWORD", "OTP_EMAIL_CHANGE",
-                        "EMAIL_CHANGED_NOTICE");
+                        "EMAIL_CHANGED_NOTICE", "ACCOUNT_LOCKED_FOLLOW_UP_APP", "LAST_BRANCH_MANAGER_LOCKED_APP");
         assertThat(jdbc.queryForList("""
                 SELECT code FROM notification_templates
                 WHERE %s AND (body <> default_body OR subject IS DISTINCT FROM default_subject)
@@ -365,6 +366,12 @@ class SchemaMigrationIT {
                 WHERE %s AND code LIKE 'OTP\\_%%' AND NOT (required_vars @> '["ma_otp"]'::jsonb)
                 """.formatted(seeded), String.class))
                 .as("mẫu OTP thiếu biến bắt buộc ma_otp").isEmpty();
+        assertThat(jdbc.queryForList("""
+                SELECT code FROM notification_templates
+                WHERE %s AND channel = 'IN_APP'
+                  AND (code NOT LIKE '%%\\_APP' OR subject IS NULL OR btrim(subject) = '' OR length(subject) > 200)
+                """.formatted(seeded), String.class))
+                .as("mẫu IN_APP phải có mã _APP và subject 1–200 ký tự (docs/adr/0014)").isEmpty();
     }
 
     /**

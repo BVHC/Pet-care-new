@@ -16,7 +16,7 @@ class VisitQueryApiPlaceholderTest {
     void everyMethodThrows() {
         assertThatThrownBy(() -> placeholder.findVisit(1L))
                 .isInstanceOf(UnsupportedOperationException.class).hasMessageContaining("D016");
-        assertThatThrownBy(() -> placeholder.findUnfinishedVisitIdsAssignedTo(1L))
+        assertThatThrownBy(() -> placeholder.findUnfinishedVisitsAssignedTo(1L))
                 .isInstanceOf(UnsupportedOperationException.class);
         assertThatThrownBy(() -> placeholder.hasOpenVisit(1L)).isInstanceOf(UnsupportedOperationException.class);
         assertThatThrownBy(() -> placeholder.existsByPet(1L)).isInstanceOf(UnsupportedOperationException.class);

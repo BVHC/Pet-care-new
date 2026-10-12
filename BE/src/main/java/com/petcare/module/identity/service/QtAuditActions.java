@@ -58,6 +58,18 @@ public final class QtAuditActions {
      */
     public static final String STAFF_EMAIL_CHANGED = "STAFF_EMAIL_CHANGED";
 
+    /**
+     * ADMIN khóa tài khoản bất kỳ, trừ chính mình (Tài khoản#7, BR-QT-11, 15; docs/adr/0035). {@code entity =
+     * accounts/<id>}; {@code before}, {@code after} = {@code isLocked, status}; {@code reason} = lý do ADMIN nhập.
+     */
+    public static final String ACCOUNT_LOCKED = "ACCOUNT_LOCKED";
+
+    /**
+     * ADMIN mở khóa (Tài khoản#8, BR-QT-11, 12, 15; docs/adr/0035). {@code entity = accounts/<id>}; {@code before},
+     * {@code after} = {@code isLocked, status} ({@code status} không đổi); {@code reason} = lý do ADMIN nhập.
+     */
+    public static final String ACCOUNT_UNLOCKED = "ACCOUNT_UNLOCKED";
+
     private QtAuditActions() {
     }
 }

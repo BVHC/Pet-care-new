@@ -335,12 +335,14 @@ m.op("get", "/accounts", "listAccounts", "Tìm tài khoản (khách và nhân vi
 m.op("post", "/accounts/{id}/lock", "lockAccount", "Khóa tài khoản", "Accounts", "UC09",
      "BR-QT-04, 11, 12, BR-TN-08, BR-TK-11", "A03", "Chỉ ADMIN; không khóa chính mình", "is_locked false → true (Tài khoản#7)",
      body="ReasonRequest", resp="LockResult", path_params=["AccountId"], errors=(400, 401, 403, 404, 409),
-     err_desc={400: "Thiếu lý do · khóa chính mình", 409: "Đã bị khóa"},
-     notes="Hủy mọi phiên; Visit IN_PROGRESS đánh dấu cần gán lại; thông báo theo BR-QT-11 (khách: lễ tân các chi nhánh có việc dở — 06 Q2); ghi audit.")
+     err_desc={400: "Thiếu lý do (`VALIDATION_FAILED`) · `BR-QT-11` khóa chính mình",
+               409: "`INVALID_STATE_TRANSITION` đã bị khóa · `CONCURRENCY_CONFLICT` chức vụ / chi nhánh của người bị khóa vừa đổi"},
+     notes="Mọi role, mọi trạng thái (kể cả PENDING, DISABLED) trừ chính mình; status giữ nguyên (BR-QT-12). Hủy mọi phiên; pendingWork sắp theo thứ tự enum rồi entityId (Visit IN_PROGRESS → needsReassign); phát AccountLockedEvent; thông báo trong app theo BR-QT-11 (nhân viên A06–A08: BRANCH_MANAGER chi nhánh, không còn thì SUPER_MANAGER; BRANCH_MANAGER: SUPER_MANAGER, quản lý cuối của chi nhánh ACTIVE → LAST_BRANCH_MANAGER_LOCKED_APP; khách: lễ tân các chi nhánh có việc dở — 06 Q2); ghi audit kèm lý do (docs/adr/0035).")
 m.op("post", "/accounts/{id}/unlock", "unlockAccount", "Mở khóa tài khoản", "Accounts", "UC09", "BR-QT-11, 12",
      "A03", "Chỉ ADMIN", "is_locked true → false (Tài khoản#8)", body="ReasonRequest", resp="AccountSummary",
-     path_params=["AccountId"], errors=(400, 401, 403, 404, 409), err_desc={409: "Không bị khóa"},
-     notes="status giữ nguyên giá trị trước khi khóa; ghi audit.")
+     path_params=["AccountId"], errors=(400, 401, 403, 404, 409),
+     err_desc={400: "Thiếu lý do (`VALIDATION_FAILED`)", 409: "`INVALID_STATE_TRANSITION` không bị khóa"},
+     notes="status giữ nguyên giá trị trước khi khóa (BR-QT-12); giữ lý do khóa gần nhất; không mở phiên, không thông báo; ghi audit kèm lý do (docs/adr/0035).")
 
 m.op("get", "/system-configs", "listSystemConfigs", "Danh sách tham số [CFG]", "Configuration", "UC10", "BR-QT-13",
      "A03", "Chỉ ADMIN", resp="array:SystemConfig", errors=(401, 403))

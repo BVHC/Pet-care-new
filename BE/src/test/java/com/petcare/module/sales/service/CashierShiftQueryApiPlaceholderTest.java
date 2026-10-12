@@ -12,7 +12,7 @@ class CashierShiftQueryApiPlaceholderTest {
 
     @Test
     void everyMethodThrows() {
-        assertThatThrownBy(() -> new CashierShiftQueryApiPlaceholder().hasOpenShift(1L))
+        assertThatThrownBy(() -> new CashierShiftQueryApiPlaceholder().findOpenShift(1L))
                 .isInstanceOf(UnsupportedOperationException.class).hasMessageContaining("D016");
     }
 }

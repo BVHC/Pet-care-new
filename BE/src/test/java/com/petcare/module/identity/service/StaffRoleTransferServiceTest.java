@@ -54,7 +54,10 @@ import com.petcare.module.identity.repository.StaffDetailRow;
 import com.petcare.module.identity.repository.StaffProfileRepository;
 import com.petcare.module.identity.repository.StaffRow;
 import com.petcare.module.sales.api.CashierShiftQueryApi;
+import com.petcare.module.sales.api.CashierShiftQueryApi.OpenShift;
 import com.petcare.module.visit.api.VisitQueryApi;
+import com.petcare.module.visit.api.VisitQueryApi.AssignedVisit;
+import com.petcare.module.visit.api.VisitQueryApi.VisitStatus;
 import com.petcare.platform.audit.AuditEntry;
 import com.petcare.platform.audit.AuditRecorder;
 import com.petcare.platform.exception.BusinessRuleViolationException;
@@ -105,7 +108,7 @@ class StaffRoleTransferServiceTest {
             ids.stream().filter(BRANCHES::containsKey).forEach(id -> locked.put(id, BRANCHES.get(id)));
             return locked;
         });
-        when(visitQueries.findUnfinishedVisitIdsAssignedTo(anyLong())).thenReturn(List.of());
+        when(visitQueries.findUnfinishedVisitsAssignedTo(anyLong())).thenReturn(List.of());
         actAs(Role.SUPER_MANAGER, null);
     }
 
@@ -301,8 +304,8 @@ class StaffRoleTransferServiceTest {
         order.verify(branchLocks).lockForStaffChange(Set.of(ACTIVE_BRANCH, DRAFT_BRANCH));
         order.verify(accounts).findByIdForUpdate(TARGET);
         order.verify(staffProfiles).findById(TARGET);
-        order.verify(visitQueries).findUnfinishedVisitIdsAssignedTo(TARGET);
-        order.verify(cashierShifts).hasOpenShift(TARGET);
+        order.verify(visitQueries).findUnfinishedVisitsAssignedTo(TARGET);
+        order.verify(cashierShifts).findOpenShift(TARGET);
         order.verify(audit).record(any());
         order.verify(staffProfiles).flush();
         order.verify(staffProfiles).findStaffDetail(TARGET);
@@ -375,10 +378,10 @@ class StaffRoleTransferServiceTest {
             "12    | true  | Không điều chuyển được: còn lượt tiếp nhận #12 chưa hoàn tất; còn ca thu ngân đang mở (BR-QT-08)"})
     void pendingWorkIsBrQt08ListingEverything(String visitIds, boolean openShift, String message) {
         Target target = target(Role.RECEPTIONIST, AccountStatus.ACTIVE, ACTIVE_BRANCH);
-        List<Long> visits = visitIds == null ? List.of()
-                : java.util.Arrays.stream(visitIds.split(",")).map(Long::valueOf).toList();
-        when(visitQueries.findUnfinishedVisitIdsAssignedTo(TARGET)).thenReturn(visits);
-        when(cashierShifts.hasOpenShift(TARGET)).thenReturn(openShift);
+        List<AssignedVisit> visits = visitIds == null ? List.of()
+                : java.util.Arrays.stream(visitIds.split(",")).map(Long::valueOf).map(id -> waitingVisit(id)).toList();
+        when(visitQueries.findUnfinishedVisitsAssignedTo(TARGET)).thenReturn(visits);
+        when(cashierShifts.findOpenShift(TARGET)).thenReturn(openShift(openShift));
 
         assertRule(() -> service.transferStaff(TARGET, new TransferStaffRequest(OTHER_ACTIVE_BRANCH)), "BR-QT-08",
                 message);
@@ -389,7 +392,7 @@ class StaffRoleTransferServiceTest {
     @Test
     void placeholderGuardFailurePropagatesWithoutWrite() {
         Target target = target(Role.VET, AccountStatus.ACTIVE, ACTIVE_BRANCH);
-        when(visitQueries.findUnfinishedVisitIdsAssignedTo(TARGET))
+        when(visitQueries.findUnfinishedVisitsAssignedTo(TARGET))
                 .thenThrow(new UnsupportedOperationException("placeholder"));
 
         assertThatThrownBy(() -> service.transferStaff(TARGET, new TransferStaffRequest(OTHER_ACTIVE_BRANCH)))
@@ -505,5 +508,15 @@ class StaffRoleTransferServiceTest {
     private static void assertRule(ThrowingCallable call, String ruleId, String message) {
         assertThatThrownBy(call).isInstanceOf(BusinessRuleViolationException.class).hasMessage(message)
                 .hasMessageEndingWith("(" + ruleId + ")");
+    }
+
+    /** Stub của {@code VisitQueryApi.findUnfinishedVisitsAssignedTo}: BR-QT-08 chỉ cần id của lượt. */
+    private static AssignedVisit waitingVisit(long visitId) {
+        return new AssignedVisit(visitId, 1L, VisitStatus.WAITING);
+    }
+
+    /** Stub của {@code CashierShiftQueryApi.findOpenShift}: BR-QT-08 chỉ cần có hay không có ca. */
+    private static Optional<OpenShift> openShift(boolean open) {
+        return open ? Optional.of(new OpenShift(77L, 1L)) : Optional.empty();
     }
 }

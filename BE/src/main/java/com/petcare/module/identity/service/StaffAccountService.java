@@ -40,6 +40,7 @@ import com.petcare.module.identity.service.StaffHierarchyPolicy.Actor;
 import com.petcare.module.identity.service.TemporaryPasswordGenerator.TemporaryPassword;
 import com.petcare.module.sales.api.CashierShiftQueryApi;
 import com.petcare.module.visit.api.VisitQueryApi;
+import com.petcare.module.visit.api.VisitQueryApi.AssignedVisit;
 import com.petcare.platform.audit.AuditEntry;
 import com.petcare.platform.audit.AuditRecorder;
 import com.petcare.platform.exception.BusinessRuleViolationException;
@@ -421,11 +422,11 @@ public class StaffAccountService {
      * lỗi (nợ D016).
      */
     private void checkNoPendingWork(Long accountId, String action) {
-        List<Long> visitIds = visitQueries.findUnfinishedVisitIdsAssignedTo(accountId);
-        boolean openShift = cashierShifts.hasOpenShift(accountId);
+        List<AssignedVisit> visits = visitQueries.findUnfinishedVisitsAssignedTo(accountId);
+        boolean openShift = cashierShifts.findOpenShift(accountId).isPresent();
         List<String> pending = new ArrayList<>();
-        if (!visitIds.isEmpty()) {
-            pending.add("còn lượt tiếp nhận " + visitIds.stream().map(id -> "#" + id)
+        if (!visits.isEmpty()) {
+            pending.add("còn lượt tiếp nhận " + visits.stream().map(visit -> "#" + visit.visitId())
                     .collect(Collectors.joining(", ")) + " chưa hoàn tất");
         }
         if (openShift) {

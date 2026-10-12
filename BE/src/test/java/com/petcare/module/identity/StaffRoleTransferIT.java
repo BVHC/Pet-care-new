@@ -12,6 +12,7 @@ import java.util.Collection;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Optional;
 import java.util.Set;
 import java.util.UUID;
 import java.util.concurrent.Callable;
@@ -47,7 +48,10 @@ import org.springframework.transaction.support.TransactionTemplate;
 import com.petcare.TestcontainersConfiguration;
 import com.petcare.module.identity.service.SessionService;
 import com.petcare.module.sales.api.CashierShiftQueryApi;
+import com.petcare.module.sales.api.CashierShiftQueryApi.OpenShift;
 import com.petcare.module.visit.api.VisitQueryApi;
+import com.petcare.module.visit.api.VisitQueryApi.AssignedVisit;
+import com.petcare.module.visit.api.VisitQueryApi.VisitStatus;
 
 /**
  * T14 phần 2 — {@code POST /api/staff/{id}/change-role} (#18), {@code POST /api/staff/{id}/transfer} (#19) qua HTTP
@@ -106,8 +110,8 @@ class StaffRoleTransferIT {
         branchA = branch("ACTIVE");
         branchB = branch("ACTIVE");
         superManager = staff("SUPER_MANAGER", null);
-        doReturn(List.of()).when(visitQueries).findUnfinishedVisitIdsAssignedTo(anyLong());
-        doReturn(false).when(cashierShifts).hasOpenShift(anyLong());
+        doReturn(List.of()).when(visitQueries).findUnfinishedVisitsAssignedTo(anyLong());
+        doReturn(Optional.empty()).when(cashierShifts).findOpenShift(anyLong());
     }
 
     // ================================================================ #18 đổi chức vụ — thành công
@@ -258,8 +262,8 @@ class StaffRoleTransferIT {
         assertThat(audits).hasSize(1);
         assertThat(json(audits.get(0), "before_data")).isEqualTo("{\"branchId\": " + branchA + "}");
         assertThat(json(audits.get(0), "after_data")).isEqualTo("{\"branchId\": " + branchB + "}");
-        Mockito.verify(visitQueries).findUnfinishedVisitIdsAssignedTo(receptionist);
-        Mockito.verify(cashierShifts).hasOpenShift(receptionist);
+        Mockito.verify(visitQueries).findUnfinishedVisitsAssignedTo(receptionist);
+        Mockito.verify(cashierShifts).findOpenShift(receptionist);
     }
 
     // ================================================================ Q1, BR-QT-04, 03, 08
@@ -327,14 +331,14 @@ class StaffRoleTransferIT {
             "12    | true  | Không điều chuyển được: còn lượt tiếp nhận #12 chưa hoàn tất; còn ca thu ngân đang mở (BR-QT-08)"})
     void pendingWorkIsBrQt08ListingEverythingAndWritesNothing(String visitIds, boolean openShift, String message) {
         long receptionist = staff("RECEPTIONIST", branchA);
-        List<Long> visits = new ArrayList<>();
+        List<AssignedVisit> visits = new ArrayList<>();
         if (visitIds != null) {
             for (String id : visitIds.split(",")) {
-                visits.add(Long.valueOf(id.strip()));
+                visits.add(waitingVisit(Long.parseLong(id.strip())));
             }
         }
-        doReturn(visits).when(visitQueries).findUnfinishedVisitIdsAssignedTo(receptionist);
-        doReturn(openShift).when(cashierShifts).hasOpenShift(receptionist);
+        doReturn(visits).when(visitQueries).findUnfinishedVisitsAssignedTo(receptionist);
+        doReturn(openShift(openShift)).when(cashierShifts).findOpenShift(receptionist);
         Timestamp profileUpdated = updatedAt("staff_profiles", "account_id", receptionist);
 
         ResponseEntity<Map<String, Object>> response = transfer(token(superManager), receptionist, branchB);
@@ -563,7 +567,7 @@ class StaffRoleTransferIT {
                 "ACCESS_DENIED_SCOPE_MISMATCH");
         assertNotLocked(admin, branchA, branchB);
         long vet = staff("VET", branchA);
-        doReturn(List.of(9L)).when(visitQueries).findUnfinishedVisitIdsAssignedTo(vet);
+        doReturn(List.of(waitingVisit(9L))).when(visitQueries).findUnfinishedVisitsAssignedTo(vet);
         assertRule(transfer(token(superManager), vet, branchB), "BR-QT-08");
         assertNotLocked(vet, branchA, branchB);
         assertThat(audits(superManager, "STAFF_TRANSFERRED")).isEmpty();
@@ -1071,5 +1075,15 @@ class StaffRoleTransferIT {
                 .containsEntry("statusCode", status.value());
         assertThat((String) response.getBody().get("message")).isNotBlank();
         assertThat((String) response.getBody().get("traceId")).isNotBlank();
+    }
+
+    /** Stub của {@code VisitQueryApi.findUnfinishedVisitsAssignedTo}: BR-QT-08 chỉ cần id của lượt. */
+    private static AssignedVisit waitingVisit(long visitId) {
+        return new AssignedVisit(visitId, 1L, VisitStatus.WAITING);
+    }
+
+    /** Stub của {@code CashierShiftQueryApi.findOpenShift}: BR-QT-08 chỉ cần có hay không có ca. */
+    private static Optional<OpenShift> openShift(boolean open) {
+        return open ? Optional.of(new OpenShift(77L, 1L)) : Optional.empty();
     }
 }

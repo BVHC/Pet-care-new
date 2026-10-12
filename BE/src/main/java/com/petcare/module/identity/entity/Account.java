@@ -30,8 +30,8 @@ import lombok.NoArgsConstructor;
  * nhất (BR-TK-01). Khóa ({@code is_locked}) độc lập với {@code status} (BR-QT-11, 12). Đã có: đăng ký
  * (Tài khoản#1), xác thực OTP (#2), xóa tài khoản {@code PENDING} quá hạn (#3, ST02 — xóa cứng bằng SQL ở
  * {@code AccountRepository}), bộ đếm đăng nhập sai và khóa tạm (BR-TK-09, ST01 — trường phụ, không phải trạng thái), đổi mật khẩu (BR-TK-14),
- * đặt lại mật khẩu (BR-TK-13), tạo nhân viên (#4), đổi chức vụ (UC08), vô hiệu hóa (#5), kích hoạt lại (#6);
- * khóa / mở khóa (#7, #8) làm ở task QT sau.
+ * đặt lại mật khẩu (BR-TK-13), tạo nhân viên (#4), đổi chức vụ (UC08), vô hiệu hóa (#5), kích hoạt lại (#6), sửa
+ * email (BR-TK-16), khóa / mở khóa (#7, #8 — docs/adr/0035).
  */
 @Getter
 @Entity
@@ -194,6 +194,37 @@ public class Account extends TimestampedEntity {
         this.firstFailedLoginAt = null;
         this.lockedUntil = null;
         this.lastSeenAt = null;
+    }
+
+    /**
+     * Tài khoản#7 — ADMIN khóa tài khoản (BR-QT-11, BR-TK-11; docs/adr/0035): {@code is_locked = true}, lưu lý do gần
+     * nhất ({@code locked_reason}). {@code status} giữ nguyên để mở khóa trả về đúng trạng thái trước đó (BR-QT-12).
+     * Đặt {@code last_seen_at = NULL} vì mọi phiên bị hủy cùng lúc — chuyển offline ngay (BR-TN-06). Áp dụng cho mọi role
+     * và mọi {@code status}. Caller giữ khóa dòng, đã kiểm "không tự khóa" và chưa bị khóa, rồi hủy phiên sau lệnh này
+     * (thứ tự {@code accounts → sessions}, docs/adr/0021). {@code reason} đã strip.
+     */
+    public void lock(String reason) {
+        if (locked) {
+            throw new IllegalStateException("Account " + id + " is already locked");
+        }
+        if (reason == null || reason.isBlank()) {
+            throw new IllegalArgumentException("Account " + id + " needs a lock reason (BR-QT-11)");
+        }
+        this.locked = true;
+        this.lockedReason = reason;
+        this.lastSeenAt = null;
+    }
+
+    /**
+     * Tài khoản#8 — ADMIN mở khóa (BR-QT-11, 12; docs/adr/0035): chỉ gỡ {@code is_locked}, nên {@code status} là giá trị
+     * ngay trước khi khóa ({@code ACTIVE} hoặc {@code DISABLED}). Giữ {@code locked_reason} (erd: "lý do khóa gần
+     * nhất"). Không mở phiên, không đổi mật khẩu. Caller giữ khóa dòng và đã kiểm đang bị khóa.
+     */
+    public void unlock() {
+        if (!locked) {
+            throw new IllegalStateException("Account " + id + " is not locked");
+        }
+        this.locked = false;
     }
 
     /**

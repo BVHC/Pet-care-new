@@ -30,7 +30,9 @@ import com.petcare.module.identity.service.SessionService;
  * T14 phần 2, 3 trên đúng bean của app thật: {@code VisitQueryApi}, {@code CashierShiftQueryApi} còn là placeholder
  * ném lỗi (nợ D016). Điều chuyển / vô hiệu hóa A05–A08 tới bước BR-QT-08 → 500, rollback, không ghi gì; các nhánh lỗi
  * đứng trước BR-QT-08, đổi chức vụ (docs/adr/0031 Q4), vô hiệu hóa SUPER_MANAGER (docs/adr/0033 Q2) và kích hoạt lại
- * vẫn chạy đúng. Khi hai interface có bản thật, test 500 phải đổi thành ca thành công (D016 *Cách trả*).
+ * vẫn chạy đúng. Khi hai interface có bản thật, test 500 phải đổi thành ca thành công (D016 *Cách trả*). T14 phần 5
+ * (docs/adr/0035): khóa A05–A08 / khách → 500 không ghi gì (D016, D010); khóa ADMIN / SUPER_MANAGER và mở khóa chạy
+ * thật.
  */
 @SpringBootTest(webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT)
 @ActiveProfiles("test")
@@ -154,6 +156,75 @@ class StaffTransferPlaceholderIT {
         assertThat(jdbc.queryForMap("""
                 SELECT a.status, sp.branch_id FROM accounts a JOIN staff_profiles sp ON sp.account_id = a.id
                 WHERE a.id = ?""", vet)).containsEntry("status", "ACTIVE").containsEntry("branch_id", branchB);
+    }
+
+    // ================================================================ T14 phần 5 — khóa / mở khóa (docs/adr/0035)
+
+    /**
+     * Khóa nhân viên A05–A08 hỏi {@code VisitQueryApi} (D016), khóa khách hỏi {@code CustomerQueryApi} (D010) — cả hai
+     * còn là placeholder → 500 trước lệnh ghi đầu tiên: chưa khóa, phiên còn sống, không audit, không thông báo.
+     */
+    @Test
+    void lockingBranchStaffOrCustomerIs500AndWritesNothingOnRealBeans() {
+        long admin = staff("ADMIN", null);
+        long vet = staff("VET", branchA);
+        long customer = jdbc.queryForObject("""
+                INSERT INTO accounts (email, password_hash, role, status)
+                VALUES (?, 'hash', 'CUSTOMER', 'ACTIVE') RETURNING id
+                """, Long.class, "placeholder-it-" + UUID.randomUUID() + "@petcare.test");
+        tokenOf(vet);
+
+        for (long target : new long[] {vet, customer}) {
+            ResponseEntity<Map<String, Object>> response = postAs(admin, "/api/accounts/" + target + "/lock",
+                    Map.of("reason", "Vi phạm"));
+
+            assertThat(response.getStatusCode()).as("%s", response.getBody())
+                    .isEqualTo(HttpStatus.INTERNAL_SERVER_ERROR);
+            assertThat(response.getBody()).containsEntry("errorCode", "INTERNAL_ERROR");
+            assertThat(jdbc.queryForObject("SELECT is_locked FROM accounts WHERE id = ?", Boolean.class, target))
+                    .isFalse();
+        }
+        assertThat(jdbc.queryForObject("""
+                SELECT count(*) FROM sessions WHERE account_id = ? AND revoked_at IS NULL""", Long.class, vet))
+                .isEqualTo(1L);
+        assertThat(jdbc.queryForObject("SELECT count(*) FROM audit_logs WHERE actor_account_id = ?", Long.class,
+                admin)).isZero();
+    }
+
+    /** ADMIN / SUPER_MANAGER không hỏi interface nào → khóa và mở khóa chạy ngay trên app thật. */
+    @Test
+    void adminLocksAndUnlocksSuperManagerOnRealBeans() {
+        long admin = staff("ADMIN", null);
+        long target = staff("SUPER_MANAGER", null);
+        String targetToken = tokenOf(target);
+
+        ResponseEntity<Map<String, Object>> locked = postAs(admin, "/api/accounts/" + target + "/lock",
+                Map.of("reason", "Sự cố bảo mật"));
+        assertThat(locked.getStatusCode()).as("%s", locked.getBody()).isEqualTo(HttpStatus.OK);
+        HttpHeaders headers = new HttpHeaders();
+        headers.setBearerAuth(targetToken);
+        assertThat(http.exchange("/api/me", HttpMethod.GET, new HttpEntity<>(headers), MAP).getStatusCode())
+                .isEqualTo(HttpStatus.UNAUTHORIZED);
+
+        ResponseEntity<Map<String, Object>> unlocked = postAs(admin, "/api/accounts/" + target + "/unlock",
+                Map.of("reason", "Đã xác minh"));
+        assertThat(unlocked.getStatusCode()).as("%s", unlocked.getBody()).isEqualTo(HttpStatus.OK);
+        assertThat(jdbc.queryForObject("SELECT is_locked FROM accounts WHERE id = ?", Boolean.class, target))
+                .isFalse();
+    }
+
+    /** Mở khóa không hỏi interface nào → chạy được với mọi tài khoản, kể cả nhân viên chi nhánh. */
+    @Test
+    void unlockBranchStaffWorksOnRealBeans() {
+        long admin = staff("ADMIN", null);
+        long vet = staff("VET", branchA);
+        jdbc.update("UPDATE accounts SET is_locked = true, locked_reason = 'Vi phạm' WHERE id = ?", vet);
+
+        ResponseEntity<Map<String, Object>> unlocked = postAs(admin, "/api/accounts/" + vet + "/unlock",
+                Map.of("reason", "Xong"));
+
+        assertThat(unlocked.getStatusCode()).as("%s", unlocked.getBody()).isEqualTo(HttpStatus.OK);
+        assertThat(jdbc.queryForObject("SELECT is_locked FROM accounts WHERE id = ?", Boolean.class, vet)).isFalse();
     }
 
     private long branch() {

@@ -89,8 +89,8 @@
 | Sửa email tài khoản khách — xác nhận OTP | A06 | Lễ tân | — | — | Ghi audit kèm phương thức xác minh; gửi EMAIL_CHANGED_NOTICE tới email cũ và mới. |
 | Liên kết hồ sơ tại quầy với tài khoản | A06 | Lễ tân | — | — | Không cần OTP: lễ tân đã đối chiếu CCCD. Ghi audit. |
 | Tìm tài khoản (khách và nhân viên) | A03 | Chỉ ADMIN | — | — | — |
-| Khóa tài khoản | A03 | Chỉ ADMIN; không khóa chính mình | is_locked false → true (Tài khoản#7) | — | Hủy mọi phiên; Visit IN_PROGRESS đánh dấu cần gán lại; thông báo theo BR-QT-11 (khách: lễ tân các chi nhánh có việc dở — 06 Q2); ghi audit. |
-| Mở khóa tài khoản | A03 | Chỉ ADMIN | is_locked true → false (Tài khoản#8) | — | status giữ nguyên giá trị trước khi khóa; ghi audit. |
+| Khóa tài khoản | A03 | Chỉ ADMIN; không khóa chính mình | is_locked false → true (Tài khoản#7) | — | Mọi role, mọi trạng thái (kể cả PENDING, DISABLED) trừ chính mình; status giữ nguyên (BR-QT-12). Hủy mọi phiên; pendingWork sắp theo thứ tự enum rồi entityId (Visit IN_PROGRESS → needsReassign); phát AccountLockedEvent; thông báo trong app theo BR-QT-11 (nhân viên A06–A08: BRANCH_MANAGER chi nhánh, không còn thì SUPER_MANAGER; BRANCH_MANAGER: SUPER_MANAGER, quản lý cuối của chi nhánh ACTIVE → LAST_BRANCH_MANAGER_LOCKED_APP; khách: lễ tân các chi nhánh có việc dở — 06 Q2); ghi audit kèm lý do (docs/adr/0035). |
+| Mở khóa tài khoản | A03 | Chỉ ADMIN | is_locked true → false (Tài khoản#8) | — | status giữ nguyên giá trị trước khi khóa (BR-QT-12); giữ lý do khóa gần nhất; không mở phiên, không thông báo; ghi audit kèm lý do (docs/adr/0035). |
 | Danh sách tham số [CFG] | A03 | Chỉ ADMIN | — | — | — |
 | Sửa tham số | A03 | Chỉ ADMIN | — | — | Chỉ áp dụng cho giao dịch tạo sau; ghi audit. |
 | Danh sách mẫu thông báo | A03 | Chỉ ADMIN | — | — | — |
@@ -143,8 +143,8 @@
 ### Accounts
 
 - **`GET /accounts`** — Tìm tài khoản (khách và nhân viên). Query: `q?`, `role?`, `isLocked?`, `page?`, `size?`. Response `200` trang `AccountSummary`. Lỗi: `401` · `403`.
-- **`POST /accounts/{id}/lock`** — Khóa tài khoản. Request `ReasonRequest`. Response `200` `LockResult`. Lỗi: `400` Thiếu lý do · khóa chính mình · `401` · `403` · `404` · `409` Đã bị khóa.
-- **`POST /accounts/{id}/unlock`** — Mở khóa tài khoản. Request `ReasonRequest`. Response `200` `AccountSummary`. Lỗi: `400` · `401` · `403` · `404` · `409` Không bị khóa.
+- **`POST /accounts/{id}/lock`** — Khóa tài khoản. Request `ReasonRequest`. Response `200` `LockResult`. Lỗi: `400` Thiếu lý do (`VALIDATION_FAILED`) · `BR-QT-11` khóa chính mình · `401` · `403` · `404` · `409` `INVALID_STATE_TRANSITION` đã bị khóa · `CONCURRENCY_CONFLICT` chức vụ / chi nhánh của người bị khóa vừa đổi.
+- **`POST /accounts/{id}/unlock`** — Mở khóa tài khoản. Request `ReasonRequest`. Response `200` `AccountSummary`. Lỗi: `400` Thiếu lý do (`VALIDATION_FAILED`) · `401` · `403` · `404` · `409` `INVALID_STATE_TRANSITION` không bị khóa.
 ### Configuration
 
 - **`GET /system-configs`** — Danh sách tham số [CFG]. Response `200` mảng `SystemConfig`. Lỗi: `401` · `403`.
