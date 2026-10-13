@@ -165,8 +165,8 @@ m.schema("NotificationTemplate", {
     "allowedVars": "array:string", "requiredVars": "array:string",
     "isDefault": "bool|Nội dung đang trùng bản mặc định",
 })
-m.schema("UpdateTemplateRequest", {"subject": "string:255?", "body": "string|Chỉ dùng biến trong allowedVars, đủ requiredVars (BR-QT-14)"},
-         required=["body"])
+m.schema("UpdateTemplateRequest", {"subject": "string:255|Bắt buộc với mọi kênh (docs/adr/0037)", "body": "string|Chỉ dùng biến trong allowedVars, đủ requiredVars (BR-QT-14)"},
+         required=["subject", "body"])
 m.schema("AuditLogEntry", {
     "id": "int64", "actorAccountId": "int64?", "actorEmail": "string?", "action": "string",
     "entityType": "string?", "entityId": "int64?", "beforeData": "object?", "afterData": "object?",
@@ -352,15 +352,17 @@ m.op("put", "/system-configs/{key}", "updateSystemConfig", "Sửa tham số", "C
      errors=(400, 401, 403, 404), err_desc={400: "`BR-QT-13` ngoài khoảng hợp lệ, message ghi khoảng cho phép"},
      notes="Thứ tự kiểm: hình thức → quyền → key lạ 404 → kiểu / min–max / ràng buộc chéo (400 BR-QT-13, message ghi khoảng cho phép thực tế; sai kiểu cũng BR-QT-13) → trùng giá trị hiện tại (sau chuẩn hóa, ví dụ 05 = 5) → 200 không ghi, không audit. Ràng buộc chéo: visit.late_priority_minutes < appointment.no_show_after_minutes, boarding.min_nights ≤ boarding.max_nights. value được chuẩn hóa (INT bỏ số 0 đầu, TIME dạng HH:mm, DECIMAL không dạng mũ). Có hiệu lực cho mọi giao dịch tạo sau khi response trả về; ghi audit SYSTEM_CONFIG_UPDATED (docs/adr/0036).")
 m.op("get", "/notification-templates", "listNotificationTemplates", "Danh sách mẫu thông báo", "Configuration",
-     "UC10", "BR-QT-14", "A03", "Chỉ ADMIN", resp="array:NotificationTemplate", errors=(401, 403))
+     "UC10", "BR-QT-14", "A03", "Chỉ ADMIN", resp="array:NotificationTemplate", errors=(401, 403),
+     notes="Mọi mẫu, sắp theo code; subject / body là bản đang dùng; isDefault = cả hai trùng từng ký tự với bản mặc định (docs/adr/0037).")
 m.op("put", "/notification-templates/{code}", "updateNotificationTemplate", "Sửa nội dung mẫu", "Configuration",
      "UC10", "BR-QT-14, 15", "A03", "Chỉ ADMIN", body="UpdateTemplateRequest", resp="NotificationTemplate",
      path_params=["TemplateCode"], errors=(400, 401, 403, 404),
-     err_desc={400: "`BR-QT-14` dùng biến không tồn tại hoặc thiếu biến bắt buộc (message chỉ rõ biến)"},
-     notes="Không có endpoint thêm / xóa mẫu.")
+     err_desc={400: "`VALIDATION_FAILED` thiếu / rỗng subject hoặc body, subject quá 255 · `BR-QT-14` dùng biến không tồn tại, dấu { } lẻ hoặc thiếu biến bắt buộc (message nêu đủ mọi biến lỗi)"},
+     notes="Thứ tự kiểm: hình thức → quyền → code lạ 404 → biến (BR-QT-14). Ngữ pháp chặt: dấu ngoặc nhọn chỉ dùng để viết {ten} với ten thuộc allowedVars (phân biệt hoa thường); biến bắt buộc tính trên subject ∪ body. Lưu nguyên văn (không cắt khoảng trắng, không đổi xuống dòng). Trùng nội dung hiện tại → 200, không ghi nhưng vẫn audit (before = after). Có hiệu lực từ lần gửi đọc mẫu sau khi response trả về, kể cả thông báo đã xếp hàng. Audit NOTIFICATION_TEMPLATE_UPDATED. Không có endpoint thêm / xóa mẫu (docs/adr/0037).")
 m.op("post", "/notification-templates/{code}/restore-default", "restoreNotificationTemplate", "Khôi phục mẫu mặc định",
      "Configuration", "UC10", "BR-QT-14, 15", "A03", "Chỉ ADMIN", resp="NotificationTemplate",
-     path_params=["TemplateCode"], errors=(401, 403, 404))
+     path_params=["TemplateCode"], errors=(401, 403, 404),
+     notes="Chép bản mặc định sang bản đang dùng. Đã là mặc định → 200, không ghi nhưng vẫn audit (before = after). Audit NOTIFICATION_TEMPLATE_RESTORED (docs/adr/0037).")
 
 m.op("get", "/audit-logs", "listAuditLogs", "Xem nhật ký audit", "Audit", "UC11", "BR-QT-15, 16", "A03", "Chỉ ADMIN",
      resp="AuditLogEntry", page=True, errors=(400, 401, 403),

@@ -77,6 +77,20 @@ public final class QtAuditActions {
      */
     public static final String SYSTEM_CONFIG_UPDATED = "SYSTEM_CONFIG_UPDATED";
 
+    /**
+     * ADMIN sửa nội dung một mẫu thông báo (UC10, BR-QT-14, 15; docs/adr/0037). {@code entity = notification_templates},
+     * không có {@code entityId} (PK là chuỗi); {@code before}, {@code after} = {@code code, subject, body} (nguyên văn).
+     * Gửi trùng nội dung hiện tại vẫn audit, {@code before} = {@code after} (BR-QT-15 "mọi thao tác" — khác
+     * {@link #SYSTEM_CONFIG_UPDATED}).
+     */
+    public static final String NOTIFICATION_TEMPLATE_UPDATED = "NOTIFICATION_TEMPLATE_UPDATED";
+
+    /**
+     * ADMIN khôi phục mẫu thông báo về bản mặc định (UC10, BR-QT-14, 15; docs/adr/0037). Snapshot như
+     * {@link #NOTIFICATION_TEMPLATE_UPDATED}; mẫu đã là mặc định vẫn audit, {@code before} = {@code after}.
+     */
+    public static final String NOTIFICATION_TEMPLATE_RESTORED = "NOTIFICATION_TEMPLATE_RESTORED";
+
     private QtAuditActions() {
     }
 }

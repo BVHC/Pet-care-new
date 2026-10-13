@@ -1410,7 +1410,7 @@ paths:
     get:
       tags: [Configuration]
       summary: "Danh sách mẫu thông báo"
-      description: "UC10 · BR-QT-14. Actor: A03. Quyền: Chỉ ADMIN. Chuyển trạng thái: —."
+      description: "UC10 · BR-QT-14. Actor: A03. Quyền: Chỉ ADMIN. Chuyển trạng thái: —. Mọi mẫu, sắp theo code; subject / body là bản đang dùng; isDefault = cả hai trùng từng ký tự với bản mặc định (docs/adr/0037)."
       operationId: listNotificationTemplates
       security:
         - bearerAuth: []
@@ -1440,7 +1440,7 @@ paths:
     put:
       tags: [Configuration]
       summary: "Sửa nội dung mẫu"
-      description: "UC10 · BR-QT-14, 15. Actor: A03. Quyền: Chỉ ADMIN. Chuyển trạng thái: —. Không có endpoint thêm / xóa mẫu."
+      description: "UC10 · BR-QT-14, 15. Actor: A03. Quyền: Chỉ ADMIN. Chuyển trạng thái: —. Thứ tự kiểm: hình thức → quyền → code lạ 404 → biến (BR-QT-14). Ngữ pháp chặt: dấu ngoặc nhọn chỉ dùng để viết {ten} với ten thuộc allowedVars (phân biệt hoa thường); biến bắt buộc tính trên subject ∪ body. Lưu nguyên văn (không cắt khoảng trắng, không đổi xuống dòng). Trùng nội dung hiện tại → 200, không ghi nhưng vẫn audit (before = after). Có hiệu lực từ lần gửi đọc mẫu sau khi response trả về, kể cả thông báo đã xếp hàng. Audit NOTIFICATION_TEMPLATE_UPDATED. Không có endpoint thêm / xóa mẫu (docs/adr/0037)."
       operationId: updateNotificationTemplate
       security:
         - bearerAuth: []
@@ -1469,7 +1469,7 @@ paths:
                     type: integer
                     description: "HTTP status của kết quả, ví dụ 200, 201"
         "400":
-          description: "`BR-QT-14` dùng biến không tồn tại hoặc thiếu biến bắt buộc (message chỉ rõ biến)"
+          description: "`VALIDATION_FAILED` thiếu / rỗng subject hoặc body, subject quá 255 · `BR-QT-14` dùng biến không tồn tại, dấu { } lẻ hoặc thiếu biến bắt buộc (message nêu đủ mọi biến lỗi)"
           content:
             "application/json":
               schema:
@@ -1484,7 +1484,7 @@ paths:
     post:
       tags: [Configuration]
       summary: "Khôi phục mẫu mặc định"
-      description: "UC10 · BR-QT-14, 15. Actor: A03. Quyền: Chỉ ADMIN. Chuyển trạng thái: —."
+      description: "UC10 · BR-QT-14, 15. Actor: A03. Quyền: Chỉ ADMIN. Chuyển trạng thái: —. Chép bản mặc định sang bản đang dùng. Đã là mặc định → 200, không ghi nhưng vẫn audit (before = after). Audit NOTIFICATION_TEMPLATE_RESTORED (docs/adr/0037)."
       operationId: restoreNotificationTemplate
       security:
         - bearerAuth: []
@@ -2197,11 +2197,12 @@ components:
           description: "Nội dung đang trùng bản mặc định"
     UpdateTemplateRequest:
       type: object
-      required: [body]
+      required: [subject, body]
       properties:
         subject:
-          type: [string, "null"]
+          type: string
           maxLength: 255
+          description: "Bắt buộc với mọi kênh (docs/adr/0037)"
         body:
           type: string
           description: "Chỉ dùng biến trong allowedVars, đủ requiredVars (BR-QT-14)"
