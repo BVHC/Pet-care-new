@@ -21,6 +21,13 @@ spring:
         # appointments) bị lưu lệch giờ khi JVM không chạy UTC (08:00 thành 00:00 ở Asia/Ho_Chi_Minh). TIMESTAMPTZ
         # lưu Instant nên không cần cấu hình này (EntityTimestampsIT, AuditRecorderIT chạy ở Asia/Ho_Chi_Minh).
 
+  # Không ép số thực thành số nguyên khi đọc JSON (docs/adr/0032): mặc định Jackson đọc {"branchId": 1.9} thành 1
+  # (ACCEPT_FLOAT_AS_INT). Tắt đi thì số thực vào trường int/long/Integer/Long → 400 MALFORMED_REQUEST. Trường
+  # BigDecimal / double không bị ảnh hưởng.
+  jackson:
+    deserialization:
+      accept-float-as-int: false
+
   # Flyway sở hữu schema (db/migration/V{n}__*.sql). Không bật baseline-on-migrate:
   # DB đã có bảng mà chưa có lịch sử Flyway phải báo lỗi, không được âm thầm bỏ qua V1.
   flyway:

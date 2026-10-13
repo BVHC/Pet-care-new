@@ -56,6 +56,18 @@ public class OtpService {
         }
     }
 
+    /**
+     * Mã còn hiệu lực của một tài khoản, tra không cần email ({@link #findActiveForAccount}, docs/adr/0034):
+     * {@code targetEmail} là email nhận mã đọc từ chính dòng mã. Không có email / hash trong log.
+     */
+    public record AccountBoundOtp(Long id, String targetEmail, String codeHash) {
+
+        @Override
+        public String toString() {
+            return "AccountBoundOtp[id=" + id + ", targetEmail=***, codeHash=***]";
+        }
+    }
+
     private static final SecureRandom RANDOM = new SecureRandom();
     /** Câu báo lỗi của BR-TK-05 ("Xử lý khi vi phạm"); dùng chung cho mã sai, hết hạn, không còn mã. */
     static final String INVALID_OTP_MESSAGE = "OTP không đúng hoặc đã hết hạn";
@@ -138,9 +150,9 @@ public class OtpService {
     /**
      * Bản có hồ sơ cần liên kết ({@code LINK_PROFILE}, BR-TK-19 — docs/adr/0025): {@code customerId} bắt buộc với
      * {@code LINK_PROFILE}, cấm với mục đích khác (lỗi lập trình → {@link IllegalArgumentException} trước mọi lệnh ghi).
-     * Với {@code LINK_PROFILE} mã cũ bị hủy theo <b>tài khoản</b> thay vì theo email: tài khoản khác xin mã cho cùng hồ sơ
-     * không hủy được mã của tài khoản này, và mọi lệnh ghi lên mã của tài khoản nằm dưới khóa dòng {@code accounts} của
-     * chính nó (docs/adr/0011).
+     * Mục đích có {@link OtpPurpose#invalidatesPerAccount()} ({@code LINK_PROFILE}, {@code CHANGE_EMAIL} — docs/adr/0034)
+     * hủy mã cũ theo <b>tài khoản</b> thay vì theo email: tài khoản khác xin mã tới cùng email không hủy được mã của tài
+     * khoản này, và mọi lệnh ghi lên mã của tài khoản nằm dưới khóa dòng {@code accounts} của chính nó (docs/adr/0011).
      */
     @Transactional(propagation = Propagation.MANDATORY)
     public IssuedOtp issuePrepared(Long accountId, OtpPurpose purpose, String targetEmail, Long customerId,
@@ -150,7 +162,7 @@ public class OtpService {
         Duration interval = Duration.ofSeconds(configs.getInt(ConfigKey.OTP_RESEND_INTERVAL_SECONDS));
         checkSendQuota(targetEmail, now, interval);
 
-        if (customerId != null) {
+        if (purpose.invalidatesPerAccount()) {
             otps.invalidateActiveForAccount(accountId, purpose, now);
         } else {
             otps.invalidateActive(targetEmail, purpose, now);
@@ -177,6 +189,22 @@ public class OtpService {
         checkCustomerMatchesPurpose(purpose, customerId);
         return findLatestActive(accountId, purpose, targetEmail, customerId)
                 .map(otp -> new ActiveOtp(otp.getId(), otp.getCodeHash(), otp.getExpiresAt()));
+    }
+
+    /**
+     * Bước đọc không khóa của sửa email (docs/adr/0034): mã còn hiệu lực mới nhất của tài khoản, kèm email nhận mã — body
+     * xác nhận chỉ có {@code code}. Chỉ cho mục đích hủy mã theo tài khoản và không gắn hồ sơ ({@code CHANGE_EMAIL}): khi
+     * đó mỗi tài khoản tối đa một mã còn sống nên kết quả duy nhất. Mục đích khác là lỗi lập trình →
+     * {@link IllegalArgumentException} trước mọi lệnh đọc. Chưa lọc hết hạn — {@link #settleCheckedOtp} kiểm dưới khóa.
+     */
+    @Transactional(propagation = Propagation.MANDATORY)
+    public Optional<AccountBoundOtp> findActiveForAccount(Long accountId, OtpPurpose purpose) {
+        if (!purpose.invalidatesPerAccount() || purpose == OtpPurpose.LINK_PROFILE) {
+            throw new IllegalArgumentException("findActiveForAccount chỉ dùng cho mục đích hủy mã theo tài khoản, không"
+                    + " gắn hồ sơ: purpose=" + purpose);
+        }
+        return otps.findTopByAccountIdAndPurposeAndConsumedAtIsNullAndInvalidatedAtIsNullOrderByIdDesc(accountId, purpose)
+                .map(otp -> new AccountBoundOtp(otp.getId(), otp.getTargetEmail(), otp.getCodeHash()));
     }
 
     /**

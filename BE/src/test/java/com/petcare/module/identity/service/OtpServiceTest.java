@@ -425,6 +425,75 @@ class OtpServiceTest {
         assertThat(otp.getConsumedAt()).isEqualTo(NOW);
     }
 
+    // --- CHANGE_EMAIL: mã gắn tài khoản + email mới, hủy mã cũ theo tài khoản (docs/adr/0034) ---
+
+    @Test
+    void invalidatesPerAccountOnlyForLinkProfileAndChangeEmail() {
+        assertThat(OtpPurpose.REGISTER.invalidatesPerAccount()).isFalse();
+        assertThat(OtpPurpose.RESET_PASSWORD.invalidatesPerAccount()).isFalse();
+        assertThat(OtpPurpose.CHANGE_EMAIL.invalidatesPerAccount()).isTrue();
+        assertThat(OtpPurpose.LINK_PROFILE.invalidatesPerAccount()).isTrue();
+    }
+
+    @Test
+    void issuePreparedForChangeEmailInvalidatesOnlyOwnAccountCodesAfterQuota() {
+        OtpService.PreparedOtp prepared = new OtpService.PreparedOtp("135790", encoder.encode("135790"));
+
+        IssuedOtp issued = service.issuePrepared(9L, OtpPurpose.CHANGE_EMAIL, EMAIL, prepared);
+
+        InOrder order = inOrder(otps);
+        order.verify(otps).findTopByTargetEmailOrderByCreatedAtDesc(EMAIL);
+        order.verify(otps).countByTargetEmailAndCreatedAtAfter(eq(EMAIL), any());
+        order.verify(otps).invalidateActiveForAccount(9L, OtpPurpose.CHANGE_EMAIL, NOW);
+        order.verify(otps).save(any(OtpToken.class));
+        verify(otps, never()).invalidateActive(anyString(), any(), any());
+        assertThat(saved().getAccountId()).isEqualTo(9L);
+        assertThat(saved().getTargetEmail()).isEqualTo(EMAIL);
+        assertThat(saved().getCustomerId()).isNull();
+        assertThat(saved().getPurpose()).isEqualTo(OtpPurpose.CHANGE_EMAIL);
+        assertThat(issued.code()).isEqualTo("135790");
+        assertThat(issued.resendAvailableAt()).isEqualTo(NOW.plusSeconds(60));
+    }
+
+    @Test
+    void changeEmailQuotaRejectionWritesNothing() {
+        when(otps.countByTargetEmailAndCreatedAtAfter(eq(EMAIL), any())).thenReturn(5L);
+
+        assertThatThrownBy(() -> service.issuePrepared(9L, OtpPurpose.CHANGE_EMAIL, EMAIL,
+                new OtpService.PreparedOtp("135790", "hash")))
+                .isInstanceOf(BusinessRuleViolationException.class).hasMessageEndingWith("(BR-TK-07)");
+        verify(otps, never()).invalidateActiveForAccount(any(), any(), any());
+        verify(otps, never()).save(any());
+    }
+
+    @Test
+    void findActiveForAccountReturnsLatestOpenCodeWithItsTargetEmail() {
+        OtpToken otp = new OtpToken(9L, OtpPurpose.CHANGE_EMAIL, "moi@petcare.test", "hash-moi",
+                NOW.plusSeconds(300));
+        ReflectionTestUtils.setField(otp, "id", 52L);
+        when(otps.findTopByAccountIdAndPurposeAndConsumedAtIsNullAndInvalidatedAtIsNullOrderByIdDesc(9L,
+                OtpPurpose.CHANGE_EMAIL)).thenReturn(Optional.of(otp));
+
+        assertThat(service.findActiveForAccount(9L, OtpPurpose.CHANGE_EMAIL))
+                .contains(new OtpService.AccountBoundOtp(52L, "moi@petcare.test", "hash-moi"));
+        assertThat(service.findActiveForAccount(9L, OtpPurpose.CHANGE_EMAIL).orElseThrow().toString())
+                .doesNotContain("moi@petcare.test").doesNotContain("hash-moi");
+        when(otps.findTopByAccountIdAndPurposeAndConsumedAtIsNullAndInvalidatedAtIsNullOrderByIdDesc(10L,
+                OtpPurpose.CHANGE_EMAIL)).thenReturn(Optional.empty());
+        assertThat(service.findActiveForAccount(10L, OtpPurpose.CHANGE_EMAIL)).isEmpty();
+    }
+
+    @Test
+    void findActiveForAccountRejectsOtherPurposesBeforeAnyRead() {
+        for (OtpPurpose purpose : new OtpPurpose[] {OtpPurpose.REGISTER, OtpPurpose.RESET_PASSWORD,
+                OtpPurpose.LINK_PROFILE}) {
+            assertThatThrownBy(() -> service.findActiveForAccount(9L, purpose))
+                    .isInstanceOf(IllegalArgumentException.class);
+        }
+        verify(otps, never()).findTopByAccountIdAndPurposeAndConsumedAtIsNullAndInvalidatedAtIsNullOrderByIdDesc(
+                any(), any());
+    }
+
     private OtpToken linkOtp(long id, long customerId, String code, Instant expiresAt) {
         OtpToken otp = new OtpToken(9L, OtpPurpose.LINK_PROFILE, EMAIL, customerId, encoder.encode(code), expiresAt);
         ReflectionTestUtils.setField(otp, "id", id);

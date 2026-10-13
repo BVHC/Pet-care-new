@@ -3,11 +3,15 @@ package com.petcare.module.identity.fsm;
 import static com.petcare.module.identity.entity.AccountStatus.ACTIVE;
 import static com.petcare.module.identity.entity.AccountStatus.DISABLED;
 import static com.petcare.module.identity.entity.AccountStatus.PENDING;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 import java.util.Map;
 import java.util.Set;
 
+import org.junit.jupiter.api.Test;
+
 import com.petcare.module.identity.entity.AccountStatus;
+import com.petcare.platform.exception.InvalidStateTransitionException;
 import com.petcare.platform.fsm.FsmTransitionTestBase;
 import com.petcare.platform.fsm.StateMachineBase;
 
@@ -38,5 +42,15 @@ class AccountTransitionHandlerTest extends FsmTransitionTestBase<AccountStatus> 
     @Override
     protected Set<AccountStatus> expectedInitialStates() {
         return Set.of(PENDING, ACTIVE);         // #1, #4
+    }
+
+    /** Message 409 mà client nhận dùng tên nghiệp vụ, không lộ tên lớp (docs/adr/0033). */
+    @Test
+    void rejectedTransitionMessageNamesAccountNotHandlerClass() {
+        assertThatThrownBy(() -> new AccountTransitionHandler().validateTransition(DISABLED, DISABLED))
+                .isInstanceOf(InvalidStateTransitionException.class)
+                .hasMessage("Không thể chuyển trạng thái tài khoản từ DISABLED sang DISABLED");
+        assertThatThrownBy(() -> new AccountTransitionHandler().validateInitial(DISABLED))
+                .hasMessage("Không thể chuyển trạng thái tài khoản từ — sang DISABLED");
     }
 }

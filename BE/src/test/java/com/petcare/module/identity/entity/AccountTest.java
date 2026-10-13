@@ -214,6 +214,64 @@ class AccountTest {
         assertThat(customer.getPhone()).isNull();
     }
 
+    // ---------------------------------------------------------------- khóa / mở khóa (Tài khoản#7, #8; docs/adr/0035)
+
+    @Test
+    void lockSetsFlagReasonAndOfflineButKeepsStatusPasswordAndTemporaryLock() {
+        Account account = staff("0901234567");
+        ReflectionTestUtils.setField(account, "status", AccountStatus.DISABLED);
+        ReflectionTestUtils.setField(account, "lastSeenAt", T0);
+        ReflectionTestUtils.setField(account, "lockedUntil", T0.plus(LOCK));
+        ReflectionTestUtils.setField(account, "mustChangePassword", true);
+
+        account.lock("Spam feedback");
+
+        assertThat(account.isLocked()).isTrue();
+        assertThat(account.getLockedReason()).isEqualTo("Spam feedback");
+        assertThat(account.getLastSeenAt()).isNull();
+        assertThat(account.getStatus()).isEqualTo(AccountStatus.DISABLED);
+        assertThat(account.getPasswordHash()).isEqualTo("hash");
+        assertThat(account.getLockedUntil()).isEqualTo(T0.plus(LOCK));
+        assertThat(account.isMustChangePassword()).isTrue();
+    }
+
+    @Test
+    void lockAppliesToPendingCustomerToo() {
+        Account customer = account();
+
+        customer.lock("Đặt lịch ảo");
+
+        assertThat(customer.isLocked()).isTrue();
+        assertThat(customer.getStatus()).isEqualTo(AccountStatus.PENDING);
+    }
+
+    @Test
+    void lockTwiceOrWithoutReasonIsProgrammingError() {
+        Account account = staff("0901234567");
+        assertThatThrownBy(() -> account.lock("  ")).isInstanceOf(IllegalArgumentException.class)
+                .hasMessageContaining("BR-QT-11");
+        assertThatThrownBy(() -> account.lock(null)).isInstanceOf(IllegalArgumentException.class);
+        assertThat(account.isLocked()).isFalse();
+
+        account.lock("Lần đầu");
+        assertThatThrownBy(() -> account.lock("Lần hai")).isInstanceOf(IllegalStateException.class);
+        assertThat(account.getLockedReason()).isEqualTo("Lần đầu");
+    }
+
+    @Test
+    void unlockClearsFlagOnlyKeepingStatusAndLastReason() {
+        Account account = staff("0901234567");
+        ReflectionTestUtils.setField(account, "status", AccountStatus.DISABLED);
+        account.lock("Vi phạm");
+
+        account.unlock();
+
+        assertThat(account.isLocked()).isFalse();
+        assertThat(account.getStatus()).isEqualTo(AccountStatus.DISABLED);
+        assertThat(account.getLockedReason()).isEqualTo("Vi phạm");
+        assertThatThrownBy(account::unlock).isInstanceOf(IllegalStateException.class);
+    }
+
     private static Account staff(String phone) {
         Account account = account();
         ReflectionTestUtils.setField(account, "role", Role.VET);

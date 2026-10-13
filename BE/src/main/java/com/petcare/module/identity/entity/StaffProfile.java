@@ -41,6 +41,47 @@ public class StaffProfile extends TimestampedEntity {
     private String bio;
 
     /**
+     * Tài khoản#4 — hồ sơ của tài khoản nhân viên vừa tạo (UC08; docs/adr/0030). {@code branchId} là chi nhánh hiệu
+     * lực, service đã kiểm BR-QT-03 ({@code null} với SUPER_MANAGER, bắt buộc với A05–A08). Ảnh, chuyên môn, mô tả để
+     * trống: nhân viên tự điền (UC06).
+     */
+    public static StaffProfile create(Long accountId, String fullName, Long branchId) {
+        if (accountId == null) {
+            throw new IllegalArgumentException("account_id is required");
+        }
+        if (fullName == null || fullName.isBlank()) {
+            throw new IllegalArgumentException("full_name is required");
+        }
+        StaffProfile profile = new StaffProfile();
+        profile.accountId = accountId;
+        profile.fullName = fullName;
+        profile.branchId = branchId;
+        return profile;
+    }
+
+    /**
+     * UC08 — điều chuyển nhân viên sang chi nhánh khác (BR-QT-03, 06; docs/adr/0031). Chỉ đổi {@code branch_id};
+     * dữ liệu lịch sử ở các bảng khác giữ chi nhánh của chúng. Caller giữ khóa {@code branches} (nguồn và đích) rồi khóa
+     * {@code accounts} trước khi đọc hồ sơ này, đã kiểm phân cấp, chi nhánh đích tồn tại, BR-QT-04 và BR-QT-08.
+     */
+    public void transferTo(Long newBranchId) {
+        if (newBranchId == null) {
+            throw new IllegalArgumentException("branch_id is required for branch staff (BR-QT-03)");
+        }
+        this.branchId = newBranchId;
+    }
+
+    /**
+     * UC08 — VET đổi sang chức vụ khác: xóa chuyên môn và mô tả ngắn, hai trường chỉ dành cho VET (BR-TK-20;
+     * docs/adr/0031). Người đó không còn tự sửa được hai trường này ({@code PATCH /me/staff-profile} → 403), nên không
+     * để lại. Ảnh đại diện giữ nguyên.
+     */
+    public void clearVetProfile() {
+        this.specialty = null;
+        this.bio = null;
+    }
+
+    /**
      * UC06 — nhân viên tự sửa hồ sơ (BR-TK-15, 20; docs/adr/0026). Nhận <b>giá trị cuối</b> của cả bốn trường: service
      * đã quyết giữ / xóa / đổi và kiểm phạm vi (chỉ VET sửa {@code specialty}, {@code bio}) cùng độ dài [CFG]; ở đây
      * không đoán {@code null} hay chuỗi rỗng. {@code branchId} không đổi được ở đây (điều chuyển là UC08). Caller giữ

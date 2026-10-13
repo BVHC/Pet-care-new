@@ -1,9 +1,12 @@
 package com.petcare.module.identity.repository;
 
 import java.time.Instant;
+import java.util.Collection;
 import java.util.List;
 import java.util.Optional;
 
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Lock;
 import org.springframework.data.jpa.repository.Modifying;
@@ -147,4 +150,34 @@ public interface AccountRepository extends JpaRepository<Account, Long> {
     /** {@code StaffDirectoryApi.findEmail}: mọi trạng thái, mọi role. Projection, không nạp entity. */
     @Query("SELECT a.email FROM Account a WHERE a.id = :id")
     Optional<String> findEmailById(@Param("id") Long id);
+
+    /**
+     * Khóa tài khoản (identity-v1 #29, docs/adr/0035), bước đọc <b>không khóa</b> trước khi khóa: chỉ role, để biết có
+     * phải khóa dòng {@code branches} trước không (BRANCH_MANAGER). Projection vô hướng, không nạp entity — nếu nạp,
+     * {@link #findByIdForUpdate} sau đó trả lại instance cũ (docs/adr/0029 mục 4).
+     */
+    @Query("SELECT a.role FROM Account a WHERE a.id = :id")
+    Optional<Role> findRoleById(@Param("id") Long id);
+
+    /**
+     * identity-v1 #28 (docs/adr/0035): mọi tài khoản (khách và nhân viên, mọi trạng thái). {@code roles},
+     * {@code lockedValues} luôn khác rỗng (service điền đủ khi không lọc — tránh tham số enum/boolean {@code null} trong
+     * {@code IS NULL}); {@code pattern} là chuỗi LIKE đã chữ thường, escape bằng {@code !} như
+     * {@code StaffProfileRepository.findStaffPage} ({@code %} khi không tìm). Sắp theo {@code id}; trang và tổng là hai
+     * câu riêng (READ COMMITTED).
+     */
+    @Query(value = """
+            SELECT new com.petcare.module.identity.repository.AccountSummaryRow(
+                a.id, a.email, a.role, a.status, a.locked, a.mustChangePassword)
+            FROM Account a
+            WHERE a.role IN :roles AND a.locked IN :lockedValues AND LOWER(a.email) LIKE :pattern ESCAPE '!'
+            ORDER BY a.id
+            """,
+            countQuery = """
+            SELECT COUNT(a) FROM Account a
+            WHERE a.role IN :roles AND a.locked IN :lockedValues AND LOWER(a.email) LIKE :pattern ESCAPE '!'
+            """)
+    Page<AccountSummaryRow> findAccountPage(@Param("roles") Collection<Role> roles,
+            @Param("lockedValues") Collection<Boolean> lockedValues, @Param("pattern") String pattern,
+            Pageable pageable);
 }

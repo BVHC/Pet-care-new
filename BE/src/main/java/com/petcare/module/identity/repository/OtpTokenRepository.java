@@ -42,6 +42,14 @@ public interface OtpTokenRepository extends JpaRepository<OtpToken, Long> {
     Optional<OtpToken> findTopByAccountIdAndPurposeAndTargetEmailAndCustomerIdAndConsumedAtIsNullAndInvalidatedAtIsNullOrderByIdDesc(
             Long accountId, OtpPurpose purpose, String targetEmail, Long customerId);
 
+    /**
+     * Mã còn hiệu lực mới nhất của tài khoản cho mục đích hủy mã theo tài khoản ({@code CHANGE_EMAIL}, docs/adr/0034):
+     * mỗi tài khoản tối đa một mã còn sống nên kết quả duy nhất, và {@code target_email} đọc từ chính dòng mã (#24 chỉ
+     * gửi {@code code}). Dùng index {@code ix_otp_tokens_account_id} (V5).
+     */
+    Optional<OtpToken> findTopByAccountIdAndPurposeAndConsumedAtIsNullAndInvalidatedAtIsNullOrderByIdDesc(
+            Long accountId, OtpPurpose purpose);
+
     /** BR-TK-05: sinh mã mới thì mã cũ cùng mục đích, cùng email, chưa dùng mất hiệu lực ngay. */
     @Modifying(flushAutomatically = true)
     @Query("""
@@ -53,7 +61,8 @@ public interface OtpTokenRepository extends JpaRepository<OtpToken, Long> {
             @Param("now") Instant now);
 
     /**
-     * BR-TK-05 cho {@code LINK_PROFILE} (docs/adr/0025): mã mới chỉ hủy mã còn hiệu lực của <b>chính tài khoản đó</b>
+     * BR-TK-05 cho {@code LINK_PROFILE} (docs/adr/0025) và {@code CHANGE_EMAIL} (docs/adr/0034) — mọi mục đích có
+     * {@link OtpPurpose#invalidatesPerAccount()}: mã mới chỉ hủy mã còn hiệu lực của <b>chính tài khoản đó</b>
      * (mọi hồ sơ), không hủy mã tài khoản khác xin cho cùng email hồ sơ. Nhờ vậy mọi lệnh ghi lên mã của một tài khoản
      * đều nằm dưới khóa dòng {@code accounts} của tài khoản đó (docs/adr/0011). Dùng index {@code ix_otp_tokens_account_id}.
      */

@@ -176,6 +176,23 @@ class PendingAccountCleanupIT {
         assertThat(rows("accounts", "email", email)).isZero();
     }
 
+    /**
+     * docs/adr/0035 (a): ADMIN khóa tài khoản PENDING không cứu nó khỏi BR-TK-08 — ST02 không đọc {@code is_locked},
+     * vẫn xóa khi quá hạn.
+     */
+    @Test
+    void lockedPendingAccountIsStillPurged() {
+        String email = register();
+        long id = accountId(email);
+        jdbc.update("UPDATE accounts SET is_locked = true, locked_reason = 'Spam' WHERE id = ?", id);
+        clock.set(T0.plus(TTL));
+
+        job.run();
+
+        assertThat(rows("accounts", "id", id)).isZero();
+        assertThat(rows("customers", "account_id", id)).isZero();
+    }
+
     /** BR-TK-08 "để email có thể đăng ký lại"; verify sau khi bị xóa → 404. */
     @Test
     void emailCanRegisterAgainAndOldVerifyIsNotFoundAfterDeletion() {
