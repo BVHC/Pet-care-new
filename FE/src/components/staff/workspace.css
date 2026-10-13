@@ -291,3 +291,17 @@
   font-weight: 700;
   font-size: 0.85rem;
 }
+
+/* Inside the staff shell, back-office pages draw with the workspace palette, light and dark.
+   On :root so portalled dialogs and sheets follow; (0,2,0) beats `.dark`, and --ws-* switch with `.dark` by themselves. */
+:root[data-staff-shell] {
+  --bg-primary: var(--ws-surface);
+  --bg-elevated: var(--ws-surface);
+  --bg-secondary: var(--ws-raised);
+  --bg-tertiary: var(--ws-line);
+  --text-primary: var(--ws-ink);
+  --text-secondary: var(--ws-ink-2);
+  --text-tertiary: var(--ws-ink-3);
+  --border-color: var(--ws-line);
+  --border-subtle: var(--ws-raised);
+}

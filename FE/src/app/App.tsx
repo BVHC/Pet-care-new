@@ -1,5 +1,5 @@
 import { lazy } from 'react';
-import { Routes, Route, Navigate } from 'react-router-dom';
+import { Routes, Route, Navigate, useLocation } from 'react-router-dom';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { Toaster } from 'sonner';
 import { GlobalModal } from './GlobalModal';
@@ -42,15 +42,15 @@ import { ROUTES } from '../shared/constants/routes';
 import { useAccount, useSession } from '../shared/stores/session.store';
 import { ALL_ROLES, STAFF_ROLES } from '../shared/types/auth';
 
-// Staff workspaces (lazy: each workspace is its own chunk)
-import { WorkspaceLayout } from '../components/staff/WorkspaceLayout';
+// Staff area: one frame (StaffShell) for the workspaces and the back office; workspaces are lazy chunks
+import { StaffShell } from '../components/staff/StaffShell';
+import { rolesForPath } from '../shared/constants/staff-menu';
 import { WORKSPACE_PATHS, WORKSPACE_ROLES, homePathFor } from '../shared/constants/workspaces';
 const ReceptionWorkspacePage = lazy(() => import('../pages/staff/ReceptionWorkspacePage').then((m) => ({ default: m.ReceptionWorkspacePage })));
 const DoctorWorkspacePage = lazy(() => import('../pages/staff/DoctorWorkspacePage').then((m) => ({ default: m.DoctorWorkspacePage })));
 const GroomingWorkspacePage = lazy(() => import('../pages/staff/GroomingWorkspacePage').then((m) => ({ default: m.GroomingWorkspacePage })));
 
 // Admin imports
-import { AdminLayout } from '../components/admin/AdminLayoutWrapper';
 import { AdminLoginPage } from '../pages/admin/AdminLoginPage';
 import { AdminDashboardPage } from '../pages/admin/AdminDashboardPage';
 import { AdminPOSPage } from '../pages/admin/AdminPOSPage';
@@ -89,9 +89,6 @@ useSession.subscribe((state, previous) => {
   if (state.account?.id !== previous.account?.id) queryClient.clear();
 });
 
-/** Nhân viên tuyến đầu: có ít nhất một bàn làm việc. */
-const FRONT_LINE_ROLES = [...new Set([...WORKSPACE_ROLES.reception, ...WORKSPACE_ROLES.doctor, ...WORKSPACE_ROLES.grooming])];
-
 /** /staff, /admin → trang đầu của role. */
 function StaffHome() {
   const account = useAccount();
@@ -103,6 +100,12 @@ const staffOnly = (roles: typeof STAFF_ROLES, page: React.ReactNode) => (
     {page}
   </RequireRole>
 );
+
+/** Trang /admin/*: role theo ADMIN_MENU (rolesForPath); 403 hiện trong khung, thanh bên vẫn còn. */
+function AdminGuard() {
+  const { pathname } = useLocation();
+  return <RequireRole roles={rolesForPath(pathname)} loginPath={ROUTES.staffLogin} />;
+}
 
 export function App() {
   return (
@@ -160,44 +163,42 @@ export function App() {
         <Route path="/auth/forgot" element={<ForgotPasswordPage />} />
         <Route path={ROUTES.changePassword} element={<ChangePasswordPage />} />
 
-        {/* Staff workspaces */}
+        {/* Khu nhân viên: một khung StaffShell cho bàn làm việc và trang quản trị */}
         <Route path="/staff" element={staffOnly(STAFF_ROLES, <StaffHome />)} />
-        <Route element={staffOnly(FRONT_LINE_ROLES, <WorkspaceLayout />)}>
+        <Route path="/admin" element={staffOnly(STAFF_ROLES, <StaffHome />)} />
+        <Route path={ROUTES.staffLogin} element={<AdminLoginPage />} />
+        <Route element={staffOnly(STAFF_ROLES, <StaffShell />)}>
           <Route path={WORKSPACE_PATHS.reception} element={staffOnly(WORKSPACE_ROLES.reception, <ReceptionWorkspacePage />)} />
           <Route path={WORKSPACE_PATHS.doctor} element={staffOnly(WORKSPACE_ROLES.doctor, <DoctorWorkspacePage />)} />
           <Route path={WORKSPACE_PATHS.grooming} element={staffOnly(WORKSPACE_ROLES.grooming, <GroomingWorkspacePage />)} />
-        </Route>
-
-        {/* Admin Routes */}
-        <Route path="/admin" element={staffOnly(STAFF_ROLES, <StaffHome />)} />
-        <Route path={ROUTES.staffLogin} element={<AdminLoginPage />} />
-        <Route element={<AdminLayout />}>
-          <Route path="/admin/dashboard" element={<AdminDashboardPage />} />
-          <Route path="/admin/profile" element={<StaffProfilePage />} />
-          <Route path="/admin/catalog/:tab?" element={<AdminCatalogPage />} />
-          <Route path="/admin/branches" element={<AdminBranchesPage />} />
-          <Route path="/admin/branches/:branchId/:tab?" element={<AdminBranchDetailPage />} />
-          <Route path="/admin/pos" element={<AdminPOSPage />} />
-          <Route path="/admin/appointments" element={<AdminAppointmentsPage />} />
-          <Route path="/admin/queue" element={<AdminQueuePage />} />
-          <Route path="/admin/exam" element={<AdminExamPage />} />
-          <Route path="/admin/vaccination" element={<AdminVaccinationPage />} />
-          <Route path="/admin/grooming" element={<AdminGroomingPage />} />
-          <Route path="/admin/orders" element={<AdminOrdersPage />} />
-          <Route path="/admin/invoices" element={<AdminInvoicesPage />} />
-          <Route path="/admin/payments" element={<AdminPaymentsPage />} />
-          <Route path="/admin/refunds" element={<AdminRefundsPage />} />
-          <Route path="/admin/promotions" element={<AdminPromotionsPage />} />
-          <Route path="/admin/membership" element={<AdminMembershipPage />} />
-          <Route path="/admin/warehouse" element={<AdminWarehousePage />} />
-          <Route path="/admin/purchasing" element={<AdminPurchasingPage />} />
-          <Route path="/admin/vaccines" element={<AdminVaccinesPage />} />
-          <Route path="/admin/workforce" element={<AdminWorkforcePage />} />
-          <Route path="/admin/incidents" element={<AdminIncidentsPage />} />
-          <Route path="/admin/reports" element={<AdminReportsPage />} />
-          <Route path="/admin/audit" element={<AdminAuditPage />} />
-          <Route path="/admin/users" element={<AdminUsersPage />} />
-          <Route path="/admin/ai" element={<AdminAIPage />} />
+          <Route element={<AdminGuard />}>
+            <Route path="/admin/dashboard" element={<AdminDashboardPage />} />
+            <Route path="/admin/profile" element={<StaffProfilePage />} />
+            <Route path="/admin/catalog/:tab?" element={<AdminCatalogPage />} />
+            <Route path="/admin/branches" element={<AdminBranchesPage />} />
+            <Route path="/admin/branches/:branchId/:tab?" element={<AdminBranchDetailPage />} />
+            <Route path="/admin/pos" element={<AdminPOSPage />} />
+            <Route path="/admin/appointments" element={<AdminAppointmentsPage />} />
+            <Route path="/admin/queue" element={<AdminQueuePage />} />
+            <Route path="/admin/exam" element={<AdminExamPage />} />
+            <Route path="/admin/vaccination" element={<AdminVaccinationPage />} />
+            <Route path="/admin/grooming" element={<AdminGroomingPage />} />
+            <Route path="/admin/orders" element={<AdminOrdersPage />} />
+            <Route path="/admin/invoices" element={<AdminInvoicesPage />} />
+            <Route path="/admin/payments" element={<AdminPaymentsPage />} />
+            <Route path="/admin/refunds" element={<AdminRefundsPage />} />
+            <Route path="/admin/promotions" element={<AdminPromotionsPage />} />
+            <Route path="/admin/membership" element={<AdminMembershipPage />} />
+            <Route path="/admin/warehouse" element={<AdminWarehousePage />} />
+            <Route path="/admin/purchasing" element={<AdminPurchasingPage />} />
+            <Route path="/admin/vaccines" element={<AdminVaccinesPage />} />
+            <Route path="/admin/workforce" element={<AdminWorkforcePage />} />
+            <Route path="/admin/incidents" element={<AdminIncidentsPage />} />
+            <Route path="/admin/reports" element={<AdminReportsPage />} />
+            <Route path="/admin/audit" element={<AdminAuditPage />} />
+            <Route path="/admin/users" element={<AdminUsersPage />} />
+            <Route path="/admin/ai" element={<AdminAIPage />} />
+          </Route>
         </Route>
       </Routes>
       <GlobalModal />

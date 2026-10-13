@@ -1,5 +1,5 @@
 import { test } from '@playwright/test';
-import { CARETAKER, DESK, VET, signIn, switchTo } from './session';
+import { CARETAKER, DESK, MANAGER, VET, signIn, switchTo } from './session';
 
 // Visual review only: SCREENS_DIR=<folder> npx playwright test screens
 const dir = process.env.SCREENS_DIR;
@@ -11,15 +11,26 @@ const sizes = [
   { name: 'phone', width: 390, height: 844 },
 ];
 
+const PAGES = [
+  ['reception', DESK, '/staff/reception'],
+  ['doctor', VET, '/staff/doctor'],
+  ['grooming', CARETAKER, '/staff/grooming'],
+  ['dashboard', MANAGER, '/admin/dashboard'],
+  ['branches', MANAGER, '/admin/branches'],
+] as const;
+
 for (const size of sizes) {
-  test(`workspaces at ${size.name}`, async ({ page }) => {
-    await page.setViewportSize({ width: size.width, height: size.height });
-    for (const [ws, owner] of [['reception', DESK], ['doctor', VET], ['grooming', CARETAKER]] as const) {
-      await switchTo(page, owner, `/staff/${ws}`);
-      await page.waitForTimeout(900);
-      await page.screenshot({ path: `${dir}/${ws}-${size.name}.png` });
-    }
-  });
+  for (const theme of ['light', 'dark'] as const) {
+    test(`staff pages at ${size.name}, ${theme}`, async ({ page }) => {
+      await page.addInitScript((t) => localStorage.setItem('theme', t), theme);
+      await page.setViewportSize({ width: size.width, height: size.height });
+      for (const [name, owner, path] of PAGES) {
+        await switchTo(page, owner, path);
+        await page.waitForTimeout(900);
+        await page.screenshot({ path: `${dir}/${name}-${size.name}-${theme}.png` });
+      }
+    });
+  }
 }
 
 test('vet view, dark, with a dialog', async ({ page }) => {

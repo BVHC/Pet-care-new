@@ -1,0 +1,111 @@
+import type { ElementType } from 'react';
+import {
+  Activity, BadgePercent, BarChart3, Bot, Boxes, Building2, CalendarClock, ClipboardList, Crown, ListOrdered,
+  Package, Receipt, Scale, Scissors, ShieldAlert, ShoppingBag, Stethoscope, Syringe, Tags, Truck, UserCog, Warehouse,
+} from 'lucide-react';
+import { STAFF_ROLES, type Role } from '../types/auth';
+import { WORKSPACE_LABELS, WORKSPACE_ROLES, workspaceForPath } from './workspaces';
+
+export interface MenuItem {
+  path: string;
+  label: string;
+  icon: ElementType;
+  roles: readonly Role[];
+  /** Trang cũ trùng việc với một bàn làm việc: không hiện trong menu; URL và quyền giữ nguyên tới T57. */
+  hidden?: true;
+}
+
+export interface MenuSection {
+  section: string;
+  items: MenuItem[];
+}
+
+// Role theo actor của UC (docs/01-business-operations.md). A03 ADMIN chỉ quản trị kỹ thuật.
+// Trang không có UC tương ứng ở v16 (đánh dấu "ngoài phạm vi") tạm để SUPER_MANAGER, gỡ ở T57.
+// Bàn làm việc và Tổng quan không nằm ở đây: thanh bên dựng nhóm đó từ WORKSPACE_*.
+export const ADMIN_MENU: MenuSection[] = [
+  {
+    section: 'Nghiệp vụ',
+    items: [
+      { path: '/admin/pos', label: 'Quầy POS', icon: ShoppingBag, roles: ['RECEPTIONIST', 'BRANCH_MANAGER'], hidden: true }, // UC66 — bàn Lễ tân
+      { path: '/admin/appointments', label: 'Lịch hẹn', icon: CalendarClock, roles: ['RECEPTIONIST'] }, // UC39, UC40
+      { path: '/admin/queue', label: 'Hàng chờ', icon: ListOrdered, roles: ['RECEPTIONIST', 'BRANCH_MANAGER', 'VET', 'CARETAKER'], hidden: true }, // UC45, UC46 — các bàn làm việc
+      { path: '/admin/exam', label: 'Khám & EMR', icon: Stethoscope, roles: ['VET'], hidden: true }, // UC48 — bàn Phòng khám
+      { path: '/admin/vaccination', label: 'Tiêm chủng', icon: Syringe, roles: ['VET'], hidden: true }, // UC49 — bàn Phòng khám
+      { path: '/admin/grooming', label: 'Grooming', icon: Scissors, roles: ['CARETAKER'], hidden: true }, // UC52 — bàn Grooming
+      { path: '/admin/orders', label: 'Đơn online', icon: Package, roles: ['RECEPTIONIST'] }, // UC65 (tầng 3)
+    ],
+  },
+  {
+    section: 'Thương mại',
+    items: [
+      { path: '/admin/invoices', label: 'Hóa đơn', icon: Receipt, roles: ['RECEPTIONIST', 'BRANCH_MANAGER'] }, // UC70, UC72
+      { path: '/admin/payments', label: 'Thanh toán', icon: Scale, roles: ['RECEPTIONIST', 'BRANCH_MANAGER'] }, // UC70–72
+      { path: '/admin/refunds', label: 'Hoàn tiền', icon: Scale, roles: ['RECEPTIONIST', 'BRANCH_MANAGER'] }, // UC68 (tầng 3)
+      { path: '/admin/promotions', label: 'Khuyến mãi', icon: BadgePercent, roles: ['SUPER_MANAGER'] }, // ngoài phạm vi
+      { path: '/admin/membership', label: 'Thành viên', icon: Crown, roles: ['SUPER_MANAGER'] }, // ngoài phạm vi
+    ],
+  },
+  {
+    section: 'Danh mục',
+    items: [
+      { path: '/admin/catalog', label: 'Sản phẩm & dịch vụ', icon: Tags, roles: ['SUPER_MANAGER'] }, // UC28–UC31
+    ],
+  },
+  {
+    section: 'Kho & Mua hàng',
+    items: [
+      { path: '/admin/warehouse', label: 'Kho hàng', icon: Warehouse, roles: ['BRANCH_MANAGER', 'RECEPTIONIST'] }, // UC75 (A06 chỉ xem), UC76
+      { path: '/admin/purchasing', label: 'Mua hàng', icon: Truck, roles: ['BRANCH_MANAGER'] }, // UC73, UC74
+      { path: '/admin/vaccines', label: 'Vaccine', icon: Boxes, roles: ['BRANCH_MANAGER', 'RECEPTIONIST'] }, // UC75
+    ],
+  },
+  {
+    section: 'Quản trị',
+    items: [
+      { path: '/admin/workforce', label: 'Nhân sự', icon: ClipboardList, roles: ['BRANCH_MANAGER'] }, // UC34–38 (tầng 3)
+      { path: '/admin/incidents', label: 'Sự cố', icon: ShieldAlert, roles: ['SUPER_MANAGER', 'BRANCH_MANAGER'] }, // UC86 (tầng 3)
+      { path: '/admin/reports', label: 'Báo cáo', icon: BarChart3, roles: ['SUPER_MANAGER', 'BRANCH_MANAGER'] }, // UC89
+      { path: '/admin/audit', label: 'Kiểm toán', icon: Activity, roles: ['ADMIN'] }, // UC11
+    ],
+  },
+  {
+    section: 'Hệ thống',
+    items: [
+      { path: '/admin/branches', label: 'Chi nhánh', icon: Building2, roles: ['SUPER_MANAGER', 'BRANCH_MANAGER'] }, // UC12, UC14, UC33, UC42
+      { path: '/admin/users', label: 'Người dùng', icon: UserCog, roles: ['ADMIN', 'SUPER_MANAGER', 'BRANCH_MANAGER'] }, // UC08, UC09
+      { path: '/admin/ai', label: 'Trí tuệ nhân tạo', icon: Bot, roles: ['SUPER_MANAGER'] }, // tầng 3, chưa đặc tả
+    ],
+  },
+];
+
+function itemForPath(path: string): MenuItem | undefined {
+  for (const section of ADMIN_MENU) {
+    for (const item of section.items) {
+      if (path === item.path || path.startsWith(item.path + '/')) return item;
+    }
+  }
+  return undefined;
+}
+
+/** Role được mở một trang nhân viên: bàn làm việc theo WORKSPACE_ROLES, trang admin theo ADMIN_MENU (kể cả mục ẩn), còn lại mọi nhân viên. */
+export function rolesForPath(path: string): readonly Role[] {
+  const workspace = workspaceForPath(path);
+  if (workspace) return WORKSPACE_ROLES[workspace];
+  return itemForPath(path)?.roles ?? STAFF_ROLES;
+}
+
+/** Menu quản trị của một role: bỏ mục ẩn và nhóm rỗng. */
+export function menuFor(role: Role): MenuSection[] {
+  return ADMIN_MENU.map((section) => ({
+    ...section,
+    items: section.items.filter((item) => !item.hidden && item.roles.includes(role)),
+  })).filter((section) => section.items.length > 0);
+}
+
+/** Tên trang trên thanh trên ở điện thoại. */
+export function pageLabel(path: string): string {
+  const workspace = workspaceForPath(path);
+  if (workspace) return WORKSPACE_LABELS[workspace];
+  return itemForPath(path)?.label ?? 'Pet Care';
+}

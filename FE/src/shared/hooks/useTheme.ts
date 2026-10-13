@@ -1,6 +1,6 @@
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useLayoutEffect, useState } from 'react';
 
-const THEME_KEY = 'theme'; // same key as AdminHeader
+const THEME_KEY = 'theme';
 
 function initialDark(): boolean {
   try {
@@ -15,13 +15,17 @@ function initialDark(): boolean {
 export function useTheme() {
   const [dark, setDark] = useState(initialDark);
 
-  useEffect(() => {
+  // Before paint, so a dark page never flashes light; off again on unmount, so customer pages never inherit it.
+  useLayoutEffect(() => {
     document.documentElement.classList.toggle('dark', dark);
     try {
       localStorage.setItem(THEME_KEY, dark ? 'dark' : 'light');
     } catch {
       // storage blocked: the choice lasts for this page only
     }
+    return () => {
+      document.documentElement.classList.remove('dark');
+    };
   }, [dark]);
 
   const toggle = useCallback(() => setDark((d) => !d), []);

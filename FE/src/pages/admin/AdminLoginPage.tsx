@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState } from 'react';
 import { useNavigate, Link, Navigate, useLocation } from 'react-router-dom';
 import { toast } from 'sonner';
 import { API_MOCK } from '../../shared/api/axios';
@@ -6,6 +6,7 @@ import { toApiError } from '../../shared/api/api-error';
 import { MOCK_ACCOUNTS, MOCK_PASSWORD } from '../../shared/api/mock/identity.mock';
 import { ROUTES } from '../../shared/constants/routes';
 import { homePathFor } from '../../shared/constants/workspaces';
+import { useTheme } from '../../shared/hooks/useTheme';
 import { useSession } from '../../shared/stores/session.store';
 import { ROLE_LABELS, type Role } from '../../shared/types/auth';
 import { cn } from '../../lib/utils';
@@ -76,24 +77,9 @@ export function AdminLoginPage() {
   const login = useSession((s) => s.login);
   const [selectedEmail, setSelectedEmail] = useState('manager@store1.vn');
   const [loading, setLoading] = useState(false);
-  const [isDark, setIsDark] = useState(false);
-
-  useEffect(() => {
-    const stored = localStorage.getItem('theme');
-    const prefersDark = window.matchMedia('(prefers-color-scheme: dark)').matches;
-    if (stored === 'dark' || (!stored && prefersDark)) {
-      setIsDark(true);
-      document.documentElement.classList.add('dark');
-    }
-  }, []);
+  const theme = useTheme();
 
   if (!API_MOCK) return <Navigate to={ROUTES.login} replace state={location.state} />;
-
-  const toggleTheme = () => {
-    setIsDark(!isDark);
-    document.documentElement.classList.toggle('dark');
-    localStorage.setItem('theme', !isDark ? 'dark' : 'light');
-  };
 
   const selected = MOCK_ACCOUNTS.find((a) => a.email === selectedEmail) ?? MOCK_ACCOUNTS[0];
   const meta = ROLE_METAS[selected.role];
@@ -133,10 +119,11 @@ export function AdminLoginPage() {
           </div>
 
           <button
-            onClick={toggleTheme}
+            onClick={theme.toggle}
             className="theme-toggle"
+            aria-label={theme.dark ? 'Chế độ sáng' : 'Chế độ tối'}
           >
-            {isDark ? <Sun className="h-5 w-5" /> : <Moon className="h-5 w-5" />}
+            {theme.dark ? <Sun className="h-5 w-5" /> : <Moon className="h-5 w-5" />}
           </button>
         </div>
 

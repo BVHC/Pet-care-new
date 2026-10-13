@@ -16,7 +16,7 @@ export const WORKSPACE_LABELS: Record<Workspace, string> = {
   reception: 'Lễ tân',
   doctor: 'Phòng khám',
   grooming: 'Grooming',
-  admin: 'Quản trị',
+  admin: 'Tổng quan',
 };
 
 /** Theo actor của UC (01-business-operations): ADMIN (A03) không làm nghiệp vụ phòng khám. */
