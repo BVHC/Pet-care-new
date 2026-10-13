@@ -21,6 +21,18 @@ describe('session', () => {
     expect(s.fullName).toBe('BS. Minh Anh');
   });
 
+  it('takes the customer name from the customer profile and keeps the pending link flag (BR-TK-19)', async () => {
+    await login('khachmoi@petcare.vn');
+
+    const s = useSession.getState();
+    expect(s.fullName).toBe('Lê Hoàng Long');
+    expect(s.linkDecisionPending).toBe(true);
+
+    s.setLinkDecisionPending(false);
+    s.setFullName('Lê H. Long');
+    expect(useSession.getState()).toMatchObject({ linkDecisionPending: false, fullName: 'Lê H. Long' });
+  });
+
   it('sends the token with every request after login', async () => {
     await login('reception@store1.vn');
     const me = await apiClient.get('/api/me');

@@ -1,335 +1,303 @@
-// ===========================================
-// ProfileLinking Component - T13: Liên kết hồ sơ
-// Theo BR-TK-19:
-// - Khách online có thể liên kết với hồ sơ tại quầy
-// - Cần OTP gửi tới email hồ sơ tại quầy
-// - Hoặc chọn "Không phải tôi"
-// ===========================================
-import { useState, useEffect } from 'react';
-import { Link2, AlertTriangle, Check, X, Loader2 } from 'lucide-react';
-import { toast } from 'sonner';
-import {
-  getLinkCandidates,
-  sendLinkOtp,
-  confirmLink,
-  declineLink,
-} from '@/shared/api/profile.api';
-import type { LinkCandidate } from '@/shared/models/profile.model';
+// Liên kết tài khoản với hồ sơ tại quầy (UC07, BR-TK-19, ADR-0027). Có cờ chờ quyết định: hiện ngay các hồ sơ
+// trùng SĐT đã khai, kèm "Không phải tôi". Không có cờ: khách nhập SĐT ghi trong hồ sơ tại quầy để tìm.
+// Xác thực bằng mã gửi tới email ghi trong hồ sơ tại quầy. identity-v1 #11–14.
+import { useState, type FormEvent } from 'react';
+import { AlertTriangle, CheckCircle2, Link2, Loader2, X } from 'lucide-react';
+import { useQuery } from '@tanstack/react-query';
+import { ConfirmModal } from '@/components/ui/modal-templates';
+import { Field, FormError, NoticeBar, type Notice } from '@/components/admin/form-ui';
+import { plainMessage, toApiError } from '@/shared/api/api-error';
+import { profileApi } from '@/shared/api/profile.api';
+import { useAddresses, useProfileMutation } from '@/shared/hooks/useProfile';
+import { useNow } from '@/shared/hooks/useNow';
+import { useSession } from '@/shared/stores/session.store';
+import type { OtpSentResponse } from '@/shared/types/auth';
+import type { CustomerProfile, LinkCandidate } from '@/shared/types/profile';
 import styles from './ProfileLinking.module.css';
 
-interface ProfileLinkingProps {
-  /** Đã có quyết định liên kết chưa? */
-  linkDecisionPending: boolean;
-  /** Callback khi liên kết thành công */
-  onLinked?: () => void;
-  /** Callback khi declined */
-  onDeclined?: () => void;
+export function ProfileLinking({ profile, pending }: { profile: CustomerProfile; pending: boolean }) {
+  const [notice, setNotice] = useState<Notice | null>(null);
+  const linked = profile.createdChannel === 'COUNTER';
+
+  return (
+    <section className={styles.container}>
+      <h2 className={styles.title}>
+        <Link2 size={18} />
+        Liên kết hồ sơ
+      </h2>
+      <NoticeBar notice={notice} />
+      {linked ? (
+        <div className={styles.successBox}>
+          <CheckCircle2 size={32} className={styles.successIcon} />
+          <p className={styles.successText}>Tài khoản đã gắn với hồ sơ tại phòng khám</p>
+          <p className={styles.successSubtext}>Thú cưng, lịch sử khám và đơn hàng của hồ sơ này thuộc tài khoản của bạn.</p>
+        </div>
+      ) : (
+        <LinkFlow pending={pending} onDone={setNotice} />
+      )}
+    </section>
+  );
 }
 
-type Step = 'idle' | 'candidates' | 'otp' | 'verifying' | 'success';
+type Step = { kind: 'choose' } | { kind: 'confirm'; candidate: LinkCandidate } | { kind: 'code'; candidate: LinkCandidate; sent: OtpSentResponse };
 
-export function ProfileLinking({
-  linkDecisionPending,
-  onLinked,
-  onDeclined,
-}: ProfileLinkingProps) {
-  const [step, setStep] = useState<Step>('idle');
-  const [candidates, setCandidates] = useState<LinkCandidate[]>([]);
-  const [selected, setSelected] = useState<LinkCandidate | null>(null);
-  const [phoneFilter, setPhoneFilter] = useState('');
-  const [otpCode, setOtpCode] = useState('');
-  const [otpSentAt, setOtpSentAt] = useState<string | null>(null);
-  const [countdown, setCountdown] = useState(0);
-  const [loading, setLoading] = useState(false);
-  const [verifying, setVerifying] = useState(false);
+function LinkFlow({ pending, onDone }: { pending: boolean; onDone: (notice: Notice) => void }) {
+  const setLinkDecisionPending = useSession((s) => s.setLinkDecisionPending);
+  const [phoneInput, setPhoneInput] = useState('');
+  /** SĐT đã tìm (khách không có cờ); có cờ thì BE dùng SĐT của hồ sơ online. */
+  const [phone, setPhone] = useState<string | undefined>();
+  const [step, setStep] = useState<Step>({ kind: 'choose' });
+  const [declining, setDeclining] = useState(false);
+  const [error, setError] = useState('');
+  const candidates = useQuery({
+    queryKey: ['me', 'link-candidates', phone ?? null],
+    queryFn: () => profileApi.linkCandidates(phone),
+    enabled: pending || phone !== undefined,
+    retry: false,
+  });
+  const decline = useProfileMutation(profileApi.declineLink);
 
-  // Load candidates when step changes to candidates
-  useEffect(() => {
-    if (step === 'candidates') {
-      loadCandidates();
-    }
-  }, [step]);
-
-  // Countdown timer
-  useEffect(() => {
-    if (countdown <= 0) return;
-    const timer = setInterval(() => {
-      setCountdown((c) => c - 1);
-    }, 1000);
-    return () => clearInterval(timer);
-  }, [countdown]);
-
-  async function loadCandidates() {
-    try {
-      setLoading(true);
-      const data = await getLinkCandidates(phoneFilter || undefined);
-      setCandidates(data);
-    } catch {
-      toast.error('Không tải được danh sách hồ sơ');
-    } finally {
-      setLoading(false);
-    }
-  }
-
-  async function handleSearch() {
-    setStep('candidates');
-    await loadCandidates();
-  }
-
-  async function handleSelectCandidate(candidate: LinkCandidate) {
-    if (!candidate.hasEmail) {
-      toast.error('Hồ sơ này không có email, không thể liên kết online. Vui lòng đến quầy để được hỗ trợ.');
-      return;
-    }
-    setSelected(candidate);
-    await sendOtp(candidate);
-  }
-
-  async function sendOtp(candidate: LinkCandidate) {
-    try {
-      setLoading(true);
-      const res = await sendLinkOtp({ customerId: candidate.customerId });
-      setOtpSentAt(res.resendAvailableAt);
-      // Calculate countdown from resendAvailableAt
-      const now = new Date();
-      const available = new Date(res.resendAvailableAt);
-      const diff = Math.max(0, Math.ceil((available.getTime() - now.getTime()) / 1000));
-      setCountdown(diff);
-      setStep('otp');
-      setOtpCode('');
-      toast.success(`Mã OTP đã được gửi đến email của hồ sơ`);
-    } catch (err) {
-      const msg = (err as { response?: { data?: { message?: string } } })?.response?.data?.message;
-      toast.error(msg ?? 'Gửi OTP thất bại');
-    } finally {
-      setLoading(false);
-    }
-  }
-
-  async function handleResendOtp() {
-    if (selected && countdown === 0) {
-      await sendOtp(selected);
-    }
-  }
-
-  async function handleVerify(e: React.FormEvent) {
+  const search = (e: FormEvent) => {
     e.preventDefault();
-    if (!selected || otpCode.length !== 6) {
-      toast.error('Vui lòng nhập mã OTP 6 số');
-      return;
-    }
+    setError('');
+    setPhone(phoneInput.trim());
+  };
 
+  const confirmDecline = async () => {
+    setDeclining(false);
     try {
-      setVerifying(true);
-      await confirmLink({ customerId: selected.customerId, code: otpCode });
-      setStep('success');
-      toast.success('Liên kết thành công!');
-      onLinked?.();
-    } catch (err) {
-      const msg = (err as { response?: { data?: { message?: string } } })?.response?.data?.message;
-      toast.error(msg ?? 'Xác nhận liên kết thất bại');
-    } finally {
-      setVerifying(false);
+      await decline.mutateAsync(undefined);
+      setLinkDecisionPending(false);
+      onDone({ kind: 'success', text: 'Đã ghi nhận "Không phải tôi". Bạn tiếp tục dùng hồ sơ online với số điện thoại đã khai.' });
+    } catch (e) {
+      setError(plainMessage(toApiError(e)));
     }
-  }
+  };
 
-  async function handleDecline() {
-    if (!confirm('Bạn có chắc chọn "Không phải tôi"? Hồ sơ online sẽ được giữ lại.')) {
-      return;
-    }
-    try {
-      setLoading(true);
-      await declineLink();
-      toast.success('Đã xác nhận. Bạn sử dụng hồ sơ online.');
-      onDeclined?.();
-    } catch (err) {
-      toast.error('Không thể xử lý lúc này');
-    } finally {
-      setLoading(false);
-    }
-  }
-
-  function formatCountdown(seconds: number): string {
-    if (seconds <= 0) return '';
-    const mins = Math.floor(seconds / 60);
-    const secs = seconds % 60;
-    return mins > 0 ? `${mins}:${secs.toString().padStart(2, '0')}` : `${secs}s`;
-  }
-
-  // Nếu chưa có quyết định, hiển thị banner nhắc nhở
-  if (!linkDecisionPending && step === 'idle') {
-    return null;
+  if (step.kind === 'confirm' || step.kind === 'code') {
+    return (
+      <LinkSteps
+        step={step}
+        phone={phone}
+        onStep={setStep}
+        onLinked={() => {
+          setLinkDecisionPending(false);
+          onDone({ kind: 'success', text: 'Liên kết hồ sơ thành công' });
+        }}
+      />
+    );
   }
 
   return (
-    <div className={styles.container}>
-      <h3 className={styles.title}>
-        <Link2 size={18} />
-        Liên kết hồ sơ
-      </h3>
-
-      {/* Success state */}
-      {step === 'success' && (
-        <div className={styles.successBox}>
-          <Check size={32} className={styles.successIcon} />
-          <p className={styles.successText}>Liên kết thành công!</p>
-          <p className={styles.successSubtext}>
-            Tài khoản đã được gắn với hồ sơ tại quầy.
-          </p>
-        </div>
-      )}
-
-      {/* Candidates list */}
-      {(step === 'idle' || step === 'candidates') && (
-        <div className={styles.section}>
-          {step === 'idle' && (
-            <div className={styles.pendingBanner}>
-              <AlertTriangle size={20} />
-              <div>
-                <p className={styles.pendingTitle}>Có vẻ bạn đã có hồ sơ tại phòng khám</p>
-                <p className={styles.pendingSubtext}>
-                  Chúng tôi nhận thấy số điện thoại của bạn trùng với một hồ sơ tại quầy.
-                  Bạn có muốn liên kết tài khoản với hồ sơ đó không?
-                </p>
-              </div>
-            </div>
-          )}
-
-          {step === 'candidates' && candidates.length === 0 && !loading && (
-            <div className={styles.emptyBox}>
-              <p>Không tìm thấy hồ sơ nào phù hợp.</p>
-            </div>
-          )}
-
-          {step === 'candidates' && candidates.length > 0 && (
-            <div className={styles.candidateList}>
-              <p className={styles.candidateHint}>
-                Chọn hồ sơ của bạn (thông tin đã được che):
-              </p>
-              {candidates.map((c) => (
-                <button
-                  key={c.customerId}
-                  type="button"
-                  className={styles.candidateCard}
-                  onClick={() => handleSelectCandidate(c)}
-                  disabled={loading}
-                >
-                  <div className={styles.candidateInfo}>
-                    <span className={styles.candidateName}>{c.maskedFullName}</span>
-                    {c.hasEmail ? (
-                      <span className={styles.candidateEmail}>✓ Có email</span>
-                    ) : (
-                      <span className={styles.candidateNoEmail}>✗ Không có email</span>
-                    )}
-                  </div>
-                  <span className={styles.candidateSelect}>Liên kết</span>
-                </button>
-              ))}
-            </div>
-          )}
-
-          {/* Search input */}
-          {step === 'idle' && (
-            <div className={styles.searchBox}>
-              <input
-                type="tel"
-                className={styles.searchInput}
-                placeholder="Tìm theo số điện thoại..."
-                value={phoneFilter}
-                onChange={(e) => setPhoneFilter(e.target.value)}
-              />
-              <button
-                type="button"
-                className={styles.searchBtn}
-                onClick={handleSearch}
-                disabled={!phoneFilter.trim()}
-              >
-                Tìm kiếm
-              </button>
-            </div>
-          )}
-
-          {loading && (
-            <div className={styles.loadingBox}>
-              <Loader2 size={24} className={styles.spinner} />
-              <span>Đang tải...</span>
-            </div>
-          )}
-
-          {/* Decline option */}
-          {!loading && (
-            <button
-              type="button"
-              className={styles.declineBtn}
-              onClick={handleDecline}
-            >
-              <X size={14} />
-              Không phải tôi — sử dụng hồ sơ online
-            </button>
-          )}
-        </div>
-      )}
-
-      {/* OTP verification */}
-      {step === 'otp' && selected && (
-        <div className={styles.otpSection}>
-          <p className={styles.otpHint}>
-            Mã OTP đã được gửi đến email của hồ sơ <strong>{selected.maskedFullName}</strong>.
-            Vui lòng kiểm tra email và nhập mã bên dưới.
-          </p>
-
-          <form onSubmit={handleVerify} className={styles.otpForm}>
-            <div className={styles.otpInput}>
-              <input
-                type="text"
-                inputMode="numeric"
-                pattern="[0-9]*"
-                maxLength={6}
-                className={styles.otpField}
-                placeholder="_ _ _ _ _ _"
-                value={otpCode}
-                onChange={(e) => setOtpCode(e.target.value.replace(/\D/g, ''))}
-                autoFocus
-              />
-            </div>
-
-            <button
-              type="submit"
-              className={styles.verifyBtn}
-              disabled={otpCode.length !== 6 || verifying}
-            >
-              {verifying ? (
-                <>
-                  <Loader2 size={16} className={styles.spinner} />
-                  Đang xác nhận...
-                </>
-              ) : (
-                'Xác nhận liên kết'
-              )}
-            </button>
-          </form>
-
-          <div className={styles.otpActions}>
-            <button
-              type="button"
-              className={styles.resendBtn}
-              onClick={handleResendOtp}
-              disabled={countdown > 0 || loading}
-            >
-              {countdown > 0
-                ? `Gửi lại sau ${formatCountdown(countdown)}`
-                : 'Gửi lại mã OTP'}
-            </button>
-            <button
-              type="button"
-              className={styles.backBtn}
-              onClick={() => setStep('candidates')}
-            >
-              ← Quay lại
-            </button>
+    <div className={styles.section}>
+      {pending ? (
+        <div className={styles.pendingBanner}>
+          <AlertTriangle size={20} />
+          <div>
+            <p className={styles.pendingTitle}>Có vẻ bạn đã có hồ sơ tại phòng khám</p>
+            <p className={styles.pendingSubtext}>
+              Số điện thoại bạn khai trùng với các hồ sơ tại quầy dưới đây (họ tên đã che). Chọn hồ sơ của bạn để liên kết, hoặc chọn
+              "Không phải tôi" để tiếp tục dùng hồ sơ online.
+            </p>
           </div>
         </div>
+      ) : (
+        <form onSubmit={search} className="space-y-3">
+          <p className={styles.candidateHint}>
+            Bạn từng làm hồ sơ tại quầy của Pet Care? Nhập số điện thoại ghi trong hồ sơ đó để tìm và liên kết. Chỉ liên kết được khi
+            hồ sơ online chưa có thú cưng, lịch hẹn, đặt chỗ, đơn hàng hay góp ý.
+          </p>
+          <Field label="Số điện thoại trong hồ sơ tại phòng khám">
+            {(id) => (
+              <div className={styles.searchBox}>
+                <input
+                  id={id}
+                  type="tel"
+                  className={styles.searchInput}
+                  placeholder="0xxxxxxxxx"
+                  value={phoneInput}
+                  onChange={(e) => setPhoneInput(e.target.value)}
+                />
+                <button type="submit" className={styles.searchBtn} disabled={!phoneInput.trim()}>
+                  Tìm hồ sơ
+                </button>
+              </div>
+            )}
+          </Field>
+        </form>
       )}
+
+      {candidates.isFetching && (
+        <div className={styles.loadingBox}>
+          <Loader2 size={20} className={styles.spinner} />
+          <span>Đang tìm hồ sơ...</span>
+        </div>
+      )}
+      <FormError message={error || (candidates.isError ? plainMessage(toApiError(candidates.error)) : '')} />
+
+      {candidates.isSuccess && candidates.data.length === 0 && (
+        <div className={styles.emptyBox}>
+          <p>Không có hồ sơ tại quầy nào chưa liên kết với số điện thoại này.</p>
+        </div>
+      )}
+      {candidates.isSuccess && candidates.data.length > 0 && (
+        <div className={styles.candidateList}>
+          {candidates.data.map((c) => (
+            <div key={c.customerId} className={styles.candidateCard}>
+              <div className={styles.candidateInfo}>
+                <span className={styles.candidateName}>{c.maskedFullName}</span>
+                {c.hasEmail ? (
+                  <span className={styles.candidateEmail}>Có email nhận mã xác thực</span>
+                ) : (
+                  <span className={styles.candidateNoEmail}>Chưa có email, vui lòng ra quầy để liên kết</span>
+                )}
+              </div>
+              <button
+                type="button"
+                className={styles.candidateSelect}
+                disabled={!c.hasEmail}
+                aria-label={`Chọn hồ sơ ${c.maskedFullName}`}
+                onClick={() => setStep({ kind: 'confirm', candidate: c })}
+              >
+                Chọn
+              </button>
+            </div>
+          ))}
+        </div>
+      )}
+
+      {pending && (
+        <button type="button" className={styles.declineBtn} onClick={() => setDeclining(true)} disabled={decline.isPending}>
+          <X size={14} />
+          Không phải tôi
+        </button>
+      )}
+
+      <ConfirmModal
+        open={declining}
+        onOpenChange={setDeclining}
+        title="Không phải hồ sơ của bạn?"
+        description="Bạn tiếp tục dùng hồ sơ online với số điện thoại đã khai. Sau này vẫn tự liên kết được khi hồ sơ online chưa có thú cưng, lịch hẹn, đặt chỗ, đơn hàng hay góp ý."
+        onConfirm={confirmDecline}
+        loading={decline.isPending}
+      />
+    </div>
+  );
+}
+
+function LinkSteps({
+  step,
+  phone,
+  onStep,
+  onLinked,
+}: {
+  step: Extract<Step, { kind: 'confirm' | 'code' }>;
+  phone?: string;
+  onStep: (step: Step) => void;
+  onLinked: () => void;
+}) {
+  const addresses = useAddresses();
+  // Vẽ lại mỗi giây cho đếm ngược gửi lại mã.
+  useNow(1000);
+  const [code, setCode] = useState('');
+  const [error, setError] = useState('');
+  const [sending, setSending] = useState(false);
+  const confirm = useProfileMutation((c: string) => profileApi.confirmLink({ customerId: step.candidate.customerId, code: c }));
+  const addressCount = addresses.data?.length ?? 0;
+
+  const send = async () => {
+    setError('');
+    setSending(true);
+    try {
+      const sent = await profileApi.sendLinkOtp({ customerId: step.candidate.customerId, phone });
+      setCode('');
+      onStep({ kind: 'code', candidate: step.candidate, sent });
+    } catch (e) {
+      setError(plainMessage(toApiError(e)));
+    } finally {
+      setSending(false);
+    }
+  };
+
+  const submit = async (e: FormEvent) => {
+    e.preventDefault();
+    setError('');
+    try {
+      await confirm.mutateAsync(code.trim());
+      onLinked();
+    } catch (err) {
+      setError(plainMessage(toApiError(err)));
+    }
+  };
+
+  const back = (
+    <button type="button" className={styles.backBtn} onClick={() => onStep({ kind: 'choose' })}>
+      ← Chọn hồ sơ khác
+    </button>
+  );
+
+  if (step.kind === 'confirm') {
+    return (
+      <div className={styles.otpSection}>
+        <div className={styles.pendingBanner}>
+          <AlertTriangle size={20} />
+          <div className="space-y-1">
+            <p className={styles.pendingTitle}>Liên kết với hồ sơ {step.candidate.maskedFullName}</p>
+            <p className={styles.pendingSubtext}>
+              Tài khoản sẽ dùng hồ sơ tại phòng khám: thú cưng, lịch sử khám và đơn hàng của hồ sơ đó. Email hồ sơ đổi theo email đăng nhập,
+              số điện thoại giữ như hồ sơ tại quầy.
+            </p>
+            <p className={styles.pendingSubtext}>
+              {addressCount > 0
+                ? `Hồ sơ online cùng sổ địa chỉ hiện tại (${addressCount} địa chỉ) sẽ bị xóa, không khôi phục được.`
+                : 'Hồ sơ online hiện tại sẽ bị xóa, không khôi phục được.'}
+            </p>
+          </div>
+        </div>
+        <FormError message={error} />
+        <div className={styles.otpActions}>
+          <button type="button" className={styles.verifyBtn} onClick={send} disabled={sending}>
+            {sending && <Loader2 size={16} className={styles.spinner} />}
+            Gửi mã xác thực
+          </button>
+          {back}
+        </div>
+      </div>
+    );
+  }
+
+  const wait = Math.max(0, Math.ceil((Date.parse(step.sent.resendAvailableAt) - Date.now()) / 1000));
+  return (
+    <div className={styles.otpSection}>
+      <p className={styles.otpHint}>
+        Mã xác thực đã gửi tới <strong>{step.sent.maskedEmail}</strong>, email ghi trong hồ sơ tại phòng khám.
+      </p>
+      <form onSubmit={submit} className={styles.otpForm} noValidate>
+        <Field label="Mã xác thực">
+          {(id) => (
+            <input
+              id={id}
+              inputMode="numeric"
+              autoComplete="one-time-code"
+              maxLength={8}
+              className={styles.otpField}
+              value={code}
+              onChange={(e) => setCode(e.target.value.replace(/\D/g, ''))}
+            />
+          )}
+        </Field>
+        <FormError message={error} />
+        <button type="submit" className={styles.verifyBtn} disabled={!code || confirm.isPending}>
+          {confirm.isPending && <Loader2 size={16} className={styles.spinner} />}
+          Xác nhận liên kết
+        </button>
+      </form>
+      <div className={styles.otpActions}>
+        <button type="button" className={styles.resendBtn} onClick={send} disabled={wait > 0 || sending}>
+          {wait > 0 ? `Gửi lại mã sau ${wait} giây` : 'Gửi lại mã'}
+        </button>
+        {back}
+      </div>
     </div>
   );
 }

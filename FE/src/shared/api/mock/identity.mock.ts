@@ -1,8 +1,37 @@
 // Mock module identity (docs/api/identity-v1.md): đăng ký + OTP, đăng nhập, đăng xuất,
-// quên / đặt lại mật khẩu, GET /me, đổi mật khẩu. Câu báo lỗi chép từ BE.
+// quên / đặt lại mật khẩu, GET /me, đổi mật khẩu, hồ sơ nhân viên, liên kết hồ sơ (UC07). Câu báo lỗi chép từ BE.
 import type { AccountSummary, LoginResponse, Role } from '../../types/auth';
+import type { StaffProfile } from '../../types/profile';
 import { passwordPolicyError } from '../../utils/password';
-import { fail, invalid, isText, noContent, ok, ruleFail, type Check, type MockHandler, type MockReply } from './envelope';
+import {
+  createOnlineProfile,
+  customerOfAccount,
+  declineLink,
+  findCustomer,
+  flagLinkDecisionIfPhoneMatches,
+  linkAccount,
+  linkBlocker,
+  linkCandidates,
+} from './customer.mock';
+import {
+  HTTPS_URL,
+  blank,
+  denied,
+  fail,
+  has,
+  invalid,
+  isText,
+  noContent,
+  notFound,
+  ok,
+  optional,
+  ruleFail,
+  scopeDenied,
+  tooLong,
+  type Check,
+  type MockHandler,
+  type MockReply,
+} from './envelope';
 
 /** Mật khẩu chung của mọi tài khoản demo (BR-TK-03: ≥ 8 ký tự, có chữ và số). */
 export const MOCK_PASSWORD = 'Petcare123';
@@ -30,7 +59,17 @@ export const MOCK_ACCOUNTS: readonly MockAccount[] = [
   { id: 7, email: 'khach@petcare.vn', role: 'CUSTOMER', fullName: 'Nguyễn Thu Trang' },
   { id: 8, email: 'newstaff@store1.vn', role: 'RECEPTIONIST', fullName: 'Lễ tân mới', mustChangePassword: true, branchId: 1 },
   { id: 9, email: 'manager2@store2.vn', role: 'BRANCH_MANAGER', fullName: 'Phạm Minh Đức', branchId: 2 },
+  // SĐT trùng hồ sơ tại quầy chưa liên kết: đăng nhập là gặp màn liên kết hồ sơ (BR-TK-19, customer.mock.ts).
+  { id: 10, email: 'khachmoi@petcare.vn', role: 'CUSTOMER', fullName: 'Lê Hoàng Long' },
 ];
+
+/** Hồ sơ nhân viên ban đầu (staff_profiles); họ tên lấy từ MOCK_ACCOUNTS. */
+const STAFF_SEED: Record<number, Partial<StaffProfile>> = {
+  5: {
+    specialty: 'Nội khoa, da liễu thú y',
+    bio: 'Hơn 8 năm khám và điều trị chó mèo, quan tâm đặc biệt tới bệnh da và dị ứng.',
+  },
+};
 
 /** Chi nhánh của nhân viên A05–A08; undefined với ADMIN, SUPER_MANAGER và khách. */
 export const branchIdOf = (accountId: number) => MOCK_ACCOUNTS.find((a) => a.id === accountId)?.branchId;
@@ -63,8 +102,10 @@ interface State {
   changes: Record<number, { password?: string; mustChangePassword?: boolean }>;
   /** Khách tự đăng ký (UC01). */
   registered: Registered[];
-  /** Mã đang dùng, khóa `REGISTER:<email>` hoặc `RESET:<email>`. */
-  otps: Record<string, Otp>;
+  /** Mã đang dùng, khóa `REGISTER:<email>`, `RESET:<email>` hoặc `LINK:<accountId>`. */
+  otps: Record<string, Otp & { customerId?: number }>;
+  /** Hồ sơ nhân viên đã sửa (PATCH /me/staff-profile) theo id tài khoản. */
+  profiles: Record<number, Partial<StaffProfile>>;
 }
 
 const STATE_KEY = 'petcare-mock-identity';
@@ -72,9 +113,9 @@ const STATE_KEY = 'petcare-mock-identity';
 function load(): State {
   try {
     const s = JSON.parse(localStorage.getItem(STATE_KEY) ?? '{}');
-    return { changes: s.changes ?? {}, registered: s.registered ?? [], otps: s.otps ?? {} };
+    return { changes: s.changes ?? {}, registered: s.registered ?? [], otps: s.otps ?? {}, profiles: s.profiles ?? {} };
   } catch {
-    return { changes: {}, registered: [], otps: {} };
+    return { changes: {}, registered: [], otps: {}, profiles: {} };
   }
 }
 
@@ -164,7 +205,16 @@ function rejectOtp(s: State, key: string, code: string): MockReply | null {
   return ruleFail('BR-TK-06', `Nhập sai mã OTP quá ${MAX_FAILED_OTP} lần, mã đã bị hủy. Vui lòng yêu cầu mã mới`);
 }
 
-const maskEmail = (email: string) => email.replace(/^(.).*(@.*)$/, '$1***$2');
+/** Như EmailMasker của BE: giữ 2 ký tự đầu (1 nếu phần trước @ chỉ có 1–2 ký tự). */
+function maskEmail(email: string): string {
+  const at = email.lastIndexOf('@');
+  if (at <= 0 || at === email.length - 1) return '***';
+  const local = [...email.slice(0, at)];
+  return local.slice(0, local.length > 2 ? 2 : 1).join('') + '***' + email.slice(at);
+}
+
+/** Số giây còn phải chờ trước khi gửi lại mã (BR-TK-07); 0 nếu gửi được. */
+const waitSeconds = (last?: Otp) => (last ? Math.ceil((last.sentAt + RESEND_SECONDS * 1000 - Date.now()) / 1000) : 0);
 
 // ─── Handlers ───
 
@@ -192,9 +242,11 @@ const register: MockHandler = ({ body }) => {
   if (policy) return ruleFail('BR-TK-03', policy);
 
   const id = 100 + s.registered.length;
-  s.registered.push({ id, email, fullName: (b.fullName as string).trim(), password: b.password as string, active: false });
+  const fullName = (b.fullName as string).trim();
+  s.registered.push({ id, email, fullName, password: b.password as string, active: false });
   const otp = issueOtp(s, `REGISTER:${email}`);
   save(s);
+  createOnlineProfile(id, fullName, (b.phone as string | undefined) ?? null);
   return ok({ accountId: id, email, status: 'PENDING', otpResendAvailableAt: resendAt(otp) }, 201, 'Đăng ký thành công');
 };
 
@@ -219,7 +271,7 @@ const verifyRegistration: MockHandler = ({ body }) => {
   reg.active = true;
   delete s.otps[key];
   save(s);
-  return ok({ accountId: reg.id, status: 'ACTIVE', linkDecisionPending: false });
+  return ok({ accountId: reg.id, status: 'ACTIVE', linkDecisionPending: flagLinkDecisionIfPhoneMatches(reg.id) });
 };
 
 const resendRegistrationOtp: MockHandler = ({ body }) => {
@@ -230,8 +282,7 @@ const resendRegistrationOtp: MockHandler = ({ body }) => {
   const reg = pendingRegistration(s, b.email as string);
   if ('status' in reg) return reg;
   const key = `REGISTER:${reg.email}`;
-  const last = s.otps[key];
-  const wait = last ? Math.ceil((last.sentAt + RESEND_SECONDS * 1000 - Date.now()) / 1000) : 0;
+  const wait = waitSeconds(s.otps[key]);
   if (wait > 0) return ruleFail('BR-TK-07', `Vui lòng chờ ${wait} giây trước khi gửi lại mã OTP`);
   const otp = issueOtp(s, key);
   save(s);
@@ -251,7 +302,7 @@ const login: MockHandler = ({ body }) => {
     accessToken: TOKEN_PREFIX + account.id,
     expiresAt: new Date(Date.now() + 12 * 3_600_000).toISOString(), // session.ttl_hours mặc định
     account: summaryOf(account),
-    linkDecisionPending: false,
+    linkDecisionPending: customerOfAccount(account.id)?.linkDecisionPending ?? false,
   };
   return ok(res);
 };
@@ -305,23 +356,164 @@ const resetPassword: MockHandler = ({ body }) => {
   return noContent();
 };
 
+/** staff_profiles: dữ liệu mẫu cộng các lần sửa. SĐT mẫu `0900000` + id 3 chữ số. */
+function staffProfileOf(s: State, a: Account): StaffProfile {
+  return {
+    accountId: a.id,
+    fullName: a.fullName,
+    avatarUrl: null,
+    phone: `0900000${String(a.id).padStart(3, '0')}`,
+    branchId: branchIdOf(a.id) ?? null,
+    specialty: null,
+    bio: null,
+    ...STAFF_SEED[a.id],
+    ...s.profiles[a.id],
+  };
+}
+
 const me: MockHandler = ({ account }) => {
-  const a = accounts(load()).find((x) => x.id === account!.id)!;
-  const isStaffAccount = a.role !== 'CUSTOMER';
-  return ok({
-    account,
-    ...(isStaffAccount
-      ? {
-          staffProfile: {
-            accountId: a.id,
-            fullName: a.fullName,
-            phone: '0900000000',
-            ...(branchIdOf(a.id) !== undefined && { branchId: branchIdOf(a.id) }),
-          },
-        }
-      : { customerId: a.id }),
-    linkDecisionPending: false,
-  });
+  const s = load();
+  const a = accounts(s).find((x) => x.id === account!.id)!;
+  if (a.role !== 'CUSTOMER') return ok({ account, staffProfile: staffProfileOf(s, a), customerId: null, linkDecisionPending: false });
+  const own = customerOfAccount(a.id);
+  return ok({ account, staffProfile: null, customerId: own?.customerId ?? null, linkDecisionPending: own?.linkDecisionPending ?? false });
+};
+
+/** Mặc định của [CFG] `vet.bio_max_length` (BR-TK-20). */
+const BIO_MAX = 500;
+
+/** null / không gửi = giữ nguyên; chuỗi rỗng = xóa `avatarUrl`, `specialty`, `bio` (ADR-0026). */
+const updateStaffProfile: MockHandler = ({ account, body }) => {
+  const b = (body ?? {}) as Record<string, unknown>;
+  const bad = invalid([
+    ['fullName', 'Họ tên tối đa 100 ký tự', tooLong(b.fullName, 100)],
+    ['fullName', 'Họ tên không được để trống', blank(b.fullName)],
+    ['avatarUrl', 'Đường dẫn ảnh đại diện tối đa 500 ký tự', tooLong(b.avatarUrl, 500)],
+    ['avatarUrl', 'Ảnh đại diện phải là đường dẫn https://', has(b.avatarUrl) && !HTTPS_URL.test(String(b.avatarUrl))],
+    ['phone', 'Số điện thoại phải có dạng 0xxxxxxxxx', has(b.phone) && !/^0\d{9}$/.test(String(b.phone))],
+    ['specialty', 'Chuyên môn tối đa 200 ký tự', tooLong(b.specialty, 200)],
+  ]);
+  if (bad) return bad;
+  if (account!.role === 'CUSTOMER') return denied();
+  if (has(b.email)) return ruleFail('BR-TK-15', 'Không thể tự sửa email; liên hệ cấp trên để được sửa hộ');
+  if (account!.role !== 'VET' && (has(b.specialty) || has(b.bio))) return scopeDenied();
+  const bio = optional(b.bio);
+  if (bio && [...bio].length > BIO_MAX) return ruleFail('BR-TK-20', `Mô tả ngắn tối đa ${BIO_MAX} ký tự`);
+  const s = load();
+  const change = { ...s.profiles[account!.id] };
+  if (has(b.fullName)) change.fullName = (b.fullName as string).trim();
+  if (has(b.phone)) change.phone = b.phone as string;
+  for (const key of ['avatarUrl', 'specialty', 'bio'] as const) if (has(b[key])) change[key] = optional(b[key]);
+  s.profiles[account!.id] = change;
+  save(s);
+  return ok(staffProfileOf(s, accounts(s).find((x) => x.id === account!.id)!), 200, 'Đã cập nhật hồ sơ');
+};
+
+// ─── Liên kết hồ sơ tại quầy (UC07, BR-TK-19, ADR-0027) ───
+
+const LINK_PHONE = 'Số điện thoại phải gồm 10–11 chữ số, bắt đầu bằng 0';
+const LINK_PHONE_RE = /^0[0-9]{9,10}$/;
+
+const linkTargetChecks = (b: Record<string, unknown>): Check[] => [
+  ['customerId', 'Vui lòng chọn hồ sơ cần liên kết', !has(b.customerId)],
+  ['customerId', 'Mã hồ sơ không hợp lệ', has(b.customerId) && !(Number(b.customerId) > 0)],
+];
+
+function linkRefused(accountId: number): MockReply | null {
+  const blocker = linkBlocker(accountId);
+  if (blocker === 'ALREADY_LINKED') return ruleFail('BR-TK-19', 'Tài khoản đã được liên kết với hồ sơ khách hàng tại phòng khám');
+  if (blocker === 'HAS_DATA') {
+    return ruleFail(
+      'BR-TK-19',
+      'Hồ sơ của bạn đã có thú cưng, lịch hẹn, đặt chỗ, đơn hàng hoặc góp ý nên không thể liên kết với hồ sơ tại quầy. Vui lòng liên hệ quầy để được hỗ trợ',
+    );
+  }
+  return null;
+}
+
+/** SĐT khách nhập; không nhập thì SĐT của hồ sơ online. */
+const phoneFor = (accountId: number, phone: unknown) => (has(phone) ? String(phone) : (customerOfAccount(accountId)?.phone ?? null));
+
+/** Như stub của BE (LinkProfileIT): "Nguyễn Văn An" → "Ng*** V** A*". */
+export function maskFullName(fullName: string): string {
+  const words = fullName.trim().split(' ');
+  return words
+    .map((word, i) => {
+      const chars = [...word];
+      if (i === 0) return chars.slice(0, 2).join('') + '***';
+      return chars[0] + (i === words.length - 1 ? '*' : '**');
+    })
+    .join(' ');
+}
+
+const linkCandidatesOf: MockHandler = ({ account, query }) => {
+  const bad = invalid([['phone', LINK_PHONE, 'phone' in query && !LINK_PHONE_RE.test(query.phone)]]);
+  if (bad) return bad;
+  if (account!.role !== 'CUSTOMER') return denied();
+  const refused = linkRefused(account!.id);
+  if (refused) return refused;
+  const phone = phoneFor(account!.id, query.phone);
+  const candidates = phone ? linkCandidates(phone) : [];
+  return ok(candidates.map((c) => ({ customerId: c.customerId, maskedFullName: maskFullName(c.fullName), hasEmail: c.email !== null })));
+};
+
+const sendLinkOtp: MockHandler = ({ account, body }) => {
+  const b = (body ?? {}) as Record<string, unknown>;
+  const bad = invalid([...linkTargetChecks(b), ['phone', LINK_PHONE, has(b.phone) && !LINK_PHONE_RE.test(String(b.phone))]]);
+  if (bad) return bad;
+  if (account!.role !== 'CUSTOMER') return denied();
+  const customerId = Number(b.customerId);
+  const phone = phoneFor(account!.id, b.phone);
+  // Không tồn tại và không phải ứng viên của SĐT: cùng một câu 404.
+  const counter = phone ? linkCandidates(phone).find((c) => c.customerId === customerId) : undefined;
+  if (!counter) return notFound('hồ sơ khách', customerId);
+  const refused = linkRefused(account!.id);
+  if (refused) return refused;
+  if (!counter.email) {
+    return ruleFail('BR-TK-19', 'Hồ sơ tại quầy chưa có email nên không thể liên kết online. Vui lòng ra quầy để được hỗ trợ');
+  }
+  const s = load();
+  const key = `LINK:${account!.id}`;
+  const wait = waitSeconds(s.otps[key]);
+  if (wait > 0) return ruleFail('BR-TK-07', `Vui lòng chờ ${wait} giây trước khi gửi lại mã OTP`);
+  // Mã mới hủy mã liên kết cũ của tài khoản.
+  const otp = { ...issueOtp(s, key), customerId };
+  s.otps[key] = otp;
+  save(s);
+  return ok({ resendAvailableAt: resendAt(otp), maskedEmail: maskEmail(counter.email) }, 200, 'Đã gửi mã xác thực tới email của hồ sơ');
+};
+
+const confirmLink: MockHandler = ({ account, body }) => {
+  const b = (body ?? {}) as Record<string, unknown>;
+  const bad = invalid([...linkTargetChecks(b), ...codeChecks(b.code)]);
+  if (bad) return bad;
+  if (account!.role !== 'CUSTOMER') return denied();
+  const customerId = Number(b.customerId);
+  const counter = findCustomer(customerId);
+  if (!counter) return notFound('hồ sơ khách', customerId);
+  const s = load();
+  const key = `LINK:${account!.id}`;
+  if (!counter.email || s.otps[key]?.customerId !== customerId) return ruleFail('BR-TK-05', INVALID_OTP);
+  const rejected = rejectOtp(s, key, b.code as string);
+  if (rejected) {
+    save(s);
+    return rejected;
+  }
+  // Module customer kiểm lại dưới khóa; bị từ chối thì mã vẫn dùng lại được.
+  const refused = linkRefused(account!.id);
+  if (refused) return refused;
+  if (!linkAccount(account!.id, customerId, account!.email)) return ruleFail('BR-TK-19', 'Không thể liên kết hồ sơ này');
+  delete s.otps[key];
+  save(s);
+  return ok({ customerId }, 200, 'Liên kết hồ sơ thành công');
+};
+
+const declineLinkOf: MockHandler = ({ account }) => {
+  if (account!.role !== 'CUSTOMER') return denied();
+  if (!declineLink(account!.id)) {
+    return fail('INVALID_STATE_TRANSITION', 'Không thể chuyển trạng thái liên kết hồ sơ từ không còn chờ quyết định sang Không phải tôi', 409);
+  }
+  return noContent();
 };
 
 const changePassword: MockHandler = ({ account, body }) => {
@@ -352,4 +544,9 @@ export const identityRoutes: Record<string, MockHandler> = {
   'POST /api/auth/password/reset': resetPassword,
   'GET /api/me': me,
   'POST /api/me/password': changePassword,
+  'PATCH /api/me/staff-profile': updateStaffProfile,
+  'GET /api/me/link-candidates': linkCandidatesOf,
+  'POST /api/me/link/otp': sendLinkOtp,
+  'POST /api/me/link/confirm': confirmLink,
+  'POST /api/me/link/decline': declineLinkOf,
 };

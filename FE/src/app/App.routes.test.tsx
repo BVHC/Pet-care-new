@@ -1,4 +1,5 @@
 import { render, screen } from '@testing-library/react';
+import userEvent from '@testing-library/user-event';
 import { MemoryRouter } from 'react-router-dom';
 import { beforeAll, beforeEach, describe, expect, it } from 'vitest';
 import { apiClient } from '../shared/api/axios';
@@ -117,5 +118,40 @@ describe('route guards', () => {
     await signInAs('newstaff@store1.vn');
     open('/staff/reception');
     expect(await screen.findByRole('button', { name: 'Đổi mật khẩu' })).toBeInTheDocument();
+  });
+
+  it('takes staff from /account to their profile in the back office (UC06)', async () => {
+    await signInAs('doctor@store1.vn');
+    open('/account');
+    expect(await screen.findByRole('heading', { name: 'Hồ sơ cá nhân' })).toBeInTheDocument();
+    expect(await screen.findByRole('heading', { name: 'Hồ sơ giới thiệu công khai' })).toBeInTheDocument();
+  });
+
+  it('links the workspace to the staff profile (UC06)', async () => {
+    await signInAs('doctor@store1.vn');
+    open('/staff/doctor');
+    expect(await screen.findByRole('link', { name: 'Hồ sơ cá nhân' })).toHaveAttribute('href', '/admin/profile');
+  });
+
+  it('opens the customer profile with the address book (UC06)', async () => {
+    await signInAs('khach@petcare.vn');
+    open('/account/addresses');
+    expect(await screen.findByRole('heading', { name: 'Sổ địa chỉ' })).toBeInTheDocument();
+  });
+
+  it('reminds of the link decision at each login (BR-TK-19)', async () => {
+    const user = userEvent.setup();
+    open('/auth/login');
+    await user.type(await screen.findByLabelText('Email'), 'khachmoi@petcare.vn');
+    await user.type(screen.getByLabelText('Mật khẩu'), MOCK_PASSWORD);
+    await user.click(screen.getByRole('button', { name: 'Đăng nhập' }));
+    expect(await screen.findByRole('heading', { name: 'Liên kết hồ sơ' })).toBeInTheDocument();
+  });
+
+  it('hides pet management while a link decision is pending (BR-TK-19)', async () => {
+    await signInAs('khachmoi@petcare.vn');
+    open('/pets');
+    expect(await screen.findByRole('heading', { name: 'Hoàn tất liên kết hồ sơ' })).toBeInTheDocument();
+    expect(screen.getByRole('link', { name: 'Đến bước liên kết hồ sơ' })).toHaveAttribute('href', '/account/link');
   });
 });

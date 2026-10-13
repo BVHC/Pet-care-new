@@ -3,7 +3,7 @@ import { create } from 'zustand';
 import { persist } from 'zustand/middleware';
 import { authApi } from '../api/auth.api';
 import { bindAuth } from '../api/axios';
-import { getMe } from '../api/profile.api';
+import { profileApi } from '../api/profile.api';
 import type { AccountSummary, LoginRequest, SessionUser } from '../types/auth';
 
 // Phiên đăng nhập duy nhất cho mọi role: một endpoint POST /api/auth/login (identity-v1).
@@ -14,7 +14,7 @@ interface SessionData {
   expiresAt: string | null;
   account: AccountSummary | null;
   linkDecisionPending: boolean;
-  /** Họ tên nhân viên từ GET /me; null thì UI hiện email. */
+  /** Họ tên từ hồ sơ nhân viên / hồ sơ khách; null thì UI hiện email. */
   fullName: string | null;
 }
 
@@ -24,6 +24,8 @@ interface SessionState extends SessionData {
   /** Bỏ phiên phía client (BE trả 401). */
   clear: () => void;
   setMustChangePassword: (value: boolean) => void;
+  setLinkDecisionPending: (value: boolean) => void;
+  setFullName: (value: string) => void;
 }
 
 const EMPTY: SessionData = { token: null, expiresAt: null, account: null, linkDecisionPending: false, fullName: null };
@@ -37,9 +39,11 @@ export const useSession = create<SessionState>()(
         const res = await authApi.login(req);
         set({ ...EMPTY, token: res.accessToken, expiresAt: res.expiresAt, account: res.account, linkDecisionPending: res.linkDecisionPending });
         try {
-          set({ fullName: (await getMe()).staffProfile?.fullName ?? null });
+          const me = await profileApi.me();
+          const fullName = me.staffProfile ? me.staffProfile.fullName : (await profileApi.customerProfile()).fullName;
+          set({ fullName, linkDecisionPending: me.linkDecisionPending });
         } catch {
-          // BE chưa có GET /me (T8): giữ email làm tên hiển thị.
+          // BE chưa đọc được hồ sơ (khách: CustomerQueryApi còn placeholder, D010): giữ email làm tên hiển thị.
         }
         return res.account;
       },
@@ -57,6 +61,10 @@ export const useSession = create<SessionState>()(
 
       setMustChangePassword: (value) =>
         set((s) => (s.account ? { account: { ...s.account, mustChangePassword: value } } : {})),
+
+      setLinkDecisionPending: (value) => set({ linkDecisionPending: value }),
+
+      setFullName: (value) => set({ fullName: value }),
     }),
     {
       name: 'petcare-session',

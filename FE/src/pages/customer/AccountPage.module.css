@@ -363,6 +363,9 @@
 }
 
 .saveBtn {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
   padding: 11px 24px;
   border-radius: 10px;
   border: none;

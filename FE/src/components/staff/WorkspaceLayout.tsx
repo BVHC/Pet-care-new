@@ -1,5 +1,5 @@
 import { Suspense, useEffect, useState } from 'react';
-import { NavLink, Outlet, useLocation, useNavigate } from 'react-router-dom';
+import { Link, NavLink, Outlet, useLocation, useNavigate } from 'react-router-dom';
 import {
   ConciergeBell,
   Keyboard,
@@ -11,6 +11,7 @@ import {
   Scissors,
   Stethoscope,
   Sun,
+  UserRound,
   type LucideIcon,
 } from 'lucide-react';
 import './workspace.css';
@@ -254,6 +255,9 @@ function Sidebar({
         <p className="truncate text-sm font-semibold">{user.name}</p>
         <p className="truncate text-xs text-(--ws-ink-3)">{ROLE_LABELS[user.role]}</p>
         <div className="mt-2 flex items-center gap-1">
+          <Link to="/admin/profile" className={iconButton} aria-label="Hồ sơ cá nhân" title="Hồ sơ cá nhân">
+            <UserRound className="h-4 w-4" />
+          </Link>
           <button type="button" className={iconButton} onClick={onToggleTheme} aria-label={dark ? 'Chế độ sáng' : 'Chế độ tối'} title={dark ? 'Chế độ sáng' : 'Chế độ tối'}>
             {dark ? <Sun className="h-4 w-4" /> : <Moon className="h-4 w-4" />}
           </button>

@@ -1,111 +1,48 @@
-// ===========================================
-// Profile & Link API - T13
-// Gọi T8 (BE-1) endpoints:
-//   GET /me                    - thông tin người đang đăng nhập
-//   PATCH /me/staff-profile    - sửa hồ sơ nhân viên
-//   GET /me/addresses          - sổ địa chỉ (module customer)
-//   POST/PUT/DELETE /me/addresses/:id
-//   GET /me/link-candidates    - danh sách hồ sơ có thể liên kết
-//   POST /me/link/otp          - gửi OTP liên kết
-//   POST /me/link/confirm      - xác nhận liên kết
-//   POST /me/link/decline      - từ chối liên kết
-// ===========================================
+// Hồ sơ cá nhân (UC06) và liên kết hồ sơ (UC07). identity-v1 #8, 10–14: GET /me, hồ sơ nhân viên, liên kết;
+// customer-v1 #1–7: hồ sơ khách và sổ địa chỉ (chỉ CUSTOMER).
 import { apiClient } from './axios';
+import type { OtpSentResponse } from '../types/auth';
 import type {
-  MeResponse,
-  UpdateStaffProfileRequest,
-  StaffProfile,
   Address,
-  CreateAddressRequest,
-  UpdateAddressRequest,
+  AddressRequest,
+  CustomerProfile,
   LinkCandidate,
-  LinkOtpRequest,
   LinkConfirmRequest,
+  LinkOtpRequest,
   LinkResult,
-  OtpSentResponse,
-} from '../models/profile.model';
+  MeResponse,
+  StaffProfile,
+  UpdateAddressRequest,
+  UpdateMyCustomerProfileRequest,
+  UpdateStaffProfileRequest,
+} from '../types/profile';
 
-// === Me ===
+const get = async <T>(url: string, params?: object): Promise<T> => (await apiClient.get(url, { params })).data.data;
+const post = async <T>(url: string, body?: object): Promise<T> => (await apiClient.post(url, body)).data.data;
+const patch = async <T>(url: string, body: object): Promise<T> => (await apiClient.patch(url, body)).data.data;
 
-/** GET /me - thông tin người đang đăng nhập */
-export async function getMe(): Promise<MeResponse> {
-  const res = await apiClient.get<{ data: MeResponse }>('/api/me');
-  return res.data.data;
-}
+export const profileApi = {
+  me: () => get<MeResponse>('/api/me'),
+  /** Chỉ nhân viên; `specialty`, `bio` chỉ VET. */
+  updateStaffProfile: (body: UpdateStaffProfileRequest) => patch<StaffProfile>('/api/me/staff-profile', body),
 
-/** PATCH /me/staff-profile - sửa hồ sơ nhân viên */
-export async function updateStaffProfile(
-  data: UpdateStaffProfileRequest
-): Promise<StaffProfile> {
-  const res = await apiClient.patch<{ data: StaffProfile }>('/api/me/staff-profile', data);
-  return res.data.data;
-}
+  customerProfile: () => get<CustomerProfile>('/api/me/customer-profile'),
+  updateCustomerProfile: (body: UpdateMyCustomerProfileRequest) => patch<CustomerProfile>('/api/me/customer-profile', body),
 
-// === Address (Sổ địa chỉ) ===
+  /** Mặc định trước, rồi theo thứ tự thêm. */
+  addresses: () => get<Address[]>('/api/me/addresses'),
+  addAddress: (body: AddressRequest) => post<Address>('/api/me/addresses', body),
+  updateAddress: (addressId: number, body: UpdateAddressRequest) => patch<Address>(`/api/me/addresses/${addressId}`, body),
+  deleteAddress: async (addressId: number): Promise<void> => {
+    await apiClient.delete(`/api/me/addresses/${addressId}`);
+  },
+  setDefaultAddress: (addressId: number) => post<Address>(`/api/me/addresses/${addressId}/set-default`),
 
-/** GET /me/addresses - danh sách địa chỉ */
-export async function getAddresses(): Promise<Address[]> {
-  const res = await apiClient.get<{ data: Address[] }>('/api/me/addresses');
-  return res.data.data;
-}
-
-/** POST /me/addresses - thêm địa chỉ mới */
-export async function createAddress(
-  data: CreateAddressRequest
-): Promise<Address> {
-  const res = await apiClient.post<{ data: Address }>('/api/me/addresses', data);
-  return res.data.data;
-}
-
-/** PUT /me/addresses/:id - sửa địa chỉ */
-export async function updateAddress(
-  id: number,
-  data: UpdateAddressRequest
-): Promise<Address> {
-  const res = await apiClient.put<{ data: Address }>(`/api/me/addresses/${id}`, data);
-  return res.data.data;
-}
-
-/** DELETE /me/addresses/:id - xóa địa chỉ */
-export async function deleteAddress(id: number): Promise<void> {
-  await apiClient.delete(`/api/me/addresses/${id}`);
-}
-
-/** PUT /me/addresses/:id/default - đặt mặc định */
-export async function setDefaultAddress(id: number): Promise<Address> {
-  const res = await apiClient.put<{ data: Address }>(`/api/me/addresses/${id}/default`);
-  return res.data.data;
-}
-
-// === Profile Linking (Liên kết hồ sơ) - BR-TK-19 ===
-
-/**
- * GET /me/link-candidates - danh sách hồ sơ tại quầy có thể liên kết
- * @param phone - filter theo SĐT (tùy chọn)
- */
-export async function getLinkCandidates(
-  phone?: string
-): Promise<LinkCandidate[]> {
-  const params = phone ? { phone } : undefined;
-  const res = await apiClient.get<{ data: LinkCandidate[] }>('/api/me/link-candidates', {
-    params,
-  });
-  return res.data.data;
-}
-
-/** POST /me/link/otp - gửi OTP tới email hồ sơ tại quầy */
-export async function sendLinkOtp(data: LinkOtpRequest): Promise<OtpSentResponse> {
-  const res = await apiClient.post<{ data: OtpSentResponse }>('/api/me/link/otp', data);
-  return res.data.data;
-}
-
-/** POST /me/link/confirm - xác nhận liên kết */
-export async function confirmLink(data: LinkConfirmRequest): Promise<LinkResult> {
-  const res = await apiClient.post<{ data: LinkResult }>('/api/me/link/confirm', data);
-  return res.data.data;
-}
-
-/** POST /me/link/decline - chọn "Không phải tôi" */
-export async function declineLink(): Promise<void> {
-  await apiClient.post('/api/me/link/decline');
-}
+  /** Không gửi `phone`: theo SĐT của hồ sơ online (khách đang có cờ chờ liên kết). */
+  linkCandidates: (phone?: string) => get<LinkCandidate[]>('/api/me/link-candidates', phone ? { phone } : undefined),
+  sendLinkOtp: (body: LinkOtpRequest) => post<OtpSentResponse>('/api/me/link/otp', body),
+  confirmLink: (body: LinkConfirmRequest) => post<LinkResult>('/api/me/link/confirm', body),
+  declineLink: async (): Promise<void> => {
+    await apiClient.post('/api/me/link/decline');
+  },
+};

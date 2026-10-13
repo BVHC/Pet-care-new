@@ -8,7 +8,18 @@ export const selectClass =
   'w-full h-10 px-3 rounded-lg border border-(--color-border-default) bg-white text-sm focus:outline-none focus:ring-2 focus:ring-accent disabled:bg-(--bg-tertiary) disabled:opacity-70';
 
 /** Nhãn gắn `htmlFor` (không bọc ô nhập: `<select>` bọc trong label sẽ dính chữ của option vào tên nhãn). */
-export function Field({ label, hint, children }: { label: string; hint?: string; children: (id: string) => ReactNode }) {
+export function Field({
+  label,
+  hint,
+  error,
+  children,
+}: {
+  label: string;
+  hint?: string;
+  /** Lỗi của riêng ô này (vd lỗi validation BE theo trường). */
+  error?: string;
+  children: (id: string) => ReactNode;
+}) {
   const id = useId();
   return (
     <div>
@@ -16,6 +27,7 @@ export function Field({ label, hint, children }: { label: string; hint?: string;
         {label}
       </label>
       {children(id)}
+      {error && <p className="mt-1 text-xs font-medium text-red-600">{error}</p>}
       {hint && <p className="mt-1 text-xs text-(--text-tertiary)">{hint}</p>}
     </div>
   );

@@ -1,4 +1,4 @@
-import { useState, type ReactNode } from 'react';
+import { useId, useState, type ReactNode } from 'react';
 import { AlertCircle, Eye, EyeOff } from 'lucide-react';
 
 type Props = {
@@ -28,13 +28,14 @@ export function AuthField({
   error,
   onBlur,
 }: Props) {
+  const id = useId();
   const [reveal, setReveal] = useState(false);
   const isPassword = type === 'password';
 
   return (
     <div>
       <div className="mb-2 flex items-center justify-between">
-        <label className="text-[12px] font-bold uppercase tracking-[0.09em] text-[#7a6a5d]">{label}</label>
+        <label htmlFor={id} className="text-[12px] font-bold uppercase tracking-[0.09em] text-[#7a6a5d]">{label}</label>
         {action}
       </div>
       <div
@@ -46,6 +47,7 @@ export function AuthField({
       >
         <span className="shrink-0 text-[#b3a495]">{icon}</span>
         <input
+          id={id}
           type={isPassword && !reveal ? 'password' : type === 'password' ? 'text' : type}
           value={value}
           onChange={(e) => onChange(e.target.value)}

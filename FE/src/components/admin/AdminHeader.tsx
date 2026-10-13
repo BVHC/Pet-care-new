@@ -1,4 +1,4 @@
-import { Bell, Settings, LogOut, Sun, Moon, PanelLeft, PanelLeftClose } from 'lucide-react';
+import { Bell, Settings, LogOut, Sun, Moon, PanelLeft, PanelLeftClose, UserRound } from 'lucide-react';
 import { Button } from '../ui/button';
 import { useSession, useSessionUser } from '../../shared/stores/session.store';
 import {
@@ -96,6 +96,10 @@ export function AdminHeader({ collapsed, onToggleSidebar }: AdminHeaderProps) {
               </div>
             </DropdownMenuLabel>
             <DropdownMenuSeparator className="border-(--border-color)" />
+            <DropdownMenuItem onClick={() => navigate('/admin/profile')} className="dropdown-item">
+              <UserRound className="h-4 w-4" />
+              Hồ sơ cá nhân
+            </DropdownMenuItem>
             <DropdownMenuItem className="dropdown-item">
               <Settings className="h-4 w-4" />
               Cài đặt

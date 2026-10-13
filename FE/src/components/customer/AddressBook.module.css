@@ -57,8 +57,8 @@
 }
 
 .card.default {
-  border-color: var(--color-primary);
-  background: color-mix(in srgb, var(--color-primary) 5%, var(--color-surface-elevated));
+  border-color: var(--color-accent);
+  background: color-mix(in srgb, var(--color-accent) 5%, var(--color-surface-elevated));
 }
 
 .defaultBadge {
@@ -67,7 +67,7 @@
   gap: 0.25rem;
   font-size: 0.75rem;
   font-weight: 600;
-  color: var(--color-primary);
+  color: var(--color-accent);
   margin-bottom: 0.5rem;
 }
 
@@ -130,7 +130,7 @@
 .defaultBtn {
   font-size: 0.75rem;
   font-weight: 500;
-  color: var(--color-primary);
+  color: var(--color-accent);
   background: transparent;
   border: none;
   cursor: pointer;
@@ -150,16 +150,16 @@
   padding: 0.625rem 1rem;
   font-size: 0.875rem;
   font-weight: 500;
-  color: var(--color-primary);
+  color: var(--color-accent);
   background: transparent;
-  border: 1px dashed var(--color-primary);
+  border: 1px dashed var(--color-accent);
   border-radius: 0.5rem;
   cursor: pointer;
   transition: all 0.15s;
 }
 
 .addBtn:hover {
-  background: color-mix(in srgb, var(--color-primary) 10%, transparent);
+  background: color-mix(in srgb, var(--color-accent) 10%, transparent);
 }
 
 .form {
@@ -207,7 +207,7 @@
 
 .fieldInput:focus {
   outline: none;
-  border-color: var(--color-primary);
+  border-color: var(--color-accent);
 }
 
 .checkbox {
@@ -222,7 +222,7 @@
 .checkbox input {
   width: 1rem;
   height: 1rem;
-  accent-color: var(--color-primary);
+  accent-color: var(--color-accent);
 }
 
 .formActions {
@@ -253,7 +253,7 @@
   font-size: 0.875rem;
   font-weight: 600;
   color: white;
-  background: var(--color-primary);
+  background: var(--color-accent);
   border: none;
   border-radius: 0.5rem;
   cursor: pointer;
@@ -268,4 +268,14 @@
 .cancelBtn:disabled {
   opacity: 0.5;
   cursor: not-allowed;
+}
+
+.wide {
+  grid-column: 1 / -1;
+}
+
+.hint {
+  margin-top: 0.5rem;
+  font-size: 0.8125rem;
+  color: var(--color-text-secondary);
 }

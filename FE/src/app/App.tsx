@@ -36,6 +36,7 @@ import { ForgotPasswordPage } from '../pages/auth/ForgotPasswordPage';
 import { ChangePasswordPage } from '../pages/auth/ChangePasswordPage';
 import { TermsPage, PrivacyPage } from '../pages/legal/LegalPage';
 import { NewsPage } from '../pages/news/NewsPage';
+import { RequireLinkDecision } from '../shared/components/auth/RequireLinkDecision';
 import { RequireRole } from '../shared/components/auth/RequireRole';
 import { ROUTES } from '../shared/constants/routes';
 import { useAccount, useSession } from '../shared/stores/session.store';
@@ -75,6 +76,7 @@ import { AdminOrdersPage } from '../pages/admin/AdminOrdersPage';
 import { AdminAIPage } from '../pages/admin/AdminAIPage';
 import { AdminCatalogPage } from '../pages/admin/AdminCatalogPage';
 import { AdminBranchesPage } from '../pages/admin/AdminBranchesPage';
+import { StaffProfilePage } from '../pages/admin/StaffProfilePage';
 import { AdminBranchDetailPage } from '../pages/admin/AdminBranchDetailPage';
 
 const queryClient = new QueryClient({
@@ -116,20 +118,23 @@ export function App() {
           <Route path="/terms" element={<TermsPage />} />
           <Route path="/privacy" element={<PrivacyPage />} />
 
-          {/* Mọi role đã đăng nhập: hồ sơ cá nhân (UC06), đổi mật khẩu (UC05) */}
+          {/* Mọi role đã đăng nhập: hồ sơ cá nhân (UC06; nhân viên chuyển sang /admin/profile), đổi mật khẩu (UC05) */}
           <Route element={<RequireRole roles={ALL_ROLES} />}>
-            <Route path="/account" element={<AccountPage />} />
+            <Route path="/account/:section?" element={<AccountPage />} />
             <Route path="/security" element={<SecurityPage />} />
           </Route>
 
           {/* Khu khách hàng (A02) */}
           <Route element={<RequireRole roles={['CUSTOMER']} />}>
-            <Route path="/booking" element={<BookingPage />} />
-            <Route path="/pets" element={<PetsPage />} />
+            {/* Còn cờ chờ quyết định liên kết: ẩn thú cưng, đặt lịch / lưu trú, feedback (BR-TK-19) */}
+            <Route element={<RequireLinkDecision />}>
+              <Route path="/booking" element={<BookingPage />} />
+              <Route path="/pets" element={<PetsPage />} />
+              <Route path="/review" element={<ReviewsPage />} />
+            </Route>
             <Route path="/appointments" element={<AppointmentsPage />} />
             <Route path="/notifications" element={<NotificationsPage />} />
             <Route path="/settings" element={<SettingsPage />} />
-            <Route path="/review" element={<ReviewsPage />} />
           </Route>
 
           {/* Trang của spec cũ, ngoài phạm vi GĐ1 v16 (gỡ ở T57) */}
@@ -168,6 +173,7 @@ export function App() {
         <Route path={ROUTES.staffLogin} element={<AdminLoginPage />} />
         <Route element={<AdminLayout />}>
           <Route path="/admin/dashboard" element={<AdminDashboardPage />} />
+          <Route path="/admin/profile" element={<StaffProfilePage />} />
           <Route path="/admin/catalog/:tab?" element={<AdminCatalogPage />} />
           <Route path="/admin/branches" element={<AdminBranchesPage />} />
           <Route path="/admin/branches/:branchId/:tab?" element={<AdminBranchDetailPage />} />

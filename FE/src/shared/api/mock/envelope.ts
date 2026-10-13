@@ -51,6 +51,16 @@ export const notFound = (type: string, id: string | number) => fail('RESOURCE_NO
 
 export const isText = (v: unknown): v is string => typeof v === 'string' && v.trim() !== '';
 
+/** Trường có gửi (PATCH: null / không gửi = giữ nguyên). */
+export const has = (v: unknown) => v !== undefined && v !== null;
+/** Có gửi nhưng chỉ toàn khoảng trắng (`@Pattern("(?s).*\\S.*")`). */
+export const blank = (v: unknown) => typeof v === 'string' && v.trim() === '';
+export const tooLong = (v: unknown, max: number) => typeof v === 'string' && v.length > max;
+/** Bỏ khoảng trắng hai đầu; rỗng thành null (xóa giá trị). */
+export const optional = (v: unknown) => (typeof v === 'string' && v.trim() !== '' ? v.trim() : null);
+/** Ảnh đại diện: để trống (xóa) hoặc `https://…`. */
+export const HTTPS_URL = /^(\s*|\s*https:\/\/\S+\s*)$/;
+
 /** [trường, câu báo lỗi, có lỗi không] */
 export type Check = [field: string, message: string, failed: boolean];
 

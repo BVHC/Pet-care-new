@@ -32,7 +32,8 @@ export function LoginPage() {
     try {
       const account = await login({ email: form.email.trim(), password: form.password });
       toast.success('Đăng nhập thành công!');
-      navigate(from ?? homePathFor(account.role));
+      // BR-TK-19: còn cờ chờ quyết định liên kết thì nhắc lại ở mỗi lần đăng nhập.
+      navigate(useSession.getState().linkDecisionPending ? '/account/link' : (from ?? homePathFor(account.role)));
     } catch (error) {
       const err = toApiError(error);
       toast.error(err.message);

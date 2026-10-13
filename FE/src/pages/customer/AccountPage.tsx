@@ -1,262 +1,53 @@
-// ===========================================
-// AccountPage - T13: Hồ sơ cá nhân + sổ địa chỉ + liên kết hồ sơ
-// Gọi T8 (BE-1) endpoints:
-//   GET /me                    - thông tin người đang đăng nhập
-//   PATCH /me/staff-profile    - sửa hồ sơ nhân viên
-// Theo identity-v1.md, BR-TK-15, BR-TK-18, BR-TK-19
-// ===========================================
-import { useState, useEffect, useCallback } from 'react';
-import { Link, useNavigate } from 'react-router-dom';
-import { Camera, Save, Loader2, LogIn } from 'lucide-react';
-import { toast } from 'sonner';
+// UC06 (hồ sơ khách, sổ địa chỉ) và UC07 (liên kết hồ sơ tại quầy) của khách A02. Nhân viên có trang riêng
+// /admin/profile. customer-v1 #1–7, identity-v1 #8, 11–14.
+import { useEffect, useState, type FormEvent } from 'react';
+import { Link, NavLink, Navigate, useParams } from 'react-router-dom';
+import { AlertTriangle, Loader2, Save } from 'lucide-react';
 import { AccountSidebar } from '@/components/customer/AccountSidebar';
 import { AddressBook } from '@/components/customer/AddressBook';
-import { VetProfile } from '@/components/customer/VetProfile';
 import { ProfileLinking } from '@/components/customer/ProfileLinking';
-import { getMe, updateStaffProfile } from '@/shared/api/profile.api';
-import type { MeResponse } from '@/shared/models/profile.model';
-import { isVetUser } from '@/shared/models/profile.model';
-import { useAccount } from '@/shared/stores/session.store';
-import { ROLE_LABELS, isStaff, type Role } from '@/shared/types/auth';
-import { ROUTES } from '@/shared/constants/routes';
+import { Field, FormError, NoticeBar, type Notice } from '@/components/admin/form-ui';
+import { cn } from '@/lib/utils';
+import { fieldErrorsOf, plainMessage, toApiError } from '@/shared/api/api-error';
+import { profileApi } from '@/shared/api/profile.api';
+import { useCustomerProfile, useMe, useProfileMutation } from '@/shared/hooks/useProfile';
+import { useAccount, useSession } from '@/shared/stores/session.store';
+import type { CustomerProfile } from '@/shared/types/profile';
 import styles from './AccountPage.module.css';
 
-// Role helpers
-function isVet(r: Role): boolean {
-  return isVetUser(r);
-}
+const SECTIONS = [
+  { key: 'profile', path: '/account', label: 'Hồ sơ cá nhân' },
+  { key: 'addresses', path: '/account/addresses', label: 'Sổ địa chỉ' },
+  { key: 'link', path: '/account/link', label: 'Liên kết hồ sơ' },
+] as const;
 
-/* ================================================================
-   Profile Form
-   ================================================================ */
-
-interface ProfileFormProps {
-  me: MeResponse;
-  onSaved: () => void;
-}
-
-function ProfileForm({ me, onSaved }: ProfileFormProps) {
-  const { account, staffProfile } = me;
-
-  // Form state
-  const [fullName, setFullName] = useState(staffProfile?.fullName ?? '');
-  const [phone, setPhone] = useState(staffProfile?.phone ?? '');
-  const [avatarUrl, setAvatarUrl] = useState(staffProfile?.avatarUrl ?? '');
-  const [saving, setSaving] = useState(false);
-
-  // Sync when me changes
-  useEffect(() => {
-    setFullName(staffProfile?.fullName ?? '');
-    setPhone(staffProfile?.phone ?? '');
-    setAvatarUrl(staffProfile?.avatarUrl ?? '');
-  }, [staffProfile]);
-
-  const initials = fullName
-    .split(' ')
-    .slice(-2)
-    .map((w) => w[0] ?? '')
-    .join('')
-    .toUpperCase() || '??';
-
-  async function handleSubmit(e: React.FormEvent) {
-    e.preventDefault();
-    try {
-      setSaving(true);
-      await updateStaffProfile({
-        fullName: fullName.trim() || undefined,
-        phone: phone.trim() || undefined,
-        avatarUrl: avatarUrl.trim() || undefined,
-      });
-      toast.success('Cập nhật thông tin thành công');
-      onSaved();
-    } catch (err) {
-      const msg = (err as { response?: { data?: { message?: string } } })?.response?.data?.message;
-      toast.error(msg ?? 'Cập nhật thất bại');
-    } finally {
-      setSaving(false);
-    }
-  }
-
-  return (
-    <section className={styles.section} id="profile">
-      <div className={styles.sectionHeader}>
-        <h2 className={styles.sectionTitle}>Thông tin cá nhân</h2>
-        <span className={styles.roleBadge}>{ROLE_LABELS[account.role]}</span>
-      </div>
-
-      <form onSubmit={handleSubmit} className={styles.profileBody} noValidate>
-        {/* Avatar */}
-        <div className={styles.avatarRow}>
-          <div className={styles.avatarCircle}>
-            {avatarUrl ? (
-              <img src={avatarUrl} alt="Avatar" className={styles.avatarImg} />
-            ) : (
-              <span>{initials}</span>
-            )}
-          </div>
-          <div>
-            <button type="button" className={styles.avatarBtn} disabled title="Đổi ảnh (sắp ra mắt)">
-              <Camera size={14} />
-              Đổi ảnh đại diện
-            </button>
-            <p className={styles.avatarHint}>JPG, PNG · tối đa 2 MB</p>
-          </div>
-        </div>
-
-        <div className={styles.formGrid}>
-          <div className={styles.field}>
-            <label htmlFor="fullName" className={styles.fieldLabel}>Họ tên</label>
-            <input
-              id="fullName"
-              type="text"
-              value={fullName}
-              onChange={(e) => setFullName(e.target.value)}
-              className={styles.fieldInput}
-              placeholder="Nhập họ tên"
-            />
-          </div>
-
-          <div className={styles.field}>
-            <label htmlFor="phone" className={styles.fieldLabel}>Số điện thoại</label>
-            <input
-              id="phone"
-              type="tel"
-              value={phone}
-              onChange={(e) => setPhone(e.target.value)}
-              className={styles.fieldInput}
-              placeholder="0xxx xxx xxx"
-            />
-          </div>
-
-          <div className={styles.field} style={{ gridColumn: '1 / -1' }}>
-            <label htmlFor="email" className={styles.fieldLabel}>
-              Email <span className={styles.readonly}>(không thể sửa)</span>
-            </label>
-            <input
-              id="email"
-              type="email"
-              value={account.email}
-              className={`${styles.fieldInput} ${styles.readonlyInput}`}
-              readOnly
-              title="Email không thể tự sửa theo BR-TK-15"
-            />
-          </div>
-        </div>
-
-        <div className={styles.formActions}>
-          <button type="submit" className={styles.saveBtn} disabled={saving}>
-            {saving ? <Loader2 size={16} className={styles.spinner} /> : <Save size={16} />}
-            {saving ? 'Đang lưu...' : 'Lưu thay đổi'}
-          </button>
-        </div>
-      </form>
-    </section>
-  );
-}
-
-/* ================================================================
-   Main page.
-   ================================================================ */
+type Section = (typeof SECTIONS)[number]['key'];
 
 export function AccountPage() {
-  const navigate = useNavigate();
-  const isAuthenticated = !!useAccount();
-  const [me, setMe] = useState<MeResponse | null>(null);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
-  const [activeSection, setActiveSection] = useState<'profile' | 'addresses' | 'vet' | 'linking'>('profile');
+  const account = useAccount();
+  const { section = 'profile' } = useParams();
+  if (account && account.role !== 'CUSTOMER') return <Navigate to="/admin/profile" replace />;
+  if (!SECTIONS.some((s) => s.key === section)) return <Navigate to="/account" replace />;
+  return <CustomerAccount section={section as Section} />;
+}
 
-  // Load me data
-  async function loadMe() {
-    try {
-      setLoading(true);
-      setError(null);
-      const data = await getMe();
-      setMe(data);
-    } catch (err) {
-      const status = (err as { response?: { status?: number } })?.response?.status;
-      const msg = (err as { response?: { data?: { message?: string } } })?.response?.data?.message;
-      if (status === 401) {
-        setError('Phiên đăng nhập đã hết hạn. Vui lòng đăng nhập lại.');
-      } else {
-        setError(msg ?? 'Không tải được thông tin tài khoản');
-      }
-    } finally {
-      setLoading(false);
-    }
-  }
+function CustomerAccount({ section }: { section: Section }) {
+  const me = useMe();
+  const profile = useCustomerProfile();
+  const setLinkDecisionPending = useSession((s) => s.setLinkDecisionPending);
+  const pending = me.data?.linkDecisionPending ?? false;
 
+  // Cờ chờ liên kết có thể đổi ở nơi khác (lễ tân liên kết hộ): đồng bộ về phiên để chặn đúng các trang (BR-TK-19).
   useEffect(() => {
-    if (isAuthenticated) {
-      loadMe();
-    } else {
-      setLoading(false);
-    }
-  }, [isAuthenticated]);
-
-  const handleSaved = useCallback(() => {
-    loadMe();
-  }, []);
-
-  function handleLoginRedirect() {
-    navigate(ROUTES.login, { state: { from: '/account' } });
-  }
-
-  // Chưa đăng nhập → yêu cầu đăng nhập
-  if (!isAuthenticated) {
-    return (
-      <div className="bg-(--color-surface-page) pb-24">
-        <section className={styles.slab}>
-          <img src="/imgs/hero-dog-clean.png" alt="" className={styles.slabBg} aria-hidden loading="eager" />
-          <div className={styles.slabOverlay} aria-hidden />
-          <div className={styles.slabNoise} aria-hidden />
-
-          <div className={`${styles.slabContent} mx-auto max-w-[1280px] px-5 sm:px-8`}>
-            <nav aria-label="Đường dẫn" className="mb-5 text-[12.5px] text-white/50">
-              <Link to="/" className="hover:text-white hover:underline underline-offset-4 transition-colors">
-                Trang chủ
-              </Link>
-              <span className="mx-1.5">/</span>
-              <span className="font-semibold text-white/85">Tài khoản</span>
-            </nav>
-            <h1 className="font-friendly font-extrabold text-[clamp(22px,3vw,36px)] leading-[1.05] text-white">
-              Tài khoản của tôi
-            </h1>
-          </div>
-        </section>
-
-        <div className="mx-auto max-w-[1280px] px-5 pt-8 sm:px-8">
-          <div className={styles.notAuthBox}>
-            <div className={styles.notAuthIcon}>
-              <LogIn size={40} />
-            </div>
-            <h2 className={styles.notAuthTitle}>Bạn chưa đăng nhập</h2>
-            <p className={styles.notAuthText}>
-              Vui lòng đăng nhập để xem và quản lý thông tin tài khoản, sổ địa chỉ, hồ sơ giới thiệu và liên kết hồ sơ.
-            </p>
-            <button type="button" className={styles.notAuthBtn} onClick={handleLoginRedirect}>
-              <LogIn size={16} />
-              Đăng nhập ngay
-            </button>
-          </div>
-        </div>
-      </div>
-    );
-  }
-
-  // Role checks
-  const role = me?.account.role ?? 'CUSTOMER';
-  const showVetProfile = isVet(role);
-  const showLinking = me?.linkDecisionPending ?? false;
+    if (me.data) setLinkDecisionPending(me.data.linkDecisionPending);
+  }, [me.data, setLinkDecisionPending]);
 
   return (
     <div className="bg-(--color-surface-page) pb-24">
-      {/* Hero slab */}
       <section className={styles.slab}>
         <img src="/imgs/hero-dog-clean.png" alt="" className={styles.slabBg} aria-hidden loading="eager" />
         <div className={styles.slabOverlay} aria-hidden />
         <div className={styles.slabNoise} aria-hidden />
-
         <div className={`${styles.slabContent} mx-auto max-w-[1280px] px-5 sm:px-8`}>
           <nav aria-label="Đường dẫn" className="mb-5 text-[12.5px] text-white/50">
             <Link to="/" className="hover:text-white hover:underline underline-offset-4 transition-colors">
@@ -265,127 +56,142 @@ export function AccountPage() {
             <span className="mx-1.5">/</span>
             <span className="font-semibold text-white/85">Tài khoản</span>
           </nav>
-          <h1 className="font-friendly font-extrabold text-[clamp(22px,3vw,36px)] leading-[1.05] text-white">
-            Tài khoản của tôi
-          </h1>
+          <h1 className="font-friendly font-extrabold text-[clamp(22px,3vw,36px)] leading-[1.05] text-white">Tài khoản của tôi</h1>
         </div>
       </section>
 
-      {/* Content */}
       <div className="mx-auto max-w-[1280px] px-5 pt-8 sm:px-8">
-        {loading && !me ? (
-          <div className={styles.loadingState}>
-            <Loader2 size={32} className={styles.spinner} />
-            <span>Đang tải thông tin...</span>
+        <div className={styles.page}>
+          <AccountSidebar active="profile" userName={profile.data?.fullName} userEmail={profile.data?.email ?? undefined} />
+
+          <div className={styles.main}>
+            <nav aria-label="Mục hồ sơ" className={styles.tabs}>
+              {SECTIONS.map((s) => (
+                <NavLink key={s.key} to={s.path} end className={({ isActive }) => cn(styles.tab, isActive && styles.tabActive)}>
+                  {s.label}
+                </NavLink>
+              ))}
+            </nav>
+
+            {pending && section !== 'link' && <PendingLinkBanner />}
+
+            {profile.isLoading && (
+              <div className={styles.loadingState}>
+                <Loader2 size={32} className={styles.spinner} />
+                <span>Đang tải thông tin...</span>
+              </div>
+            )}
+            {profile.isError && <FormError message={plainMessage(toApiError(profile.error))} />}
+
+            {profile.data && section === 'profile' && <ProfileForm key={profile.data.customerId} profile={profile.data} />}
+            {section === 'addresses' && <AddressBook />}
+            {profile.data && section === 'link' && <ProfileLinking profile={profile.data} pending={pending} />}
           </div>
-        ) : error && !me ? (
-          <div className={styles.errorState}>
-            <p>{error}</p>
-            <button type="button" className={styles.retryBtn} onClick={handleLoginRedirect}>
-              Đăng nhập lại
-            </button>
-          </div>
-        ) : me ? (
-          <div className={styles.page}>
-            {/* Sidebar */}
-            <AccountSidebar
-              active="profile"
-              userName={me.staffProfile?.fullName}
-              userEmail={me.account.email}
-            />
-
-            {/* Main */}
-            <div className={styles.main}>
-              {/* Tabs for staff users */}
-              {isStaff(role) && (
-                <div className={styles.tabs}>
-                  <button
-                    type="button"
-                    className={`${styles.tab} ${activeSection === 'profile' ? styles.tabActive : ''}`}
-                    onClick={() => setActiveSection('profile')}
-                  >
-                    Hồ sơ cá nhân
-                  </button>
-                  <button
-                    type="button"
-                    className={`${styles.tab} ${activeSection === 'addresses' ? styles.tabActive : ''}`}
-                    onClick={() => setActiveSection('addresses')}
-                  >
-                    Sổ địa chỉ
-                  </button>
-                  {showVetProfile && (
-                    <button
-                      type="button"
-                      className={`${styles.tab} ${activeSection === 'vet' ? styles.tabActive : ''}`}
-                      onClick={() => setActiveSection('vet')}
-                    >
-                      Hồ sơ giới thiệu
-                    </button>
-                  )}
-                  {showLinking && (
-                    <button
-                      type="button"
-                      className={`${styles.tab} ${activeSection === 'linking' ? styles.tabActive : ''}`}
-                      onClick={() => setActiveSection('linking')}
-                    >
-                      Liên kết hồ sơ
-                    </button>
-                  )}
-                </div>
-              )}
-
-              {/* Profile Form */}
-              {activeSection === 'profile' && (
-                <ProfileForm me={me} onSaved={handleSaved} />
-              )}
-
-              {/* Address Book */}
-              {activeSection === 'addresses' && (
-                <AddressBook onAddressChange={handleSaved} />
-              )}
-
-              {/* Vet Profile */}
-              {activeSection === 'vet' && showVetProfile && (
-                <VetProfile
-                  staffProfile={me.staffProfile}
-                  onSaved={handleSaved}
-                />
-              )}
-
-              {/* Profile Linking */}
-              {activeSection === 'linking' && showLinking && (
-                <ProfileLinking
-                  linkDecisionPending={me.linkDecisionPending}
-                  onLinked={handleSaved}
-                  onDeclined={handleSaved}
-                />
-              )}
-
-              {/* Non-staff: show simplified profile */}
-              {!isStaff(role) && (
-                <>
-                  <ProfileForm me={me} onSaved={handleSaved} />
-                  <AddressBook onAddressChange={handleSaved} />
-                  {showLinking && (
-                    <ProfileLinking
-                      linkDecisionPending={me.linkDecisionPending}
-                      onLinked={handleSaved}
-                      onDeclined={handleSaved}
-                    />
-                  )}
-                </>
-              )}
-            </div>
-          </div>
-        ) : (
-          <div className={styles.errorState}>
-            <p>Không thể tải thông tin tài khoản.</p>
-            <button type="button" className={styles.retryBtn} onClick={loadMe}>
-              Thử lại
-            </button>
-          </div>
-        )}
+        </div>
       </div>
     </div>
+  );
+}
+
+/** BR-TK-19: còn cờ thì nhắc liên kết, các chức năng cần hồ sơ đang bị ẩn. */
+function PendingLinkBanner() {
+  return (
+    <div className="flex gap-3 rounded-2xl border border-amber-200 bg-amber-50 p-4 text-amber-900">
+      <AlertTriangle className="mt-0.5 h-5 w-5 shrink-0" />
+      <div className="space-y-1 text-sm">
+        <p className="font-semibold">Bạn đã từng đến phòng khám Pet Care?</p>
+        <p>
+          Số điện thoại bạn khai trùng với hồ sơ tại phòng khám. Hãy liên kết, hoặc chọn "Không phải tôi", trước khi quản lý thú cưng,
+          đặt lịch hay gửi góp ý.
+        </p>
+        <Link to="/account/link" className="inline-block font-semibold text-accent hover:underline">
+          Liên kết hồ sơ ngay
+        </Link>
+      </div>
+    </div>
+  );
+}
+
+function ProfileForm({ profile }: { profile: CustomerProfile }) {
+  const setSessionName = useSession((s) => s.setFullName);
+  const [fullName, setFullName] = useState(profile.fullName);
+  const [phone, setPhone] = useState(profile.phone ?? '');
+  const [avatarUrl, setAvatarUrl] = useState(profile.avatarUrl ?? '');
+  const [errors, setErrors] = useState<Record<string, string>>({});
+  const [notice, setNotice] = useState<Notice | null>(null);
+  const save = useProfileMutation(profileApi.updateCustomerProfile);
+  const counter = profile.createdChannel === 'COUNTER';
+
+  const initials =
+    fullName
+      .split(' ')
+      .slice(-2)
+      .map((w) => w[0] ?? '')
+      .join('')
+      .toUpperCase() || '?';
+
+  const submit = async (e: FormEvent) => {
+    e.preventDefault();
+    setErrors({});
+    setNotice(null);
+    try {
+      // Chuỗi rỗng = xóa SĐT (chỉ hồ sơ online) / bỏ ảnh.
+      const saved = await save.mutateAsync({ fullName, phone, avatarUrl });
+      setSessionName(saved.fullName);
+      setNotice({ kind: 'success', text: 'Đã cập nhật hồ sơ' });
+    } catch (err) {
+      const error = toApiError(err);
+      const fields = fieldErrorsOf(error);
+      if (Object.keys(fields).length) setErrors(fields);
+      else setNotice({ kind: 'error', text: plainMessage(error) });
+    }
+  };
+
+  return (
+    <section className={styles.section}>
+      <div className={styles.sectionHeader}>
+        <h2 className={styles.sectionTitle}>Thông tin cá nhân</h2>
+        <span className={styles.roleBadge}>{counter ? 'Hồ sơ tại phòng khám' : 'Hồ sơ online'}</span>
+      </div>
+
+      <form onSubmit={submit} className={styles.profileBody} noValidate>
+        <div className={styles.avatarRow}>
+          <div className={styles.avatarCircle}>
+            {avatarUrl.trim().startsWith('https://') ? <img src={avatarUrl.trim()} alt="" className={styles.avatarImg} /> : <span>{initials}</span>}
+          </div>
+          <p className={styles.avatarHint}>Dán đường dẫn ảnh https://… vào ô "Ảnh đại diện"; để trống để bỏ ảnh.</p>
+        </div>
+
+        <div className={styles.formGrid}>
+          <Field label="Họ tên" error={errors.fullName}>
+            {(id) => <input id={id} className={styles.fieldInput} value={fullName} maxLength={100} onChange={(e) => setFullName(e.target.value)} />}
+          </Field>
+          <Field
+            label="Số điện thoại"
+            error={errors.phone}
+            hint={counter ? 'Hồ sơ tại phòng khám bắt buộc có số điện thoại.' : 'Để trống nếu không muốn lưu số điện thoại.'}
+          >
+            {(id) => (
+              <input id={id} type="tel" className={styles.fieldInput} value={phone} placeholder="0xxxxxxxxx" onChange={(e) => setPhone(e.target.value)} />
+            )}
+          </Field>
+          <Field label="Ảnh đại diện" error={errors.avatarUrl}>
+            {(id) => <input id={id} className={styles.fieldInput} value={avatarUrl} placeholder="https://" onChange={(e) => setAvatarUrl(e.target.value)} />}
+          </Field>
+          <Field label="Email" hint="Không tự sửa được; liên hệ lễ tân để được sửa hộ (BR-TK-15).">
+            {(id) => <input id={id} className={`${styles.fieldInput} ${styles.readonlyInput}`} value={profile.email ?? ''} readOnly />}
+          </Field>
+        </div>
+
+        <NoticeBar notice={notice} />
+
+        <div className={styles.formActions}>
+          <button type="submit" className={styles.saveBtn} disabled={save.isPending}>
+            {save.isPending ? <Loader2 size={16} className={styles.spinner} /> : <Save size={16} />}
+            Lưu thay đổi
+          </button>
+        </div>
+      </form>
+    </section>
   );
 }
