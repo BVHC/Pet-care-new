@@ -16,7 +16,7 @@ import lombok.NoArgsConstructor;
 /**
  * Bảng {@code system_configs} (erd §1, REF, PK chuỗi). Một tham số [CFG] kèm khoảng hợp lệ min–max (BR-QT-13);
  * giá trị lưu dạng chuỗi, kiểu theo {@code valueType}. Seed bởi {@code V2__seed_system_configs.sql}; đọc qua
- * {@code SystemConfigApi} (docs/adr/0004). Sửa giá trị (UC10) làm ở task QT sau.
+ * {@code SystemConfigApi} (docs/adr/0004). Sửa giá trị (UC10, identity-v1 #32) bằng {@link #changeValue} — docs/adr/0036.
  */
 @Getter
 @Entity
@@ -49,4 +49,13 @@ public class SystemConfig extends TimestampedEntity {
 
     @Column(name = "updated_by")
     private Long updatedBy;
+
+    /**
+     * UC10 (BR-QT-13). {@code value} đã chuẩn hóa và đã kiểm kiểu, min–max, ràng buộc chéo dưới khóa dòng
+     * ({@code SystemConfigEditService}); {@code updated_at} do JPA Auditing đặt (docs/adr/0015).
+     */
+    public void changeValue(String value, Long updatedBy) {
+        this.value = value;
+        this.updatedBy = updatedBy;
+    }
 }

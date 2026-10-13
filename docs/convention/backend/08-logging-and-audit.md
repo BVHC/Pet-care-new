@@ -61,7 +61,7 @@ Nguồn: BR-QT-15 và mọi chỗ đặc tả ghi "ghi audit". Mã action do mod
 | | Gửi lại mật khẩu ban đầu (UC08, BR-QT-02) | QT | `record` | `STAFF_INITIAL_PASSWORD_RESENT` (chỉ `entity`, không snapshot — ADR-0030) |
 | | Từ chối do vượt phân cấp, 403 (BR-QT-01, 07, BR-TK-16) — ghi ở facade **sau khi** transaction đã rollback ([ADR-0029](../../adr/0029-staff-administration-foundation.md) mục 2) | QT | `recordIndependently` | `STAFF_ACTION_DENIED` |
 | | Khóa / mở khóa (BR-QT-11; Tài khoản #7, #8) | QT | `record` | *(QT đặt)* |
-| | Cấu hình tham số, mẫu thông báo (UC10, BR-QT-13, 14) | QT | `record` | *(QT đặt)* |
+| | Cấu hình tham số, mẫu thông báo (UC10, BR-QT-13, 14) | QT | `record` | `SYSTEM_CONFIG_UPDATED` (sửa tham số — [ADR-0036](../../adr/0036-system-config-edit.md); `entity = system_configs` không có `entityId` vì PK là chuỗi, `before`/`after` = `key, value`; gửi trùng giá trị hiện tại không audit); mẫu thông báo *(QT đặt, T15 phần 2)* |
 | Đổi giá | Đổi giá sản phẩm, dịch vụ (UC29, UC30) | SP | `record` | `PRICE_CHANGED` |
 | Giao dịch tiền | Thu tiền (BR-TG-04; Order #8) | TG | `record` | `ORDER_PAID` |
 | | Hủy Order `PENDING` khách không thanh toán (BR-BH-05; Order #10) | BH | `record` | *(BH đặt)* |

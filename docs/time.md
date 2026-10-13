@@ -1,46 +1,20 @@
 # Pet Care Ecosystem — Team Timeline
 
 > **Kế hoạch:** `docs/timeline_petcare_v15.xlsx` (mô tả task, ngày, người làm; mã UC/ST theo sheet "Đối chiếu phạm vi").
-<<<<<<< HEAD
-<<<<<<< HEAD
-<<<<<<< HEAD
-<<<<<<< HEAD
-> **Trạng thái:** đối chiếu code trên nhánh `dev` (commit `c8652b9`) với hợp đồng `docs/api/*-v1.md`; T13 ở working tree, chưa commit. Cập nhật: 2026-10-12.
-=======
-> **Trạng thái:** đối chiếu code trên nhánh `dev` (commit `0d45292`) với hợp đồng `docs/api/*-v1.md`. Cập nhật: 2026-10-12 (T14 phần 0–2 trên nhánh `manh`; T8 đã merge `dev` qua PR #10).
->>>>>>> b55b906 (feat: triển khai đổi chức vụ điều chuyển trong chi nhánh)
-=======
-> **Trạng thái:** đối chiếu code trên nhánh `dev` (commit `0d45292`) với hợp đồng `docs/api/*-v1.md`. Cập nhật: 2026-10-12 (T14 phần 0–3 trên nhánh `manh`, phần 3 chưa commit; T8 đã merge `dev` qua PR #10).
->>>>>>> c103a3b (feat: triển khai vô hiệu hóa và tái kích hoạt tài khoản)
-=======
-> **Trạng thái:** đối chiếu code trên nhánh `dev` (commit `0d45292`) với hợp đồng `docs/api/*-v1.md`. Cập nhật: 2026-10-12 (T14 phần 0–4 trên nhánh `manh`: phần 0–3 đã commit tới `c103a3b`, phần 4 chưa commit; T8 đã merge `dev` qua PR #10).
->>>>>>> 0f27381 (feat: triển khai chức năng sửa email nhân viên)
+> **Trạng thái:** đối chiếu code trên nhánh `manh` (commit `6ed0962` = `origin/dev` @ `ad66d8f` + 5 commit T14 phần 0–5) với hợp đồng `docs/api/*-v1.md`; T15 phần 1 ở working tree, chưa commit. Cập nhật: 2026-10-13.
 
 ## Tổng quan
 
-Giai đoạn 1 (05–30/10, sắp vào W2): **14/50 DONE** · 13 IN_PROGRESS · 23 NOT_STARTED. Giai đoạn 2 (02/11–31/12): 37 task T51–T87, chưa bắt đầu.
+Giai đoạn 1 (05–30/10, đang W2): **15/50 DONE** · 14 IN_PROGRESS · 21 NOT_STARTED. Giai đoạn 2 (02/11–31/12): 37 task T51–T87, chưa bắt đầu.
 
 | Ai | Phụ trách | DONE | IN_PROGRESS | NOT_STARTED |
 |---|---|---|---|---|
-| BE-1 · Mạnh | identity, appointment, visit, care | 4 | 0 | 11 |
+| BE-1 · Mạnh | identity, appointment, visit, care | 5 | 1 | 9 |
 | BE-2 · Dũng | branch, catalog, customer, sales, inventory, boarding, content, report | 4 | 0 | 11 |
 | FE-1 · Hiến | toàn bộ giao diện | 5 | 12 | 0 |
-=======
-> **Trạng thái:** đối chiếu code trên nhánh `dev` (commit `0d45292`) với hợp đồng `docs/api/*-v1.md`. Cập nhật: 2026-10-12 (T14 phần 0–5 trên nhánh `manh`: phần 0–4 đã commit tới `0f27381`, phần 5 chưa commit → T14 DONE; T8 đã merge `dev` qua PR #10).
-
-## Tổng quan
-
-Giai đoạn 1 (05–30/10, đang đầu W2): **9/50 DONE** · 15 IN_PROGRESS · 26 NOT_STARTED. Giai đoạn 2 (02/11–31/12): 37 task T51–T87, chưa bắt đầu.
-
-| Ai | Phụ trách | DONE | IN_PROGRESS | NOT_STARTED |
-|---|---|---|---|---|
-| BE-1 · Mạnh | identity, appointment, visit, care | 5 | 0 | 10 |
-| BE-2 · Dũng | branch, catalog, customer, sales, inventory, boarding, content, report | 2 | 0 | 13 |
-| FE-1 · Hiến | toàn bộ giao diện | 1 | 14 | 2 |
->>>>>>> fdab74a (feat: triển khai api khóa mở khóa người dùng hệ thống)
 | Cả nhóm | thiết kế, demo | 1 | 1 | 1 |
 
-- **Trễ hạn** (hạn trước 12/10, chưa DONE): T1. **Xong trễ** (theo ngày commit): T5 (09/10, hạn 06/10), T10 (09/10, hạn 08/10), T8 (10/10, hạn 09/10), T12 (11/10, hạn 08/10), T13 (12/10, chưa commit, hạn 09/10).
+- **Trễ hạn** (hạn trước 12/10, chưa DONE): T1. **Xong trễ** (theo ngày commit): T5 (09/10, hạn 06/10), T10 (09/10, hạn 08/10), T8 (10/10, hạn 09/10), T12 (11/10, hạn 08/10), T13 (12/10, hạn 09/10).
 - **Đang chặn:**
   - Đăng ký, xác thực OTP, đăng nhập, `GET /api/me` và `/api/me/link-*` của **khách** trả 500 trên app thật: identity gọi `CustomerApi` / `CustomerQueryApi`, module customer vẫn chỉ có placeholder ném lỗi (nợ D001, D010). Theo `06-module-contracts.md` §6, `CustomerApi` đã quá hạn (07/10), `CustomerQueryApi` hạn 13/10; BE-1 đã đổi chữ ký hai interface (ADR-0027) nên BE-2 cài theo bản mới. Nhân viên đăng nhập bình thường. Vì vậy màn hồ sơ, sổ địa chỉ, liên kết của khách (T13) mới chạy trên mock.
   - Chi nhánh **đang hoạt động** không đổi giờ mở cửa, không thêm ngày nghỉ được: `PUT …/opening-hours`, `POST …/holidays` và hai `…/impact` trả 500, vì `ScheduleImpactFinder` gọi `AppointmentQueryApi` (BE-1, hạn 16/10), `BoardingQueryApi` (BE-2, hạn 22/10), `PetQueryApi` (BE-2, hạn 13/10), cả ba còn là placeholder. Chi nhánh nháp không bị. Mới ghi ở `system-overview.md`, chưa có mã nợ.
@@ -102,7 +76,7 @@ Giai đoạn 1 (05–30/10, đang đầu W2): **9/50 DONE** · 15 IN_PROGRESS ·
 | # | Công việc | Ai | Ngày | Trạng thái | Hiện trạng | Test |
 |---|---|---|---|---|---|---|
 | T14 | Quản trị: tài khoản nhân viên (tạo theo phân cấp, đổi chức vụ, điều chuyển, vô hiệu hóa/kích hoạt lại, sửa email/SĐT) + khóa/mở khóa _(UC08, UC09 · BR-QT-01→12, BR-TK-16)_ | BE-1 | 12–13/10 | **DONE** | _(12/10, nhánh `manh`)_ Phần 0 nền chung (ADR-0029) + phần 1 `GET/POST /api/staff`, `GET /api/staff/{id}`, `POST …/resend-initial-password` (ADR-0030, commit `90dfc6c`) + phần 2 `POST …/change-role`, `POST …/transfer` (ADR-0031, commit `b55b906`; điều chuyển 500 tới khi có `VisitQueryApi` / `CashierShiftQueryApi` — D016) + phần 3 `POST …/disable`, `POST …/reactivate` (ADR-0033, commit `c103a3b`; sai trạng thái → 409, hủy phiên + offline, kích hoạt lại cấp mật khẩu tạm mới + bắt đổi, có thể gán lại chi nhánh; trả xong D014; vô hiệu hóa A05–A08 500 tới 21/10 — D016, SUPER_MANAGER và kích hoạt lại chạy thật) + phần 4 `POST …/email-change`, `POST …/email-change/confirm` (ADR-0034, commit `0f27381`; OTP tới email mới, mọi trạng thái, không hủy phiên, thông báo email cũ + mới, audit `STAFF_EMAIL_CHANGED`; chạy thật) + phần 5 `GET /api/accounts`, `POST /api/accounts/{id}/lock`, `…/unlock` (ADR-0035, chưa commit; chỉ ADMIN, lý do bắt buộc, hủy mọi phiên + `pendingWork` + `AccountLockedEvent` + thông báo trong app cho người phụ trách, quản lý cuối → SUPER_MANAGER; mở khóa giữ `status`; V12). Test: `StaffAdminIT`, `StaffRoleTransferIT`, `StaffDisableReactivateIT`, `StaffTransferPlaceholderIT`, `StaffEmailChangeIT`, `AccountLockIT`, `StaffHierarchyPolicyTest`, `StaffDisableReactivateServiceTest`, `StaffEmailChangeServiceTest`, `AccountLockServiceTest`; `mvn clean verify` 12/10 xanh: 2914 unit + 770 IT; smoke `docker compose` khóa / mở khóa 24/24. Đủ endpoint #15–24, #28–30 của identity-v1 (sửa SĐT nhân viên: hợp đồng không có endpoint cho cấp trên — nhân viên tự sửa qua `PATCH /api/me/staff-profile`, T8; #25–27 thuộc UC22). ⚠ Chạy thật: điều chuyển, vô hiệu hóa, khóa nhân viên A05–A08 trả 500 tới khi có `VisitQueryApi` / `CashierShiftQueryApi` (21/10, D016); khóa khách 500 tới khi có `CustomerQueryApi`, `AppointmentQueryApi`, `BoardingQueryApi`, `OrderQueryApi` (D010); visit chưa nghe `AccountLockedEvent` (D017, T26) | `POST /api/staff` (ngoài phân cấp → 403 BR-QT-01), `POST /api/staff/{id}/disable` (còn Visit/ca OPEN → 400 BR-QT-08), …/change-role, …/transfer, …/reactivate; `POST /api/accounts/{id}/lock` → hủy phiên + pendingWork, …/unlock |
-| T15 | Quản trị: API cấu hình tham số [CFG] (min–max) + mẫu thông báo (khôi phục mặc định) + xem audit + thông báo trong app _(UC10, UC11, UC88 · BR-QT-13→16)_ | BE-1 | 14/10 | **NOT_STARTED** | Chưa có `/api/system-configs`, `/api/notification-templates`, `/api/audit-logs`, `/api/me/notifications`. Luồng ST20 IN_APP đã ghi bảng `notifications` (T6) | `PUT /api/system-configs/{key}` ngoài min–max → 400 BR-QT-13; `PUT /api/notification-templates/{code}` biến lạ/thiếu → 400 BR-QT-14; `POST …/{code}/restore-default`; `GET /api/audit-logs` (chỉ ADMIN); `GET /api/me/notifications` |
+| T15 | Quản trị: API cấu hình tham số [CFG] (min–max) + mẫu thông báo (khôi phục mặc định) + xem audit + thông báo trong app _(UC10, UC11, UC88 · BR-QT-13→16)_ | BE-1 | 14/10 | **IN_PROGRESS** | _(13/10, working tree chưa commit)_ Phần 1 xong (ADR-0036): `GET /api/system-configs`, `PUT /api/system-configs/{key}` — chỉ ADMIN, ngoài kiểu / min–max / ràng buộc chéo (`visit.late_priority_minutes < appointment.no_show_after_minutes`, `boarding.min_nights ≤ boarding.max_nights`) → 400 BR-QT-13 kèm khoảng cho phép, trùng giá trị → 200 không ghi, audit `SYSTEM_CONFIG_UPDATED`, cache nạp lại sau commit. Test: `SystemConfigAdminIT`, `SystemConfigEditServiceTest`, `SystemConfigAdminServiceTest`, `ConfigValuesTest`, `ConfigConstraintsTest`. Còn: `/api/notification-templates` (phần 2), `/api/audit-logs` (phần 3), `/api/me/notifications` (phần 4; luồng ST20 IN_APP đã ghi bảng `notifications` từ T6) | `PUT /api/system-configs/{key}` ngoài min–max → 400 BR-QT-13; `PUT /api/notification-templates/{code}` biến lạ/thiếu → 400 BR-QT-14; `POST …/{code}/restore-default`; `GET /api/audit-logs` (chỉ ADMIN); `GET /api/me/notifications` |
 | T16 | Lịch hẹn: sinh khung 30 phút theo giờ mở cửa/ngày nghỉ, tính quota, đặt lịch (khách/lễ tân), đổi khung, hủy (cờ hủy muộn) _(UC39, UC40 · BR-LH-01→07)_ | BE-1 | 15–16/10 | **NOT_STARTED** | Chỉ có interface `appointment/api` | `GET /api/branches/{branchId}/available-slots`, `POST /api/appointments` → BOOKED, `POST /api/appointments/{appointmentId}/reschedule`, …/cancel (< 12h → lateCancel=true); hết quota → 400 BR-LH-03; đổi lần 4 → 400 BR-LH-06 |
 | T17 | Khách hàng & thú cưng: hồ sơ tại quầy, tra cứu, thú cưng (khóa loài), cân nặng, đánh dấu đã mất & chuyển chủ (phát sự kiện), xóa thú chưa giao dịch, hồ sơ sức khỏe cho khách _(UC22–26 · BR-KH-01→08)_ | BE-2 | 12–13/10 | **NOT_STARTED** | Chỉ có placeholder ném lỗi (`CustomerApiPlaceholder`, `CustomerQueryApiPlaceholder`, `PetQueryApiPlaceholder`); chữ ký `CustomerApi.linkAccountToCounterProfile` và `CustomerQueryApi.checkOnlineProfileLinkable` đã đổi ở T8 (ADR-0027), cài theo bản mới. 10/10: BE-1 đã tạo khung entity `Customer` / `Address` + `/me/customer-profile`, `/me/addresses` (T8, ADR-0028) — T17 mở rộng các entity này, không tạo entity mới. ⚠ Đang chặn: đăng ký, xác thực, đăng nhập, `GET /me`, `/me/link-*` của khách (nợ D001, D010) và tên thú / khách trong danh sách ảnh hưởng của chi nhánh (`PetQueryApi`). `CustomerApi` quá hạn (07/10), `CustomerQueryApi` hạn 13/10 (06 §6) | `POST /api/customers` (SĐT trùng → vẫn 201 + duplicatePhoneProfiles), `POST /api/pets/{petId}/mark-deceased` → `PetDeceasedEvent`, …/transfer-owner; đổi loài khi có bệnh án → 400 BR-KH-03; xóa thú đã có giao dịch → 400 BR-KH-06 |
 | T18 | Kho: nhà cung cấp, tồn theo lô + StockMovement, phiếu nhập kho, dịch vụ xuất FEFO / hoàn lô, điều chỉnh tồn, tồn tối thiểu, xem tồn _(UC73–76 · BR-KO-01→07)_ | BE-2 | 14–15/10 | **NOT_STARTED** | Chỉ có `StockQueryApiPlaceholder` | `POST /api/stock-receipts` → DRAFT, …/{receiptId}/confirm (thiếu lô/hạn → 400 BR-KO-03), …/{receiptId}/cancel (lô không đủ tồn → 400 BR-KO-04), `POST /api/stock-adjustments`, `GET /api/inventory`; FEFO/hoàn lô là `StockApi` nội bộ |

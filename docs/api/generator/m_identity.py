@@ -345,11 +345,12 @@ m.op("post", "/accounts/{id}/unlock", "unlockAccount", "Mở khóa tài khoản"
      notes="status giữ nguyên giá trị trước khi khóa (BR-QT-12); giữ lý do khóa gần nhất; không mở phiên, không thông báo; ghi audit kèm lý do (docs/adr/0035).")
 
 m.op("get", "/system-configs", "listSystemConfigs", "Danh sách tham số [CFG]", "Configuration", "UC10", "BR-QT-13",
-     "A03", "Chỉ ADMIN", resp="array:SystemConfig", errors=(401, 403))
+     "A03", "Chỉ ADMIN", resp="array:SystemConfig", errors=(401, 403),
+     notes="Mọi tham số (52), sắp theo key; minValue / maxValue là khoảng tĩnh, khoảng thu hẹp theo ràng buộc chéo chỉ có trong message lỗi của #32 (docs/adr/0036).")
 m.op("put", "/system-configs/{key}", "updateSystemConfig", "Sửa tham số", "Configuration", "UC10", "BR-QT-13, 15",
      "A03", "Chỉ ADMIN", body="UpdateConfigRequest", resp="SystemConfig", path_params=["ConfigKey"],
      errors=(400, 401, 403, 404), err_desc={400: "`BR-QT-13` ngoài khoảng hợp lệ, message ghi khoảng cho phép"},
-     notes="Chỉ áp dụng cho giao dịch tạo sau; ghi audit.")
+     notes="Thứ tự kiểm: hình thức → quyền → key lạ 404 → kiểu / min–max / ràng buộc chéo (400 BR-QT-13, message ghi khoảng cho phép thực tế; sai kiểu cũng BR-QT-13) → trùng giá trị hiện tại (sau chuẩn hóa, ví dụ 05 = 5) → 200 không ghi, không audit. Ràng buộc chéo: visit.late_priority_minutes < appointment.no_show_after_minutes, boarding.min_nights ≤ boarding.max_nights. value được chuẩn hóa (INT bỏ số 0 đầu, TIME dạng HH:mm, DECIMAL không dạng mũ). Có hiệu lực cho mọi giao dịch tạo sau khi response trả về; ghi audit SYSTEM_CONFIG_UPDATED (docs/adr/0036).")
 m.op("get", "/notification-templates", "listNotificationTemplates", "Danh sách mẫu thông báo", "Configuration",
      "UC10", "BR-QT-14", "A03", "Chỉ ADMIN", resp="array:NotificationTemplate", errors=(401, 403))
 m.op("put", "/notification-templates/{code}", "updateNotificationTemplate", "Sửa nội dung mẫu", "Configuration",

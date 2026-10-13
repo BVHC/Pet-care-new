@@ -2,7 +2,6 @@ package com.petcare.module.identity.service;
 
 import java.math.BigDecimal;
 import java.time.LocalTime;
-import java.time.format.DateTimeParseException;
 import java.util.ArrayList;
 import java.util.EnumMap;
 import java.util.LinkedHashMap;
@@ -22,9 +21,11 @@ import lombok.extern.slf4j.Slf4j;
 
 /**
  * Cache trong bộ nhớ của {@code system_configs} (docs/adr/0004). Nạp toàn bộ lúc khởi động và kiểm tra fail-fast:
- * DB phải có đủ mọi {@link ConfigKey}, đúng {@code value_type}, giá trị parse được và nằm trong min–max (BR-QT-13);
- * sai thì app dừng, log nêu từng key lỗi. Map bất biến được thay nguyên khối ({@code volatile}) nên luồng đọc không
- * bao giờ thấy trạng thái nửa cũ nửa mới. Task sửa tham số (UC10) gọi {@link #reload()} sau khi commit.
+ * DB phải có đủ mọi {@link ConfigKey}, đúng {@code value_type}, giá trị parse được, nằm trong min–max (BR-QT-13) và
+ * thỏa ràng buộc chéo ({@link ConfigConstraints}, docs/adr/0036); sai thì app dừng, log nêu từng key lỗi. Map bất biến
+ * được thay nguyên khối ({@code volatile}) nên luồng đọc không bao giờ thấy trạng thái nửa cũ nửa mới và không bị chặn.
+ * Sửa tham số (UC10) gọi {@link #reload()} sau khi commit, từ facade {@code SystemConfigAdminService} (docs/adr/0036
+ * mục 2). Cache chỉ có đúng một entry mỗi {@link ConfigKey}: dòng DB lạ bị bỏ qua, nên kích thước cố định.
  */
 @Slf4j
 @Service
@@ -51,8 +52,12 @@ public class SystemConfigService implements SystemConfigApi, InitializingBean {
         reload();
     }
 
-    /** Nạp lại từ DB. Dữ liệu không hợp lệ thì giữ nguyên bản đang dùng và ném {@link IllegalStateException}. */
-    public void reload() {
+    /**
+     * Nạp lại từ DB. Dữ liệu không hợp lệ thì giữ nguyên bản đang dùng và ném {@link IllegalStateException}.
+     * {@code synchronized} gói cả bước đọc lẫn bước gán: hai lần nạp chồng nhau (hai ADMIN sửa hai khóa khác nhau) không
+     * thể để lần đọc trước gán đè kết quả của lần đọc sau (docs/adr/0036 mục 2). Luồng đọc giá trị không lấy monitor này.
+     */
+    public synchronized void reload() {
         values = load(repository.findAll().stream().map(ConfigRow::of).toList());
         log.info("Loaded {} system configs", values.size());
     }
@@ -79,52 +84,18 @@ public class SystemConfigService implements SystemConfigApi, InitializingBean {
         if (!byKey.isEmpty()) {
             log.warn("system_configs has keys unknown to ConfigKey, ignored: {}", byKey.keySet());
         }
+        if (errors.isEmpty()) {
+            errors.addAll(ConfigConstraints.violations(loaded));
+        }
         if (!errors.isEmpty()) {
             throw new IllegalStateException("Invalid system_configs: " + String.join("; ", errors));
         }
         return Map.copyOf(loaded);
     }
 
-    @SuppressWarnings({"unchecked", "rawtypes"})
+    /** Giữ cho {@code SystemConfigServiceTest}; cài ở {@link ConfigValues#parseInRange}. */
     static Object parseInRange(ConfigRow row) {
-        Object value = parse(row.valueType(), row.value());
-        if (row.valueType() == ConfigValueType.BOOL) {
-            return value;
-        }
-        Comparable comparable = (Comparable) value;
-        if (row.minValue() != null && comparable.compareTo(parse(row.valueType(), row.minValue())) < 0) {
-            throw new IllegalArgumentException("value " + row.value() + " < min " + row.minValue());
-        }
-        if (row.maxValue() != null && comparable.compareTo(parse(row.valueType(), row.maxValue())) > 0) {
-            throw new IllegalArgumentException("value " + row.value() + " > max " + row.maxValue());
-        }
-        return value;
-    }
-
-    private static Object parse(ConfigValueType type, String raw) {
-        if (raw == null) {
-            throw new IllegalArgumentException("null value");
-        }
-        try {
-            return switch (type) {
-                case INT -> Integer.valueOf(raw.trim());
-                case DECIMAL -> new BigDecimal(raw.trim());
-                case BOOL -> parseBool(raw.trim());
-                case TIME -> LocalTime.parse(raw.trim());
-            };
-        } catch (NumberFormatException | DateTimeParseException ex) {
-            throw new IllegalArgumentException("cannot parse '" + raw + "' as " + type);
-        }
-    }
-
-    private static Boolean parseBool(String raw) {
-        if ("true".equals(raw)) {
-            return Boolean.TRUE;
-        }
-        if ("false".equals(raw)) {
-            return Boolean.FALSE;
-        }
-        throw new IllegalArgumentException("cannot parse '" + raw + "' as BOOL");
+        return ConfigValues.parseInRange(row);
     }
 
     @Override

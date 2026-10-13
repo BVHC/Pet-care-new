@@ -70,6 +70,13 @@ public final class QtAuditActions {
      */
     public static final String ACCOUNT_UNLOCKED = "ACCOUNT_UNLOCKED";
 
+    /**
+     * ADMIN sửa một tham số [CFG] (UC10, BR-QT-13, 15; docs/adr/0036). {@code entity = system_configs}, không có
+     * {@code entityId} (PK là chuỗi, {@code audit_logs.entity_id} là BIGINT); {@code before}, {@code after} =
+     * {@code key, value} (dạng chuẩn hóa). Gửi trùng giá trị hiện tại không audit.
+     */
+    public static final String SYSTEM_CONFIG_UPDATED = "SYSTEM_CONFIG_UPDATED";
+
     private QtAuditActions() {
     }
 }

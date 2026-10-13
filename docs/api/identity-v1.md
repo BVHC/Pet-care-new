@@ -91,8 +91,8 @@
 | Tìm tài khoản (khách và nhân viên) | A03 | Chỉ ADMIN | — | — | — |
 | Khóa tài khoản | A03 | Chỉ ADMIN; không khóa chính mình | is_locked false → true (Tài khoản#7) | — | Mọi role, mọi trạng thái (kể cả PENDING, DISABLED) trừ chính mình; status giữ nguyên (BR-QT-12). Hủy mọi phiên; pendingWork sắp theo thứ tự enum rồi entityId (Visit IN_PROGRESS → needsReassign); phát AccountLockedEvent; thông báo trong app theo BR-QT-11 (nhân viên A06–A08: BRANCH_MANAGER chi nhánh, không còn thì SUPER_MANAGER; BRANCH_MANAGER: SUPER_MANAGER, quản lý cuối của chi nhánh ACTIVE → LAST_BRANCH_MANAGER_LOCKED_APP; khách: lễ tân các chi nhánh có việc dở — 06 Q2); ghi audit kèm lý do (docs/adr/0035). |
 | Mở khóa tài khoản | A03 | Chỉ ADMIN | is_locked true → false (Tài khoản#8) | — | status giữ nguyên giá trị trước khi khóa (BR-QT-12); giữ lý do khóa gần nhất; không mở phiên, không thông báo; ghi audit kèm lý do (docs/adr/0035). |
-| Danh sách tham số [CFG] | A03 | Chỉ ADMIN | — | — | — |
-| Sửa tham số | A03 | Chỉ ADMIN | — | — | Chỉ áp dụng cho giao dịch tạo sau; ghi audit. |
+| Danh sách tham số [CFG] | A03 | Chỉ ADMIN | — | — | Mọi tham số (52), sắp theo key; minValue / maxValue là khoảng tĩnh, khoảng thu hẹp theo ràng buộc chéo chỉ có trong message lỗi của #32 (docs/adr/0036). |
+| Sửa tham số | A03 | Chỉ ADMIN | — | — | Thứ tự kiểm: hình thức → quyền → key lạ 404 → kiểu / min–max / ràng buộc chéo (400 BR-QT-13, message ghi khoảng cho phép thực tế; sai kiểu cũng BR-QT-13) → trùng giá trị hiện tại (sau chuẩn hóa, ví dụ 05 = 5) → 200 không ghi, không audit. Ràng buộc chéo: visit.late_priority_minutes < appointment.no_show_after_minutes, boarding.min_nights ≤ boarding.max_nights. value được chuẩn hóa (INT bỏ số 0 đầu, TIME dạng HH:mm, DECIMAL không dạng mũ). Có hiệu lực cho mọi giao dịch tạo sau khi response trả về; ghi audit SYSTEM_CONFIG_UPDATED (docs/adr/0036). |
 | Danh sách mẫu thông báo | A03 | Chỉ ADMIN | — | — | — |
 | Sửa nội dung mẫu | A03 | Chỉ ADMIN | — | — | Không có endpoint thêm / xóa mẫu. |
 | Khôi phục mẫu mặc định | A03 | Chỉ ADMIN | — | — | — |
