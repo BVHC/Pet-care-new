@@ -218,7 +218,7 @@ paths:
     get:
       tags: [Notifications]
       summary: "Thông báo của tôi"
-      description: "UC88 · —. Actor: A02–A08. Quyền: Người đang đăng nhập. Chuyển trạng thái: —. Mới nhất trước."
+      description: "UC88 · —. Actor: A02–A08. Quyền: Người đang đăng nhập. Chuyển trạng thái: —. Mới nhất trước (`createdAt` giảm dần, trùng giờ thì `notificationId` giảm dần). `unreadOnly` rỗng / vắng = false. `page` < 0 → 0, `size` kẹp 1–100. Chỉ thông báo của chủ token (docs/adr/0039)."
       operationId: listMyNotifications
       security:
         - bearerAuth: []
@@ -254,6 +254,12 @@ paths:
                   code:
                     type: integer
                     description: "HTTP status của kết quả, ví dụ 200, 201"
+        "400":
+          description: "Tham số sai kiểu (`MALFORMED_REQUEST`); BR-TK-17"
+          content:
+            "application/json":
+              schema:
+                $ref: "#/components/schemas/Error"
         "401":
           $ref: "#/components/responses/Unauthorized"
   "/me/notifications/unread-count":
@@ -280,13 +286,19 @@ paths:
                   code:
                     type: integer
                     description: "HTTP status của kết quả, ví dụ 200, 201"
+        "400":
+          description: BR-TK-17
+          content:
+            "application/json":
+              schema:
+                $ref: "#/components/schemas/Error"
         "401":
           $ref: "#/components/responses/Unauthorized"
   "/me/notifications/{notificationId}/read":
     post:
       tags: [Notifications]
       summary: "Đánh dấu đã đọc"
-      description: "UC88 · —. Actor: A02–A08. Quyền: Chủ thông báo. Chuyển trạng thái: —."
+      description: "UC88 · —. Actor: A02–A08. Quyền: Chủ thông báo. Chuyển trạng thái: —. Gọi lại vẫn 204 và giữ `readAt` của lần đọc đầu (docs/adr/0039)."
       operationId: markNotificationRead
       security:
         - bearerAuth: []
@@ -295,21 +307,37 @@ paths:
       responses:
         "204":
           description: "Không có nội dung"
+        "400":
+          description: "`notificationId` sai kiểu (`MALFORMED_REQUEST`); BR-TK-17"
+          content:
+            "application/json":
+              schema:
+                $ref: "#/components/schemas/Error"
         "401":
           $ref: "#/components/responses/Unauthorized"
         "404":
-          $ref: "#/components/responses/NotFound"
+          description: "Không tìm thấy thông báo #<id> — cả khi thông báo là của người khác"
+          content:
+            "application/json":
+              schema:
+                $ref: "#/components/schemas/Error"
   "/me/notifications/read-all":
     post:
       tags: [Notifications]
       summary: "Đánh dấu tất cả đã đọc"
-      description: "UC88 · —. Actor: A02–A08. Quyền: Người đang đăng nhập. Chuyển trạng thái: —."
+      description: "UC88 · —. Actor: A02–A08. Quyền: Người đang đăng nhập. Chuyển trạng thái: —. Đánh dấu mọi thông báo chưa đọc tại thời điểm gọi; thông báo đến sau vẫn chưa đọc. Thông báo đã đọc giữ `readAt` cũ (docs/adr/0039)."
       operationId: markAllNotificationsRead
       security:
         - bearerAuth: []
       responses:
         "204":
           description: "Không có nội dung"
+        "400":
+          description: BR-TK-17
+          content:
+            "application/json":
+              schema:
+                $ref: "#/components/schemas/Error"
         "401":
           $ref: "#/components/responses/Unauthorized"
   "/me/notification-settings":

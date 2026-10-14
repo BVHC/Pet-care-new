@@ -78,14 +78,21 @@ m.op("post", "/care-tasks/{careTaskId}/cancel", "cancelCareTask", "Hủy Care Ta
 
 m.op("get", "/me/notifications", "listMyNotifications", "Thông báo của tôi", "Notifications", "UC88", "—", "A02–A08",
      "Người đang đăng nhập", resp="Notification", page=True, query=["unreadOnly=bool", "page", "size"],
-     errors=(401,), notes="Mới nhất trước.")
+     errors=(400, 401), err_desc={400: "Tham số sai kiểu (`MALFORMED_REQUEST`); BR-TK-17"},
+     notes="Mới nhất trước (`createdAt` giảm dần, trùng giờ thì `notificationId` giảm dần). `unreadOnly` rỗng / vắng = "
+           "false. `page` < 0 → 0, `size` kẹp 1–100. Chỉ thông báo của chủ token (docs/adr/0039).")
 m.op("get", "/me/notifications/unread-count", "countMyUnreadNotifications", "Số thông báo chưa đọc", "Notifications",
-     "UC88", "—", "A02–A08", "Người đang đăng nhập", resp="UnreadCount", errors=(401,), notes="A3.")
+     "UC88", "—", "A02–A08", "Người đang đăng nhập", resp="UnreadCount", errors=(400, 401),
+     err_desc={400: "BR-TK-17"}, notes="A3.")
 m.op("post", "/me/notifications/{notificationId}/read", "markNotificationRead", "Đánh dấu đã đọc", "Notifications",
-     "UC88", "—", "A02–A08", "Chủ thông báo", status=204, path_params=["NotificationId"], errors=(401, 404),
-     idem="Có")
+     "UC88", "—", "A02–A08", "Chủ thông báo", status=204, path_params=["NotificationId"], errors=(400, 401, 404),
+     err_desc={400: "`notificationId` sai kiểu (`MALFORMED_REQUEST`); BR-TK-17",
+               404: "Không tìm thấy thông báo #<id> — cả khi thông báo là của người khác"},
+     idem="Có", notes="Gọi lại vẫn 204 và giữ `readAt` của lần đọc đầu (docs/adr/0039).")
 m.op("post", "/me/notifications/read-all", "markAllNotificationsRead", "Đánh dấu tất cả đã đọc", "Notifications",
-     "UC88", "—", "A02–A08", "Người đang đăng nhập", status=204, errors=(401,), idem="Có")
+     "UC88", "—", "A02–A08", "Người đang đăng nhập", status=204, errors=(400, 401), err_desc={400: "BR-TK-17"},
+     idem="Có", notes="Đánh dấu mọi thông báo chưa đọc tại thời điểm gọi; thông báo đến sau vẫn chưa đọc. Thông báo "
+                      "đã đọc giữ `readAt` cũ (docs/adr/0039).")
 m.op("get", "/me/notification-settings", "getMyNotificationSettings", "Cài đặt nhận thông báo", "Notifications",
      "UC88", "BR-TB-02", "A02", "Chỉ CUSTOMER", resp="NotificationSettings", errors=(401, 403))
 m.op("put", "/me/notification-settings", "updateMyNotificationSettings", "Sửa cài đặt nhận thông báo",
