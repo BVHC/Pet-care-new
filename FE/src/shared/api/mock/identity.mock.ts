@@ -1,7 +1,18 @@
 // Mock module identity (docs/api/identity-v1.md): đăng ký + OTP, đăng nhập, đăng xuất,
-// quên / đặt lại mật khẩu, GET /me, đổi mật khẩu, hồ sơ nhân viên, liên kết hồ sơ (UC07). Câu báo lỗi chép từ BE.
-import type { AccountSummary, LoginResponse, Role } from '../../types/auth';
+// quên / đặt lại mật khẩu, GET /me, đổi mật khẩu, hồ sơ nhân viên, liên kết hồ sơ (UC07).
+// Quản trị (UC08–11): staff, accounts, system-configs, notification-templates, audit-logs. Câu báo lỗi chép từ BE.
+import type { AccountSummary, AccountStatus, LoginResponse, Role } from '../../types/auth';
 import type { StaffProfile } from '../../types/profile';
+import type {
+  AuditLogEntry,
+  ChangeableStaffRole,
+  CreateableStaffRole,
+  CreateStaffRequest,
+  LockResult,
+  NotificationTemplate,
+  StaffResponse,
+  SystemConfig,
+} from '../../types/identity';
 import { passwordPolicyError } from '../../utils/password';
 import {
   createOnlineProfile,
@@ -25,6 +36,7 @@ import {
   notFound,
   ok,
   optional,
+  page,
   ruleFail,
   scopeDenied,
   tooLong,
@@ -64,7 +76,7 @@ export const MOCK_ACCOUNTS: readonly MockAccount[] = [
 ];
 
 /** Hồ sơ nhân viên ban đầu (staff_profiles); họ tên lấy từ MOCK_ACCOUNTS. */
-const STAFF_SEED: Record<number, Partial<StaffProfile>> = {
+export const STAFF_SEED: Record<number, Partial<StaffProfile>> = {
   5: {
     specialty: 'Nội khoa, da liễu thú y',
     bio: 'Hơn 8 năm khám và điều trị chó mèo, quan tâm đặc biệt tới bệnh da và dị ứng.',
@@ -106,16 +118,39 @@ interface State {
   otps: Record<string, Otp & { customerId?: number }>;
   /** Hồ sơ nhân viên đã sửa (PATCH /me/staff-profile) theo id tài khoản. */
   profiles: Record<number, Partial<StaffProfile>>;
+  /** UC08: tài khoản nhân viên tạo thêm sau seed (đã thấy trong MOCK_ACCOUNTS). */
+  extraStaff: Record<number, { id: number; email: string; fullName: string; role: Role; status: AccountStatus; branchId?: number; mustChangePassword: boolean }>;
+  /** UC08: email mới đang chờ xác nhận cho staff. */
+  emailChanges: Record<number, { newEmail: string; otp: Otp }>;
+  /** UC09: ghi chú khóa gần nhất + status trước khi khóa. */
+  locks: Record<number, { reason: string; statusBefore: AccountStatus; lockedAt: string }>;
+  /** UC10: sửa tham số. */
+  configOverrides: Record<string, string>;
+  /** UC10: sửa mẫu thông báo. */
+  templateOverrides: Record<string, { subject?: string | null; body: string }>;
+  /** UC11: nhật ký kiểm toán. */
+  audit: AuditLogEntry[];
 }
 
 const STATE_KEY = 'petcare-mock-identity';
 
-function load(): State {
+export function load(): State {
   try {
     const s = JSON.parse(localStorage.getItem(STATE_KEY) ?? '{}');
-    return { changes: s.changes ?? {}, registered: s.registered ?? [], otps: s.otps ?? {}, profiles: s.profiles ?? {} };
+    return {
+      changes: s.changes ?? {},
+      registered: s.registered ?? [],
+      otps: s.otps ?? {},
+      profiles: s.profiles ?? {},
+      extraStaff: s.extraStaff ?? {},
+      emailChanges: s.emailChanges ?? {},
+      locks: s.locks ?? {},
+      configOverrides: s.configOverrides ?? {},
+      templateOverrides: s.templateOverrides ?? {},
+      audit: s.audit ?? [],
+    };
   } catch {
-    return { changes: {}, registered: [], otps: {}, profiles: {} };
+    return { changes: {}, registered: [], otps: {}, profiles: {}, extraStaff: {}, emailChanges: {}, locks: {}, configOverrides: {}, templateOverrides: {}, audit: [] };
   }
 }
 
@@ -127,14 +162,17 @@ function save(s: State) {
   }
 }
 
+export { save };
+
 interface Account {
   id: number;
   email: string;
   role: Role;
   fullName: string;
   password: string;
-  status: 'PENDING' | 'ACTIVE';
+  status: AccountStatus;
   mustChangePassword: boolean;
+  branchId?: number;
 }
 
 function accounts(s: State): Account[] {
@@ -143,6 +181,7 @@ function accounts(s: State): Account[] {
     status: 'ACTIVE',
     password: s.changes[a.id]?.password ?? MOCK_PASSWORD,
     mustChangePassword: s.changes[a.id]?.mustChangePassword ?? a.mustChangePassword ?? false,
+    branchId: branchIdOf(a.id),
   }));
   const registered = s.registered.map((r): Account => ({
     id: r.id,
@@ -160,7 +199,7 @@ const normalize = (email: string) => email.trim().toLowerCase();
 const byEmail = (s: State, email: string) => accounts(s).find((a) => a.email === normalize(email));
 
 function summaryOf(a: Account): AccountSummary {
-  return { id: a.id, email: a.email, role: a.role, status: a.status, isLocked: false, mustChangePassword: a.mustChangePassword };
+  return { id: a.id, email: a.email, role: a.role, status: a.status, isLocked: false, mustChangePassword: a.mustChangePassword, branchId: a.branchId };
 }
 
 const TOKEN_PREFIX = 'mock-token-';

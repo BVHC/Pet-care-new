@@ -45,6 +45,7 @@ describe('mock API envelope (00-method §3.4–3.5)', () => {
           status: 'ACTIVE',
           isLocked: false,
           mustChangePassword: false,
+          branchId: 1,
         },
         linkDecisionPending: false,
       },

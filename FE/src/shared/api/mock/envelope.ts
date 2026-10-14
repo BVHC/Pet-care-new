@@ -68,3 +68,13 @@ export function invalid(checks: Check[]): MockReply | null {
   const errors = checks.filter(([, , failed]) => failed).map(([field, message]) => `${field}: ${message}`);
   return errors.length ? fail('VALIDATION_FAILED', errors.join('; '), 400) : null;
 }
+
+/** Trang cho mọi role được phép truy cập tài nguyên (vd 200 với envelope là list). */
+export const page = <T>(content: T[], page = 0, size = 20) => ({
+  content,
+  page,
+  size,
+  totalElements: content.length,
+  totalPages: Math.max(1, Math.ceil(content.length / size)),
+});
+

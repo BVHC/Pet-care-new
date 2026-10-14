@@ -1,7 +1,7 @@
 import type { ElementType } from 'react';
 import {
   Activity, BadgePercent, BarChart3, Bot, Boxes, Building2, CalendarClock, ClipboardList, Crown, ListOrdered,
-  Package, Receipt, Scale, Scissors, ShieldAlert, ShoppingBag, Stethoscope, Syringe, Tags, Truck, UserCog, Warehouse,
+  Lock, Mail, Package, Receipt, Scale, Scissors, Settings, ShieldAlert, ShoppingBag, Stethoscope, Syringe, Tags, Truck, UserCog, Warehouse,
 } from 'lucide-react';
 import { STAFF_ROLES, type Role } from '../types/auth';
 import { WORKSPACE_LABELS, WORKSPACE_ROLES, workspaceForPath } from './workspaces';
@@ -73,7 +73,10 @@ export const ADMIN_MENU: MenuSection[] = [
     section: 'Hệ thống',
     items: [
       { path: '/admin/branches', label: 'Chi nhánh', icon: Building2, roles: ['SUPER_MANAGER', 'BRANCH_MANAGER'] }, // UC12, UC14, UC33, UC42
-      { path: '/admin/users', label: 'Người dùng', icon: UserCog, roles: ['ADMIN', 'SUPER_MANAGER', 'BRANCH_MANAGER'] }, // UC08, UC09
+      { path: '/admin/users', label: 'Người dùng', icon: UserCog, roles: ['ADMIN', 'SUPER_MANAGER', 'BRANCH_MANAGER'] }, // UC08 (Staff); UC09 (Account khóa) dùng riêng trang
+      { path: '/admin/accounts', label: 'Khóa tài khoản', icon: Lock, roles: ['ADMIN'] }, // UC09 — khóa/mở khóa + lý do
+      { path: '/admin/system-configs', label: 'Tham số', icon: Settings, roles: ['ADMIN'] }, // UC10
+      { path: '/admin/notification-templates', label: 'Mẫu thông báo', icon: Mail, roles: ['ADMIN'] }, // UC10
       { path: '/admin/ai', label: 'Trí tuệ nhân tạo', icon: Bot, roles: ['SUPER_MANAGER'] }, // tầng 3, chưa đặc tả
     ],
   },

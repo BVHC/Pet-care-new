@@ -1,7 +1,7 @@
 // Lỗi API theo hợp đồng: docs/api/00-method.md §3.5 (khớp BE ErrorResponse + ErrorCode).
 import { isAxiosError } from 'axios';
 
-/** 12 mã của BE `platform/exception/ErrorCode`. */
+/** Mã lỗi của BE `platform/exception/ErrorCode`. */
 export type ErrorCode =
   | 'BUSINESS_RULE_VIOLATION'
   | 'INVALID_STATE_TRANSITION'
@@ -14,7 +14,9 @@ export type ErrorCode =
   | 'UNSUPPORTED_MEDIA_TYPE'
   | 'UNAUTHENTICATED'
   | 'ACCESS_DENIED'
-  | 'INTERNAL_ERROR';
+  | 'INTERNAL_ERROR'
+  /** BE hoặc phụ thuộc ngoài chưa sẵn sàng; mock dùng để mô phỏng lỗi 500 từ Visit/ca thu ngân (D016). */
+  | 'UNAVAILABLE';
 
 /** Envelope lỗi, luôn đủ 6 trường. */
 export interface ErrorResponse {

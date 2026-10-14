@@ -28,6 +28,8 @@ export interface AccountSummary {
   status: AccountStatus;
   isLocked: boolean;
   mustChangePassword: boolean;
+  /** Chi nhánh của nhân viên; ADMIN/CUSTOMER/SUPER_MANAGER không có. */
+  branchId?: number | null;
 }
 
 export interface LoginRequest {

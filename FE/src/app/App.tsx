@@ -72,6 +72,9 @@ import { AdminIncidentsPage } from '../pages/admin/AdminIncidentsPage';
 import { AdminReportsPage } from '../pages/admin/AdminReportsPage';
 import { AdminAuditPage } from '../pages/admin/AdminAuditPage';
 import { AdminUsersPage } from '../pages/admin/AdminUsersPage';
+import { AdminAccountsPage } from '../pages/admin/AdminAccountsPage';
+import { AdminSystemConfigsPage } from '../pages/admin/AdminSystemConfigsPage';
+import { AdminNotificationTemplatesPage } from '../pages/admin/AdminNotificationTemplatesPage';
 import { AdminOrdersPage } from '../pages/admin/AdminOrdersPage';
 import { AdminAIPage } from '../pages/admin/AdminAIPage';
 import { AdminCatalogPage } from '../pages/admin/AdminCatalogPage';
@@ -197,6 +200,9 @@ export function App() {
             <Route path="/admin/reports" element={<AdminReportsPage />} />
             <Route path="/admin/audit" element={<AdminAuditPage />} />
             <Route path="/admin/users" element={<AdminUsersPage />} />
+            <Route path="/admin/accounts" element={<AdminAccountsPage />} />
+            <Route path="/admin/system-configs" element={<AdminSystemConfigsPage />} />
+            <Route path="/admin/notification-templates" element={<AdminNotificationTemplatesPage />} />
             <Route path="/admin/ai" element={<AdminAIPage />} />
           </Route>
         </Route>

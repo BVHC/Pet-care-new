@@ -4,13 +4,20 @@
 // Khóa route là `METHOD /api/path`, đoạn `:ten` là tham số path.
 import { AxiosError, type AxiosAdapter, type AxiosInstance, type AxiosResponse } from 'axios';
 import type { AccountSummary } from '../../types/auth';
+import { adminIdentityRoutes } from './identity-admin.mock';
 import { branchRoutes } from './branch.mock';
 import { catalogRoutes } from './catalog.mock';
 import { customerRoutes } from './customer.mock';
 import { fail, ruleFail, type MockHandler, type MockReply } from './envelope';
 import { accountForToken, identityRoutes } from './identity.mock';
 
-const ROUTES: Record<string, MockHandler> = { ...identityRoutes, ...customerRoutes, ...catalogRoutes, ...branchRoutes };
+const ROUTES: Record<string, MockHandler> = {
+  ...identityRoutes,
+  ...customerRoutes,
+  ...catalogRoutes,
+  ...branchRoutes,
+  ...adminIdentityRoutes,
+};
 
 const COMPILED = Object.entries(ROUTES).map(([key, handler]) => {
   const [method, path] = key.split(' ');
