@@ -42,12 +42,12 @@ public AccountResponse lockAccount(Long accountId, String reason) {
 Quy tắc của `AuditEntry` (vi phạm là lỗi lập trình → `IllegalArgumentException`/`IllegalStateException` → 500, ở cả hai hàm):
 - `action`: hằng số `UPPER_SNAKE` do module giữ, khớp `^[A-Z][A-Z0-9_]{2,49}$`, dạng `<ĐỐI_TƯỢNG>_<QUÁ_KHỨ>` (`ACCOUNT_LOCKED`, `ORDER_PAID`).
 - `entity(type, id)`: `type` là **tên bảng** (`accounts`, `orders`); `id` để `null` với bảng PK chuỗi (`system_configs`, `notification_templates`) — khi đó khóa nằm trong snapshot.
-- `before`/`after`: **record hoặc `Map` do service tự chọn trường**, không bao giờ là entity JPA (bị từ chối, kể cả khi nằm trong `List`/`Map`). Khóa có từ `password`, `passwd`, `otp`, `token`, `secret`, `cccd`, `pin` bị từ chối (BR-TK-16 không lưu CCCD; chỉ ghi *phương thức* xác minh). Thời điểm serialize dạng ISO-8601.
+- `before`/`after`: **record hoặc `Map` do service tự chọn trường**, không bao giờ là entity JPA (bị từ chối, kể cả khi nằm trong `List`/`Map`). Snapshot phải serialize ra **JSON object**: `List`, chuỗi, số, boolean bị từ chối, vì màn hình xem audit trả `beforeData` / `afterData` dạng object ([ADR-0038](../../adr/0038-audit-log-view.md) mục 7). Khóa có từ `password`, `passwd`, `otp`, `token`, `secret`, `cccd`, `pin` bị từ chối (BR-TK-16 không lưu CCCD; chỉ ghi *phương thức* xác minh). Thời điểm serialize dạng ISO-8601.
 - `reason`: bắt buộc ở những thao tác rule đòi lý do (khóa, hủy Order `PENDING`, gán lại lượt…). Việc kiểm tra "có lý do" là business rule nên nằm ở service và ném `BusinessRuleViolationException`; recorder không kiểm tra.
 - Actor: tự lấy từ `SecurityContext`; principal của TK phải implement `AuditPrincipal`. Không có phiên đăng nhập → hệ thống (2 cột actor NULL), dùng cho job ST*. Khi chưa có phiên (đăng nhập thất bại, đăng ký) dùng `.actor(accountIdOrNull, emailNhapVao)`.
 - IP: tự lấy từ request hiện tại (sau `RemoteIpValve`, [ADR-0002](../../adr/0002-client-ip-behind-proxy.md)); ngoài request là NULL.
 
-`audit_logs` chỉ thêm mới: `AuditLogEntity` là `@Immutable`, `AuditLogRepository` chỉ có `save`, DB có trigger chặn UPDATE/DELETE/TRUNCATE. Màn hình xem audit (UC11, chỉ ADMIN) dùng repository đọc riêng trong module QT.
+`audit_logs` chỉ thêm mới: `AuditLogEntity` là `@Immutable`, `AuditLogRepository` chỉ có `save`, DB có trigger chặn UPDATE/DELETE/TRUNCATE. Màn hình xem audit (UC11, chỉ ADMIN, `GET /api/audit-logs`) dùng repository đọc riêng trong module QT: `identity/repository/AuditLogQueryRepository` ([ADR-0038](../../adr/0038-audit-log-view.md)). Xem không ghi audit.
 
 ## 8.3. Danh mục thao tác phải audit
 

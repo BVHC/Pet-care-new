@@ -96,7 +96,7 @@
 | Danh sách mẫu thông báo | A03 | Chỉ ADMIN | — | — | Mọi mẫu, sắp theo code; subject / body là bản đang dùng; isDefault = cả hai trùng từng ký tự với bản mặc định (docs/adr/0037). |
 | Sửa nội dung mẫu | A03 | Chỉ ADMIN | — | — | Thứ tự kiểm: hình thức → quyền → code lạ 404 → biến (BR-QT-14). Ngữ pháp chặt: dấu ngoặc nhọn chỉ dùng để viết {ten} với ten thuộc allowedVars (phân biệt hoa thường); biến bắt buộc tính trên subject ∪ body. Lưu nguyên văn (không cắt khoảng trắng, không đổi xuống dòng). Trùng nội dung hiện tại → 200, không ghi nhưng vẫn audit (before = after). Có hiệu lực từ lần gửi đọc mẫu sau khi response trả về, kể cả thông báo đã xếp hàng. Audit NOTIFICATION_TEMPLATE_UPDATED. Không có endpoint thêm / xóa mẫu (docs/adr/0037). |
 | Khôi phục mẫu mặc định | A03 | Chỉ ADMIN | — | — | Chép bản mặc định sang bản đang dùng. Đã là mặc định → 200, không ghi nhưng vẫn audit (before = after). Audit NOTIFICATION_TEMPLATE_RESTORED (docs/adr/0037). |
-| Xem nhật ký audit | A03 | Chỉ ADMIN | — | — | Chỉ đọc; không có endpoint sửa / xóa (BR-QT-16). |
+| Xem nhật ký audit | A03 | Chỉ ADMIN | — | — | Chỉ đọc; không có endpoint sửa / xóa (BR-QT-16): method khác → 405. Xem không ghi audit. Mọi dòng của mọi người (kể cả hệ thống, actor null). Sắp `createdAt` giảm dần rồi `id` giảm dần; khoảng [from, to] tính cả hai mốc; giá trị lọc không tồn tại → trang rỗng; action / entityType rỗng = không lọc; size ngoài 1–100 bị kẹp, page âm = 0. `beforeData` / `afterData` là JSON object đúng như lúc ghi (thứ tự khóa không cố định), null khi không có. `totalElements` khớp `content` trong cùng một response (docs/adr/0038). |
 | Đội ngũ bác sĩ | A01, A02 | Public | — | — | Chỉ VET ACTIVE, không khóa (khóa tạm vẫn hiện), thuộc chi nhánh ACTIVE; `branchId` không phải chi nhánh ACTIVE → mảng rỗng. Sắp theo họ tên (ADR-0026). |
 
 ---
@@ -154,7 +154,7 @@
 - **`POST /notification-templates/{code}/restore-default`** — Khôi phục mẫu mặc định. Response `200` `NotificationTemplate`. Lỗi: `401` · `403` · `404`.
 ### Audit
 
-- **`GET /audit-logs`** — Xem nhật ký audit. Query: `actorAccountId?`, `action?`, `entityType?`, `entityId?`, `from?`, `to?`, `page?`, `size?`. Response `200` trang `AuditLogEntry`. Lỗi: `400` · `401` · `403`.
+- **`GET /audit-logs`** — Xem nhật ký audit. Query: `actorAccountId?`, `action?`, `entityType?`, `entityId?`, `from?`, `to?`, `page?`, `size?`. Response `200` trang `AuditLogEntry`. Lỗi: `400` `MALFORMED_REQUEST` tham số sai kiểu (from / to thiếu offset, id không phải số nguyên) · `VALIDATION_FAILED` action / entityType quá 50 ký tự, `to` trước `from`, `entityId` không kèm `entityType`, lọc `action` không kèm người / đối tượng mà thiếu from / to hoặc cách nhau quá 31 ngày (message nêu đủ lỗi, theo tên tham số) · `401` · `403` Không phải ADMIN (không ghi audit).
 ### Public
 
 - **`GET /public/vets`** — Đội ngũ bác sĩ. Public. Query: `branchId?`. Response `200` mảng `PublicVet`. Lỗi: `400`.

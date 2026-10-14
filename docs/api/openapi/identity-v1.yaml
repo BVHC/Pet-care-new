@@ -1516,7 +1516,7 @@ paths:
     get:
       tags: [Audit]
       summary: "Xem nhật ký audit"
-      description: "UC11 · BR-QT-15, 16. Actor: A03. Quyền: Chỉ ADMIN. Chuyển trạng thái: —. Chỉ đọc; không có endpoint sửa / xóa (BR-QT-16)."
+      description: "UC11 · BR-QT-15, 16. Actor: A03. Quyền: Chỉ ADMIN. Chuyển trạng thái: —. Chỉ đọc; không có endpoint sửa / xóa (BR-QT-16): method khác → 405. Xem không ghi audit. Mọi dòng của mọi người (kể cả hệ thống, actor null). Sắp `createdAt` giảm dần rồi `id` giảm dần; khoảng [from, to] tính cả hai mốc; giá trị lọc không tồn tại → trang rỗng; action / entityType rỗng = không lọc; size ngoài 1–100 bị kẹp, page âm = 0. `beforeData` / `afterData` là JSON object đúng như lúc ghi (thứ tự khóa không cố định), null khi không có. `totalElements` khớp `content` trong cùng một response (docs/adr/0038)."
       operationId: listAuditLogs
       security:
         - bearerAuth: []
@@ -1527,34 +1527,40 @@ paths:
           schema:
             type: integer
             format: int64
+          description: "Người thực hiện (khớp đúng)"
         - name: action
           in: query
           required: false
           schema:
             type: string
+          description: "Mã hành động, tối đa 50 ký tự (khớp đúng). Không kèm actorAccountId hay entityType + entityId thì bắt buộc from + to cách nhau ≤ 31 ngày"
         - name: entityType
           in: query
           required: false
           schema:
             type: string
+          description: "Tên bảng, tối đa 50 ký tự (khớp đúng)"
         - name: entityId
           in: query
           required: false
           schema:
             type: integer
             format: int64
+          description: "Bắt buộc kèm entityType"
         - name: from
           in: query
           required: false
           schema:
             type: string
             format: date-time
+          description: "Từ thời điểm (tính cả mốc); `+` của offset phải encode `%2B`"
         - name: to
           in: query
           required: false
           schema:
             type: string
             format: date-time
+          description: "Đến thời điểm (tính cả mốc); không được trước from"
         - $ref: "#/components/parameters/Page"
         - $ref: "#/components/parameters/Size"
       responses:
@@ -1582,11 +1588,19 @@ paths:
                     type: integer
                     description: "HTTP status của kết quả, ví dụ 200, 201"
         "400":
-          $ref: "#/components/responses/BadRequest"
+          description: "`MALFORMED_REQUEST` tham số sai kiểu (from / to thiếu offset, id không phải số nguyên) · `VALIDATION_FAILED` action / entityType quá 50 ký tự, `to` trước `from`, `entityId` không kèm `entityType`, lọc `action` không kèm người / đối tượng mà thiếu from / to hoặc cách nhau quá 31 ngày (message nêu đủ lỗi, theo tên tham số)"
+          content:
+            "application/json":
+              schema:
+                $ref: "#/components/schemas/Error"
         "401":
           $ref: "#/components/responses/Unauthorized"
         "403":
-          $ref: "#/components/responses/Forbidden"
+          description: "Không phải ADMIN (không ghi audit)"
+          content:
+            "application/json":
+              schema:
+                $ref: "#/components/schemas/Error"
   "/public/vets":
     get:
       tags: [Public]

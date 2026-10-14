@@ -366,9 +366,21 @@ m.op("post", "/notification-templates/{code}/restore-default", "restoreNotificat
 
 m.op("get", "/audit-logs", "listAuditLogs", "Xem nhật ký audit", "Audit", "UC11", "BR-QT-15, 16", "A03", "Chỉ ADMIN",
      resp="AuditLogEntry", page=True, errors=(400, 401, 403),
-     query=["actorAccountId=int64", "action=string", "entityType=string", "entityId=int64", "from=datetime",
-            "to=datetime", "page", "size"],
-     notes="Chỉ đọc; không có endpoint sửa / xóa (BR-QT-16).")
+     query=["actorAccountId=int64|Người thực hiện (khớp đúng)",
+            "action=string|Mã hành động, tối đa 50 ký tự (khớp đúng). Không kèm actorAccountId hay entityType + entityId thì bắt buộc from + to cách nhau ≤ 31 ngày",
+            "entityType=string|Tên bảng, tối đa 50 ký tự (khớp đúng)",
+            "entityId=int64|Bắt buộc kèm entityType",
+            "from=datetime|Từ thời điểm (tính cả mốc); `+` của offset phải encode `%2B`",
+            "to=datetime|Đến thời điểm (tính cả mốc); không được trước from", "page", "size"],
+     err_desc={400: "`MALFORMED_REQUEST` tham số sai kiểu (from / to thiếu offset, id không phải số nguyên) · "
+                    "`VALIDATION_FAILED` action / entityType quá 50 ký tự, `to` trước `from`, `entityId` không kèm `entityType`, "
+                    "lọc `action` không kèm người / đối tượng mà thiếu from / to hoặc cách nhau quá 31 ngày (message nêu đủ lỗi, theo tên tham số)",
+               403: "Không phải ADMIN (không ghi audit)"},
+     notes="Chỉ đọc; không có endpoint sửa / xóa (BR-QT-16): method khác → 405. Xem không ghi audit. Mọi dòng của mọi người (kể cả hệ thống, actor null). "
+           "Sắp `createdAt` giảm dần rồi `id` giảm dần; khoảng [from, to] tính cả hai mốc; giá trị lọc không tồn tại → trang rỗng; "
+           "action / entityType rỗng = không lọc; size ngoài 1–100 bị kẹp, page âm = 0. "
+           "`beforeData` / `afterData` là JSON object đúng như lúc ghi (thứ tự khóa không cố định), null khi không có. "
+           "`totalElements` khớp `content` trong cùng một response (docs/adr/0038).")
 
 m.op("get", "/public/vets", "listPublicVets", "Đội ngũ bác sĩ", "Public", "UC15", "BR-TK-20, BR-CK-01", "A01, A02",
      "Public", resp="array:PublicVet", public=True, errors=(400,), query=["branchId=int64"],
