@@ -3,6 +3,7 @@ package com.petcare.platform.security;
 import static org.springframework.security.config.Customizer.withDefaults;
 
 import java.util.Arrays;
+import java.util.List;
 
 import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.boot.context.properties.EnableConfigurationProperties;
@@ -47,6 +48,14 @@ public class SecurityConfig {
     static final RequestMatcher PUBLIC_REQUESTS = new OrRequestMatcher(Arrays.stream(PUBLIC_PATHS)
             .map(path -> (RequestMatcher) PathPatternRequestMatcher.withDefaults().matcher(path))
             .toList());
+
+    /**
+     * Bản sao danh sách path public, cho tài liệu OpenAPI đánh dấu {@code security: []} đúng các path mà runtime cho
+     * ẩn danh (docs/adr/0040 mục 3).
+     */
+    public static List<String> publicPaths() {
+        return List.of(PUBLIC_PATHS);
+    }
 
     @Bean
     public SecurityFilterChain securityFilterChain(HttpSecurity http,

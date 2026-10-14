@@ -1,5 +1,7 @@
 package com.petcare.module.identity.dto;
 
+import io.swagger.v3.oas.annotations.media.Schema;
+
 import jakarta.validation.constraints.Email;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.Pattern;
@@ -20,24 +22,33 @@ import jakarta.validation.constraints.Size;
  * Không có trường mật khẩu / trạng thái: hệ thống tự sinh mật khẩu (BR-QT-02); trường lạ trong JSON bị bỏ qua.
  */
 public record CreateStaffRequest(
+        @Schema(description = "Email đăng nhập của nhân viên; mật khẩu ban đầu gửi tới đây (BR-QT-02)",
+                example = "binh.tran@petcare.vn")
         @NotBlank(message = "Email không được để trống")
         @Email(message = "Email không đúng định dạng")
         @Size(max = 255, message = "Email tối đa 255 ký tự")
         String email,
 
+        @Schema(description = "Số điện thoại liên lạc nội bộ, 10 chữ số", example = "0912345678")
         @NotBlank(message = "Số điện thoại không được để trống")
         @Pattern(regexp = "^0\\d{9}$", message = "Số điện thoại phải có dạng 0xxxxxxxxx")
         String phone,
 
+        @Schema(description = "Họ tên", example = "Trần Văn Bình")
         @NotBlank(message = "Họ tên không được để trống")
         @Size(max = 100, message = "Họ tên tối đa 100 ký tự")
         String fullName,
 
+        @Schema(description = "Chức vụ trong phạm vi được tạo (BR-QT-01)", example = "VET")
         @NotBlank(message = "Chức vụ không được để trống")
         @Pattern(regexp = "^(SUPER_MANAGER|BRANCH_MANAGER|RECEPTIONIST|VET|CARETAKER)$",
                 message = "Chức vụ không hợp lệ")
         String role,
 
+        @Schema(description = "Chi nhánh (DRAFT hoặc ACTIVE). Bắt buộc với A05–A08 do SUPER_MANAGER tạo; "
+                + "BRANCH_MANAGER "
+                + "để trống = chi nhánh của mình; SUPER_MANAGER không có chi nhánh (BR-QT-03)",
+                example = "1")
         @Positive(message = "branchId phải là số dương")
         Long branchId) {
 }

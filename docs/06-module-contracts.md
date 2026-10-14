@@ -19,7 +19,7 @@
 
 **Lỗi nghiệp vụ** do bên sở hữu ném, kèm mã rule `BR-…` của rule bị vi phạm; bên gọi không bắt để "sửa" mà để lỗi đi lên tới use case. Riêng `StockApi.issueForSale` trả về danh sách thiếu thay vì ném lỗi, vì lễ tân cần biết từng dòng thiếu (BR-BH-04).
 
-**Đọc tham số [CFG]:** đã chốt ở ADR-0004 và đã có implementation. Inject `identity.api.SystemConfigApi` và đọc `getInt/getDecimal/getBool/getTime(ConfigKey.X)`. Danh mục là enum `identity.api.ConfigKey` (52 tham số, seed ở `V2__seed_system_configs.sql`). Cần tham số mới thì thêm hằng số + migration seed, báo BE-1.
+**Đọc tham số [CFG]:** đã chốt ở ADR-0004 và đã có implementation. Inject `identity.api.SystemConfigApi` và đọc `getInt/getDecimal/getBool/getTime(ConfigKey.X)`. Danh mục là enum `identity.api.ConfigKey` (52 tham số, seed ở `V2__seed_system_configs.sql`). Cần tham số mới thì thêm hằng số + migration seed, báo BE-1. **Từ 2026-10-13 (T15 phần 1, ADR-0036) ADMIN sửa được giá trị lúc app đang chạy** (`PUT /api/system-configs/{key}`): `get*` trả giá trị mới ngay sau khi lần sửa commit. Vì vậy mọi số [CFG] mà nghiệp vụ coi là "của giao dịch" (BR-QT-13 "chỉ áp dụng cho giao dịch tạo sau" — hạn, số đêm tối đa đã cam kết…) phải được **chốt vào bản ghi lúc tạo**, như `otp_tokens.expires_at`, `sessions.expires_at`; đọc lại `SystemConfigApi` lúc kiểm tra về sau nghĩa là áp chính sách hiện hành. Ràng buộc chéo được kiểm khi sửa: `visit.late_priority_minutes < appointment.no_show_after_minutes`, `boarding.min_nights ≤ boarding.max_nights`.
 
 **Người đang đăng nhập và phạm vi chi nhánh:** `platform.security.BranchScope` (ADR-0003). `current().accountId()` là actor truyền vào các interface có tham số `actorId`; `resolve` / `check` dùng cho dữ liệu có `branch_id`.
 

@@ -173,6 +173,26 @@ class NotificationDispatchServiceTest {
         assertThat(row.getPayload()).doesNotContainKey("ma_otp").containsEntry("thoi_han_phut", 5);
     }
 
+    /**
+     * ADMIN được để xuống dòng trong tiêu đề mẫu (UC10, docs/adr/0037 mục 6): Jakarta Mail gấp dòng thành dòng tiếp nối
+     * nên không chèn được header. Test này khóa hành vi đó nếu đổi thư viện mail.
+     */
+    @Test
+    void lineBreakInSubjectCannotInjectHeaders() throws Exception {
+        when(templates.findTemplate("OTP_REGISTER")).thenReturn(Optional.of(new TemplateView("OTP_REGISTER", "EMAIL",
+                "Mã xác thực\r\nBcc: attacker@evil.test\nX-Injected: 1", OTP.body(), OTP.allowedVars(),
+                OTP.requiredVars())));
+        due(otpRow());
+
+        assertThat(dispatch()).isEqualTo(DispatchResult.SENT);
+
+        MimeMessage message = sentMessage();
+        assertThat(message.getHeader("Bcc")).isNull();
+        assertThat(message.getHeader("X-Injected")).isNull();
+        assertThat(message.getAllRecipients()).extracting(Address::toString).containsExactly("an@petcare.test");
+        assertThat(message.getHeader("Subject")).hasSize(1);
+    }
+
     @Test
     void firstAttemptRecordsQueueLatency() {
         due(otpRow());

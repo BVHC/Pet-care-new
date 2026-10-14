@@ -9,7 +9,12 @@ import org.springframework.web.bind.annotation.RestController;
 
 import com.petcare.module.identity.dto.PublicVetResponse;
 import com.petcare.module.identity.service.PublicVetService;
+import com.petcare.platform.config.ApiErrorDoc;
 import com.petcare.platform.model.ApiResponse;
+
+import io.swagger.v3.oas.annotations.Operation;
+import io.swagger.v3.oas.annotations.Parameter;
+import io.swagger.v3.oas.annotations.enums.ParameterIn;
 
 import jakarta.validation.constraints.Positive;
 
@@ -28,6 +33,14 @@ public class PublicVetController {
         this.publicVets = publicVets;
     }
 
+    @Operation(operationId = "listPublicVets", tags = "Public",
+            summary = "Đội ngũ bác sĩ",
+            description = "UC15 · BR-TK-20, BR-CK-01. Actor: A01, A02. Quyền: Public. Chuyển trạng thái: "
+                + "—. Chỉ VET ACTIVE, không khóa (khóa tạm vẫn hiện), thuộc chi nhánh ACTIVE; `branchId` không phải "
+                + "chi nhánh ACTIVE → mảng rỗng. Sắp theo họ tên (ADR-0026).",
+            parameters = {
+                    @Parameter(name = "branchId", in = ParameterIn.QUERY, example = "1")})
+    @ApiErrorDoc(status = 400)
     @GetMapping
     public ApiResponse<List<PublicVetResponse>> listPublicVets(
             @RequestParam(required = false) @Positive(message = "branchId phải là số dương") Long branchId) {

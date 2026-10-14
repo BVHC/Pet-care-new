@@ -2,6 +2,7 @@ package com.petcare.module.identity.entity;
 
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Objects;
 
 import org.hibernate.annotations.JdbcTypeCode;
 import org.hibernate.type.SqlTypes;
@@ -18,8 +19,10 @@ import lombok.NoArgsConstructor;
 
 /**
  * Bảng {@code notification_templates} (erd §1, REF, PK chuỗi). Mẫu do hệ thống định sẵn (BR-QT-14), seed bằng
- * migration theo 06 §8 Q4; ứng dụng không thêm hay xóa. Đọc qua {@code NotificationTemplateQueryApi}; sửa nội dung và
- * khôi phục mặc định (UC10) làm ở task QT sau.
+ * migration theo 06 §8 Q4; ứng dụng không thêm hay xóa. Đọc qua {@code NotificationTemplateQueryApi}. ADMIN chỉ sửa
+ * được {@code subject}, {@code body} ({@link #changeContent}) và khôi phục bản mặc định ({@link #restoreDefault}) —
+ * UC10, docs/adr/0037; {@code channel}, {@code allowed_vars}, {@code required_vars}, {@code default_*} không có lệnh
+ * sửa nào.
  */
 @Getter
 @Entity
@@ -56,4 +59,29 @@ public class NotificationTemplate extends TimestampedEntity {
 
     @Column(name = "updated_by")
     private Long updatedBy;
+
+    /**
+     * Sửa nội dung (identity-v1 #34). Lưu nguyên văn — biến đã được kiểm theo BR-QT-14 ở
+     * {@code NotificationTemplateAdminService} (docs/adr/0037).
+     */
+    public void changeContent(String subject, String body, Long updatedBy) {
+        this.subject = subject;
+        this.body = body;
+        this.updatedBy = updatedBy;
+    }
+
+    /** Khôi phục bản mặc định (identity-v1 #35, BR-QT-14). */
+    public void restoreDefault(Long updatedBy) {
+        changeContent(defaultSubject, defaultBody, updatedBy);
+    }
+
+    /** Nội dung đang dùng trùng từng ký tự với bản mặc định ({@code isDefault} của identity-v1). */
+    public boolean isDefault() {
+        return Objects.equals(subject, defaultSubject) && Objects.equals(body, defaultBody);
+    }
+
+    /** Nội dung đang dùng trùng từng ký tự với {@code subject}, {@code body} cho trước. */
+    public boolean hasContent(String subject, String body) {
+        return Objects.equals(this.subject, subject) && Objects.equals(this.body, body);
+    }
 }

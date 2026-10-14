@@ -40,8 +40,10 @@ import lombok.extern.slf4j.Slf4j;
  *       nhận lỗi gốc.</li>
  * </ul>
  *
- * Entry sai (action/entityType sai mẫu, snapshot là entity hoặc chứa khóa nhạy cảm, actor thiếu email) là lỗi lập
- * trình: ném {@link IllegalArgumentException}/{@link IllegalStateException} ở cả hai hàm, trước khi chạm DB.
+ * Entry sai (action/entityType sai mẫu, snapshot là entity, chứa khóa nhạy cảm hoặc không phải JSON object, actor thiếu
+ * email) là lỗi lập trình: ném {@link IllegalArgumentException}/{@link IllegalStateException} ở cả hai hàm, trước khi
+ * chạm DB. Snapshot luôn là object để {@code beforeData} / {@code afterData} của màn hình xem audit đúng contract
+ * {@code object?} (identity-v1 #36, docs/adr/0038 mục 7).
  */
 @Slf4j
 @Component
@@ -162,6 +164,10 @@ public class AuditRecorder {
         }
         JsonNode tree = objectMapper.valueToTree(value);
         rejectSensitiveKeys(name, tree);
+        if (!tree.isObject()) {
+            throw new IllegalArgumentException(
+                    "Audit " + name + " snapshot must be a JSON object (record or Map), got " + tree.getNodeType());
+        }
         return tree;
     }
 

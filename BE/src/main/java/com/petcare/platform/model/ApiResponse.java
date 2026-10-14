@@ -1,10 +1,20 @@
 package com.petcare.platform.model;
 
+import io.swagger.v3.oas.annotations.media.Schema;
+
 /**
  * Envelope cho mọi response thành công: payload nằm một cấp trong {@code data};
  * danh sách thì {@code data} là {@link PageResponse}. {@code code} là HTTP status.
  */
-public record ApiResponse<T>(T data, String message, int code) {
+public record ApiResponse<T>(
+        @Schema(description = "Payload của kết quả")
+        T data,
+
+        @Schema(description = "Thông điệp kết quả", example = "success")
+        String message,
+
+        @Schema(description = "HTTP status của kết quả, ví dụ 200, 201", example = "200")
+        int code) {
 
     public static <T> ApiResponse<T> ok(T data) {
         return new ApiResponse<>(data, "success", 200);

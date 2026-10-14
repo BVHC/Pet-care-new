@@ -1,5 +1,7 @@
 package com.petcare.module.identity.dto;
 
+import io.swagger.v3.oas.annotations.media.Schema;
+
 import jakarta.validation.constraints.NotBlank;
 
 /**
@@ -9,9 +11,14 @@ import jakarta.validation.constraints.NotBlank;
  * hai xử lý ở service (như {@link LoginRequest}, {@link RegisterAccountRequest}). Không cắt khoảng trắng.
  */
 public record ChangePasswordRequest(
+        @Schema(description = "Mật khẩu hiện tại", example = "MatKhauCu123", accessMode = Schema.AccessMode.WRITE_ONLY)
         @NotBlank(message = "Mật khẩu hiện tại không được để trống")
         String currentPassword,
 
+        @Schema(description = "Mật khẩu mới: tối thiểu 8 ký tự [CFG], có cả chữ và số, khác mật khẩu hiện tại "
+                + "(BR-TK-03)",
+                example = "MatKhauMoi456",
+                accessMode = Schema.AccessMode.WRITE_ONLY)
         @NotBlank(message = "Mật khẩu mới không được để trống")
         String newPassword) {
 
