@@ -1,5 +1,7 @@
 package com.petcare.module.identity.dto;
 
+import io.swagger.v3.oas.annotations.media.Schema;
+
 import jakarta.validation.constraints.Email;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.Size;
@@ -11,6 +13,8 @@ import jakarta.validation.constraints.Size;
  * JSON bị bỏ qua.
  */
 public record EmailChangeRequest(
+        @Schema(description = "Email mới; mã OTP gửi tới email này (BR-TK-04, 16)",
+                example = "binh.tran.moi@petcare.vn")
         @NotBlank(message = "Email mới không được để trống")
         @Email(message = "Email mới không đúng định dạng")
         @Size(max = 255, message = "Email mới tối đa 255 ký tự")

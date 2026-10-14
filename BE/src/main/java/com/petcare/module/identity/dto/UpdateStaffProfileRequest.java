@@ -1,5 +1,7 @@
 package com.petcare.module.identity.dto;
 
+import io.swagger.v3.oas.annotations.media.Schema;
+
 import jakarta.validation.constraints.Pattern;
 import jakarta.validation.constraints.Size;
 
@@ -17,21 +19,30 @@ import jakarta.validation.constraints.Size;
  * </ul>
  */
 public record UpdateStaffProfileRequest(
+        @Schema(description = "Họ tên; null = giữ nguyên", example = "Lê Minh Châu")
         @Size(max = 100, message = "Họ tên tối đa 100 ký tự")
         @Pattern(regexp = "(?s).*\\S.*", message = "Họ tên không được để trống")
         String fullName,
 
+        @Schema(description = "Ảnh đại diện https; null = giữ nguyên, chuỗi rỗng = xóa",
+                example = "https://cdn.petcare.vn/avatars/18.jpg")
         @Size(max = 500, message = "Đường dẫn ảnh đại diện tối đa 500 ký tự")
         @Pattern(regexp = "^(\\s*|\\s*https://\\S+\\s*)$", message = "Ảnh đại diện phải là đường dẫn https://")
         String avatarUrl,
 
+        @Schema(description = "Số điện thoại 10 chữ số; null = giữ nguyên", example = "0912345678")
         @Pattern(regexp = "^0\\d{9}$", message = "Số điện thoại phải có dạng 0xxxxxxxxx")
         String phone,
 
+        @Schema(description = "Chuyên môn, chỉ VET gửi được; null = giữ nguyên, chuỗi rỗng = xóa",
+                example = "Nội khoa chó mèo")
         @Size(max = 200, message = "Chuyên môn tối đa 200 ký tự")
         String specialty,
 
+        @Schema(description = "Mô tả ngắn, chỉ VET gửi được, tối đa vet.bio_max_length [CFG] (BR-TK-20)",
+                example = "10 năm kinh nghiệm điều trị bệnh nội khoa.")
         String bio,
 
+        @Schema(hidden = true)
         String email) {
 }

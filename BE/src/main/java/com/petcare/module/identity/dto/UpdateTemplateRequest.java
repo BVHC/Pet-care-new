@@ -1,5 +1,7 @@
 package com.petcare.module.identity.dto;
 
+import io.swagger.v3.oas.annotations.media.Schema;
+
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.Size;
 
@@ -11,10 +13,13 @@ import jakarta.validation.constraints.Size;
  * chuẩn hóa; số / boolean JSON được Jackson ép thành chuỗi; trường lạ bị bỏ qua.
  */
 public record UpdateTemplateRequest(
+        @Schema(description = "Tiêu đề mới, chỉ dùng biến có sẵn (BR-QT-14)", example = "Mã xác thực đăng ký Pet Care")
         @NotBlank(message = "Vui lòng nhập tiêu đề")
         @Size(max = 255, message = "Tiêu đề tối đa 255 ký tự")
         String subject,
 
+        @Schema(description = "Nội dung mới, phải chứa đủ biến bắt buộc (BR-QT-14)",
+                example = "Xin chào,\nMã xác thực của bạn là {ma_otp}, hiệu lực 5 phút.")
         @NotBlank(message = "Vui lòng nhập nội dung")
         String body) {
 }

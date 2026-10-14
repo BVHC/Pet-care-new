@@ -1,5 +1,7 @@
 package com.petcare.module.identity.dto;
 
+import io.swagger.v3.oas.annotations.media.Schema;
+
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.Pattern;
 
@@ -11,6 +13,7 @@ import jakarta.validation.constraints.Pattern;
  * bị bỏ qua (gửi kèm {@code branchId} không điều chuyển).
  */
 public record ChangeRoleRequest(
+        @Schema(description = "Chức vụ mới, trong nhóm A05–A08 (BR-QT-05)", example = "RECEPTIONIST")
         @NotBlank(message = "Chức vụ không được để trống")
         @Pattern(regexp = "^(BRANCH_MANAGER|RECEPTIONIST|VET|CARETAKER)$", message = "Chức vụ không hợp lệ")
         String role) {

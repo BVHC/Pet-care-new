@@ -21,7 +21,12 @@ import com.petcare.module.customer.dto.UpdateAddressRequest;
 import com.petcare.module.customer.dto.UpdateMyCustomerProfileRequest;
 import com.petcare.module.customer.service.AddressBookService;
 import com.petcare.module.customer.service.MyCustomerProfileService;
+import com.petcare.platform.config.ApiErrorDoc;
 import com.petcare.platform.model.ApiResponse;
+
+import io.swagger.v3.oas.annotations.Operation;
+import io.swagger.v3.oas.annotations.Parameter;
+import io.swagger.v3.oas.annotations.enums.ParameterIn;
 
 import jakarta.validation.Valid;
 
@@ -44,6 +49,11 @@ public class MyCustomerController {
     }
 
     /** customer-v1 #1. */
+    @Operation(operationId = "getMyCustomerProfile", tags = "My profile",
+            summary = "Hồ sơ khách của tôi",
+            description = "UC06 · BR-KH-01, BR-TK-15. Actor: A02. Quyền: Khách đang đăng nhập. Chuyển "
+                + "trạng thái: —.")
+    @ApiErrorDoc(status = 403)
     @GetMapping("/customer-profile")
     @PreAuthorize("hasRole('CUSTOMER')")
     public ApiResponse<CustomerProfileResponse> getMyProfile() {
@@ -51,6 +61,13 @@ public class MyCustomerController {
     }
 
     /** customer-v1 #2 (BR-TK-15, BR-KH-01). */
+    @Operation(operationId = "updateMyCustomerProfile", tags = "My profile",
+            summary = "Sửa hồ sơ khách của tôi",
+            description = "UC06 · BR-TK-15, BR-KH-01. Actor: A02. Quyền: Khách đang đăng nhập. Chuyển "
+                + "trạng thái: —. Không trả cảnh báo nghi trùng cho khách (A1).")
+    @ApiErrorDoc(status = 400, description = "`BR-TK-15` cố sửa email · `BR-KH-01` xóa SĐT của hồ sơ tại "
+            + "quầy · dữ liệu không hợp lệ")
+    @ApiErrorDoc(status = 403)
     @PatchMapping("/customer-profile")
     @PreAuthorize("hasRole('CUSTOMER')")
     public ApiResponse<CustomerProfileResponse> updateMyProfile(
@@ -59,6 +76,11 @@ public class MyCustomerController {
     }
 
     /** customer-v1 #3. Mảng thẳng trong {@code data}, mặc định trước. */
+    @Operation(operationId = "listMyAddresses", tags = "My profile",
+            summary = "Sổ địa chỉ",
+            description = "UC06 · BR-TK-18. Actor: A02. Quyền: Khách đang đăng nhập. Chuyển trạng thái: —. "
+                + "Mặc định trước, rồi theo thứ tự thêm (A7).")
+    @ApiErrorDoc(status = 403)
     @GetMapping("/addresses")
     @PreAuthorize("hasRole('CUSTOMER')")
     public ApiResponse<List<AddressResponse>> listMyAddresses() {
@@ -66,6 +88,12 @@ public class MyCustomerController {
     }
 
     /** customer-v1 #4 (BR-TK-18). */
+    @Operation(operationId = "createMyAddress", tags = "My profile",
+            summary = "Thêm địa chỉ",
+            description = "UC06 · BR-TK-18. Actor: A02. Quyền: Khách đang đăng nhập. Chuyển trạng thái: —. "
+                + "Sổ rỗng thì địa chỉ đầu luôn là mặc định (A6).")
+    @ApiErrorDoc(status = 400, description = "`BR-TK-18` đã đủ 5 địa chỉ [CFG]")
+    @ApiErrorDoc(status = 403)
     @PostMapping("/addresses")
     @PreAuthorize("hasRole('CUSTOMER')")
     @ResponseStatus(HttpStatus.CREATED)
@@ -74,6 +102,14 @@ public class MyCustomerController {
     }
 
     /** customer-v1 #5. */
+    @Operation(operationId = "updateMyAddress", tags = "My profile",
+            summary = "Sửa địa chỉ",
+            description = "UC06 · BR-TK-18. Actor: A02. Quyền: Chủ địa chỉ. Chuyển trạng thái: —.",
+            parameters = {
+                    @Parameter(name = "addressId", in = ParameterIn.PATH, example = "5")})
+    @ApiErrorDoc(status = 400)
+    @ApiErrorDoc(status = 403)
+    @ApiErrorDoc(status = 404)
     @PatchMapping("/addresses/{addressId}")
     @PreAuthorize("hasRole('CUSTOMER')")
     public ApiResponse<AddressResponse> updateAddress(@PathVariable Long addressId,
@@ -82,6 +118,14 @@ public class MyCustomerController {
     }
 
     /** customer-v1 #6 (BR-TK-18). 204 không body. */
+    @Operation(operationId = "deleteMyAddress", tags = "My profile",
+            summary = "Xóa địa chỉ",
+            description = "UC06 · BR-TK-18. Actor: A02. Quyền: Chủ địa chỉ. Chuyển trạng thái: —.",
+            parameters = {
+                    @Parameter(name = "addressId", in = ParameterIn.PATH, example = "5")})
+    @ApiErrorDoc(status = 400, description = "`BR-TK-18` không xóa địa chỉ mặc định khi còn địa chỉ khác")
+    @ApiErrorDoc(status = 403)
+    @ApiErrorDoc(status = 404)
     @DeleteMapping("/addresses/{addressId}")
     @PreAuthorize("hasRole('CUSTOMER')")
     @ResponseStatus(HttpStatus.NO_CONTENT)
@@ -90,6 +134,14 @@ public class MyCustomerController {
     }
 
     /** customer-v1 #7. Đã là mặc định thì trả về như cũ, không ghi. */
+    @Operation(operationId = "setDefaultAddress", tags = "My profile",
+            summary = "Đặt địa chỉ mặc định",
+            description = "UC06 · BR-TK-18. Actor: A02. Quyền: Chủ địa chỉ. Chuyển trạng thái: —. Bỏ cờ "
+                + "mặc định của địa chỉ cũ trong cùng transaction; đã là mặc định thì trả về như cũ.",
+            parameters = {
+                    @Parameter(name = "addressId", in = ParameterIn.PATH, example = "5")})
+    @ApiErrorDoc(status = 403)
+    @ApiErrorDoc(status = 404)
     @PostMapping("/addresses/{addressId}/set-default")
     @PreAuthorize("hasRole('CUSTOMER')")
     public ApiResponse<AddressResponse> setDefaultAddress(@PathVariable Long addressId) {

@@ -1,5 +1,7 @@
 package com.petcare.module.identity.dto;
 
+import io.swagger.v3.oas.annotations.media.Schema;
+
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.Size;
 
@@ -9,6 +11,7 @@ import jakarta.validation.constraints.Size;
  * {@code system_configs.value} (erd §1). Số / boolean JSON được Jackson ép thành chuỗi; trường lạ bị bỏ qua.
  */
 public record UpdateConfigRequest(
+        @Schema(description = "Giá trị mới, đúng kiểu và trong khoảng min–max (BR-QT-13)", example = "10")
         @NotBlank(message = "Vui lòng nhập giá trị")
         @Size(max = 255, message = "Giá trị tối đa 255 ký tự")
         String value) {

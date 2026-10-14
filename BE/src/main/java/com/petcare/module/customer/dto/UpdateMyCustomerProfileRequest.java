@@ -1,5 +1,7 @@
 package com.petcare.module.customer.dto;
 
+import io.swagger.v3.oas.annotations.media.Schema;
+
 import jakarta.validation.constraints.Pattern;
 import jakarta.validation.constraints.Size;
 
@@ -15,16 +17,23 @@ import jakarta.validation.constraints.Size;
  * </ul>
  */
 public record UpdateMyCustomerProfileRequest(
+        @Schema(description = "Họ tên; null = giữ nguyên", example = "Nguyễn Thị Lan")
         @Size(max = 100, message = "Họ tên tối đa 100 ký tự")
         @Pattern(regexp = "(?s).*\\S.*", message = "Họ tên không được để trống")
         String fullName,
 
+        @Schema(description = "SĐT 10 chữ số; null = giữ nguyên, chuỗi rỗng = xóa (hồ sơ tại quầy không xóa được, "
+                + "BR-KH-01)",
+                example = "0901234567")
         @Pattern(regexp = "^(\\s*|0\\d{9})$", message = "Số điện thoại phải có dạng 0xxxxxxxxx")
         String phone,
 
+        @Schema(description = "Ảnh đại diện https; null = giữ nguyên, chuỗi rỗng = xóa",
+                example = "https://cdn.petcare.vn/avatars/c315.jpg")
         @Size(max = 500, message = "Đường dẫn ảnh đại diện tối đa 500 ký tự")
         @Pattern(regexp = "^(\\s*|\\s*https://\\S+\\s*)$", message = "Ảnh đại diện phải là đường dẫn https://")
         String avatarUrl,
 
+        @Schema(hidden = true)
         String email) {
 }

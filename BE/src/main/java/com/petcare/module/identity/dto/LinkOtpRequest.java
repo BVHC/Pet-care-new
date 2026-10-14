@@ -1,5 +1,7 @@
 package com.petcare.module.identity.dto;
 
+import io.swagger.v3.oas.annotations.media.Schema;
+
 import jakarta.validation.constraints.NotNull;
 import jakarta.validation.constraints.Pattern;
 import jakarta.validation.constraints.Positive;
@@ -11,10 +13,12 @@ import jakarta.validation.constraints.Positive;
  * SĐT đó (docs/adr/0027). Định dạng theo kiểu {@code phone} của contract ({@code ^0[0-9]{9,10}$}).
  */
 public record LinkOtpRequest(
+        @Schema(description = "Mã hồ sơ tại quầy muốn liên kết", example = "315")
         @NotNull(message = "Vui lòng chọn hồ sơ cần liên kết")
         @Positive(message = "Mã hồ sơ không hợp lệ")
         Long customerId,
 
+        @Schema(description = "SĐT của hồ sơ tại quầy; bỏ trống = SĐT của hồ sơ online", example = "0901234567")
         @Pattern(regexp = "^0[0-9]{9,10}$", message = "Số điện thoại phải gồm 10–11 chữ số, bắt đầu bằng 0")
         String phone) {
 }

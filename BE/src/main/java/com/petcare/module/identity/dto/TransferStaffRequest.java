@@ -1,5 +1,7 @@
 package com.petcare.module.identity.dto;
 
+import io.swagger.v3.oas.annotations.media.Schema;
+
 import jakarta.validation.constraints.NotNull;
 import jakarta.validation.constraints.Positive;
 
@@ -9,6 +11,7 @@ import jakarta.validation.constraints.Positive;
  * {@code 1.9}) bị Jackson từ chối → 400 {@code MALFORMED_REQUEST} (docs/adr/0032), không bị cắt thành số nguyên.
  */
 public record TransferStaffRequest(
+        @Schema(description = "Chi nhánh đích (DRAFT hoặc ACTIVE)", example = "2")
         @NotNull(message = "Vui lòng chọn chi nhánh")
         @Positive(message = "branchId phải là số dương")
         Long branchId) {

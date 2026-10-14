@@ -1,5 +1,7 @@
 package com.petcare.module.identity.dto;
 
+import io.swagger.v3.oas.annotations.media.Schema;
+
 import jakarta.validation.constraints.Positive;
 
 /**
@@ -9,6 +11,7 @@ import jakarta.validation.constraints.Positive;
  * service. Số thực bị Jackson từ chối → 400 {@code MALFORMED_REQUEST} (docs/adr/0032).
  */
 public record ReactivateStaffRequest(
+        @Schema(description = "Chi nhánh mới (BR-QT-03); bỏ trống = giữ chi nhánh cũ", example = "2")
         @Positive(message = "branchId phải là số dương")
         Long branchId) {
 }

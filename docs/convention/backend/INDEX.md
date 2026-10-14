@@ -15,6 +15,7 @@ Quy ước code cho `BE/` (Java 21, Spring Boot 3.5). Nghiệp vụ lấy từ `
 | 7 | [07-transaction-management.md](07-transaction-management.md) | Ranh giới transaction, hệ quả liên aggregate, sự kiện đồng bộ, outbox, khóa đồng thời |
 | 8 | [08-logging-and-audit.md](08-logging-and-audit.md) | Application log, `AuditRecorder`, danh mục thao tác phải audit |
 | 9 | [09-testing.md](09-testing.md) | Unit / integration test, Testcontainers, `FsmTransitionTestBase` |
+| 10 | [10-swagger-api-docs.md](10-swagger-api-docs.md) | Tài liệu Swagger / OpenAPI: annotation springdoc, `@ApiErrorDoc`, khớp hợp đồng `docs/api` (§7, ADR-0040) |
 
 ## Còn TBD (cần chốt trước khi dùng)
 

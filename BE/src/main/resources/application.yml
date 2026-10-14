@@ -124,3 +124,10 @@ management:
   endpoint:
     health:
       show-details: when-authorized
+
+# Tài liệu OpenAPI sinh từ annotation (docs/adr/0040, docs/convention/backend/10-swagger-api-docs.md §7).
+springdoc:
+  # Không gắn response suy ra từ @ControllerAdvice vào mọi operation: mã lỗi của từng endpoint chỉ đến từ @ApiErrorDoc
+  # cho khớp hợp đồng docs/api. Phòng hờ: hôm nay GlobalExceptionHandler không có @ResponseStatus (docs/adr/0040 mục 5).
+  override-with-generic-response: false
+  default-produces-media-type: application/json
