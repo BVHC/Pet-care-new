@@ -1,17 +1,22 @@
 package com.petcare.module.appointment.repository;
 
+import java.time.Instant;
 import java.time.LocalDate;
 import java.time.LocalTime;
 import java.util.List;
+import java.util.Optional;
 
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.JpaSpecificationExecutor;
+import org.springframework.data.jpa.repository.Lock;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 import org.springframework.transaction.annotation.Propagation;
 import org.springframework.transaction.annotation.Transactional;
 
 import com.petcare.module.appointment.entity.Appointment;
+
+import jakarta.persistence.LockModeType;
 
 /**
  * {@link JpaSpecificationExecutor}: danh sách lịch hẹn (appointment-v1 #3, docs/adr/0044) chỉ ghép điều kiện được gửi,
@@ -94,4 +99,67 @@ public interface AppointmentRepository extends JpaRepository<Appointment, Long>,
             """, nativeQuery = true)
     int countActiveInSlot(@Param("branchId") Long branchId, @Param("serviceGroup") String serviceGroup,
             @Param("slotDate") LocalDate slotDate, @Param("slotStart") LocalTime slotStart);
+
+    // Đổi khung / hủy (docs/adr/0045).
+
+    /** Ba cột không bao giờ đổi của một lịch ({@code updatable = false}): đủ để phân quyền trước khi khóa. */
+    interface AccessRow {
+
+        Long getCustomerId();
+
+        Long getPetId();
+
+        Long getBranchId();
+    }
+
+    /**
+     * Đọc không khóa, dạng projection (không nạp entity vào persistence context): {@link #findByIdForUpdate} sau đó luôn
+     * trả bản mới đọc dưới khóa, không trả lại một entity cũ (bẫy docs/adr/0029 §4).
+     */
+    @Query("SELECT a.customerId AS customerId, a.petId AS petId, a.branchId AS branchId FROM Appointment a WHERE a.id = :id")
+    Optional<AccessRow> findAccessRow(@Param("id") Long id);
+
+    /**
+     * Khóa dòng lịch hẹn ({@code FOR NO KEY UPDATE} — Hibernate 6 với {@code PESSIMISTIC_WRITE}), khóa cuối của thứ tự
+     * {@code advisory(thú) → branches → appointments} (docs/adr/0041, 0045). {@code MANDATORY}: ngoài transaction thì
+     * khóa được nhả ngay khi câu lệnh xong.
+     */
+    @Transactional(propagation = Propagation.MANDATORY)
+    @Lock(LockModeType.PESSIMISTIC_WRITE)
+    @Query("SELECT a FROM Appointment a WHERE a.id = :id")
+    Optional<Appointment> findByIdForUpdate(@Param("id") Long id);
+
+    /** Như {@link #existsActiveSameSlot} nhưng không tính lịch {@code excludeId} (đổi khung của chính lịch đó, BR-LH-05). */
+    @Query(value = """
+            SELECT EXISTS (
+                SELECT 1 FROM appointments
+                WHERE pet_id = :petId AND status IN ('BOOKED', 'CHECKED_IN', 'COMPLETED')
+                  AND slot_date = :slotDate AND slot_start = :slotStart AND id <> :excludeId)
+            """, nativeQuery = true)
+    boolean existsActiveSameSlotExcept(@Param("petId") Long petId, @Param("slotDate") LocalDate slotDate,
+            @Param("slotStart") LocalTime slotStart, @Param("excludeId") Long excludeId);
+
+    /** Như {@link #existsActiveSameGroupDay} nhưng không tính lịch {@code excludeId} (BR-LH-05). */
+    @Query(value = """
+            SELECT EXISTS (
+                SELECT 1 FROM appointments
+                WHERE pet_id = :petId AND status IN ('BOOKED', 'CHECKED_IN', 'COMPLETED')
+                  AND service_group = :serviceGroup AND slot_date = :slotDate AND id <> :excludeId)
+            """, nativeQuery = true)
+    boolean existsActiveSameGroupDayExcept(@Param("petId") Long petId, @Param("serviceGroup") String serviceGroup,
+            @Param("slotDate") LocalDate slotDate, @Param("excludeId") Long excludeId);
+
+    /**
+     * Số vi phạm BR-LH-09 của khách từ lịch hẹn, xảy ra <b>sau</b> {@code since} (loại trừ, docs/adr/0045): hủy muộn tính
+     * theo {@code cancelled_at}; {@code NO_SHOW} tính theo giờ hẹn (bảng không có cột thời điểm NO_SHOW). Phải chạy dưới
+     * khóa khách ({@code AppointmentLocks.lockCustomerViolations}), READ COMMITTED: thấy mọi vi phạm đã commit trước khi
+     * khóa được nhả.
+     */
+    @Query(value = """
+            SELECT CAST(count(*) AS integer) FROM appointments
+            WHERE customer_id = :customerId
+              AND ((status = 'CANCELLED' AND late_cancel AND cancelled_at > :since)
+                OR (status = 'NO_SHOW' AND (slot_date + slot_start) AT TIME ZONE 'Asia/Ho_Chi_Minh' > :since))
+            """, nativeQuery = true)
+    int countViolationsAfter(@Param("customerId") Long customerId, @Param("since") Instant since);
 }

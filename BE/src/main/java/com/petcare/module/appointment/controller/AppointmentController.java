@@ -17,8 +17,11 @@ import org.springframework.web.bind.annotation.RestController;
 import com.petcare.module.appointment.dto.AppointmentListFilter;
 import com.petcare.module.appointment.dto.AppointmentResponse;
 import com.petcare.module.appointment.dto.BookAppointmentRequest;
+import com.petcare.module.appointment.dto.CancelAppointmentRequest;
+import com.petcare.module.appointment.dto.RescheduleAppointmentRequest;
 import com.petcare.module.appointment.entity.AppointmentStatus;
 import com.petcare.module.appointment.service.AppointmentBookingService;
+import com.petcare.module.appointment.service.AppointmentChangeService;
 import com.petcare.module.appointment.service.AppointmentQueryService;
 import com.petcare.platform.config.ApiErrorDoc;
 import com.petcare.platform.model.ApiResponse;
@@ -31,7 +34,7 @@ import jakarta.validation.Valid;
 
 /**
  * Lịch hẹn — appointment-v1 #2 đặt lịch (UC39, A02 + A06; docs/adr/0043), #3 danh sách và #4 chi tiết (UC40, UC44;
- * docs/adr/0044). Body / tham số sai là 400 trước {@code @PreAuthorize}; phạm vi (lễ tân / nhân viên: chi nhánh của mình;
+ * docs/adr/0044), #5 đổi khung và #6 hủy (UC40, A02 + A06; docs/adr/0045). Body / tham số sai là 400 trước {@code @PreAuthorize}; phạm vi (lễ tân / nhân viên: chi nhánh của mình;
  * khách: dữ liệu của mình) và mọi rule kiểm ở service.
  */
 @RestController
@@ -49,10 +52,13 @@ public class AppointmentController {
 
     private final AppointmentBookingService booking;
     private final AppointmentQueryService queries;
+    private final AppointmentChangeService changes;
 
-    public AppointmentController(AppointmentBookingService booking, AppointmentQueryService queries) {
+    public AppointmentController(AppointmentBookingService booking, AppointmentQueryService queries,
+            AppointmentChangeService changes) {
         this.booking = booking;
         this.queries = queries;
+        this.changes = changes;
     }
 
     /** appointment-v1 #2. Khách → kênh ONLINE, lễ tân → COUNTER; khách của lịch là chủ hiện tại của thú (A2). */
@@ -134,5 +140,49 @@ public class AppointmentController {
     @PreAuthorize(VIEW_ROLES)
     public ApiResponse<AppointmentResponse> getAppointment(@PathVariable Long appointmentId) {
         return ApiResponse.ok(queries.getAppointment(appointmentId));
+    }
+
+    /** appointment-v1 #5. Cùng chi nhánh, thú, dịch vụ; khung mới trùng khung hiện tại → 200 không ghi. */
+    @Operation(operationId = "rescheduleAppointment", tags = "Appointments",
+            summary = "Đổi khung giờ",
+            description = "UC40 · BR-LH-02, 03, 04, 05, 06. Actor: A02, A06. Quyền: Khách: lịch của mình · lễ tân chi "
+                + "nhánh. Chuyển trạng thái: BOOKED → BOOKED (Lịch hẹn#2). Cùng chi nhánh, cùng thú, cùng dịch vụ; "
+                + "muốn đổi khác thì hủy rồi đặt lại. Giữ mã lịch hẹn. Khung mới trùng khung hiện tại → 200, không "
+                + "ghi, không tăng số lần đổi. BR-LH-05 trên mọi chi nhánh, không tính chính lịch này. Không kiểm lại "
+                + "BR-LH-01, BR-LH-09, BR-KH-05; đổi khung xóa mốc đã nhắc (BR-LH-12) (docs/adr/0045).",
+            parameters = @Parameter(name = "appointmentId", in = ParameterIn.PATH, example = "501"))
+    @ApiErrorDoc(status = 400, description = "`BR-LH-06` hết lượt đổi (3 [CFG]), khách đổi khi còn < 12 giờ [CFG] "
+            + "hoặc lễ tân đổi khi đã tới giờ hẹn · `BR-LH-04`, `BR-LH-02`, `BR-LH-05`, `BR-LH-03` với khung mới; tham "
+            + "số / body sai kiểu (`MALFORMED_REQUEST`, `VALIDATION_FAILED`); BR-TK-17")
+    @ApiErrorDoc(status = 403, description = "Sai vai trò hoặc lễ tân đổi lịch của chi nhánh khác")
+    @ApiErrorDoc(status = 404, description = "Lịch hẹn không tồn tại hoặc không phải của khách đang đăng nhập")
+    @ApiErrorDoc(status = 409, description = "Lịch không còn BOOKED (kiểm ngay sau khi khóa, trước mọi rule)")
+    @PostMapping("/{appointmentId}/reschedule")
+    @PreAuthorize(CUSTOMER_OR_RECEPTIONIST)
+    public ApiResponse<AppointmentResponse> rescheduleAppointment(@PathVariable Long appointmentId,
+            @Valid @RequestBody RescheduleAppointmentRequest request) {
+        return ApiResponse.ok(changes.rescheduleAppointment(appointmentId, request), "Đã đổi khung giờ");
+    }
+
+    /** appointment-v1 #6. Body không bắt buộc; nguồn hủy theo vai trò người gọi. */
+    @Operation(operationId = "cancelAppointment", tags = "Appointments",
+            summary = "Hủy lịch hẹn",
+            description = "UC40 · BR-LH-07, 09. Actor: A02, A06. Quyền: Khách: lịch của mình · lễ tân chi nhánh. "
+                + "Chuyển trạng thái: BOOKED → CANCELLED (Lịch hẹn#4). Body không bắt buộc. Còn < 12 giờ [CFG] trước "
+                + "giờ hẹn → lateCancel = true và đánh giá hạn chế đặt online (BR-LH-09: đếm NO_SHOW + hủy muộn của "
+                + "lịch hẹn và đặt chỗ sau mốc max(now − 90 ngày, lần hạn chế gần nhất); đủ 3 [CFG] → hạn chế 30 ngày "
+                + "[CFG]). cancelSource = CUSTOMER (khách) / STAFF (lễ tân) (docs/adr/0045).",
+            parameters = @Parameter(name = "appointmentId", in = ParameterIn.PATH, example = "501"))
+    @ApiErrorDoc(status = 400, description = "`BR-LH-07` đã tới giờ hẹn; tham số / body sai kiểu "
+            + "(`MALFORMED_REQUEST`, `VALIDATION_FAILED`); BR-TK-17")
+    @ApiErrorDoc(status = 403, description = "Sai vai trò hoặc lễ tân hủy lịch của chi nhánh khác")
+    @ApiErrorDoc(status = 404, description = "Lịch hẹn không tồn tại hoặc không phải của khách đang đăng nhập")
+    @ApiErrorDoc(status = 409, description = "Lịch không còn BOOKED, kể cả CHECKED_IN (kiểm ngay sau khi khóa, trước "
+            + "mọi rule)")
+    @PostMapping("/{appointmentId}/cancel")
+    @PreAuthorize(CUSTOMER_OR_RECEPTIONIST)
+    public ApiResponse<AppointmentResponse> cancelAppointment(@PathVariable Long appointmentId,
+            @Valid @RequestBody(required = false) CancelAppointmentRequest request) {
+        return ApiResponse.ok(changes.cancelAppointment(appointmentId, request), "Đã hủy lịch hẹn");
     }
 }

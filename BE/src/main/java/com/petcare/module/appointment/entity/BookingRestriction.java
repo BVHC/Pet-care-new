@@ -19,7 +19,7 @@ import lombok.NoArgsConstructor;
  * chế ⇔ có dòng {@code starts_at ≤ now < ends_at AND lifted_at IS NULL} (erd §5). {@code violation_count} là
  * {@code SMALLINT} nên field là {@code short}; {@code customerId}, {@code liftedBy} để dạng id (convention 02).
  * <p>
- * T16 phần 2 (docs/adr/0043) chỉ đọc; tạo (phần 4 / ST05) và gỡ sớm (#9) thêm method khi cần.
+ * Tạo bằng {@link #start} (vi phạm thứ N, docs/adr/0045); gỡ sớm (#9) thêm method khi cần.
  */
 @Getter
 @Entity
@@ -51,4 +51,17 @@ public class BookingRestriction extends TimestampedEntity {
 
     @Column(name = "lift_reason")
     private String liftReason;
+
+    /**
+     * Một lần hạn chế mới (BR-LH-09, docs/adr/0045): bắt đầu đúng lúc xảy ra vi phạm làm đủ ngưỡng, kéo dài
+     * {@code booking_restriction.duration_days} [CFG]. {@code violationCount} chỉ để hiển thị.
+     */
+    public static BookingRestriction start(Long customerId, Instant startsAt, Instant endsAt, int violationCount) {
+        BookingRestriction restriction = new BookingRestriction();
+        restriction.customerId = customerId;
+        restriction.startsAt = startsAt;
+        restriction.endsAt = endsAt;
+        restriction.violationCount = (short) Math.min(violationCount, Short.MAX_VALUE);
+        return restriction;
+    }
 }

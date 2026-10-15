@@ -17,7 +17,7 @@ m = Module(
         "Booking restrictions": "Hạn chế đặt online (BR-LH-09)",
     },
     security=[
-        "Khách chỉ đặt / xem / đổi / hủy lịch của thú mình là chủ hiện tại; nhân viên chỉ thao tác lịch của chi nhánh mình.",
+        "Khách đặt lịch cho thú mình là chủ hiện tại; xem / đổi / hủy lịch có `customerId` là hồ sơ của mình (chủ lúc đặt). Nhân viên chỉ thao tác lịch của chi nhánh mình.",
         "Đếm quota và INSERT trong cùng transaction có khóa theo chi nhánh × nhóm × khung (05 `appointments`), nên hai người không cùng lấy được chỗ cuối.",
         "Khách: kiểm thời hạn đặt 24 giờ / 30 ngày [CFG], hạn chế online, cờ chờ liên kết. Lễ tân: đặt mọi khung chưa bắt đầu và còn quota; giới hạn số lịch của thú vẫn áp dụng (BR-LH-04, 05).",
         "Gỡ hạn chế đặt online ghi audit (BR-LH-09).",
@@ -112,16 +112,28 @@ m.op("get", "/appointments/{appointmentId}", "getAppointment", "Chi tiết lịc
                404: "Lịch hẹn không tồn tại hoặc không phải của khách đang đăng nhập"},
      notes="`canReschedule` / `canCancel` theo người xem; BRANCH_MANAGER, VET, CARETAKER luôn false (docs/adr/0044).")
 m.op("post", "/appointments/{appointmentId}/reschedule", "rescheduleAppointment", "Đổi khung giờ", "Appointments",
-     "UC40", "BR-LH-03, 04, 05, 06", "A02, A06", "Khách: lịch của mình · lễ tân chi nhánh", "BOOKED → BOOKED (Lịch hẹn#2)",
+     "UC40", "BR-LH-02, 03, 04, 05, 06", "A02, A06", "Khách: lịch của mình · lễ tân chi nhánh", "BOOKED → BOOKED (Lịch hẹn#2)",
      body="RescheduleRequest", resp="Appointment", path_params=["AppointmentId"], errors=(400, 401, 403, 404, 409),
-     err_desc={400: "`BR-LH-06` hết lượt đổi (3 [CFG]) hoặc khách đổi khi còn < 12 giờ · `BR-LH-04`, `BR-LH-03`, `BR-LH-05` với khung mới",
-               409: "Lịch không còn BOOKED"},
-     notes="Cùng chi nhánh, cùng thú, cùng dịch vụ; muốn đổi khác thì hủy rồi đặt lại. Giữ mã lịch hẹn.")
+     err_desc={400: "`BR-LH-06` hết lượt đổi (3 [CFG]), khách đổi khi còn < 12 giờ [CFG] hoặc lễ tân đổi khi đã tới giờ hẹn · "
+                    "`BR-LH-04`, `BR-LH-02`, `BR-LH-05`, `BR-LH-03` với khung mới; tham số / body sai kiểu (`MALFORMED_REQUEST`, "
+                    "`VALIDATION_FAILED`); BR-TK-17",
+               403: "Sai vai trò hoặc lễ tân đổi lịch của chi nhánh khác",
+               404: "Lịch hẹn không tồn tại hoặc không phải của khách đang đăng nhập",
+               409: "Lịch không còn BOOKED (kiểm ngay sau khi khóa, trước mọi rule)"},
+     notes="Cùng chi nhánh, cùng thú, cùng dịch vụ; muốn đổi khác thì hủy rồi đặt lại. Giữ mã lịch hẹn. Khung mới trùng khung "
+           "hiện tại → 200, không ghi, không tăng số lần đổi. BR-LH-05 trên mọi chi nhánh, không tính chính lịch này. Không "
+           "kiểm lại BR-LH-01, BR-LH-09, BR-KH-05; đổi khung xóa mốc đã nhắc (BR-LH-12) (docs/adr/0045).")
 m.op("post", "/appointments/{appointmentId}/cancel", "cancelAppointment", "Hủy lịch hẹn", "Appointments", "UC40",
      "BR-LH-07, 09", "A02, A06", "Khách: lịch của mình · lễ tân chi nhánh", "BOOKED → CANCELLED (Lịch hẹn#4)",
      body="CancelAppointmentRequest", resp="Appointment", path_params=["AppointmentId"],
-     errors=(400, 401, 403, 404, 409), err_desc={400: "Đã qua giờ hẹn", 409: "Lịch không còn BOOKED"},
-     notes="Còn < 12 giờ [CFG] → lateCancel = true và đánh giá hạn chế đặt online (BR-LH-09).")
+     errors=(400, 401, 403, 404, 409),
+     err_desc={400: "`BR-LH-07` đã tới giờ hẹn; tham số / body sai kiểu (`MALFORMED_REQUEST`, `VALIDATION_FAILED`); BR-TK-17",
+               403: "Sai vai trò hoặc lễ tân hủy lịch của chi nhánh khác",
+               404: "Lịch hẹn không tồn tại hoặc không phải của khách đang đăng nhập",
+               409: "Lịch không còn BOOKED, kể cả CHECKED_IN (kiểm ngay sau khi khóa, trước mọi rule)"},
+     notes="Body không bắt buộc. Còn < 12 giờ [CFG] trước giờ hẹn → lateCancel = true và đánh giá hạn chế đặt online "
+           "(BR-LH-09: đếm NO_SHOW + hủy muộn của lịch hẹn và đặt chỗ sau mốc max(now − 90 ngày, lần hạn chế gần nhất); "
+           "đủ 3 [CFG] → hạn chế 30 ngày [CFG]). cancelSource = CUSTOMER (khách) / STAFF (lễ tân) (docs/adr/0045).")
 
 m.op("get", "/me/booking-restriction", "getMyBookingRestriction", "Tình trạng hạn chế đặt online của tôi",
      "Booking restrictions", "UC39, UC58", "BR-LH-09", "A02", "Khách đang đăng nhập", resp="RestrictionStatus",

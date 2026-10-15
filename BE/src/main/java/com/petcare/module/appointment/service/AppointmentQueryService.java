@@ -5,13 +5,7 @@ import java.time.Instant;
 import java.time.LocalDate;
 import java.time.LocalTime;
 import java.util.ArrayList;
-import java.util.HashMap;
-import java.util.LinkedHashSet;
 import java.util.List;
-import java.util.Map;
-import java.util.Set;
-import java.util.function.Function;
-import java.util.stream.Collectors;
 
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
@@ -27,13 +21,11 @@ import com.petcare.module.appointment.entity.Appointment;
 import com.petcare.module.appointment.entity.AppointmentStatus;
 import com.petcare.module.appointment.mapper.AppointmentMapper;
 import com.petcare.module.appointment.repository.AppointmentRepository;
+import com.petcare.module.appointment.service.AppointmentResponder.Viewer;
 import com.petcare.module.branch.api.BranchQueryApi;
 import com.petcare.module.catalog.api.CatalogQueryApi;
-import com.petcare.module.catalog.api.CatalogQueryApi.ServiceInfo;
 import com.petcare.module.customer.api.CustomerQueryApi;
-import com.petcare.module.customer.api.CustomerQueryApi.CustomerContact;
 import com.petcare.module.customer.api.PetQueryApi;
-import com.petcare.module.customer.api.PetQueryApi.PetSummary;
 import com.petcare.module.identity.api.ConfigKey;
 import com.petcare.module.identity.api.SystemConfigApi;
 import com.petcare.platform.exception.ResourceNotFoundException;
@@ -52,7 +44,8 @@ import jakarta.persistence.criteria.Predicate;
  * thú); nhân viên luôn bị ép chi nhánh qua {@link BranchScope} — {@code branchId} khác là 403 trước mọi lần đọc DB. Bộ
  * lọc người dùng gửi chỉ AND thêm vào phạm vi.</li>
  * <li>Chi tiết: không có, hoặc khách xem lịch của khách khác → cùng 404; nhân viên xem chi nhánh khác → 403.</li>
- * <li>Tên hiển thị lấy theo lô cho cả trang (mỗi module gọi một lần); trang rỗng không gọi module nào.</li>
+ * <li>Tên hiển thị lấy theo lô cho cả trang qua {@link AppointmentResponder} (mỗi module gọi một lần); trang rỗng không
+ * gọi module nào.</li>
  * <li>{@code canReschedule} / {@code canCancel} theo người xem; BRANCH_MANAGER, VET, CARETAKER không có quyền đổi / hủy
  * (hợp đồng #5, #6) nên luôn {@link AppointmentActions.Flags#NONE}.</li>
  * </ul>
@@ -65,19 +58,11 @@ public class AppointmentQueryService {
     /** Tăng dần theo giờ hẹn, hòa thì theo id (docs/adr/0044 §7). */
     static final Sort ORDER = Sort.by(Sort.Order.asc("slotDate"), Sort.Order.asc("slotStart"), Sort.Order.asc("id"));
 
-    /** Người xem, quyết định phạm vi và hai cờ. */
-    enum Viewer {
-        CUSTOMER, RECEPTIONIST, READ_ONLY_STAFF
-    }
-
     private final BranchScope branchScope;
     private final CustomerQueryApi customers;
-    private final PetQueryApi pets;
-    private final BranchQueryApi branches;
-    private final CatalogQueryApi catalog;
     private final SystemConfigApi configs;
     private final AppointmentRepository appointments;
-    private final AppointmentMapper mapper;
+    private final AppointmentResponder responder;
     private final Clock clock;
 
     public AppointmentQueryService(BranchScope branchScope, CustomerQueryApi customers, PetQueryApi pets,
@@ -85,12 +70,9 @@ public class AppointmentQueryService {
             AppointmentRepository appointments, AppointmentMapper mapper, Clock clock) {
         this.branchScope = branchScope;
         this.customers = customers;
-        this.pets = pets;
-        this.branches = branches;
-        this.catalog = catalog;
         this.configs = configs;
         this.appointments = appointments;
-        this.mapper = mapper;
+        this.responder = new AppointmentResponder(customers, pets, branches, catalog, configs, mapper);
         this.clock = clock;
     }
 
@@ -112,7 +94,7 @@ public class AppointmentQueryService {
         Specification<Appointment> spec = scope.and(filters(filter, viewer == Viewer.CUSTOMER, now));
         Page<Appointment> found = appointments.findAll(spec,
                 PageRequest.of(Math.max(page, 0), Math.min(Math.max(size, 1), MAX_PAGE_SIZE), ORDER));
-        return PageResponse.of(found.map(responder(found.getContent(), viewer, now)));
+        return PageResponse.of(found.map(responder.forRows(found.getContent(), viewer, now)));
     }
 
     /** appointment-v1 #4. */
@@ -127,7 +109,7 @@ public class AppointmentQueryService {
         if (viewer != Viewer.CUSTOMER) {
             branchScope.check(appointment.getBranchId());
         }
-        return responder(List.of(appointment), viewer, clock.instant()).apply(appointment);
+        return responder.one(appointment, viewer, clock.instant());
     }
 
     /** Hợp đồng #3: A02, A05, A06; #4 thêm A07, A08. Role khác đã bị {@code @PreAuthorize} chặn — tới đây là lỗi lập trình. */
@@ -191,65 +173,5 @@ public class AppointmentQueryService {
             }
             return cb.and(predicates.toArray(new Predicate[0]));
         };
-    }
-
-    /**
-     * Hàm map một lịch của {@code rows} sang response: tên lấy theo lô (mỗi module một lần, theo id khác nhau), cờ theo
-     * người xem với cùng {@code now}. {@code rows} rỗng → không gọi module nào. Thiếu một id (FK bảo đảm có) hoặc trùng id
-     * trong kết quả → {@link IllegalStateException} (500), không trả tên null.
-     */
-    private Function<Appointment, AppointmentResponse> responder(List<Appointment> rows, Viewer viewer, Instant now) {
-        if (rows.isEmpty()) {
-            return appointment -> {
-                throw new IllegalStateException("Không có lịch hẹn nào để map");
-            };
-        }
-        Map<Long, String> petNames = index(pets.findPets(ids(rows, Appointment::getPetId)),
-                PetSummary::petId, PetSummary::name);
-        Map<Long, String> customerNames = index(customers.findContacts(ids(rows, Appointment::getCustomerId)),
-                CustomerContact::customerId, CustomerContact::fullName);
-        Map<Long, String> serviceNames = index(catalog.findServices(ids(rows, Appointment::getServiceId)),
-                ServiceInfo::serviceId, ServiceInfo::name);
-        Map<Long, String> branchNames = new HashMap<>();
-        for (Long branchId : ids(rows, Appointment::getBranchId)) {
-            branchNames.put(branchId, branches.findBranch(branchId)
-                    .orElseThrow(() -> new IllegalStateException("Không đọc được chi nhánh #" + branchId))
-                    .name());
-        }
-
-        boolean canAct = viewer != Viewer.READ_ONLY_STAFF;
-        int maxReschedules = canAct ? configs.getInt(ConfigKey.APPOINTMENT_MAX_RESCHEDULES) : 0;
-        int leadHours = canAct ? configs.getInt(ConfigKey.APPOINTMENT_RESCHEDULE_MIN_LEAD_HOURS) : 0;
-        return appointment -> {
-            AppointmentMapper.Names names = new AppointmentMapper.Names(
-                    require(customerNames, appointment.getCustomerId(), "hồ sơ khách", appointment),
-                    require(petNames, appointment.getPetId(), "thú cưng", appointment),
-                    require(branchNames, appointment.getBranchId(), "chi nhánh", appointment),
-                    require(serviceNames, appointment.getServiceId(), "dịch vụ", appointment));
-            AppointmentActions.Flags flags = canAct
-                    ? AppointmentActions.forViewer(appointment, viewer == Viewer.CUSTOMER, now, maxReschedules,
-                            leadHours)
-                    : AppointmentActions.Flags.NONE;
-            return mapper.toResponse(appointment, names, flags);
-        };
-    }
-
-    private static Set<Long> ids(List<Appointment> rows, Function<Appointment, Long> id) {
-        return rows.stream().map(id).collect(Collectors.toCollection(LinkedHashSet::new));
-    }
-
-    private static <T> Map<Long, String> index(List<T> found, Function<T, Long> id, Function<T, String> name) {
-        return found.stream().collect(Collectors.toMap(id, name, (first, second) -> {
-            throw new IllegalStateException("Kết quả tra theo lô có id trùng");
-        }));
-    }
-
-    private static String require(Map<Long, String> names, Long id, String what, Appointment appointment) {
-        String name = names.get(id);
-        if (name == null) {
-            throw new IllegalStateException("Lịch hẹn #" + appointment.getId() + " trỏ tới " + what
-                    + " không đọc được: #" + id);
-        }
-        return name;
     }
 }

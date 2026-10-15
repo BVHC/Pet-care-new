@@ -29,7 +29,7 @@ import lombok.NoArgsConstructor;
  * hệ với Visit nằm ở {@code visits.appointment_id} (module visit). {@code reschedule_count} là {@code SMALLINT} nên field
  * là {@code short}.
  * <p>
- * T16 phần 0 (docs/adr/0041) chỉ khai cột; method tạo / đổi khung / hủy thêm ở phần dùng tới chúng.
+ * Method đổi trạng thái: {@link #book} (phần 2), {@link #reschedule}, {@link #cancel} (phần 4, docs/adr/0045).
  */
 @Getter
 @Entity
@@ -123,5 +123,29 @@ public class Appointment extends TimestampedEntity {
         appointment.lateCancel = false;
         appointment.note = note;
         return appointment;
+    }
+
+    /**
+     * Lịch hẹn#2 ({@code BOOKED → BOOKED}, command {@code rescheduleAppointment}, BR-LH-06; docs/adr/0045). Bên gọi đã kiểm
+     * trạng thái và mọi rule dưới khóa. Chỉ đổi khung, tăng số lần đổi và xóa mốc đã nhắc để ST03 nhắc theo giờ hẹn mới
+     * (BR-LH-12, Q9); chi nhánh, thú, dịch vụ, mã giữ nguyên (cột {@code updatable = false}).
+     */
+    public void reschedule(LocalDate newDate, LocalTime newStart) {
+        this.slotDate = newDate;
+        this.slotStart = newStart;
+        this.rescheduleCount = (short) (this.rescheduleCount + 1);
+        this.remindedAt = null;
+    }
+
+    /**
+     * Lịch hẹn#4 ({@code BOOKED → CANCELLED}, command {@code cancelAppointment}, BR-LH-07; docs/adr/0045): khách hoặc lễ
+     * tân hủy. Đặt đủ các cột hủy theo CHECK {@code ck_appointments_cancel_fields} (erd §5).
+     */
+    public void cancel(AppointmentCancelSource source, String reason, Instant at, boolean late) {
+        this.status = AppointmentStatus.CANCELLED;
+        this.cancelSource = source;
+        this.cancelReason = reason;
+        this.cancelledAt = at;
+        this.lateCancel = late;
     }
 }

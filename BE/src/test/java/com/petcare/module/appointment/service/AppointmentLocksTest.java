@@ -36,6 +36,24 @@ class AppointmentLocksTest {
         verify(repository).acquireTransactionLock(AppointmentLocks.PET_LOCK_NAMESPACE, 42);
     }
 
+    /** Khóa theo khách khi đánh giá BR-LH-09 (docs/adr/0045): namespace khác thú, cùng các chốt. */
+    @Test
+    void locksCustomerViolationsInItsOwnNamespace() throws NoSuchMethodException {
+        locks.lockCustomerViolations(88L);
+
+        verify(repository).acquireTransactionLock(AppointmentLocks.CUSTOMER_VIOLATION_NAMESPACE, 88);
+        assertThat(AppointmentLocks.CUSTOMER_VIOLATION_NAMESPACE).isNotEqualTo(AppointmentLocks.PET_LOCK_NAMESPACE);
+        assertThatThrownBy(() -> locks.lockCustomerViolations(null)).isInstanceOf(NullPointerException.class);
+        assertThatThrownBy(() -> locks.lockCustomerViolations(0L)).isInstanceOf(IllegalArgumentException.class);
+        TransactionSynchronizationManager.setCurrentTransactionReadOnly(true);
+        assertThatThrownBy(() -> locks.lockCustomerViolations(1L))
+                .isInstanceOf(IllegalStateException.class).hasMessageContaining("readOnly");
+        Transactional tx = AppointmentLocks.class.getMethod("lockCustomerViolations", Long.class)
+                .getAnnotation(Transactional.class);
+        assertThat(tx.propagation()).isEqualTo(Propagation.MANDATORY);
+        assertThat(tx.noRollbackFor()).isEmpty();
+    }
+
     @Test
     void keyStaysAPositiveIntForAnyPositiveId() {
         assertThat(AppointmentLocks.petKey(1L)).isEqualTo(1);

@@ -23,7 +23,7 @@
 | 2 | `POST /appointments` | Đặt lịch hẹn | UC39 | BR-LH-01…05, 09, BR-KH-05, BR-TK-19 |
 | 3 | `GET /appointments` | Danh sách lịch hẹn | UC40, UC44 | BR-LH-11, BR-TN-02 |
 | 4 | `GET /appointments/{appointmentId}` | Chi tiết lịch hẹn | UC40 | — |
-| 5 | `POST /appointments/{appointmentId}/reschedule` | Đổi khung giờ | UC40 | BR-LH-03, 04, 05, 06 |
+| 5 | `POST /appointments/{appointmentId}/reschedule` | Đổi khung giờ | UC40 | BR-LH-02, 03, 04, 05, 06 |
 | 6 | `POST /appointments/{appointmentId}/cancel` | Hủy lịch hẹn | UC40 | BR-LH-07, 09 |
 | 7 | `GET /me/booking-restriction` | Tình trạng hạn chế đặt online của tôi | UC39, UC58 | BR-LH-09 |
 | 8 | `GET /customers/{customerId}/booking-restriction` | Tình trạng hạn chế đặt online của khách | UC39 | BR-LH-09 |
@@ -39,8 +39,8 @@
 | Đặt lịch hẹn | A02, A06 | Khách: thú của mình · lễ tân: chi nhánh mình | — → BOOKED (Lịch hẹn#1); nhóm MEDICAL → Care Task#6 | — | Khách → channel ONLINE, lễ tân → COUNTER (A2). Nhóm MEDICAL: hủy nhắc tái khám đang chờ của thú (BR-TB-06); nối Care Task#6 khi visit cài FollowUpApi (docs/adr/0043). |
 | Danh sách lịch hẹn | A02, A05, A06 | Khách: lịch của mình · nhân viên: chi nhánh mình | — | — | Khách: chỉ lịch có `customerId` là hồ sơ của mình (chủ lúc đặt); nhân viên: chi nhánh của mình, `branchId` khác → 403. Mọi bộ lọc là AND; `from > to` → trang rỗng; `checkInReady` rỗng / vắng / false = không lọc. `checkInReady=true`: lịch BOOKED, ngày hẹn hôm nay, giờ hẹn − `visit.check_in_early_minutes` ≤ now ≤ giờ hẹn + `appointment.no_show_after_minutes` [CFG] (BR-TN-02, 03, BR-LH-08). Tăng dần theo `slotDate`, `slotStart`, `appointmentId`. `page` < 0 → 0, `size` kẹp 1–100. `canReschedule` / `canCancel` theo người xem; BRANCH_MANAGER luôn false (docs/adr/0044). |
 | Chi tiết lịch hẹn | A02, A05, A06, A07, A08 | Khách: lịch của mình · nhân viên chi nhánh | — | — | `canReschedule` / `canCancel` theo người xem; BRANCH_MANAGER, VET, CARETAKER luôn false (docs/adr/0044). |
-| Đổi khung giờ | A02, A06 | Khách: lịch của mình · lễ tân chi nhánh | BOOKED → BOOKED (Lịch hẹn#2) | — | Cùng chi nhánh, cùng thú, cùng dịch vụ; muốn đổi khác thì hủy rồi đặt lại. Giữ mã lịch hẹn. |
-| Hủy lịch hẹn | A02, A06 | Khách: lịch của mình · lễ tân chi nhánh | BOOKED → CANCELLED (Lịch hẹn#4) | — | Còn < 12 giờ [CFG] → lateCancel = true và đánh giá hạn chế đặt online (BR-LH-09). |
+| Đổi khung giờ | A02, A06 | Khách: lịch của mình · lễ tân chi nhánh | BOOKED → BOOKED (Lịch hẹn#2) | — | Cùng chi nhánh, cùng thú, cùng dịch vụ; muốn đổi khác thì hủy rồi đặt lại. Giữ mã lịch hẹn. Khung mới trùng khung hiện tại → 200, không ghi, không tăng số lần đổi. BR-LH-05 trên mọi chi nhánh, không tính chính lịch này. Không kiểm lại BR-LH-01, BR-LH-09, BR-KH-05; đổi khung xóa mốc đã nhắc (BR-LH-12) (docs/adr/0045). |
+| Hủy lịch hẹn | A02, A06 | Khách: lịch của mình · lễ tân chi nhánh | BOOKED → CANCELLED (Lịch hẹn#4) | — | Body không bắt buộc. Còn < 12 giờ [CFG] trước giờ hẹn → lateCancel = true và đánh giá hạn chế đặt online (BR-LH-09: đếm NO_SHOW + hủy muộn của lịch hẹn và đặt chỗ sau mốc max(now − 90 ngày, lần hạn chế gần nhất); đủ 3 [CFG] → hạn chế 30 ngày [CFG]). cancelSource = CUSTOMER (khách) / STAFF (lễ tân) (docs/adr/0045). |
 | Tình trạng hạn chế đặt online của tôi | A02 | Khách đang đăng nhập | — | — | FE hiển thị lý do và ngày hết hạn chế. |
 | Tình trạng hạn chế đặt online của khách | A05, A06 | Nhân viên | — | — | — |
 | Gỡ hạn chế sớm | A05, A06 | Lễ tân, BRANCH_MANAGER | — | — | Ghi audit. |
@@ -57,8 +57,8 @@
 - **`POST /appointments`** — Đặt lịch hẹn. Request `BookAppointmentRequest`. Response `201` `Appointment`. Lỗi: `400` `BR-LH-01` dịch vụ không đặt được / đang tắt tại chi nhánh, chi nhánh chưa ACTIVE · `BR-LH-02` khung không hợp lệ · `BR-LH-03` khung đã đủ quota · `BR-LH-04` ngoài khoảng 24 giờ – 30 ngày [CFG] (khách) hoặc khung đã bắt đầu (lễ tân) · `BR-LH-05` thú đã có 2 lịch BOOKED, trùng nhóm trong ngày hoặc trùng khung · `BR-LH-09` khách đang bị hạn chế đặt online · `BR-KH-05` thú đã mất · `BR-TK-19` hồ sơ còn chờ quyết định liên kết · `401` · `403` Lễ tân đặt lịch cho chi nhánh khác · `404` Thú cưng (kể cả thú của khách khác), dịch vụ hoặc chi nhánh không tồn tại (khách: cả chi nhánh chưa hoạt động).
 - **`GET /appointments`** — Danh sách lịch hẹn. Query: `branchId?`, `date?`, `from?`, `to?`, `status?`, `petId?`, `customerId?`, `checkInReady?`, `page?`, `size?`. Response `200` trang `Appointment`. Lỗi: `400` Tham số sai kiểu (`MALFORMED_REQUEST`); BR-TK-17 · `401` · `403` Sai vai trò hoặc nhân viên lọc chi nhánh khác.
 - **`GET /appointments/{appointmentId}`** — Chi tiết lịch hẹn. Response `200` `Appointment`. Lỗi: `400` Tham số sai kiểu (`MALFORMED_REQUEST`); BR-TK-17 · `401` · `403` Nhân viên xem lịch của chi nhánh khác · `404` Lịch hẹn không tồn tại hoặc không phải của khách đang đăng nhập.
-- **`POST /appointments/{appointmentId}/reschedule`** — Đổi khung giờ. Request `RescheduleRequest`. Response `200` `Appointment`. Lỗi: `400` `BR-LH-06` hết lượt đổi (3 [CFG]) hoặc khách đổi khi còn < 12 giờ · `BR-LH-04`, `BR-LH-03`, `BR-LH-05` với khung mới · `401` · `403` · `404` · `409` Lịch không còn BOOKED.
-- **`POST /appointments/{appointmentId}/cancel`** — Hủy lịch hẹn. Request `CancelAppointmentRequest`. Response `200` `Appointment`. Lỗi: `400` Đã qua giờ hẹn · `401` · `403` · `404` · `409` Lịch không còn BOOKED.
+- **`POST /appointments/{appointmentId}/reschedule`** — Đổi khung giờ. Request `RescheduleRequest`. Response `200` `Appointment`. Lỗi: `400` `BR-LH-06` hết lượt đổi (3 [CFG]), khách đổi khi còn < 12 giờ [CFG] hoặc lễ tân đổi khi đã tới giờ hẹn · `BR-LH-04`, `BR-LH-02`, `BR-LH-05`, `BR-LH-03` với khung mới; tham số / body sai kiểu (`MALFORMED_REQUEST`, `VALIDATION_FAILED`); BR-TK-17 · `401` · `403` Sai vai trò hoặc lễ tân đổi lịch của chi nhánh khác · `404` Lịch hẹn không tồn tại hoặc không phải của khách đang đăng nhập · `409` Lịch không còn BOOKED (kiểm ngay sau khi khóa, trước mọi rule).
+- **`POST /appointments/{appointmentId}/cancel`** — Hủy lịch hẹn. Request `CancelAppointmentRequest`. Response `200` `Appointment`. Lỗi: `400` `BR-LH-07` đã tới giờ hẹn; tham số / body sai kiểu (`MALFORMED_REQUEST`, `VALIDATION_FAILED`); BR-TK-17 · `401` · `403` Sai vai trò hoặc lễ tân hủy lịch của chi nhánh khác · `404` Lịch hẹn không tồn tại hoặc không phải của khách đang đăng nhập · `409` Lịch không còn BOOKED, kể cả CHECKED_IN (kiểm ngay sau khi khóa, trước mọi rule).
 ### Booking restrictions
 
 - **`GET /me/booking-restriction`** — Tình trạng hạn chế đặt online của tôi. Response `200` `RestrictionStatus`. Lỗi: `401` · `403`.
@@ -83,7 +83,7 @@ Trường có `?` là không bắt buộc / có thể null. Kiểu `email`, `dat
 
 ## D. Bảo mật & độ tin cậy
 
-1. Khách chỉ đặt / xem / đổi / hủy lịch của thú mình là chủ hiện tại; nhân viên chỉ thao tác lịch của chi nhánh mình.
+1. Khách đặt lịch cho thú mình là chủ hiện tại; xem / đổi / hủy lịch có `customerId` là hồ sơ của mình (chủ lúc đặt). Nhân viên chỉ thao tác lịch của chi nhánh mình.
 2. Đếm quota và INSERT trong cùng transaction có khóa theo chi nhánh × nhóm × khung (05 `appointments`), nên hai người không cùng lấy được chỗ cuối.
 3. Khách: kiểm thời hạn đặt 24 giờ / 30 ngày [CFG], hạn chế online, cờ chờ liên kết. Lễ tân: đặt mọi khung chưa bắt đầu và còn quota; giới hạn số lịch của thú vẫn áp dụng (BR-LH-04, 05).
 4. Gỡ hạn chế đặt online ghi audit (BR-LH-09).

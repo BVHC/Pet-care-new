@@ -14,7 +14,8 @@ import org.springframework.web.bind.annotation.RequestMapping;
 
 /**
  * Vai trò của từng handler trong {@link AppointmentController} khớp appointment-v1 mục B: #2 đặt lịch A02 + A06
- * (docs/adr/0043); #3 danh sách A02, A05, A06; #4 chi tiết A02, A05–A08 (docs/adr/0044). Handler mới mà quên
+ * (docs/adr/0043); #3 danh sách A02, A05, A06; #4 chi tiết A02, A05–A08 (docs/adr/0044); #5 đổi khung, #6 hủy A02 + A06
+ * (docs/adr/0045). Handler mới mà quên
  * {@code @PreAuthorize} hoặc chưa có trong bảng này thì test đỏ.
  */
 class AppointmentControllerSecurityTest {
@@ -22,7 +23,9 @@ class AppointmentControllerSecurityTest {
     private static final Map<String, String> EXPECTED = Map.of(
             "bookAppointment", "hasAnyRole('CUSTOMER','RECEPTIONIST')",
             "listAppointments", "hasAnyRole('CUSTOMER','BRANCH_MANAGER','RECEPTIONIST')",
-            "getAppointment", "hasAnyRole('CUSTOMER','BRANCH_MANAGER','RECEPTIONIST','VET','CARETAKER')");
+            "getAppointment", "hasAnyRole('CUSTOMER','BRANCH_MANAGER','RECEPTIONIST','VET','CARETAKER')",
+            "rescheduleAppointment", "hasAnyRole('CUSTOMER','RECEPTIONIST')",
+            "cancelAppointment", "hasAnyRole('CUSTOMER','RECEPTIONIST')");
 
     @Test
     void everyHandlerCarriesExactlyTheContractRoles() {

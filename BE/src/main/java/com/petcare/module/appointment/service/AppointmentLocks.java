@@ -24,6 +24,12 @@ public class AppointmentLocks {
     /** Namespace advisory lock của thú đặt lịch (bảng đăng ký namespace: docs/adr/0041). */
     public static final int PET_LOCK_NAMESPACE = 1001;
 
+    /**
+     * Namespace advisory lock của khách khi đánh giá hạn chế đặt online (BR-LH-09, docs/adr/0045). Luôn là khóa
+     * <b>cuối cùng</b> của mọi luồng (hủy muộn, ST05, boarding): không luồng nào giữ khóa này rồi chờ khóa khác.
+     */
+    public static final int CUSTOMER_VIOLATION_NAMESPACE = 1002;
+
     private final AppointmentRepository appointments;
 
     public AppointmentLocks(AppointmentRepository appointments) {
@@ -32,17 +38,34 @@ public class AppointmentLocks {
 
     @Transactional(propagation = Propagation.MANDATORY)
     public void lockPet(Long petId) {
-        Objects.requireNonNull(petId, "petId");
-        if (petId <= 0) {
-            throw new IllegalArgumentException("petId phải dương: " + petId);
+        lock(PET_LOCK_NAMESPACE, petId, "lockPet", "petId");
+    }
+
+    /**
+     * Khóa theo khách trước khi đếm vi phạm và tạo hạn chế (docs/adr/0045): hai vi phạm đồng thời của cùng khách không
+     * tạo hai dòng {@code booking_restrictions}, và vi phạm sau thấy vi phạm trước đã commit.
+     */
+    @Transactional(propagation = Propagation.MANDATORY)
+    public void lockCustomerViolations(Long customerId) {
+        lock(CUSTOMER_VIOLATION_NAMESPACE, customerId, "lockCustomerViolations", "customerId");
+    }
+
+    private void lock(int namespace, Long id, String method, String name) {
+        Objects.requireNonNull(id, name);
+        if (id <= 0) {
+            throw new IllegalArgumentException(name + " phải dương: " + id);
         }
         if (TransactionSynchronizationManager.isCurrentTransactionReadOnly()) {
-            throw new IllegalStateException("AppointmentLocks.lockPet cần transaction ghi, không được readOnly");
+            throw new IllegalStateException("AppointmentLocks." + method + " cần transaction ghi, không được readOnly");
         }
-        appointments.acquireTransactionLock(PET_LOCK_NAMESPACE, petKey(petId));
+        appointments.acquireTransactionLock(namespace, key(id));
     }
 
     static int petKey(long petId) {
-        return (int) (petId % Integer.MAX_VALUE);
+        return key(petId);
+    }
+
+    static int key(long id) {
+        return (int) (id % Integer.MAX_VALUE);
     }
 }
