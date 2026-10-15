@@ -23,7 +23,11 @@ import com.petcare.platform.config.TimeConfig;
 public final class AppointmentActions {
 
     /** Hai cờ của response. */
-    public record Flags(boolean canReschedule, boolean canCancel) {}
+    public record Flags(boolean canReschedule, boolean canCancel) {
+
+        /** Người xem không có quyền đổi / hủy (BRANCH_MANAGER, VET, CARETAKER — hợp đồng #5, #6 chỉ A02, A06). */
+        public static final Flags NONE = new Flags(false, false);
+    }
 
     private AppointmentActions() {
     }

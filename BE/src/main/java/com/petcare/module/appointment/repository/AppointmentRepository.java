@@ -5,6 +5,7 @@ import java.time.LocalTime;
 import java.util.List;
 
 import org.springframework.data.jpa.repository.JpaRepository;
+import org.springframework.data.jpa.repository.JpaSpecificationExecutor;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 import org.springframework.transaction.annotation.Propagation;
@@ -12,7 +13,11 @@ import org.springframework.transaction.annotation.Transactional;
 
 import com.petcare.module.appointment.entity.Appointment;
 
-public interface AppointmentRepository extends JpaRepository<Appointment, Long> {
+/**
+ * {@link JpaSpecificationExecutor}: danh sách lịch hẹn (appointment-v1 #3, docs/adr/0044) chỉ ghép điều kiện được gửi,
+ * không bao giờ {@code :x IS NULL OR} (khuôn {@code catalog/service/ProductService}).
+ */
+public interface AppointmentRepository extends JpaRepository<Appointment, Long>, JpaSpecificationExecutor<Appointment> {
 
     /**
      * Advisory lock theo transaction ({@code pg_advisory_xact_lock}, docs/adr/0041): tự nhả khi commit / rollback, không

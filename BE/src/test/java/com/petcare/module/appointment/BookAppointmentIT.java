@@ -571,7 +571,8 @@ class BookAppointmentIT {
                 .isEqualTo(HttpStatus.UNSUPPORTED_MEDIA_TYPE);
         HttpHeaders headers = new HttpHeaders();
         headers.setBearerAuth(customerToken);
-        assertThat(http.exchange(URI.create(http.getRootUri() + "/api/appointments"), HttpMethod.GET,
+        // GET /api/appointments là danh sách (#3, docs/adr/0044); PUT không có handler.
+        assertThat(http.exchange(URI.create(http.getRootUri() + "/api/appointments"), HttpMethod.PUT,
                 new HttpEntity<>(headers), MAP).getStatusCode()).isEqualTo(HttpStatus.METHOD_NOT_ALLOWED);
     }
 

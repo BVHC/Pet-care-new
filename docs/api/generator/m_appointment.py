@@ -95,10 +95,22 @@ m.op("get", "/appointments", "listAppointments", "Danh sách lịch hẹn", "App
      query=["branchId=int64", "date=date", "from=date", "to=date",
             "status=enum:BOOKED,CHECKED_IN,COMPLETED,CANCELLED,NO_SHOW", "petId=int64", "customerId=int64",
             "checkInReady=bool|Chỉ lịch BOOKED hôm nay trong cửa sổ check-in (A3)", "page", "size"],
-     errors=(400, 401, 403))
+     errors=(400, 401, 403),
+     err_desc={400: "Tham số sai kiểu (`MALFORMED_REQUEST`); BR-TK-17",
+               403: "Sai vai trò hoặc nhân viên lọc chi nhánh khác"},
+     notes="Khách: chỉ lịch có `customerId` là hồ sơ của mình (chủ lúc đặt); nhân viên: chi nhánh của mình, `branchId` "
+           "khác → 403. Mọi bộ lọc là AND; `from > to` → trang rỗng; `checkInReady` rỗng / vắng / false = không lọc. "
+           "`checkInReady=true`: lịch BOOKED, ngày hẹn hôm nay, giờ hẹn − `visit.check_in_early_minutes` ≤ now ≤ "
+           "giờ hẹn + `appointment.no_show_after_minutes` [CFG] (BR-TN-02, 03, BR-LH-08). Tăng dần theo `slotDate`, "
+           "`slotStart`, `appointmentId`. `page` < 0 → 0, `size` kẹp 1–100. `canReschedule` / `canCancel` theo người "
+           "xem; BRANCH_MANAGER luôn false (docs/adr/0044).")
 m.op("get", "/appointments/{appointmentId}", "getAppointment", "Chi tiết lịch hẹn", "Appointments", "UC40", "—",
      "A02, A05, A06, A07, A08", "Khách: lịch của mình · nhân viên chi nhánh", resp="Appointment",
-     path_params=["AppointmentId"], errors=(401, 403, 404))
+     path_params=["AppointmentId"], errors=(400, 401, 403, 404),
+     err_desc={400: "Tham số sai kiểu (`MALFORMED_REQUEST`); BR-TK-17",
+               403: "Nhân viên xem lịch của chi nhánh khác",
+               404: "Lịch hẹn không tồn tại hoặc không phải của khách đang đăng nhập"},
+     notes="`canReschedule` / `canCancel` theo người xem; BRANCH_MANAGER, VET, CARETAKER luôn false (docs/adr/0044).")
 m.op("post", "/appointments/{appointmentId}/reschedule", "rescheduleAppointment", "Đổi khung giờ", "Appointments",
      "UC40", "BR-LH-03, 04, 05, 06", "A02, A06", "Khách: lịch của mình · lễ tân chi nhánh", "BOOKED → BOOKED (Lịch hẹn#2)",
      body="RescheduleRequest", resp="Appointment", path_params=["AppointmentId"], errors=(400, 401, 403, 404, 409),

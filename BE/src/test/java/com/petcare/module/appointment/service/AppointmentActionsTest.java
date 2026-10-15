@@ -74,6 +74,11 @@ class AppointmentActionsTest {
         assertThat(flags(appointment(status, 0), false, early)).isEqualTo(new AppointmentActions.Flags(false, false));
     }
 
+    @Test
+    void noneMeansNoAction() {
+        assertThat(AppointmentActions.Flags.NONE).isEqualTo(new AppointmentActions.Flags(false, false));
+    }
+
     private static AppointmentActions.Flags flags(Appointment appointment, boolean customer, Instant now) {
         return AppointmentActions.forViewer(appointment, customer, now, 3, 12);
     }

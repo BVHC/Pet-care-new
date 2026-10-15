@@ -132,7 +132,7 @@ paths:
     get:
       tags: [Appointments]
       summary: "Danh sách lịch hẹn"
-      description: "UC40, UC44 · BR-LH-11, BR-TN-02. Actor: A02, A05, A06. Quyền: Khách: lịch của mình · nhân viên: chi nhánh mình. Chuyển trạng thái: —."
+      description: "UC40, UC44 · BR-LH-11, BR-TN-02. Actor: A02, A05, A06. Quyền: Khách: lịch của mình · nhân viên: chi nhánh mình. Chuyển trạng thái: —. Khách: chỉ lịch có `customerId` là hồ sơ của mình (chủ lúc đặt); nhân viên: chi nhánh của mình, `branchId` khác → 403. Mọi bộ lọc là AND; `from > to` → trang rỗng; `checkInReady` rỗng / vắng / false = không lọc. `checkInReady=true`: lịch BOOKED, ngày hẹn hôm nay, giờ hẹn − `visit.check_in_early_minutes` ≤ now ≤ giờ hẹn + `appointment.no_show_after_minutes` [CFG] (BR-TN-02, 03, BR-LH-08). Tăng dần theo `slotDate`, `slotStart`, `appointmentId`. `page` < 0 → 0, `size` kẹp 1–100. `canReschedule` / `canCancel` theo người xem; BRANCH_MANAGER luôn false (docs/adr/0044)."
       operationId: listAppointments
       security:
         - bearerAuth: []
@@ -212,16 +212,24 @@ paths:
                     type: integer
                     description: "HTTP status của kết quả, ví dụ 200, 201"
         "400":
-          $ref: "#/components/responses/BadRequest"
+          description: "Tham số sai kiểu (`MALFORMED_REQUEST`); BR-TK-17"
+          content:
+            "application/json":
+              schema:
+                $ref: "#/components/schemas/Error"
         "401":
           $ref: "#/components/responses/Unauthorized"
         "403":
-          $ref: "#/components/responses/Forbidden"
+          description: "Sai vai trò hoặc nhân viên lọc chi nhánh khác"
+          content:
+            "application/json":
+              schema:
+                $ref: "#/components/schemas/Error"
   "/appointments/{appointmentId}":
     get:
       tags: [Appointments]
       summary: "Chi tiết lịch hẹn"
-      description: "UC40 · —. Actor: A02, A05, A06, A07, A08. Quyền: Khách: lịch của mình · nhân viên chi nhánh. Chuyển trạng thái: —."
+      description: "UC40 · —. Actor: A02, A05, A06, A07, A08. Quyền: Khách: lịch của mình · nhân viên chi nhánh. Chuyển trạng thái: —. `canReschedule` / `canCancel` theo người xem; BRANCH_MANAGER, VET, CARETAKER luôn false (docs/adr/0044)."
       operationId: getAppointment
       security:
         - bearerAuth: []
@@ -243,12 +251,26 @@ paths:
                   code:
                     type: integer
                     description: "HTTP status của kết quả, ví dụ 200, 201"
+        "400":
+          description: "Tham số sai kiểu (`MALFORMED_REQUEST`); BR-TK-17"
+          content:
+            "application/json":
+              schema:
+                $ref: "#/components/schemas/Error"
         "401":
           $ref: "#/components/responses/Unauthorized"
         "403":
-          $ref: "#/components/responses/Forbidden"
+          description: "Nhân viên xem lịch của chi nhánh khác"
+          content:
+            "application/json":
+              schema:
+                $ref: "#/components/schemas/Error"
         "404":
-          $ref: "#/components/responses/NotFound"
+          description: "Lịch hẹn không tồn tại hoặc không phải của khách đang đăng nhập"
+          content:
+            "application/json":
+              schema:
+                $ref: "#/components/schemas/Error"
   "/appointments/{appointmentId}/reschedule":
     post:
       tags: [Appointments]
