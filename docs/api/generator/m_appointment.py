@@ -74,8 +74,13 @@ BOOK_ERR = ("`BR-LH-01` dịch vụ không đặt được / đang tắt tại c
 m.op("get", "/branches/{branchId}/available-slots", "listAvailableSlots", "Xem khung giờ trống", "Slots", "UC39",
      "BR-LH-01, 02, 03, 04", "A02, A06", "Khách; lễ tân chi nhánh", resp="array:Slot", path_params=["BranchId"],
      query=["serviceId!=int64", "date!=date"], errors=(400, 401, 403, 404),
-     err_desc={400: "`BR-LH-01` dịch vụ không đặt được tại chi nhánh"},
-     notes="Ngày nghỉ hoặc ngày không có giờ mở cửa trả mảng rỗng (A1).")
+     err_desc={400: "`BR-LH-01` dịch vụ không đặt được tại chi nhánh (ngừng kinh doanh, nhóm Lưu trú, đang tắt) "
+                    "hoặc chi nhánh chưa nhận đặt lịch (lễ tân của chi nhánh DRAFT)",
+               403: "Lễ tân xem chi nhánh khác",
+               404: "Chi nhánh không tồn tại (khách: cả chi nhánh chưa hoạt động) hoặc dịch vụ không tồn tại"},
+     notes="Ngày nghỉ hoặc ngày không có giờ mở cửa trả mảng rỗng (A1). Khách chỉ thấy khung bắt đầu từ "
+           "now + 24 giờ [CFG] và ngày hẹn ≤ hôm nay + 30 ngày [CFG]; lễ tân thấy mọi khung chưa bắt đầu (BR-LH-04). "
+           "Khung AVAILABLE chưa giữ chỗ: đặt lịch kiểm lại (docs/adr/0042).")
 m.op("post", "/appointments", "bookAppointment", "Đặt lịch hẹn", "Appointments", "UC39",
      "BR-LH-01…05, 09, BR-KH-05, BR-TK-19", "A02, A06", "Khách: thú của mình · lễ tân: chi nhánh mình",
      "— → BOOKED (Lịch hẹn#1); nhóm MEDICAL → Care Task#6", body="BookAppointmentRequest", resp="Appointment",

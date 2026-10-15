@@ -35,7 +35,7 @@
 
 | Thao tác | Actor | Quyền / phạm vi | Chuyển trạng thái | Idempotent | Ghi chú |
 |---|---|---|---|---|---|
-| Xem khung giờ trống | A02, A06 | Khách; lễ tân chi nhánh | — | — | Ngày nghỉ hoặc ngày không có giờ mở cửa trả mảng rỗng (A1). |
+| Xem khung giờ trống | A02, A06 | Khách; lễ tân chi nhánh | — | — | Ngày nghỉ hoặc ngày không có giờ mở cửa trả mảng rỗng (A1). Khách chỉ thấy khung bắt đầu từ now + 24 giờ [CFG] và ngày hẹn ≤ hôm nay + 30 ngày [CFG]; lễ tân thấy mọi khung chưa bắt đầu (BR-LH-04). Khung AVAILABLE chưa giữ chỗ: đặt lịch kiểm lại (docs/adr/0042). |
 | Đặt lịch hẹn | A02, A06 | Khách: thú của mình · lễ tân: chi nhánh mình | — → BOOKED (Lịch hẹn#1); nhóm MEDICAL → Care Task#6 | — | Khách → channel ONLINE, lễ tân → COUNTER (A2). Nhóm MEDICAL: hủy nhắc tái khám đang chờ của thú (BR-TB-06). |
 | Danh sách lịch hẹn | A02, A05, A06 | Khách: lịch của mình · nhân viên: chi nhánh mình | — | — | — |
 | Chi tiết lịch hẹn | A02, A05, A06, A07, A08 | Khách: lịch của mình · nhân viên chi nhánh | — | — | — |
@@ -51,7 +51,7 @@
 
 ### Slots
 
-- **`GET /branches/{branchId}/available-slots`** — Xem khung giờ trống. Query: `serviceId`, `date`. Response `200` mảng `Slot`. Lỗi: `400` `BR-LH-01` dịch vụ không đặt được tại chi nhánh · `401` · `403` · `404`.
+- **`GET /branches/{branchId}/available-slots`** — Xem khung giờ trống. Query: `serviceId`, `date`. Response `200` mảng `Slot`. Lỗi: `400` `BR-LH-01` dịch vụ không đặt được tại chi nhánh (ngừng kinh doanh, nhóm Lưu trú, đang tắt) hoặc chi nhánh chưa nhận đặt lịch (lễ tân của chi nhánh DRAFT) · `401` · `403` Lễ tân xem chi nhánh khác · `404` Chi nhánh không tồn tại (khách: cả chi nhánh chưa hoạt động) hoặc dịch vụ không tồn tại.
 ### Appointments
 
 - **`POST /appointments`** — Đặt lịch hẹn. Request `BookAppointmentRequest`. Response `201` `Appointment`. Lỗi: `400` `BR-LH-01` dịch vụ không đặt được / đang tắt tại chi nhánh, chi nhánh chưa ACTIVE · `BR-LH-02` khung không hợp lệ · `BR-LH-03` khung đã đủ quota · `BR-LH-04` ngoài khoảng 24 giờ – 30 ngày [CFG] (khách) hoặc khung đã bắt đầu (lễ tân) · `BR-LH-05` thú đã có 2 lịch BOOKED, trùng nhóm trong ngày hoặc trùng khung · `BR-LH-09` khách đang bị hạn chế đặt online · `BR-KH-05` thú đã mất · `BR-TK-19` hồ sơ còn chờ quyết định liên kết · `401` · `403` Thú không thuộc khách / chi nhánh ngoài phạm vi · `404`.

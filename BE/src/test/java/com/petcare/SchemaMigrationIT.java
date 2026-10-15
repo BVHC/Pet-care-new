@@ -131,12 +131,31 @@ class SchemaMigrationIT {
         // V10 index addresses.customer_id (docs/adr/0028),
         // V11 mẫu STAFF_TEMP_PASSWORD, OTP_EMAIL_CHANGE, EMAIL_CHANGED_NOTICE (docs/adr/0029),
         // V12 mẫu ACCOUNT_LOCKED_FOLLOW_UP_APP, LAST_BRANCH_MANAGER_LOCKED_APP (docs/adr/0035),
+<<<<<<< HEAD
         // V13 index FK trỏ tới pets / customers còn thiếu — trả nợ D013 (docs/adr/0041),
         // V14 bảng đếm mã chứng từ + index module kho (docs/adr/0042, 0043),
         // V15 index order_lines.order_id (docs/adr/0044)
         assertThat(rows).extracting(row -> row.get("version"))
                 .containsExactly("1", "2", "3", "4", "5", "6", "7", "8", "9", "10", "11", "12", "13", "14", "15");
+=======
+        // V13 sequence mã lịch hẹn appointment_code_seq (docs/adr/0041)
+        assertThat(rows).extracting(row -> row.get("version"))
+                .containsExactly("1", "2", "3", "4", "5", "6", "7", "8", "9", "10", "11", "12", "13");
+>>>>>>> 4d98452 (feat: triển khai nền lịch hẹn và xem khung giờ trống)
         assertThat(rows).allSatisfy(row -> assertThat(row).containsEntry("success", true));
+    }
+
+    /** V13 (docs/adr/0041): 10 chữ số giữ mã lịch hẹn ≤ 20 ký tự; không quay vòng nên hết số thì lỗi, không trùng mã. */
+    @Test
+    void appointmentCodeSequenceIsBoundedAndDoesNotCycle() {
+        assertThat(jdbc.queryForMap("""
+                SELECT data_type::text AS data_type, min_value, max_value, increment_by, cycle
+                FROM pg_sequences WHERE schemaname = 'public' AND sequencename = 'appointment_code_seq'"""))
+                .containsEntry("data_type", "bigint")
+                .containsEntry("min_value", 1L)
+                .containsEntry("max_value", 9_999_999_999L)
+                .containsEntry("increment_by", 1L)
+                .containsEntry("cycle", false);
     }
 
     @Test
