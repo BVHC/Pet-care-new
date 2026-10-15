@@ -1,6 +1,6 @@
 # ADR-0041: Nền lịch hẹn — khóa chi nhánh + khóa thú khi đặt / đổi lịch, mã lịch hẹn từ sequence, khung 30 phút
 
-- **Trạng thái:** Accepted
+- **Trạng thái:** Accepted · §1 (câu "phân quyền xong trước khi lấy khóa nào") thay một phần bởi ADR-0043: kiểm chủ thú chạy ngay sau `lockPet`
 - **Ngày:** 2026-10-15
 - **Liên quan:**
   - BR-LH-01 (02 L122), 02 (L123), 03 (L124), 04 (L125), 05 (L126), 06 (L127), 07 (L128), 10 (L131), 11 (L132); BR-CN-02 (L66), 03 (L67), 04 (L68); BR-KH-05, 08 (L91, L94); BR-QT-15 (L58). 03 §3 Lịch hẹn #1–#8 (L79–88), Phụ lục (L237–253).

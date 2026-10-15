@@ -1,5 +1,7 @@
 package com.petcare.module.appointment;
 
+import java.sql.Timestamp;
+import java.time.Instant;
 import java.time.LocalDate;
 import java.time.LocalTime;
 import java.util.ArrayDeque;
@@ -12,8 +14,8 @@ import org.springframework.jdbc.core.JdbcTemplate;
  * Dữ liệu cho IT của lịch hẹn, chèn bằng SQL vì customer / catalog / branch chưa có (hoặc không cần) đường ghi chung
  * (docs/adr/0041, kế hoạch T16 phần 0 mục I5). Chi nhánh luôn {@code DRAFT} nếu không yêu cầu khác, tên / email UUID, nên
  * không đổi kết quả của danh sách công khai hay test khác. {@link #cleanUp()} xóa theo thứ tự FK, con trước:
- * {@code appointments → pets → customers → (dữ liệu con của chi nhánh, sessions, staff_profiles) → services → branches →
- * accounts}. Không ghi audit.
+ * {@code appointments (theo id và theo thú — lịch đặt qua HTTP) → pets → booking_restrictions → customers → (dữ liệu con
+ * của chi nhánh, sessions, staff_profiles) → services → branches → accounts}. Không ghi audit.
  */
 public final class AppointmentItSupport {
 
@@ -102,6 +104,22 @@ public final class AppointmentItSupport {
         return track(ACCOUNT, id);
     }
 
+    /** Hồ sơ online gắn tài khoản khách (BR-KH-01: SĐT không bắt buộc). */
+    public long onlineCustomer(long accountId, String fullName) {
+        long id = jdbc.queryForObject("""
+                INSERT INTO customers (account_id, full_name, created_channel) VALUES (?, ?, 'ONLINE') RETURNING id""",
+                Long.class, accountId, fullName);
+        return track(CUSTOMER, id);
+    }
+
+    /** Một lần hạn chế đặt online (BR-LH-09); {@code liftedAt} null = chưa gỡ. Xóa cùng hồ sơ khách. */
+    public void restriction(long customerId, Instant startsAt, Instant endsAt, Instant liftedAt, Long liftedBy) {
+        jdbc.update("""
+                INSERT INTO booking_restrictions (customer_id, starts_at, ends_at, violation_count, lifted_at, lifted_by)
+                VALUES (?, ?, ?, 3, ?, ?)""", customerId, Timestamp.from(startsAt), Timestamp.from(endsAt),
+                liftedAt == null ? null : Timestamp.from(liftedAt), liftedBy);
+    }
+
     /** Tài khoản khách, không có hồ sơ khách (xem khung trống không đọc {@code customers}). */
     public long customerAccount() {
         long id = jdbc.queryForObject("""
@@ -149,9 +167,21 @@ public final class AppointmentItSupport {
      * tới chi nhánh) — IT không tạo những dòng này thì các câu đó xóa 0 dòng.
      */
     public void cleanUp() {
+        for (long[] entry : created) {
+            if (entry[0] == PET) {
+                jdbc.update("DELETE FROM appointments WHERE pet_id = ?", entry[1]);
+            }
+        }
         for (int table = 0; table < TABLES.length; table++) {
             if (table == SERVICE) {
                 deleteBranchAndAccountChildren();
+            }
+            if (table == CUSTOMER) {
+                for (long[] entry : created) {
+                    if (entry[0] == CUSTOMER) {
+                        jdbc.update("DELETE FROM booking_restrictions WHERE customer_id = ?", entry[1]);
+                    }
+                }
             }
             for (long[] entry : created) {
                 if (entry[0] == table) {

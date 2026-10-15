@@ -110,10 +110,14 @@ class OpenApiContractParityIT {
     @Test
     void documentedModulesCoverAllTheirImplementedEndpoints() {
 <<<<<<< HEAD
+<<<<<<< HEAD
         assertThat(documentedOps()).as("số endpoint identity + care + customer + inventory + sales đã cài").hasSize(80);
 =======
         assertThat(documentedOps()).as("số endpoint identity + care + customer + appointment đã cài").hasSize(46);
 >>>>>>> 4d98452 (feat: triển khai nền lịch hẹn và xem khung giờ trống)
+=======
+        assertThat(documentedOps()).as("số endpoint identity + care + customer + appointment đã cài").hasSize(47);
+>>>>>>> e5fc585 (feat: triển khai đặt lịch hẹn)
     }
 
     @Test

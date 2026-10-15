@@ -83,7 +83,7 @@ paths:
     post:
       tags: [Appointments]
       summary: "Đặt lịch hẹn"
-      description: "UC39 · BR-LH-01…05, 09, BR-KH-05, BR-TK-19. Actor: A02, A06. Quyền: Khách: thú của mình · lễ tân: chi nhánh mình. Chuyển trạng thái: — → BOOKED (Lịch hẹn#1); nhóm MEDICAL → Care Task#6. Khách → channel ONLINE, lễ tân → COUNTER (A2). Nhóm MEDICAL: hủy nhắc tái khám đang chờ của thú (BR-TB-06)."
+      description: "UC39 · BR-LH-01…05, 09, BR-KH-05, BR-TK-19. Actor: A02, A06. Quyền: Khách: thú của mình · lễ tân: chi nhánh mình. Chuyển trạng thái: — → BOOKED (Lịch hẹn#1); nhóm MEDICAL → Care Task#6. Khách → channel ONLINE, lễ tân → COUNTER (A2). Nhóm MEDICAL: hủy nhắc tái khám đang chờ của thú (BR-TB-06); nối Care Task#6 khi visit cài FollowUpApi (docs/adr/0043)."
       operationId: bookAppointment
       security:
         - bearerAuth: []
@@ -118,13 +118,17 @@ paths:
         "401":
           $ref: "#/components/responses/Unauthorized"
         "403":
-          description: "Thú không thuộc khách / chi nhánh ngoài phạm vi"
+          description: "Lễ tân đặt lịch cho chi nhánh khác"
           content:
             "application/json":
               schema:
                 $ref: "#/components/schemas/Error"
         "404":
-          $ref: "#/components/responses/NotFound"
+          description: "Thú cưng (kể cả thú của khách khác), dịch vụ hoặc chi nhánh không tồn tại (khách: cả chi nhánh chưa hoạt động)"
+          content:
+            "application/json":
+              schema:
+                $ref: "#/components/schemas/Error"
     get:
       tags: [Appointments]
       summary: "Danh sách lịch hẹn"

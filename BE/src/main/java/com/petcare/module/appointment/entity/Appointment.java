@@ -98,4 +98,30 @@ public class Appointment extends TimestampedEntity {
 
     @Column(name = "note", updatable = false)
     private String note;
+
+    /**
+     * Lịch hẹn#1 ({@code — → BOOKED}, command {@code bookAppointment}, docs/adr/0041 §7, 0043). Bên gọi đã kiểm mọi rule và
+     * {@code validateInitial(BOOKED)}; {@code serviceGroup} là bản sao lúc đặt (erd L476). Số lần đổi 0, không hủy muộn,
+     * chưa nhắc.
+     */
+    public static Appointment book(String code, Long customerId, Long petId, Long branchId, Long serviceId,
+            ServiceGroup serviceGroup, LocalDate slotDate, LocalTime slotStart, AppointmentChannel channel,
+            Long bookedBy, String note) {
+        Appointment appointment = new Appointment();
+        appointment.code = code;
+        appointment.customerId = customerId;
+        appointment.petId = petId;
+        appointment.branchId = branchId;
+        appointment.serviceId = serviceId;
+        appointment.serviceGroup = serviceGroup;
+        appointment.slotDate = slotDate;
+        appointment.slotStart = slotStart;
+        appointment.status = AppointmentStatus.BOOKED;
+        appointment.channel = channel;
+        appointment.bookedBy = bookedBy;
+        appointment.rescheduleCount = 0;
+        appointment.lateCancel = false;
+        appointment.note = note;
+        return appointment;
+    }
 }

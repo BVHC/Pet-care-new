@@ -84,8 +84,12 @@ m.op("get", "/branches/{branchId}/available-slots", "listAvailableSlots", "Xem k
 m.op("post", "/appointments", "bookAppointment", "Đặt lịch hẹn", "Appointments", "UC39",
      "BR-LH-01…05, 09, BR-KH-05, BR-TK-19", "A02, A06", "Khách: thú của mình · lễ tân: chi nhánh mình",
      "— → BOOKED (Lịch hẹn#1); nhóm MEDICAL → Care Task#6", body="BookAppointmentRequest", resp="Appointment",
-     status=201, errors=(400, 401, 403, 404), err_desc={400: BOOK_ERR, 403: "Thú không thuộc khách / chi nhánh ngoài phạm vi"},
-     notes="Khách → channel ONLINE, lễ tân → COUNTER (A2). Nhóm MEDICAL: hủy nhắc tái khám đang chờ của thú (BR-TB-06).")
+     status=201, errors=(400, 401, 403, 404),
+     err_desc={400: BOOK_ERR, 403: "Lễ tân đặt lịch cho chi nhánh khác",
+               404: "Thú cưng (kể cả thú của khách khác), dịch vụ hoặc chi nhánh không tồn tại (khách: cả chi nhánh "
+                    "chưa hoạt động)"},
+     notes="Khách → channel ONLINE, lễ tân → COUNTER (A2). Nhóm MEDICAL: hủy nhắc tái khám đang chờ của thú (BR-TB-06); "
+           "nối Care Task#6 khi visit cài FollowUpApi (docs/adr/0043).")
 m.op("get", "/appointments", "listAppointments", "Danh sách lịch hẹn", "Appointments", "UC40, UC44", "BR-LH-11, BR-TN-02",
      "A02, A05, A06", "Khách: lịch của mình · nhân viên: chi nhánh mình", resp="Appointment", page=True,
      query=["branchId=int64", "date=date", "from=date", "to=date",
