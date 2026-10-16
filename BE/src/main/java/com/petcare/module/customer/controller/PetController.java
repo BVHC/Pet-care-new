@@ -4,6 +4,7 @@ import java.util.List;
 
 import org.springframework.http.HttpStatus;
 import org.springframework.security.access.prepost.PreAuthorize;
+import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PatchMapping;
 import org.springframework.web.bind.annotation.PathVariable;
@@ -15,10 +16,13 @@ import org.springframework.web.bind.annotation.RestController;
 
 import com.petcare.module.customer.dto.AddWeightRequest;
 import com.petcare.module.customer.dto.CreatePetRequest;
+import com.petcare.module.customer.dto.MarkDeceasedRequest;
 import com.petcare.module.customer.dto.PetResponse;
 import com.petcare.module.customer.dto.PetWriteResultResponse;
+import com.petcare.module.customer.dto.TransferOwnerRequest;
 import com.petcare.module.customer.dto.UpdatePetRequest;
 import com.petcare.module.customer.dto.WeightRecordResponse;
+import com.petcare.module.customer.service.PetLifecycleService;
 import com.petcare.module.customer.service.PetService;
 import com.petcare.module.customer.service.PetWeightService;
 import com.petcare.platform.config.ApiErrorDoc;
@@ -45,10 +49,12 @@ public class PetController {
 
     private final PetService petService;
     private final PetWeightService weightService;
+    private final PetLifecycleService lifecycle;
 
-    public PetController(PetService petService, PetWeightService weightService) {
+    public PetController(PetService petService, PetWeightService weightService, PetLifecycleService lifecycle) {
         this.petService = petService;
         this.weightService = weightService;
+        this.lifecycle = lifecycle;
     }
 
     /** customer-v1 #13. Mảng thẳng trong {@code data}, theo mã thú tăng dần. */
@@ -109,6 +115,62 @@ public class PetController {
     public ApiResponse<PetWriteResultResponse> updatePet(@PathVariable Long petId,
             @Valid @RequestBody UpdatePetRequest request) {
         return ApiResponse.ok(petService.updatePet(petId, request), "Đã cập nhật thú cưng");
+    }
+
+    /** customer-v1 #17 (BR-KH-05). Không hoàn tác; phát {@code PetDeceasedEvent} trong cùng transaction. */
+    @Operation(operationId = "markPetDeceased", tags = "Pets",
+            summary = "Đánh dấu thú đã mất",
+            description = "UC24, ST19 · BR-KH-05, BR-LT-12, BR-TB-03. Actor: A02, A06. Quyền: Khách là chủ hiện "
+                + "tại · A06. Chuyển trạng thái: Phát PetDeceasedEvent → Lịch hẹn#5, Đặt chỗ#5, Care Task#4.",
+            parameters = {
+                    @Parameter(name = "petId", in = ParameterIn.PATH, example = "88")})
+    @ApiErrorDoc(status = 400, description = "`BR-KH-05` thú có Visit mở hoặc đang lưu trú (kết thúc lưu trú trước "
+            + "theo BR-LT-12) · chưa xác nhận · `BR-TK-19` hồ sơ còn chờ quyết định liên kết")
+    @ApiErrorDoc(status = 403)
+    @ApiErrorDoc(status = 404)
+    @ApiErrorDoc(status = 409, description = "Thú đã được đánh dấu đã mất (không hoàn tác)")
+    @PostMapping("/pets/{petId}/mark-deceased")
+    @PreAuthorize(OWNER_OR_FRONT_DESK)
+    public ApiResponse<PetResponse> markDeceased(@PathVariable Long petId,
+            @Valid @RequestBody MarkDeceasedRequest request) {
+        return ApiResponse.ok(lifecycle.markDeceased(petId, request), "Đã đánh dấu thú cưng đã mất");
+    }
+
+    /** customer-v1 #18 (BR-KH-06). 204 không body; xóa cứng. */
+    @Operation(operationId = "deletePet", tags = "Pets",
+            summary = "Xóa thú cưng chưa phát sinh giao dịch",
+            description = "UC24 · BR-KH-06. Actor: A02, A06. Quyền: Khách là chủ hiện tại · A06. Chuyển trạng "
+                + "thái: —.",
+            parameters = {
+                    @Parameter(name = "petId", in = ParameterIn.PATH, example = "88")})
+    @ApiErrorDoc(status = 400, description = "`BR-KH-06` đã có lịch hẹn, đặt chỗ, Visit hoặc Order — dùng đánh dấu "
+            + "đã mất · `BR-TK-19` hồ sơ còn chờ quyết định liên kết")
+    @ApiErrorDoc(status = 403)
+    @ApiErrorDoc(status = 404)
+    @DeleteMapping("/pets/{petId}")
+    @PreAuthorize(OWNER_OR_FRONT_DESK)
+    @ResponseStatus(HttpStatus.NO_CONTENT)
+    public void deletePet(@PathVariable Long petId) {
+        lifecycle.deletePet(petId);
+    }
+
+    /** customer-v1 #19 (BR-KH-08). Lễ tân; ghi audit; phát {@code PetOwnerTransferredEvent}. */
+    @Operation(operationId = "transferPetOwner", tags = "Pets",
+            summary = "Chuyển chủ thú cưng",
+            description = "UC26 · BR-KH-08. Actor: A06. Quyền: Lễ tân. Chuyển trạng thái: Phát "
+                + "PetOwnerTransferredEvent → Lịch hẹn#5, Đặt chỗ#5; Care Task OPEN sang chủ mới. Order cũ giữ chủ "
+                + "cũ; ghi audit.",
+            parameters = {
+                    @Parameter(name = "petId", in = ParameterIn.PATH, example = "88")})
+    @ApiErrorDoc(status = 400, description = "`BR-KH-08` thú có Visit mở, Order PENDING hoặc đang lưu trú · chưa xác "
+            + "nhận chủ cũ · `BR-KH-05` thú đã mất")
+    @ApiErrorDoc(status = 403)
+    @ApiErrorDoc(status = 404)
+    @PostMapping("/pets/{petId}/transfer-owner")
+    @PreAuthorize("hasRole('RECEPTIONIST')")
+    public ApiResponse<PetResponse> transferOwner(@PathVariable Long petId,
+            @Valid @RequestBody TransferOwnerRequest request) {
+        return ApiResponse.ok(lifecycle.transferOwner(petId, request), "Đã chuyển chủ thú cưng");
     }
 
     /** customer-v1 #20. Mảng thẳng trong {@code data}, mới nhất trước. */

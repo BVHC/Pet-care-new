@@ -91,4 +91,25 @@ class PetRequestValidationTest {
         assertThat(invalid(new AddWeightRequest(BigDecimal.ZERO, null))).isEmpty();
         assertThat(invalid(new AddWeightRequest(new BigDecimal("-1"), null))).isEmpty();
     }
+
+    // ---------------------------------------------------------------- đã mất, chuyển chủ
+
+    @Test
+    void markDeceasedNeedsDateAndExplicitConfirmation() {
+        java.time.LocalDate day = java.time.LocalDate.of(2026, 9, 30);
+        assertThat(invalid(new MarkDeceasedRequest(day, true))).isEmpty();
+        assertThat(invalid(new MarkDeceasedRequest(null, true))).containsExactly("deceasedOn: Vui lòng nhập ngày mất");
+        assertThat(invalid(new MarkDeceasedRequest(day, false)))
+                .containsExactly("confirmed: Cần xác nhận đánh dấu đã mất (không hoàn tác được)");
+        assertThat(invalid(new MarkDeceasedRequest(day, null))).containsExactly("confirmed: Vui lòng xác nhận");
+    }
+
+    @Test
+    void transferNeedsNewOwnerAndExplicitConfirmation() {
+        assertThat(invalid(new TransferOwnerRequest(412L, true))).isEmpty();
+        assertThat(invalid(new TransferOwnerRequest(null, true))).containsExactly("newCustomerId: Vui lòng chọn chủ mới");
+        assertThat(invalid(new TransferOwnerRequest(412L, false)))
+                .containsExactly("previousOwnerConfirmed: Cần xác nhận chủ cũ có mặt hoặc đã đồng ý");
+        assertThat(invalid(new TransferOwnerRequest(412L, null))).hasSize(1);
+    }
 }
