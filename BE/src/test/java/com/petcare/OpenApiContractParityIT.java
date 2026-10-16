@@ -54,7 +54,7 @@ class OpenApiContractParityIT {
 
     private static final Path CONTRACT_DIR = Path.of("..", "docs", "api", "openapi");
     /** File hợp đồng đã có annotation đầy đủ; thêm file khi module đó viết xong tài liệu (D026: branch, catalog). */
-    private static final Set<String> DOCUMENTED = Set.of("identity-v1.yaml", "care-v1.yaml", "customer-v1.yaml");
+    private static final Set<String> DOCUMENTED = Set.of("identity-v1.yaml", "care-v1.yaml", "customer-v1.yaml", "inventory-v1.yaml");
     private static final Set<String> METHODS = Set.of("get", "post", "put", "patch", "delete");
     private static final Pattern SECRET = Pattern.compile("(?i)(password|secret|hash)$|^otp(code)?$");
     /** Tên khớp {@link #SECRET} nhưng không phải bí mật: cờ bắt đổi mật khẩu (BR-TK-17). */
@@ -103,7 +103,7 @@ class OpenApiContractParityIT {
 
     @Test
     void documentedModulesCoverAllTheirImplementedEndpoints() {
-        assertThat(documentedOps()).as("số endpoint identity + care + customer đã cài").hasSize(59);
+        assertThat(documentedOps()).as("số endpoint identity + care + customer đã cài").hasSize(63);
     }
 
     @Test
