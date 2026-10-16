@@ -31,6 +31,10 @@ public interface SalesOrderRepository extends JpaRepository<SalesOrder, Long> {
     @Query("SELECT o FROM SalesOrder o WHERE o.visitId = :visitId")
     Optional<SalesOrder> findByVisitId(@Param("visitId") Long visitId);
 
+    /** Id Order chứa dòng (đọc không khóa): bước đầu để khóa Order rồi đọc lại dòng dưới khóa. */
+    @Query("SELECT o.id FROM SalesOrder o JOIN o.lines l WHERE l.id = :lineId")
+    Optional<Long> findIdByLineId(@Param("lineId") Long lineId);
+
     boolean existsByCustomerId(Long customerId);
 
     boolean existsByStatusAndVisitIdIn(OrderStatus status, Collection<Long> visitIds);
