@@ -148,6 +148,19 @@ class CrossModuleQueryIT extends CustomerMeItSupport {
     }
 
     @Test
+    void unpaidOrdersOfCustomerAreOpenAndPendingWithTheirBranch() {
+        assertThat(orders.findUnpaidOrdersByCustomer(customer)).isEmpty();
+
+        long open = fx.orderForVisit(customer, fx.visit(customer, pet, "COMPLETED"), "OPEN");
+        long pending = fx.orderForVisit(customer, fx.visit(customer, pet, "COMPLETED"), "PENDING");
+        fx.orderForVisit(customer, fx.visit(customer, pet, "COMPLETED"), "CANCELLED");
+
+        assertThat(orders.findUnpaidOrdersByCustomer(customer))
+                .containsExactly(new OrderQueryApi.UnpaidOrderRef(open, 999999L),
+                        new OrderQueryApi.UnpaidOrderRef(pending, 999999L));
+    }
+
+    @Test
     void pendingBoardingOrderBlocksToo() {
         long booking = fx.booking(customer, pet, "CHECKED_OUT", 50);
         fx.orderForBooking(customer, booking, "PENDING");
@@ -181,8 +194,6 @@ class CrossModuleQueryIT extends CustomerMeItSupport {
     @Test
     void notYetImplementedMethodsStillThrow() {
         assertThatThrownBy(() -> visits.findVisit(1L)).isInstanceOf(UnsupportedOperationException.class);
-        assertThatThrownBy(() -> orders.findUnpaidOrdersByCustomer(1L))
-                .isInstanceOf(UnsupportedOperationException.class);
         assertThatThrownBy(() -> boardings.findActiveStaysByCustomer(1L))
                 .isInstanceOf(UnsupportedOperationException.class);
         assertThatThrownBy(() -> appointments.findBookedByCustomer(1L))
