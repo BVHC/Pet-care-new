@@ -132,9 +132,10 @@ class SchemaMigrationIT {
         // V11 mẫu STAFF_TEMP_PASSWORD, OTP_EMAIL_CHANGE, EMAIL_CHANGED_NOTICE (docs/adr/0029),
         // V12 mẫu ACCOUNT_LOCKED_FOLLOW_UP_APP, LAST_BRANCH_MANAGER_LOCKED_APP (docs/adr/0035),
         // V13 index FK trỏ tới pets / customers còn thiếu — trả nợ D013 (docs/adr/0041),
-        // V14 bảng đếm mã chứng từ + index module kho (docs/adr/0042, 0043)
+        // V14 bảng đếm mã chứng từ + index module kho (docs/adr/0042, 0043),
+        // V15 index order_lines.order_id (docs/adr/0044)
         assertThat(rows).extracting(row -> row.get("version"))
-                .containsExactly("1", "2", "3", "4", "5", "6", "7", "8", "9", "10", "11", "12", "13", "14");
+                .containsExactly("1", "2", "3", "4", "5", "6", "7", "8", "9", "10", "11", "12", "13", "14", "15");
         assertThat(rows).allSatisfy(row -> assertThat(row).containsEntry("success", true));
     }
 
