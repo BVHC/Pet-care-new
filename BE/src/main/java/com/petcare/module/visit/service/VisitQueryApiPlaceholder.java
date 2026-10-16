@@ -6,6 +6,8 @@ import java.util.Optional;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.stereotype.Service;
 
+import com.petcare.module.catalog.api.ServiceGroup;
+
 import com.petcare.module.visit.api.VisitQueryApi;
 
 /**
@@ -16,7 +18,7 @@ import com.petcare.module.visit.api.VisitQueryApi;
  * {@code VisitQueryApiPlaceholderTest}) khi thêm implementation thật.
  * <p>
  * <b>Cài thật một phần (2026-10-16, T17, BE-2 làm thay để khóa loài / xóa thú / đánh dấu đã mất / chuyển chủ chạy
- * được):</b> {@code hasOpenVisit}, {@code existsByPet}, {@code findVisitIdsByPet}, {@code hasMedicalHistory} đọc thẳng
+ * được):</b> {@code findVisit} (thêm 2026-10-17, T19, cho quyền thêm dòng Order), {@code hasOpenVisit}, {@code existsByPet}, {@code findVisitIdsByPet}, {@code hasMedicalHistory} đọc thẳng
  * bảng {@code visits}, {@code medical_records}, {@code vaccinations} bằng SQL trong transaction của bên gọi; các method
  * còn lại vẫn ném. BE-1 thay bằng bản của mình ở T26 (giữ ngữ nghĩa ghi ở javadoc {@link VisitQueryApi}).
  */
@@ -33,7 +35,13 @@ public class VisitQueryApiPlaceholder implements VisitQueryApi {
 
     @Override
     public Optional<VisitSummary> findVisit(Long visitId) {
-        throw new UnsupportedOperationException(MESSAGE);
+        return jdbc.query("""
+                SELECT id, branch_id, customer_id, pet_id, service_group, status, assignee_id
+                FROM visits WHERE id = ?
+                """, (rs, i) -> new VisitSummary(rs.getLong("id"), rs.getLong("branch_id"),
+                rs.getLong("customer_id"), rs.getLong("pet_id"), ServiceGroup.valueOf(rs.getString("service_group")),
+                VisitStatus.valueOf(rs.getString("status")), (Long) rs.getObject("assignee_id")), visitId)
+                .stream().findFirst();
     }
 
     @Override

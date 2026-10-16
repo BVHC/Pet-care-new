@@ -14,10 +14,8 @@ class VisitQueryApiPlaceholderTest {
 
     @Test
     void methodsNotImplementedYetThrow() {
-        assertThatThrownBy(() -> placeholder.findVisit(1L))
-                .isInstanceOf(UnsupportedOperationException.class).hasMessageContaining("D016");
         assertThatThrownBy(() -> placeholder.findUnfinishedVisitsAssignedTo(1L))
-                .isInstanceOf(UnsupportedOperationException.class);
-        // hasOpenVisit, existsByPet, findVisitIdsByPet, hasMedicalHistory đã cài thật một phần (T17): CrossModuleQueryIT
+                .isInstanceOf(UnsupportedOperationException.class).hasMessageContaining("D016");
+        // findVisit (T19), hasOpenVisit, existsByPet, findVisitIdsByPet, hasMedicalHistory đã cài thật một phần: CrossModuleQueryIT
     }
 }

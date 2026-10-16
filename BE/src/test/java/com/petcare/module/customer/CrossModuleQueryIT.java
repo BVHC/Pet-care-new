@@ -148,6 +148,26 @@ class CrossModuleQueryIT extends CustomerMeItSupport {
     }
 
     @Test
+    void findVisitReadsTheVisitRowOrNothing() {
+        assertThat(visits.findVisit(Long.MAX_VALUE)).isEmpty();
+
+        long waiting = fx.visit(customer, pet, "WAITING");
+        long running = fx.visit(customer, pet, "IN_PROGRESS");
+
+        assertThat(visits.findVisit(waiting)).hasValueSatisfying(v -> {
+            assertThat(v.customerId()).isEqualTo(customer);
+            assertThat(v.petId()).isEqualTo(pet);
+            assertThat(v.status()).isEqualTo(VisitQueryApi.VisitStatus.WAITING);
+            assertThat(v.group()).isEqualTo(com.petcare.module.catalog.api.ServiceGroup.MEDICAL);
+            assertThat(v.assigneeId()).as("WAITING chưa gán").isNull();
+        });
+        assertThat(visits.findVisit(running)).hasValueSatisfying(v -> {
+            assertThat(v.status()).isEqualTo(VisitQueryApi.VisitStatus.IN_PROGRESS);
+            assertThat(v.assigneeId()).isEqualTo(999999L);
+        });
+    }
+
+    @Test
     void unpaidOrdersOfCustomerAreOpenAndPendingWithTheirBranch() {
         assertThat(orders.findUnpaidOrdersByCustomer(customer)).isEmpty();
 
@@ -193,7 +213,8 @@ class CrossModuleQueryIT extends CustomerMeItSupport {
 
     @Test
     void notYetImplementedMethodsStillThrow() {
-        assertThatThrownBy(() -> visits.findVisit(1L)).isInstanceOf(UnsupportedOperationException.class);
+        assertThatThrownBy(() -> visits.findUnfinishedVisitsAssignedTo(1L))
+                .isInstanceOf(UnsupportedOperationException.class);
         assertThatThrownBy(() -> boardings.findActiveStaysByCustomer(1L))
                 .isInstanceOf(UnsupportedOperationException.class);
         assertThatThrownBy(() -> appointments.findBookedByCustomer(1L))
