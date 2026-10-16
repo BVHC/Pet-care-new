@@ -122,6 +122,24 @@ public class StockLotDao {
                 .addValue("today", today), LOT_MAPPER);
     }
 
+    /**
+     * Lô ứng viên để xuất của <b>nhiều</b> sản phẩm cùng chi nhánh, khóa trong <b>một câu</b> theo id lô tăng dần (không
+     * theo sản phẩm): cùng thứ tự với {@link #lockLots} nên bán nhiều mặt hàng không deadlock với xác nhận phiếu nhập /
+     * điều chỉnh chạm các lô đó theo thứ tự khác (docs/adr/0042).
+     */
+    public List<LockedLot> lockIssuableLots(long branchId, Collection<Long> productIds, LocalDate today) {
+        if (productIds.isEmpty()) {
+            return List.of();
+        }
+        return jdbc.query("SELECT " + LOT_COLUMNS + """
+                FROM stock_lots l JOIN inventory_items i ON i.id = l.inventory_item_id
+                WHERE i.branch_id = :branchId AND i.product_id IN (:productIds) AND l.quantity > 0
+                  AND (l.expiry_date IS NULL OR l.expiry_date >= :today)
+                ORDER BY l.id FOR NO KEY UPDATE OF l
+                """, new MapSqlParameterSource("branchId", branchId).addValue("productIds", productIds)
+                .addValue("today", today), LOT_MAPPER);
+    }
+
     // ---------------------------------------------------------------- ghi (chỉ StockLedger gọi)
 
     public void updateQuantity(long lotId, int quantity, Instant now) {
