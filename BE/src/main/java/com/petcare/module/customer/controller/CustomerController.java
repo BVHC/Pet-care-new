@@ -13,12 +13,16 @@ import org.springframework.web.bind.annotation.ResponseStatus;
 import org.springframework.web.bind.annotation.RestController;
 
 import com.petcare.module.customer.dto.CreateCounterCustomerRequest;
+import com.petcare.module.customer.dto.CreatePetRequest;
+import com.petcare.module.customer.dto.CustomerDetailResponse;
 import com.petcare.module.customer.dto.CustomerSearchFilter;
 import com.petcare.module.customer.dto.CustomerSearchItemResponse;
 import com.petcare.module.customer.dto.CustomerWriteResultResponse;
+import com.petcare.module.customer.dto.PetWriteResultResponse;
 import com.petcare.module.customer.dto.UpdateCustomerRequest;
 import com.petcare.module.customer.service.CounterCustomerService;
 import com.petcare.module.customer.service.CustomerSearchService;
+import com.petcare.module.customer.service.PetService;
 import com.petcare.platform.config.ApiErrorDoc;
 import com.petcare.platform.model.ApiResponse;
 import com.petcare.platform.model.PageResponse;
@@ -42,10 +46,13 @@ public class CustomerController {
 
     private final CustomerSearchService searchService;
     private final CounterCustomerService counterCustomers;
+    private final PetService petService;
 
-    public CustomerController(CustomerSearchService searchService, CounterCustomerService counterCustomers) {
+    public CustomerController(CustomerSearchService searchService, CounterCustomerService counterCustomers,
+            PetService petService) {
         this.searchService = searchService;
         this.counterCustomers = counterCustomers;
+        this.petService = petService;
     }
 
     /** customer-v1 #8. Các điều kiện đã gửi nối bằng AND; email luôn che trong kết quả. */
@@ -105,5 +112,36 @@ public class CustomerController {
     public ApiResponse<CustomerWriteResultResponse> update(@PathVariable Long customerId,
             @Valid @RequestBody UpdateCustomerRequest request) {
         return ApiResponse.ok(counterCustomers.updateCustomer(customerId, request), "Đã cập nhật hồ sơ khách");
+    }
+
+    /** customer-v1 #10. Hồ sơ và mọi thú (kể cả đã mất), theo mã tăng dần. */
+    @Operation(operationId = "getCustomer", tags = "Customers",
+            summary = "Chi tiết hồ sơ khách kèm thú cưng",
+            description = "UC22, UC23 · BR-KH-01. Actor: A06, A07, A08. Quyền: Nhân viên. Chuyển trạng thái: —.",
+            parameters = {
+                    @Parameter(name = "customerId", in = ParameterIn.PATH, example = "315")})
+    @ApiErrorDoc(status = 403)
+    @ApiErrorDoc(status = 404)
+    @GetMapping("/{customerId}")
+    @PreAuthorize(CLINIC_STAFF)
+    public ApiResponse<CustomerDetailResponse> get(@PathVariable Long customerId) {
+        return ApiResponse.ok(petService.getCustomerDetail(customerId));
+    }
+
+    /** customer-v1 #12 (BR-KH-02). Nghi trùng tên: vẫn 201, {@code duplicateNameWarning = true}. */
+    @Operation(operationId = "createPetForCustomer", tags = "Pets",
+            summary = "Lễ tân thêm thú cưng cho khách",
+            description = "UC24 · BR-KH-02. Actor: A06. Quyền: Lễ tân. Chuyển trạng thái: —.",
+            parameters = {
+                    @Parameter(name = "customerId", in = ParameterIn.PATH, example = "315")})
+    @ApiErrorDoc(status = 400)
+    @ApiErrorDoc(status = 403)
+    @ApiErrorDoc(status = 404)
+    @PostMapping("/{customerId}/pets")
+    @PreAuthorize(FRONT_DESK_ONLY)
+    @ResponseStatus(HttpStatus.CREATED)
+    public ApiResponse<PetWriteResultResponse> createPet(@PathVariable Long customerId,
+            @Valid @RequestBody CreatePetRequest request) {
+        return ApiResponse.created(petService.createForCustomer(customerId, request), "Đã thêm thú cưng");
     }
 }

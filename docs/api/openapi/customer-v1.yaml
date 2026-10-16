@@ -571,6 +571,12 @@ paths:
                   code:
                     type: integer
                     description: "HTTP status của kết quả, ví dụ 200, 201"
+        "400":
+          description: "`BR-TK-19` hồ sơ còn chờ quyết định liên kết"
+          content:
+            "application/json":
+              schema:
+                $ref: "#/components/schemas/Error"
         "401":
           $ref: "#/components/responses/Unauthorized"
         "403":
@@ -609,7 +615,7 @@ paths:
                     type: integer
                     description: "HTTP status của kết quả, ví dụ 200, 201"
         "400":
-          description: "`BR-KH-03` đổi loài khi đã có bệnh án / mũi tiêm · `BR-KH-05` thú đã mất (chỉ đọc)"
+          description: "`BR-KH-03` đổi loài khi đã có bệnh án / mũi tiêm · `BR-KH-05` thú đã mất (chỉ đọc) · `BR-TK-19` hồ sơ còn chờ quyết định liên kết"
           content:
             "application/json":
               schema:
@@ -633,7 +639,7 @@ paths:
         "204":
           description: "Không có nội dung"
         "400":
-          description: "`BR-KH-06` đã có lịch hẹn, đặt chỗ, Visit hoặc Order — dùng đánh dấu đã mất"
+          description: "`BR-KH-06` đã có lịch hẹn, đặt chỗ, Visit hoặc Order — dùng đánh dấu đã mất · `BR-TK-19` hồ sơ còn chờ quyết định liên kết"
           content:
             "application/json":
               schema:
@@ -677,7 +683,7 @@ paths:
                     type: integer
                     description: "HTTP status của kết quả, ví dụ 200, 201"
         "400":
-          description: "`BR-KH-05` thú có Visit mở hoặc đang lưu trú (kết thúc lưu trú trước theo BR-LT-12) · chưa xác nhận"
+          description: "`BR-KH-05` thú có Visit mở hoặc đang lưu trú (kết thúc lưu trú trước theo BR-LT-12) · chưa xác nhận · `BR-TK-19` hồ sơ còn chờ quyết định liên kết"
           content:
             "application/json":
               schema:
@@ -766,6 +772,12 @@ paths:
                   code:
                     type: integer
                     description: "HTTP status của kết quả, ví dụ 200, 201"
+        "400":
+          description: "`BR-TK-19` hồ sơ còn chờ quyết định liên kết"
+          content:
+            "application/json":
+              schema:
+                $ref: "#/components/schemas/Error"
         "401":
           $ref: "#/components/responses/Unauthorized"
         "403":
@@ -804,7 +816,7 @@ paths:
                     type: integer
                     description: "HTTP status của kết quả, ví dụ 200, 201"
         "400":
-          description: "`BR-KH-04` cân nặng ≤ 0 · `BR-KH-05` thú đã mất"
+          description: "`BR-KH-04` cân nặng ≤ 0 · `BR-KH-05` thú đã mất · `BR-TK-19` hồ sơ còn chờ quyết định liên kết"
           content:
             "application/json":
               schema:
