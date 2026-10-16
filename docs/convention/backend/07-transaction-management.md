@@ -53,8 +53,8 @@ Chiến lược khóa (pessimistic `FOR UPDATE`, advisory lock, optimistic `@Ver
 |---|---|---|---|
 | Lấy khung cuối của quota | BR-LH-03 | Không (quota là phép đếm) | L476: `FOR UPDATE` trên `branches` hoặc advisory lock theo chi nhánh + nhóm + khung |
 | Sức chứa chuồng theo đêm | BR-LT-03 | Không | — |
-| Trừ kho khi thu tiền | BR-BH-04, BR-TG-04 | `stock_lots.quantity ≥ 0` | L802: khóa `orders` và `stock_lots` `FOR UPDATE` trong một transaction |
-| Trừ kho khi tiêm | BR-KB-04, BR-KO-05 | `stock_lots.quantity ≥ 0` | — |
+| Trừ kho khi thu tiền | BR-BH-04, BR-TG-04 | `stock_lots.quantity ≥ 0` | L802: khóa `orders` và `stock_lots` `FOR UPDATE` trong một transaction **Đã chốt — [ADR-0042](../../adr/0042-inventory-stock-ledger-and-locking.md):** khóa mọi lô cần đụng bằng một câu `ORDER BY id FOR NO KEY UPDATE`, kiểm tồn dưới khóa, ghi qua `StockLedger`; thiếu thì `StockApi.issueForSale` trả danh sách thiếu và không trừ gì |
+| Trừ kho khi tiêm | BR-KB-04, BR-KO-05 | `stock_lots.quantity ≥ 0` | — **Đã chốt — ADR-0042:** `lockFefoLot` → `issueForVaccination` / `revertVaccination` cùng cách khóa |
 | Một lễ tân một ca `OPEN` | BR-TG-05 | Partial unique `cashier_id` | — |
 | Thú không trùng khung / không chồng ngày lưu trú | BR-LH-05, BR-LT-02 | Partial unique / `EXCLUDE` | — |
 | Một chuồng một thú | BR-LT-08 | Partial unique `kennel_id` | — |

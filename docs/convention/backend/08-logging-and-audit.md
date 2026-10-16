@@ -68,8 +68,8 @@ Nguồn: BR-QT-15 và mọi chỗ đặc tả ghi "ghi audit". Mã action do mod
 | | Hủy phiên trả thú (BR-LT-09; Order #9) | LT | `record` | *(LT đặt)* |
 | | Chuyển dòng thuốc kê đơn sang mua ngoài lúc thu (BR-BH-04) | BH | `record` | *(BH đặt)* |
 | | Đối soát ca thu ngân (Ca thu ngân #6) | TG | `record` | *(TG đặt)* |
-| Điều chỉnh kho | Phiếu điều chỉnh tồn (BR-KO-06) | KO | `record` | *(KO đặt)* |
-| | Hủy phiếu nhập đã xác nhận (BR-KO-04; Phiếu nhập #4) | KO | `record` | *(KO đặt)* |
+| Điều chỉnh kho | Phiếu điều chỉnh tồn (BR-KO-06) | KO | `record` | `STOCK_ADJUSTED` (`entity = stock_adjustments`, after = lý do + các dòng `{stockLotId, quantityDelta, balanceAfter}`, `reason` = ghi chú) — [ADR-0042](../../adr/0042-inventory-stock-ledger-and-locking.md) |
+| | Hủy phiếu nhập đã xác nhận (BR-KO-04; Phiếu nhập #4) | KO | `record` | `STOCK_RECEIPT_CANCELLED` (`entity = stock_receipts`, before/after `{status}`, `reason`; hủy phiếu nháp không audit) — ADR-0042 |
 | Sửa bệnh án | Bản bổ sung bệnh án sau khi khóa (BR-KB-01) | KB | `record` | *(KB đặt)* |
 | Ngoài BR-QT-15 (rule riêng bắt ghi audit) | Sửa hộ email / khôi phục tài khoản (BR-TK-16) | TK | `record` | *(TK đặt)* |
 | | Liên kết hồ sơ khách (BR-TK-19) — khách tự liên kết bằng OTP (UC07, [ADR-0027](../../adr/0027-profile-link-endpoints.md) mục 5); lễ tân liên kết hộ (UC22) chưa có | TK | `record` | `CUSTOMER_PROFILE_LINKED` |
