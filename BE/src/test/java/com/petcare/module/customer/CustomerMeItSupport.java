@@ -101,6 +101,32 @@ abstract class CustomerMeItSupport {
         return id;
     }
 
+    private Long sharedBranchId;
+
+    /** Chi nhánh {@code ACTIVE} dùng chung trong một class IT (A05–A08 bắt buộc có chi nhánh). */
+    long branchId() {
+        if (sharedBranchId == null) {
+            sharedBranchId = jdbc.queryForObject("""
+                    INSERT INTO branches (name, address, phone, latitude, longitude, status)
+                    VALUES (?, 'Địa chỉ', '0280000000', 10.762622, 106.660172, 'ACTIVE') RETURNING id
+                    """, Long.class, "CustomerIT chi nhánh " + UUID.randomUUID());
+        }
+        return sharedBranchId;
+    }
+
+    /** Nhân viên {@code ACTIVE} với role bất kỳ; A05–A08 thuộc {@link #branchId()}, ADMIN / SUPER_MANAGER không. */
+    long staffOf(String role) {
+        boolean branchScoped = role.equals("BRANCH_MANAGER") || role.equals("RECEPTIONIST") || role.equals("VET")
+                || role.equals("CARETAKER");
+        long id = jdbc.queryForObject("""
+                INSERT INTO accounts (email, phone, password_hash, role, status)
+                VALUES (?, '0901234567', 'hash', ?, 'ACTIVE') RETURNING id
+                """, Long.class, newEmail(), role);
+        jdbc.update("INSERT INTO staff_profiles (account_id, full_name, branch_id) VALUES (?, ?, ?)", id,
+                "Nhân viên " + role, branchScoped ? branchId() : null);
+        return id;
+    }
+
     static String newEmail() {
         return "customer-me-it-" + SEQ.incrementAndGet() + "-" + UUID.randomUUID() + "@petcare.test";
     }
