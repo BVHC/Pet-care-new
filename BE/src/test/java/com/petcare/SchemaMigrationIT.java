@@ -131,9 +131,10 @@ class SchemaMigrationIT {
         // V10 index addresses.customer_id (docs/adr/0028),
         // V11 mẫu STAFF_TEMP_PASSWORD, OTP_EMAIL_CHANGE, EMAIL_CHANGED_NOTICE (docs/adr/0029),
         // V12 mẫu ACCOUNT_LOCKED_FOLLOW_UP_APP, LAST_BRANCH_MANAGER_LOCKED_APP (docs/adr/0035),
-        // V13 index FK trỏ tới pets / customers còn thiếu — trả nợ D013 (docs/adr/0041)
+        // V13 index FK trỏ tới pets / customers còn thiếu — trả nợ D013 (docs/adr/0041),
+        // V14 bảng đếm mã chứng từ + index module kho (docs/adr/0042, 0043)
         assertThat(rows).extracting(row -> row.get("version"))
-                .containsExactly("1", "2", "3", "4", "5", "6", "7", "8", "9", "10", "11", "12", "13");
+                .containsExactly("1", "2", "3", "4", "5", "6", "7", "8", "9", "10", "11", "12", "13", "14");
         assertThat(rows).allSatisfy(row -> assertThat(row).containsEntry("success", true));
     }
 
@@ -145,7 +146,10 @@ class SchemaMigrationIT {
                 """, String.class);
 
         assertThat(ERD_TABLES).hasSize(55);
-        assertThat(tables).containsExactlyInAnyOrderElementsOf(ERD_TABLES);
+        // document_counters (V14, ADR-0043) là bảng hạ tầng ngoài ERD v16 (erd 13 muc 18)
+        assertThat(tables).containsExactlyInAnyOrderElementsOf(
+                java.util.stream.Stream.concat(ERD_TABLES.stream(), java.util.stream.Stream.of("document_counters"))
+                        .toList());
     }
 
     @Test
