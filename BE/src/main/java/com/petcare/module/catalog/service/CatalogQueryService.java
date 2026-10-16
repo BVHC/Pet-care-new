@@ -60,6 +60,20 @@ public class CatalogQueryService implements CatalogQueryApi {
         return products.findById(productId).map(CatalogQueryService::toInfo);
     }
 
+    @Override
+    public List<ProductInfo> findProducts(Collection<Long> productIds) {
+        if (productIds.isEmpty()) {
+            return List.of();
+        }
+        return products.findAllById(productIds).stream().map(CatalogQueryService::toInfo).toList();
+    }
+
+    @Override
+    @Transactional(propagation = org.springframework.transaction.annotation.Propagation.MANDATORY)
+    public Optional<ProductInfo> findProductForShare(Long productId) {
+        return products.findByIdForShare(productId).map(CatalogQueryService::toInfo);
+    }
+
     /** Chỉ dịch vụ nhóm {@code BOARDING} có loại chuồng; giá đêm là giá của dịch vụ (BR-SP-04). */
     @Override
     public Optional<KennelTypeInfo> findKennelType(Long serviceId) {
