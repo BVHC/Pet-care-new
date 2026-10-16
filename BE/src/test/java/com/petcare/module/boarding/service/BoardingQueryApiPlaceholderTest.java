@@ -13,14 +13,12 @@ import org.junit.jupiter.api.Test;
  */
 class BoardingQueryApiPlaceholderTest {
 
-    private final BoardingQueryApiPlaceholder placeholder = new BoardingQueryApiPlaceholder();
+    private final BoardingQueryApiPlaceholder placeholder = new BoardingQueryApiPlaceholder(null);
 
     @Test
-    void everyMethodThrows() {
+    void methodsNotImplementedYetThrow() {
         assertThatThrownBy(() -> placeholder.findBooking(1L)).isInstanceOf(UnsupportedOperationException.class);
-        assertThatThrownBy(() -> placeholder.isPetInStay(1L)).isInstanceOf(UnsupportedOperationException.class);
-        assertThatThrownBy(() -> placeholder.existsByPet(1L)).isInstanceOf(UnsupportedOperationException.class);
-        assertThatThrownBy(() -> placeholder.existsByCustomer(1L)).isInstanceOf(UnsupportedOperationException.class);
+        // isPetInStay, existsByPet, findBookingIdsByPet, existsByCustomer đã cài thật một phần (T17): CrossModuleQueryIT
         assertThatThrownBy(() -> placeholder.findBookedFrom(1L, LocalDate.of(2026, 10, 9)))
                 .isInstanceOf(UnsupportedOperationException.class);
         assertThatThrownBy(() -> placeholder.countViolations(1L, Instant.EPOCH))

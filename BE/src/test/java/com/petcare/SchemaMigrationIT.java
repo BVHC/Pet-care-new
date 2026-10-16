@@ -130,9 +130,10 @@ class SchemaMigrationIT {
         // V9 mẫu OTP_PROFILE_LINK + index otp_tokens.customer_id (docs/adr/0025),
         // V10 index addresses.customer_id (docs/adr/0028),
         // V11 mẫu STAFF_TEMP_PASSWORD, OTP_EMAIL_CHANGE, EMAIL_CHANGED_NOTICE (docs/adr/0029),
-        // V12 mẫu ACCOUNT_LOCKED_FOLLOW_UP_APP, LAST_BRANCH_MANAGER_LOCKED_APP (docs/adr/0035)
+        // V12 mẫu ACCOUNT_LOCKED_FOLLOW_UP_APP, LAST_BRANCH_MANAGER_LOCKED_APP (docs/adr/0035),
+        // V13 index FK trỏ tới pets / customers còn thiếu — trả nợ D013 (docs/adr/0041)
         assertThat(rows).extracting(row -> row.get("version"))
-                .containsExactly("1", "2", "3", "4", "5", "6", "7", "8", "9", "10", "11", "12");
+                .containsExactly("1", "2", "3", "4", "5", "6", "7", "8", "9", "10", "11", "12", "13");
         assertThat(rows).allSatisfy(row -> assertThat(row).containsEntry("success", true));
     }
 
@@ -406,11 +407,11 @@ class SchemaMigrationIT {
 
     /**
      * V9 (docs/adr/0025): {@code otp_tokens.customer_id} có index dùng được cho kiểm FK khi xóa hồ sơ online (BR-TK-19,
-     * ST02); V10 (docs/adr/0028): {@code addresses.customer_id} cũng có. Các cột FK → {@code customers} còn thiếu index
-     * là đúng danh sách nợ D013; trả nợ (hoặc thêm cột FK mới) thì sửa danh sách này cùng sổ nợ.
+     * ST02); V10 (docs/adr/0028): {@code addresses.customer_id} cũng có; V13 (docs/adr/0041) thêm bốn index còn lại, trả hết nợ
+     * D013. Cột FK mới trỏ tới {@code customers} mà thiếu index sẽ làm test này đỏ.
      */
     @Test
-    void foreignKeysToCustomersWithoutUsableIndexAreExactlyDebtD013() {
+    void everyForeignKeyToCustomersHasUsableIndex() {
         List<String> unindexed = jdbc.queryForList("""
                 SELECT c.conrelid::regclass || '.' || a.attname
                 FROM pg_constraint c
@@ -424,9 +425,7 @@ class SchemaMigrationIT {
                 ORDER BY 1
                 """, String.class);
 
-        assertThat(unindexed).doesNotContain("otp_tokens.customer_id", "addresses.customer_id")
-                .as("nợ D013").containsExactlyInAnyOrder("boarding_bookings.customer_id",
-                        "care_tasks.customer_id", "payments.customer_id", "visits.customer_id");
+        assertThat(unindexed).as("D013 đã trả bằng V13 (docs/adr/0041)").isEmpty();
     }
 
     // ---------------------------------------------------------------- D6, D7, D10: hành vi ràng buộc

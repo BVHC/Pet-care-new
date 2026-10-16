@@ -10,15 +10,12 @@ import org.junit.jupiter.api.Test;
  */
 class OrderQueryApiPlaceholderTest {
 
-    private final OrderQueryApiPlaceholder placeholder = new OrderQueryApiPlaceholder();
+    private final OrderQueryApiPlaceholder placeholder = new OrderQueryApiPlaceholder(null, null, null);
 
     @Test
-    void everyMethodThrows() {
-        assertThatThrownBy(() -> placeholder.existsByCustomer(1L))
-                .isInstanceOf(UnsupportedOperationException.class).hasMessageContaining("OrderQueryApi");
-        assertThatThrownBy(() -> placeholder.hasPendingOrderForPet(1L))
-                .isInstanceOf(UnsupportedOperationException.class);
+    void methodsNotImplementedYetThrow() {
+        // existsByCustomer, hasPendingOrderForPet đã cài thật một phần (T17): CrossModuleQueryIT
         assertThatThrownBy(() -> placeholder.findUnpaidOrdersByCustomer(1L))
-                .isInstanceOf(UnsupportedOperationException.class);
+                .isInstanceOf(UnsupportedOperationException.class).hasMessageContaining("OrderQueryApi");
     }
 }

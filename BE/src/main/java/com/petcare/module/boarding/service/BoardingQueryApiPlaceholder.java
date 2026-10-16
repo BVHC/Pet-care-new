@@ -5,6 +5,7 @@ import java.time.LocalDate;
 import java.util.List;
 import java.util.Optional;
 
+import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.stereotype.Service;
 
 import com.petcare.module.boarding.api.BoardingQueryApi;
@@ -14,11 +15,20 @@ import com.petcare.module.boarding.api.BoardingQueryApi;
  * ném lỗi, không trả giá trị "an toàn" (trả rỗng sẽ cho thu hẹp giờ mở cửa qua mặt BR-CN-04). Hệ quả: đặt giờ mở
  * cửa, thêm ngày nghỉ và hai endpoint xem trước ảnh hưởng của branch trả 500.
  * BE-2 xóa lớp này (cùng {@code BoardingQueryApiPlaceholderTest}) khi thêm implementation thật.
+ * <p>
+ * <b>Cài thật một phần (2026-10-16, T17):</b> {@code isPetInStay}, {@code existsByPet}, {@code findBookingIdsByPet},
+ * {@code existsByCustomer} đọc thẳng {@code boarding_bookings} trong transaction của bên gọi; các method còn lại vẫn ném.
  */
 @Service
 public class BoardingQueryApiPlaceholder implements BoardingQueryApi {
 
     static final String MESSAGE = "BoardingQueryApi chưa được cài (module boarding, BE-2)";
+
+    private final JdbcTemplate jdbc;
+
+    public BoardingQueryApiPlaceholder(JdbcTemplate jdbc) {
+        this.jdbc = jdbc;
+    }
 
     @Override
     public Optional<StaySummary> findBooking(Long bookingId) {
@@ -27,17 +37,26 @@ public class BoardingQueryApiPlaceholder implements BoardingQueryApi {
 
     @Override
     public boolean isPetInStay(Long petId) {
-        throw new UnsupportedOperationException(MESSAGE);
+        return Boolean.TRUE.equals(jdbc.queryForObject("""
+                SELECT EXISTS (SELECT 1 FROM boarding_bookings WHERE pet_id = ? AND status IN ('CHECKED_IN', 'OVERDUE'))
+                """, Boolean.class, petId));
     }
 
     @Override
     public boolean existsByPet(Long petId) {
-        throw new UnsupportedOperationException(MESSAGE);
+        return Boolean.TRUE.equals(jdbc.queryForObject(
+                "SELECT EXISTS (SELECT 1 FROM boarding_bookings WHERE pet_id = ?)", Boolean.class, petId));
+    }
+
+    @Override
+    public List<Long> findBookingIdsByPet(Long petId) {
+        return jdbc.queryForList("SELECT id FROM boarding_bookings WHERE pet_id = ? ORDER BY id", Long.class, petId);
     }
 
     @Override
     public boolean existsByCustomer(Long customerId) {
-        throw new UnsupportedOperationException(MESSAGE);
+        return Boolean.TRUE.equals(jdbc.queryForObject(
+                "SELECT EXISTS (SELECT 1 FROM boarding_bookings WHERE customer_id = ?)", Boolean.class, customerId));
     }
 
     @Override

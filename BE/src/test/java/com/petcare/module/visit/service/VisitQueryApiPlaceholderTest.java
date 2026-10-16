@@ -10,19 +10,14 @@ import org.junit.jupiter.api.Test;
  */
 class VisitQueryApiPlaceholderTest {
 
-    private final VisitQueryApiPlaceholder placeholder = new VisitQueryApiPlaceholder();
+    private final VisitQueryApiPlaceholder placeholder = new VisitQueryApiPlaceholder(null);
 
     @Test
-    void everyMethodThrows() {
+    void methodsNotImplementedYetThrow() {
         assertThatThrownBy(() -> placeholder.findVisit(1L))
                 .isInstanceOf(UnsupportedOperationException.class).hasMessageContaining("D016");
         assertThatThrownBy(() -> placeholder.findUnfinishedVisitsAssignedTo(1L))
                 .isInstanceOf(UnsupportedOperationException.class);
-        assertThatThrownBy(() -> placeholder.hasOpenVisit(1L)).isInstanceOf(UnsupportedOperationException.class);
-        assertThatThrownBy(() -> placeholder.existsByPet(1L)).isInstanceOf(UnsupportedOperationException.class);
-        assertThatThrownBy(() -> placeholder.findVisitIdsByPet(1L))
-                .isInstanceOf(UnsupportedOperationException.class);
-        assertThatThrownBy(() -> placeholder.hasMedicalHistory(1L))
-                .isInstanceOf(UnsupportedOperationException.class);
+        // hasOpenVisit, existsByPet, findVisitIdsByPet, hasMedicalHistory đã cài thật một phần (T17): CrossModuleQueryIT
     }
 }

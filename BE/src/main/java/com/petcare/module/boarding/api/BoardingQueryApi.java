@@ -25,6 +25,12 @@ public interface BoardingQueryApi {
 
     boolean existsByPet(Long petId);
 
+    /**
+     * Mã mọi đặt chỗ của thú, theo id tăng dần (thêm 2026-10-16, T17): sales dùng để biết thú có Order {@code PENDING}
+     * nguồn BOARDING hay không (BR-KH-08, {@code OrderQueryApi.hasPendingOrderForPet}).
+     */
+    List<Long> findBookingIdsByPet(Long petId);
+
     boolean existsByCustomer(Long customerId);
 
     /** Đặt chỗ BOOKED có ngày trả ≥ {@code fromDate}, để branch tính danh sách bị ảnh hưởng (BR-CN-03, 04). */
