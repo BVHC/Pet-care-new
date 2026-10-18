@@ -2,6 +2,8 @@ package com.petcare.module.customer.api;
 
 import java.math.BigDecimal;
 import java.time.LocalDate;
+import java.util.Collection;
+import java.util.List;
 import java.util.Optional;
 
 /** Owner: customer (KH) · BE-2. */
@@ -20,6 +22,7 @@ public interface PetQueryApi {
     Optional<PetSummary> findPet(Long petId);
 
     /**
+<<<<<<< HEAD
      * Khóa chia sẻ dòng {@code pets} ({@code SELECT … FOR SHARE}) rồi đọc, thêm 2026-10-16 (T17, docs/adr/0041).
      * {@code MANDATORY}: chạy trong transaction của bên gọi. <b>Nghĩa vụ:</b> tiếp nhận (Visit#1), đặt / đổi lịch
      * (Lịch hẹn#1, #2), đặt chỗ lưu trú (Đặt chỗ#1) và nhận thú (Đặt chỗ#3) phải gọi method này <b>trước khi chèn dòng
@@ -29,4 +32,11 @@ public interface PetQueryApi {
      * {@code FOR NO KEY UPDATE}: bên đến sau chờ bên đến trước commit và thấy dữ liệu đã commit (READ COMMITTED).
      */
     Optional<PetSummary> findPetForShare(Long petId);
+=======
+     * Nhiều thú một lần (appointment #3 ghép tên cho một trang lịch hẹn, docs/adr/0044). Thêm 15/10 (06 §6).
+     * Nghĩa vụ: id không có thì bỏ qua, không trả null, không phân trang, mỗi id xuất hiện tối đa một lần, thứ tự tùy ý;
+     * đọc mới mỗi lần gọi (không cache); bên gọi truyền tối đa 100 id; tập rỗng → danh sách rỗng.
+     */
+    List<PetSummary> findPets(Collection<Long> petIds);
+>>>>>>> b79fc98 (feat: triển khai xem lịch trình, xem chi nhánh)
 }

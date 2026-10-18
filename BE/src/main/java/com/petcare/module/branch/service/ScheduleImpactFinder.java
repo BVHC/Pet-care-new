@@ -1,9 +1,12 @@
 package com.petcare.module.branch.service;
 
 import java.time.LocalDate;
+import java.util.Collection;
 import java.util.HashMap;
+import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 import java.util.function.Function;
 
 import org.springframework.stereotype.Component;
@@ -28,6 +31,9 @@ import com.petcare.module.customer.api.PetQueryApi.PetSummary;
  */
 @Component
 class ScheduleImpactFinder {
+
+    /** Số id tối đa một lời gọi {@code findPets} / {@code findContacts} (06 §6). */
+    static final int BATCH = 100;
 
     /** Danh sách thô theo id, dùng để phát {@code BranchClinicCancellationEvent}. */
     record Impact(List<BookedSlot> appointments, List<BookedStay> stays) {
@@ -71,25 +77,52 @@ class ScheduleImpactFinder {
         return new Impact(slots, stays);
     }
 
-    /** Thêm tên thú, tên và SĐT khách để lễ tân đối chiếu hoặc gọi điện (06 Q4). */
+    /**
+     * Thêm tên thú, tên và SĐT khách để lễ tân đối chiếu hoặc gọi điện (06 Q4). Gom id của cả lịch hẹn lẫn đặt chỗ,
+     * khử trùng, chia lô tối đa {@value #BATCH} id (nghĩa vụ của {@code PetQueryApi.findPets} /
+     * {@code CustomerQueryApi.findContacts}): số lời gọi sang module khác không phụ thuộc số dòng bị ảnh hưởng, và bằng
+     * 0 khi không có gì bị ảnh hưởng. Id không trả về → "(không rõ)"; id trả về hai lần là vi phạm hợp đồng → 500.
+     */
     ScheduleImpact describe(Impact impact) {
-        Map<Long, PetSummary> petCache = new HashMap<>();
-        Map<Long, CustomerContact> customerCache = new HashMap<>();
-        Function<Long, PetSummary> pet = id -> petCache.computeIfAbsent(id, k -> pets.findPet(k).orElse(null));
-        Function<Long, CustomerContact> customer =
-                id -> customerCache.computeIfAbsent(id, k -> customers.findContact(k).orElse(null));
+        Set<Long> petIds = new LinkedHashSet<>();
+        Set<Long> customerIds = new LinkedHashSet<>();
+        impact.appointments().forEach(s -> {
+            petIds.add(s.petId());
+            customerIds.add(s.customerId());
+        });
+        impact.stays().forEach(b -> {
+            petIds.add(b.petId());
+            customerIds.add(b.customerId());
+        });
+        Map<Long, PetSummary> petById = fetch(petIds, pets::findPets, PetSummary::petId, "findPets");
+        Map<Long, CustomerContact> customerById = fetch(customerIds, customers::findContacts, CustomerContact::customerId,
+                "findContacts");
 
         List<AffectedAppointment> affectedAppointments = impact.appointments().stream()
                 .map(s -> new AffectedAppointment(s.appointmentId(), s.code(), s.slotDate(), s.slotStart(),
-                        petName(pet.apply(s.petId())), customerName(customer.apply(s.customerId())),
-                        customerPhone(customer.apply(s.customerId()))))
+                        petName(petById.get(s.petId())), customerName(customerById.get(s.customerId())),
+                        customerPhone(customerById.get(s.customerId()))))
                 .toList();
         List<AffectedBoarding> affectedStays = impact.stays().stream()
                 .map(b -> new AffectedBoarding(b.bookingId(), b.code(), b.checkInDate(), b.checkOutDate(),
-                        petName(pet.apply(b.petId())), customerName(customer.apply(b.customerId())),
-                        customerPhone(customer.apply(b.customerId()))))
+                        petName(petById.get(b.petId())), customerName(customerById.get(b.customerId())),
+                        customerPhone(customerById.get(b.customerId()))))
                 .toList();
         return new ScheduleImpact(affectedAppointments, affectedStays);
+    }
+
+    private static <T> Map<Long, T> fetch(Collection<Long> ids, Function<Collection<Long>, List<T>> batchCall,
+            Function<T, Long> idOf, String method) {
+        Map<Long, T> byId = new HashMap<>();
+        List<Long> all = List.copyOf(ids);
+        for (int from = 0; from < all.size(); from += BATCH) {
+            for (T row : batchCall.apply(all.subList(from, Math.min(from + BATCH, all.size())))) {
+                if (byId.put(idOf.apply(row), row) != null) {
+                    throw new IllegalStateException(method + " trả một id hai lần: " + idOf.apply(row));
+                }
+            }
+        }
+        return byId;
     }
 
     private static String petName(PetSummary pet) {

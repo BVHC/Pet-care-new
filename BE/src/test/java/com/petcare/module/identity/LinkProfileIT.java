@@ -933,6 +933,11 @@ class LinkProfileIT {
         }
 
         @Override
+        public List<CustomerContact> findContacts(java.util.Collection<Long> customerIds) {
+            throw new UnsupportedOperationException("không dùng trong IT liên kết hồ sơ");
+        }
+
+        @Override
         public Optional<Long> findCustomerIdByAccountId(Long accountId) {
             return jdbc.queryForList("SELECT id FROM customers WHERE account_id = ?", Long.class, accountId).stream()
                     .findFirst();

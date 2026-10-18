@@ -36,7 +36,11 @@ public interface BoardingQueryApi {
     /** Đặt chỗ BOOKED có ngày trả ≥ {@code fromDate}, để branch tính danh sách bị ảnh hưởng (BR-CN-03, 04). */
     List<BookedStay> findBookedFrom(Long branchId, LocalDate fromDate);
 
-    /** Số NO_SHOW + hủy muộn của khách từ {@code since} (BR-LH-09, BR-LT-06). */
+    /**
+     * Số NO_SHOW + hủy muộn của khách xảy ra <b>sau</b> {@code since} (loại trừ: thời điểm vi phạm {@code > since};
+     * BR-LH-09, BR-LT-06). Gọi từ {@code BookingRestrictionApi.evaluateAfterViolation} dưới khóa theo khách, nên đọc
+     * READ COMMITTED, không khóa thêm (docs/adr/0045).
+     */
     int countViolations(Long customerId, Instant since);
 
     /** Đặt chỗ BOOKED/CHECKED_IN/OVERDUE của khách — việc dở khi khóa tài khoản khách (BR-QT-11, Q2). */

@@ -73,6 +73,7 @@ public class OpenApiConfig {
             tag("Accounts", "Khóa / mở khóa mọi tài khoản (UC09)"),
             tag("Configuration", "Tham số [CFG] và mẫu thông báo (UC10)"),
             tag("Audit", "Nhật ký audit (UC11)"),
+            tag("Slots", "Khung giờ trống (UC39)"),
             tag("Public", "Thông tin công khai, không cần đăng nhập (UC15)"));
 
     private static final String DESCRIPTION = """

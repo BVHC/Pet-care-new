@@ -2,6 +2,7 @@ package com.petcare.module.branch.service;
 
 import java.util.Collection;
 import java.util.Objects;
+import java.util.Optional;
 import java.util.SortedMap;
 import java.util.TreeMap;
 import java.util.TreeSet;
@@ -16,8 +17,9 @@ import com.petcare.module.branch.api.BranchQueryApi.BranchStatus;
 import com.petcare.module.branch.repository.BranchRepository;
 
 /**
- * Cài đặt {@link BranchApi} (docs/adr/0029, nợ D014). Thứ tự id tăng dần do lớp này giữ, bên gọi không tự sắp nên
- * không thể quên: hai luồng khóa cùng hai chi nhánh theo hai hướng (điều chuyển A→B và B→A) không deadlock.
+ * Cài đặt {@link BranchApi}: khóa dòng {@code branches} cho quản trị nhân viên (docs/adr/0029, nợ D014) và cho đặt /
+ * đổi lịch hẹn (docs/adr/0041). Thứ tự id tăng dần do lớp này giữ, bên gọi không tự sắp nên không thể quên: hai luồng
+ * khóa cùng hai chi nhánh theo hai hướng (điều chuyển A→B và B→A) không deadlock.
  * <p>
  * Chặn transaction {@code readOnly} trước mọi câu SQL: PostgreSQL không cho {@code SELECT … FOR NO KEY UPDATE} trong
  * transaction chỉ đọc, lỗi SQL đó khó hiểu hơn lỗi lập trình nêu rõ ở đây.
@@ -44,5 +46,15 @@ public class BranchStaffLockService implements BranchApi {
                     .ifPresent(status -> locked.put(branchId, BranchStatus.valueOf(status)));
         }
         return locked;
+    }
+
+    @Override
+    @Transactional(propagation = Propagation.MANDATORY)
+    public Optional<BranchStatus> lockForBooking(Long branchId) {
+        Objects.requireNonNull(branchId, "branchId");
+        if (TransactionSynchronizationManager.isCurrentTransactionReadOnly()) {
+            throw new IllegalStateException("BranchApi.lockForBooking cần transaction ghi, không được readOnly");
+        }
+        return branches.lockStatusForBooking(branchId).map(BranchStatus::valueOf);
     }
 }
