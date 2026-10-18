@@ -29,7 +29,8 @@ import lombok.NoArgsConstructor;
  * hệ với Visit nằm ở {@code visits.appointment_id} (module visit). {@code reschedule_count} là {@code SMALLINT} nên field
  * là {@code short}.
  * <p>
- * Method đổi trạng thái: {@link #book} (phần 2), {@link #reschedule}, {@link #cancel} (phần 4, docs/adr/0045).
+ * Method đổi trạng thái: {@link #book} (phần 2), {@link #reschedule}, {@link #cancel} (phần 4, docs/adr/0045),
+ * {@link #checkIn}, {@link #complete} (phần 5, docs/adr/0046).
  */
 @Getter
 @Entity
@@ -147,5 +148,18 @@ public class Appointment extends TimestampedEntity {
         this.cancelReason = reason;
         this.cancelledAt = at;
         this.lateCancel = late;
+    }
+
+    /**
+     * Lịch hẹn#3 ({@code BOOKED → CHECKED_IN}, command {@code checkIn}, SYS ← Visit#1; docs/adr/0046). Bên gọi đã kiểm
+     * trạng thái và cửa sổ check-in dưới khóa dòng. Chỉ đổi trạng thái; {@code reminded_at} giữ nguyên.
+     */
+    public void checkIn() {
+        this.status = AppointmentStatus.CHECKED_IN;
+    }
+
+    /** Lịch hẹn#7 ({@code CHECKED_IN → COMPLETED}, command {@code completeByVisit}, SYS ← Visit#5; docs/adr/0046). */
+    public void complete() {
+        this.status = AppointmentStatus.COMPLETED;
     }
 }

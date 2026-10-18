@@ -64,11 +64,19 @@ Mũi tên `A → B.m()`: module A gọi method m của module B. Cột *Chuyển
 
 | Sự kiện nguồn (03) | Cách cài | Lời gọi |
 |---|---|---|
+<<<<<<< HEAD
 | Visit#1 Tiếp nhận | gọi | visit → `AppointmentApi.checkIn` (nếu có lịch) · visit → `VisitOrderApi.openForVisit` · visit có dịch vụ `EXAM` → nội bộ hủy nhắc tái khám + `CareTaskApi.cancelFollowUpTasks` |
 | Visit#5 Hoàn tất | gọi | visit → `VisitOrderApi.findServiceIds` (kiểm điều kiện EXAM/VACCINE, BR-KB-02) → `AppointmentApi.completeByVisit` · `VisitOrderApi.markPendingByVisit`; khóa bệnh án là nội bộ visit |
 | Visit#6 Hủy lượt | gọi | visit → `AppointmentApi.cancelByVisit` · `VisitOrderApi.cancelByVisit` |
 | Visit — ghi nhận mũi tiêm | gọi | visit → `VisitOrderApi.addVaccineLine` (khóa Order, sinh dòng VACCINE) → `StockApi.lockFefoLot` → INSERT `vaccinations` (`order_line_id` = dòng vừa sinh) → `StockApi.issueForVaccination` → đánh dấu `superseded_at` các mũi cũ cùng loại → `CareTaskApi.cancelForRevaccination`. **17/10 (T19, ADR-0044): đảo thứ tự so với bản 05/10** — chứng từ khóa trước, lô sau (ADR-0042) |
 | Visit — xóa mũi tiêm ghi nhầm | gọi | visit → đọc `stock_lot_id` + số lượng của mũi → xóa `vaccinations` → `VisitOrderApi.removeVaccineLine` (khóa Order) → `StockApi.revertVaccination` (khóa lô sau cùng). **17/10 (T19, ADR-0044): xóa `vaccinations` trước** vì FK `vaccinations.order_line_id` RESTRICT, và Order khóa trước lô |
+=======
+| Visit#1 Tiếp nhận | gọi | visit → `AppointmentApi.checkIn(appointmentId, branchId, at)` (nếu có lịch; trả `CheckInInfo`, 404 → 409 → 400 BR-TN-02, docs/adr/0046) · visit → `VisitOrderApi.openForVisit` · visit có dịch vụ `EXAM` → nội bộ hủy nhắc tái khám + `CareTaskApi.cancelFollowUpTasks` |
+| Visit#5 Hoàn tất | gọi | visit → `VisitOrderApi.findServiceIds` (kiểm điều kiện EXAM/VACCINE, BR-KB-02) → `AppointmentApi.completeByVisit(appointmentId)` · `VisitOrderApi.markPendingByVisit`; khóa bệnh án là nội bộ visit |
+| Visit#6 Hủy lượt | gọi | visit → `AppointmentApi.cancelByVisit(appointmentId, at)` (`STAFF`, không hủy muộn) · `VisitOrderApi.cancelByVisit` |
+| Visit — ghi nhận mũi tiêm | gọi | visit → `StockApi.lockFefoLot` → `VisitOrderApi.addVaccineLine` → INSERT `vaccinations` → `StockApi.issueForVaccination` → đánh dấu `superseded_at` các mũi cũ cùng loại → `CareTaskApi.cancelForRevaccination` |
+| Visit — xóa mũi tiêm ghi nhầm | gọi | visit → `StockApi.revertVaccination` → `VisitOrderApi.removeVaccineLine` → xóa `vaccinations` |
+>>>>>>> fa6ea21 (feat: cài AppointmentApi và AppointmentQueryApi cho visit, branch, identity)
 | Lịch hẹn#1 / Visit#1 có dịch vụ Khám | gọi | appointment (nhóm MEDICAL) → `FollowUpApi.cancelPendingFollowUps` → (bên trong visit) `CareTaskApi.cancelFollowUpTasks` |
 | Order#8 Thu tiền | gọi | sales → `StockApi.issueForSale` (trả danh sách thiếu); thiếu thuốc kê đơn → `PrescriptionApi.markExternalPurchaseAtPayment` rồi xóa dòng. Giao thú (Đặt chỗ#10) không cần đẩy, boarding hỏi `BoardingOrderApi.hasPaidOrder` |
 | Đặt chỗ#3 Nhận thú | nội bộ boarding (Chuồng#2) + gọi | boarding → `VaccinationQueryApi.findBoardingVaccineGaps` (rỗng mới nhận) · `PetApi.recordWeight(INTAKE)` |
@@ -76,6 +84,8 @@ Mũi tên `A → B.m()`: module A gọi method m của module B. Cột *Chuyển
 | Đặt chỗ#10, #11 Kết thúc lưu trú | nội bộ boarding (Chuồng#3) + gọi | #10 điều kiện `BoardingOrderApi.hasPaidOrder`; #11 → `BoardingOrderApi.openOrReuse` (tính đến ngày mất) |
 | Thú đánh dấu đã mất | sự kiện | `PetDeceasedEvent` (§3) |
 | Chuyển chủ | sự kiện | `PetOwnerTransferredEvent` (§3) |
+
+**`AppointmentApi` — nghĩa vụ của visit (cài 16/10, docs/adr/0046).** Gọi trong transaction ghi của Visit#1 / #5 / #6 (`MANDATORY`; ngoài transaction hoặc `readOnly` bị từ chối). **Không bắt lỗi** của ba method: lỗi đã đánh dấu rollback-only, bắt rồi đi tiếp thì commit ném `UnexpectedRollbackException`. Gọi **sau** mọi khóa `branches` / advisory của visit (thứ tự `advisory(thú) → branches → appointments`; khóa dòng `appointments` rồi mới khóa `branches` thì deadlock với đổi khung). `at` là một mốc của use case, lấy sau các khóa. Appointment chỉ kiểm tồn tại, trạng thái, chi nhánh, cửa sổ check-in; role A06, `BranchScope`, chi nhánh `ACTIVE` trong giờ / cấp cứu, thú chưa mất, ưu tiên trễ 15–30 phút (dùng `scheduledAt`), chẩn đoán / mũi tiêm là của visit.
 
 ### 4.2 Guard và tra cứu chéo
 
@@ -95,10 +105,10 @@ Mũi tên `A → B.m()`: module A gọi method m của module B. Cột *Chuyển
 | catalog · Dịch vụ công khai | `BranchQueryApi.findActiveBranchIdsEnablingService` | BR-CK-01 |
 | care · Danh sách Care Task (SĐT cần gọi) | `CustomerQueryApi.findContact`; `BoardingQueryApi.findBooking` (`emergencyPhone`) cho PICKUP_OVERDUE | BR-TB-05 |
 | branch · Kích hoạt (Chi nhánh#2) | `StaffDirectoryApi.countBranchManagers` | BR-CN-01, BR-QT-04 |
-| branch · Thêm ngày nghỉ / đổi giờ | `AppointmentQueryApi.findBookedFrom`, `BoardingQueryApi.findBookedFrom` → nếu có ảnh hưởng: từ chối hoặc phát `BranchClinicCancellationEvent` | BR-CN-03, 04, BR-LH-10 |
+| branch · Thêm ngày nghỉ / đổi giờ | `AppointmentQueryApi.findBookedFrom`, `BoardingQueryApi.findBookedFrom` → nếu có ảnh hưởng: từ chối hoặc phát `BranchClinicCancellationEvent`. Tên thú / khách của danh sách ảnh hưởng lấy **theo lô** (`PetQueryApi.findPets`, `CustomerQueryApi.findContacts`, ≤ 100 id/lần; BE-1 sửa `ScheduleImpactFinder.describe` 16/10, BE-2 cài hai hàm đó phải đọc mới mỗi lần gọi). Listener của event: T25, nợ D034 | BR-CN-03, 04, BR-LH-10 |
 | customer · Khóa loài | `VisitQueryApi.hasMedicalHistory` | BR-KH-03 |
 | customer · Đánh dấu đã mất | `VisitQueryApi.hasOpenVisit`, `BoardingQueryApi.isPetInStay` | BR-KH-05 |
-| customer · Xóa thú | `AppointmentQueryApi`, `BoardingQueryApi`, `VisitQueryApi` `.existsByPet` (Order VISIT/BOARDING luôn kèm Visit/đặt chỗ) | BR-KH-06 |
+| customer · Xóa thú | `AppointmentQueryApi`, `BoardingQueryApi`, `VisitQueryApi` `.existsByPet` (Order VISIT/BOARDING luôn kèm Visit/đặt chỗ); gọi **sau** khóa thú advisory 1001 (D027), nếu không một lượt đặt chen vào bị FK `RESTRICT` chặn (409) | BR-KH-06 |
 | customer · Chuyển chủ | `VisitQueryApi.hasOpenVisit`, `OrderQueryApi.hasPendingOrderForPet`, `BoardingQueryApi.isPetInStay` | BR-KH-08 |
 | catalog · Tắt cờ hạn dùng | `StockQueryApi.hasStockAnywhere` | BR-SP-05 |
 | catalog · Xóa loại vaccine | `VaccinationQueryApi.existsByVaccineType` | BR-SP-07 |
@@ -174,7 +184,7 @@ Bên sở hữu phải có implementation thật trước ngày bên gọi bắt
 >>>>>>> b79fc98 (feat: triển khai xem lịch trình, xem chi nhánh)
 | `StockQueryApi`, `StockApi` | BE-2 · 15/10 | sales 20/10, visit 23/10 | |
 | `VisitOrderApi` | BE-2 · 16/10 | visit 20/10 | |
-| `AppointmentApi`, `AppointmentQueryApi` | BE-1 · 16/10 | visit 20/10; branch (hủy hàng loạt) nối thật 19/10 | **09/10: BE-2 thêm `appointment/service/AppointmentQueryApiPlaceholder`** (ném lỗi); `BookedSlot` có thêm `code` (mã lịch hẹn, ngay sau `appointmentId`) để branch liệt kê lịch bị ảnh hưởng khi đổi giờ / thêm ngày nghỉ. **15/10: T16 phần 0** (docs/adr/0041) dựng entity / FSM / khóa / mã lịch hẹn, chưa thay placeholder; bản thật của cả hai interface ở T16 phần 5. |
+| `AppointmentApi`, `AppointmentQueryApi` | BE-1 · 16/10 | visit 20/10; branch (hủy hàng loạt) nối thật 19/10 | **09/10: BE-2 thêm `appointment/service/AppointmentQueryApiPlaceholder`** (ném lỗi; **đã xóa 16/10**); `BookedSlot` có thêm `code` (mã lịch hẹn, ngay sau `appointmentId`) để branch liệt kê lịch bị ảnh hưởng khi đổi giờ / thêm ngày nghỉ. **15/10: T16 phần 0** (docs/adr/0041) dựng entity / FSM / khóa / mã lịch hẹn, chưa thay placeholder; **16/10: T16 phần 5 (docs/adr/0046) cài thật cả hai** — `AppointmentVisitService` (`AppointmentApi`; chữ ký đổi: `checkIn(appointmentId, branchId, Instant at)` trả `CheckInInfo` có `serviceGroup`, `cancelByVisit(appointmentId, Instant at)`, bỏ `actorId`) và `AppointmentLookupService` (`AppointmentQueryApi`). Branch / identity hết 500 ở interface này; trên app thật còn 500 ở bước khác (`BoardingQueryApi` D033, `CustomerQueryApi` D010). |
 | `BookingRestrictionApi` | BE-1 · 19/10 | boarding 22/10 | **15/10: `isRestricted` đã có bản thật** (`appointment/service/BookingRestrictionService`, docs/adr/0043): `starts_at ≤ at < ends_at AND lifted_at IS NULL`, không khóa, tham gia transaction của bên gọi. **15/10 (T16 phần 4, docs/adr/0045): `evaluateAfterViolation` có bản thật** (nợ D030 đã trả): `MANDATORY`, advisory 1002 theo khách, đếm vi phạm `> max(at − window_days, starts_at của lần hạn chế gần nhất)` từ lịch hẹn + `BoardingQueryApi.countViolations`, đủ ngưỡng → một dòng `booking_restrictions`. Tới khi `BoardingQueryApi` có bản thật, mọi lần hủy lịch hẹn muộn trả 500 (nợ D033). |
 | `VisitQueryApi` | BE-1 · 21/10 | identity, customer, sales dùng placeholder tới 21/10 | Guard vô hiệu hóa / chuyển chủ chỉ kiểm thật được từ 22/10. **11/10: BE-1 thêm `visit/service/VisitQueryApiPlaceholder`** (ném lỗi; điều chuyển / vô hiệu hóa nhân viên A05–A08 T14 trả 500 tới khi có bản thật — nợ D016; vô hiệu hóa SUPER_MANAGER, kích hoạt lại chạy thật — ADR-0033). **12/10: đổi chữ ký** `findUnfinishedVisitIdsAssignedTo` → `findUnfinishedVisitsAssignedTo(accountId)` trả `List<AssignedVisit(visitId, branchId, status)>` (chỉ WAITING / IN_PROGRESS, theo `visitId` tăng dần; ADR-0035 mục 1); khóa nhân viên A05–A08 cũng gọi → 500 tới khi có bản thật. Visit còn phải cài listener `AccountLockedEvent` (§3, nợ D017) |
 >>>>>>> e5fc585 (feat: triển khai đặt lịch hẹn)

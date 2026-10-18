@@ -14,6 +14,7 @@ import org.springframework.data.repository.query.Param;
 import org.springframework.transaction.annotation.Propagation;
 import org.springframework.transaction.annotation.Transactional;
 
+import com.petcare.module.appointment.api.AppointmentQueryApi.BookedSlot;
 import com.petcare.module.appointment.entity.Appointment;
 
 import jakarta.persistence.LockModeType;
@@ -162,4 +163,35 @@ public interface AppointmentRepository extends JpaRepository<Appointment, Long>,
                 OR (status = 'NO_SHOW' AND (slot_date + slot_start) AT TIME ZONE 'Asia/Ho_Chi_Minh' > :since))
             """, nativeQuery = true)
     int countViolationsAfter(@Param("customerId") Long customerId, @Param("since") Instant since);
+
+    // AppointmentQueryApi (docs/adr/0046): chỉ đọc, JPQL constructor để không nạp entity vào persistence context của
+    // bên gọi; một câu SQL bất kể số dòng (Appointment không có quan hệ JPA, FK là Long).
+
+    /** Lịch BOOKED của chi nhánh từ {@code fromDate} (BR-CN-04, BR-LH-10). Index {@code ix_appointments_status_slot}. */
+    @Query("""
+            SELECT new com.petcare.module.appointment.api.AppointmentQueryApi$BookedSlot(
+                a.id, a.code, a.branchId, a.petId, a.customerId, a.slotDate, a.slotStart)
+            FROM Appointment a
+            WHERE a.branchId = :branchId AND a.status = com.petcare.module.appointment.entity.AppointmentStatus.BOOKED
+              AND a.slotDate >= :fromDate
+            ORDER BY a.slotDate, a.slotStart, a.id
+            """)
+    List<BookedSlot> findBookedFrom(@Param("branchId") Long branchId, @Param("fromDate") LocalDate fromDate);
+
+    /** Lịch BOOKED của khách trên mọi chi nhánh (BR-QT-11). Index {@code ix_appointments_customer_created_at}. */
+    @Query("""
+            SELECT new com.petcare.module.appointment.api.AppointmentQueryApi$BookedSlot(
+                a.id, a.code, a.branchId, a.petId, a.customerId, a.slotDate, a.slotStart)
+            FROM Appointment a
+            WHERE a.customerId = :customerId
+              AND a.status = com.petcare.module.appointment.entity.AppointmentStatus.BOOKED
+            ORDER BY a.slotDate, a.slotStart, a.id
+            """)
+    List<BookedSlot> findBookedByCustomerId(@Param("customerId") Long customerId);
+
+    /** Thú đã từng có lịch hẹn ở bất kỳ trạng thái nào (BR-KH-06). */
+    boolean existsByPetId(Long petId);
+
+    /** Khách đã từng có lịch hẹn ở bất kỳ trạng thái nào (BR-TK-19). */
+    boolean existsByCustomerId(Long customerId);
 }

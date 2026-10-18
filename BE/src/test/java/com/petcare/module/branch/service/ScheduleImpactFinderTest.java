@@ -1,20 +1,27 @@
 package com.petcare.module.branch.service;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyCollection;
+import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
 
 import java.time.LocalDate;
 import java.time.LocalTime;
+import java.util.ArrayList;
+import java.util.Collection;
 import java.util.List;
 import java.util.Map;
-import java.util.Optional;
 import java.util.Set;
 
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
+import org.mockito.ArgumentCaptor;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 
@@ -110,10 +117,10 @@ class ScheduleImpactFinderTest {
     }
 
     @Test
-    void describeFillsNamesAndPhonesAndCachesLookups() {
-        when(pets.findPet(5L)).thenReturn(Optional.of(
+    void describeFillsNamesAndPhonesWithOneBatchPerModule() {
+        when(pets.findPets(anyCollection())).thenReturn(List.of(
                 new PetSummary(5L, 6L, "Mực", Species.DOG, null, null, null)));
-        when(customers.findContact(6L)).thenReturn(Optional.of(
+        when(customers.findContacts(anyCollection())).thenReturn(List.of(
                 new CustomerContact(6L, "Nguyễn Văn A", "0901234567", null, null, false)));
         Impact impact = new Impact(List.of(slot(1, MON, "15:00"), slot(2, MON, "15:30")),
                 List.of(stay(10, MON, SUN)));
@@ -127,19 +134,72 @@ class ScheduleImpactFinderTest {
         assertThat(described.appointments().get(0).customerPhone()).isEqualTo("0901234567");
         assertThat(described.boardingBookings().get(0).code()).isEqualTo("LT-10");
         assertThat(described.boardingBookings().get(0).checkOutDate()).isEqualTo(SUN);
-        verify(pets, times(1)).findPet(5L);
-        verify(customers, times(1)).findContact(6L);
+        // Id của lịch hẹn lẫn đặt chỗ gom chung và khử trùng: một lời gọi mỗi module, không gọi từng id.
+        verify(pets, times(1)).findPets(List.of(5L));
+        verify(customers, times(1)).findContacts(List.of(6L));
+        verify(pets, never()).findPet(any());
+        verify(customers, never()).findContact(any());
     }
 
     @Test
     void describeSurvivesAMissingPetOrCustomer() {
-        when(pets.findPet(5L)).thenReturn(Optional.empty());
-        when(customers.findContact(6L)).thenReturn(Optional.empty());
+        when(pets.findPets(anyCollection())).thenReturn(List.of());
+        when(customers.findContacts(anyCollection())).thenReturn(List.of());
 
         ScheduleImpact described = finder.describe(new Impact(List.of(slot(1, MON, "15:00")), List.of()));
 
         assertThat(described.appointments().get(0).petName()).isEqualTo("(không rõ)");
         assertThat(described.appointments().get(0).customerName()).isEqualTo("(không rõ)");
         assertThat(described.appointments().get(0).customerPhone()).isNull();
+    }
+
+    @Test
+    void describeWithNothingAffectedCallsNoModule() {
+        ScheduleImpact described = finder.describe(Impact.NONE);
+
+        assertThat(described.appointments()).isEmpty();
+        assertThat(described.boardingBookings()).isEmpty();
+        verifyNoInteractions(pets, customers);
+    }
+
+    @Test
+    void describeSplitsIdsIntoBatchesOfAtMost100() {
+        // 150 lịch hẹn của 120 thú / 110 khách + 30 đặt chỗ của các thú / khách đã có (không thêm id mới).
+        List<BookedSlot> slots = new ArrayList<>();
+        for (long i = 1; i <= 150; i++) {
+            slots.add(new BookedSlot(i, "LH-" + i, 3L, (i - 1) % 120 + 1, (i - 1) % 110 + 1, MON, LocalTime.of(9, 0)));
+        }
+        List<BookedStay> stays = new ArrayList<>();
+        for (long i = 1; i <= 30; i++) {
+            stays.add(new BookedStay(i, "LT-" + i, i, i, MON, TUE));
+        }
+        when(pets.findPets(anyCollection())).thenAnswer(inv -> ((Collection<Long>) inv.getArgument(0)).stream()
+                .map(id -> new PetSummary(id, id, "Thú " + id, Species.DOG, null, null, null)).toList());
+        when(customers.findContacts(anyCollection())).thenAnswer(inv -> ((Collection<Long>) inv.getArgument(0)).stream()
+                .map(id -> new CustomerContact(id, "Khách " + id, "09" + id, null, null, false)).toList());
+
+        ScheduleImpact described = finder.describe(new Impact(slots, stays));
+
+        ArgumentCaptor<Collection<Long>> petBatches = ArgumentCaptor.forClass(Collection.class);
+        ArgumentCaptor<Collection<Long>> customerBatches = ArgumentCaptor.forClass(Collection.class);
+        verify(pets, times(2)).findPets(petBatches.capture());
+        verify(customers, times(2)).findContacts(customerBatches.capture());
+        assertThat(petBatches.getAllValues()).extracting(Collection::size).containsExactly(100, 20);
+        assertThat(customerBatches.getAllValues()).extracting(Collection::size).containsExactly(100, 10);
+        verify(pets, never()).findPet(any());
+        verify(customers, never()).findContact(any());
+        // Ghép theo id, không theo thứ tự trả về.
+        assertThat(described.appointments().get(120).petName()).isEqualTo("Thú 1");
+        assertThat(described.appointments().get(149).customerName()).isEqualTo("Khách " + ((149L % 110) + 1));
+        assertThat(described.boardingBookings().get(29).petName()).isEqualTo("Thú 30");
+    }
+
+    @Test
+    void describeRejectsADuplicateIdFromTheModule() {
+        PetSummary mực = new PetSummary(5L, 6L, "Mực", Species.DOG, null, null, null);
+        when(pets.findPets(anyCollection())).thenReturn(List.of(mực, mực));
+
+        assertThatThrownBy(() -> finder.describe(new Impact(List.of(slot(1, MON, "15:00")), List.of())))
+                .isInstanceOf(IllegalStateException.class).hasMessageContaining("findPets");
     }
 }

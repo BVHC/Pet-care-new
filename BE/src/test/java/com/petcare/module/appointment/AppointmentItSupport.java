@@ -14,7 +14,7 @@ import org.springframework.jdbc.core.JdbcTemplate;
  * Dữ liệu cho IT của lịch hẹn, chèn bằng SQL vì customer / catalog / branch chưa có (hoặc không cần) đường ghi chung
  * (docs/adr/0041, kế hoạch T16 phần 0 mục I5). Chi nhánh luôn {@code DRAFT} nếu không yêu cầu khác, tên / email UUID, nên
  * không đổi kết quả của danh sách công khai hay test khác. {@link #cleanUp()} xóa theo thứ tự FK, con trước:
- * {@code appointments (theo id và theo thú — lịch đặt qua HTTP) → pets → booking_restrictions → customers → (dữ liệu con
+ * {@code visits (theo lịch hẹn và theo thú) → appointments (theo id và theo thú — lịch đặt qua HTTP) → pets → booking_restrictions → customers → (dữ liệu con
  * của chi nhánh, sessions, staff_profiles) → services → branches → accounts}. Không ghi audit.
  */
 public final class AppointmentItSupport {
@@ -93,6 +93,20 @@ public final class AppointmentItSupport {
         return track(APPOINTMENT, id);
     }
 
+    /**
+     * Chèn một Visit {@code WAITING} trỏ tới lịch hẹn — thứ mà bên gọi (T26) ghi cùng transaction với
+     * {@code AppointmentApi.checkIn}. Dùng {@link JdbcTemplate} nên tham gia transaction đang chạy của test. Xóa ở
+     * {@link #cleanUp()} (trước {@code appointments}, FK {@code RESTRICT}).
+     */
+    public long visit(long appointmentId, long checkedInBy) {
+        return jdbc.queryForObject("""
+                INSERT INTO visits (code, branch_id, customer_id, pet_id, appointment_id, service_group, status,
+                        priority_class, queue_sort_key, checked_in_by, checked_in_at)
+                SELECT ?, branch_id, customer_id, pet_id, id, service_group, 'WAITING', 'APPOINTMENT', now(), ?, now()
+                FROM appointments WHERE id = ? RETURNING id""", Long.class,
+                "VS-IT-" + UUID.randomUUID().toString().substring(0, 8), checkedInBy, appointmentId);
+    }
+
     /** Nhân viên A05–A08 có hồ sơ (chi nhánh {@code branchId}) hoặc ADMIN / SUPER_MANAGER ({@code branchId} null). */
     public long staff(String role, Long branchId) {
         long id = jdbc.queryForObject("""
@@ -167,6 +181,13 @@ public final class AppointmentItSupport {
      * tới chi nhánh) — IT không tạo những dòng này thì các câu đó xóa 0 dòng.
      */
     public void cleanUp() {
+        for (long[] entry : created) {
+            if (entry[0] == PET) {
+                jdbc.update("DELETE FROM visits WHERE pet_id = ?", entry[1]);
+            } else if (entry[0] == APPOINTMENT) {
+                jdbc.update("DELETE FROM visits WHERE appointment_id = ?", entry[1]);
+            }
+        }
         for (long[] entry : created) {
             if (entry[0] == PET) {
                 jdbc.update("DELETE FROM appointments WHERE pet_id = ?", entry[1]);
