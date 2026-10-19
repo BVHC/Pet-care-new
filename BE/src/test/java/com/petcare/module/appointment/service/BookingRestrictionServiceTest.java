@@ -64,6 +64,21 @@ class BookingRestrictionServiceTest {
                 .getAnnotation(Transactional.class).readOnly()).isTrue();
     }
 
+    /** D035 (docs/adr/0050): cùng điều kiện "đang hiệu lực", trả {@code ends_at}; chỉ đọc. */
+    @Test
+    void findActiveUntilReturnsTheEndOfTheActiveRow() throws NoSuchMethodException {
+        BookingRestriction active = BookingRestriction.start(5L, AT.minusSeconds(60), AT.plus(Duration.ofDays(30)), 3);
+        when(repository.findActive(5L, AT)).thenReturn(Optional.of(active));
+        when(repository.findActive(6L, AT)).thenReturn(Optional.empty());
+
+        assertThat(service.findActiveUntil(5L, AT)).contains(AT.plus(Duration.ofDays(30)));
+        assertThat(service.findActiveUntil(6L, AT)).isEmpty();
+        assertThatThrownBy(() -> service.findActiveUntil(null, AT)).isInstanceOf(NullPointerException.class);
+        assertThat(BookingRestrictionService.class.getMethod("findActiveUntil", Long.class, Instant.class)
+                .getAnnotation(Transactional.class).readOnly()).isTrue();
+        verifyNoInteractions(locks, appointments, boarding);
+    }
+
     @Test
     void nullArgumentsAreProgrammingErrors() {
         assertThatThrownBy(() -> service.isRestricted(null, AT)).isInstanceOf(NullPointerException.class);

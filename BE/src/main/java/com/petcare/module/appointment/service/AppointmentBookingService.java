@@ -4,6 +4,8 @@ import java.time.Clock;
 import java.time.Instant;
 import java.time.LocalDate;
 import java.time.LocalTime;
+import java.time.format.DateTimeFormatter;
+import java.util.Optional;
 import java.util.Set;
 
 import org.springframework.stereotype.Service;
@@ -30,6 +32,7 @@ import com.petcare.module.customer.api.PetQueryApi;
 import com.petcare.module.customer.api.PetQueryApi.PetSummary;
 import com.petcare.module.identity.api.ConfigKey;
 import com.petcare.module.identity.api.SystemConfigApi;
+import com.petcare.platform.config.TimeConfig;
 import com.petcare.platform.exception.BusinessRuleViolationException;
 import com.petcare.platform.exception.ResourceNotFoundException;
 import com.petcare.platform.security.BranchScope;
@@ -54,6 +57,13 @@ public class AppointmentBookingService {
 
     /** Nhóm đặt được qua UC39 (BR-LH-01); Lưu trú đặt qua UC58. */
     private static final Set<ServiceGroup> BOOKABLE = Set.of(ServiceGroup.MEDICAL, ServiceGroup.GROOMING);
+
+    /**
+     * Thời điểm hết hạn chế trong message BR-LH-09 (02 L130 "kèm ngày hết hạn chế"; docs/adr/0050): giờ Việt Nam, có cả
+     * giờ vì {@code ends_at} là một thời điểm trong ngày — chỉ ghi ngày thì khách đặt lại sớm hơn lúc được phép.
+     */
+    static final DateTimeFormatter RESTRICTION_END = DateTimeFormatter.ofPattern("HH:mm dd/MM/yyyy")
+            .withZone(TimeConfig.BUSINESS_ZONE);
 
     private final BranchScope branchScope;
     private final CustomerQueryApi customers;
@@ -132,9 +142,12 @@ public class AppointmentBookingService {
             throw new BusinessRuleViolationException("BR-TK-19",
                     "Hồ sơ của bạn đang chờ quyết định liên kết với hồ sơ tại phòng khám");
         }
-        if (customer && restrictions.isRestricted(ownCustomerId, now)) {
-            throw new BusinessRuleViolationException("BR-LH-09",
-                    "Bạn đang bị hạn chế đặt lịch online, vui lòng liên hệ chi nhánh để đặt lịch");
+        if (customer) {
+            Optional<Instant> restrictedUntil = restrictions.findActiveUntil(ownCustomerId, now);
+            if (restrictedUntil.isPresent()) {
+                throw new BusinessRuleViolationException("BR-LH-09", "Bạn đang bị hạn chế đặt lịch online đến "
+                        + RESTRICTION_END.format(restrictedUntil.get()) + ", vui lòng liên hệ chi nhánh để đặt lịch");
+            }
         }
         if (pet.deceased()) {
             throw new BusinessRuleViolationException("BR-KH-05", "Thú cưng đã mất, không đặt được lịch");

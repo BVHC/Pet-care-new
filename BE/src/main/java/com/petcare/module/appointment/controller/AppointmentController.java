@@ -71,8 +71,8 @@ public class AppointmentController {
     @ApiErrorDoc(status = 400, description = "`BR-LH-01` dịch vụ không đặt được / đang tắt tại chi nhánh, chi nhánh "
             + "chưa ACTIVE · `BR-LH-02` khung không hợp lệ · `BR-LH-03` khung đã đủ quota · `BR-LH-04` ngoài khoảng 24 "
             + "giờ – 30 ngày [CFG] (khách) hoặc khung đã bắt đầu (lễ tân) · `BR-LH-05` thú đã có 2 lịch BOOKED, trùng "
-            + "nhóm trong ngày hoặc trùng khung · `BR-LH-09` khách đang bị hạn chế đặt online · `BR-KH-05` thú đã mất · "
-            + "`BR-TK-19` hồ sơ còn chờ quyết định liên kết")
+            + "nhóm trong ngày hoặc trùng khung · `BR-LH-09` khách đang bị hạn chế đặt online (message kèm thời điểm hết "
+            + "hạn chế, giờ Việt Nam) · `BR-KH-05` thú đã mất · `BR-TK-19` hồ sơ còn chờ quyết định liên kết")
     @ApiErrorDoc(status = 403, description = "Lễ tân đặt lịch cho chi nhánh khác")
     @ApiErrorDoc(status = 404, description = "Thú cưng (kể cả thú của khách khác), dịch vụ hoặc chi nhánh không tồn "
             + "tại (khách: cả chi nhánh chưa hoạt động)")

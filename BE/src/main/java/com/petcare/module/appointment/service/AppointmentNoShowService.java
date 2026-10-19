@@ -60,11 +60,17 @@ public class AppointmentNoShowService {
         return NoShowCutoff.at(now, configs.getInt(ConfigKey.APPOINTMENT_NO_SHOW_AFTER_MINUTES));
     }
 
-    /** Tối đa {@code limit} id lịch {@code BOOKED} quá hạn, {@code id > afterId}, tăng dần. Không khóa. */
+    /**
+     * Tối đa {@code limit} id lịch {@code BOOKED} quá hạn theo thứ tự khung giờ rồi id; {@code afterId} = id cuối của lô
+     * trước, {@code 0} = lô đầu. Không khóa.
+     */
     @Transactional(readOnly = true)
     public List<Long> findOverdueIds(NoShowCutoff cutoff, long afterId, int limit) {
         Objects.requireNonNull(cutoff, "cutoff");
-        return appointments.findOverdueBookedIds(cutoff.date(), cutoff.time().toString(), afterId, limit);
+        String time = cutoff.time().toString();
+        return afterId == 0
+                ? appointments.findOverdueBookedIds(cutoff.date(), time, limit)
+                : appointments.findOverdueBookedIdsAfter(cutoff.date(), time, afterId, limit);
     }
 
     @Transactional

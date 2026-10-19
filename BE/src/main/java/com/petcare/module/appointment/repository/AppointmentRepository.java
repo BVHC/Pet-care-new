@@ -198,18 +198,36 @@ public interface AppointmentRepository extends JpaRepository<Appointment, Long>,
     // ST05 NO_SHOW (docs/adr/0048). Trạng thái để literal để dùng index ix_appointments_status_slot (V1).
 
     /**
-     * Id các lịch {@code BOOKED} đã quá hạn NO_SHOW (khung < mốc), có {@code id > afterId}, tăng dần theo id (keyset: lịch
-     * lỗi vẫn BOOKED nên không đọc lại trong cùng lượt). {@code cutoffTime} là chuỗi {@code LocalTime.toString()}: bind
-     * {@code LocalTime} vào native query mất độ chính xác dưới mili giây (IT chứng minh biên 1 µs). Không khóa; {@link #lockOverdueBooked} kiểm lại dưới khóa.
+     * Lô đầu: tối đa {@code limit} id lịch {@code BOOKED} đã quá hạn NO_SHOW (khung < mốc), theo
+     * {@code slot_date, slot_start, id} — đúng thứ tự của {@code ix_appointments_status_slot}, nên planner đọc index theo
+     * thứ tự và dừng ở {@code LIMIT}. Không sắp theo {@code id}: khi đó planner ước lượng sai độ chọn lọc
+     * ({@code BOOKED} và "đã qua" nghịch tương quan) và duyệt khóa chính lọc từng dòng (EXPLAIN 20 000 dòng, D037).
+     * {@code cutoffTime} là chuỗi {@code LocalTime.toString()}: bind {@code LocalTime} vào native query mất độ chính xác
+     * dưới mili giây (IT chứng minh biên 1 µs). Không khóa; {@link #lockOverdueBooked} kiểm lại dưới khóa.
      */
     @Query(value = """
             SELECT id FROM appointments
             WHERE status = 'BOOKED' AND (slot_date, slot_start) < (CAST(:cutoffDate AS date), CAST(:cutoffTime AS time))
-              AND id > :afterId
-            ORDER BY id LIMIT :limit
+            ORDER BY slot_date, slot_start, id LIMIT :limit
             """, nativeQuery = true)
     List<Long> findOverdueBookedIds(@Param("cutoffDate") LocalDate cutoffDate, @Param("cutoffTime") String cutoffTime,
-            @Param("afterId") long afterId, @Param("limit") int limit);
+            @Param("limit") int limit);
+
+    /**
+     * Lô kế tiếp của {@link #findOverdueBookedIds}: keyset {@code (slot_date, slot_start, id)} lớn hơn của lịch
+     * {@code afterId} (lịch cuối của lô trước; lịch lỗi vẫn BOOKED nên không đọc lại trong cùng lượt). Khung của lịch đó
+     * không đổi giữa hai lô: lịch quá hạn không đổi khung được (BR-LH-06 chỉ trước giờ hẹn), đổi trạng thái không đổi khung.
+     */
+    @Query(value = """
+            SELECT a.id FROM appointments a
+            WHERE a.status = 'BOOKED'
+              AND (a.slot_date, a.slot_start) < (CAST(:cutoffDate AS date), CAST(:cutoffTime AS time))
+              AND (a.slot_date, a.slot_start, a.id) > (SELECT p.slot_date, p.slot_start, p.id FROM appointments p
+                                                       WHERE p.id = :afterId)
+            ORDER BY a.slot_date, a.slot_start, a.id LIMIT :limit
+            """, nativeQuery = true)
+    List<Long> findOverdueBookedIdsAfter(@Param("cutoffDate") LocalDate cutoffDate,
+            @Param("cutoffTime") String cutoffTime, @Param("afterId") long afterId, @Param("limit") int limit);
 
     /**
      * Khóa dòng ({@code FOR NO KEY UPDATE SKIP LOCKED}) nếu lịch <b>vẫn</b> {@code BOOKED} và quá hạn: check-in, hủy,

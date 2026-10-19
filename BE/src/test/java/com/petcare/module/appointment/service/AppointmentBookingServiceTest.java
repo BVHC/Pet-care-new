@@ -133,7 +133,7 @@ class AppointmentBookingServiceTest {
         order.verify(clock).instant();
         order.verify(branches).isServiceEnabled(BRANCH, SERVICE);
         order.verify(customers).findContact(CUSTOMER_ID);
-        order.verify(restrictions).isRestricted(CUSTOMER_ID, NOW);
+        order.verify(restrictions).findActiveUntil(CUSTOMER_ID, NOW);
         order.verify(branches).openingRangesOn(BRANCH, DAY);
         order.verify(appointments).countBookedByPet(PET);
         order.verify(appointments).existsActiveSameSlot(PET, DAY, START);
@@ -177,7 +177,7 @@ class AppointmentBookingServiceTest {
         asReceptionist();
         givenBookable(pet(OTHER_CUSTOMER, null), ServiceGroup.GROOMING, BranchStatus.ACTIVE);
         when(customers.findContact(OTHER_CUSTOMER)).thenReturn(Optional.of(contact(OTHER_CUSTOMER, true)));
-        when(restrictions.isRestricted(anyLong(), any())).thenReturn(true);
+        when(restrictions.findActiveUntil(anyLong(), any())).thenReturn(Optional.of(NOW.plusSeconds(3600)));
         LocalDate today = LocalDate.of(2026, 10, 15);
         when(branches.openingRangesOn(BRANCH, today)).thenReturn(MORNING);
 
@@ -347,9 +347,24 @@ class AppointmentBookingServiceTest {
     void onlineRestrictionBlocksCustomer() {
         asCustomer();
         givenBookable(pet(CUSTOMER_ID, null), ServiceGroup.MEDICAL, BranchStatus.ACTIVE);
-        when(restrictions.isRestricted(CUSTOMER_ID, NOW)).thenReturn(true);
+        when(restrictions.findActiveUntil(CUSTOMER_ID, NOW))
+                .thenReturn(Optional.of(Instant.parse("2026-11-14T02:00:00Z")));
 
-        assertRule("BR-LH-09", "Bạn đang bị hạn chế đặt lịch online, vui lòng liên hệ chi nhánh để đặt lịch (BR-LH-09)");
+        assertRule("BR-LH-09", "Bạn đang bị hạn chế đặt lịch online đến 09:00 14/11/2026, vui lòng liên hệ chi nhánh để "
+                + "đặt lịch (BR-LH-09)");
+    }
+
+    /** D035 (docs/adr/0050): thời điểm hết hạn chế hiện theo giờ Việt Nam, kể cả khi sang ngày khác so với UTC. */
+    @Test
+    void restrictionEndIsShownInVietnamTimeWithTheDateOfVietnam() {
+        asCustomer();
+        givenBookable(pet(CUSTOMER_ID, null), ServiceGroup.MEDICAL, BranchStatus.ACTIVE);
+        when(restrictions.findActiveUntil(CUSTOMER_ID, NOW))
+                .thenReturn(Optional.of(Instant.parse("2026-11-14T23:59:30.123456Z")));
+
+        assertRule("BR-LH-09", "Bạn đang bị hạn chế đặt lịch online đến 06:59 15/11/2026, vui lòng liên hệ chi nhánh để "
+                + "đặt lịch (BR-LH-09)");
+        verify(restrictions, never()).isRestricted(any(), any());
     }
 
     @Test

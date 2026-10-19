@@ -12,7 +12,10 @@ import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.time.LocalTime;
 import java.time.ZonedDateTime;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
+import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
@@ -32,6 +35,7 @@ import org.springframework.boot.test.system.OutputCaptureExtension;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Import;
 import org.springframework.context.annotation.Primary;
+import org.springframework.data.jpa.repository.Query;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.test.context.ActiveProfiles;
 import org.springframework.test.context.bean.override.mockito.MockitoBean;
@@ -41,10 +45,12 @@ import org.springframework.transaction.support.TransactionTemplate;
 import com.petcare.TestcontainersConfiguration;
 import com.petcare.module.appointment.api.BookingRestrictionApi;
 import com.petcare.module.appointment.job.NoShowJob;
+import com.petcare.module.appointment.repository.AppointmentRepository;
 import com.petcare.module.appointment.service.AppointmentNoShowService;
 import com.petcare.module.appointment.service.AppointmentNoShowService.NoShowResult;
 import com.petcare.module.appointment.service.NoShowCutoff;
 import com.petcare.module.boarding.api.BoardingQueryApi;
+import com.petcare.module.identity.service.SystemConfigService;
 import com.petcare.platform.config.TimeConfig;
 import com.petcare.support.MutableClock;
 
@@ -61,6 +67,7 @@ class NoShowIT {
 
     private static final LocalDate DAY = LocalDate.of(2000, 6, 1);
     private static final Instant T0 = vn(DAY, LocalTime.of(10, 30));
+    private static final String NO_SHOW_KEY = "appointment.no_show_after_minutes";
 
     @TestConfiguration(proxyBeanMethods = false)
     static class TestBeans {
@@ -88,6 +95,8 @@ class NoShowIT {
     private BookingRestrictionApi restrictions;
     @Autowired
     private ConfigurableListableBeanFactory beans;
+    @Autowired
+    private SystemConfigService configs;
 
     private AppointmentItSupport data;
     private TransactionTemplate tx;
@@ -284,6 +293,24 @@ class NoShowIT {
         assertThat(restrictionCount(customer)).isZero();
     }
 
+    /**
+     * {@code saveAndFlush} trước {@code evaluateAfterViolation}: lỗi UPDATE lộ ra ngay ở bước ghi, trước khi lấy advisory
+     * 1002. Với {@code save}, Hibernate chỉ flush khi câu native đầu tiên trong {@code evaluateAfterViolation} chạy, nên
+     * lỗi nằm trong khung của nó (cùng kết quả DB, khác thứ tự — mutation {@code save} làm đỏ test này).
+     */
+    @Test
+    void updateFailureSurfacesBeforeTheEvaluation() {
+        long id = booked(customer, LocalDate.of(2000, 5, 20), LocalTime.of(9, 0), "BOOKED");
+        failingTrigger("trg_noshow_it_update", "appointments", "UPDATE", "NEW.customer_id = " + customer);
+
+        Throwable thrown = org.assertj.core.api.Assertions.catchThrowable(() -> service.markNoShow(id, cutoff()));
+
+        assertThat(thrown).isNotNull();
+        assertThat(stackTraceOf(thrown)).contains("noshow_it: UPDATE bị chặn")
+                .doesNotContain("BookingRestrictionService.evaluateAfterViolation");
+        assertThat(status(id)).isEqualTo("BOOKED");
+    }
+
     @Test
     void restrictionInsertFailureRollsBackTheFlushedNoShow() {
         long a = booked(customer, LocalDate.of(2000, 5, 20), LocalTime.of(9, 0), "BOOKED");
@@ -315,8 +342,11 @@ class NoShowIT {
         }));
         try {
             assertThat(held.await(10, TimeUnit.SECONDS)).isTrue();
+            NoShowCutoff cutoff = cutoff();
 
-            NoShowResult result = service.markNoShow(id, cutoff());
+            // Có timeout: bỏ SKIP LOCKED thì markNoShow đứng chờ dòng, test phải đỏ ngay chứ không treo tới latch.
+            NoShowResult result = CompletableFuture.supplyAsync(() -> service.markNoShow(id, cutoff))
+                    .get(5, TimeUnit.SECONDS);
 
             assertThat(result).isEqualTo(NoShowResult.SKIPPED);
         } finally {
@@ -379,6 +409,29 @@ class NoShowIT {
         assertThat(status(id)).isEqualTo("BOOKED");
     }
 
+    /** Keyset theo khung giờ rồi id: mỗi lịch đúng một lần qua các lô, kể cả khi thứ tự id ngược thứ tự khung giờ. */
+    @Test
+    void batchesWalkInSlotOrderAndVisitEachAppointmentOnce() {
+        long late = booked(customer, LocalDate.of(2000, 5, 22), LocalTime.of(9, 0), "BOOKED");
+        long sameSlotA = booked(customer, LocalDate.of(2000, 5, 21), LocalTime.of(9, 0), "BOOKED");
+        long sameSlotB = booked(customer, LocalDate.of(2000, 5, 21), LocalTime.of(9, 0), "BOOKED");
+        long early = booked(customer, LocalDate.of(2000, 5, 20), LocalTime.of(14, 30), "BOOKED");
+        NoShowCutoff cutoff = cutoff();
+        List<Long> mine = List.of(late, sameSlotA, sameSlotB, early);
+
+        List<Long> walked = new java.util.ArrayList<>();
+        long after = 0;
+        for (List<Long> batch = service.findOverdueIds(cutoff, after, 1); !batch.isEmpty();
+                batch = service.findOverdueIds(cutoff, after, 1)) {
+            walked.addAll(batch);
+            after = batch.get(0);
+        }
+
+        assertThat(walked).doesNotHaveDuplicates();
+        assertThat(walked.stream().filter(mine::contains).toList())
+                .containsExactly(early, sameSlotA, sameSlotB, late);
+    }
+
     @Test
     void rerunChangesNothing() {
         long id = booked(customer, LocalDate.of(2000, 5, 20), LocalTime.of(9, 0), "BOOKED");
@@ -389,6 +442,85 @@ class NoShowIT {
 
         assertThat(status(id)).isEqualTo("NO_SHOW");
         assertThat(rowWithoutStatus(id)).isEqualTo(after);
+    }
+
+    /** [CFG] đọc lúc chạy (docs/adr/0048 §2, D036): giá trị mới áp từ lượt kế tiếp, kể cả cho lịch đã đặt. */
+    @Test
+    void configChangeAppliesFromNextRun() {
+        long id = booked(customer, DAY, LocalTime.of(9, 45), "BOOKED");
+        String original = jdbc.queryForObject("SELECT value FROM system_configs WHERE key = ?", String.class, NO_SHOW_KEY);
+        try {
+            jdbc.update("UPDATE system_configs SET value = '60' WHERE key = ?", NO_SHOW_KEY);
+            configs.reload();
+
+            job.run();
+            assertThat(status(id)).as("10:30 chưa quá 09:45 + 60 phút").isEqualTo("BOOKED");
+        } finally {
+            jdbc.update("UPDATE system_configs SET value = ? WHERE key = ?", original, NO_SHOW_KEY);
+            configs.reload();
+        }
+
+        job.run();
+        assertThat(status(id)).as("10:30 đã quá 09:45 + 30 phút").isEqualTo("NO_SHOW");
+    }
+
+    // --- index -----------------------------------------------------------------------------------------------------
+
+    /**
+     * Dữ liệu gần thật (20 000 dòng chèn trong transaction rollback + {@code ANALYZE}, khuôn
+     * {@code BookAppointmentIT.countQueriesUseTheirIndexesOnRealisticData}): quá khứ ở trạng thái cuối, tương lai
+     * {@code BOOKED}, chỉ vài lịch quá hạn — đúng hình dạng khi ST05 chạy đều. Câu quét phải dùng
+     * {@code ix_appointments_status_slot}, không duyệt khóa chính theo {@code ORDER BY id}; câu khóa đi theo khóa chính.
+     */
+    @Test
+    void overdueQueriesUseTheirIndexesOnRealisticData() {
+        Map<String, String> plans = tx.execute(s -> {
+            s.setRollbackOnly();
+            jdbc.update("""
+                    INSERT INTO customers (full_name, phone, created_channel)
+                    SELECT 'NOSHOW-EXPLAIN ' || g, '0900000000', 'COUNTER' FROM generate_series(1, 2000) g""");
+            jdbc.update("""
+                    INSERT INTO pets (customer_id, name, species, sex)
+                    SELECT id, 'NOSHOW-EXPLAIN', 'DOG', 'MALE' FROM customers WHERE full_name LIKE 'NOSHOW-EXPLAIN %'""");
+            jdbc.update("""
+                    INSERT INTO appointments (code, customer_id, pet_id, branch_id, service_id, service_group, slot_date,
+                            slot_start, status, channel, booked_by)
+                    SELECT 'LH-NSX-' || g, p.customer_id, p.id, ?, ?, 'MEDICAL', DATE '2026-01-01' + (g / 400),
+                           TIME '08:00' + (g % 8) * INTERVAL '30 minutes',
+                           CASE WHEN g / 400 >= 25 OR g % 1000 = 0 THEN 'BOOKED'
+                                ELSE (ARRAY['COMPLETED', 'CANCELLED', 'NO_SHOW'])[1 + g % 3] END, 'COUNTER', ?
+                    FROM generate_series(0, 19999) g
+                    JOIN (SELECT id, customer_id, row_number() OVER (ORDER BY id) - 1 AS n FROM pets
+                          WHERE name = 'NOSHOW-EXPLAIN') p ON p.n = g % 2000""", branch, medical, staff);
+            jdbc.execute("ANALYZE appointments");
+            // Mốc = đầu ngày 25 (2026-01-26 08:00): chỉ 10 lịch quá khứ còn BOOKED là quá hạn, 10 000 lịch tương lai không.
+            LocalDate cutoffDate = LocalDate.of(2026, 1, 26);
+            String cutoffTime = "08:00";
+            long probe = jdbc.queryForObject("SELECT min(id) FROM appointments WHERE code LIKE 'LH-NSX-%'", Long.class);
+            long middle = jdbc.queryForObject("""
+                    SELECT id FROM appointments WHERE code LIKE 'LH-NSX-%' AND status = 'BOOKED'
+                      AND slot_date < DATE '2026-01-26' ORDER BY slot_date, slot_start, id OFFSET 4 LIMIT 1""", Long.class);
+            Map<String, String> result = new HashMap<>();
+            result.put("findOverdueBookedIds", plan("findOverdueBookedIds",
+                    new Class<?>[] {LocalDate.class, String.class, int.class}, cutoffDate, cutoffTime, 100));
+            result.put("findOverdueBookedIdsAfter", plan("findOverdueBookedIdsAfter",
+                    new Class<?>[] {LocalDate.class, String.class, long.class, int.class}, cutoffDate, cutoffTime,
+                    middle, 100));
+            result.put("rows", String.valueOf(jdbc.queryForObject("""
+                    SELECT count(*) FROM appointments WHERE code LIKE 'LH-NSX-%' AND status = 'BOOKED'
+                      AND (slot_date, slot_start) < (DATE '2026-01-26', TIME '08:00')""", Integer.class)));
+            result.put("lockOverdueBooked", plan("lockOverdueBooked",
+                    new Class<?>[] {long.class, LocalDate.class, String.class}, probe, cutoffDate, cutoffTime));
+            return result;
+        });
+
+        assertThat(plans.get("rows")).as("dữ liệu đúng hình dạng: 10 lịch quá hạn").isEqualTo("10");
+        assertThat(plans.get("findOverdueBookedIds")).doesNotContain("Seq Scan").doesNotContain("appointments_pkey")
+                .contains("Index Scan using ix_appointments_status_slot on appointments");
+        assertThat(plans.get("findOverdueBookedIdsAfter")).as("lô sau: bảng ngoài theo index, lịch mốc theo khóa chính")
+                .doesNotContain("Seq Scan").contains("Index Scan using ix_appointments_status_slot on appointments a")
+                .contains("appointments_pkey on appointments p");
+        assertThat(plans.get("lockOverdueBooked")).doesNotContain("Seq Scan").contains("appointments_pkey");
     }
 
     // --- phạm vi truy cập ------------------------------------------------------------------------------------------
@@ -411,6 +543,22 @@ class NoShowIT {
     }
 
     // --- helpers ---------------------------------------------------------------------------------------------------
+
+    private String plan(String method, Class<?>[] types, Object... args) {
+        try {
+            String sql = AppointmentRepository.class.getMethod(method, types).getAnnotation(Query.class).value()
+                    .replaceAll(":[a-zA-Z]+", "?");
+            return String.join("\n", jdbc.queryForList("EXPLAIN " + sql, String.class, args));
+        } catch (NoSuchMethodException e) {
+            throw new IllegalStateException(e);
+        }
+    }
+
+    private static String stackTraceOf(Throwable thrown) {
+        java.io.StringWriter out = new java.io.StringWriter();
+        thrown.printStackTrace(new java.io.PrintWriter(out));
+        return out.toString();
+    }
 
     private void failingTrigger(String name, String table, String event, String when) {
         jdbc.execute("""

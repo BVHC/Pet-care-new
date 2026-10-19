@@ -19,7 +19,11 @@ import lombok.NoArgsConstructor;
  * chế ⇔ có dòng {@code starts_at ≤ now < ends_at AND lifted_at IS NULL} (erd §5). {@code violation_count} là
  * {@code SMALLINT} nên field là {@code short}; {@code customerId}, {@code liftedBy} để dạng id (convention 02).
  * <p>
+<<<<<<< HEAD
  * Tạo bằng {@link #start} (vi phạm thứ N, docs/adr/0049); gỡ sớm (#9) thêm method khi cần.
+=======
+ * Tạo bằng {@link #start} (vi phạm thứ N, docs/adr/0045); gỡ sớm bằng {@link #lift} (appointment-v1 #9, docs/adr/0050).
+>>>>>>> 11f78b6 (feat: triển khai xem và gỡ hạn chế khách hàng)
  */
 @Getter
 @Entity
@@ -63,5 +67,18 @@ public class BookingRestriction extends TimestampedEntity {
         restriction.endsAt = endsAt;
         restriction.violationCount = (short) Math.min(violationCount, Short.MAX_VALUE);
         return restriction;
+    }
+
+    /**
+     * Gỡ sớm (BR-LH-09, docs/adr/0050): hết hiệu lực vì {@code lifted_at IS NOT NULL}, {@code ends_at} giữ nguyên. Service
+     * chỉ gọi với dòng đang hiệu lực đọc dưới khóa 1002; gỡ lần hai là lỗi lập trình.
+     */
+    public void lift(Instant at, Long liftedBy, String reason) {
+        if (liftedAt != null) {
+            throw new IllegalStateException("Hạn chế #" + id + " đã được gỡ lúc " + liftedAt);
+        }
+        this.liftedAt = at;
+        this.liftedBy = liftedBy;
+        this.liftReason = reason;
     }
 }

@@ -1,6 +1,6 @@
 # ADR-0048: ST05 chuyển lịch hẹn quá giờ sang `NO_SHOW` (Lịch hẹn#6 `markNoShow`) — một lịch một transaction, `SKIP LOCKED`, đánh giá BR-LH-09 cùng transaction
 
-- **Trạng thái:** Accepted
+- **Trạng thái:** Accepted — mục 9 (keyset `id`) superseded by ADR-0049
 - **Ngày:** 2026-10-19
 - **Liên quan:**
   - BR-LH-08 (02 L129), BR-LH-09 (L130), BR-LH-03 (L124), BR-LH-05 (L126), BR-TN-03 (L143), BR-QT-13 (L56), BR-KH-05 (L91).
