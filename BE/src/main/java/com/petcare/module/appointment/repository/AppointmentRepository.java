@@ -192,7 +192,42 @@ public interface AppointmentRepository extends JpaRepository<Appointment, Long>,
             """, nativeQuery = true)
     int countViolationsAfter(@Param("customerId") Long customerId, @Param("since") Instant since);
 
+<<<<<<< HEAD
     // AppointmentQueryApi (docs/adr/0050): chỉ đọc, JPQL constructor để không nạp entity vào persistence context của
+=======
+    // ST05 NO_SHOW (docs/adr/0048). Trạng thái để literal để dùng index ix_appointments_status_slot (V1).
+
+    /**
+     * Id các lịch {@code BOOKED} đã quá hạn NO_SHOW (khung < mốc), có {@code id > afterId}, tăng dần theo id (keyset: lịch
+     * lỗi vẫn BOOKED nên không đọc lại trong cùng lượt). {@code cutoffTime} là chuỗi {@code LocalTime.toString()}: bind
+     * {@code LocalTime} vào native query mất độ chính xác dưới mili giây (IT chứng minh biên 1 µs). Không khóa; {@link #lockOverdueBooked} kiểm lại dưới khóa.
+     */
+    @Query(value = """
+            SELECT id FROM appointments
+            WHERE status = 'BOOKED' AND (slot_date, slot_start) < (CAST(:cutoffDate AS date), CAST(:cutoffTime AS time))
+              AND id > :afterId
+            ORDER BY id LIMIT :limit
+            """, nativeQuery = true)
+    List<Long> findOverdueBookedIds(@Param("cutoffDate") LocalDate cutoffDate, @Param("cutoffTime") String cutoffTime,
+            @Param("afterId") long afterId, @Param("limit") int limit);
+
+    /**
+     * Khóa dòng ({@code FOR NO KEY UPDATE SKIP LOCKED}) nếu lịch <b>vẫn</b> {@code BOOKED} và quá hạn: check-in, hủy,
+     * hủy do phòng khám có thể đã commit sau {@link #findOverdueBookedIds}; dòng đang bị luồng khác giữ thì bỏ qua, lượt
+     * sau xét lại. Rỗng = không làm gì. {@code MANDATORY}: ngoài transaction khóa nhả ngay.
+     */
+    @Transactional(propagation = Propagation.MANDATORY)
+    @Query(value = """
+            SELECT id FROM appointments
+            WHERE id = :id AND status = 'BOOKED'
+              AND (slot_date, slot_start) < (CAST(:cutoffDate AS date), CAST(:cutoffTime AS time))
+            FOR NO KEY UPDATE SKIP LOCKED
+            """, nativeQuery = true)
+    Optional<Long> lockOverdueBooked(@Param("id") long id, @Param("cutoffDate") LocalDate cutoffDate,
+            @Param("cutoffTime") String cutoffTime);
+
+    // AppointmentQueryApi (docs/adr/0046): chỉ đọc, JPQL constructor để không nạp entity vào persistence context của
+>>>>>>> a32bf1b (feat: triển khai job appointment/job/NoShowJob)
     // bên gọi; một câu SQL bất kể số dòng (Appointment không có quan hệ JPA, FK là Long).
 
     /** Lịch BOOKED của chi nhánh từ {@code fromDate} (BR-CN-04, BR-LH-10). Index {@code ix_appointments_status_slot}. */

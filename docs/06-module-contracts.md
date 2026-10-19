@@ -119,7 +119,12 @@ Mũi tên `A → B.m()`: module A gọi method m của module B. Cột *Chuyển
 | visit · Tiêm | `CatalogQueryApi.findProtocol`, `findProtocolDose`, `StockQueryApi.availableQuantity` | BR-KB-04 |
 | visit · ST04 nhắc tái chủng / tái khám | `CustomerQueryApi.findContact`, `PetQueryApi.findPet` → `NotificationApi.enqueue` hoặc `CareTaskApi.create` | BR-TB-01, 02, 04, 06 |
 | boarding · Đặt chỗ (Đặt chỗ#1) | `BookingRestrictionApi.isRestricted`, `CatalogQueryApi.findKennelType`, `PetQueryApi.findPet`, `BranchQueryApi`, `VaccinationQueryApi.findBoardingVaccineGaps` (chỉ cảnh báo) | BR-LT-02…05 |
+<<<<<<< HEAD
 | boarding · NO_SHOW (ST05), hủy muộn | `BookingRestrictionApi.evaluateAfterViolation` — gọi **sau khi** vi phạm đã flush, trong cùng transaction, không bắt lỗi của nó; method lấy advisory 1002 theo khách làm khóa cuối cùng (docs/adr/0049), nên bên gọi không được giữ khóa 1002 rồi chờ khóa khác | BR-LH-09, BR-LT-06 |
+=======
+| appointment · NO_SHOW (ST05 `NoShowJob`, docs/adr/0048) cũng gọi `evaluateAfterViolation` trong cùng transaction với việc chuyển trạng thái (lỗi → rollback NO_SHOW) | cùng khóa 1002 | BR-LH-08, 09 |
+| boarding · NO_SHOW (ST05), hủy muộn | `BookingRestrictionApi.evaluateAfterViolation` — gọi **sau khi** vi phạm đã flush, trong cùng transaction, không bắt lỗi của nó; method lấy advisory 1002 theo khách làm khóa cuối cùng (docs/adr/0045), nên bên gọi không được giữ khóa 1002 rồi chờ khóa khác | BR-LH-09, BR-LT-06 |
+>>>>>>> a32bf1b (feat: triển khai job appointment/job/NoShowJob)
 | boarding · ST15 quá hạn ≥ 1 ngày | `CareTaskApi.create(PICKUP_OVERDUE)` | BR-LT-10 |
 | sales · Thêm/xóa dòng của Order VISIT (UC67) | `VisitQueryApi.findVisit` (người phụ trách) | BR-BH-02, BR-TN-01 |
 | sales · Hủy Order BOARDING (Order#9, #10) | `BoardingQueryApi.findBooking` (thú còn trong chuồng?) | BR-LT-09, BR-BH-05 |

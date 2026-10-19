@@ -84,6 +84,11 @@ app:
       batch-size: 200
       time-budget: 60s
       slow-warn: 1s
+    # ST05: lịch hẹn BOOKED quá giờ hẹn appointment.no_show_after_minutes [CFG] → NO_SHOW (docs/adr/0048).
+    no-show:
+      cron: "${NO_SHOW_CRON:0 */5 * * * *}"
+      batch-size: 100
+      time-budget: 60s
     # ST20 từ notification_outbox. Email (docs/adr/0012): hai luồng priority (OTP, mật khẩu tạm) và thường.
     # IN_APP (docs/adr/0014): giao vào bảng notifications, job riêng, không qua SMTP.
     notification-outbox:

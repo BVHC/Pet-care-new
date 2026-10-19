@@ -162,4 +162,13 @@ public class Appointment extends TimestampedEntity {
     public void complete() {
         this.status = AppointmentStatus.COMPLETED;
     }
+
+    /**
+     * Lịch hẹn#6 ({@code BOOKED → NO_SHOW}, command {@code markNoShow}, ST05; docs/adr/0048). Bên gọi đã khóa dòng, kiểm
+     * trạng thái và mốc quá hạn. Chỉ đổi trạng thái: NO_SHOW không phải hủy nên các cột hủy giữ nguyên
+     * ({@code ck_appointments_cancel_fields}). Chỉ {@code AppointmentNoShowService} được gọi.
+     */
+    public void markNoShow() {
+        this.status = AppointmentStatus.NO_SHOW;
+    }
 }
