@@ -13,6 +13,7 @@ import org.springframework.data.jpa.repository.Modifying;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 
+import com.petcare.module.identity.api.AccountContactApi.AccountContact;
 import com.petcare.module.identity.api.Role;
 import com.petcare.module.identity.entity.Account;
 
@@ -146,6 +147,18 @@ public interface AccountRepository extends JpaRepository<Account, Long> {
             ORDER BY a.id
             """)
     List<Long> findActiveIdsByRole(@Param("role") Role role);
+
+    /**
+     * {@code AccountContactApi.findContacts} (docs/adr/0047): mọi trạng thái, mọi role. JPQL constructor, không nạp
+     * entity vào persistence context của bên gọi. Bên gọi không truyền tập rỗng.
+     */
+    @Query("""
+            SELECT new com.petcare.module.identity.api.AccountContactApi$AccountContact(
+                a.id, a.email,
+                CASE WHEN a.status = com.petcare.module.identity.entity.AccountStatus.PENDING THEN true ELSE false END)
+            FROM Account a WHERE a.id IN :ids
+            """)
+    List<AccountContact> findContactsByIds(@Param("ids") Collection<Long> ids);
 
     /** {@code StaffDirectoryApi.findEmail}: mọi trạng thái, mọi role. Projection, không nạp entity. */
     @Query("SELECT a.email FROM Account a WHERE a.id = :id")

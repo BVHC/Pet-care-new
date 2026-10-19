@@ -60,6 +60,26 @@ public final class AppointmentItSupport {
         return track(CUSTOMER, id);
     }
 
+    /** Hồ sơ tại quầy có email (BR-KH-01: email không bắt buộc), tên cố định để kiểm biến {@code ten_khach}. */
+    public long counterCustomer(String fullName, String email) {
+        long id = jdbc.queryForObject("""
+                INSERT INTO customers (full_name, phone, email, created_channel) VALUES (?, '0912345678', ?, 'COUNTER')
+                RETURNING id""", Long.class, fullName, email);
+        return track(CUSTOMER, id);
+    }
+
+    /**
+     * Tài khoản khách {@code status} ({@code ACTIVE} / {@code PENDING}; tài khoản {@code PENDING} phải có
+     * {@code pending_expires_at}, CHECK {@code ck_accounts_pending_expiry}).
+     */
+    public long customerAccount(String email, String status) {
+        long id = jdbc.queryForObject("""
+                INSERT INTO accounts (email, password_hash, role, status, pending_expires_at)
+                VALUES (?, 'x', 'CUSTOMER', ?, CASE WHEN ? = 'PENDING' THEN now() + interval '1 day' END)
+                RETURNING id""", Long.class, email, status, status);
+        return track(ACCOUNT, id);
+    }
+
     public long pet(long customerId) {
         long id = jdbc.queryForObject("""
                 INSERT INTO pets (customer_id, name, species, sex) VALUES (?, 'Milu', 'DOG', 'MALE') RETURNING id""",
@@ -220,6 +240,8 @@ public final class AppointmentItSupport {
                     jdbc.update("DELETE FROM " + child + " WHERE branch_id = ?", entry[1]);
                 }
             } else if (entry[0] == ACCOUNT) {
+                jdbc.update("DELETE FROM notifications WHERE account_id = ?", entry[1]);
+                jdbc.update("DELETE FROM notification_outbox WHERE recipient_account_id = ?", entry[1]);
                 jdbc.update("DELETE FROM sessions WHERE account_id = ?", entry[1]);
                 jdbc.update("DELETE FROM staff_profiles WHERE account_id = ?", entry[1]);
             }

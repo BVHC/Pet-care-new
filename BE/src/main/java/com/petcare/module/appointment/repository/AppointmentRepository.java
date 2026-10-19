@@ -3,6 +3,7 @@ package com.petcare.module.appointment.repository;
 import java.time.Instant;
 import java.time.LocalDate;
 import java.time.LocalTime;
+import java.util.Collection;
 import java.util.List;
 import java.util.Optional;
 
@@ -35,7 +36,11 @@ public interface AppointmentRepository extends JpaRepository<Appointment, Long>,
     @Query(value = "SELECT 1 FROM pg_advisory_xact_lock(:namespace, :key)", nativeQuery = true)
     Integer acquireTransactionLock(@Param("namespace") int namespace, @Param("key") int key);
 
+<<<<<<< HEAD
     /** Số kế tiếp của {@code appointment_code_seq} (V16, docs/adr/0045). Chỉ gọi qua {@code AppointmentCodeGenerator}. */
+=======
+    /** Số kế tiếp của {@code appointment_code_seq} (V16, docs/adr/0041). Chỉ gọi qua {@code AppointmentCodeGenerator}. */
+>>>>>>> e18c4ed (feat: triển khai hủy do phòng khám)
     @Query(value = "SELECT nextval('appointment_code_seq')", nativeQuery = true)
     long nextCodeValue();
 
@@ -129,6 +134,29 @@ public interface AppointmentRepository extends JpaRepository<Appointment, Long>,
     @Lock(LockModeType.PESSIMISTIC_WRITE)
     @Query("SELECT a FROM Appointment a WHERE a.id = :id")
     Optional<Appointment> findByIdForUpdate(@Param("id") Long id);
+
+    /**
+     * Khóa nhiều lịch hẹn trong <b>một</b> câu, theo {@code id} tăng dần (Lịch hẹn#5, docs/adr/0047): mọi luồng khóa
+     * nhiều dòng {@code appointments} đều theo thứ tự này nên không tạo vòng chờ. {@code FOR NO KEY UPDATE} như
+     * {@link #findByIdForUpdate}; khóa cuối của {@code branches → appointments} và {@code customers → pets →
+     * appointments}. Bên gọi khóa tối đa 100 id mỗi câu và không truyền tập rỗng; id không có thì không có dòng.
+     */
+    @Transactional(propagation = Propagation.MANDATORY)
+    @Lock(LockModeType.PESSIMISTIC_WRITE)
+    @Query("SELECT a FROM Appointment a WHERE a.id IN :ids ORDER BY a.id")
+    List<Appointment> findAllByIdInForUpdate(@Param("ids") Collection<Long> ids);
+
+    /**
+     * Mã các lịch {@code BOOKED} của thú, không khóa, chỉ lấy id (không nạp entity vào persistence context — bước khóa
+     * sau đó đọc trạng thái mới nhất). Thú mất / chuyển chủ (BR-KH-05, BR-KH-08; docs/adr/0047). Index
+     * {@code ix_appointments_pet_status}.
+     */
+    @Query("""
+            SELECT a.id FROM Appointment a
+            WHERE a.petId = :petId AND a.status = com.petcare.module.appointment.entity.AppointmentStatus.BOOKED
+            ORDER BY a.id
+            """)
+    List<Long> findBookedIdsByPetId(@Param("petId") Long petId);
 
     /** Như {@link #existsActiveSameSlot} nhưng không tính lịch {@code excludeId} (đổi khung của chính lịch đó, BR-LH-05). */
     @Query(value = """

@@ -1,5 +1,7 @@
 package com.petcare.module.customer.repository;
 
+import java.time.LocalDate;
+import java.util.Collection;
 import java.util.List;
 import java.util.Optional;
 
@@ -8,6 +10,7 @@ import org.springframework.data.jpa.repository.Lock;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 
+import com.petcare.module.customer.api.Species;
 import com.petcare.module.customer.entity.Pet;
 
 import jakarta.persistence.LockModeType;
@@ -18,6 +21,20 @@ import jakarta.persistence.LockModeType;
  * để dùng index.
  */
 public interface PetRepository extends JpaRepository<Pet, Long> {
+
+    /** Cột của {@code PetQueryApi.PetSummary}, trừ cân nặng hiện tại (đọc riêng theo lô). */
+    record PetRow(Long id, Long customerId, String name, Species species, LocalDate birthDate, LocalDate deceasedOn) {}
+
+    /**
+     * Thú theo lô ({@code PetQueryApi.findPets}): một câu SQL, JPQL constructor nên không nạp entity vào persistence
+     * context của bên gọi (bên gọi có thể khóa dòng thú sau đó trong cùng transaction). Bên gọi không truyền tập rỗng.
+     */
+    @Query("""
+            SELECT new com.petcare.module.customer.repository.PetRepository$PetRow(
+                p.id, p.customerId, p.name, p.species, p.birthDate, p.deceasedOn)
+            FROM Pet p WHERE p.id IN :ids
+            """)
+    List<PetRow> findRowsByIds(@Param("ids") Collection<Long> ids);
 
     @Lock(LockModeType.PESSIMISTIC_WRITE)
     @Query("SELECT p FROM Pet p WHERE p.id = :id")
