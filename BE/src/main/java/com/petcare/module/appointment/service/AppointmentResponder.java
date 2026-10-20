@@ -23,7 +23,7 @@ import com.petcare.module.identity.api.ConfigKey;
 import com.petcare.module.identity.api.SystemConfigApi;
 
 /**
- * Lịch hẹn → response {@code Appointment} cho xem (#3, #4, docs/adr/0044) và đổi khung / hủy (#5, #6, docs/adr/0045):
+ * Lịch hẹn → response {@code Appointment} cho xem (#3, #4, docs/adr/0048) và đổi khung / hủy (#5, #6, docs/adr/0049):
  * tên hiển thị lấy theo lô (mỗi module một lần, theo id khác nhau), cờ theo người xem với cùng {@code now}. Lớp hỗ trợ
  * thuần (không phải bean): service dựng nó từ các dependency đã inject; chạy trong transaction của service (ADR-0020).
  */

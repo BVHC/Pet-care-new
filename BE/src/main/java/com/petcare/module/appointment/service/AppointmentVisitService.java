@@ -24,7 +24,7 @@ import com.petcare.platform.exception.ResourceNotFoundException;
 
 /**
  * Hệ quả của Visit lên lịch hẹn: Lịch hẹn#3 ({@code checkIn}), #7 ({@code completeByVisit}), #8
- * ({@code cancelByVisit}) — docs/adr/0046. Không mở transaction riêng: {@code MANDATORY}, tham gia transaction của
+ * ({@code cancelByVisit}) — docs/adr/0050. Không mở transaction riêng: {@code MANDATORY}, tham gia transaction của
  * Visit#1 / #5 / #6, không {@code noRollbackFor}, không {@code try/catch}; mọi kiểm tra đứng <b>trước</b>
  * {@code saveAndFlush}, nên từ chối thì không ghi gì và lỗi DB lộ ngay trong lời gọi.
  * <p>
@@ -58,7 +58,7 @@ public class AppointmentVisitService implements AppointmentApi {
 
         Appointment appointment = appointments.findByIdForUpdate(appointmentId)
                 .orElseThrow(() -> new ResourceNotFoundException(FSM_NAME, appointmentId));
-        // 409 trước 400 (docs/adr/0046): lệch có chủ đích so với convention 05, như docs/adr/0045.
+        // 409 trước 400 (docs/adr/0050): lệch có chủ đích so với convention 05, như docs/adr/0049.
         transitions.validateTransition(appointment.getStatus(), AppointmentStatus.CHECKED_IN);
         if (!appointment.getBranchId().equals(branchId)) {
             throw new BusinessRuleViolationException("BR-TN-02", "Lịch hẹn thuộc chi nhánh khác");

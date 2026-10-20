@@ -29,7 +29,7 @@ import com.petcare.module.identity.api.ConfigKey;
 import com.petcare.module.identity.api.SystemConfigApi;
 
 /**
- * {@link BookingRestrictionService} (docs/adr/0043, 0045): {@code isRestricted} hỏi repository, chỉ đọc;
+ * {@link BookingRestrictionService} (docs/adr/0047, 0049): {@code isRestricted} hỏi repository, chỉ đọc;
  * {@code evaluateAfterViolation} khóa theo khách trước, đếm vi phạm sau
  * {@code max(at − window, lần hạn chế gần nhất)} từ cả lịch hẹn và đặt chỗ, đủ ngưỡng mới tạo đúng một dòng.
  */

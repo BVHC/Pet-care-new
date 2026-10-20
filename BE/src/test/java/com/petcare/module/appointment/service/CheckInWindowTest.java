@@ -10,7 +10,7 @@ import java.time.LocalTime;
 import org.junit.jupiter.api.Test;
 
 /**
- * {@link CheckInWindow} (docs/adr/0044 §6): BR-TN-02 sớm nhất {@code early} phút trước giờ hẹn, BR-TN-03 / BR-LH-08 muộn
+ * {@link CheckInWindow} (docs/adr/0048 §6): BR-TN-02 sớm nhất {@code early} phút trước giờ hẹn, BR-TN-03 / BR-LH-08 muộn
  * nhất {@code noShowAfter} phút sau giờ hẹn, hai biên tính là được; chỉ lịch của hôm nay (giờ Việt Nam); mốc tràn qua nửa
  * đêm không làm vòng giờ.
  */

@@ -33,7 +33,7 @@ import com.petcare.module.appointment.service.AppointmentLocks;
 import com.petcare.module.branch.api.BranchApi;
 
 /**
- * Khóa thú của lịch hẹn trên PostgreSQL 17 (docs/adr/0041, BR-LH-05): advisory theo transaction — cùng thú thì xếp
+ * Khóa thú của lịch hẹn trên PostgreSQL 17 (docs/adr/0045, BR-LH-05): advisory theo transaction — cùng thú thì xếp
  * hàng, khác thú thì không; nhả khi commit <b>và</b> rollback (không kẹt trên connection của pool); chỉ chạy trong
  * transaction ghi của bên gọi; lỗi khóa đánh dấu bên gọi rollback-only; deadlock giữa khóa thú và khóa chi nhánh ra
  * {@code PessimisticLockingFailureException} → 409 {@code CONCURRENCY_CONFLICT} ({@code GlobalExceptionHandler}).
@@ -215,7 +215,7 @@ class AppointmentLockIT {
     }
 
     /**
-     * Deadlock thật (thú → chi nhánh ∥ chi nhánh → thú — thứ tự sai mà ADR-0041 cấm): PostgreSQL hủy đúng một bên với
+     * Deadlock thật (thú → chi nhánh ∥ chi nhánh → thú — thứ tự sai mà ADR-0045 cấm): PostgreSQL hủy đúng một bên với
      * 40P01, bên đó nhận {@code PessimisticLockingFailureException} (handler → 409), bên kia commit được.
      */
     @Test

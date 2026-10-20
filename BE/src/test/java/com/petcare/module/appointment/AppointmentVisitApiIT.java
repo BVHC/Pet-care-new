@@ -53,7 +53,7 @@ import com.petcare.platform.exception.InvalidStateTransitionException;
 import com.petcare.support.MutableClock;
 
 /**
- * {@code AppointmentApi} thật trên Postgres (docs/adr/0046): race với đổi khung / hủy của khách và lễ tân (G2), quota và
+ * {@code AppointmentApi} thật trên Postgres (docs/adr/0050): race với đổi khung / hủy của khách và lễ tân (G2), quota và
  * BR-LH-05 không đổi sau check-in / hoàn tất (G3), hủy lượt trả quota và không tính vi phạm (G4), và cửa sổ check-in
  * đúng với bộ lọc {@code checkInReady} (G6). Đồng hồ {@code T0} = 2026-10-15 09:00 giờ Việt Nam; chi nhánh mở
  * 08:00–12:00; lịch mẫu hôm nay 09:30 (đúng biên sớm nhất +30').

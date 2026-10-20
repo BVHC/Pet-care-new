@@ -33,7 +33,7 @@ import com.petcare.module.branch.service.BranchService;
 import com.petcare.platform.exception.BusinessRuleViolationException;
 
 /**
- * {@code BranchApi.lockForBooking} trên PostgreSQL 17 (docs/adr/0041): chỉ chạy trong transaction ghi của bên gọi, giữ
+ * {@code BranchApi.lockForBooking} trên PostgreSQL 17 (docs/adr/0045): chỉ chạy trong transaction ghi của bên gọi, giữ
  * dòng {@code branches} tới khi bên gọi commit / rollback, chặn đúng khóa mà mọi luồng ghi của branch lấy
  * ({@code findByIdForUpdate}: kích hoạt, giờ mở cửa, ngày nghỉ, quota, bật dịch vụ — race R2, R3) và chặn lượt đặt khác
  * của cùng chi nhánh (R1), không chặn chi nhánh khác, không ghi {@code branches}, trả trạng thái mới dù persistence

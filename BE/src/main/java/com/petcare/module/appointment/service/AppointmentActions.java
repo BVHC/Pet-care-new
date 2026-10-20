@@ -10,7 +10,7 @@ import com.petcare.platform.config.TimeConfig;
 
 /**
  * Hai cờ {@code canReschedule}, {@code canCancel} của response {@code Appointment} (appointment-v1, "theo vai trò người
- * xem"; docs/adr/0043). Lớp thuần, dùng chung cho đặt lịch, xem, đổi khung và hủy.
+ * xem"; docs/adr/0047). Lớp thuần, dùng chung cho đặt lịch, xem, đổi khung và hủy.
  * <ul>
  * <li>{@code canCancel}: lịch {@code BOOKED} và chưa tới giờ hẹn (BR-LH-07: khách hủy "bất kỳ lúc nào trước giờ hẹn";
  * lễ tân hủy hộ cùng mốc).</li>

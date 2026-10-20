@@ -36,9 +36,9 @@ import com.petcare.platform.security.SecurityPrincipal;
 import jakarta.persistence.criteria.Predicate;
 
 /**
- * Xem lịch hẹn — appointment-v1 #3 (danh sách), #4 (chi tiết); UC40, UC44; BR-LH-11, BR-TN-02 (docs/adr/0044).
+ * Xem lịch hẹn — appointment-v1 #3 (danh sách), #4 (chi tiết); UC40, UC44; BR-LH-11, BR-TN-02 (docs/adr/0048).
  * Chỉ đọc, không khóa: một transaction {@code readOnly} + {@code REPEATABLE_READ} để count, trang, tên và cờ cùng một
- * snapshot (khuôn docs/adr/0038, 0042).
+ * snapshot (khuôn docs/adr/0038, 0046).
  * <ul>
  * <li>Phạm vi: khách luôn bị ép {@code customer_id} = hồ sơ của tài khoản (chủ lúc đặt, không theo chủ hiện tại của
  * thú); nhân viên luôn bị ép chi nhánh qua {@link BranchScope} — {@code branchId} khác là 403 trước mọi lần đọc DB. Bộ
@@ -55,7 +55,7 @@ public class AppointmentQueryService {
 
     static final int MAX_PAGE_SIZE = 100;
 
-    /** Tăng dần theo giờ hẹn, hòa thì theo id (docs/adr/0044 §7). */
+    /** Tăng dần theo giờ hẹn, hòa thì theo id (docs/adr/0048 §7). */
     static final Sort ORDER = Sort.by(Sort.Order.asc("slotDate"), Sort.Order.asc("slotStart"), Sort.Order.asc("id"));
 
     private final BranchScope branchScope;
@@ -134,7 +134,7 @@ public class AppointmentQueryService {
                 .orElseThrow(() -> new IllegalStateException("Tài khoản khách #" + accountId + " không có hồ sơ khách"));
     }
 
-    /** Chỉ ghép điều kiện được gửi; mọi điều kiện AND (docs/adr/0044 §5, 6). */
+    /** Chỉ ghép điều kiện được gửi; mọi điều kiện AND (docs/adr/0048 §5, 6). */
     private Specification<Appointment> filters(AppointmentListFilter filter, boolean customer, Instant now) {
         CheckInWindow window = filter.checkInReadyRequested()
                 ? CheckInWindow.at(now, configs.getInt(ConfigKey.VISIT_CHECK_IN_EARLY_MINUTES),

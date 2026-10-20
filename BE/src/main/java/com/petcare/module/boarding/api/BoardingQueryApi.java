@@ -39,7 +39,7 @@ public interface BoardingQueryApi {
     /**
      * Số NO_SHOW + hủy muộn của khách xảy ra <b>sau</b> {@code since} (loại trừ: thời điểm vi phạm {@code > since};
      * BR-LH-09, BR-LT-06). Gọi từ {@code BookingRestrictionApi.evaluateAfterViolation} dưới khóa theo khách, nên đọc
-     * READ COMMITTED, không khóa thêm (docs/adr/0045).
+     * READ COMMITTED, không khóa thêm (docs/adr/0049).
      */
     int countViolations(Long customerId, Instant since);
 

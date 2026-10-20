@@ -31,7 +31,7 @@ import com.petcare.module.appointment.repository.AppointmentRepository;
 import com.petcare.module.catalog.api.ServiceGroup;
 
 /**
- * Entity {@link Appointment} khớp từng cột của {@code appointments} (V1, erd §5; docs/adr/0041): một dòng chèn bằng SQL,
+ * Entity {@link Appointment} khớp từng cột của {@code appointments} (V1, erd §5; docs/adr/0045): một dòng chèn bằng SQL,
  * mỗi cột một giá trị riêng, đọc lại qua repository — map nhầm cột hay sai kiểu thì đỏ. Enum Java phải bằng đúng tập
  * giá trị của CHECK trong DB ({@code service_group} chỉ là tập con MEDICAL, GROOMING của {@code ServiceGroup}).
  */

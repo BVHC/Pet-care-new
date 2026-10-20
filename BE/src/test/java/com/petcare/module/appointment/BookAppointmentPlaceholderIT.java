@@ -32,9 +32,10 @@ import com.petcare.TestcontainersConfiguration;
 import com.petcare.module.identity.service.SessionService;
 
 /**
- * Đặt lịch trên bean thật của app hiện tại (docs/adr/0043): {@code CustomerQueryApi} và {@code PetQueryApi} của BE-2 còn
- * là placeholder ném lỗi (nợ D010, D031), nên khách và lễ tân đều nhận 500 — không dòng {@code appointments} nào, không
- * số sequence nào bị tiêu, không khóa advisory nào còn treo. Vai trò sai vẫn 403 trước khi chạm placeholder.
+ * Đặt lịch trên bean thật của app hiện tại (docs/adr/0047). Từ 2026-10-20 {@code CustomerQueryApi} và
+ * {@code PetQueryApi} của BE-2 là bản thật (nợ D010, D031 đã trả) nên lễ tân đặt được; tài khoản khách <b>không có hồ
+ * sơ</b> (dữ liệu sai, BR-KH-01) vẫn 500 — không dòng {@code appointments} nào, không số sequence nào bị tiêu, không khóa
+ * advisory nào còn treo. Vai trò sai vẫn 403.
  */
 @SpringBootTest(webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT)
 @ActiveProfiles("test")
@@ -78,11 +79,11 @@ class BookAppointmentPlaceholderIT {
     }
 
     @Test
-    void customerAndReceptionistGet500AndNothingIsWrittenOrLeftLocked() {
+    void customerWithoutProfileGets500AndNothingIsWrittenOrLeftLocked() {
         long appointmentsBefore = jdbc.queryForObject("SELECT count(*) FROM appointments", Long.class);
         Long sequenceBefore = jdbc.queryForObject("SELECT last_value FROM appointment_code_seq", Long.class);
 
-        for (String token : List.of(token(data.customerAccount()), token(data.staff("RECEPTIONIST", branch)))) {
+        for (String token : List.of(token(data.customerAccount()))) {
             ResponseEntity<Map<String, Object>> response = post(token);
             assertThat(response.getStatusCode()).as("%s", response.getBody())
                     .isEqualTo(HttpStatus.INTERNAL_SERVER_ERROR);

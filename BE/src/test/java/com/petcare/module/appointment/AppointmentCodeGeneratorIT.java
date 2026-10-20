@@ -29,7 +29,7 @@ import com.petcare.TestcontainersConfiguration;
 import com.petcare.module.appointment.service.AppointmentCodeGenerator;
 
 /**
- * Mã lịch hẹn trên PostgreSQL 17 (docs/adr/0041, V13): chỉ trong transaction ghi; 50 lượt song song ra 50 mã khác nhau;
+ * Mã lịch hẹn trên PostgreSQL 17 (docs/adr/0045, V16): chỉ trong transaction ghi; 50 lượt song song ra 50 mã khác nhau;
  * rollback không trả số lại (nhảy cóc là hành vi có chủ đích); hết {@code MAXVALUE} thì lỗi, không quay vòng.
  */
 @SpringBootTest
@@ -103,7 +103,7 @@ class AppointmentCodeGeneratorIT {
         }
     }
 
-    /** Sequence không thuộc transaction: số đã cấp cho transaction bị rollback bỏ trống vĩnh viễn (docs/adr/0041). */
+    /** Sequence không thuộc transaction: số đã cấp cho transaction bị rollback bỏ trống vĩnh viễn (docs/adr/0045). */
     @Test
     void numberConsumedByRolledBackTransactionIsNotReused() {
         String rolledBack = tx().execute(status -> {
@@ -118,7 +118,7 @@ class AppointmentCodeGeneratorIT {
     /**
      * Hết số: lỗi DB, không quay vòng về 1 (sinh mã trùng). Hibernate xếp SQLState 2200H vào nhóm lỗi dữ liệu nên Spring
      * dịch thành đúng {@code DataIntegrityViolationException} → {@code GlobalExceptionHandler} trả 409 message chung
-     * (docs/adr/0041 ghi nhận; thực tế không chạm tới — 10¹⁰ mã). Khôi phục vị trí sequence sau test — sequence dùng
+     * (docs/adr/0045 ghi nhận; thực tế không chạm tới — 10¹⁰ mã). Khôi phục vị trí sequence sau test — sequence dùng
      * chung cho cả lượt chạy.
      */
     @Test

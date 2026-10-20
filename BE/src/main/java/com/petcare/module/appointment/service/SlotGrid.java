@@ -14,7 +14,7 @@ import com.petcare.module.branch.api.BranchQueryApi.TimeRange;
  * kết thúc không muộn hơn giờ đóng. Ngày nghỉ / đóng cửa ({@code ranges} rỗng) không có khung.
  * <p>
  * Ngữ nghĩa phải bằng đúng {@code BranchSchedule.isGeneratedSlot} của module branch (quota riêng của khung, BR-LH-03);
- * hai lớp ở hai module nên không dùng chung code — {@code SlotGridParityTest} giữ chúng khớp nhau (docs/adr/0041).
+ * hai lớp ở hai module nên không dùng chung code — {@code SlotGridParityTest} giữ chúng khớp nhau (docs/adr/0045).
  * <p>
  * Lớp thuần. Khoảng sai (mở ≥ đóng, chồng nhau) là dữ liệu mà BR-CN-02 đã chặn lúc ghi
  * ({@code OpeningHoursMapping}); gặp thì ném {@code IllegalArgumentException} thay vì tự sinh khung từ dữ liệu hỏng.

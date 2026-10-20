@@ -54,13 +54,8 @@ class OpenApiContractParityIT {
 
     private static final Path CONTRACT_DIR = Path.of("..", "docs", "api", "openapi");
     /** File hợp đồng đã có annotation đầy đủ; thêm file khi module đó viết xong tài liệu (D026: branch, catalog). */
-<<<<<<< HEAD
-    private static final Set<String> DOCUMENTED = Set.of("identity-v1.yaml", "care-v1.yaml", "customer-v1.yaml", "inventory-v1.yaml",
-            "sales-v1.yaml");
-=======
     private static final Set<String> DOCUMENTED = Set.of("identity-v1.yaml", "care-v1.yaml", "customer-v1.yaml",
-            "appointment-v1.yaml");
->>>>>>> 4d98452 (feat: triển khai nền lịch hẹn và xem khung giờ trống)
+            "inventory-v1.yaml", "sales-v1.yaml", "appointment-v1.yaml");
     private static final Set<String> METHODS = Set.of("get", "post", "put", "patch", "delete");
     private static final Pattern SECRET = Pattern.compile("(?i)(password|secret|hash)$|^otp(code)?$");
     /** Tên khớp {@link #SECRET} nhưng không phải bí mật: cờ bắt đổi mật khẩu (BR-TK-17). */
@@ -109,23 +104,8 @@ class OpenApiContractParityIT {
 
     @Test
     void documentedModulesCoverAllTheirImplementedEndpoints() {
-<<<<<<< HEAD
-<<<<<<< HEAD
-<<<<<<< HEAD
-<<<<<<< HEAD
-        assertThat(documentedOps()).as("số endpoint identity + care + customer + inventory + sales đã cài").hasSize(80);
-=======
-        assertThat(documentedOps()).as("số endpoint identity + care + customer + appointment đã cài").hasSize(46);
->>>>>>> 4d98452 (feat: triển khai nền lịch hẹn và xem khung giờ trống)
-=======
-        assertThat(documentedOps()).as("số endpoint identity + care + customer + appointment đã cài").hasSize(47);
->>>>>>> e5fc585 (feat: triển khai đặt lịch hẹn)
-=======
-        assertThat(documentedOps()).as("số endpoint identity + care + customer + appointment đã cài").hasSize(49);
->>>>>>> b79fc98 (feat: triển khai xem lịch trình, xem chi nhánh)
-=======
-        assertThat(documentedOps()).as("số endpoint identity + care + customer + appointment đã cài").hasSize(51);
->>>>>>> 9a8a7a0 (feat: triển khai đổi khung và hủy lịch hẹn)
+        assertThat(documentedOps()).as("số endpoint identity + care + customer + inventory + sales + appointment đã cài")
+                .hasSize(86);
     }
 
     @Test

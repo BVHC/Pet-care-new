@@ -22,7 +22,7 @@ import com.petcare.module.branch.repository.BranchRepository;
 
 /**
  * {@code BranchApi.lockForStaffChange} (docs/adr/0029, nợ D014): khóa theo id tăng dần dù bên gọi truyền thứ tự nào,
- * id lạ vắng khỏi map, transaction {@code readOnly} bị chặn trước mọi câu SQL. {@code lockForBooking} (docs/adr/0041):
+ * id lạ vắng khỏi map, transaction {@code readOnly} bị chặn trước mọi câu SQL. {@code lockForBooking} (docs/adr/0045):
  * trả trạng thái đọc dưới khóa, id lạ → rỗng, readOnly / null bị chặn trước SQL. Khóa thật trên PostgreSQL:
  * {@code BranchStaffLockIT}, {@code BranchBookingLockIT}.
  */
@@ -68,7 +68,7 @@ class BranchStaffLockServiceTest {
         verify(branches, never()).lockStatusForStaffChange(anyLong());
     }
 
-    // ---------------------------------------------------------------- lockForBooking (docs/adr/0041)
+    // ---------------------------------------------------------------- lockForBooking (docs/adr/0045)
 
     @Test
     void lockForBookingReturnsStatusReadUnderLock() {

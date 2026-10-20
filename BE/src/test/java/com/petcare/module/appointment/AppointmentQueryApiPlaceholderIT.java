@@ -31,7 +31,7 @@ import com.petcare.module.identity.service.SessionService;
 import com.petcare.platform.config.TimeConfig;
 
 /**
- * G8 (docs/adr/0046, D034): {@code AppointmentQueryApi} đã thật, nhưng {@code BoardingQueryApi} của BE-2 còn là
+ * G8 (docs/adr/0050, D034): {@code AppointmentQueryApi} đã thật, nhưng {@code BoardingQueryApi} của BE-2 còn là
  * placeholder (D033), nên thêm ngày nghỉ vào chi nhánh {@code ACTIVE} vẫn 500 — ở boarding chứ không còn ở
  * appointment — và không ghi gì: không có dòng {@code holidays}, lịch hẹn nguyên vẹn. Dùng bean thật hoàn toàn.
  */

@@ -10,7 +10,7 @@ import java.time.LocalTime;
 import org.junit.jupiter.api.Test;
 
 /**
- * BR-LH-04 (docs/adr/0042 Q1): khách — mốc gần nhất theo thời điểm (≥ now + giờ [CFG], đúng mốc vẫn được), mốc xa nhất
+ * BR-LH-04 (docs/adr/0046 Q1): khách — mốc gần nhất theo thời điểm (≥ now + giờ [CFG], đúng mốc vẫn được), mốc xa nhất
  * theo ngày (≤ hôm nay + ngày [CFG], giờ Việt Nam); lễ tân — khung chưa bắt đầu (> now). Ngày tính theo giờ Việt Nam
  * dù {@code now} là UTC.
  */

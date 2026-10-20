@@ -16,7 +16,7 @@ import org.springframework.transaction.support.TransactionSynchronizationManager
 import com.petcare.module.appointment.repository.AppointmentRepository;
 
 /**
- * {@link AppointmentLocks} (docs/adr/0041): tham số sai / transaction readOnly bị chặn trước mọi câu SQL; key advisory
+ * {@link AppointmentLocks} (docs/adr/0045): tham số sai / transaction readOnly bị chặn trước mọi câu SQL; key advisory
  * nằm trong {@code int} dương. Khóa thật trên PostgreSQL: {@code AppointmentLockIT}.
  */
 class AppointmentLocksTest {
@@ -36,7 +36,7 @@ class AppointmentLocksTest {
         verify(repository).acquireTransactionLock(AppointmentLocks.PET_LOCK_NAMESPACE, 42);
     }
 
-    /** Khóa theo khách khi đánh giá BR-LH-09 (docs/adr/0045): namespace khác thú, cùng các chốt. */
+    /** Khóa theo khách khi đánh giá BR-LH-09 (docs/adr/0049): namespace khác thú, cùng các chốt. */
     @Test
     void locksCustomerViolationsInItsOwnNamespace() throws NoSuchMethodException {
         locks.lockCustomerViolations(88L);

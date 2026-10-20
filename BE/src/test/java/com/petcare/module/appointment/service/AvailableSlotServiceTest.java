@@ -55,7 +55,7 @@ import com.petcare.platform.security.BranchScope;
 import com.petcare.platform.security.SecurityPrincipal;
 
 /**
- * {@link AvailableSlotService} (docs/adr/0042): thứ tự kiểm, mỗi nhánh lỗi dừng trước lời gọi kế tiếp, khách không qua
+ * {@link AvailableSlotService} (docs/adr/0046): thứ tự kiểm, mỗi nhánh lỗi dừng trước lời gọi kế tiếp, khách không qua
  * {@code BranchScope}, cửa sổ BR-LH-04, đếm + quota từng khung, ranh giới transaction.
  */
 class AvailableSlotServiceTest {

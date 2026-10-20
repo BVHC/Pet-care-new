@@ -19,7 +19,7 @@ import jakarta.validation.Validator;
 import jakarta.validation.ValidatorFactory;
 
 /**
- * Body đặt lịch (appointment-v1 {@code BookAppointmentRequest}; docs/adr/0043): 5 trường bắt buộc, id phải dương
+ * Body đặt lịch (appointment-v1 {@code BookAppointmentRequest}; docs/adr/0047): 5 trường bắt buộc, id phải dương
  * ({@code lockPet} từ chối id ≤ 0 bằng 500), ghi chú ≤ 500 (UTF-16, chặt hơn {@code VARCHAR(500)}). Lỗi gắn đúng tên
  * trường, message tiếng Việt.
  */

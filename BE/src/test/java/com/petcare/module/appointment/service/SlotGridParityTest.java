@@ -17,7 +17,7 @@ import com.petcare.module.branch.schedule.BranchSchedule;
 
 /**
  * {@link SlotGrid} (appointment) và {@code BranchSchedule.isGeneratedSlot} (branch — quota riêng của khung, BR-LH-03)
- * phải sinh cùng một tập khung (docs/adr/0041 mục 6). Hai lớp ở hai module nên không dùng chung code; test này (chỉ ở
+ * phải sinh cùng một tập khung (docs/adr/0045 mục 6). Hai lớp ở hai module nên không dùng chung code; test này (chỉ ở
  * test, main không import chéo) giữ chúng khớp nhau, khuôn {@code NotificationTemplateSyntaxParityTest}.
  * <p>
  * Sinh ngẫu nhiên (seed cố định) các ngày có 0–2 khoảng hợp lệ như BR-CN-02 cho phép (giờ mở trước giờ đóng, không

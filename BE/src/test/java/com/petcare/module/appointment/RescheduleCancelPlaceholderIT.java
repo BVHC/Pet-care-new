@@ -33,10 +33,10 @@ import com.petcare.module.identity.service.SessionService;
 import com.petcare.platform.config.TimeConfig;
 
 /**
- * Đổi khung / hủy trên bean thật của app hiện tại (docs/adr/0045): {@code CustomerQueryApi}, {@code PetQueryApi} (nợ
- * D010, D031) và {@code BoardingQueryApi} (nợ D033) của BE-2 còn là placeholder ném lỗi. Nhánh dừng trước khi cần
- * chúng trả đúng mã (409, 400); nhánh cần chúng trả 500 và <b>không để lại gì</b>: lịch vẫn y nguyên (UPDATE đã flush bị
- * rollback), không có dòng hạn chế, không còn khóa advisory.
+ * Đổi khung / hủy trên bean thật của app hiện tại (docs/adr/0049). Từ 2026-10-20 {@code CustomerQueryApi},
+ * {@code PetQueryApi} của BE-2 là bản thật (nợ D010, D031 đã trả) nên đổi khung / hủy sớm chạy thật; còn
+ * {@code BoardingQueryApi.countViolations} (nợ D033) ném lỗi: hủy muộn trả 500 và <b>không để lại gì</b> (UPDATE đã flush
+ * bị rollback, không dòng hạn chế, không khóa advisory). Nhánh dừng trước đó vẫn trả đúng mã (409, 400).
  */
 @SpringBootTest(webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT)
 @ActiveProfiles("test")
@@ -85,30 +85,28 @@ class RescheduleCancelPlaceholderIT {
     }
 
     @Test
-    void rescheduleReaches500AtTheNameLookupAndRollsBackTheUpdate() {
+    void rescheduleRunsOnRealBeans() {
         long id = booked(day, LocalTime.of(8, 30));
-        String xmin = xmin(id);
 
         ResponseEntity<Map<String, Object>> response = post(token, id, "reschedule",
                 "{\"slotDate\":\"" + day + "\",\"slotStart\":\"09:00\"}");
 
-        assertThat(response.getStatusCode()).as("%s", response.getBody()).isEqualTo(HttpStatus.INTERNAL_SERVER_ERROR);
-        assertThat(response.getBody()).containsEntry("errorCode", "INTERNAL_ERROR");
-        assertThat(xmin(id)).isEqualTo(xmin);
+        assertThat(response.getStatusCode()).as("%s", response.getBody()).isEqualTo(HttpStatus.OK);
+        assertThat(jdbc.queryForObject("SELECT slot_start::text FROM appointments WHERE id = ?", String.class, id))
+                .isEqualTo("09:00:00");
         assertThat(jdbc.queryForObject("SELECT count(*) FROM pg_locks WHERE locktype = 'advisory'", Long.class))
                 .isZero();
     }
 
     @Test
-    void earlyCancelReaches500AtTheNameLookupAndStaysBooked() {
+    void earlyCancelRunsOnRealBeans() {
         long id = booked(day, LocalTime.of(8, 30));
 
         ResponseEntity<Map<String, Object>> response = post(token, id, "cancel", null);
 
-        assertThat(response.getStatusCode()).isEqualTo(HttpStatus.INTERNAL_SERVER_ERROR);
-        assertThat(jdbc.queryForMap("SELECT status, cancel_source, cancelled_at FROM appointments WHERE id = ?", id))
-                .containsEntry("status", "BOOKED").containsEntry("cancel_source", null)
-                .containsEntry("cancelled_at", null);
+        assertThat(response.getStatusCode()).as("%s", response.getBody()).isEqualTo(HttpStatus.OK);
+        assertThat(jdbc.queryForMap("SELECT status, late_cancel FROM appointments WHERE id = ?", id))
+                .containsEntry("status", "CANCELLED").containsEntry("late_cancel", false);
     }
 
     /** D033: hủy muộn cần đếm vi phạm lưu trú — placeholder ném lỗi → cả lần hủy rollback, không lưu cờ hủy muộn. */
@@ -160,9 +158,6 @@ class RescheduleCancelPlaceholderIT {
                 receptionist);
     }
 
-    private String xmin(long id) {
-        return jdbc.queryForObject("SELECT xmin::text FROM appointments WHERE id = ?", String.class, id);
-    }
 
     private String token(long accountId) {
         return new TransactionTemplate(transactionManager)

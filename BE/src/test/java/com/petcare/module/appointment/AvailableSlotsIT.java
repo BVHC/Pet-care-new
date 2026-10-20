@@ -57,7 +57,7 @@ import com.zaxxer.hikari.HikariDataSource;
 
 /**
  * T16 phần 1 — xem khung giờ trống {@code GET /api/branches/{branchId}/available-slots} (appointment-v1 #1, UC39;
- * docs/adr/0042) qua HTTP trên Postgres 17 thật, với {@code BranchQueryService} / {@code CatalogQueryService} thật (không
+ * docs/adr/0046) qua HTTP trên Postgres 17 thật, với {@code BranchQueryService} / {@code CatalogQueryService} thật (không
  * mock module khác). Dữ liệu chèn bằng SQL qua {@link AppointmentItSupport}, xóa ở {@code @AfterEach}; chi nhánh ACTIVE
  * tên UUID, không có VET hay BRANCH_MANAGER nên không đổi kết quả của IT khác.
  * <p>

@@ -11,7 +11,7 @@ import com.petcare.module.appointment.api.AppointmentQueryApi;
 import com.petcare.module.appointment.repository.AppointmentRepository;
 
 /**
- * Cài đặt {@link AppointmentQueryApi} (docs/adr/0046): chỉ đọc, mỗi method đúng một câu SQL bất kể số dòng. Class
+ * Cài đặt {@link AppointmentQueryApi} (docs/adr/0050): chỉ đọc, mỗi method đúng một câu SQL bất kể số dòng. Class
  * {@code readOnly} <b>tham gia</b> transaction ghi của bên gọi (branch dưới khóa {@code branches}, identity dưới khóa
  * tài khoản) và không đổi flush / readOnly của nó. Không {@code BranchScope}, không kiểm role: API nội bộ, bên gọi đã
  * phân quyền; quyết định nghiệp vụ (BR-LH-10, BR-KH-06, BR-TK-19, BR-QT-11) là của bên gọi.

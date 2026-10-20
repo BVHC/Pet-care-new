@@ -30,9 +30,9 @@ import com.petcare.TestcontainersConfiguration;
 import com.petcare.module.identity.service.SessionService;
 
 /**
- * Xem lịch hẹn trên bean thật của app hiện tại (docs/adr/0044): {@code CustomerQueryApi} / {@code PetQueryApi} của BE-2
- * còn là placeholder ném lỗi (nợ D010, D031). Khách luôn 500 (cần hồ sơ của tài khoản); nhân viên 500 khi trang có dòng
- * (cần tên thú, tên khách) nhưng 200 với trang rỗng — trang rỗng không gọi module nào. Vai trò sai vẫn 403.
+ * Xem lịch hẹn trên bean thật của app hiện tại (docs/adr/0048). Từ 2026-10-20 {@code CustomerQueryApi} /
+ * {@code PetQueryApi} của BE-2 là bản thật (nợ D010, D031 đã trả): nhân viên thấy trang có dòng kèm tên thú, tên khách;
+ * tài khoản khách <b>không có hồ sơ</b> (dữ liệu sai, BR-KH-01) vẫn 500. Vai trò sai vẫn 403.
  */
 @SpringBootTest(webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT)
 @ActiveProfiles("test")
@@ -71,7 +71,7 @@ class AppointmentViewPlaceholderIT {
     }
 
     @Test
-    void receptionistGets200ForAnEmptyPageAnd500OnceThereAreRows() {
+    void receptionistGets200ForAnEmptyPageAndForRowsWithNames() {
         String token = token(receptionist);
 
         ResponseEntity<Map<String, Object>> empty = get(token, "");
@@ -82,9 +82,8 @@ class AppointmentViewPlaceholderIT {
                 LocalDate.now().plusDays(2), LocalTime.of(8, 0), "BOOKED", receptionist);
 
         for (ResponseEntity<Map<String, Object>> response : List.of(get(token, ""), get(token, "/" + id))) {
-            assertThat(response.getStatusCode()).as("%s", response.getBody())
-                    .isEqualTo(HttpStatus.INTERNAL_SERVER_ERROR);
-            assertThat(response.getBody()).containsEntry("errorCode", "INTERNAL_ERROR");
+            assertThat(response.getStatusCode()).as("%s", response.getBody()).isEqualTo(HttpStatus.OK);
+            assertThat(response.getBody().toString()).contains("petName=Milu");
         }
     }
 

@@ -1,12 +1,13 @@
-# ADR-0046: `AppointmentApi` và `AppointmentQueryApi` thật — chỉ khóa dòng lịch hẹn, tham gia transaction của bên gọi, 409 trước 400 ở check-in
+# ADR-0050: `AppointmentApi` và `AppointmentQueryApi` thật — chỉ khóa dòng lịch hẹn, tham gia transaction của bên gọi, 409 trước 400 ở check-in
 
 - **Trạng thái:** Accepted
+- **Đánh số lại:** ban đầu là ADR-0046; đổi thành số hiện tại khi gộp `dev` ngày 2026-10-20 vì trùng số với ADR-0041…0044 của BE-2 (vào `dev` trước). Mọi tham chiếu ADR-0041…0046 trong code / tài liệu lịch hẹn đã đổi theo (+4); migration `V13__appointment_code_sequence.sql` đổi thành V16.
 - **Ngày:** 2026-10-16
 - **Liên quan:**
   - BR-TN-01 (02 L141), BR-TN-02 (L142), BR-TN-03 (L143), BR-TN-07 (L147); BR-LH-08 (L129), BR-LH-10 (L131), BR-LH-11 (L132); BR-KH-06 (L92); BR-TK-19 (L35); BR-QT-11 (L54); BR-CN-04 (L68).
   - 03 §3 Lịch hẹn #3, #7, #8 (L83, L87, L88); 03 §4 Visit#1, #5, #6 (L102, L106, L107); 03 Quy ước L11 ("các thay đổi trong cùng một sự kiện thực hiện trong một transaction").
   - `docs/06-module-contracts.md` §1 (placeholder ném lỗi, không trả giá trị "an toàn"), §4.1 (L67–69), §4.2, §6; convention 05 L64–81, 07 §7.1–7.2.
-  - ADR-0010 (lỗi đi qua `@Transactional` làm rollback-only), 0029 §4 (bẫy persistence context), 0041 (thứ tự khóa, `AppointmentLocks`), 0044 §6 (`CheckInWindow`), 0045 (409 trước rule, hủy bằng `cancel`).
+  - ADR-0010 (lỗi đi qua `@Transactional` làm rollback-only), 0029 §4 (bẫy persistence context), 0045 (thứ tự khóa, `AppointmentLocks`), 0048 §6 (`CheckInWindow`), 0049 (409 trước rule, hủy bằng `cancel`).
   - Nợ: mở D034; cập nhật D033; ghi nhận nghĩa vụ cho D027.
 - **Triển khai (T16 phần 5):**
   - `appointment/api/AppointmentApi` (chữ ký đổi), `appointment/service/{AppointmentVisitService, AppointmentLookupService}`.
@@ -38,14 +39,14 @@ Hai interface của appointment còn chặn nhiều luồng: branch (đổi gi�
    - `void cancelByVisit(Long appointmentId, Instant at)`.
    - `CheckInInfo(appointmentId, customerId, petId, serviceId, ServiceGroup serviceGroup, Instant scheduledAt)`; `scheduledAt` là giờ hẹn.
    - Bỏ `actorId`: không cột nào của `appointments` lưu người check-in / hủy lượt (người check-in nằm ở `visits.checked_in_by`).
-2. **`cancelByVisit` (Q2):** `cancel_source = STAFF`, `late_cancel = false`, `cancel_reason = null`, `cancelled_at = at` cắt về micro giây (như ADR-0045 §5). Không gọi `BookingRestrictionApi`: hủy lượt khách bỏ về không phải vi phạm BR-LH-09. Chốt `status = CHECKED_IN` **tường minh**; cạnh `BOOKED → CANCELLED` có trong FSM nhưng thuộc #4 / #5.
-3. **Thứ tự lỗi `checkIn` (Q3):** 404 (không có lịch) → 409 (không còn `BOOKED`) → 400 BR-TN-02 (khác chi nhánh / ngoài cửa sổ). Lệch convention 05 (guard BR trước `validateTransition`) có chủ đích, như ADR-0045: với lịch đã hủy / đã check-in, "chưa tới giờ" là lý do sai. Cửa sổ dùng `CheckInWindow` (ADR-0044 §6) với `visit.check_in_early_minutes` và `appointment.no_show_after_minutes` đọc từ [CFG]; cả hai biên tính là được. Nhờ đó lịch hiện trong bộ lọc `checkInReady` ⇔ `checkIn` nhận (IT so hai tập với cùng `now`).
+2. **`cancelByVisit` (Q2):** `cancel_source = STAFF`, `late_cancel = false`, `cancel_reason = null`, `cancelled_at = at` cắt về micro giây (như ADR-0049 §5). Không gọi `BookingRestrictionApi`: hủy lượt khách bỏ về không phải vi phạm BR-LH-09. Chốt `status = CHECKED_IN` **tường minh**; cạnh `BOOKED → CANCELLED` có trong FSM nhưng thuộc #4 / #5.
+3. **Thứ tự lỗi `checkIn` (Q3):** 404 (không có lịch) → 409 (không còn `BOOKED`) → 400 BR-TN-02 (khác chi nhánh / ngoài cửa sổ). Lệch convention 05 (guard BR trước `validateTransition`) có chủ đích, như ADR-0049: với lịch đã hủy / đã check-in, "chưa tới giờ" là lý do sai. Cửa sổ dùng `CheckInWindow` (ADR-0048 §6) với `visit.check_in_early_minutes` và `appointment.no_show_after_minutes` đọc từ [CFG]; cả hai biên tính là được. Nhờ đó lịch hiện trong bộ lọc `checkInReady` ⇔ `checkIn` nhận (IT so hai tập với cùng `now`).
 4. **Transaction.**
    - `AppointmentApi` là `MANDATORY`, không `noRollbackFor`, không `try/catch`, không `REQUIRES_NEW`: tham gia transaction của Visit#1 / #5 / #6 (03 Quy ước L11). Commit / rollback do bên phát quyết định.
    - Mọi kiểm tra đứng trước `saveAndFlush`, nên từ chối thì không ghi gì và lỗi DB lộ ngay trong lời gọi.
    - Chốt đầu method: transaction `readOnly` → `IllegalStateException` (khuôn `AppointmentLocks`).
    - **Nghĩa vụ của bên gọi (ghi ở javadoc `AppointmentApi`):** không bắt lỗi của các method này. Lỗi đã đánh dấu rollback-only; bắt rồi đi tiếp thì commit ném `UnexpectedRollbackException` (ADR-0010; `AppointmentVisitTxIT.callerSwallowingTheFailureCannotCommit`).
-5. **Khóa.** Chỉ khóa dòng `appointments` (`findByIdForUpdate`, `FOR NO KEY UPDATE`) — đoạn cuối của `advisory(thú) → branches → appointments` (ADR-0041). Mọi guard đọc trạng thái **sau** khóa, không `findById` trước (ADR-0029 §4).
+5. **Khóa.** Chỉ khóa dòng `appointments` (`findByIdForUpdate`, `FOR NO KEY UPDATE`) — đoạn cuối của `advisory(thú) → branches → appointments` (ADR-0045). Mọi guard đọc trạng thái **sau** khóa, không `findById` trước (ADR-0029 §4).
    - **Nghĩa vụ của visit:** gọi sau mọi khóa `branches` / advisory của nó; không bao giờ khóa dòng `appointments` rồi mới khóa `branches` (deadlock với đổi khung).
    - `at` là một mốc của use case, lấy sau các khóa của visit; có thể trễ bằng thời gian chờ khóa dòng lịch hẹn (chấp nhận, vì cửa sổ rộng ±30 phút).
 6. **Guard thuộc đúng một bên.** Appointment kiểm: tồn tại, trạng thái, chi nhánh, cửa sổ check-in. Visit kiểm (không kiểm lại ở đây): role A06 và `BranchScope`, chi nhánh `ACTIVE` trong giờ mở cửa / cờ cấp cứu (BR-CN-05), thú chưa mất (BR-TN-01), ưu tiên trễ 15–30 phút (BR-TN-03, dùng `scheduledAt`), một Visit mỗi lịch (`uq_visits_appointment_id`), chẩn đoán / mũi tiêm (BR-KB-02), lượt chưa gọi (BR-TN-07).

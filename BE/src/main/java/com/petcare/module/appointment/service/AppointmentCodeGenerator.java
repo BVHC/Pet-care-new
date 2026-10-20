@@ -13,7 +13,7 @@ import com.petcare.module.appointment.repository.AppointmentRepository;
 import com.petcare.platform.config.TimeConfig;
 
 /**
- * Mã lịch hẹn hiển thị (docs/adr/0041): {@code LH-<yyMMdd ngày đặt theo giờ Việt Nam>-<số của appointment_code_seq, ít
+ * Mã lịch hẹn hiển thị (docs/adr/0045): {@code LH-<yyMMdd ngày đặt theo giờ Việt Nam>-<số của appointment_code_seq, ít
  * nhất 4 chữ số>}, ví dụ {@code LH-261015-0007}. Duy nhất theo cấu tạo (sequence toàn cục), không cần khóa; số không
  * reset theo ngày và có thể nhảy cóc khi transaction rollback (sequence không lùi) — lịch hẹn không yêu cầu số liên tục.
  * {@code MAXVALUE 9999999999} giữ mã ≤ 20 ký tự ({@code appointments.code VARCHAR(20)}).

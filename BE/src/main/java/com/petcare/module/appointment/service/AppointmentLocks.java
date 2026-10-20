@@ -10,7 +10,7 @@ import org.springframework.transaction.support.TransactionSynchronizationManager
 import com.petcare.module.appointment.repository.AppointmentRepository;
 
 /**
- * Khóa theo thú của lịch hẹn (docs/adr/0041): BR-LH-05 (≤ 2 lịch {@code BOOKED}, không trùng nhóm trong ngày, không trùng
+ * Khóa theo thú của lịch hẹn (docs/adr/0045): BR-LH-05 (≤ 2 lịch {@code BOOKED}, không trùng nhóm trong ngày, không trùng
  * khung) đếm trên mọi chi nhánh, nên khóa dòng {@code branches} không đủ. Thứ tự khóa của lịch hẹn:
  * {@code advisory(thú) → branches → appointments} — gọi method này <b>đầu tiên</b>, sau khi đã phân quyền.
  * <p>
@@ -21,11 +21,11 @@ import com.petcare.module.appointment.repository.AppointmentRepository;
 @Component
 public class AppointmentLocks {
 
-    /** Namespace advisory lock của thú đặt lịch (bảng đăng ký namespace: docs/adr/0041). */
+    /** Namespace advisory lock của thú đặt lịch (bảng đăng ký namespace: docs/adr/0045). */
     public static final int PET_LOCK_NAMESPACE = 1001;
 
     /**
-     * Namespace advisory lock của khách khi đánh giá hạn chế đặt online (BR-LH-09, docs/adr/0045). Luôn là khóa
+     * Namespace advisory lock của khách khi đánh giá hạn chế đặt online (BR-LH-09, docs/adr/0049). Luôn là khóa
      * <b>cuối cùng</b> của mọi luồng (hủy muộn, ST05, boarding): không luồng nào giữ khóa này rồi chờ khóa khác.
      */
     public static final int CUSTOMER_VIOLATION_NAMESPACE = 1002;
@@ -42,7 +42,7 @@ public class AppointmentLocks {
     }
 
     /**
-     * Khóa theo khách trước khi đếm vi phạm và tạo hạn chế (docs/adr/0045): hai vi phạm đồng thời của cùng khách không
+     * Khóa theo khách trước khi đếm vi phạm và tạo hạn chế (docs/adr/0049): hai vi phạm đồng thời của cùng khách không
      * tạo hai dòng {@code booking_restrictions}, và vi phạm sau thấy vi phạm trước đã commit.
      */
     @Transactional(propagation = Propagation.MANDATORY)

@@ -48,7 +48,7 @@ import com.petcare.module.identity.service.SessionService;
 import com.petcare.platform.config.TimeConfig;
 
 /**
- * {@code AppointmentQueryApi} thật trên Postgres (docs/adr/0046): kết quả từng query, tham gia transaction ghi của bên
+ * {@code AppointmentQueryApi} thật trên Postgres (docs/adr/0050): kết quả từng query, tham gia transaction ghi của bên
  * gọi, và G1 — thêm ngày nghỉ chờ khóa {@code branches} của một lượt đặt đang chạy rồi thấy lịch đó. Ba API của
  * BE-2 ({@code BoardingQueryApi}, {@code PetQueryApi}, {@code CustomerQueryApi}) là mock trả rỗng.
  */

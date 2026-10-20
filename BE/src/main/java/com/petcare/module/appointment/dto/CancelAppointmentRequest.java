@@ -5,7 +5,7 @@ import jakarta.validation.constraints.Size;
 
 /**
  * Body không bắt buộc của {@code POST /api/appointments/{id}/cancel} (appointment-v1 {@code CancelAppointmentRequest},
- * UC40; docs/adr/0045). Lý do không bắt buộc (A4); service bỏ khoảng trắng hai đầu, rỗng thì không lưu. Nguồn hủy suy ra
+ * UC40; docs/adr/0049). Lý do không bắt buộc (A4); service bỏ khoảng trắng hai đầu, rỗng thì không lưu. Nguồn hủy suy ra
  * từ vai trò người hủy, không nhận từ client.
  */
 public record CancelAppointmentRequest(

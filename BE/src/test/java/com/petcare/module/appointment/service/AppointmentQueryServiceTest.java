@@ -67,7 +67,7 @@ import com.petcare.platform.security.BranchScope;
 import com.petcare.platform.security.SecurityPrincipal;
 
 /**
- * {@link AppointmentQueryService} (docs/adr/0044): phạm vi theo vai trò (khách ép hồ sơ của mình, nhân viên ép chi
+ * {@link AppointmentQueryService} (docs/adr/0048): phạm vi theo vai trò (khách ép hồ sơ của mình, nhân viên ép chi
  * nhánh trước mọi lần đọc), tên ghép theo id chứ không theo thứ tự trả về, trang rỗng không gọi module khác, cờ theo
  * người xem, kẹp trang, ranh giới transaction. Nội dung câu lọc (Specification) được kiểm trên Postgres ở
  * {@code AppointmentViewIT}.

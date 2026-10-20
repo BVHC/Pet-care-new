@@ -63,7 +63,7 @@ import com.petcare.platform.security.BranchScope;
 import com.petcare.platform.security.SecurityPrincipal;
 
 /**
- * {@link AppointmentBookingService} (docs/adr/0041 §4, 0043): thứ tự gọi (phạm vi → khóa thú → thú → dịch vụ → khóa chi
+ * {@link AppointmentBookingService} (docs/adr/0045 §4, 0047): thứ tự gọi (phạm vi → khóa thú → thú → dịch vụ → khóa chi
  * nhánh → {@code now} → guard → mã → INSERT), mọi nhánh lỗi không sinh mã và không lưu, thứ tự ưu tiên giữa các guard,
  * khách / lễ tân, ranh giới transaction.
  */

@@ -29,10 +29,10 @@ import com.petcare.platform.security.BranchScope;
 import com.petcare.platform.security.SecurityPrincipal;
 
 /**
- * Xem khung giờ trống — appointment-v1 #1 (UC39; BR-LH-01…04, BR-CN-01; docs/adr/0042). Chỉ đọc, không khóa
- * (docs/adr/0041 §1): một transaction {@code readOnly} + {@code REPEATABLE_READ} để mọi câu đọc (chi nhánh, dịch vụ, giờ
+ * Xem khung giờ trống — appointment-v1 #1 (UC39; BR-LH-01…04, BR-CN-01; docs/adr/0046). Chỉ đọc, không khóa
+ * (docs/adr/0045 §1): một transaction {@code readOnly} + {@code REPEATABLE_READ} để mọi câu đọc (chi nhánh, dịch vụ, giờ
  * mở cửa, ngày nghỉ, số đã đặt, quota) cùng một snapshot. Khung hiển thị {@code AVAILABLE} không giữ chỗ: đặt lịch kiểm lại
- * dưới khóa (docs/adr/0041 §4).
+ * dưới khóa (docs/adr/0045 §4).
  * <p>
  * Thứ tự: phạm vi lễ tân (trước mọi lần đọc DB) → chi nhánh tồn tại (khách: DRAFT cũng 404 cùng message, BR-CN-01) →
  * dịch vụ tồn tại → chi nhánh DRAFT (lễ tân, 400 BR-LH-01) → dịch vụ đặt được tại chi nhánh (400 BR-LH-01) → cửa sổ

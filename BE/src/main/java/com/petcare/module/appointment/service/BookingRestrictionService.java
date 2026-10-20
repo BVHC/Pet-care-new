@@ -17,8 +17,8 @@ import com.petcare.module.identity.api.ConfigKey;
 import com.petcare.module.identity.api.SystemConfigApi;
 
 /**
- * Cài {@link BookingRestrictionApi} (BR-LH-09): đọc {@link #isRestricted} (docs/adr/0043) và ghi
- * {@link #evaluateAfterViolation} (docs/adr/0045, trả nợ D030).
+ * Cài {@link BookingRestrictionApi} (BR-LH-09): đọc {@link #isRestricted} (docs/adr/0047) và ghi
+ * {@link #evaluateAfterViolation} (docs/adr/0049, trả nợ D030).
  */
 @Service
 public class BookingRestrictionService implements BookingRestrictionApi {
@@ -49,7 +49,7 @@ public class BookingRestrictionService implements BookingRestrictionApi {
 
     /**
      * Gọi ngay sau một vi phạm (hủy muộn, NO_SHOW — của lịch hẹn hoặc đặt chỗ), trong transaction của bên gọi, sau khi
-     * vi phạm đã được flush (docs/adr/0045):
+     * vi phạm đã được flush (docs/adr/0049):
      * <ol>
      * <li>khóa theo khách (advisory 1002, luôn là khóa cuối cùng) — hai vi phạm đồng thời không tạo hai dòng;</li>
      * <li>đang bị hạn chế → không tạo thêm;</li>

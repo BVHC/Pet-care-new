@@ -1,6 +1,7 @@
-# ADR-0044: Xem lịch hẹn — khách theo `customer_id`, nhân viên theo chi nhánh, bộ lọc AND, cửa sổ check-in có chặn trên, tên ghép theo lô, cờ theo người xem
+# ADR-0048: Xem lịch hẹn — khách theo `customer_id`, nhân viên theo chi nhánh, bộ lọc AND, cửa sổ check-in có chặn trên, tên ghép theo lô, cờ theo người xem
 
 - **Trạng thái:** Accepted
+- **Đánh số lại:** ban đầu là ADR-0044; đổi thành số hiện tại khi gộp `dev` ngày 2026-10-20 vì trùng số với ADR-0041…0044 của BE-2 (vào `dev` trước). Mọi tham chiếu ADR-0041…0046 trong code / tài liệu lịch hẹn đã đổi theo (+4); migration `V13__appointment_code_sequence.sql` đổi thành V16.
 - **Ngày:** 2026-10-15
 - **Liên quan:**
   - BR-LH-06 (02 L127), 07 (L128), 08 (L129), 11 (L132); BR-TN-02 (L142), 03 (L143); BR-KH-08 (L94).
@@ -8,7 +9,7 @@
   - appointment-v1 #3, #4 (`docs/api/appointment-v1.md` mục A, B; A3 "danh sách chờ check-in là bộ lọc `checkInReady`").
   - `docs/api/00-method.md`: L40 (phạm vi chi nhánh, khách không có phạm vi chi nhánh), L48 (phân trang), L64–66 (403 / 404), L70 (thứ tự kiểm).
   - [CFG] `visit.check_in_early_minutes`, `appointment.no_show_after_minutes`, `appointment.max_reschedules`, `appointment.reschedule_min_lead_hours`.
-  - ADR-0006 (phạm vi khách), 0020 (OSIV tắt), 0038 (không `:x IS NULL OR`; readOnly + REPEATABLE READ), 0042 (một snapshot chỉ đọc), 0043 (`AppointmentActions`; thú của khách khác = 404).
+  - ADR-0006 (phạm vi khách), 0020 (OSIV tắt), 0038 (không `:x IS NULL OR`; readOnly + REPEATABLE READ), 0046 (một snapshot chỉ đọc), 0047 (`AppointmentActions`; thú của khách khác = 404).
   - Nợ D010, D028, D031, D032.
 - **Triển khai (T16 phần 3):**
   - `appointment/controller/AppointmentController` (`GET /api/appointments`, `GET /api/appointments/{appointmentId}`).
@@ -80,7 +81,7 @@ Người dùng chốt (2026-10-15) bốn điểm:
    - #4 dùng cùng đường đi với một phần tử.
 
 10. **Cờ `canReschedule` / `canCancel`:**
-    - CUSTOMER → cờ của khách; RECEPTIONIST → cờ của lễ tân (`AppointmentActions.forViewer`, ADR-0043 §6).
+    - CUSTOMER → cờ của khách; RECEPTIONIST → cờ của lễ tân (`AppointmentActions.forViewer`, ADR-0047 §6).
     - BRANCH_MANAGER, VET, CARETAKER → `Flags.NONE`, vì hợp đồng #5 / #6 chỉ cho A02, A06.
     - `now` và hai [CFG] đọc một lần cho cả trang. Phần 4 (đổi / hủy) phải dùng đúng các quy tắc này làm guard.
 

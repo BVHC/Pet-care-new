@@ -1,6 +1,11 @@
 package com.petcare.module.customer.service;
 
+import java.math.BigDecimal;
+import java.util.Collection;
+import java.util.List;
+import java.util.Map;
 import java.util.Optional;
+import java.util.stream.Collectors;
 
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Propagation;
@@ -10,6 +15,7 @@ import com.petcare.module.customer.api.PetQueryApi;
 import com.petcare.module.customer.entity.Pet;
 import com.petcare.module.customer.repository.PetRepository;
 import com.petcare.module.customer.repository.WeightRecordRepository;
+import com.petcare.module.customer.repository.WeightRecordRepository.CurrentWeightRow;
 
 /**
  * {@link PetQueryApi} thật (thay {@code PetQueryApiPlaceholder}, docs/adr/0041). {@code findPet} đọc không khóa;
@@ -38,8 +44,27 @@ public class PetQueryService implements PetQueryApi {
         return pets.findByIdForShare(petId).map(this::summarize);
     }
 
+    /** Hai câu cho cả lô (thú + cân nặng mới nhất), không N+1; id không có thì bỏ qua (06 §6). */
+    @Override
+    @Transactional(readOnly = true)
+    public List<PetSummary> findPets(Collection<Long> petIds) {
+        if (petIds.isEmpty()) {
+            return List.of();
+        }
+        List<Long> ids = petIds.stream().distinct().toList();
+        Map<Long, BigDecimal> current = weights.findCurrentWeights(ids).stream()
+                .collect(Collectors.toMap(CurrentWeightRow::getPetId, CurrentWeightRow::getWeightKg));
+        return pets.findAllById(ids).stream()
+                .map(pet -> summarize(pet, current.get(pet.getId())))
+                .toList();
+    }
+
     private PetSummary summarize(Pet pet) {
+        return summarize(pet, weights.findCurrentWeight(pet.getId()).orElse(null));
+    }
+
+    private static PetSummary summarize(Pet pet, BigDecimal currentWeightKg) {
         return new PetSummary(pet.getId(), pet.getCustomerId(), pet.getName(), pet.getSpecies(), pet.getBirthDate(),
-                pet.getDeceasedOn(), weights.findCurrentWeight(pet.getId()).orElse(null));
+                pet.getDeceasedOn(), currentWeightKg);
     }
 }

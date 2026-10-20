@@ -6,7 +6,7 @@ import java.util.SortedMap;
 
 /**
  * Owner: branch (CN) · BE-2 — BE-1 thêm 2026-10-11 cho quản trị nhân viên (T14, docs/adr/0029, nợ D014) và 2026-10-15
- * cho lịch hẹn (T16, docs/adr/0041).
+ * cho lịch hẹn (T16, docs/adr/0045).
  * Caller: identity (đổi chức vụ, điều chuyển, vô hiệu hóa, kích hoạt lại, khóa); appointment (đặt lịch, đổi khung).
  */
 public interface BranchApi {
@@ -25,7 +25,7 @@ public interface BranchApi {
 
     /**
      * Khóa dòng {@code branches} của chi nhánh đặt lịch ({@code FOR NO KEY UPDATE}) trong transaction của bên gọi
-     * ({@code MANDATORY}, không được {@code readOnly}) và trả trạng thái đọc dưới khóa (docs/adr/0041). Cùng dòng mà mọi
+     * ({@code MANDATORY}, không được {@code readOnly}) và trả trạng thái đọc dưới khóa (docs/adr/0045). Cùng dòng mà mọi
      * luồng ghi lịch / quota / dịch vụ của branch đã khóa, nên đặt / đổi lịch xếp hàng với thêm ngày nghỉ, đổi giờ mở
      * cửa, đổi quota, bật / tắt dịch vụ và với lượt đặt khác của cùng chi nhánh. Thứ tự khóa của lịch hẹn:
      * {@code advisory(thú) → branches → appointments}; bên gọi phải gọi method này <b>trước</b> mọi

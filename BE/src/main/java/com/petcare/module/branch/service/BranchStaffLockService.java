@@ -18,7 +18,7 @@ import com.petcare.module.branch.repository.BranchRepository;
 
 /**
  * Cài đặt {@link BranchApi}: khóa dòng {@code branches} cho quản trị nhân viên (docs/adr/0029, nợ D014) và cho đặt /
- * đổi lịch hẹn (docs/adr/0041). Thứ tự id tăng dần do lớp này giữ, bên gọi không tự sắp nên không thể quên: hai luồng
+ * đổi lịch hẹn (docs/adr/0045). Thứ tự id tăng dần do lớp này giữ, bên gọi không tự sắp nên không thể quên: hai luồng
  * khóa cùng hai chi nhánh theo hai hướng (điều chuyển A→B và B→A) không deadlock.
  * <p>
  * Chặn transaction {@code readOnly} trước mọi câu SQL: PostgreSQL không cho {@code SELECT … FOR NO KEY UPDATE} trong

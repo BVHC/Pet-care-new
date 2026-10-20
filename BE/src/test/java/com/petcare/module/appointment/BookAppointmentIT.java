@@ -55,7 +55,7 @@ import com.petcare.module.identity.service.SessionService;
 import com.petcare.support.MutableClock;
 
 /**
- * T16 phần 2 — đặt lịch {@code POST /api/appointments} (appointment-v1 #2, UC39; docs/adr/0041, 0043) qua HTTP trên
+ * T16 phần 2 — đặt lịch {@code POST /api/appointments} (appointment-v1 #2, UC39; docs/adr/0045, 0047) qua HTTP trên
  * Postgres 17 thật. {@code BranchQueryService}, {@code CatalogQueryService} thật; {@code PetQueryApi} /
  * {@code CustomerQueryApi} (BE-2, placeholder) được thay bằng {@link JdbcPetCustomerModule} đọc SQL mỗi lần gọi.
  * <p>
@@ -571,7 +571,7 @@ class BookAppointmentIT {
                 .isEqualTo(HttpStatus.UNSUPPORTED_MEDIA_TYPE);
         HttpHeaders headers = new HttpHeaders();
         headers.setBearerAuth(customerToken);
-        // GET /api/appointments là danh sách (#3, docs/adr/0044); PUT không có handler.
+        // GET /api/appointments là danh sách (#3, docs/adr/0048); PUT không có handler.
         assertThat(http.exchange(URI.create(http.getRootUri() + "/api/appointments"), HttpMethod.PUT,
                 new HttpEntity<>(headers), MAP).getStatusCode()).isEqualTo(HttpStatus.METHOD_NOT_ALLOWED);
     }
@@ -615,7 +615,7 @@ class BookAppointmentIT {
         assertThat(count()).isEqualTo(1);
     }
 
-    // ================================================================ khóa + race (docs/adr/0041, 0043)
+    // ================================================================ khóa + race (docs/adr/0045, 0047)
 
     /** I1: hai thú khác nhau tranh chỗ cuối của cùng khung — xếp hàng ở khóa {@code branches}. */
     @Test
@@ -674,7 +674,7 @@ class BookAppointmentIT {
         assertThat(count()).isEqualTo(1);
     }
 
-    /** I4: lịch chi nhánh (ngày nghỉ, quota, bật / tắt dịch vụ) đọc sau khóa {@code branches} (R2, R3 của docs/adr/0041). */
+    /** I4: lịch chi nhánh (ngày nghỉ, quota, bật / tắt dịch vụ) đọc sau khóa {@code branches} (R2, R3 của docs/adr/0045). */
     @ParameterizedTest
     @ValueSource(strings = {"holiday", "quota", "service"})
     void branchScheduleChangedWhileWaitingOnTheBranchLockIsSeen(String change) throws Exception {
@@ -714,7 +714,7 @@ class BookAppointmentIT {
                 "Chỉ đặt được khung bắt đầu sau ít nhất 24 giờ và trong vòng 30 ngày tới (BR-LH-04)");
     }
 
-    /** I6: thú đọc sau khóa thú (docs/adr/0043 Q1) — luồng giữ khóa 1001 đánh dấu thú mất rồi commit. */
+    /** I6: thú đọc sau khóa thú (docs/adr/0047 Q1) — luồng giữ khóa 1001 đánh dấu thú mất rồi commit. */
     @Test
     void petMarkedDeceasedWhileWaitingOnThePetLockIsSeen() throws Exception {
         List<ResponseEntity<Map<String, Object>>> results = whileHeld(petLockSql(), petLockArgs(pet), WAITING_ON_PET,

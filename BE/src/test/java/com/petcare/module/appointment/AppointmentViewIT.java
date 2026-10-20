@@ -42,7 +42,7 @@ import com.petcare.support.MutableClock;
 
 /**
  * T16 phần 3 — xem lịch hẹn {@code GET /api/appointments} (#3) và {@code GET /api/appointments/{id}} (#4)
- * (appointment-v1, UC40, UC44; docs/adr/0044) qua HTTP trên Postgres 17 thật. {@code BranchQueryService},
+ * (appointment-v1, UC40, UC44; docs/adr/0048) qua HTTP trên Postgres 17 thật. {@code BranchQueryService},
  * {@code CatalogQueryService} thật; {@code PetQueryApi} / {@code CustomerQueryApi} (BE-2, placeholder) thay bằng
  * {@link JdbcPetCustomerModule} (SQL mỗi lần gọi, đếm số lần gọi theo lô).
  * <p>

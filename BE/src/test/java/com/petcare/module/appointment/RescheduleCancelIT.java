@@ -60,7 +60,7 @@ import com.petcare.support.MutableClock;
 
 /**
  * T16 phần 4 — đổi khung {@code POST /api/appointments/{id}/reschedule} (#5) và hủy {@code …/cancel} (#6), cùng
- * {@code BookingRestrictionApi.evaluateAfterViolation} (UC40; BR-LH-02…07, 09; docs/adr/0045) qua HTTP trên Postgres 17
+ * {@code BookingRestrictionApi.evaluateAfterViolation} (UC40; BR-LH-02…07, 09; docs/adr/0049) qua HTTP trên Postgres 17
  * thật. {@code BranchQueryService}, {@code CatalogQueryService} thật; {@code PetQueryApi} / {@code CustomerQueryApi}
  * (placeholder của BE-2) thay bằng {@link JdbcPetCustomerModule}; {@code BoardingQueryApi} (placeholder) là mock — mặc
  * định 0 vi phạm lưu trú.

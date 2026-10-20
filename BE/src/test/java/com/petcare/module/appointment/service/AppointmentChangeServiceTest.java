@@ -67,7 +67,7 @@ import com.petcare.platform.security.BranchScope;
 import com.petcare.platform.security.SecurityPrincipal;
 
 /**
- * {@link AppointmentChangeService} (docs/adr/0041 §4, 0045): thứ tự phân quyền → khóa → {@code now} → 409 → guard → ghi,
+ * {@link AppointmentChangeService} (docs/adr/0045 §4, 0049): thứ tự phân quyền → khóa → {@code now} → 409 → guard → ghi,
  * mọi nhánh lỗi không ghi, mốc biên của BR-LH-06 / 07, nguồn hủy, hủy muộn gọi đánh giá BR-LH-09, ranh giới
  * transaction.
  */

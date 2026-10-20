@@ -35,7 +35,7 @@ import com.petcare.platform.exception.BusinessRuleViolationException;
 import com.petcare.platform.exception.InvalidStateTransitionException;
 
 /**
- * Commit / rollback của {@code AppointmentApi} theo transaction của Visit#1 / #5 / #6 (docs/adr/0046). {@link VisitLike}
+ * Commit / rollback của {@code AppointmentApi} theo transaction của Visit#1 / #5 / #6 (docs/adr/0050). {@link VisitLike}
  * đứng thay visit (T26): mở transaction ghi, chèn dòng {@code visits} thật bằng SQL (FK +
  * {@code uq_visits_appointment_id}) rồi gọi {@code AppointmentApi}. Mọi nhánh lỗi phải để lại 0 dòng: so {@code xmin}
  * và số dòng {@code visits} trước / sau.

@@ -19,7 +19,7 @@ import com.petcare.module.customer.api.Species;
 
 /**
  * Đứng thay {@link PetQueryApi} và {@link CustomerQueryApi} của module customer (BE-2, còn placeholder — nợ D010, D031)
- * cho IT đặt lịch (docs/adr/0043) và xem lịch (docs/adr/0044), khuôn {@code LinkProfileIT.JdbcCustomerModule}. Đọc thẳng
+ * cho IT đặt lịch (docs/adr/0047) và xem lịch (docs/adr/0048), khuôn {@code LinkProfileIT.JdbcCustomerModule}. Đọc thẳng
  * bảng {@code pets}, {@code customers}, {@code weight_records} bằng SQL ở <b>mỗi lần gọi</b> (không cache), trong
  * transaction của bên gọi — đúng nghĩa vụ mà đặt lịch cần: đọc thú sau khóa thấy dữ liệu đã commit trước khi khóa được
  * nhả. Hai method theo lô ({@code findPets}, {@code findContacts}) đếm số lần gọi để IT xem lịch chứng minh mỗi trang chỉ
@@ -54,6 +54,12 @@ final class JdbcPetCustomerModule implements PetQueryApi, CustomerQueryApi {
     @Override
     public Optional<PetSummary> findPet(Long petId) {
         return jdbc.query(PET_SELECT + "WHERE p.id = ?", (rs, n) -> pet(rs), petId).stream().findFirst();
+    }
+
+    /** Như {@code PetQueryService.findPetForShare} (docs/adr/0041): khóa chia sẻ dòng thú rồi đọc. */
+    @Override
+    public Optional<PetSummary> findPetForShare(Long petId) {
+        return jdbc.query(PET_SELECT + "WHERE p.id = ? FOR SHARE OF p", (rs, n) -> pet(rs), petId).stream().findFirst();
     }
 
     @Override

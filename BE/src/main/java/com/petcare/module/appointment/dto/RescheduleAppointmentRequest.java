@@ -9,7 +9,7 @@ import io.swagger.v3.oas.annotations.media.Schema;
 import jakarta.validation.constraints.NotNull;
 
 /**
- * Body của {@code POST /api/appointments/{id}/reschedule} (appointment-v1 {@code RescheduleRequest}, UC40; docs/adr/0045).
+ * Body của {@code POST /api/appointments/{id}/reschedule} (appointment-v1 {@code RescheduleRequest}, UC40; docs/adr/0049).
  * Chỉ có khung mới: chi nhánh, thú, dịch vụ giữ nguyên (BR-LH-06), trường lạ bị bỏ qua. Khung hợp lệ (BR-LH-02), cửa sổ
  * đặt (BR-LH-04) và mọi rule kiểm ở service dưới khóa.
  */

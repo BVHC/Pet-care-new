@@ -21,7 +21,7 @@ import io.swagger.v3.oas.annotations.Parameter;
 import io.swagger.v3.oas.annotations.enums.ParameterIn;
 
 /**
- * Khung giờ trống — appointment-v1 #1 (UC39, A02 + A06; docs/adr/0042). Tham số sai kiểu / thiếu là 400
+ * Khung giờ trống — appointment-v1 #1 (UC39, A02 + A06; docs/adr/0046). Tham số sai kiểu / thiếu là 400
  * {@code MALFORMED_REQUEST} (trước {@code @PreAuthorize}); {@code date} theo ISO {@code yyyy-MM-dd}. Phạm vi chi nhánh
  * của lễ tân và mọi rule kiểm ở service.
  */
@@ -44,7 +44,7 @@ public class AvailableSlotController {
             description = "UC39 · BR-LH-01, 02, 03, 04. Actor: A02, A06. Quyền: Khách; lễ tân chi nhánh. "
                 + "Chuyển trạng thái: —. Ngày nghỉ hoặc ngày không có giờ mở cửa trả mảng rỗng (A1). Khách chỉ thấy "
                 + "khung bắt đầu từ now + 24 giờ [CFG] và ngày hẹn ≤ hôm nay + 30 ngày [CFG]; lễ tân thấy mọi khung "
-                + "chưa bắt đầu (BR-LH-04). Khung AVAILABLE chưa giữ chỗ: đặt lịch kiểm lại (docs/adr/0042).",
+                + "chưa bắt đầu (BR-LH-04). Khung AVAILABLE chưa giữ chỗ: đặt lịch kiểm lại (docs/adr/0046).",
             parameters = {
                     @Parameter(name = "branchId", in = ParameterIn.PATH, example = "3"),
                     @Parameter(name = "serviceId", in = ParameterIn.QUERY, example = "12"),

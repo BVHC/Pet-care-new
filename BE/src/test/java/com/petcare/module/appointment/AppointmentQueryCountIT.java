@@ -30,7 +30,7 @@ import com.petcare.platform.config.TimeConfig;
 import jakarta.persistence.EntityManagerFactory;
 
 /**
- * Số câu SQL của {@code AppointmentQueryApi} / {@code AppointmentApi} (docs/adr/0046, không N+1): mỗi query đúng 1
+ * Số câu SQL của {@code AppointmentQueryApi} / {@code AppointmentApi} (docs/adr/0050, không N+1): mỗi query đúng 1
  * câu với 1 dòng và với 50 dòng (cùng con số ⇒ không phụ thuộc số dòng); mỗi lời gọi ghi đúng 2 câu
  * ({@code SELECT … FOR NO KEY UPDATE} + {@code UPDATE}). Context riêng bật Hibernate Statistics.
  */

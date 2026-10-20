@@ -14,7 +14,7 @@ public interface CustomerQueryApi {
     Optional<CustomerContact> findContact(Long customerId);
 
     /**
-     * Nhiều hồ sơ một lần (appointment #3 ghép tên khách cho một trang lịch hẹn, docs/adr/0044). Thêm 15/10 (06 §6).
+     * Nhiều hồ sơ một lần (appointment #3 ghép tên khách cho một trang lịch hẹn, docs/adr/0048). Thêm 15/10 (06 §6).
      * Nghĩa vụ như {@code PetQueryApi.findPets}: id không có thì bỏ qua, không trả null, không phân trang, mỗi id tối đa
      * một lần, thứ tự tùy ý, đọc mới mỗi lần gọi; bên gọi truyền tối đa 100 id; tập rỗng → danh sách rỗng.
      */

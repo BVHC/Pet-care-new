@@ -17,7 +17,7 @@ import com.petcare.module.appointment.entity.AppointmentStatus;
 import com.petcare.module.catalog.api.ServiceGroup;
 
 /**
- * {@link AppointmentActions} (docs/adr/0043): {@code canCancel} = BOOKED và chưa tới giờ hẹn (BR-LH-07);
+ * {@link AppointmentActions} (docs/adr/0047): {@code canCancel} = BOOKED và chưa tới giờ hẹn (BR-LH-07);
  * {@code canReschedule} thêm còn lượt đổi [CFG] và — với khách — còn ít nhất 12 giờ [CFG], biên tính là được (BR-LH-06).
  */
 class AppointmentActionsTest {

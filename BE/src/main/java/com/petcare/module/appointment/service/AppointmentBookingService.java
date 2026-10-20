@@ -37,9 +37,9 @@ import com.petcare.platform.security.SecurityPrincipal;
 
 /**
  * Đặt lịch hẹn — appointment-v1 #2, Lịch hẹn#1 {@code — → BOOKED} (UC39; BR-LH-01…05, 09, BR-KH-05, BR-TK-19;
- * docs/adr/0041 §4, 0043). Một transaction ghi, không {@code noRollbackFor}: bị từ chối thì không giữ lại gì.
+ * docs/adr/0045 §4, 0047). Một transaction ghi, không {@code noRollbackFor}: bị từ chối thì không giữ lại gì.
  * <p>
- * Thứ tự (docs/adr/0043): phạm vi (lễ tân: chi nhánh của mình, trước mọi lần đọc DB; khách: hồ sơ của tài khoản) →
+ * Thứ tự (docs/adr/0047): phạm vi (lễ tân: chi nhánh của mình, trước mọi lần đọc DB; khách: hồ sơ của tài khoản) →
  * {@code lockPet} → đọc thú <b>một lần</b> (404, chủ — thú của khách khác cùng 404 —, đã mất cùng một snapshot) → dịch vụ
  * (404) → {@code lockForBooking} (404; khách + chi nhánh DRAFT cũng 404) → {@code now} → BR-LH-01 → BR-TK-19, BR-LH-09
  * (chỉ khách) → BR-KH-05 → BR-LH-04 → BR-LH-02 → BR-LH-05 → BR-LH-03 → mã → INSERT. Mọi lần đọc lịch chi nhánh
@@ -172,7 +172,7 @@ public class AppointmentBookingService {
                 .orElseThrow(() -> new IllegalStateException("Tài khoản khách #" + accountId + " không có hồ sơ khách"));
     }
 
-    /** BR-LH-04 qua {@link BookingWindow} (docs/adr/0042), với {@code now} lấy sau khi đã khóa. */
+    /** BR-LH-04 qua {@link BookingWindow} (docs/adr/0046), với {@code now} lấy sau khi đã khóa. */
     private void checkWindow(boolean customer, Instant now, LocalDate date, LocalTime start) {
         if (customer) {
             int minLeadHours = configs.getInt(ConfigKey.APPOINTMENT_MIN_LEAD_HOURS);
@@ -206,7 +206,7 @@ public class AppointmentBookingService {
         return group == ServiceGroup.MEDICAL ? "Khám/Tiêm" : "Thẩm mỹ";
     }
 
-    /** Ghi chú bỏ khoảng trắng hai đầu; rỗng thì không lưu (docs/adr/0043). */
+    /** Ghi chú bỏ khoảng trắng hai đầu; rỗng thì không lưu (docs/adr/0047). */
     private static String normalizeNote(String note) {
         if (note == null) {
             return null;

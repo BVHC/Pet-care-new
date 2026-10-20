@@ -1,5 +1,6 @@
 package com.petcare.module.customer.service;
 
+import java.util.Collection;
 import java.util.List;
 import java.util.Optional;
 
@@ -29,8 +30,23 @@ public class CustomerQueryService implements CustomerQueryApi {
     @Override
     @Transactional(readOnly = true)
     public Optional<CustomerContact> findContact(Long customerId) {
-        return customers.findById(customerId).map(c -> new CustomerContact(c.getId(), c.getFullName(), c.getPhone(),
-                c.getEmail(), c.getAccountId(), c.isLinkDecisionPending()));
+        return customers.findById(customerId).map(CustomerQueryService::toContact);
+    }
+
+    private static CustomerContact toContact(Customer c) {
+        return new CustomerContact(c.getId(), c.getFullName(), c.getPhone(), c.getEmail(), c.getAccountId(),
+                c.isLinkDecisionPending());
+    }
+
+    /** Một câu cho cả lô; id không có thì bỏ qua (06 §6). */
+    @Override
+    @Transactional(readOnly = true)
+    public List<CustomerContact> findContacts(Collection<Long> customerIds) {
+        if (customerIds.isEmpty()) {
+            return List.of();
+        }
+        return customers.findAllById(customerIds.stream().distinct().toList()).stream().map(CustomerQueryService::toContact)
+                .toList();
     }
 
     @Override

@@ -1,6 +1,7 @@
-# ADR-0041: Nền lịch hẹn — khóa chi nhánh + khóa thú khi đặt / đổi lịch, mã lịch hẹn từ sequence, khung 30 phút
+# ADR-0045: Nền lịch hẹn — khóa chi nhánh + khóa thú khi đặt / đổi lịch, mã lịch hẹn từ sequence, khung 30 phút
 
-- **Trạng thái:** Accepted · §1 (câu "phân quyền xong trước khi lấy khóa nào") thay một phần bởi ADR-0043: kiểm chủ thú chạy ngay sau `lockPet`
+- **Trạng thái:** Accepted · §1 (câu "phân quyền xong trước khi lấy khóa nào") thay một phần bởi ADR-0047: kiểm chủ thú chạy ngay sau `lockPet`
+- **Đánh số lại:** ban đầu là ADR-0041; đổi thành số hiện tại khi gộp `dev` ngày 2026-10-20 vì trùng số với ADR-0041…0044 của BE-2 (vào `dev` trước). Mọi tham chiếu ADR-0041…0046 trong code / tài liệu lịch hẹn đã đổi theo (+4); migration `V13__appointment_code_sequence.sql` đổi thành V16.
 - **Ngày:** 2026-10-15
 - **Liên quan:**
   - BR-LH-01 (02 L122), 02 (L123), 03 (L124), 04 (L125), 05 (L126), 06 (L127), 07 (L128), 10 (L131), 11 (L132); BR-CN-02 (L66), 03 (L67), 04 (L68); BR-KH-05, 08 (L91, L94); BR-QT-15 (L58). 03 §3 Lịch hẹn #1–#8 (L79–88), Phụ lục (L237–253).
@@ -10,10 +11,10 @@
 - **Triển khai (T16 phần 0, không endpoint):**
   - `appointment/entity/{Appointment, AppointmentStatus, AppointmentChannel, AppointmentCancelSource}`, `appointment/fsm/AppointmentTransitionHandler`, `appointment/repository/AppointmentRepository` (`acquireTransactionLock`, `nextCodeValue`), `appointment/service/{AppointmentLocks, AppointmentCodeGenerator, SlotGrid}`.
   - `branch/api/BranchApi.lockForBooking`, `branch/service/BranchStaffLockService.lockForBooking`, `BranchRepository.lockStatusForBooking`.
-  - `V13__appointment_code_sequence.sql`.
+  - `V16__appointment_code_sequence.sql` (ban đầu V13, đổi số khi gộp `dev` 2026-10-20 vì trùng `V13__pet_customer_fk_indexes.sql`).
   - Test:
     - Unit: `AppointmentTransitionHandlerTest`, `SlotGridTest`, `SlotGridParityTest`, `AppointmentLocksTest`, `AppointmentCodeGeneratorTest`, `BranchStaffLockServiceTest` (+4).
-    - IT: `module/appointment/{AppointmentMappingIT, AppointmentLockIT, AppointmentCodeGeneratorIT}`, `module/branch/BranchBookingLockIT`, `SchemaMigrationIT` (V13).
+    - IT: `module/appointment/{AppointmentMappingIT, AppointmentLockIT, AppointmentCodeGeneratorIT}`, `module/branch/BranchBookingLockIT`, `SchemaMigrationIT` (V16).
 
 ## Bối cảnh
 
@@ -94,7 +95,7 @@ Hiện trạng có liên quan:
    - Repo không đặt `lock_timeout`, nên đường 409 thực tế là deadlock 40P01. Hibernate trả về `PessimisticLockingFailureException`, `GlobalExceptionHandler` trả 409 `CONCURRENCY_CONFLICT` (`AppointmentLockIT.deadlockSurfacesAsPessimisticLockingFailure`).
 
 5. **Mã lịch hẹn:** `LH-<yyMMdd ngày đặt theo giờ Việt Nam>-<số của appointment_code_seq, ít nhất 4 chữ số>` (`AppointmentCodeGenerator`).
-   - V13: `CREATE SEQUENCE appointment_code_seq AS BIGINT MAXVALUE 9999999999 NO CYCLE`.
+   - V16 (ban đầu V13): `CREATE SEQUENCE appointment_code_seq AS BIGINT MAXVALUE 9999999999 NO CYCLE`.
    - Duy nhất theo cấu tạo, không cần khóa. Số không reset theo ngày.
    - Số **nhảy cóc** khi transaction rollback (sequence không lùi). Lịch hẹn không yêu cầu số liên tục, khác phiếu nhập BR-KO-03.
    - Tối đa 20 ký tự. Hết số thì lỗi (không quay vòng sinh trùng): PostgreSQL 2200H → đúng `DataIntegrityViolationException` → 409 message chung. Thực tế không chạm tới.
@@ -131,7 +132,7 @@ Hiện trạng có liên quan:
 
 ## Hệ quả
 
-- Phần 2–4 dùng khung ở mục 4. Phần 0 **chưa thêm lời gọi nào trong code chạy thật**, nên không hành vi runtime nào đổi ngoài V13 và 4 bean mới.
+- Phần 2–4 dùng khung ở mục 4. Phần 0 **chưa thêm lời gọi nào trong code chạy thật**, nên không hành vi runtime nào đổi ngoài V16 (ban đầu V13) và 4 bean mới.
 - Từ phần 2, luồng ghi của branch và luồng quản trị nhân viên trên chi nhánh X có thể chờ vài ms sau một lượt đặt lịch của X, và ngược lại. Đây là điều R1–R3 cần.
 - `FOR NO KEY UPDATE` không xung đột `FOR KEY SHARE` của kiểm FK: INSERT `appointments` không bị chặn bởi khóa `branches` của chính nó hay của người khác.
 - Mỗi request đang chờ khóa giữ một connection Hikari. Một chi nhánh bị dội rất nhiều lượt đặt cùng lúc có thể làm cạn pool. Rate limit thuộc nợ D011.

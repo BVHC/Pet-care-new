@@ -22,7 +22,7 @@ import com.petcare.module.appointment.repository.AppointmentRepository;
 import com.petcare.platform.config.TimeConfig;
 
 /**
- * Mã lịch hẹn (docs/adr/0041): {@code LH-yyMMdd-NNNN}, ngày theo giờ Việt Nam kể cả khi {@code Clock} mang múi giờ
+ * Mã lịch hẹn (docs/adr/0045): {@code LH-yyMMdd-NNNN}, ngày theo giờ Việt Nam kể cả khi {@code Clock} mang múi giờ
  * khác, đệm 0 tới 4 chữ số, tối đa 20 ký tự ở {@code MAXVALUE} của sequence; transaction readOnly bị chặn trước SQL.
  */
 class AppointmentCodeGeneratorTest {

@@ -10,7 +10,7 @@ import com.petcare.module.appointment.service.SlotAvailability;
 /**
  * {@link SlotAvailability} → {@link SlotResponse} (appointment-v1 schema {@code Slot}). {@code unmappedTargetPolicy =
  * ERROR}: thiếu một trường của hợp đồng là lỗi biên dịch. {@code slotEnd} = giờ bắt đầu + 30 phút; {@code status} theo
- * {@link SlotAvailability#full()} (docs/adr/0042).
+ * {@link SlotAvailability#full()} (docs/adr/0046).
  */
 @Mapper(componentModel = "spring", unmappedTargetPolicy = ReportingPolicy.ERROR)
 public interface SlotMapper {

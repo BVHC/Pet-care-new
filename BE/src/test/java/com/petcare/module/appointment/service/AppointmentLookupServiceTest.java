@@ -16,7 +16,7 @@ import org.springframework.transaction.annotation.Transactional;
 import com.petcare.module.appointment.api.AppointmentQueryApi.BookedSlot;
 import com.petcare.module.appointment.repository.AppointmentRepository;
 
-/** {@link AppointmentLookupService} (docs/adr/0046): chỉ ủy quyền cho repository, tham số null bị chặn trước SQL. */
+/** {@link AppointmentLookupService} (docs/adr/0050): chỉ ủy quyền cho repository, tham số null bị chặn trước SQL. */
 class AppointmentLookupServiceTest {
 
     private static final LocalDate DAY = LocalDate.of(2026, 10, 19);

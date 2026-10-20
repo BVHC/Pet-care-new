@@ -15,7 +15,7 @@ import io.swagger.v3.oas.annotations.media.Schema;
 /**
  * Một lịch hẹn (appointment-v1 schema {@code Appointment}, UC39, UC40). Chỉ dựng bởi {@code AppointmentMapper}. Không
  * lộ {@code booked_by}, {@code reminded_at}, {@code created_at}, {@code updated_at}. {@code visitId} null tới khi visit có
- * query tra Visit theo lịch hẹn (nợ D028); {@code canReschedule}, {@code canCancel} theo vai trò người xem (docs/adr/0043).
+ * query tra Visit theo lịch hẹn (nợ D028); {@code canReschedule}, {@code canCancel} theo vai trò người xem (docs/adr/0047).
  */
 public record AppointmentResponse(
         @Schema(description = "Mã lịch hẹn", example = "501")

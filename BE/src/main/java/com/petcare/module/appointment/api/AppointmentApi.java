@@ -5,7 +5,7 @@ import java.time.Instant;
 import com.petcare.module.catalog.api.ServiceGroup;
 
 /**
- * Owner: appointment (LH) · BE-1. Caller: visit (TN). Cài đặt: {@code AppointmentVisitService} (docs/adr/0046).
+ * Owner: appointment (LH) · BE-1. Caller: visit (TN). Cài đặt: {@code AppointmentVisitService} (docs/adr/0050).
  * <p>
  * <b>Nghĩa vụ của bên gọi</b> (visit, T26), áp dụng cho cả ba method:
  * <ul>
@@ -15,7 +15,7 @@ import com.petcare.module.catalog.api.ServiceGroup;
  * {@code BusinessRuleViolationException}): lỗi đã đánh dấu transaction rollback-only, bắt rồi đi tiếp thì commit ném
  * {@code UnexpectedRollbackException} (docs/adr/0010).</li>
  * <li>Gọi <b>sau</b> mọi khóa {@code branches} / advisory của visit, không bao giờ khóa dòng {@code appointments} trước
- * rồi khóa {@code branches} (deadlock với đổi khung: {@code advisory(thú) → branches → appointments}, docs/adr/0041).</li>
+ * rồi khóa {@code branches} (deadlock với đổi khung: {@code advisory(thú) → branches → appointments}, docs/adr/0045).</li>
  * <li>{@code at} là một mốc duy nhất của use case, lấy <b>sau</b> các khóa của visit; có thể trễ bằng thời gian chờ khóa
  * dòng lịch hẹn (chấp nhận).</li>
  * </ul>
@@ -33,7 +33,7 @@ public interface AppointmentApi {
      * Visit#1 → Lịch hẹn#3. Thứ tự lỗi: 404 không có lịch → 409 không còn {@code BOOKED} → 400 BR-TN-02 (khác chi
      * nhánh, khác ngày, sớm hơn {@code visit.check_in_early_minutes} [CFG], hoặc trễ hơn
      * {@code appointment.no_show_after_minutes} [CFG] — biên tính là được). 409 đứng trước 400 là lệch có chủ đích so
-     * với convention 05 (docs/adr/0046, như 0045). {@code scheduledAt} là giờ hẹn.
+     * với convention 05 (docs/adr/0050, như 0049). {@code scheduledAt} là giờ hẹn.
      */
     CheckInInfo checkIn(Long appointmentId, Long branchId, Instant at);
 

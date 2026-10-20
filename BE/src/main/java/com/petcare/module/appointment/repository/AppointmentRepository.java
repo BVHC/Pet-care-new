@@ -20,13 +20,13 @@ import com.petcare.module.appointment.entity.Appointment;
 import jakarta.persistence.LockModeType;
 
 /**
- * {@link JpaSpecificationExecutor}: danh sách lịch hẹn (appointment-v1 #3, docs/adr/0044) chỉ ghép điều kiện được gửi,
+ * {@link JpaSpecificationExecutor}: danh sách lịch hẹn (appointment-v1 #3, docs/adr/0048) chỉ ghép điều kiện được gửi,
  * không bao giờ {@code :x IS NULL OR} (khuôn {@code catalog/service/ProductService}).
  */
 public interface AppointmentRepository extends JpaRepository<Appointment, Long>, JpaSpecificationExecutor<Appointment> {
 
     /**
-     * Advisory lock theo transaction ({@code pg_advisory_xact_lock}, docs/adr/0041): tự nhả khi commit / rollback, không
+     * Advisory lock theo transaction ({@code pg_advisory_xact_lock}, docs/adr/0045): tự nhả khi commit / rollback, không
      * bao giờ kẹt lại trên connection của pool. {@code MANDATORY}: method query của interface Spring Data không tự có
      * transaction, gọi ngoài transaction thì khóa được nhả ngay khi câu lệnh xong mà không báo lỗi. Chỉ gọi qua
      * {@code AppointmentLocks}.
@@ -35,7 +35,7 @@ public interface AppointmentRepository extends JpaRepository<Appointment, Long>,
     @Query(value = "SELECT 1 FROM pg_advisory_xact_lock(:namespace, :key)", nativeQuery = true)
     Integer acquireTransactionLock(@Param("namespace") int namespace, @Param("key") int key);
 
-    /** Số kế tiếp của {@code appointment_code_seq} (V13, docs/adr/0041). Chỉ gọi qua {@code AppointmentCodeGenerator}. */
+    /** Số kế tiếp của {@code appointment_code_seq} (V16, docs/adr/0045). Chỉ gọi qua {@code AppointmentCodeGenerator}. */
     @Query(value = "SELECT nextval('appointment_code_seq')", nativeQuery = true)
     long nextCodeValue();
 
@@ -49,7 +49,7 @@ public interface AppointmentRepository extends JpaRepository<Appointment, Long>,
 
     /**
      * Số lịch BOOKED / CHECKED_IN / COMPLETED theo từng khung của một chi nhánh × nhóm × ngày (BR-LH-03; xem khung trống,
-     * docs/adr/0042). Trạng thái để <b>literal</b> để planner dùng được partial index {@code ix_appointments_quota}
+     * docs/adr/0046). Trạng thái để <b>literal</b> để planner dùng được partial index {@code ix_appointments_quota}
      * (V1); giờ trả dạng số giây để không phụ thuộc kiểu Java mà Hibernate trả cho cột {@code TIME} của native query.
      * Không khóa: chỉ để hiển thị.
      */
@@ -63,7 +63,7 @@ public interface AppointmentRepository extends JpaRepository<Appointment, Long>,
     List<SlotBookedCount> countActiveBySlot(@Param("branchId") Long branchId, @Param("serviceGroup") String serviceGroup,
             @Param("slotDate") LocalDate slotDate);
 
-    // Bốn câu dưới phục vụ đặt lịch (docs/adr/0043) và chỉ đúng khi chạy dưới khóa thú + khóa chi nhánh (docs/adr/0041):
+    // Bốn câu dưới phục vụ đặt lịch (docs/adr/0047) và chỉ đúng khi chạy dưới khóa thú + khóa chi nhánh (docs/adr/0045):
     // READ COMMITTED, mỗi câu thấy mọi lượt đặt đã commit trước khi khóa được nhả. Trạng thái để literal (planner).
 
     /** Số lịch {@code BOOKED} của thú trên mọi chi nhánh (BR-LH-05: tối đa 2 [CFG]). Index {@code ix_appointments_pet_status}. */
@@ -101,7 +101,7 @@ public interface AppointmentRepository extends JpaRepository<Appointment, Long>,
     int countActiveInSlot(@Param("branchId") Long branchId, @Param("serviceGroup") String serviceGroup,
             @Param("slotDate") LocalDate slotDate, @Param("slotStart") LocalTime slotStart);
 
-    // Đổi khung / hủy (docs/adr/0045).
+    // Đổi khung / hủy (docs/adr/0049).
 
     /** Ba cột không bao giờ đổi của một lịch ({@code updatable = false}): đủ để phân quyền trước khi khóa. */
     interface AccessRow {
@@ -122,7 +122,7 @@ public interface AppointmentRepository extends JpaRepository<Appointment, Long>,
 
     /**
      * Khóa dòng lịch hẹn ({@code FOR NO KEY UPDATE} — Hibernate 6 với {@code PESSIMISTIC_WRITE}), khóa cuối của thứ tự
-     * {@code advisory(thú) → branches → appointments} (docs/adr/0041, 0045). {@code MANDATORY}: ngoài transaction thì
+     * {@code advisory(thú) → branches → appointments} (docs/adr/0045, 0049). {@code MANDATORY}: ngoài transaction thì
      * khóa được nhả ngay khi câu lệnh xong.
      */
     @Transactional(propagation = Propagation.MANDATORY)
@@ -151,7 +151,7 @@ public interface AppointmentRepository extends JpaRepository<Appointment, Long>,
             @Param("slotDate") LocalDate slotDate, @Param("excludeId") Long excludeId);
 
     /**
-     * Số vi phạm BR-LH-09 của khách từ lịch hẹn, xảy ra <b>sau</b> {@code since} (loại trừ, docs/adr/0045): hủy muộn tính
+     * Số vi phạm BR-LH-09 của khách từ lịch hẹn, xảy ra <b>sau</b> {@code since} (loại trừ, docs/adr/0049): hủy muộn tính
      * theo {@code cancelled_at}; {@code NO_SHOW} tính theo giờ hẹn (bảng không có cột thời điểm NO_SHOW). Phải chạy dưới
      * khóa khách ({@code AppointmentLocks.lockCustomerViolations}), READ COMMITTED: thấy mọi vi phạm đã commit trước khi
      * khóa được nhả.
@@ -164,7 +164,7 @@ public interface AppointmentRepository extends JpaRepository<Appointment, Long>,
             """, nativeQuery = true)
     int countViolationsAfter(@Param("customerId") Long customerId, @Param("since") Instant since);
 
-    // AppointmentQueryApi (docs/adr/0046): chỉ đọc, JPQL constructor để không nạp entity vào persistence context của
+    // AppointmentQueryApi (docs/adr/0050): chỉ đọc, JPQL constructor để không nạp entity vào persistence context của
     // bên gọi; một câu SQL bất kể số dòng (Appointment không có quan hệ JPA, FK là Long).
 
     /** Lịch BOOKED của chi nhánh từ {@code fromDate} (BR-CN-04, BR-LH-10). Index {@code ix_appointments_status_slot}. */

@@ -18,7 +18,7 @@ import jakarta.validation.ValidatorFactory;
 
 /**
  * Body đổi khung ({@code RescheduleRequest}) và hủy ({@code CancelAppointmentRequest}) của appointment-v1 #5, #6
- * (docs/adr/0045): hai trường khung bắt buộc; lý do không bắt buộc, ≤ 300 (UTF-16, chặt hơn {@code VARCHAR(300)}). Lỗi
+ * (docs/adr/0049): hai trường khung bắt buộc; lý do không bắt buộc, ≤ 300 (UTF-16, chặt hơn {@code VARCHAR(300)}). Lỗi
  * gắn đúng tên trường, message tiếng Việt.
  */
 class RescheduleCancelRequestValidationTest {

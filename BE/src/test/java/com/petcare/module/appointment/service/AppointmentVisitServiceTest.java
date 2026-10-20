@@ -46,7 +46,7 @@ import com.petcare.platform.exception.InvalidStateTransitionException;
 import com.petcare.platform.exception.ResourceNotFoundException;
 
 /**
- * {@link AppointmentVisitService} (docs/adr/0046): Lịch hẹn#3 / #7 / #8. Mỗi guard có test vi phạm và test biên hợp lệ;
+ * {@link AppointmentVisitService} (docs/adr/0050): Lịch hẹn#3 / #7 / #8. Mỗi guard có test vi phạm và test biên hợp lệ;
  * mọi nhánh lỗi không ghi gì. Commit / rollback thật: {@code AppointmentVisitTxIT}.
  */
 class AppointmentVisitServiceTest {

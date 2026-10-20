@@ -1,6 +1,7 @@
-# ADR-0045: Đổi khung và hủy lịch hẹn — 409 trước rule, trùng khung là no-op, hủy muộn đánh giá hạn chế đặt online dưới khóa theo khách
+# ADR-0049: Đổi khung và hủy lịch hẹn — 409 trước rule, trùng khung là no-op, hủy muộn đánh giá hạn chế đặt online dưới khóa theo khách
 
 - **Trạng thái:** Accepted
+- **Đánh số lại:** ban đầu là ADR-0045; đổi thành số hiện tại khi gộp `dev` ngày 2026-10-20 vì trùng số với ADR-0041…0044 của BE-2 (vào `dev` trước). Mọi tham chiếu ADR-0041…0046 trong code / tài liệu lịch hẹn đã đổi theo (+4); migration `V13__appointment_code_sequence.sql` đổi thành V16.
 - **Ngày:** 2026-10-15
 - **Liên quan:**
   - BR-LH-02 (02 L123), 03 (L124), 04 (L125), 05 (L126), 06 (L127), 07 (L128), 09 (L130), 12 (L133); BR-TK-19 (L35); BR-KH-05 (L91).
@@ -9,7 +10,7 @@
   - appointment-v1 #5, #6 (`docs/api/appointment-v1.md`); A4 "lý do hủy không bắt buộc".
   - `docs/api/00-method.md` L69 (thứ tự kiểm); convention 05 L64–82 (guard trước `validateTransition`).
   - [CFG] `appointment.max_reschedules`, `appointment.reschedule_min_lead_hours`, `appointment.late_cancel_hours`, `appointment.min_lead_hours`, `appointment.max_advance_days`, `booking_restriction.violation_threshold`, `booking_restriction.window_days`, `booking_restriction.duration_days`.
-  - ADR-0029 §4 (bẫy persistence context), 0031 Q2 (trùng giá trị = 200 không ghi), 0041 (thứ tự khóa, khung transaction; câu hỏi mở L144), 0043 (BR-LH-05, `isRestricted`), 0044 (phạm vi xem, `AppointmentActions`).
+  - ADR-0029 §4 (bẫy persistence context), 0031 Q2 (trùng giá trị = 200 không ghi), 0045 (thứ tự khóa, khung transaction; câu hỏi mở L144), 0047 (BR-LH-05, `isRestricted`), 0048 (phạm vi xem, `AppointmentActions`).
   - Nợ: trả D030; mở D033; cập nhật D010, D027, D031, D032.
 - **Triển khai (T16 phần 4):**
   - `appointment/controller/AppointmentController` (`POST /api/appointments/{id}/reschedule`, `…/cancel`).
@@ -27,7 +28,7 @@
 
 Hợp đồng #5, #6 ghi rule, actor, một câu phạm vi và "Lịch không còn BOOKED → 409". Docs để ngỏ:
 
-- Thứ tự 409 với các guard 400 (ADR-0041 L144).
+- Thứ tự 409 với các guard 400 (ADR-0045 L144).
 - Đổi sang đúng khung hiện tại.
 - Kiểm lại những rule nào của lúc đặt (BR-LH-01, 09, KH-05, TK-19).
 - Mốc đếm "3 lần trong 90 ngày" sau khi một lần hạn chế đã kết thúc / bị gỡ sớm.
@@ -37,12 +38,12 @@ Hợp đồng #5, #6 ghi rule, actor, một câu phạm vi và "Lịch không c�
 
 ## Quyết định
 
-1. **Phân quyền trước mọi khóa** (ADR-0043):
+1. **Phân quyền trước mọi khóa** (ADR-0047):
    - Đọc projection không khóa `AppointmentRepository.findAccessRow` → `(customer_id, pet_id, branch_id)`. Ba cột `updatable = false`, nên đọc không khóa vẫn an toàn; là projection nên không nạp entity (bẫy ADR-0029 §4).
    - Khách: `customer_id` phải là hồ sơ của tài khoản; lịch của khách khác = 404 cùng message với lịch không có.
    - Lễ tân: `BranchScope.check(branch_id)` → 403.
    - `switch` đúng hai role, role lạ → 500.
-2. **Thứ tự khóa** (ADR-0041 §3, không đổi):
+2. **Thứ tự khóa** (ADR-0045 §3, không đổi):
    - Đổi khung: `lockPet` → `lockForBooking` → `findByIdForUpdate` (dòng `appointments`, `FOR NO KEY UPDATE`).
    - Hủy chỉ khóa dòng `appointments`: đoạn cuối của cùng thứ tự. Hủy chỉ trả quota và làm BR-LH-05 lỏng hơn, nên không cần khóa thú / chi nhánh.
    - Khóa theo khách (mục 7) luôn là khóa cuối cùng.
@@ -103,7 +104,7 @@ Hợp đồng #5, #6 ghi rule, actor, một câu phạm vi và "Lịch không c�
 
 ## Phương án đã loại
 
-- **Khóa dòng `appointments` trước rồi mới khóa thú / chi nhánh** (bản nháp ban đầu): đảo thứ tự ADR-0041, có thể deadlock với đặt lịch, ST05, check-in.
+- **Khóa dòng `appointments` trước rồi mới khóa thú / chi nhánh** (bản nháp ban đầu): đảo thứ tự ADR-0045, có thể deadlock với đặt lịch, ST05, check-in.
 - **Guard 400 trước 409** (convention 05): lịch đã hủy trả "hết lượt đổi" / "còn < 12 giờ", sai lý do.
 - **Trùng khung → 400:** bấm hai lần thì lần sau báo lỗi dù thao tác đã thành công.
 - **Đếm nguyên văn 90 ngày:** vừa hết hạn chế (hoặc vừa được gỡ sớm) mà vi phạm một lần là bị hạn chế lại ngay.

@@ -29,8 +29,8 @@ import lombok.NoArgsConstructor;
  * hệ với Visit nằm ở {@code visits.appointment_id} (module visit). {@code reschedule_count} là {@code SMALLINT} nên field
  * là {@code short}.
  * <p>
- * Method đổi trạng thái: {@link #book} (phần 2), {@link #reschedule}, {@link #cancel} (phần 4, docs/adr/0045),
- * {@link #checkIn}, {@link #complete} (phần 5, docs/adr/0046).
+ * Method đổi trạng thái: {@link #book} (phần 2), {@link #reschedule}, {@link #cancel} (phần 4, docs/adr/0049),
+ * {@link #checkIn}, {@link #complete} (phần 5, docs/adr/0050).
  */
 @Getter
 @Entity
@@ -101,7 +101,7 @@ public class Appointment extends TimestampedEntity {
     private String note;
 
     /**
-     * Lịch hẹn#1 ({@code — → BOOKED}, command {@code bookAppointment}, docs/adr/0041 §7, 0043). Bên gọi đã kiểm mọi rule và
+     * Lịch hẹn#1 ({@code — → BOOKED}, command {@code bookAppointment}, docs/adr/0045 §7, 0047). Bên gọi đã kiểm mọi rule và
      * {@code validateInitial(BOOKED)}; {@code serviceGroup} là bản sao lúc đặt (erd L476). Số lần đổi 0, không hủy muộn,
      * chưa nhắc.
      */
@@ -127,7 +127,7 @@ public class Appointment extends TimestampedEntity {
     }
 
     /**
-     * Lịch hẹn#2 ({@code BOOKED → BOOKED}, command {@code rescheduleAppointment}, BR-LH-06; docs/adr/0045). Bên gọi đã kiểm
+     * Lịch hẹn#2 ({@code BOOKED → BOOKED}, command {@code rescheduleAppointment}, BR-LH-06; docs/adr/0049). Bên gọi đã kiểm
      * trạng thái và mọi rule dưới khóa. Chỉ đổi khung, tăng số lần đổi và xóa mốc đã nhắc để ST03 nhắc theo giờ hẹn mới
      * (BR-LH-12, Q9); chi nhánh, thú, dịch vụ, mã giữ nguyên (cột {@code updatable = false}).
      */
@@ -139,7 +139,7 @@ public class Appointment extends TimestampedEntity {
     }
 
     /**
-     * Lịch hẹn#4 ({@code BOOKED → CANCELLED}, command {@code cancelAppointment}, BR-LH-07; docs/adr/0045): khách hoặc lễ
+     * Lịch hẹn#4 ({@code BOOKED → CANCELLED}, command {@code cancelAppointment}, BR-LH-07; docs/adr/0049): khách hoặc lễ
      * tân hủy. Đặt đủ các cột hủy theo CHECK {@code ck_appointments_cancel_fields} (erd §5).
      */
     public void cancel(AppointmentCancelSource source, String reason, Instant at, boolean late) {
@@ -151,14 +151,14 @@ public class Appointment extends TimestampedEntity {
     }
 
     /**
-     * Lịch hẹn#3 ({@code BOOKED → CHECKED_IN}, command {@code checkIn}, SYS ← Visit#1; docs/adr/0046). Bên gọi đã kiểm
+     * Lịch hẹn#3 ({@code BOOKED → CHECKED_IN}, command {@code checkIn}, SYS ← Visit#1; docs/adr/0050). Bên gọi đã kiểm
      * trạng thái và cửa sổ check-in dưới khóa dòng. Chỉ đổi trạng thái; {@code reminded_at} giữ nguyên.
      */
     public void checkIn() {
         this.status = AppointmentStatus.CHECKED_IN;
     }
 
-    /** Lịch hẹn#7 ({@code CHECKED_IN → COMPLETED}, command {@code completeByVisit}, SYS ← Visit#5; docs/adr/0046). */
+    /** Lịch hẹn#7 ({@code CHECKED_IN → COMPLETED}, command {@code completeByVisit}, SYS ← Visit#5; docs/adr/0050). */
     public void complete() {
         this.status = AppointmentStatus.COMPLETED;
     }

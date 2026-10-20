@@ -9,7 +9,7 @@ import java.util.Objects;
 import com.petcare.platform.config.TimeConfig;
 
 /**
- * Khoảng thời gian được đặt lịch theo BR-LH-04 (docs/adr/0042 mục Q1), tính từ một thời điểm {@code now} cố định của
+ * Khoảng thời gian được đặt lịch theo BR-LH-04 (docs/adr/0046 mục Q1), tính từ một thời điểm {@code now} cố định của
  * request. Lớp thuần, dùng chung cho xem khung trống (#1) và đặt / đổi lịch (#2, #5).
  * <ul>
  * <li><b>Khách:</b> ngày hẹn trong {@code [hôm nay, hôm nay + maxAdvanceDays]} theo giờ Việt Nam (mốc xa nhất tính

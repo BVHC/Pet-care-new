@@ -12,7 +12,7 @@ import org.springframework.jdbc.core.JdbcTemplate;
 
 /**
  * Dữ liệu cho IT của lịch hẹn, chèn bằng SQL vì customer / catalog / branch chưa có (hoặc không cần) đường ghi chung
- * (docs/adr/0041, kế hoạch T16 phần 0 mục I5). Chi nhánh luôn {@code DRAFT} nếu không yêu cầu khác, tên / email UUID, nên
+ * (docs/adr/0045, kế hoạch T16 phần 0 mục I5). Chi nhánh luôn {@code DRAFT} nếu không yêu cầu khác, tên / email UUID, nên
  * không đổi kết quả của danh sách công khai hay test khác. {@link #cleanUp()} xóa theo thứ tự FK, con trước:
  * {@code visits (theo lịch hẹn và theo thú) → appointments (theo id và theo thú — lịch đặt qua HTTP) → pets → booking_restrictions → customers → (dữ liệu con
  * của chi nhánh, sessions, staff_profiles) → services → branches → accounts}. Không ghi audit.
@@ -81,7 +81,7 @@ public final class AppointmentItSupport {
         return track(APPOINTMENT, id);
     }
 
-    /** Chèn một lịch hẹn và ghi nhận để xóa; mã ngẫu nhiên, không qua sequence V13. */
+    /** Chèn một lịch hẹn và ghi nhận để xóa; mã ngẫu nhiên, không qua sequence V16. */
     public long appointment(long customerId, long petId, long branchId, long serviceId, String serviceGroup,
             LocalDate slotDate, LocalTime slotStart, String status, long bookedBy) {
         long id = jdbc.queryForObject("""

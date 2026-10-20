@@ -39,12 +39,12 @@ import com.petcare.platform.security.SecurityPrincipal;
 
 /**
  * Đổi khung giờ (appointment-v1 #5, Lịch hẹn#2 {@code BOOKED → BOOKED}, BR-LH-02…06) và khách / lễ tân hủy (#6,
- * Lịch hẹn#4 {@code BOOKED → CANCELLED}, BR-LH-07, 09) — UC40, docs/adr/0045. Mỗi thao tác một transaction ghi, không
- * {@code noRollbackFor}, không {@code try/catch}: bị từ chối hay lỗi giữa chừng thì không giữ lại gì (docs/adr/0041 §4).
+ * Lịch hẹn#4 {@code BOOKED → CANCELLED}, BR-LH-07, 09) — UC40, docs/adr/0049. Mỗi thao tác một transaction ghi, không
+ * {@code noRollbackFor}, không {@code try/catch}: bị từ chối hay lỗi giữa chừng thì không giữ lại gì (docs/adr/0045 §4).
  * <ul>
  * <li>Phân quyền trước mọi khóa, trên ba cột không bao giờ đổi ({@link AccessRow}): khách — lịch có {@code customer_id}
  * là hồ sơ của mình (lịch của khách khác cùng 404); lễ tân — {@link BranchScope#check} chi nhánh của lịch (403).</li>
- * <li>Đổi khung khóa {@code advisory(thú) → branches → appointments} (docs/adr/0041); hủy chỉ khóa dòng
+ * <li>Đổi khung khóa {@code advisory(thú) → branches → appointments} (docs/adr/0045); hủy chỉ khóa dòng
  * {@code appointments} (đoạn cuối của cùng thứ tự). Mọi rule kiểm dưới khóa, {@code now} lấy sau khóa.</li>
  * <li>Lịch không còn {@code BOOKED} → 409 ngay sau khi khóa, trước mọi rule 400 (Q6, lệch có chủ đích so với convention
  * 05).</li>
@@ -130,7 +130,7 @@ public class AppointmentChangeService {
     public AppointmentResponse cancelAppointment(Long appointmentId, CancelAppointmentRequest request) {
         Actor actor = authorize(appointmentId);
         Appointment appointment = lockAppointment(appointmentId);
-        // µs như cột TIMESTAMPTZ: response = GET #4, starts_at của lần hạn chế = cancelled_at (docs/adr/0045).
+        // µs như cột TIMESTAMPTZ: response = GET #4, starts_at của lần hạn chế = cancelled_at (docs/adr/0049).
         Instant now = clock.instant().truncatedTo(ChronoUnit.MICROS);
 
         // Tường minh, không qua FSM: cạnh CHECKED_IN → CANCELLED (#8) chỉ dành cho Visit#6.
@@ -163,7 +163,7 @@ public class AppointmentChangeService {
         }
     }
 
-    /** Phạm vi trước mọi khóa (docs/adr/0043): khách theo hồ sơ của mình, lễ tân theo chi nhánh của lịch. */
+    /** Phạm vi trước mọi khóa (docs/adr/0047): khách theo hồ sơ của mình, lễ tân theo chi nhánh của lịch. */
     private Actor authorize(Long appointmentId) {
         SecurityPrincipal principal = branchScope.current();
         boolean customer = switch (principal.role()) {
@@ -215,7 +215,7 @@ public class AppointmentChangeService {
         }
     }
 
-    /** BR-LH-04 với khung mới qua {@link BookingWindow} (cùng message với đặt lịch, docs/adr/0043). */
+    /** BR-LH-04 với khung mới qua {@link BookingWindow} (cùng message với đặt lịch, docs/adr/0047). */
     private void checkWindow(boolean customer, Instant now, LocalDate date, LocalTime start) {
         if (customer) {
             int minLeadHours = configs.getInt(ConfigKey.APPOINTMENT_MIN_LEAD_HOURS);

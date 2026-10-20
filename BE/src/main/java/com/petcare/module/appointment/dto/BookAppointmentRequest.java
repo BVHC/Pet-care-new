@@ -11,7 +11,7 @@ import jakarta.validation.constraints.Positive;
 import jakarta.validation.constraints.Size;
 
 /**
- * Body của {@code POST /api/appointments} (appointment-v1 {@code BookAppointmentRequest}, UC39; docs/adr/0043). Không có
+ * Body của {@code POST /api/appointments} (appointment-v1 {@code BookAppointmentRequest}, UC39; docs/adr/0047). Không có
  * {@code customerId} / {@code channel}: khách của lịch là chủ hiện tại của thú, kênh suy ra từ vai trò người đặt (A2);
  * trường lạ bị bỏ qua. Id phải dương ({@code AppointmentLocks.lockPet} từ chối id ≤ 0). Khung giờ, cửa sổ đặt và mọi rule
  * kiểm ở service dưới khóa.

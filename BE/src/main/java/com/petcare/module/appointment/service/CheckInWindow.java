@@ -9,7 +9,7 @@ import java.util.Objects;
 import com.petcare.platform.config.TimeConfig;
 
 /**
- * Cửa sổ check-in của lịch hẹn tại thời điểm {@code now} (docs/adr/0044 §6). Lớp thuần, dùng chung cho bộ lọc
+ * Cửa sổ check-in của lịch hẹn tại thời điểm {@code now} (docs/adr/0048 §6). Lớp thuần, dùng chung cho bộ lọc
  * {@code checkInReady} (appointment-v1 #3), tiếp nhận Visit#1 (T26) và ST05 NO_SHOW (T25).
  * <ul>
  * <li>BR-TN-02: lịch của <b>hôm nay</b> (giờ Việt Nam), check-in sớm nhất {@code visit.check_in_early_minutes} [CFG]

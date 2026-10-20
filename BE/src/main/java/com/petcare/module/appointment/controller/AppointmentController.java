@@ -33,8 +33,8 @@ import io.swagger.v3.oas.annotations.enums.ParameterIn;
 import jakarta.validation.Valid;
 
 /**
- * Lịch hẹn — appointment-v1 #2 đặt lịch (UC39, A02 + A06; docs/adr/0043), #3 danh sách và #4 chi tiết (UC40, UC44;
- * docs/adr/0044), #5 đổi khung và #6 hủy (UC40, A02 + A06; docs/adr/0045). Body / tham số sai là 400 trước {@code @PreAuthorize}; phạm vi (lễ tân / nhân viên: chi nhánh của mình;
+ * Lịch hẹn — appointment-v1 #2 đặt lịch (UC39, A02 + A06; docs/adr/0047), #3 danh sách và #4 chi tiết (UC40, UC44;
+ * docs/adr/0048), #5 đổi khung và #6 hủy (UC40, A02 + A06; docs/adr/0049). Body / tham số sai là 400 trước {@code @PreAuthorize}; phạm vi (lễ tân / nhân viên: chi nhánh của mình;
  * khách: dữ liệu của mình) và mọi rule kiểm ở service.
  */
 @RestController
@@ -67,7 +67,7 @@ public class AppointmentController {
             description = "UC39 · BR-LH-01…05, 09, BR-KH-05, BR-TK-19. Actor: A02, A06. Quyền: Khách: thú của mình · "
                 + "lễ tân: chi nhánh mình. Chuyển trạng thái: — → BOOKED (Lịch hẹn#1); nhóm MEDICAL → Care Task#6. "
                 + "Khách → channel ONLINE, lễ tân → COUNTER (A2). Nhóm MEDICAL: hủy nhắc tái khám đang chờ của thú "
-                + "(BR-TB-06); nối Care Task#6 khi visit cài FollowUpApi (docs/adr/0043).")
+                + "(BR-TB-06); nối Care Task#6 khi visit cài FollowUpApi (docs/adr/0047).")
     @ApiErrorDoc(status = 400, description = "`BR-LH-01` dịch vụ không đặt được / đang tắt tại chi nhánh, chi nhánh "
             + "chưa ACTIVE · `BR-LH-02` khung không hợp lệ · `BR-LH-03` khung đã đủ quota · `BR-LH-04` ngoài khoảng 24 "
             + "giờ – 30 ngày [CFG] (khách) hoặc khung đã bắt đầu (lễ tân) · `BR-LH-05` thú đã có 2 lịch BOOKED, trùng "
@@ -93,7 +93,7 @@ public class AppointmentController {
                 + "hẹn hôm nay, giờ hẹn − `visit.check_in_early_minutes` ≤ now ≤ giờ hẹn + "
                 + "`appointment.no_show_after_minutes` [CFG] (BR-TN-02, 03, BR-LH-08). Tăng dần theo `slotDate`, "
                 + "`slotStart`, `appointmentId`. `page` < 0 → 0, `size` kẹp 1–100. `canReschedule` / `canCancel` theo "
-                + "người xem; BRANCH_MANAGER luôn false (docs/adr/0044).",
+                + "người xem; BRANCH_MANAGER luôn false (docs/adr/0048).",
             parameters = {
                     @Parameter(name = "branchId", in = ParameterIn.QUERY, example = "3"),
                     @Parameter(name = "date", in = ParameterIn.QUERY, example = "2026-10-20"),
@@ -131,7 +131,7 @@ public class AppointmentController {
             summary = "Chi tiết lịch hẹn",
             description = "UC40 · —. Actor: A02, A05, A06, A07, A08. Quyền: Khách: lịch của mình · nhân viên chi "
                 + "nhánh. Chuyển trạng thái: —. `canReschedule` / `canCancel` theo người xem; BRANCH_MANAGER, VET, "
-                + "CARETAKER luôn false (docs/adr/0044).",
+                + "CARETAKER luôn false (docs/adr/0048).",
             parameters = @Parameter(name = "appointmentId", in = ParameterIn.PATH, example = "501"))
     @ApiErrorDoc(status = 400, description = "Tham số sai kiểu (`MALFORMED_REQUEST`); BR-TK-17")
     @ApiErrorDoc(status = 403, description = "Nhân viên xem lịch của chi nhánh khác")
@@ -149,7 +149,7 @@ public class AppointmentController {
                 + "nhánh. Chuyển trạng thái: BOOKED → BOOKED (Lịch hẹn#2). Cùng chi nhánh, cùng thú, cùng dịch vụ; "
                 + "muốn đổi khác thì hủy rồi đặt lại. Giữ mã lịch hẹn. Khung mới trùng khung hiện tại → 200, không "
                 + "ghi, không tăng số lần đổi. BR-LH-05 trên mọi chi nhánh, không tính chính lịch này. Không kiểm lại "
-                + "BR-LH-01, BR-LH-09, BR-KH-05; đổi khung xóa mốc đã nhắc (BR-LH-12) (docs/adr/0045).",
+                + "BR-LH-01, BR-LH-09, BR-KH-05; đổi khung xóa mốc đã nhắc (BR-LH-12) (docs/adr/0049).",
             parameters = @Parameter(name = "appointmentId", in = ParameterIn.PATH, example = "501"))
     @ApiErrorDoc(status = 400, description = "`BR-LH-06` hết lượt đổi (3 [CFG]), khách đổi khi còn < 12 giờ [CFG] "
             + "hoặc lễ tân đổi khi đã tới giờ hẹn · `BR-LH-04`, `BR-LH-02`, `BR-LH-05`, `BR-LH-03` với khung mới; tham "
@@ -171,7 +171,7 @@ public class AppointmentController {
                 + "Chuyển trạng thái: BOOKED → CANCELLED (Lịch hẹn#4). Body không bắt buộc. Còn < 12 giờ [CFG] trước "
                 + "giờ hẹn → lateCancel = true và đánh giá hạn chế đặt online (BR-LH-09: đếm NO_SHOW + hủy muộn của "
                 + "lịch hẹn và đặt chỗ sau mốc max(now − 90 ngày, lần hạn chế gần nhất); đủ 3 [CFG] → hạn chế 30 ngày "
-                + "[CFG]). cancelSource = CUSTOMER (khách) / STAFF (lễ tân) (docs/adr/0045).",
+                + "[CFG]). cancelSource = CUSTOMER (khách) / STAFF (lễ tân) (docs/adr/0049).",
             parameters = @Parameter(name = "appointmentId", in = ParameterIn.PATH, example = "501"))
     @ApiErrorDoc(status = 400, description = "`BR-LH-07` đã tới giờ hẹn; tham số / body sai kiểu "
             + "(`MALFORMED_REQUEST`, `VALIDATION_FAILED`); BR-TK-17")

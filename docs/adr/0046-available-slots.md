@@ -1,11 +1,12 @@
-# ADR-0042: Xem khung giờ trống — cửa sổ BR-LH-04, chi nhánh DRAFT, một snapshot chỉ đọc, không khóa
+# ADR-0046: Xem khung giờ trống — cửa sổ BR-LH-04, chi nhánh DRAFT, một snapshot chỉ đọc, không khóa
 
 - **Trạng thái:** Accepted
+- **Đánh số lại:** ban đầu là ADR-0042; đổi thành số hiện tại khi gộp `dev` ngày 2026-10-20 vì trùng số với ADR-0041…0044 của BE-2 (vào `dev` trước). Mọi tham chiếu ADR-0041…0046 trong code / tài liệu lịch hẹn đã đổi theo (+4); migration `V13__appointment_code_sequence.sql` đổi thành V16.
 - **Ngày:** 2026-10-15
 - **Liên quan:**
   - BR-LH-01 (02 L122), 02 (L123), 03 (L124), 04 (L125); BR-CN-01 (L65); BR-TK-17, 19; BR-LH-09.
   - UC39 (01 L104); appointment-v1 #1 (`docs/api/appointment-v1.md` mục A, B, C; yaml `listAvailableSlots`, schema `Slot`); `docs/api/00-method.md` L66 (404 khi không được biết là có), L69 (thứ tự kiểm).
-  - ADR-0006 §4 (khách chọn chi nhánh làm đích không đi qua `BranchScope`), ADR-0020 (OSIV tắt), ADR-0038 (readOnly + REPEATABLE READ), ADR-0041 (khóa đặt lịch, `SlotGrid`, khung transaction của phần 2–4).
+  - ADR-0006 §4 (khách chọn chi nhánh làm đích không đi qua `BranchScope`), ADR-0020 (OSIV tắt), ADR-0038 (readOnly + REPEATABLE READ), ADR-0045 (khóa đặt lịch, `SlotGrid`, khung transaction của phần 2–4).
 - **Triển khai (T16 phần 1):**
   - `appointment/controller/AvailableSlotController`, `appointment/service/{AvailableSlotService, BookingWindow, SlotAvailability}`, `appointment/dto/SlotResponse`, `appointment/mapper/SlotMapper`, `AppointmentRepository.countActiveBySlot`.
   - `platform/config/OpenApiConfig` thêm tag `Slots`; `OpenApiContractParityIT.DOCUMENTED` thêm `appointment-v1.yaml`.
@@ -48,8 +49,8 @@
    - Mọi câu đọc cùng snapshot chụp ở câu lệnh đầu tiên.
    - Transaction chỉ đọc ở RR không gặp 40001, không cần retry.
    - `BranchQueryService`, `CatalogQueryService` tham gia transaction này (`REQUIRED`).
-   - Không gọi `lockPet`, `lockForBooking`, `nextCode`, không ghi (ADR-0041 §1 "Xem khung trống — không khóa").
-   - **Hiển thị không giữ chỗ:** khung `AVAILABLE` vẫn có thể bị 400 BR-LH-03 lúc đặt; phần 2 kiểm lại dưới khóa (ADR-0041 §4).
+   - Không gọi `lockPet`, `lockForBooking`, `nextCode`, không ghi (ADR-0045 §1 "Xem khung trống — không khóa").
+   - **Hiển thị không giữ chỗ:** khung `AVAILABLE` vẫn có thể bị 400 BR-LH-03 lúc đặt; phần 2 kiểm lại dưới khóa (ADR-0045 §4).
 7. **Đếm:** một câu native `GROUP BY slot_start` trên `appointments`, trạng thái `BOOKED`, `CHECKED_IN`, `COMPLETED` để **literal** (planner dùng được partial index `ix_appointments_quota`). Giờ trả dạng số giây trong ngày để không phụ thuộc kiểu Java của cột `TIME` trong native query.
 8. **Quota:** `BranchQueryApi.quotaFor` cho từng khung (quota riêng → mặc định → 1). `FULL` khi `booked ≥ quota` (quota 0 luôn `FULL`). `booked` là số thật, không cắt về quota.
 9. **Response:** `SlotResponse` dựng qua MapStruct (`unmappedTargetPolicy = ERROR`); giờ `HH:mm` bằng `@JsonFormat` (mặc định Jackson in `HH:mm:ss`). Cùng DTO cho khách và lễ tân (không có trường chỉ nhân viên).
