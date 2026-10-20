@@ -110,7 +110,7 @@ paths:
                     type: integer
                     description: "HTTP status của kết quả, ví dụ 200, 201"
         "400":
-          description: "`BR-LH-01` dịch vụ không đặt được / đang tắt tại chi nhánh, chi nhánh chưa ACTIVE · `BR-LH-02` khung không hợp lệ · `BR-LH-03` khung đã đủ quota · `BR-LH-04` ngoài khoảng 24 giờ – 30 ngày [CFG] (khách) hoặc khung đã bắt đầu (lễ tân) · `BR-LH-05` thú đã có 2 lịch BOOKED, trùng nhóm trong ngày hoặc trùng khung · `BR-LH-09` khách đang bị hạn chế đặt online · `BR-KH-05` thú đã mất · `BR-TK-19` hồ sơ còn chờ quyết định liên kết"
+          description: "`BR-LH-01` dịch vụ không đặt được / đang tắt tại chi nhánh, chi nhánh chưa ACTIVE · `BR-LH-02` khung không hợp lệ · `BR-LH-03` khung đã đủ quota · `BR-LH-04` ngoài khoảng 24 giờ – 30 ngày [CFG] (khách) hoặc khung đã bắt đầu (lễ tân) · `BR-LH-05` thú đã có 2 lịch BOOKED, trùng nhóm trong ngày hoặc trùng khung · `BR-LH-09` khách đang bị hạn chế đặt online (message kèm thời điểm hết hạn chế, giờ Việt Nam) · `BR-KH-05` thú đã mất · `BR-TK-19` hồ sơ còn chờ quyết định liên kết"
           content:
             "application/json":
               schema:
@@ -391,7 +391,7 @@ paths:
     get:
       tags: ["Booking restrictions"]
       summary: "Tình trạng hạn chế đặt online của tôi"
-      description: "UC39, UC58 · BR-LH-09. Actor: A02. Quyền: Khách đang đăng nhập. Chuyển trạng thái: —. FE hiển thị lý do và ngày hết hạn chế."
+      description: "UC39, UC58 · BR-LH-09. Actor: A02. Quyền: Khách đang đăng nhập. Chuyển trạng thái: —. FE hiển thị lý do và ngày hết hạn chế. Không bị hạn chế (chưa từng, đã hết hạn, đã gỡ) → restricted = false, restriction = null. Không chặn khi hồ sơ còn chờ quyết định liên kết (docs/adr/0050)."
       operationId: getMyBookingRestriction
       security:
         - bearerAuth: []
@@ -411,6 +411,12 @@ paths:
                   code:
                     type: integer
                     description: "HTTP status của kết quả, ví dụ 200, 201"
+        "400":
+          description: BR-TK-17
+          content:
+            "application/json":
+              schema:
+                $ref: "#/components/schemas/Error"
         "401":
           $ref: "#/components/responses/Unauthorized"
         "403":
@@ -419,7 +425,7 @@ paths:
     get:
       tags: ["Booking restrictions"]
       summary: "Tình trạng hạn chế đặt online của khách"
-      description: "UC39 · BR-LH-09. Actor: A05, A06. Quyền: Nhân viên. Chuyển trạng thái: —."
+      description: "UC39 · BR-LH-09. Actor: A05, A06. Quyền: Nhân viên. Chuyển trạng thái: —. Toàn chuỗi: hạn chế gắn với khách, nhân viên chi nhánh nào cũng xem được. Không bị hạn chế → restricted = false, restriction = null (docs/adr/0050)."
       operationId: getCustomerBookingRestriction
       security:
         - bearerAuth: []
@@ -441,17 +447,31 @@ paths:
                   code:
                     type: integer
                     description: "HTTP status của kết quả, ví dụ 200, 201"
+        "400":
+          description: "Tham số sai kiểu (`MALFORMED_REQUEST`); BR-TK-17"
+          content:
+            "application/json":
+              schema:
+                $ref: "#/components/schemas/Error"
         "401":
           $ref: "#/components/responses/Unauthorized"
         "403":
-          $ref: "#/components/responses/Forbidden"
+          description: "Sai vai trò"
+          content:
+            "application/json":
+              schema:
+                $ref: "#/components/schemas/Error"
         "404":
-          $ref: "#/components/responses/NotFound"
+          description: "Khách hàng không tồn tại"
+          content:
+            "application/json":
+              schema:
+                $ref: "#/components/schemas/Error"
   "/customers/{customerId}/booking-restriction/lift":
     post:
       tags: ["Booking restrictions"]
       summary: "Gỡ hạn chế sớm"
-      description: "UC39 · BR-LH-09, BR-QT-15. Actor: A05, A06. Quyền: Lễ tân, BRANCH_MANAGER. Chuyển trạng thái: —. Ghi audit."
+      description: "UC39 · BR-LH-09, BR-QT-15. Actor: A05, A06. Quyền: Lễ tân, BRANCH_MANAGER. Chuyển trạng thái: —. Toàn chuỗi. Ghi audit BOOKING_RESTRICTION_LIFTED; không gửi thông báo cho khách. Thành công → restricted = false, restriction = null. Lần đánh giá vi phạm sau vẫn đếm từ starts_at của lần hạn chế vừa gỡ, nên vi phạm cũ không bị tính lại (docs/adr/0045, 0050)."
       operationId: liftBookingRestriction
       security:
         - bearerAuth: []
@@ -480,15 +500,27 @@ paths:
                     type: integer
                     description: "HTTP status của kết quả, ví dụ 200, 201"
         "400":
-          $ref: "#/components/responses/BadRequest"
+          description: "Thiếu lý do / lý do quá 300 ký tự (`VALIDATION_FAILED`); body sai (`MALFORMED_REQUEST`); BR-TK-17"
+          content:
+            "application/json":
+              schema:
+                $ref: "#/components/schemas/Error"
         "401":
           $ref: "#/components/responses/Unauthorized"
         "403":
-          $ref: "#/components/responses/Forbidden"
+          description: "Sai vai trò"
+          content:
+            "application/json":
+              schema:
+                $ref: "#/components/schemas/Error"
         "404":
-          $ref: "#/components/responses/NotFound"
+          description: "Khách hàng không tồn tại"
+          content:
+            "application/json":
+              schema:
+                $ref: "#/components/schemas/Error"
         "409":
-          description: "Khách không đang bị hạn chế"
+          description: "Khách không đang bị hạn chế (chưa từng, đã hết hạn hoặc đã gỡ)"
           content:
             "application/json":
               schema:
@@ -733,7 +765,7 @@ components:
         violationCount:
           type: integer
           format: int32
-          description: "Số NO_SHOW + hủy muộn trong 90 ngày [CFG] lúc bị hạn chế"
+          description: "Số NO_SHOW + hủy muộn đã đếm khi tạo hạn chế: sau mốc max(now − 90 ngày [CFG], lần hạn chế gần nhất) (docs/adr/0045)"
     RestrictionStatus:
       type: object
       required: [restricted]
@@ -750,12 +782,6 @@ components:
           type: string
           maxLength: 300
   responses:
-    BadRequest:
-      description: "VALIDATION_FAILED / MALFORMED_REQUEST: dữ liệu không hợp lệ · BUSINESS_RULE_VIOLATION: vi phạm rule, message kết thúc bằng mã rule \"(BR-…)\"."
-      content:
-        "application/json":
-          schema:
-            $ref: "#/components/schemas/Error"
     Unauthorized:
       description: "UNAUTHENTICATED: chưa đăng nhập hoặc phiên đã hết hạn / bị hủy."
       content:
@@ -764,12 +790,6 @@ components:
             $ref: "#/components/schemas/Error"
     Forbidden:
       description: "ACCESS_DENIED: sai vai trò · ACCESS_DENIED_SCOPE_MISMATCH: ngoài phạm vi (chi nhánh, chủ sở hữu). Message chung, không lộ cấu trúc phân quyền."
-      content:
-        "application/json":
-          schema:
-            $ref: "#/components/schemas/Error"
-    NotFound:
-      description: "Không tìm thấy (RESOURCE_NOT_FOUND)."
       content:
         "application/json":
           schema:

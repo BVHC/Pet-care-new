@@ -23,6 +23,18 @@ public interface BookingRestrictionRepository extends JpaRepository<BookingRestr
     boolean existsActive(@Param("customerId") Long customerId, @Param("at") Instant at);
 
     /**
+     * Dòng đang hiệu lực tại {@code at}, cùng điều kiện với {@link #existsActive} (erd §5). Chỉ có tối đa một dòng vì hạn
+     * chế chỉ được tạo dưới khóa 1002 khi chưa có dòng hiệu lực (docs/adr/0045); hai dòng là dữ liệu hỏng →
+     * {@code IncorrectResultSizeDataAccessException} (500), không chọn bừa. Không khóa: luồng gỡ gọi sau khóa 1002
+     * (docs/adr/0050).
+     */
+    @Query("""
+            SELECT r FROM BookingRestriction r
+            WHERE r.customerId = :customerId AND r.endsAt > :at AND r.startsAt <= :at AND r.liftedAt IS NULL
+            """)
+    Optional<BookingRestriction> findActive(@Param("customerId") Long customerId, @Param("at") Instant at);
+
+    /**
      * {@code starts_at} của lần hạn chế gần nhất của khách, kể cả lần đã hết hạn hoặc đã gỡ sớm: mốc dưới của phép đếm vi
      * phạm (docs/adr/0049 — mỗi vi phạm chỉ góp vào một lần hạn chế). JPQL để kết quả là {@code Instant} có kiểu (native trả kiểu JDBC tùy driver).
      */

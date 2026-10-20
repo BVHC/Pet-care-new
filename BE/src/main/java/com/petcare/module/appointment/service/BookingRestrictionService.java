@@ -3,6 +3,7 @@ package com.petcare.module.appointment.service;
 import java.time.Duration;
 import java.time.Instant;
 import java.util.Objects;
+import java.util.Optional;
 
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Propagation;
@@ -17,8 +18,13 @@ import com.petcare.module.identity.api.ConfigKey;
 import com.petcare.module.identity.api.SystemConfigApi;
 
 /**
+<<<<<<< HEAD
  * Cài {@link BookingRestrictionApi} (BR-LH-09): đọc {@link #isRestricted} (docs/adr/0047) và ghi
  * {@link #evaluateAfterViolation} (docs/adr/0049, trả nợ D030).
+=======
+ * Cài {@link BookingRestrictionApi} (BR-LH-09): đọc {@link #isRestricted} (docs/adr/0043) và ghi
+ * {@link #evaluateAfterViolation} (docs/adr/0045, trả nợ D030), {@link #findActiveUntil} (docs/adr/0050, trả nợ D035).
+>>>>>>> 11f78b6 (feat: triển khai xem và gỡ hạn chế khách hàng)
  */
 @Service
 public class BookingRestrictionService implements BookingRestrictionApi {
@@ -45,6 +51,15 @@ public class BookingRestrictionService implements BookingRestrictionApi {
         Objects.requireNonNull(customerId, "customerId");
         Objects.requireNonNull(at, "at");
         return restrictions.existsActive(customerId, at);
+    }
+
+    /** {@code ends_at} của dòng đang hiệu lực (docs/adr/0050, trả nợ D035). Tham gia transaction của bên gọi nếu có. */
+    @Override
+    @Transactional(readOnly = true)
+    public Optional<Instant> findActiveUntil(Long customerId, Instant at) {
+        Objects.requireNonNull(customerId, "customerId");
+        Objects.requireNonNull(at, "at");
+        return restrictions.findActive(customerId, at).map(BookingRestriction::getEndsAt);
     }
 
     /**

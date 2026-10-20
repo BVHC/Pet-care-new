@@ -232,7 +232,12 @@ class CrossModuleQueryIT extends CustomerMeItSupport {
                 .isInstanceOf(UnsupportedOperationException.class);
         assertThatThrownBy(() -> boardings.findActiveStaysByCustomer(1L))
                 .isInstanceOf(UnsupportedOperationException.class);
+<<<<<<< HEAD
         // appointments.findBookedByCustomer thật từ T16 phần 5 (AppointmentLookupService, docs/adr/0050)
+=======
+        // AppointmentQueryApi là bản thật của BE-1 (docs/adr/0046, AppointmentLookupService) từ khi gộp nhánh.
+        assertThat(appointments.findBookedByCustomer(-1L)).isEmpty();
+>>>>>>> e18c4ed (feat: triển khai hủy do phòng khám)
     }
 
     /** Bảng rỗng nên planner chọn Seq Scan; tắt seqscan trong transaction để chứng minh index dùng được. */

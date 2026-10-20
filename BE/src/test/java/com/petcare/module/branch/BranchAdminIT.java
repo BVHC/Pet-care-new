@@ -46,6 +46,7 @@ import org.springframework.transaction.support.TransactionTemplate;
 import com.petcare.TestcontainersConfiguration;
 import com.petcare.module.appointment.api.AppointmentQueryApi;
 import com.petcare.module.appointment.api.AppointmentQueryApi.BookedSlot;
+import com.petcare.module.appointment.service.AppointmentClinicCancellationService;
 import com.petcare.module.boarding.api.BoardingQueryApi;
 import com.petcare.module.boarding.api.BoardingQueryApi.BookedStay;
 import com.petcare.module.branch.api.BranchClinicCancellationEvent;
@@ -110,6 +111,14 @@ class BranchAdminIT {
     @MockitoBean
     private CustomerQueryApi customers;
 
+    /**
+     * Listener thật của appointment (docs/adr/0047) nhận cùng sự kiện với {@link EventSink}; id lịch hẹn ở đây do mock
+     * {@link AppointmentQueryApi} trả về, không có trong DB. IT của appointment ({@code ClinicCancellationIT}) chứng minh
+     * phần hủy thật.
+     */
+    @MockitoBean
+    private AppointmentClinicCancellationService clinicCancellations;
+
     @Autowired
     private EventSink sink;
 
@@ -138,7 +147,7 @@ class BranchAdminIT {
 
     @BeforeEach
     void setUp() {
-        reset(staff, appointments, boardings, pets, customers);
+        reset(staff, appointments, boardings, pets, customers, clinicCancellations);
         sink.events.clear();
         sink.failNext.set(false);
         branchA = branchRow("ACTIVE");

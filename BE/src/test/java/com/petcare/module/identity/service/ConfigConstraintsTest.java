@@ -14,17 +14,20 @@ import org.junit.jupiter.api.Test;
 import com.petcare.module.identity.api.ConfigKey;
 
 /**
- * Ràng buộc chéo [CFG] (docs/adr/0036 mục 1): đúng hai cặp của ADR-0004, {@code <} ở BR-TN-03, {@code ≤} ở BR-LT-02;
+ * Ràng buộc chéo [CFG] (docs/adr/0036 mục 1, docs/adr/0051): đúng ba cặp, {@code <} ở BR-TN-03 và BR-LH-12, {@code ≤} ở
+ * BR-LT-02;
  * khoảng thu hẹp theo khóa kia, kèm lý do chỉ khi thật sự thu hẹp.
  */
 class ConfigConstraintsTest {
 
     @Test
-    void exactlyTheTwoAgreedPairs() {
+    void exactlyTheThreeAgreedPairs() {
         assertThat(ConfigConstraints.ALL).containsExactly(
                 new ConfigConstraints.Constraint(ConfigKey.VISIT_LATE_PRIORITY_MINUTES,
                         ConfigKey.APPOINTMENT_NO_SHOW_AFTER_MINUTES, true),
-                new ConfigConstraints.Constraint(ConfigKey.BOARDING_MIN_NIGHTS, ConfigKey.BOARDING_MAX_NIGHTS, false));
+                new ConfigConstraints.Constraint(ConfigKey.BOARDING_MIN_NIGHTS, ConfigKey.BOARDING_MAX_NIGHTS, false),
+                new ConfigConstraints.Constraint(ConfigKey.APPOINTMENT_LATE_CANCEL_HOURS,
+                        ConfigKey.APPOINTMENT_REMINDER_HOURS_BEFORE, true));
     }
 
     @Test
@@ -44,6 +47,10 @@ class ConfigConstraintsTest {
                 .containsExactly(ConfigKey.VISIT_LATE_PRIORITY_MINUTES);
         assertThat(ConfigConstraints.partnersOf(ConfigKey.BOARDING_MAX_NIGHTS))
                 .containsExactly(ConfigKey.BOARDING_MIN_NIGHTS);
+        assertThat(ConfigConstraints.partnersOf(ConfigKey.APPOINTMENT_LATE_CANCEL_HOURS))
+                .containsExactly(ConfigKey.APPOINTMENT_REMINDER_HOURS_BEFORE);
+        assertThat(ConfigConstraints.partnersOf(ConfigKey.APPOINTMENT_REMINDER_HOURS_BEFORE))
+                .containsExactly(ConfigKey.APPOINTMENT_LATE_CANCEL_HOURS);
         assertThat(ConfigConstraints.partnersOf(ConfigKey.OTP_TTL_MINUTES)).isEmpty();
     }
 
@@ -59,6 +66,32 @@ class ConfigConstraintsTest {
         assertThat(ConfigConstraints.violations(values(29, 30, 1, 30))).isEmpty();
         assertThat(ConfigConstraints.violations(values(30, 30, 1, 30))).containsExactly(
                 "visit.late_priority_minutes (30) must be < appointment.no_show_after_minutes (30)");
+    }
+
+    @Test
+    void reminderMustComeBeforeLateCancelMark() {
+        Map<ConfigKey, Object> values = values(15, 30, 1, 30);
+        values.put(ConfigKey.APPOINTMENT_LATE_CANCEL_HOURS, 12);
+        values.put(ConfigKey.APPOINTMENT_REMINDER_HOURS_BEFORE, 24);
+        assertThat(ConfigConstraints.violations(values)).isEmpty();
+        values.put(ConfigKey.APPOINTMENT_REMINDER_HOURS_BEFORE, 13);
+        assertThat(ConfigConstraints.violations(values)).isEmpty();
+        values.put(ConfigKey.APPOINTMENT_REMINDER_HOURS_BEFORE, 12);
+        assertThat(ConfigConstraints.violations(values)).containsExactly(
+                "appointment.late_cancel_hours (12) must be < appointment.reminder_hours_before (12)");
+        values.put(ConfigKey.APPOINTMENT_REMINDER_HOURS_BEFORE, 6);
+        assertThat(ConfigConstraints.violations(values)).containsExactly(
+                "appointment.late_cancel_hours (12) must be < appointment.reminder_hours_before (6)");
+    }
+
+    @Test
+    void narrowsReminderPairBothWays() {
+        assertThat(ConfigConstraints.narrow(ConfigKey.APPOINTMENT_LATE_CANCEL_HOURS, 0, 48, key -> 24))
+                .isEqualTo(new ConfigConstraints.Narrowed(0, 23,
+                        List.of("phải nhỏ hơn appointment.reminder_hours_before đang là 24")));
+        assertThat(ConfigConstraints.narrow(ConfigKey.APPOINTMENT_REMINDER_HOURS_BEFORE, 1, 72, key -> 12))
+                .isEqualTo(new ConfigConstraints.Narrowed(13, 72,
+                        List.of("phải lớn hơn appointment.late_cancel_hours đang là 12")));
     }
 
     @Test

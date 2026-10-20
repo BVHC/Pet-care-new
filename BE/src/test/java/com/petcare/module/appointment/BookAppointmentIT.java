@@ -383,7 +383,8 @@ class BookAppointmentIT {
 
     @Test
     void activeRestrictionBlocksTheCustomerOnlyWhileItIsInForce() {
-        String message = "Bạn đang bị hạn chế đặt lịch online, vui lòng liên hệ chi nhánh để đặt lịch (BR-LH-09)";
+        String message = "Bạn đang bị hạn chế đặt lịch online đến 09:00 14/11/2026, vui lòng liên hệ chi nhánh để "
+                + "đặt lịch (BR-LH-09)";
         data.restriction(customer, T0, T0.plus(Duration.ofDays(30)), null, null);
         assertRule(post(customerToken, body(pet, branch, medical, DAY, START, null)), message);
 

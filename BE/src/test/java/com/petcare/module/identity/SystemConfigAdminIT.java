@@ -326,6 +326,54 @@ class SystemConfigAdminIT {
         ok(put("boarding.min_nights", adminToken, Map.of("value", "5")));
     }
 
+    /**
+     * BR-LH-12 (docs/adr/0051): nhắc lịch phải trước mốc hủy muộn — {@code late_cancel_hours < reminder_hours_before},
+     * kiểm theo cả hai chiều sửa, biên bằng nhau bị từ chối, lỗi không để lại gì.
+     */
+    @Test
+    void reminderMustStayBeforeLateCancelMark() {
+        Snapshot reminder = snapshot("appointment.reminder_hours_before");
+        assertThat(put("appointment.reminder_hours_before", adminToken, Map.of("value", "12")).getBody())
+                .containsEntry("message", "Giá trị của appointment.reminder_hours_before phải là số nguyên từ 13 đến "
+                        + "72 (giờ): phải lớn hơn appointment.late_cancel_hours đang là 12 (BR-QT-13)");
+        assertUnchanged(reminder);
+
+        Snapshot lateCancel = snapshot("appointment.late_cancel_hours");
+        assertThat(put("appointment.late_cancel_hours", adminToken, Map.of("value", "24")).getBody())
+                .containsEntry("message", "Giá trị của appointment.late_cancel_hours phải là số nguyên từ 0 đến 23 "
+                        + "(giờ): phải nhỏ hơn appointment.reminder_hours_before đang là 24 (BR-QT-13)");
+        assertUnchanged(lateCancel);
+
+        ok(put("appointment.reminder_hours_before", adminToken, Map.of("value", "48")));
+        ok(put("appointment.late_cancel_hours", adminToken, Map.of("value", "30")));
+        assertThat(put("appointment.reminder_hours_before", adminToken, Map.of("value", "30")).getBody())
+                .containsEntry("message", "Giá trị của appointment.reminder_hours_before phải là số nguyên từ 31 đến "
+                        + "72 (giờ): phải lớn hơn appointment.late_cancel_hours đang là 30 (BR-QT-13)");
+        assertNotLocked("appointment.late_cancel_hours", "appointment.reminder_hours_before");
+        assertThat(configs.getInt(ConfigKey.APPOINTMENT_LATE_CANCEL_HOURS))
+                .isLessThan(configs.getInt(ConfigKey.APPOINTMENT_REMINDER_HOURS_BEFORE));
+    }
+
+    /** Như {@link #pairEditedConcurrentlyNeverBreaksTheConstraint} cho cặp nhắc lịch / hủy muộn (docs/adr/0051). */
+    @Test
+    void reminderPairEditedConcurrentlyNeverBreaksTheConstraint() throws Exception {
+        flushBarrier = new CyclicBarrier(2);
+
+        List<ResponseEntity<Map<String, Object>>> responses = whileConfigsLocked(
+                List.of("appointment.late_cancel_hours", "appointment.reminder_hours_before"),
+                () -> put("appointment.late_cancel_hours", adminToken, Map.of("value", "20")),
+                () -> put("appointment.reminder_hours_before", adminToken, Map.of("value", "18")));
+
+        assertThat(responses).extracting(ResponseEntity::getStatusCode)
+                .containsExactlyInAnyOrder(HttpStatus.OK, HttpStatus.BAD_REQUEST);
+        int lateCancel = Integer.parseInt(jdbc.queryForObject(
+                "SELECT value FROM system_configs WHERE key = 'appointment.late_cancel_hours'", String.class));
+        int reminder = Integer.parseInt(jdbc.queryForObject(
+                "SELECT value FROM system_configs WHERE key = 'appointment.reminder_hours_before'", String.class));
+        assertThat(lateCancel).isLessThan(reminder);
+        assertThat(audits()).hasSize(1);
+    }
+
     // ================================================================ #32 lỗi hình thức / tồn tại / method
 
     @Test
@@ -483,6 +531,14 @@ class SystemConfigAdminIT {
             low = 16;
             reason = ": phải lớn hơn visit.late_priority_minutes đang là 15";
             valid = List.of("16", max);
+        } else if (key == ConfigKey.APPOINTMENT_LATE_CANCEL_HOURS) {     // < reminder_hours_before (24), ADR-0051
+            high = 23;
+            reason = ": phải nhỏ hơn appointment.reminder_hours_before đang là 24";
+            valid = List.of(min, "23");
+        } else if (key == ConfigKey.APPOINTMENT_REMINDER_HOURS_BEFORE) { // > late_cancel_hours (12), ADR-0051
+            low = 13;
+            reason = ": phải lớn hơn appointment.late_cancel_hours đang là 12";
+            valid = List.of("13", max);
         }
         List<String> invalid = List.of(String.valueOf(low - 1), String.valueOf(high + 1), "abc", "1.5");
         return new Expected(invalid, valid, "Giá trị của " + key.key() + " phải là số nguyên từ " + low + " đến " + high

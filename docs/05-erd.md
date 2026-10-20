@@ -493,7 +493,11 @@ Quota riêng của một khung giờ cụ thể, ghi đè quota mặc định (B
 - Index: `(pet_id, status)` cho BR-LH-05; `(customer_id, created_at)`; `(status, slot_date, slot_start)` cho ST05
 - `UNIQUE (pet_id, slot_date, slot_start) WHERE status = 'BOOKED'` — thú không trùng khung (BR-LH-05)
 
+<<<<<<< HEAD
 **Quota tính những lịch nào [ERD]:** lịch đã `CHECKED_IN`/`COMPLETED` vẫn chiếm quota của khung đó; `CANCELLED`, `NO_SHOW` trả lại quota. Đếm quota và INSERT phải trong cùng transaction có khóa (ví dụ `SELECT … FOR UPDATE` trên dòng `branches`, hoặc advisory lock theo `branch_id + service_group + slot`) để hai khách không cùng lấy khung cuối. **Đã chốt ở ADR-0045:** khóa dòng `branches` `FOR NO KEY UPDATE` (`BranchApi.lockForBooking`) + advisory theo thú cho BR-LH-05; mã `code` = `LH-<yyMMdd ngày đặt>-<số của appointment_code_seq>` (V13, mục 17 Nhật ký quyết định).
+=======
+**Quota tính những lịch nào [ERD]:** lịch đã `CHECKED_IN`/`COMPLETED` vẫn chiếm quota của khung đó; `CANCELLED`, `NO_SHOW` trả lại quota. Đếm quota và INSERT phải trong cùng transaction có khóa (ví dụ `SELECT … FOR UPDATE` trên dòng `branches`, hoặc advisory lock theo `branch_id + service_group + slot`) để hai khách không cùng lấy khung cuối. **Đã chốt ở ADR-0041:** khóa dòng `branches` `FOR NO KEY UPDATE` (`BranchApi.lockForBooking`) + advisory theo thú cho BR-LH-05; mã `code` = `LH-<yyMMdd ngày đặt>-<số của appointment_code_seq>` (V16 — ban đầu đặt V13, đổi số 2026-10-19 vì trùng `V13__pet_customer_fk_indexes.sql` của BE-2; mục 20 Nhật ký quyết định).
+>>>>>>> af117e0 (feat: triển khai job nhắc lịch)
 
 - Index: `(booked_by)` — kiểm FK khi xóa `accounts` (V7, ADR-0018)
 
@@ -1134,7 +1138,7 @@ Tổng: 55 bảng = 52 model + 3 bảng con tách ra (`care_log_addenda`, `stock
 
 ## 13. Nhật ký quyết định
 
-Mục 1–4: các câu hỏi mở của bản v14, chốt ở v15. Mục 5: thay đổi ở v16. Mục 6–10: quyết định khi viết migration `V1__init_schema.sql` (2026-10-03). Mục 11: worker ST20 (2026-10-07). Mục 12: ST02 (2026-10-07). Mục 13: ST20 kênh IN_APP (2026-10-07). Mục 15: OTP liên kết hồ sơ (2026-10-09). Mục 16: sổ địa chỉ (2026-10-10). Mục 17: mã lịch hẹn (2026-10-15).
+Mục 1–4: các câu hỏi mở của bản v14, chốt ở v15. Mục 5: thay đổi ở v16. Mục 6–10: quyết định khi viết migration `V1__init_schema.sql` (2026-10-03). Mục 11: worker ST20 (2026-10-07). Mục 12: ST02 (2026-10-07). Mục 13: ST20 kênh IN_APP (2026-10-07). Mục 15: OTP liên kết hồ sơ (2026-10-09). Mục 16: sổ địa chỉ (2026-10-10). Mục 17–19: index và mã chứng từ của BE-2 (T17–T19, 2026-10-16/17). Mục 20: mã lịch hẹn (2026-10-15).
 
 | # | Vấn đề | Quyết định | Ảnh hưởng tới bảng |
 |---|---|---|---|
@@ -1157,4 +1161,12 @@ Mục 1–4: các câu hỏi mở của bản v14, chốt ở v15. Mục 5: thay
 | 17 | Index cho FK trỏ tới `pets` / `customers` còn thiếu (T17, ADR-0041) | Xóa thú (BR-KH-06), xóa hồ sơ online (BR-TK-08, BR-TK-19) và `existsByPet` / `isPetInStay` / `existsByCustomer` phải quét toàn bảng; V1 chỉ có index cho `appointments`, `visits.pet_id`, `vaccinations`, `orders`, `feedbacks` | `boarding_bookings (pet_id)`, `boarding_bookings (customer_id)`, `care_tasks (pet_id)`, `care_tasks (customer_id)`, `visits (customer_id)`, `payments (customer_id)` (V13) — trả hết nợ D013 |
 | 18 | Mã chứng từ liên tục và index module kho (T18, ADR-0042, 0043) | BR-KO-03 đòi dãy số phiếu liên tục nhưng ERD không có nơi sinh số; `SEQUENCE` / `IDENTITY` để lỗ khi rollback. V1 chỉ có index FEFO, movement và unique của kho | Bảng ngoài ERD `document_counters (doc_type, period, last_value)`, PK `(doc_type, period)` (V14, chỉ `platform/sequence/DocumentCodeGenerator` ghi); index `inventory_items (product_id)`, `stock_receipts (branch_id, receipt_date DESC, id DESC)` và `(supplier_id)`, `stock_receipt_lines (stock_receipt_id)`, `(product_id)`, `(stock_lot_id) WHERE NOT NULL`, `stock_adjustments (branch_id, created_at DESC, id DESC)`, `stock_adjustment_lines (stock_adjustment_id)`, `(stock_lot_id)` |
 | 19 | Index `order_lines (order_id)` (T19, ADR-0044) | V1 không có index cho `order_lines.order_id`: mọi thao tác trên dòng của một Order, tính lại tổng tiền và kiểm FK khi xóa Order đều quét cả bảng | `V15__order_lines_index.sql`: `ix_order_lines_order_id` |
+<<<<<<< HEAD
+<<<<<<< HEAD
 | 20 | Mã chứng từ của lịch hẹn (`appointments.code`, BR-LH-06 giữ mã khi đổi khung) | §0 chỉ có ví dụ `LH-260115-0007`, không nói cách sinh. Chốt sequence toàn cục: mã = `LH-` + `yyMMdd` (ngày đặt, giờ Việt Nam) + `-` + số của sequence (≥ 4 chữ số, đệm 0). Duy nhất theo cấu tạo, không cần khóa; không reset theo ngày; nhảy cóc khi rollback — chấp nhận vì lịch hẹn không yêu cầu số liên tục (khác phiếu nhập BR-KO-03). `MAXVALUE 9999999999` giữ mã ≤ 20 ký tự, `NO CYCLE` (hết số → lỗi, không trùng) (ADR-0045) | V16 (ban đầu V13): `appointment_code_seq AS BIGINT MAXVALUE 9999999999 NO CYCLE` |
+=======
+| 20 | Mã chứng từ của lịch hẹn (`appointments.code`, BR-LH-06 giữ mã khi đổi khung) | §0 chỉ có ví dụ `LH-260115-0007`, không nói cách sinh. Chốt sequence toàn cục: mã = `LH-` + `yyMMdd` (ngày đặt, giờ Việt Nam) + `-` + số của sequence (≥ 4 chữ số, đệm 0). Duy nhất theo cấu tạo, không cần khóa; không reset theo ngày; nhảy cóc khi rollback — chấp nhận vì lịch hẹn không yêu cầu số liên tục (khác phiếu nhập BR-KO-03). `MAXVALUE 9999999999` giữ mã ≤ 20 ký tự, `NO CYCLE` (hết số → lỗi, không trùng) (ADR-0041) | V13: `appointment_code_seq AS BIGINT MAXVALUE 9999999999 NO CYCLE` |
+>>>>>>> e18c4ed (feat: triển khai hủy do phòng khám)
+=======
+| 20 | Mã chứng từ của lịch hẹn (`appointments.code`, BR-LH-06 giữ mã khi đổi khung) | §0 chỉ có ví dụ `LH-260115-0007`, không nói cách sinh. Chốt sequence toàn cục: mã = `LH-` + `yyMMdd` (ngày đặt, giờ Việt Nam) + `-` + số của sequence (≥ 4 chữ số, đệm 0). Duy nhất theo cấu tạo, không cần khóa; không reset theo ngày; nhảy cóc khi rollback — chấp nhận vì lịch hẹn không yêu cầu số liên tục (khác phiếu nhập BR-KO-03). `MAXVALUE 9999999999` giữ mã ≤ 20 ký tự, `NO CYCLE` (hết số → lỗi, không trùng) (ADR-0041) | V16 (ban đầu V13, đổi số 2026-10-19 khi sửa rebase vì trùng `V13__pet_customer_fk_indexes.sql`): `appointment_code_seq AS BIGINT MAXVALUE 9999999999 NO CYCLE` |
+>>>>>>> af117e0 (feat: triển khai job nhắc lịch)

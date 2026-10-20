@@ -25,6 +25,7 @@ public interface WeightRecordRepository extends JpaRepository<WeightRecord, Long
             """, nativeQuery = true)
     Optional<BigDecimal> findCurrentWeight(@Param("petId") Long petId);
 
+<<<<<<< HEAD
     /** Cân nặng mới nhất của nhiều thú một lần ({@code PetQueryApi.findPets}); thú chưa cân không có dòng. */
     @Query(value = """
             SELECT DISTINCT ON (pet_id) pet_id AS petId, weight_kg AS weightKg FROM weight_records
@@ -33,11 +34,28 @@ public interface WeightRecordRepository extends JpaRepository<WeightRecord, Long
     List<CurrentWeightRow> findCurrentWeights(@Param("petIds") Collection<Long> petIds);
 
     interface CurrentWeightRow {
+=======
+    /** Cân nặng hiện tại của một thú trong {@link #findCurrentWeights}. */
+    interface CurrentWeight {
+>>>>>>> e18c4ed (feat: triển khai hủy do phòng khám)
         Long getPetId();
 
         BigDecimal getWeightKg();
     }
 
+<<<<<<< HEAD
+=======
+    /**
+     * Cân nặng hiện tại theo lô ({@code PetQueryApi.findPets}), cùng thứ tự với {@link #findCurrentWeight}: một câu SQL,
+     * mỗi thú tối đa một dòng; thú chưa cân thì không có dòng. Bên gọi không truyền tập rỗng.
+     */
+    @Query(value = """
+            SELECT DISTINCT ON (pet_id) pet_id AS petId, weight_kg AS weightKg FROM weight_records
+            WHERE pet_id IN (:petIds) ORDER BY pet_id, measured_at DESC, id DESC
+            """, nativeQuery = true)
+    List<CurrentWeight> findCurrentWeights(@Param("petIds") Collection<Long> petIds);
+
+>>>>>>> e18c4ed (feat: triển khai hủy do phòng khám)
     /** Chỉ dùng khi xóa thú chưa giao dịch (BR-KH-06): khi đó chỉ có thể là bản ghi {@code OWNER}. */
     @Modifying(flushAutomatically = true)
     @Query(value = "DELETE FROM weight_records WHERE pet_id = :petId", nativeQuery = true)

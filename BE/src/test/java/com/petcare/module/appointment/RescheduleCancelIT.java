@@ -442,7 +442,8 @@ class RescheduleCancelIT {
         assertThat(restriction.get("starts_at")).isEqualTo(row(late).get("cancelled_at"));
         assertError(book(customerToken, data.pet(customer), DAY, "10:00"), HttpStatus.BAD_REQUEST,
                 "BUSINESS_RULE_VIOLATION",
-                "Bạn đang bị hạn chế đặt lịch online, vui lòng liên hệ chi nhánh để đặt lịch (BR-LH-09)");
+                "Bạn đang bị hạn chế đặt lịch online đến 09:00 14/11/2026, vui lòng liên hệ chi nhánh để đặt lịch "
+                        + "(BR-LH-09)");
         assertThat(book(receptionistToken, data.pet(customer), DAY, "10:00").getStatusCode())
                 .isEqualTo(HttpStatus.CREATED);
     }
