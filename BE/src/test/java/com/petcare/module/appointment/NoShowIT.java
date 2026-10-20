@@ -444,7 +444,10 @@ class NoShowIT {
         assertThat(rowWithoutStatus(id)).isEqualTo(after);
     }
 
-    /** [CFG] đọc lúc chạy (docs/adr/0048 §2, D036): giá trị mới áp từ lượt kế tiếp, kể cả cho lịch đã đặt. */
+    /**
+     * [CFG] đọc lúc chạy (docs/adr/0048 §2, D036 — đã xác nhận docs/adr/0052): giá trị mới áp từ lượt kế tiếp, kể cả
+     * cho lịch đã đặt.
+     */
     @Test
     void configChangeAppliesFromNextRun() {
         long id = booked(customer, DAY, LocalTime.of(9, 45), "BOOKED");

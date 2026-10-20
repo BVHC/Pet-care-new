@@ -33,7 +33,7 @@ import com.petcare.platform.security.BranchScope;
  * <p>
  * Gỡ sớm: một transaction, READ COMMITTED (bắt buộc — xem {@link #liftRestriction}), không {@code noRollbackFor}, không
  * bắt lỗi. Lần đánh giá vi phạm sau vẫn đếm từ {@code starts_at} của lần vừa gỡ (docs/adr/0045 §5): gỡ không làm vi phạm
- * cũ bị tính lại (giả định chờ PO — nợ D038).
+ * cũ bị tính lại (đã xác nhận 2026-10-20 — docs/adr/0052).
  */
 @Service
 public class BookingRestrictionStatusService {

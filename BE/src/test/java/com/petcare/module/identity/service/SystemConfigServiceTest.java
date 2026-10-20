@@ -29,12 +29,15 @@ class SystemConfigServiceTest {
 
     /**
      * Một bộ dòng hợp lệ cho mọi ConfigKey: INT = 5 trong [1, 10], TIME = 12:00 trong [06:00, 22:00]; riêng
-     * {@code appointment.no_show_after_minutes} = 6 để thỏa {@code visit.late_priority_minutes (5) <} nó (docs/adr/0036).
+     * {@code appointment.no_show_after_minutes} = 6 để thỏa {@code visit.late_priority_minutes (5) <} nó (docs/adr/0036)
+     * và {@code appointment.reminder_hours_before} = 6 để thỏa {@code appointment.late_cancel_hours (5) <} nó
+     * (docs/adr/0051).
      */
     private static List<ConfigRow> validRows() {
         List<ConfigRow> rows = new ArrayList<>();
         for (ConfigKey key : ConfigKey.values()) {
-            String value = key == ConfigKey.APPOINTMENT_NO_SHOW_AFTER_MINUTES ? "6" : "5";
+            String value = key == ConfigKey.APPOINTMENT_NO_SHOW_AFTER_MINUTES
+                    || key == ConfigKey.APPOINTMENT_REMINDER_HOURS_BEFORE ? "6" : "5";
             rows.add(key.type() == ConfigValueType.TIME
                     ? new ConfigRow(key.key(), "12:00", ConfigValueType.TIME, "06:00", "22:00")
                     : new ConfigRow(key.key(), value, key.type(), "1", "10"));
@@ -196,11 +199,15 @@ class SystemConfigServiceTest {
                 new ConfigRow("appointment.no_show_after_minutes", "5", ConfigValueType.INT, "1", "10"));
         rows.removeIf(r -> r.key().equals(ConfigKey.BOARDING_MAX_NIGHTS.key()));
         rows.add(new ConfigRow("boarding.max_nights", "4", ConfigValueType.INT, "1", "10"));
+        rows.removeIf(r -> r.key().equals(ConfigKey.APPOINTMENT_REMINDER_HOURS_BEFORE.key()));
+        rows.add(new ConfigRow("appointment.reminder_hours_before", "5", ConfigValueType.INT, "1", "10"));
 
         assertThatThrownBy(() -> SystemConfigService.load(rows))
                 .isInstanceOf(IllegalStateException.class)
                 .hasMessageContaining("visit.late_priority_minutes (5) must be < appointment.no_show_after_minutes (5)")
-                .hasMessageContaining("boarding.min_nights (5) must be <= boarding.max_nights (4)");
+                .hasMessageContaining("boarding.min_nights (5) must be <= boarding.max_nights (4)")
+                .hasMessageContaining(
+                        "appointment.late_cancel_hours (5) must be < appointment.reminder_hours_before (5)");
     }
 
     /** Kích thước cache cố định theo ConfigKey (docs/adr/0036, mục bộ nhớ): dòng lạ không bao giờ vào cache. */

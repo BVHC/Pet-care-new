@@ -85,6 +85,8 @@ services:
       PENDING_ACCOUNT_CLEANUP_CRON: ${PENDING_ACCOUNT_CLEANUP_CRON:-0 */15 * * * *}
       # Lịch ST05 chuyển lịch hẹn quá giờ sang NO_SHOW (docs/adr/0048); mặc định trùng application.yml.
       NO_SHOW_CRON: ${NO_SHOW_CRON:-0 */5 * * * *}
+      # Lịch ST03 nhắc lịch hẹn (docs/adr/0051); mặc định trùng application.yml (lệch phút với ST05 / ST02).
+      APPOINTMENT_REMINDER_CRON: ${APPOINTMENT_REMINDER_CRON:-0 2/5 * * * *}
       # Lịch ba luồng ST20: email HIGH, NORMAL (docs/adr/0012), IN_APP (docs/adr/0014); mặc định trùng application.yml.
       NOTIFICATION_OUTBOX_CRON: ${NOTIFICATION_OUTBOX_CRON:-*/10 * * * * *}
       NOTIFICATION_OUTBOX_PRIORITY_CRON: ${NOTIFICATION_OUTBOX_PRIORITY_CRON:-*/5 * * * * *}

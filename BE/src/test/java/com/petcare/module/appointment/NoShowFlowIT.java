@@ -288,7 +288,7 @@ class NoShowFlowIT {
         assertThat(restrictionCount(customer)).isZero();
     }
 
-    /** Thứ tự ngược lại: ST05 commit trước thì lịch giữ {@code NO_SHOW} khi thú mất sau đó (giả định chờ PO, D036). */
+    /** Thứ tự ngược lại: ST05 commit trước thì lịch giữ {@code NO_SHOW} khi thú mất sau đó (D036, đã xác nhận — docs/adr/0052). */
     @Test
     void noShowCommittedBeforeDeceasedStaysNoShow() {
         long pet = data.pet(customer);

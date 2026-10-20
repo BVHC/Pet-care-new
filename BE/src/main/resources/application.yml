@@ -89,6 +89,13 @@ app:
       cron: "${NO_SHOW_CRON:0 */5 * * * *}"
       batch-size: 100
       time-budget: 60s
+    # ST03: nhắc lịch hẹn BOOKED trước giờ hẹn appointment.reminder_hours_before [CFG] (docs/adr/0051).
+    # Mặc định phút 2, 7, 12…: lệch ST05 (0 */5) và ST02 (0 */15) để các job dài (≤ 60s) không cùng chiếm 3/4 thread
+    # scheduler, giữ thread cho ST20 HIGH (OTP). Job dài mới cũng phải chọn phút lệch (Q11).
+    appointment-reminder:
+      cron: "${APPOINTMENT_REMINDER_CRON:0 2/5 * * * *}"
+      batch-size: 100
+      time-budget: 60s
     # ST20 từ notification_outbox. Email (docs/adr/0012): hai luồng priority (OTP, mật khẩu tạm) và thường.
     # IN_APP (docs/adr/0014): giao vào bảng notifications, job riêng, không qua SMTP.
     notification-outbox:

@@ -10,6 +10,7 @@ import java.util.Optional;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.JpaSpecificationExecutor;
 import org.springframework.data.jpa.repository.Lock;
+import org.springframework.data.jpa.repository.Modifying;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 import org.springframework.transaction.annotation.Propagation;
@@ -243,6 +244,99 @@ public interface AppointmentRepository extends JpaRepository<Appointment, Long>,
             """, nativeQuery = true)
     Optional<Long> lockOverdueBooked(@Param("id") long id, @Param("cutoffDate") LocalDate cutoffDate,
             @Param("cutoffTime") String cutoffTime);
+
+    // ST03 nhắc lịch hẹn (docs/adr/0051). Cửa sổ (from, to] theo giờ Việt Nam; trạng thái để literal để dùng index
+    // ix_appointments_status_slot (V1); giờ truyền dạng LocalTime.toString() + CAST (bẫy độ chính xác của ADR-0049).
+
+    /**
+     * Lô đầu: tối đa {@code limit} id lịch {@code BOOKED} chưa nhắc có khung trong {@code (from, to]}, theo
+     * {@code slot_date, slot_start, id} — thứ tự của {@code ix_appointments_status_slot} (khuôn
+     * {@link #findOverdueBookedIds}). Cận dưới loại lịch đã bắt đầu mà ST05 chưa chuyển {@code NO_SHOW}. Không khóa;
+     * {@link #lockDueForReminder} kiểm lại dưới khóa.
+     */
+    @Query(value = """
+            SELECT id FROM appointments
+            WHERE status = 'BOOKED' AND reminded_at IS NULL
+              AND (slot_date, slot_start) <= (CAST(:toDate AS date), CAST(:toTime AS time))
+            ORDER BY slot_date, slot_start, id LIMIT :limit
+            """, nativeQuery = true)
+    List<Long> findDueForReminderIds(@Param("fromDate") LocalDate fromDate, @Param("fromTime") String fromTime,
+            @Param("toDate") LocalDate toDate, @Param("toTime") String toTime, @Param("limit") int limit);
+
+    /**
+     * Lô kế tiếp của {@link #findDueForReminderIds}: keyset {@code (slot_date, slot_start, id)} lớn hơn của lịch
+     * {@code afterId}. Nếu lịch đó vừa đổi khung, lượt này có thể bỏ sót hoặc đọc lại vài dòng: bỏ sót thì lượt sau
+     * bắt lại (điều kiện chỉ dựa trên trạng thái, {@code reminded_at}, khung), đọc lại thì khóa kiểm {@code reminded_at}.
+     */
+    @Query(value = """
+            SELECT a.id FROM appointments a
+            WHERE a.status = 'BOOKED' AND a.reminded_at IS NULL
+              AND (a.slot_date, a.slot_start) > (CAST(:fromDate AS date), CAST(:fromTime AS time))
+              AND (a.slot_date, a.slot_start) <= (CAST(:toDate AS date), CAST(:toTime AS time))
+              AND (a.slot_date, a.slot_start, a.id) > (SELECT p.slot_date, p.slot_start, p.id FROM appointments p
+                                                       WHERE p.id = :afterId)
+            ORDER BY a.slot_date, a.slot_start, a.id LIMIT :limit
+            """, nativeQuery = true)
+    List<Long> findDueForReminderIdsAfter(@Param("fromDate") LocalDate fromDate, @Param("fromTime") String fromTime,
+            @Param("toDate") LocalDate toDate, @Param("toTime") String toTime, @Param("afterId") long afterId,
+            @Param("limit") int limit);
+
+    /**
+     * Khóa dòng ({@code FOR NO KEY UPDATE SKIP LOCKED}) nếu lịch <b>vẫn</b> {@code BOOKED}, chưa nhắc và khung trong
+     * cửa sổ: hủy / đổi khung / check-in / hủy do phòng khám có thể đã commit sau khi quét. Dòng đang bị luồng khác giữ
+     * thì bỏ qua (ST03 không bao giờ chờ khóa dòng), lượt sau xét lại. {@code MANDATORY}: ngoài transaction khóa nhả ngay.
+     */
+    @Transactional(propagation = Propagation.MANDATORY)
+    @Query(value = """
+            SELECT id FROM appointments
+            WHERE id = :id AND status = 'BOOKED' AND reminded_at IS NULL
+              AND (slot_date, slot_start) > (CAST(:fromDate AS date), CAST(:fromTime AS time))
+              AND (slot_date, slot_start) <= (CAST(:toDate AS date), CAST(:toTime AS time))
+            FOR NO KEY UPDATE SKIP LOCKED
+            """, nativeQuery = true)
+    Optional<Long> lockDueForReminder(@Param("id") long id, @Param("fromDate") LocalDate fromDate,
+            @Param("fromTime") String fromTime, @Param("toDate") LocalDate toDate, @Param("toTime") String toTime);
+
+    /** Các cột ST03 cần để soạn thông báo; đọc <b>sau</b> {@link #lockDueForReminder}, không nạp entity. */
+    interface ReminderRow {
+
+        Long getId();
+
+        String getCode();
+
+        Long getCustomerId();
+
+        Long getPetId();
+
+        Long getServiceId();
+
+        Long getBranchId();
+
+        LocalDate getSlotDate();
+
+        LocalTime getSlotStart();
+    }
+
+    @Query("""
+            SELECT a.id AS id, a.code AS code, a.customerId AS customerId, a.petId AS petId, a.serviceId AS serviceId,
+                   a.branchId AS branchId, a.slotDate AS slotDate, a.slotStart AS slotStart
+            FROM Appointment a WHERE a.id = :id
+            """)
+    Optional<ReminderRow> findReminderRow(@Param("id") long id);
+
+    /**
+     * Đánh dấu đã nhắc: chỉ hai cột, có điều kiện — không bao giờ ghi lại khung giờ / trạng thái của luồng khác (entity
+     * không có {@code @Version} / {@code @DynamicUpdate}, ghi qua entity là ghi mọi cột; docs/adr/0051 Q7). Bulk update
+     * bỏ qua auditing nên tự đặt {@code updated_at} (ADR-0015). Trả số dòng đã ghi; gọi dưới khóa của
+     * {@link #lockDueForReminder} nên phải là 1.
+     */
+    @Transactional(propagation = Propagation.MANDATORY)
+    @Modifying(flushAutomatically = true, clearAutomatically = true)
+    @Query(value = """
+            UPDATE appointments SET reminded_at = :at, updated_at = :at
+            WHERE id = :id AND status = 'BOOKED' AND reminded_at IS NULL
+            """, nativeQuery = true)
+    int markRemindedIfDue(@Param("id") long id, @Param("at") Instant at);
 
     // AppointmentQueryApi (docs/adr/0046): chỉ đọc, JPQL constructor để không nạp entity vào persistence context của
 >>>>>>> a32bf1b (feat: triển khai job appointment/job/NoShowJob)

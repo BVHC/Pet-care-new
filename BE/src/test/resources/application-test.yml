@@ -39,6 +39,8 @@ app:
       cron: "-"
     no-show:
       cron: "-"
+    appointment-reminder:
+      cron: "-"
     notification-outbox:
       cron: "-"
       priority-cron: "-"

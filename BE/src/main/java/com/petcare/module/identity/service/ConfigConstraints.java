@@ -9,11 +9,14 @@ import com.petcare.module.identity.api.ConfigKey;
 import com.petcare.module.identity.api.ConfigValueType;
 
 /**
- * Ràng buộc chéo giữa các tham số [CFG] (docs/adr/0036 mục 1, trả TBD của ADR-0004). Chỉ hai cặp, cả hai kiểu INT:
+ * Ràng buộc chéo giữa các tham số [CFG] (docs/adr/0036 mục 1, trả TBD của ADR-0004; cặp thứ ba: docs/adr/0051). Ba cặp,
+ * đều kiểu INT:
  * <ul>
  *   <li>{@code visit.late_priority_minutes < appointment.no_show_after_minutes}: BR-TN-03 xếp "trễ 15–30 phút" giữa hai
  *       mốc này, mốc NO_SHOW là BR-LH-08.</li>
  *   <li>{@code boarding.min_nights ≤ boarding.max_nights}: BR-LT-02 "từ 1 đến 30 đêm".</li>
+ *   <li>{@code appointment.late_cancel_hours < appointment.reminder_hours_before}: BR-LH-12 nhắc lịch "trước mốc hủy
+ *       muộn" (BR-LH-07) để khách còn kịp hủy / đổi mà không bị tính hủy muộn.</li>
  * </ul>
  * Mọi cặp khác trong V2 đã được min–max của từng khóa đảm bảo (bảng rà ở ADR-0036). Kiểm khi nạp
  * ({@link SystemConfigService#load}, fail-fast) và khi sửa ({@link SystemConfigEditService}, dưới khóa dòng của cả cặp).
@@ -39,7 +42,8 @@ final class ConfigConstraints {
 
     static final List<Constraint> ALL = List.of(
             new Constraint(ConfigKey.VISIT_LATE_PRIORITY_MINUTES, ConfigKey.APPOINTMENT_NO_SHOW_AFTER_MINUTES, true),
-            new Constraint(ConfigKey.BOARDING_MIN_NIGHTS, ConfigKey.BOARDING_MAX_NIGHTS, false));
+            new Constraint(ConfigKey.BOARDING_MIN_NIGHTS, ConfigKey.BOARDING_MAX_NIGHTS, false),
+            new Constraint(ConfigKey.APPOINTMENT_LATE_CANCEL_HOURS, ConfigKey.APPOINTMENT_REMINDER_HOURS_BEFORE, true));
 
     private ConfigConstraints() {
     }

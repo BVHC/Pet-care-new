@@ -148,10 +148,11 @@ class SchemaMigrationIT {
         // V14 bảng đếm mã chứng từ + index module kho (docs/adr/0042-inventory…, 0043-document-code…),
         // V15 index order_lines.order_id (docs/adr/0044-order-core…),
         // V16 sequence mã lịch hẹn appointment_code_seq (docs/adr/0041-appointment-booking-locks; V13 trước khi gộp nhánh),
-        // V17 mẫu APPOINTMENT_CANCELLED_BY_CLINIC (+_APP) (docs/adr/0047)
+        // V17 mẫu APPOINTMENT_CANCELLED_BY_CLINIC (+_APP) (docs/adr/0047),
+        // V18 mẫu APPOINTMENT_REMINDER (+_APP) (docs/adr/0051)
         assertThat(rows).extracting(row -> row.get("version"))
                 .containsExactly("1", "2", "3", "4", "5", "6", "7", "8", "9", "10", "11", "12", "13", "14", "15",
-                        "16", "17");
+                        "16", "17", "18");
         assertThat(rows).allSatisfy(row -> assertThat(row).containsEntry("success", true));
     }
 
@@ -382,7 +383,8 @@ class SchemaMigrationIT {
                 .containsExactlyInAnyOrder("OTP_REGISTER", "OTP_PASSWORD_RESET", "LOGIN_LOCKED_WARNING",
                         "PASSWORD_CHANGED", "OTP_PROFILE_LINK", "STAFF_TEMP_PASSWORD", "OTP_EMAIL_CHANGE",
                         "EMAIL_CHANGED_NOTICE", "ACCOUNT_LOCKED_FOLLOW_UP_APP", "LAST_BRANCH_MANAGER_LOCKED_APP",
-                        "APPOINTMENT_CANCELLED_BY_CLINIC", "APPOINTMENT_CANCELLED_BY_CLINIC_APP");
+                        "APPOINTMENT_CANCELLED_BY_CLINIC", "APPOINTMENT_CANCELLED_BY_CLINIC_APP",
+                        "APPOINTMENT_REMINDER", "APPOINTMENT_REMINDER_APP");
         assertThat(jdbc.queryForList("""
                 SELECT code FROM notification_templates
                 WHERE %s AND (body <> default_body OR subject IS DISTINCT FROM default_subject)
