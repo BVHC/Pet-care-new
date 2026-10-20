@@ -74,7 +74,7 @@ Nguồn: BR-QT-15 và mọi chỗ đặc tả ghi "ghi audit". Mã action do mod
 | Ngoài BR-QT-15 (rule riêng bắt ghi audit) | Sửa hộ email / khôi phục tài khoản (BR-TK-16) | TK | `record` | *(TK đặt)* |
 | | Liên kết hồ sơ khách (BR-TK-19) — khách tự liên kết bằng OTP (UC07, [ADR-0027](../../adr/0027-profile-link-endpoints.md) mục 5); lễ tân liên kết hộ (UC22) chưa có | TK | `record` | `CUSTOMER_PROFILE_LINKED` |
 | | Khóa tạm do sai mật khẩu hiện tại khi đổi mật khẩu (BR-TK-14 → BR-TK-09; người dùng chọn thêm, [ADR-0019](../../adr/0019-login-failure-lockout.md) mục 6) | TK | `record` | `ACCOUNT_TEMPORARILY_LOCKED` |
-| | Gỡ hạn chế đặt online sớm (BR-LH-09) | LH | `record` | `BOOKING_RESTRICTION_LIFTED` (`entity = booking_restrictions`, before/after `{liftedAt, liftedBy}`, `reason` = lý do gỡ; gỡ bị từ chối 404 / 409 / 403 không audit) — [ADR-0050](../../adr/0050-booking-restriction-view-lift.md) |
+| | Gỡ hạn chế đặt online sớm (BR-LH-09) | LH | `record` | `BOOKING_RESTRICTION_LIFTED` (`entity = booking_restrictions`, before/after `{liftedAt, liftedBy}`, `reason` = lý do gỡ; gỡ bị từ chối 404 / 409 / 403 không audit) — [ADR-0055](../../adr/0055-booking-restriction-view-lift.md) |
 | | Chuyển chủ thú cưng (BR-KH-08) | KH | `record` | `PET_OWNER_TRANSFERRED` (`entity = pets`, before/after `{customerId}`; lần chuyển bị từ chối không audit) — [ADR-0041](../../adr/0041-customer-pet-management.md) |
 | | Gán lại lượt đã gọi (BR-TN-08; Visit #4) | TN | `record` | *(TN đặt)* |
 

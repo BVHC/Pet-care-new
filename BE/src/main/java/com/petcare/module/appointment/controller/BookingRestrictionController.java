@@ -20,7 +20,7 @@ import jakarta.validation.Valid;
 
 /**
  * Hạn chế đặt online — appointment-v1 #7 xem của tôi (A02), #8 xem của một khách và #9 gỡ sớm (A05, A06; BR-LH-09,
- * docs/adr/0050). Body sai là 400 trước {@code @PreAuthorize}; nhân viên xem / gỡ toàn chuỗi; mọi kiểm tra còn lại ở
+ * docs/adr/0055). Body sai là 400 trước {@code @PreAuthorize}; nhân viên xem / gỡ toàn chuỗi; mọi kiểm tra còn lại ở
  * service.
  */
 @RestController
@@ -43,7 +43,7 @@ public class BookingRestrictionController {
             summary = "Tình trạng hạn chế đặt online của tôi",
             description = "UC39, UC58 · BR-LH-09. Actor: A02. Quyền: Khách đang đăng nhập. Chuyển trạng thái: —. FE "
                 + "hiển thị lý do và ngày hết hạn chế. Không bị hạn chế (chưa từng, đã hết hạn, đã gỡ) → restricted = "
-                + "false, restriction = null. Không chặn khi hồ sơ còn chờ quyết định liên kết (docs/adr/0050).")
+                + "false, restriction = null. Không chặn khi hồ sơ còn chờ quyết định liên kết (docs/adr/0055).")
     @ApiErrorDoc(status = 400, description = "BR-TK-17")
     @ApiErrorDoc(status = 403)
     @GetMapping("/api/me/booking-restriction")
@@ -57,7 +57,7 @@ public class BookingRestrictionController {
             summary = "Tình trạng hạn chế đặt online của khách",
             description = "UC39 · BR-LH-09. Actor: A05, A06. Quyền: Nhân viên. Chuyển trạng thái: —. Toàn chuỗi: hạn "
                 + "chế gắn với khách, nhân viên chi nhánh nào cũng xem được. Không bị hạn chế → restricted = false, "
-                + "restriction = null (docs/adr/0050).",
+                + "restriction = null (docs/adr/0055).",
             parameters = @Parameter(name = "customerId", in = ParameterIn.PATH, example = "88"))
     @ApiErrorDoc(status = 400, description = "Tham số sai kiểu (`MALFORMED_REQUEST`); BR-TK-17")
     @ApiErrorDoc(status = 403, description = "Sai vai trò")
@@ -74,7 +74,7 @@ public class BookingRestrictionController {
             description = "UC39 · BR-LH-09, BR-QT-15. Actor: A05, A06. Quyền: Lễ tân, BRANCH_MANAGER. Chuyển trạng "
                 + "thái: —. Toàn chuỗi. Ghi audit BOOKING_RESTRICTION_LIFTED; không gửi thông báo cho khách. Thành "
                 + "công → restricted = false, restriction = null. Lần đánh giá vi phạm sau vẫn đếm từ starts_at của "
-                + "lần hạn chế vừa gỡ, nên vi phạm cũ không bị tính lại (docs/adr/0045, 0050).",
+                + "lần hạn chế vừa gỡ, nên vi phạm cũ không bị tính lại (docs/adr/0049, 0055).",
             parameters = @Parameter(name = "customerId", in = ParameterIn.PATH, example = "88"))
     @ApiErrorDoc(status = 400, description = "Thiếu lý do / lý do quá 300 ký tự (`VALIDATION_FAILED`); body sai "
             + "(`MALFORMED_REQUEST`); BR-TK-17")

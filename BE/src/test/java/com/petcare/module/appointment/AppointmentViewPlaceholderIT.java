@@ -30,15 +30,9 @@ import com.petcare.TestcontainersConfiguration;
 import com.petcare.module.identity.service.SessionService;
 
 /**
-<<<<<<< HEAD
- * Xem lịch hẹn trên bean thật của app hiện tại (docs/adr/0048). Từ 2026-10-20 {@code CustomerQueryApi} /
- * {@code PetQueryApi} của BE-2 là bản thật (nợ D010, D031 đã trả): nhân viên thấy trang có dòng kèm tên thú, tên khách;
- * tài khoản khách <b>không có hồ sơ</b> (dữ liệu sai, BR-KH-01) vẫn 500. Vai trò sai vẫn 403.
-=======
- * Xem lịch hẹn trên bean thật của app hiện tại (docs/adr/0044). Từ 2026-10-19 {@code CustomerQueryApi} /
+ * Xem lịch hẹn trên bean thật của app hiện tại (docs/adr/0048). Từ 2026-10-19 {@code CustomerQueryApi} /
  * {@code PetQueryApi} là bản thật (D010, D031 đã trả khi gộp nhánh): nhân viên 200 kèm tên; tài khoản khách không có hồ
  * sơ (dữ liệu hỏng, BR-KH-01) vẫn 500. Vai trò sai vẫn 403.
->>>>>>> e18c4ed (feat: triển khai hủy do phòng khám)
  */
 @SpringBootTest(webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT)
 @ActiveProfiles("test")
@@ -78,11 +72,7 @@ class AppointmentViewPlaceholderIT {
 
     /** D010, D031 đã trả (bản thật {@code findPets} / {@code findContacts}, 2026-10-19): trang có dòng 200 kèm tên. */
     @Test
-<<<<<<< HEAD
-    void receptionistGets200ForAnEmptyPageAndForRowsWithNames() {
-=======
     void receptionistGets200WithNamesOnTheRealBeans() {
->>>>>>> e18c4ed (feat: triển khai hủy do phòng khám)
         String token = token(receptionist);
 
         ResponseEntity<Map<String, Object>> empty = get(token, "");
@@ -94,19 +84,12 @@ class AppointmentViewPlaceholderIT {
         String customerName = jdbc.queryForObject("SELECT full_name FROM customers WHERE id = ?", String.class,
                 customer);
 
-<<<<<<< HEAD
-        for (ResponseEntity<Map<String, Object>> response : List.of(get(token, ""), get(token, "/" + id))) {
-            assertThat(response.getStatusCode()).as("%s", response.getBody()).isEqualTo(HttpStatus.OK);
-            assertThat(response.getBody().toString()).contains("petName=Milu");
-        }
-=======
         ResponseEntity<Map<String, Object>> one = get(token, "/" + id);
         assertThat(one.getStatusCode()).as("%s", one.getBody()).isEqualTo(HttpStatus.OK);
         assertThat((Map<String, Object>) one.getBody().get("data")).containsEntry("petName", "Milu")
                 .containsEntry("customerName", customerName);
         ResponseEntity<Map<String, Object>> page = get(token, "");
         assertThat(page.getStatusCode()).as("%s", page.getBody()).isEqualTo(HttpStatus.OK);
->>>>>>> e18c4ed (feat: triển khai hủy do phòng khám)
     }
 
     @Test

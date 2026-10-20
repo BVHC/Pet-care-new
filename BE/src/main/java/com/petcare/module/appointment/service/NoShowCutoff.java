@@ -10,7 +10,7 @@ import java.util.Objects;
 import com.petcare.platform.config.TimeConfig;
 
 /**
- * Mốc quá hạn của ST05 (BR-LH-08, docs/adr/0048). Lớp thuần, đối ngẫu của {@link CheckInWindow}: lịch còn check-in được
+ * Mốc quá hạn của ST05 (BR-LH-08, docs/adr/0053). Lớp thuần, đối ngẫu của {@link CheckInWindow}: lịch còn check-in được
  * khi {@code now ≤ giờ hẹn + noShowAfter} (biên tính là được), nên lịch chỉ quá hạn khi
  * {@code giờ hẹn + noShowAfter < now}, tức {@code (slot_date, slot_start) < (date, time)} với
  * {@code (date, time) = now − noShowAfter} theo giờ Việt Nam. Qua nửa đêm tự đúng vì {@code date} có thể là hôm trước.

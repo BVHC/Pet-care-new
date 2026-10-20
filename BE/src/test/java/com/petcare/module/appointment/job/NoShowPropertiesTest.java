@@ -10,7 +10,7 @@ import org.springframework.boot.test.context.ConfigDataApplicationContextInitial
 import org.springframework.boot.test.context.runner.ApplicationContextRunner;
 import org.springframework.context.annotation.Configuration;
 
-/** {@code app.jobs.no-show} từ {@code application.yml} thật và fail-fast khi giá trị sai (docs/adr/0048). */
+/** {@code app.jobs.no-show} từ {@code application.yml} thật và fail-fast khi giá trị sai (docs/adr/0053). */
 class NoShowPropertiesTest {
 
     @Configuration(proxyBeanMethods = false)

@@ -10,7 +10,7 @@ import com.petcare.module.appointment.entity.BookingRestriction;
 
 /**
  * {@code BookingRestriction} → hợp đồng appointment-v1 ({@code BookingRestriction}, {@code RestrictionStatus};
- * docs/adr/0050). {@code unmappedTargetPolicy = ERROR}: thiếu một trường của hợp đồng là lỗi biên dịch. Các cột gỡ sớm
+ * docs/adr/0055). {@code unmappedTargetPolicy = ERROR}: thiếu một trường của hợp đồng là lỗi biên dịch. Các cột gỡ sớm
  * không có trong hợp đồng nên không map.
  */
 @Mapper(componentModel = "spring", unmappedTargetPolicy = ReportingPolicy.ERROR)

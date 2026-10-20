@@ -30,7 +30,7 @@ import com.petcare.module.appointment.service.AppointmentNoShowService.NoShowRes
 import com.petcare.module.appointment.service.NoShowCutoff;
 import com.petcare.platform.config.TimeConfig;
 
-/** {@link NoShowJob} (docs/adr/0048): keyset, lỗi từng lịch, ngân sách thời gian, không ném khỏi {@code run()}. */
+/** {@link NoShowJob} (docs/adr/0053): keyset, lỗi từng lịch, ngân sách thời gian, không ném khỏi {@code run()}. */
 class NoShowJobTest {
 
     private static final Instant NOW = Instant.parse("2026-10-19T03:00:00Z");

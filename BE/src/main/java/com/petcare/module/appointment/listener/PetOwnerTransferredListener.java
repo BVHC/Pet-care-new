@@ -8,7 +8,7 @@ import com.petcare.module.appointment.service.ClinicCancelCause;
 import com.petcare.module.customer.api.PetOwnerTransferredEvent;
 
 /**
- * BR-KH-08 (UC26): chuyển chủ → mọi lịch {@code BOOKED} của thú qua Lịch hẹn#5 (docs/adr/0047). Thông báo đi tới chủ
+ * BR-KH-08 (UC26): chuyển chủ → mọi lịch {@code BOOKED} của thú qua Lịch hẹn#5 (docs/adr/0052). Thông báo đi tới chủ
  * lúc đặt ({@code appointments.customer_id} = chủ cũ, Q8), nên {@code toCustomerId} không dùng. Đồng bộ, trong
  * transaction của customer (convention 07 §7.2).
  */

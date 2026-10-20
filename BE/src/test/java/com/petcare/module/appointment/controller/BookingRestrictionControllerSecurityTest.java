@@ -13,7 +13,7 @@ import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.RequestMapping;
 
 /**
- * Vai trò của appointment-v1 #7–9 (docs/adr/0050): #7 chỉ khách; #8, #9 chỉ lễ tân và BRANCH_MANAGER (BR-LH-09). Bản sao
+ * Vai trò của appointment-v1 #7–9 (docs/adr/0055): #7 chỉ khách; #8, #9 chỉ lễ tân và BRANCH_MANAGER (BR-LH-09). Bản sao
  * độc lập của bảng vai trò — đổi annotation mà không đổi ở đây thì đỏ. HTTP thật: {@code BookingRestrictionIT.roleMatrix}.
  */
 class BookingRestrictionControllerSecurityTest {

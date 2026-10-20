@@ -1,14 +1,15 @@
-# ADR-0049: ST05 duyệt lịch quá hạn theo keyset `(slot_date, slot_start, id)` thay vì `id`
+# ADR-0054: ST05 duyệt lịch quá hạn theo keyset `(slot_date, slot_start, id)` thay vì `id`
 
 - **Trạng thái:** Accepted
 - **Ngày:** 2026-10-19
-- **Thay thế:** mục 9 của ADR-0048 (phần "keyset `id`"; ý giữ nguyên: lịch lỗi không đọc lại trong cùng lượt, ngân sách 60 s).
-- **Liên quan:** ADR-0048, nợ D037 (trả trong cùng đợt), index `ix_appointments_status_slot (status, slot_date, slot_start)` của V1.
+- **Đánh số lại:** ban đầu là ADR-0049; đổi thành số hiện tại ngày 2026-10-20 khi gộp T25 lên `dev`, vì ADR-0045…0050 (lịch hẹn T16, +4) và ADR-0051 (BE-2) đã chiếm số. Mọi tham chiếu ADR-0047…0052 của T25 trong code / tài liệu đã đổi theo (+5).
+- **Thay thế:** mục 9 của ADR-0053 (phần "keyset `id`"; ý giữ nguyên: lịch lỗi không đọc lại trong cùng lượt, ngân sách 60 s).
+- **Liên quan:** ADR-0053, nợ D037 (trả trong cùng đợt), index `ix_appointments_status_slot (status, slot_date, slot_start)` của V1.
 - **Triển khai:** `AppointmentRepository.{findOverdueBookedIds, findOverdueBookedIdsAfter}`, `AppointmentNoShowService.findOverdueIds` (API giữ nguyên `(cutoff, afterId, limit)`, `afterId = 0` là lô đầu). Không migration. Test: `NoShowIT.overdueQueriesUseTheirIndexesOnRealisticData`, `NoShowIT.batchesWalkInSlotOrderAndVisitEachAppointmentOnce`.
 
 ## Bối cảnh
 
-ADR-0048 §9 quét `WHERE status = 'BOOKED' AND (slot_date, slot_start) < mốc AND id > :afterId ORDER BY id LIMIT 100`. EXPLAIN trên 20 000 dòng (quá khứ ở trạng thái cuối, tương lai `BOOKED`, 10 lịch quá hạn — hình dạng khi ST05 chạy đều) cho thấy planner chọn `Index Scan using appointments_pkey` + `Filter`, ước lượng 5 005 dòng khớp (thực tế 10). Planner coi "`BOOKED`" và "đã qua" là độc lập, trong khi chúng nghịch tương quan. Với ước lượng đó, duyệt khóa chính theo thứ tự rồi dừng ở `LIMIT` có vẻ rẻ, nhưng thực tế mỗi lô phải đọc gần hết bảng. Bảng lịch hẹn chỉ tăng, nên chi phí này tăng theo thời gian, mỗi 5 phút.
+ADR-0053 §9 quét `WHERE status = 'BOOKED' AND (slot_date, slot_start) < mốc AND id > :afterId ORDER BY id LIMIT 100`. EXPLAIN trên 20 000 dòng (quá khứ ở trạng thái cuối, tương lai `BOOKED`, 10 lịch quá hạn — hình dạng khi ST05 chạy đều) cho thấy planner chọn `Index Scan using appointments_pkey` + `Filter`, ước lượng 5 005 dòng khớp (thực tế 10). Planner coi "`BOOKED`" và "đã qua" là độc lập, trong khi chúng nghịch tương quan. Với ước lượng đó, duyệt khóa chính theo thứ tự rồi dừng ở `LIMIT` có vẻ rẻ, nhưng thực tế mỗi lô phải đọc gần hết bảng. Bảng lịch hẹn chỉ tăng, nên chi phí này tăng theo thời gian, mỗi 5 phút.
 
 ## Quyết định
 

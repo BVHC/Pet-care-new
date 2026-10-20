@@ -181,6 +181,35 @@ class AppointmentViewIT {
         assertThat(detail).isEqualTo(row);
     }
 
+    /**
+     * Nợ D028 (docs/adr/0058): {@code visitId} lấy từ {@code visits.appointment_id} theo lô. Lịch {@code CHECKED_IN} và
+     * lịch {@code CANCELLED} do hủy lượt (Lịch hẹn#8) có Visit; lịch chưa từng check-in trả null. Danh sách và chi tiết
+     * cho cùng giá trị.
+     */
+    @Test
+    void visitIdComesFromTheVisitOfTheAppointment() {
+        long checkedIn = insert(customer, pet, branch, medical, "MEDICAL", DAY, LocalTime.of(8, 0), "CHECKED_IN");
+        long cancelledByVisit = insert(customer, pet, branch, grooming, "GROOMING", DAY, LocalTime.of(9, 0),
+                "CANCELLED");
+        jdbc.update("UPDATE appointments SET cancel_source = 'STAFF', cancelled_at = now() WHERE id = ?",
+                cancelledByVisit);
+        long booked = insert(customer, pet, branch, medical, "MEDICAL", DAY.plusDays(1), LocalTime.of(8, 0),
+                "BOOKED");
+        long noShow = insert(customer, pet, branch, grooming, "GROOMING", DAY.plusDays(1), LocalTime.of(9, 0),
+                "NO_SHOW");
+        long visitA = data.visit(checkedIn, receptionist);
+        long visitB = data.visit(cancelledByVisit, receptionist);
+
+        Map<Long, Object> byId = new HashMap<>();
+        content(page(list(receptionistToken, ""))).forEach(row ->
+                byId.put(((Number) row.get("appointmentId")).longValue(), row.get("visitId")));
+
+        assertThat(byId).containsEntry(checkedIn, (int) visitA).containsEntry(cancelledByVisit, (int) visitB)
+                .containsEntry(booked, null).containsEntry(noShow, null);
+        assertThat(detail(receptionistToken, checkedIn)).containsEntry("visitId", (int) visitA);
+        assertThat(detail(customerToken, booked)).containsEntry("visitId", null);
+    }
+
     @Test
     void bookedRowCarriesNullKeysAndViewerFlags() {
         long id = insert(customer, pet, branch, medical, "MEDICAL", DAY, LocalTime.of(10, 30), "BOOKED");

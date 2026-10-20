@@ -13,7 +13,7 @@ import org.junit.jupiter.api.Test;
 import com.petcare.platform.config.TimeConfig;
 
 /**
- * Ma trận đồng thời C5 (docs/adr/0051): không có (khung, now) nào để một lịch vừa đến hạn nhắc ST03 vừa quá hạn NO_SHOW
+ * Ma trận đồng thời C5 (docs/adr/0056): không có (khung, now) nào để một lịch vừa đến hạn nhắc ST03 vừa quá hạn NO_SHOW
  * ST05 — ST03 cần {@code giờ hẹn > now}, ST05 cần {@code giờ hẹn + noShowAfter < now}. Vét cạn quanh mọi biên (±2 µs,
  * ±1 phút) với mọi mốc no-show trong khoảng V2 (15–120 phút) và mọi H (1–72 giờ, cách 1 giờ), kể cả {@code noShowAfter = 0}.
  */

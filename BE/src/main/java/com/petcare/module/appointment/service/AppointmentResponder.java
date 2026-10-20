@@ -21,6 +21,7 @@ import com.petcare.module.customer.api.PetQueryApi;
 import com.petcare.module.customer.api.PetQueryApi.PetSummary;
 import com.petcare.module.identity.api.ConfigKey;
 import com.petcare.module.identity.api.SystemConfigApi;
+import com.petcare.module.visit.api.VisitQueryApi;
 
 /**
  * Lịch hẹn → response {@code Appointment} cho xem (#3, #4, docs/adr/0048) và đổi khung / hủy (#5, #6, docs/adr/0049):
@@ -38,15 +39,17 @@ final class AppointmentResponder {
     private final PetQueryApi pets;
     private final BranchQueryApi branches;
     private final CatalogQueryApi catalog;
+    private final VisitQueryApi visits;
     private final SystemConfigApi configs;
     private final AppointmentMapper mapper;
 
     AppointmentResponder(CustomerQueryApi customers, PetQueryApi pets, BranchQueryApi branches, CatalogQueryApi catalog,
-            SystemConfigApi configs, AppointmentMapper mapper) {
+            VisitQueryApi visits, SystemConfigApi configs, AppointmentMapper mapper) {
         this.customers = customers;
         this.pets = pets;
         this.branches = branches;
         this.catalog = catalog;
+        this.visits = visits;
         this.configs = configs;
         this.mapper = mapper;
     }
@@ -72,6 +75,9 @@ final class AppointmentResponder {
                 CustomerContact::customerId, CustomerContact::fullName);
         Map<Long, String> serviceNames = index(catalog.findServices(ids(rows, Appointment::getServiceId)),
                 ServiceInfo::serviceId, ServiceInfo::name);
+        // visitId theo lô cho mọi trạng thái: lịch CHECKED_IN / COMPLETED và lịch CANCELLED do hủy lượt (Lịch hẹn#8) có
+        // Visit; lịch chưa từng check-in không có khóa trong map → null (nợ D028, docs/adr/0058).
+        Map<Long, Long> visitIds = visits.findVisitIdsByAppointmentIds(ids(rows, Appointment::getId));
         Map<Long, String> branchNames = new HashMap<>();
         for (Long branchId : ids(rows, Appointment::getBranchId)) {
             branchNames.put(branchId, branches.findBranch(branchId)
@@ -92,7 +98,7 @@ final class AppointmentResponder {
                     ? AppointmentActions.forViewer(appointment, viewer == Viewer.CUSTOMER, now, maxReschedules,
                             leadHours)
                     : AppointmentActions.Flags.NONE;
-            return mapper.toResponse(appointment, names, flags);
+            return mapper.toResponse(appointment, names, flags, visitIds.get(appointment.getId()));
         };
     }
 

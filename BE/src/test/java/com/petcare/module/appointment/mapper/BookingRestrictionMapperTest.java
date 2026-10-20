@@ -13,7 +13,7 @@ import com.petcare.module.appointment.dto.RestrictionStatusResponse;
 import com.petcare.module.appointment.entity.BookingRestriction;
 
 /**
- * {@link BookingRestrictionMapper} (docs/adr/0050): mỗi trường của hợp đồng lấy đúng cột — giá trị khác nhau ở mọi trường
+ * {@link BookingRestrictionMapper} (docs/adr/0055): mỗi trường của hợp đồng lấy đúng cột — giá trị khác nhau ở mọi trường
  * nên map nhầm nguồn là đỏ; cột gỡ sớm không lọt ra; {@code none()} = không bị hạn chế, {@code restriction = null}.
  */
 class BookingRestrictionMapperTest {

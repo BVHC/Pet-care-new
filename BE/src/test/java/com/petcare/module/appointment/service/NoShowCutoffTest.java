@@ -13,7 +13,7 @@ import org.junit.jupiter.api.Test;
 
 import com.petcare.platform.config.TimeConfig;
 
-/** {@link NoShowCutoff} (docs/adr/0048 §1): quá hạn nghiêm ngặt, đối ngẫu của {@link CheckInWindow}. */
+/** {@link NoShowCutoff} (docs/adr/0053 §1): quá hạn nghiêm ngặt, đối ngẫu của {@link CheckInWindow}. */
 class NoShowCutoffTest {
 
     private static final LocalDate DAY = LocalDate.of(2026, 10, 19);

@@ -149,7 +149,7 @@ public interface AccountRepository extends JpaRepository<Account, Long> {
     List<Long> findActiveIdsByRole(@Param("role") Role role);
 
     /**
-     * {@code AccountContactApi.findContacts} (docs/adr/0047): mọi trạng thái, mọi role. JPQL constructor, không nạp
+     * {@code AccountContactApi.findContacts} (docs/adr/0052): mọi trạng thái, mọi role. JPQL constructor, không nạp
      * entity vào persistence context của bên gọi. Bên gọi không truyền tập rỗng.
      */
     @Query("""

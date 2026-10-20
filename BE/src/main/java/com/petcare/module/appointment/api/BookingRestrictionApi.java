@@ -11,7 +11,7 @@ public interface BookingRestrictionApi {
 
     /**
      * {@code ends_at} của hạn chế đang hiệu lực tại {@code at}, rỗng nếu không bị hạn chế (cùng điều kiện với
-     * {@link #isRestricted}). Dùng để message BR-LH-09 kèm thời điểm hết hạn chế (02 L130; docs/adr/0050).
+     * {@link #isRestricted}). Dùng để message BR-LH-09 kèm thời điểm hết hạn chế (02 L130; docs/adr/0055).
      */
     Optional<Instant> findActiveUntil(Long customerId, Instant at);
 

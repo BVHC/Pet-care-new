@@ -41,7 +41,7 @@ import com.petcare.module.identity.api.AccountContactApi.AccountContact;
 import com.petcare.module.identity.api.NotificationTemplateCode;
 
 /**
- * {@link AppointmentReminderNotices} (docs/adr/0051): payload từ chính dòng (mã, giờ hẹn), tên / địa chỉ / SĐT chi nhánh
+ * {@link AppointmentReminderNotices} (docs/adr/0056): payload từ chính dòng (mã, giờ hẹn), tên / địa chỉ / SĐT chi nhánh
  * hiện tại, mã mẫu nhắc, ma trận người nhận BR-TB-02, thú đã mất không gửi (Q10), không kênh không gửi (Q3), biến bắt
  * buộc thiếu → lỗi trước khi ghi outbox.
  */

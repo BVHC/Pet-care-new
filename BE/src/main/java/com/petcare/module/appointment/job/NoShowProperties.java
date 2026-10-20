@@ -11,7 +11,7 @@ import jakarta.validation.constraints.NotNull;
 import jakarta.validation.constraints.Positive;
 
 /**
- * {@code app.jobs.no-show} — ST05 (docs/adr/0048). Tham số vận hành, không phải [CFG]: ngưỡng "quá giờ hẹn bao lâu" là
+ * {@code app.jobs.no-show} — ST05 (docs/adr/0053). Tham số vận hành, không phải [CFG]: ngưỡng "quá giờ hẹn bao lâu" là
  * [CFG] {@code appointment.no_show_after_minutes}. Sai giá trị thì app dừng lúc khởi động.
  *
  * @param cron       biểu thức cron 6 trường theo giờ Việt Nam; {@code "-"} tắt job

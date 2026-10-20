@@ -7,7 +7,7 @@ import java.time.Instant;
 
 import org.junit.jupiter.api.Test;
 
-/** {@link BookingRestriction#lift} (docs/adr/0050): ghi ba cột gỡ sớm, giữ khoảng hiệu lực; gỡ lần hai là lỗi lập trình. */
+/** {@link BookingRestriction#lift} (docs/adr/0055): ghi ba cột gỡ sớm, giữ khoảng hiệu lực; gỡ lần hai là lỗi lập trình. */
 class BookingRestrictionTest {
 
     private static final Instant STARTS = Instant.parse("2026-10-15T02:00:00Z");

@@ -164,7 +164,7 @@ public class Appointment extends TimestampedEntity {
     }
 
     /**
-     * Lịch hẹn#6 ({@code BOOKED → NO_SHOW}, command {@code markNoShow}, ST05; docs/adr/0048). Bên gọi đã khóa dòng, kiểm
+     * Lịch hẹn#6 ({@code BOOKED → NO_SHOW}, command {@code markNoShow}, ST05; docs/adr/0053). Bên gọi đã khóa dòng, kiểm
      * trạng thái và mốc quá hạn. Chỉ đổi trạng thái: NO_SHOW không phải hủy nên các cột hủy giữ nguyên
      * ({@code ck_appointments_cancel_fields}). Chỉ {@code AppointmentNoShowService} được gọi.
      */

@@ -18,13 +18,8 @@ import com.petcare.module.identity.api.ConfigKey;
 import com.petcare.module.identity.api.SystemConfigApi;
 
 /**
-<<<<<<< HEAD
  * Cài {@link BookingRestrictionApi} (BR-LH-09): đọc {@link #isRestricted} (docs/adr/0047) và ghi
- * {@link #evaluateAfterViolation} (docs/adr/0049, trả nợ D030).
-=======
- * Cài {@link BookingRestrictionApi} (BR-LH-09): đọc {@link #isRestricted} (docs/adr/0043) và ghi
- * {@link #evaluateAfterViolation} (docs/adr/0045, trả nợ D030), {@link #findActiveUntil} (docs/adr/0050, trả nợ D035).
->>>>>>> 11f78b6 (feat: triển khai xem và gỡ hạn chế khách hàng)
+ * {@link #evaluateAfterViolation} (docs/adr/0049, trả nợ D030), {@link #findActiveUntil} (docs/adr/0055, trả nợ D035).
  */
 @Service
 public class BookingRestrictionService implements BookingRestrictionApi {
@@ -53,7 +48,7 @@ public class BookingRestrictionService implements BookingRestrictionApi {
         return restrictions.existsActive(customerId, at);
     }
 
-    /** {@code ends_at} của dòng đang hiệu lực (docs/adr/0050, trả nợ D035). Tham gia transaction của bên gọi nếu có. */
+    /** {@code ends_at} của dòng đang hiệu lực (docs/adr/0055, trả nợ D035). Tham gia transaction của bên gọi nếu có. */
     @Override
     @Transactional(readOnly = true)
     public Optional<Instant> findActiveUntil(Long customerId, Instant at) {

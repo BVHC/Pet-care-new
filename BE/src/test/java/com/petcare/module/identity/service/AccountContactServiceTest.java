@@ -17,7 +17,7 @@ import com.petcare.module.identity.api.AccountContactApi.AccountContact;
 import com.petcare.module.identity.repository.AccountRepository;
 
 /**
- * {@link AccountContactService} (docs/adr/0047): khử trùng đầu vào, tập rỗng không chạm DB, tham gia transaction của
+ * {@link AccountContactService} (docs/adr/0052): khử trùng đầu vào, tập rỗng không chạm DB, tham gia transaction của
  * bên gọi (readOnly, {@code REQUIRED}). SQL thật (cờ PENDING, mọi trạng thái): {@code ClinicCancellationIT}.
  */
 class AccountContactServiceTest {

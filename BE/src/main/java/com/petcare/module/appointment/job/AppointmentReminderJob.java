@@ -21,7 +21,7 @@ import com.petcare.platform.config.TraceContext;
 import lombok.extern.slf4j.Slf4j;
 
 /**
- * ST03 — nhắc lịch hẹn trước giờ hẹn (BR-LH-12, docs/adr/0051; cơ chế job: docs/adr/0007; khuôn {@code NoShowJob}). Đọc id
+ * ST03 — nhắc lịch hẹn trước giờ hẹn (BR-LH-12, docs/adr/0056; cơ chế job: docs/adr/0007; khuôn {@code NoShowJob}). Đọc id
  * đến hạn theo lô (keyset theo khung giờ rồi id), mỗi lịch xử lý trong một transaction riêng ở
  * {@link AppointmentReminderService}. Không {@code @Transactional} ở đây. Một lịch lỗi được log
  * {@code APPOINTMENT_REMINDER_FAILED} rồi bỏ qua; lượt sau thử lại vì điều kiện chỉ dựa trên trạng thái,

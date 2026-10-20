@@ -391,7 +391,7 @@ paths:
     get:
       tags: ["Booking restrictions"]
       summary: "Tình trạng hạn chế đặt online của tôi"
-      description: "UC39, UC58 · BR-LH-09. Actor: A02. Quyền: Khách đang đăng nhập. Chuyển trạng thái: —. FE hiển thị lý do và ngày hết hạn chế. Không bị hạn chế (chưa từng, đã hết hạn, đã gỡ) → restricted = false, restriction = null. Không chặn khi hồ sơ còn chờ quyết định liên kết (docs/adr/0050)."
+      description: "UC39, UC58 · BR-LH-09. Actor: A02. Quyền: Khách đang đăng nhập. Chuyển trạng thái: —. FE hiển thị lý do và ngày hết hạn chế. Không bị hạn chế (chưa từng, đã hết hạn, đã gỡ) → restricted = false, restriction = null. Không chặn khi hồ sơ còn chờ quyết định liên kết (docs/adr/0055)."
       operationId: getMyBookingRestriction
       security:
         - bearerAuth: []
@@ -425,7 +425,7 @@ paths:
     get:
       tags: ["Booking restrictions"]
       summary: "Tình trạng hạn chế đặt online của khách"
-      description: "UC39 · BR-LH-09. Actor: A05, A06. Quyền: Nhân viên. Chuyển trạng thái: —. Toàn chuỗi: hạn chế gắn với khách, nhân viên chi nhánh nào cũng xem được. Không bị hạn chế → restricted = false, restriction = null (docs/adr/0050)."
+      description: "UC39 · BR-LH-09. Actor: A05, A06. Quyền: Nhân viên. Chuyển trạng thái: —. Toàn chuỗi: hạn chế gắn với khách, nhân viên chi nhánh nào cũng xem được. Không bị hạn chế → restricted = false, restriction = null (docs/adr/0055)."
       operationId: getCustomerBookingRestriction
       security:
         - bearerAuth: []
@@ -471,7 +471,7 @@ paths:
     post:
       tags: ["Booking restrictions"]
       summary: "Gỡ hạn chế sớm"
-      description: "UC39 · BR-LH-09, BR-QT-15. Actor: A05, A06. Quyền: Lễ tân, BRANCH_MANAGER. Chuyển trạng thái: —. Toàn chuỗi. Ghi audit BOOKING_RESTRICTION_LIFTED; không gửi thông báo cho khách. Thành công → restricted = false, restriction = null. Lần đánh giá vi phạm sau vẫn đếm từ starts_at của lần hạn chế vừa gỡ, nên vi phạm cũ không bị tính lại (docs/adr/0045, 0050)."
+      description: "UC39 · BR-LH-09, BR-QT-15. Actor: A05, A06. Quyền: Lễ tân, BRANCH_MANAGER. Chuyển trạng thái: —. Toàn chuỗi. Ghi audit BOOKING_RESTRICTION_LIFTED; không gửi thông báo cho khách. Thành công → restricted = false, restriction = null. Lần đánh giá vi phạm sau vẫn đếm từ starts_at của lần hạn chế vừa gỡ, nên vi phạm cũ không bị tính lại (docs/adr/0049, 0055)."
       operationId: liftBookingRestriction
       security:
         - bearerAuth: []
@@ -765,7 +765,7 @@ components:
         violationCount:
           type: integer
           format: int32
-          description: "Số NO_SHOW + hủy muộn đã đếm khi tạo hạn chế: sau mốc max(now − 90 ngày [CFG], lần hạn chế gần nhất) (docs/adr/0045)"
+          description: "Số NO_SHOW + hủy muộn đã đếm khi tạo hạn chế: sau mốc max(now − 90 ngày [CFG], lần hạn chế gần nhất) (docs/adr/0049)"
     RestrictionStatus:
       type: object
       required: [restricted]

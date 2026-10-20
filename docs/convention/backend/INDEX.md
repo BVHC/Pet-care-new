@@ -23,4 +23,4 @@ Quy ước code cho `BE/` (Java 21, Spring Boot 3.5). Nghiệp vụ lấy từ `
 |---|---|---|
 | Tên method transition / command | 03 | Đề xuất trong plan của module, người dùng duyệt |
 | Cách trả "cảnh báo, không chặn" về client | 06 | ADR |
-| Chiến lược khóa cho sức chứa chuồng (đã chốt: luồng OTP ADR-0011; hủy phiên ADR-0021; quota khung giờ `0041-appointment-booking-locks`; trừ kho `0042-inventory-stock-ledger-and-locking`) | 07 | ADR |
+| Chiến lược khóa cho sức chứa chuồng (đã chốt: luồng OTP ADR-0011; hủy phiên ADR-0021; quota khung giờ `0045-appointment-booking-locks`; trừ kho `0042-inventory-stock-ledger-and-locking`) | 07 | ADR |

@@ -31,7 +31,7 @@ class SystemConfigServiceTest {
      * Một bộ dòng hợp lệ cho mọi ConfigKey: INT = 5 trong [1, 10], TIME = 12:00 trong [06:00, 22:00]; riêng
      * {@code appointment.no_show_after_minutes} = 6 để thỏa {@code visit.late_priority_minutes (5) <} nó (docs/adr/0036)
      * và {@code appointment.reminder_hours_before} = 6 để thỏa {@code appointment.late_cancel_hours (5) <} nó
-     * (docs/adr/0051).
+     * (docs/adr/0056).
      */
     private static List<ConfigRow> validRows() {
         List<ConfigRow> rows = new ArrayList<>();

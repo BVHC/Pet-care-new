@@ -9,7 +9,7 @@ import com.petcare.module.branch.api.BranchClinicCancellationEvent;
 
 /**
  * BR-LH-10, BR-CN-04 (UC14): quản lý chọn hủy hàng loạt khi thêm ngày nghỉ / thu hẹp giờ → Lịch hẹn#5 cho
- * {@code appointmentIds} (docs/adr/0047; trả nợ D034). Đồng bộ, trong transaction của branch (convention 07 §7.2);
+ * {@code appointmentIds} (docs/adr/0052; trả nợ D034). Đồng bộ, trong transaction của branch (convention 07 §7.2);
  * {@code boardingBookingIds} thuộc listener của boarding.
  */
 @Component

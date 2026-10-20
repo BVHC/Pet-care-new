@@ -17,7 +17,7 @@ import jakarta.validation.Validator;
 import jakarta.validation.ValidatorFactory;
 
 /**
- * Body gỡ hạn chế (appointment-v1 {@code LiftRestrictionRequest}, docs/adr/0050): lý do bắt buộc, ≤ 300 sau khi bỏ khoảng
+ * Body gỡ hạn chế (appointment-v1 {@code LiftRestrictionRequest}, docs/adr/0055): lý do bắt buộc, ≤ 300 sau khi bỏ khoảng
  * trắng hai đầu. Chứng minh giả định của thiết kế: {@code @NotBlank} một mình cho qua khoảng trắng Unicode (U+3000), nên
  * phải strip ở compact constructor trước khi validate.
  */

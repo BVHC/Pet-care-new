@@ -29,7 +29,7 @@ import com.petcare.platform.config.TimeConfig;
 import com.petcare.support.MutableClock;
 
 /**
- * ST05 trên bean thật của {@code BoardingQueryApi} (placeholder ném lỗi — nợ D033, docs/adr/0048 §8): mỗi lịch quá hạn
+ * ST05 trên bean thật của {@code BoardingQueryApi} (placeholder ném lỗi — nợ D033, docs/adr/0053 §8): mỗi lịch quá hạn
  * rollback, vẫn {@code BOOKED}, không có hạn chế, log {@code NO_SHOW_FAILED}. Khi BE-2 cài thật, test này đổi thành
  * "chuyển NO_SHOW được".
  */

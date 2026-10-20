@@ -354,7 +354,7 @@ class AppointmentBookingServiceTest {
                 + "đặt lịch (BR-LH-09)");
     }
 
-    /** D035 (docs/adr/0050): thời điểm hết hạn chế hiện theo giờ Việt Nam, kể cả khi sang ngày khác so với UTC. */
+    /** D035 (docs/adr/0055): thời điểm hết hạn chế hiện theo giờ Việt Nam, kể cả khi sang ngày khác so với UTC. */
     @Test
     void restrictionEndIsShownInVietnamTimeWithTheDateOfVietnam() {
         asCustomer();

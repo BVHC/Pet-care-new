@@ -12,9 +12,9 @@ import com.petcare.module.identity.api.AccountContactApi;
 import com.petcare.module.identity.repository.AccountRepository;
 
 /**
- * Cài đặt {@link AccountContactApi} (docs/adr/0047). Class {@code readOnly} <b>tham gia</b> transaction ghi của bên
+ * Cài đặt {@link AccountContactApi} (docs/adr/0052). Class {@code readOnly} <b>tham gia</b> transaction ghi của bên
  * gọi (appointment hủy lịch do phòng khám trong transaction của branch / customer) và không đổi flush / readOnly của
- * nó — khuôn {@code AppointmentLookupService} (docs/adr/0046).
+ * nó — khuôn {@code AppointmentLookupService} (docs/adr/0050).
  */
 @Service
 @Transactional(readOnly = true)

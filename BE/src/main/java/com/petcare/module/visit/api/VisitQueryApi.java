@@ -2,7 +2,9 @@ package com.petcare.module.visit.api;
 
 import com.petcare.module.catalog.api.ServiceGroup;
 
+import java.util.Collection;
 import java.util.List;
+import java.util.Map;
 import java.util.Optional;
 
 /** Owner: visit (TN, KB) · BE-1. */
@@ -36,4 +38,11 @@ public interface VisitQueryApi {
 
     /** Đã có bệnh án hoặc mũi tiêm → khóa loài (BR-KH-03). */
     boolean hasMedicalHistory(Long petId);
+
+    /**
+     * Visit của các lịch hẹn, theo lô: {@code appointmentId → visitId}; lịch chưa có Visit thì không có khóa trong map
+     * (appointment-v1 {@code Appointment.visitId}, nợ D028; docs/adr/0058). Một câu SQL bất kể số id; tập rỗng → map
+     * rỗng, không chạy SQL. Bên gọi truyền tối đa một trang (≤ 100 id).
+     */
+    Map<Long, Long> findVisitIdsByAppointmentIds(Collection<Long> appointmentIds);
 }

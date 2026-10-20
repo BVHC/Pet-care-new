@@ -42,7 +42,7 @@ import com.petcare.platform.security.BranchScope;
 import com.petcare.platform.security.SecurityPrincipal;
 
 /**
- * {@link BookingRestrictionStatusService} (docs/adr/0050). Gỡ sớm: khách tồn tại → khóa 1002 → {@code now} → đọc dòng hiệu
+ * {@link BookingRestrictionStatusService} (docs/adr/0055). Gỡ sớm: khách tồn tại → khóa 1002 → {@code now} → đọc dòng hiệu
  * lực → gỡ → {@code saveAndFlush} → audit; nhánh lỗi không ghi, không audit; 404 không lấy khóa; {@code now} sau khóa, cắt
  * µs; transaction mặc định (READ COMMITTED, không {@code noRollbackFor}). Xem: cùng điều kiện "đang hiệu lực" với guard đặt
  * lịch, khách chỉ thấy hồ sơ của mình.

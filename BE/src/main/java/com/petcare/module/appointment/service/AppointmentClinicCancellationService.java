@@ -22,7 +22,7 @@ import com.petcare.module.appointment.repository.AppointmentRepository;
 
 /**
  * Lịch hẹn#5 — phòng khám hủy ({@code BOOKED → CANCELLED}, command {@code cancelByClinic}; BR-LH-10, BR-CN-04,
- * BR-KH-05, BR-KH-08; docs/adr/0047). Chỉ gọi từ listener của {@code appointment/listener} trong transaction của bên phát
+ * BR-KH-05, BR-KH-08; docs/adr/0052). Chỉ gọi từ listener của {@code appointment/listener} trong transaction của bên phát
  * sự kiện (branch thêm ngày nghỉ / thu hẹp giờ, customer đánh dấu thú mất / chuyển chủ): {@code MANDATORY}, không
  * {@code noRollbackFor}, không bắt lỗi — lỗi ở đây rollback cả use case của bên phát (03 dòng 11).
  * <p>
@@ -30,7 +30,7 @@ import com.petcare.module.appointment.repository.AppointmentRepository;
  * vì danh sách id được tính trước khi khóa dòng {@code appointments}: lịch đã rời {@code BOOKED} (khách tự hủy, đã
  * check-in) thì bỏ qua, không lỗi. Thứ tự: khử trùng, sắp id tăng dần → khóa từng lô ≤ {@value #BATCH} id trong một câu
  * → {@code now} sau khóa → {@code validateTransition} → {@code cancel(CLINIC, lý do, now, false)} → {@code saveAndFlush}
- * → thông báo. Không khóa thú (docs/adr/0047 Q1: customer lấy khóa thú trước, nợ D027), không khóa chi nhánh, không
+ * → thông báo. Không khóa thú (docs/adr/0052 Q1: customer lấy khóa thú trước, nợ D027), không khóa chi nhánh, không
  * tăng số lần đổi, không gọi {@code BookingRestrictionApi} (hủy do phòng khám không tính BR-LH-09), không audit, không
  * {@code BranchScope} (API nội bộ: thú dùng chung toàn chuỗi, lịch ở chi nhánh khác vẫn bị hủy).
  */

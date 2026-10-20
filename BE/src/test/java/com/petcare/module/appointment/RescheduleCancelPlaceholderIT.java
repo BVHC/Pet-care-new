@@ -33,18 +33,11 @@ import com.petcare.module.identity.service.SessionService;
 import com.petcare.platform.config.TimeConfig;
 
 /**
-<<<<<<< HEAD
- * Đổi khung / hủy trên bean thật của app hiện tại (docs/adr/0049). Từ 2026-10-20 {@code CustomerQueryApi},
- * {@code PetQueryApi} của BE-2 là bản thật (nợ D010, D031 đã trả) nên đổi khung / hủy sớm chạy thật; còn
- * {@code BoardingQueryApi.countViolations} (nợ D033) ném lỗi: hủy muộn trả 500 và <b>không để lại gì</b> (UPDATE đã flush
- * bị rollback, không dòng hạn chế, không khóa advisory). Nhánh dừng trước đó vẫn trả đúng mã (409, 400).
-=======
- * Đổi khung / hủy trên bean thật của app hiện tại (docs/adr/0045): {@code BoardingQueryApi} (nợ D033) của BE-2 còn là
+ * Đổi khung / hủy trên bean thật của app hiện tại (docs/adr/0049): {@code BoardingQueryApi} (nợ D033) của BE-2 còn là
  * placeholder ném lỗi; {@code CustomerQueryApi}, {@code PetQueryApi} là bản thật từ 2026-10-19 (D010, D031 đã trả), nên
  * đổi khung và hủy sớm của lễ tân chạy được. Nhánh dừng trước khi cần
  * chúng trả đúng mã (409, 400); nhánh cần chúng trả 500 và <b>không để lại gì</b>: lịch vẫn y nguyên (UPDATE đã flush bị
  * rollback), không có dòng hạn chế, không còn khóa advisory.
->>>>>>> e18c4ed (feat: triển khai hủy do phòng khám)
  */
 @SpringBootTest(webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT)
 @ActiveProfiles("test")
@@ -94,48 +87,30 @@ class RescheduleCancelPlaceholderIT {
 
     /** D010, D031 đã trả (2026-10-19): lễ tân đổi khung trên bean thật, không còn khóa advisory treo. */
     @Test
-<<<<<<< HEAD
-    void rescheduleRunsOnRealBeans() {
-=======
     void receptionistReschedulesOnTheRealBeans() {
->>>>>>> e18c4ed (feat: triển khai hủy do phòng khám)
         long id = booked(day, LocalTime.of(8, 30));
 
         ResponseEntity<Map<String, Object>> response = post(token, id, "reschedule",
                 "{\"slotDate\":\"" + day + "\",\"slotStart\":\"09:00\"}");
 
         assertThat(response.getStatusCode()).as("%s", response.getBody()).isEqualTo(HttpStatus.OK);
-<<<<<<< HEAD
-        assertThat(jdbc.queryForObject("SELECT slot_start::text FROM appointments WHERE id = ?", String.class, id))
-                .isEqualTo("09:00:00");
-=======
         assertThat(jdbc.queryForMap("SELECT slot_start::text AS slot_start, reschedule_count FROM appointments "
                 + "WHERE id = ?", id)).containsEntry("slot_start", "09:00:00").containsEntry("reschedule_count", 1);
->>>>>>> e18c4ed (feat: triển khai hủy do phòng khám)
         assertThat(jdbc.queryForObject("SELECT count(*) FROM pg_locks WHERE locktype = 'advisory'", Long.class))
                 .isZero();
     }
 
     /** Hủy sớm (≥ 12 giờ) không cần đếm vi phạm lưu trú nên chạy được trên bean thật. */
     @Test
-<<<<<<< HEAD
-    void earlyCancelRunsOnRealBeans() {
-=======
     void receptionistEarlyCancelOnTheRealBeans() {
->>>>>>> e18c4ed (feat: triển khai hủy do phòng khám)
         long id = booked(day, LocalTime.of(8, 30));
 
         ResponseEntity<Map<String, Object>> response = post(token, id, "cancel", null);
 
         assertThat(response.getStatusCode()).as("%s", response.getBody()).isEqualTo(HttpStatus.OK);
-<<<<<<< HEAD
-        assertThat(jdbc.queryForMap("SELECT status, late_cancel FROM appointments WHERE id = ?", id))
-                .containsEntry("status", "CANCELLED").containsEntry("late_cancel", false);
-=======
         assertThat(jdbc.queryForMap("SELECT status, cancel_source, late_cancel FROM appointments WHERE id = ?", id))
                 .containsEntry("status", "CANCELLED").containsEntry("cancel_source", "STAFF")
                 .containsEntry("late_cancel", false);
->>>>>>> e18c4ed (feat: triển khai hủy do phòng khám)
     }
 
     /** D033: hủy muộn cần đếm vi phạm lưu trú — placeholder ném lỗi → cả lần hủy rollback, không lưu cờ hủy muộn. */
@@ -187,10 +162,6 @@ class RescheduleCancelPlaceholderIT {
                 receptionist);
     }
 
-<<<<<<< HEAD
-
-=======
->>>>>>> e18c4ed (feat: triển khai hủy do phòng khám)
     private String token(long accountId) {
         return new TransactionTemplate(transactionManager)
                 .execute(status -> sessions.open(accountId, "203.0.113.9", "RescheduleCancelPlaceholderIT"))

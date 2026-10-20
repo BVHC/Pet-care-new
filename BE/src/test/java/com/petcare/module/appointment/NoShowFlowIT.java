@@ -60,7 +60,7 @@ import com.petcare.support.MutableClock;
 import jakarta.persistence.EntityManagerFactory;
 
 /**
- * ST05 (T25 phần 2, docs/adr/0048, nợ D037) nhìn từ các luồng khác, trên bean thật của customer / catalog / branch:
+ * ST05 (T25 phần 2, docs/adr/0053, nợ D037) nhìn từ các luồng khác, trên bean thật của customer / catalog / branch:
  * đọc qua GET #3 / #4 và {@code AppointmentQueryApi}, check-in sau NO_SHOW, đặt online sau hạn chế do job tạo, race với
  * hủy muộn cùng khách (G4) và với đánh dấu thú mất (D036), số câu SQL theo số lịch. Đồng hồ {@link MutableClock} năm 2000
  * như {@code NoShowIT}; {@code BoardingQueryApi} là mock (D033) trả 0 vi phạm. Context bật Hibernate Statistics.
@@ -242,7 +242,7 @@ class NoShowFlowIT {
     }
 
     /**
-     * Thú mất ∥ ST05 (D036 mục 2, docs/adr/0048 "Không đảm bảo"): đánh dấu thú mất đang chờ dòng lịch hẹn thì ST05 bỏ
+     * Thú mất ∥ ST05 (D036 mục 2, docs/adr/0053 "Không đảm bảo"): đánh dấu thú mất đang chờ dòng lịch hẹn thì ST05 bỏ
      * qua dòng đó (SKIP LOCKED, không chờ); khi dòng được nhả, hủy do phòng khám thắng → đúng một trạng thái cuối
      * {@code CANCELLED} / {@code CLINIC}, không tính vi phạm, lượt sau không đụng.
      */
@@ -288,7 +288,7 @@ class NoShowFlowIT {
         assertThat(restrictionCount(customer)).isZero();
     }
 
-    /** Thứ tự ngược lại: ST05 commit trước thì lịch giữ {@code NO_SHOW} khi thú mất sau đó (D036, đã xác nhận — docs/adr/0052). */
+    /** Thứ tự ngược lại: ST05 commit trước thì lịch giữ {@code NO_SHOW} khi thú mất sau đó (D036, đã xác nhận — docs/adr/0057). */
     @Test
     void noShowCommittedBeforeDeceasedStaysNoShow() {
         long pet = data.pet(customer);

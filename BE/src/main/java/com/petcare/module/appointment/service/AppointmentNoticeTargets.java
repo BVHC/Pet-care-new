@@ -23,8 +23,8 @@ import com.petcare.module.identity.api.AccountContactApi;
 import com.petcare.module.identity.api.AccountContactApi.AccountContact;
 
 /**
- * Phần dùng chung của các thông báo gửi khách về một lịch hẹn (hủy do phòng khám — docs/adr/0047; nhắc lịch ST03 —
- * docs/adr/0051): tra tên theo lô và chọn người nhận theo BR-TB-02. Không phải bean: mỗi lớp thông báo tự tạo với các
+ * Phần dùng chung của các thông báo gửi khách về một lịch hẹn (hủy do phòng khám — docs/adr/0052; nhắc lịch ST03 —
+ * docs/adr/0056): tra tên theo lô và chọn người nhận theo BR-TB-02. Không phải bean: mỗi lớp thông báo tự tạo với các
  * {@code *QueryApi} được tiêm, nên không đổi cách dựng của chúng. Chỉ đọc, không ghi gì.
  * <p>
  * Tra theo lô ≤ {@value #BATCH} id mỗi lần gọi (khuôn {@code ScheduleImpactFinder}), ghép theo id; danh sách rỗng thì không
@@ -93,7 +93,7 @@ final class AppointmentNoticeTargets {
     }
 
     /**
-     * Kênh và người nhận theo BR-TB-02 (06 §8 Q4; docs/adr/0047 Q2):
+     * Kênh và người nhận theo BR-TB-02 (06 §8 Q4; docs/adr/0052 Q2):
      * <ul>
      * <li>tài khoản đã xác thực → {@code IN_APP} ({@code appCode}) + {@code EMAIL} ({@code emailCode}) tới email <b>của
      * tài khoản</b> (hồ sơ online có {@code customers.email = null});</li>

@@ -10,7 +10,7 @@ import java.util.Objects;
 import com.petcare.platform.config.TimeConfig;
 
 /**
- * Cửa sổ nhắc của ST03 (BR-LH-12, docs/adr/0051): lịch được nhắc khi {@code from < giờ hẹn ≤ to}, với
+ * Cửa sổ nhắc của ST03 (BR-LH-12, docs/adr/0056): lịch được nhắc khi {@code from < giờ hẹn ≤ to}, với
  * {@code from = now} và {@code to = now + hoursBefore} theo giờ Việt Nam (không có DST nên cộng giờ trên giờ địa phương
  * là đúng). Cận dưới nghiêm ngặt: lịch đã bắt đầu không nhắc nữa (Q4; ST05 có thể chưa chuyển nó sang {@code NO_SHOW}).
  * Cận trên tính là được: đúng {@code hoursBefore} giờ trước giờ hẹn là đến hạn nhắc. Lớp thuần.

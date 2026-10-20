@@ -14,7 +14,7 @@ import org.springframework.test.context.ActiveProfiles;
 
 import com.petcare.TestcontainersConfiguration;
 
-/** Khi có cron, ST05 thật sự được đăng ký với scheduler (docs/adr/0048): tên property đúng. */
+/** Khi có cron, ST05 thật sự được đăng ký với scheduler (docs/adr/0053): tên property đúng. */
 @SpringBootTest(properties = "app.jobs.no-show.cron=0 */5 * * * *")
 @ActiveProfiles("test")
 @Import(TestcontainersConfiguration.class)

@@ -104,21 +104,9 @@ class OpenApiContractParityIT {
 
     @Test
     void documentedModulesCoverAllTheirImplementedEndpoints() {
-<<<<<<< HEAD
-<<<<<<< HEAD
-        assertThat(documentedOps()).as("số endpoint identity + care + customer + inventory + sales + appointment đã cài")
-                .hasSize(91);
-=======
-        // 80 (identity + care + customer + inventory + sales, nhánh dung) + 6 appointment #1–6 (nhánh manh).
+        // 85 (identity + care + customer + inventory + sales, gồm 5 endpoint Order bán lẻ T29) + 9 appointment #1–9.
         assertThat(documentedOps())
-                .as("số endpoint identity + care + customer + inventory + sales + appointment đã cài").hasSize(86);
->>>>>>> e18c4ed (feat: triển khai hủy do phòng khám)
-=======
-        // 80 (identity + care + customer + inventory + sales, nhánh dung) + 9 appointment #1–9 (nhánh manh; #7–9
-        // docs/adr/0050).
-        assertThat(documentedOps())
-                .as("số endpoint identity + care + customer + inventory + sales + appointment đã cài").hasSize(89);
->>>>>>> 11f78b6 (feat: triển khai xem và gỡ hạn chế khách hàng)
+                .as("số endpoint identity + care + customer + inventory + sales + appointment đã cài").hasSize(94);
     }
 
     @Test

@@ -48,7 +48,7 @@ import com.petcare.module.appointment.repository.AppointmentRepository;
 import com.petcare.module.catalog.api.ServiceGroup;
 
 /**
- * {@link AppointmentClinicCancellationService} (Lịch hẹn#5, docs/adr/0047): khử trùng + sắp id tăng dần, khóa theo lô
+ * {@link AppointmentClinicCancellationService} (Lịch hẹn#5, docs/adr/0052): khử trùng + sắp id tăng dần, khóa theo lô
  * trong một câu, {@code now} sau khóa, kiểm lại {@code BOOKED} sau khóa (khác thì bỏ qua), {@code CLINIC} / không hủy
  * muộn / không đổi số lần đổi, id thiếu → lỗi không ghi gì, thông báo sau khi ghi. Commit / rollback thật:
  * {@code ClinicCancellationIT}.
@@ -246,7 +246,7 @@ class AppointmentClinicCancellationServiceTest {
         verifyNoInteractions(appointments);
     }
 
-    /** C2 (docs/adr/0047): tham gia transaction của bên phát, không mở transaction riêng, không nuốt lỗi. */
+    /** C2 (docs/adr/0052): tham gia transaction của bên phát, không mở transaction riêng, không nuốt lỗi. */
     @Test
     void everyPublicMethodJoinsTheCallerTransactionAndNeverCommitsOnError() throws NoSuchMethodException {
         for (Method method : List.of(

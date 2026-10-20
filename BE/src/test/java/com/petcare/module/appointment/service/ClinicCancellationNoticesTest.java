@@ -50,7 +50,7 @@ import com.petcare.module.identity.api.AccountContactApi.AccountContact;
 import com.petcare.module.identity.api.NotificationTemplateCode;
 
 /**
- * {@link ClinicCancellationNotices} (docs/adr/0047 Q2, Q9; mapping M3, M4): payload so nguyên map, giờ hẹn định dạng
+ * {@link ClinicCancellationNotices} (docs/adr/0052 Q2, Q9; mapping M3, M4): payload so nguyên map, giờ hẹn định dạng
  * theo giờ Việt Nam không đổi zone, ma trận người nhận (tài khoản / tài khoản PENDING / chỉ email hồ sơ / không kênh),
  * một lần gọi theo lô cho mỗi module, id thiếu / trùng → lỗi, rỗng → không gọi gì. Thông báo thật qua ST20:
  * {@code ClinicCancellationIT}.

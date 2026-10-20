@@ -28,6 +28,7 @@ import com.petcare.module.customer.api.CustomerQueryApi;
 import com.petcare.module.customer.api.PetQueryApi;
 import com.petcare.module.identity.api.ConfigKey;
 import com.petcare.module.identity.api.SystemConfigApi;
+import com.petcare.module.visit.api.VisitQueryApi;
 import com.petcare.platform.exception.ResourceNotFoundException;
 import com.petcare.platform.model.PageResponse;
 import com.petcare.platform.security.BranchScope;
@@ -66,13 +67,13 @@ public class AppointmentQueryService {
     private final Clock clock;
 
     public AppointmentQueryService(BranchScope branchScope, CustomerQueryApi customers, PetQueryApi pets,
-            BranchQueryApi branches, CatalogQueryApi catalog, SystemConfigApi configs,
+            BranchQueryApi branches, CatalogQueryApi catalog, VisitQueryApi visits, SystemConfigApi configs,
             AppointmentRepository appointments, AppointmentMapper mapper, Clock clock) {
         this.branchScope = branchScope;
         this.customers = customers;
         this.configs = configs;
         this.appointments = appointments;
-        this.responder = new AppointmentResponder(customers, pets, branches, catalog, configs, mapper);
+        this.responder = new AppointmentResponder(customers, pets, branches, catalog, visits, configs, mapper);
         this.clock = clock;
     }
 

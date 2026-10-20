@@ -60,7 +60,7 @@ m.schema("RescheduleRequest", {"slotDate": "date", "slotStart": "time"})
 m.schema("CancelAppointmentRequest", {"reason": "string:300?"}, required=[])
 m.schema("BookingRestriction", {
     "restrictionId": "int64", "customerId": "int64", "startsAt": "datetime", "endsAt": "datetime",
-    "violationCount": "int|Số NO_SHOW + hủy muộn đã đếm khi tạo hạn chế: sau mốc max(now − 90 ngày [CFG], lần hạn chế gần nhất) (docs/adr/0045)",
+    "violationCount": "int|Số NO_SHOW + hủy muộn đã đếm khi tạo hạn chế: sau mốc max(now − 90 ngày [CFG], lần hạn chế gần nhất) (docs/adr/0049)",
 })
 m.schema("RestrictionStatus", {
     "restricted": "bool", "restriction": "ref:BookingRestriction",
@@ -139,14 +139,14 @@ m.op("get", "/me/booking-restriction", "getMyBookingRestriction", "Tình trạng
      "Booking restrictions", "UC39, UC58", "BR-LH-09", "A02", "Khách đang đăng nhập", resp="RestrictionStatus",
      errors=(400, 401, 403), err_desc={400: "BR-TK-17"},
      notes="FE hiển thị lý do và ngày hết hạn chế. Không bị hạn chế (chưa từng, đã hết hạn, đã gỡ) → "
-           "restricted = false, restriction = null. Không chặn khi hồ sơ còn chờ quyết định liên kết (docs/adr/0050).")
+           "restricted = false, restriction = null. Không chặn khi hồ sơ còn chờ quyết định liên kết (docs/adr/0055).")
 m.op("get", "/customers/{customerId}/booking-restriction", "getCustomerBookingRestriction",
      "Tình trạng hạn chế đặt online của khách", "Booking restrictions", "UC39", "BR-LH-09", "A05, A06",
      "Nhân viên", resp="RestrictionStatus", path_params=["CustomerId"], errors=(400, 401, 403, 404),
      err_desc={400: "Tham số sai kiểu (`MALFORMED_REQUEST`); BR-TK-17", 403: "Sai vai trò",
                404: "Khách hàng không tồn tại"},
      notes="Toàn chuỗi: hạn chế gắn với khách, nhân viên chi nhánh nào cũng xem được. Không bị hạn chế → "
-           "restricted = false, restriction = null (docs/adr/0050).")
+           "restricted = false, restriction = null (docs/adr/0055).")
 m.op("post", "/customers/{customerId}/booking-restriction/lift", "liftBookingRestriction", "Gỡ hạn chế sớm",
      "Booking restrictions", "UC39", "BR-LH-09, BR-QT-15", "A05, A06", "Lễ tân, BRANCH_MANAGER",
      body="LiftRestrictionRequest", resp="RestrictionStatus", path_params=["CustomerId"], errors=(400, 401, 403, 404, 409),
@@ -155,4 +155,4 @@ m.op("post", "/customers/{customerId}/booking-restriction/lift", "liftBookingRes
                409: "Khách không đang bị hạn chế (chưa từng, đã hết hạn hoặc đã gỡ)"},
      notes="Toàn chuỗi. Ghi audit BOOKING_RESTRICTION_LIFTED; không gửi thông báo cho khách. Thành công → restricted = "
            "false, restriction = null. Lần đánh giá vi phạm sau vẫn đếm từ starts_at của lần hạn chế vừa gỡ, nên vi phạm "
-           "cũ không bị tính lại (docs/adr/0045, 0050).")
+           "cũ không bị tính lại (docs/adr/0049, 0055).")

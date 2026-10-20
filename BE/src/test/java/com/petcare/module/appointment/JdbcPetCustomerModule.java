@@ -56,18 +56,11 @@ final class JdbcPetCustomerModule implements PetQueryApi, CustomerQueryApi {
         return jdbc.query(PET_SELECT + "WHERE p.id = ?", (rs, n) -> pet(rs), petId).stream().findFirst();
     }
 
-<<<<<<< HEAD
-    /** Như {@code PetQueryService.findPetForShare} (docs/adr/0041): khóa chia sẻ dòng thú rồi đọc. */
-    @Override
-    public Optional<PetSummary> findPetForShare(Long petId) {
-        return jdbc.query(PET_SELECT + "WHERE p.id = ? FOR SHARE OF p", (rs, n) -> pet(rs), petId).stream().findFirst();
-=======
     /** Như {@code PetQueryService.findPetForShare} (T17, thêm khi gộp nhánh): khóa chia sẻ dòng thú rồi đọc. */
     @Override
     public Optional<PetSummary> findPetForShare(Long petId) {
         return jdbc.query(PET_SELECT + "WHERE p.id = ? FOR SHARE OF p", (rs, n) -> pet(rs), petId).stream()
                 .findFirst();
->>>>>>> e18c4ed (feat: triển khai hủy do phòng khám)
     }
 
     @Override

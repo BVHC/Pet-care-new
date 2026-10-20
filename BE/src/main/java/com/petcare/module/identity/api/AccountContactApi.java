@@ -5,7 +5,7 @@ import java.util.List;
 
 /**
  * Owner: identity (TK) · BE-1. Email của tài khoản để module khác gửi thông báo cho khách (BR-TB-02): hồ sơ online có
- * {@code customers.email = null}, email thật nằm ở {@code accounts} (thêm 2026-10-18, T25 phần 1, docs/adr/0047).
+ * {@code customers.email = null}, email thật nằm ở {@code accounts} (thêm 2026-10-18, T25 phần 1, docs/adr/0052).
  * Chỉ đọc, tham gia transaction của bên gọi, không khóa, không kiểm role (API nội bộ, bên gọi đã phân quyền).
  */
 public interface AccountContactApi {
