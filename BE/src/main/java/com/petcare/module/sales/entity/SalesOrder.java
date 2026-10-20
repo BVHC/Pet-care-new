@@ -110,6 +110,18 @@ public class SalesOrder extends TimestampedEntity {
         return order;
     }
 
+    /** Order#2: Order bán lẻ ở {@code OPEN}, không gắn Visit / đặt chỗ (BR-BH-01). */
+    public static SalesOrder openRetail(String code, Long branchId, Long customerId, Long createdBy) {
+        SalesOrder order = new SalesOrder();
+        order.code = code;
+        order.source = OrderSource.RETAIL;
+        order.branchId = branchId;
+        order.customerId = customerId;
+        order.createdBy = createdBy;
+        order.status = OrderStatus.OPEN;
+        return order;
+    }
+
     public void addLine(OrderLine line) {
         lines.add(line);
         try {

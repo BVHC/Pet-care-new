@@ -123,6 +123,21 @@ class CrossModuleQueryIT extends CustomerMeItSupport {
         assertThat(boardings.findBookingIdsByPet(pet)).containsExactly(booked, checkedIn);
     }
 
+    /** T29: sales đọc trạng thái đặt chỗ cho BR-BH-05 (Order lưu trú khi thú còn trong chuồng). */
+    @Test
+    void findBookingReadsTheBookingRowOrNothing() {
+        long overdue = fx.booking(customer, pet, "OVERDUE", 50);
+
+        assertThat(boardings.findBooking(overdue)).hasValueSatisfying(stay -> {
+            assertThat(stay.bookingId()).isEqualTo(overdue);
+            assertThat(stay.customerId()).isEqualTo(customer);
+            assertThat(stay.petId()).isEqualTo(pet);
+            assertThat(stay.status()).isEqualTo(BoardingQueryApi.StayStatus.OVERDUE);
+            assertThat(stay.emergencyPhone()).as("chưa có boarding_check_ins").isNull();
+        });
+        assertThat(boardings.findBooking(Long.MAX_VALUE)).isEmpty();
+    }
+
     @Test
     void overdueCountsAsInStayButCheckedOutDoesNot() {
         fx.booking(customer, pet, "CHECKED_OUT", 30);

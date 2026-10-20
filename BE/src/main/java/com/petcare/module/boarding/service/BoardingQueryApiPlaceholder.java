@@ -17,7 +17,8 @@ import com.petcare.module.boarding.api.BoardingQueryApi;
  * BE-2 xóa lớp này (cùng {@code BoardingQueryApiPlaceholderTest}) khi thêm implementation thật.
  * <p>
  * <b>Cài thật một phần (2026-10-16, T17):</b> {@code isPetInStay}, {@code existsByPet}, {@code findBookingIdsByPet},
- * {@code existsByCustomer} đọc thẳng {@code boarding_bookings} trong transaction của bên gọi; các method còn lại vẫn ném.
+ * {@code existsByCustomer} đọc thẳng {@code boarding_bookings} trong transaction của bên gọi; <b>2026-10-20 (T29):</b>
+ * thêm {@code findBooking} (đọc không khóa, sales cần cho BR-BH-05); các method còn lại vẫn ném.
  */
 @Service
 public class BoardingQueryApiPlaceholder implements BoardingQueryApi {
@@ -32,7 +33,13 @@ public class BoardingQueryApiPlaceholder implements BoardingQueryApi {
 
     @Override
     public Optional<StaySummary> findBooking(Long bookingId) {
-        throw new UnsupportedOperationException(MESSAGE);
+        return jdbc.query("""
+                SELECT b.id, b.branch_id, b.customer_id, b.pet_id, b.status, c.emergency_phone
+                FROM boarding_bookings b LEFT JOIN boarding_check_ins c ON c.boarding_booking_id = b.id
+                WHERE b.id = ?
+                """, (rs, n) -> new StaySummary(rs.getLong("id"), rs.getLong("branch_id"),
+                rs.getLong("customer_id"), rs.getLong("pet_id"), StayStatus.valueOf(rs.getString("status")),
+                rs.getString("emergency_phone")), bookingId).stream().findFirst();
     }
 
     @Override

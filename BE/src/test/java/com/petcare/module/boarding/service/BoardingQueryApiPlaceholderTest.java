@@ -17,8 +17,8 @@ class BoardingQueryApiPlaceholderTest {
 
     @Test
     void methodsNotImplementedYetThrow() {
-        assertThatThrownBy(() -> placeholder.findBooking(1L)).isInstanceOf(UnsupportedOperationException.class);
-        // isPetInStay, existsByPet, findBookingIdsByPet, existsByCustomer đã cài thật một phần (T17): CrossModuleQueryIT
+        // isPetInStay, existsByPet, findBookingIdsByPet, existsByCustomer (T17) và findBooking (T29) đã cài thật một
+        // phần: CrossModuleQueryIT
         assertThatThrownBy(() -> placeholder.findBookedFrom(1L, LocalDate.of(2026, 10, 9)))
                 .isInstanceOf(UnsupportedOperationException.class);
         assertThatThrownBy(() -> placeholder.countViolations(1L, Instant.EPOCH))
