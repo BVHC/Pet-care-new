@@ -46,7 +46,7 @@
 
 | Thao tác | Actor | Quyền / phạm vi | Chuyển trạng thái | Idempotent | Ghi chú |
 |---|---|---|---|---|---|
-| Tiếp nhận (check-in lịch hẹn / walk-in / cấp cứu) | A06 | Lễ tân; chi nhánh của lễ tân | — → WAITING (Visit#1) · Lịch hẹn#3 · Order#1 (OPEN + dòng dịch vụ tự sinh) · có dịch vụ Khám → Care Task#6 | — | Trễ 15–30 phút [CFG] xếp như walk-in. Khách mang nhiều thú thì tạo nhiều Visit. |
+| Tiếp nhận (check-in lịch hẹn / walk-in / cấp cứu) | A06 | Lễ tân; chi nhánh của lễ tân | — → WAITING (Visit#1) · Lịch hẹn#3 · Order#1 (OPEN + dòng dịch vụ tự sinh) · có dịch vụ Khám → Care Task#6 | — | Trễ quá `visit.late_priority_minutes` (15 phút) [CFG] xếp như walk-in. A9, A10, A11, A12. Thứ tự lỗi: 404 → 400 → 409 (docs/adr/0059). Có dịch vụ Khám: Care Task#6 chưa nối, nối khi visit cài FollowUpApi. Khách mang nhiều thú thì tạo nhiều Visit. |
 | Hàng đợi của chi nhánh | A05, A06, A07, A08 | Nhân viên chi nhánh | — | — | A1. |
 | Hàng đợi của tôi | A07, A08 | VET, CARETAKER | — | — | Visit WAITING / IN_PROGRESS gán cho tôi. |
 | Chi tiết lượt | A05–A08 | Nhân viên chi nhánh | — | — | — |
@@ -74,7 +74,7 @@
 
 ### Queue
 
-- **`POST /visits`** — Tiếp nhận (check-in lịch hẹn / walk-in / cấp cứu). Request `CreateVisitRequest`. Response `201` `Visit`. Lỗi: `400` `BR-TN-01` thú đã mất / walk-in thiếu dịch vụ · `BR-TN-02` ngoài cửa sổ check-in · `BR-CN-05` ngoài giờ mà chi nhánh không có cờ hoặc chưa đánh dấu cấp cứu · `BR-CN-01` chi nhánh chưa ACTIVE · `BR-LH-01` dịch vụ đang tắt · `401` · `403` · `404` · `409` Lịch hẹn không còn BOOKED (đã check-in / NO_SHOW: tiếp nhận như walk-in, BR-TN-03).
+- **`POST /visits`** — Tiếp nhận (check-in lịch hẹn / walk-in / cấp cứu). Request `CreateVisitRequest`. Response `201` `Visit`. Lỗi: `400` `BR-TN-01` walk-in thiếu dịch vụ / thú không khớp lịch hẹn / thú đã mất · `BR-TN-02` lịch hẹn của chi nhánh khác hoặc ngoài cửa sổ check-in · `BR-CN-01` chi nhánh chưa ACTIVE · `BR-CN-05` ngoài giờ mà chi nhánh không có cờ hoặc chưa đánh dấu cấp cứu · `BR-LH-01` walk-in: dịch vụ đã ngừng, đang tắt tại chi nhánh hoặc không thuộc MEDICAL / GROOMING; có lịch: dịch vụ đã ngừng kinh doanh · `401` · `403` · `404` · `409` Lịch hẹn không còn BOOKED (đã check-in / NO_SHOW: tiếp nhận như walk-in, BR-TN-03).
 - **`GET /visits`** — Hàng đợi của chi nhánh. Query: `date?`, `status?`, `serviceGroup?`, `assigneeId?`, `needsReassign?`. Response `200` mảng `Visit`. Lỗi: `400` · `401` · `403`.
 - **`GET /me/queue`** — Hàng đợi của tôi. Response `200` mảng `Visit`. Lỗi: `401` · `403`.
 - **`GET /visits/{visitId}`** — Chi tiết lượt. Response `200` `Visit`. Lỗi: `401` · `403` · `404`.
@@ -162,6 +162,10 @@ Trường có `?` là không bắt buộc / có thể null. Kiểu `email`, `dat
 | A6 | Ngày tiêm = ngày hiện tại theo giờ Việt Nam, không cho chọn | BR-KB-04 trừ kho ngay khi ghi nhận; 05 `administered_on` không ở tương lai |
 | A7 | Bản bổ sung bệnh án do VET của chi nhánh nơi khám ghi, sau khi Visit COMPLETED | BR-KB-01: chỉ VET; sau khi khóa mới có bản bổ sung |
 | A8 | Cân nặng khi khám ghi bằng endpoint riêng, mỗi lần là một bản ghi | 05 `weight_records` là LOG |
+| A9 | Ngoài giờ mở cửa (trước giờ mở, giờ nghỉ giữa ca, ngày nghỉ) chỉ tiếp nhận ca đánh dấu cấp cứu ở chi nhánh có cờ, kể cả check-in lịch hẹn đến sớm trong cửa sổ BR-TN-02 | 03 #1 Visit liệt kê cả điều kiện giờ mở cửa / cấp cứu lẫn cửa sổ check-in (docs/adr/0059 Q1) |
+| A10 | `isEmergency` = true → hạng `EMERGENCY`, `queueSortKey` = giờ check-in, cả trong giờ và khi có lịch hẹn | Endpoint gộp UC47 cho A06 (docs/adr/0059 Q2) |
+| A11 | Có `appointmentId` thì `serviceId` bị bỏ qua (dịch vụ của lịch); `petId` phải là thú của lịch, khác → 400 `BR-TN-01` | BR-TN-01: 1 Visit cho đúng 1 thú; BR-LH-01: lịch có 1 thú, 1 dịch vụ |
+| A12 | Lịch hẹn mà dịch vụ bị tắt tại chi nhánh sau khi đặt vẫn tiếp nhận được; chỉ dịch vụ đã ngừng kinh doanh mới bị từ chối (400 `BR-LH-01`) | BR-LH-01 là điều kiện đặt lịch (UC39); 03 #1 không liệt kê (docs/adr/0059 Q3) |
 
 | ID | Câu hỏi | Trạng thái | Gốc |
 |---|---|---|---|

@@ -9,11 +9,13 @@ import static org.mockito.Mockito.when;
 import java.time.LocalDate;
 import java.time.LocalTime;
 import java.util.List;
+import java.util.Optional;
 
 import org.junit.jupiter.api.Test;
 import org.springframework.transaction.annotation.Transactional;
 
 import com.petcare.module.appointment.api.AppointmentQueryApi.BookedSlot;
+import com.petcare.module.appointment.api.AppointmentQueryApi.CheckInRef;
 import com.petcare.module.appointment.repository.AppointmentRepository;
 
 /** {@link AppointmentLookupService} (docs/adr/0050): chỉ ủy quyền cho repository, tham số null bị chặn trước SQL. */
@@ -41,6 +43,17 @@ class AppointmentLookupServiceTest {
         assertThat(service.existsByCustomer(7L)).isTrue();
         assertThat(service.existsByPet(10L)).isFalse();
         assertThat(service.findBookedFrom(4L, DAY)).isEmpty();
+    }
+
+    /** Visit#1 (docs/adr/0059): projection không khóa theo PK; không có thì rỗng. */
+    @Test
+    void checkInRefDelegatesAndIsEmptyWhenMissing() {
+        CheckInRef ref = new CheckInRef(501L, 3L, 12L, 7L);
+        when(appointments.findCheckInRef(501L)).thenReturn(Optional.of(ref));
+
+        assertThat(service.findCheckInRef(501L)).contains(ref);
+        assertThat(service.findCheckInRef(502L)).isEmpty();
+        assertThatThrownBy(() -> service.findCheckInRef(null)).isInstanceOf(NullPointerException.class);
     }
 
     @Test

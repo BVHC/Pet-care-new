@@ -133,6 +133,16 @@ class AppointmentQueryCountIT {
         assertThat(query.existsByPet(pet)).isTrue();
     }
 
+    /** Visit#1 (docs/adr/0059): một câu theo PK, kể cả khi id không có. */
+    @Test
+    void checkInRefIsOneStatementFoundOrNot() {
+        insertBooked(0, 1);
+        long id = jdbc.queryForObject("SELECT id FROM appointments WHERE pet_id = ?", Long.class, pet);
+
+        assertThat(statements(() -> query.findCheckInRef(id))).isEqualTo(1);
+        assertThat(statements(() -> query.findCheckInRef(Long.MAX_VALUE))).isEqualTo(1);
+    }
+
     @Test
     void visitCallsAreExactlyTwoStatements() {
         long a = data.appointment(customer, pet, branch, medical, "MEDICAL", DAY, LocalTime.of(9, 0), "BOOKED", staff);

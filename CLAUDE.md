@@ -41,14 +41,14 @@ Team: **BE-1** (branch `manh`) = identity, appointment, visit, care · **BE-2** 
 
 ## Current state (2026-10-20)
 
-`manh` = `origin/manh` @ `0b5a3e0`, 4 commits (T25 parts 1–4) on top of `origin/dev` @ `bfed5ab`. **Uncommitted:** conflict-marker cleanup after the rebase + T25 ADRs renumbered to 0052–0057 (see Gotchas); T26 part 0 (visit foundation, ADR-0058).
+`manh` = `origin/manh` @ `0b5a3e0`, 4 commits (T25 parts 1–4) on top of `origin/dev` @ `bfed5ab`. **Uncommitted:** conflict-marker cleanup after the rebase + T25 ADRs renumbered to 0052–0057 (see Gotchas); T26 part 0 (visit foundation, ADR-0058) and part 1 (`POST /api/visits`, ADR-0059). `origin/dev` @ `197bbf5` = PR #15 (T25) still carries the **old** T25 ADR numbers 0047–0052.
 
 | Module | Owner | Built | Still missing / placeholder |
 |---|---|---|---|
 | identity | BE-1 | identity-v1 #1–24, #28–37 (auth, OTP, `/me`, profile link, staff admin, account lock, [CFG], templates, audit, public vets); jobs ST01, ST02, session cleanup; `AccountContactApi` | #25–27 (customer account email change / counter link, UC22) |
 | care | BE-1 | ST20 outbox (EMAIL in HIGH / NORMAL lanes, IN_APP), outbox cleanup, care-v1 #5–8 | #9–10 settings (D025), Care Task, ST04, `FollowUpApi` (T38/T39) |
 | appointment | BE-1 | appointment-v1 #1–9; `AppointmentApi`, `AppointmentQueryApi`, `BookingRestrictionApi`; clinic-cancel listeners; ST05 `NoShowJob`; ST03 `AppointmentReminderJob` | booking / rescheduling read the pet with `findPet` and do not yet call `PetQueryApi.findPetForShare` (D027) |
-| visit | BE-1 | T26 part 0: entity, FSM, code `TN-yyMM-nnnnn`, lock order, real `VisitQueryApi` (+ `visitId` for appointments) | all endpoints (**T26 parts 1+, due 21/10**); `VaccinationQueryApiPlaceholder` |
+| visit | BE-1 | T26 part 0 (entity, FSM, code `TN-yyMM-nnnnn`, lock order, real `VisitQueryApi`) + part 1: visit-v1 #1 check-in | #2–21 (**T26 parts 2+, due 21/10**: queue, assign, call, reassign, cancel); Care Task#6 on check-in (D029); `VaccinationQueryApiPlaceholder` |
 | branch, catalog | BE-2 | branch-v1, catalog-v1 staff endpoints, `BranchQueryApi`, `BranchApi`, `CatalogQueryApi` | catalog public #19–22; Swagger annotations (D026) |
 | customer | BE-2 | customer-v1 #1–21; `CustomerApi`, `CustomerQueryApi`, `PetApi`, `PetQueryApi` | — |
 | inventory | BE-2 | inventory-v1 #1–17; `StockApi`, `StockQueryApi`, `DocumentCodeGenerator` | `StockReportApi` / ST08 (T44) |
@@ -113,7 +113,7 @@ Module codes: TK, QT, CN, CK, KH, SP, NS, LH, TN, KB, LT, BH, TG, KO, BV, DG, TB
 
 Open convention TBDs (don't decide silently — ask or write an ADR): command names when no Actor↔Command table exists; how "warn, don't block" rules return warnings (contracts assume a named field in `data`, e.g. `stockWarning`); locking for kennel capacity.
 
-**ADR map** (`docs/adr/`, immutable once Accepted — supersede instead of editing; **next free: 0059**):
+**ADR map** (`docs/adr/`, immutable once Accepted — supersede instead of editing; **next free: 0060**):
 
 | Area | ADRs |
 |---|---|
@@ -121,7 +121,7 @@ Open convention TBDs (don't decide silently — ask or write an ADR): command na
 | Auth | 0003 JWT + DB session · 0005 public paths anonymous · 0006 customer owner scope · 0009 BCrypt · 0010, 0011, 0025 OTP · 0019 login · 0021 logout · 0022 change password · 0023 forgot / reset |
 | Accounts, staff, admin | 0024 staff directory · 0026 staff self-edit · 0027 profile link · 0028 customer self-edit · 0029–0035 staff admin / lock · 0036 [CFG] edit · 0037 templates · 0038 audit view · 0039 in-app notifications |
 | Notifications, jobs | 0008 session cleanup · 0012, 0014, 0016, 0017 ST20 · 0013 ST02 · 0018 FK indexes on `accounts` |
-| Appointment, visit (BE-1) | 0045 booking locks · 0046 slots · 0047 book · 0048 view · 0049 reschedule / cancel · 0050 cross-module API · 0052 clinic cancel · 0053, 0054 ST05 · 0055 booking restriction · 0056 ST03 · 0057 assumptions confirmed · 0058 visit foundation |
+| Appointment, visit (BE-1) | 0045 booking locks · 0046 slots · 0047 book · 0048 view · 0049 reschedule / cancel · 0050 cross-module API · 0052 clinic cancel · 0053, 0054 ST05 · 0055 booking restriction · 0056 ST03 · 0057 assumptions confirmed · 0058 visit foundation · 0059 check-in (also amends 0044: receptionist never edits a VISIT auto line) |
 | BE-2 | 0041 customer & pet · 0042 inventory stock ledger · 0043 document codes · 0044 order core · 0051 retail order |
 
 ## Backend architecture

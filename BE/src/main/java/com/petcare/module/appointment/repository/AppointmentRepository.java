@@ -17,6 +17,7 @@ import org.springframework.transaction.annotation.Propagation;
 import org.springframework.transaction.annotation.Transactional;
 
 import com.petcare.module.appointment.api.AppointmentQueryApi.BookedSlot;
+import com.petcare.module.appointment.api.AppointmentQueryApi.CheckInRef;
 import com.petcare.module.appointment.entity.Appointment;
 
 import jakarta.persistence.LockModeType;
@@ -355,6 +356,14 @@ public interface AppointmentRepository extends JpaRepository<Appointment, Long>,
             ORDER BY a.slotDate, a.slotStart, a.id
             """)
     List<BookedSlot> findBookedByCustomerId(@Param("customerId") Long customerId);
+
+    /** Visit#1 (docs/adr/0059): bốn cột bất biến theo PK, không nạp entity (cùng lý do với {@link #findAccessRow}). */
+    @Query("""
+            SELECT new com.petcare.module.appointment.api.AppointmentQueryApi$CheckInRef(
+                a.id, a.branchId, a.petId, a.serviceId)
+            FROM Appointment a WHERE a.id = :id
+            """)
+    Optional<CheckInRef> findCheckInRef(@Param("id") Long id);
 
     /** Thú đã từng có lịch hẹn ở bất kỳ trạng thái nào (BR-KH-06). */
     boolean existsByPetId(Long petId);

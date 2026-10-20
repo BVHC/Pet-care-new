@@ -29,7 +29,8 @@ import lombok.NoArgsConstructor;
  * <p>
  * Command (docs/adr/0058): {@code checkInVisit} (#1), {@code assignVisit} (#2), {@code callVisit} (#3),
  * {@code reassignCalledVisit} (#4), {@code completeVisit} (#5), {@code cancelVisit} (#6); ngoài bảng 03:
- * {@code moveVisitInQueue}, {@code markVisitEmergency}. Method đổi trạng thái thêm cùng phần của T26 dựng thao tác đó.
+ * {@code moveVisitInQueue}, {@code markVisitEmergency}. Đã có: {@link #checkIn} (T26 phần 1, docs/adr/0059); method đổi
+ * trạng thái khác thêm cùng phần của T26 dựng thao tác đó.
  */
 @Getter
 @Entity
@@ -94,4 +95,27 @@ public class Visit extends TimestampedEntity {
 
     @Column(name = "cancel_reason")
     private String cancelReason;
+
+    /**
+     * Visit#1 ({@code — → WAITING}, command {@code checkInVisit}, BR-TN-01…04; docs/adr/0059). Bên gọi đã kiểm mọi rule
+     * dưới khóa thú, đã chuyển lịch hẹn (nếu có) và tính hạng ưu tiên. Chưa gán nhân viên; {@code at} đã cắt về µs.
+     */
+    public static Visit checkIn(String code, Long branchId, Long customerId, Long petId, Long appointmentId,
+            ServiceGroup serviceGroup, PriorityClass priorityClass, Instant queueSortKey, Long checkedInBy,
+            Instant at) {
+        Visit visit = new Visit();
+        visit.code = code;
+        visit.branchId = branchId;
+        visit.customerId = customerId;
+        visit.petId = petId;
+        visit.appointmentId = appointmentId;
+        visit.serviceGroup = serviceGroup;
+        visit.status = VisitStatus.WAITING;
+        visit.priorityClass = priorityClass;
+        visit.queueSortKey = queueSortKey;
+        visit.needsReassign = false;
+        visit.checkedInBy = checkedInBy;
+        visit.checkedInAt = at;
+        return visit;
+    }
 }
