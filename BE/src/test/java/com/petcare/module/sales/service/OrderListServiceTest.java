@@ -60,8 +60,8 @@ class OrderListServiceTest {
 
     @BeforeEach
     void setUp() {
-        service = new OrderListService(queries, customers, configs, branchScope,
-                Clock.fixed(NOW, ZoneId.of("Asia/Ho_Chi_Minh")));
+        service = new OrderListService(queries, customers,
+                new PendingOverdueCutoff(configs, Clock.fixed(NOW, ZoneId.of("Asia/Ho_Chi_Minh"))), branchScope);
         lenient().when(branchScope.resolve(null)).thenReturn(BRANCH);
     }
 

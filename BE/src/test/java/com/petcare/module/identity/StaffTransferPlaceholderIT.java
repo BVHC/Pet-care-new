@@ -27,11 +27,10 @@ import com.petcare.TestcontainersConfiguration;
 import com.petcare.module.identity.service.SessionService;
 
 /**
- * T14 phần 2, 3 trên đúng bean của app thật: {@code VisitQueryApi}, {@code CashierShiftQueryApi} còn là placeholder
- * ném lỗi (nợ D016). Điều chuyển / vô hiệu hóa A05–A08 tới bước BR-QT-08 → 500, rollback, không ghi gì; các nhánh lỗi
- * đứng trước BR-QT-08, đổi chức vụ (docs/adr/0031 Q4), vô hiệu hóa SUPER_MANAGER (docs/adr/0033 Q2) và kích hoạt lại
- * vẫn chạy đúng. Khi hai interface có bản thật, test 500 phải đổi thành ca thành công (D016 *Cách trả*). T14 phần 5
- * (docs/adr/0035): khóa A05–A08 / khách → 500 không ghi gì (D016, D010); khóa ADMIN / SUPER_MANAGER và mở khóa chạy
+ * T14 phần 2, 3, 5 trên đúng bean của app thật: {@code VisitQueryApi}, {@code CashierShiftQueryApi} đã có bản thật
+ * (D016 trả ở T30, docs/adr/0064): điều chuyển / vô hiệu hóa / khóa A05–A08 chạy thật, còn ca thu ngân mở thì BR-QT-08; các nhánh lỗi
+ * đứng trước BR-QT-08, đổi chức vụ (docs/adr/0031 Q4), vô hiệu hóa SUPER_MANAGER (docs/adr/0033 Q2) và kích hoạt lại. T14 phần 5
+ * (docs/adr/0035): khóa A05–A08 chạy thật; khóa ADMIN / SUPER_MANAGER và mở khóa chạy
  * thật.
  */
 @SpringBootTest(webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT)
@@ -68,21 +67,37 @@ class StaffTransferPlaceholderIT {
     }
 
     @Test
-    void transferReachingPendingWorkGuardIs500AndWritesNothing() {
+    void transferOfBranchStaffWorksOnRealBeans() {
         long vet = staff("VET", branchA);
-        Timestamp updated = jdbc.queryForObject("SELECT updated_at FROM staff_profiles WHERE account_id = ?",
-                Timestamp.class, vet);
 
         ResponseEntity<Map<String, Object>> response = post("/api/staff/" + vet + "/transfer",
                 Map.of("branchId", branchB));
 
-        assertThat(response.getStatusCode()).isEqualTo(HttpStatus.INTERNAL_SERVER_ERROR);
-        assertThat(response.getBody()).containsEntry("errorCode", "INTERNAL_ERROR");
-        assertThat(jdbc.queryForMap("SELECT branch_id, updated_at FROM staff_profiles WHERE account_id = ?", vet))
-                .containsEntry("branch_id", branchA).containsEntry("updated_at", updated);
+        assertThat(response.getStatusCode()).as("%s", response.getBody()).isEqualTo(HttpStatus.OK);
+        assertThat(jdbc.queryForObject("SELECT branch_id FROM staff_profiles WHERE account_id = ?", Long.class, vet))
+                .isEqualTo(branchB);
         assertThat(jdbc.queryForObject("""
                 SELECT count(*) FROM audit_logs WHERE action = 'STAFF_TRANSFERRED' AND entity_id = ?""", Long.class,
-                vet)).isZero();
+                vet)).isEqualTo(1L);
+    }
+
+    /** T30 (docs/adr/0064): lễ tân còn ca thu ngân {@code OPEN} → BR-QT-08 trên bean thật, không ghi gì. */
+    @Test
+    void transferOfReceptionistWithOpenShiftIsBrQt08AndWritesNothing() {
+        long receptionist = staff("RECEPTIONIST", branchA);
+        long shift = jdbc.queryForObject("""
+                INSERT INTO cashier_shifts (branch_id, cashier_id, business_date, status, opened_at)
+                VALUES (?, ?, current_date, 'OPEN', now()) RETURNING id""", Long.class, branchA, receptionist);
+        try {
+            ResponseEntity<Map<String, Object>> response = post("/api/staff/" + receptionist + "/transfer",
+                    Map.of("branchId", branchB));
+
+            assertBadRequestEndingWith(response, "BR-QT-08");
+            assertThat(jdbc.queryForObject("SELECT branch_id FROM staff_profiles WHERE account_id = ?", Long.class,
+                    receptionist)).isEqualTo(branchA);
+        } finally {
+            jdbc.update("DELETE FROM cashier_shifts WHERE id = ?", shift);
+        }
     }
 
     @Test
@@ -103,24 +118,23 @@ class StaffTransferPlaceholderIT {
                 .isEqualTo("CARETAKER");
     }
 
-    /** T14 phần 3 (docs/adr/0033): vô hiệu hóa A05–A08 tới bước BR-QT-08 → 500, rollback, phiên còn sống. */
+    /** T14 phần 3 (docs/adr/0033): vô hiệu hóa A05–A08 chạy thật khi hết việc dở (D016 đã trả, T30). */
     @Test
-    void disableBranchStaffReachingPendingWorkGuardIs500AndWritesNothing() {
+    void disableBranchStaffWorksOnRealBeans() {
         long vet = staff("VET", branchA);
         String vetToken = tokenOf(vet);
 
         ResponseEntity<Map<String, Object>> response = post("/api/staff/" + vet + "/disable", null);
 
-        assertThat(response.getStatusCode()).isEqualTo(HttpStatus.INTERNAL_SERVER_ERROR);
-        assertThat(response.getBody()).containsEntry("errorCode", "INTERNAL_ERROR");
+        assertThat(response.getStatusCode()).as("%s", response.getBody()).isEqualTo(HttpStatus.OK);
         assertThat(jdbc.queryForObject("SELECT status FROM accounts WHERE id = ?", String.class, vet))
-                .isEqualTo("ACTIVE");
+                .isEqualTo("DISABLED");
         assertThat(jdbc.queryForObject("""
                 SELECT count(*) FROM sessions WHERE account_id = ? AND revoked_at IS NULL""", Long.class, vet))
-                .isEqualTo(1L);
+                .isZero();
         assertThat(jdbc.queryForObject("""
                 SELECT count(*) FROM audit_logs WHERE action = 'STAFF_DISABLED' AND entity_id = ?""", Long.class,
-                vet)).isZero();
+                vet)).isEqualTo(1L);
         assertThat(vetToken).isNotBlank();
     }
 
@@ -161,35 +175,47 @@ class StaffTransferPlaceholderIT {
     // ================================================================ T14 phần 5 — khóa / mở khóa (docs/adr/0035)
 
     /**
-     * Khóa nhân viên A05–A08 hỏi {@code VisitQueryApi} (D016), khóa khách hỏi {@code CustomerQueryApi} (D010) — cả hai
-     * còn là placeholder → 500 trước lệnh ghi đầu tiên: chưa khóa, phiên còn sống, không audit, không thông báo.
+     * Khóa nhân viên A05–A08 chạy thật khi không còn việc dở (D016 đã trả, T30): khóa dòng, thu hồi phiên, ghi audit.
+     * Khóa khách không kiểm ở đây (phụ thuộc {@code BoardingQueryApi}, nợ D033).
      */
     @Test
-    void lockingBranchStaffOrCustomerIs500AndWritesNothingOnRealBeans() {
+    void lockingBranchStaffWorksOnRealBeans() {
         long admin = staff("ADMIN", null);
         long vet = staff("VET", branchA);
-        long customer = jdbc.queryForObject("""
-                INSERT INTO accounts (email, password_hash, role, status)
-                VALUES (?, 'hash', 'CUSTOMER', 'ACTIVE') RETURNING id
-                """, Long.class, "placeholder-it-" + UUID.randomUUID() + "@petcare.test");
         tokenOf(vet);
 
-        for (long target : new long[] {vet, customer}) {
-            ResponseEntity<Map<String, Object>> response = postAs(admin, "/api/accounts/" + target + "/lock",
-                    Map.of("reason", "Vi phạm"));
+        ResponseEntity<Map<String, Object>> response = postAs(admin, "/api/accounts/" + vet + "/lock",
+                Map.of("reason", "Vi phạm"));
 
-            assertThat(response.getStatusCode()).as("%s", response.getBody())
-                    .isEqualTo(HttpStatus.INTERNAL_SERVER_ERROR);
-            assertThat(response.getBody()).containsEntry("errorCode", "INTERNAL_ERROR");
-            assertThat(jdbc.queryForObject("SELECT is_locked FROM accounts WHERE id = ?", Boolean.class, target))
-                    .isFalse();
-        }
+        assertThat(response.getStatusCode()).as("%s", response.getBody()).isEqualTo(HttpStatus.OK);
+        assertThat(jdbc.queryForObject("SELECT is_locked FROM accounts WHERE id = ?", Boolean.class, vet)).isTrue();
         assertThat(jdbc.queryForObject("""
                 SELECT count(*) FROM sessions WHERE account_id = ? AND revoked_at IS NULL""", Long.class, vet))
-                .isEqualTo(1L);
-        assertThat(jdbc.queryForObject("SELECT count(*) FROM audit_logs WHERE actor_account_id = ?", Long.class,
-                admin)).isZero();
+                .isZero();
+        assertThat(jdbc.queryForObject("""
+                SELECT count(*) FROM audit_logs WHERE action = 'ACCOUNT_LOCKED' AND entity_id = ?""", Long.class,
+                vet)).isEqualTo(1L);
     }
+
+    /** Receptionist còn ca thu ngân {@code OPEN}: khóa vẫn thành công và liệt kê ca trong {@code pendingWork}. */
+    @Test
+    void lockingReceptionistWithOpenShiftListsTheShift() {
+        long admin = staff("ADMIN", null);
+        long receptionist = staff("RECEPTIONIST", branchA);
+        long shift = jdbc.queryForObject("""
+                INSERT INTO cashier_shifts (branch_id, cashier_id, business_date, status, opened_at)
+                VALUES (?, ?, current_date, 'OPEN', now()) RETURNING id""", Long.class, branchA, receptionist);
+        try {
+            ResponseEntity<Map<String, Object>> response = postAs(admin, "/api/accounts/" + receptionist + "/lock",
+                    Map.of("reason", "Vi phạm"));
+
+            assertThat(response.getStatusCode()).as("%s", response.getBody()).isEqualTo(HttpStatus.OK);
+            assertThat(String.valueOf(response.getBody())).contains("CASHIER_SHIFT_OPEN");
+        } finally {
+            jdbc.update("DELETE FROM cashier_shifts WHERE id = ?", shift);
+        }
+    }
+
 
     /** ADMIN / SUPER_MANAGER không hỏi interface nào → khóa và mở khóa chạy ngay trên app thật. */
     @Test

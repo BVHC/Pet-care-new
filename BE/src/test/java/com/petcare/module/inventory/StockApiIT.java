@@ -23,6 +23,8 @@ import org.springframework.transaction.support.TransactionTemplate;
 
 import com.petcare.TestcontainersConfiguration;
 import com.petcare.module.inventory.api.StockApi;
+import com.petcare.module.inventory.api.StockQueryApi;
+import com.petcare.module.inventory.api.StockApi.OrderSale;
 import com.petcare.module.inventory.api.StockApi.SaleLine;
 import com.petcare.module.inventory.api.StockApi.Shortage;
 import com.petcare.platform.exception.BusinessRuleViolationException;
@@ -41,6 +43,9 @@ class StockApiIT extends InventoryItSupport {
 
     @Autowired
     private StockApi stock;
+
+    @Autowired
+    private StockQueryApi queries;
 
     private long branch;
     private long actor;
@@ -66,7 +71,7 @@ class StockApiIT extends InventoryItSupport {
     }
 
     private List<Shortage> sale(long orderId, SaleLine... lines) {
-        return inTx(() -> stock.issueForSale(orderId, branch, List.of(lines), actor));
+        return inTx(() -> stock.issueForPayment(branch, List.of(new OrderSale(orderId, List.of(lines))), actor));
     }
 
     private List<Map<String, Object>> movements(long lotId) {
@@ -155,7 +160,8 @@ class StockApiIT extends InventoryItSupport {
         long lot = lot(branch, drug, "L1", inDays(30), 10, actor);
 
         assertThatThrownBy(() -> new TransactionTemplate(transactionManager).executeWithoutResult(status -> {
-            assertThat(stock.issueForSale(507L, branch, List.of(new SaleLine(drug, 4)), actor)).isEmpty();
+            assertThat(stock.issueForPayment(branch, List.of(new OrderSale(507L, List.of(new SaleLine(drug, 4)))), actor))
+                    .isEmpty();
             throw new IllegalStateException("thu tiền lỗi sau khi trừ kho");
         })).isInstanceOf(IllegalStateException.class);
 
@@ -283,7 +289,7 @@ class StockApiIT extends InventoryItSupport {
 
     @Test
     void everyMethodRequiresTheCallersTransaction() {
-        assertThatThrownBy(() -> stock.issueForSale(1L, branch, List.of(), actor))
+        assertThatThrownBy(() -> stock.issueForPayment(branch, List.of(), actor))
                 .isInstanceOf(IllegalTransactionStateException.class);
         assertThatThrownBy(() -> stock.lockFefoLot(branch, vaccine, 1))
                 .isInstanceOf(IllegalTransactionStateException.class);
@@ -302,5 +308,106 @@ class StockApiIT extends InventoryItSupport {
         Map<String, Object> item = data(call(HttpMethod.GET, "/api/inventory/" + drug, manager, null), HttpStatus.OK);
 
         assertThat(item).containsEntry("availableQuantity", 6).containsEntry("totalQuantity", 6);
+    }
+
+    /** Thu ngân (docs/adr/0064): mỗi Order một movement SALE nguồn {@code orders/<id>}, FEFO nối tiếp trên cùng lô. */
+    @Test
+    void issueForPaymentWritesOneMovementPerOrderAndLotInFefoOrder() {
+        long early = lot(branch, goods, "E", inDays(10), 4, actor);
+        long late = lot(branch, goods, "L", inDays(60), 6, actor);
+
+        List<Shortage> shortages = inTx(() -> stock.issueForPayment(branch, List.of(
+                new OrderSale(902L, List.of(new SaleLine(goods, 3))),
+                new OrderSale(901L, List.of(new SaleLine(goods, 3)))), actor));
+
+        assertThat(shortages).isEmpty();
+        assertThat(lotQuantity(early)).isZero();
+        assertThat(lotQuantity(late)).isEqualTo(4);
+assertThat(movements(early)).filteredOn(m -> "SALE".equals(m.get("movement_type")))                .extracting(m -> m.get("source_id"), m -> m.get("quantity_delta"))                .containsExactly(org.assertj.core.groups.Tuple.tuple(901L, -3), org.assertj.core.groups.Tuple.tuple(902L, -1));        assertThat(movements(late)).filteredOn(m -> "SALE".equals(m.get("movement_type")))                .extracting(m -> m.get("source_id"), m -> m.get("quantity_delta"))                .containsExactly(org.assertj.core.groups.Tuple.tuple(902L, -2));
+    }
+
+    @Test
+    void issueForPaymentReportsAggregatedShortageAndTouchesNothing() {
+        long only = lot(branch, goods, "A", inDays(30), 5, actor);
+
+        List<Shortage> shortages = inTx(() -> stock.issueForPayment(branch, List.of(
+                new OrderSale(911L, List.of(new SaleLine(goods, 3))),
+                new OrderSale(912L, List.of(new SaleLine(goods, 4)))), actor));
+
+        assertThat(shortages).containsExactly(new Shortage(goods, 7, 5));
+        assertThat(lotQuantity(only)).isEqualTo(5);
+        assertThat(movementCount(only)).isEqualTo(1L);
+    }
+
+    @Test
+    void expiredLotIsNeverIssuedForPayment() {
+        long expired = lot(branch, goods, "X", inDays(-1), 9, actor);
+        long fresh = lot(branch, goods, "F", inDays(30), 2, actor);
+
+        assertThat(inTx(() -> stock.issueForPayment(branch, List.of(
+                new OrderSale(921L, List.of(new SaleLine(goods, 3)))), actor)))
+                .containsExactly(new Shortage(goods, 3, 2));
+        assertThat(lotQuantity(expired)).isEqualTo(9);
+        assertThat(lotQuantity(fresh)).isEqualTo(2);
+    }
+
+    @Test
+    void availableQuantitiesMatchesTheSingleProductQuery() {
+        lot(branch, goods, "G1", inDays(30), 5, actor);
+        lot(branch, goods, "G2", inDays(-3), 7, actor);
+        lot(branch, drug, "D1", inDays(30), 2, actor);
+        long noLots = newProduct("GOODS", false);
+
+        Map<Long, Integer> available = inTx(() -> queries.availableQuantities(branch, List.of(goods, drug, noLots)));
+
+        assertThat(available).containsOnlyKeys(goods, drug, noLots)
+                .containsEntry(goods, inTx(() -> queries.availableQuantity(branch, goods)))
+                .containsEntry(drug, 2).containsEntry(noLots, 0);
+        assertThat(available.get(goods)).isEqualTo(5);
+        assertThat(inTx(() -> queries.availableQuantities(branch, List.of()))).isEmpty();
+    }
+
+    /** Review Focus 1: hai phiếu thu gộp chéo sản phẩm theo thứ tự ngược nhau không bao giờ deadlock. */
+    @Test
+    void crossProductCombinedPaymentsDoNotDeadlock() throws Exception {
+        long p1 = newProduct("GOODS", false);
+        long p2 = newProduct("GOODS", false);
+        lot(branch, p1, "A", inDays(30), 200, actor);
+        lot(branch, p1, "B", inDays(40), 200, actor);
+        lot(branch, p2, "C", inDays(30), 200, actor);
+        lot(branch, p2, "D", inDays(40), 200, actor);
+        int rounds = 30;
+        java.util.concurrent.CyclicBarrier barrier = new java.util.concurrent.CyclicBarrier(2);
+        java.util.concurrent.Callable<Void> a = () -> {
+            for (int i = 0; i < rounds; i++) {
+                barrier.await();
+                inTx(() -> stock.issueForPayment(branch, List.of(
+                        new OrderSale(1000L, List.of(new SaleLine(p1, 1))),
+                        new OrderSale(1001L, List.of(new SaleLine(p2, 1)))), actor));
+            }
+            return null;
+        };
+        java.util.concurrent.Callable<Void> b = () -> {
+            for (int i = 0; i < rounds; i++) {
+                barrier.await();
+                inTx(() -> stock.issueForPayment(branch, List.of(
+                        new OrderSale(2000L, List.of(new SaleLine(p2, 1))),
+                        new OrderSale(2001L, List.of(new SaleLine(p1, 1)))), actor));
+            }
+            return null;
+        };
+        java.util.concurrent.ExecutorService pool = java.util.concurrent.Executors.newFixedThreadPool(2);
+        try {
+            List<java.util.concurrent.Future<Void>> results = pool.invokeAll(List.of(a, b));
+            for (java.util.concurrent.Future<Void> result : results) {
+                result.get(60, java.util.concurrent.TimeUnit.SECONDS);
+            }
+        } finally {
+            pool.shutdownNow();
+        }
+        assertThat(jdbc.queryForObject("""
+                SELECT COALESCE(SUM(l.quantity), 0) FROM stock_lots l JOIN inventory_items i ON i.id = l.inventory_item_id
+                WHERE i.branch_id = ? AND i.product_id IN (?, ?)""", Long.class, branch, p1, p2))
+                .isEqualTo(800L - 4L * rounds);
     }
 }

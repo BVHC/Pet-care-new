@@ -6,7 +6,6 @@ import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.List;
 import java.util.Map;
-import java.util.Optional;
 import java.util.TreeMap;
 import java.util.stream.Collectors;
 
@@ -49,50 +48,72 @@ public class StockIssueService implements StockApi {
 
     @Override
     @Transactional(propagation = Propagation.MANDATORY)
-    public List<Shortage> issueForSale(Long orderId, Long branchId, List<SaleLine> lines, Long actorId) {
-        require(orderId, "orderId");
+    public List<Shortage> issueForPayment(Long branchId, List<OrderSale> orders, Long actorId) {
         require(branchId, "branchId");
         require(actorId, "actorId");
         Map<Long, Integer> requested = new TreeMap<>();
-        for (SaleLine line : lines) {
-            if (line.quantity() <= 0) {
-                throw new IllegalArgumentException("Sale quantity must be positive");
-            }
-            requested.merge(line.productId(), line.quantity(), (a, b) -> {
-                try {
-                    return Math.addExact(a, b);
-                } catch (ArithmeticException overflow) {
-                    throw new BusinessRuleViolationException("BR-KO-01", "Số lượng yêu cầu vượt giới hạn cho phép");
+        for (OrderSale order : orders) {
+            require(order.orderId(), "orderId");
+            for (SaleLine line : order.lines()) {
+                if (line.quantity() <= 0) {
+                    throw new IllegalArgumentException("Sale quantity must be positive");
                 }
-            });
+                requested.merge(line.productId(), line.quantity(), StockIssueService::addQuantities);
+            }
         }
         if (requested.isEmpty()) {
             return List.of();
         }
         LocalDate today = LocalDate.now(clock);
+        // Một câu cho hợp sản phẩm của mọi Order (ORDER BY id): hai phiếu thu gộp chéo sản phẩm không khóa lô ngược thứ tự.
         Map<Long, List<LockedLot>> byProduct = lots.lockIssuableLots(branchId, requested.keySet(), today).stream()
                 .collect(Collectors.groupingBy(LockedLot::productId));
 
         List<Shortage> shortages = new ArrayList<>();
-        Map<Long, List<FefoAllocator.Take>> plan = new TreeMap<>();
         requested.forEach((productId, quantity) -> {
-            List<LockedLot> candidates = byProduct.getOrDefault(productId, List.of());
-            Optional<List<FefoAllocator.Take>> takes = FefoAllocator.allocate(candidates, quantity, today);
-            if (takes.isPresent()) {
-                plan.put(productId, takes.get());
-            } else {
-                shortages.add(new Shortage(productId, quantity, FefoAllocator.available(candidates, today)));
+            int available = FefoAllocator.available(byProduct.getOrDefault(productId, List.of()), today);
+            if (available < quantity) {
+                shortages.add(new Shortage(productId, quantity, available));
             }
         });
         if (!shortages.isEmpty()) {
             return shortages;
         }
-        plan.values().stream().flatMap(List::stream).sorted(Comparator.comparing(t -> t.lot().id()))
-                .forEach(take -> ledger.apply(take.lot(), -take.quantity(), MovementType.SALE, StockSources.ORDERS,
-                        orderId, actorId));
+
+        // Chia FEFO lần lượt từng Order (orderId tăng dần) trên cùng tập lô đã khóa; số dư của lô giảm dần sau mỗi lần.
+        Map<Long, LockedLot> current = new TreeMap<>();
+        byProduct.values().forEach(group -> group.forEach(lot -> current.put(lot.id(), lot)));
+        orders.stream().sorted(Comparator.comparing(OrderSale::orderId)).forEach(order -> {
+            Map<Long, Integer> perProduct = new TreeMap<>();
+            for (SaleLine line : order.lines()) {
+                perProduct.merge(line.productId(), line.quantity(), StockIssueService::addQuantities);
+            }
+            List<FefoAllocator.Take> takes = new ArrayList<>();
+            perProduct.forEach((productId, quantity) -> {
+                List<LockedLot> candidates = current.values().stream().filter(l -> l.productId().equals(productId))
+                        .toList();
+                takes.addAll(FefoAllocator.allocate(candidates, quantity, today).orElseThrow(
+                        () -> new IllegalStateException("Tồn đã kiểm đủ nhưng không chia được cho sản phẩm "
+                                + productId)));
+            });
+            takes.stream().sorted(Comparator.comparing(t -> t.lot().id())).forEach(take -> {
+                ledger.apply(take.lot(), -take.quantity(), MovementType.SALE, StockSources.ORDERS, order.orderId(),
+                        actorId);
+                LockedLot lot = take.lot();
+                current.put(lot.id(), new LockedLot(lot.id(), lot.inventoryItemId(), lot.branchId(), lot.productId(),
+                        lot.lotNumber(), lot.expiryDate(), lot.quantity() - take.quantity(), lot.defaultLot()));
+            });
+        });
         return List.of();
     }
 
+    private static int addQuantities(int a, int b) {
+        try {
+            return Math.addExact(a, b);
+        } catch (ArithmeticException overflow) {
+            throw new BusinessRuleViolationException("BR-KO-01", "Số lượng yêu cầu vượt giới hạn cho phép");
+        }
+    }
     @Override
     @Transactional(propagation = Propagation.MANDATORY)
     public Long lockFefoLot(Long branchId, Long productId, int quantity) {

@@ -768,7 +768,7 @@ Domain model gộp "bản bổ sung" vào CareLog; tách thành bảng con để
   `CHECK ((source = 'VISIT' AND visit_id IS NOT NULL AND boarding_booking_id IS NULL) OR (source = 'BOARDING' AND boarding_booking_id IS NOT NULL AND visit_id IS NULL) OR (source = 'RETAIL' AND visit_id IS NULL AND boarding_booking_id IS NULL))`
 - `CHECK ((status = 'PAID') = (payment_id IS NOT NULL))`
 - `UNIQUE (boarding_booking_id) WHERE status IN ('OPEN','PENDING')` — tối đa 1 Order lưu trú chưa kết thúc
-- Index: `(branch_id, status, pending_at)`; `(branch_id, paid_at)` cho báo cáo; `(customer_id, status)` cho thu gộp
+- Index: `(branch_id, status, pending_at)`; `(branch_id, paid_at)` cho báo cáo; `(customer_id, status)` cho thu gộp; `(payment_id) WHERE payment_id IS NOT NULL` — xem phiếu thu → các Order (V19, ADR-0064)
 
 **Thất thu (BR-BC-02)** = Order có `cancel_type = 'UNPAID'`. Order có `cancel_type = 'CHECKOUT_ABORTED'` không tính thất thu. Đây là lý do cần cột `cancel_type` thay vì suy ra từ người hủy.
 
@@ -825,6 +825,7 @@ Domain model gộp "bản bổ sung" vào CareLog; tách thành bảng con để
 - Index cho ST13: `(branch_id, is_after_hours) WHERE status = 'OPEN'`
 - Điều kiện mở ca (trong/ngoài giờ mở cửa, cờ cấp cứu của chi nhánh) kiểm tra ở ứng dụng vì phụ thuộc `opening_hours`, `holidays`.
 - Index: `(cashier_id)`, `(reconciled_by) WHERE reconciled_by IS NOT NULL` — kiểm FK khi xóa `accounts` (V7, ADR-0018)
+- Index: `(branch_id, business_date DESC, id DESC)` — danh sách ca của chi nhánh (V19, ADR-0064)
 
 ### `payments` — ROOT
 

@@ -124,4 +124,16 @@ class SalesOrderTest {
         assertThat(line.getOwnerAccountId()).isEqualTo(77L);
         assertThat(line.getAddedBy()).isEqualTo(4L);
     }
+
+    @Test
+    void markPaidSetsStatusPaymentAndTime() {
+        SalesOrder order = order();
+        order.markPending(NOW);
+
+        order.markPaid(77L, NOW.plusSeconds(60));
+
+        assertThat(order.getStatus()).isEqualTo(OrderStatus.PAID);
+        assertThat(order.getPaymentId()).isEqualTo(77L);
+        assertThat(order.getPaidAt()).isEqualTo(NOW.plusSeconds(60));
+    }
 }

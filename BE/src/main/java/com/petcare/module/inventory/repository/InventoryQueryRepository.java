@@ -5,7 +5,10 @@ import java.sql.SQLException;
 import java.time.Instant;
 import java.sql.Timestamp;
 import java.time.LocalDate;
+import java.util.Collection;
+import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.Optional;
 
 import org.springframework.jdbc.core.RowMapper;
@@ -134,6 +137,27 @@ public class InventoryQueryRepository {
                 """, new MapSqlParameterSource("branchId", branchId).addValue("productId", productId)
                 .addValue("today", today), Long.class);
         return total == null ? 0 : Math.toIntExact(Math.min(total, Integer.MAX_VALUE));
+    }
+
+    /** Như {@link #availableQuantity} cho nhiều sản phẩm bằng một câu; sản phẩm không có lô có giá trị 0. */
+    public Map<Long, Integer> availableQuantities(long branchId, Collection<Long> productIds, LocalDate today) {
+        Map<Long, Integer> result = new LinkedHashMap<>();
+        if (productIds.isEmpty()) {
+            return result;
+        }
+        productIds.forEach(id -> result.put(id, 0));
+        jdbc.query("""
+                SELECT i.product_id AS product_id, COALESCE(SUM(l.quantity), 0) AS total
+                FROM stock_lots l JOIN inventory_items i ON i.id = l.inventory_item_id
+                WHERE i.branch_id = :branchId AND i.product_id IN (:productIds)
+                  AND (l.expiry_date IS NULL OR l.expiry_date >= :today)
+                GROUP BY i.product_id
+                """, new MapSqlParameterSource("branchId", branchId).addValue("productIds", productIds)
+                .addValue("today", today), rs -> {
+                    result.put(rs.getLong("product_id"), Math.toIntExact(Math.min(rs.getLong("total"),
+                            Integer.MAX_VALUE)));
+                });
+        return result;
     }
 
     public List<Long> branchIdsWithAvailableStock(long productId, LocalDate today) {

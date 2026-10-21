@@ -41,6 +41,10 @@ app:
       cron: "-"
     appointment-reminder:
       cron: "-"
+    cashier-shift-auto-close:
+      cron: "-"
+    pending-order-digest:
+      cron: "-"
     notification-outbox:
       cron: "-"
       priority-cron: "-"

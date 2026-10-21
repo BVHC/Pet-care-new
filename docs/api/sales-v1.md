@@ -148,6 +148,10 @@ Trường có `?` là không bắt buộc / có thể null. Kiểu `email`, `dat
 | A4 | `countedCash` chỉ đếm tiền mặt; chuyển khoản lễ tân xác nhận từng phiếu thu nên không đếm lại | BR-TG-02; 05 `cashier_shifts` chỉ có `counted_cash` |
 | A5 | VET / CARETAKER đổi dịch vụ của dòng tự sinh bằng PATCH `serviceId`, giá snapshot lại tại thời điểm đổi | BR-TN-01 cho phép đổi; BR-BH-03 snapshot khi thêm dòng |
 | A6 | Dòng dịch vụ tự sinh của Order VISIT: lễ tân không sửa / xóa (403 `BR-BH-02`) dù đang là chủ dòng tạm khi lượt chưa gán; chỉ nhân viên được gán lượt sửa / xóa | BR-TN-01: dòng tự sinh do nhân viên được gán lượt đổi hoặc xóa (docs/adr/0059 Q6) |
+| A7 | Một phiếu thu tối đa 20 Order, `orderIds` không trùng (400 `VALIDATION_FAILED`); gửi lại sau khi đã thu nhận 409 vì Order không còn `PENDING`, không có khóa idempotency | Chặn request lớn giữ khóa lâu; trạng thái Order là khóa chống thu hai lần (BR-TG-02) — docs/adr/0064 |
+| A8 | Ca người khác (kể cả cùng chi nhánh) chốt / xem bởi lễ tân không phải chủ ca: 403; lễ tân chỉ xem ca của mình (#20), danh sách ca (#19) và đối soát (#21) chỉ BRANCH_MANAGER | Contract quyền "lễ tân chủ ca", "BRANCH_MANAGER chi nhánh" — docs/adr/0064 |
+| A9 | Đối soát: `countedCash` gửi lên thì ghi đè số lễ tân đã nhập (audit giữ số cũ); `note` luôn bắt buộc; ca `RECONCILED` không sửa nữa | BR-TG-04, 05: quản lý xác nhận chênh lệch kèm ghi chú; sai sót phát hiện sau khi thu ghi nhận ở đây — docs/adr/0064 |
+| A10 | `move-to-external-purchase` (#11) chưa cài, chờ `PrescriptionApi` của visit; thu tiền thiếu thuốc kê đơn vẫn 400 `BR-BH-04` | 06 §3 Order#8; `PrescriptionApi` BE-1 giao 26/10 (docs/adr/0064) |
 
 Không có câu hỏi mở.
 
