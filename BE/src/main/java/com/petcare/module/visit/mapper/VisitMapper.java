@@ -5,6 +5,7 @@ import org.mapstruct.Mapping;
 import org.mapstruct.ReportingPolicy;
 
 import com.petcare.module.customer.api.Species;
+import com.petcare.module.visit.dto.AssignResult;
 import com.petcare.module.visit.dto.VisitResponse;
 import com.petcare.module.visit.entity.Visit;
 
@@ -43,4 +44,9 @@ public interface VisitMapper {
     @Mapping(target = "cancelledAt", source = "visit.cancelledAt")
     @Mapping(target = "cancelReason", source = "visit.cancelReason")
     VisitResponse toResponse(Visit visit, Parties parties, Long orderId);
+
+    /** visit-v1 #5 (docs/adr/0061): lượt đã map + cảnh báo offline (BR-TN-06); {@code visit} gán thẳng, không map lại. */
+    @Mapping(target = "visit", source = "visit")
+    @Mapping(target = "assigneeOffline", source = "assigneeOffline")
+    AssignResult toAssignResult(VisitResponse visit, boolean assigneeOffline);
 }

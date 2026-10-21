@@ -56,7 +56,7 @@ paths:
                     type: integer
                     description: "HTTP status của kết quả, ví dụ 200, 201"
         "400":
-          description: "`BR-TN-01` walk-in thiếu dịch vụ / thú không khớp lịch hẹn / thú đã mất · `BR-TN-02` lịch hẹn của chi nhánh khác hoặc ngoài cửa sổ check-in · `BR-CN-01` chi nhánh chưa ACTIVE · `BR-CN-05` ngoài giờ mà chi nhánh không có cờ hoặc chưa đánh dấu cấp cứu · `BR-LH-01` walk-in: dịch vụ đã ngừng, đang tắt tại chi nhánh hoặc không thuộc MEDICAL / GROOMING; có lịch: dịch vụ đã ngừng kinh doanh"
+          description: "`BR-TN-01` walk-in thiếu dịch vụ / thú không khớp lịch hẹn / thú đã mất · `BR-TN-02` lịch hẹn của chi nhánh khác hoặc ngoài cửa sổ check-in · `BR-CN-01` chi nhánh chưa ACTIVE · `BR-CN-05` ngoài giờ mà chi nhánh không có cờ hoặc chưa đánh dấu cấp cứu · `BR-LH-01` walk-in: dịch vụ đã ngừng, đang tắt tại chi nhánh hoặc không thuộc MEDICAL / GROOMING; có lịch: dịch vụ đã ngừng kinh doanh · body sai (`VALIDATION_FAILED`, `MALFORMED_REQUEST`); BR-TK-17"
           content:
             "application/json":
               schema:
@@ -76,7 +76,7 @@ paths:
     get:
       tags: [Queue]
       summary: "Hàng đợi của chi nhánh"
-      description: "UC45 · BR-TN-04, 09. Actor: A05, A06, A07, A08. Quyền: Nhân viên chi nhánh. Chuyển trạng thái: —. A1."
+      description: "UC45 · BR-TN-04, 09. Actor: A05, A06, A07, A08. Quyền: Nhân viên chi nhánh. Chuyển trạng thái: —. A1, A13."
       operationId: listQueue
       security:
         - bearerAuth: []
@@ -87,7 +87,7 @@ paths:
           schema:
             type: string
             format: date
-          description: "Mặc định hôm nay"
+          description: "Ngày check-in (giờ Việt Nam). Không gửi: lượt chưa kết thúc của mọi ngày; với status COMPLETED / CANCELLED là hôm nay (A1)"
         - name: status
           in: query
           required: false
@@ -130,7 +130,11 @@ paths:
                     type: integer
                     description: "HTTP status của kết quả, ví dụ 200, 201"
         "400":
-          $ref: "#/components/responses/BadRequest"
+          description: "Tham số sai kiểu (`MALFORMED_REQUEST`); BR-TK-17"
+          content:
+            "application/json":
+              schema:
+                $ref: "#/components/schemas/Error"
         "401":
           $ref: "#/components/responses/Unauthorized"
         "403":
@@ -161,6 +165,12 @@ paths:
                   code:
                     type: integer
                     description: "HTTP status của kết quả, ví dụ 200, 201"
+        "400":
+          description: BR-TK-17
+          content:
+            "application/json":
+              schema:
+                $ref: "#/components/schemas/Error"
         "401":
           $ref: "#/components/responses/Unauthorized"
         "403":
@@ -169,7 +179,7 @@ paths:
     get:
       tags: [Queue]
       summary: "Chi tiết lượt"
-      description: "UC45, UC46 · —. Actor: A05–A08. Quyền: Nhân viên chi nhánh. Chuyển trạng thái: —."
+      description: "UC45, UC46 · —. Actor: A05–A08. Quyền: Nhân viên chi nhánh. Chuyển trạng thái: —. A13."
       operationId: getVisit
       security:
         - bearerAuth: []
@@ -191,17 +201,27 @@ paths:
                   code:
                     type: integer
                     description: "HTTP status của kết quả, ví dụ 200, 201"
+        "400":
+          description: "Tham số sai kiểu (`MALFORMED_REQUEST`); BR-TK-17"
+          content:
+            "application/json":
+              schema:
+                $ref: "#/components/schemas/Error"
         "401":
           $ref: "#/components/responses/Unauthorized"
         "403":
-          $ref: "#/components/responses/Forbidden"
+          description: "Sai vai trò · nhân viên xem lượt của chi nhánh khác"
+          content:
+            "application/json":
+              schema:
+                $ref: "#/components/schemas/Error"
         "404":
           $ref: "#/components/responses/NotFound"
   "/visits/{visitId}/assign":
     post:
       tags: [Queue]
       summary: "Gán / gán lại nhân viên (lượt chưa gọi)"
-      description: "UC45 · BR-TN-05, 06, 08. Actor: A06. Quyền: Lễ tân chi nhánh. Chuyển trạng thái: WAITING → WAITING (Visit#2). Dòng dịch vụ tự sinh chuyển quyền cho người được gán."
+      description: "UC45 · BR-TN-05, 06, 08. Actor: A06. Quyền: Lễ tân chi nhánh. Chuyển trạng thái: WAITING → WAITING (Visit#2). Dòng dịch vụ tự sinh và các dòng người được gán cũ đã thêm chuyển quyền cho người được gán (docs/adr/0061). Gán đúng người đang được gán: 200, không ghi gì."
       operationId: assignVisit
       security:
         - bearerAuth: []
@@ -230,7 +250,7 @@ paths:
                     type: integer
                     description: "HTTP status của kết quả, ví dụ 200, 201"
         "400":
-          description: "`BR-TN-05` nhân viên không ACTIVE, khác chi nhánh hoặc sai chức vụ"
+          description: "`BR-TN-05` nhân viên không ACTIVE, khác chi nhánh hoặc sai chức vụ · body sai (`VALIDATION_FAILED`, `MALFORMED_REQUEST`); BR-TK-17"
           content:
             "application/json":
               schema:
@@ -238,7 +258,11 @@ paths:
         "401":
           $ref: "#/components/responses/Unauthorized"
         "403":
-          $ref: "#/components/responses/Forbidden"
+          description: "Sai vai trò · lượt của chi nhánh khác"
+          content:
+            "application/json":
+              schema:
+                $ref: "#/components/schemas/Error"
         "404":
           $ref: "#/components/responses/NotFound"
         "409":
@@ -282,15 +306,27 @@ paths:
                     type: integer
                     description: "HTTP status của kết quả, ví dụ 200, 201"
         "400":
-          $ref: "#/components/responses/BadRequest"
+          description: "`BR-TN-04` lượt đích là chính lượt này, thuộc chi nhánh khác, hoặc sắp vượt ranh giới ca cấp cứu · body sai (`VALIDATION_FAILED`, `MALFORMED_REQUEST`); BR-TK-17"
+          content:
+            "application/json":
+              schema:
+                $ref: "#/components/schemas/Error"
         "401":
           $ref: "#/components/responses/Unauthorized"
         "403":
-          $ref: "#/components/responses/Forbidden"
+          description: "Sai vai trò · lượt của chi nhánh khác"
+          content:
+            "application/json":
+              schema:
+                $ref: "#/components/schemas/Error"
         "404":
-          $ref: "#/components/responses/NotFound"
+          description: "Không có lượt hoặc lượt đích"
+          content:
+            "application/json":
+              schema:
+                $ref: "#/components/schemas/Error"
         "409":
-          description: "Lượt đã được gọi"
+          description: "Lượt hoặc lượt đích không còn WAITING"
           content:
             "application/json":
               schema:
@@ -321,10 +357,20 @@ paths:
                   code:
                     type: integer
                     description: "HTTP status của kết quả, ví dụ 200, 201"
+        "400":
+          description: "Tham số sai kiểu (`MALFORMED_REQUEST`); BR-TK-17"
+          content:
+            "application/json":
+              schema:
+                $ref: "#/components/schemas/Error"
         "401":
           $ref: "#/components/responses/Unauthorized"
         "403":
-          $ref: "#/components/responses/Forbidden"
+          description: "Sai vai trò · lượt của chi nhánh khác"
+          content:
+            "application/json":
+              schema:
+                $ref: "#/components/schemas/Error"
         "404":
           $ref: "#/components/responses/NotFound"
         "409":
@@ -994,7 +1040,7 @@ components:
     PriorityClass:
       type: string
       enum: [EMERGENCY, APPOINTMENT, WALK_IN]
-      description: "BR-TN-03, 04"
+      description: "BR-TN-03, 04. Hạng trong hàng đợi; lễ tân sắp lại / xác định cấp cứu có thể đổi (A2, A3) — có lịch hẹn hay không xem `appointmentId`"
     CreateVisitRequest:
       type: object
       required: [petId]
@@ -1030,6 +1076,7 @@ components:
           format: int64
         customerName:
           type: string
+          description: "Họ tên chủ tại thời điểm tiếp nhận"
         petId:
           type: integer
           format: int64

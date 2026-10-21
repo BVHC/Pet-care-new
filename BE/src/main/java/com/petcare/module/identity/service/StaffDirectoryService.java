@@ -3,13 +3,16 @@ package com.petcare.module.identity.service;
 import java.time.Clock;
 import java.time.Duration;
 import java.time.Instant;
+import java.util.Collection;
 import java.util.Comparator;
 import java.util.List;
 import java.util.Objects;
 import java.util.Optional;
 
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Propagation;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.transaction.support.TransactionSynchronizationManager;
 
 import com.petcare.module.identity.api.ConfigKey;
 import com.petcare.module.identity.api.Role;
@@ -22,7 +25,8 @@ import com.petcare.module.identity.repository.StaffRow;
 
 /**
  * Cài đặt {@link StaffDirectoryApi} (docs/adr/0024). Chỉ đọc, qua projection; tham gia transaction của bên gọi
- * ({@code REQUIRED}). "Đang hoạt động" = {@code status = ACTIVE} và không bị khóa; "online" = {@code last_seen_at} trong
+ * ({@code REQUIRED}). Riêng {@link #findStaffForShare} khóa {@code accounts FOR SHARE} ({@code MANDATORY},
+ * docs/adr/0061). "Đang hoạt động" = {@code status = ACTIVE} và không bị khóa; "online" = {@code last_seen_at} trong
  * {@code staff.online_window_minutes} [CFG] tính tới bây giờ, đúng bằng mốc vẫn là online (BR-TN-06).
  */
 @Service
@@ -49,6 +53,26 @@ public class StaffDirectoryService implements StaffDirectoryApi {
         return staffProfiles.findStaffRow(accountId).map(row -> toSummary(row, onlineSince));
     }
 
+    /**
+     * Ghi đè {@code readOnly} của class: khóa phải sống trong transaction ghi của bên gọi. Hai câu tách rời — khóa vô
+     * hướng trước, đọc {@code staff_profiles} + {@code accounts} sau — để câu đọc lấy snapshot mới sau khi đã chờ khóa
+     * (READ COMMITTED); gộp JOIN vào câu {@code FOR SHARE} thì Postgres chỉ đọc lại dòng bị khóa, có thể trả
+     * {@code branch_id} cũ (docs/adr/0061).
+     */
+    @Override
+    @Transactional(propagation = Propagation.MANDATORY)
+    public Optional<StaffSummary> findStaffForShare(Long accountId) {
+        Objects.requireNonNull(accountId, "accountId");
+        if (TransactionSynchronizationManager.isCurrentTransactionReadOnly()) {
+            throw new IllegalStateException("StaffDirectoryApi.findStaffForShare cần transaction ghi, không được readOnly");
+        }
+        if (accounts.lockForShare(accountId).isEmpty()) {
+            return Optional.empty();
+        }
+        Instant onlineSince = onlineSince();
+        return staffProfiles.findStaffRow(accountId).map(row -> toSummary(row, onlineSince));
+    }
+
     /** BR-TN-05, 06: người online trước, cùng nhóm thì theo họ tên rồi {@code accountId} (thứ tự của câu query). */
     @Override
     public List<StaffSummary> findAssignableStaff(Long branchId, Role role) {
@@ -59,6 +83,16 @@ public class StaffDirectoryService implements StaffDirectoryApi {
                 .map(row -> toSummary(row, onlineSince))
                 .sorted(Comparator.comparing((StaffSummary staff) -> !staff.online()))
                 .toList();
+    }
+
+    @Override
+    public List<StaffSummary> findStaffByIds(Collection<Long> accountIds) {
+        Objects.requireNonNull(accountIds, "accountIds");
+        if (accountIds.isEmpty()) {
+            return List.of();
+        }
+        Instant onlineSince = onlineSince();
+        return staffProfiles.findStaffRows(accountIds).stream().map(row -> toSummary(row, onlineSince)).toList();
     }
 
     @Override

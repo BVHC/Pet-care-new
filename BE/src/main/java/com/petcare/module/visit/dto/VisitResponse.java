@@ -28,7 +28,7 @@ public record VisitResponse(
         @Schema(description = "Chủ tại thời điểm tiếp nhận", example = "88")
         Long customerId,
 
-        @Schema(description = "Họ tên khách", example = "Nguyễn Văn An")
+        @Schema(description = "Họ tên chủ tại thời điểm tiếp nhận", example = "Nguyễn Văn An")
         String customerName,
 
         @Schema(description = "Thú cưng", example = "12")
@@ -50,7 +50,8 @@ public record VisitResponse(
         @Schema(description = "Trạng thái (03 #4)", example = "WAITING")
         VisitStatus status,
 
-        @Schema(description = "Hạng ưu tiên (BR-TN-03, 04)", example = "APPOINTMENT")
+        @Schema(description = "Hạng ưu tiên trong hàng đợi (BR-TN-03, 04); lễ tân sắp lại / xác định cấp cứu có thể đổi "
+                + "(A2, A3) — có lịch hẹn hay không xem appointmentId", example = "APPOINTMENT")
         PriorityClass priorityClass,
 
         @Schema(description = "Giờ hẹn (lịch hẹn giữ ưu tiên) hoặc giờ check-in", example = "2026-10-20T02:00:00Z")

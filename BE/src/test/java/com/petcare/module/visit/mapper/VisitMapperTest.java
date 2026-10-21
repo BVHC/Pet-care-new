@@ -10,6 +10,7 @@ import org.springframework.test.util.ReflectionTestUtils;
 
 import com.petcare.module.catalog.api.ServiceGroup;
 import com.petcare.module.customer.api.Species;
+import com.petcare.module.visit.dto.AssignResult;
 import com.petcare.module.visit.dto.VisitResponse;
 import com.petcare.module.visit.entity.PriorityClass;
 import com.petcare.module.visit.entity.Visit;
@@ -45,6 +46,23 @@ class VisitMapperTest {
         assertThat(response).isEqualTo(new VisitResponse(9001L, "TN-2610-00042", 3L, 88L, "Nguyễn Văn An", 12L, "Milu",
                 Species.CAT, 501L, ServiceGroup.GROOMING, VisitStatus.CANCELLED, PriorityClass.APPOINTMENT, SORT, 45L,
                 "Trần Bình", true, 7001L, CHECKED_IN, CALLED, COMPLETED, CANCELLED, "Khách bận việc"));
+    }
+
+    /** visit-v1 #5 (docs/adr/0061): {@code visit} gán thẳng, cờ offline giữ đúng giá trị (không hằng). */
+    @Test
+    void assignResultKeepsTheVisitAndTheWarning() {
+        Visit visit = Visit.checkIn("TN-2610-00044", 3L, 88L, 12L, null, ServiceGroup.MEDICAL, PriorityClass.WALK_IN,
+                CHECKED_IN, 70L, CHECKED_IN);
+        ReflectionTestUtils.setField(visit, "id", 9003L);
+        VisitResponse response = mapper.toResponse(visit,
+                new VisitMapper.Parties("Nguyễn Văn An", "Milu", Species.DOG, null), 7003L);
+
+        AssignResult offline = mapper.toAssignResult(response, true);
+        AssignResult online = mapper.toAssignResult(response, false);
+
+        assertThat(offline.visit()).isSameAs(response);
+        assertThat(offline.assigneeOffline()).isTrue();
+        assertThat(online.assigneeOffline()).isFalse();
     }
 
     @Test

@@ -29,8 +29,9 @@ import lombok.NoArgsConstructor;
  * <p>
  * Command (docs/adr/0058): {@code checkInVisit} (#1), {@code assignVisit} (#2), {@code callVisit} (#3),
  * {@code reassignCalledVisit} (#4), {@code completeVisit} (#5), {@code cancelVisit} (#6); ngoài bảng 03:
- * {@code moveVisitInQueue}, {@code markVisitEmergency}. Đã có: {@link #checkIn} (T26 phần 1, docs/adr/0059); method đổi
- * trạng thái khác thêm cùng phần của T26 dựng thao tác đó.
+ * {@code moveVisitInQueue}, {@code markVisitEmergency}. Đã có: {@link #checkIn} (T26 phần 1, docs/adr/0059),
+ * {@link #assignTo}, {@link #reorder}, {@link #markEmergency} (T26 phần 3, docs/adr/0061); method đổi trạng thái khác
+ * thêm cùng phần của T26 dựng thao tác đó.
  */
 @Getter
 @Entity
@@ -117,5 +118,31 @@ public class Visit extends TimestampedEntity {
         visit.checkedInBy = checkedInBy;
         visit.checkedInAt = at;
         return visit;
+    }
+
+    /**
+     * Visit#2 ({@code WAITING → WAITING}, command {@code assignVisit}, BR-TN-05, 08; docs/adr/0061). Bên gọi đã khóa dòng,
+     * kiểm nhân viên dưới khóa tài khoản và kiểm trạng thái; trạng thái không đổi.
+     */
+    public void assignTo(Long assigneeId) {
+        this.assigneeId = assigneeId;
+    }
+
+    /**
+     * {@code moveVisitInQueue} (BR-TN-04, A3; docs/adr/0061): lễ tân sắp lại — lượt nhận hạng của lượt đứng sau nó và
+     * khóa sắp xếp mới. Không phải cạnh FSM (docs/adr/0058 mục 3).
+     */
+    public void reorder(PriorityClass priorityClass, Instant queueSortKey) {
+        this.priorityClass = priorityClass;
+        this.queueSortKey = queueSortKey;
+    }
+
+    /**
+     * {@code markVisitEmergency} (UC47, A2; docs/adr/0061): hạng {@code EMERGENCY}, khóa = thời điểm xác định cấp cứu
+     * (đã cắt về µs). Không phải cạnh FSM (docs/adr/0058 mục 3).
+     */
+    public void markEmergency(Instant at) {
+        this.priorityClass = PriorityClass.EMERGENCY;
+        this.queueSortKey = at;
     }
 }

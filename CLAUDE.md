@@ -39,16 +39,16 @@ Team: **BE-1** (branch `manh`) = identity, appointment, visit, care · **BE-2** 
 
 **Scope tiers:** 1 = full, 2 = thin, 3 = diagram only — **don't build tier 3**; the list is in `docs/INDEX.md`. Rules marked 🆕 are proposals not yet approved. Vietnamese enum values map to ASCII codes (erd §0, e.g. `TÁI_CHỦNG` → `VACCINE_DUE`, nhóm Khám/Tiêm → `MEDICAL`).
 
-## Current state (2026-10-20)
+## Current state (2026-10-21)
 
-`manh` = `origin/manh` @ `0b5a3e0`, 4 commits (T25 parts 1–4) on top of `origin/dev` @ `bfed5ab`. **Uncommitted:** conflict-marker cleanup after the rebase + T25 ADRs renumbered to 0052–0057 (see Gotchas); T26 part 0 (visit foundation, ADR-0058) and part 1 (`POST /api/visits`, ADR-0059). `origin/dev` @ `197bbf5` = PR #15 (T25) still carries the **old** T25 ADR numbers 0047–0052.
+`manh` @ `743f529` = `origin/manh` (`0b5a3e0`, T25) + 2 unpushed commits: `571e0fe` T26 part 0 (visit foundation, ADR-0058; also the conflict-marker cleanup and the T25 ADR renumbering to 0052–0057) and `743f529` T26 part 1 (`POST /api/visits`, ADR-0059). **Uncommitted:** T26 part 2 (queue views, ADR-0060) and part 3 (assign / move / mark-emergency, ADR-0061). `origin/dev` @ `197bbf5` = PR #15 (T25) still carries the **old** T25 ADR numbers 0047–0052.
 
 | Module | Owner | Built | Still missing / placeholder |
 |---|---|---|---|
 | identity | BE-1 | identity-v1 #1–24, #28–37 (auth, OTP, `/me`, profile link, staff admin, account lock, [CFG], templates, audit, public vets); jobs ST01, ST02, session cleanup; `AccountContactApi` | #25–27 (customer account email change / counter link, UC22) |
 | care | BE-1 | ST20 outbox (EMAIL in HIGH / NORMAL lanes, IN_APP), outbox cleanup, care-v1 #5–8 | #9–10 settings (D025), Care Task, ST04, `FollowUpApi` (T38/T39) |
 | appointment | BE-1 | appointment-v1 #1–9; `AppointmentApi`, `AppointmentQueryApi`, `BookingRestrictionApi`; clinic-cancel listeners; ST05 `NoShowJob`; ST03 `AppointmentReminderJob` | booking / rescheduling read the pet with `findPet` and do not yet call `PetQueryApi.findPetForShare` (D027) |
-| visit | BE-1 | T26 part 0 (entity, FSM, code `TN-yyMM-nnnnn`, lock order, real `VisitQueryApi`) + part 1: visit-v1 #1 check-in | #2–21 (**T26 parts 2+, due 21/10**: queue, assign, call, reassign, cancel); Care Task#6 on check-in (D029); `VaccinationQueryApiPlaceholder` |
+| visit | BE-1 | T26 part 0 (entity, FSM, code `TN-yyMM-nnnnn`, lock order, real `VisitQueryApi`) + part 1: visit-v1 #1 check-in + part 2: #2–4 queue views (CARETAKER sees the branch queue — assumption A13) + part 3: #5 assign, #6 move, #7 mark-emergency | #8–21 (**T26 parts 4+**: call, reassign, cancel; then T27/T28); Care Task#6 on check-in (D029); `VaccinationQueryApiPlaceholder` |
 | branch, catalog | BE-2 | branch-v1, catalog-v1 staff endpoints, `BranchQueryApi`, `BranchApi`, `CatalogQueryApi` | catalog public #19–22; Swagger annotations (D026) |
 | customer | BE-2 | customer-v1 #1–21; `CustomerApi`, `CustomerQueryApi`, `PetApi`, `PetQueryApi` | — |
 | inventory | BE-2 | inventory-v1 #1–17; `StockApi`, `StockQueryApi`, `DocumentCodeGenerator` | `StockReportApi` / ST08 (T44) |
@@ -60,7 +60,7 @@ Team: **BE-1** (branch `manh`) = identity, appointment, visit, care · **BE-2** 
 - **D016** `CashierShiftQueryApi` placeholder (visit side paid): transfer, disable and lock of A05–A08 still return 500.
 - Due with T26: **D017** (visit listener for `AccountLockedEvent`). **D029** `FollowUpApi`.
 
-**Tests:** last full green `mvn clean verify` = 2026-10-19. 2026-10-20 (after T26 part 0): 4362/4362 unit, 1575/1577 IT — the 2 red are `AppointmentReminderIT` (`startedOrPastBookedIsNotReminded`, `reminderQueriesUseTheirIndexesOnRealisticData`): `AppointmentRepository.findDueForReminderIds` lacks the lower bound `(slot_date, slot_start) > (:fromDate, :fromTime)` since T25 part 4 (`af117e0`), not fixed yet.
+**Tests:** last full green `mvn clean verify` = 2026-10-19. 2026-10-20 (after T26 part 2): 4426/4426 unit, 1649/1651 IT — the 2 red are `AppointmentReminderIT` (`startedOrPastBookedIsNotReminded`, `reminderQueriesUseTheirIndexesOnRealisticData`): `AppointmentRepository.findDueForReminderIds` lacks the lower bound `(slot_date, slot_start) > (:fromDate, :fromTime)` since T25 part 4 (`af117e0`), not fixed yet. 2026-10-21 (after T26 part 3): unit 4481/4481; targeted ITs green (visit, staff directory, sales lines, parity: 162 + `VisitDispatchCountIT`); the full IT run was killed by low host memory — not re-run yet.
 
 ## Commands
 
@@ -113,7 +113,7 @@ Module codes: TK, QT, CN, CK, KH, SP, NS, LH, TN, KB, LT, BH, TG, KO, BV, DG, TB
 
 Open convention TBDs (don't decide silently — ask or write an ADR): command names when no Actor↔Command table exists; how "warn, don't block" rules return warnings (contracts assume a named field in `data`, e.g. `stockWarning`); locking for kennel capacity.
 
-**ADR map** (`docs/adr/`, immutable once Accepted — supersede instead of editing; **next free: 0060**):
+**ADR map** (`docs/adr/`, immutable once Accepted — supersede instead of editing; **next free: 0062**):
 
 | Area | ADRs |
 |---|---|
@@ -121,7 +121,7 @@ Open convention TBDs (don't decide silently — ask or write an ADR): command na
 | Auth | 0003 JWT + DB session · 0005 public paths anonymous · 0006 customer owner scope · 0009 BCrypt · 0010, 0011, 0025 OTP · 0019 login · 0021 logout · 0022 change password · 0023 forgot / reset |
 | Accounts, staff, admin | 0024 staff directory · 0026 staff self-edit · 0027 profile link · 0028 customer self-edit · 0029–0035 staff admin / lock · 0036 [CFG] edit · 0037 templates · 0038 audit view · 0039 in-app notifications |
 | Notifications, jobs | 0008 session cleanup · 0012, 0014, 0016, 0017 ST20 · 0013 ST02 · 0018 FK indexes on `accounts` |
-| Appointment, visit (BE-1) | 0045 booking locks · 0046 slots · 0047 book · 0048 view · 0049 reschedule / cancel · 0050 cross-module API · 0052 clinic cancel · 0053, 0054 ST05 · 0055 booking restriction · 0056 ST03 · 0057 assumptions confirmed · 0058 visit foundation · 0059 check-in (also amends 0044: receptionist never edits a VISIT auto line) |
+| Appointment, visit (BE-1) | 0045 booking locks · 0046 slots · 0047 book · 0048 view · 0049 reschedule / cancel · 0050 cross-module API · 0052 clinic cancel · 0053, 0054 ST05 · 0055 booking restriction · 0056 ST03 · 0057 assumptions confirmed · 0058 visit foundation · 0059 check-in (also amends 0044: receptionist never edits a VISIT auto line) · 0060 queue views · 0061 dispatch (assign / move / emergency) |
 | BE-2 | 0041 customer & pet · 0042 inventory stock ledger · 0043 document codes · 0044 order core · 0051 retail order |
 
 ## Backend architecture
@@ -186,12 +186,12 @@ Every write ADR follows these. Read the ADR of the neighbouring feature before w
   | Staff admin | `branches (id ↑, only via BranchApi.lockForStaffChange) → accounts → staff_profiles → sessions`. Any flow lowering a branch's ACTIVE BRANCH_MANAGER count locks the branch first |
   | Customer | `accounts → customers (id ↑) → pets → weight_records` |
   | Appointment writes | `advisory(1001, pet) → branches (BranchApi.lockForBooking) → appointments`; advisory **1002** per customer (violation evaluation / restriction lift) always last |
-  | Visit (ADR-0058) | `accounts` (staff, `FOR SHARE`, id ↑) → `pets FOR SHARE` → `visits` (id ↑) → `appointments` via `AppointmentApi` → `document_counters` (`visits` → `ORDER`) → `orders` via `VisitOrderApi` → stock lots via `StockApi`. Check-in does not lock `branches` |
+  | Visit (ADR-0058) | `accounts` (staff, `FOR SHARE`, id ↑) → `pets FOR SHARE` → `visits` (id ↑) → `appointments` via `AppointmentApi` → `document_counters` (`visits` → `ORDER`) → `orders` via `VisitOrderApi` → stock lots via `StockApi`. Check-in does not lock `branches`. Assignee lock = `StaffDirectoryApi.findStaffForShare`; move locks every `WAITING` visit of the branch in one `ORDER BY id` query (ADR-0061) |
   | Sales | caller's document → `orders` (lock before read) → `products FOR SHARE` → stock lots; several orders by ascending id |
   | Inventory | caller's document → `stock_receipts` → `suppliers FOR SHARE` → `products FOR SHARE` → all lots in **one** `ORDER BY id FOR NO KEY UPDATE` → `StockLedger.apply` (the only writer of `stock_lots.quantity`) |
   | [CFG] edit | `system_configs` rows by ascending key, the key and its cross-key partner |
 
-- **Isolation:** default READ COMMITTED. Paged reads (count + page) use `readOnly` + REPEATABLE READ. A write that re-reads after an advisory lock must stay READ COMMITTED.
+- **Isolation:** default READ COMMITTED. Paged reads (count + page) use `readOnly` + REPEATABLE READ. A write that re-reads after waiting for a lock (advisory or row) must stay READ COMMITTED — under REPEATABLE READ the re-read still sees the pre-lock snapshot (ADR-0061 M5: an assignment succeeded for a staff member transferred meanwhile).
 - **Jobs:** keyset scan of ids (read-only, in the order of the index it uses) → **one record per tx** with `… FOR NO KEY UPDATE SKIP LOCKED` → re-check under the lock → conditional UPDATE (`WHERE status = …`, must hit 1 row) → outbox in the same tx; time budget ≤ 60 s. Long jobs pick a cron minute no other long job uses (ST20 HIGH needs a free thread).
 - **Native SQL:** append only the conditions that were sent (never `:x IS NULL OR …` — it loses the index); keep status literals in the query so partial indexes match; bind `LocalTime` as `CAST(:t AS time)` from `toString()` (Hibernate truncates it to milliseconds otherwise).
 - No `lock_timeout` is configured: a deadlock (40P01) → `PessimisticLockingFailureException` → 409.

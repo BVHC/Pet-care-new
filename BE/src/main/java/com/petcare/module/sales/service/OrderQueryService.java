@@ -1,6 +1,10 @@
 package com.petcare.module.sales.service;
 
+import java.util.Collection;
 import java.util.List;
+import java.util.Map;
+import java.util.Objects;
+import java.util.stream.Collectors;
 
 import org.springframework.stereotype.Service;
 
@@ -8,6 +12,7 @@ import com.petcare.module.boarding.api.BoardingQueryApi;
 import com.petcare.module.sales.api.OrderQueryApi;
 import com.petcare.module.sales.entity.OrderStatus;
 import com.petcare.module.sales.repository.SalesOrderRepository;
+import com.petcare.module.sales.repository.SalesOrderRepository.VisitOrderRow;
 import com.petcare.module.visit.api.VisitQueryApi;
 
 import lombok.RequiredArgsConstructor;
@@ -45,5 +50,16 @@ public class OrderQueryService implements OrderQueryApi {
         return orders.findIdAndBranchByCustomer(customerId, List.of(OrderStatus.OPEN, OrderStatus.PENDING)).stream()
                 .map(row -> new UnpaidOrderRef(row.getId(), row.getBranchId()))
                 .toList();
+    }
+
+    /** Thêm bởi BE-1 (docs/adr/0060). {@code uq_orders_visit_id} bảo đảm mỗi lượt tối đa một Order: trùng → lỗi. */
+    @Override
+    public Map<Long, Long> findOrderIdsByVisitIds(Collection<Long> visitIds) {
+        Objects.requireNonNull(visitIds, "visitIds");
+        if (visitIds.isEmpty()) {
+            return Map.of();
+        }
+        return orders.findVisitOrderIds(visitIds).stream()
+                .collect(Collectors.toUnmodifiableMap(VisitOrderRow::getVisitId, VisitOrderRow::getId));
     }
 }

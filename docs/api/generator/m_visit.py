@@ -27,9 +27,9 @@ m = Module(
         "Thú đã mất không được tiếp nhận (BR-TN-01, BR-KH-05).",
     ],
     assumptions=[
-        ("A1", "Danh sách hàng đợi trả theo thứ tự ưu tiên của BR-TN-04 (`priorityClass`, rồi `queueSortKey`), mặc định Visit hôm nay chưa kết thúc", "BR-TN-04"),
-        ("A2", "UC47 'Xác định ca cấp cứu' sau khi đã tiếp nhận: `POST …/mark-emergency` khi Visit còn WAITING", "UC47 có actor A07, A06; tiếp nhận chỉ do A06"),
-        ("A3", "Sắp lại thứ tự hàng đợi bằng cách đặt Visit trước một Visit khác; server tính lại `queue_sort_key`", "05 `visits.queue_sort_key`: lễ tân sắp lại thì sửa cột này"),
+        ("A1", "Danh sách hàng đợi trả theo thứ tự ưu tiên của BR-TN-04 (`priorityClass` EMERGENCY → APPOINTMENT → WALK_IN, rồi `queueSortKey`, rồi `visitId`). Không gửi `date`: lượt WAITING / IN_PROGRESS của mọi ngày (lượt dở hôm trước không bị giấu); `status` COMPLETED / CANCELLED thì chỉ lượt check-in hôm nay. Không gửi `status`: chỉ WAITING + IN_PROGRESS. Gửi `date`: lượt check-in trong ngày đó (giờ Việt Nam), không gửi `status` thì mọi trạng thái (docs/adr/0060)", "BR-TN-04; BR-QT-08 (lượt dở phải tìm được)"),
+        ("A2", "UC47 'Xác định ca cấp cứu' sau khi đã tiếp nhận: `POST …/mark-emergency` khi Visit còn WAITING; hạng → EMERGENCY, `queueSortKey` = thời điểm đánh dấu (như A10). VET nào của chi nhánh cũng đánh dấu được (docs/adr/0061)", "UC47 có actor A07, A06; tiếp nhận chỉ do A06"),
+        ("A3", "Sắp lại thứ tự hàng đợi bằng cách đặt Visit trước một Visit khác; server tính lại `queue_sort_key`. Lượt được sắp nhận hạng (`priorityClass`) của lượt đích, khóa = khóa đích − 1 µs, các lượt cùng hạng phía sau bị trùng thì dồn +1 µs. Ca cấp cứu chỉ sắp giữa các ca cấp cứu (vào nhóm cấp cứu dùng mark-emergency). Đã đứng ngay trước lượt đích: 200, không đổi gì (docs/adr/0061)", "05 `visits.queue_sort_key`: lễ tân sắp lại thì sửa cột này; BR-TN-04"),
         ("A4", "Lý do hủy lượt không bắt buộc", "BR-TN-07 không yêu cầu; `visits.cancel_reason` cho phép null"),
         ("A5", "Thiếu tồn khi kê đơn: request đầu trả 400 `BR-KB-03` kèm số tồn trong message; FE gửi lại với `shortageResolution`", "BR-KB-03: báo số tồn rồi VET chọn giảm số lượng hoặc mua ngoài"),
         ("A6", "Ngày tiêm = ngày hiện tại theo giờ Việt Nam, không cho chọn", "BR-KB-04 trừ kho ngay khi ghi nhận; 05 `administered_on` không ở tương lai"),
@@ -39,9 +39,11 @@ m = Module(
         ("A10", "`isEmergency` = true → hạng `EMERGENCY`, `queueSortKey` = giờ check-in, cả trong giờ và khi có lịch hẹn", "Endpoint gộp UC47 cho A06 (docs/adr/0059 Q2)"),
         ("A11", "Có `appointmentId` thì `serviceId` bị bỏ qua (dịch vụ của lịch); `petId` phải là thú của lịch, khác → 400 `BR-TN-01`", "BR-TN-01: 1 Visit cho đúng 1 thú; BR-LH-01: lịch có 1 thú, 1 dịch vụ"),
         ("A12", "Lịch hẹn mà dịch vụ bị tắt tại chi nhánh sau khi đặt vẫn tiếp nhận được; chỉ dịch vụ đã ngừng kinh doanh mới bị từ chối (400 `BR-LH-01`)", "BR-LH-01 là điều kiện đặt lịch (UC39); 03 #1 không liệt kê (docs/adr/0059 Q3)"),
+        ("A13", "CARETAKER xem hàng đợi chung của chi nhánh (#2) và chi tiết mọi lượt của chi nhánh (#4); 01 không có use case cho A08 xem lượt của người khác (docs/adr/0060)", "BR-TN-04 'một hàng đợi chung'; UC23 cho A08 tra khách / thú toàn chuỗi; schema `Visit` không có dữ liệu y tế"),
     ],
     questions=[
         ("Q1", "Dòng dịch vụ tự sinh khi tiếp nhận có thể bị VET đổi (BR-TN-01). Nếu đổi từ dịch vụ thường sang dịch vụ loại Khám thì có hủy nhắc tái khám như Visit#1 có dịch vụ Khám không?", "TBD (PO), tạm chỉ xét tại Visit#1 (06 G5)", "03 Care Task#6"),
+        ("Q2", "Visit#4 cho SUPER_MANAGER gán lại lượt đã gọi khi chi nhánh không còn BRANCH_MANAGER ACTIVE, nhưng #2 / #4 chỉ cho A05–A08 xem lượt. SUPER_MANAGER tìm lượt cần gán lại bằng cách nào?", "TBD, chốt cùng phần gán lại lượt (docs/adr/0060)", "03 Visit#4; 00-method §3.3"),
     ],
 )
 
@@ -51,7 +53,7 @@ m.param("PrescriptionItemId", "itemId", "path", "int64")
 m.param("VaccinationId", "vaccinationId", "path", "int64")
 
 m.schema("VisitStatus", None, enum=["WAITING", "IN_PROGRESS", "COMPLETED", "CANCELLED"], desc="03 #4")
-m.schema("PriorityClass", None, enum=["EMERGENCY", "APPOINTMENT", "WALK_IN"], desc="BR-TN-03, 04")
+m.schema("PriorityClass", None, enum=["EMERGENCY", "APPOINTMENT", "WALK_IN"], desc="BR-TN-03, 04. Hạng trong hàng đợi; lễ tân sắp lại / xác định cấp cứu có thể đổi (A2, A3) — có lịch hẹn hay không xem `appointmentId`")
 m.schema("CreateVisitRequest", {
     "petId": "int64",
     "appointmentId": "int64?|Có = check-in lịch hẹn; không = walk-in",
@@ -59,7 +61,8 @@ m.schema("CreateVisitRequest", {
     "isEmergency": "bool?|Bắt buộc true khi tiếp nhận ngoài giờ (BR-CN-05)",
 }, required=["petId"])
 m.schema("Visit", {
-    "visitId": "int64", "code": "string", "branchId": "int64", "customerId": "int64", "customerName": "string",
+    "visitId": "int64", "code": "string", "branchId": "int64", "customerId": "int64",
+    "customerName": "string|Họ tên chủ tại thời điểm tiếp nhận",
     "petId": "int64", "petName": "string", "species": "enum:DOG,CAT,OTHER", "appointmentId": "int64?",
     "serviceGroup": "enum:MEDICAL,GROOMING", "status": "ref:VisitStatus", "priorityClass": "ref:PriorityClass",
     "queueSortKey": "datetime", "assigneeId": "int64?", "assigneeName": "string?",
@@ -152,30 +155,46 @@ m.op("post", "/visits", "checkInVisit", "Tiếp nhận (check-in lịch hẹn / 
      "BR-TN-01…04, BR-CN-05, BR-LH-01, BR-KH-05", "A06", "Lễ tân; chi nhánh của lễ tân",
      "— → WAITING (Visit#1) · Lịch hẹn#3 · Order#1 (OPEN + dòng dịch vụ tự sinh) · có dịch vụ Khám → Care Task#6",
      body="CreateVisitRequest", resp="Visit", status=201, errors=(400, 401, 403, 404, 409),
-     err_desc={400: "`BR-TN-01` walk-in thiếu dịch vụ / thú không khớp lịch hẹn / thú đã mất · `BR-TN-02` lịch hẹn của chi nhánh khác hoặc ngoài cửa sổ check-in · `BR-CN-01` chi nhánh chưa ACTIVE · `BR-CN-05` ngoài giờ mà chi nhánh không có cờ hoặc chưa đánh dấu cấp cứu · `BR-LH-01` walk-in: dịch vụ đã ngừng, đang tắt tại chi nhánh hoặc không thuộc MEDICAL / GROOMING; có lịch: dịch vụ đã ngừng kinh doanh",
+     err_desc={400: "`BR-TN-01` walk-in thiếu dịch vụ / thú không khớp lịch hẹn / thú đã mất · `BR-TN-02` lịch hẹn của chi nhánh khác hoặc ngoài cửa sổ check-in · `BR-CN-01` chi nhánh chưa ACTIVE · `BR-CN-05` ngoài giờ mà chi nhánh không có cờ hoặc chưa đánh dấu cấp cứu · `BR-LH-01` walk-in: dịch vụ đã ngừng, đang tắt tại chi nhánh hoặc không thuộc MEDICAL / GROOMING; có lịch: dịch vụ đã ngừng kinh doanh · body sai (`VALIDATION_FAILED`, `MALFORMED_REQUEST`); BR-TK-17",
                409: "Lịch hẹn không còn BOOKED (đã check-in / NO_SHOW: tiếp nhận như walk-in, BR-TN-03)"},
      notes="Trễ quá `visit.late_priority_minutes` (15 phút) [CFG] xếp như walk-in. A9, A10, A11, A12. Thứ tự lỗi: 404 → 400 → 409 (docs/adr/0059). Có dịch vụ Khám: Care Task#6 chưa nối, nối khi visit cài FollowUpApi. Khách mang nhiều thú thì tạo nhiều Visit.")
 m.op("get", "/visits", "listQueue", "Hàng đợi của chi nhánh", "Queue", "UC45", "BR-TN-04, 09", "A05, A06, A07, A08",
-     "Nhân viên chi nhánh", resp="array:Visit", query=["date=date|Mặc định hôm nay",
-                                                        "status=enum:WAITING,IN_PROGRESS,COMPLETED,CANCELLED",
-                                                        "serviceGroup=enum:MEDICAL,GROOMING", "assigneeId=int64",
-                                                        "needsReassign=bool"], errors=(400, 401, 403),
-     notes="A1.")
+     "Nhân viên chi nhánh", resp="array:Visit",
+     query=["date=date|Ngày check-in (giờ Việt Nam). Không gửi: lượt chưa kết thúc của mọi ngày; với status COMPLETED / CANCELLED là hôm nay (A1)",
+            "status=enum:WAITING,IN_PROGRESS,COMPLETED,CANCELLED",
+            "serviceGroup=enum:MEDICAL,GROOMING", "assigneeId=int64",
+            "needsReassign=bool"], errors=(400, 401, 403),
+     err_desc={400: "Tham số sai kiểu (`MALFORMED_REQUEST`); BR-TK-17"},
+     notes="A1, A13.")
 m.op("get", "/me/queue", "listMyQueue", "Hàng đợi của tôi", "Queue", "UC46", "BR-TN-05", "A07, A08",
-     "VET, CARETAKER", resp="array:Visit", errors=(401, 403), notes="Visit WAITING / IN_PROGRESS gán cho tôi.")
+     "VET, CARETAKER", resp="array:Visit", errors=(400, 401, 403), err_desc={400: "BR-TK-17"},
+     notes="Visit WAITING / IN_PROGRESS gán cho tôi.")
 m.op("get", "/visits/{visitId}", "getVisit", "Chi tiết lượt", "Queue", "UC45, UC46", "—", "A05–A08",
-     "Nhân viên chi nhánh", resp="Visit", path_params=["VisitId"], errors=(401, 403, 404))
+     "Nhân viên chi nhánh", resp="Visit", path_params=["VisitId"], errors=(400, 401, 403, 404),
+     err_desc={400: "Tham số sai kiểu (`MALFORMED_REQUEST`); BR-TK-17",
+               403: "Sai vai trò · nhân viên xem lượt của chi nhánh khác"},
+     notes="A13.")
 m.op("post", "/visits/{visitId}/assign", "assignVisit", "Gán / gán lại nhân viên (lượt chưa gọi)", "Queue", "UC45",
      "BR-TN-05, 06, 08", "A06", "Lễ tân chi nhánh", "WAITING → WAITING (Visit#2)", body="AssignRequest",
      resp="AssignResult", path_params=["VisitId"], errors=(400, 401, 403, 404, 409),
-     err_desc={400: "`BR-TN-05` nhân viên không ACTIVE, khác chi nhánh hoặc sai chức vụ", 409: "Lượt đã được gọi"},
-     notes="Dòng dịch vụ tự sinh chuyển quyền cho người được gán.")
+     err_desc={400: "`BR-TN-05` nhân viên không ACTIVE, khác chi nhánh hoặc sai chức vụ · body sai (`VALIDATION_FAILED`, "
+                    "`MALFORMED_REQUEST`); BR-TK-17",
+               403: "Sai vai trò · lượt của chi nhánh khác", 409: "Lượt đã được gọi"},
+     notes="Dòng dịch vụ tự sinh và các dòng người được gán cũ đã thêm chuyển quyền cho người được gán (docs/adr/0061). "
+           "Gán đúng người đang được gán: 200, không ghi gì.")
 m.op("post", "/visits/{visitId}/move", "moveVisitInQueue", "Sắp lại thứ tự hàng đợi", "Queue", "UC45", "BR-TN-04",
      "A06", "Lễ tân chi nhánh", body="MoveVisitRequest", resp="array:Visit", path_params=["VisitId"],
-     errors=(400, 401, 403, 404, 409), err_desc={409: "Lượt đã được gọi"}, notes="A3. Trả hàng đợi sau khi sắp.")
+     errors=(400, 401, 403, 404, 409),
+     err_desc={400: "`BR-TN-04` lượt đích là chính lượt này, thuộc chi nhánh khác, hoặc sắp vượt ranh giới ca cấp cứu · "
+                    "body sai (`VALIDATION_FAILED`, `MALFORMED_REQUEST`); BR-TK-17",
+               403: "Sai vai trò · lượt của chi nhánh khác", 404: "Không có lượt hoặc lượt đích",
+               409: "Lượt hoặc lượt đích không còn WAITING"},
+     notes="A3. Trả hàng đợi sau khi sắp.")
 m.op("post", "/visits/{visitId}/mark-emergency", "markVisitEmergency", "Xác định ca cấp cứu", "Queue", "UC47",
      "BR-TN-04", "A06, A07", "Nhân viên chi nhánh", resp="Visit", path_params=["VisitId"],
-     errors=(401, 403, 404, 409), err_desc={409: "Lượt đã được gọi hoặc đã là cấp cứu"},
+     errors=(400, 401, 403, 404, 409),
+     err_desc={400: "Tham số sai kiểu (`MALFORMED_REQUEST`); BR-TK-17", 403: "Sai vai trò · lượt của chi nhánh khác",
+               409: "Lượt đã được gọi hoặc đã là cấp cứu"},
      notes="Lượt lên đầu hàng đợi (A2).")
 m.op("post", "/visits/{visitId}/call", "callVisit", "Gọi lượt", "Queue", "UC46", "BR-TN-05, 09", "A07, A08",
      "Người được gán lượt", "WAITING → IN_PROGRESS (Visit#3)", resp="Visit", path_params=["VisitId"],
