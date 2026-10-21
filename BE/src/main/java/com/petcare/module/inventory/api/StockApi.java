@@ -13,11 +13,18 @@ public interface StockApi {
 
     record Shortage(Long productId, int requested, int available) {}
 
+    /** Dòng kho (hàng, thuốc — không vaccine) của một Order trong phiếu thu. */
+    record OrderSale(Long orderId, List<SaleLine> lines) {}
+
     /**
-     * Order#8 / ST06: khóa lô, kiểm tra tồn khả dụng và trừ FEFO cho mọi dòng, movement SALE nguồn
-     * {@code orders/orderId}. Thiếu bất kỳ dòng nào thì không trừ gì và trả về danh sách thiếu; rỗng = đã trừ.
+     * Order#8 / ST06 cho một phiếu thu (thu gộp nhiều Order, BR-TG-03; docs/adr/0064): khóa lô của <b>hợp</b> sản phẩm
+     * mọi Order trong <b>một</b> câu (id lô tăng dần — hai phiếu thu gộp chéo sản phẩm không deadlock), kiểm tổng yêu
+     * cầu từng sản phẩm. Thiếu bất kỳ sản phẩm nào thì không trừ gì và trả {@code Shortage(productId, tổng yêu cầu, tồn
+     * khả dụng)}; rỗng = đã trừ FEFO lần lượt theo {@code orderId} tăng dần, movement SALE nguồn
+     * {@code orders/<orderId>}. Danh sách rỗng / Order không có dòng thì không chạm DB. Thay {@code issueForSale} (chưa
+     * có bên gọi) từ 2026-10-21.
      */
-    List<Shortage> issueForSale(Long orderId, Long branchId, List<SaleLine> lines, Long actorId);
+    List<Shortage> issueForPayment(Long branchId, List<OrderSale> orders, Long actorId);
 
     /**
      * Ghi mũi tiêm bước 1: khóa và trả về lô FEFO chưa hết hạn còn đủ {@code quantity}; không có lô nào đủ thì

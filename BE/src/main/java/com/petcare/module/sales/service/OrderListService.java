@@ -1,6 +1,5 @@
 package com.petcare.module.sales.service;
 
-import java.time.Clock;
 import java.time.Instant;
 import java.time.LocalDate;
 import java.util.List;
@@ -17,8 +16,6 @@ import org.springframework.transaction.annotation.Transactional;
 
 import com.petcare.module.customer.api.CustomerQueryApi;
 import com.petcare.module.customer.api.CustomerQueryApi.CustomerContact;
-import com.petcare.module.identity.api.ConfigKey;
-import com.petcare.module.identity.api.SystemConfigApi;
 import com.petcare.module.sales.api.OrderSource;
 import com.petcare.module.sales.dto.OrderSummaryResponse;
 import com.petcare.module.sales.entity.OrderStatus;
@@ -47,9 +44,8 @@ public class OrderListService {
 
     private final OrderListRepository queries;
     private final CustomerQueryApi customers;
-    private final SystemConfigApi configs;
+    private final PendingOverdueCutoff overdue;
     private final BranchScope branchScope;
-    private final Clock clock;
 
     @Transactional(readOnly = true, isolation = Isolation.REPEATABLE_READ)
     public PageResponse<OrderSummaryResponse> listOrders(OrderStatus status, OrderSource source, Long customerId,
@@ -58,7 +54,7 @@ public class OrderListService {
         Instant createdFrom = date == null ? null : date.atStartOfDay(TimeConfig.BUSINESS_ZONE).toInstant();
         Instant createdBefore = date == null ? null
                 : date.plusDays(1).atStartOfDay(TimeConfig.BUSINESS_ZONE).toInstant();
-        Instant pendingBefore = Boolean.TRUE.equals(pendingOverdue) ? overdueCutoff() : null;
+        Instant pendingBefore = Boolean.TRUE.equals(pendingOverdue) ? overdue.cutoff() : null;
         Filter filter = new Filter(branchId, status, source, customerId, visitId, boardingBookingId, createdFrom,
                 createdBefore, pendingBefore);
 
@@ -66,12 +62,6 @@ public class OrderListService {
         long total = queries.count(filter);
         List<Row> rows = total == 0 ? List.of() : queries.findPage(filter, pageable.getOffset(), pageable.getPageSize());
         return PageResponse.of(new PageImpl<>(toSummaries(rows), pageable, total));
-    }
-
-    /** Chốt trước 00:00 của ngày (hôm nay − N + 1): N = 1 → chốt từ hôm qua trở về trước. */
-    private Instant overdueCutoff() {
-        int days = configs.getInt(ConfigKey.ORDER_PENDING_ALERT_DAYS);
-        return LocalDate.now(clock).minusDays(days - 1L).atStartOfDay(TimeConfig.BUSINESS_ZONE).toInstant();
     }
 
     private List<OrderSummaryResponse> toSummaries(List<Row> rows) {

@@ -27,6 +27,7 @@ import org.springframework.transaction.annotation.Propagation;
 import org.springframework.transaction.annotation.Transactional;
 
 import com.petcare.module.inventory.api.StockApi;
+import com.petcare.module.inventory.api.StockApi.OrderSale;
 import com.petcare.module.inventory.api.StockApi.SaleLine;
 import com.petcare.module.inventory.api.StockApi.Shortage;
 import com.petcare.module.inventory.entity.LockedLot;
@@ -50,12 +51,62 @@ class StockIssueServiceTest {
                 expiry == null);
     }
 
+    /** Một Order: đường vào cũ của Order#8 đi qua {@code issueForPayment} với một {@link OrderSale}. */
+    private List<Shortage> issueForSale(Long orderId, Long branchId, List<SaleLine> lines, Long actorId) {
+        return service.issueForPayment(branchId, List.of(new OrderSale(orderId, lines)), actorId);
+    }
+
+    @Test
+    void paymentLocksTheUnionOfProductsOfEveryOrderInOneStatement() {
+        when(lots.lockIssuableLots(eq(5L), any(), eq(TODAY))).thenReturn(List.of(lot(1, 10, "2027-01-01", 5),
+                lot(2, 20, "2027-01-01", 5)));
+
+        List<Shortage> shortages = service.issueForPayment(5L, List.of(new OrderSale(90L, List.of(new SaleLine(20L, 1))),
+                new OrderSale(91L, List.of(new SaleLine(10L, 1)))), 3L);
+
+        assertThat(shortages).isEmpty();
+        verify(lots, org.mockito.Mockito.times(1)).lockIssuableLots(5L, Set.of(10L, 20L), TODAY);
+    }
+
+    @Test
+    void paymentShortageIsAggregatedAcrossOrdersAndNothingIsWritten() {
+        when(lots.lockIssuableLots(eq(5L), any(), eq(TODAY))).thenReturn(List.of(lot(1, 10, "2027-01-01", 5)));
+
+        List<Shortage> shortages = service.issueForPayment(5L, List.of(new OrderSale(90L, List.of(new SaleLine(10L, 3))),
+                new OrderSale(91L, List.of(new SaleLine(10L, 4)))), 3L);
+
+        assertThat(shortages).containsExactly(new Shortage(10L, 7, 5));
+        verify(ledger, never()).apply(any(), anyInt(), any(), any(), anyLong(), anyLong());
+    }
+
+    @Test
+    void paymentAllocatesFefoOrderByOrderOnTheSameLockedLots() {
+        when(lots.lockIssuableLots(eq(5L), any(), eq(TODAY))).thenReturn(List.of(lot(1, 10, "2026-12-01", 4),
+                lot(2, 10, "2027-06-01", 6)));
+
+        List<Shortage> shortages = service.issueForPayment(5L, List.of(new OrderSale(91L, List.of(new SaleLine(10L, 3))),
+                new OrderSale(90L, List.of(new SaleLine(10L, 3)))), 3L);
+
+        assertThat(shortages).isEmpty();
+        InOrder order = inOrder(ledger);
+        order.verify(ledger).apply(lot(1, 10, "2026-12-01", 4), -3, MovementType.SALE, "orders", 90L, 3L);
+        order.verify(ledger).apply(lot(1, 10, "2026-12-01", 1), -1, MovementType.SALE, "orders", 91L, 3L);
+        order.verify(ledger).apply(lot(2, 10, "2027-06-01", 6), -2, MovementType.SALE, "orders", 91L, 3L);
+    }
+
+    @Test
+    void paymentWithoutStockLinesTouchesNothing() {
+        assertThat(service.issueForPayment(5L, List.of(), 3L)).isEmpty();
+        assertThat(service.issueForPayment(5L, List.of(new OrderSale(90L, List.of())), 3L)).isEmpty();
+        verifyNoInteractions(lots, ledger);
+    }
+
     @Test
     void saleLocksAllCandidatesOnceThenIssuesInLotIdOrder() {
         when(lots.lockIssuableLots(eq(5L), any(), eq(TODAY))).thenReturn(List.of(lot(1, 20, "2027-01-01", 5),
                 lot(2, 10, "2026-12-01", 3), lot(3, 10, "2027-02-01", 10)));
 
-        List<Shortage> shortages = service.issueForSale(77L, 5L, List.of(new SaleLine(10L, 6), new SaleLine(20L, 2)),
+        List<Shortage> shortages = issueForSale(77L, 5L, List.of(new SaleLine(10L, 6), new SaleLine(20L, 2)),
                 3L);
 
         assertThat(shortages).isEmpty();
@@ -70,7 +121,7 @@ class StockIssueServiceTest {
     void duplicateProductLinesAreMergedBeforeAllocating() {
         when(lots.lockIssuableLots(eq(5L), any(), eq(TODAY))).thenReturn(List.of(lot(2, 10, "2026-12-01", 5)));
 
-        List<Shortage> shortages = service.issueForSale(77L, 5L, List.of(new SaleLine(10L, 3), new SaleLine(10L, 3)),
+        List<Shortage> shortages = issueForSale(77L, 5L, List.of(new SaleLine(10L, 3), new SaleLine(10L, 3)),
                 3L);
 
         assertThat(shortages).containsExactly(new Shortage(10L, 6, 5));
@@ -82,7 +133,7 @@ class StockIssueServiceTest {
         when(lots.lockIssuableLots(eq(5L), any(), eq(TODAY))).thenReturn(List.of(lot(1, 10, "2027-01-01", 100),
                 lot(2, 20, "2027-01-01", 1), lot(3, 30, "2025-01-01", 50)));
 
-        List<Shortage> shortages = service.issueForSale(77L, 5L,
+        List<Shortage> shortages = issueForSale(77L, 5L,
                 List.of(new SaleLine(30L, 4), new SaleLine(10L, 5), new SaleLine(20L, 2)), 3L);
 
         assertThat(shortages).containsExactly(new Shortage(20L, 2, 1), new Shortage(30L, 4, 0));
@@ -91,17 +142,17 @@ class StockIssueServiceTest {
 
     @Test
     void emptySaleTouchesNothing() {
-        assertThat(service.issueForSale(77L, 5L, List.of(), 3L)).isEmpty();
+        assertThat(issueForSale(77L, 5L, List.of(), 3L)).isEmpty();
         verifyNoInteractions(lots, ledger);
     }
 
     @Test
     void invalidSaleInputIsAProgrammingError() {
-        assertThatThrownBy(() -> service.issueForSale(77L, 5L, List.of(new SaleLine(10L, 0)), 3L))
+        assertThatThrownBy(() -> issueForSale(77L, 5L, List.of(new SaleLine(10L, 0)), 3L))
                 .isInstanceOf(IllegalArgumentException.class);
-        assertThatThrownBy(() -> service.issueForSale(null, 5L, List.of(), 3L))
+        assertThatThrownBy(() -> issueForSale(null, 5L, List.of(), 3L))
                 .isInstanceOf(IllegalArgumentException.class);
-        assertThatThrownBy(() -> service.issueForSale(77L, 5L, List.of(new SaleLine(10L, 1)), null))
+        assertThatThrownBy(() -> issueForSale(77L, 5L, List.of(new SaleLine(10L, 1)), null))
                 .isInstanceOf(IllegalArgumentException.class);
         verifyNoInteractions(lots, ledger);
     }

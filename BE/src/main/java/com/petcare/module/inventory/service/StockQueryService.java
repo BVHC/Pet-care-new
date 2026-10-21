@@ -2,7 +2,9 @@ package com.petcare.module.inventory.service;
 
 import java.time.Clock;
 import java.time.LocalDate;
+import java.util.Collection;
 import java.util.List;
+import java.util.Map;
 
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -30,6 +32,10 @@ public class StockQueryService implements StockQueryApi {
     @Override
     public int availableQuantity(Long branchId, Long productId) {
         return inventory.availableQuantity(branchId, productId, LocalDate.now(clock));
+    }
+    @Override
+    public Map<Long, Integer> availableQuantities(Long branchId, Collection<Long> productIds) {
+        return inventory.availableQuantities(branchId, productIds, LocalDate.now(clock));
     }
 
     @Override

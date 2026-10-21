@@ -8,6 +8,8 @@ import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Lock;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
+import org.springframework.transaction.annotation.Propagation;
+import org.springframework.transaction.annotation.Transactional;
 
 import com.petcare.module.sales.entity.OrderStatus;
 import com.petcare.module.sales.entity.SalesOrder;
@@ -27,6 +29,44 @@ public interface SalesOrderRepository extends JpaRepository<SalesOrder, Long> {
     @Lock(LockModeType.PESSIMISTIC_WRITE)
     @Query("SELECT o FROM SalesOrder o WHERE o.visitId = :visitId")
     Optional<SalesOrder> findByVisitIdForUpdate(@Param("visitId") Long visitId);
+
+    /**
+     * Thu gộp (docs/adr/0064): khóa <b>mọi</b> Order của phiếu trong <b>một</b> câu theo id tăng dần, nên hai phiếu thu
+     * chồng nhau không khóa ngược thứ tự. {@code MANDATORY}: gọi ngoài transaction thì khóa nhả ngay.
+     */
+    @Transactional(propagation = Propagation.MANDATORY)
+    @Lock(LockModeType.PESSIMISTIC_WRITE)
+    @Query("SELECT o FROM SalesOrder o WHERE o.id IN :ids ORDER BY o.id")
+    List<SalesOrder> findAllByIdForUpdate(@Param("ids") Collection<Long> ids);
+
+    /** Như {@link #findAllByIdForUpdate} nhưng không khóa: xem trước phiếu thu chỉ đọc (docs/adr/0064). */
+    @Query("SELECT o FROM SalesOrder o WHERE o.id IN :ids ORDER BY o.id")
+    List<SalesOrder> findAllByIdOrdered(@Param("ids") Collection<Long> ids);
+
+    /** Order chờ thu của một khách tại một chi nhánh, chốt lâu nhất trước (dùng {@code ix_orders_customer_status}). */
+    List<SalesOrder> findByCustomerIdAndBranchIdAndStatusOrderByPendingAtAscIdAsc(Long customerId, Long branchId,
+            OrderStatus status);
+
+    /** Chi nhánh có Order {@code PENDING} quá hạn: số Order và lúc chốt cũ nhất (ST13, docs/adr/0064). */
+    interface BranchOverdue {
+        Long getBranchId();
+
+        long getOrderCount();
+
+        java.time.Instant getOldestPendingAt();
+    }
+
+    /**
+     * ST13: Order {@code PENDING} chốt trước {@code cutoff} theo chi nhánh, tăng dần theo id chi nhánh. Dùng
+     * {@code ix_orders_branch_status_pending_at}. Cùng định nghĩa "quá hạn" với bộ lọc {@code pendingOverdue}.
+     */
+    @Query("SELECT o.branchId AS branchId, count(o) AS orderCount, min(o.pendingAt) AS oldestPendingAt "
+            + "FROM SalesOrder o WHERE o.status = com.petcare.module.sales.entity.OrderStatus.PENDING "
+            + "AND o.pendingAt < :cutoff GROUP BY o.branchId ORDER BY o.branchId")
+    List<BranchOverdue> findOverdueByBranch(@Param("cutoff") java.time.Instant cutoff);
+
+    /** Các Order của một phiếu thu (dùng {@code ix_orders_payment_id}, V19). */
+    List<SalesOrder> findByPaymentIdOrderById(Long paymentId);
 
     @Query("SELECT o FROM SalesOrder o WHERE o.visitId = :visitId")
     Optional<SalesOrder> findByVisitId(@Param("visitId") Long visitId);

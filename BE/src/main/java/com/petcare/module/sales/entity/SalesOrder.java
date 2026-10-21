@@ -159,6 +159,13 @@ public class SalesOrder extends TimestampedEntity {
         this.pendingAt = now;
     }
 
+    /** Order#8: thu tiền. Caller đã kiểm {@code PENDING} và giữ khóa dòng Order. */
+    public void markPaid(Long paymentId, Instant now) {
+        this.status = OrderStatus.PAID;
+        this.paymentId = paymentId;
+        this.paidAt = now;
+    }
+
     /** Hủy Order: lý do chỉ bắt buộc khi hủy từ {@code PENDING} (caller kiểm). */
     public void cancel(OrderCancelType type, Long actorId, String reason, Instant now) {
         this.status = OrderStatus.CANCELLED;
