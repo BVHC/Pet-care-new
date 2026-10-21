@@ -40,10 +40,12 @@ m = Module(
         ("A11", "Có `appointmentId` thì `serviceId` bị bỏ qua (dịch vụ của lịch); `petId` phải là thú của lịch, khác → 400 `BR-TN-01`", "BR-TN-01: 1 Visit cho đúng 1 thú; BR-LH-01: lịch có 1 thú, 1 dịch vụ"),
         ("A12", "Lịch hẹn mà dịch vụ bị tắt tại chi nhánh sau khi đặt vẫn tiếp nhận được; chỉ dịch vụ đã ngừng kinh doanh mới bị từ chối (400 `BR-LH-01`)", "BR-LH-01 là điều kiện đặt lịch (UC39); 03 #1 không liệt kê (docs/adr/0059 Q3)"),
         ("A13", "CARETAKER xem hàng đợi chung của chi nhánh (#2) và chi tiết mọi lượt của chi nhánh (#4); 01 không có use case cho A08 xem lượt của người khác (docs/adr/0060)", "BR-TN-04 'một hàng đợi chung'; UC23 cho A08 tra khách / thú toàn chuỗi; schema `Visit` không có dữ liệu y tế"),
+        ("A14", "SUPER_MANAGER xem chi tiết lượt (#4) của mọi chi nhánh, để xem lượt cần gán lại khi chi nhánh không còn BRANCH_MANAGER hoạt động; `visitId` lấy từ thông báo khóa tài khoản gửi SUPER_MANAGER. Hàng đợi chi nhánh (#2) vẫn chỉ cho A05–A08 (docs/adr/0063)", "03 Visit#4; BR-QT-11 (thông báo kèm việc dở); trả Q2"),
+        ("A15", "Gán lại lượt đã gọi (#9) khi người phụ trách hiện tại không còn đủ điều kiện phụ trách lượt: không ACTIVE hoặc bị khóa, khác chi nhánh, hoặc sai chức vụ với nhóm dịch vụ (đổi chức vụ khi còn lượt, docs/adr/0031 Q4). Không xét cờ `needsReassign`; gán lại thì gỡ cờ (docs/adr/0063)", "BR-TN-08 'không còn ACTIVE (bị khóa)'; BR-TN-05"),
     ],
     questions=[
         ("Q1", "Dòng dịch vụ tự sinh khi tiếp nhận có thể bị VET đổi (BR-TN-01). Nếu đổi từ dịch vụ thường sang dịch vụ loại Khám thì có hủy nhắc tái khám như Visit#1 có dịch vụ Khám không?", "TBD (PO), tạm chỉ xét tại Visit#1 (06 G5)", "03 Care Task#6"),
-        ("Q2", "Visit#4 cho SUPER_MANAGER gán lại lượt đã gọi khi chi nhánh không còn BRANCH_MANAGER ACTIVE, nhưng #2 / #4 chỉ cho A05–A08 xem lượt. SUPER_MANAGER tìm lượt cần gán lại bằng cách nào?", "TBD, chốt cùng phần gán lại lượt (docs/adr/0060)", "03 Visit#4; 00-method §3.3"),
+        ("Q2", "Visit#4 cho SUPER_MANAGER gán lại lượt đã gọi khi chi nhánh không còn BRANCH_MANAGER ACTIVE, nhưng #2 / #4 chỉ cho A05–A08 xem lượt. SUPER_MANAGER tìm lượt cần gán lại bằng cách nào?", "Đã chốt: A14 (docs/adr/0063)", "03 Visit#4; 00-method §3.3"),
         ("Q3", "Khóa tài khoản đánh dấu lượt IN_PROGRESS của người bị khóa là cần gán lại (needsReassign). Mở khóa có gỡ cờ này không, khi người phụ trách đã ACTIVE trở lại?", "TBD (PO); tạm không gỡ (docs/adr/0062 Q5)", "03 Tài khoản#7, #8; BR-QT-12; erd visits.needs_reassign"),
     ],
 )
@@ -77,7 +79,8 @@ m.schema("AssignResult", {
     "assigneeOffline": "bool|true = đã cảnh báo người được gán đang offline, không chặn (BR-TN-06)",
 })
 m.schema("MoveVisitRequest", {"placeBeforeVisitId": "int64|Visit WAITING cùng chi nhánh (A3)"})
-m.schema("ReassignRequest", {"assigneeId": "int64", "reason": "string:300|Bắt buộc (BR-TN-08)"})
+m.schema("ReassignRequest", {"assigneeId": "int64|Người phụ trách mới: VET cho MEDICAL, CARETAKER cho GROOMING (BR-TN-05)",
+                            "reason": "string:300|Lý do gán lại, bắt buộc (BR-TN-08)"})
 m.schema("CancelVisitRequest", {"reason": "string:300?|Lý do hủy (không bắt buộc, A4)"}, required=[])
 m.schema("PrescriptionItem", {
     "itemId": "int64", "productId": "int64", "productName": "string", "quantity": "int",
@@ -170,11 +173,12 @@ m.op("get", "/visits", "listQueue", "Hàng đợi của chi nhánh", "Queue", "U
 m.op("get", "/me/queue", "listMyQueue", "Hàng đợi của tôi", "Queue", "UC46", "BR-TN-05", "A07, A08",
      "VET, CARETAKER", resp="array:Visit", errors=(400, 401, 403), err_desc={400: "BR-TK-17"},
      notes="Visit WAITING / IN_PROGRESS gán cho tôi.")
-m.op("get", "/visits/{visitId}", "getVisit", "Chi tiết lượt", "Queue", "UC45, UC46", "—", "A05–A08",
-     "Nhân viên chi nhánh", resp="Visit", path_params=["VisitId"], errors=(400, 401, 403, 404),
+m.op("get", "/visits/{visitId}", "getVisit", "Chi tiết lượt", "Queue", "UC45, UC46", "—", "A04–A08",
+     "Nhân viên chi nhánh; SUPER_MANAGER toàn chuỗi", resp="Visit", path_params=["VisitId"],
+     errors=(400, 401, 403, 404),
      err_desc={400: "Tham số sai kiểu (`MALFORMED_REQUEST`); BR-TK-17",
                403: "Sai vai trò · nhân viên xem lượt của chi nhánh khác"},
-     notes="A13.")
+     notes="A13, A14.")
 m.op("post", "/visits/{visitId}/assign", "assignVisit", "Gán / gán lại nhân viên (lượt chưa gọi)", "Queue", "UC45",
      "BR-TN-05, 06, 08", "A06", "Lễ tân chi nhánh", "WAITING → WAITING (Visit#2)", body="AssignRequest",
      resp="AssignResult", path_params=["VisitId"], errors=(400, 401, 403, 404, 409),
@@ -210,9 +214,14 @@ m.op("post", "/visits/{visitId}/reassign", "reassignCalledVisit", "Gán lại l�
      "BR-TN-05, 08, BR-QT-15", "A05 (A04 khi chi nhánh không còn BRANCH_MANAGER ACTIVE)",
      "BRANCH_MANAGER chi nhánh; SUPER_MANAGER theo điều kiện", "IN_PROGRESS → IN_PROGRESS (Visit#4)",
      body="ReassignRequest", resp="Visit", path_params=["VisitId"], errors=(400, 401, 403, 404, 409),
-     err_desc={400: "`BR-TN-08` người phụ trách vẫn ACTIVE · thiếu lý do · `BR-TN-05` người mới sai chức vụ",
-               409: "Lượt không IN_PROGRESS"},
-     notes="Bệnh án giữ nguyên kèm tên người ghi; quyền xóa dòng Order chuyển cho người mới; ghi audit.")
+     err_desc={400: "`BR-TN-08` người phụ trách hiện tại vẫn đủ điều kiện (A15) · `BR-TN-05` người mới không ACTIVE, "
+                    "khác chi nhánh hoặc sai chức vụ · thiếu lý do / body sai (`VALIDATION_FAILED`, "
+                    "`MALFORMED_REQUEST`); BR-TK-17",
+               403: "Sai vai trò · BRANCH_MANAGER của chi nhánh khác · SUPER_MANAGER khi chi nhánh còn BRANCH_MANAGER "
+                    "hoạt động",
+               409: "Lượt không IN_PROGRESS · lượt vừa được gán lại bởi thao tác khác (`CONCURRENCY_CONFLICT`)"},
+     notes="A15. Thứ tự lỗi: 404 → 403 → 409 → 400 (docs/adr/0063). Gỡ cờ needsReassign. Bệnh án giữ nguyên kèm tên "
+           "người ghi; quyền xóa dòng Order người cũ đã thêm chuyển cho người mới; ghi audit.")
 
 m.op("post", "/visits/{visitId}/complete", "completeVisit", "Hoàn tất lượt", "Completion", "UC48, UC49, UC52",
      "BR-KB-01, 02, BR-SP-06, BR-LH-11", "A07, A08", VET_ASSIGNED,

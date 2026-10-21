@@ -80,12 +80,25 @@ class VisitQueueServiceTest {
         doReturn(role).when(principal).role();
 
         assertThatThrownBy(() -> service.listQueue(NO_FILTER)).isInstanceOf(IllegalStateException.class);
-        assertThatThrownBy(() -> service.getVisit(9001L)).isInstanceOf(IllegalStateException.class);
+        if (!"SUPER_MANAGER".equals(role)) {
+            assertThatThrownBy(() -> service.getVisit(9001L)).isInstanceOf(IllegalStateException.class);
+        }
         assertThatThrownBy(service::listMyQueue).isInstanceOf(IllegalStateException.class);
 
         verifyNoInteractions(visits, orders, pets, customers, staff);
         verify(scope, never()).resolve(any());
         verify(scope, never()).check(any());
+    }
+
+    /** A14 (docs/adr/0063): SUPER_MANAGER xem chi tiết lượt mọi chi nhánh; {@code check} với CHAIN cho qua. */
+    @Test
+    void superManagerReadsTheDetailOfAnyBranchThroughTheScopeCheck() {
+        doReturn("SUPER_MANAGER").when(principal).role();
+        doReturn(Optional.empty()).when(visits).findById(9001L);
+
+        assertThatThrownBy(() -> service.getVisit(9001L)).isInstanceOf(ResourceNotFoundException.class);
+
+        verify(visits).findById(9001L);
     }
 
     @ParameterizedTest

@@ -36,9 +36,10 @@ import jakarta.persistence.criteria.Predicate;
  * <ul>
  * <li>Role kiểm lại trước mọi lần đọc DB ({@link #requireRole}): role ngoài hợp đồng tới được đây là lỗi lập trình
  * (500), không để SUPER_MANAGER / ADMIN đi qua {@code BranchScope} — với họ {@code resolve} trả {@code null} và
- * {@code check} không chặn.</li>
+ * {@code check} không chặn. Riêng #4 cho SUPER_MANAGER (toàn chuỗi), để xem lượt cần gán lại khi chi nhánh không còn
+ * quản lý hoạt động (visit-v1 A14, docs/adr/0063 D3).</li>
  * <li>#2 luôn ép chi nhánh của người gọi; bộ lọc theo A1 (xem {@link VisitQueueFilter}). #3 ép người phụ trách là chính
- * mình. #4: không có → 404, chi nhánh khác → 403.</li>
+ * mình. #4: không có → 404, nhân viên chi nhánh khác → 403.</li>
  * <li>Thứ tự BR-TN-04 sắp trong bộ nhớ ({@link QueueOrder}); tên và {@code orderId} ghép theo lô ({@link VisitResponder}).</li>
  * </ul>
  */
@@ -48,8 +49,12 @@ public class VisitQueueService {
     /** Lượt chưa kết thúc (BR-TN-09): hàng đợi mặc định (#2) và hàng đợi của tôi (#3). */
     static final Set<VisitStatus> UNFINISHED = Set.of(VisitStatus.WAITING, VisitStatus.IN_PROGRESS);
 
-    /** Hợp đồng #2, #4: A05–A08 (yaml; visit-v1 A13 cho CARETAKER). */
+    /** Hợp đồng #2: A05–A08 (yaml; visit-v1 A13 cho CARETAKER). */
     static final Set<String> QUEUE_ROLES = Set.of("BRANCH_MANAGER", "RECEPTIONIST", "VET", "CARETAKER");
+
+    /** Hợp đồng #4: A04–A08 (A14: SUPER_MANAGER xem lượt cần gán lại, docs/adr/0063). */
+    static final Set<String> DETAIL_ROLES =
+            Set.of("SUPER_MANAGER", "BRANCH_MANAGER", "RECEPTIONIST", "VET", "CARETAKER");
 
     /** Hợp đồng #3: A07, A08 (UC46). */
     static final Set<String> MY_QUEUE_ROLES = Set.of("VET", "CARETAKER");
@@ -91,7 +96,7 @@ public class VisitQueueService {
     /** visit-v1 #4. */
     @Transactional(readOnly = true, isolation = Isolation.REPEATABLE_READ)
     public VisitResponse getVisit(Long visitId) {
-        requireRole(branchScope.current(), QUEUE_ROLES);
+        requireRole(branchScope.current(), DETAIL_ROLES);
         Visit visit = visits.findById(visitId)
                 .orElseThrow(() -> new ResourceNotFoundException("lượt tiếp nhận", visitId));
         branchScope.check(visit.getBranchId());

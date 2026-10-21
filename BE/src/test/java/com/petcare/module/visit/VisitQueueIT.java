@@ -488,11 +488,13 @@ class VisitQueueIT {
         tokens.put("CARETAKER", token(caretaker));
         List<String> queueRoles = List.of("BRANCH_MANAGER", "RECEPTIONIST", "VET", "CARETAKER");
         List<String> myQueueRoles = List.of("VET", "CARETAKER");
+        // #4 thêm SUPER_MANAGER (visit-v1 A14, docs/adr/0063); #2 thì không.
+        List<String> detailRoles = List.of("SUPER_MANAGER", "BRANCH_MANAGER", "RECEPTIONIST", "VET", "CARETAKER");
 
         tokens.forEach((role, token) -> {
             assertAllowed(get(token, "/api/visits"), queueRoles.contains(role), role + " #2");
             assertAllowed(get(token, "/api/me/queue"), myQueueRoles.contains(role), role + " #3");
-            assertAllowed(get(token, "/api/visits/" + id), queueRoles.contains(role), role + " #4");
+            assertAllowed(get(token, "/api/visits/" + id), detailRoles.contains(role), role + " #4");
         });
     }
 

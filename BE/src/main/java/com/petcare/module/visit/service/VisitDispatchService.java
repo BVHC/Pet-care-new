@@ -193,6 +193,15 @@ public class VisitDispatchService {
         }
     }
 
+    /**
+     * BR-TN-05 dạng điều kiện, cùng định nghĩa với {@link #requireAssignable}: còn được phụ trách lượt này. Gán lại lượt đã
+     * gọi (Visit#4) chỉ cho khi người phụ trách hiện tại không còn thỏa điều kiện này (docs/adr/0063 D1).
+     */
+    static boolean isAssignable(Optional<StaffSummary> found, Visit visit) {
+        return found.filter(s -> s.active() && visit.getBranchId().equals(s.branchId())
+                && s.role() == requiredRole(visit.getServiceGroup())).isPresent();
+    }
+
     /** BR-TN-05 (03 #2): nhân viên đang hoạt động của chi nhánh, đúng chức vụ theo nhóm dịch vụ — đọc dưới khóa. */
     static StaffSummary requireAssignable(Optional<StaffSummary> found, Visit visit) {
         StaffSummary staff = found

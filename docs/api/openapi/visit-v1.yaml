@@ -179,7 +179,7 @@ paths:
     get:
       tags: [Queue]
       summary: "Chi tiết lượt"
-      description: "UC45, UC46 · —. Actor: A05–A08. Quyền: Nhân viên chi nhánh. Chuyển trạng thái: —. A13."
+      description: "UC45, UC46 · —. Actor: A04–A08. Quyền: Nhân viên chi nhánh; SUPER_MANAGER toàn chuỗi. Chuyển trạng thái: —. A13, A14."
       operationId: getVisit
       security:
         - bearerAuth: []
@@ -431,7 +431,7 @@ paths:
     post:
       tags: [Queue]
       summary: "Gán lại lượt đã gọi"
-      description: "UC45 · BR-TN-05, 08, BR-QT-15. Actor: A05 (A04 khi chi nhánh không còn BRANCH_MANAGER ACTIVE). Quyền: BRANCH_MANAGER chi nhánh; SUPER_MANAGER theo điều kiện. Chuyển trạng thái: IN_PROGRESS → IN_PROGRESS (Visit#4). Bệnh án giữ nguyên kèm tên người ghi; quyền xóa dòng Order chuyển cho người mới; ghi audit."
+      description: "UC45 · BR-TN-05, 08, BR-QT-15. Actor: A05 (A04 khi chi nhánh không còn BRANCH_MANAGER ACTIVE). Quyền: BRANCH_MANAGER chi nhánh; SUPER_MANAGER theo điều kiện. Chuyển trạng thái: IN_PROGRESS → IN_PROGRESS (Visit#4). A15. Thứ tự lỗi: 404 → 403 → 409 → 400 (docs/adr/0063). Gỡ cờ needsReassign. Bệnh án giữ nguyên kèm tên người ghi; quyền xóa dòng Order người cũ đã thêm chuyển cho người mới; ghi audit."
       operationId: reassignCalledVisit
       security:
         - bearerAuth: []
@@ -460,7 +460,7 @@ paths:
                     type: integer
                     description: "HTTP status của kết quả, ví dụ 200, 201"
         "400":
-          description: "`BR-TN-08` người phụ trách vẫn ACTIVE · thiếu lý do · `BR-TN-05` người mới sai chức vụ"
+          description: "`BR-TN-08` người phụ trách hiện tại vẫn đủ điều kiện (A15) · `BR-TN-05` người mới không ACTIVE, khác chi nhánh hoặc sai chức vụ · thiếu lý do / body sai (`VALIDATION_FAILED`, `MALFORMED_REQUEST`); BR-TK-17"
           content:
             "application/json":
               schema:
@@ -468,11 +468,15 @@ paths:
         "401":
           $ref: "#/components/responses/Unauthorized"
         "403":
-          $ref: "#/components/responses/Forbidden"
+          description: "Sai vai trò · BRANCH_MANAGER của chi nhánh khác · SUPER_MANAGER khi chi nhánh còn BRANCH_MANAGER hoạt động"
+          content:
+            "application/json":
+              schema:
+                $ref: "#/components/schemas/Error"
         "404":
           $ref: "#/components/responses/NotFound"
         "409":
-          description: "Lượt không IN_PROGRESS"
+          description: "Lượt không IN_PROGRESS · lượt vừa được gán lại bởi thao tác khác (`CONCURRENCY_CONFLICT`)"
           content:
             "application/json":
               schema:
@@ -1171,10 +1175,11 @@ components:
         assigneeId:
           type: integer
           format: int64
+          description: "Người phụ trách mới: VET cho MEDICAL, CARETAKER cho GROOMING (BR-TN-05)"
         reason:
           type: string
           maxLength: 300
-          description: "Bắt buộc (BR-TN-08)"
+          description: "Lý do gán lại, bắt buộc (BR-TN-08)"
     CancelVisitRequest:
       type: object
       properties:

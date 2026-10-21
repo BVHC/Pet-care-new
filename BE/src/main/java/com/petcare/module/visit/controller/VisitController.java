@@ -20,6 +20,7 @@ import com.petcare.module.visit.dto.AssignResult;
 import com.petcare.module.visit.dto.CancelVisitRequest;
 import com.petcare.module.visit.dto.CreateVisitRequest;
 import com.petcare.module.visit.dto.MoveVisitRequest;
+import com.petcare.module.visit.dto.ReassignRequest;
 import com.petcare.module.visit.dto.QueueServiceGroup;
 import com.petcare.module.visit.dto.VisitQueueFilter;
 import com.petcare.module.visit.dto.VisitResponse;
@@ -28,6 +29,7 @@ import com.petcare.module.visit.service.VisitCheckInService;
 import com.petcare.module.visit.service.VisitDispatchService;
 import com.petcare.module.visit.service.VisitProgressService;
 import com.petcare.module.visit.service.VisitQueueService;
+import com.petcare.module.visit.service.VisitReassignService;
 import com.petcare.platform.config.ApiErrorDoc;
 import com.petcare.platform.model.ApiResponse;
 
@@ -38,8 +40,9 @@ import jakarta.validation.Valid;
 
 /**
  * Tiếp nhận và hàng đợi — visit-v1 #1 tiếp nhận (UC44, UC47, A06; docs/adr/0059), #2 hàng đợi chi nhánh, #4 chi tiết
- * lượt (UC45, UC46, A05–A08; docs/adr/0060), #5 gán, #6 sắp lại (UC45, A06), #7 xác định ca cấp cứu (UC47, A06, A07;
- * docs/adr/0061), #8 gọi lượt (UC46, A07, A08), #11 hủy lượt khách bỏ về (UC45, A06; docs/adr/0062). Body / tham số
+ * lượt (UC45, UC46, A04–A08; docs/adr/0060, 0063), #5 gán, #6 sắp lại (UC45, A06), #7 xác định ca cấp cứu (UC47,
+ * A06, A07; docs/adr/0061), #8 gọi lượt (UC46, A07, A08), #9 gán lại lượt đã gọi (UC45, A05 / A04; docs/adr/0063),
+ * #11 hủy lượt khách bỏ về (UC45, A06; docs/adr/0062). Body / tham số
  * sai là 400 trước {@code @PreAuthorize}; chi nhánh lấy từ người đăng nhập, mọi rule kiểm ở service. #3 hàng đợi của
  * tôi ở {@link MyQueueController}.
  */
@@ -50,8 +53,12 @@ public class VisitController {
     /** Hợp đồng chỉ cho A06 tiếp nhận (visit-v1 mục B; 01 UC44; 03 #1). */
     static final String RECEPTIONIST = "hasRole('RECEPTIONIST')";
 
-    /** Hợp đồng #2, #4: A05–A08 (UC45, UC46, UC47; CARETAKER theo visit-v1 A13). */
+    /** Hợp đồng #2: A05–A08 (UC45, UC46, UC47; CARETAKER theo visit-v1 A13). */
     static final String QUEUE_ROLES = "hasAnyRole('BRANCH_MANAGER','RECEPTIONIST','VET','CARETAKER')";
+
+    /** Hợp đồng #4: A04–A08 (visit-v1 A13, A14 — SUPER_MANAGER xem lượt cần gán lại, docs/adr/0063). */
+    static final String DETAIL_ROLES =
+            "hasAnyRole('SUPER_MANAGER','BRANCH_MANAGER','RECEPTIONIST','VET','CARETAKER')";
 
     /** Hợp đồng #7: A06, A07 (UC47). */
     static final String EMERGENCY_ROLES = "hasAnyRole('RECEPTIONIST','VET')";
@@ -59,17 +66,22 @@ public class VisitController {
     /** Hợp đồng #8: A07, A08 — người được gán lượt (UC46; 03 #3). */
     static final String CALL_ROLES = "hasAnyRole('VET','CARETAKER')";
 
+    /** Hợp đồng #9: A05; A04 khi chi nhánh không còn BRANCH_MANAGER hoạt động — điều kiện kiểm ở service (03 #4). */
+    static final String REASSIGN_ROLES = "hasAnyRole('BRANCH_MANAGER','SUPER_MANAGER')";
+
     private final VisitCheckInService checkIns;
     private final VisitQueueService queue;
     private final VisitDispatchService dispatch;
     private final VisitProgressService progress;
+    private final VisitReassignService reassign;
 
     public VisitController(VisitCheckInService checkIns, VisitQueueService queue, VisitDispatchService dispatch,
-            VisitProgressService progress) {
+            VisitProgressService progress, VisitReassignService reassign) {
         this.checkIns = checkIns;
         this.queue = queue;
         this.dispatch = dispatch;
         this.progress = progress;
+        this.reassign = reassign;
     }
 
     /** visit-v1 #1 (Visit#1 + Lịch hẹn#3 + Order#1 trong một transaction). */
@@ -123,16 +135,17 @@ public class VisitController {
                 needsReassign)));
     }
 
-    /** visit-v1 #4. Không có → 404; chi nhánh khác → 403 (00-method §3.3). */
+    /** visit-v1 #4. Không có → 404; nhân viên chi nhánh khác → 403 (00-method §3.3); SUPER_MANAGER toàn chuỗi (A14). */
     @Operation(operationId = "getVisit", tags = "Queue",
             summary = "Chi tiết lượt",
-            description = "UC45, UC46 · —. Actor: A05–A08. Quyền: Nhân viên chi nhánh. Chuyển trạng thái: —. A13.",
+            description = "UC45, UC46 · —. Actor: A04–A08. Quyền: Nhân viên chi nhánh; SUPER_MANAGER toàn chuỗi. Chuyển "
+                + "trạng thái: —. A13, A14.",
             parameters = @Parameter(name = "visitId", in = ParameterIn.PATH, example = "9001"))
     @ApiErrorDoc(status = 400, description = "Tham số sai kiểu (`MALFORMED_REQUEST`); BR-TK-17")
     @ApiErrorDoc(status = 403, description = "Sai vai trò · nhân viên xem lượt của chi nhánh khác")
     @ApiErrorDoc(status = 404)
     @GetMapping("/{visitId}")
-    @PreAuthorize(QUEUE_ROLES)
+    @PreAuthorize(DETAIL_ROLES)
     public ApiResponse<VisitResponse> getVisit(@PathVariable Long visitId) {
         return ApiResponse.ok(queue.getVisit(visitId));
     }
@@ -206,6 +219,30 @@ public class VisitController {
     @PreAuthorize(CALL_ROLES)
     public ApiResponse<VisitResponse> callVisit(@PathVariable Long visitId) {
         return ApiResponse.ok(progress.callVisit(visitId), "Đã gọi lượt");
+    }
+
+    /** visit-v1 #9 (Visit#4; docs/adr/0063). Thứ tự lỗi 404 → 403 → 409 → 400 (D4). */
+    @Operation(operationId = "reassignCalledVisit", tags = "Queue",
+            summary = "Gán lại lượt đã gọi",
+            description = "UC45 · BR-TN-05, 08, BR-QT-15. Actor: A05 (A04 khi chi nhánh không còn BRANCH_MANAGER ACTIVE). "
+                + "Quyền: BRANCH_MANAGER chi nhánh; SUPER_MANAGER theo điều kiện. Chuyển trạng thái: IN_PROGRESS → "
+                + "IN_PROGRESS (Visit#4). A15. Thứ tự lỗi: 404 → 403 → 409 → 400 (docs/adr/0063). Gỡ cờ needsReassign. "
+                + "Bệnh án giữ nguyên kèm tên người ghi; quyền xóa dòng Order người cũ đã thêm chuyển cho người mới; ghi "
+                + "audit.",
+            parameters = @Parameter(name = "visitId", in = ParameterIn.PATH, example = "9001"))
+    @ApiErrorDoc(status = 400, description = "`BR-TN-08` người phụ trách hiện tại vẫn đủ điều kiện (A15) · `BR-TN-05` "
+            + "người mới không ACTIVE, khác chi nhánh hoặc sai chức vụ · thiếu lý do / body sai (`VALIDATION_FAILED`, "
+            + "`MALFORMED_REQUEST`); BR-TK-17")
+    @ApiErrorDoc(status = 403, description = "Sai vai trò · BRANCH_MANAGER của chi nhánh khác · SUPER_MANAGER khi chi "
+            + "nhánh còn BRANCH_MANAGER hoạt động")
+    @ApiErrorDoc(status = 404)
+    @ApiErrorDoc(status = 409, description = "Lượt không IN_PROGRESS · lượt vừa được gán lại bởi thao tác khác "
+            + "(`CONCURRENCY_CONFLICT`)")
+    @PostMapping("/{visitId}/reassign")
+    @PreAuthorize(REASSIGN_ROLES)
+    public ApiResponse<VisitResponse> reassignCalledVisit(@PathVariable Long visitId,
+            @Valid @RequestBody ReassignRequest request) {
+        return ApiResponse.ok(reassign.reassignCalledVisit(visitId, request), "Đã gán lại lượt");
     }
 
     /** visit-v1 #11 (Visit#6 + Lịch hẹn#8 + Order#6 trong một transaction; docs/adr/0062). Body không bắt buộc (A4). */

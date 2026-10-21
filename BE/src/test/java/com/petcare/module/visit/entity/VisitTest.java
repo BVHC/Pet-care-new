@@ -53,6 +53,22 @@ class VisitTest {
         assertThat(visit.getCancelReason()).isNull();
     }
 
+    @Test
+    void reassignToReplacesTheAssigneeClearsTheFlagAndKeepsTheCall() {
+        Visit visit = assigned();
+        visit.call(AT);
+        ReflectionTestUtils.setField(visit, "needsReassign", true);
+
+        visit.reassignTo(46L);
+
+        assertThat(visit.getAssigneeId()).isEqualTo(46L);
+        assertThat(visit.isNeedsReassign()).isFalse();
+        assertThat(visit.getStatus()).isEqualTo(VisitStatus.IN_PROGRESS);
+        assertThat(visit.getCalledAt()).isEqualTo(AT);
+        assertThat(visit.getPriorityClass()).isEqualTo(PriorityClass.APPOINTMENT);
+        assertThat(visit.getQueueSortKey()).isEqualTo(CHECKED_IN);
+    }
+
     private static Visit assigned() {
         Visit visit = Visit.checkIn("TN-2610-00001", 3L, 88L, 12L, 501L, ServiceGroup.MEDICAL,
                 PriorityClass.APPOINTMENT, CHECKED_IN, 70L, CHECKED_IN);

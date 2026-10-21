@@ -41,14 +41,14 @@ Team: **BE-1** (branch `manh`) = identity, appointment, visit, care · **BE-2** 
 
 ## Current state (2026-10-21)
 
-`manh` @ `127754c` = `origin/manh` (`0b5a3e0`, T25) + 3 unpushed commits: `571e0fe` T26 part 0 (visit foundation, ADR-0058; also the conflict-marker cleanup and the T25 ADR renumbering to 0052–0057), `743f529` T26 part 1 (`POST /api/visits`, ADR-0059), `127754c` T26 parts 2+3 (queue views ADR-0060; assign / move / mark-emergency ADR-0061). **Uncommitted:** T26 part 4 (call / cancel + `AccountLockedEvent` listener, ADR-0062). `origin/dev` @ `197bbf5` = PR #15 (T25) still carries the **old** T25 ADR numbers 0047–0052.
+`manh` @ `d47c658` = `origin/manh` (`0b5a3e0`, T25) + 4 unpushed commits (T26 parts 0–4, ADR-0058–0062). **Uncommitted:** T26 part 5 (reassign a called visit, ADR-0063). `origin/dev` @ `197bbf5` = PR #15 (T25) still carries the **old** T25 ADR numbers 0047–0052.
 
 | Module | Owner | Built | Still missing / placeholder |
 |---|---|---|---|
 | identity | BE-1 | identity-v1 #1–24, #28–37 (auth, OTP, `/me`, profile link, staff admin, account lock, [CFG], templates, audit, public vets); jobs ST01, ST02, session cleanup; `AccountContactApi` | #25–27 (customer account email change / counter link, UC22) |
 | care | BE-1 | ST20 outbox (EMAIL in HIGH / NORMAL lanes, IN_APP), outbox cleanup, care-v1 #5–8 | #9–10 settings (D025), Care Task, ST04, `FollowUpApi` (T38/T39) |
 | appointment | BE-1 | appointment-v1 #1–9; `AppointmentApi`, `AppointmentQueryApi`, `BookingRestrictionApi`; clinic-cancel listeners; ST05 `NoShowJob`; ST03 `AppointmentReminderJob` | booking / rescheduling read the pet with `findPet` and do not yet call `PetQueryApi.findPetForShare` (D027) |
-| visit | BE-1 | T26 part 0 (entity, FSM, code `TN-yyMM-nnnnn`, lock order, real `VisitQueryApi`) + part 1: visit-v1 #1 check-in + part 2: #2–4 queue views (CARETAKER sees the branch queue — assumption A13) + part 3: #5 assign, #6 move, #7 mark-emergency + part 4: #8 call, #11 cancel, `AccountLockedEvent` listener → `needs_reassign` | #9 reassign (**T26 part 5**), #10, #12–21 (T27/T28); unlock does not clear `needs_reassign` (D042); Care Task#6 on check-in (D029); `VaccinationQueryApiPlaceholder` |
+| visit | BE-1 | T26 parts 0–5 (ADR-0058–0063): visit-v1 #1 check-in, #2–4 queue views (A13 CARETAKER; #4 also SUPER_MANAGER, A14), #5–7 dispatch, #8 call, #9 reassign a called visit, #11 cancel; `AccountLockedEvent` listener → `needs_reassign`; real `VisitQueryApi` | #10, #12–21 (T27/T28); unlock does not clear `needs_reassign` (D042); Care Task#6 on check-in (D029); `VaccinationQueryApiPlaceholder` |
 | branch, catalog | BE-2 | branch-v1, catalog-v1 staff endpoints, `BranchQueryApi`, `BranchApi`, `CatalogQueryApi` | catalog public #19–22; Swagger annotations (D026) |
 | customer | BE-2 | customer-v1 #1–21; `CustomerApi`, `CustomerQueryApi`, `PetApi`, `PetQueryApi` | — |
 | inventory | BE-2 | inventory-v1 #1–17; `StockApi`, `StockQueryApi`, `DocumentCodeGenerator` | `StockReportApi` / ST08 (T44) |
@@ -60,7 +60,7 @@ Team: **BE-1** (branch `manh`) = identity, appointment, visit, care · **BE-2** 
 - **D016** `CashierShiftQueryApi` placeholder (visit side paid): transfer, disable and lock of A05–A08 still return 500.
 - Due with T26: **D029** `FollowUpApi`. (D017 paid 2026-10-21, ADR-0062.)
 
-**Tests:** last full green `mvn clean verify` = 2026-10-19. 2026-10-20 (after T26 part 2): 4426/4426 unit, 1649/1651 IT — the 2 red are `AppointmentReminderIT` (`startedOrPastBookedIsNotReminded`, `reminderQueriesUseTheirIndexesOnRealisticData`): `AppointmentRepository.findDueForReminderIds` lacks the lower bound `(slot_date, slot_start) > (:fromDate, :fromTime)` since T25 part 4 (`af117e0`), not fixed yet. 2026-10-21 (after T26 part 3): unit 4481/4481; targeted ITs green (visit, staff directory, sales lines, parity: 162 + `VisitDispatchCountIT`); the full IT run was killed by low host memory — not re-run yet. 2026-10-21 (after T26 part 4): unit 4525/4525; targeted ITs green (272: visit, `AccountLockIT`, `VisitOrderApiIT`, `RescheduleCancelIT`, parity); full `mvn clean verify` killed again by low memory after ~855 ITs (only the 2 known `AppointmentReminderIT` reds) — run ITs in groups.
+**Tests:** last full green `mvn clean verify` = 2026-10-19. Known red: 2 ITs in `AppointmentReminderIT` (`startedOrPastBookedIsNotReminded`, `reminderQueriesUseTheirIndexesOnRealisticData`) — `AppointmentRepository.findDueForReminderIds` lacks the lower bound `(slot_date, slot_start) > (:fromDate, :fromTime)` since T25 part 4 (`af117e0`). Latest (2026-10-21, T26 part 5): unit 4563/4563; targeted ITs green (224: visit, `AccountLockIT`, `VisitOrderApiIT`, parity). A full `mvn clean verify` gets killed by low host memory (~855 ITs) — run ITs in groups.
 
 ## Commands
 
@@ -113,7 +113,7 @@ Module codes: TK, QT, CN, CK, KH, SP, NS, LH, TN, KB, LT, BH, TG, KO, BV, DG, TB
 
 Open convention TBDs (don't decide silently — ask or write an ADR): command names when no Actor↔Command table exists; how "warn, don't block" rules return warnings (contracts assume a named field in `data`, e.g. `stockWarning`); locking for kennel capacity.
 
-**ADR map** (`docs/adr/`, immutable once Accepted — supersede instead of editing; **next free: 0063**):
+**ADR map** (`docs/adr/`, immutable once Accepted — supersede instead of editing; **next free: 0064**):
 
 | Area | ADRs |
 |---|---|
@@ -121,7 +121,7 @@ Open convention TBDs (don't decide silently — ask or write an ADR): command na
 | Auth | 0003 JWT + DB session · 0005 public paths anonymous · 0006 customer owner scope · 0009 BCrypt · 0010, 0011, 0025 OTP · 0019 login · 0021 logout · 0022 change password · 0023 forgot / reset |
 | Accounts, staff, admin | 0024 staff directory · 0026 staff self-edit · 0027 profile link · 0028 customer self-edit · 0029–0035 staff admin / lock · 0036 [CFG] edit · 0037 templates · 0038 audit view · 0039 in-app notifications |
 | Notifications, jobs | 0008 session cleanup · 0012, 0014, 0016, 0017 ST20 · 0013 ST02 · 0018 FK indexes on `accounts` |
-| Appointment, visit (BE-1) | 0045 booking locks · 0046 slots · 0047 book · 0048 view · 0049 reschedule / cancel · 0050 cross-module API · 0052 clinic cancel · 0053, 0054 ST05 · 0055 booking restriction · 0056 ST03 · 0057 assumptions confirmed · 0058 visit foundation · 0059 check-in (also amends 0044: receptionist never edits a VISIT auto line) · 0060 queue views · 0061 dispatch (assign / move / emergency) · 0062 call / cancel / `needs_reassign` on lock |
+| Appointment, visit (BE-1) | 0045 booking locks · 0046 slots · 0047 book · 0048 view · 0049 reschedule / cancel · 0050 cross-module API · 0052 clinic cancel · 0053, 0054 ST05 · 0055 booking restriction · 0056 ST03 · 0057 assumptions confirmed · 0058 visit foundation · 0059 check-in (also amends 0044: receptionist never edits a VISIT auto line) · 0060 queue views · 0061 dispatch (assign / move / emergency) · 0062 call / cancel / `needs_reassign` on lock · 0063 reassign a called visit |
 | BE-2 | 0041 customer & pet · 0042 inventory stock ledger · 0043 document codes · 0044 order core · 0051 retail order |
 
 ## Backend architecture
@@ -186,7 +186,7 @@ Every write ADR follows these. Read the ADR of the neighbouring feature before w
   | Staff admin | `branches (id ↑, only via BranchApi.lockForStaffChange) → accounts → staff_profiles → sessions`. Any flow lowering a branch's ACTIVE BRANCH_MANAGER count locks the branch first |
   | Customer | `accounts → customers (id ↑) → pets → weight_records` |
   | Appointment writes | `advisory(1001, pet) → branches (BranchApi.lockForBooking) → appointments`; advisory **1002** per customer (violation evaluation / restriction lift) always last |
-  | Visit (ADR-0058) | `accounts` (staff, `FOR SHARE`, id ↑) → `pets FOR SHARE` → `visits` (id ↑) → `appointments` via `AppointmentApi` → `document_counters` (`visits` → `ORDER`) → `orders` via `VisitOrderApi` → stock lots via `StockApi`. Check-in does not lock `branches`. Assignee lock = `StaffDirectoryApi.findStaffForShare`; move locks every `WAITING` visit of the branch in one `ORDER BY id` query (ADR-0061); call locks the caller's own account `FOR SHARE` before the visit; cancel `visits → appointments → orders`; the lock-account listener runs `accounts → visits` (ADR-0062) |
+  | Visit (ADR-0058) | `accounts` (staff, `FOR SHARE`, id ↑) → `pets FOR SHARE` → `visits` (id ↑) → `appointments` via `AppointmentApi` → `document_counters` (`visits` → `ORDER`) → `orders` via `VisitOrderApi` → stock lots via `StockApi`. Check-in does not lock `branches`. Assignee lock = `StaffDirectoryApi.findStaffForShare`; move locks every `WAITING` visit of the branch in one `ORDER BY id` query (ADR-0061); call locks the caller's own account `FOR SHARE` before the visit; cancel `visits → appointments → orders`; the lock-account listener runs `accounts → visits` (ADR-0062); reassign locks the old and the new assignee `FOR SHARE` (id ↑) before the visit (ADR-0063) |
   | Sales | caller's document → `orders` (lock before read) → `products FOR SHARE` → stock lots; several orders by ascending id |
   | Inventory | caller's document → `stock_receipts` → `suppliers FOR SHARE` → `products FOR SHARE` → all lots in **one** `ORDER BY id FOR NO KEY UPDATE` → `StockLedger.apply` (the only writer of `stock_lots.quantity`) |
   | [CFG] edit | `system_configs` rows by ascending key, the key and its cross-key partner |
@@ -201,6 +201,7 @@ Every write ADR follows these. Read the ADR of the neighbouring feature before w
 - Schema follows erd §0: PK `BIGINT GENERATED ALWAYS AS IDENTITY` (1–1 tables reuse the FK as PK); FK `<singular>_id`, `ON DELETE RESTRICT`; ROOT / PART / REF tables have `created_at` + `updated_at`, LOG tables only `created_at` and are insert-only; money `BIGINT` VND, business dates `DATE` (Vietnam time), weight `NUMERIC(6,2)`; every enum column `VARCHAR(30)` + `CHECK`. Deliberate deviations: erd §13.
 - **Flyway owns the schema** (`BE/src/main/resources/db/migration/`, V1 = the whole v16 schema, V2 = 52 [CFG] rows, then seed templates and indexes). **Never edit an applied migration** — not even a comment: the checksum changes and every DB that ran it fails to start.
 - **Version numbers are shared with BE-2:** V1–V18 are taken (V13–V15 BE-2; V16 appointment sequence, V17–V18 appointment templates — V17/V18 not yet confirmed with BE-2). **Agree on V19 with BE-2 before creating it.** A dev DB that ran the old `V13__appointment_code_sequence` needs `flyway repair` or `docker compose down -v` (ask first — it wipes data).
+- **V16 checksum changed:** `571e0fe` removed conflict markers from `V16__appointment_code_sequence.sql` (comments only; `origin/dev` and `origin/manh` still carry the markers). A DB that ran V16 before that fails startup with *checksum mismatch for version 16*. There is no Flyway Maven plugin: after checking that `appointment_code_seq` matches the file, run `UPDATE flyway_schema_history SET checksum = -439054298 WHERE version = '16' AND checksum = -223559679` (what `repair` would write). Tell BE-2 before they merge.
 - The first ADMIN is never seeded: create it with SQL — an `accounts` row (with `phone`) **plus** a `staff_profiles` row (`branch_id` NULL); template in system-overview §1. Don't add bootstrap code for it.
 
 ## Testing

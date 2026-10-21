@@ -31,9 +31,9 @@ import lombok.NoArgsConstructor;
  * {@code reassignCalledVisit} (#4), {@code completeVisit} (#5), {@code cancelVisit} (#6); ngoài bảng 03:
  * {@code moveVisitInQueue}, {@code markVisitEmergency}. Đã có: {@link #checkIn} (T26 phần 1, docs/adr/0059),
  * {@link #assignTo}, {@link #reorder}, {@link #markEmergency} (T26 phần 3, docs/adr/0061), {@link #call},
- * {@link #cancel} (T26 phần 4, docs/adr/0062); method đổi trạng thái khác thêm cùng phần dựng thao tác đó.
- * {@code needsReassign} chỉ được đặt bằng câu UPDATE hàng loạt khi khóa tài khoản người phụ trách
- * ({@code VisitRepository.flagNeedsReassign}).
+ * {@link #cancel} (T26 phần 4, docs/adr/0062), {@link #reassignTo} (T26 phần 5, docs/adr/0063); method đổi trạng
+ * thái khác thêm cùng phần dựng thao tác đó. {@code needsReassign} chỉ được đặt bằng câu UPDATE hàng loạt khi khóa
+ * tài khoản người phụ trách ({@code VisitRepository.flagNeedsReassign}) và chỉ được gỡ khi gán lại lượt đã gọi.
  */
 @Getter
 @Entity
@@ -155,6 +155,16 @@ public class Visit extends TimestampedEntity {
     public void call(Instant at) {
         this.status = VisitStatus.IN_PROGRESS;
         this.calledAt = at;
+    }
+
+    /**
+     * Visit#4 ({@code IN_PROGRESS → IN_PROGRESS}, command {@code reassignCalledVisit}, BR-TN-05, 08; docs/adr/0063). Bên
+     * gọi đã khóa tài khoản người cũ và người mới, khóa dòng, kiểm trạng thái, kiểm người cũ không còn đủ điều kiện và
+     * người mới đủ điều kiện. Lượt đã có người phụ trách mới nên không còn "cần gán lại".
+     */
+    public void reassignTo(Long assigneeId) {
+        this.assigneeId = assigneeId;
+        this.needsReassign = false;
     }
 
     /**
