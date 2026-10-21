@@ -8,7 +8,7 @@ import io.swagger.v3.oas.annotations.media.Schema;
  * Một lần hạn chế đặt online đang hiệu lực (appointment-v1 schema {@code BookingRestriction}, BR-LH-09). Chỉ dựng bởi
  * {@code BookingRestrictionMapper}. Không lộ {@code lifted_at}, {@code lifted_by}, {@code lift_reason}: chỉ dòng đang hiệu
  * lực được trả nên các cột này luôn null; khách và nhân viên dùng chung DTO vì không có trường chỉ nhân viên được xem
- * (convention 02; docs/adr/0050).
+ * (convention 02; docs/adr/0055).
  */
 public record BookingRestrictionResponse(
         @Schema(description = "Mã lần hạn chế", example = "41")
@@ -24,6 +24,6 @@ public record BookingRestrictionResponse(
                 example = "2026-11-14T02:00:00Z")
         Instant endsAt,
 
-        @Schema(description = "Số NO_SHOW + hủy muộn đã đếm khi tạo hạn chế (docs/adr/0045)", example = "3")
+        @Schema(description = "Số NO_SHOW + hủy muộn đã đếm khi tạo hạn chế (docs/adr/0049)", example = "3")
         int violationCount) {
 }

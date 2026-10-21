@@ -17,7 +17,7 @@ import com.petcare.module.identity.api.AccountContactApi;
 import com.petcare.module.identity.api.NotificationTemplateCode;
 
 /**
- * Thông báo nhắc lịch hẹn (ST03, BR-LH-12; docs/adr/0051): mẫu {@code APPOINTMENT_REMINDER} (+{@code _APP}, V18). Gọi
+ * Thông báo nhắc lịch hẹn (ST03, BR-LH-12; docs/adr/0056): mẫu {@code APPOINTMENT_REMINDER} (+{@code _APP}, V18). Gọi
  * trong transaction của {@link AppointmentReminderService#remind}, sau khi đã đặt {@code reminded_at}; chỉ ghi outbox,
  * ST20 gửi sau commit. Người nhận theo BR-TB-02 qua {@link AppointmentNoticeTargets#requests}; không kênh nào thì không
  * gửi và không sinh Care Task (Q3). Mọi biến bắt buộc được kiểm khác {@code null} ở đây vì

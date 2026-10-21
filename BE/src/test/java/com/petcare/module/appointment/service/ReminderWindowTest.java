@@ -11,7 +11,7 @@ import java.time.LocalTime;
 import org.junit.jupiter.api.Test;
 
 /**
- * {@link ReminderWindow} (BR-LH-12, docs/adr/0051 Q4): {@code now < giờ hẹn ≤ now + H} theo giờ Việt Nam, biên ±1 µs ở
+ * {@link ReminderWindow} (BR-LH-12, docs/adr/0056 Q4): {@code now < giờ hẹn ≤ now + H} theo giờ Việt Nam, biên ±1 µs ở
  * cả hai đầu, qua nửa đêm / cuối tháng / cuối năm, H = 72, chuỗi giờ cho native query.
  */
 class ReminderWindowTest {

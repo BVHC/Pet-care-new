@@ -30,6 +30,16 @@ public interface StaffProfileRepository extends JpaRepository<StaffProfile, Long
             """)
     Optional<StaffRow> findStaffRow(@Param("accountId") Long accountId);
 
+    /** Như {@link #findStaffRow} cho nhiều tài khoản (docs/adr/0060); PK của hai bảng. Bên gọi không truyền tập rỗng. */
+    @Query("""
+            SELECT new com.petcare.module.identity.repository.StaffRow(
+                sp.accountId, sp.fullName, a.role, sp.branchId, a.status, a.locked, a.lastSeenAt)
+            FROM StaffProfile sp
+            JOIN Account a ON a.id = sp.accountId
+            WHERE sp.accountId IN :accountIds
+            """)
+    List<StaffRow> findStaffRows(@Param("accountIds") Collection<Long> accountIds);
+
     /** Nhân viên đang hoạt động của chi nhánh theo chức vụ (BR-TN-05); thứ tự online do service sắp. */
     @Query("""
             SELECT new com.petcare.module.identity.repository.StaffRow(

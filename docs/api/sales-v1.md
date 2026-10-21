@@ -147,6 +147,7 @@ Trường có `?` là không bắt buộc / có thể null. Kiểu `email`, `dat
 | A3 | Ba thao tác hủy là ba endpoint riêng theo người kích hoạt và trạng thái (Order#7, #9, #10) | Mỗi chuyển có người kích hoạt và điều kiện khác nhau trong 03 #5 |
 | A4 | `countedCash` chỉ đếm tiền mặt; chuyển khoản lễ tân xác nhận từng phiếu thu nên không đếm lại | BR-TG-02; 05 `cashier_shifts` chỉ có `counted_cash` |
 | A5 | VET / CARETAKER đổi dịch vụ của dòng tự sinh bằng PATCH `serviceId`, giá snapshot lại tại thời điểm đổi | BR-TN-01 cho phép đổi; BR-BH-03 snapshot khi thêm dòng |
+| A6 | Dòng dịch vụ tự sinh của Order VISIT: lễ tân không sửa / xóa (403 `BR-BH-02`) dù đang là chủ dòng tạm khi lượt chưa gán; chỉ nhân viên được gán lượt sửa / xóa | BR-TN-01: dòng tự sinh do nhân viên được gán lượt đổi hoặc xóa (docs/adr/0059 Q6) |
 
 Không có câu hỏi mở.
 

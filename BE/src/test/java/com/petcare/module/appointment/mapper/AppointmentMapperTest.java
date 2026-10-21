@@ -20,7 +20,7 @@ import com.petcare.module.catalog.api.ServiceGroup;
 
 /**
  * {@link AppointmentMapper}: mỗi trường một giá trị riêng, nên map nhầm nguồn là đỏ; so cả record (đủ 24 trường của
- * appointment-v1 {@code Appointment}); {@code visitId} luôn null (nợ D028).
+ * appointment-v1 {@code Appointment}); {@code visitId} lấy từ tham số riêng (docs/adr/0058).
  */
 class AppointmentMapperTest {
 
@@ -40,12 +40,12 @@ class AppointmentMapperTest {
 
         AppointmentResponse response = mapper.toResponse(appointment,
                 new AppointmentMapper.Names("Khách A", "Thú B", "Chi nhánh C", "Dịch vụ D"),
-                new AppointmentActions.Flags(true, false));
+                new AppointmentActions.Flags(true, false), 77L);
 
         assertThat(response).isEqualTo(new AppointmentResponse(66L, "LH-261015-0007", 11L, "Khách A", 22L, "Thú B",
                 33L, "Chi nhánh C", 44L, "Dịch vụ D", ServiceGroup.GROOMING, LocalDate.of(2026, 10, 20),
                 LocalTime.of(14, 15), AppointmentStatus.CANCELLED, AppointmentChannel.COUNTER, 2, true,
-                AppointmentCancelSource.STAFF, "Khách bận", Instant.parse("2026-10-19T01:02:03Z"), "Ghi chú", null,
+                AppointmentCancelSource.STAFF, "Khách bận", Instant.parse("2026-10-19T01:02:03Z"), "Ghi chú", 77L,
                 true, false));
         assertThat(AppointmentResponse.class.getRecordComponents()).hasSize(24);
     }
@@ -56,12 +56,13 @@ class AppointmentMapperTest {
                 LocalDate.of(2026, 10, 20), LocalTime.of(8, 0), AppointmentChannel.ONLINE, 5L, null);
 
         AppointmentResponse response = mapper.toResponse(appointment, new AppointmentMapper.Names("a", "b", "c", "d"),
-                new AppointmentActions.Flags(false, true));
+                new AppointmentActions.Flags(false, true), null);
 
         assertThat(response.canReschedule()).isFalse();
         assertThat(response.canCancel()).isTrue();
         assertThat(response.note()).isNull();
         assertThat(response.cancelSource()).isNull();
+        assertThat(response.visitId()).isNull();
     }
 
     private static void set(Appointment appointment, String field, Object value) {

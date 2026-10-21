@@ -11,7 +11,7 @@ import jakarta.validation.constraints.NotNull;
 import jakarta.validation.constraints.Positive;
 
 /**
- * {@code app.jobs.appointment-reminder} — ST03 (docs/adr/0051). Tham số vận hành, không phải [CFG]: "nhắc trước bao
+ * {@code app.jobs.appointment-reminder} — ST03 (docs/adr/0056). Tham số vận hành, không phải [CFG]: "nhắc trước bao
  * nhiêu giờ" là [CFG] {@code appointment.reminder_hours_before}. Sai giá trị thì app dừng lúc khởi động.
  *
  * @param cron       biểu thức cron 6 trường theo giờ Việt Nam; {@code "-"} tắt job. Mặc định lệch phút với ST05 / ST02

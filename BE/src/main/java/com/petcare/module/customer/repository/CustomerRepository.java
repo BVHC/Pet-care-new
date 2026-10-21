@@ -1,6 +1,5 @@
 package com.petcare.module.customer.repository;
 
-import java.util.Collection;
 import java.util.List;
 import java.util.Optional;
 
@@ -9,7 +8,6 @@ import org.springframework.data.jpa.repository.Lock;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 
-import com.petcare.module.customer.api.CustomerQueryApi.CustomerContact;
 import com.petcare.module.customer.entity.Customer;
 
 import jakarta.persistence.LockModeType;
@@ -35,17 +33,6 @@ public interface CustomerRepository extends JpaRepository<Customer, Long> {
     @Lock(LockModeType.PESSIMISTIC_WRITE)
     @Query("SELECT c FROM Customer c WHERE c.id = :id")
     Optional<Customer> findByIdForUpdate(@Param("id") Long id);
-
-    /**
-     * Hồ sơ theo lô ({@code CustomerQueryApi.findContacts}): một câu SQL, JPQL constructor nên không nạp entity vào
-     * persistence context của bên gọi. Bên gọi không truyền tập rỗng.
-     */
-    @Query("""
-            SELECT new com.petcare.module.customer.api.CustomerQueryApi$CustomerContact(
-                c.id, c.fullName, c.phone, c.email, c.accountId, c.linkDecisionPending)
-            FROM Customer c WHERE c.id IN :ids
-            """)
-    List<CustomerContact> findContactsByIds(@Param("ids") Collection<Long> ids);
 
     /** BR-TK-19: có ít nhất một hồ sơ tại quầy chưa liên kết cùng SĐT (dùng {@code ix_customers_phone}). */
     @Query(value = """

@@ -13,7 +13,7 @@ import org.junit.jupiter.api.Test;
 import com.petcare.platform.config.TimeConfig;
 
 /**
- * Chứng minh ST05 không bao giờ chuyển NO_SHOW một lịch còn check-in được (docs/adr/0048, G1): với mọi {@code now} quanh
+ * Chứng minh ST05 không bao giờ chuyển NO_SHOW một lịch còn check-in được (docs/adr/0053, G1): với mọi {@code now} quanh
  * các biên, một khung không thể vừa {@link CheckInWindow#contains} vừa {@link NoShowCutoff#isOverdue}.
  */
 class NoShowCutoffParityTest {

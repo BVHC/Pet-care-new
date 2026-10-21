@@ -1,12 +1,13 @@
-# ADR-0048: ST05 chuyển lịch hẹn quá giờ sang `NO_SHOW` (Lịch hẹn#6 `markNoShow`) — một lịch một transaction, `SKIP LOCKED`, đánh giá BR-LH-09 cùng transaction
+# ADR-0053: ST05 chuyển lịch hẹn quá giờ sang `NO_SHOW` (Lịch hẹn#6 `markNoShow`) — một lịch một transaction, `SKIP LOCKED`, đánh giá BR-LH-09 cùng transaction
 
-- **Trạng thái:** Accepted — mục 9 (keyset `id`) superseded by ADR-0049
+- **Trạng thái:** Accepted — mục 9 (keyset `id`) superseded by ADR-0054
 - **Ngày:** 2026-10-19
+- **Đánh số lại:** ban đầu là ADR-0048; đổi thành số hiện tại ngày 2026-10-20 khi gộp T25 lên `dev`, vì ADR-0045…0050 (lịch hẹn T16, +4) và ADR-0051 (BE-2) đã chiếm số. Mọi tham chiếu ADR-0047…0052 của T25 trong code / tài liệu đã đổi theo (+5).
 - **Liên quan:**
   - BR-LH-08 (02 L129), BR-LH-09 (L130), BR-LH-03 (L124), BR-LH-05 (L126), BR-TN-03 (L143), BR-QT-13 (L56), BR-KH-05 (L91).
   - 03 §3 Lịch hẹn#6 (L86); 03 Quy ước L11; 01 ST05 (L218).
   - `docs/06-module-contracts.md` L118; convention 07 §7.4 (L73), 08 L15, L47.
-  - ADR-0007 (job), 0013 (khuôn ST02), 0036 §9 (khóa đọc lúc chạy), 0041 (tên command `markNoShow`, thứ tự khóa), 0044 / 0046 (`CheckInWindow`, check-in), 0045 §7 (`evaluateAfterViolation`, advisory 1002, READ COMMITTED), 0047.
+  - ADR-0007 (job), 0013 (khuôn ST02), 0036 §9 (khóa đọc lúc chạy), 0045 (tên command `markNoShow`, thứ tự khóa), 0048 / 0050 (`CheckInWindow`, check-in), 0049 §7 (`evaluateAfterViolation`, advisory 1002, READ COMMITTED), 0052.
   - Nợ: cập nhật D033; mở D035 (message BR-LH-09 thiếu ngày), D036 (giả định chờ PO), D037 (kiểm chứng còn thiếu).
 - **Bổ sung:** ADR-0036 §9 (hai khóa [CFG] đọc lúc chạy).
 - **Triển khai (T25 phần 2):**
@@ -22,9 +23,9 @@ Chưa có job ST05: lịch `BOOKED` quá giờ nằm mãi ở `BOOKED`, vẫn ch
 
 ## Quyết định
 
-1. **Quá hạn nghiêm ngặt, khớp `CheckInWindow`:** `NO_SHOW` khi `giờ hẹn + no_show_after_minutes < now`. Check-in còn được khi `now ≤ giờ hẹn + no_show_after_minutes` (ADR-0044), nên đúng biên ST05 không đụng. `NoShowCutoff` quy về `(slot_date, slot_start) < (date, time)` với mốc = `now − phút` theo giờ Việt Nam, cắt về µs (cắt chỉ làm mốc sớm hơn ≤ 1 µs: phía an toàn). `NoShowCutoffParityTest` chứng minh không có khung nào vừa check-in được vừa quá hạn.
+1. **Quá hạn nghiêm ngặt, khớp `CheckInWindow`:** `NO_SHOW` khi `giờ hẹn + no_show_after_minutes < now`. Check-in còn được khi `now ≤ giờ hẹn + no_show_after_minutes` (ADR-0048), nên đúng biên ST05 không đụng. `NoShowCutoff` quy về `(slot_date, slot_start) < (date, time)` với mốc = `now − phút` theo giờ Việt Nam, cắt về µs (cắt chỉ làm mốc sớm hơn ≤ 1 µs: phía an toàn). `NoShowCutoffParityTest` chứng minh không có khung nào vừa check-in được vừa quá hạn.
 2. **[CFG] đọc lúc chạy**, một lần mỗi lượt, không snapshot. Bổ sung ADR-0036 §9: `appointment.no_show_after_minutes` và `visit.check_in_early_minutes` là chính sách hiện hành (cửa sổ vận hành tại quầy, không phải điều khoản đã hứa với khách). Áp dụng cho check-in, `checkInReady` và ST05. Đã chốt với PO/user 2026-10-19.
-3. **Một lịch một transaction** (convention 07 L73); job không `@Transactional`; READ COMMITTED (bắt buộc, ADR-0045 §7); không `noRollbackFor`, không `try/catch` trong service.
+3. **Một lịch một transaction** (convention 07 L73); job không `@Transactional`; READ COMMITTED (bắt buộc, ADR-0049 §7); không `noRollbackFor`, không `try/catch` trong service.
 4. **Thứ tự:** khóa dòng có điều kiện (`status = 'BOOKED'` + quá hạn, `FOR NO KEY UPDATE SKIP LOCKED`, `MANDATORY` trên repository) → đọc dưới khóa → kiểm lại mốc quá hạn bằng Java → `now` (µs) sau khóa → FSM → `markNoShow()` → `saveAndFlush` → `BookingRestrictionApi.evaluateAfterViolation(customerId, now)` (advisory 1002 = khóa cuối). Lỗi bất kỳ bước nào rollback cả NO_SHOW: NO_SHOW là vi phạm phải được đánh giá cùng transaction (06 L118).
 5. **Không khóa thú / chi nhánh:** ST05 chỉ trả quota khung đã qua và nới giới hạn BR-LH-05. Thứ tự khóa `appointments → advisory 1002` là đoạn cuối của mọi thứ tự hiện có; `SKIP LOCKED` nên ST05 không bao giờ chờ dòng. Không vòng chờ.
 6. **Luôn đánh giá BR-LH-09** (quyết định 2026-10-19): không phân biệt khách bị khóa (`is_locked`, BR-QT-11 giữ nguyên lịch), hồ sơ online hay tại quầy; hạn chế gắn với `customer_id`.
@@ -44,8 +45,8 @@ Chưa có job ST05: lịch `BOOKED` quá giờ nằm mãi ở `BOOKED`, vẫn ch
 
 - **Tích cực:** lịch quá giờ được giải phóng (quota, giới hạn 2 lịch BOOKED của thú); vi phạm được tính ngay trong cùng transaction.
 - **Không đảm bảo:**
-  - Thú mất / chuyển chủ sau khi ST05 đã chuyển lịch quá giờ: vi phạm vẫn tính. Đúng BR-KH-05 ("tương lai"), hẹp hơn ADR-0047 Q3 (hủy cả lịch quá giờ chưa NO_SHOW); hai bên chạy đua thì lịch kết thúc ở đúng một trạng thái cuối.
-  - NO_SHOW tính theo giờ hẹn, còn `starts_at` hạn chế = lúc job chạy: NO_SHOW xảy ra giữa giờ hẹn và lúc job chạy có thể rơi ra ngoài `since` (lệch ≤ 30 phút + độ trễ job, đã chấp nhận ở ADR-0045 §7).
+  - Thú mất / chuyển chủ sau khi ST05 đã chuyển lịch quá giờ: vi phạm vẫn tính. Đúng BR-KH-05 ("tương lai"), hẹp hơn ADR-0052 Q3 (hủy cả lịch quá giờ chưa NO_SHOW); hai bên chạy đua thì lịch kết thúc ở đúng một trạng thái cuối.
+  - NO_SHOW tính theo giờ hẹn, còn `starts_at` hạn chế = lúc job chạy: NO_SHOW xảy ra giữa giờ hẹn và lúc job chạy có thể rơi ra ngoài `since` (lệch ≤ 30 phút + độ trễ job, đã chấp nhận ở ADR-0049 §7).
   - Trong lúc D033 chưa trả, không lịch nào thành NO_SHOW; mỗi 5 phút N log ERROR và N transaction rollback. Khi BE-2 cài thật, lượt kế tiếp chuyển dồn mọi lịch tồn và có thể tạo nhiều hạn chế cùng lúc (đúng rule).
   - Một instance (ADR-0007).
 - **Để lại cho phần 3:** message 400 BR-LH-09 khi đặt online chưa kèm ngày hết hạn chế mà 02 L130 yêu cầu.

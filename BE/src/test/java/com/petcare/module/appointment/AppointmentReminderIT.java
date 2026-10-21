@@ -78,7 +78,7 @@ import jakarta.mail.Message;
 import jakarta.mail.internet.MimeMessage;
 
 /**
- * ST03 nhắc lịch hẹn (T25 phần 4, BR-LH-12, docs/adr/0051) trên Postgres 17 thật, với bean thật của customer / catalog /
+ * ST03 nhắc lịch hẹn (T25 phần 4, BR-LH-12, docs/adr/0056) trên Postgres 17 thật, với bean thật của customer / catalog /
  * branch / care (worker ST20 + GreenMail). Đồng hồ {@link MutableClock} ở <b>năm 2001</b> (NoShowIT dùng năm 2000) và
  * mọi lịch của test này ở quanh 01/06/2001, nên cửa sổ quét của job không đụng lịch của IT khác. {@code BoardingQueryApi}
  * là mock (D033) — chỉ hủy muộn / ST05 / ngày nghỉ gọi tới, trả 0 / rỗng.

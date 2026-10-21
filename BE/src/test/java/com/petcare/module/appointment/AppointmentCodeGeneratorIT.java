@@ -29,11 +29,7 @@ import com.petcare.TestcontainersConfiguration;
 import com.petcare.module.appointment.service.AppointmentCodeGenerator;
 
 /**
-<<<<<<< HEAD
  * Mã lịch hẹn trên PostgreSQL 17 (docs/adr/0045, V16): chỉ trong transaction ghi; 50 lượt song song ra 50 mã khác nhau;
-=======
- * Mã lịch hẹn trên PostgreSQL 17 (docs/adr/0041, V16): chỉ trong transaction ghi; 50 lượt song song ra 50 mã khác nhau;
->>>>>>> e18c4ed (feat: triển khai hủy do phòng khám)
  * rollback không trả số lại (nhảy cóc là hành vi có chủ đích); hết {@code MAXVALUE} thì lỗi, không quay vòng.
  */
 @SpringBootTest

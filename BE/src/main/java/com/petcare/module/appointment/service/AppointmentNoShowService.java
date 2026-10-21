@@ -20,9 +20,9 @@ import com.petcare.module.identity.api.SystemConfigApi;
 
 /**
  * ST05 — chuyển lịch hẹn quá giờ sang {@code NO_SHOW} (Lịch hẹn#6, command {@code markNoShow}; BR-LH-08, BR-LH-09;
- * docs/adr/0048). Chỉ {@code appointment/job/NoShowJob} gọi.
+ * docs/adr/0053). Chỉ {@code appointment/job/NoShowJob} gọi.
  * <p>
- * Mỗi {@link #markNoShow} là một transaction cho một lịch (convention 07 §7.4), READ COMMITTED (bắt buộc: ADR-0045 §7),
+ * Mỗi {@link #markNoShow} là một transaction cho một lịch (convention 07 §7.4), READ COMMITTED (bắt buộc: ADR-0049 §7),
  * không {@code noRollbackFor}, không {@code try/catch}: lỗi ở bất kỳ bước nào (kể cả {@code BoardingQueryApi} chưa cài —
  * nợ D033) rollback cả việc chuyển trạng thái, vì NO_SHOW là vi phạm phải được đánh giá cùng transaction (06 §4).
  * Thứ tự: khóa dòng có điều kiện ({@code SKIP LOCKED}) → đọc dưới khóa → kiểm lại mốc quá hạn → {@code now} sau khóa →
@@ -55,7 +55,7 @@ public class AppointmentNoShowService {
         this.clock = clock;
     }
 
-    /** Mốc quá hạn tại {@code now}; [CFG] đọc lúc chạy, một lần mỗi lượt (chính sách hiện hành, docs/adr/0048 §2). */
+    /** Mốc quá hạn tại {@code now}; [CFG] đọc lúc chạy, một lần mỗi lượt (chính sách hiện hành, docs/adr/0053 §2). */
     public NoShowCutoff cutoff(Instant now) {
         return NoShowCutoff.at(now, configs.getInt(ConfigKey.APPOINTMENT_NO_SHOW_AFTER_MINUTES));
     }

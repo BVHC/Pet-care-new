@@ -1,7 +1,7 @@
 package com.petcare.module.appointment.service;
 
 /**
- * Nguyên nhân của Lịch hẹn#5 ({@code cancelByClinic}, docs/adr/0047 Q6). {@link #reason()} vừa ghi vào
+ * Nguyên nhân của Lịch hẹn#5 ({@code cancelByClinic}, docs/adr/0052 Q6). {@link #reason()} vừa ghi vào
  * {@code appointments.cancel_reason} (≤ 300, khách đọc trong {@code AppointmentResponse.cancelReason}) vừa là biến
  * {@code ly_do} của mẫu {@code APPOINTMENT_CANCELLED_BY_CLINIC}: một nguồn cho hai chỗ.
  */

@@ -11,7 +11,8 @@ import com.petcare.module.appointment.service.AppointmentActions;
 /**
  * {@link Appointment} + tên hiển thị + cờ thao tác → {@link AppointmentResponse} (appointment-v1 schema
  * {@code Appointment}). {@code unmappedTargetPolicy = ERROR}: thiếu một trường của hợp đồng là lỗi biên dịch. Mọi target
- * khai tường minh; {@code visitId} để trống (nợ D028).
+ * khai tường minh. {@code visitId} do bên gọi tra theo lô qua {@code VisitQueryApi} (null khi lịch chưa có Visit;
+ * docs/adr/0058).
  */
 @Mapper(componentModel = "spring", unmappedTargetPolicy = ReportingPolicy.ERROR)
 public interface AppointmentMapper {
@@ -40,8 +41,8 @@ public interface AppointmentMapper {
     @Mapping(target = "cancelReason", source = "appointment.cancelReason")
     @Mapping(target = "cancelledAt", source = "appointment.cancelledAt")
     @Mapping(target = "note", source = "appointment.note")
-    @Mapping(target = "visitId", ignore = true)
+    @Mapping(target = "visitId", source = "visitId")
     @Mapping(target = "canReschedule", source = "flags.canReschedule")
     @Mapping(target = "canCancel", source = "flags.canCancel")
-    AppointmentResponse toResponse(Appointment appointment, Names names, AppointmentActions.Flags flags);
+    AppointmentResponse toResponse(Appointment appointment, Names names, AppointmentActions.Flags flags, Long visitId);
 }

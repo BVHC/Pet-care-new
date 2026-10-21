@@ -40,7 +40,7 @@ import com.petcare.module.identity.api.ConfigKey;
 import com.petcare.module.identity.api.SystemConfigApi;
 import com.petcare.platform.exception.InvalidStateTransitionException;
 
-/** {@link AppointmentNoShowService} (docs/adr/0048): thứ tự, mọi nhánh không ghi gì, ranh giới transaction. */
+/** {@link AppointmentNoShowService} (docs/adr/0053): thứ tự, mọi nhánh không ghi gì, ranh giới transaction. */
 class AppointmentNoShowServiceTest {
 
     private static final long ID = 701L;

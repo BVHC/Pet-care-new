@@ -32,7 +32,7 @@ import com.petcare.module.appointment.service.ReminderWindow;
 import com.petcare.platform.config.TimeConfig;
 
 /**
- * {@link AppointmentReminderJob} (docs/adr/0051): keyset, một cửa sổ cho cả lượt, lỗi từng lịch, ngân sách thời gian,
+ * {@link AppointmentReminderJob} (docs/adr/0056): keyset, một cửa sổ cho cả lượt, lỗi từng lịch, ngân sách thời gian,
  * không ném khỏi {@code run()}, đếm theo kết quả.
  */
 @ExtendWith(OutputCaptureExtension.class)

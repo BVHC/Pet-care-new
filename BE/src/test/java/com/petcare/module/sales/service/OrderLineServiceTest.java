@@ -534,10 +534,11 @@ class OrderLineServiceTest {
         actingAs("RECEPTIONIST");
         SalesOrder order = visitOrder(OrderStatus.OPEN);
         existing(order, 1, OrderLineType.SERVICE, ME, true, 1, 100);
-        when(catalog.findService(11L)).thenReturn(Optional.of(svc(ServiceGroup.MEDICAL, true)));
 
+        // Từ docs/adr/0059 Q6 bị chặn ngay ở OrderLinePolicy (lễ tân không sửa dòng tự sinh), trước khi tra dịch vụ.
         assertThatThrownBy(() -> service.updateLine(ORDER_ID, 1L, new UpdateOrderLineRequest(null, 11L)))
                 .isInstanceOf(OrderLineAccessDeniedException.class);
+        verify(catalog, never()).findService(11L);
     }
 
     // ---------------------------------------------------------------- xóa

@@ -59,7 +59,7 @@ public class AppointmentBookingService {
     private static final Set<ServiceGroup> BOOKABLE = Set.of(ServiceGroup.MEDICAL, ServiceGroup.GROOMING);
 
     /**
-     * Thời điểm hết hạn chế trong message BR-LH-09 (02 L130 "kèm ngày hết hạn chế"; docs/adr/0050): giờ Việt Nam, có cả
+     * Thời điểm hết hạn chế trong message BR-LH-09 (02 L130 "kèm ngày hết hạn chế"; docs/adr/0055): giờ Việt Nam, có cả
      * giờ vì {@code ends_at} là một thời điểm trong ngày — chỉ ghi ngày thì khách đặt lại sớm hơn lúc được phép.
      */
     static final DateTimeFormatter RESTRICTION_END = DateTimeFormatter.ofPattern("HH:mm dd/MM/yyyy")
@@ -175,8 +175,9 @@ public class AppointmentBookingService {
         AppointmentActions.Flags flags = AppointmentActions.forViewer(saved, customer, now,
                 configs.getInt(ConfigKey.APPOINTMENT_MAX_RESCHEDULES),
                 configs.getInt(ConfigKey.APPOINTMENT_RESCHEDULE_MIN_LEAD_HOURS));
+        // Lịch vừa đặt là BOOKED, chưa thể có Visit: visitId null (docs/adr/0058).
         return mapper.toResponse(saved,
-                new AppointmentMapper.Names(contact.fullName(), pet.name(), branchName, service.name()), flags);
+                new AppointmentMapper.Names(contact.fullName(), pet.name(), branchName, service.name()), flags, null);
     }
 
     /** BR-KH-01: tài khoản khách luôn có hồ sơ; không có là dữ liệu hỏng (500), không phải lỗi của người dùng. */

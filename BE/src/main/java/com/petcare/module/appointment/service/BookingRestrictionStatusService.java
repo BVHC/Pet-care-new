@@ -22,7 +22,7 @@ import com.petcare.platform.exception.ResourceNotFoundException;
 import com.petcare.platform.security.BranchScope;
 
 /**
- * Xem và gỡ sớm hạn chế đặt online — appointment-v1 #7–9 (BR-LH-09; docs/adr/0050).
+ * Xem và gỡ sớm hạn chế đặt online — appointment-v1 #7–9 (BR-LH-09; docs/adr/0055).
  * <ul>
  * <li>#7 {@link #getMyStatus}: hồ sơ của chính token, không nhận tham số khách.</li>
  * <li>#8 {@link #getCustomerStatus}, #9 {@link #liftRestriction}: lễ tân / BRANCH_MANAGER, <b>toàn chuỗi</b> — hạn chế gắn
@@ -32,8 +32,8 @@ import com.petcare.platform.security.BranchScope;
  * {@code restricted} ở đây khớp kết quả đặt lịch.
  * <p>
  * Gỡ sớm: một transaction, READ COMMITTED (bắt buộc — xem {@link #liftRestriction}), không {@code noRollbackFor}, không
- * bắt lỗi. Lần đánh giá vi phạm sau vẫn đếm từ {@code starts_at} của lần vừa gỡ (docs/adr/0045 §5): gỡ không làm vi phạm
- * cũ bị tính lại (đã xác nhận 2026-10-20 — docs/adr/0052).
+ * bắt lỗi. Lần đánh giá vi phạm sau vẫn đếm từ {@code starts_at} của lần vừa gỡ (docs/adr/0049 §5): gỡ không làm vi phạm
+ * cũ bị tính lại (đã xác nhận 2026-10-20 — docs/adr/0057).
  */
 @Service
 public class BookingRestrictionStatusService {
@@ -61,7 +61,7 @@ public class BookingRestrictionStatusService {
     }
 
     /**
-     * #7. Khách đang đăng nhập; tài khoản khách không có hồ sơ là dữ liệu hỏng → 500 (như docs/adr/0044). Không chặn khi
+     * #7. Khách đang đăng nhập; tài khoản khách không có hồ sơ là dữ liệu hỏng → 500 (như docs/adr/0048). Không chặn khi
      * hồ sơ còn cờ chờ liên kết: chỉ đọc (docs/adr/0028).
      */
     @Transactional(readOnly = true)
@@ -81,11 +81,11 @@ public class BookingRestrictionStatusService {
     }
 
     /**
-     * #9. Thứ tự (docs/adr/0050):
+     * #9. Thứ tự (docs/adr/0055):
      * <ol>
      * <li>khách tồn tại (đọc không khóa) → 404 — trước khóa, vì khóa từ chối id ≤ 0 bằng lỗi 500;</li>
      * <li>advisory <b>1002</b> theo khách, cùng khóa với {@code evaluateAfterViolation}: gỡ và đánh giá vi phạm của cùng
-     * khách chạy tuần tự. Đây là khóa duy nhất của luồng, nên 1002 vẫn là khóa cuối (docs/adr/0045);</li>
+     * khách chạy tuần tự. Đây là khóa duy nhất của luồng, nên 1002 vẫn là khóa cuối (docs/adr/0049);</li>
      * <li>{@code now} lấy <b>sau</b> khóa, cắt µs như cột {@code TIMESTAMPTZ};</li>
      * <li>dòng hiệu lực đọc sau khóa — phải READ COMMITTED: câu đọc là câu mới sau khi có khóa nên thấy hạn chế mà lần
      * đánh giá vừa nhả khóa đã commit (REPEATABLE READ giữ snapshot từ câu đầu → 409 sai). Không có → 409;</li>

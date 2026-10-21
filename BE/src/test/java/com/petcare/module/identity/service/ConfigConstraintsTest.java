@@ -14,7 +14,7 @@ import org.junit.jupiter.api.Test;
 import com.petcare.module.identity.api.ConfigKey;
 
 /**
- * Ràng buộc chéo [CFG] (docs/adr/0036 mục 1, docs/adr/0051): đúng ba cặp, {@code <} ở BR-TN-03 và BR-LH-12, {@code ≤} ở
+ * Ràng buộc chéo [CFG] (docs/adr/0036 mục 1, docs/adr/0056): đúng ba cặp, {@code <} ở BR-TN-03 và BR-LH-12, {@code ≤} ở
  * BR-LT-02;
  * khoảng thu hẹp theo khóa kia, kèm lý do chỉ khi thật sự thu hẹp.
  */

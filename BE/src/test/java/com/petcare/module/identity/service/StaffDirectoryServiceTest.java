@@ -1,7 +1,12 @@
 package com.petcare.module.identity.service;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
+import static org.mockito.Mockito.inOrder;
 import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
 
 import java.time.Clock;
@@ -11,6 +16,10 @@ import java.util.Optional;
 
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+import org.mockito.InOrder;
+import org.springframework.transaction.annotation.Propagation;
+import org.springframework.transaction.annotation.Transactional;
+import org.springframework.transaction.support.TransactionSynchronizationManager;
 
 import com.petcare.module.identity.api.ConfigKey;
 import com.petcare.module.identity.api.Role;
@@ -111,6 +120,77 @@ class StaffDirectoryServiceTest {
 
         assertThat(service.listPublicVets()).containsExactly(
                 new PublicVetProfile(4L, "Bác sĩ An", "https://img/a.png", "Nội khoa", "10 năm kinh nghiệm", 5L));
+    }
+
+    /** docs/adr/0060: tập rỗng không chạm DB; có id thì một câu, cùng định nghĩa {@code active} / {@code online}. */
+    @Test
+    void findStaffByIdsUsesOneQueryAndSkipsTheDatabaseForAnEmptySet() {
+        assertThat(service.findStaffByIds(List.of())).isEmpty();
+        verifyNoInteractions(staffProfiles);
+
+        when(staffProfiles.findStaffRows(List.of(1L, 2L))).thenReturn(List.of(
+                row(2L, AccountStatus.ACTIVE, true, NOW),
+                row(1L, AccountStatus.DISABLED, false, null)));
+
+        assertThat(service.findStaffByIds(List.of(1L, 2L))).containsExactlyInAnyOrder(
+                new StaffSummary(2L, "Nhân viên 2", Role.VET, 5L, false, true),
+                new StaffSummary(1L, "Nhân viên 1", Role.VET, 5L, false, false));
+    }
+
+    // ------------------------------------------------ findStaffForShare (docs/adr/0061, docs/adr/0031 mục 9)
+
+    @Test
+    void findStaffForShareLocksTheAccountBeforeReadingTheStaffRow() {
+        when(accounts.lockForShare(1L)).thenReturn(Optional.of(1L));
+        when(staffProfiles.findStaffRow(1L)).thenReturn(Optional.of(row(1L, AccountStatus.ACTIVE, false, NOW)));
+
+        StaffSummary summary = service.findStaffForShare(1L).orElseThrow();
+
+        InOrder order = inOrder(accounts, staffProfiles);
+        order.verify(accounts).lockForShare(1L);
+        order.verify(staffProfiles).findStaffRow(1L);
+        assertThat(summary.active()).isTrue();
+        assertThat(summary.online()).isTrue();
+        assertThat(summary.branchId()).isEqualTo(5L);
+    }
+
+    @Test
+    void findStaffForShareOfAMissingAccountReadsNothing() {
+        when(accounts.lockForShare(9L)).thenReturn(Optional.empty());
+
+        assertThat(service.findStaffForShare(9L)).isEmpty();
+        verifyNoInteractions(staffProfiles);
+    }
+
+    @Test
+    void findStaffForShareOfANonStaffAccountIsEmpty() {
+        when(accounts.lockForShare(8L)).thenReturn(Optional.of(8L));
+        when(staffProfiles.findStaffRow(8L)).thenReturn(Optional.empty());
+
+        assertThat(service.findStaffForShare(8L)).isEmpty();
+    }
+
+    @Test
+    void findStaffForShareRefusesAReadOnlyTransaction() {
+        TransactionSynchronizationManager.setCurrentTransactionReadOnly(true);
+        try {
+            assertThatThrownBy(() -> service.findStaffForShare(1L)).isInstanceOf(IllegalStateException.class);
+        } finally {
+            TransactionSynchronizationManager.setCurrentTransactionReadOnly(false);
+        }
+        verifyNoInteractions(staffProfiles);
+        verify(accounts, never()).lockForShare(1L);
+    }
+
+    @Test
+    void findStaffForShareJoinsTheCallersWriteTransactionAndTheLockQueryIsMandatory() throws Exception {
+        Transactional method = StaffDirectoryService.class.getMethod("findStaffForShare", Long.class)
+                .getAnnotation(Transactional.class);
+        assertThat(method.propagation()).isEqualTo(Propagation.MANDATORY);
+        assertThat(method.readOnly()).as("ghi đè readOnly của class").isFalse();
+        Transactional lock = AccountRepository.class.getMethod("lockForShare", Long.class)
+                .getAnnotation(Transactional.class);
+        assertThat(lock.propagation()).isEqualTo(Propagation.MANDATORY);
     }
 
     private StaffSummary summaryOf(StaffRow row) {

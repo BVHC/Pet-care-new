@@ -9,7 +9,7 @@ import com.petcare.module.identity.api.ConfigKey;
 import com.petcare.module.identity.api.ConfigValueType;
 
 /**
- * Ràng buộc chéo giữa các tham số [CFG] (docs/adr/0036 mục 1, trả TBD của ADR-0004; cặp thứ ba: docs/adr/0051). Ba cặp,
+ * Ràng buộc chéo giữa các tham số [CFG] (docs/adr/0036 mục 1, trả TBD của ADR-0004; cặp thứ ba: docs/adr/0056). Ba cặp,
  * đều kiểu INT:
  * <ul>
  *   <li>{@code visit.late_priority_minutes < appointment.no_show_after_minutes}: BR-TN-03 xếp "trễ 15–30 phút" giữa hai

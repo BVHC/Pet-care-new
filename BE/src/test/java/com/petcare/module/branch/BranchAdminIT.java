@@ -112,7 +112,7 @@ class BranchAdminIT {
     private CustomerQueryApi customers;
 
     /**
-     * Listener thật của appointment (docs/adr/0047) nhận cùng sự kiện với {@link EventSink}; id lịch hẹn ở đây do mock
+     * Listener thật của appointment (docs/adr/0052) nhận cùng sự kiện với {@link EventSink}; id lịch hẹn ở đây do mock
      * {@link AppointmentQueryApi} trả về, không có trong DB. IT của appointment ({@code ClinicCancellationIT}) chứng minh
      * phần hủy thật.
      */

@@ -24,9 +24,9 @@ public interface BookingRestrictionRepository extends JpaRepository<BookingRestr
 
     /**
      * Dòng đang hiệu lực tại {@code at}, cùng điều kiện với {@link #existsActive} (erd §5). Chỉ có tối đa một dòng vì hạn
-     * chế chỉ được tạo dưới khóa 1002 khi chưa có dòng hiệu lực (docs/adr/0045); hai dòng là dữ liệu hỏng →
+     * chế chỉ được tạo dưới khóa 1002 khi chưa có dòng hiệu lực (docs/adr/0049); hai dòng là dữ liệu hỏng →
      * {@code IncorrectResultSizeDataAccessException} (500), không chọn bừa. Không khóa: luồng gỡ gọi sau khóa 1002
-     * (docs/adr/0050).
+     * (docs/adr/0055).
      */
     @Query("""
             SELECT r FROM BookingRestriction r

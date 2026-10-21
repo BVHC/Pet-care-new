@@ -59,6 +59,7 @@ import com.petcare.module.customer.api.PetQueryApi.PetSummary;
 import com.petcare.module.customer.api.Species;
 import com.petcare.module.identity.api.ConfigKey;
 import com.petcare.module.identity.api.SystemConfigApi;
+import com.petcare.module.visit.api.VisitQueryApi;
 import com.petcare.platform.exception.AccessDeniedScopeException;
 import com.petcare.platform.exception.BusinessRuleViolationException;
 import com.petcare.platform.exception.InvalidStateTransitionException;
@@ -94,6 +95,7 @@ class AppointmentChangeServiceTest {
     private final CustomerQueryApi customers = mock(CustomerQueryApi.class);
     private final PetQueryApi pets = mock(PetQueryApi.class);
     private final CatalogQueryApi catalog = mock(CatalogQueryApi.class);
+    private final VisitQueryApi visits = mock(VisitQueryApi.class);
     private final BranchApi branchLocks = mock(BranchApi.class);
     private final BranchQueryApi branches = mock(BranchQueryApi.class);
     private final BookingRestrictionApi restrictions = mock(BookingRestrictionApi.class);
@@ -103,7 +105,7 @@ class AppointmentChangeServiceTest {
     private final Clock clock = mock(Clock.class);
     private final SecurityPrincipal principal = mock(SecurityPrincipal.class);
     private final AppointmentChangeService service = new AppointmentChangeService(scope, customers, pets, catalog,
-            branchLocks, branches, restrictions, configs, locks, appointments, new AppointmentTransitionHandler(),
+            visits, branchLocks, branches, restrictions, configs, locks, appointments, new AppointmentTransitionHandler(),
             Mappers.getMapper(AppointmentMapper.class), clock);
 
     private Appointment appointment;

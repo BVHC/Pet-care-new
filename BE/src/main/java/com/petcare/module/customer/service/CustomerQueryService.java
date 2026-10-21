@@ -1,13 +1,8 @@
 package com.petcare.module.customer.service;
 
 import java.util.Collection;
-<<<<<<< HEAD
-=======
-import java.util.LinkedHashSet;
->>>>>>> e18c4ed (feat: triển khai hủy do phòng khám)
 import java.util.List;
 import java.util.Optional;
-import java.util.Set;
 
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -52,18 +47,6 @@ public class CustomerQueryService implements CustomerQueryApi {
         }
         return customers.findAllById(customerIds.stream().distinct().toList()).stream().map(CustomerQueryService::toContact)
                 .toList();
-    }
-
-    /**
-     * Một câu SQL bất kể số id, không nạp entity. Id không có thì bỏ qua, mỗi id tối đa một lần (trùng trong đầu vào bị
-     * khử), tập rỗng → rỗng không chạm DB (nghĩa vụ của {@link CustomerQueryApi#findContacts}; BE-1 bổ sung khi gộp
-     * nhánh, 2026-10-18).
-     */
-    @Override
-    @Transactional(readOnly = true)
-    public List<CustomerContact> findContacts(Collection<Long> customerIds) {
-        Set<Long> ids = new LinkedHashSet<>(customerIds);
-        return ids.isEmpty() ? List.of() : customers.findContactsByIds(ids);
     }
 
     @Override

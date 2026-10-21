@@ -40,7 +40,7 @@ import com.petcare.module.identity.api.ConfigKey;
 import com.petcare.module.identity.api.SystemConfigApi;
 
 /**
- * {@link AppointmentReminderService} (docs/adr/0051): thứ tự khóa → đọc → {@code now} → UPDATE có điều kiện → outbox;
+ * {@link AppointmentReminderService} (docs/adr/0056): thứ tự khóa → đọc → {@code now} → UPDATE có điều kiện → outbox;
  * mọi nhánh bỏ qua không ghi gì; ranh giới transaction; không bao giờ ghi qua entity (Q7).
  */
 @ExtendWith(OutputCaptureExtension.class)

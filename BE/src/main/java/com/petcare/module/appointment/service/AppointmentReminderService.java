@@ -18,7 +18,7 @@ import com.petcare.module.identity.api.ConfigKey;
 import com.petcare.module.identity.api.SystemConfigApi;
 
 /**
- * ST03 — nhắc lịch hẹn trước giờ hẹn (BR-LH-12; docs/adr/0051; command {@code remindAppointment}, không đổi trạng thái
+ * ST03 — nhắc lịch hẹn trước giờ hẹn (BR-LH-12; docs/adr/0056; command {@code remindAppointment}, không đổi trạng thái
  * nên không có dòng trong 03 §3). Chỉ {@code appointment/job/AppointmentReminderJob} gọi.
  * <p>
  * Mỗi {@link #remind} là một transaction cho một lịch (convention 07 §7.4), READ COMMITTED, không {@code noRollbackFor},
@@ -57,7 +57,7 @@ public class AppointmentReminderService {
         this.clock = clock;
     }
 
-    /** Cửa sổ nhắc tại {@code now}; [CFG] đọc lúc chạy, một lần mỗi lượt (giả định A1, như docs/adr/0048 §2). */
+    /** Cửa sổ nhắc tại {@code now}; [CFG] đọc lúc chạy, một lần mỗi lượt (giả định A1, như docs/adr/0053 §2). */
     public ReminderWindow window(Instant now) {
         return ReminderWindow.at(now, configs.getInt(ConfigKey.APPOINTMENT_REMINDER_HOURS_BEFORE));
     }

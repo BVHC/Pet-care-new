@@ -55,7 +55,7 @@ import com.petcare.platform.config.TimeConfig;
 import com.petcare.support.MutableClock;
 
 /**
- * ST05 {@code NO_SHOW} (T25 phần 2, docs/adr/0048) trên Postgres 17 thật. Đồng hồ {@link MutableClock} ở <b>năm 2000</b>
+ * ST05 {@code NO_SHOW} (T25 phần 2, docs/adr/0053) trên Postgres 17 thật. Đồng hồ {@link MutableClock} ở <b>năm 2000</b>
  * và mọi lịch của test này ở tháng 5/2000, nên job (quét theo cutoff 2000) không bao giờ đụng lịch của IT khác. Job chạy
  * qua {@code run()} thật; {@code BoardingQueryApi} là {@code @MockitoBean} (còn placeholder — D033).
  */
@@ -445,7 +445,7 @@ class NoShowIT {
     }
 
     /**
-     * [CFG] đọc lúc chạy (docs/adr/0048 §2, D036 — đã xác nhận docs/adr/0052): giá trị mới áp từ lượt kế tiếp, kể cả
+     * [CFG] đọc lúc chạy (docs/adr/0053 §2, D036 — đã xác nhận docs/adr/0057): giá trị mới áp từ lượt kế tiếp, kể cả
      * cho lịch đã đặt.
      */
     @Test

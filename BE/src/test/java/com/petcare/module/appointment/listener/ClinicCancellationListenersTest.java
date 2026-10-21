@@ -26,7 +26,7 @@ import com.petcare.module.customer.api.PetDeceasedEvent;
 import com.petcare.module.customer.api.PetOwnerTransferredEvent;
 
 /**
- * Ba listener của Lịch hẹn#5 (docs/adr/0047, convention 07 §7.2, mapping M2): mỗi cái chỉ ủy quyền đúng một lời gọi
+ * Ba listener của Lịch hẹn#5 (docs/adr/0052, convention 07 §7.2, mapping M2): mỗi cái chỉ ủy quyền đúng một lời gọi
  * service với đúng trường của sự kiện; đồng bộ ({@code @EventListener}, không {@code @Async},
  * {@code @TransactionalEventListener}, {@code @Transactional}) — chạy trong transaction của bên phát.
  */

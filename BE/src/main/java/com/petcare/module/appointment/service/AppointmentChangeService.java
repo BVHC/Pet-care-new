@@ -30,6 +30,7 @@ import com.petcare.module.customer.api.CustomerQueryApi;
 import com.petcare.module.customer.api.PetQueryApi;
 import com.petcare.module.identity.api.ConfigKey;
 import com.petcare.module.identity.api.SystemConfigApi;
+import com.petcare.module.visit.api.VisitQueryApi;
 import com.petcare.platform.config.TimeConfig;
 import com.petcare.platform.exception.BusinessRuleViolationException;
 import com.petcare.platform.exception.InvalidStateTransitionException;
@@ -72,7 +73,7 @@ public class AppointmentChangeService {
     private final Clock clock;
 
     public AppointmentChangeService(BranchScope branchScope, CustomerQueryApi customers, PetQueryApi pets,
-            CatalogQueryApi catalog, BranchApi branchLocks, BranchQueryApi branches,
+            CatalogQueryApi catalog, VisitQueryApi visits, BranchApi branchLocks, BranchQueryApi branches,
             BookingRestrictionApi restrictions, SystemConfigApi configs, AppointmentLocks locks,
             AppointmentRepository appointments, AppointmentTransitionHandler transitions, AppointmentMapper mapper,
             Clock clock) {
@@ -85,7 +86,7 @@ public class AppointmentChangeService {
         this.locks = locks;
         this.appointments = appointments;
         this.transitions = transitions;
-        this.responder = new AppointmentResponder(customers, pets, branches, catalog, configs, mapper);
+        this.responder = new AppointmentResponder(customers, pets, branches, catalog, visits, configs, mapper);
         this.clock = clock;
     }
 

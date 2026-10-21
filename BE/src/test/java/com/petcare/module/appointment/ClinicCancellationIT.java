@@ -61,7 +61,7 @@ import jakarta.mail.internet.MimeMessage;
 import jakarta.persistence.EntityManagerFactory;
 
 /**
- * Lịch hẹn#5 {@code cancelByClinic} (T25 phần 1, docs/adr/0047) trên Postgres 17 thật qua HTTP của bên phát sự kiện —
+ * Lịch hẹn#5 {@code cancelByClinic} (T25 phần 1, docs/adr/0052) trên Postgres 17 thật qua HTTP của bên phát sự kiện —
  * thêm ngày nghỉ / thu hẹp giờ (branch), đánh dấu thú mất / chuyển chủ (customer) — với listener, service, outbox và
  * worker ST20 thật (GreenMail cho email). {@code BoardingQueryApi} là {@code @MockitoBean} vì còn placeholder (D033):
  * trả rỗng / false nên không có đặt chỗ nào bị ảnh hưởng.

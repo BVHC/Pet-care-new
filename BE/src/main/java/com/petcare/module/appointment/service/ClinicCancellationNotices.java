@@ -23,11 +23,11 @@ import com.petcare.module.identity.api.AccountContactApi.AccountContact;
 import com.petcare.module.identity.api.NotificationTemplateCode;
 
 /**
- * Thông báo cho khách khi phòng khám hủy lịch hẹn (Lịch hẹn#5; BR-LH-10, BR-KH-05, 08; docs/adr/0047 Q2, Q9): mẫu
+ * Thông báo cho khách khi phòng khám hủy lịch hẹn (Lịch hẹn#5; BR-LH-10, BR-KH-05, 08; docs/adr/0052 Q2, Q9): mẫu
  * {@code APPOINTMENT_CANCELLED_BY_CLINIC} (+{@code _APP}, V17). Gọi trong transaction của bên phát sự kiện; chỉ ghi
  * outbox ({@link NotificationApi}), ST20 gửi sau commit.
  * <p>
- * Tên tra theo lô và người nhận chọn qua {@link AppointmentNoticeTargets} (dùng chung với nhắc lịch ST03, docs/adr/0051);
+ * Tên tra theo lô và người nhận chọn qua {@link AppointmentNoticeTargets} (dùng chung với nhắc lịch ST03, docs/adr/0056);
  * id thiếu hoặc trùng là dữ liệu hỏng → {@link IllegalStateException} (rollback cả use case, như {@code AppointmentResponder}).
  * {@code NotificationApi.enqueue} không kiểm biến bắt buộc của mẫu (chỉ worker ST20 kiểm, sau commit) nên mọi giá trị
  * bắt buộc được kiểm khác {@code null} ở đây. Người nhận theo BR-TB-02:

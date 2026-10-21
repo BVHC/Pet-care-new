@@ -1,12 +1,13 @@
-# ADR-0047: Hủy lịch hẹn do phòng khám (Lịch hẹn#5 `cancelByClinic`) — ba listener đồng bộ, kiểm lại `BOOKED` sau khóa, thông báo theo BR-TB-02
+# ADR-0052: Hủy lịch hẹn do phòng khám (Lịch hẹn#5 `cancelByClinic`) — ba listener đồng bộ, kiểm lại `BOOKED` sau khóa, thông báo theo BR-TB-02
 
 - **Trạng thái:** Accepted
 - **Ngày:** 2026-10-18
+- **Đánh số lại:** ban đầu là ADR-0047; đổi thành số hiện tại ngày 2026-10-20 khi gộp T25 lên `dev`, vì ADR-0045…0050 (lịch hẹn T16, +4) và ADR-0051 (BE-2) đã chiếm số. Mọi tham chiếu ADR-0047…0052 của T25 trong code / tài liệu đã đổi theo (+5). Ngoại lệ: comment trong `V17__seed_appointment_clinic_cancel_templates.sql` (0047 = ADR-0052) và `V18__seed_appointment_reminder_templates.sql` (0051 = ADR-0056) giữ số cũ, vì sửa migration đã chạy làm đổi checksum Flyway.
 - **Liên quan:**
   - BR-LH-10 (02 L131), BR-CN-03 (L67), BR-CN-04 (L68), BR-KH-05 (L91), BR-KH-08 (L94), BR-LH-03 (L124), BR-LH-09 (L130), BR-TB-02 (L250), BR-QT-15 (L58).
   - 03 §3 Lịch hẹn#5 (L85); 03 Quy ước L11 ("một transaction"); 03 Phụ lục L251–252.
   - `docs/06-module-contracts.md` §3 (L54–56), §4.2, §8 Q4 (L237, L242, L256, L269); convention 03 L11 (tên listener), 07 §7.2 (L41–45).
-  - ADR-0010 (rollback-only), 0012 / 0014 (outbox, IN_APP), 0029 §4 (persistence context), 0037 (ngữ pháp biến), 0041 (thứ tự khóa, tên command `cancelByClinic`), 0042-inventory (khóa nhiều dòng một câu, tăng dần), 0044 (ghép tên theo lô), 0045 (cắt micro giây), 0046 (§11 để T25, §14 không audit).
+  - ADR-0010 (rollback-only), 0012 / 0014 (outbox, IN_APP), 0029 §4 (persistence context), 0037 (ngữ pháp biến), 0045 (thứ tự khóa, tên command `cancelByClinic`), 0042-inventory (khóa nhiều dòng một câu, tăng dần), 0048 (ghép tên theo lô), 0049 (cắt micro giây), 0050 (§11 để T25, §14 không audit).
   - Nợ: trả D034; cập nhật D027, D033.
 - **Triển khai (T25 phần 1):**
   - `appointment/listener/{BranchClinicCancellationListener, PetDeceasedListener, PetOwnerTransferredListener}`.
@@ -32,7 +33,7 @@ Branch (thêm ngày nghỉ / thu hẹp giờ có `cancelAffected`) và customer 
 ## Quyết định
 
 1. **Khóa thú (Q1).**
-   - Listener **không** gọi `AppointmentLocks.lockPet`. Customer đã giữ `customers → pets`; lấy advisory 1001 sau đó sẽ đảo thứ tự `advisory(thú) → branches → appointments` (ADR-0041 §1).
+   - Listener **không** gọi `AppointmentLocks.lockPet`. Customer đã giữ `customers → pets`; lấy advisory 1001 sau đó sẽ đảo thứ tự `advisory(thú) → branches → appointments` (ADR-0045 §1).
    - Điều kiện tiên quyết là customer lấy advisory 1001 **trước** khóa dòng `pets` khi đánh dấu mất / chuyển chủ. Đây là nợ D027, việc của BE-2.
    - Trước khi D027 được trả, một lượt đặt lịch chạy song song có thể commit `BOOKED` cho thú vừa mất. Không có deadlock, vì đặt lịch không xin khóa `pets FOR UPDATE`.
 2. **Người nhận (Q2, BR-TB-02).**
@@ -42,7 +43,7 @@ Branch (thêm ngày nghỉ / thu hẹp giờ có `cancelAffected`) và customer 
    - Tài khoản `PENDING` (lễ tân đặt hộ hồ sơ online chưa xác thực) được **coi như không có tài khoản**:
      - Không truyền `recipientAccountId`, vì FK sẽ chặn ST02 xóa tài khoản đó.
      - Không gửi tới email chưa xác thực.
-3. **Phạm vi khi thú mất / chuyển chủ (Q3):** hủy **mọi** lịch `BOOKED` của thú, kể cả lịch đã quá giờ mà ST05 chưa chuyển `NO_SHOW`, để khách không bị tính vi phạm oan. Không audit: convention 08 §8.3 và BR-QT-15 không liệt kê hủy lịch hẹn (như ADR-0046 §14).
+3. **Phạm vi khi thú mất / chuyển chủ (Q3):** hủy **mọi** lịch `BOOKED` của thú, kể cả lịch đã quá giờ mà ST05 chưa chuyển `NO_SHOW`, để khách không bị tính vi phạm oan. Không audit: convention 08 §8.3 và BR-QT-15 không liệt kê hủy lịch hẹn (như ADR-0050 §14).
 4. **Thứ tự (Q4).**
    - Bước 1: đọc id **không khóa, chỉ lấy id**.
      - Event branch đã mang `appointmentIds`.
@@ -62,7 +63,7 @@ Branch (thêm ngày nghỉ / thu hẹp giờ có `cancelAffected`) và customer 
    - Listener chỉ ủy quyền một lời gọi: `@EventListener`, không `@Async`, không `@TransactionalEventListener`, không `@Transactional`.
    - Lỗi ở bất kỳ lịch nào rollback **toàn bộ** use case của bên phát: ngày nghỉ, giờ mở cửa, `deceased_on`, chủ mới, audit chuyển chủ.
    - **Nghĩa vụ của bên phát:** không bắt lỗi quanh `publishEvent`, không `noRollbackFor`. Bắt lỗi sẽ dẫn tới `UnexpectedRollbackException` (ADR-0010).
-8. **Chuyển chủ (Q8):** người nhận là `appointments.customer_id`, tức chủ lúc đặt = chủ cũ (06 L55). `toCustomerId` không dùng. Chủ cũ vẫn thấy lịch đã hủy trong #3 (ADR-0044: phạm vi theo chủ lúc đặt).
+8. **Chuyển chủ (Q8):** người nhận là `appointments.customer_id`, tức chủ lúc đặt = chủ cũ (06 L55). `toCustomerId` không dùng. Chủ cũ vẫn thấy lịch đã hủy trong #3 (ADR-0048: phạm vi theo chủ lúc đặt).
 9. **Thông báo (Q9).**
    - Mỗi lịch bị hủy gửi một thông báo cho mỗi kênh.
    - Tên tra theo lô ≤ 100, ghép theo id; thiếu hoặc trùng id → `IllegalStateException`. Các module được gọi: `findContacts`, `findPets`, `findServices`, `findBranch` (mỗi chi nhánh khác nhau một lần), `AccountContactApi.findContacts`.
@@ -98,7 +99,7 @@ Branch (thêm ngày nghỉ / thu hẹp giờ có `cancelAffected`) và customer 
 
 - **Listener tự lấy advisory 1001:** đảo thứ tự khóa trong cùng transaction (pets trước), nên có rủi ro deadlock với đặt lịch.
 - **Chỉ hủy lịch có giờ hẹn trong tương lai:** lịch quá giờ còn `BOOKED` sẽ bị ST05 chuyển `NO_SHOW` và tính vi phạm cho khách đã mất thú / đã chuyển chủ.
-- **Audit mỗi lần hủy:** không rule nào đòi hỏi; ADR-0046 §14 cũng không audit lịch hẹn.
+- **Audit mỗi lần hủy:** không rule nào đòi hỏi; ADR-0050 §14 cũng không audit lịch hẹn.
 - **Lỗi khi lịch không còn `BOOKED`:** danh sách được tính trước khi khóa, nên báo lỗi sẽ rollback ngày nghỉ chỉ vì khách vừa tự hủy.
 - **Khóa từng id bằng `findByIdForUpdate`:** n câu thay vì ⌈n/100⌉.
 - **Dùng `customers.email` cho khách có tài khoản:** hồ sơ online có email `null`, nên khách đăng ký online sẽ không nhận email.

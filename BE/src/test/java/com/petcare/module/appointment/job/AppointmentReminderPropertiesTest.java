@@ -12,7 +12,7 @@ import org.springframework.boot.test.context.runner.ApplicationContextRunner;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.scheduling.support.CronExpression;
 
-/** {@code app.jobs.appointment-reminder} từ {@code application.yml} thật và fail-fast khi giá trị sai (docs/adr/0051). */
+/** {@code app.jobs.appointment-reminder} từ {@code application.yml} thật và fail-fast khi giá trị sai (docs/adr/0056). */
 class AppointmentReminderPropertiesTest {
 
     @Configuration(proxyBeanMethods = false)

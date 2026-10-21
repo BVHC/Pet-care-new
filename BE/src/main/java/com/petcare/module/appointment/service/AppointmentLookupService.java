@@ -3,6 +3,7 @@ package com.petcare.module.appointment.service;
 import java.time.LocalDate;
 import java.util.List;
 import java.util.Objects;
+import java.util.Optional;
 
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -49,5 +50,11 @@ public class AppointmentLookupService implements AppointmentQueryApi {
     public List<BookedSlot> findBookedByCustomer(Long customerId) {
         Objects.requireNonNull(customerId, "customerId");
         return appointments.findBookedByCustomerId(customerId);
+    }
+
+    @Override
+    public Optional<CheckInRef> findCheckInRef(Long appointmentId) {
+        Objects.requireNonNull(appointmentId, "appointmentId");
+        return appointments.findCheckInRef(appointmentId);
     }
 }

@@ -35,7 +35,7 @@ import com.petcare.module.identity.api.AccountContactApi;
 import com.petcare.module.identity.api.AccountContactApi.AccountContact;
 
 /**
- * {@link AppointmentNoticeTargets} (docs/adr/0047 Q2, docs/adr/0051 Q5): chọn người nhận BR-TB-02 với mã mẫu bất kỳ, và
+ * {@link AppointmentNoticeTargets} (docs/adr/0052 Q2, docs/adr/0056 Q5): chọn người nhận BR-TB-02 với mã mẫu bất kỳ, và
  * {@code resolve} trả đủ thú (kể cả ngày mất), dịch vụ, chi nhánh, tài khoản theo đúng thứ tự đầu vào. Phần chia lô / trùng
  * / thiếu id được {@code ClinicCancellationNoticesTest} canh qua lớp gọi.
  */

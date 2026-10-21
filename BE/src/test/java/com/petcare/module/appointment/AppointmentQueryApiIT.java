@@ -180,6 +180,30 @@ class AppointmentQueryApiIT {
     }
 
     /**
+     * Visit#1 (docs/adr/0059): bốn cột bất biến của lịch ở mọi trạng thái; không có thì rỗng. Projection không nạp entity,
+     * nên {@code findByIdForUpdate} sau đó trong cùng transaction đọc lại dòng từ DB (thấy thay đổi ghi ngoài JPA), không
+     * trả lại một entity cũ từ persistence context (bẫy docs/adr/0029 §4).
+     */
+    @Test
+    void checkInRefReadsImmutableColumnsWithoutLoadingTheEntity() {
+        long pet = data.pet(customer);
+        long id = data.appointment(customer, pet, branch, medical, "MEDICAL", DAY, LocalTime.of(9, 0), "NO_SHOW",
+                staff);
+
+        assertThat(inTx(() -> api.findCheckInRef(id)))
+                .contains(new AppointmentQueryApi.CheckInRef(id, branch, pet, medical));
+        assertThat(inTx(() -> api.findCheckInRef(Long.MAX_VALUE))).isEmpty();
+
+        String statusUnderLock = inTx(() -> {
+            api.findCheckInRef(id);
+            jdbc.update("UPDATE appointments SET status = 'CANCELLED', cancel_source = 'STAFF', late_cancel = false, "
+                    + "cancelled_at = now() WHERE id = ?", id);
+            return repository.findByIdForUpdate(id).orElseThrow().getStatus().name();
+        });
+        assertThat(statusUnderLock).isEqualTo("CANCELLED");
+    }
+
+    /**
      * Class {@code readOnly} <b>tham gia</b> transaction ghi của bên gọi: không chuyển session sang flush MANUAL (nếu
      * chuyển, thay đổi chưa flush của bên gọi sẽ mất khi commit) và không đổi cờ readOnly của transaction.
      */

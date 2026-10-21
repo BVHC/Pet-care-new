@@ -22,7 +22,7 @@ import com.petcare.platform.config.TraceContext;
 import lombok.extern.slf4j.Slf4j;
 
 /**
- * ST05 — chuyển lịch hẹn {@code BOOKED} quá giờ sang {@code NO_SHOW} (BR-LH-08, docs/adr/0048; cơ chế job:
+ * ST05 — chuyển lịch hẹn {@code BOOKED} quá giờ sang {@code NO_SHOW} (BR-LH-08, docs/adr/0053; cơ chế job:
  * docs/adr/0007). Đọc id quá hạn theo lô (keyset theo khung giờ rồi id, tiếp từ id cuối của lô trước), mỗi lịch xử lý trong một transaction riêng ở
  * {@link AppointmentNoShowService}. Không {@code @Transactional} ở đây. Một lịch lỗi (ví dụ {@code BoardingQueryApi} chưa
  * cài — nợ D033) được log {@code NO_SHOW_FAILED} rồi bỏ qua; lượt sau thử lại vì điều kiện chỉ dựa trên trạng thái và

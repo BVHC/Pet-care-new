@@ -14,6 +14,7 @@ import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoInteractions;
+import static org.mockito.Mockito.verifyNoMoreInteractions;
 import static org.mockito.Mockito.when;
 
 import java.lang.reflect.Field;
@@ -24,6 +25,7 @@ import java.time.LocalDate;
 import java.time.LocalTime;
 import java.util.Collection;
 import java.util.List;
+import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
 
@@ -60,6 +62,7 @@ import com.petcare.module.customer.api.PetQueryApi.PetSummary;
 import com.petcare.module.customer.api.Species;
 import com.petcare.module.identity.api.ConfigKey;
 import com.petcare.module.identity.api.SystemConfigApi;
+import com.petcare.module.visit.api.VisitQueryApi;
 import com.petcare.platform.exception.AccessDeniedScopeException;
 import com.petcare.platform.exception.ResourceNotFoundException;
 import com.petcare.platform.model.PageResponse;
@@ -89,12 +92,13 @@ class AppointmentQueryServiceTest {
     private final PetQueryApi pets = mock(PetQueryApi.class);
     private final BranchQueryApi branches = mock(BranchQueryApi.class);
     private final CatalogQueryApi catalog = mock(CatalogQueryApi.class);
+    private final VisitQueryApi visits = mock(VisitQueryApi.class);
     private final SystemConfigApi configs = mock(SystemConfigApi.class);
     private final AppointmentRepository appointments = mock(AppointmentRepository.class);
     private final Clock clock = mock(Clock.class);
     private final SecurityPrincipal principal = mock(SecurityPrincipal.class);
     private final AppointmentQueryService service = new AppointmentQueryService(scope, customers, pets, branches,
-            catalog, configs, appointments, Mappers.getMapper(AppointmentMapper.class), clock);
+            catalog, visits, configs, appointments, Mappers.getMapper(AppointmentMapper.class), clock);
 
     private List<Appointment> page = List.of();
 
@@ -207,7 +211,7 @@ class AppointmentQueryServiceTest {
         PageResponse<AppointmentResponse> result = service.listAppointments(NO_FILTER, 0, 20);
 
         assertThat(result.content()).isEmpty();
-        verifyNoInteractions(pets, catalog, branches, configs);
+        verifyNoInteractions(pets, catalog, branches, configs, visits);
         verify(customers, never()).findContacts(any());
     }
 
@@ -272,6 +276,25 @@ class AppointmentQueryServiceTest {
         verify(branches, times(1)).findBranch(BRANCH);
         verify(pets, never()).findPet(anyLong());
         verify(customers, never()).findContact(anyLong());
+    }
+
+    /** Nợ D028 (docs/adr/0058): visitId tra một lần cho cả trang; lịch không có trong map → null. */
+    @Test
+    void visitIdsAreReadInOneBatchCallForThePage() {
+        asRole("RECEPTIONIST");
+        page = List.of(
+                appointment(1L, 801L, 11L, BRANCH, 21L, LocalTime.of(8, 0)),
+                appointment(2L, 801L, 11L, BRANCH, 21L, LocalTime.of(8, 30)));
+        doReturn(List.of(new PetSummary(11L, 801L, "Chó", Species.DOG, null, null, null))).when(pets).findPets(any());
+        doReturn(List.of(new CustomerContact(801L, "An", null, null, null, false))).when(customers).findContacts(any());
+        doReturn(Map.of(2L, 900L)).when(visits).findVisitIdsByAppointmentIds(any());
+
+        PageResponse<AppointmentResponse> result = service.listAppointments(NO_FILTER, 0, 20);
+
+        assertThat(result.content()).extracting(AppointmentResponse::appointmentId, AppointmentResponse::visitId)
+                .containsExactly(tuple(1L, null), tuple(2L, 900L));
+        verify(visits).findVisitIdsByAppointmentIds(Set.of(1L, 2L));
+        verifyNoMoreInteractions(visits);
     }
 
     @Test

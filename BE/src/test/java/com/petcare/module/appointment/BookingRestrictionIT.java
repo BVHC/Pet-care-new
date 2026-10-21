@@ -54,7 +54,7 @@ import com.petcare.platform.config.TimeConfig;
 import com.petcare.support.MutableClock;
 
 /**
- * Xem / gỡ hạn chế đặt online — appointment-v1 #7–9 (T25 phần 3, docs/adr/0050) và message D035, trên bean thật của
+ * Xem / gỡ hạn chế đặt online — appointment-v1 #7–9 (T25 phần 3, docs/adr/0055) và message D035, trên bean thật của
  * customer / catalog / branch; {@code BoardingQueryApi} là mock (D033) trả 0 vi phạm. Đồng hồ {@link MutableClock} năm
  * 2001 nên không đụng dữ liệu của IT khác.
  * <ul>
@@ -63,7 +63,7 @@ import com.petcare.support.MutableClock;
  * <li>Commit / rollback: gỡ + audit cùng commit; lỗi audit / UPDATE rollback cả hai; 404 / 409 / đọc không ghi gì.</li>
  * <li>Đồng thời qua advisory 1002: gỡ chờ lần đánh giá và thấy hạn chế nó vừa commit (READ COMMITTED), hai lần gỡ,
  * hủy muộn ∥ gỡ theo cả hai thứ tự.</li>
- * <li>Mốc đếm sau khi gỡ (Q1 của ADR-0050, nợ D038).</li>
+ * <li>Mốc đếm sau khi gỡ (Q1 của ADR-0055, nợ D038).</li>
  * </ul>
  */
 @SpringBootTest(webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT)
@@ -653,7 +653,7 @@ class BookingRestrictionIT {
         assertThat(deadlocks()).isEqualTo(deadlocksBefore);
     }
 
-    // ================================================================ mốc đếm sau khi gỡ (Q1 ADR-0050, D038)
+    // ================================================================ mốc đếm sau khi gỡ (Q1 ADR-0055, D038)
 
     /** 3 vi phạm đã gây ra lần hạn chế không bị đếm lại sau khi gỡ: thêm một hủy muộn không tạo hạn chế mới. */
     @Test
@@ -674,7 +674,7 @@ class BookingRestrictionIT {
         assertThat(data(get("/api/me/booking-restriction", customerToken))).containsEntry("restricted", false);
     }
 
-    /** Vi phạm xảy ra trong lúc bị hạn chế vẫn được đếm cho lần đánh giá sau khi gỡ (docs/adr/0050 hệ quả 2). */
+    /** Vi phạm xảy ra trong lúc bị hạn chế vẫn được đếm cho lần đánh giá sau khi gỡ (docs/adr/0055 hệ quả 2). */
     @Test
     void violationsDuringTheRestrictionCountAfterTheLift() {
         restriction(customer, T0.minus(Duration.ofDays(10)), T0.plus(Duration.ofDays(20)), 3, null);

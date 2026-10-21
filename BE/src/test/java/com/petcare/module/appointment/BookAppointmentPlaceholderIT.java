@@ -31,16 +31,9 @@ import com.petcare.TestcontainersConfiguration;
 import com.petcare.module.identity.service.SessionService;
 
 /**
-<<<<<<< HEAD
- * Đặt lịch trên bean thật của app hiện tại (docs/adr/0047). Từ 2026-10-20 {@code CustomerQueryApi} và
- * {@code PetQueryApi} của BE-2 là bản thật (nợ D010, D031 đã trả) nên lễ tân đặt được; tài khoản khách <b>không có hồ
- * sơ</b> (dữ liệu sai, BR-KH-01) vẫn 500 — không dòng {@code appointments} nào, không số sequence nào bị tiêu, không khóa
- * advisory nào còn treo. Vai trò sai vẫn 403.
-=======
- * Đặt lịch trên bean thật của app hiện tại (docs/adr/0043). Từ 2026-10-19 {@code CustomerQueryApi} và
+ * Đặt lịch trên bean thật của app hiện tại (docs/adr/0047). Từ 2026-10-19 {@code CustomerQueryApi} và
  * {@code PetQueryApi} là bản thật (D010, D031 đã trả khi gộp nhánh): lễ tân đặt được; tài khoản khách không có hồ sơ vẫn
  * 500 mà không ghi gì, không tiêu số sequence, không để khóa advisory treo. Vai trò sai vẫn 403.
->>>>>>> e18c4ed (feat: triển khai hủy do phòng khám)
  */
 @SpringBootTest(webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT)
 @ActiveProfiles("test")
@@ -89,18 +82,9 @@ class BookAppointmentPlaceholderIT {
         long appointmentsBefore = jdbc.queryForObject("SELECT count(*) FROM appointments", Long.class);
         Long sequenceBefore = jdbc.queryForObject("SELECT last_value FROM appointment_code_seq", Long.class);
 
-<<<<<<< HEAD
-        for (String token : List.of(token(data.customerAccount()))) {
-            ResponseEntity<Map<String, Object>> response = post(token);
-            assertThat(response.getStatusCode()).as("%s", response.getBody())
-                    .isEqualTo(HttpStatus.INTERNAL_SERVER_ERROR);
-            assertThat(response.getBody()).containsEntry("errorCode", "INTERNAL_ERROR");
-        }
-=======
         ResponseEntity<Map<String, Object>> response = post(token(data.customerAccount()));
         assertThat(response.getStatusCode()).as("%s", response.getBody()).isEqualTo(HttpStatus.INTERNAL_SERVER_ERROR);
         assertThat(response.getBody()).containsEntry("errorCode", "INTERNAL_ERROR");
->>>>>>> e18c4ed (feat: triển khai hủy do phòng khám)
 
         assertThat(jdbc.queryForObject("SELECT count(*) FROM appointments", Long.class)).isEqualTo(appointmentsBefore);
         assertThat(jdbc.queryForObject("SELECT last_value FROM appointment_code_seq", Long.class))

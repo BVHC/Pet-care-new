@@ -64,7 +64,7 @@ class BookingRestrictionServiceTest {
                 .getAnnotation(Transactional.class).readOnly()).isTrue();
     }
 
-    /** D035 (docs/adr/0050): cùng điều kiện "đang hiệu lực", trả {@code ends_at}; chỉ đọc. */
+    /** D035 (docs/adr/0055): cùng điều kiện "đang hiệu lực", trả {@code ends_at}; chỉ đọc. */
     @Test
     void findActiveUntilReturnsTheEndOfTheActiveRow() throws NoSuchMethodException {
         BookingRestriction active = BookingRestriction.start(5L, AT.minusSeconds(60), AT.plus(Duration.ofDays(30)), 3);

@@ -52,4 +52,17 @@ public interface SalesOrderRepository extends JpaRepository<SalesOrder, Long> {
 
         Long getBranchId();
     }
+
+    /**
+     * Order nguồn VISIT của các lượt (đọc không khóa, projection; index {@code uq_orders_visit_id}). Thêm 2026-10-20 bởi
+     * BE-1 cho hàng đợi visit (docs/adr/0060). Bên gọi không truyền tập rỗng.
+     */
+    @Query("SELECT o.visitId AS visitId, o.id AS id FROM SalesOrder o WHERE o.visitId IN :visitIds")
+    List<VisitOrderRow> findVisitOrderIds(@Param("visitIds") Collection<Long> visitIds);
+
+    interface VisitOrderRow {
+        Long getVisitId();
+
+        Long getId();
+    }
 }
