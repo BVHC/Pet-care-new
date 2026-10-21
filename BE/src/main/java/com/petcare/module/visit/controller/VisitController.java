@@ -17,6 +17,7 @@ import org.springframework.web.bind.annotation.RestController;
 
 import com.petcare.module.visit.dto.AssignRequest;
 import com.petcare.module.visit.dto.AssignResult;
+import com.petcare.module.visit.dto.CancelVisitRequest;
 import com.petcare.module.visit.dto.CreateVisitRequest;
 import com.petcare.module.visit.dto.MoveVisitRequest;
 import com.petcare.module.visit.dto.QueueServiceGroup;
@@ -25,6 +26,7 @@ import com.petcare.module.visit.dto.VisitResponse;
 import com.petcare.module.visit.entity.VisitStatus;
 import com.petcare.module.visit.service.VisitCheckInService;
 import com.petcare.module.visit.service.VisitDispatchService;
+import com.petcare.module.visit.service.VisitProgressService;
 import com.petcare.module.visit.service.VisitQueueService;
 import com.petcare.platform.config.ApiErrorDoc;
 import com.petcare.platform.model.ApiResponse;
@@ -37,8 +39,9 @@ import jakarta.validation.Valid;
 /**
  * Tiếp nhận và hàng đợi — visit-v1 #1 tiếp nhận (UC44, UC47, A06; docs/adr/0059), #2 hàng đợi chi nhánh, #4 chi tiết
  * lượt (UC45, UC46, A05–A08; docs/adr/0060), #5 gán, #6 sắp lại (UC45, A06), #7 xác định ca cấp cứu (UC47, A06, A07;
- * docs/adr/0061). Body / tham số sai là 400 trước {@code @PreAuthorize}; chi nhánh lấy từ người đăng nhập, mọi rule
- * kiểm ở service. #3 hàng đợi của tôi ở {@link MyQueueController}.
+ * docs/adr/0061), #8 gọi lượt (UC46, A07, A08), #11 hủy lượt khách bỏ về (UC45, A06; docs/adr/0062). Body / tham số
+ * sai là 400 trước {@code @PreAuthorize}; chi nhánh lấy từ người đăng nhập, mọi rule kiểm ở service. #3 hàng đợi của
+ * tôi ở {@link MyQueueController}.
  */
 @RestController
 @RequestMapping("/api/visits")
@@ -53,14 +56,20 @@ public class VisitController {
     /** Hợp đồng #7: A06, A07 (UC47). */
     static final String EMERGENCY_ROLES = "hasAnyRole('RECEPTIONIST','VET')";
 
+    /** Hợp đồng #8: A07, A08 — người được gán lượt (UC46; 03 #3). */
+    static final String CALL_ROLES = "hasAnyRole('VET','CARETAKER')";
+
     private final VisitCheckInService checkIns;
     private final VisitQueueService queue;
     private final VisitDispatchService dispatch;
+    private final VisitProgressService progress;
 
-    public VisitController(VisitCheckInService checkIns, VisitQueueService queue, VisitDispatchService dispatch) {
+    public VisitController(VisitCheckInService checkIns, VisitQueueService queue, VisitDispatchService dispatch,
+            VisitProgressService progress) {
         this.checkIns = checkIns;
         this.queue = queue;
         this.dispatch = dispatch;
+        this.progress = progress;
     }
 
     /** visit-v1 #1 (Visit#1 + Lịch hẹn#3 + Order#1 trong một transaction). */
@@ -179,5 +188,43 @@ public class VisitController {
     @PreAuthorize(EMERGENCY_ROLES)
     public ApiResponse<VisitResponse> markVisitEmergency(@PathVariable Long visitId) {
         return ApiResponse.ok(dispatch.markVisitEmergency(visitId), "Đã xác định ca cấp cứu");
+    }
+
+    /** visit-v1 #8 (Visit#3; docs/adr/0062). Không có body. */
+    @Operation(operationId = "callVisit", tags = "Queue",
+            summary = "Gọi lượt",
+            description = "UC46 · BR-TN-05, 09. Actor: A07, A08. Quyền: Người được gán lượt. Chuyển trạng thái: WAITING → "
+                + "IN_PROGRESS (Visit#3). Người gọi được kiểm lại dưới khóa tài khoản của chính mình (docs/adr/0062).",
+            parameters = @Parameter(name = "visitId", in = ParameterIn.PATH, example = "9001"))
+    @ApiErrorDoc(status = 400, description = "`BR-TN-05` người gọi không còn hoạt động tại chi nhánh hoặc sai chức vụ với "
+            + "nhóm dịch vụ (đổi chức vụ sau khi được gán) · tham số sai kiểu (`MALFORMED_REQUEST`); BR-TK-17")
+    @ApiErrorDoc(status = 403, description = "Sai vai trò · lượt của chi nhánh khác · lượt không gán cho người gọi, kể "
+            + "cả lượt chưa gán (BR-TN-05, 09)")
+    @ApiErrorDoc(status = 404)
+    @ApiErrorDoc(status = 409, description = "Lượt không còn WAITING")
+    @PostMapping("/{visitId}/call")
+    @PreAuthorize(CALL_ROLES)
+    public ApiResponse<VisitResponse> callVisit(@PathVariable Long visitId) {
+        return ApiResponse.ok(progress.callVisit(visitId), "Đã gọi lượt");
+    }
+
+    /** visit-v1 #11 (Visit#6 + Lịch hẹn#8 + Order#6 trong một transaction; docs/adr/0062). Body không bắt buộc (A4). */
+    @Operation(operationId = "cancelVisit", tags = "Completion",
+            summary = "Hủy lượt khách bỏ về",
+            description = "UC45 · BR-TN-07. Actor: A06. Quyền: Lễ tân chi nhánh. Chuyển trạng thái: WAITING → CANCELLED "
+                + "(Visit#6) · Lịch hẹn#8 · Order#6. Lịch hẹn → CANCELLED, không tính hủy muộn. Không gửi body: hủy không "
+                + "lý do (A4).",
+            parameters = @Parameter(name = "visitId", in = ParameterIn.PATH, example = "9001"))
+    @ApiErrorDoc(status = 400, description = "Lý do quá 300 ký tự (`VALIDATION_FAILED`) · body / tham số sai "
+            + "(`MALFORMED_REQUEST`); BR-TK-17")
+    @ApiErrorDoc(status = 403, description = "Sai vai trò · lượt của chi nhánh khác")
+    @ApiErrorDoc(status = 404)
+    @ApiErrorDoc(status = 409, description = "Lượt đã được gọi (BR-TN-07 — nhân viên hoàn tất theo BR-KB-02) hoặc đã kết "
+            + "thúc")
+    @PostMapping("/{visitId}/cancel")
+    @PreAuthorize(RECEPTIONIST)
+    public ApiResponse<VisitResponse> cancelVisit(@PathVariable Long visitId,
+            @Valid @RequestBody(required = false) CancelVisitRequest request) {
+        return ApiResponse.ok(progress.cancelVisit(visitId, request), "Đã hủy lượt");
     }
 }

@@ -29,7 +29,9 @@ class VisitControllerSecurityTest {
                 "getVisit", QUEUE,
                 "assignVisit", "hasRole('RECEPTIONIST')",
                 "moveVisitInQueue", "hasRole('RECEPTIONIST')",
-                "markVisitEmergency", "hasAnyRole('RECEPTIONIST','VET')"));
+                "markVisitEmergency", "hasAnyRole('RECEPTIONIST','VET')",
+                "callVisit", "hasAnyRole('VET','CARETAKER')",
+                "cancelVisit", "hasRole('RECEPTIONIST')"));
         assertThat(VisitController.QUEUE_ROLES).isEqualTo(QUEUE);
     }
 

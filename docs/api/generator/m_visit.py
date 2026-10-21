@@ -44,6 +44,7 @@ m = Module(
     questions=[
         ("Q1", "Dòng dịch vụ tự sinh khi tiếp nhận có thể bị VET đổi (BR-TN-01). Nếu đổi từ dịch vụ thường sang dịch vụ loại Khám thì có hủy nhắc tái khám như Visit#1 có dịch vụ Khám không?", "TBD (PO), tạm chỉ xét tại Visit#1 (06 G5)", "03 Care Task#6"),
         ("Q2", "Visit#4 cho SUPER_MANAGER gán lại lượt đã gọi khi chi nhánh không còn BRANCH_MANAGER ACTIVE, nhưng #2 / #4 chỉ cho A05–A08 xem lượt. SUPER_MANAGER tìm lượt cần gán lại bằng cách nào?", "TBD, chốt cùng phần gán lại lượt (docs/adr/0060)", "03 Visit#4; 00-method §3.3"),
+        ("Q3", "Khóa tài khoản đánh dấu lượt IN_PROGRESS của người bị khóa là cần gán lại (needsReassign). Mở khóa có gỡ cờ này không, khi người phụ trách đã ACTIVE trở lại?", "TBD (PO); tạm không gỡ (docs/adr/0062 Q5)", "03 Tài khoản#7, #8; BR-QT-12; erd visits.needs_reassign"),
     ],
 )
 
@@ -77,7 +78,7 @@ m.schema("AssignResult", {
 })
 m.schema("MoveVisitRequest", {"placeBeforeVisitId": "int64|Visit WAITING cùng chi nhánh (A3)"})
 m.schema("ReassignRequest", {"assigneeId": "int64", "reason": "string:300|Bắt buộc (BR-TN-08)"})
-m.schema("CancelVisitRequest", {"reason": "string:300?"}, required=[])
+m.schema("CancelVisitRequest", {"reason": "string:300?|Lý do hủy (không bắt buộc, A4)"}, required=[])
 m.schema("PrescriptionItem", {
     "itemId": "int64", "productId": "int64", "productName": "string", "quantity": "int",
     "dosageInstructions": "string:500", "isExternalPurchase": "bool|Mua ngoài: vẫn in trên đơn, không sinh dòng Order",
@@ -198,7 +199,13 @@ m.op("post", "/visits/{visitId}/mark-emergency", "markVisitEmergency", "Xác đ�
      notes="Lượt lên đầu hàng đợi (A2).")
 m.op("post", "/visits/{visitId}/call", "callVisit", "Gọi lượt", "Queue", "UC46", "BR-TN-05, 09", "A07, A08",
      "Người được gán lượt", "WAITING → IN_PROGRESS (Visit#3)", resp="Visit", path_params=["VisitId"],
-     errors=(401, 403, 404, 409), err_desc={403: "`BR-TN-05` lượt không gán cho người gọi", 409: "Lượt không còn WAITING"})
+     errors=(400, 401, 403, 404, 409),
+     err_desc={400: "`BR-TN-05` người gọi không còn hoạt động tại chi nhánh hoặc sai chức vụ với nhóm dịch vụ (đổi "
+                    "chức vụ sau khi được gán) · tham số sai kiểu (`MALFORMED_REQUEST`); BR-TK-17",
+               403: "Sai vai trò · lượt của chi nhánh khác · lượt không gán cho người gọi, kể cả lượt chưa gán "
+                    "(BR-TN-05, 09)",
+               409: "Lượt không còn WAITING"},
+     notes="Người gọi được kiểm lại dưới khóa tài khoản của chính mình (docs/adr/0062).")
 m.op("post", "/visits/{visitId}/reassign", "reassignCalledVisit", "Gán lại lượt đã gọi", "Queue", "UC45",
      "BR-TN-05, 08, BR-QT-15", "A05 (A04 khi chi nhánh không còn BRANCH_MANAGER ACTIVE)",
      "BRANCH_MANAGER chi nhánh; SUPER_MANAGER theo điều kiện", "IN_PROGRESS → IN_PROGRESS (Visit#4)",
@@ -215,9 +222,11 @@ m.op("post", "/visits/{visitId}/complete", "completeVisit", "Hoàn tất lượt
                409: "Lượt không IN_PROGRESS"})
 m.op("post", "/visits/{visitId}/cancel", "cancelVisit", "Hủy lượt khách bỏ về", "Completion", "UC45", "BR-TN-07",
      "A06", "Lễ tân chi nhánh", "WAITING → CANCELLED (Visit#6) · Lịch hẹn#8 · Order#6", body="CancelVisitRequest",
-     resp="Visit", path_params=["VisitId"], errors=(401, 403, 404, 409),
-     err_desc={409: "`BR-TN-07` lượt đã được gọi — nhân viên hoàn tất theo BR-KB-02"},
-     notes="Lịch hẹn → CANCELLED, không tính hủy muộn.")
+     resp="Visit", path_params=["VisitId"], errors=(400, 401, 403, 404, 409),
+     err_desc={400: "Lý do quá 300 ký tự (`VALIDATION_FAILED`) · body / tham số sai (`MALFORMED_REQUEST`); BR-TK-17",
+               403: "Sai vai trò · lượt của chi nhánh khác",
+               409: "Lượt đã được gọi (BR-TN-07 — nhân viên hoàn tất theo BR-KB-02) hoặc đã kết thúc"},
+     notes="Lịch hẹn → CANCELLED, không tính hủy muộn. Không gửi body: hủy không lý do (A4).")
 
 m.op("get", "/visits/{visitId}/medical-record", "getMedicalRecord", "Xem bệnh án của lượt", "Medical record",
      "UC48, UC53", "BR-KB-01", "A07, A08", "VET, CARETAKER chi nhánh (CARETAKER chỉ xem)", resp="MedicalRecord",

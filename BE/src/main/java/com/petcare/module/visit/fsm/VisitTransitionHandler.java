@@ -21,6 +21,9 @@ import com.petcare.platform.fsm.StateMachineBase;
 @Component
 public class VisitTransitionHandler extends StateMachineBase<VisitStatus> {
 
+    /** Tên nghiệp vụ trong message 409, dùng chung cho kiểm trạng thái tường minh ở service (docs/adr/0062). */
+    public static final String FSM_NAME = "lượt tiếp nhận";
+
     @Override
     public Map<VisitStatus, Set<VisitStatus>> allowedTransitions() {
         return Map.of(
@@ -39,6 +42,6 @@ public class VisitTransitionHandler extends StateMachineBase<VisitStatus> {
     /** Tên hiện trong message 409 mà client nhận — tên nghiệp vụ, không lộ tên lớp (khuôn docs/adr/0033). */
     @Override
     protected String fsmName() {
-        return "lượt tiếp nhận";
+        return FSM_NAME;
     }
 }

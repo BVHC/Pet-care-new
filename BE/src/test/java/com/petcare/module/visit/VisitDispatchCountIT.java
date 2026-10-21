@@ -27,6 +27,7 @@ import com.petcare.TestcontainersConfiguration;
 import com.petcare.module.appointment.AppointmentItSupport;
 import com.petcare.module.visit.dto.MoveVisitRequest;
 import com.petcare.module.visit.service.VisitDispatchService;
+import com.petcare.module.visit.service.VisitProgressService;
 import com.petcare.platform.security.AccessScope;
 import com.petcare.platform.security.SecurityPrincipal;
 
@@ -36,7 +37,8 @@ import jakarta.persistence.EntityManagerFactory;
  * Số câu SQL của sắp lại hàng đợi (docs/adr/0061 mục Q, khuôn {@code VisitQueueCountIT}): khi không phải dồn khóa, số câu
  * không đổi dù chi nhánh có 3 hay 40 lượt WAITING — khóa tập một câu, nạp lượt một câu, hàng đợi trả về theo lô
  * (docs/adr/0060). Mutation "khóa / nạp từng lượt" → số câu tăng theo số lượt → đỏ. Gọi service trực tiếp (principal
- * đặt tay) để không đếm câu của xác thực.
+ * đặt tay) để không đếm câu của xác thực. Hủy lượt (docs/adr/0062 mục Q): số câu không đổi dù Order có 1 hay 6 dòng —
+ * sales khóa Order và đổi trạng thái, không nạp / ghi từng dòng.
  */
 @SpringBootTest(properties = "spring.jpa.properties.hibernate.generate_statistics=true")
 @ActiveProfiles("test")
@@ -45,6 +47,8 @@ class VisitDispatchCountIT {
 
     @Autowired
     private VisitDispatchService dispatch;
+    @Autowired
+    private VisitProgressService progress;
     @Autowired
     private EntityManagerFactory entityManagerFactory;
     @Autowired
@@ -68,6 +72,9 @@ class VisitDispatchCountIT {
     @AfterEach
     void tearDown() {
         SecurityContextHolder.clearContext();
+        jdbc.update("""
+                DELETE FROM order_lines WHERE order_id IN (
+                    SELECT o.id FROM orders o JOIN visits v ON v.id = o.visit_id WHERE v.branch_id = ?)""", branch);
         jdbc.update("DELETE FROM orders WHERE visit_id IN (SELECT id FROM visits WHERE branch_id = ?)", branch);
         jdbc.update("DELETE FROM visits WHERE branch_id = ?", branch);
         data.cleanUp();
@@ -83,6 +90,31 @@ class VisitDispatchCountIT {
         long large = statements(() -> dispatch.moveVisitInQueue(last, new MoveVisitRequest(many.get(0))));
 
         assertThat(large).as("40 lượt WAITING, không dồn khóa").isEqualTo(small);
+    }
+
+    @Test
+    void cancelIsAFixedNumberOfStatementsForOneAndSixOrderLines() {
+        List<Long> visits = waiting(2, Instant.parse("2007-02-01T02:00:00Z"));
+        long service = data.service("MEDICAL");
+        lines(visits.get(0), service, 1);
+        lines(visits.get(1), service, 6);
+
+        long small = statements(() -> progress.cancelVisit(visits.get(0), null));
+        long large = statements(() -> progress.cancelVisit(visits.get(1), null));
+
+        assertThat(large).as("Order 6 dòng").isEqualTo(small);
+        assertThat(jdbc.queryForList("SELECT status FROM orders WHERE visit_id IN (?, ?)", String.class,
+                visits.get(0), visits.get(1))).containsOnly("CANCELLED");
+    }
+
+    private void lines(long visitId, long serviceId, int count) {
+        for (int i = 0; i < count; i++) {
+            jdbc.update("""
+                    INSERT INTO order_lines (order_id, line_type, service_id, description, quantity, unit_price,
+                            line_total, is_auto_generated, added_by, owner_account_id)
+                    SELECT id, 'SERVICE', ?, 'Khám', 1, 100000, 100000, ?, ?, ? FROM orders WHERE visit_id = ?""",
+                    serviceId, i == 0, receptionist, receptionist, visitId);
+        }
     }
 
     private long statements(Supplier<?> work) {

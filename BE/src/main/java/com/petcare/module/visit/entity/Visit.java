@@ -30,8 +30,10 @@ import lombok.NoArgsConstructor;
  * Command (docs/adr/0058): {@code checkInVisit} (#1), {@code assignVisit} (#2), {@code callVisit} (#3),
  * {@code reassignCalledVisit} (#4), {@code completeVisit} (#5), {@code cancelVisit} (#6); ngoài bảng 03:
  * {@code moveVisitInQueue}, {@code markVisitEmergency}. Đã có: {@link #checkIn} (T26 phần 1, docs/adr/0059),
- * {@link #assignTo}, {@link #reorder}, {@link #markEmergency} (T26 phần 3, docs/adr/0061); method đổi trạng thái khác
- * thêm cùng phần của T26 dựng thao tác đó.
+ * {@link #assignTo}, {@link #reorder}, {@link #markEmergency} (T26 phần 3, docs/adr/0061), {@link #call},
+ * {@link #cancel} (T26 phần 4, docs/adr/0062); method đổi trạng thái khác thêm cùng phần dựng thao tác đó.
+ * {@code needsReassign} chỉ được đặt bằng câu UPDATE hàng loạt khi khóa tài khoản người phụ trách
+ * ({@code VisitRepository.flagNeedsReassign}).
  */
 @Getter
 @Entity
@@ -144,5 +146,25 @@ public class Visit extends TimestampedEntity {
     public void markEmergency(Instant at) {
         this.priorityClass = PriorityClass.EMERGENCY;
         this.queueSortKey = at;
+    }
+
+    /**
+     * Visit#3 ({@code WAITING → IN_PROGRESS}, command {@code callVisit}, BR-TN-05, 09; docs/adr/0062). Bên gọi đã khóa
+     * tài khoản người gọi và dòng lượt, kiểm người gọi là người được gán và kiểm trạng thái; {@code at} đã cắt về µs.
+     */
+    public void call(Instant at) {
+        this.status = VisitStatus.IN_PROGRESS;
+        this.calledAt = at;
+    }
+
+    /**
+     * Visit#6 ({@code WAITING → CANCELLED}, command {@code cancelVisit}, BR-TN-07; docs/adr/0062). Bên gọi đã khóa dòng
+     * và kiểm trạng thái; lịch hẹn và Order chuyển trong cùng transaction. {@code reason} đã chuẩn hóa (có thể null, A4);
+     * người được gán giữ nguyên.
+     */
+    public void cancel(String reason, Instant at) {
+        this.status = VisitStatus.CANCELLED;
+        this.cancelReason = reason;
+        this.cancelledAt = at;
     }
 }

@@ -1,11 +1,13 @@
 package com.petcare.module.visit.repository;
 
+import java.time.Instant;
 import java.util.Collection;
 import java.util.List;
 import java.util.Optional;
 
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.JpaSpecificationExecutor;
+import org.springframework.data.jpa.repository.Modifying;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 import org.springframework.transaction.annotation.Propagation;
@@ -83,6 +85,23 @@ public interface VisitRepository extends JpaRepository<Visit, Long>, JpaSpecific
             ORDER BY id FOR NO KEY UPDATE
             """, nativeQuery = true)
     List<Long> lockWaitingIdsOfBranch(@Param("branchId") Long branchId);
+
+    /**
+     * D017 (03 Tài khoản#7, BR-QT-11, BR-TN-08; docs/adr/0062): lượt đã gọi ({@code IN_PROGRESS}) của người vừa bị khóa
+     * → cần gán lại. Một câu, index {@code ix_visits_assignee_status}; dòng đã đánh dấu không ghi lại (khóa lại sau khi
+     * mở khóa giữ {@code updated_at}). Bulk update tự đặt {@code updated_at} từ {@code Clock} (docs/adr/0015).
+     * <p>
+     * Chạy trong transaction khóa tài khoản của identity, lúc entity {@code Account} vừa bị sửa mà chưa flush:
+     * {@code flushAutomatically} ghi nó trước, <b>không</b> {@code clearAutomatically} (clear sẽ tách entity identity
+     * đang dùng tiếp). Transaction đó không nạp entity {@code Visit} nào (chỉ projection), nên không có bản cũ cần xóa.
+     */
+    @Transactional(propagation = Propagation.MANDATORY)
+    @Modifying(flushAutomatically = true)
+    @Query(value = """
+            UPDATE visits SET needs_reassign = true, updated_at = :now
+            WHERE assignee_id = :accountId AND status = 'IN_PROGRESS' AND needs_reassign = false
+            """, nativeQuery = true)
+    int flagNeedsReassign(@Param("accountId") Long accountId, @Param("now") Instant now);
 
     @Query(value = "SELECT EXISTS (SELECT 1 FROM visits WHERE pet_id = :petId)", nativeQuery = true)
     boolean existsAnyByPetId(@Param("petId") Long petId);
