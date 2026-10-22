@@ -27,6 +27,7 @@ import com.petcare.module.customer.api.PetApi;
 import com.petcare.module.customer.api.PetQueryApi;
 import com.petcare.module.customer.api.PetQueryApi.PetSummary;
 import com.petcare.module.customer.api.Species;
+import com.petcare.module.customer.api.RecordedWeight;
 import com.petcare.module.customer.api.WeightSource;
 import com.petcare.platform.exception.BusinessRuleViolationException;
 
@@ -235,13 +236,17 @@ class CustomerModuleApiIT extends CustomerMeItSupport {
         assertThat(petQuery.findPet(pet)).get().extracting(PetSummary::currentWeightKg).isNull();
 
         Long first = tx.execute(s -> petApi.recordWeight(pet, new BigDecimal("8.5"), WeightSource.OWNER, null, null,
-                null));
+                null)).weightRecordId();
         long visit = fx.visit(customer, pet, "COMPLETED");
         long actor = staffAccount();
-        Long second = tx.execute(s -> petApi.recordWeight(pet, new BigDecimal("9.25"), WeightSource.VET, visit, null,
-                actor));
+        RecordedWeight secondRecord = tx.execute(s -> petApi.recordWeight(pet, new BigDecimal("9.25"),
+                WeightSource.VET, visit, null, actor));
+        Long second = secondRecord.weightRecordId();
 
         assertThat(second).isGreaterThan(first);
+        assertThat(secondRecord.weightKg()).isEqualByComparingTo("9.25");
+        assertThat(jdbc.queryForObject("SELECT measured_at FROM weight_records WHERE id = ?",
+                java.sql.Timestamp.class, second).toInstant()).isEqualTo(secondRecord.measuredAt());
         assertThat(jdbc.queryForMap("SELECT * FROM weight_records WHERE id = ?", second))
                 .containsEntry("source", "VET").containsEntry("visit_id", visit).containsEntry("recorded_by", actor)
                 .containsEntry("boarding_booking_id", null);

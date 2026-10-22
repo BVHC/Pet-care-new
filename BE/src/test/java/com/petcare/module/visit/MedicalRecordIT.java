@@ -160,6 +160,7 @@ class MedicalRecordIT {
     @AfterEach
     void tearDown() {
         for (long b : branches) {
+            jdbc.update("DELETE FROM weight_records WHERE visit_id IN (SELECT id FROM visits WHERE branch_id = ?)", b);
             jdbc.update("""
                     DELETE FROM medical_record_addenda WHERE medical_record_id IN (
                         SELECT id FROM visits WHERE branch_id = ?)""", b);
@@ -615,6 +616,195 @@ class MedicalRecordIT {
         assertThat(count("SELECT count(*) FROM medical_records WHERE visit_id = " + visit)).isEqualTo(1);
     }
 
+    // ================================================================ #14 cân nặng
+
+    @Test
+    void weightIsRecordedAsVetForTheVisitPetAndEachCallIsOneRecord() {
+        long visit = called(walkIn(medical), vetA);
+
+        Map<String, Object> first = data(weight(vetAToken, visit, Map.of("weightKg", 12.346)), HttpStatus.CREATED);
+        Map<String, Object> second = data(weight(vetAToken, visit, Map.of("weightKg", 9.5)), HttpStatus.CREATED);
+
+        assertThat(((Number) first.get("weightKg")).doubleValue()).isEqualTo(12.35);
+        assertThat(((Number) second.get("weightRecordId")).longValue())
+                .isGreaterThan(((Number) first.get("weightRecordId")).longValue());
+        Map<String, Object> row = jdbc.queryForMap("SELECT * FROM weight_records WHERE id = ?",
+                ((Number) first.get("weightRecordId")).longValue());
+        assertThat(row).containsEntry("pet_id", pet).containsEntry("source", "VET").containsEntry("visit_id", visit)
+                .containsEntry("recorded_by", vetA).containsEntry("boarding_booking_id", null);
+        assertThat(((Timestamp) row.get("measured_at")).toInstant())
+                .isEqualTo(Instant.parse((String) first.get("measuredAt")));
+        assertThat(count("SELECT count(*) FROM weight_records WHERE visit_id = " + visit)).isEqualTo(2);
+        assertThat(jdbc.queryForObject("""
+                SELECT weight_kg FROM weight_records WHERE pet_id = ? ORDER BY measured_at DESC, id DESC LIMIT 1""",
+                java.math.BigDecimal.class, pet)).isEqualByComparingTo("9.50");
+        assertThat(audits(visit)).isEmpty();
+    }
+
+    @Test
+    void weightBodyCannotChooseThePetTheSourceOrTheRecorder() {
+        long visit = called(walkIn(medical), vetA);
+        long otherPet = data.pet(customer);
+        Map<String, Object> body = new LinkedHashMap<>();
+        body.put("weightKg", 7.25);
+        body.put("petId", otherPet);
+        body.put("source", "OWNER");
+        body.put("recordedBy", vetB);
+        body.put("visitId", visit + 1);
+
+        data(weight(vetAToken, visit, body), HttpStatus.CREATED);
+
+        assertThat(count("SELECT count(*) FROM weight_records WHERE pet_id = " + otherPet)).isZero();
+        assertThat(jdbc.queryForList("SELECT source, recorded_by, visit_id FROM weight_records WHERE pet_id = ?", pet))
+                .singleElement().satisfies(row -> assertThat(row).containsEntry("source", "VET")
+                        .containsEntry("recorded_by", vetA).containsEntry("visit_id", visit));
+    }
+
+    @Test
+    void weightWithoutTokenOrWithALockedAccountIs401AndRecordsNothing() {
+        long visit = called(walkIn(medical), vetA);
+
+        assertError(weight(null, visit, Map.of("weightKg", 5)), HttpStatus.UNAUTHORIZED, "UNAUTHENTICATED");
+        assertThat(lock(vetA).getStatusCode()).isEqualTo(HttpStatus.OK);
+        assertError(weight(vetAToken, visit, Map.of("weightKg", 5)), HttpStatus.UNAUTHORIZED, "UNAUTHENTICATED");
+        assertThat(count("SELECT count(*) FROM weight_records WHERE visit_id = " + visit)).isZero();
+    }
+
+    @Test
+    void weightByAVetWhoMustChangeThePasswordIsBrTk17() {
+        long visit = called(walkIn(medical), vetA);
+        jdbc.update("UPDATE accounts SET must_change_password = true WHERE id = ?", vetA);
+
+        ResponseEntity<Map<String, Object>> response = weight(vetAToken, visit, Map.of("weightKg", 5));
+
+        assertThat(response.getStatusCode()).isEqualTo(HttpStatus.BAD_REQUEST);
+        assertThat((String) response.getBody().get("message")).contains("BR-TK-17");
+        assertThat(count("SELECT count(*) FROM weight_records WHERE visit_id = " + visit)).isZero();
+    }
+
+    @Test
+    void onlyAVetMayRecordWeightAndARoleChangeAppliesFromTheNextRequest() {
+        long visit = called(walkIn(medical), vetA);
+
+        for (String bearer : List.of(caretakerToken, receptionistToken, managerToken, token(superManager), adminToken,
+                token(customerAccount))) {
+            assertError(weight(bearer, visit, Map.of("weightKg", 5)), HttpStatus.FORBIDDEN, "ACCESS_DENIED");
+        }
+        jdbc.update("UPDATE accounts SET role = 'CARETAKER' WHERE id = ?", vetA);
+        assertError(weight(vetAToken, visit, Map.of("weightKg", 5)), HttpStatus.FORBIDDEN, "ACCESS_DENIED");
+        assertThat(count("SELECT count(*) FROM weight_records WHERE visit_id = " + visit)).isZero();
+    }
+
+    @Test
+    void weightBodyErrorsAre400BeforeTheRoleCheckAndRuleErrorsAreBrKh04() {
+        long visit = called(walkIn(medical), vetA);
+
+        assertError(weight(caretakerToken, visit, Map.of()), HttpStatus.BAD_REQUEST, "VALIDATION_FAILED");
+        assertError(raw(HttpMethod.POST, caretakerToken, "/api/visits/" + visit + "/weight",
+                "{\"weightKg\": \"abc\"}"), HttpStatus.BAD_REQUEST, "MALFORMED_REQUEST");
+        for (Number kg : List.of(0, -1, 0.004, 10000)) {
+            ResponseEntity<Map<String, Object>> response = weight(vetAToken, visit, Map.of("weightKg", kg));
+            assertThat(response.getStatusCode()).isEqualTo(HttpStatus.BAD_REQUEST);
+            assertThat((String) response.getBody().get("message")).contains("BR-KH-04");
+        }
+        assertThat(count("SELECT count(*) FROM weight_records WHERE visit_id = " + visit)).isZero();
+    }
+
+    @Test
+    void weightErrorOrderIs404Then403BranchThen404GroomingThen403AssigneeThen409() {
+        long visit = called(walkIn(medical), vetA);
+        long groomingVisit = called(walkIn(grooming), caretaker);
+        long waiting = assigned(walkIn(medical), vetA);
+        long done = called(walkIn(medical), vetA);
+        complete(done);
+        String otherVet = token(data.staff("VET", otherBranch));
+
+        assertThat(weight(vetAToken, 987654321L, Map.of("weightKg", 5)).getStatusCode())
+                .isEqualTo(HttpStatus.NOT_FOUND);
+        assertScopeDenied(weight(otherVet, visit, Map.of("weightKg", 5)));
+        assertThat(weight(vetAToken, groomingVisit, Map.of("weightKg", 5)).getStatusCode())
+                .isEqualTo(HttpStatus.NOT_FOUND);
+        assertScopeDenied(weight(vetBToken, visit, Map.of("weightKg", 5)));
+        assertScopeDenied(weight(vetBToken, waiting, Map.of("weightKg", 5)));
+        assertScopeDenied(weight(vetBToken, done, Map.of("weightKg", 5)));
+        assertError(weight(vetAToken, waiting, Map.of("weightKg", 5)), HttpStatus.CONFLICT,
+                "INVALID_STATE_TRANSITION");
+        assertError(weight(vetAToken, done, Map.of("weightKg", 5)), HttpStatus.CONFLICT, "INVALID_STATE_TRANSITION");
+        assertThat(count("SELECT count(*) FROM weight_records WHERE pet_id = " + pet)).isZero();
+    }
+
+    @Test
+    void weightWaitsForTheVisitLockAndThenSeesTheNewAssignee() throws Exception {
+        long visit = called(walkIn(medical), vetA);
+
+        List<ResponseEntity<Map<String, Object>>> results = whileHeld(
+                "SELECT id FROM visits WHERE id = ? FOR NO KEY UPDATE", new Object[] {visit},
+                "%from visits where id = % for no key update%",
+                j -> j.update("UPDATE visits SET assignee_id = ? WHERE id = ?", vetB, visit),
+                List.of(() -> weight(vetAToken, visit, Map.of("weightKg", 5))), 1);
+
+        assertScopeDenied(results.get(0));
+        assertThat(count("SELECT count(*) FROM weight_records WHERE visit_id = " + visit)).isZero();
+    }
+
+    /** Khóa thú FOR NO KEY UPDATE (đánh dấu đã mất / đổi loài) làm #14 chờ ở khóa thú, khi chưa giữ khóa lượt. */
+    @Test
+    void weightWaitsForAPetWriterBeforeTakingTheVisitLock() throws Exception {
+        long visit = called(walkIn(medical), vetA);
+        CountDownLatch held = new CountDownLatch(1);
+        CountDownLatch release = new CountDownLatch(1);
+        ExecutorService pool = Executors.newFixedThreadPool(2);
+        try {
+            Future<?> holder = pool.submit(() -> tx.executeWithoutResult(s -> {
+                jdbc.queryForList("SELECT id FROM pets WHERE id = ? FOR NO KEY UPDATE", pet);
+                held.countDown();
+                await(release);
+            }));
+            assertThat(held.await(10, TimeUnit.SECONDS)).isTrue();
+            Future<ResponseEntity<Map<String, Object>>> call = pool
+                    .submit(() -> weight(vetAToken, visit, Map.of("weightKg", 5)));
+            awaitWaiting("%from pets%for share%", 1);
+
+            assertThat(call).isNotDone();
+            assertThat(jdbc.queryForList("SELECT id FROM visits WHERE id = ? FOR NO KEY UPDATE NOWAIT", visit))
+                    .as("#14 chưa giữ khóa lượt khi còn chờ khóa thú").hasSize(1);
+            release.countDown();
+            holder.get(30, TimeUnit.SECONDS);
+            data(call.get(30, TimeUnit.SECONDS), HttpStatus.CREATED);
+        } finally {
+            release.countDown();
+            pool.shutdown();
+            assertThat(pool.awaitTermination(30, TimeUnit.SECONDS)).isTrue();
+        }
+        assertThat(count("SELECT count(*) FROM weight_records WHERE visit_id = " + visit)).isEqualTo(1);
+    }
+
+    /** Khóa thú chỉ ở mức SHARE (như #13 / check-in) thì #14 không bị chặn: không nâng khóa lên NO KEY UPDATE. */
+    @Test
+    void weightDoesNotUpgradeThePetLockSoASharedHolderDoesNotBlockIt() throws Exception {
+        long visit = called(walkIn(medical), vetA);
+        CountDownLatch held = new CountDownLatch(1);
+        CountDownLatch release = new CountDownLatch(1);
+        ExecutorService pool = Executors.newFixedThreadPool(2);
+        try {
+            Future<?> holder = pool.submit(() -> tx.executeWithoutResult(s -> {
+                jdbc.queryForList("SELECT id FROM pets WHERE id = ? FOR SHARE", pet);
+                held.countDown();
+                await(release);
+            }));
+            assertThat(held.await(10, TimeUnit.SECONDS)).isTrue();
+            Future<ResponseEntity<Map<String, Object>>> call = pool
+                    .submit(() -> weight(vetAToken, visit, Map.of("weightKg", 5)));
+
+            data(call.get(10, TimeUnit.SECONDS), HttpStatus.CREATED);
+            assertThat(holder).as("người giữ SHARE vẫn đang mở").isNotDone();
+        } finally {
+            release.countDown();
+            pool.shutdown();
+            assertThat(pool.awaitTermination(30, TimeUnit.SECONDS)).isTrue();
+        }
+    }
+
     // ================================================================ helpers
 
     private List<ResponseEntity<Map<String, Object>>> whileHeld(String lockSql, Object[] lockArgs, String waitingLike,
@@ -768,6 +958,10 @@ class MedicalRecordIT {
 
     private ResponseEntity<Map<String, Object>> put(String bearer, long visitId, Object body) {
         return exchange(HttpMethod.PUT, bearer, PATH.formatted(visitId), body);
+    }
+
+    private ResponseEntity<Map<String, Object>> weight(String bearer, long visitId, Object body) {
+        return exchange(HttpMethod.POST, bearer, "/api/visits/%d/weight".formatted(visitId), body);
     }
 
     private ResponseEntity<Map<String, Object>> exchange(HttpMethod method, String bearer, String path, Object body) {

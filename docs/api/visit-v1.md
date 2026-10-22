@@ -59,7 +59,7 @@
 | Hủy lượt khách bỏ về | A06 | Lễ tân chi nhánh | WAITING → CANCELLED (Visit#6) · Lịch hẹn#8 · Order#6 | — | Lịch hẹn → CANCELLED, không tính hủy muộn. Không gửi body: hủy không lý do (A4). |
 | Xem bệnh án của lượt | A07, A08 | VET, CARETAKER chi nhánh (CARETAKER chỉ xem) | — | — | Thứ tự lỗi: 403 vai trò → 404 → 403 chi nhánh → 404 GROOMING (docs/adr/0065). Lượt MEDICAL chưa ghi bệnh án trả khung rỗng; locked = Visit COMPLETED. |
 | Ghi bệnh án / hẹn tái khám | A07 | VET được gán lượt | — | — | Thứ tự lỗi: 400 body → 403 vai trò → 404 → 403 chi nhánh → 404 GROOMING → 403 người phụ trách → 409 → 400 BR-KB-06 (docs/adr/0065). PUT thay toàn bộ 5 trường; lần ghi đầu tạo bệnh án; ngày tái khám chỉ kiểm khi đổi; nội dung không đổi: 200, không ghi, không audit. |
-| Ghi cân nặng khi khám | A07 | VET được gán lượt | — | — | source = VET (A8). |
+| Ghi cân nặng khi khám | A07 | VET được gán lượt | — | — | source = VET (A8). Thứ tự lỗi như #13: 400 body → 403 vai trò → 404 → 403 chi nhánh → 404 GROOMING → 403 người phụ trách → 409 → 400 BR-KH-04 (docs/adr/0066). Mỗi lần gọi là một bản ghi; không audit. |
 | Thêm bản bổ sung bệnh án | A07 | VET chi nhánh nơi khám (A7) | — | — | Không sửa / xóa nội dung cũ; ghi audit. |
 | Kê đơn một dòng thuốc | A07 | VET được gán lượt | — | — | Đủ tồn → sinh 1 dòng Order DRUG; mua ngoài → không sinh dòng; không tách dòng. |
 | Xóa dòng đơn thuốc | A07 | VET được gán lượt | — | — | Xóa kèm dòng Order DRUG tương ứng. |
@@ -91,7 +91,7 @@
 
 - **`GET /visits/{visitId}/medical-record`** — Xem bệnh án của lượt. Response `200` `MedicalRecord`. Lỗi: `400` Tham số sai kiểu (`MALFORMED_REQUEST`); BR-TK-17 · `401` · `403` Sai vai trò · lượt của chi nhánh khác · `404` Không có Visit hoặc Visit nhóm GROOMING (không có bệnh án).
 - **`PUT /visits/{visitId}/medical-record`** — Ghi bệnh án / hẹn tái khám. Request `UpdateMedicalRecordRequest`. Response `200` `MedicalRecord`. Lỗi: `400` `BR-KB-06` ngày tái khám không sau ngày khám hoặc quá 180 ngày [CFG] · body sai (`MALFORMED_REQUEST`); BR-TK-17 · `401` · `403` Sai vai trò · lượt của chi nhánh khác · không phải VET phụ trách hiện tại · `404` · `409` Lượt không IN_PROGRESS — bệnh án đã khóa, dùng bản bổ sung.
-- **`POST /visits/{visitId}/weight`** — Ghi cân nặng khi khám. Request `RecordWeightRequest`. Response `201` `WeightRecordRef`. Lỗi: `400` · `401` · `403` · `404` · `409` Lượt không IN_PROGRESS.
+- **`POST /visits/{visitId}/weight`** — Ghi cân nặng khi khám. Request `RecordWeightRequest`. Response `201` `WeightRecordRef`. Lỗi: `400` `BR-KH-04` cân nặng ≤ 0 hoặc vượt 9999.99 kg · thiếu `weightKg` · body sai (`MALFORMED_REQUEST`); BR-TK-17 · `401` · `403` Sai vai trò · lượt của chi nhánh khác · không phải VET phụ trách hiện tại · `404` Không có Visit hoặc Visit nhóm GROOMING (không có bệnh án) · `409` Lượt không IN_PROGRESS.
 - **`POST /visits/{visitId}/medical-record/addenda`** — Thêm bản bổ sung bệnh án. Request `AddendumRequest`. Response `201` `Addendum`. Lỗi: `400` · `401` · `403` · `404` · `409` Visit chưa COMPLETED — sửa trực tiếp bệnh án.
 ### Prescriptions
 

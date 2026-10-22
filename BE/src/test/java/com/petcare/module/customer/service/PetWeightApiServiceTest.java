@@ -22,6 +22,7 @@ import org.mockito.InOrder;
 import org.springframework.transaction.annotation.Propagation;
 import org.springframework.transaction.annotation.Transactional;
 
+import com.petcare.module.customer.api.RecordedWeight;
 import com.petcare.module.customer.api.Species;
 import com.petcare.module.customer.api.WeightSource;
 import com.petcare.module.customer.entity.Pet;
@@ -39,25 +40,28 @@ class PetWeightApiServiceTest {
     private final PetRepository pets = mock(PetRepository.class);
     private final WeightRecordRepository weights = mock(WeightRecordRepository.class);
     private final PetWeightApiService service = new PetWeightApiService(pets, weights,
-            Clock.fixed(NOW, ZoneOffset.UTC));
+            Clock.fixed(NOW.plusNanos(789), ZoneOffset.UTC));
 
     private static Pet alivePet() {
         return Pet.create(1L, "Mực", Species.DOG, PetSex.MALE, null, null, false, null, null, null);
     }
 
     @Test
-    void recordsAfterLockingThePetAndReturnsTheNewId() {
+    void recordsAfterShareLockingThePetAndReturnsTheRecordedWeight() {
         Pet pet = alivePet();
-        when(pets.findByIdForUpdate(7L)).thenReturn(Optional.of(pet));
+        when(pets.findByIdForShare(7L)).thenReturn(Optional.of(pet));
         WeightRecord saved = mock(WeightRecord.class);
         when(saved.getId()).thenReturn(55L);
         when(weights.saveAndFlush(any())).thenReturn(saved);
 
-        Long id = service.recordWeight(7L, new BigDecimal("12.346"), WeightSource.VET, 9L, null, 3L);
+        RecordedWeight recorded = service.recordWeight(7L, new BigDecimal("12.346"), WeightSource.VET, 9L, null, 3L);
 
-        assertThat(id).isEqualTo(55L);
+        assertThat(recorded.weightRecordId()).isEqualTo(55L);
+        assertThat(recorded.weightKg()).isEqualByComparingTo("12.35");
+        assertThat(recorded.measuredAt()).isEqualTo(NOW);
+        verify(pets, never()).findByIdForUpdate(any());
         InOrder order = inOrder(pets, weights);
-        order.verify(pets).findByIdForUpdate(7L);
+        order.verify(pets).findByIdForShare(7L);
         ArgumentCaptor<WeightRecord> captor = ArgumentCaptor.forClass(WeightRecord.class);
         order.verify(weights).saveAndFlush(captor.capture());
         WeightRecord record = captor.getValue();
@@ -89,7 +93,7 @@ class PetWeightApiServiceTest {
 
     @Test
     void largestValidWeightIsAccepted() {
-        when(pets.findByIdForUpdate(7L)).thenReturn(Optional.of(alivePet()));
+        when(pets.findByIdForShare(7L)).thenReturn(Optional.of(alivePet()));
         when(weights.saveAndFlush(any())).thenReturn(mock(WeightRecord.class));
 
         service.recordWeight(7L, new BigDecimal("9999.99"), WeightSource.OWNER, null, null, 3L);
@@ -99,7 +103,7 @@ class PetWeightApiServiceTest {
 
     @Test
     void missingPetIs404() {
-        when(pets.findByIdForUpdate(7L)).thenReturn(Optional.empty());
+        when(pets.findByIdForShare(7L)).thenReturn(Optional.empty());
 
         assertThatThrownBy(() -> service.recordWeight(7L, BigDecimal.ONE, WeightSource.OWNER, null, null, 3L))
                 .isInstanceOf(ResourceNotFoundException.class);
@@ -110,7 +114,7 @@ class PetWeightApiServiceTest {
     void deceasedPetIsReadOnly() {
         Pet pet = alivePet();
         pet.markDeceased(java.time.LocalDate.of(2026, 10, 1));
-        when(pets.findByIdForUpdate(7L)).thenReturn(Optional.of(pet));
+        when(pets.findByIdForShare(7L)).thenReturn(Optional.of(pet));
 
         assertThatThrownBy(() -> service.recordWeight(7L, BigDecimal.ONE, WeightSource.VET, 9L, null, 3L))
                 .isInstanceOf(BusinessRuleViolationException.class).hasMessageContaining("BR-KH-05");

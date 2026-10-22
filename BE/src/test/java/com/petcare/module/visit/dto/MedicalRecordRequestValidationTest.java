@@ -54,6 +54,14 @@ class MedicalRecordRequestValidationTest {
     }
 
     @Test
+    void weightIsRequiredWithAVietnameseMessageAndRangeIsLeftToTheCustomerRule() {
+        assertThat(validator.validate(new RecordWeightRequest(null))).extracting(ConstraintViolation::getMessage)
+                .containsExactly("Bắt buộc nhập cân nặng");
+        assertThat(validator.validate(new RecordWeightRequest(java.math.BigDecimal.ZERO)))
+                .as("≤ 0 là 400 BR-KH-04 của customer, không phải Bean Validation").isEmpty();
+    }
+
+    @Test
     void emptyMedicalRecordIsValid() {
         assertThat(validator.validate(new UpdateMedicalRecordRequest(null, null, null, null, null))).isEmpty();
     }

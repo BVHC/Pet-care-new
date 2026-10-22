@@ -1,5 +1,7 @@
 package com.petcare.module.visit.mapper;
 
+import java.math.BigDecimal;
+import java.time.Instant;
 import java.util.List;
 
 import org.mapstruct.Mapper;
@@ -8,6 +10,7 @@ import org.mapstruct.ReportingPolicy;
 
 import com.petcare.module.visit.dto.AddendumResponse;
 import com.petcare.module.visit.dto.MedicalRecordResponse;
+import com.petcare.module.visit.dto.WeightRecordRefResponse;
 import com.petcare.module.visit.entity.MedicalRecord;
 import com.petcare.module.visit.entity.MedicalRecordAddendum;
 
@@ -55,4 +58,10 @@ public interface MedicalRecordMapper {
     @Mapping(target = "createdByName", source = "createdByName")
     @Mapping(target = "createdAt", source = "addendum.createdAt")
     AddendumResponse toAddendum(MedicalRecordAddendum addendum, String createdByName);
+
+    /** visit-v1 #14: tham số vô hướng, không nhận record {@code api/} của customer (docs/adr/0066). */
+    @Mapping(target = "weightRecordId", source = "weightRecordId")
+    @Mapping(target = "weightKg", source = "weightKg")
+    @Mapping(target = "measuredAt", source = "measuredAt")
+    WeightRecordRefResponse toWeightRef(Long weightRecordId, BigDecimal weightKg, Instant measuredAt);
 }

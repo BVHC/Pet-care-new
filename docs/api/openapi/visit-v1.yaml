@@ -682,7 +682,7 @@ paths:
     post:
       tags: ["Medical record"]
       summary: "Ghi cân nặng khi khám"
-      description: "UC48 · BR-KH-04. Actor: A07. Quyền: VET được gán lượt. Chuyển trạng thái: —. source = VET (A8)."
+      description: "UC48 · BR-KH-04. Actor: A07. Quyền: VET được gán lượt. Chuyển trạng thái: —. source = VET (A8). Thứ tự lỗi như #13: 400 body → 403 vai trò → 404 → 403 chi nhánh → 404 GROOMING → 403 người phụ trách → 409 → 400 BR-KH-04 (docs/adr/0066). Mỗi lần gọi là một bản ghi; không audit."
       operationId: recordVisitWeight
       security:
         - bearerAuth: []
@@ -711,13 +711,25 @@ paths:
                     type: integer
                     description: "HTTP status của kết quả, ví dụ 200, 201"
         "400":
-          $ref: "#/components/responses/BadRequest"
+          description: "`BR-KH-04` cân nặng ≤ 0 hoặc vượt 9999.99 kg · thiếu `weightKg` · body sai (`MALFORMED_REQUEST`); BR-TK-17"
+          content:
+            "application/json":
+              schema:
+                $ref: "#/components/schemas/Error"
         "401":
           $ref: "#/components/responses/Unauthorized"
         "403":
-          $ref: "#/components/responses/Forbidden"
+          description: "Sai vai trò · lượt của chi nhánh khác · không phải VET phụ trách hiện tại"
+          content:
+            "application/json":
+              schema:
+                $ref: "#/components/schemas/Error"
         "404":
-          $ref: "#/components/responses/NotFound"
+          description: "Không có Visit hoặc Visit nhóm GROOMING (không có bệnh án)"
+          content:
+            "application/json":
+              schema:
+                $ref: "#/components/schemas/Error"
         "409":
           description: "Lượt không IN_PROGRESS"
           content:

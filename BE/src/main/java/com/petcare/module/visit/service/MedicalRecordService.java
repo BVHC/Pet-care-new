@@ -13,14 +13,19 @@ import org.springframework.transaction.annotation.Isolation;
 import org.springframework.transaction.annotation.Transactional;
 
 import com.petcare.module.catalog.api.ServiceGroup;
+import com.petcare.module.customer.api.PetApi;
 import com.petcare.module.customer.api.PetQueryApi;
+import com.petcare.module.customer.api.RecordedWeight;
+import com.petcare.module.customer.api.WeightSource;
 import com.petcare.module.identity.api.ConfigKey;
 import com.petcare.module.identity.api.StaffDirectoryApi;
 import com.petcare.module.identity.api.StaffDirectoryApi.StaffSummary;
 import com.petcare.module.identity.api.SystemConfigApi;
 import com.petcare.module.visit.dto.AddendumResponse;
 import com.petcare.module.visit.dto.MedicalRecordResponse;
+import com.petcare.module.visit.dto.RecordWeightRequest;
 import com.petcare.module.visit.dto.UpdateMedicalRecordRequest;
+import com.petcare.module.visit.dto.WeightRecordRefResponse;
 import com.petcare.module.visit.entity.MedicalRecord;
 import com.petcare.module.visit.entity.MedicalRecordAddendum;
 import com.petcare.module.visit.entity.Visit;
@@ -42,12 +47,15 @@ import com.petcare.platform.security.BranchScope;
 import com.petcare.platform.security.SecurityPrincipal;
 
 /**
- * Bệnh án của lượt — visit-v1 #12 xem, #13 ghi (UC48, UC53; BR-KB-01, 06, BR-TN-08, BR-QT-15; docs/adr/0064, 0065).
+ * Bệnh án của lượt — visit-v1 #12 xem, #13 ghi, #14 ghi cân nặng (UC48, UC53; BR-KB-01, 06, BR-KH-04, BR-TN-08,
+ * BR-QT-15; docs/adr/0064, 0065, 0066).
  * <ul>
  * <li>#13 thứ tự: role → lượt (projection, 404) → chi nhánh (403) → nhóm {@code GROOMING} (404) → khóa
  * {@code pets FOR SHARE} → {@code visits} → người phụ trách hiện tại (403) → {@code IN_PROGRESS} (409) → đọc bệnh án
  * → BR-KB-06 (400) → ghi → audit. Người phụ trách và trạng thái chỉ đọc sau khóa. Một transaction ghi, READ COMMITTED.</li>
  * <li>Khóa thú ngăn đổi loài chạy song song với lần ghi đầu (BR-KH-03, {@code PetService.updatePet}).</li>
+ * <li>#14 cùng thứ tự khóa và thứ tự lỗi với #13 ({@code pets FOR SHARE} → {@code visits}), rồi
+ * {@code PetApi.recordWeight} (chỉ {@code FOR SHARE}, không nâng khóa). Không audit (BR-QT-15 không liệt kê).</li>
  * <li>Không bắt exception: lỗi từ callee {@code MANDATORY} đã đánh dấu rollback-only; lỗi audit rollback cả bệnh án.</li>
  * </ul>
  */
@@ -62,6 +70,7 @@ public class MedicalRecordService {
 
     private final BranchScope branchScope;
     private final PetQueryApi pets;
+    private final PetApi petApi;
     private final StaffDirectoryApi staffDirectory;
     private final SystemConfigApi config;
     private final VisitRepository visits;
@@ -70,11 +79,12 @@ public class MedicalRecordService {
     private final AuditRecorder audit;
     private final MedicalRecordMapper mapper;
 
-    public MedicalRecordService(BranchScope branchScope, PetQueryApi pets, StaffDirectoryApi staffDirectory,
+    public MedicalRecordService(BranchScope branchScope, PetQueryApi pets, PetApi petApi, StaffDirectoryApi staffDirectory,
             SystemConfigApi config, VisitRepository visits, MedicalRecordRepository records,
             MedicalRecordAddendumRepository addenda, AuditRecorder audit, MedicalRecordMapper mapper) {
         this.branchScope = branchScope;
         this.pets = pets;
+        this.petApi = petApi;
         this.staffDirectory = staffDirectory;
         this.config = config;
         this.visits = visits;
@@ -108,14 +118,7 @@ public class MedicalRecordService {
         pets.findPetForShare(summary.petId())
                 .orElseThrow(() -> new IllegalStateException("Thú cưng #" + summary.petId() + " của lượt biến mất"));
         Visit visit = lockAndLoad(visitId);
-        if (!principal.accountId().equals(visit.getAssigneeId())) {
-            throw new AccessDeniedScopeException("assignee:" + visit.getAssigneeId(),
-                    "account:" + principal.accountId());
-        }
-        if (visit.getStatus() != VisitStatus.IN_PROGRESS) {
-            throw new InvalidStateTransitionException(VisitTransitionHandler.FSM_NAME, visit.getStatus().name(),
-                    VisitStatus.IN_PROGRESS.name());
-        }
+        requireAssigneeInProgress(visit, principal);
 
         Optional<MedicalRecord> existing = records.findById(visitId);
         LocalDate previousDate = existing.map(MedicalRecord::getFollowUpDate).orElse(null);
@@ -138,6 +141,23 @@ public class MedicalRecordService {
         return mapper.toResponse(record, false, List.of());
     }
 
+    /** visit-v1 #14. Mỗi lần gọi là một bản ghi cân (A8); thú, nguồn, người ghi lấy từ lượt và phiên. */
+    @Transactional
+    public WeightRecordRefResponse recordWeight(Long visitId, RecordWeightRequest request) {
+        SecurityPrincipal principal = branchScope.current();
+        VisitDispatchService.requireRole(principal, WRITE_ROLES);
+        SummaryRow summary = findMedicalVisit(visitId);
+
+        pets.findPetForShare(summary.petId())
+                .orElseThrow(() -> new IllegalStateException("Thú cưng #" + summary.petId() + " của lượt biến mất"));
+        Visit visit = lockAndLoad(visitId);
+        requireAssigneeInProgress(visit, principal);
+
+        RecordedWeight recorded = petApi.recordWeight(summary.petId(), request.weightKg(), WeightSource.VET, visitId,
+                null, principal.accountId());
+        return mapper.toWeightRef(recorded.weightRecordId(), recorded.weightKg(), recorded.measuredAt());
+    }
+
     /**
      * BR-KB-06: sau ngày khám, xa nhất {@code MEDICAL_RECORD_FOLLOW_UP_MAX_DAYS} ngày. Ngày khám = ngày check-in theo giờ
      * Việt Nam (docs/adr/0064 §3); [CFG] đọc lúc ghi (ADR-0057).
@@ -148,6 +168,18 @@ public class MedicalRecordService {
         if (!followUpDate.isAfter(examDate) || followUpDate.isAfter(examDate.plusDays(maxDays))) {
             throw new BusinessRuleViolationException("BR-KB-06",
                     "Ngày tái khám phải sau ngày khám và không quá " + maxDays + " ngày");
+        }
+    }
+
+    /** Người gọi là người phụ trách hiện tại (403) rồi mới xét trạng thái {@code IN_PROGRESS} (409); gọi sau khi khóa lượt. */
+    private static void requireAssigneeInProgress(Visit visit, SecurityPrincipal principal) {
+        if (!principal.accountId().equals(visit.getAssigneeId())) {
+            throw new AccessDeniedScopeException("assignee:" + visit.getAssigneeId(),
+                    "account:" + principal.accountId());
+        }
+        if (visit.getStatus() != VisitStatus.IN_PROGRESS) {
+            throw new InvalidStateTransitionException(VisitTransitionHandler.FSM_NAME, visit.getStatus().name(),
+                    VisitStatus.IN_PROGRESS.name());
         }
     }
 

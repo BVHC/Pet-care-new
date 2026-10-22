@@ -257,8 +257,13 @@ m.op("put", "/visits/{visitId}/medical-record", "updateMedicalRecord", "Ghi bệ
            "khi đổi; nội dung không đổi: 200, không ghi, không audit.")
 m.op("post", "/visits/{visitId}/weight", "recordVisitWeight", "Ghi cân nặng khi khám", "Medical record", "UC48",
      "BR-KH-04", "A07", "VET được gán lượt", body="RecordWeightRequest", resp="WeightRecordRef", status=201,
-     path_params=["VisitId"], errors=(400, 401, 403, 404, 409), err_desc={409: "Lượt không IN_PROGRESS"},
-     notes="source = VET (A8).")
+     path_params=["VisitId"], errors=(400, 401, 403, 404, 409),
+     err_desc={400: "`BR-KH-04` cân nặng ≤ 0 hoặc vượt 9999.99 kg · thiếu `weightKg` · body sai (`MALFORMED_REQUEST`); BR-TK-17",
+               403: "Sai vai trò · lượt của chi nhánh khác · không phải VET phụ trách hiện tại",
+               404: "Không có Visit hoặc Visit nhóm GROOMING (không có bệnh án)",
+               409: "Lượt không IN_PROGRESS"},
+     notes="source = VET (A8). Thứ tự lỗi như #13: 400 body → 403 vai trò → 404 → 403 chi nhánh → 404 GROOMING → "
+           "403 người phụ trách → 409 → 400 BR-KH-04 (docs/adr/0066). Mỗi lần gọi là một bản ghi; không audit.")
 m.op("post", "/visits/{visitId}/medical-record/addenda", "addMedicalRecordAddendum", "Thêm bản bổ sung bệnh án",
      "Medical record", "UC53", "BR-KB-01, BR-QT-15", "A07", "VET chi nhánh nơi khám (A7)", body="AddendumRequest",
      resp="Addendum", status=201, path_params=["VisitId"], errors=(400, 401, 403, 404, 409),

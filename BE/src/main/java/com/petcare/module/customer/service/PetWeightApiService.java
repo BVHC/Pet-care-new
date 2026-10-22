@@ -4,12 +4,14 @@ import java.math.BigDecimal;
 import java.math.RoundingMode;
 import java.time.Clock;
 import java.time.Instant;
+import java.time.temporal.ChronoUnit;
 
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Propagation;
 import org.springframework.transaction.annotation.Transactional;
 
 import com.petcare.module.customer.api.PetApi;
+import com.petcare.module.customer.api.RecordedWeight;
 import com.petcare.module.customer.api.WeightSource;
 import com.petcare.module.customer.entity.Pet;
 import com.petcare.module.customer.entity.WeightRecord;
@@ -20,8 +22,8 @@ import com.petcare.platform.exception.ResourceNotFoundException;
 
 /**
  * {@link PetApi} thật (BR-KH-04, docs/adr/0041): visit ghi cân nặng khi khám (VET), boarding ghi khi nhận thú (INTAKE).
- * {@code MANDATORY}: cùng transaction với bên gọi. Khóa dòng thú trước khi kiểm đã mất để không ghi cân cho thú vừa
- * được đánh dấu đã mất ở transaction khác.
+ * {@code MANDATORY}: cùng transaction với bên gọi. Khóa chia sẻ dòng thú ({@code FOR SHARE}, docs/adr/0066) trước khi kiểm đã mất: xung đột với
+ * {@code NO KEY UPDATE} của đánh dấu đã mất nên không ghi cân cho thú vừa được đánh dấu ở transaction khác.
  */
 @Service
 public class PetWeightApiService implements PetApi {
@@ -41,14 +43,16 @@ public class PetWeightApiService implements PetApi {
 
     @Override
     @Transactional(propagation = Propagation.MANDATORY)
-    public Long recordWeight(Long petId, BigDecimal weightKg, WeightSource source, Long visitId,
+    public RecordedWeight recordWeight(Long petId, BigDecimal weightKg, WeightSource source, Long visitId,
             Long boardingBookingId, Long actorId) {
         requireConsistentSource(source, visitId, boardingBookingId);
         BigDecimal normalized = normalize(weightKg);
-        Pet pet = pets.findByIdForUpdate(petId).orElseThrow(() -> new ResourceNotFoundException("thú cưng", petId));
+        Pet pet = pets.findByIdForShare(petId).orElseThrow(() -> new ResourceNotFoundException("thú cưng", petId));
         pet.requireAlive();
-        return weights.saveAndFlush(WeightRecord.create(petId, normalized, source, visitId, boardingBookingId,
-                actorId, Instant.now(clock))).getId();
+        Instant measuredAt = Instant.now(clock).truncatedTo(ChronoUnit.MICROS);
+        Long id = weights.saveAndFlush(WeightRecord.create(petId, normalized, source, visitId, boardingBookingId,
+                actorId, measuredAt)).getId();
+        return new RecordedWeight(id, normalized, measuredAt);
     }
 
     /** BR-KH-04: ≤ 0 bị từ chối; làm tròn 2 chữ số thập phân, vượt NUMERIC(6,2) thì từ chối thay vì để DB báo lỗi. */

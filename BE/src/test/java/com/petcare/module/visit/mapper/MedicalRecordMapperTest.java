@@ -2,6 +2,7 @@ package com.petcare.module.visit.mapper;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
+import java.math.BigDecimal;
 import java.time.Instant;
 import java.time.LocalDate;
 import java.util.List;
@@ -12,6 +13,7 @@ import org.springframework.test.util.ReflectionTestUtils;
 
 import com.petcare.module.visit.dto.AddendumResponse;
 import com.petcare.module.visit.dto.MedicalRecordResponse;
+import com.petcare.module.visit.dto.WeightRecordRefResponse;
 import com.petcare.module.visit.entity.MedicalRecord;
 import com.petcare.module.visit.entity.MedicalRecordAddendum;
 
@@ -61,5 +63,13 @@ class MedicalRecordMapperTest {
 
         assertThat(mapper.toAddendum(addendum, "BS. Lan")).isEqualTo(new AddendumResponse(301L, "bổ sung", true, 46L,
                 "BS. Lan", Instant.parse("2026-10-22T04:00:00Z")));
+    }
+
+    @Test
+    void weightRefMapsEveryField() {
+        Instant at = Instant.parse("2026-10-22T03:00:00.123456Z");
+
+        assertThat(mapper.toWeightRef(812L, new BigDecimal("12.35"), at))
+                .isEqualTo(new WeightRecordRefResponse(812L, new BigDecimal("12.35"), at));
     }
 }

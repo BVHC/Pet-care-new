@@ -12,6 +12,7 @@ import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoInteractions;
 
+import java.math.BigDecimal;
 import java.time.Instant;
 import java.time.LocalDate;
 import java.util.List;
@@ -27,16 +28,21 @@ import org.mockito.InOrder;
 import org.springframework.test.util.ReflectionTestUtils;
 
 import com.petcare.module.catalog.api.ServiceGroup;
+import com.petcare.module.customer.api.PetApi;
 import com.petcare.module.customer.api.PetQueryApi;
 import com.petcare.module.customer.api.PetQueryApi.PetSummary;
+import com.petcare.module.customer.api.RecordedWeight;
 import com.petcare.module.customer.api.Species;
+import com.petcare.module.customer.api.WeightSource;
 import com.petcare.module.identity.api.ConfigKey;
 import com.petcare.module.identity.api.Role;
 import com.petcare.module.identity.api.StaffDirectoryApi;
 import com.petcare.module.identity.api.StaffDirectoryApi.StaffSummary;
 import com.petcare.module.identity.api.SystemConfigApi;
 import com.petcare.module.visit.dto.MedicalRecordResponse;
+import com.petcare.module.visit.dto.RecordWeightRequest;
 import com.petcare.module.visit.dto.UpdateMedicalRecordRequest;
+import com.petcare.module.visit.dto.WeightRecordRefResponse;
 import com.petcare.module.visit.entity.MedicalRecord;
 import com.petcare.module.visit.entity.MedicalRecordAddendum;
 import com.petcare.module.visit.entity.PriorityClass;
@@ -75,13 +81,14 @@ class MedicalRecordServiceTest {
     private final BranchScope scope = mock(BranchScope.class);
     private final SecurityPrincipal principal = mock(SecurityPrincipal.class);
     private final PetQueryApi pets = mock(PetQueryApi.class);
+    private final PetApi petApi = mock(PetApi.class);
     private final StaffDirectoryApi staff = mock(StaffDirectoryApi.class);
     private final SystemConfigApi config = mock(SystemConfigApi.class);
     private final VisitRepository visits = mock(VisitRepository.class);
     private final MedicalRecordRepository records = mock(MedicalRecordRepository.class);
     private final MedicalRecordAddendumRepository addenda = mock(MedicalRecordAddendumRepository.class);
     private final AuditRecorder audit = mock(AuditRecorder.class);
-    private final MedicalRecordService service = new MedicalRecordService(scope, pets, staff, config, visits, records,
+    private final MedicalRecordService service = new MedicalRecordService(scope, pets, petApi, staff, config, visits, records,
             addenda, audit, Mappers.getMapper(MedicalRecordMapper.class));
 
     @BeforeEach
@@ -365,6 +372,114 @@ class MedicalRecordServiceTest {
 
         assertThatThrownBy(() -> service.updateMedicalRecord(VISIT, request("x", "y", null, null, null)))
                 .isInstanceOf(AccessDeniedScopeException.class);
+    }
+
+    // ================================================================ #14 cân nặng
+
+    private static final Instant WEIGHED_AT = Instant.parse("2026-10-22T03:00:00.123456Z");
+
+    @ParameterizedTest
+    @ValueSource(strings = {"CARETAKER", "RECEPTIONIST", "BRANCH_MANAGER", "SUPER_MANAGER", "ADMIN", "CUSTOMER"})
+    void weightRolesOutsideTheContractNeverReachTheRepository(String role) {
+        doReturn(role).when(principal).role();
+
+        assertThatThrownBy(() -> service.recordWeight(VISIT, new RecordWeightRequest(BigDecimal.ONE)))
+                .isInstanceOf(IllegalStateException.class);
+
+        verifyNoInteractions(visits, pets, petApi);
+    }
+
+    @Test
+    void weightOfMissingVisitIs404BeforeAnyLock() {
+        doReturn(Optional.empty()).when(visits).findSummary(VISIT);
+
+        assertThatThrownBy(() -> service.recordWeight(VISIT, new RecordWeightRequest(BigDecimal.ONE)))
+                .isInstanceOf(ResourceNotFoundException.class);
+
+        verifyNoInteractions(pets, petApi);
+        verify(visits, never()).lockById(anyLong());
+    }
+
+    @Test
+    void weightOfOtherBranchIs403BeforeAnyLock() {
+        summary(9L, ServiceGroup.MEDICAL, VisitStatus.IN_PROGRESS);
+        doThrow(new AccessDeniedScopeException("branch:9", "branch:3")).when(scope).check(9L);
+
+        assertThatThrownBy(() -> service.recordWeight(VISIT, new RecordWeightRequest(BigDecimal.ONE)))
+                .isInstanceOf(AccessDeniedScopeException.class);
+
+        verifyNoInteractions(pets, petApi);
+        verify(visits, never()).lockById(anyLong());
+    }
+
+    @Test
+    void weightOfGroomingVisitIs404AndWritesNothing() {
+        summary(BRANCH, ServiceGroup.GROOMING, VisitStatus.IN_PROGRESS);
+
+        assertThatThrownBy(() -> service.recordWeight(VISIT, new RecordWeightRequest(BigDecimal.ONE)))
+                .isInstanceOf(ResourceNotFoundException.class);
+
+        verifyNoInteractions(pets, petApi);
+    }
+
+    @Test
+    void weightLocksPetThenVisitThenRecordsAsVetWithTheServerSideIds() {
+        stubLoaded(VET_A, VisitStatus.IN_PROGRESS);
+        doReturn(new RecordedWeight(812L, new BigDecimal("12.35"), WEIGHED_AT)).when(petApi).recordWeight(PET,
+                new BigDecimal("12.346"), WeightSource.VET, VISIT, null, VET_A);
+
+        WeightRecordRefResponse response = service.recordWeight(VISIT, new RecordWeightRequest(new BigDecimal("12.346")));
+
+        InOrder order = inOrder(pets, visits, petApi);
+        order.verify(pets).findPetForShare(PET);
+        order.verify(visits).lockById(VISIT);
+        order.verify(visits).findById(VISIT);
+        order.verify(petApi).recordWeight(PET, new BigDecimal("12.346"), WeightSource.VET, VISIT, null, VET_A);
+        assertThat(response.weightRecordId()).isEqualTo(812L);
+        assertThat(response.weightKg()).isEqualByComparingTo("12.35");
+        assertThat(response.measuredAt()).isEqualTo(WEIGHED_AT);
+        verifyNoInteractions(records, audit);
+    }
+
+    @Test
+    void otherVetOfTheSameBranchOrUnassignedVisitIs403AfterTheLockAndRecordsNothing() {
+        stubLoaded(VET_B, VisitStatus.IN_PROGRESS);
+        assertThatThrownBy(() -> service.recordWeight(VISIT, new RecordWeightRequest(BigDecimal.ONE)))
+                .isInstanceOf(AccessDeniedScopeException.class);
+        stubLoaded(null, VisitStatus.IN_PROGRESS);
+        assertThatThrownBy(() -> service.recordWeight(VISIT, new RecordWeightRequest(BigDecimal.ONE)))
+                .isInstanceOf(AccessDeniedScopeException.class);
+
+        verifyNoInteractions(petApi);
+    }
+
+    @ParameterizedTest
+    @ValueSource(strings = {"WAITING", "COMPLETED", "CANCELLED"})
+    void weightOnAVisitNotInProgressIs409AndRecordsNothing(String status) {
+        stubLoaded(VET_A, VisitStatus.valueOf(status));
+
+        assertThatThrownBy(() -> service.recordWeight(VISIT, new RecordWeightRequest(BigDecimal.ONE)))
+                .isInstanceOf(InvalidStateTransitionException.class);
+
+        verifyNoInteractions(petApi);
+    }
+
+    @Test
+    void weightOwnershipIsCheckedBeforeStatus() {
+        stubLoaded(VET_B, VisitStatus.COMPLETED);
+
+        assertThatThrownBy(() -> service.recordWeight(VISIT, new RecordWeightRequest(BigDecimal.ONE)))
+                .isInstanceOf(AccessDeniedScopeException.class);
+    }
+
+    @Test
+    void ruleViolationFromTheCustomerApiPropagatesUnchanged() {
+        stubLoaded(VET_A, VisitStatus.IN_PROGRESS);
+        doThrow(new BusinessRuleViolationException("BR-KH-04", "Cân nặng phải lớn hơn 0")).when(petApi)
+                .recordWeight(PET, BigDecimal.ZERO, WeightSource.VET, VISIT, null, VET_A);
+
+        assertThatThrownBy(() -> service.recordWeight(VISIT, new RecordWeightRequest(BigDecimal.ZERO)))
+                .isInstanceOf(BusinessRuleViolationException.class).hasMessageContaining("BR-KH-04");
     }
 
     // ---- BR-KB-06: sau ngày khám, tối đa max ngày; ngày khám = ngày check-in theo giờ Việt Nam
