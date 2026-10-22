@@ -28,6 +28,8 @@ import com.petcare.module.catalog.repository.KennelTypeRepository;
 import com.petcare.module.catalog.repository.ProductRepository;
 import com.petcare.module.catalog.repository.ServiceRepository;
 import com.petcare.module.catalog.repository.VaccinationProtocolRepository;
+import com.petcare.module.catalog.repository.VaccineTypeRepository;
+import com.petcare.module.catalog.entity.VaccineType;
 import com.petcare.module.customer.api.Species;
 
 /** {@code CatalogQueryApi}: đọc danh mục cho appointment, visit, boarding (06-module-contracts §2). */
@@ -38,12 +40,13 @@ class CatalogQueryServiceTest {
     @Mock KennelTypeRepository kennelTypes;
     @Mock ProductRepository products;
     @Mock VaccinationProtocolRepository protocols;
+    @Mock VaccineTypeRepository vaccineTypes;
 
     CatalogQueryService service;
 
     @BeforeEach
     void setUp() {
-        service = new CatalogQueryService(services, kennelTypes, products, protocols);
+        service = new CatalogQueryService(services, kennelTypes, products, protocols, vaccineTypes);
     }
 
     private static Service service(long id, ServiceGroup group, MedicalType type, long price, boolean active) {
@@ -135,5 +138,16 @@ class CatalogQueryServiceTest {
 
         assertThat(service.findProtocolDose(1L)).get().extracting(ProtocolDose::vaccineTypeId).isEqualTo(3L);
         assertThat(service.findProtocolDose(2L)).isEmpty();
+    }
+
+    @Test
+    void findsVaccineTypeNamesById() {
+        VaccineType rabies = new VaccineType("Dại", Species.DOG);
+        ReflectionTestUtils.setField(rabies, "id", 8L);
+        when(vaccineTypes.findAllById(List.of(8L, 9L))).thenReturn(List.of(rabies));
+
+        assertThat(service.findVaccineTypeNames(List.of(8L, 9L))).containsExactly(java.util.Map.entry(8L, "Dại"));
+        assertThat(service.findVaccineTypeNames(List.of())).isEmpty();
+        org.mockito.Mockito.verifyNoMoreInteractions(vaccineTypes);
     }
 }

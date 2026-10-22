@@ -7,6 +7,8 @@ import org.springframework.data.jpa.repository.JpaSpecificationExecutor;
 import org.springframework.data.jpa.repository.Lock;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
+import org.springframework.transaction.annotation.Propagation;
+import org.springframework.transaction.annotation.Transactional;
 
 import com.petcare.module.branch.entity.Branch;
 
@@ -35,4 +37,13 @@ public interface BranchRepository extends JpaRepository<Branch, Long>, JpaSpecif
      */
     @Query(value = "SELECT status FROM branches WHERE id = :id FOR NO KEY UPDATE", nativeQuery = true)
     Optional<String> lockStatusForStaffChange(@Param("id") Long id);
+
+    /**
+     * Khóa dòng chi nhánh cho đặt / đổi lịch hẹn ({@code BranchApi.lockForBooking}, docs/adr/0045); cùng câu và cùng lý
+     * do native vô hướng như {@link #lockStatusForStaffChange}. {@code MANDATORY}: method query của interface Spring Data
+     * không tự có transaction, gọi ngoài transaction thì câu khóa chạy autocommit, khóa rồi nhả ngay mà không báo lỗi.
+     */
+    @Transactional(propagation = Propagation.MANDATORY)
+    @Query(value = "SELECT status FROM branches WHERE id = :id FOR NO KEY UPDATE", nativeQuery = true)
+    Optional<String> lockStatusForBooking(@Param("id") Long id);
 }

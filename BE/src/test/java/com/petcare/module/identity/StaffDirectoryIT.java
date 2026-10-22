@@ -7,6 +7,7 @@ import java.sql.Timestamp;
 import java.time.Duration;
 import java.time.Instant;
 import java.time.LocalTime;
+import java.util.List;
 import java.util.Map;
 import java.util.UUID;
 
@@ -133,6 +134,22 @@ class StaffDirectoryIT {
         assertThat(directory.findStaff(customer)).isEmpty();
         assertThat(directory.findEmail(customer)).hasValueSatisfying(email -> assertThat(email).endsWith("@petcare.test"));
         assertThat(directory.findEmail(Long.MAX_VALUE)).isEmpty();
+    }
+
+    /** docs/adr/0060: tên người phụ trách cho hàng đợi — mọi trạng thái, bỏ id không phải nhân viên. */
+    @Test
+    void findStaffByIdsReturnsEveryStaffStatusAndSkipsNonStaff() {
+        long active = staff(Role.VET, branch, "ACTIVE", false, null, "Bác sĩ Đang làm");
+        long locked = staff(Role.CARETAKER, branch, "ACTIVE", true, null, "Chăm sóc Bị khóa");
+        long disabled = staff(Role.VET, otherBranch, "DISABLED", false, null, "Bác sĩ Đã nghỉ");
+        long customer = customerAccount();
+
+        assertThat(directory.findStaffByIds(List.of(active, locked, disabled, customer, Long.MAX_VALUE)))
+                .containsExactlyInAnyOrder(
+                        new StaffSummary(active, "Bác sĩ Đang làm", Role.VET, branch, true, false),
+                        new StaffSummary(locked, "Chăm sóc Bị khóa", Role.CARETAKER, branch, false, false),
+                        new StaffSummary(disabled, "Bác sĩ Đã nghỉ", Role.VET, otherBranch, false, false));
+        assertThat(directory.findStaffByIds(List.of())).isEmpty();
     }
 
     @Test

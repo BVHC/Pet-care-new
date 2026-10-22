@@ -17,7 +17,7 @@ m = Module(
         "Booking restrictions": "Hạn chế đặt online (BR-LH-09)",
     },
     security=[
-        "Khách chỉ đặt / xem / đổi / hủy lịch của thú mình là chủ hiện tại; nhân viên chỉ thao tác lịch của chi nhánh mình.",
+        "Khách đặt lịch cho thú mình là chủ hiện tại; xem / đổi / hủy lịch có `customerId` là hồ sơ của mình (chủ lúc đặt). Nhân viên chỉ thao tác lịch của chi nhánh mình.",
         "Đếm quota và INSERT trong cùng transaction có khóa theo chi nhánh × nhóm × khung (05 `appointments`), nên hai người không cùng lấy được chỗ cuối.",
         "Khách: kiểm thời hạn đặt 24 giờ / 30 ngày [CFG], hạn chế online, cờ chờ liên kết. Lễ tân: đặt mọi khung chưa bắt đầu và còn quota; giới hạn số lịch của thú vẫn áp dụng (BR-LH-04, 05).",
         "Gỡ hạn chế đặt online ghi audit (BR-LH-09).",
@@ -60,7 +60,7 @@ m.schema("RescheduleRequest", {"slotDate": "date", "slotStart": "time"})
 m.schema("CancelAppointmentRequest", {"reason": "string:300?"}, required=[])
 m.schema("BookingRestriction", {
     "restrictionId": "int64", "customerId": "int64", "startsAt": "datetime", "endsAt": "datetime",
-    "violationCount": "int|Số NO_SHOW + hủy muộn trong 90 ngày [CFG] lúc bị hạn chế",
+    "violationCount": "int|Số NO_SHOW + hủy muộn đã đếm khi tạo hạn chế: sau mốc max(now − 90 ngày [CFG], lần hạn chế gần nhất) (docs/adr/0049)",
 })
 m.schema("RestrictionStatus", {
     "restricted": "bool", "restriction": "ref:BookingRestriction",
@@ -70,45 +70,89 @@ m.schema("LiftRestrictionRequest", {"reason": "string:300"})
 BOOK_ERR = ("`BR-LH-01` dịch vụ không đặt được / đang tắt tại chi nhánh, chi nhánh chưa ACTIVE · "
             "`BR-LH-02` khung không hợp lệ · `BR-LH-03` khung đã đủ quota · `BR-LH-04` ngoài khoảng 24 giờ – 30 ngày [CFG] (khách) "
             "hoặc khung đã bắt đầu (lễ tân) · `BR-LH-05` thú đã có 2 lịch BOOKED, trùng nhóm trong ngày hoặc trùng khung · "
-            "`BR-LH-09` khách đang bị hạn chế đặt online · `BR-KH-05` thú đã mất · `BR-TK-19` hồ sơ còn chờ quyết định liên kết")
+            "`BR-LH-09` khách đang bị hạn chế đặt online (message kèm thời điểm hết hạn chế, giờ Việt Nam) · `BR-KH-05` thú đã mất · `BR-TK-19` hồ sơ còn chờ quyết định liên kết")
 m.op("get", "/branches/{branchId}/available-slots", "listAvailableSlots", "Xem khung giờ trống", "Slots", "UC39",
      "BR-LH-01, 02, 03, 04", "A02, A06", "Khách; lễ tân chi nhánh", resp="array:Slot", path_params=["BranchId"],
      query=["serviceId!=int64", "date!=date"], errors=(400, 401, 403, 404),
-     err_desc={400: "`BR-LH-01` dịch vụ không đặt được tại chi nhánh"},
-     notes="Ngày nghỉ hoặc ngày không có giờ mở cửa trả mảng rỗng (A1).")
+     err_desc={400: "`BR-LH-01` dịch vụ không đặt được tại chi nhánh (ngừng kinh doanh, nhóm Lưu trú, đang tắt) "
+                    "hoặc chi nhánh chưa nhận đặt lịch (lễ tân của chi nhánh DRAFT)",
+               403: "Lễ tân xem chi nhánh khác",
+               404: "Chi nhánh không tồn tại (khách: cả chi nhánh chưa hoạt động) hoặc dịch vụ không tồn tại"},
+     notes="Ngày nghỉ hoặc ngày không có giờ mở cửa trả mảng rỗng (A1). Khách chỉ thấy khung bắt đầu từ "
+           "now + 24 giờ [CFG] và ngày hẹn ≤ hôm nay + 30 ngày [CFG]; lễ tân thấy mọi khung chưa bắt đầu (BR-LH-04). "
+           "Khung AVAILABLE chưa giữ chỗ: đặt lịch kiểm lại (docs/adr/0046).")
 m.op("post", "/appointments", "bookAppointment", "Đặt lịch hẹn", "Appointments", "UC39",
      "BR-LH-01…05, 09, BR-KH-05, BR-TK-19", "A02, A06", "Khách: thú của mình · lễ tân: chi nhánh mình",
      "— → BOOKED (Lịch hẹn#1); nhóm MEDICAL → Care Task#6", body="BookAppointmentRequest", resp="Appointment",
-     status=201, errors=(400, 401, 403, 404), err_desc={400: BOOK_ERR, 403: "Thú không thuộc khách / chi nhánh ngoài phạm vi"},
-     notes="Khách → channel ONLINE, lễ tân → COUNTER (A2). Nhóm MEDICAL: hủy nhắc tái khám đang chờ của thú (BR-TB-06).")
+     status=201, errors=(400, 401, 403, 404),
+     err_desc={400: BOOK_ERR, 403: "Lễ tân đặt lịch cho chi nhánh khác",
+               404: "Thú cưng (kể cả thú của khách khác), dịch vụ hoặc chi nhánh không tồn tại (khách: cả chi nhánh "
+                    "chưa hoạt động)"},
+     notes="Khách → channel ONLINE, lễ tân → COUNTER (A2). Nhóm MEDICAL: hủy nhắc tái khám đang chờ của thú (BR-TB-06); "
+           "nối Care Task#6 khi visit cài FollowUpApi (docs/adr/0047).")
 m.op("get", "/appointments", "listAppointments", "Danh sách lịch hẹn", "Appointments", "UC40, UC44", "BR-LH-11, BR-TN-02",
      "A02, A05, A06", "Khách: lịch của mình · nhân viên: chi nhánh mình", resp="Appointment", page=True,
      query=["branchId=int64", "date=date", "from=date", "to=date",
             "status=enum:BOOKED,CHECKED_IN,COMPLETED,CANCELLED,NO_SHOW", "petId=int64", "customerId=int64",
             "checkInReady=bool|Chỉ lịch BOOKED hôm nay trong cửa sổ check-in (A3)", "page", "size"],
-     errors=(400, 401, 403))
+     errors=(400, 401, 403),
+     err_desc={400: "Tham số sai kiểu (`MALFORMED_REQUEST`); BR-TK-17",
+               403: "Sai vai trò hoặc nhân viên lọc chi nhánh khác"},
+     notes="Khách: chỉ lịch có `customerId` là hồ sơ của mình (chủ lúc đặt); nhân viên: chi nhánh của mình, `branchId` "
+           "khác → 403. Mọi bộ lọc là AND; `from > to` → trang rỗng; `checkInReady` rỗng / vắng / false = không lọc. "
+           "`checkInReady=true`: lịch BOOKED, ngày hẹn hôm nay, giờ hẹn − `visit.check_in_early_minutes` ≤ now ≤ "
+           "giờ hẹn + `appointment.no_show_after_minutes` [CFG] (BR-TN-02, 03, BR-LH-08). Tăng dần theo `slotDate`, "
+           "`slotStart`, `appointmentId`. `page` < 0 → 0, `size` kẹp 1–100. `canReschedule` / `canCancel` theo người "
+           "xem; BRANCH_MANAGER luôn false (docs/adr/0048).")
 m.op("get", "/appointments/{appointmentId}", "getAppointment", "Chi tiết lịch hẹn", "Appointments", "UC40", "—",
      "A02, A05, A06, A07, A08", "Khách: lịch của mình · nhân viên chi nhánh", resp="Appointment",
-     path_params=["AppointmentId"], errors=(401, 403, 404))
+     path_params=["AppointmentId"], errors=(400, 401, 403, 404),
+     err_desc={400: "Tham số sai kiểu (`MALFORMED_REQUEST`); BR-TK-17",
+               403: "Nhân viên xem lịch của chi nhánh khác",
+               404: "Lịch hẹn không tồn tại hoặc không phải của khách đang đăng nhập"},
+     notes="`canReschedule` / `canCancel` theo người xem; BRANCH_MANAGER, VET, CARETAKER luôn false (docs/adr/0048).")
 m.op("post", "/appointments/{appointmentId}/reschedule", "rescheduleAppointment", "Đổi khung giờ", "Appointments",
-     "UC40", "BR-LH-03, 04, 05, 06", "A02, A06", "Khách: lịch của mình · lễ tân chi nhánh", "BOOKED → BOOKED (Lịch hẹn#2)",
+     "UC40", "BR-LH-02, 03, 04, 05, 06", "A02, A06", "Khách: lịch của mình · lễ tân chi nhánh", "BOOKED → BOOKED (Lịch hẹn#2)",
      body="RescheduleRequest", resp="Appointment", path_params=["AppointmentId"], errors=(400, 401, 403, 404, 409),
-     err_desc={400: "`BR-LH-06` hết lượt đổi (3 [CFG]) hoặc khách đổi khi còn < 12 giờ · `BR-LH-04`, `BR-LH-03`, `BR-LH-05` với khung mới",
-               409: "Lịch không còn BOOKED"},
-     notes="Cùng chi nhánh, cùng thú, cùng dịch vụ; muốn đổi khác thì hủy rồi đặt lại. Giữ mã lịch hẹn.")
+     err_desc={400: "`BR-LH-06` hết lượt đổi (3 [CFG]), khách đổi khi còn < 12 giờ [CFG] hoặc lễ tân đổi khi đã tới giờ hẹn · "
+                    "`BR-LH-04`, `BR-LH-02`, `BR-LH-05`, `BR-LH-03` với khung mới; tham số / body sai kiểu (`MALFORMED_REQUEST`, "
+                    "`VALIDATION_FAILED`); BR-TK-17",
+               403: "Sai vai trò hoặc lễ tân đổi lịch của chi nhánh khác",
+               404: "Lịch hẹn không tồn tại hoặc không phải của khách đang đăng nhập",
+               409: "Lịch không còn BOOKED (kiểm ngay sau khi khóa, trước mọi rule)"},
+     notes="Cùng chi nhánh, cùng thú, cùng dịch vụ; muốn đổi khác thì hủy rồi đặt lại. Giữ mã lịch hẹn. Khung mới trùng khung "
+           "hiện tại → 200, không ghi, không tăng số lần đổi. BR-LH-05 trên mọi chi nhánh, không tính chính lịch này. Không "
+           "kiểm lại BR-LH-01, BR-LH-09, BR-KH-05; đổi khung xóa mốc đã nhắc (BR-LH-12) (docs/adr/0049).")
 m.op("post", "/appointments/{appointmentId}/cancel", "cancelAppointment", "Hủy lịch hẹn", "Appointments", "UC40",
      "BR-LH-07, 09", "A02, A06", "Khách: lịch của mình · lễ tân chi nhánh", "BOOKED → CANCELLED (Lịch hẹn#4)",
      body="CancelAppointmentRequest", resp="Appointment", path_params=["AppointmentId"],
-     errors=(400, 401, 403, 404, 409), err_desc={400: "Đã qua giờ hẹn", 409: "Lịch không còn BOOKED"},
-     notes="Còn < 12 giờ [CFG] → lateCancel = true và đánh giá hạn chế đặt online (BR-LH-09).")
+     errors=(400, 401, 403, 404, 409),
+     err_desc={400: "`BR-LH-07` đã tới giờ hẹn; tham số / body sai kiểu (`MALFORMED_REQUEST`, `VALIDATION_FAILED`); BR-TK-17",
+               403: "Sai vai trò hoặc lễ tân hủy lịch của chi nhánh khác",
+               404: "Lịch hẹn không tồn tại hoặc không phải của khách đang đăng nhập",
+               409: "Lịch không còn BOOKED, kể cả CHECKED_IN (kiểm ngay sau khi khóa, trước mọi rule)"},
+     notes="Body không bắt buộc. Còn < 12 giờ [CFG] trước giờ hẹn → lateCancel = true và đánh giá hạn chế đặt online "
+           "(BR-LH-09: đếm NO_SHOW + hủy muộn của lịch hẹn và đặt chỗ sau mốc max(now − 90 ngày, lần hạn chế gần nhất); "
+           "đủ 3 [CFG] → hạn chế 30 ngày [CFG]). cancelSource = CUSTOMER (khách) / STAFF (lễ tân) (docs/adr/0049).")
 
 m.op("get", "/me/booking-restriction", "getMyBookingRestriction", "Tình trạng hạn chế đặt online của tôi",
      "Booking restrictions", "UC39, UC58", "BR-LH-09", "A02", "Khách đang đăng nhập", resp="RestrictionStatus",
-     errors=(401, 403), notes="FE hiển thị lý do và ngày hết hạn chế.")
+     errors=(400, 401, 403), err_desc={400: "BR-TK-17"},
+     notes="FE hiển thị lý do và ngày hết hạn chế. Không bị hạn chế (chưa từng, đã hết hạn, đã gỡ) → "
+           "restricted = false, restriction = null. Không chặn khi hồ sơ còn chờ quyết định liên kết (docs/adr/0055).")
 m.op("get", "/customers/{customerId}/booking-restriction", "getCustomerBookingRestriction",
      "Tình trạng hạn chế đặt online của khách", "Booking restrictions", "UC39", "BR-LH-09", "A05, A06",
-     "Nhân viên", resp="RestrictionStatus", path_params=["CustomerId"], errors=(401, 403, 404))
+     "Nhân viên", resp="RestrictionStatus", path_params=["CustomerId"], errors=(400, 401, 403, 404),
+     err_desc={400: "Tham số sai kiểu (`MALFORMED_REQUEST`); BR-TK-17", 403: "Sai vai trò",
+               404: "Khách hàng không tồn tại"},
+     notes="Toàn chuỗi: hạn chế gắn với khách, nhân viên chi nhánh nào cũng xem được. Không bị hạn chế → "
+           "restricted = false, restriction = null (docs/adr/0055).")
 m.op("post", "/customers/{customerId}/booking-restriction/lift", "liftBookingRestriction", "Gỡ hạn chế sớm",
      "Booking restrictions", "UC39", "BR-LH-09, BR-QT-15", "A05, A06", "Lễ tân, BRANCH_MANAGER",
      body="LiftRestrictionRequest", resp="RestrictionStatus", path_params=["CustomerId"], errors=(400, 401, 403, 404, 409),
-     err_desc={409: "Khách không đang bị hạn chế"}, notes="Ghi audit.")
+     err_desc={400: "Thiếu lý do / lý do quá 300 ký tự (`VALIDATION_FAILED`); body sai (`MALFORMED_REQUEST`); BR-TK-17",
+               403: "Sai vai trò", 404: "Khách hàng không tồn tại",
+               409: "Khách không đang bị hạn chế (chưa từng, đã hết hạn hoặc đã gỡ)"},
+     notes="Toàn chuỗi. Ghi audit BOOKING_RESTRICTION_LIFTED; không gửi thông báo cho khách. Thành công → restricted = "
+           "false, restriction = null. Lần đánh giá vi phạm sau vẫn đếm từ starts_at của lần hạn chế vừa gỡ, nên vi phạm "
+           "cũ không bị tính lại (docs/adr/0049, 0055).")

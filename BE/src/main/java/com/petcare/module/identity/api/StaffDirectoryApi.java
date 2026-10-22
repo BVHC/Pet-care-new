@@ -1,5 +1,6 @@
 package com.petcare.module.identity.api;
 
+import java.util.Collection;
 import java.util.List;
 import java.util.Optional;
 
@@ -17,6 +18,16 @@ public interface StaffDirectoryApi {
                             String bio, Long branchId) {}
 
     Optional<StaffSummary> findStaff(Long accountId);
+
+    /**
+     * Như {@link #findStaff} nhưng khóa chia sẻ dòng {@code accounts} trước ({@code SELECT … FOR SHARE}) rồi mới đọc —
+     * nghĩa vụ của luồng tạo việc dở cho nhân viên (visit gán lượt Visit#2 / #4, docs/adr/0061; docs/adr/0031 mục 9):
+     * điều chuyển / vô hiệu hóa / khóa tài khoản giữ {@code FOR NO KEY UPDATE} trên dòng này, nên bên gọi chờ chúng
+     * commit rồi thấy chi nhánh / trạng thái mới; FK {@code visits.assignee_id} chỉ lấy {@code FOR KEY SHARE}, không
+     * chặn được. {@code MANDATORY}, từ chối transaction readOnly; khóa giữ tới khi transaction của bên gọi kết thúc.
+     * Không phải nhân viên / không có → rỗng.
+     */
+    Optional<StaffSummary> findStaffForShare(Long accountId);
 
     /** Nhân viên active của chi nhánh theo chức vụ, người online xếp trước (BR-TN-05, 06). */
     List<StaffSummary> findAssignableStaff(Long branchId, Role role);
@@ -39,4 +50,11 @@ public interface StaffDirectoryApi {
     List<PublicVetProfile> listPublicVets();
 
     Optional<String> findEmail(Long accountId);
+
+    /**
+     * Nhiều nhân viên một lần, mọi trạng thái kể cả bị khóa / vô hiệu hóa (visit ghép tên người phụ trách cho hàng đợi,
+     * visit-v1 #2–4; docs/adr/0060). Một câu SQL bất kể số id; id không phải nhân viên thì bỏ qua, mỗi id tối đa một lần,
+     * thứ tự tùy ý; tập rỗng → rỗng, không chạm DB. Bên gọi truyền tối đa 100 id và đã tự phân quyền.
+     */
+    List<StaffSummary> findStaffByIds(Collection<Long> accountIds);
 }

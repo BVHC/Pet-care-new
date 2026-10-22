@@ -1,12 +1,19 @@
 package com.petcare.module.appointment.api;
 
 import java.time.Instant;
+import java.util.Optional;
 
 /** Owner: appointment (LH, BookingRestriction) · BE-1. Caller: boarding (LT). */
 public interface BookingRestrictionApi {
 
     /** Khách đang bị hạn chế đặt online (BR-LH-09), áp dụng cho cả đặt lịch và đặt chỗ lưu trú. */
     boolean isRestricted(Long customerId, Instant at);
+
+    /**
+     * {@code ends_at} của hạn chế đang hiệu lực tại {@code at}, rỗng nếu không bị hạn chế (cùng điều kiện với
+     * {@link #isRestricted}). Dùng để message BR-LH-09 kèm thời điểm hết hạn chế (02 L130; docs/adr/0055).
+     */
+    Optional<Instant> findActiveUntil(Long customerId, Instant at);
 
     /**
      * Gọi ngay sau mỗi vi phạm (NO_SHOW hoặc hủy muộn) của lịch hẹn hoặc đặt chỗ, trong cùng transaction.

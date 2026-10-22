@@ -31,6 +31,11 @@ m = Module(
         ("A3", "Hủy vì hết chuồng đúng loại lúc nhận là endpoint riêng do lễ tân bấm sau khi nhận thất bại", "BR-LT-08: 'đặt chỗ được hủy như hủy do phòng khám' — cần người kích hoạt và thời điểm rõ ràng"),
         ("A4", "Bản bổ sung nhật ký thêm được bất cứ lúc nào bởi CARETAKER / VET chi nhánh", "BR-LT-11 'sau đó chỉ thêm bổ sung', không giới hạn thời gian"),
         ("A5", "Ảnh nhật ký là URL; tối đa 5 [CFG]", "05 `care_logs.photo_urls`"),
+        ("A6", "Hủy muộn khi hủy sau 00:00 (giờ VN) của ngày nhận trừ 24 giờ [CFG]", "BR-LT-06 nói 'dưới 24 giờ trước ngày nhận' nhưng không nêu giờ; docs/adr/0065 D4"),
+        ("A7", "Lễ tân không đặt được chỗ nhận trong ngày sau giờ đóng cửa hôm đó", "ST05 sẽ chuyển NO_SHOW ngay và tính vi phạm cho khách; docs/adr/0065 D5"),
+        ("A8", "Ngày nhận và ngày trả phải có ít nhất một khung giờ mở cửa (không phải ngày nghỉ lễ hay ngày nghỉ cố định)", "BR-LT-04; docs/adr/0065 D6"),
+        ("A9", "Thú chưa có cân nặng vẫn đặt được; cân bắt buộc lúc nhận thú", "BR-LT-02 so cân nặng hiện tại, BR-LT-08 bắt buộc cân khi nhận; docs/adr/0065 D7"),
+        ("A10", "`activeOrderId` luôn null cho tới khi có Order lưu trú (T43)", "Order BOARDING chỉ sinh khi bắt đầu trả thú (BR-LT-09)"),
     ],
     questions=[
         ("Q1", "Cơ chế tải ảnh nhật ký chăm sóc (upload trực tiếp hay presigned URL)?", "TBD (BE + FE)", "05 chỉ lưu URL"),
@@ -128,7 +133,7 @@ m.op("post", "/kennels", "createKennel", "Tạo chuồng", "Kennels", "UC54", "B
 m.op("patch", "/kennels/{kennelId}", "updateKennel", "Sửa mã / ghi chú chuồng", "Kennels", "UC54", "BR-LT-01", "A05",
      BM, body="UpdateKennelRequest", resp="Kennel", path_params=["KennelId"], errors=(400, 401, 403, 404))
 m.op("delete", "/kennels/{kennelId}", "deleteKennel", "Xóa chuồng", "Kennels", "UC54", "BR-LT-01", "A05", BM,
-     status=204, path_params=["KennelId"], errors=(401, 403, 404, 409), err_desc={409: "Chuồng đang OCCUPIED"})
+     status=204, path_params=["KennelId"], errors=(401, 403, 404, 409), err_desc={409: "Chuồng đang OCCUPIED hoặc đã có lịch sử lưu trú (chuyển bảo trì thay vì xóa)"})
 m.op("post", "/kennels/{kennelId}/start-maintenance", "startKennelMaintenance", "Chuyển chuồng sang bảo trì",
      "Kennels", "UC54", "BR-LT-01, 03", "A05", BM, "AVAILABLE → MAINTENANCE (Chuồng#4)", resp="MaintenanceResult",
      path_params=["KennelId"], errors=(401, 403, 404, 409), err_desc={409: "Chuồng không AVAILABLE (OCCUPIED không chuyển được)"})
@@ -161,7 +166,7 @@ m.op("get", "/boarding-bookings/{bookingId}", "getBoardingBooking", "Chi tiết 
 m.op("post", "/boarding-bookings/{bookingId}/extend", "extendBoardingBooking", "Gia hạn ngày trả", "Bookings", "UC58",
      "BR-LT-02, 03, 06", "A02, A06", OWN_OR_BRANCH, "BOOKED / CHECKED_IN giữ nguyên (Đặt chỗ#2)",
      body="ExtendBookingRequest", resp="Booking", path_params=["BookingId"], errors=(400, 401, 403, 404, 409),
-     err_desc={400: "`BR-LT-06` đã qua ngày trả dự kiến · `BR-LT-03` hết chỗ các đêm thêm · `BR-LT-02` vượt 30 đêm",
+     err_desc={400: "`BR-LT-06` đã qua ngày trả dự kiến · `BR-LT-03` hết chỗ các đêm thêm · `BR-LT-02` vượt 30 đêm · ngày trả mới không sau ngày trả hiện tại (`VALIDATION_FAILED`)",
                409: "Đặt chỗ OVERDUE (không gia hạn) hoặc đã kết thúc"})
 m.op("post", "/boarding-bookings/{bookingId}/cancel", "cancelBoardingBooking", "Hủy đặt chỗ", "Bookings", "UC58",
      "BR-LT-06, BR-LH-09", "A02, A06", OWN_OR_BRANCH, "BOOKED → CANCELLED (Đặt chỗ#4)", body="CancelBookingRequest",

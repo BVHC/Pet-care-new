@@ -5,7 +5,9 @@ import java.util.Optional;
 
 /**
  * Owner: identity (QT, NotificationTemplate — 06 §7 G1) · BE-1. Caller: care (worker ST20 dựng nội dung thông báo).
- * Chỉ đọc, gọi được trong hoặc ngoài transaction. Sửa mẫu (UC10, BR-QT-14) làm ở task QT sau.
+ * Chỉ đọc, gọi được trong hoặc ngoài transaction. ADMIN sửa nội dung / khôi phục mặc định qua UC10 (docs/adr/0037): mẫu
+ * đã lưu chỉ chứa dấu ngoặc nhọn ở dạng {@code {ten}} với tên thuộc {@code allowedVars} và có đủ {@code requiredVars};
+ * bản sửa có hiệu lực từ lần đọc sau khi transaction sửa đã commit (kể cả dòng outbox đã xếp hàng trước đó).
  */
 public interface NotificationTemplateQueryApi {
 

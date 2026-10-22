@@ -22,8 +22,9 @@ import com.petcare.module.branch.repository.BranchRepository;
 
 /**
  * {@code BranchApi.lockForStaffChange} (docs/adr/0029, nợ D014): khóa theo id tăng dần dù bên gọi truyền thứ tự nào,
- * id lạ vắng khỏi map, transaction {@code readOnly} bị chặn trước mọi câu SQL. Khóa thật trên PostgreSQL:
- * {@code BranchStaffLockIT}.
+ * id lạ vắng khỏi map, transaction {@code readOnly} bị chặn trước mọi câu SQL. {@code lockForBooking} (docs/adr/0045):
+ * trả trạng thái đọc dưới khóa, id lạ → rỗng, readOnly / null bị chặn trước SQL. Khóa thật trên PostgreSQL:
+ * {@code BranchStaffLockIT}, {@code BranchBookingLockIT}.
  */
 class BranchStaffLockServiceTest {
 
@@ -65,5 +66,39 @@ class BranchStaffLockServiceTest {
     void emptyInputLocksNothing() {
         assertThat(service.lockForStaffChange(List.of())).isEmpty();
         verify(branches, never()).lockStatusForStaffChange(anyLong());
+    }
+
+    // ---------------------------------------------------------------- lockForBooking (docs/adr/0045)
+
+    @Test
+    void lockForBookingReturnsStatusReadUnderLock() {
+        when(branches.lockStatusForBooking(7L)).thenReturn(Optional.of("ACTIVE"));
+        when(branches.lockStatusForBooking(8L)).thenReturn(Optional.of("DRAFT"));
+
+        assertThat(service.lockForBooking(7L)).contains(BranchStatus.ACTIVE);
+        assertThat(service.lockForBooking(8L)).contains(BranchStatus.DRAFT);
+        verify(branches, never()).lockStatusForStaffChange(anyLong());
+    }
+
+    @Test
+    void lockForBookingOfUnknownBranchIsEmptyNotAnError() {
+        when(branches.lockStatusForBooking(9L)).thenReturn(Optional.empty());
+
+        assertThat(service.lockForBooking(9L)).isEmpty();
+    }
+
+    @Test
+    void lockForBookingRejectsReadOnlyTransactionBeforeAnySql() {
+        TransactionSynchronizationManager.setCurrentTransactionReadOnly(true);
+
+        assertThatThrownBy(() -> service.lockForBooking(1L))
+                .isInstanceOf(IllegalStateException.class).hasMessageContaining("readOnly");
+        verify(branches, never()).lockStatusForBooking(anyLong());
+    }
+
+    @Test
+    void lockForBookingRejectsNullIdBeforeAnySql() {
+        assertThatThrownBy(() -> service.lockForBooking(null)).isInstanceOf(NullPointerException.class);
+        verify(branches, never()).lockStatusForBooking(anyLong());
     }
 }

@@ -10,6 +10,9 @@ import java.time.LocalTime;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
+import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.TimeUnit;
+import java.util.concurrent.atomic.AtomicInteger;
 
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.BeanUtils;
@@ -24,13 +27,20 @@ import com.petcare.module.identity.service.SystemConfigService.ConfigRow;
 /** docs/adr/0004 D11–D13; BR-QT-13 (khoảng hợp lệ). Nạp fail-fast và getter đúng kiểu. */
 class SystemConfigServiceTest {
 
-    /** Một bộ dòng hợp lệ cho mọi ConfigKey: INT = 5 trong [1, 10], TIME = 12:00 trong [06:00, 22:00]. */
+    /**
+     * Một bộ dòng hợp lệ cho mọi ConfigKey: INT = 5 trong [1, 10], TIME = 12:00 trong [06:00, 22:00]; riêng
+     * {@code appointment.no_show_after_minutes} = 6 để thỏa {@code visit.late_priority_minutes (5) <} nó (docs/adr/0036)
+     * và {@code appointment.reminder_hours_before} = 6 để thỏa {@code appointment.late_cancel_hours (5) <} nó
+     * (docs/adr/0056).
+     */
     private static List<ConfigRow> validRows() {
         List<ConfigRow> rows = new ArrayList<>();
         for (ConfigKey key : ConfigKey.values()) {
+            String value = key == ConfigKey.APPOINTMENT_NO_SHOW_AFTER_MINUTES
+                    || key == ConfigKey.APPOINTMENT_REMINDER_HOURS_BEFORE ? "6" : "5";
             rows.add(key.type() == ConfigValueType.TIME
                     ? new ConfigRow(key.key(), "12:00", ConfigValueType.TIME, "06:00", "22:00")
-                    : new ConfigRow(key.key(), "5", key.type(), "1", "10"));
+                    : new ConfigRow(key.key(), value, key.type(), "1", "10"));
         }
         return rows;
     }
@@ -182,6 +192,96 @@ class SystemConfigServiceTest {
         assertThat(service.getInt(ConfigKey.SESSION_TTL_HOURS)).isEqualTo(8);
     }
 
+    /** docs/adr/0036 mục 1: ràng buộc chéo cũng fail-fast lúc khởi động, như min–max. */
+    @Test
+    void crossKeyViolationFailsFast() {
+        List<ConfigRow> rows = replace(ConfigKey.APPOINTMENT_NO_SHOW_AFTER_MINUTES,
+                new ConfigRow("appointment.no_show_after_minutes", "5", ConfigValueType.INT, "1", "10"));
+        rows.removeIf(r -> r.key().equals(ConfigKey.BOARDING_MAX_NIGHTS.key()));
+        rows.add(new ConfigRow("boarding.max_nights", "4", ConfigValueType.INT, "1", "10"));
+        rows.removeIf(r -> r.key().equals(ConfigKey.APPOINTMENT_REMINDER_HOURS_BEFORE.key()));
+        rows.add(new ConfigRow("appointment.reminder_hours_before", "5", ConfigValueType.INT, "1", "10"));
+
+        assertThatThrownBy(() -> SystemConfigService.load(rows))
+                .isInstanceOf(IllegalStateException.class)
+                .hasMessageContaining("visit.late_priority_minutes (5) must be < appointment.no_show_after_minutes (5)")
+                .hasMessageContaining("boarding.min_nights (5) must be <= boarding.max_nights (4)")
+                .hasMessageContaining(
+                        "appointment.late_cancel_hours (5) must be < appointment.reminder_hours_before (5)");
+    }
+
+    /** Kích thước cache cố định theo ConfigKey (docs/adr/0036, mục bộ nhớ): dòng lạ không bao giờ vào cache. */
+    @Test
+    void cacheSizeIsBoundedByConfigKeyEvenWithManyUnknownRows() {
+        List<ConfigRow> rows = new ArrayList<>(validRows());
+        for (int i = 0; i < 1000; i++) {
+            rows.add(new ConfigRow("legacy.unused_" + i, "1", ConfigValueType.INT, null, null));
+        }
+
+        Map<ConfigKey, Object> values = SystemConfigService.load(rows);
+
+        assertThat(values).hasSize(ConfigKey.values().length);
+        assertThatThrownBy(() -> values.put(ConfigKey.OTP_TTL_MINUTES, 1))
+                .isInstanceOf(UnsupportedOperationException.class);
+    }
+
+    /**
+     * docs/adr/0036 mục 2: hai lần nạp chồng nhau — lần đọc trước (dữ liệu cũ) không được gán đè kết quả lần đọc sau.
+     * Lần gọi {@code findAll} đầu bị chặn và trả bản cũ (5); lần thứ hai trả bản mới (8). Có {@code synchronized} thì
+     * lần thứ hai chỉ đọc sau khi lần đầu gán xong → kết quả 8. Bỏ {@code synchronized} → 5 (đỏ).
+     */
+    @Test
+    void overlappingReloadsNeverLeaveTheOlderReadInPlace() throws Exception {
+        List<ConfigRow> oldRows = validRows();
+        List<ConfigRow> newRows = replace(ConfigKey.SESSION_TTL_HOURS,
+                new ConfigRow("session.ttl_hours", "8", ConfigValueType.INT, "1", "72"));
+        SystemConfigRepository repository = mock(SystemConfigRepository.class);
+        CountDownLatch firstReadEntered = new CountDownLatch(1);
+        CountDownLatch releaseFirstRead = new CountDownLatch(1);
+        AtomicInteger calls = new AtomicInteger();
+        when(repository.findAll()).thenAnswer(invocation -> {
+            int call = calls.incrementAndGet();
+            if (call == 2) {
+                firstReadEntered.countDown();
+                assertThat(releaseFirstRead.await(10, TimeUnit.SECONDS)).isTrue();
+                return entities(oldRows);
+            }
+            return entities(call == 1 ? oldRows : newRows);
+        });
+        SystemConfigService service = new SystemConfigService(repository);
+        service.afterPropertiesSet();
+
+        Thread first = new Thread(service::reload);
+        first.start();
+        assertThat(firstReadEntered.await(10, TimeUnit.SECONDS)).isTrue();
+        Thread second = new Thread(service::reload);
+        second.start();
+        long deadline = System.nanoTime() + TimeUnit.SECONDS.toNanos(10);
+        while (second.getState() != Thread.State.BLOCKED && second.getState() != Thread.State.TERMINATED
+                && System.nanoTime() < deadline) {
+            Thread.onSpinWait();
+        }
+        releaseFirstRead.countDown();
+        first.join(10_000);
+        second.join(10_000);
+
+        assertThat(service.getInt(ConfigKey.SESSION_TTL_HOURS)).isEqualTo(8);
+    }
+
+    private static List<SystemConfig> entities(List<ConfigRow> rows) {
+        return rows.stream().map(SystemConfigServiceTest::entity).toList();
+    }
+
+    private static SystemConfig entity(ConfigRow row) {
+        SystemConfig entity = BeanUtils.instantiateClass(SystemConfig.class);
+        ReflectionTestUtils.setField(entity, "configKey", row.key());
+        ReflectionTestUtils.setField(entity, "value", row.value());
+        ReflectionTestUtils.setField(entity, "valueType", row.valueType());
+        ReflectionTestUtils.setField(entity, "minValue", row.minValue());
+        ReflectionTestUtils.setField(entity, "maxValue", row.maxValue());
+        return entity;
+    }
+
     /** ConfigKey hiện chưa có khóa DECIMAL/BOOL; bộ parse của hai kiểu này kiểm tra trực tiếp. */
     @Test
     void parsesDecimalAndBoolWithRange() {
@@ -212,23 +312,13 @@ class SystemConfigServiceTest {
 
         SystemConfigRepositoryStub(List<ConfigRow> rows) {
             this.rows = rows;
-            when(repository.findAll()).thenAnswer(invocation -> this.rows.stream().map(this::entity).toList());
+            when(repository.findAll()).thenAnswer(invocation -> entities(this.rows));
         }
 
         SystemConfigService service() {
             SystemConfigService service = new SystemConfigService(repository);
             service.afterPropertiesSet();
             return service;
-        }
-
-        private SystemConfig entity(ConfigRow row) {
-            SystemConfig entity = BeanUtils.instantiateClass(SystemConfig.class);
-            ReflectionTestUtils.setField(entity, "configKey", row.key());
-            ReflectionTestUtils.setField(entity, "value", row.value());
-            ReflectionTestUtils.setField(entity, "valueType", row.valueType());
-            ReflectionTestUtils.setField(entity, "minValue", row.minValue());
-            ReflectionTestUtils.setField(entity, "maxValue", row.maxValue());
-            return entity;
         }
     }
 }

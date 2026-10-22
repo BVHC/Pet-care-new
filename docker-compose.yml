@@ -83,6 +83,15 @@ services:
       APP_JOBS_SESSION_CLEANUP_CRON: ${SESSION_CLEANUP_CRON:-0 0 3 * * *}
       # Lịch ST02 dọn tài khoản PENDING quá hạn (docs/adr/0013); mặc định trùng application.yml.
       PENDING_ACCOUNT_CLEANUP_CRON: ${PENDING_ACCOUNT_CLEANUP_CRON:-0 */15 * * * *}
+      # Lịch ST05 chuyển lịch hẹn quá giờ sang NO_SHOW (docs/adr/0053); mặc định trùng application.yml.
+      NO_SHOW_CRON: ${NO_SHOW_CRON:-0 */5 * * * *}
+      # Lịch ST03 nhắc lịch hẹn (docs/adr/0056); mặc định trùng application.yml (lệch phút với ST05 / ST02).
+      APPOINTMENT_REMINDER_CRON: ${APPOINTMENT_REMINDER_CRON:-0 2/5 * * * *}
+      # Lịch ST13 tự chốt ca thu ngân và báo Order PENDING quá hạn (docs/adr/0064); mặc định trùng application.yml.
+      CASHIER_SHIFT_AUTO_CLOSE_CRON: ${CASHIER_SHIFT_AUTO_CLOSE_CRON:-0 4/5 * * * *}
+      PENDING_ORDER_DIGEST_CRON: ${PENDING_ORDER_DIGEST_CRON:-0 50 23 * * *}
+      # Lịch ST05 cho lưu trú (docs/adr/0065); mặc định trùng application.yml (phút 3, 8, 13…).
+      BOARDING_NO_SHOW_CRON: ${BOARDING_NO_SHOW_CRON:-0 3/5 * * * *}
       # Lịch ba luồng ST20: email HIGH, NORMAL (docs/adr/0012), IN_APP (docs/adr/0014); mặc định trùng application.yml.
       NOTIFICATION_OUTBOX_CRON: ${NOTIFICATION_OUTBOX_CRON:-*/10 * * * * *}
       NOTIFICATION_OUTBOX_PRIORITY_CRON: ${NOTIFICATION_OUTBOX_PRIORITY_CRON:-*/5 * * * * *}

@@ -493,7 +493,7 @@ Quota riêng của một khung giờ cụ thể, ghi đè quota mặc định (B
 - Index: `(pet_id, status)` cho BR-LH-05; `(customer_id, created_at)`; `(status, slot_date, slot_start)` cho ST05
 - `UNIQUE (pet_id, slot_date, slot_start) WHERE status = 'BOOKED'` — thú không trùng khung (BR-LH-05)
 
-**Quota tính những lịch nào [ERD]:** lịch đã `CHECKED_IN`/`COMPLETED` vẫn chiếm quota của khung đó; `CANCELLED`, `NO_SHOW` trả lại quota. Đếm quota và INSERT phải trong cùng transaction có khóa (ví dụ `SELECT … FOR UPDATE` trên dòng `branches`, hoặc advisory lock theo `branch_id + service_group + slot`) để hai khách không cùng lấy khung cuối.
+**Quota tính những lịch nào [ERD]:** lịch đã `CHECKED_IN`/`COMPLETED` vẫn chiếm quota của khung đó; `CANCELLED`, `NO_SHOW` trả lại quota. Đếm quota và INSERT phải trong cùng transaction có khóa (ví dụ `SELECT … FOR UPDATE` trên dòng `branches`, hoặc advisory lock theo `branch_id + service_group + slot`) để hai khách không cùng lấy khung cuối. **Đã chốt ở ADR-0045:** khóa dòng `branches` `FOR NO KEY UPDATE` (`BranchApi.lockForBooking`) + advisory theo thú cho BR-LH-05; mã `code` = `LH-<yyMMdd ngày đặt>-<số của appointment_code_seq>` (V16 — ban đầu đặt V13, đổi số 2026-10-19 vì trùng `V13__pet_customer_fk_indexes.sql` của BE-2; mục 20 Nhật ký quyết định).
 
 - Index: `(booked_by)` — kiểm FK khi xóa `accounts` (V7, ADR-0018)
 
@@ -768,7 +768,7 @@ Domain model gộp "bản bổ sung" vào CareLog; tách thành bảng con để
   `CHECK ((source = 'VISIT' AND visit_id IS NOT NULL AND boarding_booking_id IS NULL) OR (source = 'BOARDING' AND boarding_booking_id IS NOT NULL AND visit_id IS NULL) OR (source = 'RETAIL' AND visit_id IS NULL AND boarding_booking_id IS NULL))`
 - `CHECK ((status = 'PAID') = (payment_id IS NOT NULL))`
 - `UNIQUE (boarding_booking_id) WHERE status IN ('OPEN','PENDING')` — tối đa 1 Order lưu trú chưa kết thúc
-- Index: `(branch_id, status, pending_at)`; `(branch_id, paid_at)` cho báo cáo; `(customer_id, status)` cho thu gộp
+- Index: `(branch_id, status, pending_at)`; `(branch_id, paid_at)` cho báo cáo; `(customer_id, status)` cho thu gộp; `(payment_id) WHERE payment_id IS NOT NULL` — xem phiếu thu → các Order (V19, ADR-0064)
 
 **Thất thu (BR-BC-02)** = Order có `cancel_type = 'UNPAID'`. Order có `cancel_type = 'CHECKOUT_ABORTED'` không tính thất thu. Đây là lý do cần cột `cancel_type` thay vì suy ra từ người hủy.
 
@@ -825,6 +825,7 @@ Domain model gộp "bản bổ sung" vào CareLog; tách thành bảng con để
 - Index cho ST13: `(branch_id, is_after_hours) WHERE status = 'OPEN'`
 - Điều kiện mở ca (trong/ngoài giờ mở cửa, cờ cấp cứu của chi nhánh) kiểm tra ở ứng dụng vì phụ thuộc `opening_hours`, `holidays`.
 - Index: `(cashier_id)`, `(reconciled_by) WHERE reconciled_by IS NOT NULL` — kiểm FK khi xóa `accounts` (V7, ADR-0018)
+- Index: `(branch_id, business_date DESC, id DESC)` — danh sách ca của chi nhánh (V19, ADR-0064)
 
 ### `payments` — ROOT
 
@@ -1134,7 +1135,7 @@ Tổng: 55 bảng = 52 model + 3 bảng con tách ra (`care_log_addenda`, `stock
 
 ## 13. Nhật ký quyết định
 
-Mục 1–4: các câu hỏi mở của bản v14, chốt ở v15. Mục 5: thay đổi ở v16. Mục 6–10: quyết định khi viết migration `V1__init_schema.sql` (2026-10-03). Mục 11: worker ST20 (2026-10-07). Mục 12: ST02 (2026-10-07). Mục 13: ST20 kênh IN_APP (2026-10-07). Mục 15: OTP liên kết hồ sơ (2026-10-09). Mục 16: sổ địa chỉ (2026-10-10).
+Mục 1–4: các câu hỏi mở của bản v14, chốt ở v15. Mục 5: thay đổi ở v16. Mục 6–10: quyết định khi viết migration `V1__init_schema.sql` (2026-10-03). Mục 11: worker ST20 (2026-10-07). Mục 12: ST02 (2026-10-07). Mục 13: ST20 kênh IN_APP (2026-10-07). Mục 15: OTP liên kết hồ sơ (2026-10-09). Mục 16: sổ địa chỉ (2026-10-10). Mục 17–19: index và mã chứng từ của BE-2 (T17–T19, 2026-10-16/17). Mục 20: mã lịch hẹn (2026-10-15).
 
 | # | Vấn đề | Quyết định | Ảnh hưởng tới bảng |
 |---|---|---|---|
@@ -1154,3 +1155,7 @@ Mục 1–4: các câu hỏi mở của bản v14, chốt ở v15. Mục 5: thay
 | 14 | Index cho cột FK trỏ tới `accounts` | Xóa một dòng `accounts` (ST02, BR-TK-08) kiểm FK `RESTRICT` ở 43 cột / 34 bảng; 38 cột không có index dùng được → quét toàn bảng mỗi cột (ADR-0018, trả nợ D009). Erd không liệt kê index cho các cột `*_by` | V7: index `(<cột>)` cho cột NOT NULL, partial `(<cột>) WHERE <cột> IS NOT NULL` cho cột nullable, ở 34 bảng (dòng `- Index:` ghi "V7, ADR-0018" trong từng bảng) |
 | 15 | OTP liên kết hồ sơ (`LINK_PROFILE`, BR-TK-19) | Mã gắn `(account_id, customer_id, target_email)`; xác thực lọc theo cả `customer_id` vì `customers.email` không duy nhất; mã mới hủy mã `LINK_PROFILE` cũ theo tài khoản, không theo email (ADR-0025). Cột `customer_id` (FK → `customers`) chưa có index cho kiểm FK khi xóa hồ sơ online. Các FK khác trỏ tới `customers` thiếu index: nợ D013 | `otp_tokens`: index partial `ix_otp_tokens_customer_id (customer_id) WHERE customer_id IS NOT NULL` (V9). `notification_templates`: seed `OTP_PROFILE_LINK` (V9) |
 | 16 | Sổ địa chỉ tự sửa (UC06, BR-TK-18) | §0 không liệt kê BR-TK-18 trong danh sách xóa cứng, dù UC06 / BR-TK-18 cho khách xóa địa chỉ và `addresses` không có cột trạng thái; không bảng nào có FK trỏ tới `addresses`. Chốt **xóa cứng**, thêm BR-TK-18 vào §0. Đọc / đếm theo chủ cần index (ADR-0028) | `addresses`: index `ix_addresses_customer_id (customer_id)` (V10) — trả phần `addresses` của nợ D013 |
+| 17 | Index cho FK trỏ tới `pets` / `customers` còn thiếu (T17, ADR-0041) | Xóa thú (BR-KH-06), xóa hồ sơ online (BR-TK-08, BR-TK-19) và `existsByPet` / `isPetInStay` / `existsByCustomer` phải quét toàn bảng; V1 chỉ có index cho `appointments`, `visits.pet_id`, `vaccinations`, `orders`, `feedbacks` | `boarding_bookings (pet_id)`, `boarding_bookings (customer_id)`, `care_tasks (pet_id)`, `care_tasks (customer_id)`, `visits (customer_id)`, `payments (customer_id)` (V13) — trả hết nợ D013 |
+| 18 | Mã chứng từ liên tục và index module kho (T18, ADR-0042, 0043) | BR-KO-03 đòi dãy số phiếu liên tục nhưng ERD không có nơi sinh số; `SEQUENCE` / `IDENTITY` để lỗ khi rollback. V1 chỉ có index FEFO, movement và unique của kho | Bảng ngoài ERD `document_counters (doc_type, period, last_value)`, PK `(doc_type, period)` (V14, chỉ `platform/sequence/DocumentCodeGenerator` ghi); index `inventory_items (product_id)`, `stock_receipts (branch_id, receipt_date DESC, id DESC)` và `(supplier_id)`, `stock_receipt_lines (stock_receipt_id)`, `(product_id)`, `(stock_lot_id) WHERE NOT NULL`, `stock_adjustments (branch_id, created_at DESC, id DESC)`, `stock_adjustment_lines (stock_adjustment_id)`, `(stock_lot_id)` |
+| 19 | Index `order_lines (order_id)` (T19, ADR-0044) | V1 không có index cho `order_lines.order_id`: mọi thao tác trên dòng của một Order, tính lại tổng tiền và kiểm FK khi xóa Order đều quét cả bảng | `V15__order_lines_index.sql`: `ix_order_lines_order_id` |
+| 20 | Mã chứng từ của lịch hẹn (`appointments.code`, BR-LH-06 giữ mã khi đổi khung) | §0 chỉ có ví dụ `LH-260115-0007`, không nói cách sinh. Chốt sequence toàn cục: mã = `LH-` + `yyMMdd` (ngày đặt, giờ Việt Nam) + `-` + số của sequence (≥ 4 chữ số, đệm 0). Duy nhất theo cấu tạo, không cần khóa; không reset theo ngày; nhảy cóc khi rollback — chấp nhận vì lịch hẹn không yêu cầu số liên tục (khác phiếu nhập BR-KO-03). `MAXVALUE 9999999999` giữ mã ≤ 20 ký tự, `NO CYCLE` (hết số → lỗi, không trùng) (ADR-0045) | V16 (ban đầu V13, đổi số 2026-10-19 khi sửa rebase vì trùng `V13__pet_customer_fk_indexes.sql`): `appointment_code_seq AS BIGINT MAXVALUE 9999999999 NO CYCLE` |

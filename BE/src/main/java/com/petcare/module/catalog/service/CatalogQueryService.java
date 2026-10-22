@@ -16,6 +16,7 @@ import com.petcare.module.catalog.repository.KennelTypeRepository;
 import com.petcare.module.catalog.repository.ProductRepository;
 import com.petcare.module.catalog.repository.ServiceRepository;
 import com.petcare.module.catalog.repository.VaccinationProtocolRepository;
+import com.petcare.module.catalog.repository.VaccineTypeRepository;
 import com.petcare.module.customer.api.Species;
 
 /** Cài đặt {@link CatalogQueryApi} (SP): chỉ đọc, trả record trong {@code api/} cho appointment, visit, boarding. */
@@ -27,13 +28,15 @@ public class CatalogQueryService implements CatalogQueryApi {
     private final KennelTypeRepository kennelTypes;
     private final ProductRepository products;
     private final VaccinationProtocolRepository protocols;
+    private final VaccineTypeRepository vaccineTypes;
 
     public CatalogQueryService(ServiceRepository services, KennelTypeRepository kennelTypes,
-            ProductRepository products, VaccinationProtocolRepository protocols) {
+            ProductRepository products, VaccinationProtocolRepository protocols, VaccineTypeRepository vaccineTypes) {
         this.services = services;
         this.kennelTypes = kennelTypes;
         this.products = products;
         this.protocols = protocols;
+        this.vaccineTypes = vaccineTypes;
     }
 
     @Override
@@ -58,6 +61,20 @@ public class CatalogQueryService implements CatalogQueryApi {
     @Override
     public Optional<ProductInfo> findProduct(Long productId) {
         return products.findById(productId).map(CatalogQueryService::toInfo);
+    }
+
+    @Override
+    public List<ProductInfo> findProducts(Collection<Long> productIds) {
+        if (productIds.isEmpty()) {
+            return List.of();
+        }
+        return products.findAllById(productIds).stream().map(CatalogQueryService::toInfo).toList();
+    }
+
+    @Override
+    @Transactional(propagation = org.springframework.transaction.annotation.Propagation.MANDATORY)
+    public Optional<ProductInfo> findProductForShare(Long productId) {
+        return products.findByIdForShare(productId).map(CatalogQueryService::toInfo);
     }
 
     /** Chỉ dịch vụ nhóm {@code BOARDING} có loại chuồng; giá đêm là giá của dịch vụ (BR-SP-04). */
@@ -85,6 +102,15 @@ public class CatalogQueryService implements CatalogQueryApi {
     public List<Long> findBoardingRequiredVaccineTypeIds(Species species) {
         return protocols.findBySpeciesAndRequiredForBoardingTrueAndActiveTrue(species).stream()
                 .map(VaccinationProtocol::getVaccineTypeId).distinct().sorted().toList();
+    }
+
+    @Override
+    public java.util.Map<Long, String> findVaccineTypeNames(Collection<Long> vaccineTypeIds) {
+        if (vaccineTypeIds == null || vaccineTypeIds.isEmpty()) {
+            return java.util.Map.of();
+        }
+        return vaccineTypes.findAllById(vaccineTypeIds).stream()
+                .collect(java.util.stream.Collectors.toMap(v -> v.getId(), v -> v.getName()));
     }
 
     private static ServiceInfo toInfo(com.petcare.module.catalog.entity.Service s) {

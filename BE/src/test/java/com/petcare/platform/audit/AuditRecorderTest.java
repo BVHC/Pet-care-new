@@ -136,6 +136,37 @@ class AuditRecorderTest {
                 .hasMessageContaining("not a JPA entity");
     }
 
+    /**
+     * Contract #36 ghi {@code beforeData} / {@code afterData} là {@code object?} (docs/adr/0038 mục 7): mảng, chuỗi, số
+     * là lỗi lập trình ở cả hai hàm, ném trước khi lưu — không bị {@code recordIndependently} nuốt thành
+     * {@code AUDIT_WRITE_FAILED}.
+     */
+    @Test
+    void rejectsSnapshotThatIsNotAJsonObject() {
+        for (Object snapshot : List.<Object>of(List.of(Map.of("a", 1)), "text", 5L, true)) {
+            assertThatThrownBy(() -> recorder.record(AuditEntry.of("PRICE_CHANGED").before(snapshot)))
+                    .isInstanceOf(IllegalArgumentException.class)
+                    .hasMessageContaining("snapshot must be a JSON object");
+            assertThatThrownBy(() -> recorder.recordIndependently(AuditEntry.of("PRICE_CHANGED").after(snapshot)))
+                    .isInstanceOf(IllegalArgumentException.class)
+                    .hasMessageContaining("snapshot must be a JSON object");
+        }
+        verify(repository, never()).save(any());
+    }
+
+    @Test
+    void recordAndMapSnapshotsIncludingEmptyMapAreObjects() {
+        record PriceSnapshot(long price) {
+        }
+
+        AuditLogEntity saved = recordAndCapture(AuditEntry.of("PRICE_CHANGED")
+                .before(new PriceSnapshot(100)).after(Map.of()));
+
+        assertThat(saved.getBeforeData().isObject()).isTrue();
+        assertThat(saved.getAfterData().isObject()).isTrue();
+        assertThat(saved.getAfterData().isEmpty()).isTrue();
+    }
+
     @Test
     void nullSnapshotsStayNull() {
         AuditLogEntity saved = recordAndCapture(AuditEntry.of("LOGIN_SUCCEEDED"));

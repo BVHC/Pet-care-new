@@ -166,18 +166,19 @@ m.op("post", "/me/pets", "createMyPet", "Thêm thú cưng", "Pets", "UC24", "BR-
      "Khách đang đăng nhập", body="CreatePetRequest", resp="PetWriteResult", status=201, errors=(400, 401, 403),
      err_desc={400: "Ngày sinh ở tương lai · thiếu trường bắt buộc (BR-KH-02) · `BR-TK-19` hồ sơ còn chờ quyết định liên kết"})
 m.op("get", "/pets/{petId}", "getPet", "Chi tiết thú cưng", "Pets", "UC24", "BR-KH-03, 06, 08", "A02, A06, A07, A08",
-     "Chủ hiện tại; nhân viên mọi chi nhánh", resp="PetResponse", path_params=["PetId"], errors=(401, 403, 404))
+     "Chủ hiện tại; nhân viên mọi chi nhánh", resp="PetResponse", path_params=["PetId"], errors=(400, 401, 403, 404),
+     err_desc={400: "`BR-TK-19` hồ sơ còn chờ quyết định liên kết"})
 m.op("patch", "/pets/{petId}", "updatePet", "Sửa thông tin thú cưng", "Pets", "UC24", "BR-KH-02, 03, 05", "A02, A06",
      PET_OWNER, body="UpdatePetRequest", resp="PetWriteResult", path_params=["PetId"], errors=(400, 401, 403, 404),
-     err_desc={400: "`BR-KH-03` đổi loài khi đã có bệnh án / mũi tiêm · `BR-KH-05` thú đã mất (chỉ đọc)"})
+     err_desc={400: "`BR-KH-03` đổi loài khi đã có bệnh án / mũi tiêm · `BR-KH-05` thú đã mất (chỉ đọc) · `BR-TK-19` hồ sơ còn chờ quyết định liên kết"})
 m.op("post", "/pets/{petId}/mark-deceased", "markPetDeceased", "Đánh dấu thú đã mất", "Pets", "UC24, ST19",
      "BR-KH-05, BR-LT-12, BR-TB-03", "A02, A06", PET_OWNER, "Phát PetDeceasedEvent → Lịch hẹn#5, Đặt chỗ#5, Care Task#4",
      body="MarkDeceasedRequest", resp="PetResponse", path_params=["PetId"], errors=(400, 401, 403, 404, 409),
-     err_desc={400: "`BR-KH-05` thú có Visit mở hoặc đang lưu trú (kết thúc lưu trú trước theo BR-LT-12) · chưa xác nhận",
+     err_desc={400: "`BR-KH-05` thú có Visit mở hoặc đang lưu trú (kết thúc lưu trú trước theo BR-LT-12) · chưa xác nhận · `BR-TK-19` hồ sơ còn chờ quyết định liên kết",
                409: "Thú đã được đánh dấu đã mất (không hoàn tác)"})
 m.op("delete", "/pets/{petId}", "deletePet", "Xóa thú cưng chưa phát sinh giao dịch", "Pets", "UC24", "BR-KH-06",
      "A02, A06", PET_OWNER, status=204, path_params=["PetId"], errors=(400, 401, 403, 404),
-     err_desc={400: "`BR-KH-06` đã có lịch hẹn, đặt chỗ, Visit hoặc Order — dùng đánh dấu đã mất"})
+     err_desc={400: "`BR-KH-06` đã có lịch hẹn, đặt chỗ, Visit hoặc Order — dùng đánh dấu đã mất · `BR-TK-19` hồ sơ còn chờ quyết định liên kết"})
 m.op("post", "/pets/{petId}/transfer-owner", "transferPetOwner", "Chuyển chủ thú cưng", "Pets", "UC26",
      "BR-KH-08", "A06", "Lễ tân", "Phát PetOwnerTransferredEvent → Lịch hẹn#5, Đặt chỗ#5; Care Task OPEN sang chủ mới",
      body="TransferOwnerRequest", resp="PetResponse", path_params=["PetId"], errors=(400, 401, 403, 404),
@@ -186,8 +187,9 @@ m.op("post", "/pets/{petId}/transfer-owner", "transferPetOwner", "Chuyển chủ
 
 m.op("get", "/pets/{petId}/weights", "listPetWeights", "Lịch sử cân nặng", "Weights", "UC24, UC25", "BR-KH-04, 07",
      "A02, A06, A07, A08", "Chủ hiện tại; nhân viên", resp="array:WeightRecord", path_params=["PetId"],
-     errors=(401, 403, 404), notes="Mới nhất trước.")
+     errors=(400, 401, 403, 404), err_desc={400: "`BR-TK-19` hồ sơ còn chờ quyết định liên kết"},
+     notes="Mới nhất trước.")
 m.op("post", "/pets/{petId}/weights", "addOwnerWeight", "Chủ tự khai cân nặng", "Weights", "UC24", "BR-KH-04",
      "A02", "Khách là chủ hiện tại", body="AddWeightRequest", resp="WeightRecord", status=201, path_params=["PetId"],
-     errors=(400, 401, 403, 404), err_desc={400: "`BR-KH-04` cân nặng ≤ 0 · `BR-KH-05` thú đã mất"},
+     errors=(400, 401, 403, 404), err_desc={400: "`BR-KH-04` cân nặng ≤ 0 · `BR-KH-05` thú đã mất · `BR-TK-19` hồ sơ còn chờ quyết định liên kết"},
      notes="source = OWNER (đánh dấu chủ tự khai).")

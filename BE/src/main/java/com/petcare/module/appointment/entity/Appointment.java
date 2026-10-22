@@ -1,0 +1,174 @@
+package com.petcare.module.appointment.entity;
+
+import java.time.Instant;
+import java.time.LocalDate;
+import java.time.LocalTime;
+
+import com.petcare.module.catalog.api.ServiceGroup;
+import com.petcare.platform.model.TimestampedEntity;
+
+import jakarta.persistence.Column;
+import jakarta.persistence.Entity;
+import jakarta.persistence.EnumType;
+import jakarta.persistence.Enumerated;
+import jakarta.persistence.GeneratedValue;
+import jakarta.persistence.GenerationType;
+import jakarta.persistence.Id;
+import jakarta.persistence.Table;
+import lombok.AccessLevel;
+import lombok.Getter;
+import lombok.NoArgsConstructor;
+
+/**
+ * Bảng {@code appointments} (erd §5, ROOT, SM #3). Một lịch hẹn: 1 thú, 1 dịch vụ, 1 chi nhánh, 1 khung 30 phút, không
+ * gắn nhân viên (BR-LH-01). {@code customerId}, {@code petId}, {@code branchId}, {@code serviceId}, {@code bookedBy} để
+ * dạng id, không map quan hệ sang bảng của module khác (convention 01, 02 <i>Entity</i>).
+ * <p>
+ * {@code serviceGroup} là bản sao nhóm dịch vụ lúc đặt để đếm quota (erd L476), không đọc lại từ catalog; CHECK chỉ cho
+ * {@code MEDICAL}, {@code GROOMING}. {@code code} giữ nguyên khi đổi khung (BR-LH-06). Không có cột {@code visit_id}: quan
+ * hệ với Visit nằm ở {@code visits.appointment_id} (module visit). {@code reschedule_count} là {@code SMALLINT} nên field
+ * là {@code short}.
+ * <p>
+ * Method đổi trạng thái: {@link #book} (phần 2), {@link #reschedule}, {@link #cancel} (phần 4, docs/adr/0049),
+ * {@link #checkIn}, {@link #complete} (phần 5, docs/adr/0050).
+ */
+@Getter
+@Entity
+@Table(name = "appointments")
+@NoArgsConstructor(access = AccessLevel.PROTECTED)
+public class Appointment extends TimestampedEntity {
+
+    @Id
+    @GeneratedValue(strategy = GenerationType.IDENTITY)
+    private Long id;
+
+    @Column(name = "code", nullable = false, updatable = false)
+    private String code;
+
+    @Column(name = "customer_id", nullable = false, updatable = false)
+    private Long customerId;
+
+    @Column(name = "pet_id", nullable = false, updatable = false)
+    private Long petId;
+
+    @Column(name = "branch_id", nullable = false, updatable = false)
+    private Long branchId;
+
+    @Column(name = "service_id", nullable = false, updatable = false)
+    private Long serviceId;
+
+    @Enumerated(EnumType.STRING)
+    @Column(name = "service_group", nullable = false, updatable = false)
+    private ServiceGroup serviceGroup;
+
+    @Column(name = "slot_date", nullable = false)
+    private LocalDate slotDate;
+
+    @Column(name = "slot_start", nullable = false)
+    private LocalTime slotStart;
+
+    @Enumerated(EnumType.STRING)
+    @Column(name = "status", nullable = false)
+    private AppointmentStatus status;
+
+    @Enumerated(EnumType.STRING)
+    @Column(name = "channel", nullable = false, updatable = false)
+    private AppointmentChannel channel;
+
+    @Column(name = "booked_by", nullable = false, updatable = false)
+    private Long bookedBy;
+
+    @Column(name = "reschedule_count", nullable = false)
+    private short rescheduleCount;
+
+    @Column(name = "late_cancel", nullable = false)
+    private boolean lateCancel;
+
+    @Enumerated(EnumType.STRING)
+    @Column(name = "cancel_source")
+    private AppointmentCancelSource cancelSource;
+
+    @Column(name = "cancel_reason")
+    private String cancelReason;
+
+    @Column(name = "cancelled_at")
+    private Instant cancelledAt;
+
+    @Column(name = "reminded_at")
+    private Instant remindedAt;
+
+    @Column(name = "note", updatable = false)
+    private String note;
+
+    /**
+     * Lịch hẹn#1 ({@code — → BOOKED}, command {@code bookAppointment}, docs/adr/0045 §7, 0047). Bên gọi đã kiểm mọi rule và
+     * {@code validateInitial(BOOKED)}; {@code serviceGroup} là bản sao lúc đặt (erd L476). Số lần đổi 0, không hủy muộn,
+     * chưa nhắc.
+     */
+    public static Appointment book(String code, Long customerId, Long petId, Long branchId, Long serviceId,
+            ServiceGroup serviceGroup, LocalDate slotDate, LocalTime slotStart, AppointmentChannel channel,
+            Long bookedBy, String note) {
+        Appointment appointment = new Appointment();
+        appointment.code = code;
+        appointment.customerId = customerId;
+        appointment.petId = petId;
+        appointment.branchId = branchId;
+        appointment.serviceId = serviceId;
+        appointment.serviceGroup = serviceGroup;
+        appointment.slotDate = slotDate;
+        appointment.slotStart = slotStart;
+        appointment.status = AppointmentStatus.BOOKED;
+        appointment.channel = channel;
+        appointment.bookedBy = bookedBy;
+        appointment.rescheduleCount = 0;
+        appointment.lateCancel = false;
+        appointment.note = note;
+        return appointment;
+    }
+
+    /**
+     * Lịch hẹn#2 ({@code BOOKED → BOOKED}, command {@code rescheduleAppointment}, BR-LH-06; docs/adr/0049). Bên gọi đã kiểm
+     * trạng thái và mọi rule dưới khóa. Chỉ đổi khung, tăng số lần đổi và xóa mốc đã nhắc để ST03 nhắc theo giờ hẹn mới
+     * (BR-LH-12, Q9); chi nhánh, thú, dịch vụ, mã giữ nguyên (cột {@code updatable = false}).
+     */
+    public void reschedule(LocalDate newDate, LocalTime newStart) {
+        this.slotDate = newDate;
+        this.slotStart = newStart;
+        this.rescheduleCount = (short) (this.rescheduleCount + 1);
+        this.remindedAt = null;
+    }
+
+    /**
+     * Lịch hẹn#4 ({@code BOOKED → CANCELLED}, command {@code cancelAppointment}, BR-LH-07; docs/adr/0049): khách hoặc lễ
+     * tân hủy. Đặt đủ các cột hủy theo CHECK {@code ck_appointments_cancel_fields} (erd §5).
+     */
+    public void cancel(AppointmentCancelSource source, String reason, Instant at, boolean late) {
+        this.status = AppointmentStatus.CANCELLED;
+        this.cancelSource = source;
+        this.cancelReason = reason;
+        this.cancelledAt = at;
+        this.lateCancel = late;
+    }
+
+    /**
+     * Lịch hẹn#3 ({@code BOOKED → CHECKED_IN}, command {@code checkIn}, SYS ← Visit#1; docs/adr/0050). Bên gọi đã kiểm
+     * trạng thái và cửa sổ check-in dưới khóa dòng. Chỉ đổi trạng thái; {@code reminded_at} giữ nguyên.
+     */
+    public void checkIn() {
+        this.status = AppointmentStatus.CHECKED_IN;
+    }
+
+    /** Lịch hẹn#7 ({@code CHECKED_IN → COMPLETED}, command {@code completeByVisit}, SYS ← Visit#5; docs/adr/0050). */
+    public void complete() {
+        this.status = AppointmentStatus.COMPLETED;
+    }
+
+    /**
+     * Lịch hẹn#6 ({@code BOOKED → NO_SHOW}, command {@code markNoShow}, ST05; docs/adr/0053). Bên gọi đã khóa dòng, kiểm
+     * trạng thái và mốc quá hạn. Chỉ đổi trạng thái: NO_SHOW không phải hủy nên các cột hủy giữ nguyên
+     * ({@code ck_appointments_cancel_fields}). Chỉ {@code AppointmentNoShowService} được gọi.
+     */
+    public void markNoShow() {
+        this.status = AppointmentStatus.NO_SHOW;
+    }
+}

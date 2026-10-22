@@ -91,12 +91,12 @@
 | Tìm tài khoản (khách và nhân viên) | A03 | Chỉ ADMIN | — | — | — |
 | Khóa tài khoản | A03 | Chỉ ADMIN; không khóa chính mình | is_locked false → true (Tài khoản#7) | — | Mọi role, mọi trạng thái (kể cả PENDING, DISABLED) trừ chính mình; status giữ nguyên (BR-QT-12). Hủy mọi phiên; pendingWork sắp theo thứ tự enum rồi entityId (Visit IN_PROGRESS → needsReassign); phát AccountLockedEvent; thông báo trong app theo BR-QT-11 (nhân viên A06–A08: BRANCH_MANAGER chi nhánh, không còn thì SUPER_MANAGER; BRANCH_MANAGER: SUPER_MANAGER, quản lý cuối của chi nhánh ACTIVE → LAST_BRANCH_MANAGER_LOCKED_APP; khách: lễ tân các chi nhánh có việc dở — 06 Q2); ghi audit kèm lý do (docs/adr/0035). |
 | Mở khóa tài khoản | A03 | Chỉ ADMIN | is_locked true → false (Tài khoản#8) | — | status giữ nguyên giá trị trước khi khóa (BR-QT-12); giữ lý do khóa gần nhất; không mở phiên, không thông báo; ghi audit kèm lý do (docs/adr/0035). |
-| Danh sách tham số [CFG] | A03 | Chỉ ADMIN | — | — | — |
-| Sửa tham số | A03 | Chỉ ADMIN | — | — | Chỉ áp dụng cho giao dịch tạo sau; ghi audit. |
-| Danh sách mẫu thông báo | A03 | Chỉ ADMIN | — | — | — |
-| Sửa nội dung mẫu | A03 | Chỉ ADMIN | — | — | Không có endpoint thêm / xóa mẫu. |
-| Khôi phục mẫu mặc định | A03 | Chỉ ADMIN | — | — | — |
-| Xem nhật ký audit | A03 | Chỉ ADMIN | — | — | Chỉ đọc; không có endpoint sửa / xóa (BR-QT-16). |
+| Danh sách tham số [CFG] | A03 | Chỉ ADMIN | — | — | Mọi tham số (52), sắp theo key; minValue / maxValue là khoảng tĩnh, khoảng thu hẹp theo ràng buộc chéo chỉ có trong message lỗi của #32 (docs/adr/0036). |
+| Sửa tham số | A03 | Chỉ ADMIN | — | — | Thứ tự kiểm: hình thức → quyền → key lạ 404 → kiểu / min–max / ràng buộc chéo (400 BR-QT-13, message ghi khoảng cho phép thực tế; sai kiểu cũng BR-QT-13) → trùng giá trị hiện tại (sau chuẩn hóa, ví dụ 05 = 5) → 200 không ghi, không audit. Ràng buộc chéo: visit.late_priority_minutes < appointment.no_show_after_minutes, boarding.min_nights ≤ boarding.max_nights. value được chuẩn hóa (INT bỏ số 0 đầu, TIME dạng HH:mm, DECIMAL không dạng mũ). Có hiệu lực cho mọi giao dịch tạo sau khi response trả về; ghi audit SYSTEM_CONFIG_UPDATED (docs/adr/0036). |
+| Danh sách mẫu thông báo | A03 | Chỉ ADMIN | — | — | Mọi mẫu, sắp theo code; subject / body là bản đang dùng; isDefault = cả hai trùng từng ký tự với bản mặc định (docs/adr/0037). |
+| Sửa nội dung mẫu | A03 | Chỉ ADMIN | — | — | Thứ tự kiểm: hình thức → quyền → code lạ 404 → biến (BR-QT-14). Ngữ pháp chặt: dấu ngoặc nhọn chỉ dùng để viết {ten} với ten thuộc allowedVars (phân biệt hoa thường); biến bắt buộc tính trên subject ∪ body. Lưu nguyên văn (không cắt khoảng trắng, không đổi xuống dòng). Trùng nội dung hiện tại → 200, không ghi nhưng vẫn audit (before = after). Có hiệu lực từ lần gửi đọc mẫu sau khi response trả về, kể cả thông báo đã xếp hàng. Audit NOTIFICATION_TEMPLATE_UPDATED. Không có endpoint thêm / xóa mẫu (docs/adr/0037). |
+| Khôi phục mẫu mặc định | A03 | Chỉ ADMIN | — | — | Chép bản mặc định sang bản đang dùng. Đã là mặc định → 200, không ghi nhưng vẫn audit (before = after). Audit NOTIFICATION_TEMPLATE_RESTORED (docs/adr/0037). |
+| Xem nhật ký audit | A03 | Chỉ ADMIN | — | — | Chỉ đọc; không có endpoint sửa / xóa (BR-QT-16): method khác → 405. Xem không ghi audit. Mọi dòng của mọi người (kể cả hệ thống, actor null). Sắp `createdAt` giảm dần rồi `id` giảm dần; khoảng [from, to] tính cả hai mốc; giá trị lọc không tồn tại → trang rỗng; action / entityType rỗng = không lọc; size ngoài 1–100 bị kẹp, page âm = 0. `beforeData` / `afterData` là JSON object đúng như lúc ghi (thứ tự khóa không cố định), null khi không có. `totalElements` khớp `content` trong cùng một response (docs/adr/0038). |
 | Đội ngũ bác sĩ | A01, A02 | Public | — | — | Chỉ VET ACTIVE, không khóa (khóa tạm vẫn hiện), thuộc chi nhánh ACTIVE; `branchId` không phải chi nhánh ACTIVE → mảng rỗng. Sắp theo họ tên (ADR-0026). |
 
 ---
@@ -150,11 +150,11 @@
 - **`GET /system-configs`** — Danh sách tham số [CFG]. Response `200` mảng `SystemConfig`. Lỗi: `401` · `403`.
 - **`PUT /system-configs/{key}`** — Sửa tham số. Request `UpdateConfigRequest`. Response `200` `SystemConfig`. Lỗi: `400` `BR-QT-13` ngoài khoảng hợp lệ, message ghi khoảng cho phép · `401` · `403` · `404`.
 - **`GET /notification-templates`** — Danh sách mẫu thông báo. Response `200` mảng `NotificationTemplate`. Lỗi: `401` · `403`.
-- **`PUT /notification-templates/{code}`** — Sửa nội dung mẫu. Request `UpdateTemplateRequest`. Response `200` `NotificationTemplate`. Lỗi: `400` `BR-QT-14` dùng biến không tồn tại hoặc thiếu biến bắt buộc (message chỉ rõ biến) · `401` · `403` · `404`.
+- **`PUT /notification-templates/{code}`** — Sửa nội dung mẫu. Request `UpdateTemplateRequest`. Response `200` `NotificationTemplate`. Lỗi: `400` `VALIDATION_FAILED` thiếu / rỗng subject hoặc body, subject quá 255 · `BR-QT-14` dùng biến không tồn tại, dấu { } lẻ hoặc thiếu biến bắt buộc (message nêu đủ mọi biến lỗi) · `401` · `403` · `404`.
 - **`POST /notification-templates/{code}/restore-default`** — Khôi phục mẫu mặc định. Response `200` `NotificationTemplate`. Lỗi: `401` · `403` · `404`.
 ### Audit
 
-- **`GET /audit-logs`** — Xem nhật ký audit. Query: `actorAccountId?`, `action?`, `entityType?`, `entityId?`, `from?`, `to?`, `page?`, `size?`. Response `200` trang `AuditLogEntry`. Lỗi: `400` · `401` · `403`.
+- **`GET /audit-logs`** — Xem nhật ký audit. Query: `actorAccountId?`, `action?`, `entityType?`, `entityId?`, `from?`, `to?`, `page?`, `size?`. Response `200` trang `AuditLogEntry`. Lỗi: `400` `MALFORMED_REQUEST` tham số sai kiểu (from / to thiếu offset, id không phải số nguyên) · `VALIDATION_FAILED` action / entityType quá 50 ký tự, `to` trước `from`, `entityId` không kèm `entityType`, lọc `action` không kèm người / đối tượng mà thiếu from / to hoặc cách nhau quá 31 ngày (message nêu đủ lỗi, theo tên tham số) · `401` · `403` Không phải ADMIN (không ghi audit).
 ### Public
 
 - **`GET /public/vets`** — Đội ngũ bác sĩ. Public. Query: `branchId?`. Response `200` mảng `PublicVet`. Lỗi: `400`.
@@ -198,7 +198,7 @@ Trường có `?` là không bắt buộc / có thể null. Kiểu `email`, `dat
 - **`SystemConfig`** — {`key`: string, `value`: string, `valueType`: INT|DECIMAL|BOOL|TIME, `minValue?`: string, `maxValue?`: string, `unit?`: string, `description`: string}
 - **`UpdateConfigRequest`** — {`value`: string}
 - **`NotificationTemplate`** — {`code`: string, `channel`: EMAIL|IN_APP, `subject?`: string, `body`: string, `allowedVars`: [string], `requiredVars`: [string], `isDefault`: boolean}
-- **`UpdateTemplateRequest`** — {`subject?`: string, `body`: string}
+- **`UpdateTemplateRequest`** — {`subject`: string, `body`: string}
 - **`AuditLogEntry`** — {`id`: int64, `actorAccountId?`: int64, `actorEmail?`: string, `action`: string, `entityType?`: string, `entityId?`: int64, `beforeData?`: object, `afterData?`: object, `reason?`: string, `ipAddress?`: string, `createdAt`: date-time}
 - **`PublicVet`** — {`accountId`: int64, `fullName`: string, `avatarUrl?`: string, `specialty?`: string, `bio?`: string, `branchId`: int64, `branchName`: string}
 

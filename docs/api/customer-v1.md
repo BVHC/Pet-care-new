@@ -93,15 +93,15 @@
 - **`POST /customers/{customerId}/pets`** — Lễ tân thêm thú cưng cho khách. Request `CreatePetRequest`. Response `201` `PetWriteResult`. Lỗi: `400` · `401` · `403` · `404`.
 - **`GET /me/pets`** — Thú cưng của tôi. Response `200` mảng `PetResponse`. Lỗi: `400` `BR-TK-19` hồ sơ còn chờ quyết định liên kết · `401` · `403`.
 - **`POST /me/pets`** — Thêm thú cưng. Request `CreatePetRequest`. Response `201` `PetWriteResult`. Lỗi: `400` Ngày sinh ở tương lai · thiếu trường bắt buộc (BR-KH-02) · `BR-TK-19` hồ sơ còn chờ quyết định liên kết · `401` · `403`.
-- **`GET /pets/{petId}`** — Chi tiết thú cưng. Response `200` `PetResponse`. Lỗi: `401` · `403` · `404`.
-- **`PATCH /pets/{petId}`** — Sửa thông tin thú cưng. Request `UpdatePetRequest`. Response `200` `PetWriteResult`. Lỗi: `400` `BR-KH-03` đổi loài khi đã có bệnh án / mũi tiêm · `BR-KH-05` thú đã mất (chỉ đọc) · `401` · `403` · `404`.
-- **`POST /pets/{petId}/mark-deceased`** — Đánh dấu thú đã mất. Request `MarkDeceasedRequest`. Response `200` `PetResponse`. Lỗi: `400` `BR-KH-05` thú có Visit mở hoặc đang lưu trú (kết thúc lưu trú trước theo BR-LT-12) · chưa xác nhận · `401` · `403` · `404` · `409` Thú đã được đánh dấu đã mất (không hoàn tác).
-- **`DELETE /pets/{petId}`** — Xóa thú cưng chưa phát sinh giao dịch. Response `204` rỗng. Lỗi: `400` `BR-KH-06` đã có lịch hẹn, đặt chỗ, Visit hoặc Order — dùng đánh dấu đã mất · `401` · `403` · `404`.
+- **`GET /pets/{petId}`** — Chi tiết thú cưng. Response `200` `PetResponse`. Lỗi: `400` `BR-TK-19` hồ sơ còn chờ quyết định liên kết · `401` · `403` · `404`.
+- **`PATCH /pets/{petId}`** — Sửa thông tin thú cưng. Request `UpdatePetRequest`. Response `200` `PetWriteResult`. Lỗi: `400` `BR-KH-03` đổi loài khi đã có bệnh án / mũi tiêm · `BR-KH-05` thú đã mất (chỉ đọc) · `BR-TK-19` hồ sơ còn chờ quyết định liên kết · `401` · `403` · `404`.
+- **`POST /pets/{petId}/mark-deceased`** — Đánh dấu thú đã mất. Request `MarkDeceasedRequest`. Response `200` `PetResponse`. Lỗi: `400` `BR-KH-05` thú có Visit mở hoặc đang lưu trú (kết thúc lưu trú trước theo BR-LT-12) · chưa xác nhận · `BR-TK-19` hồ sơ còn chờ quyết định liên kết · `401` · `403` · `404` · `409` Thú đã được đánh dấu đã mất (không hoàn tác).
+- **`DELETE /pets/{petId}`** — Xóa thú cưng chưa phát sinh giao dịch. Response `204` rỗng. Lỗi: `400` `BR-KH-06` đã có lịch hẹn, đặt chỗ, Visit hoặc Order — dùng đánh dấu đã mất · `BR-TK-19` hồ sơ còn chờ quyết định liên kết · `401` · `403` · `404`.
 - **`POST /pets/{petId}/transfer-owner`** — Chuyển chủ thú cưng. Request `TransferOwnerRequest`. Response `200` `PetResponse`. Lỗi: `400` `BR-KH-08` thú có Visit mở, Order PENDING hoặc đang lưu trú · chưa xác nhận chủ cũ · `BR-KH-05` thú đã mất · `401` · `403` · `404`.
 ### Weights
 
-- **`GET /pets/{petId}/weights`** — Lịch sử cân nặng. Response `200` mảng `WeightRecord`. Lỗi: `401` · `403` · `404`.
-- **`POST /pets/{petId}/weights`** — Chủ tự khai cân nặng. Request `AddWeightRequest`. Response `201` `WeightRecord`. Lỗi: `400` `BR-KH-04` cân nặng ≤ 0 · `BR-KH-05` thú đã mất · `401` · `403` · `404`.
+- **`GET /pets/{petId}/weights`** — Lịch sử cân nặng. Response `200` mảng `WeightRecord`. Lỗi: `400` `BR-TK-19` hồ sơ còn chờ quyết định liên kết · `401` · `403` · `404`.
+- **`POST /pets/{petId}/weights`** — Chủ tự khai cân nặng. Request `AddWeightRequest`. Response `201` `WeightRecord`. Lỗi: `400` `BR-KH-04` cân nặng ≤ 0 · `BR-KH-05` thú đã mất · `BR-TK-19` hồ sơ còn chờ quyết định liên kết · `401` · `403` · `404`.
 
 ### Schema
 

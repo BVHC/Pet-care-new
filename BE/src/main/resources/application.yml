@@ -84,6 +84,34 @@ app:
       batch-size: 200
       time-budget: 60s
       slow-warn: 1s
+    # ST05: lịch hẹn BOOKED quá giờ hẹn appointment.no_show_after_minutes [CFG] → NO_SHOW (docs/adr/0053).
+    no-show:
+      cron: "${NO_SHOW_CRON:0 */5 * * * *}"
+      batch-size: 100
+      time-budget: 60s
+    # ST03: nhắc lịch hẹn BOOKED trước giờ hẹn appointment.reminder_hours_before [CFG] (docs/adr/0056).
+    # Mặc định phút 2, 7, 12…: lệch ST05 (0 */5) và ST02 (0 */15) để các job dài (≤ 60s) không cùng chiếm 3/4 thread
+    # scheduler, giữ thread cho ST20 HIGH (OTP). Job dài mới cũng phải chọn phút lệch (Q11).
+    appointment-reminder:
+      cron: "${APPOINTMENT_REMINDER_CRON:0 2/5 * * * *}"
+      batch-size: 100
+      time-budget: 60s
+    # ST13 (docs/adr/0064): tự chốt ca thu ngân chưa chốt quá hạn (BR-TG-05). Phút 4, 9, 14…: lệch ST05 (0 */5),
+    # ST03 (2/5) và ST02 (0 */15) để các job dài không cùng chiếm thread scheduler.
+    cashier-shift-auto-close:
+      cron: "${CASHIER_SHIFT_AUTO_CLOSE_CRON:0 4/5 * * * *}"
+      batch-size: 100
+      time-budget: 60s
+    # ST13 (docs/adr/0064): cuối ngày liệt kê Order PENDING quá order.pending_alert_days [CFG] cho quản lý (BR-BH-05).
+    pending-order-digest:
+      cron: "${PENDING_ORDER_DIGEST_CRON:0 50 23 * * *}"
+      time-budget: 60s
+    # ST05 cho lưu trú (docs/adr/0065): đặt chỗ BOOKED chưa được nhận khi hết giờ làm việc của ngày nhận → NO_SHOW. Phút
+    # 3, 8, 13…: lệch ST05 lịch hẹn (0 */5), ST03 (2/5), ST13 (4/5) và ST02 (0 */15); phút 1, 6, 11… để dành cho ST15.
+    boarding-no-show:
+      cron: "${BOARDING_NO_SHOW_CRON:0 3/5 * * * *}"
+      batch-size: 100
+      time-budget: 60s
     # ST20 từ notification_outbox. Email (docs/adr/0012): hai luồng priority (OTP, mật khẩu tạm) và thường.
     # IN_APP (docs/adr/0014): giao vào bảng notifications, job riêng, không qua SMTP.
     notification-outbox:
@@ -124,3 +152,10 @@ management:
   endpoint:
     health:
       show-details: when-authorized
+
+# Tài liệu OpenAPI sinh từ annotation (docs/adr/0040, docs/convention/backend/10-swagger-api-docs.md §7).
+springdoc:
+  # Không gắn response suy ra từ @ControllerAdvice vào mọi operation: mã lỗi của từng endpoint chỉ đến từ @ApiErrorDoc
+  # cho khớp hợp đồng docs/api. Phòng hờ: hôm nay GlobalExceptionHandler không có @ResponseStatus (docs/adr/0040 mục 5).
+  override-with-generic-response: false
+  default-produces-media-type: application/json

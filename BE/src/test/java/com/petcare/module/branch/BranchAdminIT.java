@@ -1,6 +1,7 @@
 package com.petcare.module.branch;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.mockito.ArgumentMatchers.anyCollection;
 import static org.mockito.Mockito.reset;
 import static org.mockito.Mockito.when;
 
@@ -12,7 +13,6 @@ import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
-import java.util.Optional;
 import java.util.UUID;
 import java.util.concurrent.CopyOnWriteArrayList;
 import java.util.concurrent.CountDownLatch;
@@ -46,6 +46,8 @@ import org.springframework.transaction.support.TransactionTemplate;
 import com.petcare.TestcontainersConfiguration;
 import com.petcare.module.appointment.api.AppointmentQueryApi;
 import com.petcare.module.appointment.api.AppointmentQueryApi.BookedSlot;
+import com.petcare.module.appointment.service.AppointmentClinicCancellationService;
+import com.petcare.module.boarding.service.BoardingClinicCancellationService;
 import com.petcare.module.boarding.api.BoardingQueryApi;
 import com.petcare.module.boarding.api.BoardingQueryApi.BookedStay;
 import com.petcare.module.branch.api.BranchClinicCancellationEvent;
@@ -110,6 +112,18 @@ class BranchAdminIT {
     @MockitoBean
     private CustomerQueryApi customers;
 
+    /**
+     * Listener thật của appointment (docs/adr/0052) nhận cùng sự kiện với {@link EventSink}; id lịch hẹn ở đây do mock
+     * {@link AppointmentQueryApi} trả về, không có trong DB. IT của appointment ({@code ClinicCancellationIT}) chứng minh
+     * phần hủy thật.
+     */
+    @MockitoBean
+    private AppointmentClinicCancellationService clinicCancellations;
+
+    /** Cùng lý do cho listener thật của boarding (docs/adr/0065): id đặt chỗ do mock {@link BoardingQueryApi} trả về. */
+    @MockitoBean
+    private BoardingClinicCancellationService boardingCancellations;
+
     @Autowired
     private EventSink sink;
 
@@ -138,7 +152,7 @@ class BranchAdminIT {
 
     @BeforeEach
     void setUp() {
-        reset(staff, appointments, boardings, pets, customers);
+        reset(staff, appointments, boardings, pets, customers, clinicCancellations, boardingCancellations);
         sink.events.clear();
         sink.failNext.set(false);
         branchA = branchRow("ACTIVE");
@@ -387,8 +401,8 @@ class BranchAdminIT {
         BookedStay sundayCheckout = new BookedStay(601L, "LT-601", 7L, 8L, monday, monday.plusDays(6));
         when(appointments.findBookedFrom(branchA, effective)).thenReturn(List.of(afternoon, morning));
         when(boardings.findBookedFrom(branchA, effective)).thenReturn(List.of(sundayCheckout));
-        when(pets.findPet(7L)).thenReturn(Optional.of(new PetSummary(7L, 8L, "Mực", Species.DOG, null, null, null)));
-        when(customers.findContact(8L)).thenReturn(Optional.of(
+        when(pets.findPets(anyCollection())).thenReturn(List.of(new PetSummary(7L, 8L, "Mực", Species.DOG, null, null, null)));
+        when(customers.findContacts(anyCollection())).thenReturn(List.of(
                 new CustomerContact(8L, "Nguyễn Văn A", "0901234567", null, null, false)));
         String path = "/api/branches/" + branchA + "/opening-hours";
         Map<String, Object> morningsOnly = hoursBody(effective, false, false);
@@ -518,8 +532,8 @@ class BranchAdminIT {
         when(boardings.findBookedFrom(branchA, day)).thenReturn(List.of(
                 new BookedStay(601L, "LT-601", 7L, 8L, day.minusDays(2), day),
                 new BookedStay(602L, "LT-602", 7L, 8L, day.minusDays(2), day.plusDays(2))));
-        when(pets.findPet(7L)).thenReturn(Optional.of(new PetSummary(7L, 8L, "Mực", Species.DOG, null, null, null)));
-        when(customers.findContact(8L)).thenReturn(Optional.empty());
+        when(pets.findPets(anyCollection())).thenReturn(List.of(new PetSummary(7L, 8L, "Mực", Species.DOG, null, null, null)));
+        when(customers.findContacts(anyCollection())).thenReturn(List.of());
         String path = "/api/branches/" + branchA + "/holidays";
 
         Map<String, Object> impact = data(call(HttpMethod.POST, path + "/impact", managerA,

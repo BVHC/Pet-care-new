@@ -38,10 +38,10 @@
 | Chi tiết Care Task | A06 | Lễ tân chi nhánh được giao | — | — | — |
 | Ghi kết quả gọi điện | A06 | Lễ tân chi nhánh được giao | OPEN → DONE (Care Task#2) | — | Không liên lạc được: không sinh task gọi lại. |
 | Hủy Care Task | A06 | Lễ tân chi nhánh được giao | OPEN → CANCELLED (Care Task#3) | — | — |
-| Thông báo của tôi | A02–A08 | Người đang đăng nhập | — | — | Mới nhất trước. |
+| Thông báo của tôi | A02–A08 | Người đang đăng nhập | — | — | Mới nhất trước (`createdAt` giảm dần, trùng giờ thì `notificationId` giảm dần). `unreadOnly` rỗng / vắng = false. `page` < 0 → 0, `size` kẹp 1–100. Chỉ thông báo của chủ token (docs/adr/0039). |
 | Số thông báo chưa đọc | A02–A08 | Người đang đăng nhập | — | — | A3. |
-| Đánh dấu đã đọc | A02–A08 | Chủ thông báo | — | Có | — |
-| Đánh dấu tất cả đã đọc | A02–A08 | Người đang đăng nhập | — | Có | — |
+| Đánh dấu đã đọc | A02–A08 | Chủ thông báo | — | Có | Gọi lại vẫn 204 và giữ `readAt` của lần đọc đầu (docs/adr/0039). |
+| Đánh dấu tất cả đã đọc | A02–A08 | Người đang đăng nhập | — | Có | Đánh dấu mọi thông báo chưa đọc tại thời điểm gọi; thông báo đến sau vẫn chưa đọc. Thông báo đã đọc giữ `readAt` cũ (docs/adr/0039). |
 | Cài đặt nhận thông báo | A02 | Chỉ CUSTOMER | — | — | — |
 | Sửa cài đặt nhận thông báo | A02 | Chỉ CUSTOMER | — | — | A1, A2; nội dung chờ Q1. |
 
@@ -57,10 +57,10 @@
 - **`POST /care-tasks/{careTaskId}/cancel`** — Hủy Care Task. Request `CancelCareTaskRequest`. Response `200` `CareTask`. Lỗi: `400` Thiếu lý do · `401` · `403` · `404` · `409` Task không OPEN.
 ### Notifications
 
-- **`GET /me/notifications`** — Thông báo của tôi. Query: `unreadOnly?`, `page?`, `size?`. Response `200` trang `Notification`. Lỗi: `401`.
-- **`GET /me/notifications/unread-count`** — Số thông báo chưa đọc. Response `200` `UnreadCount`. Lỗi: `401`.
-- **`POST /me/notifications/{notificationId}/read`** — Đánh dấu đã đọc. Response `204` rỗng. Lỗi: `401` · `404`.
-- **`POST /me/notifications/read-all`** — Đánh dấu tất cả đã đọc. Response `204` rỗng. Lỗi: `401`.
+- **`GET /me/notifications`** — Thông báo của tôi. Query: `unreadOnly?`, `page?`, `size?`. Response `200` trang `Notification`. Lỗi: `400` Tham số sai kiểu (`MALFORMED_REQUEST`); BR-TK-17 · `401`.
+- **`GET /me/notifications/unread-count`** — Số thông báo chưa đọc. Response `200` `UnreadCount`. Lỗi: `400` BR-TK-17 · `401`.
+- **`POST /me/notifications/{notificationId}/read`** — Đánh dấu đã đọc. Response `204` rỗng. Lỗi: `400` `notificationId` sai kiểu (`MALFORMED_REQUEST`); BR-TK-17 · `401` · `404` Không tìm thấy thông báo #<id> — cả khi thông báo là của người khác.
+- **`POST /me/notifications/read-all`** — Đánh dấu tất cả đã đọc. Response `204` rỗng. Lỗi: `400` BR-TK-17 · `401`.
 - **`GET /me/notification-settings`** — Cài đặt nhận thông báo. Response `200` `NotificationSettings`. Lỗi: `401` · `403`.
 - **`PUT /me/notification-settings`** — Sửa cài đặt nhận thông báo. Request `NotificationSettings`. Response `200` `NotificationSettings`. Lỗi: `400` · `401` · `403`.
 

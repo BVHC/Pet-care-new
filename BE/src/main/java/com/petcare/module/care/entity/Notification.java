@@ -16,7 +16,8 @@ import lombok.NoArgsConstructor;
 
 /**
  * Bảng {@code notifications} (erd §11, ROOT): thông báo trong ứng dụng của một tài khoản (UC88). Worker ST20 tạo dòng
- * từ outbox kênh {@code IN_APP} (docs/adr/0014); đọc / đánh dấu đã đọc làm ở task UC88 sau. Độ dài tối đa khớp V1 —
+ * từ outbox kênh {@code IN_APP} (docs/adr/0014); người dùng đọc / đánh dấu đã đọc qua {@code MyNotificationService}
+ * (care-v1 #5–8, docs/adr/0039 — UPDATE hàng loạt, không qua setter). Độ dài tối đa khớp V1 —
  * worker kiểm trước khi INSERT để một dòng outbox lỗi không chặn cả luồng.
  */
 @Getter

@@ -68,7 +68,7 @@ class ProductServiceTest {
     }
 
     private void productExists(Product product) {
-        when(products.findById(7L)).thenReturn(Optional.of(product));
+        when(products.findByIdForUpdate(7L)).thenReturn(Optional.of(product));
         lenient().when(products.saveAndFlush(any(Product.class))).thenAnswer(inv -> inv.getArgument(0));
     }
 
@@ -241,7 +241,7 @@ class ProductServiceTest {
 
     @Test
     void updateUnknownProductIsNotFound() {
-        when(products.findById(7L)).thenReturn(Optional.empty());
+        when(products.findByIdForUpdate(7L)).thenReturn(Optional.empty());
 
         assertThatThrownBy(() -> service.updateProduct(7L,
                 new UpdateProductRequest(null, null, null, null, null, null, null, null, null, null)))

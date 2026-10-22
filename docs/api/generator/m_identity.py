@@ -165,8 +165,8 @@ m.schema("NotificationTemplate", {
     "allowedVars": "array:string", "requiredVars": "array:string",
     "isDefault": "bool|Nội dung đang trùng bản mặc định",
 })
-m.schema("UpdateTemplateRequest", {"subject": "string:255?", "body": "string|Chỉ dùng biến trong allowedVars, đủ requiredVars (BR-QT-14)"},
-         required=["body"])
+m.schema("UpdateTemplateRequest", {"subject": "string:255|Bắt buộc với mọi kênh (docs/adr/0037)", "body": "string|Chỉ dùng biến trong allowedVars, đủ requiredVars (BR-QT-14)"},
+         required=["subject", "body"])
 m.schema("AuditLogEntry", {
     "id": "int64", "actorAccountId": "int64?", "actorEmail": "string?", "action": "string",
     "entityType": "string?", "entityId": "int64?", "beforeData": "object?", "afterData": "object?",
@@ -345,27 +345,42 @@ m.op("post", "/accounts/{id}/unlock", "unlockAccount", "Mở khóa tài khoản"
      notes="status giữ nguyên giá trị trước khi khóa (BR-QT-12); giữ lý do khóa gần nhất; không mở phiên, không thông báo; ghi audit kèm lý do (docs/adr/0035).")
 
 m.op("get", "/system-configs", "listSystemConfigs", "Danh sách tham số [CFG]", "Configuration", "UC10", "BR-QT-13",
-     "A03", "Chỉ ADMIN", resp="array:SystemConfig", errors=(401, 403))
+     "A03", "Chỉ ADMIN", resp="array:SystemConfig", errors=(401, 403),
+     notes="Mọi tham số (52), sắp theo key; minValue / maxValue là khoảng tĩnh, khoảng thu hẹp theo ràng buộc chéo chỉ có trong message lỗi của #32 (docs/adr/0036).")
 m.op("put", "/system-configs/{key}", "updateSystemConfig", "Sửa tham số", "Configuration", "UC10", "BR-QT-13, 15",
      "A03", "Chỉ ADMIN", body="UpdateConfigRequest", resp="SystemConfig", path_params=["ConfigKey"],
      errors=(400, 401, 403, 404), err_desc={400: "`BR-QT-13` ngoài khoảng hợp lệ, message ghi khoảng cho phép"},
-     notes="Chỉ áp dụng cho giao dịch tạo sau; ghi audit.")
+     notes="Thứ tự kiểm: hình thức → quyền → key lạ 404 → kiểu / min–max / ràng buộc chéo (400 BR-QT-13, message ghi khoảng cho phép thực tế; sai kiểu cũng BR-QT-13) → trùng giá trị hiện tại (sau chuẩn hóa, ví dụ 05 = 5) → 200 không ghi, không audit. Ràng buộc chéo: visit.late_priority_minutes < appointment.no_show_after_minutes, boarding.min_nights ≤ boarding.max_nights. value được chuẩn hóa (INT bỏ số 0 đầu, TIME dạng HH:mm, DECIMAL không dạng mũ). Có hiệu lực cho mọi giao dịch tạo sau khi response trả về; ghi audit SYSTEM_CONFIG_UPDATED (docs/adr/0036).")
 m.op("get", "/notification-templates", "listNotificationTemplates", "Danh sách mẫu thông báo", "Configuration",
-     "UC10", "BR-QT-14", "A03", "Chỉ ADMIN", resp="array:NotificationTemplate", errors=(401, 403))
+     "UC10", "BR-QT-14", "A03", "Chỉ ADMIN", resp="array:NotificationTemplate", errors=(401, 403),
+     notes="Mọi mẫu, sắp theo code; subject / body là bản đang dùng; isDefault = cả hai trùng từng ký tự với bản mặc định (docs/adr/0037).")
 m.op("put", "/notification-templates/{code}", "updateNotificationTemplate", "Sửa nội dung mẫu", "Configuration",
      "UC10", "BR-QT-14, 15", "A03", "Chỉ ADMIN", body="UpdateTemplateRequest", resp="NotificationTemplate",
      path_params=["TemplateCode"], errors=(400, 401, 403, 404),
-     err_desc={400: "`BR-QT-14` dùng biến không tồn tại hoặc thiếu biến bắt buộc (message chỉ rõ biến)"},
-     notes="Không có endpoint thêm / xóa mẫu.")
+     err_desc={400: "`VALIDATION_FAILED` thiếu / rỗng subject hoặc body, subject quá 255 · `BR-QT-14` dùng biến không tồn tại, dấu { } lẻ hoặc thiếu biến bắt buộc (message nêu đủ mọi biến lỗi)"},
+     notes="Thứ tự kiểm: hình thức → quyền → code lạ 404 → biến (BR-QT-14). Ngữ pháp chặt: dấu ngoặc nhọn chỉ dùng để viết {ten} với ten thuộc allowedVars (phân biệt hoa thường); biến bắt buộc tính trên subject ∪ body. Lưu nguyên văn (không cắt khoảng trắng, không đổi xuống dòng). Trùng nội dung hiện tại → 200, không ghi nhưng vẫn audit (before = after). Có hiệu lực từ lần gửi đọc mẫu sau khi response trả về, kể cả thông báo đã xếp hàng. Audit NOTIFICATION_TEMPLATE_UPDATED. Không có endpoint thêm / xóa mẫu (docs/adr/0037).")
 m.op("post", "/notification-templates/{code}/restore-default", "restoreNotificationTemplate", "Khôi phục mẫu mặc định",
      "Configuration", "UC10", "BR-QT-14, 15", "A03", "Chỉ ADMIN", resp="NotificationTemplate",
-     path_params=["TemplateCode"], errors=(401, 403, 404))
+     path_params=["TemplateCode"], errors=(401, 403, 404),
+     notes="Chép bản mặc định sang bản đang dùng. Đã là mặc định → 200, không ghi nhưng vẫn audit (before = after). Audit NOTIFICATION_TEMPLATE_RESTORED (docs/adr/0037).")
 
 m.op("get", "/audit-logs", "listAuditLogs", "Xem nhật ký audit", "Audit", "UC11", "BR-QT-15, 16", "A03", "Chỉ ADMIN",
      resp="AuditLogEntry", page=True, errors=(400, 401, 403),
-     query=["actorAccountId=int64", "action=string", "entityType=string", "entityId=int64", "from=datetime",
-            "to=datetime", "page", "size"],
-     notes="Chỉ đọc; không có endpoint sửa / xóa (BR-QT-16).")
+     query=["actorAccountId=int64|Người thực hiện (khớp đúng)",
+            "action=string|Mã hành động, tối đa 50 ký tự (khớp đúng). Không kèm actorAccountId hay entityType + entityId thì bắt buộc from + to cách nhau ≤ 31 ngày",
+            "entityType=string|Tên bảng, tối đa 50 ký tự (khớp đúng)",
+            "entityId=int64|Bắt buộc kèm entityType",
+            "from=datetime|Từ thời điểm (tính cả mốc); `+` của offset phải encode `%2B`",
+            "to=datetime|Đến thời điểm (tính cả mốc); không được trước from", "page", "size"],
+     err_desc={400: "`MALFORMED_REQUEST` tham số sai kiểu (from / to thiếu offset, id không phải số nguyên) · "
+                    "`VALIDATION_FAILED` action / entityType quá 50 ký tự, `to` trước `from`, `entityId` không kèm `entityType`, "
+                    "lọc `action` không kèm người / đối tượng mà thiếu from / to hoặc cách nhau quá 31 ngày (message nêu đủ lỗi, theo tên tham số)",
+               403: "Không phải ADMIN (không ghi audit)"},
+     notes="Chỉ đọc; không có endpoint sửa / xóa (BR-QT-16): method khác → 405. Xem không ghi audit. Mọi dòng của mọi người (kể cả hệ thống, actor null). "
+           "Sắp `createdAt` giảm dần rồi `id` giảm dần; khoảng [from, to] tính cả hai mốc; giá trị lọc không tồn tại → trang rỗng; "
+           "action / entityType rỗng = không lọc; size ngoài 1–100 bị kẹp, page âm = 0. "
+           "`beforeData` / `afterData` là JSON object đúng như lúc ghi (thứ tự khóa không cố định), null khi không có. "
+           "`totalElements` khớp `content` trong cùng một response (docs/adr/0038).")
 
 m.op("get", "/public/vets", "listPublicVets", "Đội ngũ bác sĩ", "Public", "UC15", "BR-TK-20, BR-CK-01", "A01, A02",
      "Public", resp="array:PublicVet", public=True, errors=(400,), query=["branchId=int64"],

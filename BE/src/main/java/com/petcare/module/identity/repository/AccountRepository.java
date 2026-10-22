@@ -12,7 +12,10 @@ import org.springframework.data.jpa.repository.Lock;
 import org.springframework.data.jpa.repository.Modifying;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
+import org.springframework.transaction.annotation.Propagation;
+import org.springframework.transaction.annotation.Transactional;
 
+import com.petcare.module.identity.api.AccountContactApi.AccountContact;
 import com.petcare.module.identity.api.Role;
 import com.petcare.module.identity.entity.Account;
 
@@ -128,6 +131,16 @@ public interface AccountRepository extends JpaRepository<Account, Long> {
     Optional<Long> lockExpiredPending(@Param("id") long id, @Param("now") Instant now);
 
     /**
+     * Khóa chia sẻ dòng tài khoản ({@code SELECT … FOR SHARE}) cho {@code StaffDirectoryApi.findStaffForShare}: luồng tạo
+     * việc dở cho nhân viên (gán lượt, docs/adr/0061; mở ca thu ngân) xếp hàng sau điều chuyển / vô hiệu hóa / khóa, vốn
+     * giữ {@code FOR NO KEY UPDATE} trên dòng này (docs/adr/0031 mục 9). Câu vô hướng, không nạp entity; dữ liệu đọc
+     * bằng câu sau, chạy sau khi có khóa. {@code MANDATORY}: ngoài transaction thì khóa nhả ngay.
+     */
+    @Transactional(propagation = Propagation.MANDATORY)
+    @Query(value = "SELECT id FROM accounts WHERE id = :id FOR SHARE", nativeQuery = true)
+    Optional<Long> lockForShare(@Param("id") Long id);
+
+    /**
      * Tài khoản#3 — xóa cứng tài khoản {@code PENDING} (BR-TK-08). Gọi sau {@link #lockExpiredPending} và sau khi đã
      * xóa dòng con ({@code otp_tokens}, hồ sơ online).
      */
@@ -146,6 +159,18 @@ public interface AccountRepository extends JpaRepository<Account, Long> {
             ORDER BY a.id
             """)
     List<Long> findActiveIdsByRole(@Param("role") Role role);
+
+    /**
+     * {@code AccountContactApi.findContacts} (docs/adr/0052): mọi trạng thái, mọi role. JPQL constructor, không nạp
+     * entity vào persistence context của bên gọi. Bên gọi không truyền tập rỗng.
+     */
+    @Query("""
+            SELECT new com.petcare.module.identity.api.AccountContactApi$AccountContact(
+                a.id, a.email,
+                CASE WHEN a.status = com.petcare.module.identity.entity.AccountStatus.PENDING THEN true ELSE false END)
+            FROM Account a WHERE a.id IN :ids
+            """)
+    List<AccountContact> findContactsByIds(@Param("ids") Collection<Long> ids);
 
     /** {@code StaffDirectoryApi.findEmail}: mọi trạng thái, mọi role. Projection, không nạp entity. */
     @Query("SELECT a.email FROM Account a WHERE a.id = :id")

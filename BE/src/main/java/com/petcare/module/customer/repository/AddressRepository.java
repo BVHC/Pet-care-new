@@ -42,4 +42,9 @@ public interface AddressRepository extends JpaRepository<Address, Long> {
             WHERE customer_id = :customerId AND is_default
             """, nativeQuery = true)
     int clearDefault(@Param("customerId") Long customerId, @Param("now") Instant now);
+
+    /** Xóa cả sổ địa chỉ của hồ sơ (xóa hồ sơ online — BR-TK-08, BR-TK-19, docs/adr/0028). */
+    @Modifying(flushAutomatically = true)
+    @Query(value = "DELETE FROM addresses WHERE customer_id = :customerId", nativeQuery = true)
+    int deleteByCustomer(@Param("customerId") Long customerId);
 }

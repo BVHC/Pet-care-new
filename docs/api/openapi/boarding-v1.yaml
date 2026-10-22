@@ -166,7 +166,7 @@ paths:
         "404":
           $ref: "#/components/responses/NotFound"
         "409":
-          description: "Chuồng đang OCCUPIED"
+          description: "Chuồng đang OCCUPIED hoặc đã có lịch sử lưu trú (chuyển bảo trì thay vì xóa)"
           content:
             "application/json":
               schema:
@@ -491,7 +491,7 @@ paths:
                     type: integer
                     description: "HTTP status của kết quả, ví dụ 200, 201"
         "400":
-          description: "`BR-LT-06` đã qua ngày trả dự kiến · `BR-LT-03` hết chỗ các đêm thêm · `BR-LT-02` vượt 30 đêm"
+          description: "`BR-LT-06` đã qua ngày trả dự kiến · `BR-LT-03` hết chỗ các đêm thêm · `BR-LT-02` vượt 30 đêm · ngày trả mới không sau ngày trả hiện tại (`VALIDATION_FAILED`)"
           content:
             "application/json":
               schema:

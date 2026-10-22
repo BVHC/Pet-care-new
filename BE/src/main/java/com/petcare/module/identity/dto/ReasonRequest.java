@@ -1,5 +1,7 @@
 package com.petcare.module.identity.dto;
 
+import io.swagger.v3.oas.annotations.media.Schema;
+
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.Size;
 
@@ -10,6 +12,7 @@ import jakarta.validation.constraints.Size;
  * contract một chút, không bao giờ lỏng hơn. Service strip trước khi lưu. Trường lạ trong JSON bị bỏ qua.
  */
 public record ReasonRequest(
+        @Schema(description = "Lý do (bắt buộc, ghi audit)", example = "Tài khoản có dấu hiệu bị chiếm quyền")
         @NotBlank(message = "Vui lòng nhập lý do")
         @Size(max = 500, message = "Lý do tối đa 500 ký tự")
         String reason) {

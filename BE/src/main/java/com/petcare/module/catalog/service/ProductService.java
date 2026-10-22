@@ -111,7 +111,7 @@ public class ProductService {
     /** Sửa, đổi giá hoặc ngừng kinh doanh. Dòng Order đã có giữ giá snapshot (BR-BH-03). */
     @Transactional
     public ProductResponse updateProduct(Long productId, UpdateProductRequest request) {
-        Product product = find(productId);
+        Product product = findForUpdate(productId);
         long oldPrice = product.getPrice();
         boolean hadTrackedExpiry = product.isTracksExpiry();
 
@@ -166,6 +166,12 @@ public class ProductService {
 
     private Product find(Long productId) {
         return products.findById(productId).orElseThrow(() -> new ResourceNotFoundException("Sản phẩm", productId));
+    }
+
+    /** Khóa dòng rồi mới đọc (docs/adr/0042): tuần tự với xác nhận phiếu nhập kho khi tắt cờ hạn dùng. */
+    private Product findForUpdate(Long productId) {
+        return products.findByIdForUpdate(productId)
+                .orElseThrow(() -> new ResourceNotFoundException("Sản phẩm", productId));
     }
 
     private void requireCategory(Long categoryId) {

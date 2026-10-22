@@ -1,5 +1,6 @@
 package com.petcare.module.customer.api;
 
+import java.util.Collection;
 import java.util.List;
 import java.util.Optional;
 
@@ -11,6 +12,13 @@ public interface CustomerQueryApi {
                            Long accountId, boolean linkDecisionPending) {}
 
     Optional<CustomerContact> findContact(Long customerId);
+
+    /**
+     * Nhiều hồ sơ một lần (appointment #3 ghép tên khách cho một trang lịch hẹn, docs/adr/0048). Thêm 15/10 (06 §6).
+     * Nghĩa vụ như {@code PetQueryApi.findPets}: id không có thì bỏ qua, không trả null, không phân trang, mỗi id tối đa
+     * một lần, thứ tự tùy ý, đọc mới mỗi lần gọi; bên gọi truyền tối đa 100 id; tập rỗng → danh sách rỗng.
+     */
+    List<CustomerContact> findContacts(Collection<Long> customerIds);
 
     /** Hồ sơ khách gắn với tài khoản (BR-KH-01: tài khoản khách luôn có hồ sơ). */
     Optional<Long> findCustomerIdByAccountId(Long accountId);

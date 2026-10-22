@@ -130,10 +130,32 @@ class SchemaMigrationIT {
         // V9 mẫu OTP_PROFILE_LINK + index otp_tokens.customer_id (docs/adr/0025),
         // V10 index addresses.customer_id (docs/adr/0028),
         // V11 mẫu STAFF_TEMP_PASSWORD, OTP_EMAIL_CHANGE, EMAIL_CHANGED_NOTICE (docs/adr/0029),
-        // V12 mẫu ACCOUNT_LOCKED_FOLLOW_UP_APP, LAST_BRANCH_MANAGER_LOCKED_APP (docs/adr/0035)
+        // V12 mẫu ACCOUNT_LOCKED_FOLLOW_UP_APP, LAST_BRANCH_MANAGER_LOCKED_APP (docs/adr/0035),
+        // V13 index FK trỏ tới pets / customers còn thiếu — trả nợ D013 (docs/adr/0041-customer-pet-management),
+        // V14 bảng đếm mã chứng từ + index module kho (docs/adr/0042-inventory…, 0043-document-code…),
+        // V15 index order_lines.order_id (docs/adr/0044-order-core…),
+        // V16 sequence mã lịch hẹn appointment_code_seq (docs/adr/0045-appointment-booking-locks; V13 trước khi gộp nhánh),
+        // V17 mẫu APPOINTMENT_CANCELLED_BY_CLINIC (+_APP) (docs/adr/0052),
+        // V18 mẫu APPOINTMENT_REMINDER (+_APP) (docs/adr/0056),
+        // V19 index thu ngân + mẫu ST13 CASHIER_SHIFT_AUTO_CLOSED_APP, PENDING_ORDERS_DIGEST_APP (docs/adr/0064),
+        // V20 index ST05 lưu trú + mẫu BOARDING_CANCELLED_BY_CLINIC (+_APP) (docs/adr/0065)
         assertThat(rows).extracting(row -> row.get("version"))
-                .containsExactly("1", "2", "3", "4", "5", "6", "7", "8", "9", "10", "11", "12");
+                .containsExactly("1", "2", "3", "4", "5", "6", "7", "8", "9", "10", "11", "12", "13", "14", "15",
+                        "16", "17", "18", "19", "20");
         assertThat(rows).allSatisfy(row -> assertThat(row).containsEntry("success", true));
+    }
+
+    /** V16 (docs/adr/0045): 10 chữ số giữ mã lịch hẹn ≤ 20 ký tự; không quay vòng nên hết số thì lỗi, không trùng mã. */
+    @Test
+    void appointmentCodeSequenceIsBoundedAndDoesNotCycle() {
+        assertThat(jdbc.queryForMap("""
+                SELECT data_type::text AS data_type, min_value, max_value, increment_by, cycle
+                FROM pg_sequences WHERE schemaname = 'public' AND sequencename = 'appointment_code_seq'"""))
+                .containsEntry("data_type", "bigint")
+                .containsEntry("min_value", 1L)
+                .containsEntry("max_value", 9_999_999_999L)
+                .containsEntry("increment_by", 1L)
+                .containsEntry("cycle", false);
     }
 
     @Test
@@ -144,7 +166,10 @@ class SchemaMigrationIT {
                 """, String.class);
 
         assertThat(ERD_TABLES).hasSize(55);
-        assertThat(tables).containsExactlyInAnyOrderElementsOf(ERD_TABLES);
+        // document_counters (V14, ADR-0043) là bảng hạ tầng ngoài ERD v16 (erd 13 muc 18)
+        assertThat(tables).containsExactlyInAnyOrderElementsOf(
+                java.util.stream.Stream.concat(ERD_TABLES.stream(), java.util.stream.Stream.of("document_counters"))
+                        .toList());
     }
 
     @Test
@@ -334,7 +359,7 @@ class SchemaMigrationIT {
     }
 
     /**
-     * V3, V4, V8, V9, V11, V12 (06-module-contracts §8 Q4, BR-QT-14): mẫu seed bằng migration khôi phục được về mặc định
+     * V3, V4, V8, V9, V11, V12, V17–V20 (06-module-contracts §8 Q4, BR-QT-14): mẫu seed bằng migration khôi phục được về mặc định
      * ({@code body = default_body}, {@code subject = default_subject}), biến bắt buộc nằm trong biến cho phép và có mặt
      * trong nội dung, mẫu OTP bắt buộc {@code {ma_otp}}. Mẫu {@code IT_*} do các IT khác chèn nên bị loại.
      */
@@ -345,7 +370,10 @@ class SchemaMigrationIT {
         assertThat(jdbc.queryForList("SELECT code FROM notification_templates WHERE " + seeded, String.class))
                 .containsExactlyInAnyOrder("OTP_REGISTER", "OTP_PASSWORD_RESET", "LOGIN_LOCKED_WARNING",
                         "PASSWORD_CHANGED", "OTP_PROFILE_LINK", "STAFF_TEMP_PASSWORD", "OTP_EMAIL_CHANGE",
-                        "EMAIL_CHANGED_NOTICE", "ACCOUNT_LOCKED_FOLLOW_UP_APP", "LAST_BRANCH_MANAGER_LOCKED_APP");
+                        "EMAIL_CHANGED_NOTICE", "ACCOUNT_LOCKED_FOLLOW_UP_APP", "LAST_BRANCH_MANAGER_LOCKED_APP",
+                        "APPOINTMENT_CANCELLED_BY_CLINIC", "APPOINTMENT_CANCELLED_BY_CLINIC_APP",
+                        "APPOINTMENT_REMINDER", "APPOINTMENT_REMINDER_APP", "CASHIER_SHIFT_AUTO_CLOSED_APP",
+                        "PENDING_ORDERS_DIGEST_APP", "BOARDING_CANCELLED_BY_CLINIC", "BOARDING_CANCELLED_BY_CLINIC_APP");
         assertThat(jdbc.queryForList("""
                 SELECT code FROM notification_templates
                 WHERE %s AND (body <> default_body OR subject IS DISTINCT FROM default_subject)
@@ -406,11 +434,11 @@ class SchemaMigrationIT {
 
     /**
      * V9 (docs/adr/0025): {@code otp_tokens.customer_id} có index dùng được cho kiểm FK khi xóa hồ sơ online (BR-TK-19,
-     * ST02); V10 (docs/adr/0028): {@code addresses.customer_id} cũng có. Các cột FK → {@code customers} còn thiếu index
-     * là đúng danh sách nợ D013; trả nợ (hoặc thêm cột FK mới) thì sửa danh sách này cùng sổ nợ.
+     * ST02); V10 (docs/adr/0028): {@code addresses.customer_id} cũng có; V13 (docs/adr/0041) thêm bốn index còn lại, trả hết nợ
+     * D013. Cột FK mới trỏ tới {@code customers} mà thiếu index sẽ làm test này đỏ.
      */
     @Test
-    void foreignKeysToCustomersWithoutUsableIndexAreExactlyDebtD013() {
+    void everyForeignKeyToCustomersHasUsableIndex() {
         List<String> unindexed = jdbc.queryForList("""
                 SELECT c.conrelid::regclass || '.' || a.attname
                 FROM pg_constraint c
@@ -424,9 +452,7 @@ class SchemaMigrationIT {
                 ORDER BY 1
                 """, String.class);
 
-        assertThat(unindexed).doesNotContain("otp_tokens.customer_id", "addresses.customer_id")
-                .as("nợ D013").containsExactlyInAnyOrder("boarding_bookings.customer_id",
-                        "care_tasks.customer_id", "payments.customer_id", "visits.customer_id");
+        assertThat(unindexed).as("D013 đã trả bằng V13 (docs/adr/0041)").isEmpty();
     }
 
     // ---------------------------------------------------------------- D6, D7, D10: hành vi ràng buộc

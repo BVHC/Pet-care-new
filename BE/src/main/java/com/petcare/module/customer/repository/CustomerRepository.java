@@ -1,5 +1,6 @@
 package com.petcare.module.customer.repository;
 
+import java.util.List;
 import java.util.Optional;
 
 import org.springframework.data.jpa.repository.JpaRepository;
@@ -32,4 +33,24 @@ public interface CustomerRepository extends JpaRepository<Customer, Long> {
     @Lock(LockModeType.PESSIMISTIC_WRITE)
     @Query("SELECT c FROM Customer c WHERE c.id = :id")
     Optional<Customer> findByIdForUpdate(@Param("id") Long id);
+
+    /** BR-TK-19: có ít nhất một hồ sơ tại quầy chưa liên kết cùng SĐT (dùng {@code ix_customers_phone}). */
+    @Query(value = """
+            SELECT EXISTS (SELECT 1 FROM customers
+                           WHERE created_channel = 'COUNTER' AND account_id IS NULL AND phone = :phone)
+            """, nativeQuery = true)
+    boolean existsUnlinkedCounterProfileWithPhone(@Param("phone") String phone);
+
+    /** UC07: ứng viên liên kết của SĐT, theo id tăng dần. */
+    @Query(value = """
+            SELECT * FROM customers
+            WHERE created_channel = 'COUNTER' AND account_id IS NULL AND phone = :phone ORDER BY id
+            """, nativeQuery = true)
+    List<Customer> findUnlinkedCounterProfilesByPhone(@Param("phone") String phone);
+
+    /** BR-KH-10: hồ sơ khác (mọi nguồn) cùng SĐT, theo id, tối đa {@code limit} dòng. */
+    @Query(value = "SELECT * FROM customers WHERE phone = :phone AND id <> :excludeId ORDER BY id LIMIT :limit",
+            nativeQuery = true)
+    List<Customer> findOtherProfilesByPhone(@Param("phone") String phone, @Param("excludeId") Long excludeId,
+            @Param("limit") int limit);
 }

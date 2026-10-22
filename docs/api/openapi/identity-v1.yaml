@@ -1336,7 +1336,7 @@ paths:
     get:
       tags: [Configuration]
       summary: "Danh sách tham số [CFG]"
-      description: "UC10 · BR-QT-13. Actor: A03. Quyền: Chỉ ADMIN. Chuyển trạng thái: —."
+      description: "UC10 · BR-QT-13. Actor: A03. Quyền: Chỉ ADMIN. Chuyển trạng thái: —. Mọi tham số (52), sắp theo key; minValue / maxValue là khoảng tĩnh, khoảng thu hẹp theo ràng buộc chéo chỉ có trong message lỗi của #32 (docs/adr/0036)."
       operationId: listSystemConfigs
       security:
         - bearerAuth: []
@@ -1366,7 +1366,7 @@ paths:
     put:
       tags: [Configuration]
       summary: "Sửa tham số"
-      description: "UC10 · BR-QT-13, 15. Actor: A03. Quyền: Chỉ ADMIN. Chuyển trạng thái: —. Chỉ áp dụng cho giao dịch tạo sau; ghi audit."
+      description: "UC10 · BR-QT-13, 15. Actor: A03. Quyền: Chỉ ADMIN. Chuyển trạng thái: —. Thứ tự kiểm: hình thức → quyền → key lạ 404 → kiểu / min–max / ràng buộc chéo (400 BR-QT-13, message ghi khoảng cho phép thực tế; sai kiểu cũng BR-QT-13) → trùng giá trị hiện tại (sau chuẩn hóa, ví dụ 05 = 5) → 200 không ghi, không audit. Ràng buộc chéo: visit.late_priority_minutes < appointment.no_show_after_minutes, boarding.min_nights ≤ boarding.max_nights. value được chuẩn hóa (INT bỏ số 0 đầu, TIME dạng HH:mm, DECIMAL không dạng mũ). Có hiệu lực cho mọi giao dịch tạo sau khi response trả về; ghi audit SYSTEM_CONFIG_UPDATED (docs/adr/0036)."
       operationId: updateSystemConfig
       security:
         - bearerAuth: []
@@ -1410,7 +1410,7 @@ paths:
     get:
       tags: [Configuration]
       summary: "Danh sách mẫu thông báo"
-      description: "UC10 · BR-QT-14. Actor: A03. Quyền: Chỉ ADMIN. Chuyển trạng thái: —."
+      description: "UC10 · BR-QT-14. Actor: A03. Quyền: Chỉ ADMIN. Chuyển trạng thái: —. Mọi mẫu, sắp theo code; subject / body là bản đang dùng; isDefault = cả hai trùng từng ký tự với bản mặc định (docs/adr/0037)."
       operationId: listNotificationTemplates
       security:
         - bearerAuth: []
@@ -1440,7 +1440,7 @@ paths:
     put:
       tags: [Configuration]
       summary: "Sửa nội dung mẫu"
-      description: "UC10 · BR-QT-14, 15. Actor: A03. Quyền: Chỉ ADMIN. Chuyển trạng thái: —. Không có endpoint thêm / xóa mẫu."
+      description: "UC10 · BR-QT-14, 15. Actor: A03. Quyền: Chỉ ADMIN. Chuyển trạng thái: —. Thứ tự kiểm: hình thức → quyền → code lạ 404 → biến (BR-QT-14). Ngữ pháp chặt: dấu ngoặc nhọn chỉ dùng để viết {ten} với ten thuộc allowedVars (phân biệt hoa thường); biến bắt buộc tính trên subject ∪ body. Lưu nguyên văn (không cắt khoảng trắng, không đổi xuống dòng). Trùng nội dung hiện tại → 200, không ghi nhưng vẫn audit (before = after). Có hiệu lực từ lần gửi đọc mẫu sau khi response trả về, kể cả thông báo đã xếp hàng. Audit NOTIFICATION_TEMPLATE_UPDATED. Không có endpoint thêm / xóa mẫu (docs/adr/0037)."
       operationId: updateNotificationTemplate
       security:
         - bearerAuth: []
@@ -1469,7 +1469,7 @@ paths:
                     type: integer
                     description: "HTTP status của kết quả, ví dụ 200, 201"
         "400":
-          description: "`BR-QT-14` dùng biến không tồn tại hoặc thiếu biến bắt buộc (message chỉ rõ biến)"
+          description: "`VALIDATION_FAILED` thiếu / rỗng subject hoặc body, subject quá 255 · `BR-QT-14` dùng biến không tồn tại, dấu { } lẻ hoặc thiếu biến bắt buộc (message nêu đủ mọi biến lỗi)"
           content:
             "application/json":
               schema:
@@ -1484,7 +1484,7 @@ paths:
     post:
       tags: [Configuration]
       summary: "Khôi phục mẫu mặc định"
-      description: "UC10 · BR-QT-14, 15. Actor: A03. Quyền: Chỉ ADMIN. Chuyển trạng thái: —."
+      description: "UC10 · BR-QT-14, 15. Actor: A03. Quyền: Chỉ ADMIN. Chuyển trạng thái: —. Chép bản mặc định sang bản đang dùng. Đã là mặc định → 200, không ghi nhưng vẫn audit (before = after). Audit NOTIFICATION_TEMPLATE_RESTORED (docs/adr/0037)."
       operationId: restoreNotificationTemplate
       security:
         - bearerAuth: []
@@ -1516,7 +1516,7 @@ paths:
     get:
       tags: [Audit]
       summary: "Xem nhật ký audit"
-      description: "UC11 · BR-QT-15, 16. Actor: A03. Quyền: Chỉ ADMIN. Chuyển trạng thái: —. Chỉ đọc; không có endpoint sửa / xóa (BR-QT-16)."
+      description: "UC11 · BR-QT-15, 16. Actor: A03. Quyền: Chỉ ADMIN. Chuyển trạng thái: —. Chỉ đọc; không có endpoint sửa / xóa (BR-QT-16): method khác → 405. Xem không ghi audit. Mọi dòng của mọi người (kể cả hệ thống, actor null). Sắp `createdAt` giảm dần rồi `id` giảm dần; khoảng [from, to] tính cả hai mốc; giá trị lọc không tồn tại → trang rỗng; action / entityType rỗng = không lọc; size ngoài 1–100 bị kẹp, page âm = 0. `beforeData` / `afterData` là JSON object đúng như lúc ghi (thứ tự khóa không cố định), null khi không có. `totalElements` khớp `content` trong cùng một response (docs/adr/0038)."
       operationId: listAuditLogs
       security:
         - bearerAuth: []
@@ -1527,34 +1527,40 @@ paths:
           schema:
             type: integer
             format: int64
+          description: "Người thực hiện (khớp đúng)"
         - name: action
           in: query
           required: false
           schema:
             type: string
+          description: "Mã hành động, tối đa 50 ký tự (khớp đúng). Không kèm actorAccountId hay entityType + entityId thì bắt buộc from + to cách nhau ≤ 31 ngày"
         - name: entityType
           in: query
           required: false
           schema:
             type: string
+          description: "Tên bảng, tối đa 50 ký tự (khớp đúng)"
         - name: entityId
           in: query
           required: false
           schema:
             type: integer
             format: int64
+          description: "Bắt buộc kèm entityType"
         - name: from
           in: query
           required: false
           schema:
             type: string
             format: date-time
+          description: "Từ thời điểm (tính cả mốc); `+` của offset phải encode `%2B`"
         - name: to
           in: query
           required: false
           schema:
             type: string
             format: date-time
+          description: "Đến thời điểm (tính cả mốc); không được trước from"
         - $ref: "#/components/parameters/Page"
         - $ref: "#/components/parameters/Size"
       responses:
@@ -1582,11 +1588,19 @@ paths:
                     type: integer
                     description: "HTTP status của kết quả, ví dụ 200, 201"
         "400":
-          $ref: "#/components/responses/BadRequest"
+          description: "`MALFORMED_REQUEST` tham số sai kiểu (from / to thiếu offset, id không phải số nguyên) · `VALIDATION_FAILED` action / entityType quá 50 ký tự, `to` trước `from`, `entityId` không kèm `entityType`, lọc `action` không kèm người / đối tượng mà thiếu from / to hoặc cách nhau quá 31 ngày (message nêu đủ lỗi, theo tên tham số)"
+          content:
+            "application/json":
+              schema:
+                $ref: "#/components/schemas/Error"
         "401":
           $ref: "#/components/responses/Unauthorized"
         "403":
-          $ref: "#/components/responses/Forbidden"
+          description: "Không phải ADMIN (không ghi audit)"
+          content:
+            "application/json":
+              schema:
+                $ref: "#/components/schemas/Error"
   "/public/vets":
     get:
       tags: [Public]
@@ -2197,11 +2211,12 @@ components:
           description: "Nội dung đang trùng bản mặc định"
     UpdateTemplateRequest:
       type: object
-      required: [body]
+      required: [subject, body]
       properties:
         subject:
-          type: [string, "null"]
+          type: string
           maxLength: 255
+          description: "Bắt buộc với mọi kênh (docs/adr/0037)"
         body:
           type: string
           description: "Chỉ dùng biến trong allowedVars, đủ requiredVars (BR-QT-14)"

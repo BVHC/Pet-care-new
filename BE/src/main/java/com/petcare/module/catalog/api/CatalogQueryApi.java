@@ -32,6 +32,17 @@ public interface CatalogQueryApi {
 
     Optional<ProductInfo> findProduct(Long productId);
 
+    /** Nhiều sản phẩm một lần (id không tồn tại bị bỏ qua), để bên gọi tra tên mà không N+1 (thêm 2026-10-16, T18). */
+    List<ProductInfo> findProducts(Collection<Long> productIds);
+
+    /**
+     * Như {@link #findProduct} nhưng khóa chia sẻ dòng sản phẩm ({@code SELECT … FOR SHARE}); thêm 2026-10-16 (T18,
+     * docs/adr/0042). {@code MANDATORY}: chạy trong transaction của bên gọi. Bên sắp ghi dữ liệu phụ thuộc cờ
+     * {@code tracksExpiry} (xác nhận phiếu nhập kho tạo lô có hạn) phải đọc qua method này: catalog sửa sản phẩm khóa
+     * ghi dòng trước khi đọc, nên tắt cờ chạy song song bị xếp hàng và thấy lô vừa tạo.
+     */
+    Optional<ProductInfo> findProductForShare(Long productId);
+
     Optional<KennelTypeInfo> findKennelType(Long serviceId);
 
     Optional<ProtocolDose> findProtocolDose(Long protocolId);
@@ -41,4 +52,10 @@ public interface CatalogQueryApi {
 
     /** Loại vaccine có ít nhất 1 dòng phác đồ cờ bắt buộc khi lưu trú của loài (BR-LT-05). */
     List<Long> findBoardingRequiredVaccineTypeIds(Species species);
+
+    /**
+     * Tên loại vaccine theo lô (thêm 2026-10-22, T31): boarding ghép tên cho {@code VaccineGap}. Id không có thì vắng
+     * mặt trong kết quả; tập rỗng → map rỗng. Đọc mới mỗi lần gọi.
+     */
+    java.util.Map<Long, String> findVaccineTypeNames(Collection<Long> vaccineTypeIds);
 }
