@@ -21,6 +21,7 @@ import com.petcare.module.identity.api.ConfigKey;
 import com.petcare.module.identity.api.StaffDirectoryApi;
 import com.petcare.module.identity.api.StaffDirectoryApi.StaffSummary;
 import com.petcare.module.identity.api.SystemConfigApi;
+import com.petcare.module.visit.dto.AddendumRequest;
 import com.petcare.module.visit.dto.AddendumResponse;
 import com.petcare.module.visit.dto.MedicalRecordResponse;
 import com.petcare.module.visit.dto.RecordWeightRequest;
@@ -47,8 +48,8 @@ import com.petcare.platform.security.BranchScope;
 import com.petcare.platform.security.SecurityPrincipal;
 
 /**
- * Bệnh án của lượt — visit-v1 #12 xem, #13 ghi, #14 ghi cân nặng (UC48, UC53; BR-KB-01, 06, BR-KH-04, BR-TN-08,
- * BR-QT-15; docs/adr/0064, 0065, 0066).
+ * Bệnh án của lượt — visit-v1 #12 xem, #13 ghi, #14 ghi cân nặng, #15 bản bổ sung (UC48, UC53; BR-KB-01, 06, BR-KH-04, BR-TN-08,
+ * BR-QT-15; docs/adr/0066, 0067, 0068, 0070).
  * <ul>
  * <li>#13 thứ tự: role → lượt (projection, 404) → chi nhánh (403) → nhóm {@code GROOMING} (404) → khóa
  * {@code pets FOR SHARE} → {@code visits} → người phụ trách hiện tại (403) → {@code IN_PROGRESS} (409) → đọc bệnh án
@@ -159,8 +160,44 @@ public class MedicalRecordService {
     }
 
     /**
+     * visit-v1 #15 (UC53, BR-KB-01, BR-QT-15; docs/adr/0070). Mọi VET của chi nhánh nơi khám, không cần là người phụ
+     * trách (A7); chỉ khi lượt {@code COMPLETED}. Lượt chưa có dòng bệnh án thì tạo dòng rỗng đã khóa
+     * ({@code locked_at} = {@code completed_at}) trong cùng transaction. Tên người ghi tra trước mọi lệnh ghi.
+     */
+    @Transactional
+    public AddendumResponse addAddendum(Long visitId, AddendumRequest request) {
+        SecurityPrincipal principal = branchScope.current();
+        VisitDispatchService.requireRole(principal, WRITE_ROLES);
+        findMedicalVisit(visitId);
+
+        Visit visit = lockAndLoad(visitId);
+        if (visit.getStatus() != VisitStatus.COMPLETED) {
+            throw new InvalidStateTransitionException(VisitTransitionHandler.FSM_NAME, visit.getStatus().name(),
+                    VisitStatus.COMPLETED.name());
+        }
+        String authorName = staffDirectory.findStaff(principal.accountId()).map(StaffSummary::fullName)
+                .orElseThrow(() -> new IllegalStateException(
+                        "Người ghi bản bổ sung #" + principal.accountId() + " không còn trong danh bạ nhân viên"));
+
+        if (records.findById(visitId).isEmpty()) {
+            MedicalRecord record = MedicalRecord.of(visitId);
+            record.lock(visit.getCompletedAt());
+            records.saveAndFlush(record);
+        }
+        MedicalRecordAddendum addendum = addenda.saveAndFlush(
+                MedicalRecordAddendum.of(visitId, request.content(), request.internal(), principal.accountId()));
+
+        Map<String, Object> after = new LinkedHashMap<>();
+        after.put("content", addendum.getContent());
+        after.put("isInternal", addendum.isInternal());
+        audit.record(AuditEntry.of(VisitAuditActions.MEDICAL_RECORD_ADDENDUM_ADDED)
+                .entity("medical_record_addenda", addendum.getId()).after(after));
+        return mapper.toAddendum(addendum, authorName);
+    }
+
+    /**
      * BR-KB-06: sau ngày khám, xa nhất {@code MEDICAL_RECORD_FOLLOW_UP_MAX_DAYS} ngày. Ngày khám = ngày check-in theo giờ
-     * Việt Nam (docs/adr/0064 §3); [CFG] đọc lúc ghi (ADR-0057).
+     * Việt Nam (docs/adr/0066 §3); [CFG] đọc lúc ghi (ADR-0057).
      */
     private void requireFollowUpInRange(Visit visit, LocalDate followUpDate) {
         LocalDate examDate = visit.getCheckedInAt().atZone(TimeConfig.BUSINESS_ZONE).toLocalDate();
@@ -210,7 +247,7 @@ public class MedicalRecordService {
                 .toList();
     }
 
-    /** {@code LinkedHashMap} giữ thứ tự khóa trong JSON audit (docs/adr/0064 §2). */
+    /** {@code LinkedHashMap} giữ thứ tự khóa trong JSON audit (docs/adr/0066 §2). */
     private static Map<String, Object> snapshot(MedicalRecord record) {
         Map<String, Object> snapshot = new LinkedHashMap<>();
         snapshot.put("examination", record.getExamination());

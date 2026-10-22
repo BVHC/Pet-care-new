@@ -9,7 +9,7 @@ import org.junit.jupiter.api.Test;
 
 import jakarta.persistence.Column;
 
-/** {@link MedicalRecordAddendum} (docs/adr/0064): mỗi tham số vào đúng cột; bảng LOG chỉ thêm mới (G9). */
+/** {@link MedicalRecordAddendum} (docs/adr/0066): mỗi tham số vào đúng cột; bảng LOG chỉ thêm mới (G9). */
 class MedicalRecordAddendumTest {
 
     @Test

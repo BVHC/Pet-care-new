@@ -34,7 +34,7 @@ import com.petcare.module.visit.repository.VisitRepository;
 import com.petcare.support.MutableClock;
 
 /**
- * Nền bệnh án (T27 phần 0, docs/adr/0064) trên Postgres 17: entity khớp V1, PK gán tay chèn được qua {@code save}
+ * Nền bệnh án (T27 phần 0, docs/adr/0066) trên Postgres 17: entity khớp V1, PK gán tay chèn được qua {@code save}
  * (đường {@code merge}), {@code created_at} theo {@link MutableClock} ở <b>năm 2010</b> (chưa IT nào dùng); G1 mỗi lượt
  * tối đa một bệnh án; bản bổ sung đọc theo thứ tự ghi; {@code hasVaccinationInVisit}. Dữ liệu FK thật, xóa ở
  * {@link AppointmentItSupport#cleanUp()} (xóa bệnh án và bản bổ sung trước {@code visits}).

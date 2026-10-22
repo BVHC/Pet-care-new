@@ -53,7 +53,7 @@ import com.petcare.module.sales.api.CashierShiftQueryApi;
 import com.petcare.support.MutableClock;
 
 /**
- * visit-v1 #12 xem, #13 ghi bệnh án trên Postgres thật (docs/adr/0065). Mục theo plan:
+ * visit-v1 #12 xem, #13 ghi bệnh án trên Postgres thật (docs/adr/0067). Mục theo plan:
  * <ul>
  * <li>Đường đúng: lần ghi đầu tạo dòng, PUT thay toàn bộ, chuẩn hóa, khung rỗng, hình dạng JSON, ngày tái khám.</li>
  * <li>Xác thực / phân quyền: 401, BR-TK-17, role, chi nhánh, người phụ trách (gồm sau gán lại), thứ tự lỗi.</li>
@@ -805,6 +805,229 @@ class MedicalRecordIT {
         }
     }
 
+    // ================================================================ #15 bản bổ sung
+
+    @Test
+    void addendumByAnotherVetOfTheBranchIs201AndMatchesTheLaterGet() {
+        long visit = called(walkIn(medical), vetA);
+        put(vetAToken, visit, body("khám", "dx", null, "ghi chú", null));
+        complete(visit);
+
+        Map<String, Object> created = data(addendum(vetBToken, visit, Map.of("content", "  kết quả xét nghiệm  ",
+                "isInternal", true)), HttpStatus.CREATED);
+
+        assertThat(created.keySet()).containsExactlyInAnyOrder("addendumId", "content", "isInternal", "createdBy",
+                "createdByName", "createdAt");
+        assertThat(created).containsEntry("content", "kết quả xét nghiệm").containsEntry("isInternal", true)
+                .containsEntry("createdBy", (int) vetB);
+        assertThat((String) created.get("createdByName")).startsWith("VET ");
+        Map<String, Object> row = jdbc.queryForMap("SELECT * FROM medical_record_addenda WHERE medical_record_id = ?",
+                visit);
+        assertThat(row).containsEntry("content", "kết quả xét nghiệm").containsEntry("is_internal", true)
+                .containsEntry("created_by", vetB);
+        Map<String, Object> record = data(get(caretakerToken, visit), HttpStatus.OK);
+        assertThat(listOf(record.get("addenda"))).singleElement().isEqualTo(created);
+        assertThat(count("SELECT count(*) FROM medical_records WHERE visit_id = " + visit)).isEqualTo(1);
+
+        List<Map<String, Object>> trail = addendumAudits(((Number) created.get("addendumId")).longValue());
+        assertThat(trail).singleElement().satisfies(entry -> {
+            assertThat(entry).containsEntry("actor_account_id", vetB).containsEntry("entity_type",
+                    "medical_record_addenda");
+            assertThat(entry.get("b")).isNull();
+            assertThat((String) entry.get("a")).contains("kết quả xét nghiệm").contains("\"isInternal\": true");
+        });
+        assertThat(audits(visit)).as("không có audit ghi bệnh án").hasSize(1);
+    }
+
+    @Test
+    void aCompletedVisitWithoutARecordGetsOneEmptyLockedRecordThenTheAddendum() {
+        long visit = called(walkIn(medical), vetA);
+        complete(visit);
+        assertThat(count("SELECT count(*) FROM medical_records WHERE visit_id = " + visit)).isZero();
+
+        data(addendum(vetAToken, visit, Map.of("content", "mũi tiêm ghi sai lô, đã kiểm lại")), HttpStatus.CREATED);
+
+        Map<String, Object> record = jdbc.queryForMap("SELECT * FROM medical_records WHERE visit_id = " + visit);
+        assertThat(record.get("examination")).isNull();
+        assertThat(record.get("diagnosis")).isNull();
+        assertThat(record.get("last_edited_by")).isNull();
+        assertThat(((Timestamp) record.get("locked_at")).toInstant()).isEqualTo(
+                jdbc.queryForObject("SELECT completed_at FROM visits WHERE id = ?", Timestamp.class, visit).toInstant());
+        Map<String, Object> view = data(get(vetBToken, visit), HttpStatus.OK);
+        assertThat(view).containsEntry("locked", true).containsEntry("lastEditedBy", null);
+        assertThat(listOf(view.get("addenda"))).singleElement()
+                .satisfies(a -> assertThat(a).containsEntry("isInternal", false));
+        assertThat(audits(visit)).isEmpty();
+    }
+
+    @Test
+    void addendumBeforeCompletionIs409AndWritesNothing() {
+        long waiting = assigned(walkIn(medical), vetA);
+        long inProgress = called(walkIn(medical), vetA);
+        long cancelled = walkIn(medical);
+        data(exchange(HttpMethod.POST, receptionistToken, "/api/visits/" + cancelled + "/cancel", null), HttpStatus.OK);
+
+        for (long visit : List.of(waiting, inProgress, cancelled)) {
+            assertError(addendum(vetAToken, visit, Map.of("content", "x")), HttpStatus.CONFLICT,
+                    "INVALID_STATE_TRANSITION");
+        }
+        assertThat(count("SELECT count(*) FROM medical_record_addenda WHERE medical_record_id IN (" + waiting + ", "
+                + inProgress + ", " + cancelled + ")")).isZero();
+        assertThat(count("SELECT count(*) FROM medical_records WHERE visit_id IN (" + waiting + ", " + inProgress + ", "
+                + cancelled + ")")).isZero();
+    }
+
+    @Test
+    void addendumErrorOrderIs404Then403BranchThen404GroomingThen409() {
+        long inProgress = called(walkIn(medical), vetA);
+        long groomingDone = called(walkIn(grooming), caretaker);
+        complete(groomingDone);
+        String otherVet = token(data.staff("VET", otherBranch));
+
+        assertError(addendum(vetAToken, 987654321L, Map.of("content", "x")), HttpStatus.NOT_FOUND,
+                "RESOURCE_NOT_FOUND");
+        assertScopeDenied(addendum(otherVet, inProgress, Map.of("content", "x")));
+        assertError(addendum(vetAToken, groomingDone, Map.of("content", "x")), HttpStatus.NOT_FOUND,
+                "RESOURCE_NOT_FOUND");
+        assertError(addendum(vetAToken, inProgress, Map.of("content", "x")), HttpStatus.CONFLICT,
+                "INVALID_STATE_TRANSITION");
+        assertThat(count("SELECT count(*) FROM medical_record_addenda")).isZero();
+    }
+
+    @Test
+    void addendumWithoutTokenOrAfterTheSessionIsRevokedIs401() {
+        long visit = called(walkIn(medical), vetA);
+        complete(visit);
+
+        assertError(addendum(null, visit, Map.of("content", "x")), HttpStatus.UNAUTHORIZED, "UNAUTHENTICATED");
+        jdbc.update("UPDATE sessions SET revoked_at = now() WHERE account_id = ?", vetA);
+        assertError(addendum(vetAToken, visit, Map.of("content", "x")), HttpStatus.UNAUTHORIZED, "UNAUTHENTICATED");
+        data(addendum(vetBToken, visit, Map.of("content", "x")), HttpStatus.CREATED);
+        assertThat(count("SELECT count(*) FROM medical_record_addenda WHERE medical_record_id = " + visit)).isEqualTo(1);
+    }
+
+    @Test
+    void addendumByAVetWhoMustChangeThePasswordIsBrTk17() {
+        long visit = called(walkIn(medical), vetA);
+        complete(visit);
+        jdbc.update("UPDATE accounts SET must_change_password = true WHERE id = ?", vetB);
+
+        ResponseEntity<Map<String, Object>> response = addendum(vetBToken, visit, Map.of("content", "x"));
+
+        assertThat(response.getStatusCode()).isEqualTo(HttpStatus.BAD_REQUEST);
+        assertThat((String) response.getBody().get("message")).contains("BR-TK-17");
+        assertThat(count("SELECT count(*) FROM medical_record_addenda")).isZero();
+    }
+
+    @Test
+    void onlyAVetMayAddAnAddendumAndRoleOrBranchChangesApplyFromTheNextRequest() {
+        long visit = called(walkIn(medical), vetA);
+        complete(visit);
+
+        for (String bearer : List.of(caretakerToken, receptionistToken, managerToken, token(superManager), adminToken,
+                token(customerAccount))) {
+            assertError(addendum(bearer, visit, Map.of("content", "x")), HttpStatus.FORBIDDEN, "ACCESS_DENIED");
+        }
+        assertThat(count("SELECT count(*) FROM medical_record_addenda")).isZero();
+
+        jdbc.update("UPDATE staff_profiles SET branch_id = ? WHERE account_id = ?", otherBranch, vetA);
+        assertScopeDenied(addendum(vetAToken, visit, Map.of("content", "x")));
+        jdbc.update("UPDATE staff_profiles SET branch_id = ? WHERE account_id = ?", branch, vetA);
+        jdbc.update("UPDATE accounts SET role = 'CARETAKER' WHERE id = ?", vetB);
+        assertError(addendum(vetBToken, visit, Map.of("content", "x")), HttpStatus.FORBIDDEN, "ACCESS_DENIED");
+        assertThat(count("SELECT count(*) FROM medical_record_addenda")).isZero();
+        data(addendum(vetAToken, visit, Map.of("content", "x")), HttpStatus.CREATED);
+    }
+
+    @Test
+    void addendumBodyErrorsAre400BeforeTheRoleCheckAndUnknownFieldsAreIgnored() {
+        long visit = called(walkIn(medical), vetA);
+        complete(visit);
+        String path = "/api/visits/" + visit + "/medical-record/addenda";
+
+        assertError(addendum(caretakerToken, visit, Map.of()), HttpStatus.BAD_REQUEST, "VALIDATION_FAILED");
+        assertError(addendum(receptionistToken, visit, Map.of("content", "   ")), HttpStatus.BAD_REQUEST,
+                "VALIDATION_FAILED");
+        assertError(raw(HttpMethod.POST, receptionistToken, path, "{"), HttpStatus.BAD_REQUEST, "MALFORMED_REQUEST");
+        assertError(raw(HttpMethod.POST, vetAToken, path, "{\"content\":[\"a\"]}"), HttpStatus.BAD_REQUEST,
+                "MALFORMED_REQUEST");
+        assertError(raw(HttpMethod.POST, vetAToken, path, "{\"content\":\"a\",\"isInternal\":\"yes\"}"),
+                HttpStatus.BAD_REQUEST, "MALFORMED_REQUEST");
+        assertError(exchange(HttpMethod.POST, vetAToken, path, null), HttpStatus.BAD_REQUEST, "MALFORMED_REQUEST");
+        assertError(raw(HttpMethod.POST, vetAToken, "/api/visits/abc/medical-record/addenda", "{\"content\":\"a\"}"),
+                HttpStatus.BAD_REQUEST, "MALFORMED_REQUEST");
+        assertThat(count("SELECT count(*) FROM medical_record_addenda")).isZero();
+
+        Map<String, Object> body = new LinkedHashMap<>();
+        body.put("content", "nội dung");
+        body.put("createdBy", vetB);
+        body.put("addendumId", 1);
+        body.put("medicalRecordId", visit + 1);
+        body.put("createdAt", "2001-01-01T00:00:00Z");
+        Map<String, Object> created = data(addendum(vetAToken, visit, body), HttpStatus.CREATED);
+
+        assertThat(created).containsEntry("createdBy", (int) vetA).containsEntry("isInternal", false);
+        assertThat(jdbc.queryForList("SELECT medical_record_id, created_by FROM medical_record_addenda"))
+                .singleElement().satisfies(row -> assertThat(row).containsEntry("medical_record_id", visit)
+                        .containsEntry("created_by", vetA));
+    }
+
+    @Test
+    void anAddendumOnADeceasedPetsOldVisitIsStillAccepted() {
+        long visit = called(walkIn(medical), vetA);
+        complete(visit);
+        jdbc.update("UPDATE pets SET deceased_on = ? WHERE id = ?", java.sql.Date.valueOf(TODAY), pet);
+
+        data(addendum(vetAToken, visit, Map.of("content", "ghi nhận sau khi thú mất")), HttpStatus.CREATED);
+
+        assertThat(count("SELECT count(*) FROM medical_record_addenda WHERE medical_record_id = " + visit)).isEqualTo(1);
+    }
+
+    @Test
+    void auditFailureRollsBackTheAddendumAndTheRecordCreatedWithIt() {
+        long visit = called(walkIn(medical), vetA);
+        complete(visit);
+
+        assertError(withRejectingTrigger("INSERT", "audit_logs", "NEW.action = 'MEDICAL_RECORD_ADDENDUM_ADDED'",
+                () -> addendum(vetAToken, visit, Map.of("content", "x"))), HttpStatus.CONFLICT, "CONCURRENCY_CONFLICT");
+
+        assertThat(count("SELECT count(*) FROM medical_record_addenda WHERE medical_record_id = " + visit)).isZero();
+        assertThat(count("SELECT count(*) FROM medical_records WHERE visit_id = " + visit)).isZero();
+    }
+
+    @Test
+    void addendumInsertFailureRollsBackTheRecordCreatedWithIt() {
+        long visit = called(walkIn(medical), vetA);
+        complete(visit);
+
+        assertError(withRejectingTrigger("INSERT", "medical_record_addenda", "true",
+                () -> addendum(vetAToken, visit, Map.of("content", "x"))), HttpStatus.CONFLICT, "CONCURRENCY_CONFLICT");
+
+        assertThat(count("SELECT count(*) FROM medical_records WHERE visit_id = " + visit)).isZero();
+        assertThat(count("SELECT count(*) FROM medical_record_addenda WHERE medical_record_id = " + visit)).isZero();
+        data(addendum(vetAToken, visit, Map.of("content", "thử lại")), HttpStatus.CREATED);
+    }
+
+    /** Hai VET cùng thêm vào lượt chưa có bệnh án khi khóa lượt đang bị giữ: cả hai 201, đúng 1 bệnh án, 2 bản bổ sung. */
+    @Test
+    void twoConcurrentAddendaOnARecordlessVisitBothSucceedWithOneRecord() throws Exception {
+        long visit = called(walkIn(medical), vetA);
+        complete(visit);
+
+        List<ResponseEntity<Map<String, Object>>> results = whileHeld(
+                "SELECT id FROM visits WHERE id = ? FOR NO KEY UPDATE", new Object[] {visit},
+                "%from visits where id = % for no key update%", j -> { },
+                List.of(() -> addendum(vetAToken, visit, Map.of("content", "một")),
+                        () -> addendum(vetBToken, visit, Map.of("content", "hai"))), 2);
+
+        for (ResponseEntity<Map<String, Object>> result : results) {
+            assertThat(result.getStatusCode()).as(String.valueOf(result.getBody())).isEqualTo(HttpStatus.CREATED);
+        }
+        assertThat(count("SELECT count(*) FROM medical_records WHERE visit_id = " + visit)).isEqualTo(1);
+        assertThat(count("SELECT count(*) FROM medical_record_addenda WHERE medical_record_id = " + visit))
+                .isEqualTo(2);
+    }
+
     // ================================================================ helpers
 
     private List<ResponseEntity<Map<String, Object>>> whileHeld(String lockSql, Object[] lockArgs, String waitingLike,
@@ -907,7 +1130,7 @@ class MedicalRecordIT {
         return visitId;
     }
 
-    /** Visit#5 chưa có (T27 phần 3): đặt trạng thái cuối bằng SQL, đúng cột mà FSM sẽ ghi. */
+    /** Đặt trạng thái cuối bằng SQL (không qua Visit#5): không tạo / khóa bệnh án, dùng cho ca lượt chưa có bệnh án. */
     private void complete(long visitId) {
         jdbc.update("UPDATE visits SET status = 'COMPLETED', completed_at = now() WHERE id = ?", visitId);
     }
@@ -958,6 +1181,17 @@ class MedicalRecordIT {
 
     private ResponseEntity<Map<String, Object>> put(String bearer, long visitId, Object body) {
         return exchange(HttpMethod.PUT, bearer, PATH.formatted(visitId), body);
+    }
+
+    private ResponseEntity<Map<String, Object>> addendum(String bearer, long visitId, Object body) {
+        return exchange(HttpMethod.POST, bearer, PATH.formatted(visitId) + "/addenda", body);
+    }
+
+    private List<Map<String, Object>> addendumAudits(long addendumId) {
+        return jdbc.queryForList("""
+                SELECT actor_account_id, entity_type, before_data::text AS b, after_data::text AS a
+                FROM audit_logs WHERE action = 'MEDICAL_RECORD_ADDENDUM_ADDED' AND entity_id = ? ORDER BY id""",
+                addendumId);
     }
 
     private ResponseEntity<Map<String, Object>> weight(String bearer, long visitId, Object body) {

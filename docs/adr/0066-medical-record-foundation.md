@@ -1,7 +1,8 @@
-# ADR-0064: Nền bệnh án — tạo khi ghi lần đầu, PUT thay toàn bộ, audit mỗi lần ghi, mốc ngày khám, khóa theo lượt
+# ADR-0066: Nền bệnh án — tạo khi ghi lần đầu, PUT thay toàn bộ, audit mỗi lần ghi, mốc ngày khám, khóa theo lượt
 
 - **Trạng thái:** Accepted
 - **Ngày:** 2026-10-22
+- **Đánh số lại:** ban đầu là ADR-0064; đổi +2 ngày 2026-10-22 vì trùng ADR-0064, 0065 của BE-2 (vào `dev` trước). Mọi tham chiếu ADR-0064…0067 trong code / tài liệu visit đã đổi theo (+2).
 - **Liên quan:**
   - BR-KB-01, 02, 06 (02 L157–162), BR-SP-06 (L109), BR-TN-08 (L148), BR-KH-03, 07 (L89, L93), BR-QT-13, 15 (L56, L58).
   - 03 §4 Visit#5 và Phụ lục; erd §6 `medical_records`, `medical_record_addenda`, `vaccinations`; V1 L515–541, L923–947.

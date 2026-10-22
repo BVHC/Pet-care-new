@@ -52,7 +52,7 @@ import com.petcare.module.sales.api.CashierShiftQueryApi;
 import com.petcare.support.MutableClock;
 
 /**
- * visit-v1 #10 hoàn tất lượt (Visit#5) trên Postgres thật (docs/adr/0067). Mục theo plan:
+ * visit-v1 #10 hoàn tất lượt (Visit#5) trên Postgres thật (docs/adr/0069). Mục theo plan:
  * <ul>
  * <li>Commit (C1): bốn bảng đổi cùng lúc, {@code locked_at = completed_at}, cờ cần gán lại gỡ, bệnh án khóa.</li>
  * <li>Rollback (R1–R5): trigger tạm chặn UPDATE lịch hẹn / Order / bệnh án, guard BR-KB-02 sau ba lệnh ghi, hoàn tất lại

@@ -1,17 +1,18 @@
-# ADR-0067: Hoàn tất lượt (`POST /api/visits/{visitId}/complete`) — Order khóa trước khi đọc dịch vụ, guard BR-KB-02 sau các lệnh ghi
+# ADR-0069: Hoàn tất lượt (`POST /api/visits/{visitId}/complete`) — Order khóa trước khi đọc dịch vụ, guard BR-KB-02 sau các lệnh ghi
 
 - **Trạng thái:** Accepted
 - **Ngày:** 2026-10-22
+- **Đánh số lại:** ban đầu là ADR-0067; đổi +2 ngày 2026-10-22 vì trùng ADR-0064, 0065 của BE-2 (vào `dev` trước). Mọi tham chiếu ADR-0064…0067 trong code / tài liệu visit đã đổi theo (+2).
 - **Liên quan:**
   - BR-KB-01, 02 (02 L157–158), BR-SP-06, BR-TN-05, 09, BR-LH-11, BR-BH-01, BR-QT-13; 03 §4 Visit#5, Lịch hẹn#7, Order#4, Phụ lục.
   - visit-v1 #10, schema `Visit`, A16 (mới); 06 §2 Visit#5.
-  - ADR-0058 §5 (thứ tự khóa), 0062 (khuôn `VisitProgressService`), 0064 §5, §7 (thay §5), 0065 (khuôn #13).
+  - ADR-0058 §5 (thứ tự khóa), 0062 (khuôn `VisitProgressService`), 0066 §5, §7 (thay §5), 0067 (khuôn #13).
   - Nợ: trả D044, mở D045, trả một phần D042.
 - **Triển khai (T27 phần 3):** `visit/service/VisitCompletionService`, `VisitController.completeVisit`, `Visit.complete`, `MedicalRecord.lock`. Không DTO mới, không migration, không sửa API của module khác.
 
 ## Bối cảnh
 
-Visit#5 ghi bốn bảng trong một transaction (`visits`, `appointments`, `orders`, `medical_records`) và kiểm BR-KB-02 theo **loại dịch vụ đang có trong Order** (VET đổi được dòng tự sinh, BR-TN-01). ADR-0064 §5 chấp nhận đọc dịch vụ không khóa (D044). Khi dựng thì thấy cách đó còn gây mất cập nhật: `SalesOrder` không có `@Version`, `findServiceIds` nạp entity Order không khóa, rồi `markPendingByVisit` khóa và đọc lại thì Hibernate trả entity đã nạp (cũ); flush ghi đè `total_amount` bằng giá trị cũ. Dòng thêm trong lúc chờ khóa mất khỏi tổng tiền (D045).
+Visit#5 ghi bốn bảng trong một transaction (`visits`, `appointments`, `orders`, `medical_records`) và kiểm BR-KB-02 theo **loại dịch vụ đang có trong Order** (VET đổi được dòng tự sinh, BR-TN-01). ADR-0066 §5 chấp nhận đọc dịch vụ không khóa (D044). Khi dựng thì thấy cách đó còn gây mất cập nhật: `SalesOrder` không có `@Version`, `findServiceIds` nạp entity Order không khóa, rồi `markPendingByVisit` khóa và đọc lại thì Hibernate trả entity đã nạp (cũ); flush ghi đè `total_amount` bằng giá trị cũ. Dòng thêm trong lúc chờ khóa mất khỏi tổng tiền (D045).
 
 ## Quyết định
 
@@ -20,7 +21,7 @@ Visit#5 ghi bốn bảng trong một transaction (`visits`, `appointments`, `ord
 3. **BR-KB-02 chỉ cho nhóm `MEDICAL`.** Có dịch vụ `EXAM` → bệnh án tồn tại và `diagnosis != null`; không có `EXAM`, có `VACCINE` → `hasVaccinationInVisit`; `GROOMING` không điều kiện, không đọc dịch vụ. Hoàn tất không tạo bệnh án.
 4. **A16 (giả định, 03 không nêu):** lượt `MEDICAL` mà Order không còn dòng dịch vụ Khám/Tiêm (VET xóa dòng tự sinh) → 400 BR-KB-02, để Order `PENDING` không có dịch vụ.
 5. **Gỡ cờ `needs_reassign` khi hoàn tất** (Q2). Lượt đã xong không còn gì để gán lại. Chỉ trả một phần D042 (lượt `IN_PROGRESS` sau mở khóa vẫn giữ cờ).
-6. **Khóa bệnh án:** `locked_at` = `visits.completed_at` (cùng `at` đã cắt về µs, ADR-0064 G7) chỉ khi dòng bệnh án có sẵn. Không audit (BR-QT-15 không liệt kê), không thông báo.
+6. **Khóa bệnh án:** `locked_at` = `visits.completed_at` (cùng `at` đã cắt về µs, ADR-0066 G7) chỉ khi dòng bệnh án có sẵn. Không audit (BR-QT-15 không liệt kê), không thông báo.
 7. **Một `@Transactional`, READ COMMITTED, không `noRollbackFor`, không `catch`.** REPEATABLE READ sẽ giữ snapshot trước khi chờ khóa và làm race D044 / D045 quay lại (ADR-0061 M5).
 
 ## Bảng đảm bảo

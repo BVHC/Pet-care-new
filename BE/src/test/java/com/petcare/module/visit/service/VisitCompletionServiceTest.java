@@ -69,7 +69,7 @@ import com.petcare.platform.security.BranchScope;
 import com.petcare.platform.security.SecurityPrincipal;
 
 /**
- * {@link VisitCompletionService} (docs/adr/0067): role trước mọi lần đọc, 404 → 403 chi nhánh trước khi khóa, người phụ
+ * {@link VisitCompletionService} (docs/adr/0069): role trước mọi lần đọc, 404 → 403 chi nhánh trước khi khóa, người phụ
  * trách (403) → chức vụ (400 BR-TN-05) → 409, ghi lượt → lịch hẹn → Order rồi mới đọc dịch vụ và guard BR-KB-02, nhánh
  * từ chối trước khi ghi không chạm module nào. Hành vi trên DB thật, rollback và race ở {@code VisitCompleteIT}.
  */

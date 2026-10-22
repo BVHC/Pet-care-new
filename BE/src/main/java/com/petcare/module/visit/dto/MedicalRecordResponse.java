@@ -6,7 +6,7 @@ import java.util.List;
 import io.swagger.v3.oas.annotations.media.Schema;
 
 /**
- * Bệnh án của một lượt cho <b>nhân viên</b> (visit-v1 schema {@code MedicalRecord}, UC48, UC53; docs/adr/0064). Có
+ * Bệnh án của một lượt cho <b>nhân viên</b> (visit-v1 schema {@code MedicalRecord}, UC48, UC53; docs/adr/0066). Có
  * {@code internalNote}: hồ sơ sức khỏe cho khách (#21) dùng DTO riêng (convention 02 §DTO, BR-KH-07), không dùng lại
  * record này. {@code locked} = lượt đã {@code COMPLETED} (§1). Lượt chưa ghi bệnh án trả khung rỗng; danh sách không
  * bao giờ {@code null}. Chỉ dựng bởi {@code MedicalRecordMapper}.

@@ -32,7 +32,7 @@ import lombok.NoArgsConstructor;
  * {@code moveVisitInQueue}, {@code markVisitEmergency}. Đã có: {@link #checkIn} (T26 phần 1, docs/adr/0059),
  * {@link #assignTo}, {@link #reorder}, {@link #markEmergency} (T26 phần 3, docs/adr/0061), {@link #call},
  * {@link #cancel} (T26 phần 4, docs/adr/0062), {@link #reassignTo} (T26 phần 5, docs/adr/0063), {@link #complete}
- * (T27 phần 3, docs/adr/0067). {@code needsReassign} chỉ được đặt bằng câu UPDATE hàng loạt khi khóa tài khoản người
+ * (T27 phần 3, docs/adr/0069). {@code needsReassign} chỉ được đặt bằng câu UPDATE hàng loạt khi khóa tài khoản người
  * phụ trách ({@code VisitRepository.flagNeedsReassign}) và chỉ được gỡ khi gán lại lượt đã gọi hoặc hoàn tất lượt.
  */
 @Getter
@@ -168,9 +168,9 @@ public class Visit extends TimestampedEntity {
     }
 
     /**
-     * Visit#5 ({@code IN_PROGRESS → COMPLETED}, command {@code completeVisit}, BR-KB-02; docs/adr/0067). Bên gọi đã khóa
+     * Visit#5 ({@code IN_PROGRESS → COMPLETED}, command {@code completeVisit}, BR-KB-02; docs/adr/0069). Bên gọi đã khóa
      * dòng, kiểm người phụ trách và trạng thái; lịch hẹn, Order và bệnh án chuyển trong cùng transaction. Lượt đã xong
-     * nên không còn "cần gán lại" (docs/adr/0067 Q2); {@code at} đã cắt về µs.
+     * nên không còn "cần gán lại" (docs/adr/0069 Q2); {@code at} đã cắt về µs.
      */
     public void complete(Instant at) {
         this.status = VisitStatus.COMPLETED;

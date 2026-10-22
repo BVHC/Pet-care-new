@@ -6,7 +6,7 @@ import io.swagger.v3.oas.annotations.media.Schema;
 
 /**
  * Body của {@code PUT /api/visits/{visitId}/medical-record} (visit-v1 {@code UpdateMedicalRecordRequest}, UC48;
- * docs/adr/0064). PUT <b>thay toàn bộ</b> 5 trường: trường vắng hoặc {@code null} là xóa giá trị (§4). Compact
+ * docs/adr/0066). PUT <b>thay toàn bộ</b> 5 trường: trường vắng hoặc {@code null} là xóa giá trị (§4). Compact
  * constructor bỏ khoảng trắng hai đầu (khuôn {@code ReassignRequest}) và đổi chuỗi rỗng thành {@code null}, nên
  * "có chẩn đoán" của BR-KB-02 chỉ cần kiểm khác {@code null}. Ngày tái khám (BR-KB-06) kiểm ở service theo ngày
  * check-in và [CFG] đọc lúc ghi (§3), không ở Bean Validation.

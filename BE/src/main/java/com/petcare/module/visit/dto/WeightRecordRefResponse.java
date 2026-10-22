@@ -5,7 +5,7 @@ import java.time.Instant;
 
 import io.swagger.v3.oas.annotations.media.Schema;
 
-/** Bản ghi cân nặng vừa ghi (visit-v1 schema {@code WeightRecordRef}; docs/adr/0066). Chỉ dựng bởi {@code MedicalRecordMapper}. */
+/** Bản ghi cân nặng vừa ghi (visit-v1 schema {@code WeightRecordRef}; docs/adr/0068). Chỉ dựng bởi {@code MedicalRecordMapper}. */
 public record WeightRecordRefResponse(
         @Schema(description = "Mã bản ghi cân nặng", example = "812")
         Long weightRecordId,

@@ -6,7 +6,7 @@ import com.fasterxml.jackson.annotation.JsonProperty;
 
 import io.swagger.v3.oas.annotations.media.Schema;
 
-/** Một bản bổ sung bệnh án (visit-v1 schema {@code Addendum}, BR-KB-01; docs/adr/0064). Chỉ dựng bởi {@code MedicalRecordMapper}. */
+/** Một bản bổ sung bệnh án (visit-v1 schema {@code Addendum}, BR-KB-01; docs/adr/0066). Chỉ dựng bởi {@code MedicalRecordMapper}. */
 public record AddendumResponse(
         @Schema(description = "Mã bản bổ sung", example = "301")
         Long addendumId,

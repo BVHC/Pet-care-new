@@ -1,11 +1,12 @@
-# ADR-0066: Ghi cân nặng khi khám (`POST /api/visits/{visitId}/weight`) — `PetApi.recordWeight` khóa `FOR SHARE`, trả bản ghi
+# ADR-0068: Ghi cân nặng khi khám (`POST /api/visits/{visitId}/weight`) — `PetApi.recordWeight` khóa `FOR SHARE`, trả bản ghi
 
 - **Trạng thái:** Accepted
 - **Ngày:** 2026-10-22
+- **Đánh số lại:** ban đầu là ADR-0066; đổi +2 ngày 2026-10-22 vì trùng ADR-0064, 0065 của BE-2 (vào `dev` trước). Mọi tham chiếu ADR-0064…0067 trong code / tài liệu visit đã đổi theo (+2).
 - **Liên quan:**
   - BR-KH-04 (02 L90), BR-KH-05, BR-TN-05, 08, BR-QT-15 (không liệt kê cân nặng); 03 §4 Visit (IN_PROGRESS: VET ghi bệnh án).
   - visit-v1 #14, schema `RecordWeightRequest`, `WeightRecordRef`, A8; customer-v1 #20, #21.
-  - ADR-0041 §8 (`PetApi.recordWeight`), 0058 §5 (thứ tự khóa), 0064, 0065 (khuôn #13).
+  - ADR-0041 §8 (`PetApi.recordWeight`), 0058 §5 (thứ tự khóa), 0066, 0067 (khuôn #13).
   - Nợ: không mở, không trả.
 - **Triển khai (T27 phần 2):** `MedicalRecordService.recordWeight`, `MedicalRecordController` (gốc `/api/visits/{visitId}`), `RecordWeightRequest`, `WeightRecordRefResponse`, `MedicalRecordMapper.toWeightRef`; customer: `api/RecordedWeight`, `PetApi.recordWeight`, `PetWeightApiService`. Không migration.
 
@@ -13,7 +14,7 @@
 
 `weight_records` thuộc customer (BE-2) nên #14 ghi qua `PetApi.recordWeight`. Bản có sẵn (ADR-0041) có hai vấn đề với visit:
 
-- Khóa thú `FOR NO KEY UPDATE`. Visit khóa `pets FOR SHARE` → `visits` (ADR-0058 §5, 0065 §1); nếu #14 giữ SHARE rồi gọi hàm này, khóa phải nâng lên NO KEY UPDATE, và #14 chạy song song với #13 trên cùng lượt sẽ deadlock (#13 giữ SHARE, chờ khóa lượt mà #14 đang giữ).
+- Khóa thú `FOR NO KEY UPDATE`. Visit khóa `pets FOR SHARE` → `visits` (ADR-0058 §5, 0067 §1); nếu #14 giữ SHARE rồi gọi hàm này, khóa phải nâng lên NO KEY UPDATE, và #14 chạy song song với #13 trên cùng lượt sẽ deadlock (#13 giữ SHARE, chờ khóa lượt mà #14 đang giữ).
 - Chỉ trả `Long`; response #14 cần kg đã chuẩn hóa và `measuredAt`.
 
 ## Quyết định

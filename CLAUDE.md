@@ -41,14 +41,14 @@ Team: **BE-1** (branch `manh`) = identity, appointment, visit, care · **BE-2** 
 
 ## Current state (2026-10-22)
 
-`manh` @ `6a7ef97` (T27 parts 0–1; 1 commit ahead of `origin/manh`). **Uncommitted:** T27 parts 2–3 (#14 visit weight, #10 complete visit; ADR-0066, 0067). `origin/dev` @ `197bbf5` = PR #15 (T25) still carries the **old** T25 ADR numbers 0047–0052.
+`manh` @ `3d7f7b1` (T27 parts 0–3; 3 commits ahead of `origin/manh`). **Uncommitted:** T27 part 4 (#15 addendum, ADR-0070) and the ADR renumbering 0064–0067 → 0066–0069 (`origin/dev` took 0064–0065 for BE-2). `origin/dev` @ `197bbf5` = PR #15 (T25) still carries the **old** T25 ADR numbers 0047–0052.
 
 | Module | Owner | Built | Still missing / placeholder |
 |---|---|---|---|
 | identity | BE-1 | identity-v1 #1–24, #28–37 (auth, OTP, `/me`, profile link, staff admin, account lock, [CFG], templates, audit, public vets); jobs ST01, ST02, session cleanup; `AccountContactApi` | #25–27 (customer account email change / counter link, UC22) |
 | care | BE-1 | ST20 outbox (EMAIL in HIGH / NORMAL lanes, IN_APP), outbox cleanup, care-v1 #5–8 | #9–10 settings (D025), Care Task, ST04, `FollowUpApi` (T38/T39) |
 | appointment | BE-1 | appointment-v1 #1–9; `AppointmentApi`, `AppointmentQueryApi`, `BookingRestrictionApi`; clinic-cancel listeners; ST05 `NoShowJob`; ST03 `AppointmentReminderJob` | booking / rescheduling read the pet with `findPet` and do not yet call `PetQueryApi.findPetForShare` (D027) |
-| visit | BE-1 | T26 parts 0–5 (ADR-0058–0063): visit-v1 #1 check-in, #2–4 queue views (A13 CARETAKER; #4 also SUPER_MANAGER, A14), #5–7 dispatch, #8 call, #9 reassign a called visit, #11 cancel, #10 complete visit, #12–14 medical record view / write / weight (T27 parts 1–3, ADR-0065–0067); `AccountLockedEvent` listener → `needs_reassign`; real `VisitQueryApi` | #15–21 (D043 FK indexes + DB guards); VACCINE-only visits cannot complete until T28; unlock does not clear `needs_reassign` of an `IN_PROGRESS` visit (D042); Care Task#6 on check-in (D029); `VaccinationQueryApiPlaceholder` |
+| visit | BE-1 | T26 parts 0–5 (ADR-0058–0063): visit-v1 #1 check-in, #2–4 queue views (A13 CARETAKER; #4 also SUPER_MANAGER, A14), #5–7 dispatch, #8 call, #9 reassign a called visit, #11 cancel, #10 complete visit, #12–15 medical record view / write / weight / addendum (T27 parts 1–4, ADR-0066–0070); `AccountLockedEvent` listener → `needs_reassign`; real `VisitQueryApi` | #16–21 (D043 FK indexes + DB guards); VACCINE-only visits cannot complete until T28; unlock does not clear `needs_reassign` of an `IN_PROGRESS` visit (D042); Care Task#6 on check-in (D029); `VaccinationQueryApiPlaceholder` |
 | branch, catalog | BE-2 | branch-v1, catalog-v1 staff endpoints, `BranchQueryApi`, `BranchApi`, `CatalogQueryApi` | catalog public #19–22; Swagger annotations (D026) |
 | customer | BE-2 | customer-v1 #1–21; `CustomerApi`, `CustomerQueryApi`, `PetApi`, `PetQueryApi` | — |
 | inventory | BE-2 | inventory-v1 #1–17; `StockApi`, `StockQueryApi`, `DocumentCodeGenerator` | `StockReportApi` / ST08 (T44) |
@@ -113,7 +113,7 @@ Module codes: TK, QT, CN, CK, KH, SP, NS, LH, TN, KB, LT, BH, TG, KO, BV, DG, TB
 
 Open convention TBDs (don't decide silently — ask or write an ADR): command names when no Actor↔Command table exists; how "warn, don't block" rules return warnings (contracts assume a named field in `data`, e.g. `stockWarning`); locking for kennel capacity.
 
-**ADR map** (`docs/adr/`, immutable once Accepted — supersede instead of editing; **next free: 0068**):
+**ADR map** (`docs/adr/`, immutable once Accepted — supersede instead of editing; **next free: 0071**):
 
 | Area | ADRs |
 |---|---|
@@ -121,6 +121,7 @@ Open convention TBDs (don't decide silently — ask or write an ADR): command na
 | Auth | 0003 JWT + DB session · 0005 public paths anonymous · 0006 customer owner scope · 0009 BCrypt · 0010, 0011, 0025 OTP · 0019 login · 0021 logout · 0022 change password · 0023 forgot / reset |
 | Accounts, staff, admin | 0024 staff directory · 0026 staff self-edit · 0027 profile link · 0028 customer self-edit · 0029–0035 staff admin / lock · 0036 [CFG] edit · 0037 templates · 0038 audit view · 0039 in-app notifications |
 | Notifications, jobs | 0008 session cleanup · 0012, 0014, 0016, 0017 ST20 · 0013 ST02 · 0018 FK indexes on `accounts` |
+<<<<<<< HEAD
 <<<<<<< HEAD
 <<<<<<< HEAD
 <<<<<<< HEAD
@@ -136,6 +137,10 @@ Open convention TBDs (don't decide silently — ask or write an ADR): command na
 >>>>>>> 3d7f7b1 (feat: triển khai chức năng đánh dấu hoàn tất lượt)
 | BE-2 | 0041 customer & pet · 0042 inventory stock ledger · 0043 document codes · 0044 order core · 0051 retail order |
 >>>>>>> 6a7ef97 (feat: triển khai api xem cập nhật bênh án)
+=======
+| Appointment, visit (BE-1) | 0045 booking locks · 0046 slots · 0047 book · 0048 view · 0049 reschedule / cancel · 0050 cross-module API · 0052 clinic cancel · 0053, 0054 ST05 · 0055 booking restriction · 0056 ST03 · 0057 assumptions confirmed · 0058 visit foundation · 0059 check-in (also amends 0044: receptionist never edits a VISIT auto line) · 0060 queue views · 0061 dispatch (assign / move / emergency) · 0062 call / cancel / `needs_reassign` on lock · 0063 reassign a called visit · 0066 medical record foundation · 0067 medical record write (`pets FOR SHARE` before `visits`, no-op PUT writes nothing) · 0068 visit weight (`PetApi.recordWeight` locks `FOR SHARE` only) · 0069 complete visit (replaces 0066 §5) · 0070 addendum (any VET of the branch, creates an empty locked record if missing) |
+| BE-2 | 0041 customer & pet · 0042 inventory stock ledger · 0043 document codes · 0044 order core · 0051 retail order · 0064 cashier shift / payment · 0065 boarding (both on `origin/dev` only) |
+>>>>>>> 7254311 (feat: cập nhật module lịch khám)
 
 ## Backend architecture
 
@@ -199,7 +204,7 @@ Every write ADR follows these. Read the ADR of the neighbouring feature before w
   | Staff admin | `branches (id ↑, only via BranchApi.lockForStaffChange) → accounts → staff_profiles → sessions`. Any flow lowering a branch's ACTIVE BRANCH_MANAGER count locks the branch first |
   | Customer | `accounts → customers (id ↑) → pets → weight_records` |
   | Appointment writes | `advisory(1001, pet) → branches (BranchApi.lockForBooking) → appointments`; advisory **1002** per customer (violation evaluation / restriction lift) always last |
-  | Visit (ADR-0058) | `accounts` (staff, `FOR SHARE`, id ↑) → `pets FOR SHARE` → `visits` (id ↑) → `appointments` via `AppointmentApi` → `document_counters` (`visits` → `ORDER`) → `orders` via `VisitOrderApi` → stock lots via `StockApi`. Check-in does not lock `branches`. Assignee lock = `StaffDirectoryApi.findStaffForShare`; move locks every `WAITING` visit of the branch in one `ORDER BY id` query (ADR-0061); call locks the caller's own account `FOR SHARE` before the visit; cancel `visits → appointments → orders`; the lock-account listener runs `accounts → visits` (ADR-0062); reassign locks the old and the new assignee `FOR SHARE` (id ↑) before the visit (ADR-0063); medical-record write and weight #14 lock `pets FOR SHARE` → `visits` (ADR-0065, 0066; `PetApi.recordWeight` never upgrades the pet lock); complete `visits` → `appointments` → `orders`, read the Order's service lines only after `markPendingByVisit` has locked it (ADR-0067) |
+  | Visit (ADR-0058) | `accounts` (staff, `FOR SHARE`, id ↑) → `pets FOR SHARE` → `visits` (id ↑) → `appointments` via `AppointmentApi` → `document_counters` (`visits` → `ORDER`) → `orders` via `VisitOrderApi` → stock lots via `StockApi`. Check-in does not lock `branches`. Assignee lock = `StaffDirectoryApi.findStaffForShare`; move locks every `WAITING` visit of the branch in one `ORDER BY id` query (ADR-0061); call locks the caller's own account `FOR SHARE` before the visit; cancel `visits → appointments → orders`; the lock-account listener runs `accounts → visits` (ADR-0062); reassign locks the old and the new assignee `FOR SHARE` (id ↑) before the visit (ADR-0063); medical-record write and weight #14 lock `pets FOR SHARE` → `visits` (ADR-0067, 0068; `PetApi.recordWeight` never upgrades the pet lock); complete `visits` → `appointments` → `orders`, read the Order's service lines only after `markPendingByVisit` has locked it (ADR-0069) |
   | Sales | caller's document → `orders` (lock before read) → `products FOR SHARE` → stock lots; several orders by ascending id |
 | Cashier (ADR-0064) | open shift: `accounts FOR SHARE` (own) → INSERT shift · payment: shift `FOR SHARE` → all orders in **one** `ORDER BY id` statement → all lots in **one** statement (`StockApi.issueForPayment`) → `document_counters` last · close / reconcile: shift `FOR NO KEY UPDATE` · ST13: shift `SKIP LOCKED` |
   | Boarding (ADR-0065) | booking: `pets FOR SHARE` → `branches` (`BranchApi.lockForBooking`, shared with appointment booking and branch hours / holiday changes) → INSERT → `document_counters` · extend: `pets FOR SHARE` → `branches` → booking · cancel: booking → `evaluateAfterViolation` (advisory 1002 last) · kennel writes: `branches` → kennel · ST05: booking `SKIP LOCKED` → 1002 · clinic cancel: bookings by ascending id in batches of 100 |

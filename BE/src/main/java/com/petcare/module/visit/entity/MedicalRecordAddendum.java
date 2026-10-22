@@ -14,7 +14,7 @@ import lombok.NoArgsConstructor;
 
 /**
  * Bảng {@code medical_record_addenda} (erd §6, LOG): bản bổ sung sau khi bệnh án khóa (BR-KB-01). Chỉ thêm mới: mọi cột
- * {@code updatable = false}, không setter, service không xóa (G9, docs/adr/0064). {@code internal} = bổ sung cho ghi chú
+ * {@code updatable = false}, không setter, service không xóa (G9, docs/adr/0066). {@code internal} = bổ sung cho ghi chú
  * nội bộ, khách không thấy [ERD]. Chỉ thêm khi lượt đã {@code COMPLETED}, do VET chi nhánh nơi khám — service kiểm
  * dưới khóa lượt (visit-v1 A7).
  */

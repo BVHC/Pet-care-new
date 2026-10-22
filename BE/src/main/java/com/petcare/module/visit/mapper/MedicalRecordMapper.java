@@ -16,7 +16,7 @@ import com.petcare.module.visit.entity.MedicalRecordAddendum;
 
 /**
  * {@link MedicalRecord} + bản bổ sung → {@link MedicalRecordResponse} cho nhân viên (visit-v1 schema
- * {@code MedicalRecord}; docs/adr/0064). {@code unmappedTargetPolicy = ERROR}, mọi target khai tường minh (khuôn
+ * {@code MedicalRecord}; docs/adr/0066). {@code unmappedTargetPolicy = ERROR}, mọi target khai tường minh (khuôn
  * {@code VisitMapper}). {@code locked} do service truyền theo trạng thái lượt (§1), không đọc {@code locked_at}.
  * {@code prescriptions} / {@code vaccinations} rỗng cho tới T38 / T28. Tên người ghi bản bổ sung do service tra theo lô
  * rồi truyền vào, không nhận record {@code api/} của module khác.
@@ -56,10 +56,11 @@ public interface MedicalRecordMapper {
     @Mapping(target = "isInternal", source = "addendum.internal")
     @Mapping(target = "createdBy", source = "addendum.createdBy")
     @Mapping(target = "createdByName", source = "createdByName")
-    @Mapping(target = "createdAt", source = "addendum.createdAt")
+    @Mapping(target = "createdAt", expression = "java(addendum.getCreatedAt() == null ? null"
+            + " : addendum.getCreatedAt().truncatedTo(java.time.temporal.ChronoUnit.MICROS))")
     AddendumResponse toAddendum(MedicalRecordAddendum addendum, String createdByName);
 
-    /** visit-v1 #14: tham số vô hướng, không nhận record {@code api/} của customer (docs/adr/0066). */
+    /** visit-v1 #14: tham số vô hướng, không nhận record {@code api/} của customer (docs/adr/0068). */
     @Mapping(target = "weightRecordId", source = "weightRecordId")
     @Mapping(target = "weightKg", source = "weightKg")
     @Mapping(target = "measuredAt", source = "measuredAt")

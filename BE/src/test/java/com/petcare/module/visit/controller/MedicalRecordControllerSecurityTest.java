@@ -14,7 +14,7 @@ import org.springframework.web.bind.annotation.RequestMapping;
 
 /**
  * Vai trò của {@link MedicalRecordController} khớp visit-v1 mục B: #12 xem A07, A08 (CARETAKER chỉ xem), #13 ghi A07
- * (người được gán kiểm ở service dưới khóa lượt), #14 ghi cân nặng A07 — docs/adr/0065, 0066. Handler mới quên {@code @PreAuthorize} thì test đỏ.
+ * (người được gán kiểm ở service dưới khóa lượt), #14 ghi cân nặng A07, #15 bản bổ sung A07 (mọi VET của chi nhánh) — docs/adr/0067, 0068, 0070. Handler mới quên {@code @PreAuthorize} thì test đỏ.
  */
 class MedicalRecordControllerSecurityTest {
 
@@ -23,7 +23,8 @@ class MedicalRecordControllerSecurityTest {
         assertThat(roles()).isEqualTo(Map.of(
                 "getMedicalRecord", "hasAnyRole('VET','CARETAKER')",
                 "updateMedicalRecord", "hasRole('VET')",
-                "recordVisitWeight", "hasRole('VET')"));
+                "recordVisitWeight", "hasRole('VET')",
+                "addMedicalRecordAddendum", "hasRole('VET')"));
     }
 
     private static Map<String, String> roles() {

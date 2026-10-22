@@ -7,7 +7,7 @@ import io.swagger.v3.oas.annotations.media.Schema;
 
 /**
  * Một dòng đơn thuốc (visit-v1 schema {@code PrescriptionItem}, BR-KB-03). Có từ T27 phần 0 vì nằm trong
- * {@code MedicalRecord}; danh sách luôn rỗng cho tới khi T38 ghi đơn thuốc (docs/adr/0064).
+ * {@code MedicalRecord}; danh sách luôn rỗng cho tới khi T38 ghi đơn thuốc (docs/adr/0066).
  */
 public record PrescriptionItemResponse(
         @Schema(description = "Mã dòng đơn thuốc", example = "501")

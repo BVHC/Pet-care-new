@@ -119,7 +119,7 @@ public interface VisitRepository extends JpaRepository<Visit, Long>, JpaSpecific
     /**
      * Lượt đã ghi nhận ít nhất một mũi tiêm (BR-KB-02: lượt chỉ có dịch vụ loại Tiêm). Lọc cả {@code pet_id} để đi tiền
      * tố của {@code ix_vaccinations_pet_type_administered}: {@code vaccinations.visit_id} chưa có index (nợ D043,
-     * docs/adr/0064 §6).
+     * docs/adr/0066 §6).
      */
     @Query(value = """
             SELECT EXISTS (SELECT 1 FROM vaccinations WHERE pet_id = :petId AND visit_id = :visitId)

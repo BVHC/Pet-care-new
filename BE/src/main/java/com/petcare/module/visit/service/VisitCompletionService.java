@@ -36,7 +36,7 @@ import com.petcare.platform.security.BranchScope;
 import com.petcare.platform.security.SecurityPrincipal;
 
 /**
- * Hoàn tất lượt — visit-v1 #10 (Visit#5, UC48, UC49, UC52; BR-KB-01, 02, BR-SP-06, BR-TN-05; docs/adr/0067). Một
+ * Hoàn tất lượt — visit-v1 #10 (Visit#5, UC48, UC49, UC52; BR-KB-01, 02, BR-SP-06, BR-TN-05; docs/adr/0069). Một
  * transaction ghi, READ COMMITTED: Visit → {@code COMPLETED}, Lịch hẹn#7, Order#4, khóa bệnh án.
  * <ul>
  * <li>Thứ tự: role → lượt (projection, 404) → chi nhánh (403) → khóa {@code visits} → người phụ trách hiện tại (403) →

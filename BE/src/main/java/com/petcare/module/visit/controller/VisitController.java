@@ -248,13 +248,13 @@ public class VisitController {
         return ApiResponse.ok(reassign.reassignCalledVisit(visitId, request), "Đã gán lại lượt");
     }
 
-    /** visit-v1 #10 (Visit#5 + Lịch hẹn#7 + Order#4 + khóa bệnh án trong một transaction; docs/adr/0067). */
+    /** visit-v1 #10 (Visit#5 + Lịch hẹn#7 + Order#4 + khóa bệnh án trong một transaction; docs/adr/0069). */
     @Operation(operationId = "completeVisit", tags = "Completion",
             summary = "Hoàn tất lượt",
             description = "UC48, UC49, UC52 · BR-KB-01, 02, BR-SP-06, BR-LH-11. Actor: A07, A08. Quyền: Người được gán "
                 + "lượt. Chuyển trạng thái: IN_PROGRESS → COMPLETED (Visit#5) · Lịch hẹn#7 · Order#4 (→ PENDING) · bệnh "
                 + "án khóa. A16. Thứ tự lỗi: 403 vai trò → 404 → 403 chi nhánh → 403 người phụ trách → 400 BR-TN-05 → "
-                + "409 → 400 BR-KB-02 (docs/adr/0067). Gỡ cờ needsReassign. Lỗi BR-KB-02 hoàn tác cả lịch hẹn, Order và "
+                + "409 → 400 BR-KB-02 (docs/adr/0069). Gỡ cờ needsReassign. Lỗi BR-KB-02 hoàn tác cả lịch hẹn, Order và "
                 + "bệnh án.",
             parameters = @Parameter(name = "visitId", in = ParameterIn.PATH, example = "9001"))
     @ApiErrorDoc(status = 400, description = "`BR-KB-02` có dịch vụ loại Khám mà chưa có chẩn đoán · chỉ có dịch vụ loại "

@@ -1,11 +1,12 @@
-# ADR-0065: Xem / ghi bệnh án (`GET`, `PUT /api/visits/{visitId}/medical-record`) — khóa thú, thứ tự lỗi, PUT không đổi, biên tái khám
+# ADR-0067: Xem / ghi bệnh án (`GET`, `PUT /api/visits/{visitId}/medical-record`) — khóa thú, thứ tự lỗi, PUT không đổi, biên tái khám
 
 - **Trạng thái:** Accepted
 - **Ngày:** 2026-10-22
+- **Đánh số lại:** ban đầu là ADR-0065; đổi +2 ngày 2026-10-22 vì trùng ADR-0064, 0065 của BE-2 (vào `dev` trước). Mọi tham chiếu ADR-0064…0067 trong code / tài liệu visit đã đổi theo (+2).
 - **Liên quan:**
   - BR-KB-01, 06 (02 L157, L162), BR-KH-03 (L89), BR-TN-05, 08, BR-QT-13, 15; 03 §4 Visit (IN_PROGRESS: VET ghi bệnh án).
   - visit-v1 #12, #13; `docs/api/00-method.md` L60–70.
-  - ADR-0058 §5 (thứ tự khóa), 0061 (gán đúng người đang gán: 200, không ghi), 0063 §8, 0064 (nền bệnh án; mục 1–4, 7 áp dụng nguyên).
+  - ADR-0058 §5 (thứ tự khóa), 0061 (gán đúng người đang gán: 200, không ghi), 0063 §8, 0066 (nền bệnh án; mục 1–4, 7 áp dụng nguyên).
   - Nợ: không trả, không mở; D043 giữ nguyên (đọc bản bổ sung quét bảng).
 - **Triển khai (T27 phần 1):** `service/MedicalRecordService`, `controller/MedicalRecordController` (mới); `entity/MedicalRecord.rewrite`, `sameContent`; hợp đồng `m_visit.py` (#12 thêm 400 / 403, #13 thêm 403, ghi chú thứ tự lỗi); không migration. Test: `MedicalRecordServiceTest`, `MedicalRecordTest`, `MedicalRecordControllerSecurityTest`, `MedicalRecordIT`, `OpenApiContractParityIT` (104 → 106).
 
@@ -32,6 +33,6 @@
 
 ## Hệ quả
 
-- Mỗi lần VET bấm lưu có thay đổi thêm một dòng `audit_logs` (đã nêu ở ADR-0064); lần không đổi thì không.
+- Mỗi lần VET bấm lưu có thay đổi thêm một dòng `audit_logs` (đã nêu ở ADR-0066); lần không đổi thì không.
 - Request trùng của hai tab cùng VET chạy tuần tự nhờ khóa lượt; lần sau thấy nội dung giống thì là no-op.
-- Hồ sơ cho khách (#21) vẫn phải dùng DTO riêng (ADR-0064 §9).
+- Hồ sơ cho khách (#21) vẫn phải dùng DTO riêng (ADR-0066 §9).

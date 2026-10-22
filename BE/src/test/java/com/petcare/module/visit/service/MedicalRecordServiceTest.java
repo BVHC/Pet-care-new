@@ -63,7 +63,7 @@ import com.petcare.platform.security.BranchScope;
 import com.petcare.platform.security.SecurityPrincipal;
 
 /**
- * {@link MedicalRecordService} (docs/adr/0065): role trước mọi lần đọc, 404 → 403 chi nhánh → 404 GROOMING trước khi
+ * {@link MedicalRecordService} (docs/adr/0067): role trước mọi lần đọc, 404 → 403 chi nhánh → 404 GROOMING trước khi
  * khóa, khóa thú → lượt → người phụ trách (403) → trạng thái (409) → đọc bệnh án → BR-KB-06 (400) → ghi → audit,
  * nhánh lỗi không ghi gì, PUT không đổi không ghi. Hành vi trên DB thật ở {@code MedicalRecordIT}.
  */
@@ -582,7 +582,218 @@ class MedicalRecordServiceTest {
                 .isInstanceOf(IllegalStateException.class).hasMessage("audit");
     }
 
+    // ================================================================ #15 bản bổ sung
+
+    private static final Instant COMPLETED_AT = Instant.parse("2026-10-21T03:30:00.123456Z");
+
+    @ParameterizedTest
+    @ValueSource(strings = {"CARETAKER", "RECEPTIONIST", "BRANCH_MANAGER", "SUPER_MANAGER", "ADMIN", "CUSTOMER"})
+    void addendumRolesOutsideTheContractNeverReachTheRepository(String role) {
+        doReturn(role).when(principal).role();
+
+        assertThatThrownBy(() -> service.addAddendum(VISIT, addendumRequest("x", false)))
+                .isInstanceOf(IllegalStateException.class);
+
+        verifyNoInteractions(visits, records, addenda, audit, staff);
+    }
+
+    @Test
+    void addendumOnMissingVisitIs404BeforeAnyLock() {
+        doReturn(Optional.empty()).when(visits).findSummary(VISIT);
+
+        assertThatThrownBy(() -> service.addAddendum(VISIT, addendumRequest("x", false)))
+                .isInstanceOf(ResourceNotFoundException.class);
+
+        verify(visits, never()).lockById(anyLong());
+        verifyNoInteractions(records, addenda, audit);
+    }
+
+    @Test
+    void addendumOnOtherBranchIs403EvenWhenNotCompletedAndLocksNothing() {
+        summary(9L, ServiceGroup.MEDICAL, VisitStatus.IN_PROGRESS);
+        doThrow(new AccessDeniedScopeException("branch:9", "branch:3")).when(scope).check(9L);
+
+        assertThatThrownBy(() -> service.addAddendum(VISIT, addendumRequest("x", false)))
+                .isInstanceOf(AccessDeniedScopeException.class);
+
+        verify(visits, never()).lockById(anyLong());
+        verifyNoInteractions(records, addenda, audit);
+    }
+
+    @Test
+    void addendumOnGroomingVisitIs404AndWritesNothing() {
+        summary(BRANCH, ServiceGroup.GROOMING, VisitStatus.COMPLETED);
+
+        assertThatThrownBy(() -> service.addAddendum(VISIT, addendumRequest("x", false)))
+                .isInstanceOf(ResourceNotFoundException.class);
+
+        verify(visits, never()).lockById(anyLong());
+        verifyNoInteractions(records, addenda, audit);
+    }
+
+    @ParameterizedTest
+    @ValueSource(strings = {"WAITING", "IN_PROGRESS", "CANCELLED"})
+    void addendumBeforeCompletionIs409AfterTheLockAndWritesNothing(String status) {
+        stubCompleted(VET_A, VisitStatus.valueOf(status));
+
+        assertThatThrownBy(() -> service.addAddendum(VISIT, addendumRequest("x", false)))
+                .isInstanceOf(InvalidStateTransitionException.class);
+
+        InOrder order = inOrder(visits);
+        order.verify(visits).lockById(VISIT);
+        order.verify(visits).findById(VISIT);
+        verifyNoInteractions(records, addenda, audit);
+    }
+
+    @Test
+    void addendumByAnyVetOfTheBranchNeedsNoAssignment() {
+        stubCompleted(VET_A, VisitStatus.COMPLETED);
+        asVet(VET_B);
+        doReturn(Optional.of(staffSummary(VET_B, "BS. Hòa"))).when(staff).findStaff(VET_B);
+        doReturn(Optional.of(recordWith("khám", "viêm", null))).when(records).findById(VISIT);
+        stubAddendumSave();
+
+        assertThat(service.addAddendum(VISIT, addendumRequest("kết quả", false)).createdBy()).isEqualTo(VET_B);
+    }
+
+    @Test
+    void addendumOnExistingRecordLocksVisitReadsNameSavesThenAuditsAndCreatesNoRecord() {
+        stubCompleted(VET_A, VisitStatus.COMPLETED);
+        doReturn(Optional.of(staffSummary(VET_A, "BS. Lan"))).when(staff).findStaff(VET_A);
+        doReturn(Optional.of(recordWith("khám", "viêm", null))).when(records).findById(VISIT);
+        stubAddendumSave();
+
+        var response = service.addAddendum(VISIT, addendumRequest("kết quả xét nghiệm", true));
+
+        InOrder order = inOrder(visits, staff, records, addenda, audit);
+        order.verify(visits).lockById(VISIT);
+        order.verify(visits).findById(VISIT);
+        order.verify(staff).findStaff(VET_A);
+        order.verify(records).findById(VISIT);
+        order.verify(addenda).saveAndFlush(any(MedicalRecordAddendum.class));
+        order.verify(audit).record(any(AuditEntry.class));
+        verify(records, never()).saveAndFlush(any());
+        verifyNoInteractions(pets);
+
+        ArgumentCaptor<MedicalRecordAddendum> saved = ArgumentCaptor.forClass(MedicalRecordAddendum.class);
+        verify(addenda).saveAndFlush(saved.capture());
+        assertThat(saved.getValue().getMedicalRecordId()).isEqualTo(VISIT);
+        assertThat(saved.getValue().getContent()).isEqualTo("kết quả xét nghiệm");
+        assertThat(saved.getValue().isInternal()).isTrue();
+        assertThat(saved.getValue().getCreatedBy()).isEqualTo(VET_A);
+        assertThat(response.addendumId()).isEqualTo(301L);
+        assertThat(response.createdByName()).isEqualTo("BS. Lan");
+        assertThat(response.isInternal()).isTrue();
+        assertThat(response.createdAt()).isEqualTo(Instant.parse("2026-10-22T02:00:00.123456Z"));
+    }
+
+    @Test
+    void addendumOnCompletedVisitWithoutRecordCreatesAnEmptyLockedRecordFirst() {
+        stubCompleted(VET_A, VisitStatus.COMPLETED);
+        doReturn(Optional.of(staffSummary(VET_A, "BS. Lan"))).when(staff).findStaff(VET_A);
+        doReturn(Optional.empty()).when(records).findById(VISIT);
+        stubAddendumSave();
+
+        service.addAddendum(VISIT, addendumRequest("tiêm nhầm mũi, đã kiểm lại", false));
+
+        InOrder order = inOrder(records, addenda);
+        order.verify(records).saveAndFlush(any(MedicalRecord.class));
+        order.verify(addenda).saveAndFlush(any(MedicalRecordAddendum.class));
+        ArgumentCaptor<MedicalRecord> created = ArgumentCaptor.forClass(MedicalRecord.class);
+        verify(records).saveAndFlush(created.capture());
+        assertThat(created.getValue().getVisitId()).isEqualTo(VISIT);
+        assertThat(created.getValue().getLockedAt()).isEqualTo(COMPLETED_AT);
+        assertThat(created.getValue().getExamination()).isNull();
+        assertThat(created.getValue().getDiagnosis()).isNull();
+        assertThat(created.getValue().getLastEditedBy()).isNull();
+    }
+
+    @Test
+    void addendumAuditIsOnlyAfterWithContentAndFlagOnTheAddendumRow() {
+        stubCompleted(VET_A, VisitStatus.COMPLETED);
+        doReturn(Optional.of(staffSummary(VET_A, "BS. Lan"))).when(staff).findStaff(VET_A);
+        doReturn(Optional.of(recordWith("khám", "viêm", null))).when(records).findById(VISIT);
+        stubAddendumSave();
+
+        service.addAddendum(VISIT, addendumRequest("nội dung", true));
+
+        AuditEntry entry = capturedAudit();
+        assertThat(entry.action()).isEqualTo("MEDICAL_RECORD_ADDENDUM_ADDED");
+        assertThat(entry.entityType()).isEqualTo("medical_record_addenda");
+        assertThat(entry.entityId()).isEqualTo(301L);
+        assertThat(entry.before()).isNull();
+        java.util.Map<?, ?> after = (java.util.Map<?, ?>) entry.after();
+        assertThat(new java.util.ArrayList<Object>(after.keySet())).containsExactly("content", "isInternal");
+        assertThat(after.get("content")).isEqualTo("nội dung");
+        assertThat(after.get("isInternal")).isEqualTo(true);
+    }
+
+    @Test
+    void addendumAuthorMissingFromTheDirectoryIsCorruptDataAndWritesNothing() {
+        stubCompleted(VET_A, VisitStatus.COMPLETED);
+        doReturn(Optional.empty()).when(staff).findStaff(VET_A);
+
+        assertThatThrownBy(() -> service.addAddendum(VISIT, addendumRequest("x", false)))
+                .isInstanceOf(IllegalStateException.class);
+
+        verifyNoInteractions(records, addenda, audit);
+    }
+
+    @Test
+    void addendumInsertFailureAndAuditFailureAreNotCaught() {
+        stubCompleted(VET_A, VisitStatus.COMPLETED);
+        doReturn(Optional.of(staffSummary(VET_A, "BS. Lan"))).when(staff).findStaff(VET_A);
+        doReturn(Optional.empty()).when(records).findById(VISIT);
+        doThrow(new IllegalStateException("insert")).when(addenda).saveAndFlush(any());
+
+        assertThatThrownBy(() -> service.addAddendum(VISIT, addendumRequest("x", false)))
+                .isInstanceOf(IllegalStateException.class).hasMessage("insert");
+        verifyNoInteractions(audit);
+
+        stubAddendumSave();
+        doThrow(new IllegalStateException("audit")).when(audit).record(any());
+        assertThatThrownBy(() -> service.addAddendum(VISIT, addendumRequest("x", false)))
+                .isInstanceOf(IllegalStateException.class).hasMessage("audit");
+    }
+
+    @Test
+    void addAddendumRunsInOneDefaultTransactionThatRollsBackEveryRuntimeException() throws Exception {
+        var method = MedicalRecordService.class.getMethod("addAddendum", Long.class,
+                com.petcare.module.visit.dto.AddendumRequest.class);
+        var tx = method.getAnnotation(org.springframework.transaction.annotation.Transactional.class);
+
+        assertThat(tx).isNotNull();
+        assertThat(tx.propagation()).isEqualTo(org.springframework.transaction.annotation.Propagation.REQUIRED);
+        assertThat(tx.isolation()).isEqualTo(org.springframework.transaction.annotation.Isolation.DEFAULT);
+        assertThat(tx.readOnly()).isFalse();
+        assertThat(tx.noRollbackFor()).isEmpty();
+        assertThat(tx.noRollbackForClassName()).isEmpty();
+    }
+
     // ---------------------------------------------------------------- helpers
+
+    private Visit stubCompleted(Long assigneeId, VisitStatus status) {
+        Visit visit = stubLoaded(assigneeId, status);
+        ReflectionTestUtils.setField(visit, "completedAt", COMPLETED_AT);
+        return visit;
+    }
+
+    private void stubAddendumSave() {
+        org.mockito.Mockito.doAnswer(invocation -> {
+            MedicalRecordAddendum row = invocation.getArgument(0);
+            ReflectionTestUtils.setField(row, "id", 301L);
+            ReflectionTestUtils.setField(row, "createdAt", Instant.parse("2026-10-22T02:00:00.123456789Z"));
+            return row;
+        }).when(addenda).saveAndFlush(any(MedicalRecordAddendum.class));
+    }
+
+    private static StaffSummary staffSummary(long accountId, String name) {
+        return new StaffSummary(accountId, name, Role.VET, BRANCH, true, true);
+    }
+
+    private static com.petcare.module.visit.dto.AddendumRequest addendumRequest(String content, boolean internal) {
+        return new com.petcare.module.visit.dto.AddendumRequest(content, internal);
+    }
 
     private AuditEntry capturedAudit() {
         ArgumentCaptor<AuditEntry> captor = ArgumentCaptor.forClass(AuditEntry.class);

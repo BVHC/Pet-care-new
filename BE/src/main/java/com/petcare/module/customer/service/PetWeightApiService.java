@@ -22,7 +22,7 @@ import com.petcare.platform.exception.ResourceNotFoundException;
 
 /**
  * {@link PetApi} thật (BR-KH-04, docs/adr/0041): visit ghi cân nặng khi khám (VET), boarding ghi khi nhận thú (INTAKE).
- * {@code MANDATORY}: cùng transaction với bên gọi. Khóa chia sẻ dòng thú ({@code FOR SHARE}, docs/adr/0066) trước khi kiểm đã mất: xung đột với
+ * {@code MANDATORY}: cùng transaction với bên gọi. Khóa chia sẻ dòng thú ({@code FOR SHARE}, docs/adr/0068) trước khi kiểm đã mất: xung đột với
  * {@code NO KEY UPDATE} của đánh dấu đã mất nên không ghi cân cho thú vừa được đánh dấu ở transaction khác.
  */
 @Service

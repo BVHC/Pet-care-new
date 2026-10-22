@@ -18,7 +18,7 @@ import com.petcare.module.visit.entity.MedicalRecord;
 import com.petcare.module.visit.entity.MedicalRecordAddendum;
 
 /**
- * {@link MedicalRecordMapper} (docs/adr/0064): mỗi trường một giá trị riêng nên map nhầm nguồn là đỏ; {@code locked}
+ * {@link MedicalRecordMapper} (docs/adr/0066): mỗi trường một giá trị riêng nên map nhầm nguồn là đỏ; {@code locked}
  * lấy từ tham số, không từ {@code locked_at}; danh sách không bao giờ {@code null}.
  */
 class MedicalRecordMapperTest {
@@ -63,6 +63,19 @@ class MedicalRecordMapperTest {
 
         assertThat(mapper.toAddendum(addendum, "BS. Lan")).isEqualTo(new AddendumResponse(301L, "bổ sung", true, 46L,
                 "BS. Lan", Instant.parse("2026-10-22T04:00:00Z")));
+    }
+
+    @Test
+    void addendumCreatedAtIsCutToMicrosecondsLikeTheStoredValue() {
+        MedicalRecordAddendum addendum = MedicalRecordAddendum.of(9001L, "bổ sung", false, 46L);
+        ReflectionTestUtils.setField(addendum, "id", 301L);
+        ReflectionTestUtils.setField(addendum, "createdAt", Instant.parse("2026-10-22T04:00:00.123456789Z"));
+
+        assertThat(mapper.toAddendum(addendum, "BS. Lan").createdAt())
+                .isEqualTo(Instant.parse("2026-10-22T04:00:00.123456Z"));
+
+        ReflectionTestUtils.setField(addendum, "createdAt", null);
+        assertThat(mapper.toAddendum(addendum, "BS. Lan").createdAt()).isNull();
     }
 
     @Test

@@ -20,7 +20,7 @@ import jakarta.validation.Validator;
 import jakarta.validation.ValidatorFactory;
 
 /**
- * Hình thức body của visit-v1 #13 {@code UpdateMedicalRecordRequest} và #15 {@code AddendumRequest} (docs/adr/0064):
+ * Hình thức body của visit-v1 #13 {@code UpdateMedicalRecordRequest} và #15 {@code AddendumRequest} (docs/adr/0066):
  * chuỗi bỏ khoảng trắng hai đầu (cả Unicode); bệnh án đổi chuỗi rỗng thành {@code null} (PUT thay toàn bộ); nội dung
  * bản bổ sung bắt buộc, message tiếng Việt.
  */

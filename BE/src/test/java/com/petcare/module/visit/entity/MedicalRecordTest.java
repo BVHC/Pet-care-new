@@ -9,7 +9,7 @@ import java.time.LocalDate;
 import org.junit.jupiter.api.Test;
 import org.springframework.test.util.ReflectionTestUtils;
 
-/** {@link MedicalRecord#of} (docs/adr/0064 §1): bệnh án rỗng, PK = id lượt. */
+/** {@link MedicalRecord#of} (docs/adr/0066 §1): bệnh án rỗng, PK = id lượt. */
 class MedicalRecordTest {
 
     @Test

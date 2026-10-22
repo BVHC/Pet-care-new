@@ -16,15 +16,15 @@ import lombok.NoArgsConstructor;
 
 /**
  * Bảng {@code medical_records} (erd §6, PART của Visit, PK = FK {@code visit_id}): bệnh án của một lượt nhóm
- * {@code MEDICAL} (BR-KB-01). Dòng được tạo ở lần ghi bệnh án đầu tiên (visit-v1 #13, upsert — docs/adr/0064 §1);
+ * {@code MEDICAL} (BR-KB-01). Dòng được tạo ở lần ghi bệnh án đầu tiên (visit-v1 #13, upsert — docs/adr/0066 §1);
  * lượt chưa ghi thì không có dòng. {@code internalNote} chỉ nhân viên xem (BR-KH-07). {@code followUpDate} là ngày tái
  * khám (BR-KB-06); {@code followUpRemindedAt}, {@code followUpCancelledAt} do ST04 / hủy nhắc (BR-TB-06) ghi.
  * {@code lockedAt} = {@code visits.completed_at}, ghi ở Visit#5.
  * <p>
  * PK gán tay (khuôn {@code StaffProfile}): {@code save} đi đường {@code merge} (SELECT rồi INSERT). Không có khóa riêng:
- * mọi bên ghi khóa dòng {@code visits} trước (docs/adr/0064 §7). Method nghiệp vụ ({@code rewrite}, {@code lock}) thêm
+ * mọi bên ghi khóa dòng {@code visits} trước (docs/adr/0066 §7). Method nghiệp vụ ({@code rewrite}, {@code lock}) thêm
  * cùng phần dựng thao tác đó (docs/adr/0058 §1); quy tắc chỉ VET phụ trách ghi, khóa sau {@code COMPLETED}, chỉ nhóm
- * {@code MEDICAL} do service kiểm dưới khóa lượt (docs/adr/0064, bảng đảm bảo).
+ * {@code MEDICAL} do service kiểm dưới khóa lượt (docs/adr/0066, bảng đảm bảo).
  */
 @Getter
 @Entity
@@ -74,7 +74,7 @@ public class MedicalRecord extends TimestampedEntity {
     }
 
     /**
-     * PUT thay toàn bộ 5 trường nội dung (docs/adr/0064 §4, 0065): {@code null} là xóa. Không đụng các cột do ST04 /
+     * PUT thay toàn bộ 5 trường nội dung (docs/adr/0066 §4, 0067): {@code null} là xóa. Không đụng các cột do ST04 /
      * Visit#5 ghi ({@code followUpRemindedAt}, {@code followUpCancelledAt}, {@code lockedAt}).
      */
     public void rewrite(String examination, String diagnosis, String treatmentPlan, String internalNote,
@@ -91,7 +91,7 @@ public class MedicalRecord extends TimestampedEntity {
     }
 
     /**
-     * Visit#5 khóa bệnh án (BR-KB-01; docs/adr/0064 G7, 0067): {@code lockedAt} = {@code visits.completed_at}. Chỉ đặt
+     * Visit#5 khóa bệnh án (BR-KB-01; docs/adr/0066 G7, 0069): {@code lockedAt} = {@code visits.completed_at}. Chỉ đặt
      * {@code lockedAt}; sau đó mọi thay đổi là bản bổ sung.
      */
     public void lock(Instant at) {
@@ -101,7 +101,7 @@ public class MedicalRecord extends TimestampedEntity {
         this.lockedAt = at;
     }
 
-    /** Nội dung 5 trường giống hệt giá trị đã lưu (PUT không đổi gì — docs/adr/0065 D4). */
+    /** Nội dung 5 trường giống hệt giá trị đã lưu (PUT không đổi gì — docs/adr/0067 D4). */
     public boolean sameContent(String examination, String diagnosis, String treatmentPlan, String internalNote,
             LocalDate followUpDate) {
         return Objects.equals(this.examination, examination)
