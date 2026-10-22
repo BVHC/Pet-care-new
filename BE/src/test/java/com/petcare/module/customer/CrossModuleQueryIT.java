@@ -1,7 +1,6 @@
 package com.petcare.module.customer;
 
 import static org.assertj.core.api.Assertions.assertThat;
-import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
@@ -227,11 +226,13 @@ class CrossModuleQueryIT extends CustomerMeItSupport {
     }
 
     @Test
-    void notYetImplementedMethodsStillThrow() {
+    void everyCrossModuleQueryIsBuilt() {
         // VisitQueryApi là bản thật của BE-1 (docs/adr/0058, VisitQueryService) từ T26 phần 0.
         assertThat(visits.findUnfinishedVisitsAssignedTo(-1L)).isEmpty();
-        assertThatThrownBy(() -> boardings.findActiveStaysByCustomer(1L))
-                .isInstanceOf(UnsupportedOperationException.class);
+        // BoardingQueryApi là bản thật từ T31 (docs/adr/0065, trả nợ D033).
+        assertThat(boardings.findActiveStaysByCustomer(-1L)).isEmpty();
+        assertThat(boardings.findBookedFrom(-1L, java.time.LocalDate.of(2009, 6, 10))).isEmpty();
+        assertThat(boardings.countViolations(-1L, java.time.Instant.EPOCH)).isZero();
         // AppointmentQueryApi là bản thật của BE-1 (docs/adr/0050, AppointmentLookupService) từ khi gộp nhánh.
         assertThat(appointments.findBookedByCustomer(-1L)).isEmpty();
     }

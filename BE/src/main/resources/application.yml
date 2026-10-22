@@ -106,6 +106,12 @@ app:
     pending-order-digest:
       cron: "${PENDING_ORDER_DIGEST_CRON:0 50 23 * * *}"
       time-budget: 60s
+    # ST05 cho lưu trú (docs/adr/0065): đặt chỗ BOOKED chưa được nhận khi hết giờ làm việc của ngày nhận → NO_SHOW. Phút
+    # 3, 8, 13…: lệch ST05 lịch hẹn (0 */5), ST03 (2/5), ST13 (4/5) và ST02 (0 */15); phút 1, 6, 11… để dành cho ST15.
+    boarding-no-show:
+      cron: "${BOARDING_NO_SHOW_CRON:0 3/5 * * * *}"
+      batch-size: 100
+      time-budget: 60s
     # ST20 từ notification_outbox. Email (docs/adr/0012): hai luồng priority (OTP, mật khẩu tạm) và thường.
     # IN_APP (docs/adr/0014): giao vào bảng notifications, job riêng, không qua SMTP.
     notification-outbox:

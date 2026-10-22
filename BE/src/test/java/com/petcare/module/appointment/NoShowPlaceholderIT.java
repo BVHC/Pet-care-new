@@ -29,7 +29,7 @@ import com.petcare.platform.config.TimeConfig;
 import com.petcare.support.MutableClock;
 
 /**
- * ST05 trên bean thật của {@code BoardingQueryApi} (placeholder ném lỗi — nợ D033, docs/adr/0053 §8): mỗi lịch quá hạn
+ * ST05 trên bean thật của {@code BoardingQueryApi} (T31, docs/adr/0065 trả nợ D033; trước đó placeholder ném lỗi, docs/adr/0053 §8): mỗi lịch quá hạn
  * rollback, vẫn {@code BOOKED}, không có hạn chế, log {@code NO_SHOW_FAILED}. Khi BE-2 cài thật, test này đổi thành
  * "chuyển NO_SHOW được".
  */
@@ -72,7 +72,7 @@ class NoShowPlaceholderIT {
     }
 
     @Test
-    void overdueAppointmentStaysBookedWhileBoardingIsNotBuilt(CapturedOutput output) {
+    void overdueAppointmentBecomesNoShowOnRealBeans(CapturedOutput output) {
         long branch = data.branch("ACTIVE");
         long service = data.service("MEDICAL");
         long staff = data.receptionist();
@@ -83,10 +83,7 @@ class NoShowPlaceholderIT {
         job.run();
 
         assertThat(jdbc.queryForObject("SELECT status FROM appointments WHERE id = ?", String.class, id))
-                .isEqualTo("BOOKED");
-        assertThat(jdbc.queryForObject("SELECT count(*) FROM booking_restrictions WHERE customer_id = ?",
-                Integer.class, customer)).isZero();
-        assertThat(output).contains("NO_SHOW_FAILED appointmentId=" + id)
-                .contains("BoardingQueryApi chưa được cài");
+                .isEqualTo("NO_SHOW");
+        assertThat(output).doesNotContain("NO_SHOW_FAILED").doesNotContain("BoardingQueryApi chưa được cài");
     }
 }

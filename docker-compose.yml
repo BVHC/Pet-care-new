@@ -90,6 +90,8 @@ services:
       # Lịch ST13 tự chốt ca thu ngân và báo Order PENDING quá hạn (docs/adr/0064); mặc định trùng application.yml.
       CASHIER_SHIFT_AUTO_CLOSE_CRON: ${CASHIER_SHIFT_AUTO_CLOSE_CRON:-0 4/5 * * * *}
       PENDING_ORDER_DIGEST_CRON: ${PENDING_ORDER_DIGEST_CRON:-0 50 23 * * *}
+      # Lịch ST05 cho lưu trú (docs/adr/0065); mặc định trùng application.yml (phút 3, 8, 13…).
+      BOARDING_NO_SHOW_CRON: ${BOARDING_NO_SHOW_CRON:-0 3/5 * * * *}
       # Lịch ba luồng ST20: email HIGH, NORMAL (docs/adr/0012), IN_APP (docs/adr/0014); mặc định trùng application.yml.
       NOTIFICATION_OUTBOX_CRON: ${NOTIFICATION_OUTBOX_CRON:-*/10 * * * * *}
       NOTIFICATION_OUTBOX_PRIORITY_CRON: ${NOTIFICATION_OUTBOX_PRIORITY_CRON:-*/5 * * * * *}

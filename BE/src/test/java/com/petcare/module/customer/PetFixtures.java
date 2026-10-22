@@ -27,6 +27,7 @@ final class PetFixtures {
     private final JdbcTemplate jdbc;
     private final TransactionTemplate tx;
     private final List<Long> customers = new ArrayList<>();
+    private Long boardingBranchId;
 
     PetFixtures(JdbcTemplate jdbc, PlatformTransactionManager transactionManager) {
         this.jdbc = jdbc;
@@ -86,18 +87,33 @@ final class PetFixtures {
                 """, Long.class, code("A"), customerId, petId, status, status, status));
     }
 
+    /**
+     * Chi nhánh thật cho đặt chỗ lưu trú: listener hủy do phòng khám của boarding (T31, docs/adr/0065) đọc tên chi nhánh
+     * để soạn thông báo, nên đặt chỗ {@code BOOKED} không còn trỏ được tới chi nhánh giả 999999. Tạo lười, xóa ở
+     * {@link #cleanup()}.
+     */
+    private long boardingBranch() {
+        if (boardingBranchId == null) {
+            boardingBranchId = jdbc.queryForObject("""
+                    INSERT INTO branches (name, address, phone, latitude, longitude, status)
+                    VALUES (?, 'Địa chỉ', '0280000000', 10.76, 106.66, 'DRAFT') RETURNING id
+                    """, Long.class, "PetFixtures " + UUID.randomUUID());
+        }
+        return boardingBranchId;
+    }
+
     /** Mỗi thú chỉ một đặt chỗ đang hiệu lực tại một thời điểm (EXCLUDE chồng ngày): truyền {@code offsetDays} khác nhau. */
     long booking(long customerId, long petId, String status, int offsetDays) {
         return replica(() -> jdbc.queryForObject("""
                 INSERT INTO boarding_bookings (code, customer_id, pet_id, branch_id, kennel_type_id, check_in_date,
                                                check_out_date, nightly_price, status, channel, booked_by, kennel_id,
                                                end_reason, cancel_source)
-                SELECT ?, ?, ?, 999999, 999999, current_date + ?, current_date + ? + 2, 100000, ?, 'COUNTER', 999999,
+                SELECT ?, ?, ?, ?, 999999, current_date + ?, current_date + ? + 2, 100000, ?, 'COUNTER', 999999,
                        CASE WHEN ? IN ('CHECKED_IN', 'OVERDUE', 'CHECKED_OUT') THEN ?::bigint END,
                        CASE WHEN ? = 'CHECKED_OUT' THEN 'RETURNED' END,
                        CASE WHEN ? = 'CANCELLED' THEN 'STAFF' END
                 RETURNING id
-                """, Long.class, code("B"), customerId, petId, offsetDays, offsetDays, status, status,
+                """, Long.class, code("B"), customerId, petId, boardingBranch(), offsetDays, offsetDays, status, status,
                 SEQ.incrementAndGet(), status, status));
     }
 
@@ -143,6 +159,8 @@ final class PetFixtures {
                     + in + "))", ids);
             jdbc.update("DELETE FROM visits WHERE customer_id IN (" + in + ")", ids);
             jdbc.update("DELETE FROM appointments WHERE customer_id IN (" + in + ")", ids);
+            jdbc.update("DELETE FROM notification_outbox WHERE payload ->> 'ma_dat_cho' IN "
+                    + "(SELECT code FROM boarding_bookings WHERE customer_id IN (" + in + "))", ids);
             jdbc.update("DELETE FROM boarding_bookings WHERE customer_id IN (" + in + ")", ids);
             jdbc.update("DELETE FROM feedbacks WHERE customer_id IN (" + in + ")", ids);
             jdbc.update("DELETE FROM weight_records WHERE pet_id IN (" + petsOf + ")", ids);
@@ -152,6 +170,10 @@ final class PetFixtures {
             return jdbc.update("DELETE FROM customers WHERE id IN (" + in + ")", ids);
         });
         customers.clear();
+        if (boardingBranchId != null) {
+            jdbc.update("DELETE FROM branches WHERE id = ?", boardingBranchId);
+            boardingBranchId = null;
+        }
     }
 
     private <T> T replica(Supplier<T> action) {

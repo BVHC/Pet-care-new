@@ -33,8 +33,8 @@ import com.petcare.module.identity.service.SessionService;
 import com.petcare.platform.config.TimeConfig;
 
 /**
- * Đổi khung / hủy trên bean thật của app hiện tại (docs/adr/0049): {@code BoardingQueryApi} (nợ D033) của BE-2 còn là
- * placeholder ném lỗi; {@code CustomerQueryApi}, {@code PetQueryApi} là bản thật từ 2026-10-19 (D010, D031 đã trả), nên
+ * Đổi khung / hủy trên bean thật của app hiện tại (docs/adr/0049): {@code BoardingQueryApi} là bản thật từ T31
+ * (docs/adr/0065, trả nợ D033); {@code CustomerQueryApi}, {@code PetQueryApi} là bản thật từ 2026-10-19 (D010, D031 đã trả), nên
  * đổi khung và hủy sớm của lễ tân chạy được. Nhánh dừng trước khi cần
  * chúng trả đúng mã (409, 400); nhánh cần chúng trả 500 và <b>không để lại gì</b>: lịch vẫn y nguyên (UPDATE đã flush bị
  * rollback), không có dòng hạn chế, không còn khóa advisory.
@@ -113,19 +113,17 @@ class RescheduleCancelPlaceholderIT {
                 .containsEntry("late_cancel", false);
     }
 
-    /** D033: hủy muộn cần đếm vi phạm lưu trú — placeholder ném lỗi → cả lần hủy rollback, không lưu cờ hủy muộn. */
+    /** D033 đã trả (T31, docs/adr/0065): hủy muộn đếm vi phạm lưu trú thật, lưu cờ hủy muộn. */
     @Test
-    void lateCancelRollsBackWhenBoardingIsNotBuilt() {
+    void lateCancelCommitsOnRealBeans() {
         ZonedDateTime soon = ZonedDateTime.now(TimeConfig.BUSINESS_ZONE).plusHours(2).truncatedTo(ChronoUnit.MINUTES);
         long id = booked(soon.toLocalDate(), soon.toLocalTime());
 
         ResponseEntity<Map<String, Object>> response = post(token, id, "cancel", null);
 
-        assertThat(response.getStatusCode()).isEqualTo(HttpStatus.INTERNAL_SERVER_ERROR);
+        assertThat(response.getStatusCode()).as("%s", response.getBody()).isEqualTo(HttpStatus.OK);
         assertThat(jdbc.queryForMap("SELECT status, late_cancel FROM appointments WHERE id = ?", id))
-                .containsEntry("status", "BOOKED").containsEntry("late_cancel", false);
-        assertThat(jdbc.queryForObject("SELECT count(*) FROM booking_restrictions WHERE customer_id = ?", Long.class,
-                customer)).isZero();
+                .containsEntry("status", "CANCELLED").containsEntry("late_cancel", true);
     }
 
     @Test
