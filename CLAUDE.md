@@ -39,16 +39,16 @@ Team: **BE-1** (branch `manh`) = identity, appointment, visit, care · **BE-2** 
 
 **Scope tiers:** 1 = full, 2 = thin, 3 = diagram only — **don't build tier 3**; the list is in `docs/INDEX.md`. Rules marked 🆕 are proposals not yet approved. Vietnamese enum values map to ASCII codes (erd §0, e.g. `TÁI_CHỦNG` → `VACCINE_DUE`, nhóm Khám/Tiêm → `MEDICAL`).
 
-## Current state (2026-10-21)
+## Current state (2026-10-22)
 
-`manh` @ `d47c658` = `origin/manh` (`0b5a3e0`, T25) + 4 unpushed commits (T26 parts 0–4, ADR-0058–0062). **Uncommitted:** T26 part 5 (reassign a called visit, ADR-0063). `origin/dev` @ `197bbf5` = PR #15 (T25) still carries the **old** T25 ADR numbers 0047–0052.
+`manh` @ `984623f` = `origin/manh` (T26 parts 0–5, ADR-0058–0063). **Uncommitted:** T27 parts 0–1 (medical record foundation + #12 / #13, ADR-0064, 0065). `origin/dev` @ `197bbf5` = PR #15 (T25) still carries the **old** T25 ADR numbers 0047–0052.
 
 | Module | Owner | Built | Still missing / placeholder |
 |---|---|---|---|
 | identity | BE-1 | identity-v1 #1–24, #28–37 (auth, OTP, `/me`, profile link, staff admin, account lock, [CFG], templates, audit, public vets); jobs ST01, ST02, session cleanup; `AccountContactApi` | #25–27 (customer account email change / counter link, UC22) |
 | care | BE-1 | ST20 outbox (EMAIL in HIGH / NORMAL lanes, IN_APP), outbox cleanup, care-v1 #5–8 | #9–10 settings (D025), Care Task, ST04, `FollowUpApi` (T38/T39) |
 | appointment | BE-1 | appointment-v1 #1–9; `AppointmentApi`, `AppointmentQueryApi`, `BookingRestrictionApi`; clinic-cancel listeners; ST05 `NoShowJob`; ST03 `AppointmentReminderJob` | booking / rescheduling read the pet with `findPet` and do not yet call `PetQueryApi.findPetForShare` (D027) |
-| visit | BE-1 | T26 parts 0–5 (ADR-0058–0063): visit-v1 #1 check-in, #2–4 queue views (A13 CARETAKER; #4 also SUPER_MANAGER, A14), #5–7 dispatch, #8 call, #9 reassign a called visit, #11 cancel; `AccountLockedEvent` listener → `needs_reassign`; real `VisitQueryApi` | #10, #12–21 (T27/T28); unlock does not clear `needs_reassign` (D042); Care Task#6 on check-in (D029); `VaccinationQueryApiPlaceholder` |
+| visit | BE-1 | T26 parts 0–5 (ADR-0058–0063): visit-v1 #1 check-in, #2–4 queue views (A13 CARETAKER; #4 also SUPER_MANAGER, A14), #5–7 dispatch, #8 call, #9 reassign a called visit, #11 cancel, #12–13 medical record view / write (T27 part 1, ADR-0065); `AccountLockedEvent` listener → `needs_reassign`; real `VisitQueryApi` | #10, #14–21 (T27 part 0 = entities / DTO / mapper, ADR-0064; D043 FK indexes + DB guards, D044 Visit#5 reads service lines unlocked); unlock does not clear `needs_reassign` (D042); Care Task#6 on check-in (D029); `VaccinationQueryApiPlaceholder` |
 | branch, catalog | BE-2 | branch-v1, catalog-v1 staff endpoints, `BranchQueryApi`, `BranchApi`, `CatalogQueryApi` | catalog public #19–22; Swagger annotations (D026) |
 | customer | BE-2 | customer-v1 #1–21; `CustomerApi`, `CustomerQueryApi`, `PetApi`, `PetQueryApi` | — |
 | inventory | BE-2 | inventory-v1 #1–17; `StockApi`, `StockQueryApi`, `DocumentCodeGenerator` | `StockReportApi` / ST08 (T44) |
@@ -121,8 +121,13 @@ Open convention TBDs (don't decide silently — ask or write an ADR): command na
 | Auth | 0003 JWT + DB session · 0005 public paths anonymous · 0006 customer owner scope · 0009 BCrypt · 0010, 0011, 0025 OTP · 0019 login · 0021 logout · 0022 change password · 0023 forgot / reset |
 | Accounts, staff, admin | 0024 staff directory · 0026 staff self-edit · 0027 profile link · 0028 customer self-edit · 0029–0035 staff admin / lock · 0036 [CFG] edit · 0037 templates · 0038 audit view · 0039 in-app notifications |
 | Notifications, jobs | 0008 session cleanup · 0012, 0014, 0016, 0017 ST20 · 0013 ST02 · 0018 FK indexes on `accounts` |
+<<<<<<< HEAD
 | Appointment, visit (BE-1) | 0045 booking locks · 0046 slots · 0047 book · 0048 view · 0049 reschedule / cancel · 0050 cross-module API · 0052 clinic cancel · 0053, 0054 ST05 · 0055 booking restriction · 0056 ST03 · 0057 assumptions confirmed · 0058 visit foundation · 0059 check-in (also amends 0044: receptionist never edits a VISIT auto line) · 0060 queue views · 0061 dispatch (assign / move / emergency) · 0062 call / cancel / `needs_reassign` on lock · 0063 reassign a called visit |
 | BE-2 | 0041 customer & pet · 0042 inventory stock ledger · 0043 document codes · 0044 order core · 0051 retail order · 0064 cashier shift / payment / ST13 · 0065 boarding kennels / bookings / ST05 |
+=======
+| Appointment, visit (BE-1) | 0045 booking locks · 0046 slots · 0047 book · 0048 view · 0049 reschedule / cancel · 0050 cross-module API · 0052 clinic cancel · 0053, 0054 ST05 · 0055 booking restriction · 0056 ST03 · 0057 assumptions confirmed · 0058 visit foundation · 0059 check-in (also amends 0044: receptionist never edits a VISIT auto line) · 0060 queue views · 0061 dispatch (assign / move / emergency) · 0062 call / cancel / `needs_reassign` on lock · 0063 reassign a called visit · 0064 medical record foundation · 0065 medical record write (`pets FOR SHARE` before `visits`, no-op PUT writes nothing) |
+| BE-2 | 0041 customer & pet · 0042 inventory stock ledger · 0043 document codes · 0044 order core · 0051 retail order |
+>>>>>>> 6a7ef97 (feat: triển khai api xem cập nhật bênh án)
 
 ## Backend architecture
 
@@ -186,7 +191,7 @@ Every write ADR follows these. Read the ADR of the neighbouring feature before w
   | Staff admin | `branches (id ↑, only via BranchApi.lockForStaffChange) → accounts → staff_profiles → sessions`. Any flow lowering a branch's ACTIVE BRANCH_MANAGER count locks the branch first |
   | Customer | `accounts → customers (id ↑) → pets → weight_records` |
   | Appointment writes | `advisory(1001, pet) → branches (BranchApi.lockForBooking) → appointments`; advisory **1002** per customer (violation evaluation / restriction lift) always last |
-  | Visit (ADR-0058) | `accounts` (staff, `FOR SHARE`, id ↑) → `pets FOR SHARE` → `visits` (id ↑) → `appointments` via `AppointmentApi` → `document_counters` (`visits` → `ORDER`) → `orders` via `VisitOrderApi` → stock lots via `StockApi`. Check-in does not lock `branches`. Assignee lock = `StaffDirectoryApi.findStaffForShare`; move locks every `WAITING` visit of the branch in one `ORDER BY id` query (ADR-0061); call locks the caller's own account `FOR SHARE` before the visit; cancel `visits → appointments → orders`; the lock-account listener runs `accounts → visits` (ADR-0062); reassign locks the old and the new assignee `FOR SHARE` (id ↑) before the visit (ADR-0063) |
+  | Visit (ADR-0058) | `accounts` (staff, `FOR SHARE`, id ↑) → `pets FOR SHARE` → `visits` (id ↑) → `appointments` via `AppointmentApi` → `document_counters` (`visits` → `ORDER`) → `orders` via `VisitOrderApi` → stock lots via `StockApi`. Check-in does not lock `branches`. Assignee lock = `StaffDirectoryApi.findStaffForShare`; move locks every `WAITING` visit of the branch in one `ORDER BY id` query (ADR-0061); call locks the caller's own account `FOR SHARE` before the visit; cancel `visits → appointments → orders`; the lock-account listener runs `accounts → visits` (ADR-0062); reassign locks the old and the new assignee `FOR SHARE` (id ↑) before the visit (ADR-0063); medical-record write locks `pets FOR SHARE` → `visits` (ADR-0065) |
   | Sales | caller's document → `orders` (lock before read) → `products FOR SHARE` → stock lots; several orders by ascending id |
 | Cashier (ADR-0064) | open shift: `accounts FOR SHARE` (own) → INSERT shift · payment: shift `FOR SHARE` → all orders in **one** `ORDER BY id` statement → all lots in **one** statement (`StockApi.issueForPayment`) → `document_counters` last · close / reconcile: shift `FOR NO KEY UPDATE` · ST13: shift `SKIP LOCKED` |
   | Boarding (ADR-0065) | booking: `pets FOR SHARE` → `branches` (`BranchApi.lockForBooking`, shared with appointment booking and branch hours / holiday changes) → INSERT → `document_counters` · extend: `pets FOR SHARE` → `branches` → booking · cancel: booking → `evaluateAfterViolation` (advisory 1002 last) · kennel writes: `branches` → kennel · ST05: booking `SKIP LOCKED` → 1002 · clinic cancel: bookings by ascending id in batches of 100 |

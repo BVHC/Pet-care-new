@@ -239,12 +239,22 @@ m.op("post", "/visits/{visitId}/cancel", "cancelVisit", "Hủy lượt khách b�
 
 m.op("get", "/visits/{visitId}/medical-record", "getMedicalRecord", "Xem bệnh án của lượt", "Medical record",
      "UC48, UC53", "BR-KB-01", "A07, A08", "VET, CARETAKER chi nhánh (CARETAKER chỉ xem)", resp="MedicalRecord",
-     path_params=["VisitId"], errors=(401, 403, 404), err_desc={404: "Không có Visit hoặc Visit nhóm GROOMING (không có bệnh án)"})
+     path_params=["VisitId"], errors=(400, 401, 403, 404),
+     err_desc={400: "Tham số sai kiểu (`MALFORMED_REQUEST`); BR-TK-17",
+               403: "Sai vai trò · lượt của chi nhánh khác",
+               404: "Không có Visit hoặc Visit nhóm GROOMING (không có bệnh án)"},
+     notes="Thứ tự lỗi: 403 vai trò → 404 → 403 chi nhánh → 404 GROOMING (docs/adr/0065). Lượt MEDICAL chưa ghi bệnh án "
+           "trả khung rỗng; locked = Visit COMPLETED.")
 m.op("put", "/visits/{visitId}/medical-record", "updateMedicalRecord", "Ghi bệnh án / hẹn tái khám",
      "Medical record", "UC48", "BR-KB-01, 06", "A07", "VET được gán lượt", body="UpdateMedicalRecordRequest",
      resp="MedicalRecord", path_params=["VisitId"], errors=(400, 401, 403, 404, 409),
-     err_desc={400: "`BR-KB-06` ngày tái khám không sau ngày khám hoặc quá 180 ngày [CFG]",
-               409: "Lượt không IN_PROGRESS — bệnh án đã khóa, dùng bản bổ sung"})
+     err_desc={400: "`BR-KB-06` ngày tái khám không sau ngày khám hoặc quá 180 ngày [CFG] · body sai "
+                    "(`MALFORMED_REQUEST`); BR-TK-17",
+               403: "Sai vai trò · lượt của chi nhánh khác · không phải VET phụ trách hiện tại",
+               409: "Lượt không IN_PROGRESS — bệnh án đã khóa, dùng bản bổ sung"},
+     notes="Thứ tự lỗi: 400 body → 403 vai trò → 404 → 403 chi nhánh → 404 GROOMING → 403 người phụ trách → 409 → "
+           "400 BR-KB-06 (docs/adr/0065). PUT thay toàn bộ 5 trường; lần ghi đầu tạo bệnh án; ngày tái khám chỉ kiểm "
+           "khi đổi; nội dung không đổi: 200, không ghi, không audit.")
 m.op("post", "/visits/{visitId}/weight", "recordVisitWeight", "Ghi cân nặng khi khám", "Medical record", "UC48",
      "BR-KH-04", "A07", "VET được gán lượt", body="RecordWeightRequest", resp="WeightRecordRef", status=201,
      path_params=["VisitId"], errors=(400, 401, 403, 404, 409), err_desc={409: "Lượt không IN_PROGRESS"},
