@@ -485,7 +485,7 @@ paths:
     post:
       tags: [Completion]
       summary: "Hoàn tất lượt"
-      description: "UC48, UC49, UC52 · BR-KB-01, 02, BR-SP-06, BR-LH-11. Actor: A07, A08. Quyền: Người được gán lượt. Chuyển trạng thái: IN_PROGRESS → COMPLETED (Visit#5) · Lịch hẹn#7 · Order#4 (→ PENDING) · bệnh án khóa."
+      description: "UC48, UC49, UC52 · BR-KB-01, 02, BR-SP-06, BR-LH-11. Actor: A07, A08. Quyền: Người được gán lượt. Chuyển trạng thái: IN_PROGRESS → COMPLETED (Visit#5) · Lịch hẹn#7 · Order#4 (→ PENDING) · bệnh án khóa. A16. Thứ tự lỗi: 403 vai trò → 404 → 403 chi nhánh → 403 người phụ trách → 400 BR-TN-05 → 409 → 400 BR-KB-02 (docs/adr/0069). Gỡ cờ needsReassign. Lỗi BR-KB-02 hoàn tác cả lịch hẹn, Order và bệnh án."
       operationId: completeVisit
       security:
         - bearerAuth: []
@@ -508,7 +508,7 @@ paths:
                     type: integer
                     description: "HTTP status của kết quả, ví dụ 200, 201"
         "400":
-          description: "`BR-KB-02` có dịch vụ loại Khám mà chưa có chẩn đoán · chỉ có dịch vụ loại Tiêm mà chưa ghi mũi nào"
+          description: "`BR-KB-02` có dịch vụ loại Khám mà chưa có chẩn đoán · chỉ có dịch vụ loại Tiêm mà chưa ghi mũi nào · lượt Khám/Tiêm không còn dịch vụ Khám hoặc Tiêm nào (A16) · `BR-TN-05` chức vụ hiện tại không phụ trách được nhóm dịch vụ của lượt (đổi chức vụ sau khi được gán) · tham số sai kiểu (`MALFORMED_REQUEST`); BR-TK-17"
           content:
             "application/json":
               schema:
@@ -516,7 +516,11 @@ paths:
         "401":
           $ref: "#/components/responses/Unauthorized"
         "403":
-          $ref: "#/components/responses/Forbidden"
+          description: "Sai vai trò · lượt của chi nhánh khác · không phải người phụ trách hiện tại, kể cả lượt chưa gán"
+          content:
+            "application/json":
+              schema:
+                $ref: "#/components/schemas/Error"
         "404":
           $ref: "#/components/responses/NotFound"
         "409":
@@ -583,7 +587,7 @@ paths:
     get:
       tags: ["Medical record"]
       summary: "Xem bệnh án của lượt"
-      description: "UC48, UC53 · BR-KB-01. Actor: A07, A08. Quyền: VET, CARETAKER chi nhánh (CARETAKER chỉ xem). Chuyển trạng thái: —."
+      description: "UC48, UC53 · BR-KB-01. Actor: A07, A08. Quyền: VET, CARETAKER chi nhánh (CARETAKER chỉ xem). Chuyển trạng thái: —. Thứ tự lỗi: 403 vai trò → 404 → 403 chi nhánh → 404 GROOMING (docs/adr/0067). Lượt MEDICAL chưa ghi bệnh án trả khung rỗng; locked = Visit COMPLETED."
       operationId: getMedicalRecord
       security:
         - bearerAuth: []
@@ -605,10 +609,20 @@ paths:
                   code:
                     type: integer
                     description: "HTTP status của kết quả, ví dụ 200, 201"
+        "400":
+          description: "Tham số sai kiểu (`MALFORMED_REQUEST`); BR-TK-17"
+          content:
+            "application/json":
+              schema:
+                $ref: "#/components/schemas/Error"
         "401":
           $ref: "#/components/responses/Unauthorized"
         "403":
-          $ref: "#/components/responses/Forbidden"
+          description: "Sai vai trò · lượt của chi nhánh khác"
+          content:
+            "application/json":
+              schema:
+                $ref: "#/components/schemas/Error"
         "404":
           description: "Không có Visit hoặc Visit nhóm GROOMING (không có bệnh án)"
           content:
@@ -618,7 +632,7 @@ paths:
     put:
       tags: ["Medical record"]
       summary: "Ghi bệnh án / hẹn tái khám"
-      description: "UC48 · BR-KB-01, 06. Actor: A07. Quyền: VET được gán lượt. Chuyển trạng thái: —."
+      description: "UC48 · BR-KB-01, 06. Actor: A07. Quyền: VET được gán lượt. Chuyển trạng thái: —. Thứ tự lỗi: 400 body → 403 vai trò → 404 → 403 chi nhánh → 404 GROOMING → 403 người phụ trách → 409 → 400 BR-KB-06 (docs/adr/0067). PUT thay toàn bộ 5 trường; lần ghi đầu tạo bệnh án; ngày tái khám chỉ kiểm khi đổi; nội dung không đổi: 200, không ghi, không audit."
       operationId: updateMedicalRecord
       security:
         - bearerAuth: []
@@ -647,7 +661,7 @@ paths:
                     type: integer
                     description: "HTTP status của kết quả, ví dụ 200, 201"
         "400":
-          description: "`BR-KB-06` ngày tái khám không sau ngày khám hoặc quá 180 ngày [CFG]"
+          description: "`BR-KB-06` ngày tái khám không sau ngày khám hoặc quá 180 ngày [CFG] · body sai (`MALFORMED_REQUEST`); BR-TK-17"
           content:
             "application/json":
               schema:
@@ -655,7 +669,11 @@ paths:
         "401":
           $ref: "#/components/responses/Unauthorized"
         "403":
-          $ref: "#/components/responses/Forbidden"
+          description: "Sai vai trò · lượt của chi nhánh khác · không phải VET phụ trách hiện tại"
+          content:
+            "application/json":
+              schema:
+                $ref: "#/components/schemas/Error"
         "404":
           $ref: "#/components/responses/NotFound"
         "409":
@@ -668,7 +686,7 @@ paths:
     post:
       tags: ["Medical record"]
       summary: "Ghi cân nặng khi khám"
-      description: "UC48 · BR-KH-04. Actor: A07. Quyền: VET được gán lượt. Chuyển trạng thái: —. source = VET (A8)."
+      description: "UC48 · BR-KH-04. Actor: A07. Quyền: VET được gán lượt. Chuyển trạng thái: —. source = VET (A8). Thứ tự lỗi như #13: 400 body → 403 vai trò → 404 → 403 chi nhánh → 404 GROOMING → 403 người phụ trách → 409 → 400 BR-KH-04 (docs/adr/0068). Mỗi lần gọi là một bản ghi; không audit."
       operationId: recordVisitWeight
       security:
         - bearerAuth: []
@@ -697,13 +715,25 @@ paths:
                     type: integer
                     description: "HTTP status của kết quả, ví dụ 200, 201"
         "400":
-          $ref: "#/components/responses/BadRequest"
+          description: "`BR-KH-04` cân nặng ≤ 0 hoặc vượt 9999.99 kg · thiếu `weightKg` · body sai (`MALFORMED_REQUEST`); BR-TK-17"
+          content:
+            "application/json":
+              schema:
+                $ref: "#/components/schemas/Error"
         "401":
           $ref: "#/components/responses/Unauthorized"
         "403":
-          $ref: "#/components/responses/Forbidden"
+          description: "Sai vai trò · lượt của chi nhánh khác · không phải VET phụ trách hiện tại"
+          content:
+            "application/json":
+              schema:
+                $ref: "#/components/schemas/Error"
         "404":
-          $ref: "#/components/responses/NotFound"
+          description: "Không có Visit hoặc Visit nhóm GROOMING (không có bệnh án)"
+          content:
+            "application/json":
+              schema:
+                $ref: "#/components/schemas/Error"
         "409":
           description: "Lượt không IN_PROGRESS"
           content:
@@ -714,7 +744,7 @@ paths:
     post:
       tags: ["Medical record"]
       summary: "Thêm bản bổ sung bệnh án"
-      description: "UC53 · BR-KB-01, BR-QT-15. Actor: A07. Quyền: VET chi nhánh nơi khám (A7). Chuyển trạng thái: —. Không sửa / xóa nội dung cũ; ghi audit."
+      description: "UC53 · BR-KB-01, BR-QT-15. Actor: A07. Quyền: VET chi nhánh nơi khám (A7). Chuyển trạng thái: —. Thứ tự lỗi: 400 body → 403 vai trò → 404 → 403 chi nhánh → 404 GROOMING → 409 (docs/adr/0070). Mọi VET của chi nhánh nơi khám ghi được, không cần là người phụ trách. Lượt chưa có bệnh án: tạo bệnh án rỗng đã khóa (A17). Không sửa / xóa nội dung cũ; ghi audit."
       operationId: addMedicalRecordAddendum
       security:
         - bearerAuth: []
@@ -743,13 +773,25 @@ paths:
                     type: integer
                     description: "HTTP status của kết quả, ví dụ 200, 201"
         "400":
-          $ref: "#/components/responses/BadRequest"
+          description: "Thiếu `content` · body sai (`MALFORMED_REQUEST`); BR-TK-17"
+          content:
+            "application/json":
+              schema:
+                $ref: "#/components/schemas/Error"
         "401":
           $ref: "#/components/responses/Unauthorized"
         "403":
-          $ref: "#/components/responses/Forbidden"
+          description: "Sai vai trò · lượt của chi nhánh khác"
+          content:
+            "application/json":
+              schema:
+                $ref: "#/components/schemas/Error"
         "404":
-          $ref: "#/components/responses/NotFound"
+          description: "Không có Visit hoặc Visit nhóm GROOMING (không có bệnh án)"
+          content:
+            "application/json":
+              schema:
+                $ref: "#/components/schemas/Error"
         "409":
           description: "Visit chưa COMPLETED — sửa trực tiếp bệnh án"
           content:
@@ -1537,12 +1579,6 @@ components:
           type: [string, "null"]
           format: date
   responses:
-    BadRequest:
-      description: "VALIDATION_FAILED / MALFORMED_REQUEST: dữ liệu không hợp lệ · BUSINESS_RULE_VIOLATION: vi phạm rule, message kết thúc bằng mã rule \"(BR-…)\"."
-      content:
-        "application/json":
-          schema:
-            $ref: "#/components/schemas/Error"
     Unauthorized:
       description: "UNAUTHENTICATED: chưa đăng nhập hoặc phiên đã hết hạn / bị hủy."
       content:

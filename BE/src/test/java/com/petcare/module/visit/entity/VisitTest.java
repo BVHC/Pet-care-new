@@ -69,6 +69,27 @@ class VisitTest {
         assertThat(visit.getQueueSortKey()).isEqualTo(CHECKED_IN);
     }
 
+    @Test
+    void completeMovesToCompletedStampsCompletedAtClearsTheFlagAndTouchesNothingElse() {
+        Visit visit = assigned();
+        visit.call(AT);
+        ReflectionTestUtils.setField(visit, "needsReassign", true);
+        Instant doneAt = AT.plusSeconds(600);
+
+        visit.complete(doneAt);
+
+        assertThat(visit.getStatus()).isEqualTo(VisitStatus.COMPLETED);
+        assertThat(visit.getCompletedAt()).isEqualTo(doneAt);
+        assertThat(visit.isNeedsReassign()).isFalse();
+        assertThat(visit.getAssigneeId()).isEqualTo(45L);
+        assertThat(visit.getCalledAt()).isEqualTo(AT);
+        assertThat(visit.getCancelledAt()).isNull();
+        assertThat(visit.getCancelReason()).isNull();
+        assertThat(visit.getPriorityClass()).isEqualTo(PriorityClass.APPOINTMENT);
+        assertThat(visit.getQueueSortKey()).isEqualTo(CHECKED_IN);
+        assertThat(visit.getAppointmentId()).isEqualTo(501L);
+    }
+
     private static Visit assigned() {
         Visit visit = Visit.checkIn("TN-2610-00001", 3L, 88L, 12L, 501L, ServiceGroup.MEDICAL,
                 PriorityClass.APPOINTMENT, CHECKED_IN, 70L, CHECKED_IN);

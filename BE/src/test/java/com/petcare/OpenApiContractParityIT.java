@@ -106,10 +106,30 @@ class OpenApiContractParityIT {
     void documentedModulesCoverAllTheirImplementedEndpoints() {
         // 85 (identity + care + customer + inventory + sales, gồm 5 endpoint Order bán lẻ T29) + 9 appointment #1–9
         // + 10 visit #1 (T26 phần 1, docs/adr/0059), #2–4 (T26 phần 2, docs/adr/0060), #5–7 (T26 phần 3, docs/adr/0061),
+<<<<<<< HEAD
+<<<<<<< HEAD
         // #8, #11 (T26 phần 4, docs/adr/0062), #9 (T26 phần 5, docs/adr/0063) + 12 boarding #1–12 (T31, docs/adr/0065).
         assertThat(documentedOps())
                 .as("số endpoint identity + care + customer + inventory + sales + appointment + visit + boarding đã cài")
                 .hasSize(126);
+=======
+        // #8, #11 (T26 phần 4, docs/adr/0062), #9 (T26 phần 5, docs/adr/0063), #12–13 (T27 phần 1, docs/adr/0065).
+        assertThat(documentedOps())
+<<<<<<< HEAD
+<<<<<<< HEAD
+                .as("số endpoint identity + care + customer + inventory + sales + appointment + visit đã cài").hasSize(106);
+>>>>>>> 6a7ef97 (feat: triển khai api xem cập nhật bênh án)
+=======
+                .as("số endpoint identity + care + customer + inventory + sales + appointment + visit đã cài").hasSize(107);
+>>>>>>> 058af5f (feat: triển khai api cân nặng)
+=======
+                .as("số endpoint identity + care + customer + inventory + sales + appointment + visit đã cài").hasSize(108);
+>>>>>>> 3d7f7b1 (feat: triển khai chức năng đánh dấu hoàn tất lượt)
+=======
+        // #8, #11 (T26 phần 4, docs/adr/0062), #9 (T26 phần 5, docs/adr/0063), #12–13 (T27 phần 1, docs/adr/0067).
+        assertThat(documentedOps())
+                .as("số endpoint identity + care + customer + inventory + sales + appointment + visit đã cài").hasSize(109);
+>>>>>>> 7254311 (feat: cập nhật module lịch khám)
     }
 
     @Test

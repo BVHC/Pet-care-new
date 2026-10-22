@@ -203,6 +203,14 @@ public final class AppointmentItSupport {
     public void cleanUp() {
         for (long[] entry : created) {
             if (entry[0] == PET) {
+                // cân nặng ghi khi khám (docs/adr/0068) trỏ tới visits và pets, FK RESTRICT
+                jdbc.update("DELETE FROM weight_records WHERE pet_id = ?", entry[1]);
+                // bệnh án và bản bổ sung (docs/adr/0066) trỏ tới visits, FK RESTRICT
+                jdbc.update("""
+                        DELETE FROM medical_record_addenda WHERE medical_record_id IN (SELECT id FROM visits WHERE pet_id = ?)
+                        """, entry[1]);
+                jdbc.update("DELETE FROM medical_records WHERE visit_id IN (SELECT id FROM visits WHERE pet_id = ?)",
+                        entry[1]);
                 jdbc.update("DELETE FROM visits WHERE pet_id = ?", entry[1]);
             } else if (entry[0] == APPOINTMENT) {
                 jdbc.update("DELETE FROM visits WHERE appointment_id = ?", entry[1]);
