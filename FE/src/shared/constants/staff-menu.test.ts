@@ -6,12 +6,13 @@ const labels = (role: Role) => menuFor(role).flatMap((s) => s.items.map((i) => i
 
 describe('staff menu', () => {
   it('leaves the pages a workspace already covers out of the receptionist menu', () => {
-    expect(labels('RECEPTIONIST')).toEqual(['Lịch hẹn', 'Đơn online', 'Hóa đơn', 'Thanh toán', 'Hoàn tiền', 'Kho hàng', 'Vaccine']);
+    expect(labels('RECEPTIONIST')).toEqual(['Lịch hẹn', 'Đơn online', 'Hóa đơn', 'Thanh toán', 'Hoàn tiền', 'Kho hàng']);
   });
 
-  it('gives vets and caretakers no back-office pages besides their workspace', () => {
-    expect(menuFor('VET')).toEqual([]);
-    expect(menuFor('CARETAKER')).toEqual([]);
+  it('gives vets and caretakers only the read-only customer lookup besides their workspace (UC23)', () => {
+    expect(labels('VET')).toEqual(['Tra cứu khách & thú']);
+    expect(labels('CARETAKER')).toEqual(['Tra cứu khách & thú']);
+    expect(rolesForPath('/admin/customers')).not.toContain('RECEPTIONIST');
   });
 
   it('keeps the hidden pages reachable by URL for the roles that had them', () => {

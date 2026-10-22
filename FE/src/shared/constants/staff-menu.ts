@@ -1,7 +1,8 @@
 import type { ElementType } from 'react';
 import {
   Activity, BadgePercent, BarChart3, Bot, Boxes, Building2, CalendarClock, ClipboardList, Crown, ListOrdered,
-  Lock, Mail, Package, Receipt, Scale, Scissors, Settings, ShieldAlert, ShoppingBag, Stethoscope, Syringe, Tags, Truck, UserCog, Warehouse,
+  Lock, Mail, Package, Receipt, Scale, Scissors, Settings, ShieldAlert, ShoppingBag, Stethoscope, Syringe, Tags, Truck, UserCog, UserSearch,
+  Warehouse,
 } from 'lucide-react';
 import { STAFF_ROLES, type Role } from '../types/auth';
 import { WORKSPACE_LABELS, WORKSPACE_ROLES, workspaceForPath } from './workspaces';
@@ -34,6 +35,8 @@ export const ADMIN_MENU: MenuSection[] = [
       { path: '/admin/vaccination', label: 'Tiêm chủng', icon: Syringe, roles: ['VET'], hidden: true }, // UC49 — bàn Phòng khám
       { path: '/admin/grooming', label: 'Grooming', icon: Scissors, roles: ['CARETAKER'], hidden: true }, // UC52 — bàn Grooming
       { path: '/admin/orders', label: 'Đơn online', icon: Package, roles: ['RECEPTIONIST'] }, // UC65 (tầng 3)
+      // UC23 cho A07, A08 (chỉ xem). Lễ tân tra cứu và sửa hồ sơ ngay ở bàn Lễ tân.
+      { path: '/admin/customers', label: 'Tra cứu khách & thú', icon: UserSearch, roles: ['VET', 'CARETAKER'] },
     ],
   },
   {
@@ -55,9 +58,11 @@ export const ADMIN_MENU: MenuSection[] = [
   {
     section: 'Kho & Mua hàng',
     items: [
-      { path: '/admin/warehouse', label: 'Kho hàng', icon: Warehouse, roles: ['BRANCH_MANAGER', 'RECEPTIONIST'] }, // UC75 (A06 chỉ xem), UC76
-      { path: '/admin/purchasing', label: 'Mua hàng', icon: Truck, roles: ['BRANCH_MANAGER'] }, // UC73, UC74
-      { path: '/admin/vaccines', label: 'Vaccine', icon: Boxes, roles: ['BRANCH_MANAGER', 'RECEPTIONIST'] }, // UC75
+      // UC73–76: tab tồn kho (A06 chỉ xem), phiếu nhập, điều chỉnh, nhà cung cấp (A05) — lọc tab theo role trong trang.
+      { path: '/admin/warehouse', label: 'Kho hàng', icon: Warehouse, roles: ['BRANCH_MANAGER', 'RECEPTIONIST'] },
+      // Trang cũ, nay chuyển hướng sang tab kho (gỡ ở T57).
+      { path: '/admin/purchasing', label: 'Mua hàng', icon: Truck, roles: ['BRANCH_MANAGER'], hidden: true },
+      { path: '/admin/vaccines', label: 'Vaccine', icon: Boxes, roles: ['BRANCH_MANAGER', 'RECEPTIONIST'], hidden: true },
     ],
   },
   {

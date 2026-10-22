@@ -100,6 +100,9 @@ function load(): State {
 /** Dịch vụ của danh mục, cho mock module khác đọc chéo (như CatalogQueryApi). */
 export const catalogServices = (): Service[] => load().services;
 
+/** Sản phẩm của danh mục, cho mock kho đọc chéo (tên, SKU, đơn vị, quản lý hạn dùng). */
+export const catalogProducts = (): Product[] => load().products;
+
 function save(s: State) {
   try {
     localStorage.setItem(STATE_KEY, JSON.stringify(s));

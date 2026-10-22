@@ -55,6 +55,21 @@ export interface OtpCodeRequest {
   code: string;
 }
 
+/** Lễ tân đã đối chiếu CCCD tại quầy; hệ thống không lưu CCCD, chỉ ghi phương thức (BR-TK-16, A6). */
+export type VerificationMethod = 'ID_CARD_IN_PERSON';
+
+/** #25: sửa email tài khoản khách / khôi phục tài khoản khi khách mất email (BR-TK-16). */
+export interface CustomerEmailChangeRequest {
+  newEmail: string;
+  verificationMethod: VerificationMethod;
+}
+
+/** #27: lễ tân liên kết hồ sơ tại quầy với tài khoản online, không cần OTP (BR-TK-19). */
+export interface CounterLinkRequest {
+  accountEmail: string;
+  verificationMethod: VerificationMethod;
+}
+
 export interface StaffQuery {
   branchId?: number;
   role?: Role;

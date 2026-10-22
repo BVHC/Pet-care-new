@@ -110,12 +110,15 @@ interface Otp {
   cancelled?: boolean;
 }
 interface State {
-  /** Mật khẩu mới, đã gỡ mustChangePassword… theo id tài khoản. */
-  changes: Record<number, { password?: string; mustChangePassword?: boolean }>;
+  /** Mật khẩu mới, đã gỡ mustChangePassword, email do lễ tân sửa hộ (UC22)… theo id tài khoản. */
+  changes: Record<number, { password?: string; mustChangePassword?: boolean; email?: string }>;
   /** Khách tự đăng ký (UC01). */
   registered: Registered[];
-  /** Mã đang dùng, khóa `REGISTER:<email>`, `RESET:<email>` hoặc `LINK:<accountId>`. */
-  otps: Record<string, Otp & { customerId?: number }>;
+  /**
+   * Mã đang dùng, khóa `REGISTER:<email>`, `RESET:<email>`, `LINK:<accountId>` hoặc
+   * `CUSTOMER_EMAIL:<customerId>` (lễ tân sửa email tài khoản khách, giữ email mới chờ xác nhận).
+   */
+  otps: Record<string, Otp & { customerId?: number; newEmail?: string }>;
   /** Hồ sơ nhân viên đã sửa (PATCH /me/staff-profile) theo id tài khoản. */
   profiles: Record<number, Partial<StaffProfile>>;
   /** UC08: tài khoản nhân viên tạo thêm sau seed (đã thấy trong MOCK_ACCOUNTS). */
@@ -178,6 +181,7 @@ interface Account {
 function accounts(s: State): Account[] {
   const seeded = MOCK_ACCOUNTS.map((a): Account => ({
     ...a,
+    email: s.changes[a.id]?.email ?? a.email,
     status: 'ACTIVE',
     password: s.changes[a.id]?.password ?? MOCK_PASSWORD,
     mustChangePassword: s.changes[a.id]?.mustChangePassword ?? a.mustChangePassword ?? false,
@@ -185,7 +189,7 @@ function accounts(s: State): Account[] {
   }));
   const registered = s.registered.map((r): Account => ({
     id: r.id,
-    email: r.email,
+    email: s.changes[r.id]?.email ?? r.email,
     role: 'CUSTOMER',
     fullName: r.fullName,
     password: s.changes[r.id]?.password ?? r.password,
@@ -197,6 +201,9 @@ function accounts(s: State): Account[] {
 
 const normalize = (email: string) => email.trim().toLowerCase();
 const byEmail = (s: State, email: string) => accounts(s).find((a) => a.email === normalize(email));
+
+/** Email hiện tại của tài khoản (kể cả email lễ tân đã sửa hộ); hồ sơ gắn tài khoản lấy email theo đây (customer-v1 A5). */
+export const accountEmailOf = (accountId: number) => accounts(load()).find((a) => a.id === accountId)?.email ?? null;
 
 function summaryOf(a: Account): AccountSummary {
   return { id: a.id, email: a.email, role: a.role, status: a.status, isLocked: false, mustChangePassword: a.mustChangePassword, branchId: a.branchId };
@@ -244,8 +251,8 @@ function rejectOtp(s: State, key: string, code: string): MockReply | null {
   return ruleFail('BR-TK-06', `Nhập sai mã OTP quá ${MAX_FAILED_OTP} lần, mã đã bị hủy. Vui lòng yêu cầu mã mới`);
 }
 
-/** Như EmailMasker của BE: giữ 2 ký tự đầu (1 nếu phần trước @ chỉ có 1–2 ký tự). */
-function maskEmail(email: string): string {
+/** Như EmailMasker của BE: giữ 2 ký tự đầu (1 nếu phần trước @ chỉ có 1–2 ký tự). Tra cứu khách (BR-KH-10) dùng chung. */
+export function maskEmail(email: string): string {
   const at = email.lastIndexOf('@');
   if (at <= 0 || at === email.length - 1) return '***';
   const local = [...email.slice(0, at)];
@@ -573,7 +580,108 @@ const changePassword: MockHandler = ({ account, body }) => {
   return noContent();
 };
 
+// ─── Tài khoản của hồ sơ khách tại quầy (UC22, identity-v1 #25–27, chỉ lễ tân) ───
+
+/** Lễ tân đối chiếu CCCD tại quầy; chỉ ghi phương thức, không lưu CCCD (BR-TK-16, A6). */
+const verificationChecks = (method: unknown): Check[] => [
+  ['verificationMethod', 'Phương thức xác minh phải là ID_CARD_IN_PERSON', method !== 'ID_CARD_IN_PERSON'],
+];
+
+const newEmailChecks = (field: string, email: unknown): Check[] => [
+  [field, 'Email không được để trống', !isText(email)],
+  [field, 'Email không đúng định dạng', isText(email) && !EMAIL_RE.test(email.trim())],
+  [field, 'Email tối đa 255 ký tự', isText(email) && email.trim().length > 255],
+];
+
+/** Hồ sơ khách và tài khoản gắn với nó; lỗi nếu không có hồ sơ hoặc hồ sơ chưa gắn tài khoản. */
+function accountOfCustomer(s: State, customerId: number): Account | MockReply {
+  const customer = findCustomer(customerId);
+  if (!customer) return notFound('hồ sơ khách', customerId);
+  const a = customer.accountId === null ? undefined : accounts(s).find((x) => x.id === customer.accountId);
+  if (!a) return ruleFail('BR-TK-16', 'Hồ sơ chưa gắn tài khoản online nên không có email tài khoản để sửa');
+  return a;
+}
+const isAccount = (x: Account | MockReply): x is Account => 'role' in x;
+
+/** BR-TK-01: email trùng tài khoản khác, kể cả tài khoản PENDING và nhân viên tạo thêm. */
+const emailTaken = (s: State, email: string) => !!byEmail(s, email) || Object.values(s.extraStaff).some((x) => x.email === email);
+
+const sendCustomerEmailChange: MockHandler = ({ account, params, body }) => {
+  const b = (body ?? {}) as Record<string, unknown>;
+  const bad = invalid([...newEmailChecks('newEmail', b.newEmail), ...verificationChecks(b.verificationMethod)]);
+  if (bad) return bad;
+  if (account!.role !== 'RECEPTIONIST') return denied();
+  const s = load();
+  const customerId = Number(params.customerId);
+  const a = accountOfCustomer(s, customerId);
+  if (!isAccount(a)) return a;
+  const newEmail = normalize(b.newEmail as string);
+  if (newEmail === a.email) return ruleFail('BR-TK-01', 'Email mới trùng email hiện tại');
+  if (emailTaken(s, newEmail)) return ruleFail('BR-TK-01', 'Email đã được sử dụng');
+  const key = `CUSTOMER_EMAIL:${customerId}`;
+  const wait = waitSeconds(s.otps[key]);
+  if (wait > 0) return ruleFail('BR-TK-07', `Vui lòng chờ ${wait} giây trước khi gửi lại mã OTP`);
+  const otp = issueOtp(s, key);
+  s.otps[key] = { ...otp, newEmail };
+  save(s);
+  return ok({ resendAvailableAt: resendAt(otp), maskedEmail: maskEmail(newEmail) }, 200, 'Đã gửi mã OTP tới email mới');
+};
+
+/** Mã đúng mới đổi email; chưa xác nhận thì giữ nguyên email cũ (BR-TK-16). */
+const confirmCustomerEmailChange: MockHandler = ({ account, params, body }) => {
+  const b = (body ?? {}) as Record<string, unknown>;
+  const bad = invalid(codeChecks(b.code));
+  if (bad) return bad;
+  if (account!.role !== 'RECEPTIONIST') return denied();
+  const s = load();
+  const customerId = Number(params.customerId);
+  const a = accountOfCustomer(s, customerId);
+  if (!isAccount(a)) return a;
+  const key = `CUSTOMER_EMAIL:${customerId}`;
+  const pending = s.otps[key];
+  const rejected = rejectOtp(s, key, b.code as string);
+  if (rejected) {
+    save(s);
+    return rejected;
+  }
+  // Email mới vừa bị tài khoản khác dùng: từ chối, mã vẫn dùng lại được.
+  const newEmail = pending!.newEmail!;
+  if (emailTaken(s, newEmail)) return ruleFail('BR-TK-01', 'Email đã được sử dụng');
+  s.changes[a.id] = { ...s.changes[a.id], email: newEmail };
+  delete s.otps[key];
+  save(s);
+  return noContent();
+};
+
+/** Không cần OTP: lễ tân đã đối chiếu CCCD với họ tên hồ sơ (identity-v1 mục B, BR-TK-19). */
+const linkCounterAccount: MockHandler = ({ account, params, body }) => {
+  const b = (body ?? {}) as Record<string, unknown>;
+  const bad = invalid([...newEmailChecks('accountEmail', b.accountEmail), ...verificationChecks(b.verificationMethod)]);
+  if (bad) return bad;
+  if (account!.role !== 'RECEPTIONIST') return denied();
+  const customerId = Number(params.customerId);
+  const counter = findCustomer(customerId);
+  if (!counter) return notFound('hồ sơ khách', customerId);
+  const s = load();
+  const target = byEmail(s, b.accountEmail as string);
+  if (!target || target.role !== 'CUSTOMER' || target.status !== 'ACTIVE') {
+    return fail('RESOURCE_NOT_FOUND', 'Không tìm thấy tài khoản khách hàng đã kích hoạt với email này', 404);
+  }
+  if (counter.createdChannel !== 'COUNTER') return ruleFail('BR-TK-19', 'Chỉ liên kết được hồ sơ lập tại quầy');
+  if (counter.accountId !== null) return ruleFail('BR-TK-19', 'Hồ sơ tại quầy này đã liên kết tài khoản');
+  const blocker = linkBlocker(target.id);
+  if (blocker === 'ALREADY_LINKED') return ruleFail('BR-TK-19', 'Tài khoản đã được liên kết với một hồ sơ tại quầy khác');
+  if (blocker === 'HAS_DATA') {
+    return ruleFail('BR-TK-19', 'Hồ sơ online của tài khoản đã có thú cưng, lịch hẹn, đặt chỗ, đơn hàng hoặc góp ý nên không liên kết được');
+  }
+  if (!linkAccount(target.id, customerId, target.email)) return ruleFail('BR-TK-19', 'Không thể liên kết hồ sơ này');
+  return ok({ customerId }, 200, 'Đã liên kết hồ sơ với tài khoản');
+};
+
 export const identityRoutes: Record<string, MockHandler> = {
+  'POST /api/customers/:customerId/account-email-change': sendCustomerEmailChange,
+  'POST /api/customers/:customerId/account-email-change/confirm': confirmCustomerEmailChange,
+  'POST /api/customers/:customerId/link-account': linkCounterAccount,
   'POST /api/auth/register': register,
   'POST /api/auth/register/verify': verifyRegistration,
   'POST /api/auth/register/resend-otp': resendRegistrationOtp,

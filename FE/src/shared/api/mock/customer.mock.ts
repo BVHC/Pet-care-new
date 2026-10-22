@@ -168,6 +168,54 @@ export function declineLink(accountId: number): boolean {
 
 export const findCustomer = (customerId: number) => load().customers.find((c) => c.customerId === customerId);
 
+// ─── Cho customer-pet.mock (UC22, UC23): tra cứu, tạo và sửa hồ sơ tại quầy ───
+
+export const allCustomers = () => load().customers;
+
+/** UC22: hồ sơ tại quầy chưa gắn tài khoản, bắt buộc SĐT (BR-KH-01). */
+export function createCounterProfile(fullName: string, phone: string, email: string | null): MockCustomer {
+  const s = load();
+  const created: MockCustomer = {
+    customerId: Math.max(0, ...s.customers.map((c) => c.customerId)) + 1,
+    accountId: null,
+    fullName,
+    phone,
+    email,
+    avatarUrl: null,
+    createdChannel: 'COUNTER',
+    linkDecisionPending: false,
+    hasData: false,
+  };
+  s.customers.push(created);
+  save(s);
+  return created;
+}
+
+/** UC22: trường `undefined` giữ nguyên; trả undefined nếu không có hồ sơ. */
+export function updateCustomerFields(
+  customerId: number,
+  patch: Partial<Pick<MockCustomer, 'fullName' | 'phone' | 'email'>>,
+): MockCustomer | undefined {
+  const s = load();
+  const c = s.customers.find((x) => x.customerId === customerId);
+  if (!c) return undefined;
+  if (patch.fullName !== undefined) c.fullName = patch.fullName;
+  if (patch.phone !== undefined) c.phone = patch.phone;
+  if (patch.email !== undefined) c.email = patch.email;
+  save(s);
+  return c;
+}
+
+/** Hồ sơ online đã có thú cưng thì không liên kết được với hồ sơ tại quầy nữa (BR-TK-19). */
+export function markHasData(customerId: number) {
+  const s = load();
+  const c = s.customers.find((x) => x.customerId === customerId);
+  if (c && !c.hasData) {
+    c.hasData = true;
+    save(s);
+  }
+}
+
 // ─── Handlers ───
 
 const isCustomer = (req: MockRequest) => req.account?.role === 'CUSTOMER';

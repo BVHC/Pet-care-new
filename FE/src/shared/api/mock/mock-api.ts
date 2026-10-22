@@ -8,13 +8,17 @@ import { adminIdentityRoutes } from './identity-admin.mock';
 import { branchRoutes } from './branch.mock';
 import { catalogRoutes } from './catalog.mock';
 import { customerRoutes } from './customer.mock';
+import { customerPetRoutes } from './customer-pet.mock';
+import { inventoryRoutes } from './inventory.mock';
 import { fail, ruleFail, type MockHandler, type MockReply } from './envelope';
 import { accountForToken, identityRoutes } from './identity.mock';
 
 const ROUTES: Record<string, MockHandler> = {
   ...identityRoutes,
   ...customerRoutes,
+  ...customerPetRoutes,
   ...catalogRoutes,
+  ...inventoryRoutes,
   ...branchRoutes,
   ...adminIdentityRoutes,
 };

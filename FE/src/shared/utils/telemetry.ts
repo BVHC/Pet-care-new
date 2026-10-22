@@ -12,7 +12,13 @@ export type TelemetryName =
   | 'soap_save'
   | 'timing'
   | 'web_vital'
-  | 'workspace_error';
+  | 'workspace_error'
+  | 'counterCustomer.create'
+  | 'pet.update'
+  | 'pet.mark_deceased'
+  | 'pet.transfer_owner'
+  | 'pet.delete'
+  | 'pet.weight_add';
 
 export interface TelemetryEvent {
   name: TelemetryName;

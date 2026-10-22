@@ -1,14 +1,17 @@
-// Identity admin API — docs/api/identity-v1.md #15–24, #28–36 (Staff, Accounts, Configuration, Audit).
-// Bốn màn admin gọi qua file này; tầng hooks gọi tiếp từ đây.
+// Identity admin API — docs/api/identity-v1.md #15–36 (Staff, tài khoản của hồ sơ khách tại quầy, Accounts, Configuration, Audit).
+// Bốn màn admin và hồ sơ khách ở quầy gọi qua file này; tầng hooks gọi tiếp từ đây.
 import { apiClient } from './axios';
 import type { PageResponse } from '../types';
 import type { AccountSummary } from '../types/auth';
+import type { LinkResult } from '../types/profile';
 import type {
   AccountQuery,
   AuditLogEntry,
   AuditQuery,
   ChangeRoleRequest,
+  CounterLinkRequest,
   CreateStaffRequest,
+  CustomerEmailChangeRequest,
   EmailChangeRequest,
   LockResult,
   NotificationTemplate,
@@ -40,6 +43,16 @@ export const identityApi = {
   resendInitialPassword: (id: number) => post<void>(`/api/staff/${id}/resend-initial-password`, {}),
   sendEmailChange: (id: number, body: EmailChangeRequest) => post<OtpSentResponse>(`/api/staff/${id}/email-change`, body),
   confirmEmailChange: (id: number, body: OtpCodeRequest) => post<StaffResponse>(`/api/staff/${id}/email-change/confirm`, body),
+
+  // ─── Tài khoản của hồ sơ khách tại quầy (UC22, A06) ───
+  sendCustomerEmailChange: (customerId: number, body: CustomerEmailChangeRequest) =>
+    post<OtpSentResponse>(`/api/customers/${customerId}/account-email-change`, body),
+  /** 204: đọc `.data.data` của body rỗng ra undefined. */
+  confirmCustomerEmailChange: async (customerId: number, body: OtpCodeRequest): Promise<void> => {
+    await apiClient.post(`/api/customers/${customerId}/account-email-change/confirm`, body);
+  },
+  linkCounterAccount: (customerId: number, body: CounterLinkRequest) =>
+    post<LinkResult>(`/api/customers/${customerId}/link-account`, body),
 
   // ─── Accounts (UC09, ADMIN only) ───
   listAccounts: (query: AccountQuery = {}) => get<PageResponse<AccountSummary>>('/api/accounts', query),

@@ -18,6 +18,19 @@ export const QUERY_KEYS = {
     all: ['customers'] as const,
     search: (query: string) => ['customers', 'search', query] as const,
   },
+  /** Hồ sơ khách tại quầy (UC22..26) — theo contract docs/api/customer-v1.md #8..21. */
+  counterCustomers: {
+    all: ['counter-customers'] as const,
+    search: (params: Record<string, string>) => ['counter-customers', 'search', params] as const,
+    detail: (customerId: number) => ['counter-customers', 'detail', customerId] as const,
+  },
+  pets: {
+    all: ['pets'] as const,
+    mine: () => ['pets', 'mine'] as const,
+    detail: (petId: number) => ['pets', 'detail', petId] as const,
+    weights: (petId: number) => ['pets', 'weights', petId] as const,
+    health: (petId: number) => ['pets', 'health', petId] as const,
+  },
   catalog: { all: ['catalog'] as const },
   staff: { all: ['staff'] as const },
   shift: {
@@ -30,7 +43,7 @@ export const QUERY_KEYS = {
   },
 } as const;
 
-const { visits, appointments, orders, catalog, shift, dashboard } = QUERY_KEYS;
+const { visits, appointments, orders, catalog, shift, dashboard, counterCustomers, pets } = QUERY_KEYS;
 
 /** What each command changes — across workspaces (a check-in at reception must reach the exam room). */
 export const INVALIDATE = {
@@ -43,4 +56,14 @@ export const INVALIDATE = {
   editVisitLines: [visits.all, catalog.all],
   openShift: [shift.all, dashboard.all],
   collectPayment: [orders.all, visits.all, shift.all, catalog.all, dashboard.all],
+  // KH module: lễ tân tạo / sửa hồ sơ khách + thêm thú thì cả customer detail và search.
+  createCounterCustomer: [counterCustomers.all, pets.all],
+  updateCounterCustomer: [counterCustomers.all, pets.all],
+  addPetForCustomer: [counterCustomers.all, pets.all],
+  createMyPet: [pets.all, counterCustomers.all],
+  updatePet: [pets.all, counterCustomers.all],
+  markDeceased: [pets.all, counterCustomers.all],
+  deletePet: [pets.all, counterCustomers.all],
+  transferOwner: [pets.all, counterCustomers.all],
+  addWeight: [pets.all],
 } satisfies Record<string, readonly (readonly unknown[])[]>;

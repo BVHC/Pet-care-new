@@ -11,7 +11,7 @@ import { CartPage } from '../pages/customer/CartPage';
 import { CheckoutPage } from '../pages/customer/CheckoutPage';
 import { OrderConfirmationPage } from '../pages/customer/OrderConfirmationPage';
 import { BookingPage } from '../pages/customer/BookingPage';
-import { PetsPage } from '../pages/customer/PetsPage';
+import PetsPage from '../pages/customer/PetsPage';
 import { AccountPage } from '../pages/customer/AccountPage';
 import { OrderHistoryPage } from '../pages/customer/OrderHistoryPage';
 import { FavoritesPage } from '../pages/customer/FavoritesPage';
@@ -65,8 +65,6 @@ import { AdminRefundsPage } from '../pages/admin/AdminRefundsPage';
 import { AdminPromotionsPage } from '../pages/admin/AdminPromotionsPage';
 import { AdminMembershipPage } from '../pages/admin/AdminMembershipPage';
 import { AdminWarehousePage } from '../pages/admin/AdminWarehousePage';
-import { AdminPurchasingPage } from '../pages/admin/AdminPurchasingPage';
-import { AdminVaccinesPage } from '../pages/admin/AdminVaccinesPage';
 import { AdminWorkforcePage } from '../pages/admin/AdminWorkforcePage';
 import { AdminIncidentsPage } from '../pages/admin/AdminIncidentsPage';
 import { AdminReportsPage } from '../pages/admin/AdminReportsPage';
@@ -78,6 +76,7 @@ import { AdminNotificationTemplatesPage } from '../pages/admin/AdminNotification
 import { AdminOrdersPage } from '../pages/admin/AdminOrdersPage';
 import { AdminAIPage } from '../pages/admin/AdminAIPage';
 import { AdminCatalogPage } from '../pages/admin/AdminCatalogPage';
+import { AdminCustomersPage } from '../pages/admin/AdminCustomersPage';
 import { AdminBranchesPage } from '../pages/admin/AdminBranchesPage';
 import { StaffProfilePage } from '../pages/admin/StaffProfilePage';
 import { AdminBranchDetailPage } from '../pages/admin/AdminBranchDetailPage';
@@ -178,6 +177,7 @@ export function App() {
             <Route path="/admin/dashboard" element={<AdminDashboardPage />} />
             <Route path="/admin/profile" element={<StaffProfilePage />} />
             <Route path="/admin/catalog/:tab?" element={<AdminCatalogPage />} />
+            <Route path="/admin/customers" element={<AdminCustomersPage />} />
             <Route path="/admin/branches" element={<AdminBranchesPage />} />
             <Route path="/admin/branches/:branchId/:tab?" element={<AdminBranchDetailPage />} />
             <Route path="/admin/pos" element={<AdminPOSPage />} />
@@ -192,9 +192,10 @@ export function App() {
             <Route path="/admin/refunds" element={<AdminRefundsPage />} />
             <Route path="/admin/promotions" element={<AdminPromotionsPage />} />
             <Route path="/admin/membership" element={<AdminMembershipPage />} />
-            <Route path="/admin/warehouse" element={<AdminWarehousePage />} />
-            <Route path="/admin/purchasing" element={<AdminPurchasingPage />} />
-            <Route path="/admin/vaccines" element={<AdminVaccinesPage />} />
+            <Route path="/admin/warehouse/:tab?" element={<AdminWarehousePage />} />
+            {/* Trang mua hàng / vaccine cũ (mô hình đơn mua trước v16): chuyển sang tab kho tương ứng, gỡ ở T57. */}
+            <Route path="/admin/purchasing" element={<Navigate to="/admin/warehouse/receipts" replace />} />
+            <Route path="/admin/vaccines" element={<Navigate to="/admin/warehouse/stock?productType=VACCINE" replace />} />
             <Route path="/admin/workforce" element={<AdminWorkforcePage />} />
             <Route path="/admin/incidents" element={<AdminIncidentsPage />} />
             <Route path="/admin/reports" element={<AdminReportsPage />} />

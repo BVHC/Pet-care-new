@@ -38,10 +38,12 @@ describe('staff sidebar', () => {
     expect(admin.queryByRole('link', { name: 'Quầy POS' })).not.toBeInTheDocument();
   });
 
-  it('gives a vet the clinic counts but no back-office menu', () => {
+  it('gives a vet the clinic counts and only the read-only customer lookup in the back-office menu (UC23)', () => {
     renderSidebar('VET', { path: '/staff/doctor' });
 
-    expect(screen.queryByRole('navigation', { name: 'Quản trị' })).not.toBeInTheDocument();
+    const admin = within(nav('Quản trị'));
+    expect(admin.getAllByRole('link')).toHaveLength(1);
+    expect(admin.getByRole('link', { name: 'Tra cứu khách & thú' })).toHaveAttribute('href', '/admin/customers');
     expect(screen.getByRole('heading', { name: 'Cả phòng khám hôm nay' })).toBeInTheDocument();
   });
 

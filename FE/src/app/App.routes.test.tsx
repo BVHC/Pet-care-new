@@ -108,6 +108,30 @@ describe('route guards', () => {
     expect(await screen.findByRole('heading', { name: 'PetCare Cầu Giấy' })).toBeInTheDocument();
   });
 
+  it('sends the old purchasing page to the stock receipts of the warehouse (T24)', async () => {
+    await signInAs('manager@store1.vn');
+    open('/admin/purchasing');
+    expect(await screen.findByRole('tab', { name: 'Phiếu nhập', selected: true })).toBeInTheDocument();
+  });
+
+  it('keeps a vet out of the warehouse (UC75 is A05, A06)', async () => {
+    await signInAs('doctor@store1.vn');
+    open('/admin/warehouse');
+    expect(await forbidden()).toBeInTheDocument();
+  });
+
+  it('opens the read-only customer lookup for a vet (UC23)', async () => {
+    await signInAs('doctor@store1.vn');
+    open('/admin/customers');
+    expect(await screen.findByRole('heading', { name: 'Tra cứu khách & thú cưng' })).toBeInTheDocument();
+  });
+
+  it('keeps the receptionist on the desk for customers, not the read-only page', async () => {
+    await signInAs('reception@store1.vn');
+    open('/admin/customers');
+    expect(await forbidden()).toBeInTheDocument();
+  });
+
   it('keeps a receptionist out of branch management', async () => {
     await signInAs('reception@store1.vn');
     open('/admin/branches');
