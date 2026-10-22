@@ -45,6 +45,8 @@ app:
       cron: "-"
     pending-order-digest:
       cron: "-"
+    boarding-no-show:
+      cron: "-"
     notification-outbox:
       cron: "-"
       priority-cron: "-"

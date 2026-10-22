@@ -31,9 +31,9 @@ import com.petcare.module.identity.service.SessionService;
 import com.petcare.platform.config.TimeConfig;
 
 /**
- * G8 (docs/adr/0050, D034): {@code AppointmentQueryApi} đã thật, nhưng {@code BoardingQueryApi} của BE-2 còn là
- * placeholder (D033), nên thêm ngày nghỉ vào chi nhánh {@code ACTIVE} vẫn 500 — ở boarding chứ không còn ở
- * appointment — và không ghi gì: không có dòng {@code holidays}, lịch hẹn nguyên vẹn. Dùng bean thật hoàn toàn.
+ * G8 (docs/adr/0050, D034): thêm ngày nghỉ vào chi nhánh {@code ACTIVE} chạy trên bean thật hoàn toàn. Trước T31 vẫn
+ * 500 ở {@code BoardingQueryApi} (nợ D033); từ docs/adr/0065 boarding có bản thật nên chi nhánh có lịch hẹn bị ảnh hưởng
+ * mà chưa chọn hủy hàng loạt bị từ chối 400 BR-LH-10 và không ghi gì: không có dòng {@code holidays}, lịch hẹn nguyên vẹn.
  */
 @SpringBootTest(webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT)
 @ActiveProfiles("test")
@@ -80,13 +80,14 @@ class AppointmentQueryApiPlaceholderIT {
     }
 
     @Test
-    void addHolidayWithBookedStill500AndWritesNothing() {
+    void addHolidayWithBookedIsRefusedWithBrLh10AndWritesNothing() {
         String xmin = jdbc.queryForObject("SELECT xmin::text FROM appointments WHERE id = ?", String.class,
                 appointment);
 
         ResponseEntity<Map<String, Object>> response = post("/holidays", "{\"holidayDate\":\"" + day + "\"}");
 
-        assertThat(response.getStatusCode()).as("%s", response.getBody()).isEqualTo(HttpStatus.INTERNAL_SERVER_ERROR);
+        assertThat(response.getStatusCode()).as("%s", response.getBody()).isEqualTo(HttpStatus.BAD_REQUEST);
+        assertThat((String) response.getBody().get("message")).contains("BR-LH-10");
         assertThat(jdbc.queryForObject("SELECT count(*) FROM holidays WHERE branch_id = ?", Long.class, branch))
                 .isZero();
         assertThat(jdbc.queryForObject("SELECT xmin::text FROM appointments WHERE id = ?", String.class, appointment))
@@ -94,11 +95,15 @@ class AppointmentQueryApiPlaceholderIT {
     }
 
     @Test
-    void impactPreviewStill500AtBoarding() {
+    void impactPreviewListsTheBookedAppointmentOnRealBeans() {
         ResponseEntity<Map<String, Object>> response = post("/holidays/impact",
                 "{\"holidayDate\":\"" + day + "\"}");
 
-        assertThat(response.getStatusCode()).isEqualTo(HttpStatus.INTERNAL_SERVER_ERROR);
+        assertThat(response.getStatusCode()).as("%s", response.getBody()).isEqualTo(HttpStatus.OK);
+        @SuppressWarnings("unchecked")
+        Map<String, Object> data = (Map<String, Object>) response.getBody().get("data");
+        assertThat((java.util.List<?>) data.get("appointments")).hasSize(1);
+        assertThat((java.util.List<?>) data.get("boardingBookings")).isEmpty();
     }
 
     private ResponseEntity<Map<String, Object>> post(String path, String json) {

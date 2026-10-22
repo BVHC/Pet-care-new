@@ -80,7 +80,7 @@
 - **`GET /kennels`** — Danh sách chuồng của chi nhánh. Query: `kennelTypeId?`, `status?`. Response `200` mảng `Kennel`. Lỗi: `401` · `403`.
 - **`POST /kennels`** — Tạo chuồng. Request `CreateKennelRequest`. Response `201` `Kennel`. Lỗi: `400` `BR-LT-01` mã trùng trong chi nhánh · loại chuồng không phải dịch vụ BOARDING đang bật · `401` · `403` · `404`.
 - **`PATCH /kennels/{kennelId}`** — Sửa mã / ghi chú chuồng. Request `UpdateKennelRequest`. Response `200` `Kennel`. Lỗi: `400` · `401` · `403` · `404`.
-- **`DELETE /kennels/{kennelId}`** — Xóa chuồng. Response `204` rỗng. Lỗi: `401` · `403` · `404` · `409` Chuồng đang OCCUPIED.
+- **`DELETE /kennels/{kennelId}`** — Xóa chuồng. Response `204` rỗng. Lỗi: `401` · `403` · `404` · `409` Chuồng đang OCCUPIED hoặc đã có lịch sử lưu trú (chuyển bảo trì thay vì xóa).
 - **`POST /kennels/{kennelId}/start-maintenance`** — Chuyển chuồng sang bảo trì. Response `200` `MaintenanceResult`. Lỗi: `401` · `403` · `404` · `409` Chuồng không AVAILABLE (OCCUPIED không chuyển được).
 - **`POST /kennels/{kennelId}/end-maintenance`** — Hết bảo trì. Response `200` `Kennel`. Lỗi: `401` · `403` · `404` · `409` Chuồng không MAINTENANCE.
 ### Availability
@@ -91,7 +91,7 @@
 - **`POST /boarding-bookings`** — Đặt chỗ lưu trú. Request `CreateBookingRequest`. Response `201` `BookingResult`. Lỗi: `400` `BR-LT-02` thú sai loài / quá cân nặng tối đa / ngoài 1–30 đêm [CFG] / chồng ngày với đặt chỗ khác · `BR-LT-03` hết chỗ (message ghi các đêm thiếu) · `BR-LT-04` khách đặt ngoài khoảng 1–60 ngày [CFG], ngày nhận / trả là ngày nghỉ · `BR-LH-09` đang bị hạn chế đặt online · `BR-KH-05` thú đã mất · `BR-TK-19` hồ sơ chờ liên kết · loại chuồng không bật tại chi nhánh ACTIVE · `401` · `403` · `404`.
 - **`GET /boarding-bookings`** — Danh sách đặt chỗ. Query: `status?`, `petId?`, `customerId?`, `from?`, `to?`, `inStay?`, `missingCareLogToday?`, `page?`, `size?`. Response `200` trang `Booking`. Lỗi: `400` · `401` · `403`.
 - **`GET /boarding-bookings/{bookingId}`** — Chi tiết đặt chỗ. Response `200` `Booking`. Lỗi: `401` · `403` · `404`.
-- **`POST /boarding-bookings/{bookingId}/extend`** — Gia hạn ngày trả. Request `ExtendBookingRequest`. Response `200` `Booking`. Lỗi: `400` `BR-LT-06` đã qua ngày trả dự kiến · `BR-LT-03` hết chỗ các đêm thêm · `BR-LT-02` vượt 30 đêm · `401` · `403` · `404` · `409` Đặt chỗ OVERDUE (không gia hạn) hoặc đã kết thúc.
+- **`POST /boarding-bookings/{bookingId}/extend`** — Gia hạn ngày trả. Request `ExtendBookingRequest`. Response `200` `Booking`. Lỗi: `400` `BR-LT-06` đã qua ngày trả dự kiến · `BR-LT-03` hết chỗ các đêm thêm · `BR-LT-02` vượt 30 đêm · ngày trả mới không sau ngày trả hiện tại (`VALIDATION_FAILED`) · `401` · `403` · `404` · `409` Đặt chỗ OVERDUE (không gia hạn) hoặc đã kết thúc.
 - **`POST /boarding-bookings/{bookingId}/cancel`** — Hủy đặt chỗ. Request `CancelBookingRequest`. Response `200` `Booking`. Lỗi: `400` Đã tới ngày nhận · `401` · `403` · `404` · `409` Đặt chỗ không còn BOOKED.
 ### Stay
 
@@ -158,6 +158,11 @@ Trường có `?` là không bắt buộc / có thể null. Kiểu `email`, `dat
 | A3 | Hủy vì hết chuồng đúng loại lúc nhận là endpoint riêng do lễ tân bấm sau khi nhận thất bại | BR-LT-08: 'đặt chỗ được hủy như hủy do phòng khám' — cần người kích hoạt và thời điểm rõ ràng |
 | A4 | Bản bổ sung nhật ký thêm được bất cứ lúc nào bởi CARETAKER / VET chi nhánh | BR-LT-11 'sau đó chỉ thêm bổ sung', không giới hạn thời gian |
 | A5 | Ảnh nhật ký là URL; tối đa 5 [CFG] | 05 `care_logs.photo_urls` |
+| A6 | Hủy muộn khi hủy sau 00:00 (giờ VN) của ngày nhận trừ 24 giờ [CFG] | BR-LT-06 nói 'dưới 24 giờ trước ngày nhận' nhưng không nêu giờ; docs/adr/0065 D4 |
+| A7 | Lễ tân không đặt được chỗ nhận trong ngày sau giờ đóng cửa hôm đó | ST05 sẽ chuyển NO_SHOW ngay và tính vi phạm cho khách; docs/adr/0065 D5 |
+| A8 | Ngày nhận và ngày trả phải có ít nhất một khung giờ mở cửa (không phải ngày nghỉ lễ hay ngày nghỉ cố định) | BR-LT-04; docs/adr/0065 D6 |
+| A9 | Thú chưa có cân nặng vẫn đặt được; cân bắt buộc lúc nhận thú | BR-LT-02 so cân nặng hiện tại, BR-LT-08 bắt buộc cân khi nhận; docs/adr/0065 D7 |
+| A10 | `activeOrderId` luôn null cho tới khi có Order lưu trú (T43) | Order BOARDING chỉ sinh khi bắt đầu trả thú (BR-LT-09) |
 
 | ID | Câu hỏi | Trạng thái | Gốc |
 |---|---|---|---|

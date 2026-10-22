@@ -47,6 +47,7 @@ import com.petcare.TestcontainersConfiguration;
 import com.petcare.module.appointment.api.AppointmentQueryApi;
 import com.petcare.module.appointment.api.AppointmentQueryApi.BookedSlot;
 import com.petcare.module.appointment.service.AppointmentClinicCancellationService;
+import com.petcare.module.boarding.service.BoardingClinicCancellationService;
 import com.petcare.module.boarding.api.BoardingQueryApi;
 import com.petcare.module.boarding.api.BoardingQueryApi.BookedStay;
 import com.petcare.module.branch.api.BranchClinicCancellationEvent;
@@ -119,6 +120,10 @@ class BranchAdminIT {
     @MockitoBean
     private AppointmentClinicCancellationService clinicCancellations;
 
+    /** Cùng lý do cho listener thật của boarding (docs/adr/0065): id đặt chỗ do mock {@link BoardingQueryApi} trả về. */
+    @MockitoBean
+    private BoardingClinicCancellationService boardingCancellations;
+
     @Autowired
     private EventSink sink;
 
@@ -147,7 +152,7 @@ class BranchAdminIT {
 
     @BeforeEach
     void setUp() {
-        reset(staff, appointments, boardings, pets, customers, clinicCancellations);
+        reset(staff, appointments, boardings, pets, customers, clinicCancellations, boardingCancellations);
         sink.events.clear();
         sink.failNext.set(false);
         branchA = branchRow("ACTIVE");

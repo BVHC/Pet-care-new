@@ -53,13 +53,14 @@ Team: **BE-1** (branch `manh`) = identity, appointment, visit, care · **BE-2** 
 | customer | BE-2 | customer-v1 #1–21; `CustomerApi`, `CustomerQueryApi`, `PetApi`, `PetQueryApi` | — |
 | inventory | BE-2 | inventory-v1 #1–17; `StockApi`, `StockQueryApi`, `DocumentCodeGenerator` | `StockReportApi` / ST08 (T44) |
 | sales | BE-2 | sales-v1 #1–8, #10 (order core T19, retail T29), #12–21 (cashier T30: shifts, combined payment with FEFO deduction, reconcile); ST13 `CashierShiftAutoCloseJob` + `PendingOrderDigestJob`; `VisitOrderApi`, `OrderQueryApi`, `CashierShiftQueryApi` | #9 abort-checkout + `BoardingOrderApi` (T43), #11 move-to-external-purchase (waits for BE-1 `PrescriptionApi`) |
-| boarding, content, report | BE-2 | — | `BoardingQueryApiPlaceholder` (a few methods real) |
+| boarding | BE-2 | boarding-v1 #1–12 (T31, ADR-0065): kennels, nightly availability, booking (price snapshot), list / detail, extend, cancel; ST05 `BoardingNoShowJob`; clinic-cancel listeners (pet deceased, owner transfer, branch holiday / hours); real `BoardingQueryApi` | #13–22 check-in / check-out / care logs / cancel-no-kennel (T42, T43), ST15; creating a booking returns 500 on the real app until BE-1's `VaccinationQueryApi` lands (T28); `Booking.activeOrderId` is null until T43 |
+| content, report | BE-2 | — | — |
 
 **Blocking debts:**
-- **D033** `BoardingQueryApi`: late cancel, ST05, and holiday / opening-hours changes of an `ACTIVE` branch return 500 and roll back.
+- **T31-1** `POST /api/boarding-bookings` returns 500 on the real app until BE-1 replaces `VaccinationQueryApiPlaceholder` (T28, due 23/10). (D033 paid 2026-10-22, ADR-0065.)
 - Due with T26: **D029** `FollowUpApi`. (D017 paid 2026-10-21, ADR-0062.)
 
-**Tests:** last full green `mvn clean verify` = 2026-10-19. Known red: 2 ITs in `AppointmentReminderIT` (`startedOrPastBookedIsNotReminded`, `reminderQueriesUseTheirIndexesOnRealisticData`) — `AppointmentRepository.findDueForReminderIds` lacks the lower bound `(slot_date, slot_start) > (:fromDate, :fromTime)` since T25 part 4 (`af117e0`). Latest (2026-10-21, T30 on top of T26 part 5): unit 4683/4683; ITs green by group (sales 140, inventory 81, identity + visit + schema + parity + notifications 271). A full `mvn clean verify` gets killed by low host memory (~855 ITs) — run ITs in groups.
+**Tests:** last full green `mvn clean verify` = 2026-10-19. Known red: 2 ITs in `AppointmentReminderIT` (`startedOrPastBookedIsNotReminded`, `reminderQueriesUseTheirIndexesOnRealisticData`) — `AppointmentRepository.findDueForReminderIds` lacks the lower bound `(slot_date, slot_start) > (:fromDate, :fromTime)` since T25 part 4 (`af117e0`). Latest (2026-10-21, T30 on top of T26 part 5): unit 4683/4683; ITs green by group (sales 140, inventory 81, identity + visit + schema + parity + notifications 271). A full `mvn clean verify` gets killed by low host memory (~855 ITs) — run ITs in groups. T31 (2026-10-22, on top of T30): unit 4772/4772; ITs green by group (boarding + schema + parity, appointment minus the 2 known-red, branch + customer, sales + visit + inventory, identity).
 
 ## Commands
 
@@ -112,7 +113,7 @@ Module codes: TK, QT, CN, CK, KH, SP, NS, LH, TN, KB, LT, BH, TG, KO, BV, DG, TB
 
 Open convention TBDs (don't decide silently — ask or write an ADR): command names when no Actor↔Command table exists; how "warn, don't block" rules return warnings (contracts assume a named field in `data`, e.g. `stockWarning`); locking for kennel capacity.
 
-**ADR map** (`docs/adr/`, immutable once Accepted — supersede instead of editing; **next free: 0065**):
+**ADR map** (`docs/adr/`, immutable once Accepted — supersede instead of editing; **next free: 0066**):
 
 | Area | ADRs |
 |---|---|
@@ -121,7 +122,7 @@ Open convention TBDs (don't decide silently — ask or write an ADR): command na
 | Accounts, staff, admin | 0024 staff directory · 0026 staff self-edit · 0027 profile link · 0028 customer self-edit · 0029–0035 staff admin / lock · 0036 [CFG] edit · 0037 templates · 0038 audit view · 0039 in-app notifications |
 | Notifications, jobs | 0008 session cleanup · 0012, 0014, 0016, 0017 ST20 · 0013 ST02 · 0018 FK indexes on `accounts` |
 | Appointment, visit (BE-1) | 0045 booking locks · 0046 slots · 0047 book · 0048 view · 0049 reschedule / cancel · 0050 cross-module API · 0052 clinic cancel · 0053, 0054 ST05 · 0055 booking restriction · 0056 ST03 · 0057 assumptions confirmed · 0058 visit foundation · 0059 check-in (also amends 0044: receptionist never edits a VISIT auto line) · 0060 queue views · 0061 dispatch (assign / move / emergency) · 0062 call / cancel / `needs_reassign` on lock · 0063 reassign a called visit |
-| BE-2 | 0041 customer & pet · 0042 inventory stock ledger · 0043 document codes · 0044 order core · 0051 retail order · 0064 cashier shift / payment / ST13 |
+| BE-2 | 0041 customer & pet · 0042 inventory stock ledger · 0043 document codes · 0044 order core · 0051 retail order · 0064 cashier shift / payment / ST13 · 0065 boarding kennels / bookings / ST05 |
 
 ## Backend architecture
 
@@ -165,7 +166,7 @@ com.petcare/
 | Document codes | `platform/sequence/DocumentCodeGenerator` (gap-free, table `document_counters`); appointments use sequence `appointment_code_seq` (gaps allowed) |
 | Swagger | springdoc. Each handler gets `@Operation` copied verbatim from `docs/api/openapi/<m>-v1.yaml`, plus `@ApiErrorDoc` per 4xx and `@Parameter`; every DTO field gets `@Schema(description, example)`. Never write `security` / 401 / 500. `OpenApiContractParityIT` must stay green — it also pins the number of documented endpoints (ADR-0040, convention 10) |
 | JSON | A float into an integer field → 400 `MALFORMED_REQUEST` (ADR-0032) |
-| Jobs | `module/<m>/job/{Name}Job` with `@Scheduled(cron = "${app.jobs.<name>.cron}", zone = BUSINESS_ZONE_ID)`. Not `@Transactional`; catch and log `<NAME>_FAILED`, never rethrow; MDC `traceId`; cron `"-"` in `application-test.yml`; cron as an env var in `docker-compose.yml` / `.env.example`. Pool = 4 threads, single instance. Existing: `SessionCleanupJob`, `PendingAccountCleanupJob` (ST02, 15 min), `PriorityNotificationJob` / `NotificationOutboxJob` / `InAppNotificationJob` (ST20), `NotificationOutboxCleanupJob`, `NoShowJob` (ST05, `0 */5`), `AppointmentReminderJob` (ST03, `0 2/5`), `CashierShiftAutoCloseJob` (ST13, `0 4/5`), `PendingOrderDigestJob` (ST13, `0 50 23`) |
+| Jobs | `module/<m>/job/{Name}Job` with `@Scheduled(cron = "${app.jobs.<name>.cron}", zone = BUSINESS_ZONE_ID)`. Not `@Transactional`; catch and log `<NAME>_FAILED`, never rethrow; MDC `traceId`; cron `"-"` in `application-test.yml`; cron as an env var in `docker-compose.yml` / `.env.example`. Pool = 4 threads, single instance. Existing: `SessionCleanupJob`, `PendingAccountCleanupJob` (ST02, 15 min), `PriorityNotificationJob` / `NotificationOutboxJob` / `InAppNotificationJob` (ST20), `NotificationOutboxCleanupJob`, `NoShowJob` (ST05, `0 */5`), `AppointmentReminderJob` (ST03, `0 2/5`), `CashierShiftAutoCloseJob` (ST13, `0 4/5`), `PendingOrderDigestJob` (ST13, `0 50 23`), `BoardingNoShowJob` (ST05 boarding, `0 3/5`; `1/5` is kept for ST15) |
 
 ## Transactions, locking, concurrency — house style
 
@@ -188,6 +189,7 @@ Every write ADR follows these. Read the ADR of the neighbouring feature before w
   | Visit (ADR-0058) | `accounts` (staff, `FOR SHARE`, id ↑) → `pets FOR SHARE` → `visits` (id ↑) → `appointments` via `AppointmentApi` → `document_counters` (`visits` → `ORDER`) → `orders` via `VisitOrderApi` → stock lots via `StockApi`. Check-in does not lock `branches`. Assignee lock = `StaffDirectoryApi.findStaffForShare`; move locks every `WAITING` visit of the branch in one `ORDER BY id` query (ADR-0061); call locks the caller's own account `FOR SHARE` before the visit; cancel `visits → appointments → orders`; the lock-account listener runs `accounts → visits` (ADR-0062); reassign locks the old and the new assignee `FOR SHARE` (id ↑) before the visit (ADR-0063) |
   | Sales | caller's document → `orders` (lock before read) → `products FOR SHARE` → stock lots; several orders by ascending id |
 | Cashier (ADR-0064) | open shift: `accounts FOR SHARE` (own) → INSERT shift · payment: shift `FOR SHARE` → all orders in **one** `ORDER BY id` statement → all lots in **one** statement (`StockApi.issueForPayment`) → `document_counters` last · close / reconcile: shift `FOR NO KEY UPDATE` · ST13: shift `SKIP LOCKED` |
+  | Boarding (ADR-0065) | booking: `pets FOR SHARE` → `branches` (`BranchApi.lockForBooking`, shared with appointment booking and branch hours / holiday changes) → INSERT → `document_counters` · extend: `pets FOR SHARE` → `branches` → booking · cancel: booking → `evaluateAfterViolation` (advisory 1002 last) · kennel writes: `branches` → kennel · ST05: booking `SKIP LOCKED` → 1002 · clinic cancel: bookings by ascending id in batches of 100 |
   | Inventory | caller's document → `stock_receipts` → `suppliers FOR SHARE` → `products FOR SHARE` → all lots in **one** `ORDER BY id FOR NO KEY UPDATE` → `StockLedger.apply` (the only writer of `stock_lots.quantity`) |
   | [CFG] edit | `system_configs` rows by ascending key, the key and its cross-key partner |
 
@@ -200,7 +202,7 @@ Every write ADR follows these. Read the ADR of the neighbouring feature before w
 
 - Schema follows erd §0: PK `BIGINT GENERATED ALWAYS AS IDENTITY` (1–1 tables reuse the FK as PK); FK `<singular>_id`, `ON DELETE RESTRICT`; ROOT / PART / REF tables have `created_at` + `updated_at`, LOG tables only `created_at` and are insert-only; money `BIGINT` VND, business dates `DATE` (Vietnam time), weight `NUMERIC(6,2)`; every enum column `VARCHAR(30)` + `CHECK`. Deliberate deviations: erd §13.
 - **Flyway owns the schema** (`BE/src/main/resources/db/migration/`, V1 = the whole v16 schema, V2 = 52 [CFG] rows, then seed templates and indexes). **Never edit an applied migration** — not even a comment: the checksum changes and every DB that ran it fails to start.
-- **Version numbers are shared with BE-2:** V1–V19 are taken (V13–V15 BE-2; V16 appointment sequence, V17–V18 appointment templates; V19 cashier templates + indexes, BE-2 — V17–V19 not yet confirmed with the other dev). **Agree on V20 before creating it.** A dev DB that ran the old `V13__appointment_code_sequence` needs `flyway repair` or `docker compose down -v` (ask first — it wipes data).
+- **Version numbers are shared with BE-2:** V1–V20 are taken (V13–V15 BE-2; V16 appointment sequence, V17–V18 appointment templates; V19 cashier templates + indexes, BE-2; V20 boarding ST05 index + clinic-cancel templates, BE-2 — V17–V20 not yet confirmed with the other dev). **Agree on V21 before creating it.** A dev DB that ran the old `V13__appointment_code_sequence` needs `flyway repair` or `docker compose down -v` (ask first — it wipes data).
 - **V16 checksum changed:** `571e0fe` removed conflict markers from `V16__appointment_code_sequence.sql` (comments only; `origin/dev` and `origin/manh` still carry the markers). A DB that ran V16 before that fails startup with *checksum mismatch for version 16*. There is no Flyway Maven plugin: after checking that `appointment_code_seq` matches the file, run `UPDATE flyway_schema_history SET checksum = -439054298 WHERE version = '16' AND checksum = -223559679` (what `repair` would write). Tell BE-2 before they merge.
 - The first ADMIN is never seeded: create it with SQL — an `accounts` row (with `phone`) **plus** a `staff_profiles` row (`branch_id` NULL); template in system-overview §1. Don't add bootstrap code for it.
 

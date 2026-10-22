@@ -176,7 +176,7 @@ class StaffTransferPlaceholderIT {
 
     /**
      * Khóa nhân viên A05–A08 chạy thật khi không còn việc dở (D016 đã trả, T30): khóa dòng, thu hồi phiên, ghi audit.
-     * Khóa khách không kiểm ở đây (phụ thuộc {@code BoardingQueryApi}, nợ D033).
+     * Khóa khách không kiểm ở đây.
      */
     @Test
     void lockingBranchStaffWorksOnRealBeans() {

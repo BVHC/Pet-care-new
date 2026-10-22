@@ -137,10 +137,11 @@ class SchemaMigrationIT {
         // V16 sequence mã lịch hẹn appointment_code_seq (docs/adr/0045-appointment-booking-locks; V13 trước khi gộp nhánh),
         // V17 mẫu APPOINTMENT_CANCELLED_BY_CLINIC (+_APP) (docs/adr/0052),
         // V18 mẫu APPOINTMENT_REMINDER (+_APP) (docs/adr/0056),
-        // V19 index thu ngân + mẫu ST13 CASHIER_SHIFT_AUTO_CLOSED_APP, PENDING_ORDERS_DIGEST_APP (docs/adr/0064)
+        // V19 index thu ngân + mẫu ST13 CASHIER_SHIFT_AUTO_CLOSED_APP, PENDING_ORDERS_DIGEST_APP (docs/adr/0064),
+        // V20 index ST05 lưu trú + mẫu BOARDING_CANCELLED_BY_CLINIC (+_APP) (docs/adr/0065)
         assertThat(rows).extracting(row -> row.get("version"))
                 .containsExactly("1", "2", "3", "4", "5", "6", "7", "8", "9", "10", "11", "12", "13", "14", "15",
-                        "16", "17", "18", "19");
+                        "16", "17", "18", "19", "20");
         assertThat(rows).allSatisfy(row -> assertThat(row).containsEntry("success", true));
     }
 
@@ -358,7 +359,7 @@ class SchemaMigrationIT {
     }
 
     /**
-     * V3, V4, V8, V9, V11, V12 (06-module-contracts §8 Q4, BR-QT-14): mẫu seed bằng migration khôi phục được về mặc định
+     * V3, V4, V8, V9, V11, V12, V17–V20 (06-module-contracts §8 Q4, BR-QT-14): mẫu seed bằng migration khôi phục được về mặc định
      * ({@code body = default_body}, {@code subject = default_subject}), biến bắt buộc nằm trong biến cho phép và có mặt
      * trong nội dung, mẫu OTP bắt buộc {@code {ma_otp}}. Mẫu {@code IT_*} do các IT khác chèn nên bị loại.
      */
@@ -372,7 +373,7 @@ class SchemaMigrationIT {
                         "EMAIL_CHANGED_NOTICE", "ACCOUNT_LOCKED_FOLLOW_UP_APP", "LAST_BRANCH_MANAGER_LOCKED_APP",
                         "APPOINTMENT_CANCELLED_BY_CLINIC", "APPOINTMENT_CANCELLED_BY_CLINIC_APP",
                         "APPOINTMENT_REMINDER", "APPOINTMENT_REMINDER_APP", "CASHIER_SHIFT_AUTO_CLOSED_APP",
-                        "PENDING_ORDERS_DIGEST_APP");
+                        "PENDING_ORDERS_DIGEST_APP", "BOARDING_CANCELLED_BY_CLINIC", "BOARDING_CANCELLED_BY_CLINIC_APP");
         assertThat(jdbc.queryForList("""
                 SELECT code FROM notification_templates
                 WHERE %s AND (body <> default_body OR subject IS DISTINCT FROM default_subject)

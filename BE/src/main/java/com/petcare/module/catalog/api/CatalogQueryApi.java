@@ -52,4 +52,10 @@ public interface CatalogQueryApi {
 
     /** Loại vaccine có ít nhất 1 dòng phác đồ cờ bắt buộc khi lưu trú của loài (BR-LT-05). */
     List<Long> findBoardingRequiredVaccineTypeIds(Species species);
+
+    /**
+     * Tên loại vaccine theo lô (thêm 2026-10-22, T31): boarding ghép tên cho {@code VaccineGap}. Id không có thì vắng
+     * mặt trong kết quả; tập rỗng → map rỗng. Đọc mới mỗi lần gọi.
+     */
+    java.util.Map<Long, String> findVaccineTypeNames(Collection<Long> vaccineTypeIds);
 }
