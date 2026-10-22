@@ -89,6 +89,23 @@ class MedicalRecordTest {
     }
 
     @Test
+    void lockOnlySetsLockedAtAndKeepsTheContent() {
+        MedicalRecord record = MedicalRecord.of(9001L);
+        LocalDate day = LocalDate.of(2026, 11, 5);
+        record.rewrite("a", "b", "c", "d", day, 45L);
+        Instant at = Instant.parse("2026-10-22T03:00:00.123456Z");
+
+        record.lock(at);
+
+        assertThat(record.getLockedAt()).isEqualTo(at);
+        assertThat(record.sameContent("a", "b", "c", "d", day)).isTrue();
+        assertThat(record.getLastEditedBy()).isEqualTo(45L);
+        assertThat(record.getFollowUpRemindedAt()).isNull();
+        assertThat(record.getFollowUpCancelledAt()).isNull();
+        assertThatThrownBy(() -> record.lock(null)).isInstanceOf(IllegalArgumentException.class);
+    }
+
+    @Test
     void visitIdIsRequired() {
         assertThatThrownBy(() -> MedicalRecord.of(null)).isInstanceOf(IllegalArgumentException.class);
     }

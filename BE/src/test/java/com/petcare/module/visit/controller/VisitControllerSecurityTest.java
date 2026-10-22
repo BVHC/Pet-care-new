@@ -35,6 +35,7 @@ class VisitControllerSecurityTest {
                 "markVisitEmergency", "hasAnyRole('RECEPTIONIST','VET')",
                 "callVisit", "hasAnyRole('VET','CARETAKER')",
                 "reassignCalledVisit", "hasAnyRole('BRANCH_MANAGER','SUPER_MANAGER')",
+                "completeVisit", "hasAnyRole('VET','CARETAKER')",
                 "cancelVisit", "hasRole('RECEPTIONIST')"));
         assertThat(VisitController.QUEUE_ROLES).isEqualTo(QUEUE);
         assertThat(VisitController.DETAIL_ROLES).isEqualTo(DETAIL);

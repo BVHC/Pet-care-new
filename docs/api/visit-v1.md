@@ -55,7 +55,7 @@
 | Xác định ca cấp cứu | A06, A07 | Nhân viên chi nhánh | — | — | Lượt lên đầu hàng đợi (A2). |
 | Gọi lượt | A07, A08 | Người được gán lượt | WAITING → IN_PROGRESS (Visit#3) | — | Người gọi được kiểm lại dưới khóa tài khoản của chính mình (docs/adr/0062). |
 | Gán lại lượt đã gọi | A05 (A04 khi chi nhánh không còn BRANCH_MANAGER ACTIVE) | BRANCH_MANAGER chi nhánh; SUPER_MANAGER theo điều kiện | IN_PROGRESS → IN_PROGRESS (Visit#4) | — | A15. Thứ tự lỗi: 404 → 403 → 409 → 400 (docs/adr/0063). Gỡ cờ needsReassign. Bệnh án giữ nguyên kèm tên người ghi; quyền xóa dòng Order người cũ đã thêm chuyển cho người mới; ghi audit. |
-| Hoàn tất lượt | A07, A08 | Người được gán lượt | IN_PROGRESS → COMPLETED (Visit#5) · Lịch hẹn#7 · Order#4 (→ PENDING) · bệnh án khóa | — | — |
+| Hoàn tất lượt | A07, A08 | Người được gán lượt | IN_PROGRESS → COMPLETED (Visit#5) · Lịch hẹn#7 · Order#4 (→ PENDING) · bệnh án khóa | — | A16. Thứ tự lỗi: 403 vai trò → 404 → 403 chi nhánh → 403 người phụ trách → 400 BR-TN-05 → 409 → 400 BR-KB-02 (docs/adr/0067). Gỡ cờ needsReassign. Lỗi BR-KB-02 hoàn tác cả lịch hẹn, Order và bệnh án. |
 | Hủy lượt khách bỏ về | A06 | Lễ tân chi nhánh | WAITING → CANCELLED (Visit#6) · Lịch hẹn#8 · Order#6 | — | Lịch hẹn → CANCELLED, không tính hủy muộn. Không gửi body: hủy không lý do (A4). |
 | Xem bệnh án của lượt | A07, A08 | VET, CARETAKER chi nhánh (CARETAKER chỉ xem) | — | — | Thứ tự lỗi: 403 vai trò → 404 → 403 chi nhánh → 404 GROOMING (docs/adr/0065). Lượt MEDICAL chưa ghi bệnh án trả khung rỗng; locked = Visit COMPLETED. |
 | Ghi bệnh án / hẹn tái khám | A07 | VET được gán lượt | — | — | Thứ tự lỗi: 400 body → 403 vai trò → 404 → 403 chi nhánh → 404 GROOMING → 403 người phụ trách → 409 → 400 BR-KB-06 (docs/adr/0065). PUT thay toàn bộ 5 trường; lần ghi đầu tạo bệnh án; ngày tái khám chỉ kiểm khi đổi; nội dung không đổi: 200, không ghi, không audit. |
@@ -85,7 +85,7 @@
 - **`POST /visits/{visitId}/reassign`** — Gán lại lượt đã gọi. Request `ReassignRequest`. Response `200` `Visit`. Lỗi: `400` `BR-TN-08` người phụ trách hiện tại vẫn đủ điều kiện (A15) · `BR-TN-05` người mới không ACTIVE, khác chi nhánh hoặc sai chức vụ · thiếu lý do / body sai (`VALIDATION_FAILED`, `MALFORMED_REQUEST`); BR-TK-17 · `401` · `403` Sai vai trò · BRANCH_MANAGER của chi nhánh khác · SUPER_MANAGER khi chi nhánh còn BRANCH_MANAGER hoạt động · `404` · `409` Lượt không IN_PROGRESS · lượt vừa được gán lại bởi thao tác khác (`CONCURRENCY_CONFLICT`).
 ### Completion
 
-- **`POST /visits/{visitId}/complete`** — Hoàn tất lượt. Response `200` `Visit`. Lỗi: `400` `BR-KB-02` có dịch vụ loại Khám mà chưa có chẩn đoán · chỉ có dịch vụ loại Tiêm mà chưa ghi mũi nào · `401` · `403` · `404` · `409` Lượt không IN_PROGRESS.
+- **`POST /visits/{visitId}/complete`** — Hoàn tất lượt. Response `200` `Visit`. Lỗi: `400` `BR-KB-02` có dịch vụ loại Khám mà chưa có chẩn đoán · chỉ có dịch vụ loại Tiêm mà chưa ghi mũi nào · lượt Khám/Tiêm không còn dịch vụ Khám hoặc Tiêm nào (A16) · `BR-TN-05` chức vụ hiện tại không phụ trách được nhóm dịch vụ của lượt (đổi chức vụ sau khi được gán) · tham số sai kiểu (`MALFORMED_REQUEST`); BR-TK-17 · `401` · `403` Sai vai trò · lượt của chi nhánh khác · không phải người phụ trách hiện tại, kể cả lượt chưa gán · `404` · `409` Lượt không IN_PROGRESS.
 - **`POST /visits/{visitId}/cancel`** — Hủy lượt khách bỏ về. Request `CancelVisitRequest`. Response `200` `Visit`. Lỗi: `400` Lý do quá 300 ký tự (`VALIDATION_FAILED`) · body / tham số sai (`MALFORMED_REQUEST`); BR-TK-17 · `401` · `403` Sai vai trò · lượt của chi nhánh khác · `404` · `409` Lượt đã được gọi (BR-TN-07 — nhân viên hoàn tất theo BR-KB-02) hoặc đã kết thúc.
 ### Medical record
 
@@ -169,6 +169,7 @@ Trường có `?` là không bắt buộc / có thể null. Kiểu `email`, `dat
 | A13 | CARETAKER xem hàng đợi chung của chi nhánh (#2) và chi tiết mọi lượt của chi nhánh (#4); 01 không có use case cho A08 xem lượt của người khác (docs/adr/0060) | BR-TN-04 'một hàng đợi chung'; UC23 cho A08 tra khách / thú toàn chuỗi; schema `Visit` không có dữ liệu y tế |
 | A14 | SUPER_MANAGER xem chi tiết lượt (#4) của mọi chi nhánh, để xem lượt cần gán lại khi chi nhánh không còn BRANCH_MANAGER hoạt động; `visitId` lấy từ thông báo khóa tài khoản gửi SUPER_MANAGER. Hàng đợi chi nhánh (#2) vẫn chỉ cho A05–A08 (docs/adr/0063) | 03 Visit#4; BR-QT-11 (thông báo kèm việc dở); trả Q2 |
 | A15 | Gán lại lượt đã gọi (#9) khi người phụ trách hiện tại không còn đủ điều kiện phụ trách lượt: không ACTIVE hoặc bị khóa, khác chi nhánh, hoặc sai chức vụ với nhóm dịch vụ (đổi chức vụ khi còn lượt, docs/adr/0031 Q4). Không xét cờ `needsReassign`; gán lại thì gỡ cờ (docs/adr/0063) | BR-TN-08 'không còn ACTIVE (bị khóa)'; BR-TN-05 |
+| A16 | Lượt Khám/Tiêm (MEDICAL) hoàn tất khi Order không còn dòng dịch vụ loại Khám hoặc Tiêm nào (VET xóa dòng tự sinh) thì bị từ chối 400 `BR-KB-02`; 03 Visit#5 chỉ nêu điều kiện cho 'có Khám' và 'chỉ có Tiêm' (docs/adr/0067) | BR-KB-02; tránh Order PENDING không có dịch vụ |
 
 | ID | Câu hỏi | Trạng thái | Gốc |
 |---|---|---|---|

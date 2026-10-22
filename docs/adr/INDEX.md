@@ -89,10 +89,15 @@ Ghi lại các **quyết định kỹ thuật** mà đặc tả nghiệp vụ (`
 | [0064](0064-medical-record-foundation.md) | Nền bệnh án (T27 phần 0): tạo khi ghi lần đầu (upsert, #12 khung rỗng, `locked` = lượt COMPLETED); audit mỗi lần ghi `MEDICAL_RECORD_UPDATED` (ai ghi phần nào, BR-TN-08) + `MEDICAL_RECORD_ADDENDUM_ADDED`; ngày khám BR-KB-06 = ngày check-in, [CFG] đọc lúc ghi; PUT thay toàn bộ (chuỗi rỗng → null); khóa `visits` trước mọi ghi, chỉ người phụ trách hiện tại; bất biến ở service (khuôn 0058); bảng đảm bảo G1–G14; không endpoint / migration | Accepted | 2026-10-22 | BR-KB-01, 02, 06, BR-SP-06, BR-TN-08, BR-KH-03, 07, BR-QT-15; erd §6; ADR-0057, 0058, 0063; D043, D044 |
 | [0065](0065-medical-record-write.md) | Xem / ghi bệnh án (T27 phần 1, visit-v1 #12, #13): #13 khóa `pets FOR SHARE` → `visits` (chống race khóa loài BR-KH-03), thứ tự lỗi 403 role → 404 → 403 chi nhánh → 404 GROOMING → 403 người phụ trách → 409 → 400 BR-KB-06; PUT không đổi thì không ghi / không audit; BR-KB-06 chỉ kiểm khi ngày đổi | Accepted | 2026-10-22 | BR-KB-01, 06, BR-KH-03; ADR-0058, 0061, 0063, 0064 |
 | [0066](0066-visit-weight.md) | Ghi cân nặng khi khám (T27 phần 2, visit-v1 #14): `PetApi.recordWeight` khóa `FOR SHARE` (không nâng khóa, tránh deadlock với #13) và trả `RecordedWeight`; thứ tự lỗi như #13, GROOMING 404; thú, nguồn, người ghi do server lấy; không audit |
+| [0067](0067-visit-complete.md) | Hoàn tất lượt (T27 phần 3, visit-v1 #10, Visit#5 + Lịch hẹn#7 + Order#4 + khóa bệnh án một transaction): khóa `visits → appointments → orders`, **đọc dịch vụ sau khi khóa Order** (`markPendingByVisit` trước `findServiceIds`) nên trả D044 và chặn mất cập nhật `total_amount` (D045); thứ tự lỗi 403 vai trò → 404 → 403 chi nhánh → 403 người phụ trách → 400 BR-TN-05 → 409 → 400 BR-KB-02; A16 lượt Khám/Tiêm không còn dịch vụ thì từ chối; gỡ cờ `needs_reassign`; thay §5 của ADR-0064 |
 
+<<<<<<< HEAD
 <<<<<<< HEAD
 >>>>>>> 6a7ef97 (feat: triển khai api xem cập nhật bênh án)
 > Số ADR mới tiếp theo: **0066** (cập nhật 2026-10-22).
 =======
 > Số ADR mới tiếp theo: **0067** (cập nhật 2026-10-22).
 >>>>>>> 058af5f (feat: triển khai api cân nặng)
+=======
+> Số ADR mới tiếp theo: **0068** (cập nhật 2026-10-22).
+>>>>>>> 3d7f7b1 (feat: triển khai chức năng đánh dấu hoàn tất lượt)

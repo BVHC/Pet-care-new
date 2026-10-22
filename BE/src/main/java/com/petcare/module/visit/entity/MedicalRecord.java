@@ -90,6 +90,17 @@ public class MedicalRecord extends TimestampedEntity {
         this.lastEditedBy = editorId;
     }
 
+    /**
+     * Visit#5 khóa bệnh án (BR-KB-01; docs/adr/0064 G7, 0067): {@code lockedAt} = {@code visits.completed_at}. Chỉ đặt
+     * {@code lockedAt}; sau đó mọi thay đổi là bản bổ sung.
+     */
+    public void lock(Instant at) {
+        if (at == null) {
+            throw new IllegalArgumentException("lockedAt is required");
+        }
+        this.lockedAt = at;
+    }
+
     /** Nội dung 5 trường giống hệt giá trị đã lưu (PUT không đổi gì — docs/adr/0065 D4). */
     public boolean sameContent(String examination, String diagnosis, String treatmentPlan, String internalNote,
             LocalDate followUpDate) {

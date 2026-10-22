@@ -42,6 +42,7 @@ m = Module(
         ("A13", "CARETAKER xem hàng đợi chung của chi nhánh (#2) và chi tiết mọi lượt của chi nhánh (#4); 01 không có use case cho A08 xem lượt của người khác (docs/adr/0060)", "BR-TN-04 'một hàng đợi chung'; UC23 cho A08 tra khách / thú toàn chuỗi; schema `Visit` không có dữ liệu y tế"),
         ("A14", "SUPER_MANAGER xem chi tiết lượt (#4) của mọi chi nhánh, để xem lượt cần gán lại khi chi nhánh không còn BRANCH_MANAGER hoạt động; `visitId` lấy từ thông báo khóa tài khoản gửi SUPER_MANAGER. Hàng đợi chi nhánh (#2) vẫn chỉ cho A05–A08 (docs/adr/0063)", "03 Visit#4; BR-QT-11 (thông báo kèm việc dở); trả Q2"),
         ("A15", "Gán lại lượt đã gọi (#9) khi người phụ trách hiện tại không còn đủ điều kiện phụ trách lượt: không ACTIVE hoặc bị khóa, khác chi nhánh, hoặc sai chức vụ với nhóm dịch vụ (đổi chức vụ khi còn lượt, docs/adr/0031 Q4). Không xét cờ `needsReassign`; gán lại thì gỡ cờ (docs/adr/0063)", "BR-TN-08 'không còn ACTIVE (bị khóa)'; BR-TN-05"),
+        ("A16", "Lượt Khám/Tiêm (MEDICAL) hoàn tất khi Order không còn dòng dịch vụ loại Khám hoặc Tiêm nào (VET xóa dòng tự sinh) thì bị từ chối 400 `BR-KB-02`; 03 Visit#5 chỉ nêu điều kiện cho 'có Khám' và 'chỉ có Tiêm' (docs/adr/0067)", "BR-KB-02; tránh Order PENDING không có dịch vụ"),
     ],
     questions=[
         ("Q1", "Dòng dịch vụ tự sinh khi tiếp nhận có thể bị VET đổi (BR-TN-01). Nếu đổi từ dịch vụ thường sang dịch vụ loại Khám thì có hủy nhắc tái khám như Visit#1 có dịch vụ Khám không?", "TBD (PO), tạm chỉ xét tại Visit#1 (06 G5)", "03 Care Task#6"),
@@ -227,8 +228,14 @@ m.op("post", "/visits/{visitId}/complete", "completeVisit", "Hoàn tất lượt
      "BR-KB-01, 02, BR-SP-06, BR-LH-11", "A07, A08", VET_ASSIGNED,
      "IN_PROGRESS → COMPLETED (Visit#5) · Lịch hẹn#7 · Order#4 (→ PENDING) · bệnh án khóa", resp="Visit",
      path_params=["VisitId"], errors=(400, 401, 403, 404, 409),
-     err_desc={400: "`BR-KB-02` có dịch vụ loại Khám mà chưa có chẩn đoán · chỉ có dịch vụ loại Tiêm mà chưa ghi mũi nào",
-               409: "Lượt không IN_PROGRESS"})
+     err_desc={400: "`BR-KB-02` có dịch vụ loại Khám mà chưa có chẩn đoán · chỉ có dịch vụ loại Tiêm mà chưa ghi mũi "
+                    "nào · lượt Khám/Tiêm không còn dịch vụ Khám hoặc Tiêm nào (A16) · `BR-TN-05` chức vụ hiện tại "
+                    "không phụ trách được nhóm dịch vụ của lượt (đổi chức vụ sau khi được gán) · tham số sai kiểu "
+                    "(`MALFORMED_REQUEST`); BR-TK-17",
+               403: "Sai vai trò · lượt của chi nhánh khác · không phải người phụ trách hiện tại, kể cả lượt chưa gán",
+               409: "Lượt không IN_PROGRESS"},
+     notes="A16. Thứ tự lỗi: 403 vai trò → 404 → 403 chi nhánh → 403 người phụ trách → 400 BR-TN-05 → 409 → 400 "
+           "BR-KB-02 (docs/adr/0067). Gỡ cờ needsReassign. Lỗi BR-KB-02 hoàn tác cả lịch hẹn, Order và bệnh án.")
 m.op("post", "/visits/{visitId}/cancel", "cancelVisit", "Hủy lượt khách bỏ về", "Completion", "UC45", "BR-TN-07",
      "A06", "Lễ tân chi nhánh", "WAITING → CANCELLED (Visit#6) · Lịch hẹn#8 · Order#6", body="CancelVisitRequest",
      resp="Visit", path_params=["VisitId"], errors=(400, 401, 403, 404, 409),

@@ -26,6 +26,7 @@ import com.petcare.module.visit.dto.VisitQueueFilter;
 import com.petcare.module.visit.dto.VisitResponse;
 import com.petcare.module.visit.entity.VisitStatus;
 import com.petcare.module.visit.service.VisitCheckInService;
+import com.petcare.module.visit.service.VisitCompletionService;
 import com.petcare.module.visit.service.VisitDispatchService;
 import com.petcare.module.visit.service.VisitProgressService;
 import com.petcare.module.visit.service.VisitQueueService;
@@ -74,14 +75,16 @@ public class VisitController {
     private final VisitDispatchService dispatch;
     private final VisitProgressService progress;
     private final VisitReassignService reassign;
+    private final VisitCompletionService completion;
 
     public VisitController(VisitCheckInService checkIns, VisitQueueService queue, VisitDispatchService dispatch,
-            VisitProgressService progress, VisitReassignService reassign) {
+            VisitProgressService progress, VisitReassignService reassign, VisitCompletionService completion) {
         this.checkIns = checkIns;
         this.queue = queue;
         this.dispatch = dispatch;
         this.progress = progress;
         this.reassign = reassign;
+        this.completion = completion;
     }
 
     /** visit-v1 #1 (Visit#1 + Lịch hẹn#3 + Order#1 trong một transaction). */
@@ -243,6 +246,29 @@ public class VisitController {
     public ApiResponse<VisitResponse> reassignCalledVisit(@PathVariable Long visitId,
             @Valid @RequestBody ReassignRequest request) {
         return ApiResponse.ok(reassign.reassignCalledVisit(visitId, request), "Đã gán lại lượt");
+    }
+
+    /** visit-v1 #10 (Visit#5 + Lịch hẹn#7 + Order#4 + khóa bệnh án trong một transaction; docs/adr/0067). */
+    @Operation(operationId = "completeVisit", tags = "Completion",
+            summary = "Hoàn tất lượt",
+            description = "UC48, UC49, UC52 · BR-KB-01, 02, BR-SP-06, BR-LH-11. Actor: A07, A08. Quyền: Người được gán "
+                + "lượt. Chuyển trạng thái: IN_PROGRESS → COMPLETED (Visit#5) · Lịch hẹn#7 · Order#4 (→ PENDING) · bệnh "
+                + "án khóa. A16. Thứ tự lỗi: 403 vai trò → 404 → 403 chi nhánh → 403 người phụ trách → 400 BR-TN-05 → "
+                + "409 → 400 BR-KB-02 (docs/adr/0067). Gỡ cờ needsReassign. Lỗi BR-KB-02 hoàn tác cả lịch hẹn, Order và "
+                + "bệnh án.",
+            parameters = @Parameter(name = "visitId", in = ParameterIn.PATH, example = "9001"))
+    @ApiErrorDoc(status = 400, description = "`BR-KB-02` có dịch vụ loại Khám mà chưa có chẩn đoán · chỉ có dịch vụ loại "
+            + "Tiêm mà chưa ghi mũi nào · lượt Khám/Tiêm không còn dịch vụ Khám hoặc Tiêm nào (A16) · `BR-TN-05` chức vụ "
+            + "hiện tại không phụ trách được nhóm dịch vụ của lượt (đổi chức vụ sau khi được gán) · tham số sai kiểu "
+            + "(`MALFORMED_REQUEST`); BR-TK-17")
+    @ApiErrorDoc(status = 403, description = "Sai vai trò · lượt của chi nhánh khác · không phải người phụ trách hiện "
+            + "tại, kể cả lượt chưa gán")
+    @ApiErrorDoc(status = 404)
+    @ApiErrorDoc(status = 409, description = "Lượt không IN_PROGRESS")
+    @PostMapping("/{visitId}/complete")
+    @PreAuthorize(CALL_ROLES)
+    public ApiResponse<VisitResponse> completeVisit(@PathVariable Long visitId) {
+        return ApiResponse.ok(completion.completeVisit(visitId), "Đã hoàn tất lượt");
     }
 
     /** visit-v1 #11 (Visit#6 + Lịch hẹn#8 + Order#6 trong một transaction; docs/adr/0062). Body không bắt buộc (A4). */
