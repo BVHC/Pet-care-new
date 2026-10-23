@@ -3,7 +3,11 @@ package com.petcare.module.branch.service;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.time.LocalTime;
+import java.util.ArrayList;
+import java.util.Collection;
+import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.Optional;
 
 import org.springframework.data.domain.Sort;
@@ -88,6 +92,19 @@ public class BranchQueryService implements BranchQueryApi {
     @Override
     public List<Long> findActiveBranchIdsEnablingService(Long serviceId) {
         return serviceSettings.findActiveBranchIdsEnabling(serviceId);
+    }
+
+    @Override
+    public Map<Long, List<Long>> findActiveBranchIdsEnablingServices(Collection<Long> serviceIds) {
+        Map<Long, List<Long>> result = new LinkedHashMap<>();
+        if (serviceIds.isEmpty()) {
+            return result;
+        }
+        serviceIds.forEach(id -> result.put(id, new ArrayList<>()));
+        for (Object[] pair : serviceSettings.findActiveBranchPairsEnabling(serviceIds)) {
+            result.get((Long) pair[0]).add((Long) pair[1]);
+        }
+        return result;
     }
 
     /** Quota theo khung chỉ có với Khám/Tiêm và Thẩm mỹ; Lưu trú không có khung giờ nên là lỗi lập trình. */

@@ -55,7 +55,7 @@ class OpenApiContractParityIT {
     private static final Path CONTRACT_DIR = Path.of("..", "docs", "api", "openapi");
     /** File hợp đồng đã có annotation đầy đủ; thêm file khi module đó viết xong tài liệu (D026: branch, catalog). */
     private static final Set<String> DOCUMENTED = Set.of("identity-v1.yaml", "care-v1.yaml", "customer-v1.yaml",
-            "inventory-v1.yaml", "sales-v1.yaml", "appointment-v1.yaml", "visit-v1.yaml", "boarding-v1.yaml");
+            "inventory-v1.yaml", "sales-v1.yaml", "appointment-v1.yaml", "visit-v1.yaml", "boarding-v1.yaml", "content-v1.yaml");
     private static final Set<String> METHODS = Set.of("get", "post", "put", "patch", "delete");
     private static final Pattern SECRET = Pattern.compile("(?i)(password|secret|hash)$|^otp(code)?$");
     /** Tên khớp {@link #SECRET} nhưng không phải bí mật: cờ bắt đổi mật khẩu (BR-TK-17). */
@@ -106,30 +106,11 @@ class OpenApiContractParityIT {
     void documentedModulesCoverAllTheirImplementedEndpoints() {
         // 85 (identity + care + customer + inventory + sales, gồm 5 endpoint Order bán lẻ T29) + 9 appointment #1–9
         // + 10 visit #1 (T26 phần 1, docs/adr/0059), #2–4 (T26 phần 2, docs/adr/0060), #5–7 (T26 phần 3, docs/adr/0061),
-<<<<<<< HEAD
-<<<<<<< HEAD
-        // #8, #11 (T26 phần 4, docs/adr/0062), #9 (T26 phần 5, docs/adr/0063) + 12 boarding #1–12 (T31, docs/adr/0065).
+        // #8, #11 (T26 phần 4, docs/adr/0062), #9 (T26 phần 5, docs/adr/0063), #10, #12–15 (T27, docs/adr/0066–0070)
+        // + 10 sales cashier #12–21 (T30, docs/adr/0064) + 12 boarding #1–12 (T31, docs/adr/0065) + 22 content #1–22 (T32, docs/adr/0071).
         assertThat(documentedOps())
-                .as("số endpoint identity + care + customer + inventory + sales + appointment + visit + boarding đã cài")
-                .hasSize(126);
-=======
-        // #8, #11 (T26 phần 4, docs/adr/0062), #9 (T26 phần 5, docs/adr/0063), #12–13 (T27 phần 1, docs/adr/0065).
-        assertThat(documentedOps())
-<<<<<<< HEAD
-<<<<<<< HEAD
-                .as("số endpoint identity + care + customer + inventory + sales + appointment + visit đã cài").hasSize(106);
->>>>>>> 6a7ef97 (feat: triển khai api xem cập nhật bênh án)
-=======
-                .as("số endpoint identity + care + customer + inventory + sales + appointment + visit đã cài").hasSize(107);
->>>>>>> 058af5f (feat: triển khai api cân nặng)
-=======
-                .as("số endpoint identity + care + customer + inventory + sales + appointment + visit đã cài").hasSize(108);
->>>>>>> 3d7f7b1 (feat: triển khai chức năng đánh dấu hoàn tất lượt)
-=======
-        // #8, #11 (T26 phần 4, docs/adr/0062), #9 (T26 phần 5, docs/adr/0063), #12–13 (T27 phần 1, docs/adr/0067).
-        assertThat(documentedOps())
-                .as("số endpoint identity + care + customer + inventory + sales + appointment + visit đã cài").hasSize(109);
->>>>>>> 7254311 (feat: cập nhật module lịch khám)
+                .as("số endpoint identity + care + customer + inventory + sales + appointment + visit + boarding + content đã cài")
+                .hasSize(153);
     }
 
     @Test

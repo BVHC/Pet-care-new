@@ -5,7 +5,9 @@ import com.petcare.module.catalog.api.ServiceGroup;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.time.LocalTime;
+import java.util.Collection;
 import java.util.List;
+import java.util.Map;
 import java.util.Optional;
 
 /** Owner: branch (CN) · BE-2. Ngày giờ hiểu theo giờ Việt Nam (Asia/Ho_Chi_Minh). */
@@ -42,6 +44,12 @@ public interface BranchQueryApi {
 
     /** Chi nhánh ACTIVE đang bật dịch vụ — trang dịch vụ công khai (BR-CK-01). */
     List<Long> findActiveBranchIdsEnablingService(Long serviceId);
+
+    /**
+     * Như {@link #findActiveBranchIdsEnablingService} cho nhiều dịch vụ một lần (thêm 2026-10-23, T32): key đủ mọi id
+     * truyền vào (danh sách rỗng nếu không chi nhánh ACTIVE nào bật), id chi nhánh tăng dần; tập rỗng → map rỗng.
+     */
+    Map<Long, List<Long>> findActiveBranchIdsEnablingServices(Collection<Long> serviceIds);
 
     /** Quota khung: SlotQuota → BranchQuotaDefault → 1 (BR-LH-03). */
     int quotaFor(Long branchId, ServiceGroup group, LocalDate slotDate, LocalTime slotStart);

@@ -138,10 +138,11 @@ class SchemaMigrationIT {
         // V17 mẫu APPOINTMENT_CANCELLED_BY_CLINIC (+_APP) (docs/adr/0052),
         // V18 mẫu APPOINTMENT_REMINDER (+_APP) (docs/adr/0056),
         // V19 index thu ngân + mẫu ST13 CASHIER_SHIFT_AUTO_CLOSED_APP, PENDING_ORDERS_DIGEST_APP (docs/adr/0064),
-        // V20 index ST05 lưu trú + mẫu BOARDING_CANCELLED_BY_CLINIC (+_APP) (docs/adr/0065)
+        // V20 index ST05 lưu trú + mẫu BOARDING_CANCELLED_BY_CLINIC (+_APP) (docs/adr/0065),
+        // V21 seed 4 trang tĩnh page_contents (docs/adr/0071)
         assertThat(rows).extracting(row -> row.get("version"))
                 .containsExactly("1", "2", "3", "4", "5", "6", "7", "8", "9", "10", "11", "12", "13", "14", "15",
-                        "16", "17", "18", "19", "20");
+                        "16", "17", "18", "19", "20", "21");
         assertThat(rows).allSatisfy(row -> assertThat(row).containsEntry("success", true));
     }
 

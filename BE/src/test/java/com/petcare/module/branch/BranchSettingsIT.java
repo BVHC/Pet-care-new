@@ -168,6 +168,32 @@ class BranchSettingsIT {
     }
 
     @Test
+    void enablingServicesBatchMatchesTheSingleCallAndKeepsEveryKey() {
+        long spa = service("GROOMING", null, 200_000, true);
+        long bath = service("GROOMING", null, 100_000, true);
+        long unused = service("GROOMING", null, 50_000, true);
+        long draft = jdbc.queryForObject("""
+                INSERT INTO branches (name, address, phone, latitude, longitude, status)
+                VALUES (?, 'a', '0280000000', 10.7, 106.6, 'DRAFT') RETURNING id
+                """, Long.class, unique("Draft"));
+        jdbc.update("INSERT INTO branch_services (branch_id, service_id, is_enabled) VALUES (?, ?, true)", draft, spa);
+        call(HttpMethod.PUT, "/api/branches/" + branchA + "/services/" + spa, managerA, Map.of("enabled", true));
+        call(HttpMethod.PUT, "/api/branches/" + branchB + "/services/" + spa, managerB, Map.of("enabled", true));
+        call(HttpMethod.PUT, "/api/branches/" + branchA + "/services/" + bath, managerA, Map.of("enabled", true));
+
+        Map<Long, List<Long>> batch = branchQuery.findActiveBranchIdsEnablingServices(List.of(spa, bath, unused));
+
+        assertThat(batch).containsOnlyKeys(spa, bath, unused);
+        assertThat(batch.get(spa)).containsExactlyInAnyOrder(branchA, branchB).doesNotContain(draft);
+        assertThat(batch.get(bath)).containsExactly(branchA);
+        assertThat(batch.get(unused)).isEmpty();
+        for (long id : List.of(spa, bath, unused)) {
+            assertThat(batch.get(id)).isEqualTo(branchQuery.findActiveBranchIdsEnablingService(id));
+        }
+        assertThat(branchQuery.findActiveBranchIdsEnablingServices(List.of())).isEmpty();
+    }
+
+    @Test
     void cannotEnableAStoppedServiceButCanDisableIt_BR_LH_01() {
         long stopped = service("GROOMING", null, 90_000, false);
         String path = "/api/branches/" + branchA + "/services/" + stopped;

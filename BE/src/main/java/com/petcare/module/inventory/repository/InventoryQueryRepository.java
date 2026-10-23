@@ -5,11 +5,14 @@ import java.sql.SQLException;
 import java.time.Instant;
 import java.sql.Timestamp;
 import java.time.LocalDate;
+import java.util.ArrayList;
 import java.util.Collection;
 import java.util.LinkedHashMap;
+import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
+import java.util.Set;
 
 import org.springframework.jdbc.core.RowMapper;
 import org.springframework.jdbc.core.namedparam.MapSqlParameterSource;
@@ -168,6 +171,37 @@ public class InventoryQueryRepository {
                   AND (l.expiry_date IS NULL OR l.expiry_date >= :today)
                 GROUP BY i.branch_id ORDER BY i.branch_id
                 """, new MapSqlParameterSource("productId", productId).addValue("today", today), Long.class);
+    }
+
+    /** Như {@link #branchIdsWithAvailableStock(long, LocalDate)} cho nhiều sản phẩm một câu SQL; key đủ mọi id. */
+    public Map<Long, List<Long>> branchIdsWithAvailableStock(Collection<Long> productIds, LocalDate today) {
+        Map<Long, List<Long>> result = new LinkedHashMap<>();
+        if (productIds.isEmpty()) {
+            return result;
+        }
+        productIds.forEach(id -> result.put(id, new ArrayList<>()));
+        jdbc.query("""
+                SELECT i.product_id AS product_id, i.branch_id AS branch_id
+                FROM stock_lots l JOIN inventory_items i ON i.id = l.inventory_item_id
+                WHERE i.product_id IN (:productIds) AND l.quantity > 0
+                  AND (l.expiry_date IS NULL OR l.expiry_date >= :today)
+                GROUP BY i.product_id, i.branch_id ORDER BY i.product_id, i.branch_id
+                """, new MapSqlParameterSource("productIds", productIds).addValue("today", today),
+                rs -> {
+                    result.get(rs.getLong("product_id")).add(rs.getLong("branch_id"));
+                });
+        return result;
+    }
+
+    /** Sản phẩm còn tồn khả dụng tại một chi nhánh. */
+    public Set<Long> productIdsWithAvailableStock(long branchId, LocalDate today) {
+        return new LinkedHashSet<>(jdbc.queryForList("""
+                SELECT DISTINCT i.product_id
+                FROM stock_lots l JOIN inventory_items i ON i.id = l.inventory_item_id
+                WHERE i.branch_id = :branchId AND l.quantity > 0
+                  AND (l.expiry_date IS NULL OR l.expiry_date >= :today)
+                ORDER BY i.product_id
+                """, new MapSqlParameterSource("branchId", branchId).addValue("today", today), Long.class));
     }
 
     /** Còn số dư ở bất kỳ chi nhánh nào, kể cả lô đã hết hạn (BR-SP-05: vẫn phải xử lý lô đó). */
