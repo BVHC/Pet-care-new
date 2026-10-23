@@ -5,6 +5,7 @@ import java.time.LocalDate;
 import java.util.Collection;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -41,6 +42,16 @@ public class StockQueryService implements StockQueryApi {
     @Override
     public List<Long> branchIdsWithAvailableStock(Long productId) {
         return inventory.branchIdsWithAvailableStock(productId, LocalDate.now(clock));
+    }
+
+    @Override
+    public Map<Long, List<Long>> branchIdsWithAvailableStock(Collection<Long> productIds) {
+        return inventory.branchIdsWithAvailableStock(productIds, LocalDate.now(clock));
+    }
+
+    @Override
+    public Set<Long> productIdsWithAvailableStock(Long branchId) {
+        return inventory.productIdsWithAvailableStock(branchId, LocalDate.now(clock));
     }
 
     @Override

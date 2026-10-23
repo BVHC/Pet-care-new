@@ -49,12 +49,13 @@ Team: **BE-1** (branch `manh`) = identity, appointment, visit, care · **BE-2** 
 | care | BE-1 | ST20 outbox (EMAIL in HIGH / NORMAL lanes, IN_APP), outbox cleanup, care-v1 #5–8 | #9–10 settings (D025), Care Task, ST04, `FollowUpApi` (T38/T39) |
 | appointment | BE-1 | appointment-v1 #1–9; `AppointmentApi`, `AppointmentQueryApi`, `BookingRestrictionApi`; clinic-cancel listeners; ST05 `NoShowJob`; ST03 `AppointmentReminderJob` | booking / rescheduling read the pet with `findPet` and do not yet call `PetQueryApi.findPetForShare` (D027) |
 | visit | BE-1 | T26 parts 0–5 (ADR-0058–0063): visit-v1 #1 check-in, #2–4 queue views (A13 CARETAKER; #4 also SUPER_MANAGER, A14), #5–7 dispatch, #8 call, #9 reassign a called visit, #11 cancel, #10 complete visit, #12–15 medical record view / write / weight / addendum (T27 parts 1–4, ADR-0066–0070); `AccountLockedEvent` listener → `needs_reassign`; real `VisitQueryApi` | #16–21 (D043 FK indexes + DB guards); VACCINE-only visits cannot complete until T28; unlock does not clear `needs_reassign` of an `IN_PROGRESS` visit (D042); Care Task#6 on check-in (D029); `VaccinationQueryApiPlaceholder` |
-| branch, catalog | BE-2 | branch-v1, catalog-v1 staff endpoints, `BranchQueryApi`, `BranchApi`, `CatalogQueryApi` | catalog public #19–22; Swagger annotations (D026) |
+| branch, catalog | BE-2 | branch-v1 (gồm public #20–21), catalog-v1 (gồm public #19–22, T32), `BranchQueryApi`, `BranchApi`, `CatalogQueryApi` | Swagger annotations (D026) |
 | customer | BE-2 | customer-v1 #1–21; `CustomerApi`, `CustomerQueryApi`, `PetApi`, `PetQueryApi` | — |
 | inventory | BE-2 | inventory-v1 #1–17; `StockApi`, `StockQueryApi`, `DocumentCodeGenerator` | `StockReportApi` / ST08 (T44) |
 | sales | BE-2 | sales-v1 #1–8, #10 (order core T19, retail T29), #12–21 (cashier T30: shifts, combined payment with FEFO deduction, reconcile); ST13 `CashierShiftAutoCloseJob` + `PendingOrderDigestJob`; `VisitOrderApi`, `OrderQueryApi`, `CashierShiftQueryApi` | #9 abort-checkout + `BoardingOrderApi` (T43), #11 move-to-external-purchase (waits for BE-1 `PrescriptionApi`) |
 | boarding | BE-2 | boarding-v1 #1–12 (T31, ADR-0065): kennels, nightly availability, booking (price snapshot), list / detail, extend, cancel; ST05 `BoardingNoShowJob`; clinic-cancel listeners (pet deceased, owner transfer, branch holiday / hours); real `BoardingQueryApi` | #13–22 check-in / check-out / care logs / cancel-no-kennel (T42, T43), ST15; creating a booking returns 500 on the real app until BE-1's `VaccinationQueryApi` lands (T28); `Booking.activeOrderId` is null until T43 |
-| content, report | BE-2 | — | — |
+| content | BE-2 | content-v1 #1–22 (T32, ADR-0071): page contents, article categories, articles (jsoup-filtered HTML), public pages / articles, feedback submit / review; `FeedbackQueryApi` | `FeedbackReportApi` (T44) |
+| report | BE-2 | — | — |
 
 **Blocking debts:**
 - **T31-1** `POST /api/boarding-bookings` returns 500 on the real app until BE-1 replaces `VaccinationQueryApiPlaceholder` (T28, due 23/10). (D033 paid 2026-10-22, ADR-0065.)
@@ -113,7 +114,7 @@ Module codes: TK, QT, CN, CK, KH, SP, NS, LH, TN, KB, LT, BH, TG, KO, BV, DG, TB
 
 Open convention TBDs (don't decide silently — ask or write an ADR): command names when no Actor↔Command table exists; how "warn, don't block" rules return warnings (contracts assume a named field in `data`, e.g. `stockWarning`); locking for kennel capacity.
 
-**ADR map** (`docs/adr/`, immutable once Accepted — supersede instead of editing; **next free: 0071**):
+**ADR map** (`docs/adr/`, immutable once Accepted — supersede instead of editing; **next free: 0072**):
 
 | Area | ADRs |
 |---|---|
@@ -121,26 +122,8 @@ Open convention TBDs (don't decide silently — ask or write an ADR): command na
 | Auth | 0003 JWT + DB session · 0005 public paths anonymous · 0006 customer owner scope · 0009 BCrypt · 0010, 0011, 0025 OTP · 0019 login · 0021 logout · 0022 change password · 0023 forgot / reset |
 | Accounts, staff, admin | 0024 staff directory · 0026 staff self-edit · 0027 profile link · 0028 customer self-edit · 0029–0035 staff admin / lock · 0036 [CFG] edit · 0037 templates · 0038 audit view · 0039 in-app notifications |
 | Notifications, jobs | 0008 session cleanup · 0012, 0014, 0016, 0017 ST20 · 0013 ST02 · 0018 FK indexes on `accounts` |
-<<<<<<< HEAD
-<<<<<<< HEAD
-<<<<<<< HEAD
-<<<<<<< HEAD
-| Appointment, visit (BE-1) | 0045 booking locks · 0046 slots · 0047 book · 0048 view · 0049 reschedule / cancel · 0050 cross-module API · 0052 clinic cancel · 0053, 0054 ST05 · 0055 booking restriction · 0056 ST03 · 0057 assumptions confirmed · 0058 visit foundation · 0059 check-in (also amends 0044: receptionist never edits a VISIT auto line) · 0060 queue views · 0061 dispatch (assign / move / emergency) · 0062 call / cancel / `needs_reassign` on lock · 0063 reassign a called visit |
-| BE-2 | 0041 customer & pet · 0042 inventory stock ledger · 0043 document codes · 0044 order core · 0051 retail order · 0064 cashier shift / payment / ST13 · 0065 boarding kennels / bookings / ST05 |
-=======
-| Appointment, visit (BE-1) | 0045 booking locks · 0046 slots · 0047 book · 0048 view · 0049 reschedule / cancel · 0050 cross-module API · 0052 clinic cancel · 0053, 0054 ST05 · 0055 booking restriction · 0056 ST03 · 0057 assumptions confirmed · 0058 visit foundation · 0059 check-in (also amends 0044: receptionist never edits a VISIT auto line) · 0060 queue views · 0061 dispatch (assign / move / emergency) · 0062 call / cancel / `needs_reassign` on lock · 0063 reassign a called visit · 0064 medical record foundation · 0065 medical record write (`pets FOR SHARE` before `visits`, no-op PUT writes nothing) |
-=======
-| Appointment, visit (BE-1) | 0045 booking locks · 0046 slots · 0047 book · 0048 view · 0049 reschedule / cancel · 0050 cross-module API · 0052 clinic cancel · 0053, 0054 ST05 · 0055 booking restriction · 0056 ST03 · 0057 assumptions confirmed · 0058 visit foundation · 0059 check-in (also amends 0044: receptionist never edits a VISIT auto line) · 0060 queue views · 0061 dispatch (assign / move / emergency) · 0062 call / cancel / `needs_reassign` on lock · 0063 reassign a called visit · 0064 medical record foundation · 0065 medical record write (`pets FOR SHARE` before `visits`, no-op PUT writes nothing) · 0066 visit weight (`PetApi.recordWeight` locks `FOR SHARE` only) |
->>>>>>> 058af5f (feat: triển khai api cân nặng)
-=======
-| Appointment, visit (BE-1) | 0045 booking locks · 0046 slots · 0047 book · 0048 view · 0049 reschedule / cancel · 0050 cross-module API · 0052 clinic cancel · 0053, 0054 ST05 · 0055 booking restriction · 0056 ST03 · 0057 assumptions confirmed · 0058 visit foundation · 0059 check-in (also amends 0044: receptionist never edits a VISIT auto line) · 0060 queue views · 0061 dispatch (assign / move / emergency) · 0062 call / cancel / `needs_reassign` on lock · 0063 reassign a called visit · 0064 medical record foundation · 0065 medical record write (`pets FOR SHARE` before `visits`, no-op PUT writes nothing) · 0066 visit weight (`PetApi.recordWeight` locks `FOR SHARE` only) · 0067 complete visit (replaces 0064 §5) |
->>>>>>> 3d7f7b1 (feat: triển khai chức năng đánh dấu hoàn tất lượt)
-| BE-2 | 0041 customer & pet · 0042 inventory stock ledger · 0043 document codes · 0044 order core · 0051 retail order |
->>>>>>> 6a7ef97 (feat: triển khai api xem cập nhật bênh án)
-=======
 | Appointment, visit (BE-1) | 0045 booking locks · 0046 slots · 0047 book · 0048 view · 0049 reschedule / cancel · 0050 cross-module API · 0052 clinic cancel · 0053, 0054 ST05 · 0055 booking restriction · 0056 ST03 · 0057 assumptions confirmed · 0058 visit foundation · 0059 check-in (also amends 0044: receptionist never edits a VISIT auto line) · 0060 queue views · 0061 dispatch (assign / move / emergency) · 0062 call / cancel / `needs_reassign` on lock · 0063 reassign a called visit · 0066 medical record foundation · 0067 medical record write (`pets FOR SHARE` before `visits`, no-op PUT writes nothing) · 0068 visit weight (`PetApi.recordWeight` locks `FOR SHARE` only) · 0069 complete visit (replaces 0066 §5) · 0070 addendum (any VET of the branch, creates an empty locked record if missing) |
-| BE-2 | 0041 customer & pet · 0042 inventory stock ledger · 0043 document codes · 0044 order core · 0051 retail order · 0064 cashier shift / payment · 0065 boarding (both on `origin/dev` only) |
->>>>>>> 7254311 (feat: cập nhật module lịch khám)
+| BE-2 | 0041 customer & pet · 0042 inventory stock ledger · 0043 document codes · 0044 order core · 0051 retail order · 0064 cashier shift / payment / ST13 · 0065 boarding kennels / bookings / ST05 · 0071 public pages, articles, feedback |
 
 ## Backend architecture
 
@@ -208,6 +191,7 @@ Every write ADR follows these. Read the ADR of the neighbouring feature before w
   | Sales | caller's document → `orders` (lock before read) → `products FOR SHARE` → stock lots; several orders by ascending id |
 | Cashier (ADR-0064) | open shift: `accounts FOR SHARE` (own) → INSERT shift · payment: shift `FOR SHARE` → all orders in **one** `ORDER BY id` statement → all lots in **one** statement (`StockApi.issueForPayment`) → `document_counters` last · close / reconcile: shift `FOR NO KEY UPDATE` · ST13: shift `SKIP LOCKED` |
   | Boarding (ADR-0065) | booking: `pets FOR SHARE` → `branches` (`BranchApi.lockForBooking`, shared with appointment booking and branch hours / holiday changes) → INSERT → `document_counters` · extend: `pets FOR SHARE` → `branches` → booking · cancel: booking → `evaluateAfterViolation` (advisory 1002 last) · kennel writes: `branches` → kennel · ST05: booking `SKIP LOCKED` → 1002 · clinic cancel: bookings by ascending id in batches of 100 |
+  | Content (ADR-0071) | article create / move: `article_categories FOR SHARE` → `articles` · category delete: `article_categories FOR NO KEY UPDATE` → count `articles` · feedback submit: advisory **1003** (customer) → count → INSERT · feedback open: conditional `UPDATE … WHERE status = 'NEW'` · resolve: `feedbacks FOR NO KEY UPDATE` |
   | Inventory | caller's document → `stock_receipts` → `suppliers FOR SHARE` → `products FOR SHARE` → all lots in **one** `ORDER BY id FOR NO KEY UPDATE` → `StockLedger.apply` (the only writer of `stock_lots.quantity`) |
   | [CFG] edit | `system_configs` rows by ascending key, the key and its cross-key partner |
 
@@ -220,7 +204,7 @@ Every write ADR follows these. Read the ADR of the neighbouring feature before w
 
 - Schema follows erd §0: PK `BIGINT GENERATED ALWAYS AS IDENTITY` (1–1 tables reuse the FK as PK); FK `<singular>_id`, `ON DELETE RESTRICT`; ROOT / PART / REF tables have `created_at` + `updated_at`, LOG tables only `created_at` and are insert-only; money `BIGINT` VND, business dates `DATE` (Vietnam time), weight `NUMERIC(6,2)`; every enum column `VARCHAR(30)` + `CHECK`. Deliberate deviations: erd §13.
 - **Flyway owns the schema** (`BE/src/main/resources/db/migration/`, V1 = the whole v16 schema, V2 = 52 [CFG] rows, then seed templates and indexes). **Never edit an applied migration** — not even a comment: the checksum changes and every DB that ran it fails to start.
-- **Version numbers are shared with BE-2:** V1–V20 are taken (V13–V15 BE-2; V16 appointment sequence, V17–V18 appointment templates; V19 cashier templates + indexes, BE-2; V20 boarding ST05 index + clinic-cancel templates, BE-2 — V17–V20 not yet confirmed with the other dev). **Agree on V21 before creating it.** A dev DB that ran the old `V13__appointment_code_sequence` needs `flyway repair` or `docker compose down -v` (ask first — it wipes data).
+- **Version numbers are shared with BE-2:** V1–V21 are taken (V13–V15 BE-2; V16 appointment sequence, V17–V18 appointment templates; V19 cashier templates + indexes, BE-2; V20 boarding ST05 index + clinic-cancel templates, BE-2; V21 page_contents seed, BE-2 — V17–V21 not yet confirmed with the other dev). **Agree on V22 before creating it.** A dev DB that ran the old `V13__appointment_code_sequence` needs `flyway repair` or `docker compose down -v` (ask first — it wipes data).
 - **V16 checksum changed:** `571e0fe` removed conflict markers from `V16__appointment_code_sequence.sql` (comments only; `origin/dev` and `origin/manh` still carry the markers). A DB that ran V16 before that fails startup with *checksum mismatch for version 16*. There is no Flyway Maven plugin: after checking that `appointment_code_seq` matches the file, run `UPDATE flyway_schema_history SET checksum = -439054298 WHERE version = '16' AND checksum = -223559679` (what `repair` would write). Tell BE-2 before they merge.
 - The first ADMIN is never seeded: create it with SQL — an `accounts` row (with `phone`) **plus** a `staff_profiles` row (`branch_id` NULL); template in system-overview §1. Don't add bootstrap code for it.
 

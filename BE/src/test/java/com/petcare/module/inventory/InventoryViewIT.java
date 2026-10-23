@@ -297,6 +297,43 @@ class InventoryViewIT extends InventoryItSupport {
     }
 
     @Test
+    void availableStockBatchMatchesTheSingleCallAndKeepsEveryKey() {
+        long otherBranch = newBranch();
+        long a = newProduct("GOODS", false);
+        long b = newProduct("DRUG", true);
+        long none = newProduct("GOODS", false);
+        defaultLot(branch, a, 3, managerId);
+        defaultLot(otherBranch, a, 1, managerId);
+        lot(branch, b, "TODAY", inDays(0), 2, managerId);
+        lot(branch, b, "OLD", inDays(-1), 9, managerId);
+        lot(otherBranch, b, "OLD2", inDays(-1), 9, managerId);
+
+        Map<Long, List<Long>> batch = stockQuery.branchIdsWithAvailableStock(List.of(a, b, none));
+
+        assertThat(batch).containsOnlyKeys(a, b, none);
+        assertThat(batch.get(a)).containsExactlyInAnyOrder(branch, otherBranch);
+        assertThat(batch.get(b)).containsExactly(branch);
+        assertThat(batch.get(none)).isEmpty();
+        for (long id : List.of(a, b, none)) {
+            assertThat(batch.get(id)).isEqualTo(stockQuery.branchIdsWithAvailableStock(id));
+        }
+        assertThat(stockQuery.branchIdsWithAvailableStock(List.<Long>of())).isEmpty();
+    }
+
+    @Test
+    void productIdsWithAvailableStockAtABranchIgnoreExpiredAndEmptyLots() {
+        long inStock = newProduct("GOODS", false);
+        long expired = newProduct("DRUG", true);
+        long elsewhere = newProduct("GOODS", false);
+        defaultLot(branch, inStock, 4, managerId);
+        lot(branch, expired, "OLD", inDays(-1), 5, managerId);
+        defaultLot(newBranch(), elsewhere, 4, managerId);
+
+        assertThat(stockQuery.productIdsWithAvailableStock(branch)).contains(inStock)
+                .doesNotContain(expired, elsewhere);
+    }
+
+    @Test
     void turningOffExpiryTrackingIsRefusedWhileStockRemainsInsteadOfFailingWithA500() {
         long product = newProduct("DRUG", true);
         String superManager = token(staff("SUPER_MANAGER", null));
