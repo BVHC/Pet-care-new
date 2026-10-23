@@ -1,5 +1,5 @@
-/* /booking — One-page với hero band.
-   Hero nền ảnh + overlay tối → service cards → form. */
+/* /booking — hero band + quy định đặt lịch + form 5 bước (thú cưng → chi nhánh → dịch vụ → ngày giờ → ghi chú).
+   Khung giờ: components/appointments/SlotPicker.module.css. */
 
 /* ================================================================
    Hero band — ảnh tràn, overlay tối, tiêu đề Anton.
@@ -51,21 +51,8 @@
 }
 
 /* ================================================================
-   Service cards — grid nổi bật trên nền trang.
+   Service cards — grid trong bước 3.
    ================================================================ */
-
-.servicesSection {
-  padding: 40px 0 0;
-}
-
-.sectionLabel {
-  font-size: 11px;
-  font-weight: 800;
-  letter-spacing: 0.14em;
-  text-transform: uppercase;
-  color: var(--color-accent);
-  margin-bottom: 14px;
-}
 
 .servicesGrid {
   display: grid;
@@ -194,35 +181,54 @@
   gap: 20px;
 }
 
-.formGrid {
-  display: grid;
-  grid-template-columns: 1fr;
-  gap: 16px;
-}
-
-@media (min-width: 640px) {
-  .formGrid {
-    grid-template-columns: repeat(2, 1fr);
-  }
-}
-
-/* Label + input stack */
-.field {
+/* Một bước của form: legend có số thứ tự. */
+.step {
+  border: 0;
+  margin: 0;
+  padding: 0;
+  min-width: 0;
   display: flex;
   flex-direction: column;
-  gap: 6px;
+  gap: 12px;
 }
 
-.fieldLabel {
-  font-size: 12.5px;
-  font-weight: 700;
-  color: var(--color-text-secondary);
-  letter-spacing: 0.04em;
+.stepLegend {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 0;
+  margin-bottom: 12px;
+  font-size: 14px;
+  font-weight: 800;
+  color: var(--color-text-primary);
 }
 
-.fieldLabel span {
+.stepNumber {
+  display: grid;
+  place-items: center;
+  width: 24px;
+  height: 24px;
+  border-radius: 50%;
+  background: var(--color-accent-soft);
   color: var(--color-accent);
-  margin-left: 2px;
+  font-size: 12px;
+  font-weight: 800;
+}
+
+.muted,
+.hint {
+  font-size: 12.5px;
+  color: var(--color-text-secondary);
+  line-height: 1.5;
+}
+
+.formError {
+  border-radius: 10px;
+  background: #fef2f2;
+  padding: 10px 14px;
+  font-size: 13.5px;
+  font-weight: 600;
+  color: #b91c1c;
 }
 
 .fieldInput {
@@ -248,20 +254,19 @@
   opacity: 0.6;
 }
 
-/* Pet type pills */
-.petTypePills {
+/* Thú cưng: pill. */
+.pills {
   display: flex;
+  flex-wrap: wrap;
   gap: 8px;
 }
 
-.petTypePill {
-  flex: 1;
-  display: flex;
+.pill {
+  display: inline-flex;
   align-items: center;
-  justify-content: center;
   gap: 7px;
-  padding: 9px 14px;
-  border-radius: 10px;
+  padding: 9px 16px;
+  border-radius: 999px;
   border: 1.5px solid var(--color-border-default);
   background: var(--color-surface-page);
   font-size: 13px;
@@ -271,67 +276,67 @@
   transition: border-color 0.2s ease, background-color 0.2s ease, color 0.2s ease;
 }
 
-.petTypePill:hover {
+.pill:hover {
   border-color: var(--color-accent);
   color: var(--color-accent);
 }
 
-.petTypePillActive {
+.pillActive {
   border-color: var(--color-accent);
   background: var(--color-accent-soft);
   color: var(--color-accent);
 }
 
-/* Date + time side by side */
-.datetimeGrid {
+/* Chi nhánh: thẻ chọn. */
+.optionGrid {
   display: grid;
   grid-template-columns: 1fr;
-  gap: 16px;
+  gap: 10px;
 }
 
 @media (min-width: 640px) {
-  .datetimeGrid {
+  .optionGrid {
     grid-template-columns: repeat(2, 1fr);
   }
 }
 
-/* Time slot grid */
-.timeGrid {
-  display: grid;
-  grid-template-columns: repeat(4, 1fr);
-  gap: 8px;
-}
-
-.timeSlot {
-  padding: 8px 4px;
-  border-radius: 8px;
+.optionCard {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 4px;
+  padding: 14px 16px;
+  border-radius: 14px;
   border: 1.5px solid var(--color-border-default);
   background: var(--color-surface-page);
-  font-size: 12.5px;
-  font-weight: 700;
-  color: var(--color-text-secondary);
+  text-align: left;
   cursor: pointer;
-  text-align: center;
-  transition: border-color 0.2s ease, background-color 0.2s ease, color 0.2s ease;
+  transition: border-color 0.2s ease, background-color 0.2s ease;
 }
 
-.timeSlot:hover {
+.optionCard:hover {
   border-color: var(--color-accent);
-  color: var(--color-accent);
 }
 
-.timeSlotActive {
+.optionCardActive {
   border-color: var(--color-accent);
-  background: var(--color-accent);
-  color: #fff;
+  background: color-mix(in srgb, var(--color-accent-soft) 60%, var(--color-surface-card));
 }
 
-.timeSlotDisabled {
-  opacity: 0.4;
-  pointer-events: none;
+.optionTitle {
+  font-size: 14px;
+  font-weight: 700;
+  color: var(--color-text-primary);
 }
 
-/* Textarea */
+.optionMeta {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  font-size: 12.5px;
+  color: var(--color-text-secondary);
+}
+
 .fieldTextarea {
   resize: vertical;
   min-height: 88px;
@@ -397,6 +402,7 @@
 }
 
 .successCard {
+  position: relative;
   background: var(--color-surface-card);
   border-radius: 24px;
   padding: 40px 32px;
@@ -458,6 +464,7 @@
 .successDetail {
   display: flex;
   justify-content: space-between;
+  gap: 12px;
   font-size: 13px;
 }
 
@@ -467,6 +474,8 @@
 
 .successDetailValue {
   font-weight: 700;
+  margin: 0;
+  text-align: right;
   color: var(--color-text-primary);
 }
 
@@ -507,6 +516,39 @@
 .successSecondary:hover {
   border-color: var(--color-accent);
   color: var(--color-accent);
+}
+
+
+/* Chưa có thú cưng / bị hạn chế. */
+.emptyState {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
+  border-radius: 20px;
+  border: 1.5px dashed var(--color-border-default);
+  background: var(--color-surface-card);
+  padding: 48px 24px;
+  text-align: center;
+  font-size: 13.5px;
+  color: var(--color-text-secondary);
+}
+
+.emptyAction {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  margin-top: 8px;
+  padding: 10px 20px;
+  border-radius: 999px;
+  background: var(--color-accent);
+  color: #fff;
+  font-size: 13.5px;
+  font-weight: 700;
+}
+
+.emptyAction:hover {
+  background: var(--color-accent-hover);
 }
 
 /* ================================================================

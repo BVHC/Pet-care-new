@@ -4,10 +4,16 @@ import { Card, CardContent } from '../../components/ui/card';
 import { Button } from '../../components/ui/button';
 import { Input } from '../../components/ui/input';
 import { Search, X } from 'lucide-react';
-import { NoticeBar, selectClass, type Notice } from '../../components/admin/form-ui';
+import { NoticeBar, selectClass } from '../../components/admin/form-ui';
 import { useAuditLogs } from '../../shared/hooks/useAdminIdentity';
 import { useAccount } from '../../shared/stores/session.store';
 import { plainMessage, toApiError } from '../../shared/api/api-error';
+
+/**
+ * `datetime-local` (YYYY-MM-DDTHH:mm) → date-time kèm offset giờ nghiệp vụ +07:00 (identity-v1 #36: thiếu offset → 400).
+ * Không dùng toISOString(): nó hiểu giá trị theo múi giờ của trình duyệt.
+ */
+const withVnOffset = (local: string) => (local ? `${local.length === 16 ? `${local}:00` : local}+07:00` : undefined);
 
 export function AdminAuditPage() {
   const account = useAccount();
@@ -17,14 +23,13 @@ export function AdminAuditPage() {
   const [from, setFrom] = useState('');
   const [to, setTo] = useState('');
   const [page, setPage] = useState(0);
-  const [notice, setNotice] = useState<Notice | null>(null);
 
   const params = {
     actorAccountId: actor ? Number(actor) : undefined,
     action: action || undefined,
     entityType: entityType || undefined,
-    from: from || undefined,
-    to: to || undefined,
+    from: withVnOffset(from),
+    to: withVnOffset(to),
     page,
     size: 50,
   };
@@ -49,7 +54,6 @@ export function AdminAuditPage() {
       </div>
 
       {error && <NoticeBar notice={{ kind: 'error', text: plainMessage(toApiError(error)) }} />}
-      {notice && <NoticeBar notice={notice} />}
 
       <Card className="card">
         <CardContent className="p-4 grid grid-cols-1 md:grid-cols-6 gap-3">

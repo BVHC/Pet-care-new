@@ -13,7 +13,7 @@ import { useSessionUser } from '../../shared/stores/session.store';
 import { observeWebVitals, track } from '../../shared/utils/telemetry';
 import { LiveRegion } from './LiveRegion';
 import { ShortcutHelp } from './ShortcutHelp';
-import { StaffSidebar, WorkspaceTabBar } from './StaffSidebar';
+import { StaffNotificationLink, StaffSidebar, WorkspaceTabBar } from './StaffSidebar';
 import { WorkspaceErrorBoundary } from './WorkspaceErrorBoundary';
 import { RowsSkeleton } from './ui';
 
@@ -113,6 +113,9 @@ function Shell({ user }: { user: NonNullable<ReturnType<typeof useSessionUser>> 
           <Menu className="h-5 w-5" />
         </button>
         <span className="truncate font-semibold">{pageLabel(location.pathname)}</span>
+        <span className="ml-auto">
+          <StaffNotificationLink role={user.role} />
+        </span>
       </header>
 
       <main

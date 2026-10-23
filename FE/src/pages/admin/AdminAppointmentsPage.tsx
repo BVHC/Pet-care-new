@@ -1,137 +1,264 @@
+/**
+ * Lịch hẹn của chi nhánh (UC39, UC40 phía lễ tân) — appointment-v1 #1–6, #8, #9.
+ * Danh sách theo ngày (mặc định hôm nay) và trạng thái (5 trạng thái của 03 §3); đặt lịch hộ (kênh COUNTER);
+ * đổi giờ / hủy hộ theo cờ `canReschedule` / `canCancel` (hủy hộ: cancelSource STAFF); xem và gỡ hạn chế đặt online.
+ * Check-in không làm ở đây: thuộc tiếp nhận (POST /visits, T36).
+ */
 import { useState } from 'react';
-import { Card, CardContent } from '../../components/ui/card';
-import { Button } from '../../components/ui/button';
-import { Input } from '../../components/ui/input';
-import { Badge } from '../../components/ui/badge';
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../../components/ui/select';
-import { Search, User, Phone, Eye } from 'lucide-react';
-import { cn } from '../../lib/utils';
-import { ConfirmModal, DetailModal, FormModal, InfoRow } from '../../components/ui/modal-templates';
+import { Eye, Plus, RefreshCw, X } from 'lucide-react';
+import { Checkbox, EmptyRow, FormError, selectClass } from '@/components/admin/form-ui';
+import { BookOnBehalfDialog } from '@/components/appointments/BookOnBehalfDialog';
+import { CancelAppointmentDialog, RescheduleDialog } from '@/components/appointments/ChangeAppointmentDialogs';
+import { CustomerRestrictionPanel } from '@/components/appointments/CustomerRestrictionPanel';
+import { formatShortDate, formatSlot, formatVnDateTime, slotEnd, STATUS_TONE, todayVn } from '@/components/appointments/format';
+import { Button } from '@/components/ui/button';
+import { Card, CardContent } from '@/components/ui/card';
+import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from '@/components/ui/dialog';
+import { Input } from '@/components/ui/input';
+import { InfoRow, StatusBadge } from '@/components/ui/modal-templates';
+import { cn } from '@/lib/utils';
+import { plainMessage, toApiError } from '@/shared/api/api-error';
+import { useAppointment, useAppointmentList } from '@/shared/hooks/useAppointments';
+import { useSession } from '@/shared/stores/session.store';
+import {
+  APPOINTMENT_CFG,
+  APPOINTMENT_STATUSES,
+  APPOINTMENT_STATUS_LABELS,
+  CANCEL_SOURCE_LABELS,
+  CHANNEL_LABELS,
+  type Appointment,
+  type AppointmentStatus,
+} from '@/shared/types/appointment';
+import { QUOTA_GROUP_LABELS } from '@/shared/types/branch';
 
-type AppointmentStatus = 'PENDING' | 'CONFIRMED' | 'CHECKED_IN' | 'IN_PROGRESS' | 'COMPLETED' | 'CANCELLED';
-
-interface Appointment {
-  id: string; date: string; time: string; customerName: string;
-  customerPhone: string; petName: string; petType: string;
-  service: string; veterinarian: string; status: AppointmentStatus;
-}
-
-const MOCK_APPOINTMENTS: Appointment[] = [
-  { id: '1', date: '2026-09-18', time: '09:00', customerName: 'Nguyễn Văn A', customerPhone: '0901234567', petName: 'Mèo Whiskas', petType: 'Mèo', service: 'Khám tổng quát', veterinarian: 'Dr. Minh', status: 'COMPLETED' },
-  { id: '2', date: '2026-09-18', time: '10:30', customerName: 'Trần Thị B', customerPhone: '0912345678', petName: 'Chó Alaska', petType: 'Chó', service: 'Tiêm vaccine', veterinarian: 'Dr. Lan', status: 'IN_PROGRESS' },
-  { id: '3', date: '2026-09-18', time: '11:00', customerName: 'Lê Văn C', customerPhone: '0923456789', petName: 'Chó Poodle', petType: 'Chó', service: 'Grooming', veterinarian: '-', status: 'CONFIRMED' },
-  { id: '4', date: '2026-09-18', time: '14:00', customerName: 'Phạm Thị D', customerPhone: '0934567890', petName: 'Mèo Persian', petType: 'Mèo', service: 'Tái khám', veterinarian: 'Dr. Minh', status: 'PENDING' },
-];
-
-const STATUS_CONFIG: Record<AppointmentStatus, { label: string; className: string }> = {
-  PENDING: { label: 'Chờ xác nhận', className: 'bg-gray-100 text-gray-700' },
-  CONFIRMED: { label: 'Đã xác nhận', className: 'bg-blue-100 text-blue-700' },
-  CHECKED_IN: { label: 'Đã check-in', className: 'bg-amber-100 text-amber-700' },
-  IN_PROGRESS: { label: 'Đang khám', className: 'bg-green-100 text-green-700' },
-  COMPLETED: { label: 'Hoàn tất', className: 'bg-emerald-100 text-emerald-700' },
-  CANCELLED: { label: 'Đã hủy', className: 'bg-red-100 text-red-700' },
-};
+const PAGE_SIZE = 20;
 
 export function AdminAppointmentsPage() {
-  const [appointments, setAppointments] = useState<Appointment[]>(MOCK_APPOINTMENTS);
-  const [searchQuery, setSearchQuery] = useState('');
-  const [statusFilter, setStatusFilter] = useState<string>('all');
-  const [viewApt, setViewApt] = useState<Appointment | null>(null);
-  const [checkInApt, setCheckInApt] = useState<Appointment | null>(null);
-  const [cancelApt, setCancelApt] = useState<Appointment | null>(null);
-  const [addAptOpen, setAddAptOpen] = useState(false);
-
-  const filtered = appointments.filter(apt => {
-    const matchesSearch = apt.customerName.toLowerCase().includes(searchQuery.toLowerCase()) || apt.petName.toLowerCase().includes(searchQuery.toLowerCase());
-    const matchesStatus = statusFilter === 'all' || apt.status === statusFilter;
-    return matchesSearch && matchesStatus;
+  const account = useSession((s) => s.account);
+  const branchId = account?.branchId ?? null;
+  const isDesk = account?.role === 'RECEPTIONIST';
+  const [date, setDate] = useState(todayVn());
+  const [status, setStatus] = useState<AppointmentStatus | ''>('');
+  const [checkInOnly, setCheckInOnly] = useState(false);
+  const [page, setPage] = useState(0);
+  const list = useAppointmentList({
+    date: date || undefined,
+    status: status || undefined,
+    checkInReady: checkInOnly || undefined,
+    page,
+    size: PAGE_SIZE,
   });
-
-  const handleCheckIn = () => {
-    if (!checkInApt) return;
-    setAppointments(prev => prev.map(a => a.id === checkInApt.id ? { ...a, status: 'CHECKED_IN' as AppointmentStatus } : a));
-    setCheckInApt(null);
-  };
-
-  const handleCancel = () => {
-    if (!cancelApt) return;
-    setAppointments(prev => prev.map(a => a.id === cancelApt.id ? { ...a, status: 'CANCELLED' as AppointmentStatus } : a));
-    setCancelApt(null);
+  const [openId, setOpenId] = useState<number | null>(null);
+  const [rescheduling, setRescheduling] = useState<Appointment | null>(null);
+  const [cancelling, setCancelling] = useState<Appointment | null>(null);
+  const [booking, setBooking] = useState(false);
+  const data = list.data;
+  const reset = <T,>(set: (v: T) => void) => (v: T) => {
+    set(v);
+    setPage(0);
   };
 
   return (
     <div className="space-y-6">
-      <div>
-        <h1 className="text-2xl font-semibold text-(--text-primary)">Quản lý lịch hẹn</h1>
-        <p className="text-(--text-secondary)">Xem và quản lý các lịch hẹn khám bệnh và dịch vụ</p>
+      <div className="flex flex-wrap items-end justify-between gap-3">
+        <div>
+          <h1 className="text-2xl font-semibold text-(--text-primary)">Quản lý lịch hẹn</h1>
+          <p className="text-(--text-secondary)">
+            Lịch hẹn khám và thẩm mỹ của chi nhánh{data?.content[0] ? ` ${data.content[0].branchName}` : ''}. Check-in thực hiện ở quầy tiếp nhận.
+          </p>
+        </div>
+        {isDesk && branchId != null && (
+          <Button onClick={() => setBooking(true)}>
+            <Plus className="h-4 w-4" aria-hidden /> Đặt lịch hộ
+          </Button>
+        )}
       </div>
 
-      <Card className="card"><CardContent className="p-4">
-        <div className="flex flex-wrap gap-4 items-end">
-          <div className="flex-1 min-w-[200px]">
-            <div className="relative"><Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-(--text-tertiary)" /><Input placeholder="Tên khách hàng, thú cưng..." className="pl-10 input" value={searchQuery} onChange={(e) => setSearchQuery(e.target.value)} /></div>
-          </div>
-          <div className="w-[180px]">
-            <Select value={statusFilter} onValueChange={setStatusFilter}>
-              <SelectTrigger className="select-trigger"><SelectValue placeholder="Tất cả" /></SelectTrigger>
-              <SelectContent><SelectItem value="all">Tất cả</SelectItem><SelectItem value="PENDING">Chờ xác nhận</SelectItem><SelectItem value="CONFIRMED">Đã xác nhận</SelectItem><SelectItem value="CHECKED_IN">Đã check-in</SelectItem></SelectContent>
-            </Select>
-          </div>
-          <Button onClick={() => setAddAptOpen(true)}>Tạo lịch hẹn</Button>
-        </div>
-      </CardContent></Card>
-
       <Card className="card">
-        <CardContent className="p-0">
-          <div className="divide-y divide-(--border-subtle)">
-            {filtered.map(apt => (
-              <div key={apt.id} className={cn('flex items-center justify-between p-4', apt.status === 'IN_PROGRESS' && 'bg-green-50/50 border-l-4 border-l-green-500', apt.status === 'CHECKED_IN' && 'bg-amber-50/50 border-l-4 border-l-amber-500')}>
-                <div className="flex items-center gap-5">
-                  <div className="w-16 text-center"><p className="text-lg font-semibold text-(--text-primary)">{apt.time}</p></div>
-                  <div className="border-l border-(--border-color) pl-5">
-                    <div className="flex items-center gap-3 mb-1.5"><div className="flex items-center gap-2"><User className="h-4 w-4 text-(--text-tertiary)" /><span className="font-medium text-(--text-primary)">{apt.customerName}</span></div><Badge className={STATUS_CONFIG[apt.status].className}>{STATUS_CONFIG[apt.status].label}</Badge></div>
-                    <div className="flex items-center gap-4 text-sm text-(--text-secondary)"><span className="flex items-center gap-1.5"><Phone className="h-3 w-3" />{apt.customerPhone}</span><span>{apt.petName} ({apt.petType})</span></div>
-                    <p className="text-sm mt-1.5"><span className="text-(--color-primary) font-medium">{apt.service}</span>{apt.veterinarian !== '-' && <span className="text-(--text-tertiary)"> • {apt.veterinarian}</span>}</p>
-                  </div>
-                </div>
-                <div className="flex gap-2 ml-4">
-                  <Button size="sm" variant="outline" onClick={() => setViewApt(apt)}><Eye className="h-4 w-4" /></Button>
-                  {apt.status === 'CONFIRMED' && <Button size="sm" className="bg-(--color-primary)" onClick={() => setCheckInApt(apt)}>Check-in</Button>}
-                  {apt.status === 'CHECKED_IN' && <Button size="sm" className="bg-green-600 hover:bg-green-700">Bắt đầu khám</Button>}
-                  {!['COMPLETED', 'CANCELLED'].includes(apt.status) && <Button size="sm" variant="outline" className="text-red-500 border-red-200" onClick={() => setCancelApt(apt)}>Hủy</Button>}
-                </div>
-              </div>
+        <CardContent className="flex flex-wrap items-center gap-3 p-4">
+          <Input aria-label="Ngày hẹn" type="date" className="w-44" value={date} onChange={(e) => reset(setDate)(e.target.value)} />
+          <Button size="sm" variant="outline" onClick={() => reset(setDate)(todayVn())}>
+            Hôm nay
+          </Button>
+          <Button size="sm" variant="ghost" onClick={() => reset(setDate)('')} disabled={!date}>
+            Mọi ngày
+          </Button>
+          <select
+            aria-label="Lọc trạng thái"
+            className={cn(selectClass, 'w-44')}
+            value={status}
+            onChange={(e) => reset(setStatus)(e.target.value as AppointmentStatus | '')}
+          >
+            <option value="">Mọi trạng thái</option>
+            {APPOINTMENT_STATUSES.map((s) => (
+              <option key={s} value={s}>
+                {APPOINTMENT_STATUS_LABELS[s]}
+              </option>
             ))}
-          </div>
+          </select>
+          {/* A3: lịch BOOKED hôm nay trong cửa sổ check-in (BR-TN-02). */}
+          <Checkbox label="Chỉ lịch đang trong giờ check-in" checked={checkInOnly} onChange={reset(setCheckInOnly)} />
         </CardContent>
       </Card>
 
-      {/* MODALS */}
-      <DetailModal open={!!viewApt} onOpenChange={(o) => !o && setViewApt(null)} title="Chi tiết lịch hẹn" size="md">
-        {viewApt && (
+      {list.isError && <FormError message={plainMessage(toApiError(list.error))} />}
+
+      <Card className="card">
+        <CardContent className="overflow-x-auto p-0">
+          <table className="table" aria-label="Danh sách lịch hẹn">
+            <thead>
+              <tr>
+                <th>Giờ hẹn</th>
+                <th>Mã</th>
+                <th>Khách</th>
+                <th>Thú cưng</th>
+                <th>Dịch vụ</th>
+                <th>Kênh</th>
+                <th>Trạng thái</th>
+                <th className="text-right">Thao tác</th>
+              </tr>
+            </thead>
+            <tbody>
+              {data?.content.length ? (
+                data.content.map((a) => (
+                  <tr key={a.appointmentId}>
+                    <td className="whitespace-nowrap tabular-nums">
+                      <span className="font-semibold text-(--text-primary)">
+                        {a.slotStart}–{slotEnd(a.slotStart)}
+                      </span>
+                      {!date && <span className="block text-xs text-(--text-tertiary)">{formatShortDate(a.slotDate)}</span>}
+                    </td>
+                    <td className="font-mono text-xs">{a.code}</td>
+                    <td className="font-medium text-(--text-primary)">{a.customerName}</td>
+                    <td>{a.petName}</td>
+                    <td>
+                      {a.serviceName}
+                      <span className="block text-xs text-(--text-tertiary)">{QUOTA_GROUP_LABELS[a.serviceGroup]}</span>
+                    </td>
+                    <td className="text-xs">{CHANNEL_LABELS[a.channel]}</td>
+                    <td>
+                      <StatusBadge status={APPOINTMENT_STATUS_LABELS[a.status]} variant={STATUS_TONE[a.status]} />
+                    </td>
+                    <td>
+                      <div className="flex justify-end gap-1.5">
+                        <Button size="sm" variant="outline" onClick={() => setOpenId(a.appointmentId)} aria-label={`Chi tiết ${a.code}`}>
+                          <Eye className="h-4 w-4" aria-hidden />
+                        </Button>
+                        {a.canReschedule && (
+                          <Button size="sm" variant="outline" onClick={() => setRescheduling(a)} aria-label={`Đổi giờ ${a.code}`}>
+                            <RefreshCw className="h-4 w-4" aria-hidden /> Đổi giờ
+                          </Button>
+                        )}
+                        {a.canCancel && (
+                          <Button size="sm" variant="outline" className="border-red-200 text-red-600" onClick={() => setCancelling(a)} aria-label={`Hủy ${a.code}`}>
+                            <X className="h-4 w-4" aria-hidden /> Hủy
+                          </Button>
+                        )}
+                      </div>
+                    </td>
+                  </tr>
+                ))
+              ) : (
+                <EmptyRow colSpan={8} loading={list.isLoading} />
+              )}
+            </tbody>
+          </table>
+          {data && data.totalPages > 1 && (
+            <div className="flex items-center justify-end gap-3 border-t border-(--border-color) px-4 py-3 text-sm text-(--text-secondary)">
+              <span>
+                Trang {data.page + 1}/{data.totalPages} · {data.totalElements} lịch
+              </span>
+              <Button size="sm" variant="outline" disabled={data.page === 0} onClick={() => setPage(data.page - 1)}>
+                Trước
+              </Button>
+              <Button size="sm" variant="outline" disabled={data.page + 1 >= data.totalPages} onClick={() => setPage(data.page + 1)}>
+                Sau
+              </Button>
+            </div>
+          )}
+        </CardContent>
+      </Card>
+
+      <AppointmentDetailDialog
+        appointmentId={openId}
+        onClose={() => setOpenId(null)}
+        onReschedule={(a) => {
+          setOpenId(null);
+          setRescheduling(a);
+        }}
+        onCancel={(a) => {
+          setOpenId(null);
+          setCancelling(a);
+        }}
+      />
+      <RescheduleDialog appointment={rescheduling} viewer="RECEPTIONIST" onClose={() => setRescheduling(null)} />
+      <CancelAppointmentDialog appointment={cancelling} viewer="RECEPTIONIST" onClose={() => setCancelling(null)} />
+      {branchId != null && <BookOnBehalfDialog open={booking} branchId={branchId} onClose={() => setBooking(false)} />}
+    </div>
+  );
+}
+
+function AppointmentDetailDialog({
+  appointmentId,
+  onClose,
+  onReschedule,
+  onCancel,
+}: {
+  appointmentId: number | null;
+  onClose: () => void;
+  onReschedule: (a: Appointment) => void;
+  onCancel: (a: Appointment) => void;
+}) {
+  const detail = useAppointment(appointmentId);
+  const a = detail.data;
+  return (
+    <Dialog open={appointmentId != null} onOpenChange={(o) => !o && onClose()}>
+      <DialogContent className="max-h-[90dvh] overflow-y-auto bg-white sm:max-w-lg">
+        <DialogHeader>
+          <DialogTitle>{a ? `Lịch hẹn ${a.code}` : 'Lịch hẹn'}</DialogTitle>
+          <DialogDescription>{a ? `${a.customerName} · ${a.petName}` : 'Đang tải…'}</DialogDescription>
+        </DialogHeader>
+        {detail.isError && <FormError message={plainMessage(toApiError(detail.error))} />}
+        {a && (
           <div className="space-y-4">
-            <div className="flex items-center justify-between pb-4 border-b border-(--color-border-light)"><div><h3 className="text-lg font-semibold">{viewApt.petName}</h3><p className="text-sm text-(--text-secondary)">{viewApt.customerName}</p></div><Badge className={STATUS_CONFIG[viewApt.status].className}>{STATUS_CONFIG[viewApt.status].label}</Badge></div>
-            <div className="space-y-1"><InfoRow label="Ngày hẹn" value={viewApt.date} /><InfoRow label="Giờ hẹn" value={viewApt.time} /><InfoRow label="Dịch vụ" value={viewApt.service} /><InfoRow label="Bác sĩ" value={viewApt.veterinarian} /><InfoRow label="Loài" value={viewApt.petType} /><InfoRow label="SĐT" value={viewApt.customerPhone} /></div>
+            <div>
+              <InfoRow label="Trạng thái" value={<StatusBadge status={APPOINTMENT_STATUS_LABELS[a.status]} variant={STATUS_TONE[a.status]} />} />
+              <InfoRow label="Thời gian" value={formatSlot(a)} />
+              <InfoRow label="Dịch vụ" value={`${a.serviceName} (${QUOTA_GROUP_LABELS[a.serviceGroup]})`} />
+              <InfoRow label="Chi nhánh" value={a.branchName} />
+              <InfoRow label="Kênh đặt" value={CHANNEL_LABELS[a.channel]} />
+              <InfoRow label="Số lần đổi giờ" value={`${a.rescheduleCount}/${APPOINTMENT_CFG.maxReschedules}`} />
+              {a.note && <InfoRow label="Ghi chú của khách" value={a.note} />}
+              {a.status === 'CANCELLED' && (
+                <>
+                  <InfoRow label="Nguồn hủy" value={a.cancelSource ? CANCEL_SOURCE_LABELS[a.cancelSource] : '—'} />
+                  {a.cancelledAt && <InfoRow label="Hủy lúc" value={formatVnDateTime(a.cancelledAt)} />}
+                  {a.cancelReason && <InfoRow label="Lý do hủy" value={a.cancelReason} />}
+                  <InfoRow label="Hủy muộn" value={a.lateCancel ? 'Có (tính vào hạn chế đặt online)' : 'Không'} />
+                </>
+              )}
+            </div>
+            <div>
+              <p className="mb-1.5 text-sm font-medium">Đặt lịch online của khách</p>
+              <CustomerRestrictionPanel customerId={a.customerId} customerName={a.customerName} />
+            </div>
+            {(a.canReschedule || a.canCancel) && (
+              <div className="flex justify-end gap-2">
+                {a.canReschedule && (
+                  <Button variant="outline" onClick={() => onReschedule(a)}>
+                    Đổi giờ
+                  </Button>
+                )}
+                {a.canCancel && (
+                  <Button variant="destructive" onClick={() => onCancel(a)}>
+                    Hủy lịch
+                  </Button>
+                )}
+              </div>
+            )}
           </div>
         )}
-      </DetailModal>
-
-      <ConfirmModal open={!!checkInApt} onOpenChange={(o) => !o && setCheckInApt(null)} type="success" title="Xác nhận Check-in?" description={`Check-in lịch hẹn của "${checkInApt?.customerName}" cho thú cưng "${checkInApt?.petName}"?`} confirmText="Xác nhận Check-in" onConfirm={handleCheckIn} />
-
-      <ConfirmModal open={!!cancelApt} onOpenChange={(o) => !o && setCancelApt(null)} type="danger" title="Hủy lịch hẹn?" description={`Hủy lịch hẹn của "${cancelApt?.customerName}" vào lúc ${cancelApt?.time}? Khách hàng sẽ được thông báo.`} confirmText="Hủy lịch hẹn" onConfirm={handleCancel} />
-
-      <FormModal open={addAptOpen} onOpenChange={setAddAptOpen} title="Tạo lịch hẹn mới" description="Điều thông tin để đặt lịch hẹn mới" onSubmit={() => setAddAptOpen(false)} submitText="Tạo lịch hẹn" size="lg">
-        <div className="grid grid-cols-2 gap-4">
-          <div><label className="block text-sm font-medium mb-1.5">Tên chủ nuôi *</label><Input placeholder="Nguyễn Văn A" /></div>
-          <div><label className="block text-sm font-medium mb-1.5">SĐT *</label><Input placeholder="0901234567" /></div>
-          <div><label className="block text-sm font-medium mb-1.5">Tên thú cưng *</label><Input placeholder="Mèo Whiskas" /></div>
-          <div><label className="block text-sm font-medium mb-1.5">Loài</label><select className="w-full h-10 px-3 rounded-lg border border-(--color-border-default) bg-white text-sm"><option>Chó</option><option>Mèo</option></select></div>
-          <div><label className="block text-sm font-medium mb-1.5">Dịch vụ *</label><Input placeholder="Khám tổng quát" /></div>
-          <div><label className="block text-sm font-medium mb-1.5">Bác sĩ</label><select className="w-full h-10 px-3 rounded-lg border border-(--color-border-default) bg-white text-sm"><option>Dr. Minh</option><option>Dr. Lan</option></select></div>
-          <div><label className="block text-sm font-medium mb-1.5">Ngày *</label><Input type="date" /></div>
-          <div><label className="block text-sm font-medium mb-1.5">Giờ *</label><Input type="time" /></div>
-        </div>
-      </FormModal>
-    </div>
+      </DialogContent>
+    </Dialog>
   );
 }

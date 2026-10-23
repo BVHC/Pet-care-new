@@ -1,153 +1,404 @@
 import { useState } from 'react';
-import { Card, CardContent, CardHeader, CardTitle } from '../../components/ui/card';
+import { Plus } from 'lucide-react';
+import { Checkbox, EmptyRow, Field, FormError, NoticeBar, selectClass, type Notice } from '../../components/admin/form-ui';
+import { RetailOrderPanel } from '../../components/staff/reception/RetailOrderPanel';
 import { Button } from '../../components/ui/button';
+import { Card, CardContent } from '../../components/ui/card';
 import { Input } from '../../components/ui/input';
-import { Badge } from '../../components/ui/badge';
-import { ScrollArea } from '../../components/ui/scroll-area';
-import { Separator } from '../../components/ui/separator';
-import { Search, ShoppingCart, Trash2, CreditCard, Banknote, Minus, Plus, User } from 'lucide-react';
-import { ConfirmModal, DetailModal, FormModal } from '../../components/ui/modal-templates';
+import { StatusBadge } from '../../components/ui/modal-templates';
+import { cn, formatCurrency, formatDateTime } from '../../lib/utils';
+import { salesApi } from '../../shared/api/sales.api';
+import { salesErrorMessage, useOrder, useOrders, useSalesMutation } from '../../shared/hooks/useSales';
+import { useAccount } from '../../shared/stores/session.store';
+import {
+  CANCEL_TYPE_LABELS,
+  NOT_DELIVERED_TEXT,
+  ORDER_LINE_TYPE_LABELS,
+  ORDER_SOURCE_LABELS,
+  ORDER_STATUS_LABELS,
+  type OrderSource,
+  type OrderStatus,
+} from '../../shared/types/sales';
 
-interface CartItem { id: string; name: string; price: number; quantity: number; }
+const PAGE_SIZE = 20;
+const STATUS_VARIANT = { OPEN: 'info', PENDING: 'warning', PAID: 'success', CANCELLED: 'neutral' } as const;
 
-const MOCK_PRODUCTS = [
-  { id: '1', name: 'Thức ăn Royal Canin (mèo)', price: 450000, category: 'Thức ăn', stock: 25 },
-  { id: '2', name: 'Thức ăn Pedigree (chó)', price: 380000, category: 'Thức ăn', stock: 30 },
-  { id: '3', name: 'Sữa tắm diệt ve rận', price: 120000, category: 'Chăm sóc', stock: 15 },
-  { id: '4', name: 'Vitamin tổng hợp', price: 280000, category: 'Dinh dưỡng', stock: 20 },
-];
-
-function formatCurrency(amount: number): string {
-  return new Intl.NumberFormat('vi-VN', { style: 'currency', currency: 'VND', minimumFractionDigits: 0 }).format(amount);
-}
-
+/**
+ * T34 — Order tại quầy của chi nhánh (UC66; sales-v1 #1–8, #10). Danh sách (lọc trạng thái / nguồn / ngày tạo / chờ thu
+ * quá hạn) + chi tiết. Lễ tân: tạo và làm tiếp Order bán lẻ trong RetailOrderPanel, hủy Order bán lẻ chưa chốt.
+ * Quản lý chi nhánh: chỉ xem, và hủy Order PENDING khách không thanh toán (BR-BH-05, Order#10). Thu tiền: T35.
+ */
 export function AdminPOSPage() {
-  const [cart, setCart] = useState<CartItem[]>([]);
-  const [searchQuery, setSearchQuery] = useState('');
-  const [paymentMethod, setPaymentMethod] = useState<'CASH' | 'CARD' | null>(null);
-  const [paymentOpen, setPaymentOpen] = useState(false);
-  const [receiptOpen, setReceiptOpen] = useState(false);
-  const [customerOpen, setCustomerOpen] = useState(false);
-  const [customerName, setCustomerName] = useState('');
-  const products = MOCK_PRODUCTS.filter(p => p.name.toLowerCase().includes(searchQuery.toLowerCase()));
-
-  const addToCart = (product: typeof MOCK_PRODUCTS[0]) => {
-    setCart(prev => {
-      const existing = prev.find(item => item.id === product.id);
-      if (existing) return prev.map(item => item.id === product.id ? { ...item, quantity: item.quantity + 1 } : item);
-      return [...prev, { id: product.id, name: product.name, price: product.price, quantity: 1 }];
-    });
+  const role = useAccount()?.role;
+  const receptionist = role === 'RECEPTIONIST';
+  const manager = role === 'BRANCH_MANAGER';
+  const [status, setStatus] = useState('');
+  const [source, setSource] = useState('');
+  const [date, setDate] = useState('');
+  const [overdue, setOverdue] = useState(false);
+  const [page, setPage] = useState(0);
+  const orders = useOrders({
+    status: (status || undefined) as OrderStatus | undefined,
+    source: (source || undefined) as OrderSource | undefined,
+    date: date || undefined,
+    pendingOverdue: overdue || undefined,
+    page,
+    size: PAGE_SIZE,
+  });
+  const [selectedId, setSelectedId] = useState<number | null>(null);
+  const [selling, setSelling] = useState(false);
+  const [sellingOrderId, setSellingOrderId] = useState<number | null>(null);
+  const [notice, setNotice] = useState<Notice | null>(null);
+  const data = orders.data;
+  const reset = <T,>(set: (v: T) => void) => (v: T) => {
+    set(v);
+    setPage(0);
   };
-
-  const updateQuantity = (id: string, delta: number) => {
-    setCart(prev => prev.map(item => {
-      if (item.id === id) {
-        const newQty = item.quantity + delta;
-        return newQty > 0 ? { ...item, quantity: newQty } : item;
-      }
-      return item;
-    }).filter(item => item.quantity > 0));
+  const openSale = (orderId: number | null) => {
+    setNotice(null);
+    setSelling(true);
+    setSellingOrderId(orderId);
+    setSelectedId(orderId);
   };
-
-  const removeFromCart = (id: string) => setCart(prev => prev.filter(item => item.id !== id));
-  const clearCart = () => setCart([]);
-  const total = cart.reduce((sum, item) => sum + item.price * item.quantity, 0);
-  const itemCount = cart.reduce((sum, item) => sum + item.quantity, 0);
-
-  const handlePayment = () => { setPaymentMethod(paymentMethod || 'CASH'); setPaymentOpen(false); setReceiptOpen(true); };
+  const view = (orderId: number) => {
+    setSelling(false);
+    setSelectedId(orderId);
+  };
 
   return (
-    <div className="flex h-[calc(100vh-8rem)] gap-6">
-      <div className="flex-1 flex flex-col min-w-0">
-        <div className="mb-6">
-          <h1 className="text-2xl font-semibold text-(--text-primary)">Quầy POS</h1>
-          <p className="text-(--text-secondary)">Bán lẻ và thanh toán tại quầy</p>
+    <div className="space-y-6">
+      <div className="flex flex-wrap items-start justify-between gap-3">
+        <div>
+          <h1 className="text-2xl font-semibold text-(--text-primary)">Order tại quầy</h1>
+          <p className="text-(--text-secondary)">
+            Order bán lẻ, lượt tiếp nhận và lưu trú của chi nhánh. Order đã chốt chờ thu tiền tại quầy thu ngân; chưa thanh toán thì chưa giao hàng.
+          </p>
         </div>
-
-        <div className="mb-4">
-          <div className="relative"><Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-(--text-tertiary)" /><Input placeholder="Tìm sản phẩm..." className="pl-10 input" value={searchQuery} onChange={(e) => setSearchQuery(e.target.value)} /></div>
-        </div>
-
-        <ScrollArea className="flex-1 pr-4">
-          <div className="grid grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4 pb-4">
-            {products.map((product) => (
-              <Card key={product.id} className="card cursor-pointer hover:border-(--color-primary) transition-all" onClick={() => addToCart(product)}>
-                <CardContent className="p-4">
-                  <div className="flex justify-between items-start mb-3"><Badge variant="secondary" className="text-xs bg-(--bg-tertiary)">{product.category}</Badge><span className="text-xs text-(--text-tertiary)">Còn {product.stock}</span></div>
-                  <p className="font-medium text-sm text-(--text-primary) mb-2 line-clamp-2">{product.name}</p>
-                  <p className="text-lg font-semibold text-(--color-primary)">{formatCurrency(product.price)}</p>
-                </CardContent>
-              </Card>
-            ))}
-          </div>
-        </ScrollArea>
+        {receptionist && (
+          <Button onClick={() => openSale(null)}>
+            <Plus className="h-4 w-4" />
+            Tạo Order bán lẻ
+          </Button>
+        )}
       </div>
 
-      <Card className="card w-96 flex flex-col shrink-0">
-        <CardHeader className="pb-4">
-          <CardTitle className="flex items-center justify-between text-base">
-            <span className="flex items-center gap-2"><ShoppingCart className="h-5 w-5" /> Giỏ hàng</span>
-            <Badge variant="secondary" className="bg-(--bg-tertiary)">{itemCount} sản phẩm</Badge>
-          </CardTitle>
-        </CardHeader>
-        <CardContent className="flex-1 flex flex-col min-h-0">
-          <ScrollArea className="flex-1 mb-4">
-            {cart.length === 0 ? (
-              <div className="flex flex-col items-center justify-center h-40 text-(--text-tertiary)"><ShoppingCart className="h-12 w-12 mb-3 opacity-50" /><p>Giỏ hàng trống</p></div>
-            ) : (
-              <div className="space-y-3">
-                {cart.map((item) => (
-                  <div key={item.id} className="flex items-center justify-between py-3 border-b border-(--border-subtle)">
-                    <div className="flex-1 min-w-0 pr-3"><p className="font-medium text-sm text-(--text-primary) truncate">{item.name}</p><p className="text-xs text-(--text-secondary)">{formatCurrency(item.price)}</p></div>
-                    <div className="flex items-center gap-1.5">
-                      <Button variant="outline" size="icon" className="h-7 w-7" onClick={() => updateQuantity(item.id, -1)}><Minus className="h-3 w-3" /></Button>
-                      <span className="w-6 text-center text-sm font-medium">{item.quantity}</span>
-                      <Button variant="outline" size="icon" className="h-7 w-7" onClick={() => updateQuantity(item.id, 1)}><Plus className="h-3 w-3" /></Button>
-                      <Button variant="ghost" size="icon" className="h-7 w-7 text-red-500 hover:text-red-600 hover:bg-red-50" onClick={() => removeFromCart(item.id)}><Trash2 className="h-4 w-4" /></Button>
-                    </div>
-                  </div>
-                ))}
-              </div>
-            )}
-          </ScrollArea>
-
-          <Separator className="my-4" />
-
-          <div className="space-y-2 mb-4">
-            <div className="flex justify-between text-lg font-semibold"><span className="text-(--text-primary)">Tổng cộng</span><span className="text-(--color-primary)">{formatCurrency(total)}</span></div>
-          </div>
-
-          <div className="grid grid-cols-2 gap-3 mb-3">
-            <Button size="lg" className="bg-green-600 hover:bg-green-700 text-white" onClick={() => { if (cart.length > 0) setPaymentOpen(true); }}><Banknote className="mr-2 h-4 w-4" /> Tiền mặt</Button>
-            <Button size="lg" variant="outline" className="border-(--border-color)" onClick={() => { if (cart.length > 0) { setPaymentMethod('CARD'); setReceiptOpen(true); } }}><CreditCard className="mr-2 h-4 w-4" /> Thẻ</Button>
-          </div>
-          <Button size="lg" variant="outline" className="w-full" onClick={() => setCustomerOpen(true)}><User className="mr-2 h-4 w-4" /> Khách hàng</Button>
-          {cart.length > 0 && <Button size="sm" variant="ghost" className="w-full mt-2 text-red-500" onClick={clearCart}>Xóa giỏ hàng</Button>}
+      <Card className="card">
+        <CardContent className="flex flex-wrap items-center gap-3 p-4">
+          <select aria-label="Lọc trạng thái" className={cn(selectClass, 'w-44')} value={status} onChange={(e) => reset(setStatus)(e.target.value)}>
+            <option value="">Mọi trạng thái</option>
+            {(Object.keys(ORDER_STATUS_LABELS) as OrderStatus[]).map((s) => (
+              <option key={s} value={s}>
+                {ORDER_STATUS_LABELS[s]}
+              </option>
+            ))}
+          </select>
+          <select aria-label="Lọc nguồn" className={cn(selectClass, 'w-44')} value={source} onChange={(e) => reset(setSource)(e.target.value)}>
+            <option value="">Mọi nguồn</option>
+            {(Object.keys(ORDER_SOURCE_LABELS) as OrderSource[]).map((s) => (
+              <option key={s} value={s}>
+                {ORDER_SOURCE_LABELS[s]}
+              </option>
+            ))}
+          </select>
+          <Input aria-label="Ngày tạo" type="date" className="w-40" value={date} onChange={(e) => reset(setDate)(e.target.value)} />
+          {/* Ngưỡng N ngày là [CFG] order.pending_alert_days (BR-BH-05, ST13); BE tính, FE không đoán. */}
+          <Checkbox label="Chờ thu quá hạn" checked={overdue} onChange={reset(setOverdue)} />
         </CardContent>
       </Card>
 
-      {/* MODALS */}
-      <DetailModal open={receiptOpen} onOpenChange={setReceiptOpen} title="Hóa đơn" size="sm">
-        <div className="space-y-4">
-          <div className="text-center pb-4 border-b border-(--color-border-light)">
-            <h3 className="text-lg font-semibold">Pet Care Clinic</h3>
-            <p className="text-sm text-(--text-secondary)">Hóa đơn thanh toán</p>
-          </div>
+      <NoticeBar notice={notice} />
+
+      <div className="grid items-start gap-4 xl:grid-cols-[minmax(0,1fr)_minmax(360px,420px)]">
+        <Card className="card">
+          <CardContent className="overflow-x-auto p-0">
+            <table className="table">
+              <thead>
+                <tr>
+                  <th>Mã Order</th>
+                  <th>Nguồn</th>
+                  <th>Khách</th>
+                  <th className="text-right">Tổng tiền</th>
+                  <th>Trạng thái</th>
+                  <th>Tạo lúc</th>
+                  <th className="text-right">Thao tác</th>
+                </tr>
+              </thead>
+              <tbody>
+                {data?.content.length ? (
+                  data.content.map((o) => (
+                    <tr key={o.orderId} className={cn(o.orderId === selectedId && 'bg-(--bg-tertiary)')}>
+                      <td className="font-mono text-xs">{o.code}</td>
+                      <td>{ORDER_SOURCE_LABELS[o.source]}</td>
+                      <td className="font-medium text-(--text-primary)">{o.customerName}</td>
+                      <td className="text-right tabular-nums">{formatCurrency(o.totalAmount)}</td>
+                      <td>
+                        <StatusBadge status={ORDER_STATUS_LABELS[o.status]} variant={STATUS_VARIANT[o.status]} />
+                      </td>
+                      <td className="whitespace-nowrap">{formatDateTime(o.createdAt)}</td>
+                      <td className="text-right">
+                        <Button size="sm" variant="outline" onClick={() => view(o.orderId)} aria-label={`Xem Order ${o.code}`}>
+                          Xem
+                        </Button>
+                      </td>
+                    </tr>
+                  ))
+                ) : (
+                  <EmptyRow colSpan={7} loading={orders.isLoading} />
+                )}
+              </tbody>
+            </table>
+            {orders.isError && <FormError message={salesErrorMessage(orders.error)} />}
+            {data && data.totalPages > 1 && (
+              <div className="flex items-center justify-end gap-3 border-t border-(--border-color) px-4 py-3 text-sm text-(--text-secondary)">
+                <span>
+                  Trang {data.page + 1}/{data.totalPages} · {data.totalElements} Order
+                </span>
+                <Button size="sm" variant="outline" disabled={data.page === 0} onClick={() => setPage(data.page - 1)}>
+                  Trước
+                </Button>
+                <Button size="sm" variant="outline" disabled={data.page + 1 >= data.totalPages} onClick={() => setPage(data.page + 1)}>
+                  Sau
+                </Button>
+              </div>
+            )}
+          </CardContent>
+        </Card>
+
+        {selling ? (
           <div className="space-y-2">
-            {cart.map(item => <div key={item.id} className="flex justify-between text-sm"><span>{item.name} x{item.quantity}</span><span className="font-medium">{formatCurrency(item.price * item.quantity)}</span></div>)}
+            <div className="flex justify-end">
+              <Button size="sm" variant="outline" onClick={() => setSelling(false)}>
+                Đóng bán hàng
+              </Button>
+            </div>
+            <RetailOrderPanel
+              className="h-[640px]"
+              orderId={sellingOrderId}
+              onOrderChange={(id) => {
+                setSellingOrderId(id);
+                if (id != null) setSelectedId(id);
+              }}
+            />
           </div>
-          <Separator />
-          <div className="flex justify-between font-semibold"><span>Tổng cộng</span><span className="text-(--color-primary)">{formatCurrency(total)}</span></div>
-          <div className="text-sm text-(--text-secondary)"><span>Thanh toán: </span><Badge variant="secondary">{paymentMethod === 'CASH' ? 'Tiền mặt' : paymentMethod === 'CARD' ? 'Thẻ' : '-'}</Badge></div>
-          {customerName && <div className="text-sm text-(--text-secondary)">Khách hàng: {customerName}</div>}
-        </div>
-      </DetailModal>
-
-      <ConfirmModal open={paymentOpen} onOpenChange={setPaymentOpen} type="success" title="Xác nhận thanh toán?" description={`Thanh toán ${formatCurrency(total)} bằng tiền mặt?`} confirmText="Thanh toán" onConfirm={handlePayment} />
-
-      <FormModal open={customerOpen} onOpenChange={setCustomerOpen} title="Thông tin khách hàng" description="Nhập thông tin khách hàng (tùy chọn)" onSubmit={() => setCustomerOpen(false)} submitText="Lưu" size="sm">
-        <div><label className="block text-sm font-medium mb-1.5">Tên khách hàng</label><Input placeholder="Nhập tên..." value={customerName} onChange={(e) => setCustomerName(e.target.value)} /></div>
-      </FormModal>
+        ) : selectedId != null ? (
+          <OrderDetail
+            key={selectedId}
+            orderId={selectedId}
+            receptionist={receptionist}
+            manager={manager}
+            onContinue={() => openSale(selectedId)}
+            onDone={(text) => setNotice({ kind: 'success', text })}
+          />
+        ) : (
+          <Card className="card">
+            <CardContent className="p-6 text-sm text-(--text-secondary)">Chọn một Order để xem chi tiết.</CardContent>
+          </Card>
+        )}
+      </div>
     </div>
+  );
+}
+
+/** Chi tiết Order + thao tác theo vai trò; vai trò không làm được thì không thấy nút (BR-BH-05). */
+function OrderDetail({
+  orderId,
+  receptionist,
+  manager,
+  onContinue,
+  onDone,
+}: {
+  orderId: number;
+  receptionist: boolean;
+  manager: boolean;
+  onContinue: () => void;
+  onDone: (text: string) => void;
+}) {
+  const query = useOrder(orderId);
+  const cancel = useSalesMutation(() => salesApi.cancelOrder(orderId));
+  const cancelUnpaid = useSalesMutation((reason: string) => salesApi.cancelUnpaid(orderId, reason));
+  const [mode, setMode] = useState<'cancel' | 'unpaid' | null>(null);
+  const [reason, setReason] = useState('');
+  const [error, setError] = useState('');
+  const o = query.data;
+
+  if (!o) {
+    return (
+      <Card className="card">
+        <CardContent className="p-6 text-sm text-(--text-secondary)">
+          {query.isError ? <FormError message={salesErrorMessage(query.error)} /> : 'Đang tải…'}
+        </CardContent>
+      </Card>
+    );
+  }
+
+  const busy = cancel.isPending || cancelUnpaid.isPending;
+  const fail = (e: unknown) => setError(salesErrorMessage(e));
+  const back = () => {
+    setMode(null);
+    setError('');
+  };
+  const doCancel = () =>
+    cancel.mutate(undefined, {
+      onSuccess: (x) => {
+        back();
+        onDone(`Đã hủy Order ${x.code}`);
+      },
+      onError: fail,
+    });
+  const doCancelUnpaid = () => {
+    // BR-BH-05: không cho xác nhận khi chưa có lý do; BE kiểm lại.
+    if (!reason.trim()) return setError('Vui lòng nhập lý do hủy Order.');
+    cancelUnpaid.mutate(reason.trim(), {
+      onSuccess: (x) => {
+        back();
+        setReason('');
+        onDone(`Đã hủy Order ${x.code} — ghi nhận thất thu`);
+      },
+      onError: fail,
+    });
+  };
+
+  return (
+    <Card className="card">
+      <CardContent className="space-y-4 p-5">
+        <div className="flex flex-wrap items-center gap-2">
+          <h2 className="mr-auto text-lg font-semibold text-(--text-primary)">Order {o.code}</h2>
+          <StatusBadge status={ORDER_STATUS_LABELS[o.status]} variant={STATUS_VARIANT[o.status]} />
+        </div>
+        <p className="text-sm text-(--text-secondary)">
+          {ORDER_SOURCE_LABELS[o.source]} · <span className="font-medium text-(--text-primary)">{o.customerName}</span>
+        </p>
+        {!o.deliveryAllowed && o.status === 'PENDING' && (
+          <p role="status" className="rounded-lg bg-amber-50 px-3 py-2 text-sm font-medium text-amber-800">
+            {NOT_DELIVERED_TEXT}
+          </p>
+        )}
+        <dl className="grid grid-cols-2 gap-3 text-sm">
+          <div>
+            <dt className="text-(--text-secondary)">Tạo lúc</dt>
+            <dd className="font-medium">{formatDateTime(o.createdAt)}</dd>
+          </div>
+          {o.pendingAt && (
+            <div>
+              <dt className="text-(--text-secondary)">Chốt lúc</dt>
+              <dd className="font-medium">{formatDateTime(o.pendingAt)}</dd>
+            </div>
+          )}
+          {o.paidAt && (
+            <div>
+              <dt className="text-(--text-secondary)">Thanh toán lúc</dt>
+              <dd className="font-medium">{formatDateTime(o.paidAt)}</dd>
+            </div>
+          )}
+          {o.cancelledAt && (
+            <div className="col-span-2">
+              <dt className="text-(--text-secondary)">Hủy lúc</dt>
+              <dd className="font-medium">
+                {formatDateTime(o.cancelledAt)}
+                {o.cancelType && ` · ${CANCEL_TYPE_LABELS[o.cancelType]}`}
+                {o.cancelReason && ` — ${o.cancelReason}`}
+              </dd>
+            </div>
+          )}
+        </dl>
+
+        <table className="table">
+          <thead>
+            <tr>
+              <th>Dòng</th>
+              <th className="text-right">SL</th>
+              <th className="text-right">Thành tiền</th>
+            </tr>
+          </thead>
+          <tbody>
+            {o.lines.length ? (
+              o.lines.map((l) => (
+                <tr key={l.lineId}>
+                  <td>
+                    <span className="font-medium text-(--text-primary)">{l.description}</span>
+                    <span className="block text-xs text-(--text-tertiary)">
+                      {ORDER_LINE_TYPE_LABELS[l.lineType]} · {formatCurrency(l.unitPrice)}
+                    </span>
+                  </td>
+                  <td className="text-right tabular-nums">{l.quantity}</td>
+                  <td className="text-right tabular-nums">{formatCurrency(l.lineTotal)}</td>
+                </tr>
+              ))
+            ) : (
+              <EmptyRow colSpan={3} loading={false} />
+            )}
+          </tbody>
+        </table>
+        <p className="flex justify-between text-base font-semibold">
+          <span>Tổng tiền</span>
+          <span className="tabular-nums">{formatCurrency(o.totalAmount)}</span>
+        </p>
+
+        {mode === 'cancel' && (
+          <div className="space-y-3 rounded-lg border border-(--border-color) p-3 text-sm">
+            <p>Hủy Order chưa chốt {o.code}? Các dòng giữ lại làm lịch sử, kho không thay đổi.</p>
+            <FormError message={error} />
+            <div className="flex justify-end gap-2">
+              <Button variant="outline" onClick={back} disabled={busy}>
+                Quay lại
+              </Button>
+              <Button variant="destructive" onClick={doCancel} disabled={busy}>
+                Xác nhận hủy
+              </Button>
+            </div>
+          </div>
+        )}
+        {mode === 'unpaid' && (
+          <div className="space-y-3 rounded-lg border border-red-200 p-3 text-sm">
+            <p>
+              Order chuyển sang <b>Đã hủy</b> và được tính là <b>thất thu</b>; thao tác được ghi nhật ký (audit). Kho, bệnh án, lịch hẹn,
+              lưu trú giữ nguyên.
+            </p>
+            <Field label="Lý do hủy" hint="Bắt buộc, tối đa 300 ký tự.">
+              {(id) => (
+                <textarea
+                  id={id}
+                  value={reason}
+                  maxLength={300}
+                  rows={3}
+                  onChange={(e) => setReason(e.target.value)}
+                  autoFocus
+                  className="w-full rounded-lg border border-(--color-border-default) px-3 py-2 text-sm"
+                />
+              )}
+            </Field>
+            <FormError message={error} />
+            <div className="flex justify-end gap-2">
+              <Button variant="outline" onClick={back} disabled={busy}>
+                Quay lại
+              </Button>
+              <Button variant="destructive" onClick={doCancelUnpaid} disabled={busy || !reason.trim()}>
+                Xác nhận hủy Order
+              </Button>
+            </div>
+          </div>
+        )}
+        {mode === null && (
+          <>
+            <FormError message={error} />
+            <div className="flex flex-wrap justify-end gap-2">
+              {receptionist && o.source === 'RETAIL' && o.status === 'OPEN' && (
+                <>
+                  <Button variant="outline" className="text-red-600" onClick={() => setMode('cancel')}>
+                    Hủy Order
+                  </Button>
+                  <Button onClick={onContinue}>Tiếp tục bán</Button>
+                </>
+              )}
+              {manager && o.status === 'PENDING' && (
+                <Button variant="outline" className="text-red-600" onClick={() => setMode('unpaid')}>
+                  Hủy – khách không thanh toán
+                </Button>
+              )}
+            </div>
+          </>
+        )}
+      </CardContent>
+    </Card>
   );
 }

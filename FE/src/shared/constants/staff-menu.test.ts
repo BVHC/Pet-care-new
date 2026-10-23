@@ -6,7 +6,7 @@ const labels = (role: Role) => menuFor(role).flatMap((s) => s.items.map((i) => i
 
 describe('staff menu', () => {
   it('leaves the pages a workspace already covers out of the receptionist menu', () => {
-    expect(labels('RECEPTIONIST')).toEqual(['Lịch hẹn', 'Đơn online', 'Hóa đơn', 'Thanh toán', 'Hoàn tiền', 'Kho hàng']);
+    expect(labels('RECEPTIONIST')).toEqual(['Order tại quầy', 'Lịch hẹn', 'Đơn online', 'Hóa đơn', 'Thanh toán', 'Hoàn tiền', 'Kho hàng']);
   });
 
   it('gives vets and caretakers only the read-only customer lookup besides their workspace (UC23)', () => {

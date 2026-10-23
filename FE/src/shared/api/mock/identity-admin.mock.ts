@@ -20,7 +20,6 @@ import {
   page,
   ruleFail,
   type MockHandler,
-  type MockReply,
 } from './envelope';
 
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
@@ -84,13 +83,6 @@ const SEED_TEMPLATES: NotificationTemplate[] = [
     isDefault: true,
   },
 ];
-
-/** Mock: nhân viên A05–A08 (trừ SUPER_MANAGER) trả 500 cho transfer/disable/lock vì Visit/ca chưa có (D016). */
-function visitNotReady(a: { role: Role }): boolean {
-  return a.role === 'RECEPTIONIST' || a.role === 'VET' || a.role === 'CARETAKER';
-}
-const visitNotReadyMsg = (): MockReply =>
-  fail('UNAVAILABLE', 'Visit / ca thu ngân chưa có bản thật, BE sẽ trả 500 (D016, dự kiến 21/10)', 500);
 
 function logAudit(
   s: ReturnType<typeof load>,
@@ -211,16 +203,16 @@ const createStaff: MockHandler = ({ account, body }) => {
   ]);
   if (bad) return bad;
   const newRole = b.role as CreateableStaffRole;
-  if (account!.role === 'BRANCH_MANAGER' && !['RECEPTIONIST', 'VET', 'CARETAKER'].includes(newRole)) {
+  // BR-QT-01: ADMIN chỉ tạo SUPER_MANAGER; SUPER_MANAGER tạo A05–A08; BRANCH_MANAGER chỉ A06–A08. Ngoài quyền: 403 + audit.
+  const creatable: Partial<Record<Role, CreateableStaffRole[]>> = {
+    ADMIN: ['SUPER_MANAGER'],
+    SUPER_MANAGER: ['BRANCH_MANAGER', 'RECEPTIONIST', 'VET', 'CARETAKER'],
+    BRANCH_MANAGER: ['RECEPTIONIST', 'VET', 'CARETAKER'],
+  };
+  if (!creatable[account!.role]?.includes(newRole)) {
     const s0 = load();
     logAudit(s0, { action: 'STAFF_CREATE_DENIED', entityType: 'Staff', reason: 'BR-QT-01' }, account!.id, account!.email);
     save(s0);
-    return denied();
-  }
-  if (newRole === 'SUPER_MANAGER' && account!.role === 'SUPER_MANAGER') {
-    return denied();
-  }
-  if (newRole === 'BRANCH_MANAGER' && account!.role === 'BRANCH_MANAGER') {
     return denied();
   }
   let branchId: number | undefined;
@@ -315,7 +307,6 @@ const transfer: MockHandler = ({ account, params, body }) => {
   if (a.role === 'BRANCH_MANAGER' && countActiveBranchManagers(s, a.branchId ?? -1, a.id) < 1) {
     return ruleFail('BR-QT-04', 'Chi nhánh phải có ít nhất một quản lý đang hoạt động');
   }
-  if (visitNotReady(a)) return visitNotReadyMsg();
   const before = { branchId: a.branchId };
   a.branchId = branchId;
   logAudit(s, { action: 'STAFF_TRANSFERRED', entityType: 'Staff', entityId: id, beforeData: before, afterData: { branchId } }, account!.id, account!.email);
@@ -340,7 +331,6 @@ const disable: MockHandler = ({ account, params }) => {
   if (a.role === 'BRANCH_MANAGER' && countActiveBranchManagers(s, a.branchId ?? -1, a.id) < 1) {
     return ruleFail('BR-QT-04', 'Chi nhánh phải có ít nhất một quản lý đang hoạt động');
   }
-  if (visitNotReady(a)) return visitNotReadyMsg();
   a.status = 'DISABLED';
   a.mustChangePassword = false;
   logAudit(s, { action: 'STAFF_DISABLED', entityType: 'Staff', entityId: id, beforeData: { status: 'ACTIVE' }, afterData: { status: 'DISABLED' } }, account!.id, account!.email);
@@ -515,9 +505,6 @@ const lockAccount: MockHandler = ({ account, params, body }) => {
   const role: Role = 'role' in target ? target.role : 'CUSTOMER';
   const status: AccountStatus = 'status' in target ? target.status : target.active ? 'ACTIVE' : 'PENDING';
   s.locks[id] = { reason: String(b.reason).trim(), statusBefore: status, lockedAt: new Date().toISOString() };
-  if (role === 'RECEPTIONIST' || role === 'VET' || role === 'CARETAKER') {
-    return visitNotReadyMsg();
-  }
   logAudit(s, { action: 'ACCOUNT_LOCKED', entityType: 'Account', entityId: id, reason: s.locks[id].reason }, account!.id, account!.email);
   save(s);
   const summary = {
@@ -614,27 +601,27 @@ const updateNotificationTemplate: MockHandler = ({ account, params, body }) => {
   const seed = SEED_TEMPLATES.find((t) => t.code === code);
   if (!seed) return notFound('mẫu thông báo', code);
   const b = (body ?? {}) as Record<string, unknown>;
-  if (!isText(b.body)) return fail('VALIDATION_FAILED', 'body: Nội dung không được để trống', 400);
+  // identity-v1 #34 (BE UpdateTemplateRequest): tiêu đề bắt buộc với MỌI kênh, tối đa 255.
+  const badForm = invalid([
+    ['subject', 'Tiêu đề không được để trống', !isText(b.subject)],
+    ['subject', 'Tiêu đề tối đa 255 ký tự', isText(b.subject) && String(b.subject).length > 255],
+    ['body', 'Nội dung không được để trống', !isText(b.body)],
+  ]);
+  if (badForm) return badForm;
   const bodyStr = String(b.body);
+  const subj = String(b.subject);
   const extract = (s: string) => [...s.matchAll(/\{(\w+)\}/g)].map((m) => m[1]);
   const usedVars = new Set(extract(bodyStr));
-  let subj: string | null | undefined = undefined;
-  if (seed.channel === 'EMAIL') {
-    if (b.subject !== undefined && b.subject !== null) {
-      if (!isText(b.subject)) return fail('VALIDATION_FAILED', 'subject: Tiêu đề không được để trống', 400);
-      subj = String(b.subject);
-      extract(subj).forEach((v) => usedVars.add(v));
-    }
-  }
+  extract(subj).forEach((v) => usedVars.add(v));
   const unknown = [...usedVars].filter((v) => !seed.allowedVars.includes(v));
   if (unknown.length) return ruleFail('BR-QT-14', `Biến không tồn tại: ${unknown.join(', ')}`);
   const missing = seed.requiredVars.filter((v) => !usedVars.has(v));
   if (missing.length) return ruleFail('BR-QT-14', `Thiếu biến bắt buộc: ${missing.join(', ')}`);
   const s = load();
-  s.templateOverrides[code] = { subject: subj !== undefined ? subj : null, body: bodyStr };
+  s.templateOverrides[code] = { subject: subj, body: bodyStr };
   logAudit(s, { action: 'NOTIFICATION_TEMPLATE_CHANGED', entityType: 'NotificationTemplate', afterData: { code, body: bodyStr } }, account!.id, account!.email);
   save(s);
-  return ok({ ...seed, subject: subj !== undefined ? subj : seed.subject, body: bodyStr, isDefault: false });
+  return ok({ ...seed, subject: subj, body: bodyStr, isDefault: false });
 };
 
 const restoreTemplateDefault: MockHandler = ({ account, params }) => {
@@ -653,6 +640,11 @@ const restoreTemplateDefault: MockHandler = ({ account, params }) => {
 
 const listAuditLogs: MockHandler = ({ account, query }) => {
   if (account!.role !== 'ADMIN') return denied();
+  // identity-v1 #36: `from` / `to` là date-time kèm offset; thiếu offset → 400 MALFORMED_REQUEST.
+  for (const key of ['from', 'to'] as const) {
+    const v = query[key];
+    if (v && !/(Z|[+-]\d{2}:?\d{2})$/i.test(v)) return fail('MALFORMED_REQUEST', `${key}: phải kèm múi giờ (offset), vd 2026-10-23T08:00:00+07:00`, 400);
+  }
   const s = load();
   const from = query.from ? new Date(query.from).getTime() : -Infinity;
   const to = query.to ? new Date(query.to).getTime() : Infinity;

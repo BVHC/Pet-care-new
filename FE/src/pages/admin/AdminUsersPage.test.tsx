@@ -76,6 +76,26 @@ describe('AdminUsersPage (T22 - UC08)', () => {
       expect(within(modal).getByText('Nội khoa, da liễu thú y')).toBeInTheDocument();
       expect(within(modal).getByText('Hơn 8 năm khám và điều trị chó mèo, quan tâm đặc biệt tới bệnh da và dị ứng.')).toBeInTheDocument();
     });
+
+    // BR-QT-01: ADMIN chỉ tạo SUPER_MANAGER (không thuộc chi nhánh).
+    it('ADMIN chỉ thấy vai trò Quản lý chuỗi, không có ô chi nhánh, và tạo được tài khoản', async () => {
+      const user = userEvent.setup();
+      renderPage();
+      await user.click(await screen.findByRole('button', { name: /Thêm người dùng/ }));
+
+      const dialog = await screen.findByRole('dialog');
+      const roles = within(within(dialog).getByLabelText('Vai trò *')).getAllByRole('option');
+      expect(roles.map((o) => o.textContent)).toEqual(['Quản lý chuỗi']);
+      expect(within(dialog).queryByLabelText(/Chi nhánh/)).not.toBeInTheDocument();
+
+      await user.type(within(dialog).getByLabelText('Họ tên *'), 'Quản lý chuỗi mới');
+      await user.type(within(dialog).getByLabelText('Email *'), 'sm2@petcare.vn');
+      await user.type(within(dialog).getByLabelText('Số điện thoại *'), '0900000099');
+      await user.click(within(dialog).getByRole('button', { name: 'Tạo tài khoản' }));
+
+      expect(await screen.findByText('Quản lý chuỗi mới')).toBeInTheDocument();
+      await waitFor(() => expect(screen.queryByRole('dialog')).not.toBeInTheDocument());
+    });
   });
 
   describe('SUPER_MANAGER view (chuoi@petcare.vn)', () => {
@@ -89,6 +109,26 @@ describe('AdminUsersPage (T22 - UC08)', () => {
 
       expect(screen.getByRole('button', { name: 'Đổi chức vụ BS. Minh Anh' })).toBeInTheDocument();
       expect(screen.getByRole('button', { name: 'Điều chuyển BS. Minh Anh' })).toBeInTheDocument();
+    });
+
+    // BR-QT-01: SUPER_MANAGER không tạo được SUPER_MANAGER; vai trò ngoài quyền không hiển thị để chọn.
+    it('không có vai trò Quản lý chuỗi trong form tạo, nhưng có Quản lý chi nhánh và ô chi nhánh bắt buộc', async () => {
+      const user = userEvent.setup();
+      renderPage();
+      await user.click(await screen.findByRole('button', { name: /Thêm người dùng/ }));
+
+      const dialog = await screen.findByRole('dialog');
+      const roles = within(within(dialog).getByLabelText('Vai trò *')).getAllByRole('option').map((o) => o.textContent);
+      expect(roles).toEqual(['Quản lý chi nhánh', 'Lễ tân', 'Bác sĩ thú y', 'Nhân viên chăm sóc']);
+      expect(within(dialog).getByLabelText('Chi nhánh *')).toBeRequired();
+    });
+
+    it('điều chuyển: ô chi nhánh mới bắt buộc (không gửi branchId = 0)', async () => {
+      const user = userEvent.setup();
+      renderPage();
+      await user.click(await screen.findByRole('button', { name: 'Điều chuyển BS. Minh Anh' }));
+
+      expect(within(await screen.findByRole('dialog')).getByLabelText('Chi nhánh mới *')).toBeRequired();
     });
   });
 
@@ -116,6 +156,31 @@ describe('AdminUsersPage (T22 - UC08)', () => {
       expect(screen.queryByRole('button', { name: 'Vô hiệu hóa Hoàng Nam' })).not.toBeInTheDocument();
       // Can disable subordinates
       expect(screen.getByRole('button', { name: 'Vô hiệu hóa BS. Minh Anh' })).toBeInTheDocument();
+    });
+
+    // Hai test dưới bấm xác nhận thật: bản cũ gọi hook trong onConfirm nên mutation không bao giờ chạy.
+    it('vô hiệu hóa: bấm xác nhận gọi API, dòng chuyển sang Kích hoạt lại', async () => {
+      const user = userEvent.setup();
+      renderPage();
+      await user.click(await screen.findByRole('button', { name: 'Vô hiệu hóa Lan Chi' }));
+
+      const dialog = await screen.findByRole('dialog');
+      await user.click(within(dialog).getByRole('button', { name: 'Vô hiệu hóa' }));
+
+      expect(await screen.findByRole('button', { name: 'Kích hoạt lại Lan Chi' })).toBeInTheDocument();
+      expect(screen.queryByRole('button', { name: 'Vô hiệu hóa Lan Chi' })).not.toBeInTheDocument();
+    });
+
+    it('gửi lại mật khẩu ban đầu: bấm xác nhận gọi API và đóng hộp thoại', async () => {
+      const user = userEvent.setup();
+      renderPage();
+      await user.click(await screen.findByRole('button', { name: 'Gửi lại MK cho Lễ tân mới' }));
+
+      const dialog = await screen.findByRole('dialog');
+      await user.click(within(dialog).getByRole('button', { name: 'Gửi lại' }));
+
+      // Lỗi thì hộp thoại ở lại (handleError); thành công thì setResend(null) đóng nó.
+      await waitFor(() => expect(screen.queryByRole('dialog')).not.toBeInTheDocument());
     });
   });
 });

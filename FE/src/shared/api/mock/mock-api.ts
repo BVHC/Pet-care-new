@@ -5,11 +5,14 @@
 import { AxiosError, type AxiosAdapter, type AxiosInstance, type AxiosResponse } from 'axios';
 import type { AccountSummary } from '../../types/auth';
 import { adminIdentityRoutes } from './identity-admin.mock';
+import { appointmentRoutes } from './appointment.mock';
 import { branchRoutes } from './branch.mock';
+import { careRoutes } from './care.mock';
 import { catalogRoutes } from './catalog.mock';
 import { customerRoutes } from './customer.mock';
 import { customerPetRoutes } from './customer-pet.mock';
 import { inventoryRoutes } from './inventory.mock';
+import { salesRoutes } from './sales.mock';
 import { fail, ruleFail, type MockHandler, type MockReply } from './envelope';
 import { accountForToken, identityRoutes } from './identity.mock';
 
@@ -21,6 +24,9 @@ const ROUTES: Record<string, MockHandler> = {
   ...inventoryRoutes,
   ...branchRoutes,
   ...adminIdentityRoutes,
+  ...appointmentRoutes,
+  ...careRoutes,
+  ...salesRoutes,
 };
 
 const COMPILED = Object.entries(ROUTES).map(([key, handler]) => {

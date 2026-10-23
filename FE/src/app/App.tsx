@@ -79,6 +79,7 @@ import { AdminCatalogPage } from '../pages/admin/AdminCatalogPage';
 import { AdminCustomersPage } from '../pages/admin/AdminCustomersPage';
 import { AdminBranchesPage } from '../pages/admin/AdminBranchesPage';
 import { StaffProfilePage } from '../pages/admin/StaffProfilePage';
+import { StaffNotificationsPage } from '../pages/admin/StaffNotificationsPage';
 import { AdminBranchDetailPage } from '../pages/admin/AdminBranchDetailPage';
 
 const queryClient = new QueryClient({
@@ -176,6 +177,7 @@ export function App() {
           <Route element={<AdminGuard />}>
             <Route path="/admin/dashboard" element={<AdminDashboardPage />} />
             <Route path="/admin/profile" element={<StaffProfilePage />} />
+            <Route path="/admin/notifications" element={<StaffNotificationsPage />} />
             <Route path="/admin/catalog/:tab?" element={<AdminCatalogPage />} />
             <Route path="/admin/customers" element={<AdminCustomersPage />} />
             <Route path="/admin/branches" element={<AdminBranchesPage />} />

@@ -145,8 +145,9 @@ export interface NotificationTemplate {
   isDefault: boolean;
 }
 
+/** identity-v1 #34: `subject` bắt buộc với mọi kênh (kể cả IN_APP), tối đa 255; thiếu hoặc rỗng → 400 VALIDATION_FAILED. */
 export interface UpdateTemplateRequest {
-  subject?: string | null;
+  subject: string;
   body: string;
 }
 

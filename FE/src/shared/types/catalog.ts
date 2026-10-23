@@ -122,3 +122,16 @@ export type CreateProtocolRequest = Omit<VaccinationProtocol, 'protocolId' | 'is
 
 /** Loài, loại vaccine, mũi thứ không đổi; sửa chỉ áp dụng cho mũi tiêm sau thời điểm sửa (BR-SP-03). */
 export type UpdateProtocolRequest = Partial<Pick<VaccinationProtocol, 'intervalDays' | 'minAgeWeeks' | 'requiredForBoarding' | 'isActive'>>;
+
+/** catalog-v1 #19: dịch vụ đang kinh doanh và bật ở ≥ 1 chi nhánh ACTIVE, kèm các chi nhánh đó (BR-CK-01). */
+export interface PublicService {
+  serviceId: number;
+  name: string;
+  group: ServiceGroup;
+  price: number;
+  /** Hiện "Từ X đ" (BR-CK-02). */
+  priceIsFrom: boolean;
+  description?: string | null;
+  kennelType?: KennelTypeSpec | null;
+  branchIds: number[];
+}

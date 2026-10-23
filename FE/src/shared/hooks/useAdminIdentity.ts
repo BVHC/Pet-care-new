@@ -133,7 +133,7 @@ export const useNotificationTemplates = () =>
 export const useUpdateTemplate = () => {
   const queryClient = useQueryClient();
   return useMutation({
-    mutationFn: (vars: { code: string; subject?: string | null; body: string }) =>
+    mutationFn: (vars: { code: string; subject: string; body: string }) =>
       identityApi.updateNotificationTemplate(vars.code, { subject: vars.subject, body: vars.body }),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['notification-templates'] });

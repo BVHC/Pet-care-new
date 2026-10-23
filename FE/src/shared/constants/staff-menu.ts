@@ -1,6 +1,6 @@
 import type { ElementType } from 'react';
 import {
-  Activity, BadgePercent, BarChart3, Bot, Boxes, Building2, CalendarClock, ClipboardList, Crown, ListOrdered,
+  Activity, BadgePercent, BarChart3, Bell, Bot, Boxes, Building2, CalendarClock, ClipboardList, Crown, ListOrdered,
   Lock, Mail, Package, Receipt, Scale, Scissors, Settings, ShieldAlert, ShoppingBag, Stethoscope, Syringe, Tags, Truck, UserCog, UserSearch,
   Warehouse,
 } from 'lucide-react';
@@ -28,7 +28,8 @@ export const ADMIN_MENU: MenuSection[] = [
   {
     section: 'Nghiệp vụ',
     items: [
-      { path: '/admin/pos', label: 'Quầy POS', icon: ShoppingBag, roles: ['RECEPTIONIST', 'BRANCH_MANAGER'], hidden: true }, // UC66 — bàn Lễ tân
+      // UC66, UC67: danh sách Order + Order bán lẻ; BRANCH_MANAGER hủy Order PENDING khách không trả (BR-BH-05). Bán nhanh ở bàn Lễ tân.
+      { path: '/admin/pos', label: 'Order tại quầy', icon: ShoppingBag, roles: ['RECEPTIONIST', 'BRANCH_MANAGER'] },
       { path: '/admin/appointments', label: 'Lịch hẹn', icon: CalendarClock, roles: ['RECEPTIONIST'] }, // UC39, UC40
       { path: '/admin/queue', label: 'Hàng chờ', icon: ListOrdered, roles: ['RECEPTIONIST', 'BRANCH_MANAGER', 'VET', 'CARETAKER'], hidden: true }, // UC45, UC46 — các bàn làm việc
       { path: '/admin/exam', label: 'Khám & EMR', icon: Stethoscope, roles: ['VET'], hidden: true }, // UC48 — bàn Phòng khám
@@ -37,6 +38,8 @@ export const ADMIN_MENU: MenuSection[] = [
       { path: '/admin/orders', label: 'Đơn online', icon: Package, roles: ['RECEPTIONIST'] }, // UC65 (tầng 3)
       // UC23 cho A07, A08 (chỉ xem). Lễ tân tra cứu và sửa hồ sơ ngay ở bàn Lễ tân.
       { path: '/admin/customers', label: 'Tra cứu khách & thú', icon: UserSearch, roles: ['VET', 'CARETAKER'] },
+      // UC88 (A02–A08: mọi nhân viên kể cả ADMIN; BE isAuthenticated, ADR-0039): mở từ chuông trên khung nhân viên.
+      { path: '/admin/notifications', label: 'Thông báo', icon: Bell, roles: STAFF_ROLES, hidden: true },
     ],
   },
   {

@@ -236,6 +236,7 @@ export function AccountSidebar({
         <NavItem
           icon={Settings}
           label="Cài đặt"
+          active={active === 'settings'}
           href="/settings"
         />
         <NavItem

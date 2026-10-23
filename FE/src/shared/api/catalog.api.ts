@@ -1,4 +1,4 @@
-// Catalog API — docs/api/catalog-v1.md #1–18 (đọc: nhân viên A04–A08; ghi: SUPER_MANAGER).
+// Catalog API — docs/api/catalog-v1.md #1–19 (đọc: nhân viên A04–A08; ghi: SUPER_MANAGER; #19 công khai).
 import { apiClient } from './axios';
 import type { PageResponse } from '../types';
 import type {
@@ -8,6 +8,7 @@ import type {
   Product,
   ProductCategory,
   ProductQuery,
+  PublicService,
   Service,
   ServiceGroup,
   Species,
@@ -23,6 +24,9 @@ const post = async <T>(url: string, body: object): Promise<T> => (await apiClien
 const patch = async <T>(url: string, body: object): Promise<T> => (await apiClient.patch(url, body)).data.data;
 
 export const catalogApi = {
+  /** #19, không cần đăng nhập: dịch vụ đang kinh doanh và bật ở ≥ 1 chi nhánh ACTIVE (BR-CK-01). */
+  listPublicServices: (params?: { group?: ServiceGroup; branchId?: number }) => get<PublicService[]>('/api/public/services', params),
+
   listCategories: (params?: { isActive?: boolean }) => get<ProductCategory[]>('/api/product-categories', params),
   createCategory: (body: { name: string }) => post<ProductCategory>('/api/product-categories', body),
   updateCategory: (categoryId: number, body: { name?: string; isActive?: boolean }) =>

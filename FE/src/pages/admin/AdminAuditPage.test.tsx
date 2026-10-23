@@ -1,4 +1,4 @@
-import { render, screen } from '@testing-library/react';
+import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { MemoryRouter } from 'react-router-dom';
@@ -49,6 +49,19 @@ describe('AdminAuditPage (T22 - UC11)', () => {
 
       // Filter input is updated
       expect(actorInput).toHaveValue(1);
+    });
+
+    // identity-v1 #36: from / to phải kèm offset; mock trả 400 MALFORMED_REQUEST nếu thiếu.
+    it('lọc theo thời gian gửi from / to kèm offset +07:00 nên không bị 400', async () => {
+      renderPage();
+      await screen.findByRole('heading', { name: 'Nhật ký kiểm toán' });
+
+      fireEvent.change(screen.getByLabelText('Từ'), { target: { value: '2020-01-01T08:00' } });
+      fireEvent.change(screen.getByLabelText('Đến'), { target: { value: '2099-01-01T08:00' } });
+
+      await waitFor(() => expect(screen.queryByText('Đang tải…')).not.toBeInTheDocument());
+      // Mock mới tinh chưa có dòng nhật ký nào; điều cần chứng minh là không có lỗi 400 thiếu offset.
+      expect(screen.queryByText(/múi giờ/)).not.toBeInTheDocument();
     });
   });
 

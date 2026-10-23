@@ -1,10 +1,10 @@
 import { lazy, Suspense, useRef, useState } from 'react';
 import { UserPlus, Users } from 'lucide-react';
 import { cn } from '../../lib/utils';
-import { CatalogPanel } from '../../components/staff/reception/CatalogPanel';
 import { CheckInDialog, type CheckInTarget } from '../../components/staff/reception/CheckInDialog';
 import { CheckoutPanel, ShiftBadge } from '../../components/staff/reception/CheckoutPanel';
 import { FrontDeskPanel } from '../../components/staff/reception/FrontDeskPanel';
+import { RetailOrderPanel } from '../../components/staff/reception/RetailOrderPanel';
 import { WorkspaceHeader, WsButton } from '../../components/staff/ui';
 
 // Hồ sơ khách & thú cưng chỉ tải khi lễ tân mở tới: bàn đón khách hiện nhanh như trước.
@@ -33,7 +33,7 @@ const VIEWS: { id: View; label: string; className?: string }[] = [
 ];
 
 /**
- * Quầy lễ tân: đón khách, theo dõi hàng chờ, thu tiền.
+ * Quầy lễ tân: đón khách, theo dõi hàng chờ, bán lẻ theo Order (UC66), thu tiền.
  * ≥1280px shows all three panels; 1024–1279 keeps the receipt beside one switchable panel;
  * phones switch between the three.
  */
@@ -42,6 +42,8 @@ export function ReceptionWorkspacePage() {
   const [view, setView] = useState<View>('desk');
   const [checkIn, setCheckIn] = useState<CheckInTarget | null>(null);
   const searchRef = useRef<HTMLInputElement>(null);
+  // Order bán lẻ đang làm: giữ ở trang để mở "Khách hàng" rồi quay lại không mất Order.
+  const [retailOrderId, setRetailOrderId] = useState<number | null>(null);
   const receiptCount = usePOS((s) => s.retail.reduce((n, l) => n + l.qty, 0) + s.orderIds.length);
   const wide = useMediaQuery('(min-width: 1024px)');
   const receiptVisible = wide || view === 'cart';
@@ -126,8 +128,10 @@ export function ReceptionWorkspacePage() {
                 if (!wide) setView('cart');
               }}
             />
-            <CatalogPanel
+            <RetailOrderPanel
               ref={searchRef}
+              orderId={retailOrderId}
+              onOrderChange={setRetailOrderId}
               className={cn(showOnSmall('sell'), view === 'cart' && 'lg:flex', 'min-h-[60dvh] lg:min-h-0 xl:flex')}
             />
             <CheckoutPanel

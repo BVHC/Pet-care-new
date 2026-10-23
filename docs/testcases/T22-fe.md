@@ -34,7 +34,7 @@
 - BE đã có `/api/staff/**`, `/api/accounts/**`, `/api/system-configs`, `/api/notification-templates`, `/api/audit-logs` (xem T14, T15; commit `bd8962a`).
 - Tài khoản ADMIN phải tạo bằng SQL vì T4 không seed.
 - SUPER_MANAGER + BRANCH_MANAGER có thể tạo qua `/admin/users` UI.
-- Lỗi `pendingWork` (Visit/ca thu ngân): A05–A08 vô hiệu hóa/điều chuyển/khóa 500 tới khi visit/sales có bản thật (D016, 21/10).
+- Mock không còn giả lập lỗi 500 khi vô hiệu hóa / điều chuyển / khóa A05–A08 (gỡ 23/10): nợ D016 đã trả ở BE (`VisitQueryApi` T26, `CashierShiftQueryApi` T30). UI chưa hiển thị `pendingWork` khi khóa (BR-QT-11); mock luôn trả `pendingWork: []`.
 
 ## 2. `/admin/users` — Danh sách nhân viên (UC08)
 
@@ -60,6 +60,8 @@
 | 3.6 | Email trùng (`reception@store1.vn`) | 400 BR-TK-01, lỗi gắn ô email | (test sau) |
 | 3.7 | SĐT không phải 10 số | 400 VALIDATION_FAILED, lỗi gắn ô SĐT | (test sau) |
 | 3.8 | Sau lỗi mạng → bấm lại "Thêm" | 409 CONCURRENCY_CONFLICT (đã tạo từ lần trước). UI báo và cho bấm "Tìm theo email" → mở `/admin/users?q=…` | (test sau) |
+| 3.9 | ADMIN bấm "Thêm người dùng" (BR-QT-01: ADMIN chỉ tạo SUPER_MANAGER) | Ô Vai trò chỉ có "Quản lý chuỗi", không có ô Chi nhánh; nhập họ tên, email, SĐT, "Tạo tài khoản" → 201, dòng mới trong bảng. Mock: ADMIN gửi role khác → 403 + audit `STAFF_CREATE_DENIED` | `AdminUsersPage.test`, `identity-admin.mock.test` |
+| 3.10 | SUPER_MANAGER mở form tạo | Ô Vai trò gồm Quản lý chi nhánh, Lễ tân, Bác sĩ thú y, Nhân viên chăm sóc (không có Quản lý chuỗi); ô Chi nhánh bắt buộc (`required`). Mock: gửi `SUPER_MANAGER` → 403 | `AdminUsersPage.test`, `identity-admin.mock.test` |
 
 ## 4. `/admin/users` — Đổi chức vụ (UC08, BR-QT-04, 05, ADR-0031)
 
@@ -81,6 +83,7 @@
 | 5.3 | Điều chuyển đến cùng chi nhánh | 200, không đổi gì | (test sau) |
 | 5.4 | Điều chuyển BRANCH_MANAGER cuối của CN1 | 400 BR-QT-04 | (test sau) |
 | 5.5 | Nhân viên CN1 còn Visit đang mở (sau T26) | 400 BR-QT-08 "Còn Visit được gán chưa xong / ca thu ngân OPEN: <danh sách>" | (test sau — D016) |
+| 5.6 | Mở hộp "Điều chuyển" | Ô "Chi nhánh mới" bắt buộc (`required`), không gửi `branchId = 0` | `AdminUsersPage.test` |
 | 5.6 | `branchId` chi nhánh không tồn tại | 400 BR-QT-03 | (test sau) |
 
 ## 6. `/admin/users` — Vô hiệu hóa / Kích hoạt lại (UC08, BR-QT-04, 07, 08, 09, 10, 12, BR-TK-11, ADR-0033)
@@ -91,6 +94,7 @@
 | 6.2 | Vô hiệu hóa chính mình | 403 BR-QT-07, nút ẩn (UI chặn trước) | `AdminUsersPage.test` |
 | 6.3 | Vô hiệu hóa BRANCH_MANAGER cuối của CN1 (`manager@store1.vn`) | 400 BR-QT-04 | (test sau) |
 | 6.4 | Bấm lại "Vô hiệu hóa" trên user đã DISABLED | 409 INVALID_STATE_TRANSITION; UI gợi ý đọc lại | (test sau) |
+| 6.5 | BRANCH_MANAGER bấm "Vô hiệu hóa" Lan Chi → xác nhận trong hộp thoại | API được gọi (trước 23/10 hộp thoại gọi hook sai chỗ nên không gửi request): dòng đổi nút sang "Kích hoạt lại" | `AdminUsersPage.test` |
 | 6.5 | Sau lỗi mạng, bấm lại | 409 → UI báo "Đã xử lý, tải lại" | (test sau) |
 | 6.6 | Kích hoạt lại (`reception@store1.vn`) | 200, status ACTIVE, `mustChangePassword=true` (sinh MK tạm mới), "Đã gửi STAFF_TEMP_PASSWORD" | (test sau) |
 | 6.7 | Kích hoạt lại + chọn chi nhánh khác | 200, branchId đổi, mật khẩu tạm mới gửi email | (test sau) |
@@ -101,6 +105,7 @@
 | # | Bước | Kỳ vọng | Test tự động |
 |---|---|---|---|
 | 7.1 | Chọn user `mustChangePassword=true` → "Gửi lại MK ban đầu" | 204, toast "Đã gửi mật khẩu tạm mới", phiên bị hủy | (test sau) |
+| 7.1a | Bấm "Gửi lại MK cho Lễ tân mới" → "Gửi lại" trong hộp thoại | API được gọi, hộp thoại đóng (lỗi thì hộp thoại ở lại) | `AdminUsersPage.test` |
 | 7.2 | Gửi lại cho user đã đổi MK lần đầu | 409 "Nhân viên đã đổi mật khẩu lần đầu" | (test sau) |
 | 7.3 | Gửi lại cho tài khoản DISABLED | 409 "Tài khoản đang DISABLED" | (test sau) |
 | 7.4 | BRANCH_MANAGER bấm "Gửi lại MK" cho SUPER_MANAGER | 403 BR-QT-01 (ghi audit) | (test sau) |
@@ -153,6 +158,8 @@
 | 11.4 | Sửa → nhập body có biến lạ `{fooBar}` | 400 BR-QT-14 "Biến không tồn tại: fooBar" | (test sau) |
 | 11.5 | Click "Khôi phục mặc định" → confirm | 200, `isDefault=true`, `body` về `default_body` | (test sau) |
 | 11.6 | SUPER_MANAGER mở | 403 (chỉ ADMIN) | `App.routes.test` |
+| 11.7 | Sửa mẫu IN_APP (vd `BRANCH_MANAGER_LOCKED_APP`) | Có ô "Tiêu đề *" (bắt buộc, tối đa 255) cho mọi kênh; sửa tiêu đề + Lưu → 200 và bảng hiện tiêu đề mới (identity-v1 #34: `subject` bắt buộc mọi kênh) | `AdminNotificationTemplatesPage.test`, `identity-admin.mock.test` |
+| 11.8 | Xóa tiêu đề hoặc chỉ nhập khoảng trắng → Lưu | FE báo "Tiêu đề không được để trống", không gọi API. Mock: thiếu / null / rỗng / > 255 → 400 `VALIDATION_FAILED` | `AdminNotificationTemplatesPage.test`, `identity-admin.mock.test` |
 
 ## 12. `/admin/audit` — Nhật ký kiểm toán (UC11, BR-QT-15, 16)
 
@@ -166,6 +173,7 @@
 | 12.6 | Phân trang `size=20` | Có nút "Trang sau" khi > 20 dòng | (test sau) |
 | 12.7 | SUPER_MANAGER mở | 403 (chỉ ADMIN). UI ẩn trong `staff-menu.ts` (hiện tại SUPER_MANAGER có thấy `/admin/audit`; cần đổi `roles: ['ADMIN']` cho đúng hợp đồng) | `App.routes.test` |
 | 12.8 | BRANCH_MANAGER mở | 403 | `App.routes.test` |
+| 12.9 | Chọn "Từ" / "Đến" (datetime-local) | FE gửi `from` / `to` kèm offset giờ nghiệp vụ `+07:00` (vd `2026-10-23T08:00:00+07:00`); mock trả 400 `MALFORMED_REQUEST` nếu thiếu offset | `AdminAuditPage.test`, `identity-admin.mock.test` |
 
 ## 13. Phân quyền truy cập (tổng hợp)
 
@@ -179,6 +187,6 @@
 
 ## 14. Lỗi thường gặp & trạng thái BE hiện tại
 
-- `500` từ `/api/staff/{id}/transfer` và `/disable` với A05–A08: do `VisitQueryApi` / `CashierShiftQueryApi` còn là placeholder (D016, 21/10). UI hiện thông báo "Visit / ca thu ngân chưa có bản thật, BE sẽ trả 500" cho tới khi visit/sales lên.
-- `500` từ `/api/accounts/{id}/lock` với khách: do `CustomerQueryApi`, `AppointmentQueryApi`, `BoardingQueryApi`, `OrderQueryApi` còn placeholder. UI ẩn nút "Khóa" trên dòng khách (role=CUSTOMER) cho tới khi các module lên.
+- Điều chuyển / vô hiệu hóa / khóa A05–A08 chạy bình thường từ 21/10 (BE có `VisitQueryApi` T26, `CashierShiftQueryApi` T30); mock đã gỡ lỗi 500 giả lập. Chưa mô phỏng BR-QT-08 (còn Visit / ca OPEN) vì mock không có dữ liệu Visit.
+- Khóa tài khoản khách chạy từ T31 (`CustomerQueryApi`, `AppointmentQueryApi`, `BoardingQueryApi`, `OrderQueryApi` đều thật).
 - `mustChangePassword` cho nhân viên mới: FE phải kiểm `BR-TK-17` chặn mọi API trừ `/me`, `/me/password`, `/auth/logout` (theo `MustChangePasswordInterceptor` của BE). Hiện `axios.ts` đã xử lý 400 BR-TK-17, cần bổ sung test cho case nhân viên mới đăng nhập lần đầu.

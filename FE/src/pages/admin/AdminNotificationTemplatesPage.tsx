@@ -21,6 +21,7 @@ export function AdminNotificationTemplatesPage() {
   const [subject, setSubject] = useState('');
   const [body, setBody] = useState('');
   const [notice, setNotice] = useState<Notice | null>(null);
+  const [formError, setFormError] = useState('');
 
   if (account?.role !== 'ADMIN') {
     return (
@@ -37,6 +38,7 @@ export function AdminNotificationTemplatesPage() {
     setEditing(t);
     setSubject(t.subject ?? '');
     setBody(t.body);
+    setFormError('');
   };
 
   const handleError = (e: unknown) => {
@@ -47,12 +49,15 @@ export function AdminNotificationTemplatesPage() {
 
   const handleSave = async () => {
     if (!editing) return;
+    // identity-v1 #34: tiêu đề bắt buộc với mọi kênh (IN_APP dùng làm tiêu đề thông báo), tối đa 255.
+    const trimmed = subject.trim();
+    if (!trimmed) {
+      setFormError('Tiêu đề không được để trống (áp dụng cho mọi kênh).');
+      return;
+    }
+    setFormError('');
     try {
-      await update.mutateAsync({
-        code: editing.code,
-        subject: editing.channel === 'EMAIL' ? (subject || null) : null,
-        body,
-      });
+      await update.mutateAsync({ code: editing.code, subject: trimmed, body });
       toast.success(`Đã cập nhật mẫu ${editing.code}`);
       setEditing(null);
     } catch (e) { handleError(e); }
@@ -136,11 +141,9 @@ export function AdminNotificationTemplatesPage() {
         loading={update.isPending}
         size="md"
       >
-        {editing?.channel === 'EMAIL' && (
-          <Field label="Tiêu đề">
-            {(id) => <Input id={id} value={subject} onChange={(e) => setSubject(e.target.value)} />}
-          </Field>
-        )}
+        <Field label="Tiêu đề *">
+          {(id) => <Input id={id} value={subject} onChange={(e) => setSubject(e.target.value)} maxLength={255} required />}
+        </Field>
         <Field label="Nội dung *" hint="Dùng biến như {fullName}, {code}… đã liệt kê ở trên.">
           {(id) => (
             <textarea
@@ -153,6 +156,7 @@ export function AdminNotificationTemplatesPage() {
             />
           )}
         </Field>
+        {formError && <FormError message={formError} />}
         {update.isError && <FormError message={plainMessage(toApiError(update.error))} />}
       </FormModal>
     </div>

@@ -58,7 +58,10 @@ const ROLE_COLOR: Record<Role, string> = {
 };
 
 const CHANGEABLE_ROLES: ChangeableStaffRole[] = ['BRANCH_MANAGER', 'RECEPTIONIST', 'VET', 'CARETAKER'];
-const CREATEABLE_ROLES: CreateableStaffRole[] = ['SUPER_MANAGER', 'BRANCH_MANAGER', 'RECEPTIONIST', 'VET', 'CARETAKER'];
+// BR-QT-01: ADMIN chỉ tạo SUPER_MANAGER; SUPER_MANAGER tạo A05–A08; BRANCH_MANAGER chỉ tạo A06–A08 trong chi nhánh mình.
+const ADMIN_CREATES: CreateableStaffRole[] = ['SUPER_MANAGER'];
+const SUPER_MANAGER_CREATES: CreateableStaffRole[] = ['BRANCH_MANAGER', 'RECEPTIONIST', 'VET', 'CARETAKER'];
+const BRANCH_MANAGER_CREATES: CreateableStaffRole[] = ['RECEPTIONIST', 'VET', 'CARETAKER'];
 const STAFF_ROLES_NON_ADMIN: Role[] = ['SUPER_MANAGER', 'BRANCH_MANAGER', 'RECEPTIONIST', 'VET', 'CARETAKER'];
 
 /* ================================================================
@@ -85,6 +88,9 @@ export function AdminUsersPage() {
   const canDisable = role === 'SUPER_MANAGER' || role === 'BRANCH_MANAGER';
   const canResend = role === 'SUPER_MANAGER' || role === 'BRANCH_MANAGER';
   const canChangeEmail = role === 'SUPER_MANAGER' || role === 'BRANCH_MANAGER';
+  // Hook chỉ gọi ở đầu component (Rules of Hooks); hộp xác nhận bên dưới dùng lại hai mutation này.
+  const disableStaff = useDisable();
+  const resendInitialPassword = useResendInitialPassword();
 
   const [q, setQ] = useState('');
   const search = useDebounce(q.trim());
@@ -347,12 +353,11 @@ export function AdminUsersPage() {
         title="Vô hiệu hóa tài khoản?"
         description={disable ? `Tài khoản "${disable.fullName}" sẽ bị vô hiệu hóa. Mọi phiên đăng nhập sẽ bị hủy, nhân viên chuyển offline ngay. Bạn có thể kích hoạt lại sau.` : ''}
         confirmText="Vô hiệu hóa"
-        loading={false}
+        loading={disableStaff.isPending}
         onConfirm={async () => {
           if (!disable) return;
           try {
-            const mut = useDisable();
-            await mut.mutateAsync(disable.accountId);
+            await disableStaff.mutateAsync(disable.accountId);
             toast.success(`Đã vô hiệu hóa ${disable.fullName}`);
             setDisable(null);
           } catch (e) { handleError(e); }
@@ -373,12 +378,11 @@ export function AdminUsersPage() {
         title="Gửi lại mật khẩu ban đầu?"
         description={resend ? `Mật khẩu tạm mới sẽ được gửi tới email của "${resend.fullName}". Phiên đăng nhập sẽ bị hủy.` : ''}
         confirmText="Gửi lại"
-        loading={false}
+        loading={resendInitialPassword.isPending}
         onConfirm={async () => {
           if (!resend) return;
           try {
-            const mut = useResendInitialPassword();
-            await mut.mutateAsync(resend.accountId);
+            await resendInitialPassword.mutateAsync(resend.accountId);
             toast.success('Đã gửi mật khẩu tạm mới qua email');
             setResend(null);
           } catch (e) { handleError(e); }
@@ -423,13 +427,12 @@ function CreateForm({
 
   const create = useCreateStaff();
   const isBRANCH_MANAGER = actorRole === 'BRANCH_MANAGER';
-  const isSUPER_MANAGER = actorRole === 'SUPER_MANAGER';
-  const allowedRoles: CreateableStaffRole[] = isBRANCH_MANAGER
-    ? ['RECEPTIONIST', 'VET', 'CARETAKER']
-    : isSUPER_MANAGER
-      ? CREATEABLE_ROLES
-      : ['RECEPTIONIST', 'VET', 'CARETAKER'];
-  const roleNeedsBranch = role !== 'SUPER_MANAGER';
+  const allowedRoles =
+    actorRole === 'ADMIN' ? ADMIN_CREATES : actorRole === 'SUPER_MANAGER' ? SUPER_MANAGER_CREATES : BRANCH_MANAGER_CREATES;
+  // `role` là lựa chọn đã lưu trong state; nếu không còn nằm trong danh sách được phép (vd ADMIN) thì lấy mục đầu,
+  // để ô chọn và request luôn khớp nhau.
+  const effectiveRole = allowedRoles.includes(role) ? role : allowedRoles[0];
+  const roleNeedsBranch = effectiveRole !== 'SUPER_MANAGER';
   const branchRequired = roleNeedsBranch && !isBRANCH_MANAGER;
 
   // Reset khi mở
@@ -443,7 +446,7 @@ function CreateForm({
         email: email.trim(),
         phone: phone.trim(),
         fullName: fullName.trim(),
-        role,
+        role: effectiveRole,
         ...(roleNeedsBranch ? { branchId: Number(branchId) } : {}),
       } as Parameters<typeof create.mutateAsync>[0]);
       onSaved();
@@ -474,7 +477,7 @@ function CreateForm({
         </Field>
         <Field label="Vai trò *">
           {(id) => (
-            <select id={id} className={selectClass} value={role} onChange={(e) => setRole(e.target.value as CreateableStaffRole)}>
+            <select id={id} className={selectClass} value={effectiveRole} onChange={(e) => setRole(e.target.value as CreateableStaffRole)}>
               {allowedRoles.map((r) => <option key={r} value={r}>{ROLE_LABELS[r]}</option>)}
             </select>
           )}
@@ -482,7 +485,7 @@ function CreateForm({
         {roleNeedsBranch && (
           <Field label={branchRequired ? 'Chi nhánh *' : 'Chi nhánh'} hint={isBRANCH_MANAGER ? 'Mặc định chi nhánh của bạn.' : undefined}>
             {(id) => (
-              <select id={id} className={selectClass} value={branchId} onChange={(e) => setBranchId(e.target.value)} disabled={isBRANCH_MANAGER}>
+              <select id={id} className={selectClass} value={branchId} onChange={(e) => setBranchId(e.target.value)} disabled={isBRANCH_MANAGER} required={branchRequired}>
                 <option value="">— Chọn chi nhánh —</option>
                 {branches.map((b) => <option key={b.branchId} value={b.branchId}>{b.name}</option>)}
               </select>
@@ -578,7 +581,7 @@ function TransferDialog({
     >
       <Field label="Chi nhánh mới *">
         {(id) => (
-          <select id={id} className={selectClass} value={branchId} onChange={(e) => setBranchId(e.target.value)}>
+          <select id={id} className={selectClass} value={branchId} onChange={(e) => setBranchId(e.target.value)} required>
             <option value="">— Chọn chi nhánh —</option>
             {branches.map((b) => <option key={b.branchId} value={b.branchId}>{b.name}</option>)}
           </select>

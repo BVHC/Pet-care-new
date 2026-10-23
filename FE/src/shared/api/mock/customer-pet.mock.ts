@@ -191,6 +191,24 @@ function save(s: State) {
   }
 }
 
+// ─── Đọc chéo cho mock lịch hẹn (như PetQueryApi của BE) ───
+
+/** Chủ hiện tại, tên, ngày mất của thú; undefined nếu không có. */
+export function petSummary(petId: number) {
+  const pet = load().pets.find((p) => p.petId === petId);
+  return pet && { petId: pet.petId, customerId: pet.customerId, name: pet.name, species: pet.species, deceasedOn: pet.deceasedOn ?? null };
+}
+
+/** Thú đã phát sinh lịch hẹn thì không xóa cứng được nữa (BR-KH-06). */
+export function markPetHasBooking(petId: number) {
+  const s = load();
+  const pet = s.pets.find((p) => p.petId === petId);
+  if (pet?.deletable) {
+    pet.deletable = false;
+    save(s);
+  }
+}
+
 // ─── Chuyển đổi sang schema hợp đồng ───
 
 const byNewest = (a: WeightRow, b: WeightRow) => Date.parse(b.measuredAt) - Date.parse(a.measuredAt);

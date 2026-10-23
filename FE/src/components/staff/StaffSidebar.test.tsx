@@ -2,9 +2,15 @@ import { render, screen, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { MemoryRouter } from 'react-router-dom';
-import { describe, expect, it, vi } from 'vitest';
+import { beforeAll, describe, expect, it, vi } from 'vitest';
+import { apiClient } from '../../shared/api/axios';
+import { MOCK_PASSWORD } from '../../shared/api/mock/identity.mock';
+import { installMockApi } from '../../shared/api/mock/mock-api';
+import { useSession } from '../../shared/stores/session.store';
 import type { Role } from '../../shared/types/auth';
 import { StaffSidebar, type StaffSidebarProps } from './StaffSidebar';
+
+beforeAll(() => installMockApi(apiClient));
 
 function renderSidebar(role: Role, { path = '/staff/reception', ...props }: Partial<StaffSidebarProps> & { path?: string } = {}) {
   const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
@@ -35,7 +41,7 @@ describe('staff sidebar', () => {
     const admin = within(nav('Quản trị'));
     expect(admin.getByRole('link', { name: 'Lịch hẹn' })).toBeInTheDocument();
     expect(admin.queryByRole('link', { name: 'Hàng chờ' })).not.toBeInTheDocument();
-    expect(admin.queryByRole('link', { name: 'Quầy POS' })).not.toBeInTheDocument();
+    expect(admin.getByRole('link', { name: 'Order tại quầy' })).toHaveAttribute('href', '/admin/pos');
   });
 
   it('gives a vet the clinic counts and only the read-only customer lookup in the back-office menu (UC23)', () => {
@@ -76,5 +82,20 @@ describe('staff sidebar', () => {
     renderSidebar('BRANCH_MANAGER', { path: '/admin/branches/3/hours' });
 
     expect(within(nav('Quản trị')).getByRole('link', { name: 'Chi nhánh' })).toHaveAttribute('aria-current', 'page');
+  });
+
+  it('puts the notification bell with the unread count next to the logo, rail included (UC88)', async () => {
+    useSession.getState().clear();
+    await useSession.getState().login({ email: 'reception@store1.vn', password: MOCK_PASSWORD });
+    renderSidebar('RECEPTIONIST', { collapsed: true });
+
+    expect(await screen.findByRole('link', { name: 'Thông báo, 2 chưa đọc' })).toHaveAttribute('href', '/admin/notifications');
+    useSession.getState().clear();
+  });
+
+  it('gives the technical admin the bell too (UC88: A02–A08)', async () => {
+    renderSidebar('ADMIN', { path: '/admin/users' });
+
+    expect(await screen.findByRole('link', { name: 'Thông báo' })).toHaveAttribute('href', '/admin/notifications');
   });
 });

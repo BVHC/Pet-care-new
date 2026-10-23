@@ -119,3 +119,15 @@ export interface SlotQuota {
 }
 
 export type SetSlotQuotaRequest = Omit<SlotQuota, 'slotQuotaId'>;
+
+/** branch-v1 #20, #21: chỉ chi nhánh ACTIVE (BR-CK-01); `weeklyHours` là bản giờ mở cửa đang áp dụng. */
+export interface PublicBranch {
+  branchId: number;
+  name: string;
+  address: string;
+  phone: string;
+  latitude: number;
+  longitude: number;
+  acceptsAfterHoursEmergency: boolean;
+  weeklyHours: DayHours[];
+}

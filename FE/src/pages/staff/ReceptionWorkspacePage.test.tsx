@@ -44,15 +44,11 @@ describe('reception desk', () => {
     expect(loadDb().orders.find((o) => o.id === 'order-2')?.status).toBe('PENDING');
   });
 
-  it('adds nothing when Enter is pressed in an empty product search', async () => {
-    const user = userEvent.setup();
+  // T34: bán lẻ đi qua Order gắn hồ sơ khách (UC66, sales-v1 A1), không thả hàng thẳng vào phiếu thu nữa.
+  it('starts a retail sale from a customer profile, never straight onto the receipt', async () => {
     renderDesk();
-    const search = await screen.findByPlaceholderText('Tìm sản phẩm, Enter để thêm');
-    await screen.findByRole('button', { name: /Royal Canin/ });
-
-    await user.click(search);
-    await user.keyboard('{Enter}');
-
+    expect(await screen.findByPlaceholderText('SĐT, họ tên hoặc email của khách')).toBeInTheDocument();
+    expect(screen.queryByPlaceholderText('Tìm sản phẩm, Enter để thêm')).not.toBeInTheDocument();
     expect(usePosStore.getState().retail).toEqual([]);
   });
 });

@@ -1,29 +1,61 @@
 import { useState } from 'react'
 import { Link } from 'react-router-dom'
-import {
-  Bell,
-  ChevronRight,
-  Globe,
-  Globe2,
-  Info,
-  Mail,
-  Moon,
-  Smartphone,
-  Trash2,
-} from 'lucide-react'
+import { AlertTriangle, CalendarClock, ShieldCheck, Stethoscope, Syringe, type LucideIcon } from 'lucide-react'
 import { toast } from 'sonner'
 import { AccountSidebar } from '@/components/customer/AccountSidebar'
+import { plainMessage, toApiError } from '@/shared/api/api-error'
+import { useNotificationSettings, useSaveNotificationSettings } from '@/shared/hooks/useNotifications'
+import {
+  CHANNELS,
+  CHANNEL_LABELS,
+  REMINDER_KINDS,
+  REMINDER_LABELS,
+  type ChannelToggle,
+  type NotificationSettings,
+  type ReminderKind,
+} from '@/shared/types/care'
 import styles from './SettingsPage.module.css'
 
 /* ================================================================
-   Main.
+   T34 — Cài đặt nhận thông báo của khách (UC88, chỉ A02; care-v1 #9, #10).
+   Nội dung theo care-v1 A1 (bật / tắt 3 loại nhắc × 2 kênh; email bảo mật luôn gửi), còn chờ PO chốt (Q1).
+   Bỏ các mục của bản cũ không có use case ở v16: thông báo đẩy / SMS, chế độ tối, ngôn ngữ, đơn vị đo, múi giờ,
+   định dạng ngày, xóa dữ liệu cá nhân, phiên bản ứng dụng.
    ================================================================ */
 
+const ICONS: Record<ReminderKind, LucideIcon> = {
+  appointmentReminder: CalendarClock,
+  vaccineReminder: Syringe,
+  followUpReminder: Stethoscope,
+}
+
+const same = (a: NotificationSettings, b: NotificationSettings) =>
+  REMINDER_KINDS.every((k) => CHANNELS.every((ch) => a[k][ch] === b[k][ch]))
+
 export function SettingsPage() {
-  const [notif, setNotif] = useState(true)
-  const [dark, setDark] = useState(false)
-  const [emailNotif, setEmailNotif] = useState(true)
-  const [smsNotif, setSmsNotif] = useState(false)
+  const settings = useNotificationSettings()
+  const save = useSaveNotificationSettings()
+  /** Bản đang sửa; null = đang hiện đúng dữ liệu đã lưu. */
+  const [draft, setDraft] = useState<NotificationSettings | null>(null)
+  const saved = settings.data
+  const current = draft ?? saved
+  const dirty = !!draft && !!saved && !same(draft, saved)
+
+  const toggle = (kind: ReminderKind, channel: keyof ChannelToggle) => {
+    if (!current) return
+    setDraft({ ...current, [kind]: { ...current[kind], [channel]: !current[kind][channel] } })
+  }
+
+  const submit = () => {
+    if (!draft) return
+    save.mutate(draft, {
+      onSuccess: () => {
+        setDraft(null)
+        toast.success('Đã lưu cài đặt nhận thông báo')
+      },
+      onError: (error) => toast.error(plainMessage(toApiError(error))),
+    })
+  }
 
   return (
     <div className="bg-(--color-surface-page) pb-24">
@@ -50,199 +82,111 @@ export function SettingsPage() {
       {/* Content */}
       <div className="mx-auto max-w-[1280px] px-5 pt-8 sm:px-8">
         <div className={styles.page}>
-          <AccountSidebar />
+          <AccountSidebar active="settings" />
 
           <div className={styles.main}>
-            {/* Notifications */}
-            <section className={styles.section}>
+            <section className={styles.section} aria-labelledby="notif-settings-title">
               <div className={styles.sectionHeader}>
-                <h2 className={styles.sectionTitle}>Thông báo</h2>
+                <h2 id="notif-settings-title" className={styles.sectionTitle}>
+                  Nhận thông báo nhắc
+                </h2>
+                <p className={styles.sectionDesc}>Chọn kênh nhận từng loại nhắc. Thay đổi có hiệu lực từ lần nhắc tiếp theo.</p>
               </div>
-              <div className={styles.sectionBody}>
-                <div className={styles.settingRow}>
-                  <div className={`${styles.settingIcon} ${styles.settingIconBlue}`}>
-                    <Bell size={20} />
-                  </div>
-                  <div className={styles.settingContent}>
-                    <div className={styles.settingTitle}>Thông báo đẩy</div>
-                    <div className={styles.settingDesc}>Nhận thông báo từ ứng dụng</div>
-                  </div>
-                  <button
-                    type="button"
-                    onClick={() => setNotif((v) => !v)}
-                    className={`${styles.toggle} ${notif ? styles.toggleActive : ''}`}
-                    aria-pressed={notif}
-                  >
-                    <span className={styles.toggleKnob} />
+
+              {settings.isPending ? (
+                <div role="status" aria-label="Đang tải" className={styles.sectionBody}>
+                  {REMINDER_KINDS.map((k) => (
+                    <div key={k} className={styles.skeleton} />
+                  ))}
+                </div>
+              ) : settings.isError || !current ? (
+                <div role="alert" className={styles.errorBox}>
+                  <AlertTriangle size={20} aria-hidden />
+                  <span>Không tải được cài đặt. {settings.error ? plainMessage(toApiError(settings.error)) : ''}</span>
+                  <button type="button" className={styles.secondaryBtn} onClick={() => settings.refetch()}>
+                    Thử lại
                   </button>
                 </div>
+              ) : (
+                <div className={styles.sectionBody}>
+                  <div className={styles.gridHead} aria-hidden>
+                    <span />
+                    {CHANNELS.map((ch) => (
+                      <span key={ch}>{CHANNEL_LABELS[ch]}</span>
+                    ))}
+                  </div>
+                  <ul className={styles.rows}>
+                    {REMINDER_KINDS.map((kind) => {
+                      const Icon = ICONS[kind]
+                      const { title, description } = REMINDER_LABELS[kind]
+                      const off = CHANNELS.every((ch) => !current[kind][ch])
+                      return (
+                        <li key={kind} className={styles.gridRow}>
+                          <div className={styles.rowLabel}>
+                            <span className={styles.settingIcon}>
+                              <Icon size={20} aria-hidden />
+                            </span>
+                            <span className={styles.settingContent}>
+                              <span className={styles.settingTitle}>{title}</span>
+                              <span className={styles.settingDesc}>{description}</span>
+                              {off && <span className={styles.offHint}>Đã tắt cả hai kênh — bạn sẽ không nhận nhắc này.</span>}
+                            </span>
+                          </div>
+                          {CHANNELS.map((ch) => {
+                            const on = current[kind][ch]
+                            return (
+                              <div key={ch} className={styles.cell}>
+                                <span className={styles.cellLabel} aria-hidden>
+                                  {CHANNEL_LABELS[ch]}
+                                </span>
+                                <button
+                                  type="button"
+                                  role="switch"
+                                  aria-checked={on}
+                                  aria-label={`${title} ${ch === 'email' ? 'qua email' : 'trong ứng dụng'}`}
+                                  onClick={() => toggle(kind, ch)}
+                                  disabled={save.isPending}
+                                  className={`${styles.toggle} ${on ? styles.toggleActive : ''}`}
+                                >
+                                  <span className={styles.toggleKnob} />
+                                </button>
+                              </div>
+                            )
+                          })}
+                        </li>
+                      )
+                    })}
+                  </ul>
 
-                <div className={styles.settingRow}>
-                  <div className={`${styles.settingIcon} ${styles.settingIconBlue}`}>
-                    <Mail size={20} />
+                  <div className={styles.actions}>
+                    {dirty && (
+                      <span role="status" className={styles.dirtyNote}>
+                        Có thay đổi chưa lưu
+                      </span>
+                    )}
+                    <button type="button" className={styles.secondaryBtn} onClick={() => setDraft(null)} disabled={!dirty || save.isPending}>
+                      Hủy thay đổi
+                    </button>
+                    <button type="button" className={styles.primaryBtn} onClick={submit} disabled={!dirty || save.isPending}>
+                      {save.isPending ? 'Đang lưu…' : 'Lưu thay đổi'}
+                    </button>
                   </div>
-                  <div className={styles.settingContent}>
-                    <div className={styles.settingTitle}>Thông báo qua email</div>
-                    <div className={styles.settingDesc}>Nhận cập nhật đơn hàng, khuyến mãi qua email</div>
-                  </div>
-                  <button
-                    type="button"
-                    onClick={() => setEmailNotif((v) => !v)}
-                    className={`${styles.toggle} ${emailNotif ? styles.toggleActive : ''}`}
-                    aria-pressed={emailNotif}
-                  >
-                    <span className={styles.toggleKnob} />
-                  </button>
                 </div>
-
-                <div className={styles.settingRow}>
-                  <div className={`${styles.settingIcon} ${styles.settingIconBlue}`}>
-                    <Smartphone size={20} />
-                  </div>
-                  <div className={styles.settingContent}>
-                    <div className={styles.settingTitle}>Thông báo SMS</div>
-                    <div className={styles.settingDesc}>Nhận tin nhắn về trạng thái đơn hàng</div>
-                  </div>
-                  <button
-                    type="button"
-                    onClick={() => setSmsNotif((v) => !v)}
-                    className={`${styles.toggle} ${smsNotif ? styles.toggleActive : ''}`}
-                    aria-pressed={smsNotif}
-                  >
-                    <span className={styles.toggleKnob} />
-                  </button>
-                </div>
-              </div>
+              )}
             </section>
 
-            {/* Display */}
-            <section className={styles.section}>
-              <div className={styles.sectionHeader}>
-                <h2 className={styles.sectionTitle}>Hiển thị</h2>
-              </div>
-              <div className={styles.sectionBody}>
-                <div className={styles.settingRow}>
-                  <div className={`${styles.settingIcon} ${styles.settingIconPurple}`}>
-                    <Moon size={20} />
-                  </div>
-                  <div className={styles.settingContent}>
-                    <div className={styles.settingTitle}>Chế độ tối</div>
-                    <div className={styles.settingDesc}>Sử dụng giao diện tối</div>
-                  </div>
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setDark((v) => !v)
-                      toast.success('Chế độ tối đang phát triển.')
-                    }}
-                    className={`${styles.toggle} ${dark ? styles.toggleActive : ''}`}
-                    aria-pressed={dark}
-                  >
-                    <span className={styles.toggleKnob} />
-                  </button>
-                </div>
-
-                <div className={styles.settingRow}>
-                  <div className={`${styles.settingIcon} ${styles.settingIconGreen}`}>
-                    <Globe size={20} />
-                  </div>
-                  <div className={styles.settingContent}>
-                    <div className={styles.settingTitle}>Ngôn ngữ</div>
-                    <div className={styles.settingDesc}>Tiếng Việt</div>
-                  </div>
-                  <ChevronRight size={18} className={styles.settingChevron} />
-                </div>
-
-                <div className={styles.settingRow}>
-                  <div className={`${styles.settingIcon} ${styles.settingIconGreen}`}>
-                    <Globe2 size={20} />
-                  </div>
-                  <div className={styles.settingContent}>
-                    <div className={styles.settingTitle}>Đơn vị đo lường</div>
-                    <div className={styles.settingDesc}>Kilogram (kg) · Centimet (cm)</div>
-                  </div>
-                  <ChevronRight size={18} className={styles.settingChevron} />
-                </div>
-              </div>
-            </section>
-
-            {/* Language & Region */}
-            <section className={styles.section}>
-              <div className={styles.sectionHeader}>
-                <h2 className={styles.sectionTitle}>Ngôn ngữ &amp; Khu vực</h2>
-              </div>
-              <div className={styles.sectionBody}>
-                <div className={styles.settingRow}>
-                  <div className={`${styles.settingIcon} ${styles.settingIconYellow}`}>
-                    <Globe size={20} />
-                  </div>
-                  <div className={styles.settingContent}>
-                    <div className={styles.settingTitle}>Ngôn ngữ ứng dụng</div>
-                    <div className={styles.settingDesc}>Tiếng Việt</div>
-                  </div>
-                  <ChevronRight size={18} className={styles.settingChevron} />
-                </div>
-
-                <div className={styles.settingRow}>
-                  <div className={`${styles.settingIcon} ${styles.settingIconYellow}`}>
-                    <Globe2 size={20} />
-                  </div>
-                  <div className={styles.settingContent}>
-                    <div className={styles.settingTitle}>Múi giờ</div>
-                    <div className={styles.settingDesc}>Asia/Ho_Chi_Minh (UTC+7)</div>
-                  </div>
-                  <ChevronRight size={18} className={styles.settingChevron} />
-                </div>
-
-                <div className={styles.settingRow}>
-                  <div className={`${styles.settingIcon} ${styles.settingIconYellow}`}>
-                    <Globe size={20} />
-                  </div>
-                  <div className={styles.settingContent}>
-                    <div className={styles.settingTitle}>Định dạng ngày &amp; số</div>
-                    <div className={styles.settingDesc}>Việt Nam</div>
-                  </div>
-                  <ChevronRight size={18} className={styles.settingChevron} />
-                </div>
-              </div>
-            </section>
-
-            {/* Data */}
-            <section className={styles.section}>
-              <div className={styles.sectionHeader}>
-                <h2 className={styles.sectionTitle}>Dữ liệu &amp; Quyền riêng tư</h2>
-              </div>
-              <div className={styles.sectionBody}>
-                <div className={styles.settingRow}>
-                  <div className={`${styles.settingIcon} ${styles.settingIconRed}`}>
-                    <Trash2 size={20} />
-                  </div>
-                  <div className={styles.settingContent}>
-                    <div className={styles.settingTitle}>Xóa dữ liệu cá nhân</div>
-                    <div className={styles.settingDesc}>Yêu cầu xóa toàn bộ dữ liệu của bạn</div>
-                  </div>
-                  <ChevronRight size={18} className={styles.settingChevron} />
-                </div>
-
-                <div className={styles.settingRow}>
-                  <div className={`${styles.settingIcon} ${styles.settingIconGray}`}>
-                    <Info size={20} />
-                  </div>
-                  <div className={styles.settingContent}>
-                    <div className={styles.settingTitle}>Chính sách quyền riêng tư</div>
-                    <div className={styles.settingDesc}>Xem cách chúng tôi bảo vệ dữ liệu</div>
-                  </div>
-                  <ChevronRight size={18} className={styles.settingChevron} />
-                </div>
-              </div>
-            </section>
-
-            {/* Version */}
-            <div className={styles.versionBadge}>
-              <span>Pet Care</span>
-              <span>·</span>
-              <span>Phiên bản 2.0.0</span>
-            </div>
+            {/* care-v1 A1: email bảo mật không nằm trong cài đặt. */}
+            <aside className={styles.note}>
+              <ShieldCheck size={20} aria-hidden className={styles.noteIcon} />
+              <p>
+                <strong>Email bảo mật luôn được gửi</strong> — mã OTP, thông báo đổi mật khẩu và đổi email — để bảo vệ tài khoản
+                của bạn, kể cả khi bạn tắt mọi loại nhắc ở trên. Đổi mật khẩu tại{' '}
+                <Link to="/security" className={styles.noteLink}>
+                  Bảo mật
+                </Link>
+                .
+              </p>
+            </aside>
           </div>
         </div>
       </div>

@@ -276,10 +276,12 @@ export function SiteHeader({ cartCount = 0, onNav }: SiteHeaderProps) {
             </div>
           )}
 
-          {/* Bell + Cart */}
-          <div className="shrink-0">
-            <NotificationBell />
-          </div>
+          {/* Bell (chỉ khi đã đăng nhập — UC88) + Cart */}
+          {isAuthenticated && (
+            <div className="shrink-0">
+              <NotificationBell />
+            </div>
+          )}
           <div
             className="relative cursor-pointer text-[#3B2A1E] hover:text-accent transition-colors shrink-0"
             onClick={() => onNav('cart')}
@@ -380,9 +382,11 @@ export function SiteHeader({ cartCount = 0, onNav }: SiteHeaderProps) {
             )}
           </button>
 
-          <div className="shrink-0">
-            <NotificationBell />
-          </div>
+          {isAuthenticated && (
+            <div className="shrink-0">
+              <NotificationBell />
+            </div>
+          )}
 
           <div
             className="relative cursor-pointer text-[#3B2A1E] hover:text-accent shrink-0"

@@ -1,5 +1,6 @@
-// Mock module branch (docs/api/branch-v1.md #1–19): chi nhánh, giờ mở cửa, ngày nghỉ (kèm hủy hàng loạt),
-// dịch vụ tại chi nhánh, quota. Quyền, thứ tự kiểm tra và câu báo lỗi chép từ BE (module/branch).
+// Mock module branch (docs/api/branch-v1.md #1–21): chi nhánh, giờ mở cửa, ngày nghỉ (kèm hủy hàng loạt),
+// dịch vụ tại chi nhánh, quota, chi nhánh công khai; kèm dịch vụ công khai (catalog-v1 #19).
+// Quyền, thứ tự kiểm tra và câu báo lỗi chép từ BE (module/branch).
 // Lịch hẹn / đặt chỗ lưu trú BOOKED do mock tự giữ, thay cho AppointmentQueryApi / BoardingQueryApi;
 // trên BE thật hai API này còn là placeholder nên đổi lịch của chi nhánh ACTIVE trả 500 (time.md, T10).
 import type { Role } from '../../types/auth';
@@ -10,11 +11,13 @@ import type {
   DayHours,
   Holiday,
   OpeningHoursVersion,
+  PublicBranch,
   QuotaGroup,
   ScheduleImpact,
   SlotQuota,
   TimeRange,
 } from '../../types/branch';
+import type { PublicService } from '../../types/catalog';
 import {
   addDays,
   isEmptyImpact,
@@ -637,7 +640,89 @@ const deleteSlotQuota: MockHandler = (req) =>
     return noContent();
   });
 
+// ─── Đọc chéo cho mock lịch hẹn (như BranchQueryApi của BE) ───
+
+/**
+ * Lịch đặt của một chi nhánh, đọc một lần: dịch vụ bật, khung 30 phút của ngày (BR-LH-02, ngày nghỉ → rỗng),
+ * quota của khung (BR-LH-03: quota riêng → quota mặc định → 1). Null nếu không có chi nhánh.
+ * Lưu ý: hủy hàng loạt (BR-LH-10, BR-CN-04) của file này vẫn chỉ xét `appointments` mẫu ở trên, chưa thấy lịch của
+ * appointment.mock (xem docs/testcases/T33-fe.md).
+ */
+export function branchBooking(branchId: number) {
+  const s = load();
+  const branch = s.branches.find((b) => b.branchId === branchId);
+  if (!branch) return null;
+  return {
+    branch,
+    isServiceEnabled: (serviceId: number) => s.services[branchId]?.[serviceId] ?? false,
+    slotsOn: (date: string) => slotsOn(s.hours[branchId] ?? [], holidayDates(s, branchId), date),
+    quotaFor: (group: QuotaGroup, date: string, start: string) =>
+      s.slotQuotas.find((q) => q.branchId === branchId && q.serviceGroup === group && q.slotDate === date && q.slotStart === start)?.quota ??
+      s.quotaDefaults[branchId]?.[group] ??
+      1,
+  };
+}
+
+// ─── Công khai: branch-v1 #20, #21 và catalog-v1 #19 ───
+// Dịch vụ công khai đặt ở đây vì cần cờ bật theo chi nhánh của file này (catalog.mock không đọc ngược branch.mock).
+
+const activeBranches = (s: State) => s.branches.filter((b) => b.status === 'ACTIVE');
+
+/** Chỉ chi nhánh ACTIVE (BR-CK-01); `weeklyHours` là bản giờ đang áp dụng hôm nay. */
+function publicBranchOf(s: State, { activatedAt: _activatedAt, status: _status, ...branch }: Branch): PublicBranch {
+  const today = localIsoDate();
+  const current = [...(s.hours[branch.branchId] ?? [])]
+    .filter((v) => v.effectiveFrom <= today)
+    .sort((a, b) => b.effectiveFrom.localeCompare(a.effectiveFrom))[0];
+  return { ...branch, weeklyHours: current?.days ?? [] };
+}
+
+const listPublicBranches: MockHandler = (req) => {
+  const flag = req.query.acceptsAfterHoursEmergency;
+  if (flag !== undefined && flag !== 'true' && flag !== 'false') return badParam('acceptsAfterHoursEmergency');
+  const s = load();
+  return ok(
+    activeBranches(s)
+      .filter((b) => flag === undefined || b.acceptsAfterHoursEmergency === (flag === 'true'))
+      .sort(byName)
+      .map((b) => publicBranchOf(s, b)),
+  );
+};
+
+const getPublicBranch: MockHandler = (req) => {
+  if (!/^\d+$/.test(req.params.branchId)) return badParam('branchId');
+  const s = load();
+  const branch = activeBranches(s).find((b) => b.branchId === Number(req.params.branchId));
+  return branch ? ok(publicBranchOf(s, branch)) : notFound('chi nhánh', req.params.branchId);
+};
+
+/** Dịch vụ đang kinh doanh, bật ở ≥ 1 chi nhánh ACTIVE, kèm các chi nhánh đó (BR-CK-01). */
+const listPublicServices: MockHandler = (req) => {
+  const { group, branchId } = req.query;
+  if (group !== undefined && !isGroup(group)) return badParam('group');
+  if (branchId !== undefined && !/^\d+$/.test(branchId)) return badParam('branchId');
+  const s = load();
+  const active = activeBranches(s);
+  const services: PublicService[] = catalogServices()
+    .filter((x) => x.isActive && (!group || x.group === group))
+    .map((x) => ({
+      serviceId: x.serviceId,
+      name: x.name,
+      group: x.group,
+      price: x.price,
+      priceIsFrom: x.priceIsFrom,
+      description: x.description ?? null,
+      kennelType: x.kennelType ?? null,
+      branchIds: active.filter((b) => s.services[b.branchId]?.[x.serviceId]).map((b) => b.branchId),
+    }))
+    .filter((x) => x.branchIds.length > 0 && (!branchId || x.branchIds.includes(Number(branchId))));
+  return ok(services.sort(byName));
+};
+
 export const branchRoutes: Record<string, MockHandler> = {
+  'GET /api/public/branches': listPublicBranches,
+  'GET /api/public/branches/:branchId': getPublicBranch,
+  'GET /api/public/services': listPublicServices,
   'GET /api/branches': allow(STAFF_READ, listBranches),
   'POST /api/branches': allow(SM, createBranch),
   'GET /api/branches/:branchId': allow(STAFF_READ, getBranch),

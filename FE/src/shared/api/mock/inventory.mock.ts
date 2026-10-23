@@ -277,6 +277,14 @@ function itemFor(s: State, branchId: number, productId: number): ItemRow {
   return item;
 }
 
+/** Tồn khả dụng (lô chưa hết hạn, BR-KO-01) của sản phẩm tại chi nhánh, như StockQueryApi.availableQuantity — cho mock bán hàng. */
+export function availableQuantity(branchId: number, productId: number): number {
+  const s = load();
+  const item = itemOf(s, branchId, productId);
+  const today = localIsoDate();
+  return item ? sum(lotsOf(s, item.id).filter((l) => !isExpired(l, today)).map((l) => l.quantity)) : 0;
+}
+
 /** M1: chỉ liệt kê sản phẩm đã có dòng tồn ở chi nhánh. */
 const listInventory: MockHandler = (req) => {
   const { q, productType, belowMin, expiringWithinDays } = req.query;

@@ -15,7 +15,7 @@ export type ErrorCode =
   | 'UNAUTHENTICATED'
   | 'ACCESS_DENIED'
   | 'INTERNAL_ERROR'
-  /** BE hoặc phụ thuộc ngoài chưa sẵn sàng; mock dùng để mô phỏng lỗi 500 từ Visit/ca thu ngân (D016). */
+  /** BE hoặc phụ thuộc ngoài chưa sẵn sàng (500). */
   | 'UNAVAILABLE';
 
 /** Envelope lỗi, luôn đủ 6 trường. */

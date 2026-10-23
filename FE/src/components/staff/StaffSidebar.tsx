@@ -1,7 +1,7 @@
 import { useEffect, useId, useState } from 'react';
 import { Link, NavLink, useNavigate } from 'react-router-dom';
 import {
-  ConciergeBell, Keyboard, LayoutDashboard, LogOut, Moon, PanelLeft, PanelLeftClose, RotateCcw, Scissors,
+  Bell, ConciergeBell, Keyboard, LayoutDashboard, LogOut, Moon, PanelLeft, PanelLeftClose, RotateCcw, Scissors,
   Stethoscope, Sun, UserRound, type LucideIcon,
 } from 'lucide-react';
 import { cn } from '../../lib/utils';
@@ -11,8 +11,9 @@ import {
   WORKSPACE_LABELS, WORKSPACE_PATHS, getAccessibleWorkspaces, homePathFor, type Workspace,
 } from '../../shared/constants/workspaces';
 import { useArrivals, usePendingOrders, useResetDemo, useTodayVisits } from '../../shared/hooks/useClinic';
+import { notificationCenterPath, useUnreadCount } from '../../shared/hooks/useNotifications';
 import { useSession } from '../../shared/stores/session.store';
-import { ROLE_LABELS, type SessionUser } from '../../shared/types/auth';
+import { ROLE_LABELS, type Role, type SessionUser } from '../../shared/types/auth';
 import { formatToday } from '../../shared/utils/clinic-format';
 
 const ICONS: Record<Workspace, LucideIcon> = {
@@ -72,6 +73,7 @@ export function StaffSidebar({ user, collapsed, onToggleCollapsed, dark, onToggl
             </span>
           )}
         </Link>
+        <StaffNotificationLink role={user.role} onNavigate={onNavigate} />
         {onToggleCollapsed && (
           <button
             type="button"
@@ -160,6 +162,33 @@ export function StaffSidebar({ user, collapsed, onToggleCollapsed, dark, onToggl
         onNavigate={onNavigate}
       />
     </div>
+  );
+}
+
+/** UC88: chuông kèm số chưa đọc, mở trang Thông báo; ẩn khi role không mở được trang đó (notificationCenterPath). */
+export function StaffNotificationLink({ role, onNavigate }: { role: Role; onNavigate?: () => void }) {
+  const unread = useUnreadCount().data ?? 0;
+  const path = notificationCenterPath(role);
+  if (!path) return null;
+  const label = unread > 0 ? `Thông báo, ${unread} chưa đọc` : 'Thông báo';
+  return (
+    <NavLink
+      to={path}
+      onClick={onNavigate}
+      aria-label={label}
+      title={label}
+      className={({ isActive }) => cn(ICON_BUTTON, 'relative', isActive && 'bg-(--ws-raised) text-(--ws-ink)')}
+    >
+      <Bell className="h-4 w-4" />
+      {unread > 0 && (
+        <span
+          aria-hidden
+          className="absolute -right-0.5 -top-0.5 flex h-4 min-w-4 items-center justify-center rounded-full bg-(--ws-urgent-bg) px-1 text-[10px] font-bold leading-none text-(--ws-urgent-ink) ring-2 ring-(--ws-surface)"
+        >
+          {unread > 99 ? '99+' : unread}
+        </span>
+      )}
+    </NavLink>
   );
 }
 

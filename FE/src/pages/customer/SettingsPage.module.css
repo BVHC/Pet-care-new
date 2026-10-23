@@ -97,26 +97,53 @@
   color: var(--color-text-primary);
 }
 
+.sectionDesc {
+  margin-top: 2px;
+  font-size: 13px;
+  color: var(--color-text-secondary);
+}
+
 .sectionBody {
-  padding: 12px;
+  padding: 12px 20px 20px;
 }
 
 /* ================================================================
-   Setting row.
+   Bảng loại nhắc × kênh.
    ================================================================ */
 
-.settingRow {
+.gridHead,
+.gridRow {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 96px 120px;
+  align-items: center;
+  gap: 12px;
+}
+
+.gridHead {
+  padding: 4px 0 8px;
+  font-size: 12px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--color-text-secondary);
+  text-align: center;
+}
+
+.rows {
+  display: flex;
+  flex-direction: column;
+}
+
+.gridRow {
+  padding: 14px 0;
+  border-top: 1px solid var(--color-border-default);
+}
+
+.rowLabel {
   display: flex;
   align-items: center;
   gap: 14px;
-  padding: 14px 8px;
-  border-radius: 10px;
-  transition: background-color 0.2s ease;
-  cursor: pointer;
-}
-
-.settingRow:hover {
-  background: var(--color-surface-2);
+  min-width: 0;
 }
 
 .settingIcon {
@@ -126,17 +153,13 @@
   height: 44px;
   border-radius: 12px;
   flex: 0 0 auto;
+  background: var(--color-accent-soft);
+  color: var(--color-accent);
 }
 
-.settingIconBlue   { background: #dbeafe; color: #1d4ed8; }
-.settingIconGreen  { background: #dcfce7; color: #15803d; }
-.settingIconYellow { background: #fef3c7; color: #b45309; }
-.settingIconPurple { background: #f3e8ff; color: #7c3aed; }
-.settingIconRed    { background: #fee2e2; color: #dc2626; }
-.settingIconGray   { background: var(--color-surface-2); color: var(--color-text-secondary); }
-
 .settingContent {
-  flex: 1;
+  display: flex;
+  flex-direction: column;
   min-width: 0;
 }
 
@@ -153,9 +176,74 @@
   line-height: 1.4;
 }
 
-.settingChevron {
-  color: var(--color-border-strong);
-  flex: 0 0 auto;
+.offHint {
+  margin-top: 4px;
+  font-size: 12px;
+  font-weight: 600;
+  color: #b45309;
+}
+
+.cell {
+  display: flex;
+  justify-content: center;
+}
+
+/* Màn hẹp: nhãn kênh nằm cạnh công tắc thay cho dòng tiêu đề cột. */
+.cellLabel {
+  display: none;
+}
+
+@media (max-width: 560px) {
+  .gridHead {
+    display: none;
+  }
+
+  .gridRow {
+    grid-template-columns: 1fr 1fr;
+    row-gap: 10px;
+  }
+
+  .rowLabel {
+    grid-column: 1 / -1;
+  }
+
+  .cell {
+    justify-content: flex-start;
+    align-items: center;
+    gap: 10px;
+  }
+
+  .cellLabel {
+    display: inline;
+    font-size: 13px;
+    font-weight: 600;
+    color: var(--color-text-secondary);
+  }
+}
+
+.skeleton {
+  height: 60px;
+  margin: 8px 0;
+  border-radius: 12px;
+  background: var(--color-surface-2);
+  animation: pulse 1.4s ease-in-out infinite;
+}
+
+@keyframes pulse {
+  50% { opacity: 0.55; }
+}
+
+.errorBox {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 10px;
+  margin: 16px 20px 20px;
+  padding: 12px 14px;
+  border-radius: 12px;
+  background: #fee2e2;
+  color: #991b1b;
+  font-size: 13.5px;
 }
 
 /* ================================================================
@@ -167,11 +255,21 @@
   width: 44px;
   height: 24px;
   border-radius: 999px;
-  background: var(--color-border-default);
+  background: var(--color-border-strong);
   border: none;
   cursor: pointer;
   flex: 0 0 auto;
   transition: background-color 0.25s ease;
+}
+
+.toggle:disabled {
+  opacity: 0.6;
+  cursor: default;
+}
+
+.toggle:focus-visible {
+  outline: 2px solid var(--color-accent);
+  outline-offset: 2px;
 }
 
 .toggleActive {
@@ -195,22 +293,93 @@
 }
 
 /* ================================================================
-   Version badge.
+   Lưu / hủy.
    ================================================================ */
 
-.versionBadge {
+.actions {
   display: flex;
+  flex-wrap: wrap;
   align-items: center;
-  justify-content: center;
-  padding: 16px;
-  font-size: 12.5px;
-  color: var(--color-text-secondary);
-  gap: 6px;
+  justify-content: flex-end;
+  gap: 10px;
+  padding-top: 16px;
+  border-top: 1px solid var(--color-border-default);
+}
+
+.dirtyNote {
+  margin-right: auto;
+  font-size: 13px;
+  font-weight: 600;
+  color: #b45309;
+}
+
+.primaryBtn,
+.secondaryBtn {
+  padding: 9px 18px;
+  border-radius: 999px;
+  font-size: 13.5px;
+  font-weight: 700;
+  cursor: pointer;
+  transition: background-color 0.2s ease, border-color 0.2s ease, opacity 0.2s ease;
+}
+
+.primaryBtn {
+  background: var(--color-accent);
+  color: #fff;
+}
+
+.primaryBtn:hover:not(:disabled) {
+  background: var(--color-accent-hover);
+}
+
+.secondaryBtn {
+  border: 1.5px solid var(--color-border-default);
+  background: var(--color-surface-card);
+  color: var(--color-text-primary);
+}
+
+.secondaryBtn:hover:not(:disabled) {
+  border-color: var(--color-accent);
+}
+
+.primaryBtn:disabled,
+.secondaryBtn:disabled {
+  opacity: 0.5;
+  cursor: default;
+}
+
+/* ================================================================
+   Ghi chú email bảo mật.
+   ================================================================ */
+
+.note {
+  display: flex;
+  gap: 12px;
+  padding: 14px 18px;
+  border-radius: 14px;
+  background: var(--color-accent-soft);
+  font-size: 13.5px;
+  line-height: 1.55;
+  color: var(--color-text-primary);
+}
+
+.noteIcon {
+  flex: 0 0 auto;
+  margin-top: 1px;
+  color: var(--color-accent);
+}
+
+.noteLink {
+  font-weight: 700;
+  color: var(--color-accent);
+  text-decoration: underline;
+  text-underline-offset: 3px;
 }
 
 @media (prefers-reduced-motion: reduce) {
-  .settingRow,
-  .toggleKnob {
+  .toggleKnob,
+  .skeleton {
     transition: none;
+    animation: none;
   }
 }

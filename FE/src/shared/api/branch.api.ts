@@ -1,4 +1,4 @@
-// Branch API — docs/api/branch-v1.md #1–19. Tạo / sửa / kích hoạt: SUPER_MANAGER; giờ mở cửa, ngày nghỉ,
+// Branch API — docs/api/branch-v1.md #1–20. Tạo / sửa / kích hoạt: SUPER_MANAGER; giờ mở cửa, ngày nghỉ,
 // dịch vụ, quota: BRANCH_MANAGER của chính chi nhánh; đọc quota: BRANCH_MANAGER, RECEPTIONIST.
 import { apiClient } from './axios';
 import type {
@@ -9,6 +9,7 @@ import type {
   CreateHolidayRequest,
   Holiday,
   OpeningHoursVersion,
+  PublicBranch,
   QuotaDefault,
   QuotaGroup,
   ScheduleImpact,
@@ -29,6 +30,9 @@ const remove = async (url: string): Promise<void> => {
 const base = (branchId: number) => `/api/branches/${branchId}`;
 
 export const branchApi = {
+  /** #20, không cần đăng nhập: chỉ chi nhánh ACTIVE (BR-CK-01). */
+  listPublicBranches: (params?: { acceptsAfterHoursEmergency?: boolean }) => get<PublicBranch[]>('/api/public/branches', params),
+
   /** Nhân viên chi nhánh chỉ nhận được chi nhánh của mình. */
   listBranches: (params?: { status?: BranchStatus }) => get<Branch[]>('/api/branches', params),
   getBranch: (branchId: number) => get<Branch>(base(branchId)),
