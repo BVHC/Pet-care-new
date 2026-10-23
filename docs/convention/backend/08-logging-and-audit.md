@@ -70,7 +70,7 @@ Nguồn: BR-QT-15 và mọi chỗ đặc tả ghi "ghi audit". Mã action do mod
 | | Đối soát ca thu ngân (Ca thu ngân #6) | TG | `record` | *(TG đặt)* |
 | Điều chỉnh kho | Phiếu điều chỉnh tồn (BR-KO-06) | KO | `record` | `STOCK_ADJUSTED` (`entity = stock_adjustments`, after = lý do + các dòng `{stockLotId, quantityDelta, balanceAfter}`, `reason` = ghi chú) — [ADR-0042](../../adr/0042-inventory-stock-ledger-and-locking.md) |
 | | Hủy phiếu nhập đã xác nhận (BR-KO-04; Phiếu nhập #4) | KO | `record` | `STOCK_RECEIPT_CANCELLED` (`entity = stock_receipts`, before/after `{status}`, `reason`; hủy phiếu nháp không audit) — ADR-0042 |
-| Sửa bệnh án | Bản bổ sung bệnh án sau khi khóa (BR-KB-01) | KB | `record` | *(KB đặt)* |
+| Sửa bệnh án | Ghi bệnh án khi lượt còn `IN_PROGRESS` (nguồn "ai ghi phần nào" khi gán lại lượt — BR-TN-08, erd §6) và bản bổ sung sau khi khóa (BR-KB-01) — [ADR-0066](../../adr/0066-medical-record-foundation.md) §2 | KB | `record` | `MEDICAL_RECORD_UPDATED`, `MEDICAL_RECORD_ADDENDUM_ADDED` |
 | Ngoài BR-QT-15 (rule riêng bắt ghi audit) | Sửa hộ email / khôi phục tài khoản (BR-TK-16) | TK | `record` | *(TK đặt)* |
 | | Liên kết hồ sơ khách (BR-TK-19) — khách tự liên kết bằng OTP (UC07, [ADR-0027](../../adr/0027-profile-link-endpoints.md) mục 5); lễ tân liên kết hộ (UC22) chưa có | TK | `record` | `CUSTOMER_PROFILE_LINKED` |
 | | Khóa tạm do sai mật khẩu hiện tại khi đổi mật khẩu (BR-TK-14 → BR-TK-09; người dùng chọn thêm, [ADR-0019](../../adr/0019-login-failure-lockout.md) mục 6) | TK | `record` | `ACCOUNT_TEMPORARILY_LOCKED` |

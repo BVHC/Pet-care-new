@@ -42,6 +42,8 @@ m = Module(
         ("A13", "CARETAKER xem hàng đợi chung của chi nhánh (#2) và chi tiết mọi lượt của chi nhánh (#4); 01 không có use case cho A08 xem lượt của người khác (docs/adr/0060)", "BR-TN-04 'một hàng đợi chung'; UC23 cho A08 tra khách / thú toàn chuỗi; schema `Visit` không có dữ liệu y tế"),
         ("A14", "SUPER_MANAGER xem chi tiết lượt (#4) của mọi chi nhánh, để xem lượt cần gán lại khi chi nhánh không còn BRANCH_MANAGER hoạt động; `visitId` lấy từ thông báo khóa tài khoản gửi SUPER_MANAGER. Hàng đợi chi nhánh (#2) vẫn chỉ cho A05–A08 (docs/adr/0063)", "03 Visit#4; BR-QT-11 (thông báo kèm việc dở); trả Q2"),
         ("A15", "Gán lại lượt đã gọi (#9) khi người phụ trách hiện tại không còn đủ điều kiện phụ trách lượt: không ACTIVE hoặc bị khóa, khác chi nhánh, hoặc sai chức vụ với nhóm dịch vụ (đổi chức vụ khi còn lượt, docs/adr/0031 Q4). Không xét cờ `needsReassign`; gán lại thì gỡ cờ (docs/adr/0063)", "BR-TN-08 'không còn ACTIVE (bị khóa)'; BR-TN-05"),
+        ("A16", "Lượt Khám/Tiêm (MEDICAL) hoàn tất khi Order không còn dòng dịch vụ loại Khám hoặc Tiêm nào (VET xóa dòng tự sinh) thì bị từ chối 400 `BR-KB-02`; 03 Visit#5 chỉ nêu điều kiện cho 'có Khám' và 'chỉ có Tiêm' (docs/adr/0069)", "BR-KB-02; tránh Order PENDING không có dịch vụ"),
+        ("A17", "Bản bổ sung (#15) cho lượt MEDICAL đã COMPLETED chưa có dòng bệnh án (lượt chỉ tiêm): tạo bệnh án rỗng đã khóa rồi thêm bản bổ sung; thú đã mất hoặc đã chuyển chủ vẫn thêm được (BR-KH-05 'chỉ đọc' hiểu là hồ sơ thú) (docs/adr/0070)", "BR-KB-01, BR-KB-04: sai sót sau COMPLETED ghi bằng bản bổ sung; FK addenda cần dòng bệnh án"),
     ],
     questions=[
         ("Q1", "Dòng dịch vụ tự sinh khi tiếp nhận có thể bị VET đổi (BR-TN-01). Nếu đổi từ dịch vụ thường sang dịch vụ loại Khám thì có hủy nhắc tái khám như Visit#1 có dịch vụ Khám không?", "TBD (PO), tạm chỉ xét tại Visit#1 (06 G5)", "03 Care Task#6"),
@@ -227,8 +229,14 @@ m.op("post", "/visits/{visitId}/complete", "completeVisit", "Hoàn tất lượt
      "BR-KB-01, 02, BR-SP-06, BR-LH-11", "A07, A08", VET_ASSIGNED,
      "IN_PROGRESS → COMPLETED (Visit#5) · Lịch hẹn#7 · Order#4 (→ PENDING) · bệnh án khóa", resp="Visit",
      path_params=["VisitId"], errors=(400, 401, 403, 404, 409),
-     err_desc={400: "`BR-KB-02` có dịch vụ loại Khám mà chưa có chẩn đoán · chỉ có dịch vụ loại Tiêm mà chưa ghi mũi nào",
-               409: "Lượt không IN_PROGRESS"})
+     err_desc={400: "`BR-KB-02` có dịch vụ loại Khám mà chưa có chẩn đoán · chỉ có dịch vụ loại Tiêm mà chưa ghi mũi "
+                    "nào · lượt Khám/Tiêm không còn dịch vụ Khám hoặc Tiêm nào (A16) · `BR-TN-05` chức vụ hiện tại "
+                    "không phụ trách được nhóm dịch vụ của lượt (đổi chức vụ sau khi được gán) · tham số sai kiểu "
+                    "(`MALFORMED_REQUEST`); BR-TK-17",
+               403: "Sai vai trò · lượt của chi nhánh khác · không phải người phụ trách hiện tại, kể cả lượt chưa gán",
+               409: "Lượt không IN_PROGRESS"},
+     notes="A16. Thứ tự lỗi: 403 vai trò → 404 → 403 chi nhánh → 403 người phụ trách → 400 BR-TN-05 → 409 → 400 "
+           "BR-KB-02 (docs/adr/0069). Gỡ cờ needsReassign. Lỗi BR-KB-02 hoàn tác cả lịch hẹn, Order và bệnh án.")
 m.op("post", "/visits/{visitId}/cancel", "cancelVisit", "Hủy lượt khách bỏ về", "Completion", "UC45", "BR-TN-07",
      "A06", "Lễ tân chi nhánh", "WAITING → CANCELLED (Visit#6) · Lịch hẹn#8 · Order#6", body="CancelVisitRequest",
      resp="Visit", path_params=["VisitId"], errors=(400, 401, 403, 404, 409),
@@ -239,20 +247,41 @@ m.op("post", "/visits/{visitId}/cancel", "cancelVisit", "Hủy lượt khách b�
 
 m.op("get", "/visits/{visitId}/medical-record", "getMedicalRecord", "Xem bệnh án của lượt", "Medical record",
      "UC48, UC53", "BR-KB-01", "A07, A08", "VET, CARETAKER chi nhánh (CARETAKER chỉ xem)", resp="MedicalRecord",
-     path_params=["VisitId"], errors=(401, 403, 404), err_desc={404: "Không có Visit hoặc Visit nhóm GROOMING (không có bệnh án)"})
+     path_params=["VisitId"], errors=(400, 401, 403, 404),
+     err_desc={400: "Tham số sai kiểu (`MALFORMED_REQUEST`); BR-TK-17",
+               403: "Sai vai trò · lượt của chi nhánh khác",
+               404: "Không có Visit hoặc Visit nhóm GROOMING (không có bệnh án)"},
+     notes="Thứ tự lỗi: 403 vai trò → 404 → 403 chi nhánh → 404 GROOMING (docs/adr/0067). Lượt MEDICAL chưa ghi bệnh án "
+           "trả khung rỗng; locked = Visit COMPLETED.")
 m.op("put", "/visits/{visitId}/medical-record", "updateMedicalRecord", "Ghi bệnh án / hẹn tái khám",
      "Medical record", "UC48", "BR-KB-01, 06", "A07", "VET được gán lượt", body="UpdateMedicalRecordRequest",
      resp="MedicalRecord", path_params=["VisitId"], errors=(400, 401, 403, 404, 409),
-     err_desc={400: "`BR-KB-06` ngày tái khám không sau ngày khám hoặc quá 180 ngày [CFG]",
-               409: "Lượt không IN_PROGRESS — bệnh án đã khóa, dùng bản bổ sung"})
+     err_desc={400: "`BR-KB-06` ngày tái khám không sau ngày khám hoặc quá 180 ngày [CFG] · body sai "
+                    "(`MALFORMED_REQUEST`); BR-TK-17",
+               403: "Sai vai trò · lượt của chi nhánh khác · không phải VET phụ trách hiện tại",
+               409: "Lượt không IN_PROGRESS — bệnh án đã khóa, dùng bản bổ sung"},
+     notes="Thứ tự lỗi: 400 body → 403 vai trò → 404 → 403 chi nhánh → 404 GROOMING → 403 người phụ trách → 409 → "
+           "400 BR-KB-06 (docs/adr/0067). PUT thay toàn bộ 5 trường; lần ghi đầu tạo bệnh án; ngày tái khám chỉ kiểm "
+           "khi đổi; nội dung không đổi: 200, không ghi, không audit.")
 m.op("post", "/visits/{visitId}/weight", "recordVisitWeight", "Ghi cân nặng khi khám", "Medical record", "UC48",
      "BR-KH-04", "A07", "VET được gán lượt", body="RecordWeightRequest", resp="WeightRecordRef", status=201,
-     path_params=["VisitId"], errors=(400, 401, 403, 404, 409), err_desc={409: "Lượt không IN_PROGRESS"},
-     notes="source = VET (A8).")
+     path_params=["VisitId"], errors=(400, 401, 403, 404, 409),
+     err_desc={400: "`BR-KH-04` cân nặng ≤ 0 hoặc vượt 9999.99 kg · thiếu `weightKg` · body sai (`MALFORMED_REQUEST`); BR-TK-17",
+               403: "Sai vai trò · lượt của chi nhánh khác · không phải VET phụ trách hiện tại",
+               404: "Không có Visit hoặc Visit nhóm GROOMING (không có bệnh án)",
+               409: "Lượt không IN_PROGRESS"},
+     notes="source = VET (A8). Thứ tự lỗi như #13: 400 body → 403 vai trò → 404 → 403 chi nhánh → 404 GROOMING → "
+           "403 người phụ trách → 409 → 400 BR-KH-04 (docs/adr/0068). Mỗi lần gọi là một bản ghi; không audit.")
 m.op("post", "/visits/{visitId}/medical-record/addenda", "addMedicalRecordAddendum", "Thêm bản bổ sung bệnh án",
      "Medical record", "UC53", "BR-KB-01, BR-QT-15", "A07", "VET chi nhánh nơi khám (A7)", body="AddendumRequest",
      resp="Addendum", status=201, path_params=["VisitId"], errors=(400, 401, 403, 404, 409),
-     err_desc={409: "Visit chưa COMPLETED — sửa trực tiếp bệnh án"}, notes="Không sửa / xóa nội dung cũ; ghi audit.")
+     err_desc={400: "Thiếu `content` · body sai (`MALFORMED_REQUEST`); BR-TK-17",
+               403: "Sai vai trò · lượt của chi nhánh khác",
+               404: "Không có Visit hoặc Visit nhóm GROOMING (không có bệnh án)",
+               409: "Visit chưa COMPLETED — sửa trực tiếp bệnh án"},
+     notes="Thứ tự lỗi: 400 body → 403 vai trò → 404 → 403 chi nhánh → 404 GROOMING → 409 (docs/adr/0070). Mọi VET của "
+           "chi nhánh nơi khám ghi được, không cần là người phụ trách. Lượt chưa có bệnh án: tạo bệnh án rỗng đã khóa "
+           "(A17). Không sửa / xóa nội dung cũ; ghi audit.")
 
 m.op("post", "/visits/{visitId}/prescriptions", "addPrescriptionItem", "Kê đơn một dòng thuốc", "Prescriptions",
      "UC48, UC67", "BR-KB-03, BR-SP-01, BR-BH-02", "A07", "VET được gán lượt", body="AddPrescriptionRequest",

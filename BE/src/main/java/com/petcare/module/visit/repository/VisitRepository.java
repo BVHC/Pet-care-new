@@ -116,6 +116,16 @@ public interface VisitRepository extends JpaRepository<Visit, Long>, JpaSpecific
             """, nativeQuery = true)
     boolean hasMedicalHistory(@Param("petId") Long petId);
 
+    /**
+     * Lượt đã ghi nhận ít nhất một mũi tiêm (BR-KB-02: lượt chỉ có dịch vụ loại Tiêm). Lọc cả {@code pet_id} để đi tiền
+     * tố của {@code ix_vaccinations_pet_type_administered}: {@code vaccinations.visit_id} chưa có index (nợ D043,
+     * docs/adr/0066 §6).
+     */
+    @Query(value = """
+            SELECT EXISTS (SELECT 1 FROM vaccinations WHERE pet_id = :petId AND visit_id = :visitId)
+            """, nativeQuery = true)
+    boolean hasVaccinationInVisit(@Param("petId") Long petId, @Param("visitId") Long visitId);
+
     /** Visit của các lịch hẹn; index {@code uq_visits_appointment_id}. Bên gọi không truyền tập rỗng. */
     @Query("""
             SELECT new com.petcare.module.visit.repository.VisitRepository$AppointmentVisitRow(v.appointmentId, v.id)
