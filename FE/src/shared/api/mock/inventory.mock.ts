@@ -285,6 +285,50 @@ export function availableQuantity(branchId: number, productId: number): number {
   return item ? sum(lotsOf(s, item.id).filter((l) => !isExpired(l, today)).map((l) => l.quantity)) : 0;
 }
 
+export interface StockShortage {
+  productId: number;
+  /** Tổng số lượng cần của sản phẩm qua mọi dòng. */
+  requested: number;
+  available: number;
+}
+
+/**
+ * `StockApi.issueForPayment` của BE cho mock thu ngân (docs/adr/0064 §2.1): gộp số lượng cần theo sản phẩm; thiếu bất kỳ sản phẩm nào
+ * thì không trừ gì và trả danh sách thiếu (mã sản phẩm tăng dần); đủ thì trừ FEFO — hạn dùng sớm nhất trước, lô mặc định (không hạn)
+ * cuối, cùng hạn thì id nhỏ trước — và lưu số dư lô. Không bao giờ lấy lô đã hết hạn (BR-KO-05).
+ */
+export function issueFefo(branchId: number, lines: { productId: number; quantity: number }[]): StockShortage[] {
+  const requested = new Map<number, number>();
+  for (const l of lines) requested.set(l.productId, (requested.get(l.productId) ?? 0) + l.quantity);
+  if (requested.size === 0) return [];
+  const s = load();
+  const today = localIsoDate();
+  const usable = (productId: number) => {
+    const item = itemOf(s, branchId, productId);
+    return (item ? lotsOf(s, item.id) : [])
+      .filter((l) => l.quantity > 0 && !isExpired(l, today))
+      .sort((a, b) => (a.expiryDate ?? '9999-12-31').localeCompare(b.expiryDate ?? '9999-12-31') || a.id - b.id);
+  };
+  const shortages = [...requested]
+    .sort(([a], [b]) => a - b)
+    .flatMap(([productId, quantity]) => {
+      const available = sum(usable(productId).map((l) => l.quantity));
+      return available < quantity ? [{ productId, requested: quantity, available }] : [];
+    });
+  if (shortages.length) return shortages;
+  for (const [productId, quantity] of requested) {
+    let remaining = quantity;
+    for (const lot of usable(productId)) {
+      const take = Math.min(lot.quantity, remaining);
+      lot.quantity -= take;
+      remaining -= take;
+      if (remaining === 0) break;
+    }
+  }
+  save(s);
+  return [];
+}
+
 /** M1: chỉ liệt kê sản phẩm đã có dòng tồn ở chi nhánh. */
 const listInventory: MockHandler = (req) => {
   const { q, productType, belowMin, expiringWithinDays } = req.query;

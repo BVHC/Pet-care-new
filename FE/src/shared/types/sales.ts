@@ -1,5 +1,5 @@
 // Order tại quầy (UC66, UC67) theo docs/api/sales-v1.md (mục Schema). Trường `?` có thể vắng hoặc null.
-// Thu tiền, ca thu ngân, payable-orders thuộc T35.
+// Thu tiền và ca thu ngân (T35, #12–21) ở cuối file.
 
 export type OrderSource = 'VISIT' | 'RETAIL' | 'BOARDING';
 /** 03 #5 Order. */
@@ -125,4 +125,117 @@ export interface AddOrderLineResult {
 export interface UpdateOrderLineRequest {
   quantity?: number;
   serviceId?: number;
+}
+
+// ─── Thu tiền và ca thu ngân (T35; sales-v1 #12–21, UC70–72) ───
+// Tiền là số nguyên VND. `PaymentMethod` ở đây khác kiểu cùng tên trong types/clinic.ts (mô hình cũ).
+
+export type PaymentMethod = 'CASH' | 'TRANSFER';
+/** 03 mục 8 Ca thu ngân: OPEN → CLOSED → RECONCILED. */
+export type CashierShiftStatus = 'OPEN' | 'CLOSED' | 'RECONCILED';
+
+export const PAYMENT_METHOD_LABELS: Record<PaymentMethod, string> = { CASH: 'Tiền mặt', TRANSFER: 'Chuyển khoản' };
+export const SHIFT_STATUS_LABELS: Record<CashierShiftStatus, string> = {
+  OPEN: 'Đang mở',
+  CLOSED: 'Đã chốt',
+  RECONCILED: 'Đã đối soát',
+};
+
+/** Dòng hàng / thuốc thiếu tồn lúc thu (BR-BH-04); vaccine không bị kiểm (đã trừ kho khi tiêm). */
+export interface ShortageLine {
+  orderId: number;
+  lineId: number;
+  lineType: 'GOODS' | 'DRUG';
+  productId: number;
+  productName: string;
+  requested: number;
+  available: number;
+}
+
+/** Tối đa 20 Order, không trùng (hợp đồng A7). */
+export interface PaymentPreviewRequest {
+  orderIds: number[];
+}
+
+export interface PaymentPreview {
+  customerId: number;
+  branchId: number;
+  totalAmount: number;
+  shortages: ShortageLine[];
+}
+
+/** `amount` phải bằng đúng tổng các Order — không thu một phần (BR-TG-02). */
+export interface CreatePaymentRequest {
+  orderIds: number[];
+  method: PaymentMethod;
+  amount: number;
+}
+
+export interface Payment {
+  paymentId: number;
+  /** PT-yyMM-nnnnn. */
+  code: string;
+  branchId: number;
+  customerId: number;
+  cashierShiftId: number;
+  method: PaymentMethod;
+  amount: number;
+  receivedBy: number;
+  paidAt: string;
+  orders: OrderSummary[];
+}
+
+export interface CashierShift {
+  shiftId: number;
+  branchId: number;
+  cashierId: number;
+  cashierName: string;
+  /** Ca ngoài giờ (BR-TG-05, BR-CN-05); khóa JSON đúng là `isAfterHours`. */
+  isAfterHours: boolean;
+  /** Ngày mở ca (giờ Việt Nam); ca ngoài giờ qua nửa đêm vẫn thuộc ngày mở. */
+  businessDate: string;
+  status: CashierShiftStatus;
+  openedAt: string;
+  closedAt?: string | null;
+  /** ST13 tự chốt: chưa có số thực đếm, đối soát phải nhập (BR-TG-05). */
+  autoClosed: boolean;
+  /** Có từ khi chốt: tổng phiếu thu tiền mặt / chuyển khoản trong ca. */
+  expectedCash?: number | null;
+  expectedTransfer?: number | null;
+  /** Chỉ tiền mặt (hợp đồng A4). */
+  countedCash?: number | null;
+  /** countedCash − expectedCash. */
+  difference?: number | null;
+  reconcileNote?: string | null;
+  reconciledBy?: number | null;
+  reconciledAt?: string | null;
+  paymentCount: number;
+}
+
+export interface OpenShiftRequest {
+  afterHours: boolean;
+}
+
+export interface CurrentShift {
+  open: boolean;
+  shift?: CashierShift | null;
+}
+
+export interface CloseShiftRequest {
+  countedCash: number;
+}
+
+/** `note` bắt buộc ≤ 1000; `countedCash` bắt buộc về nghiệp vụ khi ca tự chốt (BR-TG-05). */
+export interface ReconcileShiftRequest {
+  countedCash?: number;
+  note: string;
+}
+
+/** sales-v1 #19: chỉ BRANCH_MANAGER; chi nhánh là chi nhánh người gọi; mới nhất trước. */
+export interface ShiftQuery {
+  status?: CashierShiftStatus;
+  businessDate?: string;
+  cashierId?: number;
+  page?: number;
+  size?: number;
 }

@@ -1,74 +1,36 @@
 import { create } from 'zustand';
-import type { PaymentMethod } from '../types/clinic';
-
-export interface RetailLine {
-  productId: string;
-  qty: number;
-}
+import type { PaymentMethod } from '../types/sales';
 
 interface PosState {
-  customerId: string | null;
-  /** PENDING orders handed over by the exam room / grooming, paid together (BR-TG-03). */
-  orderIds: string[];
-  retail: RetailLine[];
+  /** Khách của phiếu thu (một phiếu = một khách, BR-TG-03). */
+  customerId: number | null;
+  /** Order PENDING chọn thu gộp; id số của sales-v1. */
+  orderIds: number[];
   method: PaymentMethod;
-  addProduct: (productId: string) => void;
-  setQty: (productId: string, qty: number) => void;
-  attachOrder: (orderId: string, customerId: string) => void;
-  detachOrder: (orderId: string) => void;
-  setCustomer: (customerId: string | null) => void;
+  /** Nút "Thu tiền" ở tab Chờ thu: chọn Order này; Order của khách khác thì bắt đầu lại phiếu mới. */
+  attachOrder: (orderId: number, customerId: number) => void;
+  /** Thay cả danh sách chọn (ô tick trên phiếu thu). Khách được giữ kể cả khi bỏ chọn hết. */
+  setOrderIds: (orderIds: number[]) => void;
+  setCustomer: (customerId: number | null) => void;
   setMethod: (method: PaymentMethod) => void;
   clear: () => void;
 }
 
-const empty = () => ({ customerId: null, orderIds: [], retail: [], method: 'CASH' as PaymentMethod });
+const empty = () => ({ customerId: null, orderIds: [], method: 'CASH' as PaymentMethod });
 
-/** Reception counter (the plan's POSContext). Survives workspace switches until paid or cleared. */
+/** Quầy thu tiền của lễ tân (POSContext của kế hoạch). Còn nguyên khi đổi bàn làm việc, tới khi thu xong hoặc xóa phiếu. */
 export const usePosStore = create<PosState>()((set) => ({
   ...empty(),
-  addProduct: (productId) =>
-    set((s) => ({
-      retail: s.retail.some((l) => l.productId === productId)
-        ? s.retail.map((l) => (l.productId === productId ? { ...l, qty: l.qty + 1 } : l))
-        : [...s.retail, { productId, qty: 1 }],
-    })),
-  setQty: (productId, qty) =>
-    set((s) => ({
-      retail:
-        qty <= 0
-          ? s.retail.filter((l) => l.productId !== productId)
-          : s.retail.map((l) => (l.productId === productId ? { ...l, qty } : l)),
-    })),
   attachOrder: (orderId, customerId) =>
     set((s) => {
-      // One receipt = one customer (BR-TG-03): another customer's order starts a new selection.
-      // Items picked for a previous customer stay with them; an anonymous sale joins the new customer.
-      if (s.customerId !== customerId) return { customerId, orderIds: [orderId], retail: s.customerId ? [] : s.retail };
+      if (s.customerId !== customerId) return { customerId, orderIds: [orderId] };
       return s.orderIds.includes(orderId) ? {} : { orderIds: [...s.orderIds, orderId] };
     }),
-  detachOrder: (orderId) =>
-    set((s) => {
-      const orderIds = s.orderIds.filter((id) => id !== orderId);
-      return { orderIds, customerId: orderIds.length > 0 ? s.customerId : null };
-    }),
-  setCustomer: (customerId) =>
-    set((s) => (s.customerId === customerId ? {} : { customerId, orderIds: [], retail: s.customerId ? [] : s.retail })),
+  setOrderIds: (orderIds) => set({ orderIds }),
+  setCustomer: (customerId) => set((s) => (s.customerId === customerId ? {} : { customerId, orderIds: [] })),
   setMethod: (method) => set({ method }),
   clear: () => set(empty()),
 }));
 
-/** Plan name for the reception workspace hook. */
+/** Tên theo kế hoạch cho hook của bàn lễ tân. */
 export const usePOS = usePosStore;
-
-export function posTotal(
-  cart: { retail: RetailLine[]; orderIds: string[] },
-  products: { id: string; price: number }[],
-  pending: { id: string; total: number }[],
-): number {
-  const retail = cart.retail.reduce(
-    (sum, l) => sum + (products.find((p) => p.id === l.productId)?.price ?? 0) * l.qty,
-    0,
-  );
-  const handedOver = pending.filter((o) => cart.orderIds.includes(o.id)).reduce((sum, o) => sum + o.total, 0);
-  return retail + handedOver;
-}

@@ -26,7 +26,9 @@ import {
   rangesOn,
   slotFits,
   slotsOn,
+  toMinutes,
 } from '../../utils/branch-schedule';
+import { vnClock } from '../../utils/vn-time';
 import { catalogServices } from './catalog.mock';
 import {
   denied,
@@ -662,6 +664,21 @@ export function branchBooking(branchId: number) {
       1,
   };
 }
+
+/**
+ * `BranchQueryApi.isOpenAt` của BE (BranchSchedule.isOpenAt) cho mock thu ngân: bản giờ có hiệu lực vào ngày đó, khoảng [mở, đóng)
+ * (đúng giờ đóng là đã đóng, nghỉ trưa giữa hai khoảng là đóng), ngày nghỉ và ngày chưa có bản giờ nào là đóng. Ngày, giờ theo giờ Việt Nam.
+ */
+export function isOpenAt(branchId: number, atMs: number): boolean {
+  const s = load();
+  const { date, minutes } = vnClock(atMs);
+  if (holidayDates(s, branchId).includes(date)) return false;
+  return rangesOn(s.hours[branchId] ?? [], date).some((r) => toMinutes(r.open) <= minutes && minutes < toMinutes(r.close));
+}
+
+/** Cờ nhận cấp cứu ngoài giờ của chi nhánh (BR-CN-05); chi nhánh không có thì false. */
+export const acceptsAfterHours = (branchId: number): boolean =>
+  load().branches.find((b) => b.branchId === branchId)?.acceptsAfterHoursEmergency ?? false;
 
 // ─── Công khai: branch-v1 #20, #21 và catalog-v1 #19 ───
 // Dịch vụ công khai đặt ở đây vì cần cờ bật theo chi nhánh của file này (catalog.mock không đọc ngược branch.mock).

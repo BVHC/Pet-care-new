@@ -46,7 +46,8 @@ export const ADMIN_MENU: MenuSection[] = [
     section: 'Thương mại',
     items: [
       { path: '/admin/invoices', label: 'Hóa đơn', icon: Receipt, roles: ['RECEPTIONIST', 'BRANCH_MANAGER'] }, // UC70, UC72
-      { path: '/admin/payments', label: 'Thanh toán', icon: Scale, roles: ['RECEPTIONIST', 'BRANCH_MANAGER'] }, // UC70–72
+      // UC72 (A05): đối soát ca thu ngân. Thu tiền (UC70) và mở / chốt ca (UC71) của lễ tân làm ngay ở bàn Lễ tân.
+      { path: '/admin/payments', label: 'Ca thu ngân', icon: Scale, roles: ['BRANCH_MANAGER'] },
       { path: '/admin/refunds', label: 'Hoàn tiền', icon: Scale, roles: ['RECEPTIONIST', 'BRANCH_MANAGER'] }, // UC68 (tầng 3)
       { path: '/admin/promotions', label: 'Khuyến mãi', icon: BadgePercent, roles: ['SUPER_MANAGER'] }, // ngoài phạm vi
       { path: '/admin/membership', label: 'Thành viên', icon: Crown, roles: ['SUPER_MANAGER'] }, // ngoài phạm vi

@@ -10,8 +10,9 @@ import { menuFor } from '../../shared/constants/staff-menu';
 import {
   WORKSPACE_LABELS, WORKSPACE_PATHS, getAccessibleWorkspaces, homePathFor, type Workspace,
 } from '../../shared/constants/workspaces';
-import { useArrivals, usePendingOrders, useResetDemo, useTodayVisits } from '../../shared/hooks/useClinic';
+import { useArrivals, useResetDemo, useTodayVisits } from '../../shared/hooks/useClinic';
 import { notificationCenterPath, useUnreadCount } from '../../shared/hooks/useNotifications';
+import { usePendingSalesOrders } from '../../shared/hooks/usePendingSalesOrders';
 import { useSession } from '../../shared/stores/session.store';
 import { ROLE_LABELS, type Role, type SessionUser } from '../../shared/types/auth';
 import { formatToday } from '../../shared/utils/clinic-format';
@@ -197,7 +198,7 @@ function ClinicToday() {
   const headingId = useId();
   const arrivals = useArrivals();
   const visits = useTodayVisits();
-  const pending = usePendingOrders();
+  const pending = usePendingSalesOrders();
 
   const count = (status: 'WAITING' | 'IN_PROGRESS') => visits.data?.filter((v) => v.status === status).length;
   const today = [

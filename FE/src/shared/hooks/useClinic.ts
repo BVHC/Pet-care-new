@@ -2,13 +2,11 @@
 // Commands invalidate through INVALIDATE so every workspace sees the change.
 import { keepPreviousData, useMutation, useQuery, useQueryClient, type QueryKey } from '@tanstack/react-query';
 import { toast } from 'sonner';
-import { formatCurrency } from '../../lib/utils';
 import { ApiError, plainMessage } from '../api/api-error';
 import {
   clinicApi,
   type AddLineInput,
   type CheckInInput,
-  type CollectPaymentInput,
 } from '../api/clinic.api';
 import { INVALIDATE, QUERY_KEYS } from '../constants/queryKeys';
 import { liveQuery, retryDelay, shouldRetry } from '../constants/realtime';
@@ -22,9 +20,6 @@ export const useTodayVisits = () =>
 
 export const useArrivals = () =>
   useQuery({ queryKey: QUERY_KEYS.appointments.arrivals(), queryFn: clinicApi.listArrivals, ...liveQuery });
-
-export const usePendingOrders = () =>
-  useQuery({ queryKey: QUERY_KEYS.orders.pending(), queryFn: clinicApi.listPendingOrders, ...liveQuery });
 
 export const useDashboardSummary = () =>
   useQuery({ queryKey: QUERY_KEYS.dashboard.summary(), queryFn: clinicApi.getDashboardSummary, ...liveQuery });
@@ -54,13 +49,6 @@ export const useCatalog = () =>
 
 export const useStaffList = () =>
   useQuery({ queryKey: QUERY_KEYS.staff.all, queryFn: clinicApi.listStaff, staleTime: Infinity });
-
-export const useCurrentShift = (receptionistId: string) =>
-  useQuery({
-    queryKey: QUERY_KEYS.shift.current(receptionistId),
-    queryFn: () => clinicApi.getOpenShift(receptionistId),
-    staleTime: 30_000,
-  });
 
 // ---------- commands ----------
 
@@ -187,29 +175,6 @@ export function useVisitLines(visitId: string, staffId: string) {
     onError: notifyError,
   });
   return { add, remove, replace };
-}
-
-export function useOpenShift(receptionistId: string) {
-  const invalidate = useInvalidate();
-  return useMutation({
-    mutationFn: () => clinicApi.openShift(receptionistId),
-    onSuccess: () => toast.success('Đã mở ca thu ngân'),
-    onError: notifyError,
-    onSettled: () => invalidate(INVALIDATE.openShift),
-  });
-}
-
-export function useCollectPayment(receptionistId: string) {
-  const invalidate = useInvalidate();
-  return useMutation({
-    mutationFn: (input: CollectPaymentInput) => clinicApi.collectPayment(input, receptionistId),
-    onSuccess: (receipt) => {
-      track('payment', { total: receipt.total, method: receipt.method, orders: receipt.orderIds.length });
-      toast.success(`Đã thu ${formatCurrency(receipt.total)}`, { description: receipt.customerName });
-    },
-    onError: notifyError,
-    onSettled: () => invalidate(INVALIDATE.collectPayment),
-  });
 }
 
 export function useResetDemo() {

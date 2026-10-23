@@ -108,6 +108,9 @@ function findStaffAccount(s: ReturnType<typeof load>, id: number): MockStaffWith
   return s.extraStaff[id];
 }
 
+/** Họ tên nhân viên theo id, kể cả tài khoản tạo lúc chạy (UC08); null nếu không có. Như `StaffDirectoryApi.findStaffByIds`, cho mock thu ngân. */
+export const staffNameOf = (accountId: number): string | null => findStaffAccount(load(), accountId)?.fullName ?? null;
+
 /** Danh sách nhân viên từ seed + extra. */
 function allStaff(s: ReturnType<typeof load>) {
   return [...Object.values(MOCK_STAFF), ...Object.values(s.extraStaff)];

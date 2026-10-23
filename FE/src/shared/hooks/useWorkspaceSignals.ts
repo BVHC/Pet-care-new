@@ -5,7 +5,8 @@ import { CLINIC_DB_KEY } from '../api/clinic-db';
 import { QUERY_KEYS } from '../constants/queryKeys';
 import type { Workspace } from '../constants/workspaces';
 import { announce } from '../utils/announce';
-import { usePendingOrders, useTodayVisits } from './useClinic';
+import { useTodayVisits } from './useClinic';
+import { usePendingSalesOrders } from './usePendingSalesOrders';
 import { useOnNewItems } from './useOnNewItems';
 
 /** Another tab changed the clinic store: refresh now instead of waiting for the next poll. */
@@ -23,11 +24,12 @@ export function useClinicSync(): void {
 
 /**
  * Cross-workspace handoffs (plan: toast now, WebSocket later):
- * reception hears about finished visits, vets and groomers about work assigned to them.
+ * reception hears about orders that just became payable (sales-v1 #2, polled), vets and groomers about work assigned to them.
  */
 export function useHandoffNotices(workspace: Workspace | null, userId: string): void {
   const visits = useTodayVisits();
-  const pending = usePendingOrders();
+  // Only the reception desk reacts to new payable orders, so other desks (and roles that may not list orders) do not fetch them.
+  const pending = usePendingSalesOrders(workspace === 'reception');
 
   const myNewWork = useMemo(() => {
     if (workspace !== 'doctor' && workspace !== 'grooming') return undefined;
@@ -42,11 +44,11 @@ export function useHandoffNotices(workspace: Workspace | null, userId: string): 
 
   useOnNewItems(
     workspace === 'reception' ? pending.data : undefined,
-    (order) => order.id,
+    (order) => String(order.orderId),
     (orders) =>
       orders.forEach((o) => {
-        const title = o.queueNo ? `Số ${o.queueNo}: ${o.petName} đã xong` : `Đơn mới chờ thu của ${o.customer.name}`;
-        toast(title, { description: `Mời ${o.customer.name} đến quầy thu tiền và đón bé.` });
+        const title = `Đơn mới chờ thu của ${o.customerName}`;
+        toast(title, { description: `Mời ${o.customerName} đến quầy thu tiền (${o.code}).` });
         announce(title);
       }),
   );

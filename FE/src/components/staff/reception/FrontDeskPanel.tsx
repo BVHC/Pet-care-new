@@ -8,14 +8,16 @@ import {
   useArrivals,
   useAssignVisit,
   useCancelVisit,
-  usePendingOrders,
   useStaffList,
   useTodayVisits,
 } from '../../../shared/hooks/useClinic';
 import { useFreshIds } from '../../../shared/hooks/useFreshIds';
 import { useNow } from '../../../shared/hooks/useNow';
+import { usePendingSalesOrders } from '../../../shared/hooks/usePendingSalesOrders';
 import { usePOS } from '../../../shared/stores/pos.store';
-import type { ArrivalView, PendingOrderView, VisitView } from '../../../shared/types/clinic';
+import { useAccount } from '../../../shared/stores/session.store';
+import type { ArrivalView, VisitView } from '../../../shared/types/clinic';
+import { ORDER_SOURCE_LABELS, type OrderSummary } from '../../../shared/types/sales';
 import { formatClock, formatElapsed, petKind } from '../../../shared/utils/clinic-format';
 import { CLINIC_CFG, positionFor } from '../../../shared/utils/clinic-rules';
 import { Kbd, Panel, PriorityChip, QueryError, RowsSkeleton, StatePanel, Ticket, VisitStatusChip, WsButton } from '../ui';
@@ -38,7 +40,7 @@ export function FrontDeskPanel({
   const [tab, setTab] = useState<DeskTab>('arrivals');
   const arrivals = useArrivals();
   const visits = useTodayVisits();
-  const pending = usePendingOrders();
+  const pending = usePendingSalesOrders();
   const active = useMemo(
     () => visits.data?.filter((v) => v.status === 'WAITING' || v.status === 'IN_PROGRESS'),
     [visits.data],
@@ -251,11 +253,13 @@ function QueueList({
   );
 }
 
-function PendingList({ query, onCollect }: { query: UseQueryResult<PendingOrderView[], unknown>; onCollect: () => void }) {
+/** Order PENDING của chi nhánh (sales-v1 #2). Thu tiền là việc của lễ tân (UC70, A06): vai trò khác chỉ xem. */
+function PendingList({ query, onCollect }: { query: UseQueryResult<OrderSummary[], unknown>; onCollect: () => void }) {
   const orderIds = usePOS((s) => s.orderIds);
   const customerId = usePOS((s) => s.customerId);
   const attachOrder = usePOS((s) => s.attachOrder);
-  const fresh = useFreshIds(query.data, (o) => o.id);
+  const canCollect = useAccount()?.role === 'RECEPTIONIST';
+  const fresh = useFreshIds(query.data, (o) => String(o.orderId));
 
   if (query.isLoading) return <RowsSkeleton rows={3} />;
   if (query.isError) return <QueryError error={query.error} onRetry={() => query.refetch()} what="đơn chờ thu" />;
@@ -265,7 +269,7 @@ function PendingList({ query, onCollect }: { query: UseQueryResult<PendingOrderV
       <StatePanel
         icon={Wallet}
         title="Không có đơn chờ thu"
-        body="Khi bác sĩ hoặc nhân viên grooming hoàn tất lượt, đơn sẽ hiện ở đây."
+        body="Khi bác sĩ hoặc nhân viên grooming hoàn tất lượt, hoặc khi chốt Order bán lẻ, đơn sẽ hiện ở đây."
       />
     );
   }
@@ -273,29 +277,32 @@ function PendingList({ query, onCollect }: { query: UseQueryResult<PendingOrderV
   return (
     <ul className="divide-y divide-(--ws-line)">
       {orders.map((o) => {
-        const inReceipt = orderIds.includes(o.id);
-        const combine = !inReceipt && orderIds.length > 0 && customerId === o.customer.id;
+        const inReceipt = orderIds.includes(o.orderId);
+        const combine = !inReceipt && orderIds.length > 0 && customerId === o.customerId;
         return (
-          <li key={o.id} className={cn('flex items-start gap-3 px-4 py-3', fresh.has(o.id) && 'ws-fresh')}>
-            {o.queueNo ? <Ticket no={o.queueNo} size="sm" /> : <span className="ws-chip">Bán lẻ</span>}
+          <li key={o.orderId} className={cn('flex items-start gap-3 px-4 py-3', fresh.has(String(o.orderId)) && 'ws-fresh')}>
             <div className="min-w-0 flex-1">
-              <p className="truncate font-semibold">{o.petName ?? o.customer.name}</p>
-              <p className="truncate text-[13px] text-(--ws-ink-2)">
-                {o.customer.name}, {o.lines.length} mục
+              <p className="flex flex-wrap items-center gap-1.5">
+                <span className="ws-num truncate font-semibold">{o.code}</span>
+                <span className="ws-chip">{ORDER_SOURCE_LABELS[o.source]}</span>
               </p>
-              <p className="ws-num text-sm font-semibold">{formatCurrency(o.total)}</p>
+              <p className="truncate text-[13px] text-(--ws-ink-2)">{o.customerName}</p>
+              <p className="text-xs text-(--ws-ink-3)">{o.pendingAt ? `Chốt lúc ${formatClock(o.pendingAt)}` : 'Chờ thu tiền'}</p>
+              <p className="ws-num text-sm font-semibold">{formatCurrency(o.totalAmount)}</p>
             </div>
-            <WsButton
-              size="sm"
-              variant={inReceipt ? 'ghost' : 'primary'}
-              disabled={inReceipt}
-              onClick={() => {
-                attachOrder(o.id, o.customer.id);
-                onCollect();
-              }}
-            >
-              {inReceipt ? 'Trong phiếu' : combine ? 'Thu gộp' : 'Thu tiền'}
-            </WsButton>
+            {canCollect && (
+              <WsButton
+                size="sm"
+                variant={inReceipt ? 'ghost' : 'primary'}
+                disabled={inReceipt}
+                onClick={() => {
+                  attachOrder(o.orderId, o.customerId);
+                  onCollect();
+                }}
+              >
+                {inReceipt ? 'Trong phiếu' : combine ? 'Thu gộp' : 'Thu tiền'}
+              </WsButton>
+            )}
           </li>
         );
       })}

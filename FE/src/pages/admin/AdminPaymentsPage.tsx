@@ -1,121 +1,314 @@
 import { useState } from 'react';
-import { Card, CardContent } from '../../components/ui/card';
-import { Button } from '../../components/ui/button';
+import { Field, FormError, NoticeBar, selectClass, type Notice } from '../../components/admin/form-ui';
 import { Badge } from '../../components/ui/badge';
+import { Button } from '../../components/ui/button';
+import { Card, CardContent } from '../../components/ui/card';
 import { Input } from '../../components/ui/input';
-import { Search, CreditCard, Banknote, CheckCircle, AlertCircle, Eye } from 'lucide-react';
-import { ConfirmModal, DetailModal, InfoRow } from '../../components/ui/modal-templates';
+import { DetailModal, FormModal, InfoRow, StatusBadge } from '../../components/ui/modal-templates';
+import { cn, formatCurrency, formatDateTime } from '../../lib/utils';
+import { plainMessage, toApiError } from '../../shared/api/api-error';
+import { useReconcileShift, useShift, useShifts } from '../../shared/hooks/useSales';
+import { useAccount } from '../../shared/stores/session.store';
+import { SHIFT_STATUS_LABELS, type CashierShift, type CashierShiftStatus } from '../../shared/types/sales';
+import { formatClock } from '../../shared/utils/clinic-format';
+import { describeDifference, shiftDifference } from '../../shared/utils/shift-format';
 
-type PaymentStatus = 'PENDING' | 'COMPLETED' | 'FAILED' | 'REFUNDED';
+const PAGE_SIZE = 20;
+const NOTE_MAX = 1000;
+const STATUS_VARIANT = { OPEN: 'info', CLOSED: 'warning', RECONCILED: 'success' } as const;
 
-interface Payment {
-  id: string; transactionId: string; date: string; invoiceNumber: string;
-  customerName: string; customerPhone: string; amount: number;
-  method: 'CASH' | 'VNPAY' | 'BANK_TRANSFER' | 'MOMO';
-  status: PaymentStatus; staff: string; notes?: string;
+/** "2026-10-21" → "21/10/2026" mà không qua `Date` (ngày nghiệp vụ là ngày Việt Nam, không đổi theo múi giờ máy). */
+const formatBusinessDate = (iso: string) => iso.split('-').reverse().join('/');
+const money = (value?: number | null) => (value == null ? '—' : formatCurrency(value));
+
+/** BE chỉ ghi `difference` khi đối soát; ca đã chốt thì tự tính từ số thực đếm (ADR-0064 §3.2). */
+function differenceOf(shift: CashierShift): { value: number; provisional: boolean } | null {
+  if (shift.difference != null) return { value: shift.difference, provisional: false };
+  if (shift.status === 'CLOSED' && shift.countedCash != null && shift.expectedCash != null) {
+    return { value: shiftDifference(shift.countedCash, shift.expectedCash), provisional: true };
+  }
+  return null;
 }
 
-const MOCK_PAYMENTS: Payment[] = [
-  { id: '1', transactionId: 'TXN-2026-001', date: '2026-09-18 15:30', invoiceNumber: 'INV-2026-001', customerName: 'Nguyễn Văn A', customerPhone: '0901234567', amount: 550000, method: 'CASH', status: 'COMPLETED', staff: 'Reception 1' },
-  { id: '2', transactionId: 'TXN-2026-002', date: '2026-09-18 14:00', invoiceNumber: 'INV-2026-002', customerName: 'Trần Thị B', customerPhone: '0912345678', amount: 1100000, method: 'VNPAY', status: 'COMPLETED', staff: 'Reception 1' },
-  { id: '3', transactionId: 'TXN-2026-003', date: '2026-09-18 12:30', invoiceNumber: 'INV-2026-003', customerName: 'Lê Văn C', customerPhone: '0923456789', amount: 350000, method: 'MOMO', status: 'PENDING', staff: 'Reception 2' },
-  { id: '4', transactionId: 'TXN-2026-004', date: '2026-09-17 16:00', invoiceNumber: 'INV-2026-004', customerName: 'Phạm Thị D', customerPhone: '0934567890', amount: 750000, method: 'BANK_TRANSFER', status: 'FAILED', staff: 'Reception 1', notes: 'Giao dịch bị từ chối từ ngân hàng' },
-];
+type View = { kind: 'detail' | 'reconcile'; shiftId: number };
 
-function StatusBadgeLocal({ status }: { status: PaymentStatus }) {
-  const config: Record<PaymentStatus, { label: string; className: string }> = {
-    PENDING: { label: 'Chờ thanh toán', className: 'bg-amber-100 text-amber-700' },
-    COMPLETED: { label: 'Hoàn tất', className: 'bg-green-100 text-green-700' },
-    FAILED: { label: 'Thất bại', className: 'bg-red-100 text-red-700' },
-    REFUNDED: { label: 'Đã hoàn', className: 'bg-purple-100 text-purple-700' },
-  };
-  return <Badge className={config[status].className}>{config[status].label}</Badge>;
-}
-
-function MethodBadge({ method }: { method: string }) {
-  const icons: Record<string, React.ReactNode> = { CASH: <Banknote className="h-4 w-4" />, VNPAY: <CreditCard className="h-4 w-4" />, BANK_TRANSFER: <CreditCard className="h-4 w-4" />, MOMO: <span className="text-pink-500 font-bold text-xs">M</span> };
-  const labels: Record<string, string> = { CASH: 'Tiền mặt', VNPAY: 'VNPAY', BANK_TRANSFER: 'Chuyển khoản', MOMO: 'MoMo' };
-  return <Badge variant="secondary" className="bg-(--bg-tertiary) flex items-center gap-1">{icons[method]} {labels[method]}</Badge>;
-}
-
-function formatCurrency(amount: number): string {
-  return new Intl.NumberFormat('vi-VN', { style: 'currency', currency: 'VND', minimumFractionDigits: 0 }).format(amount);
-}
-
+/**
+ * Ca thu ngân của chi nhánh (UC72, A05; sales-v1 #19–21; BR-TG-04, BR-TG-05): danh sách ca mới nhất trước, chi tiết, và đối soát ca đã chốt.
+ * Ca tự chốt (ST13) chưa có số thực đếm nên bắt buộc nhập khi đối soát. Lễ tân mở / chốt ca và thu tiền ngay ở bàn Lễ tân (UC70, UC71).
+ */
 export function AdminPaymentsPage() {
-  const [payments] = useState<Payment[]>(MOCK_PAYMENTS);
-  const [searchQuery, setSearchQuery] = useState('');
-  const [viewPayment, setViewPayment] = useState<Payment | null>(null);
-  const [retryPayment, setRetryPayment] = useState<Payment | null>(null);
-
-  const filteredPayments = payments.filter(p => p.transactionId.toLowerCase().includes(searchQuery.toLowerCase()) || p.customerName.toLowerCase().includes(searchQuery.toLowerCase()) || p.invoiceNumber.toLowerCase().includes(searchQuery.toLowerCase()));
-  const totalCollected = payments.filter(p => p.status === 'COMPLETED').reduce((sum, p) => sum + p.amount, 0);
-  const pendingCount = payments.filter(p => p.status === 'PENDING').length;
+  const manager = useAccount()?.role === 'BRANCH_MANAGER';
+  const [status, setStatus] = useState('');
+  const [date, setDate] = useState('');
+  const [page, setPage] = useState(0);
+  const [view, setView] = useState<View | null>(null);
+  const [notice, setNotice] = useState<Notice | null>(null);
+  const shifts = useShifts(
+    { status: (status || undefined) as CashierShiftStatus | undefined, businessDate: date || undefined, page, size: PAGE_SIZE },
+    manager,
+  );
+  const data = shifts.data;
+  const reset = (set: (v: string) => void) => (v: string) => {
+    set(v);
+    setPage(0);
+  };
 
   return (
     <div className="space-y-6">
       <div>
-        <h1 className="text-2xl font-semibold text-(--text-primary)">Thanh toán</h1>
-        <p className="text-(--text-secondary)">Quản lý thanh toán và đối soát</p>
+        <h1 className="text-2xl font-semibold text-(--text-primary)">Ca thu ngân</h1>
+        <p className="text-(--text-secondary)">
+          Ca của chi nhánh, mới nhất trước. Ca đã chốt chờ quản lý nhập hoặc xác nhận số tiền mặt thực đếm, ghi chênh lệch và ghi chú rồi đối soát.
+        </p>
       </div>
-
-      <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
-        <Card className="card-kpi border-green-200"><CardContent className="p-5 flex items-center gap-4"><div className="p-3 rounded-xl bg-green-100"><CheckCircle className="h-6 w-6 text-green-600" /></div><div><p className="text-2xl font-semibold text-green-600">{formatCurrency(totalCollected)}</p><p className="text-sm text-(--text-secondary)">Đã thu hôm nay</p></div></CardContent></Card>
-        <Card className="card-kpi"><CardContent className="p-5 flex items-center gap-4"><div className="p-3 rounded-xl bg-amber-100"><AlertCircle className="h-6 w-6 text-amber-600" /></div><div><p className="text-2xl font-semibold text-amber-600">{pendingCount}</p><p className="text-sm text-(--text-secondary)">Chờ thanh toán</p></div></CardContent></Card>
-        <Card className="card-kpi"><CardContent className="p-5 flex items-center gap-4"><div className="p-3 rounded-xl bg-blue-100"><CreditCard className="h-6 w-6 text-blue-600" /></div><div><p className="text-2xl font-semibold text-blue-600">{payments.filter(p => p.method === 'VNPAY').length}</p><p className="text-sm text-(--text-secondary)">VNPAY</p></div></CardContent></Card>
-        <Card className="card-kpi"><CardContent className="p-5 flex items-center gap-4"><div className="p-3 rounded-xl bg-green-100"><Banknote className="h-6 w-6 text-green-600" /></div><div><p className="text-2xl font-semibold text-green-600">{payments.filter(p => p.method === 'CASH').length}</p><p className="text-sm text-(--text-secondary)">Tiền mặt</p></div></CardContent></Card>
-      </div>
-
-      <Card className="card"><CardContent className="p-4"><div className="relative max-w-md"><Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-(--text-tertiary)" /><Input placeholder="Tìm giao dịch..." className="pl-10 input" value={searchQuery} onChange={(e) => setSearchQuery(e.target.value)} /></div></CardContent></Card>
 
       <Card className="card">
-        <CardContent className="p-0 overflow-hidden">
-          <table className="table">
-            <thead><tr><th>Mã GD</th><th>Thời gian</th><th>Khách hàng</th><th>Hóa đơn</th><th>Phương thức</th><th>Số tiền</th><th>Trạng thái</th><th>Thu ngân</th><th></th></tr></thead>
-            <tbody>
-              {filteredPayments.map(payment => (
-                <tr key={payment.id}>
-                  <td className="font-mono text-sm text-(--text-primary)">{payment.transactionId}</td>
-                  <td className="text-(--text-secondary)">{payment.date}</td>
-                  <td><p className="font-medium text-(--text-primary)">{payment.customerName}</p><p className="text-xs text-(--text-tertiary)">{payment.customerPhone}</p></td>
-                  <td className="text-(--text-secondary)">{payment.invoiceNumber}</td>
-                  <td><MethodBadge method={payment.method} /></td>
-                  <td className="font-semibold text-(--text-primary)">{formatCurrency(payment.amount)}</td>
-                  <td><StatusBadgeLocal status={payment.status} /></td>
-                  <td className="text-(--text-secondary)">{payment.staff}</td>
-                  <td><Button size="sm" variant="ghost" onClick={() => setViewPayment(payment)}><Eye className="h-4 w-4" /></Button></td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
+        <CardContent className="flex flex-wrap items-center gap-3 p-4">
+          <select aria-label="Lọc trạng thái" className={cn(selectClass, 'w-44')} value={status} onChange={(e) => reset(setStatus)(e.target.value)}>
+            <option value="">Mọi trạng thái</option>
+            {(Object.keys(SHIFT_STATUS_LABELS) as CashierShiftStatus[]).map((s) => (
+              <option key={s} value={s}>
+                {SHIFT_STATUS_LABELS[s]}
+              </option>
+            ))}
+          </select>
+          <Input aria-label="Ngày nghiệp vụ" type="date" className="w-44" value={date} onChange={(e) => reset(setDate)(e.target.value)} />
         </CardContent>
       </Card>
 
-      {/* MODALS */}
+      <NoticeBar notice={notice} />
 
-      {/* Detail Modal */}
-      <DetailModal open={!!viewPayment} onOpenChange={(o) => !o && setViewPayment(null)} title="Chi tiết giao dịch" size="md">
-        {viewPayment && (
-          <div className="space-y-4">
-            <div className="flex items-center justify-between pb-4 border-b border-(--color-border-light)">
-              <div><h3 className="text-lg font-semibold">{viewPayment.transactionId}</h3><p className="text-sm text-(--text-secondary)">{viewPayment.date}</p></div>
-              <StatusBadgeLocal status={viewPayment.status} />
+      <Card className="card">
+        <CardContent className="overflow-x-auto p-0">
+          <table className="table">
+            <thead>
+              <tr>
+                <th>Ngày</th>
+                <th>Lễ tân</th>
+                <th>Loại ca</th>
+                <th>Trạng thái</th>
+                <th>Mở / chốt lúc</th>
+                <th className="text-right">Tiền mặt</th>
+                <th className="text-right">Chuyển khoản</th>
+                <th className="text-right">Thực đếm</th>
+                <th className="text-right">Chênh lệch</th>
+                <th className="text-right">Phiếu thu</th>
+                <th className="text-right">Thao tác</th>
+              </tr>
+            </thead>
+            <tbody>
+              {data?.content.length ? (
+                data.content.map((s) => <ShiftRow key={s.shiftId} shift={s} onView={() => setView({ kind: 'detail', shiftId: s.shiftId })} onReconcile={() => setView({ kind: 'reconcile', shiftId: s.shiftId })} />)
+              ) : (
+                <tr>
+                  <td colSpan={11} className="py-8 text-center text-(--text-tertiary)">
+                    {shifts.isLoading ? 'Đang tải…' : 'Không có ca nào khớp bộ lọc.'}
+                  </td>
+                </tr>
+              )}
+            </tbody>
+          </table>
+          {shifts.isError && <FormError message={plainMessage(toApiError(shifts.error))} />}
+          {data && data.totalPages > 1 && (
+            <div className="flex items-center justify-end gap-3 border-t border-(--border-color) px-4 py-3 text-sm text-(--text-secondary)">
+              <span>
+                Trang {data.page + 1}/{data.totalPages} · {data.totalElements} ca
+              </span>
+              <Button size="sm" variant="outline" disabled={data.page === 0} onClick={() => setPage(data.page - 1)}>
+                Trước
+              </Button>
+              <Button size="sm" variant="outline" disabled={data.page + 1 >= data.totalPages} onClick={() => setPage(data.page + 1)}>
+                Sau
+              </Button>
             </div>
-            <div className="space-y-1">
-              <InfoRow label="Khách hàng" value={viewPayment.customerName} />
-              <InfoRow label="SĐT" value={viewPayment.customerPhone} />
-              <InfoRow label="Hóa đơn" value={viewPayment.invoiceNumber} />
-              <InfoRow label="Phương thức" value={<MethodBadge method={viewPayment.method} />} />
-              <InfoRow label="Số tiền" value={<span className="font-bold text-accent">{formatCurrency(viewPayment.amount)}</span>} />
-              <InfoRow label="Thu ngân" value={viewPayment.staff} />
-              {viewPayment.notes && <InfoRow label="Ghi chú" value={viewPayment.notes} />}
-            </div>
-          </div>
-        )}
-      </DetailModal>
+          )}
+        </CardContent>
+      </Card>
 
-      {/* Retry Confirmation */}
-      <ConfirmModal open={!!retryPayment} onOpenChange={(o) => !o && setRetryPayment(null)} type="warning" title="Thử lại giao dịch?" description={`Bạn có chắc muốn thử lại giao dịch "${retryPayment?.transactionId}"?`} confirmText="Thử lại" onConfirm={() => setRetryPayment(null)} />
+      {view?.kind === 'detail' && (
+        <ShiftDetail
+          shiftId={view.shiftId}
+          onClose={() => setView(null)}
+          onReconcile={() => setView({ kind: 'reconcile', shiftId: view.shiftId })}
+        />
+      )}
+      {view?.kind === 'reconcile' && (
+        <ReconcileDialog
+          // Ca lấy từ danh sách đang xem; nếu đã đổi trang thì đọc lại theo id.
+          key={view.shiftId}
+          shiftId={view.shiftId}
+          onClose={() => setView(null)}
+          onDone={(shift) => {
+            setNotice({ kind: 'success', text: `Đã đối soát ca #${shift.shiftId}.` });
+            setView({ kind: 'detail', shiftId: shift.shiftId });
+          }}
+        />
+      )}
     </div>
+  );
+}
+
+function ShiftRow({ shift: s, onView, onReconcile }: { shift: CashierShift; onView: () => void; onReconcile: () => void }) {
+  const diff = differenceOf(s);
+  return (
+    <tr>
+      <td className="whitespace-nowrap">{formatBusinessDate(s.businessDate)}</td>
+      <td className="font-medium text-(--text-primary)">{s.cashierName}</td>
+      <td>{s.isAfterHours ? 'Ca ngoài giờ' : 'Ca thường'}</td>
+      <td>
+        <div className="flex flex-wrap items-center gap-1.5">
+          <StatusBadge status={SHIFT_STATUS_LABELS[s.status]} variant={STATUS_VARIANT[s.status]} />
+          {s.autoClosed && <Badge variant="outline">Tự chốt</Badge>}
+        </div>
+      </td>
+      <td className="whitespace-nowrap text-xs">
+        {formatClock(s.openedAt)} – {s.closedAt ? formatClock(s.closedAt) : '…'}
+      </td>
+      <td className="text-right tabular-nums">{money(s.expectedCash)}</td>
+      <td className="text-right tabular-nums">{money(s.expectedTransfer)}</td>
+      <td data-col="counted" className="text-right tabular-nums">
+        {money(s.countedCash)}
+      </td>
+      <td className={cn('text-right tabular-nums', diff && diff.value !== 0 && 'font-medium text-red-700')}>
+        {diff ? describeDifference(diff.value) : '—'}
+        {diff?.provisional && <span className="block text-xs font-normal text-(--text-tertiary)">tạm tính</span>}
+      </td>
+      <td className="text-right tabular-nums">{s.paymentCount}</td>
+      <td className="whitespace-nowrap text-right">
+        <Button size="sm" variant="outline" onClick={onView} aria-label={`Xem ca #${s.shiftId}`}>
+          Xem
+        </Button>
+        {s.status === 'CLOSED' && (
+          <Button size="sm" className="ml-2" onClick={onReconcile} aria-label={`Đối soát ca #${s.shiftId}`}>
+            Đối soát
+          </Button>
+        )}
+      </td>
+    </tr>
+  );
+}
+
+function ShiftDetail({ shiftId, onClose, onReconcile }: { shiftId: number; onClose: () => void; onReconcile: () => void }) {
+  const query = useShift(shiftId);
+  const s = query.data;
+  const diff = s ? differenceOf(s) : null;
+  return (
+    <DetailModal
+      open
+      onOpenChange={(open) => !open && onClose()}
+      title={s ? `Ca #${s.shiftId} · ${formatBusinessDate(s.businessDate)}` : `Ca #${shiftId}`}
+      onEdit={s?.status === 'CLOSED' ? onReconcile : undefined}
+      editText="Đối soát ca"
+    >
+      {!s ? (
+        query.isError ? <FormError message={plainMessage(toApiError(query.error))} /> : <p className="text-sm text-(--text-secondary)">Đang tải…</p>
+      ) : (
+        <div className="space-y-1">
+          <InfoRow label="Lễ tân" value={s.cashierName} />
+          <InfoRow label="Loại ca" value={s.isAfterHours ? 'Ca ngoài giờ' : 'Ca thường'} />
+          <InfoRow label="Trạng thái" value={<StatusBadge status={SHIFT_STATUS_LABELS[s.status]} variant={STATUS_VARIANT[s.status]} />} />
+          <InfoRow label="Mở lúc" value={formatDateTime(s.openedAt)} />
+          <InfoRow label="Chốt lúc" value={s.closedAt ? `${formatDateTime(s.closedAt)}${s.autoClosed ? ' · hệ thống tự chốt' : ''}` : '—'} />
+          <InfoRow label="Số phiếu thu" value={s.paymentCount} />
+          <InfoRow label="Tiền mặt theo phiếu thu" value={money(s.expectedCash)} />
+          <InfoRow label="Chuyển khoản theo phiếu thu" value={money(s.expectedTransfer)} />
+          <InfoRow label="Tiền mặt thực đếm" value={money(s.countedCash)} />
+          <InfoRow label="Chênh lệch" value={diff ? `${describeDifference(diff.value)}${diff.provisional ? ' · tạm tính' : ''}` : '—'} />
+          {s.status === 'RECONCILED' && (
+            <>
+              <InfoRow label="Đối soát lúc" value={s.reconciledAt ? formatDateTime(s.reconciledAt) : '—'} />
+              <InfoRow label="Ghi chú đối soát" value={s.reconcileNote ?? '—'} className="gap-4" />
+            </>
+          )}
+        </div>
+      )}
+    </DetailModal>
+  );
+}
+
+function ReconcileDialog({ shiftId, onClose, onDone }: { shiftId: number; onClose: () => void; onDone: (shift: CashierShift) => void }) {
+  const query = useShift(shiftId);
+  const shift = query.data;
+  if (!shift) {
+    return (
+      <FormModal open onOpenChange={(open) => !open && onClose()} title={`Đối soát ca #${shiftId}`} submitText="Đối soát" loading={!query.isError}>
+        {query.isError ? <FormError message={plainMessage(toApiError(query.error))} /> : <p className="text-sm text-(--text-secondary)">Đang tải…</p>}
+      </FormModal>
+    );
+  }
+  return <ReconcileForm shift={shift} onClose={onClose} onDone={onDone} />;
+}
+
+function ReconcileForm({ shift, onClose, onDone }: { shift: CashierShift; onClose: () => void; onDone: (shift: CashierShift) => void }) {
+  const reconcile = useReconcileShift();
+  const [counted, setCounted] = useState(shift.countedCash != null ? String(shift.countedCash) : '');
+  const [note, setNote] = useState('');
+  const [errors, setErrors] = useState<{ counted?: string; note?: string }>({});
+  const [error, setError] = useState('');
+
+  const typed = counted.trim();
+  const valid = /^\d+$/.test(typed);
+  const expected = shift.expectedCash ?? 0;
+
+  const submit = () => {
+    const next: { counted?: string; note?: string } = {};
+    // BR-TG-05: ca tự chốt chưa có số thực đếm thì phải nhập; ca khác để trống nghĩa là giữ số lễ tân đã nhập.
+    if (!typed && shift.autoClosed && shift.countedCash == null) next.counted = 'Ca tự chốt chưa có số thực đếm: nhập số tiền mặt thực đếm để đối soát.';
+    else if (typed && !valid) next.counted = 'Số tiền thực đếm là số nguyên từ 0.';
+    if (!note.trim()) next.note = 'Nhập ghi chú đối soát.';
+    else if (note.length > NOTE_MAX) next.note = `Ghi chú tối đa ${NOTE_MAX} ký tự.`;
+    setErrors(next);
+    setError('');
+    if (next.counted || next.note) return;
+
+    // Số thực đếm chỉ gửi khi đổi so với số lễ tân đã chốt (gửi lên là ghi đè, audit giữ số cũ).
+    const countedCash = typed && Number(typed) !== shift.countedCash ? Number(typed) : undefined;
+    reconcile.mutate(
+      { shiftId: shift.shiftId, ...(countedCash !== undefined && { countedCash }), note: note.trim() },
+      { onSuccess: onDone, onError: (e) => setError(plainMessage(toApiError(e))) },
+    );
+  };
+
+  return (
+    <FormModal
+      open
+      onOpenChange={(open) => !open && onClose()}
+      title={`Đối soát ca #${shift.shiftId}`}
+      description={`${shift.cashierName} · ${formatBusinessDate(shift.businessDate)}`}
+      submitText="Đối soát"
+      loading={reconcile.isPending}
+      onSubmit={submit}
+    >
+      <div className="space-y-1 rounded-lg bg-(--bg-tertiary) p-3 text-sm">
+        <p>Tiền mặt theo phiếu thu: {money(shift.expectedCash)}</p>
+        <p className="text-(--text-secondary)">Chuyển khoản theo phiếu thu: {money(shift.expectedTransfer)} (không đếm)</p>
+      </div>
+      {shift.autoClosed && shift.countedCash == null && (
+        <p role="note" className="rounded-lg bg-amber-50 px-3 py-2 text-sm text-amber-800">
+          Ca này tự chốt nên chưa có số tiền thực đếm. Nhập số tiền mặt đếm được trong két mới đối soát được.
+        </p>
+      )}
+      <Field label="Tiền mặt thực đếm" error={errors.counted}>
+        {(id) => (
+          <Input id={id} inputMode="numeric" autoComplete="off" value={counted} onChange={(e) => setCounted(e.target.value)} placeholder="0" />
+        )}
+      </Field>
+      {typed && valid && <p className="text-sm font-medium">Chênh lệch: {describeDifference(shiftDifference(Number(typed), expected))}</p>}
+      <Field label="Ghi chú đối soát" error={errors.note}>
+        {(id) => (
+          <>
+            <textarea
+              id={id}
+              rows={3}
+              value={note}
+              onChange={(e) => setNote(e.target.value)}
+              className="w-full rounded-lg border border-(--color-border-default) bg-white px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-accent"
+            />
+            <span className={cn('block text-right text-xs', note.length > NOTE_MAX ? 'text-red-600' : 'text-(--text-tertiary)')}>{`${note.length}/${NOTE_MAX}`}</span>
+          </>
+        )}
+      </Field>
+      <FormError message={error} />
+    </FormModal>
   );
 }

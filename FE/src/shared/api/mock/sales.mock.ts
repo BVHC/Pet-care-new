@@ -46,7 +46,7 @@ const DATE = /^\d{4}-\d{2}-\d{2}$/;
 
 // ─── Dữ liệu ───
 
-interface LineRow {
+export interface LineRow {
   lineId: number;
   lineType: OrderLineType;
   serviceId: number | null;
@@ -58,7 +58,7 @@ interface LineRow {
   addedBy: number;
   ownerAccountId: number;
 }
-interface OrderRow {
+export interface OrderRow {
   orderId: number;
   code: string;
   source: OrderSource;
@@ -579,6 +579,37 @@ const cancelUnpaid: MockHandler = (req) => {
   save(s);
   return ok(view(o, me(req)), 200, 'Đã hủy Order khách không thanh toán');
 };
+
+// ─── Cho mock thu tiền (T35, cashier.mock.ts): chỉ đọc / chuyển PAID, không đổi hành vi của salesRoutes ───
+
+/** Order theo id (chỉ id có thật), id tăng dần như `findAllByIdForUpdate` của BE. */
+export const ordersByIds = (orderIds: readonly number[]): OrderRow[] =>
+  load()
+    .orders.filter((o) => orderIds.includes(o.orderId))
+    .sort((a, b) => a.orderId - b.orderId);
+
+/** sales-v1 #12 (PaymentQueryService.listPayableOrders): PENDING của khách tại chi nhánh, chốt lâu nhất trước (`pendingAt ASC, id ASC`). */
+export const payableOrdersOf = (customerId: number, branchId: number): OrderSummary[] =>
+  load()
+    .orders.filter((o) => o.customerId === customerId && o.branchId === branchId && o.status === 'PENDING')
+    .sort((a, b) => Date.parse(a.pendingAt ?? a.createdAt) - Date.parse(b.pendingAt ?? b.createdAt) || a.orderId - b.orderId)
+    .map(summaryOf);
+
+export const orderTotal = totalOf;
+
+/** Các Order của một phiếu thu (`orders.payment_id`), id tăng dần. */
+export const ordersOfPayment = (paymentId: number): OrderSummary[] =>
+  load()
+    .orders.filter((o) => o.paymentId === paymentId)
+    .sort((a, b) => a.orderId - b.orderId)
+    .map(summaryOf);
+
+/** Order#8 PENDING → PAID cho mọi Order của phiếu thu (`SalesOrder.markPaid`). */
+export function markOrdersPaid(orderIds: readonly number[], paymentId: number, paidAt: string): void {
+  const s = load();
+  for (const o of s.orders.filter((x) => orderIds.includes(x.orderId))) Object.assign(o, { status: 'PAID', paidAt, paymentId });
+  save(s);
+}
 
 export const salesRoutes: Record<string, MockHandler> = {
   'POST /api/orders': createOrder,

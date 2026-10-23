@@ -8,6 +8,7 @@ import { adminIdentityRoutes } from './identity-admin.mock';
 import { appointmentRoutes } from './appointment.mock';
 import { branchRoutes } from './branch.mock';
 import { careRoutes } from './care.mock';
+import { cashierRoutes } from './cashier.mock';
 import { catalogRoutes } from './catalog.mock';
 import { customerRoutes } from './customer.mock';
 import { customerPetRoutes } from './customer-pet.mock';
@@ -27,6 +28,7 @@ const ROUTES: Record<string, MockHandler> = {
   ...appointmentRoutes,
   ...careRoutes,
   ...salesRoutes,
+  ...cashierRoutes,
 };
 
 const COMPILED = Object.entries(ROUTES).map(([key, handler]) => {
