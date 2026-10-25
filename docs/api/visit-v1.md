@@ -63,7 +63,7 @@
 | Thêm bản bổ sung bệnh án | A07 | VET chi nhánh nơi khám (A7) | — | — | Thứ tự lỗi: 400 body → 403 vai trò → 404 → 403 chi nhánh → 404 GROOMING → 409 (docs/adr/0070). Mọi VET của chi nhánh nơi khám ghi được, không cần là người phụ trách. Lượt chưa có bệnh án: tạo bệnh án rỗng đã khóa (A17). Không sửa / xóa nội dung cũ; ghi audit. |
 | Kê đơn một dòng thuốc | A07 | VET được gán lượt | — | — | Đủ tồn → sinh 1 dòng Order DRUG; mua ngoài → không sinh dòng; không tách dòng. |
 | Xóa dòng đơn thuốc | A07 | VET được gán lượt | — | — | Xóa kèm dòng Order DRUG tương ứng. |
-| Gợi ý mũi và sản phẩm vaccine | A07 | VET được gán lượt | — | — | — |
+| Gợi ý mũi và sản phẩm vaccine | A07 | VET được gán lượt | — | — | A18, A19, A20. Thứ tự lỗi: 400 tham số → 403 vai trò → 404 → 403 chi nhánh → 404 GROOMING → 403 người phụ trách → 404 loại vaccine → 400 BR-KB-04 → 400 BR-SP-07 (docs/adr/0073). Chỉ đọc, không khóa. |
 | Ghi nhận mũi tiêm | A07 | VET được gán lượt | IN_PROGRESS giữ nguyên · dòng Order VACCINE · trừ kho FEFO · Care Task#5 | — | Ngày tiêm = hôm nay (A6). Chưa đủ tuổi: cảnh báo trong warnings, không chặn. |
 | Xóa mũi tiêm ghi nhầm | A07 | VET đã ghi mũi đó | — | — | Hoàn kho đúng lô, xóa dòng Order vaccine trong cùng transaction. |
 | Hồ sơ sức khỏe thú cưng | A02, A06, A07, A08 | Khách là chủ hiện tại; nhân viên | — | — | Khách không nhận internalNote và bản bổ sung nội bộ. Chỉ mũi tiêm tại hệ thống. |
@@ -99,7 +99,7 @@
 - **`DELETE /visits/{visitId}/prescriptions/{itemId}`** — Xóa dòng đơn thuốc. Response `204` rỗng. Lỗi: `401` · `403` · `404` · `409` Lượt không IN_PROGRESS.
 ### Vaccinations
 
-- **`GET /visits/{visitId}/vaccination-options`** — Gợi ý mũi và sản phẩm vaccine. Query: `vaccineTypeId`. Response `200` `VaccinationOptions`. Lỗi: `400` Loại vaccine không áp dụng cho loài của thú · `401` · `403` · `404`.
+- **`GET /visits/{visitId}/vaccination-options`** — Gợi ý mũi và sản phẩm vaccine. Query: `vaccineTypeId`. Response `200` `VaccinationOptions`. Lỗi: `400` `BR-KB-04` loại vaccine không áp dụng cho loài của thú · `BR-SP-07` loại vaccine đã ngừng sử dụng · thiếu / sai kiểu `vaccineTypeId` (`MALFORMED_REQUEST`); BR-TK-17 · `401` · `403` Sai vai trò · lượt của chi nhánh khác · không phải VET phụ trách hiện tại · `404` Không có Visit, Visit nhóm GROOMING hoặc không có loại vaccine.
 - **`POST /visits/{visitId}/vaccinations`** — Ghi nhận mũi tiêm. Request `RecordVaccinationRequest`. Response `201` `RecordVaccinationResult`. Lỗi: `400` `BR-KB-04` sản phẩm không thuộc loại vaccine, không còn tồn khả dụng, hoặc mũi không thuộc phác đồ đúng loài · `401` · `403` · `404` · `409` Lượt không IN_PROGRESS.
 - **`DELETE /visits/{visitId}/vaccinations/{vaccinationId}`** — Xóa mũi tiêm ghi nhầm. Response `204` rỗng. Lỗi: `401` · `403` · `404` · `409` Visit đã COMPLETED — sai sót ghi bằng bản bổ sung.
 ### Health record
@@ -171,6 +171,9 @@ Trường có `?` là không bắt buộc / có thể null. Kiểu `email`, `dat
 | A15 | Gán lại lượt đã gọi (#9) khi người phụ trách hiện tại không còn đủ điều kiện phụ trách lượt: không ACTIVE hoặc bị khóa, khác chi nhánh, hoặc sai chức vụ với nhóm dịch vụ (đổi chức vụ khi còn lượt, docs/adr/0031 Q4). Không xét cờ `needsReassign`; gán lại thì gỡ cờ (docs/adr/0063) | BR-TN-08 'không còn ACTIVE (bị khóa)'; BR-TN-05 |
 | A16 | Lượt Khám/Tiêm (MEDICAL) hoàn tất khi Order không còn dòng dịch vụ loại Khám hoặc Tiêm nào (VET xóa dòng tự sinh) thì bị từ chối 400 `BR-KB-02`; 03 Visit#5 chỉ nêu điều kiện cho 'có Khám' và 'chỉ có Tiêm' (docs/adr/0069) | BR-KB-02; tránh Order PENDING không có dịch vụ |
 | A17 | Bản bổ sung (#15) cho lượt MEDICAL đã COMPLETED chưa có dòng bệnh án (lượt chỉ tiêm): tạo bệnh án rỗng đã khóa rồi thêm bản bổ sung; thú đã mất hoặc đã chuyển chủ vẫn thêm được (BR-KH-05 'chỉ đọc' hiểu là hồ sơ thú) (docs/adr/0070) | BR-KB-01, BR-KB-04: sai sót sau COMPLETED ghi bằng bản bổ sung; FK addenda cần dòng bệnh án |
+| A18 | Mũi gợi ý (#18): chưa từng tiêm loại đó → mũi nhỏ nhất đang dùng; đã tiêm → mũi đang dùng nhỏ nhất lớn hơn số mũi đã chụp của mũi gần nhất; không còn mũi lớn hơn → mũi lớn nhất (nhắc lại định kỳ); phác đồ rỗng → null (docs/adr/0073) | BR-KB-04; BR-SP-02 mọi mũi có khoảng cách tới mũi kế tiếp > 0; erd `vaccinations.next_due_date` NOT NULL |
+| A19 | #18 chỉ đọc: VET đang phụ trách lượt xem được ở mọi trạng thái; ghi mũi (#19) mới chặn lượt không IN_PROGRESS (docs/adr/0073) | Contract #18 không có 409; khuôn #12 |
+| A20 | #18: `products` chỉ gồm sản phẩm đang kinh doanh có tồn khả dụng > 0 tại chi nhánh của lượt, theo tên (rỗng vẫn 200); `lastDose` là mũi gần nhất ở mọi chi nhánh, kể cả mũi của chính lượt; thú không có ngày sinh → `underMinAge` false (docs/adr/0073) | BR-KB-04, BR-KO-01; 04 nguyên tắc 8 (thú dùng chung toàn chuỗi) |
 
 | ID | Câu hỏi | Trạng thái | Gốc |
 |---|---|---|---|

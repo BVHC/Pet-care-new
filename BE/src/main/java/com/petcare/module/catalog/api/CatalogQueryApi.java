@@ -58,4 +58,16 @@ public interface CatalogQueryApi {
      * mặt trong kết quả; tập rỗng → map rỗng. Đọc mới mỗi lần gọi.
      */
     java.util.Map<Long, String> findVaccineTypeNames(Collection<Long> vaccineTypeIds);
+
+    /** Loại vaccine và loài áp dụng (BR-SP-07). Thêm 2026-10-25 bởi BE-1 (visit #18, docs/adr/0073). */
+    record VaccineTypeInfo(Long vaccineTypeId, String name, Species species, boolean active) {}
+
+    /** Một loại vaccine, không lọc {@code active} (bên gọi tự xét "ngừng sử dụng"). Đọc mới mỗi lần gọi. */
+    Optional<VaccineTypeInfo> findVaccineType(Long vaccineTypeId);
+
+    /**
+     * Mọi sản phẩm gắn loại vaccine, <b>kể cả đã ngừng kinh doanh</b> (bên gọi tự lọc), theo tên rồi {@code productId}.
+     * Thêm 2026-10-25 bởi BE-1 (visit #18 gợi ý sản phẩm còn tồn, docs/adr/0073).
+     */
+    List<ProductInfo> findProductsByVaccineType(Long vaccineTypeId);
 }

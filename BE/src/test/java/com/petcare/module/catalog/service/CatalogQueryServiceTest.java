@@ -150,4 +150,37 @@ class CatalogQueryServiceTest {
         assertThat(service.findVaccineTypeNames(List.of())).isEmpty();
         org.mockito.Mockito.verifyNoMoreInteractions(vaccineTypes);
     }
+
+    @Test
+    void findsVaccineTypeWithSpeciesAndActiveFlag() {
+        VaccineType rabies = new VaccineType("Dại", Species.CAT);
+        ReflectionTestUtils.setField(rabies, "id", 8L);
+        rabies.setActive(false);
+        when(vaccineTypes.findById(8L)).thenReturn(Optional.of(rabies));
+
+        assertThat(service.findVaccineType(8L))
+                .contains(new com.petcare.module.catalog.api.CatalogQueryApi.VaccineTypeInfo(8L, "Dại", Species.CAT, false));
+        assertThat(service.findVaccineType(9L)).isEmpty();
+    }
+
+    @Test
+    void productsOfAVaccineTypeIncludeDiscontinuedOnesInRepositoryOrder() {
+        com.petcare.module.catalog.entity.Product active = vaccine(81, "Nobivac", true);
+        com.petcare.module.catalog.entity.Product discontinued = vaccine(82, "Rabisin", false);
+        when(products.findByVaccineTypeIdOrderByNameAscIdAsc(8L)).thenReturn(List.of(active, discontinued));
+
+        assertThat(service.findProductsByVaccineType(8L))
+                .extracting(com.petcare.module.catalog.api.CatalogQueryApi.ProductInfo::productId,
+                        com.petcare.module.catalog.api.CatalogQueryApi.ProductInfo::active)
+                .containsExactly(org.assertj.core.groups.Tuple.tuple(81L, true),
+                        org.assertj.core.groups.Tuple.tuple(82L, false));
+    }
+
+    private static com.petcare.module.catalog.entity.Product vaccine(long id, String name, boolean active) {
+        com.petcare.module.catalog.entity.Product p = new com.petcare.module.catalog.entity.Product(1L, "SKU" + id, name,
+                com.petcare.module.catalog.api.ProductType.VACCINE, false, true, 8L, "liều", 150_000, null, null);
+        ReflectionTestUtils.setField(p, "id", id);
+        p.setActive(active);
+        return p;
+    }
 }
