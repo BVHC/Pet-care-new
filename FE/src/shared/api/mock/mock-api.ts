@@ -15,6 +15,7 @@ import { customerPetRoutes } from './customer-pet.mock';
 import { inventoryRoutes } from './inventory.mock';
 import { salesRoutes } from './sales.mock';
 import { visitRoutes } from './visit.mock';
+import { visitClinicalRoutes } from './visit-clinical.mock';
 import { fail, ruleFail, type MockHandler, type MockReply } from './envelope';
 import { accountForToken, identityRoutes } from './identity.mock';
 import { isMockedRequest, type MockRule } from './mock-scope';
@@ -32,6 +33,7 @@ const ROUTES: Record<string, MockHandler> = {
   ...salesRoutes,
   ...cashierRoutes,
   ...visitRoutes,
+  ...visitClinicalRoutes,
 };
 
 const COMPILED = Object.entries(ROUTES).map(([key, handler]) => {

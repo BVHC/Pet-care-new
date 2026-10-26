@@ -14,7 +14,7 @@ beforeEach(() => useGroomingStore.setState({ scope: null }));
 afterEach(() => vi.useRealTimers());
 
 describe('grooming desk (khu grooming trên API visit)', () => {
-  it('nhân viên chăm sóc mở sẵn "Của tôi"; tiêu đề đếm số bé của mình, chỉ hỏi hàng đợi của tôi', async () => {
+  it('nhân viên chăm sóc mở sẵn "Của tôi"; tiêu đề đếm số bé của mình; hàng đợi chi nhánh chỉ được hỏi để lấy các lượt đã xong của chính mình hôm nay', async () => {
     const branch = vi.spyOn(visitApi, 'listQueue');
     const arrivals = vi.spyOn(visitApi, 'listArrivals');
     await startDesk('caretaker@store1.vn');
@@ -23,7 +23,8 @@ describe('grooming desk (khu grooming trên API visit)', () => {
     expect(await screen.findByText(/1 bé đang chờ hoặc đang làm/)).toBeInTheDocument();
     expect(await within(screen.getByRole('list', { name: 'Chờ làm' })).findByRole('article', { name: /Bim/ })).toBeInTheDocument();
     expect(screen.getByRole('radio', { name: 'Của tôi' })).toBeChecked();
-    expect(branch).not.toHaveBeenCalled();
+    await waitFor(() => expect(branch).toHaveBeenCalledWith({ serviceGroup: 'GROOMING', status: 'COMPLETED', assigneeId: 6 }));
+    expect(branch.mock.calls.every(([query]) => query?.status === 'COMPLETED')).toBe(true);
     expect(arrivals).not.toHaveBeenCalled();
   });
 

@@ -11,7 +11,10 @@ const SCOPES: { id: BoardScope; label: string }[] = [
   { id: 'all', label: 'Cả khu' },
 ];
 
-/** Khu grooming: một thẻ mỗi bé theo hàng đợi của API; bấm Bắt đầu hoặc kéo sang "Đang làm" là gọi lượt (visit-v1 #8). Hoàn tất lượt là T37. */
+/**
+ * Khu grooming: một thẻ mỗi bé theo hàng đợi của API; bấm Bắt đầu hoặc kéo sang "Đang làm" là gọi lượt (visit-v1 #8), bấm Xong hoặc kéo sang "Xong hôm nay" là hoàn tất lượt
+ * (#10, T37, UC52): Order chuyển sang chờ thu ở quầy.
+ */
 export function GroomingWorkspacePage() {
   const user = useStaffUser();
   const stored = useGroomingStore((s) => s.scope);

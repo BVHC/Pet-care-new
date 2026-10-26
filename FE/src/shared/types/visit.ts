@@ -152,8 +152,24 @@ export interface AssignResult {
 
 // ─── Vai trò theo từng thao tác (quan sát từ BE thật; xem `visitPermissions`) ───
 
-/** Thao tác tiếp nhận / hàng đợi mà UI cần biết vai trò nào được làm, để không gọi API sẽ bị 403. */
-export type VisitAction = 'checkIn' | 'queue' | 'myQueue' | 'detail' | 'assign' | 'move' | 'markEmergency' | 'call' | 'reassign' | 'cancel' | 'arrivals';
+/** Thao tác tiếp nhận / hàng đợi / khám mà UI cần biết vai trò nào được làm, để không gọi API sẽ bị 403. */
+export type VisitAction =
+  | 'checkIn'
+  | 'queue'
+  | 'myQueue'
+  | 'detail'
+  | 'assign'
+  | 'move'
+  | 'markEmergency'
+  | 'call'
+  | 'reassign'
+  | 'cancel'
+  | 'arrivals'
+  | 'viewRecord'
+  | 'writeRecord'
+  | 'addendum'
+  | 'complete'
+  | 'vaccinate';
 
 export const VISIT_ROLES: Record<VisitAction, readonly Role[]> = {
   checkIn: ['RECEPTIONIST'],
@@ -169,6 +185,16 @@ export const VISIT_ROLES: Record<VisitAction, readonly Role[]> = {
   cancel: ['RECEPTIONIST'],
   /** appointment-v1 #3 (`checkInReady`): chỉ RECEPTIONIST / BRANCH_MANAGER / CUSTOMER xem được danh sách lịch hẹn. */
   arrivals: ['RECEPTIONIST', 'BRANCH_MANAGER'],
+  /** #12: CARETAKER chỉ xem (BR-KB-01). */
+  viewRecord: ['VET', 'CARETAKER'],
+  /** #13 ghi bệnh án và #14 ghi cân nặng: VET được gán lượt. */
+  writeRecord: ['VET'],
+  /** #15: mọi VET của chi nhánh nơi khám (ADR-0070), không cần là người phụ trách. */
+  addendum: ['VET'],
+  /** #10: người được gán lượt, VET cho Khám/Tiêm, CARETAKER cho Thẩm mỹ (BR-TN-05). */
+  complete: ['VET', 'CARETAKER'],
+  /** #18–20: VET được gán lượt. */
+  vaccinate: ['VET'],
 };
 
 export type VisitPermissions = Record<VisitAction, boolean>;

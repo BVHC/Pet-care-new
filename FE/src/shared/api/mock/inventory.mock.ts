@@ -292,6 +292,42 @@ export interface StockShortage {
   available: number;
 }
 
+/** Lô còn hàng và chưa hết hạn theo FEFO: hạn dùng sớm nhất trước, lô mặc định (không hạn) cuối, cùng hạn thì id nhỏ trước. Không bao giờ có lô đã hết hạn (BR-KO-05). */
+function fefoLots(s: State, branchId: number, productId: number, today: string): LotRow[] {
+  const item = itemOf(s, branchId, productId);
+  return (item ? lotsOf(s, item.id) : [])
+    .filter((l) => l.quantity > 0 && !isExpired(l, today))
+    .sort((a, b) => (a.expiryDate ?? '9999-12-31').localeCompare(b.expiryDate ?? '9999-12-31') || a.id - b.id);
+}
+
+export interface IssuedLot {
+  lotId: number;
+  lotNumber: string | null;
+  expiryDate: string | null;
+}
+
+/**
+ * Trừ đúng 1 liều theo FEFO cho mũi tiêm (BR-KB-04, ST06: kho trừ NGAY khi ghi nhận mũi, không chờ PAID). Trả lô đã trừ (để hoàn đúng lô khi xóa mũi);
+ * null khi không còn tồn khả dụng và khi đó không trừ gì.
+ */
+export function issueOneFefo(branchId: number, productId: number): IssuedLot | null {
+  const s = load();
+  const lot = fefoLots(s, branchId, productId, localIsoDate())[0];
+  if (!lot) return null;
+  lot.quantity -= 1;
+  save(s);
+  return { lotId: lot.id, lotNumber: lot.lotNumber, expiryDate: lot.expiryDate };
+}
+
+/** Hoàn kho vào ĐÚNG lô đã trừ (xóa mũi ghi nhầm, BR-KB-04), kể cả khi lô đã hết hạn lúc hoàn. */
+export function returnToLot(lotId: number, quantity: number): void {
+  const s = load();
+  const lot = s.lots.find((l) => l.id === lotId);
+  if (!lot) return;
+  lot.quantity += quantity;
+  save(s);
+}
+
 /**
  * `StockApi.issueForPayment` của BE cho mock thu ngân (docs/adr/0064 §2.1): gộp số lượng cần theo sản phẩm; thiếu bất kỳ sản phẩm nào
  * thì không trừ gì và trả danh sách thiếu (mã sản phẩm tăng dần); đủ thì trừ FEFO — hạn dùng sớm nhất trước, lô mặc định (không hạn)
@@ -303,12 +339,7 @@ export function issueFefo(branchId: number, lines: { productId: number; quantity
   if (requested.size === 0) return [];
   const s = load();
   const today = localIsoDate();
-  const usable = (productId: number) => {
-    const item = itemOf(s, branchId, productId);
-    return (item ? lotsOf(s, item.id) : [])
-      .filter((l) => l.quantity > 0 && !isExpired(l, today))
-      .sort((a, b) => (a.expiryDate ?? '9999-12-31').localeCompare(b.expiryDate ?? '9999-12-31') || a.id - b.id);
-  };
+  const usable = (productId: number) => fefoLots(s, branchId, productId, today);
   const shortages = [...requested]
     .sort(([a], [b]) => a - b)
     .flatMap(([productId, quantity]) => {

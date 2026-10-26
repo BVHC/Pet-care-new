@@ -1,5 +1,5 @@
 import axios, { type AxiosInstance, type AxiosResponse } from 'axios';
-import { beforeEach, describe, expect, it } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { ruleIdOf } from '../api-error';
 import { MOCK_PASSWORD } from './identity.mock';
 import { installMockApi } from './mock-api';
@@ -222,19 +222,29 @@ describe('tài khoản của hồ sơ khách tại quầy (UC22, identity-v1 #25
 });
 
 describe('hồ sơ sức khỏe (UC25)', () => {
+  // Hồ sơ thú #1 còn có các lượt thật của mock lâm sàng (T37: lượt 61, 2001) nên tìm lượt mẫu 1002 theo mã, không theo vị trí; ghim ngày để lượt thật không đổi ngày tái khám sắp tới.
+  beforeEach(() => {
+    vi.useFakeTimers({ toFake: ['Date'] });
+    vi.setSystemTime(new Date('2026-10-20T10:00:00+07:00'));
+  });
+  afterEach(() => vi.useRealTimers());
+  type HealthVisit = { visitId: number; internalNote?: string; addenda: { addendumId: number }[] };
+  const seededVisit = (visits: HealthVisit[]) => visits.find((v) => v.visitId === 1002)!;
+
   it('khách là chủ nhận đủ mục nhưng không có ghi chú / bản bổ sung nội bộ (BR-KH-07)', async () => {
     const res = await client.get('/api/pets/1/health-record', await owner());
-    const [latest] = res.data.data.visits;
+    const latest = seededVisit(res.data.data.visits);
     expect(latest).toMatchObject({ diagnosis: 'Viêm da dị ứng — tái khám', followUpDate: '2026-10-24', serviceGroup: 'MEDICAL' });
     expect(latest).not.toHaveProperty('internalNote');
-    expect(latest.addenda.map((a: { addendumId: number }) => a.addendumId)).toEqual([1]);
+    expect(latest.addenda.map((a) => a.addendumId)).toEqual([1]);
     expect(res.data.data.upcomingFollowUpDate).toBe('2026-10-24');
   });
 
   it('nhân viên thấy ghi chú nội bộ; khách không phải chủ nhận 403', async () => {
     const res = await client.get('/api/pets/1/health-record', await vet());
-    expect(res.data.data.visits[0].internalNote).toBeTruthy();
-    expect(res.data.data.visits[0].addenda).toHaveLength(2);
+    const latest = seededVisit(res.data.data.visits);
+    expect(latest.internalNote).toBeTruthy();
+    expect(latest.addenda).toHaveLength(2);
     const other = await failure(client.get('/api/pets/4/health-record', await owner()));
     expect(other.data).toMatchObject({ errorCode: 'ACCESS_DENIED_SCOPE_MISMATCH', statusCode: 403 });
   });

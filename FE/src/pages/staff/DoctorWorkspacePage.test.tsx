@@ -1,9 +1,10 @@
-import { screen, waitFor, within } from '@testing-library/react';
+import { fireEvent, screen, waitFor, within } from '@testing-library/react';
+import type userEvent from '@testing-library/user-event';
 import { afterEach, beforeAll, describe, expect, it, vi } from 'vitest';
 import { ApiError } from '../../shared/api/api-error';
 import { apiClient } from '../../shared/api/axios';
-import { clinicApi } from '../../shared/api/clinic.api';
 import { installMockApi } from '../../shared/api/mock/mock-api';
+import { salesApi } from '../../shared/api/sales.api';
 import { visitApi } from '../../shared/api/visit.api';
 import { makeVisit, renderDesk, startDesk } from '../../test/visit-harness';
 import { DoctorWorkspacePage } from './DoctorWorkspacePage';
@@ -12,12 +13,11 @@ const toast = vi.hoisted(() => Object.assign(vi.fn(), { success: vi.fn(), error:
 vi.mock('sonner', () => ({ toast }));
 
 // visit.mock lúc 10:40 thứ Năm 22/10/2026, VET #5 (BS. Minh Anh): hàng đợi của tôi theo thứ tự BE = 2002 Lu (lịch hẹn, đang khám), 2102 Tôm (vãng lai, đang chờ).
-// Ghi bệnh án, kê đơn, tiêm chủng và hoàn tất lượt là T37 (vẫn trên clinic-db): bàn này không đưa mã lượt của API vào SoapPanel / PatientPanel.
+// Đã khám hôm nay: lượt 61 Mochi (hoàn tất, bệnh án đã khóa, có một bản bổ sung). Bệnh án, cân nặng, tiêm chủng, hoàn tất lượt chạy trên visit-clinical.mock (T37, docs/testcases/T37-fe.md).
 
 beforeAll(() => installMockApi(apiClient));
 afterEach(() => vi.useRealTimers());
 
-const NOTICE = 'Ghi bệnh án, kê đơn, tiêm chủng và hoàn tất lượt: chưa nối API (T37)';
 const queueRows = () => within(screen.getByRole('list', { name: 'Hàng đợi của tôi' })).getAllByRole('listitem');
 const petsInQueue = () => queueRows().map((li) => within(li).getByTestId('visit-pet').textContent);
 const rowOf = async (pet: string) => within((await screen.findByText(pet, { selector: '[data-testid="visit-pet"]' })).closest('li')!);
@@ -162,26 +162,384 @@ describe('exam room — gọi lượt (UC46; BR-TN-05)', () => {
   });
 });
 
-describe('exam room — ghi bệnh án chờ T37', () => {
-  it('không đưa mã lượt của API vào bệnh án trên clinic-db: nói rõ chưa nối API, không có chữ lỗi, không gọi clinic API', async () => {
-    const detail = vi.spyOn(clinicApi, 'getVisitDetail');
-    const { user } = await renderExamRoom();
+const FIELDS = ['Khám lâm sàng', 'Chẩn đoán', 'Hướng điều trị', 'Hẹn tái khám', 'Ghi chú nội bộ'];
+const status = () => exam().getByRole('status', { name: 'Trạng thái bệnh án' });
+const labelOf = (name: string) => exam().findByLabelText(name);
+const NO_AUTOSAVE_WAIT_MS = 1700;
+
+describe('exam room — ghi bệnh án (#12, #13, UC48; BR-KB-01)', () => {
+  it('lượt đang khám mở sẵn form bệnh án đúng 5 trường của hợp đồng (khám lâm sàng, chẩn đoán, hướng điều trị, hẹn tái khám, ghi chú nội bộ), chưa có thay đổi', async () => {
+    await renderExamRoom();
 
     await screen.findByRole('heading', { level: 2, name: 'Lu' });
+    for (const label of FIELDS) expect(await labelOf(label)).not.toHaveAttribute('readonly');
+    expect(status()).toHaveTextContent('Chưa có thay đổi');
+    expect(exam().queryByText(/chưa nối API \(T37\)/)).not.toBeInTheDocument();
+    expect(exam().getByText('Kê đơn thuốc chưa nối API (T46).')).toBeInTheDocument();
+    expect(exam().getByText('Khách không xem được ghi chú này.')).toBeInTheDocument();
+  });
+
+  it('lượt đang chờ chưa có form: mời gọi lượt trước; gọi xong thì form hiện ra cho đúng lượt đó', async () => {
+    const read = vi.spyOn(visitApi, 'getMedicalRecord');
+    const { user } = await renderExamRoom();
     await user.click((await rowOf('Tôm')).getByRole('button', { name: /Tôm/ }));
     await screen.findByRole('heading', { level: 2, name: 'Tôm' });
 
-    expect(exam().getByText(NOTICE)).toBeInTheDocument();
-    expect(screen.queryByRole('alert')).not.toBeInTheDocument();
-    expect(screen.queryByText(/Không tải được|không tìm thấy|Không thực hiện được/i)).not.toBeInTheDocument();
-    expect(screen.queryByRole('button', { name: /Hoàn tất/ })).not.toBeInTheDocument();
-    expect(screen.queryByLabelText(/Chẩn đoán/)).not.toBeInTheDocument();
-    expect(detail).not.toHaveBeenCalled();
+    expect(exam().queryByLabelText('Chẩn đoán')).not.toBeInTheDocument();
+    expect(exam().getByText(/Gọi lượt để ghi bệnh án/)).toBeInTheDocument();
+    expect(read).not.toHaveBeenCalledWith(2102);
+
+    await user.click(exam().getByRole('button', { name: 'Gọi Tôm vào khám' }));
+    expect(await labelOf('Chẩn đoán')).toBeInTheDocument();
+    expect(read).toHaveBeenCalledWith(2102);
+  });
+
+  it('KHÔNG tự lưu: gõ xong chờ quá 1,5 giây vẫn chưa gọi PUT (mỗi lần lưu có thay đổi là một dòng audit, ADR-0066); bấm "Lưu" mới ghi đủ 5 trường, chuỗi trống thành null', async () => {
+    const save = vi.spyOn(visitApi, 'saveMedicalRecord');
+    const { user } = await renderExamRoom();
+
+    await user.type(await labelOf('Chẩn đoán'), 'Viêm da dị ứng');
+    expect(status()).toHaveTextContent('Có thay đổi chưa lưu');
+    await new Promise((resolve) => setTimeout(resolve, NO_AUTOSAVE_WAIT_MS));
+    expect(save).not.toHaveBeenCalled();
+
+    await user.click(exam().getByRole('button', { name: /^Lưu/ }));
+    await waitFor(() => expect(save).toHaveBeenCalledWith(2002, { examination: null, diagnosis: 'Viêm da dị ứng', treatmentPlan: null, internalNote: null, followUpDate: null }));
+    await waitFor(() => expect(status()).toHaveTextContent(/Đã lưu lúc/));
+    expect((await visitApi.getMedicalRecord(2002)).diagnosis).toBe('Viêm da dị ứng');
+  });
+
+  it('Ctrl+S lưu ngay khi đang gõ; không có thay đổi thì nút Lưu tắt', async () => {
+    const save = vi.spyOn(visitApi, 'saveMedicalRecord');
+    const { user } = await renderExamRoom();
+    expect(await exam().findByRole('button', { name: /^Lưu/ })).toBeDisabled();
+
+    await user.type(await labelOf('Hướng điều trị'), 'Tắm dầu gội y tế');
+    await user.keyboard('{Control>}s{/Control}');
+
+    await waitFor(() => expect(save).toHaveBeenCalledWith(2002, expect.objectContaining({ treatmentPlan: 'Tắm dầu gội y tế' })));
+    await waitFor(() => expect(exam().getByRole('button', { name: /^Lưu/ })).toBeDisabled());
+  });
+
+  it('hẹn tái khám sai (BR-KB-06): BE từ chối 400, câu báo hiện ngay trong form, vẫn còn thay đổi chưa lưu', async () => {
+    const { user } = await renderExamRoom();
+
+    fireEvent.change(await labelOf('Hẹn tái khám'), { target: { value: '2026-10-22' } });
+    await user.click(exam().getByRole('button', { name: /^Lưu/ }));
+
+    expect(await exam().findByRole('alert')).toHaveTextContent('Ngày tái khám phải sau ngày khám và không quá 180 ngày');
+    expect(status()).toHaveTextContent('Có thay đổi chưa lưu');
+    expect((await visitApi.getMedicalRecord(2002)).followUpDate).toBeNull();
+  });
+
+  it('hẹn tái khám hợp lệ được lưu; ô ngày chỉ cho chọn từ ngày sau ngày khám tới tối đa 180 ngày', async () => {
+    const { user } = await renderExamRoom();
+
+    const date = await labelOf('Hẹn tái khám');
+    expect(date).toHaveAttribute('min', '2026-10-23');
+    expect(date).toHaveAttribute('max', '2027-04-20');
+    fireEvent.change(date, { target: { value: '2026-11-05' } });
+    await user.click(exam().getByRole('button', { name: /^Lưu/ }));
+
+    await waitFor(() => expect(status()).toHaveTextContent(/Đã lưu lúc/));
+    expect((await visitApi.getMedicalRecord(2002)).followUpDate).toBe('2026-11-05');
+  });
+});
+
+describe('exam room — hoàn tất lượt (#10, UC48; BR-KB-02)', () => {
+  it('thiếu chẩn đoán: FE KHÔNG tự chặn mà hỏi BE, hiện nguyên câu BE trả (bỏ mã rule) ngay trong form và đưa con trỏ về ô Chẩn đoán; lượt vẫn đang khám', async () => {
+    const complete = vi.spyOn(visitApi, 'complete');
+    const { user } = await renderExamRoom();
+
+    await user.click(await exam().findByRole('button', { name: /Hoàn tất/ }));
+
+    expect(await exam().findByRole('alert')).toHaveTextContent('Lượt có dịch vụ khám phải có chẩn đoán trước khi hoàn tất');
+    expect(exam().getByRole('alert')).not.toHaveTextContent('BR-KB-02');
+    expect(complete).toHaveBeenCalledTimes(1);
+    await waitFor(() => expect(exam().getByLabelText('Chẩn đoán')).toHaveFocus());
+    expect((await visitApi.getVisit(2002)).status).toBe('IN_PROGRESS');
+    expect(toast.success).not.toHaveBeenCalled();
+  });
+
+  it('có chẩn đoán: lưu bệnh án rồi mới hoàn tất; lượt COMPLETED, Order chờ thu, chuyển sang lượt kế tiếp của hàng chờ', async () => {
+    const save = vi.spyOn(visitApi, 'saveMedicalRecord');
+    const complete = vi.spyOn(visitApi, 'complete');
+    const { user } = await renderExamRoom();
+    const orderId = (await visitApi.getVisit(2002)).orderId;
+
+    await user.type(await labelOf('Chẩn đoán'), 'Viêm da dị ứng');
+    await user.click(exam().getByRole('button', { name: /Hoàn tất/ }));
+
+    await waitFor(() => expect(complete).toHaveBeenCalledWith(2002));
+    expect(save.mock.invocationCallOrder[0]).toBeLessThan(complete.mock.invocationCallOrder[0]);
+    await waitFor(() => expect(toast.success).toHaveBeenCalledWith(expect.stringContaining('Lu')));
+    expect(toast.success).toHaveBeenCalledWith(expect.stringContaining('thu ngân'));
+    expect((await visitApi.getVisit(2002)).status).toBe('COMPLETED');
+    expect((await salesApi.getOrder(orderId)).status).toBe('PENDING');
+    expect(await screen.findByRole('heading', { level: 2, name: 'Tôm' })).toBeInTheDocument();
+    await waitFor(() => expect(petsInQueue()).toEqual(['Tôm']));
+  });
+
+  it('Ctrl+Enter cũng hoàn tất lượt đang khám', async () => {
+    const complete = vi.spyOn(visitApi, 'complete');
+    const { user } = await renderExamRoom();
+
+    await user.type(await labelOf('Chẩn đoán'), 'Khỏe');
+    await user.keyboard('{Control>}{Enter}{/Control}');
+
+    await waitFor(() => expect(complete).toHaveBeenCalledWith(2002));
+  });
+
+  it('lưu trước khi hoàn tất bị BE từ chối (BR-KB-06): không gọi hoàn tất, câu báo hiện trong form', async () => {
+    const complete = vi.spyOn(visitApi, 'complete');
+    const { user } = await renderExamRoom();
+
+    await user.type(await labelOf('Chẩn đoán'), 'Viêm da');
+    fireEvent.change(exam().getByLabelText('Hẹn tái khám'), { target: { value: '2026-10-22' } });
+    await user.click(exam().getByRole('button', { name: /Hoàn tất/ }));
+
+    expect(await exam().findByRole('alert')).toHaveTextContent('Ngày tái khám phải sau ngày khám');
+    expect(complete).not.toHaveBeenCalled();
+  });
+
+  it('BE trả 409 khi hoàn tất (lượt vừa hoàn tất ở nơi khác): câu báo theo thao tác, không phải "đã tải lại hàng đợi"', async () => {
+    vi.spyOn(visitApi, 'complete').mockRejectedValue(new ApiError('INVALID_STATE_TRANSITION', 'Không thể chuyển trạng thái lượt tiếp nhận từ COMPLETED sang COMPLETED', 409));
+    const { user } = await renderExamRoom();
+
+    await user.type(await labelOf('Chẩn đoán'), 'Khỏe');
+    await user.click(exam().getByRole('button', { name: /Hoàn tất/ }));
+
+    expect(await exam().findByRole('alert')).toHaveTextContent('Lượt đã được hoàn tất rồi.');
+  });
+});
+
+describe('exam room — đã khám hôm nay, bệnh án đã khóa và bản bổ sung (#12, #15, UC53; BR-KB-01)', () => {
+  const todayList = () => within(screen.getByRole('list', { name: 'Đã khám hôm nay' })).getAllByRole('listitem');
+  const openCompleted = async (user: ReturnType<typeof userEvent.setup>, pet = 'Mochi') => {
+    await waitFor(() => expect(todayList().length).toBeGreaterThan(0));
+    await user.click(within(todayList().find((li) => li.textContent?.includes(pet))!).getByRole('button', { name: new RegExp(pet) }));
+    await screen.findByRole('heading', { level: 2, name: pet });
+  };
+
+  it('hàng chờ có thêm danh sách "Đã khám hôm nay" (lượt Khám/Tiêm đã hoàn tất trong ngày của cả chi nhánh): mở ra là bệnh án đã khóa, chỉ đọc', async () => {
+    const { user } = await renderExamRoom();
+    await openCompleted(user);
+
+    for (const label of FIELDS) expect(await labelOf(label)).toHaveAttribute('readonly');
+    expect(await exam().findByText(/Bệnh án đã khóa/)).toBeInTheDocument();
+    expect(exam().queryByRole('button', { name: /^Lưu/ })).not.toBeInTheDocument();
+    expect(exam().queryByRole('button', { name: /Hoàn tất/ })).not.toBeInTheDocument();
+    expect(exam().queryByRole('button', { name: 'Gọi Mochi vào khám' })).not.toBeInTheDocument();
+    expect(await labelOf('Chẩn đoán')).toHaveValue('Viêm đường hô hấp trên');
+  });
+
+  it('hiện bản bổ sung đã có theo thứ tự ghi kèm người ghi; thêm bản bổ sung (mặc định khách xem được) và bản nội bộ', async () => {
+    const add = vi.spyOn(visitApi, 'addAddendum');
+    const { user } = await renderExamRoom();
+    await openCompleted(user);
+
+    const list = await exam().findByRole('list', { name: 'Bản bổ sung' });
+    expect(within(list).getByText('Kết quả xét nghiệm nhanh về sau: FeLV/FIV âm tính')).toBeInTheDocument();
+    expect(within(list).getByText(/BS\. Minh Anh/)).toBeInTheDocument();
+
+    const content = exam().getByLabelText('Nội dung bổ sung');
+    const submit = exam().getByRole('button', { name: 'Thêm bổ sung' });
+    expect(submit).toBeDisabled();
+    await user.type(content, '  Kết quả máu về sau: bạch cầu tăng ');
+    await user.click(submit);
+    await waitFor(() => expect(add).toHaveBeenCalledWith(61, { content: 'Kết quả máu về sau: bạch cầu tăng', isInternal: false }));
+    expect(await within(await exam().findByRole('list', { name: 'Bản bổ sung' })).findByText('Kết quả máu về sau: bạch cầu tăng')).toBeInTheDocument();
+    expect(exam().getByLabelText('Nội dung bổ sung')).toHaveValue('');
+
+    await user.type(exam().getByLabelText('Nội dung bổ sung'), 'Chủ khó tính');
+    await user.click(exam().getByLabelText('Chỉ nhân viên xem'));
+    await user.click(exam().getByRole('button', { name: 'Thêm bổ sung' }));
+    await waitFor(() => expect(add).toHaveBeenLastCalledWith(61, { content: 'Chủ khó tính', isInternal: true }));
+    const internal = (await within(await exam().findByRole('list', { name: 'Bản bổ sung' })).findByText('Chủ khó tính')).closest('li')!;
+    expect(within(internal).getByText('Nội bộ')).toBeInTheDocument();
+  });
+
+  it('lỗi từ BE khi thêm bản bổ sung hiện trong form (không mất nội dung đã gõ)', async () => {
+    vi.spyOn(visitApi, 'addAddendum').mockRejectedValue(new ApiError('INVALID_STATE_TRANSITION', 'Không thể chuyển trạng thái lượt tiếp nhận từ IN_PROGRESS sang COMPLETED', 409));
+    const { user } = await renderExamRoom();
+    await openCompleted(user);
+
+    await user.type(await exam().findByLabelText('Nội dung bổ sung'), 'Ghi chú');
+    await user.click(exam().getByRole('button', { name: 'Thêm bổ sung' }));
+
+    expect(await exam().findByRole('alert')).toHaveTextContent('sửa trực tiếp bệnh án');
+    expect(exam().getByLabelText('Nội dung bổ sung')).toHaveValue('Ghi chú');
+  });
+});
+
+describe('exam room — cân nặng khi khám (#14; BR-KH-04)', () => {
+  it('ghi cân: gọi đúng đối số, báo thành công, xóa ô nhập, cân nặng hiện tại của thú đổi theo', async () => {
+    const weigh = vi.spyOn(visitApi, 'recordWeight');
+    const { user } = await renderExamRoom();
+
+    expect(await exam().findByText('Hiện tại 18.3 kg')).toBeInTheDocument();
+    const input = await exam().findByLabelText('Cân nặng (kg)');
+    await user.type(input, '18.4');
+    await user.click(exam().getByRole('button', { name: 'Ghi cân' }));
+
+    await waitFor(() => expect(weigh).toHaveBeenCalledWith(2002, { weightKg: 18.4 }));
+    await waitFor(() => expect(toast.success).toHaveBeenCalledWith(expect.stringContaining('18.4')));
+    await waitFor(() => expect(input).toHaveValue(null));
+    expect(await exam().findByText('Hiện tại 18.4 kg')).toBeInTheDocument();
+  });
+
+  it('cân nặng không hợp lệ: BE từ chối (BR-KH-04), câu báo hiện ngay trong form và giữ giá trị đã gõ; ô trống thì chưa cho bấm', async () => {
+    const { user } = await renderExamRoom();
+
+    expect(await exam().findByRole('button', { name: 'Ghi cân' })).toBeDisabled();
+    await user.type(exam().getByLabelText('Cân nặng (kg)'), '0');
+    await user.click(exam().getByRole('button', { name: 'Ghi cân' }));
+
+    expect(await exam().findByRole('alert')).toHaveTextContent('Cân nặng phải lớn hơn 0');
+    expect(exam().getByLabelText('Cân nặng (kg)')).toHaveValue(0);
+  });
+});
+
+describe('exam room — tiêm chủng trong lượt khám (#18–20, UC49; BR-KB-04)', () => {
+  const FIVE = { vaccineTypeId: 2, protocolId: 1, productId: 6 };
+  const section = async () => within(await exam().findByRole('region', { name: 'Tiêm chủng' }));
+  const lines = async () => within(await exam().findByRole('list', { name: 'Chỉ định trong lượt' }));
+  /** Dựng sẵn mũi tiêm bằng API (đăng nhập VET) rồi mở màn hình. */
+  async function renderAfter(setup: () => Promise<unknown>) {
+    await startDesk('doctor@store1.vn');
+    await setup();
+    return renderDesk(<DoctorWorkspacePage />);
+  }
+
+  it('chọn loại vaccine → mũi gợi ý và sản phẩm còn tồn được chọn sẵn → ghi mũi: đúng đối số, mũi hiện trong lượt, dòng vaccine vào Chỉ định, gợi ý chuyển sang mũi kế tiếp', async () => {
+    const record = vi.spyOn(visitApi, 'recordVaccination');
+    const { user } = await renderExamRoom();
+    const vaccination = await section();
+
+    await user.selectOptions(await vaccination.findByLabelText('Loại vaccine'), '5 bệnh');
+    expect(await vaccination.findByLabelText('Mũi theo phác đồ')).toHaveDisplayValue(/Mũi 1 .*gợi ý/);
+    expect(vaccination.getByLabelText('Sản phẩm vaccine')).toHaveDisplayValue('Vaccine 5 bệnh Vanguard (còn 4 liều)');
+    await user.click(vaccination.getByRole('button', { name: 'Ghi mũi tiêm' }));
+
+    await waitFor(() => expect(record).toHaveBeenCalledWith(2002, FIVE));
+    expect(within(await vaccination.findByRole('list', { name: 'Mũi tiêm trong lượt' })).getByText(/Mũi 1 · 5 bệnh/)).toBeInTheDocument();
+    expect(toast.success).toHaveBeenCalledWith(expect.stringContaining('Đã ghi mũi 1 5 bệnh'));
+    await waitFor(async () => expect((await lines()).getByText('Vaccine 5 bệnh Vanguard')).toBeInTheDocument());
+    expect((await lines()).getByText('Mũi tiêm')).toBeInTheDocument();
+    await waitFor(() => expect(vaccination.getByLabelText('Mũi theo phác đồ')).toHaveDisplayValue(/Mũi 2 .*gợi ý/));
+    expect(vaccination.getByLabelText('Sản phẩm vaccine')).toHaveDisplayValue('Vaccine 5 bệnh Vanguard (còn 3 liều)');
+  });
+
+  it('VET chọn mũi khác với gợi ý (đã tiêm ở nơi khác, hỏi chủ rồi quyết định): gửi đúng mũi đã chọn', async () => {
+    const record = vi.spyOn(visitApi, 'recordVaccination');
+    const { user } = await renderExamRoom();
+    const vaccination = await section();
+
+    await user.selectOptions(await vaccination.findByLabelText('Loại vaccine'), '5 bệnh');
+    await user.selectOptions(await vaccination.findByLabelText('Mũi theo phác đồ'), 'Mũi 2 (cách 21 ngày, từ 9 tuần tuổi)');
+    await user.click(vaccination.getByRole('button', { name: 'Ghi mũi tiêm' }));
+
+    await waitFor(() => expect(record).toHaveBeenCalledWith(2002, { ...FIVE, protocolId: 2 }));
+  });
+
+  it('xóa mũi ghi nhầm khi lượt còn đang khám: mũi và dòng vaccine biến mất, kho được hoàn', async () => {
+    const remove = vi.spyOn(visitApi, 'deleteVaccination');
+    const { user } = await renderAfter(() => visitApi.recordVaccination(2002, FIVE));
+    const vaccination = await section();
+    expect((await apiClient.get('/api/inventory/6')).data.data.availableQuantity).toBe(3);
+
+    await user.click(await vaccination.findByRole('button', { name: 'Xóa mũi 1 5 bệnh' }));
+
+    await waitFor(() => expect(remove).toHaveBeenCalledWith(2002, expect.any(Number)));
+    expect(await vaccination.findByText('Chưa ghi mũi tiêm nào trong lượt này.')).toBeInTheDocument();
+    await waitFor(async () => expect((await lines()).queryByText('Vaccine 5 bệnh Vanguard')).not.toBeInTheDocument());
+    expect((await apiClient.get('/api/inventory/6')).data.data.availableQuantity).toBe(4);
+  });
+
+  it('chưa đủ tuổi tối thiểu: cảnh báo của BE hiện bằng cảnh báo (không chặn), mũi vẫn được ghi', async () => {
+    const dose = { vaccinationId: 9, visitId: 2002, branchId: 1, vaccineTypeId: 2, vaccineTypeName: '5 bệnh', protocolId: 1, doseNumber: 1, productId: 6, productName: 'Vaccine 5 bệnh Vanguard', lotNumber: 'VG2402', expiryDate: '2027-03-31', administeredOn: '2026-10-22', nextDueDate: '2026-11-12', superseded: false, recordedBy: 5, orderLineId: 99 };
+    vi.spyOn(visitApi, 'recordVaccination').mockResolvedValue({ vaccination: dose, warnings: ['UNDER_MIN_AGE'] });
+    const { user } = await renderExamRoom();
+    const vaccination = await section();
+
+    await user.selectOptions(await vaccination.findByLabelText('Loại vaccine'), '5 bệnh');
+    await user.click(await vaccination.findByRole('button', { name: 'Ghi mũi tiêm' }));
+
+    await waitFor(() => expect(toast.warning).toHaveBeenCalledWith(expect.stringContaining('chưa đủ tuổi tối thiểu')));
+    expect(toast.success).toHaveBeenCalledWith(expect.stringContaining('Đã ghi mũi 1'));
+  });
+
+  it('loại vaccine hết sản phẩm còn tồn khả dụng: không cho chọn (nêu rõ lý do), nút ghi mũi tắt', async () => {
+    const { user } = await renderAfter(async () => {
+      for (let i = 0; i < 4; i += 1) await visitApi.recordVaccination(2002, FIVE);
+    });
+    const vaccination = await section();
+
+    await user.selectOptions(await vaccination.findByLabelText('Loại vaccine'), '5 bệnh');
+
+    expect(await vaccination.findByText('Loại vaccine này hiện không còn sản phẩm nào có tồn khả dụng.')).toBeInTheDocument();
+    expect(vaccination.queryByLabelText('Sản phẩm vaccine')).not.toBeInTheDocument();
+    expect(vaccination.getByRole('button', { name: 'Ghi mũi tiêm' })).toBeDisabled();
+  });
+
+  it('BE từ chối ghi mũi: câu báo hiện trong mục tiêm chủng, không có mũi nào được thêm', async () => {
+    vi.spyOn(visitApi, 'recordVaccination').mockRejectedValue(new ApiError('BUSINESS_RULE_VIOLATION', 'Sản phẩm vaccine không còn tồn khả dụng tại chi nhánh (BR-KB-04)', 400));
+    const { user } = await renderExamRoom();
+    const vaccination = await section();
+
+    await user.selectOptions(await vaccination.findByLabelText('Loại vaccine'), '5 bệnh');
+    await user.click(await vaccination.findByRole('button', { name: 'Ghi mũi tiêm' }));
+
+    expect(await vaccination.findByRole('alert')).toHaveTextContent('Sản phẩm vaccine không còn tồn khả dụng tại chi nhánh');
+    expect(vaccination.getByText('Chưa ghi mũi tiêm nào trong lượt này.')).toBeInTheDocument();
+  });
+
+  it('BE thật chưa có tiêm chủng (T28): #18 trả 404 thì câu báo hiện ngay trong mục "Tiêm chủng", màn không vỡ, bệnh án vẫn dùng được và nút ghi mũi tắt', async () => {
+    vi.spyOn(visitApi, 'getVaccinationOptions').mockRejectedValue(new ApiError('RESOURCE_NOT_FOUND', 'Không tìm thấy tài nguyên yêu cầu', 404));
+    const { user } = await renderExamRoom();
+    const vaccination = await section();
+
+    await user.selectOptions(await vaccination.findByLabelText('Loại vaccine'), '5 bệnh');
+
+    expect(await vaccination.findByText('Không tìm thấy tài nguyên yêu cầu')).toBeInTheDocument();
+    expect(vaccination.getByRole('button', { name: 'Ghi mũi tiêm' })).toBeDisabled();
+    expect(vaccination.queryByLabelText('Mũi theo phác đồ')).not.toBeInTheDocument();
+    // Chọn lại loại khác vẫn được, và phần còn lại của bệnh án không bị ảnh hưởng.
+    await user.selectOptions(vaccination.getByLabelText('Loại vaccine'), 'Dại');
+    expect(vaccination.getByLabelText('Loại vaccine')).toHaveDisplayValue('Dại');
+    expect(exam().getByLabelText('Chẩn đoán')).not.toHaveAttribute('readonly');
+    expect(exam().getByRole('button', { name: /Hoàn tất/ })).toBeEnabled();
+  });
+
+  it('thú nuôi loài chưa có loại vaccine nào (hamster): nói rõ, không có form ghi mũi', async () => {
+    const { user } = await renderExamRoom();
+    await user.click((await rowOf('Tôm')).getByRole('button', { name: /Tôm/ }));
+    await user.click(await exam().findByRole('button', { name: 'Gọi Tôm vào khám' }));
+
+    expect(await (await section()).findByText('Loài này chưa có loại vaccine nào trong danh mục.')).toBeInTheDocument();
+    expect((await section()).queryByLabelText('Loại vaccine')).not.toBeInTheDocument();
+  });
+
+  it('lượt đã hoàn tất: mũi tiêm chỉ để xem, không có nút xóa và không có form ghi mũi; sai sót ghi bằng bản bổ sung (BR-KB-04)', async () => {
+    const { user } = await renderAfter(async () => {
+      await visitApi.recordVaccination(2002, FIVE);
+      await visitApi.saveMedicalRecord(2002, { diagnosis: 'Khỏe' });
+      await visitApi.complete(2002);
+    });
+    const list = await screen.findByRole('list', { name: 'Đã khám hôm nay' });
+    await user.click(within(list).getByRole('button', { name: /^Lu,/ }));
+    await screen.findByRole('heading', { level: 2, name: 'Lu' });
+
+    const vaccination = await section();
+    expect(await vaccination.findByText(/Mũi 1 · 5 bệnh/)).toBeInTheDocument();
+    expect(vaccination.queryByRole('button', { name: /Xóa mũi/ })).not.toBeInTheDocument();
+    expect(vaccination.queryByLabelText('Loại vaccine')).not.toBeInTheDocument();
+    expect(vaccination.getByText(/bản bổ sung/)).toBeInTheDocument();
   });
 });
 
 describe('exam room — không gửi request vai trò này không được làm (VISIT_ROLES)', () => {
-  it('bác sĩ chỉ hỏi hàng đợi của tôi: không hỏi lịch hẹn chờ check-in (403) và không hỏi hàng đợi chi nhánh', async () => {
+  it('bác sĩ hỏi hàng đợi của tôi và chỉ hỏi hàng đợi chi nhánh cho danh sách "Đã khám hôm nay"; không hỏi lịch hẹn chờ check-in (403)', async () => {
     const arrivals = vi.spyOn(visitApi, 'listArrivals');
     const branchQueue = vi.spyOn(visitApi, 'listQueue');
     const myQueue = vi.spyOn(visitApi, 'getMyQueue');
@@ -190,6 +548,24 @@ describe('exam room — không gửi request vai trò này không được làm 
 
     expect(myQueue).toHaveBeenCalled();
     expect(arrivals).not.toHaveBeenCalled();
-    expect(branchQueue).not.toHaveBeenCalled();
+    expect(branchQueue).toHaveBeenCalledWith({ status: 'COMPLETED', serviceGroup: 'MEDICAL' });
+    expect(branchQueue.mock.calls.every(([query]) => query?.status === 'COMPLETED')).toBe(true);
+  });
+
+  it('bác sĩ không gọi API ghi của lễ tân và không gọi hoàn tất khi lượt không phải của mình', async () => {
+    await startDesk('doctor@store1.vn');
+    vi.spyOn(visitApi, 'getMyQueue').mockResolvedValue([makeVisit(91, { petName: 'Của bạn khác', status: 'IN_PROGRESS', assigneeId: 9, assigneeName: 'BS. Khác' })]);
+    const complete = vi.spyOn(visitApi, 'complete');
+    const save = vi.spyOn(visitApi, 'saveMedicalRecord');
+    vi.spyOn(visitApi, 'getMedicalRecord').mockResolvedValue({
+      visitId: 91, examination: null, diagnosis: null, treatmentPlan: null, internalNote: null, followUpDate: null, locked: false, lastEditedBy: null, prescriptions: [], vaccinations: [], addenda: [],
+    });
+    renderDesk(<DoctorWorkspacePage />);
+
+    expect(await exam().findByLabelText('Chẩn đoán')).toHaveAttribute('readonly');
+    expect(exam().getByText(/Lượt của BS\. Khác\. Bạn chỉ xem được/)).toBeInTheDocument();
+    expect(exam().queryByRole('button', { name: /Hoàn tất|^Lưu/ })).not.toBeInTheDocument();
+    expect(complete).not.toHaveBeenCalled();
+    expect(save).not.toHaveBeenCalled();
   });
 });

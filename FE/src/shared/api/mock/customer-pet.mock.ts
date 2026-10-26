@@ -5,7 +5,7 @@
 import type { Role } from '../../types/auth';
 import type { CustomerProfile } from '../../types/profile';
 import { foldVi } from '../../utils/text';
-import type { CustomerSearchItem, HealthRecord, PetResponse, Sex, Species, WeightRecord } from '../../../domains/pets/types';
+import type { CustomerSearchItem, HealthRecord, HealthVisitEntry, PetResponse, Sex, Species, VaccinationRecord, WeightRecord } from '../../../domains/pets/types';
 import {
   allCustomers,
   createCounterProfile,
@@ -193,10 +193,12 @@ function save(s: State) {
 
 // ─── Đọc chéo cho mock lịch hẹn (như PetQueryApi của BE) ───
 
-/** Chủ hiện tại, tên, ngày mất của thú; undefined nếu không có. */
+/** Chủ hiện tại, tên, ngày sinh, ngày mất của thú; undefined nếu không có. */
 export function petSummary(petId: number) {
   const pet = load().pets.find((p) => p.petId === petId);
-  return pet && { petId: pet.petId, customerId: pet.customerId, name: pet.name, species: pet.species, deceasedOn: pet.deceasedOn ?? null };
+  return (
+    pet && { petId: pet.petId, customerId: pet.customerId, name: pet.name, species: pet.species, birthDate: pet.birthDate ?? null, deceasedOn: pet.deceasedOn ?? null }
+  );
 }
 
 /**
@@ -216,6 +218,27 @@ export function setPetOpenVisit(petId: number, open: boolean) {
   save(s);
 }
 
+/** `weight_records.weight_kg` là NUMERIC(6,2): tối đa 9999.99 (PetWeightApiService). */
+const MAX_WEIGHT_KG = 9999.99;
+
+/**
+ * `PetApi.recordWeight` cho lượt khám (T37, nguồn VET, BR-KH-04, A8): ≤ 0 → 400; làm tròn 2 chữ số thập phân (HALF_UP) rồi phải trong 0.01–9999.99 kg → 400; thú đã mất →
+ * 400 BR-KH-05 (kiểm SAU cân nặng, như BE). Mỗi lần gọi là một bản ghi LOG gắn lượt; cân nặng hiện tại của thú là lần đo gần nhất.
+ */
+export function recordVisitWeight(petId: number, weightKg: number, visitId: number, measuredAt: string): { weightRecordId: number; weightKg: number; measuredAt: string } | MockReply {
+  if (!(weightKg > 0)) return ruleFail('BR-KH-04', 'Cân nặng phải lớn hơn 0');
+  const rounded = Math.round((weightKg + Number.EPSILON) * 100) / 100;
+  if (rounded <= 0 || rounded > MAX_WEIGHT_KG) return ruleFail('BR-KH-04', 'Cân nặng phải trong khoảng 0.01 đến 9999.99 kg');
+  const s = load();
+  const pet = s.pets.find((p) => p.petId === petId);
+  if (!pet) return notFound('thú cưng', petId);
+  if (pet.deceasedOn) return ruleFail('BR-KH-05', 'Thú cưng đã mất, hồ sơ chỉ đọc');
+  const weightRecordId = s.nextWeightId++;
+  s.weights.push({ weightRecordId, petId, weightKg: rounded, source: 'VET', visitId, boardingBookingId: null, measuredAt });
+  save(s);
+  return { weightRecordId, weightKg: rounded, measuredAt };
+}
+
 /** Thú đã phát sinh lịch hẹn thì không xóa cứng được nữa (BR-KH-06). */
 export function markPetHasBooking(petId: number) {
   const s = load();
@@ -228,7 +251,7 @@ export function markPetHasBooking(petId: number) {
 
 // ─── Chuyển đổi sang schema hợp đồng ───
 
-const byNewest = (a: WeightRow, b: WeightRow) => Date.parse(b.measuredAt) - Date.parse(a.measuredAt);
+const byNewest = (a: WeightRow, b: WeightRow) => Date.parse(b.measuredAt) - Date.parse(a.measuredAt) || b.weightRecordId - a.weightRecordId;
 
 /** Cân nặng hiện tại là lần đo gần nhất (BR-KH-04). */
 const currentWeight = (s: State, petId: number) => s.weights.filter((w) => w.petId === petId).sort(byNewest)[0]?.weightKg ?? null;
@@ -602,6 +625,38 @@ const addWeight: MockHandler = (req) => {
 
 // ─── Hồ sơ sức khỏe (UC25, visit-v1 #21) ───
 
+/** Dữ liệu lâm sàng thật của một thú (lượt đã hoàn tất kèm bệnh án, mũi tiêm tại hệ thống). */
+export interface HealthSource {
+  visits: HealthVisitEntry[];
+  vaccinations: VaccinationRecord[];
+}
+let healthSource: ((petId: number) => HealthSource) | null = null;
+
+/**
+ * T37: mock lâm sàng (visit-clinical.mock.ts) đăng ký nguồn dữ liệu lúc nạp để hồ sơ sức khỏe phản ánh lượt khám và mũi tiêm vừa ghi. Đăng ký thay vì import vì visit-clinical đã import
+ * file này (tránh vòng). Chưa đăng ký (test chỉ nạp riêng file này) thì hồ sơ chỉ có dữ liệu mẫu.
+ */
+export function registerHealthSource(source: (petId: number) => HealthSource) {
+  healthSource = source;
+}
+
+/** Hợp dữ liệu mẫu và dữ liệu thật: lượt mới nhất trước; mũi tiêm "sắp tới" là mũi mới nhất mỗi loại vaccine (BR-TB-03: mũi cũ hơn cùng loại là `superseded`). */
+function mergeHealth(seeded: Omit<HealthRecord, 'petId'>, live: HealthSource): Omit<HealthRecord, 'petId'> {
+  const newest = <T extends { administeredOn?: string; visitDate?: string }>(a: T, b: T) => (b.administeredOn ?? b.visitDate ?? '').localeCompare(a.administeredOn ?? a.visitDate ?? '');
+  const visits = [...live.visits, ...seeded.visits].sort((a, b) => newest(a, b) || b.visitId - a.visitId);
+  const all = [...live.vaccinations, ...seeded.vaccinations].sort((a, b) => newest(a, b) || b.vaccinationId - a.vaccinationId);
+  const latest = new Map<number, VaccinationRecord>();
+  for (const dose of all) if (!latest.has(dose.vaccineTypeId)) latest.set(dose.vaccineTypeId, dose);
+  const today = todayVn();
+  const followUps = live.visits.map((v) => v.followUpDate).filter((d): d is string => !!d && d >= today);
+  return {
+    visits,
+    vaccinations: all.map((dose) => ({ ...dose, superseded: latest.get(dose.vaccineTypeId)!.vaccinationId !== dose.vaccinationId })),
+    upcomingVaccinations: [...latest.values()].map((dose) => ({ vaccineTypeId: dose.vaccineTypeId, vaccineTypeName: dose.vaccineTypeName, nextDueDate: dose.nextDueDate })),
+    upcomingFollowUpDate: [seeded.upcomingFollowUpDate, ...followUps].filter((d): d is string => !!d).sort()[0] ?? null,
+  };
+}
+
 const getHealthRecord: MockHandler = (req) => {
   if (!isCustomer(req) && !canLookUp(req)) return denied();
   const s = load();
@@ -615,7 +670,9 @@ const getHealthRecord: MockHandler = (req) => {
   if (!pet) return notFound('thú cưng', req.params.petId);
   // visit-v1: khách không phải chủ hiện tại → 403.
   if (own && pet.customerId !== own.customerId) return scopeDenied();
-  const record = HEALTH[pet.petId] ?? { visits: [], vaccinations: [], upcomingVaccinations: [], upcomingFollowUpDate: null };
+  const seeded = HEALTH[pet.petId] ?? { visits: [], vaccinations: [], upcomingVaccinations: [], upcomingFollowUpDate: null };
+  const live = healthSource?.(pet.petId);
+  const record = live ? mergeHealth(seeded, live) : seeded;
   // Khách không nhận ghi chú nội bộ và bản bổ sung nội bộ (BR-KH-07, BR-KB-01).
   const visits = own
     ? record.visits.map(({ internalNote: _note, ...v }) => ({ ...v, addenda: v.addenda.filter((a) => !a.isInternal) }))

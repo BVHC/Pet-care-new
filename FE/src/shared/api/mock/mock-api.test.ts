@@ -77,8 +77,8 @@ describe('mock API envelope (00-method §3.4–3.5)', () => {
 
   it('answers 404 for a path that has no mock yet', async () => {
     const token = await tokenOf('reception@store1.vn');
-    // `/api/visits` được mock từ T36, nên lấy một đường dẫn của module visit mà T37 mới mock (bệnh án).
-    const res = await failure(client.get('/api/visits/1/medical-record', bearer(token)));
+    // `/api/visits` được mock từ T36, bệnh án và tiêm chủng từ T37; kê đơn (visit-v1 #16–17) là T46 nên vẫn chưa có mock.
+    const res = await failure(client.post('/api/visits/1/prescriptions', {}, bearer(token)));
     expect(res.status).toBe(404);
     expect(res.data.errorCode).toBe('RESOURCE_NOT_FOUND');
   });

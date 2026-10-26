@@ -777,6 +777,15 @@ export function cancelAppointmentByVisit(appointmentId: number, at: string): voi
   save(s);
 }
 
+/** `AppointmentApi.completeByVisit` (Lịch hẹn#7, CHECKED_IN → COMPLETED) khi lượt có lịch hẹn hoàn tất (BR-LH-11); lịch không còn CHECKED_IN thì bỏ qua. */
+export function completeAppointmentByVisit(appointmentId: number): void {
+  const s = load(Date.now());
+  const a = s.appointments.find((x) => x.appointmentId === appointmentId);
+  if (!a || a.status !== 'CHECKED_IN') return;
+  a.status = 'COMPLETED';
+  save(s);
+}
+
 export const appointmentRoutes: Record<string, MockHandler> = {
   'GET /api/branches/:branchId/available-slots': listSlots,
   'POST /api/appointments': bookAppointment,

@@ -3,6 +3,7 @@ import { afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vite
 import { ApiError } from '../../../shared/api/api-error';
 import { apiClient } from '../../../shared/api/axios';
 import { installMockApi } from '../../../shared/api/mock/mock-api';
+import { salesApi } from '../../../shared/api/sales.api';
 import { visitApi } from '../../../shared/api/visit.api';
 import { makeVisit, renderDesk, startDesk } from '../../../test/visit-harness';
 import { GroomingBoard } from './GroomingBoard';
@@ -11,9 +12,8 @@ const toast = vi.hoisted(() => Object.assign(vi.fn(), { success: vi.fn(), error:
 vi.mock('sonner', () => ({ toast }));
 
 // visit.mock lúc 10:40 thứ Năm 22/10/2026, CARETAKER #6 (Thu Hà): hàng đợi của tôi = 2103 Bim (grooming, đang chờ). Cả khu thêm 2104 Mochi đang làm, người phụ trách
-// #12 (Phạm Quốc Việt) không còn trong danh bạ. Xong lượt (visit-v1 #10) là T37.
+// #12 (Phạm Quốc Việt) không còn trong danh bạ. Chưa có lượt Thẩm mỹ nào hoàn tất hôm nay. "Xong" là hoàn tất lượt (visit-v1 #10, T37, UC52).
 const GROOMER = 6;
-const HINT = 'Hoàn tất lượt: chưa nối API (T37)';
 
 beforeAll(() => {
   installMockApi(apiClient);
@@ -52,14 +52,13 @@ function drag(card: HTMLElement, to: string) {
 }
 
 describe('grooming board (useKanban trên API visit)', () => {
-  it('cột lấy từ hàng đợi của tôi: Bim chờ làm; "Đang làm" trống; cột "Xong" tắt kèm lời nhắn chưa nối API', async () => {
+  it('cột lấy từ hàng đợi của tôi: Bim chờ làm; "Đang làm" trống; cột "Xong hôm nay" bật (không còn tắt), chưa có bé nào xong', async () => {
     await renderBoard();
 
     expect(await columnOf(/Chờ làm/).findByRole('article', { name: /Bim/ })).toBeInTheDocument();
     expect(columnOf(/Đang làm/).getByText('Trống')).toBeInTheDocument();
-    const done = document.querySelector('[data-column="READY"]')!;
-    expect(done).toHaveAttribute('aria-disabled', 'true');
-    expect(within(done as HTMLElement).getByText(HINT)).toBeInTheDocument();
+    expect(await columnOf(/Xong hôm nay/).findByText('Chưa có bé nào xong hôm nay.')).toBeInTheDocument();
+    expect(document.querySelector('[data-column="READY"]')).not.toHaveAttribute('aria-disabled');
   });
 
   it('moves a card to "Đang làm" before the server answers', async () => {
@@ -83,7 +82,7 @@ describe('grooming board (useKanban trên API visit)', () => {
     expect(columnOf(/Đang làm/).queryByRole('article', { name: /Bim/ })).not.toBeInTheDocument();
   });
 
-  it('Bắt đầu gọi lượt qua API; sau khi làm mới thẻ vẫn ở "Đang làm" và "Xong" tắt kèm lời nhắn T37', async () => {
+  it('Bắt đầu gọi lượt qua API; sau khi làm mới thẻ vẫn ở "Đang làm" và nút "Xong" bật', async () => {
     const call = vi.spyOn(visitApi, 'call');
     const { user } = await renderBoard();
 
@@ -92,11 +91,69 @@ describe('grooming board (useKanban trên API visit)', () => {
     await waitFor(() => expect(call).toHaveBeenCalledWith(2103));
     const bim = await cardIn(/Đang làm/, /Bim/);
     await waitFor(() => expect(call).toHaveBeenCalledTimes(1));
-    const done = bim.getByRole('button', { name: 'Xong' });
-    expect(done).toBeDisabled();
-    expect(done).toHaveAttribute('title', HINT);
-    expect(bim.getByText(HINT)).toBeInTheDocument();
+    expect(bim.getByRole('button', { name: 'Xong' })).toBeEnabled();
     expect(petsIn(/Chờ làm/)).toEqual([]);
+  });
+
+  /** Bắt đầu rồi chờ lượt thật đã IN_PROGRESS và thẻ đứng ở "Đang làm" sau lần làm mới. */
+  async function startBim(user: Awaited<ReturnType<typeof renderBoard>>['user']) {
+    await user.click((await cardIn(/Chờ làm/, /Bim/)).getByRole('button', { name: 'Bắt đầu' }));
+    const bim = await cardIn(/Đang làm/, /Bim/);
+    await waitFor(async () => expect((await visitApi.getVisit(2103)).status).toBe('IN_PROGRESS'));
+    return bim;
+  }
+
+  it('"Xong" hoàn tất lượt qua API (#10): thẻ sang "Xong hôm nay" ngay trước khi BE trả lời', async () => {
+    const complete = vi.spyOn(visitApi, 'complete').mockReturnValue(new Promise(() => {}));
+    const { user } = await renderBoard();
+    const bim = await startBim(user);
+
+    await user.click(bim.getByRole('button', { name: 'Xong' }));
+
+    expect(await columnOf(/Xong hôm nay/).findByRole('article', { name: /Bim/ })).toBeInTheDocument();
+    expect(complete).toHaveBeenCalledWith(2103);
+    expect(columnOf(/Đang làm/).queryByRole('article', { name: /Bim/ })).not.toBeInTheDocument();
+  });
+
+  it('hoàn tất thật: lượt COMPLETED, Order chờ thu, thẻ ở lại "Xong hôm nay" sau khi làm mới (nạp từ các lượt Thẩm mỹ đã xong trong ngày)', async () => {
+    const list = vi.spyOn(visitApi, 'listQueue');
+    const { user } = await renderBoard();
+    const bim = await startBim(user);
+    const { orderId } = await visitApi.getVisit(2103);
+
+    await user.click(bim.getByRole('button', { name: 'Xong' }));
+
+    await waitFor(async () => expect((await visitApi.getVisit(2103)).status).toBe('COMPLETED'));
+    expect((await salesApi.getOrder(orderId)).status).toBe('PENDING');
+    await waitFor(() => expect(list).toHaveBeenCalledWith({ serviceGroup: 'GROOMING', status: 'COMPLETED', assigneeId: GROOMER }));
+    const done = await cardIn(/Xong hôm nay/, /Bim/);
+    expect(done.getByText(/Xong lúc/)).toBeInTheDocument();
+    expect(done.queryByRole('button')).not.toBeInTheDocument();
+    expect(petsIn(/Đang làm/)).toEqual([]);
+    expect(petsIn(/Chờ làm/)).toEqual([]);
+  });
+
+  it('BE từ chối hoàn tất (409): thẻ về "Đang làm", câu báo theo thao tác hoàn tất', async () => {
+    vi.spyOn(visitApi, 'complete').mockRejectedValue(new ApiError('INVALID_STATE_TRANSITION', 'Không thể chuyển trạng thái lượt tiếp nhận từ COMPLETED sang COMPLETED', 409));
+    const { user } = await renderBoard();
+    const bim = await startBim(user);
+
+    await user.click(bim.getByRole('button', { name: 'Xong' }));
+
+    await waitFor(() => expect(toast.error).toHaveBeenCalledWith('Lượt đã được hoàn tất rồi.'));
+    expect(await columnOf(/Đang làm/).findByRole('article', { name: /Bim/ })).toBeInTheDocument();
+    expect(columnOf(/Xong hôm nay/).queryByRole('article', { name: /Bim/ })).not.toBeInTheDocument();
+  });
+
+  it('kéo thẻ của mình từ "Đang làm" sang "Xong hôm nay" cũng là hoàn tất lượt', async () => {
+    const complete = vi.spyOn(visitApi, 'complete');
+    const { user } = await renderBoard();
+    await startBim(user);
+
+    drag(await screen.findByRole('article', { name: /Bim/ }), 'READY');
+
+    await waitFor(() => expect(complete).toHaveBeenCalledWith(2103));
+    expect(await columnOf(/Xong hôm nay/).findByRole('article', { name: /Bim/ })).toBeInTheDocument();
   });
 
   it('kéo thẻ của mình từ "Chờ làm" sang "Đang làm" là gọi lượt', async () => {
@@ -146,14 +203,29 @@ describe('grooming board (useKanban trên API visit)', () => {
     expect(mine).not.toHaveBeenCalled();
   });
 
-  it('"Của tôi": chỉ hỏi hàng đợi của tôi, không hỏi hàng đợi chi nhánh', async () => {
+  it('"Của tôi": hàng đợi của tôi cho thẻ đang chờ / đang làm; hàng đợi chi nhánh chỉ để lấy các lượt Thẩm mỹ ĐÃ XONG của chính mình hôm nay', async () => {
     const mine = vi.spyOn(visitApi, 'getMyQueue');
     const branch = vi.spyOn(visitApi, 'listQueue');
     await renderBoard('mine');
     await cardIn(/Chờ làm/, /Bim/);
 
     expect(mine).toHaveBeenCalled();
-    expect(branch).not.toHaveBeenCalled();
+    await waitFor(() => expect(branch).toHaveBeenCalledWith({ serviceGroup: 'GROOMING', status: 'COMPLETED', assigneeId: GROOMER }));
+    expect(branch.mock.calls.every(([query]) => query?.status === 'COMPLETED')).toBe(true);
+  });
+
+  it('"Cả khu": cột "Xong hôm nay" lấy mọi lượt Thẩm mỹ đã xong trong ngày của chi nhánh, không lọc theo người', async () => {
+    await startDesk('caretaker@store1.vn');
+    vi.spyOn(visitApi, 'listQueue').mockImplementation(async (query) =>
+      query?.status === 'COMPLETED'
+        ? [makeVisit(81, { petName: 'Đã xong', serviceGroup: 'GROOMING', status: 'COMPLETED', assigneeId: 9, assigneeName: 'Gia Huy', completedAt: '2026-10-22T02:30:00Z' })]
+        : [],
+    );
+    renderDesk(<GroomingBoard userId={GROOMER} scope="all" />);
+
+    const done = await cardIn(/Xong hôm nay/, /Đã xong/);
+    expect(done.getByText('Gia Huy')).toBeInTheDocument();
+    expect(done.queryByRole('button')).not.toBeInTheDocument();
   });
 
   it('lượt chưa gán trong "Cả khu" nói chờ lễ tân gán và không có nút bắt đầu', async () => {

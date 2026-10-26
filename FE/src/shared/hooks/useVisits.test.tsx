@@ -92,6 +92,12 @@ describe('visitPermissions: ma trận vai trò đã dò trên BE thật', () => 
     reassign: ['BRANCH_MANAGER', 'SUPER_MANAGER'],
     cancel: ['RECEPTIONIST'],
     arrivals: ['RECEPTIONIST', 'BRANCH_MANAGER'],
+    // T37: bệnh án, cân nặng, bản bổ sung, hoàn tất lượt, tiêm chủng (docs/api/visit-v1.md mục B, ADR-0067, 0070).
+    viewRecord: ['VET', 'CARETAKER'],
+    writeRecord: ['VET'],
+    addendum: ['VET'],
+    complete: ['VET', 'CARETAKER'],
+    vaccinate: ['VET'],
   };
 
   it.each(Object.keys(EXPECTED) as VisitAction[])('%s', (action) => {
@@ -350,5 +356,47 @@ describe('visitErrorMessage', () => {
     expect(visitErrorMessage(apiError(400, 'VALIDATION_FAILED', 'reason: Bắt buộc nhập lý do gán lại'))).toBe('Bắt buộc nhập lý do gán lại');
     expect(visitErrorMessage(apiError(404, 'RESOURCE_NOT_FOUND', 'Không tìm thấy lượt tiếp nhận #9'))).toContain('Không tìm thấy');
     expect(visitErrorMessage(new Error('boom'))).toContain('Đã có lỗi');
+  });
+});
+
+describe('visitErrorMessage: bệnh án, hoàn tất, tiêm chủng (T37) — 409 và 403 nói theo thao tác, không dùng câu "đã tải lại hàng đợi"', () => {
+  const rule = (ruleId: string, text: string) => apiError(400, 'BUSINESS_RULE_VIOLATION', `${text} (${ruleId})`);
+  const conflictFrom = (from: string, to: string) => apiError(409, 'INVALID_STATE_TRANSITION', `Không thể chuyển trạng thái lượt tiếp nhận từ ${from} sang ${to}`);
+  const scope = apiError(403, 'ACCESS_DENIED_SCOPE_MISMATCH', 'Không có quyền truy cập dữ liệu này');
+
+  it('ghi bệnh án / cân nặng: lượt đã hoàn tất → bệnh án đã khóa, dùng "Thêm bổ sung"; chưa gọi → gọi lượt trước; đã hủy', () => {
+    const locked = visitErrorMessage(conflictFrom('COMPLETED', 'IN_PROGRESS'), 'writeRecord');
+    expect(locked).toContain('đã khóa');
+    expect(locked).toContain('Thêm bổ sung');
+    expect(visitErrorMessage(conflictFrom('WAITING', 'IN_PROGRESS'), 'writeRecord')).toContain('Gọi');
+    expect(visitErrorMessage(conflictFrom('CANCELLED', 'IN_PROGRESS'), 'writeRecord')).toContain('đã hủy');
+    expect(visitErrorMessage(scope, 'writeRecord')).toContain('được gán');
+    for (const action of ['writeRecord', 'vaccinate'] as const) expect(visitErrorMessage(conflictFrom('COMPLETED', 'IN_PROGRESS'), action)).not.toContain('tải lại hàng đợi');
+  });
+
+  it('bản bổ sung khi lượt chưa hoàn tất → sửa trực tiếp bệnh án', () => {
+    for (const from of ['IN_PROGRESS', 'WAITING', 'CANCELLED']) {
+      const text = visitErrorMessage(conflictFrom(from, 'COMPLETED'), 'addendum');
+      expect(text, from).toContain('chưa hoàn tất');
+      expect(text, from).toContain('sửa trực tiếp');
+    }
+  });
+
+  it('hoàn tất lượt: đã xong rồi / chưa ở trạng thái đang khám; chỉ người được gán; BR-TN-05 và BR-KB-02 giữ thông điệp của BE bỏ mã', () => {
+    expect(visitErrorMessage(conflictFrom('COMPLETED', 'COMPLETED'), 'complete')).toContain('đã được hoàn tất');
+    expect(visitErrorMessage(conflictFrom('WAITING', 'COMPLETED'), 'complete')).toContain('đang khám');
+    expect(visitErrorMessage(scope, 'complete')).toContain('người được gán');
+    expect(visitErrorMessage(rule('BR-KB-02', 'Lượt có dịch vụ khám phải có chẩn đoán trước khi hoàn tất'), 'complete')).toBe('Lượt có dịch vụ khám phải có chẩn đoán trước khi hoàn tất');
+    expect(visitErrorMessage(rule('BR-TN-05', 'Chức vụ hiện tại không phụ trách được nhóm dịch vụ của lượt — cần gán lại lượt'), 'complete')).toContain('cần gán lại lượt');
+  });
+
+  it('tiêm chủng: lượt đã hoàn tất → sai sót ghi bằng bản bổ sung; 403 = không phải bác sĩ được gán / đã ghi mũi; BR-KB-04, BR-KB-06, BR-KH-04 giữ thông điệp của BE', () => {
+    const locked = visitErrorMessage(conflictFrom('COMPLETED', 'IN_PROGRESS'), 'vaccinate');
+    expect(locked).toContain('đã hoàn tất');
+    expect(locked).toContain('bản bổ sung');
+    expect(visitErrorMessage(scope, 'vaccinate')).toContain('đã ghi mũi');
+    expect(visitErrorMessage(rule('BR-KB-04', 'Sản phẩm vaccine không còn tồn khả dụng tại chi nhánh'), 'vaccinate')).toBe('Sản phẩm vaccine không còn tồn khả dụng tại chi nhánh');
+    expect(visitErrorMessage(rule('BR-KB-06', 'Ngày tái khám phải sau ngày khám và không quá 180 ngày'), 'writeRecord')).toBe('Ngày tái khám phải sau ngày khám và không quá 180 ngày');
+    expect(visitErrorMessage(rule('BR-KH-04', 'Cân nặng phải lớn hơn 0'), 'writeRecord')).toBe('Cân nặng phải lớn hơn 0');
   });
 });

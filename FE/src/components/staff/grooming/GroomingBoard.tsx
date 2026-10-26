@@ -4,11 +4,11 @@ import { GripVertical } from 'lucide-react';
 import { toast } from 'sonner';
 import { SPECIES_LABEL } from '../../../domains/pets/labels';
 import { cn } from '../../../lib/utils';
-import { GROOM_DONE_HINT, moveRejection, useKanban, type GroomColumn } from '../../../shared/hooks/useKanban';
+import { moveRejection, useKanban, type GroomColumn } from '../../../shared/hooks/useKanban';
 import { useNow } from '../../../shared/hooks/useNow';
 import type { Visit } from '../../../shared/types/visit';
 import { announce } from '../../../shared/utils/announce';
-import { formatElapsed } from '../../../shared/utils/clinic-format';
+import { formatClock, formatElapsed } from '../../../shared/utils/clinic-format';
 import type { BoardScope } from '../../../shared/utils/grooming-board';
 import { track } from '../../../shared/utils/telemetry';
 import { QueryError, Skeleton, WsButton } from '../ui';
@@ -18,11 +18,13 @@ import { useBoardDrag } from './useBoardDrag';
 const COLUMN_TITLE: Record<GroomColumn, string> = {
   WAITING: 'Chờ làm',
   IN_PROGRESS: 'Đang làm',
-  READY: 'Xong, chờ đón',
+  READY: 'Xong hôm nay',
 };
 
+const EMPTY_TEXT: Record<GroomColumn, string> = { WAITING: 'Không có bé nào đang chờ.', IN_PROGRESS: 'Trống', READY: 'Chưa có bé nào xong hôm nay.' };
+
 export function GroomingBoard({ userId, scope }: { userId: number; scope: BoardScope }) {
-  const { columns, query, moveCard, calling } = useKanban(userId, scope);
+  const { columns, query, moveCard, pending } = useKanban(userId, scope);
   const now = useNow();
   const [shaking, setShaking] = useState<number | null>(null);
   const byId = new Map(columns.flatMap((c) => c.items).map((v) => [v.visitId, v]));
@@ -61,60 +63,49 @@ export function GroomingBoard({ userId, scope }: { userId: number; scope: BoardS
 
   return (
     <div className="flex min-h-0 flex-1 snap-x snap-mandatory gap-3 overflow-x-auto p-3 lg:snap-none">
-      {columns.map((col) => {
-        const disabled = col.id === 'READY';
-        return (
-          <section
-            key={col.id}
-            data-column={col.id}
-            data-drop={drag.dropState(col.id)}
-            aria-disabled={disabled || undefined}
-            aria-labelledby={`col-${col.id}`}
-            className={cn(
-              'ws-column flex w-[min(86vw,320px)] shrink-0 snap-start flex-col rounded-xl border border-(--ws-line) bg-(--ws-raised) transition-[background-color,opacity] lg:w-auto lg:min-w-[220px] lg:flex-1',
-              disabled && 'opacity-60',
+      {columns.map((col) => (
+        <section
+          key={col.id}
+          data-column={col.id}
+          data-drop={drag.dropState(col.id)}
+          aria-labelledby={`col-${col.id}`}
+          className="ws-column flex w-[min(86vw,320px)] shrink-0 snap-start flex-col rounded-xl border border-(--ws-line) bg-(--ws-raised) transition-[background-color,opacity] lg:w-auto lg:min-w-[220px] lg:flex-1"
+        >
+          <header className="flex items-baseline gap-2 px-3 pb-2 pt-3">
+            <h2 id={`col-${col.id}`} className="font-semibold">
+              {COLUMN_TITLE[col.id]}
+            </h2>
+            <span className="ws-num text-sm text-(--ws-ink-3)">{query.isLoading ? '' : col.items.length}</span>
+          </header>
+          <ul aria-label={COLUMN_TITLE[col.id]} className="flex min-h-24 flex-1 flex-col gap-2 overflow-y-auto px-2 pb-2">
+            {query.isLoading ? (
+              <li aria-hidden className="flex flex-col gap-2">
+                <Skeleton className="h-24" />
+                <Skeleton className="h-24" />
+              </li>
+            ) : col.items.length === 0 ? (
+              <li className="rounded-lg border border-dashed border-(--ws-line-strong) px-3 py-6 text-center text-sm text-(--ws-ink-3)">{EMPTY_TEXT[col.id]}</li>
+            ) : (
+              col.items.map((v) => (
+                <li key={v.visitId}>
+                  <GroomCard
+                    visit={v}
+                    column={col.id}
+                    userId={userId}
+                    showAssignee={scope === 'all'}
+                    now={now}
+                    moving={pending.has(v.visitId)}
+                    shaking={shaking === v.visitId}
+                    dragging={drag.ghost?.visitId === v.visitId}
+                    handleProps={drag.handleProps(v.visitId, col.id)}
+                    onMove={(to) => attempt(v, to)}
+                  />
+                </li>
+              ))
             )}
-          >
-            <header className="flex items-baseline gap-2 px-3 pb-2 pt-3">
-              <h2 id={`col-${col.id}`} className="font-semibold">
-                {COLUMN_TITLE[col.id]}
-              </h2>
-              {!disabled && <span className="ws-num text-sm text-(--ws-ink-3)">{query.isLoading ? '' : col.items.length}</span>}
-            </header>
-            <ul aria-label={COLUMN_TITLE[col.id]} className="flex min-h-24 flex-1 flex-col gap-2 overflow-y-auto px-2 pb-2">
-              {disabled ? (
-                <li className="rounded-lg border border-dashed border-(--ws-line-strong) px-3 py-6 text-center text-sm text-(--ws-ink-3)">{GROOM_DONE_HINT}</li>
-              ) : query.isLoading ? (
-                <li aria-hidden className="flex flex-col gap-2">
-                  <Skeleton className="h-24" />
-                  <Skeleton className="h-24" />
-                </li>
-              ) : col.items.length === 0 ? (
-                <li className="rounded-lg border border-dashed border-(--ws-line-strong) px-3 py-6 text-center text-sm text-(--ws-ink-3)">
-                  {col.id === 'WAITING' ? 'Không có bé nào đang chờ.' : 'Trống'}
-                </li>
-              ) : (
-                col.items.map((v) => (
-                  <li key={v.visitId}>
-                    <GroomCard
-                      visit={v}
-                      column={col.id}
-                      userId={userId}
-                      showAssignee={scope === 'all'}
-                      now={now}
-                      moving={calling.has(v.visitId)}
-                      shaking={shaking === v.visitId}
-                      dragging={drag.ghost?.visitId === v.visitId}
-                      handleProps={drag.handleProps(v.visitId, col.id)}
-                      onMove={(to) => attempt(v, to)}
-                    />
-                  </li>
-                ))
-              )}
-            </ul>
-          </section>
-        );
-      })}
+          </ul>
+        </section>
+      ))}
 
       {drag.ghost &&
         ghostVisit &&
@@ -153,9 +144,13 @@ function GroomCard({
   onMove: (to: GroomColumn) => void;
 }) {
   const mine = visit.assigneeId === userId;
-  const movable = mine && column === 'WAITING';
+  const movable = mine && column !== 'READY';
   const timing =
-    column === 'WAITING' ? `Chờ ${formatElapsed(visit.checkedInAt, now)}` : `Đang làm ${formatElapsed(visit.calledAt ?? visit.checkedInAt, now)}`;
+    column === 'WAITING'
+      ? `Chờ ${formatElapsed(visit.checkedInAt, now)}`
+      : column === 'READY'
+        ? `Xong lúc ${formatClock(visit.completedAt ?? visit.checkedInAt)}`
+        : `Đang làm ${formatElapsed(visit.calledAt ?? visit.checkedInAt, now)}`;
 
   return (
     <article
@@ -195,12 +190,11 @@ function GroomCard({
           </WsButton>
         )}
         {mine && column === 'IN_PROGRESS' && (
-          <WsButton size="sm" variant="primary" className="ml-auto" disabled title={GROOM_DONE_HINT}>
+          <WsButton size="sm" variant="primary" className="ml-auto" disabled={moving} onClick={() => onMove('READY')}>
             Xong
           </WsButton>
         )}
       </div>
-      {mine && column === 'IN_PROGRESS' && <p className="mt-1.5 text-xs text-(--ws-ink-3)">{GROOM_DONE_HINT}</p>}
     </article>
   );
 }

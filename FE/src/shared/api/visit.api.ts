@@ -1,11 +1,23 @@
 // Tiếp nhận, hàng đợi, gọi lượt (UC44–UC47) theo docs/api/visit-v1.md #1–9, #11 và GET /me/queue. Chi nhánh lấy từ người gọi.
 // Vai trò (đã dò BE thật, xem `VISIT_ROLES` ở types/visit.ts): tiếp nhận / gán / sắp lại / hủy là lễ tân; xem hàng đợi chi nhánh là A05–A08; hàng đợi của tôi và
 // gọi lượt là VET, CARETAKER; đánh dấu cấp cứu là lễ tân hoặc VET; gán lại lượt đã gọi là BRANCH_MANAGER (SUPER_MANAGER khi chi nhánh hết quản lý ACTIVE).
-// #10 hoàn tất lượt và bệnh án thuộc T37.
+// T37: #10 hoàn tất lượt (VET cho Khám/Tiêm, CARETAKER cho Thẩm mỹ), #12 xem bệnh án (VET, CARETAKER), #13 ghi bệnh án, #14 cân nặng, #15 bản bổ sung (VET), #18–20 tiêm chủng
+// (VET được gán lượt). Kê đơn #16–17 là T46.
 import { apiClient } from './axios';
 import { appointmentApi } from './appointment.api';
 import type { PageResponse } from '../types';
 import type { Appointment, AppointmentQuery } from '../types/appointment';
+import type {
+  Addendum,
+  AddendumRequest,
+  MedicalRecord,
+  RecordVaccinationRequest,
+  RecordVaccinationResult,
+  RecordWeightRequest,
+  UpdateMedicalRecordRequest,
+  VaccinationOptions,
+  WeightRecordRef,
+} from '../types/medical-record';
 import type {
   AssignRequest,
   AssignResult,
@@ -19,6 +31,7 @@ import type {
 
 const get = async <T>(url: string, params?: object): Promise<T> => (await apiClient.get(url, { params })).data.data;
 const post = async <T>(url: string, body?: object): Promise<T> => (await apiClient.post(url, body)).data.data;
+const put = async <T>(url: string, body: object): Promise<T> => (await apiClient.put(url, body)).data.data;
 
 /** Bộ lọc thêm cho danh sách chờ check-in; `checkInReady` và `status` do `listArrivals` cố định. */
 export type ArrivalsQuery = Pick<AppointmentQuery, 'date' | 'branchId' | 'page' | 'size'>;
@@ -47,6 +60,32 @@ export const visitApi = {
   reassign: (visitId: number, body: ReassignRequest) => post<Visit>(`/api/visits/${visitId}/reassign`, body),
   /** #11 (lễ tân): chỉ lượt WAITING (BR-TN-07); lý do không bắt buộc. */
   cancel: (visitId: number, body?: CancelVisitRequest) => post<Visit>(`/api/visits/${visitId}/cancel`, body),
+
+  /**
+   * #10 (người được gán): IN_PROGRESS → COMPLETED, lịch hẹn COMPLETED, Order PENDING, bệnh án khóa. 400 BR-KB-02 (khám thiếu chẩn đoán / chỉ tiêm chưa có mũi / không còn dịch vụ
+   * Khám hoặc Tiêm), 400 BR-TN-05 (đổi chức vụ sau khi gọi), 403 không phải người phụ trách, 409 lượt không IN_PROGRESS.
+   */
+  complete: (visitId: number) => post<Visit>(`/api/visits/${visitId}/complete`),
+
+  /** #12 (VET, CARETAKER chỉ xem): lượt Khám/Tiêm chưa ghi bệnh án trả khung rỗng; lượt Thẩm mỹ → 404 (không có bệnh án). */
+  getMedicalRecord: (visitId: number) => get<MedicalRecord>(`/api/visits/${visitId}/medical-record`),
+  /** #13 (VET được gán): PUT thay toàn bộ 5 trường. 409 khi lượt không IN_PROGRESS (bệnh án đã khóa: dùng bản bổ sung), 400 BR-KB-06 ngày tái khám. */
+  saveMedicalRecord: (visitId: number, body: UpdateMedicalRecordRequest) => put<MedicalRecord>(`/api/visits/${visitId}/medical-record`, body),
+  /** #14 (VET được gán): mỗi lần gọi là một bản ghi cân nặng; 400 BR-KH-04 khi ≤ 0 hoặc > 9999.99. */
+  recordWeight: (visitId: number, body: RecordWeightRequest) => post<WeightRecordRef>(`/api/visits/${visitId}/weight`, body),
+  /** #15 (mọi VET của chi nhánh): chỉ khi lượt đã COMPLETED, 409 nếu chưa (sửa trực tiếp bệnh án). */
+  addAddendum: (visitId: number, body: AddendumRequest) => post<Addendum>(`/api/visits/${visitId}/medical-record/addenda`, body),
+
+  /** #18 (VET được gán): mũi gợi ý (chỉ tham khảo) và sản phẩm còn tồn khả dụng; 400 khi loại vaccine không thuộc loài của thú. */
+  getVaccinationOptions: (visitId: number, vaccineTypeId: number) =>
+    get<VaccinationOptions>(`/api/visits/${visitId}/vaccination-options`, { vaccineTypeId }),
+  /** #19 (VET được gán, lượt IN_PROGRESS): trừ kho FEFO ngay, thêm dòng Order vaccine; `warnings` có thể chứa `UNDER_MIN_AGE`. */
+  recordVaccination: (visitId: number, body: RecordVaccinationRequest) =>
+    post<RecordVaccinationResult>(`/api/visits/${visitId}/vaccinations`, body),
+  /** #20 (VET đã ghi mũi đó, lượt chưa COMPLETED): hoàn kho đúng lô, xóa dòng Order vaccine. */
+  deleteVaccination: async (visitId: number, vaccinationId: number): Promise<void> => {
+    await apiClient.delete(`/api/visits/${visitId}/vaccinations/${vaccinationId}`);
+  },
 
   /**
    * Khách đã tới để check-in: lịch BOOKED hôm nay trong cửa sổ check-in (appointment-v1 #3 `checkInReady`, BR-TN-02). Lễ tân / BRANCH_MANAGER.

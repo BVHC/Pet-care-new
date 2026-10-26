@@ -18,6 +18,7 @@ export const VISIT_REFRESH_MS = 10_000;
 
 /** Lỗi 4xx không đổi khi thử lại (lỗi axios đổi sang ApiError để đọc mã HTTP). */
 const retry = { retry: (count: number, error: unknown) => shouldRetry(count, toApiError(error)), retryDelay } as const;
+export const visitQueryRetry = retry;
 const live = { ...retry, refetchInterval: VISIT_REFRESH_MS, refetchIntervalInBackground: false } as const;
 
 /** #2 (A05–A08). */
@@ -46,7 +47,7 @@ const visitOf = (result: unknown): Visit | null => {
 };
 
 /** Đặt Visit trả về (nếu là một Visit hoặc AssignResult) vào cache chi tiết rồi làm mới ba gốc, kể cả khi lỗi. */
-function useVisitMutation<A, R>(fn: (args: A) => Promise<R>) {
+export function useVisitMutation<A, R>(fn: (args: A) => Promise<R>) {
   const queryClient = useQueryClient();
   return useMutation({
     mutationFn: fn,
@@ -128,8 +129,30 @@ export function useAssignableStaff(role: AssignableStaff['role'], enabled = true
 // ─── Thông điệp lỗi ───
 
 /**
- * Câu báo lỗi cho quầy tiếp nhận. 409 tách theo thực thể BE nêu trong thông điệp: "lịch hẹn" → tiếp nhận như khách vãng lai; "hạng ưu tiên" → đã là cấp cứu; còn lại
- * (lượt) → đã đổi ở nơi khác. 403 ACCESS_DENIED_SCOPE_MISMATCH tùy thao tác: gọi lượt = chưa được gán cho mình. Thú đã mất báo mã BR-TN-01 (không phải BR-KH-05).
+ * 409 của lượt theo thao tác khám (T37): lượt không còn ở trạng thái cho phép thao tác. Câu mặc định "đã tải lại hàng đợi" không đúng ở đây vì VET đang mở đúng lượt đó
+ * và cần biết phải làm gì tiếp (bệnh án đã khóa → bản bổ sung; chưa gọi → gọi lượt; chưa hoàn tất → sửa trực tiếp). `from` là trạng thái cũ BE nêu trong thông điệp.
+ */
+function examConflictMessage(action: VisitAction | undefined, from: string | undefined): string | null {
+  switch (action) {
+    case 'writeRecord':
+      if (from === 'COMPLETED') return 'Lượt đã hoàn tất nên bệnh án đã khóa. Muốn bổ sung hãy dùng "Thêm bổ sung".';
+      return from === 'CANCELLED' ? 'Lượt đã hủy nên không ghi được.' : 'Lượt chưa được gọi vào khám nên chưa ghi được. Gọi lượt trước rồi ghi.';
+    case 'vaccinate':
+      if (from === 'COMPLETED') return 'Lượt đã hoàn tất nên không ghi hay xóa mũi tiêm được. Sai sót ghi bằng bản bổ sung bệnh án.';
+      return from === 'CANCELLED' ? 'Lượt đã hủy nên không ghi mũi tiêm được.' : 'Lượt chưa được gọi vào khám nên chưa ghi mũi tiêm được.';
+    case 'addendum':
+      return 'Lượt chưa hoàn tất nên chưa thêm bản bổ sung được. Hãy sửa trực tiếp bệnh án.';
+    case 'complete':
+      return from === 'COMPLETED' ? 'Lượt đã được hoàn tất rồi.' : 'Lượt chưa ở trạng thái đang khám (đang chờ hoặc đã hủy) nên chưa hoàn tất được.';
+    default:
+      return null;
+  }
+}
+
+/**
+ * Câu báo lỗi cho quầy tiếp nhận và bàn khám. 409 tách theo thực thể BE nêu trong thông điệp: "lịch hẹn" → tiếp nhận như khách vãng lai; "hạng ưu tiên" → đã là cấp cứu; còn lại
+ * (lượt) → theo thao tác khám (`examConflictMessage`) hoặc đã đổi ở nơi khác. 403 ACCESS_DENIED_SCOPE_MISMATCH tùy thao tác: gọi lượt = chưa được gán cho mình; ghi bệnh án,
+ * hoàn tất, tiêm chủng = không phải người phụ trách (xóa mũi tiêm: không phải người đã ghi mũi). Thú đã mất báo mã BR-TN-01 (không phải BR-KH-05).
  */
 export function visitErrorMessage(e: unknown, action?: VisitAction): string {
   const error = toApiError(e);
@@ -143,6 +166,8 @@ export function visitErrorMessage(e: unknown, action?: VisitAction): string {
         return 'Lịch hẹn này đã hủy hoặc đã hoàn tất nên không tiếp nhận được.';
       }
       if (error.message.includes('hạng ưu tiên')) return 'Lượt này đã là ca cấp cứu.';
+      const exam = examConflictMessage(action, from);
+      if (exam) return exam;
       // BR-TN-07: lượt đã gọi không hủy được; nhân viên phụ trách hoàn tất theo BR-KB-02. (BR-TN-03, khách trễ, BE không báo thành lỗi: chỉ đổi hạng ưu tiên.)
       if (from === 'IN_PROGRESS' && error.message.includes('sang CANCELLED')) {
         return 'Lượt đã được gọi nên không hủy được. Nhân viên phụ trách phải hoàn tất lượt (BR-KB-02).';
@@ -154,6 +179,9 @@ export function visitErrorMessage(e: unknown, action?: VisitAction): string {
     case 'ACCESS_DENIED_SCOPE_MISMATCH':
       if (action === 'call') return 'Lượt này không được gán cho bạn nên bạn không gọi được.';
       if (action === 'reassign') return 'Chỉ quản lý chi nhánh của lượt mới gán lại được. Quản lý chuỗi chỉ gán lại khi chi nhánh không còn quản lý hoạt động.';
+      if (action === 'writeRecord') return 'Chỉ bác sĩ được gán lượt này mới ghi được bệnh án và cân nặng.';
+      if (action === 'complete') return 'Chỉ người được gán lượt mới hoàn tất được.';
+      if (action === 'vaccinate') return 'Chỉ bác sĩ được gán lượt (hoặc đã ghi mũi tiêm này) mới thao tác được.';
       return 'Lượt này thuộc chi nhánh khác nên bạn không thao tác được.';
     case 'ACCESS_DENIED':
       return 'Bạn không có quyền thực hiện thao tác này.';

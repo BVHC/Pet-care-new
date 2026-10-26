@@ -7,13 +7,15 @@ import { cn } from '../../../lib/utils';
 import { useFreshIds } from '../../../shared/hooks/useFreshIds';
 import { useNow } from '../../../shared/hooks/useNow';
 import { VISIT_GROUP_LABELS, type Visit } from '../../../shared/types/visit';
-import { formatElapsed } from '../../../shared/utils/clinic-format';
+import { formatClock, formatElapsed } from '../../../shared/utils/clinic-format';
 import { Panel, PanelTitle, QueryError, RowsSkeleton, StatePanel, VisitStatusChip, WsButton } from '../ui';
 import { VisitBadges, VisitCode } from '../visit-ui';
 
 interface Props {
   className?: string;
   query: UseQueryResult<Visit[], unknown>;
+  /** Lượt Khám/Tiêm đã hoàn tất hôm nay của cả chi nhánh (visit-v1 #2, A1): đường vào bệnh án đã khóa để xem và thêm bản bổ sung (UC53). */
+  completed: UseQueryResult<Visit[], unknown>;
   userId: number;
   selectedId: number | null;
   onSelect: (visit: Visit) => void;
@@ -21,7 +23,7 @@ interface Props {
   callingId: number | null;
 }
 
-export function DoctorQueue({ className, query, userId, selectedId, onSelect, onCall, callingId }: Props) {
+export function DoctorQueue({ className, query, completed, userId, selectedId, onSelect, onCall, callingId }: Props) {
   const now = useNow();
   const listRef = useRef<HTMLDivElement>(null);
   const visits = query.data ?? [];
@@ -90,6 +92,37 @@ export function DoctorQueue({ className, query, userId, selectedId, onSelect, on
               </li>
             ))}
           </ul>
+        )}
+
+        {(completed.data?.length ?? 0) > 0 && (
+          <section aria-labelledby="exam-done-today" className="border-t border-(--ws-line)">
+            <h3 id="exam-done-today" className="px-4 pb-1 pt-3 text-[13px] font-semibold text-(--ws-ink-2)">
+              Đã khám hôm nay
+            </h3>
+            <ul aria-label="Đã khám hôm nay" className="divide-y divide-(--ws-line)">
+              {completed.data!.map((v) => (
+                <li key={v.visitId}>
+                  <button
+                    type="button"
+                    data-queue-row
+                    aria-current={v.visitId === selectedId ? 'true' : undefined}
+                    aria-label={`${v.petName}, ${v.code}`}
+                    onClick={() => onSelect(v)}
+                    className="flex w-full flex-col items-start gap-0.5 px-4 py-2.5 text-left hover:bg-(--ws-raised) aria-[current=true]:bg-(--ws-accent-soft) aria-[current=true]:shadow-[inset_3px_0_0_var(--ws-accent)]"
+                  >
+                    <span className="flex flex-wrap items-center gap-1.5">
+                      <VisitCode code={v.code} />
+                      <span className="font-semibold">{v.petName}</span>
+                    </span>
+                    <span className="text-xs text-(--ws-ink-3)">
+                      Hoàn tất lúc {formatClock(v.completedAt ?? v.checkedInAt)}
+                      {v.assigneeName ? `, ${v.assigneeName}` : ''}
+                    </span>
+                  </button>
+                </li>
+              ))}
+            </ul>
+          </section>
         )}
       </div>
     </Panel>

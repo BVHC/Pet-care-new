@@ -2,10 +2,10 @@ import { useState } from 'react';
 import { toast } from 'sonner';
 import { cn } from '../../lib/utils';
 import { DoctorQueue } from '../../components/staff/doctor/DoctorQueue';
-import { ExamPendingPanel } from '../../components/staff/doctor/ExamPendingPanel';
+import { ExamPanel } from '../../components/staff/doctor/ExamPanel';
 import { WorkspaceHeader } from '../../components/staff/ui';
 import { useStaffUser } from '../../shared/hooks/useStaffUser';
-import { useCallVisit, useMarkEmergency, useMyQueue, visitErrorMessage } from '../../shared/hooks/useVisits';
+import { useCallVisit, useMarkEmergency, useMyQueue, useVisitQueue, visitErrorMessage } from '../../shared/hooks/useVisits';
 import { visitPermissions, type Visit } from '../../shared/types/visit';
 
 type Pane = 'queue' | 'patient';
@@ -16,14 +16,15 @@ const PANES: { id: Pane; label: string }[] = [
 ];
 
 /**
- * Phòng khám: hàng chờ của tôi (visit-v1 #3) | lượt đang chọn. Gọi lượt (#8) và đánh dấu cấp cứu (#7) chạy trên API; ghi bệnh án và hoàn tất lượt là T37, nên cột bệnh án
- * (SoapPanel, đang trên clinic-db) chưa đặt vào đây. ≥1024px hai cột; điện thoại một khung mỗi lần.
+ * Phòng khám: hàng chờ của tôi (visit-v1 #3) và lượt Khám/Tiêm đã hoàn tất hôm nay (#2) | lượt đang chọn. Gọi lượt (#8), đánh dấu cấp cứu (#7), bệnh án, cân nặng, tiêm chủng,
+ * hoàn tất lượt và bản bổ sung (#10, #12–15, #18–20; T37) đều chạy trên API. ≥1024px hai cột; điện thoại một khung mỗi lần.
  */
 export function DoctorWorkspacePage() {
   const user = useStaffUser();
   const userId = Number(user.id);
   const perms = visitPermissions(user.role);
   const queue = useMyQueue(perms.myQueue);
+  const completed = useVisitQueue({ status: 'COMPLETED', serviceGroup: 'MEDICAL' }, perms.queue);
   const call = useCallVisit();
   const emergency = useMarkEmergency();
   const [picked, setPicked] = useState<number | null>(null);
@@ -31,9 +32,12 @@ export function DoctorWorkspacePage() {
 
   const visits = queue.data ?? [];
   const waitingCount = visits.filter((v) => v.status === 'WAITING').length;
-  // Open on the visit being examined, else the next one waiting.
+  // Open on the visit being examined, else the next one waiting; a visit picked from "Đã khám hôm nay" stays open (read-only record + addenda).
   const selected =
-    visits.find((v) => v.visitId === picked) ?? visits.find((v) => v.status === 'IN_PROGRESS') ?? visits.find((v) => v.status === 'WAITING') ?? null;
+    [...visits, ...(completed.data ?? [])].find((v) => v.visitId === picked) ??
+    visits.find((v) => v.status === 'IN_PROGRESS') ??
+    visits.find((v) => v.status === 'WAITING') ??
+    null;
 
   const open = (visit: Visit) => {
     setPicked(visit.visitId);
@@ -82,19 +86,21 @@ export function DoctorWorkspacePage() {
         <DoctorQueue
           className={cn(pane === 'queue' ? 'flex' : 'hidden', 'min-h-[60dvh] lg:flex lg:min-h-0')}
           query={queue}
+          completed={completed}
           userId={userId}
           selectedId={selected?.visitId ?? null}
           onSelect={open}
           onCall={callVisit}
           callingId={call.isPending ? (call.variables ?? null) : null}
         />
-        <ExamPendingPanel
+        <ExamPanel
           className={cn(pane === 'patient' ? 'flex' : 'hidden', 'min-h-[60dvh] lg:flex lg:min-h-0')}
           visit={selected}
           userId={userId}
-          canMarkEmergency={perms.markEmergency}
+          perms={perms}
           onCall={callVisit}
           onMarkEmergency={markEmergency}
+          onCompleted={() => setPicked(null)}
           busy={call.isPending || emergency.isPending}
         />
       </div>

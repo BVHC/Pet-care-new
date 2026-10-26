@@ -684,7 +684,33 @@ const reassignVisit: MockHandler = (req) => {
   return ok(view(row), 200, 'Đã gán lại lượt');
 };
 
-/** visit-v1 #1–9, #11 và GET /me/queue (#10 hoàn tất và các endpoint bệnh án thuộc T37). */
+// ─── Cho mock lâm sàng (T37, visit-clinical.mock.ts): chỉ THÊM export, không đổi hành vi của visitRoutes ───
+
+export type { VisitRow };
+export { FSM_NAME, ROLE_OF_GROUP, asBoolean, asLong, asText, conflict, idParam, isJsonObject, isoOf, isReply, malformed, transition, visitNotFound };
+export const visitView = view;
+
+/** Lượt theo id (không kiểm quyền): cho `VisitQueryApi.findVisit` của mock lâm sàng. */
+export const visitRowOf = (visitId: number): VisitRow | undefined => load().visits.find((v) => v.visitId === visitId);
+
+/** Ghi đè một số trường của lượt (hoàn tất lượt: trạng thái, `completedAt`, gỡ cờ cần gán lại). */
+export function updateVisitRow(visitId: number, patch: Partial<VisitRow>): VisitRow | undefined {
+  const s = load();
+  const row = s.visits.find((v) => v.visitId === visitId);
+  if (!row) return undefined;
+  Object.assign(row, patch);
+  save(s);
+  return row;
+}
+
+/** Các lượt đã hoàn tất của một thú (hồ sơ sức khỏe, visit-v1 #21). */
+export const completedVisitsOfPet = (petId: number): VisitRow[] => load().visits.filter((v) => v.petId === petId && v.status === 'COMPLETED');
+
+/** Thú còn lượt chưa kết thúc nào khác không (để gỡ `busy: OPEN_VISIT` khi lượt cuối hoàn tất). */
+export const hasOtherOpenVisit = (petId: number, exceptVisitId: number): boolean =>
+  load().visits.some((v) => v.petId === petId && v.visitId !== exceptVisitId && (OPEN_VISIT_STATUSES as readonly string[]).includes(v.status));
+
+/** visit-v1 #1–9, #11 và GET /me/queue (#10 hoàn tất, bệnh án, tiêm chủng ở visit-clinical.mock.ts, T37). */
 export const visitRoutes: Record<string, MockHandler> = {
   'POST /api/visits': checkInVisit,
   'GET /api/visits': listQueue,

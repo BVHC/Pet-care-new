@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { makeVisit } from '../../test/visit-harness';
 import type { Visit } from '../types/visit';
-import { GROOM_DONE_HINT, moveRejection } from './useKanban';
+import { moveRejection } from './useKanban';
 
 const ME = 6;
 const card = (over: Partial<Visit> = {}): Visit =>
@@ -13,9 +13,15 @@ describe('moveRejection (thẻ grooming theo lượt của API)', () => {
     expect(moveRejection(card(), 'IN_PROGRESS', ME)).toBeNull();
   });
 
-  it('chưa nối hoàn tất lượt (T37): "Xong" của chính mình bị từ chối kèm lời nhắn rõ ràng', () => {
-    expect(moveRejection(card({ status: 'IN_PROGRESS' }), 'READY', ME)).toEqual({ code: 'T37_PENDING', message: GROOM_DONE_HINT });
-    expect(GROOM_DONE_HINT).toBe('Hoàn tất lượt: chưa nối API (T37)');
+  it('"Xong" của chính mình khi đang làm là hoàn tất lượt (visit-v1 #10): được phép', () => {
+    expect(moveRejection(card({ status: 'IN_PROGRESS' }), 'READY', ME)).toBeNull();
+  });
+
+  it('thẻ đã xong (COMPLETED) không quay lại cột trước (BR-TN-09), thả lại đúng cột "Xong" không phải lỗi', () => {
+    const done = card({ status: 'COMPLETED' });
+    expect(moveRejection(done, 'WAITING', ME)?.code).toBe('BR-TN-09');
+    expect(moveRejection(done, 'IN_PROGRESS', ME)?.code).toBe('BR-TN-09');
+    expect(moveRejection(done, 'READY', ME)?.code).toBe('NO_MOVE');
   });
 
   it('never moves a card backwards (BR-TN-09)', () => {
