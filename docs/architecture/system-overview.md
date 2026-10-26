@@ -1,14 +1,14 @@
 # System Overview — trạng thái kỹ thuật thực tế
 
 > Mô tả **codebase hiện có**, không phải thiết kế mục tiêu. Nghiệp vụ: `docs/01`–`05` (tra qua `docs/INDEX.md`); quy ước code: `docs/convention/backend/`. **Chi tiết hành vi, thứ tự khóa / lỗi và danh sách test nằm trong ADR của từng dòng** — file này chỉ là bản đồ.
-> Cập nhật: 2026-10-25 — T28 phần 1: gợi ý mũi tiêm visit-v1 #18 (ADR-0073). Trạng thái task: `docs/time.md`.
+> Cập nhật: 2026-10-26 — T28 phần 4: tích hợp + smoke Docker, T28 xong; #21 tách T28b. Trạng thái task: `docs/time.md`.
 >
 > Nhật ký (mới nhất trước; cũ hơn: `git log` của file này):
+> - 2026-10-26 — T28 phần 4: tích hợp + smoke Docker 30/30 (đặt chỗ lưu trú, xóa loại vaccine, tiêm → hoàn tất → thu tiền, kho trừ một lần); không đổi `src/main`, không ADR mới; T28 DONE, #21 hồ sơ sức khỏe tách T28b.
+> - 2026-10-26 — T28 phần 3: `DELETE /api/visits/{id}/vaccinations/{vaccinationId}` (#20); quyền = người phụ trách hiện tại, mũi cũ mới nhất hết `superseded`, Care Task đã hủy không mở lại (TBD PO) — ADR-0075.
+> - 2026-10-26 — T28 phần 2: `POST /api/visits/{id}/vaccinations` (#19); advisory 1004 theo thú; `CareTaskService` chỉ cài `cancelForRevaccination` (D047) — ADR-0074.
 > - 2026-10-25 — nén file (từ 158 KB): mỗi feature một dòng + ADR; bỏ danh sách test (đã ở ADR).
 > - 2026-10-25 — T28 phần 1: `GET /api/visits/{id}/vaccination-options` (#18); BE-1 thêm `CatalogQueryApi.findVaccineType`, `findProductsByVaccineType` — ADR-0073.
-> - 2026-10-25 — T28 phần 0: `Vaccination`, `VaccinationQueryService` thật (hết 500 ở đặt chỗ lưu trú, xóa loại vaccine), mũi tiêm trong bệnh án #12/#13 (lô null, D046) — ADR-0072.
-> - 2026-10-23 — T32 (BE-2): trang công khai, module `content` — ADR-0071, V21.
-> - 2026-10-22 — T27 phần 0–4 (bệnh án, hoàn tất lượt, bản bổ sung — ADR-0066–0070); T31 lưu trú (BE-2, ADR-0065, V20).
 
 ## 1. Tóm tắt
 
@@ -48,7 +48,7 @@ Stack: Java 21, Spring Boot 3.5.15, Spring Security, Data JPA, Validation, AOP, 
 | Trace | `platform/config/TraceIdFilter`, `TraceContext` | Filter đầu tiên; header `X-Trace-Id` (`[A-Za-z0-9-]{1,64}`), MDC `traceId` |
 | Thời gian | `platform/config/TimeConfig` | Bean `Clock` theo `BUSINESS_ZONE`. Không đặt `hibernate.jdbc.time_zone` (cột `TIME` sẽ lệch); không gọi `now()` thiếu clock |
 | CORS | `platform/config/CorsConfig`, `CorsProperties` | `app.cors.allowed-origins`; không credentials |
-| OpenAPI | `platform/config/{OpenApiConfig, ApiErrorDoc, ApiErrorDocs, ApiErrorDocCustomizer, PublicPathSecurityCustomizer}` | ADR-0040. `/v3/api-docs`, `/swagger-ui.html` public; path public → `security: []`; 401 / 500 tự thêm; 4xx khai bằng `@ApiErrorDoc`. `OpenApiContractParityIT` so 9 module với `docs/api/openapi` (154 endpoint) và ghi `BE/target/openapi.json`; branch / catalog chưa annotation (D026) |
+| OpenAPI | `platform/config/{OpenApiConfig, ApiErrorDoc, ApiErrorDocs, ApiErrorDocCustomizer, PublicPathSecurityCustomizer}` | ADR-0040. `/v3/api-docs`, `/swagger-ui.html` public; path public → `security: []`; 401 / 500 tự thêm; 4xx khai bằng `@ApiErrorDoc`. `OpenApiContractParityIT` so 9 module với `docs/api/openapi` (156 endpoint) và ghi `BE/target/openapi.json`; branch / catalog chưa annotation (D026) |
 | Exception | `platform/exception/*` | `PlatformException` + 5 lớp con (convention 04); `ErrorCode` 12 mã gắn HTTP status; `GlobalExceptionHandler` là nơi duy nhất tạo `ErrorResponse` (lỗi DB khóa / ràng buộc → 409 message chung; 4xx khác của Spring giữ status; còn lại 500 + log ERROR) |
 | FSM | `platform/fsm/{Transitionable, StateMachineBase}` | `fsmName()` lấy tên lớp thật kể cả khi bị proxy; test kế thừa `FsmTransitionTestBase<S>` (chép bảng 03, sinh mọi cặp from × to) |
 | Envelope | `platform/model/{ApiResponse, PageResponse, ErrorResponse}` | `ok`, `created`, `accepted`; `PageResponse.of(Page)`, `page` từ 0 |
@@ -95,7 +95,8 @@ Stack: Java 21, Spring Boot 3.5.15, Spring Security, Data JPA, Validation, AOP, 
 | visit · tiếp nhận, hàng đợi, gán / gọi / hủy / gán lại | visit-v1 #1–9, #11 | `VisitCheckInService`, `VisitQueueService`, `VisitDispatchService`, `VisitProgressService`, `VisitReassignService`, `AccountLockedListener` | 0058–0063. Thứ tự khóa ở `CLAUDE.md`; mã `TN-yyMM-nnnnn`. Nợ D029, D041, D042 |
 | visit · bệnh án, cân nặng, hoàn tất, bản bổ sung | #10, #12–15 | `MedicalRecordService`, `VisitCompletionService` | 0066–0070. Hoàn tất `visits → appointments → orders`, đọc dịch vụ sau khi khóa Order (D045). Nợ D043 |
 | visit · mũi tiêm: nền + `VaccinationQueryApi` | (bên trong #12/#13) | `Vaccination`, `VaccinationQueryService`, `VaccinationRecordReader` | 0072. Đọc không khóa, tham gia tx bên gọi. Lô null (D046) |
-| visit · gợi ý mũi tiêm | #18 | `VaccinationController`, `VaccinationOptionService`, `VaccinationOptionsMapper` | 0073. Chỉ đọc, mọi trạng thái lượt; chỉ sản phẩm đang kinh doanh còn tồn. **Chưa có:** #16–17 kê đơn (T38), #19–20 ghi / xóa mũi, #21 hồ sơ sức khỏe |
+| visit · gợi ý mũi tiêm | #18 | `VaccinationController`, `VaccinationOptionService`, `VaccinationOptionsMapper` | 0073. Chỉ đọc, mọi trạng thái lượt; chỉ sản phẩm đang kinh doanh còn tồn. **Chưa có:** #16–17 kê đơn (T38), #21 hồ sơ sức khỏe (T28b) |
+| visit · ghi / xóa mũi tiêm | #19, #20 | `VaccinationRecordService` (`record`, `delete`), `VaccinationOptionService.requireUsableType`; care: `CareTaskService` | 0074, 0075. `pets FOR SHARE` → advisory 1004 (thú) → `visits` → (#19) `products FOR SHARE` → `orders` → lô / (#20) mũi `FOR UPDATE` → xóa mũi → `orders` → lô. #19: mũi cũ `superseded_at`, hủy Care Task `VACCINE_*`; #20: người phụ trách hiện tại, mũi cũ mới nhất hết `superseded`, task đã hủy không mở lại. Không audit. Nợ D046, D047 |
 | sales · Order lõi, bán lẻ | sales-v1 #1–8, #10 | `VisitOrderService` (`VisitOrderApi`), `OrderLineService`, `RetailOrderService`, `OrderLinePolicy` | 0044, 0051. Khóa `orders` trước khi đọc; `SalesOrder` không có `@Version` (D045). Chưa có #9, #11 |
 | sales · thu ngân, ST13 | #12–21 | `CashierShiftService`, `PaymentService`, `CashierShiftAutoCloseService`, `PendingOrderDigestService` | 0064, V19. Thu tiền: ca `FOR SHARE` → Order một câu → lô một câu → `document_counters` |
 | inventory · kho | inventory-v1 #1–17 | `StockReceiptService`, `StockAdjustmentService`, `StockLedger`, `FefoAllocator`, `StockQueryService`, `StockIssueService` | 0042, 0043, V14. `StockLedger` là nơi duy nhất đổi `stock_lots.quantity`; hết hạn = `expiry_date < hôm nay`. Chưa có `StockReportApi`, ST08 (T44) |
@@ -108,8 +109,8 @@ Stack: Java 21, Spring Boot 3.5.15, Spring Security, Data JPA, Validation, AOP, 
 | Hạng mục | Nguồn | Ghi chú |
 |---|---|---|
 | identity #25–27 (UC22: sửa hộ email / liên kết hồ sơ tại quầy của khách) | BR-TK-16, 19 | Dùng mẫu OTP của ADR-0023 (BCrypt ngoài khóa) |
-| visit #16–17, #19–21; T28 phần 2–4 | BR-KB-03, 04 | #19 dùng lại guard của #18 (ADR-0073), kiểm lại dưới khóa; D045 (khóa Order trước khi đọc) |
-| care: Care Task, ST04, ST18, ST19, `FollowUpApi` | BR-TB-01…06 | T39; trả D029; cài đặt nhận thông báo D025 |
+| visit #16–17 (T38), #21 (T28b) | BR-KB-03, KH-07 | D045 (khóa Order trước khi đọc) |
+| care: Care Task (còn `create`, `cancelFollowUpTasks` — D047), ST04, ST18, ST19, `FollowUpApi` | BR-TB-01…06 | T39; trả D029, D047; cài đặt nhận thông báo D025 |
 | sales #9, #11, `BoardingOrderApi` | BR-LT-09, BR-BH-04 | T43; #11 chờ `PrescriptionApi` |
 | boarding #13–22, ST15 | BR-LT-05…12 | T42, T43; khóa sức chứa chuồng chưa có ADR (convention 07 §7.3) |
 | report, ST08 | BR-BC-01…04, BR-KO-07 | T44 |
@@ -136,7 +137,7 @@ Không bao giờ sửa migration đã chạy (checksum). Số V dùng chung vớ
 
 - **PK đặc biệt (9 bảng):** 1–1 (`staff_profiles`, `kennel_types`, `medical_records`, `boarding_check_ins`), ghép (`branch_services`, `branch_quota_defaults`), chuỗi (`system_configs`, `notification_templates`, `page_contents`). 8 bảng LOG chỉ `created_at`. Tên ràng buộc `ck_ / uq_ / ix_ / ex_`.
 - **Thứ tự xóa cứng** (app xóa con trước, cùng tx): BR-TK-08 `otp_tokens` → hồ sơ online → `accounts`; BR-TK-19 `addresses` → hồ sơ online → gán `account_id` (flush trước, `uq_customers_account_id` không deferrable); BR-KH-06 `weight_records` → `pets`; BR-KB-04 hoàn kho + `stock_movements` → `vaccinations` → `order_lines`.
-- **TBD còn mở:** xóa mũi ghi nhầm có khôi phục `superseded_at` / Care Task của mũi cũ không (T28 phần 3); chuyển chủ: Care Task `OPEN` vẫn mang `customer_id` chủ cũ.
+- **TBD còn mở:** Care Task `VACCINE_*` đã hủy lúc ghi mũi không mở lại khi xóa mũi — PO chưa xác nhận (ADR-0075, visit-v1 Q4); chuyển chủ: Care Task `OPEN` vẫn mang `customer_id` chủ cũ.
 - **DB cũ:** `baseline-on-migrate` tắt; volume còn lịch sử Flyway lạ → không khởi động → `docker compose down -v` (hỏi trước, mất dữ liệu).
 
 ## 5. Luồng request

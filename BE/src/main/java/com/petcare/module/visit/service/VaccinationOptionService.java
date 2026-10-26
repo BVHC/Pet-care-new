@@ -85,12 +85,7 @@ public class VaccinationOptionService {
                 .orElseThrow(() -> new ResourceNotFoundException("loại vaccine", vaccineTypeId));
         PetSummary pet = pets.findPet(visit.petId())
                 .orElseThrow(() -> new IllegalStateException("Thú cưng #" + visit.petId() + " của lượt biến mất"));
-        if (type.species() != pet.species()) {
-            throw new BusinessRuleViolationException("BR-KB-04", "Loại vaccine không áp dụng cho loài của thú");
-        }
-        if (!type.active()) {
-            throw new BusinessRuleViolationException("BR-SP-07", "Loại vaccine đã ngừng sử dụng");
-        }
+        requireUsableType(type, pet);
 
         List<ProtocolDose> protocol = catalog.findProtocol(pet.species(), type.vaccineTypeId());
         VaccinationRecordResponse lastDose = doses.latestOfType(pet.petId(), type.vaccineTypeId()).orElse(null);
@@ -103,6 +98,19 @@ public class VaccinationOptionService {
                         p.minAgeWeeks(), p.requiredForBoarding())).toList(),
                 suggested == null ? null : suggested.protocolId(), lastDose,
                 productsInStock(visit.branchId(), type.vaccineTypeId()), underMinAge);
+    }
+
+    /**
+     * Loại vaccine phải đúng loài của thú (400 BR-KB-04) rồi còn sử dụng (400 BR-SP-07). Dùng chung với ghi mũi
+     * ({@link VaccinationRecordService}, docs/adr/0074) để hai endpoint không lệch nhau.
+     */
+    static void requireUsableType(VaccineTypeInfo type, PetSummary pet) {
+        if (type.species() != pet.species()) {
+            throw new BusinessRuleViolationException("BR-KB-04", "Loại vaccine không áp dụng cho loài của thú");
+        }
+        if (!type.active()) {
+            throw new BusinessRuleViolationException("BR-SP-07", "Loại vaccine đã ngừng sử dụng");
+        }
     }
 
     /**

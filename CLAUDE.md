@@ -39,16 +39,16 @@ Team: **BE-1** (branch `manh`) = identity, appointment, visit, care · **BE-2** 
 
 **Scope tiers:** 1 = full, 2 = thin, 3 = diagram only — **don't build tier 3**; the list is in `docs/INDEX.md`. Rules marked 🆕 are proposals not yet approved. Vietnamese enum values map to ASCII codes (erd §0, e.g. `TÁI_CHỦNG` → `VACCINE_DUE`, nhóm Khám/Tiêm → `MEDICAL`).
 
-## Current state (2026-10-25)
+## Current state (2026-10-26)
 
-`manh` @ `e3af773` (9 commits ahead of `origin/manh`). **Uncommitted:** T28 parts 0–1 (ADR-0072, 0073). `origin/dev` / `origin/dung` stop at ADR-0071 / V21. No `*Placeholder` left in `src/main`. Per-feature map: `docs/architecture/system-overview.md` §3.2.
+`manh` @ `f89cba3` (10 commits ahead of `origin/manh`; T28 parts 0–1 committed). **Uncommitted:** T28 parts 2–4 (ADR-0074, 0075); T28 is done. `origin/dev` / `origin/dung` stop at ADR-0071 / V21. No `*Placeholder` left in `src/main`. Per-feature map: `docs/architecture/system-overview.md` §3.2.
 
 | Module | Owner | Built (contract #, ADR) | Still missing |
 |---|---|---|---|
 | identity | BE-1 | identity-v1 #1–24, #28–37; ST01, ST02, session cleanup; `StaffDirectoryApi`, `AccountContactApi` | #25–27 (UC22) |
-| care | BE-1 | ST20 (EMAIL HIGH / NORMAL, IN_APP), outbox cleanup, care-v1 #5–8 | #9–10 (D025), Care Task, ST04, `FollowUpApi` (T39, D029) |
+| care | BE-1 | ST20 (EMAIL HIGH / NORMAL, IN_APP), outbox cleanup, care-v1 #5–8; `CareTaskApi.cancelForRevaccination` (0074) | #9–10 (D025), rest of Care Task (`create`, `cancelFollowUpTasks` throw — D047), ST04, `FollowUpApi` (T39, D029) |
 | appointment | BE-1 | appointment-v1 #1–9, ST05, ST03, clinic-cancel listeners, 3 APIs (0045–0057) | `findPetForShare` in booking (D027) |
-| visit | BE-1 | visit-v1 #1–15 (0058–0070), #18 (0073); `VisitQueryApi`, `VaccinationQueryApi` (0072); lock listener | #16–17 (T38), #19–21 (T28 parts 2–4; VACCINE-only visits cannot complete before #19); D042, D043, D046 |
+| visit | BE-1 | visit-v1 #1–15 (0058–0070), #18 (0073), #19 (0074), #20 (0075); `VisitQueryApi`, `VaccinationQueryApi` (0072); lock listener | #16–17 (T38), #21 (T28b); D042, D043, D046 |
 | branch, catalog | BE-2 | branch-v1 #1–21, catalog-v1 #1–22; `BranchQueryApi`, `BranchApi`, `CatalogQueryApi` | Swagger annotations (D026) |
 | customer | BE-2 | customer-v1 #1–21; `CustomerApi`, `CustomerQueryApi`, `PetApi`, `PetQueryApi` | — |
 | inventory | BE-2 | inventory-v1 #1–17; `StockApi`, `StockQueryApi` | `StockReportApi`, ST08 (T44) |
@@ -59,7 +59,7 @@ Team: **BE-1** (branch `manh`) = identity, appointment, visit, care · **BE-2** 
 
 **Blocking debts:** D029 `FollowUpApi` (with T39); D045 `SalesOrder` has no `@Version` — #19 must lock the Order before reading it.
 
-**Tests:** last full green `mvn clean verify` = 2026-10-19; a full run gets killed by low host memory (~870 ITs) — run ITs in groups. Known red: 2 ITs in `AppointmentReminderIT` (`findDueForReminderIds` lacks the lower bound `(slot_date, slot_start) > (:fromDate, :fromTime)` since `af117e0`). Latest (2026-10-25, T28 part 1): unit 4968/4968; ITs green by group (vaccination + medical record + catalog + parity 104; visit + boarding + catalog + public 311).
+**Tests:** last full green `mvn clean verify` = 2026-10-19; a full run gets killed by low host memory (~870 ITs) — run ITs in groups. Known red: 2 ITs in `AppointmentReminderIT` (`findDueForReminderIds` lacks the lower bound `(slot_date, slot_start) > (:fromDate, :fromTime)` since `af117e0`). Latest (2026-10-26, T28 part 4, per module): unit 5035/5035 (`PetcareApplicationTests` needs Docker); 2108 ITs green in 12 groups (11 modules + root ITs incl. parity, which pins 156 endpoints) except the 2 known reds; Docker smoke 30/30 (boarding booking, vaccine-type delete, vaccinate → complete → pay).
 
 ## Commands
 
@@ -112,7 +112,7 @@ Module codes: TK, QT, CN, CK, KH, SP, NS, LH, TN, KB, LT, BH, TG, KO, BV, DG, TB
 
 Open convention TBDs (don't decide silently — ask or write an ADR): command names when no Actor↔Command table exists; how "warn, don't block" rules return warnings (contracts assume a named field in `data`, e.g. `stockWarning`); locking for kennel capacity.
 
-**ADR map** (`docs/adr/`, immutable once Accepted — supersede instead of editing; **next free: 0074**):
+**ADR map** (`docs/adr/`, immutable once Accepted — supersede instead of editing; **next free: 0076**):
 
 | Area | ADRs |
 |---|---|
@@ -121,7 +121,7 @@ Open convention TBDs (don't decide silently — ask or write an ADR): command na
 | Accounts, staff, admin | 0024 staff directory · 0026 staff self-edit · 0027 profile link · 0028 customer self-edit · 0029–0035 staff admin / lock · 0036 [CFG] edit · 0037 templates · 0038 audit view · 0039 in-app notifications |
 | Notifications, jobs | 0008 session cleanup · 0012, 0014, 0016, 0017 ST20 · 0013 ST02 · 0018 FK indexes on `accounts` |
 | Appointment (BE-1) | 0045 booking locks · 0046 slots · 0047 book · 0048 view · 0049 reschedule / cancel · 0050 cross-module API · 0052 clinic cancel · 0053, 0054 ST05 · 0055 booking restriction · 0056 ST03 · 0057 assumptions confirmed |
-| Visit (BE-1) | 0058 foundation · 0059 check-in (amends 0044) · 0060 queue · 0061 dispatch · 0062 call / cancel / lock listener · 0063 reassign · 0066 medical record · 0067 record write · 0068 weight · 0069 complete (replaces 0066 §5) · 0070 addendum · 0072 vaccination foundation · 0073 vaccination options (#18) |
+| Visit (BE-1) | 0058 foundation · 0059 check-in (amends 0044) · 0060 queue · 0061 dispatch · 0062 call / cancel / lock listener · 0063 reassign · 0066 medical record · 0067 record write · 0068 weight · 0069 complete (replaces 0066 §5) · 0070 addendum · 0072 vaccination foundation · 0073 vaccination options (#18) · 0074 vaccination record (#19) · 0075 vaccination delete (#20) |
 | BE-2 | 0041 customer & pet · 0042 inventory stock ledger · 0043 document codes · 0044 order core · 0051 retail order · 0064 cashier shift / payment / ST13 · 0065 boarding kennels / bookings / ST05 · 0071 public pages, articles, feedback |
 
 ## Backend architecture
@@ -186,9 +186,10 @@ Every write ADR follows these. Read the ADR of the neighbouring feature before w
   | Staff admin | `branches (id ↑, only via BranchApi.lockForStaffChange) → accounts → staff_profiles → sessions`. Any flow lowering a branch's ACTIVE BRANCH_MANAGER count locks the branch first |
   | Customer | `accounts → customers (id ↑) → pets → weight_records` |
   | Appointment writes | `advisory(1001, pet) → branches (BranchApi.lockForBooking) → appointments`; advisory **1002** per customer (violation evaluation / restriction lift) always last |
-  | Visit (ADR-0058) | `accounts` (staff, `FOR SHARE`, id ↑) → `pets FOR SHARE` → `visits` (id ↑) → `appointments` via `AppointmentApi` → `document_counters` (`visits` → `ORDER`) → `orders` via `VisitOrderApi` → stock lots via `StockApi`. Check-in does not lock `branches`. Assignee lock = `StaffDirectoryApi.findStaffForShare`; move locks every `WAITING` visit of the branch in one `ORDER BY id` query (ADR-0061); call locks the caller's own account `FOR SHARE` before the visit; cancel `visits → appointments → orders`; the lock-account listener runs `accounts → visits` (ADR-0062); reassign locks the old and the new assignee `FOR SHARE` (id ↑) before the visit (ADR-0063); medical-record write and weight #14 lock `pets FOR SHARE` → `visits` (ADR-0067, 0068; `PetApi.recordWeight` never upgrades the pet lock); complete `visits` → `appointments` → `orders`, read the Order's service lines only after `markPendingByVisit` has locked it (ADR-0069) |
+  | Visit (ADR-0058; per feature 0059–0063, 0067–0069, 0074, 0075) | prefix `accounts` (staff, `FOR SHARE`, id ↑; `StaffDirectoryApi.findStaffForShare`) → `pets FOR SHARE` → advisory **1004** (#19/#20 only) → `visits` (id ↑) → `appointments` (`AppointmentApi`) → `document_counters` (`visits` → `ORDER`) → `orders` (`VisitOrderApi`) → stock lots (`StockApi`). Exceptions: check-in does not lock `branches`; call locks the caller's own account `FOR SHARE` first; move locks every `WAITING` visit of the branch in one `ORDER BY id`; reassign locks the old and the new assignee `FOR SHARE` (id ↑); the lock-account listener runs `accounts → visits`; cancel `visits → appointments → orders`; medical-record write and weight #14 stop at `visits` (`PetApi.recordWeight` never upgrades the pet lock); complete reads the Order's service lines only after `markPendingByVisit` has locked it (D045); #19 takes `products FOR SHARE` before `orders` (`addVaccineLine`) and then the FEFO lot; #20 locks the dose `FOR UPDATE` after `visits`, deletes it, then `orders` (`removeVaccineLine`) → the dose's lot |
   | Sales | caller's document → `orders` (lock before read) → `products FOR SHARE` → stock lots; several orders by ascending id |
 | Cashier (ADR-0064) | open shift: `accounts FOR SHARE` (own) → INSERT shift · payment: shift `FOR SHARE` → all orders in **one** `ORDER BY id` statement → all lots in **one** statement (`StockApi.issueForPayment`) → `document_counters` last · close / reconcile: shift `FOR NO KEY UPDATE` · ST13: shift `SKIP LOCKED` |
+  | Advisory namespaces | **1001** pet (appointment writes) · **1002** customer violation (always last) · **1003** customer feedback · **1004** pet vaccine dose (#19/#20) · next free **1005** |
   | Boarding (ADR-0065) | booking: `pets FOR SHARE` → `branches` (`BranchApi.lockForBooking`, shared with appointment booking and branch hours / holiday changes) → INSERT → `document_counters` · extend: `pets FOR SHARE` → `branches` → booking · cancel: booking → `evaluateAfterViolation` (advisory 1002 last) · kennel writes: `branches` → kennel · ST05: booking `SKIP LOCKED` → 1002 · clinic cancel: bookings by ascending id in batches of 100 |
   | Content (ADR-0071) | article create / move: `article_categories FOR SHARE` → `articles` · category delete: `article_categories FOR NO KEY UPDATE` → count `articles` · feedback submit: advisory **1003** (customer) → count → INSERT · feedback open: conditional `UPDATE … WHERE status = 'NEW'` · resolve: `feedbacks FOR NO KEY UPDATE` |
   | Inventory | caller's document → `stock_receipts` → `suppliers FOR SHARE` → `products FOR SHARE` → all lots in **one** `ORDER BY id FOR NO KEY UPDATE` → `StockLedger.apply` (the only writer of `stock_lots.quantity`) |

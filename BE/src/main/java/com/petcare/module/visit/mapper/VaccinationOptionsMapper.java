@@ -7,6 +7,7 @@ import org.mapstruct.Mapping;
 import org.mapstruct.ReportingPolicy;
 
 import com.petcare.module.visit.dto.ProtocolDoseOptionResponse;
+import com.petcare.module.visit.dto.RecordVaccinationResultResponse;
 import com.petcare.module.visit.dto.VaccinationOptionsResponse;
 import com.petcare.module.visit.dto.VaccinationRecordResponse;
 import com.petcare.module.visit.dto.VaccineProductOptionResponse;
@@ -31,6 +32,11 @@ public interface VaccinationOptionsMapper {
     @Mapping(target = "name", source = "name")
     @Mapping(target = "availableQuantity", source = "availableQuantity")
     VaccineProductOptionResponse toProductOption(Long productId, String name, int availableQuantity);
+
+    /** visit-v1 #19 (docs/adr/0074). */
+    @Mapping(target = "vaccination", source = "vaccination")
+    @Mapping(target = "warnings", source = "warnings")
+    RecordVaccinationResultResponse toRecordResult(VaccinationRecordResponse vaccination, List<String> warnings);
 
     @Mapping(target = "vaccineTypeId", source = "vaccineTypeId")
     @Mapping(target = "protocol", source = "protocol")

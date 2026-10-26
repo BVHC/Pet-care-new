@@ -13,14 +13,16 @@ import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.RequestMapping;
 
 /**
- * Vai trò của {@link VaccinationController} khớp visit-v1 mục B: #18 A07 (người được gán kiểm ở service) —
- * docs/adr/0073. Handler mới quên {@code @PreAuthorize} thì test đỏ.
+ * Vai trò của {@link VaccinationController} khớp visit-v1 mục B: #18, #19, #20 A07 (người được gán kiểm ở service) —
+ * docs/adr/0073, 0074, 0075. Handler mới quên {@code @PreAuthorize} thì test đỏ.
  */
 class VaccinationControllerSecurityTest {
 
     @Test
     void everyHandlerCarriesExactlyTheContractRoles() {
-        assertThat(roles()).isEqualTo(Map.of("getVaccinationOptions", "hasRole('VET')"));
+        assertThat(roles()).isEqualTo(
+                Map.of("getVaccinationOptions", "hasRole('VET')", "recordVaccination", "hasRole('VET')",
+                        "deleteVaccination", "hasRole('VET')"));
     }
 
     private static Map<String, String> roles() {

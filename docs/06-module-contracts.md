@@ -69,7 +69,7 @@ Mũi tên `A → B.m()`: module A gọi method m của module B. Cột *Chuyển
 | Visit#6 Hủy lượt | gọi | **Cài 21/10 (T26 phần 4, docs/adr/0062).** visit khóa `visits` → ghi lượt → `AppointmentApi.cancelByVisit(appointmentId, at)` (nếu có lịch; `STAFF`, không hủy muộn, cùng mốc `at`) → `VisitOrderApi.cancelByVisit(visitId, lễ tân)` (`VISIT_CANCELLED`); không khóa `branches` |
 | Visit — ghi cân nặng khi khám (#14) | gọi | **Cài 22/10 (T27 phần 2, docs/adr/0068).** visit → `PetQueryApi.findPetForShare` → khóa `visits` → `PetApi.recordWeight(VET, visitId)` (`MANDATORY`, chỉ `FOR SHARE`, trả `RecordedWeight`). Không audit |
 | Visit — ghi nhận mũi tiêm | gọi | visit → `VisitOrderApi.addVaccineLine` (khóa Order, sinh dòng VACCINE) → `StockApi.lockFefoLot` → INSERT `vaccinations` (`order_line_id` = dòng vừa sinh) → `StockApi.issueForVaccination` → đánh dấu `superseded_at` các mũi cũ cùng loại → `CareTaskApi.cancelForRevaccination`. **17/10 (T19, ADR-0044): đảo thứ tự so với bản 05/10** — chứng từ khóa trước, lô sau (ADR-0042) |
-| Visit — xóa mũi tiêm ghi nhầm | gọi | visit → đọc `stock_lot_id` + số lượng của mũi → xóa `vaccinations` → `VisitOrderApi.removeVaccineLine` (khóa Order) → `StockApi.revertVaccination` (khóa lô sau cùng). **17/10 (T19, ADR-0044): xóa `vaccinations` trước** vì FK `vaccinations.order_line_id` RESTRICT, và Order khóa trước lô |
+| Visit — xóa mũi tiêm ghi nhầm | gọi | **Cài 26/10 (T28 phần 3, docs/adr/0075).** visit khóa `pets FOR SHARE` → advisory 1004 → `visits` → dòng mũi `FOR UPDATE` (đọc `stock_lot_id`, `order_line_id`) → xóa `vaccinations` → `VisitOrderApi.removeVaccineLine` (khóa Order) → `StockApi.revertVaccination` (khóa lô sau cùng) → mũi cũ mới nhất cùng (thú, loại) hết `superseded` nếu mũi bị xóa chưa bị thay thế. **17/10 (T19, ADR-0044): xóa `vaccinations` trước** vì FK `vaccinations.order_line_id` RESTRICT, và Order khóa trước lô. Care Task đã hủy không mở lại (TBD PO) |
 | Lịch hẹn#1 / Visit#1 có dịch vụ Khám | gọi | appointment (nhóm MEDICAL) → `FollowUpApi.cancelPendingFollowUps` → (bên trong visit) `CareTaskApi.cancelFollowUpTasks` |
 | Order#8 Thu tiền | gọi | sales → `StockApi.issueForPayment` (một lần cho cả phiếu thu gộp, khóa lô một câu; trả danh sách thiếu); thiếu thuốc kê đơn → `PrescriptionApi.markExternalPurchaseAtPayment` rồi xóa dòng. Giao thú (Đặt chỗ#10) không cần đẩy, boarding hỏi `BoardingOrderApi.hasPaidOrder` |
 | Đặt chỗ#3 Nhận thú | nội bộ boarding (Chuồng#2) + gọi | boarding → `VaccinationQueryApi.findBoardingVaccineGaps` (rỗng mới nhận) · `PetApi.recordWeight(INTAKE)` |
@@ -131,14 +131,14 @@ Mũi tên `A → B.m()`: module A gọi method m của module B. Cột *Chuyển
 
 ## 5. Hai luồng cần làm đúng thứ tự
 
-**Ghi nhận mũi tiêm** (Visit `IN_PROGRESS`, một transaction). `vaccinations.stock_lot_id` và `order_line_id` là `NOT NULL`, nhưng `stock_movements.source_id` lại cần id của mũi tiêm, nên phải theo thứ tự:
-1. `StockApi.lockFefoLot` — khóa lô FEFO chưa hết hạn.
-2. `VisitOrderApi.addVaccineLine` — sinh dòng VACCINE.
-3. INSERT `vaccinations` với lô và dòng ở trên.
+**Ghi nhận mũi tiêm** (Visit `IN_PROGRESS`, một transaction). `vaccinations.stock_lot_id` và `order_line_id` là `NOT NULL`, nhưng `stock_movements.source_id` lại cần id của mũi tiêm, nên phải theo thứ tự (trước bước 1: `pets FOR SHARE` → advisory 1004 theo thú → `visits` → `CatalogQueryApi.findProductForShare`, ADR-0074):
+1. `VisitOrderApi.addVaccineLine` — khóa Order, sinh dòng VACCINE (chứng từ khóa trước, lô sau — ADR-0044).
+2. `StockApi.lockFefoLot` — khóa lô FEFO chưa hết hạn.
+3. INSERT `vaccinations` với dòng và lô ở trên.
 4. `StockApi.issueForVaccination` — trừ lô, ghi movement nguồn là mũi tiêm.
 5. Đánh dấu `superseded_at` các mũi cũ cùng loại vaccine, gọi `CareTaskApi.cancelForRevaccination`.
 
-Xóa mũi tiêm ghi nhầm đi ngược lại: `revertVaccination` → `removeVaccineLine` → xóa `vaccinations`.
+Xóa mũi tiêm ghi nhầm (ADR-0075): cùng tiền tố khóa `pets FOR SHARE` → advisory 1004 → `visits`, rồi xóa `vaccinations` → `removeVaccineLine` → `revertVaccination` (FK `order_line_id` RESTRICT bắt xóa mũi trước; Order khóa trước lô), cuối cùng mũi cũ mới nhất hết `superseded`.
 
 **Thu tiền** (Order#8, một transaction):
 1. Khóa các Order, kiểm `PENDING`, cùng khách, cùng chi nhánh.

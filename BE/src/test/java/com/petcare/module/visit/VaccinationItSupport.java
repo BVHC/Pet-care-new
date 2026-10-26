@@ -70,6 +70,21 @@ final class VaccinationItSupport {
         return id;
     }
 
+    /** Thuốc (không phải vaccine, không gắn loại vaccine) — #19 phải từ chối (docs/adr/0074). */
+    long drugProduct(String name) {
+        if (category == null) {
+            category = jdbc.queryForObject("INSERT INTO product_categories (name) VALUES (?) RETURNING id", Long.class,
+                    "Vaccine IT " + UUID.randomUUID());
+        }
+        String suffix = UUID.randomUUID().toString().substring(0, 8);
+        long id = jdbc.queryForObject("""
+                INSERT INTO products (category_id, sku, name, product_type, tracks_expiry, unit, price)
+                VALUES (?, ?, ?, 'DRUG', true, 'viên', 20000) RETURNING id""", Long.class, category, "DRG-" + suffix,
+                name + " " + suffix);
+        products.add(id);
+        return id;
+    }
+
     long lot(long branchId, long productId) {
         long item = jdbc.queryForObject("""
                 INSERT INTO inventory_items (branch_id, product_id) VALUES (?, ?)
@@ -137,6 +152,27 @@ final class VaccinationItSupport {
         return id;
     }
 
+    /**
+     * Care Task của một mũi tiêm (T28 phần 2, docs/adr/0074); {@code DONE} cần kết quả (CHECK {@code done_result}).
+     * Xóa ở {@link #deleteDosesOfPet}.
+     */
+    long careTask(long vaccinationId, long petId, String taskType, String status) {
+        return jdbc.queryForObject("""
+                INSERT INTO care_tasks (branch_id, customer_id, pet_id, task_type, vaccination_id, due_date, status, result)
+                SELECT v.branch_id, p.customer_id, p.id, ?, ?, now()::date, ?, CASE WHEN ? = 'DONE' THEN 'REACHED' END
+                FROM vaccinations v JOIN pets p ON p.id = v.pet_id WHERE v.id = ? AND p.id = ? RETURNING id""", Long.class,
+                taskType, vaccinationId, status, status, vaccinationId, petId);
+    }
+
+    /**
+     * Mũi tiêm và Care Task của thú, kể cả mũi ghi qua API (không có trong {@link #doses}); chạy trước
+     * {@link #deleteDoses()}: mũi trỏ tới dòng Order, Care Task trỏ tới mũi (FK {@code RESTRICT}).
+     */
+    void deleteDosesOfPet(long petId) {
+        jdbc.update("DELETE FROM care_tasks WHERE pet_id = ?", petId);
+        jdbc.update("DELETE FROM vaccinations WHERE pet_id = ?", petId);
+    }
+
     /** Pha 1: mũi tiêm (trỏ tới dòng Order, lô, sản phẩm). Phải chạy trước khi xóa Order / Visit. */
     void deleteDoses() {
         for (long id : doses) {
@@ -153,6 +189,8 @@ final class VaccinationItSupport {
     /** Pha 2: lô, tồn, sản phẩm, phác đồ, loại vaccine. Phải chạy sau khi dòng Order trỏ tới sản phẩm đã bị xóa. */
     void deleteCatalog() {
         for (long id : lots) {
+            // movement ghi khi tiêm qua API (docs/adr/0074) trỏ tới lô, FK RESTRICT
+            jdbc.update("DELETE FROM stock_movements WHERE stock_lot_id = ?", id);
             jdbc.update("DELETE FROM stock_lots WHERE id = ?", id);
         }
         for (long id : items) {
