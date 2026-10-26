@@ -42,6 +42,7 @@ import com.petcare.module.identity.api.SystemConfigApi;
 import com.petcare.module.visit.dto.MedicalRecordResponse;
 import com.petcare.module.visit.dto.RecordWeightRequest;
 import com.petcare.module.visit.dto.UpdateMedicalRecordRequest;
+import com.petcare.module.visit.dto.VaccinationRecordResponse;
 import com.petcare.module.visit.dto.WeightRecordRefResponse;
 import com.petcare.module.visit.entity.MedicalRecord;
 import com.petcare.module.visit.entity.MedicalRecordAddendum;
@@ -88,8 +89,9 @@ class MedicalRecordServiceTest {
     private final MedicalRecordRepository records = mock(MedicalRecordRepository.class);
     private final MedicalRecordAddendumRepository addenda = mock(MedicalRecordAddendumRepository.class);
     private final AuditRecorder audit = mock(AuditRecorder.class);
+    private final VaccinationRecordReader doses = mock(VaccinationRecordReader.class);
     private final MedicalRecordService service = new MedicalRecordService(scope, pets, petApi, staff, config, visits, records,
-            addenda, audit, Mappers.getMapper(MedicalRecordMapper.class));
+            addenda, audit, Mappers.getMapper(MedicalRecordMapper.class), doses);
 
     @BeforeEach
     void setUp() {
@@ -109,7 +111,7 @@ class MedicalRecordServiceTest {
 
         assertThatThrownBy(() -> service.getMedicalRecord(VISIT)).isInstanceOf(IllegalStateException.class);
 
-        verifyNoInteractions(visits, records, addenda, staff);
+        verifyNoInteractions(visits, records, addenda, staff, doses);
     }
 
     @Test
@@ -119,7 +121,7 @@ class MedicalRecordServiceTest {
         assertThatThrownBy(() -> service.getMedicalRecord(VISIT)).isInstanceOf(ResourceNotFoundException.class);
 
         verify(scope, never()).check(any());
-        verifyNoInteractions(records);
+        verifyNoInteractions(records, doses);
     }
 
     @Test
@@ -129,7 +131,7 @@ class MedicalRecordServiceTest {
 
         assertThatThrownBy(() -> service.getMedicalRecord(VISIT)).isInstanceOf(AccessDeniedScopeException.class);
 
-        verifyNoInteractions(records);
+        verifyNoInteractions(records, doses);
     }
 
     @Test
@@ -252,11 +254,12 @@ class MedicalRecordServiceTest {
         MedicalRecordResponse response = service.updateMedicalRecord(VISIT,
                 request("  khám  ", "viêm", "điều trị", "nội bộ", EXAM_DAY.plusDays(14)));
 
-        InOrder order = inOrder(pets, visits, records, audit);
+        InOrder order = inOrder(pets, visits, records, doses, audit);
         order.verify(pets).findPetForShare(PET);
         order.verify(visits).lockById(VISIT);
         order.verify(visits).findById(VISIT);
         order.verify(records).findById(VISIT);
+        order.verify(doses).forVisit(PET, VISIT);
         order.verify(records).saveAndFlush(any(MedicalRecord.class));
         order.verify(audit).record(any(AuditEntry.class));
 
@@ -580,6 +583,71 @@ class MedicalRecordServiceTest {
 
         assertThatThrownBy(() -> service.updateMedicalRecord(VISIT, request("x", "y", null, null, null)))
                 .isInstanceOf(IllegalStateException.class).hasMessage("audit");
+    }
+
+    // ---------------------------------------------------------------- mũi tiêm trong response (T28 phần 0, ADR-0072)
+
+    private static VaccinationRecordResponse dose(long id) {
+        return new VaccinationRecordResponse(id, VISIT, BRANCH, 5L, "Dại", 12L, 1, 81L, "Rabisin", null, null,
+                EXAM_DAY, EXAM_DAY.plusDays(365), false, VET_A, 9100L + id);
+    }
+
+    @Test
+    void viewReadsTheVisitsDosesByPetAndVisitAndReturnsThemWithOrWithoutARecord() {
+        asCaretaker(47L);
+        summary(BRANCH, ServiceGroup.MEDICAL, VisitStatus.COMPLETED);
+        doReturn(List.of(dose(1L), dose(2L))).when(doses).forVisit(PET, VISIT);
+        doReturn(Optional.empty()).when(records).findById(VISIT);
+
+        assertThat(service.getMedicalRecord(VISIT).vaccinations()).extracting("vaccinationId").containsExactly(1L, 2L);
+
+        doReturn(Optional.of(recordWith("khám", "dx", null))).when(records).findById(VISIT);
+        doReturn(List.of()).when(addenda).findByMedicalRecordIdOrderByIdAsc(VISIT);
+
+        assertThat(service.getMedicalRecord(VISIT).vaccinations()).extracting("vaccinationId").containsExactly(1L, 2L);
+    }
+
+    @Test
+    void writeReturnsTheDosesOnTheWriteBranchAndOnTheNoOpBranch() {
+        stubLoaded(VET_A, VisitStatus.IN_PROGRESS);
+        doReturn(List.of(dose(1L))).when(doses).forVisit(PET, VISIT);
+        doReturn(Optional.empty()).when(records).findById(VISIT);
+
+        assertThat(service.updateMedicalRecord(VISIT, request("khám", "dx", null, null, null)).vaccinations())
+                .extracting("vaccinationId").containsExactly(1L);
+
+        doReturn(Optional.of(recordWith("khám", "dx", null))).when(records).findById(VISIT);
+
+        assertThat(service.updateMedicalRecord(VISIT, request("khám", "dx", null, null, null)).vaccinations())
+                .extracting("vaccinationId").containsExactly(1L);
+    }
+
+    @Test
+    void writeGuardFailuresNeverReadDoses() {
+        stubLoaded(VET_B, VisitStatus.IN_PROGRESS);
+
+        assertThatThrownBy(() -> service.updateMedicalRecord(VISIT, request("x", null, null, null, null)))
+                .isInstanceOf(AccessDeniedScopeException.class);
+        verifyNoInteractions(doses);
+
+        stubLoaded(VET_A, VisitStatus.IN_PROGRESS);
+        doReturn(Optional.empty()).when(records).findById(VISIT);
+        assertThatThrownBy(() -> service.updateMedicalRecord(VISIT,
+                request("x", null, null, null, EXAM_DAY.plusDays(181)))).isInstanceOf(BusinessRuleViolationException.class);
+        verifyNoInteractions(doses);
+    }
+
+    @Test
+    void aFailingDoseReadHappensBeforeAnyWriteSoNothingIsWrittenOrAudited() {
+        stubLoaded(VET_A, VisitStatus.IN_PROGRESS);
+        doReturn(Optional.empty()).when(records).findById(VISIT);
+        doThrow(new IllegalStateException("catalog")).when(doses).forVisit(PET, VISIT);
+
+        assertThatThrownBy(() -> service.updateMedicalRecord(VISIT, request("x", "y", null, null, null)))
+                .isInstanceOf(IllegalStateException.class).hasMessage("catalog");
+
+        verify(records, never()).saveAndFlush(any(MedicalRecord.class));
+        verifyNoInteractions(audit);
     }
 
     // ================================================================ #15 bản bổ sung

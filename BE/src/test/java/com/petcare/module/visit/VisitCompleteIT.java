@@ -114,6 +114,9 @@ class VisitCompleteIT {
     private long manager;
     private long customer;
     private long pet;
+    private VaccinationItSupport vax;
+    private long doseId;
+    private long doseLotId;
     private String receptionistToken;
     private String vetAToken;
     private String vetBToken;
@@ -125,6 +128,7 @@ class VisitCompleteIT {
         clock.set(T0);
         tx = new TransactionTemplate(transactionManager);
         data = new AppointmentItSupport(jdbc);
+        vax = new VaccinationItSupport(jdbc);
         branch = activeBranch();
         otherBranch = activeBranch();
         medical = data.service("MEDICAL");
@@ -152,6 +156,8 @@ class VisitCompleteIT {
     @AfterEach
     void tearDown() {
         for (long b : branches) {
+            // mũi tiêm trỏ tới dòng Order, lô và lượt (FK RESTRICT): xóa trước các bảng đó
+            jdbc.update("DELETE FROM vaccinations WHERE visit_id IN (SELECT id FROM visits WHERE branch_id = ?)", b);
             jdbc.update("""
                     DELETE FROM medical_record_addenda WHERE medical_record_id IN (
                         SELECT id FROM visits WHERE branch_id = ?)""", b);
@@ -164,6 +170,8 @@ class VisitCompleteIT {
             jdbc.update("DELETE FROM orders WHERE visit_id IN (SELECT id FROM visits WHERE branch_id = ?)", b);
             jdbc.update("DELETE FROM visits WHERE branch_id = ?", b);
         }
+        vax.deleteDoses();
+        vax.deleteCatalog();
         data.cleanUp();
         for (long service : vaccineServices) {
             jdbc.update("DELETE FROM branch_services WHERE service_id = ?", service);
@@ -253,6 +261,53 @@ class VisitCompleteIT {
         assertRule(complete(vetAToken, visit), "BR-KB-02");
 
         assertThat(xmins(visit)).isEqualTo(before);
+    }
+
+    /**
+     * T28 phần 4 (BR-KB-02, Visit#5, Lịch hẹn#7, Order#4): lượt chỉ tiêm có mũi, không chẩn đoán, hoàn tất được; lịch hẹn
+     * và Order đổi cùng lúc, mũi / dòng VACCINE / lô không bị chạm, và sau đó mũi không xóa được nữa (BR-KB-04).
+     */
+    @Test
+    void aVaccineOnlyVisitWithADoseCommitsTheWholeChainWithoutADiagnosis() {
+        long visit = vaccinatedAppointmentVisit();
+        long appointment = jdbc.queryForObject("SELECT appointment_id FROM visits WHERE id = ?", Long.class, visit);
+        Map<String, Object> doseBefore = doseState(visit);
+
+        Map<String, Object> done = data(complete(vetAToken, visit), HttpStatus.OK);
+
+        assertThat(done).containsEntry("visitId", ((Number) visit).intValue()).containsEntry("status", "COMPLETED");
+        assertThat(done.get("completedAt")).isNotNull();
+        assertThat(row("SELECT status FROM visits WHERE id = " + visit)).containsEntry("status", "COMPLETED");
+        assertThat(row("SELECT status FROM appointments WHERE id = " + appointment)).containsEntry("status", "COMPLETED");
+        assertThat(row("SELECT status, pending_at FROM orders WHERE visit_id = " + visit))
+                .containsEntry("status", "PENDING").doesNotContainEntry("pending_at", null);
+        assertThat(count("SELECT count(*) FROM medical_records WHERE visit_id = " + visit))
+                .as("lượt chỉ tiêm không bắt buộc bệnh án").isZero();
+        assertThat(doseState(visit)).as("mũi, dòng VACCINE và lô không bị hoàn tất chạm vào").isEqualTo(doseBefore);
+
+        assertError(exchange(HttpMethod.DELETE, vetAToken, "/api/visits/%d/vaccinations/%d".formatted(visit, doseId), null),
+                HttpStatus.CONFLICT, "INVALID_STATE_TRANSITION");
+        assertThat(doseState(visit)).as("sau hoàn tất mũi không xóa được (BR-KB-04)").isEqualTo(doseBefore);
+    }
+
+    /** Cùng chuỗi, lỗi ở UPDATE Order (sau Visit và Lịch hẹn): mọi bảng và mũi tiêm như cũ, hoàn tất lại được. */
+    @Test
+    void aFailureWhileWritingTheOrderOfAVaccineOnlyVisitRollsEverythingBack() {
+        long visit = vaccinatedAppointmentVisit();
+        Map<String, Long> before = xmins(visit);
+        Map<String, Object> doseBefore = doseState(visit);
+
+        ResponseEntity<Map<String, Object>> failed = withRejectingTrigger("UPDATE", "orders", "true",
+                () -> complete(vetAToken, visit));
+
+        assertError(failed, HttpStatus.CONFLICT, "CONCURRENCY_CONFLICT");
+        assertThat(xmins(visit)).as("lượt, lịch hẹn, Order không bị ghi").isEqualTo(before);
+        assertThat(row("SELECT status FROM visits WHERE id = " + visit)).containsEntry("status", "IN_PROGRESS");
+        assertThat(row("SELECT status FROM appointments WHERE id = (SELECT appointment_id FROM visits WHERE id = "
+                + visit + ")")).containsEntry("status", "CHECKED_IN");
+        assertThat(row("SELECT status FROM orders WHERE visit_id = " + visit)).containsEntry("status", "OPEN");
+        assertThat(doseState(visit)).isEqualTo(doseBefore);
+        data(complete(vetAToken, visit), HttpStatus.OK);
     }
 
     /** A16: VET xóa dòng dịch vụ tự sinh → lượt Khám/Tiêm không còn dịch vụ nào → từ chối. */
@@ -627,6 +682,32 @@ class VisitCompleteIT {
         Map<String, Object> visit = data(exchange(HttpMethod.POST, receptionistToken, "/api/visits", body),
                 HttpStatus.CREATED);
         return called(((Number) visit.get("visitId")).longValue(), assigneeId);
+    }
+
+    /**
+     * Lượt tiêm có lịch hẹn, đã gọi bởi {@code vetA}, kèm một mũi (loại vaccine, phác đồ, sản phẩm, lô 10 liều) chèn bằng
+     * SQL như {@link VaccinationItSupport#dose}; {@link #doseId} và {@link #doseLotId} trỏ tới mũi và lô đó.
+     */
+    private long vaccinatedAppointmentVisit() {
+        long visit = appointmentVisit(vaccine, vetA);
+        long type = vax.vaccineType("DOG", "Dại");
+        long protocol = vax.protocol("DOG", type, 1, 21, false);
+        long product = vax.product(type, "Vaccine", true);
+        doseLotId = vax.lot(branch, product);
+        doseId = vax.dose(visit, type, protocol, 1, product, doseLotId, TODAY, TODAY.plusDays(21), vetA, null);
+        return visit;
+    }
+
+    /** Mũi, dòng VACCINE, tồn lô và xmin của mũi: phải y nguyên qua hoàn tất / rollback. */
+    private Map<String, Object> doseState(long visitId) {
+        Map<String, Object> state = new LinkedHashMap<>();
+        state.put("doses", count("SELECT count(*) FROM vaccinations WHERE visit_id = " + visitId));
+        state.put("vaccineLines", count("""
+                SELECT count(*) FROM order_lines WHERE line_type = 'VACCINE'
+                    AND order_id = (SELECT id FROM orders WHERE visit_id = %d)""".formatted(visitId)));
+        state.put("lotQuantity", count("SELECT quantity FROM stock_lots WHERE id = " + doseLotId));
+        state.put("doseXmin", count("SELECT xmin::text::bigint FROM vaccinations WHERE id = " + doseId));
+        return state;
     }
 
     private long assigned(long visitId, long assigneeId) {

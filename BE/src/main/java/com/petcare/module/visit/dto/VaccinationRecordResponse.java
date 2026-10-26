@@ -5,8 +5,8 @@ import java.time.LocalDate;
 import io.swagger.v3.oas.annotations.media.Schema;
 
 /**
- * Một mũi tiêm tại hệ thống (visit-v1 schema {@code VaccinationRecord}, BR-KB-04). Có từ T27 phần 0 vì nằm trong
- * {@code MedicalRecord}; danh sách luôn rỗng cho tới khi T28 ghi mũi tiêm (docs/adr/0066).
+ * Một mũi tiêm tại hệ thống (visit-v1 schema {@code VaccinationRecord}, BR-KB-04). Nằm trong {@code MedicalRecord}.
+ * Mọi giá trị là cột đã chụp lúc tiêm; {@code lotNumber} / {@code expiryDate} chưa điền (nợ D046, docs/adr/0072).
  */
 public record VaccinationRecordResponse(
         @Schema(description = "Mã mũi tiêm", example = "701")

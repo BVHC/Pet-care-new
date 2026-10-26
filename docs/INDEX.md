@@ -97,7 +97,7 @@ Câu hỏi chạm nhiều đối tượng (ví dụ "hoàn tất lượt khám k
 | Quy ước code backend (package, layering/DTO, naming, exception, FSM, validation, transaction, logging/audit, testing) | `convention/backend/01…09-*.md` |
 | Hợp đồng FE ↔ BE (HTTP) | `api/INDEX.md` — 12 contract v1, sinh từ `api/generator/` |
 | Hợp đồng giữa module BE | `06-module-contracts.md` |
-| Quyết định kỹ thuật đã chốt (ADR) | `adr/INDEX.md` (0001–0071; số kế tiếp **0072**). Theo nhóm: nền tảng 0001, 0002, 0004, 0007, 0015, 0020, 0032, 0040 · xác thực 0003, 0005, 0006, 0009–0011, 0019, 0021–0023, 0025 · tài khoản, nhân viên, quản trị 0024, 0026–0039 · thông báo và job hệ thống 0008, 0012–0014, 0016–0018 · lịch hẹn (BE-1) 0045–0050, 0052–0057 · visit (BE-1) 0058–0063, 0066–0070 · BE-2: ca thu ngân 0064, lưu trú 0065, công khai + bài viết + feedback 0071, khách & thú 0041, kho 0042, mã chứng từ 0043, Order 0044, Order bán lẻ 0051 |
+| Quyết định kỹ thuật đã chốt (ADR) | `adr/INDEX.md` (0001–0075; số kế tiếp **0076**). Theo nhóm: nền tảng 0001, 0002, 0004, 0007, 0015, 0020, 0032, 0040 · xác thực 0003, 0005, 0006, 0009–0011, 0019, 0021–0023, 0025 · tài khoản, nhân viên, quản trị 0024, 0026–0039 · thông báo và job hệ thống 0008, 0012–0014, 0016–0018 · lịch hẹn (BE-1) 0045–0050, 0052–0057 · visit (BE-1) 0058–0063, 0066–0070, 0072–0075 · BE-2: ca thu ngân 0064, lưu trú 0065, công khai + bài viết + feedback 0071, khách & thú 0041, kho 0042, mã chứng từ 0043, Order 0044, Order bán lẻ 0051 |
 | Sơ đồ | `diagrams/INDEX.md` *(đang trống)* |
 | Trạng thái kỹ thuật thực tế của codebase | `architecture/system-overview.md` |
 | Nợ code đã biết (placeholder, việc để lại, giả định tạm) | `dept/INDEX.md` — đọc trước khi động vào module liên quan |

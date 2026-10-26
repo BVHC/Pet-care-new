@@ -29,4 +29,10 @@ public interface ProductRepository extends JpaRepository<Product, Long>, JpaSpec
     boolean existsBySku(String sku);
 
     boolean existsByVaccineTypeId(Long vaccineTypeId);
+
+    /**
+     * Sản phẩm của một loại vaccine, kể cả đã ngừng kinh doanh (thêm 2026-10-25 bởi BE-1, docs/adr/0073). Cột
+     * {@code vaccine_type_id} chưa có index: bảng danh mục nhỏ, chấp nhận quét bảng.
+     */
+    java.util.List<Product> findByVaccineTypeIdOrderByNameAscIdAsc(Long vaccineTypeId);
 }

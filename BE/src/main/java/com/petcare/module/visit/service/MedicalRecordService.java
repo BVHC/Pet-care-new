@@ -26,6 +26,7 @@ import com.petcare.module.visit.dto.AddendumResponse;
 import com.petcare.module.visit.dto.MedicalRecordResponse;
 import com.petcare.module.visit.dto.RecordWeightRequest;
 import com.petcare.module.visit.dto.UpdateMedicalRecordRequest;
+import com.petcare.module.visit.dto.VaccinationRecordResponse;
 import com.petcare.module.visit.dto.WeightRecordRefResponse;
 import com.petcare.module.visit.entity.MedicalRecord;
 import com.petcare.module.visit.entity.MedicalRecordAddendum;
@@ -79,10 +80,12 @@ public class MedicalRecordService {
     private final MedicalRecordAddendumRepository addenda;
     private final AuditRecorder audit;
     private final MedicalRecordMapper mapper;
+    private final VaccinationRecordReader vaccinations;
 
     public MedicalRecordService(BranchScope branchScope, PetQueryApi pets, PetApi petApi, StaffDirectoryApi staffDirectory,
             SystemConfigApi config, VisitRepository visits, MedicalRecordRepository records,
-            MedicalRecordAddendumRepository addenda, AuditRecorder audit, MedicalRecordMapper mapper) {
+            MedicalRecordAddendumRepository addenda, AuditRecorder audit, MedicalRecordMapper mapper,
+            VaccinationRecordReader vaccinations) {
         this.branchScope = branchScope;
         this.pets = pets;
         this.petApi = petApi;
@@ -93,6 +96,7 @@ public class MedicalRecordService {
         this.addenda = addenda;
         this.audit = audit;
         this.mapper = mapper;
+        this.vaccinations = vaccinations;
     }
 
     /** visit-v1 #12. Lượt {@code MEDICAL} chưa ghi bệnh án trả khung rỗng; {@code locked} = lượt {@code COMPLETED}. */
@@ -102,11 +106,12 @@ public class MedicalRecordService {
         SummaryRow summary = findMedicalVisit(visitId);
         boolean locked = summary.status() == VisitStatus.COMPLETED;
         Optional<MedicalRecord> record = records.findById(visitId);
+        List<VaccinationRecordResponse> doses = vaccinations.forVisit(summary.petId(), visitId);
         if (record.isEmpty()) {
-            return mapper.toEmptyResponse(visitId, locked);
+            return mapper.toEmptyResponse(visitId, locked, doses);
         }
         List<AddendumResponse> items = locked ? addendaOf(visitId) : List.of();
-        return mapper.toResponse(record.get(), locked, items);
+        return mapper.toResponse(record.get(), locked, items, doses);
     }
 
     /** visit-v1 #13. */
@@ -126,9 +131,11 @@ public class MedicalRecordService {
         if (request.followUpDate() != null && !request.followUpDate().equals(previousDate)) {
             requireFollowUpInRange(visit, request.followUpDate());
         }
+        // Sau mọi guard, trước mọi lệnh ghi (docs/adr/0072 T4): lỗi đọc thì chưa ghi gì.
+        List<VaccinationRecordResponse> doses = vaccinations.forVisit(summary.petId(), visitId);
         if (existing.isPresent() && existing.get().sameContent(request.examination(), request.diagnosis(),
                 request.treatmentPlan(), request.internalNote(), request.followUpDate())) {
-            return mapper.toResponse(existing.get(), false, List.of());
+            return mapper.toResponse(existing.get(), false, List.of(), doses);
         }
 
         MedicalRecord record = existing.orElseGet(() -> MedicalRecord.of(visitId));
@@ -139,7 +146,7 @@ public class MedicalRecordService {
         audit.record(AuditEntry.of(VisitAuditActions.MEDICAL_RECORD_UPDATED).entity("medical_records", visitId)
                 .before(before)
                 .after(snapshot(record)));
-        return mapper.toResponse(record, false, List.of());
+        return mapper.toResponse(record, false, List.of(), doses);
     }
 
     /** visit-v1 #14. Mỗi lần gọi là một bản ghi cân (A8); thú, nguồn, người ghi lấy từ lượt và phiên. */
