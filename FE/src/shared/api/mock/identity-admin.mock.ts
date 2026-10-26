@@ -159,17 +159,96 @@ function staffResponseOf(s: ReturnType<typeof load>, a: MockStaffWithState): Sta
     specialty: a.role === 'VET' ? (s.profiles[a.id]?.specialty ?? STAFF_SEED[a.id]?.specialty ?? null) : null,
     bio: a.role === 'VET' ? (s.profiles[a.id]?.bio ?? STAFF_SEED[a.id]?.bio ?? null) : null,
     mustChangePassword: a.mustChangePassword,
-    online: a.status === 'ACTIVE' && !s.locks[a.id],
+    online: a.status === 'ACTIVE' && !s.locks[a.id] && !loadPresence().offline.includes(a.id),
   };
 }
 
 const denied = () => fail('ACCESS_DENIED', 'Không có quyền thực hiện thao tác này', 403);
 
+// ─── Hiện diện (BR-TN-06) ───
+
+// BE: `online` = `last_seen_at` trong `staff.online_window_minutes`. Mock không theo dõi thao tác nên mặc định ai cũng online;
+// `setStaffOnline` đặt riêng một người offline (kho riêng, không đụng state danh tính) để dựng cảnh báo gán người offline (T36).
+const PRESENCE_KEY = 'petcare-mock-presence';
+
+function loadPresence(): { offline: number[] } {
+  try {
+    const raw = JSON.parse(localStorage.getItem(PRESENCE_KEY) ?? '{}');
+    return { offline: Array.isArray(raw.offline) ? raw.offline : [] };
+  } catch {
+    return { offline: [] };
+  }
+}
+
+export function setStaffOnline(accountId: number, online: boolean): void {
+  const offline = loadPresence().offline.filter((id) => id !== accountId);
+  if (!online) offline.push(accountId);
+  try {
+    localStorage.setItem(PRESENCE_KEY, JSON.stringify({ offline }));
+  } catch {
+    // Không ghi được (chế độ riêng tư): thay đổi chỉ mất khi tải lại.
+  }
+}
+
+// ─── Đọc chéo cho mock tiếp nhận (như StaffDirectoryApi của BE, T36) ───
+
+/** `StaffDirectoryApi.StaffSummary`: `active` = ACTIVE và không bị khóa; tìm được cả nhân viên tạo lúc chạy. */
+export interface StaffSummary {
+  accountId: number;
+  fullName: string;
+  role: Role;
+  branchId: number | null;
+  active: boolean;
+  online: boolean;
+}
+
+function summaryOf(s: ReturnType<typeof load>, a: MockStaffWithState): StaffSummary {
+  const active = a.status === 'ACTIVE' && !s.locks[a.id];
+  return { accountId: a.id, fullName: a.fullName, role: a.role, branchId: a.branchId ?? null, active, online: staffResponseOf(s, a).online };
+}
+
+export function staffSummaryOf(accountId: number): StaffSummary | null {
+  const s = load();
+  const a = findStaffAccount(s, accountId);
+  return a ? summaryOf(s, a) : null;
+}
+
+/** `findAssignableStaff`: nhân viên active của chi nhánh theo chức vụ, người online xếp trước. */
+export function assignableStaffOf(branchId: number, role: Role): StaffSummary[] {
+  const s = load();
+  return allStaff(s)
+    .filter((a) => a.role === role && a.branchId === branchId)
+    .map((a) => summaryOf(s, a))
+    .filter((x) => x.active)
+    .sort((a, b) => Number(b.online) - Number(a.online) || a.accountId - b.accountId);
+}
+
+/** `findActiveStaffIds(branchId, BRANCH_MANAGER)`: chi nhánh còn quản lý ACTIVE không bị khóa nào không (BR-TN-08). */
+export const hasActiveBranchManager = (branchId: number): boolean => countActiveBranchManagers(load(), branchId) > 0;
+
 // ─── Staff (UC08) ───
+
+/**
+ * ASSUMPTION (T36, chờ BE-1): lễ tân chọn người gán lượt (UC45) nhưng identity-v1 #15 loại RECEPTIONIST. Mock mở đúng phạm vi nhỏ nhất:
+ * VET / CARETAKER ACTIVE không bị khóa của chi nhánh mình. Lọc ngoài phạm vi (role, status, branchId) → 403. BE thật hiện trả 403 cho cả lời gọi hợp lệ.
+ */
+function listAssignableForReceptionist(s: ReturnType<typeof load>, account: { id: number; branchId?: number | null }, query: Record<string, string>) {
+  const branchId = account.branchId ?? MOCK_STAFF[account.id]?.branchId;
+  if (query.role && query.role !== 'VET' && query.role !== 'CARETAKER') return denied();
+  if (query.status && query.status !== 'ACTIVE') return denied();
+  if (query.branchId && Number(query.branchId) !== branchId) return denied();
+  const q = (query.q ?? '').trim().toLowerCase();
+  const staff = allStaff(s)
+    .filter((a) => (a.role === 'VET' || a.role === 'CARETAKER') && a.branchId === branchId && a.status === 'ACTIVE' && !s.locks[a.id])
+    .filter((a) => !query.role || a.role === query.role)
+    .filter((a) => !q || a.email.toLowerCase().includes(q) || a.fullName.toLowerCase().includes(q));
+  return ok(page(staff.map((a) => staffResponseOf(s, a))));
+}
 
 const listStaff: MockHandler = ({ account, query }) => {
   if (account!.role === 'CUSTOMER') return denied();
   const s = load();
+  if (account!.role === 'RECEPTIONIST') return listAssignableForReceptionist(s, account!, query);
   const q = (query.q ?? '').trim().toLowerCase();
   const roleFilter = query.role as Role | undefined;
   const statusFilter = query.status as AccountStatus | undefined;

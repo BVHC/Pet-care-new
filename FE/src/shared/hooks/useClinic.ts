@@ -1,25 +1,15 @@
 // React Query bindings for the clinic API: one hook per read, one per command.
 // Commands invalidate through INVALIDATE so every workspace sees the change.
-import { keepPreviousData, useMutation, useQuery, useQueryClient, type QueryKey } from '@tanstack/react-query';
+import { useMutation, useQuery, useQueryClient, type QueryKey } from '@tanstack/react-query';
 import { toast } from 'sonner';
 import { ApiError, plainMessage } from '../api/api-error';
-import {
-  clinicApi,
-  type AddLineInput,
-  type CheckInInput,
-} from '../api/clinic.api';
+import { clinicApi, type AddLineInput } from '../api/clinic.api';
 import { INVALIDATE, QUERY_KEYS } from '../constants/queryKeys';
 import { liveQuery, retryDelay, shouldRetry } from '../constants/realtime';
 import type { MedicalRecord, VisitDetail, VisitView } from '../types/clinic';
 import { startTimer, track } from '../utils/telemetry';
 
 // ---------- reads ----------
-
-export const useTodayVisits = () =>
-  useQuery({ queryKey: QUERY_KEYS.visits.today(), queryFn: clinicApi.listTodayVisits, ...liveQuery });
-
-export const useArrivals = () =>
-  useQuery({ queryKey: QUERY_KEYS.appointments.arrivals(), queryFn: clinicApi.listArrivals, ...liveQuery });
 
 export const useDashboardSummary = () =>
   useQuery({ queryKey: QUERY_KEYS.dashboard.summary(), queryFn: clinicApi.getDashboardSummary, ...liveQuery });
@@ -34,21 +24,8 @@ export function useVisitDetail(visitId: string | null) {
   });
 }
 
-export function useCustomerSearch(query: string, enabled = true) {
-  return useQuery({
-    queryKey: QUERY_KEYS.customers.search(query.trim()),
-    queryFn: () => clinicApi.searchCustomers(query),
-    placeholderData: keepPreviousData,
-    staleTime: 30_000,
-    enabled,
-  });
-}
-
 export const useCatalog = () =>
   useQuery({ queryKey: QUERY_KEYS.catalog.all, queryFn: clinicApi.getCatalog, staleTime: 60_000 });
-
-export const useStaffList = () =>
-  useQuery({ queryKey: QUERY_KEYS.staff.all, queryFn: clinicApi.listStaff, staleTime: Infinity });
 
 // ---------- commands ----------
 
@@ -66,40 +43,6 @@ export function notifyError(error: unknown) {
 function useInvalidate() {
   const queryClient = useQueryClient();
   return (keys: readonly QueryKey[]) => Promise.all(keys.map((queryKey) => queryClient.invalidateQueries({ queryKey })));
-}
-
-export function useCheckIn(actorId: string) {
-  const invalidate = useInvalidate();
-  return useMutation({
-    mutationFn: (input: CheckInInput) => clinicApi.checkIn(input, actorId),
-    onSuccess: (visit) => {
-      track('check_in', { queueNo: visit.queueNo, priority: visit.priority });
-      toast.success(`Đã tiếp nhận ${visit.pet.name}, số ${visit.queueNo}`);
-    },
-    onError: notifyError,
-    onSettled: () => invalidate(INVALIDATE.checkIn),
-  });
-}
-
-export function useAssignVisit(actorId: string) {
-  const invalidate = useInvalidate();
-  return useMutation({
-    mutationFn: ({ visitId, staffId }: { visitId: string; staffId: string }) =>
-      clinicApi.assignVisit(visitId, staffId, actorId),
-    onSuccess: (visit) => toast.success(`Đã gán số ${visit.queueNo} cho ${visit.assignee?.name ?? 'nhân viên'}`),
-    onError: notifyError,
-    onSettled: () => invalidate(INVALIDATE.assignVisit),
-  });
-}
-
-export function useCancelVisit(actorId: string) {
-  const invalidate = useInvalidate();
-  return useMutation({
-    mutationFn: (visitId: string) => clinicApi.cancelVisit(visitId, actorId),
-    onSuccess: (visit) => toast.success(`Đã hủy lượt số ${visit.queueNo}`),
-    onError: notifyError,
-    onSettled: () => invalidate(INVALIDATE.cancelVisit),
-  });
 }
 
 type MoveTarget = 'IN_PROGRESS' | 'COMPLETED';

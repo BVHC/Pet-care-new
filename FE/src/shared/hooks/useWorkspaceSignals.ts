@@ -4,10 +4,12 @@ import { toast } from 'sonner';
 import { CLINIC_DB_KEY } from '../api/clinic-db';
 import { QUERY_KEYS } from '../constants/queryKeys';
 import type { Workspace } from '../constants/workspaces';
+import { useAccount } from '../stores/session.store';
+import { VISIT_GROUP_LABELS, visitPermissions } from '../types/visit';
 import { announce } from '../utils/announce';
-import { useTodayVisits } from './useClinic';
 import { usePendingSalesOrders } from './usePendingSalesOrders';
 import { useOnNewItems } from './useOnNewItems';
+import { useMyQueue } from './useVisits';
 
 /** Another tab changed the clinic store: refresh now instead of waiting for the next poll. */
 export function useClinicSync(): void {
@@ -24,23 +26,17 @@ export function useClinicSync(): void {
 
 /**
  * Cross-workspace handoffs (plan: toast now, WebSocket later):
- * reception hears about orders that just became payable (sales-v1 #2, polled), vets and groomers about work assigned to them.
+ * reception hears about orders that just became payable (sales-v1 #2, polled), vets and groomers about visits newly waiting in their own queue (visit-v1 #3, polled).
  */
-export function useHandoffNotices(workspace: Workspace | null, userId: string): void {
-  const visits = useTodayVisits();
+export function useHandoffNotices(workspace: Workspace | null): void {
+  const desk = workspace === 'doctor' || workspace === 'grooming';
+  const role = useAccount()?.role;
+  // Chỉ VET / CARETAKER có hàng đợi của tôi; vai trò khác hỏi sẽ bị 403.
+  const myQueue = useMyQueue(desk && visitPermissions(role).myQueue);
   // Only the reception desk reacts to new payable orders, so other desks (and roles that may not list orders) do not fetch them.
   const pending = usePendingSalesOrders(workspace === 'reception');
 
-  const myNewWork = useMemo(() => {
-    if (workspace !== 'doctor' && workspace !== 'grooming') return undefined;
-    const wantsGrooming = workspace === 'grooming';
-    return visits.data?.filter(
-      (v) =>
-        v.status === 'WAITING' &&
-        v.assignee?.id === userId &&
-        v.services.some((s) => (s.kind === 'GROOMING') === wantsGrooming),
-    );
-  }, [visits.data, workspace, userId]);
+  const myNewWork = useMemo(() => (desk ? myQueue.data?.filter((v) => v.status === 'WAITING') : undefined), [myQueue.data, desk]);
 
   useOnNewItems(
     workspace === 'reception' ? pending.data : undefined,
@@ -55,11 +51,11 @@ export function useHandoffNotices(workspace: Workspace | null, userId: string): 
 
   useOnNewItems(
     myNewWork,
-    (visit) => visit.id,
+    (visit) => String(visit.visitId),
     (arrived) =>
       arrived.forEach((v) => {
-        const title = `Số ${v.queueNo}: ${v.pet.name} vào hàng chờ của bạn`;
-        toast(title, { description: v.services.map((s) => s.name).join(', ') });
+        const title = `${v.code}: ${v.petName} vào hàng chờ của bạn`;
+        toast(title, { description: VISIT_GROUP_LABELS[v.serviceGroup] });
         announce(title);
       }),
   );

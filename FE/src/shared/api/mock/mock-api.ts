@@ -2,7 +2,7 @@
 // giống hệt khi nối BE thật: cùng path, cùng envelope (00-method §3.4–3.5).
 // Thêm module: viết `<module>Routes` cạnh identity.mock.ts rồi gộp vào ROUTES.
 // Khóa route là `METHOD /api/path`, đoạn `:ten` là tham số path.
-import { AxiosError, type AxiosAdapter, type AxiosInstance, type AxiosResponse } from 'axios';
+import { AxiosError, getAdapter, type AxiosAdapter, type AxiosInstance, type AxiosResponse } from 'axios';
 import type { AccountSummary } from '../../types/auth';
 import { adminIdentityRoutes } from './identity-admin.mock';
 import { appointmentRoutes } from './appointment.mock';
@@ -14,8 +14,10 @@ import { customerRoutes } from './customer.mock';
 import { customerPetRoutes } from './customer-pet.mock';
 import { inventoryRoutes } from './inventory.mock';
 import { salesRoutes } from './sales.mock';
+import { visitRoutes } from './visit.mock';
 import { fail, ruleFail, type MockHandler, type MockReply } from './envelope';
 import { accountForToken, identityRoutes } from './identity.mock';
+import { isMockedRequest, type MockRule } from './mock-scope';
 
 const ROUTES: Record<string, MockHandler> = {
   ...identityRoutes,
@@ -29,6 +31,7 @@ const ROUTES: Record<string, MockHandler> = {
   ...careRoutes,
   ...salesRoutes,
   ...cashierRoutes,
+  ...visitRoutes,
 };
 
 const COMPILED = Object.entries(ROUTES).map(([key, handler]) => {
@@ -58,11 +61,21 @@ const PUBLIC_PATH = /^\/api\/(auth\/(register(\/.*)?|login|password\/.*)|public\
 /** Vẫn gọi được khi còn mustChangePassword (identity-v1 A4). */
 const ALLOWED_BEFORE_PASSWORD_CHANGE = new Set(['GET /api/me', 'POST /api/me/password', 'POST /api/auth/logout']);
 
-function route(method: string, path: string, body: unknown, token: string | null, query: Record<string, string>): MockReply {
+/** Nguồn tài khoản của phiên đăng nhập thật; chỉ dùng ở chế độ hỗn hợp, nơi token JWT của BE mock không biết. */
+type SessionAccount = () => AccountSummary | null;
+
+function route(
+  method: string,
+  path: string,
+  body: unknown,
+  token: string | null,
+  query: Record<string, string>,
+  sessionAccount?: SessionAccount,
+): MockReply {
   const key = `${method} ${path}`;
   let account: AccountSummary | null = null;
   if (!PUBLIC_PATH.test(path)) {
-    account = token ? accountForToken(token) : null;
+    account = sessionAccount ? sessionAccount() : token ? accountForToken(token) : null;
     if (!account) return fail('UNAUTHENTICATED', 'Chưa đăng nhập hoặc phiên đăng nhập đã hết hạn', 401);
     if (account.mustChangePassword && !ALLOWED_BEFORE_PASSWORD_CHANGE.has(key)) {
       return ruleFail('BR-TK-17', 'Bạn cần đổi mật khẩu trước khi sử dụng chức năng khác');
@@ -84,7 +97,7 @@ function queryOf(url: URL, params: unknown): Record<string, string> {
 
 const LATENCY_MS = import.meta.env.MODE === 'test' ? 0 : 200;
 
-const mockAdapter: AxiosAdapter = async (config) => {
+const makeMockAdapter = (sessionAccount?: SessionAccount): AxiosAdapter => async (config) => {
   await new Promise((resolve) => setTimeout(resolve, LATENCY_MS));
   const method = (config.method ?? 'get').toUpperCase();
   const url = new URL(config.url ?? '', 'http://mock');
@@ -93,7 +106,7 @@ const mockAdapter: AxiosAdapter = async (config) => {
   let reply: MockReply;
   try {
     const body = typeof config.data === 'string' && config.data ? JSON.parse(config.data) : config.data;
-    reply = route(method, url.pathname, body, token, queryOf(url, config.params));
+    reply = route(method, url.pathname, body, token, queryOf(url, config.params), sessionAccount);
   } catch {
     reply = fail('MALFORMED_REQUEST', 'Dữ liệu gửi lên không đọc được.', 400);
   }
@@ -117,5 +130,20 @@ const mockAdapter: AxiosAdapter = async (config) => {
 };
 
 export function installMockApi(client: AxiosInstance) {
-  client.defaults.adapter = mockAdapter;
+  client.defaults.adapter = makeMockAdapter();
+}
+
+/**
+ * Chế độ hỗn hợp (VITE_API_MOCK=false kèm VITE_API_MOCK_ONLY): đường dẫn khớp `rules` trả bằng mock, còn lại đi tiếp tới
+ * adapter thật mà axios đang dùng. Mock không biết token JWT của BE nên lấy tài khoản từ phiên đăng nhập thật.
+ * Giới hạn: dữ liệu mock không liên thông với dữ liệu BE (id khác nhau), nên chỉ mock những màn mà BE chưa có
+ * và không tham chiếu chéo dữ liệu thật.
+ */
+export function installHybridMockApi(client: AxiosInstance, rules: MockRule[], sessionAccount: SessionAccount) {
+  const real = getAdapter(client.defaults.adapter);
+  const mock = makeMockAdapter(sessionAccount);
+  client.defaults.adapter = (config) => {
+    const { pathname } = new URL(config.url ?? '', 'http://mock');
+    return isMockedRequest(config.method ?? 'get', pathname, rules) ? mock(config) : real(config);
+  };
 }

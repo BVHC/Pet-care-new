@@ -1,4 +1,5 @@
-// Chọn hồ sơ khách cần thu tiền (UC23 tra cứu tại quầy, cùng hook với RetailOrderPanel): SĐT đủ 10 số tra chính xác, có @ là email, còn lại là họ tên.
+// Chọn hồ sơ khách tại quầy (UC23 tra cứu, cùng hook với RetailOrderPanel): SĐT đủ 10 số tra chính xác, có @ là email, còn lại là họ tên.
+// Chữ mặc định là của màn thu tiền; màn khác (tiếp nhận khách, T36) đổi chữ bằng `copy`.
 import { useState } from 'react';
 import { Search } from 'lucide-react';
 import { useCustomerLookup } from '../../../domains/pets/hooks/useCustomerPet';
@@ -13,7 +14,16 @@ function lookupOf(term: string): CustomerSearchQuery {
   return term.includes('@') ? { email: term } : { name: term };
 }
 
-export function CustomerLookup({ onPick }: { onPick: (customerId: number) => void }) {
+const THU_TIEN_COPY = {
+  label: 'Tìm khách cần thu tiền',
+  placeholder: 'Tìm khách cần thu: SĐT, họ tên hoặc email',
+  emptyTitle: 'Chọn khách để thu tiền',
+  emptyBody: 'Tìm khách theo SĐT hoặc họ tên, hoặc bấm Thu tiền ở tab Chờ thu.',
+  listLabel: 'Hồ sơ khách cần thu',
+};
+
+export function CustomerLookup({ onPick, copy }: { onPick: (customerId: number) => void; copy?: Partial<typeof THU_TIEN_COPY> }) {
+  const text = { ...THU_TIEN_COPY, ...copy };
   const [term, setTerm] = useState('');
   const debounced = useDebounce(term.trim(), 250);
   const lookup = useCustomerLookup(lookupOf(debounced));
@@ -24,20 +34,20 @@ export function CustomerLookup({ onPick }: { onPick: (customerId: number) => voi
   return (
     <div className="flex flex-col gap-3 p-3">
       <label className="relative block">
-        <span className="sr-only">Tìm khách cần thu tiền</span>
+        <span className="sr-only">{text.label}</span>
         <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-(--ws-ink-3)" aria-hidden />
         <input
           type="search"
           value={term}
           onChange={(e) => setTerm(e.target.value)}
-          placeholder="Tìm khách cần thu: SĐT, họ tên hoặc email"
+          placeholder={text.placeholder}
           autoComplete="off"
           className="h-11 w-full rounded-lg border border-(--ws-line-strong) bg-(--ws-raised) pl-9 pr-3 text-sm text-(--ws-ink) placeholder:text-(--ws-ink-3) focus:border-(--ws-accent) focus:bg-(--ws-surface)"
         />
       </label>
       {waitingForPhone && <p className="text-xs text-(--ws-ink-3)">Nhập đủ 10 số điện thoại để tra cứu.</p>}
       {!trimmed ? (
-        <StatePanel title="Chọn khách để thu tiền" body="Tìm khách theo SĐT hoặc họ tên, hoặc bấm Thu tiền ở tab Chờ thu." />
+        <StatePanel title={text.emptyTitle} body={text.emptyBody} />
       ) : lookup.isError ? (
         <p role="alert" className="text-sm text-(--ws-urgent-ink)">
           Không tra cứu được khách. Thử lại sau ít phút.
@@ -45,7 +55,7 @@ export function CustomerLookup({ onPick }: { onPick: (customerId: number) => voi
       ) : items.length === 0 && lookup.isSuccess && !lookup.isFetching && !waitingForPhone ? (
         <p className="text-sm text-(--ws-ink-2)">Không tìm thấy hồ sơ phù hợp.</p>
       ) : (
-        <ul aria-label="Hồ sơ khách cần thu" className="flex flex-col gap-2">
+        <ul aria-label={text.listLabel} className="flex flex-col gap-2">
           {items.map((c) => (
             <li key={c.customerId}>
               {/* Cùng SĐT có thể nhiều hồ sơ (BR-KH-10): hiện thêm email đã che để chọn đúng người. */}

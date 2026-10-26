@@ -3,23 +3,27 @@ import userEvent from '@testing-library/user-event';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { MemoryRouter } from 'react-router-dom';
 import { afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
-import { resetClinicDb, seedClinicDb } from '../../shared/api/clinic-db';
 import { apiClient } from '../../shared/api/axios';
 import { installMockApi } from '../../shared/api/mock/mock-api';
 import { salesApi } from '../../shared/api/sales.api';
+import { visitApi } from '../../shared/api/visit.api';
 import { usePosStore } from '../../shared/stores/pos.store';
 import { pinClock, signInAs } from '../../test/cashier-harness';
+import { at } from '../../test/visit-harness';
 import { ReceptionWorkspacePage } from './ReceptionWorkspacePage';
 
 // Mock sales / cashier: Order #2 (khách #1 Nguyễn Thu Trang) đang chờ thu 266.000. Lễ tân #4 chưa có ca OPEN. Đồng hồ ghim thứ Năm 22/10/2026 10:00.
 // Trong jsdom `matchMedia` luôn false nên bàn lễ tân ở dạng điện thoại: phiếu thu chỉ hiện ở tab "Phiếu thu".
 
-beforeAll(() => installMockApi(apiClient));
+beforeAll(async () => {
+  installMockApi(apiClient);
+  // Hộp thoại tiếp nhận tải lười: nạp trước để test mở hộp thoại không phải chờ bước biên dịch lần đầu.
+  await import('../../components/staff/reception/CheckInDialog');
+});
 
 beforeEach(() => {
   localStorage.clear();
   pinClock();
-  resetClinicDb(seedClinicDb());
   usePosStore.getState().clear();
 });
 
@@ -121,5 +125,65 @@ describe('reception desk — quản lý chi nhánh (A05)', () => {
     expect(myShift).not.toHaveBeenCalled();
     expect(payable).not.toHaveBeenCalled();
     await waitFor(() => expect(within(screen.getByRole('tab', { name: /Chờ thu/ })).getByText('3')).toBeInTheDocument());
+  });
+});
+
+// T36: tiếp nhận, hàng chờ, phím tắt. Lịch hẹn mẫu #1 (Mochi, Nguyễn Thu Trang, Khám tổng quát 11:00) vào cửa sổ check-in từ 10:30.
+describe('reception desk — tiếp nhận và hàng chờ (T36, UC44–UC45)', () => {
+  it('phím N mở hộp thoại tiếp nhận khách vãng lai; Esc đóng', async () => {
+    await signInAs('reception@store1.vn');
+    const user = renderDesk();
+    await screen.findByRole('button', { name: /Tiếp nhận khách/ });
+
+    await user.keyboard('n');
+    expect(await screen.findByRole('dialog', { name: 'Tiếp nhận khách vãng lai' })).toBeInTheDocument();
+
+    await user.keyboard('{Escape}');
+    await waitFor(() => expect(screen.queryByRole('dialog')).not.toBeInTheDocument());
+  });
+
+  it('phím F1 sang khu bán hàng và đưa con trỏ vào ô tìm khách', async () => {
+    await signInAs('reception@store1.vn');
+    const user = renderDesk();
+    await screen.findByRole('button', { name: /Tiếp nhận khách/ });
+
+    await user.keyboard('{F1}');
+
+    await waitFor(() => expect(screen.getByPlaceholderText('SĐT, họ tên hoặc email của khách')).toHaveFocus());
+  });
+
+  it('"Tiếp nhận" ở lịch hẹn mở hộp thoại điền sẵn; tiếp nhận xong lượt có trong hàng chờ và số trên tab tăng', async () => {
+    pinClock(at('10:40'));
+    await signInAs('reception@store1.vn');
+    const checkIn = vi.spyOn(visitApi, 'checkIn');
+    const user = renderDesk();
+
+    await waitFor(() => expect(screen.getByRole('tab', { name: /Hàng chờ/ })).toHaveTextContent('5'));
+    await user.click(await screen.findByRole('button', { name: 'Tiếp nhận' }));
+    const dialog = within(await screen.findByRole('dialog', { name: 'Tiếp nhận lịch hẹn' }));
+    expect(dialog.getByText('Mochi')).toBeInTheDocument();
+    expect(dialog.getByText('Khám tổng quát')).toBeInTheDocument();
+    await user.click(dialog.getByRole('button', { name: 'Tiếp nhận' }));
+
+    await waitFor(() => expect(screen.queryByRole('dialog')).not.toBeInTheDocument());
+    expect(checkIn).toHaveBeenCalledWith({ appointmentId: 1, petId: 1 });
+    await waitFor(() => expect(screen.getByRole('tab', { name: /Hàng chờ/ })).toHaveTextContent('6'));
+    await waitFor(() => expect(screen.getByRole('tab', { name: /Đón tiếp/ })).toHaveTextContent('0'));
+  });
+
+  it('chỉ có quản lý chi nhánh: không có nút "Tiếp nhận khách", phím N không mở gì, không gửi lệnh tiếp nhận hay hàng đợi của tôi', async () => {
+    const checkIn = vi.spyOn(visitApi, 'checkIn');
+    const myQueue = vi.spyOn(visitApi, 'getMyQueue');
+    await signInAs('manager@store1.vn');
+    const user = renderDesk();
+    await screen.findByRole('tab', { name: /Hàng chờ/ });
+
+    await user.keyboard('n');
+    await new Promise((r) => setTimeout(r, 50));
+
+    expect(screen.queryByRole('button', { name: /Tiếp nhận khách/ })).not.toBeInTheDocument();
+    expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
+    expect(checkIn).not.toHaveBeenCalled();
+    expect(myQueue).not.toHaveBeenCalled();
   });
 });

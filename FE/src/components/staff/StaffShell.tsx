@@ -46,7 +46,7 @@ function Shell({ user }: { user: NonNullable<ReturnType<typeof useSessionUser>> 
   const theme = useTheme();
 
   useClinicSync();
-  useHandoffNotices(current, user.id);
+  useHandoffNotices(current);
 
   // Before paint: back-office colours follow the workspace palette (workspace.css), each desk gets its zone colour.
   useLayoutEffect(() => {

@@ -721,6 +721,62 @@ const liftRestriction: MockHandler = (req) => {
   return ok(NOT_RESTRICTED, 200, 'Đã gỡ hạn chế đặt online');
 };
 
+// ─── Cho mock tiếp nhận (T36, visit.mock.ts): như AppointmentQueryApi / AppointmentApi của BE, chỉ thêm export ───
+
+/** `AppointmentQueryApi.findCheckInRef` (+ trạng thái, giờ hẹn, khách): đọc không khóa trước khi visit kiểm các guard 400. */
+export function findCheckInRef(appointmentId: number, now = Date.now()) {
+  const a = load(now).appointments.find((x) => x.appointmentId === appointmentId);
+  return (
+    a && {
+      appointmentId: a.appointmentId,
+      branchId: a.branchId,
+      customerId: a.customerId,
+      petId: a.petId,
+      serviceId: a.serviceId,
+      serviceGroup: a.serviceGroup,
+      status: a.status,
+      /** Giờ bắt đầu khung (ms). */
+      scheduledAt: startOf(a),
+    }
+  );
+}
+
+export type AppointmentCheckIn =
+  | { ok: true; customerId: number; serviceGroup: QuotaGroup; scheduledAt: number }
+  | { ok: false; reason: 'STATE'; status: AppointmentStatus }
+  | { ok: false; reason: 'BRANCH' }
+  | { ok: false; reason: 'WINDOW'; earlyMinutes: number; noShowAfterMinutes: number };
+
+/**
+ * `AppointmentApi.checkIn` (Lịch hẹn#3, BOOKED → CHECKED_IN). Thứ tự của BE: trạng thái 409 → chi nhánh 400 → cửa sổ 400 (BR-TN-02).
+ * Cửa sổ: lịch của hôm nay, giờ hẹn − 30' ≤ lúc check-in ≤ giờ hẹn + 30' [CFG] (biên tính là được). Khác BE ở một điểm: ST05 của mock chạy lười
+ * lúc đọc nên quá giờ hẹn + 30' lịch đã NO_SHOW (409), còn BE trả 400 cửa sổ tới khi job chạy.
+ */
+export function checkInAppointment(appointmentId: number, branchId: number, now: number, visitId: number): AppointmentCheckIn {
+  const s = load(now);
+  const a = s.appointments.find((x) => x.appointmentId === appointmentId);
+  if (!a) return { ok: false, reason: 'STATE', status: 'CANCELLED' };
+  if (a.status !== 'BOOKED') return { ok: false, reason: 'STATE', status: a.status };
+  if (a.branchId !== branchId) return { ok: false, reason: 'BRANCH' };
+  const start = startOf(a);
+  if (a.slotDate !== vnDate(now) || now < start - CFG.checkInEarlyMinutes * MINUTE || now > start + CFG.noShowAfterMinutes * MINUTE) {
+    return { ok: false, reason: 'WINDOW', earlyMinutes: CFG.checkInEarlyMinutes, noShowAfterMinutes: CFG.noShowAfterMinutes };
+  }
+  a.status = 'CHECKED_IN';
+  a.visitId = visitId;
+  save(s);
+  return { ok: true, customerId: a.customerId, serviceGroup: a.serviceGroup, scheduledAt: start };
+}
+
+/** `AppointmentApi.cancelByVisit` (Lịch hẹn#8, CHECKED_IN → CANCELLED): nguồn STAFF, không lý do, KHÔNG tính hủy muộn nên không ảnh hưởng hạn chế đặt online. */
+export function cancelAppointmentByVisit(appointmentId: number, at: string): void {
+  const s = load(Date.now());
+  const a = s.appointments.find((x) => x.appointmentId === appointmentId);
+  if (!a || a.status !== 'CHECKED_IN') return;
+  Object.assign(a, { status: 'CANCELLED', cancelSource: 'STAFF', cancelReason: null, cancelledAt: at, lateCancel: false });
+  save(s);
+}
+
 export const appointmentRoutes: Record<string, MockHandler> = {
   'GET /api/branches/:branchId/available-slots': listSlots,
   'POST /api/appointments': bookAppointment,

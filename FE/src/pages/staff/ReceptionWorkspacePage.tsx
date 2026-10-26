@@ -1,7 +1,7 @@
 import { lazy, Suspense, useRef, useState } from 'react';
 import { UserPlus, Users } from 'lucide-react';
 import { cn } from '../../lib/utils';
-import { CheckInDialog, type CheckInTarget } from '../../components/staff/reception/CheckInDialog';
+import type { CheckInTarget } from '../../components/staff/reception/CheckInDialog';
 import { CheckoutPanel } from '../../components/staff/reception/CheckoutPanel';
 import { FrontDeskPanel } from '../../components/staff/reception/FrontDeskPanel';
 import { RetailOrderPanel } from '../../components/staff/reception/RetailOrderPanel';
@@ -9,6 +9,8 @@ import { CloseShiftControl, ShiftBadge } from '../../components/staff/reception/
 import { WorkspaceHeader, WsButton } from '../../components/staff/ui';
 
 // Hồ sơ khách & thú cưng chỉ tải khi lễ tân mở tới: bàn đón khách hiện nhanh như trước.
+// Hộp thoại tiếp nhận chỉ tải khi lễ tân mở tới (bàn hiện ra nhanh, không kéo theo tra cứu khách và dịch vụ).
+const CheckInDialog = lazy(() => import('../../components/staff/reception/CheckInDialog').then((m) => ({ default: m.CheckInDialog })));
 const CustomerSearchPanel = lazy(() =>
   import('../../components/staff/reception/customers/CustomerSearchPanel').then((m) => ({ default: m.CustomerSearchPanel })),
 );
@@ -20,8 +22,9 @@ const CreateCustomerDialog = lazy(() =>
 );
 import { useHotkeys } from '../../shared/hooks/useHotkeys';
 import { useMediaQuery } from '../../shared/hooks/useMediaQuery';
-import { useStaffUser } from '../../shared/hooks/useStaffUser';
 import { usePOS } from '../../shared/stores/pos.store';
+import { useAccount } from '../../shared/stores/session.store';
+import { visitPermissions } from '../../shared/types/visit';
 import { formatToday } from '../../shared/utils/clinic-format';
 
 type View = 'desk' | 'sell' | 'cart' | 'customers';
@@ -34,12 +37,13 @@ const VIEWS: { id: View; label: string; className?: string }[] = [
 ];
 
 /**
- * Quầy lễ tân: đón khách, theo dõi hàng chờ, bán lẻ theo Order (UC66), thu tiền.
+ * Quầy lễ tân: đón khách, theo dõi hàng chờ, bán lẻ theo Order (UC66), thu tiền. Mở cho lễ tân và quản lý chi nhánh (A05): quản lý chỉ xem hàng chờ và
+ * gán lại lượt đã gọi (BR-TN-08), nên không có nút / phím tiếp nhận.
  * ≥1280px shows all three panels; 1024–1279 keeps the receipt beside one switchable panel;
  * phones switch between the three.
  */
 export function ReceptionWorkspacePage() {
-  const user = useStaffUser();
+  const canCheckIn = visitPermissions(useAccount()?.role).checkIn;
   const [view, setView] = useState<View>('desk');
   const [checkIn, setCheckIn] = useState<CheckInTarget | null>(null);
   const searchRef = useRef<HTMLInputElement>(null);
@@ -62,7 +66,7 @@ export function ReceptionWorkspacePage() {
     {
       f1: focusSearch,
       'mod+k': focusSearch,
-      n: () => setCheckIn({ mode: 'walk-in' }),
+      ...(canCheckIn ? { n: () => setCheckIn({ mode: 'walk-in' }) } : {}),
       // Never pay from a receipt that is off screen: show it first.
       ...(receiptVisible ? {} : { 'mod+enter': () => setView('cart') }),
     },
@@ -84,11 +88,13 @@ export function ReceptionWorkspacePage() {
           <Users className="h-4 w-4" aria-hidden />
           <span className="hidden sm:inline">Khách hàng</span>
         </WsButton>
-        <WsButton variant="primary" onClick={() => setCheckIn({ mode: 'walk-in' })}>
-          <UserPlus className="h-4 w-4" aria-hidden />
-          <span className="hidden sm:inline">Tiếp nhận khách</span>
-          <span className="hidden text-xs font-medium opacity-75 sm:inline">N</span>
-        </WsButton>
+        {canCheckIn && (
+          <WsButton variant="primary" onClick={() => setCheckIn({ mode: 'walk-in' })}>
+            <UserPlus className="h-4 w-4" aria-hidden />
+            <span className="hidden sm:inline">Tiếp nhận khách</span>
+            <span className="hidden text-xs font-medium opacity-75 sm:inline">N</span>
+          </WsButton>
+        )}
       </WorkspaceHeader>
 
       <div aria-label="Khu vực quầy" role="group" className="flex gap-1 border-b border-(--ws-line) bg-(--ws-surface) px-3 py-2 lg:hidden">
@@ -123,7 +129,6 @@ export function ReceptionWorkspacePage() {
           <>
             <FrontDeskPanel
               className={cn(showOnSmall('desk'), 'min-h-[60dvh] lg:min-h-0 xl:flex')}
-              actorId={user.id}
               onCheckIn={(arrival) => setCheckIn({ mode: 'appointment', arrival })}
               onWalkIn={() => setCheckIn({ mode: 'walk-in' })}
               onCollect={() => {
@@ -144,7 +149,9 @@ export function ReceptionWorkspacePage() {
         )}
       </div>
 
-      <CheckInDialog target={checkIn} onClose={() => setCheckIn(null)} actorId={user.id} />
+      <Suspense fallback={null}>
+        {checkIn && <CheckInDialog target={checkIn} onClose={() => setCheckIn(null)} />}
+      </Suspense>
       <Suspense fallback={null}>
         {openCustomerId != null && <CustomerDetailDialog customerId={openCustomerId} onClose={() => setOpenCustomerId(null)} />}
         {creatingCustomer && <CreateCustomerDialog open onOpenChange={setCreatingCustomer} onOpenCustomer={setOpenCustomerId} />}

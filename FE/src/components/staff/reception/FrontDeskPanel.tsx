@@ -1,54 +1,49 @@
-import { useMemo, useState } from 'react';
+import { useState } from 'react';
 import * as Tabs from '@radix-ui/react-tabs';
 import type { UseQueryResult } from '@tanstack/react-query';
-import { CalendarClock, ClipboardList, UserPlus, Wallet } from 'lucide-react';
+import { CalendarClock, UserPlus, Wallet } from 'lucide-react';
 import { cn, formatCurrency } from '../../../lib/utils';
-import { KIND_LABEL } from '../../../shared/constants/clinic-labels';
-import {
-  useArrivals,
-  useAssignVisit,
-  useCancelVisit,
-  useStaffList,
-  useTodayVisits,
-} from '../../../shared/hooks/useClinic';
 import { useFreshIds } from '../../../shared/hooks/useFreshIds';
 import { useNow } from '../../../shared/hooks/useNow';
 import { usePendingSalesOrders } from '../../../shared/hooks/usePendingSalesOrders';
+import { useArrivals, useVisitQueue } from '../../../shared/hooks/useVisits';
 import { usePOS } from '../../../shared/stores/pos.store';
 import { useAccount } from '../../../shared/stores/session.store';
-import type { ArrivalView, VisitView } from '../../../shared/types/clinic';
+import type { Appointment } from '../../../shared/types/appointment';
+import { QUOTA_GROUP_LABELS } from '../../../shared/types/branch';
 import { ORDER_SOURCE_LABELS, type OrderSummary } from '../../../shared/types/sales';
-import { formatClock, formatElapsed, petKind } from '../../../shared/utils/clinic-format';
-import { CLINIC_CFG, positionFor } from '../../../shared/utils/clinic-rules';
-import { Kbd, Panel, PriorityChip, QueryError, RowsSkeleton, StatePanel, Ticket, VisitStatusChip, WsButton } from '../ui';
+import { visitPermissions } from '../../../shared/types/visit';
+import { formatClock } from '../../../shared/utils/clinic-format';
+import { Kbd, Panel, QueryError, RowsSkeleton, StatePanel, WsButton } from '../ui';
+import { arrivalWindow } from './arrival';
+import { VisitQueueList } from './VisitQueueList';
 
 type DeskTab = 'arrivals' | 'queue' | 'pending';
 
+/** Giờ hẹn của lịch: `slotDate` + `slotStart` là giờ Việt Nam (docs/time.md). */
+const slotMs = (a: Appointment) => Date.parse(`${a.slotDate}T${a.slotStart}:00+07:00`);
+
 export function FrontDeskPanel({
   className,
-  actorId,
   onCheckIn,
   onWalkIn,
   onCollect,
 }: {
   className?: string;
-  actorId: string;
-  onCheckIn: (arrival: ArrivalView) => void;
+  onCheckIn: (arrival: Appointment) => void;
   onWalkIn: () => void;
   onCollect: () => void;
 }) {
+  const perms = visitPermissions(useAccount()?.role);
   const [tab, setTab] = useState<DeskTab>('arrivals');
-  const arrivals = useArrivals();
-  const visits = useTodayVisits();
+  // Mỗi vai trò chỉ hỏi những gì BE cho phép (VISIT_ROLES): BRANCH_MANAGER xem hàng đợi, VET / CARETAKER không hỏi lịch hẹn chờ check-in.
+  const arrivals = useArrivals(perms.arrivals);
+  const queue = useVisitQueue({}, perms.queue);
   const pending = usePendingSalesOrders();
-  const active = useMemo(
-    () => visits.data?.filter((v) => v.status === 'WAITING' || v.status === 'IN_PROGRESS'),
-    [visits.data],
-  );
 
   const tabs: { id: DeskTab; label: string; count?: number }[] = [
     { id: 'arrivals', label: 'Đón tiếp', count: arrivals.data?.length },
-    { id: 'queue', label: 'Hàng chờ', count: active?.length },
+    { id: 'queue', label: 'Hàng chờ', count: queue.data?.length },
     { id: 'pending', label: 'Chờ thu', count: pending.data?.length },
   ];
 
@@ -70,10 +65,10 @@ export function FrontDeskPanel({
           ))}
         </Tabs.List>
         <Tabs.Content value="arrivals" className="min-h-0 flex-1 overflow-y-auto">
-          <ArrivalsList query={arrivals} onCheckIn={onCheckIn} onWalkIn={onWalkIn} />
+          <ArrivalsList query={arrivals} canCheckIn={perms.checkIn} onCheckIn={onCheckIn} onWalkIn={onWalkIn} />
         </Tabs.Content>
         <Tabs.Content value="queue" className="min-h-0 flex-1 overflow-y-auto">
-          <QueueList query={visits} active={active} actorId={actorId} />
+          <VisitQueueList query={queue} />
         </Tabs.Content>
         <Tabs.Content value="pending" className="min-h-0 flex-1 overflow-y-auto">
           <PendingList query={pending} onCollect={onCollect} />
@@ -85,15 +80,18 @@ export function FrontDeskPanel({
 
 function ArrivalsList({
   query,
+  canCheckIn,
   onCheckIn,
   onWalkIn,
 }: {
-  query: UseQueryResult<ArrivalView[], unknown>;
-  onCheckIn: (arrival: ArrivalView) => void;
+  query: UseQueryResult<Appointment[], unknown>;
+  canCheckIn: boolean;
+  onCheckIn: (arrival: Appointment) => void;
   onWalkIn: () => void;
 }) {
   const now = useNow();
-  const walkIn = (
+  const fresh = useFreshIds(query.data, (a) => String(a.appointmentId));
+  const walkIn = canCheckIn && (
     <div className="border-t border-(--ws-line) p-3">
       <WsButton className="w-full" onClick={onWalkIn}>
         <UserPlus className="h-4 w-4" aria-hidden />
@@ -110,42 +108,38 @@ function ArrivalsList({
   return (
     <>
       {arrivals.length === 0 ? (
-        <StatePanel
-          icon={CalendarClock}
-          title="Chưa có lịch hẹn sắp đến"
-          body={`Lịch hẹn hiện ở đây từ ${CLINIC_CFG.checkInEarlyMin} phút trước giờ hẹn.`}
-        />
+        <StatePanel icon={CalendarClock} title="Chưa có lịch hẹn sắp đến" body="Lịch hẹn hiện ở đây từ 30 phút trước giờ hẹn." />
       ) : (
         <ul className="divide-y divide-(--ws-line)">
           {arrivals.map((a) => {
-            const lateMin = Math.floor((now - Date.parse(a.startsAt)) / 60_000);
+            const window = arrivalWindow(slotMs(a), now);
             return (
-              <li key={a.appointmentId} className="flex items-start gap-3 px-4 py-3">
-                <time className="ws-num w-11 shrink-0 pt-0.5 text-sm font-bold" dateTime={a.startsAt}>
-                  {formatClock(a.startsAt)}
+              <li key={a.appointmentId} className={cn('flex items-start gap-3 px-4 py-3', fresh.has(String(a.appointmentId)) && 'ws-fresh')}>
+                <time className="ws-num w-11 shrink-0 pt-0.5 text-sm font-bold" dateTime={`${a.slotDate}T${a.slotStart}:00+07:00`}>
+                  {a.slotStart}
                 </time>
                 <div className="min-w-0 flex-1">
                   <p className="truncate font-semibold">
-                    {a.pet.name}{' '}
-                    <span className="font-normal text-(--ws-ink-3)">{petKind(a.pet.species, a.pet.breed)}</span>
+                    <span>{a.petName}</span>
                   </p>
-                  <p className="truncate text-[13px] text-(--ws-ink-2)">{a.customer.name}</p>
-                  <p className="ws-num text-[13px] text-(--ws-ink-3)">{a.customer.phone}</p>
+                  <p className="truncate text-[13px] text-(--ws-ink-2)">{a.customerName}</p>
                   <p className="mt-1 flex flex-wrap items-center gap-1.5 text-[13px]">
                     <span className="ws-chip" data-tone="accent">
-                      {KIND_LABEL[a.service.kind]}
+                      {QUOTA_GROUP_LABELS[a.serviceGroup]}
                     </span>
-                    {a.service.name}
-                    {lateMin > CLINIC_CFG.latePriorityMin && (
-                      <span className="ws-chip" data-tone="wait" title="Trễ quá 15 phút nên xếp như khách vãng lai">
-                        Trễ {lateMin} phút
-                      </span>
-                    )}
+                    <span>{a.serviceName}</span>
+                  </p>
+                  <p className="mt-1">
+                    <span className="ws-chip" data-tone={window.kind === 'ON_TIME' ? undefined : 'wait'}>
+                      {window.label}
+                    </span>
                   </p>
                 </div>
-                <WsButton size="sm" variant="primary" onClick={() => onCheckIn(a)}>
-                  Tiếp nhận
-                </WsButton>
+                {canCheckIn && (
+                  <WsButton size="sm" variant="primary" onClick={() => onCheckIn(a)}>
+                    Tiếp nhận
+                  </WsButton>
+                )}
               </li>
             );
           })}
@@ -153,103 +147,6 @@ function ArrivalsList({
       )}
       {walkIn}
     </>
-  );
-}
-
-function QueueList({
-  query,
-  active,
-  actorId,
-}: {
-  query: UseQueryResult<VisitView[], unknown>;
-  active: VisitView[] | undefined;
-  actorId: string;
-}) {
-  const staff = useStaffList();
-  const assign = useAssignVisit(actorId);
-  const cancel = useCancelVisit(actorId);
-  const now = useNow();
-  const fresh = useFreshIds(active, (v) => v.id);
-  const [confirmCancel, setConfirmCancel] = useState<string | null>(null);
-
-  if (query.isLoading) return <RowsSkeleton rows={4} />;
-  if (query.isError) return <QueryError error={query.error} onRetry={() => query.refetch()} what="hàng chờ" />;
-  if (!active?.length) {
-    return <StatePanel icon={ClipboardList} title="Hàng chờ đang trống" body="Khách đến thì bấm Tiếp nhận ở tab Đón tiếp." />;
-  }
-
-  return (
-    <ol className="divide-y divide-(--ws-line)" aria-label="Hàng chờ theo thứ tự ưu tiên">
-      {active.map((v) => {
-        const kind = v.services[0]?.kind ?? 'EXAM';
-        const options = staff.data?.filter((s) => s.position === positionFor(kind)) ?? [];
-        return (
-          <li key={v.id} className={cn('px-4 py-3', fresh.has(v.id) && 'ws-fresh')}>
-            <div className="flex items-start gap-3">
-              <Ticket no={v.queueNo} size="sm" tone={v.emergency ? 'urgent' : undefined} />
-              <div className="min-w-0 flex-1">
-                <p className="flex flex-wrap items-center gap-1.5">
-                  <span className="font-semibold">{v.pet.name}</span>
-                  <VisitStatusChip status={v.status} />
-                  <PriorityChip priority={v.priority} />
-                </p>
-                <p className="truncate text-[13px] text-(--ws-ink-2)">
-                  {v.services.map((s) => s.name).join(', ')}, {v.customer.name}
-                </p>
-                <p className="text-xs text-(--ws-ink-3)">
-                  {v.status === 'WAITING'
-                    ? `Chờ ${formatElapsed(v.checkedInAt, now)}`
-                    : `Bắt đầu lúc ${formatClock(v.calledAt ?? v.checkedInAt)}, ${v.assignee?.name ?? ''}`}
-                </p>
-              </div>
-            </div>
-            {v.status === 'WAITING' && (
-              <div className="mt-2 flex flex-wrap items-center gap-2 pl-[2.85rem]">
-                <label className="sr-only" htmlFor={`assign-${v.id}`}>
-                  Người phụ trách số {v.queueNo}
-                </label>
-                <select
-                  id={`assign-${v.id}`}
-                  value={v.assignee?.id ?? ''}
-                  onChange={(e) => e.target.value && assign.mutate({ visitId: v.id, staffId: e.target.value })}
-                  className="h-8 min-w-0 flex-1 rounded-md border border-(--ws-line-strong) bg-(--ws-surface) px-2 text-[13px] text-(--ws-ink)"
-                >
-                  <option value="" disabled>
-                    Chưa gán người làm
-                  </option>
-                  {options.map((s) => (
-                    <option key={s.id} value={s.id}>
-                      {s.name}
-                    </option>
-                  ))}
-                </select>
-                {confirmCancel === v.id ? (
-                  <>
-                    <WsButton
-                      size="sm"
-                      variant="danger"
-                      onClick={() => {
-                        cancel.mutate(v.id);
-                        setConfirmCancel(null);
-                      }}
-                    >
-                      Xác nhận hủy lượt
-                    </WsButton>
-                    <WsButton size="sm" variant="ghost" onClick={() => setConfirmCancel(null)}>
-                      Giữ lại
-                    </WsButton>
-                  </>
-                ) : (
-                  <WsButton size="sm" variant="ghost" onClick={() => setConfirmCancel(v.id)}>
-                    Khách về
-                  </WsButton>
-                )}
-              </div>
-            )}
-          </li>
-        );
-      })}
-    </ol>
   );
 }
 

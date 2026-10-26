@@ -2,15 +2,18 @@ import { render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { MemoryRouter } from 'react-router-dom';
-import { beforeAll, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeAll, describe, expect, it, vi } from 'vitest';
 import { apiClient } from '../../shared/api/axios';
+import { visitApi } from '../../shared/api/visit.api';
 import { MOCK_PASSWORD } from '../../shared/api/mock/identity.mock';
 import { installMockApi } from '../../shared/api/mock/mock-api';
 import { useSession } from '../../shared/stores/session.store';
 import type { Role } from '../../shared/types/auth';
+import { startDesk } from '../../test/visit-harness';
 import { StaffSidebar, type StaffSidebarProps } from './StaffSidebar';
 
 beforeAll(() => installMockApi(apiClient));
+afterEach(() => vi.useRealTimers());
 
 function renderSidebar(role: Role, { path = '/staff/reception', ...props }: Partial<StaffSidebarProps> & { path?: string } = {}) {
   const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
@@ -108,5 +111,40 @@ describe('staff sidebar', () => {
     const row = (await screen.findByText('Chờ thu tiền')).closest('div')!;
     await waitFor(() => expect(within(row).getByText('3')).toBeInTheDocument());
     useSession.getState().clear();
+  });
+
+  // T36: "Chờ tiếp nhận / Đang chờ / Đang làm" đếm từ API visit (lịch hẹn chờ check-in, hàng đợi chi nhánh), không còn đếm clinic-db. Đồng hồ ghim 10:40 thứ Năm 22/10/2026:
+  // hàng đợi mẫu có 3 lượt đang chờ (2101, 2102, 2103) và 2 lượt đã gọi (2002, 2104); lịch hẹn #1 vào cửa sổ check-in từ 10:30.
+  const count = async (label: string) => (await screen.findByText(label)).closest('div')!;
+
+  it('counts arrivals, waiting and called visits from the visit API for the front desk', async () => {
+    await startDesk('reception@store1.vn');
+    const myQueue = vi.spyOn(visitApi, 'getMyQueue');
+    renderSidebar('RECEPTIONIST');
+
+    await waitFor(async () => expect(within(await count('Chờ tiếp nhận')).getByText('1')).toBeInTheDocument());
+    await waitFor(async () => expect(within(await count('Đang chờ')).getByText('3')).toBeInTheDocument());
+    await waitFor(async () => expect(within(await count('Đang làm')).getByText('2')).toBeInTheDocument());
+    expect(myQueue).not.toHaveBeenCalled();
+  });
+
+  it('gives a vet the branch counts but never asks for the check-in list (403 for VET / CARETAKER)', async () => {
+    await startDesk('doctor@store1.vn');
+    const arrivals = vi.spyOn(visitApi, 'listArrivals');
+    const branchQueue = vi.spyOn(visitApi, 'listQueue');
+    renderSidebar('VET', { path: '/staff/doctor' });
+
+    await waitFor(async () => expect(within(await count('Đang chờ')).getByText('3')).toBeInTheDocument());
+    expect(within(await count('Chờ tiếp nhận')).getByText('–')).toBeInTheDocument();
+    expect(branchQueue).toHaveBeenCalled();
+    expect(arrivals).not.toHaveBeenCalled();
+  });
+
+  it('shows the branch manager the same live counts', async () => {
+    await startDesk('manager@store1.vn');
+    renderSidebar('BRANCH_MANAGER');
+
+    await waitFor(async () => expect(within(await count('Đang chờ')).getByText('3')).toBeInTheDocument());
+    await waitFor(async () => expect(within(await count('Chờ tiếp nhận')).getByText('1')).toBeInTheDocument());
   });
 });

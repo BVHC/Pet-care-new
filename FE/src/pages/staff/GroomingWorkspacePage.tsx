@@ -1,8 +1,9 @@
 import { GroomingBoard } from '../../components/staff/grooming/GroomingBoard';
 import { WorkspaceHeader } from '../../components/staff/ui';
-import { useTodayVisits } from '../../shared/hooks/useClinic';
 import { useStaffUser } from '../../shared/hooks/useStaffUser';
+import { useMyQueue } from '../../shared/hooks/useVisits';
 import { useGroomingStore } from '../../shared/stores/grooming.store';
+import { visitPermissions } from '../../shared/types/visit';
 import type { BoardScope } from '../../shared/utils/grooming-board';
 
 const SCOPES: { id: BoardScope; label: string }[] = [
@@ -10,20 +11,14 @@ const SCOPES: { id: BoardScope; label: string }[] = [
   { id: 'all', label: 'Cả khu' },
 ];
 
-/** Khu grooming: one card per pet, moved along the visit FSM by drag or by its buttons. */
+/** Khu grooming: một thẻ mỗi bé theo hàng đợi của API; bấm Bắt đầu hoặc kéo sang "Đang làm" là gọi lượt (visit-v1 #8). Hoàn tất lượt là T37. */
 export function GroomingWorkspacePage() {
   const user = useStaffUser();
   const stored = useGroomingStore((s) => s.scope);
   const setScope = useGroomingStore((s) => s.setScope);
   const scope: BoardScope = stored ?? (user.role === 'CARETAKER' ? 'mine' : 'all');
-  const visits = useTodayVisits();
-  const mineActive =
-    visits.data?.filter(
-      (v) =>
-        v.assignee?.id === user.id &&
-        v.services.some((s) => s.kind === 'GROOMING') &&
-        (v.status === 'WAITING' || v.status === 'IN_PROGRESS'),
-    ).length ?? 0;
+  // Hàng đợi của tôi chỉ có lượt WAITING / IN_PROGRESS gán cho mình (cùng khóa cache với bảng "Của tôi").
+  const mineActive = useMyQueue(visitPermissions(user.role).myQueue).data?.filter((v) => v.serviceGroup === 'GROOMING').length ?? 0;
 
   return (
     <div className="flex flex-col lg:h-full">
@@ -46,7 +41,7 @@ export function GroomingWorkspacePage() {
           ))}
         </div>
       </WorkspaceHeader>
-      <GroomingBoard userId={user.id} scope={scope} />
+      <GroomingBoard userId={Number(user.id)} scope={scope} />
     </div>
   );
 }

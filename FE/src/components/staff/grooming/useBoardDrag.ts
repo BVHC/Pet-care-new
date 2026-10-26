@@ -1,16 +1,16 @@
 import { useRef, useState, type PointerEvent } from 'react';
-import type { BoardColumnId } from '../../../shared/utils/clinic-rules';
+import type { GroomColumn } from '../../../shared/hooks/useKanban';
 
 export interface DragGhost {
-  visitId: string;
-  from: BoardColumnId;
+  visitId: number;
+  from: GroomColumn;
   x: number;
   y: number;
 }
 
-function columnAt(x: number, y: number): BoardColumnId | null {
+function columnAt(x: number, y: number): GroomColumn | null {
   const column = document.elementFromPoint(x, y)?.closest<HTMLElement>('[data-column]');
-  return (column?.dataset.column as BoardColumnId | undefined) ?? null;
+  return (column?.dataset.column as GroomColumn | undefined) ?? null;
 }
 
 /**
@@ -21,13 +21,13 @@ export function useBoardDrag({
   onDrop,
   canDrop,
 }: {
-  onDrop: (visitId: string, to: BoardColumnId) => void;
-  canDrop: (visitId: string, to: BoardColumnId) => boolean;
+  onDrop: (visitId: number, to: GroomColumn) => void;
+  canDrop: (visitId: number, to: GroomColumn) => boolean;
 }) {
   const [ghost, setGhost] = useState<DragGhost | null>(null);
-  const start = useRef<{ x: number; y: number; visitId: string; from: BoardColumnId; active: boolean } | null>(null);
+  const start = useRef<{ x: number; y: number; visitId: number; from: GroomColumn; active: boolean } | null>(null);
 
-  const handleProps = (visitId: string, from: BoardColumnId) => ({
+  const handleProps = (visitId: number, from: GroomColumn) => ({
     onPointerDown: (e: PointerEvent<HTMLElement>) => {
       if (e.button !== 0) return;
       e.preventDefault();
@@ -55,7 +55,7 @@ export function useBoardDrag({
     },
   });
 
-  const dropState = (column: BoardColumnId): 'ok' | 'no' | undefined => {
+  const dropState = (column: GroomColumn): 'ok' | 'no' | undefined => {
     if (!ghost || column === ghost.from) return undefined;
     return canDrop(ghost.visitId, column) ? 'ok' : 'no';
   };

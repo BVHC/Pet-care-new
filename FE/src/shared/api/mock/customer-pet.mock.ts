@@ -199,6 +199,23 @@ export function petSummary(petId: number) {
   return pet && { petId: pet.petId, customerId: pet.customerId, name: pet.name, species: pet.species, deceasedOn: pet.deceasedOn ?? null };
 }
 
+/**
+ * Visit mở / đóng của thú (T36): thú có lượt chưa kết thúc thì không đánh dấu đã mất, không chuyển chủ (BR-KH-05, BR-KH-08); đã có lượt thì không xóa cứng (BR-KH-06).
+ * Chỉ đặt / gỡ `OPEN_VISIT`, không đè việc dở khác (đang lưu trú, Order chưa thanh toán).
+ */
+export function setPetOpenVisit(petId: number, open: boolean) {
+  const s = load();
+  const pet = s.pets.find((p) => p.petId === petId);
+  if (!pet) return;
+  if (open) {
+    pet.deletable = false;
+    pet.busy = pet.busy ?? 'OPEN_VISIT';
+  } else if (pet.busy === 'OPEN_VISIT') {
+    pet.busy = null;
+  }
+  save(s);
+}
+
 /** Thú đã phát sinh lịch hẹn thì không xóa cứng được nữa (BR-KH-06). */
 export function markPetHasBooking(petId: number) {
   const s = load();

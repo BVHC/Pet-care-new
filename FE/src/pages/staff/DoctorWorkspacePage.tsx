@@ -1,68 +1,61 @@
-import { useMemo, useState } from 'react';
+import { useState } from 'react';
+import { toast } from 'sonner';
 import { cn } from '../../lib/utils';
 import { DoctorQueue } from '../../components/staff/doctor/DoctorQueue';
-import { PatientPanel } from '../../components/staff/doctor/PatientPanel';
-import { SoapPanel } from '../../components/staff/doctor/SoapPanel';
+import { ExamPendingPanel } from '../../components/staff/doctor/ExamPendingPanel';
 import { WorkspaceHeader } from '../../components/staff/ui';
-import { useMoveVisit, useTodayVisits, useVisitDetail } from '../../shared/hooks/useClinic';
-import { useHotkeys } from '../../shared/hooks/useHotkeys';
-import { useMediaQuery } from '../../shared/hooks/useMediaQuery';
 import { useStaffUser } from '../../shared/hooks/useStaffUser';
-import { useConsultation } from '../../shared/stores/consultation.store';
-import type { VisitView } from '../../shared/types/clinic';
+import { useCallVisit, useMarkEmergency, useMyQueue, visitErrorMessage } from '../../shared/hooks/useVisits';
+import { visitPermissions, type Visit } from '../../shared/types/visit';
 
-type Pane = 'queue' | 'patient' | 'soap';
+type Pane = 'queue' | 'patient';
 
-const PANES: { id: Pane; label: string; className?: string }[] = [
-  { id: 'queue', label: 'Hàng chờ', className: 'lg:hidden' },
+const PANES: { id: Pane; label: string }[] = [
+  { id: 'queue', label: 'Hàng chờ' },
   { id: 'patient', label: 'Bệnh nhân' },
-  { id: 'soap', label: 'Bệnh án' },
 ];
 
 /**
- * Phòng khám: hàng chờ | bệnh nhân | bệnh án (SOAP).
- * ≥1280px three columns; 1024–1279 queue + one switchable column; phones one pane at a time.
+ * Phòng khám: hàng chờ của tôi (visit-v1 #3) | lượt đang chọn. Gọi lượt (#8) và đánh dấu cấp cứu (#7) chạy trên API; ghi bệnh án và hoàn tất lượt là T37, nên cột bệnh án
+ * (SoapPanel, đang trên clinic-db) chưa đặt vào đây. ≥1024px hai cột; điện thoại một khung mỗi lần.
  */
 export function DoctorWorkspacePage() {
   const user = useStaffUser();
-  const visits = useTodayVisits();
-  const activeVisitId = useConsultation((s) => s.activeVisitId);
-  const select = useConsultation((s) => s.select);
-  const move = useMoveVisit(user.id);
+  const userId = Number(user.id);
+  const perms = visitPermissions(user.role);
+  const queue = useMyQueue(perms.myQueue);
+  const call = useCallVisit();
+  const emergency = useMarkEmergency();
+  const [picked, setPicked] = useState<number | null>(null);
   const [pane, setPane] = useState<Pane>('queue');
-  const wide = useMediaQuery('(min-width: 1280px)');
-  const soapVisible = wide || pane === 'soap';
-  // Ctrl+S / Ctrl+Enter act on the record only while it is on screen; otherwise they bring it up.
-  useHotkeys(soapVisible ? {} : { 'mod+enter': () => setPane('soap'), 'mod+s': () => setPane('soap') });
 
-  const clinical = useMemo(
-    () => visits.data?.filter((v) => v.services.some((s) => s.kind !== 'GROOMING')) ?? [],
-    [visits.data],
-  );
-  const mine = clinical.filter((v) => v.assignee?.id === user.id);
-  const waitingCount = mine.filter((v) => v.status === 'WAITING').length;
-
+  const visits = queue.data ?? [];
+  const waitingCount = visits.filter((v) => v.status === 'WAITING').length;
   // Open on the visit being examined, else the next one waiting.
-  const fallback = mine.find((v) => v.status === 'IN_PROGRESS') ?? mine.find((v) => v.status === 'WAITING');
-  const selectedId =
-    activeVisitId && clinical.some((v) => v.id === activeVisitId) ? activeVisitId : (fallback?.id ?? null);
-  const detail = useVisitDetail(selectedId);
+  const selected =
+    visits.find((v) => v.visitId === picked) ?? visits.find((v) => v.status === 'IN_PROGRESS') ?? visits.find((v) => v.status === 'WAITING') ?? null;
 
-  const open = (visit: VisitView) => {
-    select(visit.id);
-    setPane(visit.status === 'IN_PROGRESS' ? 'soap' : 'patient');
+  const open = (visit: Visit) => {
+    setPicked(visit.visitId);
+    setPane('patient');
   };
 
-  const call = (visitId: string) => {
-    select(visitId);
-    move.mutate({ visitId, to: 'IN_PROGRESS' }, { onSuccess: () => setPane('soap') });
+  const callVisit = (visit: Visit) => {
+    setPicked(visit.visitId);
+    call.mutate(visit.visitId, {
+      onSuccess: (done) => {
+        toast.success(`Đã gọi ${done.petName} (${done.code}) vào khám.`);
+        setPane('patient');
+      },
+      onError: (e) => toast.error(visitErrorMessage(e, 'call')),
+    });
   };
 
-  const onCompleted = (visitId: string) => {
-    const next = mine.find((v) => v.status === 'WAITING' && v.id !== visitId);
-    select(next?.id ?? visitId);
-    setPane(next ? 'patient' : 'soap');
-  };
+  const markEmergency = (visit: Visit) =>
+    emergency.mutate(visit.visitId, {
+      onSuccess: (done) => toast.success(`Đã xác định ca cấp cứu: ${done.petName} (${done.code}).`),
+      onError: (e) => toast.error(visitErrorMessage(e, 'markEmergency')),
+    });
 
   return (
     <div className="flex flex-col lg:h-full">
@@ -71,50 +64,38 @@ export function DoctorWorkspacePage() {
         subtitle={`${user.name}, ${waitingCount === 0 ? 'không có lượt nào đang chờ' : `${waitingCount} lượt đang chờ bạn`}`}
       />
 
-      <div role="group" aria-label="Khu vực phòng khám" className="flex gap-1 border-b border-(--ws-line) bg-(--ws-surface) px-3 py-2 xl:hidden">
+      <div role="group" aria-label="Khu vực phòng khám" className="flex gap-1 border-b border-(--ws-line) bg-(--ws-surface) px-3 py-2 lg:hidden">
         {PANES.map((p) => (
           <button
             key={p.id}
             type="button"
-            aria-pressed={pane === p.id || (p.id === 'patient' && pane === 'queue')}
+            aria-pressed={pane === p.id}
             onClick={() => setPane(p.id)}
-            className={cn(
-              'h-9 flex-1 rounded-md text-sm font-medium text-(--ws-ink-2) aria-pressed:bg-(--ws-accent-soft) aria-pressed:font-semibold aria-pressed:text-(--ws-accent-ink)',
-              p.id === 'patient' && pane === 'queue' && 'max-lg:aria-pressed:bg-transparent max-lg:aria-pressed:font-medium max-lg:aria-pressed:text-(--ws-ink-2)',
-              p.className,
-            )}
+            className="h-9 flex-1 rounded-md text-sm font-medium text-(--ws-ink-2) aria-pressed:bg-(--ws-accent-soft) aria-pressed:font-semibold aria-pressed:text-(--ws-accent-ink)"
           >
             {p.label}
           </button>
         ))}
       </div>
 
-      <div className="grid min-h-0 flex-1 gap-3 p-3 lg:grid-cols-[272px_minmax(0,1fr)] xl:grid-cols-[272px_minmax(0,0.85fr)_minmax(0,1.2fr)]">
+      <div className="grid min-h-0 flex-1 gap-3 p-3 lg:grid-cols-[272px_minmax(0,1fr)]">
         <DoctorQueue
           className={cn(pane === 'queue' ? 'flex' : 'hidden', 'min-h-[60dvh] lg:flex lg:min-h-0')}
-          query={visits}
-          visits={clinical}
-          userId={user.id}
-          selectedId={selectedId}
+          query={queue}
+          userId={userId}
+          selectedId={selected?.visitId ?? null}
           onSelect={open}
-          onCall={(v) => call(v.id)}
-          callingId={move.isPending ? (move.variables?.visitId ?? null) : null}
+          onCall={callVisit}
+          callingId={call.isPending ? (call.variables ?? null) : null}
         />
-        <PatientPanel
-          className={cn(pane === 'patient' ? 'flex' : 'hidden', pane === 'soap' ? 'lg:hidden' : 'lg:flex', 'min-h-[60dvh] lg:min-h-0 xl:flex')}
-          selectedId={selectedId}
-          detail={detail}
-          userId={user.id}
-          onCall={call}
-          calling={move.isPending}
-        />
-        <SoapPanel
-          className={cn(pane === 'soap' ? 'flex' : 'hidden', pane === 'soap' && 'lg:flex', 'min-h-[60dvh] lg:min-h-0 xl:flex')}
-          selectedId={selectedId}
-          detail={detail}
-          userId={user.id}
-          onCompleted={onCompleted}
-          hotkeysEnabled={soapVisible}
+        <ExamPendingPanel
+          className={cn(pane === 'patient' ? 'flex' : 'hidden', 'min-h-[60dvh] lg:flex lg:min-h-0')}
+          visit={selected}
+          userId={userId}
+          canMarkEmergency={perms.markEmergency}
+          onCall={callVisit}
+          onMarkEmergency={markEmergency}
+          busy={call.isPending || emergency.isPending}
         />
       </div>
     </div>

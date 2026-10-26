@@ -95,3 +95,57 @@ describe('GET /api/audit-logs — from / to phải kèm offset (identity-v1 #36)
     expect((await client.get('/api/audit-logs', { params: { to: '2099-01-01T00:00:00Z' }, ...auth })).status).toBe(200);
   });
 });
+
+// ASSUMPTION (T36, docs/testcases/T36-fe.md): lễ tân chọn người gán lượt (UC45) nhưng identity-v1 #15 loại RECEPTIONIST và 06-module-contracts L115 nói
+// `findAssignableStaff` chưa có endpoint. Mock mở GET /api/staff cho lễ tân với đúng phạm vi: VET / CARETAKER ACTIVE, không bị khóa, của chi nhánh mình.
+// BE thật hiện trả 403 cho lễ tân (đã dò) — chờ BE-1.
+describe('GET /api/staff cho lễ tân — danh sách chọn người gán lượt (ASSUMPTION chờ BE-1, BR-TN-05, BR-TN-06)', () => {
+  const desk = () => as('reception@store1.vn');
+  const names = (res: AxiosResponse) => res.data.data.content.map((s: { accountId: number }) => s.accountId);
+
+  it('không lọc: chỉ VET và CARETAKER ACTIVE của chi nhánh lễ tân (#5 bác sĩ, #6 nhân viên chăm sóc); không thấy lễ tân, quản lý, chi nhánh khác', async () => {
+    const res = await client.get('/api/staff', await desk());
+    expect(names(res)).toEqual([5, 6]);
+    expect(res.data.data.content[0]).toMatchObject({ role: 'VET', status: 'ACTIVE', isLocked: false, branchId: 1, online: true });
+  });
+
+  it('role=VET&status=ACTIVE&size=100 (lời gọi của hook) và role=CARETAKER chỉ ra đúng một nhóm', async () => {
+    const auth = await desk();
+    expect(names(await client.get('/api/staff', { params: { role: 'VET', status: 'ACTIVE', size: 100 }, ...auth }))).toEqual([5]);
+    expect(names(await client.get('/api/staff', { params: { role: 'CARETAKER', status: 'ACTIVE', size: 100 }, ...auth }))).toEqual([6]);
+  });
+
+  it('role khác VET / CARETAKER, status khác ACTIVE, chi nhánh khác → 403 (ngoài phạm vi được mở)', async () => {
+    const auth = await desk();
+    for (const params of [{ role: 'RECEPTIONIST' }, { role: 'BRANCH_MANAGER' }, { role: 'SUPER_MANAGER' }, { status: 'DISABLED' }, { status: 'PENDING' }, { branchId: 2 }]) {
+      const res = await failure(client.get('/api/staff', { params, ...auth }));
+      expect(res.status, JSON.stringify(params)).toBe(403);
+    }
+    expect((await client.get('/api/staff', { params: { branchId: 1 }, ...auth })).status).toBe(200);
+  });
+
+  it('nhân viên tạo lúc chạy hiện ngay; VET ở chi nhánh khác, bị khóa hoặc vô hiệu hóa thì không', async () => {
+    const chain = await as('chuoi@petcare.vn');
+    const created = async (body: object) => (await client.post('/api/staff', { phone: '0900000077', ...body }, chain)).data.data.accountId as number;
+    const sameBranch = await created({ email: 'vet.moi@new.vn', fullName: 'BS. Mới', role: 'VET', branchId: 1 });
+    const otherBranch = await created({ email: 'vet.b2@new.vn', fullName: 'BS. Chi nhánh 2', role: 'VET', branchId: 2 });
+    const locked = await created({ email: 'vet.khoa@new.vn', fullName: 'BS. Bị khóa', role: 'VET', branchId: 1 });
+    await client.post(`/api/accounts/${locked}/lock`, { reason: 'Thử khóa' }, await as('admin@petcare.vn'));
+    const disabled = await created({ email: 'vet.nghi@new.vn', fullName: 'BS. Đã nghỉ', role: 'VET', branchId: 1 });
+    await client.post(`/api/staff/${disabled}/disable`, {}, chain);
+    const res = await client.get('/api/staff', { params: { role: 'VET' }, ...(await desk()) });
+    expect(names(res)).toEqual([5, sameBranch]);
+    expect(names(res)).not.toContain(otherBranch);
+    expect(names(res)).not.toContain(locked);
+    expect(names(res)).not.toContain(disabled);
+  });
+
+  it('cờ online lấy từ bảng hiện diện (mặc định ai cũng online): setStaffOnline đặt một người offline', async () => {
+    const { setStaffOnline } = await import('./identity-admin.mock');
+    setStaffOnline(6, false);
+    const res = await client.get('/api/staff', await desk());
+    expect(res.data.data.content.map((s: { accountId: number; online: boolean }) => [s.accountId, s.online])).toEqual([[5, true], [6, false]]);
+    setStaffOnline(6, true);
+    expect((await client.get('/api/staff', await desk())).data.data.content.every((s: { online: boolean }) => s.online)).toBe(true);
+  });
+});

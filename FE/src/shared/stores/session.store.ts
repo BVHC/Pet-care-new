@@ -83,6 +83,7 @@ bindAuth({
   token: () => useSession.getState().token,
   onUnauthorized: () => useSession.getState().clear(),
   onMustChangePassword: () => useSession.getState().setMustChangePassword(true),
+  account: () => activeAccount(useSession.getState()),
 });
 
 /** Tài khoản đang đăng nhập; null nếu chưa đăng nhập hoặc đã quá `expiresAt`. */

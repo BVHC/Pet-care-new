@@ -121,6 +121,8 @@ Phủ chung: đủ 10 khóa route; 401 và `mustChangePassword`; ma trận 5 vai
 
 Mock theo cột BE. Chỉ ghi chỗ **hai nguồn thật sự khác nhau** (L1–L4).
 
+**Đã xác nhận với BE chạy thật (24/10/2026, DB mới + dữ liệu seed, 1 chi nhánh):** L2 (`size=1000` trả `size=100`, 200) và L4 (body `orderIds: []` kèm vai trò quản lý trả 400 `VALIDATION_FAILED`, không phải 403). **Chưa kiểm với BE thật:** L1 và L3 (đọc từ code; L1 cần 2 chi nhánh, L3 cần ca mở song song với dữ liệu sai).
+
 | # | Nội dung | Hợp đồng | BE | Đề xuất |
 |---|---|---|---|---|
 | L1 | Order **chi nhánh khác** trong xem trước / thu: hợp đồng ghi 400 `BR-TG-03`; BE trả **403 `ACCESS_DENIED_SCOPE_MISMATCH`** (kiểm phạm vi chi nhánh trước rule). BR-TG-03 chỉ còn khi khác khách | `docs/api/sales-v1.md:91` (xem trước), `:92` (thu), `docs/api/openapi/sales-v1.yaml:619`, `:661` ("Order khác khách / khác chi nhánh") | `PaymentQueryService.java:58` (`branchScope.check` trước BR-TG-03 ở `:59–63`), `PaymentService.java:78` (trước `:85–88`); ADR-0064 §2.4 ghi đúng thứ tự này | Sửa hợp đồng + openapi: 403 cho Order chi nhánh khác, BR-TG-03 chỉ "khác khách" |

@@ -1,44 +1,44 @@
 import { useState } from 'react';
 import { createPortal } from 'react-dom';
-import { AlertTriangle, GripVertical } from 'lucide-react';
+import { GripVertical } from 'lucide-react';
 import { toast } from 'sonner';
-import { cn, formatCurrency } from '../../../lib/utils';
-import { moveRejection, useKanban } from '../../../shared/hooks/useKanban';
+import { SPECIES_LABEL } from '../../../domains/pets/labels';
+import { cn } from '../../../lib/utils';
+import { GROOM_DONE_HINT, moveRejection, useKanban, type GroomColumn } from '../../../shared/hooks/useKanban';
 import { useNow } from '../../../shared/hooks/useNow';
-import type { VisitView } from '../../../shared/types/clinic';
+import type { Visit } from '../../../shared/types/visit';
 import { announce } from '../../../shared/utils/announce';
-import { formatClock, formatElapsed } from '../../../shared/utils/clinic-format';
-import type { BoardColumnId } from '../../../shared/utils/clinic-rules';
+import { formatElapsed } from '../../../shared/utils/clinic-format';
 import type { BoardScope } from '../../../shared/utils/grooming-board';
 import { track } from '../../../shared/utils/telemetry';
-import { QueryError, Skeleton, Ticket, WsButton } from '../ui';
+import { QueryError, Skeleton, WsButton } from '../ui';
+import { VisitBadges, VisitCode } from '../visit-ui';
 import { useBoardDrag } from './useBoardDrag';
 
-const COLUMN_TITLE: Record<BoardColumnId, string> = {
+const COLUMN_TITLE: Record<GroomColumn, string> = {
   WAITING: 'Chờ làm',
   IN_PROGRESS: 'Đang làm',
   READY: 'Xong, chờ đón',
-  PAID: 'Đã thanh toán',
 };
 
-export function GroomingBoard({ userId, scope }: { userId: string; scope: BoardScope }) {
-  const { columns, query, moveCard, movingId } = useKanban(userId, scope);
+export function GroomingBoard({ userId, scope }: { userId: number; scope: BoardScope }) {
+  const { columns, query, moveCard, calling } = useKanban(userId, scope);
   const now = useNow();
-  const [shaking, setShaking] = useState<string | null>(null);
-  const byId = new Map(columns.flatMap((c) => c.items).map((v) => [v.id, v]));
+  const [shaking, setShaking] = useState<number | null>(null);
+  const byId = new Map(columns.flatMap((c) => c.items).map((v) => [v.visitId, v]));
 
-  const attempt = (visit: VisitView, to: BoardColumnId) => {
+  const attempt = (visit: Visit, to: GroomColumn) => {
     const rejection = moveCard(visit, to);
     if (!rejection) {
       track('board_move', { to });
-      announce(`Đã chuyển ${visit.pet.name} sang ${COLUMN_TITLE[to]}`);
+      announce(`Đã chuyển ${visit.petName} sang ${COLUMN_TITLE[to]}`);
       return;
     }
     if (rejection.code === 'NO_MOVE') return;
     track('board_move_rejected', { code: rejection.code });
     toast.error(rejection.message);
     announce(rejection.message);
-    setShaking(visit.id);
+    setShaking(visit.visitId);
     window.setTimeout(() => setShaking(null), 400);
   };
 
@@ -61,59 +61,67 @@ export function GroomingBoard({ userId, scope }: { userId: string; scope: BoardS
 
   return (
     <div className="flex min-h-0 flex-1 snap-x snap-mandatory gap-3 overflow-x-auto p-3 lg:snap-none">
-      {columns.map((col) => (
-        <section
-          key={col.id}
-          data-column={col.id}
-          data-drop={drag.dropState(col.id)}
-          aria-labelledby={`col-${col.id}`}
-          className="ws-column flex w-[min(86vw,320px)] shrink-0 snap-start flex-col rounded-xl border border-(--ws-line) bg-(--ws-raised) transition-[background-color,opacity] lg:w-auto lg:min-w-[220px] lg:flex-1"
-        >
-          <header className="flex items-baseline gap-2 px-3 pb-2 pt-3">
-            <h2 id={`col-${col.id}`} className="font-semibold">
-              {COLUMN_TITLE[col.id]}
-            </h2>
-            <span className="ws-num text-sm text-(--ws-ink-3)">{query.isLoading ? '' : col.items.length}</span>
-            <span className="ws-num ml-auto text-xs text-(--ws-ink-3)">{col.total > 0 && formatCurrency(col.total)}</span>
-          </header>
-          <ul aria-label={COLUMN_TITLE[col.id]} className="flex min-h-24 flex-1 flex-col gap-2 overflow-y-auto px-2 pb-2">
-            {query.isLoading ? (
-              <li aria-hidden className="flex flex-col gap-2">
-                <Skeleton className="h-24" />
-                <Skeleton className="h-24" />
-              </li>
-            ) : col.items.length === 0 ? (
-              <li className="rounded-lg border border-dashed border-(--ws-line-strong) px-3 py-6 text-center text-sm text-(--ws-ink-3)">
-                {col.id === 'WAITING' ? 'Không có bé nào đang chờ.' : 'Trống'}
-              </li>
-            ) : (
-              col.items.map((v) => (
-                <li key={v.id}>
-                  <GroomCard
-                    visit={v}
-                    column={col.id}
-                    userId={userId}
-                    showAssignee={scope === 'all'}
-                    now={now}
-                    moving={movingId === v.id}
-                    shaking={shaking === v.id}
-                    dragging={drag.ghost?.visitId === v.id}
-                    handleProps={drag.handleProps(v.id, col.id)}
-                    onMove={(to) => attempt(v, to)}
-                  />
-                </li>
-              ))
+      {columns.map((col) => {
+        const disabled = col.id === 'READY';
+        return (
+          <section
+            key={col.id}
+            data-column={col.id}
+            data-drop={drag.dropState(col.id)}
+            aria-disabled={disabled || undefined}
+            aria-labelledby={`col-${col.id}`}
+            className={cn(
+              'ws-column flex w-[min(86vw,320px)] shrink-0 snap-start flex-col rounded-xl border border-(--ws-line) bg-(--ws-raised) transition-[background-color,opacity] lg:w-auto lg:min-w-[220px] lg:flex-1',
+              disabled && 'opacity-60',
             )}
-          </ul>
-        </section>
-      ))}
+          >
+            <header className="flex items-baseline gap-2 px-3 pb-2 pt-3">
+              <h2 id={`col-${col.id}`} className="font-semibold">
+                {COLUMN_TITLE[col.id]}
+              </h2>
+              {!disabled && <span className="ws-num text-sm text-(--ws-ink-3)">{query.isLoading ? '' : col.items.length}</span>}
+            </header>
+            <ul aria-label={COLUMN_TITLE[col.id]} className="flex min-h-24 flex-1 flex-col gap-2 overflow-y-auto px-2 pb-2">
+              {disabled ? (
+                <li className="rounded-lg border border-dashed border-(--ws-line-strong) px-3 py-6 text-center text-sm text-(--ws-ink-3)">{GROOM_DONE_HINT}</li>
+              ) : query.isLoading ? (
+                <li aria-hidden className="flex flex-col gap-2">
+                  <Skeleton className="h-24" />
+                  <Skeleton className="h-24" />
+                </li>
+              ) : col.items.length === 0 ? (
+                <li className="rounded-lg border border-dashed border-(--ws-line-strong) px-3 py-6 text-center text-sm text-(--ws-ink-3)">
+                  {col.id === 'WAITING' ? 'Không có bé nào đang chờ.' : 'Trống'}
+                </li>
+              ) : (
+                col.items.map((v) => (
+                  <li key={v.visitId}>
+                    <GroomCard
+                      visit={v}
+                      column={col.id}
+                      userId={userId}
+                      showAssignee={scope === 'all'}
+                      now={now}
+                      moving={calling.has(v.visitId)}
+                      shaking={shaking === v.visitId}
+                      dragging={drag.ghost?.visitId === v.visitId}
+                      handleProps={drag.handleProps(v.visitId, col.id)}
+                      onMove={(to) => attempt(v, to)}
+                    />
+                  </li>
+                ))
+              )}
+            </ul>
+          </section>
+        );
+      })}
 
       {drag.ghost &&
         ghostVisit &&
         createPortal(
           <div className="ws-ghost" style={{ left: drag.ghost.x + 14, top: drag.ghost.y + 10 }} aria-hidden>
-            <Ticket no={ghostVisit.queueNo} size="sm" />
-            {ghostVisit.pet.name}
+            <VisitCode code={ghostVisit.code} />
+            {ghostVisit.petName}
           </div>,
           document.body,
         )}
@@ -133,44 +141,37 @@ function GroomCard({
   handleProps,
   onMove,
 }: {
-  visit: VisitView;
-  column: BoardColumnId;
-  userId: string;
+  visit: Visit;
+  column: GroomColumn;
+  userId: number;
   showAssignee: boolean;
   now: number;
   moving: boolean;
   shaking: boolean;
   dragging: boolean;
   handleProps: ReturnType<ReturnType<typeof useBoardDrag>['handleProps']>;
-  onMove: (to: BoardColumnId) => void;
+  onMove: (to: GroomColumn) => void;
 }) {
-  const mine = visit.assignee?.id === userId;
-  const movable = mine && (column === 'WAITING' || column === 'IN_PROGRESS');
-  const timing = {
-    WAITING: `Chờ ${formatElapsed(visit.checkedInAt, now)}`,
-    IN_PROGRESS: `Đang làm ${formatElapsed(visit.calledAt ?? visit.checkedInAt, now)}`,
-    READY: `Xong lúc ${formatClock(visit.completedAt ?? visit.checkedInAt)}, chờ đón ${formatElapsed(visit.completedAt ?? visit.checkedInAt, now)}`,
-    PAID: 'Đã thanh toán, có thể giao bé',
-  }[column];
+  const mine = visit.assigneeId === userId;
+  const movable = mine && column === 'WAITING';
+  const timing =
+    column === 'WAITING' ? `Chờ ${formatElapsed(visit.checkedInAt, now)}` : `Đang làm ${formatElapsed(visit.calledAt ?? visit.checkedInAt, now)}`;
 
   return (
     <article
-      aria-label={`${visit.pet.name}, số ${visit.queueNo}`}
-      className={cn(
-        'rounded-lg border border-(--ws-line) bg-(--ws-surface) p-3 transition-opacity',
-        shaking && 'ws-shake',
-        dragging && 'opacity-40',
-        column === 'PAID' && 'opacity-75',
-      )}
+      aria-label={`${visit.petName}, ${visit.code}`}
+      className={cn('rounded-lg border border-(--ws-line) bg-(--ws-surface) p-3 transition-opacity', shaking && 'ws-shake', dragging && 'opacity-40')}
     >
       <div className="flex items-start gap-2.5">
-        <Ticket no={visit.queueNo} size="sm" tone={visit.emergency ? 'urgent' : column === 'PAID' ? 'muted' : undefined} />
         <div className="min-w-0 flex-1">
-          <p className="truncate font-semibold">
-            {visit.pet.name} <span className="font-normal text-(--ws-ink-3)">{visit.pet.breed}</span>
+          <p className="flex flex-wrap items-center gap-1.5">
+            <VisitCode code={visit.code} urgent={visit.priorityClass === 'EMERGENCY'} />
+            <VisitBadges visit={visit} />
           </p>
-          <p className="truncate text-[13px] text-(--ws-ink-2)">{visit.services.map((s) => s.name).join(', ')}</p>
-          <p className="truncate text-xs text-(--ws-ink-3)">{visit.customer.name}</p>
+          <p className="mt-1 truncate font-semibold">
+            {visit.petName} <span className="font-normal text-(--ws-ink-3)">{SPECIES_LABEL[visit.species]}</span>
+          </p>
+          <p className="truncate text-xs text-(--ws-ink-3)">{visit.customerName}</p>
         </div>
         {movable && (
           <span
@@ -184,28 +185,22 @@ function GroomCard({
         )}
       </div>
 
-      {visit.pet.alert && column !== 'PAID' && (
-        <p className="mt-2 flex items-center gap-1.5 rounded-md bg-(--ws-urgent-bg) px-2 py-1 text-xs font-semibold text-(--ws-urgent-ink)">
-          <AlertTriangle className="h-3.5 w-3.5 shrink-0" aria-hidden />
-          {visit.pet.alert}
-        </p>
-      )}
-
       <div className="mt-2.5 flex flex-wrap items-center gap-x-2 gap-y-1">
         <span className="ws-num text-xs text-(--ws-ink-2)">{timing}</span>
-        {showAssignee && visit.assignee && !mine && <span className="text-xs text-(--ws-ink-3)">{visit.assignee.name}</span>}
-        {!visit.assignee && column === 'WAITING' && <span className="ml-auto text-xs text-(--ws-ink-3)">Chờ lễ tân gán</span>}
+        {showAssignee && visit.assigneeName && !mine && <span className="text-xs text-(--ws-ink-3)">{visit.assigneeName}</span>}
+        {visit.assigneeId === null && column === 'WAITING' && <span className="ml-auto text-xs text-(--ws-ink-3)">Chờ lễ tân gán</span>}
         {mine && column === 'WAITING' && (
           <WsButton size="sm" variant="primary" className="ml-auto" disabled={moving} onClick={() => onMove('IN_PROGRESS')}>
             Bắt đầu
           </WsButton>
         )}
         {mine && column === 'IN_PROGRESS' && (
-          <WsButton size="sm" variant="primary" className="ml-auto" disabled={moving} onClick={() => onMove('READY')}>
+          <WsButton size="sm" variant="primary" className="ml-auto" disabled title={GROOM_DONE_HINT}>
             Xong
           </WsButton>
         )}
       </div>
+      {mine && column === 'IN_PROGRESS' && <p className="mt-1.5 text-xs text-(--ws-ink-3)">{GROOM_DONE_HINT}</p>}
     </article>
   );
 }

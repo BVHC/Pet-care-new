@@ -10,11 +10,13 @@ import { menuFor } from '../../shared/constants/staff-menu';
 import {
   WORKSPACE_LABELS, WORKSPACE_PATHS, getAccessibleWorkspaces, homePathFor, type Workspace,
 } from '../../shared/constants/workspaces';
-import { useArrivals, useResetDemo, useTodayVisits } from '../../shared/hooks/useClinic';
+import { useResetDemo } from '../../shared/hooks/useClinic';
 import { notificationCenterPath, useUnreadCount } from '../../shared/hooks/useNotifications';
 import { usePendingSalesOrders } from '../../shared/hooks/usePendingSalesOrders';
+import { useArrivals, useVisitQueue } from '../../shared/hooks/useVisits';
 import { useSession } from '../../shared/stores/session.store';
 import { ROLE_LABELS, type Role, type SessionUser } from '../../shared/types/auth';
+import { visitPermissions } from '../../shared/types/visit';
 import { formatToday } from '../../shared/utils/clinic-format';
 
 const ICONS: Record<Workspace, LucideIcon> = {
@@ -151,7 +153,7 @@ export function StaffSidebar({ user, collapsed, onToggleCollapsed, dark, onToggl
         )}
       </div>
 
-      {hasDesk && !collapsed && <ClinicToday />}
+      {hasDesk && !collapsed && <ClinicToday role={user.role} />}
 
       <SidebarFooter
         user={user}
@@ -193,11 +195,15 @@ export function StaffNotificationLink({ role, onNavigate }: { role: Role; onNavi
   );
 }
 
-/** Live counts for the whole clinic, for the roles that work a desk. */
-function ClinicToday() {
+/**
+ * Live counts for the branch, for the roles that work a desk. Each role asks only what the BE allows it (VISIT_ROLES): the check-in list is for the front desk and the
+ * branch manager, so a vet or groomer sees "–" there instead of a 403.
+ */
+function ClinicToday({ role }: { role: Role }) {
   const headingId = useId();
-  const arrivals = useArrivals();
-  const visits = useTodayVisits();
+  const perms = visitPermissions(role);
+  const arrivals = useArrivals(perms.arrivals);
+  const visits = useVisitQueue({}, perms.queue);
   const pending = usePendingSalesOrders();
 
   const count = (status: 'WAITING' | 'IN_PROGRESS') => visits.data?.filter((v) => v.status === status).length;
