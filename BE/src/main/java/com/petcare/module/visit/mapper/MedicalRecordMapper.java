@@ -10,18 +10,21 @@ import org.mapstruct.ReportingPolicy;
 
 import com.petcare.module.visit.dto.AddendumResponse;
 import com.petcare.module.visit.dto.MedicalRecordResponse;
+import com.petcare.module.visit.dto.PrescriptionItemResponse;
 import com.petcare.module.visit.dto.VaccinationRecordResponse;
 import com.petcare.module.visit.dto.WeightRecordRefResponse;
 import com.petcare.module.visit.entity.MedicalRecord;
 import com.petcare.module.visit.entity.MedicalRecordAddendum;
+import com.petcare.module.visit.entity.PrescriptionItem;
 import com.petcare.module.visit.entity.Vaccination;
 
 /**
  * {@link MedicalRecord} + bản bổ sung → {@link MedicalRecordResponse} cho nhân viên (visit-v1 schema
  * {@code MedicalRecord}; docs/adr/0066). {@code unmappedTargetPolicy = ERROR}, mọi target khai tường minh (khuôn
  * {@code VisitMapper}). {@code locked} do service truyền theo trạng thái lượt (§1), không đọc {@code locked_at}.
- * {@code prescriptions} rỗng cho tới T38. Tên người ghi bản bổ sung và tên loại vaccine / sản phẩm do service tra theo
- * lô rồi truyền vào, không nhận record {@code api/} của module khác.
+ * {@code prescriptions} do reader dựng (docs/adr/0076); bệnh án chưa có dòng thì luôn rỗng (FK). Tên người ghi bản bổ
+ * sung và tên loại vaccine / sản phẩm do service tra theo lô rồi truyền vào, không nhận record {@code api/} của module
+ * khác.
  */
 @Mapper(componentModel = "spring", unmappedTargetPolicy = ReportingPolicy.ERROR)
 public interface MedicalRecordMapper {
@@ -34,11 +37,11 @@ public interface MedicalRecordMapper {
     @Mapping(target = "followUpDate", source = "record.followUpDate")
     @Mapping(target = "locked", source = "locked")
     @Mapping(target = "lastEditedBy", source = "record.lastEditedBy")
-    @Mapping(target = "prescriptions", expression = "java(java.util.List.of())")
+    @Mapping(target = "prescriptions", source = "prescriptions")
     @Mapping(target = "vaccinations", source = "vaccinations")
     @Mapping(target = "addenda", source = "addenda")
     MedicalRecordResponse toResponse(MedicalRecord record, boolean locked, List<AddendumResponse> addenda,
-            List<VaccinationRecordResponse> vaccinations);
+            List<VaccinationRecordResponse> vaccinations, List<PrescriptionItemResponse> prescriptions);
 
     /** Lượt {@code MEDICAL} chưa ghi bệnh án (§1): khung rỗng, danh sách rỗng chứ không {@code null}. */
     @Mapping(target = "visitId", source = "visitId")
@@ -53,6 +56,17 @@ public interface MedicalRecordMapper {
     @Mapping(target = "vaccinations", source = "vaccinations")
     @Mapping(target = "addenda", expression = "java(java.util.List.of())")
     MedicalRecordResponse toEmptyResponse(Long visitId, boolean locked, List<VaccinationRecordResponse> vaccinations);
+
+    /** Dòng đơn thuốc (BR-KB-03); tên thuốc do reader tra theo lô. Dòng mua ngoài có {@code orderLineId} null. */
+    @Mapping(target = "itemId", source = "item.id")
+    @Mapping(target = "productId", source = "item.productId")
+    @Mapping(target = "productName", source = "productName")
+    @Mapping(target = "quantity", source = "item.quantity")
+    @Mapping(target = "dosageInstructions", source = "item.dosageInstructions")
+    @Mapping(target = "isExternalPurchase", source = "item.externalPurchase")
+    @Mapping(target = "externalReason", source = "item.externalReason")
+    @Mapping(target = "orderLineId", source = "item.orderLineId")
+    PrescriptionItemResponse toPrescriptionItem(PrescriptionItem item, String productName);
 
     /** Mọi giá trị là cột đã chụp lúc tiêm (BR-SP-03); lô chưa điền (D046). Tên do service tra theo lô. */
     @Mapping(target = "vaccinationId", source = "vaccination.id")

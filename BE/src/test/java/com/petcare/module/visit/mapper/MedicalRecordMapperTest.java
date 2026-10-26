@@ -14,9 +14,12 @@ import org.springframework.test.util.ReflectionTestUtils;
 
 import com.petcare.module.visit.dto.AddendumResponse;
 import com.petcare.module.visit.dto.MedicalRecordResponse;
+import com.petcare.module.visit.dto.PrescriptionItemResponse;
 import com.petcare.module.visit.dto.WeightRecordRefResponse;
 import com.petcare.module.visit.dto.VaccinationRecordResponse;
+import com.petcare.module.visit.entity.ExternalPurchaseReason;
 import com.petcare.module.visit.entity.MedicalRecord;
+import com.petcare.module.visit.entity.PrescriptionItem;
 import com.petcare.module.visit.entity.Vaccination;
 import com.petcare.module.visit.entity.MedicalRecordAddendum;
 
@@ -41,10 +44,44 @@ class MedicalRecordMapperTest {
         AddendumResponse addendum = new AddendumResponse(301L, "bổ sung", false, 46L, "BS. Lan",
                 Instant.parse("2026-10-22T04:00:00Z"));
 
-        MedicalRecordResponse response = mapper.toResponse(record, false, List.of(addendum), List.of());
+        PrescriptionItemResponse prescribed = new PrescriptionItemResponse(501L, 77L, "Amoxicillin", 10, "Ngày 2 lần",
+                false, null, 9101L);
+
+        MedicalRecordResponse response = mapper.toResponse(record, false, List.of(addendum), List.of(),
+                List.of(prescribed));
 
         assertThat(response).isEqualTo(new MedicalRecordResponse(9001L, "khám", "chẩn đoán", "điều trị", "nội bộ",
-                LocalDate.of(2026, 11, 5), false, 45L, List.of(), List.of(), List.of(addendum)));
+                LocalDate.of(2026, 11, 5), false, 45L, List.of(prescribed), List.of(), List.of(addendum)));
+    }
+
+    private static PrescriptionItem prescriptionRow(boolean external) {
+        PrescriptionItem item = BeanUtils.instantiateClass(PrescriptionItem.class);
+        ReflectionTestUtils.setField(item, "id", 501L);
+        ReflectionTestUtils.setField(item, "medicalRecordId", 9001L);
+        ReflectionTestUtils.setField(item, "productId", 77L);
+        ReflectionTestUtils.setField(item, "quantity", 10);
+        ReflectionTestUtils.setField(item, "dosageInstructions", "Ngày 2 lần, mỗi lần 1 viên");
+        if (external) {
+            ReflectionTestUtils.setField(item, "externalPurchase", true);
+            ReflectionTestUtils.setField(item, "externalReason", ExternalPurchaseReason.OUT_OF_STOCK_AT_PAYMENT);
+        } else {
+            ReflectionTestUtils.setField(item, "orderLineId", 9101L);
+        }
+        return item;
+    }
+
+    @Test
+    void prescriptionMapsEveryFieldFromTheStoredRowAndTheNameFromTheCaller() {
+        assertThat(mapper.toPrescriptionItem(prescriptionRow(false), "Amoxicillin")).isEqualTo(
+                new PrescriptionItemResponse(501L, 77L, "Amoxicillin", 10, "Ngày 2 lần, mỗi lần 1 viên", false, null,
+                        9101L));
+    }
+
+    @Test
+    void anExternalPurchaseKeepsItsReasonAndHasNoOrderLine() {
+        assertThat(mapper.toPrescriptionItem(prescriptionRow(true), "Amoxicillin")).isEqualTo(
+                new PrescriptionItemResponse(501L, 77L, "Amoxicillin", 10, "Ngày 2 lần, mỗi lần 1 viên", true,
+                        ExternalPurchaseReason.OUT_OF_STOCK_AT_PAYMENT, null));
     }
 
     private static Vaccination vaccination(boolean superseded) {
@@ -86,13 +123,13 @@ class MedicalRecordMapperTest {
         VaccinationRecordResponse dose = mapper.toVaccinationRecord(vaccination(false), "Dại", "Rabisin");
 
         assertThat(mapper.toEmptyResponse(9001L, true, List.of(dose)).vaccinations()).containsExactly(dose);
-        assertThat(mapper.toResponse(MedicalRecord.of(9001L), false, List.of(), List.of(dose)).vaccinations())
+        assertThat(mapper.toResponse(MedicalRecord.of(9001L), false, List.of(), List.of(dose), List.of()).vaccinations())
                 .containsExactly(dose);
     }
 
     @Test
     void lockedComesFromTheCallerNotFromLockedAt() {
-        assertThat(mapper.toResponse(MedicalRecord.of(1L), true, List.of(), List.of()).locked()).isTrue();
+        assertThat(mapper.toResponse(MedicalRecord.of(1L), true, List.of(), List.of(), List.of()).locked()).isTrue();
     }
 
     @Test

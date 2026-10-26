@@ -17,7 +17,7 @@ Team: **BE-1** (branch `manh`) = identity, appointment, visit, care · **BE-2** 
 **Cross-cutting principles (04 §Nguyên tắc):**
 1. **Customer is the root, Account is optional.** Business data points to `customers`, never to `accounts`; linking an account = setting `customers.account_id` (BR-TK-19).
 2. **Identity = verified email only.** Phone is never unique. CCCD (national ID) is never stored (BR-TK-01, 16, BR-KH-10).
-3. **No hard delete** except where a rule allows it (BR-KH-06, BR-TK-08, 18, 19, BR-BV-02, BR-KB-04). The app deletes children itself (FKs are `RESTRICT`).
+3. **No hard delete** except where a rule allows it (BR-KH-06, BR-TK-08, 18, 19, BR-BV-02, BR-KB-03, BR-KB-04). The app deletes children itself (FKs are `RESTRICT`).
 4. **Price snapshots:** an order line freezes its price when added; a boarding booking freezes its nightly rate.
 5. **All stock is per lot.** Every quantity change writes a `stock_movements` row; FEFO never issues expired lots.
 6. **Cross-aggregate consequences run in one transaction**, coordinated by the aggregate that emits the event (03 *Phụ lục*).
@@ -39,27 +39,27 @@ Team: **BE-1** (branch `manh`) = identity, appointment, visit, care · **BE-2** 
 
 **Scope tiers:** 1 = full, 2 = thin, 3 = diagram only — **don't build tier 3**; the list is in `docs/INDEX.md`. Rules marked 🆕 are proposals not yet approved. Vietnamese enum values map to ASCII codes (erd §0, e.g. `TÁI_CHỦNG` → `VACCINE_DUE`, nhóm Khám/Tiêm → `MEDICAL`).
 
-## Current state (2026-10-26)
+## Current state (2026-10-27)
 
-`manh` @ `f89cba3` (10 commits ahead of `origin/manh`; T28 parts 0–1 committed). **Uncommitted:** T28 parts 2–4 (ADR-0074, 0075); T28 is done. `origin/dev` / `origin/dung` stop at ADR-0071 / V21. No `*Placeholder` left in `src/main`. Per-feature map: `docs/architecture/system-overview.md` §3.2.
+`manh` @ `1c7b08f` = `origin/dev` (3 commits ahead of `origin/manh`); T28 is merged (PR #19, ADR-0072–0075). **Uncommitted:** T38 (ADR-0076: `PrescriptionItem`, `PrescriptionApi`; ADR-0077: visit-v1 #16 prescribe; ADR-0078: #17 remove a prescription line; part 3: integration + smoke, no `src/main` change) — T38 is complete. `origin/dung` stops at ADR-0071 / V21. No `*Placeholder` left in `src/main`. Per-feature map: `docs/architecture/system-overview.md` §3.2.
 
 | Module | Owner | Built (contract #, ADR) | Still missing |
 |---|---|---|---|
 | identity | BE-1 | identity-v1 #1–24, #28–37; ST01, ST02, session cleanup; `StaffDirectoryApi`, `AccountContactApi` | #25–27 (UC22) |
 | care | BE-1 | ST20 (EMAIL HIGH / NORMAL, IN_APP), outbox cleanup, care-v1 #5–8; `CareTaskApi.cancelForRevaccination` (0074) | #9–10 (D025), rest of Care Task (`create`, `cancelFollowUpTasks` throw — D047), ST04, `FollowUpApi` (T39, D029) |
 | appointment | BE-1 | appointment-v1 #1–9, ST05, ST03, clinic-cancel listeners, 3 APIs (0045–0057) | `findPetForShare` in booking (D027) |
-| visit | BE-1 | visit-v1 #1–15 (0058–0070), #18 (0073), #19 (0074), #20 (0075); `VisitQueryApi`, `VaccinationQueryApi` (0072); lock listener | #16–17 (T38), #21 (T28b); D042, D043, D046 |
+| visit | BE-1 | visit-v1 #1–15 (0058–0070), #18 (0073), #19 (0074), #20 (0075), #16 (0077), #17 (0078); `VisitQueryApi`, `VaccinationQueryApi` (0072), `PrescriptionApi` (0076); lock listener | #21 (T28b); D042, D043, D046 |
 | branch, catalog | BE-2 | branch-v1 #1–21, catalog-v1 #1–22; `BranchQueryApi`, `BranchApi`, `CatalogQueryApi` | Swagger annotations (D026) |
 | customer | BE-2 | customer-v1 #1–21; `CustomerApi`, `CustomerQueryApi`, `PetApi`, `PetQueryApi` | — |
 | inventory | BE-2 | inventory-v1 #1–17; `StockApi`, `StockQueryApi` | `StockReportApi`, ST08 (T44) |
-| sales | BE-2 | sales-v1 #1–8, #10, #12–21, ST13; `VisitOrderApi`, `OrderQueryApi`, `CashierShiftQueryApi` | #9 + `BoardingOrderApi` (T43), #11 (needs `PrescriptionApi`) |
+| sales | BE-2 | sales-v1 #1–8, #10, #12–21, ST13; `VisitOrderApi`, `OrderQueryApi`, `CashierShiftQueryApi` | #9 + `BoardingOrderApi` (T43), #11 (`PrescriptionApi` ready since ADR-0076, BE-2 wires it) |
 | boarding | BE-2 | boarding-v1 #1–12, ST05, clinic-cancel listeners; `BoardingQueryApi` (0065) | #13–22, ST15 (T42, T43); `activeOrderId` null |
 | content | BE-2 | content-v1 #1–22; `FeedbackQueryApi` (0071) | `FeedbackReportApi` (T44) |
 | report | BE-2 | — | everything (T44) |
 
 **Blocking debts:** D029 `FollowUpApi` (with T39); D045 `SalesOrder` has no `@Version` — #19 must lock the Order before reading it.
 
-**Tests:** last full green `mvn clean verify` = 2026-10-19; a full run gets killed by low host memory (~870 ITs) — run ITs in groups. Known red: 2 ITs in `AppointmentReminderIT` (`findDueForReminderIds` lacks the lower bound `(slot_date, slot_start) > (:fromDate, :fromTime)` since `af117e0`). Latest (2026-10-26, T28 part 4, per module): unit 5035/5035 (`PetcareApplicationTests` needs Docker); 2108 ITs green in 12 groups (11 modules + root ITs incl. parity, which pins 156 endpoints) except the 2 known reds; Docker smoke 30/30 (boarding booking, vaccine-type delete, vaccinate → complete → pay).
+**Tests:** last full green `mvn clean verify` = 2026-10-19; a full run gets killed by low host memory — run ITs in groups (`-Dit.test='com/petcare/module/<m>/**/*IT'`). Known red: 2 ITs in `AppointmentReminderIT` (`findDueForReminderIds` lacks the lower bound `(slot_date, slot_start) > (:fromDate, :fromTime)` since `af117e0`). Latest (2026-10-27, T38 part 3): unit 5134/5134; ITs by group 2203 — visit 397, `OpenApiContractParityIT` 11 (pins 158 endpoints), sales + appointment 512, inventory + customer 244, identity 730, care + branch + catalog 139, boarding + content + root 170 — only the 2 known reds; contract check 230 operations; Docker smoke of #16/#17 → complete → pay 27/27.
 
 ## Commands
 
@@ -68,7 +68,7 @@ All Maven commands run from `BE/`; npm commands from `FE/`. **Docker Desktop mus
 ```bash
 cp .env.example .env                              # once (repo root): compose has no JWT_SECRET default
 docker compose up -d postgres redis mailpit       # local deps; Mailpit SMTP :1025, UI http://localhost:8025
-docker compose up -d --build                      # full stack smoke test (BE on 8080 in Docker)
+docker compose up -d --build postgres redis mailpit backend   # BE smoke test (8080); plain `--build` also builds `frontend`, which fails (2026-10-26) on TS errors in FE/src/test/seed-dev.dry-run.test.ts
 
 mvn clean compile -DskipTests
 mvn spring-boot:run                               # port 8081 (SERVER_PORT)
@@ -112,7 +112,7 @@ Module codes: TK, QT, CN, CK, KH, SP, NS, LH, TN, KB, LT, BH, TG, KO, BV, DG, TB
 
 Open convention TBDs (don't decide silently — ask or write an ADR): command names when no Actor↔Command table exists; how "warn, don't block" rules return warnings (contracts assume a named field in `data`, e.g. `stockWarning`); locking for kennel capacity.
 
-**ADR map** (`docs/adr/`, immutable once Accepted — supersede instead of editing; **next free: 0076**):
+**ADR map** (`docs/adr/`, immutable once Accepted — supersede instead of editing; **next free: 0079**):
 
 | Area | ADRs |
 |---|---|
@@ -121,7 +121,7 @@ Open convention TBDs (don't decide silently — ask or write an ADR): command na
 | Accounts, staff, admin | 0024 staff directory · 0026 staff self-edit · 0027 profile link · 0028 customer self-edit · 0029–0035 staff admin / lock · 0036 [CFG] edit · 0037 templates · 0038 audit view · 0039 in-app notifications |
 | Notifications, jobs | 0008 session cleanup · 0012, 0014, 0016, 0017 ST20 · 0013 ST02 · 0018 FK indexes on `accounts` |
 | Appointment (BE-1) | 0045 booking locks · 0046 slots · 0047 book · 0048 view · 0049 reschedule / cancel · 0050 cross-module API · 0052 clinic cancel · 0053, 0054 ST05 · 0055 booking restriction · 0056 ST03 · 0057 assumptions confirmed |
-| Visit (BE-1) | 0058 foundation · 0059 check-in (amends 0044) · 0060 queue · 0061 dispatch · 0062 call / cancel / lock listener · 0063 reassign · 0066 medical record · 0067 record write · 0068 weight · 0069 complete (replaces 0066 §5) · 0070 addendum · 0072 vaccination foundation · 0073 vaccination options (#18) · 0074 vaccination record (#19) · 0075 vaccination delete (#20) |
+| Visit (BE-1) | 0058 foundation · 0059 check-in (amends 0044) · 0060 queue · 0061 dispatch · 0062 call / cancel / lock listener · 0063 reassign · 0066 medical record · 0067 record write · 0068 weight · 0069 complete (replaces 0066 §5) · 0070 addendum · 0072 vaccination foundation · 0073 vaccination options (#18) · 0074 vaccination record (#19) · 0075 vaccination delete (#20) · 0076 prescription foundation + `PrescriptionApi` · 0077 prescribe (#16) · 0078 remove prescription line (#17) |
 | BE-2 | 0041 customer & pet · 0042 inventory stock ledger · 0043 document codes · 0044 order core · 0051 retail order · 0064 cashier shift / payment / ST13 · 0065 boarding kennels / bookings / ST05 · 0071 public pages, articles, feedback |
 
 ## Backend architecture
@@ -186,8 +186,8 @@ Every write ADR follows these. Read the ADR of the neighbouring feature before w
   | Staff admin | `branches (id ↑, only via BranchApi.lockForStaffChange) → accounts → staff_profiles → sessions`. Any flow lowering a branch's ACTIVE BRANCH_MANAGER count locks the branch first |
   | Customer | `accounts → customers (id ↑) → pets → weight_records` |
   | Appointment writes | `advisory(1001, pet) → branches (BranchApi.lockForBooking) → appointments`; advisory **1002** per customer (violation evaluation / restriction lift) always last |
-  | Visit (ADR-0058; per feature 0059–0063, 0067–0069, 0074, 0075) | prefix `accounts` (staff, `FOR SHARE`, id ↑; `StaffDirectoryApi.findStaffForShare`) → `pets FOR SHARE` → advisory **1004** (#19/#20 only) → `visits` (id ↑) → `appointments` (`AppointmentApi`) → `document_counters` (`visits` → `ORDER`) → `orders` (`VisitOrderApi`) → stock lots (`StockApi`). Exceptions: check-in does not lock `branches`; call locks the caller's own account `FOR SHARE` first; move locks every `WAITING` visit of the branch in one `ORDER BY id`; reassign locks the old and the new assignee `FOR SHARE` (id ↑); the lock-account listener runs `accounts → visits`; cancel `visits → appointments → orders`; medical-record write and weight #14 stop at `visits` (`PetApi.recordWeight` never upgrades the pet lock); complete reads the Order's service lines only after `markPendingByVisit` has locked it (D045); #19 takes `products FOR SHARE` before `orders` (`addVaccineLine`) and then the FEFO lot; #20 locks the dose `FOR UPDATE` after `visits`, deletes it, then `orders` (`removeVaccineLine`) → the dose's lot |
-  | Sales | caller's document → `orders` (lock before read) → `products FOR SHARE` → stock lots; several orders by ascending id |
+  | Visit (ADR-0058; per feature 0059–0063, 0067–0069, 0074–0078) | prefix `accounts` (staff, `FOR SHARE`, id ↑; `StaffDirectoryApi.findStaffForShare`) → `pets FOR SHARE` → advisory **1004** (#19/#20 only) → `visits` (id ↑) → `appointments` (`AppointmentApi`) → `document_counters` (`visits` → `ORDER`) → `orders` (`VisitOrderApi`; lock before read, D045) → stock lots (`StockApi`). Each flow drops or adds steps (check-in has no `branches`, #14 and record writes stop at `visits`, #16/#17 have no lot, #17/#20 lock the child row after `visits`, #19 takes `products FOR SHARE` before `orders`): per-flow orders are in system-overview §3.2 and the ADR |
+  | Sales | caller's document → `orders` (lock before read) → `products FOR SHARE` → stock lots; several orders by ascending id; #11 move to external purchase: `orders` → `prescription_items` (`PrescriptionApi`, never `visits`) |
 | Cashier (ADR-0064) | open shift: `accounts FOR SHARE` (own) → INSERT shift · payment: shift `FOR SHARE` → all orders in **one** `ORDER BY id` statement → all lots in **one** statement (`StockApi.issueForPayment`) → `document_counters` last · close / reconcile: shift `FOR NO KEY UPDATE` · ST13: shift `SKIP LOCKED` |
   | Advisory namespaces | **1001** pet (appointment writes) · **1002** customer violation (always last) · **1003** customer feedback · **1004** pet vaccine dose (#19/#20) · next free **1005** |
   | Boarding (ADR-0065) | booking: `pets FOR SHARE` → `branches` (`BranchApi.lockForBooking`, shared with appointment booking and branch hours / holiday changes) → INSERT → `document_counters` · extend: `pets FOR SHARE` → `branches` → booking · cancel: booking → `evaluateAfterViolation` (advisory 1002 last) · kennel writes: `branches` → kennel · ST05: booking `SKIP LOCKED` → 1002 · clinic cancel: bookings by ascending id in batches of 100 |
@@ -213,8 +213,8 @@ Every write ADR follows these. Read the ADR of the neighbouring feature before w
 - **Unit tests** (`*Test`, JUnit 5 + Mockito) for every service or handler that carries a rule or guard: `InOrder` for lock → guard → write order, and error branches write nothing.
 - **ITs** (`*IT`, `@SpringBootTest`, `test` profile, `@Import(TestcontainersConfiguration.class)`, real Postgres, never H2) for every FSM and every complex API. FSM tests extend `FsmTransitionTestBase<S>` with an independent copy of the 03 table and **every** valid and invalid pair.
 - Token in an IT: insert the account with `JdbcTemplate`, then `SessionService.open(...)` inside a `TransactionTemplate`.
-- **Isolation between ITs:** each feature uses its own `MutableClock` era (year 2000 / 2001 / 2003…) and cleans only that era; rows get UUID emails or a per-test tag; `audit_logs` cannot be deleted (trigger) — tag rows with a random `reason` or narrow the time window. An IT that changes `system_configs` restores the V2 value and calls `SystemConfigService.reload()`; one that edits `notification_templates` restores `subject = default_subject, body = default_body`.
-- **Proven techniques (copy the template):** race = hold a row / advisory lock in another thread and wait on `pg_stat_activity` (`whileHeld` in `BookAppointmentIT`, `StaffRoleTransferIT`) · rollback on failure = temporary trigger rejecting an INSERT / UPDATE (`InAppNotificationIT`) · no connection during BCrypt = `HikariPoolMXBean.getActiveConnections() == 0` in a spy `PasswordEncoder` (`LoginIT`) · index proof = `EXPLAIN` on 20 000+ rows in a rolled-back tx + `ANALYZE` (`NoShowIT`) · no write = compare `xmin` (`BookingRestrictionIT`) · unbuilt module = `@Primary` SQL stand-in for the `api` interface (`JdbcPetCustomerModule`) · jobs = era data, failing batch, `SKIP LOCKED` vs a held row (`AppointmentReminderIT`) · SMTP = GreenMail :3025 (`NotificationOutboxIT`).
+- **Isolation between ITs:** each feature uses its own `MutableClock` era (year 2000 / 2001 / 2003…) and cleans only that era; rows get UUID emails or a per-test tag; `audit_logs` cannot be deleted (trigger) — tag rows with a random `reason` or narrow the time window. An IT that changes `system_configs` restores the V2 value and calls `SystemConfigService.reload()`; one that edits `notification_templates` restores `subject = default_subject, body = default_body`. An IT that inserts `prescription_items` or a medical record for an appointment-based visit deletes them itself before `AppointmentItSupport.cleanUp` (FK `RESTRICT`; `VaccinationItSupport.deleteDoses`).
+- **Proven techniques (copy the template):** race = hold a row / advisory lock in another thread and wait on `pg_stat_activity` (`whileHeld` in `BookAppointmentIT`, `StaffRoleTransferIT`) · rollback on failure = temporary trigger rejecting an INSERT / UPDATE (`InAppNotificationIT`) · no connection during BCrypt = `HikariPoolMXBean.getActiveConnections() == 0` in a spy `PasswordEncoder` (`LoginIT`) · index proof = `EXPLAIN` on 20 000+ rows in a rolled-back tx + `ANALYZE` (`NoShowIT`) · no write = compare `xmin` (`BookingRestrictionIT`) · unbuilt module = `@Primary` SQL stand-in for the `api` interface (`JdbcPetCustomerModule`); an endpoint that does not exist yet = a `TransactionTemplate` that calls the `api` interface and JDBC in the contract's lock order (`PrescriptionIT`, sales #11, D048) · jobs = era data, failing batch, `SKIP LOCKED` vs a held row (`AppointmentReminderIT`) · SMTP = GreenMail :3025 (`NotificationOutboxIT`).
 
 - **Mockito traps:** re-stub with `doThrow` / `doAnswer`, never `when(mock.call())`; `@MockitoSpyBean` cannot stub a CGLIB-proxied `@Transactional` bean — spy the repository or encoder instead; to call the real bean from a spy stub use `mockingDetails(spy).getMockCreationSettings().getDefaultAnswer()`.
 - **Mutation testing is expected for concurrency / transaction guarantees** (remove a lock, add `noRollbackFor`, `REQUIRES_NEW`, `save` instead of `saveAndFlush`, change the isolation) — a test must turn red. Record the mutations in the ADR.

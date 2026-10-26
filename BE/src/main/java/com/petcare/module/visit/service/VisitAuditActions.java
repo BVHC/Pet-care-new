@@ -22,6 +22,20 @@ final class VisitAuditActions {
      */
     static final String MEDICAL_RECORD_ADDENDUM_ADDED = "MEDICAL_RECORD_ADDENDUM_ADDED";
 
+    /**
+     * Kê một dòng thuốc (visit-v1 #16, BR-KB-03, BR-QT-15 "sửa bệnh án"; docs/adr/0077): {@code entity =
+     * prescription_items}, id = id dòng, after = {@code {visitId, productId, quantity, requestedQuantity,
+     * dosageInstructions, isExternalPurchase, externalReason, orderLineId}}. Bệnh án rỗng tạo kèm không audit riêng.
+     */
+    static final String PRESCRIPTION_ITEM_ADDED = "PRESCRIPTION_ITEM_ADDED";
+
+    /**
+     * Xóa một dòng đơn thuốc khi lượt còn {@code IN_PROGRESS} (visit-v1 #17, BR-KB-03, BR-QT-15 "sửa bệnh án";
+     * docs/adr/0078): {@code entity = prescription_items}, id = id dòng, before = cùng khóa với {@code after} của
+     * {@link #PRESCRIPTION_ITEM_ADDED} trừ {@code requestedQuantity}, after rỗng.
+     */
+    static final String PRESCRIPTION_ITEM_REMOVED = "PRESCRIPTION_ITEM_REMOVED";
+
     private VisitAuditActions() {
     }
 }
