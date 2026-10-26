@@ -40,6 +40,7 @@ import com.petcare.module.identity.api.StaffDirectoryApi;
 import com.petcare.module.identity.api.StaffDirectoryApi.StaffSummary;
 import com.petcare.module.identity.api.SystemConfigApi;
 import com.petcare.module.visit.dto.MedicalRecordResponse;
+import com.petcare.module.visit.dto.PrescriptionItemResponse;
 import com.petcare.module.visit.dto.RecordWeightRequest;
 import com.petcare.module.visit.dto.UpdateMedicalRecordRequest;
 import com.petcare.module.visit.dto.VaccinationRecordResponse;
@@ -90,8 +91,9 @@ class MedicalRecordServiceTest {
     private final MedicalRecordAddendumRepository addenda = mock(MedicalRecordAddendumRepository.class);
     private final AuditRecorder audit = mock(AuditRecorder.class);
     private final VaccinationRecordReader doses = mock(VaccinationRecordReader.class);
+    private final PrescriptionItemReader prescribed = mock(PrescriptionItemReader.class);
     private final MedicalRecordService service = new MedicalRecordService(scope, pets, petApi, staff, config, visits, records,
-            addenda, audit, Mappers.getMapper(MedicalRecordMapper.class), doses);
+            addenda, audit, Mappers.getMapper(MedicalRecordMapper.class), doses, prescribed);
 
     @BeforeEach
     void setUp() {
@@ -111,7 +113,7 @@ class MedicalRecordServiceTest {
 
         assertThatThrownBy(() -> service.getMedicalRecord(VISIT)).isInstanceOf(IllegalStateException.class);
 
-        verifyNoInteractions(visits, records, addenda, staff, doses);
+        verifyNoInteractions(visits, records, addenda, staff, doses, prescribed);
     }
 
     @Test
@@ -121,7 +123,7 @@ class MedicalRecordServiceTest {
         assertThatThrownBy(() -> service.getMedicalRecord(VISIT)).isInstanceOf(ResourceNotFoundException.class);
 
         verify(scope, never()).check(any());
-        verifyNoInteractions(records, doses);
+        verifyNoInteractions(records, doses, prescribed);
     }
 
     @Test
@@ -131,7 +133,7 @@ class MedicalRecordServiceTest {
 
         assertThatThrownBy(() -> service.getMedicalRecord(VISIT)).isInstanceOf(AccessDeniedScopeException.class);
 
-        verifyNoInteractions(records, doses);
+        verifyNoInteractions(records, doses, prescribed);
     }
 
     @Test
@@ -155,8 +157,9 @@ class MedicalRecordServiceTest {
         assertThat(response.locked()).isFalse();
         assertThat(response.diagnosis()).isNull();
         assertThat(response.addenda()).isEmpty();
+        assertThat(response.prescriptions()).isEmpty();
         verify(visits, never()).lockById(anyLong());
-        verifyNoInteractions(addenda, audit, pets);
+        verifyNoInteractions(addenda, audit, pets, prescribed);
     }
 
     @Test
@@ -644,6 +647,92 @@ class MedicalRecordServiceTest {
         doThrow(new IllegalStateException("catalog")).when(doses).forVisit(PET, VISIT);
 
         assertThatThrownBy(() -> service.updateMedicalRecord(VISIT, request("x", "y", null, null, null)))
+                .isInstanceOf(IllegalStateException.class).hasMessage("catalog");
+
+        verify(records, never()).saveAndFlush(any(MedicalRecord.class));
+        verifyNoInteractions(audit);
+    }
+
+    // ---------------------------------------------------------------- đơn thuốc trong response (T38 phần 0, ADR-0076)
+
+    private static PrescriptionItemResponse item(long id) {
+        return new PrescriptionItemResponse(id, 77L, "Amoxicillin", 10, "Ngày 2 lần", false, null, 9200L + id);
+    }
+
+    @Test
+    void viewReadsThePrescriptionOfTheRecordAndSkipsItWhenThereIsNoRecord() {
+        summary(BRANCH, ServiceGroup.MEDICAL, VisitStatus.IN_PROGRESS);
+        doReturn(Optional.empty()).when(records).findById(VISIT);
+
+        assertThat(service.getMedicalRecord(VISIT).prescriptions()).isEmpty();
+        verifyNoInteractions(prescribed);
+
+        doReturn(Optional.of(recordWith("khám", "dx", null))).when(records).findById(VISIT);
+        doReturn(List.of(item(1L), item(2L))).when(prescribed).forRecord(VISIT);
+
+        assertThat(service.getMedicalRecord(VISIT).prescriptions()).extracting("itemId").containsExactly(1L, 2L);
+    }
+
+    @Test
+    void writeReturnsThePrescriptionOnTheNoOpBranchAndOnTheWriteBranchOfAnExistingRecord() {
+        stubLoaded(VET_A, VisitStatus.IN_PROGRESS);
+        doReturn(List.of(item(1L))).when(prescribed).forRecord(VISIT);
+        doReturn(Optional.of(recordWith("khám", "dx", null))).when(records).findById(VISIT);
+
+        assertThat(service.updateMedicalRecord(VISIT, request("khám", "dx", null, null, null)).prescriptions())
+                .extracting("itemId").containsExactly(1L);
+        assertThat(service.updateMedicalRecord(VISIT, request("khám mới", "dx", null, null, null)).prescriptions())
+                .extracting("itemId").containsExactly(1L);
+    }
+
+    @Test
+    void theFirstWriteHasNoPrescriptionToReadBecauseTheRecordDidNotExist() {
+        stubLoaded(VET_A, VisitStatus.IN_PROGRESS);
+        doReturn(Optional.empty()).when(records).findById(VISIT);
+
+        assertThat(service.updateMedicalRecord(VISIT, request("khám", "dx", null, null, null)).prescriptions())
+                .isEmpty();
+
+        verifyNoInteractions(prescribed);
+    }
+
+    @Test
+    void writeReadsThePrescriptionAfterTheRecordAndBeforeTheWrite() {
+        stubLoaded(VET_A, VisitStatus.IN_PROGRESS);
+        doReturn(Optional.of(recordWith("khám", "dx", null))).when(records).findById(VISIT);
+
+        service.updateMedicalRecord(VISIT, request("khám mới", "dx", null, null, null));
+
+        InOrder order = inOrder(records, doses, prescribed, audit);
+        order.verify(records).findById(VISIT);
+        order.verify(doses).forVisit(PET, VISIT);
+        order.verify(prescribed).forRecord(VISIT);
+        order.verify(records).saveAndFlush(any(MedicalRecord.class));
+        order.verify(audit).record(any(AuditEntry.class));
+    }
+
+    @Test
+    void writeGuardFailuresNeverReadThePrescription() {
+        stubLoaded(VET_B, VisitStatus.IN_PROGRESS);
+
+        assertThatThrownBy(() -> service.updateMedicalRecord(VISIT, request("x", null, null, null, null)))
+                .isInstanceOf(AccessDeniedScopeException.class);
+        verifyNoInteractions(prescribed);
+
+        stubLoaded(VET_A, VisitStatus.IN_PROGRESS);
+        doReturn(Optional.of(recordWith("khám", "dx", null))).when(records).findById(VISIT);
+        assertThatThrownBy(() -> service.updateMedicalRecord(VISIT,
+                request("x", null, null, null, EXAM_DAY.plusDays(181)))).isInstanceOf(BusinessRuleViolationException.class);
+        verifyNoInteractions(prescribed);
+    }
+
+    @Test
+    void aFailingPrescriptionReadHappensBeforeAnyWriteSoNothingIsWrittenOrAudited() {
+        stubLoaded(VET_A, VisitStatus.IN_PROGRESS);
+        doReturn(Optional.of(recordWith("khám", "dx", null))).when(records).findById(VISIT);
+        doThrow(new IllegalStateException("catalog")).when(prescribed).forRecord(VISIT);
+
+        assertThatThrownBy(() -> service.updateMedicalRecord(VISIT, request("khám mới", "dx", null, null, null)))
                 .isInstanceOf(IllegalStateException.class).hasMessage("catalog");
 
         verify(records, never()).saveAndFlush(any(MedicalRecord.class));

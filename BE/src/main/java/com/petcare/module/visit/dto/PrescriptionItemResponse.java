@@ -6,8 +6,9 @@ import com.petcare.module.visit.entity.ExternalPurchaseReason;
 import io.swagger.v3.oas.annotations.media.Schema;
 
 /**
- * Một dòng đơn thuốc (visit-v1 schema {@code PrescriptionItem}, BR-KB-03). Có từ T27 phần 0 vì nằm trong
- * {@code MedicalRecord}; danh sách luôn rỗng cho tới khi T38 ghi đơn thuốc (docs/adr/0066).
+ * Một dòng đơn thuốc (visit-v1 schema {@code PrescriptionItem}, BR-KB-03). Nằm trong {@code MedicalRecord}; do
+ * {@code PrescriptionItemReader} dựng và chỉ {@code MedicalRecordMapper} map (docs/adr/0076). Dòng mua ngoài có
+ * {@code orderLineId} null và {@code externalReason} khác null.
  */
 public record PrescriptionItemResponse(
         @Schema(description = "Mã dòng đơn thuốc", example = "501")

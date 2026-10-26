@@ -1236,6 +1236,126 @@ class MedicalRecordIT {
         assertThat(count("SELECT count(*) FROM vaccinations WHERE visit_id = " + visit)).isEqualTo(1L);
     }
 
+    // ================================================================ đơn thuốc trong response (T38 phần 0, ADR-0076)
+
+    /**
+     * Một dòng đơn thuốc của {@code visit}: có Order ({@code external = false}, kèm dòng {@code DRUG} 1–1) hoặc mua
+     * ngoài lúc kê. Trả {@code {itemId, productId, orderLineId (0 nếu mua ngoài)}}.
+     */
+    private long[] rxItem(long visit, long recordedBy, String drugName, int quantity, boolean external) {
+        long product = vaccines.prescriptionDrug(drugName);
+        Long line = external ? null : vaccines.drugLine(visit, product, quantity, recordedBy);
+        long item = vaccines.prescriptionItem(visit, product, quantity, "Ngày 2 lần " + drugName, line);
+        return new long[] {item, product, line == null ? 0L : line};
+    }
+
+    @Test
+    void getReturnsThePrescriptionInPrescribingOrderWithNamesAndTheExternalFlagForVetAndCaretaker() {
+        long visit = called(walkIn(medical), vetA);
+        long[] withOrder = rxItem(visit, vetA, "Amoxicillin", 3, false);
+        long[] external = rxItem(visit, vetA, "Cefalexin", 2, true);
+        // ngừng kinh doanh sau khi kê: đơn cũ vẫn có tên thuốc
+        jdbc.update("UPDATE products SET is_active = false WHERE id = ?", withOrder[1]);
+
+        for (String bearer : List.of(vetAToken, vetBToken, caretakerToken)) {
+            List<Map<String, Object>> items = listOf(data(get(bearer, visit), HttpStatus.OK).get("prescriptions"));
+
+            assertThat(items).hasSize(2);
+            assertThat(items.get(0).keySet()).containsExactlyInAnyOrder("itemId", "productId", "productName", "quantity",
+                    "dosageInstructions", "isExternalPurchase", "externalReason", "orderLineId");
+            assertThat(items.get(0)).containsEntry("itemId", (int) withOrder[0])
+                    .containsEntry("productId", (int) withOrder[1]).containsEntry("quantity", 3)
+                    .containsEntry("dosageInstructions", "Ngày 2 lần Amoxicillin")
+                    .containsEntry("isExternalPurchase", false).containsEntry("orderLineId", (int) withOrder[2]);
+            assertThat(items.get(0).get("externalReason")).isNull();
+            assertThat((String) items.get(0).get("productName")).startsWith("Amoxicillin");
+            assertThat(items.get(1)).containsEntry("itemId", (int) external[0])
+                    .containsEntry("isExternalPurchase", true)
+                    .containsEntry("externalReason", "OUT_OF_STOCK_AT_PRESCRIBE").containsEntry("quantity", 2);
+            assertThat(items.get(1).get("orderLineId")).as("mua ngoài: không có dòng Order").isNull();
+            assertThat((String) items.get(1).get("productName")).startsWith("Cefalexin");
+        }
+    }
+
+    @Test
+    void getKeepsThePrescriptionsOfDifferentVisitsApart() {
+        long visit = called(walkIn(medical), vetA);
+        long other = called(walkIn(medical), vetB);
+        long[] mine = rxItem(visit, vetA, "Amoxicillin", 1, false);
+        rxItem(other, vetB, "Cefalexin", 1, false);
+        rxItem(other, vetB, "Metronidazol", 4, true);
+
+        List<Map<String, Object>> items = listOf(data(get(vetAToken, visit), HttpStatus.OK).get("prescriptions"));
+
+        assertThat(items).extracting(i -> ((Number) i.get("itemId")).longValue()).containsExactly(mine[0]);
+        assertThat(listOf(data(get(vetBToken, other), HttpStatus.OK).get("prescriptions"))).hasSize(2);
+    }
+
+    @Test
+    void aCompletedVisitKeepsShowingItsPrescriptionToTheCaretaker() {
+        long visit = called(walkIn(medical), vetA);
+        rxItem(visit, vetA, "Amoxicillin", 3, false);
+        complete(visit);
+
+        Map<String, Object> record = data(get(caretakerToken, visit), HttpStatus.OK);
+
+        assertThat(record).containsEntry("locked", true);
+        assertThat(listOf(record.get("prescriptions"))).hasSize(1);
+    }
+
+    @Test
+    void putReturnsThePrescriptionOnWriteAndOnNoOpAndNeverTouchesTheItemRow() {
+        long visit = called(walkIn(medical), vetA);
+        long[] item = rxItem(visit, vetA, "Amoxicillin", 3, false);
+        long xmin = xmin("prescription_items", item[0]);
+
+        Map<String, Object> written = data(put(vetAToken, visit, body("khám", "dx", null, null, null)), HttpStatus.OK);
+        Map<String, Object> unchanged = data(put(vetAToken, visit, body("khám", "dx", null, null, null)),
+                HttpStatus.OK);
+        Map<String, Object> rewritten = data(put(vetAToken, visit, body("khám lại", "dx", null, null, null)),
+                HttpStatus.OK);
+
+        for (Map<String, Object> response : List.of(written, unchanged, rewritten)) {
+            assertThat(listOf(response.get("prescriptions"))).extracting(i -> ((Number) i.get("itemId")).longValue())
+                    .containsExactly(item[0]);
+        }
+        assertThat(xmin("prescription_items", item[0])).as("PUT không ghi dòng đơn thuốc").isEqualTo(xmin);
+    }
+
+    @Test
+    void prescriptionDataNeverReachesRolesOutsideTheContractOrAnotherBranch() {
+        long visit = called(walkIn(medical), vetA);
+        rxItem(visit, vetA, "Amoxicillin", 3, false);
+        long foreignVet = data.staff("VET", otherBranch);
+
+        for (String bearer : List.of(receptionistToken, managerToken, adminToken, token(superManager),
+                token(customerAccount))) {
+            ResponseEntity<Map<String, Object>> denied = get(bearer, visit);
+            assertThat(denied.getStatusCode()).isEqualTo(HttpStatus.FORBIDDEN);
+            assertThat(String.valueOf(denied.getBody())).doesNotContain("productName", "Amoxicillin");
+        }
+        ResponseEntity<Map<String, Object>> foreign = get(token(foreignVet), visit);
+        assertScopeDenied(foreign);
+        assertThat(String.valueOf(foreign.getBody())).doesNotContain("productName", "Amoxicillin");
+    }
+
+    @Test
+    void aFailureAfterThePrescriptionReadLeavesTheRecordAndTheAuditUnchanged() {
+        long visit = called(walkIn(medical), vetA);
+        rxItem(visit, vetA, "Amoxicillin", 3, false);
+        data(put(vetAToken, visit, body("khám đầu", "dx", null, null, null)), HttpStatus.OK);
+        long audits = audits(visit).size();
+
+        ResponseEntity<Map<String, Object>> response = withRejectingTrigger("INSERT", "audit_logs",
+                "NEW.action = 'MEDICAL_RECORD_UPDATED'", () -> put(vetAToken, visit, body("khám sau", "dx", null, null, null)));
+
+        assertError(response, HttpStatus.CONFLICT, "CONCURRENCY_CONFLICT");
+        assertThat(jdbc.queryForObject("SELECT examination FROM medical_records WHERE visit_id = ?", String.class, visit))
+                .isEqualTo("khám đầu");
+        assertThat(audits(visit)).hasSize((int) audits);
+        assertThat(count("SELECT count(*) FROM prescription_items WHERE medical_record_id = " + visit)).isEqualTo(1L);
+    }
+
     private long walkIn(long serviceId) {
         clock.set(T0);
         Map<String, Object> request = new LinkedHashMap<>();

@@ -52,6 +52,11 @@ m = Module(
         ("A23", "Gửi lại cùng request ghi thêm một mũi nữa (không chống trùng); ghi nhầm thì xóa bằng #20 khi lượt còn IN_PROGRESS (docs/adr/0074)", "Docs không có rule chặn trùng mũi trong một lượt"),
         ("A24", "Xóa mũi (#20): người gọi phải là VET phụ trách **hiện tại** của lượt, không cần là người đã ghi mũi. Chỉ người phụ trách ghi được mũi (#19) và gán lại lượt đã gọi chuyển quyền của người cũ sang người mới (BR-TN-08), nên 'VET đã ghi mũi đó' trùng với người phụ trách hiện tại; sau khi gán lại, người cũ không xóa được nữa (docs/adr/0075)", "BR-KB-04 'VET xóa được mũi mình đã ghi nhận'; BR-TN-08"),
         ("A25", "Sau khi xóa mũi X chưa bị thay thế, mũi còn lại mới nhất cùng thú và cùng loại vaccine (ngày tiêm mới nhất, cùng ngày thì ghi sau) hết `superseded` để nhắc tái chủng tính lại theo nó; xóa mũi đã bị thay thế thì mũi khác không đổi. Care Task đã hủy khi ghi X không mở lại (docs/adr/0075)", "BR-TB-03 'mũi đã tiêm lại khi có mũi mới hơn cùng loại'; 03 Care Task CANCELLED là trạng thái cuối"),
+        ("A26", "Kê đơn (#16) gửi `shortageResolution` nhưng tồn khả dụng lúc ghi đã đủ: bỏ qua lựa chọn, sinh dòng Order DRUG với số lượng yêu cầu (docs/adr/0077)", "BR-KB-03 'Đủ tồn: sinh 1 dòng Order'; mua ngoài chỉ khi thiếu tồn"),
+        ("A27", "`REDUCE_TO_AVAILABLE` khi tồn khả dụng bằng 0: 400 `BR-KB-03`, không ghi gì — chỉ chọn được mua ngoài (docs/adr/0077)", "05 `prescription_items.quantity > 0`"),
+        ("A28", "Tồn khả dụng khi kê đơn = tổng các lô chưa hết hạn tại chi nhánh của lượt, không trừ thuốc đã kê chưa thu; thiếu thật sẽ bị chặn lúc thu (BR-BH-04) (docs/adr/0077)", "BR-KO-01; tầng 1 không giữ hàng"),
+        ("A29", "Gửi lại cùng request kê thêm một dòng nữa (không chống trùng); lượt chưa có bệnh án thì tạo bệnh án rỗng trong cùng transaction; thuốc không tồn tại, không phải thuốc kê đơn hoặc đã ngừng kinh doanh là 400 `BR-KB-03`, kể cả khi chọn mua ngoài (docs/adr/0077)", "Docs không có rule chặn trùng (khuôn A23); FK `prescription_items.medical_record_id`; BR-SP-01"),
+        ("A30", "Xóa dòng đơn thuốc (#17): người gọi phải là VET phụ trách **hiện tại**, không cần là người đã kê. Dòng mua ngoài cũng xóa được (chỉ xóa dòng đơn, không có dòng Order). Bệnh án rỗng do #16 tạo được giữ nguyên khi xóa dòng cuối, nên thú vẫn bị khóa đổi loài. Xóa cứng, ghi audit `PRESCRIPTION_ITEM_REMOVED` (docs/adr/0078)", "BR-BH-02 'chỉ người thêm được xóa dòng khi OPEN', BR-TN-08; contract #17 'xóa dòng đơn thuốc'; erd §0 / §13 mục 21; không có rule xóa bệnh án"),
     ],
     questions=[
         ("Q1", "Dòng dịch vụ tự sinh khi tiếp nhận có thể bị VET đổi (BR-TN-01). Nếu đổi từ dịch vụ thường sang dịch vụ loại Khám thì có hủy nhắc tái khám như Visit#1 có dịch vụ Khám không?", "TBD (PO), tạm chỉ xét tại Visit#1 (06 G5)", "03 Care Task#6"),
@@ -293,15 +298,31 @@ m.op("post", "/visits/{visitId}/medical-record/addenda", "addMedicalRecordAddend
            "(A17). Không sửa / xóa nội dung cũ; ghi audit.")
 
 m.op("post", "/visits/{visitId}/prescriptions", "addPrescriptionItem", "Kê đơn một dòng thuốc", "Prescriptions",
-     "UC48, UC67", "BR-KB-03, BR-SP-01, BR-BH-02", "A07", "VET được gán lượt", body="AddPrescriptionRequest",
-     resp="PrescriptionItem", status=201, path_params=["VisitId"], errors=(400, 401, 403, 404, 409),
-     err_desc={400: "`BR-KB-03` thiếu tồn khả dụng (message ghi số tồn hiện có) — gửi lại kèm shortageResolution · sản phẩm không phải thuốc kê đơn",
+     "UC48, UC67", "BR-KB-03, BR-SP-01, BR-BH-02, BR-QT-15", "A07", "VET được gán lượt",
+     "IN_PROGRESS giữ nguyên · dòng Order DRUG (đủ tồn / giảm số lượng) · bệnh án rỗng nếu chưa có",
+     body="AddPrescriptionRequest", resp="PrescriptionItem", status=201, path_params=["VisitId"],
+     errors=(400, 401, 403, 404, 409),
+     err_desc={400: "`BR-KB-03` thuốc không tồn tại, không phải thuốc kê đơn hoặc đã ngừng kinh doanh · thiếu tồn khả "
+                    "dụng (message ghi số tồn hiện có) — gửi lại kèm shortageResolution · `REDUCE_TO_AVAILABLE` khi "
+                    "tồn bằng 0 (A27) · body sai (`VALIDATION_FAILED`, `MALFORMED_REQUEST`); BR-TK-17",
+               403: "Sai vai trò · lượt của chi nhánh khác · không phải VET phụ trách hiện tại",
+               404: "Không có Visit hoặc Visit nhóm GROOMING",
                409: "Lượt không IN_PROGRESS"},
-     notes="Đủ tồn → sinh 1 dòng Order DRUG; mua ngoài → không sinh dòng; không tách dòng.")
+     notes="A5, A26, A27, A28, A29. Thứ tự lỗi: 400 body → 403 vai trò → 404 → 403 chi nhánh → 404 GROOMING → 403 người "
+           "phụ trách → 409 → 400 BR-KB-03 (thuốc) → 400 BR-KB-03 (tồn) (docs/adr/0077). Đủ tồn → 1 dòng Order DRUG "
+           "giá snapshot; giảm số lượng → dòng DRUG bằng tồn; mua ngoài → không sinh dòng, giữ số lượng; không tách "
+           "dòng. Kho trừ lúc thu tiền (BR-BH-04). Ghi audit.")
 m.op("delete", "/visits/{visitId}/prescriptions/{itemId}", "removePrescriptionItem", "Xóa dòng đơn thuốc",
-     "Prescriptions", "UC48", "BR-KB-03, BR-BH-02", "A07", "VET được gán lượt", status=204,
-     path_params=["VisitId", "PrescriptionItemId"], errors=(401, 403, 404, 409),
-     err_desc={409: "Lượt không IN_PROGRESS"}, notes="Xóa kèm dòng Order DRUG tương ứng.")
+     "Prescriptions", "UC48", "BR-KB-03, BR-BH-02, BR-QT-15", "A07", "VET phụ trách hiện tại (A30)",
+     "IN_PROGRESS giữ nguyên · xóa dòng Order DRUG đi kèm (trừ dòng mua ngoài) · bệnh án giữ nguyên",
+     status=204, path_params=["VisitId", "PrescriptionItemId"], errors=(400, 401, 403, 404, 409),
+     err_desc={400: "`MALFORMED_REQUEST` id sai kiểu; BR-TK-17",
+               403: "Sai vai trò · lượt của chi nhánh khác · không phải VET phụ trách hiện tại (A30)",
+               404: "Không có Visit, Visit nhóm GROOMING hoặc dòng đơn thuốc không thuộc lượt này",
+               409: "Lượt không IN_PROGRESS — sau COMPLETED, sai sót ghi bằng bản bổ sung"},
+     notes="A30. Thứ tự lỗi: 400 id → 403 vai trò → 404 lượt → 403 chi nhánh → 404 GROOMING → 403 người phụ trách → 409 → "
+           "404 dòng đơn (docs/adr/0078). Xóa dòng đơn rồi xóa dòng Order DRUG tương ứng trong cùng transaction; dòng mua "
+           "ngoài chỉ xóa dòng đơn. Kho không đổi (thuốc chỉ trừ lúc thu tiền). Ghi audit.")
 
 m.op("get", "/visits/{visitId}/vaccination-options", "getVaccinationOptions", "Gợi ý mũi và sản phẩm vaccine",
      "Vaccinations", "UC49", "BR-KB-04, BR-SP-02, 07, BR-KO-01", "A07", "VET được gán lượt", resp="VaccinationOptions",

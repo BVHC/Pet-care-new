@@ -802,7 +802,7 @@ paths:
     post:
       tags: [Prescriptions]
       summary: "Kê đơn một dòng thuốc"
-      description: "UC48, UC67 · BR-KB-03, BR-SP-01, BR-BH-02. Actor: A07. Quyền: VET được gán lượt. Chuyển trạng thái: —. Đủ tồn → sinh 1 dòng Order DRUG; mua ngoài → không sinh dòng; không tách dòng."
+      description: "UC48, UC67 · BR-KB-03, BR-SP-01, BR-BH-02, BR-QT-15. Actor: A07. Quyền: VET được gán lượt. Chuyển trạng thái: IN_PROGRESS giữ nguyên · dòng Order DRUG (đủ tồn / giảm số lượng) · bệnh án rỗng nếu chưa có. A5, A26, A27, A28, A29. Thứ tự lỗi: 400 body → 403 vai trò → 404 → 403 chi nhánh → 404 GROOMING → 403 người phụ trách → 409 → 400 BR-KB-03 (thuốc) → 400 BR-KB-03 (tồn) (docs/adr/0077). Đủ tồn → 1 dòng Order DRUG giá snapshot; giảm số lượng → dòng DRUG bằng tồn; mua ngoài → không sinh dòng, giữ số lượng; không tách dòng. Kho trừ lúc thu tiền (BR-BH-04). Ghi audit."
       operationId: addPrescriptionItem
       security:
         - bearerAuth: []
@@ -831,7 +831,7 @@ paths:
                     type: integer
                     description: "HTTP status của kết quả, ví dụ 200, 201"
         "400":
-          description: "`BR-KB-03` thiếu tồn khả dụng (message ghi số tồn hiện có) — gửi lại kèm shortageResolution · sản phẩm không phải thuốc kê đơn"
+          description: "`BR-KB-03` thuốc không tồn tại, không phải thuốc kê đơn hoặc đã ngừng kinh doanh · thiếu tồn khả dụng (message ghi số tồn hiện có) — gửi lại kèm shortageResolution · `REDUCE_TO_AVAILABLE` khi tồn bằng 0 (A27) · body sai (`VALIDATION_FAILED`, `MALFORMED_REQUEST`); BR-TK-17"
           content:
             "application/json":
               schema:
@@ -839,9 +839,17 @@ paths:
         "401":
           $ref: "#/components/responses/Unauthorized"
         "403":
-          $ref: "#/components/responses/Forbidden"
+          description: "Sai vai trò · lượt của chi nhánh khác · không phải VET phụ trách hiện tại"
+          content:
+            "application/json":
+              schema:
+                $ref: "#/components/schemas/Error"
         "404":
-          $ref: "#/components/responses/NotFound"
+          description: "Không có Visit hoặc Visit nhóm GROOMING"
+          content:
+            "application/json":
+              schema:
+                $ref: "#/components/schemas/Error"
         "409":
           description: "Lượt không IN_PROGRESS"
           content:
@@ -852,7 +860,7 @@ paths:
     delete:
       tags: [Prescriptions]
       summary: "Xóa dòng đơn thuốc"
-      description: "UC48 · BR-KB-03, BR-BH-02. Actor: A07. Quyền: VET được gán lượt. Chuyển trạng thái: —. Xóa kèm dòng Order DRUG tương ứng."
+      description: "UC48 · BR-KB-03, BR-BH-02, BR-QT-15. Actor: A07. Quyền: VET phụ trách hiện tại (A30). Chuyển trạng thái: IN_PROGRESS giữ nguyên · xóa dòng Order DRUG đi kèm (trừ dòng mua ngoài) · bệnh án giữ nguyên. A30. Thứ tự lỗi: 400 id → 403 vai trò → 404 lượt → 403 chi nhánh → 404 GROOMING → 403 người phụ trách → 409 → 404 dòng đơn (docs/adr/0078). Xóa dòng đơn rồi xóa dòng Order DRUG tương ứng trong cùng transaction; dòng mua ngoài chỉ xóa dòng đơn. Kho không đổi (thuốc chỉ trừ lúc thu tiền). Ghi audit."
       operationId: removePrescriptionItem
       security:
         - bearerAuth: []
@@ -862,14 +870,28 @@ paths:
       responses:
         "204":
           description: "Không có nội dung"
+        "400":
+          description: "`MALFORMED_REQUEST` id sai kiểu; BR-TK-17"
+          content:
+            "application/json":
+              schema:
+                $ref: "#/components/schemas/Error"
         "401":
           $ref: "#/components/responses/Unauthorized"
         "403":
-          $ref: "#/components/responses/Forbidden"
+          description: "Sai vai trò · lượt của chi nhánh khác · không phải VET phụ trách hiện tại (A30)"
+          content:
+            "application/json":
+              schema:
+                $ref: "#/components/schemas/Error"
         "404":
-          $ref: "#/components/responses/NotFound"
+          description: "Không có Visit, Visit nhóm GROOMING hoặc dòng đơn thuốc không thuộc lượt này"
+          content:
+            "application/json":
+              schema:
+                $ref: "#/components/schemas/Error"
         "409":
-          description: "Lượt không IN_PROGRESS"
+          description: "Lượt không IN_PROGRESS — sau COMPLETED, sai sót ghi bằng bản bổ sung"
           content:
             "application/json":
               schema:

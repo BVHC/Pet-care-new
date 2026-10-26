@@ -26,10 +26,13 @@ import org.springframework.transaction.support.TransactionTemplate;
 
 import com.petcare.TestcontainersConfiguration;
 import com.petcare.module.appointment.AppointmentItSupport;
+import com.petcare.module.visit.entity.ExternalPurchaseReason;
 import com.petcare.module.visit.entity.MedicalRecord;
 import com.petcare.module.visit.entity.MedicalRecordAddendum;
+import com.petcare.module.visit.entity.PrescriptionItem;
 import com.petcare.module.visit.repository.MedicalRecordAddendumRepository;
 import com.petcare.module.visit.repository.MedicalRecordRepository;
+import com.petcare.module.visit.repository.PrescriptionItemRepository;
 import com.petcare.module.visit.repository.VisitRepository;
 import com.petcare.support.MutableClock;
 
@@ -61,6 +64,8 @@ class MedicalRecordPersistenceIT {
     private MedicalRecordAddendumRepository addenda;
     @Autowired
     private VisitRepository visits;
+    @Autowired
+    private PrescriptionItemRepository prescriptions;
     @Autowired
     private JdbcTemplate jdbc;
     @Autowired
@@ -134,6 +139,38 @@ class MedicalRecordPersistenceIT {
     @Test
     void visitWithoutVaccinationHasNone() {
         assertThat(visits.hasVaccinationInVisit(pet, visit)).isFalse();
+    }
+
+    /** T38 phần 0 (docs/adr/0076, G7/G11): entity {@code PrescriptionItem} khớp V1 và đọc theo thứ tự kê, chỉ của bệnh án đó. */
+    @Test
+    void prescriptionItemsAreMappedFromTheirColumnsAndReadInPrescribingOrderPerRecord() {
+        VaccinationItSupport rx = new VaccinationItSupport(jdbc);
+        try {
+            long product = rx.prescriptionDrug("Amoxicillin");
+            long line = rx.drugLine(visit, product, 3, vet);
+            long first = rx.prescriptionItem(visit, product, 3, "Ngày 2 lần", line);
+            long second = rx.prescriptionItem(visit, product, 2, "Ngày 3 lần", null);
+            long otherVisit = visit(jdbc.queryForObject("SELECT branch_id FROM visits WHERE id = ?", Long.class, visit));
+            rx.prescriptionItem(otherVisit, product, 1, "Ngày 1 lần", null);
+
+            List<PrescriptionItem> read = tx
+                    .execute(s -> prescriptions.findByMedicalRecordIdOrderByIdAsc(visit));
+
+            assertThat(read).extracting(PrescriptionItem::getId, PrescriptionItem::getMedicalRecordId,
+                    PrescriptionItem::getProductId, PrescriptionItem::getQuantity,
+                    PrescriptionItem::getDosageInstructions, PrescriptionItem::isExternalPurchase,
+                    PrescriptionItem::getOrderLineId, PrescriptionItem::getExternalReason)
+                    .containsExactly(
+                            tuple(first, visit, product, 3, "Ngày 2 lần", false, line, null),
+                            tuple(second, visit, product, 2, "Ngày 3 lần", true, null,
+                                    ExternalPurchaseReason.OUT_OF_STOCK_AT_PRESCRIBE));
+            List<PrescriptionItem> unknown = tx
+                    .execute(s -> prescriptions.findByMedicalRecordIdOrderByIdAsc(Long.MAX_VALUE));
+            assertThat(unknown).isEmpty();
+        } finally {
+            rx.deleteDoses();
+            rx.deleteCatalog();
+        }
     }
 
     private long visit(long branchId) {
