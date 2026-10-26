@@ -103,6 +103,7 @@ class MedicalRecordIT {
     private MutableClock clock;
 
     private AppointmentItSupport data;
+    private VaccinationItSupport vaccines;
     private TransactionTemplate tx;
     private final List<Long> branches = new ArrayList<>();
     private long branch;
@@ -131,6 +132,7 @@ class MedicalRecordIT {
         clock.set(T0);
         tx = new TransactionTemplate(transactionManager);
         data = new AppointmentItSupport(jdbc);
+        vaccines = new VaccinationItSupport(jdbc);
         branch = activeBranch();
         otherBranch = activeBranch();
         medical = data.service("MEDICAL");
@@ -159,6 +161,7 @@ class MedicalRecordIT {
 
     @AfterEach
     void tearDown() {
+        vaccines.deleteDoses();
         for (long b : branches) {
             jdbc.update("DELETE FROM weight_records WHERE visit_id IN (SELECT id FROM visits WHERE branch_id = ?)", b);
             jdbc.update("""
@@ -173,6 +176,7 @@ class MedicalRecordIT {
             jdbc.update("DELETE FROM orders WHERE visit_id IN (SELECT id FROM visits WHERE branch_id = ?)", b);
             jdbc.update("DELETE FROM visits WHERE branch_id = ?", b);
         }
+        vaccines.deleteCatalog();
         data.cleanUp();
     }
 
@@ -1102,6 +1106,134 @@ class MedicalRecordIT {
             jdbc.execute("DROP TRIGGER " + name + " ON " + table);
             jdbc.execute("DROP FUNCTION " + name + "()");
         }
+    }
+
+    // ================================================================ mũi tiêm trong response (T28 phần 0, ADR-0072)
+
+    /** Mũi tiêm của {@code visit}: loại, phác đồ, sản phẩm và lô riêng cho chi nhánh {@code branch}. */
+    private long[] doseOn(long visit, long recordedBy, LocalDate given, LocalDate nextDue) {
+        long type = vaccines.vaccineType("DOG", "Dại IT");
+        long protocol = vaccines.protocol("DOG", type, 2, 365, false);
+        long product = vaccines.product(type, "Rabisin", true);
+        long lot = vaccines.lot(branch, product);
+        long dose = vaccines.dose(visit, type, protocol, 2, product, lot, given, nextDue, recordedBy, null);
+        return new long[] {dose, type, protocol, product};
+    }
+
+    @Test
+    void getReturnsOnlyTheVisitsDosesWithTheValuesSnapshottedAtInjectionTime() {
+        long visit = called(walkIn(medical), vetA);
+        long other = called(walkIn(medical), vetB);
+        long[] mine = doseOn(visit, vetA, TODAY, TODAY.plusDays(365));
+        doseOn(other, vetB, TODAY.minusDays(1), TODAY.plusDays(364));
+        // đổi phác đồ và ngừng loại / sản phẩm sau khi tiêm: lịch sử không đổi (BR-SP-03, BR-SP-07)
+        jdbc.update("UPDATE vaccination_protocols SET dose_number = 9, interval_days = 30 WHERE id = ?", mine[2]);
+        jdbc.update("UPDATE vaccine_types SET is_active = false WHERE id = ?", mine[1]);
+        jdbc.update("UPDATE products SET is_active = false WHERE id = ?", mine[3]);
+
+        List<Map<String, Object>> doses = listOf(data(get(vetAToken, visit), HttpStatus.OK).get("vaccinations"));
+
+        assertThat(doses).hasSize(1);
+        Map<String, Object> dose = doses.get(0);
+        assertThat(dose.keySet()).containsExactlyInAnyOrder("vaccinationId", "visitId", "branchId", "vaccineTypeId",
+                "vaccineTypeName", "protocolId", "doseNumber", "productId", "productName", "lotNumber", "expiryDate",
+                "administeredOn", "nextDueDate", "superseded", "recordedBy", "orderLineId");
+        assertThat(dose).containsEntry("vaccinationId", (int) mine[0]).containsEntry("visitId", (int) visit)
+                .containsEntry("branchId", (int) branch).containsEntry("vaccineTypeId", (int) mine[1])
+                .containsEntry("protocolId", (int) mine[2]).containsEntry("doseNumber", 2)
+                .containsEntry("productId", (int) mine[3]).containsEntry("administeredOn", TODAY.toString())
+                .containsEntry("nextDueDate", TODAY.plusDays(365).toString()).containsEntry("superseded", false)
+                .containsEntry("recordedBy", (int) vetA);
+        assertThat((String) dose.get("vaccineTypeName")).startsWith("Dại IT");
+        assertThat((String) dose.get("productName")).startsWith("Rabisin");
+        assertThat(dose.get("lotNumber")).as("lô chưa điền (D046)").isNull();
+        assertThat(dose.get("expiryDate")).isNull();
+        assertThat(((Number) dose.get("orderLineId")).longValue()).isEqualTo(jdbc.queryForObject(
+                "SELECT order_line_id FROM vaccinations WHERE id = ?", Long.class, mine[0]));
+    }
+
+    @Test
+    void supersededFollowsTheColumnAndDosesComeInRecordingOrder() {
+        long visit = called(walkIn(medical), vetA);
+        long[] first = doseOn(visit, vetA, TODAY.minusDays(1), TODAY.plusDays(364));
+        long[] second = doseOn(visit, vetA, TODAY, TODAY.plusDays(365));
+        jdbc.update("UPDATE vaccinations SET superseded_at = now() WHERE id = ?", first[0]);
+
+        List<Map<String, Object>> doses = listOf(data(get(vetAToken, visit), HttpStatus.OK).get("vaccinations"));
+
+        assertThat(doses).extracting(d -> ((Number) d.get("vaccinationId")).longValue())
+                .containsExactly(first[0], second[0]);
+        assertThat(doses).extracting(d -> d.get("superseded")).containsExactly(true, false);
+    }
+
+    @Test
+    void aVaccineOnlyVisitWithoutARecordRowStillShowsItsDoses() {
+        long visit = called(walkIn(medical), vetA);
+        doseOn(visit, vetA, TODAY, TODAY.plusDays(365));
+        assertThat(count("SELECT count(*) FROM medical_records WHERE visit_id = " + visit)).isZero();
+
+        Map<String, Object> record = data(get(vetAToken, visit), HttpStatus.OK);
+
+        assertThat(listOf(record.get("vaccinations"))).hasSize(1);
+        assertThat(record.get("diagnosis")).isNull();
+    }
+
+    @Test
+    void aCompletedVisitKeepsShowingItsDosesToTheCaretakerOfTheBranch() {
+        long visit = called(walkIn(medical), vetA);
+        doseOn(visit, vetA, TODAY, TODAY.plusDays(365));
+        complete(visit);
+
+        Map<String, Object> record = data(get(caretakerToken, visit), HttpStatus.OK);
+
+        assertThat(record).containsEntry("locked", true);
+        assertThat(listOf(record.get("vaccinations"))).hasSize(1);
+    }
+
+    @Test
+    void doseDataNeverReachesRolesOutsideTheContractOrAnotherBranch() {
+        long visit = called(walkIn(medical), vetA);
+        doseOn(visit, vetA, TODAY, TODAY.plusDays(365));
+        long foreignVet = data.staff("VET", otherBranch);
+
+        for (String bearer : List.of(receptionistToken, managerToken, adminToken, token(superManager),
+                token(customerAccount))) {
+            ResponseEntity<Map<String, Object>> denied = get(bearer, visit);
+            assertThat(denied.getStatusCode()).isEqualTo(HttpStatus.FORBIDDEN);
+            assertThat(String.valueOf(denied.getBody())).doesNotContain("vaccineTypeName", "Rabisin");
+        }
+        ResponseEntity<Map<String, Object>> foreign = get(token(foreignVet), visit);
+        assertScopeDenied(foreign);
+        assertThat(String.valueOf(foreign.getBody())).doesNotContain("vaccineTypeName", "Rabisin");
+    }
+
+    @Test
+    void putReturnsTheDosesOnWriteAndOnNoOpAndNeverTouchesTheDoseRow() {
+        long visit = called(walkIn(medical), vetA);
+        long[] dose = doseOn(visit, vetA, TODAY, TODAY.plusDays(365));
+        long xmin = xmin("vaccinations", dose[0]);
+
+        Map<String, Object> written = data(put(vetAToken, visit, body("khám", "dx", null, null, null)), HttpStatus.OK);
+        Map<String, Object> unchanged = data(put(vetAToken, visit, body("khám", "dx", null, null, null)),
+                HttpStatus.OK);
+
+        assertThat(listOf(written.get("vaccinations"))).extracting(d -> ((Number) d.get("vaccinationId")).longValue())
+                .containsExactly(dose[0]);
+        assertThat(listOf(unchanged.get("vaccinations"))).hasSize(1);
+        assertThat(xmin("vaccinations", dose[0])).as("PUT không ghi dòng mũi tiêm").isEqualTo(xmin);
+    }
+
+    @Test
+    void aFailureAfterTheDoseReadLeavesNoRecordAndNoAudit() {
+        long visit = called(walkIn(medical), vetA);
+        doseOn(visit, vetA, TODAY, TODAY.plusDays(365));
+
+        ResponseEntity<Map<String, Object>> response = withRejectingTrigger("INSERT", "audit_logs",
+                "NEW.action = 'MEDICAL_RECORD_UPDATED'", () -> put(vetAToken, visit, body("x", "y", null, null, null)));
+
+        assertError(response, HttpStatus.CONFLICT, "CONCURRENCY_CONFLICT");
+        assertThat(count("SELECT count(*) FROM medical_records WHERE visit_id = " + visit)).isZero();
+        assertThat(count("SELECT count(*) FROM vaccinations WHERE visit_id = " + visit)).isEqualTo(1L);
     }
 
     private long walkIn(long serviceId) {

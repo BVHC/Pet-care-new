@@ -415,7 +415,11 @@ class VisitQueueIT {
         ResponseEntity<Map<String, Object>> response = get(vetToken, "/api/visits/" + foreign);
 
         assertError(response, HttpStatus.FORBIDDEN, "ACCESS_DENIED_SCOPE_MISMATCH", null);
-        assertThat(String.valueOf(response.getBody())).doesNotContain(code).doesNotContain(petName)
+        // timestamp / traceId ngẫu nhiên có thể tình cờ chứa chuỗi số của id chi nhánh: chỉ xét phần còn lại.
+        Map<String, Object> body = new java.util.HashMap<>(response.getBody());
+        body.remove("timestamp");
+        body.remove("traceId");
+        assertThat(String.valueOf(body)).doesNotContain(code).doesNotContain(petName)
                 .doesNotContain(String.valueOf(otherBranch));
     }
 

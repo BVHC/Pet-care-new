@@ -2,7 +2,7 @@
 
 > Phạm vi: **A. Mock bệnh án, cân nặng, hoàn tất lượt, bản bổ sung, tiêm chủng** (types, `visit.api.ts`, hooks, `visit-clinical.mock.ts`) và **B. Giao diện** bàn Phòng khám (VET) + khu Grooming (CARETAKER). Kê đơn (#16–17) là T46, không làm ở đây.
 > Hợp đồng: `docs/api/visit-v1.md` + `docs/api/openapi/visit-v1.yaml` (#10, #12–15, #18–20, đọc thêm #21); ADR 0066–0070. Rule: BR-KB-01, 02, 04, 06, BR-SP-06, 07, BR-KH-04, 05, 07, BR-TN-05, 09, BR-TB-03, BR-KO-05. **Khi docs lệch BE thì theo BE** (đã đọc `MedicalRecordService`, `VisitCompletionService`, DTO, mapper, `PetWeightApiService`).
-> **BE có #10, #12–15 (T27). BE CHƯA CÓ #18–20 (tiêm chủng, T28, `VaccinationQueryApiPlaceholder`)** nên phần đó chỉ theo hợp đồng + BR-KB-04, chỗ hợp đồng im lặng là ASSUMPTION (A.3).
+> **BE có #10, #12–15 (T27) và #18–20 (tiêm chủng, T28 giao 26/10, ADR 0072–0075).** Phần tiêm chủng của T37 dựng khi BE chưa có, nên chỉ theo hợp đồng + BR-KB-04, chỗ hợp đồng im lặng là ASSUMPTION (A.3); **chưa chạy thử với BE thật** (đối chiếu ở A.3).
 > File chính: `FE/src/shared/types/medical-record.ts`, `api/visit.api.ts`, `hooks/useExam.ts`, `api/mock/visit-clinical.mock.ts` (+ test cạnh từng file). Route mock đăng ký trong `mock-api.ts` (`...visitClinicalRoutes`).
 
 ## A. Mock
@@ -34,17 +34,44 @@ Thứ tự chung (chép từ BE): **đọc JSON / tham số path + Bean Validati
 
 **Hồ sơ sức khỏe (#21)** giờ gộp dữ liệu mẫu T23 với dữ liệu thật của mock này: lượt đã hoàn tất kèm bệnh án và bản bổ sung, mũi tiêm tại hệ thống (kể cả mũi của lượt chưa xong), mũi "sắp tới" = mũi mới nhất mỗi loại, mũi cũ hơn cùng loại là `superseded` (BR-TB-03). Khách (chủ hiện tại) bị lọc ghi chú nội bộ và bản bổ sung nội bộ (BR-KH-07).
 
-### A.3 ASSUMPTION cho #18–20 (BE chưa có, hợp đồng im lặng)
+### A.3 ASSUMPTION cho #18–20 (dựng khi BE chưa có) và đối chiếu với BE T28
 
-1. **Thứ tự kiểm** copy #13 (403 người phụ trách trước 409; 404 id loại / phác đồ / sản phẩm sau 409, trước rule 400). Hợp đồng chỉ liệt kê mã lỗi.
-2. **Câu chữ lỗi tự đặt** (BE chưa có để chép): thiếu `vaccineTypeId` → 400 `MALFORMED_REQUEST` `Thiếu tham số 'vaccineTypeId'`; body #19 thiếu mã → `VALIDATION_FAILED` (`vaccineTypeId: Thiếu loại vaccine`…); `Sản phẩm không thuộc loại vaccine đã chọn`, `Mũi tiêm không thuộc phác đồ của loại vaccine và loài của thú`, `Sản phẩm vaccine không còn tồn khả dụng tại chi nhánh`; thông điệp thành công #19. Loại không đúng loài dùng đúng câu của hợp đồng `Loại vaccine không áp dụng cho loài của thú` kèm mã BR-KB-04. **Khi BE giao T28, đối chiếu lại các câu này.**
-3. **Mũi gợi ý** = mũi kế tiếp sau mũi mới nhất cùng loại của thú tại hệ thống (chưa tiêm → mũi 1). **Hết phác đồ thì `suggestedProtocolId = null`** để VET tự chọn (hợp đồng cho phép null); mock KHÔNG suy ra "tiêm nhắc lại" vì không tài liệu nào nêu.
-4. **Không chặn tiêm trùng mũi** (không có luật). VET được chọn mũi khác gợi ý (BR-KB-04).
-5. **#20 chỉ người đã ghi mũi đó** (hợp đồng: "VET đã ghi mũi đó"). Hệ quả đã biết: sau khi gán lại lượt (BR-TN-08), VET mới không xóa được mũi VET cũ đã ghi, dù quyền xóa dòng Order khác được chuyển cho người mới. Chờ BE-1 xác nhận.
-6. **Tiêm trong lượt khám** (UC49 "tiêm ngay trong lượt khám trên cùng Visit"): cho mọi lượt Khám/Tiêm đang IN_PROGRESS, không bắt dịch vụ Tiêm. Lượt Thẩm mỹ → 404 như các endpoint bệnh án.
-7. **`warnings`** là mã (`UNDER_MIN_AGE`), giao diện tự dịch. Chưa đủ tuổi tính theo mũi VET **chọn**, không phải mũi gợi ý.
-8. `MedicalRecord.vaccinations`: BE (mapper) trả `[]` tới khi T28 xong; mock trả các mũi thật của lượt.
-9. Care Task#5 (hủy nhắc tái chủng cũ khi tiêm lại) không mô phỏng.
+Đối chiếu ngày 26/10 bằng **đọc code** BE T28 (`VaccinationOptionService`, `VaccinationRecordService`, `MedicalRecordMapper`, `RecordVaccinationRequest`, ADR 0072–0075). **Chưa chạy FE trên BE thật; mock và FE chưa sửa.** Nhãn **KHỚP** / **LỆCH** ở cuối mỗi mục; việc FE phải sửa gom ở A.3b.
+
+1. **Thứ tự kiểm** copy #13 (403 người phụ trách trước 409; 404 id loại / phác đồ / sản phẩm sau 409, trước rule 400). Hợp đồng chỉ liệt kê mã lỗi. **LỆCH.** BE #19: 403 người phụ trách → 409 → 404 loại vaccine → 400 BR-KB-04 (loài) → 400 BR-SP-07 (loại đã ngừng) → 400 BR-KB-04 (phác đồ, rồi sản phẩm; **id không tồn tại cũng là 400, không phải 404**) → 400 hết tồn. BE #20: **403 → 409 → 404 mũi** (mock: 404 → 403 → 409).
+2. **Câu chữ lỗi tự đặt** (BE chưa có để chép): thiếu `vaccineTypeId` → 400 `MALFORMED_REQUEST` `Thiếu tham số 'vaccineTypeId'`; body #19 thiếu mã → `VALIDATION_FAILED` (`vaccineTypeId: Thiếu loại vaccine`…); `Sản phẩm không thuộc loại vaccine đã chọn`, `Mũi tiêm không thuộc phác đồ của loại vaccine và loài của thú`, `Sản phẩm vaccine không còn tồn khả dụng tại chi nhánh`; thông điệp thành công #19. Loại không đúng loài dùng đúng câu của hợp đồng `Loại vaccine không áp dụng cho loài của thú` kèm mã BR-KB-04. **LỆCH một phần:** câu khớp và câu khác chữ ở A.3b.
+3. **Mũi gợi ý** = mũi kế tiếp sau mũi mới nhất cùng loại của thú tại hệ thống (chưa tiêm → mũi 1). **Hết phác đồ thì `suggestedProtocolId = null`** để VET tự chọn (hợp đồng cho phép null); mock KHÔNG suy ra "tiêm nhắc lại" vì không tài liệu nào nêu. **LỆCH.** BE (A18, ADR-0073): hết phác đồ thì gợi ý **mũi lớn nhất** (nhắc lại); `suggestedProtocolId = null` chỉ khi phác đồ rỗng.
+4. **Không chặn tiêm trùng mũi** (không có luật). VET được chọn mũi khác gợi ý (BR-KB-04). **KHỚP** (`VaccinationRecordService.record` không có kiểm trùng).
+5. **#20 chỉ người đã ghi mũi đó** (hợp đồng: "VET đã ghi mũi đó"). Hệ quả đã biết: sau khi gán lại lượt (BR-TN-08), VET mới không xóa được mũi VET cũ đã ghi, dù quyền xóa dòng Order khác được chuyển cho người mới. **LỆCH, BE-1 đã quyết (ADR-0075 mục 4, A24):** BE cho **người phụ trách hiện tại** xóa mũi của lượt, không xét người đã ghi; sau gán lại, VET mới xóa được mũi VET cũ ghi còn VET cũ nhận 403, ngược với mock. ADR-0075 loại phương án "quyền theo `recorded_by`".
+6. **Tiêm trong lượt khám** (UC49 "tiêm ngay trong lượt khám trên cùng Visit"): cho mọi lượt Khám/Tiêm đang IN_PROGRESS, không bắt dịch vụ Tiêm. Lượt Thẩm mỹ → 404 như các endpoint bệnh án. **KHỚP** (BE không bắt dịch vụ Tiêm; lượt Thẩm mỹ → 404).
+7. **`warnings`** là mã (`UNDER_MIN_AGE`), giao diện tự dịch. Chưa đủ tuổi tính theo mũi VET **chọn**, không phải mũi gợi ý. **KHỚP** (#19 `warnings` là `[]` hoặc `["UNDER_MIN_AGE"]` theo mũi chọn; #18 `underMinAge` theo mũi gợi ý).
+8. `MedicalRecord.vaccinations`: **KHỚP sau T28**: BE trả các mũi của lượt (`MedicalRecordService` đọc `VaccinationRecordReader.forVisit`), như mock. **Khác:** `lotNumber` và `expiryDate` luôn `null` ở BE (`MedicalRecordMapper` bỏ qua, nợ D046) trong #19, `lastDose` và `vaccinations`; mock điền lô thật.
+9. Care Task#5 (hủy nhắc tái chủng cũ khi tiêm lại) không mô phỏng. **BE đã làm** khi ghi mũi (`careTasks.cancelForRevaccination`, BR-TB-03); không lộ ra response #18–20 nên FE không phải làm gì.
+
+### A.3b Việc phải làm trước khi nối tiêm chủng với BE thật (chưa làm)
+
+Câu lỗi mock tự đặt so với BE (còn lại giống chữ-theo-chữ, giữ nguyên: `Thiếu loại vaccine`, `Mã loại vaccine không hợp lệ`, `Thiếu sản phẩm vaccine`, `Mã sản phẩm không hợp lệ`, `Loại vaccine không áp dụng cho loài của thú`, `Sản phẩm vaccine không còn tồn khả dụng tại chi nhánh`, `Đã ghi nhận mũi tiêm`):
+
+| Tình huống | Mock (T37) | BE (T28) |
+|---|---|---|
+| Thiếu `protocolId` (#19) | `Thiếu mũi theo phác đồ` | `Thiếu mũi tiêm` |
+| `protocolId` không dương | `Mã phác đồ không hợp lệ` | `Mã mũi tiêm không hợp lệ` |
+| Mũi không thuộc phác đồ đang dùng của loại + loài (kể cả id không tồn tại) | 400 `Mũi tiêm không thuộc phác đồ của loại vaccine và loài của thú`; id lạ: 404 `Không tìm thấy phác đồ tiêm chủng #id` | 400 BR-KB-04 `Mũi tiêm không thuộc phác đồ đang dùng của loại vaccine cho loài này` |
+| Sản phẩm không phải vaccine đang kinh doanh của loại (kể cả id không tồn tại) | 400 `Sản phẩm không thuộc loại vaccine đã chọn`; id lạ: 404 `Không tìm thấy sản phẩm #id` | 400 BR-KB-04 `Sản phẩm không phải vaccine đang kinh doanh của loại đã chọn` |
+| Lượt Thẩm mỹ | 404 `Không tìm thấy bệnh án #id` | 404 `Không tìm thấy lượt khám / tiêm #id` |
+| Loại vaccine đã ngừng (#18, #19) | không mô phỏng | 400 BR-SP-07 `Loại vaccine đã ngừng sử dụng` |
+| Lô cạn hoặc hết hạn giữa chừng (#19) | không mô phỏng | 400 BR-KO-05 `Không còn lô chưa hết hạn nào đủ 1 để xuất (tồn khả dụng N)` hoặc `Lô … đã hết hạn, không xuất được` |
+| Xóa mũi mà Care Task đang trỏ tới (#20) | không mô phỏng | 409 `CONCURRENCY_CONFLICT` (ADR-0075) |
+
+Sửa FE / mock:
+
+1. **Xóa mũi (#20):** nút Xóa theo người phụ trách hiện tại (`canVaccinate`), không theo `recordedBy` (`VaccinationSection.tsx`); mock đổi thứ tự kiểm sang 403 → 409 → 404 và bỏ kiểm `recordedBy`; sửa câu 403 "…hoặc đã ghi mũi tiêm này…" trong `visitErrorMessage`.
+2. **Gợi ý khi hết phác đồ:** mock gợi ý mũi lớn nhất (null chỉ khi phác đồ rỗng). Dòng "Đã hết phác đồ…" trong `VaccinationSection.tsx` không bao giờ hiện với BE thật, bỏ hoặc đổi nghĩa.
+3. **`products`:** sắp theo tên rồi id như BE (mặc định chọn `products[0]`; mock đang sắp theo id).
+4. **`lotNumber` / `expiryDate` = `null`:** giao diện đã ẩn lô / hạn khi null nên không vỡ; mock nên trả `null` để test sát BE.
+5. **Lỗi:** 400 (không 404) cho phác đồ / sản phẩm lạ; đổi câu theo bảng; thêm BR-SP-07, BR-KO-05; `CONCURRENCY_CONFLICT` của #20 hiện câu của hàng đợi ("Lượt vừa được gán lại…") trong `visitErrorMessage`, cần câu riêng.
+6. **Test và chú thích lỗi thời:** sửa test mock tương ứng (`visit-clinical.mock.test.ts`); chú thích còn nói "BE chưa có (T28)" hoặc "trả `[]` tới khi T28": `medical-record.ts`, `VaccinationSection.tsx`, `visit-clinical.mock.ts` (đầu file, đoạn #18–20, `vaccinations`), `visit-clinical.mock.test.ts`, tên ca "BE thật chưa có tiêm chủng (T28)" trong `DoctorWorkspacePage.test.tsx`.
+7. **Chạy thử** ghi mũi, xóa mũi, hoàn tất lượt trên BE thật (`VITE_API_MOCK=false`, không đặt các đường dẫn này vào `VITE_API_MOCK_ONLY`).
 
 ### A.4 Mock lệch BE thật
 
@@ -180,7 +207,7 @@ Chạy với mock: `cd FE && npm run dev`, mật khẩu `Petcare123`, nhân viê
 
 - **Kê đơn (#16–17)** là T46: bệnh án chỉ ghi "Kê đơn thuốc chưa nối API (T46)"; `prescriptions` có trong kiểu nhưng luôn rỗng ở mock và BE (tới T38).
 - **Care Task / ST04** (T39) và **audit** không mô phỏng. **Chưa chạy thử màn hình với BE thật** (script seed chưa dựng dữ liệu lâm sàng); kiểu dữ liệu của #10, #12–15 lấy từ code BE nên khả năng lệch thấp, nhưng cần thử.
-- **Trên BE thật hôm nay:** bệnh án, cân nặng, hoàn tất, bản bổ sung chạy theo BE (T27); **tiêm chủng chưa có endpoint** nên chọn loại vaccine sẽ hiện câu lỗi ngay tại mục "Tiêm chủng" (không làm vỡ màn hình) và `vaccinations` luôn rỗng; lượt chỉ tiêm chưa hoàn tất được tới T28. Chế độ hỗn hợp không cứu được (A.4-8).
+- **Trên BE thật (từ 26/10):** bệnh án, cân nặng, hoàn tất, bản bổ sung (T27) và tiêm chủng (T28) đều có endpoint thật. Tiêm chủng **chưa chạy thử**: còn các chỗ lệch ở A.3 / A.3b (xóa mũi theo người phụ trách, gợi ý khi hết phác đồ, lô / hạn `null`, câu lỗi) cần sửa mock và FE trước. Chế độ hỗn hợp không dùng được cho tiêm chủng (A.4-8).
 - **Mã clinic chết sau T37** (gỡ cùng đợt dọn T57, không sửa ở đây): trong `hooks/useClinic.ts` các hook `useVisitDetail`, `useSaveRecord`, `useVisitLines`, `useCatalog`, `useMoveVisit` hết người dùng; trong `clinic.api.ts` `getVisitDetail`, `saveRecord`, `addVisitLine`, `removeVisitLine`, `replaceVisitService`, `getCatalog`, `completeVisit`, `callVisit` chỉ còn `clinic.api.test.ts` gọi; `INVALIDATE.saveRecord`, `editVisitLines`, `completeVisit` trong `queryKeys.ts`; `types/clinic.ts` (`VisitDetail`, `ClinicalRecord`…) và `clinic-db.ts` phần bệnh án; `utils/clinic-rules.ts` `completeViolation`. `AdminDashboardPage` vẫn dùng `clinic-db` cho KPI (T49).
 - Phím tắt `Ctrl+S`, `Ctrl+Enter` (bàn bác sĩ) và "bấm Bắt đầu hoặc Xong" (grooming) trong `shortcuts.ts` nay đúng trở lại (T36 B.7 đã ghi là tạm sai).
 

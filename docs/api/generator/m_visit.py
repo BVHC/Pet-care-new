@@ -21,7 +21,7 @@ m = Module(
     security=[
         "Nhân viên chỉ thấy và thao tác Visit của chi nhánh mình. Chỉ người được gán gọi lượt, ghi bệnh án, kê đơn, tiêm, hoàn tất (BR-TN-05, BR-KB-01).",
         "Tiếp nhận tạo Visit, chuyển lịch hẹn và mở Order trong một transaction (03 Phụ lục, 06 §4.1). Hoàn tất / hủy lượt tương tự.",
-        "Ghi mũi tiêm: khóa lô FEFO, sinh dòng Order, ghi mũi, trừ kho trong một transaction theo thứ tự ở 06-module-contracts §5. Xóa mũi ghi nhầm đi ngược lại.",
+        "Ghi mũi tiêm: sinh dòng Order, khóa lô FEFO, ghi mũi, trừ kho, đánh dấu mũi cũ và hủy Care Task trong một transaction theo thứ tự ở 06-module-contracts §3 (docs/adr/0074). Xóa mũi ghi nhầm đi ngược lại.",
         "`internalNote` và bản bổ sung `isInternal` không bao giờ trả cho khách (BR-KB-01, BR-KH-07).",
         "Gán lại lượt đã gọi, bản bổ sung bệnh án ghi audit (BR-TN-08, BR-KB-01, BR-QT-15).",
         "Thú đã mất không được tiếp nhận (BR-TN-01, BR-KH-05).",
@@ -44,11 +44,20 @@ m = Module(
         ("A15", "Gán lại lượt đã gọi (#9) khi người phụ trách hiện tại không còn đủ điều kiện phụ trách lượt: không ACTIVE hoặc bị khóa, khác chi nhánh, hoặc sai chức vụ với nhóm dịch vụ (đổi chức vụ khi còn lượt, docs/adr/0031 Q4). Không xét cờ `needsReassign`; gán lại thì gỡ cờ (docs/adr/0063)", "BR-TN-08 'không còn ACTIVE (bị khóa)'; BR-TN-05"),
         ("A16", "Lượt Khám/Tiêm (MEDICAL) hoàn tất khi Order không còn dòng dịch vụ loại Khám hoặc Tiêm nào (VET xóa dòng tự sinh) thì bị từ chối 400 `BR-KB-02`; 03 Visit#5 chỉ nêu điều kiện cho 'có Khám' và 'chỉ có Tiêm' (docs/adr/0069)", "BR-KB-02; tránh Order PENDING không có dịch vụ"),
         ("A17", "Bản bổ sung (#15) cho lượt MEDICAL đã COMPLETED chưa có dòng bệnh án (lượt chỉ tiêm): tạo bệnh án rỗng đã khóa rồi thêm bản bổ sung; thú đã mất hoặc đã chuyển chủ vẫn thêm được (BR-KH-05 'chỉ đọc' hiểu là hồ sơ thú) (docs/adr/0070)", "BR-KB-01, BR-KB-04: sai sót sau COMPLETED ghi bằng bản bổ sung; FK addenda cần dòng bệnh án"),
+        ("A18", "Mũi gợi ý (#18): chưa từng tiêm loại đó → mũi nhỏ nhất đang dùng; đã tiêm → mũi đang dùng nhỏ nhất lớn hơn số mũi đã chụp của mũi gần nhất; không còn mũi lớn hơn → mũi lớn nhất (nhắc lại định kỳ); phác đồ rỗng → null (docs/adr/0073)", "BR-KB-04; BR-SP-02 mọi mũi có khoảng cách tới mũi kế tiếp > 0; erd `vaccinations.next_due_date` NOT NULL"),
+        ("A19", "#18 chỉ đọc: VET đang phụ trách lượt xem được ở mọi trạng thái; ghi mũi (#19) mới chặn lượt không IN_PROGRESS (docs/adr/0073)", "Contract #18 không có 409; khuôn #12"),
+        ("A20", "#18: `products` chỉ gồm sản phẩm đang kinh doanh có tồn khả dụng > 0 tại chi nhánh của lượt, theo tên (rỗng vẫn 200); `lastDose` là mũi gần nhất ở mọi chi nhánh, kể cả mũi của chính lượt; thú không có ngày sinh → `underMinAge` false (docs/adr/0073)", "BR-KB-04, BR-KO-01; 04 nguyên tắc 8 (thú dùng chung toàn chuỗi)"),
+        ("A21", "Ghi mũi (#19): mũi phải thuộc phác đồ đang dùng của đúng loài và đúng loại đã chọn; sản phẩm phải là vaccine đang kinh doanh của loại đó và còn tồn khả dụng tại chi nhánh của lượt; cùng thú, cùng loại: mọi mũi cũ chưa bị thay thế được đánh dấu `superseded` và Care Task `VACCINE_*` còn OPEN của chúng bị hủy (docs/adr/0074)", "BR-KB-04, BR-TB-03; 03 Care Task#5"),
+        ("A22", "Hết tồn: kiểm trước nên trả `BR-KB-04`; nếu lô bị lấy hết giữa lúc kiểm và lúc ghi thì trả `BR-KO-05` (vẫn 400, không ghi gì) (docs/adr/0074)", "BR-KB-04, BR-KO-05; exception qua callee MANDATORY đã đánh rollback-only"),
+        ("A23", "Gửi lại cùng request ghi thêm một mũi nữa (không chống trùng); ghi nhầm thì xóa bằng #20 khi lượt còn IN_PROGRESS (docs/adr/0074)", "Docs không có rule chặn trùng mũi trong một lượt"),
+        ("A24", "Xóa mũi (#20): người gọi phải là VET phụ trách **hiện tại** của lượt, không cần là người đã ghi mũi. Chỉ người phụ trách ghi được mũi (#19) và gán lại lượt đã gọi chuyển quyền của người cũ sang người mới (BR-TN-08), nên 'VET đã ghi mũi đó' trùng với người phụ trách hiện tại; sau khi gán lại, người cũ không xóa được nữa (docs/adr/0075)", "BR-KB-04 'VET xóa được mũi mình đã ghi nhận'; BR-TN-08"),
+        ("A25", "Sau khi xóa mũi X chưa bị thay thế, mũi còn lại mới nhất cùng thú và cùng loại vaccine (ngày tiêm mới nhất, cùng ngày thì ghi sau) hết `superseded` để nhắc tái chủng tính lại theo nó; xóa mũi đã bị thay thế thì mũi khác không đổi. Care Task đã hủy khi ghi X không mở lại (docs/adr/0075)", "BR-TB-03 'mũi đã tiêm lại khi có mũi mới hơn cùng loại'; 03 Care Task CANCELLED là trạng thái cuối"),
     ],
     questions=[
         ("Q1", "Dòng dịch vụ tự sinh khi tiếp nhận có thể bị VET đổi (BR-TN-01). Nếu đổi từ dịch vụ thường sang dịch vụ loại Khám thì có hủy nhắc tái khám như Visit#1 có dịch vụ Khám không?", "TBD (PO), tạm chỉ xét tại Visit#1 (06 G5)", "03 Care Task#6"),
         ("Q2", "Visit#4 cho SUPER_MANAGER gán lại lượt đã gọi khi chi nhánh không còn BRANCH_MANAGER ACTIVE, nhưng #2 / #4 chỉ cho A05–A08 xem lượt. SUPER_MANAGER tìm lượt cần gán lại bằng cách nào?", "Đã chốt: A14 (docs/adr/0063)", "03 Visit#4; 00-method §3.3"),
         ("Q3", "Khóa tài khoản đánh dấu lượt IN_PROGRESS của người bị khóa là cần gán lại (needsReassign). Mở khóa có gỡ cờ này không, khi người phụ trách đã ACTIVE trở lại?", "TBD (PO); tạm không gỡ (docs/adr/0062 Q5)", "03 Tài khoản#7, #8; BR-QT-12; erd visits.needs_reassign"),
+        ("Q4", "Xóa mũi ghi nhầm (#20) có mở lại Care Task tái chủng đã bị hủy khi ghi mũi đó (Care Task#5) không?", "TBD (PO); tạm không mở lại — CANCELLED là trạng thái cuối (03 §10), mũi cũ hết `superseded` nên ST04 nhắc lại được (docs/adr/0075)", "03 Care Task#5; BR-TB-03"),
     ],
 )
 
@@ -125,9 +134,9 @@ m.schema("AddPrescriptionRequest", {
 m.schema("VaccineProductOption", {"productId": "int64", "name": "string", "availableQuantity": "int"})
 m.schema("VaccinationOptions", {
     "vaccineTypeId": "int64",
-    "protocol": "array:ref:ProtocolDoseOption|Các mũi trong phác đồ của loài",
-    "suggestedProtocolId": "int64?|Gợi ý theo lịch sử tiêm cùng loại tại hệ thống, chỉ tham khảo (BR-KB-04)",
-    "lastDose": "ref:VaccinationRecord",
+    "protocol": "array:ref:ProtocolDoseOption|Các mũi đang dùng trong phác đồ của loài, theo mũi tăng dần",
+    "suggestedProtocolId": "int64?|Gợi ý theo lịch sử tiêm cùng loại tại hệ thống, chỉ tham khảo (BR-KB-04, A18)",
+    "lastDose": "ref:VaccinationRecord?|Mũi gần nhất cùng loại tại hệ thống; null nếu chưa tiêm (A20)",
     "products": "array:ref:VaccineProductOption|Chỉ sản phẩm thuộc loại còn tồn khả dụng tại chi nhánh",
     "underMinAge": "bool|Thú chưa đủ tuổi tối thiểu của mũi gợi ý — cảnh báo, không chặn",
 }, required=["vaccineTypeId", "protocol", "products", "underMinAge"])
@@ -297,19 +306,38 @@ m.op("delete", "/visits/{visitId}/prescriptions/{itemId}", "removePrescriptionIt
 m.op("get", "/visits/{visitId}/vaccination-options", "getVaccinationOptions", "Gợi ý mũi và sản phẩm vaccine",
      "Vaccinations", "UC49", "BR-KB-04, BR-SP-02, 07, BR-KO-01", "A07", "VET được gán lượt", resp="VaccinationOptions",
      path_params=["VisitId"], query=["vaccineTypeId!=int64|Loại vaccine đúng loài của thú"],
-     errors=(400, 401, 403, 404), err_desc={400: "Loại vaccine không áp dụng cho loài của thú"})
+     errors=(400, 401, 403, 404),
+     err_desc={400: "`BR-KB-04` loại vaccine không áp dụng cho loài của thú · `BR-SP-07` loại vaccine đã ngừng sử dụng · "
+                    "thiếu / sai kiểu `vaccineTypeId` (`MALFORMED_REQUEST`); BR-TK-17",
+               403: "Sai vai trò · lượt của chi nhánh khác · không phải VET phụ trách hiện tại",
+               404: "Không có Visit, Visit nhóm GROOMING hoặc không có loại vaccine"},
+     notes="A18, A19, A20. Thứ tự lỗi: 400 tham số → 403 vai trò → 404 → 403 chi nhánh → 404 GROOMING → 403 người "
+           "phụ trách → 404 loại vaccine → 400 BR-KB-04 → 400 BR-SP-07 (docs/adr/0073). Chỉ đọc, không khóa.")
 m.op("post", "/visits/{visitId}/vaccinations", "recordVaccination", "Ghi nhận mũi tiêm", "Vaccinations", "UC49, ST06",
      "BR-KB-04, BR-KO-05, BR-TB-03", "A07", "VET được gán lượt",
      "IN_PROGRESS giữ nguyên · dòng Order VACCINE · trừ kho FEFO · Care Task#5", body="RecordVaccinationRequest",
      resp="RecordVaccinationResult", status=201, path_params=["VisitId"], errors=(400, 401, 403, 404, 409),
-     err_desc={400: "`BR-KB-04` sản phẩm không thuộc loại vaccine, không còn tồn khả dụng, hoặc mũi không thuộc phác đồ đúng loài",
+     err_desc={400: "`BR-KB-04` loại vaccine không áp dụng cho loài của thú · mũi không thuộc phác đồ đang dùng của loại và loài · "
+                    "sản phẩm không phải vaccine đang kinh doanh của loại đã chọn · sản phẩm không còn tồn khả dụng · "
+                    "`BR-SP-07` loại vaccine đã ngừng sử dụng · `BR-KO-05` hết lô chưa hết hạn khi đang ghi (A22) · "
+                    "body sai (`VALIDATION_FAILED`, `MALFORMED_REQUEST`); BR-TK-17",
+               403: "Sai vai trò · lượt của chi nhánh khác · không phải VET phụ trách hiện tại",
+               404: "Không có Visit, Visit nhóm GROOMING hoặc không có loại vaccine",
                409: "Lượt không IN_PROGRESS"},
-     notes="Ngày tiêm = hôm nay (A6). Chưa đủ tuổi: cảnh báo trong warnings, không chặn.")
+     notes="A6, A21, A22, A23. Thứ tự lỗi: 400 body → 403 vai trò → 404 → 403 chi nhánh → 404 GROOMING → 403 người phụ "
+           "trách → 409 → 404 loại vaccine → 400 BR-KB-04 → 400 BR-SP-07 → 400 BR-KB-04 (mũi, sản phẩm, tồn) (docs/adr/0074). "
+           "Ngày tiêm = hôm nay (A6). Chưa đủ tuổi: cảnh báo trong warnings, không chặn. Không audit.")
 m.op("delete", "/visits/{visitId}/vaccinations/{vaccinationId}", "deleteVaccination", "Xóa mũi tiêm ghi nhầm",
-     "Vaccinations", "UC49", "BR-KB-04", "A07", "VET đã ghi mũi đó", status=204,
-     path_params=["VisitId", "VaccinationId"], errors=(401, 403, 404, 409),
-     err_desc={409: "Visit đã COMPLETED — sai sót ghi bằng bản bổ sung"},
-     notes="Hoàn kho đúng lô, xóa dòng Order vaccine trong cùng transaction.")
+     "Vaccinations", "UC49", "BR-KB-04, BR-TB-03", "A07", "VET phụ trách hiện tại (A24)",
+     "IN_PROGRESS giữ nguyên · hoàn kho đúng lô · xóa dòng Order VACCINE · mũi cũ mới nhất hết `superseded` (A25)",
+     status=204, path_params=["VisitId", "VaccinationId"], errors=(400, 401, 403, 404, 409),
+     err_desc={400: "`MALFORMED_REQUEST` id sai kiểu; BR-TK-17",
+               403: "Sai vai trò · lượt của chi nhánh khác · không phải VET phụ trách hiện tại (A24)",
+               404: "Không có Visit, Visit nhóm GROOMING hoặc mũi tiêm không thuộc lượt này",
+               409: "Lượt không IN_PROGRESS — sau COMPLETED, sai sót ghi bằng bản bổ sung"},
+     notes="A24, A25, Q4. Thứ tự lỗi: 400 id → 403 vai trò → 404 lượt → 403 chi nhánh → 404 GROOMING → 403 người phụ trách "
+           "→ 409 → 404 mũi (docs/adr/0075). Hoàn kho đúng lô (kể cả lô đã hết hạn), xóa dòng Order vaccine trong cùng "
+           "transaction. Không audit. Care Task đã hủy của mũi cũ không mở lại (Q4).")
 
 m.op("get", "/pets/{petId}/health-record", "getPetHealthRecord", "Hồ sơ sức khỏe thú cưng", "Health record",
      "UC25, UC53", "BR-KH-07, BR-KB-01, 04, 06", "A02, A06, A07, A08", "Khách là chủ hiện tại; nhân viên",

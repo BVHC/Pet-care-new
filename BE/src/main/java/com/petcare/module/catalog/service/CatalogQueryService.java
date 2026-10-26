@@ -113,6 +113,18 @@ public class CatalogQueryService implements CatalogQueryApi {
                 .collect(java.util.stream.Collectors.toMap(v -> v.getId(), v -> v.getName()));
     }
 
+    @Override
+    public Optional<VaccineTypeInfo> findVaccineType(Long vaccineTypeId) {
+        return vaccineTypes.findById(vaccineTypeId)
+                .map(v -> new VaccineTypeInfo(v.getId(), v.getName(), v.getSpecies(), v.isActive()));
+    }
+
+    @Override
+    public List<ProductInfo> findProductsByVaccineType(Long vaccineTypeId) {
+        return products.findByVaccineTypeIdOrderByNameAscIdAsc(vaccineTypeId).stream()
+                .map(CatalogQueryService::toInfo).toList();
+    }
+
     private static ServiceInfo toInfo(com.petcare.module.catalog.entity.Service s) {
         return new ServiceInfo(s.getId(), s.getName(), s.getGroup(), s.getMedicalType(), s.getPrice(), s.isActive());
     }
