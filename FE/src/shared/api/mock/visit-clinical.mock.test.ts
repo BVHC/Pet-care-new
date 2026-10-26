@@ -56,6 +56,18 @@ const direct = (key: string, account: AccountSummary, over: { body?: unknown; pa
 const RECORD_KEYS = ['addenda', 'diagnosis', 'examination', 'followUpDate', 'internalNote', 'lastEditedBy', 'locked', 'prescriptions', 'treatmentPlan', 'vaccinations', 'visitId'];
 const EMPTY_RECORD = { examination: null, diagnosis: null, treatmentPlan: null, internalNote: null, followUpDate: null, locked: false, lastEditedBy: null, prescriptions: [], vaccinations: [], addenda: [] };
 
+/** Dòng đơn thuốc mẫu của lượt 61: Amoxicillin x10, khớp dòng Order DRUG #22 của Order #2 (bất biến isExternalPurchase === (orderLineId == null)). */
+const SEED_61_ITEM = {
+  itemId: 2,
+  productId: 3,
+  productName: 'Amoxicillin 250mg',
+  quantity: 10,
+  dosageInstructions: 'Ngày 2 lần, mỗi lần 1 viên sau ăn, uống 5 ngày',
+  isExternalPurchase: false,
+  externalReason: null,
+  orderLineId: 22,
+};
+
 const getRecord = async (visitId: number | string, who: () => Promise<object> = vet) => client.get(`/api/visits/${visitId}/medical-record`, await who());
 const putRecord = async (visitId: number | string, body: unknown, who: () => Promise<object> = vet) => client.put(`/api/visits/${visitId}/medical-record`, body, await who());
 
@@ -74,7 +86,8 @@ describe('xem bệnh án (#12, UC48, UC53)', () => {
 
   it('lượt đã hoàn tất: locked = true, kèm bản bổ sung theo thứ tự ghi và tên người ghi (dữ liệu mẫu lượt 61)', async () => {
     const record = (await getRecord(61)).data.data;
-    expect(record).toMatchObject({ visitId: 61, locked: true, lastEditedBy: 5, prescriptions: [], vaccinations: [] });
+    expect(record).toMatchObject({ visitId: 61, locked: true, lastEditedBy: 5, vaccinations: [] });
+    expect(record.prescriptions).toEqual([SEED_61_ITEM]);
     expect(record.diagnosis).toBeTruthy();
     expect(record.followUpDate).toBe(addDays(TODAY, 7));
     expect(record.addenda).toHaveLength(1);
@@ -719,5 +732,389 @@ describe('hồ sơ sức khỏe thú cưng phản ánh lượt khám, mũi tiêm
     const bim = (await healthOf(2)).visits.find((v: { visitId: number }) => v.visitId === 2103);
     expect(bim).toMatchObject({ serviceGroup: 'GROOMING', examination: null, diagnosis: null, followUpDate: null, prescriptions: [], addenda: [] });
     expect((await healthOf(1)).visits.map((v: { visitId: number }) => v.visitId)).not.toContain(2104); // Mochi đang làm
+  });
+});
+
+// ─── Kê đơn: thêm dòng (#16) và xóa dòng (#17) (UC48; BR-KB-03, BR-SP-01, BR-BH-02) ───
+// BE chưa có (T38): theo hợp đồng visit-v1 + BR-KB-03; chỗ hợp đồng im lặng là ASSUMPTION (docs/superpowers/plans/2026-10-26-t46-fe-prescription-public.md):
+//  A1 thứ tự kiểm #16: body 400 → vai trò 403 → lượt 404 → chi nhánh 403 → Thẩm mỹ 404 → người phụ trách 403 → không IN_PROGRESS 409 → sản phẩm 404 → rule BR-KB-03 400.
+//     #17 cùng thứ tự, thay "sản phẩm 404" bằng "dòng đơn của lượt này 404" (đứng SAU 409, giống vị trí 404 sản phẩm của #16 — khác #20 xóa mũi tiêm).
+//  A2 sản phẩm không phải thuốc kê đơn / ngừng kinh doanh → 400 BR-KB-03 · A3 REDUCE_TO_AVAILABLE tồn 0 → 400 BR-KB-03 · A4 gửi resolution khi tồn đã đủ → như kê thường
+//  A5 cùng thuốc kê hai lần → hai dòng · A6 kê đơn không trừ kho (kho trừ khi PAID, BR-BH-04).
+// Dữ liệu mẫu: Amoxicillin #3 (thuốc kê đơn, 8.000 đ) chi nhánh 1 tồn 700 (lô 200 + 500); lượt 2002 đang khám (VET #5), Order OPEN một dòng khám.
+
+const prescribe = async (visitId: number | string, body: unknown, who: () => Promise<object> = vet) => client.post(`/api/visits/${visitId}/prescriptions`, body, await who());
+const removeRx = async (visitId: number | string, itemId: number | string, who: () => Promise<object> = vet) => client.delete(`/api/visits/${visitId}/prescriptions/${itemId}`, await who());
+const AMOX = { productId: 3, quantity: 10, dosageInstructions: 'Ngày 2 lần, mỗi lần 1 viên sau ăn' };
+const PRESCRIPTION_KEYS = ['dosageInstructions', 'externalReason', 'isExternalPurchase', 'itemId', 'orderLineId', 'productId', 'productName', 'quantity'];
+interface Rx {
+  itemId: number;
+  productId: number;
+  productName: string;
+  quantity: number;
+  dosageInstructions: string;
+  isExternalPurchase: boolean;
+  externalReason: string | null;
+  orderLineId: number | null;
+}
+interface OrderLineView {
+  lineId: number;
+  lineType: string;
+  productId: number | null;
+  description: string;
+  quantity: number;
+  unitPrice: number;
+}
+const rxOf = async (visitId: number) => (await getRecord(visitId)).data.data.prescriptions as Rx[];
+const orderLinesOf = async (visitId: number) => (await orderOf((await visitOf(visitId)).orderId)).lines as OrderLineView[];
+const drugLinesOf = async (visitId: number) => (await orderLinesOf(visitId)).filter((l) => l.lineType === 'DRUG');
+const AMOX_STOCK = 700;
+const SHORT_800 = 'Thiếu tồn khả dụng: Amoxicillin 250mg chỉ còn 700 viên, cần 800. Giảm số lượng cho vừa tồn hoặc giữ nguyên số lượng và mua ngoài (BR-KB-03)';
+
+/** Thuốc kê đơn mới (chi nhánh 1 chưa có tồn): dựng trong test, KHÔNG đổi dữ liệu mẫu kho / danh mục (nhiều test khác đếm theo dữ liệu mẫu). */
+async function newDrug(sku: string, name = 'Thuốc hết tồn') {
+  const res = await client.post('/api/products', { categoryId: 2, sku, name, productType: 'DRUG', isPrescription: true, tracksExpiry: true, unit: 'viên', price: 5_000 }, await chain());
+  return res.data.data.productId as number;
+}
+
+describe('kê đơn một dòng thuốc — đủ tồn (#16, UC48; BR-KB-03, BR-BH-02)', () => {
+  it('đủ tồn: 201, dòng đơn thuốc sinh đúng 1 dòng Order DRUG (giá và tên chụp lúc kê), liều dùng bỏ khoảng trắng hai đầu, KHÔNG trừ kho (A6)', async () => {
+    const before = (await stock(3)).availableQuantity;
+    expect(before).toBe(AMOX_STOCK);
+    const res = await prescribe(2002, { ...AMOX, dosageInstructions: `  ${AMOX.dosageInstructions}  ` });
+
+    expect(res.status).toBe(201);
+    expect(message(res)).toBe('Đã kê đơn thuốc');
+    expect(Object.keys(res.data.data).sort()).toEqual(PRESCRIPTION_KEYS);
+    expect(res.data.data).toMatchObject({ productId: 3, productName: 'Amoxicillin 250mg', quantity: 10, dosageInstructions: AMOX.dosageInstructions, isExternalPurchase: false, externalReason: null });
+    expect(typeof res.data.data.orderLineId).toBe('number');
+
+    const lines = await drugLinesOf(2002);
+    expect(lines).toHaveLength(1);
+    expect(lines[0]).toMatchObject({ lineId: res.data.data.orderLineId, lineType: 'DRUG', productId: 3, description: 'Amoxicillin 250mg', quantity: 10, unitPrice: 8_000, addedBy: 5, canEdit: false, canDelete: false });
+    expect(await rxOf(2002)).toEqual([res.data.data]);
+    expect((await stock(3)).availableQuantity).toBe(before);
+  });
+
+  it('tổng Order tính theo dòng thuốc (SL × giá lúc kê) và quay về khi xóa dòng đơn; hoàn tất lượt thì dòng thuốc vào Order chờ thu (BR-BH-04)', async () => {
+    const orderId = (await visitOf(2002)).orderId;
+    const base = (await orderOf(orderId)).totalAmount;
+    const item = (await prescribe(2002, AMOX)).data.data;
+    expect((await orderOf(orderId)).totalAmount).toBe(base + 10 * 8_000);
+    await removeRx(2002, item.itemId);
+    expect((await orderOf(orderId)).totalAmount).toBe(base);
+
+    await prescribe(2002, { ...AMOX, quantity: 3 });
+    await putRecord(2002, { diagnosis: 'Khỏe' });
+    await complete(2002);
+    const order = await orderOf(orderId);
+    expect([order.status, order.totalAmount]).toEqual(['PENDING', base + 3 * 8_000]);
+  });
+
+  it('dòng thuốc trong Order không sửa / xóa trực tiếp được ở module bán hàng — chỉ biến mất kèm dòng đơn (BR-BH-02)', async () => {
+    const item = (await prescribe(2002, AMOX)).data.data;
+    const url = `/api/orders/${(await visitOf(2002)).orderId}/lines/${item.orderLineId}`;
+    for (const who of [vet, desk]) {
+      expect((await failure(client.delete(url, await who()))).status).toBeGreaterThanOrEqual(400);
+      expect((await failure(client.patch(url, { quantity: 1 }, await who()))).status).toBeGreaterThanOrEqual(400);
+    }
+    expect(await rxOf(2002)).toEqual([item]);
+    expect(await drugLinesOf(2002)).toHaveLength(1);
+  });
+
+  it('A5: cùng thuốc kê hai lần là hai dòng đơn và hai dòng Order riêng', async () => {
+    const first = (await prescribe(2002, AMOX)).data.data;
+    const second = (await prescribe(2002, { ...AMOX, quantity: 5 })).data.data;
+    expect(second.itemId).not.toBe(first.itemId);
+    expect(second.orderLineId).not.toBe(first.orderLineId);
+    expect((await rxOf(2002)).map((r) => r.quantity)).toEqual([10, 5]);
+    expect((await drugLinesOf(2002)).map((l) => l.quantity)).toEqual([10, 5]);
+  });
+
+  it('đúng bằng tồn (700) là đủ tồn; hơn 1 (701) là thiếu tồn — không dính nhau', async () => {
+    const exact = await prescribe(2002, { ...AMOX, quantity: AMOX_STOCK });
+    expect([exact.status, exact.data.data.quantity, exact.data.data.isExternalPurchase]).toEqual([201, AMOX_STOCK, false]);
+    const over = await failure(prescribe(2002, { ...AMOX, quantity: AMOX_STOCK + 1 }));
+    expect([over.status, ruleOf(over)]).toEqual([400, 'BR-KB-03']);
+  });
+
+  it('A4: gửi shortageResolution khi tồn đã đủ thì xử lý như kê thường (dòng Order, không mua ngoài, giữ số lượng)', async () => {
+    for (const shortageResolution of ['REDUCE_TO_AVAILABLE', 'EXTERNAL_PURCHASE']) {
+      const res = await prescribe(2002, { ...AMOX, shortageResolution });
+      expect(res.status).toBe(201);
+      expect(res.data.data).toMatchObject({ quantity: 10, isExternalPurchase: false, externalReason: null });
+      expect(res.data.data.orderLineId).not.toBeNull();
+    }
+    expect(await drugLinesOf(2002)).toHaveLength(2);
+  });
+
+  it('shortageResolution vắng hoặc null là như nhau (không có cách xử lý)', async () => {
+    expect((await prescribe(2002, { ...AMOX, shortageResolution: null })).status).toBe(201);
+    expect(message(await failure(prescribe(2002, { ...AMOX, quantity: 800, shortageResolution: null })))).toBe(SHORT_800);
+  });
+});
+
+describe('kê đơn khi thiếu tồn (#16, UC48; BR-KB-03)', () => {
+  it('chưa chọn cách xử lý: 400 BR-KB-03 kèm số tồn hiện có trong message và KHÔNG ghi gì (không dòng đơn, không dòng Order)', async () => {
+    const orderLines = (await orderLinesOf(2002)).length;
+    const res = await failure(prescribe(2002, { ...AMOX, quantity: 800 }));
+
+    expect([res.status, res.data.errorCode, message(res), ruleOf(res)]).toEqual([400, 'BUSINESS_RULE_VIOLATION', SHORT_800, 'BR-KB-03']);
+    expect(await rxOf(2002)).toEqual([]);
+    expect(await orderLinesOf(2002)).toHaveLength(orderLines);
+    expect((await stock(3)).availableQuantity).toBe(AMOX_STOCK);
+  });
+
+  it('REDUCE_TO_AVAILABLE: giảm xuống đúng tồn khả dụng, vẫn sinh dòng Order với số lượng đã giảm', async () => {
+    const res = await prescribe(2002, { ...AMOX, quantity: 800, shortageResolution: 'REDUCE_TO_AVAILABLE' });
+    expect(res.status).toBe(201);
+    expect(res.data.data).toMatchObject({ quantity: AMOX_STOCK, isExternalPurchase: false, externalReason: null });
+    const lines = await drugLinesOf(2002);
+    expect(lines).toHaveLength(1);
+    expect(lines[0]).toMatchObject({ lineId: res.data.data.orderLineId, quantity: AMOX_STOCK });
+    expect((await stock(3)).availableQuantity).toBe(AMOX_STOCK);
+  });
+
+  it('REDUCE_TO_AVAILABLE khi tồn bằng 0 (A3): 400 BR-KB-03 bảo chọn mua ngoài, không ghi gì', async () => {
+    const productId = await newDrug('RX-HET-1');
+    const res = await failure(prescribe(2002, { productId, quantity: 3, dosageInstructions: 'x', shortageResolution: 'REDUCE_TO_AVAILABLE' }));
+    expect([res.status, message(res), ruleOf(res)]).toEqual([400, 'Thuốc hết tồn đã hết tồn khả dụng nên không giảm được, hãy chọn mua ngoài (BR-KB-03)', 'BR-KB-03']);
+    expect(await rxOf(2002)).toEqual([]);
+    expect(await drugLinesOf(2002)).toEqual([]);
+  });
+
+  it('thuốc chưa từng nhập kho (tồn 0) mà chưa chọn cách xử lý: báo thiếu tồn còn 0', async () => {
+    const productId = await newDrug('RX-HET-2');
+    const res = await failure(prescribe(2002, { productId, quantity: 3, dosageInstructions: 'x' }));
+    expect([res.status, message(res)]).toEqual([400, 'Thiếu tồn khả dụng: Thuốc hết tồn chỉ còn 0 viên, cần 3. Giảm số lượng cho vừa tồn hoặc giữ nguyên số lượng và mua ngoài (BR-KB-03)']);
+  });
+
+  it('EXTERNAL_PURCHASE (A3): giữ nguyên số lượng, đánh dấu mua ngoài (OUT_OF_STOCK_AT_PRESCRIBE), không có dòng Order; dòng vẫn nằm trong đơn của bệnh án', async () => {
+    const orderLines = (await orderLinesOf(2002)).length;
+    const res = await prescribe(2002, { ...AMOX, quantity: 800, shortageResolution: 'EXTERNAL_PURCHASE' });
+
+    expect(res.status).toBe(201);
+    expect(res.data.data).toMatchObject({ productId: 3, quantity: 800, isExternalPurchase: true, externalReason: 'OUT_OF_STOCK_AT_PRESCRIBE', orderLineId: null });
+    expect(await orderLinesOf(2002)).toHaveLength(orderLines);
+    expect(await drugLinesOf(2002)).toEqual([]);
+    expect(await rxOf(2002)).toEqual([res.data.data]);
+    expect((await stock(3)).availableQuantity).toBe(AMOX_STOCK);
+  });
+
+  it('EXTERNAL_PURCHASE cũng dùng được cho thuốc tồn 0', async () => {
+    const productId = await newDrug('RX-HET-3');
+    const res = await prescribe(2002, { productId, quantity: 3, dosageInstructions: 'x', shortageResolution: 'EXTERNAL_PURCHASE' });
+    expect(res.data.data).toMatchObject({ quantity: 3, isExternalPurchase: true, orderLineId: null });
+  });
+
+  it('bất biến isExternalPurchase === (orderLineId == null) với mọi dòng đơn, cả dòng thường lẫn mua ngoài lẫn dòng mẫu', async () => {
+    await prescribe(2002, AMOX);
+    await prescribe(2002, { ...AMOX, quantity: 800, shortageResolution: 'EXTERNAL_PURCHASE' });
+    await prescribe(2002, { ...AMOX, quantity: 800, shortageResolution: 'REDUCE_TO_AVAILABLE' });
+    for (const visitId of [2002, 61]) {
+      for (const item of await rxOf(visitId)) expect(item.isExternalPurchase).toBe(item.orderLineId === null);
+    }
+  });
+});
+
+describe('kê đơn: sản phẩm không kê được (#16; BR-KB-03, BR-SP-01)', () => {
+  it('A2: không phải thuốc kê đơn (hàng #1) hoặc thuốc đã ngừng kinh doanh: 400 BR-KB-03, không ghi gì', async () => {
+    const stopped = await newDrug('RX-NGUNG', 'Thuốc ngừng bán');
+    await client.patch(`/api/products/${stopped}`, { isActive: false }, await chain());
+
+    const goods = await failure(prescribe(2002, { ...AMOX, productId: 1 }));
+    expect([goods.status, message(goods), ruleOf(goods)]).toEqual([400, 'Sản phẩm không phải thuốc kê đơn (BR-KB-03)', 'BR-KB-03']);
+    const inactive = await failure(prescribe(2002, { ...AMOX, productId: stopped }));
+    expect([inactive.status, message(inactive), ruleOf(inactive)]).toEqual([400, 'Thuốc đã ngừng kinh doanh (BR-KB-03)', 'BR-KB-03']);
+    expect(await rxOf(2002)).toEqual([]);
+    expect(await drugLinesOf(2002)).toEqual([]);
+  });
+
+  it('không có sản phẩm: 404', async () => {
+    const res = await failure(prescribe(2002, { ...AMOX, productId: 9999 }));
+    expect([res.status, res.data.errorCode, message(res)]).toEqual([404, 'RESOURCE_NOT_FOUND', 'Không tìm thấy sản phẩm #9999']);
+  });
+});
+
+describe('kê đơn: kiểm dữ liệu vào (#16)', () => {
+  it.each<[string, object, string]>([
+    ['thiếu productId', { quantity: 1, dosageInstructions: 'x' }, 'productId: Thiếu thuốc cần kê'],
+    ['productId bằng 0', { ...AMOX, productId: 0 }, 'productId: Mã thuốc không hợp lệ'],
+    ['productId âm', { ...AMOX, productId: -3 }, 'productId: Mã thuốc không hợp lệ'],
+    ['thiếu quantity', { productId: 3, dosageInstructions: 'x' }, 'quantity: Thiếu số lượng'],
+    ['quantity bằng 0', { ...AMOX, quantity: 0 }, 'quantity: Số lượng phải lớn hơn 0'],
+    ['quantity âm', { ...AMOX, quantity: -2 }, 'quantity: Số lượng phải lớn hơn 0'],
+    ['thiếu liều dùng', { productId: 3, quantity: 1 }, 'dosageInstructions: Bắt buộc nhập liều dùng'],
+    ['liều dùng rỗng', { ...AMOX, dosageInstructions: '' }, 'dosageInstructions: Bắt buộc nhập liều dùng'],
+    ['liều dùng chỉ khoảng trắng', { ...AMOX, dosageInstructions: '   ' }, 'dosageInstructions: Bắt buộc nhập liều dùng'],
+    ['liều dùng 501 ký tự', { ...AMOX, dosageInstructions: 'a'.repeat(501) }, 'dosageInstructions: Liều dùng tối đa 500 ký tự'],
+  ])('%s: 400 VALIDATION_FAILED và không ghi gì', async (_name, body, expected) => {
+    const res = await failure(prescribe(2002, body));
+    expect([res.status, res.data.errorCode, message(res)]).toEqual([400, 'VALIDATION_FAILED', expected]);
+    expect(await rxOf(2002)).toEqual([]);
+  });
+
+  it('liều dùng đúng 500 ký tự (sau khi bỏ khoảng trắng hai đầu) còn hợp lệ', async () => {
+    const res = await prescribe(2002, { ...AMOX, dosageInstructions: ` ${'a'.repeat(500)} ` });
+    expect([res.status, res.data.data.dosageInstructions.length]).toEqual([201, 500]);
+  });
+
+  it.each<[string, unknown]>([
+    ['body không phải đối tượng', []],
+    ['productId không nguyên', { ...AMOX, productId: 3.5 }],
+    ['quantity không nguyên', { ...AMOX, quantity: 1.5 }],
+    ['quantity là chuỗi chữ', { ...AMOX, quantity: 'nhiều' }],
+    ['liều dùng là mảng', { ...AMOX, dosageInstructions: ['x'] }],
+    ['shortageResolution ngoài enum', { ...AMOX, shortageResolution: 'GIAM_BOT' }],
+    ['shortageResolution sai kiểu', { ...AMOX, shortageResolution: 1 }],
+  ])('%s: 400 MALFORMED_REQUEST', async (_name, body) => {
+    const res = await failure(prescribe(2002, body));
+    expect([res.status, res.data.errorCode]).toEqual([400, 'MALFORMED_REQUEST']);
+    expect(await rxOf(2002)).toEqual([]);
+  });
+});
+
+describe('kê đơn: thứ tự lỗi (#16, A1)', () => {
+  it('path / body 400 (trước cả vai trò, kể cả ADMIN) → vai trò VET 403', async () => {
+    const path = await failure(prescribe('abc', AMOX, admin));
+    expect([path.status, path.data.errorCode, message(path)]).toEqual([400, 'MALFORMED_REQUEST', "Tham số 'visitId' sai kiểu dữ liệu"]);
+    expect((await failure(prescribe(2002, [], admin))).data.errorCode).toBe('MALFORMED_REQUEST');
+    expect((await failure(prescribe(2002, { ...AMOX, quantity: 0 }, admin))).data.errorCode).toBe('VALIDATION_FAILED');
+    for (const who of [desk, caretaker, manager, chain, admin]) {
+      const denied = await failure(prescribe(2002, AMOX, who));
+      expect([denied.status, denied.data.errorCode]).toEqual([403, 'ACCESS_DENIED']);
+    }
+  });
+
+  it('lượt 404 → chi nhánh khác 403 → Thẩm mỹ 404 → người phụ trách 403 (chưa gán, người khác) → không IN_PROGRESS 409 → sản phẩm 404 → BR-KB-03 400', async () => {
+    const missing = await failure(prescribe(99999, AMOX));
+    expect([missing.status, message(missing)]).toEqual([404, 'Không tìm thấy lượt tiếp nhận #99999']);
+    const otherBranch = direct('POST /api/visits/:visitId/prescriptions', callerOf('VET', 55, 2), { params: { visitId: '2002' }, body: AMOX });
+    expect([otherBranch.status, (otherBranch.body as { errorCode: string }).errorCode]).toEqual([403, 'ACCESS_DENIED_SCOPE_MISMATCH']);
+    const grooming = await failure(prescribe(2103, AMOX));
+    expect([grooming.status, message(grooming)]).toEqual([404, 'Không tìm thấy bệnh án #2103']);
+
+    // 403 người phụ trách đứng TRƯỚC 409 (người không phải chủ lượt không dò được trạng thái) và trước 404 sản phẩm.
+    expect((await failure(prescribe(2101, { ...AMOX, productId: 9999 }))).data.errorCode).toBe('ACCESS_DENIED_SCOPE_MISMATCH');
+    updateVisitRow(2002, { assigneeId: 7 });
+    expect((await failure(prescribe(2002, AMOX))).data.errorCode).toBe('ACCESS_DENIED_SCOPE_MISMATCH');
+    updateVisitRow(2002, { assigneeId: 5 });
+
+    // 409 đứng TRƯỚC 404 sản phẩm và BR-KB-03.
+    const waiting = await failure(prescribe(2102, { ...AMOX, productId: 9999 }));
+    expect([waiting.status, waiting.data.errorCode, message(waiting)]).toEqual([409, 'INVALID_STATE_TRANSITION', 'Không thể chuyển trạng thái lượt tiếp nhận từ WAITING sang IN_PROGRESS']);
+    const done = await failure(prescribe(61, { ...AMOX, productId: 1 }));
+    expect([done.status, message(done)]).toEqual([409, 'Không thể chuyển trạng thái lượt tiếp nhận từ COMPLETED sang IN_PROGRESS']);
+
+    // 404 sản phẩm đứng TRƯỚC BR-KB-03.
+    expect((await failure(prescribe(2002, { ...AMOX, productId: 9999, quantity: 800 }))).status).toBe(404);
+    expect(ruleOf(await failure(prescribe(2002, { ...AMOX, productId: 1, quantity: 800 })))).toBe('BR-KB-03');
+  });
+});
+
+describe('xóa dòng đơn thuốc (#17, UC48; BR-KB-03, BR-BH-02)', () => {
+  it('xóa dòng đơn đã sinh dòng Order: 204, dòng đơn và dòng Order DRUG cùng biến mất, các dòng khác của Order giữ nguyên, kho không đổi', async () => {
+    const kept = (await prescribe(2002, { ...AMOX, quantity: 3 })).data.data;
+    const removed = (await prescribe(2002, AMOX)).data.data;
+    const linesBefore = await orderLinesOf(2002);
+
+    const res = await removeRx(2002, removed.itemId);
+    expect(res.status).toBe(204);
+    expect(await rxOf(2002)).toEqual([kept]);
+    expect((await orderLinesOf(2002)).map((l) => l.lineId)).toEqual(linesBefore.map((l) => l.lineId).filter((id) => id !== removed.orderLineId));
+    expect((await drugLinesOf(2002)).map((l) => l.lineId)).toEqual([kept.orderLineId]);
+    expect((await stock(3)).availableQuantity).toBe(AMOX_STOCK);
+  });
+
+  it('xóa dòng mua ngoài: 204, không đụng Order (không có dòng Order để xóa)', async () => {
+    const orderBefore = await orderLinesOf(2002);
+    const external = (await prescribe(2002, { ...AMOX, quantity: 800, shortageResolution: 'EXTERNAL_PURCHASE' })).data.data;
+    expect((await removeRx(2002, external.itemId)).status).toBe(204);
+    expect(await rxOf(2002)).toEqual([]);
+    expect(await orderLinesOf(2002)).toEqual(orderBefore);
+  });
+
+  it('dòng đơn của lượt khác hoặc không có: 404 và không xóa gì', async () => {
+    const mine = (await prescribe(2002, AMOX)).data.data;
+    const other = await startWalkIn(2, 1, 5, vet);
+    for (const [visitId, itemId] of [[other.visitId, mine.itemId], [2002, 99999]] as const) {
+      const res = await failure(removeRx(visitId, itemId));
+      expect([res.status, res.data.errorCode, message(res)]).toEqual([404, 'RESOURCE_NOT_FOUND', `Không tìm thấy dòng đơn thuốc #${itemId}`]);
+    }
+    expect(await rxOf(2002)).toEqual([mine]);
+    expect(await drugLinesOf(2002)).toHaveLength(1);
+  });
+
+  it('thứ tự lỗi: path 400 (trước cả vai trò) → VET 403 → lượt 404 → chi nhánh 403 → Thẩm mỹ 404 → người phụ trách 403 → không IN_PROGRESS 409 → dòng đơn 404', async () => {
+    const mine = (await prescribe(2002, AMOX)).data.data;
+    expect((await failure(removeRx('abc', 1, admin))).data.message).toBe("Tham số 'visitId' sai kiểu dữ liệu");
+    expect((await failure(removeRx(2002, 'xyz', admin))).data.message).toBe("Tham số 'itemId' sai kiểu dữ liệu");
+    for (const who of [desk, caretaker, manager, chain, admin]) expect((await failure(removeRx(2002, mine.itemId, who))).data.errorCode).toBe('ACCESS_DENIED');
+    expect((await failure(removeRx(99999, 1))).status).toBe(404);
+    const otherBranch = direct('DELETE /api/visits/:visitId/prescriptions/:itemId', callerOf('VET', 55, 2), { params: { visitId: '2002', itemId: String(mine.itemId) } });
+    expect([otherBranch.status, (otherBranch.body as { errorCode: string }).errorCode]).toEqual([403, 'ACCESS_DENIED_SCOPE_MISMATCH']);
+    expect((await failure(removeRx(2103, 1))).status).toBe(404);
+
+    expect((await failure(removeRx(2101, 99999))).data.errorCode).toBe('ACCESS_DENIED_SCOPE_MISMATCH');
+    updateVisitRow(2002, { assigneeId: 7 });
+    expect((await failure(removeRx(2002, mine.itemId))).data.errorCode).toBe('ACCESS_DENIED_SCOPE_MISMATCH');
+    updateVisitRow(2002, { assigneeId: 5 });
+
+    // 409 đứng TRƯỚC 404 dòng đơn: dòng đơn không có trên lượt đã hoàn tất vẫn báo 409.
+    const waiting = await failure(removeRx(2102, 99999));
+    expect([waiting.status, waiting.data.errorCode]).toEqual([409, 'INVALID_STATE_TRANSITION']);
+    const done = await failure(removeRx(61, 99999));
+    expect([done.status, message(done)]).toEqual([409, 'Không thể chuyển trạng thái lượt tiếp nhận từ COMPLETED sang IN_PROGRESS']);
+    expect((await failure(removeRx(2002, 99999))).status).toBe(404);
+    expect(await rxOf(2002)).toEqual([mine]);
+  });
+});
+
+describe('đơn thuốc trong bệnh án và hồ sơ sức khỏe (#12, #21; BR-KB-01)', () => {
+  it('dữ liệu mẫu: lượt 61 đã khóa có dòng đơn Amoxicillin ×10 gắn dòng Order #22 của Order #2 — khớp bất biến isExternalPurchase === (orderLineId == null)', async () => {
+    const record = (await getRecord(61)).data.data;
+    expect(record.locked).toBe(true);
+    expect(record.prescriptions).toHaveLength(1);
+    expect(record.prescriptions[0]).toMatchObject({ productId: 3, productName: 'Amoxicillin 250mg', quantity: 10, isExternalPurchase: false, externalReason: null, orderLineId: 22 });
+    expect(record.prescriptions[0].dosageInstructions).toBeTruthy();
+    expect(Object.keys(record.prescriptions[0]).sort()).toEqual(PRESCRIPTION_KEYS);
+    const line = (await orderOf(2)).lines.find((l: OrderLineView) => l.lineId === 22);
+    expect(line).toMatchObject({ lineType: 'DRUG', productId: 3, quantity: 10 });
+  });
+
+  it('sau khi hoàn tất (#10): kê thêm và xóa đều 409, bệnh án đã khóa vẫn liệt kê đơn, dòng Order DRUG nằm trong Order chờ thu', async () => {
+    const item = (await prescribe(2002, AMOX)).data.data;
+    await putRecord(2002, { diagnosis: 'Khỏe' });
+    expect((await complete(2002)).status).toBe(200);
+
+    for (const request of [prescribe(2002, AMOX), removeRx(2002, item.itemId)]) {
+      const res = await failure(request);
+      expect([res.status, message(res)]).toEqual([409, 'Không thể chuyển trạng thái lượt tiếp nhận từ COMPLETED sang IN_PROGRESS']);
+    }
+    const record = (await getRecord(2002)).data.data;
+    expect(record).toMatchObject({ locked: true, prescriptions: [item] });
+    expect(await drugLinesOf(2002)).toHaveLength(1);
+  });
+
+  it('hồ sơ sức khỏe của thú: lượt đã hoàn tất kèm đơn thuốc đã kê (cả dòng mua ngoài); lượt chưa hoàn tất thì chưa vào hồ sơ', async () => {
+    const normal = (await prescribe(2002, AMOX)).data.data;
+    const external = (await prescribe(2002, { ...AMOX, quantity: 800, shortageResolution: 'EXTERNAL_PURCHASE' })).data.data;
+    expect((await healthOf(4)).visits.map((v: { visitId: number }) => v.visitId)).not.toContain(2002);
+    await putRecord(2002, { diagnosis: 'Viêm da' });
+    await complete(2002);
+
+    const entry = (await healthOf(4)).visits.find((v: { visitId: number }) => v.visitId === 2002);
+    expect(entry.prescriptions).toEqual([normal, external]);
+    const seeded = (await healthOf(1)).visits.find((v: { visitId: number }) => v.visitId === 61);
+    expect(seeded.prescriptions).toEqual([expect.objectContaining({ productId: 3, quantity: 10, orderLineId: 22 })]);
+    expect((await healthOf(1, khach)).visits.find((v: { visitId: number }) => v.visitId === 61).prescriptions).toHaveLength(1);
+  });
+
+  it('trạng thái cũ trong localStorage chưa có mảng prescriptions (nạp từ bản trước T46): đọc bệnh án và kê đơn vẫn chạy', async () => {
+    localStorage.setItem('petcare-mock-clinical', JSON.stringify({ seq: 1, records: [], addenda: [], vaccinations: [] }));
+    expect((await getRecord(2002)).data.data.prescriptions).toEqual([]);
+    expect((await prescribe(2002, AMOX)).status).toBe(201);
+    expect(await rxOf(2002)).toHaveLength(1);
+    expect((await healthOf(4)).visits).toBeDefined();
   });
 });

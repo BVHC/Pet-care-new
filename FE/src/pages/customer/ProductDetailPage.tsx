@@ -1,144 +1,219 @@
-import { useState } from 'react';
-import { Link, useParams } from 'react-router-dom';
-import { Minus, Plus, ShoppingCart, Star, Truck, ShieldCheck, RotateCcw } from 'lucide-react';
-import { toast } from 'sonner';
+import { useEffect, useState } from 'react'
+import { Link, useParams } from 'react-router-dom'
+import { MapPin, PawPrint, RotateCw, Store, WifiOff } from 'lucide-react'
+import { toApiError } from '@/shared/api/api-error'
+import { usePublicBranches, usePublicProduct } from '@/shared/hooks/usePublicSite'
+import type { PublicBranch } from '@/shared/types/branch'
+import type { PublicProduct } from '@/shared/types/public-site'
+import { branchNamesByIds, productPriceLabel } from '@/shared/utils/public-format'
 
-const MOCK_PRODUCTS: Record<number, {
-  name: string;
-  category: string;
-  price: number;
-  originalPrice?: number;
-  rating: number;
-  reviews: number;
-  stock: number;
-  image: string;
-  images: string[];
-  description: string;
-  petType: string;
-}> = {
-  1: { name: 'Royal Canin Adult', category: 'Thức ăn', price: 450000, originalPrice: 520000, rating: 4.8, reviews: 234, stock: 50, image: '/imgs/prod1.jpg', images: ['/imgs/prod1.jpg', '/imgs/prod2.jpg'], description: 'Thức ăn hạt cho chó trưởng thành, cung cấp đầy đủ dinh dưỡng cần thiết.', petType: 'dog' },
-  2: { name: 'Pedigree Chicken', category: 'Thức ăn', price: 280000, rating: 4.5, reviews: 156, stock: 30, image: '/imgs/prod2.jpg', images: ['/imgs/prod2.jpg'], description: 'Thức ăn chó vị gà, giàu protein và vitamin.', petType: 'dog' },
-  3: { name: 'Whiskas Salmon', category: 'Thức ăn', price: 120000, rating: 4.7, reviews: 189, stock: 45, image: '/imgs/prod3.jpg', images: ['/imgs/prod3.jpg'], description: 'Thức ăn mèo vị cá hồi, giúp lông mượt.', petType: 'cat' },
-  4: { name: 'Interactive Ball', category: 'Đồ chơi', price: 89000, rating: 4.3, reviews: 98, stock: 20, image: '/imgs/prod4.jpg', images: ['/imgs/prod4.jpg'], description: 'Bóng tương tác cho chó, phát sáng và phát nhạc.', petType: 'dog' },
-  5: { name: 'Catnip Toy Mouse', category: 'Đồ chơi', price: 45000, rating: 4.6, reviews: 145, stock: 60, image: '/imgs/prod5.jpg', images: ['/imgs/prod5.jpg'], description: 'Chuột đồ chơi có bạc hà mèo, an toàn cho mèo.', petType: 'cat' },
-};
+/* ================================================================
+   Data.
+   ================================================================ */
 
-function formatVnd(price: number): string {
-  return new Intl.NumberFormat('vi-VN', { style: 'currency', currency: 'VND', maximumFractionDigits: 0 }).format(price);
+// Id trên URL phải là số nguyên dương; thứ khác ("abc", "0", "-1", "1.5") coi như không tìm thấy mà không gọi API.
+const PRODUCT_ID = /^[1-9]\d{0,8}$/
+
+const CARD =
+  'rounded-2xl border border-(--color-border-default) bg-(--color-surface-card) shadow-[0_1px_2px_rgba(56,36,23,0.06),0_8px_18px_-14px_rgba(56,36,23,0.4)]'
+const FOCUS = 'focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent'
+const PULSE = 'animate-pulse motion-reduce:animate-none bg-(--color-surface-2)'
+const BUTTON = `inline-flex min-h-10 items-center justify-center gap-2 rounded-full bg-accent px-5 text-[13.5px] font-bold text-white transition-colors hover:bg-accent-hover ${FOCUS}`
+
+/* ================================================================
+   States.
+   ================================================================ */
+
+function Skeleton() {
+  return (
+    <div role="status" aria-label="Đang tải sản phẩm" className="grid gap-8 lg:grid-cols-2">
+      <div aria-hidden className={`${PULSE} aspect-square rounded-2xl`} />
+      <div aria-hidden className="space-y-4">
+        <div className={`${PULSE} h-4 w-24 rounded-lg`} />
+        <div className={`${PULSE} h-9 w-4/5 rounded-lg`} />
+        <div className={`${PULSE} h-9 w-40 rounded-lg`} />
+        <div className={`${PULSE} h-28 w-full rounded-2xl`} />
+      </div>
+    </div>
+  )
 }
 
+function Notice({ icon, children }: { icon: React.ReactNode; children: React.ReactNode }) {
+  return (
+    <div className={`${CARD} mx-auto max-w-[560px] px-6 py-14 text-center`}>
+      <span className="mx-auto flex h-12 w-12 items-center justify-center rounded-full bg-(--color-accent-soft) text-accent">
+        {icon}
+      </span>
+      {children}
+    </div>
+  )
+}
+
+/* ================================================================
+   Pieces.
+   ================================================================ */
+
+/** Ảnh sản phẩm; chưa có ảnh hoặc ảnh tải lỗi thì hiện khối thay thế cùng khung. */
+function ProductImage({ product }: { product: PublicProduct }) {
+  const [broken, setBroken] = useState(false)
+  if (!product.imageUrl || broken) {
+    return (
+      <div aria-hidden className="grid h-full w-full place-items-center bg-(--color-surface-2)">
+        <PawPrint size={88} strokeWidth={1.25} className="text-accent/25" />
+      </div>
+    )
+  }
+  return (
+    <img
+      src={product.imageUrl}
+      alt={product.name}
+      onError={() => setBroken(true)}
+      className="h-full w-full object-contain p-4 mix-blend-multiply"
+    />
+  )
+}
+
+/* ================================================================
+   Main.
+   ================================================================ */
+
 export function ProductDetailPage() {
-  const { id } = useParams<{ id: string }>();
-  const productId = id ? parseInt(id) : 1;
-  const product = MOCK_PRODUCTS[productId] || MOCK_PRODUCTS[1];
-  const [qty, setQty] = useState(1);
-  const [activeImg, setActiveImg] = useState(0);
+  const { id } = useParams<{ id: string }>()
+  const productId = id && PRODUCT_ID.test(id) ? Number(id) : null
+  const product = usePublicProduct(productId)
+  const branches = usePublicBranches()
 
-  const discount = product.originalPrice ? Math.round((1 - product.price / product.originalPrice) * 100) : 0;
+  const name = product.data?.name
+  useEffect(() => {
+    if (!name) return
+    const previous = document.title
+    document.title = `${name} | PetCare`
+    return () => {
+      document.title = previous
+    }
+  }, [name])
 
-  const handleAddToCart = () => {
-    toast.success(`Đã thêm ${product.name} vào giỏ hàng`);
-  };
+  const notFound = productId === null || (product.isError && toApiError(product.error).statusCode === 404)
 
   return (
     <div className="mx-auto max-w-[1200px] px-4 py-8 sm:px-6">
-      <nav className="mb-4 flex flex-wrap items-center gap-2 text-sm text-gray-500">
-        <Link to="/" className="hover:text-[#843122]">Trang chủ</Link>
-        <span>/</span>
-        <Link to="/shop" className="hover:text-[#843122]">Danh mục sản phẩm</Link>
-        <span>/</span>
-        <span>{product.category}</span>
-        <span>/</span>
-        <span className="font-semibold text-gray-900">{product.name}</span>
+      {notFound ? (
+        <Notice icon={<PawPrint size={22} aria-hidden />}>
+          <h1 className="mt-4 font-friendly text-[26px] font-extrabold text-(--color-surface-dark)">Không tìm thấy sản phẩm</h1>
+          <p className="mt-2 text-[14px] text-(--color-dark-gray)/70">Sản phẩm này không còn được bán hoặc đường dẫn chưa đúng.</p>
+          <Link to="/shop" className={`${BUTTON} mt-6`}>
+            Quay lại cửa hàng
+          </Link>
+        </Notice>
+      ) : product.isError ? (
+        <div role="alert">
+          <Notice icon={<WifiOff size={22} aria-hidden />}>
+            <p className="mt-4 font-friendly text-[22px] font-extrabold text-(--color-surface-dark)">Không tải được sản phẩm</p>
+            <p className="mt-2 text-[14px] text-(--color-dark-gray)/70">Kết nối có thể đang gián đoạn. Bạn thử tải lại nhé.</p>
+            <button type="button" onClick={() => void product.refetch()} disabled={product.isFetching} className={`${BUTTON} mt-6 disabled:opacity-60`}>
+              <RotateCw size={15} aria-hidden className={product.isFetching ? 'animate-spin motion-reduce:animate-none' : ''} />
+              Thử lại
+            </button>
+          </Notice>
+        </div>
+      ) : !product.data ? (
+        <Skeleton />
+      ) : (
+        <ProductView product={product.data} branches={branches.data} branchesLoading={branches.isPending} />
+      )}
+    </div>
+  )
+}
+
+function ProductView({
+  product: p,
+  branches,
+  branchesLoading,
+}: {
+  product: PublicProduct
+  branches: PublicBranch[] | undefined
+  branchesLoading: boolean
+}) {
+  // BR-CK-03: chỉ tên chi nhánh còn hàng, không số lượng, không nút mua.
+  const stockedAt = branches ? branchNamesByIds(p.inStockBranchIds, branches) : []
+  const outOfStock = p.inStockBranchIds.length === 0 || (branches !== undefined && stockedAt.length === 0)
+
+  return (
+    <>
+      <nav aria-label="Đường dẫn" className="mb-5 flex flex-wrap items-center gap-x-2 gap-y-1 text-sm text-(--color-text-secondary)">
+        <Link to="/" className={`hover:text-accent ${FOCUS}`}>
+          Trang chủ
+        </Link>
+        <span aria-hidden>/</span>
+        <Link to="/shop" className={`hover:text-accent ${FOCUS}`}>
+          Danh mục sản phẩm
+        </Link>
+        <span aria-hidden>/</span>
+        <Link to={`/shop?category=${p.categoryId}`} className={`hover:text-accent ${FOCUS}`}>
+          {p.categoryName}
+        </Link>
+        <span aria-hidden>/</span>
+        <span aria-current="page" className="font-semibold text-(--color-text-primary)">
+          {p.name}
+        </span>
       </nav>
 
-      <div className="grid gap-8 lg:grid-cols-2">
-        {/* Hình ảnh */}
-        <div>
-          <div className="relative aspect-square overflow-hidden rounded-xl bg-gray-100">
-            <img src={product.images[activeImg] || product.image} alt={product.name} className="h-full w-full object-cover" />
-            {discount > 0 && (
-              <span className="absolute top-4 left-4 rounded-full bg-red-500 px-3 py-1 text-sm font-bold text-white">
-                -{discount}%
-              </span>
-            )}
-          </div>
-          <div className="mt-4 flex gap-3">
-            {product.images.map((img, i) => (
-              <button
-                key={i}
-                onClick={() => setActiveImg(i)}
-                className={`h-20 w-20 overflow-hidden rounded-lg border-2 ${activeImg === i ? 'border-[#843122]' : 'border-transparent'}`}
-              >
-                <img src={img} alt="" className="h-full w-full object-cover" />
-              </button>
-            ))}
-          </div>
+      <article className="grid gap-8 lg:grid-cols-2 lg:gap-12">
+        <div className="aspect-square overflow-hidden rounded-2xl border border-(--color-border-default) bg-(--color-surface-1)">
+          <ProductImage product={p} />
         </div>
 
-        {/* Thông tin */}
         <div>
-          <div className="text-sm text-gray-500">{product.category} · Cho {product.petType === 'dog' ? 'Chó' : 'Mèo'}</div>
-          <h1 className="mt-2 font-friendly text-3xl font-bold text-gray-900">{product.name}</h1>
+          <p className="text-[12px] font-semibold tracking-widest text-(--color-text-secondary) uppercase">{p.categoryName}</p>
+          <h1 className="mt-2 font-friendly text-[clamp(26px,3.4vw,36px)] leading-tight font-extrabold text-(--color-surface-dark)">{p.name}</h1>
 
-          <div className="mt-3 flex items-center gap-2">
-            <div className="flex gap-0.5">
-              {[1,2,3,4,5].map(i => (
-                <Star key={i} size={16} className={i <= Math.round(product.rating) ? 'fill-amber-400 text-amber-400' : 'text-gray-300'} />
-              ))}
-            </div>
-            <span className="text-sm text-gray-600">{product.rating} ({product.reviews} đánh giá)</span>
-          </div>
+          <p className="mt-5 flex flex-wrap items-baseline gap-x-2">
+            <span className="font-friendly text-[clamp(28px,3.6vw,36px)] font-extrabold text-accent tabular-nums">{productPriceLabel(p.price)}</span>
+            <span className="text-[15px] text-(--color-text-secondary)">/ {p.unit}</span>
+          </p>
 
-          <div className="mt-6 flex items-end gap-3">
-            <span className="font-friendly text-3xl font-bold text-[#843122]">{formatVnd(product.price)}</span>
-            {product.originalPrice && (
-              <span className="text-lg text-gray-400 line-through">{formatVnd(product.originalPrice)}</span>
+          {p.description && <p className="mt-5 max-w-[60ch] leading-relaxed text-(--color-dark-gray)/80">{p.description}</p>}
+
+          <section aria-labelledby="product-stock" className={`${CARD} mt-8 p-5 sm:p-6`}>
+            <h2 id="product-stock" className="flex items-center gap-2 font-friendly text-[18px] font-bold text-(--color-surface-dark)">
+              <Store size={18} aria-hidden className="text-accent" />
+              Mua tại chi nhánh
+            </h2>
+
+            {outOfStock ? (
+              <p className="mt-3 text-[14px] text-(--color-dark-gray)/70">Tạm hết hàng tại các chi nhánh</p>
+            ) : stockedAt.length > 0 ? (
+              <>
+                <p className="mt-3 text-[13px] font-semibold text-(--color-dark-gray)/70">Còn hàng tại</p>
+                <ul aria-label="Chi nhánh còn hàng" className="mt-2 flex flex-wrap gap-2">
+                  {stockedAt.map((branch) => (
+                    <li key={branch}>
+                      <Link
+                        to="/branches"
+                        className={`inline-flex items-center gap-1.5 rounded-full border border-(--color-border-default) bg-(--color-surface-1) px-3.5 py-1.5 text-[13.5px] font-semibold text-(--color-dark-gray) transition-colors hover:border-accent hover:text-accent ${FOCUS}`}
+                      >
+                        <MapPin size={13} aria-hidden className="text-accent" />
+                        {branch}
+                      </Link>
+                    </li>
+                  ))}
+                </ul>
+              </>
+            ) : branchesLoading ? (
+              <div aria-hidden className={`${PULSE} mt-3 h-8 w-48 rounded-full`} />
+            ) : (
+              <p className="mt-3 text-[14px] text-(--color-dark-gray)/70">Còn hàng tại chi nhánh PetCare.</p>
             )}
-          </div>
 
-          <p className="mt-6 text-gray-600 leading-relaxed">{product.description}</p>
-
-          {/* Số lượng */}
-          <div className="mt-6">
-            <span className="text-sm font-semibold text-gray-900">Số lượng:</span>
-            <div className="mt-2 flex items-center gap-4">
-              <div className="flex items-center rounded-lg border border-gray-200">
-                <button onClick={() => setQty(Math.max(1, qty - 1))} className="p-3 hover:bg-gray-100"><Minus size={16} /></button>
-                <span className="w-12 text-center font-semibold">{qty}</span>
-                <button onClick={() => setQty(Math.min(product.stock, qty + 1))} className="p-3 hover:bg-gray-100"><Plus size={16} /></button>
-              </div>
-              <span className="text-sm text-gray-500">{product.stock} sản phẩm có sẵn</span>
-            </div>
-          </div>
-
-          {/* Nút */}
-          <div className="mt-6 flex gap-3">
-            <button
-              onClick={handleAddToCart}
-              className="flex-1 flex items-center justify-center gap-2 rounded-lg bg-[#843122] py-3 font-bold text-white hover:bg-[#6a2517] transition-colors"
-            >
-              <ShoppingCart size={20} /> Thêm vào giỏ
-            </button>
-            <button className="flex-1 rounded-lg border-2 border-[#843122] py-3 font-bold text-[#843122] hover:bg-amber-50 transition-colors">
-              Mua ngay
-            </button>
-          </div>
-
-          {/* Ưu đãi */}
-          <div className="mt-8 space-y-3">
-            <div className="flex items-center gap-3 text-sm text-gray-600">
-              <Truck size={20} className="text-green-600" /> Miễn phí vận chuyển cho đơn từ 300K
-            </div>
-            <div className="flex items-center gap-3 text-sm text-gray-600">
-              <ShieldCheck size={20} className="text-blue-600" /> Bảo hành chính hãng 12 tháng
-            </div>
-            <div className="flex items-center gap-3 text-sm text-gray-600">
-              <RotateCcw size={20} className="text-purple-600" /> Đổi trả trong 7 ngày
-            </div>
-          </div>
+            <p className="mt-4 text-[13.5px] leading-relaxed text-(--color-dark-gray)/70">
+              Sản phẩm bán tại quầy, vui lòng liên hệ chi nhánh để mua.
+            </p>
+            <Link to="/branches" className={`${BUTTON} mt-4`}>
+              Xem chi nhánh &amp; số điện thoại
+            </Link>
+          </section>
         </div>
-      </div>
-    </div>
-  );
+      </article>
+    </>
+  )
 }

@@ -685,6 +685,13 @@ export const acceptsAfterHours = (branchId: number): boolean =>
 
 const activeBranches = (s: State) => s.branches.filter((b) => b.status === 'ACTIVE');
 
+/** Chi nhánh ACTIVE (id, tên), cho mock công khai đọc chéo như BranchQueryApi.listActiveBranches (T46). */
+export const activeBranchSummaries = (): { branchId: number; name: string }[] =>
+  activeBranches(load()).map(({ branchId, name }) => ({ branchId, name }));
+
+/** `@Positive` của BE: id ≤ 0 là 400 VALIDATION_FAILED. */
+const notPositive = (name: string) => fail('VALIDATION_FAILED', `${name}: ${name} phải là số dương`, 400);
+
 /** Chỉ chi nhánh ACTIVE (BR-CK-01); `weeklyHours` là bản giờ đang áp dụng hôm nay. */
 function publicBranchOf(s: State, { activatedAt: _activatedAt, status: _status, ...branch }: Branch): PublicBranch {
   const today = localIsoDate();
@@ -708,6 +715,7 @@ const listPublicBranches: MockHandler = (req) => {
 
 const getPublicBranch: MockHandler = (req) => {
   if (!/^\d+$/.test(req.params.branchId)) return badParam('branchId');
+  if (Number(req.params.branchId) <= 0) return notPositive('branchId');
   const s = load();
   const branch = activeBranches(s).find((b) => b.branchId === Number(req.params.branchId));
   return branch ? ok(publicBranchOf(s, branch)) : notFound('chi nhánh', req.params.branchId);
@@ -718,6 +726,7 @@ const listPublicServices: MockHandler = (req) => {
   const { group, branchId } = req.query;
   if (group !== undefined && !isGroup(group)) return badParam('group');
   if (branchId !== undefined && !/^\d+$/.test(branchId)) return badParam('branchId');
+  if (branchId !== undefined && Number(branchId) <= 0) return notPositive('branchId');
   const s = load();
   const active = activeBranches(s);
   const services: PublicService[] = catalogServices()

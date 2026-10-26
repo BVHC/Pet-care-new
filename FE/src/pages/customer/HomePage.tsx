@@ -1,7 +1,8 @@
 import { useEffect, useState } from 'react'
-import { Link, useNavigate } from 'react-router-dom'
+import { Link } from 'react-router-dom'
 import gsap from 'gsap'
 import { ScrollTrigger } from 'gsap/ScrollTrigger'
+import { useGSAP } from '@gsap/react'
 import {
   ChevronDown,
   ChevronUp,
@@ -10,31 +11,65 @@ import {
   Calendar,
   User,
   ArrowRight,
-  Star,
+  MapPin,
 } from 'lucide-react'
-import { toast } from 'sonner'
 import { HeroBanner } from '@/components/customer/HeroBanner'
 import { OurServicesStage } from '@/components/customer/OurServicesStage'
 import { StackingProcessCards } from '@/components/customer/StackingProcessCards'
 import { NoCagesPhilosophy } from '@/components/customer/NoCagesPhilosophy'
 import { TestimonialsSpeechBubble } from '@/components/customer/TestimonialsSpeechBubble'
 import { ContactVetCTA } from '@/components/customer/ContactVetCTA'
-import { PHOTOS, FEATURED, filterFeaturedByPetType, STATS, PARTNERS, FAQS, DOCTORS } from './home.mock'
-import { NEWS_ARTICLES } from './news.mock'
+import { doctorInitials } from '@/pages/doctors/initials'
+import { usePublicArticles, usePublicProducts, usePublicVets } from '@/shared/hooks/usePublicSite'
+import type { PublicProduct } from '@/shared/types/public-site'
+import { formatPublishedDate, productPriceLabel } from '@/shared/utils/public-format'
+import { PHOTOS, STATS, PARTNERS, FAQS } from './home.mock'
 import styles from './HomePage.module.css'
 
 gsap.registerPlugin(ScrollTrigger)
 
-export function HomePage() {
-  const navigate = useNavigate()
-  const [openFaq, setOpenFaq] = useState<number | null>(0)
-  const [petFilter, setPetFilter] = useState<'all' | 'dog' | 'cat'>('all')
+/** Số thẻ mỗi khối dữ liệu trên trang chủ: 4 cột sản phẩm, 4 cột bác sĩ, 3 cột tin. */
+const FEATURED_COUNT = 4
+const DOCTOR_COUNT = 4
+const NEWS_COUNT = 3
 
+const MOTION_OK = '(prefers-reduced-motion: no-preference)'
+
+/** Ảnh sản phẩm; chưa có ảnh hoặc ảnh tải lỗi thì hiện khối thay thế cùng khung. */
+function ProductThumb({ product }: { product: PublicProduct }) {
+  const [broken, setBroken] = useState(false)
+  if (!product.imageUrl || broken) {
+    return (
+      <div aria-hidden className="grid h-full w-full place-items-center bg-(--color-surface-1)">
+        <PawPrint size={44} strokeWidth={1.5} className="text-accent/30" />
+      </div>
+    )
+  }
+  return <img src={product.imageUrl} alt="" loading="lazy" onError={() => setBroken(true)} className="h-full w-full object-cover" />
+}
+
+/** Khung chờ cùng chiều cao với khối thật để ScrollTrigger phía dưới không bị lệch khi dữ liệu về. */
+function SkeletonCard({ className }: { className: string }) {
+  return <div aria-hidden className={`animate-pulse rounded-(--radius-rounded) bg-white/70 motion-reduce:animate-none ${className}`} />
+}
+
+export function HomePage() {
+  const [openFaq, setOpenFaq] = useState<number | null>(0)
+
+  // Dữ liệu thật (T46). Khối nào rỗng hoặc lỗi thì ẩn cả section, không để placeholder giả.
+  const featured = usePublicProducts({ size: FEATURED_COUNT })
+  const vets = usePublicVets()
+  const news = usePublicArticles({ size: NEWS_COUNT })
+  const featuredItems = featured.data?.content ?? []
+  const doctorItems = (vets.data ?? []).slice(0, DOCTOR_COUNT)
+  const newsItems = news.data?.content ?? []
+
+  // Phần tĩnh: dựng một lần lúc mount.
   useEffect(() => {
     if (typeof window === 'undefined') return
 
-    const ctx = gsap.context(() => {
-
+    const mm = gsap.matchMedia()
+    mm.add(MOTION_OK, () => {
       // 2. 3 Steps Section reveal
       gsap.fromTo('.gsap-step-card',
         { opacity: 0, y: 40, scale: 0.96 },
@@ -49,38 +84,6 @@ export function HomePage() {
           stagger: 0.12,
           duration: 0.7,
           ease: 'back.out(1.2)',
-        }
-      )
-
-      // 3. Featured Products reveal
-      gsap.fromTo('.gsap-product-card',
-        { opacity: 0, y: 35 },
-        {
-          scrollTrigger: {
-            trigger: '.gsap-featured-section',
-            start: 'top 85%',
-          },
-          opacity: 1,
-          y: 0,
-          stagger: 0.08,
-          duration: 0.65,
-          ease: 'power2.out',
-        }
-      )
-
-      // 4. Doctors reveal
-      gsap.fromTo('.gsap-doctor-card',
-        { opacity: 0, y: 40 },
-        {
-          scrollTrigger: {
-            trigger: '.gsap-doctors-section',
-            start: 'top 85%',
-          },
-          opacity: 1,
-          y: 0,
-          stagger: 0.1,
-          duration: 0.7,
-          ease: 'power2.out',
         }
       )
 
@@ -101,12 +104,69 @@ export function HomePage() {
       )
     })
 
-    return () => ctx.revert()
+    return () => mm.revert()
   }, [])
 
-  const handleAddToCart = (_id: string, name: string) => {
-    toast.success(`Đã thêm ${name} vào giỏ hàng`)
-  }
+  // Phần theo dữ liệu: thẻ chỉ có trong DOM sau khi API trả về nên dựng lại khi số thẻ đổi (revertOnUpdate), nếu không trigger
+  // sẽ chạy lúc chưa có thẻ nào hoặc đo lệch. Người chọn giảm chuyển động thì không ẩn thẻ trước, nội dung luôn hiện.
+  useGSAP(
+    () => {
+      if (featuredItems.length === 0) return
+      const mm = gsap.matchMedia()
+      mm.add(MOTION_OK, () => {
+        gsap.fromTo('.gsap-product-card',
+          { opacity: 0, y: 35 },
+          {
+            scrollTrigger: {
+              trigger: '.gsap-featured-section',
+              start: 'top 85%',
+            },
+            opacity: 1,
+            y: 0,
+            stagger: 0.08,
+            duration: 0.65,
+            ease: 'power2.out',
+            clearProps: 'opacity,transform',
+          }
+        )
+      })
+    },
+    { dependencies: [featuredItems.length], revertOnUpdate: true },
+  )
+
+  useGSAP(
+    () => {
+      if (doctorItems.length === 0) return
+      const mm = gsap.matchMedia()
+      mm.add(MOTION_OK, () => {
+        gsap.fromTo('.gsap-doctor-card',
+          { opacity: 0, y: 40 },
+          {
+            scrollTrigger: {
+              trigger: '.gsap-doctors-section',
+              start: 'top 85%',
+            },
+            opacity: 1,
+            y: 0,
+            stagger: 0.1,
+            duration: 0.7,
+            ease: 'power2.out',
+            clearProps: 'opacity,transform',
+          }
+        )
+      })
+    },
+    { dependencies: [doctorItems.length], revertOnUpdate: true },
+  )
+
+  // Khối dữ liệu hiện / ẩn / thay skeleton làm đổi chiều cao trang: đo lại mọi ScrollTrigger (cả pin của OurServicesStage).
+  const featuredReady = featuredItems.length > 0
+  const doctorsReady = doctorItems.length > 0
+  const newsReady = newsItems.length > 0
+  useEffect(() => {
+    const frame = requestAnimationFrame(() => ScrollTrigger.refresh())
+    return () => cancelAnimationFrame(frame)
+  }, [featured.isPending, vets.isPending, news.isPending, featuredReady, doctorsReady, newsReady])
 
   return (
     <div className="relative bg-(--color-surface-page) font-professional">
@@ -123,80 +183,65 @@ export function HomePage() {
       <NoCagesPhilosophy />
 
       {/* 4. Featured Products */}
-      <section className="gsap-featured-section relative overflow-hidden bg-[#f6e8da] px-6 py-14">
-        <img
-          src={PHOTOS.doodleBone}
-          alt=""
-          className={styles.sectionDoodle}
-          style={{ top: 18, right: '4%', width: 54 }}
-        />
-        <div className={styles.wrap}>
-          <div className="mb-10 text-center">
-            <div className={styles.eyebrow}>
-              <Sparkles size={13} />
-              SẢN PHẨM BÁN CHẠY
-            </div>
-            <div className="font-friendly text-[clamp(32px,4vw,42px)] font-extrabold text-(--color-text-primary) mb-6">
-              Sản Phẩm Nổi Bật
-            </div>
-            <div className="flex justify-center gap-2">
-              {(['all', 'dog', 'cat'] as const).map((f) => (
-                <button
-                  key={f}
-                  onClick={() => setPetFilter(f)}
-                  className={`px-5 py-2 rounded-full text-[13px] font-bold transition-colors ${petFilter === f ? 'bg-accent text-white' : 'bg-white text-[#5a3a29] border border-accent/20 hover:border-accent hover:text-accent'}`}
-                >
-                  {f === 'all' ? 'Tất cả' : f === 'dog' ? 'Cho Chó' : 'Cho Mèo'}
-                </button>
-              ))}
-            </div>
-          </div>
-          <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-6">
-            {filterFeaturedByPetType(FEATURED, petFilter).map((p) => (
-              <div className="gsap-product-card transition-transform hover:-translate-y-1" key={p.id}>
-                <Link
-                  to={`/shop/${p.id}`}
-                  className="block w-full overflow-hidden rounded-(--radius-rounded) bg-white shadow-(--shadow-1)"
-                >
-                  <div className="relative aspect-4/3 bg-gray-100">
-                    <img src={p.image} alt={p.name} className="h-full w-full object-cover" />
-                    {p.badge && (
-                      <span className="absolute top-2 left-2 rounded-full bg-amber-400 px-2 py-0.5 text-[11px] font-bold text-white">
-                        {p.badge}
-                      </span>
-                    )}
-                  </div>
-                  <div className="p-3">
-                    <div className="text-[11px] tracking-wide text-gray-500 uppercase">{p.category}</div>
-                    <div className="my-0.5 mb-1.5 text-[15px] font-bold text-gray-900">{p.name}</div>
-                    <div className="flex items-center justify-between">
-                      <span className="text-base font-bold text-gray-900">{p.price}</span>
-                      <span className="flex items-center gap-1 text-sm text-gray-500">
-                        <Star className="h-3.5 w-3.5 fill-amber-400 text-amber-400" />
-                        {p.rating}
-                      </span>
-                    </div>
-                  </div>
-                </Link>
-                <button
-                  onClick={() => handleAddToCart(p.id, p.name)}
-                  className="mt-2 w-full rounded-lg border border-accent bg-accent px-3 py-2 text-[13px] font-semibold text-white hover:bg-accent-hover transition-colors"
-                >
-                  Thêm vào giỏ
-                </button>
+      {(featured.isPending || featuredReady) && (
+        <section className="gsap-featured-section relative overflow-hidden bg-[#f6e8da] px-6 py-14">
+          <img
+            src={PHOTOS.doodleBone}
+            alt=""
+            className={styles.sectionDoodle}
+            style={{ top: 18, right: '4%', width: 54 }}
+          />
+          <div className={styles.wrap}>
+            <div className="mb-10 text-center">
+              <div className={styles.eyebrow}>
+                <Sparkles size={13} />
+                SẢN PHẨM TẠI PETCARE
               </div>
-            ))}
+              <h2 className="font-friendly text-[clamp(32px,4vw,42px)] font-extrabold text-(--color-text-primary)">
+                Sản Phẩm Nổi Bật
+              </h2>
+            </div>
+            {featuredReady ? (
+              <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-6">
+                {featuredItems.map((p) => (
+                  <div className="gsap-product-card transition-transform hover:-translate-y-1" key={p.productId}>
+                    <Link
+                      to={`/shop/${p.productId}`}
+                      className="block w-full overflow-hidden rounded-(--radius-rounded) bg-white shadow-(--shadow-1) focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent"
+                    >
+                      <div className="relative aspect-4/3 bg-gray-100">
+                        <ProductThumb product={p} />
+                      </div>
+                      <div className="p-3">
+                        <div className="text-[11px] tracking-wide text-gray-500 uppercase">{p.categoryName}</div>
+                        <h3 className="my-0.5 mb-1.5 line-clamp-2 text-[15px] font-bold text-gray-900">{p.name}</h3>
+                        <div className="flex items-baseline gap-1.5">
+                          <span className="text-base font-bold text-gray-900 tabular-nums">{productPriceLabel(p.price)}</span>
+                          <span className="text-sm text-gray-500">/ {p.unit}</span>
+                        </div>
+                      </div>
+                    </Link>
+                  </div>
+                ))}
+              </div>
+            ) : (
+              <div role="status" aria-label="Đang tải sản phẩm" className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-6">
+                {Array.from({ length: FEATURED_COUNT }, (_, i) => (
+                  <SkeletonCard key={i} className="h-[268px]" />
+                ))}
+              </div>
+            )}
+            <div className="text-center mt-10">
+              <Link
+                to="/shop"
+                className="rounded-full border-2 border-accent px-8 py-3 font-bold text-accent hover:bg-accent hover:text-white transition-colors inline-flex items-center gap-2 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent"
+              >
+                Xem tất cả sản phẩm <ArrowRight size={18} />
+              </Link>
+            </div>
           </div>
-          <div className="text-center mt-10">
-            <button
-              onClick={() => navigate('/shop')}
-              className="rounded-full border-2 border-accent px-8 py-3 font-bold text-accent hover:bg-accent hover:text-white transition-colors inline-flex items-center gap-2"
-            >
-              Xem tất cả sản phẩm <ArrowRight size={18} />
-            </button>
-          </div>
-        </div>
-      </section>
+        </section>
+      )}
 
       {/* 5. Stats + Vet Care */}
       <section className={styles.statsBand}>
@@ -235,34 +280,68 @@ export function HomePage() {
       </section>
 
       {/* 6. Doctors */}
-      <section className="gsap-doctors-section px-6 py-14 bg-[#fdf6ec]">
-        <div className={styles.wrap}>
-          <div className="text-center mb-12">
-            <div className="text-[12px] font-bold text-accent tracking-widest uppercase flex items-center justify-center gap-2 mb-3">
-              ĐỘI NGŨ TẬN TÂM VÌ THÚ CƯNG <PawPrint size={14} />
-            </div>
-            <div className="font-friendly text-[clamp(32px,4vw,42px)] font-extrabold text-(--color-text-primary) leading-tight">
-              Gặp Gỡ Đội Ngũ
-              <br />
-              Bác Sĩ Chuyên Môn
-            </div>
-          </div>
-          <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-8 text-center">
-            {DOCTORS.map((d, i) => (
-              <div key={i} className={`${styles.doctorCard} ${styles.doctorCardReveal} gsap-doctor-card`}>
-                <div className={styles.doctorImgWrap}>
-                  <img src={d.photo} alt={d.name} className={styles.doctorImg} />
-                  <img src={PHOTOS.doodlePaw} className={styles.doctorPawDecor} alt="" />
-                </div>
-                <h4 className="font-friendly text-[22px] font-bold text-(--color-text-primary) mt-5 mb-1">
-                  {d.name}
-                </h4>
-                <p className="text-[14px] text-(--color-text-secondary)">{d.role}</p>
+      {(vets.isPending || doctorsReady) && (
+        <section className="gsap-doctors-section px-6 py-14 bg-[#fdf6ec]">
+          <div className={styles.wrap}>
+            <div className="text-center mb-12">
+              <div className="text-[12px] font-bold text-accent tracking-widest uppercase flex items-center justify-center gap-2 mb-3">
+                ĐỘI NGŨ TẬN TÂM VÌ THÚ CƯNG <PawPrint size={14} />
               </div>
-            ))}
+              <h2 className="font-friendly text-[clamp(32px,4vw,42px)] font-extrabold text-(--color-text-primary) leading-tight">
+                Gặp Gỡ Đội Ngũ
+                <br />
+                Bác Sĩ Chuyên Môn
+              </h2>
+            </div>
+            {doctorsReady ? (
+              <>
+                {/* Chịu được 1..4 bác sĩ: thẻ cố định bề rộng theo số cột, dồn giữa thay vì dồn trái. */}
+                <div className="flex flex-wrap justify-center gap-8 text-center">
+                  {doctorItems.map((d) => (
+                    <div
+                      key={d.accountId}
+                      className={`${styles.doctorCard} ${styles.doctorCardReveal} gsap-doctor-card w-full sm:w-[calc(50%-1rem)] md:w-[calc(25%-1.5rem)]`}
+                    >
+                      <div className={styles.doctorImgWrap}>
+                        {d.avatarUrl ? (
+                          <img src={d.avatarUrl} alt={d.fullName} className={styles.doctorImg} />
+                        ) : (
+                          <div
+                            aria-hidden
+                            className={`${styles.doctorImg} grid place-items-center bg-(--color-accent-soft) font-friendly text-[56px] font-extrabold text-accent`}
+                          >
+                            {doctorInitials(d.fullName)}
+                          </div>
+                        )}
+                        <img src={PHOTOS.doodlePaw} className={styles.doctorPawDecor} alt="" />
+                      </div>
+                      <h3 className="font-friendly text-[22px] font-bold text-(--color-text-primary) mt-5 mb-1">
+                        {d.fullName}
+                      </h3>
+                      <p className="text-[14px] text-(--color-text-secondary)">{d.specialty || 'Bác sĩ thú y'}</p>
+                      <p className="mt-1 flex items-center justify-center gap-1 text-[12.5px] text-(--color-text-secondary)">
+                        <MapPin size={12} aria-hidden /> {d.branchName}
+                      </p>
+                    </div>
+                  ))}
+                </div>
+                <div className="text-center mt-10">
+                  <Link
+                    to="/doctors"
+                    className="rounded-full border-2 border-accent px-8 py-3 font-bold text-accent hover:bg-accent hover:text-white transition-colors inline-flex items-center gap-2 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent"
+                  >
+                    Xem đội ngũ bác sĩ <ArrowRight size={18} />
+                  </Link>
+                </div>
+              </>
+            ) : (
+              <div role="status" aria-label="Đang tải bác sĩ" className="flex flex-wrap justify-center gap-8">
+                <SkeletonCard className="h-[300px] w-full sm:w-[calc(50%-1rem)] md:w-[calc(25%-1.5rem)]" />
+              </div>
+            )}
           </div>
-        </div>
-      </section>
+        </section>
+      )}
 
       {/* 7. Don't Board Me Style Speech Bubble Testimonials */}
       <TestimonialsSpeechBubble />
@@ -328,50 +407,73 @@ export function HomePage() {
 
 
       {/* 11. News */}
-      <section className="px-6 py-14 bg-[#f6e8da]">
-        <div className={styles.wrap}>
-          <div className="flex flex-col md:flex-row items-center justify-between gap-6 mb-12">
-            <div>
-              <div className="text-[12px] font-bold text-accent tracking-widest uppercase flex items-center gap-2 mb-2">
-                TIN TỨC & BÀI VIẾT <PawPrint size={14} />
+      {(news.isPending || newsReady) && (
+        <section className="px-6 py-14 bg-[#f6e8da]">
+          <div className={styles.wrap}>
+            <div className="flex flex-col md:flex-row items-center justify-between gap-6 mb-12">
+              <div>
+                <div className="text-[12px] font-bold text-accent tracking-widest uppercase flex items-center gap-2 mb-2">
+                  TIN TỨC & BÀI VIẾT <PawPrint size={14} />
+                </div>
+                <h2 className="font-friendly text-[clamp(32px,4vw,42px)] font-extrabold text-(--color-text-primary) leading-tight">
+                  Bài Viết Mới Nhất
+                </h2>
               </div>
-              <div className="font-friendly text-[clamp(32px,4vw,42px)] font-extrabold text-(--color-text-primary) leading-tight">
-                Bài Viết Mới Nhất
-              </div>
+              <Link
+                to="/news"
+                className="px-6 py-2.5 rounded-full bg-[#faebe4] hover:bg-accent hover:text-white transition-colors flex items-center gap-2 font-bold text-[14px] text-accent border border-accent/20 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent"
+              >
+                Xem Tất Cả <ArrowRight size={18} />
+              </Link>
             </div>
-            <button
-              className="px-6 py-2.5 rounded-full bg-[#faebe4] hover:bg-accent hover:text-white transition-colors flex items-center gap-2 font-bold text-[14px] text-accent border border-accent/20"
-            >
-              Xem Tất Cả <ArrowRight size={18} />
-            </button>
-          </div>
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
-            {NEWS_ARTICLES.slice(0, 3).map((a) => (
-              <div key={a.id} className={styles.articleCard}>
-                <div className={styles.articleImgWrap}>
-                  <img src={a.image} alt={a.title} className={styles.articleImg} />
-                  <div className={styles.articleBadges}>
-                    <span className={styles.articleBadge}>{a.category}</span>
-                  </div>
-                </div>
-                <div className="p-7">
-                  <div className="flex items-center gap-5 text-[13px] font-semibold text-(--color-text-secondary) mb-4">
-                    <span className="flex items-center gap-2">
-                      <User size={16} className="text-accent" /> {a.author}
-                    </span>
-                    <span className="flex items-center gap-2">
-                      <Calendar size={16} className="text-accent" /> {a.date}
-                    </span>
-                  </div>
-                  <h3 className="font-friendly text-[22px] font-extrabold text-(--color-text-primary) leading-[1.3]">
-                    {a.title}
-                  </h3>
-                </div>
+            {newsReady ? (
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
+                {newsItems.map((a) => (
+                  <Link
+                    key={a.articleId}
+                    to={`/news/${a.slug}`}
+                    className="block h-full rounded-[20px] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent"
+                  >
+                    <div className={`${styles.articleCard} h-full`}>
+                      <div className={styles.articleImgWrap}>
+                        {a.coverImageUrl ? (
+                          <img src={a.coverImageUrl} alt="" loading="lazy" className={styles.articleImg} />
+                        ) : (
+                          <div aria-hidden className={`${styles.articleImg} grid place-items-center bg-(--color-surface-2)`}>
+                            <PawPrint size={48} strokeWidth={1.5} className="text-accent/25" />
+                          </div>
+                        )}
+                        <div className={styles.articleBadges}>
+                          <span className={styles.articleBadge}>{a.categoryName}</span>
+                        </div>
+                      </div>
+                      <div className="p-7">
+                        <div className="flex flex-wrap items-center gap-x-5 gap-y-1 text-[13px] font-semibold text-(--color-text-secondary) mb-4">
+                          <span className="flex items-center gap-2">
+                            <User size={16} className="text-accent" /> {a.authorDisplayName}
+                          </span>
+                          <span className="flex items-center gap-2">
+                            <Calendar size={16} className="text-accent" /> {formatPublishedDate(a.publishedAt)}
+                          </span>
+                        </div>
+                        <h3 className="font-friendly text-[22px] font-extrabold text-(--color-text-primary) leading-[1.3] line-clamp-3">
+                          {a.title}
+                        </h3>
+                      </div>
+                    </div>
+                  </Link>
+                ))}
               </div>
-            ))}
+            ) : (
+              <div role="status" aria-label="Đang tải bài viết" className="grid grid-cols-1 md:grid-cols-3 gap-8">
+                {Array.from({ length: NEWS_COUNT }, (_, i) => (
+                  <SkeletonCard key={i} className="h-[380px]" />
+                ))}
+              </div>
+            )}
           </div>
-        </div>
-      </section>
+        </section>
+      )}
 
       {/* 12. Don't Board Me Style Contact Vet Hotline & Booking CTA */}
       <ContactVetCTA />

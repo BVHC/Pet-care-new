@@ -92,6 +92,9 @@ export function SiteFooter({ onNav }: SiteFooterProps) {
 
         <FooterCol title="Đặt lịch">
           <a href="#" onClick={go('booking')}>Đặt lịch khám</a>
+          <a href="#" onClick={go('services')}>Dịch vụ</a>
+          <a href="#" onClick={go('branches')}>Chi nhánh</a>
+          <a href="#" onClick={go('doctors')}>Đội ngũ bác sĩ</a>
           <a href="#" onClick={go('hotel')}>Khách sạn thú cưng</a>
           <a href="#" onClick={go('orders')}>Lịch sử đơn hàng</a>
         </FooterCol>

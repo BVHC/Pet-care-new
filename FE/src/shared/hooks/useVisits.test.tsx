@@ -98,6 +98,8 @@ describe('visitPermissions: ma trận vai trò đã dò trên BE thật', () => 
     addendum: ['VET'],
     complete: ['VET', 'CARETAKER'],
     vaccinate: ['VET'],
+    // T46: kê đơn #16–17 (BR-BH-02: VET kê đơn / xóa thuốc cho lượt mình phụ trách).
+    prescribe: ['VET'],
   };
 
   it.each(Object.keys(EXPECTED) as VisitAction[])('%s', (action) => {
@@ -398,5 +400,22 @@ describe('visitErrorMessage: bệnh án, hoàn tất, tiêm chủng (T37) — 40
     expect(visitErrorMessage(rule('BR-KB-04', 'Sản phẩm vaccine không còn tồn khả dụng tại chi nhánh'), 'vaccinate')).toBe('Sản phẩm vaccine không còn tồn khả dụng tại chi nhánh');
     expect(visitErrorMessage(rule('BR-KB-06', 'Ngày tái khám phải sau ngày khám và không quá 180 ngày'), 'writeRecord')).toBe('Ngày tái khám phải sau ngày khám và không quá 180 ngày');
     expect(visitErrorMessage(rule('BR-KH-04', 'Cân nặng phải lớn hơn 0'), 'writeRecord')).toBe('Cân nặng phải lớn hơn 0');
+  });
+
+  it('kê đơn (T46): 409 nói theo trạng thái lượt (đã hoàn tất → bệnh án khóa; chưa gọi; đã hủy), không dùng câu "đã tải lại hàng đợi"', () => {
+    const locked = visitErrorMessage(conflictFrom('COMPLETED', 'IN_PROGRESS'), 'prescribe');
+    expect(locked).toContain('đã hoàn tất');
+    expect(locked).toContain('đơn thuốc');
+    expect(visitErrorMessage(conflictFrom('WAITING', 'IN_PROGRESS'), 'prescribe')).toContain('chưa được gọi');
+    expect(visitErrorMessage(conflictFrom('CANCELLED', 'IN_PROGRESS'), 'prescribe')).toContain('đã hủy');
+    for (const from of ['COMPLETED', 'WAITING', 'CANCELLED']) expect(visitErrorMessage(conflictFrom(from, 'IN_PROGRESS'), 'prescribe'), from).not.toContain('tải lại hàng đợi');
+  });
+
+  it('kê đơn (T46): 403 = chỉ bác sĩ được gán lượt; BR-KB-03 và lỗi dữ liệu giữ thông điệp của BE bỏ mã', () => {
+    expect(visitErrorMessage(scope, 'prescribe')).toContain('được gán');
+    expect(visitErrorMessage(scope, 'prescribe')).not.toContain('chi nhánh khác');
+    expect(visitErrorMessage(rule('BR-KB-03', 'Sản phẩm không phải thuốc kê đơn'), 'prescribe')).toBe('Sản phẩm không phải thuốc kê đơn');
+    expect(visitErrorMessage(apiError(400, 'VALIDATION_FAILED', 'dosageInstructions: Bắt buộc nhập liều dùng'), 'prescribe')).toBe('Bắt buộc nhập liều dùng');
+    expect(visitErrorMessage(apiError(404, 'RESOURCE_NOT_FOUND', 'Không tìm thấy dòng đơn thuốc #9'), 'prescribe')).toContain('Không tìm thấy');
   });
 });

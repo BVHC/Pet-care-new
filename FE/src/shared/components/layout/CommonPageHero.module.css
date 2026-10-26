@@ -46,7 +46,8 @@
 .slabContent {
   position: relative;
   z-index: 3;
-  padding: 36px 0 32px;
+  /* Chỉ chiều dọc: lề ngang do `px-5 sm:px-8` ở CommonPageHero.tsx (shorthand cũ đè mất, chữ dính mép trái). */
+  padding-block: 36px 32px;
 }
 
 /* ================================================================

@@ -99,67 +99,6 @@ export const CATEGORIES: Category[] = [
   },
 ]
 
-export interface FeaturedProduct {
-  id: string;
-  name: string;
-  category: string;
-  price: string;
-  rating: string;
-  badge?: string;
-  image: string;
-  petType: 'dog' | 'cat';
-}
-
-export const FEATURED: FeaturedProduct[] = [
-  {
-    id: 'p1',
-    name: 'Grain-Free Kibble',
-    category: 'Dog Food',
-    price: '$34.99',
-    rating: '4.8',
-    badge: 'Best seller',
-    image: PHOTOS.prodKibble,
-    petType: 'dog',
-  },
-  {
-    id: 'p2',
-    name: 'Orthopedic Bed',
-    category: 'Bedding',
-    price: '$59.00',
-    rating: '4.9',
-    image: PHOTOS.prodBed,
-    petType: 'dog',
-  },
-  {
-    id: 'p3',
-    name: 'Salmon Treats',
-    category: 'Treats',
-    price: '$12.50',
-    rating: '4.7',
-    badge: 'New',
-    image: PHOTOS.prodTreats,
-    petType: 'cat',
-  },
-  {
-    id: 'p4',
-    name: 'Interactive Puzzle',
-    category: 'Dog Toys',
-    price: '$18.99',
-    rating: '4.5',
-    image: PHOTOS.prodToy,
-    petType: 'dog',
-  },
-]
-
-// Lọc sản phẩm nổi bật theo loài — hàm thuần, dùng cho tab ALL/CHÓ/MÈO ở HomePage.
-export function filterFeaturedByPetType(
-  items: FeaturedProduct[],
-  filter: 'all' | 'dog' | 'cat'
-): FeaturedProduct[] {
-  if (filter === 'all') return items
-  return items.filter((p) => p.petType === filter)
-}
-
 export const WHY: { icon: LucideIcon; title: string; desc: string }[] = [
   {
     icon: Truck,
@@ -265,13 +204,6 @@ export const FAQS: { q: string; a: string }[] = [
     q: 'Chi phí giao hàng như thế nào?',
     a: 'Miễn phí giao hàng cho đơn từ một mức tối thiểu; phần lớn đơn được giao trong vòng 24 giờ.',
   },
-]
-
-export const DOCTORS = [
-  { name: 'Daria Andaloro', role: 'Veterinary Technician', photo: '/imgs/team1.jpg' },
-  { name: 'Michael Brian', role: 'Medicine Specialist', photo: '/imgs/team2.jpg' },
-  { name: 'Kenroly Gajon', role: 'Food Technician', photo: '/imgs/team3.jpg' },
-  { name: 'Lizay Arianya', role: 'Veterinary Technician', photo: '/imgs/team4.jpg' },
 ]
 
 export { PHOTOS }

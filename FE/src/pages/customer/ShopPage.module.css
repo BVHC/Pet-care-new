@@ -51,6 +51,9 @@
   gap: 6px;
   min-width: 0;
   overflow-x: auto;
+  /* Chừa chỗ cho dải mờ hai đầu để chip đầu tiên không bị mờ đi. */
+  padding-inline: 14px;
+  scroll-padding-inline: 14px;
   scrollbar-width: none;
   scroll-snap-type: x proximity;
   -webkit-mask-image: linear-gradient(
@@ -79,7 +82,7 @@
   display: inline-flex;
   align-items: center;
   gap: 7px;
-  padding: 7px 13px 7px 9px;
+  padding: 7px 13px;
   border-radius: 999px;
   font-size: 13px;
   font-weight: 700;
@@ -96,20 +99,9 @@
   color: var(--color-accent);
 }
 
-.catChip img {
-  width: 19px;
-  height: 19px;
-  object-fit: contain;
-}
-
 .catChipActive {
   background: var(--color-accent);
   color: #fff;
-}
-
-/* Line-art là mực nâu đậm — đảo sang trắng khi chip đang bật. */
-.catChipActive img {
-  filter: brightness(0) invert(1);
 }
 
 /* Thanh lọc dính — có bóng khi đã dính để tách khỏi nền kem phía sau. */
@@ -181,35 +173,7 @@
   transform: scale(1.06);
 }
 
-/* Nút thêm giỏ trượt lên từ mép dưới ảnh — phủ lên ảnh nên thân thẻ không chừa
-   khoảng trống, các thẻ trong cùng hàng vẫn thẳng nhịp. */
-.cardAction {
-  position: absolute;
-  right: 8px;
-  bottom: 8px;
-  left: 8px;
-  transform: translateY(calc(100% + 8px));
-  opacity: 0;
-  transition:
-    transform 0.4s cubic-bezier(0.32, 0.72, 0, 1),
-    opacity 0.25s ease;
-}
-
-.card:hover .cardAction,
-.card:focus-within .cardAction {
-  transform: translateY(0);
-  opacity: 1;
-}
-
-/* Thiết bị cảm ứng không có hover → hiện sẵn. */
-@media (hover: none) {
-  .cardAction {
-    transform: none;
-    opacity: 1;
-  }
-}
-
-/* Skeleton khi đổi bộ lọc. */
+/* Skeleton khi tải lần đầu. */
 .skeleton {
   border-radius: 14px;
   background: linear-gradient(
@@ -231,7 +195,6 @@
 @media (prefers-reduced-motion: reduce) {
   .card,
   .cardMedia img,
-  .cardAction,
   .catChip {
     transition: none;
   }

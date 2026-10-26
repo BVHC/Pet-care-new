@@ -1,4 +1,4 @@
-import { render, screen } from '@testing-library/react';
+import { render, screen, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { MemoryRouter } from 'react-router-dom';
 import { beforeAll, beforeEach, describe, expect, it } from 'vitest';
@@ -25,6 +25,52 @@ function open(path: string) {
 }
 
 const forbidden = () => screen.findByRole('heading', { name: 'Bạn không có quyền vào trang này' });
+
+// UC15 (T46): dịch vụ, chi nhánh, bác sĩ là trang công khai, khách vãng lai xem được.
+describe('public pages (UC15)', () => {
+  it.each([
+    ['/services', 'Dịch vụ tại PetCare'],
+    ['/branches', 'Hệ thống chi nhánh'],
+    ['/doctors', 'Đội ngũ bác sĩ'],
+  ])('opens %s for a visitor without sending them to the login page', async (path, title) => {
+    open(path);
+    expect(await screen.findByRole('heading', { level: 1, name: title })).toBeInTheDocument();
+    expect(screen.queryByRole('heading', { name: 'Chào mừng trở lại' })).not.toBeInTheDocument();
+  });
+
+  it.each([
+    ['banner', 'Dịch vụ', 'Dịch vụ tại PetCare'],
+    ['banner', 'Chi nhánh', 'Hệ thống chi nhánh'],
+    ['banner', 'Bác sĩ', 'Đội ngũ bác sĩ'],
+    ['contentinfo', 'Dịch vụ', 'Dịch vụ tại PetCare'],
+    ['contentinfo', 'Chi nhánh', 'Hệ thống chi nhánh'],
+    ['contentinfo', 'Đội ngũ bác sĩ', 'Đội ngũ bác sĩ'],
+  ])('reaches the page from the %s link "%s"', async (landmark, link, title) => {
+    open('/help');
+    await userEvent.click(within(await screen.findByRole(landmark)).getByRole('link', { name: link }));
+    expect(await screen.findByRole('heading', { level: 1, name: title })).toBeInTheDocument();
+  });
+});
+
+// UC16–17 (T46): cửa hàng, tin tức và bài viết là trang công khai, khách vãng lai xem được (ADR-0005).
+describe('public pages (UC16–17)', () => {
+  it.each([
+    ['/shop', 'Cửa hàng của boss'],
+    ['/shop/1', 'Hạt Royal Canin Mini Adult 2kg'],
+    ['/news', 'Kiến thức chăm sóc thú cưng'],
+    ['/news/royal-canin-vs-pedigree-chon-hang-nao-cho-cho-cung', 'Royal Canin vs Pedigree: nên chọn hãng nào cho chó cưng?'],
+  ])('opens %s for a visitor without sending them to the login page', async (path, title) => {
+    open(path);
+    expect(await screen.findByRole('heading', { level: 1, name: title })).toBeInTheDocument();
+    expect(screen.queryByRole('heading', { name: 'Chào mừng trở lại' })).not.toBeInTheDocument();
+  });
+
+  it('shows the not-found frame (not the login page) for a draft article slug', async () => {
+    open('/news/meo-cao-sofa-5-cach-ngan-chan');
+    expect(await screen.findByRole('heading', { level: 1, name: 'Không tìm thấy bài viết' })).toBeInTheDocument();
+    expect(screen.queryByRole('heading', { name: 'Chào mừng trở lại' })).not.toBeInTheDocument();
+  });
+});
 
 describe('route guards', () => {
   it('sends a visitor from a customer page to the login page', async () => {

@@ -1,9 +1,10 @@
-// React Query cho khám bệnh (T37): bệnh án, cân nặng, bản bổ sung, hoàn tất lượt, tiêm chủng (visit-v1 #10, #12–15, #18–20; UC48, UC49, UC52, UC53).
+// React Query cho khám bệnh (T37): bệnh án, cân nặng, bản bổ sung, hoàn tất lượt, tiêm chủng (visit-v1 #10, #12–15, #18–20; UC48, UC49, UC52, UC53) và kê đơn (T46, #16–17).
 // Khóa đọc nằm dưới gốc ['visits', …] nên mọi lệnh ghi của lượt (gọi, hoàn tất, hủy) làm tải lại bệnh án đang mở. KHÔNG tự làm mới định kỳ như hàng đợi: bệnh án
 // đang soạn là của chính người mở nó. Phân quyền kiểu `useMyShift(enabled)`: UI tính từ `visitPermissions(role)` để vai trò không có quyền không bắn request (BE trả 403).
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { visitApi } from '../api/visit.api';
 import type { AddendumRequest, MedicalRecord, RecordVaccinationRequest, RecordWeightRequest, UpdateMedicalRecordRequest } from '../types/medical-record';
+import type { AddPrescriptionRequest } from '../types/visit';
 import { VISITS_KEY, useVisitMutation, visitQueryRetry } from './useVisits';
 
 const recordKey = (visitId: number | null) => ['visits', 'record', visitId] as const;
@@ -47,6 +48,15 @@ export const useRecordWeight = () => useExamMutation(({ visitId, weightKg }: { v
 
 /** #15 (mọi VET của chi nhánh). */
 export const useAddAddendum = () => useExamMutation(({ visitId, ...body }: { visitId: number } & AddendumRequest) => visitApi.addAddendum(visitId, body), [['pets']]);
+
+/**
+ * #16 (VET được gán): dòng đơn thuốc, kèm dòng Order thuốc khi đủ tồn → làm mới [sales] (và [visits] cho bệnh án). Không đổi kho (kho trừ khi thu tiền, BR-BH-04) và chưa vào hồ sơ
+ * sức khỏe (chỉ lượt đã hoàn tất) nên không cần làm mới [inventory], [pets].
+ */
+export const useAddPrescription = () => useExamMutation(({ visitId, ...body }: { visitId: number } & AddPrescriptionRequest) => visitApi.addPrescription(visitId, body));
+
+/** #17 (VET được gán): xóa dòng đơn, kèm dòng Order thuốc của nó. */
+export const useDeletePrescription = () => useExamMutation(({ visitId, itemId }: { visitId: number; itemId: number }) => visitApi.deletePrescription(visitId, itemId));
 
 /** #19 (VET được gán): trừ kho FEFO, thêm dòng Order vaccine, thêm vào hồ sơ sức khỏe → làm mới [inventory], [pets]. */
 export const useRecordVaccination = () =>

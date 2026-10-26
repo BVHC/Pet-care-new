@@ -10,9 +10,11 @@ import { branchRoutes } from './branch.mock';
 import { careRoutes } from './care.mock';
 import { cashierRoutes } from './cashier.mock';
 import { catalogRoutes } from './catalog.mock';
+import { contentRoutes } from './content.mock';
 import { customerRoutes } from './customer.mock';
 import { customerPetRoutes } from './customer-pet.mock';
 import { inventoryRoutes } from './inventory.mock';
+import { publicRoutes } from './public.mock';
 import { salesRoutes } from './sales.mock';
 import { visitRoutes } from './visit.mock';
 import { visitClinicalRoutes } from './visit-clinical.mock';
@@ -27,6 +29,8 @@ const ROUTES: Record<string, MockHandler> = {
   ...catalogRoutes,
   ...inventoryRoutes,
   ...branchRoutes,
+  ...publicRoutes,
+  ...contentRoutes,
   ...adminIdentityRoutes,
   ...appointmentRoutes,
   ...careRoutes,

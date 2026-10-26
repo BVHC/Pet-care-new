@@ -16,8 +16,11 @@ export const ROUTES = {
   hotel: '/hotel',
   recommend: '/recommend',
   about: '/about',
+  services: '/services', // UC15
+  branches: '/branches', // UC15
+  doctors: '/doctors', // UC15
   news: '/news',
-  newsDetail: '/news/:newsId',
+  newsDetail: '/news/:slug', // UC17, BR-BV-01: đường dẫn bài là slug, không phải id
   terms: '/terms',
   privacy: '/privacy',
   favorites: '/favorites',
@@ -58,6 +61,9 @@ export const NAV_TO_PATH: Record<string, string> = {
   booking: ROUTES.booking,
   hotel: ROUTES.hotel,
   about: ROUTES.about,
+  services: ROUTES.services,
+  branches: ROUTES.branches,
+  doctors: ROUTES.doctors,
   news: ROUTES.news,
   cart: ROUTES.cart,
   login: ROUTES.login,

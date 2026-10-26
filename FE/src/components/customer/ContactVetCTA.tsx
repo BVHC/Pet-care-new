@@ -1,28 +1,13 @@
 import React from 'react'
 import { Link } from 'react-router-dom'
 import { PhoneCall, MapPin, Clock, ArrowRight, ExternalLink } from 'lucide-react'
-
-// Branch data with Google Maps links
-const BRANCHES = [
-  {
-    id: 'quan-1',
-    name: 'PetCare Quận 1',
-    address: '123 Đồng Khởi, P. Bến Nghé',
-    hours: '08:00 - 21:00',
-    mapsUrl: 'https://www.google.com/maps/search/PetCare+Qu%E1%BA%A7n+1+Ho+Chi+Minh',
-    coords: '10.7808,106.6980',
-  },
-  {
-    id: 'quan-7',
-    name: 'PetCare Quận 7',
-    address: '88 Nguyễn Thị Thật, P. Tân Hưng',
-    hours: '08:00 - 21:00',
-    mapsUrl: 'https://www.google.com/maps/search/PetCare+Qu%E1%BA%A7n+7+Ho+Chi+Minh',
-    coords: '10.7329,106.7273',
-  },
-]
+import { usePublicBranches } from '@/shared/hooks/usePublicSite'
 
 export const ContactVetCTA: React.FC = () => {
+  // Chi nhánh thật (UC15): chưa tải xong thì hiện ô chờ, lỗi hoặc chưa có chi nhánh nào thì bỏ hàng chip, các nút bên phải vẫn dùng được.
+  const branches = usePublicBranches()
+  const list = branches.data ?? []
+
   return (
     <section className="relative w-full bg-[#382417] py-14 px-6 sm:px-10 text-white overflow-hidden select-none">
       <div className="max-w-6xl mx-auto flex flex-col lg:flex-row items-center justify-between gap-8">
@@ -47,32 +32,47 @@ export const ContactVetCTA: React.FC = () => {
           </div>
 
           {/* Branch Location Chips */}
-          <div className="flex flex-wrap gap-3 mt-6">
-            {BRANCHES.map((branch) => (
-              <a
-                key={branch.id}
-                href={branch.mapsUrl}
-                target="_blank"
-                rel="noopener noreferrer"
-                className="group inline-flex items-center gap-2.5 bg-white/10 hover:bg-white/20 border border-white/20 hover:border-white/30 rounded-full px-4 py-2.5 transition-all duration-200 cursor-pointer"
-              >
-                <div className="flex items-center justify-center w-8 h-8 rounded-full bg-[#cf5b47]/20 text-[#cf5b47] shrink-0">
-                  <MapPin size={14} />
-                </div>
-                <div className="flex flex-col">
-                  <span className="text-xs font-bold text-white leading-tight">{branch.name}</span>
-                  <span className="text-[10px] text-white/70 flex items-center gap-1">
-                    <Clock size={10} />
-                    {branch.hours}
-                  </span>
-                </div>
-                <ExternalLink
-                  size={12}
-                  className="text-white/50 group-hover:text-white/80 transition-colors ml-1"
-                />
-              </a>
-            ))}
-          </div>
+          {(branches.isPending || list.length > 0) && (
+            <ul aria-label="Chi nhánh" className="flex flex-wrap gap-3 mt-6">
+              {branches.isPending
+                ? [0, 1].map((i) => (
+                    <li key={i} aria-hidden className="h-[52px] w-48 animate-pulse rounded-full bg-white/10 motion-reduce:animate-none" />
+                  ))
+                : list.map((branch) => (
+                    <li
+                      key={branch.branchId}
+                      className="inline-flex items-center gap-2.5 bg-white/10 border border-white/20 rounded-full px-4 py-2.5"
+                    >
+                      <div className="flex items-center justify-center w-8 h-8 rounded-full bg-[#cf5b47]/20 text-[#cf5b47] shrink-0">
+                        <MapPin size={14} aria-hidden />
+                      </div>
+                      <div className="flex flex-col">
+                        <a
+                          href={`https://www.google.com/maps/search/?api=1&query=${branch.latitude},${branch.longitude}`}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="group inline-flex items-center gap-1 text-xs font-bold text-white leading-tight hover:underline underline-offset-2 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-white"
+                        >
+                          {branch.name}
+                          <ExternalLink size={11} aria-hidden className="text-white/50 group-hover:text-white/80 transition-colors" />
+                        </a>
+                        <a
+                          href={`tel:${branch.phone}`}
+                          className="text-[11px] text-white/70 hover:text-white flex items-center gap-1 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-white"
+                        >
+                          <PhoneCall size={10} aria-hidden />
+                          {branch.phone}
+                        </a>
+                      </div>
+                      {branch.acceptsAfterHoursEmergency && (
+                        <span className="ml-1 rounded-full bg-[#cf5b47]/30 px-2 py-0.5 text-[10px] font-bold text-white whitespace-nowrap">
+                          Cấp cứu 24/7
+                        </span>
+                      )}
+                    </li>
+                  ))}
+            </ul>
+          )}
         </div>
 
         {/* Action Buttons */}

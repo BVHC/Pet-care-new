@@ -140,6 +140,9 @@ function examConflictMessage(action: VisitAction | undefined, from: string | und
     case 'vaccinate':
       if (from === 'COMPLETED') return 'Lượt đã hoàn tất nên không ghi hay xóa mũi tiêm được. Sai sót ghi bằng bản bổ sung bệnh án.';
       return from === 'CANCELLED' ? 'Lượt đã hủy nên không ghi mũi tiêm được.' : 'Lượt chưa được gọi vào khám nên chưa ghi mũi tiêm được.';
+    case 'prescribe':
+      if (from === 'COMPLETED') return 'Lượt đã hoàn tất nên đơn thuốc đã khóa cùng bệnh án, không kê hay xóa thuốc được. Sai sót ghi bằng bản bổ sung bệnh án.';
+      return from === 'CANCELLED' ? 'Lượt đã hủy nên không kê đơn được.' : 'Lượt chưa được gọi vào khám nên chưa kê đơn được.';
     case 'addendum':
       return 'Lượt chưa hoàn tất nên chưa thêm bản bổ sung được. Hãy sửa trực tiếp bệnh án.';
     case 'complete':
@@ -152,7 +155,7 @@ function examConflictMessage(action: VisitAction | undefined, from: string | und
 /**
  * Câu báo lỗi cho quầy tiếp nhận và bàn khám. 409 tách theo thực thể BE nêu trong thông điệp: "lịch hẹn" → tiếp nhận như khách vãng lai; "hạng ưu tiên" → đã là cấp cứu; còn lại
  * (lượt) → theo thao tác khám (`examConflictMessage`) hoặc đã đổi ở nơi khác. 403 ACCESS_DENIED_SCOPE_MISMATCH tùy thao tác: gọi lượt = chưa được gán cho mình; ghi bệnh án,
- * hoàn tất, tiêm chủng = không phải người phụ trách (xóa mũi tiêm: không phải người đã ghi mũi). Thú đã mất báo mã BR-TN-01 (không phải BR-KH-05).
+ * hoàn tất, tiêm chủng, kê đơn = không phải người phụ trách (xóa mũi tiêm: không phải người đã ghi mũi). Thú đã mất báo mã BR-TN-01 (không phải BR-KH-05).
  */
 export function visitErrorMessage(e: unknown, action?: VisitAction): string {
   const error = toApiError(e);
@@ -182,6 +185,7 @@ export function visitErrorMessage(e: unknown, action?: VisitAction): string {
       if (action === 'writeRecord') return 'Chỉ bác sĩ được gán lượt này mới ghi được bệnh án và cân nặng.';
       if (action === 'complete') return 'Chỉ người được gán lượt mới hoàn tất được.';
       if (action === 'vaccinate') return 'Chỉ bác sĩ được gán lượt (hoặc đã ghi mũi tiêm này) mới thao tác được.';
+      if (action === 'prescribe') return 'Chỉ bác sĩ được gán lượt này mới kê đơn hoặc xóa thuốc được.';
       return 'Lượt này thuộc chi nhánh khác nên bạn không thao tác được.';
     case 'ACCESS_DENIED':
       return 'Bạn không có quyền thực hiện thao tác này.';

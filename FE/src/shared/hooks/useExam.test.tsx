@@ -8,7 +8,9 @@ import type { MedicalRecord } from '../types/medical-record';
 import type { Visit } from '../types/visit';
 import {
   useAddAddendum,
+  useAddPrescription,
   useCompleteVisit,
+  useDeletePrescription,
   useDeleteVaccination,
   useMedicalRecord,
   useRecordVaccination,
@@ -124,5 +126,25 @@ describe('lệnh ghi khám bệnh: làm mới các gốc bị ảnh hưởng, k�
     expect(del).toHaveBeenCalledWith(7, 3);
     vi.spyOn(visitApi, 'deleteVaccination').mockRejectedValue(new ApiError('INVALID_STATE_TRANSITION', 'x', 409));
     expect(await run(useDeleteVaccination as never, { visitId: 7, vaccinationId: 3 })).toContainEqual(['inventory']);
+  });
+
+  it('kê đơn / xóa dòng đơn (#16, #17): chuyển đúng đối số, làm mới [visits] (bệnh án) và [sales] (dòng Order thuốc); không đổi kho (kho trừ khi thu tiền); lỗi 400 BR-KB-03 và 409 cũng làm mới', async () => {
+    const body = { productId: 3, quantity: 10, dosageInstructions: 'Ngày 2 lần' };
+    const add = vi.spyOn(visitApi, 'addPrescription').mockResolvedValue({} as never);
+    const del = vi.spyOn(visitApi, 'deletePrescription').mockResolvedValue(undefined);
+    for (const root of [['visits'], ['sales']]) {
+      expect(await run(useAddPrescription as never, { visitId: 7, ...body }), 'kê').toContainEqual(root);
+      expect(await run(useDeletePrescription as never, { visitId: 7, itemId: 3 }), 'xóa').toContainEqual(root);
+    }
+    expect(add).toHaveBeenCalledWith(7, body);
+    expect(del).toHaveBeenCalledWith(7, 3);
+    expect(await run(useAddPrescription as never, { visitId: 7, ...body })).not.toContainEqual(['inventory']);
+
+    vi.spyOn(visitApi, 'addPrescription').mockRejectedValue(new ApiError('BUSINESS_RULE_VIOLATION', 'Thiếu tồn khả dụng (BR-KB-03)', 400));
+    vi.spyOn(visitApi, 'deletePrescription').mockRejectedValue(new ApiError('INVALID_STATE_TRANSITION', 'x', 409));
+    for (const root of [['visits'], ['sales']]) {
+      expect(await run(useAddPrescription as never, { visitId: 7, ...body })).toContainEqual(root);
+      expect(await run(useDeletePrescription as never, { visitId: 7, itemId: 3 })).toContainEqual(root);
+    }
   });
 });

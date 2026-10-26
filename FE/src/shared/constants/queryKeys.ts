@@ -32,6 +32,19 @@ export const QUERY_KEYS = {
     health: (petId: number) => ['pets', 'health', petId] as const,
   },
   catalog: { all: ['catalog'] as const },
+  /** Trang công khai (UC15–17); `branches` và `services(branchId)` trùng khóa của usePublicBranches / usePublicServices. */
+  public: {
+    all: ['public'] as const,
+    branches: () => ['public', 'branches'] as const,
+    services: (params?: object) => ['public', 'services', 'list', params ?? {}] as const,
+    vets: (branchId?: number) => ['public', 'vets', branchId ?? null] as const,
+    productCategories: () => ['public', 'product-categories'] as const,
+    products: (query: object) => ['public', 'products', 'list', query] as const,
+    product: (productId: number) => ['public', 'products', 'detail', productId] as const,
+    articleCategories: () => ['public', 'article-categories'] as const,
+    articles: (query: object) => ['public', 'articles', 'list', query] as const,
+    article: (slug: string) => ['public', 'articles', 'detail', slug] as const,
+  },
   staff: { all: ['staff'] as const },
   shift: {
     all: ['shift'] as const,

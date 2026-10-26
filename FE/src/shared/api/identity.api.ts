@@ -26,12 +26,17 @@ import type {
   UpdateConfigRequest,
   UpdateTemplateRequest,
 } from '../types/identity';
+import type { PublicVet } from '../types/public-site';
 
 const get = async <T>(url: string, params?: object): Promise<T> => (await apiClient.get(url, { params })).data.data;
 const post = async <T>(url: string, body: object): Promise<T> => (await apiClient.post(url, body)).data.data;
 const put = async <T>(url: string, body: object): Promise<T> => (await apiClient.put(url, body)).data.data;
 
 export const identityApi = {
+  // ─── Công khai (UC15), không cần đăng nhập ───
+  /** VET ACTIVE ở chi nhánh ACTIVE, sắp theo họ tên; `branchId` không ACTIVE thì mảng rỗng. */
+  listPublicVets: (params?: { branchId?: number }) => get<PublicVet[]>('/api/public/vets', params),
+
   // ─── Staff (UC08) ───
   listStaff: (query: StaffQuery = {}) => get<PageResponse<StaffResponse>>('/api/staff', query),
   createStaff: (body: CreateStaffRequest) => post<StaffResponse>('/api/staff', body),

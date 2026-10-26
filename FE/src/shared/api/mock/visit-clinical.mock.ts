@@ -4,8 +4,10 @@
 // → người phụ trách 403 (đứng TRƯỚC 409, để người không phải chủ lượt không dò được trạng thái) → trạng thái 409 → rule 400.
 // #18–20 (tiêm chủng) BE CHƯA CÓ (T28, `VaccinationQueryApiPlaceholder`): chỉ theo hợp đồng visit-v1 + BR-KB-04; chỗ hợp đồng im lặng là ASSUMPTION ghi ở
 // docs/testcases/T37-fe.md. Không mô phỏng: audit (BE ghi MEDICAL_RECORD_UPDATED, MEDICAL_RECORD_ADDENDUM_ADDED), khóa đồng thời, Care Task#5 khi tiêm.
+// T46: #16–17 (kê đơn thuốc) BE CHƯA CÓ (T38, chưa có controller): hợp đồng visit-v1 + BR-KB-03; chỗ im lặng là ASSUMPTION A1–A6 ghi ở docs/testcases/T46-fe.md.
 import type { Role } from '../../types/auth';
-import type { Addendum, MedicalRecord, ProtocolDoseOption, VaccinationOptions, VaccinationRecord } from '../../types/medical-record';
+import type { Addendum, MedicalRecord, PrescriptionItem, ProtocolDoseOption, VaccinationOptions, VaccinationRecord } from '../../types/medical-record';
+import type { ShortageResolution } from '../../types/visit';
 import type { VaccineType } from '../../types/catalog';
 import { addDays } from '../../utils/branch-schedule';
 import { vnDate } from '../../utils/vn-time';
@@ -18,7 +20,7 @@ import { denied, fail, invalid, noContent, notFound, ok, ruleFail, scopeDenied, 
 import { branchIdOf } from './identity.mock';
 import { staffNameOf } from './identity-admin.mock';
 import { availableQuantity, issueOneFefo, returnToLot } from './inventory.mock';
-import { addVaccineLine, markOrderPendingByVisit, removeVaccineLine, serviceIdsOfVisit } from './sales.mock';
+import { addDrugLine, addVaccineLine, markOrderPendingByVisit, removeDrugLine, removeVaccineLine, serviceIdsOfVisit } from './sales.mock';
 import {
   FSM_NAME,
   ROLE_OF_GROUP,
@@ -47,6 +49,11 @@ const WRITE_ROLES: readonly Role[] = ['VET'];
 const COMPLETE_ROLES: readonly Role[] = ['VET', 'CARETAKER'];
 /** Tiêm chủng #18–20: VET (được gán lượt; xóa mũi: VET đã ghi mũi đó). */
 const VACCINATE_ROLES: readonly Role[] = ['VET'];
+/** Kê đơn #16–17: VET được gán lượt (BR-BH-02). */
+const PRESCRIBE_ROLES: readonly Role[] = ['VET'];
+const RESOLUTIONS: readonly ShortageResolution[] = ['REDUCE_TO_AVAILABLE', 'EXTERNAL_PURCHASE'];
+/** `prescription_items.dosage_instructions` VARCHAR(500). */
+const MAX_DOSAGE_LENGTH = 500;
 /** [CFG] `medical_record.follow_up_max_days` (seed BE V2__seed_system_configs.sql): sau ngày khám, xa nhất 180 ngày (BR-KB-06). */
 const FOLLOW_UP_MAX_DAYS = 180;
 const MINUTE = 60_000;
@@ -89,19 +96,31 @@ interface VaccinationRow {
   nextDueDate: string;
   recordedBy: number;
 }
+interface PrescriptionRow {
+  itemId: number;
+  visitId: number;
+  productId: number;
+  quantity: number;
+  dosageInstructions: string;
+  /** null = mua ngoài: `isExternalPurchase === (orderLineId == null)` (CHECK của 05 `prescription_items`). */
+  orderLineId: number | null;
+  externalReason: NonNullable<PrescriptionItem['externalReason']> | null;
+}
 interface State {
   seq: number;
   records: RecordRow[];
   addenda: AddendumRow[];
   vaccinations: VaccinationRow[];
+  prescriptions: PrescriptionRow[];
 }
 
 /**
  * Dữ liệu mẫu cho các lượt Khám/Tiêm đã hoàn tất của visit.mock (người ghi: VET #5): 61 hôm nay (có hẹn tái khám sau 7 ngày và một bản bổ sung), 58, 40 và 2001.
  * Bệnh án đã khóa vì lượt COMPLETED. Không có mũi tiêm mẫu: dòng vaccine của Order #3 (lượt 58) là sản phẩm của chó còn thú là mèo, nên không dựng mũi tiêm khớp.
+ * Lượt 61 có một dòng đơn thuốc Amoxicillin x10 gắn dòng Order DRUG #22 của Order #2 (sales.mock), để đơn và hóa đơn khớp nhau.
  */
 function seed(): State {
-  const s: State = { seq: 0, records: [], addenda: [], vaccinations: [] };
+  const s: State = { seq: 0, records: [], addenda: [], vaccinations: [], prescriptions: [] };
   const rows: [number, Partial<RecordRow>, number | null][] = [
     [61, { examination: 'Mèo sốt nhẹ, bỏ ăn 1 ngày, nghe phổi có ran', diagnosis: 'Viêm đường hô hấp trên', treatmentPlan: 'Kháng sinh 7 ngày, ăn thức ăn mềm', internalNote: 'Chủ lo lắng, nhắc tái khám' }, 7],
     [58, { examination: 'Khám trước tiêm, thể trạng tốt', diagnosis: 'Khỏe mạnh' }, null],
@@ -125,6 +144,7 @@ function seed(): State {
   const done = visitRowOf(61);
   if (done?.completedAt) {
     s.addenda.push({ addendumId: ++s.seq, visitId: 61, content: 'Kết quả xét nghiệm nhanh về sau: FeLV/FIV âm tính', isInternal: false, createdBy: 5, createdAt: new Date(Date.parse(done.completedAt) + 20 * MINUTE).toISOString() });
+    s.prescriptions.push({ itemId: ++s.seq, visitId: 61, productId: 3, quantity: 10, dosageInstructions: 'Ngày 2 lần, mỗi lần 1 viên sau ăn, uống 5 ngày', orderLineId: 22, externalReason: null });
   }
   return s;
 }
@@ -134,7 +154,11 @@ const STATE_KEY = 'petcare-mock-clinical';
 function load(): State {
   try {
     const raw = localStorage.getItem(STATE_KEY);
-    if (raw) return JSON.parse(raw) as State;
+    if (raw) {
+      const s = JSON.parse(raw) as State;
+      s.prescriptions ??= []; // state lưu từ bản trước T46 chưa có mảng này
+      return s;
+    }
   } catch {
     // Dữ liệu hỏng: dùng lại dữ liệu mẫu.
   }
@@ -156,6 +180,22 @@ function save(s: State) {
 function addendumView(a: AddendumRow): Addendum {
   return { addendumId: a.addendumId, content: a.content, isInternal: a.isInternal, createdBy: a.createdBy, createdByName: staffNameOf(a.createdBy) ?? `Nhân viên #${a.createdBy}`, createdAt: a.createdAt };
 }
+
+function prescriptionView(p: PrescriptionRow): PrescriptionItem {
+  return {
+    itemId: p.itemId,
+    productId: p.productId,
+    productName: catalogProducts().find((x) => x.productId === p.productId)?.name ?? `Sản phẩm #${p.productId}`,
+    quantity: p.quantity,
+    dosageInstructions: p.dosageInstructions,
+    isExternalPurchase: p.orderLineId === null,
+    externalReason: p.externalReason,
+    orderLineId: p.orderLineId,
+  };
+}
+
+const prescriptionsOf = (s: State, visitId: number): PrescriptionItem[] =>
+  s.prescriptions.filter((p) => p.visitId === visitId).sort((a, b) => a.itemId - b.itemId).map(prescriptionView);
 
 /** `superseded`: đã có mũi mới hơn cùng loại vaccine của cùng thú tại hệ thống (BR-TB-03); tính lúc đọc nên xóa mũi mới thì mũi cũ hết bị thay thế. */
 function vaccinationView(s: State, v: VaccinationRow): VaccinationRecord {
@@ -195,7 +235,8 @@ function recordView(s: State, visit: VisitRow): MedicalRecord {
     followUpDate: row?.followUpDate ?? null,
     locked,
     lastEditedBy: row?.lastEditedBy ?? null,
-    prescriptions: [],
+    // Kê đơn: BE trả mảng rỗng tới khi T38 xong; mock mô phỏng T38 theo hợp đồng, kể cả khi bệnh án đã khóa (BR-KB-01).
+    prescriptions: prescriptionsOf(s, visit.visitId),
     // BE trả mảng rỗng tới khi T28 xong (MedicalRecordMapper); mock mô phỏng T28 theo hợp đồng nên trả các mũi đã ghi trong lượt.
     vaccinations: s.vaccinations.filter((v) => v.visitId === visit.visitId).sort((a, b) => a.vaccinationId - b.vaccinationId).map((v) => vaccinationView(s, v)),
     addenda: locked ? s.addenda.filter((a) => a.visitId === visit.visitId).sort((a, b) => a.addendumId - b.addendumId).map(addendumView) : [],
@@ -574,6 +615,110 @@ const deleteVaccination: MockHandler = (req) => {
   return noContent();
 };
 
+// ─── #16–17 Kê đơn thuốc (BR-KB-03). BE chưa có (T38): hợp đồng + BR; thứ tự kiểm, câu báo và cách xử lý chỗ im lặng là ASSUMPTION A1–A6 (docs/testcases/T46-fe.md) ───
+
+/** `AddPrescriptionRequest`: `productId` / `quantity` số nguyên (sai kiểu → MALFORMED, thiếu / không dương → VALIDATION_FAILED), liều dùng bỏ khoảng trắng hai đầu rồi @NotBlank, ≤ 500 ký tự. */
+function readPrescription(body: unknown) {
+  if (!isJsonObject(body)) return malformed();
+  const productId = asLong(body.productId);
+  const quantity = asLong(body.quantity);
+  const text = asText(body.dosageInstructions);
+  const resolution = body.shortageResolution ?? null;
+  if (productId === undefined || quantity === undefined || text === undefined) return malformed();
+  if (resolution !== null && !RESOLUTIONS.includes(resolution as ShortageResolution)) return malformed();
+  const dosageInstructions = text?.trim() ?? '';
+  const bad = invalid([
+    ['productId', 'Thiếu thuốc cần kê', productId === null],
+    ['productId', 'Mã thuốc không hợp lệ', productId !== null && productId <= 0],
+    ['quantity', 'Thiếu số lượng', quantity === null],
+    ['quantity', 'Số lượng phải lớn hơn 0', quantity !== null && quantity <= 0],
+    ['dosageInstructions', 'Bắt buộc nhập liều dùng', dosageInstructions === ''],
+    ['dosageInstructions', `Liều dùng tối đa ${MAX_DOSAGE_LENGTH} ký tự`, dosageInstructions.length > MAX_DOSAGE_LENGTH],
+  ]);
+  return bad ?? { productId: productId as number, quantity: quantity as number, dosageInstructions, shortageResolution: resolution as ShortageResolution | null };
+}
+
+/**
+ * ASSUMPTION (hợp đồng im lặng, A1–A6): thứ tự kiểm, câu báo 400 thiếu tồn (tiếng Việt tự viết, ghi số tồn hiện có, kết thúc `(BR-KB-03)`) và cách xử lý các ca biên là FE tự định, BE thật (T38) có thể khác.
+ * #16 (addPrescription): body → path → vai trò (VET) → 404 → chi nhánh 403 → Thẩm mỹ 404 → người phụ trách 403 → không IN_PROGRESS 409 → sản phẩm 404 → BR-KB-03 400 (A1; sản phẩm không phải
+ * thuốc kê đơn hoặc ngừng kinh doanh: A2). Tồn khả dụng của chi nhánh (BR-KO-01) so với số lượng: đủ → dòng đơn kèm 1 dòng Order DRUG (kê đơn KHÔNG trừ kho, kho trừ khi PAID: A6; cùng thuốc kê hai
+ * lần là hai dòng: A5; `shortageResolution` thừa khi đủ tồn bị bỏ qua: A4). Thiếu tồn: chưa chọn cách xử lý → 400 báo số tồn và không ghi gì; REDUCE_TO_AVAILABLE → số lượng = tồn (tồn 0 → 400), vẫn
+ * sinh dòng Order; EXTERNAL_PURCHASE → giữ số lượng, mua ngoài OUT_OF_STOCK_AT_PRESCRIBE, không dòng Order (A3). Không tách một dòng thành hai phần.
+ */
+const addPrescription: MockHandler = (req) => {
+  const visitId = idParam(req, 'visitId');
+  if (isReply(visitId)) return visitId;
+  const parsed = readPrescription(req.body);
+  if (isReply(parsed)) return parsed;
+  if (!PRESCRIBE_ROLES.includes(me(req).role)) return denied();
+  const visit = medicalVisit(req, visitId);
+  if (isReply(visit)) return visit;
+  const blocked = assigneeInProgress(req, visit);
+  if (blocked) return blocked;
+
+  const product = catalogProducts().find((p) => p.productId === parsed.productId);
+  if (!product) return notFound('sản phẩm', parsed.productId);
+  if (!product.isPrescription) return ruleFail('BR-KB-03', 'Sản phẩm không phải thuốc kê đơn');
+  if (!product.isActive) return ruleFail('BR-KB-03', 'Thuốc đã ngừng kinh doanh');
+
+  const available = availableQuantity(visit.branchId, product.productId);
+  let quantity = parsed.quantity;
+  let external = false;
+  if (quantity > available) {
+    if (parsed.shortageResolution === null) {
+      return ruleFail('BR-KB-03', `Thiếu tồn khả dụng: ${product.name} chỉ còn ${available} ${product.unit}, cần ${quantity}. Giảm số lượng cho vừa tồn hoặc giữ nguyên số lượng và mua ngoài`);
+    }
+    external = parsed.shortageResolution === 'EXTERNAL_PURCHASE';
+    if (!external) {
+      if (available === 0) return ruleFail('BR-KB-03', `${product.name} đã hết tồn khả dụng nên không giảm được, hãy chọn mua ngoài`);
+      quantity = available;
+    }
+  }
+
+  let orderLineId: number | null = null;
+  if (!external) {
+    orderLineId = addDrugLine(visit.visitId, { productId: product.productId, description: product.name, quantity, unitPrice: product.price, actorId: me(req).id });
+    if (orderLineId === null) return fail('INTERNAL_ERROR', `Lượt #${visit.visitId} không có Order đang mở`, 500);
+  }
+  const s = load();
+  const row: PrescriptionRow = {
+    itemId: ++s.seq,
+    visitId: visit.visitId,
+    productId: product.productId,
+    quantity,
+    dosageInstructions: parsed.dosageInstructions,
+    orderLineId,
+    externalReason: external ? 'OUT_OF_STOCK_AT_PRESCRIBE' : null,
+  };
+  s.prescriptions.push(row);
+  save(s);
+  return ok(prescriptionView(row), 201, 'Đã kê đơn thuốc');
+};
+
+/**
+ * #17 (deletePrescription): path → vai trò (VET) → 404 → chi nhánh 403 → Thẩm mỹ 404 → người phụ trách hiện tại 403 (BR-TN-08 chuyển quyền xóa dòng cho người phụ trách mới) → không IN_PROGRESS 409
+ * → dòng đơn của lượt này 404 (A1: đứng sau 409 như bước sản phẩm 404 của #16). Một giao dịch: xóa dòng Order DRUG tương ứng (nếu có, mua ngoài thì không có) rồi xóa dòng đơn. Kho không đổi (A6).
+ */
+const deletePrescription: MockHandler = (req) => {
+  const visitId = idParam(req, 'visitId');
+  if (isReply(visitId)) return visitId;
+  const itemId = idParam(req, 'itemId');
+  if (isReply(itemId)) return itemId;
+  if (!PRESCRIBE_ROLES.includes(me(req).role)) return denied();
+  const visit = medicalVisit(req, visitId);
+  if (isReply(visit)) return visit;
+  const blocked = assigneeInProgress(req, visit);
+  if (blocked) return blocked;
+  const s = load();
+  const item = s.prescriptions.find((p) => p.itemId === itemId && p.visitId === visitId);
+  if (!item) return notFound('dòng đơn thuốc', itemId);
+
+  if (item.orderLineId !== null) removeDrugLine(visitId, item.orderLineId);
+  s.prescriptions = s.prescriptions.filter((p) => p.itemId !== itemId);
+  save(s);
+  return noContent();
+};
+
 // Hồ sơ sức khỏe thú cưng (visit-v1 #21, UC25) đọc dữ liệu lâm sàng thật của mock này: lượt đã hoàn tất kèm bệnh án và bản bổ sung, mũi tiêm tại hệ thống (BR-KB-04, nguyên tắc 8).
 // Khách (chủ hiện tại) bị lọc ghi chú nội bộ và bản bổ sung nội bộ ở customer-pet.mock (BR-KH-07, BR-KB-01).
 registerHealthSource((petId) => {
@@ -592,7 +737,7 @@ registerHealthSource((petId) => {
           treatmentPlan: r?.treatmentPlan ?? null,
           internalNote: r?.internalNote ?? null,
           followUpDate: r?.followUpDate ?? null,
-          prescriptions: [],
+          prescriptions: prescriptionsOf(s, v.visitId),
           addenda: s.addenda.filter((a) => a.visitId === v.visitId).sort((a, b) => a.addendumId - b.addendumId).map(addendumView),
         };
       },
@@ -608,6 +753,8 @@ export const visitClinicalRoutes: Record<string, MockHandler> = {
   'DELETE /api/visits/:visitId/vaccinations/:vaccinationId': deleteVaccination,
   'GET /api/visits/:visitId/medical-record': getMedicalRecord,
   'PUT /api/visits/:visitId/medical-record': saveMedicalRecord,
+  'POST /api/visits/:visitId/prescriptions': addPrescription,
+  'DELETE /api/visits/:visitId/prescriptions/:itemId': deletePrescription,
   'POST /api/visits/:visitId/weight': recordWeight,
   'POST /api/visits/:visitId/medical-record/addenda': addAddendum,
 };

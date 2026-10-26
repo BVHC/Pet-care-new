@@ -2,7 +2,7 @@
 // Vai trò (đã dò BE thật, xem `VISIT_ROLES` ở types/visit.ts): tiếp nhận / gán / sắp lại / hủy là lễ tân; xem hàng đợi chi nhánh là A05–A08; hàng đợi của tôi và
 // gọi lượt là VET, CARETAKER; đánh dấu cấp cứu là lễ tân hoặc VET; gán lại lượt đã gọi là BRANCH_MANAGER (SUPER_MANAGER khi chi nhánh hết quản lý ACTIVE).
 // T37: #10 hoàn tất lượt (VET cho Khám/Tiêm, CARETAKER cho Thẩm mỹ), #12 xem bệnh án (VET, CARETAKER), #13 ghi bệnh án, #14 cân nặng, #15 bản bổ sung (VET), #18–20 tiêm chủng
-// (VET được gán lượt). Kê đơn #16–17 là T46.
+// (VET được gán lượt). T46: #16–17 kê đơn / xóa dòng đơn thuốc (VET được gán lượt; BE là T38, chưa có controller nên màn chạy trên mock theo hợp đồng).
 import { apiClient } from './axios';
 import { appointmentApi } from './appointment.api';
 import type { PageResponse } from '../types';
@@ -11,6 +11,7 @@ import type {
   Addendum,
   AddendumRequest,
   MedicalRecord,
+  PrescriptionItem,
   RecordVaccinationRequest,
   RecordVaccinationResult,
   RecordWeightRequest,
@@ -19,6 +20,7 @@ import type {
   WeightRecordRef,
 } from '../types/medical-record';
 import type {
+  AddPrescriptionRequest,
   AssignRequest,
   AssignResult,
   CancelVisitRequest,
@@ -75,6 +77,16 @@ export const visitApi = {
   recordWeight: (visitId: number, body: RecordWeightRequest) => post<WeightRecordRef>(`/api/visits/${visitId}/weight`, body),
   /** #15 (mọi VET của chi nhánh): chỉ khi lượt đã COMPLETED, 409 nếu chưa (sửa trực tiếp bệnh án). */
   addAddendum: (visitId: number, body: AddendumRequest) => post<Addendum>(`/api/visits/${visitId}/medical-record/addenda`, body),
+
+  /**
+   * #16 (VET được gán, lượt IN_PROGRESS): thêm một dòng thuốc kê đơn. Đủ tồn → dòng đơn kèm dòng Order thuốc. Thiếu tồn mà chưa có `shortageResolution` → 400 BR-KB-03 kèm số tồn
+   * trong message (gửi lại cùng body kèm `shortageResolution`). Sản phẩm không phải thuốc kê đơn / ngừng kinh doanh → 400 BR-KB-03. 409 khi lượt không IN_PROGRESS.
+   */
+  addPrescription: (visitId: number, body: AddPrescriptionRequest) => post<PrescriptionItem>(`/api/visits/${visitId}/prescriptions`, body),
+  /** #17 (VET được gán, lượt IN_PROGRESS): xóa dòng đơn, kèm dòng Order thuốc của nó (nếu có). 204 rỗng. */
+  deletePrescription: async (visitId: number, itemId: number): Promise<void> => {
+    await apiClient.delete(`/api/visits/${visitId}/prescriptions/${itemId}`);
+  },
 
   /** #18 (VET được gán): mũi gợi ý (chỉ tham khảo) và sản phẩm còn tồn khả dụng; 400 khi loại vaccine không thuộc loài của thú. */
   getVaccinationOptions: (visitId: number, vaccineTypeId: number) =>

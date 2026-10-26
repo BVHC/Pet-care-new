@@ -36,6 +36,10 @@ import { ForgotPasswordPage } from '../pages/auth/ForgotPasswordPage';
 import { ChangePasswordPage } from '../pages/auth/ChangePasswordPage';
 import { TermsPage, PrivacyPage } from '../pages/legal/LegalPage';
 import { NewsPage } from '../pages/news/NewsPage';
+import { ArticleDetailPage } from '../pages/news/ArticleDetailPage';
+import { ServicesPage } from '../pages/services/ServicesPage';
+import { BranchesPage } from '../pages/branches/BranchesPage';
+import { DoctorsPage } from '../pages/doctors/DoctorsPage';
 import { RequireLinkDecision } from '../shared/components/auth/RequireLinkDecision';
 import { RequireRole } from '../shared/components/auth/RequireRole';
 import { ROUTES } from '../shared/constants/routes';
@@ -120,6 +124,12 @@ export function App() {
           <Route path="/about" element={<AboutPage />} />
           <Route path="/hotel" element={<HotelPage />} />
           <Route path="/news" element={<NewsPage />} />
+          {/* UC17: bài viết công khai theo slug (bài DRAFT / HIDDEN / slug lạ cùng một 404, BR-BV-03) */}
+          <Route path="/news/:slug" element={<ArticleDetailPage />} />
+          {/* UC15: dịch vụ, chi nhánh, bác sĩ công khai, không cần đăng nhập */}
+          <Route path="/services" element={<ServicesPage />} />
+          <Route path="/branches" element={<BranchesPage />} />
+          <Route path="/doctors" element={<DoctorsPage />} />
           <Route path="/help" element={<HelpPage />} />
           <Route path="/terms" element={<TermsPage />} />
           <Route path="/privacy" element={<PrivacyPage />} />

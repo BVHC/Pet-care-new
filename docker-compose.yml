@@ -15,7 +15,9 @@ services:
       POSTGRES_PASSWORD: ${DB_PASSWORD:-123456}
       POSTGRES_DB: ${DB_NAME:-petcare}
     ports:
-      - "5432:5432"
+      # Cổng host lấy từ .env (DB_PORT, mặc định 5432). Máy đã có Postgres cài sẵn chiếm 5432 (vd dịch vụ Windows) thì đặt
+      # DB_PORT=5434: nếu không, kết nối tới localhost:5432 vào nhầm Postgres đó thay vì container này.
+      - "${DB_PORT:-5432}:5432"
     volumes:
       - postgres_data:/var/lib/postgresql/data
     healthcheck:

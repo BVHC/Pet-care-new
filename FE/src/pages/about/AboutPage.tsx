@@ -1,23 +1,30 @@
+import { useState } from 'react'
+import { Link } from 'react-router-dom'
 import {
+  ArrowRight,
   Award,
-  Calendar,
+  BedDouble,
   Heart,
   Mail,
   MapPin,
-  PawPrint,
   Phone,
+  Scissors,
   Shield,
-  ShoppingBag,
-  Sparkles,
   Stethoscope,
   Star,
 } from 'lucide-react'
+import type { LucideIcon } from 'lucide-react'
 import { CommonPageHero } from '@/shared/components/layout/CommonPageHero'
+import { doctorInitials } from '@/pages/doctors/initials'
+import { usePublicServiceList, usePublicVets } from '@/shared/hooks/usePublicSite'
+import type { ServiceGroup } from '@/shared/types/catalog'
+import type { PublicVet } from '@/shared/types/public-site'
 
 /* ================================================================
    Data.
    ================================================================ */
 
+// STATS và VALUES là nội dung tĩnh của trang giới thiệu (UC21, T47); đội ngũ và dịch vụ đọc từ API công khai (UC15).
 const STATS = [
   { value: '10K+', label: 'Khách hàng tin tưởng' },
   { value: '15+',  label: 'Năm kinh nghiệm' },
@@ -48,61 +55,56 @@ const VALUES = [
   },
 ]
 
-const SERVICES = [
-  {
-    icon: Stethoscope,
-    title: 'Khám bệnh & Tiêm phòng',
-    desc: 'Khám lâm sàng, xét nghiệm, tiêm vaccine theo phác đồ khoa học.',
-  },
-  {
-    icon: PawPrint,
-    title: 'Chăm sóc & Spa',
-    desc: 'Tắm, cắt tỉa, chăm sóc lông-da, nail — dịch vụ làm đẹp cho thú cưng.',
-  },
-  {
-    icon: ShoppingBag,
-    title: 'Mua sắm thực phẩm & phụ kiện',
-    desc: 'Hơn 1000+ sản phẩm chính hãng: thức ăn, đồ chơi, phụ kiện, đồ dùng y tế.',
-  },
-  {
-    icon: Sparkles,
-    title: 'Khách sạn lưu trú',
-    desc: 'Phòng riêng, camera 24/7, nhân viên trực chiều đêm, vận động 2 lần/ngày.',
-  },
+const GROUPS: { group: ServiceGroup; icon: LucideIcon; title: string }[] = [
+  { group: 'MEDICAL', icon: Stethoscope, title: 'Khám & tiêm chủng' },
+  { group: 'GROOMING', icon: Scissors, title: 'Thẩm mỹ' },
+  { group: 'BOARDING', icon: BedDouble, title: 'Lưu trú' },
 ]
 
-const TEAM = [
-  {
-    name: 'Dr. Nguyễn Văn Minh',
-    role: 'Bác sĩ Thú y chuyên nghiệp',
-    exp: '15 năm kinh nghiệm',
-    image: 'https://images.unsplash.com/photo-1612349317150-e413f6a5b16d?w=400',
-  },
-  {
-    name: 'Dr. Trần Thị Lan',
-    role: 'Chuyên gia Dinh dưỡng',
-    exp: '10 năm kinh nghiệm',
-    image: 'https://images.unsplash.com/photo-1559839734-2b71ea197ec2?w=400',
-  },
-  {
-    name: 'Ngô Thị Hương',
-    role: 'Chuyên gia Chăm sóc & Spa',
-    exp: '8 năm kinh nghiệm',
-    image: 'https://images.unsplash.com/photo-1594824476967-48c8b964273f?w=400',
-  },
-  {
-    name: 'Lê Minh Tuấn',
-    role: 'Bác sĩ Phẫu thuật',
-    exp: '12 năm kinh nghiệm',
-    image: 'https://images.unsplash.com/photo-1537368910025-700350fe46c7?w=400',
-  },
-]
+/** Tối đa 8 bác sĩ ở trang giới thiệu (2 hàng); đầy đủ ở /doctors. */
+const TEAM_LIMIT = 8
+
+const CARD =
+  'rounded-2xl border border-(--color-border-default) bg-(--color-surface-card) shadow-[0_1px_2px_rgba(56,36,23,0.06),0_4px_12px_-8px_rgba(56,36,23,0.4)]'
+const PULSE = 'animate-pulse motion-reduce:animate-none bg-(--color-surface-2)'
+const SECTION_LINK =
+  'inline-flex items-center gap-2 text-[14px] font-bold text-accent transition-colors hover:text-accent-hover focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent'
+
+/* ================================================================
+   Pieces.
+   ================================================================ */
+
+/** Ảnh bác sĩ; chưa có ảnh hoặc ảnh tải lỗi thì hiện chữ cái đầu của tên (tên đã nằm ngay dưới). */
+function TeamAvatar({ vet }: { vet: PublicVet }) {
+  const [broken, setBroken] = useState(false)
+  const frame = 'mx-auto mb-4 h-32 w-32 overflow-hidden rounded-full border-4 border-white shadow-lg'
+  if (!vet.avatarUrl || broken) {
+    return (
+      <div aria-hidden className={`${frame} flex items-center justify-center bg-(--color-accent-soft) font-friendly text-[40px] font-extrabold text-accent`}>
+        {doctorInitials(vet.fullName)}
+      </div>
+    )
+  }
+  return (
+    <div className={frame}>
+      <img src={vet.avatarUrl} alt={vet.fullName} loading="lazy" onError={() => setBroken(true)} className="h-full w-full object-cover" />
+    </div>
+  )
+}
 
 /* ================================================================
    Main.
    ================================================================ */
 
 export function AboutPage() {
+  const vets = usePublicVets()
+  const services = usePublicServiceList()
+  const team = (vets.data ?? []).slice(0, TEAM_LIMIT)
+  // Nhóm nào có dịch vụ thì một thẻ liệt kê tên dịch vụ (giá và chi tiết ở /services).
+  const serviceGroups = GROUPS.map((g) => ({ ...g, names: (services.data ?? []).filter((s) => s.group === g.group).map((s) => s.name) })).filter(
+    (g) => g.names.length > 0,
+  )
+
   return (
     <div className="bg-(--color-surface-page) pb-24">
       <CommonPageHero
@@ -154,62 +156,93 @@ export function AboutPage() {
         </div>
       </section>
 
-      {/* Services overview */}
-      <section className="bg-(--color-surface-1) px-5 py-20 sm:px-8">
-        <div className="mx-auto max-w-[1100px]">
+      {/* Services overview — ẩn khi API lỗi hoặc chưa có dịch vụ nào */}
+      {(services.isPending || serviceGroups.length > 0) && (
+        <section className="bg-(--color-surface-1) px-5 py-20 sm:px-8">
+          <div className="mx-auto max-w-[1100px]">
+            <header className="mb-12 text-center">
+              <h2 className="font-friendly font-extrabold text-[clamp(28px,4vw,42px)] leading-[1.05] text-(--color-text-primary)">
+                Dịch vụ của chúng tôi
+              </h2>
+              <p className="mt-3 text-(--color-text-secondary)">Tất cả dịch vụ chăm sóc thú cưng tại một nơi duy nhất</p>
+            </header>
+
+            {services.isPending ? (
+              <div role="status" aria-label="Đang tải dịch vụ" className="grid gap-5 sm:grid-cols-2 lg:grid-cols-3">
+                {[0, 1, 2].map((i) => (
+                  <div key={i} aria-hidden className={`${PULSE} h-[116px] rounded-2xl`} />
+                ))}
+              </div>
+            ) : (
+              <>
+                <div className="grid gap-5 sm:grid-cols-2 lg:grid-cols-3">
+                  {serviceGroups.map((g) => (
+                    <div
+                      key={g.group}
+                      className={`${CARD} flex gap-4 p-6 transition-transform duration-300 ease-[cubic-bezier(0.32,0.72,0,1)] hover:-translate-y-0.5 motion-reduce:transition-none motion-reduce:hover:translate-y-0`}
+                    >
+                      <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-xl bg-(--color-accent-soft) text-accent">
+                        <g.icon size={24} />
+                      </div>
+                      <div className="min-w-0">
+                        <h3 className="font-friendly font-bold text-lg text-(--color-text-primary)">{g.title}</h3>
+                        <p className="mt-2 line-clamp-3 text-[13.5px] leading-relaxed text-(--color-text-secondary)">{g.names.join(', ')}</p>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+                <div className="mt-8 text-center">
+                  <Link to="/services" className={SECTION_LINK}>
+                    Xem tất cả dịch vụ <ArrowRight size={16} aria-hidden />
+                  </Link>
+                </div>
+              </>
+            )}
+          </div>
+        </section>
+      )}
+
+      {/* Team — ẩn khi API lỗi hoặc chưa có hồ sơ bác sĩ nào được công bố */}
+      {(vets.isPending || team.length > 0) && (
+        <section className="mx-auto max-w-[1100px] px-5 py-20 sm:px-8">
           <header className="mb-12 text-center">
             <h2 className="font-friendly font-extrabold text-[clamp(28px,4vw,42px)] leading-[1.05] text-(--color-text-primary)">
-              Dịch vụ của chúng tôi
+              Đội ngũ bác sĩ
             </h2>
-            <p className="mt-3 text-(--color-text-secondary)">Tất cả dịch vụ chăm sóc thú cưng tại một nơi duy nhất</p>
+            <p className="mt-3 text-(--color-text-secondary)">Những người bạn đồng hành của thú cưng</p>
           </header>
 
-          <div className="grid gap-5 sm:grid-cols-2">
-            {SERVICES.map((s) => (
-              <div
-                key={s.title}
-                className="flex gap-4 rounded-2xl border border-(--color-border-default) bg-(--color-surface-card) p-6 shadow-[0_1px_2px_rgba(56,36,23,0.06),0_4px_12px_-8px_rgba(56,36,23,0.4)] transition-transform duration-300 ease-[cubic-bezier(0.32,0.72,0,1)] hover:-translate-y-0.5"
-              >
-                <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-xl bg-(--color-accent-soft) text-accent">
-                  <s.icon size={24} />
-                </div>
-                <div>
-                  <h3 className="font-friendly font-bold text-lg text-(--color-text-primary)">{s.title}</h3>
-                  <p className="mt-2 text-[13.5px] leading-relaxed text-(--color-text-secondary)">{s.desc}</p>
-                </div>
-              </div>
-            ))}
-          </div>
-        </div>
-      </section>
-
-      {/* Team */}
-      <section className="mx-auto max-w-[1100px] px-5 py-20 sm:px-8">
-        <header className="mb-12 text-center">
-          <h2 className="font-friendly font-extrabold text-[clamp(28px,4vw,42px)] leading-[1.05] text-(--color-text-primary)">
-            Đội ngũ chuyên gia
-          </h2>
-          <p className="mt-3 text-(--color-text-secondary)">Những người bạn đồng hành của thú cưng</p>
-        </header>
-
-        <div className="grid gap-8 sm:grid-cols-2 lg:grid-cols-4">
-          {TEAM.map((m) => (
-            <div
-              key={m.name}
-              className="rounded-2xl border border-(--color-border-default) bg-(--color-surface-card) p-5 text-center shadow-[0_1px_2px_rgba(56,36,23,0.06),0_4px_12px_-8px_rgba(56,36,23,0.4)] transition-transform duration-300 ease-[cubic-bezier(0.32,0.72,0,1)] hover:-translate-y-0.5"
-            >
-              <div className="mx-auto mb-4 h-32 w-32 overflow-hidden rounded-full border-4 border-white shadow-lg">
-                <img src={m.image} alt={m.name} className="h-full w-full object-cover" />
-              </div>
-              <h3 className="font-friendly font-bold text-base text-(--color-text-primary)">{m.name}</h3>
-              <p className="text-[13px] font-semibold text-accent">{m.role}</p>
-              <p className="mt-1 flex items-center justify-center gap-1 text-[12px] text-(--color-text-secondary)">
-                <Calendar size={12} /> {m.exp}
-              </p>
+          {vets.isPending ? (
+            <div role="status" aria-label="Đang tải đội ngũ bác sĩ" className="flex flex-wrap justify-center gap-8">
+              <div aria-hidden className={`${PULSE} h-[260px] w-full rounded-2xl sm:w-[calc(50%-1rem)] lg:w-[calc(25%-1.5rem)]`} />
             </div>
-          ))}
-        </div>
-      </section>
+          ) : (
+            <>
+              {/* Chịu được 1..8 bác sĩ: thẻ cố định bề rộng theo số cột, dồn giữa thay vì dồn trái. */}
+              <div className="flex flex-wrap justify-center gap-8">
+                {team.map((m) => (
+                  <div
+                    key={m.accountId}
+                    className={`${CARD} w-full p-5 text-center transition-transform duration-300 ease-[cubic-bezier(0.32,0.72,0,1)] hover:-translate-y-0.5 motion-reduce:transition-none motion-reduce:hover:translate-y-0 sm:w-[calc(50%-1rem)] lg:w-[calc(25%-1.5rem)]`}
+                  >
+                    <TeamAvatar vet={m} />
+                    <h3 className="font-friendly font-bold text-base text-(--color-text-primary)">{m.fullName}</h3>
+                    <p className="text-[13px] font-semibold text-accent">{m.specialty || 'Bác sĩ thú y'}</p>
+                    <p className="mt-1 flex items-center justify-center gap-1 text-[12px] text-(--color-text-secondary)">
+                      <MapPin size={12} aria-hidden /> {m.branchName}
+                    </p>
+                  </div>
+                ))}
+              </div>
+              <div className="mt-8 text-center">
+                <Link to="/doctors" className={SECTION_LINK}>
+                  Xem đội ngũ bác sĩ <ArrowRight size={16} aria-hidden />
+                </Link>
+              </div>
+            </>
+          )}
+        </section>
+      )}
 
       {/* Contact */}
       <section className="bg-(--color-surface-1) px-5 py-20 sm:px-8">

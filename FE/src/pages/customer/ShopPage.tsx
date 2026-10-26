@@ -1,139 +1,125 @@
-import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
+import { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react'
 import { Link, useSearchParams } from 'react-router-dom'
 import gsap from 'gsap'
-import { toast } from 'sonner'
-import {
-  Check,
-  ChevronLeft,
-  ChevronRight,
-  ChevronDown,
-  PawPrint,
-  Plus,
-  SlidersHorizontal,
-  Star,
-  Truck,
-  X,
-} from 'lucide-react'
-import {
-  BRANDS,
-  BRAND_BY_ID,
-  CATEGORIES,
-  CATEGORY_LABELS,
-  PET_TYPES,
-  PRICE_BANDS,
-  PRODUCTS,
-  SORT_OPTIONS,
-  type CategoryId,
-  type ShopProduct,
-} from './shop.mock'
-import { useCartStore } from '../../shared/stores/cart.store'
+import { ChevronLeft, ChevronRight, MapPin, PawPrint, RotateCw, Search, SlidersHorizontal, Store, WifiOff, X } from 'lucide-react'
+import { usePublicBranches, usePublicProductCategories, usePublicProducts } from '@/shared/hooks/usePublicSite'
+import type { PublicBranch } from '@/shared/types/branch'
+import type { PublicProduct, PublicProductQuery } from '@/shared/types/public-site'
+import { branchNamesByIds, productPriceLabel } from '@/shared/utils/public-format'
 import styles from './ShopPage.module.css'
 
-const PAGE_SIZE = 60
+const PAGE_SIZE = 24
+/** BE trả 400 khi `q` dài hơn 100 ký tự (catalog-v1 #21). */
+const MAX_Q = 100
+const DEBOUNCE_MS = 300
 
-const vnd = new Intl.NumberFormat('vi-VN', {
-  style: 'currency',
-  currency: 'VND',
-  maximumFractionDigits: 0,
-})
+/** "3" → 3; mọi thứ khác ("food", "-1", "1.5", rỗng) → undefined, tham số lạ trên URL bị bỏ qua thay vì gửi lên API. */
+const positiveInt = (raw: string | null) => (raw && /^[1-9]\d{0,8}$/.test(raw) ? Number(raw) : undefined)
 
-const soldFmt = new Intl.NumberFormat('vi-VN')
-
-function toggle<T>(list: T[], value: T): T[] {
-  return list.includes(value) ? list.filter((v) => v !== value) : [...list, value]
-}
+type Patch = Partial<Record<'q' | 'category' | 'branch' | 'page', string | number | null>>
 
 export function ShopPage() {
   const [searchParams, setSearchParams] = useSearchParams()
-  const addItem = useCartStore((s) => s.addItem)
 
-  const searchQuery = (searchParams.get('q') || '').trim().toLowerCase()
+  // URL là nguồn sự thật của bộ lọc (chia sẻ link được). `?petType=` của mega-menu cũ và mọi khóa lạ khác không được đọc.
+  const urlQ = searchParams.get('q') ?? ''
+  const q = urlQ.trim().slice(0, MAX_Q)
+  const categoryId = positiveInt(searchParams.get('category'))
+  const branchId = positiveInt(searchParams.get('branch'))
+  const page = positiveInt(searchParams.get('page')) ?? 1
 
-  const [petTypes, setPetTypes] = useState<string[]>(() => {
-    const p = searchParams.get('petType')
-    return p ? [p] : []
-  })
-  const [categories, setCategories] = useState<CategoryId[]>(() => {
-    const c = searchParams.get('category') as CategoryId | null
-    return c ? [c] : []
-  })
-  const [brands, setBrands] = useState<string[]>([])
-  const [bands, setBands] = useState<string[]>([])
-  const [sort, setSort] = useState<string>('popular')
-  const [page, setPage] = useState(1)
-  const [loading, setLoading] = useState(false)
+  const query: PublicProductQuery = {
+    ...(q ? { q } : {}),
+    ...(categoryId ? { categoryId } : {}),
+    ...(branchId ? { branchId } : {}),
+    page: page - 1, // UI đếm từ 1, BE đếm từ 0
+    size: PAGE_SIZE,
+  }
+  const products = usePublicProducts(query)
+  const categories = usePublicProductCategories()
+  const branches = usePublicBranches()
+
   const [drawerOpen, setDrawerOpen] = useState(false)
-
   const gridRef = useRef<HTMLDivElement>(null)
   const anchorRef = useRef<HTMLDivElement>(null)
 
+  // Hàm ghi URL lấy searchParams mới nhất lúc gọi, kể cả khi gọi từ timeout của ô tìm (react-router 6 không xếp hàng cập nhật hàm).
+  const latest = useRef({ searchParams, setSearchParams })
+  useEffect(() => {
+    latest.current = { searchParams, setSearchParams }
+  })
+  const patch = useCallback((changes: Patch, replace = false) => {
+    const { searchParams: current, setSearchParams: write } = latest.current
+    const next = new URLSearchParams(current)
+    for (const [key, value] of Object.entries(changes)) {
+      if (value === null || value === '') next.delete(key)
+      else next.set(key, String(value))
+    }
+    write(next, { replace })
+  }, [])
+
+  // Ô tìm: gõ chỉ đổi chữ trong ô, ~300ms sau phím cuối (hoặc Enter) mới ghi q lên URL nên không bắn mỗi phím một request.
+  const [text, setText] = useState(urlQ)
+  const applied = useRef(q)
+  const timer = useRef<number>()
+  const applyQ = useCallback(
+    (value: string) => {
+      window.clearTimeout(timer.current)
+      const next = value.trim().slice(0, MAX_Q)
+      if (next === applied.current) return
+      applied.current = next
+      patch({ q: next, page: null }, true)
+    },
+    [patch],
+  )
+  const onType = (value: string) => {
+    setText(value)
+    window.clearTimeout(timer.current)
+    timer.current = window.setTimeout(() => applyQ(value), DEBOUNCE_MS)
+  }
+  // URL đổi từ ngoài (ô tìm ở header, nút xóa bộ lọc, Back) thì kéo ô nhập theo, không đè lên chữ đang gõ.
+  useEffect(() => {
+    if (q === applied.current) return
+    applied.current = q
+    window.clearTimeout(timer.current)
+    setText(urlQ)
+  }, [q, urlQ])
+  useEffect(() => () => window.clearTimeout(timer.current), [])
+
   const goToPage = (next: number) => {
-    setPage(next)
+    patch({ page: next > 1 ? next : null })
     // Cuộn về đầu lưới, chừa chỗ cho header + thanh lọc đang dính.
     const top = (anchorRef.current?.getBoundingClientRect().top ?? 0) + window.scrollY - 130
     window.scrollTo({ top, behavior: 'smooth' })
   }
+  const pickCategory = (id: number | null) => patch({ category: id, page: null })
+  const pickBranch = (id: number | null) => patch({ branch: id, page: null })
+  const clearAll = () => {
+    window.clearTimeout(timer.current)
+    setSearchParams({}, { replace: true })
+  }
 
-  const products = useMemo(() => {
-    const list = PRODUCTS.filter((p) => {
-      if (searchQuery && !p.name.toLowerCase().includes(searchQuery)) return false
-      if (petTypes.length && !petTypes.includes(p.petType)) return false
-      if (categories.length && !categories.includes(p.category)) return false
-      if (brands.length && !brands.includes(p.brand)) return false
-      if (bands.length) {
-        const hit = bands.some((id) => {
-          const band = PRICE_BANDS.find((b) => b.id === id)
-          return band ? p.price >= band.min && p.price < band.max : false
-        })
-        if (!hit) return false
-      }
-      return true
-    })
+  const data = products.data
+  const items = data?.content
+  const placeholder = products.isPlaceholderData
 
-    if (sort === 'price_asc') list.sort((a, b) => a.price - b.price)
-    else if (sort === 'price_desc') list.sort((a, b) => b.price - a.price)
-    else if (sort === 'rating') list.sort((a, b) => b.rating - a.rating)
-    else if (sort === 'newest') list.sort((a, b) => b.id - a.id)
-    else list.sort((a, b) => b.sold - a.sold)
-
-    return list
-  }, [searchQuery, petTypes, categories, brands, bands, sort])
-
-  const totalPages = Math.max(1, Math.ceil(products.length / PAGE_SIZE))
-  const shown = products.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE)
-
-  // Đổi bộ lọc → về trang đầu + nháy skeleton để người dùng thấy lưới đã tải lại.
-  useEffect(() => {
-    setPage(1)
-    setLoading(true)
-    const t = window.setTimeout(() => setLoading(false), 260)
-    return () => window.clearTimeout(t)
-  }, [petTypes, categories, brands, bands, sort])
-
-  // Giữ URL khớp bộ lọc để chia sẻ được link.
-  useEffect(() => {
-    const next = new URLSearchParams(searchParams)
-    if (petTypes.length === 1) next.set('petType', petTypes[0])
-    else next.delete('petType')
-    if (categories.length === 1) next.set('category', categories[0])
-    else next.delete('category')
-    if (next.toString() !== searchParams.toString()) {
-      setSearchParams(next, { replace: true })
-    }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [petTypes, categories])
-
+  // Thẻ vào khung nhẹ nhàng mỗi khi có trang dữ liệu mới; người chọn giảm chuyển động thì không animate.
   useLayoutEffect(() => {
-    if (loading || !gridRef.current) return
-    const ctx = gsap.context(() => {
-      gsap.fromTo(
-        '[data-card]',
-        { opacity: 0, y: 26 },
-        { opacity: 1, y: 0, duration: 0.55, stagger: 0.05, ease: 'power2.out' },
-      )
-    }, gridRef)
-    return () => ctx.revert()
-  }, [loading, page, shown.length])
+    if (!gridRef.current || !items?.length || placeholder) return
+    const mm = gsap.matchMedia()
+    mm.add(
+      '(prefers-reduced-motion: no-preference)',
+      () => {
+        gsap.fromTo(
+          '[data-card]',
+          { opacity: 0, y: 26 },
+          { opacity: 1, y: 0, duration: 0.55, stagger: 0.05, ease: 'power2.out', clearProps: 'opacity,transform' },
+        )
+      },
+      gridRef,
+    )
+    return () => mm.revert()
+  }, [items, placeholder])
 
   // Khoá cuộn nền khi mở ngăn lọc trên mobile.
   useEffect(() => {
@@ -145,87 +131,57 @@ export function ShopPage() {
     }
   }, [drawerOpen])
 
+  const branchList = branches.data
+  const categoryName = categoryId ? (categories.data?.find((c) => c.categoryId === categoryId)?.name ?? 'Danh mục') : undefined
+  const branchName = branchId ? (branchList?.find((b) => b.branchId === branchId)?.name ?? 'chi nhánh đã chọn') : undefined
   const activeChips = [
-    ...petTypes.map((id) => ({
-      key: `pet-${id}`,
-      label: PET_TYPES.find((p) => p.id === id)?.label ?? id,
-      clear: () => setPetTypes((a) => toggle(a, id)),
-    })),
-    ...categories.map((id) => ({
-      key: `cat-${id}`,
-      label: CATEGORY_LABELS[id],
-      clear: () => setCategories((a) => toggle(a, id)),
-    })),
-    ...bands.map((id) => ({
-      key: `band-${id}`,
-      label: PRICE_BANDS.find((b) => b.id === id)?.label ?? id,
-      clear: () => setBands((a) => toggle(a, id)),
-    })),
-    ...brands.map((id) => ({
-      key: `brand-${id}`,
-      label: BRAND_BY_ID[id]?.label ?? id,
-      clear: () => setBrands((a) => toggle(a, id)),
-    })),
+    ...(q ? [{ key: 'q', label: `Từ khóa "${q}"`, clear: () => patch({ q: null, page: null }) }] : []),
+    ...(categoryName ? [{ key: 'category', label: categoryName, clear: () => pickCategory(null) }] : []),
+    ...(branchName ? [{ key: 'branch', label: `Còn hàng tại ${branchName}`, clear: () => pickBranch(null) }] : []),
   ]
-
-  const clearAll = () => {
-    setPetTypes([])
-    setCategories([])
-    setBrands([])
-    setBands([])
-  }
-
-  const handleAdd = (p: ShopProduct) => {
-    addItem({
-      id: p.id,
-      productId: p.id,
-      productName: p.name,
-      quantity: 1,
-      unitPrice: p.price,
-      subtotal: p.price,
-    })
-    toast.success('Đã thêm vào giỏ', { description: p.name })
-  }
+  const total = data?.totalElements ?? 0
 
   return (
     <div className="bg-(--color-surface-page)">
-      <ShopHero total={PRODUCTS.length} />
+      <ShopHero />
 
       <FilterBar
-        petTypes={petTypes}
-        categories={categories}
-        onCategory={(id) => setCategories((a) => toggle(a, id))}
-        bands={bands}
-        brands={brands}
-        sort={sort}
-        count={products.length}
+        text={text}
+        onType={onType}
+        onSubmit={() => applyQ(text)}
+        categories={categories.data ?? []}
+        categoryId={categoryId}
+        onCategory={pickCategory}
+        branches={branchList ?? []}
+        branchId={branchId}
+        onBranch={pickBranch}
+        count={data ? total : null}
         activeCount={activeChips.length}
-        onPetType={(id) => setPetTypes((a) => toggle(a, id))}
-        onBand={(id) => setBands((a) => toggle(a, id))}
-        onBrand={(id) => setBrands((a) => toggle(a, id))}
-        onSort={setSort}
         onOpenDrawer={() => setDrawerOpen(true)}
       />
 
-      <main className="mx-auto w-full max-w-[1440px] px-5 pb-24 sm:px-8">
+      <div className="mx-auto w-full max-w-[1440px] px-5 pb-24 sm:px-8">
         {activeChips.length > 0 && (
           <div className="flex flex-wrap items-center gap-2 py-5">
             <span className="text-[13px] text-(--color-text-secondary)">Đang lọc:</span>
             {activeChips.map((chip) => (
               <button
                 key={chip.key}
+                type="button"
                 onClick={chip.clear}
+                aria-label={`Bỏ lọc ${chip.label}`}
                 className="inline-flex items-center gap-1.5 rounded-full bg-(--color-accent-soft) py-1.5 pr-2.5 pl-3 text-[13px] font-semibold text-accent transition-colors hover:bg-accent hover:text-white focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-(--color-accent)"
               >
                 {chip.label}
-                <X size={13} strokeWidth={2.5} />
+                <X size={13} strokeWidth={2.5} aria-hidden />
               </button>
             ))}
             <button
+              type="button"
               onClick={clearAll}
-              className="ml-1 text-[13px] font-semibold text-(--color-text-secondary) underline-offset-4 hover:text-accent hover:underline"
+              className="ml-1 text-[13px] font-semibold text-(--color-text-secondary) underline-offset-4 hover:text-accent hover:underline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-(--color-accent)"
             >
-              Xoá hết
+              Xóa hết
             </button>
           </div>
         )}
@@ -233,42 +189,46 @@ export function ShopPage() {
         <div ref={anchorRef} />
 
         <div ref={gridRef} className={activeChips.length > 0 ? '' : 'pt-6'}>
-          {loading ? (
+          {products.isError ? (
+            <LoadError retrying={products.isFetching} onRetry={() => void products.refetch()} />
+          ) : !data ? (
             <ProductGridSkeleton />
-          ) : products.length === 0 ? (
+          ) : items!.length === 0 ? (
             <EmptyState onClear={clearAll} />
           ) : (
             <>
-              <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-4 lg:gap-4 xl:grid-cols-5 2xl:grid-cols-6">
-                {shown.map((p) => (
-                  <ProductCard key={p.id} product={p} onAdd={handleAdd} />
+              <h2 className="sr-only">Danh sách sản phẩm</h2>
+              <div
+                aria-busy={placeholder}
+                className={`grid grid-cols-2 gap-3 transition-opacity sm:grid-cols-3 lg:grid-cols-4 lg:gap-4 xl:grid-cols-5 2xl:grid-cols-6 ${placeholder ? 'opacity-60' : ''}`}
+              >
+                {items!.map((p) => (
+                  <ProductCard key={p.productId} product={p} branches={branchList} branchesLoading={branches.isPending} />
                 ))}
               </div>
 
               <Pagination
                 page={page}
-                totalPages={totalPages}
+                totalPages={data.totalPages}
                 from={(page - 1) * PAGE_SIZE + 1}
-                to={Math.min(page * PAGE_SIZE, products.length)}
-                total={products.length}
+                to={(page - 1) * PAGE_SIZE + items!.length}
+                total={total}
                 onChange={goToPage}
               />
             </>
           )}
         </div>
-      </main>
+      </div>
 
       {drawerOpen && (
         <FilterDrawer
-          petTypes={petTypes}
-          categories={categories}
-          bands={bands}
-          brands={brands}
-          resultCount={products.length}
-          onPetType={(id) => setPetTypes((a) => toggle(a, id))}
-          onCategory={(id) => setCategories((a) => toggle(a, id))}
-          onBand={(id) => setBands((a) => toggle(a, id))}
-          onBrand={(id) => setBrands((a) => toggle(a, id))}
+          categories={categories.data ?? []}
+          categoryId={categoryId}
+          onCategory={(id) => pickCategory(id === categoryId ? null : id)}
+          branches={branchList ?? []}
+          branchId={branchId}
+          onBranch={(id) => pickBranch(id === branchId ? null : id)}
+          resultCount={total}
           onClear={clearAll}
           onClose={() => setDrawerOpen(false)}
         />
@@ -330,6 +290,7 @@ function Pagination({
             ) : (
               <button
                 key={n}
+                type="button"
                 onClick={() => onChange(n)}
                 aria-current={n === page ? 'page' : undefined}
                 className={`h-9 min-w-9 rounded-full px-3 text-[13px] font-bold tabular-nums transition-colors focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-(--color-accent) ${
@@ -344,7 +305,7 @@ function Pagination({
           )}
 
           <PageBtn
-            disabled={page === totalPages}
+            disabled={page >= totalPages}
             onClick={() => onChange(page + 1)}
             label="Trang sau"
           >
@@ -369,6 +330,7 @@ function PageBtn({
 }) {
   return (
     <button
+      type="button"
       onClick={onClick}
       disabled={disabled}
       aria-label={label}
@@ -381,7 +343,7 @@ function PageBtn({
 
 /* ---------------------------------------------------------------- hero slab */
 
-function ShopHero({ total }: { total: number }) {
+function ShopHero() {
   return (
     <section className="relative overflow-hidden bg-gradient-to-b from-[#fdf8f3] via-[#fbf3e8] to-[#f6ebd9] border-b border-[#ebdccb] px-5 py-7 sm:px-8 sm:py-9">
       {/* Decorative ambient glow */}
@@ -412,34 +374,28 @@ function ShopHero({ total }: { total: number }) {
               Cửa hàng của boss
             </h1>
             <span className="inline-flex items-center gap-1.5 rounded-full bg-[#faebe4] px-3 py-1 text-xs font-bold text-accent border border-accent/15 shadow-2xs">
-              <PawPrint size={13} className="fill-current" /> Chính hãng 100%
+              <PawPrint size={13} className="fill-current" aria-hidden /> Chính hãng 100%
             </span>
           </div>
           <p className="mt-1 text-[13px] sm:text-sm text-[#70584b] font-medium max-w-xl">
-            Thức ăn hạt, phụ kiện, đồ chơi & dinh dưỡng cao cấp được bác sĩ thú y khuyên dùng.
+            Thức ăn, phụ kiện và sản phẩm chăm sóc sức khỏe cho thú cưng, bán tại quầy các chi nhánh PetCare.
           </p>
         </div>
 
-        {/* Highlight trust badges */}
+        {/* Không có đặt mua online (BR-CK-03): dẫn khách tới chi nhánh. */}
         <div className="flex flex-wrap items-center gap-2 sm:gap-2.5 pb-0.5">
           <div className="inline-flex items-center gap-1.5 rounded-full bg-white/90 px-3.5 py-1.5 text-[12.5px] font-bold text-[#3b2a1e] shadow-xs border border-[#ebdccb]/80 backdrop-blur-xs">
-            <PawPrint size={14} className="text-accent" />
-            <span>
-              <span className="tabular-nums font-extrabold text-accent">{total}</span> sản phẩm
-            </span>
+            <Store size={14} className="text-accent" aria-hidden />
+            <span>Mua trực tiếp tại quầy</span>
           </div>
 
-          <div className="inline-flex items-center gap-1.5 rounded-full bg-white/90 px-3.5 py-1.5 text-[12.5px] font-bold text-[#3b2a1e] shadow-xs border border-[#ebdccb]/80 backdrop-blur-xs">
-            <Star size={14} className="fill-amber-400 text-amber-400" />
-            <span>
-              <span className="tabular-nums font-extrabold">4.9/5</span> hài lòng
-            </span>
-          </div>
-
-          <div className="inline-flex items-center gap-1.5 rounded-full bg-white/90 px-3.5 py-1.5 text-[12.5px] font-bold text-[#3b2a1e] shadow-xs border border-[#ebdccb]/80 backdrop-blur-xs">
-            <Truck size={14} className="text-emerald-600" />
-            <span>Giao 2 giờ nội thành</span>
-          </div>
+          <Link
+            to="/branches"
+            className="inline-flex items-center gap-1.5 rounded-full bg-white/90 px-3.5 py-1.5 text-[12.5px] font-bold text-[#3b2a1e] shadow-xs border border-[#ebdccb]/80 backdrop-blur-xs transition-colors hover:text-accent focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-(--color-accent)"
+          >
+            <MapPin size={14} className="text-emerald-600" aria-hidden />
+            <span>Xem chi nhánh</span>
+          </Link>
         </div>
       </div>
     </section>
@@ -448,33 +404,36 @@ function ShopHero({ total }: { total: number }) {
 
 /* -------------------------------------------------------------- filter bar */
 
+interface BarCategory {
+  categoryId: number
+  name: string
+}
+
 function FilterBar({
-  petTypes,
+  text,
+  onType,
+  onSubmit,
   categories,
-  bands,
-  brands,
-  sort,
+  categoryId,
+  onCategory,
+  branches,
+  branchId,
+  onBranch,
   count,
   activeCount,
-  onPetType,
-  onCategory,
-  onBand,
-  onBrand,
-  onSort,
   onOpenDrawer,
 }: {
-  petTypes: string[]
-  categories: CategoryId[]
-  bands: string[]
-  brands: string[]
-  sort: string
-  count: number
+  text: string
+  onType: (value: string) => void
+  onSubmit: () => void
+  categories: BarCategory[]
+  categoryId: number | undefined
+  onCategory: (id: number | null) => void
+  branches: Pick<PublicBranch, 'branchId' | 'name'>[]
+  branchId: number | undefined
+  onBranch: (id: number | null) => void
+  count: number | null
   activeCount: number
-  onPetType: (id: string) => void
-  onCategory: (id: CategoryId) => void
-  onBand: (id: string) => void
-  onBrand: (id: string) => void
-  onSort: (id: string) => void
   onOpenDrawer: () => void
 }) {
   const [stuck, setStuck] = useState(false)
@@ -483,7 +442,7 @@ function FilterBar({
   // Sentinel ngay trên thanh lọc: rời khỏi tầm nhìn = thanh đã dính.
   useEffect(() => {
     const el = sentinelRef.current
-    if (!el) return
+    if (!el || typeof IntersectionObserver === 'undefined') return
     const io = new IntersectionObserver(([e]) => setStuck(!e.isIntersecting), {
       rootMargin: '-62px 0px 0px 0px',
       threshold: 0,
@@ -496,208 +455,98 @@ function FilterBar({
     <>
       <div ref={sentinelRef} aria-hidden className="h-px" />
       <div className={`${styles.filterBar} ${stuck ? styles.filterBarStuck : ''}`}>
-        <div className="mx-auto flex max-w-[1440px] items-center gap-3 px-5 py-2.5 sm:px-8">
+        <div className="mx-auto flex max-w-[1440px] flex-wrap items-center gap-x-3 gap-y-2 px-5 py-2.5 sm:px-8">
           <button
+            type="button"
             onClick={onOpenDrawer}
-            className="inline-flex shrink-0 items-center gap-2 rounded-full border border-(--color-border-default) bg-white px-4 py-2 text-[13px] font-bold text-(--color-text-primary) lg:hidden"
+            className="order-1 inline-flex shrink-0 items-center gap-2 rounded-full border border-(--color-border-default) bg-white px-4 py-2 text-[13px] font-bold text-(--color-text-primary) focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-(--color-accent) lg:hidden"
           >
-            <SlidersHorizontal size={15} />
+            <SlidersHorizontal size={15} aria-hidden />
             Bộ lọc{activeCount > 0 && ` (${activeCount})`}
           </button>
 
-          <div className="hidden shrink-0 lg:block">
-            <SegmentGroup items={PET_TYPES} selected={petTypes} onToggle={onPetType} />
-          </div>
-
-          {/* Danh mục — thay cho rail cũ, cuộn ngang khi hẹp. */}
-          <div className={styles.catStrip}>
-            {CATEGORIES.map((c) => {
-              const active = categories.includes(c.id)
-              return (
-                <button
-                  key={c.id}
-                  onClick={() => onCategory(c.id)}
-                  aria-pressed={active}
-                  className={`${styles.catChip} ${active ? styles.catChipActive : ''} focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-(--color-accent)`}
-                >
-                  <img src={c.photo} alt="" loading="lazy" />
-                  {c.label}
-                </button>
-              )
-            })}
-          </div>
-
-          <div className="hidden shrink-0 items-center gap-2 lg:flex">
-            <span className="h-6 w-px bg-(--color-border-default)" />
-
-            <DropdownFilter
-              label="Giá"
-              count={bands.length}
-              items={PRICE_BANDS.map((b) => ({ id: b.id, label: b.label }))}
-              selected={bands}
-              onToggle={onBand}
+          <form
+            role="search"
+            onSubmit={(e) => {
+              e.preventDefault()
+              onSubmit()
+            }}
+            className="relative order-2 min-w-0 flex-1 lg:w-64 lg:flex-none"
+          >
+            <input
+              type="search"
+              value={text}
+              onChange={(e) => onType(e.target.value)}
+              maxLength={100}
+              placeholder="Tìm sản phẩm"
+              aria-label="Tìm sản phẩm"
+              className="w-full rounded-full border border-(--color-border-default) bg-white py-2 pr-10 pl-4 text-[13px] font-semibold text-(--color-text-primary) placeholder:font-medium placeholder:text-(--color-text-secondary) focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-(--color-accent)"
             />
+            <button
+              type="submit"
+              aria-label="Tìm"
+              className="absolute top-1/2 right-1.5 grid h-7 w-7 -translate-y-1/2 place-items-center rounded-full text-(--color-text-secondary) transition-colors hover:text-accent focus-visible:outline-2 focus-visible:outline-(--color-accent)"
+            >
+              <Search size={15} aria-hidden />
+            </button>
+          </form>
 
-            <DropdownFilter
-              label="Thương hiệu"
-              count={brands.length}
-              width={330}
-              columns={2}
-              items={BRANDS.map((b) => ({ id: b.id, label: b.label, logo: b.logo }))}
-              selected={brands}
-              onToggle={onBrand}
-            />
+          {/* Danh mục — cuộn ngang khi hẹp. */}
+          <div
+            role="group"
+            aria-label="Danh mục"
+            className={`${styles.catStrip} order-3 basis-full lg:min-w-0 lg:flex-1 lg:basis-0`}
+          >
+            <CatChip active={categoryId === undefined} onClick={() => onCategory(null)}>
+              Tất cả
+            </CatChip>
+            {categories.map((c) => (
+              <CatChip
+                key={c.categoryId}
+                active={categoryId === c.categoryId}
+                onClick={() => onCategory(c.categoryId)}
+              >
+                {c.name}
+              </CatChip>
+            ))}
           </div>
 
-          <div className="ml-auto flex shrink-0 items-center gap-3">
-            <span className="hidden text-[13px] text-(--color-text-secondary) tabular-nums xl:inline">
-              {count} sản phẩm
-            </span>
+          <div className="order-4 hidden shrink-0 items-center gap-2 lg:flex">
+            <span className="h-6 w-px bg-(--color-border-default)" aria-hidden />
+            <MapPin size={15} className="-mr-0.5 text-accent" aria-hidden />
             <select
-              value={sort}
-              onChange={(e) => onSort(e.target.value)}
-              aria-label="Sắp xếp"
+              value={branchId ?? ''}
+              onChange={(e) => onBranch(e.target.value ? Number(e.target.value) : null)}
+              aria-label="Còn hàng tại"
               className="cursor-pointer rounded-full border border-(--color-border-default) bg-white px-3.5 py-2 text-[13px] font-semibold text-(--color-text-primary) focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-(--color-accent)"
             >
-              {SORT_OPTIONS.map((o) => (
-                <option key={o.id} value={o.id}>
-                  {o.label}
+              <option value="">Tất cả chi nhánh</option>
+              {branches.map((b) => (
+                <option key={b.branchId} value={b.branchId}>
+                  {b.name}
                 </option>
               ))}
             </select>
           </div>
+
+          {count !== null && (
+            <span className="order-5 ml-auto hidden shrink-0 text-[13px] text-(--color-text-secondary) tabular-nums xl:inline">
+              {count} sản phẩm
+            </span>
+          )}
         </div>
       </div>
     </>
   )
 }
 
-// Dropdown chọn nhiều — dùng chung cho Giá và Thương hiệu.
-function DropdownFilter({
-  label,
-  count,
-  items,
-  selected,
-  onToggle,
-  width = 220,
-  columns = 1,
-}: {
-  label: string
-  count: number
-  items: { id: string; label: string; logo?: string }[]
-  selected: string[]
-  onToggle: (id: string) => void
-  width?: number
-  columns?: number
-}) {
-  const [open, setOpen] = useState(false)
-  const wrapRef = useRef<HTMLDivElement>(null)
-
-  useEffect(() => {
-    if (!open) return
-    const onDoc = (e: MouseEvent) => {
-      if (!wrapRef.current?.contains(e.target as Node)) setOpen(false)
-    }
-    const onKey = (e: KeyboardEvent) => {
-      if (e.key === 'Escape') setOpen(false)
-    }
-    document.addEventListener('mousedown', onDoc)
-    document.addEventListener('keydown', onKey)
-    return () => {
-      document.removeEventListener('mousedown', onDoc)
-      document.removeEventListener('keydown', onKey)
-    }
-  }, [open])
-
-  return (
-    <div ref={wrapRef} className="relative">
-      <FilterPill active={count > 0} onClick={() => setOpen((v) => !v)}>
-        {label}
-        {count > 0 && ` · ${count}`}
-        <ChevronDown
-          size={14}
-          className={open ? 'rotate-180 transition-transform' : 'transition-transform'}
-        />
-      </FilterPill>
-
-      {open && (
-        <div
-          style={{ width, gridTemplateColumns: `repeat(${columns}, minmax(0, 1fr))` }}
-          className="absolute top-[calc(100%+8px)] left-0 z-40 grid gap-1 rounded-2xl bg-white p-2 shadow-[0_24px_48px_-24px_rgba(56,36,23,0.55)]"
-        >
-          {items.map((it) => {
-            const active = selected.includes(it.id)
-            return (
-              <button
-                key={it.id}
-                onClick={() => onToggle(it.id)}
-                className={`flex items-center gap-2.5 rounded-xl px-2.5 py-2 text-left text-[13px] font-semibold transition-colors ${active ? 'bg-(--color-accent-soft) text-accent' : 'text-(--color-text-primary) hover:bg-(--color-surface-2)'}`}
-              >
-                {it.logo && (
-                  <img
-                    src={it.logo}
-                    alt=""
-                    className="h-7 w-7 shrink-0 rounded-lg object-cover"
-                    loading="lazy"
-                  />
-                )}
-                <span className="truncate">{it.label}</span>
-                {active && <Check size={14} className="ml-auto shrink-0" />}
-              </button>
-            )
-          })}
-        </div>
-      )}
-    </div>
-  )
-}
-
-function SegmentGroup({
-  items,
-  selected,
-  onToggle,
-}: {
-  items: readonly { id: string; label: string }[]
-  selected: string[]
-  onToggle: (id: string) => void
-}) {
-  return (
-    <div className="flex rounded-full bg-(--color-surface-2) p-1">
-      {items.map((it) => {
-        const active = selected.includes(it.id)
-        return (
-          <button
-            key={it.id}
-            onClick={() => onToggle(it.id)}
-            aria-pressed={active}
-            className={`rounded-full px-4 py-1.5 text-[13px] font-bold transition-colors ${active ? 'bg-accent text-white' : 'text-(--color-text-secondary) hover:text-(--color-text-primary)'}`}
-          >
-            {it.label}
-          </button>
-        )
-      })}
-    </div>
-  )
-}
-
-function FilterPill({
-  active,
-  onClick,
-  children,
-}: {
-  active: boolean
-  onClick: () => void
-  children: React.ReactNode
-}) {
+function CatChip({ active, onClick, children }: { active: boolean; onClick: () => void; children: React.ReactNode }) {
   return (
     <button
+      type="button"
       onClick={onClick}
       aria-pressed={active}
-      className={`inline-flex items-center gap-1.5 rounded-full px-3.5 py-2 text-[13px] font-semibold transition-colors focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-(--color-accent) ${
-        active
-          ? 'bg-accent text-white'
-          : 'bg-white text-(--color-text-secondary) ring-1 ring-(--color-border-default) ring-inset hover:text-(--color-text-primary)'
-      }`}
+      className={`${styles.catChip} ${active ? styles.catChipActive : ''} focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-(--color-accent)`}
     >
       {children}
     </button>
@@ -706,80 +555,127 @@ function FilterPill({
 
 /* ------------------------------------------------------------ product card */
 
-function ProductCard({ product: p, onAdd }: { product: ShopProduct; onAdd: (p: ShopProduct) => void }) {
-  const brand = BRAND_BY_ID[p.brand]
+/** Ảnh sản phẩm; chưa có ảnh hoặc ảnh tải lỗi thì hiện khối thay thế cùng khung, tên đã có ngay cạnh nên khối này chỉ trang trí. */
+function ProductImage({ product }: { product: PublicProduct }) {
+  const [broken, setBroken] = useState(false)
+  if (!product.imageUrl || broken) {
+    return (
+      <div aria-hidden className="grid h-full w-full place-items-center bg-(--color-surface-2)">
+        <PawPrint size={44} strokeWidth={1.5} className="text-accent/25" />
+      </div>
+    )
+  }
+  return <img src={product.imageUrl} alt={product.name} loading="lazy" onError={() => setBroken(true)} />
+}
 
+/** BR-CK-03: chỉ tên chi nhánh còn hàng, không số lượng. */
+function StockLine({
+  ids,
+  branches,
+  loading,
+}: {
+  ids: number[]
+  branches: PublicBranch[] | undefined
+  loading: boolean
+}) {
+  const names = branches ? branchNamesByIds(ids, branches) : []
+  const none = ids.length === 0 || (branches !== undefined && names.length === 0)
+  if (!none && !branches && loading) {
+    return <div aria-hidden className="mt-2 h-4 w-3/4 animate-pulse rounded bg-(--color-surface-2) motion-reduce:animate-none" />
+  }
+  return (
+    <p className="mt-2 flex items-start gap-1.5 text-[11.5px] leading-snug text-(--color-text-secondary)">
+      <MapPin size={12} aria-hidden className={`mt-0.5 shrink-0 ${none ? 'text-(--color-text-secondary)' : 'text-accent'}`} />
+      {none ? (
+        <span>Tạm hết hàng tại các chi nhánh</span>
+      ) : (
+        <span className="line-clamp-2">
+          Còn hàng tại:{' '}
+          <span className="font-semibold text-(--color-text-primary)">{names.length ? names.join(', ') : 'chi nhánh PetCare'}</span>
+        </span>
+      )}
+    </p>
+  )
+}
+
+function ProductCard({
+  product: p,
+  branches,
+  branchesLoading,
+}: {
+  product: PublicProduct
+  branches: PublicBranch[] | undefined
+  branchesLoading: boolean
+}) {
   return (
     <article data-card className={styles.card}>
       <div className={styles.cardMedia}>
-        <Link to={`/shop/${p.id}`} aria-label={p.name}>
-          <img src={p.image} alt={p.name} loading="lazy" />
+        {/* Link ảnh trùng với link tên bên dưới nên bỏ khỏi thứ tự Tab và trình đọc màn hình. */}
+        <Link to={`/shop/${p.productId}`} aria-hidden tabIndex={-1} className="block h-full w-full">
+          <ProductImage product={p} />
         </Link>
-
-        {p.badge && (
-          <span className="absolute top-2 left-2 rounded bg-accent px-1.5 py-0.5 text-[10px] font-bold tracking-wide text-white uppercase">
-            {p.badge}
-          </span>
-        )}
-
-        <div className={styles.cardAction}>
-          <button
-            onClick={() => onAdd(p)}
-            className="flex w-full items-center justify-center gap-1.5 rounded-lg bg-accent px-2 py-2 text-[12.5px] font-bold text-white shadow-[0_10px_20px_-10px_rgba(164,51,36,0.8)] transition-colors hover:bg-(--color-accent-hover) focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-(--color-accent) active:scale-[0.985]"
-          >
-            <Plus size={14} strokeWidth={2.5} />
-            Thêm vào giỏ
-          </button>
-        </div>
       </div>
 
       <div className="flex flex-1 flex-col p-3">
         <p className="mb-1 truncate text-[10px] font-semibold tracking-[0.1em] text-(--color-text-secondary) uppercase">
-          {CATEGORY_LABELS[p.category]}
-          {brand && ` · ${brand.label}`}
+          {p.categoryName}
         </p>
 
-        <h3 className="mb-1.5 line-clamp-2 min-h-[2.6em] text-[13px] leading-[1.3] font-bold">
-          <Link to={`/shop/${p.id}`} className="hover:text-accent">
+        <h3 className="line-clamp-2 min-h-[2.6em] text-[13px] leading-[1.3] font-bold">
+          <Link to={`/shop/${p.productId}`} className="hover:text-accent focus-visible:outline-none">
             {p.name}
           </Link>
         </h3>
 
-        <div className="flex items-center gap-1 text-[11.5px] text-(--color-text-secondary)">
-          <Star
-            size={11}
-            className="fill-(--color-brand-primary) text-(--color-brand-primary)"
-          />
-          <span className="font-semibold text-(--color-text-primary)">
-            {p.rating.toFixed(1)}
-          </span>
-          <span aria-hidden>·</span>
-          <span className="tabular-nums">đã bán {soldFmt.format(p.sold)}</span>
-        </div>
+        <StockLine ids={p.inStockBranchIds} branches={branches} loading={branchesLoading} />
 
         <div className="mt-auto flex min-h-[24px] flex-wrap items-baseline gap-x-1.5 pt-3">
           <span className="font-friendly text-[16px] font-extrabold tabular-nums">
-            {vnd.format(p.price)}
+            {productPriceLabel(p.price)}
           </span>
-          {p.oldPrice && (
-            <span className="text-[11.5px] text-(--color-text-secondary) line-through tabular-nums">
-              {vnd.format(p.oldPrice)}
-            </span>
-          )}
+          <span className="text-[11.5px] text-(--color-text-secondary)">/ {p.unit}</span>
         </div>
       </div>
     </article>
   )
 }
 
-/* -------------------------------------------------------- skeleton + trống */
+/* -------------------------------------------------- skeleton + lỗi + trống */
 
 function ProductGridSkeleton() {
   return (
-    <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-4 lg:gap-4 xl:grid-cols-5 2xl:grid-cols-6">
-      {Array.from({ length: 15 }).map((_, i) => (
-        <div key={i} className={`${styles.skeleton} h-[248px]`} />
+    <div
+      role="status"
+      aria-label="Đang tải sản phẩm"
+      className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-4 lg:gap-4 xl:grid-cols-5 2xl:grid-cols-6"
+    >
+      {Array.from({ length: 12 }).map((_, i) => (
+        <div key={i} aria-hidden className={`${styles.skeleton} h-[248px]`} />
       ))}
+    </div>
+  )
+}
+
+function LoadError({ retrying, onRetry }: { retrying: boolean; onRetry: () => void }) {
+  return (
+    <div
+      role="alert"
+      className="mx-auto flex max-w-[560px] flex-col items-center rounded-3xl bg-(--color-surface-2) px-6 py-14 text-center"
+    >
+      <span className="grid h-12 w-12 place-items-center rounded-full bg-(--color-accent-soft) text-accent">
+        <WifiOff size={22} aria-hidden />
+      </span>
+      <p className="mt-4 font-friendly text-[20px] font-extrabold">Không tải được danh sách sản phẩm</p>
+      <p className="mt-2 text-[14px] text-(--color-text-secondary)">Kết nối có thể đang gián đoạn. Bạn thử tải lại nhé.</p>
+      <button
+        type="button"
+        onClick={onRetry}
+        disabled={retrying}
+        className="mt-6 inline-flex items-center gap-2 rounded-full bg-accent px-6 py-2.5 text-[13px] font-bold text-white transition-colors hover:bg-(--color-accent-hover) disabled:opacity-60 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-(--color-accent)"
+      >
+        <RotateCw size={15} aria-hidden className={retrying ? 'animate-spin motion-reduce:animate-none' : ''} />
+        Thử lại
+      </button>
     </div>
   )
 }
@@ -788,17 +684,16 @@ function EmptyState({ onClear }: { onClear: () => void }) {
   return (
     <div className="flex flex-col items-center rounded-3xl bg-(--color-surface-2) px-6 py-20 text-center">
       <img src="/imgs/download11.png" alt="" className="mb-5 w-16 opacity-40" />
-      <p className="font-friendly text-[20px] font-extrabold">
-        Chưa có sản phẩm nào khớp
-      </p>
+      <p className="font-friendly text-[20px] font-extrabold">Không tìm thấy sản phẩm phù hợp</p>
       <p className="mt-2 max-w-[42ch] text-[14px] text-(--color-text-secondary)">
         Bộ lọc hiện tại hơi hẹp. Bỏ bớt một vài điều kiện để xem thêm lựa chọn cho boss nhà bạn.
       </p>
       <button
+        type="button"
         onClick={onClear}
-        className="mt-6 rounded-full bg-accent px-6 py-2.5 text-[13px] font-bold text-white transition-colors hover:bg-(--color-accent-hover)"
+        className="mt-6 rounded-full bg-accent px-6 py-2.5 text-[13px] font-bold text-white transition-colors hover:bg-(--color-accent-hover) focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-(--color-accent)"
       >
-        Xoá bộ lọc
+        Xóa bộ lọc
       </button>
     </div>
   )
@@ -807,27 +702,23 @@ function EmptyState({ onClear }: { onClear: () => void }) {
 /* ----------------------------------------------------------- mobile drawer */
 
 function FilterDrawer({
-  petTypes,
   categories,
-  bands,
-  brands,
-  resultCount,
-  onPetType,
+  categoryId,
   onCategory,
-  onBand,
-  onBrand,
+  branches,
+  branchId,
+  onBranch,
+  resultCount,
   onClear,
   onClose,
 }: {
-  petTypes: string[]
-  categories: CategoryId[]
-  bands: string[]
-  brands: string[]
+  categories: BarCategory[]
+  categoryId: number | undefined
+  onCategory: (id: number) => void
+  branches: Pick<PublicBranch, 'branchId' | 'name'>[]
+  branchId: number | undefined
+  onBranch: (id: number) => void
   resultCount: number
-  onPetType: (id: string) => void
-  onCategory: (id: CategoryId) => void
-  onBand: (id: string) => void
-  onBrand: (id: string) => void
   onClear: () => void
   onClose: () => void
 }) {
@@ -851,54 +742,45 @@ function FilterDrawer({
         <div className="mb-6 flex items-center justify-between">
           <span className="font-friendly text-[18px] font-extrabold">Bộ lọc</span>
           <button
+            type="button"
             onClick={onClose}
             aria-label="Đóng bộ lọc"
-            className="rounded-full p-1.5 hover:bg-(--color-surface-2)"
+            className="rounded-full p-1.5 hover:bg-(--color-surface-2) focus-visible:outline-2 focus-visible:outline-(--color-accent)"
           >
-            <X size={20} />
+            <X size={20} aria-hidden />
           </button>
         </div>
 
-        <DrawerGroup title="Loại thú cưng">
-          {PET_TYPES.map((t) => (
-            <DrawerPill key={t.id} active={petTypes.includes(t.id)} onClick={() => onPetType(t.id)}>
-              {t.label}
-            </DrawerPill>
-          ))}
-        </DrawerGroup>
+        {categories.length > 0 && (
+          <DrawerGroup title="Danh mục">
+            {categories.map((c) => (
+              <DrawerPill key={c.categoryId} active={categoryId === c.categoryId} onClick={() => onCategory(c.categoryId)}>
+                {c.name}
+              </DrawerPill>
+            ))}
+          </DrawerGroup>
+        )}
 
-        <DrawerGroup title="Danh mục">
-          {CATEGORIES.map((c) => (
-            <DrawerPill key={c.id} active={categories.includes(c.id)} onClick={() => onCategory(c.id)}>
-              {c.label}
-            </DrawerPill>
-          ))}
-        </DrawerGroup>
-
-        <DrawerGroup title="Khoảng giá">
-          {PRICE_BANDS.map((b) => (
-            <DrawerPill key={b.id} active={bands.includes(b.id)} onClick={() => onBand(b.id)}>
-              {b.label}
-            </DrawerPill>
-          ))}
-        </DrawerGroup>
-
-        <DrawerGroup title="Thương hiệu">
-          {BRANDS.map((b) => (
-            <DrawerPill key={b.id} active={brands.includes(b.id)} onClick={() => onBrand(b.id)}>
-              {b.label}
-            </DrawerPill>
-          ))}
-        </DrawerGroup>
+        {branches.length > 0 && (
+          <DrawerGroup title="Còn hàng tại">
+            {branches.map((b) => (
+              <DrawerPill key={b.branchId} active={branchId === b.branchId} onClick={() => onBranch(b.branchId)}>
+                {b.name}
+              </DrawerPill>
+            ))}
+          </DrawerGroup>
+        )}
 
         <div className="fixed inset-x-0 bottom-0 flex gap-3 border-t border-(--color-border-default) bg-white p-4">
           <button
+            type="button"
             onClick={onClear}
             className="flex-1 rounded-full border border-(--color-border-default) py-3 text-[14px] font-bold text-(--color-text-primary)"
           >
-            Xoá hết
+            Xóa hết
           </button>
           <button
+            type="button"
             onClick={onClose}
             className="flex-[1.6] rounded-full bg-accent py-3 text-[14px] font-bold text-white active:scale-[0.985]"
           >
@@ -913,9 +795,9 @@ function FilterDrawer({
 function DrawerGroup({ title, children }: { title: string; children: React.ReactNode }) {
   return (
     <section className="mb-7">
-      <h4 className="mb-3 text-[12px] font-bold tracking-[0.14em] text-(--color-text-secondary) uppercase">
+      <h2 className="mb-3 text-[12px] font-bold tracking-[0.14em] text-(--color-text-secondary) uppercase">
         {title}
-      </h4>
+      </h2>
       <div className="flex flex-wrap gap-2">{children}</div>
     </section>
   )
@@ -932,6 +814,7 @@ function DrawerPill({
 }) {
   return (
     <button
+      type="button"
       onClick={onClick}
       aria-pressed={active}
       className={`rounded-full px-4 py-2 text-[13px] font-semibold transition-colors ${

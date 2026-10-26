@@ -18,6 +18,7 @@ import type {
   VaccinationProtocol,
   VaccineType,
 } from '../types/catalog';
+import type { PublicProduct, PublicProductQuery } from '../types/public-site';
 
 const get = async <T>(url: string, params?: object): Promise<T> => (await apiClient.get(url, { params })).data.data;
 const post = async <T>(url: string, body: object): Promise<T> => (await apiClient.post(url, body)).data.data;
@@ -26,6 +27,13 @@ const patch = async <T>(url: string, body: object): Promise<T> => (await apiClie
 export const catalogApi = {
   /** #19, không cần đăng nhập: dịch vụ đang kinh doanh và bật ở ≥ 1 chi nhánh ACTIVE (BR-CK-01). */
   listPublicServices: (params?: { group?: ServiceGroup; branchId?: number }) => get<PublicService[]>('/api/public/services', params),
+
+  /** Không cần đăng nhập: danh mục đang dùng. */
+  listPublicProductCategories: () => get<ProductCategory[]>('/api/public/product-categories'),
+  /** Không cần đăng nhập: đang kinh doanh, không thuốc kê đơn, không có số lượng tồn (BR-CK-01, 03). */
+  listPublicProducts: (query: PublicProductQuery = {}) => get<PageResponse<PublicProduct>>('/api/public/products', query),
+  /** Không cần đăng nhập: 404 nếu thuốc kê đơn, ngừng kinh doanh hoặc không có. */
+  getPublicProduct: (productId: number) => get<PublicProduct>(`/api/public/products/${productId}`),
 
   listCategories: (params?: { isActive?: boolean }) => get<ProductCategory[]>('/api/product-categories', params),
   createCategory: (body: { name: string }) => post<ProductCategory>('/api/product-categories', body),

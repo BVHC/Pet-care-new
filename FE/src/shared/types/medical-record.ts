@@ -1,6 +1,7 @@
 // Bệnh án, cân nặng khi khám, bản bổ sung, tiêm chủng của lượt (UC48, UC49, UC52, UC53) — docs/api/visit-v1.md #10, #12–15, #18–20 và
 // schema `MedicalRecord`, `UpdateMedicalRecordRequest`, `VaccinationOptions`…; kiểm lại bằng BE (docs/adr/0066–0070, docs/testcases/T37-fe.md).
-// Kê đơn (#16–17) là T46: `prescriptions` luôn có mặt trong `MedicalRecord` nhưng BE trả mảng rỗng tới T38.
+// Kê đơn (#16–17, T46): `prescriptions` luôn có mặt trong `MedicalRecord`; BE trả mảng rỗng tới khi T38 ghi đơn thuốc nên đơn thuốc chạy trên mock theo hợp đồng.
+// Yêu cầu kê đơn (`AddPrescriptionRequest`, `ShortageResolution`) nằm ở types/visit.ts.
 import type { Addendum, PrescriptionItem, VaccinationRecord } from '../../domains/pets/types';
 
 export type { Addendum, PrescriptionItem, VaccinationRecord };

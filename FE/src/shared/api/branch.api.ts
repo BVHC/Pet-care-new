@@ -32,6 +32,8 @@ const base = (branchId: number) => `/api/branches/${branchId}`;
 export const branchApi = {
   /** #20, không cần đăng nhập: chỉ chi nhánh ACTIVE (BR-CK-01). */
   listPublicBranches: (params?: { acceptsAfterHoursEmergency?: boolean }) => get<PublicBranch[]>('/api/public/branches', params),
+  /** #21, không cần đăng nhập: 404 nếu chi nhánh không ACTIVE hoặc không có. */
+  getPublicBranch: (branchId: number) => get<PublicBranch>(`/api/public/branches/${branchId}`),
 
   /** Nhân viên chi nhánh chỉ nhận được chi nhánh của mình. */
   listBranches: (params?: { status?: BranchStatus }) => get<Branch[]>('/api/branches', params),

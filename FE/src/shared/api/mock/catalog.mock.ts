@@ -102,6 +102,8 @@ export const catalogServices = (): Service[] => load().services;
 
 /** Sản phẩm của danh mục, cho mock kho đọc chéo (tên, SKU, đơn vị, quản lý hạn dùng). */
 export const catalogProducts = (): Product[] => load().products;
+/** Danh mục sản phẩm, cho mock công khai (T46) lọc theo danh mục đang dùng (catalog-v1 A1 của T32). */
+export const catalogCategories = (): ProductCategory[] => load().categories;
 /** Cho mock lâm sàng (T37): loại vaccine và dòng phác đồ để gợi ý / kiểm mũi tiêm (BR-KB-04, BR-SP-02). */
 export const catalogVaccineTypes = (): VaccineType[] => load().vaccineTypes;
 export const catalogProtocols = (): VaccinationProtocol[] => load().protocols;

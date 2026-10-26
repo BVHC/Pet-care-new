@@ -205,7 +205,7 @@ Chạy với mock: `cd FE && npm run dev`, mật khẩu `Petcare123`, nhân viê
 
 ### B.6 Còn lại, không làm ở T37
 
-- **Kê đơn (#16–17)** là T46: bệnh án chỉ ghi "Kê đơn thuốc chưa nối API (T46)"; `prescriptions` có trong kiểu nhưng luôn rỗng ở mock và BE (tới T38).
+- **Kê đơn (#16–17)** đã làm ở T46 (26/10, mock; xem `T46-fe.md`). Bệnh án không còn dòng "chưa nối API"; trên BE thật `prescriptions` vẫn luôn rỗng tới T38.
 - **Care Task / ST04** (T39) và **audit** không mô phỏng. **Chưa chạy thử màn hình với BE thật** (script seed chưa dựng dữ liệu lâm sàng); kiểu dữ liệu của #10, #12–15 lấy từ code BE nên khả năng lệch thấp, nhưng cần thử.
 - **Trên BE thật (từ 26/10):** bệnh án, cân nặng, hoàn tất, bản bổ sung (T27) và tiêm chủng (T28) đều có endpoint thật. Tiêm chủng **chưa chạy thử**: còn các chỗ lệch ở A.3 / A.3b (xóa mũi theo người phụ trách, gợi ý khi hết phác đồ, lô / hạn `null`, câu lỗi) cần sửa mock và FE trước. Chế độ hỗn hợp không dùng được cho tiêm chủng (A.4-8).
 - **Mã clinic chết sau T37** (gỡ cùng đợt dọn T57, không sửa ở đây): trong `hooks/useClinic.ts` các hook `useVisitDetail`, `useSaveRecord`, `useVisitLines`, `useCatalog`, `useMoveVisit` hết người dùng; trong `clinic.api.ts` `getVisitDetail`, `saveRecord`, `addVisitLine`, `removeVisitLine`, `replaceVisitService`, `getCatalog`, `completeVisit`, `callVisit` chỉ còn `clinic.api.test.ts` gọi; `INVALIDATE.saveRecord`, `editVisitLines`, `completeVisit` trong `queryKeys.ts`; `types/clinic.ts` (`VisitDetail`, `ClinicalRecord`…) và `clinic-db.ts` phần bệnh án; `utils/clinic-rules.ts` `completeViolation`. `AdminDashboardPage` vẫn dùng `clinic-db` cho KPI (T49).

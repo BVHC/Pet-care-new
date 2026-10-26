@@ -142,6 +142,21 @@ export interface VisitQueueQuery {
   needsReassign?: boolean;
 }
 
+/**
+ * #16 (BR-KB-03): chỉ gửi lại sau khi request đầu bị 400 BR-KB-03 vì thiếu tồn. `REDUCE_TO_AVAILABLE` giảm số lượng xuống đúng tồn khả dụng (vẫn sinh dòng Order);
+ * `EXTERNAL_PURCHASE` giữ nguyên số lượng và đánh dấu mua ngoài (không sinh dòng Order). Đủ tồn thì BE bỏ qua trường này.
+ */
+export type ShortageResolution = 'REDUCE_TO_AVAILABLE' | 'EXTERNAL_PURCHASE';
+
+/** #16: một dòng thuốc. `productId` phải là thuốc kê đơn đang kinh doanh; `dosageInstructions` bắt buộc, tối đa 500 ký tự (in trên đơn). */
+export interface AddPrescriptionRequest {
+  productId: number;
+  /** Số nguyên dương. */
+  quantity: number;
+  dosageInstructions: string;
+  shortageResolution?: ShortageResolution;
+}
+
 // ─── Kết quả ───
 
 /** #5. `assigneeOffline` là cảnh báo không chặn của BR-TN-06. */
@@ -169,7 +184,8 @@ export type VisitAction =
   | 'writeRecord'
   | 'addendum'
   | 'complete'
-  | 'vaccinate';
+  | 'vaccinate'
+  | 'prescribe';
 
 export const VISIT_ROLES: Record<VisitAction, readonly Role[]> = {
   checkIn: ['RECEPTIONIST'],
@@ -195,6 +211,8 @@ export const VISIT_ROLES: Record<VisitAction, readonly Role[]> = {
   complete: ['VET', 'CARETAKER'],
   /** #18–20: VET được gán lượt. */
   vaccinate: ['VET'],
+  /** #16–17: VET được gán lượt (BR-BH-02: VET thêm / xóa thuốc qua kê đơn cho lượt mình phụ trách). */
+  prescribe: ['VET'],
 };
 
 export type VisitPermissions = Record<VisitAction, boolean>;

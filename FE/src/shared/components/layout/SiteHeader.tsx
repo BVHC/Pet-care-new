@@ -36,8 +36,12 @@ const SHOP_CATEGORIES = [
 ]
 const SHOP_MEGA_MENU = buildShopMegaMenu(SHOP_CATEGORIES)
 
+// UC15: dịch vụ, chi nhánh, bác sĩ nằm ở hàng trên (hàng dưới đã kín khi thu gọn khi cuộn).
 const TOP_LINKS = [
   { label: 'Giới thiệu', page: 'about' },
+  { label: 'Dịch vụ', page: 'services' },
+  { label: 'Chi nhánh', page: 'branches' },
+  { label: 'Bác sĩ', page: 'doctors' },
   { label: 'Tin tức', page: 'news' },
 ]
 
@@ -158,7 +162,7 @@ export function SiteHeader({ cartCount = 0, onNav }: SiteHeaderProps) {
         }`}
       >
         {/* Top links */}
-        <div className="flex items-center gap-6 flex-1 min-w-[150px]">
+        <div className="flex items-center gap-4 xl:gap-6 flex-1 min-w-[150px]">
           {TOP_LINKS.map((l) => (
             <a
               key={l.page}

@@ -1,4 +1,4 @@
-// Bệnh án của lượt Khám/Tiêm (UC48, UC53; visit-v1 #10, #12–15; BR-KB-01, 02, 06, BR-KH-04): 5 trường của hợp đồng, cân nặng, tiêm chủng, hoàn tất lượt, bản bổ sung khi đã khóa.
+// Bệnh án của lượt Khám/Tiêm (UC48, UC53; visit-v1 #10, #12–17; BR-KB-01, 02, 03, 06, BR-KH-04): 5 trường của hợp đồng, cân nặng, tiêm chủng, đơn thuốc, hoàn tất lượt, bản bổ sung khi đã khóa.
 // Chỉ VET được gán lượt đang IN_PROGRESS mới sửa được; lượt COMPLETED là bệnh án đã khóa. KHÔNG tự lưu: mỗi lần lưu có thay đổi BE ghi một dòng audit (ADR-0066), nên lưu khi bấm "Lưu"
 // hoặc Ctrl+S, và hoàn tất lưu trước. FE không tự kiểm BR-KB-02: hỏi BE và hiện nguyên câu BE trả để luật không lệch.
 import { useRef, useState, type ReactNode, type Ref } from 'react';
@@ -19,6 +19,7 @@ import { vnDate } from '../../../shared/utils/vn-time';
 import { QueryError, RowsSkeleton, WsButton } from '../ui';
 import { AddendaSection } from './AddendaSection';
 import { fieldClass } from './field-class';
+import { PrescriptionSection } from './PrescriptionSection';
 import { VaccinationSection } from './VaccinationSection';
 
 interface Props {
@@ -157,9 +158,7 @@ function Editor({ visit, userId, perms, summary, onCompleted, record }: Props & 
           {editable && perms.writeRecord && <WeightBox visit={visit} />}
           {visit.serviceGroup === 'MEDICAL' && <VaccinationSection visit={visit} doses={record.vaccinations} userId={userId} canVaccinate={editable && perms.vaccinate} />}
           <OrderLines orderId={visit.orderId} />
-          <p role="note" className="text-xs text-(--ws-ink-3)">
-            Kê đơn thuốc chưa nối API (T46).
-          </p>
+          <PrescriptionSection visitId={visit.visitId} items={record.prescriptions} canPrescribe={editable && perms.prescribe} />
           {record.locked && <AddendaSection visitId={visit.visitId} addenda={record.addenda} canAdd={perms.addendum} />}
         </div>
       </div>
