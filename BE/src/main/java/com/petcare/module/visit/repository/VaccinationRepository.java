@@ -122,6 +122,105 @@ public interface VaccinationRepository extends JpaRepository<Vaccination, Long> 
     List<LatestDose> findLatestDoses(@Param("petId") Long petId,
             @Param("vaccineTypeIds") Collection<Long> vaccineTypeIds);
 
+    /**
+     * Loại vaccine của các mũi theo id (care ghép tên vào Care Task, docs/adr/0080). Đi khóa chính, một câu cho cả lô.
+     * Bên gọi không truyền tập rỗng ({@code IN ()} là SQL sai).
+     */
+    @Query(value = "SELECT id AS id, vaccine_type_id AS vaccineTypeId FROM vaccinations WHERE id IN (:ids)",
+            nativeQuery = true)
+    List<DoseType> findVaccineTypeIds(@Param("ids") Collection<Long> ids);
+
+    /**
+     * ST04 nhắc tái chủng (docs/adr/0082): id mũi đến hạn nhắc, theo ngày đến hạn rồi id. Chỉ mũi chưa bị thay thế, chưa
+     * nhắc, của lượt {@code COMPLETED} (nghĩa vụ ADR-0075 §Hệ quả) và có {@code next_due_date} trong {@code [from, to]}.
+     * Không khóa; {@link #lockDueForReminder} kiểm lại dưới khóa. Đi {@code ix_vaccinations_next_due}.
+     */
+    @Query(value = """
+            SELECT v.id FROM vaccinations v JOIN visits vi ON vi.id = v.visit_id
+            WHERE v.superseded_at IS NULL AND v.due_reminded_at IS NULL AND vi.status = 'COMPLETED'
+              AND v.next_due_date BETWEEN :fromDate AND :toDate
+            ORDER BY v.next_due_date, v.id LIMIT :limit
+            """, nativeQuery = true)
+    List<Long> findDueForReminderIds(@Param("fromDate") LocalDate fromDate, @Param("toDate") LocalDate toDate,
+            @Param("limit") int limit);
+
+    /**
+     * Lô kế tiếp của {@link #findDueForReminderIds}: keyset {@code (next_due_date, id)} lớn hơn của mũi {@code afterId}.
+     * Mũi đó chưa bao giờ bị xóa (lượt {@code COMPLETED} không xóa mũi, BR-KB-04), nên truy vấn con luôn có dòng.
+     */
+    @Query(value = """
+            SELECT v.id FROM vaccinations v JOIN visits vi ON vi.id = v.visit_id
+            WHERE v.superseded_at IS NULL AND v.due_reminded_at IS NULL AND vi.status = 'COMPLETED'
+              AND v.next_due_date BETWEEN :fromDate AND :toDate
+              AND (v.next_due_date, v.id) > (SELECT p.next_due_date, p.id FROM vaccinations p WHERE p.id = :afterId)
+            ORDER BY v.next_due_date, v.id LIMIT :limit
+            """, nativeQuery = true)
+    List<Long> findDueForReminderIdsAfter(@Param("fromDate") LocalDate fromDate, @Param("toDate") LocalDate toDate,
+            @Param("afterId") long afterId, @Param("limit") int limit);
+
+    /** Thú của mũi, đọc không khóa để khóa {@code pets} trước dòng nguồn (docs/adr/0079 nghĩa vụ 2). Cột không đổi. */
+    @Query(value = "SELECT pet_id FROM vaccinations WHERE id = :id", nativeQuery = true)
+    Optional<Long> findPetIdOfDose(@Param("id") long id);
+
+    /**
+     * Khóa dòng ({@code FOR NO KEY UPDATE SKIP LOCKED}) nếu mũi <b>vẫn</b> đến hạn nhắc: ghi mũi mới cùng loại (#19), xóa
+     * mũi (#20) hay một lượt ST04 khác có thể đã commit sau khi quét. Dòng đang bị luồng khác giữ thì bỏ qua (ST04 không
+     * bao giờ chờ khóa dòng), lượt sau xét lại. {@code OF v}: không khóa {@code visits}. {@code MANDATORY}: ngoài
+     * transaction khóa nhả ngay.
+     */
+    @Transactional(propagation = Propagation.MANDATORY)
+    @Query(value = """
+            SELECT v.id FROM vaccinations v JOIN visits vi ON vi.id = v.visit_id
+            WHERE v.id = :id AND v.superseded_at IS NULL AND v.due_reminded_at IS NULL AND vi.status = 'COMPLETED'
+              AND v.next_due_date BETWEEN :fromDate AND :toDate
+            FOR NO KEY UPDATE OF v SKIP LOCKED
+            """, nativeQuery = true)
+    Optional<Long> lockDueForReminder(@Param("id") long id, @Param("fromDate") LocalDate fromDate,
+            @Param("toDate") LocalDate toDate);
+
+    /** Các cột ST04 cần để soạn nhắc; đọc <b>sau</b> {@link #lockDueForReminder}, không nạp entity. */
+    @Query(value = """
+            SELECT id AS id, pet_id AS petId, branch_id AS branchId, vaccine_type_id AS vaccineTypeId,
+                   next_due_date AS nextDueDate
+            FROM vaccinations WHERE id = :id
+            """, nativeQuery = true)
+    Optional<DueDose> findDueDose(@Param("id") long id);
+
+    /**
+     * Đánh dấu đã nhắc (cờ chống nhắc trùng của ST04, cùng transaction với {@code enqueue} / {@code create}). Điều kiện lặp
+     * lại để không bao giờ đè luồng khác; bên gọi đã khóa dòng nên phải trả đúng 1. {@code updated_at} đặt từ
+     * {@code Clock} (docs/adr/0015).
+     */
+    @Transactional(propagation = Propagation.MANDATORY)
+    @Modifying(flushAutomatically = true, clearAutomatically = true)
+    @Query(value = """
+            UPDATE vaccinations SET due_reminded_at = :at, updated_at = :at
+            WHERE id = :id AND due_reminded_at IS NULL AND superseded_at IS NULL
+            """, nativeQuery = true)
+    int markDueReminded(@Param("id") long id, @Param("at") Instant at);
+
+    /** Projection của {@link #findDueDose}. */
+    interface DueDose {
+
+        Long getId();
+
+        Long getPetId();
+
+        Long getBranchId();
+
+        Long getVaccineTypeId();
+
+        LocalDate getNextDueDate();
+    }
+
+    /** Projection của {@link #findVaccineTypeIds}. */
+    interface DoseType {
+
+        Long getId();
+
+        Long getVaccineTypeId();
+    }
+
     /** Projection của {@link #lockDoseInVisit}: {@code stockLotId}, {@code orderLineId} đi thẳng vào hoàn kho / xóa dòng. */
     interface LockedDose {
 

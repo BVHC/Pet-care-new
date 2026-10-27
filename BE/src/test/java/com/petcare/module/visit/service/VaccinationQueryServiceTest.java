@@ -21,6 +21,7 @@ import com.petcare.module.customer.api.PetQueryApi.PetSummary;
 import com.petcare.module.customer.api.Species;
 import com.petcare.module.visit.api.VaccinationQueryApi.BoardingVaccineGap;
 import com.petcare.module.visit.repository.VaccinationRepository;
+import com.petcare.module.visit.repository.VaccinationRepository.DoseType;
 import com.petcare.module.visit.repository.VaccinationRepository.LatestDose;
 
 /**
@@ -126,6 +127,37 @@ class VaccinationQueryServiceTest {
         assertThat(service.existsByVaccineType(6L)).isFalse();
         verify(vaccinations).existsByVaccineTypeId(5L);
         verify(pets, org.mockito.Mockito.never()).findPet(any());
+    }
+
+    private static DoseType doseType(long id, long typeId) {
+        DoseType row = mock(DoseType.class);
+        doReturn(id).when(row).getId();
+        doReturn(typeId).when(row).getVaccineTypeId();
+        return row;
+    }
+
+    @Test
+    void anEmptySetOfDosesReturnsAnEmptyMapWithoutTouchingTheDatabase() {
+        assertThat(service.findVaccineTypeIds(List.of())).isEmpty();
+
+        verifyNoInteractions(vaccinations, pets, catalog);
+    }
+
+    @Test
+    void eachDoseMapsToItsOwnVaccineTypeInOneQuery() {
+        doReturn(List.of(doseType(500L, 8L), doseType(501L, 9L))).when(vaccinations)
+                .findVaccineTypeIds(List.of(500L, 501L, 502L));
+
+        assertThat(service.findVaccineTypeIds(List.of(500L, 501L, 502L)))
+                .containsOnly(java.util.Map.entry(500L, 8L), java.util.Map.entry(501L, 9L));
+
+        verify(vaccinations).findVaccineTypeIds(List.of(500L, 501L, 502L));
+        verifyNoInteractions(pets, catalog);
+    }
+
+    @Test
+    void aNullCollectionIsAProgrammingError() {
+        assertThatThrownBy(() -> service.findVaccineTypeIds(null)).isInstanceOf(NullPointerException.class);
     }
 
     @Test

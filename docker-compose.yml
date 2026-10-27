@@ -89,6 +89,9 @@ services:
       NO_SHOW_CRON: ${NO_SHOW_CRON:-0 */5 * * * *}
       # Lịch ST03 nhắc lịch hẹn (docs/adr/0056); mặc định trùng application.yml (lệch phút với ST05 / ST02).
       APPOINTMENT_REMINDER_CRON: ${APPOINTMENT_REMINDER_CRON:-0 2/5 * * * *}
+      # Lịch ST04 nhắc tái chủng / tái khám (docs/adr/0082); mặc định trùng application.yml.
+      VACCINE_REMINDER_CRON: ${VACCINE_REMINDER_CRON:-30 10 7-20 * * *}
+      FOLLOW_UP_REMINDER_CRON: ${FOLLOW_UP_REMINDER_CRON:-30 40 7-20 * * *}
       # Lịch ST13 tự chốt ca thu ngân và báo Order PENDING quá hạn (docs/adr/0064); mặc định trùng application.yml.
       CASHIER_SHIFT_AUTO_CLOSE_CRON: ${CASHIER_SHIFT_AUTO_CLOSE_CRON:-0 4/5 * * * *}
       PENDING_ORDER_DIGEST_CRON: ${PENDING_ORDER_DIGEST_CRON:-0 50 23 * * *}

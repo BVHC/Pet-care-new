@@ -21,7 +21,7 @@ paths:
     get:
       tags: ["Care tasks"]
       summary: "Danh sách việc gọi điện của chi nhánh"
-      description: "UC87 · BR-TB-05, BR-LT-10. Actor: A06. Quyền: Lễ tân chi nhánh được giao. Chuyển trạng thái: —. Mặc định OPEN, sắp theo dueDate."
+      description: "UC87 · BR-TB-05, BR-LT-10. Actor: A06. Quyền: Lễ tân chi nhánh được giao. Chuyển trạng thái: —. Lọc theo chi nhánh của lễ tân (không có tham số chi nhánh). `status` vắng = OPEN. Sắp `dueDate` tăng dần, trùng thì `careTaskId` tăng dần. `page` < 0 → 0, `size` kẹp 1–100. `dueFrom` > `dueTo` → trang rỗng (docs/adr/0080)."
       operationId: listCareTasks
       security:
         - bearerAuth: []
@@ -108,6 +108,12 @@ paths:
                   code:
                     type: integer
                     description: "HTTP status của kết quả, ví dụ 200, 201"
+        "400":
+          description: "`careTaskId` sai kiểu (`MALFORMED_REQUEST`); BR-TK-17"
+          content:
+            "application/json":
+              schema:
+                $ref: "#/components/schemas/Error"
         "401":
           $ref: "#/components/responses/Unauthorized"
         "403":
@@ -147,7 +153,7 @@ paths:
                     type: integer
                     description: "HTTP status của kết quả, ví dụ 200, 201"
         "400":
-          description: "`BR-TB-05` chưa chọn kết quả / thiếu ghi chú"
+          description: "`BR-TB-05` chưa chọn kết quả / thiếu ghi chú; `VALIDATION_FAILED` ghi chú quá 2000 ký tự; `MALFORMED_REQUEST` body hoặc `careTaskId` sai kiểu; BR-TK-17"
           content:
             "application/json":
               schema:
@@ -197,7 +203,7 @@ paths:
                     type: integer
                     description: "HTTP status của kết quả, ví dụ 200, 201"
         "400":
-          description: "Thiếu lý do"
+          description: "`BR-TB-05` thiếu lý do; `VALIDATION_FAILED` lý do quá 300 ký tự; `MALFORMED_REQUEST` body hoặc `careTaskId` sai kiểu; BR-TK-17"
           content:
             "application/json":
               schema:
@@ -554,6 +560,7 @@ components:
           description: "LIÊN_HỆ_ĐƯỢC / KHÔNG_LIÊN_LẠC_ĐƯỢC"
         note:
           type: string
+          maxLength: 2000
     CancelCareTaskRequest:
       type: object
       required: [reason]
