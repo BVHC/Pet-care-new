@@ -1,5 +1,7 @@
 # T47 (FE): Nội dung trang, chuyên mục & bài viết, feedback, Care Task của lễ tân (UC21, UC81, UC83, UC84, UC87)
 
+> **Cập nhật 28/10/2026 (T49):** Care Task (care-v1 #1–4) **đã có ở BE** từ T39 và đã chạy thật với FE: danh sách + "Đã gọi" 200 (`T49-fe.md` mục C.5); dòng "BE chưa có" bên dưới là lịch sử.
+
 > Phạm vi: **A. Bài viết và chuyên mục** (UC81) · **B. Nội dung trang** (UC21: quản trị + trang công khai đọc `/public/pages/{key}`) · **C. Feedback** (UC83 khách, UC84 nhân viên) · **D. Care Task của lễ tân** (UC87). Mỗi phần gồm types, api, hooks, mock, giao diện. UC80, UC82, UC85, UC86 là tầng 3: không làm.
 > Hợp đồng: `docs/api/content-v1.md` (#1–13, #18–22; Q1 mở), `docs/api/care-v1.md` (#1–4). Rule: BR-BV-01…04, BR-DG-01…04, BR-CK-01, BR-TB-05, BR-TK-19. ADR-0071 (nội dung công khai, lọc HTML, feedback). SM Care Task #10.
 > **BE:** content-v1 (22 endpoint) **đã có** (T32), nhưng cả bốn phần **chưa chạy thử với BE thật**. **Care Task (care-v1 #1–4) BE chưa có** (T39): FE chạy mock; chạy BE thật cần `VITE_API_MOCK=false` + `VITE_API_MOCK_ONLY=/api/care-tasks` (`FE/.env.example`). Chỗ hợp đồng im lặng là ASSUMPTION (từng phần).

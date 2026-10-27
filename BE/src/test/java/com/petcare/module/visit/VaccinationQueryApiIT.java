@@ -198,6 +198,26 @@ class VaccinationQueryApiIT {
                 .containsExactly(dogRequiredA);
     }
 
+    // ================================================================ findVaccineTypeIds (care ghép tên loại, ADR-0080)
+
+    @Test
+    void findVaccineTypeIdsGivesEachDoseItsOwnTypeAndOmitsUnknownIds() {
+        long doseA = dose(dogRequiredA, ON.minusDays(10), ON.plusDays(355));
+        long doseB = dose(dogRequiredB, ON.minusDays(5), ON.plusDays(360));
+        long missing = 999_999_000L;
+
+        Map<Long, Long> result = api.findVaccineTypeIds(List.of(doseA, doseB, missing));
+
+        assertThat(result).containsOnly(Map.entry(doseA, dogRequiredA), Map.entry(doseB, dogRequiredB));
+        assertThat(api.findVaccineTypeIds(List.of(doseB))).containsOnly(Map.entry(doseB, dogRequiredB));
+    }
+
+    @Test
+    void findVaccineTypeIdsOfNothingIsEmptyAndRunsNoQuery() {
+        assertThat(api.findVaccineTypeIds(List.of())).isEmpty();
+        assertThat(api.findVaccineTypeIds(List.of(999_999_000L))).isEmpty();
+    }
+
     // ================================================================ existsByVaccineType + xóa loại (BR-SP-07)
 
     @Test

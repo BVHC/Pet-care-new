@@ -46,6 +46,7 @@ import com.petcare.module.identity.api.ConfigKey;
 import com.petcare.module.identity.api.SystemConfigApi;
 import com.petcare.module.sales.api.VisitOrderApi;
 import com.petcare.module.sales.api.VisitOrderApi.LineRef;
+import com.petcare.module.visit.api.FollowUpApi;
 import com.petcare.module.visit.dto.CreateVisitRequest;
 import com.petcare.module.visit.dto.VisitResponse;
 import com.petcare.module.visit.entity.PriorityClass;
@@ -89,14 +90,15 @@ class VisitCheckInServiceTest {
     private final BranchQueryApi branches = mock(BranchQueryApi.class);
     private final CustomerQueryApi customers = mock(CustomerQueryApi.class);
     private final VisitOrderApi visitOrders = mock(VisitOrderApi.class);
+    private final FollowUpApi followUps = mock(FollowUpApi.class);
     private final SystemConfigApi configs = mock(SystemConfigApi.class);
     private final VisitCodeGenerator codes = mock(VisitCodeGenerator.class);
     private final VisitRepository visits = mock(VisitRepository.class);
     private final Clock clock = mock(Clock.class);
     private final SecurityPrincipal principal = mock(SecurityPrincipal.class);
     private final VisitCheckInService service = new VisitCheckInService(scope, pets, appointmentQueries, appointments,
-            catalog, branches, customers, visitOrders, configs, codes, visits, new VisitTransitionHandler(),
-            Mappers.getMapper(VisitMapper.class), clock);
+            catalog, branches, customers, visitOrders, followUps, configs, codes, visits,
+            new VisitTransitionHandler(), Mappers.getMapper(VisitMapper.class), clock);
 
     @BeforeEach
     void setUp() {
@@ -132,7 +134,7 @@ class VisitCheckInServiceTest {
         VisitResponse response = service.checkInVisit(new CreateVisitRequest(PET, APPOINTMENT, 99L, null));
 
         InOrder order = inOrder(pets, appointmentQueries, catalog, clock, branches, appointments, configs, codes,
-                visits, visitOrders, customers);
+                visits, visitOrders, followUps, customers);
         order.verify(pets).findPetForShare(PET);
         order.verify(appointmentQueries).findCheckInRef(APPOINTMENT);
         order.verify(catalog).findService(SERVICE);
@@ -144,6 +146,7 @@ class VisitCheckInServiceTest {
         order.verify(codes).nextCode();
         order.verify(visits).saveAndFlush(any(Visit.class));
         order.verify(visitOrders).openForVisit(VISIT_ID, BRANCH, CUSTOMER, SERVICE, null, ACCOUNT);
+        order.verify(followUps).cancelPendingFollowUps(PET, NOW);
         order.verify(customers).findContact(CUSTOMER);
         verify(catalog, never()).findService(99L);
         verify(branches, never()).isServiceEnabled(anyLong(), anyLong());
@@ -169,6 +172,35 @@ class VisitCheckInServiceTest {
         assertThat(response.petName()).isEqualTo("Milu");
         assertThat(response.species()).isEqualTo(Species.CAT);
         assertThat(response.assigneeName()).isNull();
+    }
+
+    @Test
+    void groomingVisitNeverCancelsFollowUps() {
+        when(catalog.findService(SERVICE)).thenReturn(Optional.of(service(ServiceGroup.GROOMING, true)));
+
+        service.checkInVisit(new CreateVisitRequest(PET, null, SERVICE, false));
+
+        verify(visits).saveAndFlush(any(Visit.class));
+        verify(followUps, never()).cancelPendingFollowUps(anyLong(), any());
+    }
+
+    @Test
+    void vaccineOnlyVisitNeverCancelsFollowUps() {
+        when(catalog.findService(SERVICE)).thenReturn(Optional.of(
+                new ServiceInfo(SERVICE, "Tiêm phòng", ServiceGroup.MEDICAL, MedicalType.VACCINE, 120_000, true)));
+
+        service.checkInVisit(new CreateVisitRequest(PET, null, SERVICE, false));
+
+        verify(visits).saveAndFlush(any(Visit.class));
+        verify(followUps, never()).cancelPendingFollowUps(anyLong(), any());
+    }
+
+    @Test
+    void followUpFailureAfterTheOrderPropagatesSoTheWholeCheckInRollsBack() {
+        doThrow(new IllegalStateException("boom")).when(followUps).cancelPendingFollowUps(PET, NOW);
+
+        assertThatThrownBy(() -> service.checkInVisit(new CreateVisitRequest(PET, APPOINTMENT, null, null)))
+                .isInstanceOf(IllegalStateException.class).hasMessage("boom");
     }
 
     @Test
@@ -410,6 +442,7 @@ class VisitCheckInServiceTest {
         verify(codes, never()).nextCode();
         verify(visits, never()).saveAndFlush(any());
         verify(visitOrders, never()).openForVisit(any(), any(), any(), any(), any(), any());
+        verify(followUps, never()).cancelPendingFollowUps(anyLong(), any());
     }
 
     private Visit savedVisit() {

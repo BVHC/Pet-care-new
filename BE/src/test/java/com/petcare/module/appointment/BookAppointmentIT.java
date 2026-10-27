@@ -52,6 +52,7 @@ import com.petcare.TestcontainersConfiguration;
 import com.petcare.module.appointment.repository.AppointmentRepository;
 import com.petcare.module.appointment.repository.BookingRestrictionRepository;
 import com.petcare.module.identity.service.SessionService;
+import com.petcare.module.visit.FollowUpItSupport;
 import com.petcare.support.MutableClock;
 
 /**
@@ -153,6 +154,7 @@ class BookAppointmentIT {
     void tearDown() {
         jdbc.execute("DROP TRIGGER IF EXISTS it_fail_appointment_insert ON appointments");
         jdbc.execute("DROP FUNCTION IF EXISTS it_fail_appointment_insert()");
+        FollowUpItSupport.cleanUp(jdbc, pet);
         data.cleanUp();
     }
 
@@ -205,6 +207,29 @@ class BookAppointmentIT {
         assertThat(jdbc.queryForMap("SELECT customer_id, booked_by, channel FROM appointments WHERE pet_id = ?",
                 counterPet)).containsEntry("customer_id", owner).containsEntry("booked_by", receptionist)
                 .containsEntry("channel", "COUNTER");
+    }
+
+    /** D029 (BR-TB-06, Care Task#6, docs/adr/0084): chỉ nhóm Khám/Tiêm hủy nhắc tái khám chờ gửi và task tái khám đã sinh. */
+    @Test
+    void bookingAMedicalServiceCancelsPendingFollowUpsAndTasksButGroomingDoesNot() {
+        Instant past = T0.minus(Duration.ofDays(40));
+        long pending = FollowUpItSupport.record(jdbc, branch, customer, pet, receptionist, past, DAY.plusDays(20), true,
+                false);
+        long reminded = FollowUpItSupport.record(jdbc, branch, customer, pet, receptionist, past, DAY.plusDays(2), true,
+                true);
+        long openTask = FollowUpItSupport.task(jdbc, "FOLLOW_UP_DUE", reminded, branch, customer, pet, "OPEN",
+                receptionist);
+
+        created(post(receptionistToken, body(pet, branch, grooming, DAY, "10:00", null)));
+
+        assertThat(FollowUpItSupport.cancelledAt(jdbc, pending)).as("Thẩm mỹ không hủy nhắc").isNull();
+        assertThat(FollowUpItSupport.taskStatus(jdbc, openTask)).isEqualTo("OPEN");
+
+        created(post(customerToken, body(pet, branch, medical, DAY, START, null)));
+
+        assertThat(FollowUpItSupport.cancelledAt(jdbc, pending)).as("nhắc chờ gửi bị hủy").isEqualTo(T0);
+        assertThat(FollowUpItSupport.cancelledAt(jdbc, reminded)).as("đã nhắc rồi: chỉ hủy task").isNull();
+        assertThat(FollowUpItSupport.taskStatus(jdbc, openTask)).isEqualTo("CANCELLED");
     }
 
     @Test

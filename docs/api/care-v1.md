@@ -34,7 +34,7 @@
 
 | Thao tác | Actor | Quyền / phạm vi | Chuyển trạng thái | Idempotent | Ghi chú |
 |---|---|---|---|---|---|
-| Danh sách việc gọi điện của chi nhánh | A06 | Lễ tân chi nhánh được giao | — | — | Mặc định OPEN, sắp theo dueDate. |
+| Danh sách việc gọi điện của chi nhánh | A06 | Lễ tân chi nhánh được giao | — | — | Lọc theo chi nhánh của lễ tân (không có tham số chi nhánh). `status` vắng = OPEN. Sắp `dueDate` tăng dần, trùng thì `careTaskId` tăng dần. `page` < 0 → 0, `size` kẹp 1–100. `dueFrom` > `dueTo` → trang rỗng (docs/adr/0080). |
 | Chi tiết Care Task | A06 | Lễ tân chi nhánh được giao | — | — | — |
 | Ghi kết quả gọi điện | A06 | Lễ tân chi nhánh được giao | OPEN → DONE (Care Task#2) | — | Không liên lạc được: không sinh task gọi lại. |
 | Hủy Care Task | A06 | Lễ tân chi nhánh được giao | OPEN → CANCELLED (Care Task#3) | — | — |
@@ -52,9 +52,9 @@
 ### Care tasks
 
 - **`GET /care-tasks`** — Danh sách việc gọi điện của chi nhánh. Query: `status?`, `type?`, `dueFrom?`, `dueTo?`, `page?`, `size?`. Response `200` trang `CareTask`. Lỗi: `400` · `401` · `403`.
-- **`GET /care-tasks/{careTaskId}`** — Chi tiết Care Task. Response `200` `CareTask`. Lỗi: `401` · `403` · `404`.
-- **`POST /care-tasks/{careTaskId}/complete`** — Ghi kết quả gọi điện. Request `CompleteCareTaskRequest`. Response `200` `CareTask`. Lỗi: `400` `BR-TB-05` chưa chọn kết quả / thiếu ghi chú · `401` · `403` · `404` · `409` Task không OPEN.
-- **`POST /care-tasks/{careTaskId}/cancel`** — Hủy Care Task. Request `CancelCareTaskRequest`. Response `200` `CareTask`. Lỗi: `400` Thiếu lý do · `401` · `403` · `404` · `409` Task không OPEN.
+- **`GET /care-tasks/{careTaskId}`** — Chi tiết Care Task. Response `200` `CareTask`. Lỗi: `400` `careTaskId` sai kiểu (`MALFORMED_REQUEST`); BR-TK-17 · `401` · `403` · `404`.
+- **`POST /care-tasks/{careTaskId}/complete`** — Ghi kết quả gọi điện. Request `CompleteCareTaskRequest`. Response `200` `CareTask`. Lỗi: `400` `BR-TB-05` chưa chọn kết quả / thiếu ghi chú; `VALIDATION_FAILED` ghi chú quá 2000 ký tự; `MALFORMED_REQUEST` body hoặc `careTaskId` sai kiểu; BR-TK-17 · `401` · `403` · `404` · `409` Task không OPEN.
+- **`POST /care-tasks/{careTaskId}/cancel`** — Hủy Care Task. Request `CancelCareTaskRequest`. Response `200` `CareTask`. Lỗi: `400` `BR-TB-05` thiếu lý do; `VALIDATION_FAILED` lý do quá 300 ký tự; `MALFORMED_REQUEST` body hoặc `careTaskId` sai kiểu; BR-TK-17 · `401` · `403` · `404` · `409` Task không OPEN.
 ### Notifications
 
 - **`GET /me/notifications`** — Thông báo của tôi. Query: `unreadOnly?`, `page?`, `size?`. Response `200` trang `Notification`. Lỗi: `400` Tham số sai kiểu (`MALFORMED_REQUEST`); BR-TK-17 · `401`.

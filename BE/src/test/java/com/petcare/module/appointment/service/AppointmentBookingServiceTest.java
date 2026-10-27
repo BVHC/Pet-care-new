@@ -56,6 +56,7 @@ import com.petcare.module.customer.api.PetQueryApi.PetSummary;
 import com.petcare.module.customer.api.Species;
 import com.petcare.module.identity.api.ConfigKey;
 import com.petcare.module.identity.api.SystemConfigApi;
+import com.petcare.module.visit.api.FollowUpApi;
 import com.petcare.platform.exception.AccessDeniedScopeException;
 import com.petcare.platform.exception.BusinessRuleViolationException;
 import com.petcare.platform.exception.ResourceNotFoundException;
@@ -88,6 +89,7 @@ class AppointmentBookingServiceTest {
     private final BranchApi branchLocks = mock(BranchApi.class);
     private final BranchQueryApi branches = mock(BranchQueryApi.class);
     private final BookingRestrictionApi restrictions = mock(BookingRestrictionApi.class);
+    private final FollowUpApi followUps = mock(FollowUpApi.class);
     private final SystemConfigApi configs = mock(SystemConfigApi.class);
     private final AppointmentLocks locks = mock(AppointmentLocks.class);
     private final AppointmentCodeGenerator codes = mock(AppointmentCodeGenerator.class);
@@ -95,7 +97,7 @@ class AppointmentBookingServiceTest {
     private final Clock clock = mock(Clock.class);
     private final SecurityPrincipal principal = mock(SecurityPrincipal.class);
     private final AppointmentBookingService service = new AppointmentBookingService(scope, customers, pets, catalog,
-            branchLocks, branches, restrictions, configs, locks, codes, appointments,
+            branchLocks, branches, restrictions, followUps, configs, locks, codes, appointments,
             new AppointmentTransitionHandler(), Mappers.getMapper(AppointmentMapper.class), clock);
 
     @BeforeEach
@@ -124,7 +126,7 @@ class AppointmentBookingServiceTest {
         AppointmentResponse response = service.bookAppointment(request(DAY, START, "  Bé hay sợ  "));
 
         InOrder order = inOrder(customers, locks, pets, catalog, branchLocks, clock, branches, restrictions,
-                appointments, codes);
+                appointments, codes, followUps);
         order.verify(customers).findCustomerIdByAccountId(ACCOUNT);
         order.verify(locks).lockPet(PET);
         order.verify(pets).findPet(PET);
@@ -142,6 +144,7 @@ class AppointmentBookingServiceTest {
         order.verify(branches).quotaFor(BRANCH, ServiceGroup.MEDICAL, DAY, START);
         order.verify(codes).nextCode();
         order.verify(appointments).saveAndFlush(any(Appointment.class));
+        order.verify(followUps).cancelPendingFollowUps(PET, NOW);
         order.verify(branches).findBranch(BRANCH);
         verify(scope, never()).check(any());
 
@@ -173,6 +176,28 @@ class AppointmentBookingServiceTest {
     }
 
     @Test
+    void followUpFailureAfterTheInsertPropagatesSoTheWholeBookingRollsBack() {
+        asCustomer();
+        givenBookable(pet(CUSTOMER_ID, null), ServiceGroup.MEDICAL, BranchStatus.ACTIVE);
+        doThrow(new IllegalStateException("boom")).when(followUps).cancelPendingFollowUps(PET, NOW);
+
+        assertThatThrownBy(() -> service.bookAppointment(request(DAY, START, null)))
+                .isInstanceOf(IllegalStateException.class).hasMessage("boom");
+    }
+
+    @Test
+    void rejectedBookingNeverTouchesFollowUps() {
+        asCustomer();
+        givenBookable(pet(CUSTOMER_ID, null), ServiceGroup.MEDICAL, BranchStatus.ACTIVE);
+        when(branches.quotaFor(any(), any(), any(), any())).thenReturn(0);
+
+        assertThatThrownBy(() -> service.bookAppointment(request(DAY, START, null)))
+                .isInstanceOf(BusinessRuleViolationException.class).hasMessageContaining("BR-LH-03");
+        verify(appointments, never()).saveAndFlush(any());
+        verifyNoInteractions(followUps);
+    }
+
+    @Test
     void receptionistBooksAtCounterForThePetsCurrentOwnerIgnoringCustomerOnlyRules() {
         asReceptionist();
         givenBookable(pet(OTHER_CUSTOMER, null), ServiceGroup.GROOMING, BranchStatus.ACTIVE);
@@ -190,6 +215,7 @@ class AppointmentBookingServiceTest {
         order.verify(branchLocks).lockForBooking(BRANCH);
         verify(customers, never()).findCustomerIdByAccountId(anyLong());
         verifyNoInteractions(restrictions);
+        verifyNoInteractions(followUps); // Thẩm mỹ: không hủy nhắc tái khám (BR-TB-06 chỉ nhóm Khám/Tiêm)
         Appointment saved = savedAppointment();
         assertThat(saved.getCustomerId()).isEqualTo(OTHER_CUSTOMER);
         assertThat(saved.getChannel()).isEqualTo(AppointmentChannel.COUNTER);

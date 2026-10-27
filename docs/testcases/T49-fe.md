@@ -148,13 +148,20 @@ Chi tiết từng bước (kỳ vọng · thực tế · request / response · p
 
 **Dữ liệu để lại trong DB tạm `petcare_seed`** (chỉ DB này): 2 dòng phác đồ mèo; 4 chuồng (N-01, N-02, M-01, L-01); 16 nhân viên thử (`thu.nguyen@`, `qa.nv01…15@petcare.local`, CARETAKER); khách `khach.thu@petcare.local` (thú Kem; lịch 0006 `BOOKED` 29/10); lượt 14, 15, 16 `COMPLETED`, lượt 9 `CANCELLED`; Order 15, 16 `PAID`; phiếu thu PT-2610-00002/3; ca thu ngân 2 `RECONCILED`; đặt chỗ LT-2610-00001 `CANCELLED`; kho Felocell 19, Vanguard 29, Amoxicillin AMX2405 190.
 
+## C.5 Sau khi merge `origin/dev` (28/10/2026): Care Task thật
+
+Merge `origin/dev` (T39 của BE-1: Care Task, ST04, ST18, ST19, `FollowUpApi`, `V22`, `V23`, ADR 0079–0084; 3 commit, 116 file, **không file FE**). Kiểm trên cây đã gộp: BE `mvn test` **5320 / 5320, BUILD SUCCESS**; FE tsc / lint sạch; `V22`, `V23` áp dụng thành công trên DB `petcare_seed` đã có dữ liệu thử.
+- **Care Task đã có ở BE** (care-v1 #1–4): RECEPTIONIST 200, BRANCH_MANAGER và VET **403** (đúng thiết kế: chỉ lễ tân, chi nhánh của mình). Kiểu dữ liệu FE T47 khớp DTO BE (20 trường, enum, giới hạn 2000 / 300).
+- **Tạo dữ liệu bằng nghiệp vụ thật:** check-in cấp cứu Miu (khách Lê Thị Hoa, **không có email**) → gán VET → gọi → ghi bệnh án có `followUpDate` 02/11 → hoàn tất → job ST04 (`FollowUpReminderJob`, cron `30 * * * * *` đặt qua biến môi trường để chạy mỗi phút; mặc định 07–20h) sinh Care Task `FOLLOW_UP_DUE` (khách có email / tài khoản thì job gửi thông báo, không sinh task). Cửa sổ nhắc là `reminder.follow_up_days_before` (mặc định 3 ngày, [CFG] 1–14; đã tạm nâng lên 7 rồi khôi phục).
+- **FE ↔ BE thật:** `/admin/care-tasks` hiện đúng hàng (hạn, khách + SĐT, loại "Tái khám", thú, ngữ cảnh, "Đang chờ"), không 4xx; "Đã gọi" → chọn kết quả + ghi chú → `POST /api/care-tasks/1/complete` 200, danh sách làm mới.
+- **Chưa chạy thật:** hủy Care Task (`/cancel`), `VACCINE_DUE` / `VACCINE_OVERDUE` (ST04 tái chủng, ST18: cần mũi tiêm tới hạn / quá hạn), `PICKUP_OVERDUE` (chờ ST15, T43), hủy tự động khi thú mất / chuyển chủ (ST19).
+
 ## D. Màn hình còn bị BE chặn (tiêu chí "tắt mock, mọi màn gọi API thật" **chưa đạt**)
 
 | Màn / luồng | Bị chặn bởi | Hiện tượng với BE thật |
 |---|---|---|
 | `/admin/reports`, thẻ "Đã thu hôm nay" ở dashboard | module `report` (**T44**, BE-2) | trang báo "Không tìm thấy đường dẫn yêu cầu" (404); thẻ hiện "–" |
 | Nhận / trả thú, nhật ký chăm sóc, hủy phiên trả thú (`/admin/boarding`) | boarding #13–22, sales #9 (**T42, T43**) | 404 ở các nút nhận / trả / nhật ký; `activeOrderId` null |
-| `/admin/care-tasks` | Care Task care-v1 #1–4 (**T39**) | 404 |
 | Cài đặt thông báo của khách | care-v1 #9–10 (**D025**) | 404 |
 | Tab "Hồ sơ sức khỏe" của thú | visit-v1 #21 (**T28b**) | 404 "Không tìm thấy đường dẫn yêu cầu" trong tab |
 | Chuyển dòng đơn sang mua ngoài ở thu ngân | sales #11 (**BE-2 nối `PrescriptionApi`**) | 404 |

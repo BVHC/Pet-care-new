@@ -1,6 +1,7 @@
 package com.petcare.module.visit.service;
 
 import java.time.LocalDate;
+import java.util.Collection;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
@@ -15,6 +16,7 @@ import com.petcare.module.customer.api.PetQueryApi;
 import com.petcare.module.customer.api.PetQueryApi.PetSummary;
 import com.petcare.module.visit.api.VaccinationQueryApi;
 import com.petcare.module.visit.repository.VaccinationRepository;
+import com.petcare.module.visit.repository.VaccinationRepository.DoseType;
 import com.petcare.module.visit.repository.VaccinationRepository.LatestDose;
 
 /**
@@ -62,6 +64,16 @@ public class VaccinationQueryService implements VaccinationQueryApi {
     public boolean existsByVaccineType(Long vaccineTypeId) {
         Objects.requireNonNull(vaccineTypeId, "vaccineTypeId");
         return vaccinations.existsByVaccineTypeId(vaccineTypeId);
+    }
+
+    @Override
+    public Map<Long, Long> findVaccineTypeIds(Collection<Long> vaccinationIds) {
+        Objects.requireNonNull(vaccinationIds, "vaccinationIds");
+        if (vaccinationIds.isEmpty()) {
+            return Map.of();
+        }
+        return vaccinations.findVaccineTypeIds(vaccinationIds).stream()
+                .collect(Collectors.toMap(DoseType::getId, DoseType::getVaccineTypeId));
     }
 
     private static BoardingVaccineGap gapOf(Long typeId, LatestDose dose, LocalDate onDate) {

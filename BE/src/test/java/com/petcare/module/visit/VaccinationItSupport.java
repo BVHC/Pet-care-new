@@ -202,11 +202,15 @@ final class VaccinationItSupport {
      * Xóa ở {@link #deleteDosesOfPet}.
      */
     long careTask(long vaccinationId, long petId, String taskType, String status) {
+        // V22 (docs/adr/0081): DONE có ghi chú + người xử lý + giờ; CANCELLED có lý do + giờ (người xử lý NULL = hệ thống)
         return jdbc.queryForObject("""
-                INSERT INTO care_tasks (branch_id, customer_id, pet_id, task_type, vaccination_id, due_date, status, result)
-                SELECT v.branch_id, p.customer_id, p.id, ?, ?, now()::date, ?, CASE WHEN ? = 'DONE' THEN 'REACHED' END
+                INSERT INTO care_tasks (branch_id, customer_id, pet_id, task_type, vaccination_id, due_date, status, result,
+                                        note, cancel_reason, handled_by, handled_at)
+                SELECT v.branch_id, p.customer_id, p.id, ?, ?, now()::date, ?, CASE WHEN ? = 'DONE' THEN 'REACHED' END,
+                       CASE WHEN ? = 'DONE' THEN 'đã gọi' END, CASE WHEN ? = 'CANCELLED' THEN 'hủy trong IT' END,
+                       CASE WHEN ? = 'DONE' THEN v.recorded_by END, CASE WHEN ? <> 'OPEN' THEN now() END
                 FROM vaccinations v JOIN pets p ON p.id = v.pet_id WHERE v.id = ? AND p.id = ? RETURNING id""", Long.class,
-                taskType, vaccinationId, status, status, vaccinationId, petId);
+                taskType, vaccinationId, status, status, status, status, status, status, vaccinationId, petId);
     }
 
     /**

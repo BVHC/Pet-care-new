@@ -1060,6 +1060,8 @@ Domain model gộp "bản bổ sung" vào CareLog; tách thành bảng con để
 - `UNIQUE (boarding_booking_id) WHERE task_type = 'PICKUP_OVERDUE'` [ERD]
 - Index: `(branch_id, status, due_date)` — danh sách việc của lễ tân
 - Index: `(handled_by) WHERE handled_by IS NOT NULL` — kiểm FK khi xóa `accounts` (V7, ADR-0018)
+- Index: `(vaccination_id) WHERE vaccination_id IS NOT NULL`, `(medical_record_id) WHERE medical_record_id IS NOT NULL` — hủy task hệ thống, kiểm FK khi xóa mũi (V22, ADR-0081)
+- `CHECK` trạng thái ↔ cột xử lý (V22, ADR-0081): `OPEN` không `note / cancel_reason / handled_by / handled_at`; `DONE` có `note, handled_by, handled_at`, không `cancel_reason`; `CANCELLED` có `cancel_reason, handled_at` (`handled_by` NULL = hệ thống hủy)
 
 ### `notifications` — ROOT
 
@@ -1135,7 +1137,7 @@ Tổng: 55 bảng = 52 model + 3 bảng con tách ra (`care_log_addenda`, `stock
 
 ## 13. Nhật ký quyết định
 
-Mục 1–4: các câu hỏi mở của bản v14, chốt ở v15. Mục 5: thay đổi ở v16. Mục 6–10: quyết định khi viết migration `V1__init_schema.sql` (2026-10-03). Mục 11: worker ST20 (2026-10-07). Mục 12: ST02 (2026-10-07). Mục 13: ST20 kênh IN_APP (2026-10-07). Mục 15: OTP liên kết hồ sơ (2026-10-09). Mục 16: sổ địa chỉ (2026-10-10). Mục 17–19: index và mã chứng từ của BE-2 (T17–T19, 2026-10-16/17). Mục 20: mã lịch hẹn (2026-10-15). Mục 21: xóa dòng đơn thuốc (2026-10-26).
+Mục 1–4: các câu hỏi mở của bản v14, chốt ở v15. Mục 5: thay đổi ở v16. Mục 6–10: quyết định khi viết migration `V1__init_schema.sql` (2026-10-03). Mục 11: worker ST20 (2026-10-07). Mục 12: ST02 (2026-10-07). Mục 13: ST20 kênh IN_APP (2026-10-07). Mục 15: OTP liên kết hồ sơ (2026-10-09). Mục 16: sổ địa chỉ (2026-10-10). Mục 17–19: index và mã chứng từ của BE-2 (T17–T19, 2026-10-16/17). Mục 20: mã lịch hẹn (2026-10-15). Mục 21: xóa dòng đơn thuốc (2026-10-26). Mục 22: ràng buộc `care_tasks` (2026-10-27).
 
 | # | Vấn đề | Quyết định | Ảnh hưởng tới bảng |
 |---|---|---|---|
@@ -1160,3 +1162,4 @@ Mục 1–4: các câu hỏi mở của bản v14, chốt ở v15. Mục 5: thay
 | 19 | Index `order_lines (order_id)` (T19, ADR-0044) | V1 không có index cho `order_lines.order_id`: mọi thao tác trên dòng của một Order, tính lại tổng tiền và kiểm FK khi xóa Order đều quét cả bảng | `V15__order_lines_index.sql`: `ix_order_lines_order_id` |
 | 20 | Mã chứng từ của lịch hẹn (`appointments.code`, BR-LH-06 giữ mã khi đổi khung) | §0 chỉ có ví dụ `LH-260115-0007`, không nói cách sinh. Chốt sequence toàn cục: mã = `LH-` + `yyMMdd` (ngày đặt, giờ Việt Nam) + `-` + số của sequence (≥ 4 chữ số, đệm 0). Duy nhất theo cấu tạo, không cần khóa; không reset theo ngày; nhảy cóc khi rollback — chấp nhận vì lịch hẹn không yêu cầu số liên tục (khác phiếu nhập BR-KO-03). `MAXVALUE 9999999999` giữ mã ≤ 20 ký tự, `NO CYCLE` (hết số → lỗi, không trùng) (ADR-0045) | V16 (ban đầu V13, đổi số 2026-10-19 khi sửa rebase vì trùng `V13__pet_customer_fk_indexes.sql`): `appointment_code_seq AS BIGINT MAXVALUE 9999999999 NO CYCLE` |
 | 21 | Xóa dòng đơn thuốc (`prescription_items`, visit-v1 #17, BR-KB-03) | §0 chưa liệt kê BR-KB-03 trong các trường hợp xóa cứng, dù BR-BH-02 cho người thêm xóa dòng khi Order `OPEN` và contract #17 có sẵn. Bảng không có cột trạng thái và không bảng nào có FK trỏ tới `prescription_items`. Chốt **xóa cứng**, thêm BR-KB-03 vào §0 (tiền lệ mục 16); ứng dụng xóa dòng đơn trước dòng Order `DRUG` trong cùng transaction vì `order_line_id` là FK `RESTRICT` (ADR-0078). Bệnh án không bị xóa kèm | Không đổi schema (không migration) |
+| 22 | Ràng buộc `care_tasks` (nợ D049, T39 phần 2) | Hai câu hủy hệ thống và câu kiểm FK khi xóa mũi ghi nhầm (BR-KB-04) quét bảng (index V1 partial theo `task_type`); DB chưa giữ cột xử lý theo trạng thái (BR-TB-05). Thêm 2 index partial `IS NOT NULL` không lọc trạng thái và 3 CHECK (ADR-0081). Cùng migration seed 4 mẫu nhắc ST04 | `care_tasks`: `ix_care_tasks_vaccination_id`, `ix_care_tasks_medical_record_id`, `ck_care_tasks_open_unhandled`, `ck_care_tasks_done_handled`, `ck_care_tasks_cancelled_reason` (V22) |

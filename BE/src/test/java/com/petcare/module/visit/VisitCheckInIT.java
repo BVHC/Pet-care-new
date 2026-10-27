@@ -6,6 +6,7 @@ import static org.mockito.Mockito.when;
 
 import java.net.URI;
 import java.sql.Timestamp;
+import java.time.Duration;
 import java.time.Instant;
 import java.time.LocalDate;
 import java.time.LocalTime;
@@ -137,6 +138,7 @@ class VisitCheckInIT {
 
     @AfterEach
     void tearDown() {
+        FollowUpItSupport.cleanUp(jdbc, pet);
         for (long b : branches) {
             jdbc.update("""
                     DELETE FROM order_lines WHERE order_id IN (
@@ -202,6 +204,29 @@ class VisitCheckInIT {
         assertThat(after.petXmin()).as("chỉ khóa, không ghi pets").isEqualTo(before.petXmin());
         assertThat(after.branchXmin()).as("không ghi branches").isEqualTo(before.branchXmin());
         assertInvariants();
+    }
+
+    /** D029 (BR-TB-06, Care Task#6, docs/adr/0084): dịch vụ tự sinh loại Khám hủy nhắc tái khám; Thẩm mỹ thì không. */
+    @Test
+    void checkInWithAnExamServiceCancelsPendingFollowUpsButGroomingDoesNot() {
+        Instant past = T0.minus(Duration.ofDays(40));
+        long pending = FollowUpItSupport.record(jdbc, branch, customer, pet, receptionist, past, TODAY.plusDays(20),
+                true, false);
+        long reminded = FollowUpItSupport.record(jdbc, branch, customer, pet, receptionist, past, TODAY.plusDays(2),
+                true, true);
+        long openTask = FollowUpItSupport.task(jdbc, "FOLLOW_UP_DUE", reminded, branch, customer, pet, "OPEN",
+                receptionist);
+
+        data(post(token, body(pet, null, grooming, null)), HttpStatus.CREATED);
+
+        assertThat(FollowUpItSupport.cancelledAt(jdbc, pending)).as("Thẩm mỹ không hủy nhắc").isNull();
+        assertThat(FollowUpItSupport.taskStatus(jdbc, openTask)).isEqualTo("OPEN");
+
+        data(post(token, body(pet, appointment, null, null)), HttpStatus.CREATED);
+
+        assertThat(FollowUpItSupport.cancelledAt(jdbc, pending)).as("nhắc chờ gửi bị hủy").isEqualTo(T0);
+        assertThat(FollowUpItSupport.cancelledAt(jdbc, reminded)).as("đã nhắc rồi: chỉ hủy task").isNull();
+        assertThat(FollowUpItSupport.taskStatus(jdbc, openTask)).isEqualTo("CANCELLED");
     }
 
     @Test

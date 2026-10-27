@@ -1,6 +1,7 @@
 package com.petcare.module.care.service;
 
 import java.time.Clock;
+import java.time.Instant;
 import java.util.Collection;
 
 import org.springframework.stereotype.Service;
@@ -8,31 +9,59 @@ import org.springframework.transaction.annotation.Propagation;
 import org.springframework.transaction.annotation.Transactional;
 
 import com.petcare.module.care.api.CareTaskApi;
-import com.petcare.module.care.repository.CareTaskWriteRepository;
+import com.petcare.module.care.entity.CareTask;
+import com.petcare.module.care.entity.CareTaskStatus;
+import com.petcare.module.care.fsm.CareTaskTransitionHandler;
+import com.petcare.module.care.repository.CareTaskRepository;
 
 /**
- * {@link CareTaskApi} <b>một phần</b> (docs/adr/0074, nợ D047): chỉ {@link #cancelForRevaccination} (Care Task#5) có thật
- * vì ghi mũi tiêm (#19) cần; {@code create} và {@code cancelFollowUpTasks} ném {@link UnsupportedOperationException}
- * tới T39 (không trả "mặc định an toàn", CLAUDE.md *Unbuilt interface*). Mọi method {@code MANDATORY}.
+ * {@link CareTaskApi} (docs/adr/0079, trả D047). Mọi method {@code MANDATORY}: chạy trong transaction của bên gọi (visit
+ * ghi mũi tiêm, ST04 / ST18, boarding ST15, {@code FollowUpApi}), không {@code catch}, không audit, không outbox. Care
+ * không đọc bảng của module khác nên không kiểm thú, chủ, email, SĐT hay chi nhánh phụ trách: đó là nghĩa vụ bên gọi
+ * (javadoc {@link CareTaskApi#create}).
  */
 @Service
 public class CareTaskService implements CareTaskApi {
 
-    /** Lý do hủy do hệ thống đặt (03 Care Task#5 không quy định chữ); T39 xem lại (D047). */
+    /** Lý do hủy do hệ thống đặt (03 Care Task#5 không quy định chữ). Giữ nguyên chữ của ADR-0074. */
     static final String REVACCINATED_REASON = "Đã tiêm lại (BR-TB-03)";
 
-    private final CareTaskWriteRepository tasks;
+    /** Care Task#6. */
+    static final String FOLLOW_UP_CANCELLED_REASON = "Đã có lịch khám / lượt khám mới (BR-TB-06)";
+
+    /** Care Task#4 (ST19). */
+    static final String PET_DECEASED_REASON = "Thú cưng đã mất (BR-KH-05)";
+
+    private final CareTaskRepository tasks;
+    private final CareTaskTransitionHandler fsm;
     private final Clock clock;
 
-    public CareTaskService(CareTaskWriteRepository tasks, Clock clock) {
+    public CareTaskService(CareTaskRepository tasks, CareTaskTransitionHandler fsm, Clock clock) {
         this.tasks = tasks;
+        this.fsm = fsm;
         this.clock = clock;
     }
 
     @Override
     @Transactional(propagation = Propagation.MANDATORY)
     public Long create(NewCareTask task) {
-        throw new UnsupportedOperationException("CareTaskApi.create chưa cài (T39, D047)");
+        CareTask entity = CareTask.open(task);
+        fsm.validateInitial(CareTaskStatus.OPEN);
+        return switch (entity.getTaskType()) {
+            case VACCINE_DUE, FOLLOW_UP_DUE -> tasks.saveAndFlush(entity).getId();
+            case VACCINE_OVERDUE -> {
+                tasks.insertVaccineOverdueIfAbsent(entity.getBranchId(), entity.getCustomerId(), entity.getPetId(),
+                        entity.getVaccinationId(), entity.getDueDate(), clock.instant());
+                yield tasks.findVaccineOverdueId(entity.getVaccinationId())
+                        .orElseThrow(() -> missingAfterInsert(entity));
+            }
+            case PICKUP_OVERDUE -> {
+                tasks.insertPickupOverdueIfAbsent(entity.getBranchId(), entity.getCustomerId(), entity.getPetId(),
+                        entity.getBoardingBookingId(), entity.getDueDate(), clock.instant());
+                yield tasks.findPickupOverdueId(entity.getBoardingBookingId())
+                        .orElseThrow(() -> missingAfterInsert(entity));
+            }
+        };
     }
 
     @Override
@@ -41,12 +70,44 @@ public class CareTaskService implements CareTaskApi {
         if (supersededVaccinationIds.isEmpty()) {
             return;
         }
-        tasks.cancelOpenVaccineTasks(supersededVaccinationIds, REVACCINATED_REASON, clock.instant());
+        Instant now = clock.instant();
+        tasks.cancelOpenVaccineTasks(supersededVaccinationIds, REVACCINATED_REASON, now);
     }
 
     @Override
     @Transactional(propagation = Propagation.MANDATORY)
     public void cancelFollowUpTasks(Collection<Long> medicalRecordVisitIds) {
-        throw new UnsupportedOperationException("CareTaskApi.cancelFollowUpTasks chưa cài (T39, D047)");
+        if (medicalRecordVisitIds.isEmpty()) {
+            return;
+        }
+        Instant now = clock.instant();
+        tasks.cancelOpenFollowUpTasks(medicalRecordVisitIds, FOLLOW_UP_CANCELLED_REASON, now);
+    }
+
+    /**
+     * Care Task#4 (ST19, docs/adr/0084): thú đã mất → mọi task {@code OPEN} của thú → {@code CANCELLED}. Chỉ
+     * {@code CarePetDeceasedListener} gọi, trong transaction của customer.
+     */
+    @Transactional(propagation = Propagation.MANDATORY)
+    public void cancelOpenTasksOfDeceasedPet(long petId) {
+        tasks.cancelOpenTasksOfPet(petId, PET_DECEASED_REASON, clock.instant());
+    }
+
+    /**
+     * Chuyển chủ (06 §8 Q1, docs/adr/0084): task {@code OPEN} của thú sang chủ mới. Chỉ
+     * {@code CarePetOwnerTransferredListener} gọi, trong transaction của customer.
+     */
+    @Transactional(propagation = Propagation.MANDATORY)
+    public void moveOpenTasksToOwner(long petId, long newCustomerId) {
+        tasks.moveOpenTasksToCustomer(petId, newCustomerId, clock.instant());
+    }
+
+    /**
+     * {@code ON CONFLICT DO NOTHING} không chèn mà SELECT cũng không thấy: chỉ xảy ra khi bên gọi chạy REPEATABLE READ
+     * (không thấy dòng do transaction khác vừa commit) — vi phạm nghĩa vụ ở {@link CareTaskApi#create}.
+     */
+    private static IllegalStateException missingAfterInsert(CareTask task) {
+        return new IllegalStateException("Care Task " + task.getTaskType() + " không chèn được mà cũng không thấy dòng "
+                + "đã có (bên gọi phải chạy READ COMMITTED)");
     }
 }
