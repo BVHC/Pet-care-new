@@ -1,6 +1,9 @@
 package com.petcare.module.visit.service;
 
-/** Kết quả xử lý một bản ghi của ST04 (docs/adr/0082); dùng chung cho nhắc tái chủng và nhắc tái khám. */
+/**
+ * Kết quả xử lý một bản ghi của ST04 (docs/adr/0082) và ST18 quá hạn tái chủng (docs/adr/0083, không bao giờ trả
+ * {@link #REMINDED}); dùng chung cho nhắc tái chủng, nhắc tái khám và sinh task quá hạn.
+ */
 public enum ReminderResult {
     /** Đã đặt cờ "đã nhắc" và ghi outbox (email và / hoặc trong app). */
     REMINDED,

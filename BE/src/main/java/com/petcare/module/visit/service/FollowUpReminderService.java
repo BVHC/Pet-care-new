@@ -39,8 +39,9 @@ import com.petcare.module.visit.repository.MedicalRecordRepository.DueFollowUp;
  * command {@code remindFollowUp}). Chỉ {@code visit/job/FollowUpReminderJob} gọi. Cùng khuôn, cùng thứ tự khóa và cùng
  * bảo đảm retry với {@link VaccineReminderService}; khác ở nguồn ({@code medical_records}, khóa theo {@code visit_id}),
  * cờ ({@code follow_up_reminded_at}; thú đã mất đặt {@code follow_up_cancelled_at} đúng nghĩa "nhắc bị hủy", BR-TB-06) và
- * Care Task ({@code FOLLOW_UP_DUE}, {@code sourceId} = id lượt, chi nhánh của lượt có hẹn). Chưa hủy nhắc khi thú đã đặt
- * lịch Khám/Tiêm (cần {@code FollowUpApi}, nợ D029).
+ * Care Task ({@code FOLLOW_UP_DUE}, {@code sourceId} = id lượt, chi nhánh của lượt có hẹn). Nhắc bị hủy khi thú đã đặt
+ * lịch Khám / có Visit Khám mới do {@link FollowUpCancellationService} (docs/adr/0084), cùng khóa dòng bệnh án nên ST04
+ * không gửi chen vào.
  */
 @Service
 public class FollowUpReminderService {

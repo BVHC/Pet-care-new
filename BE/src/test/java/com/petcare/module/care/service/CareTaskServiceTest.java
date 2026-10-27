@@ -147,12 +147,30 @@ class CareTaskServiceTest {
     }
 
     @Test
+    void deceasedPetCancelsEveryOpenTaskOfThePetWithTheSystemReasonAtTheClockTime() {
+        service.cancelOpenTasksOfDeceasedPet(33L);
+
+        verify(tasks).cancelOpenTasksOfPet(33L, CareTaskService.PET_DECEASED_REASON, NOW);
+        verifyNoMoreInteractions(tasks);
+    }
+
+    @Test
+    void ownerTransferMovesOpenTasksToTheNewOwnerAtTheClockTime() {
+        service.moveOpenTasksToOwner(33L, 44L);
+
+        verify(tasks).moveOpenTasksToCustomer(33L, 44L, NOW);
+        verifyNoMoreInteractions(tasks);
+    }
+
+    @Test
     void theSystemReasonsAreTheAgreedTextAndFitTheColumn() {
         assertThat(CareTaskService.REVACCINATED_REASON).isEqualTo("Đã tiêm lại (BR-TB-03)");
         assertThat(CareTaskService.FOLLOW_UP_CANCELLED_REASON).isEqualTo("Đã có lịch khám / lượt khám mới (BR-TB-06)");
+        assertThat(CareTaskService.PET_DECEASED_REASON).isEqualTo("Thú cưng đã mất (BR-KH-05)");
         assertThat(CareTaskService.REVACCINATED_REASON.length()).isLessThanOrEqualTo(CareTask.CANCEL_REASON_MAX_LENGTH);
         assertThat(CareTaskService.FOLLOW_UP_CANCELLED_REASON.length())
                 .isLessThanOrEqualTo(CareTask.CANCEL_REASON_MAX_LENGTH);
+        assertThat(CareTaskService.PET_DECEASED_REASON.length()).isLessThanOrEqualTo(CareTask.CANCEL_REASON_MAX_LENGTH);
     }
 
     // ---------------------------------------------------------------- transaction
@@ -162,7 +180,9 @@ class CareTaskServiceTest {
         for (Method method : new Method[] {
                 CareTaskService.class.getMethod("create", NewCareTask.class),
                 CareTaskService.class.getMethod("cancelForRevaccination", java.util.Collection.class),
-                CareTaskService.class.getMethod("cancelFollowUpTasks", java.util.Collection.class)}) {
+                CareTaskService.class.getMethod("cancelFollowUpTasks", java.util.Collection.class),
+                CareTaskService.class.getMethod("cancelOpenTasksOfDeceasedPet", long.class),
+                CareTaskService.class.getMethod("moveOpenTasksToOwner", long.class, long.class)}) {
             Transactional transactional = method.getAnnotation(Transactional.class);
             assertThat(transactional).as(method.getName()).isNotNull();
             assertThat(transactional.propagation()).as(method.getName()).isEqualTo(Propagation.MANDATORY);

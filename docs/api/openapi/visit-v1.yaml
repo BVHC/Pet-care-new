@@ -29,7 +29,7 @@ paths:
     post:
       tags: [Queue]
       summary: "Tiếp nhận (check-in lịch hẹn / walk-in / cấp cứu)"
-      description: "UC44, UC47 · BR-TN-01…04, BR-CN-05, BR-LH-01, BR-KH-05. Actor: A06. Quyền: Lễ tân; chi nhánh của lễ tân. Chuyển trạng thái: — → WAITING (Visit#1) · Lịch hẹn#3 · Order#1 (OPEN + dòng dịch vụ tự sinh) · có dịch vụ Khám → Care Task#6. Trễ quá `visit.late_priority_minutes` (15 phút) [CFG] xếp như walk-in. A9, A10, A11, A12. Thứ tự lỗi: 404 → 400 → 409 (docs/adr/0059). Có dịch vụ Khám: Care Task#6 chưa nối, nối khi visit cài FollowUpApi. Khách mang nhiều thú thì tạo nhiều Visit."
+      description: "UC44, UC47 · BR-TN-01…04, BR-CN-05, BR-LH-01, BR-KH-05. Actor: A06. Quyền: Lễ tân; chi nhánh của lễ tân. Chuyển trạng thái: — → WAITING (Visit#1) · Lịch hẹn#3 · Order#1 (OPEN + dòng dịch vụ tự sinh) · có dịch vụ Khám → Care Task#6. Trễ quá `visit.late_priority_minutes` (15 phút) [CFG] xếp như walk-in. A9, A10, A11, A12. Thứ tự lỗi: 404 → 400 → 409 (docs/adr/0059). Có dịch vụ Khám: hủy nhắc tái khám đang chờ của thú và Care Task tái khám tương ứng (BR-TB-06, docs/adr/0084). Khách mang nhiều thú thì tạo nhiều Visit."
       operationId: checkInVisit
       security:
         - bearerAuth: []

@@ -199,6 +199,62 @@ public interface VaccinationRepository extends JpaRepository<Vaccination, Long> 
             """, nativeQuery = true)
     int markDueReminded(@Param("id") long id, @Param("at") Instant at);
 
+    /**
+     * ST18 quá hạn tái chủng (BR-TB-04, docs/adr/0083): id mũi chưa thay thế, chưa xét quá hạn, của lượt {@code COMPLETED}
+     * (nghĩa vụ ADR-0075) và có {@code next_due_date <= cutoff}, theo ngày đến hạn rồi id. Không khóa;
+     * {@link #lockOverdue} kiểm lại dưới khóa. Đi {@code ix_vaccinations_overdue_scan}.
+     */
+    @Query(value = """
+            SELECT v.id FROM vaccinations v JOIN visits vi ON vi.id = v.visit_id
+            WHERE v.superseded_at IS NULL AND v.overdue_handled_at IS NULL AND vi.status = 'COMPLETED'
+              AND v.next_due_date <= :cutoff
+            ORDER BY v.next_due_date, v.id LIMIT :limit
+            """, nativeQuery = true)
+    List<Long> findOverdueIds(@Param("cutoff") LocalDate cutoff, @Param("limit") int limit);
+
+    /**
+     * Lô kế tiếp của {@link #findOverdueIds}: keyset {@code (next_due_date, id)} lớn hơn của mũi {@code afterId}. Cận dưới
+     * {@code next_due_date >= …} là thừa về ngữ nghĩa nhưng bắt buộc cho planner: thiếu nó, Postgres chỉ rút được khoảng
+     * hai đầu cho {@code ix_vaccinations_next_due} và chọn index đó (đọc cả mũi đã xét); có nó, hai index cùng ước lượng
+     * và {@code ix_vaccinations_overdue_scan} thắng (ReminderScanIndexIT, cả generic plan).
+     */
+    @Query(value = """
+            SELECT v.id FROM vaccinations v JOIN visits vi ON vi.id = v.visit_id
+            WHERE v.superseded_at IS NULL AND v.overdue_handled_at IS NULL AND vi.status = 'COMPLETED'
+              AND v.next_due_date <= :cutoff
+              AND v.next_due_date >= (SELECT p.next_due_date FROM vaccinations p WHERE p.id = :afterId)
+              AND (v.next_due_date, v.id) > (SELECT p.next_due_date, p.id FROM vaccinations p WHERE p.id = :afterId)
+            ORDER BY v.next_due_date, v.id LIMIT :limit
+            """, nativeQuery = true)
+    List<Long> findOverdueIdsAfter(@Param("cutoff") LocalDate cutoff, @Param("afterId") long afterId,
+            @Param("limit") int limit);
+
+    /**
+     * Khóa dòng ({@code FOR NO KEY UPDATE SKIP LOCKED}) nếu mũi <b>vẫn</b> đến hạn xét quá hạn: một lượt ST18 khác hoặc
+     * #19 (tiêm lại) có thể đã commit sau khi quét. Dòng đang bị luồng khác giữ thì bỏ qua (ST18 không bao giờ chờ khóa
+     * dòng). {@code OF v}: không khóa {@code visits}. {@code MANDATORY}: ngoài transaction khóa nhả ngay.
+     */
+    @Transactional(propagation = Propagation.MANDATORY)
+    @Query(value = """
+            SELECT v.id FROM vaccinations v JOIN visits vi ON vi.id = v.visit_id
+            WHERE v.id = :id AND v.superseded_at IS NULL AND v.overdue_handled_at IS NULL AND vi.status = 'COMPLETED'
+              AND v.next_due_date <= :cutoff
+            FOR NO KEY UPDATE OF v SKIP LOCKED
+            """, nativeQuery = true)
+    Optional<Long> lockOverdue(@Param("id") long id, @Param("cutoff") LocalDate cutoff);
+
+    /**
+     * Đánh dấu ST18 đã xét (cùng transaction với {@code CareTaskApi.create}). Điều kiện lặp lại để không bao giờ đè luồng
+     * khác; bên gọi đã khóa dòng nên phải trả đúng 1. {@code updated_at} đặt từ {@code Clock} (docs/adr/0015).
+     */
+    @Transactional(propagation = Propagation.MANDATORY)
+    @Modifying(flushAutomatically = true, clearAutomatically = true)
+    @Query(value = """
+            UPDATE vaccinations SET overdue_handled_at = :at, updated_at = :at
+            WHERE id = :id AND overdue_handled_at IS NULL AND superseded_at IS NULL
+            """, nativeQuery = true)
+    int markOverdueHandled(@Param("id") long id, @Param("at") Instant at);
+
     /** Projection của {@link #findDueDose}. */
     interface DueDose {
 

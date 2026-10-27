@@ -200,8 +200,8 @@ class VaccineReminderRaceIT {
 
     /**
      * ST04 giữ thú trước → bên đánh dấu mất chờ tới khi ST04 commit, rồi mới đánh dấu. Task {@code VACCINE_DUE} ST04 vừa sinh
-     * còn {@code OPEN} (ST19 hủy task khi thú mất chưa làm — T39 phần sau), nhưng không bao giờ có task sinh SAU khi thú đã
-     * đánh dấu mất.
+     * còn {@code OPEN} (bên đánh dấu ở đây là SQL thô, không phát {@code PetDeceasedEvent}; ST19 hủy task qua sự kiện được
+     * chứng minh ở {@code CarePetLifecycleIT}, docs/adr/0084), nhưng không bao giờ có task sinh SAU khi thú đã đánh dấu mất.
      */
     @Test
     void markingAPetDeceasedWaitsForSt04ThatAlreadyHoldsThePet() throws Exception {

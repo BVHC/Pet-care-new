@@ -95,6 +95,32 @@ public interface MedicalRecordRepository extends JpaRepository<MedicalRecord, Lo
             """, nativeQuery = true)
     int markFollowUpCancelled(@Param("visitId") long visitId, @Param("at") Instant at);
 
+    /**
+     * Care Task#6 / thú mất (docs/adr/0084): hủy nhắc tái khám còn chờ của <b>mọi</b> bệnh án đã khóa của thú trong một
+     * câu. Cùng điều kiện với {@link #markFollowUpCancelled}. READ COMMITTED: dòng đang bị ST04 giữ thì câu này chờ, rồi
+     * kiểm lại điều kiện nên bỏ qua dòng ST04 vừa đánh dấu đã nhắc. Đi {@code ix_visits_pet_checked_in_at} rồi PK.
+     */
+    @Transactional(propagation = Propagation.MANDATORY)
+    @Modifying(flushAutomatically = true, clearAutomatically = true)
+    @Query(value = """
+            UPDATE medical_records m SET follow_up_cancelled_at = :at, updated_at = :at
+            FROM visits v
+            WHERE v.id = m.visit_id AND v.pet_id = :petId AND m.follow_up_date IS NOT NULL
+              AND m.follow_up_reminded_at IS NULL AND m.follow_up_cancelled_at IS NULL AND m.locked_at IS NOT NULL
+            """, nativeQuery = true)
+    int cancelPendingFollowUpsOfPet(@Param("petId") long petId, @Param("at") Instant at);
+
+    /**
+     * Id (= id lượt) các bệnh án đã khóa của thú mà ST04 <b>đã nhắc</b> và chưa bị hủy nhắc: chỉ những bệnh án này mới có
+     * thể có Care Task {@code FOLLOW_UP_DUE}. Đọc sau {@link #cancelPendingFollowUpsOfPet} cùng transaction.
+     */
+    @Query(value = """
+            SELECT m.visit_id FROM medical_records m JOIN visits v ON v.id = m.visit_id
+            WHERE v.pet_id = :petId AND m.follow_up_date IS NOT NULL AND m.follow_up_reminded_at IS NOT NULL
+              AND m.follow_up_cancelled_at IS NULL AND m.locked_at IS NOT NULL
+            """, nativeQuery = true)
+    List<Long> findRemindedFollowUpIdsOfPet(@Param("petId") long petId);
+
     /** Projection của {@link #findDueFollowUp}. */
     interface DueFollowUp {
 

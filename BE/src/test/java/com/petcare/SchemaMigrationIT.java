@@ -140,10 +140,11 @@ class SchemaMigrationIT {
         // V19 index thu ngân + mẫu ST13 CASHIER_SHIFT_AUTO_CLOSED_APP, PENDING_ORDERS_DIGEST_APP (docs/adr/0064),
         // V20 index ST05 lưu trú + mẫu BOARDING_CANCELLED_BY_CLINIC (+_APP) (docs/adr/0065),
         // V21 seed 4 trang tĩnh page_contents (docs/adr/0071),
-        // V22 mẫu nhắc VACCINE_REMINDER, FOLLOW_UP_REMINDER (+_APP) + index / CHECK care_tasks (docs/adr/0081, 0082)
+        // V22 mẫu nhắc VACCINE_REMINDER, FOLLOW_UP_REMINDER (+_APP) + index / CHECK care_tasks (docs/adr/0081, 0082),
+        // V23 cờ ST18 vaccinations.overdue_handled_at + index quét (docs/adr/0083)
         assertThat(rows).extracting(row -> row.get("version"))
                 .containsExactly("1", "2", "3", "4", "5", "6", "7", "8", "9", "10", "11", "12", "13", "14", "15",
-                        "16", "17", "18", "19", "20", "21", "22");
+                        "16", "17", "18", "19", "20", "21", "22", "23");
         assertThat(rows).allSatisfy(row -> assertThat(row).containsEntry("success", true));
     }
 
@@ -377,6 +378,37 @@ class SchemaMigrationIT {
                 .contains("ON public.care_tasks").contains("(medical_record_id)")
                 .contains("WHERE (medical_record_id IS NOT NULL)").doesNotContain("status")
                 .doesNotContain("task_type");
+    }
+
+    /**
+     * V23 (docs/adr/0083): cờ ST18 là {@code timestamptz} cho phép NULL (NULL = chưa xét, không backfill) và index quét
+     * keyset chỉ chứa mũi còn chờ xét.
+     */
+    @Test
+    void vaccinationsHaveTheSt18FlagAndItsScanIndex() {
+        Column flag = column("vaccinations.overdue_handled_at");
+        assertThat(flag.dataType()).isEqualTo("timestamp with time zone");
+        assertThat(jdbc.queryForObject("""
+                SELECT is_nullable FROM information_schema.columns
+                WHERE table_schema = 'public' AND table_name = 'vaccinations' AND column_name = 'overdue_handled_at'
+                """, String.class)).isEqualTo("YES");
+        assertThat(jdbc.queryForList("SELECT indexdef FROM pg_indexes WHERE schemaname = 'public' AND indexname = ?",
+                String.class, "ix_vaccinations_overdue_scan"))
+                .singleElement().asString()
+                .contains("ON public.vaccinations").contains("(next_due_date, id)")
+                .contains("superseded_at IS NULL").contains("overdue_handled_at IS NULL");
+    }
+
+    /**
+     * ST18 và ST04 dựa vào việc lỗi DB nổi ngay ở câu ghi, trước lúc COMMIT (docs/adr/0083 mục RT): schema không có ràng
+     * buộc {@code DEFERRABLE}. Constraint trigger tạm của IT khác (contype {@code t}) không tính.
+     */
+    @Test
+    void noConstraintIsDeferrable() {
+        assertThat(jdbc.queryForList("""
+                SELECT conrelid::regclass || '.' || conname FROM pg_constraint
+                WHERE connamespace = 'public'::regnamespace AND condeferrable AND contype <> 't'
+                """, String.class)).isEmpty();
     }
 
     /** V22 (docs/adr/0081): ba CHECK trạng thái ↔ cột xử lý của {@code care_tasks} có mặt; ca vi phạm ở {@code CareTaskConstraintIT}. */

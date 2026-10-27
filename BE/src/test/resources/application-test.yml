@@ -45,6 +45,8 @@ app:
       cron: "-"
     follow-up-reminder:
       cron: "-"
+    vaccine-overdue:
+      cron: "-"
     cashier-shift-auto-close:
       cron: "-"
     pending-order-digest:

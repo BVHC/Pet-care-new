@@ -29,6 +29,9 @@ public class CareTaskService implements CareTaskApi {
     /** Care Task#6. */
     static final String FOLLOW_UP_CANCELLED_REASON = "Đã có lịch khám / lượt khám mới (BR-TB-06)";
 
+    /** Care Task#4 (ST19). */
+    static final String PET_DECEASED_REASON = "Thú cưng đã mất (BR-KH-05)";
+
     private final CareTaskRepository tasks;
     private final CareTaskTransitionHandler fsm;
     private final Clock clock;
@@ -79,6 +82,24 @@ public class CareTaskService implements CareTaskApi {
         }
         Instant now = clock.instant();
         tasks.cancelOpenFollowUpTasks(medicalRecordVisitIds, FOLLOW_UP_CANCELLED_REASON, now);
+    }
+
+    /**
+     * Care Task#4 (ST19, docs/adr/0084): thú đã mất → mọi task {@code OPEN} của thú → {@code CANCELLED}. Chỉ
+     * {@code CarePetDeceasedListener} gọi, trong transaction của customer.
+     */
+    @Transactional(propagation = Propagation.MANDATORY)
+    public void cancelOpenTasksOfDeceasedPet(long petId) {
+        tasks.cancelOpenTasksOfPet(petId, PET_DECEASED_REASON, clock.instant());
+    }
+
+    /**
+     * Chuyển chủ (06 §8 Q1, docs/adr/0084): task {@code OPEN} của thú sang chủ mới. Chỉ
+     * {@code CarePetOwnerTransferredListener} gọi, trong transaction của customer.
+     */
+    @Transactional(propagation = Propagation.MANDATORY)
+    public void moveOpenTasksToOwner(long petId, long newCustomerId) {
+        tasks.moveOpenTasksToCustomer(petId, newCustomerId, clock.instant());
     }
 
     /**

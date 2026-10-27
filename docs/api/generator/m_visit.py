@@ -177,7 +177,7 @@ m.op("post", "/visits", "checkInVisit", "Tiếp nhận (check-in lịch hẹn / 
      body="CreateVisitRequest", resp="Visit", status=201, errors=(400, 401, 403, 404, 409),
      err_desc={400: "`BR-TN-01` walk-in thiếu dịch vụ / thú không khớp lịch hẹn / thú đã mất · `BR-TN-02` lịch hẹn của chi nhánh khác hoặc ngoài cửa sổ check-in · `BR-CN-01` chi nhánh chưa ACTIVE · `BR-CN-05` ngoài giờ mà chi nhánh không có cờ hoặc chưa đánh dấu cấp cứu · `BR-LH-01` walk-in: dịch vụ đã ngừng, đang tắt tại chi nhánh hoặc không thuộc MEDICAL / GROOMING; có lịch: dịch vụ đã ngừng kinh doanh · body sai (`VALIDATION_FAILED`, `MALFORMED_REQUEST`); BR-TK-17",
                409: "Lịch hẹn không còn BOOKED (đã check-in / NO_SHOW: tiếp nhận như walk-in, BR-TN-03)"},
-     notes="Trễ quá `visit.late_priority_minutes` (15 phút) [CFG] xếp như walk-in. A9, A10, A11, A12. Thứ tự lỗi: 404 → 400 → 409 (docs/adr/0059). Có dịch vụ Khám: Care Task#6 chưa nối, nối khi visit cài FollowUpApi. Khách mang nhiều thú thì tạo nhiều Visit.")
+     notes="Trễ quá `visit.late_priority_minutes` (15 phút) [CFG] xếp như walk-in. A9, A10, A11, A12. Thứ tự lỗi: 404 → 400 → 409 (docs/adr/0059). Có dịch vụ Khám: hủy nhắc tái khám đang chờ của thú và Care Task tái khám tương ứng (BR-TB-06, docs/adr/0084). Khách mang nhiều thú thì tạo nhiều Visit.")
 m.op("get", "/visits", "listQueue", "Hàng đợi của chi nhánh", "Queue", "UC45", "BR-TN-04, 09", "A05, A06, A07, A08",
      "Nhân viên chi nhánh", resp="array:Visit",
      query=["date=date|Ngày check-in (giờ Việt Nam). Không gửi: lượt chưa kết thúc của mọi ngày; với status COMPLETED / CANCELLED là hôm nay (A1)",

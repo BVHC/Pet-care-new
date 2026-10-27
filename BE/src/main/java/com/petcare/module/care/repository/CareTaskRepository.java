@@ -112,4 +112,29 @@ public interface CareTaskRepository extends JpaRepository<CareTask, Long>, JpaSp
             """, nativeQuery = true)
     int cancelOpenFollowUpTasks(@Param("medicalRecordIds") Collection<Long> medicalRecordIds,
             @Param("reason") String reason, @Param("now") Instant now);
+
+    /**
+     * Care Task#4 (ST19): mọi task còn {@code OPEN} của thú đã mất → {@code CANCELLED}, mọi loại. Cùng cách ghi như
+     * {@link #cancelOpenVaccineTasks}; đi {@code ix_care_tasks_pet_id} (V13).
+     */
+    @Transactional(propagation = Propagation.MANDATORY)
+    @Modifying
+    @Query(value = """
+            UPDATE care_tasks SET status = 'CANCELLED', cancel_reason = :reason, handled_at = :now, updated_at = :now
+            WHERE status = 'OPEN' AND pet_id = :petId
+            """, nativeQuery = true)
+    int cancelOpenTasksOfPet(@Param("petId") Long petId, @Param("reason") String reason, @Param("now") Instant now);
+
+    /**
+     * Chuyển chủ (06 §8 Q1): task còn {@code OPEN} của thú đổi {@code customer_id} sang chủ mới; loại, chi nhánh, hạn giữ
+     * nguyên. Task đã đóng giữ chủ lúc đóng.
+     */
+    @Transactional(propagation = Propagation.MANDATORY)
+    @Modifying
+    @Query(value = """
+            UPDATE care_tasks SET customer_id = :customerId, updated_at = :now
+            WHERE status = 'OPEN' AND pet_id = :petId AND customer_id <> :customerId
+            """, nativeQuery = true)
+    int moveOpenTasksToCustomer(@Param("petId") Long petId, @Param("customerId") Long customerId,
+            @Param("now") Instant now);
 }

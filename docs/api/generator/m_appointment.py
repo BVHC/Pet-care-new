@@ -88,8 +88,8 @@ m.op("post", "/appointments", "bookAppointment", "Đặt lịch hẹn", "Appoint
      err_desc={400: BOOK_ERR, 403: "Lễ tân đặt lịch cho chi nhánh khác",
                404: "Thú cưng (kể cả thú của khách khác), dịch vụ hoặc chi nhánh không tồn tại (khách: cả chi nhánh "
                     "chưa hoạt động)"},
-     notes="Khách → channel ONLINE, lễ tân → COUNTER (A2). Nhóm MEDICAL: hủy nhắc tái khám đang chờ của thú (BR-TB-06); "
-           "nối Care Task#6 khi visit cài FollowUpApi (docs/adr/0047).")
+     notes="Khách → channel ONLINE, lễ tân → COUNTER (A2). Nhóm MEDICAL: hủy nhắc tái khám đang chờ của thú và Care Task "
+           "tái khám tương ứng (BR-TB-06, docs/adr/0084).")
 m.op("get", "/appointments", "listAppointments", "Danh sách lịch hẹn", "Appointments", "UC40, UC44", "BR-LH-11, BR-TN-02",
      "A02, A05, A06", "Khách: lịch của mình · nhân viên: chi nhánh mình", resp="Appointment", page=True,
      query=["branchId=int64", "date=date", "from=date", "to=date",

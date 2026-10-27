@@ -15,11 +15,11 @@ import org.springframework.test.context.ActiveProfiles;
 import com.petcare.TestcontainersConfiguration;
 
 /**
- * Khi có cron, ST04 thật sự được đăng ký với scheduler (docs/adr/0082): tên property đúng cho cả hai job. Profile {@code test}
+ * Khi có cron, ST04 và ST18 thật sự được đăng ký với scheduler (docs/adr/0082, 0083): tên property đúng cho cả ba job. Profile {@code test}
  * đặt cron {@code "-"}; ở đây ghi đè bằng biểu thức mặc định của {@code application.yml}.
  */
 @SpringBootTest(properties = {"app.jobs.vaccine-reminder.cron=30 10 7-20 * * *",
-        "app.jobs.follow-up-reminder.cron=30 40 7-20 * * *"})
+        "app.jobs.follow-up-reminder.cron=30 40 7-20 * * *", "app.jobs.vaccine-overdue.cron=30 25 7-20 * * *"})
 @ActiveProfiles("test")
 @Import(TestcontainersConfiguration.class)
 class ReminderScheduleIT {
@@ -36,6 +36,12 @@ class ReminderScheduleIT {
     void vaccineReminderIsRegisteredAsCronTaskWithConfiguredExpression() {
         assertThat(tasksOf("VaccineReminderJob.run")).singleElement().extracting(CronTask::getExpression)
                 .isEqualTo("30 10 7-20 * * *");
+    }
+
+    @Test
+    void vaccineOverdueIsRegisteredAsCronTaskWithConfiguredExpression() {
+        assertThat(tasksOf("VaccineOverdueJob.run")).singleElement().extracting(CronTask::getExpression)
+                .isEqualTo("30 25 7-20 * * *");
     }
 
     @Test
