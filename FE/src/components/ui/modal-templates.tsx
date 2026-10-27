@@ -16,7 +16,11 @@ interface ModalProps {
   className?: string
 }
 
+/** Id của ModalTitle trong Modal gần nhất: để role="dialog" có tên truy cập (aria-labelledby). */
+const ModalTitleIdContext = React.createContext<string | undefined>(undefined)
+
 export function Modal({ open, onOpenChange, children, className }: ModalProps) {
+  const titleId = React.useId()
   return (
     <div
       data-state={open ? "open" : "closed"}
@@ -30,6 +34,7 @@ export function Modal({ open, onOpenChange, children, className }: ModalProps) {
       <div
         role="dialog"
         aria-modal="true"
+        aria-labelledby={titleId}
         className={cn(
           "relative w-full max-h-[90vh] overflow-auto rounded-2xl border border-(--color-border-default) bg-white shadow-2xl transition-all duration-200",
           open ? "scale-100 translate-y-0" : "scale-95 translate-y-4",
@@ -37,7 +42,7 @@ export function Modal({ open, onOpenChange, children, className }: ModalProps) {
         )}
         onClick={(e) => e.stopPropagation()}
       >
-        {children}
+        <ModalTitleIdContext.Provider value={titleId}>{children}</ModalTitleIdContext.Provider>
       </div>
     </div>
   )
@@ -70,8 +75,9 @@ export function ModalHeader({
 }
 
 export function ModalTitle({ children, className }: { children: React.ReactNode; className?: string }) {
+  const id = React.useContext(ModalTitleIdContext)
   return (
-    <h2 className={cn("font-friendly text-lg font-extrabold text-(--color-text-primary)", className)}>
+    <h2 id={id} className={cn("font-friendly text-lg font-extrabold text-(--color-text-primary)", className)}>
       {children}
     </h2>
   )

@@ -1,5 +1,6 @@
 import { Link, useNavigate } from 'react-router-dom'
 import {
+  Bed,
   Bell,
   CalendarClock,
   ChevronRight,
@@ -94,7 +95,7 @@ function NavItem({
 
 export interface AccountSidebarProps {
   /** Tab đang active. */
-  active?: 'profile' | 'pets' | 'orders' | 'recommend' | 'favorites' | 'notifications' | 'payment' | 'security' | 'settings' | 'help' | 'membership' | 'vouchers' | 'caregivers' | 'appointments' | 'packages'
+  active?: 'profile' | 'pets' | 'orders' | 'recommend' | 'favorites' | 'notifications' | 'payment' | 'security' | 'settings' | 'help' | 'membership' | 'vouchers' | 'caregivers' | 'appointments' | 'boarding' | 'packages'
   /** Số thú cưng (hiện badge). */
   petCount?: number
   /** User display name. */
@@ -172,6 +173,12 @@ export function AccountSidebar({
           label="Lịch hẹn"
           active={active === 'appointments'}
           href="/appointments"
+        />
+        <NavItem
+          icon={Bed}
+          label="Lưu trú của tôi"
+          active={active === 'boarding'}
+          href="/boarding-bookings"
         />
         <NavItem
           icon={Gift}

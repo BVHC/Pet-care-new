@@ -1,8 +1,8 @@
 import type { ElementType } from 'react';
 import {
-  Activity, BadgePercent, BarChart3, Bell, Bot, Boxes, Building2, CalendarClock, ClipboardList, Crown, FileText, ListOrdered,
+  Activity, BadgePercent, BarChart3, Bell, BedDouble, Bot, Boxes, Building2, CalendarClock, ClipboardList, Crown, FileText, ListOrdered,
   Lock, Mail, MessageSquareText, Newspaper, Package, PhoneCall, Receipt, Scale, Scissors, Settings, ShieldAlert, ShoppingBag, Stethoscope, Syringe,
-  Tags, Truck, UserCog, UserSearch, Warehouse,
+  Tags, Truck, UserCog, UserSearch, Warehouse, LayoutGrid,
 } from 'lucide-react';
 import { STAFF_ROLES, type Role } from '../types/auth';
 import { WORKSPACE_LABELS, WORKSPACE_ROLES, workspaceForPath } from './workspaces';
@@ -31,6 +31,10 @@ export const ADMIN_MENU: MenuSection[] = [
       // UC66, UC67: danh sách Order + Order bán lẻ; BRANCH_MANAGER hủy Order PENDING khách không trả (BR-BH-05). Bán nhanh ở bàn Lễ tân.
       { path: '/admin/pos', label: 'Order tại quầy', icon: ShoppingBag, roles: ['RECEPTIONIST', 'BRANCH_MANAGER'] },
       { path: '/admin/appointments', label: 'Lịch hẹn', icon: CalendarClock, roles: ['RECEPTIONIST'] }, // UC39, UC40
+      // UC57 (A07, A08 ghi nhật ký), UC58 (A06 đặt tại quầy), UC59 (A06 nhận / trả, A08 chỉ nhận thú); A05 chỉ xem (boarding-v1 §B).
+      { path: '/admin/boarding', label: 'Lưu trú', icon: BedDouble, roles: ['RECEPTIONIST', 'BRANCH_MANAGER', 'CARETAKER', 'VET'] },
+      // UC54 (A05): tạo / sửa / xóa chuồng, bảo trì. BE: ADMIN và SUPER_MANAGER bị 403 (không có RoleHierarchy).
+      { path: '/admin/kennels', label: 'Chuồng lưu trú', icon: LayoutGrid, roles: ['BRANCH_MANAGER'] },
       // UC87 (A06): Care Task của chi nhánh; BRANCH_MANAGER không thấy (BR-TB-05, care-v1 §D.1).
       { path: '/admin/care-tasks', label: 'Việc gọi điện', icon: PhoneCall, roles: ['RECEPTIONIST'] },
       { path: '/admin/queue', label: 'Hàng chờ', icon: ListOrdered, roles: ['RECEPTIONIST', 'BRANCH_MANAGER', 'VET', 'CARETAKER'], hidden: true }, // UC45, UC46 — các bàn làm việc

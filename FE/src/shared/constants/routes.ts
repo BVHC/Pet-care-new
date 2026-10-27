@@ -36,6 +36,7 @@ export const ROUTES = {
   orders: '/orders',
   petProfile: '/pets',
   appointments: '/appointments',
+  boardingBookings: '/boarding-bookings', // UC60: lưu trú của tôi
   packages: '/packages',
   review: '/review',
   membership: '/membership',
@@ -79,6 +80,7 @@ export const NAV_TO_PATH: Record<string, string> = {
   pets: ROUTES.petProfile,
   petprofile: ROUTES.petProfile,
   appointments: ROUTES.appointments,
+  boardingbookings: ROUTES.boardingBookings,
   packages: ROUTES.packages,
   review: ROUTES.review,
   notifications: ROUTES.notifications,

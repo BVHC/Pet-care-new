@@ -5,8 +5,9 @@
 // thú (customer-pet.mock), khách (customer.mock).
 // Tác vụ hệ thống chạy "lười" ở mỗi lần đọc: ST05 chuyển NO_SHOW (BR-LH-08) kèm đánh giá hạn chế (BR-LH-09);
 // thú đã mất / đã chuyển chủ thì lịch BOOKED bị phòng khám hủy (03 §3 #5, BR-KH-05, BR-KH-08).
-// Giả định của mock (ghi ở docs/testcases/T33-fe.md): chưa có module lưu trú nên BR-LH-09 chỉ đếm vi phạm của lịch hẹn;
-// gỡ hạn chế không ghi audit vào mock quản trị.
+// BR-LH-09 đếm cả hủy muộn / NO_SHOW của đặt chỗ lưu trú (T48): boarding.mock.ts đăng ký nguồn vi phạm (registerBoardingViolations) và hàm
+// chạy ST05 lưu trú (registerBoardingSweep, gọi đầu mỗi lần nạp state để mốc NO_SHOW lưu trú đến hạn được tính trước khi đọc hạn chế).
+// Giả định của mock (ghi ở docs/testcases/T33-fe.md): gỡ hạn chế không ghi audit vào mock quản trị.
 import type { Role } from '../../types/auth';
 import type {
   Appointment,
@@ -192,8 +193,21 @@ function save(s: State) {
   }
 }
 
+/** Nguồn cho BR-LH-09 từ mock lưu trú (đăng ký thay vì import để khỏi vòng): thời điểm các lần hủy muộn / NO_SHOW đã ghi của khách. */
+let boardingViolations: (customerId: number) => number[] = () => [];
+export function registerBoardingViolations(source: (customerId: number) => number[]) {
+  boardingViolations = source;
+}
+
+/** ST05 / ST15 lưu trú chạy lười; boarding.mock tự chặn vào lại khi nó đang chạy (nó gọi ngược lại file này). */
+let boardingSweep: ((now: number) => void) | null = null;
+export function registerBoardingSweep(run: (now: number) => void) {
+  boardingSweep = run;
+}
+
 /** Đọc trạng thái rồi chạy các tác vụ hệ thống đến hạn (xem đầu file). */
 function load(now: number): State {
+  boardingSweep?.(now);
   let s: State | null = null;
   try {
     const raw = localStorage.getItem(STATE_KEY);
@@ -216,14 +230,16 @@ const activeRestriction = (s: State, customerId: number, at: number) =>
   );
 
 /** Thời điểm vi phạm: hủy muộn theo `cancelledAt`; không đến theo giờ hẹn (ADR-0049 §7). */
-const violationTimes = (s: State, customerId: number) =>
-  s.appointments
+const violationTimes = (s: State, customerId: number) => [
+  ...s.appointments
     .filter((a) => a.customerId === customerId)
     .flatMap((a) => {
       if (a.status === 'NO_SHOW') return [startOf(a)];
       if (a.status === 'CANCELLED' && a.lateCancel && a.cancelledAt) return [Date.parse(a.cancelledAt)];
       return [];
-    });
+    }),
+  ...boardingViolations(customerId),
+];
 
 /**
  * Sau một vi phạm: đang bị hạn chế thì thôi; đếm vi phạm sau `max(at − 90 ngày, starts_at lần hạn chế gần nhất)`;
@@ -720,6 +736,24 @@ const liftRestriction: MockHandler = (req) => {
   save(s);
   return ok(NOT_RESTRICTED, 200, 'Đã gỡ hạn chế đặt online');
 };
+
+// ─── Cho mock lưu trú (T48, boarding.mock.ts): như BookingRestrictionApi của BE, chỉ thêm export ───
+
+/** `BookingRestrictionApi.findActiveUntil`: thời điểm (ms) hết hạn chế đặt online đang hiệu lực của khách, null nếu không bị hạn chế (BR-LH-09). */
+export function activeRestrictionEndsAt(customerId: number, now = Date.now()): number | null {
+  const r = activeRestriction(load(now), customerId, now);
+  return r ? Date.parse(r.endsAt) : null;
+}
+
+/**
+ * `BookingRestrictionApi.evaluateAfterViolation` cho hủy muộn / NO_SHOW của đặt chỗ lưu trú (BR-LT-06, BR-LH-09). `at` là thời điểm vi phạm; mock lưu trú đã ghi vi phạm
+ * vào state của nó TRƯỚC khi gọi (nguồn vi phạm đọc state lưu, không đọc bộ nhớ).
+ */
+export function evaluateBoardingViolation(customerId: number, at: number): void {
+  const s = load(Date.now());
+  evaluateAfterViolation(s, customerId, at);
+  save(s);
+}
 
 // ─── Cho mock tiếp nhận (T36, visit.mock.ts): như AppointmentQueryApi / AppointmentApi của BE, chỉ thêm export ───
 

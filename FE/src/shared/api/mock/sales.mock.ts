@@ -1,8 +1,9 @@
 // Mock sales-v1 Order tại quầy (docs/api/sales-v1.md #1–8, #10; UC66, UC67; docs/adr/0044, 0051) — T34.
 // Thứ tự kiểm như BE: body (Bean Validation chạy trước @PreAuthorize) → vai trò 403 → khóa Order 404 → chi nhánh 403
 // → trạng thái 409 → rule 400. Quyền sửa / xóa dòng một nguồn (`lineDenial`, như OrderLinePolicy) cho cả guard lẫn cờ
-// canEdit / canDelete. Không mô phỏng: audit (BE ghi ORDER_CANCELLED_UNPAID), dịch vụ bật theo chi nhánh, Order BOARDING
-// (chưa có lưu trú, T43). Thu tiền / ca thu ngân / payable-orders là T35.
+// canEdit / canDelete. Không mô phỏng: audit (BE ghi ORDER_CANCELLED_UNPAID), dịch vụ bật theo chi nhánh. Thu tiền / ca thu ngân / payable-orders là T35.
+// Order BOARDING (T43 chưa có ở BE; T48): sinh bởi mock lưu trú khi bắt đầu trả thú / thú mất (openBoardingOrder), hủy phiên trả thú là
+// POST /orders/:orderId/abort-checkout (#9, ASSUMPTION A6 của T48).
 import type { AccountSummary, Role } from '../../types/auth';
 import type { ServiceGroup } from '../../types/catalog';
 import type {
@@ -16,7 +17,7 @@ import type {
 } from '../../types/sales';
 import { addDays, localIsoDate } from '../../utils/branch-schedule';
 import { catalogProducts, catalogServices } from './catalog.mock';
-import { findCustomer, markHasData } from './customer.mock';
+import { findCustomer, findCustomerOrGuest, markHasData } from './customer.mock';
 import { availableQuantity } from './inventory.mock';
 import {
   denied,
@@ -278,7 +279,7 @@ function denialReply(d: Denial, o: OrderRow, l: LineRow): MockReply {
 // ─── Hiển thị ───
 
 const totalOf = (o: OrderRow) => o.lines.reduce((sum, l) => sum + l.quantity * l.unitPrice, 0);
-const nameOf = (customerId: number) => findCustomer(customerId)?.fullName ?? `Khách #${customerId}`;
+const nameOf = (customerId: number) => findCustomerOrGuest(customerId)?.fullName ?? `Khách #${customerId}`;
 
 function view(o: OrderRow, me: AccountSummary): Order {
   return {
@@ -573,11 +574,43 @@ const cancelUnpaid: MockHandler = (req) => {
   const o = owned(s, req);
   if (!isRow(o)) return o;
   if (o.status !== 'PENDING') return conflict('đơn hàng (chỉ hủy được Order đang chờ thu tiền)', o.status, 'CANCELLED');
+  // sales-v1 #10: Order BOARDING khi thú còn trong chuồng xử lý theo BR-LT-09 (hủy phiên trả thú), không hủy thất thu (ASSUMPTION: BR-LT-09, kiểm sau 409, trước lý do).
+  if (o.source === 'BOARDING' && o.boardingBookingId !== null && stayOf(o.boardingBookingId)) {
+    return ruleFail('BR-LT-09', 'Order lưu trú khi thú còn trong chuồng phải hủy phiên trả thú');
+  }
   const text = typeof reason === 'string' ? reason.trim() : '';
   if (!text) return ruleFail('BR-BH-05', 'Vui lòng nhập lý do hủy Order');
   Object.assign(o, { status: 'CANCELLED', cancelType: 'UNPAID', cancelReason: text, cancelledBy: me(req).id, cancelledAt: new Date().toISOString() });
   save(s);
   return ok(view(o, me(req)), 200, 'Đã hủy Order khách không thanh toán');
+};
+
+/**
+ * #9 Order#9 (ASSUMPTION A6 của T48, BE chưa có): lễ tân hủy phiên trả thú khi khách không thanh toán. Thứ tự: body → vai trò (chỉ lễ tân) → Order 404 → chi nhánh 403 →
+ * 409 không phải Order BOARDING đang PENDING → 400 BR-LT-09 thiếu lý do → 400 BR-LT-09 thú không còn trong chuồng (dùng cancel-unpaid). Thành công: Order → CANCELLED,
+ * `CHECKOUT_ABORTED` (không tính thất thu, BR-BC-02); đặt chỗ giữ trạng thái và tiếp tục tính đêm; lần trả sau sinh Order mới.
+ */
+const abortCheckout: MockHandler = (req) => {
+  if (req.body == null) return malformed();
+  const { reason } = bodyOf(req);
+  if (has(reason) && typeof reason !== 'string') return malformed();
+  const bad = invalid([['reason', 'Lý do tối đa 300 ký tự', tooLong(reason, 300)]]);
+  if (bad) return bad;
+  if (me(req).role !== 'RECEPTIONIST') return denied();
+  const s = load();
+  const o = owned(s, req);
+  if (!isRow(o)) return o;
+  if (o.source !== 'BOARDING' || o.status !== 'PENDING') {
+    return conflict('đơn hàng (chỉ hủy phiên trả thú của Order lưu trú đang chờ thu tiền)', o.status, 'CANCELLED');
+  }
+  const text = typeof reason === 'string' ? reason.trim() : '';
+  if (!text) return ruleFail('BR-LT-09', 'Vui lòng nhập lý do hủy phiên trả thú');
+  if (o.boardingBookingId === null || !stayOf(o.boardingBookingId)) {
+    return ruleFail('BR-LT-09', 'Thú cưng không còn trong chuồng, hãy hủy Order theo luồng khách không thanh toán');
+  }
+  Object.assign(o, { status: 'CANCELLED', cancelType: 'CHECKOUT_ABORTED', cancelReason: text, cancelledBy: me(req).id, cancelledAt: new Date().toISOString() });
+  save(s);
+  return ok(view(o, me(req)), 200, 'Đã hủy phiên trả thú');
 };
 
 // ─── Cho mock thu tiền (T35, cashier.mock.ts): chỉ đọc / chuyển PAID, không đổi hành vi của salesRoutes ───
@@ -780,6 +813,88 @@ export function markOrderPendingByVisit(visitId: number, at: string): void {
   save(s);
 }
 
+// ─── Cho mock lưu trú (T48, boarding.mock.ts): như BoardingOrderApi của BE (Order#3), chỉ thêm export ───
+
+/** Thú của đặt chỗ còn trong chuồng (CHECKED_IN / OVERDUE)? Mock lưu trú đăng ký lúc nạp (đăng ký thay vì import để khỏi vòng); chưa đăng ký thì coi như đã rời chuồng. */
+let stayOf: (bookingId: number) => boolean = () => false;
+export function registerBoardingStay(inStay: (bookingId: number) => boolean) {
+  stayOf = inStay;
+}
+
+/** Order BOARDING của đặt chỗ (kể cả đã hủy), id tăng dần (`orders.boarding_booking_id`). */
+export const boardingOrdersOf = (bookingId: number): OrderRow[] =>
+  load()
+    .orders.filter((o) => o.source === 'BOARDING' && o.boardingBookingId === bookingId)
+    .sort((a, b) => a.orderId - b.orderId);
+
+/** Order lưu trú mới nhất chưa CANCELLED (PENDING hoặc PAID) của đặt chỗ: nguồn của `activeOrderId` (ASSUMPTION A10), không lưu hai nơi. */
+export const activeBoardingOrder = (bookingId: number): OrderRow | undefined => boardingOrdersOf(bookingId).filter((o) => o.status !== 'CANCELLED').pop();
+
+/**
+ * `BoardingOrderApi.openCheckout` (Order#3, BR-LT-09): đặt chỗ đã có Order PAID (thu rồi chưa giao) → trả lại Order đó; đã có Order PENDING → dùng lại và tính lại số đêm; chưa có (hoặc mọi Order đã hủy) → Order
+ * BOARDING PENDING mới, 1 dòng BOARDING "Lưu trú <loại chuồng> × N đêm" đơn giá = giá đêm đã snapshot, tên và giá chụp lúc này (BR-BH-03).
+ */
+export function openBoardingOrder(args: {
+  bookingId: number;
+  branchId: number;
+  customerId: number;
+  serviceId: number;
+  description: string;
+  nights: number;
+  unitPrice: number;
+  actorId: number;
+}): OrderRow {
+  const s = load();
+  const existing = s.orders
+    .filter((o) => o.source === 'BOARDING' && o.boardingBookingId === args.bookingId && o.status !== 'CANCELLED')
+    .sort((a, b) => a.orderId - b.orderId)
+    .pop();
+  if (existing?.status === 'PAID') return existing;
+  if (existing) {
+    Object.assign(existing.lines[0], { description: args.description, quantity: args.nights, unitPrice: args.unitPrice });
+    save(s);
+    return existing;
+  }
+  const now = new Date().toISOString();
+  s.codeSeq += 1;
+  const row: OrderRow = {
+    orderId: ++s.seq,
+    code: codeOf(now, s.codeSeq),
+    source: 'BOARDING',
+    status: 'PENDING',
+    customerId: args.customerId,
+    branchId: args.branchId,
+    visitId: null,
+    assigneeId: null,
+    boardingBookingId: args.bookingId,
+    lines: [
+      {
+        lineId: ++s.seq,
+        lineType: 'BOARDING',
+        serviceId: args.serviceId,
+        productId: null,
+        description: args.description,
+        quantity: args.nights,
+        unitPrice: args.unitPrice,
+        isAutoGenerated: true,
+        addedBy: args.actorId,
+        ownerAccountId: args.actorId,
+      },
+    ],
+    createdAt: now,
+    pendingAt: now,
+    paidAt: null,
+    paymentId: null,
+    cancelType: null,
+    cancelReason: null,
+    cancelledBy: null,
+    cancelledAt: null,
+  };
+  s.orders.push(row);
+  save(s);
+  return row;
+}
+
 export const salesRoutes: Record<string, MockHandler> = {
   'POST /api/orders': createOrder,
   'GET /api/orders': allow(BRANCH_STAFF, listOrders),
@@ -790,4 +905,5 @@ export const salesRoutes: Record<string, MockHandler> = {
   'POST /api/orders/:orderId/close': allow(['RECEPTIONIST'], closeOrder),
   'POST /api/orders/:orderId/cancel': allow(['RECEPTIONIST'], cancelOrder),
   'POST /api/orders/:orderId/cancel-unpaid': cancelUnpaid,
+  'POST /api/orders/:orderId/abort-checkout': abortCheckout,
 };

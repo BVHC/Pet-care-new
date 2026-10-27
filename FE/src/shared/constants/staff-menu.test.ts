@@ -6,7 +6,7 @@ const labels = (role: Role) => menuFor(role).flatMap((s) => s.items.map((i) => i
 
 describe('staff menu', () => {
   it('leaves the pages a workspace already covers out of the receptionist menu', () => {
-    expect(labels('RECEPTIONIST')).toEqual(['Order tại quầy', 'Lịch hẹn', 'Việc gọi điện', 'Đơn online', 'Hóa đơn', 'Hoàn tiền', 'Kho hàng']);
+    expect(labels('RECEPTIONIST')).toEqual(['Order tại quầy', 'Lịch hẹn', 'Lưu trú', 'Việc gọi điện', 'Đơn online', 'Hóa đơn', 'Hoàn tiền', 'Kho hàng']);
   });
 
   // T47: nội dung công khai (UC21, UC81) là việc của A04; feedback (UC84) của A04 và A05; Care Task (UC87) chỉ của A06 (BR-TB-05).
@@ -39,10 +39,24 @@ describe('staff menu', () => {
     expect(pageLabel('/admin/payments')).toBe('Ca thu ngân');
   });
 
-  it('gives vets and caretakers only the read-only customer lookup besides their workspace (UC23)', () => {
-    expect(labels('VET')).toEqual(['Tra cứu khách & thú']);
-    expect(labels('CARETAKER')).toEqual(['Tra cứu khách & thú']);
+  it('gives vets and caretakers the boarding page and the read-only customer lookup besides their workspace (UC23, UC57)', () => {
+    expect(labels('VET')).toEqual(['Lưu trú', 'Tra cứu khách & thú']);
+    expect(labels('CARETAKER')).toEqual(['Lưu trú', 'Tra cứu khách & thú']);
     expect(rolesForPath('/admin/customers')).not.toContain('RECEPTIONIST');
+  });
+
+  // T48: lưu trú (UC54, UC57–59). BE: ADMIN và SUPER_MANAGER bị 403 ở cả 12 endpoint (không có RoleHierarchy).
+  it('gives the boarding board to the four branch roles and the kennel page to the branch manager only', () => {
+    expect(rolesForPath('/admin/boarding')).toEqual(['RECEPTIONIST', 'BRANCH_MANAGER', 'CARETAKER', 'VET']);
+    expect(rolesForPath('/admin/kennels')).toEqual(['BRANCH_MANAGER']);
+    expect(labels('BRANCH_MANAGER')).toEqual(expect.arrayContaining(['Lưu trú', 'Chuồng lưu trú']));
+    for (const role of ['SUPER_MANAGER', 'ADMIN'] as const) {
+      expect(labels(role)).not.toContain('Lưu trú');
+      expect(labels(role)).not.toContain('Chuồng lưu trú');
+    }
+    expect(labels('RECEPTIONIST')).not.toContain('Chuồng lưu trú');
+    expect(pageLabel('/admin/boarding')).toBe('Lưu trú');
+    expect(pageLabel('/admin/kennels')).toBe('Chuồng lưu trú');
   });
 
   it('keeps the hidden pages reachable by URL for the roles that had them', () => {

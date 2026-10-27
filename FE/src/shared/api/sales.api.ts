@@ -44,6 +44,8 @@ export const salesApi = {
   cancelOrder: (orderId: number) => post<Order>(`/api/orders/${orderId}/cancel`),
   /** Order#10: PENDING → CANCELLED, thất thu; lý do bắt buộc (BR-BH-05). */
   cancelUnpaid: (orderId: number, reason: string) => post<Order>(`/api/orders/${orderId}/cancel-unpaid`, { reason }),
+  /** sales-v1 #9 (UC59): lễ tân hủy phiên trả thú khi khách không thanh toán — Order lưu trú PENDING → CANCELLED, đặt chỗ giữ trạng thái; lý do bắt buộc (BR-LT-09). BE chưa có (T43): chỉ chạy trên mock. */
+  abortCheckout: (orderId: number, reason: string) => post<Order>(`/api/orders/${orderId}/abort-checkout`, { reason }),
 
   // ─── Thu tiền (UC70) ───
   /** #12: Order PENDING của khách tại chi nhánh lễ tân, cũ nhất trước — để chọn Order thu gộp. */

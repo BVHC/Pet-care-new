@@ -15,7 +15,7 @@ import { completeAppointmentByVisit } from './appointment.mock';
 import { catalogProducts, catalogProtocols, catalogServices, catalogVaccineTypes } from './catalog.mock';
 import type { HealthVisitEntry } from '../../../domains/pets/types';
 import { branchBooking } from './branch.mock';
-import { petSummary, recordVisitWeight, registerHealthSource, setPetOpenVisit } from './customer-pet.mock';
+import { petSummary, recordVisitWeight, registerHealthSource, seededVaccinationDoses, setPetOpenVisit } from './customer-pet.mock';
 import { denied, fail, invalid, noContent, notFound, ok, ruleFail, scopeDenied, type MockHandler, type MockReply, type MockRequest } from './envelope';
 import { branchIdOf } from './identity.mock';
 import { staffNameOf } from './identity-admin.mock';
@@ -718,6 +718,54 @@ const deletePrescription: MockHandler = (req) => {
   save(s);
   return noContent();
 };
+
+// ─── Cho mock lưu trú (T48, boarding.mock.ts): như VaccinationQueryApi.findBoardingVaccineGaps của BE, chỉ thêm export ───
+
+export interface DoseSummary {
+  vaccinationId: number;
+  vaccineTypeId: number;
+  administeredOn: string;
+  nextDueDate: string;
+}
+
+/** Mũi tiêm TẠI HỆ THỐNG của thú (BR-LT-05, nguyên tắc 8): mũi mẫu trong hồ sơ sức khỏe cộng mũi do mock này ghi. Mũi tiêm ở nơi khác không có trong mock nên không được tính. */
+export function vaccineDosesOf(petId: number): DoseSummary[] {
+  const live = load().vaccinations.filter((v) => v.petId === petId);
+  return [...seededVaccinationDoses(petId), ...live].map(({ vaccinationId, vaccineTypeId, administeredOn, nextDueDate }) => ({ vaccinationId, vaccineTypeId, administeredOn, nextDueDate }));
+}
+
+/**
+ * Ghi một mũi tiêm KHÔNG qua lượt khám, để test / demo đưa Bim (thiếu 5 bệnh) vào trạng thái nhận được thú lưu trú: mũi kế tiếp theo phác đồ (hoặc mũi cuối nếu hết phác đồ), hạn tái chủng = ngày tiêm + khoảng cách của mũi,
+ * không trừ kho, không sinh dòng Order. Trả mã mũi tiêm. Mũi này hiện trong hồ sơ sức khỏe của thú (visitId 0), không xóa được qua API.
+ */
+export function recordDoseForMock(petId: number, vaccineTypeId: number, administeredOn: string): number {
+  const s = load();
+  const pet = petSummary(petId);
+  const protocols = pet ? protocolOf(vaccineTypeId, pet.species) : [];
+  const last = lastDoseOf(s, petId, vaccineTypeId);
+  const protocol = protocols.find((p) => p.doseNumber === (last?.doseNumber ?? 0) + 1) ?? protocols[protocols.length - 1];
+  const product = catalogProducts().find((p) => p.productType === 'VACCINE' && p.vaccineTypeId === vaccineTypeId);
+  const row: VaccinationRow = {
+    vaccinationId: ++s.seq,
+    visitId: 0,
+    petId,
+    branchId: 1,
+    vaccineTypeId,
+    protocolId: protocol?.protocolId ?? 0,
+    doseNumber: protocol?.doseNumber ?? 1,
+    productId: product?.productId ?? 0,
+    lotId: 0,
+    orderLineId: 0,
+    lotNumber: null,
+    expiryDate: null,
+    administeredOn,
+    nextDueDate: addDays(administeredOn, protocol?.intervalDays ?? 365),
+    recordedBy: 5,
+  };
+  s.vaccinations.push(row);
+  save(s);
+  return row.vaccinationId;
+}
 
 // Hồ sơ sức khỏe thú cưng (visit-v1 #21, UC25) đọc dữ liệu lâm sàng thật của mock này: lượt đã hoàn tất kèm bệnh án và bản bổ sung, mũi tiêm tại hệ thống (BR-KB-04, nguyên tắc 8).
 // Khách (chủ hiện tại) bị lọc ghi chú nội bộ và bản bổ sung nội bộ ở customer-pet.mock (BR-KH-07, BR-KB-01).

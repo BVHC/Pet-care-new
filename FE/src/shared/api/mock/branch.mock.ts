@@ -1,8 +1,8 @@
 // Mock module branch (docs/api/branch-v1.md #1–21): chi nhánh, giờ mở cửa, ngày nghỉ (kèm hủy hàng loạt),
 // dịch vụ tại chi nhánh, quota, chi nhánh công khai; kèm dịch vụ công khai (catalog-v1 #19).
 // Quyền, thứ tự kiểm tra và câu báo lỗi chép từ BE (module/branch).
-// Lịch hẹn / đặt chỗ lưu trú BOOKED do mock tự giữ, thay cho AppointmentQueryApi / BoardingQueryApi;
-// trên BE thật hai API này còn là placeholder nên đổi lịch của chi nhánh ACTIVE trả 500 (time.md, T10).
+// Lịch hẹn BOOKED do mock tự giữ, thay cho AppointmentQueryApi; trên BE thật API này còn là placeholder nên đổi lịch của chi nhánh ACTIVE
+// trả 500 (time.md, T10). Đặt chỗ lưu trú BOOKED (T48) đọc từ mock lưu trú qua nguồn đã đăng ký (registerBoardingSource), như BoardingQueryApi.
 import type { Role } from '../../types/auth';
 import type {
   AffectedAppointment,
@@ -61,7 +61,7 @@ interface State {
   slotQuotas: Booked<SlotQuota>[];
   /** Lịch hẹn BOOKED (thay module appointment). */
   appointments: Booked<AffectedAppointment>[];
-  /** Đặt chỗ lưu trú BOOKED (thay module boarding). */
+  /** Không còn dùng từ T48 (đặt chỗ lưu trú nằm ở boarding.mock.ts); giữ trường để state lưu từ trước và dry-run seed-dev vẫn đúng hình dạng. */
   boardings: Booked<AffectedBoarding>[];
 }
 
@@ -73,7 +73,6 @@ const code = (prefix: string, date: string, n: number) => `${prefix}-${date.slic
 function seed(today = localIsoDate()): State {
   const tuesday = nextWeekday(today, 2);
   const thursday = nextWeekday(today, 4);
-  const friday = nextWeekday(today, 5);
   const branch = (b: Omit<Branch, 'activatedAt'> & { activatedAt?: string | null }): Branch => ({ activatedAt: null, ...b });
   return {
     seq: 100,
@@ -130,9 +129,7 @@ function seed(today = localIsoDate()): State {
       { appointmentId: 2, branchId: 1, code: code('LH', tuesday, 2), slotDate: tuesday, slotStart: '18:30', petName: 'Lucky', customerName: 'Trần Đức Huy', customerPhone: '0912554321' },
       { appointmentId: 3, branchId: 1, code: code('LH', thursday, 1), slotDate: thursday, slotStart: '14:00', petName: 'Miu', customerName: 'Lê Minh Châu', customerPhone: null },
     ],
-    boardings: [
-      { bookingId: 1, branchId: 1, code: code('LT', friday, 1), checkInDate: friday, checkOutDate: addDays(friday, 2), petName: 'Bơ', customerName: 'Phạm Gia Bảo', customerPhone: '0987654321' },
-    ],
+    boardings: [],
   };
 }
 
@@ -199,6 +196,18 @@ const holidayDates = (s: State, branchId: number) => s.holidays.filter((h) => h.
 
 const strip = <T extends { branchId: number }>({ branchId: _branchId, ...rest }: T) => rest;
 
+/** Nguồn đặt chỗ lưu trú của mock lưu trú (BoardingQueryApi + BoardingClinicCancellationService); chưa đăng ký (test nạp riêng file này) thì coi như không có. */
+export interface BoardingSource {
+  /** Đặt chỗ BOOKED của chi nhánh. */
+  booked(branchId: number): AffectedBoarding[];
+  /** Hủy do phòng khám (Đặt chỗ#5), không tính hủy muộn, báo khách. */
+  cancelByClinic(bookingIds: number[], cause: 'HOLIDAY_ADDED' | 'OPENING_HOURS_REDUCED'): void;
+}
+let boardingSource: BoardingSource = { booked: () => [], cancelByClinic: () => undefined };
+export function registerBoardingSource(source: BoardingSource) {
+  boardingSource = source;
+}
+
 /** Lịch bị ảnh hưởng khi áp bản giờ mới (BE ScheduleImpactFinder.forOpeningHours). */
 function hoursImpact(s: State, branchId: number, version: OpeningHoursVersion): ScheduleImpact {
   const versions = [...(s.hours[branchId] ?? []).filter((v) => v.effectiveFrom !== version.effectiveFrom), version];
@@ -210,10 +219,9 @@ function hoursImpact(s: State, branchId: number, version: OpeningHoursVersion): 
       .filter((a) => a.branchId === branchId && a.slotDate >= from)
       .filter((a) => off.includes(a.slotDate) || !slotFits(rangesOn(versions, a.slotDate), a.slotStart))
       .map(strip),
-    boardingBookings: s.boardings
-      .filter((b) => b.branchId === branchId)
-      .filter((b) => (b.checkInDate >= from && closed(b.checkInDate)) || (b.checkOutDate >= from && closed(b.checkOutDate)))
-      .map(strip),
+    boardingBookings: boardingSource
+      .booked(branchId)
+      .filter((b) => (b.checkInDate >= from && closed(b.checkInDate)) || (b.checkOutDate >= from && closed(b.checkOutDate))),
   };
 }
 
@@ -221,20 +229,17 @@ function hoursImpact(s: State, branchId: number, version: OpeningHoursVersion): 
 function holidayImpact(s: State, branchId: number, date: string): ScheduleImpact {
   return {
     appointments: s.appointments.filter((a) => a.branchId === branchId && a.slotDate === date).map(strip),
-    boardingBookings: s.boardings
-      .filter((b) => b.branchId === branchId && (b.checkInDate === date || b.checkOutDate === date))
-      .map(strip),
+    boardingBookings: boardingSource.booked(branchId).filter((b) => b.checkInDate === date || b.checkOutDate === date),
   };
 }
 
 const EMPTY_IMPACT: ScheduleImpact = { appointments: [], boardingBookings: [] };
 
-/** Thay listener của BranchClinicCancellationEvent: lịch bị ảnh hưởng chuyển CANCELLED. */
-function cancel(s: State, impact: ScheduleImpact) {
+/** Thay listener của BranchClinicCancellationEvent: lịch hẹn bị ảnh hưởng bị bỏ khỏi danh sách mẫu, đặt chỗ lưu trú chuyển CANCELLED (do phòng khám). */
+function cancel(s: State, impact: ScheduleImpact, cause: Parameters<BoardingSource['cancelByClinic']>[1]) {
   const appointmentIds = impact.appointments.map((a) => a.appointmentId);
-  const bookingIds = impact.boardingBookings.map((b) => b.bookingId);
   s.appointments = s.appointments.filter((a) => !appointmentIds.includes(a.appointmentId));
-  s.boardings = s.boardings.filter((b) => !bookingIds.includes(b.bookingId));
+  if (impact.boardingBookings.length) boardingSource.cancelByClinic(impact.boardingBookings.map((b) => b.bookingId), cause);
 }
 
 // ─── Chi nhánh (#1–5) ───
@@ -446,7 +451,7 @@ const setHours: MockHandler = (req) => {
       );
     }
     s.hours[branch.branchId] = [...(s.hours[branch.branchId] ?? []).filter((v) => v.effectiveFrom !== effectiveFrom), version];
-    cancel(s, impact);
+    cancel(s, impact, 'OPENING_HOURS_REDUCED');
     save(s);
     return ok(version, 200, 'Đã cập nhật giờ mở cửa');
   });
@@ -502,7 +507,7 @@ const addHoliday: MockHandler = (req) => {
     }
     const holiday = { holidayId: ++s.seq, branchId: branch.branchId, holidayDate: date, reason: (b.reason as string | undefined) ?? null };
     s.holidays.push(holiday);
-    cancel(s, impact);
+    cancel(s, impact, 'HOLIDAY_ADDED');
     save(s);
     return ok(strip(holiday), 201, 'Đã thêm ngày nghỉ');
   });
@@ -674,6 +679,15 @@ export function isOpenAt(branchId: number, atMs: number): boolean {
   const { date, minutes } = vnClock(atMs);
   if (holidayDates(s, branchId).includes(date)) return false;
   return rangesOn(s.hours[branchId] ?? [], date).some((r) => toMinutes(r.open) <= minutes && minutes < toMinutes(r.close));
+}
+
+/**
+ * `BranchQueryApi.openingRangesOn` của BE cho mock lưu trú: các khoảng giờ mở cửa của ngày (bản giờ có hiệu lực vào ngày đó); ngày nghỉ hoặc chưa có bản giờ nào → rỗng.
+ * Dùng cho BR-LT-04 (ngày nhận / trả phải mở cửa) và mốc ST05 (giờ đóng cửa muộn nhất, ADR-0057).
+ */
+export function openingRangesOn(branchId: number, date: string): TimeRange[] {
+  const s = load();
+  return holidayDates(s, branchId).includes(date) ? [] : rangesOn(s.hours[branchId] ?? [], date);
 }
 
 /** Cờ nhận cấp cứu ngoài giờ của chi nhánh (BR-CN-05); chi nhánh không có thì false. */

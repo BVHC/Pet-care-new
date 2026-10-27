@@ -1,143 +1,85 @@
-import { useState } from 'react'
-import { Link } from 'react-router-dom'
-import {
-  Bed,
-  Calendar,
-  Car,
-  Cat,
-  Check,
+/**
+ * Khách sạn thú cưng (trang công khai) — UC58 phía công khai. Loại chuồng = dịch vụ nhóm BOARDING (catalog-v1 #19) kèm loài, cân nặng tối đa,
+ * giá đêm và các chi nhánh đang bật; chi nhánh từ branch-v1 #20. Không có số liệu cứng và không gọi `boarding-availability` (cần đăng nhập):
+ * xem chỗ trống từng đêm ở bước đặt chỗ. Khách chưa đăng nhập bấm "Đặt chỗ lưu trú" sẽ được đưa tới đăng nhập rồi quay lại.
+ */
+import { useState } from 'react';
+import { Link } from 'react-router-dom';
+import { Bed, Bell, CalendarRange, CalendarX, ClipboardList, Clock, MapPin, Phone, RefreshCw, Stethoscope, Syringe } from 'lucide-react';
+import { SPECIES_LABEL } from '@/domains/pets/types';
+import { plainMessage, toApiError } from '@/shared/api/api-error';
+import { usePublicBranches } from '@/shared/hooks/useAppointments';
+import { BOARDING_CFG } from '@/shared/types/boarding';
+import { formatWeight, vnd } from '@/pages/customer/boarding/format';
+import { usePublicKennelTypes } from '@/pages/customer/boarding/hooks';
+import { branchIdsWithBoarding, type KennelOption } from '@/pages/customer/boarding/rules';
+import { StayCalculator } from './StayCalculator';
+import styles from './HotelPage.module.css';
 
-  Dog,
+const IMAGE_BY_SPECIES = { DOG: '/imgs/hero-dog.png', CAT: '/imgs/cat-boarding.png', OTHER: '/imgs/hero-dog-clean.png' } as const;
 
-  MapPin,
-  Search,
-  Shield,
-  Star,
-  Utensils,
-  Wifi,
-} from 'lucide-react'
-import { toast } from 'sonner'
-import { StayPriceCalculator } from '@/components/customer/StayPriceCalculator'
-import { DatePicker } from '@/components/customer/DatePicker'
-import styles from './HotelPage.module.css'
-
-/* ================================================================
-   Data.
-   ================================================================ */
-
-const ROOMS = [
-  {
-    id: 1,
-    name: 'Phòng Standard',
-    desc: 'Không gian yên tĩnh cho thú cưng nghỉ ngơi thoải mái',
-    price: 150_000,
-    popular: false,
-    image: '/imgs/hero-dog.png',
-    features: ['Giường êm', 'Bát ăn uống', 'Đèn ngủ'],
-  },
-  {
-    id: 2,
-    name: 'Phòng Deluxe',
-    desc: 'Phòng rộng với khu vực chơi riêng, camera 24/7',
-    price: 250_000,
-    popular: true,
-    image: '/imgs/cat-spa.png',
-    features: ['Giường đôi', 'Khu vực chơi', 'Camera 24/7', 'Bữa ăn sáng'],
-  },
-  {
-    id: 3,
-    name: 'Phòng VIP',
-    desc: 'Suite cao cấp với dịch vụ đặc biệt cho boss',
-    price: 400_000,
-    popular: false,
-    image: '/imgs/hero-dog-clean.png',
-    features: ['Phòng riêng lớn', 'Spa miễn phí', 'Camera 24/7', 'Bữa ăn cao cấp', 'Dắt đi dạo'],
-  },
-]
-
-const SERVICES = [
-  { name: 'Dắt đi dạo', price: '30K/lần', icon: Dog },
-  { name: 'Spa & tắm', price: '100K', icon: Utensils },
-  { name: 'Chăm sóc lông', price: '80K', icon: Star },
-  { name: 'Khám sức khoẻ', price: '150K', icon: Shield },
-]
-
-const AMENITIES = [
-  { icon: Wifi, label: 'Wifi miễn phí' },
-  { icon: Car, label: 'Bãi đỗ xe' },
-  { icon: MapPin, label: 'Quận Cầu Giấy' },
-  { icon: Shield, label: 'Camera 24/7' },
-]
-
-const vnd = new Intl.NumberFormat('vi-VN', {
-  style: 'currency',
-  currency: 'VND',
-  maximumFractionDigits: 0,
-})
-
-/* ================================================================
-   Main page.
-   ================================================================ */
+function KennelCard({ kennel, branchNames, active, onToggle }: { kennel: KennelOption; branchNames: string[]; active: boolean; onToggle: () => void }) {
+  const { species, maxWeightKg } = kennel.kennelType;
+  return (
+    <article aria-label={kennel.name} className={`${styles.roomCard} ${active ? styles.roomCardActive : ''}`}>
+      <div className={styles.roomCardMedia}>
+        <img src={IMAGE_BY_SPECIES[species]} alt={kennel.name} loading="lazy" />
+      </div>
+      <div className={styles.roomCardBody}>
+        <h3 className={styles.roomName}>{kennel.name}</h3>
+        <p className={styles.roomDesc}>{kennel.description || `Chuồng riêng cho ${SPECIES_LABEL[species].toLowerCase()} từ nhỏ đến ${formatWeight(maxWeightKg)}.`}</p>
+        <div className={styles.roomFeatures}>
+          <span className={styles.roomFeature}>{`${SPECIES_LABEL[species]}, tối đa ${formatWeight(maxWeightKg)}`}</span>
+          {branchNames.length > 0 && <span className={styles.roomFeature}>{`Có tại ${branchNames.join(', ')}`}</span>}
+        </div>
+        <div className={styles.roomFooter}>
+          <p className={styles.roomPrice}>
+            {kennel.priceIsFrom ? 'Từ ' : ''}
+            {vnd.format(kennel.price)}
+            <span className={styles.roomPriceNight}>/đêm</span>
+          </p>
+          <button type="button" aria-pressed={active} onClick={onToggle} className={`${styles.roomSelectBtn} ${active ? styles.roomSelectBtnActive : ''}`}>
+            {active ? 'Đang chọn' : 'Chọn loại này'}
+          </button>
+        </div>
+      </div>
+    </article>
+  );
+}
 
 export function HotelPage() {
-  const [petType, setPetType] = useState<'dog' | 'cat'>('dog')
-  const [checkIn, setCheckIn] = useState('')
-  const [checkOut, setCheckOut] = useState('')
-  const [selectedRoom, setSelectedRoom] = useState<number | null>(null)
+  const kennelTypes = usePublicKennelTypes();
+  const branches = usePublicBranches();
+  const [pickedId, setPickedId] = useState<number | null>(null);
 
-  const handleSearch = () => {
-    if (!checkIn || !checkOut) {
-      toast.error('Vui lòng chọn ngày nhận và trả phòng.')
-      return
-    }
-    if (checkIn >= checkOut) {
-      toast.error('Ngày trả phòng phải sau ngày nhận phòng.')
-      return
-    }
-    toast.success('Đang tìm phòng trống...')
-  }
-
-  const handleSelectRoom = (roomId: number) => {
-    setSelectedRoom((prev) => (prev === roomId ? null : roomId))
-    const room = ROOMS.find((r) => r.id === roomId)
-    if (room) toast.info(`Đã chọn ${room.name}`)
-  }
+  const types = kennelTypes.data ?? [];
+  const offered = branchIdsWithBoarding(types);
+  const branchList = (branches.data ?? []).filter((b) => offered.includes(b.branchId));
+  // Chỉ một loại chuồng thì chọn sẵn cho máy tính tiền.
+  const selectedId = types.some((t) => t.serviceId === pickedId) ? pickedId : types.length === 1 ? types[0].serviceId : null;
+  const namesOf = (kennel: KennelOption) => branchList.filter((b) => kennel.branchIds.includes(b.branchId)).map((b) => b.name);
 
   return (
     <div className="bg-(--color-surface-page) pb-24">
       {/* ====== Hero ====== */}
       <section className={styles.hero}>
-        <img
-          src="/imgs/cat-spa.png"
-          alt=""
-          className={styles.heroBg}
-          aria-hidden
-          loading="eager"
-        />
+        <img src="/imgs/cat-boarding.png" alt="" className={styles.heroBg} aria-hidden loading="eager" />
         <div className={styles.heroOverlay} aria-hidden />
         <div className={styles.heroNoise} aria-hidden />
 
         <div className={`${styles.heroContent} mx-auto max-w-[1280px] px-5 sm:px-8`}>
-          {/* Breadcrumb */}
-          <nav
-            aria-label="Đường dẫn"
-            className="mb-5 text-[12.5px] text-white/50"
-          >
-            <Link
-              to="/"
-              className="underline-offset-4 transition-colors hover:text-white hover:underline"
-            >
+          <nav aria-label="Đường dẫn" className="mb-5 text-[12.5px] text-white/50">
+            <Link to="/" className="underline-offset-4 transition-colors hover:text-white hover:underline">
               Trang chủ
             </Link>
             <span className="mx-1.5">/</span>
             <span className="font-semibold text-white/85">Khách sạn thú cưng</span>
           </nav>
 
-          {/* Heading */}
           <div className="flex flex-wrap items-end justify-between gap-6">
-            <div>
+            <div className="min-w-0">
               <div className="mb-4 inline-flex items-center gap-2 rounded-full bg-white/10 px-4 py-1.5 text-[12.5px] font-bold text-white/80 backdrop-blur-sm">
-                <Bed size={14} />
+                <Bed size={14} aria-hidden />
                 Khách sạn thú cưng
               </div>
               <h1 className="font-friendly font-extrabold text-[clamp(30px,4.5vw,58px)] leading-[1.05] text-white">
@@ -146,194 +88,157 @@ export function HotelPage() {
                 cho boss yêu
               </h1>
               <p className="mt-4 max-w-[50ch] text-[15px] leading-relaxed text-white/65">
-                Khu nghỉ dưỡng cao cấp dành riêng cho thú cưng. Đội ngũ chăm sóc tận tâm 24/7, không gian xanh mát, dịch vụ đa dạng.
+                Chuồng riêng theo loài và cân nặng, nhật ký chăm sóc mỗi ngày gửi về tài khoản của bạn.
               </p>
             </div>
 
             <Link
-              to="/booking"
-              className="inline-flex items-center gap-2 rounded-full bg-white px-6 py-3 text-[13.5px] font-bold text-accent transition-colors hover:bg-white/90"
+              to="/boarding-bookings/new"
+              className="inline-flex min-h-11 items-center gap-2 rounded-full bg-white px-6 py-3 text-[13.5px] font-bold whitespace-nowrap text-accent transition-colors hover:bg-white/90"
             >
-              <Calendar size={16} />
-              Đặt phòng ngay
+              <Bed size={16} aria-hidden />
+              Đặt chỗ lưu trú
             </Link>
           </div>
         </div>
       </section>
 
-      {/* ====== Quick search card ====== */}
+      {/* ====== Máy tính tiền ====== */}
       <div className="mx-auto max-w-[1280px] px-5 sm:px-8">
-        <div className={styles.searchCard}>
-          <div className={styles.searchRow}>
-            {/* Pet type */}
-            <div className={styles.field}>
-              <span className={styles.fieldLabel}>Loại thú cưng</span>
-              <div className={styles.petTypePills}>
-                {(['dog', 'cat'] as const).map((t) => (
-                  <button
-                    key={t}
-                    type="button"
-                    onClick={() => setPetType(t)}
-                    className={`${styles.petTypePill} ${petType === t ? styles.petTypePillActive : ''}`}
-                  >
-                    {t === 'dog' ? <Dog size={15} /> : <Cat size={15} />}
-                    {t === 'dog' ? 'Chó' : 'Mèo'}
-                  </button>
-                ))}
-              </div>
-            </div>
+        <StayCalculator types={types} selectedId={selectedId} onSelect={setPickedId} loading={kennelTypes.isPending} />
+      </div>
 
-            {/* Check-in */}
-            <div className={styles.field}>
-              <span className={styles.fieldLabel}>Nhận phòng</span>
-              <DatePicker
-                id="checkIn"
-                value={checkIn || null}
-                onChange={(iso) => setCheckIn(iso)}
-                minDate={new Date().toISOString().split('T')[0]}
-                ariaLabel="Ngày nhận phòng"
-              />
-            </div>
+      {/* ====== Loại chuồng ====== */}
+      <div className="mx-auto max-w-[1280px] px-5 sm:px-8">
+        <section className={styles.section}>
+          <p className={styles.sectionLabel}>Chọn chuồng</p>
+          <h2 className={styles.sectionTitle}>Loại chuồng và giá theo đêm</h2>
 
-            {/* Check-out */}
-            <div className={styles.field}>
-              <span className={styles.fieldLabel}>Trả phòng</span>
-              <DatePicker
-                id="checkOut"
-                value={checkOut || null}
-                onChange={(iso) => setCheckOut(iso)}
-                minDate={checkIn || new Date().toISOString().split('T')[0]}
-                ariaLabel="Ngày trả phòng"
-              />
+          {kennelTypes.isPending && (
+            <div role="status" aria-label="Đang tải loại chuồng" className={styles.roomsGrid}>
+              {[0, 1, 2].map((i) => (
+                <span key={i} className={styles.skeleton} />
+              ))}
             </div>
+          )}
+          {kennelTypes.isError && (
+            <div role="alert" className={styles.errorBox}>
+              <span className="min-w-0">{plainMessage(toApiError(kennelTypes.error))}</span>
+              <button type="button" onClick={() => kennelTypes.refetch()} className={styles.retryBtn}>
+                <RefreshCw size={13} className="mr-1.5 inline" aria-hidden /> Thử lại
+              </button>
+            </div>
+          )}
+          {kennelTypes.isSuccess && types.length === 0 && <p className={styles.notice}>Hiện chưa có chi nhánh nào mở dịch vụ lưu trú.</p>}
+          {types.length > 0 && (
+            <div className={styles.roomsGrid}>
+              {types.map((kennel) => (
+                <KennelCard
+                  key={kennel.serviceId}
+                  kennel={kennel}
+                  branchNames={namesOf(kennel)}
+                  active={selectedId === kennel.serviceId}
+                  onToggle={() => setPickedId(selectedId === kennel.serviceId && types.length > 1 ? null : kennel.serviceId)}
+                />
+              ))}
+            </div>
+          )}
+        </section>
+      </div>
 
-            {/* Search button */}
-            <button type="button" onClick={handleSearch} className={styles.searchBtn}>
-              <Search size={16} />
-              Tìm phòng
-            </button>
+      {/* ====== Khi gửi thú ====== */}
+      <section className={styles.infoSection}>
+        <div className="mx-auto max-w-[1280px] px-5 sm:px-8">
+          <h2 className={styles.sectionTitle}>Khi gửi thú ở PetCare</h2>
+          <div className={styles.infoGrid}>
+            <div className={styles.infoCard}>
+              <h3 className={styles.infoCardTitle}>Trong thời gian lưu trú</h3>
+              <ul className={styles.infoList}>
+                <li className={styles.infoItem}>
+                  <span className={styles.infoIcon}>
+                    <ClipboardList size={15} aria-hidden />
+                  </span>
+                  <span>Nhật ký chăm sóc mỗi ngày: ăn uống, vệ sinh, vận động, có thể kèm ảnh. Bạn xem trong mục Lưu trú của tôi.</span>
+                </li>
+                <li className={styles.infoItem}>
+                  <span className={styles.infoIcon}>
+                    <Bell size={15} aria-hidden />
+                  </span>
+                  <span>Thú có dấu hiệu bất thường, bạn và lễ tân chi nhánh được báo ngay.</span>
+                </li>
+                <li className={styles.infoItem}>
+                  <span className={styles.infoIcon}>
+                    <Stethoscope size={15} aria-hidden />
+                  </span>
+                  <span>
+                    Khám hoặc tắm trong lúc lưu trú là dịch vụ riêng, tính theo bảng giá dịch vụ.{' '}
+                    <Link to="/services" className={styles.infoLink}>
+                      Xem dịch vụ
+                    </Link>
+                  </span>
+                </li>
+              </ul>
+            </div>
+            <div className={styles.infoCard}>
+              <h3 className={styles.infoCardTitle}>Quy định cần biết</h3>
+              <ul className={styles.infoList}>
+                <li className={styles.infoItem}>
+                  <span className={styles.infoIcon}>
+                    <CalendarRange size={15} aria-hidden />
+                  </span>
+                  <span>
+                    Đặt online trước ngày nhận ít nhất {BOARDING_CFG.minLeadDays} ngày, xa nhất {BOARDING_CFG.maxAdvanceDays} ngày; mỗi lần lưu trú {BOARDING_CFG.minNights} đến{' '}
+                    {BOARDING_CFG.maxNights} đêm.
+                  </span>
+                </li>
+                <li className={styles.infoItem}>
+                  <span className={styles.infoIcon}>
+                    <Syringe size={15} aria-hidden />
+                  </span>
+                  <span>Thú cần tiêm đủ các mũi bắt buộc tại PetCare khi nhận. Mũi tiêm ở nơi khác không được tính.</span>
+                </li>
+                <li className={styles.infoItem}>
+                  <span className={styles.infoIcon}>
+                    <CalendarX size={15} aria-hidden />
+                  </span>
+                  <span>Hủy khi còn dưới {BOARDING_CFG.lateCancelHours} giờ trước 00:00 ngày nhận là hủy muộn, tính vào hạn chế đặt online.</span>
+                </li>
+                <li className={styles.infoItem}>
+                  <span className={styles.infoIcon}>
+                    <Clock size={15} aria-hidden />
+                  </span>
+                  <span>Giờ trả thú là {BOARDING_CFG.checkoutTime}. Trả sau giờ này tính thêm 1 đêm.</span>
+                </li>
+              </ul>
+            </div>
           </div>
         </div>
-      </div>
+      </section>
 
-      {/* ====== Rooms ====== */}
-      <div className="mx-auto max-w-[1280px] px-5 sm:px-8">
-        <section className={styles.section}>
-          <p className={styles.sectionLabel}>Chọn phòng</p>
-          <h2 className={styles.sectionTitle}>Loại phòng của chúng tôi</h2>
-
-          <div className={styles.roomsGrid}>
-            {ROOMS.map((room) => {
-              const active = selectedRoom === room.id
-              return (
-                <div
-                  key={room.id}
-                  className={`${styles.roomCard} ${active ? styles.roomCardActive : ''}`}
-                  onClick={() => handleSelectRoom(room.id)}
-                >
-                  <div className={styles.roomCardMedia}>
-                    <img src={room.image} alt={room.name} loading="lazy" />
-                    {room.popular && (
-                      <span className={styles.roomRibbon}>
-                        <Star size={11} className="fill-white text-white" />
-                        Phổ biến nhất
-                      </span>
-                    )}
-                  </div>
-
-                  <div className={styles.roomCardBody}>
-                    <h3 className={styles.roomName}>{room.name}</h3>
-                    <p className={styles.roomDesc}>{room.desc}</p>
-
-                    <div className={styles.roomFeatures}>
-                      {room.features.map((f) => (
-                        <span key={f} className={styles.roomFeature}>
-                          <Check size={10} />
-                          {f}
-                        </span>
-                      ))}
-                    </div>
-
-                    <div className={styles.roomFooter}>
-                      <div>
-                        <span className={styles.roomPrice}>{vnd.format(room.price)}</span>
-                        <span className={styles.roomPriceNight}>/đêm</span>
-                      </div>
-                      <button
-                        type="button"
-                        onClick={(e) => {
-                          e.stopPropagation()
-                          handleSelectRoom(room.id)
-                        }}
-                        className={`${styles.roomSelectBtn} ${active ? styles.roomSelectBtnActive : ''}`}
-                      >
-                        {active ? (
-                          <>
-                            <Check size={13} />
-                            Đã chọn
-                          </>
-                        ) : (
-                          'Chọn phòng'
-                        )}
-                      </button>
-                    </div>
-                  </div>
-                </div>
-              )
-            })}
-          </div>
-        </section>
-
-        {/* ====== Price calculator ====== */}
-        <section className={styles.calcSection}>
-          <p className={styles.sectionLabel}>Tính giá</p>
-          <h2 className={styles.sectionTitle}>Ước tính chi phí</h2>
-          <StayPriceCalculator />
-        </section>
-
-        {/* ====== Services ====== */}
-        <section className={styles.servicesSection}>
-          <p className={styles.sectionLabel}>Bổ sung</p>
-          <h2 className={styles.sectionTitle}>Dịch vụ thêm</h2>
-
-          <div className={styles.servicesGrid}>
-            {SERVICES.map((s) => {
-              const Icon = s.icon
-              return (
-                <div key={s.name} className={styles.serviceCard}>
-                  <span className={styles.serviceIcon}>
-                    <Icon size={20} />
-                  </span>
-                  <div>
-                    <div className={styles.serviceName}>{s.name}</div>
-                    <div className={styles.servicePrice}>{s.price}</div>
-                  </div>
-                </div>
-              )
-            })}
-          </div>
-        </section>
-
-        {/* ====== Amenities ====== */}
-        <section className={styles.section}>
-          <p className={styles.sectionLabel}>Tiện nghi</p>
-          <h2 className={styles.sectionTitle}>Khách sạn mang lại</h2>
-
-          <div className={styles.amenitiesGrid}>
-            {AMENITIES.map((a) => {
-              const Icon = a.icon
-              return (
-                <div key={a.label} className={styles.amenityItem}>
-                  <span className={styles.amenityIcon}>
-                    <Icon size={16} />
-                  </span>
-                  <span>{a.label}</span>
-                </div>
-              )
-            })}
-          </div>
-        </section>
-      </div>
+      {/* ====== Chi nhánh nhận lưu trú ====== */}
+      {kennelTypes.isSuccess && branchList.length > 0 && (
+        <div className="mx-auto max-w-[1280px] px-5 sm:px-8">
+          <section aria-label="Chi nhánh nhận lưu trú" className={styles.section}>
+            <h2 className={styles.sectionTitle}>Nơi nhận lưu trú</h2>
+            <ul className={styles.branchGrid}>
+              {branchList.map((b) => (
+                <li key={b.branchId} className={styles.branchCard}>
+                  <h3 className={styles.branchName}>{b.name}</h3>
+                  <p className={styles.branchMeta}>
+                    <MapPin size={15} className="mt-0.5 shrink-0" aria-hidden /> <span className="min-w-0">{b.address}</span>
+                  </p>
+                  <p className={styles.branchMeta}>
+                    <Phone size={15} className="mt-0.5 shrink-0" aria-hidden /> <span className="min-w-0">{b.phone}</span>
+                  </p>
+                </li>
+              ))}
+            </ul>
+            <Link to="/branches" className={styles.branchLink}>
+              Xem tất cả chi nhánh
+            </Link>
+          </section>
+        </div>
+      )}
     </div>
-  )
+  );
 }

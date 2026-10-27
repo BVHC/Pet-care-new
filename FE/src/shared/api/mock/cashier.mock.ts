@@ -10,7 +10,7 @@ import type { CashierShift, CashierShiftStatus, OrderLineType, PaymentMethod, Sh
 import { addDays } from '../../utils/branch-schedule';
 import { vnDate } from '../../utils/vn-time';
 import { acceptsAfterHours, isOpenAt } from './branch.mock';
-import { findCustomer } from './customer.mock';
+import { findCustomerOrGuest } from './customer.mock';
 import {
   denied,
   fail,
@@ -350,7 +350,7 @@ const listPayable: MockHandler = (req) => {
   const customerId = idParam(req, 'customerId');
   if (isReply(customerId)) return customerId;
   if (me(req).role !== 'RECEPTIONIST') return denied();
-  if (!findCustomer(customerId)) return notFound('khách hàng', customerId);
+  if (!findCustomerOrGuest(customerId)) return notFound('khách hàng', customerId);
   return ok(payableOrdersOf(customerId, me(req).branchId!));
 };
 

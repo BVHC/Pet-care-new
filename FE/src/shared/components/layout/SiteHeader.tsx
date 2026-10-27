@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import {
+  Bed,
   Bell,
   CalendarClock,
   ChevronDown,
@@ -72,6 +73,7 @@ const USER_DROPDOWN_AUTHED: DropdownItem[] = [
   { label: 'Tài khoản của tôi', page: 'account',  icon: User },
   { label: 'Hồ sơ thú cưng',  page: 'pets',     icon: PawPrint },
   { label: 'Lịch hẹn',         page: 'appointments', icon: CalendarClock },
+  { label: 'Lưu trú của tôi',  page: 'boardingbookings', icon: Bed },
   { label: 'Đơn hàng',         page: 'orders',   icon: Package },
   { label: 'Gói dịch vụ',     page: 'packages', icon: Gift },
   { label: 'Voucher',          page: 'vouchers', icon: Star },

@@ -6,6 +6,7 @@ import { AxiosError, getAdapter, type AxiosAdapter, type AxiosInstance, type Axi
 import type { AccountSummary } from '../../types/auth';
 import { adminIdentityRoutes } from './identity-admin.mock';
 import { appointmentRoutes } from './appointment.mock';
+import { boardingRoutes } from './boarding.mock';
 import { branchRoutes } from './branch.mock';
 import { careRoutes } from './care.mock';
 import { cashierRoutes } from './cashier.mock';
@@ -37,6 +38,7 @@ const ROUTES: Record<string, MockHandler> = {
   ...feedbackRoutes,
   ...adminIdentityRoutes,
   ...appointmentRoutes,
+  ...boardingRoutes,
   ...careRoutes,
   ...salesRoutes,
   ...cashierRoutes,

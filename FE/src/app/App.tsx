@@ -26,6 +26,9 @@ import { VouchersPage } from '../pages/customer/VouchersPage';
 import { AppointmentsPage } from '../pages/customer/AppointmentsPage';
 import { PackagesPage } from '../pages/customer/PackagesPage';
 import { ReviewsPage } from '../pages/customer/ReviewsPage';
+import { BoardingBookingsPage } from '../pages/customer/BoardingBookingsPage';
+import { BoardingNewPage } from '../pages/customer/BoardingNewPage';
+import { BoardingDetailPage } from '../pages/customer/BoardingDetailPage';
 import { AboutPage } from '../pages/about/AboutPage';
 import { RecommendPage } from '../pages/recommend/RecommendPage';
 import { HotelPage } from '../pages/hotel/HotelPage';
@@ -82,6 +85,8 @@ import { AdminAIPage } from '../pages/admin/AdminAIPage';
 import { AdminCatalogPage } from '../pages/admin/AdminCatalogPage';
 import { AdminArticlesPage } from '../pages/admin/AdminArticlesPage';
 import { AdminCareTasksPage } from '../pages/admin/AdminCareTasksPage';
+import { AdminBoardingPage } from '../pages/admin/AdminBoardingPage';
+import { AdminKennelsPage } from '../pages/admin/AdminKennelsPage';
 import { AdminFeedbacksPage } from '../pages/admin/AdminFeedbacksPage';
 import { AdminPageContentsPage } from '../pages/admin/AdminPageContentsPage';
 import { AdminCustomersPage } from '../pages/admin/AdminCustomersPage';
@@ -151,8 +156,12 @@ export function App() {
               <Route path="/booking" element={<BookingPage />} />
               <Route path="/pets" element={<PetsPage />} />
               <Route path="/review" element={<ReviewsPage />} />
+              {/* UC58: đặt chỗ lưu trú cần BR-TK-19; danh sách / chi tiết ở ngoài như /appointments. Đường dẫn là link BE dự kiến trong thông báo (ADR-0065). */}
+              <Route path="/boarding-bookings/new" element={<BoardingNewPage />} />
             </Route>
             <Route path="/appointments" element={<AppointmentsPage />} />
+            <Route path="/boarding-bookings" element={<BoardingBookingsPage />} />
+            <Route path="/boarding-bookings/:bookingId" element={<BoardingDetailPage />} />
             <Route path="/notifications" element={<NotificationsPage />} />
             <Route path="/settings" element={<SettingsPage />} />
           </Route>
@@ -197,6 +206,8 @@ export function App() {
             <Route path="/admin/articles/:tab?" element={<AdminArticlesPage />} />
             <Route path="/admin/feedbacks" element={<AdminFeedbacksPage />} />
             <Route path="/admin/care-tasks" element={<AdminCareTasksPage />} />
+            <Route path="/admin/boarding" element={<AdminBoardingPage />} />
+            <Route path="/admin/kennels" element={<AdminKennelsPage />} />
             <Route path="/admin/customers" element={<AdminCustomersPage />} />
             <Route path="/admin/branches" element={<AdminBranchesPage />} />
             <Route path="/admin/branches/:branchId/:tab?" element={<AdminBranchDetailPage />} />

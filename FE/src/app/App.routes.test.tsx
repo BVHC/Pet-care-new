@@ -259,3 +259,50 @@ describe('content, feedback and care task pages (T47)', () => {
     expect(await forbidden()).toBeInTheDocument();
   });
 });
+
+
+// T48: lưu trú. Mỗi trang giữ một <h1> cố định (route test dựa vào đó). Quyền theo ADMIN_MENU; khách: danh sách / chi tiết ở ngoài
+// RequireLinkDecision, riêng đặt chỗ (/new) ở trong (BR-TK-19). BE: ADMIN và SUPER_MANAGER bị 403 ở mọi endpoint lưu trú.
+describe('boarding pages (T48)', () => {
+  it.each([
+    ['khach@petcare.vn', '/boarding-bookings', 'Lưu trú của tôi'],
+    ['khach@petcare.vn', '/boarding-bookings/new', 'Đặt chỗ lưu trú'],
+    ['khach@petcare.vn', '/boarding-bookings/1', 'Chi tiết lưu trú'],
+    ['manager@store1.vn', '/admin/kennels', 'Chuồng lưu trú'],
+    ['manager@store1.vn', '/admin/boarding', 'Lưu trú'],
+    ['reception@store1.vn', '/admin/boarding', 'Lưu trú'],
+    ['caretaker@store1.vn', '/admin/boarding', 'Lưu trú'],
+    ['doctor@store1.vn', '/admin/boarding', 'Lưu trú'],
+  ])('lets %s open %s', async (email, path, title) => {
+    await signInAs(email);
+    open(path);
+    expect(await screen.findByRole('heading', { level: 1, name: title })).toBeInTheDocument();
+    expect(screen.queryByRole('heading', { name: 'Bạn không có quyền vào trang này' })).not.toBeInTheDocument();
+  });
+
+  it.each([
+    ['chuoi@petcare.vn', '/admin/boarding'],
+    ['chuoi@petcare.vn', '/admin/kennels'],
+    ['admin@petcare.vn', '/admin/boarding'],
+    ['admin@petcare.vn', '/admin/kennels'],
+    ['reception@store1.vn', '/admin/kennels'],
+    ['caretaker@store1.vn', '/admin/kennels'],
+    ['doctor@store1.vn', '/admin/kennels'],
+  ])('shows 403 in place to %s on %s', async (email, path) => {
+    await signInAs(email);
+    open(path);
+    expect(await forbidden()).toBeInTheDocument();
+  });
+
+  it('keeps the booking form behind the link decision (BR-TK-19)', async () => {
+    await signInAs('khachmoi@petcare.vn');
+    open('/boarding-bookings/new');
+    expect(await screen.findByRole('heading', { name: 'Hoàn tất liên kết hồ sơ' })).toBeInTheDocument();
+  });
+
+  it('keeps the list outside the link decision, like /appointments', async () => {
+    await signInAs('khachmoi@petcare.vn');
+    open('/boarding-bookings');
+    expect(await screen.findByRole('heading', { level: 1, name: 'Lưu trú của tôi' })).toBeInTheDocument();
+  });
+});

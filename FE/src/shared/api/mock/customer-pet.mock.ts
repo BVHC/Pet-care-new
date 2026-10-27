@@ -11,6 +11,7 @@ import {
   createCounterProfile,
   customerOfAccount,
   findCustomer,
+  findCustomerOrGuest,
   markHasData,
   updateCustomerFields,
   type MockCustomer,
@@ -239,6 +240,35 @@ export function recordVisitWeight(petId: number, weightKg: number, visitId: numb
   return { weightRecordId, weightKg: rounded, measuredAt };
 }
 
+/**
+ * Đang lưu trú (T48): mock lưu trú (boarding.mock.ts) đăng ký nguồn lúc nạp, như BoardingQueryApi.hasPetInStay; suy từ đặt chỗ CHECKED_IN / OVERDUE nên không lưu cờ `busy` tĩnh
+ * (chặn đánh dấu mất BR-KH-05, chuyển chủ BR-KH-08, xóa BR-KH-06). Chưa đăng ký (test nạp riêng file này) thì không thú nào đang lưu trú.
+ */
+let staySource: (petId: number) => boolean = () => false;
+export function registerStaySource(source: (petId: number) => boolean) {
+  staySource = source;
+}
+
+/** Cân nặng hiện tại (lần đo gần nhất, BR-KH-04); null nếu thú chưa cân hoặc không có. Cho BR-LT-02 (đặt chỗ lưu trú). */
+export const petCurrentWeight = (petId: number): number | null => currentWeight(load(), petId);
+
+/**
+ * `PetApi.recordWeight` lúc nhận thú lưu trú (T48, BR-KH-04, BR-LT-08): nguồn INTAKE, gắn đặt chỗ. Thú không có (đặt chỗ mẫu) hoặc cân không hợp lệ thì bỏ qua và trả null: mock lưu trú đã kiểm
+ * cân nặng ở body (> 0, ≤ 9999.99, 2 chữ số thập phân) trước khi gọi.
+ */
+export function recordIntakeWeight(petId: number, weightKg: number, boardingBookingId: number, measuredAt: string): WeightRecord | null {
+  const s = load();
+  const pet = s.pets.find((p) => p.petId === petId);
+  if (!pet || pet.deceasedOn || !(weightKg > 0)) return null;
+  const record: WeightRow = { weightRecordId: s.nextWeightId++, petId, weightKg, source: 'INTAKE', visitId: null, boardingBookingId, measuredAt };
+  s.weights.push(record);
+  save(s);
+  return weightOf(record);
+}
+
+/** Mũi tiêm mẫu trong hồ sơ sức khỏe của thú (dữ liệu có sẵn, ngoài mũi do mock lâm sàng ghi): cho BR-LT-05 đối chiếu mũi bắt buộc khi lưu trú. */
+export const seededVaccinationDoses = (petId: number): VaccinationRecord[] => HEALTH[petId]?.vaccinations ?? [];
+
 /** Thú đã phát sinh lịch hẹn thì không xóa cứng được nữa (BR-KH-06). */
 export function markPetHasBooking(petId: number) {
   const s = load();
@@ -360,7 +390,7 @@ const searchCustomers: MockHandler = (req) => {
 
 const getCustomer: MockHandler = (req) => {
   if (!canLookUp(req)) return denied();
-  const c = findCustomer(Number(req.params.customerId));
+  const c = findCustomerOrGuest(Number(req.params.customerId));
   if (!c) return notFound('khách hàng', req.params.customerId);
   const s = load();
   return ok({ customer: profileOf(c), pets: s.pets.filter((p) => p.customerId === c.customerId).map((p) => responseOf(s, p)) });
@@ -529,7 +559,7 @@ const markDeceased: MockHandler = (req) => {
   const pet = petFor(req, s, 'write');
   if (isReply(pet)) return pet;
   if (pet.busy === 'OPEN_VISIT') return ruleFail('BR-KH-05', 'Thú đang có lượt khám chưa kết thúc');
-  if (pet.busy === 'BOARDING') return ruleFail('BR-KH-05', 'Thú đang lưu trú, hãy kết thúc lưu trú trước (BR-LT-12)');
+  if (pet.busy === 'BOARDING' || staySource(pet.petId)) return ruleFail('BR-KH-05', 'Thú đang lưu trú, hãy kết thúc lưu trú trước (BR-LT-12)');
   if (pet.deceasedOn) return fail('INVALID_STATE_TRANSITION', 'Thú đã được đánh dấu đã mất, không hoàn tác được', 409);
   pet.deceasedOn = String(b.deceasedOn);
   pet.deletable = false;
@@ -542,7 +572,7 @@ const deletePet: MockHandler = (req) => {
   const pet = petFor(req, s, 'write');
   if (isReply(pet)) return pet;
   if (pet.deceasedOn) return ruleFail('BR-KH-05', 'Thú đã mất, hồ sơ chỉ đọc');
-  if (!pet.deletable) return ruleFail('BR-KH-06', 'Thú đã có lịch hẹn, đặt chỗ, lượt khám hoặc Order — hãy dùng đánh dấu đã mất');
+  if (!pet.deletable || staySource(pet.petId)) return ruleFail('BR-KH-06', 'Thú đã có lịch hẹn, đặt chỗ, lượt khám hoặc Order — hãy dùng đánh dấu đã mất');
   s.pets = s.pets.filter((p) => p.petId !== pet.petId);
   s.weights = s.weights.filter((w) => w.petId !== pet.petId);
   save(s);
@@ -575,6 +605,7 @@ const transferOwner: MockHandler = (req) => {
   }
   if (pet.deceasedOn) return ruleFail('BR-KH-05', 'Thú đã mất, không chuyển chủ được');
   if (pet.busy) return ruleFail('BR-KH-08', `${BUSY_REASON[pet.busy]}, chưa chuyển chủ được`);
+  if (staySource(pet.petId)) return ruleFail('BR-KH-08', `${BUSY_REASON.BOARDING}, chưa chuyển chủ được`);
   pet.customerId = newOwner.customerId;
   save(s);
   markHasData(newOwner.customerId);

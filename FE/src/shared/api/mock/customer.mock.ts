@@ -168,6 +168,17 @@ export function declineLink(accountId: number): boolean {
 
 export const findCustomer = (customerId: number) => load().customers.find((c) => c.customerId === customerId);
 
+/**
+ * Khách chỉ có tên trong dữ liệu mẫu của module khác (đặt chỗ lưu trú mẫu T48: khách tại quầy chưa có hồ sơ): tra theo id cho
+ * bàn thu tiền và chi tiết khách, KHÔNG vào danh sách / tìm kiếm và không đổi `findCustomer` (nơi nó là cổng chặn luật khác).
+ */
+const guestSources: Array<(customerId: number) => MockCustomer | undefined> = [];
+export const registerCounterGuests = (source: (customerId: number) => MockCustomer | undefined) => {
+  guestSources.push(source);
+};
+export const findCustomerOrGuest = (customerId: number) =>
+  findCustomer(customerId) ?? guestSources.map((source) => source(customerId)).find((c) => c !== undefined);
+
 // ─── Cho customer-pet.mock (UC22, UC23): tra cứu, tạo và sửa hồ sơ tại quầy ───
 
 export const allCustomers = () => load().customers;

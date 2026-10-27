@@ -1,0 +1,389 @@
+/* /boarding-bookings/new — phần bổ sung cho form đặt chỗ lưu trú. Bước, thẻ chọn, nút gửi, màn thành công dùng lại
+   pages/customer/BookingPage.module.css (cùng hệ thiết kế khách); ở đây chỉ có dải đêm, hai cột form + tóm tắt, khối cảnh báo. */
+
+/* ================================================================
+   Bố cục: các bước bên trái, tóm tắt bám theo cuộn bên phải (từ lg).
+   ================================================================ */
+
+.layout {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: 20px;
+  padding-top: 28px;
+}
+
+@media (min-width: 1024px) {
+  .layout {
+    grid-template-columns: minmax(0, 1fr) 340px;
+    align-items: start;
+  }
+
+  .summary {
+    position: sticky;
+    top: 170px;
+  }
+}
+
+.twoCols {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: 14px;
+}
+
+@media (min-width: 640px) {
+  .twoCols {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+.fieldLabel {
+  display: block;
+  margin-bottom: 6px;
+  font-size: 12.5px;
+  font-weight: 700;
+  color: var(--color-text-primary);
+}
+
+/* Thẻ thú cưng / loại chuồng bị khóa (đã mất). */
+.optionDisabled {
+  opacity: 0.55;
+  cursor: not-allowed;
+}
+
+.optionDisabled:hover {
+  border-color: var(--color-border-default);
+}
+
+.price {
+  margin-top: 4px;
+  font-family: var(--font-friendly);
+  font-size: 15px;
+  font-weight: 800;
+  color: var(--color-accent);
+}
+
+/* ================================================================
+   Dải đêm: mỗi đêm một ô, tự xuống dòng nên 30 đêm không làm rộng trang.
+   Hết chỗ vừa có chữ, vừa có sọc chéo (không chỉ dựa vào màu).
+   ================================================================ */
+
+.nights {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(88px, 1fr));
+  gap: 8px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.night {
+  display: flex;
+  min-width: 0;
+  flex-direction: column;
+  gap: 1px;
+  padding: 8px 10px;
+  border-radius: 12px;
+  border: 1.5px solid var(--color-border-default);
+  background: var(--color-surface-page);
+  font-size: 12px;
+  color: var(--color-text-secondary);
+}
+
+.nightDow {
+  font-weight: 700;
+}
+
+.nightDate {
+  font-family: var(--font-friendly);
+  font-size: 15px;
+  font-weight: 800;
+  color: var(--color-text-primary);
+}
+
+.nightLeft {
+  font-weight: 600;
+}
+
+.nightLow {
+  border-color: #fcd34d;
+  background: #fffbeb;
+}
+
+.nightLow .nightLeft {
+  color: #92400e;
+}
+
+.nightFull {
+  border-color: #fecaca;
+  background-color: #fef2f2;
+  background-image: repeating-linear-gradient(135deg, rgba(185, 28, 28, 0.08) 0 6px, transparent 6px 12px);
+}
+
+.nightFull .nightDate,
+.nightFull .nightLeft {
+  color: #991b1b;
+}
+
+.nightSkeleton {
+  height: 62px;
+  border-radius: 12px;
+  background: var(--color-surface-2);
+}
+
+@media (prefers-reduced-motion: no-preference) {
+  .nightSkeleton {
+    animation: pulse 1.4s ease-in-out infinite;
+  }
+}
+
+@keyframes pulse {
+  50% {
+    opacity: 0.5;
+  }
+}
+
+/* ================================================================
+   Tóm tắt (phiếu tạm tính) + chính sách.
+   ================================================================ */
+
+.summaryBody {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  padding: 18px 20px;
+}
+
+.rows {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin: 0;
+  font-size: 13px;
+}
+
+.row {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.rowLabel {
+  flex: 0 0 auto;
+  color: var(--color-text-secondary);
+}
+
+.rowValue {
+  min-width: 0;
+  margin: 0;
+  text-align: right;
+  font-weight: 700;
+  color: var(--color-text-primary);
+  overflow-wrap: anywhere;
+}
+
+.rowEmpty {
+  font-weight: 500;
+  color: var(--color-text-secondary);
+}
+
+/* Đường kẻ đứt kiểu phiếu, ngăn phần thông tin và phần tiền. */
+.tear {
+  border: 0;
+  border-top: 1.5px dashed var(--color-border-strong);
+  margin: 2px 0;
+}
+
+.total {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.totalCalc {
+  font-size: 12.5px;
+  color: var(--color-text-secondary);
+}
+
+.totalValue {
+  font-family: var(--font-friendly);
+  font-size: 22px;
+  font-weight: 800;
+  color: var(--color-accent);
+}
+
+.policies {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  font-size: 12.5px;
+  line-height: 1.5;
+  color: var(--color-text-secondary);
+}
+
+.policy {
+  display: flex;
+  gap: 10px;
+}
+
+.policyIcon {
+  flex: 0 0 auto;
+  margin-top: 2px;
+  color: var(--color-accent);
+}
+
+.lockHint {
+  margin: 0;
+  border-radius: 10px;
+  background: #fffbeb;
+  padding: 10px 14px;
+  font-size: 13px;
+  font-weight: 600;
+  color: #92400e;
+}
+
+/* ================================================================
+   Màn xác nhận + cảnh báo tiêm phòng.
+   ================================================================ */
+
+.done {
+  max-width: 760px;
+  margin: 28px auto 0;
+  border-radius: 20px;
+  background: var(--color-surface-card);
+  box-shadow:
+    0 1px 2px rgba(56, 36, 23, 0.06),
+    0 8px 18px -14px rgba(56, 36, 23, 0.4);
+  padding: 28px 24px;
+}
+
+@media (min-width: 640px) {
+  .done {
+    padding: 36px;
+  }
+}
+
+.doneHead {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+}
+
+.doneIcon {
+  display: grid;
+  flex: 0 0 auto;
+  place-items: center;
+  width: 56px;
+  height: 56px;
+  border-radius: 50%;
+  background: var(--color-accent-soft);
+  color: var(--color-accent);
+}
+
+.doneTitle {
+  font-family: var(--font-friendly);
+  font-size: 22px;
+  font-weight: 800;
+  line-height: 1.2;
+  color: var(--color-text-primary);
+  overflow-wrap: anywhere;
+}
+
+.doneCode {
+  margin-top: 4px;
+  font-size: 13px;
+  color: var(--color-text-secondary);
+}
+
+.doneCode strong {
+  color: var(--color-accent);
+  overflow-wrap: anywhere;
+}
+
+.doneDetails {
+  margin: 24px 0 0;
+  border-radius: 12px;
+  background: var(--color-surface-2);
+  padding: 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  font-size: 13px;
+}
+
+.warn {
+  margin-top: 20px;
+  border-radius: 16px;
+  border: 1.5px solid #fcd34d;
+  background: #fffbeb;
+  padding: 18px 20px;
+  color: #78350f;
+}
+
+.warnTitle {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 14.5px;
+  font-weight: 800;
+}
+
+.warnText {
+  margin-top: 8px;
+  font-size: 13px;
+  line-height: 1.55;
+}
+
+.warnList {
+  margin: 12px 0 0;
+  padding: 0;
+  list-style: none;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  font-size: 13px;
+}
+
+.warnList li {
+  border-radius: 10px;
+  background: rgba(255, 255, 255, 0.7);
+  padding: 8px 12px;
+}
+
+.warnList strong {
+  display: block;
+}
+
+.warnAction {
+  display: inline-flex;
+  align-items: center;
+  min-height: 40px;
+  margin-top: 14px;
+  padding: 0 18px;
+  border-radius: 999px;
+  background: #92400e;
+  color: #fff;
+  font-size: 13px;
+  font-weight: 700;
+}
+
+.warnAction:hover {
+  background: #78350f;
+}
+
+.doneActions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+  margin-top: 24px;
+}
+
+/* Hai nút xếp ngang khi đủ rộng, xuống dòng khi hẹp (không ép chữ nút xuống 2 dòng). */
+.doneActions > a,
+.doneActions > button {
+  flex: 1 1 200px;
+  min-height: 44px;
+  white-space: nowrap;
+}

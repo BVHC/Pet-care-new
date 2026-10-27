@@ -330,6 +330,29 @@ function save(s: State) {
   }
 }
 
+// ─── Cho mock lưu trú (T48): như NotificationApi.enqueue (IN_APP) của BE, chỉ thêm export ───
+
+/** Nội dung một thông báo trong ứng dụng; `type` là mã mẫu bỏ hậu tố `_APP` (vd `CARE_LOG_ABNORMAL`). */
+export interface InAppNotice {
+  type: string;
+  title: string;
+  body: string;
+  linkUrl: string | null;
+}
+
+/** Thêm thông báo chưa đọc, createdAt = bây giờ, cho người nhận (id tăng như cột serial). Gọi cho khách có tài khoản và nhân viên; hồ sơ không có tài khoản thì không có thông báo trong ứng dụng (BR-TB-02). */
+export function pushNotification(accountId: number, notice: InAppNotice): void {
+  const s = load();
+  s.notifications.push({
+    ...notice,
+    notificationId: Math.max(0, ...s.notifications.map((n) => n.notificationId)) + 1,
+    accountId,
+    createdAt: new Date().toISOString(),
+    readAt: null,
+  });
+  save(s);
+}
+
 // ─── Thông báo (#5–8) ───
 
 const me = (req: MockRequest) => req.account!.id;
