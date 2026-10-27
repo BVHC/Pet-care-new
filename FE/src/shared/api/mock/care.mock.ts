@@ -1,20 +1,55 @@
-// Mock care-v1 #5–10 (UC88): thông báo trong ứng dụng của người đang đăng nhập và cài đặt nhận thông báo của khách.
+// Mock care-v1: việc gọi điện của lễ tân (#1–4, UC87) và #5–10 (UC88): thông báo trong ứng dụng của người đang đăng nhập
+// và cài đặt nhận thông báo của khách.
 // Thông báo: mọi role đã đăng nhập, kể cả ADMIN (01 UC88 A02–A08; BE MyNotificationController `isAuthenticated()`,
 // docs/adr/0039 §1). Mới nhất trước, trùng giờ thì id lớn trước; `page` < 0 → 0, `size` kẹp 1–100; đánh dấu đã đọc
 // giữ `readAt` lần đầu; thông báo của người khác → 404 cùng câu với id không tồn tại.
 // Cài đặt (#9, #10): chỉ CUSTOMER; BE chưa làm (nợ D025) nên mock là nguồn — nội dung theo care-v1 A1, chờ PO (Q1).
 // Thứ tự kiểm như BE (00-method §3.5): dữ liệu vào → quyền.
-import type { AppNotification, ChannelToggle, NotificationSettings, ReminderKind } from '../../types/care';
-import { CHANNELS, REMINDER_KINDS } from '../../types/care';
-import { denied, fail, invalid, noContent, notFound, ok, type Check, type MockHandler, type MockRequest } from './envelope';
+import type {
+  AppNotification,
+  CareTask,
+  CareTaskResult,
+  CareTaskStatus,
+  CareTaskType,
+  ChannelToggle,
+  NotificationSettings,
+  ReminderKind,
+} from '../../types/care';
+import { CARE_TASK_LIMITS, CARE_TASK_RESULTS, CARE_TASK_STATUSES, CARE_TASK_TYPES, CHANNELS, REMINDER_KINDS } from '../../types/care';
+import { vnDate } from '../../utils/vn-time';
+import { findCustomer } from './customer.mock';
+import { petSummary } from './customer-pet.mock';
+import {
+  denied,
+  fail,
+  invalid,
+  isText,
+  noContent,
+  notFound,
+  ok,
+  ruleFail,
+  scopeDenied,
+  tooLong,
+  type Check,
+  type MockHandler,
+  type MockReply,
+  type MockRequest,
+} from './envelope';
+import { clampPaging, pageOf, typeError } from './public.mock';
 
 interface NotificationRow extends AppNotification {
   accountId: number;
+}
+/** Dòng `care_tasks` (05-erd) cộng SĐT khẩn của đặt chỗ lưu trú; mock chưa có đặt chỗ lưu trú nên SĐT khẩn giữ ở đây. */
+interface CareTaskRow extends Omit<CareTask, 'customerName' | 'petName' | 'phoneToCall'> {
+  emergencyPhone: string | null;
 }
 interface State {
   notifications: NotificationRow[];
   /** accounts.notification_settings; vắng = mặc định (05 DEFAULT '{}'). */
   settings: Record<number, NotificationSettings>;
+  /** care_tasks (UC87). State lưu từ trước T47 chưa có trường này: `load()` thêm dữ liệu mẫu. */
+  careTasks: CareTaskRow[];
 }
 
 /** Mặc định bật hết: cột ERD DEFAULT '{}' và docs không nói loại nào tắt sẵn (giả định, chờ Q1). */
@@ -223,7 +258,46 @@ function seed(now = Date.now()): State {
     createdAt: new Date(createdAt).toISOString(),
     readAt: read ? new Date(Math.min(createdAt + 2 * HOUR, now)).toISOString() : null,
   }));
-  return { notifications, settings: {} };
+  return { notifications, settings: {}, careTasks: seedCareTasks(now) };
+}
+
+/**
+ * 9 việc gọi điện của chi nhánh 1 (lễ tân reception@store1.vn, id 4): 5 đang chờ, 2 đã xong, 2 đã hủy, đủ 4 loại. Hạn tính theo
+ * ngày Việt Nam so với lúc tạo. Mảng xếp id giảm dần (#6 và #7 cùng hạn) để thứ tự trả về do sắp xếp chứ không do thứ tự mảng.
+ * Khóa liên kết (mũi tiêm, bệnh án, đặt chỗ lưu trú) là id giả: mock tiêm chủng / bệnh án / lưu trú không cần có dòng tương ứng.
+ * #6 không có SĐT khẩn để thử giao diện "chưa có số điện thoại" (ERD đặt emergency_phone NN, hợp đồng cho `phoneToCall` vắng).
+ */
+function seedCareTasks(now = Date.now()): CareTaskRow[] {
+  const date = (days: number) => vnDate(now + days * DAY);
+  const text = (days: number) => vn(now + days * DAY).date;
+  const when = (days: number, hh: number, mm = 0) => new Date(at(now + days * DAY, hh, mm)).toISOString();
+  type Seed = Pick<CareTaskRow, 'careTaskId' | 'type' | 'status' | 'customerId' | 'petId' | 'dueDate' | 'context' | 'createdAt'> & Partial<CareTaskRow>;
+  const task = (t: Seed): CareTaskRow => ({
+    branchId: 1,
+    vaccinationId: null,
+    medicalRecordVisitId: null,
+    boardingBookingId: null,
+    result: null,
+    note: null,
+    cancelReason: null,
+    handledBy: null,
+    handledAt: null,
+    emergencyPhone: null,
+    ...t,
+  });
+  const RECEPTION = 4;
+  return [
+    task({ careTaskId: 9, type: 'VACCINE_DUE', status: 'OPEN', customerId: 4, petId: 5, vaccinationId: 706, dueDate: date(2), createdAt: when(-5, 6), context: `Mũi 2 vaccine 4 bệnh cho mèo, đến hạn ${text(2)}` }),
+    task({ careTaskId: 8, type: 'FOLLOW_UP_DUE', status: 'OPEN', customerId: 4, petId: 5, medicalRecordVisitId: 1104, dueDate: date(0), createdAt: when(-3, 6), context: `Hẹn tái khám ngày ${text(0)} sau đợt điều trị viêm da` }),
+    task({ careTaskId: 7, type: 'PICKUP_OVERDUE', status: 'OPEN', customerId: 1, petId: 2, boardingBookingId: 3002, emergencyPhone: '0987000111', dueDate: date(-1), createdAt: when(-1, 6), context: `Đặt chỗ LT-2610-00032: dự kiến trả ngày ${text(-1)}, chưa đến đón` }),
+    task({ careTaskId: 6, type: 'PICKUP_OVERDUE', status: 'OPEN', customerId: 1, petId: 3, boardingBookingId: 3001, dueDate: date(-1), createdAt: when(-1, 6), context: `Đặt chỗ LT-2610-00031: dự kiến trả ngày ${text(-1)}, chưa đến đón` }),
+    task({ careTaskId: 5, type: 'VACCINE_OVERDUE', status: 'OPEN', customerId: 3, petId: 4, vaccinationId: 705, dueDate: date(-3), createdAt: when(-3, 6), context: `Vaccine Dại: hạn tiêm nhắc ${text(-10)}, đã quá 7 ngày chưa tiêm lại` }),
+    // Hệ thống hủy khi mũi đã được tiêm lại (BR-TB-03): không có người xử lý.
+    task({ careTaskId: 4, type: 'VACCINE_OVERDUE', status: 'CANCELLED', customerId: 1, petId: 1, vaccinationId: 704, dueDate: date(-4), createdAt: when(-4, 6), cancelReason: 'Đã tiêm lại (BR-TB-03)', context: `Vaccine 4 bệnh cho mèo: hạn tiêm nhắc ${text(-11)}, đã quá 7 ngày chưa tiêm lại` }),
+    task({ careTaskId: 3, type: 'PICKUP_OVERDUE', status: 'CANCELLED', customerId: 3, petId: 4, boardingBookingId: 3003, emergencyPhone: '0905111222', dueDate: date(-5), createdAt: when(-5, 6), cancelReason: 'Khách đã đến đón thú lúc 17:30, chưa kịp cập nhật hệ thống', handledBy: RECEPTION, handledAt: when(-5, 17, 45), context: `Đặt chỗ LT-2610-00028: dự kiến trả ngày ${text(-5)}, chưa đến đón` }),
+    task({ careTaskId: 2, type: 'VACCINE_DUE', status: 'DONE', customerId: 4, petId: 5, vaccinationId: 702, dueDate: date(-30), createdAt: when(-37, 6), result: 'REACHED', note: 'Khách hẹn đưa Miu đến tiêm trong tuần này.', handledBy: RECEPTION, handledAt: when(-30, 10, 15), context: `Mũi 1 vaccine 4 bệnh cho mèo, đến hạn ${text(-30)}` }),
+    task({ careTaskId: 1, type: 'VACCINE_OVERDUE', status: 'DONE', customerId: 1, petId: 2, vaccinationId: 703, dueDate: date(-6), createdAt: when(-6, 6), result: 'UNREACHABLE', note: 'Gọi hai lần không nghe máy, đã nhắn tin để lại lời nhắn.', handledBy: RECEPTION, handledAt: when(-6, 14, 40), context: `Vaccine 5 bệnh: hạn tiêm nhắc ${text(-13)}, đã quá 7 ngày chưa tiêm lại` }),
+  ];
 }
 
 const STATE_KEY = 'petcare-mock-care';
@@ -231,7 +305,14 @@ const STATE_KEY = 'petcare-mock-care';
 function load(): State {
   try {
     const raw = localStorage.getItem(STATE_KEY);
-    if (raw) return JSON.parse(raw) as State;
+    if (raw) {
+      const stored = JSON.parse(raw) as Partial<State>;
+      if (stored.careTasks) return stored as State;
+      // State lưu trong trình duyệt từ trước T47 chỉ có notifications, settings: giữ nguyên, thêm Care Task mẫu và ghi lại ngay.
+      const merged: State = { notifications: [], settings: {}, ...stored, careTasks: seedCareTasks() };
+      save(merged);
+      return merged;
+    }
   } catch {
     // Dữ liệu hỏng: dùng lại dữ liệu mẫu.
   }
@@ -326,7 +407,141 @@ function settingsChecks(body: unknown): Check[] {
 const pickSettings = (body: Record<ReminderKind, ChannelToggle>): NotificationSettings =>
   Object.fromEntries(REMINDER_KINDS.map((k) => [k, { email: body[k].email, inApp: body[k].inApp }])) as NotificationSettings;
 
+// ─── Việc gọi điện của lễ tân (#1–4, UC87, BR-TB-05, 03 §10) ───
+// BE chưa có (T39) nên mock theo hợp đồng; chỗ hợp đồng im lặng là ASSUMPTION (plan T47 C1–C8):
+//  C1  Sắp theo hạn tăng dần rồi id tăng dần; `status` vắng = OPEN (không có "tất cả"); `dueFrom` / `dueTo` gồm cả hai đầu,
+//      `dueFrom` sau `dueTo` ra trang rỗng (hợp đồng không nêu 400); `page` / `size` kẹp như các danh sách khác.
+//  C2  Hoàn tất cần cả `result` và `note`: thiếu → 400 VALIDATION_FAILED theo trường; `result` ngoài enum hoặc `note` không
+//      phải chuỗi → 400 MALFORMED_REQUEST; `note` toàn khoảng trắng → 400 BR-TB-05 (sau 404 / 403 phạm vi, trước 409).
+//      Hợp đồng ghi BR-TB-05 cho cả "chưa chọn kết quả"; mock tách theo C2, FE luôn chặn trước nên không phân biệt.
+//  C3  Hủy: `reason` thiếu / trống / quá 300 ký tự → 400 VALIDATION_FAILED.
+//  C4  Task của chi nhánh khác → 403 ACCESS_DENIED_SCOPE_MISMATCH (00-method §3.3).
+//  C5  Hoàn tất / hủy tay ghi handledBy = người gọi, handledAt = bây giờ; hệ thống hủy (ST19, BR-TB-03, BR-TB-06) để null (seed).
+//  C6  409 INVALID_STATE_TRANSITION "Không thể chuyển trạng thái CareTask từ X sang Y".
+//  C7  Mọi role khác lễ tân, kể cả BRANCH_MANAGER và SUPER_MANAGER → 403 ACCESS_DENIED.
+//  C8  `note` ≤ 500 ký tự (giới hạn của giao diện, hợp đồng không có).
+//  Khác: id không tồn tại → 404 "Không tìm thấy việc gọi điện #id" (câu do mock đặt); id / tham số sai kiểu → 400 MALFORMED_REQUEST.
+// Thứ tự: 400 path / query / body → 403 vai trò → 404 / 403 phạm vi → 400 BR-TB-05 → 409.
+// customerName, petName, phoneToCall đọc từ mock khách / thú như BE đọc qua QueryApi. BR-TB-05: đón thú quá hạn gọi SĐT khẩn ghi
+// lúc nhận thú (giữ trong dòng, mock chưa có đặt chỗ lưu trú), các loại khác gọi SĐT hồ sơ khách.
+
+const isReceptionist = (req: MockRequest) => req.account!.role === 'RECEPTIONIST';
+const branchOf = (req: MockRequest) => req.account!.branchId ?? null;
+const malformed = () => fail('MALFORMED_REQUEST', 'Nội dung request không đúng định dạng JSON hoặc sai kiểu dữ liệu', 400);
+const stateError = (from: CareTaskStatus, to: CareTaskStatus) =>
+  fail('INVALID_STATE_TRANSITION', `Không thể chuyển trạng thái CareTask từ ${from} sang ${to}`, 409);
+const isReply = (x: CareTaskRow | MockReply): x is MockReply => typeof x.status === 'number';
+
+/** `yyyy-MM-dd` là ngày có thật (không nhận 2026-02-30). */
+function isDate(v: string): boolean {
+  const m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(v);
+  if (!m) return false;
+  const d = new Date(Date.UTC(Number(m[1]), Number(m[2]) - 1, Number(m[3])));
+  return d.getUTCMonth() === Number(m[2]) - 1 && d.getUTCDate() === Number(m[3]);
+}
+
+function careTaskView({ emergencyPhone, ...row }: CareTaskRow): CareTask {
+  const customer = findCustomer(row.customerId);
+  return {
+    ...row,
+    customerName: customer?.fullName ?? `Khách #${row.customerId}`,
+    petName: petSummary(row.petId)?.name ?? `Thú #${row.petId}`,
+    phoneToCall: row.type === 'PICKUP_OVERDUE' ? emergencyPhone : (customer?.phone ?? null),
+  };
+}
+
+/** Task theo id trong phạm vi chi nhánh của người gọi: không có → 404, của chi nhánh khác → 403 phạm vi. */
+function careTaskFor(req: MockRequest, s: State): CareTaskRow | MockReply {
+  const id = Number(req.params.careTaskId);
+  const row = s.careTasks.find((t) => t.careTaskId === id);
+  if (!row) return notFound('việc gọi điện', id);
+  return row.branchId === branchOf(req) ? row : scopeDenied();
+}
+
+const listCareTasks: MockHandler = (req) => {
+  const { status = 'OPEN', type, dueFrom, dueTo } = req.query;
+  if (!CARE_TASK_STATUSES.includes(status as CareTaskStatus)) return badParam('status');
+  if (type !== undefined && !CARE_TASK_TYPES.includes(type as CareTaskType)) return badParam('type');
+  if (dueFrom !== undefined && !isDate(dueFrom)) return badParam('dueFrom');
+  if (dueTo !== undefined && !isDate(dueTo)) return badParam('dueTo');
+  const badPaging = typeError(req.query, ['page', 'size']);
+  if (badPaging) return badPaging;
+  if (!isReceptionist(req)) return denied();
+
+  const found = load()
+    .careTasks.filter(
+      (t) =>
+        t.branchId === branchOf(req) &&
+        t.status === status &&
+        (type === undefined || t.type === type) &&
+        (dueFrom === undefined || t.dueDate >= dueFrom) &&
+        (dueTo === undefined || t.dueDate <= dueTo),
+    )
+    .sort((a, b) => a.dueDate.localeCompare(b.dueDate) || a.careTaskId - b.careTaskId);
+  return ok(pageOf(found.map(careTaskView), clampPaging(req.query)));
+};
+
+const getCareTask: MockHandler = (req) => {
+  const badId = typeError(req.params, ['careTaskId']);
+  if (badId) return badId;
+  if (!isReceptionist(req)) return denied();
+  const row = careTaskFor(req, load());
+  return isReply(row) ? row : ok(careTaskView(row));
+};
+
+const completeCareTask: MockHandler = (req) => {
+  const badId = typeError(req.params, ['careTaskId']);
+  if (badId) return badId;
+  const b = (req.body ?? {}) as Record<string, unknown>;
+  if ((b.result != null && !CARE_TASK_RESULTS.includes(b.result as CareTaskResult)) || (b.note != null && typeof b.note !== 'string')) {
+    return malformed();
+  }
+  const badBody = invalid([
+    ['result', 'Vui lòng chọn kết quả cuộc gọi', b.result == null],
+    ['note', 'Vui lòng nhập ghi chú kết quả cuộc gọi', b.note == null],
+    ['note', `Ghi chú tối đa ${CARE_TASK_LIMITS.note} ký tự`, tooLong(b.note, CARE_TASK_LIMITS.note)],
+  ]);
+  if (badBody) return badBody;
+  if (!isReceptionist(req)) return denied();
+
+  const s = load();
+  const row = careTaskFor(req, s);
+  if (isReply(row)) return row;
+  const note = (b.note as string).trim();
+  if (note === '') return ruleFail('BR-TB-05', 'Vui lòng nhập ghi chú kết quả cuộc gọi');
+  if (row.status !== 'OPEN') return stateError(row.status, 'DONE');
+  Object.assign(row, { status: 'DONE', result: b.result, note, handledBy: me(req), handledAt: new Date().toISOString() });
+  save(s);
+  return ok(careTaskView(row), 200, 'Đã ghi kết quả cuộc gọi');
+};
+
+const cancelCareTask: MockHandler = (req) => {
+  const badId = typeError(req.params, ['careTaskId']);
+  if (badId) return badId;
+  const b = (req.body ?? {}) as Record<string, unknown>;
+  if (b.reason != null && typeof b.reason !== 'string') return malformed();
+  const badBody = invalid([
+    ['reason', 'Vui lòng nhập lý do hủy', !isText(b.reason)],
+    ['reason', `Lý do tối đa ${CARE_TASK_LIMITS.reason} ký tự`, tooLong(b.reason, CARE_TASK_LIMITS.reason)],
+  ]);
+  if (badBody) return badBody;
+  if (!isReceptionist(req)) return denied();
+
+  const s = load();
+  const row = careTaskFor(req, s);
+  if (isReply(row)) return row;
+  if (row.status !== 'OPEN') return stateError(row.status, 'CANCELLED');
+  Object.assign(row, { status: 'CANCELLED', cancelReason: (b.reason as string).trim(), handledBy: me(req), handledAt: new Date().toISOString() });
+  save(s);
+  return ok(careTaskView(row), 200, 'Đã hủy việc gọi điện');
+};
+
 export const careRoutes: Record<string, MockHandler> = {
+  'GET /api/care-tasks': listCareTasks,
+  'GET /api/care-tasks/:careTaskId': getCareTask,
+  'POST /api/care-tasks/:careTaskId/complete': completeCareTask,
+  'POST /api/care-tasks/:careTaskId/cancel': cancelCareTask,
+
   'GET /api/me/notifications': listMine,
   'GET /api/me/notifications/unread-count': countUnread,
   'POST /api/me/notifications/read-all': markAllRead,

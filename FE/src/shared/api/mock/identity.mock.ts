@@ -63,13 +63,33 @@ export const MOCK_ACCOUNTS: readonly MockAccount[] = [
   { id: 9, email: 'manager2@store2.vn', role: 'BRANCH_MANAGER', fullName: 'Phạm Minh Đức', branchId: 2 },
   // SĐT trùng hồ sơ tại quầy chưa liên kết: đăng nhập là gặp màn liên kết hồ sơ (BR-TK-19, customer.mock.ts).
   { id: 10, email: 'khachmoi@petcare.vn', role: 'CUSTOMER', fullName: 'Lê Hoàng Long' },
+  // Id 21–23: bác sĩ thêm cho trang chủ / trang bác sĩ có đủ 4 thẻ. Tránh 11 (cashier.mock) và 12 (visit.mock) vì hai mock đó giữ chỗ làm nhân viên đã nghỉ; 100+ là khách tự đăng ký, 200+ là nhân viên tạo thêm.
+  { id: 21, email: 'doctor2@store1.vn', role: 'VET', fullName: 'BS. Quốc Bảo', branchId: 1 },
+  { id: 22, email: 'doctor3@store1.vn', role: 'VET', fullName: 'BS. Ngọc Lan', branchId: 1 },
+  { id: 23, email: 'doctor4@store1.vn', role: 'VET', fullName: 'BS. Thanh Thảo', branchId: 1 },
 ];
 
 /** Hồ sơ nhân viên ban đầu (staff_profiles); họ tên lấy từ MOCK_ACCOUNTS. */
 export const STAFF_SEED: Record<number, Partial<StaffProfile>> = {
   5: {
+    avatarUrl: '/imgs/team1.jpg',
     specialty: 'Nội khoa, da liễu thú y',
     bio: 'Hơn 8 năm khám và điều trị chó mèo, quan tâm đặc biệt tới bệnh da và dị ứng.',
+  },
+  21: {
+    avatarUrl: '/imgs/team2.jpg',
+    specialty: 'Ngoại khoa, chỉnh hình',
+    bio: 'Hơn 10 năm phẫu thuật mô mềm và chỉnh hình cho chó mèo, theo sát giai đoạn hồi phục sau mổ.',
+  },
+  22: {
+    avatarUrl: '/imgs/team3.jpg',
+    specialty: 'Chẩn đoán hình ảnh, siêu âm',
+    bio: 'Chuyên siêu âm, X-quang và xét nghiệm giúp phát hiện sớm bệnh nội tạng ở thú cưng.',
+  },
+  23: {
+    avatarUrl: '/imgs/team4.jpg',
+    specialty: 'Dinh dưỡng, tiêm phòng',
+    bio: 'Tư vấn dinh dưỡng và lịch tiêm phòng theo từng độ tuổi cho chó mèo con.',
   },
 };
 

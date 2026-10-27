@@ -8,10 +8,6 @@ import {
   Stethoscope,
   BadgePercent,
   ShieldCheck,
-  PawPrint,
-  Users,
-  Clock,
-  Smile,
   Search,
   Heart,
 } from 'lucide-react'
@@ -147,12 +143,8 @@ export const TRUST_ITEMS: { icon: LucideIcon; label: string }[] = [
   { icon: BadgePercent, label: 'Giá tốt' },
 ]
 
-export const STATS: { icon: LucideIcon; image?: string; value: string; label: string }[] = [
-  { icon: PawPrint, image: '/imgs/100.svg', value: '10K+', label: 'Thú cưng được chăm sóc' },
-  { icon: Users, image: '/imgs/ThuY.svg', value: '500+', label: 'Bác sĩ & chuyên gia' },
-  { icon: Clock, image: '/imgs/ship.svg', value: '24h', label: 'Giao hàng tận nơi' },
-  { icon: Smile, image: '/imgs/support.svg', value: '4.9/5', label: 'Đánh giá hài lòng' },
-]
+// Biểu tượng 4 ô của dải số liệu theo vị trí; chữ và số do quản trị sửa (UC21, khóa HOME_BANNER, shared/constants/page-content.ts).
+export const STAT_IMAGES: string[] = ['/imgs/100.svg', '/imgs/ThuY.svg', '/imgs/ship.svg', '/imgs/support.svg']
 
 export const STEPS: { icon: LucideIcon; step: string; title: string; desc: string }[] = [
   {
@@ -185,25 +177,6 @@ export const PARTNERS: { name: string; logo: string }[] = [
   { name: 'Me-O', logo: '/imgs/brands/Me-O.jpg' },
   { name: 'KitCat', logo: '/imgs/brands/KitCat.jpg' },
   { name: 'Monge', logo: '/imgs/brands/Monge.jpg' },
-]
-
-export const FAQS: { q: string; a: string }[] = [
-  {
-    q: 'PetCare hoạt động ở khu vực nào?',
-    a: 'Hiện chúng tôi phục vụ tại các thành phố lớn và đang mở rộng liên tục. Nhập địa chỉ khi đặt lịch để kiểm tra khả năng phục vụ.',
-  },
-  {
-    q: 'Tôi có thể đổi hoặc hủy lịch hẹn không?',
-    a: 'Có. Bạn có thể dời hoặc hủy lịch miễn phí trước 24 giờ, ngay trong mục Lịch hẹn của tài khoản.',
-  },
-  {
-    q: 'Các bác sĩ thú y có được cấp phép không?',
-    a: 'Mọi phòng khám và bác sĩ đối tác đều được kiểm chứng giấy phép hành nghề trước khi tham gia hệ thống.',
-  },
-  {
-    q: 'Chi phí giao hàng như thế nào?',
-    a: 'Miễn phí giao hàng cho đơn từ một mức tối thiểu; phần lớn đơn được giao trong vòng 24 giờ.',
-  },
 ]
 
 export { PHOTOS }

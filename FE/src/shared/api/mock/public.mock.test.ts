@@ -7,8 +7,12 @@ import { installMockApi } from './mock-api';
 
 // Dữ liệu mẫu: catalog.mock.ts (sản phẩm 1, 2 hàng thường; 3 thuốc kê đơn; 4 vitamin chưa có dòng tồn; 5, 6 vaccine;
 // 7 ngừng kinh doanh; danh mục 5 "Đồ chơi" ngừng), inventory.mock.ts (chi nhánh 1 còn hàng 1, 2, 3, 5, 6; chi nhánh 2 DRAFT
-// còn hàng sản phẩm 1), branch.mock.ts (chi nhánh 1 ACTIVE; 2, 3 DRAFT), identity.mock.ts (VET duy nhất: #5 "BS. Minh Anh", chi nhánh 1).
+// còn hàng sản phẩm 1), branch.mock.ts (chi nhánh 1 ACTIVE; 2, 3 DRAFT), identity.mock.ts (4 VET ở chi nhánh 1: #5 "BS. Minh Anh", #21 "BS. Quốc Bảo", #22 "BS. Ngọc Lan", #23 "BS. Thanh Thảo").
 let client: AxiosInstance;
+
+// Thứ tự theo họ tên (vi): Minh Anh, Ngọc Lan, Quốc Bảo, Thanh Thảo.
+const SEED_VET_IDS = [5, 22, 21, 23];
+const SEED_VET_NAMES = ['BS. Minh Anh', 'BS. Ngọc Lan', 'BS. Quốc Bảo', 'BS. Thanh Thảo'];
 
 beforeEach(() => {
   client = axios.create();
@@ -251,17 +255,19 @@ describe('đội ngũ bác sĩ công khai (public, UC15; BR-TK-20, BR-CK-01)', (
     return res.data.data.accountId as number;
   };
 
-  it('không cần đăng nhập; VET duy nhất của mẫu kèm hồ sơ công khai và tên chi nhánh', async () => {
+  it('không cần đăng nhập; 4 VET của mẫu kèm hồ sơ công khai, ảnh và tên chi nhánh', async () => {
     const list = await vets();
-    expect(list).toHaveLength(1);
+    expect(list).toHaveLength(4);
     expect(list[0]).toMatchObject({
       accountId: 5,
       fullName: 'BS. Minh Anh',
+      avatarUrl: '/imgs/team1.jpg',
       branchId: 1,
       branchName: 'PetCare Cầu Giấy',
       specialty: 'Nội khoa, da liễu thú y',
     });
     expect(list[0].bio).toContain('8 năm');
+    expect(list.every((v) => v.avatarUrl && v.specialty && v.bio && v.branchId === 1)).toBe(true);
   });
 
   it('không lộ email, SĐT, vai trò, trạng thái', async () => {
@@ -271,11 +277,11 @@ describe('đội ngũ bác sĩ công khai (public, UC15; BR-TK-20, BR-CK-01)', (
   });
 
   it('chỉ VET: lễ tân, thu ngân, chăm sóc, quản lý cùng chi nhánh không hiện', async () => {
-    expect((await vets()).map((v) => v.accountId)).toEqual([5]);
+    expect((await vets()).map((v) => v.accountId)).toEqual(SEED_VET_IDS);
   });
 
   it('lọc theo branchId: chi nhánh ACTIVE trả VET của nó, chi nhánh DRAFT hoặc không có trả mảng rỗng', async () => {
-    expect((await vets({ branchId: 1 })).map((v) => v.accountId)).toEqual([5]);
+    expect((await vets({ branchId: 1 })).map((v) => v.accountId)).toEqual(SEED_VET_IDS);
     for (const branchId of [2, 3, 999]) expect(await vets({ branchId })).toEqual([]);
   });
 
@@ -289,12 +295,12 @@ describe('đội ngũ bác sĩ công khai (public, UC15; BR-TK-20, BR-CK-01)', (
   it('nhiều bác sĩ: sắp theo họ tên', async () => {
     await newVet('Zed Bác sĩ');
     await newVet('An Bình');
-    expect((await vets()).map((v) => v.fullName)).toEqual(['An Bình', 'BS. Minh Anh', 'Zed Bác sĩ']);
+    expect((await vets()).map((v) => v.fullName)).toEqual(['An Bình', ...SEED_VET_NAMES, 'Zed Bác sĩ']);
   });
 
   it('VET ở chi nhánh DRAFT bị ẩn dù tài khoản ACTIVE (BR-CK-01)', async () => {
     await newVet('Bác sĩ Hà Đông', 2);
-    expect((await vets()).map((v) => v.fullName)).toEqual(['BS. Minh Anh']);
+    expect((await vets()).map((v) => v.fullName)).toEqual(SEED_VET_NAMES);
     expect(await vets({ branchId: 2 })).toEqual([]);
   });
 

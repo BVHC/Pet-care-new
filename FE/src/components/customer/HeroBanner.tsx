@@ -1,8 +1,10 @@
-import React, { useEffect, useRef } from "react";
+import React, { useRef } from "react";
 import { Link } from "react-router-dom";
 import { PawPrint } from "lucide-react";
 import gsap from "gsap";
 import { ScrollTrigger } from "gsap/ScrollTrigger";
+import { useGSAP } from "@gsap/react";
+import { usePublicPage } from "@/shared/hooks/usePageContent";
 import { GazeTrackingHeroPet } from "./GazeTrackingHeroPet";
 
 gsap.registerPlugin(ScrollTrigger);
@@ -14,11 +16,16 @@ const AVATARS = [
 
 export const HeroBanner: React.FC = () => {
 	const bannerRef = useRef<HTMLDivElement>(null);
+	// Chữ của hero do quản trị sửa (UC21, khóa HOME_BANNER). Chưa có câu trả lời thì giữ chỗ bằng opacity-0 và chưa chạy hiệu ứng vào:
+	// vẽ chữ mặc định rồi đổi sang chữ đã sửa sẽ nháy. Lỗi hoặc `{}` thì `ready` vẫn true với chữ mặc định, hero không bao giờ trống.
+	const { content, ready } = usePublicPage("HOME_BANNER");
 
-	useEffect(() => {
-		if (typeof window === "undefined") return;
+	// Lớp opacity-0 bên dưới biến mất ngay trong lần render làm `ready` đổi, và hiệu ứng (layout effect) đặt opacity 0 cho từng cánh
+	// trước khi trình duyệt vẽ, nên không có khung hình nào lộ ra; revertOnUpdate để dựng lại sạch nếu `ready` đổi.
+	useGSAP(
+		() => {
+			if (!ready) return;
 
-		const ctx = gsap.context(() => {
 			const entryTl = gsap.timeline({ defaults: { ease: "power3.out" } });
 
 			entryTl
@@ -45,10 +52,9 @@ export const HeroBanner: React.FC = () => {
 					{ opacity: 1, y: 0, duration: 0.5, stagger: 0.1, ease: "power2.out" },
 					"-=0.3",
 				);
-		}, bannerRef);
-
-		return () => ctx.revert();
-	}, []);
+		},
+		{ scope: bannerRef, dependencies: [ready], revertOnUpdate: true },
+	);
 
 	return (
 		<div
@@ -62,23 +68,20 @@ export const HeroBanner: React.FC = () => {
 			<div className="absolute top-0 left-1/3 w-[600px] h-[500px] bg-white/40 rounded-full blur-3xl pointer-events-none -z-0" />
 
 			{/* Main Content Container — rộng gần full-bleed như reference */}
-			<div className="relative z-10 max-w-[1560px] mx-auto px-5 sm:px-8 lg:px-12">
+			<div className={`relative z-10 max-w-[1560px] mx-auto px-5 sm:px-8 lg:px-12 ${ready ? "" : "opacity-0"}`}>
 				{/* ================= 3-ZONE HERO STAGE ================= */}
 				<div className="grid grid-cols-1 lg:grid-cols-12 gap-8 lg:gap-8 items-center mb-10 sm:mb-16 lg:mb-[52px]">
 					{/* 1. LEFT WING: Headline, Subtitle, White Pill Button, 5-Star Ratings */}
 					<div className="hero-left-wing lg:col-span-4 flex flex-col justify-center order-2 lg:order-1 text-left">
 						{/* Bold Giant Title */}
-						<h1 className="font-sans text-[clamp(48px,6.6vw,124px)] font-black leading-[0.85] tracking-[-0.04em] text-[#141414] mb-5 lg:mb-6">
-							Pet
-							<br />
-							Care
+						{/* Chữ thuần: xuống dòng trong chuỗi = xuống dòng (pre-line), React escape nên không có HTML thô. */}
+						<h1 className="font-sans text-[clamp(48px,6.6vw,124px)] font-black leading-[0.85] tracking-[-0.04em] text-[#141414] mb-5 lg:mb-6 whitespace-pre-line wrap-break-word">
+							{content.headline}
 						</h1>
 
 						{/* Subtitle — đen đậm như reference, không phải xám nhạt */}
-						<p className="text-xl sm:text-2xl font-bold leading-[1.35] text-[#1a1a1a] mb-7 lg:mb-8 max-w-[340px]">
-							Tận tâm chăm sóc
-							<br />
-							bé cưng của bạn
+						<p className="text-xl sm:text-2xl font-bold leading-[1.35] text-[#1a1a1a] mb-7 lg:mb-8 max-w-[340px] whitespace-pre-line wrap-break-word">
+							{content.subheadline}
 						</p>
 
 						{/* White Pill Button with Orange Text */}
@@ -87,12 +90,12 @@ export const HeroBanner: React.FC = () => {
 								to="/booking"
 								className="inline-flex items-center justify-center rounded-full bg-white hover:bg-accent text-accent hover:text-white px-9 sm:px-10 py-4 sm:py-5 text-base sm:text-lg font-black uppercase tracking-wide shadow-sm hover:shadow-lg transition-all duration-200 hover:scale-[1.03] active:scale-95"
 							>
-								Đặt Lịch Ngay
+								{content.ctaLabel}
 							</Link>
 						</div>
 
 						{/* Đánh Giá 5 Sao Trên Mọi Nền Tảng */}
-						<div className="flex items-center gap-4 mb-3">
+						<div className="flex items-center gap-4">
 							<div className="w-14 h-14 rounded-2xl bg-accent text-white flex items-center justify-center shrink-0 shadow-sm">
 								<PawPrint size={26} className="fill-white text-white" />
 							</div>
@@ -104,14 +107,6 @@ export const HeroBanner: React.FC = () => {
 								Mọi Nền Tảng
 							</div>
 						</div>
-
-						{/* Google Reviews Link */}
-						<Link
-							to="/review"
-							className="text-[15px] text-[#5a5a5a] hover:text-accent underline underline-offset-4 font-semibold transition-colors w-fit mt-1"
-						>
-							Xem tất cả đánh giá Google
-						</Link>
 					</div>
 
 					{/* 2. CENTER STAGE: White Squircle Card + Mascot (Căn chính giữa tuyệt đối 4-4-4) */}
@@ -168,13 +163,11 @@ export const HeroBanner: React.FC = () => {
 
 						{/* Stat */}
 						<div className="w-fit shrink-0 text-left lg:text-right">
-							<div className="text-[15px] font-bold text-[#4d4d4d] leading-[1.25]">
-								Chủ thú cưng
-								<br />
-								tin tưởng
+							<div className="text-[15px] font-bold text-[#4d4d4d] leading-[1.25] whitespace-pre-line wrap-break-word">
+								{content.heroStat.label}
 							</div>
 							<div className="font-sans text-5xl sm:text-6xl font-black text-[#141414] leading-none tracking-tight mt-1">
-								2.500+
+								{content.heroStat.value}
 							</div>
 						</div>
 					</div>

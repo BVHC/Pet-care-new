@@ -13,7 +13,9 @@ import { catalogRoutes } from './catalog.mock';
 import { contentRoutes } from './content.mock';
 import { customerRoutes } from './customer.mock';
 import { customerPetRoutes } from './customer-pet.mock';
+import { feedbackRoutes } from './feedback.mock';
 import { inventoryRoutes } from './inventory.mock';
+import { pageContentRoutes } from './page-content.mock';
 import { publicRoutes } from './public.mock';
 import { salesRoutes } from './sales.mock';
 import { visitRoutes } from './visit.mock';
@@ -31,6 +33,8 @@ const ROUTES: Record<string, MockHandler> = {
   ...branchRoutes,
   ...publicRoutes,
   ...contentRoutes,
+  ...pageContentRoutes,
+  ...feedbackRoutes,
   ...adminIdentityRoutes,
   ...appointmentRoutes,
   ...careRoutes,

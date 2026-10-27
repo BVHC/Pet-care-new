@@ -103,15 +103,15 @@ describe('GET /api/staff cho lễ tân — danh sách chọn người gán lư�
   const desk = () => as('reception@store1.vn');
   const names = (res: AxiosResponse) => res.data.data.content.map((s: { accountId: number }) => s.accountId);
 
-  it('không lọc: chỉ VET và CARETAKER ACTIVE của chi nhánh lễ tân (#5 bác sĩ, #6 nhân viên chăm sóc); không thấy lễ tân, quản lý, chi nhánh khác', async () => {
+  it('không lọc: chỉ VET và CARETAKER ACTIVE của chi nhánh lễ tân (#5, #21–23 bác sĩ, #6 nhân viên chăm sóc); không thấy lễ tân, quản lý, chi nhánh khác', async () => {
     const res = await client.get('/api/staff', await desk());
-    expect(names(res)).toEqual([5, 6]);
+    expect(names(res)).toEqual([5, 6, 21, 22, 23]);
     expect(res.data.data.content[0]).toMatchObject({ role: 'VET', status: 'ACTIVE', isLocked: false, branchId: 1, online: true });
   });
 
   it('role=VET&status=ACTIVE&size=100 (lời gọi của hook) và role=CARETAKER chỉ ra đúng một nhóm', async () => {
     const auth = await desk();
-    expect(names(await client.get('/api/staff', { params: { role: 'VET', status: 'ACTIVE', size: 100 }, ...auth }))).toEqual([5]);
+    expect(names(await client.get('/api/staff', { params: { role: 'VET', status: 'ACTIVE', size: 100 }, ...auth }))).toEqual([5, 21, 22, 23]);
     expect(names(await client.get('/api/staff', { params: { role: 'CARETAKER', status: 'ACTIVE', size: 100 }, ...auth }))).toEqual([6]);
   });
 
@@ -134,7 +134,7 @@ describe('GET /api/staff cho lễ tân — danh sách chọn người gán lư�
     const disabled = await created({ email: 'vet.nghi@new.vn', fullName: 'BS. Đã nghỉ', role: 'VET', branchId: 1 });
     await client.post(`/api/staff/${disabled}/disable`, {}, chain);
     const res = await client.get('/api/staff', { params: { role: 'VET' }, ...(await desk()) });
-    expect(names(res)).toEqual([5, sameBranch]);
+    expect(names(res)).toEqual([5, 21, 22, 23, sameBranch]);
     expect(names(res)).not.toContain(otherBranch);
     expect(names(res)).not.toContain(locked);
     expect(names(res)).not.toContain(disabled);
@@ -144,7 +144,7 @@ describe('GET /api/staff cho lễ tân — danh sách chọn người gán lư�
     const { setStaffOnline } = await import('./identity-admin.mock');
     setStaffOnline(6, false);
     const res = await client.get('/api/staff', await desk());
-    expect(res.data.data.content.map((s: { accountId: number; online: boolean }) => [s.accountId, s.online])).toEqual([[5, true], [6, false]]);
+    expect(res.data.data.content.map((s: { accountId: number; online: boolean }) => [s.accountId, s.online])).toEqual([[5, true], [6, false], [21, true], [22, true], [23, true]]);
     setStaffOnline(6, true);
     expect((await client.get('/api/staff', await desk())).data.data.content.every((s: { online: boolean }) => s.online)).toBe(true);
   });

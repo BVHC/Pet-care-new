@@ -62,7 +62,7 @@ describe('hook trang công khai (UC15–17), không cần đăng nhập', () => 
     const prescription = renderHook(() => usePublicProduct(3), { wrapper: wrapper() });
     await waitFor(() => expect(services.result.current.isSuccess && vets.result.current.isSuccess && products.result.current.isSuccess).toBe(true));
     expect(services.result.current.data).toHaveLength(5);
-    expect(vets.result.current.data?.map((v) => v.fullName)).toEqual(['BS. Minh Anh']);
+    expect(vets.result.current.data?.map((v) => v.fullName)).toEqual(['BS. Minh Anh', 'BS. Ngọc Lan', 'BS. Quốc Bảo', 'BS. Thanh Thảo']);
     expect(products.result.current.data).toMatchObject({ size: 2, totalElements: 5 });
 
     await waitFor(() => expect(prescription.result.current.isError).toBe(true));

@@ -225,3 +225,37 @@ describe('route guards', () => {
     expect(screen.getByRole('link', { name: 'Đến bước liên kết hồ sơ' })).toHaveAttribute('href', '/account/link');
   });
 });
+
+// T47: quản trị nội dung, feedback và Care Task. Mỗi trang giữ một <h1> cố định (route test dựa vào đó); quyền theo ADMIN_MENU.
+describe('content, feedback and care task pages (T47)', () => {
+  it.each([
+    ['chuoi@petcare.vn', '/admin/page-contents', 'Nội dung trang'],
+    ['chuoi@petcare.vn', '/admin/articles', 'Bài viết'],
+    ['chuoi@petcare.vn', '/admin/articles/categories', 'Bài viết'],
+    ['chuoi@petcare.vn', '/admin/feedbacks', 'Góp ý của khách'],
+    ['manager@store1.vn', '/admin/feedbacks', 'Góp ý của khách'],
+    ['reception@store1.vn', '/admin/care-tasks', 'Việc gọi điện'],
+  ])('lets %s open %s', async (email, path, title) => {
+    await signInAs(email);
+    open(path);
+    expect(await screen.findByRole('heading', { level: 1, name: title })).toBeInTheDocument();
+    expect(screen.queryByRole('heading', { name: 'Bạn không có quyền vào trang này' })).not.toBeInTheDocument();
+  });
+
+  it.each([
+    ['manager@store1.vn', '/admin/page-contents'],
+    ['manager@store1.vn', '/admin/articles'],
+    // BR-TB-05: chỉ lễ tân của chi nhánh được giao xem và làm Care Task.
+    ['manager@store1.vn', '/admin/care-tasks'],
+    ['chuoi@petcare.vn', '/admin/care-tasks'],
+    ['reception@store1.vn', '/admin/feedbacks'],
+    // ADMIN kỹ thuật không vào được các endpoint content (BE: hasRole SUPER_MANAGER, không có RoleHierarchy).
+    ['admin@petcare.vn', '/admin/feedbacks'],
+    ['admin@petcare.vn', '/admin/articles'],
+    ['doctor@store1.vn', '/admin/page-contents'],
+  ])('shows 403 in place to %s on %s', async (email, path) => {
+    await signInAs(email);
+    open(path);
+    expect(await forbidden()).toBeInTheDocument();
+  });
+});

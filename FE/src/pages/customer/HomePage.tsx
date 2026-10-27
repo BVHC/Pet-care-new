@@ -20,10 +20,12 @@ import { NoCagesPhilosophy } from '@/components/customer/NoCagesPhilosophy'
 import { TestimonialsSpeechBubble } from '@/components/customer/TestimonialsSpeechBubble'
 import { ContactVetCTA } from '@/components/customer/ContactVetCTA'
 import { doctorInitials } from '@/pages/doctors/initials'
+import { PAGE_LIMITS } from '@/shared/constants/page-content'
+import { usePublicPage } from '@/shared/hooks/usePageContent'
 import { usePublicArticles, usePublicProducts, usePublicVets } from '@/shared/hooks/usePublicSite'
 import type { PublicProduct } from '@/shared/types/public-site'
 import { formatPublishedDate, productPriceLabel } from '@/shared/utils/public-format'
-import { PHOTOS, STATS, PARTNERS, FAQS } from './home.mock'
+import { PHOTOS, STAT_IMAGES, PARTNERS } from './home.mock'
 import styles from './HomePage.module.css'
 
 gsap.registerPlugin(ScrollTrigger)
@@ -63,6 +65,12 @@ export function HomePage() {
   const featuredItems = featured.data?.content ?? []
   const doctorItems = (vets.data ?? []).slice(0, DOCTOR_COUNT)
   const newsItems = news.data?.content ?? []
+
+  // Nội dung trang do quản trị sửa (UC21, T47). Dải số liệu (HOME_BANNER) và FAQ giữ skeleton tới khi có câu trả lời để không nháy từ
+  // chữ mặc định sang chữ đã sửa; `{}`, sai dạng hoặc request lỗi thì `ready` vẫn true với chữ mặc định, trang không bao giờ trống.
+  // Chữ của hero nằm trong HeroBanner (cùng khóa HOME_BANNER, cùng một request).
+  const banner = usePublicPage('HOME_BANNER')
+  const faq = usePublicPage('FAQ')
 
   // Phần tĩnh: dựng một lần lúc mount.
   useEffect(() => {
@@ -160,13 +168,25 @@ export function HomePage() {
   )
 
   // Khối dữ liệu hiện / ẩn / thay skeleton làm đổi chiều cao trang: đo lại mọi ScrollTrigger (cả pin của OurServicesStage).
+  // Chữ hero / dải số liệu / FAQ về hoặc đổi (kể cả quản trị sửa lúc đang mở trang) cũng đổi chiều cao các khối phía trên các pin.
   const featuredReady = featuredItems.length > 0
   const doctorsReady = doctorItems.length > 0
   const newsReady = newsItems.length > 0
   useEffect(() => {
     const frame = requestAnimationFrame(() => ScrollTrigger.refresh())
     return () => cancelAnimationFrame(frame)
-  }, [featured.isPending, vets.isPending, news.isPending, featuredReady, doctorsReady, newsReady])
+  }, [
+    featured.isPending,
+    vets.isPending,
+    news.isPending,
+    featuredReady,
+    doctorsReady,
+    newsReady,
+    banner.ready,
+    banner.content,
+    faq.ready,
+    faq.content,
+  ])
 
   return (
     <div className="relative bg-(--color-surface-page) font-professional">
@@ -259,23 +279,29 @@ export function HomePage() {
               </div>
             </div>
           </div>
-          <div className={styles.statsGrid}>
-            {STATS.map((s) => (
-              <div key={s.label} className={styles.statItem}>
-                <div className={styles.statIcon}>
-                  {s.image ? (
-                    <img src={s.image} alt="" style={{ width: 26, height: 26, objectFit: 'contain' }} />
-                  ) : (
-                    <s.icon size={24} />
-                  )}
+          {banner.ready ? (
+            <div className={styles.statsGrid}>
+              {banner.content.stats.map((s, i) => (
+                <div key={i} className={styles.statItem}>
+                  <div className={styles.statIcon}>
+                    <img src={STAT_IMAGES[i]} alt="" style={{ width: 26, height: 26, objectFit: 'contain' }} />
+                  </div>
+                  <div className={styles.statValue}>{s.value}</div>
+                  <div className={`${styles.statLabel} whitespace-pre-line`}>{s.label}</div>
                 </div>
-                <div className={styles.statValue} data-count={s.value}>
-                  {s.value}
+              ))}
+            </div>
+          ) : (
+            <div role="status" aria-label="Đang tải số liệu" className={styles.statsGrid}>
+              {Array.from({ length: PAGE_LIMITS.statCount }, (_, i) => (
+                <div key={i} aria-hidden className={styles.statItem}>
+                  <div className="mb-1 size-12 animate-pulse rounded-full bg-white/15 motion-reduce:animate-none" />
+                  <div className="h-[34px] w-20 animate-pulse rounded-md bg-white/15 motion-reduce:animate-none" />
+                  <div className="h-[13px] w-28 animate-pulse rounded-md bg-white/15 motion-reduce:animate-none" />
                 </div>
-                <div className={styles.statLabel}>{s.label}</div>
-              </div>
-            ))}
-          </div>
+              ))}
+            </div>
+          )}
         </div>
       </section>
 
@@ -384,23 +410,31 @@ export function HomePage() {
           <div className="mb-8 text-center text-sm text-(--color-text-secondary)">
             Chưa tìm thấy câu trả lời? Liên hệ đội hỗ trợ của chúng tôi bất cứ lúc nào.
           </div>
-          <div className={styles.faqList}>
-            {FAQS.map((f, i) => (
-              <div key={f.q} className={styles.faqItem} data-open={openFaq === i}>
-                <button
-                  className={styles.faqQ}
-                  onClick={() => setOpenFaq(openFaq === i ? null : i)}
-                  aria-expanded={openFaq === i}
-                >
-                  {f.q}
-                  {openFaq === i ? <ChevronUp size={18} /> : <ChevronDown size={18} />}
-                </button>
-                <div className={styles.faqA}>
-                  <div className={styles.faqAInner}>{f.a}</div>
+          {faq.ready ? (
+            <div className={styles.faqList}>
+              {faq.content.items.map((f, i) => (
+                <div key={i} className={styles.faqItem} data-open={openFaq === i}>
+                  <button
+                    className={styles.faqQ}
+                    onClick={() => setOpenFaq(openFaq === i ? null : i)}
+                    aria-expanded={openFaq === i}
+                  >
+                    {f.question}
+                    {openFaq === i ? <ChevronUp size={18} /> : <ChevronDown size={18} />}
+                  </button>
+                  <div className={styles.faqA}>
+                    <div className={`${styles.faqAInner} whitespace-pre-line`}>{f.answer}</div>
+                  </div>
                 </div>
-              </div>
-            ))}
-          </div>
+              ))}
+            </div>
+          ) : (
+            <div role="status" aria-label="Đang tải câu hỏi" className={styles.faqList}>
+              {Array.from({ length: 4 }, (_, i) => (
+                <SkeletonCard key={i} className="h-[58px]" />
+              ))}
+            </div>
+          )}
         </div>
       </section>
 

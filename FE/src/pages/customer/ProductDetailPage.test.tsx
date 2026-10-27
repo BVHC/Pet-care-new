@@ -73,8 +73,8 @@ describe('ProductDetailPage (UC16)', () => {
   });
 
   it('chưa có ảnh: khối thay thế, không có thẻ ảnh vỡ', async () => {
-    renderPage('1');
-    await screen.findByRole('heading', { level: 1, name: 'Hạt Royal Canin Mini Adult 2kg' });
+    renderPage('4');
+    await screen.findByRole('heading', { level: 1, name: 'Vitamin tổng hợp PetCare' });
     expect(screen.queryByRole('img')).not.toBeInTheDocument();
   });
 

@@ -474,7 +474,8 @@
   overflow: hidden;
   transition: max-height 0.3s ease;
 }
-.faqItem[data-open='true'] .faqA { max-height: 240px; }
+/* Câu trả lời do quản trị soạn (tối đa PAGE_LIMITS.answer = 500 ký tự, ~14 dòng ở 360px): chừa đủ chỗ để không bị cắt cụt. */
+.faqItem[data-open='true'] .faqA { max-height: 480px; }
 .faqAInner {
   padding: 0 20px 18px;
   font-size: 14px;

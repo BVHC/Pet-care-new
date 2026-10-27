@@ -60,8 +60,8 @@ function seed(): State {
       { vaccineTypeId: 5, name: 'Ho cũi', species: 'DOG', isActive: true },
     ],
     products: [
-      product({ productId: 1, categoryId: 1, sku: 'RC-MINI-2KG', name: 'Hạt Royal Canin Mini Adult 2kg', unit: 'túi', price: 450_000 }),
-      product({ productId: 2, categoryId: 1, sku: 'WK-PATE-85', name: 'Pate Whiskas 85g', unit: 'gói', price: 18_000 }),
+      product({ productId: 1, categoryId: 1, sku: 'RC-MINI-2KG', name: 'Hạt Royal Canin Mini Adult 2kg', unit: 'túi', price: 450_000, imageUrl: '/imgs/prod1.jpg' }),
+      product({ productId: 2, categoryId: 1, sku: 'WK-PATE-85', name: 'Pate Whiskas 85g', unit: 'gói', price: 18_000, imageUrl: '/imgs/prod6.jpg' }),
       product({ productId: 3, categoryId: 2, sku: 'AMOX-250', name: 'Amoxicillin 250mg', productType: 'DRUG', isPrescription: true, tracksExpiry: true, unit: 'viên', price: 8_000 }),
       product({ productId: 4, categoryId: 2, sku: 'VITA-PET', name: 'Vitamin tổng hợp PetCare', productType: 'DRUG', tracksExpiry: true, unit: 'lọ', price: 120_000 }),
       product({ productId: 5, categoryId: 3, sku: 'VAC-RABISIN', name: 'Vaccine Dại Rabisin', productType: 'VACCINE', tracksExpiry: true, vaccineTypeId: 1, unit: 'liều', price: 150_000 }),

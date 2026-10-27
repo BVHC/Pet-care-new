@@ -80,6 +80,10 @@ import { AdminNotificationTemplatesPage } from '../pages/admin/AdminNotification
 import { AdminOrdersPage } from '../pages/admin/AdminOrdersPage';
 import { AdminAIPage } from '../pages/admin/AdminAIPage';
 import { AdminCatalogPage } from '../pages/admin/AdminCatalogPage';
+import { AdminArticlesPage } from '../pages/admin/AdminArticlesPage';
+import { AdminCareTasksPage } from '../pages/admin/AdminCareTasksPage';
+import { AdminFeedbacksPage } from '../pages/admin/AdminFeedbacksPage';
+import { AdminPageContentsPage } from '../pages/admin/AdminPageContentsPage';
 import { AdminCustomersPage } from '../pages/admin/AdminCustomersPage';
 import { AdminBranchesPage } from '../pages/admin/AdminBranchesPage';
 import { StaffProfilePage } from '../pages/admin/StaffProfilePage';
@@ -189,6 +193,10 @@ export function App() {
             <Route path="/admin/profile" element={<StaffProfilePage />} />
             <Route path="/admin/notifications" element={<StaffNotificationsPage />} />
             <Route path="/admin/catalog/:tab?" element={<AdminCatalogPage />} />
+            <Route path="/admin/page-contents" element={<AdminPageContentsPage />} />
+            <Route path="/admin/articles/:tab?" element={<AdminArticlesPage />} />
+            <Route path="/admin/feedbacks" element={<AdminFeedbacksPage />} />
+            <Route path="/admin/care-tasks" element={<AdminCareTasksPage />} />
             <Route path="/admin/customers" element={<AdminCustomersPage />} />
             <Route path="/admin/branches" element={<AdminBranchesPage />} />
             <Route path="/admin/branches/:branchId/:tab?" element={<AdminBranchDetailPage />} />

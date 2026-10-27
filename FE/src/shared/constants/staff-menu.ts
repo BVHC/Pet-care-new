@@ -1,8 +1,8 @@
 import type { ElementType } from 'react';
 import {
-  Activity, BadgePercent, BarChart3, Bell, Bot, Boxes, Building2, CalendarClock, ClipboardList, Crown, ListOrdered,
-  Lock, Mail, Package, Receipt, Scale, Scissors, Settings, ShieldAlert, ShoppingBag, Stethoscope, Syringe, Tags, Truck, UserCog, UserSearch,
-  Warehouse,
+  Activity, BadgePercent, BarChart3, Bell, Bot, Boxes, Building2, CalendarClock, ClipboardList, Crown, FileText, ListOrdered,
+  Lock, Mail, MessageSquareText, Newspaper, Package, PhoneCall, Receipt, Scale, Scissors, Settings, ShieldAlert, ShoppingBag, Stethoscope, Syringe,
+  Tags, Truck, UserCog, UserSearch, Warehouse,
 } from 'lucide-react';
 import { STAFF_ROLES, type Role } from '../types/auth';
 import { WORKSPACE_LABELS, WORKSPACE_ROLES, workspaceForPath } from './workspaces';
@@ -31,6 +31,8 @@ export const ADMIN_MENU: MenuSection[] = [
       // UC66, UC67: danh sách Order + Order bán lẻ; BRANCH_MANAGER hủy Order PENDING khách không trả (BR-BH-05). Bán nhanh ở bàn Lễ tân.
       { path: '/admin/pos', label: 'Order tại quầy', icon: ShoppingBag, roles: ['RECEPTIONIST', 'BRANCH_MANAGER'] },
       { path: '/admin/appointments', label: 'Lịch hẹn', icon: CalendarClock, roles: ['RECEPTIONIST'] }, // UC39, UC40
+      // UC87 (A06): Care Task của chi nhánh; BRANCH_MANAGER không thấy (BR-TB-05, care-v1 §D.1).
+      { path: '/admin/care-tasks', label: 'Việc gọi điện', icon: PhoneCall, roles: ['RECEPTIONIST'] },
       { path: '/admin/queue', label: 'Hàng chờ', icon: ListOrdered, roles: ['RECEPTIONIST', 'BRANCH_MANAGER', 'VET', 'CARETAKER'], hidden: true }, // UC45, UC46 — các bàn làm việc
       { path: '/admin/exam', label: 'Khám & EMR', icon: Stethoscope, roles: ['VET'], hidden: true }, // UC48 — bàn Phòng khám
       { path: '/admin/vaccination', label: 'Tiêm chủng', icon: Syringe, roles: ['VET'], hidden: true }, // UC49 — bàn Phòng khám
@@ -57,6 +59,15 @@ export const ADMIN_MENU: MenuSection[] = [
     section: 'Danh mục',
     items: [
       { path: '/admin/catalog', label: 'Sản phẩm & dịch vụ', icon: Tags, roles: ['SUPER_MANAGER'] }, // UC28–UC31
+    ],
+  },
+  {
+    section: 'Nội dung',
+    items: [
+      { path: '/admin/page-contents', label: 'Nội dung trang', icon: FileText, roles: ['SUPER_MANAGER'] }, // UC21
+      { path: '/admin/articles', label: 'Bài viết', icon: Newspaper, roles: ['SUPER_MANAGER'] }, // UC81 (tab Bài viết, Chuyên mục)
+      // UC84: SUPER_MANAGER xem tất cả, BRANCH_MANAGER chỉ feedback chi nhánh mình (BR-DG-03).
+      { path: '/admin/feedbacks', label: 'Góp ý của khách', icon: MessageSquareText, roles: ['SUPER_MANAGER', 'BRANCH_MANAGER'] },
     ],
   },
   {

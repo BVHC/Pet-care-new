@@ -1,8 +1,9 @@
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
-import { render, screen, within } from '@testing-library/react';
+import { act, render, screen, waitFor, within } from '@testing-library/react';
+import userEvent from '@testing-library/user-event';
 import { ScrollTrigger } from 'gsap/ScrollTrigger';
 import { MemoryRouter } from 'react-router-dom';
-import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest';
+import { beforeAll, describe, expect, it, vi } from 'vitest';
 import { ApiError } from '../../shared/api/api-error';
 import { apiClient } from '../../shared/api/axios';
 import { branchApi } from '../../shared/api/branch.api';
@@ -10,16 +11,18 @@ import { catalogApi } from '../../shared/api/catalog.api';
 import { contentApi } from '../../shared/api/content.api';
 import { identityApi } from '../../shared/api/identity.api';
 import { installMockApi } from '../../shared/api/mock/mock-api';
+import { PAGES_STATE_KEY } from '../../shared/api/mock/page-content.mock';
+import { pageContentApi } from '../../shared/api/page-content.api';
+import { PAGE_DEFAULTS } from '../../shared/constants/page-content';
+import type { PageContent, PageKey } from '../../shared/types/page-content';
 import type { PublicVet } from '../../shared/types/public-site';
 import { HomePage } from './HomePage';
 
 // Trang chủ đọc dữ liệu thật (T46): sản phẩm, bác sĩ, tin tức, dịch vụ (OurServicesStage), chi nhánh (ContactVetCTA). Seed: 5 sản phẩm
-// (xếp theo tên), 1 bác sĩ BS. Minh Anh ở PetCare Cầu Giấy, 8 bài viết, 5 dịch vụ ở 3 nhóm, 1 chi nhánh nhận cấp cứu ngoài giờ.
-// STATS và FAQS vẫn tĩnh (UC21, T47). Lỗi giả dùng 403 vì hook công khai không thử lại 4xx.
+// (xếp theo tên), 4 bác sĩ ở PetCare Cầu Giấy (BS. Minh Anh đầu tiên, có ảnh), 8 bài viết, 5 dịch vụ ở 3 nhóm, 1 chi nhánh nhận cấp cứu ngoài giờ.
+// Hero, dải số liệu và FAQ đọc nội dung trang do quản trị sửa (UC21, T47). Lỗi giả dùng 403 vì hook công khai không thử lại 4xx.
 
 beforeAll(() => installMockApi(apiClient));
-// ScrollTrigger bật setInterval 250ms ở lần nạp đầu; interval sống qua lúc jsdom bị hủy và gọi requestAnimationFrame (đã mất) ở file test khác cùng worker.
-afterAll(() => ScrollTrigger.killAll());
 
 function renderPage() {
   const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
@@ -59,13 +62,13 @@ describe('HomePage: dữ liệu thật (T46)', () => {
     expect(within(section).getByRole('link', { name: /Xem tất cả sản phẩm/ })).toHaveAttribute('href', '/shop');
   });
 
-  it('bác sĩ: hồ sơ thật (chữ cái đầu thay ảnh, chuyên môn, chi nhánh), không còn tên bác sĩ giả', async () => {
+  it('bác sĩ: hồ sơ thật (ảnh, chuyên môn, chi nhánh), không còn tên bác sĩ giả', async () => {
     renderPage();
     const section = (await screen.findByRole('heading', { level: 2, name: /Bác Sĩ Chuyên Môn/ })).closest('section')!;
     expect(await within(section).findByRole('heading', { level: 3, name: 'BS. Minh Anh' })).toBeInTheDocument();
     expect(section).toHaveTextContent('Nội khoa, da liễu thú y');
     expect(section).toHaveTextContent('PetCare Cầu Giấy');
-    expect(within(section).getByText('MA')).toBeInTheDocument();
+    expect(within(section).getByRole('img', { name: 'BS. Minh Anh' })).toHaveAttribute('src', '/imgs/team1.jpg');
     expect(section).not.toHaveTextContent(/Daria Andaloro|Michael Brian|Veterinary Technician/);
     expect(within(section).getByRole('link', { name: /Xem đội ngũ bác sĩ/ })).toHaveAttribute('href', '/doctors');
   });
@@ -120,13 +123,6 @@ describe('HomePage: dữ liệu thật (T46)', () => {
     expect(within(chip).getByRole('link', { name: /0901234567/ })).toHaveAttribute('href', 'tel:0901234567');
     expect(chip).toHaveTextContent('Cấp cứu 24/7');
     expect(document.body).not.toHaveTextContent(/PetCare Quận 1|PetCare Quận 7/);
-  });
-
-  it('STATS và FAQ vẫn tĩnh (UC21, T47)', async () => {
-    renderPage();
-    expect(screen.getByText('Câu hỏi thường gặp')).toBeInTheDocument();
-    expect(screen.getByText('Thú cưng được chăm sóc')).toBeInTheDocument();
-    await screen.findByRole('heading', { level: 2, name: 'Sản Phẩm Nổi Bật' });
   });
 
   it('đang tải: sản phẩm, bác sĩ, tin tức có skeleton đọc được, chưa có thẻ giả', async () => {
@@ -199,5 +195,143 @@ describe('HomePage: không có dữ liệu hoặc lỗi thì ẩn gọn, không 
     expect(screen.queryByText('Chi phí thực tế phụ thuộc chỉ định của bác sĩ')).not.toBeInTheDocument();
     const stage = screen.getByRole('heading', { level: 2, name: 'DỊCH VỤ CỦA CHÚNG TÔI' }).closest('section')!;
     expect(within(stage).getByRole('link', { name: /LIÊN HỆ CHI NHÁNH/ })).toHaveAttribute('href', '/branches');
+  });
+});
+
+describe('HomePage: hero, dải số liệu và FAQ đọc nội dung trang (UC21, T47)', () => {
+  const statsBand = () => screen.getByText('Sự tin tưởng của bạn là ưu tiên của chúng tôi').closest('section')!;
+  const faqSection = () => screen.getByText('Câu hỏi thường gặp').closest('section')!;
+  const heroTitle = () => screen.getByRole('heading', { level: 1 });
+  const stat = (value: string, label: string) => ({ value, label });
+  const bannerWith = (stats: ReturnType<typeof stat>[]) => ({ ...PAGE_DEFAULTS.HOME_BANNER, headline: 'Mèo\nChó', stats });
+  const NEW_STATS = [stat('20K+', 'Bé được chăm sóc'), stat('30+', 'Bác sĩ nội trú'), stat('48h', 'Trả kết quả'), stat('5/5', 'Khách hài lòng')];
+
+  /** Ghi thẳng state mock như admin đã sửa (mock đọc lại state ở mọi request). */
+  function setPages(pages: Partial<Record<PageKey, unknown>>) {
+    const state = Object.fromEntries(
+      Object.entries(pages).map(([key, content]) => [key, { key, title: null, content, updatedAt: '2026-10-20T08:00:00+07:00' }]),
+    );
+    localStorage.setItem(PAGES_STATE_KEY, JSON.stringify(state));
+  }
+
+  /** Giữ request nội dung trang lại tới khi test trả lời từng khóa. */
+  function hold() {
+    const waiting = new Map<PageKey, (content: unknown) => void>();
+    vi.spyOn(pageContentApi, 'getPublic').mockImplementation(
+      (key) =>
+        new Promise<PageContent>((resolve) =>
+          waiting.set(key, (content) => resolve({ key, title: null, content: content as PageContent['content'], updatedAt: '2026-10-20T08:00:00+07:00' })),
+        ),
+    );
+    return waiting;
+  }
+
+  it('BE chưa có nội dung ({}): hero, dải số liệu và FAQ hiện đúng chữ mặc định (chữ tĩnh trước UC21)', async () => {
+    renderPage();
+    expect(await within(statsBand()).findByText('Thú cưng được chăm sóc')).toBeInTheDocument();
+    expect(within(statsBand()).getAllByText(/^(10K\+|500\+|24h|4\.9\/5)$/)).toHaveLength(4);
+    expect(heroTitle().textContent).toBe('Pet\nCare');
+    const buttons = await within(faqSection()).findAllByRole('button');
+    expect(buttons).toHaveLength(4);
+    expect(buttons[0]).toHaveTextContent('PetCare hoạt động ở khu vực nào?');
+    expect(buttons[0]).toHaveAttribute('aria-expanded', 'true');
+    expect(faqSection()).toHaveTextContent('Hiện chúng tôi phục vụ tại các thành phố lớn');
+    await screen.findByRole('heading', { level: 2, name: 'Sản Phẩm Nổi Bật' });
+  });
+
+  it('nội dung đã sửa: hero, số liệu, FAQ đổi theo và chữ mặc định không còn; bấm mở / đóng từng câu, xuống dòng giữ nguyên', async () => {
+    setPages({
+      HOME_BANNER: bannerWith(NEW_STATS),
+      FAQ: { items: [{ question: 'Hỏi một?', answer: 'Đáp một.\nDòng hai.' }, { question: 'Hỏi hai?', answer: 'Đáp hai.' }] },
+    });
+    const user = userEvent.setup();
+    renderPage();
+    const band = statsBand();
+    expect(await within(band).findByText('Bé được chăm sóc')).toBeInTheDocument();
+    expect(within(band).getByText('20K+')).toBeInTheDocument();
+    expect(band).not.toHaveTextContent('Thú cưng được chăm sóc');
+    await waitFor(() => expect(heroTitle().textContent).toBe('Mèo\nChó'));
+
+    const faq = faqSection();
+    const buttons = await within(faq).findAllByRole('button');
+    expect(buttons.map((b) => b.textContent)).toEqual(['Hỏi một?', 'Hỏi hai?']);
+    expect(faq).not.toHaveTextContent('PetCare hoạt động ở khu vực nào?');
+    expect(within(faq).getByText('Đáp một.', { exact: false }).textContent).toBe('Đáp một.\nDòng hai.');
+    await user.click(buttons[1]);
+    expect(buttons[1]).toHaveAttribute('aria-expanded', 'true');
+    expect(buttons[0]).toHaveAttribute('aria-expanded', 'false');
+    await user.click(buttons[1]);
+    expect(buttons[1]).toHaveAttribute('aria-expanded', 'false');
+  });
+
+  it('sai dạng (số ô cố định sai, FAQ rỗng): về chữ mặc định, không trống', async () => {
+    setPages({ HOME_BANNER: bannerWith(NEW_STATS.slice(0, 3)), FAQ: { items: [] } });
+    renderPage();
+    expect(await within(statsBand()).findByText('Thú cưng được chăm sóc')).toBeInTheDocument();
+    expect(statsBand()).not.toHaveTextContent('Bé được chăm sóc');
+    expect(await within(faqSection()).findAllByRole('button')).toHaveLength(4);
+    expect(heroTitle().textContent).toBe('Pet\nCare');
+  });
+
+  it('request nội dung trang lỗi: vẫn hiện chữ mặc định, skeleton không kẹt, không văng lỗi', async () => {
+    vi.spyOn(pageContentApi, 'getPublic').mockRejectedValue(gone());
+    renderPage();
+    expect(await within(statsBand()).findByText('Thú cưng được chăm sóc')).toBeInTheDocument();
+    expect(await within(faqSection()).findAllByRole('button')).toHaveLength(4);
+    expect(heroTitle().textContent).toBe('Pet\nCare');
+    expect(screen.queryByRole('status', { name: 'Đang tải số liệu' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('status', { name: 'Đang tải câu hỏi' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('alert')).not.toBeInTheDocument();
+  });
+
+  it('đang tải: dải số liệu và FAQ là skeleton, chưa lộ chữ mặc định; hero giữ chỗ (opacity-0); từng khóa hiện khi nó về', async () => {
+    const waiting = hold();
+    renderPage();
+    expect(screen.getByRole('status', { name: 'Đang tải số liệu' })).toBeInTheDocument();
+    expect(screen.getByRole('status', { name: 'Đang tải câu hỏi' })).toBeInTheDocument();
+    expect(screen.queryByText('Thú cưng được chăm sóc')).not.toBeInTheDocument();
+    expect(screen.queryByText('PetCare hoạt động ở khu vực nào?')).not.toBeInTheDocument();
+    expect(heroTitle().closest('[class*="opacity-0"]')).not.toBeNull();
+
+    await act(async () => waiting.get('FAQ')!({ items: [{ question: 'Hỏi một?', answer: 'Đáp một.' }] }));
+    expect(await within(faqSection()).findByRole('button', { name: 'Hỏi một?' })).toBeInTheDocument();
+    expect(screen.queryByRole('status', { name: 'Đang tải câu hỏi' })).not.toBeInTheDocument();
+    expect(screen.getByRole('status', { name: 'Đang tải số liệu' })).toBeInTheDocument();
+
+    await act(async () => waiting.get('HOME_BANNER')!(bannerWith(NEW_STATS)));
+    expect(await within(statsBand()).findByText('Bé được chăm sóc')).toBeInTheDocument();
+    await waitFor(() => expect(heroTitle().closest('[class*="opacity-0"]')).toBeNull());
+    expect(heroTitle().textContent).toBe('Mèo\nChó');
+  });
+
+  it('chỉ văn bản thuần: thẻ HTML gõ vào số liệu / FAQ hiện thành chữ, không thành phần tử (ADR-0071)', async () => {
+    setPages({
+      HOME_BANNER: bannerWith([stat('<b>1</b>', '<i>x</i>'), ...NEW_STATS.slice(1)]),
+      FAQ: { items: [{ question: '<b id="q">Hỏi</b>?', answer: '<img id="a" src="x" onerror="alert(1)">' }] },
+    });
+    renderPage();
+    expect(await within(statsBand()).findByText('<b>1</b>')).toBeInTheDocument();
+    expect(within(statsBand()).getByText('<i>x</i>')).toBeInTheDocument();
+    expect(statsBand().querySelector('b, i')).toBeNull();
+    expect(await within(faqSection()).findByRole('button', { name: '<b id="q">Hỏi</b>?' })).toBeInTheDocument();
+    expect(within(faqSection()).getByText('<img id="a" src="x" onerror="alert(1)">')).toBeInTheDocument();
+    for (const id of ['q', 'a']) expect(document.getElementById(id)).toBeNull();
+  });
+
+  it('nội dung trang về (hoặc đổi) làm đổi chiều cao trang: đo lại ScrollTrigger sau khi render', async () => {
+    const waiting = hold();
+    const refresh = vi.spyOn(ScrollTrigger, 'refresh');
+    renderPage();
+    await screen.findByRole('heading', { level: 2, name: 'Sản Phẩm Nổi Bật' });
+    await screen.findByRole('heading', { level: 2, name: /Bác Sĩ Chuyên Môn/ });
+    await screen.findByRole('heading', { level: 2, name: 'Bài Viết Mới Nhất' });
+    await new Promise((resolve) => setTimeout(resolve, 120)); // để các khung rAF của dữ liệu T46 chạy hết
+    const before = refresh.mock.calls.length;
+
+    await act(async () => waiting.get('HOME_BANNER')!(bannerWith(NEW_STATS)));
+    await waitFor(() => expect(refresh.mock.calls.length).toBeGreaterThan(before));
+    const afterBanner = refresh.mock.calls.length;
+    await act(async () => waiting.get('FAQ')!({ items: [{ question: 'Hỏi một?', answer: 'Đáp một.' }] }));
+    await waitFor(() => expect(refresh.mock.calls.length).toBeGreaterThan(afterBanner));
   });
 });

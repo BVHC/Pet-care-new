@@ -11,7 +11,7 @@ import type { PublicVet } from '../../shared/types/public-site';
 import { DoctorsPage } from './DoctorsPage';
 
 // UC15, BR-TK-20: hồ sơ công khai của bác sĩ (ảnh, chuyên môn, mô tả, chi nhánh), không có email / SĐT.
-// Seed: một bác sĩ BS. Minh Anh ở PetCare Cầu Giấy, có chuyên môn và mô tả nhưng chưa có ảnh. Lỗi giả dùng 4xx vì hook công khai không thử lại 4xx.
+// Seed: 4 bác sĩ ở PetCare Cầu Giấy (BS. Minh Anh đầu tiên), đều có ảnh, chuyên môn và mô tả. Lỗi giả dùng 4xx vì hook công khai không thử lại 4xx.
 
 beforeAll(() => installMockApi(apiClient));
 
@@ -38,7 +38,7 @@ const vet = (accountId: number, fullName: string, branchId: number, branchName: 
 const gone = () => new ApiError('ACCESS_DENIED', 'Từ chối', 403);
 
 describe('DoctorsPage (UC15)', () => {
-  it('hiện bác sĩ seed: tên, chuyên môn, mô tả, chi nhánh và chữ cái đầu thay ảnh', async () => {
+  it('hiện bác sĩ seed: tên, ảnh, chuyên môn, mô tả và chi nhánh', async () => {
     const { container } = renderPage();
     expect(screen.getByRole('heading', { level: 1, name: 'Đội ngũ bác sĩ' })).toBeInTheDocument();
     expect(document.title).toBe('Bác sĩ | PetCare');
@@ -47,8 +47,8 @@ describe('DoctorsPage (UC15)', () => {
     expect(within(card).getByText('PetCare Cầu Giấy')).toBeInTheDocument();
     expect(within(card).getByText('Nội khoa, da liễu thú y')).toBeInTheDocument();
     expect(within(card).getByText(/^Hơn 8 năm khám và điều trị chó mèo/)).toBeInTheDocument();
-    expect(within(card).getByText('MA')).toBeInTheDocument();
-    expect(card.querySelector('img')).toBeNull();
+    expect(card.querySelector('img')).toHaveAttribute('src', '/imgs/team1.jpg');
+    expect(within(card).queryByText('MA')).not.toBeInTheDocument();
     // Hợp đồng không trả email / SĐT của bác sĩ (BR-TK-20): trang không được hiện liên hệ cá nhân.
     expect(container.querySelector('a[href^="tel:"], a[href^="mailto:"]')).toBeNull();
     expect(screen.queryByRole('group', { name: 'Lọc theo chi nhánh' })).not.toBeInTheDocument();

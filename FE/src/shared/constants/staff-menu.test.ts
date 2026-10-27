@@ -6,7 +6,28 @@ const labels = (role: Role) => menuFor(role).flatMap((s) => s.items.map((i) => i
 
 describe('staff menu', () => {
   it('leaves the pages a workspace already covers out of the receptionist menu', () => {
-    expect(labels('RECEPTIONIST')).toEqual(['Order tại quầy', 'Lịch hẹn', 'Đơn online', 'Hóa đơn', 'Hoàn tiền', 'Kho hàng']);
+    expect(labels('RECEPTIONIST')).toEqual(['Order tại quầy', 'Lịch hẹn', 'Việc gọi điện', 'Đơn online', 'Hóa đơn', 'Hoàn tiền', 'Kho hàng']);
+  });
+
+  // T47: nội dung công khai (UC21, UC81) là việc của A04; feedback (UC84) của A04 và A05; Care Task (UC87) chỉ của A06 (BR-TB-05).
+  it('gives the content pages to the chain manager and the feedback page also to the branch manager', () => {
+    expect(labels('SUPER_MANAGER')).toEqual(expect.arrayContaining(['Nội dung trang', 'Bài viết', 'Góp ý của khách']));
+    expect(labels('BRANCH_MANAGER')).toContain('Góp ý của khách');
+    expect(labels('BRANCH_MANAGER')).not.toContain('Bài viết');
+    expect(labels('BRANCH_MANAGER')).not.toContain('Nội dung trang');
+    expect(rolesForPath('/admin/page-contents')).toEqual(['SUPER_MANAGER']);
+    expect(rolesForPath('/admin/articles')).toEqual(['SUPER_MANAGER']);
+    expect(rolesForPath('/admin/articles/categories')).toEqual(['SUPER_MANAGER']);
+    expect(rolesForPath('/admin/feedbacks')).toEqual(['SUPER_MANAGER', 'BRANCH_MANAGER']);
+  });
+
+  it('shows Care Tasks to the receptionist only, and nothing of T47 to the technical admin (BR-TB-05)', () => {
+    expect(rolesForPath('/admin/care-tasks')).toEqual(['RECEPTIONIST']);
+    expect(labels('BRANCH_MANAGER')).not.toContain('Việc gọi điện');
+    expect(labels('SUPER_MANAGER')).not.toContain('Việc gọi điện');
+    for (const label of ['Việc gọi điện', 'Nội dung trang', 'Bài viết', 'Góp ý của khách']) expect(labels('ADMIN')).not.toContain(label);
+    expect(pageLabel('/admin/care-tasks')).toBe('Việc gọi điện');
+    expect(pageLabel('/admin/articles/categories')).toBe('Bài viết');
   });
 
   // T35: lễ tân thu tiền và mở / chốt ca ngay ở bàn Lễ tân (UC70, UC71); đối soát ca (UC72) là việc của A05.

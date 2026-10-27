@@ -77,7 +77,7 @@ const USER_DROPDOWN_AUTHED: DropdownItem[] = [
   { label: 'Voucher',          page: 'vouchers', icon: Star },
   { label: 'Hội viên',         page: 'membership', icon: Sparkles },
   { label: 'Người chăm sóc',   page: 'caregivers', icon: Heart },
-  { label: 'Đánh giá dịch vụ', page: 'review',  icon: Edit3 },
+  { label: 'Góp ý của tôi', page: 'review',  icon: Edit3 },
   { label: 'Yêu thích',         page: 'favorites', icon: Heart },
   { label: 'Thông báo',         page: 'notifications', icon: Bell },
   { label: 'Thanh toán',        page: 'payment',   icon: CreditCard },

@@ -1,8 +1,7 @@
 // Dữ liệu mẫu của mock bài viết (content-v1 §Articles): chuyên mục và bài viết, chuyển từ news.mock.ts cũ (đã xóa ở T46) sang HTML an toàn
 // (chỉ <p>, <h2>, <h3>, <ul>, <ol start>, <li>, <strong>; không link / ảnh ngoài, đúng bộ lọc ADR-0071). 10 bài: 8 PUBLISHED, 1 DRAFT, 1 HIDDEN;
 // chuyên mục "Lưu trú & dịch vụ" ẩn nhưng có 1 bài PUBLISHED (BR-BV-04). Tách khỏi content.mock.ts để T47 (quản trị bài viết) dùng lại.
-
-export type ArticleStatus = 'DRAFT' | 'PUBLISHED' | 'HIDDEN';
+import type { ArticleStatus } from '../../types/content';
 
 export interface ArticleCategoryRecord {
   categoryId: number;

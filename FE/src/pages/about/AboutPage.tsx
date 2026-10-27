@@ -16,6 +16,8 @@ import {
 import type { LucideIcon } from 'lucide-react'
 import { CommonPageHero } from '@/shared/components/layout/CommonPageHero'
 import { doctorInitials } from '@/pages/doctors/initials'
+import { PAGE_LIMITS } from '@/shared/constants/page-content'
+import { usePublicPage } from '@/shared/hooks/usePageContent'
 import { usePublicServiceList, usePublicVets } from '@/shared/hooks/usePublicSite'
 import type { ServiceGroup } from '@/shared/types/catalog'
 import type { PublicVet } from '@/shared/types/public-site'
@@ -24,36 +26,8 @@ import type { PublicVet } from '@/shared/types/public-site'
    Data.
    ================================================================ */
 
-// STATS và VALUES là nội dung tĩnh của trang giới thiệu (UC21, T47); đội ngũ và dịch vụ đọc từ API công khai (UC15).
-const STATS = [
-  { value: '10K+', label: 'Khách hàng tin tưởng' },
-  { value: '15+',  label: 'Năm kinh nghiệm' },
-  { value: '50+',  label: 'Bác sĩ chuyên nghiệp' },
-  { value: '4.9/5', label: 'Đánh giá trung bình' },
-]
-
-const VALUES = [
-  {
-    icon: Heart,
-    title: 'Yêu thương',
-    desc: 'Mỗi thú cưng đều xứng đáng được yêu thương và chăm sóc tốt nhất.',
-  },
-  {
-    icon: Shield,
-    title: 'An toàn',
-    desc: 'Tiêu chuẩn vệ sinh, an toàn và chất lượng dịch vụ hàng đầu trong ngành.',
-  },
-  {
-    icon: Award,
-    title: 'Chuyên nghiệp',
-    desc: 'Đội ngũ bác sĩ và nhân viên được đào tạo bài bản, giàu kinh nghiệm thực tiễn.',
-  },
-  {
-    icon: Star,
-    title: 'Chất lượng',
-    desc: 'Sản phẩm và dịch vụ luôn đạt tiêu chuẩn cao nhất, cập nhật theo quy chuẩn quốc tế.',
-  },
-]
+// Số liệu và 4 giá trị cốt lõi do quản trị sửa (UC21, T47, khóa ABOUT); biểu tượng của giá trị theo vị trí. Đội ngũ và dịch vụ đọc từ API công khai (UC15).
+const VALUE_ICONS: LucideIcon[] = [Heart, Shield, Award, Star]
 
 const GROUPS: { group: ServiceGroup; icon: LucideIcon; title: string }[] = [
   { group: 'MEDICAL', icon: Stethoscope, title: 'Khám & tiêm chủng' },
@@ -99,6 +73,9 @@ function TeamAvatar({ vet }: { vet: PublicVet }) {
 export function AboutPage() {
   const vets = usePublicVets()
   const services = usePublicServiceList()
+  // Giữ skeleton tới khi có câu trả lời để không nháy từ chữ mặc định sang chữ đã sửa; `{}`, sai dạng hoặc request lỗi thì `ready` vẫn
+  // true với chữ mặc định, trang không bao giờ trống.
+  const about = usePublicPage('ABOUT')
   const team = (vets.data ?? []).slice(0, TEAM_LIMIT)
   // Nhóm nào có dịch vụ thì một thẻ liệt kê tên dịch vụ (giá và chi tiết ở /services).
   const serviceGroups = GROUPS.map((g) => ({ ...g, names: (services.data ?? []).filter((s) => s.group === g.group).map((s) => s.name) })).filter(
@@ -121,14 +98,25 @@ export function AboutPage() {
 
       {/* Stats */}
       <section className="bg-accent px-6 py-12">
-        <div className="mx-auto grid max-w-[1100px] grid-cols-2 gap-8 text-center text-white sm:grid-cols-4">
-          {STATS.map((s) => (
-            <div key={s.label}>
-              <div className="font-friendly font-extrabold text-4xl leading-none">{s.value}</div>
-              <div className="mt-2 text-[13.5px] text-white/85">{s.label}</div>
-            </div>
-          ))}
-        </div>
+        {about.ready ? (
+          <div className="mx-auto grid max-w-[1100px] grid-cols-2 gap-8 text-center text-white sm:grid-cols-4">
+            {about.content.stats.map((s, i) => (
+              <div key={i}>
+                <div className="font-friendly font-extrabold text-4xl leading-none wrap-anywhere">{s.value}</div>
+                <div className="mt-2 text-[13.5px] text-white/85 whitespace-pre-line wrap-anywhere">{s.label}</div>
+              </div>
+            ))}
+          </div>
+        ) : (
+          <div role="status" aria-label="Đang tải số liệu" className="mx-auto grid max-w-[1100px] grid-cols-2 gap-8 sm:grid-cols-4">
+            {Array.from({ length: PAGE_LIMITS.statCount }, (_, i) => (
+              <div key={i} aria-hidden className="flex flex-col items-center">
+                <div className="h-9 w-24 animate-pulse rounded-md bg-white/20 motion-reduce:animate-none" />
+                <div className="mt-2 h-[14px] w-32 animate-pulse rounded-md bg-white/20 motion-reduce:animate-none" />
+              </div>
+            ))}
+          </div>
+        )}
       </section>
 
       {/* Values */}
@@ -140,20 +128,31 @@ export function AboutPage() {
           <p className="mt-3 text-(--color-text-secondary)">Những giá trị chúng tôi luôn theo đuổi</p>
         </header>
 
-        <div className="grid gap-5 sm:grid-cols-2 lg:grid-cols-4">
-          {VALUES.map((v) => (
-            <div
-              key={v.title}
-              className="rounded-2xl border border-(--color-border-default) bg-(--color-surface-card) p-6 text-center shadow-[0_1px_2px_rgba(56,36,23,0.06),0_8px_18px_-14px_rgba(56,36,23,0.4)] transition-shadow hover:shadow-[0_2px_4px_rgba(56,36,23,0.07),0_12px_28px_-16px_rgba(164,51,36,0.4)]"
-            >
-              <div className="mx-auto mb-4 flex h-14 w-14 items-center justify-center rounded-full bg-(--color-accent-soft) text-accent">
-                <v.icon size={26} />
-              </div>
-              <h3 className="font-friendly font-bold text-lg text-(--color-text-primary)">{v.title}</h3>
-              <p className="mt-2 text-[13.5px] leading-relaxed text-(--color-text-secondary)">{v.desc}</p>
-            </div>
-          ))}
-        </div>
+        {about.ready ? (
+          <div className="grid gap-5 sm:grid-cols-2 lg:grid-cols-4">
+            {about.content.values.map((v, i) => {
+              const Icon = VALUE_ICONS[i]
+              return (
+                <div
+                  key={i}
+                  className="rounded-2xl border border-(--color-border-default) bg-(--color-surface-card) p-6 text-center shadow-[0_1px_2px_rgba(56,36,23,0.06),0_8px_18px_-14px_rgba(56,36,23,0.4)] transition-shadow hover:shadow-[0_2px_4px_rgba(56,36,23,0.07),0_12px_28px_-16px_rgba(164,51,36,0.4)]"
+                >
+                  <div className="mx-auto mb-4 flex h-14 w-14 items-center justify-center rounded-full bg-(--color-accent-soft) text-accent">
+                    <Icon size={26} />
+                  </div>
+                  <h3 className="font-friendly font-bold text-lg text-(--color-text-primary) wrap-anywhere">{v.title}</h3>
+                  <p className="mt-2 text-[13.5px] leading-relaxed text-(--color-text-secondary) whitespace-pre-line wrap-anywhere">{v.description}</p>
+                </div>
+              )
+            })}
+          </div>
+        ) : (
+          <div role="status" aria-label="Đang tải giá trị cốt lõi" className="grid gap-5 sm:grid-cols-2 lg:grid-cols-4">
+            {Array.from({ length: PAGE_LIMITS.valueCount }, (_, i) => (
+              <div key={i} aria-hidden className={`${PULSE} h-[200px] rounded-2xl`} />
+            ))}
+          </div>
+        )}
       </section>
 
       {/* Services overview — ẩn khi API lỗi hoặc chưa có dịch vụ nào */}
