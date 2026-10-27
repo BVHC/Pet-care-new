@@ -3,7 +3,7 @@
 import { useMemo } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { branchApi } from '../api/branch.api';
-import { useAccount } from '../stores/session.store';
+import { useStaffBranchId } from './useStaffBranch';
 import { shiftOptions, type ShiftOptions } from '../utils/shift-options';
 import { vnDate } from '../utils/vn-time';
 import { useNow } from './useNow';
@@ -17,7 +17,7 @@ export interface ShiftOptionsState {
 }
 
 export function useShiftOptions(enabled = true): ShiftOptionsState {
-  const branchId = useAccount()?.branchId ?? null;
+  const branchId = useStaffBranchId();
   const now = useNow();
   const on = enabled && branchId != null;
   const today = vnDate(now);

@@ -30,6 +30,8 @@ import {
 } from '../../shared/hooks/useAdminIdentity';
 import { plainMessage, toApiError } from '../../shared/api/api-error';
 import { useBranches } from '../../shared/hooks/useBranch';
+import { useStaffBranchId } from '../../shared/hooks/useStaffBranch';
+import { Pager } from '../../components/admin/Pager';
 import type { ChangeableStaffRole, CreateableStaffRole, StaffResponse } from '../../shared/types/identity';
 import { useAccount } from '../../shared/stores/session.store';
 
@@ -62,7 +64,15 @@ const CHANGEABLE_ROLES: ChangeableStaffRole[] = ['BRANCH_MANAGER', 'RECEPTIONIST
 const ADMIN_CREATES: CreateableStaffRole[] = ['SUPER_MANAGER'];
 const SUPER_MANAGER_CREATES: CreateableStaffRole[] = ['BRANCH_MANAGER', 'RECEPTIONIST', 'VET', 'CARETAKER'];
 const BRANCH_MANAGER_CREATES: CreateableStaffRole[] = ['RECEPTIONIST', 'VET', 'CARETAKER'];
-const STAFF_ROLES_NON_ADMIN: Role[] = ['SUPER_MANAGER', 'BRANCH_MANAGER', 'RECEPTIONIST', 'VET', 'CARETAKER'];
+// Vai trò người xem THẤY được (BE `StaffQueryService.visibleRoles`): trùng tập được tạo; lọc ngoài tập này BE trả trang rỗng.
+const VIEWABLE_ROLES: Partial<Record<Role, Role[]>> = {
+  ADMIN: ADMIN_CREATES,
+  SUPER_MANAGER: SUPER_MANAGER_CREATES,
+  BRANCH_MANAGER: BRANCH_MANAGER_CREATES,
+};
+// BE chỉ lọc ACTIVE / DISABLED (nhân viên không có PENDING).
+const STAFF_STATUS_FILTERS: AccountStatus[] = ['ACTIVE', 'DISABLED'];
+const PAGE_SIZE = 20; // = mặc định của BE, kẹp 1–100
 
 /* ================================================================
    Badges.
@@ -97,16 +107,25 @@ export function AdminUsersPage() {
   const [roleFilter, setRoleFilter] = useState('');
   const [statusFilter, setStatusFilter] = useState('');
   const [branchFilter, setBranchFilter] = useState('');
+  // Đổi bộ lọc thì về trang đầu: trang nhớ kèm bộ lọc lúc chọn, lệch bộ lọc thì coi như trang 0.
+  const filterKey = [search, roleFilter, statusFilter, branchFilter].join('|');
+  const [paging, setPaging] = useState({ key: filterKey, page: 0 });
+  if (paging.key !== filterKey) setPaging({ key: filterKey, page: 0 });
+  const page = paging.key === filterKey ? paging.page : 0;
 
   const params = {
     q: search || undefined,
     role: (roleFilter || undefined) as Role | undefined,
     status: (statusFilter || undefined) as AccountStatus | undefined,
     branchId: branchFilter ? Number(branchFilter) : undefined,
+    page,
+    size: PAGE_SIZE,
   };
   const { data, isPending } = useStaff(params);
   const branches = useBranches();
-  const myBranch = branches.data?.find((b) => b.branchId === account?.branchId);
+  // BE login không trả `branchId` (chỉ `GET /me` → staffProfile.branchId): lấy qua hook có dự phòng /me.
+  const myBranchId = useStaffBranchId();
+  const myBranch = branches.data?.find((b) => b.branchId === myBranchId);
 
   const [detail, setDetail] = useState<StaffResponse | null>(null);
   const [creating, setCreating] = useState(false);
@@ -158,17 +177,18 @@ export function AdminUsersPage() {
           </div>
           <select aria-label="Lọc vai trò" className={selectClass} value={roleFilter} onChange={(e) => setRoleFilter(e.target.value)}>
             <option value="">Mọi vai trò</option>
-            {STAFF_ROLES_NON_ADMIN.map((r) => (
+            {(role ? VIEWABLE_ROLES[role] ?? [] : []).map((r) => (
               <option key={r} value={r}>{ROLE_LABELS[r]}</option>
             ))}
           </select>
           <select aria-label="Lọc trạng thái" className={selectClass} value={statusFilter} onChange={(e) => setStatusFilter(e.target.value)}>
             <option value="">Mọi trạng thái</option>
-            <option value="ACTIVE">Đang hoạt động</option>
-            <option value="DISABLED">Vô hiệu hóa</option>
-            <option value="PENDING">Chờ xác thực</option>
+            {STAFF_STATUS_FILTERS.map((st) => (
+              <option key={st} value={st}>{STATUS_LABEL[st]}</option>
+            ))}
           </select>
-          {branches.data && branches.data.length > 0 ? (
+          {/* ADMIN chỉ thấy SUPER_MANAGER (không thuộc chi nhánh): lọc theo chi nhánh luôn ra trang rỗng. */}
+          {role !== 'ADMIN' && branches.data && branches.data.length > 0 ? (
             <select
               aria-label="Lọc chi nhánh"
               className={selectClass}
@@ -285,6 +305,7 @@ export function AdminUsersPage() {
               })}
             </tbody>
           </table>
+          {data && <Pager data={data} unit="nhân viên" onPage={(p) => setPaging({ key: filterKey, page: p })} />}
         </CardContent>
       </Card>
 
@@ -327,7 +348,7 @@ export function AdminUsersPage() {
         open={creating}
         onOpenChange={setCreating}
         branches={branches.data ?? []}
-        myBranchId={myBranch?.branchId ?? null}
+        myBranchId={myBranchId}
         actorRole={role ?? null}
         onSaved={() => { setCreating(false); toast.success('Đã tạo nhân viên'); }}
         onError={handleError}
@@ -423,7 +444,7 @@ function CreateForm({
   const [phone, setPhone] = useState('');
   const [fullName, setFullName] = useState('');
   const [role, setRole] = useState<CreateableStaffRole>('RECEPTIONIST');
-  const [branchId, setBranchId] = useState<string>(myBranchId ? String(myBranchId) : '');
+  const [branchId, setBranchId] = useState<string>('');
 
   const create = useCreateStaff();
   const isBRANCH_MANAGER = actorRole === 'BRANCH_MANAGER';
@@ -434,6 +455,8 @@ function CreateForm({
   const effectiveRole = allowedRoles.includes(role) ? role : allowedRoles[0];
   const roleNeedsBranch = effectiveRole !== 'SUPER_MANAGER';
   const branchRequired = roleNeedsBranch && !isBRANCH_MANAGER;
+  // BRANCH_MANAGER: ô chi nhánh khóa ở chi nhánh của mình (lấy từ prop, không từ state chụp lúc mount khi hồ sơ chưa tải).
+  const shownBranch = isBRANCH_MANAGER ? (myBranchId ? String(myBranchId) : '') : branchId;
 
   // Reset khi mở
   if (open && !email && !phone && !fullName) {
@@ -447,10 +470,12 @@ function CreateForm({
         phone: phone.trim(),
         fullName: fullName.trim(),
         role: effectiveRole,
-        ...(roleNeedsBranch ? { branchId: Number(branchId) } : {}),
+        // BRANCH_MANAGER KHÔNG gửi branchId: BE lấy chi nhánh của người gọi, còn gửi 0 là 400 (@Positive). SUPER_MANAGER chưa chọn thì cũng
+        // không gửi, để BE báo "Vui lòng chọn chi nhánh" (BR-QT-03).
+        ...(roleNeedsBranch && !isBRANCH_MANAGER && branchId ? { branchId: Number(branchId) } : {}),
       } as Parameters<typeof create.mutateAsync>[0]);
       onSaved();
-      setEmail(''); setPhone(''); setFullName(''); setBranchId(myBranchId ? String(myBranchId) : '');
+      setEmail(''); setPhone(''); setFullName(''); setBranchId('');
     } catch (e) { onError(e); }
   };
 
@@ -485,7 +510,7 @@ function CreateForm({
         {roleNeedsBranch && (
           <Field label={branchRequired ? 'Chi nhánh *' : 'Chi nhánh'} hint={isBRANCH_MANAGER ? 'Mặc định chi nhánh của bạn.' : undefined}>
             {(id) => (
-              <select id={id} className={selectClass} value={branchId} onChange={(e) => setBranchId(e.target.value)} disabled={isBRANCH_MANAGER} required={branchRequired}>
+              <select id={id} className={selectClass} value={shownBranch} onChange={(e) => setBranchId(e.target.value)} disabled={isBRANCH_MANAGER} required={branchRequired}>
                 <option value="">— Chọn chi nhánh —</option>
                 {branches.map((b) => <option key={b.branchId} value={b.branchId}>{b.name}</option>)}
               </select>

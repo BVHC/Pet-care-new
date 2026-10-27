@@ -1,14 +1,14 @@
 # System Overview — trạng thái kỹ thuật thực tế
 
 > Mô tả **codebase hiện có**, không phải thiết kế mục tiêu. Nghiệp vụ: `docs/01`–`05` (tra qua `docs/INDEX.md`); quy ước code: `docs/convention/backend/`. **Chi tiết hành vi, thứ tự khóa / lỗi và danh sách test nằm trong ADR của từng dòng** — file này chỉ là bản đồ.
-> Cập nhật: 2026-10-27 — T48 (FE lưu trú, mock) và T38 phần 3. Trạng thái task: `docs/time.md`.
+> Cập nhật: 2026-10-27 — T49 (FE báo cáo + chạy FE với BE thật), T48 (FE lưu trú, mock) và T38 phần 3. Trạng thái task: `docs/time.md`.
 >
 > Nhật ký (mới nhất trước; cũ hơn: `git log` của file này):
+> - 2026-10-27 — T49 (FE): `/admin/reports` (UC89) chạy mock `report.mock.ts` (BE chưa có module `report`, T44); dashboard trên API hợp đồng, bỏ `clinic-db`; `branchId` của nhân viên lấy từ `GET /me` (login không trả); đã chạy FE với BE thật (quét 34 trang × 5 vai trò + luồng tiếp nhận → khám → thu tiền, không lỗi chức năng ngoài 2 lỗi FE nhẹ); không đổi `src/main`, không ADR / migration. Chi tiết và BE-note: `docs/testcases/T49-fe.md`.
 > - 2026-10-27 — T48 (FE): màn lưu trú chạy trên contract mock boarding-v1 #1–22 + sales #9; không đổi `src/main`, không ADR / migration. BE #1–12 có, #13–22 chưa (T42, T43); chưa chạy FE với BE thật. Chi tiết: `docs/testcases/T48-fe.md`.
 > - 2026-10-27 — T38 phần 3: tích hợp, không đổi `src/main`, không ADR / migration mới; IT `PrescriptionIT` thêm chuỗi thu từ chối BR-BH-04 → mua ngoài (stand-in sales #11, D048) → thu lại → bệnh án hiện lý do; unit 5134, IT 2203 theo nhóm (chỉ 2 ca đỏ đã biết), smoke Docker #16 / #17 → hoàn tất → thu tiền 27/27; báo FE T46 (mock #16 / #17).
 > - 2026-10-26 — T38 phần 2: `DELETE /api/visits/{id}/prescriptions/{itemId}` (#17); xóa dòng đơn rồi dòng Order `DRUG` cùng tx, mua ngoài chỉ xóa dòng đơn, bệnh án rỗng giữ nguyên; audit; BR-KB-03 thêm vào danh sách xóa cứng erd §0 — ADR-0078.
 > - 2026-10-26 — T38 phần 0–1: entity `PrescriptionItem`, `PrescriptionApi.markExternalPurchaseAtPayment` (mở sales #11 cho BE-2), bệnh án #12/#13 trả đơn thuốc thật (ADR-0076); `POST …/prescriptions` (#16): đủ tồn → dòng DRUG, thiếu → 400 BR-KB-03 kèm số tồn, giảm số lượng / mua ngoài, bệnh án rỗng tạo kèm, audit (ADR-0077); D043 giữ mở.
-> - 2026-10-26 — T28 phần 4: tích hợp + smoke Docker 30/30 (đặt chỗ lưu trú, xóa loại vaccine, tiêm → hoàn tất → thu tiền, kho trừ một lần); không đổi `src/main`; T28 DONE, #21 tách T28b.
 
 ## 1. Tóm tắt
 
@@ -158,6 +158,7 @@ Job: Scheduler (4 thread) → {Việc}Job.run() (không tx, MDC traceId) → Ser
 - **Routes** (`src/app/App.tsx`): công khai; mọi role đã đăng nhập; khách A02 (`/booking`, `/pets`, `/review` sau `RequireLinkDecision`); bàn làm việc `/staff/*` và back office `/admin/*` trong `StaffShell`. Chặn route: `RequireRole` (chưa đăng nhập → login, `mustChangePassword` → đổi mật khẩu, sai role → 403). Chi tiết: `CLAUDE.md` *Frontend notes*.
 - **Nhiều route thuộc phạm vi đã bỏ / tầng 3** (shop, membership, vouchers…) — đối chiếu `docs/INDEX.md` trước khi nối API.
 - **API:** một client `shared/api/axios.ts` (`VITE_API_URL`, mặc định 8081), lỗi `ApiError` + `ruleId`. Mock theo hợp đồng `shared/api/mock/` bật ở `npm run dev` (`VITE_API_MOCK=false` để gọi BE thật). `clinic.api.ts` / `clinic-db.ts` (localStorage, rule v13) nay chỉ còn nuôi KPI tổng quan và mã chết (T37-fe.md B.6). Bàn Phòng khám (kê đơn #16–17, T46), hàng đợi, grooming chạy trên mock theo hợp đồng. Trang công khai (`/services`, `/branches`, `/doctors`, `/shop`, `/news`, `/news/:slug`, `/`, `/about`) đọc `/api/public/*` qua `usePublicSite` (T46). Lưu trú (T48): `/admin/kennels`, `/admin/boarding` (nhân viên), `/boarding-bookings[/new|/:id]` (khách), `/hotel` đọc loại chuồng thật; chạy mock boarding-v1 #1–22 (BE #1–12 có, #13–22 chưa), Order BOARDING qua sales mock, thu tiền ở bàn Lễ tân. Trang quản trị nội dung (`/admin/page-contents`, `/admin/articles`), góp ý (`/admin/feedbacks`, khách `/review`) và Care Task (`/admin/care-tasks`) chạy mock (T47): content-v1 BE đã có nhưng chưa chạy thử với BE thật, Care Task BE chưa có (T39); trang công khai `/`, `/about`, `/terms`, `/privacy` đọc nội dung từ `/api/public/pages/{key}` (mặc định trong mã khi `{}`). `mock-api.test.ts` cố ý assert mock trả 404 cho một path chưa có mock (`/api/visits/1/not-yet-built`).
+- **Chạy với BE thật (T49, 27/10):** BE `SERVER_PORT=8082` (cổng 8081 có thể bị `petcare-api` cũ giữ), `VITE_API_MOCK=false VITE_API_URL=http://localhost:8082 npx vite`; BE **không trả `branchId` ở `POST /auth/login`**: dùng `useStaffBranch()`; `/api/reports/*` và `/api/care-tasks` trả 404 tới khi BE xong T44 / T39. Cách dựng lại và bảng màn bị BE chặn: `docs/testcases/T49-fe.md` §D, §F.
 - **Khuyết tật:** 2 `QueryClient` (`main.tsx`, `App.tsx` thắng); Vite proxy 8080 ≠ axios 8081.
 
 ## 7. Nợ cấu hình & tài liệu (đừng tin, hãy kiểm tra)

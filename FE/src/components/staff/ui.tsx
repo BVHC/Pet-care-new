@@ -4,7 +4,7 @@ import { AlertTriangle } from 'lucide-react';
 import { cn } from '../../lib/utils';
 import { PRIORITY_LABEL, VISIT_STATUS_LABEL } from '../../shared/constants/clinic-labels';
 import type { QueuePriority, VisitStatus } from '../../shared/types/clinic';
-import { errorMessage } from '../../shared/hooks/useClinic';
+import { errorMessage } from '../../shared/utils/error-message';
 
 type Variant = 'primary' | 'secondary' | 'ghost' | 'danger';
 type Size = 'sm' | 'md' | 'lg';

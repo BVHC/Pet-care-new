@@ -47,12 +47,12 @@ import { RequireLinkDecision } from '../shared/components/auth/RequireLinkDecisi
 import { RequireRole } from '../shared/components/auth/RequireRole';
 import { ROUTES } from '../shared/constants/routes';
 import { useAccount, useSession } from '../shared/stores/session.store';
-import { ALL_ROLES, STAFF_ROLES } from '../shared/types/auth';
+import { ALL_ROLES, STAFF_ROLES, type Role } from '../shared/types/auth';
 
 // Staff area: one frame (StaffShell) for the workspaces and the back office; workspaces are lazy chunks
 import { StaffShell } from '../components/staff/StaffShell';
 import { rolesForPath } from '../shared/constants/staff-menu';
-import { WORKSPACE_PATHS, WORKSPACE_ROLES, homePathFor } from '../shared/constants/workspaces';
+import { WORKSPACE_PATHS, WORKSPACE_ROLES, homePathFor, type Workspace } from '../shared/constants/workspaces';
 const ReceptionWorkspacePage = lazy(() => import('../pages/staff/ReceptionWorkspacePage').then((m) => ({ default: m.ReceptionWorkspacePage })));
 const DoctorWorkspacePage = lazy(() => import('../pages/staff/DoctorWorkspacePage').then((m) => ({ default: m.DoctorWorkspacePage })));
 const GroomingWorkspacePage = lazy(() => import('../pages/staff/GroomingWorkspacePage').then((m) => ({ default: m.GroomingWorkspacePage })));
@@ -62,11 +62,6 @@ import { AdminLoginPage } from '../pages/admin/AdminLoginPage';
 import { AdminDashboardPage } from '../pages/admin/AdminDashboardPage';
 import { AdminPOSPage } from '../pages/admin/AdminPOSPage';
 import { AdminAppointmentsPage } from '../pages/admin/AdminAppointmentsPage';
-import { AdminQueuePage } from '../pages/admin/AdminQueuePage';
-import { AdminExamPage } from '../pages/admin/AdminExamPage';
-import { AdminVaccinationPage } from '../pages/admin/AdminVaccinationPage';
-import { AdminGroomingPage } from '../pages/admin/AdminGroomingPage';
-import { AdminInvoicesPage } from '../pages/admin/AdminInvoicesPage';
 import { AdminPaymentsPage } from '../pages/admin/AdminPaymentsPage';
 import { AdminRefundsPage } from '../pages/admin/AdminRefundsPage';
 import { AdminPromotionsPage } from '../pages/admin/AdminPromotionsPage';
@@ -116,6 +111,25 @@ const staffOnly = (roles: typeof STAFF_ROLES, page: React.ReactNode) => (
     {page}
   </RequireRole>
 );
+
+/**
+ * Trang cũ có dữ liệu cứng (T49): việc đã nằm ở nơi khác nên route chỉ còn chuyển hướng. Mỗi vai trò đi tới đích của nó;
+ * vai trò không có đích về trang đầu của chính nó (homePathFor) thay vì vào trang 403 vô nghĩa.
+ */
+function RedirectByRole({ targets }: { targets: Partial<Record<Role, string>> }) {
+  const role = useAccount()?.role;
+  return <Navigate to={role ? (targets[role] ?? homePathFor(role)) : ROUTES.staffLogin} replace />;
+}
+
+/** Mọi vai trò được vào bàn `workspace` (WORKSPACE_ROLES) đi tới bàn đó. */
+const toDesk = (workspace: Exclude<Workspace, 'admin'>): Partial<Record<Role, string>> =>
+  Object.fromEntries(WORKSPACE_ROLES[workspace].map((role) => [role, WORKSPACE_PATHS[workspace]]));
+
+const TO_RECEPTION = toDesk('reception');
+const TO_DOCTOR = toDesk('doctor');
+const TO_GROOMING = toDesk('grooming');
+/** UC70 (thu tiền, lễ tân) làm ở bàn Lễ tân; UC72 (đối soát ca, BRANCH_MANAGER) ở trang Ca thu ngân. v16 không có hóa đơn. */
+const TO_CASHIER: Partial<Record<Role, string>> = { ...TO_RECEPTION, BRANCH_MANAGER: '/admin/payments' };
 
 /** Trang /admin/*: role theo ADMIN_MENU (rolesForPath); 403 hiện trong khung, thanh bên vẫn còn. */
 function AdminGuard() {
@@ -213,12 +227,13 @@ export function App() {
             <Route path="/admin/branches/:branchId/:tab?" element={<AdminBranchDetailPage />} />
             <Route path="/admin/pos" element={<AdminPOSPage />} />
             <Route path="/admin/appointments" element={<AdminAppointmentsPage />} />
-            <Route path="/admin/queue" element={<AdminQueuePage />} />
-            <Route path="/admin/exam" element={<AdminExamPage />} />
-            <Route path="/admin/vaccination" element={<AdminVaccinationPage />} />
-            <Route path="/admin/grooming" element={<AdminGroomingPage />} />
+            {/* Hàng chờ, khám, tiêm chủng, grooming cũ: đã có bàn làm việc (T36, T37), gỡ mục menu ẩn. */}
+            <Route path="/admin/queue" element={<RedirectByRole targets={TO_RECEPTION} />} />
+            <Route path="/admin/exam" element={<RedirectByRole targets={TO_DOCTOR} />} />
+            <Route path="/admin/vaccination" element={<RedirectByRole targets={TO_DOCTOR} />} />
+            <Route path="/admin/grooming" element={<RedirectByRole targets={TO_GROOMING} />} />
             <Route path="/admin/orders" element={<AdminOrdersPage />} />
-            <Route path="/admin/invoices" element={<AdminInvoicesPage />} />
+            <Route path="/admin/invoices" element={<RedirectByRole targets={TO_CASHIER} />} />
             <Route path="/admin/payments" element={<AdminPaymentsPage />} />
             <Route path="/admin/refunds" element={<AdminRefundsPage />} />
             <Route path="/admin/promotions" element={<AdminPromotionsPage />} />

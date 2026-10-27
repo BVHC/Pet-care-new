@@ -19,6 +19,7 @@ import { InfoRow, StatusBadge } from '@/components/ui/modal-templates';
 import { cn } from '@/lib/utils';
 import { plainMessage, toApiError } from '@/shared/api/api-error';
 import { useAppointment, useAppointmentList } from '@/shared/hooks/useAppointments';
+import { useStaffBranchId } from '@/shared/hooks/useStaffBranch';
 import { useSession } from '@/shared/stores/session.store';
 import {
   APPOINTMENT_CFG,
@@ -35,7 +36,7 @@ const PAGE_SIZE = 20;
 
 export function AdminAppointmentsPage() {
   const account = useSession((s) => s.account);
-  const branchId = account?.branchId ?? null;
+  const branchId = useStaffBranchId();
   const isDesk = account?.role === 'RECEPTIONIST';
   const [date, setDate] = useState(todayVn());
   const [status, setStatus] = useState<AppointmentStatus | ''>('');

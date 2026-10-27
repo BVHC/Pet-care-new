@@ -1,6 +1,6 @@
 // Bệnh án, cân nặng khi khám, bản bổ sung, tiêm chủng của lượt (UC48, UC49, UC52, UC53) — docs/api/visit-v1.md #10, #12–15, #18–20 và
 // schema `MedicalRecord`, `UpdateMedicalRecordRequest`, `VaccinationOptions`…; kiểm lại bằng BE (docs/adr/0066–0070, docs/testcases/T37-fe.md).
-// Kê đơn (#16–17, T46): `prescriptions` luôn có mặt trong `MedicalRecord`; BE trả mảng rỗng tới khi T38 ghi đơn thuốc nên đơn thuốc chạy trên mock theo hợp đồng.
+// Kê đơn (#16–17, T46): `prescriptions` luôn có mặt trong `MedicalRecord`; BE trả các dòng đơn của bệnh án từ T38 (ADR 0076–0078).
 // Yêu cầu kê đơn (`AddPrescriptionRequest`, `ShortageResolution`) nằm ở types/visit.ts.
 import type { Addendum, PrescriptionItem, VaccinationRecord } from '../../domains/pets/types';
 
@@ -18,7 +18,7 @@ export interface MedicalRecord {
   locked: boolean;
   lastEditedBy: number | null;
   prescriptions: PrescriptionItem[];
-  /** BE trả mảng rỗng tới khi T28 xong (mapper `MedicalRecordMapper`). */
+  /** Các mũi tiêm của lượt (BE từ T28, `MedicalRecordMapper`); `lotNumber` / `expiryDate` BE chưa điền (null, nợ D046). */
   vaccinations: VaccinationRecord[];
   /** Chỉ có khi lượt COMPLETED, theo thứ tự ghi. */
   addenda: Addendum[];
@@ -70,7 +70,10 @@ export interface VaccineProductOption {
   availableQuantity: number;
 }
 
-/** `GET /visits/{id}/vaccination-options`: các mũi của phác đồ đúng loài, mũi gợi ý (chỉ tham khảo) và sản phẩm còn tồn khả dụng tại chi nhánh. */
+/**
+ * `GET /visits/{id}/vaccination-options`: các mũi của phác đồ đúng loài, mũi gợi ý (chỉ tham khảo) và sản phẩm còn tồn khả dụng tại chi nhánh (theo tên rồi id). Hết phác đồ thì BE gợi ý MŨI LỚN NHẤT
+ * (nhắc lại); `suggestedProtocolId` chỉ null khi phác đồ rỗng.
+ */
 export interface VaccinationOptions {
   vaccineTypeId: number;
   protocol: ProtocolDoseOption[];

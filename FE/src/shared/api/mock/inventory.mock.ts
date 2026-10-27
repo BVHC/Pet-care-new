@@ -1,6 +1,6 @@
 // Mock module kho (docs/api/inventory-v1.md #1–17): nhà cung cấp, phiếu nhập kho (03 §9), tồn theo lô, tồn tối thiểu,
 // điều chỉnh tồn. Chi nhánh lấy từ người gọi; nhà cung cấp dùng chung toàn chuỗi. Ghi: BRANCH_MANAGER; xem tồn: A05–A08;
-// xem lô: A05, A06. Thứ tự kiểm như BE (00-method §3.5): dữ liệu vào → quyền → tồn tại → rule (400) → trạng thái (409).
+// xem lô: A05, A06. Thứ tự kiểm như BE thật (StockReceiptService): dữ liệu vào → quyền → tồn tại (404 / 403 chi nhánh) → trạng thái (409) → rule (400); lệch có chủ đích so với 00-method §3.5 (rule 400 trước 409).
 // Điểm hợp đồng còn bỏ ngỏ (M1–M8) chọn như docs/testcases/T24-fe.md §8, chờ BE-2 (T18) chốt.
 import type { Role } from '../../types/auth';
 import type { Product, ProductType } from '../../types/catalog';
@@ -554,14 +554,14 @@ function receiptChecks(b: Record<string, unknown>): Check[] {
   return checks;
 }
 
-/** Sản phẩm lạ → 404; nhà cung cấp lạ → 404, ngừng hợp tác → BR-KO-02. */
+/** Như BE (requireActiveSupplier rồi requireProductsExist): nhà cung cấp lạ → 404, ngừng hợp tác → BR-KO-02; sau đó sản phẩm lạ → 404. */
 function receiptRefs(s: State, b: Record<string, unknown>): MockReply | null {
   const sp = s.suppliers.find((x) => x.supplierId === b.supplierId);
   if (!sp) return notFound('nhà cung cấp', String(b.supplierId));
+  if (!sp.isActive) return ruleFail('BR-KO-02', `Nhà cung cấp ${sp.name} đã ngừng hợp tác`);
   for (const l of b.lines as Record<string, unknown>[]) {
     if (!productOf(l.productId as number)) return notFound('sản phẩm', String(l.productId));
   }
-  if (!sp.isActive) return ruleFail('BR-KO-02', `Nhà cung cấp ${sp.name} đã ngừng hợp tác`);
   return null;
 }
 
@@ -650,9 +650,10 @@ const updateReceipt: MockHandler = (req) => {
   const s = load();
   const r = receiptFor(req, s);
   if (!('receiptId' in r)) return r;
+  // Như BE (StockReceiptService.updateReceipt): 409 trạng thái trước, rồi mới nhà cung cấp / sản phẩm (T49 nhóm 2, hàng 12).
+  if (r.status !== 'DRAFT') return fail('INVALID_STATE_TRANSITION', 'Phiếu nhập không còn ở trạng thái nháp, không sửa được', 409);
   const refused = receiptRefs(s, b);
   if (refused) return refused;
-  if (r.status !== 'DRAFT') return fail('INVALID_STATE_TRANSITION', 'Phiếu nhập không còn ở trạng thái nháp, không sửa được', 409);
   r.supplierId = b.supplierId as number;
   r.receiptDate = b.receiptDate as string;
   r.note = optional(b.note);
@@ -661,8 +662,19 @@ const updateReceipt: MockHandler = (req) => {
   return ok(receiptOf(s, r), 200, 'Đã lưu phiếu nhập nháp');
 };
 
-/** BR-KO-03 lúc xác nhận; trả câu báo đầu tiên hoặc null. */
-function confirmProblem(r: ReceiptRow): string | null {
+/**
+ * BR-KO-03 lúc xác nhận. Câu ngày nhập tương lai chép BE (StockReceiptService.validateForConfirm, "hôm nay" theo giờ VN) và đứng
+ * đầu, BE ghép các lỗi bằng "; ". Mock chỉ báo thêm MỘT lỗi dòng hàng (câu mock, khác câu BE "dòng i (tên) thiếu số lô"); null nếu hợp lệ.
+ */
+function confirmProblem(r: ReceiptRow, today: string): string | null {
+  const errors: string[] = [];
+  if (r.receiptDate > today) errors.push('ngày nhập không được ở tương lai');
+  const lineProblem = firstLineProblem(r);
+  if (lineProblem) errors.push(lineProblem);
+  return errors.length ? errors.join('; ') : null;
+}
+
+function firstLineProblem(r: ReceiptRow): string | null {
   if (r.lines.length === 0) return 'Phiếu nhập chưa có dòng nào';
   for (const l of r.lines) {
     const p = productOf(l.productId)!;
@@ -697,11 +709,12 @@ const confirmReceipt: MockHandler = (req) => {
   const s = load();
   const r = receiptFor(req, s);
   if (!('receiptId' in r)) return r;
+  // Như BE (StockReceiptService.confirmReceipt): 409 trạng thái trước, rồi BR-KO-02, rồi BR-KO-03 (T49 nhóm 2, hàng 12).
+  if (r.status !== 'DRAFT') return fail('INVALID_STATE_TRANSITION', 'Chỉ xác nhận được phiếu nhập nháp', 409);
   const sp = s.suppliers.find((x) => x.supplierId === r.supplierId)!;
   if (!sp.isActive) return ruleFail('BR-KO-02', `Nhà cung cấp ${sp.name} đã ngừng hợp tác`);
-  const problem = confirmProblem(r);
+  const problem = confirmProblem(r, localIsoDate());
   if (problem) return ruleFail('BR-KO-03', problem);
-  if (r.status !== 'DRAFT') return fail('INVALID_STATE_TRANSITION', 'Chỉ xác nhận được phiếu nhập nháp', 409);
   for (const line of r.lines) {
     const item = itemFor(s, r.branchId, line.productId);
     const lot = lotForLine(s, item, line, productOf(line.productId)!.tracksExpiry);
@@ -836,6 +849,30 @@ const getAdjustment: MockHandler = (req) => {
   if (a.branchId !== branchOf(req)) return scopeDenied();
   return ok(a);
 };
+
+export interface StockSnapshotItem {
+  branchId: number;
+  productId: number;
+  minQuantity: number;
+  /** Tồn khả dụng tại `today` (BR-KO-01): chỉ cộng lô chưa hết hạn. */
+  availableQuantity: number;
+  lots: { stockLotId: number; lotNumber: string | null; expiryDate: string | null; quantity: number; expired: boolean }[];
+}
+
+/** Cho mock báo cáo (T49, StockQueryApi của BE): dòng tồn mọi chi nhánh tại ngày `today` (giờ VN do người gọi truyền). Chỉ đọc, không tạo dòng tồn còn thiếu. */
+export function stockSnapshot(today: string): StockSnapshotItem[] {
+  const s = load();
+  return s.items.map((item) => {
+    const lots = lotsOf(s, item.id);
+    return {
+      branchId: item.branchId,
+      productId: item.productId,
+      minQuantity: item.minQuantity,
+      availableQuantity: sum(lots.filter((l) => !isExpired(l, today)).map((l) => l.quantity)),
+      lots: lots.map((l) => ({ stockLotId: l.id, lotNumber: l.lotNumber, expiryDate: l.expiryDate, quantity: l.quantity, expired: isExpired(l, today) })),
+    };
+  });
+}
 
 export const inventoryRoutes: Record<string, MockHandler> = {
   'GET /api/suppliers': allow(BM, listSuppliers),

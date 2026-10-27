@@ -2,12 +2,13 @@ import { fireEvent, render, screen, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { MemoryRouter, Route, Routes } from 'react-router-dom';
-import { beforeAll, describe, expect, it } from 'vitest';
+import { afterEach, beforeAll, describe, expect, it, vi } from 'vitest';
 import { formatDate } from '../../lib/utils';
 import { apiClient } from '../../shared/api/axios';
 import { MOCK_PASSWORD } from '../../shared/api/mock/identity.mock';
 import { installMockApi } from '../../shared/api/mock/mock-api';
 import { useSession } from '../../shared/stores/session.store';
+import { restoreTimezone, setTimezone } from '../../test/timezone';
 import { addDays, localIsoDate, nextWeekday } from '../../shared/utils/branch-schedule';
 import { AdminBranchDetailPage } from './AdminBranchDetailPage';
 
@@ -171,5 +172,68 @@ describe('chain manager', () => {
 
     await user.click(screen.getByRole('tab', { name: 'Dịch vụ' }));
     expect(await screen.findByRole('checkbox', { name: 'Bật Chuồng mèo tại chi nhánh' })).toBeDisabled();
+  });
+});
+
+// BE tính "hôm nay" theo Asia/Ho_Chi_Minh (T49 nhóm 2, hàng 10). Mỗi ca ghim đồng hồ và đặt máy ở múi giờ mà ngày lịch của máy KHÁC ngày giờ VN.
+describe.each([
+  ['Pacific/Auckland', '2026-10-27T23:59:00+07:00', '2026-10-27'], // máy đã sang 28/10
+  ['America/Los_Angeles', '2026-10-28T00:01:00+07:00', '2026-10-28'], // máy còn ở 27/10
+])('máy ở %s, lúc %s giờ VN (hôm nay là %s)', (tz, instant, vnToday) => {
+  const pin = async () => {
+    setTimezone(tz);
+    vi.useFakeTimers({ toFake: ['Date'] });
+    vi.setSystemTime(new Date(instant));
+    await asManager();
+  };
+  afterEach(() => {
+    vi.useRealTimers();
+    restoreTimezone();
+  });
+
+  it('giờ mở cửa: ngày hiệu lực mặc định là ngày mai giờ VN (BR-CN-04)', async () => {
+    await pin();
+    const user = userEvent.setup();
+    renderAt('/admin/branches/1/hours');
+    await user.click(await screen.findByRole('button', { name: 'Đặt giờ mở cửa mới' }));
+
+    const date = within(screen.getByRole('dialog')).getByLabelText('Ngày hiệu lực');
+    expect(date).toHaveValue(addDays(vnToday, 1));
+    expect(date).toHaveAttribute('min', addDays(vnToday, 1));
+  });
+
+  it('ngày nghỉ: ô chọn ngày không cho chọn trước hôm nay giờ VN (BR-CN-03)', async () => {
+    await pin();
+    const user = userEvent.setup();
+    renderAt('/admin/branches/1/holidays');
+    await user.click(await screen.findByRole('button', { name: 'Thêm ngày nghỉ' }));
+
+    expect(within(screen.getByRole('dialog')).getByLabelText('Ngày nghỉ')).toHaveAttribute('min', vnToday);
+  });
+
+  it('quota: ngày xem mặc định là hôm nay giờ VN', async () => {
+    await pin();
+    renderAt('/admin/branches/1/quota');
+
+    expect(await screen.findByLabelText('Ngày')).toHaveValue(vnToday);
+  });
+});
+
+describe('ngày nghỉ của ngày mai giờ VN khi máy đã sang ngày đó (T49 nhóm 2, hàng 10)', () => {
+  afterEach(() => {
+    vi.useRealTimers();
+    restoreTimezone();
+  });
+
+  it('máy ở Auckland lúc 23:59 giờ VN 27/10 (máy đã là 28/10): ngày nghỉ 28/10 còn "Sắp tới" và xóa được (BE: holidayDate > hôm nay giờ VN)', async () => {
+    setTimezone('Pacific/Auckland');
+    vi.useFakeTimers({ toFake: ['Date'] });
+    vi.setSystemTime(new Date('2026-10-27T23:59:00+07:00'));
+    await asManager();
+    await apiClient.post('/api/branches/1/holidays', { holidayDate: '2026-10-28', reason: 'Nghỉ thử múi giờ', cancelAffected: false });
+    renderAt('/admin/branches/1/holidays');
+
+    expect(await screen.findByRole('button', { name: `Xóa ngày nghỉ ${formatDate('2026-10-28')}` })).toBeInTheDocument();
+    expect(screen.getByRole('row', { name: /Nghỉ thử múi giờ/ })).toHaveTextContent('Sắp tới');
   });
 });

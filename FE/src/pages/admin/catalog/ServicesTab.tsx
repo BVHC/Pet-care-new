@@ -162,12 +162,15 @@ function ServiceForm({ service, onClose, onSaved }: { service: Service | null; o
   const isBoarding = form.group === 'BOARDING';
 
   const save = useCatalogMutation(async (f: ServiceDraft) => {
+    // PATCH: BE giữ nguyên khi vắng / null, chỉ xóa khi nhận "" → sửa mà xóa trắng ô mô tả phải gửi "" (T49 nhóm 2, hàng 4).
+    // Mô tả không đổi thì không gửi (null cũ không bị ghi thành ""); tạo mới mà để trống thì bỏ trường.
+    const description = f.description.trim();
     const body = {
       name: f.name.trim(),
       medicalType: isMedical ? (f.medicalType as MedicalType) : undefined,
       price: Number(f.price),
       priceIsFrom: f.priceIsFrom,
-      description: f.description.trim() || undefined,
+      description: service ? (description === (service.description ?? '') ? undefined : description) : description || undefined,
       kennelType: isBoarding ? { species: f.species as Species, maxWeightKg: Number(f.maxWeightKg) } : undefined,
     };
     return service

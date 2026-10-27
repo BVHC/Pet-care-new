@@ -1,7 +1,7 @@
-import { useEffect, useId, useState } from 'react';
+import { useId } from 'react';
 import { Link, NavLink, useNavigate } from 'react-router-dom';
 import {
-  Bell, ConciergeBell, Keyboard, LayoutDashboard, LogOut, Moon, PanelLeft, PanelLeftClose, RotateCcw, Scissors,
+  Bell, ConciergeBell, Keyboard, LayoutDashboard, LogOut, Moon, PanelLeft, PanelLeftClose, Scissors,
   Stethoscope, Sun, UserRound, type LucideIcon,
 } from 'lucide-react';
 import { cn } from '../../lib/utils';
@@ -10,7 +10,6 @@ import { menuFor } from '../../shared/constants/staff-menu';
 import {
   WORKSPACE_LABELS, WORKSPACE_PATHS, getAccessibleWorkspaces, homePathFor, type Workspace,
 } from '../../shared/constants/workspaces';
-import { useResetDemo } from '../../shared/hooks/useClinic';
 import { notificationCenterPath, useUnreadCount } from '../../shared/hooks/useNotifications';
 import { usePendingSalesOrders } from '../../shared/hooks/usePendingSalesOrders';
 import { useArrivals, useVisitQueue } from '../../shared/hooks/useVisits';
@@ -158,7 +157,6 @@ export function StaffSidebar({ user, collapsed, onToggleCollapsed, dark, onToggl
       <SidebarFooter
         user={user}
         collapsed={collapsed}
-        canResetDemo={workspaces.length > 0}
         dark={dark}
         onToggleTheme={onToggleTheme}
         onHelp={onHelp}
@@ -234,7 +232,6 @@ function ClinicToday({ role }: { role: Role }) {
 function SidebarFooter({
   user,
   collapsed,
-  canResetDemo,
   dark,
   onToggleTheme,
   onHelp,
@@ -242,7 +239,6 @@ function SidebarFooter({
 }: {
   user: SessionUser;
   collapsed: boolean;
-  canResetDemo: boolean;
   dark: boolean;
   onToggleTheme: () => void;
   onHelp: () => void;
@@ -250,15 +246,7 @@ function SidebarFooter({
 }) {
   const navigate = useNavigate();
   const logout = useSession((s) => s.logout);
-  const reset = useResetDemo();
-  const [confirmReset, setConfirmReset] = useState(false);
   const themeLabel = dark ? 'Chế độ sáng' : 'Chế độ tối';
-
-  useEffect(() => {
-    if (!confirmReset) return;
-    const id = window.setTimeout(() => setConfirmReset(false), 4000);
-    return () => window.clearTimeout(id);
-  }, [confirmReset]);
 
   return (
     <div className="shrink-0 border-t border-(--ws-line) p-3">
@@ -278,21 +266,6 @@ function SidebarFooter({
         <button type="button" className={ICON_BUTTON} onClick={onHelp} aria-label="Phím tắt" title="Phím tắt (?)">
           <Keyboard className="h-4 w-4" />
         </button>
-        {canResetDemo && (
-          <button
-            type="button"
-            className={cn(ICON_BUTTON, confirmReset && 'bg-(--ws-urgent-bg) text-(--ws-urgent-ink)')}
-            onClick={() => {
-              if (!confirmReset) { setConfirmReset(true); return; }
-              setConfirmReset(false);
-              reset.mutate();
-            }}
-            aria-label={confirmReset ? 'Bấm lần nữa để đặt lại dữ liệu demo' : 'Đặt lại dữ liệu demo'}
-            title="Đặt lại dữ liệu demo"
-          >
-            <RotateCcw className="h-4 w-4" />
-          </button>
-        )}
         <button
           type="button"
           className={cn(ICON_BUTTON, !collapsed && 'ml-auto', 'hover:text-(--ws-urgent-ink)')}
@@ -306,11 +279,6 @@ function SidebarFooter({
           <LogOut className="h-4 w-4" />
         </button>
       </div>
-      {confirmReset && !collapsed && (
-        <p role="status" className="mt-1 text-xs text-(--ws-urgent-ink)">
-          Bấm lần nữa để đặt lại dữ liệu demo hôm nay.
-        </p>
-      )}
     </div>
   );
 }

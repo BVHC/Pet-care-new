@@ -244,6 +244,9 @@ function ProductForm({
   const mustTrackExpiry = isVaccine || (isDrug && form.isPrescription);
 
   const save = useCatalogMutation(async (f: ProductDraft) => {
+    // PATCH: BE giữ nguyên khi vắng / null, chỉ xóa khi nhận "" → sửa mà xóa trắng ô mô tả phải gửi "" (T49 nhóm 2, hàng 4).
+    // Mô tả không đổi thì không gửi (null cũ không bị ghi thành ""); tạo mới mà để trống thì bỏ trường.
+    const description = f.description.trim();
     const body = {
       categoryId: Number(f.categoryId),
       name: f.name.trim(),
@@ -252,7 +255,7 @@ function ProductForm({
       vaccineTypeId: isVaccine ? Number(f.vaccineTypeId) : undefined,
       unit: f.unit.trim(),
       price: Number(f.price),
-      description: f.description.trim() || undefined,
+      description: product ? (description === (product.description ?? '') ? undefined : description) : description || undefined,
     };
     return product
       ? catalogApi.updateProduct(product.productId, body)

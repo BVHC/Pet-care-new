@@ -14,6 +14,7 @@ import { ConfirmModal } from '@/components/ui/modal-templates';
 import { cn } from '@/lib/utils';
 import { plainMessage, toApiError } from '@/shared/api/api-error';
 import { useKennels, useRefreshBoarding } from '@/shared/hooks/useBoarding';
+import { useStaffBranch } from '@/shared/hooks/useStaffBranch';
 import { useSession } from '@/shared/stores/session.store';
 import { KENNEL_STATUSES, KENNEL_STATUS_LABELS, type Kennel, type KennelQuery, type KennelStatus } from '@/shared/types/boarding';
 import { summarizeCapacity } from './kennels/capacity';
@@ -28,7 +29,8 @@ type Dialog = { kind: 'form'; mode: KennelFormMode } | { kind: 'maintenance'; ke
 export function AdminKennelsPage() {
   const account = useSession((s) => s.account);
   const isManager = account?.role === 'BRANCH_MANAGER';
-  const branchId = isManager ? (account?.branchId ?? null) : null;
+  const staffBranch = useStaffBranch();
+  const branchId = isManager ? staffBranch.branchId : null;
 
   const [typeFilter, setTypeFilter] = useState('');
   const [statusFilter, setStatusFilter] = useState<KennelStatus | ''>('');
@@ -120,7 +122,7 @@ export function AdminKennelsPage() {
         <FormError message="Chỉ quản lý chi nhánh được quản lý chuồng lưu trú." />
       ) : (
         <>
-          {branchId == null && <FormError message="Phiên đăng nhập không có chi nhánh nên không tải được loại chuồng. Hãy đăng nhập lại." />}
+          {branchId == null && !staffBranch.isPending && <FormError message="Tài khoản chưa gắn chi nhánh nên không tải được loại chuồng." />}
           {typesError && <FormError message={plainMessage(toApiError(typesErr))} />}
           {branchId != null && !typesLoading && !typesError && !canCreate && (
             <p role="status" className="rounded-lg bg-amber-50 px-4 py-3 text-sm text-amber-900">

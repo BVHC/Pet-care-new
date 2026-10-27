@@ -1,6 +1,6 @@
 // Đơn thuốc trong lượt khám (UC48, visit-v1 #16–17; BR-KB-03, BR-SP-01, BR-BH-02). VET được gán lượt IN_PROGRESS chọn thuốc kê đơn, nhập số lượng và liều dùng; đủ tồn thì dòng đơn sinh
 // một dòng Order thuốc (hiện ở "Chỉ định trong lượt"). Thiếu tồn thì BE trả 400 BR-KB-03 kèm số tồn: FE hiện nguyên câu đó và để VET chọn giảm số lượng cho vừa tồn hoặc mua ngoài (dòng vẫn in trên đơn,
-// không vào hóa đơn), rồi gửi lại cùng body kèm `shortageResolution`. Bệnh án đã khóa hoặc lượt của người khác chỉ xem. BE chưa có các endpoint này (T38): màn chạy trên mock theo hợp đồng.
+// không vào hóa đơn), rồi gửi lại cùng body kèm `shortageResolution`. Bệnh án đã khóa hoặc lượt của người khác chỉ xem. BE có các endpoint này từ T38 (ADR 0076–0078).
 import { useState } from 'react';
 import { toast } from 'sonner';
 import { plainMessage, toApiError } from '../../../shared/api/api-error';
@@ -14,6 +14,11 @@ import { fieldClass } from './field-class';
 
 /** `prescription_items.dosage_instructions` VARCHAR(500). */
 const MAX_DOSAGE_LENGTH = 500;
+/**
+ * BE dùng chung `BR-KB-03` cho ba ca (PrescriptionService): thuốc không phải kê đơn đang kinh doanh, thiếu tồn ("Tồn khả dụng tại chi nhánh chỉ còn N; chọn giảm số lượng hoặc mua ngoài"), hết tồn
+ * khi chọn giảm. Chỉ ca thiếu tồn mới cho chọn giảm / mua ngoài; hai ca kia là lỗi thường. Mã rule không phân biệt được nên nhận ra bằng câu "chỉ còn N".
+ */
+const SHORTAGE_MESSAGE = /chỉ còn \d+/;
 const EXTERNAL_REASON_LABELS = { OUT_OF_STOCK_AT_PRESCRIBE: 'hết tồn khi kê', OUT_OF_STOCK_AT_PAYMENT: 'hết tồn khi thu tiền' } as const;
 const select = 'h-9 w-full rounded-lg border border-(--ws-line-strong) bg-(--ws-surface) px-2 text-sm text-(--ws-ink) focus:border-(--ws-accent)';
 const hint = 'text-sm text-(--ws-ink-3)';
@@ -115,8 +120,10 @@ function PrescriptionForm({ visitId }: { visitId: number }) {
       setDosage('');
     } catch (e) {
       const apiError = toApiError(e);
-      // Chỉ request CHƯA có cách xử lý mới đưa ra lựa chọn; lỗi của request đã có (vd. giảm khi tồn bằng 0) là lỗi thường.
-      if (apiError.statusCode === 400 && apiError.ruleId === 'BR-KB-03' && body.shortageResolution === undefined) setShortage({ body, message: plainMessage(apiError) });
+      // Chỉ request CHƯA có cách xử lý và đúng ca thiếu tồn mới đưa ra lựa chọn; lỗi khác (vd. giảm khi tồn bằng 0, không phải thuốc kê đơn) là lỗi thường.
+      if (apiError.statusCode === 400 && apiError.ruleId === 'BR-KB-03' && body.shortageResolution === undefined && SHORTAGE_MESSAGE.test(apiError.message)) {
+        setShortage({ body, message: plainMessage(apiError) });
+      }
       else setError(visitErrorMessage(e, 'prescribe'));
     }
   };

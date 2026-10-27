@@ -12,7 +12,7 @@ export const PENDING_REFRESH_MS = 15_000;
 
 const PENDING_QUERY: OrderQuery = { status: 'PENDING', size: 100 };
 /** sales-v1 #2: A05–A08 của chi nhánh; ADMIN, SUPER_MANAGER, CUSTOMER bị 403 nên không gọi. */
-const ORDER_READERS: readonly Role[] = ['BRANCH_MANAGER', 'RECEPTIONIST', 'VET', 'CARETAKER'];
+export const ORDER_READERS: readonly Role[] = ['BRANCH_MANAGER', 'RECEPTIONIST', 'VET', 'CARETAKER'];
 
 const contentOf = (page: PageResponse<OrderSummary>) => page.content;
 

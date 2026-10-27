@@ -135,7 +135,7 @@ export function AdminNotificationTemplatesPage() {
         open={!!editing}
         onOpenChange={(o) => !o && setEditing(null)}
         title={`Sửa mẫu ${editing?.code ?? ''}`}
-        description={`Biến được phép: ${editing?.allowedVars.map((v) => `{${v}}`).join(', ')}`}
+        description={editing ? `Biến được phép: ${editing.allowedVars.map((v) => `{${v}}`).join(', ')}` : undefined}
         onSubmit={handleSave}
         submitText="Lưu"
         loading={update.isPending}

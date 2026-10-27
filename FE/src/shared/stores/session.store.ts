@@ -41,9 +41,11 @@ export const useSession = create<SessionState>()(
         try {
           const me = await profileApi.me();
           const fullName = me.staffProfile ? me.staffProfile.fullName : (await profileApi.customerProfile()).fullName;
-          set({ fullName, linkDecisionPending: me.linkDecisionPending });
+          // BE không trả `branchId` ở login (chỉ `GET /me` → staffProfile): gộp vào phiên để mọi trang nhân viên có chi nhánh ngay.
+          const branchId = me.staffProfile?.branchId;
+          set({ fullName, linkDecisionPending: me.linkDecisionPending, ...(branchId != null ? { account: { ...res.account, branchId } } : {}) });
         } catch {
-          // BE chưa đọc được hồ sơ (khách: CustomerQueryApi còn placeholder, D010): giữ email làm tên hiển thị.
+          // Chưa đọc được hồ sơ: giữ email làm tên hiển thị.
         }
         return res.account;
       },

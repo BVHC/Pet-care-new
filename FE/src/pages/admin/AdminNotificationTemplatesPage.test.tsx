@@ -63,4 +63,11 @@ describe('AdminNotificationTemplatesPage (T22 - UC10)', () => {
     expect(await within(dialog).findByText(/Tiêu đề không được để trống/)).toBeInTheDocument();
     expect(screen.getByRole('dialog')).toBeInTheDocument();
   });
+
+  // Chạy với BE thật (T49): hộp thoại sửa chưa mở thì `editing` null, mô tả không được ghi "Biến được phép: undefined".
+  it('chưa mở hộp thoại sửa thì không rò chữ "undefined" ra trang', async () => {
+    renderPage();
+    await screen.findByRole('button', { name: 'Sửa BRANCH_MANAGER_LOCKED_APP' });
+    expect(document.body).not.toHaveTextContent('undefined');
+  });
 });

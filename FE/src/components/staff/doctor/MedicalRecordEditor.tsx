@@ -156,7 +156,7 @@ function Editor({ visit, userId, perms, summary, onCompleted, record }: Props & 
           </div>
 
           {editable && perms.writeRecord && <WeightBox visit={visit} />}
-          {visit.serviceGroup === 'MEDICAL' && <VaccinationSection visit={visit} doses={record.vaccinations} userId={userId} canVaccinate={editable && perms.vaccinate} />}
+          {visit.serviceGroup === 'MEDICAL' && <VaccinationSection visit={visit} doses={record.vaccinations} canVaccinate={editable && perms.vaccinate} />}
           <OrderLines orderId={visit.orderId} />
           <PrescriptionSection visitId={visit.visitId} items={record.prescriptions} canPrescribe={editable && perms.prescribe} />
           {record.locked && <AddendaSection visitId={visit.visitId} addenda={record.addenda} canAdd={perms.addendum} />}

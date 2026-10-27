@@ -1,8 +1,5 @@
-import { useEffect, useMemo } from 'react';
-import { useQueryClient } from '@tanstack/react-query';
+import { useMemo } from 'react';
 import { toast } from 'sonner';
-import { CLINIC_DB_KEY } from '../api/clinic-db';
-import { QUERY_KEYS } from '../constants/queryKeys';
 import type { Workspace } from '../constants/workspaces';
 import { useAccount } from '../stores/session.store';
 import { VISIT_GROUP_LABELS, visitPermissions } from '../types/visit';
@@ -10,19 +7,6 @@ import { announce } from '../utils/announce';
 import { usePendingSalesOrders } from './usePendingSalesOrders';
 import { useOnNewItems } from './useOnNewItems';
 import { useMyQueue } from './useVisits';
-
-/** Another tab changed the clinic store: refresh now instead of waiting for the next poll. */
-export function useClinicSync(): void {
-  const queryClient = useQueryClient();
-  useEffect(() => {
-    const onStorage = (e: StorageEvent) => {
-      if (e.key !== CLINIC_DB_KEY) return;
-      Object.values(QUERY_KEYS).forEach((family) => queryClient.invalidateQueries({ queryKey: family.all }));
-    };
-    window.addEventListener('storage', onStorage);
-    return () => window.removeEventListener('storage', onStorage);
-  }, [queryClient]);
-}
 
 /**
  * Cross-workspace handoffs (plan: toast now, WebSocket later):

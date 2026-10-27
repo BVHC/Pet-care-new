@@ -287,17 +287,18 @@ const updateProduct: MockHandler = ({ body, params }) => {
     ...priceChecks(b.price, false),
   ]);
   if (bad) return bad;
+  // PATCH như BE (ProductService.update): trường vắng hoặc null = giữ nguyên; mô tả "" = xóa mô tả.
   const next: Product = {
     ...product,
     ...(isInt(b.categoryId) && { categoryId: b.categoryId }),
     ...(isText(b.name) && { name: b.name.trim() }),
     ...(isBool(b.isPrescription) && { isPrescription: b.isPrescription }),
     ...(isBool(b.tracksExpiry) && { tracksExpiry: b.tracksExpiry }),
-    ...(b.vaccineTypeId !== undefined && { vaccineTypeId: b.vaccineTypeId as number | null }),
+    ...(b.vaccineTypeId != null && { vaccineTypeId: b.vaccineTypeId as number }),
     ...(isText(b.unit) && { unit: b.unit.trim() }),
     ...(isInt(b.price) && { price: b.price }),
-    ...(b.description !== undefined && { description: b.description as string | null }),
-    ...(b.imageUrl !== undefined && { imageUrl: b.imageUrl as string | null }),
+    ...(b.description != null && { description: b.description as string }),
+    ...(b.imageUrl != null && { imageUrl: b.imageUrl as string }),
     ...(isBool(b.isActive) && { isActive: b.isActive }),
   };
   const rule = productRule(s, next.productType, next.isPrescription, next.tracksExpiry, next.vaccineTypeId);
@@ -384,13 +385,14 @@ const updateService: MockHandler = ({ body, params }) => {
   const patch = b.kennelType as Partial<KennelTypeSpec> | undefined;
   // Như BE: trường nào của thông số chuồng không gửi thì giữ giá trị cũ.
   const kennel = patch && service.group === 'BOARDING' ? { ...service.kennelType, ...patch } : patch ?? service.kennelType;
+  // PATCH như BE (ServiceCatalogService.update): trường vắng hoặc null = giữ nguyên; mô tả "" = xóa mô tả.
   const next: Service = {
     ...service,
     ...(isText(b.name) && { name: b.name.trim() }),
-    ...(b.medicalType !== undefined && { medicalType: b.medicalType as MedicalType | null }),
+    ...(b.medicalType != null && { medicalType: b.medicalType as MedicalType }),
     ...(isInt(b.price) && { price: b.price }),
     ...(isBool(b.priceIsFrom) && { priceIsFrom: b.priceIsFrom }),
-    ...(b.description !== undefined && { description: b.description as string | null }),
+    ...(b.description != null && { description: b.description as string }),
     ...(isBool(b.isActive) && { isActive: b.isActive }),
     kennelType: (kennel as KennelTypeSpec | null | undefined) ?? null,
   };

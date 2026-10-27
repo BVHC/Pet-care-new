@@ -5,7 +5,7 @@ import { toast } from 'sonner';
 import { AuthShell } from './AuthShell';
 import { AuthField, SubmitButton } from './AuthField';
 import { authApi } from '../../shared/api/auth.api';
-import { toApiError } from '../../shared/api/api-error';
+import { plainMessage, toApiError } from '../../shared/api/api-error';
 import { ROUTES } from '../../shared/constants/routes';
 import { homePathFor } from '../../shared/constants/workspaces';
 import { useAccount, useSession } from '../../shared/stores/session.store';
@@ -38,7 +38,7 @@ export function ChangePasswordPage() {
       toast.success('Đã đổi mật khẩu.');
       navigate(from ?? homePathFor(account.role), { replace: true });
     } catch (err) {
-      setError(toApiError(err).message);
+      setError(plainMessage(toApiError(err)));
     } finally {
       setLoading(false);
     }

@@ -14,6 +14,9 @@ import { useDebounce } from '../../shared/hooks/useDebounce';
 import { useLock, useUnlock, useAccounts } from '../../shared/hooks/useAdminIdentity';
 import { plainMessage, toApiError } from '../../shared/api/api-error';
 import { useAccount } from '../../shared/stores/session.store';
+import { Pager } from '../../components/admin/Pager';
+
+const PAGE_SIZE = 20; // = mặc định của BE, kẹp 1–100
 
 const STATUS_COLOR: Record<AccountStatus, string> = {
   PENDING: 'bg-yellow-100 text-yellow-700',
@@ -32,6 +35,11 @@ export function AdminAccountsPage() {
   const search = useDebounce(q.trim());
   const [role, setRole] = useState('');
   const [isLocked, setIsLocked] = useState('');
+  // Đổi bộ lọc thì về trang đầu: trang nhớ kèm bộ lọc lúc chọn, lệch bộ lọc thì coi như trang 0.
+  const filterKey = [search, role, isLocked].join('|');
+  const [paging, setPaging] = useState({ key: filterKey, page: 0 });
+  if (paging.key !== filterKey) setPaging({ key: filterKey, page: 0 });
+  const page = paging.key === filterKey ? paging.page : 0;
   const [notice, setNotice] = useState<Notice | null>(null);
   const [lockTarget, setLockTarget] = useState<{ id: number; name: string } | null>(null);
   const [unlockTarget, setUnlockTarget] = useState<{ id: number; name: string } | null>(null);
@@ -41,6 +49,8 @@ export function AdminAccountsPage() {
     q: search || undefined,
     role: (role || undefined) as Role | undefined,
     isLocked: isLocked ? isLocked === 'true' : undefined,
+    page,
+    size: PAGE_SIZE,
   };
   const { data, isPending } = useAccounts(params);
   const lock = useLock();
@@ -77,8 +87,8 @@ export function AdminAccountsPage() {
           <div className="relative">
             <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-(--text-tertiary)" />
             <Input
-              aria-label="Tìm theo tên hoặc email"
-              placeholder="Tìm theo tên hoặc email…"
+              aria-label="Tìm theo email"
+              placeholder="Tìm theo email…"
               className="pl-10"
               value={q}
               onChange={(e) => setQ(e.target.value)}
@@ -86,13 +96,11 @@ export function AdminAccountsPage() {
           </div>
           <select aria-label="Lọc vai trò" className={selectClass} value={role} onChange={(e) => setRole(e.target.value)}>
             <option value="">Mọi vai trò</option>
-            <option value="ADMIN">Quản trị hệ thống</option>
-            <option value="SUPER_MANAGER">Giám đốc vận hành</option>
-            <option value="BRANCH_MANAGER">Quản lý chi nhánh</option>
-            <option value="RECEPTIONIST">Lễ tân</option>
-            <option value="VET">Bác sĩ thú y</option>
-            <option value="CARETAKER">Phụ tá</option>
-            <option value="CUSTOMER">Khách hàng</option>
+            {(['ADMIN', 'SUPER_MANAGER', 'BRANCH_MANAGER', 'RECEPTIONIST', 'VET', 'CARETAKER', 'CUSTOMER'] as const).map((r) => (
+              <option key={r} value={r}>
+                {ROLE_LABELS[r]}
+              </option>
+            ))}
           </select>
           <select aria-label="Lọc trạng thái khóa" className={selectClass} value={isLocked} onChange={(e) => setIsLocked(e.target.value)}>
             <option value="">Mọi trạng thái khóa</option>
@@ -158,6 +166,7 @@ export function AdminAccountsPage() {
               })}
             </tbody>
           </table>
+          {data && <Pager data={data} unit="tài khoản" onPage={(p) => setPaging({ key: filterKey, page: p })} />}
         </CardContent>
       </Card>
 

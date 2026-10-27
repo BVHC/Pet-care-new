@@ -1,5 +1,7 @@
 # T37 (FE): Khám bệnh, tiêm chủng, hoàn tất lượt, bản bổ sung (UC48, UC49, UC52, UC53)
 
+> **Cập nhật 27/10/2026 (T49):** các lệch ở **A.3 / A.3b** (xóa mũi theo người phụ trách, mũi gợi ý khi hết phác đồ, lô / hạn `null`, thứ tự kiểm và câu lỗi, mũi / sản phẩm lạ = 400 `BR-KB-04`) **đã sửa trong mock + FE** (`T49-fe.md` §C.1); vẫn **chưa chạy với BE thật**. `AdminDashboardPage` không còn dùng `clinic-db` (mục B.6 bên dưới: mã chết còn lại gỡ ở T57).
+
 > Phạm vi: **A. Mock bệnh án, cân nặng, hoàn tất lượt, bản bổ sung, tiêm chủng** (types, `visit.api.ts`, hooks, `visit-clinical.mock.ts`) và **B. Giao diện** bàn Phòng khám (VET) + khu Grooming (CARETAKER). Kê đơn (#16–17) là T46, không làm ở đây.
 > Hợp đồng: `docs/api/visit-v1.md` + `docs/api/openapi/visit-v1.yaml` (#10, #12–15, #18–20, đọc thêm #21); ADR 0066–0070. Rule: BR-KB-01, 02, 04, 06, BR-SP-06, 07, BR-KH-04, 05, 07, BR-TN-05, 09, BR-TB-03, BR-KO-05. **Khi docs lệch BE thì theo BE** (đã đọc `MedicalRecordService`, `VisitCompletionService`, DTO, mapper, `PetWeightApiService`).
 > **BE có #10, #12–15 (T27) và #18–20 (tiêm chủng, T28 giao 26/10, ADR 0072–0075).** Phần tiêm chủng của T37 dựng khi BE chưa có, nên chỉ theo hợp đồng + BR-KB-04, chỗ hợp đồng im lặng là ASSUMPTION (A.3); **chưa chạy thử với BE thật** (đối chiếu ở A.3).

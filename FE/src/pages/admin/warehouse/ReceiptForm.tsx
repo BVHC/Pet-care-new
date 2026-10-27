@@ -11,7 +11,7 @@ import { useProducts } from '../../../shared/hooks/useCatalog';
 import { useInventoryMutation, useSuppliers } from '../../../shared/hooks/useInventory';
 import type { Product } from '../../../shared/types/catalog';
 import type { StockReceipt, StockReceiptRequest } from '../../../shared/types/inventory';
-import { localIsoDate } from '../../../shared/utils/branch-schedule';
+import { vnDate } from '../../../shared/utils/vn-time';
 
 interface LineDraft {
   productId: string;
@@ -40,7 +40,7 @@ export function ReceiptForm({
   const suppliers = useSuppliers();
   const products = useProducts({ isActive: true, page: 0, size: 100 });
   const [supplierId, setSupplierId] = useState(receipt ? String(receipt.supplierId) : '');
-  const [receiptDate, setReceiptDate] = useState(receipt?.receiptDate ?? localIsoDate());
+  const [receiptDate, setReceiptDate] = useState(receipt?.receiptDate ?? vnDate());
   const [note, setNote] = useState(receipt?.note ?? '');
   const [lines, setLines] = useState<LineDraft[]>(
     receipt?.lines.map((l) => ({
@@ -67,6 +67,8 @@ export function ReceiptForm({
     let problem = '';
     if (!supplierId) problem = 'Vui lòng chọn nhà cung cấp';
     else if (!receiptDate) problem = 'Vui lòng chọn ngày nhập';
+    // FE chặn sớm hơn BE: BE chỉ từ chối lúc xác nhận (400 BR-KO-03), tạo / sửa nháp nhận mọi ngày (T49 nhóm 2, hàng 5).
+    else if (receiptDate > vnDate()) problem = 'Ngày nhập không được ở tương lai';
     else {
       lines.forEach((l, i) => {
         if (problem) return;
@@ -125,7 +127,7 @@ export function ReceiptForm({
           )}
         </Field>
         <Field label="Ngày nhập">
-          {(id) => <Input id={id} type="date" value={receiptDate} onChange={(e) => setReceiptDate(e.target.value)} />}
+          {(id) => <Input id={id} type="date" max={vnDate()} value={receiptDate} onChange={(e) => setReceiptDate(e.target.value)} />}
         </Field>
       </div>
       <Field label="Ghi chú">

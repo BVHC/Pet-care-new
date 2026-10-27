@@ -1,6 +1,7 @@
 import axios, { type AxiosInstance, type AxiosResponse } from 'axios';
-import { beforeEach, describe, expect, it } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { ruleIdOf } from '../api-error';
+import { restoreTimezone, setTimezone, TIMEZONES } from '../../../test/timezone';
 import { addDays, localIsoDate } from '../../utils/branch-schedule';
 import { MOCK_PASSWORD } from './identity.mock';
 import { installMockApi } from './mock-api';
@@ -163,6 +164,44 @@ describe('phiếu nhập kho (UC74, 03 §9)', () => {
     expect(put.data).toMatchObject({ errorCode: 'INVALID_STATE_TRANSITION', statusCode: 409 });
   });
 
+  // BE StockReceiptService.validateForConfirm: ngày nhập sau hôm nay (giờ VN) → BR-KO-03, nối với lỗi dòng bằng "; " (T49 nhóm 2, hàng 5).
+  it('ngày nhập ở tương lai: lưu nháp được, xác nhận → BR-KO-03 đúng câu BE, đứng trước lỗi dòng; sửa về hôm nay thì nhập kho được', async () => {
+    const future = addDays(today, 1);
+    const line = { productId: 1, quantity: 5, unitCost: 380_000 };
+    const created = await client.post('/api/stock-receipts', { supplierId: 1, receiptDate: future, lines: [line] }, await manager());
+    expect(created.status).toBe(201);
+    const id = created.data.data.receiptId;
+    const refused = await failure(client.post(`/api/stock-receipts/${id}/confirm`, undefined, await manager()));
+    expect(refused.status).toBe(400);
+    expect(refused.data.message).toBe('ngày nhập không được ở tương lai (BR-KO-03)');
+    expect((await item(1)).totalQuantity).toBe(12);
+
+    // Phiếu #2 còn dòng Vanguard thiếu số lô / hạn dùng: lỗi ngày đứng đầu, lỗi dòng nối sau.
+    await client.put('/api/stock-receipts/2', { supplierId: 1, receiptDate: future, lines: [line, { productId: 6, quantity: 10, unitCost: 140_000 }] }, await manager());
+    const both = await failure(client.post('/api/stock-receipts/2/confirm', undefined, await manager()));
+    expect(both.data.message).toMatch(/^ngày nhập không được ở tương lai; .*Vaccine 5 bệnh Vanguard.* \(BR-KO-03\)$/);
+
+    await client.put(`/api/stock-receipts/${id}`, { supplierId: 1, receiptDate: today, lines: [line] }, await manager());
+    const confirmed = await client.post(`/api/stock-receipts/${id}/confirm`, undefined, await manager());
+    expect(confirmed.data.data.status).toBe('CONFIRMED');
+    expect((await item(1)).totalQuantity).toBe(17);
+  });
+
+  // BE: 404 / 403 → 409 trạng thái → 400 rule (ADR-0065 §7), nhà cung cấp trước sản phẩm (T49 nhóm 2, hàng 12).
+  it('phiếu không còn nháp báo 409 trước BR-KO-02, cả lúc xác nhận lẫn lúc sửa; nhà cung cấp ngừng hợp tác báo trước sản phẩm lạ', async () => {
+    await client.patch('/api/suppliers/2', { isActive: false }, await manager()); // phiếu #1 (đã nhập) và #3 (đã hủy) thuộc nhà cung cấp này
+    const confirmedAgain = await failure(client.post('/api/stock-receipts/1/confirm', undefined, await manager()));
+    expect(confirmedAgain.data).toMatchObject({ errorCode: 'INVALID_STATE_TRANSITION', statusCode: 409 });
+    const cancelled = await failure(client.post('/api/stock-receipts/3/confirm', undefined, await manager()));
+    expect(cancelled.data).toMatchObject({ errorCode: 'INVALID_STATE_TRANSITION', statusCode: 409 });
+    const edit = { supplierId: 2, receiptDate: today, lines: [{ productId: 1, quantity: 1, unitCost: 1 }] };
+    const edited = await failure(client.put('/api/stock-receipts/1', edit, await manager()));
+    expect(edited.data).toMatchObject({ errorCode: 'INVALID_STATE_TRANSITION', statusCode: 409 });
+
+    const both = { supplierId: 3, receiptDate: today, lines: [{ productId: 999, quantity: 1, unitCost: 1 }] };
+    expect(ruleOf(await failure(client.post('/api/stock-receipts', both, await manager())))).toBe('BR-KO-02');
+  });
+
   it('hủy phiếu đã nhập khi lô không còn đủ → BR-KO-04, chỉ sang phiếu điều chỉnh; tồn không đổi', async () => {
     const res = await failure(client.post('/api/stock-receipts/1/cancel', {}, await manager()));
     expect(ruleOf(res)).toBe('BR-KO-04');
@@ -238,5 +277,33 @@ describe('điều chỉnh tồn (UC76, BR-KO-06)', () => {
     expect(list.data.data.content.map((a: { adjustmentId: number }) => a.adjustmentId)).toEqual([3, 2, 1]);
     const old = await client.get('/api/stock-adjustments', { params: { to: addDays(today, -1) }, ...(await manager()) });
     expect(old.data.data.content.map((a: { adjustmentId: number }) => a.adjustmentId)).toEqual([1]);
+  });
+});
+
+// BE tính "hôm nay" theo Asia/Ho_Chi_Minh; ngày lịch của máy không được lọt vào đây (T49 nhóm 2, hàng 10).
+describe.each(TIMEZONES)('ngày nhập tương lai tính theo giờ VN khi máy ở %s', (tz) => {
+  beforeEach(() => {
+    setTimezone(tz);
+    vi.useFakeTimers({ toFake: ['Date'] });
+  });
+  afterEach(() => {
+    vi.useRealTimers();
+    restoreTimezone();
+  });
+
+  it.each([
+    ['2026-10-27T23:59:00+07:00', '2026-10-27'],
+    ['2026-10-28T00:01:00+07:00', '2026-10-28'],
+  ])('lúc %s giờ VN: phiếu ghi ngày %s nhập kho được, phiếu ghi ngày kế tiếp bị BR-KO-03', async (instant, vnToday) => {
+    vi.setSystemTime(new Date(instant));
+    const line = { productId: 1, quantity: 1, unitCost: 1 };
+    const create = async (receiptDate: string) =>
+      (await client.post('/api/stock-receipts', { supplierId: 1, receiptDate, lines: [line] }, await manager())).data.data.receiptId;
+    const todayId = await create(vnToday);
+    const tomorrowId = await create(addDays(vnToday, 1));
+
+    expect((await client.post(`/api/stock-receipts/${todayId}/confirm`, undefined, await manager())).data.data.status).toBe('CONFIRMED');
+    const refused = await failure(client.post(`/api/stock-receipts/${tomorrowId}/confirm`, undefined, await manager()));
+    expect(refused.data.message).toBe('ngày nhập không được ở tương lai (BR-KO-03)');
   });
 });

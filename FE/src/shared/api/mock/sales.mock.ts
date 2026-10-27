@@ -630,6 +630,9 @@ export const payableOrdersOf = (customerId: number, branchId: number): OrderSumm
 
 export const orderTotal = totalOf;
 
+/** Cho mock báo cáo (T49, như *ReportApi của BE, 06 §8 Q3): mọi Order của mọi chi nhánh, chỉ đọc; giá trị tính bằng `orderTotal` theo đơn giá snapshot (BR-BH-03). */
+export const allOrderRows = (): readonly OrderRow[] => load().orders;
+
 /** Các Order của một phiếu thu (`orders.payment_id`), id tăng dần. */
 export const ordersOfPayment = (paymentId: number): OrderSummary[] =>
   load()

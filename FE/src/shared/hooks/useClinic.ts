@@ -1,18 +1,17 @@
 // React Query bindings for the clinic API: one hook per read, one per command.
 // Commands invalidate through INVALIDATE so every workspace sees the change.
+// T49: bảng điều khiển, bàn làm việc và thanh bên đã chạy trên API hợp đồng; các hook còn lại ở đây là mã chết, gỡ cùng clinic.api.ts ở T57.
 import { useMutation, useQuery, useQueryClient, type QueryKey } from '@tanstack/react-query';
 import { toast } from 'sonner';
-import { ApiError, plainMessage } from '../api/api-error';
+import { ApiError } from '../api/api-error';
 import { clinicApi, type AddLineInput } from '../api/clinic.api';
 import { INVALIDATE, QUERY_KEYS } from '../constants/queryKeys';
-import { liveQuery, retryDelay, shouldRetry } from '../constants/realtime';
+import { retryDelay, shouldRetry } from '../constants/realtime';
 import type { MedicalRecord, VisitDetail, VisitView } from '../types/clinic';
+import { errorMessage } from '../utils/error-message';
 import { startTimer, track } from '../utils/telemetry';
 
 // ---------- reads ----------
-
-export const useDashboardSummary = () =>
-  useQuery({ queryKey: QUERY_KEYS.dashboard.summary(), queryFn: clinicApi.getDashboardSummary, ...liveQuery });
 
 export function useVisitDetail(visitId: string | null) {
   return useQuery({
@@ -28,12 +27,6 @@ export const useCatalog = () =>
   useQuery({ queryKey: QUERY_KEYS.catalog.all, queryFn: clinicApi.getCatalog, staleTime: 60_000 });
 
 // ---------- commands ----------
-
-/** Message hiển thị; mã rule ở cuối message (00-method §3.5) tách ra, xem `notifyError`. */
-export function errorMessage(error: unknown): string {
-  if (error instanceof ApiError) return plainMessage(error);
-  return error instanceof Error && error.message ? error.message : 'Không thực hiện được. Thử lại sau ít phút.';
-}
 
 export function notifyError(error: unknown) {
   const rule = error instanceof ApiError ? error.ruleId : null;
@@ -118,16 +111,4 @@ export function useVisitLines(visitId: string, staffId: string) {
     onError: notifyError,
   });
   return { add, remove, replace };
-}
-
-export function useResetDemo() {
-  const queryClient = useQueryClient();
-  return useMutation({
-    mutationFn: clinicApi.resetDemo,
-    onSuccess: () => {
-      toast.success('Đã đặt lại dữ liệu demo của hôm nay');
-      return queryClient.invalidateQueries();
-    },
-    onError: notifyError,
-  });
 }

@@ -76,6 +76,21 @@ describe('products', () => {
     expect(res.data).toMatchObject({ errorCode: 'VALIDATION_FAILED', message: 'SKU đã tồn tại' });
   });
 
+  // BE ProductService.update: trường vắng hoặc null = giữ nguyên; "" được ghi như "" (T49 nhóm 2, hàng 4).
+  it('PATCH keeps the description when it is absent or null and clears it only with ""', async () => {
+    const auth = await manager();
+    const id = (await client.post('/api/products', { ...NEW_PRODUCT, description: 'Mô tả cũ', imageUrl: '/imgs/a.jpg' }, auth)).data.data.productId;
+    const read = async () => (await client.get(`/api/products/${id}`, auth)).data.data;
+
+    await client.patch(`/api/products/${id}`, { name: 'Sữa tắm thử 2' }, auth);
+    expect(await read()).toMatchObject({ name: 'Sữa tắm thử 2', description: 'Mô tả cũ', imageUrl: '/imgs/a.jpg' });
+    await client.patch(`/api/products/${id}`, { description: null, imageUrl: null }, auth);
+    expect(await read()).toMatchObject({ description: 'Mô tả cũ', imageUrl: '/imgs/a.jpg' });
+    const cleared = await client.patch(`/api/products/${id}`, { description: '' }, auth);
+    expect(cleared.data.data.description).toBe('');
+    expect(await read()).toMatchObject({ description: '', imageUrl: '/imgs/a.jpg' });
+  });
+
   it('answers 404 for an unknown product', async () => {
     const res = await failure(client.get('/api/products/9999', await manager()));
     expect(res.data).toMatchObject({ statusCode: 404, message: 'Không tìm thấy Sản phẩm #9999' });
@@ -97,6 +112,17 @@ describe('services', () => {
       client.post('/api/services', { name: 'Chuồng lớn', group: 'BOARDING', price: 0, kennelType: { species: 'DOG', maxWeightKg: 40 } }, auth),
     );
     expect([ruleIdOf(noSpecies.data.message), ruleIdOf(free.data.message)]).toEqual(['BR-SP-04', 'BR-SP-04']);
+  });
+
+  it('PATCH keeps the description and the medical type when they are absent or null; "" clears the description', async () => {
+    const auth = await manager();
+    const created = await client.post('/api/services', { name: 'Siêu âm bụng', group: 'MEDICAL', medicalType: 'EXAM', price: 300_000, description: 'Mô tả cũ' }, auth);
+    const id = created.data.data.serviceId;
+
+    const same = await client.patch(`/api/services/${id}`, { price: 310_000, description: null, medicalType: null }, auth);
+    expect(same.data.data).toMatchObject({ price: 310_000, description: 'Mô tả cũ', medicalType: 'EXAM' });
+    const cleared = await client.patch(`/api/services/${id}`, { description: '' }, auth);
+    expect(cleared.data.data).toMatchObject({ description: '', medicalType: 'EXAM' });
   });
 
   it('creates a kennel type and changes its price with PATCH /services/{serviceId}', async () => {

@@ -51,8 +51,8 @@ describe('staff shell', () => {
 
   it('still opens a page hidden from the menu by its URL', async () => {
     await signInAs('reception@store1.vn');
-    open('/admin/queue');
-    expect(await screen.findByRole('heading', { name: 'Hàng chờ walk-in' })).toBeInTheDocument();
+    open('/admin/notifications');
+    expect(await screen.findByRole('heading', { name: 'Thông báo' })).toBeInTheDocument();
   });
 
   it('shows 403 inside the frame, sidebar included', async () => {

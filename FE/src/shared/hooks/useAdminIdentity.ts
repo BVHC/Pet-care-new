@@ -155,11 +155,13 @@ export const useRestoreTemplateDefault = () => {
 
 // ─── Audit (UC11) ───
 
-export function useAuditLogs(query: AuditQuery = {}) {
+/** `enabled = false`: bộ lọc chưa hợp lệ phía FE (xem `auditFilterHint`), chưa gọi BE để khỏi nhận 400. */
+export function useAuditLogs(query: AuditQuery = {}, enabled = true) {
   return useQuery({
     queryKey: ['audit-logs', query],
     queryFn: () => identityApi.listAuditLogs(query),
     placeholderData: keepPreviousData,
+    enabled,
   });
 }
 

@@ -425,6 +425,7 @@ describe('exam room — tiêm chủng trong lượt khám (#18–20, UC49; BR-KB
 
     await waitFor(() => expect(record).toHaveBeenCalledWith(2002, FIVE));
     expect(within(await vaccination.findByRole('list', { name: 'Mũi tiêm trong lượt' })).getByText(/Mũi 1 · 5 bệnh/)).toBeInTheDocument();
+    expect(vaccination.getByRole('list', { name: 'Mũi tiêm trong lượt' })).not.toHaveTextContent(/lô |hạn /); // BE chưa điền lô / hạn (null, D046): màn ẩn chứ không in "lô null"
     expect(toast.success).toHaveBeenCalledWith(expect.stringContaining('Đã ghi mũi 1 5 bệnh'));
     await waitFor(async () => expect((await lines()).getByText('Vaccine 5 bệnh Vanguard')).toBeInTheDocument());
     expect((await lines()).getByText('Mũi tiêm')).toBeInTheDocument();
@@ -458,8 +459,60 @@ describe('exam room — tiêm chủng trong lượt khám (#18–20, UC49; BR-KB
     expect((await apiClient.get('/api/inventory/6')).data.data.availableQuantity).toBe(4);
   });
 
+  /** Đổi người ghi mọi mũi trong dữ liệu mock sang VET #7: như lượt đã gán lại cho người mở màn hình sau khi VET cũ ghi mũi. */
+  const recordedByAnotherVet = () => {
+    const state = JSON.parse(localStorage.getItem('petcare-mock-clinical')!);
+    for (const dose of state.vaccinations) dose.recordedBy = 7;
+    localStorage.setItem('petcare-mock-clinical', JSON.stringify(state));
+  };
+
+  it('người phụ trách hiện tại xóa được mũi do VET KHÁC ghi (lượt đã gán lại, ADR-0075): nút Xóa theo quyền tiêm chứ không theo người ghi; xóa xong mũi biến mất và kho được hoàn', async () => {
+    const remove = vi.spyOn(visitApi, 'deleteVaccination');
+    const { user } = await renderAfter(async () => {
+      await visitApi.recordVaccination(2002, FIVE);
+      recordedByAnotherVet();
+    });
+    const vaccination = await section();
+    expect(await vaccination.findByText(/Mũi 1 · 5 bệnh/)).toBeInTheDocument();
+
+    await user.click(await vaccination.findByRole('button', { name: 'Xóa mũi 1 5 bệnh' }));
+
+    await waitFor(() => expect(remove).toHaveBeenCalledWith(2002, expect.any(Number)));
+    expect(await vaccination.findByText('Chưa ghi mũi tiêm nào trong lượt này.')).toBeInTheDocument();
+    expect((await apiClient.get('/api/inventory/6')).data.data.availableQuantity).toBe(4);
+  });
+
+  it('xóa mũi mà Care Task nhắc tái chủng còn trỏ tới: BE trả 409 CONCURRENCY_CONFLICT chung chung, màn nói đúng nguyên nhân (không phải "vừa được gán lại") và mũi vẫn còn', async () => {
+    vi.spyOn(visitApi, 'deleteVaccination').mockRejectedValue(new ApiError('CONCURRENCY_CONFLICT', 'Dữ liệu vừa được thay đổi bởi thao tác khác, vui lòng thử lại', 409));
+    const { user } = await renderAfter(() => visitApi.recordVaccination(2002, FIVE));
+    const vaccination = await section();
+
+    await user.click(await vaccination.findByRole('button', { name: 'Xóa mũi 1 5 bệnh' }));
+
+    const alert = await vaccination.findByRole('alert');
+    expect(alert).toHaveTextContent('Mũi này đã gắn nhắc tái chủng nên không xóa được.');
+    expect(alert).not.toHaveTextContent('gán lại');
+    expect(vaccination.getByText(/Mũi 1 · 5 bệnh/)).toBeInTheDocument();
+  });
+
+  it('hết phác đồ: sau mũi cuối vẫn gợi ý mũi lớn nhất (BE) kèm câu "Đã hết phác đồ, gợi ý nhắc lại mũi N" và chọn sẵn mũi đó; còn mũi kế tiếp thì không có câu này', async () => {
+    const { user } = await renderAfter(() => visitApi.recordVaccination(2002, FIVE));
+    const vaccination = await section();
+
+    await user.selectOptions(await vaccination.findByLabelText('Loại vaccine'), '5 bệnh');
+    expect(await vaccination.findByText(/Mũi gần nhất tại hệ thống: mũi 1 /)).toBeInTheDocument();
+    expect(vaccination.queryByText(/Đã hết phác đồ/)).not.toBeInTheDocument();
+    await waitFor(() => expect(vaccination.getByLabelText('Mũi theo phác đồ')).toHaveDisplayValue(/Mũi 2 .*gợi ý/));
+
+    await user.click(vaccination.getByRole('button', { name: 'Ghi mũi tiêm' }));
+
+    expect(await vaccination.findByText(/Mũi gần nhất tại hệ thống: mũi 2 .*Đã hết phác đồ, gợi ý nhắc lại mũi 2\./)).toBeInTheDocument();
+    expect(vaccination.getByLabelText('Mũi theo phác đồ')).toHaveDisplayValue(/Mũi 2 .*gợi ý/);
+    expect(vaccination.getByRole('button', { name: 'Ghi mũi tiêm' })).toBeEnabled();
+  });
+
   it('chưa đủ tuổi tối thiểu: cảnh báo của BE hiện bằng cảnh báo (không chặn), mũi vẫn được ghi', async () => {
-    const dose = { vaccinationId: 9, visitId: 2002, branchId: 1, vaccineTypeId: 2, vaccineTypeName: '5 bệnh', protocolId: 1, doseNumber: 1, productId: 6, productName: 'Vaccine 5 bệnh Vanguard', lotNumber: 'VG2402', expiryDate: '2027-03-31', administeredOn: '2026-10-22', nextDueDate: '2026-11-12', superseded: false, recordedBy: 5, orderLineId: 99 };
+    const dose = { vaccinationId: 9, visitId: 2002, branchId: 1, vaccineTypeId: 2, vaccineTypeName: '5 bệnh', protocolId: 1, doseNumber: 1, productId: 6, productName: 'Vaccine 5 bệnh Vanguard', lotNumber: null, expiryDate: null, administeredOn: '2026-10-22', nextDueDate: '2026-11-12', superseded: false, recordedBy: 5, orderLineId: 99 };
     vi.spyOn(visitApi, 'recordVaccination').mockResolvedValue({ vaccination: dose, warnings: ['UNDER_MIN_AGE'] });
     const { user } = await renderExamRoom();
     const vaccination = await section();
@@ -496,7 +549,7 @@ describe('exam room — tiêm chủng trong lượt khám (#18–20, UC49; BR-KB
     expect(vaccination.getByText('Chưa ghi mũi tiêm nào trong lượt này.')).toBeInTheDocument();
   });
 
-  it('BE thật chưa có tiêm chủng (T28): #18 trả 404 thì câu báo hiện ngay trong mục "Tiêm chủng", màn không vỡ, bệnh án vẫn dùng được và nút ghi mũi tắt', async () => {
+  it('lỗi khi tải gợi ý mũi tiêm (#18 trả 404, vd. loại vaccine vừa bị xóa): câu báo hiện ngay trong mục "Tiêm chủng", màn không vỡ, bệnh án vẫn dùng được và nút ghi mũi tắt', async () => {
     vi.spyOn(visitApi, 'getVaccinationOptions').mockRejectedValue(new ApiError('RESOURCE_NOT_FOUND', 'Không tìm thấy tài nguyên yêu cầu', 404));
     const { user } = await renderExamRoom();
     const vaccination = await section();
@@ -541,7 +594,7 @@ describe('exam room — tiêm chủng trong lượt khám (#18–20, UC49; BR-KB
 });
 
 describe('exam room — kê đơn thuốc (#16–17, UC48; BR-KB-03, BR-BH-02)', () => {
-  // Amoxicillin #3 (thuốc kê đơn) chi nhánh 1 tồn 700; Vitamin #4 là thuốc KHÔNG kê đơn. BE chưa có (T38): màn chạy trên visit-clinical.mock theo hợp đồng.
+  // Amoxicillin #3 (thuốc kê đơn) chi nhánh 1 tồn 700; Vitamin #4 là thuốc KHÔNG kê đơn. Màn chạy trên visit-clinical.mock, đã chép thứ tự kiểm và câu lỗi từ BE T38 (PrescriptionService).
   const AMOX = { productId: 3, quantity: 10, dosageInstructions: 'Ngày 2 lần, mỗi lần 1 viên sau ăn' };
   const AMOX_NAME = 'Amoxicillin 250mg';
   const rx = async () => within(await exam().findByRole('region', { name: 'Đơn thuốc' }));
@@ -550,7 +603,7 @@ describe('exam room — kê đơn thuốc (#16–17, UC48; BR-KB-03, BR-BH-02)',
   type Section = Awaited<ReturnType<typeof rx>>;
   type User = ReturnType<typeof userEvent.setup>;
   const SUBMIT = 'Kê thuốc';
-  const SHORT_ALERT = /Thiếu tồn khả dụng: Amoxicillin 250mg chỉ còn 700 viên, cần 800/;
+  const SHORT_ALERT = /Tồn khả dụng tại chi nhánh chỉ còn 700; chọn giảm số lượng hoặc mua ngoài/;
   const NO_ITEM = 'Chưa kê thuốc nào trong lượt này.';
   const EXTERNAL_800 = { ...AMOX, quantity: 800, shortageResolution: 'EXTERNAL_PURCHASE' } as const;
 
@@ -722,11 +775,32 @@ describe('exam room — kê đơn thuốc (#16–17, UC48; BR-KB-03, BR-BH-02)',
     expect(add).toHaveBeenCalledTimes(1);
   });
 
+  it('BR-KB-03 của ca "không phải thuốc kê đơn đang kinh doanh" (cùng mã với thiếu tồn) là lỗi thường: câu BE bỏ mã, KHÔNG hiện khung giảm / mua ngoài, dữ liệu đã nhập còn nguyên', async () => {
+    const add = vi
+      .spyOn(visitApi, 'addPrescription')
+      .mockRejectedValue(new ApiError('BUSINESS_RULE_VIOLATION', 'Sản phẩm không phải thuốc kê đơn đang kinh doanh (BR-KB-03)', 400));
+    const { user } = await renderExamRoom();
+    const section = await rx();
+    await fill(user, section);
+
+    await user.click(submit(section));
+
+    const alert = await section.findByRole('alert');
+    expect(alert).toHaveTextContent('Sản phẩm không phải thuốc kê đơn đang kinh doanh');
+    expect(alert).not.toHaveTextContent('BR-KB-03');
+    expect(section.queryByRole('button', { name: 'Giảm xuống vừa tồn' })).not.toBeInTheDocument();
+    expect(section.queryByRole('button', { name: 'Mua ngoài, giữ nguyên số lượng' })).not.toBeInTheDocument();
+    expect(section.queryByRole('button', { name: 'Hủy' })).not.toBeInTheDocument();
+    expect(add).toHaveBeenCalledTimes(1);
+    expect(section.getByLabelText('Số lượng')).toHaveValue(10);
+    expect(section.getByLabelText('Liều dùng')).toHaveValue(AMOX.dosageInstructions);
+  });
+
   it('lỗi 400 BR-KB-03 của request ĐÃ có shortageResolution (vd. thuốc hết tồn mà chọn giảm) hiện như lỗi thường: câu BE bỏ mã, không hiện lại khung 3 nút', async () => {
     const add = vi
       .spyOn(visitApi, 'addPrescription')
-      .mockRejectedValueOnce(new ApiError('BUSINESS_RULE_VIOLATION', 'Thiếu tồn khả dụng: Amoxicillin 250mg chỉ còn 0 viên, cần 800 (BR-KB-03)', 400))
-      .mockRejectedValueOnce(new ApiError('BUSINESS_RULE_VIOLATION', 'Amoxicillin 250mg đã hết tồn khả dụng nên không giảm được, hãy chọn mua ngoài (BR-KB-03)', 400));
+      .mockRejectedValueOnce(new ApiError('BUSINESS_RULE_VIOLATION', 'Tồn khả dụng tại chi nhánh chỉ còn 0; chọn giảm số lượng hoặc mua ngoài (BR-KB-03)', 400))
+      .mockRejectedValueOnce(new ApiError('BUSINESS_RULE_VIOLATION', 'Thuốc đã hết tồn khả dụng tại chi nhánh, chỉ chọn được mua ngoài (BR-KB-03)', 400));
     const { user } = await renderExamRoom();
     const section = await rx();
     await fill(user, section, { quantity: 800 });
@@ -735,7 +809,7 @@ describe('exam room — kê đơn thuốc (#16–17, UC48; BR-KB-03, BR-BH-02)',
     await user.click(await section.findByRole('button', { name: 'Giảm xuống vừa tồn' }));
 
     await waitFor(() => expect(add).toHaveBeenCalledTimes(2));
-    expect(await section.findByText(/đã hết tồn khả dụng nên không giảm được, hãy chọn mua ngoài/)).toBeInTheDocument();
+    expect(await section.findByText(/Thuốc đã hết tồn khả dụng tại chi nhánh, chỉ chọn được mua ngoài/)).toBeInTheDocument();
     expect(section.getByRole('alert')).not.toHaveTextContent('BR-KB-03');
     expect(section.queryByRole('button', { name: 'Giảm xuống vừa tồn' })).not.toBeInTheDocument();
     expect(section.queryByRole('button', { name: 'Hủy' })).not.toBeInTheDocument();

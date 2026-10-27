@@ -1,6 +1,6 @@
 // Tiêm chủng trong lượt khám (UC49, visit-v1 #18–20; BR-KB-04, BR-KO-05). VET chọn loại vaccine đúng loài, mũi theo phác đồ (mặc định là mũi gợi ý, chọn mũi khác được) và sản phẩm còn tồn
-// khả dụng; ghi mũi trừ kho FEFO ngay và thêm dòng Order vaccine. Xóa mũi ghi nhầm chỉ khi lượt còn IN_PROGRESS và chỉ người đã ghi mũi đó; sau khi hoàn tất, sai sót ghi bằng bản bổ sung.
-// BE chưa có các endpoint này (T28): màn chạy trên mock theo hợp đồng.
+// khả dụng; ghi mũi trừ kho FEFO ngay và thêm dòng Order vaccine. Xóa mũi ghi nhầm chỉ khi lượt còn IN_PROGRESS và chỉ người phụ trách HIỆN TẠI của lượt (kể cả mũi do VET cũ ghi trước khi gán lại,
+// ADR-0075); sau khi hoàn tất, sai sót ghi bằng bản bổ sung. BE có các endpoint này từ T28 (26/10, ADR 0072–0075); lô / hạn của mũi BE chưa điền (null, nợ D046) nên chỉ hiện khi có.
 import { useState } from 'react';
 import { toast } from 'sonner';
 import { plainMessage, toApiError } from '../../../shared/api/api-error';
@@ -18,12 +18,11 @@ const hint = 'text-sm text-(--ws-ink-3)';
 interface Props {
   visit: Visit;
   doses: VaccinationRecord[];
-  userId: number;
-  /** Lượt đang IN_PROGRESS và người mở là VET được gán (visitPermissions.vaccinate). */
+  /** Lượt đang IN_PROGRESS và người mở là VET được gán (visitPermissions.vaccinate): vừa ghi vừa xóa mũi (BE không xét người đã ghi mũi). */
   canVaccinate: boolean;
 }
 
-export function VaccinationSection({ visit, doses, userId, canVaccinate }: Props) {
+export function VaccinationSection({ visit, doses, canVaccinate }: Props) {
   const remove = useDeleteVaccination();
   const [error, setError] = useState<string | null>(null);
   if (!canVaccinate && doses.length === 0) return null;
@@ -34,7 +33,7 @@ export function VaccinationSection({ visit, doses, userId, canVaccinate }: Props
       await remove.mutateAsync({ visitId: visit.visitId, vaccinationId: dose.vaccinationId });
       toast.success(`Đã xóa mũi ${dose.doseNumber} ${dose.vaccineTypeName}`);
     } catch (e) {
-      setError(visitErrorMessage(e, 'vaccinate'));
+      setError(visitErrorMessage(e, 'deleteVaccination'));
     }
   };
 
@@ -67,7 +66,7 @@ export function VaccinationSection({ visit, doses, userId, canVaccinate }: Props
                   Có mũi mới hơn
                 </span>
               )}
-              {visit.status === 'IN_PROGRESS' && d.recordedBy === userId && (
+              {canVaccinate && (
                 <WsButton size="sm" variant="danger" aria-label={`Xóa mũi ${d.doseNumber} ${d.vaccineTypeName}`} disabled={remove.isPending} onClick={() => void removeDose(d)}>
                   Xóa
                 </WsButton>
@@ -99,6 +98,7 @@ function VaccinationForm({ visit }: { visit: Visit }) {
   const data = options.data;
   const protocolId = protocolPick ?? data?.suggestedProtocolId ?? null;
   const productId = productPick ?? data?.products[0]?.productId ?? null;
+  const suggestedDose = data?.protocol.find((p) => p.protocolId === data.suggestedProtocolId);
   const choices = (types.data ?? []).filter((t) => t.isActive);
 
   const pickType = (id: number | null) => {
@@ -144,7 +144,7 @@ function VaccinationForm({ visit }: { visit: Visit }) {
           {data.lastDose && (
             <p className={hint}>
               Mũi gần nhất tại hệ thống: mũi {data.lastDose.doseNumber} ngày {viDate(data.lastDose.administeredOn)}.
-              {data.suggestedProtocolId == null && data.protocol.length > 0 && ' Đã hết phác đồ, chọn mũi theo quyết định của bác sĩ.'}
+              {suggestedDose && suggestedDose.doseNumber <= data.lastDose.doseNumber && ` Đã hết phác đồ, gợi ý nhắc lại mũi ${suggestedDose.doseNumber}.`}
             </p>
           )}
           {data.protocol.length === 0 ? (

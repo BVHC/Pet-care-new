@@ -20,6 +20,7 @@ import {
   page,
   ruleFail,
   type MockHandler,
+  type MockReply,
 } from './envelope';
 
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
@@ -165,6 +166,30 @@ function staffResponseOf(s: ReturnType<typeof load>, a: MockStaffWithState): Sta
 
 const denied = () => fail('ACCESS_DENIED', 'Không có quyền thực hiện thao tác này', 403);
 
+// ─── Phân trang như BE (chỉ dùng trong file này; KHÔNG đổi `page()` toàn cục của envelope.ts) ───
+
+const PAGE_SIZE_DEFAULT = 20; // BE: @RequestParam(defaultValue = "20") của staff / accounts / audit-logs
+const PAGE_SIZE_MAX = 100; // BE: MAX_PAGE_SIZE, kẹp 1–100; page âm = 0
+
+/**
+ * `PageRequest.of(max(page, 0), clamp(size, 1, 100))` rồi `PageResponse.of`. `totalPages` của Spring là ceil(total / size) nên danh sách
+ * rỗng ra 0 trang (`envelope.page()` luôn ≥ 1). `page` / `size` không phải số nguyên → 400 MALFORMED_REQUEST (MethodArgumentTypeMismatch).
+ */
+function pagedOk<T>(all: T[], query: Record<string, string>): MockReply {
+  for (const name of ['page', 'size'] as const) {
+    if (query[name] !== undefined && !/^[+-]?\d+$/.test(query[name])) return fail('MALFORMED_REQUEST', `Tham số '${name}' sai kiểu dữ liệu`, 400);
+  }
+  const pageNo = Math.max(Number(query.page ?? 0), 0);
+  const size = Math.min(Math.max(Number(query.size ?? PAGE_SIZE_DEFAULT), 1), PAGE_SIZE_MAX);
+  return ok({
+    content: all.slice(pageNo * size, (pageNo + 1) * size),
+    page: pageNo,
+    size,
+    totalElements: all.length,
+    totalPages: Math.ceil(all.length / size),
+  });
+}
+
 // ─── Hiện diện (BR-TN-06) ───
 
 // BE: `online` = `last_seen_at` trong `staff.online_window_minutes`. Mock không theo dõi thao tác nên mặc định ai cũng online;
@@ -245,22 +270,33 @@ function listAssignableForReceptionist(s: ReturnType<typeof load>, account: { id
   return ok(page(staff.map((a) => staffResponseOf(s, a))));
 }
 
+// BE `StaffQueryService.visibleRoles`: ADMIN chỉ thấy SUPER_MANAGER; SUPER_MANAGER thấy A05–A08; BRANCH_MANAGER thấy A06–A08.
+// Không ai thấy chính mình. Lọc `role` ngoài tập này → trang rỗng (không lỗi).
+const VISIBLE_STAFF_ROLES: Partial<Record<Role, Role[]>> = {
+  ADMIN: ['SUPER_MANAGER'],
+  SUPER_MANAGER: ['BRANCH_MANAGER', 'RECEPTIONIST', 'VET', 'CARETAKER'],
+  BRANCH_MANAGER: ['RECEPTIONIST', 'VET', 'CARETAKER'],
+};
+
 const listStaff: MockHandler = ({ account, query }) => {
   if (account!.role === 'CUSTOMER') return denied();
   const s = load();
+  // BE-1 chưa mở GET /api/staff cho lễ tân: BE thật 403 (STAFF_ADMINS), mock mở phạm vi nhỏ để dựng luồng gán lượt (T36 A.7).
   if (account!.role === 'RECEPTIONIST') return listAssignableForReceptionist(s, account!, query);
+  const visible = VISIBLE_STAFF_ROLES[account!.role];
+  if (!visible) return denied(); // VET, CARETAKER: BE `@PreAuthorize(STAFF_ADMINS)`
   const q = (query.q ?? '').trim().toLowerCase();
   const roleFilter = query.role as Role | undefined;
   const statusFilter = query.status as AccountStatus | undefined;
   const branchFilter = query.branchId ? Number(query.branchId) : undefined;
-  let staff = allStaff(s);
-  // Phạm vi xem
-  if (account!.role === 'SUPER_MANAGER') {
-    staff = staff.filter((a) => a.role !== 'ADMIN');
-  } else if (account!.role === 'BRANCH_MANAGER') {
-    const myBranch = MOCK_STAFF[account!.id]?.branchId;
+  let staff = allStaff(s).filter((a) => visible.includes(a.role));
+  if (account!.role === 'BRANCH_MANAGER') {
+    const myBranch = findStaffAccount(s, account!.id)?.branchId;
+    // BranchScope.resolve: `branchId` khác chi nhánh mình → 403 (không audit).
+    if (branchFilter !== undefined && branchFilter !== myBranch) return fail('ACCESS_DENIED_SCOPE_MISMATCH', 'Không có quyền truy cập dữ liệu này', 403);
     staff = staff.filter((a) => a.branchId === myBranch);
   }
+  // ADMIN gửi `branchId` → rỗng vì SUPER_MANAGER không có chi nhánh (tự ra từ bộ lọc dưới). `status` ngoài {ACTIVE, DISABLED} → rỗng.
   const filtered = staff.filter((a) => {
     if (q && !a.email.toLowerCase().includes(q) && !a.fullName.toLowerCase().includes(q)) return false;
     if (roleFilter && a.role !== roleFilter) return false;
@@ -268,7 +304,9 @@ const listStaff: MockHandler = ({ account, query }) => {
     if (branchFilter && a.branchId !== branchFilter) return false;
     return true;
   });
-  return ok(page(filtered.map((a) => staffResponseOf(s, a))));
+  // BE: ORDER BY họ tên, accountId. ASSUMPTION: collation DB chưa rõ, mock so sánh theo tiếng Việt.
+  filtered.sort((a, b) => a.fullName.localeCompare(b.fullName, 'vi') || a.id - b.id);
+  return pagedOk(filtered.map((a) => staffResponseOf(s, a)), query);
 };
 
 const createStaff: MockHandler = ({ account, body }) => {
@@ -282,6 +320,8 @@ const createStaff: MockHandler = ({ account, body }) => {
     ['fullName', 'Họ tên không được để trống', !isText(b.fullName)],
     ['fullName', 'Họ tên tối đa 100 ký tự', isText(b.fullName) && String(b.fullName).length > 100],
     ['role', 'Vai trò không hợp lệ', !isText(b.role) || !roleList.includes(b.role as CreateableStaffRole)],
+    // BE `CreateStaffRequest.branchId` @Positive: gửi 0 / âm là 400 với MỌI vai trò (BRANCH_MANAGER không gửi = chi nhánh của mình).
+    ['branchId', 'branchId phải là số dương', b.branchId != null && Number(b.branchId) <= 0],
   ]);
   if (bad) return bad;
   const newRole = b.role as CreateableStaffRole;
@@ -293,7 +333,8 @@ const createStaff: MockHandler = ({ account, body }) => {
   };
   if (!creatable[account!.role]?.includes(newRole)) {
     const s0 = load();
-    logAudit(s0, { action: 'STAFF_CREATE_DENIED', entityType: 'Staff', reason: 'BR-QT-01' }, account!.id, account!.email);
+    // BE ghi STAFF_ACTION_DENIED; với thao tác tạo thì không có đối tượng (StaffHierarchyPolicy: entity chỉ khi có targetAccountId).
+    logAudit(s0, { action: 'STAFF_ACTION_DENIED', reason: 'BR-QT-01' }, account!.id, account!.email);
     save(s0);
     return denied();
   }
@@ -308,7 +349,6 @@ const createStaff: MockHandler = ({ account, body }) => {
       return fail('MALFORMED_REQUEST', 'branchId: phải là số nguyên', 400);
     }
     branchId = Number(b.branchId);
-    if (branchId <= 0) return ruleFail('BR-QT-03', 'Chi nhánh không hợp lệ');
   }
   const s = load();
   const email = normalize(String(b.email));
@@ -326,7 +366,7 @@ const createStaff: MockHandler = ({ account, body }) => {
     mustChangePassword: true,
   };
   s.changes[id] = { password: MOCK_PASSWORD, mustChangePassword: true };
-  logAudit(s, { action: 'STAFF_CREATED', entityType: 'Staff', entityId: id, afterData: { email, role: newRole, branchId } }, account!.id, account!.email);
+  logAudit(s, { action: 'STAFF_CREATED', entityType: 'accounts', entityId: id, afterData: { email, role: newRole, branchId } }, account!.id, account!.email);
   save(s);
   return ok(staffResponseOf(s, s.extraStaff[id]!), 201, 'Đã tạo tài khoản nhân viên, mật khẩu tạm đã gửi qua email');
 };
@@ -367,7 +407,7 @@ const changeRole: MockHandler = ({ account, params, body }) => {
   if (a.role !== 'VET') {
     s.profiles[a.id] = { ...s.profiles[a.id], specialty: null, bio: null };
   }
-  logAudit(s, { action: 'STAFF_ROLE_CHANGED', entityType: 'Staff', entityId: id, beforeData: before, afterData: { role: a.role } }, account!.id, account!.email);
+  logAudit(s, { action: 'STAFF_ROLE_CHANGED', entityType: 'accounts', entityId: id, beforeData: before, afterData: { role: a.role } }, account!.id, account!.email);
   save(s);
   return ok(staffResponseOf(s, a));
 };
@@ -391,7 +431,7 @@ const transfer: MockHandler = ({ account, params, body }) => {
   }
   const before = { branchId: a.branchId };
   a.branchId = branchId;
-  logAudit(s, { action: 'STAFF_TRANSFERRED', entityType: 'Staff', entityId: id, beforeData: before, afterData: { branchId } }, account!.id, account!.email);
+  logAudit(s, { action: 'STAFF_TRANSFERRED', entityType: 'accounts', entityId: id, beforeData: before, afterData: { branchId } }, account!.id, account!.email);
   save(s);
   return ok(staffResponseOf(s, a));
 };
@@ -404,7 +444,7 @@ const disable: MockHandler = ({ account, params }) => {
   const a = findStaffAccount(s, id);
   if (!a) return notFound('nhân viên', id);
   if (account!.role === 'BRANCH_MANAGER' && a.branchId !== MOCK_STAFF[account!.id]?.branchId) {
-    logAudit(s, { action: 'STAFF_DISABLE_DENIED', entityType: 'Staff', entityId: id, reason: 'BR-QT-07' }, account!.id, account!.email);
+    logAudit(s, { action: 'STAFF_ACTION_DENIED', entityType: 'accounts', entityId: id, reason: 'BR-QT-07' }, account!.id, account!.email);
     save(s);
     return denied();
   }
@@ -415,7 +455,7 @@ const disable: MockHandler = ({ account, params }) => {
   }
   a.status = 'DISABLED';
   a.mustChangePassword = false;
-  logAudit(s, { action: 'STAFF_DISABLED', entityType: 'Staff', entityId: id, beforeData: { status: 'ACTIVE' }, afterData: { status: 'DISABLED' } }, account!.id, account!.email);
+  logAudit(s, { action: 'STAFF_DISABLED', entityType: 'accounts', entityId: id, beforeData: { status: 'ACTIVE' }, afterData: { status: 'DISABLED' } }, account!.id, account!.email);
   save(s);
   return ok(staffResponseOf(s, a));
 };
@@ -431,7 +471,7 @@ const reactivate: MockHandler = ({ account, params, body }) => {
   if (s.locks[a.id]) return ruleFail('BR-QT-10', 'Đang bị khóa, cần mở khóa trước');
   if (a.status === 'ACTIVE') return fail('INVALID_STATE_TRANSITION', 'Tài khoản đang hoạt động', 409);
   if (account!.role === 'BRANCH_MANAGER' && a.branchId !== MOCK_STAFF[account!.id]?.branchId) {
-    logAudit(s, { action: 'STAFF_REACTIVATE_DENIED', entityType: 'Staff', entityId: id, reason: 'BR-QT-10' }, account!.id, account!.email);
+    logAudit(s, { action: 'STAFF_ACTION_DENIED', entityType: 'accounts', entityId: id, reason: 'BR-QT-10' }, account!.id, account!.email);
     save(s);
     return denied();
   }
@@ -447,7 +487,7 @@ const reactivate: MockHandler = ({ account, params, body }) => {
   a.status = 'ACTIVE';
   a.mustChangePassword = true;
   s.changes[a.id] = { ...s.changes[a.id], password: MOCK_PASSWORD, mustChangePassword: true };
-  logAudit(s, { action: 'STAFF_REACTIVATED', entityType: 'Staff', entityId: id, beforeData: { status: 'DISABLED' }, afterData: { status: 'ACTIVE' } }, account!.id, account!.email);
+  logAudit(s, { action: 'STAFF_REACTIVATED', entityType: 'accounts', entityId: id, beforeData: { status: 'DISABLED' }, afterData: { status: 'ACTIVE' } }, account!.id, account!.email);
   save(s);
   return ok(staffResponseOf(s, a));
 };
@@ -464,7 +504,7 @@ const resendInitialPassword: MockHandler = ({ account, params }) => {
     return fail('INVALID_STATE_TRANSITION', 'Nhân viên đã đổi mật khẩu lần đầu', 409);
   }
   s.changes[a.id] = { ...s.changes[a.id], password: MOCK_PASSWORD, mustChangePassword: true };
-  logAudit(s, { action: 'STAFF_INITIAL_PASSWORD_RESENT', entityType: 'Staff', entityId: id }, account!.id, account!.email);
+  logAudit(s, { action: 'STAFF_INITIAL_PASSWORD_RESENT', entityType: 'accounts', entityId: id }, account!.id, account!.email);
   save(s);
   return noContent();
 };
@@ -525,7 +565,7 @@ const confirmEmailChange: MockHandler = ({ account, params, body }) => {
   const before = { email: a.email };
   a.email = change.newEmail;
   delete s.emailChanges[id];
-  logAudit(s, { action: 'STAFF_EMAIL_CHANGED', entityType: 'Staff', entityId: id, beforeData: before, afterData: { email: a.email } }, account!.id, account!.email);
+  logAudit(s, { action: 'STAFF_EMAIL_CHANGED', entityType: 'accounts', entityId: id, beforeData: before, afterData: { email: a.email } }, account!.id, account!.email);
   save(s);
   return ok(staffResponseOf(s, a));
 };
@@ -535,6 +575,7 @@ const confirmEmailChange: MockHandler = ({ account, params, body }) => {
 const listAccounts: MockHandler = ({ account, query }) => {
   if (account!.role !== 'ADMIN') return denied();
   const s = load();
+  // BE `AccountRepository.findAccountPage`: `q` chỉ tìm trong EMAIL (không có họ tên), ORDER BY id.
   const q = (query.q ?? '').trim().toLowerCase();
   const roleFilter = query.role as Role | undefined;
   const isLockedFilter = query.isLocked === 'true' ? true : query.isLocked === 'false' ? false : undefined;
@@ -553,22 +594,22 @@ const listAccounts: MockHandler = ({ account, query }) => {
     })),
   ];
   const filtered = all.filter((a) => {
-    if (q && !a.email.toLowerCase().includes(q) && !a.fullName.toLowerCase().includes(q)) return false;
+    if (q && !a.email.toLowerCase().includes(q)) return false;
     if (roleFilter && a.role !== roleFilter) return false;
     if (isLockedFilter !== undefined && !!s.locks[a.id] !== isLockedFilter) return false;
     return true;
   });
-  return ok(
-    page(
-      filtered.map((a) => ({
-        id: a.id,
-        email: a.email,
-        role: a.role,
-        status: a.status,
-        isLocked: !!s.locks[a.id],
-        mustChangePassword: a.mustChangePassword,
-      })),
-    ),
+  filtered.sort((a, b) => a.id - b.id);
+  return pagedOk(
+    filtered.map((a) => ({
+      id: a.id,
+      email: a.email,
+      role: a.role,
+      status: a.status,
+      isLocked: !!s.locks[a.id],
+      mustChangePassword: a.mustChangePassword,
+    })),
+    query,
   );
 };
 
@@ -587,7 +628,7 @@ const lockAccount: MockHandler = ({ account, params, body }) => {
   const role: Role = 'role' in target ? target.role : 'CUSTOMER';
   const status: AccountStatus = 'status' in target ? target.status : target.active ? 'ACTIVE' : 'PENDING';
   s.locks[id] = { reason: String(b.reason).trim(), statusBefore: status, lockedAt: new Date().toISOString() };
-  logAudit(s, { action: 'ACCOUNT_LOCKED', entityType: 'Account', entityId: id, reason: s.locks[id].reason }, account!.id, account!.email);
+  logAudit(s, { action: 'ACCOUNT_LOCKED', entityType: 'accounts', entityId: id, reason: s.locks[id].reason }, account!.id, account!.email);
   save(s);
   const summary = {
     id,
@@ -613,7 +654,7 @@ const unlockAccount: MockHandler = ({ account, params, body }) => {
   if (!s.locks[id]) return fail('INVALID_STATE_TRANSITION', 'Tài khoản không bị khóa', 409);
   const reason = String(b.reason).trim();
   delete s.locks[id];
-  logAudit(s, { action: 'ACCOUNT_UNLOCKED', entityType: 'Account', entityId: id, reason }, account!.id, account!.email);
+  logAudit(s, { action: 'ACCOUNT_UNLOCKED', entityType: 'accounts', entityId: id, reason }, account!.id, account!.email);
   save(s);
   return ok({
     id,
@@ -657,7 +698,7 @@ const updateSystemConfig: MockHandler = ({ account, params, body }) => {
   const s = load();
   const before = { value: s.configOverrides[key] ?? seed.value };
   s.configOverrides[key] = value;
-  logAudit(s, { action: 'SYSTEM_CONFIG_CHANGED', entityType: 'SystemConfig', beforeData: before, afterData: { value } }, account!.id, account!.email);
+  logAudit(s, { action: 'SYSTEM_CONFIG_UPDATED', entityType: 'system_configs', beforeData: before, afterData: { value } }, account!.id, account!.email);
   save(s);
   return ok({ ...seed, value });
 };
@@ -701,7 +742,7 @@ const updateNotificationTemplate: MockHandler = ({ account, params, body }) => {
   if (missing.length) return ruleFail('BR-QT-14', `Thiếu biến bắt buộc: ${missing.join(', ')}`);
   const s = load();
   s.templateOverrides[code] = { subject: subj, body: bodyStr };
-  logAudit(s, { action: 'NOTIFICATION_TEMPLATE_CHANGED', entityType: 'NotificationTemplate', afterData: { code, body: bodyStr } }, account!.id, account!.email);
+  logAudit(s, { action: 'NOTIFICATION_TEMPLATE_UPDATED', entityType: 'notification_templates', afterData: { code, body: bodyStr } }, account!.id, account!.email);
   save(s);
   return ok({ ...seed, subject: subj, body: bodyStr, isDefault: false });
 };
@@ -713,12 +754,14 @@ const restoreTemplateDefault: MockHandler = ({ account, params }) => {
   if (!seed) return notFound('mẫu thông báo', code);
   const s = load();
   delete s.templateOverrides[code];
-  logAudit(s, { action: 'NOTIFICATION_TEMPLATE_RESTORED', entityType: 'NotificationTemplate', afterData: { code } }, account!.id, account!.email);
+  logAudit(s, { action: 'NOTIFICATION_TEMPLATE_RESTORED', entityType: 'notification_templates', afterData: { code } }, account!.id, account!.email);
   save(s);
   return ok(seed);
 };
 
 // ─── Audit (UC11, ADMIN only) ───
+
+const AUDIT_ACTION_WINDOW_MS = 31 * 24 * 60 * 60 * 1000; // AuditLogFilter.MAX_ACTION_WINDOW
 
 const listAuditLogs: MockHandler = ({ account, query }) => {
   if (account!.role !== 'ADMIN') return denied();
@@ -730,16 +773,33 @@ const listAuditLogs: MockHandler = ({ account, query }) => {
   const s = load();
   const from = query.from ? new Date(query.from).getTime() : -Infinity;
   const to = query.to ? new Date(query.to).getTime() : Infinity;
+  // `action` / `entityType` toàn khoảng trắng = không lọc; còn lại giữ nguyên văn (AuditLogFilter.blankToNull).
+  const action = query.action?.trim() ? query.action : undefined;
+  const entityType = query.entityType?.trim() ? query.entityType : undefined;
+  // AuditLogFilterValidator: R1 from > to; R2 entityId không kèm entityType; R3 lọc action mà không có người thực hiện / (loại + id đối tượng)
+  // thì phải có from + to cách nhau ≤ 31 ngày (không có index trên action). Báo đủ cả ba, theo thứ tự to → entityType → from.
+  const anchored = !!query.actorAccountId || (!!entityType && !!query.entityId);
+  const bounded = !!query.from && !!query.to && to - from <= AUDIT_ACTION_WINDOW_MS;
+  const violations = [
+    ...(query.from && query.to && from > to ? ['to: Thời điểm kết thúc không được trước thời điểm bắt đầu'] : []),
+    ...(query.entityId && !entityType ? ['entityType: Bắt buộc khi lọc theo entityId'] : []),
+    ...(action && !anchored && !bounded
+      ? ['from: Lọc theo hành động cần from và to cách nhau tối đa 31 ngày, hoặc kèm actorAccountId hay entityType + entityId']
+      : []),
+  ];
+  if (violations.length) return fail('VALIDATION_FAILED', violations.join('; '), 400);
   const filtered = s.audit.filter((a) => {
     const ts = new Date(a.createdAt).getTime();
     if (ts < from || ts > to) return false;
     if (query.actorAccountId && a.actorAccountId !== Number(query.actorAccountId)) return false;
-    if (query.action && !a.action.toLowerCase().includes(query.action.toLowerCase())) return false;
-    if (query.entityType && a.entityType !== query.entityType) return false;
+    if (action && a.action !== action) return false;
+    if (entityType && a.entityType !== entityType) return false;
     if (query.entityId && a.entityId !== Number(query.entityId)) return false;
     return true;
   });
-  return ok(page(filtered));
+  // BE: ORDER BY created_at DESC, id DESC.
+  filtered.sort((a, b) => Date.parse(b.createdAt) - Date.parse(a.createdAt) || b.id - a.id);
+  return pagedOk(filtered, query);
 };
 
 export const adminIdentityRoutes: Record<string, MockHandler> = {

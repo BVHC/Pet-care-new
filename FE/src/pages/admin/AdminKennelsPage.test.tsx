@@ -6,6 +6,7 @@ import { afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vite
 import { ApiError } from '../../shared/api/api-error';
 import { apiClient } from '../../shared/api/axios';
 import { boardingApi } from '../../shared/api/boarding.api';
+import { profileApi } from '../../shared/api/profile.api';
 import { MOCK_PASSWORD } from '../../shared/api/mock/identity.mock';
 import { installMockApi } from '../../shared/api/mock/mock-api';
 import { useSession } from '../../shared/stores/session.store';
@@ -683,10 +684,15 @@ describe('AdminKennelsPage (UC54 — quản lý chi nhánh)', () => {
       expect(screen.queryByRole('alert')).not.toBeInTheDocument();
     });
 
-    it('phiên không có chi nhánh: báo đăng nhập lại, không hiện liên kết tới /admin/branches/null', async () => {
+    it('tài khoản chưa gắn chi nhánh (cả phiên lẫn GET /me): báo, không hiện liên kết tới /admin/branches/null', async () => {
       useSession.setState((s) => ({ account: { ...s.account!, branchId: null } }));
+      const real = profileApi.me;
+      vi.spyOn(profileApi, 'me').mockImplementation(async () => {
+        const me = await real();
+        return { ...me, staffProfile: me.staffProfile && { ...me.staffProfile, branchId: null } };
+      });
       renderPage();
-      expect(await screen.findByText(/Phiên đăng nhập không có chi nhánh/)).toBeInTheDocument();
+      expect(await screen.findByText(/Tài khoản chưa gắn chi nhánh/)).toBeInTheDocument();
       expect(screen.queryByRole('link', { name: /Dịch vụ của chi nhánh/ })).not.toBeInTheDocument();
       expect(screen.getByRole('button', { name: 'Tạo chuồng' })).toBeDisabled();
     });

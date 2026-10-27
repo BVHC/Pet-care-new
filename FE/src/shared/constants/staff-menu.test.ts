@@ -1,12 +1,12 @@
 import { describe, expect, it } from 'vitest';
 import { STAFF_ROLES, type Role } from '../types/auth';
-import { menuFor, pageLabel, rolesForPath } from './staff-menu';
+import { ADMIN_MENU, menuFor, pageLabel, rolesForPath } from './staff-menu';
 
 const labels = (role: Role) => menuFor(role).flatMap((s) => s.items.map((i) => i.label));
 
 describe('staff menu', () => {
   it('leaves the pages a workspace already covers out of the receptionist menu', () => {
-    expect(labels('RECEPTIONIST')).toEqual(['Order tại quầy', 'Lịch hẹn', 'Lưu trú', 'Việc gọi điện', 'Đơn online', 'Hóa đơn', 'Hoàn tiền', 'Kho hàng']);
+    expect(labels('RECEPTIONIST')).toEqual(['Order tại quầy', 'Lịch hẹn', 'Lưu trú', 'Việc gọi điện', 'Đơn online', 'Hoàn tiền', 'Kho hàng']);
   });
 
   // T47: nội dung công khai (UC21, UC81) là việc của A04; feedback (UC84) của A04 và A05; Care Task (UC87) chỉ của A06 (BR-TB-05).
@@ -59,9 +59,19 @@ describe('staff menu', () => {
     expect(pageLabel('/admin/kennels')).toBe('Chuồng lưu trú');
   });
 
-  it('keeps the hidden pages reachable by URL for the roles that had them', () => {
-    expect(rolesForPath('/admin/queue')).toContain('RECEPTIONIST');
+  // T49: trang mảng cứng của hàng chờ / khám / tiêm / grooming / hóa đơn đã gỡ; URL cũ chỉ còn chuyển hướng (App.redirects.test), nên không còn mục menu giữ quyền cho chúng.
+  it('has no menu entry, hidden or shown, for the retired queue, exam, vaccination, grooming and invoice pages', () => {
+    const paths = ADMIN_MENU.flatMap((s) => s.items.map((i) => i.path));
+    for (const old of ['/admin/queue', '/admin/exam', '/admin/vaccination', '/admin/grooming', '/admin/invoices']) {
+      expect(paths).not.toContain(old);
+      expect(rolesForPath(old)).toEqual(STAFF_ROLES);
+    }
     expect(rolesForPath('/admin/pos')).not.toContain('VET');
+  });
+
+  it('keeps the payments entry that carries the cashier reconciliation after "Hóa đơn" is gone (UC72)', () => {
+    expect(labels('BRANCH_MANAGER')).not.toContain('Hóa đơn');
+    expect(labels('BRANCH_MANAGER')).toContain('Ca thu ngân');
   });
 
   it('keeps the technical admin out of the dashboard', () => {

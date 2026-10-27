@@ -1,6 +1,7 @@
 // Lịch của chi nhánh, tính ở client giống BE (module branch, BranchSchedule): ngày, bản giờ mở cửa, khung 30 phút.
 // Dùng cho màn hình T20 và cho mock của module branch.
 import type { DayHours, OpeningHoursVersion, ScheduleImpact, TimeRange } from '../types/branch';
+import { vnDate } from './vn-time';
 
 /** Thứ trong tuần theo BE: 1 = thứ Hai … 7 = Chủ nhật. */
 export const WEEK_DAYS = [1, 2, 3, 4, 5, 6, 7] as const;
@@ -22,18 +23,21 @@ export const toMinutes = (hhmm: string) => Number(hhmm.slice(0, 2)) * 60 + Numbe
 export const toHHmm = (minutes: number) =>
   `${String(Math.floor(minutes / 60)).padStart(2, '0')}:${String(minutes % 60).padStart(2, '0')}`;
 
-/** Ngày theo giờ máy (người dùng ở Việt Nam), dạng `yyyy-MM-dd`. */
-export const localIsoDate = (date: Date = new Date()) => date.toLocaleDateString('sv-SE');
+/**
+ * Ngày theo giờ Việt Nam (Asia/Ho_Chi_Minh, +07:00) dạng `yyyy-MM-dd` — BE tính "hôm nay" theo múi giờ này, không theo
+ * múi giờ của máy (T49 nhóm 2, hàng 10). Tên cũ giữ nguyên để khỏi đổi mọi nơi gọi; `date` là một thời điểm, không phải ngày lịch.
+ */
+export const localIsoDate = (date: Date = new Date()) => vnDate(date.getTime());
 
 const parse = (iso: string) => {
   const [y, m, d] = iso.split('-').map(Number);
   return new Date(y, m - 1, d);
 };
 
+/** Cộng ngày lịch thuần, tính theo UTC nên không dính múi giờ của máy. */
 export function addDays(iso: string, days: number): string {
-  const date = parse(iso);
-  date.setDate(date.getDate() + days);
-  return localIsoDate(date);
+  const [y, m, d] = iso.split('-').map(Number);
+  return new Date(Date.UTC(y, m - 1, d + days)).toISOString().slice(0, 10);
 }
 
 export function isoDayOfWeek(iso: string): number {

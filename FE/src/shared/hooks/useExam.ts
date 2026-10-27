@@ -62,6 +62,6 @@ export const useDeletePrescription = () => useExamMutation(({ visitId, itemId }:
 export const useRecordVaccination = () =>
   useExamMutation(({ visitId, ...body }: { visitId: number } & RecordVaccinationRequest) => visitApi.recordVaccination(visitId, body), [['inventory'], ['pets']]);
 
-/** #20 (VET đã ghi mũi đó): hoàn kho đúng lô, xóa dòng Order vaccine. */
+/** #20 (VET được gán lượt hiện tại, không xét người đã ghi mũi: ADR-0075): hoàn kho đúng lô, xóa dòng Order vaccine. */
 export const useDeleteVaccination = () =>
   useExamMutation(({ visitId, vaccinationId }: { visitId: number; vaccinationId: number }) => visitApi.deleteVaccination(visitId, vaccinationId), [['inventory'], ['pets']]);

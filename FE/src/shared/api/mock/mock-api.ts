@@ -18,6 +18,7 @@ import { feedbackRoutes } from './feedback.mock';
 import { inventoryRoutes } from './inventory.mock';
 import { pageContentRoutes } from './page-content.mock';
 import { publicRoutes } from './public.mock';
+import { reportRoutes } from './report.mock';
 import { salesRoutes } from './sales.mock';
 import { visitRoutes } from './visit.mock';
 import { visitClinicalRoutes } from './visit-clinical.mock';
@@ -44,6 +45,7 @@ const ROUTES: Record<string, MockHandler> = {
   ...cashierRoutes,
   ...visitRoutes,
   ...visitClinicalRoutes,
+  ...reportRoutes,
 };
 
 const COMPILED = Object.entries(ROUTES).map(([key, handler]) => {

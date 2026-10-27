@@ -1,6 +1,7 @@
-import { describe, expect, it } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { restoreTimezone, setTimezone, TIMEZONES } from '../../test/timezone';
 import type { DayHours, OpeningHoursVersion } from '../types/branch';
-import { addDays, hoursError, isoDayOfWeek, nextWeekday, slotsOn, versionOn } from './branch-schedule';
+import { addDays, hoursError, isoDayOfWeek, localIsoDate, nextWeekday, slotsOn, versionOn } from './branch-schedule';
 
 /** Bản giờ mẫu: mọi ngày giống nhau, trừ các ngày ghi đè. */
 function version(effectiveFrom: string, ranges: DayHours['ranges'], override: Record<number, DayHours['ranges']> = {}): OpeningHoursVersion {
@@ -22,6 +23,42 @@ describe('dates', () => {
   it('adds days across a month end', () => {
     expect(addDays('2026-10-31', 1)).toBe('2026-11-01');
     expect(addDays('2026-11-01', -1)).toBe('2026-10-31');
+  });
+});
+
+// BE tính "hôm nay" theo Asia/Ho_Chi_Minh (TimeConfig); ngày lịch của máy không được lọt vào đây (T49 nhóm 2, hàng 10).
+describe.each(TIMEZONES)('ngày theo giờ Việt Nam khi máy ở %s', (tz) => {
+  beforeEach(() => {
+    setTimezone(tz);
+    vi.useFakeTimers({ toFake: ['Date'] });
+  });
+  afterEach(() => {
+    vi.useRealTimers();
+    restoreTimezone();
+  });
+
+  // Los Angeles và UTC lúc 00:01 giờ VN vẫn ở ngày hôm trước; Auckland lúc 23:59 giờ VN đã sang ngày hôm sau: hai hướng lệch đều có ca.
+  it.each([
+    ['2026-10-27T23:59:00+07:00', '2026-10-27'],
+    ['2026-10-28T00:01:00+07:00', '2026-10-28'],
+  ])('lúc %s giờ VN, hôm nay là %s', (instant, vnToday) => {
+    vi.setSystemTime(new Date(instant));
+    expect(localIsoDate()).toBe(vnToday);
+  });
+
+  it('localIsoDate(date) đọc thời điểm đã cho theo giờ VN, không theo ngày lịch của máy', () => {
+    expect(localIsoDate(new Date('2026-10-27T16:59:59Z'))).toBe('2026-10-27');
+    expect(localIsoDate(new Date('2026-10-27T17:00:00Z'))).toBe('2026-10-28');
+  });
+
+  it('addDays, isoDayOfWeek, nextWeekday là phép tính ngày lịch thuần, không lệch dù máy ở múi giờ nào', () => {
+    expect(addDays('2026-10-27', 0)).toBe('2026-10-27');
+    expect(addDays('2026-10-27', 1)).toBe('2026-10-28');
+    expect(addDays('2026-10-31', 2)).toBe('2026-11-02'); // qua ngày Los Angeles lùi giờ (1/11)
+    expect(addDays('2026-03-01', -1)).toBe('2026-02-28');
+    expect(addDays('2026-12-31', 1)).toBe('2027-01-01');
+    expect(isoDayOfWeek('2026-10-27')).toBe(2);
+    expect(nextWeekday('2026-10-27', 2)).toBe('2026-11-03');
   });
 });
 

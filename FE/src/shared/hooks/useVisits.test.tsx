@@ -373,7 +373,7 @@ describe('visitErrorMessage: bệnh án, hoàn tất, tiêm chủng (T37) — 40
     expect(visitErrorMessage(conflictFrom('WAITING', 'IN_PROGRESS'), 'writeRecord')).toContain('Gọi');
     expect(visitErrorMessage(conflictFrom('CANCELLED', 'IN_PROGRESS'), 'writeRecord')).toContain('đã hủy');
     expect(visitErrorMessage(scope, 'writeRecord')).toContain('được gán');
-    for (const action of ['writeRecord', 'vaccinate'] as const) expect(visitErrorMessage(conflictFrom('COMPLETED', 'IN_PROGRESS'), action)).not.toContain('tải lại hàng đợi');
+    for (const action of ['writeRecord', 'vaccinate', 'deleteVaccination'] as const) expect(visitErrorMessage(conflictFrom('COMPLETED', 'IN_PROGRESS'), action)).not.toContain('tải lại hàng đợi');
   });
 
   it('bản bổ sung khi lượt chưa hoàn tất → sửa trực tiếp bệnh án', () => {
@@ -392,14 +392,26 @@ describe('visitErrorMessage: bệnh án, hoàn tất, tiêm chủng (T37) — 40
     expect(visitErrorMessage(rule('BR-TN-05', 'Chức vụ hiện tại không phụ trách được nhóm dịch vụ của lượt — cần gán lại lượt'), 'complete')).toContain('cần gán lại lượt');
   });
 
-  it('tiêm chủng: lượt đã hoàn tất → sai sót ghi bằng bản bổ sung; 403 = không phải bác sĩ được gán / đã ghi mũi; BR-KB-04, BR-KB-06, BR-KH-04 giữ thông điệp của BE', () => {
-    const locked = visitErrorMessage(conflictFrom('COMPLETED', 'IN_PROGRESS'), 'vaccinate');
-    expect(locked).toContain('đã hoàn tất');
-    expect(locked).toContain('bản bổ sung');
-    expect(visitErrorMessage(scope, 'vaccinate')).toContain('đã ghi mũi');
+  it('tiêm chủng (ghi và xóa mũi): lượt đã hoàn tất → sai sót ghi bằng bản bổ sung; 403 = không phải bác sĩ ĐANG được gán lượt (không xét người đã ghi mũi, ADR-0075); BR-KB-04, BR-KB-06, BR-KH-04 giữ thông điệp của BE', () => {
+    for (const action of ['vaccinate', 'deleteVaccination'] as const) {
+      const locked = visitErrorMessage(conflictFrom('COMPLETED', 'IN_PROGRESS'), action);
+      expect(locked, action).toContain('đã hoàn tất');
+      expect(locked, action).toContain('bản bổ sung');
+      const denied = visitErrorMessage(scope, action);
+      expect(denied, action).toContain('được gán');
+      expect(denied, action).not.toContain('đã ghi');
+    }
     expect(visitErrorMessage(rule('BR-KB-04', 'Sản phẩm vaccine không còn tồn khả dụng tại chi nhánh'), 'vaccinate')).toBe('Sản phẩm vaccine không còn tồn khả dụng tại chi nhánh');
     expect(visitErrorMessage(rule('BR-KB-06', 'Ngày tái khám phải sau ngày khám và không quá 180 ngày'), 'writeRecord')).toBe('Ngày tái khám phải sau ngày khám và không quá 180 ngày');
     expect(visitErrorMessage(rule('BR-KH-04', 'Cân nặng phải lớn hơn 0'), 'writeRecord')).toBe('Cân nặng phải lớn hơn 0');
+  });
+
+  it('xóa mũi tiêm: 409 CONCURRENCY_CONFLICT là mũi còn Care Task nhắc tái chủng trỏ tới, không phải "vừa được gán lại"; các thao tác khác giữ câu cũ', () => {
+    const conflict = apiError(409, 'CONCURRENCY_CONFLICT', 'Dữ liệu vừa được thay đổi bởi thao tác khác, vui lòng thử lại');
+    const text = visitErrorMessage(conflict, 'deleteVaccination');
+    expect(text).toContain('nhắc tái chủng');
+    expect(text).not.toContain('gán lại');
+    for (const action of ['vaccinate', 'assign', undefined] as const) expect(visitErrorMessage(conflict, action), String(action)).toContain('gán lại');
   });
 
   it('kê đơn (T46): 409 nói theo trạng thái lượt (đã hoàn tất → bệnh án khóa; chưa gọi; đã hủy), không dùng câu "đã tải lại hàng đợi"', () => {
@@ -414,7 +426,7 @@ describe('visitErrorMessage: bệnh án, hoàn tất, tiêm chủng (T37) — 40
   it('kê đơn (T46): 403 = chỉ bác sĩ được gán lượt; BR-KB-03 và lỗi dữ liệu giữ thông điệp của BE bỏ mã', () => {
     expect(visitErrorMessage(scope, 'prescribe')).toContain('được gán');
     expect(visitErrorMessage(scope, 'prescribe')).not.toContain('chi nhánh khác');
-    expect(visitErrorMessage(rule('BR-KB-03', 'Sản phẩm không phải thuốc kê đơn'), 'prescribe')).toBe('Sản phẩm không phải thuốc kê đơn');
+    expect(visitErrorMessage(rule('BR-KB-03', 'Sản phẩm không phải thuốc kê đơn đang kinh doanh'), 'prescribe')).toBe('Sản phẩm không phải thuốc kê đơn đang kinh doanh');
     expect(visitErrorMessage(apiError(400, 'VALIDATION_FAILED', 'dosageInstructions: Bắt buộc nhập liều dùng'), 'prescribe')).toBe('Bắt buộc nhập liều dùng');
     expect(visitErrorMessage(apiError(404, 'RESOURCE_NOT_FOUND', 'Không tìm thấy dòng đơn thuốc #9'), 'prescribe')).toContain('Không tìm thấy');
   });

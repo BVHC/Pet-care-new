@@ -1,7 +1,7 @@
 import type { ElementType } from 'react';
 import {
-  Activity, BadgePercent, BarChart3, Bell, BedDouble, Bot, Boxes, Building2, CalendarClock, ClipboardList, Crown, FileText, ListOrdered,
-  Lock, Mail, MessageSquareText, Newspaper, Package, PhoneCall, Receipt, Scale, Scissors, Settings, ShieldAlert, ShoppingBag, Stethoscope, Syringe,
+  Activity, BadgePercent, BarChart3, Bell, BedDouble, Bot, Boxes, Building2, CalendarClock, ClipboardList, Crown, FileText,
+  Lock, Mail, MessageSquareText, Newspaper, Package, PhoneCall, Scale, Settings, ShieldAlert, ShoppingBag,
   Tags, Truck, UserCog, UserSearch, Warehouse, LayoutGrid,
 } from 'lucide-react';
 import { STAFF_ROLES, type Role } from '../types/auth';
@@ -37,10 +37,7 @@ export const ADMIN_MENU: MenuSection[] = [
       { path: '/admin/kennels', label: 'Chuồng lưu trú', icon: LayoutGrid, roles: ['BRANCH_MANAGER'] },
       // UC87 (A06): Care Task của chi nhánh; BRANCH_MANAGER không thấy (BR-TB-05, care-v1 §D.1).
       { path: '/admin/care-tasks', label: 'Việc gọi điện', icon: PhoneCall, roles: ['RECEPTIONIST'] },
-      { path: '/admin/queue', label: 'Hàng chờ', icon: ListOrdered, roles: ['RECEPTIONIST', 'BRANCH_MANAGER', 'VET', 'CARETAKER'], hidden: true }, // UC45, UC46 — các bàn làm việc
-      { path: '/admin/exam', label: 'Khám & EMR', icon: Stethoscope, roles: ['VET'], hidden: true }, // UC48 — bàn Phòng khám
-      { path: '/admin/vaccination', label: 'Tiêm chủng', icon: Syringe, roles: ['VET'], hidden: true }, // UC49 — bàn Phòng khám
-      { path: '/admin/grooming', label: 'Grooming', icon: Scissors, roles: ['CARETAKER'], hidden: true }, // UC52 — bàn Grooming
+      // Hàng chờ (UC45, UC46), Khám & EMR (UC48), Tiêm chủng (UC49), Grooming (UC52) nằm ở các bàn làm việc; URL cũ /admin/queue|exam|vaccination|grooming chỉ còn chuyển hướng (App.tsx).
       { path: '/admin/orders', label: 'Đơn online', icon: Package, roles: ['RECEPTIONIST'] }, // UC65 (tầng 3)
       // UC23 cho A07, A08 (chỉ xem). Lễ tân tra cứu và sửa hồ sơ ngay ở bàn Lễ tân.
       { path: '/admin/customers', label: 'Tra cứu khách & thú', icon: UserSearch, roles: ['VET', 'CARETAKER'] },
@@ -51,7 +48,7 @@ export const ADMIN_MENU: MenuSection[] = [
   {
     section: 'Thương mại',
     items: [
-      { path: '/admin/invoices', label: 'Hóa đơn', icon: Receipt, roles: ['RECEPTIONIST', 'BRANCH_MANAGER'] }, // UC70, UC72
+      // v16 không có hóa đơn: thu tiền (UC70) làm ở bàn Lễ tân; URL cũ /admin/invoices chuyển hướng (App.tsx).
       // UC72 (A05): đối soát ca thu ngân. Thu tiền (UC70) và mở / chốt ca (UC71) của lễ tân làm ngay ở bàn Lễ tân.
       { path: '/admin/payments', label: 'Ca thu ngân', icon: Scale, roles: ['BRANCH_MANAGER'] },
       { path: '/admin/refunds', label: 'Hoàn tiền', icon: Scale, roles: ['RECEPTIONIST', 'BRANCH_MANAGER'] }, // UC68 (tầng 3)

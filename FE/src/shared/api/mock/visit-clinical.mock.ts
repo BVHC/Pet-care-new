@@ -2,9 +2,10 @@
 // #10, #12–15 chép từ BE (module visit: MedicalRecordService, VisitCompletionService, MedicalRecordController, DTO, mapper). Thứ tự kiểm khác 00-method §3.5:
 // đọc JSON / tham số path và Bean Validation chạy TRƯỚC `@PreAuthorize` (400 trước 403, kể cả ADMIN) → vai trò 403 → lượt 404 → chi nhánh 403 → nhóm Thẩm mỹ 404
 // → người phụ trách 403 (đứng TRƯỚC 409, để người không phải chủ lượt không dò được trạng thái) → trạng thái 409 → rule 400.
-// #18–20 (tiêm chủng) BE CHƯA CÓ (T28, `VaccinationQueryApiPlaceholder`): chỉ theo hợp đồng visit-v1 + BR-KB-04; chỗ hợp đồng im lặng là ASSUMPTION ghi ở
-// docs/testcases/T37-fe.md. Không mô phỏng: audit (BE ghi MEDICAL_RECORD_UPDATED, MEDICAL_RECORD_ADDENDUM_ADDED), khóa đồng thời, Care Task#5 khi tiêm.
-// T46: #16–17 (kê đơn thuốc) BE CHƯA CÓ (T38, chưa có controller): hợp đồng visit-v1 + BR-KB-03; chỗ im lặng là ASSUMPTION A1–A6 ghi ở docs/testcases/T46-fe.md.
+// #18–20 (tiêm chủng) chép từ BE T28 (26/10, ADR 0072–0075: VaccinationOptionService, VaccinationRecordService, RecordVaccinationRequest): thứ tự kiểm, mã lỗi và câu lỗi nguyên văn BE.
+// Không mô phỏng: audit (BE ghi MEDICAL_RECORD_UPDATED, MEDICAL_RECORD_ADDENDUM_ADDED), khóa đồng thời, Care Task#5 khi tiêm, 409 CONCURRENCY_CONFLICT khi xóa mũi có Care Task trỏ tới (T39),
+// BR-KO-05 (BE chỉ gặp khi lô cạn / hết hạn chen giữa chừng; mock chạy tuần tự nên kiểm tồn đã chặn trước) và lô / hạn của mũi (BE luôn trả null, nợ D046).
+// T46: #16–17 (kê đơn thuốc) chép từ BE T38 (ADR 0076–0078: PrescriptionService): thứ tự kiểm và ba câu lỗi BR-KB-03 nguyên văn BE; chỗ BE im lặng giữ ASSUMPTION A1–A6 ghi ở docs/testcases/T46-fe.md.
 import type { Role } from '../../types/auth';
 import type { Addendum, MedicalRecord, PrescriptionItem, ProtocolDoseOption, VaccinationOptions, VaccinationRecord } from '../../types/medical-record';
 import type { ShortageResolution } from '../../types/visit';
@@ -47,7 +48,7 @@ const VIEW_ROLES: readonly Role[] = ['VET', 'CARETAKER'];
 const WRITE_ROLES: readonly Role[] = ['VET'];
 /** Hoàn tất lượt: người được gán, VET cho Khám/Tiêm, CARETAKER cho Thẩm mỹ (BR-TN-05). */
 const COMPLETE_ROLES: readonly Role[] = ['VET', 'CARETAKER'];
-/** Tiêm chủng #18–20: VET (được gán lượt; xóa mũi: VET đã ghi mũi đó). */
+/** Tiêm chủng #18–20: VET được gán lượt HIỆN TẠI; xóa mũi cũng vậy, không xét người đã ghi mũi (ADR-0075). */
 const VACCINATE_ROLES: readonly Role[] = ['VET'];
 /** Kê đơn #16–17: VET được gán lượt (BR-BH-02). */
 const PRESCRIBE_ROLES: readonly Role[] = ['VET'];
@@ -56,6 +57,8 @@ const RESOLUTIONS: readonly ShortageResolution[] = ['REDUCE_TO_AVAILABLE', 'EXTE
 const MAX_DOSAGE_LENGTH = 500;
 /** [CFG] `medical_record.follow_up_max_days` (seed BE V2__seed_system_configs.sql): sau ngày khám, xa nhất 180 ngày (BR-KB-06). */
 const FOLLOW_UP_MAX_DAYS = 180;
+/** Câu 404 của lượt Thẩm mỹ ở #16–20 (BE: mỗi service một câu; #12–15 dùng "bệnh án"). */
+const EXAM_VISIT = 'lượt khám / tiêm';
 const MINUTE = 60_000;
 const DATE = /^\d{4}-\d{2}-\d{2}$/;
 
@@ -90,8 +93,6 @@ interface VaccinationRow {
   /** Lô đã trừ (để hoàn đúng lô khi xóa mũi, BR-KB-04) và dòng Order vaccine tương ứng. */
   lotId: number;
   orderLineId: number;
-  lotNumber: string | null;
-  expiryDate: string | null;
   administeredOn: string;
   nextDueDate: string;
   recordedBy: number;
@@ -212,8 +213,9 @@ function vaccinationView(s: State, v: VaccinationRow): VaccinationRecord {
     doseNumber: v.doseNumber,
     productId: v.productId,
     productName: catalogProducts().find((p) => p.productId === v.productId)?.name ?? `Sản phẩm #${v.productId}`,
-    lotNumber: v.lotNumber,
-    expiryDate: v.expiryDate,
+    // BE chưa điền lô / hạn (MedicalRecordMapper bỏ qua, nợ D046): luôn null ở #19, `lastDose` và `vaccinations`.
+    lotNumber: null,
+    expiryDate: null,
     administeredOn: v.administeredOn,
     nextDueDate: v.nextDueDate,
     superseded: newer,
@@ -235,9 +237,9 @@ function recordView(s: State, visit: VisitRow): MedicalRecord {
     followUpDate: row?.followUpDate ?? null,
     locked,
     lastEditedBy: row?.lastEditedBy ?? null,
-    // Kê đơn: BE trả mảng rỗng tới khi T38 xong; mock mô phỏng T38 theo hợp đồng, kể cả khi bệnh án đã khóa (BR-KB-01).
+    // Kê đơn (T38): các dòng đơn của lượt, kể cả khi bệnh án đã khóa (BR-KB-01).
     prescriptions: prescriptionsOf(s, visit.visitId),
-    // BE trả mảng rỗng tới khi T28 xong (MedicalRecordMapper); mock mô phỏng T28 theo hợp đồng nên trả các mũi đã ghi trong lượt.
+    // Tiêm chủng (T28): các mũi đã ghi trong lượt (BE: VaccinationRecordReader.forVisit).
     vaccinations: s.vaccinations.filter((v) => v.visitId === visit.visitId).sort((a, b) => a.vaccinationId - b.vaccinationId).map((v) => vaccinationView(s, v)),
     addenda: locked ? s.addenda.filter((a) => a.visitId === visit.visitId).sort((a, b) => a.addendumId - b.addendumId).map(addendumView) : [],
   };
@@ -248,12 +250,12 @@ function recordView(s: State, visit: VisitRow): MedicalRecord {
 const me = (req: MockRequest) => req.account!;
 const branchOf = (req: MockRequest) => me(req).branchId ?? branchIdOf(me(req).id) ?? null;
 
-/** `findMedicalVisit`: lượt tồn tại (404), thuộc chi nhánh người gọi (403), nhóm Khám/Tiêm (404 — Thẩm mỹ không có bệnh án). */
-function medicalVisit(req: MockRequest, visitId: number): VisitRow | MockReply {
+/** `findMedicalVisit`: lượt tồn tại (404), thuộc chi nhánh người gọi (403), nhóm Khám/Tiêm (404 — Thẩm mỹ không có bệnh án). `groomingAs`: tên thực thể trong câu 404 của lượt Thẩm mỹ. */
+function medicalVisit(req: MockRequest, visitId: number, groomingAs = 'bệnh án'): VisitRow | MockReply {
   const visit = visitRowOf(visitId);
   if (!visit) return visitNotFound(visitId);
   if (visit.branchId !== branchOf(req)) return scopeDenied();
-  return visit.serviceGroup === 'GROOMING' ? notFound('bệnh án', visitId) : visit;
+  return visit.serviceGroup === 'GROOMING' ? notFound(groomingAs, visitId) : visit;
 }
 
 /** Người gọi phải là người phụ trách hiện tại (403, kể cả lượt chưa gán) rồi lượt phải IN_PROGRESS (409): `requireAssigneeInProgress`. */
@@ -433,7 +435,7 @@ const completeVisit: MockHandler = (req) => {
   return ok(visitView(done), 200, 'Đã hoàn tất lượt');
 };
 
-// ─── #18–20 Tiêm chủng (BR-KB-04). BE chưa có (T28): hợp đồng + BR; thứ tự kiểm, câu báo và tên trường tham số là ASSUMPTION (docs/testcases/T37-fe.md) ───
+// ─── #18–20 Tiêm chủng (BR-KB-04). Chép từ BE T28 (VaccinationOptionService, VaccinationRecordService); lệch còn lại ở đầu file ───
 
 const INTEGER = /^-?\d+$/;
 const DAY_MS = 86_400_000;
@@ -472,9 +474,28 @@ const doseOption = (p: ReturnType<typeof protocolOf>[number]): ProtocolDoseOptio
 
 const NOT_FOR_SPECIES = 'Loại vaccine không áp dụng cho loài của thú';
 
+/** `VaccinationOptionService.requireUsableType`, dùng chung #18 và #19: loại đúng loài của thú (400 BR-KB-04) rồi còn sử dụng (400 BR-SP-07). */
+function usableType(type: VaccineType, species: string): MockReply | null {
+  if (type.species !== species) return ruleFail('BR-KB-04', NOT_FOR_SPECIES);
+  return type.isActive ? null : ruleFail('BR-SP-07', 'Loại vaccine đã ngừng sử dụng');
+}
+
 /**
- * #18 (getVaccinationOptions): tham số → vai trò (VET) → 404 → chi nhánh 403 → Thẩm mỹ 404 → người phụ trách 403 → loại vaccine 404 → loài không khớp 400 BR-KB-04.
- * Mũi gợi ý = mũi kế tiếp sau mũi mới nhất cùng loại tại hệ thống (mũi 1 nếu chưa tiêm); hết phác đồ thì null để VET tự chọn (hợp đồng cho phép null; không suy ra tiêm nhắc lại).
+ * `VaccinationOptionService.suggest` (A18): chưa tiêm → mũi nhỏ nhất; đã tiêm → mũi nhỏ nhất lớn hơn số mũi đã chụp; hết mũi lớn hơn → mũi lớn nhất (nhắc lại);
+ * phác đồ rỗng → không gợi ý. `protocol` theo mũi tăng dần.
+ */
+function suggestDose(protocol: ReturnType<typeof protocolOf>, lastDoseNumber: number | undefined) {
+  if (lastDoseNumber === undefined) return protocol[0];
+  return protocol.find((p) => p.doseNumber > lastDoseNumber) ?? protocol[protocol.length - 1];
+}
+
+/** `Comparator.comparing(name).thenComparing(id)` của BE: `String.compareTo` so từng đơn vị UTF-16 (không theo bảng chữ cái tiếng Việt), nên không dùng `localeCompare`. */
+const byNameThenId = (a: { name: string; productId: number }, b: { name: string; productId: number }) =>
+  a.name < b.name ? -1 : a.name > b.name ? 1 : a.productId - b.productId;
+
+/**
+ * #18 (getVaccinationOptions): tham số → vai trò (VET) → 404 → chi nhánh 403 → Thẩm mỹ 404 → người phụ trách 403 (mọi trạng thái lượt) → loại vaccine 404 → loài không khớp 400 BR-KB-04
+ * → loại đã ngừng 400 BR-SP-07. Mũi gợi ý: `suggestDose`; sản phẩm đang kinh doanh còn tồn khả dụng, theo tên rồi id.
  */
 const getVaccinationOptions: MockHandler = (req) => {
   const visitId = idParam(req, 'visitId');
@@ -482,18 +503,19 @@ const getVaccinationOptions: MockHandler = (req) => {
   const vaccineTypeId = requiredId(req, 'vaccineTypeId');
   if (isReply(vaccineTypeId)) return vaccineTypeId;
   if (!VACCINATE_ROLES.includes(me(req).role)) return denied();
-  const visit = medicalVisit(req, visitId);
+  const visit = medicalVisit(req, visitId, EXAM_VISIT);
   if (isReply(visit)) return visit;
   if (visit.assigneeId !== me(req).id) return scopeDenied();
   const type: VaccineType | undefined = catalogVaccineTypes().find((t) => t.vaccineTypeId === vaccineTypeId);
   if (!type) return notFound('loại vaccine', vaccineTypeId);
   const pet = petSummary(visit.petId)!;
-  if (type.species !== pet.species) return ruleFail('BR-KB-04', NOT_FOR_SPECIES);
+  const unusable = usableType(type, pet.species);
+  if (unusable) return unusable;
 
   const s = load();
   const protocol = protocolOf(type.vaccineTypeId, pet.species);
   const last = lastDoseOf(s, visit.petId, type.vaccineTypeId);
-  const suggested = last ? protocol.find((p) => p.doseNumber === last.doseNumber + 1) : protocol[0];
+  const suggested = suggestDose(protocol, last?.doseNumber);
   const age = ageInWeeks(pet.birthDate);
   const result: VaccinationOptions = {
     vaccineTypeId: type.vaccineTypeId,
@@ -504,13 +526,13 @@ const getVaccinationOptions: MockHandler = (req) => {
       .filter((p) => p.productType === 'VACCINE' && p.vaccineTypeId === type.vaccineTypeId && p.isActive)
       .map((p) => ({ productId: p.productId, name: p.name, availableQuantity: availableQuantity(visit.branchId, p.productId) }))
       .filter((p) => p.availableQuantity > 0)
-      .sort((a, b) => a.productId - b.productId),
+      .sort(byNameThenId),
     underMinAge: suggested !== undefined && age !== null && age < suggested.minAgeWeeks,
   };
-  return ok(result);
+  return ok(result, 200, 'Gợi ý mũi tiêm');
 };
 
-/** `RecordVaccinationRequest`: ba mã bắt buộc, số dương. Sai kiểu → MALFORMED, thiếu / không dương → VALIDATION_FAILED (cả hai trước @PreAuthorize). */
+/** `RecordVaccinationRequest` (câu lỗi chép nguyên văn): ba mã bắt buộc, số dương. Sai kiểu → MALFORMED, thiếu / không dương → VALIDATION_FAILED (cả hai trước @PreAuthorize). */
 function readVaccination(body: unknown) {
   if (!isJsonObject(body)) return malformed();
   const ids = { vaccineTypeId: asLong(body.vaccineTypeId), protocolId: asLong(body.protocolId), productId: asLong(body.productId) };
@@ -518,8 +540,8 @@ function readVaccination(body: unknown) {
   const bad = invalid([
     ['vaccineTypeId', 'Thiếu loại vaccine', ids.vaccineTypeId === null],
     ['vaccineTypeId', 'Mã loại vaccine không hợp lệ', ids.vaccineTypeId != null && ids.vaccineTypeId <= 0],
-    ['protocolId', 'Thiếu mũi theo phác đồ', ids.protocolId === null],
-    ['protocolId', 'Mã phác đồ không hợp lệ', ids.protocolId != null && ids.protocolId <= 0],
+    ['protocolId', 'Thiếu mũi tiêm', ids.protocolId === null],
+    ['protocolId', 'Mã mũi tiêm không hợp lệ', ids.protocolId != null && ids.protocolId <= 0],
     ['productId', 'Thiếu sản phẩm vaccine', ids.productId === null],
     ['productId', 'Mã sản phẩm không hợp lệ', ids.productId != null && ids.productId <= 0],
   ]);
@@ -527,9 +549,10 @@ function readVaccination(body: unknown) {
 }
 
 /**
- * #19 (recordVaccination): body → path → vai trò (VET) → 404 → chi nhánh 403 → Thẩm mỹ 404 → người phụ trách 403 → không IN_PROGRESS 409 → loại / phác đồ / sản phẩm 404 → BR-KB-04 400
- * (loài của loại, phác đồ đúng loại + loài, sản phẩm đúng loại, còn tồn khả dụng). Một giao dịch: trừ kho FEFO 1 liều NGAY (không chờ PAID), thêm dòng Order VACCINE, ghi mũi (ngày tiêm = hôm nay,
- * A6; ngày tái chủng = ngày tiêm + khoảng cách của mũi). Thú chưa đủ tuổi tối thiểu: cảnh báo `UNDER_MIN_AGE`, không chặn. Care Task#5 chưa mô phỏng.
+ * #19 (recordVaccination): body → path → vai trò (VET) → 404 → chi nhánh 403 → Thẩm mỹ 404 → người phụ trách 403 → không IN_PROGRESS 409 → loại vaccine 404 → loài của loại 400 BR-KB-04
+ * → loại đã ngừng 400 BR-SP-07 → mũi đúng phác đồ đang dùng của loại + loài 400 BR-KB-04 (id không tồn tại cũng 400) → sản phẩm là vaccine đang kinh doanh của loại 400 BR-KB-04 (id lạ cũng 400)
+ * → còn tồn khả dụng 400 BR-KB-04. Một giao dịch: thêm dòng Order VACCINE, trừ kho FEFO 1 liều NGAY (không chờ PAID), ghi mũi (ngày tiêm = hôm nay, A6; ngày tái chủng = ngày tiêm + khoảng cách
+ * của mũi). Thú chưa đủ tuổi tối thiểu: cảnh báo `UNDER_MIN_AGE`, không chặn. Care Task#5 chưa mô phỏng.
  */
 const recordVaccination: MockHandler = (req) => {
   const visitId = idParam(req, 'visitId');
@@ -537,25 +560,21 @@ const recordVaccination: MockHandler = (req) => {
   const parsed = readVaccination(req.body);
   if (isReply(parsed)) return parsed;
   if (!VACCINATE_ROLES.includes(me(req).role)) return denied();
-  const visit = medicalVisit(req, visitId);
+  const visit = medicalVisit(req, visitId, EXAM_VISIT);
   if (isReply(visit)) return visit;
   const blocked = assigneeInProgress(req, visit);
   if (blocked) return blocked;
 
   const type = catalogVaccineTypes().find((t) => t.vaccineTypeId === parsed.vaccineTypeId);
   if (!type) return notFound('loại vaccine', parsed.vaccineTypeId);
-  const protocol = catalogProtocols().find((p) => p.protocolId === parsed.protocolId);
-  if (!protocol) return notFound('phác đồ tiêm chủng', parsed.protocolId);
-  const product = catalogProducts().find((p) => p.productId === parsed.productId);
-  if (!product) return notFound('sản phẩm', parsed.productId);
   const pet = petSummary(visit.petId)!;
-  if (type.species !== pet.species) return ruleFail('BR-KB-04', NOT_FOR_SPECIES);
-  if (protocol.vaccineTypeId !== type.vaccineTypeId || protocol.species !== pet.species || !protocol.isActive) {
-    return ruleFail('BR-KB-04', 'Mũi tiêm không thuộc phác đồ của loại vaccine và loài của thú');
-  }
-  if (product.productType !== 'VACCINE' || product.vaccineTypeId !== type.vaccineTypeId || !product.isActive) {
-    return ruleFail('BR-KB-04', 'Sản phẩm không thuộc loại vaccine đã chọn');
-  }
+  const unusable = usableType(type, pet.species);
+  if (unusable) return unusable;
+  const protocol = catalogProtocols().find((p) => p.protocolId === parsed.protocolId && p.isActive && p.vaccineTypeId === type.vaccineTypeId && p.species === pet.species);
+  if (!protocol) return ruleFail('BR-KB-04', 'Mũi tiêm không thuộc phác đồ đang dùng của loại vaccine cho loài này');
+  const product = catalogProducts().find((p) => p.productId === parsed.productId && p.isActive && p.productType === 'VACCINE' && p.vaccineTypeId === type.vaccineTypeId);
+  if (!product) return ruleFail('BR-KB-04', 'Sản phẩm không phải vaccine đang kinh doanh của loại đã chọn');
+  // `issueOneFefo` rỗng ⇔ tồn khả dụng < 1 (cùng một điều kiện lô chưa hết hạn): đây là kiểm tồn của BE; BR-KO-05 của lô chỉ xảy ra khi đua khóa nên mock không có.
   const lot = issueOneFefo(visit.branchId, product.productId);
   if (!lot) return ruleFail('BR-KB-04', 'Sản phẩm vaccine không còn tồn khả dụng tại chi nhánh');
   const lineId = addVaccineLine(visit.visitId, { productId: product.productId, description: product.name, unitPrice: product.price, actorId: me(req).id });
@@ -577,8 +596,6 @@ const recordVaccination: MockHandler = (req) => {
     productId: product.productId,
     lotId: lot.lotId,
     orderLineId: lineId,
-    lotNumber: lot.lotNumber,
-    expiryDate: lot.expiryDate,
     administeredOn,
     nextDueDate: addDays(administeredOn, protocol.intervalDays),
     recordedBy: me(req).id,
@@ -591,8 +608,8 @@ const recordVaccination: MockHandler = (req) => {
 };
 
 /**
- * #20 (deleteVaccination): path → vai trò (VET) → 404 → chi nhánh 403 → Thẩm mỹ 404 → mũi tiêm của lượt này 404 → người ghi mũi đó 403 (hợp đồng: "VET đã ghi mũi đó", không phải người phụ trách)
- * → lượt không IN_PROGRESS 409 (đã COMPLETED: sai sót ghi bằng bản bổ sung). Một giao dịch: hoàn kho đúng lô đã trừ, xóa dòng Order vaccine, xóa mũi.
+ * #20 (deleteVaccination): path → vai trò (VET) → 404 → chi nhánh 403 → Thẩm mỹ 404 → người phụ trách HIỆN TẠI 403 (không xét người đã ghi mũi, ADR-0075: sau khi gán lại, VET mới xóa được mũi VET cũ ghi)
+ * → lượt không IN_PROGRESS 409 (đã COMPLETED: sai sót ghi bằng bản bổ sung) → mũi của lượt này 404. Một giao dịch: hoàn kho đúng lô đã trừ, xóa dòng Order vaccine, xóa mũi.
  */
 const deleteVaccination: MockHandler = (req) => {
   const visitId = idParam(req, 'visitId');
@@ -600,13 +617,13 @@ const deleteVaccination: MockHandler = (req) => {
   const vaccinationId = idParam(req, 'vaccinationId');
   if (isReply(vaccinationId)) return vaccinationId;
   if (!VACCINATE_ROLES.includes(me(req).role)) return denied();
-  const visit = medicalVisit(req, visitId);
+  const visit = medicalVisit(req, visitId, EXAM_VISIT);
   if (isReply(visit)) return visit;
+  const blocked = assigneeInProgress(req, visit);
+  if (blocked) return blocked;
   const s = load();
   const dose = s.vaccinations.find((v) => v.vaccinationId === vaccinationId && v.visitId === visitId);
   if (!dose) return notFound('mũi tiêm', vaccinationId);
-  if (dose.recordedBy !== me(req).id) return scopeDenied();
-  if (visit.status !== 'IN_PROGRESS') return conflict(FSM_NAME, visit.status, 'IN_PROGRESS');
 
   returnToLot(dose.lotId, 1);
   removeVaccineLine(visitId, dose.orderLineId);
@@ -615,7 +632,7 @@ const deleteVaccination: MockHandler = (req) => {
   return noContent();
 };
 
-// ─── #16–17 Kê đơn thuốc (BR-KB-03). BE chưa có (T38): hợp đồng + BR; thứ tự kiểm, câu báo và cách xử lý chỗ im lặng là ASSUMPTION A1–A6 (docs/testcases/T46-fe.md) ───
+// ─── #16–17 Kê đơn thuốc (BR-KB-03). Chép từ BE T38 (PrescriptionService); chỗ BE im lặng là ASSUMPTION A1–A6 (docs/testcases/T46-fe.md) ───
 
 /** `AddPrescriptionRequest`: `productId` / `quantity` số nguyên (sai kiểu → MALFORMED, thiếu / không dương → VALIDATION_FAILED), liều dùng bỏ khoảng trắng hai đầu rồi @NotBlank, ≤ 500 ký tự. */
 function readPrescription(body: unknown) {
@@ -639,11 +656,11 @@ function readPrescription(body: unknown) {
 }
 
 /**
- * ASSUMPTION (hợp đồng im lặng, A1–A6): thứ tự kiểm, câu báo 400 thiếu tồn (tiếng Việt tự viết, ghi số tồn hiện có, kết thúc `(BR-KB-03)`) và cách xử lý các ca biên là FE tự định, BE thật (T38) có thể khác.
- * #16 (addPrescription): body → path → vai trò (VET) → 404 → chi nhánh 403 → Thẩm mỹ 404 → người phụ trách 403 → không IN_PROGRESS 409 → sản phẩm 404 → BR-KB-03 400 (A1; sản phẩm không phải
- * thuốc kê đơn hoặc ngừng kinh doanh: A2). Tồn khả dụng của chi nhánh (BR-KO-01) so với số lượng: đủ → dòng đơn kèm 1 dòng Order DRUG (kê đơn KHÔNG trừ kho, kho trừ khi PAID: A6; cùng thuốc kê hai
- * lần là hai dòng: A5; `shortageResolution` thừa khi đủ tồn bị bỏ qua: A4). Thiếu tồn: chưa chọn cách xử lý → 400 báo số tồn và không ghi gì; REDUCE_TO_AVAILABLE → số lượng = tồn (tồn 0 → 400), vẫn
- * sinh dòng Order; EXTERNAL_PURCHASE → giữ số lượng, mua ngoài OUT_OF_STOCK_AT_PRESCRIBE, không dòng Order (A3). Không tách một dòng thành hai phần.
+ * #16 (addPrescription), thứ tự và câu lỗi chép từ `PrescriptionService.add`: body → path → vai trò (VET) → 404 → chi nhánh 403 → Thẩm mỹ 404 → người phụ trách 403 → không IN_PROGRESS 409 → thuốc 400
+ * BR-KB-03 (id không tồn tại, không phải thuốc kê đơn hoặc ngừng kinh doanh cùng một câu) → tồn khả dụng của chi nhánh (BR-KO-01) so với số lượng: đủ → dòng đơn kèm 1 dòng Order DRUG (kê đơn KHÔNG
+ * trừ kho, kho trừ khi PAID; `shortageResolution` thừa khi đủ tồn bị bỏ qua). Thiếu tồn: chưa chọn cách xử lý → 400 BR-KB-03 báo số tồn và không ghi gì; REDUCE_TO_AVAILABLE → số lượng = tồn (tồn 0
+ * → 400 BR-KB-03), vẫn sinh dòng Order; EXTERNAL_PURCHASE → giữ số lượng, mua ngoài OUT_OF_STOCK_AT_PRESCRIBE, không dòng Order. Không tách một dòng thành hai phần. ASSUMPTION A5: cùng thuốc kê hai lần
+ * là hai dòng (chưa đối chiếu BE).
  */
 const addPrescription: MockHandler = (req) => {
   const visitId = idParam(req, 'visitId');
@@ -651,26 +668,24 @@ const addPrescription: MockHandler = (req) => {
   const parsed = readPrescription(req.body);
   if (isReply(parsed)) return parsed;
   if (!PRESCRIBE_ROLES.includes(me(req).role)) return denied();
-  const visit = medicalVisit(req, visitId);
+  const visit = medicalVisit(req, visitId, EXAM_VISIT);
   if (isReply(visit)) return visit;
   const blocked = assigneeInProgress(req, visit);
   if (blocked) return blocked;
 
-  const product = catalogProducts().find((p) => p.productId === parsed.productId);
-  if (!product) return notFound('sản phẩm', parsed.productId);
-  if (!product.isPrescription) return ruleFail('BR-KB-03', 'Sản phẩm không phải thuốc kê đơn');
-  if (!product.isActive) return ruleFail('BR-KB-03', 'Thuốc đã ngừng kinh doanh');
+  const product = catalogProducts().find((p) => p.productId === parsed.productId && p.isActive && p.productType === 'DRUG' && p.isPrescription);
+  if (!product) return ruleFail('BR-KB-03', 'Sản phẩm không phải thuốc kê đơn đang kinh doanh');
 
   const available = availableQuantity(visit.branchId, product.productId);
   let quantity = parsed.quantity;
   let external = false;
   if (quantity > available) {
     if (parsed.shortageResolution === null) {
-      return ruleFail('BR-KB-03', `Thiếu tồn khả dụng: ${product.name} chỉ còn ${available} ${product.unit}, cần ${quantity}. Giảm số lượng cho vừa tồn hoặc giữ nguyên số lượng và mua ngoài`);
+      return ruleFail('BR-KB-03', `Tồn khả dụng tại chi nhánh chỉ còn ${available}; chọn giảm số lượng hoặc mua ngoài`);
     }
     external = parsed.shortageResolution === 'EXTERNAL_PURCHASE';
     if (!external) {
-      if (available === 0) return ruleFail('BR-KB-03', `${product.name} đã hết tồn khả dụng nên không giảm được, hãy chọn mua ngoài`);
+      if (available < 1) return ruleFail('BR-KB-03', 'Thuốc đã hết tồn khả dụng tại chi nhánh, chỉ chọn được mua ngoài');
       quantity = available;
     }
   }
@@ -692,12 +707,12 @@ const addPrescription: MockHandler = (req) => {
   };
   s.prescriptions.push(row);
   save(s);
-  return ok(prescriptionView(row), 201, 'Đã kê đơn thuốc');
+  return ok(prescriptionView(row), 201, 'Đã kê đơn');
 };
 
 /**
  * #17 (deletePrescription): path → vai trò (VET) → 404 → chi nhánh 403 → Thẩm mỹ 404 → người phụ trách hiện tại 403 (BR-TN-08 chuyển quyền xóa dòng cho người phụ trách mới) → không IN_PROGRESS 409
- * → dòng đơn của lượt này 404 (A1: đứng sau 409 như bước sản phẩm 404 của #16). Một giao dịch: xóa dòng Order DRUG tương ứng (nếu có, mua ngoài thì không có) rồi xóa dòng đơn. Kho không đổi (A6).
+ * → dòng đơn của lượt này 404 (BE: đứng sau 409). Một giao dịch: xóa dòng Order DRUG tương ứng (nếu có, mua ngoài thì không có) rồi xóa dòng đơn. Kho không đổi (A6).
  */
 const deletePrescription: MockHandler = (req) => {
   const visitId = idParam(req, 'visitId');
@@ -705,7 +720,7 @@ const deletePrescription: MockHandler = (req) => {
   const itemId = idParam(req, 'itemId');
   if (isReply(itemId)) return itemId;
   if (!PRESCRIBE_ROLES.includes(me(req).role)) return denied();
-  const visit = medicalVisit(req, visitId);
+  const visit = medicalVisit(req, visitId, EXAM_VISIT);
   if (isReply(visit)) return visit;
   const blocked = assigneeInProgress(req, visit);
   if (blocked) return blocked;
@@ -756,8 +771,6 @@ export function recordDoseForMock(petId: number, vaccineTypeId: number, administ
     productId: product?.productId ?? 0,
     lotId: 0,
     orderLineId: 0,
-    lotNumber: null,
-    expiryDate: null,
     administeredOn,
     nextDueDate: addDays(administeredOn, protocol?.intervalDays ?? 365),
     recordedBy: 5,

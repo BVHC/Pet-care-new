@@ -57,6 +57,15 @@ describe('staff sidebar', () => {
     expect(screen.getByRole('heading', { name: 'Cả phòng khám hôm nay' })).toBeInTheDocument();
   });
 
+  // T49: nút "Đặt lại dữ liệu demo" chỉ đặt lại clinic-db (localStorage cũ), đã bỏ cùng clinic-db khỏi luồng chạy.
+  it.each(['RECEPTIONIST', 'BRANCH_MANAGER', 'VET', 'CARETAKER'] as const)('has no demo reset button for the %s', (role) => {
+    renderSidebar(role, { path: '/staff/reception' });
+
+    expect(screen.queryByRole('button', { name: /dữ liệu demo/i })).not.toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Phím tắt' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Đăng xuất' })).toBeInTheDocument();
+  });
+
   it('gives the technical admin no desks, no clinic counts and no demo reset', () => {
     renderSidebar('ADMIN', { path: '/admin/users' });
 

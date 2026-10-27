@@ -5,7 +5,7 @@ import { toast } from 'sonner';
 import { AuthShell } from './AuthShell';
 import { AuthField, GoogleButton, SubmitButton, OrDivider } from './AuthField';
 import { useSession } from '../../shared/stores/session.store';
-import { toApiError } from '../../shared/api/api-error';
+import { plainMessage, toApiError } from '../../shared/api/api-error';
 import { homePathFor } from '../../shared/constants/workspaces';
 
 const STATS = [
@@ -36,7 +36,7 @@ export function LoginPage() {
       navigate(useSession.getState().linkDecisionPending ? '/account/link' : (from ?? homePathFor(account.role)));
     } catch (error) {
       const err = toApiError(error);
-      toast.error(err.message);
+      toast.error(plainMessage(err)); // bỏ đuôi mã rule BE nối vào message; `err.ruleId` vẫn dùng bên dưới
       // BR-TK-08: tai khoan chua xac thuc -> dua sang buoc nhap OTP (00-method §3.5).
       if (err.ruleId === 'BR-TK-08') {
         navigate('/auth/verify-otp', { state: { email: form.email.trim() } });

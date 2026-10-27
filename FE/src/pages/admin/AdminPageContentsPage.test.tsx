@@ -22,6 +22,8 @@ import { AdminPageContentsPage } from './AdminPageContentsPage';
 
 // Dữ liệu mẫu ở shared/api/mock/page-content.mock.ts: cả 4 trang bắt đầu bằng `{}` (đang dùng nội dung mặc định trong mã, PAGE_DEFAULTS).
 // Mặc định: HOME_BANNER ctaLabel "Đặt Lịch Ngay", FAQ 4 câu hỏi, POLICY mỗi văn bản 7 mục.
+// Ca "tối đa 20 mục" bấm thêm 20 lần (~3,7 giây một mình): chạy cả bộ song song thì vượt 5 giây mặc định và đỏ chập chờn (T49 gặp ở lần chạy thứ 4).
+vi.setConfig({ testTimeout: 20_000 });
 beforeAll(() => installMockApi(apiClient));
 
 beforeEach(async () => {

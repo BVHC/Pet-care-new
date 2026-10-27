@@ -140,7 +140,7 @@ describe('lệnh ghi khám bệnh: làm mới các gốc bị ảnh hưởng, k�
     expect(del).toHaveBeenCalledWith(7, 3);
     expect(await run(useAddPrescription as never, { visitId: 7, ...body })).not.toContainEqual(['inventory']);
 
-    vi.spyOn(visitApi, 'addPrescription').mockRejectedValue(new ApiError('BUSINESS_RULE_VIOLATION', 'Thiếu tồn khả dụng (BR-KB-03)', 400));
+    vi.spyOn(visitApi, 'addPrescription').mockRejectedValue(new ApiError('BUSINESS_RULE_VIOLATION', 'Tồn khả dụng tại chi nhánh chỉ còn 0; chọn giảm số lượng hoặc mua ngoài (BR-KB-03)', 400));
     vi.spyOn(visitApi, 'deletePrescription').mockRejectedValue(new ApiError('INVALID_STATE_TRANSITION', 'x', 409));
     for (const root of [['visits'], ['sales']]) {
       expect(await run(useAddPrescription as never, { visitId: 7, ...body })).toContainEqual(root);

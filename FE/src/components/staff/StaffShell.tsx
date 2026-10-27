@@ -8,7 +8,7 @@ import { pageLabel } from '../../shared/constants/staff-menu';
 import { WORKSPACE_PATHS, getAccessibleWorkspaces, workspaceForPath } from '../../shared/constants/workspaces';
 import { useHotkeys } from '../../shared/hooks/useHotkeys';
 import { useTheme } from '../../shared/hooks/useTheme';
-import { useClinicSync, useHandoffNotices } from '../../shared/hooks/useWorkspaceSignals';
+import { useHandoffNotices } from '../../shared/hooks/useWorkspaceSignals';
 import { useSessionUser } from '../../shared/stores/session.store';
 import { observeWebVitals, track } from '../../shared/utils/telemetry';
 import { LiveRegion } from './LiveRegion';
@@ -45,7 +45,6 @@ function Shell({ user }: { user: NonNullable<ReturnType<typeof useSessionUser>> 
   const [collapsed, setCollapsed] = useState(readCollapsed);
   const theme = useTheme();
 
-  useClinicSync();
   useHandoffNotices(current);
 
   // Before paint: back-office colours follow the workspace palette (workspace.css), each desk gets its zone colour.

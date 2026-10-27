@@ -2,7 +2,7 @@
 // Vai trò (đã dò BE thật, xem `VISIT_ROLES` ở types/visit.ts): tiếp nhận / gán / sắp lại / hủy là lễ tân; xem hàng đợi chi nhánh là A05–A08; hàng đợi của tôi và
 // gọi lượt là VET, CARETAKER; đánh dấu cấp cứu là lễ tân hoặc VET; gán lại lượt đã gọi là BRANCH_MANAGER (SUPER_MANAGER khi chi nhánh hết quản lý ACTIVE).
 // T37: #10 hoàn tất lượt (VET cho Khám/Tiêm, CARETAKER cho Thẩm mỹ), #12 xem bệnh án (VET, CARETAKER), #13 ghi bệnh án, #14 cân nặng, #15 bản bổ sung (VET), #18–20 tiêm chủng
-// (VET được gán lượt). T46: #16–17 kê đơn / xóa dòng đơn thuốc (VET được gán lượt; BE là T38, chưa có controller nên màn chạy trên mock theo hợp đồng).
+// (VET được gán lượt; BE có từ T28, 26/10). T46: #16–17 kê đơn / xóa dòng đơn thuốc (VET được gán lượt; BE có từ T38).
 import { apiClient } from './axios';
 import { appointmentApi } from './appointment.api';
 import type { PageResponse } from '../types';
@@ -80,7 +80,8 @@ export const visitApi = {
 
   /**
    * #16 (VET được gán, lượt IN_PROGRESS): thêm một dòng thuốc kê đơn. Đủ tồn → dòng đơn kèm dòng Order thuốc. Thiếu tồn mà chưa có `shortageResolution` → 400 BR-KB-03 kèm số tồn
-   * trong message (gửi lại cùng body kèm `shortageResolution`). Sản phẩm không phải thuốc kê đơn / ngừng kinh doanh → 400 BR-KB-03. 409 khi lượt không IN_PROGRESS.
+   * trong message "Tồn khả dụng tại chi nhánh chỉ còn N; …" (gửi lại cùng body kèm `shortageResolution`). Cùng mã BR-KB-03 còn có "Sản phẩm không phải thuốc kê đơn đang kinh doanh" (id lạ, không phải thuốc
+   * kê đơn, ngừng kinh doanh) và "Thuốc đã hết tồn khả dụng…" (chọn giảm khi tồn 0): hai ca này là lỗi thường. 409 khi lượt không IN_PROGRESS.
    */
   addPrescription: (visitId: number, body: AddPrescriptionRequest) => post<PrescriptionItem>(`/api/visits/${visitId}/prescriptions`, body),
   /** #17 (VET được gán, lượt IN_PROGRESS): xóa dòng đơn, kèm dòng Order thuốc của nó (nếu có). 204 rỗng. */
@@ -88,13 +89,19 @@ export const visitApi = {
     await apiClient.delete(`/api/visits/${visitId}/prescriptions/${itemId}`);
   },
 
-  /** #18 (VET được gán): mũi gợi ý (chỉ tham khảo) và sản phẩm còn tồn khả dụng; 400 khi loại vaccine không thuộc loài của thú. */
+  /**
+   * #18 (VET được gán): mũi gợi ý (chỉ tham khảo; hết phác đồ thì là mũi lớn nhất để nhắc lại) và sản phẩm còn tồn khả dụng; 400 BR-KB-04 khi loại vaccine không thuộc loài của thú, 400 BR-SP-07 khi loại
+   * đã ngừng sử dụng.
+   */
   getVaccinationOptions: (visitId: number, vaccineTypeId: number) =>
     get<VaccinationOptions>(`/api/visits/${visitId}/vaccination-options`, { vaccineTypeId }),
   /** #19 (VET được gán, lượt IN_PROGRESS): trừ kho FEFO ngay, thêm dòng Order vaccine; `warnings` có thể chứa `UNDER_MIN_AGE`. */
   recordVaccination: (visitId: number, body: RecordVaccinationRequest) =>
     post<RecordVaccinationResult>(`/api/visits/${visitId}/vaccinations`, body),
-  /** #20 (VET đã ghi mũi đó, lượt chưa COMPLETED): hoàn kho đúng lô, xóa dòng Order vaccine. */
+  /**
+   * #20 (VET được gán lượt HIỆN TẠI, lượt IN_PROGRESS; không xét người đã ghi mũi, ADR-0075): hoàn kho đúng lô, xóa dòng Order vaccine. 409 CONCURRENCY_CONFLICT (chung chung) khi còn Care Task
+   * nhắc tái chủng trỏ tới mũi.
+   */
   deleteVaccination: async (visitId: number, vaccinationId: number): Promise<void> => {
     await apiClient.delete(`/api/visits/${visitId}/vaccinations/${vaccinationId}`);
   },

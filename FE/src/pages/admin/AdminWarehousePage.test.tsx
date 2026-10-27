@@ -2,11 +2,13 @@ import { fireEvent, render, screen, waitFor, within } from '@testing-library/rea
 import userEvent from '@testing-library/user-event';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { MemoryRouter, Route, Routes, useLocation } from 'react-router-dom';
-import { beforeAll, describe, expect, it } from 'vitest';
+import { afterEach, beforeAll, describe, expect, it, vi } from 'vitest';
 import { apiClient } from '../../shared/api/axios';
+import { inventoryApi } from '../../shared/api/inventory.api';
 import { MOCK_PASSWORD } from '../../shared/api/mock/identity.mock';
 import { installMockApi } from '../../shared/api/mock/mock-api';
 import { useSession } from '../../shared/stores/session.store';
+import { restoreTimezone, setTimezone } from '../../test/timezone';
 import { addDays, localIsoDate } from '../../shared/utils/branch-schedule';
 import { AdminWarehousePage } from './AdminWarehousePage';
 
@@ -50,6 +52,11 @@ function renderAt(path: string) {
 const rowOf = async (text: string) => (await screen.findByText(text)).closest('tr')!;
 
 describe('AdminWarehousePage (T24 — UC73–76)', () => {
+  afterEach(() => {
+    vi.useRealTimers();
+    restoreTimezone();
+  });
+
   it('lễ tân chỉ thấy tab Tồn kho, mở thẳng tab phiếu nhập bị đưa về tồn kho, không sửa tồn tối thiểu', async () => {
     await signIn('reception@store1.vn');
     renderAt('/admin/warehouse/receipts');
@@ -123,6 +130,53 @@ describe('AdminWarehousePage (T24 — UC73–76)', () => {
     expect(await within(detail).findByRole('alert')).toHaveTextContent('phiếu điều chỉnh');
     await user.click(within(detail).getByRole('button', { name: 'Lập phiếu điều chỉnh' }));
     expect(screen.getByTestId('where')).toHaveTextContent('/admin/warehouse/adjustments');
+  });
+
+  // BE chỉ chặn ngày nhập tương lai lúc xác nhận (BR-KO-03); FE chặn sớm hơn ngay lúc lưu nháp, "hôm nay" theo giờ VN (T49 nhóm 2, hàng 5, 10).
+  // Trình duyệt (và jsdom) chặn nộp form khi vượt `max` trước cả onSubmit; `fireEvent.submit` bỏ qua bước đó để thử riêng kiểm tra của FE.
+  it('phiếu nhập: ô ngày nhập có max là hôm nay; ngày mai bị chặn trước khi lưu, hôm nay thì lưu được', async () => {
+    vi.useFakeTimers({ toFake: ['Date'] });
+    vi.setSystemTime(new Date('2026-10-27T10:00:00+07:00'));
+    await signIn('manager@store1.vn');
+    const create = vi.spyOn(inventoryApi, 'createReceipt');
+    const user = renderAt('/admin/warehouse/receipts');
+    await user.click(await screen.findByRole('button', { name: 'Tạo phiếu nhập' }));
+    const form = screen.getByRole('dialog');
+    await user.selectOptions(within(form).getByLabelText('Nhà cung cấp'), 'Công ty Royal Canin Việt Nam');
+    await user.selectOptions(within(form).getByLabelText('Dòng 1 — sản phẩm'), 'Hạt Royal Canin Mini Adult 2kg (túi)');
+    await user.type(within(form).getByLabelText('Dòng 1 — số lượng'), '5');
+    await user.type(within(form).getByLabelText('Dòng 1 — giá nhập'), '380000');
+    const date = within(form).getByLabelText('Ngày nhập');
+    expect(date).toHaveValue('2026-10-27');
+    expect(date).toHaveAttribute('max', '2026-10-27');
+
+    fireEvent.change(date, { target: { value: '2026-10-28' } });
+    await user.click(within(form).getByRole('button', { name: 'Lưu nháp' }));
+    expect(date).toBeInvalid();
+    expect(create).not.toHaveBeenCalled();
+    fireEvent.submit(form.querySelector('form')!);
+    expect(await within(form).findByRole('alert')).toHaveTextContent('Ngày nhập không được ở tương lai');
+    expect(create).not.toHaveBeenCalled();
+
+    fireEvent.change(date, { target: { value: '2026-10-27' } });
+    await user.click(within(form).getByRole('button', { name: 'Lưu nháp' }));
+    await waitFor(() => expect(create).toHaveBeenCalledWith(expect.objectContaining({ receiptDate: '2026-10-27' })));
+  });
+
+  it.each([
+    ['Pacific/Auckland', '2026-10-27T23:59:00+07:00', '2026-10-27'], // máy đã sang 28/10
+    ['America/Los_Angeles', '2026-10-28T00:01:00+07:00', '2026-10-28'], // máy còn ở 27/10
+  ])('phiếu nhập: máy ở %s, lúc %s giờ VN thì ngày nhập mặc định và max là %s', async (tz, instant, expected) => {
+    setTimezone(tz);
+    vi.useFakeTimers({ toFake: ['Date'] });
+    vi.setSystemTime(new Date(instant));
+    await signIn('manager@store1.vn');
+    const user = renderAt('/admin/warehouse/receipts');
+    await user.click(await screen.findByRole('button', { name: 'Tạo phiếu nhập' }));
+    const date = within(screen.getByRole('dialog')).getByLabelText('Ngày nhập');
+
+    expect(date).toHaveValue(expected);
+    expect(date).toHaveAttribute('max', expected);
   });
 
   it('điều chỉnh tồn: "Khác" bắt ghi chú; lô mặc định chọn sẵn; điều chỉnh lô hết hạn thành công', async () => {

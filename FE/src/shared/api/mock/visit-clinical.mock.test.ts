@@ -12,7 +12,7 @@ import { visitClinicalRoutes } from './visit-clinical.mock';
 //  - 2002 Lu (chó) lịch hẹn #10 Khám tổng quát, IN_PROGRESS, VET #5 · 2102 Tôm (hamster) walk-in WAITING, VET #5 · 2101 Miu cấp cứu WAITING chưa gán
 //  - 2103 Bim Thẩm mỹ WAITING (CARETAKER #6) · 2104 Mochi Thẩm mỹ IN_PROGRESS, người phụ trách #12 không còn
 //  - COMPLETED: 61 (hôm nay, Order #2 PENDING), 58, 40, 2001 — dữ liệu mẫu bệnh án của mock lâm sàng (visit-clinical.mock.ts) cho 61, 58, 40, 2001.
-// Chuẩn hành vi: BE (MedicalRecordService, VisitCompletionService; docs/adr/0066–0070). Tiêm chủng (#18–20) chưa có ở BE (T28): theo hợp đồng + BR-KB-04.
+// Chuẩn hành vi: BE (MedicalRecordService, VisitCompletionService; docs/adr/0066–0070). Tiêm chủng (#18–20, T28, ADR 0072–0075) và kê đơn (#16–17, T38, ADR 0076–0078) chép từ service của BE.
 const NOW = new Date('2026-10-23T10:40:00+07:00');
 const TODAY = '2026-10-23';
 
@@ -336,7 +336,7 @@ describe('hoàn tất lượt: thứ tự lỗi', () => {
 });
 
 // ─── Tiêm chủng: gợi ý mũi và sản phẩm (#18, UC49; BR-KB-04) ───
-// BE chưa có (T28): theo hợp đồng visit-v1 + BR-KB-04. Dữ liệu mẫu: Lu (chó, sinh 2021) đang khám ở 2002; loại 1 "Dại" (chó) có phác đồ #3 (mũi 1, 365 ngày, ≥ 12 tuần);
+// Chép từ BE T28 (VaccinationOptionService, ADR-0073). Dữ liệu mẫu: Lu (chó, sinh 2021) đang khám ở 2002; loại 1 "Dại" (chó) có phác đồ #3 (mũi 1, 365 ngày, ≥ 12 tuần);
 // loại 2 "5 bệnh" (chó) có #1 (mũi 1, 21 ngày, ≥ 6 tuần) và #2 (mũi 2, 21 ngày, ≥ 9 tuần); loại 3 "Dại" là của mèo. Vaccine "Dại Rabisin" (#5) còn 15 liều lô RB2401
 // và 2 liều lô RB2309 ĐÃ HẾT HẠN; "5 bệnh Vanguard" (#6) còn 4 liều lô VG2402.
 const options = async (visitId: number | string, vaccineTypeId?: number | string, who: () => Promise<object> = vet) =>
@@ -346,6 +346,7 @@ describe('gợi ý mũi tiêm và sản phẩm vaccine (#18, UC49; BR-KB-04)', (
   it('chưa tiêm loại này tại hệ thống: gợi ý mũi 1 của phác đồ đúng loài; chỉ liệt kê vaccine thuộc loại còn tồn khả dụng (bỏ lô đã hết hạn)', async () => {
     const res = await options(2002, 1);
     expect(res.status).toBe(200);
+    expect(message(res)).toBe('Gợi ý mũi tiêm');
     expect(res.data.data).toEqual({
       vaccineTypeId: 1,
       protocol: [{ protocolId: 3, doseNumber: 1, intervalDays: 365, minAgeWeeks: 12, requiredForBoarding: true }],
@@ -366,6 +367,26 @@ describe('gợi ý mũi tiêm và sản phẩm vaccine (#18, UC49; BR-KB-04)', (
     expect((await failure(options(2102, 1))).status).toBe(400);
   });
 
+  it('sản phẩm theo TÊN rồi id như BE, không theo id: vaccine Dại (id 5) chuyển sang loại 5 bệnh có tên đứng sau vaccine 5 bệnh (id 6)', async () => {
+    expect((await client.patch('/api/products/5', { vaccineTypeId: 2 }, await chain())).status).toBe(200);
+    const { products } = (await options(2002, 2)).data.data;
+    expect(products.map((p: { productId: number; name: string }) => [p.productId, p.name])).toEqual([[6, 'Vaccine 5 bệnh Vanguard'], [5, 'Vaccine Dại Rabisin']]);
+  });
+
+  it('loại vaccine đã ngừng sử dụng: 400 BR-SP-07 ở cả #18 và #19 (đứng trước kiểm mũi / sản phẩm, sau kiểm loài); không ghi gì', async () => {
+    await client.patch('/api/vaccine-types/2', { isActive: false }, await chain()); // 5 bệnh (chó)
+    await client.patch('/api/vaccine-types/3', { isActive: false }, await chain()); // Dại (mèo)
+    for (const call of [() => options(2002, 2), () => vaccinate(2002, { vaccineTypeId: 2, protocolId: 99, productId: 99 })]) {
+      const stopped = await failure(call());
+      expect([stopped.status, stopped.data.errorCode, message(stopped), ruleOf(stopped)]).toEqual([400, 'BUSINESS_RULE_VIOLATION', 'Loại vaccine đã ngừng sử dụng (BR-SP-07)', 'BR-SP-07']);
+    }
+    // Loại của mèo đã ngừng mà thú là chó: sai loài đứng TRƯỚC ngừng sử dụng.
+    for (const call of [() => options(2002, 3), () => vaccinate(2002, { vaccineTypeId: 3, protocolId: 99, productId: 99 })]) {
+      expect(message(await failure(call()))).toBe(`${NOT_FOR_SPECIES} (BR-KB-04)`);
+    }
+    expect(await dosesOf(2002)).toEqual([]);
+  });
+
   it('thứ tự lỗi: tham số 400 (trước cả vai trò) → vai trò VET 403 → lượt 404 → chi nhánh 403 → Thẩm mỹ 404 → người phụ trách 403 → loại vaccine 404', async () => {
     const missing = await failure(options(2002, undefined, admin));
     expect([missing.status, missing.data.errorCode]).toEqual([400, 'MALFORMED_REQUEST']);
@@ -379,7 +400,8 @@ describe('gợi ý mũi tiêm và sản phẩm vaccine (#18, UC49; BR-KB-04)', (
     expect((await failure(options(99999, 1))).status).toBe(404);
     const otherBranch = direct('GET /api/visits/:visitId/vaccination-options', callerOf('VET', 55, 2), { params: { visitId: '2002' }, query: { vaccineTypeId: '1' } });
     expect([otherBranch.status, (otherBranch.body as { errorCode: string }).errorCode]).toEqual([403, 'ACCESS_DENIED_SCOPE_MISMATCH']);
-    expect((await failure(options(2103, 1))).status).toBe(404);
+    const grooming = await failure(options(2103, 1));
+    expect([grooming.status, message(grooming)]).toEqual([404, 'Không tìm thấy lượt khám / tiêm #2103']);
     expect((await failure(options(2101, 3))).data.errorCode).toBe('ACCESS_DENIED_SCOPE_MISMATCH');
     const unknownType = await failure(options(2002, 99));
     expect([unknownType.status, message(unknownType)]).toEqual([404, 'Không tìm thấy loại vaccine #99']);
@@ -387,12 +409,15 @@ describe('gợi ý mũi tiêm và sản phẩm vaccine (#18, UC49; BR-KB-04)', (
 });
 
 // ─── Tiêm chủng: ghi nhận mũi (#19) và xóa mũi ghi nhầm (#20) ───
-// Thứ tự kiểm (ASSUMPTION, hợp đồng không nêu): copy #13 — body 400 → vai trò 403 → lượt 404 → chi nhánh 403 → Thẩm mỹ 404 → người phụ trách 403 → trạng thái 409
-// → loại / phác đồ / sản phẩm 404 → rule BR-KB-04 400 (loài, phác đồ, sản phẩm, tồn). #20: người ghi mũi đó 403 (không phải người phụ trách) → trạng thái 409.
+// Thứ tự kiểm chép từ BE (VaccinationRecordService): body 400 → vai trò 403 → lượt 404 → chi nhánh 403 → Thẩm mỹ 404 → người phụ trách 403 → trạng thái 409 → loại vaccine 404 → loài 400 BR-KB-04
+// → ngừng sử dụng 400 BR-SP-07 → mũi 400 BR-KB-04 → sản phẩm 400 BR-KB-04 → tồn 400 BR-KB-04 (id lạ của mũi / sản phẩm là 400, không phải 404). #20: người phụ trách HIỆN TẠI 403 → trạng thái 409 → mũi 404.
 
 const vaccinate = async (visitId: number | string, body: unknown, who: () => Promise<object> = vet) => client.post(`/api/visits/${visitId}/vaccinations`, body, await who());
 const removeDose = async (visitId: number | string, vaccinationId: number | string, who: () => Promise<object> = vet) =>
   client.delete(`/api/visits/${visitId}/vaccinations/${vaccinationId}`, await who());
+const WRONG_DOSE = 'Mũi tiêm không thuộc phác đồ đang dùng của loại vaccine cho loài này (BR-KB-04)';
+const WRONG_PRODUCT = 'Sản phẩm không phải vaccine đang kinh doanh của loại đã chọn (BR-KB-04)';
+const NOT_FOR_SPECIES = 'Loại vaccine không áp dụng cho loài của thú';
 const RABIES = { vaccineTypeId: 1, protocolId: 3, productId: 5 };
 const FIVE_DOSE_1 = { vaccineTypeId: 2, protocolId: 1, productId: 6 };
 const FIVE_DOSE_2 = { vaccineTypeId: 2, protocolId: 2, productId: 6 };
@@ -411,8 +436,9 @@ describe('ghi nhận mũi tiêm (#19, UC49, ST06; BR-KB-04, BR-KO-05)', () => {
     const { vaccination, warnings } = res.data.data;
     expect(warnings).toEqual([]);
     expect(Object.keys(vaccination).sort()).toEqual(VACCINATION_KEYS);
-    expect(vaccination).toMatchObject({ visitId: 2002, branchId: 1, vaccineTypeId: 2, vaccineTypeName: '5 bệnh', protocolId: 1, doseNumber: 1, productId: 6, productName: 'Vaccine 5 bệnh Vanguard', lotNumber: 'VG2402', administeredOn: TODAY, nextDueDate: addDays(TODAY, 21), superseded: false, recordedBy: 5 });
-    expect(vaccination.expiryDate).toBe(addDays(TODAY, 160));
+    expect(vaccination).toMatchObject({ visitId: 2002, branchId: 1, vaccineTypeId: 2, vaccineTypeName: '5 bệnh', protocolId: 1, doseNumber: 1, productId: 6, productName: 'Vaccine 5 bệnh Vanguard', lotNumber: null, expiryDate: null, administeredOn: TODAY, nextDueDate: addDays(TODAY, 21), superseded: false, recordedBy: 5 });
+    // Mũi không mang số lô / hạn (BE chưa điền, D046) nhưng kho vẫn trừ đúng lô FEFO.
+    expect((await lotsOf(6)).find((l) => l.lotNumber === 'VG2402')?.quantity).toBe(before.availableQuantity - 1);
 
     expect((await stock(6)).availableQuantity).toBe(before.availableQuantity - 1);
     const order = await orderOf((await visitOf(2002)).orderId);
@@ -423,7 +449,7 @@ describe('ghi nhận mũi tiêm (#19, UC49, ST06; BR-KB-04, BR-KO-05)', () => {
 
   it('FEFO (BR-KO-05): trừ lô chưa hết hạn có hạn gần nhất, không bao giờ lấy lô đã hết hạn dù hạn sớm hơn', async () => {
     const res = await vaccinate(2002, RABIES);
-    expect(res.data.data.vaccination.lotNumber).toBe('RB2401');
+    expect(res.data.data.vaccination).toMatchObject({ lotNumber: null, expiryDate: null });
     const lots = await lotsOf(5);
     expect(lots.find((l) => l.lotNumber === 'RB2309')).toMatchObject({ quantity: 2, expired: true });
     expect(lots.find((l) => l.lotNumber === 'RB2401')?.quantity).toBe(14);
@@ -440,15 +466,17 @@ describe('ghi nhận mũi tiêm (#19, UC49, ST06; BR-KB-04, BR-KO-05)', () => {
     expect((await stock(6)).availableQuantity).toBe(0);
   });
 
-  it('sản phẩm không thuộc loại, mũi không thuộc phác đồ đúng loài, loại không đúng loài: 400 BR-KB-04 và không ghi gì (kho, Order, mũi tiêm)', async () => {
-    const wrongProduct = 'Sản phẩm không thuộc loại vaccine đã chọn (BR-KB-04)';
-    const wrongProtocol = 'Mũi tiêm không thuộc phác đồ của loại vaccine và loài của thú (BR-KB-04)';
+  it('sản phẩm không phải vaccine của loại, mũi không thuộc phác đồ đúng loài (kể cả id không tồn tại: vẫn 400, không 404), loại không đúng loài: 400 BR-KB-04 và không ghi gì (kho, Order, mũi tiêm)', async () => {
     const cases: [object, string][] = [
-      [{ ...FIVE_DOSE_1, productId: 5 }, wrongProduct], // vaccine Dại cho loại 5 bệnh
-      [{ ...FIVE_DOSE_1, productId: 1 }, wrongProduct], // hạt, không phải vaccine
-      [{ ...FIVE_DOSE_1, protocolId: 3 }, wrongProtocol], // phác đồ của loại Dại
-      [{ ...FIVE_DOSE_1, protocolId: 4 }, wrongProtocol], // phác đồ của mèo
-      [{ vaccineTypeId: 3, protocolId: 5, productId: 5 }, 'Loại vaccine không áp dụng cho loài của thú (BR-KB-04)'], // loại Dại của mèo cho chó
+      [{ ...FIVE_DOSE_1, productId: 5 }, WRONG_PRODUCT], // vaccine Dại cho loại 5 bệnh
+      [{ ...FIVE_DOSE_1, productId: 1 }, WRONG_PRODUCT], // hạt, không phải vaccine
+      [{ ...FIVE_DOSE_1, productId: 99 }, WRONG_PRODUCT], // sản phẩm không tồn tại
+      [{ ...FIVE_DOSE_1, protocolId: 3 }, WRONG_DOSE], // phác đồ của loại Dại
+      [{ ...FIVE_DOSE_1, protocolId: 4 }, WRONG_DOSE], // phác đồ của mèo
+      [{ ...FIVE_DOSE_1, protocolId: 99 }, WRONG_DOSE], // mũi không tồn tại
+      [{ ...FIVE_DOSE_1, protocolId: 99, productId: 99 }, WRONG_DOSE], // mũi đứng trước sản phẩm
+      [{ vaccineTypeId: 3, protocolId: 5, productId: 5 }, `${NOT_FOR_SPECIES} (BR-KB-04)`], // loại Dại của mèo cho chó
+      [{ vaccineTypeId: 3, protocolId: 99, productId: 99 }, `${NOT_FOR_SPECIES} (BR-KB-04)`], // loài đứng trước mũi và sản phẩm
     ];
     const lines = (await linesOf(2002)).length;
     const available = (await stock(6)).availableQuantity;
@@ -471,16 +499,31 @@ describe('ghi nhận mũi tiêm (#19, UC49, ST06; BR-KB-04, BR-KO-05)', () => {
     expect(res.data.data.vaccination.doseNumber).toBe(1);
   });
 
-  it('mũi mới hơn cùng loại làm mũi cũ superseded và đổi gợi ý; hết phác đồ thì không gợi ý; xóa mũi mới thì mũi cũ hết superseded (BR-TB-03)', async () => {
+  it('mũi đã ngừng dùng và vaccine đã ngừng kinh doanh không ghi được: 400 BR-KB-04 cùng câu với id lạ; không ghi gì', async () => {
+    await client.patch('/api/vaccination-protocols/1', { isActive: false }, await chain());
+    expect(message(await failure(vaccinate(2002, FIVE_DOSE_1)))).toBe(WRONG_DOSE);
+    await client.patch('/api/products/6', { isActive: false }, await chain());
+    expect(message(await failure(vaccinate(2002, FIVE_DOSE_2)))).toBe(WRONG_PRODUCT);
+    expect((await options(2002, 2)).data.data.products).toEqual([]);
+    expect(await dosesOf(2002)).toEqual([]);
+  });
+
+  it('mũi mới hơn cùng loại làm mũi cũ superseded và đổi gợi ý; hết phác đồ thì gợi ý lại MŨI LỚN NHẤT (nhắc lại, không phải null); xóa mũi mới thì mũi cũ hết superseded (BR-TB-03)', async () => {
     const first = (await vaccinate(2002, FIVE_DOSE_1)).data.data.vaccination;
     expect((await options(2002, 2)).data.data).toMatchObject({ suggestedProtocolId: 2, lastDose: { vaccinationId: first.vaccinationId, doseNumber: 1 } });
     const second = (await vaccinate(2002, FIVE_DOSE_2)).data.data.vaccination;
     expect((await dosesOf(2002)).map((d) => [d.doseNumber, d.superseded])).toEqual([[1, true], [2, false]]);
-    expect((await options(2002, 2)).data.data.suggestedProtocolId).toBeNull();
+    expect((await options(2002, 2)).data.data).toMatchObject({ suggestedProtocolId: 2, lastDose: { vaccinationId: second.vaccinationId, doseNumber: 2 } });
 
     expect((await removeDose(2002, second.vaccinationId)).status).toBe(204);
     expect((await dosesOf(2002)).map((d) => [d.doseNumber, d.superseded])).toEqual([[1, false]]);
-    expect((await options(2002, 2)).data.data.suggestedProtocolId).toBe(2);
+    expect((await options(2002, 2)).data.data).toMatchObject({ suggestedProtocolId: 2, lastDose: { vaccinationId: first.vaccinationId, doseNumber: 1 } });
+  });
+
+  it('phác đồ một mũi (Dại): sau mũi 1 vẫn gợi ý mũi 1 để nhắc lại; phác đồ rỗng (Ho cũi của chó) mới không gợi ý (null)', async () => {
+    await vaccinate(2002, RABIES);
+    expect((await options(2002, 1)).data.data).toMatchObject({ suggestedProtocolId: 3, lastDose: { doseNumber: 1 }, underMinAge: false });
+    expect((await options(2002, 5)).data.data).toMatchObject({ protocol: [], suggestedProtocolId: null, lastDose: null, underMinAge: false });
   });
 
   it('lượt chỉ tiêm: có ≥ 1 mũi thì hoàn tất được, Order chờ thu có dòng dịch vụ + dòng vaccine; xóa hết mũi thì lại bị chặn (BR-KB-02)', async () => {
@@ -497,10 +540,12 @@ describe('ghi nhận mũi tiêm (#19, UC49, ST06; BR-KB-04, BR-KO-05)', () => {
     expect(order.totalAmount).toBe(50_000 + 150_000);
   });
 
-  it('thứ tự lỗi: body 400 (trước cả vai trò) → VET 403 → lượt 404 → chi nhánh 403 → Thẩm mỹ 404 → người phụ trách 403 → 409 → id 404', async () => {
+  it('thứ tự lỗi: body 400 (trước cả vai trò) → VET 403 → lượt 404 → chi nhánh 403 → Thẩm mỹ 404 → người phụ trách 403 → 409 → loại vaccine 404 → mũi / sản phẩm 400', async () => {
     const empty = await failure(vaccinate(2002, {}, admin));
     expect([empty.status, empty.data.errorCode]).toEqual([400, 'VALIDATION_FAILED']);
-    for (const field of ['vaccineTypeId', 'protocolId', 'productId']) expect(empty.data.message).toContain(`${field}: `);
+    for (const text of ['vaccineTypeId: Thiếu loại vaccine', 'protocolId: Thiếu mũi tiêm', 'productId: Thiếu sản phẩm vaccine']) expect(empty.data.message).toContain(text);
+    const zero = await failure(vaccinate(2002, { vaccineTypeId: 0, protocolId: 0, productId: 0 }, admin));
+    for (const text of ['vaccineTypeId: Mã loại vaccine không hợp lệ', 'protocolId: Mã mũi tiêm không hợp lệ', 'productId: Mã sản phẩm không hợp lệ']) expect(zero.data.message).toContain(text);
     expect((await failure(vaccinate(2002, { ...RABIES, productId: 'x' }, admin))).data.errorCode).toBe('MALFORMED_REQUEST');
     expect((await failure(vaccinate(2002, { ...RABIES, productId: 0 }, admin))).data.errorCode).toBe('VALIDATION_FAILED');
 
@@ -508,22 +553,25 @@ describe('ghi nhận mũi tiêm (#19, UC49, ST06; BR-KB-04, BR-KO-05)', () => {
     expect((await failure(vaccinate(99999, RABIES))).status).toBe(404);
     const otherBranch = direct('POST /api/visits/:visitId/vaccinations', callerOf('VET', 55, 2), { params: { visitId: '2002' }, body: RABIES });
     expect([otherBranch.status, (otherBranch.body as { errorCode: string }).errorCode]).toEqual([403, 'ACCESS_DENIED_SCOPE_MISMATCH']);
-    expect((await failure(vaccinate(2103, RABIES))).status).toBe(404);
+    const grooming = await failure(vaccinate(2103, RABIES));
+    expect([grooming.status, message(grooming)]).toEqual([404, 'Không tìm thấy lượt khám / tiêm #2103']);
     expect((await failure(vaccinate(2101, RABIES))).data.errorCode).toBe('ACCESS_DENIED_SCOPE_MISMATCH');
 
     expect(message(await failure(vaccinate(2102, RABIES)))).toBe('Không thể chuyển trạng thái lượt tiếp nhận từ WAITING sang IN_PROGRESS');
     expect(message(await failure(vaccinate(61, RABIES)))).toBe('Không thể chuyển trạng thái lượt tiếp nhận từ COMPLETED sang IN_PROGRESS');
 
     expect(message(await failure(vaccinate(2002, { ...RABIES, vaccineTypeId: 99 })))).toBe('Không tìm thấy loại vaccine #99');
-    expect(message(await failure(vaccinate(2002, { ...RABIES, protocolId: 99 })))).toBe('Không tìm thấy phác đồ tiêm chủng #99');
-    expect(message(await failure(vaccinate(2002, { ...RABIES, productId: 99 })))).toBe('Không tìm thấy sản phẩm #99');
+    const unknownDose = await failure(vaccinate(2002, { ...RABIES, protocolId: 99 }));
+    expect([unknownDose.status, unknownDose.data.errorCode, message(unknownDose)]).toEqual([400, 'BUSINESS_RULE_VIOLATION', WRONG_DOSE]);
+    const unknownProduct = await failure(vaccinate(2002, { ...RABIES, productId: 99 }));
+    expect([unknownProduct.status, unknownProduct.data.errorCode, message(unknownProduct)]).toEqual([400, 'BUSINESS_RULE_VIOLATION', WRONG_PRODUCT]);
   });
 });
 
-describe('xóa mũi tiêm ghi nhầm (#20, UC49; BR-KB-04)', () => {
+describe('xóa mũi tiêm ghi nhầm (#20, UC49; BR-KB-04, ADR-0075)', () => {
   it('khi lượt còn IN_PROGRESS: 204, hoàn kho vào ĐÚNG lô đã trừ (kể cả lô đã hết hạn lúc xóa), xóa dòng Order vaccine', async () => {
     const dose = (await vaccinate(2002, RABIES)).data.data.vaccination;
-    expect(dose.lotNumber).toBe('RB2401');
+    expect((await lotsOf(5)).find((l) => l.lotNumber === 'RB2401')?.quantity).toBe(14); // mũi không mang số lô (D046) nhưng kho biết lô đã trừ
     vi.setSystemTime(new Date('2027-08-01T10:00:00+07:00')); // lô RB2401 hết hạn 10/07/2027: hoàn về lô cũ, không sang lô khác
     const res = await removeDose(2002, dose.vaccinationId);
     expect(res.status).toBe(204);
@@ -535,7 +583,22 @@ describe('xóa mũi tiêm ghi nhầm (#20, UC49; BR-KB-04)', () => {
     expect(await dosesOf(2002)).toEqual([]);
   });
 
-  it('thứ tự lỗi: path 400 → VET 403 → lượt 404 → chi nhánh 403 → Thẩm mỹ 404 → mũi 404 (kể cả mũi của lượt khác) → không phải người ghi mũi 403 → lượt đã hoàn tất 409', async () => {
+  it('sau khi gán lại lượt (BR-TN-08): người phụ trách MỚI xóa được mũi do VET cũ ghi (204, hoàn kho), VET cũ hết là người phụ trách nên 403; không xét người ghi mũi', async () => {
+    const dose = (await vaccinate(2002, FIVE_DOSE_1)).data.data.vaccination;
+    expect(dose.recordedBy).toBe(5);
+    updateVisitRow(2002, { assigneeId: 7 });
+    const recorder = await failure(removeDose(2002, dose.vaccinationId));
+    expect([recorder.status, recorder.data.errorCode]).toEqual([403, 'ACCESS_DENIED_SCOPE_MISMATCH']);
+    expect(await dosesOf(2002)).toHaveLength(1);
+
+    const successor = direct('DELETE /api/visits/:visitId/vaccinations/:vaccinationId', callerOf('VET', 7, 1), { params: { visitId: '2002', vaccinationId: String(dose.vaccinationId) } });
+    expect(successor.status).toBe(204);
+    expect(await dosesOf(2002)).toEqual([]);
+    expect((await stock(6)).availableQuantity).toBe(4);
+    expect((await linesOf(2002)).some((l) => l.lineType === 'VACCINE')).toBe(false);
+  });
+
+  it('thứ tự lỗi: path 400 → VET 403 → lượt 404 → chi nhánh 403 → Thẩm mỹ 404 → người phụ trách 403 → lượt không IN_PROGRESS 409 → mũi 404 (kể cả mũi của lượt khác)', async () => {
     const dose = (await vaccinate(2002, FIVE_DOSE_1)).data.data.vaccination;
     expect((await failure(removeDose('abc', dose.vaccinationId, admin))).data.errorCode).toBe('MALFORMED_REQUEST');
     expect((await failure(removeDose(2002, 'x', admin))).data.message).toBe("Tham số 'vaccinationId' sai kiểu dữ liệu");
@@ -544,16 +607,21 @@ describe('xóa mũi tiêm ghi nhầm (#20, UC49; BR-KB-04)', () => {
     const params = { visitId: '2002', vaccinationId: String(dose.vaccinationId) };
     const otherBranch = direct('DELETE /api/visits/:visitId/vaccinations/:vaccinationId', callerOf('VET', 55, 2), { params });
     expect([otherBranch.status, (otherBranch.body as { errorCode: string }).errorCode]).toEqual([403, 'ACCESS_DENIED_SCOPE_MISMATCH']);
-    expect((await failure(removeDose(2103, dose.vaccinationId))).status).toBe(404);
+    const grooming = await failure(removeDose(2103, dose.vaccinationId));
+    expect([grooming.status, message(grooming)]).toEqual([404, 'Không tìm thấy lượt khám / tiêm #2103']);
+
+    // 403 người phụ trách đứng TRƯỚC 409 và 404 mũi (lượt chưa gán không dò được gì); 409 đứng TRƯỚC 404 mũi (lượt đang chờ / đã xong của chính mình, mũi không có).
+    expect((await failure(removeDose(2101, 99999))).data.errorCode).toBe('ACCESS_DENIED_SCOPE_MISMATCH');
+    const waiting = await failure(removeDose(2102, 99999));
+    expect([waiting.status, waiting.data.errorCode]).toEqual([409, 'INVALID_STATE_TRANSITION']);
+    expect(message(await failure(removeDose(61, 99999)))).toBe('Không thể chuyển trạng thái lượt tiếp nhận từ COMPLETED sang IN_PROGRESS');
+
+    // 404 mũi ở cuối: mũi không có, hoặc mũi của lượt khác (lượt đang khám khác của chính mình).
     const unknown = await failure(removeDose(2002, 99999));
     expect([unknown.status, message(unknown)]).toEqual([404, 'Không tìm thấy mũi tiêm #99999']);
-    expect((await failure(removeDose(61, dose.vaccinationId))).status).toBe(404);
-
-    // Chỉ VET đã ghi mũi đó xóa được (hợp đồng): VET khác 403 dù là người phụ trách mới sau khi gán lại.
-    updateVisitRow(2002, { assigneeId: 7 });
-    const other = direct('DELETE /api/visits/:visitId/vaccinations/:vaccinationId', callerOf('VET', 7, 1), { params });
-    expect([other.status, (other.body as { errorCode: string }).errorCode]).toEqual([403, 'ACCESS_DENIED_SCOPE_MISMATCH']);
-    updateVisitRow(2002, { assigneeId: 5 });
+    const second = await startWalkIn(2, 1, 5, vet);
+    expect((await failure(removeDose(second.visitId, dose.vaccinationId))).status).toBe(404);
+    expect(await dosesOf(2002)).toHaveLength(1);
 
     // Hoàn tất rồi thì không xóa được; sai sót ghi bằng bản bổ sung.
     await putRecord(2002, { diagnosis: 'Khỏe' });
@@ -736,11 +804,10 @@ describe('hồ sơ sức khỏe thú cưng phản ánh lượt khám, mũi tiêm
 });
 
 // ─── Kê đơn: thêm dòng (#16) và xóa dòng (#17) (UC48; BR-KB-03, BR-SP-01, BR-BH-02) ───
-// BE chưa có (T38): theo hợp đồng visit-v1 + BR-KB-03; chỗ hợp đồng im lặng là ASSUMPTION (docs/superpowers/plans/2026-10-26-t46-fe-prescription-public.md):
-//  A1 thứ tự kiểm #16: body 400 → vai trò 403 → lượt 404 → chi nhánh 403 → Thẩm mỹ 404 → người phụ trách 403 → không IN_PROGRESS 409 → sản phẩm 404 → rule BR-KB-03 400.
-//     #17 cùng thứ tự, thay "sản phẩm 404" bằng "dòng đơn của lượt này 404" (đứng SAU 409, giống vị trí 404 sản phẩm của #16 — khác #20 xóa mũi tiêm).
-//  A2 sản phẩm không phải thuốc kê đơn / ngừng kinh doanh → 400 BR-KB-03 · A3 REDUCE_TO_AVAILABLE tồn 0 → 400 BR-KB-03 · A4 gửi resolution khi tồn đã đủ → như kê thường
-//  A5 cùng thuốc kê hai lần → hai dòng · A6 kê đơn không trừ kho (kho trừ khi PAID, BR-BH-04).
+// Chép từ BE T38 (PrescriptionService, ADR 0076–0078). Thứ tự kiểm #16: body 400 → vai trò 403 → lượt 404 → chi nhánh 403 → Thẩm mỹ 404 → người phụ trách 403 → không IN_PROGRESS 409 → thuốc 400 BR-KB-03
+//  (id lạ cũng 400, BE không có 404 sản phẩm) → tồn 400 BR-KB-03. #17 cùng thứ tự, thay bước thuốc bằng "dòng đơn của lượt này 404" (đứng SAU 409, khác #20 xóa mũi tiêm có 404 mũi sau 409 cùng kiểu).
+// BE khớp ASSUMPTION của T46 (docs/superpowers/plans/2026-10-26-t46-fe-prescription-public.md): A2 sản phẩm không phải thuốc kê đơn / ngừng kinh doanh → 400 BR-KB-03 · A3 REDUCE_TO_AVAILABLE tồn 0 → 400
+//  BR-KB-03 · A4 gửi resolution khi tồn đã đủ → như kê thường · A6 kê đơn không trừ kho (kho trừ khi PAID, BR-BH-04). Còn chưa đối chiếu BE: A5 cùng thuốc kê hai lần → hai dòng.
 // Dữ liệu mẫu: Amoxicillin #3 (thuốc kê đơn, 8.000 đ) chi nhánh 1 tồn 700 (lô 200 + 500); lượt 2002 đang khám (VET #5), Order OPEN một dòng khám.
 
 const prescribe = async (visitId: number | string, body: unknown, who: () => Promise<object> = vet) => client.post(`/api/visits/${visitId}/prescriptions`, body, await who());
@@ -769,7 +836,11 @@ const rxOf = async (visitId: number) => (await getRecord(visitId)).data.data.pre
 const orderLinesOf = async (visitId: number) => (await orderOf((await visitOf(visitId)).orderId)).lines as OrderLineView[];
 const drugLinesOf = async (visitId: number) => (await orderLinesOf(visitId)).filter((l) => l.lineType === 'DRUG');
 const AMOX_STOCK = 700;
-const SHORT_800 = 'Thiếu tồn khả dụng: Amoxicillin 250mg chỉ còn 700 viên, cần 800. Giảm số lượng cho vừa tồn hoặc giữ nguyên số lượng và mua ngoài (BR-KB-03)';
+// Ba câu BR-KB-03 của PrescriptionService, nguyên văn BE.
+const SHORT_800 = 'Tồn khả dụng tại chi nhánh chỉ còn 700; chọn giảm số lượng hoặc mua ngoài (BR-KB-03)';
+const SHORT_0 = 'Tồn khả dụng tại chi nhánh chỉ còn 0; chọn giảm số lượng hoặc mua ngoài (BR-KB-03)';
+const EXHAUSTED = 'Thuốc đã hết tồn khả dụng tại chi nhánh, chỉ chọn được mua ngoài (BR-KB-03)';
+const NOT_PRESCRIPTION = 'Sản phẩm không phải thuốc kê đơn đang kinh doanh (BR-KB-03)';
 
 /** Thuốc kê đơn mới (chi nhánh 1 chưa có tồn): dựng trong test, KHÔNG đổi dữ liệu mẫu kho / danh mục (nhiều test khác đếm theo dữ liệu mẫu). */
 async function newDrug(sku: string, name = 'Thuốc hết tồn') {
@@ -784,7 +855,7 @@ describe('kê đơn một dòng thuốc — đủ tồn (#16, UC48; BR-KB-03, BR
     const res = await prescribe(2002, { ...AMOX, dosageInstructions: `  ${AMOX.dosageInstructions}  ` });
 
     expect(res.status).toBe(201);
-    expect(message(res)).toBe('Đã kê đơn thuốc');
+    expect(message(res)).toBe('Đã kê đơn');
     expect(Object.keys(res.data.data).sort()).toEqual(PRESCRIPTION_KEYS);
     expect(res.data.data).toMatchObject({ productId: 3, productName: 'Amoxicillin 250mg', quantity: 10, dosageInstructions: AMOX.dosageInstructions, isExternalPurchase: false, externalReason: null });
     expect(typeof res.data.data.orderLineId).toBe('number');
@@ -878,7 +949,7 @@ describe('kê đơn khi thiếu tồn (#16, UC48; BR-KB-03)', () => {
   it('REDUCE_TO_AVAILABLE khi tồn bằng 0 (A3): 400 BR-KB-03 bảo chọn mua ngoài, không ghi gì', async () => {
     const productId = await newDrug('RX-HET-1');
     const res = await failure(prescribe(2002, { productId, quantity: 3, dosageInstructions: 'x', shortageResolution: 'REDUCE_TO_AVAILABLE' }));
-    expect([res.status, message(res), ruleOf(res)]).toEqual([400, 'Thuốc hết tồn đã hết tồn khả dụng nên không giảm được, hãy chọn mua ngoài (BR-KB-03)', 'BR-KB-03']);
+    expect([res.status, message(res), ruleOf(res)]).toEqual([400, EXHAUSTED, 'BR-KB-03']);
     expect(await rxOf(2002)).toEqual([]);
     expect(await drugLinesOf(2002)).toEqual([]);
   });
@@ -886,7 +957,7 @@ describe('kê đơn khi thiếu tồn (#16, UC48; BR-KB-03)', () => {
   it('thuốc chưa từng nhập kho (tồn 0) mà chưa chọn cách xử lý: báo thiếu tồn còn 0', async () => {
     const productId = await newDrug('RX-HET-2');
     const res = await failure(prescribe(2002, { productId, quantity: 3, dosageInstructions: 'x' }));
-    expect([res.status, message(res)]).toEqual([400, 'Thiếu tồn khả dụng: Thuốc hết tồn chỉ còn 0 viên, cần 3. Giảm số lượng cho vừa tồn hoặc giữ nguyên số lượng và mua ngoài (BR-KB-03)']);
+    expect([res.status, message(res)]).toEqual([400, SHORT_0]);
   });
 
   it('EXTERNAL_PURCHASE (A3): giữ nguyên số lượng, đánh dấu mua ngoài (OUT_OF_STOCK_AT_PRESCRIBE), không có dòng Order; dòng vẫn nằm trong đơn của bệnh án', async () => {
@@ -918,21 +989,25 @@ describe('kê đơn khi thiếu tồn (#16, UC48; BR-KB-03)', () => {
 });
 
 describe('kê đơn: sản phẩm không kê được (#16; BR-KB-03, BR-SP-01)', () => {
-  it('A2: không phải thuốc kê đơn (hàng #1) hoặc thuốc đã ngừng kinh doanh: 400 BR-KB-03, không ghi gì', async () => {
+  it('không phải thuốc kê đơn (hàng #1, Vitamin #4), thuốc đã ngừng kinh doanh hoặc id không tồn tại: CÙNG MỘT câu 400 BR-KB-03 của BE (không có 404), không ghi gì', async () => {
     const stopped = await newDrug('RX-NGUNG', 'Thuốc ngừng bán');
     await client.patch(`/api/products/${stopped}`, { isActive: false }, await chain());
 
-    const goods = await failure(prescribe(2002, { ...AMOX, productId: 1 }));
-    expect([goods.status, message(goods), ruleOf(goods)]).toEqual([400, 'Sản phẩm không phải thuốc kê đơn (BR-KB-03)', 'BR-KB-03']);
-    const inactive = await failure(prescribe(2002, { ...AMOX, productId: stopped }));
-    expect([inactive.status, message(inactive), ruleOf(inactive)]).toEqual([400, 'Thuốc đã ngừng kinh doanh (BR-KB-03)', 'BR-KB-03']);
+    for (const productId of [1, 4, stopped, 9999]) {
+      const res = await failure(prescribe(2002, { ...AMOX, productId }));
+      expect([res.status, res.data.errorCode, message(res), ruleOf(res)], `thuốc #${productId}`).toEqual([400, 'BUSINESS_RULE_VIOLATION', NOT_PRESCRIPTION, 'BR-KB-03']);
+    }
     expect(await rxOf(2002)).toEqual([]);
     expect(await drugLinesOf(2002)).toEqual([]);
   });
 
-  it('không có sản phẩm: 404', async () => {
-    const res = await failure(prescribe(2002, { ...AMOX, productId: 9999 }));
-    expect([res.status, res.data.errorCode, message(res)]).toEqual([404, 'RESOURCE_NOT_FOUND', 'Không tìm thấy sản phẩm #9999']);
+  it('ba ca BR-KB-03 cùng mã khác câu: chỉ ca thiếu tồn có "chỉ còn N" (giao diện dựa vào đó để hiện khung chọn giảm / mua ngoài)', async () => {
+    const empty = await newDrug('RX-HET-4');
+    const notDrug = message(await failure(prescribe(2002, { ...AMOX, productId: 1 })));
+    const shortage = message(await failure(prescribe(2002, { ...AMOX, quantity: 800 })));
+    const exhausted = message(await failure(prescribe(2002, { productId: empty, quantity: 3, dosageInstructions: 'x', shortageResolution: 'REDUCE_TO_AVAILABLE' })));
+    expect([notDrug, shortage, exhausted]).toEqual([NOT_PRESCRIPTION, SHORT_800, EXHAUSTED]);
+    expect([notDrug, shortage, exhausted].map((text) => /chỉ còn \d+/.test(text))).toEqual([false, true, false]);
   });
 });
 
@@ -986,29 +1061,30 @@ describe('kê đơn: thứ tự lỗi (#16, A1)', () => {
     }
   });
 
-  it('lượt 404 → chi nhánh khác 403 → Thẩm mỹ 404 → người phụ trách 403 (chưa gán, người khác) → không IN_PROGRESS 409 → sản phẩm 404 → BR-KB-03 400', async () => {
+  it('lượt 404 → chi nhánh khác 403 → Thẩm mỹ 404 → người phụ trách 403 (chưa gán, người khác) → không IN_PROGRESS 409 → thuốc 400 BR-KB-03 → tồn 400 BR-KB-03', async () => {
     const missing = await failure(prescribe(99999, AMOX));
     expect([missing.status, message(missing)]).toEqual([404, 'Không tìm thấy lượt tiếp nhận #99999']);
     const otherBranch = direct('POST /api/visits/:visitId/prescriptions', callerOf('VET', 55, 2), { params: { visitId: '2002' }, body: AMOX });
     expect([otherBranch.status, (otherBranch.body as { errorCode: string }).errorCode]).toEqual([403, 'ACCESS_DENIED_SCOPE_MISMATCH']);
     const grooming = await failure(prescribe(2103, AMOX));
-    expect([grooming.status, message(grooming)]).toEqual([404, 'Không tìm thấy bệnh án #2103']);
+    expect([grooming.status, message(grooming)]).toEqual([404, 'Không tìm thấy lượt khám / tiêm #2103']);
 
-    // 403 người phụ trách đứng TRƯỚC 409 (người không phải chủ lượt không dò được trạng thái) và trước 404 sản phẩm.
+    // 403 người phụ trách đứng TRƯỚC 409 (người không phải chủ lượt không dò được trạng thái) và trước kiểm thuốc.
     expect((await failure(prescribe(2101, { ...AMOX, productId: 9999 }))).data.errorCode).toBe('ACCESS_DENIED_SCOPE_MISMATCH');
     updateVisitRow(2002, { assigneeId: 7 });
     expect((await failure(prescribe(2002, AMOX))).data.errorCode).toBe('ACCESS_DENIED_SCOPE_MISMATCH');
     updateVisitRow(2002, { assigneeId: 5 });
 
-    // 409 đứng TRƯỚC 404 sản phẩm và BR-KB-03.
+    // 409 đứng TRƯỚC kiểm thuốc và tồn.
     const waiting = await failure(prescribe(2102, { ...AMOX, productId: 9999 }));
     expect([waiting.status, waiting.data.errorCode, message(waiting)]).toEqual([409, 'INVALID_STATE_TRANSITION', 'Không thể chuyển trạng thái lượt tiếp nhận từ WAITING sang IN_PROGRESS']);
     const done = await failure(prescribe(61, { ...AMOX, productId: 1 }));
     expect([done.status, message(done)]).toEqual([409, 'Không thể chuyển trạng thái lượt tiếp nhận từ COMPLETED sang IN_PROGRESS']);
 
-    // 404 sản phẩm đứng TRƯỚC BR-KB-03.
-    expect((await failure(prescribe(2002, { ...AMOX, productId: 9999, quantity: 800 }))).status).toBe(404);
-    expect(ruleOf(await failure(prescribe(2002, { ...AMOX, productId: 1, quantity: 800 })))).toBe('BR-KB-03');
+    // Kiểm thuốc đứng TRƯỚC kiểm tồn: số lượng 800 vượt tồn nhưng thuốc lạ / không kê đơn báo "không phải thuốc kê đơn", không báo thiếu tồn, và không còn 404 sản phẩm.
+    const unknownDrug = await failure(prescribe(2002, { ...AMOX, productId: 9999, quantity: 800 }));
+    expect([unknownDrug.status, message(unknownDrug)]).toEqual([400, NOT_PRESCRIPTION]);
+    expect(message(await failure(prescribe(2002, { ...AMOX, productId: 1, quantity: 800 })))).toBe(NOT_PRESCRIPTION);
   });
 });
 
@@ -1053,7 +1129,8 @@ describe('xóa dòng đơn thuốc (#17, UC48; BR-KB-03, BR-BH-02)', () => {
     expect((await failure(removeRx(99999, 1))).status).toBe(404);
     const otherBranch = direct('DELETE /api/visits/:visitId/prescriptions/:itemId', callerOf('VET', 55, 2), { params: { visitId: '2002', itemId: String(mine.itemId) } });
     expect([otherBranch.status, (otherBranch.body as { errorCode: string }).errorCode]).toEqual([403, 'ACCESS_DENIED_SCOPE_MISMATCH']);
-    expect((await failure(removeRx(2103, 1))).status).toBe(404);
+    const grooming = await failure(removeRx(2103, 1));
+    expect([grooming.status, message(grooming)]).toEqual([404, 'Không tìm thấy lượt khám / tiêm #2103']);
 
     expect((await failure(removeRx(2101, 99999))).data.errorCode).toBe('ACCESS_DENIED_SCOPE_MISMATCH');
     updateVisitRow(2002, { assigneeId: 7 });

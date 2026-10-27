@@ -2,7 +2,7 @@
  * Lưu trú của chi nhánh (UC57–59) — boarding-v1 #9 (danh sách) cho RECEPTIONIST, BRANCH_MANAGER, CARETAKER, VET.
  * Ba tab: Sắp nhận (BOOKED), Đang lưu trú (inStay: CHECKED_IN + OVERDUE), Lịch sử (CHECKED_OUT / CANCELLED / NO_SHOW, một trạng thái mỗi lần
  * vì API chỉ nhận một status). Nút theo vai trò × trạng thái ở boarding/rules.ts; dialog nhận / trả / nhật ký do WS khác viết, trang chỉ mount.
- * Chi nhánh lấy từ phiên (account.branchId); BE tự giới hạn phạm vi, trang không có ô chọn chi nhánh.
+ * Chi nhánh của nhân viên (`useStaffBranchId`: BE không trả branchId ở login); BE tự giới hạn phạm vi, trang không có ô chọn chi nhánh.
  */
 import { useState } from 'react';
 import { Plus } from 'lucide-react';
@@ -15,6 +15,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { cn } from '@/lib/utils';
 import { plainMessage, toApiError } from '@/shared/api/api-error';
 import { useBookingList } from '@/shared/hooks/useBoarding';
+import { useStaffBranchId } from '@/shared/hooks/useStaffBranch';
 import { useSession } from '@/shared/stores/session.store';
 import { BOOKING_STATUS_LABELS, type Booking } from '@/shared/types/boarding';
 import { BookingDetailDialog } from './boarding/BookingDetailDialog';
@@ -45,7 +46,7 @@ interface ActiveDialog {
 export function AdminBoardingPage() {
   const account = useSession((s) => s.account);
   const role = account?.role;
-  const branchId = account?.branchId ?? null;
+  const branchId = useStaffBranchId();
   const [filters, setFilters] = useState<BoardingFilters>({ tab: 'upcoming', historyStatus: 'CHECKED_OUT', from: '', to: '', missingCareLogToday: false });
   const [page, setPage] = useState(0);
   const [active, setActive] = useState<ActiveDialog | null>(null);

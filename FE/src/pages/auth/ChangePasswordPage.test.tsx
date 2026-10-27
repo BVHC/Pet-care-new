@@ -48,7 +48,9 @@ describe('forced password change (BR-TK-17)', () => {
     renderPage();
     await submit('Sai12345', 'MatKhauMoi1');
 
-    expect(await screen.findByRole('alert')).toHaveTextContent('Mật khẩu hiện tại không đúng');
+    const alert = await screen.findByRole('alert');
+    expect(alert).toHaveTextContent('Mật khẩu hiện tại không đúng');
+    expect(alert).not.toHaveTextContent('BR-TK-14'); // BE nối mã rule vào cuối message; người dùng không cần thấy
     expect(useSession.getState().account?.mustChangePassword).toBe(true);
   });
 

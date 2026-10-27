@@ -17,6 +17,12 @@ import { SlotPicker } from './SlotPicker';
 /** Khách tự thao tác hay lễ tân thao tác hộ (khác nhau ở khoảng ngày và câu nhắc). */
 export type Viewer = 'CUSTOMER' | 'RECEPTIONIST';
 
+/**
+ * 409 = lịch không còn BOOKED (đã tiếp nhận, hủy hoặc đổi ở nơi khác) hoặc vừa đua ghi. BE nối tên trạng thái tiếng Anh vào câu
+ * ("…từ CHECKED_IN sang CANCELLED") nên đổi sang câu dễ hiểu và làm mới danh sách.
+ */
+const STALE_APPOINTMENT = 'Lịch hẹn đã được tiếp nhận hoặc thay đổi, vui lòng tải lại.';
+
 const CONTENT_CLASS = 'max-h-[90dvh] overflow-y-auto bg-white text-(--color-text-primary) sm:max-w-xl';
 
 function Summary({ appointment }: { appointment: Appointment }) {
@@ -75,7 +81,8 @@ function RescheduleForm({ appointment, viewer, onClose }: { appointment: Appoint
         onError: (e) => {
           const apiError = toApiError(e);
           refreshAppointments();
-          setError(apiError.ruleId === 'BR-LH-03' ? 'Khung giờ vừa hết chỗ, vui lòng chọn khung khác.' : plainMessage(apiError));
+          if (apiError.statusCode === 409) setError(STALE_APPOINTMENT);
+          else setError(apiError.ruleId === 'BR-LH-03' ? 'Khung giờ vừa hết chỗ, vui lòng chọn khung khác.' : plainMessage(apiError));
         },
       },
     );
@@ -144,6 +151,7 @@ function CancelForm({ appointment, viewer, onClose }: { appointment: Appointment
   const [reason, setReason] = useState('');
   const [error, setError] = useState('');
   const cancel = useAppointmentMutation((body: { reason?: string }) => appointmentApi.cancel(appointment.appointmentId, body));
+  const refreshAppointments = useRefreshAppointments();
   const late = isLateCancelNow(appointment);
   const { lateCancelHours, violationThreshold, violationWindowDays, restrictionDays } = APPOINTMENT_CFG;
 
@@ -160,7 +168,13 @@ function CancelForm({ appointment, viewer, onClose }: { appointment: Appointment
           toast.success(updated.lateCancel ? 'Đã hủy lịch hẹn (ghi nhận hủy muộn)' : 'Đã hủy lịch hẹn');
           onClose();
         },
-        onError: (e) => setError(plainMessage(toApiError(e))),
+        onError: (e) => {
+          const apiError = toApiError(e);
+          if (apiError.statusCode === 409) {
+            refreshAppointments();
+            setError(STALE_APPOINTMENT);
+          } else setError(plainMessage(apiError));
+        },
       },
     );
   };
