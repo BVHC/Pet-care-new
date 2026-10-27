@@ -32,6 +32,7 @@ import com.petcare.module.customer.api.PetQueryApi;
 import com.petcare.module.customer.api.PetQueryApi.PetSummary;
 import com.petcare.module.identity.api.ConfigKey;
 import com.petcare.module.identity.api.SystemConfigApi;
+import com.petcare.module.visit.api.FollowUpApi;
 import com.petcare.platform.config.TimeConfig;
 import com.petcare.platform.exception.BusinessRuleViolationException;
 import com.petcare.platform.exception.ResourceNotFoundException;
@@ -46,8 +47,9 @@ import com.petcare.platform.security.SecurityPrincipal;
  * {@code lockPet} → đọc thú <b>một lần</b> (404, chủ — thú của khách khác cùng 404 —, đã mất cùng một snapshot) → dịch vụ
  * (404) → {@code lockForBooking} (404; khách + chi nhánh DRAFT cũng 404) → {@code now} → BR-LH-01 → BR-TK-19, BR-LH-09
  * (chỉ khách) → BR-KH-05 → BR-LH-04 → BR-LH-02 → BR-LH-05 → BR-LH-03 → mã → INSERT. Mọi lần đọc lịch chi nhánh
- * ({@code BranchQueryApi.*}), mọi phép đếm và {@code now} đều sau hai khóa. Không gọi {@code FollowUpApi} (Care Task#6,
- * nợ D029), không audit, không thông báo.
+ * ({@code BranchQueryApi.*}), mọi phép đếm và {@code now} đều sau hai khóa. Nhóm {@code MEDICAL}: sau INSERT gọi
+ * {@code FollowUpApi.cancelPendingFollowUps} (Care Task#6, BR-TB-06; docs/adr/0084, trả D029) — khóa thêm
+ * {@code medical_records → care_tasks}, luôn sau {@code advisory → branches → appointments}. Không audit, không thông báo.
  */
 @Service
 public class AppointmentBookingService {
@@ -72,6 +74,7 @@ public class AppointmentBookingService {
     private final BranchApi branchLocks;
     private final BranchQueryApi branches;
     private final BookingRestrictionApi restrictions;
+    private final FollowUpApi followUps;
     private final SystemConfigApi configs;
     private final AppointmentLocks locks;
     private final AppointmentCodeGenerator codes;
@@ -82,7 +85,7 @@ public class AppointmentBookingService {
 
     public AppointmentBookingService(BranchScope branchScope, CustomerQueryApi customers, PetQueryApi pets,
             CatalogQueryApi catalog, BranchApi branchLocks, BranchQueryApi branches,
-            BookingRestrictionApi restrictions, SystemConfigApi configs, AppointmentLocks locks,
+            BookingRestrictionApi restrictions, FollowUpApi followUps, SystemConfigApi configs, AppointmentLocks locks,
             AppointmentCodeGenerator codes, AppointmentRepository appointments,
             AppointmentTransitionHandler transitions, AppointmentMapper mapper, Clock clock) {
         this.branchScope = branchScope;
@@ -92,6 +95,7 @@ public class AppointmentBookingService {
         this.branchLocks = branchLocks;
         this.branches = branches;
         this.restrictions = restrictions;
+        this.followUps = followUps;
         this.configs = configs;
         this.locks = locks;
         this.codes = codes;
@@ -168,6 +172,9 @@ public class AppointmentBookingService {
                 branchId, service.serviceId(), service.group(), date, start,
                 customer ? AppointmentChannel.ONLINE : AppointmentChannel.COUNTER, principal.accountId(),
                 normalizeNote(request.note())));
+        if (service.group() == ServiceGroup.MEDICAL) {
+            followUps.cancelPendingFollowUps(pet.petId(), now);
+        }
 
         String branchName = branches.findBranch(branchId)
                 .orElseThrow(() -> new IllegalStateException("Chi nhánh đã khóa nhưng không đọc được: " + branchId))

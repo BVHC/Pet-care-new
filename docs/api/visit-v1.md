@@ -46,7 +46,7 @@
 
 | Thao tác | Actor | Quyền / phạm vi | Chuyển trạng thái | Idempotent | Ghi chú |
 |---|---|---|---|---|---|
-| Tiếp nhận (check-in lịch hẹn / walk-in / cấp cứu) | A06 | Lễ tân; chi nhánh của lễ tân | — → WAITING (Visit#1) · Lịch hẹn#3 · Order#1 (OPEN + dòng dịch vụ tự sinh) · có dịch vụ Khám → Care Task#6 | — | Trễ quá `visit.late_priority_minutes` (15 phút) [CFG] xếp như walk-in. A9, A10, A11, A12. Thứ tự lỗi: 404 → 400 → 409 (docs/adr/0059). Có dịch vụ Khám: Care Task#6 chưa nối, nối khi visit cài FollowUpApi. Khách mang nhiều thú thì tạo nhiều Visit. |
+| Tiếp nhận (check-in lịch hẹn / walk-in / cấp cứu) | A06 | Lễ tân; chi nhánh của lễ tân | — → WAITING (Visit#1) · Lịch hẹn#3 · Order#1 (OPEN + dòng dịch vụ tự sinh) · có dịch vụ Khám → Care Task#6 | — | Trễ quá `visit.late_priority_minutes` (15 phút) [CFG] xếp như walk-in. A9, A10, A11, A12. Thứ tự lỗi: 404 → 400 → 409 (docs/adr/0059). Có dịch vụ Khám: hủy nhắc tái khám đang chờ của thú và Care Task tái khám tương ứng (BR-TB-06, docs/adr/0084). Khách mang nhiều thú thì tạo nhiều Visit. |
 | Hàng đợi của chi nhánh | A05, A06, A07, A08 | Nhân viên chi nhánh | — | — | A1, A13. |
 | Hàng đợi của tôi | A07, A08 | VET, CARETAKER | — | — | Visit WAITING / IN_PROGRESS gán cho tôi. |
 | Chi tiết lượt | A04–A08 | Nhân viên chi nhánh; SUPER_MANAGER toàn chuỗi | — | — | A13, A14. |

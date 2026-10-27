@@ -112,6 +112,23 @@ app:
       cron: "${BOARDING_NO_SHOW_CRON:0 3/5 * * * *}"
       batch-size: 100
       time-budget: 60s
+    # ST04 (docs/adr/0082): nhắc tái chủng reminder.vaccine_days_before [CFG] và nhắc tái khám
+    # reminder.follow_up_days_before [CFG]. Mỗi giờ từ 07:00 đến 20:00 (không gửi email ban đêm; lượt sau tự thử lại phần
+    # lỗi), giây 30 phút 10 / 40: lệch các job 5 phút và lệch nhau.
+    vaccine-reminder:
+      cron: "${VACCINE_REMINDER_CRON:30 10 7-20 * * *}"
+      batch-size: 100
+      time-budget: 60s
+    follow-up-reminder:
+      cron: "${FOLLOW_UP_REMINDER_CRON:30 40 7-20 * * *}"
+      batch-size: 100
+      time-budget: 60s
+    # ST18 (docs/adr/0083): Care Task quá hạn tái chủng sau reminder.vaccine_overdue_days [CFG] (BR-TB-04). Mỗi giờ từ
+    # 07:00 đến 20:00, giây 30 phút 25: lệch các job 5 phút và lệch ST04 (phút 10 / 40).
+    vaccine-overdue:
+      cron: "${VACCINE_OVERDUE_CRON:30 25 7-20 * * *}"
+      batch-size: 100
+      time-budget: 60s
     # ST20 từ notification_outbox. Email (docs/adr/0012): hai luồng priority (OTP, mật khẩu tạm) và thường.
     # IN_APP (docs/adr/0014): giao vào bảng notifications, job riêng, không qua SMTP.
     notification-outbox:

@@ -43,7 +43,7 @@ m.schema("CareTask", {
     "handledBy": "int64?", "handledAt": "datetime?", "createdAt": "datetime",
 })
 m.schema("CompleteCareTaskRequest", {
-    "result": "enum:REACHED,UNREACHABLE|LIÊN_HỆ_ĐƯỢC / KHÔNG_LIÊN_LẠC_ĐƯỢC", "note": "string",
+    "result": "enum:REACHED,UNREACHABLE|LIÊN_HỆ_ĐƯỢC / KHÔNG_LIÊN_LẠC_ĐƯỢC", "note": "string:2000",
 })
 m.schema("CancelCareTaskRequest", {"reason": "string:300"})
 m.schema("Notification", {
@@ -63,18 +63,25 @@ m.op("get", "/care-tasks", "listCareTasks", "Danh sách việc gọi điện c�
      "BR-TB-05, BR-LT-10", "A06", LT, resp="CareTask", page=True,
      query=["status=enum:OPEN,DONE,CANCELLED", "type=enum:VACCINE_DUE,VACCINE_OVERDUE,FOLLOW_UP_DUE,PICKUP_OVERDUE",
             "dueFrom=date", "dueTo=date", "page", "size"], errors=(400, 401, 403),
-     notes="Mặc định OPEN, sắp theo dueDate.")
+     notes="Lọc theo chi nhánh của lễ tân (không có tham số chi nhánh). `status` vắng = OPEN. Sắp `dueDate` tăng "
+           "dần, trùng thì `careTaskId` tăng dần. `page` < 0 → 0, `size` kẹp 1–100. `dueFrom` > `dueTo` → trang "
+           "rỗng (docs/adr/0080).")
 m.op("get", "/care-tasks/{careTaskId}", "getCareTask", "Chi tiết Care Task", "Care tasks", "UC87", "BR-TB-05", "A06",
-     LT, resp="CareTask", path_params=["CareTaskId"], errors=(401, 403, 404))
+     LT, resp="CareTask", path_params=["CareTaskId"], errors=(400, 401, 403, 404),
+     err_desc={400: "`careTaskId` sai kiểu (`MALFORMED_REQUEST`); BR-TK-17"})
 m.op("post", "/care-tasks/{careTaskId}/complete", "completeCareTask", "Ghi kết quả gọi điện", "Care tasks", "UC87",
      "BR-TB-05", "A06", LT, "OPEN → DONE (Care Task#2)", body="CompleteCareTaskRequest", resp="CareTask",
      path_params=["CareTaskId"], errors=(400, 401, 403, 404, 409),
-     err_desc={400: "`BR-TB-05` chưa chọn kết quả / thiếu ghi chú", 409: "Task không OPEN"},
+     err_desc={400: "`BR-TB-05` chưa chọn kết quả / thiếu ghi chú; `VALIDATION_FAILED` ghi chú quá 2000 ký tự; "
+                    "`MALFORMED_REQUEST` body hoặc `careTaskId` sai kiểu; BR-TK-17",
+               409: "Task không OPEN"},
      notes="Không liên lạc được: không sinh task gọi lại.")
 m.op("post", "/care-tasks/{careTaskId}/cancel", "cancelCareTask", "Hủy Care Task", "Care tasks", "UC87", "BR-TB-05",
      "A06", LT, "OPEN → CANCELLED (Care Task#3)", body="CancelCareTaskRequest", resp="CareTask",
      path_params=["CareTaskId"], errors=(400, 401, 403, 404, 409),
-     err_desc={400: "Thiếu lý do", 409: "Task không OPEN"})
+     err_desc={400: "`BR-TB-05` thiếu lý do; `VALIDATION_FAILED` lý do quá 300 ký tự; `MALFORMED_REQUEST` body hoặc "
+                    "`careTaskId` sai kiểu; BR-TK-17",
+               409: "Task không OPEN"})
 
 m.op("get", "/me/notifications", "listMyNotifications", "Thông báo của tôi", "Notifications", "UC88", "—", "A02–A08",
      "Người đang đăng nhập", resp="Notification", page=True, query=["unreadOnly=bool", "page", "size"],

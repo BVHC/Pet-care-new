@@ -18,6 +18,7 @@ import com.petcare.module.branch.api.BranchQueryApi.BranchStatus;
 import com.petcare.module.branch.api.BranchQueryApi.BranchSummary;
 import com.petcare.module.catalog.api.CatalogQueryApi;
 import com.petcare.module.catalog.api.CatalogQueryApi.ServiceInfo;
+import com.petcare.module.catalog.api.MedicalType;
 import com.petcare.module.catalog.api.ServiceGroup;
 import com.petcare.module.customer.api.CustomerQueryApi;
 import com.petcare.module.customer.api.CustomerQueryApi.CustomerContact;
@@ -27,6 +28,7 @@ import com.petcare.module.identity.api.ConfigKey;
 import com.petcare.module.identity.api.SystemConfigApi;
 import com.petcare.module.sales.api.VisitOrderApi;
 import com.petcare.module.sales.api.VisitOrderApi.LineRef;
+import com.petcare.module.visit.api.FollowUpApi;
 import com.petcare.module.visit.dto.CreateVisitRequest;
 import com.petcare.module.visit.dto.VisitResponse;
 import com.petcare.module.visit.entity.Visit;
@@ -49,7 +51,9 @@ import com.petcare.platform.security.SecurityPrincipal;
  * (409 → 400 BR-TN-02, lệch sẵn có của docs/adr/0050) → mã lượt → INSERT {@code visits} → Order. Mọi 400 của visit
  * đứng trước câu ghi đầu tiên. Thứ tự khóa: {@code pets FOR SHARE → appointments → document_counters (visits → ORDER)
  * → orders} (docs/adr/0058 mục 5). Không bắt exception nào: lỗi từ callee {@code MANDATORY} đã đánh dấu rollback-only.
- * Không audit, không thông báo (08 §8.3). Care Task#6 / BR-TB-06 chưa nối (nợ D029).
+ * Dịch vụ tự sinh loại {@code EXAM}: sau {@code openForVisit} gọi {@code FollowUpApi.cancelPendingFollowUps} (Care Task#6,
+ * BR-TB-06; docs/adr/0084, trả D029), khóa thêm {@code medical_records → care_tasks} sau {@code orders}. Không audit,
+ * không thông báo (08 §8.3).
  */
 @Service
 public class VisitCheckInService {
@@ -65,6 +69,7 @@ public class VisitCheckInService {
     private final BranchQueryApi branches;
     private final CustomerQueryApi customers;
     private final VisitOrderApi visitOrders;
+    private final FollowUpApi followUps;
     private final SystemConfigApi configs;
     private final VisitCodeGenerator codes;
     private final VisitRepository visits;
@@ -74,7 +79,8 @@ public class VisitCheckInService {
 
     public VisitCheckInService(BranchScope branchScope, PetQueryApi pets, AppointmentQueryApi appointmentQueries,
             AppointmentApi appointments, CatalogQueryApi catalog, BranchQueryApi branches, CustomerQueryApi customers,
-            VisitOrderApi visitOrders, SystemConfigApi configs, VisitCodeGenerator codes, VisitRepository visits,
+            VisitOrderApi visitOrders, FollowUpApi followUps, SystemConfigApi configs, VisitCodeGenerator codes,
+            VisitRepository visits,
             VisitTransitionHandler transitions, VisitMapper mapper, Clock clock) {
         this.branchScope = branchScope;
         this.pets = pets;
@@ -84,6 +90,7 @@ public class VisitCheckInService {
         this.branches = branches;
         this.customers = customers;
         this.visitOrders = visitOrders;
+        this.followUps = followUps;
         this.configs = configs;
         this.codes = codes;
         this.visits = visits;
@@ -148,6 +155,9 @@ public class VisitCheckInService {
                 appointmentId, group, placement.priorityClass(), placement.queueSortKey(), principal.accountId(), now));
         LineRef order = visitOrders.openForVisit(visit.getId(), branchId, pet.customerId(), service.serviceId(), null,
                 principal.accountId());
+        if (service.medicalType() == MedicalType.EXAM) {
+            followUps.cancelPendingFollowUps(pet.petId(), now);
+        }
 
         CustomerContact contact = customers.findContact(pet.customerId())
                 .orElseThrow(() -> new IllegalStateException("Thú #" + pet.petId() + " trỏ tới hồ sơ khách không có: "

@@ -57,6 +57,11 @@ class BoardingBookingIT extends BoardingItSupport {
                 public boolean existsByVaccineType(Long vaccineTypeId) {
                     return false;
                 }
+
+                @Override
+                public Map<Long, Long> findVaccineTypeIds(java.util.Collection<Long> vaccinationIds) {
+                    return Map.of();
+                }
             };
         }
     }

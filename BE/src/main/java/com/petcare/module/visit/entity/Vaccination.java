@@ -21,9 +21,9 @@ import lombok.NoArgsConstructor;
 /**
  * Bảng {@code vaccinations} (erd §6, ROOT): một mũi tiêm thực hiện tại hệ thống (BR-KB-04). Mọi cột là giá trị đã chụp
  * lúc tiêm ({@code dose_number}, {@code next_due_date}, {@code branch_id}): sửa phác đồ không đổi lịch sử (BR-SP-03).
- * Chỉ có factory {@link #record} (T28 phần 2, docs/adr/0074), không setter; {@code superseded_at} (BR-TB-03) được
- * đặt bằng bulk UPDATE của repository, {@code due_reminded_at} (ST04) sẽ có bên ghi ở T39: hai cột đó là cột duy nhất
- * {@code updatable}.
+ * Chỉ có factory {@link #record} (T28 phần 2, docs/adr/0074), không setter; {@code superseded_at} (BR-TB-03) và
+ * {@code due_reminded_at} (ST04) được đặt bằng bulk UPDATE của repository; hai cột đó là cột duy nhất {@code updatable}.
+ * {@code overdue_handled_at} (ST18, docs/adr/0083) cũng chỉ ghi bằng bulk UPDATE nên entity chỉ đọc.
  */
 @Getter
 @Entity
@@ -74,6 +74,10 @@ public class Vaccination extends TimestampedEntity {
 
     @Column(name = "superseded_at")
     private Instant supersededAt;
+
+    /** ST18 đã xét quá hạn (BR-TB-04, docs/adr/0083). Chỉ đọc: cột chỉ được ghi bằng bulk UPDATE của repository. */
+    @Column(name = "overdue_handled_at", insertable = false, updatable = false)
+    private Instant overdueHandledAt;
 
     @Column(name = "recorded_by", nullable = false, updatable = false)
     private Long recordedBy;
