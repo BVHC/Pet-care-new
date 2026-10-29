@@ -9,6 +9,7 @@ import java.time.LocalDate;
 import java.time.LocalTime;
 import java.time.ZoneId;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
@@ -21,6 +22,7 @@ import java.util.concurrent.Future;
 import java.util.concurrent.TimeUnit;
 import java.util.function.Consumer;
 import java.util.function.Supplier;
+import java.util.stream.Collectors;
 
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
@@ -41,14 +43,12 @@ import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.test.context.ActiveProfiles;
-import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.springframework.transaction.PlatformTransactionManager;
 import org.springframework.transaction.support.TransactionTemplate;
 
 import com.petcare.TestcontainersConfiguration;
 import com.petcare.module.appointment.AppointmentItSupport;
 import com.petcare.module.identity.service.SessionService;
-import com.petcare.module.sales.api.CashierShiftQueryApi;
 import com.petcare.support.MutableClock;
 
 /**
@@ -60,9 +60,10 @@ import com.petcare.support.MutableClock;
  * <li>Xác thực / phân quyền / thứ tự lỗi; BR-KB-02 (Khám, Tiêm, A16); GROOMING.</li>
  * <li>Race ({@code pg_stat_activity}): đổi dòng dịch vụ trong lúc chờ khóa Order (D044), thêm dòng không bị ghi đè tổng
  * tiền (D045), ghi chẩn đoán xong trước khi hoàn tất.</li>
+ * <li>BR-QT-08 trên bean thật (T40.2): lượt chưa hoàn tất chặn vô hiệu hóa người phụ trách.</li>
  * </ul>
- * {@code CashierShiftQueryApi} (placeholder, D016) được thay bằng mock "không có ca mở". Đồng hồ {@link MutableClock} ở
- * <b>năm 2012</b>; chi nhánh mở 08:00–12:00 và 14:00–19:00 mọi ngày.
+ * Mọi bean là bản thật (không mock API chéo). Đồng hồ {@link MutableClock} ở <b>năm 2012</b>; chi nhánh mở 08:00–12:00
+ * và 14:00–19:00 mọi ngày.
  */
 @SpringBootTest(webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT)
 @ActiveProfiles("test")
@@ -83,9 +84,6 @@ class VisitCompleteIT {
             return new MutableClock(T0);
         }
     }
-
-    @MockitoBean
-    private CashierShiftQueryApi cashierShifts;
 
     @Autowired
     private TestRestTemplate http;
@@ -577,6 +575,33 @@ class VisitCompleteIT {
         assertThat(xmins(visit).get("order")).isEqualTo(before.get("order"));
     }
 
+    // ================================================================ BR-QT-08 trên bean thật (T40.2)
+
+    /**
+     * G1 của docs/testcases/T40-be.md: vô hiệu hóa VET hỏi {@code VisitQueryApi} thật. Lượt {@code WAITING} đã gán và
+     * lượt {@code IN_PROGRESS} đều là việc dở (BR-QT-08), cùng lúc hay riêng lẻ; lượt {@code COMPLETED} thì không. Lần bị
+     * chặn không ghi gì nên VET làm tiếp bằng token cũ; hoàn tất hết thì vô hiệu hóa được và mọi phiên bị hủy (Tài khoản#5).
+     */
+    @Test
+    void unfinishedVisitsBlockDisablingTheAssigneeUntilEachIsCompleted() {
+        long waiting = assigned(walkIn(medical), vetA);
+        long inProgress = called(walkIn(medical), vetA);
+
+        assertDisableBlockedBy(vetA, waiting, inProgress);
+
+        finish(inProgress);
+        assertDisableBlockedBy(vetA, waiting);
+        called(waiting, vetA);
+        assertDisableBlockedBy(vetA, waiting);
+
+        finish(waiting);
+        ResponseEntity<Map<String, Object>> response = disable(vetA);
+
+        assertThat(response.getStatusCode()).as(String.valueOf(response.getBody())).isEqualTo(HttpStatus.OK);
+        assertThat(accountState(vetA)).containsEntry("status", "DISABLED").containsEntry("openSessions", 0L)
+                .containsEntry("disableAudits", 1L);
+    }
+
     // ================================================================ helpers
 
     private List<ResponseEntity<Map<String, Object>>> whileHeld(String lockSql, Object[] lockArgs, String waitingLike,
@@ -724,6 +749,40 @@ class VisitCompleteIT {
                 "/api/visits/" + visitId + "/call", null);
         assertThat(response.getStatusCode()).as(String.valueOf(response.getBody())).isEqualTo(HttpStatus.OK);
         return visitId;
+    }
+
+    /** Ghi chẩn đoán rồi hoàn tất lượt đang khám của {@code vetA}. */
+    private void finish(long visitId) {
+        data(put(vetAToken, visitId, Map.of("examination", "Khám", "diagnosis", "Viêm da")), HttpStatus.OK);
+        data(complete(vetAToken, visitId), HttpStatus.OK);
+    }
+
+    private ResponseEntity<Map<String, Object>> disable(long accountId) {
+        return exchange(HttpMethod.POST, managerToken, "/api/staff/" + accountId + "/disable", null);
+    }
+
+    /** BR-QT-08 liệt kê đúng các lượt theo id tăng dần ({@code StaffAccountService#checkNoPendingWork}) và không ghi gì. */
+    private void assertDisableBlockedBy(long accountId, long... visitIds) {
+        Map<String, Object> before = accountState(accountId);
+
+        ResponseEntity<Map<String, Object>> response = disable(accountId);
+
+        assertRule(response, "BR-QT-08");
+        String visits = Arrays.stream(visitIds).mapToObj(id -> "#" + id).collect(Collectors.joining(", "));
+        assertThat(response.getBody()).containsEntry("message",
+                "Không vô hiệu hóa được: còn lượt tiếp nhận " + visits + " chưa hoàn tất (BR-QT-08)");
+        assertThat(accountState(accountId)).isEqualTo(before);
+    }
+
+    /** Mọi thứ vô hiệu hóa ghi lên một tài khoản: trạng thái và xmin của {@code accounts}, phiên chưa thu hồi, audit. */
+    private Map<String, Object> accountState(long accountId) {
+        Map<String, Object> state = new LinkedHashMap<>(
+                row("SELECT status, xmin::text AS xmin FROM accounts WHERE id = " + accountId));
+        state.put("openSessions",
+                count("SELECT count(*) FROM sessions WHERE revoked_at IS NULL AND account_id = " + accountId));
+        state.put("disableAudits", count("""
+                SELECT count(*) FROM audit_logs WHERE action = 'STAFF_DISABLED' AND entity_id = %d""".formatted(accountId)));
+        return state;
     }
 
     /** xmin của mọi bảng mà hoàn tất có thể ghi: lượt, lịch hẹn (nếu có), Order, bệnh án (nếu có). */
