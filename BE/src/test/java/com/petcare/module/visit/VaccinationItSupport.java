@@ -12,8 +12,9 @@ import org.springframework.jdbc.core.JdbcTemplate;
  * Dữ liệu mũi tiêm cho IT (T28 phần 0, docs/adr/0072): loại vaccine, phác đồ, sản phẩm, lô và mũi tiêm chèn bằng SQL
  * (chưa có endpoint ghi mũi tiêm). Dọn theo hai pha vì FK {@code RESTRICT}: {@link #deleteDoses()} trước khi bên gọi xóa
  * Order / Visit, {@link #deleteCatalog()} sau khi dòng Order trỏ tới sản phẩm đã xóa và trước khi xóa chi nhánh.
+ * {@code public} để {@code care/CareTaskFsmIT} dựng danh mục vaccine cho mũi tiêm ghi qua API (T40.6).
  */
-final class VaccinationItSupport {
+public final class VaccinationItSupport {
 
     private final JdbcTemplate jdbc;
     private final List<Long> doses = new ArrayList<>();
@@ -26,11 +27,11 @@ final class VaccinationItSupport {
     private final List<Long> ownedOrders = new ArrayList<>();
     private Long category;
 
-    VaccinationItSupport(JdbcTemplate jdbc) {
+    public VaccinationItSupport(JdbcTemplate jdbc) {
         this.jdbc = jdbc;
     }
 
-    long vaccineType(String species, String name) {
+    public long vaccineType(String species, String name) {
         long id = jdbc.queryForObject("""
                 INSERT INTO vaccine_types (name, species) VALUES (?, ?) RETURNING id""", Long.class,
                 name + " " + UUID.randomUUID().toString().substring(0, 8), species);
@@ -38,7 +39,7 @@ final class VaccinationItSupport {
         return id;
     }
 
-    long protocol(String species, long typeId, int dose, int intervalDays, boolean requiredForBoarding) {
+    public long protocol(String species, long typeId, int dose, int intervalDays, boolean requiredForBoarding) {
         long id = jdbc.queryForObject("""
                 INSERT INTO vaccination_protocols (species, vaccine_type_id, dose_number, interval_days, min_age_weeks,
                         required_for_boarding) VALUES (?, ?, ?, ?, 6, ?) RETURNING id""", Long.class, species, typeId,
@@ -57,7 +58,7 @@ final class VaccinationItSupport {
         return id;
     }
 
-    long product(long typeId, String name, boolean active) {
+    public long product(long typeId, String name, boolean active) {
         if (category == null) {
             category = jdbc.queryForObject("INSERT INTO product_categories (name) VALUES (?) RETURNING id", Long.class,
                     "Vaccine IT " + UUID.randomUUID());
@@ -145,7 +146,7 @@ final class VaccinationItSupport {
     }
 
     /** Lô có hạn dùng và số lượng tường minh (lô đã hết hạn, lô hết hàng). */
-    long lot(long branchId, long productId, LocalDate expiry, int quantity) {
+    public long lot(long branchId, long productId, LocalDate expiry, int quantity) {
         long item = jdbc.queryForObject("""
                 INSERT INTO inventory_items (branch_id, product_id) VALUES (?, ?)
                 ON CONFLICT (branch_id, product_id) DO UPDATE SET min_quantity = inventory_items.min_quantity
@@ -217,7 +218,7 @@ final class VaccinationItSupport {
      * Mũi tiêm và Care Task của thú, kể cả mũi ghi qua API (không có trong {@link #doses}); chạy trước
      * {@link #deleteDoses()}: mũi trỏ tới dòng Order, Care Task trỏ tới mũi (FK {@code RESTRICT}).
      */
-    void deleteDosesOfPet(long petId) {
+    public void deleteDosesOfPet(long petId) {
         jdbc.update("DELETE FROM care_tasks WHERE pet_id = ?", petId);
         jdbc.update("DELETE FROM vaccinations WHERE pet_id = ?", petId);
     }
@@ -236,7 +237,7 @@ final class VaccinationItSupport {
      * Pha 1: đơn thuốc (trỏ tới dòng Order, bệnh án, sản phẩm), rồi mũi tiêm (trỏ tới dòng Order, lô, sản phẩm). Phải chạy
      * trước khi xóa Order / bệnh án / Visit.
      */
-    void deleteDoses() {
+    public void deleteDoses() {
         for (long id : prescriptionItems) {
             jdbc.update("DELETE FROM prescription_items WHERE id = ?", id);
         }
@@ -253,7 +254,7 @@ final class VaccinationItSupport {
     }
 
     /** Pha 2: lô, tồn, sản phẩm, phác đồ, loại vaccine. Phải chạy sau khi dòng Order trỏ tới sản phẩm đã bị xóa. */
-    void deleteCatalog() {
+    public void deleteCatalog() {
         for (long id : lots) {
             // movement ghi khi tiêm qua API (docs/adr/0074) trỏ tới lô, FK RESTRICT
             jdbc.update("DELETE FROM stock_movements WHERE stock_lot_id = ?", id);

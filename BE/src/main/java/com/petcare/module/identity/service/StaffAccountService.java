@@ -243,7 +243,7 @@ public class StaffAccountService {
      * Tài khoản#5 — vô hiệu hóa nhân viên (BR-QT-04, 07, 08, 09, 12, BR-TK-11; docs/adr/0033). Khóa {@code branches}
      * (chi nhánh hiện tại; SUPER_MANAGER không có) → {@code accounts} → đọc {@code staff_profiles}, rồi: phân cấp (403,
      * audit do facade) → BR-QT-12 → chỉ khi {@code ACTIVE}: chi nhánh vừa đổi (409) → BR-QT-04 (đếm dưới khóa chi
-     * nhánh, trả nợ D014) → BR-QT-08 (cuối cùng, bỏ qua với SUPER_MANAGER; placeholder → 500, nợ D016) →
+     * nhánh, trả nợ D014) → BR-QT-08 (cuối cùng, bỏ qua với SUPER_MANAGER) →
      * {@code validateTransition} (409 nếu đã {@code DISABLED}). Hủy mọi phiên, chuyển offline; không gửi email.
      */
     @Transactional
@@ -418,8 +418,9 @@ public class StaffAccountService {
     /**
      * BR-QT-08 (vô hiệu hóa; BR-QT-06 "phải thỏa BR-QT-08 trước khi điều chuyển"): không còn lượt tiếp nhận được gán
      * chưa kết thúc, không còn ca thu ngân {@code OPEN}. Hỏi cả hai với mọi chức vụ A05–A08 (đổi chức vụ không chặn việc
-     * dở, docs/adr/0031) và liệt kê đủ việc dở; {@code action} là đầu câu message. Hai interface còn là placeholder ném
-     * lỗi (nợ D016).
+     * dở, docs/adr/0031) và liệt kê đủ việc dở; {@code action} là đầu câu message. Hai interface đã có bản thật (D016 trả
+     * ở T30); IT trên bean thật: {@code VisitCompleteIT#unfinishedVisitsBlockDisablingTheAssigneeUntilEachIsCompleted},
+     * {@code CashierShiftIT}.
      */
     private void checkNoPendingWork(Long accountId, String action) {
         List<AssignedVisit> visits = visitQueries.findUnfinishedVisitsAssignedTo(accountId);
