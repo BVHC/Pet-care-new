@@ -28,6 +28,10 @@ public interface KennelRepository extends JpaRepository<Kennel, Long> {
 
     List<Kennel> findByBranchIdOrderByCodeAsc(Long branchId);
 
+    /** Chuồng {@code status} của một loại tại chi nhánh theo mã (danh sách chuồng trống lúc nhận, BR-LT-08). */
+    List<Kennel> findByBranchIdAndKennelTypeIdAndStatusOrderByCodeAsc(Long branchId, Long kennelTypeId,
+            com.petcare.module.boarding.entity.KennelStatus status);
+
     boolean existsByBranchIdAndCode(Long branchId, String code);
 
     boolean existsByBranchIdAndCodeAndIdNot(Long branchId, String code, Long id);
@@ -38,6 +42,12 @@ public interface KennelRepository extends JpaRepository<Kennel, Long> {
             WHERE branch_id = :branchId AND kennel_type_id = :kennelTypeId AND status <> 'MAINTENANCE'
             """, nativeQuery = true)
     int countCapacity(@Param("branchId") Long branchId, @Param("kennelTypeId") Long kennelTypeId);
+
+    /** Số chuồng {@code AVAILABLE} của một loại tại chi nhánh (BR-LT-08). */
+    @Query(value = "SELECT CAST(count(*) AS integer) FROM kennels "
+            + "WHERE branch_id = :branchId AND kennel_type_id = :kennelTypeId AND status = 'AVAILABLE'",
+            nativeQuery = true)
+    int countAvailable(@Param("branchId") Long branchId, @Param("kennelTypeId") Long kennelTypeId);
 
     @Query(value = "SELECT EXISTS (SELECT 1 FROM boarding_bookings WHERE kennel_id = :id)", nativeQuery = true)
     boolean hasBookingHistory(@Param("id") Long kennelId);

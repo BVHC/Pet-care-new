@@ -109,10 +109,10 @@ class OpenApiContractParityIT {
         // #8, #11 (T26 phần 4, docs/adr/0062), #9 (T26 phần 5, docs/adr/0063), #10, #12–15 (T27, docs/adr/0066–0070),
         // #18 (T28 phần 1, docs/adr/0073), #19 (T28 phần 2, docs/adr/0074), #20 (T28 phần 3, docs/adr/0075), #16 (T38 phần 1, docs/adr/0077), #17 (T38 phần 2, docs/adr/0078)
         // + 10 sales cashier #12–21 (T30, docs/adr/0064) + 12 boarding #1–12 (T31, docs/adr/0065) + 22 content #1–22 (T32, docs/adr/0071)
-        // + 4 care #1–4 (T39 phần 1, docs/adr/0080).
+        // + 4 care #1–4 (T39 phần 1, docs/adr/0080) + 7 boarding #13–15, #19–22 (T42, docs/adr/0085).
         assertThat(documentedOps())
                 .as("số endpoint identity + care + customer + inventory + sales + appointment + visit + boarding + content đã cài")
-                .hasSize(162);
+                .hasSize(169);
     }
 
     @Test

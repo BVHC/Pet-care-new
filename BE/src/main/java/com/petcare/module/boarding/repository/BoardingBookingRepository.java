@@ -156,6 +156,14 @@ public interface BoardingBookingRepository extends JpaRepository<BoardingBooking
             """, nativeQuery = true)
     Optional<Long> lockBookedForNoShow(@Param("id") long id);
 
+    /**
+     * Khóa chia sẻ dòng đặt chỗ rồi trả trạng thái (ghi nhật ký, docs/adr/0085): chặn chen với trả thú / ST15 của T43
+     * nhưng nhiều người ghi nhật ký không chờ nhau. {@code MANDATORY}: ngoài transaction thì khóa nhả ngay.
+     */
+    @Transactional(propagation = Propagation.MANDATORY)
+    @Query(value = "SELECT status FROM boarding_bookings WHERE id = :id FOR SHARE", nativeQuery = true)
+    Optional<String> lockStatusForShare(@Param("id") Long id);
+
     /** Id mọi đặt chỗ BOOKED của thú (không khóa; {@link #findAllByIdInForUpdate} khóa và kiểm lại trạng thái). */
     @Query(value = "SELECT id FROM boarding_bookings WHERE pet_id = :petId AND status = 'BOOKED' ORDER BY id",
             nativeQuery = true)
