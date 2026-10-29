@@ -141,10 +141,11 @@ class SchemaMigrationIT {
         // V20 index ST05 lưu trú + mẫu BOARDING_CANCELLED_BY_CLINIC (+_APP) (docs/adr/0065),
         // V21 seed 4 trang tĩnh page_contents (docs/adr/0071),
         // V22 mẫu nhắc VACCINE_REMINDER, FOLLOW_UP_REMINDER (+_APP) + index / CHECK care_tasks (docs/adr/0081, 0082),
-        // V23 cờ ST18 vaccinations.overdue_handled_at + index quét (docs/adr/0083)
+        // V23 cờ ST18 vaccinations.overdue_handled_at + index quét (docs/adr/0083),
+        // V24 mẫu CARE_LOG_ABNORMAL (+_APP), BOARDING_NO_KENNEL_APP + 2 index nhận thú / nhật ký (docs/adr/0085)
         assertThat(rows).extracting(row -> row.get("version"))
                 .containsExactly("1", "2", "3", "4", "5", "6", "7", "8", "9", "10", "11", "12", "13", "14", "15",
-                        "16", "17", "18", "19", "20", "21", "22", "23");
+                        "16", "17", "18", "19", "20", "21", "22", "23", "24");
         assertThat(rows).allSatisfy(row -> assertThat(row).containsEntry("success", true));
     }
 
@@ -439,7 +440,8 @@ class SchemaMigrationIT {
                         "APPOINTMENT_CANCELLED_BY_CLINIC", "APPOINTMENT_CANCELLED_BY_CLINIC_APP",
                         "APPOINTMENT_REMINDER", "APPOINTMENT_REMINDER_APP", "CASHIER_SHIFT_AUTO_CLOSED_APP",
                         "PENDING_ORDERS_DIGEST_APP", "BOARDING_CANCELLED_BY_CLINIC", "BOARDING_CANCELLED_BY_CLINIC_APP",
-                        "VACCINE_REMINDER", "VACCINE_REMINDER_APP", "FOLLOW_UP_REMINDER", "FOLLOW_UP_REMINDER_APP");
+                        "VACCINE_REMINDER", "VACCINE_REMINDER_APP", "FOLLOW_UP_REMINDER", "FOLLOW_UP_REMINDER_APP",
+                        "CARE_LOG_ABNORMAL", "CARE_LOG_ABNORMAL_APP", "BOARDING_NO_KENNEL_APP");
         assertThat(jdbc.queryForList("""
                 SELECT code FROM notification_templates
                 WHERE %s AND (body <> default_body OR subject IS DISTINCT FROM default_subject)

@@ -51,6 +51,19 @@ class BoardingRulesTest {
     }
 
     @Test
+    void withinOpeningHoursIsOpenInclusiveCloseExclusiveInVietnamTime() {
+        List<TimeRange> ranges = List.of(new TimeRange(LocalTime.of(8, 0), LocalTime.of(12, 0)),
+                new TimeRange(LocalTime.of(13, 30), LocalTime.of(19, 0)));
+
+        assertThat(BoardingRules.withinOpeningHours(Instant.parse("2009-06-10T01:00:00Z"), ranges)).isTrue();   // 08:00
+        assertThat(BoardingRules.withinOpeningHours(Instant.parse("2009-06-10T00:59:59Z"), ranges)).isFalse();  // 07:59
+        assertThat(BoardingRules.withinOpeningHours(Instant.parse("2009-06-10T05:00:00Z"), ranges)).isFalse();  // 12:00
+        assertThat(BoardingRules.withinOpeningHours(Instant.parse("2009-06-10T06:00:00Z"), ranges)).isFalse();  // 13:00
+        assertThat(BoardingRules.withinOpeningHours(Instant.parse("2009-06-10T11:59:59Z"), ranges)).isTrue();   // 18:59
+        assertThat(BoardingRules.withinOpeningHours(Instant.parse("2009-06-10T03:00:00Z"), List.of())).isFalse();
+    }
+
+    @Test
     void nightListFormat() {
         assertThat(BoardingRules.nightList(List.of(LocalDate.parse("2009-06-12"), LocalDate.parse("2009-06-13"))))
                 .isEqualTo("12/06, 13/06");

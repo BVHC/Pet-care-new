@@ -53,4 +53,27 @@ class BoardingBookingTest {
 
         assertThat(b.getCheckOutDate()).isEqualTo(LocalDate.parse("2009-06-16"));
     }
+
+    @Test
+    void checkInOnTheDayKeepsCheckInDate() {
+        BoardingBooking b = booked();
+        java.time.Instant at = java.time.Instant.parse("2009-06-12T03:00:00Z");
+
+        b.checkIn(7L, at, LocalDate.parse("2009-06-12"));
+
+        assertThat(b.getStatus()).isEqualTo(BoardingBookingStatus.CHECKED_IN);
+        assertThat(b.getKennelId()).isEqualTo(7L);
+        assertThat(b.getActualCheckInAt()).isEqualTo(at);
+        assertThat(b.getCheckInDate()).isEqualTo(LocalDate.parse("2009-06-12"));
+    }
+
+    @Test
+    void earlyCheckInMovesCheckInDateToToday() {
+        BoardingBooking b = booked();
+
+        b.checkIn(7L, java.time.Instant.parse("2009-06-10T03:00:00Z"), LocalDate.parse("2009-06-10"));
+
+        assertThat(b.getCheckInDate()).isEqualTo(LocalDate.parse("2009-06-10"));
+        assertThat(b.getCheckOutDate()).isEqualTo(LocalDate.parse("2009-06-14"));
+    }
 }

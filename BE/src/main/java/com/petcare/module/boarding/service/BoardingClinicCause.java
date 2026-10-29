@@ -14,7 +14,9 @@ public enum BoardingClinicCause {
     /** BR-KH-05: thú được đánh dấu đã mất. */
     PET_DECEASED("Thú cưng đã được ghi nhận là đã mất"),
     /** BR-KH-08: thú được chuyển sang chủ mới. */
-    PET_OWNER_TRANSFERRED("Thú cưng đã được chuyển sang chủ mới");
+    PET_OWNER_TRANSFERRED("Thú cưng đã được chuyển sang chủ mới"),
+    /** BR-LT-08: không còn chuồng trống đúng loại lúc nhận thú. */
+    NO_KENNEL("Không còn chuồng trống đúng loại lúc nhận thú");
 
     private final String reason;
 

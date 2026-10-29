@@ -63,6 +63,11 @@ public class Kennel extends TimestampedEntity {
         this.note = note;
     }
 
+    /** Chuồng#2: nhận thú. */
+    public void occupy() {
+        this.status = KennelStatus.OCCUPIED;
+    }
+
     /** Chuồng#4. */
     public void startMaintenance() {
         this.status = KennelStatus.MAINTENANCE;

@@ -118,7 +118,8 @@ Stack: Java 21, Spring Boot 3.5.15, Spring Security, Data JPA, Validation, AOP, 
 | sales · Order lõi, bán lẻ | sales-v1 #1–8, #10 | `VisitOrderService` (`VisitOrderApi`), `OrderLineService`, `RetailOrderService`, `OrderLinePolicy` | 0044, 0051. Khóa `orders` trước khi đọc; `SalesOrder` không có `@Version` (D045). Chưa có #9, #11 |
 | sales · thu ngân, ST13 | #12–21 | `CashierShiftService`, `PaymentService`, `CashierShiftAutoCloseService`, `PendingOrderDigestService` | 0064, V19. Thu tiền: ca `FOR SHARE` → Order một câu → lô một câu → `document_counters` |
 | inventory · kho | inventory-v1 #1–17 | `StockReceiptService`, `StockAdjustmentService`, `StockLedger`, `FefoAllocator`, `StockQueryService`, `StockIssueService` | 0042, 0043, V14. `StockLedger` là nơi duy nhất đổi `stock_lots.quantity`; hết hạn = `expiry_date < hôm nay`. Chưa có `StockReportApi`, ST08 (T44) |
-| boarding · chuồng, đặt chỗ, gia hạn, hủy, ST05 | boarding-v1 #1–12 | `KennelService`, `BoardingBookingService`, `BoardingChangeService`, `BoardingNoShowService`, 3 listener | 0065, V20. Cảnh báo mũi tiêm qua `VaccinationQueryApi`. Chưa có #13–22 nhận / trả thú, nhật ký, ST15 (T42, T43); `activeOrderId` null |
+| boarding · chuồng, đặt chỗ, gia hạn, hủy, ST05 | boarding-v1 #1–12 | `KennelService`, `BoardingBookingService`, `BoardingChangeService`, `BoardingNoShowService`, 3 listener | 0065, V20. Cảnh báo mũi tiêm qua `VaccinationQueryApi`. `activeOrderId` null |
+| boarding · nhận thú, hủy vì hết chuồng, nhật ký, bất thường | boarding-v1 #13–15, #19–22 | `BoardingCheckInService`, `CareLogService`, `BoardingManagerNotices`, `CareLogAbnormalNotices` | 0085, V24 (T42, 29/10). Mũi bắt buộc qua `VaccinationQueryApi`, cân qua `PetApi.recordWeight(INTAKE)`; bất thường → outbox khách + lễ tân cùng tx. Chưa có #16–18, ST15 (T43) |
 | content · trang, bài viết, feedback | content-v1 #1–22 | `PageContentService`, `ArticleService`, `ArticleHtml` (jsoup), `FeedbackSubmitService`, `FeedbackReviewService` | 0071, V21. Feedback: advisory 1003 theo khách. Chưa có `FeedbackReportApi` (T44) |
 | report | — | Chỉ interface `*ReportApi` | T44 |
 
@@ -130,7 +131,7 @@ Stack: Java 21, Spring Boot 3.5.15, Spring Security, Data JPA, Validation, AOP, 
 | visit #21 (T28b) | BR-KH-07 | D045 (khóa Order trước khi đọc) |
 | care: cài đặt nhận thông báo (care-v1 #9–10) | UC88 | D025, chờ PO |
 | sales #9, #11, `BoardingOrderApi` | BR-LT-09, BR-BH-04 | T43; #11 làm được từ 26/10 (`PrescriptionApi` có từ ADR-0076); chuỗi thu → mua ngoài → thu lại đã có IT bằng stand-in (D048) |
-| boarding #13–22, ST15 | BR-LT-05…12 | T42, T43; khóa sức chứa chuồng chưa có ADR (convention 07 §7.3) |
+| boarding #16–18, ST15 | BR-LT-09, 10, 12 | T43 |
 | report, ST08 | BR-BC-01…04, BR-KO-07 | T44 |
 | Gọi `AuditRecorder` ở module còn lại | BR-QT-15 | Snapshot JSON object |
 
@@ -154,6 +155,7 @@ Không bao giờ sửa migration đã chạy (checksum). Số V dùng chung vớ
 | 19–21 | `V19__cashier_shift_templates_indexes.sql`, `V20__boarding_no_show_index_templates.sql`, `V21__seed_page_contents.sql` | BE-2: thu ngân (0064), ST05 lưu trú (0065), `page_contents` (0071) |
 | 22 | `V22__care_reminder_templates_care_task_guards.sql` | BE-1: mẫu `VACCINE_REMINDER`, `FOLLOW_UP_REMINDER` (+`_APP`); index `care_tasks (vaccination_id)`, `(medical_record_id)`; 3 CHECK trạng thái ↔ cột xử lý (0081, D049). Test đã sửa, xanh (phần 3) |
 | 23 | `V23__vaccination_overdue_flag.sql` | BE-1: cột `vaccinations.overdue_handled_at` (không backfill), partial index `ix_vaccinations_overdue_scan (next_due_date, id)` chỉ mũi chờ xét (0083). V22, V23 chờ BE-2 xác nhận; BE-2 từ V24 |
+| 24 | `V24__boarding_check_in_care_log.sql` | BE-2: mẫu `CARE_LOG_ABNORMAL` (+`_APP`), `BOARDING_NO_KENNEL_APP` + index `care_log_addenda (care_log_id)`, `weight_records (boarding_booking_id)` (0085); chưa xác nhận với BE-1 |
 
 - **PK đặc biệt (9 bảng):** 1–1 (`staff_profiles`, `kennel_types`, `medical_records`, `boarding_check_ins`), ghép (`branch_services`, `branch_quota_defaults`), chuỗi (`system_configs`, `notification_templates`, `page_contents`). 8 bảng LOG chỉ `created_at`. Tên ràng buộc `ck_ / uq_ / ix_ / ex_`.
 - **Thứ tự xóa cứng** (app xóa con trước, cùng tx): BR-TK-08 `otp_tokens` → hồ sơ online → `accounts`; BR-TK-19 `addresses` → hồ sơ online → gán `account_id` (flush trước, `uq_customers_account_id` không deferrable); BR-KH-06 `weight_records` → `pets`; BR-KB-04 hoàn kho + `stock_movements` → `vaccinations` → `order_lines`; BR-KB-03 `prescription_items` → `order_lines` (dòng `DRUG`, bệnh án giữ).

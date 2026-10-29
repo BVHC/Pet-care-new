@@ -1447,6 +1447,7 @@ components:
           maxLength: 300
         note:
           type: [string, "null"]
+          maxLength: 2000
         photoUrls:
           type: array
           items:
@@ -1491,6 +1492,7 @@ components:
           maxLength: 300
         note:
           type: [string, "null"]
+          maxLength: 2000
         photoUrls:
           type: array
           items:
@@ -1516,16 +1518,20 @@ components:
           maxLength: 300
         note:
           type: [string, "null"]
+          maxLength: 2000
         photoUrls:
           type: array
           items:
             type: string
+          description: "Vắng = giữ nguyên; có = thay toàn bộ danh sách (tối đa 5 [CFG])"
     AddendumRequest:
       type: object
       required: [content]
       properties:
         content:
           type: string
+          maxLength: 2000
+          description: "Tối đa 2000 ký tự"
   responses:
     BadRequest:
       description: "VALIDATION_FAILED / MALFORMED_REQUEST: dữ liệu không hợp lệ · BUSINESS_RULE_VIOLATION: vi phạm rule, message kết thúc bằng mã rule \"(BR-…)\"."

@@ -264,8 +264,8 @@ Báo cáo (2) đếm theo dòng dịch vụ trong Order, vì dịch vụ thực 
 | `APPOINTMENT_CANCELLED_BY_CLINIC` (+`_APP`) | Email / trong app | Khách | BR-LH-10, BR-KH-05, 08 — seed V17 (18/10, ADR-0052; V16 = sequence lịch hẹn đánh số lại, cần BE-2 xác nhận) |
 | `BOARDING_CANCELLED_BY_CLINIC` (+`_APP`) | Email / trong app | Khách | BR-LT-08, BR-LH-10 |
 | `BOARDING_OVERDUE` (+`_APP`) | Email / trong app | Khách, mỗi ngày | BR-LT-10 |
-| `CARE_LOG_ABNORMAL` (+`_APP`) | Email / trong app | Khách; lễ tân nhận bản `_APP` | BR-LT-12 |
-| `BOARDING_NO_KENNEL_APP` | Trong app | BRANCH_MANAGER | BR-LT-08 |
+| `CARE_LOG_ABNORMAL` (+`_APP`) | Email / trong app | Khách; lễ tân nhận bản `_APP` | BR-LT-12 — seed V24 (29/10, ADR-0085; cần BE-1 xác nhận số). Biến `ten_khach`, `ten_thu_cung`*, `chi_nhanh`*, `ma_dat_cho`*, `ngay_ghi`*; link `_APP` khách `/boarding-bookings/{id}`, lễ tân `/admin/boarding`. Đã gọi bởi `CareLogAbnormalNotices` |
+| `BOARDING_NO_KENNEL_APP` | Trong app | BRANCH_MANAGER | BR-LT-08 — seed V24 (như trên). Biến `ten_thu_cung`*, `ma_dat_cho`*, `ngay_nhan`*, `loai_chuong`*; không còn quản lý hoạt động → mọi SUPER_MANAGER. Đã gọi bởi `BoardingManagerNotices` |
 | `BOARDING_OVERDUE_MANAGER_APP` | Trong app | BRANCH_MANAGER (quá hạn ≥ 7 ngày) | BR-LT-10 |
 | `BOARDING_CAPACITY_WARNING_APP` | Trong app | Lễ tân | BR-LT-10 |
 | `VACCINE_REMINDER` (+`_APP`) | Email / trong app | Khách | BR-TB-01, 02 — seed V22 (27/10, ADR-0081; cần BE-2 xác nhận số). Biến `ten_khach`, `ten_thu_cung`*, `loai_vaccine`*, `ngay_tai_chung`*, `chi_nhanh`*, `so_dien_thoai_chi_nhanh`*. Link đặt lịch chỉ ở `_APP` (`NotificationRequest.link`) — đã gọi bởi ST04 (docs/adr/0082): `/booking?petId=&branchId=&serviceType=VACCINE` (FE chưa đọc query: D051) |

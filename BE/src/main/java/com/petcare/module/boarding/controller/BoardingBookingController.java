@@ -19,12 +19,15 @@ import com.petcare.module.boarding.dto.BookingFilter;
 import com.petcare.module.boarding.dto.BookingResponse;
 import com.petcare.module.boarding.dto.BookingResultResponse;
 import com.petcare.module.boarding.dto.CancelBookingRequest;
+import com.petcare.module.boarding.dto.CheckInReadinessResponse;
+import com.petcare.module.boarding.dto.CheckInRequest;
 import com.petcare.module.boarding.dto.CreateBookingRequest;
 import com.petcare.module.boarding.dto.ExtendBookingRequest;
 import com.petcare.module.boarding.service.BoardingAvailabilityService;
 import com.petcare.module.boarding.entity.BoardingBookingStatus;
 import com.petcare.module.boarding.service.BoardingBookingService;
 import com.petcare.module.boarding.service.BoardingChangeService;
+import com.petcare.module.boarding.service.BoardingCheckInService;
 import com.petcare.module.boarding.service.BoardingViewService;
 import com.petcare.platform.config.ApiErrorDoc;
 import com.petcare.platform.model.ApiResponse;
@@ -41,6 +44,7 @@ import jakarta.validation.Valid;
 public class BoardingBookingController {
 
     static final String CUSTOMER_OR_RECEPTIONIST = "hasAnyRole('CUSTOMER', 'RECEPTIONIST')";
+    static final String RECEPTIONIST_OR_CARETAKER = "hasAnyRole('RECEPTIONIST', 'CARETAKER')";
     static final String ANY_BOARDING_VIEWER =
             "hasAnyRole('CUSTOMER', 'BRANCH_MANAGER', 'RECEPTIONIST', 'VET', 'CARETAKER')";
 
@@ -48,13 +52,15 @@ public class BoardingBookingController {
     private final BoardingBookingService booking;
     private final BoardingViewService views;
     private final BoardingChangeService changes;
+    private final BoardingCheckInService stays;
 
     public BoardingBookingController(BoardingAvailabilityService availability, BoardingBookingService booking,
-            BoardingViewService views, BoardingChangeService changes) {
+            BoardingViewService views, BoardingChangeService changes, BoardingCheckInService stays) {
         this.availability = availability;
         this.booking = booking;
         this.views = views;
         this.changes = changes;
+        this.stays = stays;
     }
 
     /** boarding-v1 #7. */
@@ -180,5 +186,57 @@ public class BoardingBookingController {
     public ApiResponse<BookingResponse> cancel(@PathVariable Long bookingId,
             @Valid @RequestBody(required = false) CancelBookingRequest request) {
         return ApiResponse.ok(changes.cancelBooking(bookingId, request), "Đã hủy đặt chỗ lưu trú");
+    }
+
+    /** boarding-v1 #13. */
+    @Operation(operationId = "getCheckInReadiness", tags = "Stay",
+            summary = "Kiểm tra điều kiện nhận thú",
+            description = "UC59 · BR-LT-04, 05, 08. Actor: A06, A08. Quyền: Lễ tân, CARETAKER chi nhánh. "
+                + "Chuyển trạng thái: —.",
+            parameters = {@Parameter(name = "bookingId", in = ParameterIn.PATH, example = "88")})
+    @ApiErrorDoc(status = 403)
+    @ApiErrorDoc(status = 404)
+    @ApiErrorDoc(status = 409, description = "Đặt chỗ không còn BOOKED")
+    @GetMapping("/boarding-bookings/{bookingId}/check-in-readiness")
+    @PreAuthorize(RECEPTIONIST_OR_CARETAKER)
+    public ApiResponse<CheckInReadinessResponse> checkInReadiness(@PathVariable Long bookingId) {
+        return ApiResponse.ok(stays.readiness(bookingId));
+    }
+
+    /** boarding-v1 #14 (Đặt chỗ#3, Chuồng#2). */
+    @Operation(operationId = "checkInBoarding", tags = "Stay",
+            summary = "Nhận thú",
+            description = "UC59 · BR-LT-04, 05, 08, BR-KH-04. Actor: A06, A08. Quyền: Lễ tân, CARETAKER chi nhánh. "
+                + "Chuyển trạng thái: BOOKED → CHECKED_IN (Đặt chỗ#3) · Chuồng#2 (→ OCCUPIED). "
+                + "Cân nặng ghi vào lịch sử (source INTAKE); nhận sớm được nếu còn chỗ.",
+            parameters = {@Parameter(name = "bookingId", in = ParameterIn.PATH, example = "88")})
+    @ApiErrorDoc(status = 400, description = "`BR-LT-05` thiếu / quá hạn mũi bắt buộc (lễ tân tiếp nhận walk-in để "
+            + "tiêm trước) · `BR-LT-08` chuồng không AVAILABLE hoặc sai loại, thiếu cân nặng · `BR-LT-04` ngoài giờ "
+            + "mở cửa · `BR-LT-03` nhận sớm khi hết chỗ")
+    @ApiErrorDoc(status = 403)
+    @ApiErrorDoc(status = 404)
+    @ApiErrorDoc(status = 409, description = "Đặt chỗ không còn BOOKED")
+    @PostMapping("/boarding-bookings/{bookingId}/check-in")
+    @PreAuthorize(RECEPTIONIST_OR_CARETAKER)
+    public ApiResponse<BookingResponse> checkIn(@PathVariable Long bookingId,
+            @Valid @RequestBody CheckInRequest request) {
+        return ApiResponse.ok(stays.checkIn(bookingId, request), "Đã nhận thú lưu trú");
+    }
+
+    /** boarding-v1 #15 (Đặt chỗ#5). */
+    @Operation(operationId = "cancelBoardingNoKennel", tags = "Stay",
+            summary = "Hủy vì không còn chuồng đúng loại lúc nhận",
+            description = "UC59 · BR-LT-08, BR-LH-09. Actor: A06. Quyền: Lễ tân chi nhánh. "
+                + "Chuyển trạng thái: BOOKED → CANCELLED (Đặt chỗ#5, phòng khám hủy). Không tính hủy muộn; "
+                + "thông báo khách và BRANCH_MANAGER (A3).",
+            parameters = {@Parameter(name = "bookingId", in = ParameterIn.PATH, example = "88")})
+    @ApiErrorDoc(status = 400, description = "Vẫn còn chuồng AVAILABLE đúng loại")
+    @ApiErrorDoc(status = 403)
+    @ApiErrorDoc(status = 404)
+    @ApiErrorDoc(status = 409, description = "Đặt chỗ không còn BOOKED")
+    @PostMapping("/boarding-bookings/{bookingId}/cancel-no-kennel")
+    @PreAuthorize("hasRole('RECEPTIONIST')")
+    public ApiResponse<BookingResponse> cancelNoKennel(@PathVariable Long bookingId) {
+        return ApiResponse.ok(stays.cancelNoKennel(bookingId), "Đã hủy đặt chỗ vì không còn chuồng");
     }
 }

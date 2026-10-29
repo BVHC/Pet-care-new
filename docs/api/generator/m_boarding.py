@@ -107,20 +107,20 @@ m.schema("DeceasedEndRequest", {"note": "string|Ghi rõ diễn biến (BR-LT-12)
 m.schema("CareLogAddendum", {"addendumId": "int64", "content": "string", "createdBy": "int64", "createdAt": "datetime"})
 m.schema("CareLog", {
     "careLogId": "int64", "bookingId": "int64", "logDate": "date", "eating": "string:300?", "drinking": "string:300?",
-    "hygiene": "string:300?", "activity": "string:300?", "note": "string?", "photoUrls": "array:string",
+    "hygiene": "string:300?", "activity": "string:300?", "note": "string:2000?", "photoUrls": "array:string",
     "isAbnormal": "bool", "recordedBy": "int64", "recordedByName": "string", "createdAt": "datetime",
     "editableUntil": "datetime|created_at + 1 giờ [CFG]", "addenda": "array:ref:CareLogAddendum",
 })
 m.schema("CareLogRequest", {
     "logDate": "date?|Mặc định hôm nay", "eating": "string:300?", "drinking": "string:300?", "hygiene": "string:300?",
-    "activity": "string:300?", "note": "string?", "photoUrls": "array:string|Tối đa 5 [CFG] (A5)",
+    "activity": "string:300?", "note": "string:2000?", "photoUrls": "array:string|Tối đa 5 [CFG] (A5)",
     "isAbnormal": "bool?|true → thông báo ngay khách và lễ tân (BR-LT-12)",
 }, required=["photoUrls"])
 m.schema("UpdateCareLogRequest", {
     "eating": "string:300?", "drinking": "string:300?", "hygiene": "string:300?", "activity": "string:300?",
-    "note": "string?", "photoUrls": "array:string",
+    "note": "string:2000?", "photoUrls": "array:string|Vắng = giữ nguyên; có = thay toàn bộ danh sách (tối đa 5 [CFG])",
 }, required=[])
-m.schema("AddendumRequest", {"content": "string"})
+m.schema("AddendumRequest", {"content": "string:2000|Tối đa 2000 ký tự"})
 
 BM = "BRANCH_MANAGER chi nhánh"
 OWN_OR_BRANCH = "Khách: thú của mình · lễ tân chi nhánh"

@@ -31,6 +31,12 @@ final class BoardingRules {
         return checkIn.atStartOfDay(TimeConfig.BUSINESS_ZONE).toInstant().minus(Duration.ofHours(lateCancelHours));
     }
 
+    /** Giờ Việt Nam của {@code now} nằm trong một khung giờ mở cửa {@code [open, close)} (BR-LT-04). */
+    static boolean withinOpeningHours(Instant now, List<TimeRange> ranges) {
+        LocalTime time = now.atZone(TimeConfig.BUSINESS_ZONE).toLocalTime();
+        return ranges.stream().anyMatch(r -> !time.isBefore(r.open()) && time.isBefore(r.close()));
+    }
+
     static Optional<LocalTime> closingTime(List<TimeRange> ranges) {
         return ranges.stream().map(TimeRange::close).max(Comparator.naturalOrder());
     }

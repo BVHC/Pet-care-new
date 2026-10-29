@@ -132,6 +132,19 @@ public class BoardingBooking extends TimestampedEntity {
         this.lateCancel = late;
     }
 
+    /**
+     * Đặt chỗ#3: nhận thú vào {@code kennelId}. Nhận sớm kéo ngày nhận về hôm nay để đêm nhận sớm được đếm sức chứa
+     * và tính tiền (docs/adr/0085, nợ T31-4); nhận đúng ngày giữ nguyên.
+     */
+    public void checkIn(Long kennelId, Instant at, LocalDate today) {
+        this.status = BoardingBookingStatus.CHECKED_IN;
+        this.kennelId = kennelId;
+        this.actualCheckInAt = at;
+        if (today.isBefore(checkInDate)) {
+            this.checkInDate = today;
+        }
+    }
+
     /** Đặt chỗ#6 (ST05). */
     public void markNoShow() {
         this.status = BoardingBookingStatus.NO_SHOW;
