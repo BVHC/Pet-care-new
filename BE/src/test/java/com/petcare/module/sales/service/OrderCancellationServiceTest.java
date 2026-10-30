@@ -223,4 +223,77 @@ class OrderCancellationServiceTest {
         assertThat(tx.noRollbackFor()).isEmpty();
         assertThat(tx.readOnly()).isFalse();
     }
+
+    @Test
+    void abortCheckoutCancelsBoardingPendingAsCheckoutAbortedAndAudits() {
+        SalesOrder order = order(OrderSource.BOARDING, OrderStatus.PENDING);
+        stay(StayStatus.CHECKED_IN);
+
+        assertThat(service.abortCheckout(ORDER_ID, REASON)).isSameAs(response);
+
+        assertThat(order.getStatus()).isEqualTo(OrderStatus.CANCELLED);
+        assertThat(order.getCancelType()).isEqualTo(OrderCancelType.CHECKOUT_ABORTED);
+        assertThat(order.getCancelReason()).isEqualTo("Khách bỏ về");
+        assertThat(order.getCancelledBy()).isEqualTo(ME);
+        ArgumentCaptor<AuditEntry> entry = ArgumentCaptor.forClass(AuditEntry.class);
+        InOrder inOrder = inOrder(orders, branchScope, boarding, audit);
+        inOrder.verify(orders).findByIdForUpdate(ORDER_ID);
+        inOrder.verify(branchScope).check(BRANCH);
+        inOrder.verify(boarding).findBooking(BOOKING);
+        inOrder.verify(orders).flush();
+        inOrder.verify(audit).record(entry.capture());
+        assertThat(entry.getValue().action()).isEqualTo("ORDER_CHECKOUT_ABORTED");
+        assertThat(entry.getValue().before()).isEqualTo(Map.of("status", "PENDING"));
+        assertThat(((Map<?, ?>) entry.getValue().after()).get("cancelType")).isEqualTo("CHECKOUT_ABORTED");
+    }
+
+    @ParameterizedTest
+    @EnumSource(value = OrderSource.class, names = {"VISIT", "RETAIL"})
+    void abortCheckoutOfNonBoardingOrderIs409AndWritesNothing(OrderSource source) {
+        order(source, OrderStatus.PENDING);
+
+        assertThatThrownBy(() -> service.abortCheckout(ORDER_ID, REASON))
+                .isInstanceOf(InvalidStateTransitionException.class);
+
+        verify(orders, never()).flush();
+        verifyNoInteractions(audit);
+    }
+
+    @Test
+    void abortCheckoutOfPaidBoardingOrderIs409() {
+        order(OrderSource.BOARDING, OrderStatus.PAID);
+
+        assertThatThrownBy(() -> service.abortCheckout(ORDER_ID, REASON))
+                .isInstanceOf(InvalidStateTransitionException.class);
+
+        verifyNoInteractions(audit);
+    }
+
+    @ParameterizedTest
+    @NullSource
+    @ValueSource(strings = {"", "   "})
+    void abortCheckoutWithoutReasonIsBrLt09AndWritesNothing(String reason) {
+        SalesOrder order = order(OrderSource.BOARDING, OrderStatus.PENDING);
+
+        assertThatThrownBy(() -> service.abortCheckout(ORDER_ID, new OrderReasonRequest(reason)))
+                .isInstanceOfSatisfying(BusinessRuleViolationException.class,
+                        e -> assertThat(e.getRuleId()).isEqualTo("BR-LT-09"));
+
+        assertThat(order.getStatus()).isEqualTo(OrderStatus.PENDING);
+        verifyNoInteractions(audit);
+        verifyNoInteractions(boarding);
+    }
+
+    @Test
+    void abortCheckoutWhenPetLeftTheKennelIsBrLt09() {
+        SalesOrder order = order(OrderSource.BOARDING, OrderStatus.PENDING);
+        stay(StayStatus.CHECKED_OUT);
+
+        assertThatThrownBy(() -> service.abortCheckout(ORDER_ID, REASON))
+                .isInstanceOfSatisfying(BusinessRuleViolationException.class,
+                        e -> assertThat(e.getRuleId()).isEqualTo("BR-LT-09"));
+
+        assertThat(order.getStatus()).isEqualTo(OrderStatus.PENDING);
+        verifyNoInteractions(audit);
+    }
 }

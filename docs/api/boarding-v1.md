@@ -98,7 +98,7 @@
 - **`GET /boarding-bookings/{bookingId}/check-in-readiness`** — Kiểm tra điều kiện nhận thú. Response `200` `CheckInReadiness`. Lỗi: `401` · `403` · `404` · `409` Đặt chỗ không còn BOOKED.
 - **`POST /boarding-bookings/{bookingId}/check-in`** — Nhận thú. Request `CheckInRequest`. Response `200` `Booking`. Lỗi: `400` `BR-LT-05` thiếu / quá hạn mũi bắt buộc (lễ tân tiếp nhận walk-in để tiêm trước) · `BR-LT-08` chuồng không AVAILABLE hoặc sai loại, thiếu cân nặng · `BR-LT-04` ngoài giờ mở cửa · `BR-LT-03` nhận sớm khi hết chỗ · `401` · `403` · `404` · `409` Đặt chỗ không còn BOOKED.
 - **`POST /boarding-bookings/{bookingId}/cancel-no-kennel`** — Hủy vì không còn chuồng đúng loại lúc nhận. Response `200` `Booking`. Lỗi: `400` Vẫn còn chuồng AVAILABLE đúng loại · `401` · `403` · `404` · `409` Đặt chỗ không còn BOOKED.
-- **`POST /boarding-bookings/{bookingId}/start-checkout`** — Bắt đầu trả thú. Response `200` `CheckoutStarted`. Lỗi: `400` `BR-LT-04` ngoài giờ mở cửa · `401` · `403` · `404` · `409` Thú không còn trong chuồng.
+- **`POST /boarding-bookings/{bookingId}/start-checkout`** — Bắt đầu trả thú. Response `200` `CheckoutStarted`. Lỗi: `400` `BR-LT-04` ngoài giờ mở cửa · `401` · `403` · `404` · `409` Thú không còn trong chuồng · đã thu tiền lưu trú (chỉ còn giao thú).
 - **`POST /boarding-bookings/{bookingId}/hand-over`** — Giao thú (trả thú). Response `200` `Booking`. Lỗi: `400` `BR-LT-09` Order lưu trú chưa PAID — không có ngoại lệ · `401` · `403` · `404` · `409` Thú không còn trong chuồng.
 - **`POST /boarding-bookings/{bookingId}/end-deceased`** — Kết thúc lưu trú do thú mất. Request `DeceasedEndRequest`. Response `200` `CheckoutStarted`. Lỗi: `400` · `401` · `403` · `404` · `409` Thú không còn trong chuồng.
 ### Care logs
@@ -162,7 +162,7 @@ Trường có `?` là không bắt buộc / có thể null. Kiểu `email`, `dat
 | A7 | Lễ tân không đặt được chỗ nhận trong ngày sau giờ đóng cửa hôm đó | ST05 sẽ chuyển NO_SHOW ngay và tính vi phạm cho khách; docs/adr/0065 D5 |
 | A8 | Ngày nhận và ngày trả phải có ít nhất một khung giờ mở cửa (không phải ngày nghỉ lễ hay ngày nghỉ cố định) | BR-LT-04; docs/adr/0065 D6 |
 | A9 | Thú chưa có cân nặng vẫn đặt được; cân bắt buộc lúc nhận thú | BR-LT-02 so cân nặng hiện tại, BR-LT-08 bắt buộc cân khi nhận; docs/adr/0065 D7 |
-| A10 | `activeOrderId` luôn null cho tới khi có Order lưu trú (T43) | Order BOARDING chỉ sinh khi bắt đầu trả thú (BR-LT-09) |
+| A10 | `activeOrderId` là Order BOARDING OPEN / PENDING của đặt chỗ, null nếu không có (T43) | Order BOARDING chỉ sinh khi bắt đầu trả thú hoặc kết thúc do thú mất (BR-LT-09, 12) |
 
 | ID | Câu hỏi | Trạng thái | Gốc |
 |---|---|---|---|

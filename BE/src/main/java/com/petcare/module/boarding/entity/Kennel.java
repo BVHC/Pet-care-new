@@ -68,6 +68,11 @@ public class Kennel extends TimestampedEntity {
         this.status = KennelStatus.OCCUPIED;
     }
 
+    /** Chuồng#3: kết thúc lưu trú (giao thú hoặc thú mất). */
+    public void release() {
+        this.status = KennelStatus.AVAILABLE;
+    }
+
     /** Chuồng#4. */
     public void startMaintenance() {
         this.status = KennelStatus.MAINTENANCE;

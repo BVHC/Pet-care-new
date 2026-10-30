@@ -53,6 +53,8 @@ app:
       cron: "-"
     boarding-no-show:
       cron: "-"
+    boarding-overdue:
+      cron: "-"
     notification-outbox:
       cron: "-"
       priority-cron: "-"

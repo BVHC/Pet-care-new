@@ -7,7 +7,6 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
-import java.util.Set;
 import java.util.stream.Collectors;
 
 import org.springframework.stereotype.Service;
@@ -19,7 +18,6 @@ import com.petcare.module.boarding.dto.KennelResponse;
 import com.petcare.module.boarding.dto.MaintenanceResultResponse;
 import com.petcare.module.boarding.dto.UpdateKennelRequest;
 import com.petcare.module.boarding.entity.BoardingBooking;
-import com.petcare.module.boarding.entity.BoardingBookingStatus;
 import com.petcare.module.boarding.entity.Kennel;
 import com.petcare.module.boarding.entity.KennelStatus;
 import com.petcare.module.boarding.exception.BoardingConflictException;
@@ -173,25 +171,11 @@ public class KennelService {
      */
     private List<AffectedBookingBriefResponse> shortageBookings(Kennel kennel) {
         LocalDate today = LocalDate.now(clock);
-        List<BoardingBooking> booked = bookings
-                .findByBranchIdAndKennelTypeIdAndStatusAndCheckOutDateAfterOrderByCheckInDateAscIdAsc(
-                        kennel.getBranchId(), kennel.getKennelTypeId(), BoardingBookingStatus.BOOKED, today);
-        if (booked.isEmpty()) {
+        List<BoardingBooking> affected = capacity.shortageBookings(kennel.getBranchId(), kennel.getKennelTypeId(),
+                today, null);
+        if (affected.isEmpty()) {
             return List.of();
         }
-        LocalDate from = booked.stream().map(b -> max(b.getCheckInDate(), today)).min(LocalDate::compareTo).get();
-        LocalDate to = booked.stream().map(BoardingBooking::getCheckOutDate).max(LocalDate::compareTo).get();
-        Set<LocalDate> over = capacity.nights(kennel.getBranchId(), kennel.getKennelTypeId(), from, to, today).stream()
-                .filter(n -> n.occupied() > n.capacity()).map(BoardingCapacity.Night::date)
-                .collect(Collectors.toSet());
-        List<BoardingBooking> affected = booked.stream().filter(b -> {
-            for (LocalDate d = max(b.getCheckInDate(), today); d.isBefore(b.getCheckOutDate()); d = d.plusDays(1)) {
-                if (over.contains(d)) {
-                    return true;
-                }
-            }
-            return false;
-        }).toList();
         Map<Long, String> petNames = new HashMap<>();
         List<Long> petIds = affected.stream().map(BoardingBooking::getPetId).distinct().toList();
         for (int i = 0; i < petIds.size(); i += PET_BATCH) {
@@ -219,10 +203,6 @@ public class KennelService {
     private static KennelResponse toResponse(Kennel kennel, String typeName, Long currentBookingId) {
         return new KennelResponse(kennel.getId(), kennel.getBranchId(), kennel.getKennelTypeId(), typeName,
                 kennel.getCode(), kennel.getStatus(), kennel.getNote(), currentBookingId);
-    }
-
-    private static LocalDate max(LocalDate a, LocalDate b) {
-        return a.isAfter(b) ? a : b;
     }
 
     private static String blankToNull(String value) {
