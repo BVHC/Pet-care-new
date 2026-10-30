@@ -55,6 +55,8 @@ app:
       cron: "-"
     boarding-overdue:
       cron: "-"
+    stock-alert-digest:
+      cron: "-"
     notification-outbox:
       cron: "-"
       priority-cron: "-"
