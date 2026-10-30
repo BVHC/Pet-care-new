@@ -729,7 +729,7 @@ paths:
         "404":
           $ref: "#/components/responses/NotFound"
         "409":
-          description: "Thú không còn trong chuồng"
+          description: "Thú không còn trong chuồng · đã thu tiền lưu trú (chỉ còn giao thú)"
           content:
             "application/json":
               schema:
@@ -1404,7 +1404,8 @@ components:
       properties:
         note:
           type: string
-          description: "Ghi rõ diễn biến (BR-LT-12)"
+          maxLength: 2000
+          description: "Ghi rõ diễn biến (BR-LT-12), tối đa 2000 ký tự"
     CareLogAddendum:
       type: object
       required: [addendumId, content, createdBy, createdAt]

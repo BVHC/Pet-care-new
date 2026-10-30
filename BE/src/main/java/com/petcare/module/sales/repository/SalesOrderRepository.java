@@ -105,4 +105,32 @@ public interface SalesOrderRepository extends JpaRepository<SalesOrder, Long> {
 
         Long getId();
     }
+
+    /**
+     * Order lưu trú chưa kết thúc ({@code OPEN} / {@code PENDING}) của đặt chỗ, khóa {@code FOR NO KEY UPDATE}
+     * (docs/adr/0086). Tối đa 1 dòng nhờ {@code uq_orders_boarding_unfinished}. Khi một thu tiền commit trong lúc chờ
+     * khóa, Postgres đánh giá lại điều kiện trạng thái và bỏ dòng → bên gọi phải kiểm {@code PAID} sau khóa.
+     */
+    @Transactional(propagation = Propagation.MANDATORY)
+    @Lock(LockModeType.PESSIMISTIC_WRITE)
+    @Query("SELECT o FROM SalesOrder o WHERE o.boardingBookingId = :bookingId "
+            + "AND o.status IN (com.petcare.module.sales.entity.OrderStatus.OPEN, "
+            + "com.petcare.module.sales.entity.OrderStatus.PENDING)")
+    Optional<SalesOrder> findUnfinishedByBookingForUpdate(@Param("bookingId") Long bookingId);
+
+    boolean existsByBoardingBookingIdAndStatus(Long bookingId, OrderStatus status);
+
+    Optional<SalesOrder> findFirstByBoardingBookingIdAndStatusOrderByIdDesc(Long bookingId, OrderStatus status);
+
+    /** Order lưu trú chưa kết thúc của các đặt chỗ (đọc không khóa, index {@code uq_orders_boarding_unfinished}). */
+    @Query("SELECT o.boardingBookingId AS bookingId, o.id AS orderId FROM SalesOrder o WHERE o.boardingBookingId IN "
+            + ":bookingIds AND o.status IN (com.petcare.module.sales.entity.OrderStatus.OPEN, "
+            + "com.petcare.module.sales.entity.OrderStatus.PENDING)")
+    List<BookingOrderRow> findUnfinishedByBookingIds(@Param("bookingIds") Collection<Long> bookingIds);
+
+    interface BookingOrderRow {
+        Long getBookingId();
+
+        Long getOrderId();
+    }
 }

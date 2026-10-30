@@ -145,6 +145,30 @@ public class BoardingBooking extends TimestampedEntity {
         }
     }
 
+    /** Đặt chỗ#10 (giao thú, {@code RETURNED}) và #11 (thú mất, {@code PET_DECEASED}). */
+    public void checkOut(BookingEndReason reason, String note, Instant at) {
+        this.status = BoardingBookingStatus.CHECKED_OUT;
+        this.endReason = reason;
+        this.endNote = note;
+        this.actualCheckOutAt = at;
+    }
+
+    /** Đặt chỗ#7 (ST15): {@code since} là giờ trả quy định của ngày trả dự kiến, không phải giờ job chạy. */
+    public void markOverdue(Instant since) {
+        this.status = BoardingBookingStatus.OVERDUE;
+        this.overdueSince = since;
+    }
+
+    /** ST15: đã gửi thông báo quá hạn cho khách trong ngày {@code day} (BR-LT-10). */
+    public void overdueNoticeSent(LocalDate day) {
+        this.lastOverdueNoticeOn = day;
+    }
+
+    /** ST15: đã báo BRANCH_MANAGER (chỉ một lần, BR-LT-10). */
+    public void managerNotified(Instant at) {
+        this.managerNotifiedAt = at;
+    }
+
     /** Đặt chỗ#6 (ST05). */
     public void markNoShow() {
         this.status = BoardingBookingStatus.NO_SHOW;

@@ -99,6 +99,7 @@ services:
       PENDING_ORDER_DIGEST_CRON: ${PENDING_ORDER_DIGEST_CRON:-0 50 23 * * *}
       # Lịch ST05 cho lưu trú (docs/adr/0065); mặc định trùng application.yml (phút 3, 8, 13…).
       BOARDING_NO_SHOW_CRON: ${BOARDING_NO_SHOW_CRON:-0 3/5 * * * *}
+      BOARDING_OVERDUE_CRON: ${BOARDING_OVERDUE_CRON:-0 1/5 * * * *}
       # Lịch ba luồng ST20: email HIGH, NORMAL (docs/adr/0012), IN_APP (docs/adr/0014); mặc định trùng application.yml.
       NOTIFICATION_OUTBOX_CRON: ${NOTIFICATION_OUTBOX_CRON:-*/10 * * * * *}
       NOTIFICATION_OUTBOX_PRIORITY_CRON: ${NOTIFICATION_OUTBOX_PRIORITY_CRON:-*/5 * * * * *}

@@ -168,4 +168,61 @@ public interface BoardingBookingRepository extends JpaRepository<BoardingBooking
     @Query(value = "SELECT id FROM boarding_bookings WHERE pet_id = :petId AND status = 'BOOKED' ORDER BY id",
             nativeQuery = true)
     List<Long> findBookedIdsByPetId(@Param("petId") Long petId);
+
+    interface CheckedInDue {
+        Long getId();
+
+        Long getPetId();
+
+        LocalDate getCheckOutDate();
+    }
+
+    interface OverdueRow {
+        Long getId();
+
+        Long getPetId();
+    }
+
+    /**
+     * ST15 lượt 1: tối đa {@code limit} đặt chỗ {@code CHECKED_IN} có ngày trả dự kiến ≤ {@code today}, theo
+     * {@code (check_out_date, id)} — đúng thứ tự của {@code ix_boarding_bookings_checked_in_due} (V25). Không khóa;
+     * {@link #lockCheckedInForOverdue} kiểm lại dưới khóa.
+     */
+    @Query(value = """
+            SELECT id AS id, pet_id AS petId, check_out_date AS checkOutDate FROM boarding_bookings
+            WHERE status = 'CHECKED_IN' AND check_out_date <= :today
+            ORDER BY check_out_date, id LIMIT :limit
+            """, nativeQuery = true)
+    List<CheckedInDue> findCheckedInDue(@Param("today") LocalDate today, @Param("limit") int limit);
+
+    @Query(value = """
+            SELECT id AS id, pet_id AS petId, check_out_date AS checkOutDate FROM boarding_bookings
+            WHERE status = 'CHECKED_IN' AND check_out_date <= :today
+              AND (check_out_date, id) > (CAST(:afterDate AS date), :afterId)
+            ORDER BY check_out_date, id LIMIT :limit
+            """, nativeQuery = true)
+    List<CheckedInDue> findCheckedInDueAfter(@Param("today") LocalDate today, @Param("afterDate") LocalDate afterDate,
+            @Param("afterId") long afterId, @Param("limit") int limit);
+
+    /** ST15 lượt 2: đặt chỗ {@code OVERDUE} theo id (index partial {@code ix_boarding_bookings_overdue}), keyset. */
+    @Query(value = """
+            SELECT id AS id, pet_id AS petId FROM boarding_bookings
+            WHERE status = 'OVERDUE' AND id > :afterId ORDER BY id LIMIT :limit
+            """, nativeQuery = true)
+    List<OverdueRow> findOverdueAfter(@Param("afterId") long afterId, @Param("limit") int limit);
+
+    /** Khóa một đặt chỗ CHECKED_IN bỏ qua dòng đang bị luồng khác giữ ({@code SKIP LOCKED}); rỗng nếu đã đổi trạng thái. */
+    @Transactional(propagation = Propagation.MANDATORY)
+    @Query(value = """
+            SELECT id FROM boarding_bookings WHERE id = :id AND status = 'CHECKED_IN'
+            FOR NO KEY UPDATE SKIP LOCKED
+            """, nativeQuery = true)
+    Optional<Long> lockCheckedInForOverdue(@Param("id") long id);
+
+    @Transactional(propagation = Propagation.MANDATORY)
+    @Query(value = """
+            SELECT id FROM boarding_bookings WHERE id = :id AND status = 'OVERDUE'
+            FOR NO KEY UPDATE SKIP LOCKED
+            """, nativeQuery = true)
+    Optional<Long> lockOverdueForFollowUp(@Param("id") long id);
 }

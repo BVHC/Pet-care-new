@@ -112,6 +112,11 @@ app:
       cron: "${BOARDING_NO_SHOW_CRON:0 3/5 * * * *}"
       batch-size: 100
       time-budget: 60s
+    # ST15 (docs/adr/0086): lưu trú quá hạn đón; phút 1, 6, 11… (ST05 lưu trú 3/5, ST05 lịch hẹn */5, ST03 2/5, ST13 4/5)
+    boarding-overdue:
+      cron: "${BOARDING_OVERDUE_CRON:0 1/5 * * * *}"
+      batch-size: 100
+      time-budget: 60s
     # ST04 (docs/adr/0082): nhắc tái chủng reminder.vaccine_days_before [CFG] và nhắc tái khám
     # reminder.follow_up_days_before [CFG]. Mỗi giờ từ 07:00 đến 20:00 (không gửi email ban đêm; lượt sau tự thử lại phần
     # lỗi), giây 30 phút 10 / 40: lệch các job 5 phút và lệch nhau.

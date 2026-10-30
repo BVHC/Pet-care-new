@@ -106,16 +106,7 @@ class CareLogAbnormalNotices {
     /** Kênh và người nhận của khách theo BR-TB-02; {@code account} null khi hồ sơ không gắn tài khoản. */
     static List<NotificationRequest> customerRequests(CustomerContact contact, AccountContact account,
             Map<String, Object> payload, Long bookingId) {
-        List<NotificationRequest> requests = new ArrayList<>(2);
-        if (account != null && !account.pending()) {
-            requests.add(new NotificationRequest(NotificationTemplateCode.CARE_LOG_ABNORMAL_APP, Channel.IN_APP,
-                    account.accountId(), null, payload, CUSTOMER_LINK + bookingId));
-            requests.add(new NotificationRequest(NotificationTemplateCode.CARE_LOG_ABNORMAL, Channel.EMAIL, null,
-                    account.email(), payload, null));
-        } else if (contact.email() != null && !contact.email().isBlank()) {
-            requests.add(new NotificationRequest(NotificationTemplateCode.CARE_LOG_ABNORMAL, Channel.EMAIL, null,
-                    contact.email(), payload, null));
-        }
-        return requests;
+        return BoardingRecipients.customerRequests(NotificationTemplateCode.CARE_LOG_ABNORMAL,
+                NotificationTemplateCode.CARE_LOG_ABNORMAL_APP, contact, account, payload, CUSTOMER_LINK + bookingId);
     }
 }

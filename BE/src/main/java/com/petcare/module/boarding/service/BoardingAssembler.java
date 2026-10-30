@@ -22,11 +22,12 @@ import com.petcare.module.customer.api.CustomerQueryApi;
 import com.petcare.module.customer.api.CustomerQueryApi.CustomerContact;
 import com.petcare.module.customer.api.PetQueryApi;
 import com.petcare.module.customer.api.PetQueryApi.PetSummary;
+import com.petcare.module.sales.api.BoardingOrderApi;
 
 /**
  * Ghép {@link BoardingBooking} với tên khách, thú, loại chuồng, mã chuồng (docs/adr/0065). Tra theo lô ≤
  * {@value #BATCH} id mỗi lần gọi module khác (khuôn {@code ScheduleImpactFinder}); id thiếu là dữ liệu hỏng →
- * {@link IllegalStateException}, rollback use case của bên gọi. {@code activeOrderId} luôn null tới T43.
+ * {@link IllegalStateException}, rollback use case của bên gọi. {@code activeOrderId} là Order OPEN / PENDING của đặt chỗ (BoardingOrderApi, ADR-0086).
  */
 @Component
 public class BoardingAssembler {
@@ -38,14 +39,17 @@ public class BoardingAssembler {
     private final CatalogQueryApi catalog;
     private final KennelRepository kennels;
     private final BoardingBookingRepository bookings;
+    private final BoardingOrderApi boardingOrders;
 
     public BoardingAssembler(CustomerQueryApi customers, PetQueryApi pets, CatalogQueryApi catalog,
-            KennelRepository kennels, BoardingBookingRepository bookings) {
+            KennelRepository kennels, BoardingBookingRepository bookings,
+            BoardingOrderApi boardingOrders) {
         this.customers = customers;
         this.pets = pets;
         this.catalog = catalog;
         this.kennels = kennels;
         this.bookings = bookings;
+        this.boardingOrders = boardingOrders;
     }
 
     public BookingResponse toResponse(BoardingBooking booking, LocalDate today) {
@@ -70,13 +74,19 @@ public class BoardingAssembler {
                 || b.getStatus() == BoardingBookingStatus.OVERDUE).map(BoardingBooking::getId).toList();
         Set<Long> logged = inStay.isEmpty() ? Set.of()
                 : new HashSet<>(bookings.findBookingIdsWithCareLogOn(inStay, today));
+        Map<Long, Long> activeOrders = new java.util.HashMap<>();
+        List<Long> bookingIds = ids(rows, BoardingBooking::getId);
+        for (int from = 0; from < bookingIds.size(); from += BATCH) {
+            activeOrders.putAll(boardingOrders.findActiveOrderIds(
+                    bookingIds.subList(from, Math.min(bookingIds.size(), from + BATCH))));
+        }
         return rows.stream().map(b -> new BookingResponse(b.getId(), b.getCode(), b.getCustomerId(),
                 customerById.get(b.getCustomerId()).fullName(), b.getPetId(), petById.get(b.getPetId()).name(),
                 b.getBranchId(), b.getKennelTypeId(), typeById.get(b.getKennelTypeId()).name(), b.getKennelId(),
                 b.getKennelId() == null ? null : kennelCodes.get(b.getKennelId()), b.getCheckInDate(),
                 b.getCheckOutDate(), b.getActualCheckInAt(), b.getActualCheckOutAt(), b.getNightlyPrice(),
                 b.getStatus(), b.getEndReason(), b.getChannel(), b.isLateCancel(), b.getCancelSource(),
-                b.getCancelReason(), b.getOverdueSince(), null,
+                b.getCancelReason(), b.getOverdueSince(), activeOrders.get(b.getId()),
                 inStay.contains(b.getId()) && !logged.contains(b.getId()))).toList();
     }
 

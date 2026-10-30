@@ -35,7 +35,7 @@ m = Module(
         ("A7", "Lễ tân không đặt được chỗ nhận trong ngày sau giờ đóng cửa hôm đó", "ST05 sẽ chuyển NO_SHOW ngay và tính vi phạm cho khách; docs/adr/0065 D5"),
         ("A8", "Ngày nhận và ngày trả phải có ít nhất một khung giờ mở cửa (không phải ngày nghỉ lễ hay ngày nghỉ cố định)", "BR-LT-04; docs/adr/0065 D6"),
         ("A9", "Thú chưa có cân nặng vẫn đặt được; cân bắt buộc lúc nhận thú", "BR-LT-02 so cân nặng hiện tại, BR-LT-08 bắt buộc cân khi nhận; docs/adr/0065 D7"),
-        ("A10", "`activeOrderId` luôn null cho tới khi có Order lưu trú (T43)", "Order BOARDING chỉ sinh khi bắt đầu trả thú (BR-LT-09)"),
+        ("A10", "`activeOrderId` là Order BOARDING OPEN / PENDING của đặt chỗ, null nếu không có (T43)", "Order BOARDING chỉ sinh khi bắt đầu trả thú hoặc kết thúc do thú mất (BR-LT-09, 12)"),
     ],
     questions=[
         ("Q1", "Cơ chế tải ảnh nhật ký chăm sóc (upload trực tiếp hay presigned URL)?", "TBD (BE + FE)", "05 chỉ lưu URL"),
@@ -103,7 +103,7 @@ m.schema("CheckoutStarted", {
     "booking": "ref:Booking", "orderId": "int64", "nights": "int|Tối thiểu 1; trả sau 12:00 [CFG] +1 đêm",
     "amount": "money",
 })
-m.schema("DeceasedEndRequest", {"note": "string|Ghi rõ diễn biến (BR-LT-12)"})
+m.schema("DeceasedEndRequest", {"note": "string:2000|Ghi rõ diễn biến (BR-LT-12), tối đa 2000 ký tự"})
 m.schema("CareLogAddendum", {"addendumId": "int64", "content": "string", "createdBy": "int64", "createdAt": "datetime"})
 m.schema("CareLog", {
     "careLogId": "int64", "bookingId": "int64", "logDate": "date", "eating": "string:300?", "drinking": "string:300?",
@@ -194,7 +194,7 @@ m.op("post", "/boarding-bookings/{bookingId}/start-checkout", "startBoardingChec
      "UC59", "BR-LT-04, 09, BR-BH-01", "A06", "Chỉ lễ tân chi nhánh",
      "CHECKED_IN / OVERDUE giữ nguyên (Đặt chỗ#9) · Order#3 (BOARDING → PENDING)", resp="CheckoutStarted",
      path_params=["BookingId"], errors=(400, 401, 403, 404, 409),
-     err_desc={400: "`BR-LT-04` ngoài giờ mở cửa", 409: "Thú không còn trong chuồng"},
+     err_desc={400: "`BR-LT-04` ngoài giờ mở cửa", 409: "Thú không còn trong chuồng · đã thu tiền lưu trú (chỉ còn giao thú)"},
      notes="Đã có Order BOARDING PENDING thì dùng lại và tính lại số đêm. Tiếp theo: `POST /payments`.")
 m.op("post", "/boarding-bookings/{bookingId}/hand-over", "handOverBoardingPet", "Giao thú (trả thú)", "Stay", "UC59",
      "BR-LT-09, BR-BH-06", "A06", "Chỉ lễ tân chi nhánh", "CHECKED_IN / OVERDUE → CHECKED_OUT, RETURNED (Đặt chỗ#10) · Chuồng#3",
