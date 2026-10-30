@@ -55,7 +55,7 @@ class OpenApiContractParityIT {
     private static final Path CONTRACT_DIR = Path.of("..", "docs", "api", "openapi");
     /** File hợp đồng đã có annotation đầy đủ; thêm file khi module đó viết xong tài liệu (D026: branch, catalog). */
     private static final Set<String> DOCUMENTED = Set.of("identity-v1.yaml", "care-v1.yaml", "customer-v1.yaml",
-            "inventory-v1.yaml", "sales-v1.yaml", "appointment-v1.yaml", "visit-v1.yaml", "boarding-v1.yaml", "content-v1.yaml");
+            "inventory-v1.yaml", "sales-v1.yaml", "appointment-v1.yaml", "visit-v1.yaml", "boarding-v1.yaml", "content-v1.yaml", "report-v1.yaml");
     private static final Set<String> METHODS = Set.of("get", "post", "put", "patch", "delete");
     private static final Pattern SECRET = Pattern.compile("(?i)(password|secret|hash)$|^otp(code)?$");
     /** Tên khớp {@link #SECRET} nhưng không phải bí mật: cờ bắt đổi mật khẩu (BR-TK-17). */
@@ -109,10 +109,10 @@ class OpenApiContractParityIT {
         // #8, #11 (T26 phần 4, docs/adr/0062), #9 (T26 phần 5, docs/adr/0063), #10, #12–15 (T27, docs/adr/0066–0070),
         // #18 (T28 phần 1, docs/adr/0073), #19 (T28 phần 2, docs/adr/0074), #20 (T28 phần 3, docs/adr/0075), #16 (T38 phần 1, docs/adr/0077), #17 (T38 phần 2, docs/adr/0078)
         // + 10 sales cashier #12–21 (T30, docs/adr/0064) + 12 boarding #1–12 (T31, docs/adr/0065) + 22 content #1–22 (T32, docs/adr/0071)
-        // + 4 care #1–4 (T39 phần 1, docs/adr/0080) + 7 boarding #13–15, #19–22 (T42, docs/adr/0085) + 3 boarding #16–18 và 1 sales #9 (T43, docs/adr/0086).
+        // + 4 care #1–4 (T39 phần 1, docs/adr/0080) + 7 boarding #13–15, #19–22 (T42, docs/adr/0085) + 3 boarding #16–18 và 1 sales #9 (T43, docs/adr/0086) + 7 report #1–7 (T44, docs/adr/0087).
         assertThat(documentedOps())
-                .as("số endpoint identity + care + customer + inventory + sales + appointment + visit + boarding + content đã cài")
-                .hasSize(173);
+                .as("số endpoint identity + care + customer + inventory + sales + appointment + visit + boarding + content + report đã cài")
+                .hasSize(180);
     }
 
     @Test

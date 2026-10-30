@@ -117,6 +117,10 @@ app:
       cron: "${BOARDING_OVERDUE_CRON:0 1/5 * * * *}"
       batch-size: 100
       time-budget: 60s
+    # ST08 (docs/adr/0087): cảnh báo tồn kho dưới ngưỡng, lô sắp / đã hết hạn; 07:00 hằng ngày, mỗi chi nhánh ACTIVE một tx.
+    stock-alert-digest:
+      cron: "${STOCK_ALERT_DIGEST_CRON:0 0 7 * * *}"
+      time-budget: 60s
     # ST04 (docs/adr/0082): nhắc tái chủng reminder.vaccine_days_before [CFG] và nhắc tái khám
     # reminder.follow_up_days_before [CFG]. Mỗi giờ từ 07:00 đến 20:00 (không gửi email ban đêm; lượt sau tự thử lại phần
     # lỗi), giây 30 phút 10 / 40: lệch các job 5 phút và lệch nhau.

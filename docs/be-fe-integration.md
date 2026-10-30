@@ -31,9 +31,9 @@
 | sales-v1 | 20 / 21 | #11 chuyển dòng sang mua ngoài (#9 hủy phiên trả thú có từ 30/10, T43) | BE-2 · wiring #11 | Order, thu tiền, ca, đối soát: **L** |
 | boarding-v1 | 22 / 22 | — (T42 29/10: #13–15, #19–22; T43 30/10: #16–18) | BE-2 · T42, T43 | chuồng, đặt chỗ, gia hạn, hủy: **L**; nhận / trả thú, nhật ký: BE có, FE chưa chạy với BE thật |
 | content-v1 | 22 / 22 | — | BE-2 | trang quản trị: **P**; luồng soạn bài / feedback chưa thao tác |
-| report-v1 | **0 / 7** | tất cả | BE-2 · T44 | chỉ mock |
+| report-v1 | 7 / 7 (T44 30/10) | — | BE-2 · T44 | báo cáo + thẻ "Đã thu hôm nay": **M** (BE có, FE chưa chạy với BE thật) |
 
-**Tác vụ hệ thống (giai đoạn 1: 12):** đã có ST01, ST02, ST03, ST04, ST05 (lịch hẹn + lưu trú), ST06 (trừ kho FEFO khi tiêm / thu tiền; phần giữ hàng đơn online là tầng 3), ST13, ST18, ST19, ST20; **chưa có ST08** (cảnh báo tồn thấp / lô sắp hết hạn, T44) và **ST15** (lưu trú quá hạn đón, T43).
+**Tác vụ hệ thống (giai đoạn 1: 12):** đã có ST01, ST02, ST03, ST04, ST05 (lịch hẹn + lưu trú), ST06 (trừ kho FEFO khi tiêm / thu tiền; phần giữ hàng đơn online là tầng 3), ST13, ST18, ST19, ST20; ST08 (cảnh báo tồn thấp / lô sắp hết hạn, T44 30/10) và ST15 (lưu trú quá hạn đón, T43 30/10).
 
 **Việc BE còn dở:** BE-1: T28b (#21), T40 (nối interface chéo, IN_PROGRESS), T41 (E2E BE, chưa bắt đầu), D025. **BE-2: T42, T43, T44, T45 đều `NOT_STARTED` dù hạn 26–29/10, `origin/dung` chưa có commit mới** → đây là rủi ro lớn nhất của buổi demo 30/10 (T50).
 
@@ -109,12 +109,12 @@ Hạn và trạng thái lấy từ `docs/time.md` (28/10). "API" ghi số thứ 
 | T41 | E2E BE luồng chính | BE-1 · 29/10 · NOT_STARTED | — | — | luồng chính đã chạy tay bằng UI ở T49 | ⚪ |
 | T42 | Lưu trú: nhận thú, nhật ký | BE-2 · 29/10 · **DONE** | boarding #13–15, #19–22 (ADR-0085) | — | T48 · **M** (dialog nhận thú, nhật ký, khách xem nhật ký); mock T48 #13–22 chưa đối chiếu BE thật | 🟡 |
 | T43 | Lưu trú: trả thú, Order BOARDING, ST15 | BE-2 · 30/10 · **DONE** | boarding #16–18, sales #9, `activeOrderId`, ST15 (ADR-0086) | — | T48 · **M** (bắt đầu trả → thu tiền ở bàn Lễ tân → giao thú; hủy phiên; thú mất); mock T48 #16–18 / sales #9 chưa đối chiếu BE thật | 🟡 |
-| T44 | Báo cáo + ST08 | BE-2 · 28/10 · **NOT_STARTED** | **chưa có** (report #1–7) | — | T49 · **M** (trang + dashboard "Đã thu hôm nay" hiện "–" với BE thật) | 🔴 |
+| T44 | Báo cáo + ST08 | BE-2 · 30/10 · **DONE** | report #1–7, 5 `*ReportApi`, ST08 (ADR-0087) | — | T49 · **M** (đối chiếu biên 12 tháng, thứ tự 403 trước 400, tên chi nhánh / dịch vụ; mock khác cách tính doanh thu) | 🟡 |
 | T45 | Test FSM + E2E bán lẻ, lưu trú | BE-2 · 29/10 · NOT_STARTED | — | — | — | ⚪ |
 | T46 | FE: kê đơn, trang công khai | FE-1 · 26/10 · DONE (mock) | (T38, T32) | — | kê đơn **L**; trang công khai (`/services`, `/branches`, `/doctors`, `/products`, `/news`) **S** | 🟢 kê đơn · 🟡 công khai |
 | T47 | FE: nội dung trang, bài viết, feedback, Care Task | FE-1 · 27/10 · DONE (mock) | (T32, T39) | — | Care Task **L**; nội dung, bài viết, feedback **P** (chưa thao tác) | 🟢 Care Task · 🟡 còn lại |
 | T48 | FE: lưu trú | FE-1 · 28/10 · DONE (mock) | (T31) | — | chuồng, đặt chỗ, gia hạn, hủy **L**; nhận / trả thú, nhật ký, khách xem nhật ký **M** | 🟢 · 🔴 nhận / trả / nhật ký |
-| T49 | FE: báo cáo + tích hợp API thật | FE-1 · 29/10 · IN_PROGRESS | (T44 chưa có) | — | tích hợp **L**; báo cáo **M** | 🟢 tích hợp · 🔴 báo cáo |
+| T49 | FE: báo cáo + tích hợp API thật | FE-1 · 29/10 · IN_PROGRESS | (T44 có từ 30/10) | — | tích hợp **L**; báo cáo **M** | 🟢 tích hợp · 🔴 báo cáo |
 | T50 | Tổng duyệt demo, bàn giao | Cả nhóm · 30/10 · NOT_STARTED | — | cần seed giai đoạn 2 | — | ⚪ phụ thuộc T42–T44 |
 
 ## 4. Tóm lại: ghép được ngay / cần việc nhỏ / chưa ghép được

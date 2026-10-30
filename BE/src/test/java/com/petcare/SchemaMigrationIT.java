@@ -143,10 +143,11 @@ class SchemaMigrationIT {
         // V22 mẫu nhắc VACCINE_REMINDER, FOLLOW_UP_REMINDER (+_APP) + index / CHECK care_tasks (docs/adr/0081, 0082),
         // V23 cờ ST18 vaccinations.overdue_handled_at + index quét (docs/adr/0083),
         // V24 mẫu CARE_LOG_ABNORMAL (+_APP), BOARDING_NO_KENNEL_APP + 2 index nhận thú / nhật ký (docs/adr/0085),
-        // V25 mẫu BOARDING_OVERDUE (+_APP), BOARDING_OVERDUE_MANAGER_APP, BOARDING_CAPACITY_WARNING_APP + 3 index trả thú / ST15 (docs/adr/0086)
+        // V25 mẫu BOARDING_OVERDUE (+_APP), BOARDING_OVERDUE_MANAGER_APP, BOARDING_CAPACITY_WARNING_APP + 3 index trả thú / ST15 (docs/adr/0086),
+        // V26 mẫu STOCK_ALERT_DIGEST_APP (ST08, docs/adr/0087)
         assertThat(rows).extracting(row -> row.get("version"))
                 .containsExactly("1", "2", "3", "4", "5", "6", "7", "8", "9", "10", "11", "12", "13", "14", "15",
-                        "16", "17", "18", "19", "20", "21", "22", "23", "24", "25");
+                        "16", "17", "18", "19", "20", "21", "22", "23", "24", "25", "26");
         assertThat(rows).allSatisfy(row -> assertThat(row).containsEntry("success", true));
     }
 
@@ -444,7 +445,7 @@ class SchemaMigrationIT {
                         "VACCINE_REMINDER", "VACCINE_REMINDER_APP", "FOLLOW_UP_REMINDER", "FOLLOW_UP_REMINDER_APP",
                         "CARE_LOG_ABNORMAL", "CARE_LOG_ABNORMAL_APP", "BOARDING_NO_KENNEL_APP",
                         "BOARDING_OVERDUE", "BOARDING_OVERDUE_APP", "BOARDING_OVERDUE_MANAGER_APP",
-                        "BOARDING_CAPACITY_WARNING_APP");
+                        "BOARDING_CAPACITY_WARNING_APP", "STOCK_ALERT_DIGEST_APP");
         assertThat(jdbc.queryForList("""
                 SELECT code FROM notification_templates
                 WHERE %s AND (body <> default_body OR subject IS DISTINCT FROM default_subject)

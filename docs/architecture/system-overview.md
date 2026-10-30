@@ -121,7 +121,7 @@ Stack: Java 21, Spring Boot 3.5.15, Spring Security, Data JPA, Validation, AOP, 
 | boarding · chuồng, đặt chỗ, gia hạn, hủy, ST05 | boarding-v1 #1–12 | `KennelService`, `BoardingBookingService`, `BoardingChangeService`, `BoardingNoShowService`, 3 listener | 0065, V20. Cảnh báo mũi tiêm qua `VaccinationQueryApi`. `activeOrderId` null |
 | boarding · nhận thú, hủy vì hết chuồng, nhật ký, bất thường | boarding-v1 #13–15, #19–22 | `BoardingCheckInService`, `CareLogService`, `BoardingManagerNotices`, `CareLogAbnormalNotices` | 0085, V24 (T42, 29/10). Mũi bắt buộc qua `VaccinationQueryApi`, cân qua `PetApi.recordWeight(INTAKE)`; bất thường → outbox khách + lễ tân cùng tx. Chưa có #16–18, ST15 (T43) |
 | content · trang, bài viết, feedback | content-v1 #1–22 | `PageContentService`, `ArticleService`, `ArticleHtml` (jsoup), `FeedbackSubmitService`, `FeedbackReviewService` | 0071, V21. Feedback: advisory 1003 theo khách. Chưa có `FeedbackReportApi` (T44) |
-| report | — | Chỉ interface `*ReportApi` | T44 |
+| report · báo cáo UC89 | report-v1 #1–7 | `ReportController`, `ReportService`, `ReportPeriod`, 15 DTO; `SalesReportService`, `StockReportService`, `FeedbackReportService`, `AppointmentReportService` + `VaccinationReportService` (BE-2 cài thay BE-1) | 0087. Không bảng, không khóa; phạm vi → kỳ → API → gắn tên; kỳ nửa mở giờ VN; `SalesReportApi.lostRevenue` chỉ `UNPAID` |
 
 ## 4. Backend — chưa có (phải xây)
 
@@ -132,7 +132,7 @@ Stack: Java 21, Spring Boot 3.5.15, Spring Security, Data JPA, Validation, AOP, 
 | care: cài đặt nhận thông báo (care-v1 #9–10) | UC88 | D025, chờ PO |
 | sales #9, #11, `BoardingOrderApi` | BR-LT-09, BR-BH-04 | T43; #11 làm được từ 26/10 (`PrescriptionApi` có từ ADR-0076); chuỗi thu → mua ngoài → thu lại đã có IT bằng stand-in (D048) |
 | boarding · bắt đầu trả, giao thú, thú mất, ST15 | boarding-v1 #16–18, sales-v1 #9 | `BoardingCheckoutService`, `BoardingOrderService` (`BoardingOrderApi`), `OrderCancellationService.abortCheckout`, `BoardingOverdueService`, `BoardingOverdueJob` | 0086, V25 (T43, 30/10). `openOrReuse` kiểm lại `PAID` sau khóa (không thu hai lần); `activeOrderId` điền thật; ST15 `0 1/5`, mốc quá hạn = 12:00 ngày trả, Care Task `PICKUP_OVERDUE` qua `CareTaskApi` |
-| report, ST08 | BR-BC-01…04, BR-KO-07 | T44 |
+| report, ST08 | BR-BC-01…04, BR-KO-07 | T44 đã làm 30/10 (ADR-0087); công thức G11 chờ PO |
 | Gọi `AuditRecorder` ở module còn lại | BR-QT-15 | Snapshot JSON object |
 
 ## 4b. Database — migration (`BE/src/main/resources/db/migration/`)
@@ -157,6 +157,7 @@ Không bao giờ sửa migration đã chạy (checksum). Số V dùng chung vớ
 | 23 | `V23__vaccination_overdue_flag.sql` | BE-1: cột `vaccinations.overdue_handled_at` (không backfill), partial index `ix_vaccinations_overdue_scan (next_due_date, id)` chỉ mũi chờ xét (0083). V22, V23 chờ BE-2 xác nhận; BE-2 từ V24 |
 | 24 | `V24__boarding_check_in_care_log.sql` | BE-2: mẫu `CARE_LOG_ABNORMAL` (+`_APP`), `BOARDING_NO_KENNEL_APP` + index `care_log_addenda (care_log_id)`, `weight_records (boarding_booking_id)` (0085); chưa xác nhận với BE-1 |
 | 25 | `V25__boarding_checkout_overdue.sql` | BE-2: index `ix_boarding_bookings_checked_in_due`, `ix_boarding_bookings_overdue`, `ix_orders_boarding_booking_id`; mẫu `BOARDING_OVERDUE` (+`_APP`), `BOARDING_OVERDUE_MANAGER_APP`, `BOARDING_CAPACITY_WARNING_APP` (0086); chưa xác nhận với BE-1 |
+| 26 | `V26__stock_alert_digest_template.sql` | BE-2: mẫu `STOCK_ALERT_DIGEST_APP` (IN_APP, ST08, ADR-0087); chỉ INSERT, cần BE-1 xác nhận số |
 
 - **PK đặc biệt (9 bảng):** 1–1 (`staff_profiles`, `kennel_types`, `medical_records`, `boarding_check_ins`), ghép (`branch_services`, `branch_quota_defaults`), chuỗi (`system_configs`, `notification_templates`, `page_contents`). 8 bảng LOG chỉ `created_at`. Tên ràng buộc `ck_ / uq_ / ix_ / ex_`.
 - **Thứ tự xóa cứng** (app xóa con trước, cùng tx): BR-TK-08 `otp_tokens` → hồ sơ online → `accounts`; BR-TK-19 `addresses` → hồ sơ online → gán `account_id` (flush trước, `uq_customers_account_id` không deferrable); BR-KH-06 `weight_records` → `pets`; BR-KB-04 hoàn kho + `stock_movements` → `vaccinations` → `order_lines`; BR-KB-03 `prescription_items` → `order_lines` (dòng `DRUG`, bệnh án giữ).
