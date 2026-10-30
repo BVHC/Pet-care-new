@@ -76,4 +76,34 @@ class BoardingBookingTest {
         assertThat(b.getCheckInDate()).isEqualTo(LocalDate.parse("2009-06-10"));
         assertThat(b.getCheckOutDate()).isEqualTo(LocalDate.parse("2009-06-14"));
     }
+
+    @Test
+    void checkOutRecordsReasonNoteAndTime() {
+        BoardingBooking b = booked();
+        b.checkIn(7L, java.time.Instant.parse("2009-06-12T03:00:00Z"), LocalDate.parse("2009-06-12"));
+        java.time.Instant at = java.time.Instant.parse("2009-06-14T05:00:00Z");
+
+        b.checkOut(BookingEndReason.PET_DECEASED, "Mat luc 9h", at);
+
+        assertThat(b.getStatus()).isEqualTo(BoardingBookingStatus.CHECKED_OUT);
+        assertThat(b.getEndReason()).isEqualTo(BookingEndReason.PET_DECEASED);
+        assertThat(b.getEndNote()).isEqualTo("Mat luc 9h");
+        assertThat(b.getActualCheckOutAt()).isEqualTo(at);
+    }
+
+    @Test
+    void markOverdueAndNoticeFlags() {
+        BoardingBooking b = booked();
+        b.checkIn(7L, java.time.Instant.parse("2009-06-12T03:00:00Z"), LocalDate.parse("2009-06-12"));
+        java.time.Instant since = java.time.Instant.parse("2009-06-14T05:00:00Z");
+
+        b.markOverdue(since);
+        b.overdueNoticeSent(LocalDate.parse("2009-06-14"));
+        b.managerNotified(since.plusSeconds(60));
+
+        assertThat(b.getStatus()).isEqualTo(BoardingBookingStatus.OVERDUE);
+        assertThat(b.getOverdueSince()).isEqualTo(since);
+        assertThat(b.getLastOverdueNoticeOn()).isEqualTo(LocalDate.parse("2009-06-14"));
+        assertThat(b.getManagerNotifiedAt()).isEqualTo(since.plusSeconds(60));
+    }
 }

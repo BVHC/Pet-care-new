@@ -526,7 +526,8 @@ describe('thu tiền (#14, Order#8, BR-TG-01…04) — cần ca OPEN của chín
     const { auth } = await withShift();
     await adjust([[13, -195]]);
     expect((await payOf([2], 'CASH', 266_000, auth)).status).toBe(201);
-    expect((await lotsOf(3)).map((l) => [l.stockLotId, l.quantity])).toEqual([[13, 0], [14, 495]]);
+    // Lô 13 còn 5 sau điều chỉnh, bị lấy hết rồi mới sang lô 14 (−5): lô 13 về 0 nên danh sách lô (như BE) không còn trả nó.
+    expect((await lotsOf(3)).map((l) => [l.stockLotId, l.quantity])).toEqual([[14, 495]]);
     expect(await stockOf(3)).toBe(495);
   });
 
@@ -548,7 +549,8 @@ describe('thu tiền (#14, Order#8, BR-TG-01…04) — cần ca OPEN của chín
     const res = await payOf([3], 'CASH', 200_000, auth);
     expect(res.status).toBe(201);
     expect(res.data.data).toMatchObject({ customerId: 4, amount: 200_000 });
-    expect((await lotsOf(5)).map((l) => [l.stockLotId, l.quantity])).toEqual([[16, 2], [15, 0]]);
+    // Lô 15 đã về 0 (điều chỉnh) nên không còn trong danh sách lô; lô hết hạn 16 giữ nguyên 2.
+    expect((await lotsOf(5)).map((l) => [l.stockLotId, l.quantity])).toEqual([[16, 2]]);
   });
 
   it('số tiền khác tổng → 400 BR-TG-02 với câu nêu cả hai số, kể cả 0; không đổi gì; kiểm trước BR-BH-04', async () => {

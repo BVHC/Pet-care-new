@@ -365,12 +365,13 @@ const listInventory: MockHandler = (req) => {
   const { q, productType, belowMin, expiringWithinDays } = req.query;
   if (productType && !PRODUCT_TYPES.includes(productType as ProductType)) return fail('VALIDATION_FAILED', 'productType: Loại sản phẩm không hợp lệ', 400);
   const within = expiringWithinDays === undefined ? null : Number(expiringWithinDays);
-  if (within !== null && !(Number.isInteger(within) && within >= 0)) {
-    return fail('VALIDATION_FAILED', 'expiringWithinDays: Số ngày phải là số nguyên ≥ 0', 400);
+  // Như BE: không phải số nguyên → 400 MALFORMED_REQUEST (kiểu `Integer` của controller); số âm không bị từ chối mà kẹp về 0 (InventoryService.listInventory).
+  if (within !== null && !Number.isInteger(within)) {
+    return fail('MALFORMED_REQUEST', "Tham số 'expiringWithinDays' sai kiểu dữ liệu", 400);
   }
   const s = load();
   const today = localIsoDate();
-  const limit = within === null ? null : addDays(today, within);
+  const limit = within === null ? null : addDays(today, Math.max(within, 0));
   const needle = q ? foldVi(q.trim()) : '';
   const rows = s.items
     .filter((i) => i.branchId === branchOf(req))
@@ -383,8 +384,8 @@ const listInventory: MockHandler = (req) => {
       if (productType && p.productType !== productType) return false;
       if (belowMin === 'true' && !view.belowMin) return false;
       if (belowMin === 'false' && view.belowMin) return false;
-      // M7: có lô chưa hết hạn, còn hàng, hạn trong N ngày tới.
-      if (limit !== null && !lotsOf(s, item.id).some((l) => l.quantity > 0 && l.expiryDate !== null && !isExpired(l, today) && l.expiryDate <= limit)) {
+      // M7 như BE (InventoryQueryRepository.where, ADR-0042): có lô còn hàng với hạn ≤ hôm nay + N, KỂ CẢ lô đã hết hạn.
+      if (limit !== null && !lotsOf(s, item.id).some((l) => l.quantity > 0 && l.expiryDate !== null && l.expiryDate <= limit)) {
         return false;
       }
       return true;
@@ -402,7 +403,7 @@ const getInventoryItem: MockHandler = (req) => {
   return ok(itemView(s, p, itemOf(s, branchOf(req), p.productId), localIsoDate()));
 };
 
-/** M5: mọi lô kể cả đã hết số lượng; hạn dùng tăng dần (thứ tự FEFO), lô mặc định cuối. */
+/** M5 như BE (InventoryQueryRepository.findLots, ADR-0042): chỉ lô còn số dư (> 0), lô số dư 0 ẩn; hạn dùng tăng dần (thứ tự FEFO), lô mặc định cuối. */
 const listLots: MockHandler = (req) => {
   const p = productOf(Number(req.params.productId));
   if (!p) return notFound('sản phẩm', req.params.productId);
@@ -410,6 +411,7 @@ const listLots: MockHandler = (req) => {
   const item = itemOf(s, branchOf(req), p.productId);
   const today = localIsoDate();
   const lots: StockLot[] = (item ? lotsOf(s, item.id) : [])
+    .filter((l) => l.quantity > 0)
     .sort((a, b) => (a.expiryDate ?? '9999-12-31').localeCompare(b.expiryDate ?? '9999-12-31') || a.id - b.id)
     .map((l) => ({ stockLotId: l.id, lotNumber: l.lotNumber, expiryDate: l.expiryDate, quantity: l.quantity, isDefault: l.isDefault, expired: isExpired(l, today) }));
   return ok(lots);

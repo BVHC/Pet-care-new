@@ -20,6 +20,8 @@ import com.petcare.module.boarding.dto.BookingResponse;
 import com.petcare.module.boarding.dto.BookingResultResponse;
 import com.petcare.module.boarding.dto.CancelBookingRequest;
 import com.petcare.module.boarding.dto.CheckInReadinessResponse;
+import com.petcare.module.boarding.dto.CheckoutStartedResponse;
+import com.petcare.module.boarding.dto.DeceasedEndRequest;
 import com.petcare.module.boarding.dto.CheckInRequest;
 import com.petcare.module.boarding.dto.CreateBookingRequest;
 import com.petcare.module.boarding.dto.ExtendBookingRequest;
@@ -28,6 +30,7 @@ import com.petcare.module.boarding.entity.BoardingBookingStatus;
 import com.petcare.module.boarding.service.BoardingBookingService;
 import com.petcare.module.boarding.service.BoardingChangeService;
 import com.petcare.module.boarding.service.BoardingCheckInService;
+import com.petcare.module.boarding.service.BoardingCheckoutService;
 import com.petcare.module.boarding.service.BoardingViewService;
 import com.petcare.platform.config.ApiErrorDoc;
 import com.petcare.platform.model.ApiResponse;
@@ -38,13 +41,14 @@ import io.swagger.v3.oas.annotations.Parameter;
 import io.swagger.v3.oas.annotations.enums.ParameterIn;
 import jakarta.validation.Valid;
 
-/** Còn chỗ, đặt chỗ, xem, gia hạn, hủy (UC58, boarding-v1 #7–12). Không chứa logic: mọi rule ở service. */
+/** Còn chỗ, đặt chỗ, xem, gia hạn, hủy (UC58, UC59, boarding-v1 #7–18). Không chứa logic: mọi rule ở service. */
 @RestController
 @RequestMapping("/api")
 public class BoardingBookingController {
 
     static final String CUSTOMER_OR_RECEPTIONIST = "hasAnyRole('CUSTOMER', 'RECEPTIONIST')";
     static final String RECEPTIONIST_OR_CARETAKER = "hasAnyRole('RECEPTIONIST', 'CARETAKER')";
+    static final String RECEPTIONIST = "hasRole('RECEPTIONIST')";
     static final String ANY_BOARDING_VIEWER =
             "hasAnyRole('CUSTOMER', 'BRANCH_MANAGER', 'RECEPTIONIST', 'VET', 'CARETAKER')";
 
@@ -53,14 +57,17 @@ public class BoardingBookingController {
     private final BoardingViewService views;
     private final BoardingChangeService changes;
     private final BoardingCheckInService stays;
+    private final BoardingCheckoutService checkouts;
 
     public BoardingBookingController(BoardingAvailabilityService availability, BoardingBookingService booking,
-            BoardingViewService views, BoardingChangeService changes, BoardingCheckInService stays) {
+            BoardingViewService views, BoardingChangeService changes, BoardingCheckInService stays,
+            BoardingCheckoutService checkouts) {
         this.availability = availability;
         this.booking = booking;
         this.views = views;
         this.changes = changes;
         this.stays = stays;
+        this.checkouts = checkouts;
     }
 
     /** boarding-v1 #7. */
@@ -235,8 +242,60 @@ public class BoardingBookingController {
     @ApiErrorDoc(status = 404)
     @ApiErrorDoc(status = 409, description = "Đặt chỗ không còn BOOKED")
     @PostMapping("/boarding-bookings/{bookingId}/cancel-no-kennel")
-    @PreAuthorize("hasRole('RECEPTIONIST')")
+    @PreAuthorize(RECEPTIONIST)
     public ApiResponse<BookingResponse> cancelNoKennel(@PathVariable Long bookingId) {
         return ApiResponse.ok(stays.cancelNoKennel(bookingId), "Đã hủy đặt chỗ vì không còn chuồng");
+    }
+
+    /** boarding-v1 #16 (Đặt chỗ#9, Order#3). */
+    @Operation(operationId = "startBoardingCheckout", tags = "Stay",
+            summary = "Bắt đầu trả thú",
+            description = "UC59 · BR-LT-04, 09, BR-BH-01. Actor: A06. Quyền: Chỉ lễ tân chi nhánh. "
+                + "Chuyển trạng thái: CHECKED_IN / OVERDUE giữ nguyên (Đặt chỗ#9) · Order#3 (BOARDING → PENDING). "
+                + "Đã có Order BOARDING PENDING thì dùng lại và tính lại số đêm. Tiếp theo: `POST /payments`.",
+            parameters = {@Parameter(name = "bookingId", in = ParameterIn.PATH, example = "88")})
+    @ApiErrorDoc(status = 400, description = "`BR-LT-04` ngoài giờ mở cửa")
+    @ApiErrorDoc(status = 403)
+    @ApiErrorDoc(status = 404)
+    @ApiErrorDoc(status = 409, description = "Thú không còn trong chuồng · đã thu tiền lưu trú (chỉ còn giao thú)")
+    @PostMapping("/boarding-bookings/{bookingId}/start-checkout")
+    @PreAuthorize(RECEPTIONIST)
+    public ApiResponse<CheckoutStartedResponse> startCheckout(@PathVariable Long bookingId) {
+        return ApiResponse.ok(checkouts.startCheckout(bookingId), "Đã bắt đầu trả thú");
+    }
+
+    /** boarding-v1 #17 (Đặt chỗ#10, Chuồng#3). */
+    @Operation(operationId = "handOverBoardingPet", tags = "Stay",
+            summary = "Giao thú (trả thú)",
+            description = "UC59 · BR-LT-09, BR-BH-06. Actor: A06. Quyền: Chỉ lễ tân chi nhánh. "
+                + "Chuyển trạng thái: CHECKED_IN / OVERDUE → CHECKED_OUT, RETURNED (Đặt chỗ#10) · Chuồng#3.",
+            parameters = {@Parameter(name = "bookingId", in = ParameterIn.PATH, example = "88")})
+    @ApiErrorDoc(status = 400, description = "`BR-LT-09` Order lưu trú chưa PAID — không có ngoại lệ")
+    @ApiErrorDoc(status = 403)
+    @ApiErrorDoc(status = 404)
+    @ApiErrorDoc(status = 409, description = "Thú không còn trong chuồng")
+    @PostMapping("/boarding-bookings/{bookingId}/hand-over")
+    @PreAuthorize(RECEPTIONIST)
+    public ApiResponse<BookingResponse> handOver(@PathVariable Long bookingId) {
+        return ApiResponse.ok(checkouts.handOver(bookingId), "Đã giao thú");
+    }
+
+    /** boarding-v1 #18 (Đặt chỗ#11, Chuồng#3, Order#3). */
+    @Operation(operationId = "endBoardingDeceased", tags = "Stay",
+            summary = "Kết thúc lưu trú do thú mất",
+            description = "UC59 · BR-LT-12, BR-KH-05. Actor: A06. Quyền: Chỉ lễ tân chi nhánh. "
+                + "Chuyển trạng thái: CHECKED_IN / OVERDUE → CHECKED_OUT, PET_DECEASED (Đặt chỗ#11) · Chuồng#3 · "
+                + "Order#3 (tính đến ngày mất). Sau đó mới đánh dấu thú đã mất (`POST /pets/{petId}/mark-deceased`). "
+                + "Order xử lý như PENDING thường.",
+            parameters = {@Parameter(name = "bookingId", in = ParameterIn.PATH, example = "88")})
+    @ApiErrorDoc(status = 400)
+    @ApiErrorDoc(status = 403)
+    @ApiErrorDoc(status = 404)
+    @ApiErrorDoc(status = 409, description = "Thú không còn trong chuồng")
+    @PostMapping("/boarding-bookings/{bookingId}/end-deceased")
+    @PreAuthorize(RECEPTIONIST)
+    public ApiResponse<CheckoutStartedResponse> endDeceased(@PathVariable Long bookingId,
+            @Valid @RequestBody DeceasedEndRequest request) {
+        return ApiResponse.ok(checkouts.endDeceased(bookingId, request), "Đã kết thúc lưu trú do thú mất");
     }
 }

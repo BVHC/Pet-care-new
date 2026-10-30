@@ -89,11 +89,35 @@ describe('tồn kho (UC75, BR-KO-01, 07)', () => {
 
   it('lọc sắp hết hạn trong 30 ngày, theo loại; chi nhánh 2 chỉ thấy tồn của mình', async () => {
     const soon = await client.get('/api/inventory', { params: { expiringWithinDays: 30 }, ...(await manager()) });
-    expect(soon.data.data.content.map((i: { productId: number }) => i.productId)).toEqual([3]);
+    // Như BE: gồm cả lô đã hết hạn còn tồn, nên Rabisin (#5, lô RB2309 hết hạn 16 ngày trước) lọt cùng Amoxicillin (#3, AMX2405 +20 ngày).
+    expect(soon.data.data.content.map((i: { productId: number }) => i.productId)).toEqual([3, 5]);
     const vaccines = await client.get('/api/inventory', { params: { productType: 'VACCINE' }, ...(await manager()) });
     expect(vaccines.data.data.content.map((i: { productId: number }) => i.productId)).toEqual([6, 5]);
     const other = await client.get('/api/inventory', await manager2());
     expect(other.data.data.content).toMatchObject([{ productId: 1, totalQuantity: 7 }]);
+  });
+
+  // BE: expiry_date <= hôm nay + N (InventoryQueryRepository.where, InventoryViewIT); N âm kẹp về 0 (InventoryService); Integer sai kiểu → 400 MALFORMED_REQUEST.
+  it('lọc hạn dùng như BE: ≤ hôm nay + N gồm lô đã hết hạn, ranh giới đúng N; số âm kẹp về 0; không phải số nguyên → 400 MALFORMED_REQUEST', async () => {
+    const ids = async (expiringWithinDays: number) =>
+      (await client.get('/api/inventory', { params: { expiringWithinDays }, ...(await manager()) })).data.data.content.map((i: { productId: number }) => i.productId);
+    expect(await ids(0)).toEqual([5]); // chỉ lô RB2309 đã hết hạn
+    expect(await ids(-5)).toEqual([5]); // âm coi như 0, không bị từ chối
+    expect(await ids(19)).toEqual([5]); // AMX2405 hạn +20 chưa tới
+    expect(await ids(20)).toEqual([3, 5]); // đúng +20 thì lọt (≤)
+    expect(await ids(365)).toEqual([3, 6, 5]); // Vanguard +160, Rabisin RB2401 +260; AMX2501 +400 vẫn ngoài
+
+    for (const bad of ['abc', '1.5']) {
+      const res = await failure(client.get('/api/inventory', { params: { expiringWithinDays: bad }, ...(await manager()) }));
+      expect(res.status).toBe(400);
+      expect(res.data).toMatchObject({ errorCode: 'MALFORMED_REQUEST', message: "Tham số 'expiringWithinDays' sai kiểu dữ liệu" });
+    }
+  });
+
+  it('lô số dư 0 ẩn khỏi danh sách lô như BE (ADR-0042), tồn của sản phẩm vẫn đủ', async () => {
+    await client.post('/api/stock-adjustments', { reason: 'DAMAGED', lines: [{ stockLotId: 13, quantityDelta: -200 }] }, await manager());
+    expect((await lots(3)).map((l: { stockLotId: number }) => l.stockLotId)).toEqual([14]);
+    expect(await item(3)).toMatchObject({ totalQuantity: 500, availableQuantity: 500 });
   });
 
   it('lô theo FEFO kèm cờ hết hạn; bác sĩ xem tồn nhưng không xem lô; SUPER_MANAGER không có kho', async () => {

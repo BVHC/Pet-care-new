@@ -86,6 +86,49 @@ public class OrderCancellationService {
         return assembler.assemble(order, me);
     }
 
+    /**
+     * Hủy phiên trả thú (sales-v1 #9, Order#9; BR-LT-09, BR-QT-15; docs/adr/0086). Chỉ lễ tân của chi nhánh Order (vai
+     * trò ở controller). Thứ tự như {@link #cancelUnpaidOrder}: khóa Order (404) → chi nhánh 403 → không phải Order
+     * BOARDING {@code PENDING} 409 → thiếu lý do 400 → thú đã rời chuồng 400 → FSM → ghi → audit. Không tính thất thu
+     * ({@code CHECKOUT_ABORTED}); đặt chỗ giữ trạng thái và tiếp tục tính đêm, lần trả sau sinh Order mới.
+     */
+    @Transactional
+    public OrderResponse abortCheckout(Long orderId, OrderReasonRequest request) {
+        SalesOrder order = orders.findByIdForUpdate(orderId)
+                .orElseThrow(() -> new ResourceNotFoundException("đơn hàng", orderId));
+        branchScope.check(order.getBranchId());
+        if (order.getStatus() != OrderStatus.PENDING || order.getSource() != OrderSource.BOARDING) {
+            throw new InvalidStateTransitionException("đơn hàng (chỉ hủy phiên trả thú của Order lưu trú đang chờ thu)",
+                    order.getStatus().name(), OrderStatus.CANCELLED.name());
+        }
+        String reason = request == null || request.reason() == null ? "" : request.reason().strip();
+        if (reason.isEmpty()) {
+            throw new BusinessRuleViolationException("BR-LT-09", "Vui lòng nhập lý do hủy phiên trả thú");
+        }
+        StayStatus stay = boarding.findBooking(order.getBoardingBookingId())
+                .orElseThrow(() -> new IllegalStateException("Order #" + order.getId() + " trỏ tới đặt chỗ #"
+                        + order.getBoardingBookingId() + " không tồn tại"))
+                .status();
+        if (!PET_IN_KENNEL.contains(stay)) {
+            throw new BusinessRuleViolationException("BR-LT-09",
+                    "Thú không còn trong chuồng: dùng hủy Order khách không thanh toán (BR-BH-05)");
+        }
+        fsm.validateTransition(order.getStatus(), OrderStatus.CANCELLED);
+
+        SecurityPrincipal me = branchScope.current();
+        order.cancel(OrderCancelType.CHECKOUT_ABORTED, me.accountId(), reason, Instant.now(clock));
+        orders.flush();
+        Map<String, Object> after = new LinkedHashMap<>();
+        after.put("status", OrderStatus.CANCELLED.name());
+        after.put("cancelType", OrderCancelType.CHECKOUT_ABORTED.name());
+        after.put("totalAmount", order.getTotalAmount());
+        audit.record(AuditEntry.of(SalesAuditActions.ORDER_CHECKOUT_ABORTED).entity("orders", order.getId())
+                .before(Map.of("status", OrderStatus.PENDING.name()))
+                .after(after)
+                .reason(reason));
+        return assembler.assemble(order, me);
+    }
+
     /** BR-BH-05: không áp dụng cho Order lưu trú khi thú còn trong chuồng — khi đó lễ tân hủy phiên trả thú (BR-LT-09). */
     private void requirePetLeftKennel(SalesOrder order) {
         StayStatus status = boarding.findBooking(order.getBoardingBookingId())

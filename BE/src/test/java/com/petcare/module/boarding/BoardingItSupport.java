@@ -72,6 +72,11 @@ public abstract class BoardingItSupport {
     void cleanBoarding() {
         if (!branches.isEmpty()) {
             String b = ids(branches);
+            jdbc.update("DELETE FROM care_tasks WHERE branch_id IN (" + b + ")");
+            jdbc.update("DELETE FROM order_lines WHERE order_id IN (SELECT id FROM orders WHERE branch_id IN (" + b + "))");
+            jdbc.update("DELETE FROM orders WHERE branch_id IN (" + b + ")");
+            jdbc.update("DELETE FROM payments WHERE branch_id IN (" + b + ")");
+            jdbc.update("DELETE FROM cashier_shifts WHERE branch_id IN (" + b + ")");
             jdbc.update("DELETE FROM care_log_addenda WHERE care_log_id IN (SELECT id FROM care_logs "
                     + "WHERE boarding_booking_id IN (SELECT id FROM boarding_bookings WHERE branch_id IN (" + b + ")))");
             jdbc.update("DELETE FROM care_logs WHERE boarding_booking_id IN "

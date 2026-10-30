@@ -225,6 +225,26 @@ public class OrderController {
         return ApiResponse.ok(retail.cancelRetailOrder(orderId), "Đã hủy Order");
     }
 
+    /** sales-v1 #9 (Order#9). */
+    @Operation(operationId = "abortBoardingCheckout", tags = "Orders",
+            summary = "Hủy phiên trả thú (khách không thanh toán)",
+            description = "UC59 · BR-LT-09, BR-QT-15. Actor: A06. Quyền: Lễ tân. Chuyển trạng thái: PENDING → "
+                + "CANCELLED, BOARDING (Order#9). cancelType = CHECKOUT_ABORTED, không tính thất thu. Đặt chỗ giữ "
+                + "trạng thái, tiếp tục tính đêm. Ghi audit.",
+            parameters = {
+                    @Parameter(name = "orderId", in = ParameterIn.PATH, example = "101")})
+    @ApiErrorDoc(status = 400, description = "`BR-LT-09` thiếu lý do · thú không còn trong chuồng (dùng "
+            + "cancel-unpaid)")
+    @ApiErrorDoc(status = 403)
+    @ApiErrorDoc(status = 404)
+    @ApiErrorDoc(status = 409, description = "Không phải Order BOARDING PENDING")
+    @PostMapping("/{orderId}/abort-checkout")
+    @PreAuthorize(RECEPTIONIST)
+    public ApiResponse<OrderResponse> abortCheckout(@PathVariable Long orderId,
+            @Valid @RequestBody OrderReasonRequest request) {
+        return ApiResponse.ok(cancellation.abortCheckout(orderId, request), "Đã hủy phiên trả thú");
+    }
+
     /** sales-v1 #10 (Order#10). */
     @Operation(operationId = "cancelUnpaidOrder", tags = "Orders",
             summary = "Hủy Order khách không thanh toán",

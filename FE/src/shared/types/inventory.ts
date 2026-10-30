@@ -11,7 +11,7 @@ export const ADJUSTMENT_REASON_LABELS: Record<AdjustmentReason, string> = {
   COUNT_MISMATCH: 'Lệch kiểm đếm',
   OTHER: 'Khác',
 };
-/** [CFG] stock.expiry_warning_days mặc định 30; chỉ ADMIN đọc được tham số nên bộ lọc dùng hằng này (BR-KO-07). */
+/** [CFG] stock.expiry_warning_days mặc định 30 (7–180); chỉ ADMIN đọc được tham số nên bộ lọc và badge "Sắp hết hạn" dùng hằng này (BR-KO-07). */
 export const EXPIRY_WARNING_DAYS_DEFAULT = 30;
 
 // ─── Nhà cung cấp (UC73, BR-KO-02) ───

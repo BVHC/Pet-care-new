@@ -31,6 +31,7 @@ class OrderControllerSecurityTest {
                 "deleteLine", OrderController.LINE_EDITORS,
                 "close", OrderController.RECEPTIONIST,
                 "cancel", OrderController.RECEPTIONIST,
+                "abortCheckout", OrderController.RECEPTIONIST,
                 "cancelUnpaid", OrderController.BRANCH_MANAGER);
         List<Method> handlers = Arrays.stream(OrderController.class.getDeclaredMethods())
                 .filter(method -> AnnotatedElementUtils.hasAnnotation(method, RequestMapping.class))

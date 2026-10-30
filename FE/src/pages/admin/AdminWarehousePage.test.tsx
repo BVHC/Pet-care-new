@@ -51,6 +51,17 @@ function renderAt(path: string) {
 
 const rowOf = async (text: string) => (await screen.findByText(text)).closest('tr')!;
 
+/** Nhập thêm một lô còn `days` ngày hạn (phiếu nhập → xác nhận) để dựng lô sắp hết hạn trên mock; "hôm nay" theo ngày VN như mock. */
+const receiveLot = async (productId: number, lotNumber: string, days: number) => {
+  const today = localIsoDate();
+  const receipt = await inventoryApi.createReceipt({
+    supplierId: 1,
+    receiptDate: today,
+    lines: [{ productId, quantity: 5, unitCost: 1000, lotNumber, expiryDate: addDays(today, days) }],
+  });
+  await inventoryApi.confirmReceipt(receipt.receiptId);
+};
+
 describe('AdminWarehousePage (T24 — UC73–76)', () => {
   afterEach(() => {
     vi.useRealTimers();
@@ -264,5 +275,75 @@ describe('AdminWarehousePage (T24 — UC73–76)', () => {
     expect(saveDraft).toBeEnabled();
     await user.click(saveDraft);
     await waitFor(() => expect(update).toHaveBeenCalledWith(2, expect.objectContaining({ supplierId: 4 })));
+  });
+
+  // Ngưỡng "sắp hết hạn" = EXPIRY_WARNING_DAYS_DEFAULT (30 ngày): [CFG] stock.expiry_warning_days chỉ ADMIN đọc được, BE không trả cờ trong InventoryItem.
+  it('tồn kho: lô gần nhất hạn trong 14 ngày hiện "Sắp hết hạn" ở bảng và ở danh sách lô', async () => {
+    await signIn('manager@store1.vn');
+    await receiveLot(4, 'VT-SOON', 14);
+    const user = renderAt('/admin/warehouse');
+
+    const row = await rowOf('Vitamin tổng hợp PetCare');
+    expect(within(row).getByText('Sắp hết hạn')).toBeInTheDocument();
+    expect(within(row).queryByText('Có lô hết hạn')).not.toBeInTheDocument();
+    // Amoxicillin của dữ liệu mẫu có lô AMX2405 hạn +20 ngày.
+    expect(within(await rowOf('Amoxicillin 250mg')).getByText('Sắp hết hạn')).toBeInTheDocument();
+
+    await user.click(within(row).getByRole('button', { name: 'Xem lô Vitamin tổng hợp PetCare' }));
+    const lots = screen.getByRole('dialog');
+    expect(await within(lots).findByText('VT-SOON')).toBeInTheDocument();
+    expect(within(lots).getByText('Sắp hết hạn')).toBeInTheDocument();
+    expect(within(lots).queryByText('Còn hạn')).not.toBeInTheDocument();
+  });
+
+  it('tồn kho: hạn xa thì không có badge ở bảng và lô hiện "Còn hạn"; sản phẩm không có hạn dùng cũng không', async () => {
+    await signIn('manager@store1.vn');
+    const user = renderAt('/admin/warehouse');
+
+    const far = await rowOf('Vaccine 5 bệnh Vanguard'); // lô VG2402 hạn +160 ngày
+    expect(within(far).queryByText('Sắp hết hạn')).not.toBeInTheDocument();
+    expect(within(far).queryByText('Có lô hết hạn')).not.toBeInTheDocument();
+    const noExpiry = await rowOf('Hạt Royal Canin Mini Adult 2kg'); // lô mặc định, không hạn
+    expect(within(noExpiry).queryByText('Sắp hết hạn')).not.toBeInTheDocument();
+
+    await user.click(within(far).getByRole('button', { name: 'Xem lô Vaccine 5 bệnh Vanguard' }));
+    const lots = screen.getByRole('dialog');
+    expect(await within(lots).findByText('VG2402')).toBeInTheDocument();
+    expect(within(lots).getByText('Còn hạn')).toBeInTheDocument();
+    expect(within(lots).queryByText('Sắp hết hạn')).not.toBeInTheDocument();
+  });
+
+  it('tồn kho: sản phẩm có lô đã hết hạn chỉ hiện "Có lô hết hạn", dù còn lô khác sắp hết hạn', async () => {
+    await signIn('manager@store1.vn');
+    await receiveLot(5, 'RB-SOON', 10); // Rabisin đã có lô RB2309 hết hạn
+    const user = renderAt('/admin/warehouse');
+
+    const row = await rowOf('Vaccine Dại Rabisin');
+    expect(within(row).getByText('Có lô hết hạn')).toBeInTheDocument();
+    expect(within(row).queryByText('Sắp hết hạn')).not.toBeInTheDocument();
+
+    // Danh sách lô vẫn đánh dấu từng lô: hết hạn / sắp hết hạn / còn hạn.
+    await user.click(within(row).getByRole('button', { name: 'Xem lô Vaccine Dại Rabisin' }));
+    const lots = screen.getByRole('dialog');
+    const status = async (lotNumber: string) => (await within(lots).findByText(lotNumber)).closest('tr')!;
+    expect(within(await status('RB2309')).getByText('Đã hết hạn')).toBeInTheDocument();
+    expect(within(await status('RB-SOON')).getByText('Sắp hết hạn')).toBeInTheDocument();
+    expect(within(await status('RB2401')).getByText('Còn hạn')).toBeInTheDocument();
+  });
+
+  // Ngưỡng tính từ ngày VN: máy ở Auckland đã sang 31/10 trong khi VN còn 30/10 23:59, nên dùng ngày máy sẽ gán nhầm lô +31 ngày vào ngưỡng.
+  it('tồn kho: hạn đúng +30 ngày (giờ VN) là sắp hết hạn, +31 ngày thì chưa — kể cả khi máy đã sang ngày mới', async () => {
+    setTimezone('Pacific/Auckland');
+    vi.useFakeTimers({ toFake: ['Date'] });
+    vi.setSystemTime(new Date('2026-10-30T23:59:00+07:00'));
+    await signIn('manager@store1.vn');
+    await receiveLot(4, 'VT-D30', 30);
+    await receiveLot(6, 'VG-D31', 31); // Vanguard còn lô VG2402 hạn +160 ngày
+    renderAt('/admin/warehouse');
+
+    expect(within(await rowOf('Vitamin tổng hợp PetCare')).getByText('Sắp hết hạn')).toBeInTheDocument();
+    const day31 = await rowOf('Vaccine 5 bệnh Vanguard');
+    expect(within(day31).getByText('30/11/2026')).toBeInTheDocument(); // hạn gần nhất = lô +31 ngày, không phải lô +160
+    expect(within(day31).queryByText('Sắp hết hạn')).not.toBeInTheDocument();
   });
 });

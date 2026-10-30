@@ -20,6 +20,7 @@ import org.springframework.jdbc.core.namedparam.NamedParameterJdbcTemplate;
 import org.springframework.stereotype.Repository;
 
 import com.petcare.module.catalog.api.ProductType;
+import com.petcare.module.inventory.api.StockReportApi;
 import com.petcare.module.inventory.dto.InventoryItemResponse;
 import com.petcare.module.inventory.dto.StockLotResponse;
 
@@ -222,6 +223,51 @@ public class InventoryQueryRepository {
                 SET min_quantity = EXCLUDED.min_quantity, updated_at = :now
                 """, new MapSqlParameterSource("branchId", branchId).addValue("productId", productId)
                 .addValue("min", minQuantity).addValue("now", Timestamp.from(now)));
+    }
+
+    // ---------------------------------------------------------------- StockReportApi (BR-KO-07, docs/adr/0087)
+
+    /**
+     * Sản phẩm đang kinh doanh có tồn tối thiểu &gt; 0 mà tồn khả dụng (lô chưa hết hạn, BR-KO-01) thấp hơn; không có lô nào
+     * thì khả dụng 0. {@code branchId} null = toàn chuỗi.
+     */
+    public List<StockReportApi.LowStockRow> lowStock(Long branchId, LocalDate today) {
+        MapSqlParameterSource params = new MapSqlParameterSource("today", today);
+        String branch = "";
+        if (branchId != null) {
+            branch = " AND i.branch_id = :branchId";
+            params.addValue("branchId", branchId);
+        }
+        return jdbc.query("""
+                SELECT i.branch_id, i.product_id, COALESCE(t.available, 0) AS available, i.min_quantity
+                FROM inventory_items i
+                JOIN products p ON p.id = i.product_id AND p.is_active
+                LEFT JOIN LATERAL (
+                    SELECT sum(l.quantity) AS available FROM stock_lots l
+                    WHERE l.inventory_item_id = i.id AND (l.expiry_date IS NULL OR l.expiry_date >= :today)) t ON true
+                WHERE i.min_quantity > 0 AND COALESCE(t.available, 0) < i.min_quantity""" + branch + """
+                 ORDER BY i.branch_id, i.product_id
+                """, params, (rs, i) -> new StockReportApi.LowStockRow(rs.getLong("branch_id"),
+                rs.getLong("product_id"), Math.toIntExact(Math.min(rs.getLong("available"), Integer.MAX_VALUE)),
+                rs.getInt("min_quantity")));
+    }
+
+    /** Lô còn tồn có hạn dùng không muộn hơn {@code limitDate}, gồm lô đã hết hạn; theo hạn tăng dần. */
+    public List<StockReportApi.ExpiringLotRow> expiringLots(Long branchId, LocalDate limitDate) {
+        MapSqlParameterSource params = new MapSqlParameterSource("limitDate", limitDate);
+        String branch = "";
+        if (branchId != null) {
+            branch = " AND i.branch_id = :branchId";
+            params.addValue("branchId", branchId);
+        }
+        return jdbc.query("""
+                SELECT i.branch_id, i.product_id, l.id, l.lot_number, l.expiry_date, l.quantity
+                FROM stock_lots l JOIN inventory_items i ON i.id = l.inventory_item_id
+                WHERE l.quantity > 0 AND l.expiry_date IS NOT NULL AND l.expiry_date <= :limitDate""" + branch + """
+                 ORDER BY i.branch_id, l.expiry_date, l.id
+                """, params, (rs, i) -> new StockReportApi.ExpiringLotRow(rs.getLong("branch_id"),
+                rs.getLong("product_id"), rs.getLong("id"), rs.getString("lot_number"),
+                rs.getDate("expiry_date").toLocalDate(), rs.getInt("quantity")));
     }
 
     private static InventoryItemResponse mapItem(ResultSet rs, int rowNum) throws SQLException {

@@ -68,4 +68,26 @@ class BoardingRulesTest {
         assertThat(BoardingRules.nightList(List.of(LocalDate.parse("2009-06-12"), LocalDate.parse("2009-06-13"))))
                 .isEqualTo("12/06, 13/06");
     }
+
+    @Test
+    void chargedNightsTable() {
+        assertThat(BoardingRules.chargedNights(d("2009-06-10"), d("2009-06-10"), false)).isEqualTo(1);
+        assertThat(BoardingRules.chargedNights(d("2009-06-10"), d("2009-06-10"), true)).isEqualTo(1);
+        assertThat(BoardingRules.chargedNights(d("2009-06-10"), d("2009-06-12"), false)).isEqualTo(2);
+        assertThat(BoardingRules.chargedNights(d("2009-06-10"), d("2009-06-12"), true)).isEqualTo(3);
+        assertThat(BoardingRules.chargedNights(d("2009-06-10"), d("2009-06-15"), false)).isEqualTo(5);
+    }
+
+    @Test
+    void afterCheckoutTimeIsStrictlyAfterNoonVietnamTime() {
+        LocalTime noon = LocalTime.of(12, 0);
+
+        assertThat(BoardingRules.afterCheckoutTime(Instant.parse("2009-06-12T05:00:00Z"), noon)).isFalse();
+        assertThat(BoardingRules.afterCheckoutTime(Instant.parse("2009-06-12T05:00:00.000001Z"), noon)).isTrue();
+        assertThat(BoardingRules.afterCheckoutTime(Instant.parse("2009-06-12T04:59:59Z"), noon)).isFalse();
+    }
+
+    private static LocalDate d(String date) {
+        return LocalDate.parse(date);
+    }
 }

@@ -93,6 +93,15 @@ public class OrderLine extends TimestampedEntity {
         this.lineTotal = total(quantity, newUnitPrice);
     }
 
+    /** Tính lại số đêm của dòng lưu trú, giữ đơn giá đã snapshot (BR-LT-09: dùng lại Order, tính lại số đêm). */
+    public void repriceBoarding(int nights) {
+        if (lineType != OrderLineType.BOARDING) {
+            throw new IllegalStateException("Chỉ dòng BOARDING mới tính lại số đêm");
+        }
+        this.quantity = nights;
+        this.lineTotal = total(nights, unitPrice);
+    }
+
     public void transferOwnerTo(Long accountId) {
         this.ownerAccountId = accountId;
     }

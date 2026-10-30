@@ -110,6 +110,21 @@ public class SalesOrder extends TimestampedEntity {
         return order;
     }
 
+    /** Order#3: Order nguồn BOARDING sinh thẳng ở {@code PENDING} khi bắt đầu trả thú / thú mất (BR-LT-09, 12). */
+    public static SalesOrder openForBoarding(String code, Long branchId, Long customerId, Long bookingId,
+            Long createdBy, Instant now) {
+        SalesOrder order = new SalesOrder();
+        order.code = code;
+        order.source = OrderSource.BOARDING;
+        order.branchId = branchId;
+        order.customerId = customerId;
+        order.boardingBookingId = bookingId;
+        order.createdBy = createdBy;
+        order.status = OrderStatus.PENDING;
+        order.pendingAt = now;
+        return order;
+    }
+
     /** Order#2: Order bán lẻ ở {@code OPEN}, không gắn Visit / đặt chỗ (BR-BH-01). */
     public static SalesOrder openRetail(String code, Long branchId, Long customerId, Long createdBy) {
         SalesOrder order = new SalesOrder();

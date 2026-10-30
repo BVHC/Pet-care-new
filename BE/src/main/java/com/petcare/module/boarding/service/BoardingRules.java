@@ -37,6 +37,20 @@ final class BoardingRules {
         return ranges.stream().anyMatch(r -> !time.isBefore(r.open()) && time.isBefore(r.close()));
     }
 
+    /** Giờ Việt Nam của {@code now} sau giờ trả quy định (BR-LT-04); đúng giờ đó chưa tính trễ. */
+    static boolean afterCheckoutTime(Instant now, LocalTime checkoutTime) {
+        return now.atZone(TimeConfig.BUSINESS_ZONE).toLocalTime().isAfter(checkoutTime);
+    }
+
+    /**
+     * Số đêm tính tiền (BR-LT-09): ngày kết thúc − ngày nhận thực tế, tối thiểu 1; trả sau giờ quy định cộng 1 đêm
+     * (docs/adr/0086 F1). Thú mất (BR-LT-12) không cộng đêm trễ.
+     */
+    static int chargedNights(LocalDate checkInDate, LocalDate endDate, boolean afterCheckoutTime) {
+        long nights = java.time.temporal.ChronoUnit.DAYS.between(checkInDate, endDate) + (afterCheckoutTime ? 1 : 0);
+        return (int) Math.max(1, nights);
+    }
+
     static Optional<LocalTime> closingTime(List<TimeRange> ranges) {
         return ranges.stream().map(TimeRange::close).max(Comparator.naturalOrder());
     }

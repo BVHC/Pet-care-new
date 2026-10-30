@@ -136,4 +136,35 @@ class SalesOrderTest {
         assertThat(order.getPaymentId()).isEqualTo(77L);
         assertThat(order.getPaidAt()).isEqualTo(NOW.plusSeconds(60));
     }
+
+    @Test
+    void boardingOrderStartsPendingWithBookingSourceAndNoVisit() {
+        SalesOrder order = SalesOrder.openForBoarding("DH-2610-00009", 1L, 2L, 88L, 4L, NOW);
+
+        assertThat(order.getStatus()).isEqualTo(OrderStatus.PENDING);
+        assertThat(order.getSource()).isEqualTo(OrderSource.BOARDING);
+        assertThat(order.getBoardingBookingId()).isEqualTo(88L);
+        assertThat(order.getVisitId()).isNull();
+        assertThat(order.getPendingAt()).isEqualTo(NOW);
+    }
+
+    @Test
+    void repriceBoardingChangesQuantityAndTotalKeepsUnitPrice() {
+        SalesOrder order = SalesOrder.openForBoarding("DH-2610-00009", 1L, 2L, 88L, 4L, NOW);
+        OrderLine line = OrderLine.of(OrderLineType.BOARDING, 5L, null, "Luu tru", 2, 150_000L, true, 4L, 4L);
+        order.addLine(line);
+
+        line.repriceBoarding(4);
+        order.recalculateTotal();
+
+        assertThat(line.getQuantity()).isEqualTo(4);
+        assertThat(line.getUnitPrice()).isEqualTo(150_000L);
+        assertThat(line.getLineTotal()).isEqualTo(600_000L);
+        assertThat(order.getTotalAmount()).isEqualTo(600_000L);
+    }
+
+    @Test
+    void repriceOfNonBoardingLineThrows() {
+        assertThatThrownBy(() -> service(1, 100L).repriceBoarding(2)).isInstanceOf(IllegalStateException.class);
+    }
 }
