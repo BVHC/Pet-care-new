@@ -20,6 +20,11 @@ import { BoardingDetailPage } from './BoardingDetailPage';
 
 const toast = vi.hoisted(() => Object.assign(vi.fn(), { success: vi.fn(), error: vi.fn() }));
 vi.mock('sonner', () => ({ toast }));
+// Hook thử lại lỗi 5xx / mạng tối đa 3 lần (shouldRetry) với retryDelay 1 s, 2 s, 4 s: bỏ chờ để ca lỗi chạy nhanh.
+vi.mock('../../shared/constants/realtime', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('../../shared/constants/realtime')>()),
+  retryDelay: () => 0,
+}));
 
 beforeAll(() => installMockApi(apiClient));
 beforeEach(async () => {
@@ -112,6 +117,10 @@ async function refreshed(get: { mock: { calls: unknown[] } }) {
   });
 }
 const NETWORK_DOWN = () => new ApiError('INTERNAL_ERROR', 'Không kết nối được máy chủ. Vui lòng thử lại.', 0);
+/** Lần gọi đầu và cả 3 lần thử lại của hook đều lỗi: lỗi chỉ hiện ra sau lần gọi thứ 4. */
+const failThroughRetries = (spy: { mockRejectedValueOnce: (error: unknown) => unknown }) => {
+  for (let i = 0; i < 4; i++) spy.mockRejectedValueOnce(NETWORK_DOWN());
+};
 
 /** Nạp dữ liệu mẫu theo ngày đang ghim (mock tính ngày mẫu lúc nạp lần đầu), để sau đó dời đồng hồ mà đặt chỗ không dời theo. */
 const seed = () => boardingApi.get(4);
@@ -153,18 +162,20 @@ describe('khung trang và đường dẫn', () => {
   });
 
   it('lỗi mạng: hiện câu lỗi + "Thử lại", bấm lại thì tải được', async () => {
-    const get = vi.spyOn(boardingApi, 'get').mockRejectedValueOnce(NETWORK_DOWN()).mockResolvedValue({ ...BIM_4, status: 'BOOKED' });
+    const get = vi.spyOn(boardingApi, 'get');
+    failThroughRetries(get);
+    get.mockResolvedValue({ ...BIM_4, status: 'BOOKED' });
     vi.spyOn(boardingApi, 'listCareLogs').mockResolvedValue([]);
     const { user } = renderAt('/boarding-bookings/4');
     expect(await screen.findByRole('alert')).toHaveTextContent('Không kết nối được máy chủ. Vui lòng thử lại.');
     expect(screen.queryByRole('heading', { name: 'Không tìm thấy lưu trú' })).not.toBeInTheDocument();
     await user.click(screen.getByRole('button', { name: 'Thử lại' }));
     expect(await loaded()).toBeInTheDocument();
-    expect(get).toHaveBeenCalledTimes(2);
+    expect(get).toHaveBeenCalledTimes(5);
   });
 
   it('chỉ 404 mới là "không tìm thấy": 500 vẫn là lỗi có nút Thử lại', async () => {
-    vi.spyOn(boardingApi, 'get').mockRejectedValue(new ApiError('INTERNAL_ERROR', 'Máy chủ đang gặp sự cố. Vui lòng thử lại sau.', 0));
+    vi.spyOn(boardingApi, 'get').mockRejectedValue(new ApiError('INTERNAL_ERROR', 'Máy chủ đang gặp sự cố. Vui lòng thử lại sau.', 500));
     renderAt('/boarding-bookings/4');
     expect(await screen.findByRole('button', { name: 'Thử lại' })).toBeInTheDocument();
     expect(screen.queryByRole('heading', { name: 'Không tìm thấy lưu trú' })).not.toBeInTheDocument();
@@ -837,14 +848,15 @@ describe('nhật ký chăm sóc (UC60)', () => {
 
   it('đang tải nhật ký: khung chờ; lỗi: câu lỗi + Thử lại, bấm lại thì có nhật ký', async () => {
     const { list } = stub({}, []);
-    list.mockRejectedValueOnce(NETWORK_DOWN()).mockResolvedValue([log({ eating: 'Ăn hết' })]);
+    failThroughRetries(list);
+    list.mockResolvedValue([log({ eating: 'Ăn hết' })]);
     const { user } = renderAt('/boarding-bookings/4');
     await loaded();
     const logs = region('Nhật ký chăm sóc');
     expect(await within(logs).findByRole('alert')).toHaveTextContent('Không kết nối được máy chủ');
     await user.click(within(logs).getByRole('button', { name: 'Thử lại' }));
     expect(await within(logs).findByText('Ăn hết')).toBeInTheDocument();
-    expect(list).toHaveBeenCalledTimes(2);
+    expect(list).toHaveBeenCalledTimes(5);
   });
 
   it('khung chờ nhật ký khi đang tải', async () => {

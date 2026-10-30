@@ -211,6 +211,8 @@ interface FormModalProps {
   submitText?: string
   cancelText?: string
   loading?: boolean
+  /** Khóa nút gửi khi biểu mẫu đang có giá trị chắc chắn bị từ chối. */
+  submitDisabled?: boolean
   size?: "sm" | "md" | "lg" | "xl"
 }
 
@@ -231,6 +233,7 @@ export function FormModal({
   submitText = "Lưu",
   cancelText = "Hủy",
   loading = false,
+  submitDisabled = false,
   size = "md",
 }: FormModalProps) {
   return (
@@ -254,7 +257,7 @@ export function FormModal({
           <Button type="button" variant="outline" onClick={() => onOpenChange(false)} disabled={loading}>
             {cancelText}
           </Button>
-          <Button type="submit" disabled={loading}>
+          <Button type="submit" disabled={loading || submitDisabled}>
             {loading ? "Đang lưu..." : submitText}
           </Button>
         </ModalFooter>

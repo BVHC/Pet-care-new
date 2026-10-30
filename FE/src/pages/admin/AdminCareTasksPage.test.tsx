@@ -16,6 +16,12 @@ import { AdminCareTasksPage } from './AdminCareTasksPage';
 //   Bim (Nguyễn Thu Trang) quá hạn đón 25/10, SĐT khẩn 0987000111 · Miu (Lê Thị Hoa) tái khám 26/10 · Miu tái chủng 28/10
 //   Đã xong: Miu 26/09 (liên hệ được), Bim 20/10 (không liên lạc được). Đã hủy: Lu 21/10 (lễ tân hủy), Mochi 22/10 (hệ thống hủy).
 
+// Hook thử lại lỗi 5xx / mạng tối đa 3 lần (shouldRetry) với retryDelay 1 s, 2 s, 4 s: bỏ chờ để ca lỗi chạy nhanh.
+vi.mock('../../shared/constants/realtime', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('../../shared/constants/realtime')>()),
+  retryDelay: () => 0,
+}));
+
 beforeAll(() => installMockApi(apiClient));
 beforeEach(async () => {
   vi.useFakeTimers({ toFake: ['Date'] });
@@ -209,7 +215,9 @@ describe('AdminCareTasksPage (UC87 — lễ tân)', () => {
     });
 
     it('lỗi tải hiện thông báo kèm nút Thử lại; thử lại được', async () => {
-      vi.spyOn(careApi, 'listTasks').mockRejectedValueOnce(new ApiError('INTERNAL_ERROR', 'Máy chủ đang gặp sự cố. Vui lòng thử lại sau.', 0));
+      // Lần gọi đầu và cả 3 lần thử lại của hook đều lỗi 5xx thì lỗi mới hiện ra; bấm Thử lại thì gọi API thật.
+      const listTasks = vi.spyOn(careApi, 'listTasks');
+      for (let i = 0; i < 4; i++) listTasks.mockRejectedValueOnce(new ApiError('INTERNAL_ERROR', 'Máy chủ đang gặp sự cố. Vui lòng thử lại sau.', 503));
       const user = renderPage();
       const alert = await screen.findByRole('alert');
       expect(alert).toHaveTextContent('Không tải được việc gọi điện');

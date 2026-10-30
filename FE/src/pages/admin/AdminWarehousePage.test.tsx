@@ -202,4 +202,67 @@ describe('AdminWarehousePage (T24 — UC73–76)', () => {
     await user.click(within(form).getByRole('button', { name: 'Lưu phiếu điều chỉnh' }));
     expect(await screen.findByRole('status')).toHaveTextContent(/Đã lập phiếu điều chỉnh DC-\d{6}-0002/);
   });
+
+  // BE cấm một lô xuất hiện hai lần trong phiếu (400 VALIDATION_FAILED "lotsDistinct: Mỗi lô chỉ được xuất hiện một lần trong phiếu").
+  it('điều chỉnh tồn: hai dòng cùng một lô báo lỗi ở dòng sau và không gửi; đổi sang lô khác thì lưu được', async () => {
+    await signIn('manager@store1.vn');
+    const create = vi.spyOn(inventoryApi, 'createAdjustment');
+    const user = renderAt('/admin/warehouse/adjustments');
+    await user.click(await screen.findByRole('button', { name: 'Lập phiếu điều chỉnh' }));
+    const form = screen.getByRole('dialog');
+    await user.selectOptions(within(form).getByLabelText('Lý do'), 'EXPIRED');
+    await user.click(within(form).getByRole('button', { name: 'Thêm dòng' }));
+    await waitFor(() => expect(within(form).getAllByRole('option', { name: 'Vaccine Dại Rabisin' }).length).toBe(2));
+    for (const row of [1, 2]) {
+      await user.selectOptions(within(form).getByLabelText(`Dòng ${row} — sản phẩm`), '5');
+      // Rabisin có hai lô (RB2401, RB2309): chờ đủ "Chọn lô…" + 2 lô rồi mới chọn.
+      await waitFor(() => expect(within(within(form).getByLabelText(`Dòng ${row} — lô`)).getAllByRole('option').length).toBe(3));
+      await user.selectOptions(within(form).getByLabelText(`Dòng ${row} — lô`), '16');
+      // Ô số trong jsdom bỏ dấu "-" khi gõ từng ký tự: đặt giá trị trực tiếp.
+      fireEvent.change(within(form).getByLabelText(`Dòng ${row} — số điều chỉnh`), { target: { value: '-1' } });
+    }
+
+    await user.click(within(form).getByRole('button', { name: 'Lưu phiếu điều chỉnh' }));
+    expect(within(form).getByRole('alert')).toHaveTextContent('Dòng 2: lô đã chọn ở dòng 1');
+    expect(create).not.toHaveBeenCalled();
+
+    await user.selectOptions(within(form).getByLabelText('Dòng 2 — lô'), '15');
+    await user.click(within(form).getByRole('button', { name: 'Lưu phiếu điều chỉnh' }));
+    expect(await screen.findByRole('status')).toHaveTextContent(/Đã lập phiếu điều chỉnh DC-\d{6}-0002/);
+    expect(create).toHaveBeenCalledTimes(1);
+  });
+
+  // BE từ chối lưu và xác nhận nháp có nhà cung cấp ngừng hợp tác (400 BR-KO-02 "Nhà cung cấp … đã ngừng hợp tác, không chọn được ở phiếu nhập mới").
+  it('phiếu nhập: nháp có nhà cung cấp ngừng hợp tác báo trước, khóa "Xác nhận nhập kho"; ở "Sửa" khóa "Lưu nháp" tới khi đổi nhà cung cấp', async () => {
+    await signIn('manager@store1.vn');
+    await inventoryApi.updateSupplier(1, { isActive: false }); // phiếu #2 (nháp) của Royal Canin
+    await inventoryApi.updateSupplier(2, { isActive: false }); // phiếu #1 (đã nhập) của Hanvet
+    const update = vi.spyOn(inventoryApi, 'updateReceipt');
+    const user = renderAt('/admin/warehouse/receipts');
+
+    // Phiếu đã nhập không còn gì để chặn: không cảnh báo.
+    await user.click(await screen.findByRole('button', { name: /^Mở phiếu PN-\d{6}-0001$/ }));
+    let detail = screen.getByRole('dialog');
+    await within(detail).findByRole('button', { name: 'Hủy phiếu' });
+    expect(within(detail).queryByRole('note')).not.toBeInTheDocument();
+    await user.click(within(detail).getByRole('button', { name: 'Đóng' }));
+
+    await user.click(await screen.findByRole('button', { name: /^Mở phiếu PN-\d{6}-0002$/ }));
+    detail = screen.getByRole('dialog');
+    expect(await within(detail).findByRole('note')).toHaveTextContent('Công ty Royal Canin Việt Nam đã ngừng hợp tác');
+    expect(within(detail).getByRole('button', { name: 'Xác nhận nhập kho' })).toBeDisabled();
+    expect(within(detail).getByRole('button', { name: 'Sửa' })).toBeEnabled();
+
+    await user.click(within(detail).getByRole('button', { name: 'Sửa' }));
+    const form = screen.getByRole('dialog');
+    expect(await within(form).findByText(/đã ngừng hợp tác, không chọn được ở phiếu nhập mới/)).toBeInTheDocument();
+    const saveDraft = within(form).getByRole('button', { name: 'Lưu nháp' });
+    expect(saveDraft).toBeDisabled();
+
+    await user.selectOptions(within(form).getByLabelText('Nhà cung cấp'), 'Virbac Việt Nam');
+    expect(within(form).queryByText(/đã ngừng hợp tác/)).not.toBeInTheDocument();
+    expect(saveDraft).toBeEnabled();
+    await user.click(saveDraft);
+    await waitFor(() => expect(update).toHaveBeenCalledWith(2, expect.objectContaining({ supplierId: 4 })));
+  });
 });

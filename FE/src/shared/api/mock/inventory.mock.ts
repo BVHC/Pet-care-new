@@ -558,7 +558,7 @@ function receiptChecks(b: Record<string, unknown>): Check[] {
 function receiptRefs(s: State, b: Record<string, unknown>): MockReply | null {
   const sp = s.suppliers.find((x) => x.supplierId === b.supplierId);
   if (!sp) return notFound('nhà cung cấp', String(b.supplierId));
-  if (!sp.isActive) return ruleFail('BR-KO-02', `Nhà cung cấp ${sp.name} đã ngừng hợp tác`);
+  if (!sp.isActive) return ruleFail('BR-KO-02', `Nhà cung cấp ${sp.name} đã ngừng hợp tác, không chọn được ở phiếu nhập mới`);
   for (const l of b.lines as Record<string, unknown>[]) {
     if (!productOf(l.productId as number)) return notFound('sản phẩm', String(l.productId));
   }
@@ -712,6 +712,7 @@ const confirmReceipt: MockHandler = (req) => {
   // Như BE (StockReceiptService.confirmReceipt): 409 trạng thái trước, rồi BR-KO-02, rồi BR-KO-03 (T49 nhóm 2, hàng 12).
   if (r.status !== 'DRAFT') return fail('INVALID_STATE_TRANSITION', 'Chỉ xác nhận được phiếu nhập nháp', 409);
   const sp = s.suppliers.find((x) => x.supplierId === r.supplierId)!;
+  // Câu của BE lúc xác nhận ngắn hơn câu lúc tạo / sửa nháp (không có vế "không chọn được ở phiếu nhập mới").
   if (!sp.isActive) return ruleFail('BR-KO-02', `Nhà cung cấp ${sp.name} đã ngừng hợp tác`);
   const problem = confirmProblem(r, localIsoDate());
   if (problem) return ruleFail('BR-KO-03', problem);
@@ -773,6 +774,12 @@ function lotInBranch(s: State, lotId: number, branchId: number): { lot: LotRow; 
   return lot && item && item.branchId === branchId ? { lot, item } : null;
 }
 
+/** BE `StockAdjustmentRequest.isLotsDistinct`: mỗi lô chỉ một dòng trong phiếu (400 VALIDATION_FAILED), nên không có chuyện cộng dồn. */
+const hasDuplicateLot = (lines: Record<string, unknown>[]) => {
+  const ids = lines.map((l) => l?.stockLotId).filter(isId);
+  return new Set(ids).size < ids.length;
+};
+
 const createAdjustment: MockHandler = (req) => {
   const b = bodyOf(req);
   const lines = Array.isArray(b.lines) ? (b.lines as Record<string, unknown>[]) : null;
@@ -783,6 +790,7 @@ const createAdjustment: MockHandler = (req) => {
       [`lines[${i}].stockLotId`, 'Vui lòng chọn lô', !isId(l?.stockLotId)],
       [`lines[${i}].quantityDelta`, 'Số điều chỉnh phải là số nguyên khác 0', !(Number.isInteger(l?.quantityDelta) && l.quantityDelta !== 0)],
     ]),
+    ['lotsDistinct', 'Mỗi lô chỉ được xuất hiện một lần trong phiếu', hasDuplicateLot(lines ?? [])],
     ['note', 'Ghi chú tối đa 1000 ký tự', tooLong(b.note, 1000)],
   ]);
   if (bad) return bad;
@@ -793,18 +801,13 @@ const createAdjustment: MockHandler = (req) => {
   const missing = found.findIndex((f) => f === null);
   if (missing >= 0) return notFound('lô hàng', String(lines![missing].stockLotId));
   if (b.reason === 'OTHER' && !isText(b.note)) return ruleFail('BR-KO-06', 'Lý do "Khác" bắt buộc ghi chú');
-  // Không giảm quá tồn của lô; cộng dồn các dòng cùng lô (BR-KO-01, 06).
-  const after = new Map<number, number>();
-  lines!.forEach((l, i) => {
-    const { lot } = found[i]!;
-    after.set(lot.id, (after.get(lot.id) ?? lot.quantity) + (l.quantityDelta as number));
-  });
-  for (const [lotId, qty] of after) {
-    if (qty < 0) {
-      const lot = s.lots.find((x) => x.id === lotId)!;
-      return ruleFail('BR-KO-06', `Giảm quá tồn của lô ${lot.lotNumber ?? 'mặc định'} (còn ${lot.quantity})`);
-    }
-  }
+  // Không giảm quá tồn của lô (BR-KO-01, 06). Như BE (StockAdjustmentService): nêu đủ các lô thiếu, theo id lô tăng dần, lô mặc định ghi "mặc định #id".
+  const lacking = lines!
+    .map((l, i) => ({ lot: found[i]!.lot, delta: l.quantityDelta as number }))
+    .sort((a, b) => a.lot.id - b.lot.id)
+    .filter(({ lot, delta }) => delta < 0 && lot.quantity + delta < 0)
+    .map(({ lot, delta }) => `lô ${lot.isDefault ? `mặc định #${lot.id}` : `${lot.lotNumber} (hạn ${lot.expiryDate})`} còn ${lot.quantity}, giảm ${-delta}`);
+  if (lacking.length) return ruleFail('BR-KO-06', `Không giảm quá tồn của lô: ${lacking.join('; ')}`);
   const adjustmentLines: AdjustmentLine[] = lines!.map((l, i) => {
     const { lot, item } = found[i]!;
     lot.quantity += l.quantityDelta as number;

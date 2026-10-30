@@ -126,6 +126,22 @@ describe('reception desk — quản lý chi nhánh (A05)', () => {
     expect(payable).not.toHaveBeenCalled();
     await waitFor(() => expect(within(screen.getByRole('tab', { name: /Chờ thu/ })).getByText('3')).toBeInTheDocument());
   });
+
+  // BE: GET /customers cho lễ tân, bác sĩ, người chăm; POST / PATCH chỉ lễ tân; quản lý bị 403 ở mọi endpoint khách và POST /orders.
+  it('không có đường vào hồ sơ khách (nút "Khách hàng", ô tìm khách bán lẻ): chỉ lời nhắc bán hàng là việc của lễ tân', async () => {
+    await signInAs('manager@store1.vn');
+    renderDesk();
+
+    expect(await screen.findByText('Bán hàng tại quầy là việc của lễ tân')).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: /Khách hàng/ })).not.toBeInTheDocument();
+    expect(screen.queryByPlaceholderText('SĐT, họ tên hoặc email của khách')).not.toBeInTheDocument();
+  });
+
+  it('lễ tân vẫn có nút "Khách hàng" để tra cứu hồ sơ', async () => {
+    await signInAs('reception@store1.vn');
+    renderDesk();
+    expect((await screen.findAllByRole('button', { name: /Khách hàng/ })).length).toBeGreaterThan(0);
+  });
 });
 
 // T36: tiếp nhận, hàng chờ, phím tắt. Lịch hẹn mẫu #1 (Mochi, Nguyễn Thu Trang, Khám tổng quát 11:00) vào cửa sổ check-in từ 10:30.

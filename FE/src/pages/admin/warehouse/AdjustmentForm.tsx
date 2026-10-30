@@ -44,16 +44,17 @@ export function AdjustmentForm({ onClose, onSaved }: { onClose: () => void; onSa
     let problem = '';
     if (!reason) problem = 'Vui lòng chọn lý do điều chỉnh';
     else if (reason === 'OTHER' && !note.trim()) problem = 'Lý do "Khác" bắt buộc ghi chú';
-    const remaining = new Map<string, number>();
+    // BE cấm một lô xuất hiện hai lần trong phiếu (400 lotsDistinct), nên mỗi lô chỉ được chọn ở một dòng.
+    const rowOfLot = new Map<string, number>();
     lines.forEach((l, i) => {
       if (problem) return;
       const delta = Number(l.delta);
       if (!l.stockLotId) problem = `Dòng ${i + 1}: chọn sản phẩm và lô`;
+      else if (rowOfLot.has(l.stockLotId)) problem = `Dòng ${i + 1}: lô đã chọn ở dòng ${rowOfLot.get(l.stockLotId)}`;
       else if (l.delta.trim() === '' || !Number.isInteger(delta) || delta === 0) problem = `Dòng ${i + 1}: số điều chỉnh là số nguyên khác 0 (âm = giảm)`;
       else {
-        const left = (remaining.get(l.stockLotId) ?? l.lotQuantity ?? 0) + delta;
-        remaining.set(l.stockLotId, left);
-        if (left < 0) problem = `Dòng ${i + 1}: giảm quá tồn của lô (còn ${l.lotQuantity ?? 0})`;
+        rowOfLot.set(l.stockLotId, i + 1);
+        if ((l.lotQuantity ?? 0) + delta < 0) problem = `Dòng ${i + 1}: giảm quá tồn của lô (còn ${l.lotQuantity ?? 0})`;
       }
     });
     setError(problem);

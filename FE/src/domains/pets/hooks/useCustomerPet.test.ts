@@ -1,11 +1,13 @@
 import { act, renderHook, waitFor } from '@testing-library/react';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { createElement, type ReactNode } from 'react';
-import { beforeAll, beforeEach, describe, expect, it } from 'vitest';
+import { afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
 import { apiClient } from '../../../shared/api/axios';
 import { MOCK_PASSWORD } from '../../../shared/api/mock/identity.mock';
 import { installMockApi } from '../../../shared/api/mock/mock-api';
 import { useSession } from '../../../shared/stores/session.store';
+import { customerPetApi } from '../customer-pet.api';
+import type { CustomerSearchQuery } from '../types';
 import {
   customerErrors,
   deceasedErrors,
@@ -22,6 +24,7 @@ import {
 // Hook gọi customerPetApi thật qua apiClient (mock theo hợp đồng): bắt lỗi đường dẫn và cách đọc envelope.
 
 beforeAll(() => installMockApi(apiClient));
+afterEach(() => vi.restoreAllMocks());
 
 const signIn = async (email: string) => {
   useSession.getState().clear();
@@ -47,6 +50,32 @@ describe('hook tra cứu và hồ sơ (lễ tân)', () => {
     const { result } = renderHook(() => useCustomerLookup({ phone: '  ', name: '' }), { wrapper: wrapper() });
     expect(result.current.fetchStatus).toBe('idle');
     expect(result.current.data).toBeUndefined();
+  });
+
+  it('xin BE tối đa 100 dòng mỗi lần tra cứu, không để mặc định 20', async () => {
+    const search = vi.spyOn(customerPetApi, 'searchCustomers');
+    const { result } = renderHook(() => useCustomerLookup({ phone: '0905111222' }), { wrapper: wrapper() });
+    await waitFor(() => expect(result.current.isSuccess).toBe(true));
+    expect(search).toHaveBeenCalledOnce();
+    expect(search.mock.calls[0][0]).toMatchObject({ phone: '0905111222', size: '100' });
+  });
+
+  it('truy vấn bị tắt thì data là undefined, không giữ kết quả của lần tra trước', async () => {
+    const { result, rerender } = renderHook(({ query }: { query: CustomerSearchQuery }) => useCustomerLookup(query), {
+      wrapper: wrapper(),
+      initialProps: { query: { phone: '0905111222' } as CustomerSearchQuery },
+    });
+    await waitFor(() => expect(result.current.data?.content).toHaveLength(3));
+
+    // SĐT bị xóa bớt (chưa đủ 10 số nên màn gửi phone rỗng): keepPreviousData không được phép trả 3 hồ sơ cũ.
+    rerender({ query: { phone: '' } });
+    expect(result.current.fetchStatus).toBe('idle');
+    expect(result.current.data).toBeUndefined();
+
+    // Có điều kiện hợp lệ trở lại thì tra bình thường.
+    rerender({ query: { phone: '0912345678' } });
+    await waitFor(() => expect(result.current.isFetching).toBe(false));
+    expect(result.current.data?.content.map((c) => c.fullName)).toEqual(['Nguyễn Thu Trang']);
   });
 
   it('tạo hồ sơ tại quầy trả hồ sơ mới và danh sách nghi trùng SĐT', async () => {

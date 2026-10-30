@@ -156,6 +156,119 @@ Merge `origin/dev` (T39 của BE-1: Care Task, ST04, ST18, ST19, `FollowUpApi`, 
 - **FE ↔ BE thật:** `/admin/care-tasks` hiện đúng hàng (hạn, khách + SĐT, loại "Tái khám", thú, ngữ cảnh, "Đang chờ"), không 4xx; "Đã gọi" → chọn kết quả + ghi chú → `POST /api/care-tasks/1/complete` 200, danh sách làm mới.
 - **Chưa chạy thật:** hủy Care Task (`/cancel`), `VACCINE_DUE` / `VACCINE_OVERDUE` (ST04 tái chủng, ST18: cần mũi tiêm tới hạn / quá hạn), `PICKUP_OVERDUE` (chờ ST15, T43), hủy tự động khi thú mất / chuyển chủ (ST19).
 
+## C.6 Cụm 3: đặt lịch → tiếp nhận (28/10/2026)
+
+Chạy thật BE 8082 + FE 5173 trên DB `petcare_seed`: 11 ca `C3-01…C3-11` qua API và giao diện (Playwright) không có lệch FE ↔ BE cần sửa FE; không đổi code FE (vitest 15 file / 196 ca của cụm xanh). BE-note: `GET /api/staff` 403 với lễ tân (hộp gán người chờ BE-1). Chi tiết ca, dữ liệu `[TEST C3]` và kết quả: `docs/testcases/test-tay-ghep-api-theo-cum.md` mục Cụm 3; nhật ký tiến độ ở `docs/be-fe-integration.md` mục 3.
+
+## C.7 Cụm 5: thu ngân và bán lẻ (28/10/2026)
+
+Chạy thật BE 8082 + FE 5173 trên DB `petcare_seed`: 9 ca `C5-01…C5-09` qua API và giao diện (Playwright). **Lỗi FE tìm thấy và sửa:** quản lý chi nhánh thấy hai lối vào hồ sơ khách trong bàn lễ tân (khung "Bán lẻ" và nút "Khách hàng") nhưng BE trả 403 cho `GET /api/customers` và `POST /api/orders`; `RetailOrderPanel` nay tách theo vai trò như `CheckoutPanel`, `ReceptionWorkspacePage` ẩn nút "Khách hàng" (test mới ở `RetailOrderPanel.test.tsx` và `ReceptionWorkspacePage.test.tsx`). BE-note: sales #9, #11 404 (BE-2). Chi tiết ca, dữ liệu và kết quả: `docs/testcases/test-tay-ghep-api-theo-cum.md` mục Cụm 5; nhật ký ở `docs/be-fe-integration.md` mục 3.
+
+## C.8 Cụm 8: nội dung công khai (28/10/2026)
+
+Chạy thật BE 8082 + FE 5173 trên DB `petcare_seed`: 6 ca `C8-01…C8-06` qua API và giao diện (Playwright) đều đạt; **không có lệch FE ↔ BE cần sửa FE**, không đổi code FE (nên không chạy lại tsc / lint / vitest). 11 trang công khai tải được, 0 4xx / 5xx ngoài hai 404 có chủ ý (`/news/<slug lạ>`, `/shop/999999`). BE-note: `PUT` nội dung trang chỉ kiểm "là object" và ≤ 64 KB, không kiểm cấu trúc (`{"foo":1}` cho ABOUT vẫn 200, trang công khai lặng lẽ về mặc định cả khóa); tên chuyên mục phân biệt hoa / thường; thông điệp 409 dùng tên entity tiếng Anh ("Article", "Feedback"); bài đã từng xuất bản và feedback không xóa được qua API (`BR-BV-02`). Ghi nhận ngoài BE: modal chung `components/ui/modal-templates.tsx` không đóng bằng Esc và không chuyển focus vào hộp thoại; `/help` FAQ cứng; `/about` và footer dùng số liệu / địa chỉ mặc định trong mã (lệch chi nhánh thật). Dữ liệu test đã dọn sạch (0 bài, 0 chuyên mục, 0 feedback, nội dung trang `{}`, `feedback.max_per_day` = 5). Chi tiết ca, dữ liệu và kết quả: `docs/testcases/test-tay-ghep-api-theo-cum.md` mục Cụm 8; nhật ký ở `docs/be-fe-integration.md` mục 3.
+
+## C.9 Cụm 2: nền, danh mục, chi nhánh, kho, khách (chạy thật 29/10, sửa FE 30/10/2026)
+
+**Cách chạy.** BE thật `http://localhost:8082` trên DB tạm `petcare_seed` (Postgres 5433); FE `VITE_API_MOCK=false` ở cổng **5174** (không dùng 5173 vì không rõ chế độ), Playwright; mỗi ca ABORT nếu 0 response từ 8082. **CORS:** BE chỉ cho origin `http://localhost:5173` và `http://localhost:3000` (`CORS_ALLOWED_ORIGINS`), nên FE ở 5174 trượt preflight; Playwright mở Chrome với `--disable-web-security` (request vẫn đi thật tới 8082). Chạy tay: dùng cổng 5173. Docker Desktop không tự bật container sau khi khởi động lại máy: `docker start petcare-seed-pg petcare-mailpit petcare-redis`. Kịch bản, `*-result.json`, `evidence-*.json`, `snapshot-*.json` và ảnh ở `D:/Do-an/.c2-tmp/{branch,inventory,customer}/` (ngoài repo; ba mảng chi nhánh, kho, khách). Mỗi ca có hàng chục đến hàng trăm response từ 8082, không ca nào abort.
+
+**Kết quả 9 ca `C2-01…C2-09`: đều đạt, mức L** (bước và mong đợi: `docs/testcases/test-tay-ghep-api-theo-cum.md` mục Cụm 2).
+
+| Ca | Kết quả chạy thật |
+|---|---|
+| C2-01 mô tả rỗng | tạo sản phẩm để trống mô tả → không gửi `description`, DB NULL; xóa trắng → gửi `""`, DB `''`, mở lại ô rỗng |
+| C2-02 danh mục (giao diện) | số dòng UI = API = DB (5 loại vaccine, 3 phác đồ, 7 dịch vụ); tạo / sửa / ngừng / xóa dòng thử; trùng → 400 hiện đúng câu. Bỏ vế "bàn khám gợi ý mũi 1 mèo" (là C4-11) |
+| C2-03 giờ mở cửa, ngày nghỉ, dịch vụ, quota | "Ngày hiệu lực" mặc định và `min` = ngày mai ở cả 3 múi giờ trình duyệt; nhập hôm nay → trình duyệt chặn, API 400 `BR-CN-04`; xem trước ảnh hưởng đúng (1 lịch `BOOKED` mỗi ngày kiểm); thêm ngày nghỉ an toàn 08/12 (0 lịch) rồi xóa; tắt / bật "Cắt tỉa lông"; quota GROOMING 2→4→2, MEDICAL 3→4→3, quota riêng khung; FE chặn -1 và 40000 |
+| C2-04 tồn theo lô | `hung.tran` và `mai.le`; lô **đã** hết hạn có badge "Có lô hết hạn"; hàng dưới tồn tối thiểu có badge (8 sản phẩm demo đều tồn tối thiểu 0 nên chưa hàng demo nào bị đánh dấu) |
+| C2-05 phiếu nhập | nháp → xác nhận tăng đúng lô; trùng số lô + hạn thì cộng vào lô cũ; ngày tương lai bị trình duyệt chặn (`max`), 0 POST; nhà cung cấp ngừng hợp tác bị chặn ở mọi ngả; hủy phiếu đã nhập đúng `BR-KO-04` (+ nút "Lập phiếu điều chỉnh") |
+| C2-06 điều chỉnh tồn | có lý do, tồn đổi, có dòng lịch sử; vượt tồn bị từ chối ở FE (0 POST) và ở BE; BE từ chối khi tồn đã đổi sau lúc mở form |
+| C2-07 khách quầy, thú | `mai.le` tạo khách (SĐT 10 số), cảnh báo trùng `BR-KH-10` (liệt kê hồ sơ nghi trùng, nút "Mở"), thêm thú, trùng tên + loài chỉ cảnh báo, ảnh `http://` bị BE 400, tra theo SĐT / họ tên / tên thú / email đúng (8 phép tìm khớp `count(*)`), xóa thú chưa giao dịch 204 (`BR-KH-06`), thú có bệnh án không xóa được và khóa đổi loài (`BR-KH-03`). **Lệch tài liệu:** lễ tân không có đường ghi cân nặng (xem BE-note) |
+| C2-08 thú mất | hai đường (lễ tân, chủ thú tự đánh dấu); đối chiếu SQL: lịch hẹn và đặt chỗ lưu trú `BOOKED` → `CANCELLED`, `cancel_source=CLINIC`, `late_cancel=false`, `booking_restrictions` không tăng; Care Task `FOLLOW_UP_DUE` `OPEN` → `CANCELLED`; thông báo EMAIL + IN_APP đã gửi. Âm tính: sửa tên, xóa, chuyển chủ, đặt lịch / lưu trú, tiếp nhận (`BR-TN-01`), cân nặng đều bị chặn; đánh dấu lần 2 → 409 |
+| C2-09 hồ sơ sức khỏe | 404 "Không tìm thấy đường dẫn yêu cầu" trong tab (T28b, đã biết); các tab khác chạy; nút trên UI tên "Sức khỏe", chi tiết thú mở bằng ngăn kéo |
+
+**Vai trò (HTTP khớp `@PreAuthorize`, không có lối vào chết).** Chi nhánh: `ha.nguyen` (SM) thấy danh sách + 3 tab, không có nút "Đặt giờ mở cửa mới" / "Thêm ngày nghỉ", checkbox dịch vụ khóa, tab Quota ẩn (mở thẳng `/quota` tự về `/hours`); `hung.tran` (BM) đủ 4 tab và nút sửa; `mai.le`, `khoi.vo`, `tai.bui`, `admin` không có menu "Chi nhánh", route ra khung 403. Danh mục `/admin/catalog`: chỉ SM; `hung.tran`, `mai.le`, `khoi.vo`, `admin` → khung 403, không nút "Thêm", API ghi 403. Kho `/admin/warehouse`: BM đủ 4 tab; lễ tân chỉ tab "Tồn kho" (xem lô, không nút tồn tối thiểu; gõ `/receipts` tự về `/stock`); SM, bác sĩ, chăm sóc → khung 403; ma trận API 16 dòng, 0 sai kỳ vọng. Khách / thú: `GET /customers` lễ tân, bác sĩ, chăm sóc 200, BM, SM, `admin`, khách 403; tạo / sửa khách, thú, chuyển chủ chỉ lễ tân (đánh dấu mất và xóa thú: thêm chủ thú); `POST /pets/{id}/weights` chỉ khách chủ; BM, SM, `admin` mở `/staff/reception`, `/admin/customers` → khung 403; BM ở quầy lễ tân không có nút "Khách hàng" (sửa ở cụm 5).
+
+**Lỗi tìm thấy và đã sửa (30/10, kèm test, chưa commit).** Phát hiện chính: tab hồ sơ sức khỏe 404 treo 7,4 giây vì thử lại 3 lần; tìm khách quầy giữ dòng cũ.
+
+| Mã | Loại | Lỗi | Sửa ở (`FE/src/…`) |
+|---|---|---|---|
+| K1 | FE | `shouldRetry` chỉ nhận `ApiError` mà lỗi thật là `AxiosError`: 4xx bị thử lại 3 lần (1 + 2 + 4 giây), tab "Hồ sơ sức khỏe" 404 treo 7,4 giây; ảnh hưởng mọi `useQuery` | `shared/constants/realtime.ts` (+ `realtime.test.ts`) |
+| K2 | FE | ~13 hook gọi `shouldRetry(count, toApiError(error))`: lỗi mạng thành `ApiError` status 0 rơi nhánh `< 500`, KHÔNG BAO GIỜ retry (ngược comment) | cùng file: `statusCode > 0 && statusCode < 500` |
+| K3 | FE | `QueryClient` "thắng" ở `App.tsx` không đặt `retry`, hook thiếu `retry` dùng mặc định 3 lần kể cả 4xx | `app/App.tsx` (`defaultOptions.queries.retry = shouldRetry`) + `App.queryClient.test.tsx`; sửa 4 ca test phụ thuộc hành vi cũ ở `AdminCareTasksPage.test.tsx`, `BoardingDetailPage.test.tsx` |
+| K4 | FE | Panel tìm khách quầy: gõ đủ 10 số rồi xóa bớt, dòng khách cũ vẫn hiện (có thể mở nhầm hồ sơ); không gửi `size`, BE cắt im lặng ở 20 | `components/staff/reception/customers/CustomerSearchPanel.tsx` (`!waitingForPhone`; dòng nhắc "Đang hiển thị X / Y kết quả, hãy thu hẹp từ khóa") + `CustomerLookup.test.tsx` |
+| K5 | FE | `useCustomerLookup` (dùng ở `CustomerLookup`, `RetailOrderPanel`, `TransferOwnerDialog`, `BookOnBehalfDialog`): `keepPreviousData` vẫn trả dữ liệu cũ khi truy vấn tắt (có thể chuyển chủ / đặt hộ nhầm); không gửi `size` | `domains/pets/hooks/useCustomerPet.ts` (`size '100'`, `placeholderData` chỉ khi `enabled`) + test; test mới `TransferOwnerDialog.test.tsx`, `BookOnBehalfDialog.test.tsx` |
+| K6 | FE | Phiếu điều chỉnh tồn cho chọn 2 dòng cùng lô (FE cộng dồn, BE luôn 400 `lotsDistinct`) | `pages/admin/warehouse/AdjustmentForm.tsx` (báo "Dòng i: lô đã chọn ở dòng j", không POST) |
+| K7 | FE | Phiếu nhập nháp giữ NCC đã ngừng hợp tác, lưu / xác nhận luôn 400 | `ReceiptForm.tsx` (báo nội tuyến + khóa "Lưu nháp"), `ReceiptsTab.tsx` (ghi chú + khóa "Xác nhận nhập kho"), `components/ui/modal-templates.tsx` (thêm prop `submitDisabled`, mặc định false) |
+| K8 | FE | Ô chọn lô giữ tồn cũ sau khi BE từ chối (mutation chỉ làm mới cache `onSuccess`) | `shared/hooks/useInventory.ts` (`onSettled`) + `useInventory.test.tsx` (mới) |
+| K9 | Mock che lỗi | Mock kho dễ dãi hơn BE: cộng dồn lô trùng; câu `BR-KO-02`, `BR-KO-06` khác BE | `shared/api/mock/inventory.mock.ts` (+ test): lô trùng → 400 `lotsDistinct`; `BR-KO-02` tạo / sửa nháp: "…đã ngừng hợp tác, không chọn được ở phiếu nhập mới", xác nhận dùng câu ngắn đúng BE; `BR-KO-06`: "Không giảm quá tồn của lô: lô <số lô> (hạn <ngày>) còn N, giảm M" |
+
+File FE đổi: `shared/constants/realtime.ts`, `app/App.tsx`, `domains/pets/hooks/useCustomerPet.ts`, `components/staff/reception/customers/CustomerSearchPanel.tsx`, `pages/admin/warehouse/{AdjustmentForm,ReceiptForm,ReceiptsTab}.tsx`, `components/ui/modal-templates.tsx`, `shared/hooks/useInventory.ts`, `shared/api/mock/inventory.mock.ts` và các file test đi kèm (`realtime`, `App.queryClient`, `useCustomerPet`, `CustomerLookup`, `TransferOwnerDialog`, `BookOnBehalfDialog`, `useInventory`, `AdminWarehousePage`, `inventory.mock`, `AdminCareTasksPage`, `BoardingDetailPage`).
+
+**Kiểm FE (30/10):** `tsc`, `eslint` và vitest toàn bộ: tsc sạch (exit 0); lint sạch (exit 0, --max-warnings 0); vitest toàn bộ 163 file / 3279 ca xanh, chạy 3 lần liền đều exit 0, không dính lỗi chập chờn GSAP.
+
+**Bẫy `size=20`.** Danh sách kho, sản phẩm, phiếu nhập, điều chỉnh, chi nhánh, danh mục đều truyền `size` rõ ràng; FE hiện đúng `count(*)` (chưa vượt 20 dòng nên bẫy chưa kích hoạt; phân trang thử bằng cách ép `size` nhỏ qua `page.route`, chạy đúng). Riêng tìm khách (`useCustomerLookup`) trước đây không gửi `size`: đã sửa ở K4, K5.
+
+**BE-note mới (không phải lỗi FE).**
+- CORS mặc định chỉ 5173 và 3000.
+- `POST /vaccination-protocols` nhận mũi 3 khi chưa có mũi 2 (201): không kiểm tính liên tục của số mũi.
+- Câu `BR-CN-03` (ngày nghỉ trùng) dùng ngày ISO ("Ngày 2026-12-08 đã là…").
+- `addHoliday` chỉ chặn quá khứ nên thêm được ngày **hôm nay** (hủy cả ngày, không hoàn tác); `deleteHoliday` chỉ xóa từ ngày mai.
+- Không có DELETE cho phiên bản giờ mở cửa, phác đồ, dịch vụ (chỉ ngừng thay cho xóa): bản giờ mở cửa tương lai lỡ lưu chỉ ghi đè được cùng ngày hiệu lực.
+- SM `PATCH /branches/1` với `{}` trả 200, không đổi trường nào.
+- `PATCH` sản phẩm với `description:""` lưu `''` (không NULL; sản phẩm seed là NULL). Sản phẩm mới đang bán hiện ngay ở `/shop` (7 → 8) dù chưa có tồn (`inStockBranchIds:[]`).
+- Hai đường cân nặng không đồng nhất: khách `POST /pets/{id}/weights` `4.555` → 400 `@Digits`, bác sĩ `POST /visits/{id}/weight` `4.555` → 201 làm tròn 4,56. Biên 0, âm, 10000 bị chặn, 9999,99 nhận. Lễ tân không có đường ghi cân nặng.
+- Tra cứu tên khách không phân biệt hoa / thường nhưng phân biệt dấu; `GET /customers` không điều kiện → 400; không có trang "xem tất cả khách".
+- Lỗi 400 (validation) luôn chạy trước 403 (muốn kiểm vai trò phải gửi body hợp lệ). BE giới hạn `size` tối đa 100 ở inventory, receipts, adjustments, products, customers.
+- `GET /api/reports/revenue` 404 mỗi lần mở dashboard BM / SM (T44, đã biết). Đã biết: BE nhận phiếu nhập nháp ngày tương lai (PUT 200), chỉ chặn lúc xác nhận `BR-KO-03`.
+
+**Ghi nhận, CHƯA sửa (cần quyết hoặc ngoài phạm vi).**
+- **SĐT:** FE chỉ nhận `^0\d{9}$` + `maxLength=10` (ký tự thứ 11 bị cắt im lặng), BE nhận `^0\d{9,10}$` (`docs/06-module-contracts.md` G6: hồ sơ tại quầy 10–11 số). Cần chốt tài liệu 10 số hay sửa FE (cũng là dòng "SĐT hồ sơ tại quầy 11 số" ở mục C.2).
+- Chưa có badge "sắp hết hạn" trên bảng tồn: chỉ lô **đã** hết hạn có badge đỏ.
+- Modal chung `components/ui/modal-templates.tsx` không đóng bằng Esc (đã ghi ở C.8). `formatDate("yyyy-MM-dd")` (`lib/utils.ts`) parse thành UTC, lệch 1 ngày ở trình duyệt phía tây UTC (không ảnh hưởng người dùng VN).
+- Khi xem trước ra 0 lịch ảnh hưởng, "Kiểm tra và thêm" ngày nghỉ / "Kiểm tra và lưu" giờ mở cửa ghi luôn, không hiện "0 lịch" (panel chỉ hiện khi ≥ 1): hợp lý, ghi nhận UX. SM thấy checkbox dịch vụ khóa không giải thích.
+- Form tạo phiếu nhập / điều chỉnh lấy `size:100` (trần BE): quá 100 sản phẩm thì ô chọn bị cắt im lặng (chưa xảy ra). `AdjustmentForm`: `lotQuantity` chụp lúc chọn lô, kiểm vượt tồn trước khi gửi dùng số cũ cho tới khi chọn lại (BE vẫn chặn).
+- 4 nơi dùng `useCustomerLookup` nay lấy tối đa 100 dòng nhưng chỉ `CustomerSearchPanel` có dòng nhắc cắt.
+- `main.tsx` có `QueryClient` thứ hai với `retry: 1` hoàn toàn bị đè, vô dụng.
+- Mock kho còn lệch nhỏ: câu `Lý do "Khác" bắt buộc có ghi chú` thiếu chữ "có"; thứ tự kiểm 404 và OTHER.
+- Thông báo "Phòng khám đã hủy lịch hẹn…" gửi cả khi chính chủ tự đánh dấu thú mất (chỉ là lưu ý nội dung).
+
+**Dữ liệu `[TEST C2]` còn trong DB `petcare_seed`** (KHÔNG dọn: chưa được duyệt; xóa khách / lượt khám / sổ kho khó hoàn tác; dữ liệu `[TEST C3]` và demo gốc không đụng). Khách quầy 5 (id 7–11), tài khoản khách `c2.khach1@example.com` / `Matkhau123` (id 29), thú 15 và 18 **đã mất (không hoàn tác)**, 16 và 19; lượt khám #25 + bệnh án #25 + **Order 38 (150.000 đ, `PENDING`)** làm "Chờ thu" ở thanh bên tăng 2 → 3; lịch hẹn 33, 34 và đặt chỗ lưu trú 2, 3 đã `CANCELLED`, Care Task 2 `CANCELLED`; kho: sản phẩm 9 `TESTC2-01` (ngừng bán), NCC 3 (ngừng hợp tác), phiếu nhập PN-2610-00002…00004, phiếu điều chỉnh DC-2610-00001…00004, 9 dòng sổ kho; 1 dòng audit `PRICE_CHANGED` (id 412). Chi nhánh và danh mục đã dọn hết. Script dọn chưa chạy: `D:/Do-an/.c2-tmp/customer/cleanup-dryrun.sql` (chạy thử `BEGIN … ROLLBACK`). Chi tiết: `docs/testcases/test-tay-ghep-api-theo-cum.md` mục Cụm 2.
+
+**Kiểm khôi phục (đo lại bằng SQL 29/10).** Chi nhánh: `opening_hours` 7 dòng (chỉ bản 24/10), `holidays` 0, `slot_quotas` 0, 7 dịch vụ bật, quota MEDICAL 3 / GROOMING 2; snapshot API 6 mục khớp, chỉ `updated_at` khác ở `branch_services(1,4)` và 2 dòng `branch_quota_defaults`. Kho: tồn 8 sản phẩm demo khớp (Royal Canin 22, Pate 112, Vòng cổ 40, Amoxicillin 690, Vitamin 17 tổng / 15 khả dụng, Vaccine Dại 40, 5 bệnh 29, mèo 19); lô 1–10, NCC 1–2, phiếu nhập 1, movement 1–23 không đổi. Khách: `late_cancel=true` và `booking_restrictions` (2) của cụm 3 không đổi. Nhật ký tiến độ: `docs/be-fe-integration.md` mục 3.
+
+### Chạy lại các ca đã sửa trên BE thật (30/10)
+
+**Môi trường.** BE (8082) và Vite (5174) chết đêm 29→30/10 vì máy khởi động lại: log BE (`D:/Do-an/.c2-be.log`) dừng lúc 29/10 18:12 với lỗi mất kết nối Redis và Postgres, Docker Desktop mới bật lại container sáng 30/10. Dựng lại bằng lệnh ở `docs/be-fe-integration.md` mục 7 (FE ở cổng 5174, `VITE_API_MOCK=false`, `VITE_API_URL=http://localhost:8082`). Lần khởi động BE đầu build không nạp `application.yml` ("Failed to determine a suitable driver class") nên phải chạy lại; lần chạy lại lên bình thường (`curl` BE và Vite đều 200 trước khi chạy ca).
+
+**Cách chạy.** Chỉ đọc. Playwright (Chrome, `--disable-web-security`, 1280 px), mỗi session đăng ký `page.route('**/api/**')` chặn (abort) và đếm mọi request không phải GET, trừ `POST /api/auth/login`; mỗi ca ghi lại mọi response từ `localhost:8082/api/` và ABORT nếu không thấy response thật nào. **Kết quả: 13 session, 0 request non-GET bị chặn; mọi non-GET đã gửi chỉ là `POST /api/auth/login` ×13.** DB sau khi chạy không đổi (11 khách, 18 thú, 38 Order, Order 17, 18, 38 nguyên, `stock_movements` 32). Không đụng BE, Docker, Vite. Kịch bản (`lib.mjs`, `r1.mjs`…`r6.mjs`, `r4b.mjs`), `out-r*.json`, `evidence-*.json` (từng request, status, độ trễ) và ảnh `shots/` ở `D:/Do-an/.c2-tmp/rerun/` (ngoài repo).
+
+| Ca | Kết quả | Số đo thật (request, status, thời gian) |
+|---|---|---|
+| R1b `RetailOrderPanel` (khung "Bán lẻ", `mai.le`) | đạt, mức L | Ô trống lúc tải trang: 0 request `/api/customers*`. Gõ "L": `GET /api/customers?size=100&name=L` 200 (3 ứng viên). Gõ `0905111222`: `…?size=100&phone=0905111222` 200 (2). Rút còn 9 số hoặc xóa hết: 0 request, 0 ứng viên |
+| R1a `CustomerLookup` hộp "Tiếp nhận khách" | đạt, mức L | Trống: 0 request. "N": `name=N` 200. "Lê": `name=L%C3%AA&size=100` 200 (2). Rút còn "0905" hoặc xóa: 0 request, 0 ứng viên |
+| R1a `CustomerLookup` khung "Thu tiền" | mức S | Cần ca thu ngân đang mở (xem lưu ý) |
+| R1a `CustomerSearchPanel` (nút "Khách hàng") | đạt, mức L | Chế độ SĐT: trống 0 request, "0" 0 request, `0988123456` → `phone=…&size=100` 200 (1), rút còn 9 số → 0 ứng viên. Chế độ Họ tên: "P" `name=P` 200, "Thử" 200 (1), xóa → 0 ứng viên |
+| R1d `TransferOwnerDialog` | đạt, mức L | Trống 0 request, "H" 0 request, "Hoa" `name=Hoa&size=100` 200 (1 ứng viên), rút còn "H" → 0 ứng viên, xóa 0. Mở từ hồ sơ khách `0912345678` (2 thú còn sống), bấm Hủy, không xác nhận |
+| R1c `BookOnBehalfDialog` | đạt, mức L | Trống 0 request, "L" 0 request, "Lê" `name=L%C3%AA&size=100` 200 (2), rút còn "L" → 0 ứng viên, xóa 0. Mở từ `/admin/appointments`, đóng bằng Esc, không chọn khách |
+| R2 dòng khách cũ | đạt, mức L | Gõ `0909207001`: 1 dòng "[TEST C2] Chủ thú mất S1" (`phone=0909207001&size=100` 200). Xóa 1 số (đo sau ~60 ms, trong debounce) và 8 số (sau 1,8 s): 0 dòng, còn lời nhắc "Nhập đủ 10 số điện thoại để tra cứu.", không hiện "Không tìm thấy hồ sơ phù hợp."; gõ lại 2 số, dòng về (từ cache, 0 request) |
+| R3a `/health-record` | đạt, mức L | `khoi.vo`, ngăn kéo "Sức khỏe" của 2 thú (Mochi, Bim): mỗi thú đúng **1** `GET /api/pets/{1,2}/health-record` 404, chờ thêm 16 s không có lần thứ hai. "Không tìm thấy đường dẫn yêu cầu" hiện sau **152 ms** và **348 ms** kể từ lúc bấm (trước đây ~7,4 s) |
+| R3b dashboard | đạt, mức L | `hung.tran` `/admin` → `/admin/dashboard`: `GET /api/reports/revenue?from=…&to=…` 404 (T44) đúng 1 lần mỗi lượt tải trang, theo dõi 22 s không lặp (hook `useReports` đi qua `toApiError`, 404 không retry) |
+| R3c trang 4xx khác | đạt, mức L | Không trang nào khác trả 4xx lặp; `GET /api/staff` 403 không xuất hiện ở trang nào đã mở |
+| R4 giả 503 | đạt, mức L | `hung.tran`, `GET /api/branches/1` (trang `/admin/branches/1/hours`) giả 503 bằng `page.route`: **4 lần** (1 + 3 retry) ở 975, 2014, 4019, 8023 ms (cách nhau ~1, 2, 4 s); UI hiện "Giả lập 503 (R4)" |
+| R4 lỗi mạng | đạt, mức L | Cùng URL, `route.abort('failed')`: **4 lần** ở 912, 1951, 3958, 7964 ms; UI hiện "Không kết nối được máy chủ" |
+| R4 nhánh K2 (`toApiError`, status 0) | đạt, mức L | Hook `useReports` gọi `shouldRetry(count, toApiError(error))`, `GET /api/reports/revenue`: giả 503 → 4 lần (791, 1856, 3866, 7874 ms); lỗi mạng → 4 lần (718, 1772, 3780, 7783 ms). Trước sửa K2 nhánh lỗi mạng này không bao giờ retry |
+| R5 lô trùng | đạt, mức L | `hung.tran`, `/admin/warehouse/adjustments`: dòng 1 Amoxicillin 250mg lô AMX2405 +1, dòng 2 cùng lô +1, bấm "Lưu phiếu điều chỉnh" → "Dòng 2: lô đã chọn ở dòng 1"; **0 POST / PUT** gửi đi, 0 request bị chặn, hộp thoại còn mở, bấm Hủy |
+| R5 phiếu nhập NCC ngừng hợp tác | mức S | Không có phiếu nháp nào để thử (SQL: `stock_receipts` 4 phiếu, 2 `CONFIRMED`, 2 `CANCELLED`, 0 `DRAFT`); không tạo |
+| R6 quét 4 trang chỉ xem | đạt, mức L | Không response ≥ 400 nào ngoài `reports/revenue` 404 ở dashboard lúc đăng nhập BM / SM: `/admin/branches` (`hung.tran`, tự vào `/admin/branches/1/hours`, 9 request), `/admin/warehouse` (`hung.tran`, → `/stock`, 7), `/admin/catalog` (`ha.nguyen`, → `/products`, 4), `/staff/reception` (`mai.le`, 10); không request lỗi mạng, không `pageerror` |
+
+**Kết luận:** đạt hết, không thấy lỗi FE mới. Ô nhập trống không bắn truy vấn khách (`GET /api/customers` 400 khi ô trống: không xảy ra, 0 request); 4xx không retry (lỗi hiện sau dưới 0,4 s); 5xx và lỗi mạng retry 4 lần, nhánh `toApiError` (K2) cũng vậy; lô trùng bị chặn ở FE.
+
+**Lưu ý.**
+- **R1d, khách không có đường chuyển chủ:** `TransferOwnerDialog` chỉ gắn ở `components/staff/reception/customers/CustomerDetailDialog.tsx:121` (nút "Chuyển chủ" của lễ tân), nên đã kiểm qua `mai.le`. Khách chủ thú `c2.khach1` ở `/pets`: 0 nút "chuyển chủ", 0 chữ "chuyển chủ", 0 request `/api/customers*`.
+- **Gõ 1 ký tự tên:** `RetailOrderPanel`, `CustomerLookup` và `CustomerSearchPanel` (chế độ Họ tên) gửi `name=<1 ký tự>`, BE trả 200 (không 400); `BookOnBehalfDialog` và `TransferOwnerDialog` đòi từ 2 ký tự mới tra. UX không đồng nhất, chưa sửa.
+- **Cache làm lần chạy đầu thiếu request:** `staleTime` 60 s của React Query khiến lần chạy R1 đầu (cùng từ khóa ở nhiều nơi) thấy 0 request ở các nơi gõ sau (ứng viên lấy từ cache). Đã chạy lại với từ khóa riêng mỗi nơi; bảng trên là lần chạy thứ hai.
+- **Ca "Thu tiền" của `CustomerLookup` chỉ mức S:** ô chỉ hiện khi ca thu ngân đang mở (`CheckoutPanel.tsx`: `hasShift && <CustomerLookup>`), mở ca là ghi nên không làm; đọc code thì cùng hook có `enabled` chặn truy vấn rỗng. Khung "Bán lẻ" không cần mở ca nên kiểm được ở mức L.
+
 ## D. Màn hình còn bị BE chặn (tiêu chí "tắt mock, mọi màn gọi API thật" **chưa đạt**)
 
 | Màn / luồng | Bị chặn bởi | Hiện tượng với BE thật |

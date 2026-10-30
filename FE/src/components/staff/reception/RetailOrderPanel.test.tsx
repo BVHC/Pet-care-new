@@ -2,6 +2,7 @@ import { useState } from 'react';
 import { render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
+import { MemoryRouter } from 'react-router-dom';
 import { beforeAll, beforeEach, describe, expect, it } from 'vitest';
 import { apiClient } from '../../../shared/api/axios';
 import { MOCK_PASSWORD } from '../../../shared/api/mock/identity.mock';
@@ -27,9 +28,11 @@ function Harness({ initial = null }: { initial?: number | null }) {
 function renderPanel(initial: number | null = null) {
   const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
   render(
-    <QueryClientProvider client={client}>
-      <Harness initial={initial} />
-    </QueryClientProvider>,
+    <MemoryRouter>
+      <QueryClientProvider client={client}>
+        <Harness initial={initial} />
+      </QueryClientProvider>
+    </MemoryRouter>,
   );
   return userEvent.setup();
 }
@@ -94,5 +97,15 @@ describe('RetailOrderPanel (T34 — UC66)', () => {
 
     expect(await screen.findByPlaceholderText('SĐT, họ tên hoặc email của khách')).toBeInTheDocument();
     expect((await apiClient.get('/api/orders/1')).data.data).toMatchObject({ status: 'CANCELLED', cancelType: 'RETAIL_UNCLOSED' });
+  });
+
+  it('quản lý chi nhánh (BE chỉ cho lễ tân tạo Order và tra khách, 403): chỉ thấy lời nhắc, không có ô tìm khách', async () => {
+    useSession.getState().clear();
+    await useSession.getState().login({ email: 'manager@store1.vn', password: MOCK_PASSWORD });
+    renderPanel();
+
+    expect(await screen.findByText('Bán hàng tại quầy là việc của lễ tân')).toBeInTheDocument();
+    expect(screen.queryByPlaceholderText('SĐT, họ tên hoặc email của khách')).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Tạo hồ sơ mới' })).not.toBeInTheDocument();
   });
 });

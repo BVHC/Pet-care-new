@@ -58,6 +58,8 @@ export function ReceiptForm({
 
   // Phiếu nháp cũ có thể có nhà cung cấp đã ngừng hợp tác / sản phẩm đã ngừng bán: vẫn hiện để không mất giá trị đang chọn.
   const supplierOptions = (suppliers.data ?? []).filter((s) => s.isActive || String(s.supplierId) === supplierId);
+  // ...nhưng BE từ chối lưu / xác nhận nháp có nhà cung cấp đó (400 BR-KO-02): báo ngay và khóa "Lưu nháp" tới khi đổi nhà cung cấp.
+  const stoppedSupplier = suppliers.data?.find((s) => String(s.supplierId) === supplierId && !s.isActive);
   const productList: Product[] = products.data?.content ?? [];
   const productOf = (id: string) => productList.find((p) => String(p.productId) === id);
   const set = (i: number, patch: Partial<LineDraft>) => setLines((ls) => ls.map((l, j) => (j === i ? { ...l, ...patch } : l)));
@@ -110,10 +112,14 @@ export function ReceiptForm({
       onSubmit={submit}
       submitText="Lưu nháp"
       loading={save.isPending}
+      submitDisabled={!!stoppedSupplier}
       size="xl"
     >
       <div className="grid gap-3 sm:grid-cols-2">
-        <Field label="Nhà cung cấp">
+        <Field
+          label="Nhà cung cấp"
+          error={stoppedSupplier && `Nhà cung cấp ${stoppedSupplier.name} đã ngừng hợp tác, không chọn được ở phiếu nhập mới. Hãy chọn nhà cung cấp khác.`}
+        >
           {(id) => (
             <select id={id} className={selectClass} value={supplierId} onChange={(e) => setSupplierId(e.target.value)}>
               <option value="">Chọn nhà cung cấp…</option>

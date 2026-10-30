@@ -45,6 +45,7 @@ import { BranchesPage } from '../pages/branches/BranchesPage';
 import { DoctorsPage } from '../pages/doctors/DoctorsPage';
 import { RequireLinkDecision } from '../shared/components/auth/RequireLinkDecision';
 import { RequireRole } from '../shared/components/auth/RequireRole';
+import { shouldRetry } from '../shared/constants/realtime';
 import { ROUTES } from '../shared/constants/routes';
 import { useAccount, useSession } from '../shared/stores/session.store';
 import { ALL_ROLES, STAFF_ROLES, type Role } from '../shared/types/auth';
@@ -90,8 +91,9 @@ import { StaffProfilePage } from '../pages/admin/StaffProfilePage';
 import { StaffNotificationsPage } from '../pages/admin/StaffNotificationsPage';
 import { AdminBranchDetailPage } from '../pages/admin/AdminBranchDetailPage';
 
+// `retry` mặc định của React Query là 3 lần kể cả 4xx; shouldRetry chỉ thử lại lỗi mạng và 5xx (hook nào đặt retry riêng thì giữ riêng).
 const queryClient = new QueryClient({
-  defaultOptions: { queries: { staleTime: 60_000, refetchOnWindowFocus: false } },
+  defaultOptions: { queries: { staleTime: 60_000, refetchOnWindowFocus: false, retry: shouldRetry } },
 });
 
 // Đổi người dùng trong cùng tab (đăng nhập, đăng xuất, hết phiên) thì bỏ dữ liệu đã tải của người trước,

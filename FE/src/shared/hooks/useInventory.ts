@@ -35,5 +35,6 @@ export const useAdjustment = (adjustmentId: number | null) =>
 
 export function useInventoryMutation<A, R>(fn: (args: A) => Promise<R>) {
   const queryClient = useQueryClient();
-  return useMutation({ mutationFn: fn, onSuccess: () => queryClient.invalidateQueries({ queryKey: ['inventory'] }) });
+  // onSettled: BE từ chối vì tồn đã đổi sau lúc mở form (vd BR-KO-06) thì ô chọn lô phải nạp lại, không giữ số cũ.
+  return useMutation({ mutationFn: fn, onSettled: () => queryClient.invalidateQueries({ queryKey: ['inventory'] }) });
 }

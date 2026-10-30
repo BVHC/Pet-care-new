@@ -170,8 +170,11 @@ function ReceiptDetail({
   const [needsAdjustment, setNeedsAdjustment] = useState(false);
   const confirm = useInventoryMutation(() => inventoryApi.confirmReceipt(receiptId));
   const cancel = useInventoryMutation(() => inventoryApi.cancelReceipt(receiptId, { reason: reason.trim() || undefined }));
+  const suppliers = useSuppliers();
   const r = receipt.data;
   const busy = confirm.isPending || cancel.isPending;
+  // BE từ chối xác nhận nháp có nhà cung cấp đã ngừng hợp tác (400 BR-KO-02): báo trước và khóa nút; "Sửa" để đổi nhà cung cấp.
+  const supplierStopped = r?.status === 'DRAFT' && !!suppliers.data?.some((s) => s.supplierId === r.supplierId && !s.isActive);
 
   const run = async (action: () => Promise<StockReceipt>, text: (saved: StockReceipt) => string) => {
     setError('');
@@ -261,6 +264,11 @@ function ReceiptDetail({
                 {(id) => <Input id={id} value={reason} maxLength={300} onChange={(e) => setReason(e.target.value)} autoFocus />}
               </Field>
             )}
+            {supplierStopped && (
+              <p role="note" className="rounded-lg bg-amber-50 px-3 py-2 text-sm font-medium text-amber-800">
+                Nhà cung cấp {r.supplierName} đã ngừng hợp tác nên chưa nhập kho được. Bấm "Sửa" để chọn nhà cung cấp khác.
+              </p>
+            )}
             <FormError message={error} />
             {needsAdjustment && (
               <Button variant="outline" onClick={() => navigate('/admin/warehouse/adjustments')}>
@@ -291,7 +299,7 @@ function ReceiptDetail({
                   <Button variant="outline" onClick={() => onEdit(r)} disabled={busy}>
                     Sửa
                   </Button>
-                  <Button disabled={busy} onClick={() => run(() => confirm.mutateAsync(undefined), (s) => `Đã nhập kho phiếu ${s.code}`)}>
+                  <Button disabled={busy || supplierStopped} onClick={() => run(() => confirm.mutateAsync(undefined), (s) => `Đã nhập kho phiếu ${s.code}`)}>
                     Xác nhận nhập kho
                   </Button>
                 </>

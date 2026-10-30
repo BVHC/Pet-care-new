@@ -123,8 +123,10 @@ describe('phiếu nhập kho (UC74, 03 §9)', () => {
     expect(res.status).toBe(201);
     expect(res.data.data).toMatchObject({ receiptId: 4, status: 'DRAFT', supplierName: 'Công ty Royal Canin Việt Nam' });
     expect(res.data.data.code).toMatch(/^PN-\d{6}-0004$/);
-    expect(ruleOf(await failure(client.post('/api/stock-receipts', { ...body, supplierId: 3 }, await manager())))).toBe('BR-KO-02');
-    const unknown = { ...body, lines: [{ productId: 999, quantity: 1, unitCost: 1 }] };
+    const stopped = await failure(client.post('/api/stock-receipts', { ...body, supplierId: 3 }, await manager()));
+    expect(ruleOf(stopped)).toBe('BR-KO-02');
+    expect(stopped.data.message).toBe('Nhà cung cấp Pet Mart phân phối đã ngừng hợp tác, không chọn được ở phiếu nhập mới (BR-KO-02)');
+    const unknown ={ ...body, lines: [{ productId: 999, quantity: 1, unitCost: 1 }] };
     expect((await failure(client.post('/api/stock-receipts', unknown, await manager()))).status).toBe(404);
     const zero = { ...body, lines: [{ productId: 1, quantity: 0, unitCost: 1 }] };
     expect((await failure(client.post('/api/stock-receipts', zero, await manager()))).data.errorCode).toBe('VALIDATION_FAILED');
@@ -202,6 +204,16 @@ describe('phiếu nhập kho (UC74, 03 §9)', () => {
     expect(ruleOf(await failure(client.post('/api/stock-receipts', both, await manager())))).toBe('BR-KO-02');
   });
 
+  // BE StockReceiptService: sửa nháp dùng requireActiveSupplier (câu có vế "không chọn được ở phiếu nhập mới"), còn xác nhận có câu ngắn riêng.
+  it('nháp có nhà cung cấp ngừng hợp tác: sửa và xác nhận đều → BR-KO-02, mỗi nơi đúng câu của BE', async () => {
+    await client.patch('/api/suppliers/1', { isActive: false }, await manager()); // phiếu #2 (nháp) thuộc nhà cung cấp này
+    const edit = { supplierId: 1, receiptDate: today, lines: [{ productId: 1, quantity: 1, unitCost: 1 }] };
+    const edited = await failure(client.put('/api/stock-receipts/2', edit, await manager()));
+    expect(edited.data.message).toBe('Nhà cung cấp Công ty Royal Canin Việt Nam đã ngừng hợp tác, không chọn được ở phiếu nhập mới (BR-KO-02)');
+    const confirmed = await failure(client.post('/api/stock-receipts/2/confirm', undefined, await manager()));
+    expect(confirmed.data.message).toBe('Nhà cung cấp Công ty Royal Canin Việt Nam đã ngừng hợp tác (BR-KO-02)');
+  });
+
   it('hủy phiếu đã nhập khi lô không còn đủ → BR-KO-04, chỉ sang phiếu điều chỉnh; tồn không đổi', async () => {
     const res = await failure(client.post('/api/stock-receipts/1/cancel', {}, await manager()));
     expect(ruleOf(res)).toBe('BR-KO-04');
@@ -248,10 +260,40 @@ describe('điều chỉnh tồn (UC76, BR-KO-06)', () => {
   it('lý do Khác bắt ghi chú; giảm quá tồn của lô bị chặn; dòng 0 hoặc không có dòng → 400', async () => {
     const lot = 15; // RB2401 còn 15
     expect(ruleOf(await failure(client.post('/api/stock-adjustments', { reason: 'OTHER', lines: [{ stockLotId: lot, quantityDelta: -1 }] }, await manager())))).toBe('BR-KO-06');
-    expect(ruleOf(await failure(client.post('/api/stock-adjustments', { reason: 'DAMAGED', lines: [{ stockLotId: lot, quantityDelta: -16 }] }, await manager())))).toBe('BR-KO-06');
+    const over = await failure(client.post('/api/stock-adjustments', { reason: 'DAMAGED', lines: [{ stockLotId: lot, quantityDelta: -16 }] }, await manager()));
+    expect(ruleOf(over)).toBe('BR-KO-06');
+    expect(over.data.message).toBe(`Không giảm quá tồn của lô: lô RB2401 (hạn ${addDays(today, 260)}) còn 15, giảm 16 (BR-KO-06)`);
     expect((await item(5)).totalQuantity).toBe(17);
     expect((await failure(client.post('/api/stock-adjustments', { reason: 'DAMAGED', lines: [{ stockLotId: lot, quantityDelta: 0 }] }, await manager()))).data.errorCode).toBe('VALIDATION_FAILED');
     expect((await failure(client.post('/api/stock-adjustments', { reason: 'DAMAGED', lines: [] }, await manager()))).data.errorCode).toBe('VALIDATION_FAILED');
+  });
+
+  // BE StockAdjustmentService: nêu đủ các lô thiếu, id tăng dần, nối bằng "; "; lô mặc định ghi "mặc định #id". Lô còn đủ không có mặt trong câu.
+  it('giảm quá tồn nhiều lô: câu BR-KO-06 nêu đủ các lô thiếu theo id lô, lô mặc định ghi "mặc định #id"; không lô nào bị trừ', async () => {
+    const lines = [
+      { stockLotId: 16, quantityDelta: -3 }, // RB2309 còn 2
+      { stockLotId: 15, quantityDelta: -1 }, // RB2401 còn 15, đủ
+      { stockLotId: 11, quantityDelta: -13 }, // lô mặc định của Royal Canin còn 12
+    ];
+    const res = await failure(client.post('/api/stock-adjustments', { reason: 'DAMAGED', lines }, await manager()));
+    expect(res.data.message).toBe(`Không giảm quá tồn của lô: lô mặc định #11 còn 12, giảm 13; lô RB2309 (hạn ${addDays(today, -16)}) còn 2, giảm 3 (BR-KO-06)`);
+    expect((await item(1)).totalQuantity).toBe(12);
+    expect((await item(5)).totalQuantity).toBe(17);
+  });
+
+  // BE StockAdjustmentRequest.isLotsDistinct: lô trùng bị 400 VALIDATION_FAILED trước khi tính tồn, kể cả khi tổng các dòng vẫn đủ tồn.
+  it('một lô xuất hiện ở hai dòng → 400 lotsDistinct, không cộng dồn; hai lô khác nhau thì lưu được', async () => {
+    const twice = [
+      { stockLotId: 15, quantityDelta: -1 },
+      { stockLotId: 15, quantityDelta: -1 },
+    ];
+    const res = await failure(client.post('/api/stock-adjustments', { reason: 'DAMAGED', lines: twice }, await manager()));
+    expect(res.data).toMatchObject({ errorCode: 'VALIDATION_FAILED', statusCode: 400, message: 'lotsDistinct: Mỗi lô chỉ được xuất hiện một lần trong phiếu' });
+    expect((await item(5)).totalQuantity).toBe(17);
+
+    const distinct = [twice[0], { stockLotId: 16, quantityDelta: -1 }];
+    expect((await client.post('/api/stock-adjustments', { reason: 'DAMAGED', lines: distinct }, await manager())).status).toBe(201);
+    expect((await item(5)).totalQuantity).toBe(15);
   });
 
   it('lô của chi nhánh khác coi như không có (404); lễ tân 403', async () => {

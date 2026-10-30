@@ -24,17 +24,24 @@ const CRITERIA = ['phone', 'name', 'email', 'petName'] as const;
 
 // ───── Đọc ─────
 
-/** UC23: bỏ điều kiện rỗng; chưa có điều kiện nào thì không gọi (BE trả 400). */
+/** BE mặc định 20 dòng, tối đa 100 (kẹp 1–100): xin tối đa, nơi dùng nhắc thu hẹp từ khóa nếu `totalElements` còn lớn hơn. */
+const LOOKUP_SIZE = '100';
+
+/**
+ * UC23: bỏ điều kiện rỗng; chưa có điều kiện nào thì không gọi (BE trả 400) và `data` là undefined:
+ * kết quả của lần tra trước chỉ được giữ (keepPreviousData) khi đang tra tiếp, không giữ lúc truy vấn tắt.
+ */
 export function useCustomerLookup(query: CustomerSearchQuery) {
-  const filters: Record<string, string> = {};
+  const filters: Record<string, string> = { size: LOOKUP_SIZE };
   for (const [key, value] of Object.entries(query)) {
     if (value !== undefined && String(value).trim() !== '') filters[key] = String(value).trim();
   }
+  const enabled = CRITERIA.some((key) => key in filters);
   return useQuery({
     queryKey: QUERY_KEYS.counterCustomers.search(filters),
     queryFn: () => customerPetApi.searchCustomers(filters as CustomerSearchQuery),
-    enabled: CRITERIA.some((key) => key in filters),
-    placeholderData: keepPreviousData,
+    enabled,
+    placeholderData: enabled ? keepPreviousData : undefined,
     ...retry,
   });
 }

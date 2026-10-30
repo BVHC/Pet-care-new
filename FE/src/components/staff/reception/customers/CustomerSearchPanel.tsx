@@ -44,7 +44,9 @@ export function CustomerSearchPanel({
   const lookup = useCustomerLookup(queryOf(mode, debounced));
   const active = MODES.find((m) => m.mode === mode)!;
   const waitingForPhone = mode === 'phone' && term.trim() !== '' && !/^0\d{9}$/.test(term.trim());
-  const items = term.trim() ? (lookup.data?.content ?? []) : [];
+  // Trong 250 ms debounce truy vấn vẫn là của lần gõ trước: SĐT vừa bị xóa bớt thì ẩn ngay các hồ sơ đó.
+  const items = term.trim() && !waitingForPhone ? (lookup.data?.content ?? []) : [];
+  const total = lookup.data?.totalElements ?? items.length;
 
   return (
     <section aria-label="Tra cứu khách hàng" className="flex h-full flex-col">
@@ -105,7 +107,9 @@ export function CustomerSearchPanel({
         )}
         {items.length > 0 && (
           <>
-            <p className="mb-2 text-xs text-(--ws-ink-3)">{lookup.data?.totalElements} hồ sơ</p>
+            <p className="mb-2 text-xs text-(--ws-ink-3)">
+              {total > items.length ? `Đang hiển thị ${items.length} / ${total} kết quả, hãy thu hẹp từ khóa.` : `${total} hồ sơ`}
+            </p>
             <ul className="space-y-2">
               {items.map((item) => (
                 <li key={item.customerId}>

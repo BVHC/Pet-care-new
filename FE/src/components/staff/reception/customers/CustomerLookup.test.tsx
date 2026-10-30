@@ -1,8 +1,9 @@
-import { render, screen, waitFor, within } from '@testing-library/react';
+import { act, render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { useState } from 'react';
-import { beforeAll, beforeEach, describe, expect, it } from 'vitest';
+import { afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
+import { customerPetApi } from '../../../../domains/pets/customer-pet.api';
 import { apiClient } from '../../../../shared/api/axios';
 import { MOCK_PASSWORD } from '../../../../shared/api/mock/identity.mock';
 import { installMockApi } from '../../../../shared/api/mock/mock-api';
@@ -17,6 +18,7 @@ beforeEach(async () => {
   useSession.getState().clear();
   await useSession.getState().login({ email: 'reception@store1.vn', password: MOCK_PASSWORD });
 });
+afterEach(() => vi.restoreAllMocks());
 
 function Desk() {
   const [customerId, setCustomerId] = useState<number | null>(null);
@@ -59,6 +61,46 @@ describe('tra cứu và hồ sơ khách tại quầy', () => {
     await user.type(screen.getByLabelText('Tra cứu theo SĐT'), '0905');
     expect(screen.getByText('Nhập đủ 10 số điện thoại để tra cứu.')).toBeInTheDocument();
     expect(screen.queryByRole('button', { name: /^Mở hồ sơ/ })).not.toBeInTheDocument();
+  });
+
+  it('gõ đủ 10 số rồi xóa bớt thì các hồ sơ cũ biến mất, chỉ còn lời nhắc (tránh mở nhầm hồ sơ)', async () => {
+    const user = renderDesk();
+    const input = screen.getByLabelText('Tra cứu theo SĐT');
+    await user.type(input, '0905111222');
+    expect(await screen.findAllByRole('button', { name: /^Mở hồ sơ/ })).toHaveLength(3);
+
+    await user.type(input, '{Backspace}{Backspace}');
+    expect(screen.getByText('Nhập đủ 10 số điện thoại để tra cứu.')).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: /^Mở hồ sơ/ })).not.toBeInTheDocument();
+
+    // Sau khi debounce, truy vấn bị tắt và keepPreviousData vẫn giữ kết quả cũ: hàng không được hiện lại.
+    await act(() => new Promise((resolve) => setTimeout(resolve, 400)));
+    expect(screen.queryByRole('button', { name: /^Mở hồ sơ/ })).not.toBeInTheDocument();
+    expect(screen.queryByText(/hồ sơ$/)).not.toBeInTheDocument();
+  });
+
+  it('xin BE tối đa 100 dòng mỗi lần tra cứu, không để mặc định 20', async () => {
+    const search = vi.spyOn(customerPetApi, 'searchCustomers');
+    const user = renderDesk();
+    await user.type(screen.getByLabelText('Tra cứu theo SĐT'), '0905111222');
+    await screen.findAllByRole('button', { name: /^Mở hồ sơ/ });
+    expect(search).toHaveBeenCalledWith(expect.objectContaining({ phone: '0905111222' }));
+    expect(Number(search.mock.calls.at(-1)![0].size)).toBe(100);
+  });
+
+  it('BE còn nhiều kết quả hơn số dòng đã vẽ thì nhắc thu hẹp từ khóa, không cắt im lặng', async () => {
+    const item = { customerId: 1, fullName: 'Khách Một', phone: '0905111222', maskedEmail: null, createdChannel: 'COUNTER' as const, hasAccount: false, pets: [] };
+    vi.spyOn(customerPetApi, 'searchCustomers').mockResolvedValue({ content: [item], page: 0, size: 100, totalElements: 130, totalPages: 2 });
+    const user = renderDesk();
+    await user.type(screen.getByLabelText('Tra cứu theo SĐT'), '0905111222');
+    expect(await screen.findByText('Đang hiển thị 1 / 130 kết quả, hãy thu hẹp từ khóa.')).toBeInTheDocument();
+  });
+
+  it('đủ kết quả trong một trang thì chỉ ghi số hồ sơ, không có lời nhắc thu hẹp', async () => {
+    const user = renderDesk();
+    await user.type(screen.getByLabelText('Tra cứu theo SĐT'), '0905111222');
+    expect(await screen.findByText('3 hồ sơ')).toBeInTheDocument();
+    expect(screen.queryByText(/hãy thu hẹp từ khóa/)).not.toBeInTheDocument();
   });
 
   it('đánh dấu đã mất bị BE chặn khi thú có lượt khám mở thì báo lỗi trong hộp thoại (BR-KH-05)', async () => {

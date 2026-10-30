@@ -7,6 +7,7 @@
  */
 import { forwardRef, lazy, Suspense, useState, type ForwardedRef, type KeyboardEvent } from 'react';
 import { AlertTriangle, Minus, PackageSearch, Search, ShoppingBag, UserPlus, X } from 'lucide-react';
+import { Link } from 'react-router-dom';
 import { toast } from 'sonner';
 import { formatCurrency } from '../../../lib/utils';
 import { Dialog, DialogContent, DialogDescription, DialogTitle } from '../../ui/dialog';
@@ -16,6 +17,7 @@ import { salesApi } from '../../../shared/api/sales.api';
 import { useProducts } from '../../../shared/hooks/useCatalog';
 import { useDebounce } from '../../../shared/hooks/useDebounce';
 import { salesErrorMessage, useOrder, useOrders, useSalesMutation } from '../../../shared/hooks/useSales';
+import { useAccount } from '../../../shared/stores/session.store';
 import type { Product } from '../../../shared/types/catalog';
 import {
   NOT_DELIVERED_TEXT,
@@ -48,8 +50,36 @@ interface Props {
   onOrderChange: (orderId: number | null) => void;
 }
 
-/** `ref` trỏ vào ô tìm của bước hiện tại (khách, rồi sản phẩm) để F1 / Ctrl+K focus. */
-export const RetailOrderPanel = forwardRef<HTMLInputElement, Props>(function RetailOrderPanel({ className, orderId, onOrderChange }, ref) {
+/**
+ * Bán lẻ là việc của lễ tân (A06): BE chỉ cho RECEPTIONIST tạo Order (sales #1) và tra khách (UC23), quản lý chi nhánh bị 403.
+ * Trong bàn lễ tân quản lý chỉ thấy lời nhắc, không gửi lệnh gọi nào. `ref` trỏ vào ô tìm của bước hiện tại (khách, rồi sản phẩm)
+ * để F1 / Ctrl+K focus.
+ */
+export const RetailOrderPanel = forwardRef<HTMLInputElement, Props>(function RetailOrderPanel(props, ref) {
+  const role = useAccount()?.role;
+  if (role !== 'RECEPTIONIST') return <NotSeller className={props.className} />;
+  return <Seller {...props} ref={ref} />;
+});
+
+function NotSeller({ className }: { className?: string }) {
+  return (
+    <Panel label="Bán lẻ tại quầy" className={className}>
+      <PanelTitle>Bán lẻ tại quầy</PanelTitle>
+      <StatePanel
+        icon={ShoppingBag}
+        title="Bán hàng tại quầy là việc của lễ tân"
+        body="Lễ tân tạo và chốt Order bán lẻ. Quản lý xem Order và hủy Order khách không thanh toán ở trang POS bán lẻ."
+        action={
+          <Link to="/admin/pos" className="text-sm font-semibold text-(--ws-accent-ink) underline">
+            POS bán lẻ
+          </Link>
+        }
+      />
+    </Panel>
+  );
+}
+
+const Seller = forwardRef<HTMLInputElement, Props>(function Seller({ className, orderId, onOrderChange }, ref) {
   const [customerId, setCustomerId] = useState<number | null>(null);
   const leave = () => {
     setCustomerId(null);

@@ -43,7 +43,10 @@ const VIEWS: { id: View; label: string; className?: string }[] = [
  * phones switch between the three.
  */
 export function ReceptionWorkspacePage() {
-  const canCheckIn = visitPermissions(useAccount()?.role).checkIn;
+  const role = useAccount()?.role;
+  const canCheckIn = visitPermissions(role).checkIn;
+  // Hồ sơ khách và bán lẻ là việc của lễ tân: BE trả 403 cho quản lý ở mọi endpoint khách và POST /orders.
+  const canUseCustomers = role === 'RECEPTIONIST';
   const [view, setView] = useState<View>('desk');
   const [checkIn, setCheckIn] = useState<CheckInTarget | null>(null);
   const searchRef = useRef<HTMLInputElement>(null);
@@ -80,14 +83,16 @@ export function ReceptionWorkspacePage() {
       <WorkspaceHeader title="Quầy lễ tân" subtitle={formatToday()}>
         <ShiftBadge />
         <CloseShiftControl />
-        <WsButton
-          variant={view === 'customers' ? 'primary' : 'secondary'}
-          onClick={() => setView((v) => (v === 'customers' ? 'desk' : 'customers'))}
-          aria-pressed={view === 'customers'}
-        >
-          <Users className="h-4 w-4" aria-hidden />
-          <span className="hidden sm:inline">Khách hàng</span>
-        </WsButton>
+        {canUseCustomers && (
+          <WsButton
+            variant={view === 'customers' ? 'primary' : 'secondary'}
+            onClick={() => setView((v) => (v === 'customers' ? 'desk' : 'customers'))}
+            aria-pressed={view === 'customers'}
+          >
+            <Users className="h-4 w-4" aria-hidden />
+            <span className="hidden sm:inline">Khách hàng</span>
+          </WsButton>
+        )}
         {canCheckIn && (
           <WsButton variant="primary" onClick={() => setCheckIn({ mode: 'walk-in' })}>
             <UserPlus className="h-4 w-4" aria-hidden />
@@ -98,7 +103,7 @@ export function ReceptionWorkspacePage() {
       </WorkspaceHeader>
 
       <div aria-label="Khu vực quầy" role="group" className="flex gap-1 border-b border-(--ws-line) bg-(--ws-surface) px-3 py-2 lg:hidden">
-        {VIEWS.map((v) => (
+        {VIEWS.filter((v) => v.id !== 'customers' || canUseCustomers).map((v) => (
           <button
             key={v.id}
             type="button"
