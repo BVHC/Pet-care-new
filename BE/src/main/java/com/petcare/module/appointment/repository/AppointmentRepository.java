@@ -251,6 +251,7 @@ public interface AppointmentRepository extends JpaRepository<Appointment, Long>,
     @Query(value = """
             SELECT id FROM appointments
             WHERE status = 'BOOKED' AND reminded_at IS NULL
+              AND (slot_date, slot_start) > (CAST(:fromDate AS date), CAST(:fromTime AS time))
               AND (slot_date, slot_start) <= (CAST(:toDate AS date), CAST(:toTime AS time))
             ORDER BY slot_date, slot_start, id LIMIT :limit
             """, nativeQuery = true)

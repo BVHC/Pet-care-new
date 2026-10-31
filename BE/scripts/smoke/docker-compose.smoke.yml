@@ -1,0 +1,32 @@
+# ===========================================
+# Pet Care — compose override cho smoke Docker (T41.4, docs/testcases/T41-be.md §10)
+# ===========================================
+# Dùng chồng lên docker-compose.yml với project riêng, volume riêng (không đụng volume pet-care-new_* của dev):
+#   docker compose -p petcare-smoke -f docker-compose.yml -f BE/scripts/smoke/docker-compose.smoke.yml up -d --build \
+#     postgres redis mailpit backend
+# Script BE/scripts/smoke/t41_main_flow.py tự chạy lệnh này. Cần Docker Compose ≥ 2.24 (`!reset`).
+
+services:
+  postgres:
+    container_name: petcare-smoke-postgres
+    # Không publish cổng: máy dev có thể đã có Postgres cài sẵn giữ 5432. Script truy vấn qua `docker exec … psql`.
+    ports: !reset []
+
+  redis:
+    container_name: petcare-smoke-redis
+    ports: !reset []
+
+  mailpit:
+    container_name: petcare-smoke-mailpit
+
+  backend:
+    container_name: petcare-smoke-api
+    environment:
+      # ST04 / ST18 mỗi phút (mặc định chỉ 07–20h, một lần / giờ — docs/adr/0082, 0083), lệch giây với nhau.
+      VACCINE_REMINDER_CRON: "30 * * * * *"
+      FOLLOW_UP_REMINDER_CRON: "40 * * * * *"
+      VACCINE_OVERDUE_CRON: "50 * * * * *"
+
+networks:
+  default:
+    name: petcare-smoke-network
