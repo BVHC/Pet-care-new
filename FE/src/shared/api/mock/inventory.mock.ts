@@ -241,6 +241,9 @@ function paged<T>(list: T[], query: Record<string, string>) {
 
 /** M4: lô hết hạn khi hạn dùng trước hôm nay; lô mặc định không hết hạn. */
 const isExpired = (lot: LotRow, today: string) => lot.expiryDate !== null && lot.expiryDate < today;
+const EXPIRY_WARNING_DAYS = 30; // seed V2 của [CFG] stock.expiry_warning_days (mock không có [CFG])
+/** Như BE: hạn ≤ hôm nay + N, KỂ CẢ lô đã hết hạn (cờ `expiringSoon` của InventoryItem / StockLot). */
+const expiresWithinWarning = (lot: LotRow, today: string) => lot.expiryDate !== null && lot.expiryDate <= addDays(today, EXPIRY_WARNING_DAYS);
 const sum = (xs: number[]) => xs.reduce((a, b) => a + b, 0);
 const lotsOf = (s: State, itemId: number) => s.lots.filter((l) => l.itemId === itemId);
 const itemOf = (s: State, branchId: number, productId: number) => s.items.find((i) => i.branchId === branchId && i.productId === productId);
@@ -264,6 +267,7 @@ function itemView(s: State, p: Product, item: ItemRow | undefined, today: string
     belowMin: total - expired < minQuantity,
     nearestExpiryDate: nearest,
     expiredQuantity: expired,
+    expiringSoon: lots.some((l) => l.quantity > 0 && expiresWithinWarning(l, today)),
   };
 }
 
@@ -413,7 +417,15 @@ const listLots: MockHandler = (req) => {
   const lots: StockLot[] = (item ? lotsOf(s, item.id) : [])
     .filter((l) => l.quantity > 0)
     .sort((a, b) => (a.expiryDate ?? '9999-12-31').localeCompare(b.expiryDate ?? '9999-12-31') || a.id - b.id)
-    .map((l) => ({ stockLotId: l.id, lotNumber: l.lotNumber, expiryDate: l.expiryDate, quantity: l.quantity, isDefault: l.isDefault, expired: isExpired(l, today) }));
+    .map((l) => ({
+      stockLotId: l.id,
+      lotNumber: l.lotNumber,
+      expiryDate: l.expiryDate,
+      quantity: l.quantity,
+      isDefault: l.isDefault,
+      expired: isExpired(l, today),
+      expiringSoon: expiresWithinWarning(l, today),
+    }));
   return ok(lots);
 };
 

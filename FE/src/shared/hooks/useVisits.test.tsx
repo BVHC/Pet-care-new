@@ -2,12 +2,13 @@ import type { ReactNode } from 'react';
 import { act, renderHook, waitFor } from '@testing-library/react';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { ApiError } from '../api/api-error';
+import { ApiError, plainMessage, toApiError } from '../api/api-error';
 import { identityApi } from '../api/identity.api';
 import { visitApi } from '../api/visit.api';
 import type { Appointment } from '../types/appointment';
 import { ALL_ROLES, type Role } from '../types/auth';
-import type { StaffResponse } from '../types/identity';
+import type { AssignableStaffResponse } from '../types/identity';
+import { useSession } from '../stores/session.store';
 import { visitPermissions, type Visit, type VisitAction } from '../types/visit';
 import {
   VISIT_REFRESH_MS,
@@ -52,16 +53,11 @@ const visit = (visitId: number, over: Partial<Visit> = {}): Visit => ({
   ...over,
 });
 
-const staff = (accountId: number, over: Partial<StaffResponse> = {}): StaffResponse => ({
+/** Một dòng của identity-v1 #38 `GET /api/staff/assignable`: chỉ 4 trường. */
+const staff = (accountId: number, over: Partial<AssignableStaffResponse> = {}): AssignableStaffResponse => ({
   accountId,
-  email: `nv${accountId}@store1.vn`,
-  phone: '0900000000',
   fullName: `Nhân viên ${accountId}`,
   role: 'VET',
-  status: 'ACTIVE',
-  isLocked: false,
-  branchId: 1,
-  mustChangePassword: false,
   online: true,
   ...over,
 });
@@ -119,7 +115,7 @@ describe('hook đọc: chỉ gọi API khi enabled (vai trò không có quyền 
     vi.spyOn(visitApi, 'getMyQueue').mockResolvedValue([visit(2)]);
     vi.spyOn(visitApi, 'getVisit').mockResolvedValue(visit(3));
     vi.spyOn(visitApi, 'listArrivals').mockResolvedValue(emptyPage);
-    vi.spyOn(identityApi, 'listStaff').mockResolvedValue(emptyPage);
+    vi.spyOn(identityApi, 'listAssignableStaff').mockResolvedValue([]);
   });
 
   it('enabled = false: không có request nào', async () => {
@@ -133,7 +129,7 @@ describe('hook đọc: chỉ gọi API khi enabled (vai trò không có quyền 
     expect(visitApi.getMyQueue).not.toHaveBeenCalled();
     expect(visitApi.getVisit).not.toHaveBeenCalled();
     expect(visitApi.listArrivals).not.toHaveBeenCalled();
-    expect(identityApi.listStaff).not.toHaveBeenCalled();
+    expect(identityApi.listAssignableStaff).not.toHaveBeenCalled();
   });
 
   it('useVisit chưa chọn lượt (null) thì không gọi', async () => {
@@ -255,52 +251,78 @@ describe('lệnh ghi: làm mới visits, appointments, sales (cả khi lỗi, v�
   });
 });
 
-describe('useAssignableStaff (BR-TN-05, BR-TN-06; ASSUMPTION GET /api/staff mở cho lễ tân, chờ BE-1)', () => {
-  it('gọi identityApi.listStaff({ role, status: ACTIVE, size: 100 }); thêm branchId khi quản lý chuỗi chọn chi nhánh của lượt', async () => {
-    const spy = vi.spyOn(identityApi, 'listStaff').mockResolvedValue(emptyPage);
+describe('useAssignableStaff (identity-v1 #38 GET /api/staff/assignable, ADR-0089; BR-TN-05, BR-TN-06)', () => {
+  const signInAs = (role: Role, branchId?: number) =>
+    useSession.setState({
+      token: 't',
+      expiresAt: null,
+      account: { id: 4, email: 'nv@store1.vn', role, status: 'ACTIVE', isLocked: false, mustChangePassword: false, ...(branchId !== undefined && { branchId }) },
+      fullName: null,
+    });
+  afterEach(() => useSession.setState({ token: null, expiresAt: null, account: null, fullName: null }));
+
+  it('gọi identityApi.listAssignableStaff({ role }) và chỉ thêm branchId khi truyền (quản lý chuỗi chọn chi nhánh của lượt); không còn size / status', async () => {
+    const spy = vi.spyOn(identityApi, 'listAssignableStaff').mockResolvedValue([]);
+    const old = vi.spyOn(identityApi, 'listStaff');
     renderHook(() => useAssignableStaff('VET', true), { wrapper });
     renderHook(() => useAssignableStaff('CARETAKER', true, 2), { wrapper });
     await waitFor(() => expect(spy).toHaveBeenCalledTimes(2));
-    expect(spy).toHaveBeenCalledWith({ role: 'VET', status: 'ACTIVE', size: 100 });
-    expect(spy).toHaveBeenCalledWith({ role: 'CARETAKER', status: 'ACTIVE', size: 100, branchId: 2 });
+    expect(spy).toHaveBeenCalledWith({ role: 'VET' });
+    expect(spy).toHaveBeenCalledWith({ role: 'CARETAKER', branchId: 2 });
+    expect(old).not.toHaveBeenCalled();
   });
 
-  it('người online xếp trước; người offline vẫn chọn được kèm cờ cảnh báo; bỏ tài khoản bị khóa (status vẫn ACTIVE) và sai chức vụ', async () => {
-    vi.spyOn(identityApi, 'listStaff').mockResolvedValue({
-      ...emptyPage,
-      content: [
-        staff(3, { online: false }),
-        staff(8, { online: true }),
-        staff(7, { isLocked: true }),
-        staff(6, { role: 'CARETAKER' }),
-        staff(5, { online: true }),
-      ],
-      totalElements: 5,
-    });
+  it('giữ nguyên thứ tự BE (online trước, rồi họ tên) và không lọc lại; người offline vẫn có kèm cờ cảnh báo', async () => {
+    vi.spyOn(identityApi, 'listAssignableStaff').mockResolvedValue([
+      staff(8, { fullName: 'An', online: true }),
+      staff(5, { fullName: 'Bình', online: true }),
+      staff(3, { fullName: 'Chi', online: false }),
+    ]);
     const { result } = renderHook(() => useAssignableStaff('VET', true), { wrapper });
     await waitFor(() => expect(result.current.staff).toHaveLength(3));
     expect(result.current.staff.map((s) => [s.accountId, s.online, s.offlineWarning])).toEqual([
-      [5, true, false],
       [8, true, false],
+      [5, true, false],
       [3, false, true],
     ]);
-    expect(result.current.staffPickerBlocked).toBe(false);
+    expect(result.current.isSuccess).toBe(true);
   });
 
-  it('BE trả 403 (lễ tân chưa được mở GET /api/staff): staffPickerBlocked = true, danh sách rỗng, không gọi lại', async () => {
-    const spy = vi.spyOn(identityApi, 'listStaff').mockRejectedValue(apiError(403, 'ACCESS_DENIED', 'Không có quyền thực hiện thao tác này'));
-    const { result } = renderHook(() => useAssignableStaff('VET', true), { wrapper });
-    await waitFor(() => expect(result.current.staffPickerBlocked).toBe(true));
+  it('BE trả 403 (ví dụ chi nhánh khác): isError, danh sách rỗng, thông điệp BE còn đó để UI hiện, không gọi lại (lỗi 4xx không đổi khi thử lại)', async () => {
+    const spy = vi.spyOn(identityApi, 'listAssignableStaff').mockRejectedValue(apiError(403, 'ACCESS_DENIED_SCOPE_MISMATCH', 'Không có quyền truy cập dữ liệu này'));
+    const { result } = renderHook(() => useAssignableStaff('VET', true, 2), { wrapper });
+    await waitFor(() => expect(result.current.isError).toBe(true));
     expect(result.current.staff).toEqual([]);
+    expect(result.current.isSuccess).toBe(false);
+    expect(plainMessage(toApiError(result.current.error))).toBe('Không có quyền truy cập dữ liệu này');
     await flush();
     expect(spy).toHaveBeenCalledTimes(1);
   });
 
-  it('lỗi khác 403 không bị coi là bị chặn', async () => {
-    vi.spyOn(identityApi, 'listStaff').mockRejectedValue(apiError(404, 'RESOURCE_NOT_FOUND'));
-    const { result } = renderHook(() => useAssignableStaff('VET', true), { wrapper });
-    await waitFor(() => expect(result.current.isError).toBe(true));
-    expect(result.current.staffPickerBlocked).toBe(false);
+  it('SUPER_MANAGER (cấp chuỗi) chưa có chi nhánh để gửi: không gọi API (BE trả 400); có chi nhánh thì gọi với branchId', async () => {
+    signInAs('SUPER_MANAGER');
+    const spy = vi.spyOn(identityApi, 'listAssignableStaff').mockResolvedValue([staff(5)]);
+    const without = renderHook(() => useAssignableStaff('VET', true), { wrapper });
+    await flush();
+    expect(spy).not.toHaveBeenCalled();
+    expect(without.result.current.isSuccess).toBe(false);
+    expect(without.result.current.isLoading).toBe(false);
+
+    const withBranch = renderHook(() => useAssignableStaff('VET', true, 1), { wrapper });
+    await waitFor(() => expect(withBranch.result.current.staff).toHaveLength(1));
+    expect(spy).toHaveBeenCalledTimes(1);
+    expect(spy).toHaveBeenCalledWith({ role: 'VET', branchId: 1 });
+  });
+
+  it('lễ tân / quản lý chi nhánh không bắt buộc gửi branchId (BE lấy chi nhánh của người gọi): gọi được cả khi chưa biết chi nhánh', async () => {
+    const spy = vi.spyOn(identityApi, 'listAssignableStaff').mockResolvedValue([]);
+    signInAs('RECEPTIONIST');
+    renderHook(() => useAssignableStaff('VET', true), { wrapper });
+    signInAs('BRANCH_MANAGER');
+    renderHook(() => useAssignableStaff('CARETAKER', true), { wrapper });
+    await waitFor(() => expect(spy).toHaveBeenCalledTimes(2));
+    expect(spy).toHaveBeenCalledWith({ role: 'VET' });
+    expect(spy).toHaveBeenCalledWith({ role: 'CARETAKER' });
   });
 });
 

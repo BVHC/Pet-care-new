@@ -73,10 +73,14 @@ m.schema("InventoryItem", {
     "totalQuantity": "int|Tổng các lô", "availableQuantity": "int|Tổng lô chưa hết hạn (BR-KO-01)",
     "minQuantity": "int", "belowMin": "bool", "nearestExpiryDate": "date?",
     "expiredQuantity": "int|Tồn ở lô đã hết hạn, cần điều chỉnh lý do hết hạn (BR-KO-07)",
+    "expiringSoon": "bool|Có lô còn tồn hết hạn trong [CFG] stock.expiry_warning_days ngày tới, gồm lô đã hết hạn "
+                    "(BR-KO-07, ADR-0088); cùng vị từ với bộ lọc expiringWithinDays",
 })
 m.schema("StockLot", {
     "stockLotId": "int64", "lotNumber": "string?", "expiryDate": "date?", "quantity": "int",
     "isDefault": "bool|Lô duy nhất của sản phẩm không quản lý hạn dùng", "expired": "bool",
+    "expiringSoon": "bool|Lô có hạn dùng trong [CFG] stock.expiry_warning_days ngày tới, gồm lô đã hết hạn; lô mặc định "
+                    "(không hạn) luôn false (BR-KO-07, ADR-0088)",
 })
 m.schema("SetMinQuantityRequest", {"minQuantity": "int|≥ 0"})
 m.schema("AdjustmentLineRequest", {"stockLotId": "int64", "quantityDelta": "int|≠ 0; âm = giảm, dương = tăng"})

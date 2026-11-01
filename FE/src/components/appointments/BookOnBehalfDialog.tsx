@@ -26,8 +26,11 @@ import { SlotPicker } from './SlotPicker';
 
 const NOTE_MAX = 500;
 
-/** SĐT đủ 10 số thì tra theo SĐT, còn lại tra theo họ tên (BR-KH-10). */
-const queryOf = (term: string): CustomerSearchQuery => (/^0\d{9}$/.test(term) ? { phone: term } : { name: term.length >= 2 ? term : '' });
+const PHONE = /^0\d{9}$/;
+
+/** Toàn chữ số là SĐT, chỉ tra khi đủ 10 số (chưa đủ thì không gọi API); còn lại tra theo họ tên từ 2 ký tự (BR-KH-10). */
+const queryOf = (term: string): CustomerSearchQuery =>
+  /^\d+$/.test(term) ? { phone: PHONE.test(term) ? term : '' } : { name: term.length >= 2 ? term : '' };
 
 export function BookOnBehalfDialog({ open, branchId, onClose }: { open: boolean; branchId: number; onClose: () => void }) {
   return (
@@ -47,6 +50,7 @@ function BookForm({ branchId, onClose }: { branchId: number; onClose: () => void
   const [term, setTerm] = useState('');
   const debounced = useDebounce(term.trim(), 250);
   const lookup = useCustomerLookup(queryOf(debounced));
+  const waitingForPhone = /^\d+$/.test(term.trim()) && !PHONE.test(term.trim());
   const [customerId, setCustomerId] = useState<number | null>(null);
   const detail = useCustomerDetail(customerId);
   const services = useBranchServices(branchId);
@@ -96,7 +100,8 @@ function BookForm({ branchId, onClose }: { branchId: number; onClose: () => void
   };
 
   if (customerId == null) {
-    const items = debounced ? (lookup.data?.content ?? []) : [];
+    // Trong 250 ms debounce truy vấn vẫn là của lần gõ trước: SĐT vừa bị xóa bớt thì ẩn ngay kết quả đó.
+    const items = debounced && !waitingForPhone ? (lookup.data?.content ?? []) : [];
     return (
       <div className="space-y-3">
         <div className="relative">
@@ -110,8 +115,9 @@ function BookForm({ branchId, onClose }: { branchId: number; onClose: () => void
             autoFocus
           />
         </div>
+        {waitingForPhone && <p className="text-xs text-(--text-secondary)">Nhập đủ 10 số điện thoại để tra cứu.</p>}
         {lookup.isError && <FormError message={plainMessage(toApiError(lookup.error))} />}
-        {debounced && lookup.isSuccess && items.length === 0 && (
+        {debounced && !waitingForPhone && lookup.isSuccess && items.length === 0 && (
           <p className="text-sm text-(--text-secondary)">Không tìm thấy khách. Hồ sơ mới tạo ở màn Khách hàng.</p>
         )}
         <ul className="space-y-2" aria-label="Kết quả tìm khách">

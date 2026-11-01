@@ -96,32 +96,53 @@ describe('GET /api/audit-logs — from / to phải kèm offset (identity-v1 #36)
   });
 });
 
-// ASSUMPTION (T36, docs/testcases/T36-fe.md): lễ tân chọn người gán lượt (UC45) nhưng identity-v1 #15 loại RECEPTIONIST và 06-module-contracts L115 nói
-// `findAssignableStaff` chưa có endpoint. Mock mở GET /api/staff cho lễ tân với đúng phạm vi: VET / CARETAKER ACTIVE, không bị khóa, của chi nhánh mình.
-// BE thật hiện trả 403 cho lễ tân (đã dò) — chờ BE-1.
-describe('GET /api/staff cho lễ tân — danh sách chọn người gán lượt (ASSUMPTION chờ BE-1, BR-TN-05, BR-TN-06)', () => {
+// identity-v1 #38 `GET /api/staff/assignable` (ADR-0089, docs/testcases/T36-fe.md A.7): người gán lượt cho lễ tân (UC45) và quản lý (gán lại, BR-TN-08). Thay cho việc mở
+// `GET /api/staff` cho lễ tân: endpoint cũ vẫn đóng (xem describe ngay dưới). Cờ `online` lấy từ bảng hiện diện của mock (BR-TN-06).
+describe('GET /api/staff/assignable — danh sách chọn người gán lượt (identity-v1 #38, BR-TN-05, BR-TN-06)', () => {
+  const URL = '/api/staff/assignable';
   const desk = () => as('reception@store1.vn');
-  const names = (res: AxiosResponse) => res.data.data.content.map((s: { accountId: number }) => s.accountId);
+  type Row = { accountId: number; fullName: string; role: string; online: boolean };
+  const rows = (res: AxiosResponse) => res.data.data as Row[];
+  const accountIds = (res: AxiosResponse) => rows(res).map((s) => s.accountId);
+  const ask = (params: object, auth: object) => client.get(URL, { params, ...auth });
 
-  it('không lọc: chỉ VET và CARETAKER ACTIVE của chi nhánh lễ tân (#5, #21–23 bác sĩ, #6 nhân viên chăm sóc); không thấy lễ tân, quản lý, chi nhánh khác', async () => {
-    const res = await client.get('/api/staff', await desk());
-    expect(names(res)).toEqual([5, 6, 21, 22, 23]);
-    expect(res.data.data.content[0]).toMatchObject({ role: 'VET', status: 'ACTIVE', isLocked: false, branchId: 1, online: true });
+  it('lễ tân, bỏ branchId = chi nhánh mình: mảng (không phân trang) chỉ có 4 trường, đúng chức vụ, người online xếp trước rồi họ tên', async () => {
+    const auth = await desk();
+    const vets = await ask({ role: 'VET' }, auth);
+    expect(Array.isArray(vets.data.data)).toBe(true);
+    // Họ tên theo tiếng Việt: BS. Minh Anh (5), BS. Ngọc Lan (22), BS. Quốc Bảo (21), BS. Thanh Thảo (23).
+    expect(accountIds(vets)).toEqual([5, 22, 21, 23]);
+    expect(rows(vets)[0]).toEqual({ accountId: 5, fullName: 'BS. Minh Anh', role: 'VET', online: true });
+    for (const row of rows(vets)) expect(Object.keys(row).sort()).toEqual(['accountId', 'fullName', 'online', 'role']);
+    const caretakers = await ask({ role: 'CARETAKER' }, auth);
+    expect(rows(caretakers)).toEqual([{ accountId: 6, fullName: 'Thu Hà', role: 'CARETAKER', online: true }]);
   });
 
-  it('role=VET&status=ACTIVE&size=100 (lời gọi của hook) và role=CARETAKER chỉ ra đúng một nhóm', async () => {
+  it('branchId của chính mình thì được; chi nhánh khác → 403 ACCESS_DENIED_SCOPE_MISMATCH', async () => {
     const auth = await desk();
-    expect(names(await client.get('/api/staff', { params: { role: 'VET', status: 'ACTIVE', size: 100 }, ...auth }))).toEqual([5, 21, 22, 23]);
-    expect(names(await client.get('/api/staff', { params: { role: 'CARETAKER', status: 'ACTIVE', size: 100 }, ...auth }))).toEqual([6]);
+    expect(accountIds(await ask({ role: 'VET', branchId: 1 }, auth))).toEqual([5, 22, 21, 23]);
+    const res = await failure(ask({ role: 'VET', branchId: 2 }, auth));
+    expect(res.status).toBe(403);
+    expect(res.data.errorCode).toBe('ACCESS_DENIED_SCOPE_MISMATCH');
   });
 
-  it('role khác VET / CARETAKER, status khác ACTIVE, chi nhánh khác → 403 (ngoài phạm vi được mở)', async () => {
+  it('role thiếu hoặc không phải VET / CARETAKER → 400 MALFORMED_REQUEST', async () => {
     const auth = await desk();
-    for (const params of [{ role: 'RECEPTIONIST' }, { role: 'BRANCH_MANAGER' }, { role: 'SUPER_MANAGER' }, { status: 'DISABLED' }, { status: 'PENDING' }, { branchId: 2 }]) {
-      const res = await failure(client.get('/api/staff', { params, ...auth }));
-      expect(res.status, JSON.stringify(params)).toBe(403);
+    for (const params of [{}, { role: 'RECEPTIONIST' }, { role: 'BRANCH_MANAGER' }, { role: 'ADMIN' }, { role: 'vet' }, { branchId: 1 }]) {
+      const res = await failure(ask(params, auth));
+      expect(res.status, JSON.stringify(params)).toBe(400);
+      expect(res.data.errorCode, JSON.stringify(params)).toBe('MALFORMED_REQUEST');
     }
-    expect((await client.get('/api/staff', { params: { branchId: 1 }, ...auth })).status).toBe(200);
+  });
+
+  it('branchId sai kiểu → 400 MALFORMED_REQUEST; không phải số dương (0, âm) → 400 VALIDATION_FAILED (@Positive)', async () => {
+    const auth = await desk();
+    const bad = await failure(ask({ role: 'VET', branchId: 'abc' }, auth));
+    expect([bad.status, bad.data.errorCode]).toEqual([400, 'MALFORMED_REQUEST']);
+    for (const branchId of [0, -1]) {
+      const res = await failure(ask({ role: 'VET', branchId }, auth));
+      expect([res.status, res.data.errorCode], String(branchId)).toEqual([400, 'VALIDATION_FAILED']);
+    }
   });
 
   it('nhân viên tạo lúc chạy hiện ngay; VET ở chi nhánh khác, bị khóa hoặc vô hiệu hóa thì không', async () => {
@@ -133,20 +154,78 @@ describe('GET /api/staff cho lễ tân — danh sách chọn người gán lư�
     await client.post(`/api/accounts/${locked}/lock`, { reason: 'Thử khóa' }, await as('admin@petcare.vn'));
     const disabled = await created({ email: 'vet.nghi@new.vn', fullName: 'BS. Đã nghỉ', role: 'VET', branchId: 1 });
     await client.post(`/api/staff/${disabled}/disable`, {}, chain);
-    const res = await client.get('/api/staff', { params: { role: 'VET' }, ...(await desk()) });
-    expect(names(res)).toEqual([5, 21, 22, 23, sameBranch]);
-    expect(names(res)).not.toContain(otherBranch);
-    expect(names(res)).not.toContain(locked);
-    expect(names(res)).not.toContain(disabled);
+    const wrongRole = await created({ email: 'cs.moi@new.vn', fullName: 'Chăm sóc mới', role: 'CARETAKER', branchId: 1 });
+    const res = await ask({ role: 'VET' }, await desk());
+    expect(accountIds(res)).toEqual([5, sameBranch, 22, 21, 23]);
+    for (const id of [otherBranch, locked, disabled, wrongRole]) expect(accountIds(res)).not.toContain(id);
+    // Quản lý chi nhánh 2 chỉ thấy VET của chi nhánh mình.
+    expect(accountIds(await ask({ role: 'VET' }, await as('manager2@store2.vn')))).toEqual([otherBranch]);
   });
 
-  it('cờ online lấy từ bảng hiện diện (mặc định ai cũng online): setStaffOnline đặt một người offline', async () => {
+  it('cờ online lấy từ bảng hiện diện (mặc định ai cũng online): người offline xếp sau nhưng VẪN có trong danh sách (BR-TN-06 chỉ gợi ý)', async () => {
     const { setStaffOnline } = await import('./identity-admin.mock');
-    setStaffOnline(6, false);
-    const res = await client.get('/api/staff', await desk());
-    expect(res.data.data.content.map((s: { accountId: number; online: boolean }) => [s.accountId, s.online])).toEqual([[5, true], [6, false], [21, true], [22, true], [23, true]]);
-    setStaffOnline(6, true);
-    expect((await client.get('/api/staff', await desk())).data.data.content.every((s: { online: boolean }) => s.online)).toBe(true);
+    const auth = await desk();
+    setStaffOnline(5, false);
+    const res = await ask({ role: 'VET' }, auth);
+    expect(rows(res).map((s) => [s.accountId, s.online])).toEqual([[22, true], [21, true], [23, true], [5, false]]);
+    setStaffOnline(5, true);
+    expect(accountIds(await ask({ role: 'VET' }, auth))).toEqual([5, 22, 21, 23]);
+    expect(rows(await ask({ role: 'VET' }, auth)).every((s) => s.online)).toBe(true);
+  });
+
+  it('BRANCH_MANAGER (gán lại): chi nhánh mình bỏ trống hoặc gửi đúng thì được; chi nhánh khác → 403 ACCESS_DENIED_SCOPE_MISMATCH; chi nhánh chưa có VET → mảng rỗng', async () => {
+    const bm = await as('manager@store1.vn');
+    expect(accountIds(await ask({ role: 'VET' }, bm))).toEqual([5, 22, 21, 23]);
+    expect(accountIds(await ask({ role: 'CARETAKER', branchId: 1 }, bm))).toEqual([6]);
+    const res = await failure(ask({ role: 'VET', branchId: 2 }, bm));
+    expect(res.status).toBe(403);
+    expect(res.data.errorCode).toBe('ACCESS_DENIED_SCOPE_MISMATCH');
+    expect((await ask({ role: 'VET' }, await as('manager2@store2.vn'))).data.data).toEqual([]);
+  });
+
+  it('SUPER_MANAGER (cấp chuỗi): không gửi branchId → 400 VALIDATION_FAILED; có branchId thì được; chi nhánh không tồn tại → mảng rỗng', async () => {
+    const chain = await as('chuoi@petcare.vn');
+    const res = await failure(ask({ role: 'VET' }, chain));
+    expect(res.status).toBe(400);
+    expect(res.data.errorCode).toBe('VALIDATION_FAILED');
+    expect(accountIds(await ask({ role: 'VET', branchId: 1 }, chain))).toEqual([5, 22, 21, 23]);
+    expect((await ask({ role: 'VET', branchId: 999 }, chain)).data.data).toEqual([]);
+  });
+
+  it('ADMIN, VET, CARETAKER, CUSTOMER → 403 ACCESS_DENIED dù lời gọi hợp lệ; chưa đăng nhập → 401', async () => {
+    for (const email of ['admin@petcare.vn', 'doctor@store1.vn', 'caretaker@store1.vn', 'khach@petcare.vn']) {
+      const res = await failure(ask({ role: 'VET', branchId: 1 }, await as(email)));
+      expect(res.status, email).toBe(403);
+      expect(res.data.errorCode, email).toBe('ACCESS_DENIED');
+    }
+    expect((await failure(client.get(URL, { params: { role: 'VET' } }))).status).toBe(401);
+  });
+
+  it('route "/api/staff/assignable" không bị "/api/staff/:id" ăn (khai báo trước :id): 200 với mảng, không phải 400/403/404 của getStaffOne', async () => {
+    const res = await client.get(URL, { params: { role: 'VET' }, validateStatus: () => true, ...(await desk()) });
+    expect(res.status).toBe(200);
+    expect(Array.isArray(res.data.data)).toBe(true);
+  });
+});
+
+describe('GET /api/staff và GET /api/staff/{id} — vẫn đóng với lễ tân (ADR-0089: không mở endpoint cũ, StaffController chỉ dành cho quản trị nhân sự)', () => {
+  it('lễ tân gọi GET /api/staff (không lọc, đúng lời gọi cũ của hộp gán, lọc chi nhánh mình) → 403 ACCESS_DENIED', async () => {
+    const auth = await as('reception@store1.vn');
+    for (const params of [{}, { role: 'VET', status: 'ACTIVE', size: 100 }, { branchId: 1 }]) {
+      const res = await failure(client.get('/api/staff', { params, ...auth }));
+      expect(res.status, JSON.stringify(params)).toBe(403);
+      expect(res.data.errorCode, JSON.stringify(params)).toBe('ACCESS_DENIED');
+    }
+  });
+
+  it('GET /api/staff/{id}: lễ tân, bác sĩ, nhân viên chăm sóc → 403; SUPER_MANAGER và BRANCH_MANAGER chi nhánh mình vẫn đọc được', async () => {
+    for (const email of ['reception@store1.vn', 'doctor@store1.vn', 'caretaker@store1.vn']) {
+      const res = await failure(client.get('/api/staff/5', await as(email)));
+      expect(res.status, email).toBe(403);
+      expect(res.data.errorCode, email).toBe('ACCESS_DENIED');
+    }
+    expect((await client.get('/api/staff/5', await as('chuoi@petcare.vn'))).data.data.accountId).toBe(5);
+    expect((await client.get('/api/staff/5', await as('manager@store1.vn'))).data.data.accountId).toBe(5);
   });
 });
 

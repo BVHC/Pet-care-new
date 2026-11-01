@@ -10,7 +10,8 @@ import { visitApi, type ArrivalsQuery } from '../api/visit.api';
 import { retryDelay, shouldRetry } from '../constants/realtime';
 import type { Appointment } from '../types/appointment';
 import type { PageResponse } from '../types';
-import type { StaffResponse } from '../types/identity';
+import { useAccount } from '../stores/session.store';
+import type { AssignableStaffResponse } from '../types/identity';
 import type { AssignRequest, CheckInRequest, MoveVisitRequest, ReassignRequest, Visit, VisitAction, VisitQueueQuery } from '../types/visit';
 
 export const VISITS_KEY = ['visits'] as const;
@@ -84,41 +85,32 @@ export const useCancelVisit = () =>
 
 // ─── Chọn người gán (BR-TN-05, BR-TN-06) ───
 
-export interface AssignableStaff {
-  accountId: number;
-  fullName: string;
-  role: 'VET' | 'CARETAKER';
-  online: boolean;
+export interface AssignableStaff extends AssignableStaffResponse {
   /** Offline vẫn chọn được, chỉ cảnh báo (BR-TN-06). */
   offlineWarning: boolean;
 }
 
-/** Bỏ tài khoản bị khóa (BE vẫn trả `status: ACTIVE` kèm `isLocked`, gán sẽ 400 BR-TN-05) và sai chức vụ; người online xếp trước. */
-function assignableOf(role: AssignableStaff['role'], rows: PageResponse<StaffResponse>): AssignableStaff[] {
-  return rows.content
-    .filter((s) => s.role === role && s.status === 'ACTIVE' && !s.isLocked)
-    .map((s) => ({ accountId: s.accountId, fullName: s.fullName, role, online: s.online, offlineWarning: !s.online }))
-    .sort((a, b) => Number(b.online) - Number(a.online) || a.accountId - b.accountId);
-}
+const withWarning = (rows: AssignableStaffResponse[]): AssignableStaff[] => rows.map((s) => ({ ...s, offlineWarning: !s.online }));
 
 /**
- * Danh sách người gán lượt: VET cho MEDICAL, CARETAKER cho GROOMING. Dùng identity-v1 #15 `GET /api/staff`.
- * ASSUMPTION chờ BE-1: BE thật hiện loại RECEPTIONIST khỏi #15 (403, đã dò), nên `staffPickerBlocked = true` và UI phải báo "danh sách nhân viên chờ BE-1 mở GET /api/staff
- * cho lễ tân" thay vì để trống. BRANCH_MANAGER / SUPER_MANAGER gọi được; SUPER_MANAGER truyền `branchId` của lượt vì #15 trả cả chuỗi.
+ * Danh sách người gán lượt: VET cho MEDICAL, CARETAKER cho GROOMING. Dùng identity-v1 #38 `GET /api/staff/assignable` (ADR-0089): BE đã lọc ACTIVE, chưa khóa, đúng chi nhánh
+ * và chức vụ, đã xếp online trước rồi họ tên (BR-TN-06 chỉ gợi ý, người offline vẫn có trong danh sách) nên hook giữ nguyên thứ tự BE.
+ * Lễ tân / quản lý chi nhánh bỏ `branchId` = chi nhánh của mình. SUPER_MANAGER (cấp chuỗi) bắt buộc gửi `branchId`: chưa có thì không gọi (BE trả 400).
  */
 export function useAssignableStaff(role: AssignableStaff['role'], enabled = true, branchId?: number) {
+  const chainWide = useAccount()?.role === 'SUPER_MANAGER';
   const query = useQuery({
     queryKey: ['staff', 'assignable', role, branchId ?? null],
-    queryFn: () => identityApi.listStaff({ role, status: 'ACTIVE', size: 100, ...(branchId !== undefined && { branchId }) }),
-    select: (page) => assignableOf(role, page),
-    enabled,
+    queryFn: () => identityApi.listAssignableStaff({ role, ...(branchId !== undefined && { branchId }) }),
+    select: withWarning,
+    enabled: enabled && (!chainWide || branchId !== undefined),
     staleTime: 30_000,
     ...retry,
   });
-  const staffPickerBlocked = query.isError && toApiError(query.error).statusCode === 403;
   return {
     staff: query.data ?? [],
-    staffPickerBlocked,
+    /** Chỉ true khi đã có danh sách thật: chưa tải, bị tắt (không đủ chi nhánh) hay lỗi đều false, đừng đọc `staff` rỗng như "không có ai". */
+    isSuccess: query.isSuccess,
     isLoading: query.isLoading,
     isError: query.isError,
     error: query.error,

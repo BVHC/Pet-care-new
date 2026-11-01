@@ -9,6 +9,7 @@ import io.swagger.v3.oas.annotations.media.Schema;
 /**
  * Tồn của một sản phẩm tại chi nhánh (inventory-v1 {@code InventoryItem}, BR-KO-01, 07). Tồn khả dụng chỉ tính lô chưa
  * hết hạn; {@code expiredQuantity} là số còn trong các lô đã hết hạn (cần lập điều chỉnh lý do hết hạn).
+ * {@code expiringSoon} do BE tính theo [CFG] (docs/adr/0088) để FE không phải giữ hằng số ngày.
  */
 public record InventoryItemResponse(
         @Schema(description = "Mã sản phẩm", example = "12")
@@ -45,5 +46,10 @@ public record InventoryItemResponse(
         LocalDate nearestExpiryDate,
 
         @Schema(description = "Số còn trong các lô đã hết hạn", example = "10")
-        int expiredQuantity) {
+        int expiredQuantity,
+
+        @Schema(description = "Có lô còn tồn hết hạn trong [CFG] stock.expiry_warning_days ngày tới, gồm cả lô đã hết "
+                + "hạn (BR-KO-07). Cùng vị từ với bộ lọc expiringWithinDays; cờ sắp hết hạn của màn hình kho, "
+                + "ưu tiên hiển thị expiredQuantity > 0 trước", example = "true")
+        boolean expiringSoon) {
 }

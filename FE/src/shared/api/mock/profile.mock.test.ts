@@ -220,11 +220,22 @@ describe('profile link (UC07, BR-TK-19)', () => {
     ]);
   });
 
-  it('searches by another phone and checks its format', async () => {
+  // Mock siết 10 số như hồ sơ khách tại quầy (customer-pet.mock.ts); BE-1 thật còn nhận 10–11 số.
+  it('searches by another phone and checks its format (10 digits)', async () => {
     const auth = await pending();
     expect((await client.get('/api/me/link-candidates', { ...auth, params: { phone: '0977000000' } })).data.data).toEqual([]);
-    const bad = await failure(client.get('/api/me/link-candidates', { ...auth, params: { phone: '12345' } }));
-    expect(bad.data).toMatchObject({ errorCode: 'VALIDATION_FAILED', message: 'phone: Số điện thoại phải gồm 10–11 chữ số, bắt đầu bằng 0' });
+    for (const phone of ['12345', '09051112223', '1234567890']) {
+      const bad = await failure(client.get('/api/me/link-candidates', { ...auth, params: { phone } }));
+      expect(bad.data).toMatchObject({ errorCode: 'VALIDATION_FAILED', message: 'phone: Số điện thoại phải có dạng 0xxxxxxxxx' });
+    }
+  });
+
+  it('checks the phone format of the code request too', async () => {
+    const auth = await pending();
+    for (const phone of ['12345', '09051112223', '1234567890']) {
+      const bad = await failure(client.post('/api/me/link/otp', { customerId: 3, phone }, auth));
+      expect(bad.data).toMatchObject({ errorCode: 'VALIDATION_FAILED', message: 'phone: Số điện thoại phải có dạng 0xxxxxxxxx' });
+    }
   });
 
   it('refuses a profile that already has data', async () => {

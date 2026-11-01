@@ -467,8 +467,10 @@ const updateStaffProfile: MockHandler = ({ account, body }) => {
 
 // ─── Liên kết hồ sơ tại quầy (UC07, BR-TK-19, ADR-0027) ───
 
-const LINK_PHONE = 'Số điện thoại phải gồm 10–11 chữ số, bắt đầu bằng 0';
-const LINK_PHONE_RE = /^0[0-9]{9,10}$/;
+// SĐT hồ sơ tại quầy là 10 số (chốt 30/10, UC07 áp 31/10). Mock siết 10 số như customer-pet.mock.ts, dùng câu "dạng 0xxxxxxxxx" của
+// các request 10 số khác; BE-1 thật (`MeController`, `LinkOtpRequest`) còn `^0[0-9]{9,10}$` và trả "phải gồm 10–11 chữ số, bắt đầu bằng 0".
+const LINK_PHONE = 'Số điện thoại phải có dạng 0xxxxxxxxx';
+const LINK_PHONE_RE = /^0[0-9]{9}$/;
 
 const linkTargetChecks = (b: Record<string, unknown>): Check[] => [
   ['customerId', 'Vui lòng chọn hồ sơ cần liên kết', !has(b.customerId)],

@@ -82,6 +82,7 @@ describe('tồn kho (UC75, BR-KO-01, 07)', () => {
       minQuantity: 10,
       belowMin: false,
       nearestExpiryDate: addDays(today, 260),
+      expiringSoon: true, // lô RB2309 đã hết hạn còn tồn 2 vẫn tính (như BE), dù lô còn hạn gần nhất là +260
     });
     const below = await client.get('/api/inventory', { params: { belowMin: true }, ...(await manager()) });
     expect(below.data.data.content.map((i: { productId: number }) => i.productId)).toEqual([2, 6]);
@@ -112,6 +113,61 @@ describe('tồn kho (UC75, BR-KO-01, 07)', () => {
       expect(res.status).toBe(400);
       expect(res.data).toMatchObject({ errorCode: 'MALFORMED_REQUEST', message: "Tham số 'expiringWithinDays' sai kiểu dữ liệu" });
     }
+  });
+
+  // Như BE (cờ `expiringSoon`, N = [CFG] stock.expiry_warning_days = 30): item = có lô CÒN TỒN với hạn ≤ hôm nay + N, gồm lô đã hết hạn; lô = hạn của chính lô.
+  it('cờ expiringSoon của tồn: Amoxicillin (AMX2405 +20) và Rabisin (lô hết hạn còn tồn) true; Vanguard (+160), hàng không hạn dùng false', async () => {
+    const list = await client.get('/api/inventory', await manager());
+    const flags = Object.fromEntries(list.data.data.content.map((i: { productId: number; expiringSoon: boolean }) => [i.productId, i.expiringSoon]));
+    expect(flags).toEqual({ 1: false, 2: false, 3: true, 5: true, 6: false });
+    expect((await item(3)).expiringSoon).toBe(true);
+    expect((await item(6)).expiringSoon).toBe(false);
+    expect((await item(4)).expiringSoon).toBe(false); // chưa có dòng tồn
+    const min = await client.put('/api/inventory/3/min-quantity', { minQuantity: 100 }, await manager());
+    expect(min.data.data.expiringSoon).toBe(true);
+  });
+
+  it('cờ expiringSoon của lô theo hạn của lô, lô hết hạn cũng true; lô mặc định không hạn false', async () => {
+    const flags = async (productId: number) =>
+      (await lots(productId)).map((l: { lotNumber: string | null; expired: boolean; expiringSoon: boolean }) => [l.lotNumber, l.expired, l.expiringSoon]);
+    expect(await flags(3)).toEqual([
+      ['AMX2405', false, true],
+      ['AMX2501', false, false],
+    ]);
+    expect(await flags(5)).toEqual([
+      ['RB2309', true, true],
+      ['RB2401', false, false],
+    ]);
+    expect(await flags(1)).toEqual([[null, false, false]]);
+  });
+
+  it('cờ expiringSoon: ranh giới đúng +30 ngày (true) và +31 ngày (false), ở cả tồn và lô', async () => {
+    const receive = async (productId: number, lotNumber: string, days: number) => {
+      const created = await client.post(
+        '/api/stock-receipts',
+        { supplierId: 1, receiptDate: today, lines: [{ productId, quantity: 5, unitCost: 1000, lotNumber, expiryDate: addDays(today, days) }] },
+        await manager(),
+      );
+      await client.post(`/api/stock-receipts/${created.data.data.receiptId}/confirm`, undefined, await manager());
+    };
+    await receive(6, 'VG-D31', 31); // Vanguard còn lô VG2402 +160
+    expect((await item(6)).expiringSoon).toBe(false);
+    expect((await lots(6)).map((l: { expiringSoon: boolean }) => l.expiringSoon)).toEqual([false, false]);
+
+    await receive(4, 'VT-D31', 31);
+    expect((await item(4)).expiringSoon).toBe(false);
+    await receive(4, 'VT-D30', 30);
+    expect((await item(4)).expiringSoon).toBe(true);
+    expect((await lots(4)).map((l: { lotNumber: string; expiringSoon: boolean }) => [l.lotNumber, l.expiringSoon])).toEqual([
+      ['VT-D30', true],
+      ['VT-D31', false],
+    ]);
+  });
+
+  it('cờ expiringSoon của tồn chỉ tính lô còn tồn: điều chỉnh lô hết hạn về 0 thì Rabisin hết cờ', async () => {
+    expect((await item(5)).expiringSoon).toBe(true);
+    await client.post('/api/stock-adjustments', { reason: 'EXPIRED', lines: [{ stockLotId: 16, quantityDelta: -2 }] }, await manager());
+    expect(await item(5)).toMatchObject({ expiredQuantity: 0, expiringSoon: false });
   });
 
   it('lô số dư 0 ẩn khỏi danh sách lô như BE (ADR-0042), tồn của sản phẩm vẫn đủ', async () => {

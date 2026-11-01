@@ -102,8 +102,8 @@ Trường có `?` là không bắt buộc / có thể null. Kiểu `email`, `dat
 - **`StockReceipt`** — {`receiptId`: int64, `code`: string, `branchId`: int64, `supplierId`: int64, `supplierName`: string, `receiptDate`: date, `status`: DRAFT|CONFIRMED|CANCELLED, `note?`: string, `lines`: [ReceiptLine], `createdBy`: int64, `confirmedBy?`: int64, `confirmedAt?`: date-time, `cancelledBy?`: int64, `cancelledAt?`: date-time, `cancelReason?`: string}
 - **`StockReceiptSummary`** — {`receiptId`: int64, `code`: string, `supplierName`: string, `receiptDate`: date, `status`: DRAFT|CONFIRMED|CANCELLED, `lineCount`: int32, `totalCost`: int64}
 - **`CancelReceiptRequest`** — {`reason?`: string}
-- **`InventoryItem`** — {`productId`: int64, `productName`: string, `sku`: string, `unit`: string, `productType`: GOODS|DRUG|VACCINE, `tracksExpiry`: boolean, `totalQuantity`: int32, `availableQuantity`: int32, `minQuantity`: int32, `belowMin`: boolean, `nearestExpiryDate?`: date, `expiredQuantity`: int32}
-- **`StockLot`** — {`stockLotId`: int64, `lotNumber?`: string, `expiryDate?`: date, `quantity`: int32, `isDefault`: boolean, `expired`: boolean}
+- **`InventoryItem`** — {`productId`: int64, `productName`: string, `sku`: string, `unit`: string, `productType`: GOODS|DRUG|VACCINE, `tracksExpiry`: boolean, `totalQuantity`: int32, `availableQuantity`: int32, `minQuantity`: int32, `belowMin`: boolean, `nearestExpiryDate?`: date, `expiredQuantity`: int32, `expiringSoon`: boolean}
+- **`StockLot`** — {`stockLotId`: int64, `lotNumber?`: string, `expiryDate?`: date, `quantity`: int32, `isDefault`: boolean, `expired`: boolean, `expiringSoon`: boolean}
 - **`SetMinQuantityRequest`** — {`minQuantity`: int32}
 - **`AdjustmentLineRequest`** — {`stockLotId`: int64, `quantityDelta`: int32}
 - **`StockAdjustmentRequest`** — {`reason`: DAMAGED|EXPIRED|COUNT_MISMATCH|OTHER, `note?`: string, `lines`: [AdjustmentLineRequest]}

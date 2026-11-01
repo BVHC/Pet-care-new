@@ -27,6 +27,20 @@ export interface StaffResponse {
   online: boolean;
 }
 
+/** identity-v1 #38 `GET /api/staff/assignable`: chỉ đủ để chọn người gán lượt (không email, SĐT, trạng thái, chi nhánh). */
+export interface AssignableStaffResponse {
+  accountId: number;
+  fullName: string;
+  role: 'VET' | 'CARETAKER';
+  online: boolean;
+}
+
+export interface AssignableStaffQuery {
+  role: AssignableStaffResponse['role'];
+  /** Lễ tân / quản lý chi nhánh: bỏ trống = chi nhánh của mình. SUPER_MANAGER (cấp chuỗi): bắt buộc. */
+  branchId?: number;
+}
+
 export interface CreateStaffRequest {
   email: string;
   phone: string;

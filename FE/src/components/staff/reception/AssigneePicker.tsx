@@ -7,8 +7,6 @@ import { QueryError } from '../ui';
 const ROLE_NAME = { VET: 'bác sĩ thú y', CARETAKER: 'nhân viên chăm sóc' } as const;
 const field = 'h-10 w-full rounded-lg border border-(--ws-line-strong) bg-(--ws-surface) px-3 text-sm text-(--ws-ink)';
 
-export const STAFF_PICKER_BLOCKED = 'Danh sách nhân viên chờ BE-1 mở GET /api/staff cho lễ tân';
-
 export function AssigneePicker({
   group,
   value,
@@ -22,16 +20,8 @@ export function AssigneePicker({
 }) {
   const id = useId();
   const role = ASSIGNEE_ROLE_OF_GROUP[group];
-  const { staff, staffPickerBlocked, isLoading, isError, error, refetch } = useAssignableStaff(role, true, branchId);
+  const { staff, isLoading, isError, error, refetch } = useAssignableStaff(role, true, branchId);
 
-  // Lễ tân là người duy nhất được gán (UC45) mà BE thật đang trả 403 cho `GET /api/staff` của lễ tân (docs/testcases/T36-fe.md A.7).
-  if (staffPickerBlocked) {
-    return (
-      <p role="alert" className="rounded-lg bg-(--ws-urgent-bg) px-3 py-2 text-sm font-medium text-(--ws-urgent-ink)">
-        {STAFF_PICKER_BLOCKED}
-      </p>
-    );
-  }
   if (isError) return <QueryError error={error} onRetry={() => refetch()} what="danh sách nhân viên" />;
   if (isLoading) return <p role="status" className="text-sm text-(--ws-ink-2)">Đang tải danh sách nhân viên…</p>;
 

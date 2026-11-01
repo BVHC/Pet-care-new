@@ -1,8 +1,8 @@
-import { render, screen, within } from '@testing-library/react';
+import { fireEvent, render, screen, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { MemoryRouter, Route, Routes } from 'react-router-dom';
-import { beforeAll, describe, expect, it } from 'vitest';
+import { afterEach, beforeAll, describe, expect, it, vi } from 'vitest';
 import { apiClient } from '../../shared/api/axios';
 import { MOCK_OTP_CODE, MOCK_PASSWORD } from '../../shared/api/mock/identity.mock';
 import { installMockApi } from '../../shared/api/mock/mock-api';
@@ -13,6 +13,7 @@ import { AccountPage } from './AccountPage';
 // Dữ liệu mẫu (customer.mock.ts): khach@petcare.vn có 2 địa chỉ (mặc định: 12 Trần Thái Tông) và đã có thú cưng;
 // khachmoi@petcare.vn đang chờ quyết định liên kết, SĐT trùng hồ sơ tại quầy #3 (có email) và #4 (không có email).
 beforeAll(() => installMockApi(apiClient));
+afterEach(() => vi.restoreAllMocks());
 
 const signIn = async (email: string) => {
   useSession.getState().clear();
@@ -198,5 +199,102 @@ describe('profile link (UC07, BR-TK-19)', () => {
     await user.click(screen.getByRole('button', { name: 'Tìm hồ sơ' }));
 
     expect(await screen.findByRole('alert')).toHaveTextContent('Hồ sơ của bạn đã có thú cưng, lịch hẹn');
+  });
+
+  // SĐT hồ sơ tại quầy là 10 số bắt đầu bằng 0 (chốt 30/10, UC07 áp 31/10); BE còn nhận 10–11 số nhưng FE chỉ gửi khi đủ 10.
+  describe('phone format', () => {
+    const REMINDER = 'Nhập đủ 10 số điện thoại để tra cứu.';
+    const open = async () => {
+      await signIn('khach@petcare.vn');
+      const user = userEvent.setup();
+      renderAt('/account/link');
+      const input = await screen.findByLabelText('Số điện thoại trong hồ sơ tại phòng khám');
+      return { user, input, search: screen.getByRole('button', { name: 'Tìm hồ sơ' }) };
+    };
+
+    it('searches only once the phone has 10 digits', async () => {
+      const lookup = vi.spyOn(profileApi, 'linkCandidates');
+      const { user, input, search } = await open();
+      expect(search).toBeDisabled();
+      expect(screen.queryByText(REMINDER)).not.toBeInTheDocument();
+
+      await user.type(input, '090511122');
+      expect(screen.getByText(REMINDER)).toBeInTheDocument();
+      expect(search).toBeDisabled();
+      expect(lookup).not.toHaveBeenCalled();
+
+      await user.type(input, '2');
+      expect(screen.queryByText(REMINDER)).not.toBeInTheDocument();
+      expect(search).toBeEnabled();
+      await user.click(search);
+      expect(await screen.findByRole('alert')).toHaveTextContent('Hồ sơ của bạn đã có thú cưng, lịch hẹn');
+      expect(lookup).toHaveBeenCalledTimes(1);
+      expect(lookup).toHaveBeenCalledWith('0905111222');
+    });
+
+    it('does not search 11 digits, not even with Enter', async () => {
+      const lookup = vi.spyOn(profileApi, 'linkCandidates');
+      const { user, input, search } = await open();
+      await user.type(input, '09051112223{Enter}');
+
+      expect(screen.getByText(REMINDER)).toBeInTheDocument();
+      expect(search).toBeDisabled();
+      expect(lookup).not.toHaveBeenCalled();
+      expect(screen.queryByRole('alert')).not.toBeInTheDocument();
+    });
+
+    it('does not search a phone that does not start with 0', async () => {
+      const lookup = vi.spyOn(profileApi, 'linkCandidates');
+      const { user, input, search } = await open();
+      await user.type(input, '1234567890');
+
+      expect(screen.getByText(REMINDER)).toBeInTheDocument();
+      expect(search).toBeDisabled();
+      expect(lookup).not.toHaveBeenCalled();
+    });
+
+    it('ignores a form submit that bypasses the disabled button', async () => {
+      const lookup = vi.spyOn(profileApi, 'linkCandidates');
+      const { user, input } = await open();
+      await user.type(input, '09051112223');
+      fireEvent.submit(input.closest('form')!);
+
+      expect(lookup).not.toHaveBeenCalled();
+      expect(screen.queryByRole('alert')).not.toBeInTheDocument();
+    });
+
+    it('hides the result of the last search while the phone is edited', async () => {
+      const lookup = vi.spyOn(profileApi, 'linkCandidates');
+      const { user, input, search } = await open();
+      await user.type(input, '0905111222');
+      await user.click(search);
+      expect(await screen.findByRole('alert')).toBeInTheDocument();
+
+      await user.type(input, '3');
+      expect(screen.queryByRole('alert')).not.toBeInTheDocument();
+      expect(screen.getByText(REMINDER)).toBeInTheDocument();
+
+      await user.type(input, '{Backspace}');
+      expect(await screen.findByRole('alert')).toBeInTheDocument();
+      expect(lookup).toHaveBeenCalledTimes(1);
+    });
+
+    it('shows no candidates after "Không phải tôi" until a phone is searched, and hides them while it is edited', async () => {
+      await signIn('khachmoi@petcare.vn');
+      const user = userEvent.setup();
+      renderAt('/account/link');
+      await screen.findByRole('button', { name: 'Chọn hồ sơ Lê*** H** L*' });
+      await user.click(screen.getByRole('button', { name: 'Không phải tôi' }));
+      await user.click(within(screen.getByRole('dialog')).getByRole('button', { name: 'Xác nhận' }));
+      const input = await screen.findByLabelText('Số điện thoại trong hồ sơ tại phòng khám');
+      expect(screen.queryByRole('button', { name: /^Chọn hồ sơ/ })).not.toBeInTheDocument();
+
+      await user.type(input, '0905111222');
+      await user.click(screen.getByRole('button', { name: 'Tìm hồ sơ' }));
+      expect(await screen.findByRole('button', { name: 'Chọn hồ sơ Lê*** H** L*' })).toBeInTheDocument();
+
+      await user.type(input, '3');
+      expect(screen.queryByRole('button', { name: /^Chọn hồ sơ/ })).not.toBeInTheDocument();
+    });
   });
 });

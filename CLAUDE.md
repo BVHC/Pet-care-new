@@ -45,13 +45,13 @@ Team: **BE-1** (branch `manh`) = identity, appointment, visit, care · **BE-2** 
 
 | Module | Owner | Built (contract #, ADR) | Still missing |
 |---|---|---|---|
-| identity | BE-1 | identity-v1 #1–24, #28–37; ST01, ST02, session cleanup; `StaffDirectoryApi`, `AccountContactApi` | #25–27 (UC22) |
+| identity | BE-1 | identity-v1 #1–24, #28–37, #38 (`GET /api/staff/assignable`, 0089); ST01, ST02, session cleanup; `StaffDirectoryApi`, `AccountContactApi` | #25–27 (UC22) |
 | care | BE-1 | ST20 (EMAIL HIGH / NORMAL, IN_APP), outbox cleanup, care-v1 #1–8; `CareTask` + FSM, `CareTaskApi` complete (0074, 0079, 0080); V22 (4 reminder templates + `care_tasks` index / CHECK, 0081; D049 paid); ST19 + owner-transfer listeners (0084); ST18 `VaccineOverdueJob` in `visit` (0083, V23) | #9–10 (D025); D050 (boarding lookup) |
 | appointment | BE-1 | appointment-v1 #1–9, ST05, ST03, clinic-cancel listeners, 3 APIs (0045–0057); `AppointmentReportApi` (BE-2 wrote it for BE-1, 0087) | `findPetForShare` in booking (D027) |
 | visit | BE-1 | visit-v1 #1–15 (0058–0070), #18 (0073), #19 (0074), #20 (0075), #16 (0077), #17 (0078); `VisitQueryApi`, `VaccinationQueryApi` (0072), `PrescriptionApi` (0076); lock listener; ST04 reminder jobs (0082); `FollowUpApi` + pet-deceased listener (0084); `VaccinationReportApi` (BE-2 wrote it for BE-1, 0087) | #21 (T28b); D042, D043, D046, D052 (follow-up cancel gaps) |
 | branch, catalog | BE-2 | branch-v1 #1–21, catalog-v1 #1–22; `BranchQueryApi`, `BranchApi`, `CatalogQueryApi` | Swagger annotations (D026) |
 | customer | BE-2 | customer-v1 #1–21; `CustomerApi`, `CustomerQueryApi`, `PetApi`, `PetQueryApi` | — |
-| inventory | BE-2 | inventory-v1 #1–17; `StockApi`, `StockQueryApi`, `StockReportApi`, ST08 (0087) | — |
+| inventory | BE-2 | inventory-v1 #1–17 (item / lot carry an `expiringSoon` flag, 0088); `StockApi`, `StockQueryApi`, `StockReportApi`, ST08 (0087) | — |
 | sales | BE-2 | sales-v1 #1–10, #12–21, ST13; `VisitOrderApi`, `BoardingOrderApi` (0086), `OrderQueryApi`, `CashierShiftQueryApi`, `SalesReportApi` (0087) | #11 (`PrescriptionApi` ready since ADR-0076, BE-2 wires it) |
 | boarding | BE-2 | boarding-v1 #1–22, ST05, ST15, clinic-cancel listeners; `BoardingQueryApi` (0065, 0085, 0086) | — |
 | content | BE-2 | content-v1 #1–22; `FeedbackQueryApi` (0071), `FeedbackReportApi` (0087) | — |
@@ -82,6 +82,7 @@ npm run build                                     # tsc && vite build
 npm run lint                                      # eslint --max-warnings 0
 npx tsc --noEmit                                  # no typecheck script
 npm run test / npm run test:e2e                   # Vitest / Playwright
+SEED_API_URL=http://localhost:8082 ./node_modules/.bin/vite-node scripts/seed-dev/cli-phase2.ts   # phase-2 demo data (after create-admin.sql + cli.ts); opening hours only, add --check to dry-run; `FE/scripts/` is gitignored; see docs/be-fe-integration.md §2
 
 python docs/api/generator/generate.py && node docs/api/check-contracts.mjs   # after editing an API contract
 git grep -n '^<<<<<<< \|^>>>>>>> '                # after every rebase / merge (see Gotchas)
@@ -101,7 +102,7 @@ Never invent a rule, transition, model, column or enum value. When something is 
 | ERD: 55 tables, enum codes, decision log §13 — priority 4 | `docs/05-erd.md` |
 | Actors, UC01–UC89, ST01–ST21 (must match the rules) | `docs/01-business-operations.md` |
 | BE ↔ BE contracts (`module/<m>/api`), who calls what, delivery dates, notes for the other dev | `docs/06-module-contracts.md` |
-| FE ↔ BE HTTP contracts (12 modules, 230 endpoints) — **generated** from `docs/api/generator/m_<module>.py`, never hand-edit | `docs/api/*-v1.{md,yaml}` |
+| FE ↔ BE HTTP contracts (12 modules, 231 endpoints) — **generated** from `docs/api/generator/m_<module>.py`, never hand-edit | `docs/api/*-v1.{md,yaml}` |
 | What exists in code, per feature (§3), migrations (§4b) | `docs/architecture/system-overview.md` |
 | Which endpoints the BE has vs. which FE screens can be wired now, per task T (updated 2026-10-28) | `docs/be-fe-integration.md` |
 | Why a technical decision was made | `docs/adr/INDEX.md` → `docs/adr/00nn-*.md` |
@@ -113,18 +114,18 @@ Module codes: TK, QT, CN, CK, KH, SP, NS, LH, TN, KB, LT, BH, TG, KO, BV, DG, TB
 
 Open convention TBDs (don't decide silently — ask or write an ADR): command names when no Actor↔Command table exists; how "warn, don't block" rules return warnings (contracts assume a named field in `data`, e.g. `stockWarning`); locking for kennel capacity.
 
-**ADR map** (`docs/adr/`, immutable once Accepted — supersede instead of editing; **next free: 0088**):
+**ADR map** (`docs/adr/`, immutable once Accepted — supersede instead of editing; **next free: 0090**):
 
 | Area | ADRs |
 |---|---|
 | Platform | 0001 audit · 0002 client IP · 0004 [CFG] · 0007 jobs · 0015 timestamps from `Clock` · 0020 OSIV off · 0032 strict JSON ints · 0040 Swagger = contract |
 | Auth | 0003 JWT + DB session · 0005 public paths anonymous · 0006 customer owner scope · 0009 BCrypt · 0010, 0011, 0025 OTP · 0019 login · 0021 logout · 0022 change password · 0023 forgot / reset |
-| Accounts, staff, admin | 0024 staff directory · 0026 staff self-edit · 0027 profile link · 0028 customer self-edit · 0029–0035 staff admin / lock · 0036 [CFG] edit · 0037 templates · 0038 audit view · 0039 in-app notifications |
+| Accounts, staff, admin | 0024 staff directory · 0026 staff self-edit · 0027 profile link · 0028 customer self-edit · 0029–0035 staff admin / lock · 0036 [CFG] edit · 0037 templates · 0038 audit view · 0039 in-app notifications · 0089 staff assignable list (Proposed) |
 | Notifications, jobs | 0008 session cleanup · 0012, 0014, 0016, 0017 ST20 · 0013 ST02 · 0018 FK indexes on `accounts` |
 | Appointment (BE-1) | 0045 booking locks · 0046 slots · 0047 book · 0048 view · 0049 reschedule / cancel · 0050 cross-module API · 0052 clinic cancel · 0053, 0054 ST05 · 0055 booking restriction · 0056 ST03 · 0057 assumptions confirmed |
 | Visit (BE-1) | 0058 foundation · 0059 check-in (amends 0044) · 0060 queue · 0061 dispatch · 0062 call / cancel / lock listener · 0063 reassign · 0066 medical record · 0067 record write · 0068 weight · 0069 complete (replaces 0066 §5) · 0070 addendum · 0072 vaccination foundation · 0073 vaccination options (#18) · 0074 vaccination record (#19) · 0075 vaccination delete (#20) · 0076 prescription foundation + `PrescriptionApi` · 0077 prescribe (#16) · 0078 remove prescription line (#17) |
 | Care (BE-1) | 0079 care task foundation (`CareTask`, FSM, `CareTaskApi`, caller obligations) · 0080 receptionist desk API (care-v1 #1–4) · 0081 V22 reminder templates + `care_tasks` index / CHECK (Proposed until BE-2 confirms V22) · 0082 ST04 reminder jobs (visit) · 0083 ST18 overdue vaccine tasks (visit, V23; Proposed until BE-2 confirms V23) · 0084 cancellation flows (`FollowUpApi`, ST19 + owner-transfer listeners) |
-| BE-2 | 0041 customer & pet · 0042 inventory stock ledger · 0043 document codes · 0044 order core · 0051 retail order · 0064 cashier shift / payment / ST13 · 0065 boarding kennels / bookings / ST05 · 0085 boarding check-in / care log · 0086 boarding checkout / overdue · 0087 reports UC89 / ST08 · 0071 public pages, articles, feedback |
+| BE-2 | 0041 customer & pet · 0042 inventory stock ledger · 0043 document codes · 0044 order core · 0051 retail order · 0064 cashier shift / payment / ST13 · 0065 boarding kennels / bookings / ST05 · 0085 boarding check-in / care log · 0086 boarding checkout / overdue · 0087 reports UC89 / ST08 · 0088 `expiringSoon` flag (Proposed) · 0071 public pages, articles, feedback |
 
 ## Backend architecture
 
@@ -241,7 +242,7 @@ Known gaps:
 
 ## Gotchas
 
-- **Rebases have committed conflict markers three times** (PR #14 → repair `49fd9a7`; T25 onto `dev` → cleanup 2026-10-20; T39 rebase left them in `docs/time.md` / `system-overview.md` of `a47a719` → cleaned in the working tree 2026-10-28, `origin/dev` had resolved them itself). After any rebase / merge run `git grep -n '^<<<<<<< \|^>>>>>>> '` and `mvn clean compile` before pushing. When both sides re-implemented the same thing, keep the owner's version (BE-2 for customer, BE-1 for appointment) — not both: two beans per interface or two methods with one name break the build.
+- **Rebases have committed conflict markers four times** (PR #14 → repair `49fd9a7`; T25 onto `dev` → cleanup 2026-10-20; T39 rebase left them in `docs/time.md` / `system-overview.md` of `a47a719` → cleaned 2026-10-28; the T40 commit `a210199` put them back in the same two files on `origin/dev`, so `HEAD` `4991095` carried them too → cleaned again in the 2026-10-30 merge). After any rebase / merge run `git grep -n '^<<<<<<< \|^>>>>>>> '` and `mvn clean compile` before pushing; when markers are removed by hand, `git add` every cleaned file (the index keeps the auto-merged copy with markers until then). When both sides re-implemented the same thing, keep the owner's version (BE-2 for customer, BE-1 for appointment) — not both: two beans per interface or two methods with one name break the build.
 - **ADR and Flyway numbers are global across branches.** Both branches have taken the same numbers before (ADR 0041–0044, 0047–0051; V13). Before taking a number, check `origin/dev` and the other dev's branch. When renumbering, add a **Đánh số lại** line to each file and update every reference (`git blame` tells which numbering a line was written with).
 - **Large files:** `docs/02-business-rules.md` (~80 KB), `docs/06-module-contracts.md`, `docs/time.md` — read them by section (Grep the heading or rule id), never whole.
 - **Port mismatch:** `mvn spring-boot:run` and axios default to 8081; the Vite proxy and Docker use 8080. Set `VITE_API_URL` consistently.

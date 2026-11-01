@@ -6,6 +6,7 @@ import { AlertTriangle, CheckCircle2, Link2, Loader2, X } from 'lucide-react';
 import { useQuery } from '@tanstack/react-query';
 import { ConfirmModal } from '@/components/ui/modal-templates';
 import { Field, FormError, NoticeBar, type Notice } from '@/components/admin/form-ui';
+import { PHONE_PATTERN } from '@/domains/pets/hooks/useCustomerPet';
 import { plainMessage, toApiError } from '@/shared/api/api-error';
 import { profileApi } from '@/shared/api/profile.api';
 import { useAddresses, useProfileMutation } from '@/shared/hooks/useProfile';
@@ -56,9 +57,15 @@ function LinkFlow({ pending, onDone }: { pending: boolean; onDone: (notice: Noti
     retry: false,
   });
   const decline = useProfileMutation(profileApi.declineLink);
+  // SĐT hồ sơ tại quầy: 10 số bắt đầu bằng 0 (chốt 30/10). BE-1 còn nhận 10–11 số, FE chỉ gửi khi đủ 10.
+  const phoneReady = PHONE_PATTERN.test(phoneInput.trim());
+  const waitingForPhone = phoneInput.trim() !== '' && !phoneReady;
+  // Kết quả chỉ hiện cho đúng SĐT đã tìm: khóa `null` (có cờ) còn dữ liệu cũ sau "Không phải tôi", gõ lại SĐT thì kết quả cũ phải ẩn.
+  const showResults = pending || (phone !== undefined && phone === phoneInput.trim());
 
   const search = (e: FormEvent) => {
     e.preventDefault();
+    if (!phoneReady) return;
     setError('');
     setPhone(phoneInput.trim());
   };
@@ -107,7 +114,7 @@ function LinkFlow({ pending, onDone }: { pending: boolean; onDone: (notice: Noti
             Bạn từng làm hồ sơ tại quầy của Pet Care? Nhập số điện thoại ghi trong hồ sơ đó để tìm và liên kết. Chỉ liên kết được khi
             hồ sơ online chưa có thú cưng, lịch hẹn, đặt chỗ, đơn hàng hay góp ý.
           </p>
-          <Field label="Số điện thoại trong hồ sơ tại phòng khám">
+          <Field label="Số điện thoại trong hồ sơ tại phòng khám" hint={waitingForPhone ? 'Nhập đủ 10 số điện thoại để tra cứu.' : undefined}>
             {(id) => (
               <div className={styles.searchBox}>
                 <input
@@ -118,7 +125,7 @@ function LinkFlow({ pending, onDone }: { pending: boolean; onDone: (notice: Noti
                   value={phoneInput}
                   onChange={(e) => setPhoneInput(e.target.value)}
                 />
-                <button type="submit" className={styles.searchBtn} disabled={!phoneInput.trim()}>
+                <button type="submit" className={styles.searchBtn} disabled={!phoneReady}>
                   Tìm hồ sơ
                 </button>
               </div>
@@ -127,20 +134,20 @@ function LinkFlow({ pending, onDone }: { pending: boolean; onDone: (notice: Noti
         </form>
       )}
 
-      {candidates.isFetching && (
+      {showResults && candidates.isFetching && (
         <div className={styles.loadingBox}>
           <Loader2 size={20} className={styles.spinner} />
           <span>Đang tìm hồ sơ...</span>
         </div>
       )}
-      <FormError message={error || (candidates.isError ? plainMessage(toApiError(candidates.error)) : '')} />
+      <FormError message={error || (showResults && candidates.isError ? plainMessage(toApiError(candidates.error)) : '')} />
 
-      {candidates.isSuccess && candidates.data.length === 0 && (
+      {showResults && candidates.isSuccess && candidates.data.length === 0 && (
         <div className={styles.emptyBox}>
           <p>Không có hồ sơ tại quầy nào chưa liên kết với số điện thoại này.</p>
         </div>
       )}
-      {candidates.isSuccess && candidates.data.length > 0 && (
+      {showResults && candidates.isSuccess && candidates.data.length > 0 && (
         <div className={styles.candidateList}>
           {candidates.data.map((c) => (
             <div key={c.customerId} className={styles.candidateCard}>

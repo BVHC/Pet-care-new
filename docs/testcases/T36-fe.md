@@ -56,7 +56,7 @@ Dò bằng HTTP thật, ghi được vì DB dùng-một-lần (`petcare-seed-pg:
 
 **Thứ tự lỗi quan sát:** đọc JSON / tham số path sai kiểu và Bean Validation → 400 **trước** quyền 403, kể cả ADMIN (`GET /visits/abc` → 400 `Tham số 'visitId' sai kiểu dữ liệu`; VET gửi `{}` vào `/assign` → 400 `assigneeId: Thiếu nhân viên được gán`).
 
-**Staff picker.** `GET /api/staff?role=VET&status=ACTIVE&size=100` với lễ tân → **403** `ACCESS_DENIED` (đã dò). Quản lý / quản lý chuỗi / admin gọi được; `StaffResponse.online` có thật (VET #6 online, #7 offline; CARETAKER #8 / #9 offline). Tài khoản bị khóa **vẫn `status: ACTIVE`** (chỉ `isLocked: true`) nên FE phải loại `isLocked` (gán sẽ 400 BR-TN-05).
+**Staff picker.** `GET /api/staff?role=VET&status=ACTIVE&size=100` với lễ tân → **403** `ACCESS_DENIED` (đã dò). Quản lý / quản lý chuỗi / admin gọi được; `StaffResponse.online` có thật (VET #6 online, #7 offline; CARETAKER #8 / #9 offline). Tài khoản bị khóa **vẫn `status: ACTIVE`** (chỉ `isLocked: true`) nên FE phải loại `isLocked` (gán sẽ 400 BR-TN-05). **[31/10: lễ tân dùng endpoint hẹp #38 `GET /api/staff/assignable` (ADR-0089) thay cho #15; #15 vẫn 403 với lễ tân, BE đã lọc ACTIVE + chưa khóa nên FE không còn tự lọc `isLocked`.]**
 
 **Jackson:** trường lạ bị bỏ qua (`{"emergency":true}` → 201 nhưng `WALK_IN`); số id dạng chuỗi `"3"`, `isEmergency` `"true"` / `1` và `reason: 5` (thành `"5"`) được ép kiểu; `3.5`, `"yes"`, `reason: ["x"]` → 400 `MALFORMED_REQUEST`.
 
@@ -111,7 +111,7 @@ Thứ tự kiểm chung (chép từ BE): **đọc JSON / tham số path + Bean V
 
 Test đáng chú ý (tên rút gọn, đều trong `visit.mock.test.ts`): cửa sổ check-in đúng biên (10:30:00 được, 10:29:59 không); trễ 11:15:00 giữ ưu tiên, 11:15:01 thành WALK_IN vẫn gắn `appointmentId`; 11:30:00 còn check-in, 11:30:01 → 409 NO_SHOW; trường sai tên `emergency` → vẫn WALK_IN; thứ tự lỗi move / assign / call / reassign; tầng quyền SM chỉ khi `lock` hết BRANCH_MANAGER; `404` / `403` phạm vi bằng handler gọi thẳng với người gọi giả (chi nhánh 2).
 
-Khác: `identity-admin.mock.test.ts` mô tả `GET /api/staff cho lễ tân` (5 test); `visit.api.test.ts` (6 test, qua `apiClient` + mock); `useVisits.test.tsx` (43 test: ma trận `visitPermissions`, `enabled`, làm mới ba gốc kể cả khi lỗi, `useAssignableStaff`, `visitErrorMessage`); `mock-api.test.ts` sửa 1 chỗ (A.6).
+Khác: `identity-admin.mock.test.ts` mô tả `GET /api/staff cho lễ tân` (5 test) [31/10: viết lại cho `GET /api/staff/assignable` (10 test) + 2 test "`GET /api/staff` và `GET /api/staff/{id}` vẫn 403 với lễ tân"]; `visit.api.test.ts` (6 test, qua `apiClient` + mock); `useVisits.test.tsx` (43 test: ma trận `visitPermissions`, `enabled`, làm mới ba gốc kể cả khi lỗi, `useAssignableStaff`, `visitErrorMessage`); `mock-api.test.ts` sửa 1 chỗ (A.6).
 
 `visitErrorMessage(e, action?)`: 409 `INVALID_STATE_TRANSITION` tách theo thực thể **và trạng thái cũ** trong thông điệp. Lịch hẹn `CHECKED_IN` → "đã được tiếp nhận rồi, xem hàng đợi" (KHÔNG khuyên tiếp nhận thêm, vì BE không chặn thú đã có lượt mở nên sẽ ra lượt + Order thứ hai); `NO_SHOW` → tiếp nhận như khách vãng lai; `CANCELLED` / `COMPLETED` → không tiếp nhận được. "hạng ưu tiên" → đã là cấp cứu. `IN_PROGRESS → CANCELLED` (BR-TN-07) → lượt đã gọi không hủy được, nhân viên phụ trách hoàn tất (BR-KB-02). Còn lại → đã đổi ở nơi khác, đã tải lại. `ACCESS_DENIED_SCOPE_MISMATCH` theo `action` (`call` = chưa được gán cho mình), `CONCURRENCY_CONFLICT` = vừa được gán lại, `BR-TN-08` viết lại, `BR-TN-01/02/05`, `BR-CN-05` giữ thông điệp BE bỏ mã. BR-TN-03 (khách trễ) không bao giờ thành lỗi nên không có nhánh.
 
@@ -121,7 +121,7 @@ Khác: `identity-admin.mock.test.ts` mô tả `GET /api/staff cho lễ tân` (5 
 |---|---|---|
 | `mock/appointment.mock.ts` | `findCheckInRef`, `checkInAppointment`, `cancelAppointmentByVisit`, type `AppointmentCheckIn` | `AppointmentQueryApi.findCheckInRef`; Lịch hẹn#3 (409 → chi nhánh → cửa sổ, gắn `visitId`); Lịch hẹn#8 (CANCELLED, STAFF, không muộn) |
 | `mock/sales.mock.ts` | `orderOfVisit`, `openOrderForVisit`, `setVisitOrderAssignee`, `transferVisitOrderLines`, `cancelOrderOfVisit` | `VisitOrderApi` (mở Order OPEN + dòng tự sinh giá chụp, đổi chủ dòng, chuyển quyền, hủy `VISIT_CANCELLED`); `openOrderForVisit` idempotent theo `visitId` |
-| `mock/identity-admin.mock.ts` | `staffSummaryOf`, `assignableStaffOf`, `hasActiveBranchManager`, `setStaffOnline`, type `StaffSummary`; **`GET /api/staff` cho RECEPTIONIST** | `StaffDirectoryApi` (active = ACTIVE ∧ không khóa; tìm được nhân viên tạo lúc chạy); bảng hiện diện `petcare-mock-presence` (mặc định ai cũng online) |
+| `mock/identity-admin.mock.ts` | `staffSummaryOf`, `assignableStaffOf`, `hasActiveBranchManager`, `setStaffOnline`, type `StaffSummary`; **`GET /api/staff` cho RECEPTIONIST** [31/10: đã bỏ, mock 403 như BE; thay bằng `GET /api/staff/assignable` (#38), xem A.7] | `StaffDirectoryApi` (active = ACTIVE ∧ không khóa; tìm được nhân viên tạo lúc chạy); bảng hiện diện `petcare-mock-presence` (mặc định ai cũng online) |
 | `mock/customer-pet.mock.ts` | `setPetOpenVisit` | đặt / gỡ `busy: OPEN_VISIT` (BR-KH-05, 06, 08) |
 | `mock/mock-api.ts` | `...visitRoutes` | đăng ký |
 
@@ -154,6 +154,8 @@ Quyết định (FE): dùng lại #15. Mock mở `GET /api/staff` cho RECEPTIONI
 
 **Yêu cầu gửi BE-1:** mở `GET /api/staff` cho RECEPTIONIST, giới hạn `status = ACTIVE`, `role ∈ {VET, CARETAKER}`, `branchId` = chi nhánh người gọi, loại `isLocked`; khuyến nghị DTO rút gọn (`accountId, fullName, role, online`, bỏ email / SĐT / `mustChangePassword`) vì lễ tân không cần; cập nhật `docs/06-module-contracts.md:115`. Phương án thay thế: endpoint riêng dưới visit (`findAssignableStaff` đã có sẵn ở `StaffDirectoryApi`). Cho tới khi BE mở, màn gán của lễ tân chạy được với mock nhưng **không** chạy với BE thật.
 
+**Cập nhật 31/10 (đã giải quyết bằng endpoint hẹp, các đoạn trên giữ làm lịch sử):** BE-1 **không** mở `GET /api/staff` cho lễ tân mà thêm `GET /api/staff/assignable?role=VET|CARETAKER[&branchId=]` (identity-v1 #38, ADR-0089): vai gọi RECEPTIONIST (gán), BRANCH_MANAGER và SUPER_MANAGER (gán lại), vai khác 403 `ACCESS_DENIED`, chưa đăng nhập 401; `role` bắt buộc (thiếu hoặc sai 400 `MALFORMED_REQUEST`); lễ tân / quản lý chi nhánh bỏ `branchId` = chi nhánh mình, gửi chi nhánh khác 403 `ACCESS_DENIED_SCOPE_MISMATCH`; SUPER_MANAGER bắt buộc `branchId` (thiếu 400 `VALIDATION_FAILED`, chi nhánh không tồn tại 200 mảng rỗng); `data` là mảng không phân trang `{ accountId, fullName, role, online }`, chỉ ACTIVE và chưa khóa, xếp online trước rồi họ tên rồi `accountId` (BR-TN-06: người offline vẫn có trong danh sách). FE: `identityApi.listAssignableStaff`, `useAssignableStaff(role, enabled, branchId?)` giữ nguyên thứ tự BE, bỏ `staffPickerBlocked`; hộp gán và hộp gán lại gửi `visit.branchId`; chấm hiện diện của `VisitQueueList` gửi chi nhánh của người xem (đợi `GET /me`), SUPER_MANAGER không có chi nhánh thì không gọi. Mock: `GET /api/staff` và `GET /api/staff/{id}` 403 với lễ tân như BE, route `assignable` khai báo trước `:id`. BE thật phải build + bật lại mới thử được (chưa chạy với BE thật).
+
 ### A.8 Lệch hợp đồng ↔ BE
 
 **Docs lệch code (theo BE):**
@@ -166,7 +168,7 @@ Quyết định (FE): dùng lại #15. Mock mở `GET /api/staff` cho RECEPTIONI
 | Đánh dấu cấp cứu | `visit-v1.md:55` "Nhân viên chi nhánh" | `VisitController.java:64-65, 203-204`: chỉ RECEPTIONIST, VET (BRANCH_MANAGER, CARETAKER → 403, đã dò) |
 | Một thú, nhiều lượt mở | `02-business-rules.md:141` BR-TN-01 "1 Visit cho đúng 1 thú" (hiểu: mỗi lần tiếp nhận) | không có guard "thú đã có lượt mở": check-in lần hai vẫn 201 (ADR-0059 "Không đảm bảo"; đã dò). UI nên tự cảnh báo |
 | `isEmergency` | `visit-v1.md:115` `isEmergency?` | tên đúng; BE **bỏ qua trường lạ** nên `emergency: true` vẫn 201 nhưng không thành cấp cứu. `CheckInRequest` đặt `isEmergency` và test chốt lại |
-| Staff picker | `visit-v1.md` / `06-module-contracts.md:115` chưa có endpoint | `GET /api/staff` 403 với lễ tân (A.7) |
+| Staff picker | `visit-v1.md` / `06-module-contracts.md:115` chưa có endpoint | `GET /api/staff` 403 với lễ tân (A.7); 31/10 đã mở endpoint hẹp #38 `GET /api/staff/assignable` |
 | Kiểu `queueSortKey` | `visit-v1.md:116` "date-time" | tới µs, bỏ phần lẻ khi chẵn giây (`Instant.toString`); không so bằng `Date.parse` |
 | Đăng nhập | `identity-v1` `AccountSummary` | BE không trả `branchId` ở `POST /auth/login`; chi nhánh ở `GET /me` `staffProfile.branchId` |
 
@@ -208,7 +210,7 @@ Chạy từ `FE/` (cuối cùng, sau mọi thay đổi code):
 | Hộp thoại tiếp nhận | `reception/CheckInDialog.tsx` | Lịch hẹn / khách vãng lai / cấp cứu; ô tìm khách dùng lại `CustomerLookup` (thêm prop `copy`, mặc định giữ nguyên chữ của màn thu tiền) và `useCustomerDetail`. Tải lười từ trang lễ tân |
 | Hàng chờ chi nhánh | `reception/VisitQueueList.tsx` | Đúng thứ tự mảng BE trả; nút theo vai trò |
 | Hộp thoại thao tác | `reception/VisitActionDialogs.tsx` | `AssignVisitDialog`, `MoveVisitDialog`, `CancelVisitDialog`, `ReassignVisitDialog` (tải lười từ `VisitQueueList`) |
-| Chọn người phụ trách | `reception/AssigneePicker.tsx` | VET cho Khám/Tiêm, CARETAKER cho Thẩm mỹ, online trước, cảnh báo ngoại tuyến, báo `staffPickerBlocked` |
+| Chọn người phụ trách | `reception/AssigneePicker.tsx` | VET cho Khám/Tiêm, CARETAKER cho Thẩm mỹ, online trước, cảnh báo ngoại tuyến, báo `staffPickerBlocked` [31/10: đã bỏ; lỗi tải danh sách hiện `QueryError` chung kèm "Thử lại"] |
 | Quy tắc thuần | `reception/arrival.ts`, `reception/queue-rules.ts` | Gợi ý giờ đến (BR-TN-03); đích "Đưa lên trước"; điều kiện hiện "Gán lại" |
 | Phòng khám | `pages/staff/DoctorWorkspacePage.tsx`, `doctor/DoctorQueue.tsx`, `doctor/ExamPendingPanel.tsx` | Hàng đợi của tôi (`useMyQueue`), gọi lượt, cấp cứu; khung bệnh nhân của API |
 | Khu grooming | `pages/staff/GroomingWorkspacePage.tsx`, `grooming/GroomingBoard.tsx`, `grooming/useBoardDrag.ts`, `shared/hooks/useKanban.ts` | Cột Chờ làm / Đang làm từ API; cột "Xong" chỉ giữ chỗ |
@@ -249,11 +251,11 @@ Mọi `enabled` tính từ `visitPermissions(role)` (`VISIT_ROLES`): vai trò kh
 - **Không có ô chọn người phụ trách ở đây**: `CheckInRequest` không có trường gán nhân viên (types), nên gán là bước riêng ở tab Hàng chờ (B.5-1).
 
 **Tab Hàng chờ (UC45).** Mỗi dòng: mã lượt, thú, trạng thái ("Đang chờ" / "Đã gọi"), nhãn "Cấp cứu", nguồn "Lịch hẹn" / "Vãng lai" / "Lịch hẹn trễ" (có lịch nhưng xếp vãng lai), khách, nhóm, người phụ trách kèm chấm Trực tuyến / Ngoại tuyến (chỉ khi lấy được danh sách nhân viên), nhãn "Cần gán lại" khi `needsReassign`, thời gian chờ. Thứ tự là thứ tự mảng BE; **không sắp lại ở FE**. Lượt đã gọi chỉ để xem. Nút (đúng thứ tự trên dòng): Gán người / Đổi người · Đưa lên trước · Cấp cứu · Hủy lượt · Gán lại.
-- **Gán (BR-TN-05, BR-TN-06):** chọn người đúng chức vụ, online trước (`· trực tuyến` / `· ngoại tuyến`); chọn người ngoại tuyến hiện cảnh báo trong hộp thoại và vẫn gán được, `assigneeOffline` thì toast cảnh báo. BE chưa mở `GET /api/staff` cho lễ tân (403): hiện **"Danh sách nhân viên chờ BE-1 mở GET /api/staff cho lễ tân"**, nút Gán tắt.
+- **Gán (BR-TN-05, BR-TN-06):** chọn người đúng chức vụ, online trước (`· trực tuyến` / `· ngoại tuyến`); chọn người ngoại tuyến hiện cảnh báo trong hộp thoại và vẫn gán được, `assigneeOffline` thì toast cảnh báo. BE chưa mở `GET /api/staff` cho lễ tân (403): hiện **"Danh sách nhân viên chờ BE-1 mở GET /api/staff cho lễ tân"**, nút Gán tắt. **[31/10: không còn. Hộp gán gọi `GET /api/staff/assignable` (#38) với `visit.branchId`; lỗi tải danh sách (403 chi nhánh khác, mạng) hiện "Không tải được danh sách nhân viên" + thông điệp BE + "Thử lại", nút Gán tắt.]**
 - **Đưa lên trước (BR-TN-04):** chọn lượt đích trong các lượt đứng trước, còn WAITING, cùng phía ranh giới cấp cứu (`moveTargets`, chỉ dùng thứ tự mảng); mặc định là lượt đầu nhóm; gửi `placeBeforeVisitId`; hàng đợi theo mảng BE trả lại.
 - **Cấp cứu (UC47):** một chạm, thành công thì lượt lên nhóm cấp cứu; 409 "đã là cấp cứu" báo "Lượt này đã là ca cấp cứu."
 - **Hủy lượt khách bỏ về (BR-TN-07):** hộp thoại ghi rõ Order của lượt và lịch hẹn liên quan bị hủy, không tính là hủy muộn; lý do không bắt buộc, ≤ 300; để trống / chỉ khoảng trắng thì **không gửi body** (A4); 409 lượt đã gọi → "Lượt đã được gọi nên không hủy được…".
-- **Gán lại (BR-TN-08, quản lý chi nhánh):** hiện khi lượt IN_PROGRESS và (`needsReassign` hoặc người phụ trách không còn trong danh sách nhân viên gán được của đúng chức vụ); người mới đúng chức vụ, lý do bắt buộc (cắt khoảng trắng, ≤ 300); BE 400 BR-TN-08 hiện bằng câu viết lại của `visitErrorMessage`.
+- **Gán lại (BR-TN-08, quản lý chi nhánh):** hiện khi lượt IN_PROGRESS và (`needsReassign` hoặc người phụ trách không còn trong danh sách nhân viên gán được của đúng chức vụ, từ 31/10 lấy từ #38 `GET /api/staff/assignable`); người mới đúng chức vụ, lý do bắt buộc (cắt khoảng trắng, ≤ 300); BE 400 BR-TN-08 hiện bằng câu viết lại của `visitErrorMessage`.
 
 **Phòng khám (UC46, UC47).** "Hàng chờ của bạn" = `useMyQueue`, **một danh sách theo thứ tự BE trả**, mỗi dòng có chip trạng thái ("Đang khám" / "Đang chờ"), nhãn cấp cứu, mã lượt. Chỉ lượt WAITING gán cho mình có "Gọi lượt"; BE 403 (`ACCESS_DENIED_SCOPE_MISMATCH`) / 409 hiện bằng toast `visitErrorMessage(e, 'call')`. Khung bên phải (`ExamPendingPanel`): thú, loài, chủ nuôi, nhóm dịch vụ, trạng thái, người phụ trách, mã lượt, "Gọi <thú> vào khám", "Cấp cứu" (VET), và ghi chú **"Ghi bệnh án, kê đơn, tiêm chủng và hoàn tất lượt: chưa nối API (T37)"**. Mở sẵn ở lượt đang khám, không có thì lượt chờ đầu tiên. Phím ↑ / ↓ đi qua hàng đợi.
 
@@ -279,7 +281,7 @@ Chạy với mock: `cd FE && npm run dev`, mật khẩu `Petcare123`, nhân viê
 | 10 | reception | BE trả 400 BR-TN-01 (thú đã mất) | Thông điệp hiện, bỏ mã rule | `CheckInDialog` › BE vẫn từ chối thú đã mất… |
 | 11 | reception | Tab Hàng chờ | Thứ tự Miu, Lu, Mochi, Tôm, Bim; nhãn hạng / nguồn / trạng thái; chấm trực tuyến; "Cần gán lại" ở Mochi; số trên tab = 5 | `FrontDeskPanel` › tab Hàng chờ (4 ca) |
 | 12 | reception | BE trả mảng "sai hạng" | Giao diện giữ nguyên thứ tự mảng | › không tự sắp lại… |
-| 13 | reception | Gán người cho Miu / Bim | Danh sách đúng chức vụ, online trước; ngoại tuyến → cảnh báo, vẫn gán; 403 → câu chờ BE-1, nút Gán tắt; 400 BR-TN-05 hiện trong hộp thoại | `FrontDeskPanel` › gán người phụ trách (5 ca) |
+| 13 | reception | Gán người cho Miu / Bim | Danh sách đúng chức vụ, online trước; ngoại tuyến → cảnh báo, vẫn gán; 403 → câu chờ BE-1, nút Gán tắt; 400 BR-TN-05 hiện trong hộp thoại [31/10: 403 → "Không tải được danh sách nhân viên" + Thử lại; thêm ca chọn VET → "Gán" bật → `assign`, hộp gán gửi `branchId` của lượt, không gọi `GET /api/staff`] | `FrontDeskPanel` › gán người phụ trách (5 ca; từ 31/10: 7 ca) |
 | 14 | reception | Đưa Bim lên trước Tôm | `placeBeforeVisitId` đúng, hàng đợi đổi theo BE; Tôm không có nút này (không có đích) | › "Đưa lên trước"…; nút theo từng lượt chờ…; `queue-rules.test` |
 | 15 | reception | Cấp cứu cho Tôm | Tôm lên ngay sau Miu, nút biến mất; 409 → "Lượt này đã là ca cấp cứu." | › "Cấp cứu"… (2 ca) |
 | 16 | reception | Hủy lượt Bim | Hộp thoại nói Order + lịch hẹn bị hủy, không tính hủy muộn; không lý do → không body; có lý do → `{reason}`; "Giữ lại" không gửi gì; 409 lượt đã gọi → báo không hủy được | › hủy lượt khách bỏ về (5 ca) |
@@ -312,7 +314,7 @@ Chạy với mock: `cd FE && npm run dev`, mật khẩu `Petcare123`, nhân viê
 
 ### B.6 Chấm online và `GET /api/staff`
 
-Chấm trực tuyến ở hàng đợi và danh sách chọn người lấy từ `GET /api/staff` (identity-v1 #15). Với lễ tân trên BE thật hiện **403** nên: hàng đợi không có chấm, hộp thoại gán báo "chờ BE-1 mở GET /api/staff cho lễ tân", quản lý chi nhánh vẫn dùng bình thường. Mỗi lần mở tab Hàng chờ lễ tân bắn 2 request (VET, CARETAKER) và nhận 2 lần 403 (`retry` tắt cho 4xx, lưu cache 30 giây); chỉ gây ồn console.
+Chấm trực tuyến ở hàng đợi và danh sách chọn người lấy từ `GET /api/staff` (identity-v1 #15). Với lễ tân trên BE thật hiện **403** nên: hàng đợi không có chấm, hộp thoại gán báo "chờ BE-1 mở GET /api/staff cho lễ tân", quản lý chi nhánh vẫn dùng bình thường. Mỗi lần mở tab Hàng chờ lễ tân bắn 2 request (VET, CARETAKER) và nhận 2 lần 403 (`retry` tắt cho 4xx, lưu cache 30 giây); chỉ gây ồn console. **[31/10: lỗi thời. Chấm trực tuyến và danh sách chọn người lấy từ `GET /api/staff/assignable` (identity-v1 #38, ADR-0089) cho lễ tân và quản lý chi nhánh, hết 403 khi mở tab Hàng chờ. `VisitQueueList` đợi `GET /me` có chi nhánh rồi gọi 2 request (VET, CARETAKER) với `branchId` của người xem; SUPER_MANAGER không có chi nhánh thì không gọi. BE thật phải build + bật lại để thử.]**
 
 ### B.7 Còn để lại cho T37 (không sửa trong T36)
 
@@ -358,7 +360,7 @@ Chấm trực tuyến ở hàng đợi và danh sách chọn người lấy từ
 | Thứ tự BE (O1–O3) | hàng chờ lễ tân / hàng đợi bác sĩ / cột grooming sắp lại theo `queueSortKey` |
 | Hủy lượt (X1–X2) | gửi `reason: ''` thay vì không có body · không cắt khoảng trắng |
 | Quy tắc thuần (R1–R5) | bỏ ranh giới cấp cứu · cho đích đã gọi · bỏ điều kiện người phụ trách không đủ điều kiện · luôn hiện "Gán lại" · mốc trễ 15 phút lệch một biên |
-| Chọn người (P1–P3) | bỏ câu chờ BE-1 · bỏ cảnh báo ngoại tuyến · luôn lấy VET |
+| Chọn người (P1–P3) | bỏ câu chờ BE-1 · bỏ cảnh báo ngoại tuyến · luôn lấy VET (31/10: mutant "bỏ câu chờ BE-1" không còn; thay bằng đổi về `listStaff` · bỏ `branchId` · bỏ chặn SUPER_MANAGER không chi nhánh) |
 | Grooming (K1–K4) | không giữ thẻ ngay · không trả thẻ về khi BE từ chối · "Xong" bật · cho bắt đầu thẻ của người khác |
 | Gọi lượt (D1–D2) | nút gọi cho lượt đã gọi · cho lượt của người khác |
 

@@ -1,6 +1,6 @@
 # Test case FE — T13 (hồ sơ cá nhân, sổ địa chỉ, hồ sơ giới thiệu VET, liên kết hồ sơ)
 
-> Hợp đồng: `docs/api/identity-v1.md` #8, 10–14 và `docs/api/customer-v1.md` #1–7 (UC06, UC07; BR-TK-15, 18, 19, 20, BR-KH-01). Cập nhật 2026-10-12.
+> Hợp đồng: `docs/api/identity-v1.md` #8, 10–14 và `docs/api/customer-v1.md` #1–7 (UC06, UC07; BR-TK-15, 18, 19, 20, BR-KH-01). Cập nhật 2026-10-31.
 > Cột cuối mỗi bảng ghi test tự động tương ứng.
 
 ## 1. Chuẩn bị
@@ -81,7 +81,7 @@ Lối vào:
 | TC-T13-11 | Danh sách hồ sơ trùng SĐT | Ở `/account/link` | Khung "Có vẻ bạn đã có hồ sơ tại phòng khám". Hai hồ sơ: **Lê\*\*\* H\*\* L\*** (có email) và **Lê\*\*\* T\*\* H\*** (*Chưa có email, vui lòng ra quầy để liên kết*, nút **Chọn** bị khóa). Có nút **Không phải tôi** | `AccountPage.test`, `profile.mock.test` |
 | TC-T13-12 | Liên kết thành công | **Chọn** "Lê\*\*\* H\*\* L\*" → đọc cảnh báo → **Gửi mã xác thực** → nhập `000000` → **Xác nhận liên kết** → nhập `123456` → **Xác nhận liên kết** | Cảnh báo: hồ sơ online cùng *sổ địa chỉ hiện tại (1 địa chỉ) sẽ bị xóa*. Sau khi gửi: *Mã xác thực đã gửi tới lo\*\*\*@gmail.com*, nút gửi lại đếm ngược 60 giây. Mã sai: *OTP không đúng hoặc đã hết hạn*. Mã đúng: *Liên kết hồ sơ thành công*, "Tài khoản đã gắn với hồ sơ tại phòng khám". Hồ sơ cá nhân thành "Hồ sơ tại phòng khám", sổ địa chỉ **0/5**, `/pets` mở bình thường | `AccountPage.test`, `profile.mock.test`, e2e `profile.spec` |
 | TC-T13-13 | "Không phải tôi" | Đặt lại dữ liệu mock, đăng nhập `khachmoi@petcare.vn` → **Không phải tôi** → **Xác nhận** | *Đã ghi nhận "Không phải tôi". Bạn tiếp tục dùng hồ sơ online…*. `/pets` mở bình thường. Mục liên kết chuyển sang ô "Số điện thoại trong hồ sơ tại phòng khám"; tìm `0905111222` lại ra 2 hồ sơ, vẫn tự liên kết được | `AccountPage.test`, `profile.mock.test` |
-| TC-T13-14 | Tự tìm theo SĐT | Ở ô tìm (sau TC-T13-13): `12345`; rồi `0977000000` | `12345`: *Số điện thoại phải gồm 10–11 chữ số, bắt đầu bằng 0*. `0977000000`: *Không có hồ sơ tại quầy nào chưa liên kết với số điện thoại này.* | `profile.mock.test` |
+| TC-T13-14 | Tự tìm theo SĐT | Ở ô tìm (sau TC-T13-13): `12345`; `09051112223` (11 số); rồi `0977000000` | `12345` và `09051112223`: nút "Tìm hồ sơ" khóa, lời nhắc *Nhập đủ 10 số điện thoại để tra cứu.*, 0 request (SĐT hồ sơ tại quầy là 10 số bắt đầu bằng 0, áp cho UC07 từ 31/10; câu lỗi chỉ gặp khi gọi thẳng API: mock *Số điện thoại phải có dạng 0xxxxxxxxx*, BE-1 thật vẫn nhận 10–11 số và trả *Số điện thoại phải gồm 10–11 chữ số, bắt đầu bằng 0*). `0977000000`: *Không có hồ sơ tại quầy nào chưa liên kết với số điện thoại này.* | `profile.mock.test`, `AccountPage.test` |
 | TC-T13-15 | Hồ sơ online đã có dữ liệu | Đăng nhập `khach@petcare.vn` → `/account/link` → tìm `0905111222` | *Hồ sơ của bạn đã có thú cưng, lịch hẹn, đặt chỗ, đơn hàng hoặc góp ý nên không thể liên kết với hồ sơ tại quầy. Vui lòng liên hệ quầy để được hỗ trợ* | `AccountPage.test`, `profile.mock.test` |
 | TC-T13-16 | Đăng ký mới có SĐT trùng hồ sơ tại quầy | `/auth/register` với SĐT `0905111222` → OTP `123456` → đăng nhập | Sau khi đăng nhập vào thẳng `/account/link` với 2 hồ sơ như TC-T13-11 | `profile.mock.test` |
 

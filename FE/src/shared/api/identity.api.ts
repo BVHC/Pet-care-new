@@ -1,4 +1,4 @@
-// Identity admin API — docs/api/identity-v1.md #15–36 (Staff, tài khoản của hồ sơ khách tại quầy, Accounts, Configuration, Audit).
+// Identity admin API — docs/api/identity-v1.md #15–36 và #38 (Staff, tài khoản của hồ sơ khách tại quầy, Accounts, Configuration, Audit).
 // Bốn màn admin và hồ sơ khách ở quầy gọi qua file này; tầng hooks gọi tiếp từ đây.
 import { apiClient } from './axios';
 import type { PageResponse } from '../types';
@@ -6,6 +6,8 @@ import type { AccountSummary } from '../types/auth';
 import type { LinkResult } from '../types/profile';
 import type {
   AccountQuery,
+  AssignableStaffQuery,
+  AssignableStaffResponse,
   AuditLogEntry,
   AuditQuery,
   ChangeRoleRequest,
@@ -39,6 +41,8 @@ export const identityApi = {
 
   // ─── Staff (UC08) ───
   listStaff: (query: StaffQuery = {}) => get<PageResponse<StaffResponse>>('/api/staff', query),
+  /** #38 (lễ tân gán, quản lý chi nhánh / SUPER_MANAGER gán lại): mảng không phân trang, online trước rồi họ tên. `GET /api/staff` vẫn đóng với lễ tân (ADR-0089). */
+  listAssignableStaff: (query: AssignableStaffQuery) => get<AssignableStaffResponse[]>('/api/staff/assignable', query),
   createStaff: (body: CreateStaffRequest) => post<StaffResponse>('/api/staff', body),
   getStaff: (id: number) => get<StaffResponse>(`/api/staff/${id}`),
   changeRole: (id: number, body: ChangeRoleRequest) => post<StaffResponse>(`/api/staff/${id}/change-role`, body),

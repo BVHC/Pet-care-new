@@ -14,7 +14,6 @@ import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
 
-import org.springframework.jdbc.core.RowMapper;
 import org.springframework.jdbc.core.namedparam.MapSqlParameterSource;
 import org.springframework.jdbc.core.namedparam.NamedParameterJdbcTemplate;
 import org.springframework.stereotype.Repository;
@@ -29,7 +28,9 @@ import com.petcare.module.inventory.dto.StockLotResponse;
  * giới module:</b> JOIN thẳng bảng {@code products} của catalog (chỉ đọc, chỉ các cột {@code id, sku, name, unit,
  * product_type, tracks_expiry, is_active}) để lọc theo tên / SKU / loại và phân trang trong một câu SQL — cả hai module
  * cùng BE-2; đổi các cột đó ở catalog phải sửa lớp này ({@code InventoryViewIT} bắt). Truy vấn động chỉ ghép điều kiện
- * đã gửi (không {@code :x IS NULL OR …}, ADR-0038). Hết hạn = {@code expiry_date < :today}.
+ * đã gửi (không {@code :x IS NULL OR …}, ADR-0038). Hết hạn = {@code expiry_date < :today}. Cờ {@code expiringSoon}
+ * (docs/adr/0088) tính trong Java từ cột đã có so với {@code warnDate} = hôm nay + [CFG] ngày cảnh báo, do service đọc
+ * một lần mỗi request; không thêm bind SQL.
  */
 @Repository
 public class InventoryQueryRepository {
@@ -38,9 +39,6 @@ public class InventoryQueryRepository {
     public record Filter(long branchId, LocalDate today, String q, ProductType productType, boolean belowMin,
             Integer expiringWithinDays) {
     }
-
-    private static final RowMapper<InventoryItemResponse> ITEM_MAPPER = InventoryQueryRepository::mapItem;
-    private static final RowMapper<StockLotResponse> LOT_MAPPER = InventoryQueryRepository::mapLot;
 
     private static final String ITEM_SELECT = """
             SELECT p.id AS product_id, p.name, p.sku, p.unit, p.product_type, p.tracks_expiry,
@@ -74,19 +72,20 @@ public class InventoryQueryRepository {
         return total == null ? 0 : total;
     }
 
-    public List<InventoryItemResponse> findPage(Filter filter, long offset, int limit) {
+    public List<InventoryItemResponse> findPage(Filter filter, LocalDate warnDate, long offset, int limit) {
         MapSqlParameterSource params = new MapSqlParameterSource();
         String sql = ITEM_SELECT + ITEM_FROM + where(filter, params)
                 + " ORDER BY p.name, p.id LIMIT :limit OFFSET :offset";
         params.addValue("limit", limit).addValue("offset", offset);
-        return jdbc.query(sql, params, ITEM_MAPPER);
+        return jdbc.query(sql, params, (rs, rowNum) -> mapItem(rs, warnDate));
     }
 
     /** Một sản phẩm (kể cả ngừng kinh doanh); chưa có dòng tồn thì toàn 0. */
-    public Optional<InventoryItemResponse> findItem(long branchId, long productId, LocalDate today) {
+    public Optional<InventoryItemResponse> findItem(long branchId, long productId, LocalDate today,
+            LocalDate warnDate) {
         return jdbc.query(ITEM_SELECT + ITEM_FROM + " WHERE p.id = :productId",
                 new MapSqlParameterSource("branchId", branchId).addValue("today", today)
-                        .addValue("productId", productId), ITEM_MAPPER).stream().findFirst();
+                        .addValue("productId", productId), (rs, rowNum) -> mapItem(rs, warnDate)).stream().findFirst();
     }
 
     /**
@@ -118,7 +117,7 @@ public class InventoryQueryRepository {
     // ---------------------------------------------------------------- lô
 
     /** Lô còn số dư của (chi nhánh, sản phẩm), thứ tự FEFO: hạn tăng dần, lô mặc định (không hạn) sau cùng. */
-    public List<StockLotResponse> findLots(long branchId, long productId, LocalDate today) {
+    public List<StockLotResponse> findLots(long branchId, long productId, LocalDate today, LocalDate warnDate) {
         return jdbc.query("""
                 SELECT l.id, l.lot_number, l.expiry_date, l.quantity, l.is_default,
                        (l.expiry_date IS NOT NULL AND l.expiry_date < :today) AS expired
@@ -126,7 +125,7 @@ public class InventoryQueryRepository {
                 WHERE i.branch_id = :branchId AND i.product_id = :productId AND l.quantity > 0
                 ORDER BY l.expiry_date ASC NULLS LAST, l.id
                 """, new MapSqlParameterSource("branchId", branchId).addValue("productId", productId)
-                .addValue("today", today), LOT_MAPPER);
+                .addValue("today", today), (rs, rowNum) -> mapLot(rs, warnDate));
     }
 
     // ---------------------------------------------------------------- StockQueryApi
@@ -270,21 +269,37 @@ public class InventoryQueryRepository {
                 rs.getDate("expiry_date").toLocalDate(), rs.getInt("quantity")));
     }
 
-    private static InventoryItemResponse mapItem(ResultSet rs, int rowNum) throws SQLException {
+    static InventoryItemResponse mapItem(ResultSet rs, LocalDate warnDate) throws SQLException {
         int total = rs.getInt("total");
         int available = rs.getInt("available");
         int min = rs.getInt("min_quantity");
-        java.sql.Date nearest = rs.getDate("nearest");
+        int expired = rs.getInt("expired");
+        java.sql.Date nearestDate = rs.getDate("nearest");
+        LocalDate nearest = nearestDate == null ? null : nearestDate.toLocalDate();
         return new InventoryItemResponse(rs.getLong("product_id"), rs.getString("name"), rs.getString("sku"),
                 rs.getString("unit"), ProductType.valueOf(rs.getString("product_type")),
-                rs.getBoolean("tracks_expiry"), total, available, min, available < min,
-                nearest == null ? null : nearest.toLocalDate(), rs.getInt("expired"));
+                rs.getBoolean("tracks_expiry"), total, available, min, available < min, nearest, expired,
+                itemExpiringSoon(expired, nearest, warnDate));
     }
 
-    private static StockLotResponse mapLot(ResultSet rs, int rowNum) throws SQLException {
-        java.sql.Date expiry = rs.getDate("expiry_date");
-        return new StockLotResponse(rs.getLong("id"), rs.getString("lot_number"),
-                expiry == null ? null : expiry.toLocalDate(), rs.getInt("quantity"), rs.getBoolean("is_default"),
-                rs.getBoolean("expired"));
+    static StockLotResponse mapLot(ResultSet rs, LocalDate warnDate) throws SQLException {
+        java.sql.Date expiryDate = rs.getDate("expiry_date");
+        LocalDate expiry = expiryDate == null ? null : expiryDate.toLocalDate();
+        return new StockLotResponse(rs.getLong("id"), rs.getString("lot_number"), expiry, rs.getInt("quantity"),
+                rs.getBoolean("is_default"), rs.getBoolean("expired"), lotExpiringSoon(expiry, warnDate));
+    }
+
+    /**
+     * Cùng vị từ với bộ lọc {@code expiringWithinDays}: có lô còn tồn mà hạn &le; {@code warnDate}, gồm lô đã hết hạn.
+     * {@code expiredQty} = số còn ở lô hết hạn (SUM &gt; 0 &hArr; có lô hết hạn còn tồn, vì {@code quantity >= 0});
+     * {@code nearest} = hạn nhỏ nhất của lô còn tồn chưa hết hạn (null nếu không có).
+     */
+    static boolean itemExpiringSoon(long expiredQty, LocalDate nearest, LocalDate warnDate) {
+        return expiredQty > 0 || lotExpiringSoon(nearest, warnDate);
+    }
+
+    /** Lô có hạn không muộn hơn {@code warnDate} (gồm đã hết hạn); lô không hạn (mặc định) thì không. */
+    static boolean lotExpiringSoon(LocalDate expiry, LocalDate warnDate) {
+        return expiry != null && !expiry.isAfter(warnDate);
     }
 }

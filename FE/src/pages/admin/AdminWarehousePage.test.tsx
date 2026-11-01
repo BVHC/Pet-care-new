@@ -8,6 +8,7 @@ import { inventoryApi } from '../../shared/api/inventory.api';
 import { MOCK_PASSWORD } from '../../shared/api/mock/identity.mock';
 import { installMockApi } from '../../shared/api/mock/mock-api';
 import { useSession } from '../../shared/stores/session.store';
+import type { InventoryItem, StockLot } from '../../shared/types/inventory';
 import { restoreTimezone, setTimezone } from '../../test/timezone';
 import { addDays, localIsoDate } from '../../shared/utils/branch-schedule';
 import { AdminWarehousePage } from './AdminWarehousePage';
@@ -277,7 +278,7 @@ describe('AdminWarehousePage (T24 — UC73–76)', () => {
     await waitFor(() => expect(update).toHaveBeenCalledWith(2, expect.objectContaining({ supplierId: 4 })));
   });
 
-  // Ngưỡng "sắp hết hạn" = EXPIRY_WARNING_DAYS_DEFAULT (30 ngày): [CFG] stock.expiry_warning_days chỉ ADMIN đọc được, BE không trả cờ trong InventoryItem.
+  // Badge "Sắp hết hạn" lấy từ cờ `expiringSoon` của BE (InventoryItem / StockLot, N = [CFG] stock.expiry_warning_days); mock tính cờ với N = 30 theo ngày VN như BE.
   it('tồn kho: lô gần nhất hạn trong 14 ngày hiện "Sắp hết hạn" ở bảng và ở danh sách lô', async () => {
     await signIn('manager@store1.vn');
     await receiveLot(4, 'VT-SOON', 14);
@@ -331,7 +332,7 @@ describe('AdminWarehousePage (T24 — UC73–76)', () => {
     expect(within(await status('RB2401')).getByText('Còn hạn')).toBeInTheDocument();
   });
 
-  // Ngưỡng tính từ ngày VN: máy ở Auckland đã sang 31/10 trong khi VN còn 30/10 23:59, nên dùng ngày máy sẽ gán nhầm lô +31 ngày vào ngưỡng.
+  // Cờ do mock tính từ ngày VN như BE: máy ở Auckland đã sang 31/10 trong khi VN còn 30/10 23:59, nên tính theo ngày máy sẽ bật cờ nhầm cho lô +31 ngày.
   it('tồn kho: hạn đúng +30 ngày (giờ VN) là sắp hết hạn, +31 ngày thì chưa — kể cả khi máy đã sang ngày mới', async () => {
     setTimezone('Pacific/Auckland');
     vi.useFakeTimers({ toFake: ['Date'] });
@@ -345,5 +346,79 @@ describe('AdminWarehousePage (T24 — UC73–76)', () => {
     const day31 = await rowOf('Vaccine 5 bệnh Vanguard');
     expect(within(day31).getByText('30/11/2026')).toBeInTheDocument(); // hạn gần nhất = lô +31 ngày, không phải lô +160
     expect(within(day31).queryByText('Sắp hết hạn')).not.toBeInTheDocument();
+  });
+
+  // Chứng minh FE dùng cờ của BE chứ không tự tính từ ngày: dựng dữ liệu mà cờ và ngày mâu thuẫn nhau (ADMIN đổi [CFG] thì ngưỡng khác 30).
+  const stockRow = (over: Partial<InventoryItem>): InventoryItem => ({
+    productId: 91,
+    productName: 'Hàng thử',
+    sku: 'T-91',
+    unit: 'hộp',
+    productType: 'GOODS',
+    tracksExpiry: true,
+    totalQuantity: 10,
+    availableQuantity: 10,
+    minQuantity: 0,
+    belowMin: false,
+    nearestExpiryDate: null,
+    expiredQuantity: 0,
+    expiringSoon: false,
+    ...over,
+  });
+
+  it('tồn kho: badge "Sắp hết hạn" theo cờ expiringSoon của BE, không theo hạn gần nhất; có lô hết hạn thì chỉ đỏ', async () => {
+    await signIn('manager@store1.vn');
+    const today = localIsoDate();
+    const content = [
+      stockRow({ productId: 91, productName: 'Hàng cờ bật hạn xa', sku: 'T-91', nearestExpiryDate: addDays(today, 200), expiringSoon: true }),
+      stockRow({ productId: 92, productName: 'Hàng cờ tắt hạn gần', sku: 'T-92', nearestExpiryDate: addDays(today, 10), expiringSoon: false }),
+      stockRow({ productId: 93, productName: 'Hàng có lô hết hạn', sku: 'T-93', nearestExpiryDate: addDays(today, 200), expiredQuantity: 3, expiringSoon: true }),
+    ];
+    vi.spyOn(inventoryApi, 'listInventory').mockResolvedValue({ content, page: 0, size: 20, totalElements: 3, totalPages: 1 });
+    renderAt('/admin/warehouse');
+
+    const flagged = await rowOf('Hàng cờ bật hạn xa');
+    expect(within(flagged).getByText('Sắp hết hạn')).toBeInTheDocument();
+    expect(within(flagged).queryByText('Có lô hết hạn')).not.toBeInTheDocument();
+    const unflagged = await rowOf('Hàng cờ tắt hạn gần');
+    expect(within(unflagged).queryByText('Sắp hết hạn')).not.toBeInTheDocument();
+    expect(within(unflagged).queryByText('Có lô hết hạn')).not.toBeInTheDocument();
+    const expired = await rowOf('Hàng có lô hết hạn');
+    expect(within(expired).getByText('Có lô hết hạn')).toBeInTheDocument();
+    expect(within(expired).queryByText('Sắp hết hạn')).not.toBeInTheDocument();
+  });
+
+  it('danh sách lô: lô hết hạn đỏ, expiringSoon vàng dù hạn xa, expiringSoon tắt thì "Còn hạn" dù hạn gần', async () => {
+    await signIn('manager@store1.vn');
+    const today = localIsoDate();
+    const lot = (stockLotId: number, lotNumber: string, days: number, over: Partial<StockLot> = {}): StockLot => ({
+      stockLotId,
+      lotNumber,
+      expiryDate: addDays(today, days),
+      quantity: 5,
+      isDefault: false,
+      expired: false,
+      expiringSoon: false,
+      ...over,
+    });
+    vi.spyOn(inventoryApi, 'listLots').mockResolvedValue([
+      lot(1, 'L-EXPIRED', -3, { expired: true, expiringSoon: true }),
+      lot(2, 'L-FLAG-ON', 200, { expiringSoon: true }),
+      lot(3, 'L-FLAG-OFF', 10),
+    ]);
+    const user = renderAt('/admin/warehouse');
+
+    await user.click(within(await rowOf('Vaccine Dại Rabisin')).getByRole('button', { name: 'Xem lô Vaccine Dại Rabisin' }));
+    const lots = screen.getByRole('dialog');
+    const status = async (lotNumber: string) => (await within(lots).findByText(lotNumber)).closest('tr')!;
+    const expired = await status('L-EXPIRED');
+    expect(within(expired).getByText('Đã hết hạn')).toBeInTheDocument();
+    expect(within(expired).queryByText('Sắp hết hạn')).not.toBeInTheDocument();
+    const on = await status('L-FLAG-ON');
+    expect(within(on).getByText('Sắp hết hạn')).toBeInTheDocument();
+    expect(within(on).queryByText('Còn hạn')).not.toBeInTheDocument();
+    const off = await status('L-FLAG-OFF');
+    expect(within(off).getByText('Còn hạn')).toBeInTheDocument();
+    expect(within(off).queryByText('Sắp hết hạn')).not.toBeInTheDocument();
   });
 });

@@ -14,6 +14,8 @@ import org.springframework.transaction.annotation.Transactional;
 
 import com.petcare.module.catalog.api.CatalogQueryApi;
 import com.petcare.module.catalog.api.ProductType;
+import com.petcare.module.identity.api.ConfigKey;
+import com.petcare.module.identity.api.SystemConfigApi;
 import com.petcare.module.inventory.dto.InventoryItemResponse;
 import com.petcare.module.inventory.dto.StockLotResponse;
 import com.petcare.module.inventory.repository.InventoryQueryRepository;
@@ -24,7 +26,8 @@ import com.petcare.platform.security.BranchScope;
 /**
  * UC75 — xem tồn và đặt tồn tối thiểu (inventory-v1 #11–14; BR-KO-01, 05, 07; docs/adr/0042). Luôn làm trên chi nhánh
  * của người gọi (A05–A08 đều có chi nhánh); chỉ BRANCH_MANAGER ghi. Không audit. "Hôm nay" theo bean {@code Clock}
- * (Asia/Ho_Chi_Minh): hết hạn = hạn dùng trước hôm nay.
+ * (Asia/Ho_Chi_Minh): hết hạn = hạn dùng trước hôm nay. Cờ {@code expiringSoon} của dòng tồn và của lô dùng chung một mốc
+ * hôm nay + [CFG] {@code stock.expiry_warning_days} (docs/adr/0088).
  */
 @Service
 public class InventoryService {
@@ -35,13 +38,15 @@ public class InventoryService {
     private final CatalogQueryApi catalog;
     private final BranchScope branchScope;
     private final Clock clock;
+    private final SystemConfigApi configs;
 
     public InventoryService(InventoryQueryRepository inventory, CatalogQueryApi catalog, BranchScope branchScope,
-            Clock clock) {
+            Clock clock, SystemConfigApi configs) {
         this.inventory = inventory;
         this.catalog = catalog;
         this.branchScope = branchScope;
         this.clock = clock;
+        this.configs = configs;
     }
 
     /** Sắp {@code name, id}; {@code size} kẹp 1–100, {@code page} âm = 0; {@code expiringWithinDays} âm → coi như 0. */
@@ -50,16 +55,18 @@ public class InventoryService {
             Integer expiringWithinDays, int page, int size) {
         Pageable pageable = PageRequest.of(Math.max(page, 0), Math.min(Math.max(size, 1), MAX_PAGE_SIZE));
         String needle = q == null || q.isBlank() ? null : q.strip().toLowerCase(Locale.ROOT);
-        InventoryQueryRepository.Filter filter = new InventoryQueryRepository.Filter(branchId(), today(), needle,
+        LocalDate today = today();
+        InventoryQueryRepository.Filter filter = new InventoryQueryRepository.Filter(branchId(), today, needle,
                 productType, belowMin, expiringWithinDays == null ? null : Math.max(expiringWithinDays, 0));
         long total = inventory.count(filter);
-        return PageResponse.of(new PageImpl<>(inventory.findPage(filter, pageable.getOffset(), pageable.getPageSize()),
-                pageable, total));
+        return PageResponse.of(new PageImpl<>(inventory.findPage(filter, warnDate(today), pageable.getOffset(),
+                pageable.getPageSize()), pageable, total));
     }
 
     @Transactional(readOnly = true)
     public InventoryItemResponse getItem(Long productId) {
-        return inventory.findItem(branchId(), productId, today())
+        LocalDate today = today();
+        return inventory.findItem(branchId(), productId, today, warnDate(today))
                 .orElseThrow(() -> new ResourceNotFoundException("sản phẩm", productId));
     }
 
@@ -67,7 +74,8 @@ public class InventoryService {
     @Transactional(readOnly = true)
     public List<StockLotResponse> listLots(Long productId) {
         requireProduct(productId);
-        return inventory.findLots(branchId(), productId, today());
+        LocalDate today = today();
+        return inventory.findLots(branchId(), productId, today, warnDate(today));
     }
 
     @Transactional
@@ -85,6 +93,14 @@ public class InventoryService {
 
     private LocalDate today() {
         return LocalDate.now(clock);
+    }
+
+    /**
+     * Mốc cờ {@code expiringSoon} = hôm nay + [CFG] {@code stock.expiry_warning_days}; đọc một lần mỗi request, từ cùng
+     * {@code today} với bộ lọc (docs/adr/0088). Chỉ trả cờ, không trả số ngày.
+     */
+    private LocalDate warnDate(LocalDate today) {
+        return today.plusDays(configs.getInt(ConfigKey.STOCK_EXPIRY_WARNING_DAYS));
     }
 
     private long branchId() {

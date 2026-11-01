@@ -17,7 +17,6 @@ import {
   noContent,
   notFound,
   ok,
-  page,
   ruleFail,
   type MockHandler,
   type MockReply,
@@ -254,21 +253,36 @@ export const hasActiveBranchManager = (branchId: number): boolean => countActive
 // ─── Staff (UC08) ───
 
 /**
- * ASSUMPTION (T36, chờ BE-1): lễ tân chọn người gán lượt (UC45) nhưng identity-v1 #15 loại RECEPTIONIST. Mock mở đúng phạm vi nhỏ nhất:
- * VET / CARETAKER ACTIVE không bị khóa của chi nhánh mình. Lọc ngoài phạm vi (role, status, branchId) → 403. BE thật hiện trả 403 cho cả lời gọi hợp lệ.
+ * identity-v1 #38 `GET /api/staff/assignable` (ADR-0089): người gán lượt cho lễ tân (gán) và quản lý (gán lại), mảng không phân trang, KHÔNG mở `GET /api/staff`.
+ * Vai gọi: RECEPTIONIST, BRANCH_MANAGER, SUPER_MANAGER; vai khác 403 ACCESS_DENIED. `role` bắt buộc VET | CARETAKER (400 MALFORMED_REQUEST), `branchId` tùy chọn là số dương.
+ * Lễ tân / quản lý chi nhánh: bỏ `branchId` = chi nhánh của mình, chi nhánh khác 403 ACCESS_DENIED_SCOPE_MISMATCH. SUPER_MANAGER (cấp chuỗi): bắt buộc `branchId`
+ * (thiếu 400 VALIDATION_FAILED), chi nhánh không có nhân viên nào thì mảng rỗng. Chỉ ACTIVE, chưa khóa, đúng chi nhánh và chức vụ; online trước, rồi họ tên, rồi accountId.
+ * ASSUMPTION: kiểm vai (403) trước kiểm tham số (400); BE thật chưa dò.
  */
-function listAssignableForReceptionist(s: ReturnType<typeof load>, account: { id: number; branchId?: number | null }, query: Record<string, string>) {
-  const branchId = account.branchId ?? MOCK_STAFF[account.id]?.branchId;
-  if (query.role && query.role !== 'VET' && query.role !== 'CARETAKER') return denied();
-  if (query.status && query.status !== 'ACTIVE') return denied();
-  if (query.branchId && Number(query.branchId) !== branchId) return denied();
-  const q = (query.q ?? '').trim().toLowerCase();
-  const staff = allStaff(s)
-    .filter((a) => (a.role === 'VET' || a.role === 'CARETAKER') && a.branchId === branchId && a.status === 'ACTIVE' && !s.locks[a.id])
-    .filter((a) => !query.role || a.role === query.role)
-    .filter((a) => !q || a.email.toLowerCase().includes(q) || a.fullName.toLowerCase().includes(q));
-  return ok(page(staff.map((a) => staffResponseOf(s, a))));
-}
+const listAssignableStaff: MockHandler = ({ account, query }) => {
+  const caller = account!;
+  if (caller.role !== 'RECEPTIONIST' && caller.role !== 'BRANCH_MANAGER' && caller.role !== 'SUPER_MANAGER') return denied();
+  const role = query.role;
+  if (role !== 'VET' && role !== 'CARETAKER') return fail('MALFORMED_REQUEST', "Tham số 'role' phải là VET hoặc CARETAKER", 400);
+  if (query.branchId !== undefined && !/^[+-]?\d+$/.test(query.branchId)) return fail('MALFORMED_REQUEST', "Tham số 'branchId' sai kiểu dữ liệu", 400);
+  const asked = query.branchId === undefined ? undefined : Number(query.branchId);
+  if (asked !== undefined && asked <= 0) return fail('VALIDATION_FAILED', 'branchId: phải là số dương', 400);
+  const s = load();
+  let branchId: number;
+  if (caller.role === 'SUPER_MANAGER') {
+    if (asked === undefined) return fail('VALIDATION_FAILED', 'branchId: Vui lòng chọn chi nhánh', 400);
+    branchId = asked;
+  } else {
+    const mine = findStaffAccount(s, caller.id)?.branchId;
+    if (asked !== undefined && asked !== mine) return fail('ACCESS_DENIED_SCOPE_MISMATCH', 'Không có quyền truy cập dữ liệu này', 403);
+    branchId = mine!;
+  }
+  const rows = allStaff(s)
+    .filter((a) => a.role === role && a.branchId === branchId && a.status === 'ACTIVE' && !s.locks[a.id])
+    .map((a) => ({ accountId: a.id, fullName: a.fullName, role, online: staffResponseOf(s, a).online }));
+  rows.sort((a, b) => Number(b.online) - Number(a.online) || a.fullName.localeCompare(b.fullName, 'vi') || a.accountId - b.accountId);
+  return ok(rows);
+};
 
 // BE `StaffQueryService.visibleRoles`: ADMIN chỉ thấy SUPER_MANAGER; SUPER_MANAGER thấy A05–A08; BRANCH_MANAGER thấy A06–A08.
 // Không ai thấy chính mình. Lọc `role` ngoài tập này → trang rỗng (không lỗi).
@@ -281,10 +295,8 @@ const VISIBLE_STAFF_ROLES: Partial<Record<Role, Role[]>> = {
 const listStaff: MockHandler = ({ account, query }) => {
   if (account!.role === 'CUSTOMER') return denied();
   const s = load();
-  // BE-1 chưa mở GET /api/staff cho lễ tân: BE thật 403 (STAFF_ADMINS), mock mở phạm vi nhỏ để dựng luồng gán lượt (T36 A.7).
-  if (account!.role === 'RECEPTIONIST') return listAssignableForReceptionist(s, account!, query);
   const visible = VISIBLE_STAFF_ROLES[account!.role];
-  if (!visible) return denied(); // VET, CARETAKER: BE `@PreAuthorize(STAFF_ADMINS)`
+  if (!visible) return denied(); // RECEPTIONIST, VET, CARETAKER: BE `@PreAuthorize(STAFF_ADMINS)`; lễ tân chọn người gán qua `GET /api/staff/assignable` (ADR-0089)
   const q = (query.q ?? '').trim().toLowerCase();
   const roleFilter = query.role as Role | undefined;
   const statusFilter = query.status as AccountStatus | undefined;
@@ -372,7 +384,7 @@ const createStaff: MockHandler = ({ account, body }) => {
 };
 
 const getStaffOne: MockHandler = ({ account, params }) => {
-  if (account!.role === 'CUSTOMER') return denied();
+  if (!VISIBLE_STAFF_ROLES[account!.role]) return denied(); // như `GET /api/staff`: chỉ ADMIN, SUPER_MANAGER, BRANCH_MANAGER (BE `STAFF_ADMINS`); lễ tân 403
   const id = Number(params.id);
   if (!Number.isInteger(id) || id <= 0) return fail('MALFORMED_REQUEST', 'Mã nhân viên không hợp lệ', 400);
   const s = load();
@@ -805,6 +817,8 @@ const listAuditLogs: MockHandler = ({ account, query }) => {
 export const adminIdentityRoutes: Record<string, MockHandler> = {
   'GET /api/staff': listStaff,
   'POST /api/staff': createStaff,
+  // Khai báo TRƯỚC ':id': router khớp theo thứ tự khai báo và ':id' ăn cả chữ 'assignable'.
+  'GET /api/staff/assignable': listAssignableStaff,
   'GET /api/staff/:id': getStaffOne,
   'POST /api/staff/:id/change-role': changeRole,
   'POST /api/staff/:id/transfer': transfer,

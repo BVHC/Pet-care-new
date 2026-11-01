@@ -11,7 +11,7 @@ import { visitApi } from '../../../shared/api/visit.api';
 import { VISIT_REFRESH_MS } from '../../../shared/hooks/useVisits';
 import { useSession } from '../../../shared/stores/session.store';
 import { usePosStore } from '../../../shared/stores/pos.store';
-import { at, makeStaff, makeVisit, pageOf, renderDesk, startDesk } from '../../../test/visit-harness';
+import { at, makeAssignable, makeVisit, pageOf, renderDesk, startDesk } from '../../../test/visit-harness';
 import { FrontDeskPanel } from './FrontDeskPanel';
 
 const toast = vi.hoisted(() => Object.assign(vi.fn(), { success: vi.fn(), error: vi.fn(), warning: vi.fn() }));
@@ -221,7 +221,7 @@ describe('FrontDeskPanel — tab Hàng chờ (UC45; BR-TN-04)', () => {
     vi.setSystemTime(new Date(at('10:40')));
     vi.spyOn(visitApi, 'listArrivals').mockResolvedValue(pageOf([]));
     vi.spyOn(salesApi, 'listOrders').mockResolvedValue(pageOf([]));
-    vi.spyOn(identityApi, 'listStaff').mockResolvedValue(pageOf([]));
+    vi.spyOn(identityApi, 'listAssignableStaff').mockResolvedValue([]);
     const list = vi
       .spyOn(visitApi, 'listQueue')
       .mockResolvedValueOnce([makeVisit(41, { petName: 'Có sẵn' })])
@@ -252,7 +252,7 @@ describe('FrontDeskPanel — gán người phụ trách (BR-TN-05, BR-TN-06)', (
 
   it('lượt khám: chỉ liệt kê bác sĩ thú y (VET), gán xong hàng đợi hiện tên người phụ trách', async () => {
     await startDesk('reception@store1.vn');
-    const list = vi.spyOn(identityApi, 'listStaff');
+    const list = vi.spyOn(identityApi, 'listAssignableStaff');
     const assign = vi.spyOn(visitApi, 'assign');
     const { user, dialog } = await openAssign('Miu');
 
@@ -260,7 +260,7 @@ describe('FrontDeskPanel — gán người phụ trách (BR-TN-05, BR-TN-06)', (
     await user.click(dialog.getByRole('button', { name: 'Gán' }));
 
     await waitFor(() => expect(assign).toHaveBeenCalledWith(2101, { assigneeId: 5 }));
-    expect(list).toHaveBeenCalledWith(expect.objectContaining({ role: 'VET', status: 'ACTIVE' }));
+    expect(list).toHaveBeenCalledWith({ role: 'VET', branchId: 1 });
     await waitFor(() => expect(screen.queryByRole('dialog')).not.toBeInTheDocument());
     expect(await (await rowOf('Miu')).findByText('BS. Minh Anh')).toBeInTheDocument();
     expect(toast.success).toHaveBeenCalledWith(expect.stringContaining('TN-2610-00008'));
@@ -268,19 +268,20 @@ describe('FrontDeskPanel — gán người phụ trách (BR-TN-05, BR-TN-06)', (
 
   it('lượt grooming: chỉ liệt kê nhân viên chăm sóc (CARETAKER)', async () => {
     await startDesk('reception@store1.vn');
-    const list = vi.spyOn(identityApi, 'listStaff');
+    const list = vi.spyOn(identityApi, 'listAssignableStaff');
     const { dialog } = await openAssign('Bim');
 
     expect(await dialog.findByRole('option', { name: /Thu Hà/ })).toBeInTheDocument();
     expect(dialog.queryByRole('option', { name: /Minh Anh/ })).not.toBeInTheDocument();
-    expect(list).toHaveBeenCalledWith(expect.objectContaining({ role: 'CARETAKER' }));
+    expect(list).toHaveBeenCalledWith({ role: 'CARETAKER', branchId: 1 });
   });
 
-  it('người online xếp trước; chọn người ngoại tuyến chỉ cảnh báo, không chặn gán (BR-TN-06)', async () => {
+  it('giữ thứ tự BE (online trước); chọn người ngoại tuyến chỉ cảnh báo, không chặn gán (BR-TN-06)', async () => {
     await startDesk('reception@store1.vn');
-    vi.spyOn(identityApi, 'listStaff').mockResolvedValue(
-      pageOf([makeStaff(7, { fullName: 'Bác sĩ Offline', online: false }), makeStaff(8, { fullName: 'Bác sĩ Online', online: true })]),
-    );
+    vi.spyOn(identityApi, 'listAssignableStaff').mockResolvedValue([
+      makeAssignable(8, { fullName: 'Bác sĩ Online', online: true }),
+      makeAssignable(7, { fullName: 'Bác sĩ Offline', online: false }),
+    ]);
     const assign = vi.spyOn(visitApi, 'assign').mockResolvedValue({ visit: makeVisit(2101, { assigneeId: 7, assigneeName: 'Bác sĩ Offline' }), assigneeOffline: true });
     const { user, dialog } = await openAssign('Miu');
 
@@ -295,12 +296,45 @@ describe('FrontDeskPanel — gán người phụ trách (BR-TN-05, BR-TN-06)', (
     await waitFor(() => expect(toast.warning).toHaveBeenCalledWith(expect.stringContaining('ngoại tuyến')));
   });
 
-  it('BE chưa mở danh sách nhân viên cho lễ tân (403): báo rõ chờ BE-1, không để trống, nút Gán tắt', async () => {
+  it('không gọi GET /api/staff (BE đóng với lễ tân): danh sách đến từ GET /api/staff/assignable; nút Gán tắt cho tới khi chọn một bác sĩ trong danh sách', async () => {
     await startDesk('reception@store1.vn');
-    vi.spyOn(identityApi, 'listStaff').mockRejectedValue(new ApiError('ACCESS_DENIED', 'Bạn không có quyền', 403));
+    const old = vi.spyOn(identityApi, 'listStaff');
+    const list = vi.spyOn(identityApi, 'listAssignableStaff');
+    const assign = vi.spyOn(visitApi, 'assign');
+    const { user, dialog } = await openAssign('Miu');
+
+    const options = (await dialog.findAllByRole('option')).map((o) => o.textContent);
+    expect(options).toEqual(['Chọn nhân viên', 'BS. Minh Anh · trực tuyến', 'BS. Ngọc Lan · trực tuyến', 'BS. Quốc Bảo · trực tuyến', 'BS. Thanh Thảo · trực tuyến']);
+    const give = dialog.getByRole('button', { name: 'Gán' });
+    expect(give).toBeDisabled();
+    await user.selectOptions(dialog.getByLabelText(/Người phụ trách/), '22');
+    expect(give).toBeEnabled();
+    await user.click(give);
+
+    await waitFor(() => expect(assign).toHaveBeenCalledWith(2101, { assigneeId: 22 }));
+    expect(list).toHaveBeenCalledWith({ role: 'VET', branchId: 1 });
+    expect(old).not.toHaveBeenCalled();
+    expect(screen.queryByText(/chờ BE-1/)).not.toBeInTheDocument();
+  });
+
+  it('hộp gán gửi branchId của CHÍNH lượt (không suy từ chi nhánh người xem)', async () => {
+    await startDesk('reception@store1.vn');
+    vi.spyOn(visitApi, 'listQueue').mockResolvedValue([makeVisit(51, { petName: 'Khác chi nhánh', branchId: 7 })]);
+    const list = vi.spyOn(identityApi, 'listAssignableStaff').mockResolvedValue([makeAssignable(5, { fullName: 'BS. Chi nhánh 7' })]);
+    const { dialog } = await openAssign('Khác chi nhánh');
+
+    expect(await dialog.findByRole('option', { name: /BS. Chi nhánh 7/ })).toBeInTheDocument();
+    expect(list).toHaveBeenCalledWith({ role: 'VET', branchId: 7 });
+  });
+
+  it('BE từ chối danh sách (403 chi nhánh khác): hiện thông điệp lỗi chung kèm "Thử lại", không để trống, nút Gán tắt', async () => {
+    await startDesk('reception@store1.vn');
+    vi.spyOn(identityApi, 'listAssignableStaff').mockRejectedValue(new ApiError('ACCESS_DENIED_SCOPE_MISMATCH', 'Không có quyền truy cập dữ liệu này', 403));
     const { dialog } = await openAssign('Miu');
 
-    expect(await dialog.findByText('Danh sách nhân viên chờ BE-1 mở GET /api/staff cho lễ tân')).toBeInTheDocument();
+    expect(await dialog.findByText('Không tải được danh sách nhân viên')).toBeInTheDocument();
+    expect(dialog.getByText('Không có quyền truy cập dữ liệu này')).toBeInTheDocument();
+    expect(dialog.getByRole('button', { name: 'Thử lại' })).toBeInTheDocument();
     expect(dialog.getByRole('button', { name: 'Gán' })).toBeDisabled();
     expect(dialog.queryByLabelText(/Người phụ trách/)).not.toBeInTheDocument();
   });
@@ -433,9 +467,10 @@ describe('FrontDeskPanel — sắp lại, cấp cứu, hủy lượt (BR-TN-04, 
 });
 
 describe('FrontDeskPanel — vai trò không gán được (VET) chỉ xem, không hỏi danh sách nhân viên', () => {
-  it('bác sĩ thấy hàng đợi nhưng không có nút nào, không hỏi GET /api/staff (BE 403) và không có chấm trực tuyến', async () => {
+  it('bác sĩ thấy hàng đợi nhưng không có nút nào, không hỏi danh sách nhân viên (GET /api/staff và /api/staff/assignable đều 403) và không có chấm trực tuyến', async () => {
     await startDesk('doctor@store1.vn');
     const staff = vi.spyOn(identityApi, 'listStaff');
+    const assignable = vi.spyOn(identityApi, 'listAssignableStaff');
     const arrivals = vi.spyOn(visitApi, 'listArrivals');
     const { user } = renderPanel();
     await queueTab(user);
@@ -444,6 +479,7 @@ describe('FrontDeskPanel — vai trò không gán được (VET) chỉ xem, khô
     expect((await rowOf('Miu')).queryAllByRole('button')).toHaveLength(0);
     expect(screen.queryByRole('img', { name: /tuyến/ })).not.toBeInTheDocument();
     expect(staff).not.toHaveBeenCalled();
+    expect(assignable).not.toHaveBeenCalled();
     expect(arrivals).not.toHaveBeenCalled();
   });
 });
@@ -484,6 +520,8 @@ describe('FrontDeskPanel — quản lý chi nhánh (A05): xem hàng đợi, ch�
   it('lượt đã gọi có cờ cần gán lại: "Gán lại" cần lý do, chọn người cùng chức vụ, rồi cờ biến mất', async () => {
     await startDesk('manager@store1.vn');
     const reassign = vi.spyOn(visitApi, 'reassign');
+    const list = vi.spyOn(identityApi, 'listAssignableStaff');
+    const old = vi.spyOn(identityApi, 'listStaff');
     const { user } = renderPanel();
     await queueTab(user);
 
@@ -501,6 +539,9 @@ describe('FrontDeskPanel — quản lý chi nhánh (A05): xem hàng đợi, ch�
     await user.click(confirm);
 
     await waitFor(() => expect(reassign).toHaveBeenCalledWith(2104, { assigneeId: 6, reason: 'Người cũ bị khóa tài khoản' }));
+    // Hộp gán lại dùng cùng danh sách #38 (quản lý chi nhánh) và gửi branchId của lượt; không đụng GET /api/staff.
+    expect(list).toHaveBeenCalledWith({ role: 'CARETAKER', branchId: 1 });
+    expect(old).not.toHaveBeenCalled();
     const mochi = await rowOf('Mochi');
     expect(await mochi.findByText('Thu Hà')).toBeInTheDocument();
     expect(mochi.queryByText('Cần gán lại')).not.toBeInTheDocument();

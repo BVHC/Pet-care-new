@@ -1,5 +1,7 @@
 package com.petcare.module.identity.controller;
 
+import java.util.List;
+
 import org.springframework.http.HttpStatus;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.GetMapping;
@@ -12,6 +14,8 @@ import org.springframework.web.bind.annotation.ResponseStatus;
 import org.springframework.web.bind.annotation.RestController;
 
 import com.petcare.module.identity.api.Role;
+import com.petcare.module.identity.dto.AssignableRole;
+import com.petcare.module.identity.dto.AssignableStaffResponse;
 import com.petcare.module.identity.dto.ChangeRoleRequest;
 import com.petcare.module.identity.dto.CreateStaffRequest;
 import com.petcare.module.identity.dto.EmailChangeRequest;
@@ -21,6 +25,7 @@ import com.petcare.module.identity.dto.ReactivateStaffRequest;
 import com.petcare.module.identity.dto.StaffResponse;
 import com.petcare.module.identity.dto.TransferStaffRequest;
 import com.petcare.module.identity.entity.AccountStatus;
+import com.petcare.module.identity.service.AssignableStaffService;
 import com.petcare.module.identity.service.StaffAdminService;
 import com.petcare.module.identity.service.StaffQueryService;
 import com.petcare.platform.config.ApiErrorDoc;
@@ -35,13 +40,14 @@ import jakarta.validation.Valid;
 import jakarta.validation.constraints.Positive;
 
 /**
- * {@code /api/staff/**} của identity-v1 — quản lý tài khoản nhân viên (UC08; docs/adr/0029, 0030, 0031, 0033, 0034).
- * Chỉ ADMIN,
- * SUPER_MANAGER, BRANCH_MANAGER (role khác → 403 {@code ACCESS_DENIED}, không audit); đổi chức vụ và điều chuyển chỉ
- * SUPER_MANAGER (BR-QT-05, 06). Phạm vi chi tiết và phân cấp kiểm ở service. Bị chặn khi người gọi còn phải đổi mật
- * khẩu lần đầu (BR-TK-17, {@code MustChangePasswordInterceptor}). Hiện có: danh sách (#15), tạo (#16), chi tiết (#17),
- * đổi chức vụ (#18), điều chuyển (#19), vô hiệu hóa (#20), kích hoạt lại (#21), gửi lại mật khẩu ban đầu (#22), sửa
- * email (#23 gửi OTP, #24 xác nhận).
+ * {@code /api/staff/**} của identity-v1 — quản lý tài khoản nhân viên (UC08; docs/adr/0029, 0030, 0031, 0033, 0034) và
+ * một endpoint đọc hẹp cho người gán lượt (#38, UC45; docs/adr/0089). Quản trị nhân sự: chỉ ADMIN, SUPER_MANAGER,
+ * BRANCH_MANAGER ({@link #STAFF_ADMINS}; role khác kể cả lễ tân → 403 {@code ACCESS_DENIED}, không audit); đổi chức vụ
+ * và điều chuyển chỉ SUPER_MANAGER (BR-QT-05, 06). Phạm vi chi tiết và phân cấp kiểm ở service. Bị chặn khi người gọi
+ * còn phải đổi mật khẩu lần đầu (BR-TK-17, {@code MustChangePasswordInterceptor}). Hiện có: danh sách (#15), tạo (#16),
+ * chi tiết (#17), đổi chức vụ (#18), điều chuyển (#19), vô hiệu hóa (#20), kích hoạt lại (#21), gửi lại mật khẩu ban đầu
+ * (#22), sửa email (#23 gửi OTP, #24 xác nhận). Ngoại lệ duy nhất với {@code STAFF_ADMINS}: {@code GET /assignable}
+ * (#38) dành cho người gán / gán lại lượt ({@link #ASSIGNERS}), chỉ trả 4 trường, không có email / SĐT.
  */
 @RestController
 @RequestMapping("/api/staff")
@@ -50,12 +56,18 @@ public class StaffController {
     static final String STAFF_ADMINS = "hasAnyRole('ADMIN', 'SUPER_MANAGER', 'BRANCH_MANAGER')";
     static final String SUPER_MANAGER_ONLY = "hasRole('SUPER_MANAGER')";
 
+    /** #38: quyền của lệnh gán (visit-v1 #5, chỉ RECEPTIONIST) cộng gán lại (visit-v1 #9, BRANCH_MANAGER, SUPER_MANAGER). */
+    static final String ASSIGNERS = "hasAnyRole('RECEPTIONIST','BRANCH_MANAGER','SUPER_MANAGER')";
+
     private final StaffQueryService staffQueries;
     private final StaffAdminService staffAdmin;
+    private final AssignableStaffService assignableStaff;
 
-    public StaffController(StaffQueryService staffQueries, StaffAdminService staffAdmin) {
+    public StaffController(StaffQueryService staffQueries, StaffAdminService staffAdmin,
+            AssignableStaffService assignableStaff) {
         this.staffQueries = staffQueries;
         this.staffAdmin = staffAdmin;
+        this.assignableStaff = assignableStaff;
     }
 
     /** identity-v1 #15. */
@@ -305,5 +317,35 @@ public class StaffController {
     @PreAuthorize(STAFF_ADMINS)
     public void resendInitialPassword(@PathVariable Long id) {
         staffAdmin.resendInitialPassword(id);
+    }
+
+    /**
+     * identity-v1 #38 (UC45; docs/adr/0089). Đoạn literal {@code /assignable} thắng {@code /{id}}. Mảng trả thẳng trong
+     * {@code data}, không phân trang. Tham số sai là 400 trước {@code @PreAuthorize}.
+     */
+    @Operation(operationId = "listAssignableStaff", tags = "Staff",
+            summary = "Nhân viên có thể gán lượt",
+            description = "UC45 · BR-TN-05, 06. Actor: A04, A05, A06. Quyền: A06, A05: chi nhánh mình · A04: chi nhánh "
+                + "do `branchId` chọn. Chuyển trạng thái: —. Danh sách chọn người gán (visit-v1 #5) hoặc gán lại (#9), "
+                + "không có email, SĐT hay trạng thái; `GET /staff` vẫn chỉ A03–A05. Chỉ nhân viên ACTIVE, không bị khóa, "
+                + "đúng chi nhánh và chức vụ; người online xếp trước, rồi họ tên, rồi `accountId`. Mảng trong `data`, "
+                + "không phân trang. Chi nhánh không tồn tại → mảng rỗng. Chỉ đọc, không audit, không khóa: lệnh gán "
+                + "kiểm lại dưới khóa (ADR-0061). ADR-0089.",
+            parameters = {
+                    @Parameter(name = "role", in = ParameterIn.QUERY, example = "VET",
+                            description = "VET cho nhóm Khám / Tiêm, CARETAKER cho nhóm Thẩm mỹ (BR-TN-05)"),
+                    @Parameter(name = "branchId", in = ParameterIn.QUERY, example = "1",
+                            description = "A05, A06: bỏ trống hoặc chi nhánh mình; A04: bắt buộc")})
+    @ApiErrorDoc(status = 400, description = "`MALFORMED_REQUEST` thiếu `role`, `role` ngoài VET / CARETAKER hoặc sai "
+            + "kiểu · `VALIDATION_FAILED` `branchId` ≤ 0, hoặc SUPER_MANAGER không gửi `branchId` (message `Vui lòng "
+            + "chọn chi nhánh`, không mã BR)")
+    @ApiErrorDoc(status = 403, description = "`ACCESS_DENIED` ngoài A04–A06 (ADMIN, VET, CARETAKER, CUSTOMER) · "
+            + "`ACCESS_DENIED_SCOPE_MISMATCH` A05, A06 gửi `branchId` của chi nhánh khác (không ghi audit)")
+    @GetMapping("/assignable")
+    @PreAuthorize(ASSIGNERS)
+    public ApiResponse<List<AssignableStaffResponse>> listAssignableStaff(
+            @RequestParam AssignableRole role,
+            @RequestParam(required = false) @Positive(message = "branchId phải là số dương") Long branchId) {
+        return ApiResponse.ok(assignableStaff.listAssignable(role, branchId));
     }
 }

@@ -6,7 +6,7 @@
 
 | Module | Mã | Owner | Endpoint | Đọc | Máy đọc |
 |---|---|---|---|---|---|
-| identity | TK, QT | BE-1 | 37 | [identity-v1.md](./identity-v1.md) | [openapi/identity-v1.yaml](./openapi/identity-v1.yaml) |
+| identity | TK, QT | BE-1 | 38 | [identity-v1.md](./identity-v1.md) | [openapi/identity-v1.yaml](./openapi/identity-v1.yaml) |
 | customer | KH | BE-2 | 21 | [customer-v1.md](./customer-v1.md) | [openapi/customer-v1.yaml](./openapi/customer-v1.yaml) |
 | catalog | SP (+ CK sản phẩm, dịch vụ) | BE-2 | 22 | [catalog-v1.md](./catalog-v1.md) | [openapi/catalog-v1.yaml](./openapi/catalog-v1.yaml) |
 | branch | CN (+ UC33, UC42) | BE-2 | 21 | [branch-v1.md](./branch-v1.md) | [openapi/branch-v1.yaml](./openapi/branch-v1.yaml) |
@@ -18,13 +18,13 @@
 | content | CK (trang), BV, DG | BE-2 | 22 | [content-v1.md](./content-v1.md) | [openapi/content-v1.yaml](./openapi/content-v1.yaml) |
 | care | TB | BE-1 | 10 | [care-v1.md](./care-v1.md) | [openapi/care-v1.yaml](./openapi/care-v1.yaml) |
 | report | BC | BE-2 | 7 | [report-v1.md](./report-v1.md) | [openapi/report-v1.yaml](./openapi/report-v1.yaml) |
-| **Tổng** | | | **230** | | |
+| **Tổng** | | | **231** | | |
 
 ## Tra nhanh theo use case
 
 | Use case | File |
 |---|---|
-| UC01–UC11, sửa email khách / liên kết tại quầy (UC22), bác sĩ công khai (UC15) | identity |
+| UC01–UC11, sửa email khách / liên kết tại quầy (UC22), bác sĩ công khai (UC15), nhân viên có thể gán lượt (UC45) | identity |
 | UC06 phần khách (hồ sơ khách, sổ địa chỉ), UC22–UC26 | customer |
 | UC28–UC31, dịch vụ / sản phẩm công khai (UC15, UC16) | catalog |
 | UC12, UC14, UC33, UC42, chi nhánh công khai (UC15) | branch |

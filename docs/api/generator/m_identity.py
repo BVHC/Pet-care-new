@@ -176,6 +176,12 @@ m.schema("PublicVet", {
     "accountId": "int64", "fullName": "string", "avatarUrl": "https_url?", "specialty": "string?", "bio": "string?",
     "branchId": "int64", "branchName": "string|Tên chi nhánh ACTIVE (BR-CK-01)",
 })
+m.schema("AssignableStaff", {
+    "accountId": "int64|Mã tài khoản; gửi làm `assigneeId` của visit-v1 #5, #9",
+    "fullName": "string",
+    "role": "enum:VET,CARETAKER",
+    "online": "bool|Có thao tác trong `staff.online_window_minutes` [CFG] gần nhất (BR-TN-06, chỉ là gợi ý)",
+})
 
 # ---------------- operations
 OTP_ERR = "`BR-TK-05` mã sai / hết hạn · `BR-TK-06` sai quá 5 lần, mã bị hủy"
@@ -385,3 +391,18 @@ m.op("get", "/audit-logs", "listAuditLogs", "Xem nhật ký audit", "Audit", "UC
 m.op("get", "/public/vets", "listPublicVets", "Đội ngũ bác sĩ", "Public", "UC15", "BR-TK-20, BR-CK-01", "A01, A02",
      "Public", resp="array:PublicVet", public=True, errors=(400,), query=["branchId=int64"],
      notes="Chỉ VET ACTIVE, không khóa (khóa tạm vẫn hiện), thuộc chi nhánh ACTIVE; `branchId` không phải chi nhánh ACTIVE → mảng rỗng. Sắp theo họ tên (ADR-0026).")
+
+# Số 38 = thứ tự khai báo: thêm ở cuối để không đánh số lại #25–37 mà ADR và FE đang trích (ADR-0089).
+m.op("get", "/staff/assignable", "listAssignableStaff", "Nhân viên có thể gán lượt", "Staff", "UC45", "BR-TN-05, 06",
+     "A04, A05, A06", "A06, A05: chi nhánh mình · A04: chi nhánh do `branchId` chọn", resp="array:AssignableStaff",
+     errors=(400, 401, 403),
+     err_desc={400: "`MALFORMED_REQUEST` thiếu `role`, `role` ngoài VET / CARETAKER hoặc sai kiểu · `VALIDATION_FAILED` "
+                    "`branchId` ≤ 0, hoặc SUPER_MANAGER không gửi `branchId` (message `Vui lòng chọn chi nhánh`, không mã BR)",
+               403: "`ACCESS_DENIED` ngoài A04–A06 (ADMIN, VET, CARETAKER, CUSTOMER) · `ACCESS_DENIED_SCOPE_MISMATCH` A05, A06 "
+                    "gửi `branchId` của chi nhánh khác (không ghi audit)"},
+     query=["role!=enum:VET,CARETAKER|VET cho nhóm Khám / Tiêm, CARETAKER cho nhóm Thẩm mỹ (BR-TN-05)",
+            "branchId=int64|A05, A06: bỏ trống hoặc chi nhánh mình; A04: bắt buộc"],
+     notes="Danh sách chọn người gán (visit-v1 #5) hoặc gán lại (#9), không có email, SĐT hay trạng thái; `GET /staff` vẫn chỉ "
+           "A03–A05. Chỉ nhân viên ACTIVE, không bị khóa, đúng chi nhánh và chức vụ; người online xếp trước, rồi họ tên, rồi "
+           "`accountId`. Mảng trong `data`, không phân trang. Chi nhánh không tồn tại → mảng rỗng. Chỉ đọc, không audit, "
+           "không khóa: lệnh gán kiểm lại dưới khóa (ADR-0061). ADR-0089.")

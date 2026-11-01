@@ -24,5 +24,10 @@ public record StockLotResponse(
         @JsonProperty("isDefault") boolean isDefault,
 
         @Schema(description = "Đã hết hạn (hạn dùng trước hôm nay): không xuất được (BR-KO-05)", example = "false")
-        boolean expired) {
+        boolean expired,
+
+        @Schema(description = "Lô này có hạn dùng trong [CFG] stock.expiry_warning_days ngày tới, gồm cả lô đã hết hạn "
+                + "(BR-KO-07); cùng nghĩa với cờ expiringSoon của dòng tồn. Lô mặc định (không hạn) luôn false",
+                example = "true")
+        boolean expiringSoon) {
 }

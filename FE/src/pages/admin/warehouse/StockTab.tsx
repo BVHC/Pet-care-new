@@ -13,14 +13,9 @@ import { useDebounce } from '../../../shared/hooks/useDebounce';
 import { useInventoryItems, useInventoryMutation, useStockLots } from '../../../shared/hooks/useInventory';
 import { PRODUCT_TYPE_LABELS, type ProductType } from '../../../shared/types/catalog';
 import { EXPIRY_WARNING_DAYS_DEFAULT, type InventoryItem } from '../../../shared/types/inventory';
-import { addDays } from '../../../shared/utils/branch-schedule';
-import { vnDate } from '../../../shared/utils/vn-time';
 
 const PAGE_SIZE = 20;
 const TYPES = Object.keys(PRODUCT_TYPE_LABELS) as ProductType[];
-
-/** Hạn ≤ hôm nay (giờ VN) + ngưỡng cảnh báo — cùng phép so với bộ lọc `expiringWithinDays` của BE. Lô đã hết hạn do chỗ gọi loại trước. */
-const expiresSoon = (expiryDate: string | null | undefined, today: string) => !!expiryDate && expiryDate <= addDays(today, EXPIRY_WARNING_DAYS_DEFAULT);
 
 /** UC75 — tồn theo lô / hạn dùng (BR-KO-01) và tồn tối thiểu (BR-KO-07). `canEdit`: quản lý chi nhánh đặt tồn tối thiểu. */
 export function StockTab({ canEdit }: { canEdit: boolean }) {
@@ -47,7 +42,6 @@ export function StockTab({ canEdit }: { canEdit: boolean }) {
     setPage(0);
   };
   const data = items.data;
-  const today = vnDate();
 
   return (
     <div className="space-y-4">
@@ -113,7 +107,7 @@ export function StockTab({ canEdit }: { canEdit: boolean }) {
                         {it.expiredQuantity > 0 ? (
                           <StatusBadge status="Có lô hết hạn" variant="danger" />
                         ) : (
-                          expiresSoon(it.nearestExpiryDate, today) && <StatusBadge status="Sắp hết hạn" variant="warning" />
+                          it.expiringSoon && <StatusBadge status="Sắp hết hạn" variant="warning" />
                         )}
                       </div>
                     </td>
@@ -176,7 +170,6 @@ export function StockTab({ canEdit }: { canEdit: boolean }) {
 /** Lô theo thứ tự FEFO (hạn gần nhất trước), lô đã hết hạn đánh dấu để lập phiếu điều chỉnh lý do hết hạn. */
 function LotsModal({ item, onClose }: { item: InventoryItem; onClose: () => void }) {
   const lots = useStockLots(item.productId);
-  const today = vnDate();
   return (
     <DetailModal open onOpenChange={(open) => !open && onClose()} title={`Lô hàng — ${item.productName}`} size="lg">
       {lots.isError && <FormError message={plainMessage(toApiError(lots.error))} />}
@@ -201,7 +194,7 @@ function LotsModal({ item, onClose }: { item: InventoryItem; onClose: () => void
                 <td>
                   {lot.expired ? (
                     <StatusBadge status="Đã hết hạn" variant="danger" />
-                  ) : expiresSoon(lot.expiryDate, today) ? (
+                  ) : lot.expiringSoon ? (
                     <StatusBadge status="Sắp hết hạn" variant="warning" />
                   ) : (
                     <StatusBadge status="Còn hạn" variant="success" />

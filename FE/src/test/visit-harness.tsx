@@ -6,7 +6,7 @@ import { render } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { MemoryRouter } from 'react-router-dom';
-import type { StaffResponse } from '../shared/types/identity';
+import type { AssignableStaffResponse } from '../shared/types/identity';
 import type { Visit } from '../shared/types/visit';
 import { pinClock, signInAs } from './cashier-harness';
 
@@ -62,16 +62,11 @@ export const makeVisit = (visitId: number, over: Partial<Visit> = {}): Visit => 
   ...over,
 });
 
-export const makeStaff = (accountId: number, over: Partial<StaffResponse> = {}): StaffResponse => ({
+/** Một dòng của identity-v1 #38 `GET /api/staff/assignable` (chỉ 4 trường; BE đã lọc ACTIVE, chưa khóa, đúng chi nhánh và chức vụ). */
+export const makeAssignable = (accountId: number, over: Partial<AssignableStaffResponse> = {}): AssignableStaffResponse => ({
   accountId,
-  email: `nv${accountId}@store1.vn`,
-  phone: '0900000000',
   fullName: `Nhân viên ${accountId}`,
   role: 'VET',
-  status: 'ACTIVE',
-  isLocked: false,
-  branchId: 1,
-  mustChangePassword: false,
   online: true,
   ...over,
 });

@@ -1635,6 +1635,61 @@ paths:
                     description: "HTTP status của kết quả, ví dụ 200, 201"
         "400":
           $ref: "#/components/responses/BadRequest"
+  "/staff/assignable":
+    get:
+      tags: [Staff]
+      summary: "Nhân viên có thể gán lượt"
+      description: "UC45 · BR-TN-05, 06. Actor: A04, A05, A06. Quyền: A06, A05: chi nhánh mình · A04: chi nhánh do `branchId` chọn. Chuyển trạng thái: —. Danh sách chọn người gán (visit-v1 #5) hoặc gán lại (#9), không có email, SĐT hay trạng thái; `GET /staff` vẫn chỉ A03–A05. Chỉ nhân viên ACTIVE, không bị khóa, đúng chi nhánh và chức vụ; người online xếp trước, rồi họ tên, rồi `accountId`. Mảng trong `data`, không phân trang. Chi nhánh không tồn tại → mảng rỗng. Chỉ đọc, không audit, không khóa: lệnh gán kiểm lại dưới khóa (ADR-0061). ADR-0089."
+      operationId: listAssignableStaff
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: role
+          in: query
+          required: true
+          schema:
+            type: string
+            enum: [VET, CARETAKER]
+          description: "VET cho nhóm Khám / Tiêm, CARETAKER cho nhóm Thẩm mỹ (BR-TN-05)"
+        - name: branchId
+          in: query
+          required: false
+          schema:
+            type: integer
+            format: int64
+          description: "A05, A06: bỏ trống hoặc chi nhánh mình; A04: bắt buộc"
+      responses:
+        "200":
+          description: OK
+          content:
+            "application/json":
+              schema:
+                type: object
+                required: [data, message, code]
+                properties:
+                  data:
+                    type: array
+                    items:
+                      $ref: "#/components/schemas/AssignableStaff"
+                  message:
+                    type: string
+                  code:
+                    type: integer
+                    description: "HTTP status của kết quả, ví dụ 200, 201"
+        "400":
+          description: "`MALFORMED_REQUEST` thiếu `role`, `role` ngoài VET / CARETAKER hoặc sai kiểu · `VALIDATION_FAILED` `branchId` ≤ 0, hoặc SUPER_MANAGER không gửi `branchId` (message `Vui lòng chọn chi nhánh`, không mã BR)"
+          content:
+            "application/json":
+              schema:
+                $ref: "#/components/schemas/Error"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          description: "`ACCESS_DENIED` ngoài A04–A06 (ADMIN, VET, CARETAKER, CUSTOMER) · `ACCESS_DENIED_SCOPE_MISMATCH` A05, A06 gửi `branchId` của chi nhánh khác (không ghi audit)"
+          content:
+            "application/json":
+              schema:
+                $ref: "#/components/schemas/Error"
 components:
   securitySchemes:
     bearerAuth:
@@ -2275,6 +2330,22 @@ components:
         branchName:
           type: string
           description: "Tên chi nhánh ACTIVE (BR-CK-01)"
+    AssignableStaff:
+      type: object
+      required: [accountId, fullName, role, online]
+      properties:
+        accountId:
+          type: integer
+          format: int64
+          description: "Mã tài khoản; gửi làm `assigneeId` của visit-v1 #5, #9"
+        fullName:
+          type: string
+        role:
+          type: string
+          enum: [VET, CARETAKER]
+        online:
+          type: boolean
+          description: "Có thao tác trong `staff.online_window_minutes` [CFG] gần nhất (BR-TN-06, chỉ là gợi ý)"
   responses:
     BadRequest:
       description: "VALIDATION_FAILED / MALFORMED_REQUEST: dữ liệu không hợp lệ · BUSINESS_RULE_VIOLATION: vi phạm rule, message kết thúc bằng mã rule \"(BR-…)\"."

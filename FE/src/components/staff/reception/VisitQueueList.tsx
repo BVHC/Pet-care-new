@@ -7,6 +7,7 @@ import { toast } from 'sonner';
 import { cn } from '../../../lib/utils';
 import { useFreshIds } from '../../../shared/hooks/useFreshIds';
 import { useNow } from '../../../shared/hooks/useNow';
+import { useStaffBranch } from '../../../shared/hooks/useStaffBranch';
 import { useAssignableStaff, useMarkEmergency, visitErrorMessage } from '../../../shared/hooks/useVisits';
 import { useAccount } from '../../../shared/stores/session.store';
 import { VISIT_GROUP_LABELS, visitPermissions, type Visit, type VisitServiceGroup } from '../../../shared/types/visit';
@@ -23,12 +24,18 @@ const ReassignVisitDialog = lazy(() => import('./VisitActionDialogs').then((m) =
 
 type Open = { kind: 'assign' | 'move' | 'cancel' | 'reassign'; visit: Visit } | null;
 
-/** Hiện diện và danh sách nhân viên gán được theo chức vụ: để vẽ chấm trực tuyến và biết người phụ trách có còn đủ điều kiện (cùng khóa cache với hộp thoại gán). */
+/**
+ * Hiện diện và danh sách nhân viên gán được theo chức vụ: để vẽ chấm trực tuyến và biết người phụ trách có còn đủ điều kiện (cùng khóa cache với hộp thoại gán, vì hộp gán
+ * gửi `visit.branchId` = chi nhánh của hàng đợi). Gửi chi nhánh của người xem; đợi `GET /me` trả chi nhánh xong rồi mới gọi để không gọi hai lần, còn SUPER_MANAGER không có
+ * chi nhánh thì `useAssignableStaff` tự không gọi (#38 bắt buộc `branchId` cho cấp chuỗi).
+ */
 function useStaffPresence(enabled: boolean) {
-  const vets = useAssignableStaff('VET', enabled);
-  const caretakers = useAssignableStaff('CARETAKER', enabled);
+  const { branchId, isPending } = useStaffBranch();
+  const ready = enabled && !isPending;
+  const vets = useAssignableStaff('VET', ready, branchId ?? undefined);
+  const caretakers = useAssignableStaff('CARETAKER', ready, branchId ?? undefined);
   const online = new Map([...vets.staff, ...caretakers.staff].map((s) => [s.accountId, s.online]));
-  const listOf = (query: typeof vets) => (enabled && !query.isLoading && !query.isError ? new Set(query.staff.map((s) => s.accountId)) : null);
+  const listOf = (query: typeof vets) => (query.isSuccess ? new Set(query.staff.map((s) => s.accountId)) : null);
   const assignable: Record<VisitServiceGroup, ReadonlySet<number> | null> = { MEDICAL: listOf(vets), GROOMING: listOf(caretakers) };
   return { online, assignable };
 }

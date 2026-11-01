@@ -72,7 +72,7 @@ export function AssignVisitDialog({ visit, onClose }: { visit: Visit; onClose: (
 
   return (
     <ActionDialog title="Gán người phụ trách" description={`Lượt ${who(visit)}. Người được gán gọi lượt này từ hàng đợi của mình.`} onClose={onClose}>
-      <AssigneePicker group={visit.serviceGroup} value={picked} onChange={setPicked} />
+      <AssigneePicker group={visit.serviceGroup} value={picked} onChange={setPicked} branchId={visit.branchId} />
       <Problem text={problem} />
       <Footer onClose={onClose}>
         <WsButton variant="primary" disabled={picked === null || assign.isPending} onClick={submit}>
@@ -113,7 +113,7 @@ export function ReassignVisitDialog({ visit, onClose }: { visit: Visit; onClose:
       description={`Lượt ${who(visit)} đang do ${visit.assigneeName ?? 'người phụ trách cũ'} phụ trách nhưng người này không còn đủ điều kiện. Bệnh án đã ghi được giữ nguyên.`}
       onClose={onClose}
     >
-      <AssigneePicker group={visit.serviceGroup} value={picked} onChange={setPicked} />
+      <AssigneePicker group={visit.serviceGroup} value={picked} onChange={setPicked} branchId={visit.branchId} />
       <div className="flex flex-col gap-2">
         <label htmlFor={reasonId} className="text-[13px] font-semibold">
           Lý do gán lại (bắt buộc)

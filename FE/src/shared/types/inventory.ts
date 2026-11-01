@@ -11,7 +11,10 @@ export const ADJUSTMENT_REASON_LABELS: Record<AdjustmentReason, string> = {
   COUNT_MISMATCH: 'Lệch kiểm đếm',
   OTHER: 'Khác',
 };
-/** [CFG] stock.expiry_warning_days mặc định 30 (7–180); chỉ ADMIN đọc được tham số nên bộ lọc và badge "Sắp hết hạn" dùng hằng này (BR-KO-07). */
+/**
+ * [CFG] stock.expiry_warning_days mặc định 30 (7–180). Chỉ còn dùng cho bộ lọc "Có lô hết hạn trong 30 ngày" (BE chưa có tham số lọc `expiringSoon`,
+ * ADMIN đổi [CFG] thì bộ lọc lệch); badge "Sắp hết hạn" dùng cờ `expiringSoon` của BE, không tự tính từ hằng này (BR-KO-07).
+ */
 export const EXPIRY_WARNING_DAYS_DEFAULT = 30;
 
 // ─── Nhà cung cấp (UC73, BR-KO-02) ───
@@ -120,6 +123,8 @@ export interface InventoryItem {
   nearestExpiryDate?: string | null;
   /** Tồn ở lô đã hết hạn, cần phiếu điều chỉnh lý do hết hạn (BR-KO-07). */
   expiredQuantity: number;
+  /** Có lô còn tồn với hạn dùng ≤ hôm nay + [CFG] stock.expiry_warning_days, GỒM CẢ lô đã hết hạn còn tồn; badge "Sắp hết hạn" lấy từ đây. */
+  expiringSoon: boolean;
 }
 export interface InventoryQuery {
   q?: string;
@@ -137,6 +142,8 @@ export interface StockLot {
   /** Lô duy nhất của sản phẩm không quản lý hạn dùng. */
   isDefault: boolean;
   expired: boolean;
+  /** Có hạn dùng ≤ hôm nay + [CFG] stock.expiry_warning_days (lô đã hết hạn cũng true); badge "Sắp hết hạn" lấy từ đây. */
+  expiringSoon: boolean;
 }
 
 // ─── Điều chỉnh tồn (UC76, BR-KO-06) ───

@@ -1019,7 +1019,7 @@ components:
           maxLength: 300
     InventoryItem:
       type: object
-      required: [productId, productName, sku, unit, productType, tracksExpiry, totalQuantity, availableQuantity, minQuantity, belowMin, expiredQuantity]
+      required: [productId, productName, sku, unit, productType, tracksExpiry, totalQuantity, availableQuantity, minQuantity, belowMin, expiredQuantity, expiringSoon]
       properties:
         productId:
           type: integer
@@ -1055,9 +1055,12 @@ components:
           type: integer
           format: int32
           description: "Tồn ở lô đã hết hạn, cần điều chỉnh lý do hết hạn (BR-KO-07)"
+        expiringSoon:
+          type: boolean
+          description: "Có lô còn tồn hết hạn trong [CFG] stock.expiry_warning_days ngày tới, gồm lô đã hết hạn (BR-KO-07, ADR-0088); cùng vị từ với bộ lọc expiringWithinDays"
     StockLot:
       type: object
-      required: [stockLotId, quantity, isDefault, expired]
+      required: [stockLotId, quantity, isDefault, expired, expiringSoon]
       properties:
         stockLotId:
           type: integer
@@ -1075,6 +1078,9 @@ components:
           description: "Lô duy nhất của sản phẩm không quản lý hạn dùng"
         expired:
           type: boolean
+        expiringSoon:
+          type: boolean
+          description: "Lô có hạn dùng trong [CFG] stock.expiry_warning_days ngày tới, gồm lô đã hết hạn; lô mặc định (không hạn) luôn false (BR-KO-07, ADR-0088)"
     SetMinQuantityRequest:
       type: object
       required: [minQuantity]

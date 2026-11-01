@@ -13,7 +13,7 @@
 
 ---
 
-## A. Danh sách endpoint (37)
+## A. Danh sách endpoint (38)
 
 | # | Endpoint | Thao tác | Use case | Rule |
 |---|---|---|---|---|
@@ -54,6 +54,7 @@
 | 35 | `POST /notification-templates/{code}/restore-default` | Khôi phục mẫu mặc định | UC10 | BR-QT-14, 15 |
 | 36 | `GET /audit-logs` | Xem nhật ký audit | UC11 | BR-QT-15, 16 |
 | 37 | `GET /public/vets` | Đội ngũ bác sĩ | UC15 | BR-TK-20, BR-CK-01 |
+| 38 | `GET /staff/assignable` | Nhân viên có thể gán lượt | UC45 | BR-TN-05, 06 |
 
 ---
 
@@ -98,6 +99,7 @@
 | Khôi phục mẫu mặc định | A03 | Chỉ ADMIN | — | — | Chép bản mặc định sang bản đang dùng. Đã là mặc định → 200, không ghi nhưng vẫn audit (before = after). Audit NOTIFICATION_TEMPLATE_RESTORED (docs/adr/0037). |
 | Xem nhật ký audit | A03 | Chỉ ADMIN | — | — | Chỉ đọc; không có endpoint sửa / xóa (BR-QT-16): method khác → 405. Xem không ghi audit. Mọi dòng của mọi người (kể cả hệ thống, actor null). Sắp `createdAt` giảm dần rồi `id` giảm dần; khoảng [from, to] tính cả hai mốc; giá trị lọc không tồn tại → trang rỗng; action / entityType rỗng = không lọc; size ngoài 1–100 bị kẹp, page âm = 0. `beforeData` / `afterData` là JSON object đúng như lúc ghi (thứ tự khóa không cố định), null khi không có. `totalElements` khớp `content` trong cùng một response (docs/adr/0038). |
 | Đội ngũ bác sĩ | A01, A02 | Public | — | — | Chỉ VET ACTIVE, không khóa (khóa tạm vẫn hiện), thuộc chi nhánh ACTIVE; `branchId` không phải chi nhánh ACTIVE → mảng rỗng. Sắp theo họ tên (ADR-0026). |
+| Nhân viên có thể gán lượt | A04, A05, A06 | A06, A05: chi nhánh mình · A04: chi nhánh do `branchId` chọn | — | — | Danh sách chọn người gán (visit-v1 #5) hoặc gán lại (#9), không có email, SĐT hay trạng thái; `GET /staff` vẫn chỉ A03–A05. Chỉ nhân viên ACTIVE, không bị khóa, đúng chi nhánh và chức vụ; người online xếp trước, rồi họ tên, rồi `accountId`. Mảng trong `data`, không phân trang. Chi nhánh không tồn tại → mảng rỗng. Chỉ đọc, không audit, không khóa: lệnh gán kiểm lại dưới khóa (ADR-0061). ADR-0089. |
 
 ---
 
@@ -158,6 +160,9 @@
 ### Public
 
 - **`GET /public/vets`** — Đội ngũ bác sĩ. Public. Query: `branchId?`. Response `200` mảng `PublicVet`. Lỗi: `400`.
+### Staff
+
+- **`GET /staff/assignable`** — Nhân viên có thể gán lượt. Query: `role`, `branchId?`. Response `200` mảng `AssignableStaff`. Lỗi: `400` `MALFORMED_REQUEST` thiếu `role`, `role` ngoài VET / CARETAKER hoặc sai kiểu · `VALIDATION_FAILED` `branchId` ≤ 0, hoặc SUPER_MANAGER không gửi `branchId` (message `Vui lòng chọn chi nhánh`, không mã BR) · `401` · `403` `ACCESS_DENIED` ngoài A04–A06 (ADMIN, VET, CARETAKER, CUSTOMER) · `ACCESS_DENIED_SCOPE_MISMATCH` A05, A06 gửi `branchId` của chi nhánh khác (không ghi audit).
 
 ### Schema
 
@@ -201,6 +206,7 @@ Trường có `?` là không bắt buộc / có thể null. Kiểu `email`, `dat
 - **`UpdateTemplateRequest`** — {`subject`: string, `body`: string}
 - **`AuditLogEntry`** — {`id`: int64, `actorAccountId?`: int64, `actorEmail?`: string, `action`: string, `entityType?`: string, `entityId?`: int64, `beforeData?`: object, `afterData?`: object, `reason?`: string, `ipAddress?`: string, `createdAt`: date-time}
 - **`PublicVet`** — {`accountId`: int64, `fullName`: string, `avatarUrl?`: string, `specialty?`: string, `bio?`: string, `branchId`: int64, `branchName`: string}
+- **`AssignableStaff`** — {`accountId`: int64, `fullName`: string, `role`: VET|CARETAKER, `online`: boolean}
 
 ---
 
