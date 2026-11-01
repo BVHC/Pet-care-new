@@ -1,6 +1,6 @@
 // Việc gọi điện của lễ tân (Care Task, UC87) theo docs/api/care-v1.md #1–4: chỉ RECEPTIONIST của chi nhánh được giao (BR-TB-05);
-// BE chưa có (T39), FE chạy mock. Thông báo của tôi (UC88) #5–10: mọi role đã đăng nhập (docs/adr/0039);
-// cài đặt nhận thông báo: chỉ CUSTOMER.
+// BE đã có care #1–8 (T39 của BE-1): CareTaskController #1–4 chỉ RECEPTIONIST; MyNotificationController #5–8 (Thông báo của tôi,
+// UC88) mọi role đã đăng nhập (docs/adr/0039). Care #9–10 (cài đặt nhận thông báo, chỉ CUSTOMER) chưa có BE (D025, chờ PO).
 import { apiClient } from './axios';
 import type { PageResponse } from '../types';
 import type {
@@ -22,7 +22,7 @@ export const careApi = {
   /** `status` vắng = OPEN; sắp theo hạn tăng dần. */
   listTasks: (query: CareTaskQuery = {}) => get<PageResponse<CareTask>>('/api/care-tasks', query),
   getTask: (careTaskId: number) => get<CareTask>(`/api/care-tasks/${careTaskId}`),
-  /** OPEN → DONE; 400 BR-TB-05 khi ghi chú trống; 409 khi task không còn OPEN. */
+  /** OPEN → DONE; 400 BR-TB-05 khi thiếu kết quả hoặc ghi chú trống; 409 khi task không còn OPEN. */
   completeTask: (careTaskId: number, body: CompleteCareTaskRequest) => post<CareTask>(`/api/care-tasks/${careTaskId}/complete`, body),
   /** OPEN → CANCELLED; 409 khi task không còn OPEN. */
   cancelTask: (careTaskId: number, body: CancelCareTaskRequest) => post<CareTask>(`/api/care-tasks/${careTaskId}/cancel`, body),

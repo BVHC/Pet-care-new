@@ -191,6 +191,9 @@ const getTask = (auth: object, id: number | string) => client.get(`/api/care-tas
 const complete = (auth: object, id: number | string, body: unknown) => client.post(`/api/care-tasks/${id}/complete`, body, auth);
 const cancel = (auth: object, id: number | string, body: unknown) => client.post(`/api/care-tasks/${id}/cancel`, body, auth);
 const done = { result: 'REACHED', note: 'Khách sẽ ghé chiều nay' };
+/** Nguyên văn BE (BR-TB-05): MỘT câu cho cả ba ca thiếu kết quả / ghi chú trống / thiếu cả hai; hủy thì một câu về lý do. */
+const BR_COMPLETE = 'Vui lòng chọn kết quả và nhập ghi chú (BR-TB-05)';
+const BR_CANCEL = 'Vui lòng nhập lý do hủy (BR-TB-05)';
 
 type RawState = { careTasks: Array<Record<string, unknown>> };
 const rawState = () => JSON.parse(localStorage.getItem(CARE_KEY)!) as RawState;
@@ -372,7 +375,7 @@ describe('Care Task', () => {
       const missing = await failure(getTask(auth, 999));
       expect(missing.status).toBe(404);
       expect(missing.data.errorCode).toBe('RESOURCE_NOT_FOUND');
-      expect(missing.data.message).toBe('Không tìm thấy việc gọi điện #999');
+      expect(missing.data.message).toBe('Không tìm thấy việc chăm sóc khách #999');
       expect((await failure(getTask(auth, 0))).status).toBe(404);
       const bad = await failure(getTask(auth, 'abc'));
       expect(bad.status).toBe(400);
@@ -421,7 +424,7 @@ describe('Care Task', () => {
     });
   });
 
-  describe('thứ tự lỗi: 400 body / path → 403 vai trò → 404 / 403 phạm vi → 400 BR-TB-05 → 409', () => {
+  describe('thứ tự lỗi: 400 path / body sai kiểu / @Size → 403 vai trò → 404 → 403 phạm vi → 400 BR-TB-05 → 409', () => {
     it('body sai đến trước vai trò', async () => {
       const res = await failure(complete(await as('manager@store1.vn'), 5, { result: 'MAYBE', note: 'x' }));
       expect([res.status, res.data.errorCode]).toEqual([400, 'MALFORMED_REQUEST']);
@@ -439,7 +442,7 @@ describe('Care Task', () => {
 
     it('404 đến trước BR-TB-05', async () => {
       const res = await failure(complete(await desk(), 999, { result: 'REACHED', note: '   ' }));
-      expect([res.status, res.data.errorCode, res.data.message]).toEqual([404, 'RESOURCE_NOT_FOUND', 'Không tìm thấy việc gọi điện #999']);
+      expect([res.status, res.data.errorCode, res.data.message]).toEqual([404, 'RESOURCE_NOT_FOUND', 'Không tìm thấy việc chăm sóc khách #999']);
     });
 
     it('phạm vi chi nhánh đến trước BR-TB-05 và 409', async () => {
@@ -454,6 +457,66 @@ describe('Care Task', () => {
       const res = await failure(complete(await desk(), 1, { result: 'REACHED', note: ' ' }));
       expect([res.status, res.data.errorCode]).toEqual([400, 'BUSINESS_RULE_VIOLATION']);
       expect((await failure(complete(await desk(), 1, done))).data.errorCode).toBe('INVALID_STATE_TRANSITION');
+    });
+
+    it.each([
+      ['thiếu cả result và note', {}],
+      ['thiếu result', { note: 'ok' }],
+    ])('BR-TB-05 đến trước 409: task đã xong, %s → vẫn báo BR-TB-05 (không phải 409)', async (_name, body) => {
+      const res = await failure(complete(await desk(), 1, body));
+      expect([res.status, res.data.errorCode, res.data.message]).toEqual([400, 'BUSINESS_RULE_VIOLATION', BR_COMPLETE]);
+    });
+
+    it.each([
+      ['đã xong', 1],
+      ['đã hủy', 4],
+    ])('BR-TB-05 đến trước 409: hủy task %s với lý do trống → vẫn báo thiếu lý do (không phải 409)', async (_name, id) => {
+      const auth = await desk();
+      for (const body of [{}, { reason: '' }, { reason: '   ' }]) {
+        const res = await failure(cancel(auth, id, body));
+        expect([res.status, res.data.errorCode, res.data.message]).toEqual([400, 'BUSINESS_RULE_VIOLATION', BR_CANCEL]);
+      }
+      expect((await failure(cancel(auth, id, { reason: 'Hủy nhầm' }))).data.errorCode).toBe('INVALID_STATE_TRANSITION');
+    });
+
+    it('vai trò đến trước BR-TB-05: bác sĩ gửi body thiếu / lý do khoảng trắng → 403, không phải 400', async () => {
+      const vet = await as('doctor@store1.vn');
+      for (const call of [() => complete(vet, 5, {}), () => cancel(vet, 5, { reason: '   ' })]) {
+        const res = await failure(call());
+        expect([res.status, res.data.errorCode]).toEqual([403, 'ACCESS_DENIED']);
+      }
+    });
+
+    it.each([
+      ['hoàn tất {}', (auth: object) => complete(auth, 999, {})],
+      ['hoàn tất note trống', (auth: object) => complete(auth, 999, { result: 'REACHED', note: '' })],
+      ['hủy {}', (auth: object) => cancel(auth, 999, {})],
+      ['hủy reason trống', (auth: object) => cancel(auth, 999, { reason: '' })],
+    ])('404 đến trước BR-TB-05: id không tồn tại, %s → 404 chứ không phải 400', async (_name, call) => {
+      const res = await failure(call(await desk()));
+      expect([res.status, res.data.errorCode, res.data.message]).toEqual([404, 'RESOURCE_NOT_FOUND', 'Không tìm thấy việc chăm sóc khách #999']);
+    });
+
+    it.each([
+      ['hoàn tất {}', (auth: object) => complete(auth, 22, {})],
+      ['hoàn tất thiếu result', (auth: object) => complete(auth, 22, { note: 'ok' })],
+      ['hủy {}', (auth: object) => cancel(auth, 22, {})],
+      ['hủy reason khoảng trắng', (auth: object) => cancel(auth, 22, { reason: '   ' })],
+    ])('403 phạm vi đến trước BR-TB-05: task chi nhánh khác, %s → 403 ACCESS_DENIED_SCOPE_MISMATCH', async (_name, call) => {
+      await addBranch2Task(5, 22);
+      const res = await failure(call(await desk()));
+      expect([res.status, res.data.errorCode]).toEqual([403, 'ACCESS_DENIED_SCOPE_MISMATCH']);
+      expect(rawState().careTasks.find((t) => t.careTaskId === 22)).toMatchObject({ status: 'OPEN', result: null, handledBy: null });
+    });
+
+    it('@Size đến trước vai trò: bác sĩ gửi note 2001 ký tự / reason 301 ký tự → 400 VALIDATION_FAILED, không phải 403', async () => {
+      const vet = await as('doctor@store1.vn');
+      const longNote = await failure(complete(vet, 5, { result: 'REACHED', note: 'x'.repeat(2001) }));
+      expect([longNote.status, longNote.data.errorCode]).toEqual([400, 'VALIDATION_FAILED']);
+      expect(longNote.data.message).toBe('note: Ghi chú tối đa 2000 ký tự');
+      const longReason = await failure(cancel(vet, 5, { reason: 'x'.repeat(301) }));
+      expect([longReason.status, longReason.data.errorCode]).toEqual([400, 'VALIDATION_FAILED']);
+      expect(longReason.data.message).toBe('reason: Lý do tối đa 300 ký tự');
     });
   });
 
@@ -491,13 +554,30 @@ describe('Care Task', () => {
     });
 
     it.each([
-      ['thiếu cả result và note', {}, 'VALIDATION_FAILED', ['result:', 'note:']],
-      ['thiếu result', { note: 'x' }, 'VALIDATION_FAILED', ['result:']],
-      ['thiếu note', { result: 'REACHED' }, 'VALIDATION_FAILED', ['note:']],
-      ['note dài 501 ký tự', { result: 'REACHED', note: 'x'.repeat(501) }, 'VALIDATION_FAILED', ['note:']],
+      ['thiếu cả result và note', {}],
+      ['thiếu result', { note: 'ok' }],
+      ['result null', { result: null, note: 'ok' }],
+      ['thiếu note', { result: 'REACHED' }],
+      ['note null', { result: 'REACHED', note: null }],
+      ['note rỗng', { result: 'REACHED', note: '' }],
+      ['note toàn khoảng trắng', { result: 'REACHED', note: '   ' }],
+      ['note toàn khoảng trắng, xuống dòng, tab', { result: 'REACHED', note: ' \n\t ' }],
+    ])('%s → 400 BUSINESS_RULE_VIOLATION (BR-TB-05), MỘT câu duy nhất của BE, task vẫn đang chờ', async (_name, body) => {
+      const auth = await desk();
+      const before = await everyTask(auth);
+      const res = await failure(complete(auth, 5, body));
+      expect(res.status).toBe(400);
+      expect(res.data.errorCode).toBe('BUSINESS_RULE_VIOLATION');
+      expect(res.data.message).toBe(BR_COMPLETE);
+      expect(await everyTask(auth)).toEqual(before);
+      expect((await getTask(auth, 5)).data.data).toMatchObject({ status: 'OPEN', result: null, note: null, handledBy: null });
+    });
+
+    it.each([
+      ['note dài 2001 ký tự', { result: 'REACHED', note: 'x'.repeat(2001) }, 'VALIDATION_FAILED', ['note: Ghi chú tối đa 2000 ký tự']],
       ['result ngoài enum', { result: 'MAYBE', note: 'x' }, 'MALFORMED_REQUEST', []],
       ['note không phải chuỗi', { result: 'REACHED', note: 5 }, 'MALFORMED_REQUEST', []],
-    ])('%s → 400 %s, không ghi gì', async (_name, body, code, fields) => {
+    ])('%s → 400, không ghi gì', async (_name, body, code, fields) => {
       const auth = await desk();
       const before = await everyTask(auth);
       const res = await failure(complete(auth, 5, body));
@@ -507,20 +587,10 @@ describe('Care Task', () => {
       expect(await everyTask(auth)).toEqual(before);
     });
 
-    it('ghi chú dài đúng 500 ký tự được chấp nhận', async () => {
-      const res = await complete(await desk(), 5, { result: 'REACHED', note: 'x'.repeat(500) });
+    it('ghi chú dài đúng 2000 ký tự được chấp nhận', async () => {
+      const res = await complete(await desk(), 5, { result: 'REACHED', note: 'x'.repeat(2000) });
       expect(res.status).toBe(200);
-      expect(res.data.data.note).toHaveLength(500);
-    });
-
-    it('ghi chú toàn khoảng trắng → 400 BUSINESS_RULE_VIOLATION (BR-TB-05), task vẫn đang chờ', async () => {
-      const auth = await desk();
-      const before = await everyTask(auth);
-      const res = await failure(complete(auth, 5, { result: 'REACHED', note: ' \n\t ' }));
-      expect(res.status).toBe(400);
-      expect(res.data.errorCode).toBe('BUSINESS_RULE_VIOLATION');
-      expect(res.data.message).toMatch(/\(BR-TB-05\)$/);
-      expect(await everyTask(auth)).toEqual(before);
+      expect(res.data.data.note).toHaveLength(2000);
     });
 
     it.each([
@@ -532,7 +602,7 @@ describe('Care Task', () => {
       const res = await failure(complete(auth, id, done));
       expect(res.status).toBe(409);
       expect(res.data.errorCode).toBe('INVALID_STATE_TRANSITION');
-      expect(res.data.message).toBe(`Không thể chuyển trạng thái CareTask từ ${from} sang DONE`);
+      expect(res.data.message).toBe(`Không thể chuyển trạng thái việc chăm sóc khách từ ${from} sang DONE`);
       expect(await everyTask(auth)).toEqual(before);
     });
 
@@ -564,9 +634,23 @@ describe('Care Task', () => {
     });
 
     it.each([
-      ['thiếu reason', {}, 'VALIDATION_FAILED'],
-      ['reason rỗng', { reason: '' }, 'VALIDATION_FAILED'],
-      ['reason toàn khoảng trắng', { reason: '   ' }, 'VALIDATION_FAILED'],
+      ['thiếu reason', {}],
+      ['reason null', { reason: null }],
+      ['reason rỗng', { reason: '' }],
+      ['reason toàn khoảng trắng', { reason: '   ' }],
+      ['reason toàn khoảng trắng, xuống dòng, tab', { reason: ' \n\t ' }],
+    ])('%s → 400 BUSINESS_RULE_VIOLATION (BR-TB-05), MỘT câu của BE, task vẫn đang chờ', async (_name, body) => {
+      const auth = await desk();
+      const before = await everyTask(auth);
+      const res = await failure(cancel(auth, 5, body));
+      expect(res.status).toBe(400);
+      expect(res.data.errorCode).toBe('BUSINESS_RULE_VIOLATION');
+      expect(res.data.message).toBe(BR_CANCEL);
+      expect(await everyTask(auth)).toEqual(before);
+      expect((await getTask(auth, 5)).data.data).toMatchObject({ status: 'OPEN', cancelReason: null, handledBy: null });
+    });
+
+    it.each([
       ['reason dài 301 ký tự', { reason: 'x'.repeat(301) }, 'VALIDATION_FAILED'],
       ['reason không phải chuỗi', { reason: 5 }, 'MALFORMED_REQUEST'],
     ])('%s → 400 %s, không ghi gì', async (_name, body, code) => {
@@ -594,7 +678,7 @@ describe('Care Task', () => {
       const res = await failure(cancel(auth, id, { reason: 'Hủy nhầm' }));
       expect(res.status).toBe(409);
       expect(res.data.errorCode).toBe('INVALID_STATE_TRANSITION');
-      expect(res.data.message).toBe(`Không thể chuyển trạng thái CareTask từ ${from} sang CANCELLED`);
+      expect(res.data.message).toBe(`Không thể chuyển trạng thái việc chăm sóc khách từ ${from} sang CANCELLED`);
       expect(await everyTask(auth)).toEqual(before);
     });
   });

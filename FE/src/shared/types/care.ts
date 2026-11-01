@@ -119,5 +119,5 @@ export const CARE_TASK_STATUS_LABELS: Record<CareTaskStatus, string> = { OPEN: '
 
 export const CARE_TASK_RESULT_LABELS: Record<CareTaskResult, string> = { REACHED: 'Liên hệ được', UNREACHABLE: 'Không liên lạc được' };
 
-/** `reason` ≤ 300 theo care-v1 (CancelCareTaskRequest); `note` ≤ 500 là giới hạn của FE / mock, hợp đồng không nêu (ASSUMPTION C8). */
-export const CARE_TASK_LIMITS = { reason: 300, note: 500 } as const;
+/** care-v1 và BE (`@Size`, ADR-0080): `note` (CompleteCareTaskRequest) ≤ 2000, `reason` (CancelCareTaskRequest) ≤ 300. */
+export const CARE_TASK_LIMITS = { reason: 300, note: 2000 } as const;

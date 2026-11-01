@@ -260,8 +260,8 @@ describe('AdminCareTasksPage (UC87 — lễ tân)', () => {
       const unreachable = within(dialog).getByRole('radio', { name: 'Không liên lạc được' });
       expect(reached).not.toBeChecked();
       expect(unreachable).not.toBeChecked();
-      expect(within(dialog).getByText('0/500')).toBeInTheDocument();
-      expect(within(dialog).getByLabelText('Ghi chú')).toHaveAttribute('maxlength', '500');
+      expect(within(dialog).getByText('0/2000')).toBeInTheDocument();
+      expect(within(dialog).getByLabelText('Ghi chú')).toHaveAttribute('maxlength', '2000');
 
       await user.click(within(dialog).getByRole('button', { name: 'Lưu kết quả' }));
       expect(within(dialog).getByRole('alert')).toHaveTextContent('Chọn kết quả cuộc gọi.');
@@ -275,7 +275,7 @@ describe('AdminCareTasksPage (UC87 — lễ tân)', () => {
 
       await user.clear(within(dialog).getByLabelText('Ghi chú'));
       await user.type(within(dialog).getByLabelText('Ghi chú'), NOTE);
-      expect(within(dialog).getByText('26/500')).toBeInTheDocument();
+      expect(within(dialog).getByText('26/2000')).toBeInTheDocument();
       await user.click(within(dialog).getByRole('button', { name: 'Lưu kết quả' }));
 
       await waitFor(() => expect(screen.queryByRole('dialog')).not.toBeInTheDocument());
@@ -326,7 +326,7 @@ describe('AdminCareTasksPage (UC87 — lễ tân)', () => {
 
     it('lỗi BR-TB-05 của máy chủ hiện ngay trong hộp thoại, không đóng', async () => {
       vi.spyOn(careApi, 'completeTask').mockRejectedValueOnce(
-        new ApiError('BUSINESS_RULE_VIOLATION', 'Vui lòng nhập ghi chú kết quả cuộc gọi (BR-TB-05)', 400),
+        new ApiError('BUSINESS_RULE_VIOLATION', 'Vui lòng chọn kết quả và nhập ghi chú (BR-TB-05)', 400),
       );
       const user = renderPage();
       await user.click(buttonIn(await rowWith(/Vaccine Dại/), /^Đã gọi/));
@@ -335,7 +335,8 @@ describe('AdminCareTasksPage (UC87 — lễ tân)', () => {
       await user.type(within(dialog).getByLabelText('Ghi chú'), 'Đã gọi');
       await user.click(within(dialog).getByRole('button', { name: 'Lưu kết quả' }));
 
-      expect(await within(dialog).findByRole('alert')).toHaveTextContent('Vui lòng nhập ghi chú kết quả cuộc gọi');
+      // FE bỏ đuôi rule (plainMessage): hiện đúng câu của BE, không kèm "(BR-TB-05)".
+      expect(await within(dialog).findByRole('alert')).toHaveTextContent(/^Vui lòng chọn kết quả và nhập ghi chú$/);
       expect(within(dialog).getByRole('alert')).not.toHaveTextContent('BR-TB-05');
       expect(screen.getByRole('dialog')).toBeInTheDocument();
     });
@@ -351,7 +352,7 @@ describe('AdminCareTasksPage (UC87 — lễ tân)', () => {
       await careApi.completeTask(5, { result: 'REACHED', note: 'Đồng nghiệp đã gọi' });
       await user.click(within(dialog).getByRole('button', { name: 'Lưu kết quả' }));
 
-      expect(await within(dialog).findByRole('alert')).toHaveTextContent('Không thể chuyển trạng thái CareTask từ DONE sang DONE');
+      expect(await within(dialog).findByRole('alert')).toHaveTextContent('Không thể chuyển trạng thái việc chăm sóc khách từ DONE sang DONE');
       await waitFor(() => expect(screen.queryByText(/Vaccine Dại/)).not.toBeInTheDocument());
       expect(screen.getByRole('dialog')).toBeInTheDocument();
       await user.click(within(dialog).getByRole('button', { name: 'Hủy' }));
@@ -398,7 +399,20 @@ describe('AdminCareTasksPage (UC87 — lễ tân)', () => {
       await user.type(within(dialog).getByLabelText('Lý do hủy'), 'Không cần gọi nữa');
       await careApi.cancelTask(8, { reason: 'Đồng nghiệp đã hủy' });
       await user.click(within(dialog).getByRole('button', { name: 'Hủy việc này' }));
-      expect(await within(dialog).findByRole('alert')).toHaveTextContent('Không thể chuyển trạng thái CareTask từ CANCELLED sang CANCELLED');
+      expect(await within(dialog).findByRole('alert')).toHaveTextContent('Không thể chuyển trạng thái việc chăm sóc khách từ CANCELLED sang CANCELLED');
+    });
+
+    it('lỗi BR-TB-05 của máy chủ hiện ngay trong hộp thoại, không đuôi rule, không đóng', async () => {
+      vi.spyOn(careApi, 'cancelTask').mockRejectedValueOnce(new ApiError('BUSINESS_RULE_VIOLATION', 'Vui lòng nhập lý do hủy (BR-TB-05)', 400));
+      const user = renderPage();
+      await user.click(buttonIn(await rowWith(/Hẹn tái khám/), /^Hủy việc/));
+      const dialog = screen.getByRole('dialog');
+      await user.type(within(dialog).getByLabelText('Lý do hủy'), 'Không cần gọi nữa');
+      await user.click(within(dialog).getByRole('button', { name: 'Hủy việc này' }));
+
+      expect(await within(dialog).findByRole('alert')).toHaveTextContent(/^Vui lòng nhập lý do hủy$/);
+      expect(within(dialog).getByRole('alert')).not.toHaveTextContent('BR-TB-05');
+      expect(screen.getByRole('dialog')).toBeInTheDocument();
     });
   });
 
