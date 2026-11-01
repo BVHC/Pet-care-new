@@ -255,7 +255,7 @@ describe('profile link (UC07, BR-TK-19)', () => {
     expect(stranger.data).toMatchObject({ errorCode: 'RESOURCE_NOT_FOUND', message: 'Không tìm thấy hồ sơ khách #1' });
 
     const sent = await client.post('/api/me/link/otp', { customerId: 3 }, auth);
-    expect(sent.data).toMatchObject({ message: 'Đã gửi mã xác thực tới email của hồ sơ', data: { maskedEmail: 'lo***@gmail.com' } });
+    expect(sent.data).toMatchObject({ message: 'Đã gửi mã xác thực tới email của hồ sơ', data: { maskedEmail: 'lo***@gmail.com', codeLength: 6 } });
     rule(await failure(client.post('/api/me/link/otp', { customerId: 3 }, auth)), 'Vui lòng chờ 60 giây trước khi gửi lại mã OTP (BR-TK-07)');
   });
 

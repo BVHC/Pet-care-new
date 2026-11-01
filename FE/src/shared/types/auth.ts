@@ -64,6 +64,8 @@ export interface RegistrationResponse {
   email: string;
   status: 'PENDING';
   otpResendAvailableAt: string;
+  /** Độ dài mã OTP vừa gửi (BE `otp.code_length` 4–8). Vắng thì FE dùng 6 (xem `otpLengthOf`). */
+  otpCodeLength?: number;
 }
 
 export interface VerifyOtpRequest {
@@ -81,6 +83,8 @@ export interface VerificationResponse {
 export interface OtpSentResponse {
   resendAvailableAt: string;
   maskedEmail?: string | null;
+  /** Độ dài mã OTP vừa gửi (BE `otp.code_length` 4–8). Vắng thì FE dùng 6 (xem `otpLengthOf`). */
+  codeLength?: number;
 }
 
 export interface ResetPasswordRequest {

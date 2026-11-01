@@ -34,7 +34,10 @@ export function AdminNotificationTemplatesPage() {
 
   const list = data ?? [];
 
+  // Mở thao tác mới thì bỏ lỗi của lần lưu trước (FormError theo mutation, thanh lỗi cấp trang theo notice).
   const open = (t: NotificationTemplate) => {
+    update.reset();
+    setNotice(null);
     setEditing(t);
     setSubject(t.subject ?? '');
     setBody(t.body);
@@ -59,6 +62,7 @@ export function AdminNotificationTemplatesPage() {
     try {
       await update.mutateAsync({ code: editing.code, subject: trimmed, body });
       toast.success(`Đã cập nhật mẫu ${editing.code}`);
+      setNotice(null);
       setEditing(null);
     } catch (e) { handleError(e); }
   };
@@ -67,6 +71,7 @@ export function AdminNotificationTemplatesPage() {
     try {
       await restore.mutateAsync(code);
       toast.success(`Đã khôi phục mặc định mẫu ${code}`);
+      setNotice(null);
     } catch (e) { handleError(e); }
   };
 
@@ -144,7 +149,7 @@ export function AdminNotificationTemplatesPage() {
         <Field label="Tiêu đề *">
           {(id) => <Input id={id} value={subject} onChange={(e) => setSubject(e.target.value)} maxLength={255} required />}
         </Field>
-        <Field label="Nội dung *" hint="Dùng biến như {fullName}, {code}… đã liệt kê ở trên.">
+        <Field label="Nội dung *" hint="Dùng đúng các biến đã liệt kê ở trên.">
           {(id) => (
             <textarea
               id={id}

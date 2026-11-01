@@ -1,5 +1,5 @@
-// Chi nhánh của nhân viên khi BE thật KHÔNG trả `branchId` ở login (chỉ `GET /me` → staffProfile.branchId). Mock login có sẵn
-// `branchId` nên che lỗi này (T49): các ca dưới đây bỏ `branchId` khỏi phiên để dựng đúng cái BE trả.
+// Chi nhánh của nhân viên khi BE thật KHÔNG trả `branchId` ở login (chỉ `GET /me` → staffProfile.branchId). Trước 1/11 mock login có sẵn
+// `branchId` nên che lỗi này (T49); nay mock đã khớp BE, `stripBranchFromLogin` chỉ còn là bảo hiểm khi mock đổi lại.
 import { renderHook, waitFor } from '@testing-library/react';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import type { ReactNode } from 'react';

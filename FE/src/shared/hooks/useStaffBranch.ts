@@ -1,4 +1,4 @@
-// Chi nhánh của nhân viên đang đăng nhập. BE thật không trả `branchId` ở `POST /auth/login` (chỉ ở `GET /me` → `staffProfile.branchId`), mock thì có sẵn;
+// Chi nhánh của nhân viên đang đăng nhập. BE thật không trả `branchId` ở `POST /auth/login` (chỉ ở `GET /me` → `staffProfile.branchId`), mock cũng không trả (đã khớp BE từ 1/11);
 // `login` đã gộp `branchId` vào phiên (session.store.ts), còn phiên cũ lưu trước đó thì hỏi `GET /me` một lần khi chưa có.
 import { useQuery } from '@tanstack/react-query';
 import { profileApi } from '../api/profile.api';

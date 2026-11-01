@@ -63,6 +63,19 @@ export function AdminAccountsPage() {
     toast.error(msg);
     setNotice({ kind: 'error', text: msg });
   };
+  // Mở thao tác mới thì bỏ lỗi của lần trước (FormError theo mutation, thanh lỗi cấp trang theo notice).
+  const openLock = (a: { id: number; email: string }) => {
+    lock.reset();
+    setNotice(null);
+    setLockTarget({ id: a.id, name: a.email });
+    setReason('');
+  };
+  const openUnlock = (a: { id: number; email: string }) => {
+    unlock.reset();
+    setNotice(null);
+    setUnlockTarget({ id: a.id, name: a.email });
+    setReason('');
+  };
 
   if (account?.role !== 'ADMIN') {
     return (
@@ -150,12 +163,12 @@ export function AdminAccountsPage() {
                     <td>
                       <div className="flex justify-end gap-1">
                         {!a.isLocked && !isMe && (
-                          <Button size="sm" variant="ghost" onClick={() => { setLockTarget({ id: a.id, name: a.email }); setReason(''); }} title="Khóa" aria-label={`Khóa ${a.email}`}>
+                          <Button size="sm" variant="ghost" onClick={() => openLock(a)} title="Khóa" aria-label={`Khóa ${a.email}`}>
                             <Lock className="h-4 w-4" />
                           </Button>
                         )}
                         {a.isLocked && (
-                          <Button size="sm" variant="ghost" onClick={() => { setUnlockTarget({ id: a.id, name: a.email }); setReason(''); }} title="Mở khóa" aria-label={`Mở khóa ${a.email}`}>
+                          <Button size="sm" variant="ghost" onClick={() => openUnlock(a)} title="Mở khóa" aria-label={`Mở khóa ${a.email}`}>
                             <Unlock className="h-4 w-4" />
                           </Button>
                         )}
@@ -179,6 +192,7 @@ export function AdminAccountsPage() {
           try {
             await lock.mutateAsync({ id: lockTarget.id, reason });
             toast.success(`Đã khóa ${lockTarget.name}`);
+            setNotice(null);
             setLockTarget(null);
           } catch (e) { handleError(e); }
         }}
@@ -188,7 +202,7 @@ export function AdminAccountsPage() {
       >
         <NoticeBar notice={{ kind: 'success', text: 'Mọi phiên đăng nhập sẽ bị hủy ngay. Nhân viên / khách phải dùng lại khi được mở khóa.' }} />
         <Field label="Lý do khóa *" hint="Lưu vào nhật ký kiểm toán (UC11).">
-          {(id) => <Input id={id} value={reason} onChange={(e) => setReason(e.target.value)} placeholder="VD: Nhân viên vi phạm BR-CS-01" required />}
+          {(id) => <Input id={id} value={reason} onChange={(e) => setReason(e.target.value)} placeholder="VD: Tài khoản có dấu hiệu bị chiếm" required />}
         </Field>
         {lock.isError && <FormError message={plainMessage(toApiError(lock.error))} />}
       </FormModal>
@@ -202,6 +216,7 @@ export function AdminAccountsPage() {
           try {
             await unlock.mutateAsync({ id: unlockTarget.id, reason });
             toast.success(`Đã mở khóa ${unlockTarget.name}`);
+            setNotice(null);
             setUnlockTarget(null);
           } catch (e) { handleError(e); }
         }}

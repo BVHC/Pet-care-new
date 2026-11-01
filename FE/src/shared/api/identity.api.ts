@@ -1,5 +1,5 @@
-// Identity admin API — docs/api/identity-v1.md #15–36 và #38 (Staff, tài khoản của hồ sơ khách tại quầy, Accounts, Configuration, Audit).
-// Bốn màn admin và hồ sơ khách ở quầy gọi qua file này; tầng hooks gọi tiếp từ đây.
+// Identity admin API — docs/api/identity-v1.md #15–38 (Staff, tài khoản của hồ sơ khách tại quầy, Accounts, Configuration, Audit; #37 `listPublicVets` công khai).
+// Năm màn admin (Users, Accounts, SystemConfigs, NotificationTemplates, Audit) và hồ sơ khách ở quầy gọi qua file này; tầng hooks gọi tiếp từ đây.
 import { apiClient } from './axios';
 import type { PageResponse } from '../types';
 import type { AccountSummary } from '../types/auth';

@@ -10,6 +10,7 @@ import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } f
 import { Input } from '@/components/ui/input';
 import { fieldErrorsOf, plainMessage, toApiError } from '@/shared/api/api-error';
 import type { CustomerProfile } from '@/shared/types/profile';
+import { otpLengthOf } from '@/shared/utils/otp';
 import {
   emailError,
   otpError,
@@ -21,9 +22,15 @@ import {
 const DIALOG = 'ws-portal border-(--ws-line) bg-(--ws-surface) text-(--ws-ink) sm:max-w-md';
 const ID_CHECK = 'Đã đối chiếu CCCD của khách với họ tên hồ sơ';
 
-/** Lỗi theo trường của BE (VALIDATION_FAILED) hoặc câu báo chung. */
+/** Câu 404 "không có đường dẫn" của BE (GlobalExceptionHandler, NoResourceFound/NoHandlerFound): khác 404 thực thể "không tìm thấy <đối tượng>". */
+const NO_ROUTE_MESSAGE = 'Không tìm thấy đường dẫn yêu cầu';
+
+/** Lỗi theo trường của BE (VALIDATION_FAILED) hoặc câu báo chung; BE chưa có đường dẫn UC22 thì báo chưa hỗ trợ. */
 function messageOf(e: unknown): string {
   const error = toApiError(e);
+  if (error.statusCode === 404 && error.errorCode === 'RESOURCE_NOT_FOUND' && error.message === NO_ROUTE_MESSAGE) {
+    return 'Chức năng này chưa được máy chủ hỗ trợ. Vui lòng liên hệ quản trị viên.';
+  }
   const fields = Object.values(fieldErrorsOf(error));
   return fields.length ? fields.join('. ') : plainMessage(error);
 }
@@ -53,6 +60,8 @@ function AccountEmailForm({ customerId, onClose }: { customerId: number; onClose
   const [newEmail, setNewEmail] = useState('');
   const [code, setCode] = useState('');
   const [sentTo, setSentTo] = useState<string | null>(null);
+  // Độ dài mã BE báo ở response gửi mã (`codeLength`); vắng thì 6. Mỗi lần gửi lại đọc lại.
+  const [codeLength, setCodeLength] = useState<number | undefined>();
   const [error, setError] = useState('');
   const send = useSendCustomerEmailChange(customerId);
   const confirm = useConfirmCustomerEmailChange(customerId);
@@ -65,6 +74,7 @@ function AccountEmailForm({ customerId, onClose }: { customerId: number; onClose
     send.mutate(newEmail.trim(), {
       onSuccess: (result) => {
         setSentTo(result.maskedEmail ?? newEmail.trim());
+        setCodeLength(result.codeLength);
         setCode('');
       },
       onError: (err) => setError(messageOf(err)),
@@ -73,7 +83,7 @@ function AccountEmailForm({ customerId, onClose }: { customerId: number; onClose
 
   const confirmCode = (e: FormEvent) => {
     e.preventDefault();
-    const invalid = otpError(code);
+    const invalid = otpError(code, codeLength);
     setError(invalid);
     if (invalid) return;
     confirm.mutate(code.trim(), {
@@ -92,7 +102,9 @@ function AccountEmailForm({ customerId, onClose }: { customerId: number; onClose
           Đã gửi mã tới <strong>{sentTo}</strong>. Khách mở email mới và đọc mã cho lễ tân.
         </p>
         <Field label="Mã OTP">
-          {(id) => <Input id={id} inputMode="numeric" maxLength={6} value={code} onChange={(e) => setCode(e.target.value)} autoFocus />}
+          {(id) => (
+            <Input id={id} inputMode="numeric" maxLength={otpLengthOf(codeLength)} value={code} onChange={(e) => setCode(e.target.value)} autoFocus />
+          )}
         </Field>
         <FormError message={error} />
         <div className="flex flex-wrap justify-end gap-2">

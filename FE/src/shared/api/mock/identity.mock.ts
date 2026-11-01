@@ -1,6 +1,6 @@
-// Mock module identity (docs/api/identity-v1.md): đăng ký + OTP, đăng nhập, đăng xuất,
-// quên / đặt lại mật khẩu, GET /me, đổi mật khẩu, hồ sơ nhân viên, liên kết hồ sơ (UC07).
-// Quản trị (UC08–11): staff, accounts, system-configs, notification-templates, audit-logs. Câu báo lỗi chép từ BE.
+// Mock module identity (docs/api/identity-v1.md): đăng ký + OTP, đăng nhập, đăng xuất, quên / đặt lại mật khẩu, GET /me, đổi mật khẩu, hồ sơ nhân viên,
+// liên kết hồ sơ (UC07). Quản trị (UC08–11: staff, accounts, system-configs, notification-templates, audit-logs) KHÔNG ở file này mà ở identity-admin.mock.ts (adminIdentityRoutes). Câu báo lỗi chép từ BE.
+// Cuối file (identityRoutes) còn UC22 (identity-v1 #25–27: lễ tân sửa email / liên kết tài khoản của hồ sơ khách tại quầy): BE CHƯA có controller cho các route này, nên trên BE thật chúng trả 404.
 import type { AccountSummary, AccountStatus, LoginResponse, Role } from '../../types/auth';
 import type { StaffProfile } from '../../types/profile';
 import type { AuditLogEntry } from '../../types/identity';
@@ -39,6 +39,8 @@ import {
 export const MOCK_PASSWORD = 'Petcare123';
 /** Mock không gửi email: mọi mã OTP (đăng ký, quên mật khẩu) đều là mã này. */
 export const MOCK_OTP_CODE = '123456';
+/** BE trả độ dài mã ở mọi response gửi mã (`codeLength`; đăng ký: `otpCodeLength`) để FE dựng ô nhập; mock luôn 6. */
+const CODE_LENGTH = MOCK_OTP_CODE.length;
 
 export interface MockAccount {
   id: number;
@@ -215,16 +217,17 @@ const byEmail = (s: State, email: string) => accounts(s).find((a) => a.email ===
 /** Email hiện tại của tài khoản (kể cả email lễ tân đã sửa hộ); hồ sơ gắn tài khoản lấy email theo đây (customer-v1 A5). */
 export const accountEmailOf = (accountId: number) => accounts(load()).find((a) => a.id === accountId)?.email ?? null;
 
+/** Dạng RESPONSE (login, /me): đúng 6 trường như `AccountSummary` của BE. `branchId` chỉ có ở GET /me → staffProfile.branchId. */
 function summaryOf(a: Account): AccountSummary {
-  return { id: a.id, email: a.email, role: a.role, status: a.status, isLocked: false, mustChangePassword: a.mustChangePassword, branchId: a.branchId };
+  return { id: a.id, email: a.email, role: a.role, status: a.status, isLocked: false, mustChangePassword: a.mustChangePassword };
 }
 
 const TOKEN_PREFIX = 'mock-token-';
 
-/** Tài khoản của token, null nếu token không hợp lệ. */
+/** Ngữ cảnh request nội bộ (`req.account`): summaryOf cộng `branchId` mà các mock khác đọc; không bao giờ lọt vào response. Null nếu token không hợp lệ. */
 export function accountForToken(token: string): AccountSummary | null {
   const account = accounts(load()).find((a) => a.status === 'ACTIVE' && token === TOKEN_PREFIX + a.id);
-  return account ? summaryOf(account) : null;
+  return account ? { ...summaryOf(account), branchId: account.branchId } : null;
 }
 
 // ─── Kiểm dữ liệu vào (cùng câu báo lỗi với các DTO của BE) ───
@@ -303,7 +306,7 @@ const register: MockHandler = ({ body }) => {
   const otp = issueOtp(s, `REGISTER:${email}`);
   save(s);
   createOnlineProfile(id, fullName, (b.phone as string | undefined) ?? null);
-  return ok({ accountId: id, email, status: 'PENDING', otpResendAvailableAt: resendAt(otp) }, 201, 'Đăng ký thành công');
+  return ok({ accountId: id, email, status: 'PENDING', otpResendAvailableAt: resendAt(otp), otpCodeLength: CODE_LENGTH }, 201, 'Đăng ký thành công');
 };
 
 function pendingRegistration(s: State, email: string): Registered | MockReply {
@@ -342,7 +345,7 @@ const resendRegistrationOtp: MockHandler = ({ body }) => {
   if (wait > 0) return ruleFail('BR-TK-07', `Vui lòng chờ ${wait} giây trước khi gửi lại mã OTP`);
   const otp = issueOtp(s, key);
   save(s);
-  return ok({ resendAvailableAt: resendAt(otp), maskedEmail: maskEmail(reg.email) });
+  return ok({ resendAvailableAt: resendAt(otp), maskedEmail: maskEmail(reg.email), codeLength: CODE_LENGTH });
 };
 
 const login: MockHandler = ({ body }) => {
@@ -378,7 +381,7 @@ const forgotPassword: MockHandler = ({ body }) => {
     save(s);
   }
   return ok(
-    { resendAvailableAt: new Date(Date.now() + RESEND_SECONDS * 1000).toISOString(), maskedEmail: null },
+    { resendAvailableAt: new Date(Date.now() + RESEND_SECONDS * 1000).toISOString(), maskedEmail: null, codeLength: CODE_LENGTH },
     202,
     'Nếu email đã đăng ký, mã đặt lại mật khẩu đã được gửi',
   );
@@ -430,9 +433,9 @@ function staffProfileOf(s: State, a: Account): StaffProfile {
 const me: MockHandler = ({ account }) => {
   const s = load();
   const a = accounts(s).find((x) => x.id === account!.id)!;
-  if (a.role !== 'CUSTOMER') return ok({ account, staffProfile: staffProfileOf(s, a), customerId: null, linkDecisionPending: false });
+  if (a.role !== 'CUSTOMER') return ok({ account: summaryOf(a), staffProfile: staffProfileOf(s, a), customerId: null, linkDecisionPending: false });
   const own = customerOfAccount(a.id);
-  return ok({ account, staffProfile: null, customerId: own?.customerId ?? null, linkDecisionPending: own?.linkDecisionPending ?? false });
+  return ok({ account: summaryOf(a), staffProfile: null, customerId: own?.customerId ?? null, linkDecisionPending: own?.linkDecisionPending ?? false });
 };
 
 /** Mặc định của [CFG] `vet.bio_max_length` (BR-TK-20). */
@@ -538,7 +541,7 @@ const sendLinkOtp: MockHandler = ({ account, body }) => {
   const otp = { ...issueOtp(s, key), customerId };
   s.otps[key] = otp;
   save(s);
-  return ok({ resendAvailableAt: resendAt(otp), maskedEmail: maskEmail(counter.email) }, 200, 'Đã gửi mã xác thực tới email của hồ sơ');
+  return ok({ resendAvailableAt: resendAt(otp), maskedEmail: maskEmail(counter.email), codeLength: CODE_LENGTH }, 200, 'Đã gửi mã xác thực tới email của hồ sơ');
 };
 
 const confirmLink: MockHandler = ({ account, body }) => {
@@ -636,7 +639,7 @@ const sendCustomerEmailChange: MockHandler = ({ account, params, body }) => {
   const otp = issueOtp(s, key);
   s.otps[key] = { ...otp, newEmail };
   save(s);
-  return ok({ resendAvailableAt: resendAt(otp), maskedEmail: maskEmail(newEmail) }, 200, 'Đã gửi mã OTP tới email mới');
+  return ok({ resendAvailableAt: resendAt(otp), maskedEmail: maskEmail(newEmail), codeLength: CODE_LENGTH }, 200, 'Đã gửi mã OTP tới email mới');
 };
 
 /** Mã đúng mới đổi email; chưa xác nhận thì giữ nguyên email cũ (BR-TK-16). */

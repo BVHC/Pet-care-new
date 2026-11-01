@@ -7,6 +7,7 @@ import { AuthField, SubmitButton } from './AuthField';
 import { authApi } from '../../shared/api/auth.api';
 import { plainMessage, toApiError } from '../../shared/api/api-error';
 import { useSession } from '../../shared/stores/session.store';
+import { DEFAULT_OTP_LENGTH, otpLengthOf } from '../../shared/utils/otp';
 import { passwordPolicyError } from '../../shared/utils/password';
 
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
@@ -15,7 +16,7 @@ const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 const secondsUntil = (iso: string) => Math.max(0, Math.ceil((Date.parse(iso) - Date.now()) / 1000));
 
 const NOTES = [
-  { icon: Mail, text: 'Mã 6 số được gửi tới đúng email đã đăng ký' },
+  { icon: Mail, text: 'Mã xác thực được gửi tới đúng email đã đăng ký' },
   { icon: Timer, text: 'Mã sống 5 phút, quá hạn thì bấm gửi lại' },
   { icon: LifeBuoy, text: 'Đặt lại mật khẩu cũng mở khoá tài khoản bị khoá tạm' },
 ];
@@ -32,6 +33,8 @@ export function ForgotPasswordPage() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
   const [cooldown, setCooldown] = useState(0);
+  // Độ dài mã BE báo ở bước gửi mã (`codeLength`); vắng thì 6.
+  const [otpLength, setOtpLength] = useState(DEFAULT_OTP_LENGTH);
 
   useEffect(() => {
     if (cooldown <= 0) return;
@@ -54,6 +57,7 @@ export function ForgotPasswordPage() {
       const res = await authApi.forgotPassword(value);
       setEmail(value);
       setStep('reset');
+      setOtpLength(otpLengthOf(res.codeLength));
       setCooldown(secondsUntil(res.resendAvailableAt));
       toast.success('Nếu email đã đăng ký, mã đặt lại vừa được gửi tới hộp thư.');
     } catch (err) {
@@ -70,7 +74,7 @@ export function ForgotPasswordPage() {
       return;
     }
     const invalid =
-      (otpCode.trim().length !== 6 && 'Mã xác thực gồm 6 chữ số.') ||
+      (otpCode.trim().length !== otpLength && `Mã xác thực gồm ${otpLength} chữ số.`) ||
       passwordPolicyError(password) ||
       (password !== confirm && 'Mật khẩu xác nhận không khớp.');
     if (invalid) {
@@ -104,7 +108,7 @@ export function ForgotPasswordPage() {
           <span className="text-accent-warm">không sao cả</span>
         </>
       }
-      lead="Chúng tôi gửi một mã sáu số tới email của bạn. Nhập mã, đặt mật khẩu mới, quay lại với bé cưng ngay."
+      lead="Chúng tôi gửi một mã xác thực tới email của bạn. Nhập mã, đặt mật khẩu mới, quay lại với bé cưng ngay."
       stageFooter={
         <ul className="space-y-3.5">
           {NOTES.map(({ icon: Icon, text }) => (
@@ -150,8 +154,8 @@ export function ForgotPasswordPage() {
               icon={<KeyRound size={19} strokeWidth={1.7} />}
               autoComplete="one-time-code"
               value={otpCode}
-              onChange={(v) => setOtpCode(v.replace(/\D/g, '').slice(0, 6))}
-              placeholder="6 chữ số"
+              onChange={(v) => setOtpCode(v.replace(/\D/g, '').slice(0, otpLength))}
+              placeholder={`${otpLength} chữ số`}
               action={
                 <button
                   type="button"

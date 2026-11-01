@@ -1,4 +1,4 @@
-// T22 — UC10: Tham số hệ thống. ADMIN chỉ. Sửa inline, validate số ngay trong form.
+// T22 — UC10: Tham số hệ thống. ADMIN chỉ. Sửa qua hộp thoại; FE không kiểm số, giá trị sai kiểu / ngoài khoảng do BE trả 400 BR-QT-13.
 import { useState } from 'react';
 import { Card, CardContent } from '../../components/ui/card';
 import { Button } from '../../components/ui/button';
@@ -38,7 +38,10 @@ export function AdminSystemConfigsPage() {
 
   const list = data ?? [];
 
+  // Mở thao tác mới thì bỏ lỗi của lần lưu trước (FormError theo mutation, thanh lỗi cấp trang theo notice).
   const open = (c: SystemConfig) => {
+    update.reset();
+    setNotice(null);
     setEditing(c);
     setDraft(c.value);
   };
@@ -54,6 +57,7 @@ export function AdminSystemConfigsPage() {
     try {
       await update.mutateAsync({ key: editing.key, value: draft.trim() });
       toast.success(`Đã cập nhật ${editing.key}`);
+      setNotice(null);
       setEditing(null);
     } catch (e) { handleError(e); }
   };
@@ -62,7 +66,7 @@ export function AdminSystemConfigsPage() {
     <div className="space-y-6">
       <div>
         <h1 className="text-2xl font-semibold text-(--text-primary)">Tham số hệ thống</h1>
-        <p className="text-(--text-secondary)">Cấu hình toàn hệ thống — hiệu lực ngay. Lỗi sẽ ghi vào nhật ký kiểm toán (UC11). Số ngoài khoảng → BR-QT-13.</p>
+        <p className="text-(--text-secondary)">Cấu hình toàn hệ thống — hiệu lực ngay. Mỗi lần sửa thành công được ghi vào nhật ký kiểm toán (UC11). Số ngoài khoảng → BR-QT-13.</p>
       </div>
 
       <NoticeBar notice={notice} />

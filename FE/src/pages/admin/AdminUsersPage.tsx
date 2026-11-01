@@ -29,6 +29,7 @@ import {
   useTransfer,
 } from '../../shared/hooks/useAdminIdentity';
 import { plainMessage, toApiError } from '../../shared/api/api-error';
+import { API_MOCK } from '../../shared/api/axios';
 import { useBranches } from '../../shared/hooks/useBranch';
 import { useStaffBranchId } from '../../shared/hooks/useStaffBranch';
 import { Pager } from '../../components/admin/Pager';
@@ -95,9 +96,9 @@ export function AdminUsersPage() {
   const role = account?.role;
   const canChangeRole = role === 'SUPER_MANAGER';
   const canTransfer = role === 'SUPER_MANAGER';
-  const canDisable = role === 'SUPER_MANAGER' || role === 'BRANCH_MANAGER';
-  const canResend = role === 'SUPER_MANAGER' || role === 'BRANCH_MANAGER';
-  const canChangeEmail = role === 'SUPER_MANAGER' || role === 'BRANCH_MANAGER';
+  // BE StaffController: vô hiệu hóa / kích hoạt lại / gửi lại MK / sửa email đều @PreAuthorize(STAFF_ADMINS) = ADMIN, SUPER_MANAGER, BRANCH_MANAGER.
+  // Ai quản lý ai do StaffHierarchyPolicy và danh sách đã lọc sẵn theo vai nhìn thấy (ADMIN chỉ thấy SUPER_MANAGER; BR-QT-07, BR-TK-16).
+  const canManage = role === 'ADMIN' || role === 'SUPER_MANAGER' || role === 'BRANCH_MANAGER';
   // Hook chỉ gọi ở đầu component (Rules of Hooks); hộp xác nhận bên dưới dùng lại hai mutation này.
   const disableStaff = useDisable();
   const resendInitialPassword = useResendInitialPassword();
@@ -144,6 +145,8 @@ export function AdminUsersPage() {
     toast.error(msg);
     setNotice({ kind: 'error', text: msg });
   };
+  // Mở thao tác mới thì xóa thanh lỗi của thao tác trước (trước đây nó còn nguyên tới khi tải lại trang).
+  const begin = (open: () => void) => { setNotice(null); open(); };
 
   return (
     <div className="space-y-6">
@@ -155,7 +158,7 @@ export function AdminUsersPage() {
             {role === 'BRANCH_MANAGER' && myBranch ? <> Chỉ thấy nhân viên thuộc <strong>{myBranch.name}</strong>.</> : null}
           </p>
         </div>
-        <Button onClick={() => setCreating(true)}>
+        <Button onClick={() => begin(() => setCreating(true))}>
           <Plus className="mr-2 h-4 w-4" />
           Thêm người dùng
         </Button>
@@ -268,33 +271,33 @@ export function AdminUsersPage() {
                         <Button size="sm" variant="ghost" onClick={() => toast.info('Sửa hồ sơ: dùng nút "Sửa email" hoặc trang Hồ sơ nhân viên.')} title="Sửa hồ sơ" aria-label={`Sửa ${u.fullName}`}>
                           <Edit className="h-4 w-4" />
                         </Button>
-                        {canChangeEmail && !isMe && (
-                          <Button size="sm" variant="ghost" onClick={() => setChangeEmail(u)} title="Sửa email" aria-label={`Sửa email ${u.fullName}`}>
+                        {canManage && !isMe && (
+                          <Button size="sm" variant="ghost" onClick={() => begin(() => setChangeEmail(u))} title="Sửa email" aria-label={`Sửa email ${u.fullName}`}>
                             <Mail className="h-4 w-4" />
                           </Button>
                         )}
-                        {canResend && !isMe && u.mustChangePassword && (
-                          <Button size="sm" variant="ghost" onClick={() => setResend(u)} title="Gửi lại MK ban đầu" aria-label={`Gửi lại MK cho ${u.fullName}`}>
+                        {canManage && !isMe && u.status === 'ACTIVE' && u.mustChangePassword && (
+                          <Button size="sm" variant="ghost" onClick={() => begin(() => setResend(u))} title="Gửi lại MK ban đầu" aria-label={`Gửi lại MK cho ${u.fullName}`}>
                             <Repeat className="h-4 w-4" />
                           </Button>
                         )}
                         {canChangeRole && !isMe && (
-                          <Button size="sm" variant="ghost" onClick={() => setChangeRole(u)} title="Đổi chức vụ" aria-label={`Đổi chức vụ ${u.fullName}`}>
+                          <Button size="sm" variant="ghost" onClick={() => begin(() => setChangeRole(u))} title="Đổi chức vụ" aria-label={`Đổi chức vụ ${u.fullName}`}>
                             <UserCheck className="h-4 w-4" />
                           </Button>
                         )}
                         {canTransfer && !isMe && u.role !== 'SUPER_MANAGER' && (
-                          <Button size="sm" variant="ghost" onClick={() => setTransfer(u)} title="Điều chuyển" aria-label={`Điều chuyển ${u.fullName}`}>
+                          <Button size="sm" variant="ghost" onClick={() => begin(() => setTransfer(u))} title="Điều chuyển" aria-label={`Điều chuyển ${u.fullName}`}>
                             <ArrowRightLeft className="h-4 w-4" />
                           </Button>
                         )}
-                        {canDisable && !isMe && u.status !== 'DISABLED' && (
-                          <Button size="sm" variant="ghost" onClick={() => setDisable(u)} title="Vô hiệu hóa" aria-label={`Vô hiệu hóa ${u.fullName}`}>
+                        {canManage && !isMe && u.status !== 'DISABLED' && (
+                          <Button size="sm" variant="ghost" onClick={() => begin(() => setDisable(u))} title="Vô hiệu hóa" aria-label={`Vô hiệu hóa ${u.fullName}`}>
                             <Ban className="h-4 w-4" />
                           </Button>
                         )}
-                        {canDisable && !isMe && u.status === 'DISABLED' && (
-                          <Button size="sm" variant="ghost" onClick={() => setReactivate(u)} title="Kích hoạt lại" aria-label={`Kích hoạt lại ${u.fullName}`}>
+                        {canManage && !isMe && u.status === 'DISABLED' && (
+                          <Button size="sm" variant="ghost" onClick={() => begin(() => setReactivate(u))} title="Kích hoạt lại" aria-label={`Kích hoạt lại ${u.fullName}`}>
                             <RotateCcw className="h-4 w-4" />
                           </Button>
                         )}
@@ -462,6 +465,11 @@ function CreateForm({
   if (open && !email && !phone && !fullName) {
     // chỉ chạy lần đầu
   }
+  // Hộp thoại luôn được render nên mutation không tự reset: bỏ lỗi của lần tạo hỏng mỗi lần đóng để lần mở sau không thấy lại.
+  const handleOpenChange = (next: boolean) => {
+    if (!next) create.reset();
+    onOpenChange(next);
+  };
 
   const handleSubmit = async () => {
     try {
@@ -482,7 +490,7 @@ function CreateForm({
   return (
     <FormModal
       open={open}
-      onOpenChange={onOpenChange}
+      onOpenChange={handleOpenChange}
       title="Thêm người dùng mới"
       description="Điền thông tin để tạo tài khoản nhân viên. Mật khẩu tạm sẽ gửi qua email; nhân viên phải đổi ở lần đăng nhập đầu."
       onSubmit={handleSubmit}
@@ -534,6 +542,11 @@ function ChangeRoleDialog({
 }) {
   const [role, setRole] = useState<ChangeableStaffRole>('BRANCH_MANAGER');
   const changeRole = useChangeRole();
+  // Hộp thoại luôn được render nên mutation không tự reset: bỏ lỗi của lần đổi hỏng mỗi lần đóng để dòng kế tiếp không thấy lại.
+  const handleOpenChange = (open: boolean) => {
+    if (!open) changeRole.reset();
+    onOpenChange(open);
+  };
 
   const handleConfirm = async () => {
     if (!target) return;
@@ -547,9 +560,9 @@ function ChangeRoleDialog({
   return (
     <FormModal
       open={!!target}
-      onOpenChange={onOpenChange}
+      onOpenChange={handleOpenChange}
       title={`Đổi chức vụ ${target?.fullName ?? ''}`}
-      description="Đổi chức vụ sẽ thay đổi quyền truy cập. Nếu là VET → RECEPTIONIST/CARETAKER, chuyên môn và mô tả ngắn sẽ bị xóa (BR-QT-05)."
+      description="Đổi chức vụ sẽ thay đổi quyền truy cập. Nếu VET đổi sang chức vụ khác, chuyên môn và mô tả ngắn sẽ bị xóa (BR-QT-05)."
       onSubmit={handleConfirm}
       submitText="Đổi chức vụ"
       loading={changeRole.isPending}
@@ -583,6 +596,11 @@ function TransferDialog({
 }) {
   const [branchId, setBranchId] = useState('');
   const transfer = useTransfer();
+  // Hộp thoại luôn được render nên mutation không tự reset: bỏ lỗi của lần điều chuyển hỏng mỗi lần đóng để dòng kế tiếp không thấy lại.
+  const handleOpenChange = (open: boolean) => {
+    if (!open) transfer.reset();
+    onOpenChange(open);
+  };
 
   const handleSubmit = async () => {
     if (!target) return;
@@ -596,7 +614,7 @@ function TransferDialog({
   return (
     <FormModal
       open={!!target}
-      onOpenChange={onOpenChange}
+      onOpenChange={handleOpenChange}
       title={`Điều chuyển ${target?.fullName ?? ''}`}
       description="Chọn chi nhánh mới. Nhân viên sẽ chuyển chi nhánh ngay; quyền truy cập theo chi nhánh cập nhật ở yêu cầu kế tiếp."
       onSubmit={handleSubmit}
@@ -631,23 +649,31 @@ function ReactivateDialog({
   const [branchId, setBranchId] = useState('');
   const [changeBranch, setChangeBranch] = useState(false);
   const reactivate = useReactivate();
+  // Quản lý chuỗi không thuộc chi nhánh nào: gửi branchId thì BE trả 400 BR-QT-03 nên không mời chọn.
+  const canPickBranch = target?.role !== 'SUPER_MANAGER';
+  const pickBranch = canPickBranch && changeBranch;
+  // Dialog luôn được render nên state không tự reset: xóa lựa chọn và lỗi của lần kích hoạt hỏng mỗi lần đóng để dòng kế tiếp không thừa hưởng.
+  const handleOpenChange = (open: boolean) => {
+    if (!open) { setChangeBranch(false); setBranchId(''); reactivate.reset(); }
+    onOpenChange(open);
+  };
 
   const handleSubmit = async () => {
     if (!target) return;
     try {
       await reactivate.mutateAsync({
         id: target.accountId,
-        args: { branchId: changeBranch && branchId ? Number(branchId) : null },
+        args: { branchId: pickBranch && branchId ? Number(branchId) : null },
       });
       toast.success(`Đã kích hoạt lại ${target.fullName}, mật khẩu tạm mới đã gửi email`);
-      onOpenChange(false);
+      handleOpenChange(false);
     } catch (e) { onError(e); }
   };
 
   return (
     <FormModal
       open={!!target}
-      onOpenChange={onOpenChange}
+      onOpenChange={handleOpenChange}
       title={`Kích hoạt lại ${target?.fullName ?? ''}`}
       description="Mật khẩu tạm mới sẽ được gửi tới email nhân viên. Nhân viên sẽ phải đổi mật khẩu ở lần đăng nhập kế tiếp."
       onSubmit={handleSubmit}
@@ -655,12 +681,14 @@ function ReactivateDialog({
       loading={reactivate.isPending}
       size="sm"
     >
-      <Checkbox
-        label="Đổi chi nhánh"
-        checked={changeBranch}
-        onChange={setChangeBranch}
-      />
-      {changeBranch && (
+      {canPickBranch && (
+        <Checkbox
+          label="Đổi chi nhánh"
+          checked={changeBranch}
+          onChange={setChangeBranch}
+        />
+      )}
+      {pickBranch && (
         <Field label="Chi nhánh mới *">
           {(id) => (
             <select id={id} className={selectClass} value={branchId} onChange={(e) => setBranchId(e.target.value)}>
@@ -687,7 +715,6 @@ function ChangeEmailDialog({
   const [step, setStep] = useState<'email' | 'otp'>('email');
   const [newEmail, setNewEmail] = useState('');
   const [code, setCode] = useState('');
-  const [masked, setMasked] = useState('');
   const [resendAt, setResendAt] = useState<number>(0);
   const send = useSendEmailChange();
   const confirm = useConfirmEmailChange();
@@ -696,20 +723,20 @@ function ChangeEmailDialog({
     setStep('email');
     setNewEmail('');
     setCode('');
-    setMasked('');
     setResendAt(0);
   };
 
-  const close = () => { onOpenChange(false); setTimeout(reset, 200); };
+  // Lỗi của mutation bỏ ngay khi đóng (không đợi 200 ms như bước / ô nhập) để mở lại nhanh cũng không thấy lại.
+  const close = () => { onOpenChange(false); send.reset(); confirm.reset(); setTimeout(reset, 200); };
 
   const handleSend = async () => {
     if (!target) return;
     try {
       const res = await send.mutateAsync({ id: target.accountId, newEmail: newEmail.trim() });
-      setMasked(res.maskedEmail ?? '');
+      // BE không trả maskedEmail cho email-change nhân viên (chỉ luồng liên kết hồ sơ có): mã gửi tới chính email vừa nhập.
       setResendAt(new Date(res.resendAvailableAt).getTime());
       setStep('otp');
-      toast.success(`Đã gửi mã OTP tới ${res.maskedEmail}`);
+      toast.success(`Đã gửi mã OTP tới ${newEmail.trim()}`);
     } catch (e) { onError(e); }
   };
 
@@ -751,7 +778,7 @@ function ChangeEmailDialog({
         </Field>
       ) : (
         <div className="space-y-3">
-          <NoticeBar notice={{ kind: 'success', text: `Mã đã gửi tới ${masked}. Mã mock: 123456.` }} />
+          <NoticeBar notice={{ kind: 'success', text: `Mã đã gửi tới ${newEmail.trim()}.${API_MOCK ? ' Mã mock: 123456.' : ''}` }} />
           <Field label="Mã OTP *">
             {(id) => <Input id={id} value={code} onChange={(e) => setCode(e.target.value)} inputMode="numeric" maxLength={8} autoFocus />}
           </Field>

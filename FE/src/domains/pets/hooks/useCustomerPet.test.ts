@@ -18,6 +18,7 @@ import {
   useCustomerLookup,
   useHealthRecord,
   useMyPets,
+  otpError,
   weightErrors,
 } from './useCustomerPet';
 
@@ -106,6 +107,24 @@ describe('hook thú cưng của khách', () => {
 
 describe('kiểm tra phía FE', () => {
   const TODAY = '2026-10-16';
+
+  it('mã OTP: đúng độ dài, chỉ chữ số; độ dài mặc định 6, đổi theo độ dài BE trả (BR-TK-04)', () => {
+    expect(otpError('123456')).toBe('');
+    expect(otpError(' 123456 ')).toBe('');
+    expect(otpError('12345')).toBe('Mã OTP gồm 6 chữ số');
+    expect(otpError('1234567')).toBe('Mã OTP gồm 6 chữ số');
+    expect(otpError('12345a')).toBe('Mã OTP gồm 6 chữ số');
+
+    expect(otpError('1234', 4)).toBe('');
+    expect(otpError('123456', 4)).toBe('Mã OTP gồm 4 chữ số');
+    expect(otpError('12345678', 8)).toBe('');
+    expect(otpError('123456', 8)).toBe('Mã OTP gồm 8 chữ số');
+
+    // Độ dài ngoài 4–8 hoặc vắng (BE chưa trả) -> 6.
+    expect(otpError('123456', undefined)).toBe('');
+    expect(otpError('123456', null)).toBe('');
+    expect(otpError('1234567', 9)).toBe('Mã OTP gồm 6 chữ số');
+  });
 
   it('ngày nghiệp vụ theo giờ Việt Nam', () => {
     expect(todayVn(new Date('2026-10-15T18:30:00Z'))).toBe('2026-10-16');

@@ -6,14 +6,13 @@ import { AuthShell } from './AuthShell';
 import { SubmitButton } from './AuthField';
 import { authApi } from '../../shared/api/auth.api';
 import { plainMessage, toApiError } from '../../shared/api/api-error';
-
-const OTP_LENGTH = 6;
+import { otpLengthOf } from '../../shared/utils/otp';
 
 /** So giay con lai toi `resendAvailableAt` cua BE (BR-TK-07, khoang cach la [CFG]). */
 const secondsUntil = (iso?: string) => (iso ? Math.max(0, Math.ceil((Date.parse(iso) - Date.now()) / 1000)) : 0);
 
 const STEPS = [
-  { icon: MailCheck, text: 'Mã gồm 6 chữ số vừa được gửi tới email của bạn' },
+  { icon: MailCheck, text: 'Mã xác thực vừa được gửi tới email của bạn' },
   { icon: Timer, text: 'Mã có hiệu lực trong 5 phút, hết hạn thì gửi lại' },
   { icon: ShieldCheck, text: 'Xác thực xong là đăng nhập được ngay' },
 ];
@@ -23,12 +22,14 @@ export function VerifyOtpPage() {
   const location = useLocation();
 
   // Email do RegisterPage/LoginPage chuyen sang qua router state; fallback
-  // ?email= de link van mo lai duoc sau khi F5. Tu LoginPage (BR-TK-08) khong co resendAvailableAt.
+  // ?email= de link van mo lai duoc sau khi F5. Tu LoginPage (BR-TK-08) khong co resendAvailableAt va otpCodeLength.
   const [searchParams] = useSearchParams();
-  const state = location.state as { email?: string; resendAvailableAt?: string } | null;
+  const state = location.state as { email?: string; resendAvailableAt?: string; otpCodeLength?: number } | null;
   const email = state?.email ?? searchParams.get('email') ?? '';
 
-  const [digits, setDigits] = useState<string[]>(Array(OTP_LENGTH).fill(''));
+  // Do dai ma BE bao luc dang ky (`otpCodeLength`) hoac luc gui lai (`codeLength`); vang thi 6.
+  const [otpLength, setOtpLength] = useState(() => otpLengthOf(state?.otpCodeLength));
+  const [digits, setDigits] = useState<string[]>(() => Array(otpLength).fill(''));
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
   const [cooldown, setCooldown] = useState(() => secondsUntil(state?.resendAvailableAt));
@@ -53,7 +54,7 @@ export function VerifyOtpPage() {
   const writeDigits = (next: string[]) => {
     setDigits(next);
     const firstEmpty = next.findIndex((d) => !d);
-    inputs.current[firstEmpty === -1 ? OTP_LENGTH - 1 : firstEmpty]?.focus();
+    inputs.current[firstEmpty === -1 ? otpLength - 1 : firstEmpty]?.focus();
   };
 
   const handleChange = (index: number, raw: string) => {
@@ -64,10 +65,10 @@ export function VerifyOtpPage() {
       setDigits(next);
       return;
     }
-    // Go tung so hoac dan ca day 6 so deu chay qua day.
+    // Go tung so hoac dan ca day ma deu chay qua day.
     const next = [...digits];
     clean.split('').forEach((ch, offset) => {
-      if (index + offset < OTP_LENGTH) next[index + offset] = ch;
+      if (index + offset < otpLength) next[index + offset] = ch;
     });
     writeDigits(next);
   };
@@ -77,14 +78,14 @@ export function VerifyOtpPage() {
       inputs.current[index - 1]?.focus();
     }
     if (e.key === 'ArrowLeft' && index > 0) inputs.current[index - 1]?.focus();
-    if (e.key === 'ArrowRight' && index < OTP_LENGTH - 1) inputs.current[index + 1]?.focus();
+    if (e.key === 'ArrowRight' && index < otpLength - 1) inputs.current[index + 1]?.focus();
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     const code = digits.join('');
-    if (code.length < OTP_LENGTH) {
-      toast.error(`Vui lòng nhập đủ ${OTP_LENGTH} chữ số!`);
+    if (code.length < otpLength) {
+      toast.error(`Vui lòng nhập đủ ${otpLength} chữ số!`);
       return;
     }
     setLoading(true);
@@ -96,7 +97,7 @@ export function VerifyOtpPage() {
     } catch (err) {
       // BR-TK-05 sai / het han, BR-TK-06 sai qua 5 lan (phai gui lai ma), 404 khong co tai khoan cho xac thuc.
       setError(plainMessage(toApiError(err)));
-      writeDigits(Array(OTP_LENGTH).fill(''));
+      writeDigits(Array(otpLength).fill(''));
     } finally {
       setLoading(false);
     }
@@ -108,6 +109,12 @@ export function VerifyOtpPage() {
     try {
       const res = await authApi.resendRegistrationOtp(email);
       setCooldown(secondsUntil(res.resendAvailableAt));
+      // Chi doi do dai khi BE bao; ma moi khac do dai thi ma cu dang go bo di.
+      const next = res.codeLength == null ? otpLength : otpLengthOf(res.codeLength);
+      if (next !== otpLength) {
+        setOtpLength(next);
+        setDigits(Array(next).fill(''));
+      }
       toast.success('Đã gửi lại mã OTP.');
     } catch (err) {
       setError(plainMessage(toApiError(err)));
@@ -122,7 +129,7 @@ export function VerifyOtpPage() {
         <>
           Một mã
           <br />
-          <span className="text-accent-warm">sáu số</span>
+          <span className="text-accent-warm">xác thực</span>
           <br />
           là xong
         </>
@@ -151,7 +158,7 @@ export function VerifyOtpPage() {
               }}
               inputMode="numeric"
               autoComplete={i === 0 ? 'one-time-code' : 'off'}
-              maxLength={OTP_LENGTH}
+              maxLength={otpLength}
               value={digit}
               onChange={(e) => handleChange(i, e.target.value)}
               onKeyDown={(e) => handleKeyDown(i, e)}

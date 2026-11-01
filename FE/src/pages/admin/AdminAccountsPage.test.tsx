@@ -1,4 +1,4 @@
-import { render, screen, within } from '@testing-library/react';
+import { render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { MemoryRouter } from 'react-router-dom';
@@ -121,5 +121,122 @@ describe('AdminAccountsPage (T22 - UC09)', () => {
       .getAllByRole('option')
       .map((o) => o.textContent);
     expect(options).toEqual(['Mọi vai trò', ...(['ADMIN', 'SUPER_MANAGER', 'BRANCH_MANAGER', 'RECEPTIONIST', 'VET', 'CARETAKER', 'CUSTOMER'] as const).map((r) => ROLE_LABELS[r])]);
+  });
+
+  // Đo trên BE thật 1/11: lỗi của lần khóa / mở khóa trước còn nguyên khi mở lại hộp thoại (mutation không reset), thanh lỗi cấp trang không bao giờ bị xóa.
+  // Lỗi gây bằng lý do chỉ toàn khoảng trắng: qua được `required` của ô nhập nhưng BE (mock) trả 400 "Lý do không được để trống".
+  describe('lỗi cũ không còn sót', () => {
+    const BLANK = 'Lý do không được để trống';
+    const LAN_CHI = 'reception@store1.vn';
+    const MINH_ANH = 'doctor@store1.vn';
+    type User = ReturnType<typeof userEvent.setup>;
+    // Thanh lỗi cấp trang = `role="alert"` NGOÀI hộp thoại (FormError nằm trong hộp). `hidden` vì nền bị aria-hidden khi hộp thoại mở.
+    const pageAlerts = () => screen.queryAllByRole('alert', { hidden: true }).filter((el) => !el.closest('[role="dialog"]'));
+    const openDialog = async (user: User, action: 'Khóa' | 'Mở khóa', email: string) => {
+      await user.click(await screen.findByRole('button', { name: `${action} ${email}` }));
+      return screen.findByRole('dialog');
+    };
+    const submit = async (user: User, dialog: HTMLElement, reason: string, button: 'Khóa' | 'Mở khóa') => {
+      const input = within(dialog).getByLabelText(/^Lý do/);
+      await user.clear(input);
+      await user.type(input, reason);
+      await user.click(within(dialog).getByRole('button', { name: button }));
+    };
+    const cancel = async (user: User, dialog: HTMLElement) => {
+      await user.click(within(dialog).getByRole('button', { name: 'Hủy' }));
+      await waitFor(() => expect(screen.queryByRole('dialog')).not.toBeInTheDocument());
+    };
+    /** Khóa / mở khóa với lý do toàn khoảng trắng rồi Hủy: để lại FormError (trong hộp) + thanh lỗi cấp trang. */
+    const failAndCancel = async (user: User, action: 'Khóa' | 'Mở khóa', email: string) => {
+      const dialog = await openDialog(user, action, email);
+      await submit(user, dialog, '   ', action);
+      expect(await within(dialog).findByText(BLANK)).toBeInTheDocument(); // lần thất bại có thật
+      await cancel(user, dialog);
+      expect(pageAlerts().map((el) => el.textContent)).toEqual([BLANK]);
+    };
+    /** Khóa sẵn Lan Chi và BS. Minh Anh trong state mock (sau signIn: signIn xóa localStorage) để có dòng "Mở khóa". */
+    const seedLocked = (...ids: number[]) => {
+      const s = load();
+      for (const id of ids) s.locks[id] = { reason: 'Thử khóa', statusBefore: 'ACTIVE', lockedAt: new Date().toISOString() };
+      save(s);
+    };
+
+    it('khóa: lỗi của lần trước không còn khi mở lại hộp thoại (cùng dòng lẫn dòng khác)', async () => {
+      const user = userEvent.setup();
+      renderPage();
+      await failAndCancel(user, 'Khóa', LAN_CHI);
+
+      let dialog = await openDialog(user, 'Khóa', LAN_CHI);
+      expect(within(dialog).queryByRole('alert')).not.toBeInTheDocument();
+      await cancel(user, dialog);
+
+      dialog = await openDialog(user, 'Khóa', MINH_ANH);
+      expect(within(dialog).queryByRole('alert')).not.toBeInTheDocument();
+    });
+
+    it('mở khóa: lỗi của lần trước không còn khi mở lại hộp thoại (cùng dòng lẫn dòng khác)', async () => {
+      seedLocked(4, 5);
+      const user = userEvent.setup();
+      renderPage();
+      await failAndCancel(user, 'Mở khóa', LAN_CHI);
+
+      let dialog = await openDialog(user, 'Mở khóa', LAN_CHI);
+      expect(within(dialog).queryByRole('alert')).not.toBeInTheDocument();
+      await cancel(user, dialog);
+
+      dialog = await openDialog(user, 'Mở khóa', MINH_ANH);
+      expect(within(dialog).queryByRole('alert')).not.toBeInTheDocument();
+    });
+
+    it('thanh lỗi cấp trang của lần khóa hỏng biến mất khi mở hộp thoại khóa khác', async () => {
+      const user = userEvent.setup();
+      renderPage();
+      await failAndCancel(user, 'Khóa', LAN_CHI);
+
+      await openDialog(user, 'Khóa', MINH_ANH);
+
+      expect(pageAlerts()).toHaveLength(0);
+    });
+
+    it('thanh lỗi cấp trang của lần khóa hỏng biến mất khi mở hộp thoại mở khóa', async () => {
+      seedLocked(5);
+      const user = userEvent.setup();
+      renderPage();
+      await failAndCancel(user, 'Khóa', LAN_CHI);
+
+      await openDialog(user, 'Mở khóa', MINH_ANH);
+
+      expect(pageAlerts()).toHaveLength(0);
+    });
+
+    // Thử lại ngay trong cùng hộp thoại (không mở lại) nên chỉ lần thành công mới có thể xóa thanh lỗi.
+    it('thanh lỗi cấp trang biến mất khi khóa lại thành công trong cùng hộp thoại', async () => {
+      const user = userEvent.setup();
+      renderPage();
+      const dialog = await openDialog(user, 'Khóa', LAN_CHI);
+      await submit(user, dialog, '   ', 'Khóa');
+      expect(await within(dialog).findByText(BLANK)).toBeInTheDocument();
+      expect(pageAlerts().map((el) => el.textContent)).toEqual([BLANK]);
+
+      await submit(user, dialog, 'Tài khoản có dấu hiệu bị chiếm', 'Khóa');
+
+      await waitFor(() => expect(screen.queryByRole('dialog')).not.toBeInTheDocument());
+      expect(pageAlerts()).toHaveLength(0);
+    });
+
+    it('thanh lỗi cấp trang biến mất khi mở khóa lại thành công trong cùng hộp thoại', async () => {
+      seedLocked(4);
+      const user = userEvent.setup();
+      renderPage();
+      const dialog = await openDialog(user, 'Mở khóa', LAN_CHI);
+      await submit(user, dialog, '   ', 'Mở khóa');
+      expect(await within(dialog).findByText(BLANK)).toBeInTheDocument();
+      expect(pageAlerts().map((el) => el.textContent)).toEqual([BLANK]);
+
+      await submit(user, dialog, 'Đã xác minh chủ tài khoản', 'Mở khóa');
+
+      await waitFor(() => expect(screen.queryByRole('dialog')).not.toBeInTheDocument());
+      expect(pageAlerts()).toHaveLength(0);
+    });
   });
 });

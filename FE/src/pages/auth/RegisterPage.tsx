@@ -119,7 +119,9 @@ export function RegisterPage() {
       });
       toast.success('Đã gửi mã OTP tới email của bạn!');
       // Tai khoan PENDING -> bat buoc qua buoc OTP; dem nguoc gui lai theo BE (BR-TK-07).
-      navigate('/auth/verify-otp', { state: { email, resendAvailableAt: res.otpResendAvailableAt } });
+      navigate('/auth/verify-otp', {
+        state: { email, resendAvailableAt: res.otpResendAvailableAt, otpCodeLength: res.otpCodeLength },
+      });
     } catch (error) {
       const err = toApiError(error);
       const byField: Errors = {};

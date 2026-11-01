@@ -6,6 +6,8 @@ import { keepPreviousData, useMutation, useQuery, useQueryClient } from '@tansta
 import { identityApi } from '../../../shared/api/identity.api';
 import { INVALIDATE, QUERY_KEYS } from '../../../shared/constants/queryKeys';
 import { retryDelay, shouldRetry } from '../../../shared/constants/realtime';
+import type { OtpSentResponse } from '../../../shared/types/auth';
+import { otpLengthOf } from '../../../shared/utils/otp';
 import { customerPetApi } from '../customer-pet.api';
 import type {
   AddWeightRequest,
@@ -118,10 +120,13 @@ export const useAddWeight = (petId: number) =>
 
 // Tài khoản của hồ sơ khách tại quầy (UC22, identity-v1 #25–27). Lễ tân đã đối chiếu CCCD tại quầy (BR-TK-16, A6).
 
-/** #25: gửi mã tới email mới; chưa xác nhận thì email cũ giữ nguyên. Không làm mới cache. */
+/**
+ * #25: gửi mã tới email mới; chưa xác nhận thì email cũ giữ nguyên. Không làm mới cache.
+ * Kiểu trả về là OtpSentResponse của auth.ts (có `codeLength`), không phải bản sao thiếu trường ở types/identity.ts.
+ */
 export const useSendCustomerEmailChange = (customerId: number) =>
   useMutation({
-    mutationFn: (newEmail: string) =>
+    mutationFn: (newEmail: string): Promise<OtpSentResponse> =>
       identityApi.sendCustomerEmailChange(customerId, { newEmail, verificationMethod: 'ID_CARD_IN_PERSON' }),
   });
 
@@ -211,8 +216,12 @@ export function emailError(email: string): string {
   return '';
 }
 
-/** Mã OTP 6 chữ số (BR-TK-04). */
-export const otpError = (code: string) => (/^\d{6}$/.test(code.trim()) ? '' : 'Mã OTP gồm 6 chữ số');
+/** Mã OTP đủ `length` chữ số (BR-TK-04): độ dài BE báo ở bước gửi mã (`codeLength`); vắng hoặc ngoài 4–8 thì 6. */
+export function otpError(code: string, length?: number | null): string {
+  const n = otpLengthOf(length);
+  const value = code.trim();
+  return value.length === n && /^\d+$/.test(value) ? '' : `Mã OTP gồm ${n} chữ số`;
+}
 
 /** BR-KH-04: cân nặng > 0; cột NUMERIC(6,2) nên tối đa 9999.99. */
 export function weightErrors(weightKg: number | null): FieldErrors {

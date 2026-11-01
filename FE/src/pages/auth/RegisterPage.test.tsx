@@ -1,16 +1,23 @@
 import { render, screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { MemoryRouter, Route, Routes, useLocation } from 'react-router-dom';
-import { beforeAll, describe, expect, it } from 'vitest';
+import { afterEach, beforeAll, describe, expect, it, vi } from 'vitest';
+import { authApi } from '../../shared/api/auth.api';
 import { apiClient } from '../../shared/api/axios';
 import { installMockApi } from '../../shared/api/mock/mock-api';
 import { RegisterPage } from './RegisterPage';
 
 beforeAll(() => installMockApi(apiClient));
+afterEach(() => vi.restoreAllMocks());
 
 function OtpStep() {
-  const state = useLocation().state as { email: string; resendAvailableAt: string };
-  return <p>{`otp ${state.email} ${state.resendAvailableAt ? 'có hạn gửi lại' : 'thiếu hạn'}`}</p>;
+  const state = useLocation().state as { email: string; resendAvailableAt: string; otpCodeLength?: number };
+  return (
+    <>
+      <p>{`otp ${state.email} ${state.resendAvailableAt ? 'có hạn gửi lại' : 'thiếu hạn'}`}</p>
+      <p>{`độ dài mã ${state.otpCodeLength ?? 'chưa biết'}`}</p>
+    </>
+  );
 }
 
 function renderPage() {
@@ -43,6 +50,25 @@ describe('RegisterPage (UC01)', () => {
     await submit(user);
 
     expect(await screen.findByText('otp moi@petcare.vn có hạn gửi lại')).toBeInTheDocument();
+    expect(screen.getByText('độ dài mã 6')).toBeInTheDocument();
+  });
+
+  it.each([8, undefined])('hands the code length of the BE (otpCodeLength %s) to the OTP step', async (otpCodeLength) => {
+    vi.spyOn(authApi, 'register').mockResolvedValue({
+      accountId: 100,
+      email: 'moi@petcare.vn',
+      status: 'PENDING',
+      otpResendAvailableAt: new Date(Date.now() + 60_000).toISOString(),
+      otpCodeLength,
+    });
+    const user = userEvent.setup();
+    renderPage();
+    await fill(user);
+    await user.click(screen.getByRole('checkbox', { name: /đủ 18 tuổi/ }));
+    await user.click(screen.getByRole('checkbox', { name: /Điều khoản sử dụng/ }));
+    await submit(user);
+
+    expect(await screen.findByText(`độ dài mã ${otpCodeLength ?? 'chưa biết'}`)).toBeInTheDocument();
   });
 
   it('asks for the 18+ and terms confirmation before sending (BR-TK-02)', async () => {

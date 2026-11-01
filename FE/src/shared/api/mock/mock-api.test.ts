@@ -45,7 +45,6 @@ describe('mock API envelope (00-method §3.4–3.5)', () => {
           status: 'ACTIVE',
           isLocked: false,
           mustChangePassword: false,
-          branchId: 1,
         },
         linkDecisionPending: false,
       },
@@ -153,6 +152,7 @@ describe('registration (UC01, UC02)', () => {
       email: NEW.email,
       status: 'PENDING',
       otpResendAvailableAt: expect.any(String),
+      otpCodeLength: 6,
     });
   });
 
@@ -221,8 +221,8 @@ describe('forgot / reset password (UC04)', () => {
     const known = await forgot('doctor@store1.vn');
     const unknown = await forgot('ai@do.vn');
     expect([known.status, unknown.status]).toEqual([202, 202]);
-    expect(known.data.data).toEqual({ resendAvailableAt: expect.any(String), maskedEmail: null });
-    expect(unknown.data.data).toEqual({ resendAvailableAt: expect.any(String), maskedEmail: null });
+    expect(known.data.data).toEqual({ resendAvailableAt: expect.any(String), maskedEmail: null, codeLength: 6 });
+    expect(unknown.data.data).toEqual({ resendAvailableAt: expect.any(String), maskedEmail: null, codeLength: 6 });
   });
 
   it('sets the new password with the code; the old one stops working', async () => {

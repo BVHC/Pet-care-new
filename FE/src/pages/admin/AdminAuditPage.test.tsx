@@ -56,7 +56,7 @@ const auditCalls = (seen: ReturnType<typeof recordRequests>) => seen.filter((r) 
 /** Tạo dòng nhật ký bằng chính thao tác quản trị của mock (khóa tài khoản, sửa tham số) để kiểm đúng tên bảng / mã hành động mock ghi. */
 async function makeAuditRows() {
   await apiClient.post('/api/accounts/4/lock', { reason: 'Thử khóa' });
-  await apiClient.put('/api/system-configs/vet.bio_max_length', { value: '600' });
+  await apiClient.put('/api/system-configs/vet.bio_max_length', { value: '300' }); // BE: 100–500; phải khác mặc định 500 (giá trị trùng thì BE không ghi, không audit)
 }
 
 /** `datetime-local` (giờ máy) cách bây giờ `days` ngày; biên 3 ngày dư để múi giờ không làm lệch. */
@@ -135,6 +135,16 @@ describe('AdminAuditPage (T22 - UC11)', () => {
         '', 'accounts', 'system_configs', 'notification_templates', 'customers', 'pets', 'booking_restrictions', 'products', 'services',
         'stock_receipts', 'stock_adjustments', 'orders', 'cashier_shifts', 'visits', 'medical_records', 'medical_record_addenda', 'prescription_items',
       ]);
+    });
+
+    // BE ghi ORDER_CHECKOUT_ABORTED khi lễ tân hủy phiên trả thú (SalesAuditActions); thiếu ở gợi ý thì ADMIN phải tự gõ đúng mã.
+    it('gợi ý hành động (datalist) có ORDER_CHECKOUT_ABORTED cùng mã sẵn có', async () => {
+      renderPage();
+      const input = await screen.findByLabelText('Hành động');
+      const options = document.getElementById(input.getAttribute('list')!)!.querySelectorAll('option');
+      const codes = Array.from(options).map((o) => o.value);
+      expect(codes).toContain('STAFF_CREATED');
+      expect(codes).toContain('ORDER_CHECKOUT_ABORTED');
     });
 
     // BE `action = :action` (so khớp đúng); có mã người thực hiện nên không cần from / to.

@@ -2,18 +2,26 @@ import { render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { MemoryRouter } from 'react-router-dom';
-import { afterEach, beforeAll, beforeEach, describe, expect, it } from 'vitest';
+import { afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
 import { apiClient } from '../../shared/api/axios';
 import { MOCK_PASSWORD, load, save } from '../../shared/api/mock/identity.mock';
 import { installMockApi } from '../../shared/api/mock/mock-api';
 import { useSession } from '../../shared/stores/session.store';
 import { AdminUsersPage } from './AdminUsersPage';
 
+// API_MOCK đọc lúc render: cho phép ca "BE thật" (mock tắt) mà request vẫn đi qua mock-api.
+const apiMode = vi.hoisted(() => ({ mock: true }));
+vi.mock('../../shared/api/axios', async (importOriginal) => {
+  const original = await importOriginal<typeof import('../../shared/api/axios')>();
+  return Object.defineProperty({ ...original }, 'API_MOCK', { get: () => apiMode.mock, enumerable: true });
+});
+
 beforeAll(() => installMockApi(apiClient));
 
 const cleanups: Array<() => void> = [];
 afterEach(() => {
   while (cleanups.length) cleanups.pop()!();
+  apiMode.mock = true;
 });
 
 const signIn = async (email: string) => {
@@ -76,6 +84,32 @@ function seedReceptionists(count: number) {
   save(s);
 }
 
+type ExtraStaff = ReturnType<typeof load>['extraStaff'][number];
+
+/** Thêm nhân viên chạy-lúc vào state mock (sau signIn). Nhân viên seed đổi trạng thái thì còn lại tới hết file, nhân viên chạy-lúc thì reset mỗi test. */
+function seedStaff(...rows: Array<Partial<ExtraStaff> & Pick<ExtraStaff, 'id' | 'fullName' | 'role'>>) {
+  const s = load();
+  for (const r of rows) s.extraStaff[r.id] = { email: `nv${r.id}@seed.vn`, status: 'ACTIVE', mustChangePassword: false, ...r };
+  save(s);
+}
+
+/** Khóa sẵn các tài khoản (state mock, sau signIn) để thao tác lên chúng bị BE từ chối vì đang bị khóa. */
+function lockAccounts(...ids: number[]) {
+  const s = load();
+  for (const id of ids) s.locks[id] = { reason: 'Thử khóa', statusBefore: 'ACTIVE', lockedAt: new Date().toISOString() };
+  save(s);
+}
+
+type User = ReturnType<typeof userEvent.setup>;
+const openDialogOf = async (user: User, name: string | RegExp) => {
+  await user.click(await screen.findByRole('button', { name }));
+  return screen.findByRole('dialog');
+};
+const cancelDialog = async (user: User, dialog: HTMLElement) => {
+  await user.click(within(dialog).getByRole('button', { name: 'Hủy' }));
+  await waitFor(() => expect(screen.queryByRole('dialog')).not.toBeInTheDocument());
+};
+
 const rowOf = async (text: string) => (await screen.findByText(text)).closest('tr')!;
 const optionsOf = (label: string) => within(screen.getByLabelText(label)).getAllByRole('option').map((o) => o.textContent);
 const bodyRows = () => screen.getAllByRole('row').length - 1;
@@ -116,6 +150,65 @@ describe('AdminUsersPage (T22 - UC08)', () => {
 
       expect(await screen.findByText('Quản lý chuỗi mới')).toBeInTheDocument();
       await waitFor(() => expect(screen.queryByRole('dialog')).not.toBeInTheDocument());
+    });
+
+    // Mutation của hộp thoại không reset khi đóng: FormError của lần tạo hỏng trước hiện lại khi mở lại (đo trên BE thật 1/11).
+    it('tạo người dùng: lỗi email trùng của lần trước không còn khi mở lại hộp thoại', async () => {
+      const user = userEvent.setup();
+      renderPage();
+      let dialog = await openDialogOf(user, /Thêm người dùng/);
+      await user.type(within(dialog).getByLabelText('Họ tên *'), 'Quản lý trùng email');
+      await user.type(within(dialog).getByLabelText('Email *'), 'chuoi@petcare.vn'); // email của Đỗ Thanh Hà
+      await user.type(within(dialog).getByLabelText('Số điện thoại *'), '0900000077');
+      await user.click(within(dialog).getByRole('button', { name: 'Tạo tài khoản' }));
+      expect(await within(dialog).findByText('Email đã được sử dụng')).toBeInTheDocument(); // lần thất bại có thật
+      await cancelDialog(user, dialog);
+
+      dialog = await openDialogOf(user, /Thêm người dùng/);
+
+      expect(within(dialog).queryByRole('alert')).not.toBeInTheDocument();
+    });
+
+    // BE StaffController: disable / reactivate / resend / email-change đều @PreAuthorize(STAFF_ADMINS) gồm ADMIN, StaffHierarchyPolicy.manages: ADMIN → SUPER_MANAGER (BR-QT-07, BR-TK-16 → BR-QT-01).
+    it('ADMIN có Sửa email và Vô hiệu hóa trên dòng Quản lý chuỗi; Gửi lại MK chỉ khi chưa đổi mật khẩu lần đầu', async () => {
+      seedStaff({ id: 410, fullName: 'Quản lý chuỗi mới', role: 'SUPER_MANAGER', mustChangePassword: true });
+      renderPage();
+      await rowOf('Đỗ Thanh Hà');
+
+      expect(screen.getByRole('button', { name: 'Sửa email Đỗ Thanh Hà' })).toBeInTheDocument();
+      expect(screen.getByRole('button', { name: 'Vô hiệu hóa Đỗ Thanh Hà' })).toBeInTheDocument();
+      expect(screen.queryByRole('button', { name: 'Gửi lại MK cho Đỗ Thanh Hà' })).not.toBeInTheDocument();
+      expect(screen.getByRole('button', { name: 'Gửi lại MK cho Quản lý chuỗi mới' })).toBeInTheDocument();
+    });
+
+    // BE StaffAccountService.resend: đích không ACTIVE → 409; Account.disable() giữ mustChangePassword nên cờ này không đủ để ẩn nút.
+    it('dòng đã vô hiệu hóa có Kích hoạt lại nhưng KHÔNG có Gửi lại MK dù chưa đổi mật khẩu lần đầu', async () => {
+      seedStaff({ id: 410, fullName: 'Quản lý chuỗi tắt', role: 'SUPER_MANAGER', status: 'DISABLED', mustChangePassword: true });
+      renderPage();
+      await rowOf('Quản lý chuỗi tắt');
+
+      expect(screen.getByRole('button', { name: 'Kích hoạt lại Quản lý chuỗi tắt' })).toBeInTheDocument();
+      expect(screen.queryByRole('button', { name: 'Gửi lại MK cho Quản lý chuỗi tắt' })).not.toBeInTheDocument();
+    });
+
+    // BE reactivate: SUPER_MANAGER không thuộc chi nhánh nào, body có branchId → 400 BR-QT-03; nên dialog không được mời chọn chi nhánh.
+    it('ADMIN vô hiệu hóa rồi kích hoạt lại Quản lý chuỗi: hộp thoại không có ô "Đổi chi nhánh", request mang branchId null', async () => {
+      seedStaff({ id: 410, fullName: 'Quản lý chuỗi phụ', role: 'SUPER_MANAGER' });
+      const user = userEvent.setup();
+      const seen = recordRequests();
+      renderPage();
+
+      await user.click(await screen.findByRole('button', { name: 'Vô hiệu hóa Quản lý chuỗi phụ' }));
+      await user.click(within(await screen.findByRole('dialog')).getByRole('button', { name: 'Vô hiệu hóa' }));
+      await waitFor(() => expect(screen.queryByRole('dialog')).not.toBeInTheDocument());
+      await user.click(await screen.findByRole('button', { name: 'Kích hoạt lại Quản lý chuỗi phụ' }));
+
+      const dialog = await screen.findByRole('dialog');
+      expect(within(dialog).queryByText('Đổi chi nhánh')).not.toBeInTheDocument();
+      await user.click(within(dialog).getByRole('button', { name: 'Kích hoạt lại' }));
+
+      await waitFor(() => expect(seen.find((r) => r.url === '/api/staff/410/reactivate')).toMatchObject({ method: 'POST', status: 200, body: { branchId: null } }));
+      expect(seen.filter((r) => r.status === 403)).toEqual([]);
     });
 
     it('tải trang không phát sinh 403', async () => {
@@ -206,6 +299,172 @@ describe('AdminUsersPage (T22 - UC08)', () => {
       await user.click(within(dialog).getByRole('button', { name: 'Tạo tài khoản' }));
 
       await waitFor(() => expect(seen.find((r) => r.method === 'POST' && r.url === '/api/staff')).toMatchObject({ status: 201, body: { role: 'RECEPTIONIST', branchId: 1 } }));
+    });
+
+    // BE StaffAdminMapper: maskedEmail của email-change nhân viên luôn null (chỉ luồng liên kết hồ sơ có), mã gửi tới chính email vừa nhập.
+    const openOtpStep = async () => {
+      const user = userEvent.setup();
+      renderPage();
+      await user.click(await screen.findByRole('button', { name: 'Sửa email BS. Minh Anh' }));
+      const dialog = await screen.findByRole('dialog');
+      await user.type(within(dialog).getByLabelText('Email mới *'), 'moi@example.vn');
+      await user.click(within(dialog).getByRole('button', { name: 'Gửi mã OTP' }));
+      return dialog;
+    };
+
+    it('sửa email: bước OTP nêu email mới vừa nhập, không có "null", mock bật thì nhắc mã 123456', async () => {
+      const dialog = await openOtpStep();
+
+      expect(await within(dialog).findByText(/Mã đã gửi tới moi@example\.vn\./)).toBeInTheDocument();
+      expect(dialog).not.toHaveTextContent('null');
+      expect(dialog).toHaveTextContent('Mã mock: 123456');
+    });
+
+    it('sửa email trên BE thật (mock tắt): bước OTP không nhắc mã mock', async () => {
+      apiMode.mock = false;
+      const dialog = await openOtpStep();
+
+      expect(await within(dialog).findByText(/Mã đã gửi tới moi@example\.vn\./)).toBeInTheDocument();
+      expect(dialog).not.toHaveTextContent('Mã mock');
+    });
+
+    // Đo trên BE thật 1/11: thanh lỗi đỏ ở đầu trang (notice) đặt khi một thao tác lỗi và không bao giờ bị xóa, còn nguyên sau nhiều thao tác thành công.
+    it('thanh lỗi của thao tác trước biến mất khi mở thao tác mới', async () => {
+      const user = userEvent.setup();
+      renderPage();
+
+      await user.click(await screen.findByRole('button', { name: 'Sửa email BS. Minh Anh' }));
+      const email = await screen.findByRole('dialog');
+      await user.type(within(email).getByLabelText('Email mới *'), 'moi@example.vn');
+      await user.click(within(email).getByRole('button', { name: 'Gửi mã OTP' }));
+      await user.type(await within(email).findByLabelText('Mã OTP *'), '000000');
+      await user.click(within(email).getByRole('button', { name: 'Xác nhận' }));
+      await user.click(await within(email).findByRole('button', { name: 'Hủy' }));
+      await waitFor(() => expect(screen.queryByRole('dialog')).not.toBeInTheDocument());
+      // Thanh lỗi cấp trang là `role="alert"` nằm NGOÀI hộp thoại (FormError trong hộp và toast cùng câu không tính). `hidden` vì nền bị aria-hidden khi hộp thoại mở.
+      const banners = () => screen.queryAllByRole('alert', { hidden: true })
+        .filter((el) => el.textContent === 'OTP không đúng hoặc đã hết hạn' && !el.closest('[role="dialog"]'));
+      expect(banners()).toHaveLength(1); // còn lại sau khi đóng hộp
+
+      await user.click(screen.getByRole('button', { name: 'Vô hiệu hóa BS. Minh Anh' }));
+
+      expect(banners()).toHaveLength(0);
+    });
+
+    // Đối chứng với ca ADMIN → Quản lý chuỗi: đích thuộc chi nhánh thì vẫn được đổi chi nhánh khi kích hoạt lại.
+    it('kích hoạt lại nhân viên chi nhánh: hộp thoại vẫn có ô "Đổi chi nhánh"', async () => {
+      seedStaff({ id: 411, fullName: 'Lễ tân tắt', role: 'RECEPTIONIST', status: 'DISABLED', branchId: 1 });
+      const user = userEvent.setup();
+      renderPage();
+
+      await user.click(await screen.findByRole('button', { name: 'Kích hoạt lại Lễ tân tắt' }));
+
+      expect(within(await screen.findByRole('dialog')).getByText('Đổi chi nhánh')).toBeInTheDocument();
+    });
+
+    // ReactivateDialog luôn được render và state trong dialog không bao giờ reset: tick "Đổi chi nhánh" ở dòng A còn lại khi mở dòng B.
+    it('kích hoạt lại: lựa chọn "Đổi chi nhánh" của dòng này không còn lại khi mở dòng khác', async () => {
+      seedStaff(
+        { id: 411, fullName: 'Lễ tân tắt A', role: 'RECEPTIONIST', status: 'DISABLED', branchId: 1 },
+        { id: 412, fullName: 'Lễ tân tắt B', role: 'RECEPTIONIST', status: 'DISABLED', branchId: 1 },
+      );
+      const user = userEvent.setup();
+      renderPage();
+
+      await user.click(await screen.findByRole('button', { name: 'Kích hoạt lại Lễ tân tắt A' }));
+      const first = await screen.findByRole('dialog');
+      await user.click(within(first).getByText('Đổi chi nhánh'));
+      expect(within(first).getByLabelText('Chi nhánh mới *')).toBeInTheDocument();
+      await user.click(within(first).getByRole('button', { name: 'Hủy' }));
+      await waitFor(() => expect(screen.queryByRole('dialog')).not.toBeInTheDocument());
+
+      await user.click(screen.getByRole('button', { name: 'Kích hoạt lại Lễ tân tắt B' }));
+      const second = await screen.findByRole('dialog');
+      expect(within(second).queryByLabelText('Chi nhánh mới *')).not.toBeInTheDocument();
+    });
+
+    // Cả 4 hộp thoại còn lại luôn được render và mutation KHÔNG reset khi đóng: FormError của lần thất bại trước hiện lại khi mở lại (đo trên BE thật 1/11).
+    // Mỗi ca gây lỗi thật bằng một luật của mock (không dựng giả), rồi đóng và mở lại cho một dòng KHÁC.
+    describe('FormError của lần thất bại trước không còn khi mở lại hộp thoại', () => {
+      const LAST_MANAGER = 'Chi nhánh phải có ít nhất một quản lý đang hoạt động'; // Hoàng Nam là quản lý duy nhất của chi nhánh 1 (BR-QT-04)
+
+      it('sửa email: nhập sai OTP rồi đóng, mở lại cho dòng khác', async () => {
+        const user = userEvent.setup();
+        renderPage();
+        let dialog = await openDialogOf(user, 'Sửa email BS. Minh Anh');
+        await user.type(within(dialog).getByLabelText('Email mới *'), 'moi@example.vn');
+        await user.click(within(dialog).getByRole('button', { name: 'Gửi mã OTP' }));
+        await user.type(await within(dialog).findByLabelText('Mã OTP *'), '000000');
+        await user.click(within(dialog).getByRole('button', { name: 'Xác nhận' }));
+        expect(await within(dialog).findByText('OTP không đúng hoặc đã hết hạn')).toBeInTheDocument(); // lần thất bại có thật
+        await cancelDialog(user, dialog);
+
+        dialog = await openDialogOf(user, 'Sửa email Lan Chi');
+        await within(dialog).findByLabelText('Email mới *'); // hộp đặt lại về bước nhập email sau 200 ms
+
+        expect(within(dialog).queryByRole('alert')).not.toBeInTheDocument();
+      });
+
+      // Hộp Sửa email có hai mutation (gửi mã, xác nhận mã); ca trên chỉ làm hỏng bước xác nhận, ca này làm hỏng bước gửi.
+      it('sửa email: gửi mã tới email đã dùng bị từ chối, mở lại cho dòng khác không còn lỗi', async () => {
+        const user = userEvent.setup();
+        renderPage();
+        let dialog = await openDialogOf(user, 'Sửa email BS. Minh Anh');
+        await user.type(within(dialog).getByLabelText('Email mới *'), 'reception@store1.vn'); // email của Lan Chi
+        await user.click(within(dialog).getByRole('button', { name: 'Gửi mã OTP' }));
+        expect(await within(dialog).findByText('Email đã được sử dụng')).toBeInTheDocument(); // lần thất bại có thật
+        await cancelDialog(user, dialog);
+
+        dialog = await openDialogOf(user, 'Sửa email Lan Chi');
+
+        expect(within(dialog).queryByRole('alert')).not.toBeInTheDocument();
+      });
+
+      it('đổi chức vụ: đổi quản lý chi nhánh cuối cùng bị từ chối, mở lại cho dòng khác không còn lỗi', async () => {
+        const user = userEvent.setup();
+        renderPage();
+        let dialog = await openDialogOf(user, 'Đổi chức vụ Hoàng Nam');
+        await user.selectOptions(within(dialog).getByLabelText('Vai trò mới *'), 'RECEPTIONIST');
+        await user.click(within(dialog).getByRole('button', { name: 'Đổi chức vụ' }));
+        expect(await within(dialog).findByText(LAST_MANAGER)).toBeInTheDocument();
+        await cancelDialog(user, dialog);
+
+        dialog = await openDialogOf(user, 'Đổi chức vụ BS. Minh Anh');
+
+        expect(within(dialog).queryByRole('alert')).not.toBeInTheDocument();
+      });
+
+      it('điều chuyển: chuyển quản lý chi nhánh cuối cùng bị từ chối, mở lại cho dòng khác không còn lỗi', async () => {
+        const user = userEvent.setup();
+        renderPage();
+        let dialog = await openDialogOf(user, 'Điều chuyển Hoàng Nam');
+        await user.selectOptions(within(dialog).getByLabelText('Chi nhánh mới *'), '2');
+        await user.click(within(dialog).getByRole('button', { name: 'Điều chuyển' }));
+        expect(await within(dialog).findByText(LAST_MANAGER)).toBeInTheDocument();
+        await cancelDialog(user, dialog);
+
+        dialog = await openDialogOf(user, 'Điều chuyển BS. Minh Anh');
+
+        expect(within(dialog).queryByRole('alert')).not.toBeInTheDocument();
+      });
+
+      it('kích hoạt lại: tài khoản đang bị khóa bị từ chối, mở lại cho dòng khác không còn lỗi', async () => {
+        seedStaff(
+          { id: 411, fullName: 'Lễ tân tắt A', role: 'RECEPTIONIST', status: 'DISABLED', branchId: 1 },
+          { id: 412, fullName: 'Lễ tân tắt B', role: 'RECEPTIONIST', status: 'DISABLED', branchId: 1 },
+        );
+        lockAccounts(411, 412); // BR-QT-10
+        const user = userEvent.setup();
+        renderPage();
+        let dialog = await openDialogOf(user, 'Kích hoạt lại Lễ tân tắt A');
+        await user.click(within(dialog).getByRole('button', { name: 'Kích hoạt lại' }));
+        expect(await within(dialog).findByText('Tài khoản đang bị khóa, cần mở khóa trước')).toBeInTheDocument();
+        await cancelDialog(user, dialog);
+
+        dialog = await openDialogOf(user, 'Kích hoạt lại Lễ tân tắt B');
+
+        expect(within(dialog).queryByRole('alert')).not.toBeInTheDocument();
+      });
     });
 
     it('điều chuyển: ô chi nhánh mới bắt buộc (không gửi branchId = 0)', async () => {

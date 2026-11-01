@@ -185,6 +185,7 @@ describe('tài khoản của hồ sơ khách tại quầy (UC22, identity-v1 #25
   it('sửa email tài khoản qua OTP gửi tới email mới; sau đó đăng nhập bằng email mới (BR-TK-16)', async () => {
     const sent = await client.post('/api/customers/1/account-email-change', { newEmail: 'trang.moi@gmail.com', ...ID }, await desk());
     expect(sent.data.data.maskedEmail).toBe('tr***@gmail.com');
+    expect(sent.data.data.codeLength).toBe(6);
     expect(ruleOf(await failure(client.post('/api/customers/1/account-email-change', { newEmail: 'trang.moi@gmail.com', ...ID }, await desk())))).toBe('BR-TK-07');
     expect(ruleOf(await failure(client.post('/api/customers/1/account-email-change/confirm', { code: '000000' }, await desk())))).toBe('BR-TK-05');
     expect((await client.post('/api/customers/1/account-email-change/confirm', { code: '123456' }, await desk())).status).toBe(204);
