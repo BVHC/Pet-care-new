@@ -333,6 +333,7 @@ class VaccinationDeleteIT {
         assertThat(exchange(vetToken, HttpMethod.DELETE, "/api/visits/abc/vaccinations/abc", null).getBody())
                 .containsEntry("message", mustChange.getBody().get("message"));
         jdbc.update("UPDATE accounts SET must_change_password = false WHERE id = ?", vet);
+        jdbc.update("DELETE FROM refresh_tokens WHERE session_id IN (SELECT id FROM sessions WHERE account_id = ?)", vet);
         jdbc.update("DELETE FROM sessions WHERE account_id = ?", vet);
         assertError(delete(vetToken, visit, dose), HttpStatus.UNAUTHORIZED, "UNAUTHENTICATED");
 

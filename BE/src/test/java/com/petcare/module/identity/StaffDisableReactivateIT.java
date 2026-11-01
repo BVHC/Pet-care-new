@@ -144,7 +144,6 @@ class StaffDisableReactivateIT {
         long vet = staff("VET", branchA);
         String vetToken1 = token(vet);
         String vetToken2 = token(vet);
-        jdbc.update("UPDATE accounts SET last_seen_at = now() WHERE id = ?", vet);
         long auditsBefore = auditsOn(vet);
 
         Map<String, Object> data = map(ok(disable(token(superManager), vet)));
@@ -397,8 +396,8 @@ class StaffDisableReactivateIT {
         long vet = staffWithPassword("VET", branchA);
         jdbc.update("""
                 UPDATE accounts SET status = 'DISABLED', must_change_password = false, failed_login_count = 3,
-                       first_failed_login_at = now(), locked_until = now() + interval '10 minutes',
-                       last_seen_at = now() WHERE id = ?""", vet);
+                       first_failed_login_at = now(), locked_until = now() + interval '10 minutes'
+                WHERE id = ?""", vet);
         String staleToken = token(vet);
 
         ResponseEntity<Map<String, Object>> response = reactivate(token(superManager), vet, null);
@@ -410,9 +409,9 @@ class StaffDisableReactivateIT {
                 .containsEntry("branchId", (int) branchA);
         assertThat(map(ok(get("/api/staff/" + vet, token(superManager))))).isEqualTo(data);
         assertThat(jdbc.queryForMap("""
-                SELECT failed_login_count, first_failed_login_at, locked_until, last_seen_at FROM accounts WHERE id = ?""",
+                SELECT failed_login_count, first_failed_login_at, locked_until FROM accounts WHERE id = ?""",
                 vet)).containsEntry("failed_login_count", 0).containsEntry("first_failed_login_at", null)
-                .containsEntry("locked_until", null).containsEntry("last_seen_at", null);
+                .containsEntry("locked_until", null);
         assertError(get("/api/me", staleToken), HttpStatus.UNAUTHORIZED, "UNAUTHENTICATED");
 
         List<Map<String, Object>> mails = jdbc.queryForList("""
@@ -759,17 +758,16 @@ class StaffDisableReactivateIT {
     }
 
     /**
-     * R8: đăng xuất và vô hiệu hóa cùng khóa {@code accounts → sessions} → không deadlock. {@code last_seen_at} có giá trị
-     * để {@code clearLastSeen} ({@code WHERE last_seen_at IS NOT NULL}) thực sự phải chờ dòng đang bị khóa.
+     * R8: đăng xuất chỉ chạm dòng {@code sessions}; vô hiệu hóa khóa {@code accounts → sessions} → không deadlock khi
+     * cả hai cùng chờ dòng phiên đang bị giữ (docs/adr/0021, docs/adr/0091).
      */
     @Test
     void logoutAndDisableDoNotDeadlock() throws Exception {
         long vet = staff("VET", branchA);
         String vetToken = token(vet);
         String token = token(superManager);
-        jdbc.update("UPDATE accounts SET last_seen_at = now() WHERE id = ?", vet);
 
-        List<ResponseEntity<Map<String, Object>>> results = whileAccountLockedMany(vet, List.of(
+        List<ResponseEntity<Map<String, Object>>> results = whileSessionsLockedMany(vet, List.of(
                 () -> post("/api/auth/logout", vetToken, null), () -> disable(token, vet)));
 
         assertThat(results.get(0).getStatusCode()).isEqualTo(HttpStatus.NO_CONTENT);
@@ -931,8 +929,8 @@ class StaffDisableReactivateIT {
 
     /** I1 (docs/adr/0033 C4): DISABLED ⇒ không còn phiên chưa hủy và offline. */
     private void assertDisabledInvariant(long accountId) {
-        assertThat(jdbc.queryForMap("SELECT status, last_seen_at FROM accounts WHERE id = ?", accountId))
-                .containsEntry("status", "DISABLED").containsEntry("last_seen_at", null);
+        assertThat(jdbc.queryForObject("SELECT status FROM accounts WHERE id = ?", String.class, accountId))
+                .isEqualTo("DISABLED");
         assertThat(jdbc.queryForObject("SELECT count(*) FROM sessions WHERE account_id = ? AND revoked_at IS NULL",
                 Long.class, accountId)).isZero();
     }
@@ -1000,6 +998,13 @@ class StaffDisableReactivateIT {
     }
 
     /** Như trên với dòng {@code accounts}: mọi request (đăng nhập, đăng xuất, quản trị) xếp hàng trên cùng dòng. */
+    /** Giữ khóa dòng phiên (duy nhất) của tài khoản: đăng xuất và các luồng hủy phiên đều phải chờ ở đây. */
+    private List<ResponseEntity<Map<String, Object>>> whileSessionsLockedMany(long accountId,
+            List<Callable<ResponseEntity<Map<String, Object>>>> requests) throws Exception {
+        return whileLocked("SELECT id FROM sessions WHERE account_id = ? FOR UPDATE", List.of(accountId),
+                WAITING_ON_ANY_LOCK, requests);
+    }
+
     private List<ResponseEntity<Map<String, Object>>> whileAccountLockedMany(long accountId,
             List<Callable<ResponseEntity<Map<String, Object>>>> requests) throws Exception {
         return whileLocked("SELECT id FROM accounts WHERE id = ? FOR UPDATE", List.of(accountId), WAITING_ON_ANY_LOCK,

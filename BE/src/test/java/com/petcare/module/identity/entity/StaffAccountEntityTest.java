@@ -36,7 +36,6 @@ class StaffAccountEntityTest {
         assertThat(account.isLocked()).isFalse();
         assertThat(account.getPendingExpiresAt()).as("CHECK ck_accounts_pending_expiry: chỉ PENDING có hạn").isNull();
         assertThat(account.getFailedLoginCount()).isZero();
-        assertThat(account.getLastSeenAt()).isNull();
     }
 
     @Test
@@ -48,11 +47,10 @@ class StaffAccountEntityTest {
     }
 
     @Test
-    void reissueInitialPasswordReplacesHashAndClearsCounterTempLockAndLastSeen() {
+    void reissueInitialPasswordReplacesHashAndClearsCounterAndTempLock() {
         Account account = Account.createStaff("nv@petcare.test", "0901234567", "old-hash", Role.VET);
         account.recordFailedLogin(T0, Duration.ofMinutes(15), 5, Duration.ofMinutes(15));
         ReflectionTestUtils.setField(account, "lockedUntil", T0.plusSeconds(600));
-        ReflectionTestUtils.setField(account, "lastSeenAt", T0);
         ReflectionTestUtils.setField(account, "locked", true);
 
         account.reissueInitialPassword("new-hash");
@@ -61,7 +59,6 @@ class StaffAccountEntityTest {
         assertThat(account.getFailedLoginCount()).isZero();
         assertThat(account.getFirstFailedLoginAt()).isNull();
         assertThat(account.getLockedUntil()).isNull();
-        assertThat(account.getLastSeenAt()).isNull();
         assertThat(account.isMustChangePassword()).as("vẫn bắt đổi ở lần đăng nhập đầu").isTrue();
         assertThat(account.isLocked()).as("khóa của ADMIN không đổi (BR-QT-11)").isTrue();
         assertThat(account.getStatus()).isEqualTo(AccountStatus.ACTIVE);
@@ -108,8 +105,6 @@ class StaffAccountEntityTest {
         Account account = Account.createStaff("nv@petcare.test", "0901234567", "hash", from);
         ReflectionTestUtils.setField(account, "status", AccountStatus.DISABLED);
         ReflectionTestUtils.setField(account, "locked", true);
-        ReflectionTestUtils.setField(account, "lastSeenAt", T0);
-
         account.changeStaffRole(to);
 
         assertThat(account.getRole()).isEqualTo(to);
@@ -117,7 +112,6 @@ class StaffAccountEntityTest {
         assertThat(account.isLocked()).isTrue();
         assertThat(account.isMustChangePassword()).isTrue();
         assertThat(account.getPasswordHash()).isEqualTo("hash");
-        assertThat(account.getLastSeenAt()).isEqualTo(T0);
         assertThat(account.getEmail()).isEqualTo("nv@petcare.test");
         assertThat(account.getPhone()).isEqualTo("0901234567");
     }
@@ -157,16 +151,14 @@ class StaffAccountEntityTest {
     /** Tài khoản#5 (docs/adr/0033): chỉ đổi {@code status} và đưa offline; mật khẩu, cờ, chức vụ giữ nguyên. */
     @ParameterizedTest
     @EnumSource(value = Role.class, names = {"CUSTOMER", "ADMIN"}, mode = EnumSource.Mode.EXCLUDE)
-    void disableSetsDisabledAndOfflineOnly(Role role) {
+    void disableSetsDisabledOnly(Role role) {
         Account account = Account.createStaff("nv@petcare.test", "0901234567", "hash", role);
-        ReflectionTestUtils.setField(account, "lastSeenAt", T0);
         ReflectionTestUtils.setField(account, "failedLoginCount", 2);
         ReflectionTestUtils.setField(account, "mustChangePassword", false);
 
         account.disable();
 
         assertThat(account.getStatus()).isEqualTo(AccountStatus.DISABLED);
-        assertThat(account.getLastSeenAt()).isNull();
         assertThat(account.getRole()).isEqualTo(role);
         assertThat(account.getPasswordHash()).isEqualTo("hash");
         assertThat(account.isMustChangePassword()).isFalse();
@@ -199,8 +191,6 @@ class StaffAccountEntityTest {
         ReflectionTestUtils.setField(account, "failedLoginCount", 4);
         ReflectionTestUtils.setField(account, "firstFailedLoginAt", T0);
         ReflectionTestUtils.setField(account, "lockedUntil", T0.plus(Duration.ofMinutes(15)));
-        ReflectionTestUtils.setField(account, "lastSeenAt", T0);
-
         account.reactivate("new");
 
         assertThat(account.getStatus()).isEqualTo(AccountStatus.ACTIVE);
@@ -209,7 +199,6 @@ class StaffAccountEntityTest {
         assertThat(account.getFailedLoginCount()).isZero();
         assertThat(account.getFirstFailedLoginAt()).isNull();
         assertThat(account.getLockedUntil()).isNull();
-        assertThat(account.getLastSeenAt()).isNull();
         assertThat(account.getRole()).isEqualTo(Role.CARETAKER);
         assertThat(account.getEmail()).isEqualTo("nv@petcare.test");
         assertThat(account.isLocked()).isFalse();
@@ -255,8 +244,6 @@ class StaffAccountEntityTest {
         ReflectionTestUtils.setField(account, "locked", locked);
         ReflectionTestUtils.setField(account, "failedLoginCount", 2);
         ReflectionTestUtils.setField(account, "lockedUntil", T0);
-        ReflectionTestUtils.setField(account, "lastSeenAt", T0);
-
         account.changeEmail("moi@petcare.test");
 
         assertThat(account.getEmail()).isEqualTo("moi@petcare.test");
@@ -266,7 +253,6 @@ class StaffAccountEntityTest {
         assertThat(account.isMustChangePassword()).isTrue();
         assertThat(account.getFailedLoginCount()).isEqualTo(2);
         assertThat(account.getLockedUntil()).isEqualTo(T0);
-        assertThat(account.getLastSeenAt()).isEqualTo(T0);
         assertThat(account.getPhone()).isEqualTo("0901234567");
         assertThat(account.getRole()).isEqualTo(Role.VET);
     }

@@ -17,7 +17,7 @@ Ghi lại các **quyết định kỹ thuật** mà đặc tả nghiệp vụ (`
 |---|---|---|---|---|
 | [0001](0001-audit-recording.md) | Ghi audit nghiệp vụ bằng `AuditRecorder` tường minh | Accepted (mục 3 phần `LOGIN_FAILED` → 0019) | 2026-10-03 | BR-QT-15, 16, BR-QT-01, BR-TK-16; convention 08 |
 | [0002](0002-client-ip-behind-proxy.md) | Xác định IP client sau reverse proxy | Accepted | 2026-10-03 | ADR-0001; `audit_logs.ip_address`, `sessions.ip_address` |
-| [0003](0003-jwt-session-authentication.md) | Xác thực bằng JWT HS256 gắn phiên DB, RBAC 7 role và phạm vi chi nhánh | Accepted (mục 4, 9 → 0005; mục 8 → 0006; mục 2 phần không xóa → 0008; mục 10 câu UPDATE `last_seen_at` → 0021) | 2026-10-04 | BR-TK-09, 11, 13, 14, 17; BR-QT-01, 03, 05, 06, 11, 13; BR-TN-06; `00-method` §3.1, §3.3; identity A1, A4, Q1; convention 02 |
+| [0003](0003-jwt-session-authentication.md) | Xác thực bằng JWT HS256 gắn phiên DB, RBAC 7 role và phạm vi chi nhánh | Accepted (mục 4, 9 → 0005; mục 8 → 0006; mục 2 phần không xóa → 0008; mục 10 câu UPDATE `last_seen_at` → 0021; mục 1 `exp`, mục 3 hạn token, không refresh token → 0091) | 2026-10-04 | BR-TK-09, 11, 13, 14, 17; BR-QT-01, 03, 05, 06, 11, 13; BR-TN-06; `00-method` §3.1, §3.3; identity A1, A4, Q1; convention 02 |
 | [0004](0004-system-config-reading.md) | Đọc tham số [CFG] bằng `ConfigKey` + cache trong bộ nhớ, seed toàn bộ bằng Flyway | Accepted | 2026-10-04 | BR-QT-13; convention 03, 06; `06-module-contracts` §1; ADR-0003 |
 | [0005](0005-public-paths-anonymous.md) | Path public luôn xử lý như chưa đăng nhập | Accepted | 2026-10-05 | Supersedes ADR-0003 mục 4, 9; BR-TK-12, 17, BR-QT-15; `00-method` §3.1; identity A4 |
 | [0006](0006-customer-owner-scope.md) | Phạm vi dữ liệu theo role — CUSTOMER không đi qua phạm vi chi nhánh | Accepted | 2026-10-05 | Supersedes ADR-0003 mục 8; 01 A02; 04 nguyên tắc 8; `00-method` §3.3; convention 02 |
@@ -113,6 +113,11 @@ Ghi lại các **quyết định kỹ thuật** mà đặc tả nghiệp vụ (`
 > Số ADR mới tiếp theo: **0091** (cập nhật 2026-11-01; 0090 đã viết). Trước khi lấy số, kiểm `origin/dev` và nhánh của BE-2.
 =======
 | [0088](0088-n5-unlock-flag-follow-up-deferral-stopped-service.md) | N5: mở khóa gỡ cờ "cần gán lại" của lượt người đó lại đủ điều kiện (D042, thay 0062 Q5); ST04 hoãn nhắc tái khám khi thú có lịch MEDICAL BOOKED, đặt lịch chỉ hủy task đã sinh (D052, thay 0084 §2 §5); lịch đã đặt vẫn tiếp nhận khi dịch vụ ngừng (D040, thay 0059 Q3). Giả định chờ PO, không migration |
+| [0091](0091-access-token-refresh-online.md) | Access token 10 phút + refresh token xoay vòng (bảng `refresh_tokens`, dùng lại ⇒ hủy phiên), online suy ra từ `sessions.access_expires_at` thay `last_seen_at`, xác thực chỉ đọc; trả D024; thay ADR-0003 mục 1, 3, 4; V27, `POST /auth/refresh` | Accepted | 2026-11-02 | BR-TN-06, BR-TK-11, 13, 14; ADR-0003, 0021, 0008, 0024, 0030 |
 
+<<<<<<< HEAD
 > Số ADR mới tiếp theo: **0089** (cập nhật 2026-11-01; 0088 đã viết). Trước khi lấy số, kiểm `origin/dev` và nhánh của BE-2.
 >>>>>>> 5e645ec (feat: mở khóa xóa needs_reassign, ST04 hoãn nhắc tái khám, check-in lịch đã đặt khi dịch vụ ngừng)
+=======
+> Số ADR mới tiếp theo: **0092** (cập nhật 2026-11-02; 0091 đã viết; `origin/dev` đã dùng 0088–0090 của BE-2 nên ADR-0088 của N5 ở nhánh này trùng số, đổi số trước khi merge). Trước khi lấy số, kiểm `origin/dev` và nhánh của BE-2.
+>>>>>>> cdb1f62 (feat: access token 10 phút + refresh token xoay vòng, online theo phiên)

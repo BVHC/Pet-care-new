@@ -15,7 +15,7 @@ import io.swagger.v3.oas.annotations.media.Schema;
  *       (BR-TK-09) — như {@code AccountSummary}. {@code @JsonProperty} giữ đúng tên trường của contract.</li>
  *   <li>{@code fullName}, {@code branchId} ({@code null} với SUPER_MANAGER — BR-QT-03), {@code specialty},
  *       {@code bio} từ {@code staff_profiles}.</li>
- *   <li>{@code online}: có thao tác trong {@code staff.online_window_minutes} [CFG] (BR-TN-06).</li>
+ *   <li>{@code online}: có phiên chưa hủy với access token còn hạn (BR-TN-06, docs/adr/0091).</li>
  * </ul>
  * Không có {@code avatarUrl} (contract không có), không có hash, lý do khóa, bộ đếm sai.
  */
@@ -53,7 +53,7 @@ public record StaffResponse(
         @Schema(description = "Chưa đổi mật khẩu ban đầu (BR-TK-17)", example = "false")
         boolean mustChangePassword,
 
-        @Schema(description = "Có thao tác trong staff.online_window_minutes [CFG] gần nhất (BR-TN-06)",
+        @Schema(description = "Có phiên chưa hủy với access token còn hạn (BR-TN-06, ADR-0091)",
                 example = "true")
         boolean online) {
 }

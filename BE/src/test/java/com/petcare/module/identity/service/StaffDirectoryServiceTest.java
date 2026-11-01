@@ -14,18 +14,15 @@ import java.time.Instant;
 import java.util.List;
 import java.util.Optional;
 
-import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.mockito.InOrder;
 import org.springframework.transaction.annotation.Propagation;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.transaction.support.TransactionSynchronizationManager;
 
-import com.petcare.module.identity.api.ConfigKey;
 import com.petcare.module.identity.api.Role;
 import com.petcare.module.identity.api.StaffDirectoryApi.PublicVetProfile;
 import com.petcare.module.identity.api.StaffDirectoryApi.StaffSummary;
-import com.petcare.module.identity.api.SystemConfigApi;
 import com.petcare.module.identity.entity.AccountStatus;
 import com.petcare.module.identity.repository.AccountRepository;
 import com.petcare.module.identity.repository.PublicVetRow;
@@ -33,21 +30,15 @@ import com.petcare.module.identity.repository.StaffProfileRepository;
 import com.petcare.module.identity.repository.StaffRow;
 import com.petcare.platform.config.TimeConfig;
 
-/** docs/adr/0024: định nghĩa {@code active}, {@code online} (BR-TN-06), thứ tự gán (BR-TN-05), đếm quản lý (BR-QT-04). */
+/** docs/adr/0024: định nghĩa {@code active}, {@code online} (BR-TN-06, docs/adr/0091), thứ tự gán (BR-TN-05), đếm quản lý (BR-QT-04). */
 class StaffDirectoryServiceTest {
 
     private static final Instant NOW = Instant.parse("2026-10-09T03:00:00Z");
 
     private final StaffProfileRepository staffProfiles = mock(StaffProfileRepository.class);
     private final AccountRepository accounts = mock(AccountRepository.class);
-    private final SystemConfigApi configs = mock(SystemConfigApi.class);
-    private final StaffDirectoryService service = new StaffDirectoryService(staffProfiles, accounts, configs,
+    private final StaffDirectoryService service = new StaffDirectoryService(staffProfiles, accounts,
             Clock.fixed(NOW, TimeConfig.BUSINESS_ZONE));
-
-    @BeforeEach
-    void setUp() {
-        when(configs.getInt(ConfigKey.STAFF_ONLINE_WINDOW_MINUTES)).thenReturn(10);
-    }
 
     @Test
     void activeMeansStatusActiveAndNotLocked() {
@@ -57,16 +48,14 @@ class StaffDirectoryServiceTest {
     }
 
     @Test
-    void onlineWindowIncludesItsBoundaryAndComesFromConfig() {
-        assertThat(summaryOf(row(1L, AccountStatus.ACTIVE, false, null)).online()).as("chưa từng thao tác").isFalse();
-        assertThat(summaryOf(row(2L, AccountStatus.ACTIVE, false, NOW.minusSeconds(600))).online())
-                .as("đúng mốc 10 phút").isTrue();
-        assertThat(summaryOf(row(3L, AccountStatus.ACTIVE, false, NOW.minusSeconds(601))).online())
-                .as("quá mốc 1 giây").isFalse();
-
-        when(configs.getInt(ConfigKey.STAFF_ONLINE_WINDOW_MINUTES)).thenReturn(15);
-        assertThat(summaryOf(row(4L, AccountStatus.ACTIVE, false, NOW.minusSeconds(601))).online())
-                .as("[CFG] đổi thì cửa sổ đổi").isTrue();
+    void onlineMeansAnAccessTokenThatIsStillValid() {
+        assertThat(summaryOf(row(1L, AccountStatus.ACTIVE, false, null)).online()).as("không có phiên nào").isFalse();
+        assertThat(summaryOf(row(2L, AccountStatus.ACTIVE, false, NOW.plusSeconds(1))).online())
+                .as("access token còn hạn 1 giây").isTrue();
+        assertThat(summaryOf(row(3L, AccountStatus.ACTIVE, false, NOW)).online())
+                .as("đúng mốc hạn là đã hết hạn (như JwtTokenService)").isFalse();
+        assertThat(summaryOf(row(4L, AccountStatus.ACTIVE, false, NOW.minusSeconds(1))).online())
+                .as("đã hết hạn").isFalse();
     }
 
     @Test
@@ -80,9 +69,9 @@ class StaffDirectoryServiceTest {
     void assignableStaffPutsOnlineFirstAndKeepsQueryOrderWithinGroup() {
         when(staffProfiles.findActiveStaffRows(5L, Role.VET)).thenReturn(List.of(
                 vet(1L, "An", null),
-                vet(2L, "Bình", NOW.minusSeconds(60)),
+                vet(2L, "Bình", NOW.plusSeconds(60)),
                 vet(3L, "Chi", NOW.minusSeconds(3600)),
-                vet(4L, "Dũng", NOW)));
+                vet(4L, "Dũng", NOW.plusSeconds(600))));
 
         assertThat(service.findAssignableStaff(5L, Role.VET))
                 .extracting(StaffSummary::accountId).containsExactly(2L, 4L, 1L, 3L);
@@ -91,7 +80,7 @@ class StaffDirectoryServiceTest {
     @Test
     void activeStaffIdsKeepQueryOrder() {
         when(staffProfiles.findActiveStaffRows(5L, Role.RECEPTIONIST)).thenReturn(List.of(
-                new StaffRow(7L, "An", Role.RECEPTIONIST, 5L, AccountStatus.ACTIVE, false, NOW),
+                new StaffRow(7L, "An", Role.RECEPTIONIST, 5L, AccountStatus.ACTIVE, false, NOW.plusSeconds(60)),
                 new StaffRow(3L, "Bình", Role.RECEPTIONIST, 5L, AccountStatus.ACTIVE, false, null)));
 
         assertThat(service.findActiveStaffIds(5L, Role.RECEPTIONIST)).containsExactly(7L, 3L);
@@ -129,7 +118,7 @@ class StaffDirectoryServiceTest {
         verifyNoInteractions(staffProfiles);
 
         when(staffProfiles.findStaffRows(List.of(1L, 2L))).thenReturn(List.of(
-                row(2L, AccountStatus.ACTIVE, true, NOW),
+                row(2L, AccountStatus.ACTIVE, true, NOW.plusSeconds(60)),
                 row(1L, AccountStatus.DISABLED, false, null)));
 
         assertThat(service.findStaffByIds(List.of(1L, 2L))).containsExactlyInAnyOrder(
@@ -142,7 +131,7 @@ class StaffDirectoryServiceTest {
     @Test
     void findStaffForShareLocksTheAccountBeforeReadingTheStaffRow() {
         when(accounts.lockForShare(1L)).thenReturn(Optional.of(1L));
-        when(staffProfiles.findStaffRow(1L)).thenReturn(Optional.of(row(1L, AccountStatus.ACTIVE, false, NOW)));
+        when(staffProfiles.findStaffRow(1L)).thenReturn(Optional.of(row(1L, AccountStatus.ACTIVE, false, NOW.plusSeconds(60))));
 
         StaffSummary summary = service.findStaffForShare(1L).orElseThrow();
 
@@ -198,11 +187,11 @@ class StaffDirectoryServiceTest {
         return service.findStaff(row.accountId()).orElseThrow();
     }
 
-    private static StaffRow row(Long id, AccountStatus status, boolean locked, Instant lastSeenAt) {
-        return new StaffRow(id, "Nhân viên " + id, Role.VET, 5L, status, locked, lastSeenAt);
+    private static StaffRow row(Long id, AccountStatus status, boolean locked, Instant onlineUntil) {
+        return new StaffRow(id, "Nhân viên " + id, Role.VET, 5L, status, locked, onlineUntil);
     }
 
-    private static StaffRow vet(Long id, String name, Instant lastSeenAt) {
-        return new StaffRow(id, name, Role.VET, 5L, AccountStatus.ACTIVE, false, lastSeenAt);
+    private static StaffRow vet(Long id, String name, Instant onlineUntil) {
+        return new StaffRow(id, name, Role.VET, 5L, AccountStatus.ACTIVE, false, onlineUntil);
     }
 }

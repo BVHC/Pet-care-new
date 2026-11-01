@@ -253,6 +253,7 @@ public final class AppointmentItSupport {
             } else if (entry[0] == ACCOUNT) {
                 jdbc.update("DELETE FROM notifications WHERE account_id = ?", entry[1]);
                 jdbc.update("DELETE FROM notification_outbox WHERE recipient_account_id = ?", entry[1]);
+                jdbc.update("DELETE FROM refresh_tokens WHERE session_id IN (SELECT id FROM sessions WHERE account_id = ?)", entry[1]);
                 jdbc.update("DELETE FROM sessions WHERE account_id = ?", entry[1]);
                 jdbc.update("DELETE FROM staff_profiles WHERE account_id = ?", entry[1]);
             }

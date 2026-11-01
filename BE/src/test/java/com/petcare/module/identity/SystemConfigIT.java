@@ -47,6 +47,8 @@ class SystemConfigIT {
         expect("vet.bio_max_length", "500", "INT", "100", "500");                 // BR-TK-20
         expect("audit.retention_years", "2", "INT", "2", "10");                   // BR-QT-16
         expect("session.ttl_hours", "12", "INT", "1", "72");                      // ADR-0003
+        // Mặc định production là 10 (V27); profile test nâng lên 720 bằng db/test-migration (ADR-0091)
+        expect("session.access_ttl_minutes", "720", "INT", "5", "720");           // ADR-0091, BR-TN-06
         expect("appointment.min_lead_hours", "24", "INT", "0", "72");             // BR-LH-04
         expect("appointment.max_advance_days", "30", "INT", "7", "90");           // BR-LH-04
         expect("appointment.max_booked_per_pet", "2", "INT", "1", "5");           // BR-LH-05
@@ -60,7 +62,6 @@ class SystemConfigIT {
         expect("booking_restriction.duration_days", "30", "INT", "1", "180");     // BR-LH-09
         expect("visit.check_in_early_minutes", "30", "INT", "0", "120");          // BR-TN-02
         expect("visit.late_priority_minutes", "15", "INT", "0", "30");            // BR-TN-03
-        expect("staff.online_window_minutes", "10", "INT", "1", "60");            // BR-TN-06
         expect("medical_record.follow_up_max_days", "180", "INT", "30", "365");   // BR-KB-06
         expect("boarding.min_nights", "1", "INT", "1", "7");                      // BR-LT-02
         expect("boarding.max_nights", "30", "INT", "1", "90");                    // BR-LT-02

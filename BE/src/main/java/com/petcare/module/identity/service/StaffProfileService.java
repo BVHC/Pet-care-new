@@ -25,7 +25,7 @@ import com.petcare.platform.security.BranchScope;
  *   <li>Có {@code email} → BR-TK-15, trước mọi đọc / ghi.</li>
  *   <li>Khóa dòng {@code accounts} ({@code FOR NO KEY UPDATE}) <b>rồi mới</b> đọc {@code staff_profiles}: Hibernate ghi
  *       đủ mọi cột, nên đọc dưới khóa thì không ghi đè thay đổi đã commit của luồng khác (thứ tự khóa
- *       {@code accounts → staff_profiles}; {@code touchLastSeen} dùng {@code SKIP LOCKED} nên không chờ).</li>
+ *       {@code accounts → staff_profiles}).</li>
  *   <li>BR-TK-11 kiểm lại dưới khóa: tài khoản vừa bị khóa / vô hiệu hóa sau khi filter cho request qua (như
  *       {@code ChangePasswordAttemptService}, docs/adr/0022 mục 9).</li>
  *   <li>Không phải VET mà gửi {@code specialty} / {@code bio} (kể cả chuỗi rỗng) → 403.</li>

@@ -120,6 +120,7 @@ public abstract class BoardingItSupport {
         }
         if (!accounts.isEmpty()) {
             String a = ids(accounts);
+            jdbc.update("DELETE FROM refresh_tokens WHERE session_id IN (SELECT id FROM sessions WHERE account_id IN (" + a + "))");
             jdbc.update("DELETE FROM sessions WHERE account_id IN (" + a + ")");
             jdbc.update("DELETE FROM staff_profiles WHERE account_id IN (" + a + ")");
         }

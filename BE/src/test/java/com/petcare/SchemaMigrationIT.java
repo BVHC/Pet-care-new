@@ -144,10 +144,12 @@ class SchemaMigrationIT {
         // V23 cờ ST18 vaccinations.overdue_handled_at + index quét (docs/adr/0083),
         // V24 mẫu CARE_LOG_ABNORMAL (+_APP), BOARDING_NO_KENNEL_APP + 2 index nhận thú / nhật ký (docs/adr/0085),
         // V25 mẫu BOARDING_OVERDUE (+_APP), BOARDING_OVERDUE_MANAGER_APP, BOARDING_CAPACITY_WARNING_APP + 3 index trả thú / ST15 (docs/adr/0086),
-        // V26 mẫu STOCK_ALERT_DIGEST_APP (ST08, docs/adr/0087)
+        // V26 mẫu STOCK_ALERT_DIGEST_APP (ST08, docs/adr/0087),
+        // V27 refresh_tokens + sessions.access_expires_at, bỏ accounts.last_seen_at, [CFG] session.access_ttl_minutes
+        // (docs/adr/0091), V9000 chỉ ở test: baseline session.access_ttl_minutes = 720
         assertThat(rows).extracting(row -> row.get("version"))
                 .containsExactly("1", "2", "3", "4", "5", "6", "7", "8", "9", "10", "11", "12", "13", "14", "15",
-                        "16", "17", "18", "19", "20", "21", "22", "23", "24", "25", "26");
+                        "16", "17", "18", "19", "20", "21", "22", "23", "24", "25", "26", "27", "9000");
         assertThat(rows).allSatisfy(row -> assertThat(row).containsEntry("success", true));
     }
 
@@ -172,10 +174,11 @@ class SchemaMigrationIT {
                 """, String.class);
 
         assertThat(ERD_TABLES).hasSize(55);
-        // document_counters (V14, ADR-0043) là bảng hạ tầng ngoài ERD v16 (erd 13 muc 18)
+        // document_counters (V14, ADR-0043) và refresh_tokens (V27, ADR-0091) là bảng hạ tầng ngoài ERD v16
+        // (erd 13 muc 18)
         assertThat(tables).containsExactlyInAnyOrderElementsOf(
-                java.util.stream.Stream.concat(ERD_TABLES.stream(), java.util.stream.Stream.of("document_counters"))
-                        .toList());
+                java.util.stream.Stream.concat(ERD_TABLES.stream(),
+                        java.util.stream.Stream.of("document_counters", "refresh_tokens")).toList());
     }
 
     @Test

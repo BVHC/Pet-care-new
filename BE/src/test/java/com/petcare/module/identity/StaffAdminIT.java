@@ -601,8 +601,9 @@ class StaffAdminIT {
         long vet = staff("VET", branchB);
         jdbc.update("""
                 UPDATE accounts SET email = ?, phone = '0911111111', is_locked = true, locked_reason = 'IT',
-                       must_change_password = true, last_seen_at = now(), locked_until = now() + interval '1 hour'
+                       must_change_password = true, locked_until = now() + interval '1 hour'
                 WHERE id = ?""", "col-email-" + tag.toLowerCase() + "@petcare.test", vet);
+        liveSession(vet);
         jdbc.update("""
                 UPDATE staff_profiles SET full_name = ?, specialty = 'col-specialty', bio = 'col-bio',
                        avatar_url = 'https://img.test/col.png'
@@ -628,8 +629,8 @@ class StaffAdminIT {
                 token(superManager)))).get("content");
         assertThat(content).containsExactly(expected);
 
-        jdbc.update("UPDATE accounts SET is_locked = false, locked_reason = NULL, last_seen_at = NULL WHERE id = ?",
-                vet);
+        jdbc.update("UPDATE accounts SET is_locked = false, locked_reason = NULL WHERE id = ?", vet);
+        jdbc.update("UPDATE sessions SET revoked_at = now() WHERE account_id = ?", vet);
         assertThat(map(ok(get("/api/staff/" + vet, token(superManager)))))
                 .as("khóa tạm locked_until không làm isLocked = true").containsEntry("isLocked", false)
                 .containsEntry("online", false);
@@ -677,7 +678,7 @@ class StaffAdminIT {
         String oldToken = (String) map(ok(login(email, oldPassword))).get("accessToken");
         jdbc.update("""
                 UPDATE accounts SET failed_login_count = 3, first_failed_login_at = now(),
-                       locked_until = now() + interval '10 minutes', last_seen_at = now() WHERE id = ?""", id);
+                       locked_until = now() + interval '10 minutes' WHERE id = ?""", id);
 
         ResponseEntity<Map<String, Object>> response = post("/api/staff/" + id + "/resend-initial-password",
                 token(managerA), null);
@@ -685,10 +686,10 @@ class StaffAdminIT {
         assertThat(response.getStatusCode()).as("%s", response.getBody()).isEqualTo(HttpStatus.NO_CONTENT);
         assertThat(response.getBody()).isNull();
         assertThat(jdbc.queryForMap("""
-                SELECT failed_login_count, first_failed_login_at, locked_until, last_seen_at, must_change_password
+                SELECT failed_login_count, first_failed_login_at, locked_until, must_change_password
                 FROM accounts WHERE id = ?""", id)).containsEntry("failed_login_count", 0)
                 .containsEntry("first_failed_login_at", null).containsEntry("locked_until", null)
-                .containsEntry("last_seen_at", null).containsEntry("must_change_password", true);
+                .containsEntry("must_change_password", true);
         assertError(get("/api/me", oldToken), HttpStatus.UNAUTHORIZED, "UNAUTHENTICATED");
         assertThat(outbox(email)).hasSize(2);
         String newPassword = tempPassword(email);
@@ -1086,5 +1087,13 @@ class StaffAdminIT {
                 .containsEntry("statusCode", status.value());
         assertThat((String) response.getBody().get("message")).isNotBlank();
         assertThat((String) response.getBody().get("traceId")).isNotBlank();
+    }
+
+    /** Phiên còn hiệu lực với access token còn hạn: nhân viên online (BR-TN-06, docs/adr/0091). */
+    private void liveSession(long accountId) {
+        jdbc.update("""
+                INSERT INTO sessions (account_id, token_hash, expires_at, access_expires_at)
+                VALUES (?, ?, now() + interval '1 hour', now() + interval '1 hour')""", accountId,
+                java.util.UUID.randomUUID().toString());
     }
 }

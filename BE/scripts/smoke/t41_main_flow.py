@@ -83,7 +83,28 @@ def q(value):
     return "'" + str(value).replace("'", "''") + "'"
 
 
+# Access token sống 10 phút (ADR-0091) mà kịch bản chờ cron nhiều phút: token hết hạn (401) thì đăng nhập lại cùng
+# tài khoản rồi gửi lại một lần. TOKEN_OWNER: token → email; TOKEN_ALIAS: token cũ → token hiện hành.
+TOKEN_OWNER = {}
+TOKEN_ALIAS = {}
+
+
 def http(method, path, token=None, body=None, base=API):
+    token = TOKEN_ALIAS.get(token, token)
+    status, payload = _http_once(method, path, token, body, base)
+    if status == 401 and token in TOKEN_OWNER and path != "/api/auth/login":
+        email = TOKEN_OWNER[token]
+        relogin_status, relogin_body = _http_once("POST", "/api/auth/login", None,
+                                                  {"email": email, "password": PASSWORD}, API)
+        if relogin_status == 200:
+            fresh = relogin_body["data"]["accessToken"]
+            TOKEN_ALIAS[token] = fresh
+            TOKEN_OWNER[fresh] = email
+            return _http_once(method, path, fresh, body, base)
+    return status, payload
+
+
+def _http_once(method, path, token=None, body=None, base=API):
     data = None if body is None else json.dumps(body, ensure_ascii=False).encode("utf-8")
     request = urllib.request.Request(base + path, data=data, method=method)
     request.add_header("Accept", "application/json")
@@ -302,7 +323,10 @@ def lots(lot_ids):
 
 def login(email):
     status, body = http("POST", "/api/auth/login", body={"email": email, "password": PASSWORD})
-    return status, data_of(body).get("accessToken")
+    token = data_of(body).get("accessToken")
+    if token:
+        TOKEN_OWNER[token] = email
+    return status, token
 
 
 def mailpit_reminders(email):

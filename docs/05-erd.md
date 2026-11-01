@@ -92,7 +92,6 @@ erDiagram
 | failed_login_count | INT | NN, DEFAULT 0 | Đếm lần sai liên tiếp |
 | first_failed_login_at | TIMESTAMPTZ | ? | Mốc đầu của cửa sổ 15 phút |
 | must_change_password | BOOLEAN | NN, DEFAULT false | BR-TK-17, BR-QT-10 |
-| last_seen_at | TIMESTAMPTZ | ? | Trạng thái online (BR-TN-06) |
 | notification_settings | JSONB | NN, DEFAULT '{}' | Cài đặt nhận thông báo của khách (UC88) [ERD] |
 | pending_expires_at | TIMESTAMPTZ | ? | Hạn xác thực của tài khoản `PENDING` = lúc đăng ký + `account.pending_ttl_hours` [CFG], chốt theo BR-QT-13; ST02 xóa khi `now >= pending_expires_at` (BR-TK-08). Xác thực thì về NULL [ERD] (V5, §13 mục 12) |
 
@@ -126,9 +125,23 @@ Ràng buộc "A05–A08 phải có chi nhánh" kiểm tra ở ứng dụng vì `
 | user_agent | VARCHAR(500) | ? | |
 | expires_at | TIMESTAMPTZ | NN | |
 | revoked_at | TIMESTAMPTZ | ? | Hủy phiên khi khóa, vô hiệu hóa, đổi/đặt lại mật khẩu (BR-TK-11, 13, 14) |
+| access_expires_at | TIMESTAMPTZ | ? | Hạn access token hiện hành (≤ `expires_at`); nhân viên online ⇔ có phiên chưa hủy với hạn này còn tới (BR-TN-06). NULL với phiên mở trước V27 [ERD] (ADR-0091) |
 
 - Index: `(account_id) WHERE revoked_at IS NULL`
 - Index: `(account_id)` — kiểm FK khi xóa `accounts` (V7, ADR-0018)
+
+### `refresh_tokens` — PART của Session [ERD] (V27, ADR-0091)
+
+| Cột | Kiểu | Ràng buộc | Ghi chú |
+|---|---|---|---|
+| id | BIGINT | PK | |
+| session_id | BIGINT | NN, FK→sessions | `RESTRICT`: job dọn phiên xóa token của lô phiên trước |
+| token_hash | VARCHAR(64) | NN, UQ | SHA-256 hex của chuỗi 256 bit ngẫu nhiên; không lưu token gốc |
+| expires_at | TIMESTAMPTZ | NN | = `sessions.expires_at`, chốt lúc tạo (BR-QT-13) |
+| used_at | TIMESTAMPTZ | ? | NULL = còn dùng được; mỗi lần refresh đánh dấu token cũ và tạo token mới; dùng lại token đã dùng ⇒ hủy phiên |
+
+- Index: `(session_id)`; UNIQUE partial `(session_id) WHERE used_at IS NULL` (đúng một token còn dùng mỗi phiên)
+- Bảng hạ tầng ngoài 55 bảng của erd v16 (như `document_counters`): không có SM riêng, không phải model của 04.
 
 ### `otp_tokens` — LOG
 

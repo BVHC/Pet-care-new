@@ -89,7 +89,7 @@ class StaffAccountServiceTest {
 
     @BeforeEach
     void setUp() {
-        when(presence.onlineSince()).thenReturn(NOW.minusSeconds(600));
+        when(presence.now()).thenReturn(NOW);
         when(branches.findBranch(OWN_BRANCH)).thenReturn(Optional.of(branch(OWN_BRANCH, BranchStatus.ACTIVE)));
         when(branches.findBranch(OTHER_BRANCH)).thenReturn(Optional.of(branch(OTHER_BRANCH, BranchStatus.DRAFT)));
         when(accounts.save(any(Account.class))).thenAnswer(invocation -> {

@@ -12,6 +12,8 @@ import com.petcare.module.identity.dto.ForgotPasswordRequest;
 import com.petcare.module.identity.dto.LoginRequest;
 import com.petcare.module.identity.dto.LoginResponse;
 import com.petcare.module.identity.dto.OtpSentResponse;
+import com.petcare.module.identity.dto.RefreshTokenRequest;
+import com.petcare.module.identity.dto.RefreshTokenResponse;
 import com.petcare.module.identity.dto.RegisterAccountRequest;
 import com.petcare.module.identity.dto.RegistrationResponse;
 import com.petcare.module.identity.dto.ResendRegistrationOtpRequest;
@@ -21,6 +23,7 @@ import com.petcare.module.identity.dto.VerifyAccountRequest;
 import com.petcare.module.identity.service.LoginService;
 import com.petcare.module.identity.service.LogoutService;
 import com.petcare.module.identity.service.PasswordResetService;
+import com.petcare.module.identity.service.RefreshTokenService;
 import com.petcare.module.identity.service.RegistrationService;
 import com.petcare.platform.config.ApiErrorDoc;
 import com.petcare.platform.model.ApiResponse;
@@ -40,13 +43,15 @@ public class AuthController {
 
     private final RegistrationService registrations;
     private final LoginService logins;
+    private final RefreshTokenService refreshTokens;
     private final LogoutService logouts;
     private final PasswordResetService passwordResets;
 
-    public AuthController(RegistrationService registrations, LoginService logins, LogoutService logouts,
-            PasswordResetService passwordResets) {
+    public AuthController(RegistrationService registrations, LoginService logins, RefreshTokenService refreshTokens,
+            LogoutService logouts, PasswordResetService passwordResets) {
         this.registrations = registrations;
         this.logins = logins;
+        this.refreshTokens = refreshTokens;
         this.logouts = logouts;
         this.passwordResets = passwordResets;
     }
@@ -110,6 +115,27 @@ public class AuthController {
             HttpServletRequest httpRequest) {
         return ApiResponse.ok(logins.login(request, httpRequest.getRemoteAddr(),
                 httpRequest.getHeader(HttpHeaders.USER_AGENT)), "Đăng nhập thành công");
+    }
+
+    /**
+     * Đổi refresh token lấy cặp token mới của cùng phiên (docs/adr/0091). Path public: xác thực bằng refresh token,
+     * bearer gửi kèm bị bỏ qua (docs/adr/0005).
+     */
+    @Operation(operationId = "refreshAccessToken", tags = "Auth",
+            summary = "Làm mới access token",
+            description = "UC03 · BR-TK-11, BR-TN-06. Actor: A02–A08. Quyền: Public. Chuyển trạng thái: —. "
+                + "Cấp cặp token mới cho cùng phiên: access token mới (hạn `session.access_ttl_minutes` [CFG], không "
+                + "vượt hạn phiên) và refresh token mới; access token cũ và refresh token vừa gửi hết hiệu lực ngay "
+                + "(request đang chạy với token cũ nhận 401, client gửi lại bằng token mới). Chỉ gọi khi người dùng "
+                + "có thao tác: refresh theo bộ đếm hoặc từ request poll làm nhân viên online mãi (D024). Hạn tuyệt "
+                + "đối của phiên không đổi. Không ghi audit khi thành công (ADR-0091).")
+    @ApiErrorDoc(status = 400, description = "`VALIDATION_FAILED` refreshToken trống hoặc quá 128 ký tự")
+    @ApiErrorDoc(status = 401, description = "Refresh token không đúng, đã dùng, hết hạn, phiên đã bị hủy hoặc tài "
+            + "khoản bị khóa / vô hiệu hóa — một thông điệp chung. Dùng lại token đã dùng hủy cả phiên và ghi audit "
+            + "`REFRESH_TOKEN_REUSED` (ADR-0091)")
+    @PostMapping("/refresh")
+    public ApiResponse<RefreshTokenResponse> refresh(@Valid @RequestBody RefreshTokenRequest request) {
+        return ApiResponse.ok(refreshTokens.refresh(request.refreshToken()), "Làm mới phiên thành công");
     }
 
     /**

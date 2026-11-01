@@ -442,6 +442,7 @@ class PrescriptionIT {
         assertThat(mustChange.getStatusCode()).isEqualTo(HttpStatus.BAD_REQUEST);
         assertThat((String) mustChange.getBody().get("message")).endsWith("(BR-TK-17)");
         jdbc.update("UPDATE accounts SET must_change_password = false WHERE id = ?", vet);
+        jdbc.update("DELETE FROM refresh_tokens WHERE session_id IN (SELECT id FROM sessions WHERE account_id = ?)", vet);
         jdbc.update("DELETE FROM sessions WHERE account_id = ?", vet);
         assertError(post(vetToken, visit, body(1, null)), HttpStatus.UNAUTHORIZED, "UNAUTHENTICATED");
 
@@ -930,6 +931,7 @@ class PrescriptionIT {
         jdbc.update("UPDATE accounts SET role = 'CARETAKER' WHERE id = ?", vet);
         assertError(delete(vetToken, visit, itemId), HttpStatus.FORBIDDEN, "ACCESS_DENIED");
         jdbc.update("UPDATE accounts SET role = 'VET' WHERE id = ?", vet);
+        jdbc.update("DELETE FROM refresh_tokens WHERE session_id IN (SELECT id FROM sessions WHERE account_id = ?)", vet);
         jdbc.update("DELETE FROM sessions WHERE account_id = ?", vet);
         assertError(delete(vetToken, visit, itemId), HttpStatus.UNAUTHORIZED, "UNAUTHENTICATED");
 

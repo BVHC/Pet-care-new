@@ -156,7 +156,6 @@ class AccountLockServiceTest {
     @Test
     void lockVetReadsThenLocksRevokesPublishesNotifiesAuditsFlushes() {
         Account account = staff(TARGET, Role.VET, AccountStatus.ACTIVE, ACTIVE_BRANCH);
-        ReflectionTestUtils.setField(account, "lastSeenAt", NOW);
         when(visits.findUnfinishedVisitsAssignedTo(TARGET)).thenReturn(List.of(
                 new AssignedVisit(15L, ACTIVE_BRANCH, VisitStatus.WAITING),
                 new AssignedVisit(12L, ACTIVE_BRANCH, VisitStatus.IN_PROGRESS)));
@@ -180,7 +179,6 @@ class AccountLockServiceTest {
 
         assertThat(account.isLocked()).isTrue();
         assertThat(account.getLockedReason()).isEqualTo("Nghi bị chiếm tài khoản");
-        assertThat(account.getLastSeenAt()).isNull();
         assertThat(account.getStatus()).isEqualTo(AccountStatus.ACTIVE);
 
         assertThat(result.account()).isEqualTo(new AccountSummary(TARGET, "staff7@petcare.test", Role.VET,
