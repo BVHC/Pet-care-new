@@ -11,9 +11,9 @@ import java.util.Set;
  * {@code {ten_bien}} với tên nằm trong {@code allowedVars} (khớp chính xác, phân biệt hoa thường); mọi {@code {} hay
  * {@code }} khác là lỗi.
  *
- * <p>Phải khớp với {@code care.service.NotificationTemplateRenderer}, vốn chỉ thay đúng chuỗi {@code {ten}} cho từng tên
- * trong {@code allowedVars}: mẫu qua bộ quét thì nội dung gửi đi không còn dấu ngoặc nào, và biến được quét thấy đúng là
- * biến được thay. Hai lớp ở hai module nên giữ khớp bằng {@code NotificationTemplateSyntaxParityTest}, không dùng chung
+ * <p>Phải khớp với {@code care.service.NotificationTemplateRenderer}, vốn quét một lượt theo cùng ngữ pháp và chỉ thay
+ * đúng token {@code {ten}} có tên trong {@code allowedVars} (giá trị chèn vào không bị quét lại, D019): mẫu qua bộ quét
+ * thì nội dung gửi đi không còn dấu ngoặc nào của mẫu, và biến được quét thấy đúng là biến được thay. Hai lớp ở hai module nên giữ khớp bằng {@code NotificationTemplateSyntaxParityTest}, không dùng chung
  * code (06 §1: {@code api/} chỉ chứa interface, record, enum, event).
  */
 final class TemplateVariables {
