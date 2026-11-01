@@ -74,7 +74,7 @@ export function RevenueTab({ query, enabled, branchName }: PeriodTabProps) {
                       <StatusBadge status={SOURCE_LABELS[r.source]} variant="neutral" />
                     </td>
                     <td className="text-right tabular-nums">{formatCurrency(r.amount)}</td>
-                    <td>{r.reason}</td>
+                    <td>{r.reason || '—'}</td>
                     <td className="whitespace-nowrap text-(--text-secondary)!">{formatVnDateTime(r.cancelledAt)}</td>
                   </tr>
                 ))}

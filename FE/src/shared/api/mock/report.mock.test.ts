@@ -6,7 +6,7 @@ import type { FeedbackStatRow, LostRevenueRow, NoShowRow, ReturnRateRow, Revenue
 import { FEEDBACK_STATE_KEY, type FeedbackRecord } from './feedback.mock';
 import type { OrderRow } from './sales.mock';
 
-// Báo cáo UC89 (report-v1 #1–7) — BE chưa có (T44), mock theo ASSUMPTION A1–A9 ở đầu report.mock.ts.
+// Báo cáo UC89 (report-v1 #1–7) — BE đã có từ 30/10 (T44), mock theo ASSUMPTION A1–A10 ở đầu report.mock.ts.
 // Đồng hồ ghim ở thứ Sáu 23/10/2026 09:00 giờ Việt Nam (như test lưu trú): "tháng này" = 2026-10-01…2026-10-23, "30 ngày qua" = 2026-09-24…2026-10-23.
 // Số liệu chính xác chỉ khẳng định trên state TỰ GHI (kỳ năm 2020, xa dữ liệu mẫu trong file và dữ liệu mẫu của sales / kho dùng giờ máy); dữ liệu mẫu
 // tất định của #1, #3, #4, #5 (theo "số ngày trước hôm nay") chỉ khẳng định ở ngày hôm nay và bằng tính chất (chia kỳ làm đôi, tỷ lệ, phạm vi).
@@ -153,14 +153,17 @@ describe('tham số sai → 400 MALFORMED_REQUEST / VALIDATION_FAILED', () => {
     }
   });
 
-  it('stock-alerts: withinDays sai kiểu / ngoài int32 → MALFORMED, âm → VALIDATION_FAILED, 0 hợp lệ', async () => {
+  // BE: `@Min(0) @Max(365)` trên Integer (đã đo 1/11/2026: 366 và 2147483647 → 400 VALIDATION_FAILED, 2147483648 → MALFORMED_REQUEST).
+  it('stock-alerts: withinDays sai kiểu / ngoài int32 → MALFORMED, ngoài 0..365 → VALIDATION_FAILED, 0 và 365 hợp lệ', async () => {
     for (const withinDays of ['x', '1.5', '2147483648', '-2147483649']) {
       expectFail(await rejected('chain', 'stock-alerts', { withinDays }), 400, 'MALFORMED_REQUEST', "Tham số 'withinDays' sai kiểu dữ liệu");
     }
-    expectFail(await rejected('chain', 'stock-alerts', { withinDays: '-1' }), 400, 'VALIDATION_FAILED', 'withinDays: Số ngày phải là số nguyên ≥ 0');
+    for (const withinDays of ['-1', '366', '2147483647', '-2147483648']) {
+      expectFail(await rejected('chain', 'stock-alerts', { withinDays }), 400, 'VALIDATION_FAILED', 'withinDays: withinDays phải từ 0 tới 365');
+    }
     expectFail(await rejected('chain', 'stock-alerts', { branchId: 'abc', withinDays: 'x' }), 400, 'MALFORMED_REQUEST', "Tham số 'branchId' sai kiểu dữ liệu");
     expect((await report('chain', 'stock-alerts', { withinDays: 0 })).status).toBe(200);
-    expect((await report('chain', 'stock-alerts', { withinDays: 2147483647 })).status).toBe(200);
+    expect((await report('chain', 'stock-alerts', { withinDays: 365 })).status).toBe(200);
   });
 
   it('stock-alerts không đọc from / to: gửi kèm sai dạng hay đảo ngược vẫn 200', async () => {
@@ -169,11 +172,27 @@ describe('tham số sai → 400 MALFORMED_REQUEST / VALIDATION_FAILED', () => {
   });
 });
 
-describe('thứ tự: 400 tham số → 403 vai trò → 403 phạm vi → 400 BR-BC-01', () => {
-  it('tham số sai đến trước vai trò (khách và ADMIN cũng nhận 400)', async () => {
+// Thứ tự đã đo trên BE thật 1/11/2026 (curl): thiếu / sai kiểu (MALFORMED) → vai trò → ràng buộc @Positive / @Min / @Max
+// (VALIDATION_FAILED) → phạm vi chi nhánh → BR-BC-01. Lễ tân + branchId=0 hay withinDays=-1 → 403; hung.tran + branchId=-1 → 400.
+describe('thứ tự: 400 thiếu / sai kiểu → 403 vai trò → 400 VALIDATION_FAILED → 403 phạm vi → 400 BR-BC-01', () => {
+  it('thiếu / sai kiểu đến trước vai trò (khách và ADMIN cũng nhận 400)', async () => {
     expectFail(await rejected('customer', 'revenue', { to: '2026-10-23' }), 400, 'MALFORMED_REQUEST');
     expectFail(await rejected('admin', 'feedback', { ...MONTH, branchId: 'abc' }), 400, 'MALFORMED_REQUEST');
-    expectFail(await rejected('desk', 'stock-alerts', { withinDays: '-5' }), 400, 'VALIDATION_FAILED');
+    expectFail(await rejected('desk', 'stock-alerts', { withinDays: 'abc' }), 400, 'MALFORMED_REQUEST');
+  });
+
+  it('vai trò đến trước ràng buộc giá trị: lễ tân / ADMIN gửi withinDays hay branchId ngoài khoảng vẫn nhận 403', async () => {
+    expectFail(await rejected('desk', 'stock-alerts', { withinDays: '-5' }), 403, 'ACCESS_DENIED');
+    expectFail(await rejected('desk', 'stock-alerts', { withinDays: '366' }), 403, 'ACCESS_DENIED');
+    expectFail(await rejected('desk', 'revenue', { ...MONTH, branchId: '0' }), 403, 'ACCESS_DENIED');
+    expectFail(await rejected('admin', 'feedback', { ...MONTH, branchId: '-1' }), 403, 'ACCESS_DENIED');
+  });
+
+  it('ràng buộc giá trị đến trước phạm vi: quản lý gửi branchId âm hay withinDays ngoài khoảng kèm chi nhánh khác → 400', async () => {
+    expectFail(await rejected('manager', 'revenue', { ...MONTH, branchId: '-1' }), 400, 'VALIDATION_FAILED', 'branchId: branchId phải là số dương');
+    expectFail(await rejected('manager', 'stock-alerts', { withinDays: '-1', branchId: 2 }), 400, 'VALIDATION_FAILED', 'withinDays: withinDays phải từ 0 tới 365');
+    expectFail(await rejected('manager', 'stock-alerts', { withinDays: '366', branchId: 2 }), 400, 'VALIDATION_FAILED', 'withinDays: withinDays phải từ 0 tới 365');
+    expectFail(await rejected('manager', 'stock-alerts', { branchId: 2 }), 403, 'ACCESS_DENIED_SCOPE_MISMATCH');
   });
 
   it('vai trò đến trước phạm vi và rule: lễ tân truyền chi nhánh khác hay kỳ sai đều ACCESS_DENIED', async () => {
@@ -182,41 +201,51 @@ describe('thứ tự: 400 tham số → 403 vai trò → 403 phạm vi → 400 B
     expectFail(await rejected('vet', 'no-show', { from: '2020-01-01', to: '2026-10-01' }), 403, 'ACCESS_DENIED');
   });
 
-  it.each(PERIOD_ENDPOINTS)('%s: phạm vi đến trước rule (quản lý chi nhánh khác + kỳ sai → 403 BR-BC-01)', async (endpoint) => {
+  it.each(PERIOD_ENDPOINTS)('%s: phạm vi đến trước rule (quản lý chi nhánh khác + kỳ sai → 403 phạm vi, không phải 400)', async (endpoint) => {
     const reversed = await rejected('manager', endpoint, { branchId: 2, from: '2026-10-23', to: '2026-10-01' });
     expectFail(reversed, 403, 'ACCESS_DENIED_SCOPE_MISMATCH');
-    expect(ruleIdOf(reversed.data.message)).toBe('BR-BC-01');
     const tooLong = await rejected('manager', endpoint, { branchId: 3, from: '2020-01-01', to: '2026-10-01' });
     expectFail(tooLong, 403, 'ACCESS_DENIED_SCOPE_MISMATCH');
   });
 
-  it.each(PERIOD_ENDPOINTS)('%s: from > to và kỳ quá 12 tháng → 400 BR-BC-01 (SUPER_MANAGER lẫn BRANCH_MANAGER)', async (endpoint) => {
+  // Câu của BE (ReportPeriod.java:20,23), đã đo trên BE thật; BusinessRuleViolationException nối " (BR-BC-01)".
+  it.each(PERIOD_ENDPOINTS)('%s: from > to và kỳ từ 12 tháng trở lên → 400 BR-BC-01 (SUPER_MANAGER lẫn BRANCH_MANAGER)', async (endpoint) => {
     for (const who of ['chain', 'manager'] as const) {
       const reversed = await rejected(who, endpoint, { from: '2026-10-23', to: '2026-10-22' });
-      expectFail(reversed, 400, 'BUSINESS_RULE_VIOLATION', /^Ngày bắt đầu không được sau ngày kết thúc/);
+      expectFail(reversed, 400, 'BUSINESS_RULE_VIOLATION', 'Kỳ báo cáo không hợp lệ: ngày bắt đầu sau ngày kết thúc (BR-BC-01)');
       expect(ruleIdOf(reversed.data.message)).toBe('BR-BC-01');
       const tooLong = await rejected(who, endpoint, { from: '2025-01-01', to: '2026-10-23' });
-      expectFail(tooLong, 400, 'BUSINESS_RULE_VIOLATION', /^Kỳ báo cáo tối đa 12 tháng/);
+      expectFail(tooLong, 400, 'BUSINESS_RULE_VIOLATION', 'Kỳ báo cáo dài tối đa 12 tháng (BR-BC-01)');
       expect(ruleIdOf(tooLong.data.message)).toBe('BR-BC-01');
     }
   });
 });
 
-// ─── Biên 12 tháng (A2): to ≤ from + 12 tháng theo lịch ───
+// ─── Biên 12 tháng (A2): to < from + 12 tháng theo lịch (BE: !to.isBefore(from.plusMonths(12)) → 400) ───
 
 describe('biên kỳ 12 tháng (A2)', () => {
+  // Các ca 2024-02-29, 2025-10-31, 2025-11-01 đã đo trên BE thật 1/11/2026 (đúng + 12 tháng → 400, lùi một ngày → 200).
   const cases: [from: string, to: string, status: 200 | 400][] = [
-    ['2025-10-27', '2026-10-27', 200],
+    ['2025-10-27', '2026-10-26', 200],
+    ['2025-10-27', '2026-10-27', 400],
     ['2025-10-27', '2026-10-28', 400],
     ['2025-10-28', '2026-10-27', 200],
-    ['2025-12-31', '2026-12-31', 200],
+    ['2025-12-31', '2026-12-30', 200],
+    ['2025-12-31', '2026-12-31', 400],
     ['2025-12-31', '2027-01-01', 400],
-    ['2025-01-31', '2026-01-31', 200],
+    ['2025-01-31', '2026-01-30', 200],
+    ['2025-01-31', '2026-01-31', 400],
     ['2025-01-31', '2026-02-01', 400],
-    ['2024-02-29', '2025-02-28', 200],
+    ['2024-02-29', '2025-02-27', 200],
+    ['2024-02-29', '2025-02-28', 400],
     ['2024-02-29', '2025-03-01', 400],
-    ['2023-02-28', '2024-02-28', 200],
+    ['2023-02-28', '2024-02-27', 200],
+    ['2023-02-28', '2024-02-28', 400],
     ['2023-02-28', '2024-02-29', 400],
+    ['2025-10-31', '2026-10-30', 200],
+    ['2025-10-31', '2026-10-31', 400],
+    ['2025-11-01', '2026-10-31', 200],
+    ['2025-11-01', '2026-11-01', 400],
     ['2026-03-31', '2026-03-31', 200],
     ['2026-03-31', '2026-03-30', 400],
   ];
@@ -285,11 +314,28 @@ describe('phạm vi chi nhánh', () => {
     expect(second.lowStock.map((r: { branchId: number }) => r.branchId)).toEqual([2]);
   });
 
-  it.each(ENDPOINTS)('%s: BRANCH_MANAGER truyền chi nhánh khác → 403 BR-BC-01, body không có dữ liệu', async (endpoint) => {
+  it('stock-alerts: lô sắp theo chi nhánh, rồi hạn dùng, rồi mã lô như BE (ORDER BY branch_id, expiry_date, id)', async () => {
+    putInventory(
+      [
+        { id: 1, branchId: 1, productId: 2, minQuantity: 0 },
+        { id: 2, branchId: 2, productId: 1, minQuantity: 0 },
+      ],
+      [
+        { id: 1, itemId: 1, lotNumber: 'A', expiryDate: shift(FRIDAY, 9), quantity: 2, isDefault: false },
+        { id: 2, itemId: 2, lotNumber: 'B', expiryDate: shift(FRIDAY, 3), quantity: 1, isDefault: false },
+        { id: 3, itemId: 1, lotNumber: 'C', expiryDate: shift(FRIDAY, 5), quantity: 1, isDefault: false },
+      ],
+    );
+    const lots = (await report('chain', 'stock-alerts')).data.data.expiringLots as { branchId: number; stockLotId: number }[];
+    expect(lots.map((l) => [l.branchId, l.stockLotId])).toEqual([[1, 3], [1, 1], [2, 2]]);
+  });
+
+  // BE thật trả câu chung, KHÔNG có "(BR-BC-01)" (AccessDeniedScopeException.clientMessage; chi tiết chỉ vào log). Hợp đồng report-v1.md ghi khác: BE-note.
+  it.each(ENDPOINTS)('%s: BRANCH_MANAGER truyền chi nhánh khác → 403 phạm vi, body không có dữ liệu', async (endpoint) => {
     for (const [who, other] of [['manager', 2], ['manager', 999], ['manager2', 1]] as const) {
       const res = await rejected(who, endpoint, { ...paramsFor(endpoint), branchId: other });
-      expectFail(res, 403, 'ACCESS_DENIED_SCOPE_MISMATCH', 'Chỉ xem được báo cáo của chi nhánh mình (BR-BC-01)');
-      expect(ruleIdOf(res.data.message)).toBe('BR-BC-01');
+      expectFail(res, 403, 'ACCESS_DENIED_SCOPE_MISMATCH', 'Không có quyền truy cập dữ liệu này');
+      expect(res.data.message).not.toMatch(/BR-BC-01/);
       expect(res.data).not.toHaveProperty('data');
       expect(JSON.stringify(res.data)).not.toMatch(/rows|lowStock|expiringLots|totalAmount/);
     }
@@ -421,14 +467,15 @@ describe('GET /reports/lost-revenue (#2)', () => {
       orderRow({ orderId: 19, status: 'PAID', paidAt: '2020-03-10T03:00:00.000Z' }),
     ]);
     const data = (await report('chain', 'lost-revenue', ANCIENT)).data.data;
+    // Cũ nhất trước như BE (`ORDER BY cancelled_at, id`).
     expect(data.rows).toEqual([
-      { orderId: 16, orderCode: 'DH-2003-00016', branchId: 2, source: 'RETAIL', amount: 250_000, reason: 'Lý do #16', cancelledAt: '2020-03-20T03:00:00.000Z' },
-      { orderId: 12, orderCode: 'DH-2003-00012', branchId: 1, source: 'BOARDING', amount: 400_000, reason: 'Lý do #12', cancelledAt: '2020-03-12T03:00:00.000Z' },
       { orderId: 11, orderCode: 'DH-2003-00011', branchId: 1, source: 'VISIT', amount: 150_000, reason: 'Lý do #11', cancelledAt: '2020-03-10T03:00:00.000Z' },
+      { orderId: 12, orderCode: 'DH-2003-00012', branchId: 1, source: 'BOARDING', amount: 400_000, reason: 'Lý do #12', cancelledAt: '2020-03-12T03:00:00.000Z' },
+      { orderId: 16, orderCode: 'DH-2003-00016', branchId: 2, source: 'RETAIL', amount: 250_000, reason: 'Lý do #16', cancelledAt: '2020-03-20T03:00:00.000Z' },
     ]);
     expect(data).toMatchObject({ ...ANCIENT, count: 3, totalAmount: 800_000 });
     const mine = (await report('manager', 'lost-revenue', ANCIENT)).data.data;
-    expect(mine.rows.map((r: LostRevenueRow) => r.orderId)).toEqual([12, 11]);
+    expect(mine.rows.map((r: LostRevenueRow) => r.orderId)).toEqual([11, 12]);
     expect(mine).toMatchObject({ count: 2, totalAmount: 550_000 });
   });
 
@@ -447,13 +494,24 @@ describe('GET /reports/lost-revenue (#2)', () => {
     expect(await on('2020-04-01')).toEqual([2]);
   });
 
-  it('thiếu lý do thì trả chuỗi rỗng; sắp mới nhất trước', async () => {
+  // BE chuyển thẳng `cancel_reason` (VARCHAR nullable) sang `reason` (ReportService.lostRevenue), nên thiếu lý do là null, không phải chuỗi rỗng.
+  it('thiếu lý do thì trả null như BE; cùng thời điểm hủy thì theo mã Order tăng dần (BE: ORDER BY cancelled_at, id)', async () => {
     putOrders([
       cancelled(1, 'UNPAID', '2020-03-10T03:00:00.000Z', { cancelReason: null }),
       cancelled(2, 'UNPAID', '2020-03-10T03:00:00.000Z'),
     ]);
     const rows = await rowsOf<LostRevenueRow>('chain', 'lost-revenue', ANCIENT);
-    expect(rows.map((r) => [r.orderId, r.reason])).toEqual([[2, 'Lý do #2'], [1, '']]);
+    expect(rows.map((r) => [r.orderId, r.reason])).toEqual([[1, null], [2, 'Lý do #2']]);
+  });
+
+  it('sắp theo thời điểm hủy tăng dần, cũ nhất trước như BE (không phải mới nhất trước)', async () => {
+    putOrders([
+      cancelled(3, 'UNPAID', '2020-03-12T05:00:00.000Z'),
+      cancelled(1, 'UNPAID', '2020-03-10T03:00:00.000Z'),
+      cancelled(2, 'UNPAID', '2020-03-11T01:00:00.000Z'),
+    ]);
+    const rows = await rowsOf<LostRevenueRow>('chain', 'lost-revenue', ANCIENT);
+    expect(rows.map((r) => r.orderId)).toEqual([1, 2, 3]);
   });
 });
 
@@ -526,26 +584,26 @@ describe('GET /reports/no-show (#4)', () => {
     }
   });
 
-  it('kỳ không phát sinh: mỗi chi nhánh một dòng đếm 0 và tỷ lệ 0 (mẫu số 0 không thành NaN)', async () => {
-    expect(await rowsOf<NoShowRow>('chain', 'no-show', ANCIENT)).toEqual([
-      { branchId: 1, dueCount: 0, noShowCount: 0, lateCancelCount: 0, noShowRate: 0, lateCancelRate: 0 },
-      { branchId: 2, dueCount: 0, noShowCount: 0, lateCancelCount: 0, noShowRate: 0, lateCancelRate: 0 },
-    ]);
-    expect(await rowsOf('manager', 'no-show', ANCIENT)).toHaveLength(1);
+  // BE: GROUP BY thuần trên lịch hẹn thật (AppointmentReportRepository), kỳ không có lịch → `rows: []`, không sinh dòng đếm 0 (ReportControllerIT :252).
+  it('kỳ không có lịch đến hạn: rows rỗng như BE, không sinh dòng đếm 0', async () => {
+    expect(await rowsOf<NoShowRow>('chain', 'no-show', ANCIENT)).toEqual([]);
+    expect(await rowsOf('manager', 'no-show', ANCIENT)).toEqual([]);
     expect(await rowsOf('chain', 'no-show', { ...ANCIENT, branchId: 3 })).toEqual([]);
   });
 });
 
 describe('GET /reports/revaccination-return (#5)', () => {
-  it('hôm nay: một dòng mỗi (chi nhánh, loại vaccine) có trong dữ liệu mẫu, tên theo danh mục, tỷ lệ = tử / mẫu', async () => {
+  it('hôm nay: chỉ (chi nhánh, loại vaccine) có mũi đến hạn trong kỳ, tên theo danh mục, tỷ lệ = tử / mẫu', async () => {
     const rows = await rowsOf<ReturnRateRow>('chain', 'revaccination-return', TODAY);
     expect(rows.map((r) => [r.branchId, r.vaccineTypeId, r.vaccineTypeName, r.dueCount, r.returnedCount, r.rate])).toEqual([
       [1, 1, 'Dại', 3, 2, 0.6667],
-      [1, 2, '5 bệnh', 0, 0, 0],
-      [1, 4, '4 bệnh', 0, 0, 0],
       [2, 1, 'Dại', 2, 1, 0.5],
-      [2, 2, '5 bệnh', 0, 0, 0],
     ]);
+  });
+
+  it('kỳ không có mũi đến hạn: rows rỗng như BE, không sinh dòng đếm 0', async () => {
+    expect(await rowsOf<ReturnRateRow>('chain', 'revaccination-return', ANCIENT)).toEqual([]);
+    expect(await rowsOf('manager', 'revaccination-return', ANCIENT)).toEqual([]);
   });
 
   it('tử số không vượt mẫu số, tỷ lệ trong khoảng 0–1', async () => {
@@ -553,6 +611,57 @@ describe('GET /reports/revaccination-return (#5)', () => {
       expect(r.returnedCount).toBeLessThanOrEqual(r.dueCount);
       expect(r.rate).toBeGreaterThanOrEqual(0);
       expect(r.rate).toBeLessThanOrEqual(1);
+    }
+  });
+
+  // `pendingCount` của BE: mũi trong mẫu số CHƯA quay lại và còn trong thời gian chờ (hôm nay ≤ ngày tái chủng + 7 ngày, [CFG] report.revaccination_grace_days).
+  describe('pendingCount', () => {
+    const pending = async (period: { from: string; to: string }) =>
+      (await rowsOf<ReturnRateRow>('chain', 'revaccination-return', period)).map((r) => [r.branchId, r.vaccineTypeId, r.pendingCount]);
+
+    it('mọi dòng có pendingCount là số nguyên ≥ 0 và không vượt số mũi chưa quay lại (dueCount - returnedCount)', async () => {
+      for (const period of [TODAY, LAST_30, { from: '2025-11-01', to: '2026-10-23' }]) {
+        for (const who of ['chain', 'manager'] as const) {
+          const rows = await rowsOf<ReturnRateRow>(who, 'revaccination-return', period);
+          expect(rows.length).toBeGreaterThan(0);
+          for (const r of rows) {
+            expect(Number.isInteger(r.pendingCount)).toBe(true);
+            expect(r.pendingCount).toBeGreaterThanOrEqual(0);
+            expect(r.pendingCount).toBeLessThanOrEqual(r.dueCount - r.returnedCount);
+          }
+        }
+      }
+    });
+
+    it('mũi hôm nay chưa quay lại còn trong thời gian chờ: pendingCount > 0 (Dại chi nhánh 1: 3 đến hạn, 2 quay lại → 1)', async () => {
+      expect(await pending(TODAY)).toEqual([[1, 1, 1], [2, 1, 1]]);
+    });
+
+    it('kỳ chỉ gồm mũi có ngày tái chủng từ 8 ngày trước trở về trước: hết thời gian chờ nên pendingCount = 0 dù còn mũi chưa quay lại', async () => {
+      const rows = await rowsOf<ReturnRateRow>('chain', 'revaccination-return', { from: shift(FRIDAY, -300), to: shift(FRIDAY, -8) });
+      expect(rows.length).toBeGreaterThan(0);
+      expect(rows.some((r) => r.dueCount > r.returnedCount)).toBe(true);
+      expect(rows.map((r) => r.pendingCount)).toEqual(rows.map(() => 0));
+    });
+
+    it('mũi trong thời gian chờ nhưng đã quay lại hết (5 ngày trước, loại 4: 2/2) thì pendingCount = 0', async () => {
+      const day = shift(FRIDAY, -5);
+      expect(await pending({ from: day, to: day })).toEqual([[1, 4, 0]]);
+    });
+
+    // Dữ liệu mẫu: chỉ mũi có ngày tái chủng ≤ 7 ngày trước mới tính (ngày 0, 1, 3 ở chi nhánh 1; ngày 0, 4 ở chi nhánh 2); mũi 8, 11, 12, 15… ngày trước thì không.
+    it('30 ngày qua: chỉ cộng mũi còn trong thời gian chờ, mũi đã quá 7 ngày thì không', async () => {
+      expect(await pending(LAST_30)).toEqual([[1, 1, 2], [1, 2, 1], [1, 4, 0], [2, 1, 2], [2, 2, 0]]);
+    });
+  });
+});
+
+describe('#4 và #5: mọi dòng trả về có mẫu số ≥ 1 (BE chỉ trả nhóm có dữ liệu, mẫu số 0 không xảy ra với dữ liệu thật)', () => {
+  it.each(['no-show', 'revaccination-return'] as const)('%s', async (endpoint) => {
+    for (const period of [TODAY, ANCIENT, LAST_30, { from: '2026-10-22', to: '2026-10-22' }, { from: '2025-11-01', to: '2026-10-23' }]) {
+      for (const who of ['chain', 'manager'] as const) {
+        for (const r of await rowsOf<{ dueCount: number }>(who, endpoint, period)) expect(r.dueCount).toBeGreaterThanOrEqual(1);
+      }
     }
   });
 });
@@ -575,11 +684,13 @@ describe('chia kỳ làm đôi: tổng hai nửa = tổng cả kỳ (kỳ gồm 
     ['revenue', ['branchId', 'source'], ['orderCount', 'amount']],
     ['completed-services', ['branchId', 'serviceId'], ['count']],
     ['no-show', ['branchId'], ['dueCount', 'noShowCount', 'lateCancelCount']],
-    ['revaccination-return', ['branchId', 'vaccineTypeId'], ['dueCount', 'returnedCount']],
+    ['revaccination-return', ['branchId', 'vaccineTypeId'], ['dueCount', 'returnedCount', 'pendingCount']],
   ] as const)('%s', async (endpoint, key, fields) => {
     const whole = await rowsOf<Record<string, unknown>>('chain', endpoint, WHOLE);
     const halves = [...(await rowsOf<Record<string, unknown>>('chain', endpoint, FIRST)), ...(await rowsOf<Record<string, unknown>>('chain', endpoint, SECOND))];
     expect(whole.length).toBeGreaterThan(0);
+    // Trường thiếu thì tổng ra NaN ở cả hai vế và toEqual coi NaN bằng NaN, nên chặn riêng.
+    expect(Object.values(totals(whole, [...key], [...fields])).flat().every(Number.isFinite)).toBe(true);
     expect(totals(halves, [...key], [...fields])).toEqual(totals(whole, [...key], [...fields]));
   });
 });
@@ -625,17 +736,18 @@ describe('GET /reports/stock-alerts (#6)', () => {
     ]);
   });
 
-  it('lô hết hạn / sắp hết hạn: mặc định 30 ngày gồm đúng ngày thứ 30, bỏ ngày thứ 31, lô cạn và lô không hạn; hết hạn trước nhất', async () => {
+  it('lô hết hạn / sắp hết hạn: mặc định 30 ngày gồm đúng ngày thứ 30, bỏ ngày thứ 31, lô cạn và lô không hạn; chi nhánh rồi hết hạn trước nhất', async () => {
     seedStock();
     const { expiringLots } = (await report('chain', 'stock-alerts')).data.data;
     const brief = expiringLots.map((l: { stockLotId: number; expired: boolean }) => [l.stockLotId, l.expired]);
+    // BE `ORDER BY branch_id, expiry_date, id`: hết hạn sớm xếp trước TRONG chi nhánh, chi nhánh 2 xếp sau cả chi nhánh 1.
     expect(brief).toEqual([
       [3, true], // hết hạn hôm qua, còn 50
       [4, true],
       [5, false], // hết hạn đúng hôm nay: chưa hết hạn
-      [11, false], // +7 (chi nhánh 2)
       [10, false], // +10
       [6, false], // +30
+      [11, false], // +7 (chi nhánh 2)
     ]);
     expect(expiringLots[0]).toEqual({
       branchId: 1,
@@ -658,7 +770,7 @@ describe('GET /reports/stock-alerts (#6)', () => {
     expect(await lots({ withinDays: '' })).toEqual(await lots({}));
     expect(await lots({ withinDays: 31 })).toContain(7);
     expect(await lots({})).not.toContain(7);
-    expect(await lots({ withinDays: 2147483647 })).toContain(2); // lô +100 vào, không tràn ngày
+    expect(await lots({ withinDays: 365 })).toContain(2); // lô +100 vào; 365 là cận trên của BE (@Max)
   });
 
   it('SUPER_MANAGER lọc chi nhánh; BRANCH_MANAGER chi nhánh 2 chỉ thấy tồn chi nhánh 2', async () => {

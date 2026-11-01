@@ -50,7 +50,7 @@ public class ReportController {
                     @Parameter(name = "from", in = ParameterIn.QUERY, example = "2026-10-01"),
                     @Parameter(name = "to", in = ParameterIn.QUERY, example = "2026-10-31")})
     @ApiErrorDoc(status = 400, description = "`BR-BC-01` kỳ vượt 12 tháng [CFG] hoặc from > to")
-    @ApiErrorDoc(status = 403, description = "`BR-BC-01` chi nhánh ngoài phạm vi")
+    @ApiErrorDoc(status = 403)
     @GetMapping("/revenue")
     @PreAuthorize(ReportAccess.MANAGERS)
     public ApiResponse<RevenueReport> revenue(
@@ -67,7 +67,7 @@ public class ReportController {
                     @Parameter(name = "from", in = ParameterIn.QUERY, example = "2026-10-01"),
                     @Parameter(name = "to", in = ParameterIn.QUERY, example = "2026-10-31")})
     @ApiErrorDoc(status = 400, description = "`BR-BC-01` kỳ vượt 12 tháng [CFG] hoặc from > to")
-    @ApiErrorDoc(status = 403, description = "`BR-BC-01` chi nhánh ngoài phạm vi")
+    @ApiErrorDoc(status = 403)
     @GetMapping("/lost-revenue")
     @PreAuthorize(ReportAccess.MANAGERS)
     public ApiResponse<LostRevenueReport> lostRevenue(
@@ -84,7 +84,7 @@ public class ReportController {
                     @Parameter(name = "from", in = ParameterIn.QUERY, example = "2026-10-01"),
                     @Parameter(name = "to", in = ParameterIn.QUERY, example = "2026-10-31")})
     @ApiErrorDoc(status = 400, description = "`BR-BC-01` kỳ vượt 12 tháng [CFG] hoặc from > to")
-    @ApiErrorDoc(status = 403, description = "`BR-BC-01` chi nhánh ngoài phạm vi")
+    @ApiErrorDoc(status = 403)
     @GetMapping("/completed-services")
     @PreAuthorize(ReportAccess.MANAGERS)
     public ApiResponse<CompletedServicesReport> completedServices(
@@ -101,7 +101,7 @@ public class ReportController {
                     @Parameter(name = "from", in = ParameterIn.QUERY, example = "2026-10-01"),
                     @Parameter(name = "to", in = ParameterIn.QUERY, example = "2026-10-31")})
     @ApiErrorDoc(status = 400, description = "`BR-BC-01` kỳ vượt 12 tháng [CFG] hoặc from > to")
-    @ApiErrorDoc(status = 403, description = "`BR-BC-01` chi nhánh ngoài phạm vi")
+    @ApiErrorDoc(status = 403)
     @GetMapping("/no-show")
     @PreAuthorize(ReportAccess.MANAGERS)
     public ApiResponse<NoShowReport> noShow(
@@ -118,7 +118,7 @@ public class ReportController {
                     @Parameter(name = "from", in = ParameterIn.QUERY, example = "2026-10-01"),
                     @Parameter(name = "to", in = ParameterIn.QUERY, example = "2026-10-31")})
     @ApiErrorDoc(status = 400, description = "`BR-BC-01` kỳ vượt 12 tháng [CFG] hoặc from > to")
-    @ApiErrorDoc(status = 403, description = "`BR-BC-01` chi nhánh ngoài phạm vi")
+    @ApiErrorDoc(status = 403)
     @GetMapping("/revaccination-return")
     @PreAuthorize(ReportAccess.MANAGERS)
     public ApiResponse<RevaccinationReport> revaccinationReturn(
@@ -135,7 +135,7 @@ public class ReportController {
                     @Parameter(name = "branchId", in = ParameterIn.QUERY, example = "2"),
                     @Parameter(name = "withinDays", in = ParameterIn.QUERY, example = "30")})
     @ApiErrorDoc(status = 400)
-    @ApiErrorDoc(status = 403, description = "`BR-BC-01` chi nhánh ngoài phạm vi")
+    @ApiErrorDoc(status = 403)
     @GetMapping("/stock-alerts")
     @PreAuthorize(ReportAccess.MANAGERS)
     public ApiResponse<StockAlertReport> stockAlerts(
@@ -152,7 +152,7 @@ public class ReportController {
                     @Parameter(name = "from", in = ParameterIn.QUERY, example = "2026-10-01"),
                     @Parameter(name = "to", in = ParameterIn.QUERY, example = "2026-10-31")})
     @ApiErrorDoc(status = 400, description = "`BR-BC-01` kỳ vượt 12 tháng [CFG] hoặc from > to")
-    @ApiErrorDoc(status = 403, description = "`BR-BC-01` chi nhánh ngoài phạm vi")
+    @ApiErrorDoc(status = 403)
     @GetMapping("/feedback")
     @PreAuthorize(ReportAccess.MANAGERS)
     public ApiResponse<FeedbackReport> feedback(

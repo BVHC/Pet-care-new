@@ -1,5 +1,6 @@
 // Report API — docs/api/report-v1.md #1–7 (UC89). Chỉ đọc. SUPER_MANAGER toàn chuỗi; BRANCH_MANAGER chỉ chi nhánh mình
-// (truyền chi nhánh khác = 403 BR-BC-01). Kỳ ≤ 12 tháng và from ≤ to, sai = 400 BR-BC-01 (#6 không theo kỳ).
+// (truyền chi nhánh khác = 403 ACCESS_DENIED_SCOPE_MISMATCH, câu chung không có BR-BC-01). Kỳ phải có from ≤ to và to < from + 12 tháng, sai = 400
+// BR-BC-01 (#6 không theo kỳ; withinDays 0..365, ngoài khoảng = 400 VALIDATION_FAILED).
 import { apiClient } from './axios';
 import type {
   CompletedServicesReport, FeedbackReport, LostRevenueReport, NoShowReport, ReportPeriodQuery, RevaccinationReport,

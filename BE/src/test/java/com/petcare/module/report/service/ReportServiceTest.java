@@ -163,14 +163,28 @@ class ReportServiceTest {
 
     @Test
     void revaccinationRowsNameTheVaccineTypeAndComputeTheRate() {
-        when(vaccinations.revaccinationReturn(null, FROM, TO)).thenReturn(List.of(new VaccinationReportApi.ReturnRateRow(1L, 7L, 4, 3)));
+        when(vaccinations.revaccinationReturn(null, FROM, TO, LocalDate.now(clock))).thenReturn(List.of(
+                new VaccinationReportApi.ReturnRateRow(1L, 7L, 4, 3, 1),
+                new VaccinationReportApi.ReturnRateRow(2L, 7L, 0, 0, 0)));
         when(catalog.findVaccineTypeNames(List.of(7L))).thenReturn(java.util.Map.of(7L, "Dại"));
 
         RevaccinationReport report = service.revaccinationReturn(null, FROM, TO);
 
-        assertThat(report.rows()).singleElement().satisfies(row -> {
+        // "hôm nay" truyền xuống là ngày giờ Việt Nam của Clock (2026-10-30)
+        verify(vaccinations).revaccinationReturn(null, FROM, TO, LocalDate.parse("2026-10-30"));
+        assertThat(report.rows()).hasSize(2);
+        assertThat(report.rows().get(0)).satisfies(row -> {
             assertThat(row.vaccineTypeName()).isEqualTo("Dại");
+            assertThat(row.dueCount()).isEqualTo(4);
+            assertThat(row.returnedCount()).isEqualTo(3);
+            assertThat(row.pendingCount()).isEqualTo(1);
             assertThat(row.rate()).isEqualByComparingTo("0.7500");
+        });
+        // pendingCount chỉ minh bạch, không đổi công thức: mẫu số 0 vẫn trả 0.0000
+        assertThat(report.rows().get(1)).satisfies(row -> {
+            assertThat(row.pendingCount()).isZero();
+            assertThat(row.rate()).isEqualByComparingTo(BigDecimal.ZERO);
+            assertThat(row.rate().scale()).isEqualTo(4);
         });
     }
 

@@ -6,7 +6,7 @@ import { Input } from '../../../components/ui/input';
 import { StatusBadge } from '../../../components/ui/modal-templates';
 import { useStockAlertReport } from '../../../shared/hooks/useReports';
 import { ReportBody } from './ReportBody';
-import { formatCount, parseWithinDays } from './report-format';
+import { formatCount, MAX_WITHIN_DAYS, parseWithinDays, withinDaysError } from './report-format';
 
 /** [CFG] hạn dùng cảnh báo mặc định 30 ngày (report-v1 A2, BR-KO-07). */
 const DEFAULT_WITHIN_DAYS = '30';
@@ -26,9 +26,9 @@ export function StockTab({ branchId, branchName }: Props) {
   return (
     <div className="space-y-4">
       <div className="card max-w-xs p-4">
-        <Field label="Lô hết hạn trong vòng (ngày)" error={withinDays === null ? 'Nhập số ngày là số nguyên dương.' : undefined}>
+        <Field label="Lô hết hạn trong vòng (ngày)" error={withinDaysError(withinText) ?? undefined}>
           {(id) => (
-            <Input id={id} type="number" min={1} step={1} className="h-10 py-0" value={withinText} onChange={(e) => setWithinText(e.target.value)} />
+            <Input id={id} type="number" min={1} max={MAX_WITHIN_DAYS} step={1} className="h-10 py-0" value={withinText} onChange={(e) => setWithinText(e.target.value)} />
           )}
         </Field>
       </div>

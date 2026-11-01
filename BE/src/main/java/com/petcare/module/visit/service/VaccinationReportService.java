@@ -26,8 +26,8 @@ public class VaccinationReportService implements VaccinationReportApi {
     private final SystemConfigApi configs;
 
     @Override
-    public List<ReturnRateRow> revaccinationReturn(Long branchId, LocalDate from, LocalDate to) {
-        return reports.revaccinationReturn(branchId, from, to,
+    public List<ReturnRateRow> revaccinationReturn(Long branchId, LocalDate from, LocalDate to, LocalDate today) {
+        return reports.revaccinationReturn(branchId, from, to, today,
                 configs.getInt(ConfigKey.REPORT_REVACCINATION_GRACE_DAYS));
     }
 }

@@ -15,6 +15,8 @@ import com.petcare.module.visit.api.VaccinationReportApi.ReturnRateRow;
  * mẫu số "trừ thú mất trước ngày tái chủng" — một câu thay vì một lần gọi {@code PetQueryApi} mỗi mũi (06 Q3). Mũi trước
  * đã bị thay ({@code superseded_at}) vẫn ở mẫu số; mũi lại là mũi khác của cùng thú + cùng loại tiêm sau mũi trước và
  * không muộn quá {@code graceDays} sau ngày tái chủng (tiêm sớm cũng tính). Chi nhánh = chi nhánh của mũi trước.
+ * {@code pending} = mũi ở mẫu số chưa có mũi lại (cùng điều kiện tử số) mà {@code next_due_date + graceDays >= :today};
+ * {@code today} do bên gọi truyền (giờ Việt Nam), không dùng {@code CURRENT_DATE} vì múi giờ phiên DB có thể lệch ngày.
  */
 @Repository
 public class VaccinationReportRepository {
@@ -25,9 +27,10 @@ public class VaccinationReportRepository {
         this.jdbc = jdbc;
     }
 
-    public List<ReturnRateRow> revaccinationReturn(Long branchId, LocalDate from, LocalDate to, int graceDays) {
+    public List<ReturnRateRow> revaccinationReturn(Long branchId, LocalDate from, LocalDate to, LocalDate today,
+            int graceDays) {
         MapSqlParameterSource params = new MapSqlParameterSource("from", from).addValue("to", to)
-                .addValue("graceDays", graceDays);
+                .addValue("today", today).addValue("graceDays", graceDays);
         String branch = "";
         if (branchId != null) {
             branch = " AND v.branch_id = :branchId";
@@ -39,12 +42,18 @@ public class VaccinationReportRepository {
                            SELECT 1 FROM vaccinations w
                            WHERE w.pet_id = v.pet_id AND w.vaccine_type_id = v.vaccine_type_id AND w.id <> v.id
                              AND w.administered_on > v.administered_on
-                             AND w.administered_on <= v.next_due_date + :graceDays)) AS returned
+                             AND w.administered_on <= v.next_due_date + :graceDays)) AS returned,
+                       count(*) FILTER (WHERE v.next_due_date + :graceDays >= :today AND NOT EXISTS (
+                           SELECT 1 FROM vaccinations w
+                           WHERE w.pet_id = v.pet_id AND w.vaccine_type_id = v.vaccine_type_id AND w.id <> v.id
+                             AND w.administered_on > v.administered_on
+                             AND w.administered_on <= v.next_due_date + :graceDays)) AS pending
                 FROM vaccinations v JOIN pets p ON p.id = v.pet_id
                 WHERE v.next_due_date BETWEEN :from AND :to
                   AND (p.deceased_on IS NULL OR p.deceased_on >= v.next_due_date)""" + branch + """
                  GROUP BY v.branch_id, v.vaccine_type_id ORDER BY v.branch_id, v.vaccine_type_id
                 """, params, (rs, i) -> new ReturnRateRow(rs.getLong("branch_id"), rs.getLong("vaccine_type_id"),
-                Math.toIntExact(rs.getLong("due")), Math.toIntExact(rs.getLong("returned"))));
+                Math.toIntExact(rs.getLong("due")), Math.toIntExact(rs.getLong("returned")),
+                Math.toIntExact(rs.getLong("pending"))));
     }
 }

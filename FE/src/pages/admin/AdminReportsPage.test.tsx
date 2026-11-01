@@ -70,15 +70,17 @@ const FIXTURES: Record<string, Handler> = {
     to: '2026-10-27',
     rows: [
       { branchId: 1, dueCount: 7, noShowCount: 2, lateCancelCount: 1, noShowRate: 0.2857, lateCancelRate: 0.1429 },
-      { branchId: 2, dueCount: 0, noShowCount: 0, lateCancelCount: 0, noShowRate: 0, lateCancelRate: 0 },
+      // BE chỉ trả chi nhánh có lịch đến hạn trong kỳ (GROUP BY thật): mọi dòng có dueCount ≥ 1, kỳ trống là `rows: []`.
+      { branchId: 2, dueCount: 4, noShowCount: 1, lateCancelCount: 0, noShowRate: 0.25, lateCancelRate: 0 },
     ],
   }),
+  // Dạng BE: thứ tự trường như ReturnRateRow, `pendingCount` 0 = không có mũi nào đang trong thời gian chờ.
   'revaccination-return': () => ({
     from: '2026-10-01',
     to: '2026-10-27',
     rows: [
-      { branchId: 1, vaccineTypeId: 3, vaccineTypeName: 'Dại', dueCount: 10, returnedCount: 4, rate: 0.4 },
-      { branchId: 2, vaccineTypeId: 4, vaccineTypeName: '5 bệnh cho chó', dueCount: 8, returnedCount: 8, rate: 1 },
+      { branchId: 1, vaccineTypeId: 3, vaccineTypeName: 'Dại', dueCount: 10, returnedCount: 4, pendingCount: 0, rate: 0.4 },
+      { branchId: 2, vaccineTypeId: 4, vaccineTypeName: '5 bệnh cho chó', dueCount: 8, returnedCount: 8, pendingCount: 0, rate: 1 },
     ],
   }),
   'stock-alerts': () => ({
@@ -329,6 +331,8 @@ describe('kỳ báo cáo', () => {
     it.each([
       ['từ sau đến', '2026-10-28', '2026-10-27', 'Ngày bắt đầu không được sau ngày kết thúc.'],
       ['quá 12 tháng', '2025-10-01', '2026-10-27', 'Kỳ báo cáo tối đa 12 tháng.'],
+      // BE từ chối `to` = `from` + 12 tháng (ReportPeriod: !to.isBefore(from.plusMonths(12)), đã đo trên BE thật 1/11/2026).
+      ['đúng 12 tháng (BE từ chối)', '2025-10-27', '2026-10-27', 'Kỳ báo cáo tối đa 12 tháng.'],
       ['thiếu ngày bắt đầu', '', '2026-10-27', 'Chọn đủ ngày bắt đầu và ngày kết thúc.'],
       ['thiếu ngày kết thúc', '2026-10-01', '', 'Chọn đủ ngày bắt đầu và ngày kết thúc.'],
     ])('%s', async (_case, from, to, message) => {
@@ -361,12 +365,12 @@ describe('kỳ báo cáo', () => {
       expect(sent(get).at(-1)?.params).toMatchObject({ from: '2026-10-20', to: '2026-10-27' });
     });
 
-    it('đúng 12 tháng (ngày kết thúc = bắt đầu + 12 tháng) vẫn được gửi', async () => {
+    it('lùi một ngày so với mốc 12 tháng (ngày kết thúc < bắt đầu + 12 tháng) vẫn được gửi', async () => {
       const get = stubReports();
       renderPage();
       await revenueTable();
-      setDates('2025-10-27', '2026-10-27');
-      await waitFor(() => expect(sent(get).at(-1)?.params).toMatchObject({ from: '2025-10-27', to: '2026-10-27' }));
+      setDates('2025-10-27', '2026-10-26');
+      await waitFor(() => expect(sent(get).at(-1)?.params).toMatchObject({ from: '2025-10-27', to: '2026-10-26' }));
       expect(screen.queryByRole('alert')).not.toBeInTheDocument();
     });
 
@@ -447,6 +451,24 @@ describe('nội dung các báo cáo', () => {
     expect(within(lostRegion).getByText('Order thất thu', { selector: 'p' }).nextElementSibling).toHaveTextContent('1');
   });
 
+  it('Thất thu: lý do null (BE cho phép) hoặc rỗng hiện "—", lý do có chữ giữ nguyên', async () => {
+    const row = (orderId: number, reason: string | null) => ({
+      orderId,
+      orderCode: `ORD-${orderId}`,
+      branchId: 1,
+      source: 'VISIT',
+      amount: 100_000,
+      reason,
+      cancelledAt: '2026-10-20T03:15:00Z',
+    });
+    stubReports({ 'lost-revenue': () => ({ from: '2026-10-01', to: '2026-10-27', count: 3, totalAmount: 300_000, rows: [row(1, null), row(2, ''), row(3, 'Khách bỏ về')] }) });
+    renderPage();
+    const lost = await screen.findByRole('table', { name: 'Order thất thu' });
+    const reasons = within(lost).getAllByRole('row').slice(1).map((r) => within(r).getAllByRole('cell')[4].textContent);
+    expect(reasons).toEqual(['—', '—', 'Khách bỏ về']);
+    expect(lost).not.toHaveTextContent('null');
+  });
+
   it('Lượt dịch vụ: tổng theo nhóm Khám/Tiêm và Thẩm mỹ, bảng theo dịch vụ', async () => {
     stubReports();
     const user = userEvent.setup();
@@ -465,7 +487,46 @@ describe('nội dung các báo cáo', () => {
     expect(rows[3]).toHaveTextContent('Tắm sấy');
   });
 
-  it('NO_SHOW và hủy muộn: tử số / mẫu số kèm % (tỷ lệ 0–1 × 100, làm tròn 1 chữ số); mẫu số 0 hiện "—"', async () => {
+  it('Lượt dịch vụ: mô tả dưới tiêu đề nói rõ cách đếm (số dòng dịch vụ, theo lúc hoàn tất lượt khám, kể cả Order chưa thu tiền)', async () => {
+    stubReports();
+    const user = userEvent.setup();
+    renderPage();
+    await user.click(tab('Lượt dịch vụ'));
+    await screen.findByRole('table', { name: 'Lượt dịch vụ theo dịch vụ' });
+    const section = await region('Lượt dịch vụ hoàn tất');
+    const description = within(section).getByText(
+      'Số dòng dịch vụ của các lượt khám đã hoàn tất trong kỳ (tính theo lúc hoàn tất lượt khám), kể cả Order chưa thu tiền hoặc bị hủy vì khách không thanh toán; không cộng số lượng.',
+    );
+    const heading = within(section).getByRole('heading', { name: 'Lượt dịch vụ hoàn tất' });
+    expect(heading.compareDocumentPosition(description) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+  });
+
+  it('Lượt dịch vụ: nhóm BOARDING hiện "Lưu trú", nhóm lạ không có nhãn hiện nguyên mã (không ô trống); thẻ tổng theo nhóm không NaN', async () => {
+    stubReports({
+      'completed-services': () => ({
+        from: '2026-10-01',
+        to: '2026-10-27',
+        rows: [
+          { branchId: 1, serviceGroup: 'MEDICAL', serviceId: 11, serviceName: 'Khám tổng quát', count: 20 },
+          { branchId: 1, serviceGroup: 'GROOMING', serviceId: 21, serviceName: 'Tắm sấy', count: 14 },
+          { branchId: 1, serviceGroup: 'BOARDING', serviceId: 31, serviceName: 'Lưu trú chuồng vừa', count: 5 },
+          { branchId: 2, serviceGroup: 'SPA', serviceId: 41, serviceName: 'Xông hơi', count: 2 },
+        ],
+      }),
+    });
+    const user = userEvent.setup();
+    renderPage();
+    await user.click(tab('Lượt dịch vụ'));
+    const table = await screen.findByRole('table', { name: 'Lượt dịch vụ theo dịch vụ' });
+    const groupCells = within(table).getAllByRole('row').slice(1).map((r) => within(r).getAllByRole('cell')[1].textContent);
+    expect(groupCells).toEqual(['Khám/Tiêm', 'Thẩm mỹ', 'Lưu trú', 'SPA']);
+    expect(screen.getByText('Nhóm Khám/Tiêm').nextElementSibling).toHaveTextContent(/^20$/);
+    expect(screen.getByText('Nhóm Thẩm mỹ').nextElementSibling).toHaveTextContent(/^14$/);
+    expect(await region('Lượt dịch vụ hoàn tất')).not.toHaveTextContent(/NaN|undefined/);
+  });
+
+  // Kỳ trống ('Không có dữ liệu trong kỳ') đã có ở nhóm "rỗng ở tab"; mẫu số 0 → "—" là phòng thủ của `formatRate`, kiểm ở report-format.test.ts.
+  it('NO_SHOW và hủy muộn: tử số / mẫu số kèm % (tỷ lệ 0–1 × 100, làm tròn 1 chữ số); tử số 0 hiện 0,0%', async () => {
     stubReports();
     const user = userEvent.setup();
     renderPage();
@@ -474,8 +535,8 @@ describe('nội dung các báo cáo', () => {
     const [first, second] = within(table).getAllByRole('row').slice(1);
     const cells = within(first).getAllByRole('cell').map((c) => c.textContent);
     expect(cells).toEqual(['PetCare Cầu Giấy', '7', '2 / 7', '28,6%', '1 / 7', '14,3%']);
-    const none = within(second).getAllByRole('cell').map((c) => c.textContent);
-    expect(none).toEqual(['PetCare Hà Đông', '0', '0 / 0', '—', '0 / 0', '—']);
+    const other = within(second).getAllByRole('cell').map((c) => c.textContent);
+    expect(other).toEqual(['PetCare Hà Đông', '4', '1 / 4', '25,0%', '0 / 4', '0,0%']);
   });
 
   it('Tái chủng: đã quay lại / đến hạn theo loại vaccine kèm %', async () => {
@@ -487,6 +548,61 @@ describe('nội dung các báo cáo', () => {
     const [first, second] = within(table).getAllByRole('row').slice(1);
     expect(within(first).getAllByRole('cell').map((c) => c.textContent)).toEqual(['PetCare Cầu Giấy', 'Dại', '4 / 10', '40,0%']);
     expect(within(second).getAllByRole('cell').map((c) => c.textContent)).toEqual(['PetCare Hà Đông', '5 bệnh cho chó', '8 / 8', '100,0%']);
+  });
+
+  describe('Tái chủng: mũi đang trong thời gian chờ quay lại (pendingCount của BE)', () => {
+    const NOTE = 'Mũi chưa hết thời gian chờ quay lại vẫn nằm ở mẫu số nên tỷ lệ kỳ gần đây thấp hơn thực tế.';
+    const pendingText = (n: number) => `còn ${n} mũi đang trong thời gian chờ quay lại`;
+    /** Tham số bỏ trống (undefined) = BE cũ chưa có trường: bỏ hẳn khóa `pendingCount`, không để khóa mang giá trị undefined. */
+    const withPending = (first?: number, second?: number): Handler => () => ({
+      from: '2026-10-01',
+      to: '2026-10-27',
+      rows: [
+        { branchId: 1, vaccineTypeId: 3, vaccineTypeName: 'Dại', dueCount: 10, returnedCount: 4, ...(first === undefined ? {} : { pendingCount: first }), rate: 0.4 },
+        { branchId: 2, vaccineTypeId: 4, vaccineTypeName: '5 bệnh cho chó', dueCount: 8, returnedCount: 8, ...(second === undefined ? {} : { pendingCount: second }), rate: 1 },
+      ],
+    });
+    const openTab = async (handler: Handler) => {
+      stubReports({ 'revaccination-return': handler });
+      const user = userEvent.setup();
+      renderPage();
+      await user.click(tab('Tái chủng'));
+      return screen.findByRole('table', { name: 'Tái chủng theo loại vaccine' });
+    };
+
+    it('dòng có pendingCount > 0: dòng nhỏ dưới số của đúng dòng đó, số "đã quay lại / đến hạn" giữ nguyên, chú thích nằm trên bảng', async () => {
+      const table = await openTab(withPending(3, 0));
+      const [first, second] = within(table).getAllByRole('row').slice(1);
+      expect(within(first).getByText(pendingText(3))).toBeInTheDocument();
+      expect(first).toHaveTextContent('4 / 10');
+      expect(first).toHaveTextContent('40,0%');
+      expect(within(second).getAllByRole('cell').map((c) => c.textContent)).toEqual(['PetCare Hà Đông', '5 bệnh cho chó', '8 / 8', '100,0%']);
+      expect(screen.getAllByText(/đang trong thời gian chờ quay lại/)).toHaveLength(1);
+      const note = screen.getByText(NOTE);
+      expect(note.compareDocumentPosition(table) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+    });
+
+    it('nhiều dòng có pending: mỗi dòng một dòng nhỏ với số của riêng nó, chú thích vẫn chỉ một lần', async () => {
+      const table = await openTab(withPending(3, 1));
+      const [first, second] = within(table).getAllByRole('row').slice(1);
+      expect(within(first).getByText(pendingText(3))).toBeInTheDocument();
+      expect(within(second).getByText(pendingText(1))).toBeInTheDocument();
+      expect(screen.getAllByText(NOTE)).toHaveLength(1);
+    });
+
+    it.each([
+      ['mọi pendingCount = 0', withPending(0, 0)],
+      ['BE cũ chưa có trường pendingCount', withPending()],
+    ])('%s: không hiện dòng nhỏ lẫn chú thích, ô số giữ nguyên, không lỗi', async (_case, handler) => {
+      const table = await openTab(handler);
+      const [first, second] = within(table).getAllByRole('row').slice(1);
+      expect(within(first).getAllByRole('cell').map((c) => c.textContent)).toEqual(['PetCare Cầu Giấy', 'Dại', '4 / 10', '40,0%']);
+      expect(within(second).getAllByRole('cell').map((c) => c.textContent)).toEqual(['PetCare Hà Đông', '5 bệnh cho chó', '8 / 8', '100,0%']);
+      expect(screen.queryByText(NOTE)).not.toBeInTheDocument();
+      expect(screen.queryByText(/đang trong thời gian chờ quay lại/)).not.toBeInTheDocument();
+      expect(await region('Tái chủng')).not.toHaveTextContent(/NaN|undefined/);
+      expect(screen.queryByRole('alert')).not.toBeInTheDocument();
+    });
   });
 
   it('Feedback: số lượng + điểm trung bình; null → "—"; dòng không gắn chi nhánh có nhãn riêng', async () => {
@@ -556,6 +672,34 @@ describe('nội dung các báo cáo', () => {
       expect(screen.queryByRole('table', { name: 'Hàng dưới tồn tối thiểu' })).not.toBeInTheDocument();
       await settle();
       expect(sent(get)).toHaveLength(before);
+    });
+
+    // BE: `@Max(365)` (đã đo 1/11/2026: 365 → 200, 366 → 400 VALIDATION_FAILED). FE chặn sớm, không gửi request.
+    it.each(['366', '1000'])('vượt 365 ngày "%s": báo số ngày tối đa tại ô và không gửi request', async (value) => {
+      const get = stubReports();
+      const user = userEvent.setup();
+      renderPage();
+      await user.click(tab('Tồn kho'));
+      await screen.findByRole('table', { name: 'Hàng dưới tồn tối thiểu' });
+      const before = sent(get).length;
+
+      fireEvent.change(screen.getByLabelText('Lô hết hạn trong vòng (ngày)'), { target: { value } });
+      expect(await screen.findByText('Số ngày tối đa là 365.')).toBeInTheDocument();
+      expect(screen.getByText('Nhập số ngày hợp lệ để xem cảnh báo tồn kho.')).toBeInTheDocument();
+      await settle();
+      expect(sent(get)).toHaveLength(before);
+    });
+
+    it('đúng 365 ngày vẫn được gửi', async () => {
+      const get = stubReports();
+      const user = userEvent.setup();
+      renderPage();
+      await user.click(tab('Tồn kho'));
+      await screen.findByRole('table', { name: 'Hàng dưới tồn tối thiểu' });
+
+      fireEvent.change(screen.getByLabelText('Lô hết hạn trong vòng (ngày)'), { target: { value: '365' } });
+      await waitFor(() => expect(sent(get).at(-1)?.params.withinDays).toBe(365));
+      expect(screen.queryByText('Số ngày tối đa là 365.')).not.toBeInTheDocument();
     });
   });
 });

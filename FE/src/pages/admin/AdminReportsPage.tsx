@@ -4,11 +4,12 @@
 //
 // ASSUMPTION (docs im lặng):
 //  - Kỳ mặc định "Tháng này" = mùng 1 đến hôm nay; "7 / 30 ngày qua" gồm cả hôm nay (hôm nay trừ 6 / 29 ngày); "Tháng trước" = cả tháng trước.
-//  - Kỳ ≤ 12 tháng = ngày kết thúc không quá ngày bắt đầu cộng 12 tháng theo lịch. Kiểm ở FE chỉ để báo sớm; lệch với BE thì BE trả 400 và FE hiện nguyên câu đó.
+//  - Kỳ tối đa 12 tháng = ngày kết thúc phải TRƯỚC ngày bắt đầu cộng 12 tháng theo lịch (như BE ReportPeriod: đúng + 12 tháng bị 400). Kiểm ở FE chỉ để
+//    báo sớm; lệch với BE thì BE trả 400 và FE hiện nguyên câu đó.
 //  - BRANCH_MANAGER không gửi `branchId` (BE ngầm hiểu chi nhánh mình), không có ô chọn chi nhánh.
-//  - Mẫu số bằng 0 thì tỷ lệ hiện "—" (chưa có lượt đến hạn nên chưa có tỷ lệ), không hiện 0,0%.
+//  - Mẫu số bằng 0 thì tỷ lệ hiện "—" (chỉ là phòng thủ: BE GROUP BY nên chỉ trả dòng có mẫu số ≥ 1, kỳ trống = mảng rỗng "Không có dữ liệu trong kỳ").
 //  - Dòng Feedback không gắn chi nhánh (góp ý về website) hiện "Không gắn chi nhánh".
-//  - `withinDays` của tồn kho: số nguyên dương, mặc định 30; cận trên để BE phán (400 hiện nguyên câu).
+//  - `withinDays` của tồn kho: số nguyên 1–365 (BE chấp nhận 0–365, FE chặn 0), mặc định 30; ngoài khoảng FE báo tại ô và không gửi request.
 import { useMemo, useState } from 'react';
 import { todayVn } from '../../components/appointments/format';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '../../components/ui/tabs';

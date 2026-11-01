@@ -44,13 +44,13 @@
 
 ### Reports
 
-- **`GET /reports/revenue`** — Doanh thu theo nguồn. Query: `branchId?`, `from`, `to`. Response `200` `RevenueReport`. Lỗi: `400` `BR-BC-01` kỳ vượt 12 tháng [CFG] hoặc from > to · `401` · `403` `BR-BC-01` chi nhánh ngoài phạm vi.
-- **`GET /reports/lost-revenue`** — Thất thu. Query: `branchId?`, `from`, `to`. Response `200` `LostRevenueReport`. Lỗi: `400` `BR-BC-01` kỳ vượt 12 tháng [CFG] hoặc from > to · `401` · `403` `BR-BC-01` chi nhánh ngoài phạm vi.
-- **`GET /reports/completed-services`** — Lượt dịch vụ hoàn tất. Query: `branchId?`, `from`, `to`. Response `200` `CompletedServicesReport`. Lỗi: `400` `BR-BC-01` kỳ vượt 12 tháng [CFG] hoặc from > to · `401` · `403` `BR-BC-01` chi nhánh ngoài phạm vi.
-- **`GET /reports/no-show`** — Tỷ lệ NO_SHOW và hủy muộn. Query: `branchId?`, `from`, `to`. Response `200` `NoShowReport`. Lỗi: `400` `BR-BC-01` kỳ vượt 12 tháng [CFG] hoặc from > to · `401` · `403` `BR-BC-01` chi nhánh ngoài phạm vi.
-- **`GET /reports/revaccination-return`** — Tỷ lệ quay lại tái chủng. Query: `branchId?`, `from`, `to`. Response `200` `RevaccinationReport`. Lỗi: `400` `BR-BC-01` kỳ vượt 12 tháng [CFG] hoặc from > to · `401` · `403` `BR-BC-01` chi nhánh ngoài phạm vi.
-- **`GET /reports/stock-alerts`** — Tồn dưới ngưỡng và lô sắp / đã hết hạn. Query: `branchId?`, `withinDays?`. Response `200` `StockAlertReport`. Lỗi: `400` · `401` · `403` `BR-BC-01` chi nhánh ngoài phạm vi.
-- **`GET /reports/feedback`** — Feedback theo chi nhánh. Query: `branchId?`, `from`, `to`. Response `200` `FeedbackReport`. Lỗi: `400` `BR-BC-01` kỳ vượt 12 tháng [CFG] hoặc from > to · `401` · `403` `BR-BC-01` chi nhánh ngoài phạm vi.
+- **`GET /reports/revenue`** — Doanh thu theo nguồn. Query: `branchId?`, `from`, `to`. Response `200` `RevenueReport`. Lỗi: `400` `BR-BC-01` kỳ vượt 12 tháng [CFG] hoặc from > to · `401` · `403`.
+- **`GET /reports/lost-revenue`** — Thất thu. Query: `branchId?`, `from`, `to`. Response `200` `LostRevenueReport`. Lỗi: `400` `BR-BC-01` kỳ vượt 12 tháng [CFG] hoặc from > to · `401` · `403`.
+- **`GET /reports/completed-services`** — Lượt dịch vụ hoàn tất. Query: `branchId?`, `from`, `to`. Response `200` `CompletedServicesReport`. Lỗi: `400` `BR-BC-01` kỳ vượt 12 tháng [CFG] hoặc from > to · `401` · `403`.
+- **`GET /reports/no-show`** — Tỷ lệ NO_SHOW và hủy muộn. Query: `branchId?`, `from`, `to`. Response `200` `NoShowReport`. Lỗi: `400` `BR-BC-01` kỳ vượt 12 tháng [CFG] hoặc from > to · `401` · `403`.
+- **`GET /reports/revaccination-return`** — Tỷ lệ quay lại tái chủng. Query: `branchId?`, `from`, `to`. Response `200` `RevaccinationReport`. Lỗi: `400` `BR-BC-01` kỳ vượt 12 tháng [CFG] hoặc from > to · `401` · `403`.
+- **`GET /reports/stock-alerts`** — Tồn dưới ngưỡng và lô sắp / đã hết hạn. Query: `branchId?`, `withinDays?`. Response `200` `StockAlertReport`. Lỗi: `400` · `401` · `403`.
+- **`GET /reports/feedback`** — Feedback theo chi nhánh. Query: `branchId?`, `from`, `to`. Response `200` `FeedbackReport`. Lỗi: `400` `BR-BC-01` kỳ vượt 12 tháng [CFG] hoặc from > to · `401` · `403`.
 
 ### Schema
 
@@ -64,7 +64,7 @@ Trường có `?` là không bắt buộc / có thể null. Kiểu `email`, `dat
 - **`CompletedServicesReport`** — {`from`: date, `to`: date, `rows`: [ServiceCountRow]}
 - **`NoShowRow`** — {`branchId`: int64, `dueCount`: int32, `noShowCount`: int32, `lateCancelCount`: int32, `noShowRate`: number, `lateCancelRate`: number}
 - **`NoShowReport`** — {`from`: date, `to`: date, `rows`: [NoShowRow]}
-- **`ReturnRateRow`** — {`branchId`: int64, `vaccineTypeId`: int64, `vaccineTypeName`: string, `dueCount`: int32, `returnedCount`: int32, `rate`: number}
+- **`ReturnRateRow`** — {`branchId`: int64, `vaccineTypeId`: int64, `vaccineTypeName`: string, `dueCount`: int32, `returnedCount`: int32, `pendingCount`: int32, `rate`: number}
 - **`RevaccinationReport`** — {`from`: date, `to`: date, `rows`: [ReturnRateRow]} — BR-BC-04: đo khách quay lại tiêm đúng hạn tại hệ thống
 - **`LowStockRow`** — {`branchId`: int64, `productId`: int64, `productName`: string, `availableQuantity`: int32, `minQuantity`: int32}
 - **`ExpiringLotRow`** — {`branchId`: int64, `productId`: int64, `productName`: string, `stockLotId`: int64, `lotNumber?`: string, `expiryDate`: date, `quantity`: int32, `expired`: boolean}
@@ -76,7 +76,7 @@ Trường có `?` là không bắt buộc / có thể null. Kiểu `email`, `dat
 
 ## D. Bảo mật & độ tin cậy
 
-1. SUPER_MANAGER xem toàn chuỗi và lọc theo chi nhánh; BRANCH_MANAGER chỉ chi nhánh mình — truyền chi nhánh khác trả 403 (BR-BC-01).
+1. SUPER_MANAGER xem toàn chuỗi và lọc theo chi nhánh; BRANCH_MANAGER chỉ chi nhánh mình — truyền chi nhánh khác trả 403 `ACCESS_DENIED_SCOPE_MISMATCH` (rule BR-BC-01; message chung, không kèm mã rule).
 2. Kỳ báo cáo tối đa 12 tháng [CFG], ngày theo giờ Việt Nam; vượt trả 400 `BR-BC-01`.
 3. Chỉ đọc; module report không có bảng riêng, gọi `*ReportApi` của từng module sở hữu dữ liệu (06 Q3).
 
@@ -89,8 +89,12 @@ Trường có `?` là không bắt buộc / có thể null. Kiểu `email`, `dat
 | A1 | Mỗi báo cáo là một endpoint riêng, cùng bộ tham số `branchId`, `from`, `to` | BR-BC-03 liệt kê 6 báo cáo độc lập |
 | A2 | Báo cáo tồn kho (5) không theo kỳ, lấy tại thời điểm xem; `withinDays` mặc định 30 [CFG] | BR-KO-07: lô hết hạn trong 30 ngày [CFG] |
 | A3 | Tỷ lệ trả về dạng số thập phân 0–1, kèm tử số và mẫu số | FE tự định dạng phần trăm |
+| A4 | Báo cáo 3: lượt dịch vụ hoàn tất = số DÒNG `SERVICE` (không cộng `quantity`) của Order VISIT có `pending_at` trong kỳ, mọi trạng thái Order (kể cả hủy vì không thanh toán, vì dịch vụ đã làm; trừ Order hủy trước khi hoàn tất lượt khám) | docs/adr/0087 G9; 06 §4 (Q3): dịch vụ đã làm |
+| A5 | Báo cáo 5: `pendingCount` là trường minh bạch (số mũi trong mẫu số chưa quay lại và còn trong thời gian chờ), không đổi công thức BR-BC-04; `rate` vẫn = `returnedCount` / `dueCount` | docs/adr/0087 G11, docs/adr/0090: cho người xem biết tỷ lệ kỳ gần đây thấp giả |
 
-Không có câu hỏi mở.
+| ID | Câu hỏi | Trạng thái | Gốc |
+|---|---|---|---|
+| Q1 | Báo cáo 5 (BR-BC-04): mẫu số có nên loại mũi chưa hết thời gian chờ (hôm nay ≤ ngày tái chủng + grace) không? Hiện vẫn tính nên tỷ lệ kỳ gần đây thấp hơn thực tế; `pendingCount` (A5) chỉ để minh bạch | TBD (PO) | docs/adr/0087 G11, docs/adr/0090 |
 
 ---
 

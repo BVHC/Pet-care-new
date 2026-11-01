@@ -1,6 +1,7 @@
 package com.petcare.module.sales;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.tuple;
 
 import java.sql.Timestamp;
 import java.time.Instant;
@@ -105,6 +106,21 @@ class SalesReportIT extends CashierItSupport {
                 VALUES (?, 'SERVICE', ?, 'Dịch vụ IT', 1, 100000, 100000, ?, ?)""", orderId, serviceId, owner, owner);
     }
 
+    /** Order VISIT hủy do khách không trả ({@code UNPAID}) của {@code branch}, hủy lúc {@code cancelledAt}. */
+    private long unpaidOrderOf(long branch, long amount, String reason, Instant cancelledAt) {
+        return insertOrder(branch, "VISIT", "CANCELLED", amount, IN_PERIOD, null, null, cancelledAt, "UNPAID", reason);
+    }
+
+    /** Order VISIT {@code PENDING} lúc {@code pendingAt} của {@code branch}, có {@code lines} dòng SERVICE {@code serviceId}. */
+    private long pendingVisitOrderOf(long branch, Instant pendingAt, long serviceId, int lines) {
+        long order = insertOrder(branch, "VISIT", "PENDING", lines * 100_000L, pendingAt, null, null, null, null, null);
+        long owner = branch == b1 ? cashier1 : cashier2;
+        for (int i = 0; i < lines; i++) {
+            serviceLine(order, serviceId, owner);
+        }
+        return order;
+    }
+
     @Test
     void revenueGroupsPaidOrdersByBranchAndSourceUsingTotalAmount() {
         paidOrderOf(b1, "VISIT", 100_000, IN_PERIOD);
@@ -164,5 +180,76 @@ class SalesReportIT extends CashierItSupport {
 
         assertThat(api.completedServiceCounts(b1, FROM, TO))
                 .containsExactly(new ServiceCountRow(b1, ServiceGroup.MEDICAL, s1, 3));
+    }
+
+    @Test
+    void cancelledAtBoundaryIsHalfOpenInVietnamTime() {
+        long last = unpaidOrderOf(b1, 1, "Cuối kỳ", Instant.parse("2005-03-31T16:59:59.999999Z"));     // 23:59:59.999999 VN 31/03
+        unpaidOrderOf(b1, 10, "Sau kỳ", Instant.parse("2005-03-31T17:00:00Z"));                         // 00:00 VN 01/04
+        unpaidOrderOf(b1, 100, "Trước kỳ", Instant.parse("2005-02-28T16:59:59.999999Z"));               // 23:59:59.999999 VN 28/02
+        long first = unpaidOrderOf(b1, 1_000, "Đầu kỳ", Instant.parse("2005-02-28T17:00:00Z"));         // 00:00 VN 01/03
+
+        assertThat(api.lostRevenue(b1, FROM, TO))
+                .extracting(LostRevenueRow::orderId, LostRevenueRow::amount, LostRevenueRow::reason,
+                        LostRevenueRow::cancelledAt)
+                .containsExactly(
+                        tuple(first, 1_000L, "Đầu kỳ", Instant.parse("2005-02-28T17:00:00Z")),
+                        tuple(last, 1L, "Cuối kỳ", Instant.parse("2005-03-31T16:59:59.999999Z")));
+    }
+
+    @Test
+    void pendingAtBoundaryIsHalfOpenInVietnamTime() {
+        long atStart = newService("MEDICAL", 100_000);
+        long atEnd = newService("MEDICAL", 100_000);
+        long beforeStart = newService("MEDICAL", 100_000);
+        long afterEnd = newService("MEDICAL", 100_000);
+        pendingVisitOrderOf(b1, Instant.parse("2005-02-28T17:00:00Z"), atStart, 1);                  // 00:00 VN 01/03
+        pendingVisitOrderOf(b1, Instant.parse("2005-03-31T16:59:59.999999Z"), atEnd, 2);             // 23:59:59.999999 VN 31/03
+        pendingVisitOrderOf(b1, Instant.parse("2005-02-28T16:59:59.999999Z"), beforeStart, 1);       // 23:59:59.999999 VN 28/02
+        pendingVisitOrderOf(b1, Instant.parse("2005-03-31T17:00:00Z"), afterEnd, 1);                 // 00:00 VN 01/04
+
+        assertThat(api.completedServiceCounts(b1, FROM, TO)).containsExactly(
+                new ServiceCountRow(b1, ServiceGroup.MEDICAL, atStart, 1),
+                new ServiceCountRow(b1, ServiceGroup.MEDICAL, atEnd, 2));
+    }
+
+    @Test
+    void lostRevenueFiltersByBranchAndChainIncludesBoth() {
+        long order1 = unpaidOrderOf(b1, 40_000, "Khách bỏ về b1", IN_PERIOD);
+        long order2 = unpaidOrderOf(b2, 70_000, "Khách bỏ về b2", IN_PERIOD);
+
+        assertThat(api.lostRevenue(b1, FROM, TO))
+                .extracting(LostRevenueRow::orderId, LostRevenueRow::branchId, LostRevenueRow::amount,
+                        LostRevenueRow::reason)
+                .containsExactly(tuple(order1, b1, 40_000L, "Khách bỏ về b1"));
+        assertThat(api.lostRevenue(b2, FROM, TO))
+                .extracting(LostRevenueRow::orderId, LostRevenueRow::branchId, LostRevenueRow::amount,
+                        LostRevenueRow::reason)
+                .containsExactly(tuple(order2, b2, 70_000L, "Khách bỏ về b2"));
+        assertThat(api.lostRevenue(null, FROM, TO))
+                .filteredOn(row -> row.branchId() == b1 || row.branchId() == b2)
+                .extracting(LostRevenueRow::orderId, LostRevenueRow::branchId, LostRevenueRow::amount,
+                        LostRevenueRow::reason)
+                .containsExactly(
+                        tuple(order1, b1, 40_000L, "Khách bỏ về b1"),
+                        tuple(order2, b2, 70_000L, "Khách bỏ về b2"));
+    }
+
+    @Test
+    void completedServicesFiltersByBranchAndChainIncludesBoth() {
+        long s1 = newService("MEDICAL", 100_000);
+        long s2 = newService("GROOMING", 100_000);
+        pendingVisitOrderOf(b1, IN_PERIOD, s1, 2);
+        pendingVisitOrderOf(b2, IN_PERIOD, s1, 3);
+        pendingVisitOrderOf(b2, IN_PERIOD, s2, 1);
+        ServiceCountRow b1Medical = new ServiceCountRow(b1, ServiceGroup.MEDICAL, s1, 2);
+        ServiceCountRow b2Medical = new ServiceCountRow(b2, ServiceGroup.MEDICAL, s1, 3);
+        ServiceCountRow b2Grooming = new ServiceCountRow(b2, ServiceGroup.GROOMING, s2, 1);
+
+        assertThat(api.completedServiceCounts(b1, FROM, TO)).containsExactly(b1Medical);
+        assertThat(api.completedServiceCounts(b2, FROM, TO)).containsExactly(b2Medical, b2Grooming);
+        assertThat(api.completedServiceCounts(null, FROM, TO))
+                .filteredOn(row -> row.serviceId() == s1 || row.serviceId() == s2)
+                .containsExactly(b1Medical, b2Medical, b2Grooming);
     }
 }

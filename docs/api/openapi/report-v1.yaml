@@ -69,11 +69,7 @@ paths:
         "401":
           $ref: "#/components/responses/Unauthorized"
         "403":
-          description: "`BR-BC-01` chi nhánh ngoài phạm vi"
-          content:
-            "application/json":
-              schema:
-                $ref: "#/components/schemas/Error"
+          $ref: "#/components/responses/Forbidden"
   "/reports/lost-revenue":
     get:
       tags: [Reports]
@@ -128,11 +124,7 @@ paths:
         "401":
           $ref: "#/components/responses/Unauthorized"
         "403":
-          description: "`BR-BC-01` chi nhánh ngoài phạm vi"
-          content:
-            "application/json":
-              schema:
-                $ref: "#/components/schemas/Error"
+          $ref: "#/components/responses/Forbidden"
   "/reports/completed-services":
     get:
       tags: [Reports]
@@ -187,11 +179,7 @@ paths:
         "401":
           $ref: "#/components/responses/Unauthorized"
         "403":
-          description: "`BR-BC-01` chi nhánh ngoài phạm vi"
-          content:
-            "application/json":
-              schema:
-                $ref: "#/components/schemas/Error"
+          $ref: "#/components/responses/Forbidden"
   "/reports/no-show":
     get:
       tags: [Reports]
@@ -246,11 +234,7 @@ paths:
         "401":
           $ref: "#/components/responses/Unauthorized"
         "403":
-          description: "`BR-BC-01` chi nhánh ngoài phạm vi"
-          content:
-            "application/json":
-              schema:
-                $ref: "#/components/schemas/Error"
+          $ref: "#/components/responses/Forbidden"
   "/reports/revaccination-return":
     get:
       tags: [Reports]
@@ -305,11 +289,7 @@ paths:
         "401":
           $ref: "#/components/responses/Unauthorized"
         "403":
-          description: "`BR-BC-01` chi nhánh ngoài phạm vi"
-          content:
-            "application/json":
-              schema:
-                $ref: "#/components/schemas/Error"
+          $ref: "#/components/responses/Forbidden"
   "/reports/stock-alerts":
     get:
       tags: [Reports]
@@ -353,11 +333,7 @@ paths:
         "401":
           $ref: "#/components/responses/Unauthorized"
         "403":
-          description: "`BR-BC-01` chi nhánh ngoài phạm vi"
-          content:
-            "application/json":
-              schema:
-                $ref: "#/components/schemas/Error"
+          $ref: "#/components/responses/Forbidden"
   "/reports/feedback":
     get:
       tags: [Reports]
@@ -412,11 +388,7 @@ paths:
         "401":
           $ref: "#/components/responses/Unauthorized"
         "403":
-          description: "`BR-BC-01` chi nhánh ngoài phạm vi"
-          content:
-            "application/json":
-              schema:
-                $ref: "#/components/schemas/Error"
+          $ref: "#/components/responses/Forbidden"
 components:
   securitySchemes:
     bearerAuth:
@@ -604,7 +576,7 @@ components:
             $ref: "#/components/schemas/NoShowRow"
     ReturnRateRow:
       type: object
-      required: [branchId, vaccineTypeId, vaccineTypeName, dueCount, returnedCount, rate]
+      required: [branchId, vaccineTypeId, vaccineTypeName, dueCount, returnedCount, pendingCount, rate]
       properties:
         branchId:
           type: integer
@@ -621,6 +593,10 @@ components:
         returnedCount:
           type: integer
           format: int32
+        pendingCount:
+          type: integer
+          format: int32
+          description: "Số mũi trong mẫu số chưa quay lại và còn trong thời gian chờ (hôm nay ≤ ngày tái chủng + grace); `rate` vẫn = đã quay lại / đến hạn, nên kỳ gần đây thấp hơn thực tế khi `pendingCount` > 0"
         rate:
           type: number
     RevaccinationReport:
@@ -732,6 +708,12 @@ components:
             $ref: "#/components/schemas/Error"
     Unauthorized:
       description: "UNAUTHENTICATED: chưa đăng nhập hoặc phiên đã hết hạn / bị hủy."
+      content:
+        "application/json":
+          schema:
+            $ref: "#/components/schemas/Error"
+    Forbidden:
+      description: "ACCESS_DENIED: sai vai trò · ACCESS_DENIED_SCOPE_MISMATCH: ngoài phạm vi (chi nhánh, chủ sở hữu). Message chung, không lộ cấu trúc phân quyền."
       content:
         "application/json":
           schema:

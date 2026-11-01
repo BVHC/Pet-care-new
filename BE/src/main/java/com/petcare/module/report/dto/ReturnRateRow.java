@@ -16,6 +16,10 @@ public record ReturnRateRow(
         int dueCount,
         @Schema(description = "Số mũi đã được tiêm lại tại hệ thống không muộn quá hạn cho phép", example = "15")
         int returnedCount,
+        @Schema(description = "Số mũi trong mẫu số chưa quay lại và còn trong thời gian chờ (hôm nay ≤ ngày tái chủng "
+                + "+ grace); `rate` vẫn = đã quay lại / đến hạn, nên kỳ gần đây thấp hơn thực tế khi `pendingCount` > 0",
+                example = "1")
+        int pendingCount,
         @Schema(description = "Tỷ lệ quay lại, 0–1 (4 chữ số thập phân)", example = "0.7500")
         BigDecimal rate) {
 }

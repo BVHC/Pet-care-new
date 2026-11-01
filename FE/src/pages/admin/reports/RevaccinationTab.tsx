@@ -12,6 +12,12 @@ export function RevaccinationTab({ query, enabled, branchName }: PeriodTabProps)
           <p className="px-4 pt-1 text-sm text-(--text-secondary)">
             Đo khách quay lại tiêm đúng hạn tại hệ thống; mũi tiêm ở nơi khác không được ghi nhận.
           </p>
+          {/* `pendingCount` thiếu (BE cũ) thì `undefined > 0` là false: không hiện gì thêm. */}
+          {d.rows.some((r) => r.pendingCount > 0) && (
+            <p className="px-4 pt-1 text-sm text-(--text-secondary)">
+              Mũi chưa hết thời gian chờ quay lại vẫn nằm ở mẫu số nên tỷ lệ kỳ gần đây thấp hơn thực tế.
+            </p>
+          )}
           <table className="table mt-3" aria-label="Tái chủng theo loại vaccine">
             <thead>
               <tr>
@@ -28,6 +34,11 @@ export function RevaccinationTab({ query, enabled, branchName }: PeriodTabProps)
                   <td>{r.vaccineTypeName}</td>
                   <td className="text-right tabular-nums">
                     {formatCount(r.returnedCount)} / {formatCount(r.dueCount)}
+                    {r.pendingCount > 0 && (
+                      <span className="block text-xs text-(--text-tertiary)">
+                        còn {formatCount(r.pendingCount)} mũi đang trong thời gian chờ quay lại
+                      </span>
+                    )}
                   </td>
                   <td className="text-right font-semibold tabular-nums">{formatRate(r.rate, r.dueCount)}</td>
                 </tr>

@@ -10,7 +10,7 @@ m = Module(
     ],
     tags={"Reports": "Báo cáo (UC89)"},
     security=[
-        "SUPER_MANAGER xem toàn chuỗi và lọc theo chi nhánh; BRANCH_MANAGER chỉ chi nhánh mình — truyền chi nhánh khác trả 403 (BR-BC-01).",
+        "SUPER_MANAGER xem toàn chuỗi và lọc theo chi nhánh; BRANCH_MANAGER chỉ chi nhánh mình — truyền chi nhánh khác trả 403 `ACCESS_DENIED_SCOPE_MISMATCH` (rule BR-BC-01; message chung, không kèm mã rule).",
         "Kỳ báo cáo tối đa 12 tháng [CFG], ngày theo giờ Việt Nam; vượt trả 400 `BR-BC-01`.",
         "Chỉ đọc; module report không có bảng riêng, gọi `*ReportApi` của từng module sở hữu dữ liệu (06 Q3).",
     ],
@@ -18,8 +18,12 @@ m = Module(
         ("A1", "Mỗi báo cáo là một endpoint riêng, cùng bộ tham số `branchId`, `from`, `to`", "BR-BC-03 liệt kê 6 báo cáo độc lập"),
         ("A2", "Báo cáo tồn kho (5) không theo kỳ, lấy tại thời điểm xem; `withinDays` mặc định 30 [CFG]", "BR-KO-07: lô hết hạn trong 30 ngày [CFG]"),
         ("A3", "Tỷ lệ trả về dạng số thập phân 0–1, kèm tử số và mẫu số", "FE tự định dạng phần trăm"),
+        ("A4", "Báo cáo 3: lượt dịch vụ hoàn tất = số DÒNG `SERVICE` (không cộng `quantity`) của Order VISIT có `pending_at` trong kỳ, mọi trạng thái Order (kể cả hủy vì không thanh toán, vì dịch vụ đã làm; trừ Order hủy trước khi hoàn tất lượt khám)", "docs/adr/0087 G9; 06 §4 (Q3): dịch vụ đã làm"),
+        ("A5", "Báo cáo 5: `pendingCount` là trường minh bạch (số mũi trong mẫu số chưa quay lại và còn trong thời gian chờ), không đổi công thức BR-BC-04; `rate` vẫn = `returnedCount` / `dueCount`", "docs/adr/0087 G11, docs/adr/0090: cho người xem biết tỷ lệ kỳ gần đây thấp giả"),
     ],
-    questions=[],
+    questions=[
+        ("Q1", "Báo cáo 5 (BR-BC-04): mẫu số có nên loại mũi chưa hết thời gian chờ (hôm nay ≤ ngày tái chủng + grace) không? Hiện vẫn tính nên tỷ lệ kỳ gần đây thấp hơn thực tế; `pendingCount` (A5) chỉ để minh bạch", "TBD (PO)", "docs/adr/0087 G11, docs/adr/0090"),
+    ],
 )
 
 PERIOD = ["branchId=int64|SUPER_MANAGER: bỏ trống = toàn chuỗi · BRANCH_MANAGER: luôn là chi nhánh mình",
@@ -50,7 +54,9 @@ m.schema("NoShowRow", {
 m.schema("NoShowReport", {"from": "date", "to": "date", "rows": "array:ref:NoShowRow"})
 m.schema("ReturnRateRow", {
     "branchId": "int64|Chi nhánh của mũi trước", "vaccineTypeId": "int64", "vaccineTypeName": "string",
-    "dueCount": "int", "returnedCount": "int", "rate": "decimal",
+    "dueCount": "int", "returnedCount": "int",
+    "pendingCount": "int|Số mũi trong mẫu số chưa quay lại và còn trong thời gian chờ (hôm nay ≤ ngày tái chủng + grace); `rate` vẫn = đã quay lại / đến hạn, nên kỳ gần đây thấp hơn thực tế khi `pendingCount` > 0",
+    "rate": "decimal",
 })
 m.schema("RevaccinationReport", {"from": "date", "to": "date", "rows": "array:ref:ReturnRateRow"},
          desc="BR-BC-04: đo khách quay lại tiêm đúng hạn tại hệ thống")
@@ -69,7 +75,7 @@ m.schema("FeedbackStatRow", {
 m.schema("FeedbackReport", {"from": "date", "to": "date", "rows": "array:ref:FeedbackStatRow"})
 
 SCOPE = "SUPER_MANAGER: toàn chuỗi · BRANCH_MANAGER: chi nhánh mình"
-ERR = {400: "`BR-BC-01` kỳ vượt 12 tháng [CFG] hoặc from > to", 403: "`BR-BC-01` chi nhánh ngoài phạm vi"}
+ERR = {400: "`BR-BC-01` kỳ vượt 12 tháng [CFG] hoặc from > to"}
 m.op("get", "/reports/revenue", "getRevenueReport", "Doanh thu theo nguồn", "Reports", "UC89", "BR-BC-01, 02, 03",
      "A04, A05", SCOPE, resp="RevenueReport", query=PERIOD, errors=(400, 401, 403), err_desc=ERR)
 m.op("get", "/reports/lost-revenue", "getLostRevenueReport", "Thất thu", "Reports", "UC89", "BR-BC-01, 02, BR-BH-05",
@@ -84,8 +90,7 @@ m.op("get", "/reports/revaccination-return", "getRevaccinationReport", "Tỷ l�
      err_desc=ERR)
 m.op("get", "/reports/stock-alerts", "getStockAlertReport", "Tồn dưới ngưỡng và lô sắp / đã hết hạn", "Reports",
      "UC89", "BR-BC-01, 03, BR-KO-07", "A04, A05", SCOPE, resp="StockAlertReport",
-     query=["branchId=int64", "withinDays=int|Mặc định 30 [CFG] (A2)"], errors=(400, 401, 403),
-     err_desc={403: "`BR-BC-01` chi nhánh ngoài phạm vi"})
+     query=["branchId=int64", "withinDays=int|Mặc định 30 [CFG] (A2)"], errors=(400, 401, 403))
 m.op("get", "/reports/feedback", "getFeedbackReport", "Feedback theo chi nhánh", "Reports", "UC89",
      "BR-BC-01, 03, BR-DG-03", "A04, A05", SCOPE, resp="FeedbackReport", query=PERIOD, errors=(400, 401, 403),
      err_desc=ERR)

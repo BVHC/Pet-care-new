@@ -59,20 +59,33 @@ function addMonths(iso: string, months: number): string {
   return `${year}-${pad(month)}-${pad(Math.min(d, lastDay))}`;
 }
 
-/** Câu báo khi kỳ sai, null nếu hợp lệ. Kỳ tối đa tính từ ngày bắt đầu cộng đủ 12 tháng (ASSUMPTION ghi ở trang). */
+/**
+ * Câu báo khi kỳ sai, null nếu hợp lệ. Như BE (`ReportPeriod`: `!to.isBefore(from.plusMonths(12))` → 400): `to` phải nhỏ hơn
+ * HẲN ngày bắt đầu cộng 12 tháng (01/01–31/12 hợp lệ, 01/01–01/01 năm sau thì không).
+ */
 export function periodError(from: string, to: string): string | null {
   if (!from || !to) return 'Chọn đủ ngày bắt đầu và ngày kết thúc.';
   if (from > to) return 'Ngày bắt đầu không được sau ngày kết thúc.';
-  if (to > addMonths(from, MAX_PERIOD_MONTHS)) return `Kỳ báo cáo tối đa ${MAX_PERIOD_MONTHS} tháng.`;
+  if (to >= addMonths(from, MAX_PERIOD_MONTHS)) return `Kỳ báo cáo tối đa ${MAX_PERIOD_MONTHS} tháng.`;
   return null;
 }
 
-/** `withinDays` của báo cáo tồn kho: số nguyên dương. Trả về số cần gửi, hoặc null nếu ô nhập chưa hợp lệ. */
+/** BE `withinDays`: `@Min(0) @Max(365)`. FE chặt hơn ở đầu dưới (0 ngày vô nghĩa với "lô hết hạn trong vòng …"). */
+export const MAX_WITHIN_DAYS = 365;
+
+/** `withinDays` của báo cáo tồn kho: số nguyên 1–365. Trả về số cần gửi, hoặc null nếu ô nhập chưa hợp lệ. */
 export function parseWithinDays(text: string): number | null {
   const value = text.trim();
   if (!/^\d+$/.test(value)) return null;
   const days = Number(value);
-  return Number.isSafeInteger(days) && days >= 1 ? days : null;
+  return Number.isSafeInteger(days) && days >= 1 && days <= MAX_WITHIN_DAYS ? days : null;
+}
+
+/** Câu báo cho ô `withinDays`, null nếu hợp lệ. */
+export function withinDaysError(text: string): string | null {
+  if (parseWithinDays(text) !== null) return null;
+  const value = text.trim();
+  return /^\d+$/.test(value) && Number(value) > MAX_WITHIN_DAYS ? `Số ngày tối đa là ${MAX_WITHIN_DAYS}.` : 'Nhập số ngày là số nguyên dương.';
 }
 
 const NUMBER = new Intl.NumberFormat('vi-VN');
@@ -80,8 +93,15 @@ const ONE_DECIMAL = new Intl.NumberFormat('vi-VN', { minimumFractionDigits: 1, m
 
 export const formatCount = (n: number) => NUMBER.format(n);
 
-/** Tỷ lệ API là số thập phân 0–1 (A3): nhân 100, làm tròn 1 chữ số. Mẫu số 0 thì chưa có tỷ lệ → "—". */
-export const formatRate = (rate: number, denominator: number) => (denominator > 0 ? `${ONE_DECIMAL.format(rate * 100)}%` : '—');
+/**
+ * Tỷ lệ API là số thập phân 0–1 với 4 chữ số (A3, BE `rate()` HALF_UP scale 4): nhân 100, làm tròn nửa lên 1 chữ số.
+ * Tính bằng số nguyên (điểm cơ bản) vì `0.0045 * 100 = 0.44999…` sẽ ra "0,4%" thay vì "0,5%". Mẫu số 0 thì chưa có tỷ lệ → "—".
+ */
+export function formatRate(rate: number, denominator: number): string {
+  if (denominator <= 0) return '—';
+  const basisPoints = Math.round(rate * 10000);
+  return `${ONE_DECIMAL.format(Math.floor((basisPoints + 5) / 10) / 10)}%`;
+}
 
 /** Điểm trung bình (thang 5); chưa có đánh giá nào (null) thì "—". */
 export const formatRating = (average: number | null | undefined) => (average == null ? '—' : `${ONE_DECIMAL.format(average)} / 5`);

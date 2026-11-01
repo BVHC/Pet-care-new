@@ -3,35 +3,38 @@
 // trong file này, nên không có bẫy gộp state cũ. Mock nguồn export hàm đọc (`allOrderRows`, `stockSnapshot`, `feedbackRecords`) như các
 // `*ReportApi` của BE (06 §8 Q3); không ai import file này nên import thẳng, không cần `register*Source`.
 //
-// BE report CHƯA CÓ (T44): hợp đồng + BR-BC-01…04 là nguồn duy nhất. Chỗ im lặng là ASSUMPTION của T49:
-//  A1  Thứ tự kiểm: 401 → 400 tham số (đúng thứ tự `branchId`, `from`, `to` hoặc `branchId`, `withinDays`; thiếu / sai kiểu là 400 MALFORMED_REQUEST,
-//      `branchId` ≤ 0 và `withinDays` < 0 là 400 VALIDATION_FAILED; Spring đọc tham số TRƯỚC @PreAuthorize) → 403 vai trò (chỉ SUPER_MANAGER và
-//      BRANCH_MANAGER) → 403 phạm vi (ACCESS_DENIED_SCOPE_MISMATCH, message có đuôi "(BR-BC-01)") → 400 BR-BC-01 (`from` > `to`, rồi kỳ quá dài).
+// BE report đã có từ 30/10 (T44): mock chép hợp đồng + BR-BC-01…04 và các số đo trên BE thật. Chỗ im lặng là ASSUMPTION của T49:
+//  A1  Thứ tự kiểm (đã đo trên BE thật 1/11/2026): 401 → 400 thiếu / sai kiểu (MALFORMED_REQUEST; đúng thứ tự `branchId`, `from`, `to` hoặc
+//      `branchId`, `withinDays`; Spring đọc tham số TRƯỚC @PreAuthorize) → 403 vai trò (chỉ SUPER_MANAGER và BRANCH_MANAGER) → 400 VALIDATION_FAILED
+//      (`branchId` ≤ 0, `withinDays` ngoài 0..365: ràng buộc @Positive / @Min / @Max chạy SAU vai trò) → 403 phạm vi (ACCESS_DENIED_SCOPE_MISMATCH,
+//      câu chung, KHÔNG có đuôi "(BR-BC-01)") → 400 BR-BC-01 (`from` > `to`, rồi kỳ từ 12 tháng trở lên).
 //      Giá trị rỗng (`from=`) bị adapter bỏ nên thành "Thiếu tham số". #6 không đọc `from`, `to` (gửi kèm cũng bỏ qua).
-//  A2  Biên "12 tháng" ([CFG] report.max_period_months, mock không đọc cấu hình nên là hằng số): kỳ gồm cả hai đầu, hợp lệ khi `to` ≤ `from` + 12
-//      tháng theo lịch như LocalDate.plusMonths (ngày vượt cuối tháng đích thì lấy ngày cuối tháng đó; 29/02/2024 + 12 tháng = 28/02/2025).
-//      Nên `to` = đúng ngày này năm sau vẫn qua, thêm một ngày là 400. BE T44 có thể tính khác (vd đếm cả ngày đầu): đối chiếu khi có BE.
+//  A2  Biên "12 tháng" ([CFG] report.max_period_months, mock không đọc cấu hình nên là hằng số): như BE `ReportPeriod` (`!to.isBefore(from.plusMonths(12))`
+//      → 400), `to` phải NHỎ HƠN HẲN `from` + 12 tháng theo lịch như LocalDate.plusMonths (ngày vượt cuối tháng đích thì lấy ngày cuối tháng đó;
+//      29/02/2024 + 12 tháng = 28/02/2025 nên 28/02/2025 đã bị từ chối). 01/01–31/12 hợp lệ, 01/01–01/01 năm sau là 400. Đã đo trên BE thật.
 //  A3  SUPER_MANAGER bỏ trống `branchId` = toàn chuỗi, truyền thì lọc một chi nhánh (chi nhánh không có dữ liệu / không tồn tại → rows rỗng, hợp đồng
 //      không có 404). BRANCH_MANAGER bỏ trống = chi nhánh mình. Tên chi nhánh tra ở mock chi nhánh (mọi trạng thái, như BranchQueryApi.findBranch).
 //  A4  #1: Order PAID thật của mock bán hàng (ngày VN của `paidAt`, theo chi nhánh của Order, giá trị = tổng dòng theo đơn giá snapshot) CỘNG
 //      BASELINE_REVENUE (doanh thu lịch sử tất định, vì mock bán hàng chỉ có 1 Order PAID mẫu nên kỳ mặc định sẽ rỗng). Mỗi (chi nhánh, nguồn)
 //      có dữ liệu là một dòng; sắp chi nhánh rồi VISIT, RETAIL, BOARDING.
 //  A5  #2: CHỈ Order CANCELLED có `cancelType` = UNPAID (hủy theo BR-BH-05). VISIT_CANCELLED, RETAIL_UNCLOSED và CHECKOUT_ABORTED (hủy phiên trả
-//      thú lưu trú, BR-LT-09 / BR-BC-02) không tính. Ngày theo `cancelledAt` (giờ VN); mới nhất trước; `reason` thiếu → ''. Không có dữ liệu
+//      thú lưu trú, BR-LT-09 / BR-BC-02) không tính. Ngày theo `cancelledAt` (giờ VN); cũ nhất trước như BE (`ORDER BY cancelled_at, id`); `reason` thiếu → null (BE chuyển thẳng `cancel_reason`). Không có dữ liệu
 //      lịch sử mẫu: đầu tháng kỳ "tháng này" có thể rỗng.
 //  A6  #3, #4, #5: dòng mẫu tất định theo ngày tương đối với hôm nay (mock lịch hẹn / lượt khám quá ít dòng và không có khái niệm "đến hạn").
-//      #3 tên và nhóm dịch vụ lấy danh mục hiện tại (không snapshot), chỉ MEDICAL / GROOMING. #4 và #5 trả MỘT DÒNG cho mỗi chi nhánh (#4) hoặc chi
-//      nhánh × loại vaccine (#5) có trong dữ liệu mẫu, kể cả kỳ không phát sinh gì (đếm 0, tỷ lệ 0). KHÔNG mô phỏng BR-BC-04 (7 ngày, thú mất):
-//      `returnedCount` là số mẫu, ngày mẫu là ngày tái chủng.
+//      #3 tên và nhóm dịch vụ lấy danh mục hiện tại (không snapshot), chỉ MEDICAL / GROOMING. #4 và #5 chỉ trả nhóm CÓ lịch / mũi đến hạn trong kỳ (một
+//      dòng mỗi chi nhánh (#4) hoặc chi nhánh × loại vaccine (#5)); kỳ không có gì → `rows: []`, KHÔNG sinh dòng đếm 0 (BE là GROUP BY thật, nên mọi
+//      dòng có mẫu số ≥ 1). KHÔNG mô phỏng BR-BC-04 (7 ngày, thú mất): `returnedCount` là số mẫu, ngày mẫu là ngày tái chủng. Riêng
+//      #5 `pendingCount` = số mũi chưa quay lại (due - returned) của các bản ghi mẫu có ngày tái chủng + MOCK_GRACE_DAYS (7) ≥ hôm nay, tính theo hôm nay chứ không theo `to`.
 //  A7  Tỷ lệ là số thập phân 0–1 làm tròn 4 chữ số (A3 của hợp đồng); mẫu số 0 → tỷ lệ 0 (không NaN).
 //  A8  #6: cảnh báo thiếu khi tồn khả dụng (lô chưa hết hạn, BR-KO-01) < ngưỡng (ngưỡng 0 không bao giờ báo). Lô liệt kê khi còn tồn > 0, có hạn
-//      dùng và (hạn dùng − hôm nay) ≤ `withinDays` tính cả ngày thứ `withinDays`; `expired` = hạn dùng < hôm nay (giờ VN, như M4 của kho). Sắp hạn
-//      sớm nhất trước. `withinDays` mặc định 30 [CFG] (hằng), kiểu int32.
+//      dùng và (hạn dùng − hôm nay) ≤ `withinDays` tính cả ngày thứ `withinDays`; `expired` = hạn dùng < hôm nay (giờ VN, như M4 của kho). Sắp
+//      chi nhánh, rồi hạn sớm nhất trước, rồi mã lô (BE `ORDER BY branch_id, expiry_date, id`). `withinDays` mặc định 30 [CFG] (hằng), kiểu int32, hợp lệ 0..365 (BE @Min(0) @Max(365)).
 //  A9  #7: `count` = mọi feedback tạo trong kỳ (ngày VN của `createdAt`) của nhóm; `averageRating` = trung bình các feedback CÓ điểm (rating
 //      tùy chọn, content-v1), làm tròn 2 chữ số, null khi nhóm không có điểm nào. Feedback không gắn chi nhánh là dòng `branchId: null` (xếp cuối),
 //      chỉ SUPER_MANAGER bỏ trống `branchId` thấy (BR-DG-03). Chỉ nhóm có ít nhất một feedback.
-//  A10 Câu báo lỗi rule / phạm vi là văn bản tự đặt (BE chưa có): "Chỉ xem được báo cáo của chi nhánh mình (BR-BC-01)",
-//      "Ngày bắt đầu không được sau ngày kết thúc (BR-BC-01)", "Kỳ báo cáo tối đa 12 tháng (BR-BC-01)". Mã lỗi và mã rule theo hợp đồng.
+//  A10 Câu báo lỗi lấy nguyên văn từ BE thật (đã đo 1/11/2026): "Kỳ báo cáo không hợp lệ: ngày bắt đầu sau ngày kết thúc (BR-BC-01)",
+//      "Kỳ báo cáo dài tối đa 12 tháng (BR-BC-01)", 403 phạm vi "Không có quyền truy cập dữ liệu này" (hợp đồng report-v1.md ghi BR-BC-01: BE-note),
+//      400 "withinDays: withinDays phải từ 0 tới 365" và "branchId: branchId phải là số dương".
 import type { Role } from '../../types/auth';
 import type {
   CompletedServicesReport,
@@ -52,7 +55,7 @@ import type {
 import { vnDate } from '../../utils/vn-time';
 import { branchBooking } from './branch.mock';
 import { catalogProducts, catalogServices, catalogVaccineTypes } from './catalog.mock';
-import { denied, fail, ok, ruleFail, type MockHandler, type MockReply } from './envelope';
+import { denied, fail, ok, ruleFail, scopeDenied, type MockHandler, type MockReply } from './envelope';
 import { feedbackRecords } from './feedback.mock';
 import { branchIdOf } from './identity.mock';
 import { stockSnapshot } from './inventory.mock';
@@ -63,6 +66,8 @@ import { allOrderRows, orderTotal } from './sales.mock';
 const REPORT_MAX_PERIOD_MONTHS = 12;
 /** Mặc định của `withinDays` (BR-KO-07, A2 của hợp đồng). */
 const DEFAULT_WITHIN_DAYS = 30;
+/** [CFG] `report.revaccination_grace_days` (BR-BC-04, seed V2 của BE): khách còn được chờ quay lại tới ngày tái chủng + số ngày này. */
+const MOCK_GRACE_DAYS = 7;
 const DAY_MS = 86_400_000;
 const MANAGERS: readonly Role[] = ['SUPER_MANAGER', 'BRANCH_MANAGER'];
 const SOURCE_ORDER: readonly ReportSource[] = ['VISIT', 'RETAIL', 'BOARDING'];
@@ -218,8 +223,8 @@ const REQUIRED = new Set(['from', 'to']);
 
 const malformed = (message: string) => fail('MALFORMED_REQUEST', message, 400);
 
-/** Như Spring: tham số theo thứ tự khai báo, mỗi tham số kiểm sai kiểu rồi thiếu; ràng buộc `@Positive` / `@Min` sau cùng. */
-function badParams(query: Record<string, string>, kind: Kind): MockReply | null {
+/** Như Spring: tham số theo thứ tự khai báo, mỗi tham số kiểm sai kiểu rồi thiếu. Đến TRƯỚC @PreAuthorize (khách / ADMIN cũng nhận 400). */
+function malformedParams(query: Record<string, string>, kind: Kind): MockReply | null {
   for (const name of PARAMS[kind]) {
     if (query[name] === undefined) {
       if (REQUIRED.has(name)) return malformed(`Thiếu tham số '${name}'`);
@@ -227,30 +232,39 @@ function badParams(query: Record<string, string>, kind: Kind): MockReply | null 
       return malformed(`Tham số '${name}' sai kiểu dữ liệu`);
     }
   }
-  if (kind === 'STOCK' && Number(query.withinDays) < 0) return fail('VALIDATION_FAILED', 'withinDays: Số ngày phải là số nguyên ≥ 0', 400);
+  return null;
+}
+
+/** BE `@Max(365)` / `@Min(0)` trên withinDays; `@Positive` trên branchId. Chạy SAU @PreAuthorize và TRƯỚC kiểm phạm vi (đã đo, A1). */
+const MAX_WITHIN_DAYS = 365;
+function invalidValues(query: Record<string, string>, kind: Kind): MockReply | null {
+  if (kind === 'STOCK' && query.withinDays !== undefined) {
+    const days = Number(query.withinDays);
+    if (days < 0 || days > MAX_WITHIN_DAYS) return fail('VALIDATION_FAILED', `withinDays: withinDays phải từ 0 tới ${MAX_WITHIN_DAYS}`, 400);
+  }
   return notPositive(query, ['branchId']);
 }
 
-/** BR-BC-01: `from` > `to` (400), kỳ quá `report.max_period_months` (400). */
+/** BR-BC-01 (câu nguyên văn của BE `ReportPeriod`): `from` > `to` (400), `to` ≥ `from` + `report.max_period_months` (400, A2). */
 function badPeriod({ from, to }: Ask): MockReply | null {
-  if (from > to) return ruleFail('BR-BC-01', 'Ngày bắt đầu không được sau ngày kết thúc');
-  if (to > plusMonths(from, REPORT_MAX_PERIOD_MONTHS)) return ruleFail('BR-BC-01', `Kỳ báo cáo tối đa ${REPORT_MAX_PERIOD_MONTHS} tháng`);
+  if (from > to) return ruleFail('BR-BC-01', 'Kỳ báo cáo không hợp lệ: ngày bắt đầu sau ngày kết thúc');
+  if (to >= plusMonths(from, REPORT_MAX_PERIOD_MONTHS)) return ruleFail('BR-BC-01', `Kỳ báo cáo dài tối đa ${REPORT_MAX_PERIOD_MONTHS} tháng`);
   return null;
 }
 
 function guarded<T>(kind: Kind, build: (ask: Ask) => T): MockHandler {
   return ({ account, query }) => {
-    const bad = badParams(query, kind);
+    const bad = malformedParams(query, kind);
     if (bad) return bad;
     const me = account!;
     if (!MANAGERS.includes(me.role)) return denied();
+    const invalid = invalidValues(query, kind);
+    if (invalid) return invalid;
     const requested = query.branchId === undefined ? null : Number(query.branchId);
     // BRANCH_MANAGER không có chi nhánh (không xảy ra ở mock): -1 để không thấy gì, không bao giờ thành "toàn chuỗi".
     const own = me.branchId ?? branchIdOf(me.id) ?? -1;
     const manager = me.role === 'BRANCH_MANAGER';
-    if (manager && requested !== null && requested !== own) {
-      return fail('ACCESS_DENIED_SCOPE_MISMATCH', 'Chỉ xem được báo cáo của chi nhánh mình (BR-BC-01)', 403);
-    }
+    if (manager && requested !== null && requested !== own) return scopeDenied();
     const ask: Ask = {
       branchId: manager ? own : requested,
       from: query.from ?? '',
@@ -307,10 +321,10 @@ function lostRevenue(ask: Ask): LostRevenueReport {
   const rows: LostRevenueRow[] = allOrderRows()
     .flatMap((o) =>
       o.status === 'CANCELLED' && o.cancelType === 'UNPAID' && o.cancelledAt && inScope(ask, o.branchId) && inPeriod(ask, vnDate(Date.parse(o.cancelledAt)))
-        ? [{ orderId: o.orderId, orderCode: o.code, branchId: o.branchId, source: o.source, amount: orderTotal(o), reason: o.cancelReason ?? '', cancelledAt: o.cancelledAt }]
+        ? [{ orderId: o.orderId, orderCode: o.code, branchId: o.branchId, source: o.source, amount: orderTotal(o), reason: o.cancelReason, cancelledAt: o.cancelledAt }]
         : [],
     )
-    .sort((a, b) => Date.parse(b.cancelledAt) - Date.parse(a.cancelledAt) || b.orderId - a.orderId);
+    .sort((a, b) => Date.parse(a.cancelledAt) - Date.parse(b.cancelledAt) || a.orderId - b.orderId);
   return { from: ask.from, to: ask.to, rows, count: rows.length, totalAmount: sum(rows.map((r) => r.amount)) };
 }
 
@@ -329,31 +343,36 @@ function completedServices(ask: Ask): CompletedServicesReport {
   return { from: ask.from, to: ask.to, rows };
 }
 
-/** #4 BR-BC-03 (3): NO_SHOW và hủy muộn trên tổng lịch hẹn đến hạn trong kỳ, một dòng mỗi chi nhánh có dữ liệu mẫu (A6). */
+/** #4 BR-BC-03 (3): NO_SHOW và hủy muộn trên tổng lịch hẹn đến hạn trong kỳ, một dòng mỗi chi nhánh CÓ lịch đến hạn trong kỳ (A6, như GROUP BY của BE). */
 function noShow(ask: Ask): NoShowReport {
   const branches = [...new Set(APPOINTMENTS_DUE.map(([, branchId]) => branchId))].filter((b) => inScope(ask, b)).sort((a, b) => a - b);
-  const rows = branches.map((branchId) => {
+  const rows = branches.flatMap((branchId) => {
     const mine = APPOINTMENTS_DUE.filter((r) => r[1] === branchId && inPeriod(ask, agoDay(r[0])));
     const dueCount = sum(mine.map((r) => r[2]));
+    if (dueCount === 0) return [];
     const noShowCount = sum(mine.map((r) => r[3]));
     const lateCancelCount = sum(mine.map((r) => r[4]));
-    return { branchId, dueCount, noShowCount, lateCancelCount, noShowRate: ratio(noShowCount, dueCount), lateCancelRate: ratio(lateCancelCount, dueCount) };
+    return [{ branchId, dueCount, noShowCount, lateCancelCount, noShowRate: ratio(noShowCount, dueCount), lateCancelRate: ratio(lateCancelCount, dueCount) }];
   });
   return { from: ask.from, to: ask.to, rows };
 }
 
-/** #5 BR-BC-04: tỷ lệ quay lại tiêm đúng hạn, một dòng mỗi chi nhánh × loại vaccine có dữ liệu mẫu (A6). */
+/** #5 BR-BC-04: tỷ lệ quay lại tiêm đúng hạn, một dòng mỗi chi nhánh × loại vaccine CÓ mũi đến hạn trong kỳ (A6, như GROUP BY của BE). */
 function revaccinationReturn(ask: Ask): RevaccinationReport {
   const names = new Map(catalogVaccineTypes().map((t) => [t.vaccineTypeId, t.name]));
+  const today = dayNumber(vnDate());
   const series = groupBy(REVACCINATIONS, (r) => `${r[1]}/${r[2]}`)
     .map((g) => ({ branchId: g[0][1], vaccineTypeId: g[0][2] }))
     .filter((s) => inScope(ask, s.branchId))
     .sort((a, b) => a.branchId - b.branchId || a.vaccineTypeId - b.vaccineTypeId);
-  const rows = series.map(({ branchId, vaccineTypeId }) => {
+  const rows = series.flatMap(({ branchId, vaccineTypeId }) => {
     const mine = REVACCINATIONS.filter((r) => r[1] === branchId && r[2] === vaccineTypeId && inPeriod(ask, agoDay(r[0])));
     const dueCount = sum(mine.map((r) => r[3]));
+    if (dueCount === 0) return [];
     const returnedCount = sum(mine.map((r) => r[4]));
-    return { branchId, vaccineTypeId, vaccineTypeName: names.get(vaccineTypeId) ?? `Loại vaccine #${vaccineTypeId}`, dueCount, returnedCount, rate: ratio(returnedCount, dueCount) };
+    // Mũi chưa quay lại mà còn trong thời gian chờ: hôm nay ≤ ngày tái chủng + MOCK_GRACE_DAYS (đếm theo hôm nay, không theo `ask.to`).
+    const pendingCount = sum(mine.map((r) => (dayNumber(agoDay(r[0])) + MOCK_GRACE_DAYS >= today ? r[3] - r[4] : 0)));
+    return [{ branchId, vaccineTypeId, vaccineTypeName: names.get(vaccineTypeId) ?? `Loại vaccine #${vaccineTypeId}`, dueCount, returnedCount, pendingCount, rate: ratio(returnedCount, dueCount) }];
   });
   return { from: ask.from, to: ask.to, rows };
 }
@@ -376,7 +395,7 @@ function stockAlerts(ask: Ask): StockAlertReport {
           : [],
       ),
     )
-    .sort((a, b) => a.expiryDate.localeCompare(b.expiryDate) || a.branchId - b.branchId || a.stockLotId - b.stockLotId);
+    .sort((a, b) => a.branchId - b.branchId || a.expiryDate.localeCompare(b.expiryDate) || a.stockLotId - b.stockLotId);
   return { lowStock, expiringLots };
 }
 

@@ -112,12 +112,14 @@ public class ReportService {
     @Transactional(readOnly = true)
     public RevaccinationReport revaccinationReturn(Long branchId, LocalDate from, LocalDate to) {
         Long effective = scopedPeriod(branchId, from, to);
-        List<VaccinationReportApi.ReturnRateRow> data = vaccinations.revaccinationReturn(effective, from, to);
+        // "Hôm nay" theo giờ Việt Nam cho pendingCount (docs/adr/0087 G11); công thức tỷ lệ không đổi.
+        List<VaccinationReportApi.ReturnRateRow> data = vaccinations.revaccinationReturn(effective, from, to,
+                LocalDate.now(clock));
         List<Long> typeIds = data.stream().map(VaccinationReportApi.ReturnRateRow::vaccineTypeId).distinct().toList();
         Map<Long, String> typeNames = typeIds.isEmpty() ? Map.of() : catalog.findVaccineTypeNames(typeIds);
         List<ReturnRateRow> rows = data.stream()
                 .map(r -> new ReturnRateRow(r.branchId(), r.vaccineTypeId(), typeNames.get(r.vaccineTypeId()),
-                        r.dueCount(), r.returnedCount(), rate(r.returnedCount(), r.dueCount())))
+                        r.dueCount(), r.returnedCount(), r.pendingCount(), rate(r.returnedCount(), r.dueCount())))
                 .toList();
         return new RevaccinationReport(from, to, rows);
     }

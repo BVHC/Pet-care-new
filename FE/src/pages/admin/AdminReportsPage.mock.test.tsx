@@ -133,21 +133,31 @@ describe('số liệu trên mock thật', () => {
     await user.click(tab('NO_SHOW và hủy muộn'));
     const rows = await rowsOf('NO_SHOW và hủy muộn theo chi nhánh');
     expect(rows.length).toBeGreaterThan(0);
-    expect(rows.some((r) => digits(cells(r)[1]) > 0)).toBe(true); // ít nhất một dòng có mẫu số để kiểm tỷ lệ
+    // BE chỉ trả chi nhánh có lịch đến hạn trong kỳ (GROUP BY thật), nên mọi dòng có mẫu số ≥ 1.
+    expect(rows.every((r) => digits(cells(r)[1]) > 0)).toBe(true);
     for (const row of rows) {
       const [, due, noShow, noShowPct, late, latePct] = cells(row);
       const percent = (text: string) => Number(text.replace('%', '').replace(',', '.'));
-      if (digits(due) === 0) {
-        // Chi nhánh không có lịch đến hạn trong kỳ: chưa có tỷ lệ, không phải NaN hay 0,0%.
-        expect([noShowPct, latePct]).toEqual(['—', '—']);
-        continue;
-      }
       expect(Math.abs(percent(noShowPct) - (digits(noShow.split('/')[0]) / digits(due)) * 100)).toBeLessThanOrEqual(0.06);
       expect(Math.abs(percent(latePct) - (digits(late.split('/')[0]) / digits(due)) * 100)).toBeLessThanOrEqual(0.06);
     }
   });
 
-  it('kỳ không có dữ liệu: doanh thu / thất thu rỗng; NO_SHOW mẫu số 0 hiện "—" chứ không phải 0,0%', async () => {
+  it('Tái chủng: dòng nhỏ "còn N mũi đang trong thời gian chờ quay lại" lấy từ pendingCount của mock, N không vượt số mũi chưa quay lại', async () => {
+    const user = userEvent.setup();
+    renderPage();
+    await user.click(tab('Tái chủng'));
+    const rows = await rowsOf('Tái chủng theo loại vaccine');
+    const pending = rows.map((row) => Number(/còn (\d+) mũi đang trong thời gian chờ quay lại/.exec(cells(row)[2])?.[1] ?? 0));
+    expect(pending.some((n) => n > 0)).toBe(true); // "Tháng này" gồm mũi tái chủng hôm nay chưa quay lại
+    rows.forEach((row, i) => {
+      const [, returned, due] = /^(\d+) \/ (\d+)/.exec(cells(row)[2])!;
+      expect(pending[i]).toBeLessThanOrEqual(Number(due) - Number(returned));
+    });
+    expect(screen.getByText('Mũi chưa hết thời gian chờ quay lại vẫn nằm ở mẫu số nên tỷ lệ kỳ gần đây thấp hơn thực tế.')).toBeInTheDocument();
+  });
+
+  it('kỳ không có dữ liệu: doanh thu / thất thu / NO_SHOW / tái chủng đều rỗng (BE trả rows rỗng, không sinh dòng đếm 0)', async () => {
     const user = userEvent.setup();
     renderPage();
     await rowsOf(REVENUE);
@@ -157,9 +167,11 @@ describe('số liệu trên mock thật', () => {
     expect(await within(revenue).findByText('Không có dữ liệu trong kỳ')).toBeInTheDocument();
     expect(await within(screen.getByRole('region', { name: 'Thất thu' })).findByText('Không có dữ liệu trong kỳ')).toBeInTheDocument();
 
-    await user.click(tab('NO_SHOW và hủy muộn'));
-    const rows = await rowsOf('NO_SHOW và hủy muộn theo chi nhánh');
-    expect(cells(rows[0]).slice(1)).toEqual(['0', '0 / 0', '—', '0 / 0', '—']);
+    for (const name of ['NO_SHOW và hủy muộn', 'Tái chủng']) {
+      await user.click(tab(name));
+      expect(await screen.findByText('Không có dữ liệu trong kỳ')).toBeInTheDocument();
+      expect(screen.queryByRole('table')).not.toBeInTheDocument();
+    }
   });
 
   it('Tồn kho: tăng số ngày không làm giảm số lô được liệt kê; 1 ngày ≤ 365 ngày', async () => {

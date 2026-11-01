@@ -122,7 +122,7 @@ Stack: Java 21, Spring Boot 3.5.15, Spring Security, Data JPA, Validation, AOP, 
 | boarding · chuồng, đặt chỗ, gia hạn, hủy, ST05 | boarding-v1 #1–12 | `KennelService`, `BoardingBookingService`, `BoardingChangeService`, `BoardingNoShowService`, 3 listener | 0065, V20. Cảnh báo mũi tiêm qua `VaccinationQueryApi`. `activeOrderId` null |
 | boarding · nhận thú, hủy vì hết chuồng, nhật ký, bất thường | boarding-v1 #13–15, #19–22 | `BoardingCheckInService`, `CareLogService`, `BoardingManagerNotices`, `CareLogAbnormalNotices` | 0085, V24 (T42, 29/10). Mũi bắt buộc qua `VaccinationQueryApi`, cân qua `PetApi.recordWeight(INTAKE)`; bất thường → outbox khách + lễ tân cùng tx. Chưa có #16–18, ST15 (T43) |
 | content · trang, bài viết, feedback | content-v1 #1–22 | `PageContentService`, `ArticleService`, `ArticleHtml` (jsoup), `FeedbackSubmitService`, `FeedbackReviewService` | 0071, V21. Feedback: advisory 1003 theo khách. Chưa có `FeedbackReportApi` (T44) |
-| report · báo cáo UC89 | report-v1 #1–7 | `ReportController`, `ReportService`, `ReportPeriod`, 15 DTO; `SalesReportService`, `StockReportService`, `FeedbackReportService`, `AppointmentReportService` + `VaccinationReportService` (BE-2 cài thay BE-1) | 0087. Không bảng, không khóa; phạm vi → kỳ → API → gắn tên; kỳ nửa mở giờ VN; `SalesReportApi.lostRevenue` chỉ `UNPAID` |
+| report · báo cáo UC89 | report-v1 #1–7 | `ReportController`, `ReportService`, `ReportPeriod`, 15 DTO; `SalesReportService`, `StockReportService`, `FeedbackReportService`, `AppointmentReportService` + `VaccinationReportService` (BE-2 cài thay BE-1) | 0087, 0090 (`pendingCount` của #5, Proposed). Không bảng, không khóa; phạm vi → kỳ → API → gắn tên; kỳ nửa mở giờ VN; `SalesReportApi.lostRevenue` chỉ `UNPAID` |
 
 ## 4. Backend — chưa có (phải xây)
 
@@ -133,7 +133,7 @@ Stack: Java 21, Spring Boot 3.5.15, Spring Security, Data JPA, Validation, AOP, 
 | care: cài đặt nhận thông báo (care-v1 #9–10) | UC88 | D025, chờ PO |
 | sales #9, #11, `BoardingOrderApi` | BR-LT-09, BR-BH-04 | T43; #11 làm được từ 26/10 (`PrescriptionApi` có từ ADR-0076); chuỗi thu → mua ngoài → thu lại đã có IT bằng stand-in (D048) |
 | boarding · bắt đầu trả, giao thú, thú mất, ST15 | boarding-v1 #16–18, sales-v1 #9 | `BoardingCheckoutService`, `BoardingOrderService` (`BoardingOrderApi`), `OrderCancellationService.abortCheckout`, `BoardingOverdueService`, `BoardingOverdueJob` | 0086, V25 (T43, 30/10). `openOrReuse` kiểm lại `PAID` sau khóa (không thu hai lần); `activeOrderId` điền thật; ST15 `0 1/5`, mốc quá hạn = 12:00 ngày trả, Care Task `PICKUP_OVERDUE` qua `CareTaskApi` |
-| report, ST08 | BR-BC-01…04, BR-KO-07 | T44 đã làm 30/10 (ADR-0087); công thức G11 chờ PO |
+| report, ST08 | BR-BC-01…04, BR-KO-07 | T44 đã làm 30/10 (ADR-0087); công thức G11 chờ PO (1/11: ADR-0090 thêm trường `pendingCount`, Proposed, không đổi công thức) |
 | Gọi `AuditRecorder` ở module còn lại | BR-QT-15 | Snapshot JSON object |
 
 ## 4b. Database — migration (`BE/src/main/resources/db/migration/`)

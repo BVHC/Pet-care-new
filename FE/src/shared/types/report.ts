@@ -1,7 +1,8 @@
 // Báo cáo UC89 — docs/api/report-v1.md (7 endpoint, chỉ đọc). Ngày dạng 'YYYY-MM-DD' (giờ Việt Nam), thời điểm dạng ISO.
 // Tỷ lệ (`noShowRate`, `lateCancelRate`, `rate`) là số thập phân 0–1 kèm tử số và mẫu số (A3): FE tự định dạng phần trăm.
 export type ReportSource = 'VISIT' | 'RETAIL' | 'BOARDING';
-export type ReportServiceGroup = 'MEDICAL' | 'GROOMING';
+/** BE `ServiceGroup` có 3 giá trị; bảng #3 có thể gặp cả BOARDING. */
+export type ReportServiceGroup = 'MEDICAL' | 'GROOMING' | 'BOARDING';
 
 /** Báo cáo theo kỳ (#1–5, #7). `branchId` bỏ trống = toàn chuỗi (SUPER_MANAGER) hoặc chi nhánh mình (BRANCH_MANAGER). */
 export interface ReportPeriodQuery {
@@ -37,7 +38,8 @@ export interface LostRevenueRow {
   branchId: number;
   source: ReportSource;
   amount: number;
-  reason: string;
+  /** BE chuyển thẳng `cancel_reason` (cho phép null). */
+  reason: string | null;
   cancelledAt: string;
 }
 /** BR-BC-02: chỉ Order hủy theo BR-BH-05 (UNPAID); hủy phiên trả thú không tính. */
@@ -82,6 +84,8 @@ export interface ReturnRateRow {
   vaccineTypeName: string;
   dueCount: number;
   returnedCount: number;
+  /** Số mũi trong mẫu số CHƯA quay lại và còn trong thời gian chờ (hôm nay ≤ ngày tái chủng + 7 ngày [CFG]); BE cũ chưa có trường này. */
+  pendingCount: number;
   rate: number;
 }
 /** BR-BC-04: đo khách quay lại tiêm đúng hạn tại hệ thống. */
