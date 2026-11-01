@@ -112,6 +112,9 @@ class KennelServiceTest {
         if (status == KennelStatus.MAINTENANCE) {
             kennel.startMaintenance();
         }
+        if (status == KennelStatus.OCCUPIED) {
+            kennel.occupy();
+        }
         when(kennels.findBranchIdById(anyLong())).thenReturn(Optional.of(BRANCH));
         when(kennels.findByIdForUpdate(anyLong())).thenReturn(Optional.of(kennel));
         return kennel;
@@ -149,6 +152,18 @@ class KennelServiceTest {
         order.verify(branchLocks).lockForBooking(BRANCH);
         order.verify(kennels).findByIdForUpdate(1L);
         order.verify(kennels).delete(kennel);
+    }
+
+    /** Chuồng#5 chỉ đi từ MAINTENANCE: chuồng đang có thú không được "hết bảo trì" (T45). */
+    @Test
+    void endMaintenanceOnOccupiedKennelIsInvalidTransition() {
+        Kennel kennel = kennelWithStatus(KennelStatus.OCCUPIED);
+
+        assertThatThrownBy(() -> service.endMaintenance(1L))
+                .isInstanceOf(com.petcare.platform.exception.InvalidStateTransitionException.class);
+
+        assertThat(kennel.getStatus()).isEqualTo(KennelStatus.OCCUPIED);
+        verify(kennels, never()).saveAndFlush(any());
     }
 
     @Test

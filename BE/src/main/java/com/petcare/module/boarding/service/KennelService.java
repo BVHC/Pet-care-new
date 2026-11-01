@@ -32,6 +32,7 @@ import com.petcare.module.catalog.api.CatalogQueryApi.KennelTypeInfo;
 import com.petcare.module.customer.api.PetQueryApi;
 import com.petcare.module.customer.api.PetQueryApi.PetSummary;
 import com.petcare.platform.exception.BusinessRuleViolationException;
+import com.petcare.platform.exception.InvalidStateTransitionException;
 import com.petcare.platform.exception.ResourceNotFoundException;
 import com.petcare.platform.security.BranchScope;
 
@@ -151,6 +152,11 @@ public class KennelService {
     @Transactional
     public KennelResponse endMaintenance(Long kennelId) {
         Kennel kennel = lockKennel(kennelId);
+        // Chuồng#5 chỉ đi từ MAINTENANCE; OCCUPIED → AVAILABLE (Chuồng#3) là hệ quả của Đặt chỗ#10, #11, không phải thao tác tay
+        if (kennel.getStatus() != KennelStatus.MAINTENANCE) {
+            throw new InvalidStateTransitionException("chuồng (chỉ kết thúc bảo trì khi đang bảo trì)",
+                    kennel.getStatus().name(), KennelStatus.AVAILABLE.name());
+        }
         transitions.validateTransition(kennel.getStatus(), KennelStatus.AVAILABLE);
         kennel.endMaintenance();
         return toResponse(kennels.saveAndFlush(kennel));

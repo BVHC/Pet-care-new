@@ -98,7 +98,7 @@ Chốt 28/10: **mỗi FSM một lớp `*FsmIT`** trên bean thật (không `@Moc
 | T40.4 | `appointment/AppointmentFsmIT`: 8 chuyển + 12 cặp sai (§2.2), gồm **G3** | Xong 28/10, 11 test |
 | T40.5 | `visit/VisitFsmIT`: 6 chuyển (kèm Lịch hẹn + Order) + 15 cặp sai (§2.3), gồm **G2** | Xong 29/10, 10 test |
 | T40.6 | `care/CareTaskFsmIT`: 6 chuyển + 6 cặp sai (§2.4), gồm **G4** | Xong 29/10, 10 test |
-| T40.7 | Chạy lại IT theo nhóm (identity, appointment, visit, care) + cập nhật tài liệu cuối T40 | Chưa |
+| T40.7 | Chạy lại IT theo nhóm (identity, appointment, visit, care) + cập nhật tài liệu cuối T40 | Xong 29/10: identity 739 xanh; appointment 384, chỉ 2 đỏ đã biết của `AppointmentReminderIT` (`startedOrPastBookedIsNotReminded`, `reminderQueriesUseTheirIndexesOnRealisticData` — thiếu cận dưới, từ `af117e0`); visit 474 xanh; care 134 xanh (14 lớp; số 135 ghi trước đó là đếm nhầm) |
 
 G5 — `PICKUP_OVERDUE` sinh bởi ST15 thuộc BE-2 (T43): chờ, không phải nợ mới.
 
