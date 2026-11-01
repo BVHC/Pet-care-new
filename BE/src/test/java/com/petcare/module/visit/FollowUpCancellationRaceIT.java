@@ -122,6 +122,69 @@ class FollowUpCancellationRaceIT {
                 Timestamp.class, visit)).isNotNull();
     }
 
+    /**
+     * Docs/adr/0088: đường đặt lịch. ST04 đã khóa dòng và đứng ở UPDATE cờ "đã nhắc"; bước hủy mới chờ ở câu khóa bệnh án
+     * chờ nhắc (không ghi). ST04 commit nhắc + task -> hủy chạy tiếp, câu đọc (READ COMMITTED) thấy dòng đã nhắc và hủy
+     * chính task ST04 vừa sinh. Không khóa trước khi đọc thì task còn {@code OPEN} dù khách đã có lịch.
+     */
+    @Test
+    void bookingPathWaitingForSt04CancelsTheTaskSt04JustCreated() throws Exception {
+        long pet = fx.pet(fx.silent);
+        long visit = FollowUpItSupport.record(jdbc, fx.branch, fx.silent, pet, fx.vet, PAST, TODAY.plusDays(3), true,
+                false);
+        DueDateWindow window = reminders.window();
+        installPause(visit);
+        CountDownLatch held = new CountDownLatch(1);
+        CountDownLatch release = new CountDownLatch(1);
+        Future<?> holder = pool.submit(() -> tx.executeWithoutResult(s -> {
+            jdbc.queryForObject("SELECT pg_advisory_xact_lock(?, 1)::text", String.class, PAUSE_NAMESPACE);
+            held.countDown();
+            await(release);
+        }));
+        assertThat(held.await(10, TimeUnit.SECONDS)).isTrue();
+        Future<ReminderResult> st04 = pool.submit(() -> reminders.remind(visit, window));
+        awaitWaiting(WAITING_ST04_FLAG);
+        Future<?> cancel = pool.submit(() -> tx.executeWithoutResult(s -> followUps.cancelRemindedFollowUpTasks(pet)));
+        awaitWaiting("%for no key update of m%");
+        assertThat(st04.isDone()).isFalse();
+        assertThat(cancel.isDone()).isFalse();
+
+        release.countDown();
+        holder.get(10, TimeUnit.SECONDS);
+
+        assertThat(st04.get(30, TimeUnit.SECONDS)).isEqualTo(ReminderResult.TASK_CREATED);
+        cancel.get(30, TimeUnit.SECONDS);
+        assertThat(fx.tasks(pet)).singleElement().satisfies(task -> assertThat(task)
+                .containsEntry("task_type", "FOLLOW_UP_DUE").containsEntry("status", "CANCELLED"));
+        assertThat(FollowUpItSupport.cancelledAt(jdbc, visit)).as("không đặt cờ hủy nhắc").isNull();
+    }
+
+    /** Đường đặt lịch giữ dòng trước -> ST04 {@code SKIP LOCKED} bỏ qua ngay, không ghi gì, lần sau quét lại. */
+    @Test
+    void st04IsSkippedWithoutWaitingWhileTheBookingPathHoldsTheRow() throws Exception {
+        long pet = fx.pet(fx.silent);
+        long visit = FollowUpItSupport.record(jdbc, fx.branch, fx.silent, pet, fx.vet, PAST, TODAY.plusDays(3), true,
+                false);
+        DueDateWindow window = reminders.window();
+        CountDownLatch held = new CountDownLatch(1);
+        CountDownLatch release = new CountDownLatch(1);
+        Future<?> cancel = pool.submit(() -> tx.executeWithoutResult(s -> {
+            followUps.cancelRemindedFollowUpTasks(pet);
+            held.countDown();
+            await(release);
+        }));
+        assertThat(held.await(10, TimeUnit.SECONDS)).isTrue();
+
+        ReminderResult whileHeld = pool.submit(() -> reminders.remind(visit, window)).get(5, TimeUnit.SECONDS);
+
+        assertThat(whileHeld).isEqualTo(ReminderResult.SKIPPED);
+        release.countDown();
+        cancel.get(10, TimeUnit.SECONDS);
+        assertThat(jdbc.queryForObject("SELECT follow_up_reminded_at FROM medical_records WHERE visit_id = ?",
+                Timestamp.class, visit)).as("chưa nhắc: lần quét sau mới nhắc").isNull();
+        assertThat(reminders.remind(visit, window)).isEqualTo(ReminderResult.TASK_CREATED);
+    }
+
     /** Hủy giữ dòng trước → ST04 {@code SKIP LOCKED} trả {@code SKIPPED} ngay (quá 5 giây là đang chờ khóa), rồi vẫn bỏ qua. */
     @Test
     void st04IsSkippedWithoutWaitingWhileTheCancellationHoldsTheRow() throws Exception {

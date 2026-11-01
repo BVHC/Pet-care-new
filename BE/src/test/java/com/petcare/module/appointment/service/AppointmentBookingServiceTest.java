@@ -144,7 +144,7 @@ class AppointmentBookingServiceTest {
         order.verify(branches).quotaFor(BRANCH, ServiceGroup.MEDICAL, DAY, START);
         order.verify(codes).nextCode();
         order.verify(appointments).saveAndFlush(any(Appointment.class));
-        order.verify(followUps).cancelPendingFollowUps(PET, NOW);
+        order.verify(followUps).cancelRemindedFollowUpTasks(PET);
         order.verify(branches).findBranch(BRANCH);
         verify(scope, never()).check(any());
 
@@ -179,7 +179,7 @@ class AppointmentBookingServiceTest {
     void followUpFailureAfterTheInsertPropagatesSoTheWholeBookingRollsBack() {
         asCustomer();
         givenBookable(pet(CUSTOMER_ID, null), ServiceGroup.MEDICAL, BranchStatus.ACTIVE);
-        doThrow(new IllegalStateException("boom")).when(followUps).cancelPendingFollowUps(PET, NOW);
+        doThrow(new IllegalStateException("boom")).when(followUps).cancelRemindedFollowUpTasks(PET);
 
         assertThatThrownBy(() -> service.bookAppointment(request(DAY, START, null)))
                 .isInstanceOf(IllegalStateException.class).hasMessage("boom");

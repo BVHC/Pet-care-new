@@ -44,6 +44,15 @@ public class FollowUpCancellationService implements FollowUpApi {
         careTasks.cancelFollowUpTasks(reminded);
     }
 
+    /** Docs/adr/0088: khóa bệnh án chờ nhắc (chờ ST04) → đọc bệnh án đã nhắc → hủy task; không ghi {@code medical_records}. */
+    @Override
+    @Transactional(propagation = Propagation.MANDATORY)
+    public void cancelRemindedFollowUpTasks(long petId) {
+        records.lockPendingFollowUpsOfPet(petId);
+        List<Long> reminded = records.findRemindedFollowUpIdsOfPet(petId);
+        careTasks.cancelFollowUpTasks(reminded);
+    }
+
     /**
      * Thú đã mất: chỉ hủy nhắc chưa gửi. Task đã sinh (mọi loại) do care tự hủy trong {@code CarePetDeceasedListener},
      * chạy sau listener của visit để giữ thứ tự khóa {@code medical_records → care_tasks}.

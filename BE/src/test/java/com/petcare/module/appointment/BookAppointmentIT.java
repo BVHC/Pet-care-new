@@ -209,9 +209,12 @@ class BookAppointmentIT {
                 .containsEntry("channel", "COUNTER");
     }
 
-    /** D029 (BR-TB-06, Care Task#6, docs/adr/0084): chỉ nhóm Khám/Tiêm hủy nhắc tái khám chờ gửi và task tái khám đã sinh. */
+    /**
+     * BR-TB-06, Care Task#6 (docs/adr/0088, thay 0084 §2): chỉ nhóm Khám/Tiêm hủy task tái khám đã sinh; nhắc chờ gửi
+     * không bị đặt cờ hủy (ST04 tự hoãn khi thú có lịch BOOKED).
+     */
     @Test
-    void bookingAMedicalServiceCancelsPendingFollowUpsAndTasksButGroomingDoesNot() {
+    void bookingAMedicalServiceCancelsGeneratedFollowUpTasksButLeavesPendingRemindersToSt04() {
         Instant past = T0.minus(Duration.ofDays(40));
         long pending = FollowUpItSupport.record(jdbc, branch, customer, pet, receptionist, past, DAY.plusDays(20), true,
                 false);
@@ -227,7 +230,7 @@ class BookAppointmentIT {
 
         created(post(customerToken, body(pet, branch, medical, DAY, START, null)));
 
-        assertThat(FollowUpItSupport.cancelledAt(jdbc, pending)).as("nhắc chờ gửi bị hủy").isEqualTo(T0);
+        assertThat(FollowUpItSupport.cancelledAt(jdbc, pending)).as("nhắc chờ gửi không bị đặt cờ hủy").isNull();
         assertThat(FollowUpItSupport.cancelledAt(jdbc, reminded)).as("đã nhắc rồi: chỉ hủy task").isNull();
         assertThat(FollowUpItSupport.taskStatus(jdbc, openTask)).isEqualTo("CANCELLED");
     }

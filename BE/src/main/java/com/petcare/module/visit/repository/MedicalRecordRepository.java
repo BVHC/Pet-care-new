@@ -111,6 +111,21 @@ public interface MedicalRecordRepository extends JpaRepository<MedicalRecord, Lo
     int cancelPendingFollowUpsOfPet(@Param("petId") long petId, @Param("at") Instant at);
 
     /**
+     * Docs/adr/0088: khóa ({@code FOR NO KEY UPDATE OF m}, theo id tăng dần, không ghi) các bệnh án đã khóa của thú còn
+     * chờ nhắc. Dòng đang bị ST04 giữ thì câu này chờ rồi kiểm lại điều kiện (READ COMMITTED), nên câu đọc kế tiếp thấy
+     * task ST04 vừa sinh; dòng bị câu này giữ thì ST04 gặp {@code SKIP LOCKED}. Chỉ khóa {@code medical_records}, không
+     * khóa {@code visits}.
+     */
+    @Transactional(propagation = Propagation.MANDATORY)
+    @Query(value = """
+            SELECT m.visit_id FROM medical_records m JOIN visits v ON v.id = m.visit_id
+            WHERE v.pet_id = :petId AND m.follow_up_date IS NOT NULL AND m.follow_up_reminded_at IS NULL
+              AND m.follow_up_cancelled_at IS NULL AND m.locked_at IS NOT NULL
+            ORDER BY m.visit_id FOR NO KEY UPDATE OF m
+            """, nativeQuery = true)
+    List<Long> lockPendingFollowUpsOfPet(@Param("petId") long petId);
+
+    /**
      * Id (= id lượt) các bệnh án đã khóa của thú mà ST04 <b>đã nhắc</b> và chưa bị hủy nhắc: chỉ những bệnh án này mới có
      * thể có Care Task {@code FOLLOW_UP_DUE}. Đọc sau {@link #cancelPendingFollowUpsOfPet} cùng transaction.
      */

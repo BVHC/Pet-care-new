@@ -103,6 +103,24 @@ public interface VisitRepository extends JpaRepository<Visit, Long>, JpaSpecific
             """, nativeQuery = true)
     int flagNeedsReassign(@Param("accountId") Long accountId, @Param("now") Instant now);
 
+    /**
+     * D042 (03 Tài khoản#8, BR-QT-12, BR-TN-08; docs/adr/0088): người vừa được mở khóa lại đủ điều kiện phụ trách
+     * (cùng định nghĩa {@code VisitDispatchService.isAssignable}: {@code ACTIVE} không khóa, đúng chi nhánh, đúng chức
+     * vụ với nhóm dịch vụ — bên gọi đã kiểm {@code ACTIVE} / chức vụ và truyền {@code branchId}, {@code serviceGroup}
+     * suy từ chức vụ) → gỡ cờ "cần gán lại" của lượt đã gọi. Lượt chi nhánh / nhóm khác giữ cờ để #9 gán lại. Một câu,
+     * index {@code ix_visits_assignee_status}. Chạy trong transaction mở khóa của identity (cùng lưu ý flush / không
+     * clear với {@link #flagNeedsReassign}).
+     */
+    @Transactional(propagation = Propagation.MANDATORY)
+    @Modifying(flushAutomatically = true)
+    @Query(value = """
+            UPDATE visits SET needs_reassign = false, updated_at = :now
+            WHERE assignee_id = :accountId AND status = 'IN_PROGRESS' AND needs_reassign = true
+              AND branch_id = :branchId AND service_group = :serviceGroup
+            """, nativeQuery = true)
+    int clearNeedsReassign(@Param("accountId") Long accountId, @Param("branchId") Long branchId,
+            @Param("serviceGroup") String serviceGroup, @Param("now") Instant now);
+
     @Query(value = "SELECT EXISTS (SELECT 1 FROM visits WHERE pet_id = :petId)", nativeQuery = true)
     boolean existsAnyByPetId(@Param("petId") Long petId);
 

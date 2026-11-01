@@ -88,7 +88,7 @@ E2E chỉ chạy đường thành công; rollback khi một bước giữa chừ
 
 ## 9. T41.3 — nhánh khám (`MainFlowExamIT`)
 
-> Đã chốt khi thảo luận (29/10): dòng mua ngoài tạo **lúc kê** (#16 `EXTERNAL_PURCHASE`; sales #11 chưa có) · đầu vào là đặt lịch online rồi check-in · có bệnh án cũ đã khóa với hẹn tái khám chưa nhắc, đặt lịch MEDICAL phải hủy nhắc đó (Care Task#6, ADR-0084) · khách có tài khoản (ST04 → IN_APP + EMAIL). Quy ước như §1; era **2030**, ngày khám `D` = 2030-03-13 (thứ Tư). Giá: `S` = dịch vụ khám 150 000, `A` = thuốc 30 000.
+> Đã chốt khi thảo luận (29/10): dòng mua ngoài tạo **lúc kê** (#16 `EXTERNAL_PURCHASE`; sales #11 chưa có) · đầu vào là đặt lịch online rồi check-in · có bệnh án cũ đã khóa với hẹn tái khám chưa nhắc, đặt lịch MEDICAL **không** đặt cờ hủy (ST04 tự hoãn, ADR-0088), check-in dịch vụ EXAM mới hủy nhắc đó (Care Task#6, ADR-0084) · khách có tài khoản (ST04 → IN_APP + EMAIL). Quy ước như §1; era **2030**, ngày khám `D` = 2030-03-13 (thứ Tư). Giá: `S` = dịch vụ khám 150 000, `A` = thuốc 30 000.
 
 ### 9.1 Dữ liệu dựng sẵn (SQL)
 
@@ -105,8 +105,8 @@ E2E chỉ chạy đường thành công; rollback khi một bước giữa chừ
 
 | # | Giờ | Vai trò | Endpoint / job | Kỳ vọng | 03 · rule |
 |---|---|---|---|---|---|
-| 1 | D−3 10:00 | A02 | `POST /api/appointments` (D 09:00) | `BOOKED`; **R0 `follow_up_cancelled_at` = giờ bước 1**, chưa nhắc; 0 Care Task, 0 outbox | Lịch hẹn#1 · Care Task#6 · BR-TB-06 |
-| 2 | D 08:40 | A06 | `POST /api/visits` | Lịch hẹn `CHECKED_IN`; Visit `WAITING`; Order `OPEN` + dòng `SERVICE` S; R0 không đổi (`xmin`) dù check-in EXAM gọi lại `FollowUpApi` | Visit#1 |
+| 1 | D−3 10:00 | A02 | `POST /api/appointments` (D 09:00) | `BOOKED`; **R0 `follow_up_cancelled_at` vẫn null** (ADR-0088), chưa nhắc; 0 Care Task, 0 outbox | Lịch hẹn#1 · Care Task#6 · BR-TB-06 |
+| 2 | D 08:40 | A06 | `POST /api/visits` | Lịch hẹn `CHECKED_IN`; Visit `WAITING`; Order `OPEN` + dòng `SERVICE` S; **R0 `follow_up_cancelled_at` = giờ check-in** (check-in EXAM gọi `FollowUpApi`, ADR-0084) | Visit#1 |
 | 3–4 | 08:45, 09:00 | A06, A07 | `…/assign`, `…/call` | `IN_PROGRESS` | Visit#2, #3 |
 | 5 | 09:02 | A07 | `…/complete` chưa có bệnh án | **400 BR-KB-02**; Visit, Order, lịch hẹn không đổi (`xmin`), không có bệnh án | BR-KB-02 |
 | 6 | 09:05 | A07 | `PUT …/medical-record` {examination, diagnosis, treatmentPlan, followUpDate D+14} | bệnh án chưa khóa, chưa nhắc; GET trả đủ trường | BR-KB-01, 06 |
@@ -150,7 +150,7 @@ python BE/scripts/smoke/t41_main_flow.py --down   # dọn stack + volume petcare
 |---|---|---|---|---|---|
 | 1 | — | ADMIN | login; `PUT /api/system-configs/appointment.min_lead_hours` | 200/200 | value=0 |
 | 2 | V | A02 | login; `POST /api/appointments` (tiêm) | 200/201 | LH-261030-0001 BOOKED ONLINE |
-| 3 | E | A02 | `POST /api/appointments` (khám) | 201 | R0 hủy nhắc = true |
+| 3 | E | A02 | `POST /api/appointments` (khám) | 201 | R0 hủy nhắc = false (hủy ở bước 10, check-in EXAM) |
 | 4 | V | A06/A07 | `POST /api/visits` → assign → call | 201/200/200 | IN_PROGRESS, lịch CHECKED_IN, Order OPEN 150 000 |
 | 5 | V | A07 | `GET …/vaccination-options` | 200 | gợi ý mũi 2; khả dụng 10 |
 | 6 | V | A07 | `POST …/vaccinations` | 201 | lô L0/L1/L2 = 5/5/4; next_due = hôm nay + 7; mũi cũ thay thế, task CANCELLED |

@@ -194,9 +194,8 @@ public class VisitCheckInService {
      */
     private void checkService(ServiceInfo service, boolean fromAppointment, Long branchId) {
         if (fromAppointment) {
-            if (!service.active()) {
-                throw new BusinessRuleViolationException("BR-LH-01", "Dịch vụ của lịch hẹn đã ngừng kinh doanh");
-            }
+            // Docs/adr/0088 (thay docs/adr/0059 Q3, trả D040): BR-LH-01 là điều kiện đặt lịch (UC39); lịch đã đặt vẫn
+            // tiếp nhận được dù dịch vụ đã ngừng kinh doanh hay bị tắt tại chi nhánh, nếu không ST05 tính NO_SHOW oan.
             return;
         }
         if (!service.active() || !VISIT_GROUPS.contains(service.group())

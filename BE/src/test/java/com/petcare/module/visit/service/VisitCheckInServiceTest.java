@@ -394,12 +394,24 @@ class VisitCheckInServiceTest {
                 "Dịch vụ không tiếp nhận được tại chi nhánh này (BR-LH-01)");
     }
 
+    /** Docs/adr/0088 (thay 0059 Q3, trả D040): lịch đã đặt vẫn tiếp nhận khi dịch vụ ngừng / tắt tại chi nhánh. */
     @Test
-    void stoppedAppointmentServiceIs400BeforeTheAppointmentIsTouched() {
+    void appointmentWhoseServiceWasStoppedOrDisabledIsStillCheckedIn() {
+        when(catalog.findService(SERVICE)).thenReturn(Optional.of(service(ServiceGroup.MEDICAL, false)));
+        when(branches.isServiceEnabled(BRANCH, SERVICE)).thenReturn(false);
+
+        service.checkInVisit(new CreateVisitRequest(PET, APPOINTMENT, null, null));
+
+        verify(appointments).checkIn(APPOINTMENT, BRANCH, NOW);
+        verify(visitOrders).openForVisit(VISIT_ID, BRANCH, CUSTOMER, SERVICE, null, ACCOUNT);
+    }
+
+    @Test
+    void stoppedServiceStillRejectsAWalkIn() {
         when(catalog.findService(SERVICE)).thenReturn(Optional.of(service(ServiceGroup.MEDICAL, false)));
 
-        assertRule(new CreateVisitRequest(PET, APPOINTMENT, null, null), "BR-LH-01",
-                "Dịch vụ của lịch hẹn đã ngừng kinh doanh (BR-LH-01)");
+        assertRule(new CreateVisitRequest(PET, null, SERVICE, null), "BR-LH-01",
+                "Dịch vụ không tiếp nhận được tại chi nhánh này (BR-LH-01)");
     }
 
     // ---------------------------------------------------------------- lỗi từ checkIn và sau checkIn

@@ -145,18 +145,28 @@ class VisitOrderServiceTest {
     }
 
     @Test
-    void openForVisitRefusesMissingOrInactiveServiceBeforeTakingACode() {
+    void openForVisitRefusesMissingServiceBeforeTakingACode() {
         when(catalog.findService(10L)).thenReturn(Optional.empty());
         assertThatThrownBy(() -> service.openForVisit(VISIT, 1L, 2L, 10L, null, RECEPTIONIST))
                 .isInstanceOf(IllegalStateException.class);
 
-        when(catalog.findService(11L)).thenReturn(Optional.of(
-                new ServiceInfo(11L, "Ngừng", ServiceGroup.GROOMING, null, 90_000, false)));
-        assertThatThrownBy(() -> service.openForVisit(VISIT, 1L, 2L, 11L, null, RECEPTIONIST))
-                .isInstanceOf(IllegalStateException.class);
-
         verifyNoInteractions(codes);
         verify(orders, never()).saveAndFlush(any());
+    }
+
+    /** Docs/adr/0088 (trả D040): lịch hẹn đặt trước khi dịch vụ ngừng vẫn mở được Order, giá theo giá hiện tại. */
+    @Test
+    void openForVisitStillOpensTheOrderForAServiceStoppedAfterTheBooking() {
+        when(catalog.findService(11L)).thenReturn(Optional.of(
+                new ServiceInfo(11L, "Ngừng", ServiceGroup.GROOMING, null, 90_000, false)));
+        when(codes.next(anyString(), anyString(), any())).thenReturn("DH-2610-00003");
+
+        service.openForVisit(VISIT, 1L, 2L, 11L, null, RECEPTIONIST);
+
+        org.mockito.ArgumentCaptor<SalesOrder> saved = org.mockito.ArgumentCaptor.forClass(SalesOrder.class);
+        verify(orders).saveAndFlush(saved.capture());
+        assertThat(saved.getValue().getTotalAmount()).isEqualTo(90_000);
+        assertThat(saved.getValue().getLines().get(0).getDescription()).isEqualTo("Ngừng");
     }
 
     // ---------------------------------------------------------------- chủ dòng (Visit#2, #4)
