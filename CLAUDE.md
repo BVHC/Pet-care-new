@@ -128,6 +128,7 @@ Open convention TBDs (don't decide silently — ask or write an ADR): command na
 <<<<<<< HEAD
 <<<<<<< HEAD
 <<<<<<< HEAD
+<<<<<<< HEAD
 **ADR map** (`docs/adr/`, immutable once Accepted — supersede instead of editing; **next free: 0091**):
 =======
 **ADR map** (`docs/adr/`, immutable once Accepted — supersede instead of editing; **next free: 0089**):
@@ -141,6 +142,9 @@ Open convention TBDs (don't decide silently — ask or write an ADR): command na
 =======
 **ADR map** (`docs/adr/`, immutable once Accepted — supersede instead of editing; **next free: 0094** — `origin/dev` already holds BE-2's 0088–0090, so this branch's N5 ADR-0088 must be renumbered before merge):
 >>>>>>> df1329c (fix: trả D043 một phần, thêm 4 index FK bệnh án/mũi tiêm và CHECK lý do mua ngoài (V28))
+=======
+**ADR map** (`docs/adr/`, immutable once Accepted — supersede instead of editing; **next free: 0095** — `origin/dev` already holds BE-2's 0088–0090, so this branch's N5 ADR-0088 must be renumbered before merge):
+>>>>>>> 3811528 (fix: trả D032, thêm index lịch hẹn theo chi nhánh × ngày (V29), chấp nhận OFFSET của #3)
 
 | Area | ADRs |
 |---|---|
@@ -239,7 +243,7 @@ Every write ADR follows these. Read the ADR of the neighbouring feature before w
 
 - Schema follows erd §0: PK `BIGINT GENERATED ALWAYS AS IDENTITY` (1–1 tables reuse the FK as PK); FK `<singular>_id`, `ON DELETE RESTRICT`; ROOT / PART / REF tables have `created_at` + `updated_at`, LOG tables only `created_at` and are insert-only; money `BIGINT` VND, business dates `DATE` (Vietnam time), weight `NUMERIC(6,2)`; every enum column `VARCHAR(30)` + `CHECK`. Deliberate deviations: erd §13.
 - **Flyway owns the schema** (`BE/src/main/resources/db/migration/`, V1 = the whole v16 schema, V2 = 52 [CFG] rows, then seed templates and indexes). **Never edit an applied migration** — not even a comment: the checksum changes and every DB that ran it fails to start.
-- **Version numbers are shared with BE-2:** V1–V28 are taken (V13–V15 BE-2; V16 appointment sequence, V17–V18 appointment templates; V19 cashier templates + indexes, BE-2; V20 boarding ST05 index + clinic-cancel templates, BE-2; V21 page_contents seed, BE-2; V22 care reminder templates + `care_tasks` index / CHECK, BE-1; V23 `vaccinations.overdue_handled_at` + ST18 index, BE-1; V24 boarding check-in / care-log templates + 2 indexes, BE-2; V25 boarding checkout / ST15 templates + 3 indexes, BE-2; V26 ST08 stock-alert template, BE-2; V27 `refresh_tokens` + `sessions.access_expires_at`, drops `accounts.last_seen_at`, [CFG] `session.access_ttl_minutes` replaces `staff.online_window_minutes`, BE-1; V28 4 FK indexes on `medical_record_addenda` / `prescription_items` / `vaccinations` + CHECK `ck_prescription_items_external_reason_tied` (D043), BE-1 — V17–V28 not yet confirmed with the other dev, note in 06 §6). **BE-2 from V29 (V27 and V28 were taken by BE-1 on 2026-11-02 while `origin/dev` stopped at V26: BE-2, check before you create one).** V22 ships in the same PR as T39 part 3 (ST04); its IT helpers are already fixed (ADR-0081). A dev DB that ran the old `V13__appointment_code_sequence` needs `flyway repair` or `docker compose down -v` (ask first — it wipes data).
+- **Version numbers are shared with BE-2:** V1–V29 are taken (V13–V15 BE-2; V16 appointment sequence, V17–V18 appointment templates; V19 cashier templates + indexes, BE-2; V20 boarding ST05 index + clinic-cancel templates, BE-2; V21 page_contents seed, BE-2; V22 care reminder templates + `care_tasks` index / CHECK, BE-1; V23 `vaccinations.overdue_handled_at` + ST18 index, BE-1; V24 boarding check-in / care-log templates + 2 indexes, BE-2; V25 boarding checkout / ST15 templates + 3 indexes, BE-2; V26 ST08 stock-alert template, BE-2; V27 `refresh_tokens` + `sessions.access_expires_at`, drops `accounts.last_seen_at`, [CFG] `session.access_ttl_minutes` replaces `staff.online_window_minutes`, BE-1; V28 4 FK indexes on `medical_record_addenda` / `prescription_items` / `vaccinations` + CHECK `ck_prescription_items_external_reason_tied` (D043), BE-1; V29 index `ix_appointments_branch_slot`, BE-1 (D032) — V17–V29 not yet confirmed with the other dev, note in 06 §6). **BE-2 from V30 (V27–V29 were taken by BE-1 on 2026-11-02 while `origin/dev` stopped at V26: BE-2, check before you create one).** V22 ships in the same PR as T39 part 3 (ST04); its IT helpers are already fixed (ADR-0081). A dev DB that ran the old `V13__appointment_code_sequence` needs `flyway repair` or `docker compose down -v` (ask first — it wipes data).
 - **V16 checksum changed:** `571e0fe` removed conflict markers from `V16__appointment_code_sequence.sql` (comments only; `origin/dev` and `origin/manh` still carry the markers). A DB that ran V16 before that fails startup with *checksum mismatch for version 16*. There is no Flyway Maven plugin: after checking that `appointment_code_seq` matches the file, run `UPDATE flyway_schema_history SET checksum = -439054298 WHERE version = '16' AND checksum = -223559679` (what `repair` would write). Tell BE-2 before they merge.
 - The first ADMIN is never seeded: create it with SQL — an `accounts` row (with `phone`) **plus** a `staff_profiles` row (`branch_id` NULL); template in system-overview §1. Don't add bootstrap code for it.
 

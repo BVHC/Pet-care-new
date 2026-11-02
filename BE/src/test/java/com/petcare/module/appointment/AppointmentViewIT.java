@@ -567,12 +567,14 @@ class AppointmentViewIT {
         assertThat(jdbc.queryForObject("SELECT count(*) FROM audit_logs", Long.class)).isEqualTo(audits);
     }
 
-    // ================================================================ kế hoạch truy vấn (nợ D032)
+    // ================================================================ kế hoạch truy vấn (D032 đã trả, V29)
 
     /**
      * EXPLAIN trên 20 000 dòng chèn trong một transaction rollback + {@code ANALYZE}, với câu SQL tương đương câu
-     * Specification sinh ra (giá trị literal). Hai dạng nóng — danh sách của khách và danh sách chờ check-in — không được
-     * quét toàn bảng. Danh sách cả ngày của chi nhánh (mọi trạng thái) không có index riêng: chỉ ghi lại, xem D032.
+     * Specification sinh ra (giá trị literal). Danh sách của khách, danh sách chờ check-in và danh sách cả ngày / khoảng
+     * ngày của chi nhánh (mọi trạng thái) không được quét toàn bảng; hai câu sau dùng {@code ix_appointments_branch_slot}
+     * (V29, docs/adr/0094) với {@code branch_id} và {@code slot_date} đều là Index Cond. {@code count(*)} chỉ theo
+     * {@code branch_id} không kiểm: dữ liệu mẫu chia đôi hai chi nhánh nên Seq Scan là kế hoạch đúng.
      */
     @Test
     void hotQueriesUseAnIndex() {
@@ -593,13 +595,58 @@ class AppointmentViewIT {
             String checkInPlan = plan("SELECT * FROM appointments WHERE branch_id = " + branch
                     + " AND status = 'BOOKED' AND slot_date = DATE '2026-10-15' AND slot_start >= TIME '08:30'"
                     + " AND slot_start <= TIME '09:30' ORDER BY slot_date, slot_start, id LIMIT 20");
+            // Ngày nằm trong vùng dữ liệu mẫu (2024-01-01 + 0..699 ngày): mỗi (chi nhánh, ngày) có vài chục dòng.
             String dayPlan = plan("SELECT * FROM appointments WHERE branch_id = " + branch
-                    + " AND slot_date = DATE '2026-10-15' ORDER BY slot_date, slot_start, id LIMIT 20");
+                    + " AND slot_date = DATE '2024-06-01' ORDER BY slot_date, slot_start, id LIMIT 20");
+            String rangePlan = plan("SELECT * FROM appointments WHERE branch_id = " + branch
+                    + " AND slot_date >= DATE '2024-06-01' AND slot_date <= DATE '2024-06-07'"
+                    + " ORDER BY slot_date, slot_start, id LIMIT 20");
+            String rangeCountPlan = plan("SELECT count(*) FROM appointments WHERE branch_id = " + branch
+                    + " AND slot_date >= DATE '2024-06-01' AND slot_date <= DATE '2024-06-07'");
 
             assertThat(customerPlan).as(customerPlan).doesNotContain("Seq Scan on appointments");
             assertThat(checkInPlan).as(checkInPlan).doesNotContain("Seq Scan on appointments");
-            // Nợ D032: chưa có index bắt đầu bằng (branch_id, slot_date) — branch_id chỉ là Filter. Trả nợ thì đổi assert.
-            assertThat(dayPlan).as(dayPlan).contains("Filter: (branch_id = " + branch + ")");
+            // D032 (V29): branch_id đứng đầu index nên là Index Cond cùng slot_date, không còn Filter.
+            assertThat(dayPlan).as(dayPlan).contains("ix_appointments_branch_slot")
+                    .contains("branch_id = " + branch).contains("slot_date = '2024-06-01'::date")
+                    .doesNotContain("Filter: (branch_id").doesNotContain("Seq Scan on appointments");
+            assertThat(rangePlan).as(rangePlan).contains("ix_appointments_branch_slot")
+                    .doesNotContain("Seq Scan on appointments");
+            assertThat(rangeCountPlan).as(rangeCountPlan).contains("ix_appointments_branch_slot")
+                    .doesNotContain("Seq Scan on appointments");
+            status.setRollbackOnly();
+        });
+    }
+
+    /**
+     * Hibernate gửi tham số bind; sau 5 lần thực thi pgjdbc có thể chuyển sang generic plan (D032). Ép generic plan bằng
+     * {@code plan_cache_mode} và kiểm câu cả ngày / khoảng ngày của chi nhánh vẫn đi {@code ix_appointments_branch_slot}.
+     */
+    @Test
+    void branchDayListUsesTheIndexWithAGenericPlan() {
+        tx.executeWithoutResult(status -> {
+            jdbc.update("""
+                    INSERT INTO appointments (code, customer_id, pet_id, branch_id, service_id, service_group,
+                            slot_date, slot_start, status, channel, booked_by)
+                    SELECT 'LH-GP-' || g, ?, ?, CASE WHEN g % 2 = 0 THEN ? ELSE ? END, ?, 'MEDICAL',
+                           DATE '2024-01-01' + (g % 700), TIME '08:00' + (g % 8) * INTERVAL '30 minutes',
+                           'COMPLETED', 'COUNTER', ?
+                    FROM generate_series(1, 20000) g""", otherCustomer, otherPet, branch, otherBranch, medical,
+                    receptionist);
+            jdbc.execute("ANALYZE appointments");
+            jdbc.execute("SET LOCAL plan_cache_mode = force_generic_plan");
+            jdbc.execute("PREPARE day_list (bigint, date) AS SELECT * FROM appointments WHERE branch_id = $1"
+                    + " AND slot_date = $2 ORDER BY slot_date, slot_start, id LIMIT 20");
+            jdbc.execute("PREPARE range_list (bigint, date, date) AS SELECT * FROM appointments WHERE branch_id = $1"
+                    + " AND slot_date >= $2 AND slot_date <= $3 ORDER BY slot_date, slot_start, id LIMIT 20");
+
+            String dayPlan = plan("EXECUTE day_list(" + branch + ", DATE '2024-06-01')");
+            String rangePlan = plan("EXECUTE range_list(" + branch + ", DATE '2024-06-01', DATE '2024-06-07')");
+
+            assertThat(dayPlan).as(dayPlan).contains("ix_appointments_branch_slot")
+                    .doesNotContain("Seq Scan on appointments");
+            assertThat(rangePlan).as(rangePlan).contains("ix_appointments_branch_slot")
+                    .doesNotContain("Seq Scan on appointments");
             status.setRollbackOnly();
         });
     }
