@@ -117,7 +117,9 @@ Ghi lại các **quyết định kỹ thuật** mà đặc tả nghiệp vụ (`
 | [0092](0092-accept-booking-pet-lifecycle-race.md) | Chấp nhận race đặt / đổi lịch ∥ thú mất / chuyển chủ (D027): customer không bắt buộc lấy advisory 1001, lịch `BOOKED` mồ côi do lễ tân hủy tay; check-in lịch mồ côi sau chuyển chủ 500 → 400 `BR-TN-01`; cách đóng thật = `findPetForShare` sau `lockPet`. Thay nghĩa vụ của 0045 / 0047 / 0049 / 0050 §10 / 0052 §2–3. Không migration | Accepted | 2026-11-02 | BR-KH-05, 08, BR-LH-07, 09, BR-TN-01; ADR-0045, 0052, 0084 |
 | [0093](0093-d043-fk-indexes-reason-check-accept-triggers.md) | Trả D043 một phần (V28): 4 index FK `medical_record_addenda` / `prescription_items` (`medical_record_id`), `vaccinations` (`visit_id`, `vaccine_type_id`) + CHECK `ck_prescription_items_external_reason_tied` (mua ngoài ⇔ có lý do); chấp nhận không làm trigger chặn sửa bệnh án đã khóa / sửa-xóa bản bổ sung (ứng dụng giữ BR-KB-01). Không contract | Accepted | 2026-11-02 | BR-KB-01, 03, BR-BH-04, BR-SP-07; ADR-0066, 0076 |
 | [0094](0094-appointment-branch-day-index-accept-offset.md) | Trả D032: index `ix_appointments_branch_slot (branch_id, slot_date, slot_start)` (V29) cho danh sách lịch hẹn của chi nhánh theo ngày (#3); chấp nhận OFFSET + `count(*)` chính xác và drift giữa hai request (keyset cũng drift vì đổi khung làm khóa sắp xếp đổi). Giữ hai index cũ. Không contract | Accepted | 2026-11-02 | BR-LH-03; ADR-0048, 0049, 0092 |
+| [0095](0095-visits-branch-checked-in-at-index.md) | Trả D041: index `ix_visits_branch_checked_in_at (branch_id, checked_in_at)` (V30) cho hàng đợi visit lọc theo ngày check-in (visit-v1 #2); không partial, giữ năm index cũ, không đổi hợp đồng (vẫn không phân trang); hướng hybrid (keyset cho lịch sử, chia lịch sử cũ) ghi sẵn, chưa làm. Không contract | Accepted | 2026-11-02 | ADR-0060, 0094 |
 
+<<<<<<< HEAD
 <<<<<<< HEAD
 <<<<<<< HEAD
 <<<<<<< HEAD
@@ -136,3 +138,6 @@ Ghi lại các **quyết định kỹ thuật** mà đặc tả nghiệp vụ (`
 =======
 > Số ADR mới tiếp theo: **0095** (cập nhật 2026-11-02; 0094 đã viết; `origin/dev` đã dùng 0088–0090 của BE-2 nên ADR-0088 của N5 ở nhánh này trùng số, đổi số trước khi merge). Trước khi lấy số, kiểm `origin/dev` và nhánh của BE-2.
 >>>>>>> 3811528 (fix: trả D032, thêm index lịch hẹn theo chi nhánh × ngày (V29), chấp nhận OFFSET của #3)
+=======
+> Số ADR mới tiếp theo: **0096** (cập nhật 2026-11-02; 0095 đã viết; `origin/dev` đã dùng 0088–0090 của BE-2 nên ADR-0088 của N5 ở nhánh này trùng số, đổi số trước khi merge). Trước khi lấy số, kiểm `origin/dev` và nhánh của BE-2.
+>>>>>>> aff6532 (fix: trả D041, thêm index lượt tiếp nhận theo chi nhánh × ngày check-in (V30))

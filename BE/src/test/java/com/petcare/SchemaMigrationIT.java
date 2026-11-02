@@ -148,10 +148,12 @@ class SchemaMigrationIT {
         // V27 refresh_tokens + sessions.access_expires_at, bỏ accounts.last_seen_at, [CFG] session.access_ttl_minutes
         // (docs/adr/0091), V28 4 index FK bệnh án / mũi tiêm + CHECK lý do mua ngoài (docs/adr/0093, trả D043),
         // V29 index lịch hẹn theo chi nhánh × ngày (docs/adr/0094, trả D032),
+        // V30 index lượt tiếp nhận theo chi nhánh × ngày check-in (docs/adr/0095, trả D041),
         // V9000 chỉ ở test: baseline session.access_ttl_minutes = 720
         assertThat(rows).extracting(row -> row.get("version"))
                 .containsExactly("1", "2", "3", "4", "5", "6", "7", "8", "9", "10", "11", "12", "13", "14", "15",
-                        "16", "17", "18", "19", "20", "21", "22", "23", "24", "25", "26", "27", "28", "29", "9000");
+                        "16", "17", "18", "19", "20", "21", "22", "23", "24", "25", "26", "27", "28", "29", "30",
+                        "9000");
         assertThat(rows).allSatisfy(row -> assertThat(row).containsEntry("success", true));
     }
 
@@ -446,6 +448,27 @@ class SchemaMigrationIT {
                         + " AND indexname IN ('ix_appointments_quota', 'ix_appointments_status_slot')",
                 String.class))
                 .containsExactlyInAnyOrder("ix_appointments_quota", "ix_appointments_status_slot");
+    }
+
+    /**
+     * V30 (docs/adr/0095, trả D041): index lượt tiếp nhận của chi nhánh bắt đầu bằng (branch_id, checked_in_at), không
+     * partial (phủ mọi trạng thái); năm index cũ của {@code visits} còn nguyên.
+     */
+    @Test
+    void visitBranchCheckedInAtIndexCoversEveryStatus() {
+        assertThat(jdbc.queryForList(
+                "SELECT indexdef FROM pg_indexes WHERE schemaname = 'public' AND indexname = 'ix_visits_branch_checked_in_at'",
+                String.class))
+                .singleElement().asString()
+                .contains("ON public.visits").contains("(branch_id, checked_in_at)")
+                .doesNotContain("WHERE");
+        assertThat(jdbc.queryForList(
+                "SELECT indexname FROM pg_indexes WHERE schemaname = 'public' AND tablename = 'visits'"
+                        + " AND indexname IN ('ix_visits_queue', 'ix_visits_assignee_status',"
+                        + " 'ix_visits_pet_checked_in_at', 'ix_visits_checked_in_by', 'ix_visits_customer_id')",
+                String.class))
+                .containsExactlyInAnyOrder("ix_visits_queue", "ix_visits_assignee_status",
+                        "ix_visits_pet_checked_in_at", "ix_visits_checked_in_by", "ix_visits_customer_id");
     }
 
     /**

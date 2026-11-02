@@ -559,6 +559,7 @@ Quota riêng của một khung giờ cụ thể, ghi đè quota mặc định (B
 - Index hàng đợi: `(branch_id, status, priority_class, queue_sort_key)`
 - Index: `(assignee_id, status)`; `(pet_id, checked_in_at DESC)`
 - Index: `(checked_in_by)` — kiểm FK khi xóa `accounts` (V7, ADR-0018)
+- Index: `(branch_id, checked_in_at)` — hàng đợi lọc theo ngày check-in, không partial (V30, ADR-0095, trả D041)
 
 ### `visit_assignments` — LOG
 
