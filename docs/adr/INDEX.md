@@ -114,10 +114,15 @@ Ghi lại các **quyết định kỹ thuật** mà đặc tả nghiệp vụ (`
 =======
 | [0088](0088-n5-unlock-flag-follow-up-deferral-stopped-service.md) | N5: mở khóa gỡ cờ "cần gán lại" của lượt người đó lại đủ điều kiện (D042, thay 0062 Q5); ST04 hoãn nhắc tái khám khi thú có lịch MEDICAL BOOKED, đặt lịch chỉ hủy task đã sinh (D052, thay 0084 §2 §5); lịch đã đặt vẫn tiếp nhận khi dịch vụ ngừng (D040, thay 0059 Q3). Giả định chờ PO, không migration |
 | [0091](0091-access-token-refresh-online.md) | Access token 10 phút + refresh token xoay vòng (bảng `refresh_tokens`, dùng lại ⇒ hủy phiên), online suy ra từ `sessions.access_expires_at` thay `last_seen_at`, xác thực chỉ đọc; trả D024; thay ADR-0003 mục 1, 3, 4; V27, `POST /auth/refresh` | Accepted | 2026-11-02 | BR-TN-06, BR-TK-11, 13, 14; ADR-0003, 0021, 0008, 0024, 0030 |
+| [0092](0092-accept-booking-pet-lifecycle-race.md) | Chấp nhận race đặt / đổi lịch ∥ thú mất / chuyển chủ (D027): customer không bắt buộc lấy advisory 1001, lịch `BOOKED` mồ côi do lễ tân hủy tay; check-in lịch mồ côi sau chuyển chủ 500 → 400 `BR-TN-01`; cách đóng thật = `findPetForShare` sau `lockPet`. Thay nghĩa vụ của 0045 / 0047 / 0049 / 0050 §10 / 0052 §2–3. Không migration | Accepted | 2026-11-02 | BR-KH-05, 08, BR-LH-07, 09, BR-TN-01; ADR-0045, 0052, 0084 |
 
+<<<<<<< HEAD
 <<<<<<< HEAD
 > Số ADR mới tiếp theo: **0089** (cập nhật 2026-11-01; 0088 đã viết). Trước khi lấy số, kiểm `origin/dev` và nhánh của BE-2.
 >>>>>>> 5e645ec (feat: mở khóa xóa needs_reassign, ST04 hoãn nhắc tái khám, check-in lịch đã đặt khi dịch vụ ngừng)
 =======
 > Số ADR mới tiếp theo: **0092** (cập nhật 2026-11-02; 0091 đã viết; `origin/dev` đã dùng 0088–0090 của BE-2 nên ADR-0088 của N5 ở nhánh này trùng số, đổi số trước khi merge). Trước khi lấy số, kiểm `origin/dev` và nhánh của BE-2.
 >>>>>>> cdb1f62 (feat: access token 10 phút + refresh token xoay vòng, online theo phiên)
+=======
+> Số ADR mới tiếp theo: **0093** (cập nhật 2026-11-02; 0092 đã viết; `origin/dev` đã dùng 0088–0090 của BE-2 nên ADR-0088 của N5 ở nhánh này trùng số, đổi số trước khi merge). Trước khi lấy số, kiểm `origin/dev` và nhánh của BE-2.
+>>>>>>> 34497f2 (fix: chấp nhận race đặt lịch ∥ thú mất/chuyển chủ (D027), check-in lịch mồ côi trả 400 BR-TN-01)

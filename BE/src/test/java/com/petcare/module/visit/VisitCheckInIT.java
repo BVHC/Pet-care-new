@@ -593,19 +593,24 @@ class VisitCheckInIT {
 
     // ============================================================ rollback (F5 T7–T9) và gửi lại (T12, T13)
 
+    /** D027 / ADR-0092: lịch BOOKED mồ côi của chủ cũ (race đặt lịch ∥ chuyển chủ được chấp nhận) → 400, không phải 500. */
     @Test
-    void corruptOwnershipRollsBackTheAppointmentUpdate() {
+    void orphanAppointmentOfAPreviousOwnerIsRejectedAndRollsBackTheAppointmentUpdate() {
         long stranger = data.counterCustomer();
-        long corrupt = data.appointment(stranger, pet, branch, grooming, "GROOMING", TODAY, LocalTime.of(9, 0),
+        long orphan = data.appointment(stranger, pet, branch, grooming, "GROOMING", TODAY, LocalTime.of(9, 0),
                 "BOOKED", receptionist);
-        long before = xmin("appointments", corrupt);
+        long before = xmin("appointments", orphan);
+        long ordersBefore = jdbc.queryForObject("SELECT count(*) FROM orders WHERE branch_id = ? AND source = 'VISIT'",
+                Long.class, branch);
 
-        assertThat(post(token, body(pet, corrupt, null, null)).getStatusCode())
-                .isEqualTo(HttpStatus.INTERNAL_SERVER_ERROR);
+        assertRule(post(token, body(pet, orphan, null, null)), "BR-TN-01", "Lịch hẹn #" + orphan
+                + " thuộc khách khác (thú đã chuyển chủ): hủy lịch hẹn rồi tiếp nhận thú như khách walk-in (BR-TN-01)");
 
-        assertThat(appointmentStatus(corrupt)).isEqualTo("BOOKED");
-        assertThat(xmin("appointments", corrupt)).isEqualTo(before);
+        assertThat(appointmentStatus(orphan)).isEqualTo("BOOKED");
+        assertThat(xmin("appointments", orphan)).isEqualTo(before);
         assertThat(visitsOfBranch()).isZero();
+        assertThat(jdbc.queryForObject("SELECT count(*) FROM orders WHERE branch_id = ? AND source = 'VISIT'",
+                Long.class, branch)).isEqualTo(ordersBefore);
     }
 
     @Test
