@@ -81,7 +81,8 @@ class LoginAttemptServiceTest {
         when(configs.getInt(ConfigKey.LOGIN_FAILED_WINDOW_MINUTES)).thenReturn(15);
         when(configs.getInt(ConfigKey.LOGIN_LOCK_MINUTES)).thenReturn(15);
         when(sessions.open(anyLong(), any(), any()))
-                .thenReturn(new OpenedSession(99L, "jwt-token", NOW.plus(Duration.ofHours(12))));
+                .thenReturn(new OpenedSession(99L, "jwt-token", NOW.plus(Duration.ofHours(12)),
+                        NOW.plus(Duration.ofMinutes(10)), "refresh-token"));
     }
 
     // ---------------------------------------------------------------- tồn tại (BR-TK-10)
@@ -307,6 +308,8 @@ class LoginAttemptServiceTest {
         verifyNoInteractions(customers, notifications);
         assertThat(response.accessToken()).isEqualTo("jwt-token");
         assertThat(response.expiresAt()).isEqualTo(NOW.plus(Duration.ofHours(12)));
+        assertThat(response.accessTokenExpiresAt()).isEqualTo(NOW.plus(Duration.ofMinutes(10)));
+        assertThat(response.refreshToken()).isEqualTo("refresh-token");
         assertThat(response.linkDecisionPending()).isFalse();
         assertThat(response.account().id()).isEqualTo(ID);
         assertThat(response.account().email()).isEqualTo(EMAIL);

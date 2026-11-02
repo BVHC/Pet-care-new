@@ -169,6 +169,73 @@ class FollowUpReminderIT {
         assertThat(fx.outbox(pets.get(4), CODES)).isEmpty();
     }
 
+    // ================================================================ hoãn nhắc khi thú có lịch Khám/Tiêm (docs/adr/0088, D052)
+
+    private long appointment(long customer, long pet, String group, String status) {
+        long service = fx.data.service(group);
+        return fx.data.appointment(customer, pet, fx.branch, service, group, TODAY.plusDays(5),
+                java.time.LocalTime.of(9, 0), status, fx.vet);
+    }
+
+    /** Thú đang có lịch MEDICAL BOOKED: không nhắc, không ghi gì; lịch rời BOOKED thì lần quét sau nhắc đúng một lần. */
+    @Test
+    void aBookedMedicalAppointmentDefersTheReminderUntilItLeavesBooked() {
+        long pet = fx.pet(fx.counter);
+        long visit = record(fx.counter, pet, fx.branch, 2);
+        long appointment = appointment(fx.counter, pet, "MEDICAL", "BOOKED");
+        String before = rowWithoutFlag(visit);
+
+        job.run();
+
+        assertThat(fx.outbox(pet, CODES)).as("hoãn: chưa gửi").isEmpty();
+        assertThat(fx.tasks(pet)).isEmpty();
+        assertThat(rowWithoutFlag(visit)).isEqualTo(before);
+        assertThat(jdbc.queryForObject("SELECT follow_up_reminded_at FROM medical_records WHERE visit_id = ?",
+                Timestamp.class, visit)).as("không đánh dấu đã nhắc").isNull();
+        assertThat(FollowUpItSupport.cancelledAt(jdbc, visit)).as("không đánh dấu hủy nhắc").isNull();
+
+        jdbc.update("UPDATE appointments SET status = 'CANCELLED' WHERE id = ?", appointment);
+        job.run();
+        job.run();
+
+        assertThat(fx.outbox(pet, CODES)).as("lịch bị hủy: nhắc quay lại đúng một lần").hasSize(1);
+    }
+
+    @Test
+    void aNoShowCompletedOrGroomingAppointmentDoesNotDefer() {
+        long noShow = fx.pet(fx.counter);
+        record(fx.counter, noShow, fx.branch, 2);
+        appointment(fx.counter, noShow, "MEDICAL", "NO_SHOW");
+        long grooming = fx.pet(fx.counter);
+        record(fx.counter, grooming, fx.branch, 2);
+        appointment(fx.counter, grooming, "GROOMING", "BOOKED");
+        long done = fx.pet(fx.counter);
+        record(fx.counter, done, fx.branch, 2);
+        appointment(fx.counter, done, "MEDICAL", "COMPLETED");
+
+        job.run();
+
+        assertThat(fx.outbox(noShow, CODES)).hasSize(1);
+        assertThat(fx.outbox(grooming, CODES)).hasSize(1);
+        assertThat(fx.outbox(done, CODES)).hasSize(1);
+    }
+
+    /** Hoãn áp dụng cả cho hồ sơ không email (không sinh Care Task trong lúc thú đã có lịch). */
+    @Test
+    void aBookedAppointmentAlsoDefersTheCareTaskOfAProfileWithoutEmail() {
+        long pet = fx.pet(fx.silent);
+        record(fx.silent, pet, fx.branch, 2);
+        long appointment = appointment(fx.silent, pet, "MEDICAL", "BOOKED");
+
+        job.run();
+        assertThat(fx.tasks(pet)).isEmpty();
+
+        jdbc.update("UPDATE appointments SET status = 'CANCELLED' WHERE id = ?", appointment);
+        job.run();
+        assertThat(fx.tasks(pet)).singleElement()
+                .satisfies(t -> assertThat(t).containsEntry("task_type", "FOLLOW_UP_DUE"));
+    }
+
     /** Bệnh án chưa khóa, không có hẹn, đã nhắc, đã hủy nhắc đều không được nhắc. */
     @Test
     void onlyLockedUnremindedUncancelledRecordsWithADateAreReminded() {

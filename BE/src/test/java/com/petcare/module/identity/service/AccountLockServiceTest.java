@@ -53,6 +53,7 @@ import com.petcare.module.care.api.NotificationApi.NotificationRequest;
 import com.petcare.module.customer.api.CustomerQueryApi;
 import com.petcare.module.customer.api.CustomerQueryApi.CustomerContact;
 import com.petcare.module.identity.api.AccountLockedEvent;
+import com.petcare.module.identity.api.AccountUnlockedEvent;
 import com.petcare.module.identity.api.NotificationTemplateCode;
 import com.petcare.module.identity.api.Role;
 import com.petcare.module.identity.dto.AccountSummary;
@@ -155,7 +156,6 @@ class AccountLockServiceTest {
     @Test
     void lockVetReadsThenLocksRevokesPublishesNotifiesAuditsFlushes() {
         Account account = staff(TARGET, Role.VET, AccountStatus.ACTIVE, ACTIVE_BRANCH);
-        ReflectionTestUtils.setField(account, "lastSeenAt", NOW);
         when(visits.findUnfinishedVisitsAssignedTo(TARGET)).thenReturn(List.of(
                 new AssignedVisit(15L, ACTIVE_BRANCH, VisitStatus.WAITING),
                 new AssignedVisit(12L, ACTIVE_BRANCH, VisitStatus.IN_PROGRESS)));
@@ -179,7 +179,6 @@ class AccountLockServiceTest {
 
         assertThat(account.isLocked()).isTrue();
         assertThat(account.getLockedReason()).isEqualTo("Nghi bị chiếm tài khoản");
-        assertThat(account.getLastSeenAt()).isNull();
         assertThat(account.getStatus()).isEqualTo(AccountStatus.ACTIVE);
 
         assertThat(result.account()).isEqualTo(new AccountSummary(TARGET, "staff7@petcare.test", Role.VET,
@@ -478,8 +477,11 @@ class AccountLockServiceTest {
         assertThat(account.isLocked()).isFalse();
         assertThat(account.getStatus()).isEqualTo(status);
         assertThat(account.getLockedReason()).isEqualTo("Vi phạm");
-        InOrder order = inOrder(accounts, audit);
+        // Flush trước khi phát để listener của visit đọc lại tài khoản thấy đã mở khóa (docs/adr/0088, D042).
+        InOrder order = inOrder(accounts, events, audit);
         order.verify(accounts).findByIdForUpdate(TARGET);
+        order.verify(accounts).flush();
+        order.verify(events).publishEvent(new AccountUnlockedEvent(TARGET, ACTOR));
         order.verify(audit).record(any());
         order.verify(accounts).flush();
         AuditEntry entry = capturedAudit();
@@ -489,7 +491,19 @@ class AccountLockServiceTest {
                 Map.entry("status", status.name()));
         assertThat(snapshot(entry.after())).containsExactly(Map.entry("isLocked", false),
                 Map.entry("status", status.name()));
-        verifyNoInteractions(sessions, events, notifications, branchLocks);
+        verifyNoInteractions(sessions, notifications, branchLocks);
+    }
+
+    /** Listener của visit lỗi (docs/adr/0088): lỗi lan ra, không audit, nên giao dịch mở khóa rollback cả cờ. */
+    @Test
+    void unlockListenerFailurePropagatesBeforeAuditSoTheWholeUnlockRollsBack() {
+        Account account = staff(TARGET, Role.VET, AccountStatus.ACTIVE, ACTIVE_BRANCH);
+        ReflectionTestUtils.setField(account, "locked", true);
+        org.mockito.Mockito.doThrow(new IllegalStateException("boom")).when(events).publishEvent(any(Object.class));
+
+        assertThatThrownBy(() -> service.unlockAccount(TARGET, "Đã xác minh"))
+                .isInstanceOf(IllegalStateException.class).hasMessage("boom");
+        verifyNoInteractions(audit, sessions, notifications);
     }
 
     @Test

@@ -183,8 +183,6 @@ class PasswordResetAttemptServiceTest {
         ReflectionTestUtils.setField(account, "mustChangePassword", true);
         ReflectionTestUtils.setField(account, "lockedUntil", NOW.plusSeconds(600));
         ReflectionTestUtils.setField(account, "failedLoginCount", 0);
-        ReflectionTestUtils.setField(account, "lastSeenAt", NOW.minusSeconds(30));
-
         service.applyReset(attempt(true, currentHash, false, newHash));
 
         InOrder order = inOrder(accounts, otps, sessions, notifications);
@@ -196,7 +194,6 @@ class PasswordResetAttemptServiceTest {
         assertThat(account.getPasswordHash()).isEqualTo(newHash);
         assertThat(account.isMustChangePassword()).isFalse();
         assertThat(account.getLockedUntil()).isNull();
-        assertThat(account.getLastSeenAt()).isNull();
     }
 
     @ParameterizedTest

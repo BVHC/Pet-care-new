@@ -1,7 +1,6 @@
 package com.petcare.module.identity.service;
 
 import java.time.Clock;
-import java.time.Duration;
 import java.time.Instant;
 import java.util.Collection;
 import java.util.Comparator;
@@ -14,10 +13,8 @@ import org.springframework.transaction.annotation.Propagation;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.transaction.support.TransactionSynchronizationManager;
 
-import com.petcare.module.identity.api.ConfigKey;
 import com.petcare.module.identity.api.Role;
 import com.petcare.module.identity.api.StaffDirectoryApi;
-import com.petcare.module.identity.api.SystemConfigApi;
 import com.petcare.module.identity.entity.AccountStatus;
 import com.petcare.module.identity.repository.AccountRepository;
 import com.petcare.module.identity.repository.StaffProfileRepository;
@@ -26,8 +23,8 @@ import com.petcare.module.identity.repository.StaffRow;
 /**
  * Cài đặt {@link StaffDirectoryApi} (docs/adr/0024). Chỉ đọc, qua projection; tham gia transaction của bên gọi
  * ({@code REQUIRED}). Riêng {@link #findStaffForShare} khóa {@code accounts FOR SHARE} ({@code MANDATORY},
- * docs/adr/0061). "Đang hoạt động" = {@code status = ACTIVE} và không bị khóa; "online" = {@code last_seen_at} trong
- * {@code staff.online_window_minutes} [CFG] tính tới bây giờ, đúng bằng mốc vẫn là online (BR-TN-06).
+ * docs/adr/0061). "Đang hoạt động" = {@code status = ACTIVE} và không bị khóa; "online" = có phiên chưa hủy với access
+ * token còn hạn ({@code onlineUntil > now}, BR-TN-06, docs/adr/0091).
  */
 @Service
 @Transactional(readOnly = true)
@@ -35,22 +32,19 @@ public class StaffDirectoryService implements StaffDirectoryApi {
 
     private final StaffProfileRepository staffProfiles;
     private final AccountRepository accounts;
-    private final SystemConfigApi configs;
     private final Clock clock;
 
-    public StaffDirectoryService(StaffProfileRepository staffProfiles, AccountRepository accounts,
-            SystemConfigApi configs, Clock clock) {
+    public StaffDirectoryService(StaffProfileRepository staffProfiles, AccountRepository accounts, Clock clock) {
         this.staffProfiles = staffProfiles;
         this.accounts = accounts;
-        this.configs = configs;
         this.clock = clock;
     }
 
     @Override
     public Optional<StaffSummary> findStaff(Long accountId) {
         Objects.requireNonNull(accountId, "accountId");
-        Instant onlineSince = onlineSince();
-        return staffProfiles.findStaffRow(accountId).map(row -> toSummary(row, onlineSince));
+        Instant now = Instant.now(clock);
+        return staffProfiles.findStaffRow(accountId).map(row -> toSummary(row, now));
     }
 
     /**
@@ -69,8 +63,8 @@ public class StaffDirectoryService implements StaffDirectoryApi {
         if (accounts.lockForShare(accountId).isEmpty()) {
             return Optional.empty();
         }
-        Instant onlineSince = onlineSince();
-        return staffProfiles.findStaffRow(accountId).map(row -> toSummary(row, onlineSince));
+        Instant now = Instant.now(clock);
+        return staffProfiles.findStaffRow(accountId).map(row -> toSummary(row, now));
     }
 
     /** BR-TN-05, 06: người online trước, cùng nhóm thì theo họ tên rồi {@code accountId} (thứ tự của câu query). */
@@ -78,9 +72,9 @@ public class StaffDirectoryService implements StaffDirectoryApi {
     public List<StaffSummary> findAssignableStaff(Long branchId, Role role) {
         Objects.requireNonNull(branchId, "branchId");
         Objects.requireNonNull(role, "role");
-        Instant onlineSince = onlineSince();
+        Instant now = Instant.now(clock);
         return staffProfiles.findActiveStaffRows(branchId, role).stream()
-                .map(row -> toSummary(row, onlineSince))
+                .map(row -> toSummary(row, now))
                 .sorted(Comparator.comparing((StaffSummary staff) -> !staff.online()))
                 .toList();
     }
@@ -91,8 +85,8 @@ public class StaffDirectoryService implements StaffDirectoryApi {
         if (accountIds.isEmpty()) {
             return List.of();
         }
-        Instant onlineSince = onlineSince();
-        return staffProfiles.findStaffRows(accountIds).stream().map(row -> toSummary(row, onlineSince)).toList();
+        Instant now = Instant.now(clock);
+        return staffProfiles.findStaffRows(accountIds).stream().map(row -> toSummary(row, now)).toList();
     }
 
     @Override
@@ -127,13 +121,9 @@ public class StaffDirectoryService implements StaffDirectoryApi {
         return accounts.findEmailById(accountId);
     }
 
-    private Instant onlineSince() {
-        return Instant.now(clock).minus(Duration.ofMinutes(configs.getInt(ConfigKey.STAFF_ONLINE_WINDOW_MINUTES)));
-    }
-
-    private static StaffSummary toSummary(StaffRow row, Instant onlineSince) {
+    private static StaffSummary toSummary(StaffRow row, Instant now) {
         boolean active = row.status() == AccountStatus.ACTIVE && !row.locked();
-        boolean online = row.lastSeenAt() != null && !row.lastSeenAt().isBefore(onlineSince);
+        boolean online = row.onlineUntil() != null && row.onlineUntil().isAfter(now);
         return new StaffSummary(row.accountId(), row.fullName(), row.role(), row.branchId(), active, online);
     }
 }

@@ -37,6 +37,7 @@ import com.petcare.module.branch.api.BranchQueryApi.BranchSummary;
 import com.petcare.module.care.api.CareTaskApi;
 import com.petcare.module.care.api.CareTaskApi.CareTaskType;
 import com.petcare.module.care.api.CareTaskApi.NewCareTask;
+import com.petcare.module.appointment.api.AppointmentQueryApi;
 import com.petcare.module.care.api.NotificationApi;
 import com.petcare.module.care.api.NotificationApi.Channel;
 import com.petcare.module.care.api.NotificationApi.NotificationRequest;
@@ -66,6 +67,7 @@ class FollowUpReminderServiceTest {
     private static final Instant AT = NOW.truncatedTo(ChronoUnit.MICROS);
 
     private final MedicalRecordRepository records = mock(MedicalRecordRepository.class);
+    private final AppointmentQueryApi appointments = mock(AppointmentQueryApi.class);
     private final PetQueryApi pets = mock(PetQueryApi.class);
     private final CustomerQueryApi customers = mock(CustomerQueryApi.class);
     private final AccountContactApi accounts = mock(AccountContactApi.class);
@@ -73,8 +75,8 @@ class FollowUpReminderServiceTest {
     private final NotificationApi notifications = mock(NotificationApi.class);
     private final CareTaskApi careTasks = mock(CareTaskApi.class);
     private final SystemConfigApi configs = mock(SystemConfigApi.class);
-    private final FollowUpReminderService service = new FollowUpReminderService(records, pets, customers, accounts,
-            branches, notifications, careTasks, configs, Clock.fixed(NOW, ZoneOffset.UTC));
+    private final FollowUpReminderService service = new FollowUpReminderService(records, appointments, pets,
+            customers, accounts, branches, notifications, careTasks, configs, Clock.fixed(NOW, ZoneOffset.UTC));
 
     record FollowUp(Long getVisitId, Long getPetId, Long getBranchId, LocalDate getFollowUpDate)
             implements DueFollowUp {}
@@ -129,16 +131,32 @@ class FollowUpReminderServiceTest {
 
         assertThat(service.remind(VISIT, WINDOW)).isEqualTo(ReminderResult.REMINDED);
 
-        InOrder order = inOrder(records, pets, notifications);
+        InOrder order = inOrder(records, pets, appointments, notifications);
         order.verify(records).findPetIdOfVisit(VISIT);
         order.verify(pets).findPetForShare(PET);
         order.verify(records).lockDueForReminder(VISIT, TODAY, WINDOW.to());
         order.verify(records).findDueFollowUp(VISIT);
+        order.verify(appointments).hasBookedMedical(PET);
         order.verify(records).markFollowUpReminded(VISIT, AT);
         order.verify(notifications, times(2)).enqueue(any());
         verify(records, never()).markFollowUpCancelled(anyLong(), any());
         verify(records, never()).save(any());
         verifyNoInteractions(careTasks);
+    }
+
+    @Test
+    void petWithABookedMedicalAppointmentDefersTheReminderAndWritesNothing() {
+        due(pet(null), contact(null, 5L, "0901234567"), new AccountContact(5L, "a@x.vn", false));
+        when(appointments.hasBookedMedical(PET)).thenReturn(true);
+
+        assertThat(service.remind(VISIT, WINDOW)).isEqualTo(ReminderResult.SKIPPED);
+
+        InOrder order = inOrder(records, appointments);
+        order.verify(records).lockDueForReminder(VISIT, TODAY, WINDOW.to());
+        order.verify(appointments).hasBookedMedical(PET);
+        verify(records, never()).markFollowUpReminded(anyLong(), any());
+        verify(records, never()).markFollowUpCancelled(anyLong(), any());
+        verifyNoInteractions(notifications, careTasks, customers);
     }
 
     @Test

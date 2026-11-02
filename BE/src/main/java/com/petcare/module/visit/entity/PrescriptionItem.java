@@ -21,7 +21,7 @@ import lombok.NoArgsConstructor;
  * không có thao tác sửa dòng. Ba cột còn lại ({@code is_external_purchase}, {@code order_line_id}, {@code external_reason})
  * chỉ đổi bằng bulk UPDATE của repository lúc thu tiền thiếu tồn (BR-BH-04, docs/adr/0076). Dòng mới chỉ tạo qua hai
  * factory của kê đơn (visit-v1 #16, docs/adr/0077), mỗi factory đặt cả ba cột cùng lúc nên luôn giữ "mua ngoài ⇔ có lý
- * do" (DB chưa có CHECK này — nợ D043).
+ * do" (DB giữ thêm bằng CHECK {@code ck_prescription_items_external_reason_tied} của V28, docs/adr/0093).
  */
 @Getter
 @Entity

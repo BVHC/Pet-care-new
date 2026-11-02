@@ -52,6 +52,20 @@ class FollowUpCancellationServiceTest {
     }
 
     @Test
+    void cancelRemindedTasksLocksPendingRecordsThenReadsRemindedThenCancelsAndWritesNoRecord() {
+        when(records.findRemindedFollowUpIdsOfPet(PET)).thenReturn(List.of(701L));
+
+        service.cancelRemindedFollowUpTasks(PET);
+
+        // Docs/adr/0088: khóa bệnh án chờ nhắc (chờ ST04) trước khi đọc; không UPDATE medical_records; records → care.
+        InOrder order = inOrder(records, careTasks);
+        order.verify(records).lockPendingFollowUpsOfPet(PET);
+        order.verify(records).findRemindedFollowUpIdsOfPet(PET);
+        order.verify(careTasks).cancelFollowUpTasks(List.of(701L));
+        verifyNoMoreInteractions(records, careTasks);
+    }
+
+    @Test
     void withNoRemindedRecordsTheCareCallReceivesAnEmptyCollectionWhichCareIgnores() {
         when(records.findRemindedFollowUpIdsOfPet(PET)).thenReturn(List.of());
 
@@ -88,6 +102,7 @@ class FollowUpCancellationServiceTest {
     void everyMethodJoinsTheCallersTransactionAndNeverStartsOne() throws NoSuchMethodException {
         for (Method method : new Method[] {
                 FollowUpCancellationService.class.getMethod("cancelPendingFollowUps", long.class, Instant.class),
+                FollowUpCancellationService.class.getMethod("cancelRemindedFollowUpTasks", long.class),
                 FollowUpCancellationService.class.getMethod("cancelForDeceasedPet", long.class)}) {
             Transactional transactional = method.getAnnotation(Transactional.class);
             assertThat(transactional).as(method.getName()).isNotNull();

@@ -19,6 +19,12 @@ public final class IdentityAuditActions {
      */
     public static final String CUSTOMER_PROFILE_LINKED = "CUSTOMER_PROFILE_LINKED";
 
+    /**
+     * Refresh token đã dùng bị đưa lại (docs/adr/0091): token bị lộ hoặc client dùng token cũ; phiên bị hủy.
+     * {@code entity = sessions/<phiên>}, actor = chủ phiên.
+     */
+    public static final String REFRESH_TOKEN_REUSED = "REFRESH_TOKEN_REUSED";
+
     /** {@code verificationMethod} của {@code CUSTOMER_PROFILE_LINKED} khi khách tự liên kết (mã gửi tới email hồ sơ). */
     public static final String VERIFICATION_EMAIL_CODE = "EMAIL_CODE";
 

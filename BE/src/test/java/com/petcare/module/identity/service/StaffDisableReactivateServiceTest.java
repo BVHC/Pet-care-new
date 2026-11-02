@@ -114,7 +114,7 @@ class StaffDisableReactivateServiceTest {
 
     @BeforeEach
     void setUp() {
-        when(presence.onlineSince()).thenReturn(NOW.minusSeconds(600));
+        when(presence.now()).thenReturn(NOW);
         when(branchLocks.lockForStaffChange(any())).thenAnswer(invocation -> {
             Collection<Long> ids = invocation.getArgument(0);
             SortedMap<Long, BranchStatus> locked = new TreeMap<>();
@@ -133,7 +133,6 @@ class StaffDisableReactivateServiceTest {
     @Test
     void disableLocksBranchThenAccountThenGuardsThenWritesRevokesAuditsFlushesAndReadsBack() {
         Target target = target(Role.VET, AccountStatus.ACTIVE, ACTIVE_BRANCH);
-        ReflectionTestUtils.setField(target.account(), "lastSeenAt", NOW);
         StaffDetailRow after = givenDetail(AccountStatus.DISABLED, ACTIVE_BRANCH);
 
         StaffResponse response = service.disableStaff(TARGET);
@@ -151,7 +150,6 @@ class StaffDisableReactivateServiceTest {
         order.verify(staffProfiles).flush();
         order.verify(staffProfiles).findStaffDetail(TARGET);
         assertThat(target.account().getStatus()).isEqualTo(AccountStatus.DISABLED);
-        assertThat(target.account().getLastSeenAt()).isNull();
         assertThat(target.profile().getBranchId()).isEqualTo(ACTIVE_BRANCH);
 
         AuditEntry entry = capturedAudit();
@@ -363,7 +361,6 @@ class StaffDisableReactivateServiceTest {
         assertThat(account.getFailedLoginCount()).isZero();
         assertThat(account.getFirstFailedLoginAt()).isNull();
         assertThat(account.getLockedUntil()).isNull();
-        assertThat(account.getLastSeenAt()).isNull();
         assertThat(target.profile().getBranchId()).isEqualTo(ACTIVE_BRANCH);
 
         ArgumentCaptor<NotificationRequest> mail = ArgumentCaptor.forClass(NotificationRequest.class);

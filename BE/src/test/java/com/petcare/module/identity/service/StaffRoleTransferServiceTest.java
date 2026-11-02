@@ -101,7 +101,7 @@ class StaffRoleTransferServiceTest {
 
     @BeforeEach
     void setUp() {
-        when(presence.onlineSince()).thenReturn(NOW.minusSeconds(600));
+        when(presence.now()).thenReturn(NOW);
         when(branchLocks.lockForStaffChange(any())).thenAnswer(invocation -> {
             Collection<Long> ids = invocation.getArgument(0);
             SortedMap<Long, BranchStatus> locked = new TreeMap<>();

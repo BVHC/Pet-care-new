@@ -2,7 +2,7 @@ package com.petcare.module.identity.service;
 
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.anyLong;
-import static org.mockito.Mockito.inOrder;
+import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
@@ -10,37 +10,32 @@ import static org.mockito.Mockito.verifyNoMoreInteractions;
 import static org.mockito.Mockito.when;
 
 import org.junit.jupiter.api.Test;
-import org.mockito.InOrder;
 
 import com.petcare.module.identity.api.Role;
-import com.petcare.module.identity.repository.AccountRepository;
 import com.petcare.platform.security.BranchScope;
 
 /**
- * docs/adr/0021: đăng xuất xóa {@code last_seen_at} <b>trước</b> rồi mới hủy phiên (thứ tự khóa
- * {@code accounts → sessions}), chỉ phiên của token đang dùng, không ghi audit (không có phụ thuộc
- * {@code AuditRecorder}). Khách cũng đi cùng đường: câu SQL tự bỏ qua dòng đã {@code NULL}.
+ * docs/adr/0021, docs/adr/0091: đăng xuất chỉ hủy phiên của token đang dùng (nhân viên tự offline vì online đọc từ phiên
+ * chưa hủy, không còn câu xóa {@code last_seen_at}), không ghi audit (không có phụ thuộc {@code AuditRecorder}).
+ * Khách cũng đi cùng đường.
  */
 class LogoutServiceTest {
 
     private static final long ACCOUNT = 7L;
     private static final long SESSION = 42L;
 
-    private final AccountRepository accounts = mock(AccountRepository.class);
     private final SessionService sessions = mock(SessionService.class);
     private final BranchScope branchScope = mock(BranchScope.class);
-    private final LogoutService service = new LogoutService(accounts, sessions, branchScope);
+    private final LogoutService service = new LogoutService(sessions, branchScope);
 
     @Test
-    void staffClearsLastSeenBeforeRevokingCurrentSession() {
+    void staffRevokesOnlyTheCurrentSession() {
         when(branchScope.current()).thenReturn(principal(Role.VET, 3L));
 
         service.logout();
 
-        InOrder order = inOrder(accounts, sessions);
-        order.verify(accounts).clearLastSeen(ACCOUNT);
-        order.verify(sessions).revoke(SESSION);
-        verifyNoMoreInteractions(accounts, sessions);
+        verify(sessions).revoke(SESSION);
+        verifyNoMoreInteractions(sessions);
     }
 
     @Test
@@ -49,9 +44,7 @@ class LogoutServiceTest {
 
         service.logout();
 
-        InOrder order = inOrder(accounts, sessions);
-        order.verify(accounts).clearLastSeen(ACCOUNT);
-        order.verify(sessions).revoke(SESSION);
+        verify(sessions).revoke(SESSION);
     }
 
     @Test
@@ -66,13 +59,11 @@ class LogoutServiceTest {
     }
 
     @Test
-    void failureToClearLastSeenNeverRevokes() {
+    void revokeFailureIsNotSwallowed() {
         when(branchScope.current()).thenReturn(principal(Role.VET, 3L));
-        when(accounts.clearLastSeen(ACCOUNT)).thenThrow(new IllegalStateException("db down"));
+        doThrow(new IllegalStateException("db down")).when(sessions).revoke(SESSION);
 
         assertThatThrownBy(service::logout).isInstanceOf(IllegalStateException.class);
-
-        verify(sessions, never()).revoke(anyLong());
     }
 
     private static AccountPrincipal principal(Role role, Long branchId) {

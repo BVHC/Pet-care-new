@@ -17,5 +17,5 @@ public record StaffRow(
         Long branchId,
         AccountStatus status,
         boolean locked,
-        Instant lastSeenAt) {
+        Instant onlineUntil) {
 }

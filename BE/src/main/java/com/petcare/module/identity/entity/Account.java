@@ -82,9 +82,6 @@ public class Account extends TimestampedEntity {
     @Column(name = "must_change_password", nullable = false)
     private boolean mustChangePassword;
 
-    @Column(name = "last_seen_at")
-    private Instant lastSeenAt;
-
     @JdbcTypeCode(SqlTypes.JSON)
     @Column(name = "notification_settings", nullable = false)
     private Map<String, Object> notificationSettings = new HashMap<>();
@@ -136,9 +133,9 @@ public class Account extends TimestampedEntity {
 
     /**
      * UC08 — gửi lại mật khẩu ban đầu (BR-QT-02; docs/adr/0030): hash của mật khẩu tạm mới, mật khẩu cũ hết hiệu lực.
-     * Như đặt lại mật khẩu (BR-TK-13): xóa bộ đếm sai và khóa tạm, {@code last_seen_at = NULL} vì mọi phiên bị hủy cùng
-     * lúc (BR-TN-06). Vẫn bắt đổi mật khẩu lần đầu. Caller giữ khóa dòng, đã kiểm {@code ACTIVE} và
-     * {@code must_change_password}, rồi hủy phiên sau lệnh này (thứ tự {@code accounts → sessions}).
+     * Như đặt lại mật khẩu (BR-TK-13): xóa bộ đếm sai và khóa tạm. Vẫn bắt đổi mật khẩu lần đầu. Mọi phiên bị hủy
+     * cùng lúc nên nhân viên tự offline (BR-TN-06, online theo phiên — docs/adr/0091). Caller giữ khóa dòng, đã kiểm
+     * {@code ACTIVE} và {@code must_change_password}, rồi hủy phiên sau lệnh này (thứ tự {@code accounts → sessions}).
      */
     public void reissueInitialPassword(String newPasswordHash) {
         if (role == Role.CUSTOMER || status != AccountStatus.ACTIVE || !mustChangePassword) {
@@ -148,7 +145,6 @@ public class Account extends TimestampedEntity {
         this.failedLoginCount = 0;
         this.firstFailedLoginAt = null;
         this.lockedUntil = null;
-        this.lastSeenAt = null;
     }
 
     /**
@@ -164,9 +160,8 @@ public class Account extends TimestampedEntity {
     }
 
     /**
-     * Tài khoản#5 — vô hiệu hóa nhân viên (BR-QT-07, 09; docs/adr/0033): {@code ACTIVE → DISABLED}. Đặt
-     * {@code last_seen_at = NULL} vì mọi phiên bị hủy cùng lúc — chuyển offline ngay (BR-TN-06, docs/adr/0030 *Hệ quả*).
-     * Dữ liệu khác giữ nguyên (BR-QT-09). Caller giữ khóa dòng, đã kiểm phân cấp, BR-QT-12, 04, 08 và
+     * Tài khoản#5 — vô hiệu hóa nhân viên (BR-QT-07, 09; docs/adr/0033): {@code ACTIVE → DISABLED}. Mọi phiên
+     * bị hủy cùng lúc nên tự offline ngay (BR-TN-06, docs/adr/0091). Dữ liệu khác giữ nguyên (BR-QT-09). Caller giữ khóa dòng, đã kiểm phân cấp, BR-QT-12, 04, 08 và
      * {@code validateTransition}, rồi hủy phiên sau lệnh này (thứ tự {@code accounts → sessions}).
      */
     public void disable() {
@@ -174,14 +169,13 @@ public class Account extends TimestampedEntity {
             throw new IllegalStateException("Account " + id + " cannot be disabled");
         }
         this.status = AccountStatus.DISABLED;
-        this.lastSeenAt = null;
     }
 
     /**
      * Tài khoản#6 — kích hoạt lại nhân viên (BR-QT-10; docs/adr/0033): {@code DISABLED → ACTIVE} với mật khẩu tạm mới
-     * (BR-QT-02), bắt đổi mật khẩu như lần đầu (BR-TK-17). Như gửi lại mật khẩu ban đầu: xóa bộ đếm sai và khóa tạm,
-     * {@code last_seen_at = NULL} vì mọi phiên bị hủy. Caller giữ khóa dòng, đã kiểm phân cấp, BR-QT-10, 03 và
-     * {@code validateTransition}, rồi hủy phiên sau lệnh này.
+     * (BR-QT-02), bắt đổi mật khẩu như lần đầu (BR-TK-17). Như gửi lại mật khẩu ban đầu: xóa bộ đếm sai và khóa tạm;
+     * mọi phiên bị hủy. Caller giữ khóa dòng, đã kiểm phân cấp, BR-QT-10, 03 và {@code validateTransition}, rồi hủy
+     * phiên sau lệnh này.
      */
     public void reactivate(String newPasswordHash) {
         if (role == Role.CUSTOMER || status != AccountStatus.DISABLED || locked) {
@@ -193,13 +187,12 @@ public class Account extends TimestampedEntity {
         this.failedLoginCount = 0;
         this.firstFailedLoginAt = null;
         this.lockedUntil = null;
-        this.lastSeenAt = null;
     }
 
     /**
      * Tài khoản#7 — ADMIN khóa tài khoản (BR-QT-11, BR-TK-11; docs/adr/0035): {@code is_locked = true}, lưu lý do gần
      * nhất ({@code locked_reason}). {@code status} giữ nguyên để mở khóa trả về đúng trạng thái trước đó (BR-QT-12).
-     * Đặt {@code last_seen_at = NULL} vì mọi phiên bị hủy cùng lúc — chuyển offline ngay (BR-TN-06). Áp dụng cho mọi role
+     * Mọi phiên bị hủy cùng lúc nên tự offline ngay (BR-TN-06, docs/adr/0091). Áp dụng cho mọi role
      * và mọi {@code status}. Caller giữ khóa dòng, đã kiểm "không tự khóa" và chưa bị khóa, rồi hủy phiên sau lệnh này
      * (thứ tự {@code accounts → sessions}, docs/adr/0021). {@code reason} đã strip.
      */
@@ -212,7 +205,6 @@ public class Account extends TimestampedEntity {
         }
         this.locked = true;
         this.lockedReason = reason;
-        this.lastSeenAt = null;
     }
 
     /**
@@ -281,9 +273,8 @@ public class Account extends TimestampedEntity {
 
     /**
      * UC04 — đặt lại mật khẩu bằng OTP (BR-TK-13; docs/adr/0023): hash mới, gỡ bắt đổi mật khẩu lần đầu (BR-TK-17,
-     * docs/adr/0019 *Hệ quả*), xóa bộ đếm sai và <b>gỡ khóa tạm</b> kể cả khi còn hạn (BR-TK-13). Đặt
-     * {@code last_seen_at = NULL} vì mọi phiên bị hủy cùng lúc — "đăng xuất thì chuyển offline ngay" (BR-TN-06), như
-     * đăng xuất (docs/adr/0021). Caller giữ khóa dòng và hủy phiên sau lệnh này (thứ tự {@code accounts → sessions}).
+     * docs/adr/0019 *Hệ quả*), xóa bộ đếm sai và <b>gỡ khóa tạm</b> kể cả khi còn hạn (BR-TK-13). Mọi phiên
+     * bị hủy cùng lúc nên tự offline (BR-TN-06, docs/adr/0091), như đăng xuất (docs/adr/0021). Caller giữ khóa dòng và hủy phiên sau lệnh này (thứ tự {@code accounts → sessions}).
      * Không đổi {@code status}: không phải chuyển trạng thái của SM #1.
      */
     public void resetPassword(String newPasswordHash) {
@@ -292,7 +283,6 @@ public class Account extends TimestampedEntity {
         this.failedLoginCount = 0;
         this.firstFailedLoginAt = null;
         this.lockedUntil = null;
-        this.lastSeenAt = null;
     }
 
     /**

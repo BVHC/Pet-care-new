@@ -175,7 +175,7 @@ public class StaffEmailChangeService {
         log.info("STAFF_EMAIL_CHANGED accountId={}", accountId);
         StaffDetailRow row = staffProfiles.findStaffDetail(accountId)
                 .orElseThrow(() -> new IllegalStateException("Staff " + accountId + " not readable"));
-        return mapper.toResponse(row, StaffPresence.isOnline(row.lastSeenAt(), presence.onlineSince()));
+        return mapper.toResponse(row, StaffPresence.isOnline(row.onlineUntil(), presence.now()));
     }
 
     /** Khóa dòng {@code accounts} trước mọi lệnh đọc khác (docs/adr/0029 mục 4); không có / khách → 404. */

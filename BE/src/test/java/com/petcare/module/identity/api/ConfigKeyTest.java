@@ -19,7 +19,7 @@ class ConfigKeyTest {
 
     @Test
     void catalogHas52Parameters() {
-        // 51 tham số [CFG] của docs/02 + session.ttl_hours (docs/adr/0003); V2 seed đúng 52 dòng
+        // 50 tham số [CFG] của docs/02 + session.ttl_hours (docs/adr/0003) + session.access_ttl_minutes (docs/adr/0091); V2 + V27 = 52 dòng
         assertThat(ConfigKey.values()).hasSize(52);
     }
 }

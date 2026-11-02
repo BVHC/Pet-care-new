@@ -47,7 +47,6 @@ import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.RestController;
 
 import com.petcare.TestcontainersConfiguration;
-import com.petcare.module.identity.repository.AccountRepository;
 import com.petcare.module.identity.repository.SessionRepository;
 import com.petcare.module.identity.service.SessionService;
 import com.petcare.module.identity.service.SessionService.OpenedSession;
@@ -57,9 +56,10 @@ import com.petcare.support.MutableClock;
 /**
  * UC03 đăng xuất ({@code POST /api/auth/logout}, docs/adr/0021) trên Postgres 17 thật qua HTTP. Tài khoản chèn bằng
  * SQL, phiên mở qua {@link SessionService} (khuôn {@code AuthenticationIT}). Kiểm: hủy đúng phiên hiện tại, nhân viên
- * về offline ({@code last_seen_at = NULL}), không đổi {@code updated_at}, không audit, mọi đầu vào lỗi (401/405) không
- * đổi DB; đồng thời: request cùng token đang chạy không ghi lại online (race R3), hai lần đăng xuất song song, đăng xuất
- * chờ khóa dòng {@code accounts} (không {@code SKIP LOCKED}), không deadlock với luồng khóa {@code accounts → sessions}.
+ * về offline (không còn phiên chưa hủy với access token còn hạn — docs/adr/0091), không đổi {@code accounts}, không
+ * audit, mọi đầu vào lỗi (401/405) không đổi DB; đồng thời: request cùng token đang chạy không đưa nhân viên về online
+ * (race R3), hai lần đăng xuất song song, đăng xuất không chờ khóa dòng {@code accounts} (chỉ chạm {@code sessions}),
+ * không deadlock với luồng khóa {@code accounts → sessions}.
  */
 @SpringBootTest(webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT)
 @ActiveProfiles("test")
@@ -71,10 +71,10 @@ class LogoutIT {
     private static final AtomicInteger SEQ = new AtomicInteger();
     private static final ParameterizedTypeReference<Map<String, Object>> MAP = new ParameterizedTypeReference<>() {
     };
-    /** Câu {@code AccountRepository.clearLastSeen} đang chờ khóa, nhận diện trong {@code pg_stat_activity}. */
-    private static final String CLEAR_LAST_SEEN_WAITING = """
+    /** Có câu đang chờ khóa dòng trong DB này (các test trong lớp chạy tuần tự nên chỉ là câu của test). */
+    private static final String ANY_LOCK_WAITING = """
             SELECT count(*) FROM pg_stat_activity
-            WHERE wait_event_type = 'Lock' AND query LIKE 'UPDATE accounts SET last_seen_at = NULL%'
+            WHERE wait_event_type = 'Lock' AND datname = current_database()
             """;
 
     @TestConfiguration(proxyBeanMethods = false)
@@ -101,7 +101,7 @@ class LogoutIT {
         }
     }
 
-    /** Spy để dừng filter của một request ngay sau bước đọc phiên (trước bước ghi {@code last_seen_at}). */
+    /** Spy để dừng filter của một request ngay sau bước đọc phiên. */
     @MockitoSpyBean
     private SessionRepository sessionRepository;
 
@@ -113,9 +113,6 @@ class LogoutIT {
 
     @Autowired
     private SessionService sessions;
-
-    @Autowired
-    private AccountRepository accounts;
 
     @Autowired
     private MutableClock clock;
@@ -139,11 +136,11 @@ class LogoutIT {
     // ---------------------------------------------------------------- thành công
 
     @Test
-    void staffLogoutRevokesCurrentSessionGoesOfflineWithoutAuditOrUpdatedAt() {
+    void staffLogoutRevokesCurrentSessionGoesOfflineWithoutAuditOrAccountChange() {
         long vet = staff("VET");
         OpenedSession session = open(vet);
         assertThat(probe(session.accessToken()).getStatusCode()).isEqualTo(HttpStatus.OK);
-        assertThat(lastSeen(vet)).isEqualTo(T0);
+        assertThat(online(vet)).isTrue();
         Instant accountUpdatedAt = accountTime(vet, "updated_at");
         clock.advance(Duration.ofMinutes(5));
 
@@ -153,7 +150,7 @@ class LogoutIT {
         assertThat(response.getBody()).isNull();
         assertThat(sessionTime(session, "revoked_at")).isEqualTo(T0.plus(Duration.ofMinutes(5)));
         assertThat(sessionTime(session, "updated_at")).isEqualTo(T0.plus(Duration.ofMinutes(5)));
-        assertThat(lastSeen(vet)).isNull();
+        assertThat(online(vet)).isFalse();
         assertThat(accountTime(vet, "updated_at")).isEqualTo(accountUpdatedAt);
         assertThat(jdbc.queryForObject("SELECT count(*) FROM audit_logs WHERE actor_account_id = ?", Long.class, vet))
                 .isZero();
@@ -172,14 +169,13 @@ class LogoutIT {
     }
 
     @Test
-    void customerLogoutRevokesSessionAndLastSeenStaysNull() {
+    void customerLogoutRevokesSession() {
         long customer = customerAccount();
         OpenedSession session = open(customer);
 
         assertThat(logout(session.accessToken()).getStatusCode()).isEqualTo(HttpStatus.NO_CONTENT);
 
         assertThat(sessionTime(session, "revoked_at")).isEqualTo(T0);
-        assertThat(lastSeen(customer)).isNull();
     }
 
     @Test
@@ -187,11 +183,11 @@ class LogoutIT {
         long admin = staffWithoutBranch("ADMIN");
         OpenedSession session = open(admin);
         probe(session.accessToken());
-        assertThat(lastSeen(admin)).isEqualTo(T0);
+        assertThat(online(admin)).isTrue();
 
         assertThat(logout(session.accessToken()).getStatusCode()).isEqualTo(HttpStatus.NO_CONTENT);
 
-        assertThat(lastSeen(admin)).isNull();
+        assertThat(online(admin)).isFalse();
     }
 
     /** BR-TK-17 miễn đăng xuất (docs/adr/0005 mục 2): còn phải đổi mật khẩu vẫn đăng xuất được. */
@@ -228,21 +224,20 @@ class LogoutIT {
         assertThat(sessionTime(session, "revoked_at")).isEqualTo(T0);
     }
 
-    /** R4: chỉ phiên của token đang dùng; máy khác vẫn dùng được và online lại ngay ở request kế tiếp. */
+    /** R4: chỉ phiên của token đang dùng; máy khác vẫn dùng được và nhân viên vẫn online nhờ phiên đó. */
     @Test
-    void otherSessionStaysValidAndComesBackOnline() {
+    void otherSessionStaysValidAndKeepsStaffOnline() {
         long vet = staff("VET");
         OpenedSession phone = open(vet);
         OpenedSession desk = open(vet);
         probe(desk.accessToken());
 
         assertThat(logout(desk.accessToken()).getStatusCode()).isEqualTo(HttpStatus.NO_CONTENT);
-        assertThat(lastSeen(vet)).isNull();
+        assertThat(online(vet)).as("phiên của điện thoại còn hiệu lực").isTrue();
         assertThat(sessionTime(phone, "revoked_at")).isNull();
 
         clock.advance(Duration.ofSeconds(10));
         assertThat(probe(phone.accessToken()).getStatusCode()).isEqualTo(HttpStatus.OK);
-        assertThat(lastSeen(vet)).isEqualTo(T0.plusSeconds(10));
         assertError(probe(desk.accessToken()), HttpStatus.UNAUTHORIZED, "UNAUTHENTICATED");
     }
 
@@ -269,13 +264,11 @@ class LogoutIT {
     void lockedOrDisabledAccountIs401AndUntouched(String change) {
         long vet = staff("VET");
         OpenedSession session = open(vet);
-        jdbc.update("UPDATE accounts SET last_seen_at = ? WHERE id = ?", Timestamp.from(T0), vet);
         jdbc.update("UPDATE accounts SET " + change + " WHERE id = ?", vet);
 
         assertError(logout(session.accessToken()), HttpStatus.UNAUTHORIZED, "UNAUTHENTICATED");
 
         assertThat(sessionTime(session, "revoked_at")).isNull();
-        assertThat(lastSeen(vet)).isEqualTo(T0);
     }
 
     @Test
@@ -292,28 +285,10 @@ class LogoutIT {
 
     // ---------------------------------------------------------------- đồng thời (docs/adr/0021)
 
-    /** Câu ghi online của filter không ghi cho phiên đã hủy (điều kiện EXISTS — docs/adr/0021 mục 3). */
-    @Test
-    void touchLastSeenSkipsRevokedSession() {
-        long vet = staff("VET");
-        OpenedSession live = open(vet);
-        OpenedSession revoked = open(vet);
-        tx.executeWithoutResult(status -> sessions.revoke(revoked.sessionId()));
-        Instant threshold = T0.minusSeconds(60);
-
-        Integer skipped = tx.execute(status -> accounts.touchLastSeen(vet, revoked.sessionId(), T0, threshold));
-        assertThat(skipped).isZero();
-        assertThat(lastSeen(vet)).isNull();
-
-        Integer touched = tx.execute(status -> accounts.touchLastSeen(vet, live.sessionId(), T0, threshold));
-        assertThat(touched).isEqualTo(1);
-        assertThat(lastSeen(vet)).isEqualTo(T0);
-    }
-
     /**
-     * Race R3: request A cùng token đã đọc phiên (còn hiệu lực) nhưng chưa ghi {@code last_seen_at}; đăng xuất chạy
-     * xong; A ghi tiếp. A vẫn hoàn tất (00-method §3.1: token hết hiệu lực ở request <b>kế tiếp</b>), nhưng không được
-     * đưa nhân viên đã đăng xuất về online.
+     * Race R3: request A cùng token đã đọc phiên (còn hiệu lực); đăng xuất chạy xong; A hoàn tất. A vẫn hoàn tất
+     * (00-method §3.1: token hết hiệu lực ở request <b>kế tiếp</b>), và vì xác thực không ghi gì (docs/adr/0091) nên A
+     * không thể đưa nhân viên đã đăng xuất về online.
      */
     @Test
     void inFlightRequestCannotMarkLoggedOutStaffOnline() throws Exception {
@@ -337,7 +312,7 @@ class LogoutIT {
             assertThat(arrived.await(10, TimeUnit.SECONDS)).as("request A dừng sau khi đọc phiên").isTrue();
 
             assertThat(logout(token).getStatusCode()).isEqualTo(HttpStatus.NO_CONTENT);
-            assertThat(lastSeen(vet)).isNull();
+            assertThat(online(vet)).isFalse();
 
             release.countDown();
             assertThat(inFlight.get(30, TimeUnit.SECONDS).getStatusCode()).isEqualTo(HttpStatus.OK);
@@ -347,7 +322,7 @@ class LogoutIT {
             assertThat(pool.awaitTermination(30, TimeUnit.SECONDS)).isTrue();
         }
 
-        assertThat(lastSeen(vet)).as("nhân viên đã đăng xuất không được online lại").isNull();
+        assertThat(online(vet)).as("nhân viên đã đăng xuất không được online lại").isFalse();
         assertError(probe(token), HttpStatus.UNAUTHORIZED, "UNAUTHENTICATED");
     }
 
@@ -381,18 +356,17 @@ class LogoutIT {
 
         assertThat(sessionTime(session, "revoked_at")).isEqualTo(T0);
         assertThat(sessionTime(other, "revoked_at")).isNull();
-        assertThat(lastSeen(vet)).isNull();
+        assertThat(online(vet)).as("phiên other còn hiệu lực").isTrue();
     }
 
     /**
-     * R5: một transaction đang giữ khóa dòng {@code accounts} (như đăng nhập ở máy khác: khóa → mở phiên mới). Đăng
-     * xuất phải <b>chờ</b> rồi mới xóa {@code last_seen_at} (không bỏ qua bằng {@code SKIP LOCKED}); phiên mới còn nguyên.
+     * R5: một transaction đang giữ khóa dòng {@code accounts} (như đăng nhập ở máy khác: khóa → mở phiên mới). Đăng xuất
+     * chỉ chạm dòng {@code sessions} nên <b>không chờ</b> khóa đó (docs/adr/0091); phiên mới còn nguyên.
      */
     @Test
-    void logoutWaitsForAccountLockAndKeepsNewSession() throws Exception {
+    void logoutDoesNotWaitForTheAccountLockAndKeepsNewSession() throws Exception {
         long vet = staff("VET");
         String token = open(vet).accessToken();
-        jdbc.update("UPDATE accounts SET last_seen_at = ? WHERE id = ?", Timestamp.from(T0), vet);
         CountDownLatch locked = new CountDownLatch(1);
         CountDownLatch release = new CountDownLatch(1);
         ExecutorService pool = Executors.newFixedThreadPool(2);
@@ -407,14 +381,14 @@ class LogoutIT {
             assertThat(locked.await(10, TimeUnit.SECONDS)).isTrue();
 
             Future<ResponseEntity<Map<String, Object>>> logout = pool.submit(() -> logout(token));
-            awaitClearLastSeenWaiting();
+            assertThat(logout.get(10, TimeUnit.SECONDS).getStatusCode()).as("không chờ khóa accounts")
+                    .isEqualTo(HttpStatus.NO_CONTENT);
             release.countDown();
 
             OpenedSession newSession = login.get(30, TimeUnit.SECONDS);
-            assertThat(logout.get(30, TimeUnit.SECONDS).getStatusCode()).isEqualTo(HttpStatus.NO_CONTENT);
-            assertThat(lastSeen(vet)).isNull();
             assertThat(sessionTime(newSession, "revoked_at")).isNull();
             assertThat(probe(newSession.accessToken()).getStatusCode()).isEqualTo(HttpStatus.OK);
+            assertThat(online(vet)).isTrue();
         } finally {
             release.countDown();
             pool.shutdown();
@@ -423,31 +397,31 @@ class LogoutIT {
     }
 
     /**
-     * R6: luồng hủy phiên khóa {@code accounts → sessions} (như đổi / đặt lại mật khẩu, khóa tài khoản sau này:
-     * {@code FOR UPDATE} rồi {@code UPDATE sessions … WHERE account_id}). Đăng xuất cùng thứ tự nên chỉ chờ, không deadlock;
-     * đảo thứ tự trong {@code LogoutService} thì Postgres hủy một bên.
+     * R6: luồng hủy phiên khóa {@code accounts → sessions} (như đổi / đặt lại mật khẩu, khóa tài khoản). Đăng xuất chỉ
+     * khóa {@code sessions}, nên khi luồng kia đang giữ dòng phiên thì đăng xuất chỉ chờ, không deadlock; hủy phiên
+     * đã xong thì đăng xuất hủy lại 0 dòng và vẫn 204.
      */
     @Test
     void logoutDoesNotDeadlockWithAccountsFirstRevoke() throws Exception {
         long vet = staff("VET");
         OpenedSession session = open(vet);
-        jdbc.update("UPDATE accounts SET last_seen_at = ? WHERE id = ?", Timestamp.from(T0), vet);
         CountDownLatch locked = new CountDownLatch(1);
         CountDownLatch logoutWaiting = new CountDownLatch(1);
         ExecutorService pool = Executors.newFixedThreadPool(2);
         try {
             Future<Integer> revokeAll = pool.submit(() -> tx.execute(status -> {
                 jdbc.queryForObject("SELECT id FROM accounts WHERE id = ? FOR UPDATE", Long.class, vet);
-                locked.countDown();
-                await(logoutWaiting);
-                return jdbc.update("""
+                int revoked = jdbc.update("""
                         UPDATE sessions SET revoked_at = ?, updated_at = ? WHERE account_id = ? AND revoked_at IS NULL
                         """, Timestamp.from(T0), Timestamp.from(T0), vet);
+                locked.countDown();
+                await(logoutWaiting);
+                return revoked;
             }));
             assertThat(locked.await(10, TimeUnit.SECONDS)).isTrue();
 
             Future<ResponseEntity<Map<String, Object>>> logout = pool.submit(() -> logout(session.accessToken()));
-            awaitClearLastSeenWaiting();
+            awaitLockWaiting();
             logoutWaiting.countDown();
 
             assertThat(revokeAll.get(30, TimeUnit.SECONDS)).isEqualTo(1);
@@ -459,7 +433,7 @@ class LogoutIT {
         }
 
         assertThat(sessionTime(session, "revoked_at")).isEqualTo(T0);
-        assertThat(lastSeen(vet)).isNull();
+        assertThat(online(vet)).isFalse();
     }
 
     // ---------------------------------------------------------------- helpers
@@ -493,11 +467,11 @@ class LogoutIT {
                 .containsKeys("message", "timestamp", "traceId");
     }
 
-    /** Chờ tới khi câu {@code clearLastSeen} của đăng xuất đang đứng chờ khóa dòng {@code accounts}. */
-    private void awaitClearLastSeenWaiting() throws InterruptedException {
+    /** Chờ tới khi đăng xuất đang đứng chờ khóa dòng phiên do luồng kia giữ. */
+    private void awaitLockWaiting() throws InterruptedException {
         long deadline = System.nanoTime() + TimeUnit.SECONDS.toNanos(10);
-        while (jdbc.queryForObject(CLEAR_LAST_SEEN_WAITING, Long.class) == 0) {
-            assertThat(System.nanoTime()).as("đăng xuất phải chờ khóa dòng accounts").isLessThan(deadline);
+        while (jdbc.queryForObject(ANY_LOCK_WAITING, Long.class) == 0) {
+            assertThat(System.nanoTime()).as("đăng xuất phải chờ khóa dòng sessions").isLessThan(deadline);
             Thread.sleep(20);
         }
     }
@@ -510,8 +484,12 @@ class LogoutIT {
         }
     }
 
-    private Instant lastSeen(long accountId) {
-        return accountTime(accountId, "last_seen_at");
+    /** BR-TN-06, docs/adr/0091: có phiên chưa hủy với access token còn hạn tính tới đồng hồ của test. */
+    private boolean online(long accountId) {
+        return jdbc.queryForObject("""
+                SELECT count(*) FROM sessions
+                WHERE account_id = ? AND revoked_at IS NULL AND access_expires_at > ?""", Long.class, accountId,
+                Timestamp.from(clock.instant())) > 0;
     }
 
     private Instant accountTime(long accountId, String column) {

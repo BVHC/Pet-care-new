@@ -1286,7 +1286,7 @@ paths:
     post:
       tags: [Accounts]
       summary: "Mở khóa tài khoản"
-      description: "UC09 · BR-QT-11, 12. Actor: A03. Quyền: Chỉ ADMIN. Chuyển trạng thái: is_locked true → false (Tài khoản#8). status giữ nguyên giá trị trước khi khóa (BR-QT-12); giữ lý do khóa gần nhất; không mở phiên, không thông báo; ghi audit kèm lý do (docs/adr/0035)."
+      description: "UC09 · BR-QT-11, 12. Actor: A03. Quyền: Chỉ ADMIN. Chuyển trạng thái: is_locked true → false (Tài khoản#8). status giữ nguyên giá trị trước khi khóa (BR-QT-12); giữ lý do khóa gần nhất; không mở phiên, không thông báo; ghi audit kèm lý do (docs/adr/0035). Lượt `IN_PROGRESS` của người được mở khóa mà họ lại phụ trách được (ACTIVE, đúng chi nhánh, đúng chức vụ) không còn cờ `needsReassign` (docs/adr/0088)."
       operationId: unlockAccount
       security:
         - bearerAuth: []
@@ -1635,6 +1635,7 @@ paths:
                     description: "HTTP status của kết quả, ví dụ 200, 201"
         "400":
           $ref: "#/components/responses/BadRequest"
+<<<<<<< HEAD
   "/staff/assignable":
     get:
       tags: [Staff]
@@ -1658,6 +1659,21 @@ paths:
             type: integer
             format: int64
           description: "A05, A06: bỏ trống hoặc chi nhánh mình; A04: bắt buộc"
+=======
+  "/auth/refresh":
+    post:
+      tags: [Auth]
+      summary: "Làm mới access token"
+      description: "UC03 · BR-TK-11, BR-TN-06. Actor: A02–A08. Quyền: Public. Chuyển trạng thái: —. Cấp cặp token mới cho cùng phiên: access token mới (hạn `session.access_ttl_minutes` [CFG], không vượt hạn phiên) và refresh token mới; access token cũ và refresh token vừa gửi hết hiệu lực ngay (request đang chạy với token cũ nhận 401, client gửi lại bằng token mới). Chỉ gọi khi người dùng có thao tác: refresh theo bộ đếm hoặc từ request poll làm nhân viên online mãi (D024). Hạn tuyệt đối của phiên không đổi. Không ghi audit khi thành công (ADR-0091)."
+      operationId: refreshAccessToken
+      security: []
+      requestBody:
+        required: true
+        content:
+          "application/json":
+            schema:
+              $ref: "#/components/schemas/RefreshRequest"
+>>>>>>> cdb1f62 (feat: access token 10 phút + refresh token xoay vòng, online theo phiên)
       responses:
         "200":
           description: OK
@@ -1668,24 +1684,36 @@ paths:
                 required: [data, message, code]
                 properties:
                   data:
+<<<<<<< HEAD
                     type: array
                     items:
                       $ref: "#/components/schemas/AssignableStaff"
+=======
+                    $ref: "#/components/schemas/RefreshResponse"
+>>>>>>> cdb1f62 (feat: access token 10 phút + refresh token xoay vòng, online theo phiên)
                   message:
                     type: string
                   code:
                     type: integer
                     description: "HTTP status của kết quả, ví dụ 200, 201"
         "400":
+<<<<<<< HEAD
           description: "`MALFORMED_REQUEST` thiếu `role`, `role` ngoài VET / CARETAKER hoặc sai kiểu · `VALIDATION_FAILED` `branchId` ≤ 0, hoặc SUPER_MANAGER không gửi `branchId` (message `Vui lòng chọn chi nhánh`, không mã BR)"
+=======
+          description: "`VALIDATION_FAILED` refreshToken trống hoặc quá 128 ký tự"
+>>>>>>> cdb1f62 (feat: access token 10 phút + refresh token xoay vòng, online theo phiên)
           content:
             "application/json":
               schema:
                 $ref: "#/components/schemas/Error"
         "401":
+<<<<<<< HEAD
           $ref: "#/components/responses/Unauthorized"
         "403":
           description: "`ACCESS_DENIED` ngoài A04–A06 (ADMIN, VET, CARETAKER, CUSTOMER) · `ACCESS_DENIED_SCOPE_MISMATCH` A05, A06 gửi `branchId` của chi nhánh khác (không ghi audit)"
+=======
+          description: "Refresh token không đúng, đã dùng, hết hạn, phiên đã bị hủy hoặc tài khoản bị khóa / vô hiệu hóa — một thông điệp chung. Dùng lại token đã dùng hủy cả phiên và ghi audit `REFRESH_TOKEN_REUSED` (ADR-0091)"
+>>>>>>> cdb1f62 (feat: access token 10 phút + refresh token xoay vòng, online theo phiên)
           content:
             "application/json":
               schema:
@@ -1914,7 +1942,7 @@ components:
           type: boolean
     LoginResponse:
       type: object
-      required: [accessToken, expiresAt, account, linkDecisionPending]
+      required: [accessToken, expiresAt, accessTokenExpiresAt, refreshToken, account, linkDecisionPending]
       properties:
         accessToken:
           type: string
@@ -1922,11 +1950,45 @@ components:
         expiresAt:
           type: string
           format: date-time
+          description: "Hạn tuyệt đối của phiên (`session.ttl_hours` [CFG])"
+        accessTokenExpiresAt:
+          type: string
+          format: date-time
+          description: "Hạn của `accessToken` (`session.access_ttl_minutes` [CFG]); sau mốc này gọi `POST /auth/refresh`"
+        refreshToken:
+          type: string
+          description: "Refresh token dùng một lần để lấy access token mới (ADR-0091)"
         account:
           $ref: "#/components/schemas/AccountSummary"
         linkDecisionPending:
           type: boolean
           description: "Khách còn cờ chờ quyết định liên kết thì FE nhắc lại lời đề nghị (BR-TK-19)"
+    RefreshRequest:
+      type: object
+      required: [refreshToken]
+      properties:
+        refreshToken:
+          type: string
+          maxLength: 128
+          description: "Refresh token nhận lúc đăng nhập hoặc lần refresh trước"
+    RefreshResponse:
+      type: object
+      required: [accessToken, accessTokenExpiresAt, refreshToken, expiresAt]
+      properties:
+        accessToken:
+          type: string
+          description: "Bearer token mới của cùng phiên; token cũ hết hiệu lực ngay"
+        accessTokenExpiresAt:
+          type: string
+          format: date-time
+          description: "Hạn của `accessToken` mới, không vượt `expiresAt`"
+        refreshToken:
+          type: string
+          description: "Refresh token mới; token vừa gửi không dùng lại được"
+        expiresAt:
+          type: string
+          format: date-time
+          description: "Hạn tuyệt đối của phiên (không đổi)"
     ResetPasswordRequest:
       type: object
       required: [email, code, newPassword]
@@ -2093,7 +2155,7 @@ components:
           type: boolean
         online:
           type: boolean
-          description: "Thao tác trong 10 phút [CFG] gần nhất (BR-TN-06)"
+          description: "Có phiên chưa hủy với access token còn hạn (BR-TN-06, ADR-0091)"
     CreateStaffRequest:
       type: object
       required: [email, phone, fullName, role]

@@ -156,13 +156,11 @@ class AccountTest {
     // ---------------------------------------------------------------- đặt lại mật khẩu (BR-TK-13; docs/adr/0023)
 
     @Test
-    void resetPasswordClearsActiveTemporaryLockCounterMustChangeAndOnlineStatus() {
+    void resetPasswordClearsActiveTemporaryLockCounterAndMustChange() {
         Account account = withCounter(3, T0);
         ReflectionTestUtils.setField(account, "status", AccountStatus.ACTIVE);
         ReflectionTestUtils.setField(account, "mustChangePassword", true);
         ReflectionTestUtils.setField(account, "lockedUntil", T0.plus(LOCK));
-        ReflectionTestUtils.setField(account, "lastSeenAt", T0.minusSeconds(30));
-
         account.resetPassword("new-hash");
 
         assertThat(account.getPasswordHash()).isEqualTo("new-hash");
@@ -170,7 +168,6 @@ class AccountTest {
         assertThat(account.getFailedLoginCount()).isZero();
         assertThat(account.getFirstFailedLoginAt()).isNull();
         assertThat(account.getLockedUntil()).as("BR-TK-13: gỡ khóa tạm còn hạn").isNull();
-        assertThat(account.getLastSeenAt()).as("BR-TN-06: mọi phiên bị hủy nên offline ngay").isNull();
     }
 
     @Test
@@ -217,10 +214,9 @@ class AccountTest {
     // ---------------------------------------------------------------- khóa / mở khóa (Tài khoản#7, #8; docs/adr/0035)
 
     @Test
-    void lockSetsFlagReasonAndOfflineButKeepsStatusPasswordAndTemporaryLock() {
+    void lockSetsFlagAndReasonButKeepsStatusPasswordAndTemporaryLock() {
         Account account = staff("0901234567");
         ReflectionTestUtils.setField(account, "status", AccountStatus.DISABLED);
-        ReflectionTestUtils.setField(account, "lastSeenAt", T0);
         ReflectionTestUtils.setField(account, "lockedUntil", T0.plus(LOCK));
         ReflectionTestUtils.setField(account, "mustChangePassword", true);
 
@@ -228,7 +224,6 @@ class AccountTest {
 
         assertThat(account.isLocked()).isTrue();
         assertThat(account.getLockedReason()).isEqualTo("Spam feedback");
-        assertThat(account.getLastSeenAt()).isNull();
         assertThat(account.getStatus()).isEqualTo(AccountStatus.DISABLED);
         assertThat(account.getPasswordHash()).isEqualTo("hash");
         assertThat(account.getLockedUntil()).isEqualTo(T0.plus(LOCK));

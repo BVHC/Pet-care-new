@@ -44,8 +44,7 @@ import com.petcare.module.visit.job.FollowUpReminderJob;
 import com.petcare.support.MutableClock;
 
 /**
- * T41.3 — E2E nhánh khám theo kịch bản của docs/testcases/T41-be.md §9: khách đặt lịch khám (hủy nhắc tái khám chờ gửi
- * của bệnh án cũ) → lễ tân check-in → VET chẩn đoán, hẹn tái khám, kê một thuốc đủ tồn và một thuốc mua ngoài → hoàn tất
+ * T41.3 — E2E nhánh khám theo kịch bản của docs/testcases/T41-be.md §9: khách đặt lịch khám (nhắc tái khám chờ gửi của bệnh án cũ chưa bị hủy, ST04 sẽ hoãn; check-in lịch khám mới hủy) → lễ tân check-in → VET chẩn đoán, hẹn tái khám, kê một thuốc đủ tồn và một thuốc mua ngoài → hoàn tất
  * (khóa bệnh án) → lễ tân mở ca, thu tiền (trừ thuốc FEFO) → ST04 nhắc tái khám. Mọi bước qua endpoint / job thật,
  * <b>không stand-in, không {@code UPDATE} trạng thái</b>; chỉ dữ liệu nền chèn bằng SQL. Rollback của từng chuỗi đã có IT
  * riêng (T41-be.md §8, cùng {@code PrescriptionIT}, {@code FollowUpReminderIT}).
@@ -119,6 +118,7 @@ class MainFlowExamIT {
 
     // trạng thái của mạch, ghi ở từng bước
     private Instant bookedAt;
+    private Instant checkedInAt;
     private String oldRecordXmin;
     private long appointment;
     private long visit;
@@ -197,7 +197,7 @@ class MainFlowExamIT {
 
     @Test
     void examFlowFromBookingToFollowUpReminder() {
-        step01BookingCancelsTheOldPendingFollowUp();
+        step01BookingLeavesThePendingFollowUpToSt04();
         step02ReceptionChecksIn();
         step03ReceptionAssignsTheVet();
         step04VetCalls();
@@ -218,10 +218,10 @@ class MainFlowExamIT {
     // ================================================================ bước
 
     /**
-     * 1 — A02 đặt khung 09:00 ngày D lúc D−3 10:00 (Lịch hẹn#1); nhóm MEDICAL hủy nhắc tái khám chờ gửi của bệnh án đã
-     * khóa cũ (Care Task#6, BR-TB-06; docs/adr/0084).
+     * 1 — A02 đặt khung 09:00 ngày D lúc D−3 10:00 (Lịch hẹn#1); nhóm MEDICAL chỉ hủy Care Task đã sinh, không đặt cờ
+     * hủy nhắc của bệnh án đã khóa cũ: ST04 tự hoãn khi thú có lịch BOOKED (BR-TB-06; docs/adr/0088, thay 0084).
      */
-    private void step01BookingCancelsTheOldPendingFollowUp() {
+    private void step01BookingLeavesThePendingFollowUpToSt04() {
         bookedAt = clock.instant();
         Map<String, Object> body = new LinkedHashMap<>();
         body.put("petId", pet);
@@ -234,8 +234,8 @@ class MainFlowExamIT {
         assertThat(jdbc.queryForMap("SELECT status, channel, service_group FROM appointments WHERE id = ?",
                 appointment)).as("bước 1 lịch hẹn").containsEntry("status", "BOOKED").containsEntry("channel", "ONLINE")
                 .containsEntry("service_group", "MEDICAL");
-        assertThat(FollowUpItSupport.cancelledAt(jdbc, oldVisit)).as("bước 1 nhắc tái khám cũ bị hủy")
-                .isEqualTo(bookedAt);
+        assertThat(FollowUpItSupport.cancelledAt(jdbc, oldVisit)).as("bước 1 đặt lịch không đặt cờ hủy nhắc")
+                .isNull();
         assertThat(oldRemindedAt()).as("bước 1 nhắc cũ chưa gửi").isNull();
         assertThat(count("SELECT count(*) FROM care_tasks WHERE pet_id = ?", pet)).as("bước 1 Care Task").isZero();
         assertThat(customerOutbox()).as("bước 1 outbox").isZero();
@@ -243,11 +243,12 @@ class MainFlowExamIT {
     }
 
     /**
-     * 2 — A06 check-in lúc D 08:40 (Visit#1 → Lịch hẹn#3, Order#1). Dịch vụ EXAM gọi lại {@code FollowUpApi}: nhắc cũ đã
-     * hủy ở bước 1, nên bệnh án cũ không bị ghi lần nữa.
+     * 2 — A06 check-in lúc D 08:40 (Visit#1 → Lịch hẹn#3, Order#1). Dịch vụ EXAM gọi {@code FollowUpApi}: thú đã đến
+     * khám nên nhắc tái khám cũ chờ gửi bị hủy ở đây (Care Task#6, docs/adr/0084).
      */
     private void step02ReceptionChecksIn() {
         moveTo(at(D, 8, 40));
+        checkedInAt = clock.instant();
         Map<String, Object> body = new HashMap<>();
         body.put("petId", pet);
         body.put("appointmentId", appointment);
@@ -264,8 +265,10 @@ class MainFlowExamIT {
         assertThat(lines()).as("bước 2 dòng Order").extracting(l -> l.get("line_type"), l -> l.get("service_id"),
                         l -> l.get("unit_price"), l -> l.get("is_auto_generated"))
                 .containsExactly(tuple("SERVICE", service, S, true));
-        assertThat(xmin("medical_records", "visit_id", oldVisit)).as("bước 2 bệnh án cũ không đổi")
-                .isEqualTo(oldRecordXmin);
+        assertThat(FollowUpItSupport.cancelledAt(jdbc, oldVisit)).as("bước 2 nhắc tái khám cũ bị hủy lúc check-in")
+                .isEqualTo(checkedInAt);
+        assertThat(xmin("medical_records", "visit_id", oldVisit)).as("bước 2 bệnh án cũ được ghi cờ hủy")
+                .isNotEqualTo(oldRecordXmin);
         assertThat(lotQuantities()).as("bước 2 kho").isEqualTo(List.of(5, 3, 2, 5));
     }
 
@@ -476,7 +479,7 @@ class MainFlowExamIT {
         assertThat(count("SELECT count(*) FROM care_tasks WHERE pet_id = ?", pet)).as("bước 14 không Care Task")
                 .isZero();
         assertThat(oldRemindedAt()).as("bước 14 nhắc cũ đã hủy không gửi").isNull();
-        assertThat(FollowUpItSupport.cancelledAt(jdbc, oldVisit)).as("bước 14 cờ hủy giữ nguyên").isEqualTo(bookedAt);
+        assertThat(FollowUpItSupport.cancelledAt(jdbc, oldVisit)).as("bước 14 cờ hủy giữ nguyên").isEqualTo(checkedInAt);
     }
 
     /** 15 — chạy lại: không gửi trùng (ADR-0082). */

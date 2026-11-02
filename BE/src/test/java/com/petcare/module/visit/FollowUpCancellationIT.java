@@ -168,6 +168,32 @@ class FollowUpCancellationIT {
         assertThat(cancelledAt(open)).as("bệnh án đã nhắc không bị đặt cờ hủy nhắc").isNull();
     }
 
+    /** Docs/adr/0088: đường đặt lịch chỉ hủy task đã sinh, nhắc chờ gửi giữ nguyên (ST04 tự hoãn). */
+    @Test
+    void cancelRemindedTasksCancelsOnlyOpenTasksAndLeavesPendingRemindersUntouched() {
+        long pet = fx.pet(fx.counter);
+        long otherPet = fx.pet(fx.counter);
+        long pending = record(pet, TODAY.plusDays(20), true, false);
+        long reminded = record(pet, TODAY.plusDays(2), true, true);
+        long done = record(pet, TODAY.plusDays(3), true, true);
+        long otherPetRecord = record(otherPet, TODAY.plusDays(2), true, true);
+        long openTask = task("FOLLOW_UP_DUE", reminded, pet, "OPEN");
+        long doneTask = task("FOLLOW_UP_DUE", done, pet, "DONE");
+        long otherPetTask = task("FOLLOW_UP_DUE", otherPetRecord, otherPet, "OPEN");
+        String before = jdbc.queryForObject("SELECT xmin::text FROM medical_records WHERE visit_id = ?", String.class,
+                pending);
+
+        tx.executeWithoutResult(s -> followUps.cancelRemindedFollowUpTasks(pet));
+
+        assertThat(status(openTask)).isEqualTo("CANCELLED");
+        assertThat(status(doneTask)).isEqualTo("DONE");
+        assertThat(status(otherPetTask)).as("thú khác").isEqualTo("OPEN");
+        assertThat(cancelledAt(pending)).as("nhắc chờ gửi không bị đặt cờ hủy").isNull();
+        assertThat(jdbc.queryForObject("SELECT xmin::text FROM medical_records WHERE visit_id = ?", String.class,
+                pending)).as("chỉ khóa, không ghi bệnh án").isEqualTo(before);
+        assertThat(cancelledAt(reminded)).isNull();
+    }
+
     @Test
     void st04SkipsARecordWhoseReminderWasCancelled() {
         long pet = fx.pet(fx.silent);

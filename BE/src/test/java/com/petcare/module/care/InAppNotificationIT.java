@@ -108,6 +108,26 @@ class InAppNotificationIT {
 
     // ---------------------------------------------------------------- giao đúng một lần
 
+    /**
+     * D019 trên đường gửi thật: mẫu seed V12 {@code ACCOUNT_LOCKED_FOLLOW_UP_APP} với họ tên khách là {@code {ly_do}} —
+     * họ tên ra nguyên văn, lý do thật chỉ nằm ở dòng "Lý do:".
+     */
+    @Test
+    void aNameThatLooksLikeAVariableIsStoredLiterally() {
+        long recipient = account();
+        enqueue(new NotificationRequest("ACCOUNT_LOCKED_FOLLOW_UP_APP", Channel.IN_APP, recipient, null,
+                Map.of("ho_ten", "{ly_do}", "email_tai_khoan", "khach@petcare.test", "vai_tro", "Khách",
+                        "ly_do", "Spam feedback", "thoi_diem", "10:00 01/11/2026", "viec_do_dang", "Không có"),
+                null));
+
+        job.run();
+
+        String body = jdbc.queryForObject("SELECT body FROM notifications", String.class);
+        assertThat(body).contains("({ly_do}, Khách)").doesNotContain("(Spam feedback");
+        assertThat(body).contains("Lý do: Spam feedback");
+        assertThat(body.split("Spam feedback", -1)).hasSize(2);
+    }
+
     @Test
     void enqueuedRowBecomesExactlyOneNotification() {
         long account = account();
@@ -335,8 +355,11 @@ class InAppNotificationIT {
     }
 
     private void enqueue(long account, Map<String, Object> payload, String linkUrl) {
-        new TransactionTemplate(transactionManager)
-                .executeWithoutResult(status -> notifications.enqueue(request(account, payload, linkUrl)));
+        enqueue(request(account, payload, linkUrl));
+    }
+
+    private void enqueue(NotificationRequest request) {
+        new TransactionTemplate(transactionManager).executeWithoutResult(status -> notifications.enqueue(request));
     }
 
     private long insertInApp(String template, long account, String payloadJson, Instant due) {

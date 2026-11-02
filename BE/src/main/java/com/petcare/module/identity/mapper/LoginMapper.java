@@ -16,6 +16,8 @@ public interface LoginMapper {
 
     @Mapping(target = "accessToken", source = "session.accessToken")
     @Mapping(target = "expiresAt", source = "session.expiresAt")
+    @Mapping(target = "accessTokenExpiresAt", source = "session.accessExpiresAt")
+    @Mapping(target = "refreshToken", source = "session.refreshToken")
     @Mapping(target = "account", source = "account")
     LoginResponse toLoginResponse(OpenedSession session, Account account, boolean linkDecisionPending);
 }

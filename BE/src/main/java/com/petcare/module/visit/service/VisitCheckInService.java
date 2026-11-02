@@ -141,9 +141,10 @@ public class VisitCheckInService {
         if (ref != null) {
             info = appointments.checkIn(appointmentId, branchId, now);
             if (!info.customerId().equals(pet.customerId())) {
-                // Chuyển chủ hủy lịch BOOKED trong cùng transaction và ta đang giữ khóa thú: lệch là dữ liệu hỏng.
-                throw new IllegalStateException("Lịch hẹn #" + appointmentId + " của khách #" + info.customerId()
-                        + " nhưng thú #" + pet.petId() + " thuộc khách #" + pet.customerId());
+                // Chuyển chủ hủy lịch BOOKED, nhưng một lượt đặt chạy chen có thể còn sót lại (D027, ADR-0092: race được
+                // chấp nhận). Lễ tân hủy lịch rồi tiếp nhận như walk-in; ném ở đây rollback cả lần check-in lịch.
+                throw new BusinessRuleViolationException("BR-TN-01", "Lịch hẹn #" + appointmentId
+                        + " thuộc khách khác (thú đã chuyển chủ): hủy lịch hẹn rồi tiếp nhận thú như khách walk-in");
             }
         }
         ServiceGroup group = info != null ? info.serviceGroup() : service.group();
@@ -194,9 +195,8 @@ public class VisitCheckInService {
      */
     private void checkService(ServiceInfo service, boolean fromAppointment, Long branchId) {
         if (fromAppointment) {
-            if (!service.active()) {
-                throw new BusinessRuleViolationException("BR-LH-01", "Dịch vụ của lịch hẹn đã ngừng kinh doanh");
-            }
+            // Docs/adr/0088 (thay docs/adr/0059 Q3, trả D040): BR-LH-01 là điều kiện đặt lịch (UC39); lịch đã đặt vẫn
+            // tiếp nhận được dù dịch vụ đã ngừng kinh doanh hay bị tắt tại chi nhánh, nếu không ST05 tính NO_SHOW oan.
             return;
         }
         if (!service.active() || !VISIT_GROUPS.contains(service.group())

@@ -31,7 +31,7 @@ import com.petcare.module.visit.api.VisitQueryApi.AssignedVisit;
 @Mapper(componentModel = "spring", unmappedTargetPolicy = ReportingPolicy.ERROR, uses = LoginMapper.class)
 public interface AccountAdminMapper {
 
-    /** identity-v1 #28 — projection không có {@code password_hash}, {@code locked_reason}, {@code last_seen_at}. */
+    /** identity-v1 #28 — projection không có {@code password_hash}, {@code locked_reason}. */
     @Mapping(target = "id", source = "id")
     @Mapping(target = "email", source = "email")
     @Mapping(target = "role", source = "role")

@@ -56,7 +56,7 @@ class StaffQueryServiceTest {
 
     @BeforeEach
     void setUp() {
-        when(presence.onlineSince()).thenReturn(NOW.minusSeconds(600));
+        when(presence.now()).thenReturn(NOW);
         when(staffProfiles.findStaffPage(any(), any(), any(), any(), any()))
                 .thenAnswer(invocation -> new PageImpl<>(List.of(), invocation.getArgument(4, Pageable.class), 0));
     }
@@ -141,11 +141,11 @@ class StaffQueryServiceTest {
     }
 
     @Test
-    void listMapsOnlineFromWindow() {
+    void listMapsOnlineFromAccessTokenExpiry() {
         actAs(Role.SUPER_MANAGER, null);
-        StaffDetailRow onBoundary = row(Role.VET, OWN, NOW.minusSeconds(600));
-        StaffDetailRow before = row(Role.VET, OWN, NOW.minusSeconds(601));
-        doAnswer(inv -> new PageImpl<>(List.of(onBoundary, before), inv.getArgument(4, Pageable.class), 2))
+        StaffDetailRow valid = row(Role.VET, OWN, NOW.plusSeconds(1));
+        StaffDetailRow onBoundary = row(Role.VET, OWN, NOW);
+        doAnswer(inv -> new PageImpl<>(List.of(valid, onBoundary), inv.getArgument(4, Pageable.class), 2))
                 .when(staffProfiles).findStaffPage(any(), any(), any(), any(), any());
 
         PageResponse<StaffResponse> page = service.listStaff(null, null, null, null, 0, 20);
@@ -218,8 +218,8 @@ class StaffQueryServiceTest {
                 new UsernamePasswordAuthenticationToken(principal, null, List.of()));
     }
 
-    private static StaffDetailRow row(Role role, Long branchId, Instant lastSeenAt) {
+    private static StaffDetailRow row(Role role, Long branchId, Instant onlineUntil) {
         return new StaffDetailRow(9L, "nv@petcare.test", "0901234567", "Nhân viên", role, AccountStatus.ACTIVE,
-                false, branchId, null, null, false, lastSeenAt);
+                false, branchId, null, null, false, onlineUntil);
     }
 }

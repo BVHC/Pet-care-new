@@ -20,7 +20,11 @@
 
 | Module (hợp đồng) | Có / tổng | Thiếu | Ai · task | FE đã chạy thật |
 |---|---|---|---|---|
+<<<<<<< HEAD
 | identity-v1 | 35 / 38 | #25–27 (đổi email / liên kết tài khoản của khách, UC22) | BE-1 | đăng nhập, đăng ký OTP, quản trị NV / tài khoản / [CFG] / mẫu / audit: **L** |
+=======
+| identity-v1 | 35 / 38 | #25–27 (đổi email / liên kết tài khoản của khách, UC22) | BE-1 | đăng nhập, đăng ký OTP, quản trị NV / tài khoản / [CFG] / mẫu / audit: **L**. **#38 `POST /auth/refresh` (ADR-0091) đã có ở BE, FE chưa nối (D055): với BE thật access token sống 10 phút nên FE bị đăng xuất sau 10 phút** |
+>>>>>>> cdb1f62 (feat: access token 10 phút + refresh token xoay vòng, online theo phiên)
 | appointment-v1 | 9 / 9 | — | BE-1 | khách đặt, đổi, hủy: **L**; lễ tân đặt hộ: **S** |
 | visit-v1 | 20 / 21 | #21 hồ sơ sức khỏe thú | BE-1 · T28b | tiếp nhận, hàng đợi, bệnh án, tiêm, kê đơn, hoàn tất: **L** |
 | care-v1 | 8 / 10 | #9–10 cài đặt nhận thông báo (D025, chờ PO) | BE-1 | thông báo: **P**; Care Task lễ tân: **L** |

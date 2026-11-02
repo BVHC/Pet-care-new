@@ -46,7 +46,7 @@
 
 | Thao tác | Actor | Quyền / phạm vi | Chuyển trạng thái | Idempotent | Ghi chú |
 |---|---|---|---|---|---|
-| Tiếp nhận (check-in lịch hẹn / walk-in / cấp cứu) | A06 | Lễ tân; chi nhánh của lễ tân | — → WAITING (Visit#1) · Lịch hẹn#3 · Order#1 (OPEN + dòng dịch vụ tự sinh) · có dịch vụ Khám → Care Task#6 | — | Trễ quá `visit.late_priority_minutes` (15 phút) [CFG] xếp như walk-in. A9, A10, A11, A12. Thứ tự lỗi: 404 → 400 → 409 (docs/adr/0059). Có dịch vụ Khám: hủy nhắc tái khám đang chờ của thú và Care Task tái khám tương ứng (BR-TB-06, docs/adr/0084). Khách mang nhiều thú thì tạo nhiều Visit. |
+| Tiếp nhận (check-in lịch hẹn / walk-in / cấp cứu) | A06 | Lễ tân; chi nhánh của lễ tân | — → WAITING (Visit#1) · Lịch hẹn#3 · Order#1 (OPEN + dòng dịch vụ tự sinh) · có dịch vụ Khám → Care Task#6 | — | Trễ quá `visit.late_priority_minutes` (15 phút) [CFG] xếp như walk-in. A9, A10, A11, A12. Thứ tự lỗi: 404 → 400 → 409 (docs/adr/0059). Có dịch vụ Khám: hủy nhắc tái khám đang chờ của thú và Care Task tái khám tương ứng (BR-TB-06, docs/adr/0084). Lịch có dịch vụ đã ngừng vẫn tiếp nhận (A12, docs/adr/0088). Khách mang nhiều thú thì tạo nhiều Visit. |
 | Hàng đợi của chi nhánh | A05, A06, A07, A08 | Nhân viên chi nhánh | — | — | A1, A13. |
 | Hàng đợi của tôi | A07, A08 | VET, CARETAKER | — | — | Visit WAITING / IN_PROGRESS gán cho tôi. |
 | Chi tiết lượt | A04–A08 | Nhân viên chi nhánh; SUPER_MANAGER toàn chuỗi | — | — | A13, A14. |
@@ -74,7 +74,7 @@
 
 ### Queue
 
-- **`POST /visits`** — Tiếp nhận (check-in lịch hẹn / walk-in / cấp cứu). Request `CreateVisitRequest`. Response `201` `Visit`. Lỗi: `400` `BR-TN-01` walk-in thiếu dịch vụ / thú không khớp lịch hẹn / thú đã mất · `BR-TN-02` lịch hẹn của chi nhánh khác hoặc ngoài cửa sổ check-in · `BR-CN-01` chi nhánh chưa ACTIVE · `BR-CN-05` ngoài giờ mà chi nhánh không có cờ hoặc chưa đánh dấu cấp cứu · `BR-LH-01` walk-in: dịch vụ đã ngừng, đang tắt tại chi nhánh hoặc không thuộc MEDICAL / GROOMING; có lịch: dịch vụ đã ngừng kinh doanh · body sai (`VALIDATION_FAILED`, `MALFORMED_REQUEST`); BR-TK-17 · `401` · `403` · `404` · `409` Lịch hẹn không còn BOOKED (đã check-in / NO_SHOW: tiếp nhận như walk-in, BR-TN-03).
+- **`POST /visits`** — Tiếp nhận (check-in lịch hẹn / walk-in / cấp cứu). Request `CreateVisitRequest`. Response `201` `Visit`. Lỗi: `400` `BR-TN-01` walk-in thiếu dịch vụ / thú không khớp lịch hẹn / thú đã mất · `BR-TN-02` lịch hẹn của chi nhánh khác hoặc ngoài cửa sổ check-in · `BR-CN-01` chi nhánh chưa ACTIVE · `BR-CN-05` ngoài giờ mà chi nhánh không có cờ hoặc chưa đánh dấu cấp cứu · `BR-LH-01` walk-in: dịch vụ đã ngừng, đang tắt tại chi nhánh hoặc không thuộc MEDICAL / GROOMING · body sai (`VALIDATION_FAILED`, `MALFORMED_REQUEST`); BR-TK-17 · `401` · `403` · `404` · `409` Lịch hẹn không còn BOOKED (đã check-in / NO_SHOW: tiếp nhận như walk-in, BR-TN-03).
 - **`GET /visits`** — Hàng đợi của chi nhánh. Query: `date?`, `status?`, `serviceGroup?`, `assigneeId?`, `needsReassign?`. Response `200` mảng `Visit`. Lỗi: `400` Tham số sai kiểu (`MALFORMED_REQUEST`); BR-TK-17 · `401` · `403`.
 - **`GET /me/queue`** — Hàng đợi của tôi. Response `200` mảng `Visit`. Lỗi: `400` BR-TK-17 · `401` · `403`.
 - **`GET /visits/{visitId}`** — Chi tiết lượt. Response `200` `Visit`. Lỗi: `400` Tham số sai kiểu (`MALFORMED_REQUEST`); BR-TK-17 · `401` · `403` Sai vai trò · nhân viên xem lượt của chi nhánh khác · `404`.
@@ -165,7 +165,7 @@ Trường có `?` là không bắt buộc / có thể null. Kiểu `email`, `dat
 | A9 | Ngoài giờ mở cửa (trước giờ mở, giờ nghỉ giữa ca, ngày nghỉ) chỉ tiếp nhận ca đánh dấu cấp cứu ở chi nhánh có cờ, kể cả check-in lịch hẹn đến sớm trong cửa sổ BR-TN-02 | 03 #1 Visit liệt kê cả điều kiện giờ mở cửa / cấp cứu lẫn cửa sổ check-in (docs/adr/0059 Q1) |
 | A10 | `isEmergency` = true → hạng `EMERGENCY`, `queueSortKey` = giờ check-in, cả trong giờ và khi có lịch hẹn | Endpoint gộp UC47 cho A06 (docs/adr/0059 Q2) |
 | A11 | Có `appointmentId` thì `serviceId` bị bỏ qua (dịch vụ của lịch); `petId` phải là thú của lịch, khác → 400 `BR-TN-01` | BR-TN-01: 1 Visit cho đúng 1 thú; BR-LH-01: lịch có 1 thú, 1 dịch vụ |
-| A12 | Lịch hẹn mà dịch vụ bị tắt tại chi nhánh sau khi đặt vẫn tiếp nhận được; chỉ dịch vụ đã ngừng kinh doanh mới bị từ chối (400 `BR-LH-01`) | BR-LH-01 là điều kiện đặt lịch (UC39); 03 #1 không liệt kê (docs/adr/0059 Q3) |
+| A12 | Lịch hẹn mà dịch vụ bị tắt tại chi nhánh hoặc đã ngừng kinh doanh sau khi đặt vẫn tiếp nhận được (giá snapshot theo giá lúc tiếp nhận); khách walk-in vẫn bị từ chối 400 `BR-LH-01` nếu dịch vụ đã ngừng hoặc đang tắt | BR-LH-01 là điều kiện đặt lịch (UC39); 03 #1 không liệt kê (docs/adr/0088, thay 0059 Q3) |
 | A13 | CARETAKER xem hàng đợi chung của chi nhánh (#2) và chi tiết mọi lượt của chi nhánh (#4); 01 không có use case cho A08 xem lượt của người khác (docs/adr/0060) | BR-TN-04 'một hàng đợi chung'; UC23 cho A08 tra khách / thú toàn chuỗi; schema `Visit` không có dữ liệu y tế |
 | A14 | SUPER_MANAGER xem chi tiết lượt (#4) của mọi chi nhánh, để xem lượt cần gán lại khi chi nhánh không còn BRANCH_MANAGER hoạt động; `visitId` lấy từ thông báo khóa tài khoản gửi SUPER_MANAGER. Hàng đợi chi nhánh (#2) vẫn chỉ cho A05–A08 (docs/adr/0063) | 03 Visit#4; BR-QT-11 (thông báo kèm việc dở); trả Q2 |
 | A15 | Gán lại lượt đã gọi (#9) khi người phụ trách hiện tại không còn đủ điều kiện phụ trách lượt: không ACTIVE hoặc bị khóa, khác chi nhánh, hoặc sai chức vụ với nhóm dịch vụ (đổi chức vụ khi còn lượt, docs/adr/0031 Q4). Không xét cờ `needsReassign`; gán lại thì gỡ cờ (docs/adr/0063) | BR-TN-08 'không còn ACTIVE (bị khóa)'; BR-TN-05 |
@@ -189,7 +189,7 @@ Trường có `?` là không bắt buộc / có thể null. Kiểu `email`, `dat
 |---|---|---|---|
 | Q1 | Dòng dịch vụ tự sinh khi tiếp nhận có thể bị VET đổi (BR-TN-01). Nếu đổi từ dịch vụ thường sang dịch vụ loại Khám thì có hủy nhắc tái khám như Visit#1 có dịch vụ Khám không? | TBD (PO), tạm chỉ xét tại Visit#1 (06 G5) | 03 Care Task#6 |
 | Q2 | Visit#4 cho SUPER_MANAGER gán lại lượt đã gọi khi chi nhánh không còn BRANCH_MANAGER ACTIVE, nhưng #2 / #4 chỉ cho A05–A08 xem lượt. SUPER_MANAGER tìm lượt cần gán lại bằng cách nào? | Đã chốt: A14 (docs/adr/0063) | 03 Visit#4; 00-method §3.3 |
-| Q3 | Khóa tài khoản đánh dấu lượt IN_PROGRESS của người bị khóa là cần gán lại (needsReassign). Mở khóa có gỡ cờ này không, khi người phụ trách đã ACTIVE trở lại? | TBD (PO); tạm không gỡ (docs/adr/0062 Q5) | 03 Tài khoản#7, #8; BR-QT-12; erd visits.needs_reassign |
+| Q3 | Khóa tài khoản đánh dấu lượt IN_PROGRESS của người bị khóa là cần gán lại (needsReassign). Mở khóa có gỡ cờ này không, khi người phụ trách đã ACTIVE trở lại? | Đã chốt 2026-11-01 (người dùng thay PO, docs/adr/0088): mở khóa gỡ cờ của lượt mà người đó lại phụ trách được (ACTIVE, đúng chi nhánh, đúng chức vụ); giữ cờ nếu không (A15) | 03 Tài khoản#7, #8; BR-QT-12; erd visits.needs_reassign |
 | Q4 | Xóa mũi ghi nhầm (#20) có mở lại Care Task tái chủng đã bị hủy khi ghi mũi đó (Care Task#5) không? | TBD (PO); tạm không mở lại — CANCELLED là trạng thái cuối (03 §10), mũi cũ hết `superseded` nên ST04 nhắc lại được (docs/adr/0075) | 03 Care Task#5; BR-TB-03 |
 
 ---

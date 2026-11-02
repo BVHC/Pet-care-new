@@ -167,9 +167,14 @@ class StaffRoleTransferIT {
         long vet = staff("VET", branchA);
         jdbc.update("""
                 UPDATE accounts SET status = 'DISABLED', is_locked = true, locked_reason = 'IT',
-                       must_change_password = true, last_seen_at = now(), phone = '0911111111'
+                       must_change_password = true, phone = '0911111111'
                 WHERE id = ?""", vet);
         jdbc.update("UPDATE staff_profiles SET avatar_url = 'https://img.test/a.png' WHERE account_id = ?", vet);
+        // online = có phiên chưa hủy với access token còn hạn (BR-TN-06, docs/adr/0091)
+        jdbc.update("""
+                INSERT INTO sessions (account_id, token_hash, expires_at, access_expires_at)
+                VALUES (?, ?, now() + interval '1 hour', now() + interval '1 hour')""", vet,
+                UUID.randomUUID().toString());
         Map<String, Object> before = map(ok(get("/api/staff/" + vet, token(superManager))));
 
         Map<String, Object> afterTransfer = map(ok(transfer(token(superManager), vet, branchB)));
@@ -754,7 +759,7 @@ class StaffRoleTransferIT {
         assertThat(text("SELECT bio FROM staff_profiles WHERE account_id = ?", vet)).isNull();
     }
 
-    /** R9: request của chính người bị tác động không chờ khóa ({@code touchLastSeen} dùng {@code SKIP LOCKED}). */
+    /** R9: request của chính người bị tác động không chờ khóa dòng accounts (xác thực chỉ đọc, docs/adr/0091). */
     @Test
     void targetRequestsAreNotBlockedWhileTheirAccountRowIsLocked() throws Exception {
         long vet = staff("VET", branchA);

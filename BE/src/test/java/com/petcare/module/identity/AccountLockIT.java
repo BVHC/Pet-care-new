@@ -194,7 +194,6 @@ class AccountLockIT {
         long vet = staff("VET", branchA);
         String vetToken1 = token(vet);
         String vetToken2 = token(vet);
-        jdbc.update("UPDATE accounts SET last_seen_at = now() WHERE id = ?", vet);
         long manager1 = staff("BRANCH_MANAGER", branchA);
         long manager2 = staff("BRANCH_MANAGER", branchA);
         staff("BRANCH_MANAGER", branchB);
@@ -772,15 +771,14 @@ class AccountLockIT {
         assertNotLocked(second, branchA);
     }
 
-    /** {@code accounts → sessions} ở cả hai luồng → không deadlock; {@code last_seen_at} có giá trị để đăng xuất chờ. */
+    /** {@code accounts → sessions} ở cả hai luồng → không deadlock. */
     @Test
     void lockAndLogoutDoNotDeadlock() throws Exception {
         long vet = staff("VET", branchA);
         String vetToken = token(vet);
         String adminToken = token(admin);
-        jdbc.update("UPDATE accounts SET last_seen_at = now() WHERE id = ?", vet);
 
-        List<ResponseEntity<Map<String, Object>>> results = whileAccountLockedMany(vet, List.of(
+        List<ResponseEntity<Map<String, Object>>> results = whileSessionsLockedMany(vet, List.of(
                 () -> post("/api/auth/logout", vetToken, null), () -> lock(adminToken, vet, "Vi phạm")));
 
         assertThat(results.get(0).getStatusCode()).isEqualTo(HttpStatus.NO_CONTENT);
@@ -950,8 +948,7 @@ class AccountLockIT {
 
     /** I1: đã khóa ⇒ không còn phiên chưa hủy và offline. */
     private void assertLockedInvariant(long accountId) {
-        assertThat(jdbc.queryForMap("SELECT is_locked, last_seen_at FROM accounts WHERE id = ?", accountId))
-                .containsEntry("is_locked", true).containsEntry("last_seen_at", null);
+        assertThat(jdbc.queryForObject("SELECT is_locked FROM accounts WHERE id = ?", Boolean.class, accountId)).isTrue();
         assertThat(jdbc.queryForObject("SELECT count(*) FROM sessions WHERE account_id = ? AND revoked_at IS NULL",
                 Long.class, accountId)).isZero();
     }
@@ -1001,6 +998,14 @@ class AccountLockIT {
             List<Callable<ResponseEntity<Map<String, Object>>>> requests) throws Exception {
         return whileLocked("SELECT id FROM branches WHERE id = ? FOR UPDATE", branchIds, WAITING_ON_BRANCH_LOCK,
                 requests, holder -> {
+                });
+    }
+
+    /** Giữ khóa dòng phiên (duy nhất) của tài khoản: đăng xuất và các luồng hủy phiên đều phải chờ ở đây. */
+    private List<ResponseEntity<Map<String, Object>>> whileSessionsLockedMany(long accountId,
+            List<Callable<ResponseEntity<Map<String, Object>>>> requests) throws Exception {
+        return whileLocked("SELECT id FROM sessions WHERE account_id = ? FOR UPDATE", List.of(accountId),
+                WAITING_ON_ANY_LOCK, requests, holder -> {
                 });
     }
 

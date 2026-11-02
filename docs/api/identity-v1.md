@@ -54,7 +54,11 @@
 | 35 | `POST /notification-templates/{code}/restore-default` | Khôi phục mẫu mặc định | UC10 | BR-QT-14, 15 |
 | 36 | `GET /audit-logs` | Xem nhật ký audit | UC11 | BR-QT-15, 16 |
 | 37 | `GET /public/vets` | Đội ngũ bác sĩ | UC15 | BR-TK-20, BR-CK-01 |
+<<<<<<< HEAD
 | 38 | `GET /staff/assignable` | Nhân viên có thể gán lượt | UC45 | BR-TN-05, 06 |
+=======
+| 38 | `POST /auth/refresh` | Làm mới access token | UC03 | BR-TK-11, BR-TN-06 |
+>>>>>>> cdb1f62 (feat: access token 10 phút + refresh token xoay vòng, online theo phiên)
 
 ---
 
@@ -91,7 +95,7 @@
 | Liên kết hồ sơ tại quầy với tài khoản | A06 | Lễ tân | — | — | Không cần OTP: lễ tân đã đối chiếu CCCD. Ghi audit. |
 | Tìm tài khoản (khách và nhân viên) | A03 | Chỉ ADMIN | — | — | — |
 | Khóa tài khoản | A03 | Chỉ ADMIN; không khóa chính mình | is_locked false → true (Tài khoản#7) | — | Mọi role, mọi trạng thái (kể cả PENDING, DISABLED) trừ chính mình; status giữ nguyên (BR-QT-12). Hủy mọi phiên; pendingWork sắp theo thứ tự enum rồi entityId (Visit IN_PROGRESS → needsReassign); phát AccountLockedEvent; thông báo trong app theo BR-QT-11 (nhân viên A06–A08: BRANCH_MANAGER chi nhánh, không còn thì SUPER_MANAGER; BRANCH_MANAGER: SUPER_MANAGER, quản lý cuối của chi nhánh ACTIVE → LAST_BRANCH_MANAGER_LOCKED_APP; khách: lễ tân các chi nhánh có việc dở — 06 Q2); ghi audit kèm lý do (docs/adr/0035). |
-| Mở khóa tài khoản | A03 | Chỉ ADMIN | is_locked true → false (Tài khoản#8) | — | status giữ nguyên giá trị trước khi khóa (BR-QT-12); giữ lý do khóa gần nhất; không mở phiên, không thông báo; ghi audit kèm lý do (docs/adr/0035). |
+| Mở khóa tài khoản | A03 | Chỉ ADMIN | is_locked true → false (Tài khoản#8) | — | status giữ nguyên giá trị trước khi khóa (BR-QT-12); giữ lý do khóa gần nhất; không mở phiên, không thông báo; ghi audit kèm lý do (docs/adr/0035). Lượt `IN_PROGRESS` của người được mở khóa mà họ lại phụ trách được (ACTIVE, đúng chi nhánh, đúng chức vụ) không còn cờ `needsReassign` (docs/adr/0088). |
 | Danh sách tham số [CFG] | A03 | Chỉ ADMIN | — | — | Mọi tham số (52), sắp theo key; minValue / maxValue là khoảng tĩnh, khoảng thu hẹp theo ràng buộc chéo chỉ có trong message lỗi của #32 (docs/adr/0036). |
 | Sửa tham số | A03 | Chỉ ADMIN | — | — | Thứ tự kiểm: hình thức → quyền → key lạ 404 → kiểu / min–max / ràng buộc chéo (400 BR-QT-13, message ghi khoảng cho phép thực tế; sai kiểu cũng BR-QT-13) → trùng giá trị hiện tại (sau chuẩn hóa, ví dụ 05 = 5) → 200 không ghi, không audit. Ràng buộc chéo: visit.late_priority_minutes < appointment.no_show_after_minutes, boarding.min_nights ≤ boarding.max_nights. value được chuẩn hóa (INT bỏ số 0 đầu, TIME dạng HH:mm, DECIMAL không dạng mũ). Có hiệu lực cho mọi giao dịch tạo sau khi response trả về; ghi audit SYSTEM_CONFIG_UPDATED (docs/adr/0036). |
 | Danh sách mẫu thông báo | A03 | Chỉ ADMIN | — | — | Mọi mẫu, sắp theo code; subject / body là bản đang dùng; isDefault = cả hai trùng từng ký tự với bản mặc định (docs/adr/0037). |
@@ -99,7 +103,11 @@
 | Khôi phục mẫu mặc định | A03 | Chỉ ADMIN | — | — | Chép bản mặc định sang bản đang dùng. Đã là mặc định → 200, không ghi nhưng vẫn audit (before = after). Audit NOTIFICATION_TEMPLATE_RESTORED (docs/adr/0037). |
 | Xem nhật ký audit | A03 | Chỉ ADMIN | — | — | Chỉ đọc; không có endpoint sửa / xóa (BR-QT-16): method khác → 405. Xem không ghi audit. Mọi dòng của mọi người (kể cả hệ thống, actor null). Sắp `createdAt` giảm dần rồi `id` giảm dần; khoảng [from, to] tính cả hai mốc; giá trị lọc không tồn tại → trang rỗng; action / entityType rỗng = không lọc; size ngoài 1–100 bị kẹp, page âm = 0. `beforeData` / `afterData` là JSON object đúng như lúc ghi (thứ tự khóa không cố định), null khi không có. `totalElements` khớp `content` trong cùng một response (docs/adr/0038). |
 | Đội ngũ bác sĩ | A01, A02 | Public | — | — | Chỉ VET ACTIVE, không khóa (khóa tạm vẫn hiện), thuộc chi nhánh ACTIVE; `branchId` không phải chi nhánh ACTIVE → mảng rỗng. Sắp theo họ tên (ADR-0026). |
+<<<<<<< HEAD
 | Nhân viên có thể gán lượt | A04, A05, A06 | A06, A05: chi nhánh mình · A04: chi nhánh do `branchId` chọn | — | — | Danh sách chọn người gán (visit-v1 #5) hoặc gán lại (#9), không có email, SĐT hay trạng thái; `GET /staff` vẫn chỉ A03–A05. Chỉ nhân viên ACTIVE, không bị khóa, đúng chi nhánh và chức vụ; người online xếp trước, rồi họ tên, rồi `accountId`. Mảng trong `data`, không phân trang. Chi nhánh không tồn tại → mảng rỗng. Chỉ đọc, không audit, không khóa: lệnh gán kiểm lại dưới khóa (ADR-0061). ADR-0089. |
+=======
+| Làm mới access token | A02–A08 | Public | — | — | Cấp cặp token mới cho cùng phiên: access token mới (hạn `session.access_ttl_minutes` [CFG], không vượt hạn phiên) và refresh token mới; access token cũ và refresh token vừa gửi hết hiệu lực ngay (request đang chạy với token cũ nhận 401, client gửi lại bằng token mới). Chỉ gọi khi người dùng có thao tác: refresh theo bộ đếm hoặc từ request poll làm nhân viên online mãi (D024). Hạn tuyệt đối của phiên không đổi. Không ghi audit khi thành công (ADR-0091). |
+>>>>>>> cdb1f62 (feat: access token 10 phút + refresh token xoay vòng, online theo phiên)
 
 ---
 
@@ -160,9 +168,15 @@
 ### Public
 
 - **`GET /public/vets`** — Đội ngũ bác sĩ. Public. Query: `branchId?`. Response `200` mảng `PublicVet`. Lỗi: `400`.
+<<<<<<< HEAD
 ### Staff
 
 - **`GET /staff/assignable`** — Nhân viên có thể gán lượt. Query: `role`, `branchId?`. Response `200` mảng `AssignableStaff`. Lỗi: `400` `MALFORMED_REQUEST` thiếu `role`, `role` ngoài VET / CARETAKER hoặc sai kiểu · `VALIDATION_FAILED` `branchId` ≤ 0, hoặc SUPER_MANAGER không gửi `branchId` (message `Vui lòng chọn chi nhánh`, không mã BR) · `401` · `403` `ACCESS_DENIED` ngoài A04–A06 (ADMIN, VET, CARETAKER, CUSTOMER) · `ACCESS_DENIED_SCOPE_MISMATCH` A05, A06 gửi `branchId` của chi nhánh khác (không ghi audit).
+=======
+### Auth
+
+- **`POST /auth/refresh`** — Làm mới access token. Public. Request `RefreshRequest`. Response `200` `RefreshResponse`. Lỗi: `400` `VALIDATION_FAILED` refreshToken trống hoặc quá 128 ký tự · `401` Refresh token không đúng, đã dùng, hết hạn, phiên đã bị hủy hoặc tài khoản bị khóa / vô hiệu hóa — một thông điệp chung. Dùng lại token đã dùng hủy cả phiên và ghi audit `REFRESH_TOKEN_REUSED` (ADR-0091).
+>>>>>>> cdb1f62 (feat: access token 10 phút + refresh token xoay vòng, online theo phiên)
 
 ### Schema
 
@@ -178,7 +192,9 @@ Trường có `?` là không bắt buộc / có thể null. Kiểu `email`, `dat
 - **`OtpSentResponse`** — {`resendAvailableAt`: date-time, `maskedEmail?`: string}
 - **`LoginRequest`** — {`email`: email, `password`: string}
 - **`AccountSummary`** — {`id`: int64, `email`: email, `role`: Role, `status`: AccountStatus, `isLocked`: boolean, `mustChangePassword`: boolean}
-- **`LoginResponse`** — {`accessToken`: string, `expiresAt`: date-time, `account`: AccountSummary, `linkDecisionPending`: boolean}
+- **`LoginResponse`** — {`accessToken`: string, `expiresAt`: date-time, `accessTokenExpiresAt`: date-time, `refreshToken`: string, `account`: AccountSummary, `linkDecisionPending`: boolean}
+- **`RefreshRequest`** — {`refreshToken`: string}
+- **`RefreshResponse`** — {`accessToken`: string, `accessTokenExpiresAt`: date-time, `refreshToken`: string, `expiresAt`: date-time}
 - **`ResetPasswordRequest`** — {`email`: email, `code`: string, `newPassword`: string}
 - **`ChangePasswordRequest`** — {`currentPassword`: string, `newPassword`: string}
 - **`StaffProfile`** — {`accountId`: int64, `fullName`: string, `avatarUrl?`: string, `phone`: string, `branchId?`: int64, `specialty?`: string, `bio?`: string}
@@ -218,8 +234,9 @@ Trường có `?` là không bắt buộc / có thể null. Kiểu `email`, `dat
 4. Giới hạn OTP kiểm ở server: 60 giây giữa hai lần gửi, 5 mã/giờ/email, 5 lần nhập sai/mã (BR-TK-06, 07).
 5. Ghi audit: đăng nhập thành công và thất bại, mọi thao tác Staff / Accounts / Configuration, sửa email hộ, liên kết hồ sơ (BR-QT-15, BR-TK-16, 19).
 6. Phân cấp: request ngoài phạm vi BR-QT-01 / BR-QT-07 trả 403 và ghi audit. BRANCH_MANAGER chỉ thấy và thao tác nhân viên chi nhánh mình.
-7. Khi `mustChangePassword = true`, mọi API trừ `GET /me`, `POST /me/password`, `POST /auth/logout` trả 400 `BUSINESS_RULE_VIOLATION`, message kèm `BR-TK-17` (A4). Path public (§3.1 của `00-method`: `/auth/register…`, `/auth/login`, `/auth/password/…`, `/public/…`) không bị chặn vì luôn xử lý như chưa đăng nhập, token gửi kèm bị bỏ qua (ADR-0005).
-8. Request của nhân viên cập nhật `last_seen_at` (tối đa một lần mỗi 60 giây, ADR-0003); đăng xuất đặt về offline ngay (BR-TN-06).
+7. Khi `mustChangePassword = true`, mọi API trừ `GET /me`, `POST /me/password`, `POST /auth/logout` trả 400 `BUSINESS_RULE_VIOLATION`, message kèm `BR-TK-17` (A4). Path public (§3.1 của `00-method`: `/auth/register…`, `/auth/login`, `/auth/refresh`, `/auth/password/…`, `/public/…`) không bị chặn vì luôn xử lý như chưa đăng nhập, token gửi kèm bị bỏ qua (ADR-0005).
+8. Access token sống ngắn (`session.access_ttl_minutes` [CFG], mặc định 10 phút); lấy token mới bằng `POST /auth/refresh`. Mỗi refresh token chỉ dùng một lần: dùng lại một token đã dùng hủy cả phiên (ADR-0091). Hạn tuyệt đối vẫn là hạn phiên `session.ttl_hours` [CFG].
+9. Nhân viên online khi có phiên chưa hủy với access token còn hạn (BR-TN-06, ADR-0091): request poll tự động không làm ai online; đăng xuất, khóa, vô hiệu hóa hủy phiên nên offline ngay.
 
 ---
 
@@ -227,10 +244,10 @@ Trường có `?` là không bắt buộc / có thể null. Kiểu `email`, `dat
 
 | ID | Giả định | Lý do |
 |---|---|---|
-| A1 | Access token gắn 1-1 với một phiên (`sessions`), không có refresh token; phiên hết hạn thì đăng nhập lại | Docs chỉ có bảng `sessions` có `expires_at`, `revoked_at`; không nhắc refresh |
+| A1 | Access token gắn 1-1 với một phiên (`sessions`) và sống ngắn (`session.access_ttl_minutes`); gia hạn bằng refresh token xoay vòng, hạn tuyệt đối vẫn là hạn phiên; phiên hết hạn thì đăng nhập lại | ADR-0091 thay quyết định không có refresh token của ADR-0003 để trạng thái online đo được (D024); docs chỉ có bảng `sessions` có `expires_at`, `revoked_at` |
 | A2 | Xác thực OTP đăng ký không tự đăng nhập; client gọi `POST /auth/login` sau đó | Ít phát minh nhất; 03 Tài khoản#2 không có hệ quả tạo phiên |
 | A3 | Đăng ký lại bằng email còn `PENDING` bị báo trùng (BR-TK-01); người dùng dùng gửi lại OTP | Email duy nhất trong tập tài khoản, `PENDING` vẫn là tài khoản |
-| A4 | Chặn mọi chức năng khi chưa đổi mật khẩu lần đầu bằng 400, message kèm `BR-TK-17`; path public (đăng ký, đăng nhập, quên / đặt lại mật khẩu, `/public/…`) không bị chặn vì luôn xử lý như chưa đăng nhập, kể cả khi client gửi token (ADR-0005) | BR-TK-17 'chặn mọi chức năng khác' |
+| A4 | Chặn mọi chức năng khi chưa đổi mật khẩu lần đầu bằng 400, message kèm `BR-TK-17`; path public (đăng ký, đăng nhập, làm mới token, quên / đặt lại mật khẩu, `/public/…`) không bị chặn vì luôn xử lý như chưa đăng nhập, kể cả khi client gửi token (ADR-0005) | BR-TK-17 'chặn mọi chức năng khác' |
 | A5 | Khách tự sửa họ tên, SĐT, ảnh ở module customer; identity chỉ sửa hồ sơ nhân viên | BR-TK-15: với khách, họ tên và SĐT là thông tin của hồ sơ khách |
 | A6 | `verificationMethod` khi sửa email hộ / liên kết tại quầy chỉ có `ID_CARD_IN_PERSON` | BR-TK-16: audit chỉ ghi phương thức xác minh, docs chỉ nêu CCCD |
 | A7 | Gửi lại OTP quên mật khẩu = gọi lại `POST /auth/password/forgot` (cùng quota BR-TK-07) | Tránh endpoint thứ hai lộ trạng thái tài khoản |
@@ -238,7 +255,7 @@ Trường có `?` là không bắt buộc / có thể null. Kiểu `email`, `dat
 
 | ID | Câu hỏi | Trạng thái | Gốc |
 |---|---|---|---|
-| Q1 | Thời hạn phiên đăng nhập bao lâu, có thêm vào [CFG] không, có cần refresh token cho app không? | Đã chốt (ADR-0003): hạn tuyệt đối `session.ttl_hours` [CFG], mặc định 12 giờ (1–72), không gia hạn, không refresh token; `exp` của token = `expiresAt` | Docs không quy định (A1) |
+| Q1 | Thời hạn phiên đăng nhập bao lâu, có thêm vào [CFG] không, có cần refresh token cho app không? | Đã chốt (ADR-0003, sửa bởi ADR-0091): hạn tuyệt đối của phiên `session.ttl_hours` [CFG], mặc định 12 giờ (1–72); access token sống `session.access_ttl_minutes` [CFG] (mặc định 10 phút), có refresh token dùng một lần; `exp` của token = hạn access token, không vượt hạn phiên | Docs không quy định (A1) |
 | Q2 | Lỗi `BR-TK-09` (khóa tạm, kèm giờ thử lại) cho biết email tồn tại, lệch với tinh thần BR-TK-10. Chấp nhận như BR-TK-09 yêu cầu? | Đã chốt (ADR-0019): BR-TK-08/09/11 chỉ trả khi mật khẩu đúng; mật khẩu sai luôn 401 chung, nên người không biết mật khẩu không phân biệt được email có tồn tại, đang khóa hay chưa xác thực | BR-TK-09 vs BR-TK-10 |
 
 ---

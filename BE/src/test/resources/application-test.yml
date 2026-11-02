@@ -5,6 +5,11 @@ spring:
   application:
     name: petcare-api-test
 
+  # Thêm thư mục migration chỉ cho test: baseline session.access_ttl_minutes = 720 để IT dịch đồng hồ không làm
+  # token chết sau 10 phút (db/test-migration/V9000__*.sql, docs/adr/0091).
+  flyway:
+    locations: classpath:db/migration,classpath:db/test-migration
+
   data:
     redis:
       host: localhost
