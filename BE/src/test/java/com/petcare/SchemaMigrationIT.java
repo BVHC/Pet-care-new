@@ -146,10 +146,11 @@ class SchemaMigrationIT {
         // V25 mẫu BOARDING_OVERDUE (+_APP), BOARDING_OVERDUE_MANAGER_APP, BOARDING_CAPACITY_WARNING_APP + 3 index trả thú / ST15 (docs/adr/0086),
         // V26 mẫu STOCK_ALERT_DIGEST_APP (ST08, docs/adr/0087),
         // V27 refresh_tokens + sessions.access_expires_at, bỏ accounts.last_seen_at, [CFG] session.access_ttl_minutes
-        // (docs/adr/0091), V9000 chỉ ở test: baseline session.access_ttl_minutes = 720
+        // (docs/adr/0091), V28 4 index FK bệnh án / mũi tiêm + CHECK lý do mua ngoài (docs/adr/0093, trả D043),
+        // V9000 chỉ ở test: baseline session.access_ttl_minutes = 720
         assertThat(rows).extracting(row -> row.get("version"))
                 .containsExactly("1", "2", "3", "4", "5", "6", "7", "8", "9", "10", "11", "12", "13", "14", "15",
-                        "16", "17", "18", "19", "20", "21", "22", "23", "24", "25", "26", "27", "9000");
+                        "16", "17", "18", "19", "20", "21", "22", "23", "24", "25", "26", "27", "28", "9000");
         assertThat(rows).allSatisfy(row -> assertThat(row).containsEntry("success", true));
     }
 
@@ -403,6 +404,41 @@ class SchemaMigrationIT {
                 .singleElement().asString()
                 .contains("ON public.vaccinations").contains("(next_due_date, id)")
                 .contains("superseded_at IS NULL").contains("overdue_handled_at IS NULL");
+    }
+
+    /**
+     * V28 (docs/adr/0093, trả D043 nhóm 1): bốn cột FK của bệnh án / mũi tiêm có index một cột, không partial (cột đều
+     * NOT NULL) để đọc theo bệnh án, {@code existsByVaccineTypeId} và kiểm FK khi xóa dòng cha không quét bảng.
+     */
+    @Test
+    void medicalRecordAndVaccinationForeignKeysHaveSingleColumnIndexes() {
+        record Expected(String index, String table, String column) {
+        }
+        List<Expected> expected = List.of(
+                new Expected("ix_medical_record_addenda_medical_record_id", "medical_record_addenda",
+                        "medical_record_id"),
+                new Expected("ix_prescription_items_medical_record_id", "prescription_items", "medical_record_id"),
+                new Expected("ix_vaccinations_visit_id", "vaccinations", "visit_id"),
+                new Expected("ix_vaccinations_vaccine_type_id", "vaccinations", "vaccine_type_id"));
+        for (Expected e : expected) {
+            assertThat(jdbc.queryForList("SELECT indexdef FROM pg_indexes WHERE schemaname = 'public' AND indexname = ?",
+                    String.class, e.index()))
+                    .as(e.index()).singleElement().asString()
+                    .contains("ON public." + e.table()).contains("(" + e.column() + ")").doesNotContain("WHERE");
+        }
+    }
+
+    /**
+     * V28 (docs/adr/0093, trả D043 nhóm 3): CHECK buộc lý do mua ngoài theo cờ mua ngoài; ca vi phạm ở
+     * {@code PrescriptionItemConstraintIT}.
+     */
+    @Test
+    void prescriptionItemsTieTheExternalReasonToTheExternalFlag() {
+        assertThat(jdbc.queryForList("""
+                SELECT pg_get_constraintdef(oid) FROM pg_constraint
+                WHERE conrelid = 'prescription_items'::regclass AND conname = 'ck_prescription_items_external_reason_tied'
+                """, String.class)).singleElement().asString()
+                .contains("is_external_purchase").contains("external_reason IS NOT NULL");
     }
 
     /**

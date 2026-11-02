@@ -4,6 +4,7 @@
 <<<<<<< HEAD
 <<<<<<< HEAD
 <<<<<<< HEAD
+<<<<<<< HEAD
 > Cập nhật: 2026-11-01 — gộp T41 (BE-1: E2E luồng chính, smoke Docker, D053) và T45 (BE-2: `*FsmIT` Chi nhánh, Order, Ca thu ngân, Phiếu nhập, Đặt chỗ, Chuồng + 2 E2E, sửa `end-maintenance`); trước đó T40.1–T40.6 (BE-1: `*FsmIT` Tài khoản, Lịch hẹn, Visit, Care Task), T42–T44 (BE-2: nhận / trả thú, nhật ký, báo cáo, ST08 — hàng boarding / report ở mục 3.2, ADR-0085…0087), T49 (FE báo cáo + chạy FE với BE thật), T48 (FE lưu trú, mock) và T39 (BE care: Care Task, ST04, ST18, ST19, `FollowUpApi`); việc B + C của FE-1 (ADR-0088, 0089). Trạng thái task: `docs/time.md`.
 >
 > Nhật ký (mới nhất trước; cũ hơn: `git log` của file này):
@@ -30,12 +31,17 @@
 =======
 > Cập nhật: 2026-11-02 — D027 chấp nhận (BE-1, ADR-0092); trước đó D024 (ADR-0091); N5 (BE-1: D042, D052, D040); trước đó T45 (BE-2: `*FsmIT` + 2 E2E), T41 (E2E luồng chính), T40 (`*FsmIT` BE-1), T49 / T48 (FE), T39 (BE care). Trạng thái task: `docs/time.md`.
 >>>>>>> 34497f2 (fix: chấp nhận race đặt lịch ∥ thú mất/chuyển chủ (D027), check-in lịch mồ côi trả 400 BR-TN-01)
+=======
+> Cập nhật: 2026-11-02 — D043 trả một phần (BE-1, ADR-0093, V28); trước đó D027 chấp nhận (BE-1, ADR-0092); trước đó D024 (ADR-0091); N5 (BE-1: D042, D052, D040); trước đó T45 (BE-2: `*FsmIT` + 2 E2E), T41 (E2E luồng chính), T40 (`*FsmIT` BE-1), T49 / T48 (FE), T39 (BE care). Trạng thái task: `docs/time.md`.
+>>>>>>> df1329c (fix: trả D043 một phần, thêm 4 index FK bệnh án/mũi tiêm và CHECK lý do mua ngoài (V28))
 >
 > Nhật ký (mới nhất trước, giữ 5 dòng; cũ hơn: `git log` của file này):
+> - 2026-11-02 — D043 trả một phần (BE-1, ADR-0093, V28): 4 index FK (`medical_record_addenda` / `prescription_items` theo `medical_record_id`, `vaccinations` theo `visit_id` / `vaccine_type_id`) + CHECK `ck_prescription_items_external_reason_tied` (mua ngoài ⇔ có lý do); chấp nhận không làm trigger chặn sửa bệnh án đã khóa / sửa-xóa bản bổ sung. Test: `SchemaMigrationIT`, `PrescriptionItemConstraintIT.theReasonIsTiedToTheExternalFlag`, `FkIndexScanIT`. Chưa commit.
 > - 2026-11-02 — D027 chấp nhận (BE-1, ADR-0092, không migration / contract): race đặt / đổi lịch ∥ thú mất / chuyển chủ không đóng (đồ án, không người dùng thật), lịch `BOOKED` mồ côi do lễ tân hủy tay (quy trình trong ADR); check-in lịch mồ côi sau chuyển chủ 500 → 400 `BR-TN-01` (`VisitCheckInService`, `VisitCheckInIT.orphanAppointment…`). Chưa chạy lại IT (Docker Desktop tắt). Chưa commit.
 > - 2026-11-02 — D024 (BE-1, ADR-0091, V27): access token 10 phút + refresh token xoay vòng (`POST /auth/refresh`, identity-v1 #38), bảng `refresh_tokens`, online suy ra từ `sessions.access_expires_at`, xác thực chỉ đọc (bỏ `last_seen_at`, `staff.online_window_minutes`); dọn phiên xóa refresh token trước. Test: `RefreshTokenIT` 18, `RefreshTokenServiceTest` 13; IT cũ chỉnh theo (profile test baseline TTL 720). FE chưa nối refresh (D055, `CLAUDE.md`); D054 mở. Chưa commit.
 > - 2026-11-01 — N5 (BE-1, ADR-0088, không migration): trả D042 / D052 / D040 theo quyết định người dùng thay PO. Mở khóa phát `AccountUnlockedEvent` → visit gỡ cờ `needs_reassign` của lượt người đó lại phụ trách được (ACTIVE, đúng chi nhánh, đúng chức vụ); đặt lịch MEDICAL chỉ hủy Care Task đã sinh (khóa bệnh án chờ nhắc rồi đọc), ST04 hoãn nhắc khi `AppointmentQueryApi.hasBookedMedical` và gửi lại khi lịch hủy / `NO_SHOW`; lịch đã đặt vẫn tiếp nhận khi dịch vụ ngừng (visit `checkService`, sales `openForVisit` bỏ lọc `active`, BE-2 báo qua 06). Test: `VisitProgressIT`, `FollowUpReminderIT`, `FollowUpCancellationIT` / `RaceIT`, `MainFlowExamIT`, `VisitCheckInIT`, `AppointmentQueryApiIT` + unit.
 > - 2026-10-31 — T41.4–T41.6 (không ADR / migration): smoke Docker `BE/scripts/smoke/t41_main_flow.py` PASS 22/22 (30/10, `T41-be.md` §10); T41.5 trả D053 — `AppointmentRepository.findDueForReminderIds` (ST03) thêm cận dưới `(slot_date, slot_start) > (:fromDate, :fromTime)` như ADR-0056 §1; `AppointmentReminderIT` 34/34, nhóm appointment 384/384 xanh, hết 2 IT đỏ đã biết. T41.6: không lỗi nào từ T41.2–T41.4 để sửa.
+<<<<<<< HEAD
 > - 2026-10-29 — T41 xong (chỉ test + tài liệu, không ADR / migration / nợ mới): `visit/MainFlowE2EIT` chạy 16 bước của `docs/testcases/T41-be.md` qua endpoint / job thật (era 2029): đặt lịch online → check-in → tiêm thay mũi cũ (hủy Care Task quá hạn) → bệnh án khóa khi hoàn tất (sửa → 409) → thêm GOODS → mở ca → thu tiền FEFO → ST04 IN_APP + EMAIL, chạy lại không trùng. Không lộ lỗi; rollback dẫn IT sẵn có (§8). T41.3: `visit/MainFlowExamIT` (era 2030) chạy nhánh khám (T41-be.md §9): đặt lịch hủy nhắc tái khám cũ → chẩn đoán + hẹn tái khám → kê đơn đủ tồn + mua ngoài lúc kê → thu tiền trừ thuốc FEFO → ST04 tái khám; không lộ lỗi. Hồi quy: visit 476, care 134 xanh.
 <<<<<<< HEAD
 > - 2026-10-30 — T45 (BE-2, chỉ test + 1 sửa lỗi): 6 lớp `*FsmIT` trên bean thật cho Chi nhánh (`branch/BranchFsmIT`), Order (`sales/OrderFsmIT`, nguồn VISIT + RETAIL), Ca thu ngân (`sales/CashierShiftFsmIT`, era 1986), Phiếu nhập (`inventory/StockReceiptFsmIT`), Đặt chỗ (`boarding/BoardingBookingFsmIT`, era 1987, gồm Order BOARDING #3 / #9 / #10 và ST05 / ST15 / Care Task `PICKUP_OVERDUE`) và Chuồng (`boarding/KennelFsmIT`) + 2 E2E (`sales/RetailSaleFlowIT`, `boarding/BoardingStayFlowIT`); bảng truy vết `docs/testcases/T45-be.md`. **Sửa lỗi:** `KennelService.endMaintenance` chấp nhận chuồng `OCCUPIED` (trả 200 và giải phóng chuồng đang có thú) — nay chỉ nhận `MAINTENANCE`, 409 `INVALID_STATE_TRANSITION` còn lại. Không ADR / migration.
@@ -46,6 +52,8 @@
 >>>>>>> cdb1f62 (feat: access token 10 phút + refresh token xoay vòng, online theo phiên)
 =======
 >>>>>>> 34497f2 (fix: chấp nhận race đặt lịch ∥ thú mất/chuyển chủ (D027), check-in lịch mồ côi trả 400 BR-TN-01)
+=======
+>>>>>>> df1329c (fix: trả D043 một phần, thêm 4 index FK bệnh án/mũi tiêm và CHECK lý do mua ngoài (V28))
 
 ## 1. Tóm tắt
 
@@ -192,6 +200,7 @@ Không bao giờ sửa migration đã chạy (checksum). Số V dùng chung vớ
 | 25 | `V25__boarding_checkout_overdue.sql` | BE-2: index `ix_boarding_bookings_checked_in_due`, `ix_boarding_bookings_overdue`, `ix_orders_boarding_booking_id`; mẫu `BOARDING_OVERDUE` (+`_APP`), `BOARDING_OVERDUE_MANAGER_APP`, `BOARDING_CAPACITY_WARNING_APP` (0086); chưa xác nhận với BE-1 |
 | 26 | `V26__stock_alert_digest_template.sql` | BE-2: mẫu `STOCK_ALERT_DIGEST_APP` (IN_APP, ST08, ADR-0087); chỉ INSERT, cần BE-1 xác nhận số |
 | 27 | `V27__refresh_tokens_access_ttl.sql` | BE-1 (ADR-0091, D024): bảng `refresh_tokens` (+ index, UNIQUE partial một token còn dùng mỗi phiên), `sessions.access_expires_at`, bỏ `accounts.last_seen_at`, [CFG] `session.access_ttl_minutes` (10, 5–720) thay `staff.online_window_minutes`; chưa xác nhận số với BE-2. Profile test thêm `V9000` (`src/test/resources/db/test-migration`): baseline 720 |
+| 28 | `V28__medical_record_fk_indexes_external_reason_check.sql` | BE-1 (ADR-0093, trả D043 một phần): 4 index một cột `medical_record_addenda.medical_record_id`, `prescription_items.medical_record_id`, `vaccinations.visit_id`, `vaccinations.vaccine_type_id` + CHECK `ck_prescription_items_external_reason_tied`; chưa xác nhận số với BE-2 (BE-2 từ V29). Hai trigger chặn sửa bệnh án đã khóa / bản bổ sung chấp nhận không làm |
 
 - **PK đặc biệt (9 bảng):** 1–1 (`staff_profiles`, `kennel_types`, `medical_records`, `boarding_check_ins`), ghép (`branch_services`, `branch_quota_defaults`), chuỗi (`system_configs`, `notification_templates`, `page_contents`). 8 bảng LOG chỉ `created_at`. Tên ràng buộc `ck_ / uq_ / ix_ / ex_`.
 - **Thứ tự xóa cứng** (app xóa con trước, cùng tx): BR-TK-08 `otp_tokens` → hồ sơ online → `accounts`; BR-TK-19 `addresses` → hồ sơ online → gán `account_id` (flush trước, `uq_customers_account_id` không deferrable); BR-KH-06 `weight_records` → `pets`; BR-KB-04 hoàn kho + `stock_movements` → `vaccinations` → `order_lines`; BR-KB-03 `prescription_items` → `order_lines` (dòng `DRUG`, bệnh án giữ).

@@ -17,8 +17,8 @@ import com.petcare.module.visit.entity.Vaccination;
 
 /**
  * Bảng {@code vaccinations}. Truy vấn đọc không khóa: bên ghi (#19, docs/adr/0074) khóa {@code pets FOR SHARE}, advisory
- * 1004 rồi {@code visits} trước (docs/adr/0072). {@code vaccinations.visit_id} và {@code vaccine_type_id} chưa có index (nợ
- * D043): mọi truy vấn theo thú đi tiền tố {@code pet_id} của {@code ix_vaccinations_pet_type_administered}.
+ * 1004 rồi {@code visits} trước (docs/adr/0072). {@code vaccinations.visit_id} và {@code vaccine_type_id} có index riêng từ V28
+ * (docs/adr/0093); truy vấn theo thú vẫn đi tiền tố {@code pet_id} của {@code ix_vaccinations_pet_type_administered}.
  */
 public interface VaccinationRepository extends JpaRepository<Vaccination, Long> {
 
@@ -103,7 +103,7 @@ public interface VaccinationRepository extends JpaRepository<Vaccination, Long> 
             """, nativeQuery = true)
     int restoreLatest(@Param("petId") Long petId, @Param("vaccineTypeId") Long vaccineTypeId, @Param("now") Instant now);
 
-    /** Loại vaccine đã có mũi tiêm thì không xóa (BR-SP-07). Chưa có index theo {@code vaccine_type_id} (nợ D043). */
+    /** Loại vaccine đã có mũi tiêm thì không xóa (BR-SP-07). Đi {@code ix_vaccinations_vaccine_type_id} (V28, docs/adr/0093). */
     @Query(value = "SELECT EXISTS (SELECT 1 FROM vaccinations WHERE vaccine_type_id = :vaccineTypeId)",
             nativeQuery = true)
     boolean existsByVaccineTypeId(@Param("vaccineTypeId") Long vaccineTypeId);

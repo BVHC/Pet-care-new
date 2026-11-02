@@ -14,8 +14,8 @@ import org.springframework.transaction.annotation.Transactional;
 import com.petcare.module.visit.entity.PrescriptionItem;
 
 /**
- * Bảng {@code prescription_items} (docs/adr/0076). {@code medical_record_id} chưa có index (nợ D043): đọc theo bệnh án
- * quét bảng, chấp nhận ở giai đoạn 1 vì mỗi lượt khám chỉ vài dòng.
+ * Bảng {@code prescription_items} (docs/adr/0076). {@code medical_record_id} có index từ V28 (docs/adr/0093), nên đọc
+ * theo bệnh án không quét bảng.
  */
 public interface PrescriptionItemRepository extends JpaRepository<PrescriptionItem, Long> {
 
