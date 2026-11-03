@@ -55,7 +55,7 @@ class LoginServiceTest {
     void normalizesEmailAndPassesBcryptResult() {
         AccountCredential credential = new AccountCredential(7L, hash);
         when(attempts.findCredential("nv@petcare.test")).thenReturn(Optional.of(credential));
-        LoginResponse expected = new LoginResponse("t", null, null, false);
+        LoginResponse expected = new LoginResponse("t", null, null, null, null, false);
         when(attempts.login(credential, "nv@petcare.test", PASSWORD, true, "ip", "ua")).thenReturn(expected);
 
         assertThat(service.login(new LoginRequest(" NV@PetCare.Test ", PASSWORD), "ip", "ua")).isSameAs(expected);

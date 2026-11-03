@@ -160,7 +160,8 @@ class LoginIT {
         assertThat(response.getStatusCode()).isEqualTo(HttpStatus.OK);
         assertThat(response.getBody()).containsEntry("code", 200).containsEntry("message", "Đăng nhập thành công");
         Map<String, Object> data = data(response);
-        assertThat(data).containsOnlyKeys("accessToken", "expiresAt", "account", "linkDecisionPending")
+        assertThat(data).containsOnlyKeys("accessToken", "expiresAt", "accessTokenExpiresAt", "refreshToken", "account",
+                "linkDecisionPending")
                 .containsEntry("expiresAt", "2026-10-08T14:00:00Z")
                 .containsEntry("linkDecisionPending", false);
         @SuppressWarnings("unchecked")

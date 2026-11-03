@@ -15,6 +15,7 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.transaction.support.TransactionSynchronizationManager;
 
+import com.petcare.module.appointment.api.AppointmentQueryApi;
 import com.petcare.module.branch.api.BranchQueryApi;
 import com.petcare.module.branch.api.BranchQueryApi.BranchSummary;
 import com.petcare.module.care.api.CareTaskApi;
@@ -55,6 +56,7 @@ public class FollowUpReminderService {
     private static final Logger log = LoggerFactory.getLogger(FollowUpReminderService.class);
 
     private final MedicalRecordRepository records;
+    private final AppointmentQueryApi appointments;
     private final PetQueryApi pets;
     private final CustomerQueryApi customers;
     private final AccountContactApi accounts;
@@ -64,10 +66,12 @@ public class FollowUpReminderService {
     private final SystemConfigApi configs;
     private final Clock clock;
 
-    public FollowUpReminderService(MedicalRecordRepository records, PetQueryApi pets, CustomerQueryApi customers,
+    public FollowUpReminderService(MedicalRecordRepository records, AppointmentQueryApi appointments, PetQueryApi pets,
+            CustomerQueryApi customers,
             AccountContactApi accounts, BranchQueryApi branches, NotificationApi notifications,
             CareTaskApi careTasks, SystemConfigApi configs, Clock clock) {
         this.records = records;
+        this.appointments = appointments;
         this.pets = pets;
         this.customers = customers;
         this.accounts = accounts;
@@ -118,6 +122,12 @@ public class FollowUpReminderService {
             requireOne(visitId, updated);
             log.warn("FOLLOW_UP_REMINDER_PET_DECEASED visitId={} petId={}", visitId, petId);
             return ReminderResult.NOT_SENT;
+        }
+        if (appointments.hasBookedMedical(petId)) {
+            // BR-TB-06, docs/adr/0088: thú đã có lịch Khám/Tiêm thì chưa nhắc, không ghi gì; lịch rời BOOKED thì lần quét
+            // sau (còn trong cửa sổ) nhắc lại.
+            log.info("FOLLOW_UP_REMINDER_DEFERRED_BOOKED visitId={} petId={}", visitId, petId);
+            return ReminderResult.SKIPPED;
         }
         CustomerContact contact = customers.findContact(pet.customerId()).orElseThrow(() -> new IllegalStateException(
                 "Thú #" + petId + " trỏ tới hồ sơ khách không tồn tại: " + pet.customerId()));

@@ -256,15 +256,15 @@ class VisitDispatchIT {
     }
 
     @Test
-    void offlineIsOnlyAWarningAndItsBoundaryCountsAsOnline() {
+    void offlineIsOnlyAWarningAndItsBoundaryCountsAsOffline() {
         long visit = walkIn(medical, at(9, 0));
         clock.set(at(10, 0));
-        jdbc.update("UPDATE accounts SET last_seen_at = ? WHERE id = ?", Timestamp.from(at(9, 50)), vetA);
-        jdbc.update("UPDATE accounts SET last_seen_at = ? WHERE id = ?", Timestamp.from(at(9, 49)), vetB);
+        accessTokenValidUntil(vetA, at(10, 1));
+        accessTokenValidUntil(vetB, at(10, 0));
 
-        assertThat(data(assign(receptionistToken, visit, vetA))).as("đúng mốc 10 phút [CFG]")
+        assertThat(data(assign(receptionistToken, visit, vetA))).as("access token còn hạn")
                 .containsEntry("assigneeOffline", false);
-        assertThat(data(assign(receptionistToken, visit, vetB))).as("quá mốc: cảnh báo, vẫn gán")
+        assertThat(data(assign(receptionistToken, visit, vetB))).as("đúng mốc hạn là hết hạn: cảnh báo, vẫn gán")
                 .containsEntry("assigneeOffline", true);
         assertThat(jdbc.queryForList("SELECT assignee_was_offline FROM visit_assignments WHERE visit_id = ? "
                 + "ORDER BY id", Boolean.class, visit)).containsExactly(false, true);
@@ -723,7 +723,7 @@ class VisitDispatchIT {
         }
     }
 
-    /** Request của người được gán không bị treo vì khóa chia sẻ: {@code touchLastSeen} dùng SKIP LOCKED. */
+    /** Request của người được gán không bị treo vì khóa chia sẻ: xác thực chỉ đọc (docs/adr/0091). */
     @Test
     void theAssigneesOwnRequestsAreNotBlockedByTheShareLock() throws Exception {
         String vetToken = token(vetA);
@@ -1078,5 +1078,17 @@ class VisitDispatchIT {
 
     private static Instant at(int hour, int minute) {
         return TODAY.atTime(hour, minute).atZone(VN).toInstant();
+    }
+
+    /** Đặt hạn access token của mọi phiên chưa hủy của nhân viên (tạo một phiên nếu chưa có): BR-TN-06, docs/adr/0091. */
+    private void accessTokenValidUntil(long accountId, Instant until) {
+        int updated = jdbc.update("UPDATE sessions SET access_expires_at = ? WHERE account_id = ? AND revoked_at IS NULL",
+                Timestamp.from(until), accountId);
+        if (updated == 0) {
+            jdbc.update("""
+                    INSERT INTO sessions (account_id, token_hash, expires_at, access_expires_at)
+                    VALUES (?, ?, ?, ?)""", accountId, UUID.randomUUID().toString(),
+                    Timestamp.from(until.plusSeconds(3600)), Timestamp.from(until));
+        }
     }
 }

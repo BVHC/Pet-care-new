@@ -68,9 +68,9 @@ public class StaffQueryService {
             return PageResponse.of(Page.<StaffResponse>empty(pageable));
         }
 
-        Instant onlineSince = presence.onlineSince();
+        Instant now = presence.now();
         return PageResponse.of(staffProfiles.findStaffPage(roles, statuses, effectiveBranchId, likePattern(q), pageable)
-                .map(row -> toResponse(row, onlineSince)));
+                .map(row -> toResponse(row, now)));
     }
 
     /**
@@ -86,7 +86,7 @@ public class StaffQueryService {
         if (principal.branchScoped()) {
             branchScope.check(row.branchId());
         }
-        return toResponse(row, presence.onlineSince());
+        return toResponse(row, presence.now());
     }
 
     /** Role ngoài A03–A05 đã bị {@code @PreAuthorize} chặn; nếu lọt tới đây thì không thấy ai (từ chối mặc định). */
@@ -112,7 +112,7 @@ public class StaffQueryService {
         return "%" + escaped + "%";
     }
 
-    private StaffResponse toResponse(StaffDetailRow row, Instant onlineSince) {
-        return mapper.toResponse(row, StaffPresence.isOnline(row.lastSeenAt(), onlineSince));
+    private StaffResponse toResponse(StaffDetailRow row, Instant now) {
+        return mapper.toResponse(row, StaffPresence.isOnline(row.onlineUntil(), now));
     }
 }

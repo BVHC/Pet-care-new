@@ -5,7 +5,7 @@
 
 ## Tổng quan
 
-Giai đoạn 1 (05–30/10, đếm lại từ bảng ngày 31/10 sau T39–T41 của BE-1, T42–T45 của BE-2 và T46–T48 của FE-1; có T28b): **45/51 DONE** · 4 IN_PROGRESS · 2 NOT_STARTED. Giai đoạn 2 (02/11–31/12): 37 task T51–T87, chưa bắt đầu.
+Giai đoạn 1 (05–30/10, đếm lại từ bảng ngày 31/10 sau T39–T41 của BE-1, T42–T45 của BE-2 và T46–T48 của FE-1; có T28b): **45/51 DONE** · 4 IN_PROGRESS · 2 NOT_STARTED. Giai đoạn 2 (02/11–31/12): 37 task T51–T87, chưa bắt đầu. Ngoài bảng: N5 (trả D042 / D052 / D040, ADR-0088) xong 01/11, chưa commit.
 
 | Ai | Phụ trách | DONE | IN_PROGRESS | NOT_STARTED |
 |---|---|---|---|---|

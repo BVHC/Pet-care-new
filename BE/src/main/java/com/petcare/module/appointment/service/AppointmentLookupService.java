@@ -35,6 +35,12 @@ public class AppointmentLookupService implements AppointmentQueryApi {
     }
 
     @Override
+    public boolean hasBookedMedical(Long petId) {
+        Objects.requireNonNull(petId, "petId");
+        return appointments.existsBookedMedicalByPet(petId);
+    }
+
+    @Override
     public boolean existsByPet(Long petId) {
         Objects.requireNonNull(petId, "petId");
         return appointments.existsByPetId(petId);

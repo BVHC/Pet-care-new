@@ -1,11 +1,11 @@
-# ADR-0092: UC22 — lễ tân sửa hộ email tài khoản khách và liên kết hộ hồ sơ tại quầy (identity-v1 #25–27)
+# ADR-0097: UC22 — lễ tân sửa hộ email tài khoản khách và liên kết hộ hồ sơ tại quầy (identity-v1 #25–27)
 
 - **Trạng thái:** **Proposed (chờ BE-1 xác nhận; mục 9a–c cần BE-2)**
 - **Ngày:** 2026-11-02
 - **Tác giả:** FE-1 (Hiến) với Claude, **thay BE-1**.
 - **Liên quan:**
   - identity-v1 #25 `POST /customers/{customerId}/account-email-change`, #26 `POST /customers/{customerId}/account-email-change/confirm`, #27 `POST /customers/{customerId}/link-account`; UC22; BR-TK-01, 04, 05, 06, 07, 11, 16, 19; BR-KH-01, 10; BR-QT-15; giả định A6 (`verificationMethod`); `docs/api/00-method.md` §3.5.
-  - ADR-0034 (khuôn sửa email: mục **TBD (dòng ~51) nay trỏ tới ADR này**; ADR-0034 không sửa), ADR-0027 (UC07: mục 6 thứ tự khóa, mục 7 thứ tự kiểm), ADR-0025 (OTP gắn chủ thể), ADR-0023 (BCrypt ngoài khóa), ADR-0010 (sai mã vẫn commit bộ đếm), ADR-0011 (khóa `accounts` cho luồng OTP), ADR-0013 (ST02), ADR-0041 (hồ sơ khách dùng chung toàn chuỗi), ADR-0040 (Swagger = hợp đồng), ADR-0091 (`codeLength` của #25). Nợ D015 (quota theo email đích).
+  - ADR-0034 (khuôn sửa email: mục **TBD (dòng ~51) nay trỏ tới ADR này**; ADR-0034 không sửa), ADR-0027 (UC07: mục 6 thứ tự khóa, mục 7 thứ tự kiểm), ADR-0025 (OTP gắn chủ thể), ADR-0023 (BCrypt ngoài khóa), ADR-0010 (sai mã vẫn commit bộ đếm), ADR-0011 (khóa `accounts` cho luồng OTP), ADR-0013 (ST02), ADR-0041 (hồ sơ khách dùng chung toàn chuỗi), ADR-0040 (Swagger = hợp đồng), ADR-0096 (`codeLength` của #25). Nợ D015 (quota theo email đích).
   - `docs/06-module-contracts.md` §6 (ghi chú 2/11 cho BE-1 và cho BE-2); `docs/testcases/T49-fe.md` K21; `docs/testcases/test-tay-ghep-api-theo-cum.md` L-21.
 - **Triển khai:**
   - Người viết: FE-1 (Hiến) với Claude; **người dùng (Hiến) cho phép sửa module `identity` của BE-1** (2/11/2026). BE-1 chưa xem. **Không sửa module `customer`** (BE-2): mọi lời gọi sang customer dùng `CustomerApi` / `CustomerQueryApi` đã có.
@@ -18,7 +18,7 @@
 
 ## Bối cảnh
 
-Hợp đồng identity-v1 #25–27 (UC22, BR-TK-16) có từ trước nhưng BE chưa có controller: đo 1/11, ba `POST` đều 404 `RESOURCE_NOT_FOUND` "Không tìm thấy đường dẫn yêu cầu" (K21, L-21). Hai hộp thoại của lễ tân ("Sửa email tài khoản", "Liên kết tài khoản online") gọi chúng; FE tạm hiện "chưa được máy chủ hỗ trợ". ADR-0034 mục TBD để lại việc đồng bộ `customers.email` "chốt khi làm UC22"; ADR-0027 mục 6 ghi UC22 #27 **phải** khóa `accounts` của tài khoản được liên kết trước. Hợp đồng cũ không nói: hồ sơ chưa gắn tài khoản thì sao, tài khoản `PENDING` hay đang khóa thì sao, hồ sơ quầy không có email thì liên kết thế nào, thứ tự kiểm lỗi. Người dùng cho phép FE-1 làm thay BE-1 ngày 2/11 (cùng đợt với ADR-0091).
+Hợp đồng identity-v1 #25–27 (UC22, BR-TK-16) có từ trước nhưng BE chưa có controller: đo 1/11, ba `POST` đều 404 `RESOURCE_NOT_FOUND` "Không tìm thấy đường dẫn yêu cầu" (K21, L-21). Hai hộp thoại của lễ tân ("Sửa email tài khoản", "Liên kết tài khoản online") gọi chúng; FE tạm hiện "chưa được máy chủ hỗ trợ". ADR-0034 mục TBD để lại việc đồng bộ `customers.email` "chốt khi làm UC22"; ADR-0027 mục 6 ghi UC22 #27 **phải** khóa `accounts` của tài khoản được liên kết trước. Hợp đồng cũ không nói: hồ sơ chưa gắn tài khoản thì sao, tài khoản `PENDING` hay đang khóa thì sao, hồ sơ quầy không có email thì liên kết thế nào, thứ tự kiểm lỗi. Người dùng cho phép FE-1 làm thay BE-1 ngày 2/11 (cùng đợt với ADR-0096).
 
 ## Quyết định
 
@@ -32,7 +32,7 @@ Hợp đồng identity-v1 #25–27 (UC22, BR-TK-16) có từ trước nhưng BE 
 Thứ tự kiểm (cả hai endpoint): 400 hình thức (Bean Validation, trước `@PreAuthorize`) → 403 role → **404 hồ sơ** ("Không tìm thấy hồ sơ khách #id") → **hồ sơ chưa gắn tài khoản: 400 `VALIDATION_FAILED` KHÔNG hậu tố BR** (đúng hợp đồng) → khóa dòng `accounts` (`findByIdForUpdate`) → tài khoản không phải CUSTOMER → 404 như hồ sơ không có (lễ tân không sửa email nhân viên qua cửa này) → **`PENDING`: 400 `VALIDATION_FAILED` không BR** (`Account.changeEmail` ném lỗi lập trình với `PENDING`, sẽ thành 500) → email mới trùng email hiện tại / thuộc tài khoản khác (kể cả `PENDING`, nhân viên) → BR-TK-01 → BR-TK-07 (60 giây, 5 mã/giờ [CFG], **tính theo email đích**).
 
 - Tài khoản `is_locked` **được sửa**: mục đích là khôi phục tài khoản (BR-TK-16, tiền lệ ADR-0034 Q1). `DISABLED` không tồn tại với khách (CHECK `ck_accounts_disabled_staff_only`).
-- Request `CustomerEmailChangeRequest {newEmail, verificationMethod}`; enum `VerificationMethod {ID_CARD_IN_PERSON}` (A6): thiếu → 400 `VALIDATION_FAILED`, giá trị lạ → 400 `MALFORMED_REQUEST`. Response #25 `OtpSentResponse(resendAvailableAt, maskedEmail = null, codeLength)` (ADR-0091); #26 `204` không body, body `OtpCodeRequest {code}` dùng lại.
+- Request `CustomerEmailChangeRequest {newEmail, verificationMethod}`; enum `VerificationMethod {ID_CARD_IN_PERSON}` (A6): thiếu → 400 `VALIDATION_FAILED`, giá trị lạ → 400 `MALFORMED_REQUEST`. Response #25 `OtpSentResponse(resendAvailableAt, maskedEmail = null, codeLength)` (ADR-0096); #26 `204` không body, body `OtpCodeRequest {code}` dùng lại.
 
 ### 3. Hai exception 400/404 không mã BR
 
@@ -103,7 +103,7 @@ Các mục (a)–(c) cần **BE-2 (Dũng)**; BE-1 xác nhận phần identity.
 - Sau #26: đăng nhập / quên mật khẩu bằng email cũ như email lạ, email mới dùng ngay với mật khẩu cũ, email cũ được giải phóng; phiên của khách giữ nguyên; thư đã xếp hàng trước khi đổi vẫn tới email cũ (người nhận chốt lúc ghi outbox).
 - **`customers.email` KHÔNG đồng bộ sau #26** — `CustomerAccountEmailChangeIT.customerProfileEmailIsNotSyncedKnownGap` ghim hiện trạng (khi BE-2 đồng bộ, ca này phải đổi). Hệ quả nhìn thấy: hộp UC22 và hồ sơ ở đường nhân viên vẫn hiện email cũ; lễ tân thử gõ email mới nhận "Email mới trùng email hiện tại". Và #27 ghi đè `customers.email` bằng email tài khoản nên về sau #26 làm lệch tiếp (ảnh hưởng cả hồ sơ đã liên kết). Xem 9a.
 - **Khóa:** #25 / #26 `accounts → otp_tokens`, không ghi `customers`. #27 `accounts → customers` (không `otp_tokens`; `customers` bởi `CustomerApi`, id tăng dần trong module customer). Bước đọc hồ sơ của #27 nằm **ngoài** transaction ghi (mục 6).
-- **Điểm merge với nhánh `manh` (BE-1):** `OtpSentResponse`, `RegistrationResponse`, bốn mapper, `PasswordResetService`, `AuthController` (ADR-0091); `IdentityAuditActions`; `OpenApiContractParityIT` (181 → 184); `docs/api/generator/m_identity.py` + `identity-v1.{md,yaml}`; số ADR 0091 / 0092. `docs/api/INDEX.md` không đổi.
+- **Điểm merge với nhánh `manh` (BE-1):** `OtpSentResponse`, `RegistrationResponse`, bốn mapper, `PasswordResetService`, `AuthController` (ADR-0096); `IdentityAuditActions`; `OpenApiContractParityIT` (181 → 184); `docs/api/generator/m_identity.py` + `identity-v1.{md,yaml}`; số ADR 0096 / 0097. `docs/api/INDEX.md` không đổi.
 - **FE:** mock đã khớp (`identity.mock.ts`); `K21` (hiện "chưa được máy chủ hỗ trợ" cho 404 "không có đường dẫn") không còn gặp trên BE mới, 404 thực thể ("email chưa có tài khoản") vẫn là 404 như mock.
 
 ## Kiểm chứng

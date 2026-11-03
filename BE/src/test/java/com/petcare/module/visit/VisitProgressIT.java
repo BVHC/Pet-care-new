@@ -667,21 +667,72 @@ class VisitProgressIT {
         assertThat(visitRow(called)).containsEntry("needs_reassign", false);
     }
 
-    /** Q5 / D042: mở khóa không gỡ cờ; khóa lại không ghi lại dòng đã đánh dấu. */
+    private ResponseEntity<Map<String, Object>> unlock(long accountId) {
+        return exchange(HttpMethod.POST, adminToken, "/api/accounts/" + accountId + "/unlock",
+                Map.of("reason", "IT mở khóa " + UUID.randomUUID()));
+    }
+
+    /** D042 (docs/adr/0088): mở khóa gỡ cờ của người lại đủ điều kiện; khóa lại đánh dấu lại. */
     @Test
-    void unlockKeepsTheFlagAndRelockDoesNotRewriteIt() {
+    void unlockClearsTheFlagOfAnEligibleAssigneeAndRelockFlagsItAgain() {
         long called = called(walkIn(medical, at(9, 0)), vetA);
         assertThat(lock(vetA).getStatusCode()).isEqualTo(HttpStatus.OK);
-        long xmin = xmin("visits", called);
+        assertThat(visitRow(called)).containsEntry("needs_reassign", true);
 
-        ResponseEntity<Map<String, Object>> unlocked = exchange(HttpMethod.POST, adminToken,
-                "/api/accounts/" + vetA + "/unlock", Map.of("reason", "IT mở khóa"));
+        ResponseEntity<Map<String, Object>> unlocked = unlock(vetA);
         assertThat(unlocked.getStatusCode()).as(String.valueOf(unlocked.getBody())).isEqualTo(HttpStatus.OK);
-        assertThat(visitRow(called)).as("D042: cờ còn sau khi mở khóa").containsEntry("needs_reassign", true);
+        assertThat(visitRow(called)).as("D042: cờ được gỡ khi mở khóa").containsEntry("needs_reassign", false);
 
         clock.set(at(11, 0));
         assertThat(lock(vetA).getStatusCode()).isEqualTo(HttpStatus.OK);
-        assertThat(xmin("visits", called)).as("đã đánh dấu thì không ghi lại").isEqualTo(xmin);
+        assertThat(visitRow(called)).as("khóa lại đánh dấu lại").containsEntry("needs_reassign", true);
+    }
+
+    /** Người đã sai chức vụ trong lúc bị khóa không còn phụ trách được lượt: giữ cờ để quản lý gán lại (BR-TN-08). */
+    @Test
+    void unlockKeepsTheFlagWhenTheAssigneeCanNoLongerTakeTheVisit() {
+        long called = called(walkIn(medical, at(9, 0)), vetA);
+        assertThat(lock(vetA).getStatusCode()).isEqualTo(HttpStatus.OK);
+        jdbc.update("UPDATE accounts SET role = 'RECEPTIONIST' WHERE id = ?", vetA);
+        long xmin = xmin("visits", called);
+
+        assertThat(unlock(vetA).getStatusCode()).isEqualTo(HttpStatus.OK);
+
+        assertThat(visitRow(called)).containsEntry("needs_reassign", true);
+        assertThat(xmin("visits", called)).as("không ghi gì").isEqualTo(xmin);
+    }
+
+    /** Lượt của người khác và lượt chưa gọi không bị chạm. */
+    @Test
+    void unlockOfOneStaffTouchesNoOtherVisit() {
+        long mine = called(walkIn(medical, at(9, 0)), vetA);
+        long other = called(walkIn(medical, at(9, 30)), vetB);
+        assertThat(lock(vetB).getStatusCode()).isEqualTo(HttpStatus.OK);
+        assertThat(lock(vetA).getStatusCode()).isEqualTo(HttpStatus.OK);
+        long otherXmin = xmin("visits", other);
+
+        assertThat(unlock(vetA).getStatusCode()).isEqualTo(HttpStatus.OK);
+
+        assertThat(visitRow(mine)).containsEntry("needs_reassign", false);
+        assertThat(visitRow(other)).containsEntry("needs_reassign", true);
+        assertThat(xmin("visits", other)).isEqualTo(otherXmin);
+    }
+
+    /** Lỗi ghi cờ rollback cả lần mở khóa (listener đồng bộ, convention 07 §7.2). */
+    @Test
+    void aFailureClearingTheFlagRollsBackTheUnlock() {
+        long called = called(walkIn(medical, at(9, 0)), vetA);
+        assertThat(lock(vetA).getStatusCode()).isEqualTo(HttpStatus.OK);
+        long audits = count("SELECT count(*) FROM audit_logs WHERE action = 'ACCOUNT_UNLOCKED' AND entity_id = " + vetA);
+
+        ResponseEntity<Map<String, Object>> response = withRejectingTrigger("UPDATE", "visits",
+                "OLD.needs_reassign AND NOT NEW.needs_reassign", () -> unlock(vetA));
+
+        assertError(response, HttpStatus.CONFLICT, "CONCURRENCY_CONFLICT");
+        assertThat(jdbc.queryForObject("SELECT is_locked FROM accounts WHERE id = ?", Boolean.class, vetA)).isTrue();
+        assertThat(visitRow(called)).containsEntry("needs_reassign", true);
+        assertThat(count("SELECT count(*) FROM audit_logs WHERE action = 'ACCOUNT_UNLOCKED' AND entity_id = " + vetA))
+                .isEqualTo(audits);
     }
 
     /** Đổi chức vụ được phép khi còn lượt (docs/adr/0031 Q4): listener không lọc theo role. */

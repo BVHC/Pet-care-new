@@ -26,8 +26,8 @@ npx --yes @redocly/cli@1 lint docs/api/openapi/*.yaml   # kiểm tra chuẩn Ope
 
 ### 3.1 Địa chỉ và xác thực
 - `servers: /api`. Path trong yaml **không** có tiền tố `/api`; gọi thật là `/api/<path>`. Phiên bản nằm ở tên file (`-v1`), không nằm trong path.
-- Bearer token trả về từ `POST /auth/login`, gắn 1-1 với một phiên (`sessions`). Phiên bị hủy (khóa, vô hiệu hóa, đổi / đặt lại mật khẩu) thì token hết hiệu lực ngay ở request kế tiếp.
-- Không cần đăng nhập: `/auth/register…`, `/auth/login`, `/auth/password/…` và mọi `/public/…`. Các path này luôn xử lý như chưa đăng nhập: token gửi kèm bị bỏ qua (ADR-0005).
+- Bearer token trả về từ `POST /auth/login`, gắn 1-1 với một phiên (`sessions`) và sống ngắn (`session.access_ttl_minutes` [CFG], mặc định 10 phút); lấy token mới bằng `POST /auth/refresh` (ADR-0091). Phiên bị hủy (khóa, vô hiệu hóa, đổi / đặt lại mật khẩu) thì token hết hiệu lực ngay ở request kế tiếp.
+- Không cần đăng nhập: `/auth/register…`, `/auth/login`, `/auth/refresh`, `/auth/password/…` và mọi `/public/…`. Các path này luôn xử lý như chưa đăng nhập: token gửi kèm bị bỏ qua (ADR-0005).
 
 ### 3.2 Đặt tên đường dẫn
 - Resource số nhiều, kebab-case: `/boarding-bookings`, `/stock-receipts`.

@@ -21,6 +21,7 @@ import com.petcare.module.branch.api.BranchQueryApi.BranchStatus;
 import com.petcare.module.care.api.NotificationApi;
 import com.petcare.module.care.api.NotificationApi.NotificationRequest;
 import com.petcare.module.identity.api.AccountLockedEvent;
+import com.petcare.module.identity.api.AccountUnlockedEvent;
 import com.petcare.module.identity.api.Role;
 import com.petcare.module.identity.dto.AccountSummary;
 import com.petcare.module.identity.dto.LockResult;
@@ -149,7 +150,8 @@ public class AccountLockService {
 
     /**
      * Tài khoản#8 (identity-v1 #30): chỉ gỡ cờ khóa, {@code status} giữ nguyên (BR-QT-12). Không khóa {@code branches}
-     * (mở khóa chỉ làm tăng số quản lý đang hoạt động, docs/adr/0029 mục 5), không mở phiên, không thông báo.
+     * (mở khóa chỉ làm tăng số quản lý đang hoạt động, docs/adr/0029 mục 5), không mở phiên, không thông báo. Phát
+     * {@link AccountUnlockedEvent} để visit gỡ cờ "cần gán lại" (docs/adr/0088, trả D042).
      */
     @Transactional
     public AccountSummary unlockAccount(Long accountId, String rawReason) {
@@ -161,6 +163,9 @@ public class AccountLockService {
         }
 
         account.unlock();
+        // Flush trước khi phát: listener của visit đọc lại tài khoản (StaffDirectoryApi) và phải thấy đã mở khóa.
+        accounts.flush();
+        events.publishEvent(new AccountUnlockedEvent(accountId, branchScope.current().accountId()));
         audit.record(AuditEntry.of(QtAuditActions.ACCOUNT_UNLOCKED).entity("accounts", accountId)
                 .before(lockSnapshot(true, account.getStatus())).after(lockSnapshot(false, account.getStatus()))
                 .reason(reason));

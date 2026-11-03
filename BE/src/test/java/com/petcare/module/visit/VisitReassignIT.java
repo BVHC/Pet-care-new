@@ -246,9 +246,9 @@ class VisitReassignIT {
 
     // ================================================================ BR-TN-08, BR-TN-05
 
-    /** D042: mở khóa không gỡ cờ, nhưng #9 xét điều kiện thật của người phụ trách, không xét cờ. */
+    /** D042 (docs/adr/0088): mở khóa gỡ cờ; #9 xét điều kiện thật của người phụ trách nên vẫn từ chối (BR-TN-08). */
     @Test
-    void activeAssigneeIsBrTn08EvenWithAStaleFlagAfterUnlock() {
+    void activeAssigneeIsBrTn08AfterUnlockAndTheFlagIsAlreadyGone() {
         long visit = called(walkIn(at(9, 0)), vetA);
         assertThat(lock(vetA).getStatusCode()).isEqualTo(HttpStatus.OK);
         assertThat(exchange(HttpMethod.POST, adminToken, "/api/accounts/" + vetA + "/unlock",
@@ -260,7 +260,7 @@ class VisitReassignIT {
 
         assertThat(allXmins(visit)).isEqualTo(before);
         assertThat(logs(visit)).isEqualTo(logs);
-        assertThat(visitRow(visit)).containsEntry("needs_reassign", true).containsEntry("assignee_id", vetA);
+        assertThat(visitRow(visit)).containsEntry("needs_reassign", false).containsEntry("assignee_id", vetA);
     }
 
     @Test

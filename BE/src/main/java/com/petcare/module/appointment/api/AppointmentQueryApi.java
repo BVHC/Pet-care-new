@@ -15,6 +15,12 @@ public interface AppointmentQueryApi {
     /** Lịch BOOKED từ {@code fromDate} của chi nhánh, để branch tính danh sách bị ảnh hưởng (BR-CN-04, BR-LH-10). */
     List<BookedSlot> findBookedFrom(Long branchId, LocalDate fromDate);
 
+    /**
+     * Thú đang có lịch nhóm MEDICAL (Khám/Tiêm) {@code BOOKED}: ST04 hoãn nhắc tái khám (BR-TB-06, docs/adr/0088). Đọc
+     * không khóa, một câu theo {@code ix_appointments_pet_status}.
+     */
+    boolean hasBookedMedical(Long petId);
+
     /** BR-KH-06 (xóa thú). */
     boolean existsByPet(Long petId);
 

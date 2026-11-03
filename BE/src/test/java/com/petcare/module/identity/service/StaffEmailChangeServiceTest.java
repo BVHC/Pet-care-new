@@ -99,7 +99,7 @@ class StaffEmailChangeServiceTest {
 
     @BeforeEach
     void setUp() {
-        when(presence.onlineSince()).thenReturn(NOW.minusSeconds(600));
+        when(presence.now()).thenReturn(NOW);
         when(otps.issuePrepared(anyLong(), any(), anyString(), any(PreparedOtp.class))).thenReturn(ISSUED);
         actAs(Role.SUPER_MANAGER, null);
     }

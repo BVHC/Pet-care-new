@@ -237,14 +237,13 @@ class PasswordResetIT {
     // ---------------------------------------------------------------- đặt lại mật khẩu (BR-TK-13)
 
     @Test
-    void resetSucceedsAndClearsLockMustChangeOnlineAndAllSessions() {
+    void resetSucceedsAndClearsLockMustChangeAndAllSessions() {
         long id = staff("RECEPTIONIST");
         jdbc.update("""
                 UPDATE accounts SET must_change_password = true, locked_until = ?, failed_login_count = 2,
-                       first_failed_login_at = ?, last_seen_at = ?
+                       first_failed_login_at = ?
                 WHERE id = ?
-                """, Timestamp.from(T0.plusSeconds(600)), Timestamp.from(T0.minusSeconds(60)),
-                Timestamp.from(T0.minusSeconds(30)), id);
+                """, Timestamp.from(T0.plusSeconds(600)), Timestamp.from(T0.minusSeconds(60)), id);
         OpenedSession a = open(id);
         OpenedSession b = open(id);
         assertError(login(email(id), PASSWORD), HttpStatus.BAD_REQUEST, "BUSINESS_RULE_VIOLATION", "(BR-TK-09)");
@@ -255,15 +254,13 @@ class PasswordResetIT {
         assertThat(response.getStatusCode()).isEqualTo(HttpStatus.NO_CONTENT);
         assertThat(response.getBody()).isNull();
         Map<String, Object> row = jdbc.queryForMap("""
-                SELECT password_hash, must_change_password, failed_login_count, first_failed_login_at, locked_until,
-                       last_seen_at
+                SELECT password_hash, must_change_password, failed_login_count, first_failed_login_at, locked_until
                 FROM accounts WHERE id = ?
                 """, id);
         assertThat(FAST.matches(NEW_PASSWORD, (String) row.get("password_hash"))).isTrue();
         assertThat(row).containsEntry("must_change_password", false).containsEntry("failed_login_count", 0);
         assertThat(row.get("first_failed_login_at")).isNull();
         assertThat(row.get("locked_until")).as("BR-TK-13: gỡ khóa tạm").isNull();
-        assertThat(row.get("last_seen_at")).as("BR-TN-06: offline ngay").isNull();
         assertThat(jdbc.queryForObject("SELECT count(*) FROM sessions WHERE account_id = ? AND revoked_at IS NULL",
                 Long.class, id)).as("BR-TK-13: hủy mọi phiên").isZero();
         assertError(probe(a.accessToken()), HttpStatus.UNAUTHORIZED, "UNAUTHENTICATED", null);

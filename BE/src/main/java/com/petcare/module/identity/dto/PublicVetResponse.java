@@ -4,7 +4,7 @@ import io.swagger.v3.oas.annotations.media.Schema;
 
 /**
  * Hồ sơ bác sĩ công khai (identity-v1 {@code PublicVet}, {@code GET /api/public/vets}, UC15). Chỉ dữ liệu được phép
- * công khai theo BR-TK-20 — không có email, SĐT, trạng thái hay {@code last_seen_at}. {@code branchName} lấy từ
+ * công khai theo BR-TK-20 — không có email, SĐT, trạng thái hay trạng thái online. {@code branchName} lấy từ
  * {@code BranchQueryApi} (chi nhánh {@code ACTIVE}, BR-CK-01; docs/adr/0026).
  */
 public record PublicVetResponse(

@@ -73,39 +73,6 @@ public interface AccountRepository extends JpaRepository<Account, Long> {
     Optional<Account> findByIdForUpdate(@Param("id") Long id);
 
     /**
-     * BR-TN-06: ghi {@code last_seen_at} nếu giá trị cũ trước {@code threshold} <b>và</b> phiên {@code sessionId} chưa
-     * bị hủy. {@code SKIP LOCKED}: dòng đang bị transaction khác khóa (đăng xuất, khóa tài khoản, đổi mật khẩu…) thì
-     * bỏ qua lần này thay vì chờ, nên request không bao giờ bị chặn vì cập nhật trạng thái online. Không đổi
-     * {@code updated_at} vì đây không phải sửa dữ liệu nghiệp vụ.
-     * <p>
-     * Điều kiện phiên đóng race "request cùng token đang chạy ghi lại {@code last_seen_at} sau khi đăng xuất"
-     * (docs/adr/0021 mục 3): đăng xuất commit trước câu này → {@code EXISTS} sai; đăng xuất đang chạy → nó giữ khóa dòng
-     * {@code accounts} tới lúc commit ({@link #clearLastSeen} chạy trước khi hủy phiên) → câu này bỏ qua dòng.
-     */
-    @Modifying
-    @Query(value = """
-            UPDATE accounts SET last_seen_at = :now
-            WHERE id = (SELECT a.id FROM accounts a
-                        WHERE a.id = :accountId AND (a.last_seen_at IS NULL OR a.last_seen_at < :threshold)
-                          AND EXISTS (SELECT 1 FROM sessions s WHERE s.id = :sessionId AND s.revoked_at IS NULL)
-                        FOR UPDATE OF a SKIP LOCKED)
-            """, nativeQuery = true)
-    int touchLastSeen(@Param("accountId") Long accountId, @Param("sessionId") Long sessionId,
-            @Param("now") Instant now, @Param("threshold") Instant threshold);
-
-    /**
-     * Đăng xuất (BR-TN-06 "đăng xuất thì chuyển offline ngay", docs/adr/0021): đặt {@code last_seen_at = NULL}. Gọi
-     * <b>trước</b> khi hủy phiên, để transaction khóa {@code accounts → sessions} như mọi luồng hủy phiên khác (không
-     * deadlock) và giữ khóa dòng tới lúc commit (đóng race với {@link #touchLastSeen}). Cố ý <b>không</b>
-     * {@code SKIP LOCKED}: phải chờ transaction đang khóa dòng (đăng nhập…) rồi mới xóa. Dòng đã {@code NULL} (khách,
-     * nhân viên chưa từng có request) không bị khóa. Không đổi {@code updated_at}, như {@link #touchLastSeen}.
-     */
-    @Modifying
-    @Query(value = "UPDATE accounts SET last_seen_at = NULL WHERE id = :accountId AND last_seen_at IS NOT NULL",
-            nativeQuery = true)
-    int clearLastSeen(@Param("accountId") Long accountId);
-
-    /**
      * ST02 (docs/adr/0013): tối đa {@code limit} id tài khoản {@code PENDING} đã quá hạn ({@code now >=
      * pending_expires_at}, BR-TK-08) có {@code id > afterId}, theo {@code id} — keyset để một lượt không đọc lại id cũ.
      * Không khóa: {@link #lockExpiredPending} kiểm lại dưới khóa. Dùng index partial {@code ix_accounts_pending_expires_at}.

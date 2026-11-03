@@ -17,6 +17,5 @@ public record SessionAuthView(
         AccountStatus status,
         boolean locked,
         boolean mustChangePassword,
-        Instant lastSeenAt,
         Long branchId) {
 }

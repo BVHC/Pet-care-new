@@ -389,8 +389,9 @@ class VisitCheckInIT {
         assertThat(appointmentStatus(appointment)).isEqualTo("BOOKED");
     }
 
+    /** Docs/adr/0088 (thay 0059 Q3, trả D040): lịch đã đặt vẫn tiếp nhận khi dịch vụ bị tắt tại chi nhánh hoặc đã ngừng. */
     @Test
-    void appointmentServiceDisabledAtTheBranchIsCheckedInButStoppedIsRejected() {
+    void appointmentServiceDisabledAtTheBranchOrStoppedIsStillCheckedIn() {
         jdbc.update("UPDATE branch_services SET is_enabled = false WHERE branch_id = ? AND service_id = ?", branch,
                 medical);
         assertThat(post(token, body(pet, appointment, null, null)).getStatusCode()).isEqualTo(HttpStatus.CREATED);
@@ -399,9 +400,20 @@ class VisitCheckInIT {
         long stopped = data.appointment(customer, otherPet, branch, grooming, "GROOMING", TODAY, SLOT, "BOOKED",
                 receptionist);
         jdbc.update("UPDATE services SET is_active = false WHERE id = ?", grooming);
-        assertRule(post(token, body(otherPet, stopped, null, null)), "BR-LH-01",
-                "Dịch vụ của lịch hẹn đã ngừng kinh doanh (BR-LH-01)");
-        assertThat(appointmentStatus(stopped)).isEqualTo("BOOKED");
+        Map<String, Object> visit = data(post(token, body(otherPet, stopped, null, null)), HttpStatus.CREATED);
+
+        assertThat(appointmentStatus(stopped)).isEqualTo("CHECKED_IN");
+        long orderId = ((Number) visit.get("orderId")).longValue();
+        assertThat(jdbc.queryForMap("SELECT service_id, unit_price FROM order_lines WHERE order_id = ?", orderId))
+                .as("giá snapshot theo giá hiện tại lúc check-in").containsEntry("service_id", grooming);
+    }
+
+    @Test
+    void stoppedServiceIsStillRejectedForAWalkIn() {
+        jdbc.update("UPDATE services SET is_active = false WHERE id = ?", grooming);
+
+        assertRule(post(token, body(data.pet(customer), null, grooming, null)), "BR-LH-01",
+                "Dịch vụ không tiếp nhận được tại chi nhánh này (BR-LH-01)");
     }
 
     @Test
@@ -432,8 +444,8 @@ class VisitCheckInIT {
         long noShow = data.appointment(customer, data.pet(customer), branch, medical, "MEDICAL", TODAY, SLOT,
                 "NO_SHOW", receptionist);
         long noShowPet = jdbc.queryForObject("SELECT pet_id FROM appointments WHERE id = ?", Long.class, noShow);
-        assertRule(post(token, body(noShowPet, noShow, null, null)), "BR-LH-01",
-                "Dịch vụ của lịch hẹn đã ngừng kinh doanh (BR-LH-01)");
+        // Docs/adr/0088: dịch vụ đã ngừng không còn là lỗi 400 của lịch hẹn, nên 409 trạng thái lịch đứng ngay sau BR-TN-02.
+        assertError(post(token, body(noShowPet, noShow, null, null)), HttpStatus.CONFLICT, "INVALID_STATE_TRANSITION");
         jdbc.update("UPDATE services SET is_active = true WHERE id = ?", medical);
 
         long draftNoShow = data.appointment(customer, noShowPet, draft, medical, "MEDICAL", TODAY, SLOT, "NO_SHOW",
@@ -581,19 +593,24 @@ class VisitCheckInIT {
 
     // ============================================================ rollback (F5 T7–T9) và gửi lại (T12, T13)
 
+    /** D027 / ADR-0092: lịch BOOKED mồ côi của chủ cũ (race đặt lịch ∥ chuyển chủ được chấp nhận) → 400, không phải 500. */
     @Test
-    void corruptOwnershipRollsBackTheAppointmentUpdate() {
+    void orphanAppointmentOfAPreviousOwnerIsRejectedAndRollsBackTheAppointmentUpdate() {
         long stranger = data.counterCustomer();
-        long corrupt = data.appointment(stranger, pet, branch, grooming, "GROOMING", TODAY, LocalTime.of(9, 0),
+        long orphan = data.appointment(stranger, pet, branch, grooming, "GROOMING", TODAY, LocalTime.of(9, 0),
                 "BOOKED", receptionist);
-        long before = xmin("appointments", corrupt);
+        long before = xmin("appointments", orphan);
+        long ordersBefore = jdbc.queryForObject("SELECT count(*) FROM orders WHERE branch_id = ? AND source = 'VISIT'",
+                Long.class, branch);
 
-        assertThat(post(token, body(pet, corrupt, null, null)).getStatusCode())
-                .isEqualTo(HttpStatus.INTERNAL_SERVER_ERROR);
+        assertRule(post(token, body(pet, orphan, null, null)), "BR-TN-01", "Lịch hẹn #" + orphan
+                + " thuộc khách khác (thú đã chuyển chủ): hủy lịch hẹn rồi tiếp nhận thú như khách walk-in (BR-TN-01)");
 
-        assertThat(appointmentStatus(corrupt)).isEqualTo("BOOKED");
-        assertThat(xmin("appointments", corrupt)).isEqualTo(before);
+        assertThat(appointmentStatus(orphan)).isEqualTo("BOOKED");
+        assertThat(xmin("appointments", orphan)).isEqualTo(before);
         assertThat(visitsOfBranch()).isZero();
+        assertThat(jdbc.queryForObject("SELECT count(*) FROM orders WHERE branch_id = ? AND source = 'VISIT'",
+                Long.class, branch)).isEqualTo(ordersBefore);
     }
 
     @Test

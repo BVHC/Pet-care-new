@@ -16,7 +16,7 @@ import com.petcare.module.identity.api.NotificationTemplateQueryApi.TemplateView
 
 /**
  * Bộ quét biến lúc lưu mẫu ({@link TemplateVariables}, identity) và renderer lúc gửi
- * ({@link NotificationTemplateRenderer}, care — giữ nguyên code) phải cùng một ngữ pháp (docs/adr/0037 mục 4). Hai lớp ở
+ * ({@link NotificationTemplateRenderer}, care — quét một lượt, D019) phải cùng một ngữ pháp (docs/adr/0037 mục 4). Hai lớp ở
  * hai module nên không dùng chung code; test này (chỉ ở test, main không import chéo) là thứ giữ chúng khớp nhau, khuôn
  * {@code StaffPresenceParityTest}.
  *
@@ -57,6 +57,51 @@ class NotificationTemplateSyntaxParityTest {
             "Chào {ten_khach},\n\nMã: {ma_otp} ({thoi_han_phut} phút)"})
     void scannerAndRendererAgreeOnEdgeCases(String text) {
         assertAgree(text);
+        assertValuesAreNeverScannedAgain(text);
+    }
+
+    /**
+     * D019: giá trị payload được chép nguyên văn, không bao giờ bị quét lại. Kết quả render với giá trị chứa token của
+     * biến khác ({@code ⟦{biến kế tiếp}⟧}) phải bằng kết quả render với giá trị canh, rồi thay mỗi giá trị canh bằng
+     * giá trị đó đúng một lần (canh không chứa ngoặc và không chồng nhau nên phép thay này không lặp).
+     */
+    @Test
+    void renderedValuesAreNeverScannedAgainOnGeneratedTexts() {
+        Random random = new Random(20261101L);
+        for (int n = 0; n < 20_000; n++) {
+            StringBuilder text = new StringBuilder();
+            int length = random.nextInt(13);
+            for (int i = 0; i < length; i++) {
+                text.append(FRAGMENTS.get(random.nextInt(FRAGMENTS.size())));
+            }
+            assertValuesAreNeverScannedAgain(text.toString());
+        }
+    }
+
+    private void assertValuesAreNeverScannedAgain(String text) {
+        Map<String, Object> sentinels = new HashMap<>();
+        Map<String, Object> hostile = new HashMap<>();
+        for (int i = 0; i < ALLOWED.size(); i++) {
+            sentinels.put(ALLOWED.get(i), sentinel(i));
+            hostile.put(ALLOWED.get(i), hostile(i));
+        }
+        TemplateView template = new TemplateView("IT_PARITY", "EMAIL", text, text, ALLOWED, List.of());
+        String expectedBody = renderer.render(template, sentinels).body();
+        String expectedSubject = renderer.render(template, sentinels).subject();
+        for (int i = 0; i < ALLOWED.size(); i++) {
+            expectedBody = expectedBody.replace(sentinel(i), hostile(i));
+            expectedSubject = expectedSubject.replace(sentinel(i), hostile(i));
+        }
+
+        var rendered = renderer.render(template, hostile);
+
+        assertThat(rendered.body()).as("body — %s", text).isEqualTo(expectedBody);
+        assertThat(rendered.subject()).as("subject — %s", text).isEqualTo(expectedSubject);
+    }
+
+    /** Giá trị chứa token của biến kế tiếp, và một mảnh token dở để thử ghép với chữ của mẫu. */
+    private static String hostile(int index) {
+        return "⟦{" + ALLOWED.get((index + 1) % ALLOWED.size()) + "}{ma_⟧";
     }
 
     @Test

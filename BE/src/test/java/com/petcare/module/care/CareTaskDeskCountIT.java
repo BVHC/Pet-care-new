@@ -84,6 +84,7 @@ class CareTaskDeskCountIT {
     @AfterEach
     void tearDown() {
         jdbc.update("DELETE FROM care_tasks WHERE branch_id = ?", branch);
+        jdbc.update("DELETE FROM refresh_tokens WHERE session_id IN (SELECT id FROM sessions WHERE account_id = ?)", desk);
         jdbc.update("DELETE FROM sessions WHERE account_id = ?", desk);
         jdbc.update("DELETE FROM staff_profiles WHERE account_id = ?", desk);
         jdbc.update("DELETE FROM accounts WHERE id = ?", desk);

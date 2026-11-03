@@ -48,7 +48,7 @@ Trạng thái `LOCKED` trong business-rules được cài bằng cờ `is_locked
 | 5 | `ACTIVE` → `DISABLED` | Vô hiệu hóa | A03, A04, A05 | Là nhân viên trong phạm vi; không phải chính mình; `is_locked = false`; không có Visit được gán chưa kết thúc, không có ca thu ngân `OPEN`; không phải BRANCH_MANAGER `ACTIVE` cuối cùng của chi nhánh `ACTIVE` | Hủy mọi phiên | BR-QT-04, 07, 08, 09, 12 · UC08 |
 | 6 | `DISABLED` → `ACTIVE` | Kích hoạt lại | A03, A04, A05 | Cùng phạm vi với vô hiệu hóa; `is_locked = false`; chi nhánh hợp lệ | `must_change_password = true`; cấp mật khẩu tạm mới | BR-QT-10 · UC08 |
 | 7 | `is_locked`: false → true | Khóa | A03 | Không phải chính mình; có lý do | Hủy mọi phiên. Liệt kê quy trình dở dang; Visit `IN_PROGRESS` đánh dấu cần gán lại. Thông báo BRANCH_MANAGER (nhân viên), SUPER_MANAGER (người bị khóa là BRANCH_MANAGER) hoặc lễ tân (khách). Ghi audit | BR-QT-11, BR-TN-08 · UC09 |
-| 8 | `is_locked`: true → false | Mở khóa | A03 | Có lý do | `status` giữ nguyên giá trị trước khi khóa. Ghi audit | BR-QT-11, 12 · UC09 |
+| 8 | `is_locked`: true → false | Mở khóa | A03 | Có lý do | `status` giữ nguyên giá trị trước khi khóa. Ghi audit. *(Làm rõ 2026-11-01, ADR-0088)* Lượt `IN_PROGRESS` của người được mở khóa mà họ lại đủ điều kiện phụ trách (`ACTIVE`, đúng chi nhánh, đúng chức vụ) không còn đánh dấu cần gán lại; lượt họ không còn phụ trách được giữ dấu | BR-QT-11, 12, BR-TN-08 · UC09 |
 
 ## 2. Chi nhánh
 `branches.status` · CN · Tầng 1
@@ -230,7 +230,7 @@ Có hai loại ca, phân biệt bằng cờ `is_after_hours` đặt lúc mở ca
 | 3 | `OPEN` → `CANCELLED` | Hủy thủ công | A06 | Có lý do | — | BR-TB-05 · UC87 |
 | 4 | `OPEN` → `CANCELLED` | Thú đã mất | ST19 | — | — | BR-TB-03, BR-KH-05 |
 | 5 | `OPEN` → `CANCELLED` | Mũi đã được tiêm lại | SYS ← Visit (ghi nhận mũi tiêm) | Task loại `TÁI_CHỦNG` / `QUÁ_HẠN_TÁI_CHỦNG` của mũi cũ; mũi mới cùng loại vaccine | — | BR-TB-03, 05 |
-| 6 | `OPEN` → `CANCELLED` | Nhắc tái khám bị hủy | SYS ← Lịch hẹn#1, Visit#1 | Task loại `TÁI_KHÁM`; từ ngày lập hẹn, thú có lịch hẹn nhóm Khám/Tiêm `BOOKED` hoặc Visit mới có dịch vụ loại Khám | — | BR-TB-05, 06 |
+| 6 | `OPEN` → `CANCELLED` | Nhắc tái khám bị hủy | SYS ← Lịch hẹn#1, Visit#1 | Task loại `TÁI_KHÁM`; từ ngày lập hẹn, thú có lịch hẹn nhóm Khám/Tiêm `BOOKED` hoặc Visit mới có dịch vụ loại Khám | — *(Làm rõ 2026-11-01, ADR-0088: với lịch hẹn, chỉ task đã sinh bị hủy; nhắc chưa gửi được ST04 hoãn khi lịch còn `BOOKED` và gửi lại khi lịch hủy / `NO_SHOW`; Visit Khám hủy ngay)* | BR-TB-05, 06 |
 
 ---
 

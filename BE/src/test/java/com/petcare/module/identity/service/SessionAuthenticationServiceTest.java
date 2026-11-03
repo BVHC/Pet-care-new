@@ -1,11 +1,10 @@
 package com.petcare.module.identity.service;
 
 import static org.assertj.core.api.Assertions.assertThat;
-import static org.mockito.ArgumentMatchers.any;
-import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.Mockito.mock;
-import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.verifyNoMoreInteractions;
 import static org.mockito.Mockito.when;
 
 import java.time.Clock;
@@ -16,7 +15,6 @@ import org.junit.jupiter.api.Test;
 
 import com.petcare.module.identity.api.Role;
 import com.petcare.module.identity.entity.AccountStatus;
-import com.petcare.module.identity.repository.AccountRepository;
 import com.petcare.module.identity.repository.SessionAuthView;
 import com.petcare.module.identity.repository.SessionRepository;
 import com.petcare.platform.config.TimeConfig;
@@ -25,7 +23,7 @@ import com.petcare.platform.security.TokenClaims;
 
 /**
  * docs/adr/0003 D2, D3, D10. Mỗi điều kiện của phiên hợp lệ có một ca vi phạm; BR-TK-11, BR-QT-11, 12 (khóa, vô hiệu
- * hóa), BR-TK-09 (khóa tạm không chặn phiên), BR-TN-06 (last_seen_at của nhân viên).
+ * hóa), BR-TK-09 (khóa tạm không chặn phiên), BR-TN-06 / docs/adr/0091 (request không còn ghi trạng thái online).
  */
 class SessionAuthenticationServiceTest {
 
@@ -35,8 +33,7 @@ class SessionAuthenticationServiceTest {
     private static final String JTI = "jti-value";
 
     private final SessionRepository sessions = mock(SessionRepository.class);
-    private final AccountRepository accounts = mock(AccountRepository.class);
-    private final SessionAuthenticationService service = new SessionAuthenticationService(sessions, accounts,
+    private final SessionAuthenticationService service = new SessionAuthenticationService(sessions,
             Clock.fixed(NOW, TimeConfig.BUSINESS_ZONE));
 
     private static final TokenClaims CLAIMS = new TokenClaims(ACCOUNT, SESSION, JTI);
@@ -154,48 +151,17 @@ class SessionAuthenticationServiceTest {
     }
 
     @Test
-    void staffLastSeenTouchedWhenOlderThanThrottle() {
-        given(valid().lastSeenAt(NOW.minusSeconds(61)));
+    void authenticatingNeverWritesAnything() {
+        // docs/adr/0091 (trả D024): request poll tự động không làm ai online, vì hot path không còn ghi gì.
+        // Trạng thái online suy ra từ sessions.access_expires_at, chỉ đổi khi đăng nhập / refresh.
+        for (Role role : Role.values()) {
+            given(valid().role(role).branchId(role == Role.VET ? 3L : null));
 
-        service.authenticate(CLAIMS);
+            assertThat(service.authenticate(CLAIMS)).isPresent();
+        }
 
-        verify(accounts).touchLastSeen(ACCOUNT, SESSION, NOW, NOW.minusSeconds(60));
-    }
-
-    @Test
-    void staffLastSeenTouchedWhenNeverSeen() {
-        given(valid().lastSeenAt(null));
-
-        service.authenticate(CLAIMS);
-
-        verify(accounts).touchLastSeen(ACCOUNT, SESSION, NOW, NOW.minusSeconds(60));
-    }
-
-    @Test
-    void staffLastSeenNotTouchedWithinThrottle() {
-        given(valid().lastSeenAt(NOW.minusSeconds(60)));
-
-        service.authenticate(CLAIMS);
-
-        verify(accounts, never()).touchLastSeen(anyLong(), anyLong(), any(), any());
-    }
-
-    @Test
-    void customerLastSeenNeverTouched() {
-        given(valid().role(Role.CUSTOMER).branchId(null).lastSeenAt(null));
-
-        service.authenticate(CLAIMS);
-
-        verify(accounts, never()).touchLastSeen(anyLong(), anyLong(), any(), any());
-    }
-
-    @Test
-    void rejectedSessionDoesNotTouchLastSeen() {
-        given(valid().locked(true).lastSeenAt(null));
-
-        service.authenticate(CLAIMS);
-
-        verify(accounts, never()).touchLastSeen(anyLong(), anyLong(), any(), any());
+        verify(sessions, times(Role.values().length)).findAuthView(SESSION);
+        verifyNoMoreInteractions(sessions);
     }
 
     private void given(ViewBuilder builder) {
@@ -211,7 +177,6 @@ class SessionAuthenticationServiceTest {
         private AccountStatus status = AccountStatus.ACTIVE;
         private boolean locked;
         private boolean mustChangePassword;
-        private Instant lastSeenAt = NOW.minusSeconds(5);
         private Long branchId = 3L;
 
         ViewBuilder accountId(Long value) { accountId = value; return this; }
@@ -222,12 +187,11 @@ class SessionAuthenticationServiceTest {
         ViewBuilder status(AccountStatus value) { status = value; return this; }
         ViewBuilder locked(boolean value) { locked = value; return this; }
         ViewBuilder mustChangePassword(boolean value) { mustChangePassword = value; return this; }
-        ViewBuilder lastSeenAt(Instant value) { lastSeenAt = value; return this; }
         ViewBuilder branchId(Long value) { branchId = value; return this; }
 
         SessionAuthView build() {
             return new SessionAuthView(SESSION, accountId, tokenHash, expiresAt, revokedAt, "vet@petcare.test",
-                    role, status, locked, mustChangePassword, lastSeenAt, branchId);
+                    role, status, locked, mustChangePassword, branchId);
         }
     }
 }

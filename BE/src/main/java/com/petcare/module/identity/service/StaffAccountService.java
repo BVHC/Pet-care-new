@@ -502,6 +502,6 @@ public class StaffAccountService {
     }
 
     private StaffResponse toResponse(StaffDetailRow row) {
-        return mapper.toResponse(row, StaffPresence.isOnline(row.lastSeenAt(), presence.onlineSince()));
+        return mapper.toResponse(row, StaffPresence.isOnline(row.onlineUntil(), presence.now()));
     }
 }

@@ -173,7 +173,7 @@ public class AppointmentBookingService {
                 customer ? AppointmentChannel.ONLINE : AppointmentChannel.COUNTER, principal.accountId(),
                 normalizeNote(request.note())));
         if (service.group() == ServiceGroup.MEDICAL) {
-            followUps.cancelPendingFollowUps(pet.petId(), now);
+            followUps.cancelRemindedFollowUpTasks(pet.petId());
         }
 
         String branchName = branches.findBranch(branchId)

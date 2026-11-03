@@ -27,6 +27,7 @@ public enum ConfigKey {
     VET_BIO_MAX_LENGTH("vet.bio_max_length", INT),                         // BR-TK-20
     AUDIT_RETENTION_YEARS("audit.retention_years", INT),                   // BR-QT-16
     SESSION_TTL_HOURS("session.ttl_hours", INT),                           // docs/adr/0003
+    SESSION_ACCESS_TTL_MINUTES("session.access_ttl_minutes", INT),         // docs/adr/0091, BR-TN-06
 
     // LH
     APPOINTMENT_MIN_LEAD_HOURS("appointment.min_lead_hours", INT),                     // BR-LH-04
@@ -44,7 +45,6 @@ public enum ConfigKey {
     // TN, KB
     VISIT_CHECK_IN_EARLY_MINUTES("visit.check_in_early_minutes", INT),     // BR-TN-02
     VISIT_LATE_PRIORITY_MINUTES("visit.late_priority_minutes", INT),       // BR-TN-03
-    STAFF_ONLINE_WINDOW_MINUTES("staff.online_window_minutes", INT),       // BR-TN-06
     MEDICAL_RECORD_FOLLOW_UP_MAX_DAYS("medical_record.follow_up_max_days", INT), // BR-KB-06
 
     // LT

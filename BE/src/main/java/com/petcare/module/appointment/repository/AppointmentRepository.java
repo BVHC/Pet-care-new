@@ -366,6 +366,13 @@ public interface AppointmentRepository extends JpaRepository<Appointment, Long>,
             """)
     Optional<CheckInRef> findCheckInRef(@Param("id") Long id);
 
+    /** Thú đang có lịch MEDICAL {@code BOOKED} (ST04 hoãn nhắc tái khám, docs/adr/0088). Literal giữ để khớp index. */
+    @Query(value = """
+            SELECT EXISTS (SELECT 1 FROM appointments
+                           WHERE pet_id = :petId AND status = 'BOOKED' AND service_group = 'MEDICAL')
+            """, nativeQuery = true)
+    boolean existsBookedMedicalByPet(@Param("petId") Long petId);
+
     /** Thú đã từng có lịch hẹn ở bất kỳ trạng thái nào (BR-KH-06). */
     boolean existsByPetId(Long petId);
 

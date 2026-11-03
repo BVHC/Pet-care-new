@@ -41,8 +41,8 @@ import com.petcare.support.MutableClock;
 
 /**
  * {@code StaffDirectoryApi} thật trên Postgres 17 (docs/adr/0024): đếm BRANCH_MANAGER {@code ACTIVE} kể cả đang bị khóa
- * (BR-QT-04), "đang hoạt động" = {@code ACTIVE} và không khóa, online theo {@code staff.online_window_minutes} [CFG]
- * (BR-TN-05, 06), VET công khai (BR-TK-20). Kích hoạt chi nhánh qua HTTP <b>không mock</b> module nào: hết 500 của
+ * (BR-QT-04), "đang hoạt động" = {@code ACTIVE} và không khóa, online = có phiên chưa hủy với access token còn hạn
+ * (BR-TN-05, 06, docs/adr/0091), VET công khai (BR-TK-20). Kích hoạt chi nhánh qua HTTP <b>không mock</b> module nào: hết 500 của
  * placeholder cũ. Mỗi test dùng chi nhánh mới; các câu không theo chi nhánh chỉ kiểm id do test tạo.
  */
 @SpringBootTest(webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT)
@@ -105,12 +105,12 @@ class StaffDirectoryIT {
     @Test
     void assignableStaffAreActiveUnlockedOfBranchAndRoleWithOnlineFirst() {
         long offline = staff(Role.VET, branch, "ACTIVE", false, null, "An");
-        long online = staff(Role.VET, branch, "ACTIVE", false, T0.minus(Duration.ofMinutes(10)), "Bình");
-        long stale = staff(Role.VET, branch, "ACTIVE", false, T0.minus(Duration.ofMinutes(11)), "Chi");
-        staff(Role.VET, branch, "ACTIVE", true, T0, "Khóa");
-        staff(Role.VET, branch, "DISABLED", false, T0, "Vô hiệu");
-        staff(Role.CARETAKER, branch, "ACTIVE", false, T0, "Chăm sóc");
-        staff(Role.VET, otherBranch, "ACTIVE", false, T0, "Chi nhánh khác");
+        long online = staff(Role.VET, branch, "ACTIVE", false, T0.plus(Duration.ofMinutes(10)), "Bình");
+        long stale = staff(Role.VET, branch, "ACTIVE", false, T0.minus(Duration.ofMinutes(1)), "Chi");
+        staff(Role.VET, branch, "ACTIVE", true, T0.plus(Duration.ofMinutes(10)), "Khóa");
+        staff(Role.VET, branch, "DISABLED", false, T0.plus(Duration.ofMinutes(10)), "Vô hiệu");
+        staff(Role.CARETAKER, branch, "ACTIVE", false, T0.plus(Duration.ofMinutes(10)), "Chăm sóc");
+        staff(Role.VET, otherBranch, "ACTIVE", false, T0.plus(Duration.ofMinutes(10)), "Chi nhánh khác");
 
         assertThat(directory.findAssignableStaff(branch, Role.VET))
                 .extracting(StaffSummary::accountId, StaffSummary::online, StaffSummary::active)
@@ -120,13 +120,13 @@ class StaffDirectoryIT {
                         tuple(stale, false, true));
         assertThat(directory.findActiveStaffIds(branch, Role.VET)).containsExactly(offline, online, stale);
 
-        clock.advance(Duration.ofMinutes(1));
+        clock.advance(Duration.ofMinutes(10));   // đúng mốc hạn access token là đã hết hạn
         assertThat(directory.findAssignableStaff(branch, Role.VET)).noneMatch(StaffSummary::online);
     }
 
     @Test
     void findStaffReportsLockedAsInactiveAndIgnoresCustomers() {
-        long locked = staff(Role.RECEPTIONIST, branch, "ACTIVE", true, T0, "Lễ tân");
+        long locked = staff(Role.RECEPTIONIST, branch, "ACTIVE", true, T0.plus(Duration.ofMinutes(10)), "Lễ tân");
         long customer = customerAccount();
 
         assertThat(directory.findStaff(locked)).contains(
@@ -221,14 +221,18 @@ class StaffDirectoryIT {
                 """, Long.class, "staff-dir-it-" + UUID.randomUUID() + "@petcare.test", role.name(), status, locked);
     }
 
-    private long staff(Role role, Long branchId, String status, boolean locked, Instant lastSeenAt) {
-        return staff(role, branchId, status, locked, lastSeenAt, "Nhân viên IT");
+    private long staff(Role role, Long branchId, String status, boolean locked, Instant onlineUntil) {
+        return staff(role, branchId, status, locked, onlineUntil, "Nhân viên IT");
     }
 
-    private long staff(Role role, Long branchId, String status, boolean locked, Instant lastSeenAt, String name) {
+    /** {@code onlineUntil} = hạn access token của một phiên chưa hủy; {@code null} = không có phiên nào. */
+    private long staff(Role role, Long branchId, String status, boolean locked, Instant onlineUntil, String name) {
         long id = account(role, status, locked);
-        if (lastSeenAt != null) {
-            jdbc.update("UPDATE accounts SET last_seen_at = ? WHERE id = ?", Timestamp.from(lastSeenAt), id);
+        if (onlineUntil != null) {
+            jdbc.update("""
+                    INSERT INTO sessions (account_id, token_hash, expires_at, access_expires_at)
+                    VALUES (?, ?, ?, ?)""", id, UUID.randomUUID().toString(),
+                    Timestamp.from(T0.plus(Duration.ofHours(12))), Timestamp.from(onlineUntil));
         }
         jdbc.update("INSERT INTO staff_profiles (account_id, full_name, branch_id) VALUES (?, ?, ?)", id, name,
                 branchId);

@@ -27,21 +27,22 @@ m = Module(
         "Giới hạn OTP kiểm ở server: 60 giây giữa hai lần gửi, 5 mã/giờ/email, 5 lần nhập sai/mã (BR-TK-06, 07).",
         "Ghi audit: đăng nhập thành công và thất bại, mọi thao tác Staff / Accounts / Configuration, sửa email hộ, liên kết hồ sơ (BR-QT-15, BR-TK-16, 19).",
         "Phân cấp: request ngoài phạm vi BR-QT-01 / BR-QT-07 trả 403 và ghi audit. BRANCH_MANAGER chỉ thấy và thao tác nhân viên chi nhánh mình.",
-        "Khi `mustChangePassword = true`, mọi API trừ `GET /me`, `POST /me/password`, `POST /auth/logout` trả 400 `BUSINESS_RULE_VIOLATION`, message kèm `BR-TK-17` (A4). Path public (§3.1 của `00-method`: `/auth/register…`, `/auth/login`, `/auth/password/…`, `/public/…`) không bị chặn vì luôn xử lý như chưa đăng nhập, token gửi kèm bị bỏ qua (ADR-0005).",
-        "Request của nhân viên cập nhật `last_seen_at` (tối đa một lần mỗi 60 giây, ADR-0003); đăng xuất đặt về offline ngay (BR-TN-06).",
+        "Khi `mustChangePassword = true`, mọi API trừ `GET /me`, `POST /me/password`, `POST /auth/logout` trả 400 `BUSINESS_RULE_VIOLATION`, message kèm `BR-TK-17` (A4). Path public (§3.1 của `00-method`: `/auth/register…`, `/auth/login`, `/auth/refresh`, `/auth/password/…`, `/public/…`) không bị chặn vì luôn xử lý như chưa đăng nhập, token gửi kèm bị bỏ qua (ADR-0005).",
+        "Access token sống ngắn (`session.access_ttl_minutes` [CFG], mặc định 10 phút); lấy token mới bằng `POST /auth/refresh`. Mỗi refresh token chỉ dùng một lần: dùng lại một token đã dùng hủy cả phiên (ADR-0091). Hạn tuyệt đối vẫn là hạn phiên `session.ttl_hours` [CFG].",
+        "Nhân viên online khi có phiên chưa hủy với access token còn hạn (BR-TN-06, ADR-0091): request poll tự động không làm ai online; đăng xuất, khóa, vô hiệu hóa hủy phiên nên offline ngay.",
     ],
     assumptions=[
-        ("A1", "Access token gắn 1-1 với một phiên (`sessions`), không có refresh token; phiên hết hạn thì đăng nhập lại", "Docs chỉ có bảng `sessions` có `expires_at`, `revoked_at`; không nhắc refresh"),
+        ("A1", "Access token gắn 1-1 với một phiên (`sessions`) và sống ngắn (`session.access_ttl_minutes`); gia hạn bằng refresh token xoay vòng, hạn tuyệt đối vẫn là hạn phiên; phiên hết hạn thì đăng nhập lại", "ADR-0091 thay quyết định không có refresh token của ADR-0003 để trạng thái online đo được (D024); docs chỉ có bảng `sessions` có `expires_at`, `revoked_at`"),
         ("A2", "Xác thực OTP đăng ký không tự đăng nhập; client gọi `POST /auth/login` sau đó", "Ít phát minh nhất; 03 Tài khoản#2 không có hệ quả tạo phiên"),
         ("A3", "Đăng ký lại bằng email còn `PENDING` bị báo trùng (BR-TK-01); người dùng dùng gửi lại OTP", "Email duy nhất trong tập tài khoản, `PENDING` vẫn là tài khoản"),
-        ("A4", "Chặn mọi chức năng khi chưa đổi mật khẩu lần đầu bằng 400, message kèm `BR-TK-17`; path public (đăng ký, đăng nhập, quên / đặt lại mật khẩu, `/public/…`) không bị chặn vì luôn xử lý như chưa đăng nhập, kể cả khi client gửi token (ADR-0005)", "BR-TK-17 'chặn mọi chức năng khác'"),
+        ("A4", "Chặn mọi chức năng khi chưa đổi mật khẩu lần đầu bằng 400, message kèm `BR-TK-17`; path public (đăng ký, đăng nhập, làm mới token, quên / đặt lại mật khẩu, `/public/…`) không bị chặn vì luôn xử lý như chưa đăng nhập, kể cả khi client gửi token (ADR-0005)", "BR-TK-17 'chặn mọi chức năng khác'"),
         ("A5", "Khách tự sửa họ tên, SĐT, ảnh ở module customer; identity chỉ sửa hồ sơ nhân viên", "BR-TK-15: với khách, họ tên và SĐT là thông tin của hồ sơ khách"),
         ("A6", "`verificationMethod` khi sửa email hộ / liên kết tại quầy chỉ có `ID_CARD_IN_PERSON`", "BR-TK-16: audit chỉ ghi phương thức xác minh, docs chỉ nêu CCCD"),
         ("A7", "Gửi lại OTP quên mật khẩu = gọi lại `POST /auth/password/forgot` (cùng quota BR-TK-07)", "Tránh endpoint thứ hai lộ trạng thái tài khoản"),
         ("A8", "BR-TK-04 'gửi thất bại thì báo lỗi': đăng ký trả 201 khi đã ghi `notification_outbox`; gửi thất bại do ST20 thử lại, người dùng gửi lại bằng `POST /auth/register/resend-otp`", "06-module-contracts §1: `NotificationApi.enqueue` chỉ ghi outbox; convention 07 §7.2 cấm gửi trực tiếp trong use case"),
     ],
     questions=[
-        ("Q1", "Thời hạn phiên đăng nhập bao lâu, có thêm vào [CFG] không, có cần refresh token cho app không?", "Đã chốt (ADR-0003): hạn tuyệt đối `session.ttl_hours` [CFG], mặc định 12 giờ (1–72), không gia hạn, không refresh token; `exp` của token = `expiresAt`", "Docs không quy định (A1)"),
+        ("Q1", "Thời hạn phiên đăng nhập bao lâu, có thêm vào [CFG] không, có cần refresh token cho app không?", "Đã chốt (ADR-0003, sửa bởi ADR-0091): hạn tuyệt đối của phiên `session.ttl_hours` [CFG], mặc định 12 giờ (1–72); access token sống `session.access_ttl_minutes` [CFG] (mặc định 10 phút), có refresh token dùng một lần; `exp` của token = hạn access token, không vượt hạn phiên", "Docs không quy định (A1)"),
         ("Q2", "Lỗi `BR-TK-09` (khóa tạm, kèm giờ thử lại) cho biết email tồn tại, lệch với tinh thần BR-TK-10. Chấp nhận như BR-TK-09 yêu cầu?", "Đã chốt (ADR-0019): BR-TK-08/09/11 chỉ trả khi mật khẩu đúng; mật khẩu sai luôn 401 chung, nên người không biết mật khẩu không phân biệt được email có tồn tại, đang khóa hay chưa xác thực", "BR-TK-09 vs BR-TK-10"),
     ],
 )
@@ -90,9 +91,18 @@ m.schema("AccountSummary", {
 })
 m.schema("LoginResponse", {
     "accessToken": "string|Bearer token gắn với một phiên (A1)",
-    "expiresAt": "datetime",
+    "expiresAt": "datetime|Hạn tuyệt đối của phiên (`session.ttl_hours` [CFG])",
+    "accessTokenExpiresAt": "datetime|Hạn của `accessToken` (`session.access_ttl_minutes` [CFG]); sau mốc này gọi `POST /auth/refresh`",
+    "refreshToken": "string|Refresh token dùng một lần để lấy access token mới (ADR-0091)",
     "account": "ref:AccountSummary",
     "linkDecisionPending": "bool|Khách còn cờ chờ quyết định liên kết thì FE nhắc lại lời đề nghị (BR-TK-19)",
+})
+m.schema("RefreshRequest", {"refreshToken": "string:128|Refresh token nhận lúc đăng nhập hoặc lần refresh trước"})
+m.schema("RefreshResponse", {
+    "accessToken": "string|Bearer token mới của cùng phiên; token cũ hết hiệu lực ngay",
+    "accessTokenExpiresAt": "datetime|Hạn của `accessToken` mới, không vượt `expiresAt`",
+    "refreshToken": "string|Refresh token mới; token vừa gửi không dùng lại được",
+    "expiresAt": "datetime|Hạn tuyệt đối của phiên (không đổi)",
 })
 m.schema("ResetPasswordRequest", {"email": "email", "code": "string", "newPassword": "string"})
 m.schema("ChangePasswordRequest", {"currentPassword": "string", "newPassword": "string"})
@@ -127,7 +137,7 @@ m.schema("StaffResponse", {
     "accountId": "int64", "email": "email", "phone": "mobile", "fullName": "string:100",
     "role": "ref:Role", "status": "ref:AccountStatus", "isLocked": "bool", "branchId": "int64?",
     "specialty": "string?", "bio": "string?", "mustChangePassword": "bool",
-    "online": "bool|Thao tác trong 10 phút [CFG] gần nhất (BR-TN-06)",
+    "online": "bool|Có phiên chưa hủy với access token còn hạn (BR-TN-06, ADR-0091)",
 })
 m.schema("CreateStaffRequest", {
     "email": "email", "phone": "mobile|Bắt buộc với nhân viên (BR-TK-01)", "fullName": "string:100",
@@ -182,7 +192,7 @@ m.schema("AssignableStaff", {
     "accountId": "int64|Mã tài khoản; gửi làm `assigneeId` của visit-v1 #5, #9",
     "fullName": "string",
     "role": "enum:VET,CARETAKER",
-    "online": "bool|Có thao tác trong `staff.online_window_minutes` [CFG] gần nhất (BR-TN-06, chỉ là gợi ý)",
+    "online": "bool|Có phiên chưa hủy với access token còn hạn (BR-TN-06, ADR-0091); chỉ là gợi ý",
 })
 
 # ---------------- operations
@@ -354,7 +364,7 @@ m.op("post", "/accounts/{id}/unlock", "unlockAccount", "Mở khóa tài khoản"
      "A03", "Chỉ ADMIN", "is_locked true → false (Tài khoản#8)", body="ReasonRequest", resp="AccountSummary",
      path_params=["AccountId"], errors=(400, 401, 403, 404, 409),
      err_desc={400: "Thiếu lý do (`VALIDATION_FAILED`)", 409: "`INVALID_STATE_TRANSITION` không bị khóa"},
-     notes="status giữ nguyên giá trị trước khi khóa (BR-QT-12); giữ lý do khóa gần nhất; không mở phiên, không thông báo; ghi audit kèm lý do (docs/adr/0035).")
+     notes="status giữ nguyên giá trị trước khi khóa (BR-QT-12); giữ lý do khóa gần nhất; không mở phiên, không thông báo; ghi audit kèm lý do (docs/adr/0035). Lượt `IN_PROGRESS` của người được mở khóa mà họ lại phụ trách được (ACTIVE, đúng chi nhánh, đúng chức vụ) không còn cờ `needsReassign` (docs/adr/0088).")
 
 m.op("get", "/system-configs", "listSystemConfigs", "Danh sách tham số [CFG]", "Configuration", "UC10", "BR-QT-13",
      "A03", "Chỉ ADMIN", resp="array:SystemConfig", errors=(401, 403),
@@ -412,3 +422,10 @@ m.op("get", "/staff/assignable", "listAssignableStaff", "Nhân viên có thể g
            "A03–A05. Chỉ nhân viên ACTIVE, không bị khóa, đúng chi nhánh và chức vụ; người online xếp trước, rồi họ tên, rồi "
            "`accountId`. Mảng trong `data`, không phân trang. Chi nhánh không tồn tại → mảng rỗng. Chỉ đọc, không audit, "
            "không khóa: lệnh gán kiểm lại dưới khóa (ADR-0061). ADR-0089.")
+
+# Số 39 = thứ tự khai báo: refresh của BE-1 (ADR-0091) thêm sau staff/assignable (#38, ADR-0089), vì #38 đã được ADR và FE trích.
+m.op("post", "/auth/refresh", "refreshAccessToken", "Làm mới access token", "Auth", "UC03", "BR-TK-11, BR-TN-06", "A02–A08",
+     "Public", "—", body="RefreshRequest", resp="RefreshResponse", public=True, errors=(400, 401),
+     err_desc={400: "`VALIDATION_FAILED` refreshToken trống hoặc quá 128 ký tự",
+               401: "Refresh token không đúng, đã dùng, hết hạn, phiên đã bị hủy hoặc tài khoản bị khóa / vô hiệu hóa — một thông điệp chung. Dùng lại token đã dùng hủy cả phiên và ghi audit `REFRESH_TOKEN_REUSED` (ADR-0091)"},
+     notes="Cấp cặp token mới cho cùng phiên: access token mới (hạn `session.access_ttl_minutes` [CFG], không vượt hạn phiên) và refresh token mới; access token cũ và refresh token vừa gửi hết hiệu lực ngay (request đang chạy với token cũ nhận 401, client gửi lại bằng token mới). Chỉ gọi khi người dùng có thao tác: refresh theo bộ đếm hoặc từ request poll làm nhân viên online mãi (D024). Hạn tuyệt đối của phiên không đổi. Không ghi audit khi thành công (ADR-0091).")

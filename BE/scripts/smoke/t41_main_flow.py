@@ -83,7 +83,28 @@ def q(value):
     return "'" + str(value).replace("'", "''") + "'"
 
 
+# Access token sống 10 phút (ADR-0091) mà kịch bản chờ cron nhiều phút: token hết hạn (401) thì đăng nhập lại cùng
+# tài khoản rồi gửi lại một lần. TOKEN_OWNER: token → email; TOKEN_ALIAS: token cũ → token hiện hành.
+TOKEN_OWNER = {}
+TOKEN_ALIAS = {}
+
+
 def http(method, path, token=None, body=None, base=API):
+    token = TOKEN_ALIAS.get(token, token)
+    status, payload = _http_once(method, path, token, body, base)
+    if status == 401 and token in TOKEN_OWNER and path != "/api/auth/login":
+        email = TOKEN_OWNER[token]
+        relogin_status, relogin_body = _http_once("POST", "/api/auth/login", None,
+                                                  {"email": email, "password": PASSWORD}, API)
+        if relogin_status == 200:
+            fresh = relogin_body["data"]["accessToken"]
+            TOKEN_ALIAS[token] = fresh
+            TOKEN_OWNER[fresh] = email
+            return _http_once(method, path, fresh, body, base)
+    return status, payload
+
+
+def _http_once(method, path, token=None, body=None, base=API):
     data = None if body is None else json.dumps(body, ensure_ascii=False).encode("utf-8")
     request = urllib.request.Request(base + path, data=data, method=method)
     request.add_header("Accept", "application/json")
@@ -302,7 +323,10 @@ def lots(lot_ids):
 
 def login(email):
     status, body = http("POST", "/api/auth/login", body={"email": email, "password": PASSWORD})
-    return status, data_of(body).get("accessToken")
+    token = data_of(body).get("accessToken")
+    if token:
+        TOKEN_OWNER[token] = email
+    return status, token
 
 
 def mailpit_reminders(email):
@@ -341,7 +365,7 @@ def scenario(ids, today, slot):
     record(1, "—", "ADMIN", "login; PUT /api/system-configs/appointment.min_lead_hours", f"{st}/{st2}",
            f"value={value}", [(st == 200 and st2 == 200, f"HTTP {st}/{st2} {body}"), (str(value) == "0", "value ≠ 0")])
 
-    # 2–3 — A02 đặt lịch cho 2 thú cùng khung; đặt MEDICAL hủy nhắc tái khám chờ gửi của R0 (ADR-0084)
+    # 2–3 — A02 đặt lịch cho 2 thú cùng khung; đặt MEDICAL không đặt cờ hủy nhắc của R0 (ST04 tự hoãn, ADR-0088); check-in EXAM mới hủy (bước 10)
     st, customer = login(ids["email"])
     booking = {"branchId": ids["branch"], "slotDate": slot.date().isoformat(), "slotStart": slot.strftime("%H:%M")}
     st2, body = http("POST", "/api/appointments", customer,
@@ -358,7 +382,7 @@ def scenario(ids, today, slot):
                         coalesce((follow_up_reminded_at IS NOT NULL)::text, '')
                  FROM medical_records WHERE visit_id = {ids['old_visit_e']}""")
     record(3, "E", "A02", "POST /api/appointments (khám)", st, f"appointment={appt_e}; R0 hủy nhắc={r0.split()[0]}",
-           [(st == 201, f"HTTP {st} {body}"), (r0 == "true false", f"R0 cancelled/reminded = {r0}")])
+           [(st == 201, f"HTTP {st} {body}"), (r0 == "false false", f"R0 cancelled/reminded = {r0}")])
 
     # chờ tới 30 phút trước giờ hẹn nếu cần (visit.check_in_early_minutes = 30)
     wait = (slot - timedelta(minutes=30) - datetime.now(VN)).total_seconds()
@@ -431,6 +455,11 @@ def scenario(ids, today, slot):
 
     # ---------------------------------------------------------------- nhánh khám (T41.3)
     visit_e, order_e = check_in(10, "E", ids["pet_e"], appt_e)
+    r0_after = one(f"""SELECT coalesce((follow_up_cancelled_at IS NOT NULL)::text, '') || ' ' ||
+                              coalesce((follow_up_reminded_at IS NOT NULL)::text, '')
+                       FROM medical_records WHERE visit_id = {ids['old_visit_e']}""")
+    if r0_after != "true false":  # check-in dịch vụ EXAM hủy nhắc tái khám cũ (Care Task#6, ADR-0084)
+        failures.append(f"bước 10: R0 cancelled/reminded sau check-in EXAM = {r0_after}")
 
     st, body = http("POST", f"/api/visits/{visit_e}/complete", vet)
     record(11, "E", "A07", "POST …/complete (chưa chẩn đoán)", st, (body or {}).get("message", ""),

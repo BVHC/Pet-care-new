@@ -13,6 +13,8 @@ public interface VisitOrderApi {
     /**
      * Visit#1 → Order#1: tạo Order OPEN kèm 1 dòng dịch vụ tự sinh, đơn giá snapshot (BR-TN-01, BR-BH-03).
      * {@code ownerAccountId} = người được gán lượt; null nếu chưa gán, khi đó owner tạm là {@code actorId}.
+     * Dịch vụ đã ngừng kinh doanh vẫn mở được Order (lịch hẹn đã đặt trước khi ngừng, docs/adr/0088); dịch vụ không tồn
+     * tại thì {@code IllegalStateException}. Bên gọi tự kiểm "đang kinh doanh" khi khách walk-in.
      */
     LineRef openForVisit(Long visitId, Long branchId, Long customerId, Long serviceId,
                          Long ownerAccountId, Long actorId);

@@ -51,9 +51,10 @@ public class VisitOrderService implements VisitOrderApi {
     @Transactional(propagation = Propagation.MANDATORY)
     public LineRef openForVisit(Long visitId, Long branchId, Long customerId, Long serviceId, Long ownerAccountId,
             Long actorId) {
+        // Không lọc "đang kinh doanh": lịch hẹn đã đặt vẫn tiếp nhận khi dịch vụ ngừng (docs/adr/0088, trả D040); bên gọi
+        // giữ rule cho khách walk-in. Giá snapshot theo giá hiện tại lúc tiếp nhận (BR-BH-03).
         ServiceInfo service = catalog.findService(serviceId)
-                .filter(ServiceInfo::active)
-                .orElseThrow(() -> new IllegalStateException("Dịch vụ #" + serviceId + " không tồn tại hoặc đã ngừng"));
+                .orElseThrow(() -> new IllegalStateException("Dịch vụ #" + serviceId + " không tồn tại"));
         SalesOrder order = SalesOrder.openForVisit(codes.next(DOC_TYPE, PREFIX, LocalDate.now(clock)), branchId,
                 customerId, visitId, actorId);
         OrderLine line = OrderLine.of(OrderLineType.SERVICE, serviceId, null, service.name(), 1, service.price(),

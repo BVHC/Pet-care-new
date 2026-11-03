@@ -7,8 +7,8 @@ import org.springframework.data.jpa.repository.JpaRepository;
 import com.petcare.module.visit.entity.MedicalRecordAddendum;
 
 /**
- * Bảng {@code medical_record_addenda} (LOG, chỉ thêm mới). Cột {@code medical_record_id} chưa có index (nợ D043): đọc
- * bản bổ sung của một bệnh án quét bảng cho tới khi trả nợ.
+ * Bảng {@code medical_record_addenda} (LOG, chỉ thêm mới). Cột {@code medical_record_id} có index từ V28 (docs/adr/0093).
+ * DB không chặn UPDATE / DELETE bản bổ sung (trigger bị chấp nhận không làm, ADR-0093): chỉ service giữ "chỉ thêm".
  */
 public interface MedicalRecordAddendumRepository extends JpaRepository<MedicalRecordAddendum, Long> {
 

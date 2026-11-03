@@ -25,7 +25,7 @@ import com.petcare.module.appointment.AppointmentItSupport;
  * Ràng buộc của {@code prescription_items} do DB giữ (docs/adr/0076, bảng C1–C4): số lượng dương, liều bắt buộc và ≤ 500,
  * không tách một dòng thành hai phần ({@code is_external_purchase} ⇔ không có {@code order_line_id}, BR-KB-03), lý do mua
  * ngoài chỉ nhận hai giá trị, mỗi dòng Order chỉ gắn một dòng đơn thuốc. Mỗi vi phạm là một ca, chèn trong transaction
- * rollback. Ca cuối ghi lại khoảng trống đã biết của V1 (nợ D043): DB chưa đòi lý do khi mua ngoài.
+ * rollback. Ca cuối kiểm CHECK V28 (D043): lý do mua ngoài đi cùng cờ mua ngoài.
  */
 @SpringBootTest
 @ActiveProfiles("test")
@@ -154,18 +154,20 @@ class PrescriptionItemConstraintIT {
     }
 
     /**
-     * Khoảng trống đã biết (nợ D043, docs/adr/0076 C3): CHECK của V1 chỉ giới hạn giá trị nên lý do NULL vẫn lọt, kể cả khi
-     * mua ngoài hay có dòng Order kèm lý do. Ứng dụng giữ (UPDATE đặt cả ba cột, factory ở phần 1). Khi V22 thêm CHECK
-     * {@code is_external_purchase = (external_reason IS NOT NULL)} ca này phải đỏ và được đổi thành ca bị từ chối.
+     * V28 (docs/adr/0093, trả D043 nhóm 3, docs/adr/0076 C3): {@code ck_prescription_items_external_reason_tied} buộc lý do
+     * theo cờ mua ngoài. CHECK của V1 chỉ giới hạn giá trị nên NULL từng lọt; nay mua ngoài mà thiếu lý do, hoặc còn dòng
+     * Order mà có lý do, đều bị từ chối. Hai ca hợp lệ ở {@link #aValidItemWithAnOrderLineIsAccepted} và
+     * {@link #aValidExternalPurchaseWithAReasonIsAccepted}.
      */
     @Test
-    void knownGapD043TheDatabaseDoesNotYetTieTheReasonToTheExternalFlag() {
-        tx.executeWithoutResult(s -> {
-            jdbc.update(INSERT, visit, drug, 1, "Ngày 2 lần", true, null, null);
-            jdbc.update(INSERT, visit, drug, 1, "Ngày 2 lần", false, freeLine, "OUT_OF_STOCK_AT_PAYMENT");
-            s.setRollbackOnly();
-        });
+    void theReasonIsTiedToTheExternalFlag() {
+        assertThatThrownBy(() -> insert(1, "Ngày 2 lần", true, null, null))
+                .as("mua ngoài mà thiếu lý do").isInstanceOf(DataIntegrityViolationException.class)
+                .hasMessageContaining("ck_prescription_items_external_reason_tied");
+        assertThatThrownBy(() -> insert(1, "Ngày 2 lần", false, freeLine, "OUT_OF_STOCK_AT_PAYMENT"))
+                .as("còn dòng Order mà có lý do mua ngoài").isInstanceOf(DataIntegrityViolationException.class)
+                .hasMessageContaining("ck_prescription_items_external_reason_tied");
         assertThat(jdbc.queryForObject("SELECT count(*) FROM prescription_items WHERE medical_record_id = ?",
-                Long.class, visit)).as("chỉ còn dòng dựng sẵn, hai dòng thử đã rollback").isEqualTo(1);
+                Long.class, visit)).as("chỉ còn dòng dựng sẵn, hai dòng thử bị từ chối").isEqualTo(1);
     }
 }

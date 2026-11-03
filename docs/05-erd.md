@@ -92,7 +92,6 @@ erDiagram
 | failed_login_count | INT | NN, DEFAULT 0 | Đếm lần sai liên tiếp |
 | first_failed_login_at | TIMESTAMPTZ | ? | Mốc đầu của cửa sổ 15 phút |
 | must_change_password | BOOLEAN | NN, DEFAULT false | BR-TK-17, BR-QT-10 |
-| last_seen_at | TIMESTAMPTZ | ? | Trạng thái online (BR-TN-06) |
 | notification_settings | JSONB | NN, DEFAULT '{}' | Cài đặt nhận thông báo của khách (UC88) [ERD] |
 | pending_expires_at | TIMESTAMPTZ | ? | Hạn xác thực của tài khoản `PENDING` = lúc đăng ký + `account.pending_ttl_hours` [CFG], chốt theo BR-QT-13; ST02 xóa khi `now >= pending_expires_at` (BR-TK-08). Xác thực thì về NULL [ERD] (V5, §13 mục 12) |
 
@@ -126,9 +125,23 @@ Ràng buộc "A05–A08 phải có chi nhánh" kiểm tra ở ứng dụng vì `
 | user_agent | VARCHAR(500) | ? | |
 | expires_at | TIMESTAMPTZ | NN | |
 | revoked_at | TIMESTAMPTZ | ? | Hủy phiên khi khóa, vô hiệu hóa, đổi/đặt lại mật khẩu (BR-TK-11, 13, 14) |
+| access_expires_at | TIMESTAMPTZ | ? | Hạn access token hiện hành (≤ `expires_at`); nhân viên online ⇔ có phiên chưa hủy với hạn này còn tới (BR-TN-06). NULL với phiên mở trước V27 [ERD] (ADR-0091) |
 
 - Index: `(account_id) WHERE revoked_at IS NULL`
 - Index: `(account_id)` — kiểm FK khi xóa `accounts` (V7, ADR-0018)
+
+### `refresh_tokens` — PART của Session [ERD] (V27, ADR-0091)
+
+| Cột | Kiểu | Ràng buộc | Ghi chú |
+|---|---|---|---|
+| id | BIGINT | PK | |
+| session_id | BIGINT | NN, FK→sessions | `RESTRICT`: job dọn phiên xóa token của lô phiên trước |
+| token_hash | VARCHAR(64) | NN, UQ | SHA-256 hex của chuỗi 256 bit ngẫu nhiên; không lưu token gốc |
+| expires_at | TIMESTAMPTZ | NN | = `sessions.expires_at`, chốt lúc tạo (BR-QT-13) |
+| used_at | TIMESTAMPTZ | ? | NULL = còn dùng được; mỗi lần refresh đánh dấu token cũ và tạo token mới; dùng lại token đã dùng ⇒ hủy phiên |
+
+- Index: `(session_id)`; UNIQUE partial `(session_id) WHERE used_at IS NULL` (đúng một token còn dùng mỗi phiên)
+- Bảng hạ tầng ngoài 55 bảng của erd v16 (như `document_counters`): không có SM riêng, không phải model của 04.
 
 ### `otp_tokens` — LOG
 
@@ -546,6 +559,7 @@ Quota riêng của một khung giờ cụ thể, ghi đè quota mặc định (B
 - Index hàng đợi: `(branch_id, status, priority_class, queue_sort_key)`
 - Index: `(assignee_id, status)`; `(pet_id, checked_in_at DESC)`
 - Index: `(checked_in_by)` — kiểm FK khi xóa `accounts` (V7, ADR-0018)
+- Index: `(branch_id, checked_in_at)` — hàng đợi lọc theo ngày check-in, không partial (V30, ADR-0095, trả D041)
 
 ### `visit_assignments` — LOG
 
@@ -1163,3 +1177,4 @@ Mục 1–4: các câu hỏi mở của bản v14, chốt ở v15. Mục 5: thay
 | 20 | Mã chứng từ của lịch hẹn (`appointments.code`, BR-LH-06 giữ mã khi đổi khung) | §0 chỉ có ví dụ `LH-260115-0007`, không nói cách sinh. Chốt sequence toàn cục: mã = `LH-` + `yyMMdd` (ngày đặt, giờ Việt Nam) + `-` + số của sequence (≥ 4 chữ số, đệm 0). Duy nhất theo cấu tạo, không cần khóa; không reset theo ngày; nhảy cóc khi rollback — chấp nhận vì lịch hẹn không yêu cầu số liên tục (khác phiếu nhập BR-KO-03). `MAXVALUE 9999999999` giữ mã ≤ 20 ký tự, `NO CYCLE` (hết số → lỗi, không trùng) (ADR-0045) | V16 (ban đầu V13, đổi số 2026-10-19 khi sửa rebase vì trùng `V13__pet_customer_fk_indexes.sql`): `appointment_code_seq AS BIGINT MAXVALUE 9999999999 NO CYCLE` |
 | 21 | Xóa dòng đơn thuốc (`prescription_items`, visit-v1 #17, BR-KB-03) | §0 chưa liệt kê BR-KB-03 trong các trường hợp xóa cứng, dù BR-BH-02 cho người thêm xóa dòng khi Order `OPEN` và contract #17 có sẵn. Bảng không có cột trạng thái và không bảng nào có FK trỏ tới `prescription_items`. Chốt **xóa cứng**, thêm BR-KB-03 vào §0 (tiền lệ mục 16); ứng dụng xóa dòng đơn trước dòng Order `DRUG` trong cùng transaction vì `order_line_id` là FK `RESTRICT` (ADR-0078). Bệnh án không bị xóa kèm | Không đổi schema (không migration) |
 | 22 | Ràng buộc `care_tasks` (nợ D049, T39 phần 2) | Hai câu hủy hệ thống và câu kiểm FK khi xóa mũi ghi nhầm (BR-KB-04) quét bảng (index V1 partial theo `task_type`); DB chưa giữ cột xử lý theo trạng thái (BR-TB-05). Thêm 2 index partial `IS NOT NULL` không lọc trạng thái và 3 CHECK (ADR-0081). Cùng migration seed 4 mẫu nhắc ST04 | `care_tasks`: `ix_care_tasks_vaccination_id`, `ix_care_tasks_medical_record_id`, `ck_care_tasks_open_unhandled`, `ck_care_tasks_done_handled`, `ck_care_tasks_cancelled_reason` (V22) |
+| 23 | Index FK của bệnh án / mũi tiêm và CHECK lý do mua ngoài (nợ D043, ADR-0093) | Xem bệnh án (#12), hồ sơ sức khỏe (#21), `existsByVaccineTypeId` và kiểm FK khi xóa dòng cha quét bảng (V1, V7 không tạo index cho bốn cột); `prescription_items.external_reason` chỉ có `IN (...)` nên NULL lọt khi mua ngoài. Thêm 4 index một cột và CHECK `is_external_purchase = (external_reason IS NOT NULL)`. Trigger chặn sửa bệnh án đã khóa / sửa-xóa bản bổ sung chấp nhận không làm (ứng dụng giữ BR-KB-01) | `medical_record_addenda`: `ix_medical_record_addenda_medical_record_id`; `prescription_items`: `ix_prescription_items_medical_record_id`, `ck_prescription_items_external_reason_tied`; `vaccinations`: `ix_vaccinations_visit_id`, `ix_vaccinations_vaccine_type_id` (V28) |

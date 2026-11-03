@@ -9,7 +9,7 @@ import org.junit.jupiter.params.provider.ValueSource;
 
 /**
  * Hai factory của {@link PrescriptionItem} (visit-v1 #16, docs/adr/0077): mỗi factory đặt cả ba cột mua ngoài cùng lúc
- * (C2 "không tách dòng" có CHECK ở DB; C3 "mua ngoài ⇔ có lý do" chỉ ứng dụng giữ — nợ D043) và chặn dữ liệu sai trước
+ * (C2 "không tách dòng" có CHECK ở DB; C3 "mua ngoài ⇔ có lý do" có CHECK từ V28, docs/adr/0093) và chặn dữ liệu sai trước
  * khi chạm DB.
  */
 class PrescriptionItemTest {

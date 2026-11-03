@@ -69,6 +69,7 @@ class SessionCleanupIT {
 
     @BeforeEach
     void setUp() {
+        jdbc.update("DELETE FROM refresh_tokens WHERE session_id IN (SELECT id FROM sessions WHERE expires_at < '2010-01-01')");
         jdbc.update("DELETE FROM sessions WHERE expires_at < '2010-01-01'");
         account = jdbc.queryForObject("""
                 INSERT INTO accounts (email, password_hash, role, status)
@@ -131,7 +132,7 @@ class SessionCleanupIT {
     void failedBatchKeepsEarlierBatchesDeleted() {
         List<Long> ids = IntStream.rangeClosed(1, 5)
                 .mapToObj(day -> session(Instant.parse("2000-01-0" + day + "T00:00:00Z"), null)).toList();
-        SessionCleanupService failingOnSecondBatch = new SessionCleanupService(null) {
+        SessionCleanupService failingOnSecondBatch = new SessionCleanupService(null, null) {
             private int calls;
 
             @Override

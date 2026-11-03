@@ -129,6 +129,7 @@ class CareTaskDeskIT {
             // Task trỏ tới tài khoản lễ tân (handled_by) và chi nhánh: xóa task trước, rồi tài khoản, rồi mới chi nhánh.
             jdbc.update("DELETE FROM care_tasks WHERE branch_id IN (?, ?)", branchA, branchB);
             for (Long id : accounts) {
+                jdbc.update("DELETE FROM refresh_tokens WHERE session_id IN (SELECT id FROM sessions WHERE account_id = ?)", id);
                 jdbc.update("DELETE FROM sessions WHERE account_id = ?", id);
                 jdbc.update("DELETE FROM staff_profiles WHERE account_id = ?", id);
                 jdbc.update("DELETE FROM accounts WHERE id = ?", id);

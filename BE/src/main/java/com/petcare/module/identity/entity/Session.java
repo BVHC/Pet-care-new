@@ -18,7 +18,9 @@ import lombok.NoArgsConstructor;
  * Bảng {@code sessions} (erd §1, PART của Account). Mỗi access token gắn với đúng một phiên: {@code id} là claim
  * {@code sid}, {@code tokenHash} = SHA-256 của claim {@code jti} (docs/adr/0003); không lưu token gốc. Hủy phiên chỉ
  * đặt {@code revokedAt}; dòng hết hạn quá thời gian lưu bị job xóa (docs/adr/0008). {@code expiresAt} chốt lúc tạo
- * theo [CFG] (BR-QT-13).
+ * theo [CFG] (BR-QT-13). {@code accessExpiresAt}: hạn của access token hiện hành (docs/adr/0091); nhân viên online ⇔ có
+ * phiên chưa hủy với hạn này còn tới, nên chỉ đổi qua câu UPDATE có điều kiện ({@code SessionRepository.rotateAccess}),
+ * không qua entity. {@code null} với phiên mở trước V27.
  */
 @Getter
 @Entity
@@ -48,11 +50,16 @@ public class Session extends TimestampedEntity {
     @Column(name = "revoked_at")
     private Instant revokedAt;
 
-    public Session(Long accountId, String tokenHash, String ipAddress, String userAgent, Instant expiresAt) {
+    @Column(name = "access_expires_at", updatable = false)
+    private Instant accessExpiresAt;
+
+    public Session(Long accountId, String tokenHash, String ipAddress, String userAgent, Instant expiresAt,
+            Instant accessExpiresAt) {
         this.accountId = accountId;
         this.tokenHash = tokenHash;
         this.ipAddress = ipAddress;
         this.userAgent = userAgent;
         this.expiresAt = expiresAt;
+        this.accessExpiresAt = accessExpiresAt;
     }
 }

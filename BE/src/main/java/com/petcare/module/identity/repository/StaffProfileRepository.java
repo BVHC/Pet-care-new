@@ -15,7 +15,9 @@ import com.petcare.module.identity.entity.AccountStatus;
 import com.petcare.module.identity.entity.StaffProfile;
 
 /**
- * Đọc nhân viên cho {@code StaffDirectoryApi} (docs/adr/0024). Mọi câu trả projection, không trả entity. "Đang hoạt
+ * Đọc nhân viên cho {@code StaffDirectoryApi} (docs/adr/0024). {@code onlineUntil} = hạn access token xa nhất của các
+ * phiên chưa hủy (docs/adr/0091): nhân viên online ⇔ {@code onlineUntil > now}; subquery dùng index
+ * {@code ix_sessions_active_account}. Mọi câu trả projection, không trả entity. "Đang hoạt
  * động" = {@code status = ACTIVE} và không bị khóa ({@code is_locked}); khóa tạm do đăng nhập sai ({@code locked_until})
  * không tính. Không có index {@code staff_profiles(branch_id)}: bảng nhân viên nhỏ (ADR-0024).
  */
@@ -23,7 +25,8 @@ public interface StaffProfileRepository extends JpaRepository<StaffProfile, Long
 
     @Query("""
             SELECT new com.petcare.module.identity.repository.StaffRow(
-                sp.accountId, sp.fullName, a.role, sp.branchId, a.status, a.locked, a.lastSeenAt)
+                sp.accountId, sp.fullName, a.role, sp.branchId, a.status, a.locked,
+                (SELECT MAX(s.accessExpiresAt) FROM Session s WHERE s.accountId = a.id AND s.revokedAt IS NULL))
             FROM StaffProfile sp
             JOIN Account a ON a.id = sp.accountId
             WHERE sp.accountId = :accountId
@@ -33,7 +36,8 @@ public interface StaffProfileRepository extends JpaRepository<StaffProfile, Long
     /** Như {@link #findStaffRow} cho nhiều tài khoản (docs/adr/0060); PK của hai bảng. Bên gọi không truyền tập rỗng. */
     @Query("""
             SELECT new com.petcare.module.identity.repository.StaffRow(
-                sp.accountId, sp.fullName, a.role, sp.branchId, a.status, a.locked, a.lastSeenAt)
+                sp.accountId, sp.fullName, a.role, sp.branchId, a.status, a.locked,
+                (SELECT MAX(s.accessExpiresAt) FROM Session s WHERE s.accountId = a.id AND s.revokedAt IS NULL))
             FROM StaffProfile sp
             JOIN Account a ON a.id = sp.accountId
             WHERE sp.accountId IN :accountIds
@@ -43,7 +47,8 @@ public interface StaffProfileRepository extends JpaRepository<StaffProfile, Long
     /** Nhân viên đang hoạt động của chi nhánh theo chức vụ (BR-TN-05); thứ tự online do service sắp. */
     @Query("""
             SELECT new com.petcare.module.identity.repository.StaffRow(
-                sp.accountId, sp.fullName, a.role, sp.branchId, a.status, a.locked, a.lastSeenAt)
+                sp.accountId, sp.fullName, a.role, sp.branchId, a.status, a.locked,
+                (SELECT MAX(s.accessExpiresAt) FROM Session s WHERE s.accountId = a.id AND s.revokedAt IS NULL))
             FROM StaffProfile sp
             JOIN Account a ON a.id = sp.accountId
             WHERE sp.branchId = :branchId AND a.role = :role
@@ -74,7 +79,8 @@ public interface StaffProfileRepository extends JpaRepository<StaffProfile, Long
     @Query("""
             SELECT new com.petcare.module.identity.repository.StaffDetailRow(
                 sp.accountId, a.email, a.phone, sp.fullName, a.role, a.status, a.locked, sp.branchId,
-                sp.specialty, sp.bio, a.mustChangePassword, a.lastSeenAt)
+                sp.specialty, sp.bio, a.mustChangePassword,
+                (SELECT MAX(s.accessExpiresAt) FROM Session s WHERE s.accountId = a.id AND s.revokedAt IS NULL))
             FROM StaffProfile sp
             JOIN Account a ON a.id = sp.accountId
             WHERE sp.accountId = :accountId
@@ -91,7 +97,8 @@ public interface StaffProfileRepository extends JpaRepository<StaffProfile, Long
     @Query(value = """
             SELECT new com.petcare.module.identity.repository.StaffDetailRow(
                 sp.accountId, a.email, a.phone, sp.fullName, a.role, a.status, a.locked, sp.branchId,
-                sp.specialty, sp.bio, a.mustChangePassword, a.lastSeenAt)
+                sp.specialty, sp.bio, a.mustChangePassword,
+                (SELECT MAX(s.accessExpiresAt) FROM Session s WHERE s.accountId = a.id AND s.revokedAt IS NULL))
             FROM StaffProfile sp
             JOIN Account a ON a.id = sp.accountId
             WHERE a.role IN :roles AND a.status IN :statuses

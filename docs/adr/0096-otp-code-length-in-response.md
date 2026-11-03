@@ -1,11 +1,11 @@
-# ADR-0091: Độ dài mã OTP trong response — `OtpSentResponse.codeLength`, `RegistrationResponse.otpCodeLength`
+# ADR-0096: Độ dài mã OTP trong response — `OtpSentResponse.codeLength`, `RegistrationResponse.otpCodeLength`
 
 - **Trạng thái:** **Proposed (chờ BE-1 xác nhận)**
 - **Ngày:** 2026-11-02
 - **Liên quan:**
-  - identity-v1 #1 `POST /auth/register`, #3 `POST /auth/register/resend-otp`, #6 `POST /auth/password/forgot`, #12 `POST /me/link/otp`, #23 `POST /staff/{id}/email-change`, #25 `POST /customers/{customerId}/account-email-change` (UC22, ADR-0092); schema `OtpSentResponse`, `RegistrationResponse`, mô tả `VerifyOtpRequest.code`.
+  - identity-v1 #1 `POST /auth/register`, #3 `POST /auth/register/resend-otp`, #6 `POST /auth/password/forgot`, #12 `POST /me/link/otp`, #23 `POST /staff/{id}/email-change`, #25 `POST /customers/{customerId}/account-email-change` (UC22, ADR-0097); schema `OtpSentResponse`, `RegistrationResponse`, mô tả `VerifyOtpRequest.code`.
   - BR-TK-04, 05, 07, 10; BR-QT-13 ([CFG] `otp.code_length`, 4–8, mặc định 6).
-  - ADR-0004 (đọc [CFG]), ADR-0009 (OTP băm BCrypt), ADR-0023 (forgot luôn 202 cùng body, `prepare()` chạy mọi nhánh), ADR-0025 (OTP `LINK_PROFILE`), ADR-0027, ADR-0034, ADR-0040 (Swagger = hợp đồng), ADR-0092.
+  - ADR-0004 (đọc [CFG]), ADR-0009 (OTP băm BCrypt), ADR-0023 (forgot luôn 202 cùng body, `prepare()` chạy mọi nhánh), ADR-0025 (OTP `LINK_PROFILE`), ADR-0027, ADR-0034, ADR-0040 (Swagger = hợp đồng), ADR-0097.
   - `docs/testcases/T49-fe.md` K25 và `docs/testcases/test-tay-ghep-api-theo-cum.md` L-20 (1/11: Hiến chọn phương án (a), BE trả độ dài); `docs/06-module-contracts.md` §6 (ghi chú 2/11 cho BE-1).
 - **Triển khai:**
   - Người viết: FE-1 (Hiến) với Claude, **thay BE-1**; **người dùng (Hiến) cho phép sửa module `identity` của BE-1** cho việc này. BE-1 chưa xem. Các file dưới đây nằm trong module của BE-1.
@@ -22,7 +22,7 @@
 
 ### 1. Hai trường cộng thêm, cuối record, bắt buộc
 
-- `OtpSentResponse` thêm `codeLength` (`int`, **cuối record**). Mọi endpoint trả `OtpSentResponse` trả trường này: `forgot` (#6), `resend-otp` (#3), `/me/link/otp` (#12), sửa email nhân viên (#23, cùng DTO và cùng `StaffAdminMapper.toOtpSentResponse`), UC22 #25 (ADR-0092).
+- `OtpSentResponse` thêm `codeLength` (`int`, **cuối record**). Mọi endpoint trả `OtpSentResponse` trả trường này: `forgot` (#6), `resend-otp` (#3), `/me/link/otp` (#12), sửa email nhân viên (#23, cùng DTO và cùng `StaffAdminMapper.toOtpSentResponse`), UC22 #25 (ADR-0097).
 - `RegistrationResponse` (#1) thêm `otpCodeLength` (`int`, cuối record), cạnh `otpResendAvailableAt`.
 - Cả hai là `required` trong `identity-v1` (kiểu nguyên thủy, luôn có giá trị). Không đổi trường cũ: FE cũ bỏ qua.
 
@@ -59,7 +59,7 @@
 - **Hợp đồng `identity-v1`:** `OtpSentResponse` thêm `codeLength` (int32, bắt buộc), `RegistrationResponse` thêm `otpCodeLength` (int32, bắt buộc). Sinh từ `m_identity.py`; không sửa tay `.md` / `.yaml`.
 - **FE:** đọc tùy chọn, mặc định 6 (K25). Đổi tên trường thì báo FE-1, sửa nhanh ở `FE/src/shared/types/auth.ts` và các nơi dùng. Mock của #23 (`identity-admin.mock.ts`) đã trả `codeLength`, test hai khóa đã đổi thành ba khóa.
 - Sau khi ADMIN đổi `otp.code_length`: mã đã gửi trước đó giữ độ dài cũ tới khi hết hạn; response của lần gửi tiếp theo trả độ dài mới. FE đọc số này từ chính response của lần gửi gần nhất.
-- **Điểm merge với nhánh `manh` (BE-1):** `OtpSentResponse`, `RegistrationResponse`, bốn mapper, `PasswordResetService`, `AuthController`, `docs/api/generator/m_identity.py` + `identity-v1.{md,yaml}`, các test đã liệt kê, số ADR 0091. `OtpSentResponse` đổi chữ ký record nên mọi nơi gọi `new OtpSentResponse(...)` (chủ yếu test) phải theo.
+- **Điểm merge với nhánh `manh` (BE-1):** `OtpSentResponse`, `RegistrationResponse`, bốn mapper, `PasswordResetService`, `AuthController`, `docs/api/generator/m_identity.py` + `identity-v1.{md,yaml}`, các test đã liệt kê, số ADR 0096. `OtpSentResponse` đổi chữ ký record nên mọi nơi gọi `new OtpSentResponse(...)` (chủ yếu test) phải theo.
 
 ## Kiểm chứng
 
@@ -68,8 +68,8 @@ Mục này có hai loại: số **đã đo** trực tiếp ngày 2/11 (chạy tr
 - **Ca mới (6 phương thức):**
   - Unit (5): `LinkProfileMapperTest.otpSentCodeLengthFollowsTheIssuedCode`, `StaffAdminMapperTest.otpSentResponseCodeLengthFollowsTheIssuedCode` (mã 8 số và 4 số, không phải 6), `PasswordResetServiceTest.forgotCodeLengthFollowsPreparedCodeOnEveryBranch` (mã 8 số, bốn nhánh cùng một response), `RegistrationServiceTest.registrationResponseCodeLengthFollowsTheIssuedCode`, `RegistrationServiceTest.resendCodeLengthFollowsTheIssuedCode`.
   - IT (1): `SystemConfigAdminIT.otpCodeLengthChangeReachesForgotAndRegisterResponses` — `PUT` `otp.code_length` = 8 → forgot cho email có tài khoản lẫn email lạ đều `codeLength` 8 (BR-TK-10), đăng ký trả `otpCodeLength` 8, và cả hai bằng độ dài `ma_otp` thật trong `notification_outbox`.
-- **Khẳng định thêm trong IT cũ:** `LinkProfileIT`, `PasswordResetIT`, `RegistrationIT`, `RegistrationResendIT`, `StaffEmailChangeIT` (cả bộ khóa response nay có `codeLength` / `otpCodeLength` = 6 và độ dài bằng mã thật). `CustomerAccountEmailChangeIT` (ADR-0092) khẳng định tương tự cho #25. `OtpServiceTest.codeLengthFollowsConfig` có từ trước, không tính là ca mới.
-- **Đã đo (2/11):** unit toàn bộ mọi module cộng `PetcareApplicationTests`: 5492 ca, 0 lỗi (riêng identity 2597); IT gộp trong MỘT JVM — mọi `*IT` của `module/identity` và `module/customer` cộng `OpenApiContractParityIT` và `SchemaMigrationIT`, 41 lớp: **1007 ca, 0 lỗi** (chi tiết từng lớp ở ADR-0092 mục Kiểm chứng); sáu IT hồi quy chạm response OTP (`PasswordResetIT`, `RegistrationResendIT`, `RegistrationIT`, `StaffEmailChangeIT`, `SystemConfigAdminIT`, `PendingAccountCleanupIT`) 199 ca xanh.
+- **Khẳng định thêm trong IT cũ:** `LinkProfileIT`, `PasswordResetIT`, `RegistrationIT`, `RegistrationResendIT`, `StaffEmailChangeIT` (cả bộ khóa response nay có `codeLength` / `otpCodeLength` = 6 và độ dài bằng mã thật). `CustomerAccountEmailChangeIT` (ADR-0097) khẳng định tương tự cho #25. `OtpServiceTest.codeLengthFollowsConfig` có từ trước, không tính là ca mới.
+- **Đã đo (2/11):** unit toàn bộ mọi module cộng `PetcareApplicationTests`: 5492 ca, 0 lỗi (riêng identity 2597); IT gộp trong MỘT JVM — mọi `*IT` của `module/identity` và `module/customer` cộng `OpenApiContractParityIT` và `SchemaMigrationIT`, 41 lớp: **1007 ca, 0 lỗi** (chi tiết từng lớp ở ADR-0097 mục Kiểm chứng); sáu IT hồi quy chạm response OTP (`PasswordResetIT`, `RegistrationResendIT`, `RegistrationIT`, `StaffEmailChangeIT`, `SystemConfigAdminIT`, `PendingAccountCleanupIT`) 199 ca xanh.
 - **Lời agent (chưa đối chiếu):** có chạy đột biến ở bốn nơi (tên từng đột biến và ca đỏ **chưa được chép lại**; người chạy bổ sung trước khi ADR thành Accepted). Với các unit test viết sau mã, bằng chứng "đỏ" chỉ đến từ đột biến này. Con số "783 ca" agent báo cho nhóm identity bị bỏ vì trùng đúng số của ADR-0089 (trước UC22).
 - **Hợp đồng (đã đo):** `node docs/api/check-contracts.mjs` — `ALL CONTRACTS PASS`, 231 operations, sau khi sinh lại.
 

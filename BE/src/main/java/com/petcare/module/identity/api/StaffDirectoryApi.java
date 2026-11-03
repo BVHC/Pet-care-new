@@ -9,7 +9,7 @@ public interface StaffDirectoryApi {
 
     /**
      * {@code active} = status ACTIVE và không bị khóa ({@code is_locked}; khóa tạm {@code locked_until} không tính);
-     * {@code online} = {@code last_seen_at} trong {@code staff.online_window_minutes} [CFG] (BR-TN-06) — docs/adr/0024.
+     * {@code online} = có phiên chưa hủy với access token còn hạn (BR-TN-06) — docs/adr/0024, docs/adr/0091.
      */
     record StaffSummary(Long accountId, String fullName, Role role, Long branchId,
                         boolean active, boolean online) {}

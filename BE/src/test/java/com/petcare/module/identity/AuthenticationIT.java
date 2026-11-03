@@ -65,7 +65,7 @@ import jakarta.persistence.EntityManager;
 /**
  * Xác thực JWT + phiên DB, RBAC, phạm vi chi nhánh, BR-TK-17, BR-TN-06 trên Postgres 17 thật qua HTTP
  * (docs/adr/0003). Dữ liệu dựng bằng SQL; phiên mở qua {@link SessionService} như task đăng nhập sẽ làm.
- * Thời gian điều khiển bằng một {@link Clock} thay được, để kiểm tra hết hạn phiên và nhịp ghi {@code last_seen_at}.
+ * Thời gian điều khiển bằng một {@link Clock} thay được, để kiểm tra hết hạn phiên và việc xác thực không ghi gì (docs/adr/0091).
  */
 @SpringBootTest(webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT)
 @ActiveProfiles("test")
@@ -581,7 +581,7 @@ class AuthenticationIT {
 
     /**
      * docs/adr/0005: FE gắn token vào mọi request; nhân viên còn phải đổi mật khẩu vẫn tới được path public (đăng nhập,
-     * quên mật khẩu…) dưới dạng ẩn danh: token không được đọc, phiên không được tra, {@code last_seen_at} không đổi.
+     * quên mật khẩu…) dưới dạng ẩn danh: token không được đọc, phiên không được tra.
      */
     @Test
     void mustChangePasswordStillReachesPublicPathAsAnonymous() {
@@ -592,34 +592,40 @@ class AuthenticationIT {
 
         assertThat(response.getStatusCode()).isEqualTo(HttpStatus.OK);
         assertThat(response.getBody()).isEqualTo("anonymous");
-        assertThat(lastSeen(vet)).isNull();
     }
 
     // ---------------------------------------------------------------- BR-TN-06
 
-    @Test
-    void staffLastSeenUpdatedAtMostOncePerMinute() {
-        String token = open(vet).accessToken();
-
-        get("/api/test/whoami", token);
-        assertThat(lastSeen(vet)).isEqualTo(T0);
-
-        clock.advance(Duration.ofSeconds(30));
-        get("/api/test/whoami", token);
-        assertThat(lastSeen(vet)).isEqualTo(T0);
-
-        clock.advance(Duration.ofSeconds(31));
-        get("/api/test/whoami", token);
-        assertThat(lastSeen(vet)).isEqualTo(T0.plusSeconds(61));
-    }
-
     /**
-     * docs/adr/0003 (BR-TN-06): ghi {@code last_seen_at} dùng {@code FOR UPDATE SKIP LOCKED}, nên khi dòng
-     * {@code accounts} đang bị transaction khác khóa (khóa tài khoản, đổi mật khẩu…) request không phải chờ mà bỏ qua
-     * lần ghi đó. Hết khóa thì ghi bình thường.
+     * docs/adr/0091 (trả D024): xác thực chỉ đọc. Request của người dùng, kể cả request poll tự động, không ghi gì vào
+     * {@code sessions} / {@code accounts}, nên chỉ đăng nhập và refresh mới làm nhân viên online.
      */
     @Test
-    void lastSeenUpdateNeverBlocksRequestWhenAccountRowIsLocked() throws Exception {
+    void authenticatedRequestsNeverWriteTheOnlineState() {
+        OpenedSession session = open(vet);
+        String token = session.accessToken();
+        Instant accessExpiresAt = sessionTime(session, "access_expires_at");
+        Instant sessionUpdatedAt = sessionTime(session, "updated_at");
+        String accountXmin = jdbc.queryForObject("SELECT xmin::text FROM accounts WHERE id = ?", String.class, vet);
+        String sessionXmin = jdbc.queryForObject("SELECT xmin::text FROM sessions WHERE id = ?", String.class,
+                session.sessionId());
+
+        for (int i = 0; i < 3; i++) {
+            clock.advance(Duration.ofSeconds(61));
+            assertThat(get("/api/test/whoami", token).getStatusCode()).isEqualTo(HttpStatus.OK);
+        }
+
+        assertThat(sessionTime(session, "access_expires_at")).isEqualTo(accessExpiresAt);
+        assertThat(sessionTime(session, "updated_at")).isEqualTo(sessionUpdatedAt);
+        assertThat(jdbc.queryForObject("SELECT xmin::text FROM accounts WHERE id = ?", String.class, vet))
+                .as("không UPDATE accounts").isEqualTo(accountXmin);
+        assertThat(jdbc.queryForObject("SELECT xmin::text FROM sessions WHERE id = ?", String.class,
+                session.sessionId())).as("không UPDATE sessions").isEqualTo(sessionXmin);
+    }
+
+    /** Xác thực không ghi nên không chờ khóa dòng {@code accounts} do transaction khác giữ (khóa, đổi mật khẩu…). */
+    @Test
+    void requestNeverBlocksWhenAccountRowIsLocked() throws Exception {
         String token = open(vet).accessToken();
         CountDownLatch locked = new CountDownLatch(1);
         CountDownLatch release = new CountDownLatch(1);
@@ -639,23 +645,12 @@ class AuthenticationIT {
             Future<ResponseEntity<Map<String, Object>>> call = pool.submit(() -> get("/api/test/whoami", token));
 
             assertThat(call.get(5, TimeUnit.SECONDS).getStatusCode()).isEqualTo(HttpStatus.OK);
-            assertThat(lastSeen(vet)).isNull();
         } finally {
             release.countDown();
             holder.get(30, TimeUnit.SECONDS);
             pool.shutdown();
             assertThat(pool.awaitTermination(30, TimeUnit.SECONDS)).isTrue();
         }
-
-        get("/api/test/whoami", token);
-        assertThat(lastSeen(vet)).isEqualTo(T0);
-    }
-
-    @Test
-    void customerLastSeenNotRecorded() {
-        get("/api/test/whoami", open(customer).accessToken());
-
-        assertThat(lastSeen(customer)).isNull();
     }
 
     // ---------------------------------------------------------------- audit, public paths
@@ -743,12 +738,6 @@ class AuthenticationIT {
         assertThat(response.getBody()).containsEntry("success", false).containsEntry("errorCode", errorCode)
                 .containsEntry("statusCode", status.value())
                 .containsKeys("message", "timestamp", "traceId");
-    }
-
-    private Instant lastSeen(long accountId) {
-        java.sql.Timestamp value = jdbc.queryForObject("SELECT last_seen_at FROM accounts WHERE id = ?",
-                java.sql.Timestamp.class, accountId);
-        return value == null ? null : value.toInstant();
     }
 
     private boolean sessionExists(OpenedSession session) {

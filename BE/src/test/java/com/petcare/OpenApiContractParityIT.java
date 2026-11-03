@@ -111,10 +111,11 @@ class OpenApiContractParityIT {
         // + 10 sales cashier #12–21 (T30, docs/adr/0064) + 12 boarding #1–12 (T31, docs/adr/0065) + 22 content #1–22 (T32, docs/adr/0071)
         // + 4 care #1–4 (T39 phần 1, docs/adr/0080) + 7 boarding #13–15, #19–22 (T42, docs/adr/0085) + 3 boarding #16–18 và 1 sales #9 (T43, docs/adr/0086) + 7 report #1–7 (T44, docs/adr/0087)
         // + 1 identity #38 (docs/adr/0089) + 2 identity #25, #26 (UC22 sửa hộ email tài khoản khách, BR-TK-16)
-        // + 1 identity #27 (UC22 lễ tân liên kết hộ hồ sơ tại quầy với tài khoản online, BR-TK-19).
+        // + 1 identity #27 (UC22 lễ tân liên kết hộ hồ sơ tại quầy với tài khoản online, BR-TK-19)
+        // + 1 identity #39 (refresh, docs/adr/0091).
         assertThat(documentedOps())
                 .as("số endpoint identity + care + customer + inventory + sales + appointment + visit + boarding + content + report đã cài")
-                .hasSize(184);
+                .hasSize(185);
     }
 
     @Test

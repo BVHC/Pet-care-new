@@ -163,6 +163,26 @@ class AppointmentQueryApiIT {
         assertThat(inTx(() -> api.findBookedByCustomer(Long.MAX_VALUE))).isEmpty();
     }
 
+    /** Docs/adr/0088: ST04 hoãn nhắc tái khám khi thú có lịch Khám/Tiêm BOOKED; chỉ BOOKED + MEDICAL tính. */
+    @Test
+    void hasBookedMedicalCountsOnlyBookedMedicalAppointmentsOfThatPet() {
+        long pet = data.pet(customer);
+        long otherPet = data.pet(customer);
+        assertThat(inTx(() -> api.hasBookedMedical(pet))).isFalse();
+
+        for (String status : List.of("CHECKED_IN", "COMPLETED", "CANCELLED", "NO_SHOW")) {
+            data.appointment(customer, pet, branch, medical, "MEDICAL", DAY, LocalTime.of(9, 0), status, staff);
+        }
+        data.appointment(customer, pet, branch, data.service("GROOMING"), "GROOMING", DAY, LocalTime.of(10, 0),
+                "BOOKED", staff);
+        data.appointment(customer, otherPet, branch, medical, "MEDICAL", DAY, LocalTime.of(11, 0), "BOOKED", staff);
+        assertThat(inTx(() -> api.hasBookedMedical(pet))).as("không BOOKED / không MEDICAL / thú khác").isFalse();
+
+        data.appointment(customer, pet, branch, medical, "MEDICAL", DAY, LocalTime.of(12, 0), "BOOKED", staff);
+        assertThat(inTx(() -> api.hasBookedMedical(pet))).isTrue();
+        assertThat(inTx(() -> api.hasBookedMedical(Long.MAX_VALUE))).isFalse();
+    }
+
     @Test
     void existsCountsEveryStatus() {
         long pet = data.pet(customer);
