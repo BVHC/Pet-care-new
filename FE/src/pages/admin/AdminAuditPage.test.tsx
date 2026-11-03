@@ -163,34 +163,38 @@ describe('AdminAuditPage (T22 - UC11)', () => {
       expect(screen.queryByText('SYSTEM_CONFIG_UPDATED')).not.toBeInTheDocument();
     });
 
-    // BE AuditLogFilterValidator R3: lọc action mà không có người thực hiện thì cần from + to cách ≤ 31 ngày, nếu không 400.
-    it('lọc theo hành động không kèm người thực hiện: FE hướng dẫn và chưa gửi cho tới khi from / to hợp lệ (≤ 31 ngày)', async () => {
+    // R3 của BE (action cần from + to ≤ 31 ngày) đã bỏ cùng index action (V31, ADR-0098): FE gửi ngay, không chặn.
+    it('lọc theo hành động một mình (không người thực hiện, không from / to) gửi ngay và nhận 200', async () => {
       await makeAuditRows();
       const user = userEvent.setup();
       const seen = recordRequests();
       renderPage();
       await screen.findByText('ACCOUNT_LOCKED');
-      const before = auditCalls(seen).length;
 
       await user.type(screen.getByLabelText('Hành động'), 'ACCOUNT_LOCKED');
 
-      expect(await screen.findByRole('alert')).toHaveTextContent('Lọc theo hành động cần chọn cả "Từ" và "Đến"');
-      expect(screen.queryByText('ACCOUNT_LOCKED', { selector: 'span' })).not.toBeInTheDocument(); // không giữ dòng của lần lọc trước
-      fireEvent.change(screen.getByLabelText('Từ'), { target: { value: localIn(-40) } });
-      fireEvent.change(screen.getByLabelText('Đến'), { target: { value: localIn(3) } });
-      expect(await screen.findByRole('alert')).toHaveTextContent('tối đa 31 ngày');
-      expect(auditCalls(seen)).toHaveLength(before); // chưa có request nào mang action
-
-      fireEvent.change(screen.getByLabelText('Từ'), { target: { value: localIn(-3) } });
-
-      await waitFor(() => expect(auditCalls(seen).filter((r) => r.params.action)).toHaveLength(1));
-      expect(auditCalls(seen).find((r) => r.params.action)).toMatchObject({ status: 200, params: { action: 'ACCOUNT_LOCKED' } });
+      await waitFor(() => expect(auditCalls(seen).some((r) => r.params.action === 'ACCOUNT_LOCKED' && r.status === 200)).toBe(true));
       expect(await screen.findByText('ACCOUNT_LOCKED', { selector: 'span' })).toBeInTheDocument();
       expect(screen.queryByRole('alert')).not.toBeInTheDocument();
       expect(seen.filter((r) => r.status === 400)).toEqual([]);
     });
 
-    it('có mã người thực hiện thì lọc theo hành động không cần from / to', async () => {
+    it('lọc theo hành động kèm khoảng dài hơn 31 ngày vẫn gửi và nhận 200', async () => {
+      await makeAuditRows();
+      const seen = recordRequests();
+      renderPage();
+      await screen.findByText('ACCOUNT_LOCKED');
+
+      await userEvent.setup().type(screen.getByLabelText('Hành động'), 'ACCOUNT_LOCKED');
+      fireEvent.change(screen.getByLabelText('Từ'), { target: { value: localIn(-400) } });
+      fireEvent.change(screen.getByLabelText('Đến'), { target: { value: localIn(3) } });
+
+      await waitFor(() => expect(auditCalls(seen).some((r) => r.params.action === 'ACCOUNT_LOCKED' && r.params.from && r.status === 200)).toBe(true));
+      expect(screen.queryByRole('alert')).not.toBeInTheDocument();
+      expect(seen.filter((r) => r.status === 400)).toEqual([]);
+    });
+
+    it('có mã người thực hiện thì lọc theo hành động vẫn gửi bình thường', async () => {
       await makeAuditRows();
       const user = userEvent.setup();
       const seen = recordRequests();

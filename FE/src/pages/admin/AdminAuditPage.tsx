@@ -54,22 +54,6 @@ const AUDIT_ACTIONS = [
   'PRESCRIPTION_ITEM_ADDED', 'PRESCRIPTION_ITEM_REMOVED',
 ];
 
-const MAX_ACTION_WINDOW_MS = 31 * 24 * 60 * 60 * 1000; // BE AuditLogFilter.MAX_ACTION_WINDOW
-
-/**
- * BE (AuditLogFilterValidator R3): lọc `action` mà không có người thực hiện (hay loại + mã đối tượng, FE chưa có ô mã đối tượng) thì bắt
- * buộc `from` + `to` cách nhau ≤ 31 ngày, nếu không trả 400. Trả câu hướng dẫn thay vì gửi; null = gửi được.
- */
-function auditFilterHint(f: { actor: string; action: string; from: string; to: string }): string | null {
-  if (!f.action.trim() || f.actor) return null;
-  const from = Date.parse(withVnOffset(f.from) ?? '');
-  const to = Date.parse(withVnOffset(f.to) ?? '');
-  if (Number.isNaN(from) || Number.isNaN(to)) {
-    return 'Lọc theo hành động cần chọn cả "Từ" và "Đến" (cách nhau tối đa 31 ngày), hoặc nhập mã người thực hiện.';
-  }
-  return to - from > MAX_ACTION_WINDOW_MS ? 'Khi lọc theo hành động, "Từ" và "Đến" chỉ được cách nhau tối đa 31 ngày (hoặc nhập mã người thực hiện).' : null;
-}
-
 export function AdminAuditPage() {
   const account = useAccount();
   const [actor, setActor] = useState('');
@@ -82,7 +66,6 @@ export function AdminAuditPage() {
   const [paging, setPaging] = useState({ key: filterKey, page: 0 });
   if (paging.key !== filterKey) setPaging({ key: filterKey, page: 0 });
   const page = paging.key === filterKey ? paging.page : 0;
-  const hint = auditFilterHint({ actor, action, from, to });
 
   const params = {
     actorAccountId: actor ? Number(actor) : undefined,
@@ -93,7 +76,7 @@ export function AdminAuditPage() {
     page,
     size: PAGE_SIZE,
   };
-  const { data, isPending, error } = useAuditLogs(params, !hint);
+  const { data, isPending, error } = useAuditLogs(params);
 
   if (account?.role !== 'ADMIN') {
     return (
@@ -104,8 +87,7 @@ export function AdminAuditPage() {
     );
   }
 
-  // Bộ lọc chưa gửi được thì không hiện dòng cũ của lần lọc trước (keepPreviousData).
-  const list = hint ? [] : (data?.content ?? []);
+  const list = data?.content ?? [];
 
   return (
     <div className="space-y-6">
@@ -114,8 +96,7 @@ export function AdminAuditPage() {
         <p className="text-(--text-secondary)">Ghi lại mọi thao tác tạo / sửa / khóa / đổi tham số. Mỗi dòng kèm trước-sau (before / after).</p>
       </div>
 
-      {error && !hint && <NoticeBar notice={{ kind: 'error', text: plainMessage(toApiError(error)) }} />}
-      {hint && <NoticeBar notice={{ kind: 'error', text: hint }} />}
+      {error && <NoticeBar notice={{ kind: 'error', text: plainMessage(toApiError(error)) }} />}
 
       <Card className="card">
         <CardContent className="p-4 grid grid-cols-1 md:grid-cols-6 gap-3">
@@ -181,9 +162,8 @@ export function AdminAuditPage() {
               </tr>
             </thead>
             <tbody>
-              {hint && <tr><td colSpan={6} className="text-center text-(--text-tertiary) py-8">Chưa tải nhật ký: chỉnh bộ lọc theo hướng dẫn phía trên.</td></tr>}
-              {!hint && isPending && <tr><td colSpan={6} className="text-center text-(--text-tertiary) py-8">Đang tải…</td></tr>}
-              {!hint && !isPending && list.length === 0 && <tr><td colSpan={6} className="text-center text-(--text-tertiary) py-8">Không có dòng nhật ký nào.</td></tr>}
+              {isPending && <tr><td colSpan={6} className="text-center text-(--text-tertiary) py-8">Đang tải…</td></tr>}
+              {!isPending && list.length === 0 && <tr><td colSpan={6} className="text-center text-(--text-tertiary) py-8">Không có dòng nhật ký nào.</td></tr>}
               {list.map((a) => (
                 <tr key={a.id}>
                   <td className="text-xs text-(--text-tertiary) whitespace-nowrap">{new Date(a.createdAt).toLocaleString('vi-VN')}</td>
@@ -212,7 +192,7 @@ export function AdminAuditPage() {
               ))}
             </tbody>
           </table>
-          {data && !hint && <Pager data={data} unit="dòng" onPage={(p) => setPaging({ key: filterKey, page: p })} />}
+          {data && <Pager data={data} unit="dòng" onPage={(p) => setPaging({ key: filterKey, page: p })} />}
         </CardContent>
       </Card>
     </div>

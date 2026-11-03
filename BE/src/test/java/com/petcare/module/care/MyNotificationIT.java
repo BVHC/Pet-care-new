@@ -507,10 +507,14 @@ class MyNotificationIT {
     // ---------------------------------------------------------------- index
 
     /**
-     * Câu SQL thật của repository (đọc từ {@code @Query}) dùng index V1 {@code ix_notifications_account_read_created}
-     * khi bảng có 6 000 dòng của 300 tài khoản khác. Dữ liệu chèn và {@code ANALYZE} trong một transaction rollback.
-     * Không khẳng định bỏ được bước Sort: plan đo 14/10 có Sort ở cả hai câu trang ({@code read_at IS NULL} không cho
-     * thứ tự, index không có {@code id}) — sort trên các dòng của một tài khoản, nợ D022.
+     * Câu SQL thật của repository (đọc từ {@code @Query}) dùng index khi bảng có 6 000 dòng của 300 tài khoản khác.
+     * Dữ liệu chèn và {@code ANALYZE} trong một transaction rollback. Hai index (docs/adr/0099, trả D022): V1
+     * {@code ix_notifications_account_read_created (account_id, read_at, created_at DESC)} cho {@code countUnread} /
+     * {@code markAllRead}, V32 {@code ix_notifications_account_created (account_id, created_at DESC, id DESC)} cho thứ
+     * tự của danh sách. Các câu trang và câu đếm chỉ phải dùng một trong hai index (planner chọn theo thống kê).
+     * "Index V32 cho được thứ tự" được chứng minh bằng {@code SET LOCAL enable_sort = off}: nếu không index nào cho
+     * thứ tự thì Postgres vẫn phải Sort, nên plan không có node Sort chỉ khi V32 khớp {@code ORDER BY}; cách này không
+     * phụ thuộc cỡ dữ liệu nên không flaky.
      */
     @Test
     void repositoryQueriesUseTheAccountIndex() {
@@ -527,15 +531,15 @@ class MyNotificationIT {
                     FROM generate_series(1, 20) g
                     CROSS JOIN (SELECT id FROM accounts WHERE email LIKE ?) a
                     """, "explain-" + tag + "-%");
-            for (int i = 0; i < 50; i++) {
+            for (int i = 0; i < 250; i++) {
                 insert(me, "MINE", "t", "b", null, i % 2 == 0 ? SEEDED_AT : null, at(i));
             }
             jdbc.execute("ANALYZE notifications");
 
             for (String method : List.of("findMine", "findMineUnread")) {
                 Query query = query(method);
-                assertUsesIndex(method, query.value() + " LIMIT 20 OFFSET 0", me);
-                assertUsesIndex(method + " count", query.countQuery(), me);
+                assertUsesAnAccountIndex(method, query.value() + " LIMIT 20 OFFSET 0", me);
+                assertUsesAnAccountIndex(method + " count", query.countQuery(), me);
             }
             assertUsesIndex("countUnread", query("countUnread").value(), me);
             // :now xuất hiện hai lần (read_at, updated_at) → hai tham số bind
@@ -544,6 +548,12 @@ class MyNotificationIT {
             String markRead = explain(query("markRead").value().replace(":now", "?").replace(":id", "?")
                     .replace(":accountId", "?"), Timestamp.from(T0), Timestamp.from(T0), 1L, me);
             assertThat(markRead).as(markRead).contains("notifications_pkey").doesNotContain("Seq Scan");
+
+            // Thứ tự của danh sách (V32, docs/adr/0099): cấm Sort thì chỉ index khớp ORDER BY mới tránh được node Sort.
+            jdbc.execute("SET LOCAL enable_sort = off");
+            String page = explain(query("findMine").value().replace(":accountId", "?") + " LIMIT 20 OFFSET 0", me);
+            assertThat(page).as(page).contains("ix_notifications_account_created")
+                    .doesNotContain("Sort").doesNotContain("Seq Scan");
 
             status.setRollbackOnly();
         });
@@ -599,6 +609,14 @@ class MyNotificationIT {
     private void assertUsesIndex(String label, String sql, Object... params) {
         String plan = explain(sql.replace(":accountId", "?"), params);
         assertThat(plan).as("%s\n%s", label, plan).contains("ix_notifications_account_read_created")
+                .doesNotContain("Seq Scan");
+    }
+
+    /** Câu trang và câu đếm: planner chọn một trong hai index theo thống kê (docs/adr/0099); không được Seq Scan. */
+    private void assertUsesAnAccountIndex(String label, String sql, Object... params) {
+        String plan = explain(sql.replace(":accountId", "?"), params);
+        assertThat(plan).as("%s\n%s", label, plan)
+                .containsAnyOf("ix_notifications_account_read_created", "ix_notifications_account_created")
                 .doesNotContain("Seq Scan");
     }
 

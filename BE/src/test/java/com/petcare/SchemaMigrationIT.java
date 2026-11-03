@@ -149,11 +149,13 @@ class SchemaMigrationIT {
         // (docs/adr/0091), V28 4 index FK bệnh án / mũi tiêm + CHECK lý do mua ngoài (docs/adr/0093, trả D043),
         // V29 index lịch hẹn theo chi nhánh × ngày (docs/adr/0094, trả D032),
         // V30 index lượt tiếp nhận theo chi nhánh × ngày check-in (docs/adr/0095, trả D041),
+        // V31 index audit_logs (action, created_at) + gỡ 2 trigger chỉ-thêm-mới của audit_logs (docs/adr/0098, trả D021),
+        // V32 index thứ tự danh sách thông báo (account_id, created_at DESC, id DESC) (docs/adr/0099, trả D022),
         // V9000 chỉ ở test: baseline session.access_ttl_minutes = 720
         assertThat(rows).extracting(row -> row.get("version"))
                 .containsExactly("1", "2", "3", "4", "5", "6", "7", "8", "9", "10", "11", "12", "13", "14", "15",
                         "16", "17", "18", "19", "20", "21", "22", "23", "24", "25", "26", "27", "28", "29", "30",
-                        "9000");
+                        "31", "32", "9000");
         assertThat(rows).allSatisfy(row -> assertThat(row).containsEntry("success", true));
     }
 
@@ -472,6 +474,26 @@ class SchemaMigrationIT {
     }
 
     /**
+     * V32 (docs/adr/0099, trả D022): index thứ tự danh sách thông báo (account_id, created_at DESC, id DESC), không
+     * partial; index V1 {@code ix_notifications_account_read_created} còn nguyên cho countUnread / markAllRead.
+     */
+    @Test
+    void notificationAccountCreatedIndexKeepsTheV1Index() {
+        assertThat(jdbc.queryForList(
+                "SELECT indexdef FROM pg_indexes WHERE schemaname = 'public' AND indexname = 'ix_notifications_account_created'",
+                String.class))
+                .singleElement().asString()
+                .contains("ON public.notifications").contains("(account_id, created_at DESC, id DESC)")
+                .doesNotContain("WHERE");
+        assertThat(jdbc.queryForList(
+                "SELECT indexdef FROM pg_indexes WHERE schemaname = 'public'"
+                        + " AND indexname = 'ix_notifications_account_read_created'",
+                String.class))
+                .singleElement().asString()
+                .contains("(account_id, read_at, created_at DESC)");
+    }
+
+    /**
      * V28 (docs/adr/0093, trả D043 nhóm 3): CHECK buộc lý do mua ngoài theo cờ mua ngoài; ca vi phạm ở
      * {@code PrescriptionItemConstraintIT}.
      */
@@ -611,24 +633,23 @@ class SchemaMigrationIT {
 
     // ---------------------------------------------------------------- D6, D7, D10: hành vi ràng buộc
 
+    /**
+     * V31 (docs/adr/0098): hai trigger chỉ-thêm-mới của V1 đã gỡ theo yêu cầu của chủ dự án; bảo đảm BR-QT-16 nằm ở
+     * tầng ứng dụng. Index {@code action} có mặt. Không UPDATE / DELETE / TRUNCATE bảng thật trong IT chung database.
+     */
     @Test
-    void auditLogsAreInsertOnly() {
-        Long id = jdbc.queryForObject(
-                "INSERT INTO audit_logs (actor_email, action) VALUES ('it@petcare.test', 'IT_AUDIT') RETURNING id",
-                Long.class);
-
-        assertThatThrownBy(() -> jdbc.update("UPDATE audit_logs SET reason = 'sửa' WHERE id = ?", id))
-                .isInstanceOf(DataAccessException.class)
-                .satisfies(ex -> assertThat(rootMessage(ex)).contains("BR-QT-16"));
-        assertThatThrownBy(() -> jdbc.update("DELETE FROM audit_logs WHERE id = ?", id))
-                .isInstanceOf(DataAccessException.class)
-                .satisfies(ex -> assertThat(rootMessage(ex)).contains("BR-QT-16"));
-        assertThatThrownBy(() -> jdbc.execute("TRUNCATE audit_logs"))
-                .isInstanceOf(DataAccessException.class)
-                .satisfies(ex -> assertThat(rootMessage(ex)).contains("BR-QT-16"));
-
-        Map<String, Object> row = jdbc.queryForMap("SELECT action, reason FROM audit_logs WHERE id = ?", id);
-        assertThat(row).containsEntry("action", "IT_AUDIT").containsEntry("reason", null);
+    void auditLogsTriggersAreDroppedAndActionIndexExists() {
+        assertThat(jdbc.queryForList("""
+                SELECT tgname FROM pg_trigger
+                WHERE tgrelid = 'audit_logs'::regclass AND NOT tgisinternal
+                """, String.class)).as("không còn trigger nào trên audit_logs").isEmpty();
+        assertThat(jdbc.queryForObject("SELECT count(*) FROM pg_proc WHERE proname = 'forbid_audit_log_change'",
+                Long.class)).as("hàm trigger đã xóa").isZero();
+        assertThat(jdbc.queryForObject("""
+                SELECT pg_get_indexdef(indexrelid) FROM pg_index
+                WHERE indrelid = 'audit_logs'::regclass
+                  AND indexrelid = 'ix_audit_logs_action_created_at'::regclass
+                """, String.class)).contains("(action, created_at)");
     }
 
     @Test

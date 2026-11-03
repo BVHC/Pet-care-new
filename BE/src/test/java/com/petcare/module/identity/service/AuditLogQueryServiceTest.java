@@ -33,7 +33,6 @@ import com.petcare.module.identity.repository.AuditLogRow;
 import com.petcare.platform.audit.AuditRecorder;
 import com.petcare.platform.model.PageResponse;
 
-import jakarta.validation.ConstraintViolation;
 import jakarta.validation.ConstraintViolationException;
 import jakarta.validation.Validation;
 import jakarta.validation.Validator;
@@ -108,19 +107,7 @@ class AuditLogQueryServiceTest {
         assertThatThrownBy(() -> service.listAuditLogs(filter, 0, 20))
                 .isInstanceOfSatisfying(ConstraintViolationException.class, ex -> assertThat(
                         ex.getConstraintViolations().stream().map(v -> v.getPropertyPath().toString()).toList())
-                        .as("R1 → R2 (R3 không áp vì khoảng ngược đã là R1)").containsExactly("to", "entityType"));
-        verifyNoInteractions(repository);
-    }
-
-    @Test
-    void allThreeRulesComeOutInFixedOrder() {
-        AuditLogFilter r2AndR3 = new AuditLogFilter(null, "LOGIN_FAILED", null, 9L, null, null);
-
-        assertThatThrownBy(() -> service.listAuditLogs(r2AndR3, 0, 20))
-                .isInstanceOfSatisfying(ConstraintViolationException.class, ex -> assertThat(
-                        ex.getConstraintViolations().stream().map(ConstraintViolation::getPropertyPath)
-                                .map(Object::toString).toList())
-                        .containsExactly("entityType", "from"));
+                        .as("R1 → R2").containsExactly("to", "entityType"));
         verifyNoInteractions(repository);
     }
 

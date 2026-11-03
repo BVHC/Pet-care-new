@@ -1543,7 +1543,7 @@ paths:
           required: false
           schema:
             type: string
-          description: "Mã hành động, tối đa 50 ký tự (khớp đúng). Không kèm actorAccountId hay entityType + entityId thì bắt buộc from + to cách nhau ≤ 31 ngày"
+          description: "Mã hành động, tối đa 50 ký tự (khớp đúng)"
         - name: entityType
           in: query
           required: false
@@ -1598,7 +1598,7 @@ paths:
                     type: integer
                     description: "HTTP status của kết quả, ví dụ 200, 201"
         "400":
-          description: "`MALFORMED_REQUEST` tham số sai kiểu (from / to thiếu offset, id không phải số nguyên) · `VALIDATION_FAILED` action / entityType quá 50 ký tự, `to` trước `from`, `entityId` không kèm `entityType`, lọc `action` không kèm người / đối tượng mà thiếu from / to hoặc cách nhau quá 31 ngày (message nêu đủ lỗi, theo tên tham số)"
+          description: "`MALFORMED_REQUEST` tham số sai kiểu (from / to thiếu offset, id không phải số nguyên) · `VALIDATION_FAILED` action / entityType quá 50 ký tự, `to` trước `from`, `entityId` không kèm `entityType` (message nêu đủ lỗi, theo tên tham số)"
           content:
             "application/json":
               schema:
