@@ -1,4 +1,5 @@
 import { fireEvent, screen, waitFor, within } from '@testing-library/react';
+import { toast } from 'sonner';
 import { afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
 import { ApiError } from '@/shared/api/api-error';
 import { boardingApi } from '@/shared/api/boarding.api';
@@ -148,8 +149,8 @@ describe('CheckoutDialog — bước chưa có Order', () => {
     await startButton();
     await (await otherStaff(ACCOUNTS.desk)).post('/api/boarding-bookings/2/end-deceased', { note: 'Người khác ghi trước' });
     await user.click(screen.getByRole('button', { name: 'Bắt đầu trả thú' }));
-    expect(await screen.findByRole('alert')).toHaveTextContent('Thú cưng không còn trong chuồng');
-    expect(await screen.findByText(/Thú không còn trong chuồng/)).toBeInTheDocument();
+    expect(await screen.findByRole('alert')).toHaveTextContent('Thú không còn trong chuồng');
+    expect(await screen.findByText(/không cần trả thú nữa/)).toBeInTheDocument(); // đoạn của hộp thoại (câu 409 của BE nằm ở dải lỗi, không lẫn vào đây)
     expect(screen.queryByRole('button', { name: 'Bắt đầu trả thú' })).not.toBeInTheDocument();
     await user.click(screen.getByRole('button', { name: 'Đóng' }));
     expect(onClose).toHaveBeenCalledTimes(1);
@@ -265,6 +266,195 @@ describe('CheckoutDialog — bước Order chờ thanh toán', () => {
   });
 });
 
+// BE chỉ trả `Booking.activeOrderId` cho Order OPEN / PENDING (SalesOrderRepository.findUnfinishedByBookingIds): thu tiền xong (PAID) thì `activeOrderId` = null.
+// Khi đó hộp thoại hỏi `GET /api/orders?boardingBookingId=` (Order mới nhất chưa hủy) rồi đọc chi tiết Order đó. Interceptor của harness chỉ ghi `config.url`
+// (không ghi params), nên lệnh hỏi danh sách hiện là 'GET /api/orders' và lệnh đọc chi tiết là 'GET /api/orders/<id>'.
+type OrderPage = Awaited<ReturnType<typeof salesApi.listOrders>>;
+const LIST_ORDERS = 'GET /api/orders';
+const orderDetailCalls = () => requests().filter((r) => /^GET \/api\/orders\/\d+$/.test(r));
+
+/** Trạng thái thật của BE sau khi thu tiền: Order lưu trú PAID, đặt chỗ còn trong chuồng nhưng `activeOrderId` = null. */
+async function paidElsewhere(bookingId = 2) {
+  await signIn(ACCOUNTS.desk);
+  await (await otherStaff(ACCOUNTS.desk)).post(`/api/boarding-bookings/${bookingId}/start-checkout`);
+  const order = await collectElsewhere(bookingId);
+  const booking = await bookingOf(bookingId);
+  expect(booking.activeOrderId).toBeNull();
+  return { order, booking };
+}
+/** Hủy phiên ở máy khác: Order PENDING → CANCELLED (CHECKOUT_ABORTED), `activeOrderId` về null. */
+async function abortElsewhere(bookingId = 2) {
+  const order = await orderOf(bookingId);
+  await (await otherStaff(ACCOUNTS.desk)).post(`/api/orders/${order.orderId}/abort-checkout`, { reason: 'Khách bỏ về' });
+  return order;
+}
+/** Theo dõi lệnh hỏi danh sách Order; `gate.armed = true` thì lần hỏi KẾ TIẾP bị giữ (đang tải) cho tới khi `gate.release(trang)`, các lần khác chạy thật. */
+function watchOrderList() {
+  const real = salesApi.listOrders;
+  const gate = { armed: false, started: false, release: (_page: OrderPage) => {} };
+  const spy = vi.spyOn(salesApi, 'listOrders').mockImplementation((query) => {
+    if (!gate.armed) return real(query);
+    gate.armed = false;
+    gate.started = true;
+    return new Promise<OrderPage>((resolve) => (gate.release = resolve));
+  });
+  return { spy, gate, real };
+}
+type OrderDetail = Awaited<ReturnType<typeof salesApi.getOrder>>;
+/** Giống `watchOrderList` nhưng cho lần đọc chi tiết Order KẾ TIẾP (`gate.armed = true`): giữ lại thì lệnh ghi chưa "xong" (làm mới của hook còn chờ) dù đặt chỗ đã về. */
+function holdNextOrderRead() {
+  const real = salesApi.getOrder;
+  const gate = { armed: false, started: false, release: (_order: OrderDetail) => {} };
+  vi.spyOn(salesApi, 'getOrder').mockImplementation((orderId) => {
+    if (!gate.armed) return real(orderId);
+    gate.armed = false;
+    gate.started = true;
+    return new Promise<OrderDetail>((resolve) => (gate.release = resolve));
+  });
+  return { gate, real };
+}
+
+describe('CheckoutDialog — Order đã PAID (BE không còn trả activeOrderId)', () => {
+  it('activeOrderId = null + có Order PAID: mở ra vào thẳng bước Giao thú (nút bật), không gọi start-checkout, không ghi gì', async () => {
+    const { order, booking } = await paidElsewhere();
+    const spy = vi.spyOn(salesApi, 'listOrders');
+    clearRequests();
+    renderDialog(<CheckoutDialog booking={booking} onClose={() => {}} />);
+    await waitFor(() => expect(handOverButton()).toBeEnabled());
+    const dialog = screen.getByRole('dialog', { name: 'Trả thú' });
+    expect(within(dialog).getByText(order.code)).toBeInTheDocument();
+    expect(within(dialog).getByText('Đã thanh toán')).toBeInTheDocument();
+    expect(within(dialog).getByText('2 đêm')).toBeInTheDocument();
+    expect(within(dialog).queryByRole('button', { name: 'Bắt đầu trả thú' })).not.toBeInTheDocument();
+    expect(spy).toHaveBeenCalledWith({ boardingBookingId: 2 });
+    expect(requests().filter((r) => r === LIST_ORDERS)).toHaveLength(1);
+    expect(writes()).toEqual([]);
+  });
+
+  it('đang hỏi danh sách Order của đặt chỗ: báo đang tải, KHÔNG chớp "Bắt đầu trả thú"; có kết quả PAID thì vào bước Giao thú', async () => {
+    const { booking } = await paidElsewhere();
+    const { gate, real } = watchOrderList();
+    gate.armed = true;
+    clearRequests();
+    renderDialog(<CheckoutDialog booking={booking} onClose={() => {}} />);
+    await waitFor(() => expect(gate.started).toBe(true)); // đặt chỗ đã tải, danh sách Order đang chờ
+    expect(screen.getByRole('status')).toHaveTextContent('Đang tải Order lưu trú');
+    expect(screen.queryByRole('button', { name: 'Bắt đầu trả thú' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Giao thú' })).not.toBeInTheDocument();
+    gate.release(await real({ boardingBookingId: 2 }));
+    await waitFor(() => expect(handOverButton()).toBeEnabled());
+    expect(screen.queryByRole('button', { name: 'Bắt đầu trả thú' })).not.toBeInTheDocument();
+    expect(writes()).toEqual([]);
+  });
+
+  it('lỗi hỏi danh sách (404): hiện câu của BE, không hiện Bắt đầu trả thú; Thử lại hỏi lại và vào bước Giao thú', async () => {
+    const { booking } = await paidElsewhere();
+    const spy = vi.spyOn(salesApi, 'listOrders').mockRejectedValueOnce(new ApiError('RESOURCE_NOT_FOUND', 'Không tìm thấy đặt chỗ lưu trú #2', 404));
+    clearRequests();
+    const onClose = vi.fn();
+    const { user } = renderDialog(<CheckoutDialog booking={booking} onClose={onClose} />);
+    expect(await screen.findByRole('alert')).toHaveTextContent('Không tìm thấy đặt chỗ lưu trú #2');
+    expect(screen.queryByRole('button', { name: 'Bắt đầu trả thú' })).not.toBeInTheDocument();
+    expect(spy).toHaveBeenCalledTimes(1);
+    await user.click(screen.getByRole('button', { name: 'Thử lại' }));
+    await waitFor(() => expect(handOverButton()).toBeEnabled());
+    expect(spy).toHaveBeenCalledTimes(2);
+    expect(screen.getByText('Đã thanh toán')).toBeInTheDocument();
+    expect(writes()).toEqual([]);
+    expect(onClose).not.toHaveBeenCalled();
+  });
+
+  it('lỗi hỏi danh sách: nút Đóng đóng được', async () => {
+    const { booking } = await paidElsewhere();
+    vi.spyOn(salesApi, 'listOrders').mockRejectedValueOnce(new ApiError('RESOURCE_NOT_FOUND', 'Không tìm thấy đặt chỗ lưu trú #2', 404));
+    const onClose = vi.fn();
+    const { user } = renderDialog(<CheckoutDialog booking={booking} onClose={onClose} />);
+    await screen.findByRole('alert');
+    await user.click(screen.getByRole('button', { name: 'Đóng' }));
+    expect(onClose).toHaveBeenCalledTimes(1);
+  });
+
+  it('activeOrderId có sẵn (Order PENDING): KHÔNG hỏi danh sách Order của đặt chỗ, chỉ đọc đúng Order đó', async () => {
+    await signIn(ACCOUNTS.desk);
+    await (await otherStaff(ACCOUNTS.desk)).post('/api/boarding-bookings/2/start-checkout');
+    const stale = await bookingOf(2);
+    const orderId = stale.activeOrderId!;
+    const spy = vi.spyOn(salesApi, 'listOrders');
+    clearRequests();
+    renderDialog(<CheckoutDialog booking={stale} onClose={() => {}} />);
+    expect(await screen.findByRole('button', { name: 'Kiểm tra lại' })).toBeEnabled();
+    expect(spy).not.toHaveBeenCalled();
+    expect(requests()).not.toContain(LIST_ORDERS);
+    expect(orderDetailCalls()).toEqual([`GET /api/orders/${orderId}`]);
+  });
+
+  it('activeOrderId = null + chỉ có Order CANCELLED (đã hủy phiên): vẫn là bước Bắt đầu trả thú, không đọc lại Order đã hủy', async () => {
+    await signIn(ACCOUNTS.desk);
+    await (await otherStaff(ACCOUNTS.desk)).post('/api/boarding-bookings/2/start-checkout');
+    const aborted = await abortElsewhere();
+    const booking = await bookingOf(2);
+    expect(booking.activeOrderId).toBeNull();
+    expect(await salesApi.getOrder(aborted.orderId)).toMatchObject({ status: 'CANCELLED', cancelType: 'CHECKOUT_ABORTED' });
+    clearRequests();
+    renderDialog(<CheckoutDialog booking={booking} onClose={() => {}} />);
+    expect(await startButton()).toBeEnabled();
+    expect(requests().filter((r) => r === LIST_ORDERS)).toHaveLength(1);
+    expect(orderDetailCalls()).toEqual([]);
+    expect(screen.queryByRole('button', { name: 'Giao thú' })).not.toBeInTheDocument();
+    expect(writes()).toEqual([]);
+  });
+
+  it('activeOrderId = null + danh sách rỗng (chưa từng bắt đầu trả thú): bước Bắt đầu trả thú, đã hỏi đúng đặt chỗ này', async () => {
+    const spy = vi.spyOn(salesApi, 'listOrders');
+    await open();
+    expect(await startButton()).toBeEnabled();
+    expect(spy).toHaveBeenCalledWith({ boardingBookingId: 2 });
+    expect(await spy.mock.results[0].value).toMatchObject({ content: [], totalElements: 0 });
+    expect(orderDetailCalls()).toEqual([]);
+    expect(writes()).toEqual([]);
+  });
+
+  it('có cả Order CANCELLED cũ lẫn PAID mới: chọn Order PAID (mới nhất chưa hủy)', async () => {
+    await signIn(ACCOUNTS.desk);
+    const desk = await otherStaff(ACCOUNTS.desk);
+    await desk.post('/api/boarding-bookings/2/start-checkout');
+    const aborted = await abortElsewhere();
+    await desk.post('/api/boarding-bookings/2/start-checkout'); // Order mới (PENDING), phiên cũ đã hủy
+    const paid = await collectElsewhere();
+    expect(paid.orderId).not.toBe(aborted.orderId);
+    const booking = await bookingOf(2);
+    expect(booking.activeOrderId).toBeNull();
+    const page = await salesApi.listOrders({ boardingBookingId: 2 });
+    expect(page.content.map((o) => [o.orderId, o.status])).toEqual([
+      [paid.orderId, 'PAID'],
+      [aborted.orderId, 'CANCELLED'],
+    ]);
+    clearRequests();
+    renderDialog(<CheckoutDialog booking={booking} onClose={() => {}} />);
+    await waitFor(() => expect(handOverButton()).toBeEnabled());
+    const dialog = screen.getByRole('dialog', { name: 'Trả thú' });
+    expect(within(dialog).getByText(paid.code)).toBeInTheDocument();
+    expect(within(dialog).queryByText(aborted.code)).not.toBeInTheDocument();
+    expect(orderDetailCalls()).toEqual([`GET /api/orders/${paid.orderId}`]);
+    expect(writes()).toEqual([]);
+  });
+
+  it('Kiểm tra lại sau khi thu tiền ở máy khác: lúc hỏi lại danh sách vẫn báo đang tải, không chớp Bắt đầu trả thú từ kết quả "chưa có Order" của lần trước', async () => {
+    const { gate } = watchOrderList();
+    const { user } = await open(); // danh sách rỗng → Bắt đầu trả thú
+    await start(user); // activeOrderId có (PENDING) → danh sách tắt
+    await collectElsewhere(); // PAID: lần làm mới tới sẽ thấy activeOrderId = null
+    gate.armed = true;
+    await user.click(screen.getByRole('button', { name: 'Kiểm tra lại' }));
+    await waitFor(() => expect(gate.started).toBe(true));
+    expect(screen.getByRole('status')).toHaveTextContent('Đang tải Order lưu trú');
+    expect(screen.queryByRole('button', { name: 'Bắt đầu trả thú' })).not.toBeInTheDocument();
+    gate.release(await salesApi.listOrders({ boardingBookingId: 2 }));
+    await waitFor(() => expect(handOverButton()).toBeEnabled());
+    expect(screen.getByText('Đã thanh toán')).toBeInTheDocument();
+  });
+});
+
 describe('CheckoutDialog — hủy phiên (Review Focus #4)', () => {
   it('lý do bắt buộc; hủy xong quay về bước chưa có Order, bắt đầu lại sinh Order mới', async () => {
     const abort = vi.spyOn(salesApi, 'abortCheckout');
@@ -293,6 +483,24 @@ describe('CheckoutDialog — hủy phiên (Review Focus #4)', () => {
     expect(screen.getByText(ORDER_CODE).textContent).not.toBe(firstCode);
   });
 
+  it('đặt chỗ làm mới xong trước khi Order được đọc lại (bước Order đã gỡ khỏi màn hình): vẫn báo "Đã hủy phiên" đúng một lần', async () => {
+    const notify = vi.spyOn(toast, 'success').mockImplementation(() => '');
+    const { gate, real } = holdNextOrderRead();
+    const { user } = await open();
+    await start(user);
+    const { orderId, code } = await orderOf();
+    await user.click(screen.getByRole('button', { name: 'Khách không thanh toán → Hủy phiên' }));
+    await user.type(screen.getByLabelText('Lý do hủy phiên'), 'Khách chưa mang đủ tiền');
+    gate.armed = true; // lần đọc Order kế tiếp (làm mới sau khi hủy phiên) bị giữ: lệnh ghi chưa xong với màn hình
+    await user.click(screen.getByRole('button', { name: 'Xác nhận hủy phiên' }));
+    await waitFor(() => expect(gate.started).toBe(true));
+    expect(await startButton()).toBeEnabled(); // đặt chỗ đã làm mới: bước Order bị gỡ, hiện bước Bắt đầu trả thú
+    expect(notify).not.toHaveBeenCalled();
+    gate.release(await real(orderId));
+    await waitFor(() => expect(notify).toHaveBeenCalledTimes(1));
+    expect(notify).toHaveBeenCalledWith(`Đã hủy phiên trả thú ${code}. Thú vẫn ở trong chuồng, bắt đầu lại khi khách sẵn sàng.`);
+  });
+
   it('Quay lại trong khung lý do: đóng khung, chưa hủy gì', async () => {
     const abort = vi.spyOn(salesApi, 'abortCheckout');
     const { user } = await open();
@@ -317,7 +525,8 @@ describe('CheckoutDialog — hủy phiên (Review Focus #4)', () => {
 });
 
 describe('CheckoutDialog — giao thú (BR-LT-09)', () => {
-  it('Order PAID: Giao thú gọi hand-over, đặt chỗ CHECKED_OUT, chuồng trống, đóng hộp thoại', async () => {
+  it('Order PAID: Giao thú gọi hand-over, đặt chỗ CHECKED_OUT, chuồng trống, báo "Đã giao" và đóng hộp thoại đúng một lần', async () => {
+    const notify = vi.spyOn(toast, 'success').mockImplementation(() => '');
     const { user, onClose } = await open();
     await start(user);
     await collectElsewhere();
@@ -328,6 +537,32 @@ describe('CheckoutDialog — giao thú (BR-LT-09)', () => {
     await waitFor(() => expect(onClose).toHaveBeenCalledTimes(1));
     expect(writes()).toEqual(['POST /api/boarding-bookings/2/hand-over']);
     expect(await bookingOf(2)).toMatchObject({ status: 'CHECKED_OUT', endReason: 'RETURNED', activeOrderId: null });
+    expect(notify).toHaveBeenCalledTimes(1);
+    expect(notify).toHaveBeenCalledWith('Đã giao Cốm cho khách.');
+    expect(onClose).toHaveBeenCalledTimes(1);
+  });
+
+  it('đặt chỗ làm mới xong (CHECKED_OUT, hộp thoại đã sang "không cần trả thú") trước khi các truy vấn khác về: vẫn báo "Đã giao" và đóng đúng một lần', async () => {
+    const notify = vi.spyOn(toast, 'success').mockImplementation(() => '');
+    const { gate, real } = watchOrderList();
+    const { user, onClose } = await open();
+    await start(user);
+    await collectElsewhere();
+    await user.click(screen.getByRole('button', { name: 'Kiểm tra lại' }));
+    await waitFor(() => expect(handOverButton()).toBeEnabled());
+    clearRequests();
+    gate.armed = true; // lần hỏi danh sách Order kế tiếp (làm mới sau hand-over) bị giữ: lệnh ghi chưa xong với màn hình
+    await user.click(handOverButton());
+    await waitFor(() => expect(gate.started).toBe(true));
+    expect(await screen.findByText(/không cần trả thú nữa/)).toBeInTheDocument(); // bước Order (nút Giao thú) đã bị gỡ khỏi cây
+    expect(screen.queryByRole('button', { name: 'Giao thú' })).not.toBeInTheDocument();
+    expect(notify).not.toHaveBeenCalled();
+    expect(onClose).not.toHaveBeenCalled();
+    gate.release(await real({ boardingBookingId: 2 }));
+    await waitFor(() => expect(onClose).toHaveBeenCalledTimes(1));
+    expect(notify).toHaveBeenCalledTimes(1);
+    expect(notify).toHaveBeenCalledWith('Đã giao Cốm cho khách.');
+    expect(writes()).toEqual(['POST /api/boarding-bookings/2/hand-over']);
   });
 
   it('nếu bấm được khi Order chưa PAID (màn hình lệch): hiện nguyên câu 400 BR-LT-09 của BE, không đóng', async () => {
@@ -356,7 +591,7 @@ describe('CheckoutDialog — giao thú (BR-LT-09)', () => {
     await waitFor(() => expect(handOverButton()).toBeEnabled());
     await (await otherStaff(ACCOUNTS.desk)).post('/api/boarding-bookings/2/hand-over');
     await user.click(handOverButton());
-    expect(await screen.findByRole('alert')).toHaveTextContent('Thú cưng không còn trong chuồng');
+    expect(await screen.findByRole('alert')).toHaveTextContent('Không thể chuyển trạng thái đặt chỗ lưu trú từ CHECKED_OUT sang CHECKED_OUT'); // hand-over: câu FSM của BE
     expect(await screen.findByText(/Thú không còn trong chuồng/)).toBeInTheDocument();
     expect(screen.queryByRole('button', { name: 'Giao thú' })).not.toBeInTheDocument();
     await user.click(screen.getByRole('button', { name: 'Đóng' }));

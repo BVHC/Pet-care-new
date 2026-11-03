@@ -208,13 +208,15 @@ describe('chi nhánh đổi lịch: đặt chỗ lưu trú BOOKED bị ảnh hư
 });
 
 describe('chuồng của chi nhánh khác', () => {
-  it('nhận thú vào chuồng của chi nhánh khác → 404 chuồng, như không tồn tại', async () => {
+  it('nhận thú vào chuồng của chi nhánh khác → 400 BR-LT-08 (chuồng có thật nên không phải 404, như BoardingCheckInService)', async () => {
     await get(4);
     patchState((s) => {
       (s as unknown as { kennels: Record<string, unknown>[] }).kennels.push({ kennelId: 99, branchId: 2, kennelTypeId: 5, code: 'X-01', note: null, status: 'AVAILABLE' });
     });
+    at('2026-10-30T09:00:00+07:00'); // đúng ngày nhận của Bơ: không vướng nhận sớm
     const res = await failure(client.post('/api/boarding-bookings/1/check-in', { kennelId: 99, weightKg: 6.2, healthCondition: 'Khỏe', emergencyPhone: '0987000111' }, await desk()));
-    expect(res.data).toMatchObject({ errorCode: 'RESOURCE_NOT_FOUND', message: 'Không tìm thấy chuồng #99' });
+    expect(res.data).toMatchObject({ errorCode: 'BUSINESS_RULE_VIOLATION', statusCode: 400, message: 'Chuồng phải đúng chi nhánh và đúng loại đã đặt (BR-LT-08)' });
+    expect((await get(1)).status).toBe('BOOKED');
   });
 });
 

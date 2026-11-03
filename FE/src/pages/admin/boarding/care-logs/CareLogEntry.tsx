@@ -127,14 +127,14 @@ export function CareLogEntry({ log, petName, now, accountId, canWrite, inStay, o
         <div className="mt-3 flex flex-wrap items-center gap-2">
           {editable && (
             <>
-              <Button variant="outline" onClick={() => onOpen('edit')}>
+              <Button variant="outline" aria-label={`Sửa nhật ký lúc ${time}`} onClick={() => onOpen('edit')}>
                 Sửa
               </Button>
               <span className="text-xs text-(--text-secondary)">còn {left} phút để sửa</span>
             </>
           )}
           {!editable && inStay && mine && <span className="text-xs text-(--text-secondary)">Đã quá thời hạn sửa — thêm bản bổ sung</span>}
-          <Button variant="outline" onClick={() => onOpen('addendum')}>
+          <Button variant="outline" aria-label={`Thêm bản bổ sung cho nhật ký lúc ${time}`} onClick={() => onOpen('addendum')}>
             Thêm bản bổ sung
           </Button>
         </div>

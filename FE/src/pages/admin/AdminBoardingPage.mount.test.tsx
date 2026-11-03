@@ -20,8 +20,14 @@ beforeEach(() => {
 });
 afterEach(() => vi.useRealTimers());
 
-async function openAs(email: string) {
+/** `at` = giờ sau khi nạp dữ liệu mẫu ở mốc ghim 23/10 (phiên cũ hết hạn khi đồng hồ nhảy ngày nên đăng nhập lại). */
+async function openAs(email: string, at?: string) {
   await useSession.getState().login({ email, password: MOCK_PASSWORD });
+  if (at) {
+    await apiClient.get('/api/boarding-bookings');
+    vi.setSystemTime(new Date(at));
+    await useSession.getState().login({ email, password: MOCK_PASSWORD });
+  }
   const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
   render(
     <QueryClientProvider client={client}>
@@ -41,15 +47,18 @@ async function expectDialogTitled(title: string) {
   return dialog;
 }
 
+// Bơ nhận 30/10: lễ tân chỉ hủy vì hết chuồng được từ ngày nhận (BE 400 BR-LT-08 "Chưa tới ngày nhận"), nên nút này chỉ có từ 30/10.
+const BO_CHECK_IN_DAY = '2026-10-30T09:00:00+07:00';
+
 describe('AdminBoardingPage ghép với dialog thật của STAY / CARELOG', () => {
   it.each([
-    ['Nhận thú', 'Nhận thú', 'Bơ', false],
-    ['Hủy vì hết chuồng', 'Hủy vì hết chuồng', 'Bơ', false],
-    ['Trả thú', 'Trả thú', 'Cốm', true],
-    ['Thú mất', 'Thú mất', 'Cốm', true],
-    ['Nhật ký', 'Nhật ký chăm sóc', 'Cốm', true],
-  ])('nút %s mở dialog "%s"', async (button, title, pet, inStay) => {
-    const user = await openAs(ACCOUNTS.desk);
+    ['Nhận thú', 'Nhận thú', 'Bơ', false, undefined],
+    ['Hủy vì hết chuồng', 'Hủy vì hết chuồng', 'Bơ', false, BO_CHECK_IN_DAY],
+    ['Trả thú', 'Trả thú', 'Cốm', true, undefined],
+    ['Thú mất', 'Thú mất', 'Cốm', true, undefined],
+    ['Nhật ký', 'Nhật ký chăm sóc', 'Cốm', true, undefined],
+  ])('nút %s mở dialog "%s"', async (button, title, pet, inStay, at) => {
+    const user = await openAs(ACCOUNTS.desk, at);
     if (inStay) await user.click(await screen.findByRole('tab', { name: 'Đang lưu trú' }));
     await user.click(within(await rowOf(pet)).getByRole('button', { name: new RegExp(`^${button} LT-`) }));
     await expectDialogTitled(title);

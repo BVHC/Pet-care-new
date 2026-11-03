@@ -32,6 +32,9 @@ afterEach(() => {
   vi.useRealTimers();
 });
 
+/** Ngày nhận của Bim (#4): từ ngày này lễ tân mới hủy vì hết chuồng được (BR-LT-08). */
+const CHECK_IN_DAY = '2026-10-26T09:00:00+07:00';
+
 type OpenOptions = { email?: string; id?: number; dosed?: boolean; at?: string };
 
 async function open({ email = ACCOUNTS.desk, id = 4, dosed = false, at }: OpenOptions = {}) {
@@ -117,6 +120,7 @@ describe('CheckInDialog — điều kiện nhận (A1)', () => {
     const dialog = screen.getByRole('dialog', { name: 'Nhận thú' });
     expect(await within(dialog).findByText(/Ngoài giờ mở cửa của chi nhánh/)).toBeInTheDocument();
     expect(within(dialog).getByText(/BR-LT-04/)).toBeInTheDocument();
+    expect(within(dialog).queryByText('Chưa nhận được')).not.toBeInTheDocument();
     expect(within(dialog).queryByLabelText(W)).not.toBeInTheDocument();
     expect(within(dialog).queryByRole('button', { name: submitName })).not.toBeInTheDocument();
   });
@@ -127,6 +131,8 @@ describe('CheckInDialog — điều kiện nhận (A1)', () => {
     await noRoomLeft();
     dosedBim();
     const booking = await bookingOf(4);
+    vi.setSystemTime(new Date(CHECK_IN_DAY)); // BE chỉ cho hủy vì hết chuồng từ ngày nhận (Bim nhận 26/10)
+    await signIn(ACCOUNTS.desk);
     const first = renderDialog(<CheckInDialog booking={booking} onClose={() => {}} />);
     const dialog = await screen.findByRole('dialog', { name: 'Nhận thú' });
     expect(await within(dialog).findByText(/Không còn chuồng trống đúng loại/)).toBeInTheDocument();
@@ -141,11 +147,71 @@ describe('CheckInDialog — điều kiện nhận (A1)', () => {
     expect(within(asCaretaker).queryByRole('button', { name: 'Hủy vì hết chuồng' })).not.toBeInTheDocument();
   });
 
+  it('hết chuồng nhưng nhận sớm (chưa tới ngày nhận 26/10): vẫn nêu hết chuồng, lễ tân KHÔNG có nút Hủy vì hết chuồng (BE 400 BR-LT-08)', async () => {
+    await signIn(ACCOUNTS.desk);
+    await bookingOf(4);
+    await noRoomLeft();
+    dosedBim();
+    const booking = await bookingOf(4);
+    renderDialog(<CheckInDialog booking={booking} onClose={() => {}} />);
+    const dialog = await screen.findByRole('dialog', { name: 'Nhận thú' });
+    expect(await within(dialog).findByText(/Không còn chuồng trống đúng loại/)).toBeInTheDocument();
+    expect(within(dialog).queryByRole('button', { name: 'Hủy vì hết chuồng' })).not.toBeInTheDocument();
+    expect(within(dialog).getByText(/Chưa tới ngày nhận nên chưa hủy vì hết chuồng được/)).toBeInTheDocument();
+    expect(within(dialog).queryByText('Chưa nhận được')).not.toBeInTheDocument();
+    expect(within(dialog).queryByLabelText(W)).not.toBeInTheDocument();
+  });
+
+  it('nhận sớm mà một đêm đã kín chỗ (không thiếu mũi, trong giờ, còn chuồng): canCheckIn=false thì nêu lý do BR-LT-02 / BR-LT-03, ẩn ghi chú nhận sớm, chỉ còn Đóng', async () => {
+    await signIn(ACCOUNTS.desk);
+    await bookingOf(4);
+    dosedBim();
+    await fillNight24();
+    const booking = await bookingOf(4);
+    const onClose = vi.fn();
+    const { user } = renderDialog(<CheckInDialog booking={booking} onClose={onClose} />);
+    const dialog = await screen.findByRole('dialog', { name: 'Nhận thú' });
+    expect(await within(dialog).findByText('Chưa nhận được')).toBeInTheDocument();
+    expect(within(dialog).getByText(/Các đêm nhận sớm không nhận được: vượt 30 đêm, trùng đặt chỗ khác của thú hoặc hết chỗ \(BR-LT-02 \/ BR-LT-03\)\./)).toBeInTheDocument();
+    expect(within(dialog).queryByText(/Nhận sớm hơn ngày đặt/)).not.toBeInTheDocument();
+    expect(within(dialog).queryByText(/Đã quá ngày nhận/)).not.toBeInTheDocument();
+    expect(within(dialog).queryByLabelText(W)).not.toBeInTheDocument();
+    expect(within(dialog).queryByRole('button', { name: submitName })).not.toBeInTheDocument();
+    expect(within(dialog).queryByRole('button', { name: 'Hủy vì hết chuồng' })).not.toBeInTheDocument();
+    await user.click(within(dialog).getByRole('button', { name: 'Đóng' }));
+    expect(onClose).toHaveBeenCalledTimes(1);
+  });
+
+  it('quá ngày nhận (BR-LT-06; readiness vẫn trả canCheckIn=false, mock không với tới vì ST05 đã chuyển NO_SHOW): nêu lý do, không còn ghi chú nhận sớm', async () => {
+    await signIn(ACCOUNTS.desk);
+    const booking = { ...(await bookingOf(4)), checkInDate: '2026-10-22' }; // hôm nay 23/10
+    const real = await boardingApi.checkInReadiness(4);
+    vi.spyOn(boardingApi, 'checkInReadiness').mockResolvedValue({ ...real, vaccineGaps: [], canCheckIn: false });
+    renderDialog(<CheckInDialog booking={booking} onClose={() => {}} />);
+    const dialog = await screen.findByRole('dialog', { name: 'Nhận thú' });
+    expect(await within(dialog).findByText('Chưa nhận được')).toBeInTheDocument();
+    expect(within(dialog).getByText('Đã quá ngày nhận, đặt chỗ không nhận được nữa (BR-LT-06).')).toBeInTheDocument();
+    expect(within(dialog).queryByText(/Các đêm nhận sớm không nhận được/)).not.toBeInTheDocument();
+    expect(within(dialog).queryByText(/Nhận sớm hơn ngày đặt/)).not.toBeInTheDocument();
+    expect(within(dialog).queryByLabelText(W)).not.toBeInTheDocument();
+    expect(within(dialog).getByRole('button', { name: 'Đóng' })).toBeInTheDocument();
+  });
+
+  it('đã có lý do khác (thiếu mũi) thì không chồng thêm callout "Chưa nhận được"; ghi chú nhận sớm vẫn hiện', async () => {
+    await open(); // Bim chưa tiêm 5 bệnh
+    const dialog = await screen.findByRole('dialog', { name: 'Nhận thú' });
+    await within(dialog).findByRole('table', { name: 'Mũi tiêm còn thiếu' });
+    expect(within(dialog).queryByText('Chưa nhận được')).not.toBeInTheDocument();
+    expect(within(dialog).getByText(/Nhận sớm hơn ngày đặt/)).toBeInTheDocument();
+  });
+
   it('nút Hủy vì hết chuồng mở NoKennelDialog; hủy xong thì đóng cả hộp thoại nhận thú', async () => {
     await signIn(ACCOUNTS.desk);
     await bookingOf(4);
     await noRoomLeft();
     dosedBim();
+    vi.setSystemTime(new Date(CHECK_IN_DAY)); // BE chỉ cho hủy vì hết chuồng từ ngày nhận (Bim nhận 26/10)
+    await signIn(ACCOUNTS.desk);
     const booking = await bookingOf(4);
     const onClose = vi.fn();
     const { user } = renderDialog(<CheckInDialog booking={booking} onClose={onClose} />);
@@ -316,16 +382,27 @@ describe('CheckInDialog — lỗi nghiệp vụ của BE hiện nguyên câu', (
     expect((await bookingOf(1)).status).toBe('BOOKED');
   });
 
-  it('BR-LT-08: chuồng vừa bị người khác dùng; form làm mới danh sách chuồng', async () => {
+  it('BR-LT-03: người khác vừa nhận Rex vào chuồng cuối → đêm nay kín, nhận sớm bị chặn trước cả bước chọn chuồng; form làm mới', async () => {
     const { user } = await open({ dosed: true });
     await fill(user);
-    await rexInStay(); // Rex vào C-03
+    await rexInStay(); // Rex vào C-03: đêm 23/10 có Cốm + Mực + Rex = sức chứa
     await submit(user);
-    expect(await screen.findByRole('alert')).toHaveTextContent('Chuồng không ở trạng thái trống');
+    expect(await screen.findByRole('alert')).toHaveTextContent('Hết chỗ các đêm: 23/10');
     expect((await bookingOf(4)).status).toBe('BOOKED');
     // Làm mới điều kiện: không còn chuồng trống nên form biến mất, câu lỗi vẫn đọc được.
     await waitFor(() => expect(screen.queryByLabelText(W)).not.toBeInTheDocument());
-    expect(screen.getByRole('alert')).toHaveTextContent('Chuồng không ở trạng thái trống');
+    expect(screen.getByRole('alert')).toHaveTextContent('Hết chỗ các đêm: 23/10');
+  });
+
+  it('BR-LT-08: chuồng vừa bị đưa vào bảo trì (nhận đúng ngày, không vướng nhận sớm); form làm mới danh sách chuồng', async () => {
+    const { user } = await open({ id: 1, at: '2026-10-30T09:00:00+07:00' });
+    await fill(user);
+    await noRoomLeft(); // quản lý đưa C-03 vào bảo trì sau khi form đã mở
+    await submit(user);
+    expect(await screen.findByRole('alert')).toHaveTextContent('Chuồng không còn trống');
+    expect((await bookingOf(1)).status).toBe('BOOKED');
+    await waitFor(() => expect(screen.queryByLabelText(W)).not.toBeInTheDocument());
+    expect(screen.getByRole('alert')).toHaveTextContent('Chuồng không còn trống');
   });
 
   it('BR-LT-05: thiếu mũi (điều kiện đã cũ: màn hình tưởng đủ mũi, BE vẫn thấy thiếu)', async () => {
@@ -336,7 +413,7 @@ describe('CheckInDialog — lỗi nghiệp vụ của BE hiện nguyên câu', (
     const { user } = renderDialog(<CheckInDialog booking={booking} onClose={() => {}} />);
     await fill(user);
     await submit(user);
-    expect(await screen.findByRole('alert')).toHaveTextContent('Hãy tiếp nhận thú như walk-in để tiêm trước');
+    expect(await screen.findByRole('alert')).toHaveTextContent('Thiếu hoặc quá hạn mũi tiêm bắt buộc khi lưu trú: 5 bệnh');
   });
 
   it('BR-LT-03: nhận sớm nhưng một đêm đã kín chỗ', async () => {

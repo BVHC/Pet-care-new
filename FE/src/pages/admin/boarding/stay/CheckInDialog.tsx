@@ -76,12 +76,17 @@ function CheckInBody({ booking, isDesk, onClose, onNoKennel }: { booking: Bookin
     if (readiness.isError) return <StayError error={readiness.error} onRetry={() => readiness.refetch()} onClose={onClose} />;
     return <StayLoading what="Đang kiểm tra điều kiện nhận thú…" />;
   }
-  const early = booking.checkInDate > todayVn();
+  const today = todayVn();
+  const early = booking.checkInDate > today;
+  const pastDue = booking.checkInDate < today;
   const noKennels = r.availableKennels.length === 0;
+  // Điều kiện nhận chỉ có 4 trường, không có lý do: ba lý do ở trên đều không bật mà canCheckIn=false thì lý do nằm ở ngày (BR-LT-02/03/06).
+  const dateBlocked = !r.canCheckIn && r.withinOpeningHours && r.vaccineGaps.length === 0 && !noKennels;
+  const earlyBlocked = dateBlocked && early;
   return (
     <div className="space-y-4">
       <BookingSummary booking={booking} />
-      {early && (
+      {early && !earlyBlocked && (
         <Callout tone="info">
           <p>
             Nhận sớm hơn ngày đặt ({formatShortDate(booking.checkInDate)}): tính đêm theo thực tế, từ hôm nay (BR-LT-08). Chỉ nhận được nếu các đêm còn chỗ.
@@ -99,15 +104,27 @@ function CheckInBody({ booking, isDesk, onClose, onNoKennel }: { booking: Bookin
         <Callout tone="danger">
           <p>
             Không còn chuồng trống đúng loại “{booking.kennelTypeName}” để nhận thú; không gán chuồng loại khác (BR-LT-08).{' '}
-            {isDesk
-              ? 'Nếu không bố trí được, hủy đặt chỗ như hủy do phòng khám (không tính hủy muộn).'
-              : 'Báo lễ tân hoặc quản lý chi nhánh để xử lý.'}
+            {!isDesk
+              ? 'Báo lễ tân hoặc quản lý chi nhánh để xử lý.'
+              : early
+                ? 'Chưa tới ngày nhận nên chưa hủy vì hết chuồng được (BR-LT-08).'
+                : 'Nếu không bố trí được, hủy đặt chỗ như hủy do phòng khám (không tính hủy muộn).'}
           </p>
-          {isDesk && (
+          {isDesk && !early && (
             <Button variant="outline" className="mt-2 bg-white" onClick={onNoKennel}>
               Hủy vì hết chuồng
             </Button>
           )}
+        </Callout>
+      )}
+      {earlyBlocked && (
+        <Callout tone="danger" title="Chưa nhận được">
+          <p>Các đêm nhận sớm không nhận được: vượt 30 đêm, trùng đặt chỗ khác của thú hoặc hết chỗ (BR-LT-02 / BR-LT-03).</p>
+        </Callout>
+      )}
+      {dateBlocked && pastDue && (
+        <Callout tone="danger" title="Chưa nhận được">
+          <p>Đã quá ngày nhận, đặt chỗ không nhận được nữa (BR-LT-06).</p>
         </Callout>
       )}
       {r.canCheckIn ? (

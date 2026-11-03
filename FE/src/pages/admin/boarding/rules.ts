@@ -1,5 +1,5 @@
 // Quy tắc thuần của màn lưu trú nhân viên (UC57–59): ma trận vai trò × trạng thái (boarding-v1 §B, A07 / A08) và ghép tab + bộ lọc thành query.
-import { formatShortDate } from '@/components/appointments/format';
+import { formatShortDate, todayVn } from '@/components/appointments/format';
 import type { Species } from '@/domains/pets/types';
 import type { Role } from '@/shared/types/auth';
 import type { Booking, BookingQuery, BookingStatus, VaccineGap } from '@/shared/types/boarding';
@@ -55,18 +55,19 @@ export const canWriteCareLog = (role: Role | undefined): boolean => role === 'VE
 
 /**
  * Thao tác ghi / mở dialog của một đặt chỗ, theo `booking.status` (không theo tab). BRANCH_MANAGER chỉ xem nhật ký;
- * vai trò ngoài 4 vai trò nhân viên chi nhánh không có thao tác nào (BE trả 403).
+ * vai trò ngoài 4 vai trò nhân viên chi nhánh không có thao tác nào (BE trả 403). `today` là `YYYY-MM-DD` giờ VN (`todayVn()`).
  */
 export function actionsOf(
   role: Role | undefined,
   booking: Pick<Booking, 'status' | 'checkInDate' | 'checkOutDate'>,
-  today: string,
+  today: string = todayVn(),
 ): BookingAction[] {
   const desk = role === 'RECEPTIONIST';
   const actions: BookingAction[] = [];
   if (booking.status === 'BOOKED') {
     if (desk || role === 'CARETAKER') actions.push('checkIn');
-    if (desk) actions.push('noKennel');
+    // BE #15: today < ngày nhận → 400 BR-LT-08 "Chưa tới ngày nhận, chưa hủy vì hết chuồng được"; chỉ bày nút từ ngày nhận.
+    if (desk && today >= booking.checkInDate) actions.push('noKennel');
     if (desk && canExtend(booking, today)) actions.push('extend');
     if (desk && canCancel(booking, today)) actions.push('cancel');
   } else if (booking.status === 'CHECKED_IN' || booking.status === 'OVERDUE') {

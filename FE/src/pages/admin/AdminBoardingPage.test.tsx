@@ -115,10 +115,19 @@ function renderPage() {
   return userEvent.setup();
 }
 
-async function openAs(email: string) {
+/** `at` = giờ sau khi nạp dữ liệu mẫu ở mốc ghim 23/10 (phiên cũ hết hạn khi đồng hồ nhảy ngày nên đăng nhập lại, như ca OVERDUE). */
+async function openAs(email: string, at?: string) {
   await loginAs(email);
+  if (at) {
+    await apiClient.get('/api/boarding-bookings');
+    vi.setSystemTime(new Date(at));
+    await loginAs(email);
+  }
   return renderPage();
 }
+
+/** Ngày nhận của Bơ (#1): từ ngày này lễ tân mới hủy vì hết chuồng được (BR-LT-08). */
+const BO_CHECK_IN_DAY = '2026-10-30T09:00:00+07:00';
 
 const rowOf = async (petName: string) => (await screen.findByText(petName, { selector: 'p, span, strong' })).closest('tr')!;
 const buttonNames = (row: HTMLElement) => within(row).queryAllByRole('button').map((b) => b.textContent?.trim() ?? '');
@@ -279,7 +288,7 @@ describe('AdminBoardingPage — 4 trạng thái', () => {
     expect(screen.queryByRole('table')).not.toBeInTheDocument();
   });
 
-  it('lỗi: hiện nguyên câu của BE (from > to) kèm nút Thử lại; sửa bộ lọc thì có dữ liệu lại', async () => {
+  it('khoảng ngày ngược (from > to): hiện câu lỗi cục bộ, không có nút Thử lại; sửa bộ lọc thì có dữ liệu lại', async () => {
     const user = await openAs(ACCOUNTS.desk);
     await rowOf('Bơ');
     fireEvent.change(screen.getByLabelText('Từ ngày'), { target: { value: '2026-12-01' } });
@@ -288,7 +297,7 @@ describe('AdminBoardingPage — 4 trạng thái', () => {
     expect(alert).toHaveTextContent('Ngày bắt đầu lọc phải trước hoặc bằng ngày kết thúc');
     expect(screen.queryByRole('table')).not.toBeInTheDocument();
 
-    expect(screen.getByRole('button', { name: 'Thử lại' })).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Thử lại' })).not.toBeInTheDocument();
     fireEvent.change(screen.getByLabelText('Từ ngày'), { target: { value: '2026-10-01' } });
     await waitFor(() => expect(screen.queryByRole('alert')).not.toBeInTheDocument());
     await user.click(await screen.findByRole('button', { name: 'Xóa lọc ngày' }));
@@ -323,10 +332,10 @@ describe('AdminBoardingPage — 4 trạng thái', () => {
 });
 
 describe('AdminBoardingPage — nút theo vai trò × trạng thái (hợp đồng §B)', () => {
-  it('RECEPTIONIST, BOOKED: Nhận thú, Hủy vì hết chuồng, Gia hạn, Hủy đặt chỗ', async () => {
+  it('RECEPTIONIST, BOOKED chưa tới ngày nhận (Bơ 30/10, hôm nay 23/10): Nhận thú, Gia hạn, Hủy đặt chỗ; chưa có Hủy vì hết chuồng (BE 400 BR-LT-08)', async () => {
     await openAs(ACCOUNTS.desk);
     const bo = await rowOf('Bơ');
-    expect(buttonNames(bo)).toEqual(['Nhận thú', 'Hủy vì hết chuồng', 'Gia hạn', 'Hủy đặt chỗ', '']);
+    expect(buttonNames(bo)).toEqual(['Nhận thú', 'Gia hạn', 'Hủy đặt chỗ', '']);
     expect(within(bo).getByRole('button', { name: 'Chi tiết ' + within(bo).getByText(/^LT-/).textContent })).toBeInTheDocument();
   });
 
@@ -403,8 +412,8 @@ describe('AdminBoardingPage — mount dialog của WS khác (chữ ký cố đ�
     await openDialog(user, await rowOf('Bơ'), /^Nhận thú/, 'Nhận thú');
   });
 
-  it('Hủy vì hết chuồng mount NoKennelDialog', async () => {
-    const user = await openAs(ACCOUNTS.desk);
+  it('Hủy vì hết chuồng mount NoKennelDialog (từ ngày nhận 30/10)', async () => {
+    const user = await openAs(ACCOUNTS.desk, BO_CHECK_IN_DAY);
     await openDialog(user, await rowOf('Bơ'), /^Hủy vì hết chuồng/, 'Hủy vì hết chuồng');
   });
 

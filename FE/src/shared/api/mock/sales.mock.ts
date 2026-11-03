@@ -830,12 +830,16 @@ export const boardingOrdersOf = (bookingId: number): OrderRow[] =>
     .orders.filter((o) => o.source === 'BOARDING' && o.boardingBookingId === bookingId)
     .sort((a, b) => a.orderId - b.orderId);
 
-/** Order lưu trú mới nhất chưa CANCELLED (PENDING hoặc PAID) của đặt chỗ: nguồn của `activeOrderId` (ASSUMPTION A10), không lưu hai nơi. */
-export const activeBoardingOrder = (bookingId: number): OrderRow | undefined => boardingOrdersOf(bookingId).filter((o) => o.status !== 'CANCELLED').pop();
+/** Order lưu trú chưa kết thúc (OPEN / PENDING) của đặt chỗ: nguồn của `activeOrderId` như `findActiveOrderIds` của BE (Order PAID và CANCELLED không tính), không lưu hai nơi. */
+export const activeBoardingOrder = (bookingId: number): OrderRow | undefined => boardingOrdersOf(bookingId).filter((o) => o.status === 'OPEN' || o.status === 'PENDING').pop();
+
+/** Đặt chỗ đã có Order lưu trú PAID (thu rồi chưa giao): `BoardingOrderApi.hasPaidOrder`, cổng của start-checkout (409) và hand-over (BR-LT-09). */
+export const hasPaidBoardingOrder = (bookingId: number): boolean => boardingOrdersOf(bookingId).some((o) => o.status === 'PAID');
 
 /**
- * `BoardingOrderApi.openCheckout` (Order#3, BR-LT-09): đặt chỗ đã có Order PAID (thu rồi chưa giao) → trả lại Order đó; đã có Order PENDING → dùng lại và tính lại số đêm; chưa có (hoặc mọi Order đã hủy) → Order
- * BOARDING PENDING mới, 1 dòng BOARDING "Lưu trú <loại chuồng> × N đêm" đơn giá = giá đêm đã snapshot, tên và giá chụp lúc này (BR-BH-03).
+ * `BoardingOrderApi.openOrReuse` (Order#3, BR-LT-09): đã có Order PENDING → dùng lại và tính lại số đêm; chưa có (hoặc mọi Order đã hủy) → Order BOARDING PENDING mới, 1 dòng BOARDING
+ * "Lưu trú <loại chuồng> × N đêm" đơn giá = giá đêm đã snapshot, tên và giá chụp lúc này (BR-BH-03). Đã có Order PAID → trả lại Order đó: chỉ thú mất (`findPaidOrder`) tới đây,
+ * start-checkout đã chặn PAID từ trước (409).
  */
 export function openBoardingOrder(args: {
   bookingId: number;

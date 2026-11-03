@@ -31,6 +31,9 @@ afterEach(() => {
 
 const WRITERS: string[] = [ACCOUNTS.caretaker, ACCOUNTS.vet];
 const HTTPS = 'https://images.example.com/cot-1.jpg';
+/** Nút "Sửa" / "Thêm bản bổ sung" mang aria-label riêng từng mục ("… lúc <giờ> <ngày>"): khớp theo phần đầu của tên (ca cụ thể từng mục: CareLogFixes.test.tsx). */
+const EDIT_BTN = /^Sửa\b/;
+const ADDENDUM_BTN = /^Thêm bản bổ sung/;
 const at = (iso: string) => vi.setSystemTime(new Date(iso));
 /** Cửa sổ lấy lại tiêu điểm: hộp thoại đọc lại đồng hồ (tab nền bị trình duyệt làm chậm interval). */
 const refocus = () =>
@@ -67,6 +70,9 @@ const paste = async (user: ReturnType<typeof renderDialog>['user'], field: HTMLE
   await user.paste(text);
 };
 const save = (form: HTMLElement) => within(form).getByRole('button', { name: 'Lưu nhật ký' });
+const photoInputs = (form: HTMLElement) => within(form).getAllByLabelText<HTMLInputElement>(/^Đường dẫn ảnh \d+$/);
+/** Câu của BE (CareLogService.checkedPhotos) cho URL ảnh sai. */
+const PHOTO_MESSAGE = 'Ảnh phải là địa chỉ http / https dài tối đa 500 ký tự';
 
 describe('danh sách (UC57, UC60)', () => {
   it('nhóm theo ngày mới → cũ; mỗi mục có ô ăn / uống / vệ sinh / hoạt động (chỉ ô có dữ liệu), ghi chú, người ghi + giờ VN', async () => {
@@ -171,7 +177,7 @@ describe('trạng thái đặt chỗ (BR-LT-11)', () => {
     expect(await screen.findByText(text)).toBeInTheDocument();
     expect(requests()).toEqual([]);
     expect(screen.queryByRole('button', { name: 'Ghi nhật ký mới' })).not.toBeInTheDocument();
-    expect(screen.queryByRole('button', { name: 'Thêm bản bổ sung' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: ADDENDUM_BTN })).not.toBeInTheDocument();
   });
 
   it('đã trả thú (CHECKED_OUT): gọi API lấy nhật ký cũ, chỉ xem — không ghi mới, không Sửa; vẫn thêm được bản bổ sung (A4, ASSUMPTION)', async () => {
@@ -181,14 +187,14 @@ describe('trạng thái đặt chỗ (BR-LT-11)', () => {
     expect(screen.getByText(/Lưu trú đã kết thúc/)).toBeInTheDocument();
     expect(screen.queryByText(/Hôm nay chưa có nhật ký/)).not.toBeInTheDocument();
     expect(screen.queryByRole('button', { name: 'Ghi nhật ký mới' })).not.toBeInTheDocument();
-    expect(screen.queryByRole('button', { name: 'Sửa' })).not.toBeInTheDocument();
-    expect(screen.getAllByRole('button', { name: 'Thêm bản bổ sung' })).toHaveLength(3);
+    expect(screen.queryByRole('button', { name: EDIT_BTN })).not.toBeInTheDocument();
+    expect(screen.getAllByRole('button', { name: ADDENDUM_BTN })).toHaveLength(3);
   });
 
   it('đã trả thú, người chỉ xem: không có nút nào', async () => {
     await open(ACCOUNTS.desk, 5);
     expect(await screen.findAllByRole('article')).toHaveLength(3);
-    expect(screen.queryByRole('button', { name: 'Thêm bản bổ sung' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: ADDENDUM_BTN })).not.toBeInTheDocument();
   });
 
   it('đã trả thú mà mục của mình còn trong 60 phút sửa: vẫn KHÔNG có nút Sửa (chỉ xem + bổ sung), không báo "quá thời hạn"', async () => {
@@ -196,10 +202,10 @@ describe('trạng thái đặt chỗ (BR-LT-11)', () => {
     await (await otherUser(ACCOUNTS.desk)).post('/api/boarding-bookings/2/end-deceased', { note: 'Thú mất đột ngột' });
     await open(ACCOUNTS.caretaker, 2);
     const mine = await entry(/Thu Hà lúc 09:00 23\/10\/2026/);
-    expect(within(mine).queryByRole('button', { name: 'Sửa' })).not.toBeInTheDocument();
+    expect(within(mine).queryByRole('button', { name: EDIT_BTN })).not.toBeInTheDocument();
     expect(within(mine).queryByText(/Đã quá thời hạn sửa/)).not.toBeInTheDocument();
     expect(within(mine).queryByText(/để sửa/)).not.toBeInTheDocument();
-    expect(within(mine).getByRole('button', { name: 'Thêm bản bổ sung' })).toBeInTheDocument();
+    expect(within(mine).getByRole('button', { name: ADDENDUM_BTN })).toBeInTheDocument();
   });
 
   it('OVERDUE vẫn ghi được', async () => {
@@ -219,8 +225,8 @@ describe('quyền theo vai trò', () => {
     await open(email, 3);
     expect(await entry(MUC_4)).toBeInTheDocument();
     expect(screen.queryByRole('button', { name: 'Ghi nhật ký mới' })).not.toBeInTheDocument();
-    expect(screen.queryByRole('button', { name: 'Sửa' })).not.toBeInTheDocument();
-    expect(screen.queryByRole('button', { name: 'Thêm bản bổ sung' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: EDIT_BTN })).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: ADDENDUM_BTN })).not.toBeInTheDocument();
     expect(screen.getByText(/Bạn chỉ xem nhật ký/)).toBeInTheDocument();
   });
 
@@ -328,16 +334,16 @@ describe('ghi mới', () => {
     expect(spy.mock.calls[0][1]).toStrictEqual({ logDate: '2026-10-23', photoUrls: [HTTPS], isAbnormal: false });
   });
 
-  it('ảnh: không phải https bị chặn; tối đa 5 ô (nút Thêm ảnh khóa); thêm / xóa / chuyển lên-xuống đổi đúng thứ tự gửi đi; ô trống bị bỏ', async () => {
+  it('ảnh: sai địa chỉ bị chặn; tối đa 10 ô (cận trên của [CFG], nút Thêm ảnh khóa ở ô thứ 10); thêm / xóa / chuyển lên-xuống đổi đúng thứ tự gửi đi; ô trống bị bỏ', async () => {
     const { user } = await open(ACCOUNTS.caretaker);
     const spy = vi.spyOn(boardingApi, 'createCareLog');
     const form = await openNewForm(user);
     expect(within(form).getByText(/chưa tải ảnh lên được/)).toBeInTheDocument();
     const add = () => user.click(within(form).getByRole('button', { name: 'Thêm ảnh' }));
     await add();
-    await paste(user, within(form).getByLabelText('Đường dẫn ảnh 1'), 'http://images.example.com/a.jpg');
+    await paste(user, within(form).getByLabelText('Đường dẫn ảnh 1'), 'ftp://images.example.com/a.jpg');
     await user.click(save(form));
-    expect(await within(form).findByText('Ảnh phải là đường dẫn https (bắt đầu bằng https://)')).toBeInTheDocument();
+    expect(await within(form).findByText(PHOTO_MESSAGE)).toBeInTheDocument();
     expect(spy).not.toHaveBeenCalled();
 
     await user.clear(within(form).getByLabelText('Đường dẫn ảnh 1'));
@@ -352,19 +358,82 @@ describe('ghi mới', () => {
     expect(within(form).getByRole('button', { name: 'Chuyển ảnh 3 xuống' })).toBeDisabled();
     await user.click(within(form).getByRole('button', { name: 'Xóa ảnh 3' })); // c, a
     await add(); // ô trống thứ 3: bị bỏ khi gửi
-    expect(within(form).getAllByLabelText(/^Đường dẫn ảnh \d$/).map((i) => (i as HTMLInputElement).value)).toEqual([
-      'https://i.example.com/c.jpg',
-      'https://i.example.com/a.jpg',
-      '',
-    ]);
+    expect(photoInputs(form).map((i) => i.value)).toEqual(['https://i.example.com/c.jpg', 'https://i.example.com/a.jpg', '']);
     await add();
     await add();
-    expect(within(form).getAllByLabelText(/^Đường dẫn ảnh \d$/)).toHaveLength(5);
+    expect(photoInputs(form)).toHaveLength(5);
+    expect(within(form).getByRole('button', { name: 'Thêm ảnh' })).toBeEnabled(); // FE không còn khóa cứng ở 5: BE quyết theo [CFG]
+    for (let i = 0; i < 5; i++) await add();
+    expect(photoInputs(form)).toHaveLength(10);
     expect(within(form).getByRole('button', { name: 'Thêm ảnh' })).toBeDisabled();
 
     await user.click(save(form));
     await waitFor(() => expect(spy).toHaveBeenCalledTimes(1));
     expect(spy.mock.calls[0][1]).toMatchObject({ photoUrls: ['https://i.example.com/c.jpg', 'https://i.example.com/a.jpg'] });
+  });
+
+  it('ảnh: http và https đều được nhận (như BE); gửi đúng địa chỉ, ô không bị đánh dấu sai', async () => {
+    const { user } = await open(ACCOUNTS.caretaker);
+    const spy = vi.spyOn(boardingApi, 'createCareLog');
+    const form = await openNewForm(user);
+    await user.click(within(form).getByRole('button', { name: 'Thêm ảnh' }));
+    const field = within(form).getByLabelText('Đường dẫn ảnh 1');
+    await paste(user, field, 'http://example.com/a.jpg');
+    await user.click(save(form));
+    await waitFor(() => expect(spy).toHaveBeenCalledTimes(1));
+    expect(spy.mock.calls[0][1]).toMatchObject({ photoUrls: ['http://example.com/a.jpg'] });
+    expect(screen.queryByText(PHOTO_MESSAGE)).not.toBeInTheDocument();
+    expect(await screen.findByRole('img', { name: /Ảnh 1\/1 nhật ký/ })).toHaveAttribute('src', 'http://example.com/a.jpg');
+  });
+
+  it('ảnh: ftp:// và chuỗi không có :// bị chặn bằng câu của BE; dài quá 500 ký tự bị chặn, đúng 500 qua; không gọi API khi bị chặn', async () => {
+    const { user } = await open(ACCOUNTS.caretaker);
+    const spy = vi.spyOn(boardingApi, 'createCareLog');
+    const form = await openNewForm(user);
+    await user.click(within(form).getByRole('button', { name: 'Thêm ảnh' }));
+    const field = within(form).getByLabelText('Đường dẫn ảnh 1');
+    const exact500 = 'https://i.example.com/' + 'a'.repeat(500 - 'https://i.example.com/'.length);
+    for (const bad of ['ftp://x/y.jpg', 'images.example.com/a.jpg', `${exact500}a`]) {
+      await user.clear(field);
+      await paste(user, field, bad);
+      await user.click(save(form));
+      expect(await within(form).findByText(PHOTO_MESSAGE)).toBeInTheDocument();
+      expect(field).toBeInvalid();
+    }
+    expect(spy).not.toHaveBeenCalled();
+
+    await user.clear(field);
+    await paste(user, field, exact500);
+    await user.click(save(form));
+    await waitFor(() => expect(spy).toHaveBeenCalledTimes(1));
+  });
+
+  it('ảnh thứ 6 hợp lệ: FE vẫn gửi, BE (mock thật, [CFG] mặc định 5) trả BR-LT-11 → hiện nguyên câu của BE ở dải lỗi; form giữ nguyên dữ liệu, không kẹt nút Lưu', async () => {
+    const { user } = await open(ACCOUNTS.caretaker);
+    const spy = vi.spyOn(boardingApi, 'createCareLog');
+    const form = await openNewForm(user);
+    await user.type(within(form).getByLabelText('Ăn'), 'Ăn hết');
+    for (let i = 1; i <= 6; i++) {
+      await user.click(within(form).getByRole('button', { name: 'Thêm ảnh' }));
+      await paste(user, within(form).getByLabelText(`Đường dẫn ảnh ${i}`), `https://i.example.com/${i}.jpg`);
+    }
+    clearRequests();
+    await user.click(save(form));
+    expect(await screen.findByRole('alert')).toHaveTextContent(/^Mỗi mục nhật ký tối đa 5 ảnh$/);
+    expect(spy).toHaveBeenCalledTimes(1);
+    expect(writes()).toEqual(['POST /api/boarding-bookings/2/care-logs']);
+    expect(spy.mock.calls[0][1].photoUrls).toHaveLength(6);
+
+    expect(screen.getByRole('form', { name: 'Ghi nhật ký mới' })).toBeInTheDocument();
+    expect(photoInputs(form).map((i) => i.value)).toEqual([1, 2, 3, 4, 5, 6].map((i) => `https://i.example.com/${i}.jpg`));
+    expect(within(form).getByLabelText('Ăn')).toHaveValue('Ăn hết');
+    expect(save(form)).toBeEnabled();
+
+    // Bỏ bớt một ảnh rồi lưu lại: thành công, nên nút không kẹt và dải lỗi biến mất.
+    await user.click(within(form).getByRole('button', { name: 'Xóa ảnh 6' }));
+    await user.click(save(form));
+    await waitFor(() => expect(screen.queryByRole('form', { name: 'Ghi nhật ký mới' })).not.toBeInTheDocument());
+    expect(screen.queryByText('Mỗi mục nhật ký tối đa 5 ảnh')).not.toBeInTheDocument();
   });
 
   it('bất thường: bật công tắc kèm lời giải thích hệ quả; bấm lưu → hỏi xác nhận (chưa gửi); quay lại không gửi; xác nhận mới gửi isAbnormal=true', async () => {
@@ -461,12 +530,12 @@ describe('ghi mới', () => {
     await (await otherUser(ACCOUNTS.desk)).post('/api/boarding-bookings/2/end-deceased', { note: 'Thú mất đột ngột' });
     const refetch = vi.spyOn(client, 'invalidateQueries');
     await user.click(save(form));
-    expect(await screen.findByRole('alert')).toHaveTextContent('Thú cưng không đang lưu trú');
+    expect(await screen.findByRole('alert')).toHaveTextContent('Thú không đang lưu trú, không ghi nhật ký được');
     expect(refetch).toHaveBeenCalledWith(expect.objectContaining({ queryKey: ['boarding'] }));
     expect(screen.queryByRole('form', { name: 'Ghi nhật ký mới' })).not.toBeInTheDocument();
     expect(screen.queryByRole('button', { name: 'Ghi nhật ký mới' })).not.toBeInTheDocument();
     expect(screen.getByText(/Lưu trú đã kết thúc/)).toBeInTheDocument();
-    expect(screen.getAllByRole('button', { name: 'Thêm bản bổ sung' }).length).toBeGreaterThan(0);
+    expect(screen.getAllByRole('button', { name: ADDENDUM_BTN }).length).toBeGreaterThan(0);
   });
 
   it('Hủy đóng form mà không gửi gì', async () => {
@@ -483,20 +552,20 @@ describe('sửa trong hạn (BR-LT-11)', () => {
   it('mục của chính mình, còn hạn: có nút Sửa + nhãn "còn N phút để sửa"; mục hết hạn thì ẩn nút và nói thêm bản bổ sung', async () => {
     await open(ACCOUNTS.caretaker, 3);
     const today = await entry(MUC_4);
-    expect(within(today).getByRole('button', { name: 'Sửa' })).toBeInTheDocument();
+    expect(within(today).getByRole('button', { name: EDIT_BTN })).toBeInTheDocument();
     expect(within(today).getByText('còn 30 phút để sửa')).toBeInTheDocument();
     const old = await entry(MUC_3);
-    expect(within(old).queryByRole('button', { name: 'Sửa' })).not.toBeInTheDocument();
+    expect(within(old).queryByRole('button', { name: EDIT_BTN })).not.toBeInTheDocument();
     expect(within(old).getByText('Đã quá thời hạn sửa — thêm bản bổ sung')).toBeInTheDocument();
   });
 
   it('mục của người khác (kể cả VET): không có nút Sửa và không có câu "quá thời hạn"', async () => {
     await open(ACCOUNTS.vet, 3);
     const today = await entry(MUC_4);
-    expect(within(today).queryByRole('button', { name: 'Sửa' })).not.toBeInTheDocument();
+    expect(within(today).queryByRole('button', { name: EDIT_BTN })).not.toBeInTheDocument();
     expect(within(today).queryByText(/Đã quá thời hạn sửa/)).not.toBeInTheDocument();
     expect(within(today).queryByText(/để sửa/)).not.toBeInTheDocument();
-    expect(within(today).getByRole('button', { name: 'Thêm bản bổ sung' })).toBeInTheDocument();
+    expect(within(today).getByRole('button', { name: ADDENDUM_BTN })).toBeInTheDocument();
   });
 
   it('mục vừa ghi: nhãn đúng "còn 60 phút" dù đồng hồ hộp thoại đã cũ (đọc lại đồng hồ sau khi lưu, không để hiện 61)', async () => {
@@ -512,7 +581,7 @@ describe('sửa trong hạn (BR-LT-11)', () => {
   it('sửa: form nạp sẵn nội dung, gửi UpdateCareLogRequest (đủ ô chữ + ảnh, KHÔNG isAbnormal / logDate), danh sách cập nhật', async () => {
     const { user } = await open(ACCOUNTS.caretaker, 3);
     const spy = vi.spyOn(boardingApi, 'updateCareLog');
-    await user.click(within(await entry(MUC_4)).getByRole('button', { name: 'Sửa' }));
+    await user.click(within(await entry(MUC_4)).getByRole('button', { name: EDIT_BTN }));
     const form = await screen.findByRole('form', { name: 'Sửa nhật ký' });
     expect(within(form).getByLabelText('Ăn')).toHaveValue('Ăn hết khẩu phần sáng');
     expect(within(form).getByLabelText('Hoạt động')).toHaveValue('Chơi với bóng');
@@ -539,7 +608,7 @@ describe('sửa trong hạn (BR-LT-11)', () => {
     await writeVia(ACCOUNTS.caretaker, 2, { isAbnormal: true, eating: '', note: 'Bỏ ăn' });
     const { user } = await open(ACCOUNTS.caretaker, 2);
     const spy = vi.spyOn(boardingApi, 'updateCareLog');
-    await user.click(within(await entry(/Thu Hà lúc 09:00 23\/10\/2026/)).getByRole('button', { name: 'Sửa' }));
+    await user.click(within(await entry(/Thu Hà lúc 09:00 23\/10\/2026/)).getByRole('button', { name: EDIT_BTN }));
     const form = await screen.findByRole('form', { name: 'Sửa nhật ký' });
     expect(within(form).queryByRole('switch')).not.toBeInTheDocument();
     expect(within(form).getByText(/đã đánh dấu bất thường/i)).toBeInTheDocument();
@@ -554,27 +623,27 @@ describe('sửa trong hạn (BR-LT-11)', () => {
     at('2026-10-23T09:59:59+07:00');
     await open(ACCOUNTS.caretaker, 2);
     const mine = await entry(/Thu Hà lúc 09:00 23\/10\/2026/);
-    expect(within(mine).getByRole('button', { name: 'Sửa' })).toBeInTheDocument();
+    expect(within(mine).getByRole('button', { name: EDIT_BTN })).toBeInTheDocument();
     expect(within(mine).getByText('còn 1 phút để sửa')).toBeInTheDocument();
 
     at('2026-10-23T10:00:01+07:00');
     await refocus();
-    await waitFor(() => expect(within(mine).queryByRole('button', { name: 'Sửa' })).not.toBeInTheDocument());
+    await waitFor(() => expect(within(mine).queryByRole('button', { name: EDIT_BTN })).not.toBeInTheDocument());
     expect(within(mine).getByText('Đã quá thời hạn sửa — thêm bản bổ sung')).toBeInTheDocument();
-    expect(within(mine).getByRole('button', { name: 'Thêm bản bổ sung' })).toBeInTheDocument();
+    expect(within(mine).getByRole('button', { name: ADDENDUM_BTN })).toBeInTheDocument();
   });
 
   it('đang mở form sửa mà quá hạn: gửi nhận 409 — hiện nguyên câu, làm mới, chuyển sang chế độ bổ sung', async () => {
     await writeVia(ACCOUNTS.caretaker, 2);
     at('2026-10-23T09:30:00+07:00');
     const { user, client } = await open(ACCOUNTS.caretaker, 2);
-    await user.click(within(await entry(/Thu Hà lúc 09:00 23\/10\/2026/)).getByRole('button', { name: 'Sửa' }));
+    await user.click(within(await entry(/Thu Hà lúc 09:00 23\/10\/2026/)).getByRole('button', { name: EDIT_BTN }));
     const form = await screen.findByRole('form', { name: 'Sửa nhật ký' });
     await user.type(within(form).getByLabelText('Ăn'), ' thêm');
     at('2026-10-23T10:00:30+07:00'); // quá hạn nhưng chưa tick: form vẫn mở
     const refetch = vi.spyOn(client, 'invalidateQueries');
     await user.click(within(form).getByRole('button', { name: 'Lưu thay đổi' }));
-    expect(await screen.findByRole('alert')).toHaveTextContent('Đã quá thời hạn sửa nhật ký, vui lòng thêm bản bổ sung');
+    expect(await screen.findByRole('alert')).toHaveTextContent('Đã quá thời hạn sửa nhật ký, hãy thêm bản bổ sung');
     expect(refetch).toHaveBeenCalledWith(expect.objectContaining({ queryKey: ['boarding'] }));
     expect(screen.queryByRole('form', { name: 'Sửa nhật ký' })).not.toBeInTheDocument();
     expect(await screen.findByRole('form', { name: 'Thêm bản bổ sung' })).toBeInTheDocument();
@@ -585,9 +654,9 @@ describe('sửa trong hạn (BR-LT-11)', () => {
 describe('bản bổ sung (A4)', () => {
   it('mọi mục đều có nút, kể cả của người khác và đã hết hạn sửa; gửi đúng endpoint; hiện "Bạn" + giờ VN; chỉ thêm, không sửa / xóa', async () => {
     const { user } = await open(ACCOUNTS.caretaker);
-    expect(await screen.findAllByRole('button', { name: 'Thêm bản bổ sung' })).toHaveLength(2);
+    expect(await screen.findAllByRole('button', { name: ADDENDUM_BTN })).toHaveLength(2);
     const spy = vi.spyOn(boardingApi, 'addAddendum');
-    await user.click(within(await entry(COM_2)).getByRole('button', { name: 'Thêm bản bổ sung' }));
+    await user.click(within(await entry(COM_2)).getByRole('button', { name: ADDENDUM_BTN }));
     const form = await screen.findByRole('form', { name: 'Thêm bản bổ sung' });
     expect(within(form).getByText('0/2000')).toBeInTheDocument();
     await user.type(within(form).getByLabelText('Nội dung bổ sung'), '  Đã gọi báo chủ, bé ăn lại bình thường ');
@@ -613,7 +682,7 @@ describe('bản bổ sung (A4)', () => {
   it('nội dung 1–2000 ký tự: trống, toàn khoảng trắng và 2001 bị chặn (không gọi API); 2000 qua', async () => {
     const { user } = await open(ACCOUNTS.vet);
     const spy = vi.spyOn(boardingApi, 'addAddendum');
-    await user.click(within(await entry(COM_1)).getByRole('button', { name: 'Thêm bản bổ sung' }));
+    await user.click(within(await entry(COM_1)).getByRole('button', { name: ADDENDUM_BTN }));
     const form = await screen.findByRole('form', { name: 'Thêm bản bổ sung' });
     const box = within(form).getByLabelText('Nội dung bổ sung');
     const submit = () => user.click(within(form).getByRole('button', { name: 'Lưu bản bổ sung' }));
@@ -639,7 +708,7 @@ describe('bản bổ sung (A4)', () => {
     vi.spyOn(boardingApi, 'addAddendum')
       .mockRejectedValueOnce(new ApiError('VALIDATION_FAILED', 'content: Nội dung tối đa 2000 ký tự', 400))
       .mockRejectedValueOnce(new ApiError('RESOURCE_NOT_FOUND', 'Không tìm thấy nhật ký chăm sóc #1', 404));
-    await user.click(within(await entry(COM_1)).getByRole('button', { name: 'Thêm bản bổ sung' }));
+    await user.click(within(await entry(COM_1)).getByRole('button', { name: ADDENDUM_BTN }));
     const form = await screen.findByRole('form', { name: 'Thêm bản bổ sung' });
     await user.type(within(form).getByLabelText('Nội dung bổ sung'), 'Bổ sung');
     await user.click(within(form).getByRole('button', { name: 'Lưu bản bổ sung' }));
@@ -652,8 +721,8 @@ describe('bản bổ sung (A4)', () => {
 
   it('chỉ một biểu mẫu mở một lúc: mở bổ sung ở mục khác thì đóng biểu mẫu trước', async () => {
     const { user } = await open(ACCOUNTS.caretaker);
-    await user.click(within(await entry(COM_1)).getByRole('button', { name: 'Thêm bản bổ sung' }));
-    await user.click(within(await entry(COM_2)).getByRole('button', { name: 'Thêm bản bổ sung' }));
+    await user.click(within(await entry(COM_1)).getByRole('button', { name: ADDENDUM_BTN }));
+    await user.click(within(await entry(COM_2)).getByRole('button', { name: ADDENDUM_BTN }));
     expect(screen.getAllByRole('form')).toHaveLength(1);
     await user.click(screen.getByRole('button', { name: 'Ghi nhật ký mới' }));
     expect(screen.getAllByRole('form')).toHaveLength(1);

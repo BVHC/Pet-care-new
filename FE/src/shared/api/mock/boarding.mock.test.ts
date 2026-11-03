@@ -230,18 +230,27 @@ describe('start-maintenance / end-maintenance (#5, #6)', () => {
     expect(again.data.message).toBe('Không thể chuyển trạng thái chuồng từ MAINTENANCE sang MAINTENANCE');
   });
 
-  it('hết bảo trì → AVAILABLE; chuồng đang AVAILABLE → 409', async () => {
+  it('hết bảo trì → AVAILABLE; chuồng đang AVAILABLE → 409 (KennelService.endMaintenance chỉ nhận MAINTENANCE)', async () => {
     const res = await end(4);
     expect(res.data).toMatchObject({ message: 'Đã hết bảo trì' });
     expect(res.data.data).toMatchObject({ kennelId: 4, status: 'AVAILABLE' });
     const again = await failure(end(4));
-    expect(again.data.message).toBe('Không thể chuyển trạng thái chuồng từ AVAILABLE sang AVAILABLE');
+    expect(again.data).toMatchObject({
+      errorCode: 'INVALID_STATE_TRANSITION',
+      statusCode: 409,
+      message: 'Không thể chuyển trạng thái chuồng (chỉ kết thúc bảo trì khi đang bảo trì) từ AVAILABLE sang AVAILABLE',
+    });
   });
 
-  it('chuồng OCCUPIED hết bảo trì KHÔNG bị 409 mà về AVAILABLE (BE lệch hợp đồng: FSM cho phép OCCUPIED → AVAILABLE)', async () => {
-    const res = await end(1);
-    expect(res.status).toBe(200);
-    expect(res.data.data.status).toBe('AVAILABLE');
+  it('chuồng OCCUPIED hết bảo trì → 409, chuồng và thú giữ nguyên (OCCUPIED → AVAILABLE chỉ do trả thú / thú mất)', async () => {
+    const res = await failure(end(1));
+    expect(res.data).toMatchObject({
+      errorCode: 'INVALID_STATE_TRANSITION',
+      statusCode: 409,
+      message: 'Không thể chuyển trạng thái chuồng (chỉ kết thúc bảo trì khi đang bảo trì) từ OCCUPIED sang AVAILABLE',
+    });
+    const list = (await client.get('/api/kennels', await manager())).data.data as { kennelId: number; status: string; currentBookingId: number | null }[];
+    expect(list.find((k) => k.kennelId === 1)).toMatchObject({ status: 'OCCUPIED', currentBookingId: 2 });
   });
 
   it('404 → 403 phạm vi → vai trò', async () => {

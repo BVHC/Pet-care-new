@@ -17,7 +17,7 @@ import { CareLogEntry, type EntryForm } from './CareLogEntry';
 import { CareLogForm } from './CareLogForm';
 import { useNow } from './hooks';
 import { Notice } from './parts';
-import { careLogMode, groupByDate } from './rules';
+import { careLogMode, groupByDate, stayStartOf } from './rules';
 
 /** Đặt chỗ chưa từng ở trong chuồng: chưa thể có nhật ký, không gọi API. */
 const NO_LOGS: Partial<Record<BookingStatus, string>> = {
@@ -123,7 +123,7 @@ function CareLogBody({ booking, canWrite }: { booking: Booking; canWrite: boolea
         </div>
       )}
       {active?.kind === 'new' && (
-        <CareLogForm kind="create" bookingId={booking.bookingId} today={today} onDone={done} onCancel={done} onConflict={conflict(null, true)} />
+        <CareLogForm kind="create" bookingId={booking.bookingId} today={today} minDate={stayStartOf(booking)} onDone={done} onCancel={done} onConflict={conflict(null, true)} />
       )}
 
       {baseMode !== 'none' && (

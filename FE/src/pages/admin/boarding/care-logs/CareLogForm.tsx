@@ -10,7 +10,7 @@ import { cn } from '@/lib/utils';
 import { fieldErrorsOf, plainMessage, toApiError } from '@/shared/api/api-error';
 import { boardingApi } from '@/shared/api/boarding.api';
 import { useBoardingMutation } from '@/shared/hooks/useBoarding';
-import type { CareLog } from '@/shared/types/boarding';
+import { BOARDING_CFG, type CareLog } from '@/shared/types/boarding';
 import { footerClass, textareaClass } from './parts';
 import {
   FIELD_LABELS,
@@ -28,7 +28,7 @@ import {
 } from './rules';
 
 type Props = { onDone: () => void; onCancel: () => void; onConflict: (message: string) => void } & (
-  | { kind: 'create'; bookingId: number; today: string }
+  | { kind: 'create'; bookingId: number; today: string; minDate?: string }
   | { kind: 'edit'; log: CareLog }
 );
 
@@ -67,7 +67,7 @@ export function CareLogForm(props: Props) {
   /** `confirmed`: người dùng đã bấm xác nhận bước "đánh dấu bất thường". */
   const attempt = (confirmed: boolean) => {
     setServerError('');
-    const found = validateDraft(draft, { creating, today: todayVn() });
+    const found = validateDraft(draft, { creating, today: todayVn(), minDate: props.kind === 'create' ? props.minDate : undefined });
     setErrors(found);
     if (Object.keys(found).length > 0) {
       setConfirming(false);
@@ -116,6 +116,7 @@ export function CareLogForm(props: Props) {
               id={id}
               type="date"
               value={draft.logDate}
+              min={props.kind === 'create' ? props.minDate : undefined}
               max={props.kind === 'create' ? props.today : undefined}
               aria-invalid={errors.logDate ? true : undefined}
               onChange={(e) => change({ logDate: e.target.value }, 'logDate')}
@@ -146,7 +147,9 @@ export function CareLogForm(props: Props) {
 
       <fieldset className="space-y-2">
         <legend className="mb-1 text-sm font-medium text-(--text-primary)">Ảnh đính kèm</legend>
-        <p className="text-xs text-(--text-tertiary)">Dán đường dẫn ảnh https (chưa tải ảnh lên được); tối đa {MAX_PHOTOS} ảnh.</p>
+        <p className="text-xs text-(--text-tertiary)">
+          Dán đường dẫn ảnh http hoặc https (chưa tải ảnh lên được); số ảnh tối đa theo cấu hình hệ thống (mặc định {BOARDING_CFG.careLogMaxPhotos}, nhiều nhất {MAX_PHOTOS}).
+        </p>
         {draft.photoUrls.map((url, i) => (
           <div key={i} className="flex flex-wrap items-center gap-1.5">
             <Input
@@ -205,7 +208,8 @@ export function CareLogForm(props: Props) {
             Đánh dấu bất thường
           </label>
           <p id={warningId} className="mt-1 text-xs text-(--text-secondary)">
-            Khi bật, hệ thống thông báo ngay cho chủ thú và lễ tân chi nhánh (BR-LT-12). Nếu thú cần điều trị, phải liên hệ chủ thú trước khi phát sinh chi phí.
+            Khi bật, hệ thống thông báo ngay cho chủ thú và lễ tân chi nhánh (BR-LT-12): chủ thú nhận thông báo trong ứng dụng và email (nếu có), lễ tân nhận thông báo trong ứng dụng. Nếu thú cần điều trị, phải
+            liên hệ chủ thú trước khi phát sinh chi phí.
           </p>
         </div>
       ) : (
@@ -221,7 +225,10 @@ export function CareLogForm(props: Props) {
       {confirming ? (
         <div className="space-y-3 rounded-lg border border-red-200 bg-red-50 p-3 text-sm text-red-900">
           <p className="font-semibold">Xác nhận đánh dấu bất thường</p>
-          <p>Nhật ký được gửi ngay; chủ thú và lễ tân chi nhánh nhận thông báo tức thì và không thu hồi được. Chi phí điều trị (nếu có) chỉ phát sinh khi chủ thú đã đồng ý.</p>
+          <p>
+            Nhật ký được gửi ngay; chủ thú (trong ứng dụng và qua email, nếu có) và lễ tân chi nhánh (trong ứng dụng) nhận thông báo tức thì và không thu hồi được. Chi phí điều trị (nếu có) chỉ phát sinh khi chủ
+            thú đã đồng ý.
+          </p>
           <div className={footerClass}>
             <Button type="button" variant="outline" className="bg-white" onClick={() => setConfirming(false)} disabled={save.isPending}>
               Quay lại chỉnh sửa

@@ -1,7 +1,8 @@
 // UC59 "Trả thú" (A3, A4, A6, A10, A11; BR-LT-09): lễ tân bắt đầu trả thú (sinh Order lưu trú chờ thu) → thu tiền Ở BÀN LỄ TÂN → giao thú chỉ khi Order PAID;
 // khách không trả thì hủy phiên (lý do bắt buộc) rồi bắt đầu lại. Mở hộp thoại KHÔNG ghi gì: mọi lệnh ghi do lễ tân bấm.
-// Bước suy ra từ dữ liệu tải về, không lưu thêm: đặt chỗ mới nhất (`activeOrderId`) + Order đó. Thu tiền xảy ra ở màn khác nên hai truy vấn này luôn hỏi lại
-// khi mở, khi bấm "Kiểm tra lại" và khi cửa sổ lấy lại tiêu điểm (hooks.ts).
+// Bước suy ra từ dữ liệu tải về, không lưu thêm: đặt chỗ mới nhất + Order lưu trú của nó. BE chỉ trả `activeOrderId` cho Order OPEN / PENDING; thu tiền xong (PAID)
+// thì null, nên khi đó tra Order mới nhất chưa hủy của đặt chỗ qua danh sách Order (GET /api/orders?boardingBookingId=) rồi mới đọc chi tiết Order đó.
+// Thu tiền xảy ra ở màn khác nên các truy vấn này luôn hỏi lại khi mở, khi bấm "Kiểm tra lại" và khi cửa sổ lấy lại tiêu điểm (hooks.ts).
 // Chữ ký và tên truy cập của role="dialog" ("Trả thú") là hợp đồng với AdminBoardingPage: không đổi.
 import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
@@ -18,7 +19,7 @@ import { usePOS } from '@/shared/stores/pos.store';
 import { BOOKING_STATUS_LABELS, type Booking } from '@/shared/types/boarding';
 import type { Order } from '@/shared/types/sales';
 import { isInStay } from '@/shared/utils/boarding';
-import { useAllowed, useRefreshOnFocus, useRefreshStay, useStayBooking, useStayOrder } from './hooks';
+import { useAllowed, useRefreshOnFocus, useRefreshStay, useStayBooking, useStayLatestOrderId, useStayOrder } from './hooks';
 import { BookingSummary, Callout, StayError, StayFooter, StayForbidden, StayLoading, StayModal } from './shared';
 
 const REASON_MAX = 300;
@@ -42,7 +43,10 @@ function CheckoutBody({ booking, onClose }: { booking: Booking; onClose: () => v
   const stay = useStayBooking(booking.bookingId);
   const live = stay.data;
   const inStay = !!live && isInStay(live.status);
-  const orderId = inStay ? (live.activeOrderId ?? null) : null;
+  /** Không có `activeOrderId` (chưa bắt đầu, đã hủy phiên, hoặc đã PAID): hỏi Order mới nhất chưa hủy của đặt chỗ. Có `activeOrderId` thì không hỏi. */
+  const lookup = inStay && live.activeOrderId == null;
+  const latest = useStayLatestOrderId(booking.bookingId, lookup);
+  const orderId = inStay ? (live.activeOrderId ?? latest.data ?? null) : null;
   const orderQuery = useStayOrder(orderId);
   const refresh = useRefreshStay();
   useRefreshOnFocus(refresh);
@@ -80,7 +84,13 @@ function CheckoutBody({ booking, onClose }: { booking: Booking; onClose: () => v
         </Callout>
       )}
       <FormError message={error} />
-      {orderId == null || order?.status === 'CANCELLED' ? (
+      {lookup && latest.data === undefined ? (
+        latest.isError ? (
+          <StayError error={latest.error} onRetry={() => latest.refetch()} onClose={onClose} />
+        ) : (
+          <StayLoading what="Đang tải Order lưu trú…" />
+        )
+      ) : orderId == null || order?.status === 'CANCELLED' ? (
         <StartStep booking={live} onError={fail} onClearError={() => setError('')} onClose={onClose} />
       ) : orderQuery.isLoading ? (
         <StayLoading what="Đang tải Order lưu trú…" />
@@ -158,17 +168,13 @@ function OrderStep({
       return;
     }
     onClearError();
-    abort.mutate(
-      { orderId: order.orderId, reason: text },
-      {
-        onSuccess: () => {
-          toast.success(`Đã hủy phiên trả thú ${order.code}. Thú vẫn ở trong chuồng, bắt đầu lại khi khách sẵn sàng.`);
-          setAborting(false);
-          setReason('');
-        },
-        onError,
-      },
-    );
+    // mutateAsync, không phải mutate(…, {onSuccess}): hook chờ làm mới cache xong mới báo thành công, mà đặt chỗ làm mới xong trước có thể gỡ OrderStep khỏi cây
+    // (hết quan sát) → React Query bỏ callback của mutate(). Lời hứa của mutateAsync không phụ thuộc OrderStep còn hay không.
+    abort.mutateAsync({ orderId: order.orderId, reason: text }).then(() => {
+      toast.success(`Đã hủy phiên trả thú ${order.code}. Thú vẫn ở trong chuồng, bắt đầu lại khi khách sẵn sàng.`);
+      setAborting(false);
+      setReason('');
+    }, onError);
   };
 
   return (
@@ -254,13 +260,11 @@ function OrderStep({
           aria-describedby={paid ? undefined : 'handover-lock'}
           onClick={() => {
             onClearError();
-            handOver.mutate(undefined, {
-              onSuccess: () => {
-                toast.success(`Đã giao ${booking.petName} cho khách.`);
-                onClose();
-              },
-              onError,
-            });
+            // mutateAsync vì cùng lý do với confirmAbort: làm mới đặt chỗ (CHECKED_OUT) gỡ OrderStep khỏi cây trước khi hook báo xong → callback của mutate() bị bỏ.
+            handOver.mutateAsync(undefined).then(() => {
+              toast.success(`Đã giao ${booking.petName} cho khách.`);
+              onClose();
+            }, onError);
           }}
         >
           {handOver.isPending ? 'Đang xử lý…' : 'Giao thú'}

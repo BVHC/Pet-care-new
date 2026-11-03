@@ -16,12 +16,30 @@ const booking = (status: BookingStatus, over: Partial<Booking> = {}): Pick<Booki
 describe('actionsOf — BOOKED', () => {
   const sample = booking('BOOKED');
   it.each<[Role, string[]]>([
-    ['RECEPTIONIST', ['checkIn', 'noKennel', 'extend', 'cancel']],
+    ['RECEPTIONIST', ['checkIn', 'extend', 'cancel']],
     ['CARETAKER', ['checkIn']],
     ['VET', []],
     ['BRANCH_MANAGER', []],
-  ])('%s', (role, expected) => {
+  ])('%s (chưa tới ngày nhận)', (role, expected) => {
     expect(actionsOf(role, sample, TODAY)).toEqual(expected);
+  });
+
+  // BE #15 trả 400 BR-LT-08 "Chưa tới ngày nhận, chưa hủy vì hết chuồng được" khi hôm nay < ngày nhận: không bày nút đó ra.
+  it('BOOKED chưa tới ngày nhận: lễ tân không có Hủy vì hết chuồng (BR-LT-08), kể cả đêm liền trước ngày nhận', () => {
+    expect(actionsOf('RECEPTIONIST', booking('BOOKED'), TODAY)).not.toContain('noKennel');
+    expect(actionsOf('RECEPTIONIST', booking('BOOKED', { checkInDate: '2026-10-24' }), TODAY)).not.toContain('noKennel');
+  });
+
+  it('ngày nhận = hôm nay hoặc đã qua: lễ tân có Hủy vì hết chuồng; CARETAKER thì không', () => {
+    expect(actionsOf('RECEPTIONIST', booking('BOOKED', { checkInDate: TODAY }), TODAY)).toContain('noKennel');
+    expect(actionsOf('RECEPTIONIST', booking('BOOKED', { checkInDate: '2026-10-22' }), TODAY)).toEqual(['checkIn', 'noKennel', 'extend']);
+    expect(actionsOf('CARETAKER', booking('BOOKED', { checkInDate: '2026-10-22' }), TODAY)).toEqual(['checkIn']);
+  });
+
+  it('so ngày theo `today` truyền vào (giờ VN), không theo giờ máy', () => {
+    const b = booking('BOOKED', { checkInDate: '2026-10-30' });
+    expect(actionsOf('RECEPTIONIST', b, '2026-10-29')).not.toContain('noKennel');
+    expect(actionsOf('RECEPTIONIST', b, '2026-10-30')).toContain('noKennel');
   });
 
   it('đã tới ngày nhận thì lễ tân không hủy được nhưng vẫn gia hạn được (canCancel / canExtend)', () => {

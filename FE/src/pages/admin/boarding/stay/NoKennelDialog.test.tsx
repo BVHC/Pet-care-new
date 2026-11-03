@@ -16,7 +16,8 @@ import {
   writes,
 } from './stay-harness';
 
-// UC59 "Hủy vì hết chuồng" (A2, BR-LT-08), đồng hồ ghim thứ Sáu 23/10/2026 09:00. Đặt chỗ #4: Bim BOOKED 26/10→28/10, loại chuồng #5 "Chuồng chó nhỏ"
+// UC59 "Hủy vì hết chuồng" (A2, BR-LT-08). Đồng hồ ghim thứ Sáu 23/10/2026 09:00 lúc nạp dữ liệu mẫu, rồi `open` chuyển sang thứ Hai 26/10 09:00 (ngày nhận): BE chỉ cho hủy
+// vì hết chuồng từ ngày nhận ("Chưa tới ngày nhận, chưa hủy vì hết chuồng được"). Đặt chỗ #4: Bim BOOKED 26/10→28/10, loại chuồng #5 "Chuồng chó nhỏ"
 // còn đúng một chuồng trống C-03 (kennelId 3); quản lý chuyển C-03 sang bảo trì thì "hết chuồng".
 
 beforeAll(installStayMock);
@@ -26,9 +27,14 @@ afterEach(() => {
   vi.useRealTimers();
 });
 
-async function open(email: string = ACCOUNTS.desk) {
+const CHECK_IN_DAY = '2026-10-26T09:00:00+07:00';
+
+/** `at` = giờ sau khi nạp dữ liệu mẫu (mặc định đúng ngày nhận của Bim); phiên cũ hết hạn khi đồng hồ nhảy ngày nên đăng nhập lại. */
+async function open(email: string = ACCOUNTS.desk, at: string = CHECK_IN_DAY) {
   await signIn(email);
   const booking = await bookingOf(4);
+  vi.setSystemTime(new Date(at));
+  await signIn(email);
   clearRequests();
   const onClose = vi.fn();
   const view = renderDialog(<NoKennelDialog booking={booking} onClose={onClose} />);
@@ -63,6 +69,8 @@ describe('NoKennelDialog (UC59, A2)', () => {
   it('báo thành công cho cha qua onDone (CheckInDialog đóng theo)', async () => {
     await signIn(ACCOUNTS.desk);
     const booking = await bookingOf(4);
+    vi.setSystemTime(new Date(CHECK_IN_DAY));
+    await signIn(ACCOUNTS.desk);
     const onClose = vi.fn();
     const onDone = vi.fn();
     const { user } = renderDialog(<NoKennelDialog booking={booking} onClose={onClose} onDone={onDone} />);
@@ -76,6 +84,16 @@ describe('NoKennelDialog (UC59, A2)', () => {
     const { user, onClose } = await open();
     await user.click(await screen.findByRole('button', { name: 'Xác nhận hủy' }));
     expect(await screen.findByRole('alert')).toHaveTextContent('Vẫn còn chuồng trống đúng loại, hãy nhận thú');
+    expect(onClose).not.toHaveBeenCalled();
+    expect(screen.getByRole('button', { name: 'Xác nhận hủy' })).toBeEnabled();
+    expect((await bookingOf(4)).status).toBe('BOOKED');
+  });
+
+  it('chưa tới ngày nhận (23/10): hiện nguyên câu 400 BR-LT-08 của BE dù đã hết chuồng, đặt chỗ giữ BOOKED, không kẹt nút', async () => {
+    const { user, onClose } = await open(ACCOUNTS.desk, '2026-10-23T09:00:00+07:00');
+    await noRoomLeft();
+    await user.click(await screen.findByRole('button', { name: 'Xác nhận hủy' }));
+    expect(await screen.findByRole('alert')).toHaveTextContent('Chưa tới ngày nhận, chưa hủy vì hết chuồng được');
     expect(onClose).not.toHaveBeenCalled();
     expect(screen.getByRole('button', { name: 'Xác nhận hủy' })).toBeEnabled();
     expect((await bookingOf(4)).status).toBe('BOOKED');

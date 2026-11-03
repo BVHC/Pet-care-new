@@ -3,28 +3,32 @@
 // #1–12 chép NGUYÊN VĂN BE (module/boarding: KennelService, BoardingAvailabilityService, BoardingBookingService, BoardingChangeService, BoardingViewService, BoardingAssembler,
 // BoardingRules, BoardingNoShowService, BoardingClinicCancellationService; docs/adr/0065). Thứ tự lỗi: 401 → 400 body / path / query (đọc tham số và Bean Validation chạy TRƯỚC
 // @PreAuthorize, kể cả với vai trò không được phép) → 403 vai trò → 404 / 403 phạm vi → 409 trạng thái → 400 rule (ADR-0065 §7, giống lịch hẹn: 409 trước 400 BR).
-// Lệch hợp đồng mà mock chép theo BE thật: #2 loại chuồng không thuộc nhóm BOARDING → 404 (hợp đồng nói 400); #6 hết bảo trì trên chuồng OCCUPIED không 409 mà về AVAILABLE (FSM
-// cho phép OCCUPIED → AVAILABLE); #9 `size` kẹp [1,100] im lặng; #8 / #11 có thêm vài 400 ngoài hợp đồng; `vaccineWarnings` là dữ liệu thật; trường null trả null.
+// Lệch hợp đồng mà mock chép theo BE thật: #2 loại chuồng không thuộc nhóm BOARDING → 404 (hợp đồng nói 400); #6 chỉ nhận chuồng MAINTENANCE (OCCUPIED /
+// AVAILABLE → 409, như BE đã sửa); #9 `size` kẹp [1,100] im lặng; #8 / #11 có thêm vài 400 ngoài hợp đồng; `vaccineWarnings` là dữ liệu thật; trường null trả null.
 //
-// #13–22 BE CHƯA CÓ (T42, T43): hợp đồng + BR là nguồn duy nhất; chỗ im lặng là ASSUMPTION của T48 (ghi ở docs/testcases/T48-fe.md), thông điệp tự đặt theo văn phong BE "… (BR-LT-xx)":
-//  A1  Nhận thú #14 (RECEPTIONIST, CARETAKER): 400 body → 403 → 404 đặt chỗ → 404 chuồng [ASSUMPTION: chuồng không có hoặc khác chi nhánh → 404, đứng TRƯỚC 409] → 409 không còn BOOKED →
-//      400 BR-LT-04 ngoài giờ mở cửa → BR-LT-08 chuồng không AVAILABLE / sai loại → BR-LT-05 thiếu hoặc quá hạn mũi → BR-LT-03 nhận sớm hết chỗ. Thành công: chuồng OCCUPIED, ghi cân nặng INTAKE,
-//      `actualCheckInAt` = bây giờ, nhận sớm kéo `checkInDate` về ngày nhận thực tế (ADR-0065 Nợ). GET …/check-in-readiness: vaccineGaps (tại ngày hôm nay), availableKennels, withinOpeningHours, canCheckIn.
-//      [ASSUMPTION] câu BR-LT-04 / BR-LT-08 / BR-LT-05 và câu 409 "Thú cưng không còn trong chuồng" là văn bản tự đặt.
-//  A2  Hủy vì hết chuồng #15 (RECEPTIONIST): 409 không BOOKED; 400 BR-LT-08 nếu còn chuồng AVAILABLE đúng loại; CANCELLED / CLINIC / không hủy muộn; báo khách (nếu có tài khoản) và BRANCH_MANAGER chi nhánh
-//      [ASSUMPTION: loại thông báo BOARDING_CANCELLED_BY_CLINIC cho cả hai người nhận, nội dung riêng cho quản lý].
-//  A3  Bắt đầu trả thú #16 (chỉ RECEPTIONIST): 409 thú không còn trong chuồng; 400 BR-LT-04 ngoài giờ mở cửa; số đêm = max(1, hôm nay − ngày nhận thực tế) + 1 nếu quá 12:00 giờ VN; Order BOARDING PENDING 1 dòng;
-//      đã có Order PENDING thì dùng lại và tính lại số đêm; đã có Order PAID thì trả lại Order đó (BR-LT-09: mỗi đặt chỗ tối đa 1 Order chưa kết thúc).
-//  A4  Giao thú #17 (RECEPTIONIST): 409 không còn trong chuồng; 400 BR-LT-09 nếu Order lưu trú mới nhất chưa hủy chưa PAID (hoặc chưa có); thành công CHECKED_OUT / RETURNED, chuồng AVAILABLE.
-//  A5  Thú mất #18 (RECEPTIONIST, `note` bắt buộc): CHECKED_OUT / PET_DECEASED, chuồng AVAILABLE, Order PENDING tính đến hôm nay như A3, trả CheckoutStarted. Thú hết "đang lưu trú" nên trang thú đánh dấu mất được.
+// #13–18 chép BE (module/boarding: BoardingCheckInService, BoardingCheckoutService, BoardingRules.chargedNights, KennelService; module/customer: PetWeightApiService; docs/adr/0085, 0086): BE đã giao T42 / T43.
+// Hậu tố rule "(BR-xx-yy)" nối bằng `ruleFail` như BE. Các mục còn lại (A6 trở đi) giữ ghi chú của T48 (docs/testcases/T48-fe.md):
+//  A1  Nhận thú #14 (RECEPTIONIST, CARETAKER): 400 body (MALFORMED; @Valid chỉ có tình trạng sức khỏe / đồ gửi kèm / chế độ ăn / SĐT khẩn, KHÔNG có kennelId, weightKg) → 403 → 404 đặt chỗ / 403 phạm vi → 409 FSM →
+//      400 BR-LT-04 ngoài giờ mở cửa → nhận sớm (BR-LT-02 số đêm hoặc trùng đặt chỗ, BR-LT-03 hết chỗ) → BR-LT-05 thiếu hoặc quá hạn mũi → BR-LT-08 thiếu cân / thiếu chuồng → 404 chuồng không có →
+//      BR-LT-08 khác chi nhánh hoặc sai loại / không còn trống → BR-KH-04 cân nặng (làm tròn HALF_UP 2 số, không từ chối >2 số lẻ). BR-LT-06 (quá ngày nhận) KHÔNG với tới: ST05 (A12) đã chuyển BOOKED quá
+//      hạn sang NO_SHOW trước handler. Thành công: chuồng OCCUPIED, ghi cân nặng INTAKE, `actualCheckInAt` = bây giờ, nhận sớm kéo `checkInDate` về hôm nay (ADR-0065 Nợ). GET …/check-in-readiness: 409 "Đặt chỗ
+//      không còn ở trạng thái BOOKED"; vaccineGaps (tại hôm nay), availableKennels, withinOpeningHours, canCheckIn (cũng đòi nhận sớm hợp lệ); không có trường lý do.
+//  A2  Hủy vì hết chuồng #15 (RECEPTIONIST): 409 FSM → 400 BR-LT-08 chưa tới ngày nhận → 400 BR-LT-08 nếu còn chuồng AVAILABLE đúng loại; CANCELLED / CLINIC / không hủy muộn; báo khách (nếu có tài khoản) và
+//      BRANCH_MANAGER chi nhánh [ASSUMPTION: loại thông báo BOARDING_CANCELLED_BY_CLINIC cho cả hai người nhận, nội dung riêng cho quản lý].
+//  A3  Bắt đầu trả thú #16 (chỉ RECEPTIONIST): 409 "Thú không còn trong chuồng"; 400 BR-LT-04 ngoài giờ mở cửa; 409 "Đã thu tiền lưu trú, chỉ còn giao thú" nếu đã có Order PAID (giờ mở cửa kiểm TRƯỚC, như BE);
+//      số đêm = chargedNights: max(1, ngày ở + (quá 12:00 giờ VN ? 1 : 0)) — đêm trễ cộng TRƯỚC khi lấy tối thiểu 1; Order BOARDING PENDING 1 dòng; đã có Order PENDING thì dùng lại và tính lại số đêm (BR-LT-09).
+//  A4  Giao thú #17 (RECEPTIONIST): 409 câu FSM "… từ X sang CHECKED_OUT" nếu không còn trong chuồng; 400 BR-LT-09 "Order lưu trú chưa thanh toán, chưa giao thú được" nếu chưa có Order lưu trú PAID; CHECKED_OUT / RETURNED.
+//  A5  Thú mất #18 (RECEPTIONIST, `note` bắt buộc ≤ 2000 ký tự): 409 câu FSM như A4; CHECKED_OUT / PET_DECEASED, chuồng AVAILABLE, Order PENDING tính đến hôm nay KHÔNG BAO GIỜ cộng đêm trễ (BR-LT-12), trả CheckoutStarted.
+//      Thú hết "đang lưu trú" nên trang thú đánh dấu mất được.
 //  A6  Hủy phiên trả thú (sales #9) — ở sales.mock.ts.
-//  A7  Nhật ký #19–22: ghi (VET, CARETAKER chi nhánh) chỉ khi CHECKED_IN / OVERDUE (409 khác); `logDate` mặc định hôm nay VN, không ở tương lai [ASSUMPTION: 400 VALIDATION_FAILED "logDate: …", kiểm cùng nhóm
-//      Bean Validation nên đứng TRƯỚC 403 vai trò]; `photoUrls` bắt buộc, ≤ 5, https; `isAbnormal` mặc định false và đẩy thông báo CARE_LOG_ABNORMAL (khách + lễ tân chi nhánh); `editableUntil` = createdAt + 60 phút;
-//      sửa chỉ người ghi (người khác 403 ACCESS_DENIED), quá hạn 409 "… (BR-LT-11)"; bản bổ sung 1–2000 ký tự bất cứ lúc nào bởi VET / CARETAKER chi nhánh (A4 hợp đồng); khách xem nhật ký của thú mình (người khác 404),
-//      nhân viên chi nhánh mình (khác 403); sắp `logDate DESC, careLogId DESC`.
-//  A8  Ảnh nhật ký là URL https, không tải lên (Q1 của hợp đồng còn TBD).
+//  A7  Nhật ký #19–22 chép BE (CareLogController, CareLogService, CareLogIT; docs/adr/0085 §3–5). Ghi #20 (VET, CARETAKER chi nhánh), thứ tự: Bean Validation (chữ ≤ 300, `note` ≤ 2000, `photoUrls` bắt buộc, có thể rỗng)
+//      → 403 vai trò → 404 / 403 phạm vi → 409 "Thú không đang lưu trú, không ghi nhật ký được" (chỉ CHECKED_IN / OVERDUE ghi được) → 400 VALIDATION_FAILED nếu `logDate` ngoài [ngày nhận thực tế, hôm nay] (mặc định hôm nay VN)
+//      → quá 5 ảnh [CFG] là 400 BUSINESS_RULE_VIOLATION "(BR-LT-11)" → URL ảnh không phải http / https hoặc > 500 ký tự → mục rỗng (không chữ, không ảnh). `isAbnormal` mặc định false, đẩy thông báo CARE_LOG_ABNORMAL
+//      (khách + lễ tân chi nhánh); `editableUntil` = createdAt + 60 phút. Sửa #21: chỉ người ghi (người khác 403 ACCESS_DENIED_SCOPE_MISMATCH), quá hạn 409 "… (BR-LT-11)", ô vắng / null giữ nguyên, chuỗi trống xóa, mục rỗng sau khi gộp → 400.
+//      Bổ sung #22: 1–2000 ký tự, bất cứ lúc nào, bởi VET / CARETAKER chi nhánh (A4 hợp đồng). Xem #19: khách thú của mình (người khác 404), nhân viên chi nhánh mình (khác 403); sắp `logDate`, `id` TĂNG dần như BE (FE tự sắp lại).
+//  A8  Ảnh nhật ký là URL http / https, không tải lên (Q1 của hợp đồng còn TBD).
 //  A9  Gia hạn áp cho BOOKED và CHECKED_IN (SM #6 #2), OVERDUE → 409 như BE.
-//  A10 `activeOrderId` suy từ Order BOARDING mới nhất chưa CANCELLED (PENDING / PAID) của đặt chỗ đang CHECKED_IN / OVERDUE; null khi đã kết thúc. BE thật luôn null tới T43 (ADR-0065 D10).
+//  A10 `activeOrderId` suy từ Order BOARDING OPEN / PENDING của đặt chỗ đang CHECKED_IN / OVERDUE (như `findActiveOrderIds` của BE): null khi chưa bắt đầu trả thú, khi Order đã PAID hoặc đã hủy, và khi đã kết thúc.
 //  A11 Thu tiền trả thú ở bàn Lễ tân bằng POST /payments của mock thu ngân (Order BOARDING không có dòng hàng nên không cần tồn kho).
 //  A12 ST05 (NO_SHOW) và ST15 (OVERDUE) chạy "lười" mỗi lần nạp state (mẫu `sweep` của appointment.mock): BOOKED quá giờ đóng cửa muộn nhất của ngày nhận → NO_SHOW + đánh giá hạn chế đặt online (BR-LH-09);
 //      [ASSUMPTION] thời điểm vi phạm = chính mốc đóng cửa (BE ghi `updated_at` lúc job chạy, nên lệch vài phút). CHECKED_IN quá 12:00 giờ VN của ngày trả → OVERDUE, `overdueSince` = 12:00 ngày trả [ASSUMPTION];
@@ -58,7 +62,7 @@ import { markPetHasBooking, petCurrentWeight, petSummary, recordIntakeWeight, re
 import { denied, fail, invalid, isText, noContent, notFound, ok, ruleFail, scopeDenied, tooLong, type Check, type MockHandler, type MockReply, type MockRequest } from './envelope';
 import { MOCK_ACCOUNTS, branchIdOf } from './identity.mock';
 import { staffNameOf } from './identity-admin.mock';
-import { activeBoardingOrder, openBoardingOrder, registerBoardingStay } from './sales.mock';
+import { activeBoardingOrder, hasPaidBoardingOrder, openBoardingOrder, registerBoardingStay } from './sales.mock';
 import { vaccineDosesOf } from './visit-clinical.mock';
 import { seedState, SEED_CODE, type AddendumRow, type BookingRow, type CareLogRow, type KennelRow, type State } from './boarding.seed';
 
@@ -581,8 +585,8 @@ const endMaintenance: MockHandler = (req) => {
   const s = load(Date.now());
   const k = kennelFor(req, s, kennelId);
   if (isReply(k)) return k;
-  const refused = kennelTransition(k, 'AVAILABLE');
-  if (refused) return refused;
+  // Chuồng#5 chỉ đi từ MAINTENANCE: OCCUPIED → AVAILABLE (Chuồng#3) là hệ quả của giao thú / thú mất, không phải thao tác tay (KennelService.endMaintenance).
+  if (k.status !== 'MAINTENANCE') return stateError('chuồng (chỉ kết thúc bảo trì khi đang bảo trì)', k.status, 'AVAILABLE');
   k.status = 'AVAILABLE';
   save(s);
   return ok(toKennel(s, k), 200, 'Đã hết bảo trì');
@@ -866,13 +870,25 @@ const cancelBooking: MockHandler = (req) => {
   return ok(toBooking(s, b, today), 200, 'Đã hủy đặt chỗ lưu trú');
 };
 
-// ─── #13 Điều kiện nhận thú, #14 Nhận thú (A1) ───
+// ─── #13 Điều kiện nhận thú, #14 Nhận thú (BoardingCheckInService) ───
 
-const NOT_IN_STAY = 'Thú cưng không còn trong chuồng';
 const PHONE_RE = /^0[0-9]{9,10}$/;
 const withinOpeningHours = (branchId: number, now: number) => isOpenAt(branchId, now);
 
-/** #13 — ASSUMPTION A1 (BE chưa có, T42): 409 nếu không còn BOOKED; vaccineGaps tại hôm nay (BR-LT-05), chuồng AVAILABLE đúng loại, giờ mở cửa; canCheckIn = không thiếu mũi && trong giờ && còn chuồng. Chỉ lễ tân, CARETAKER. */
+/**
+ * `checkEarlyNights`: chỉ khi nhận sớm (hôm nay < ngày nhận), tính cho khoảng [hôm nay, ngày trả): số đêm trong [min, max] → thú không trùng đặt chỗ khác → các đêm thêm
+ * [hôm nay, ngày nhận cũ) còn chỗ. (`today > checkInDate` của BR-LT-06 không với tới: ST05 đã chuyển BOOKED quá hạn thành NO_SHOW trước handler.)
+ */
+function earlyNightsError(s: State, b: BookingRow, today: string): MockReply | null {
+  if (today >= b.checkInDate) return null;
+  const nights = nightsError(today, b.checkOutDate);
+  if (nights) return nights;
+  if (overlaps(s, b.petId, today, b.checkInDate, b.bookingId)) return ruleFail('BR-LT-02', 'Thú cưng đã có đặt chỗ lưu trú trùng ngày');
+  const short = shortNights(s, b.branchId, b.kennelTypeId, today, b.checkInDate, today);
+  return short.length ? fullNightsError(short) : null;
+}
+
+/** #13 — chỉ lễ tân, CARETAKER; 409 "Đặt chỗ không còn ở trạng thái BOOKED"; canCheckIn = không thiếu mũi && còn chuồng AVAILABLE đúng loại && trong giờ mở cửa && nhận sớm (nếu có) vẫn hợp lệ. Không có trường lý do. */
 const checkInReadiness: MockHandler = (req) => {
   const id = idParam(req, 'bookingId');
   if (isReply(id)) return id;
@@ -881,17 +897,27 @@ const checkInReadiness: MockHandler = (req) => {
   const s = load(now);
   const b = bookingFor(req, s, id);
   if (isReply(b)) return b;
-  if (b.status !== 'BOOKED') return stateError('đặt chỗ lưu trú', b.status, 'CHECKED_IN');
-  const gaps = vaccineGaps(b.petId, vnDate(now));
+  if (b.status !== 'BOOKED') return conflict('Đặt chỗ không còn ở trạng thái BOOKED');
+  const today = vnDate(now);
+  const gaps = vaccineGaps(b.petId, today);
   const kennels = s.kennels.filter((k) => k.branchId === b.branchId && k.kennelTypeId === b.kennelTypeId && k.status === 'AVAILABLE').sort(byCode);
   const open = withinOpeningHours(b.branchId, now);
-  return ok({ vaccineGaps: gaps, availableKennels: kennels.map((k) => toKennel(s, k)), withinOpeningHours: open, canCheckIn: gaps.length === 0 && open && kennels.length > 0 }, 200, 'Điều kiện nhận thú');
+  const dateOk = earlyNightsError(s, b, today) === null;
+  return ok({ vaccineGaps: gaps, availableKennels: kennels.map((k) => toKennel(s, k)), withinOpeningHours: open, canCheckIn: gaps.length === 0 && kennels.length > 0 && open && dateOk }, 200, 'Điều kiện nhận thú');
 };
 
-/** Cân nặng: > 0, tối đa 9999,99 và 2 chữ số thập phân (weight_records.weight_kg NUMERIC(6,2)). */
-const weightOk = (w: number) => w <= 9999.99 && Math.abs(Math.round(w * 100) - w * 100) < 1e-6;
+/** `PetWeightApiService.normalize` (BR-KH-04, hằng cứng): ≤ 0 → 400; làm tròn HALF_UP 2 chữ số thập phân rồi phải trong 0.01–9999.99 kg (NUMERIC(6,2)). Trả số đã làm tròn. */
+function intakeWeight(weightKg: number): number | MockReply {
+  if (!(weightKg > 0)) return ruleFail('BR-KH-04', 'Cân nặng phải lớn hơn 0');
+  const rounded = Math.round((weightKg + Number.EPSILON) * 100) / 100;
+  return rounded <= 0 || rounded > 9999.99 ? ruleFail('BR-KH-04', 'Cân nặng phải trong khoảng 0.01 đến 9999.99 kg') : rounded;
+}
 
-/** #14 — ASSUMPTION A1 (BE chưa có, T42): thứ tự 400 body → 403 → 404 đặt chỗ → 404 chuồng [tự đặt, trước 409] → 409 → BR-LT-04 → BR-LT-08 → BR-LT-05 → BR-LT-03 (nhận sớm); câu BR-LT-04 / 08 / 05 tự đặt; nhận sớm kéo ngày nhận về hôm nay. */
+/**
+ * #14 — thứ tự như BE: 400 body (MALFORMED, rồi @Valid: CHỈ tình trạng sức khỏe / đồ gửi kèm / chế độ ăn / SĐT khẩn; kennelId, weightKg không @NotNull) → 403 → 404 đặt chỗ / 403 phạm vi → 409 FSM →
+ * BR-LT-04 giờ mở cửa → nhận sớm (BR-LT-02, BR-LT-03) → BR-LT-05 mũi tiêm → BR-LT-08 thiếu cân / thiếu chuồng → 404 chuồng không có → BR-LT-08 khác chi nhánh hoặc sai loại → BR-LT-08 không còn trống
+ * → BR-KH-04 cân nặng. Nhận sớm kéo ngày nhận về hôm nay.
+ */
 const checkIn: MockHandler = (req) => {
   const id = idParam(req, 'bookingId');
   if (isReply(id)) return id;
@@ -903,15 +929,13 @@ const checkIn: MockHandler = (req) => {
   ) {
     return malformed();
   }
-  const w = b.weightKg as number | undefined | null;
   const bad = invalid([
-    ['kennelId', 'Vui lòng chọn chuồng', b.kennelId == null],
-    ['weightKg', 'Vui lòng nhập cân nặng', w == null],
-    ['weightKg', 'Cân nặng phải lớn hơn 0', typeof w === 'number' && w <= 0],
-    ['weightKg', 'Cân nặng tối đa 9999.99 kg và 2 chữ số thập phân', typeof w === 'number' && w > 0 && !weightOk(w)],
-    ['healthCondition', 'Vui lòng nhập tình trạng sức khỏe', !isText(b.healthCondition)],
+    ['healthCondition', 'Vui lòng nhập tình trạng sức khỏe lúc nhận', !isText(b.healthCondition)],
+    ['healthCondition', 'Tình trạng sức khỏe tối đa 1000 ký tự', tooLong(b.healthCondition, 1000)],
+    ['belongings', 'Đồ gửi kèm tối đa 1000 ký tự', tooLong(b.belongings, 1000)],
+    ['dietInstructions', 'Chế độ ăn riêng tối đa 1000 ký tự', tooLong(b.dietInstructions, 1000)],
     ['emergencyPhone', 'Vui lòng nhập số điện thoại liên hệ khẩn', !isText(b.emergencyPhone)],
-    ['emergencyPhone', 'Số điện thoại liên hệ khẩn phải bắt đầu bằng 0 và có 10–11 chữ số', isText(b.emergencyPhone) && !PHONE_RE.test(b.emergencyPhone)],
+    ['emergencyPhone', 'Số điện thoại liên hệ khẩn không hợp lệ', typeof b.emergencyPhone === 'string' && !PHONE_RE.test(b.emergencyPhone)],
   ]);
   if (bad) return bad;
   if (!RECEIVERS.includes(roleOf(req))) return denied();
@@ -920,21 +944,20 @@ const checkIn: MockHandler = (req) => {
   const s = load(now);
   const row = bookingFor(req, s, id);
   if (isReply(row)) return row;
-  const kennel = s.kennels.find((k) => k.kennelId === b.kennelId && k.branchId === row.branchId);
-  if (!kennel) return notFound('chuồng', b.kennelId as number);
   if (row.status !== 'BOOKED') return stateError('đặt chỗ lưu trú', row.status, 'CHECKED_IN');
   if (!withinOpeningHours(row.branchId, now)) return ruleFail('BR-LT-04', 'Chỉ nhận thú trong giờ mở cửa của chi nhánh');
-  if (kennel.status !== 'AVAILABLE') return ruleFail('BR-LT-08', 'Chuồng không ở trạng thái trống');
-  if (kennel.kennelTypeId !== row.kennelTypeId) return ruleFail('BR-LT-08', 'Chuồng không đúng loại chuồng đã đặt');
+  const early = earlyNightsError(s, row, today);
+  if (early) return early;
   const gaps = vaccineGaps(row.petId, today);
-  if (gaps.length) {
-    return ruleFail('BR-LT-05', `Thú cưng thiếu hoặc quá hạn mũi tiêm bắt buộc khi lưu trú: ${gaps.map((g) => g.vaccineTypeName).join(', ')}. Hãy tiếp nhận thú như walk-in để tiêm trước`);
-  }
-  // Nhận sớm: các đêm từ hôm nay tới trước ngày nhận cũ cũng phải còn chỗ (BR-LT-03).
-  if (today < row.checkInDate) {
-    const short = shortNights(s, row.branchId, row.kennelTypeId, today, row.checkInDate, today);
-    if (short.length) return fullNightsError(short);
-  }
+  if (gaps.length) return ruleFail('BR-LT-05', `Thiếu hoặc quá hạn mũi tiêm bắt buộc khi lưu trú: ${gaps.map((g) => g.vaccineTypeName).join(', ')}`);
+  if (b.weightKg == null) return ruleFail('BR-LT-08', 'Vui lòng nhập cân nặng lúc nhận');
+  if (b.kennelId == null) return ruleFail('BR-LT-08', 'Vui lòng chọn chuồng cho thú');
+  const kennel = s.kennels.find((k) => k.kennelId === b.kennelId);
+  if (!kennel) return notFound('chuồng', b.kennelId as number);
+  if (kennel.branchId !== row.branchId || kennel.kennelTypeId !== row.kennelTypeId) return ruleFail('BR-LT-08', 'Chuồng phải đúng chi nhánh và đúng loại đã đặt');
+  if (kennel.status !== 'AVAILABLE') return ruleFail('BR-LT-08', 'Chuồng không còn trống');
+  const weightKg = intakeWeight(b.weightKg as number);
+  if (isReply(weightKg)) return weightKg;
 
   kennel.status = 'OCCUPIED';
   row.status = 'CHECKED_IN';
@@ -942,20 +965,20 @@ const checkIn: MockHandler = (req) => {
   row.actualCheckInAt = iso(now);
   if (today < row.checkInDate) row.checkInDate = today;
   row.checkIn = {
-    weightKg: w as number,
+    weightKg,
     healthCondition: (b.healthCondition as string).trim(),
     belongings: optionalText(b.belongings),
     dietInstructions: optionalText(b.dietInstructions),
     emergencyPhone: b.emergencyPhone as string,
   };
   save(s);
-  recordIntakeWeight(row.petId, w as number, row.bookingId, iso(now));
+  recordIntakeWeight(row.petId, weightKg, row.bookingId, iso(now));
   return ok(toBooking(s, row, today), 200, 'Đã nhận thú lưu trú');
 };
 
 // ─── #15 Hủy vì hết chuồng (A2) ───
 
-/** #15 — ASSUMPTION A2 (BE chưa có, T42): chỉ lễ tân; 409 không BOOKED; 400 BR-LT-08 nếu còn chuồng AVAILABLE đúng loại; CANCELLED / CLINIC / không hủy muộn; báo khách và BRANCH_MANAGER [loại thông báo và nội dung cho quản lý tự đặt]. */
+/** #15 (BoardingCheckInService.cancelNoKennel) — chỉ lễ tân; 409 không BOOKED → 400 BR-LT-08 chưa tới ngày nhận → 400 BR-LT-08 nếu còn chuồng AVAILABLE đúng loại; CANCELLED / CLINIC / không hủy muộn; báo khách và BRANCH_MANAGER [loại thông báo và nội dung cho quản lý tự đặt]. */
 const cancelNoKennel: MockHandler = (req) => {
   const id = idParam(req, 'bookingId');
   if (isReply(id)) return id;
@@ -965,6 +988,7 @@ const cancelNoKennel: MockHandler = (req) => {
   const b = bookingFor(req, s, id);
   if (isReply(b)) return b;
   if (b.status !== 'BOOKED') return stateError('đặt chỗ lưu trú', b.status, 'CANCELLED');
+  if (vnDate(now) < b.checkInDate) return ruleFail('BR-LT-08', 'Chưa tới ngày nhận, chưa hủy vì hết chuồng được');
   if (s.kennels.some((k) => k.branchId === b.branchId && k.kennelTypeId === b.kennelTypeId && k.status === 'AVAILABLE')) {
     return ruleFail('BR-LT-08', 'Vẫn còn chuồng trống đúng loại, hãy nhận thú');
   }
@@ -985,15 +1009,18 @@ const cancelNoKennel: MockHandler = (req) => {
 
 // ─── #16 Bắt đầu trả thú, #17 Giao thú, #18 Thú mất (A3–A5) ───
 
-/** Số đêm tính tiền (A3): max(1, hôm nay − ngày nhận thực tế) + 1 nếu quá 12:00 giờ VN. */
-function billableNights(b: BookingRow, now: number): number {
+/**
+ * `BoardingRules.chargedNights` (BR-LT-09): max(1, hôm nay − ngày nhận + 1 nếu quá giờ trả quy định 12:00 giờ VN) — đêm trễ cộng TRƯỚC khi lấy tối thiểu 1, đúng 12:00:00 chưa trễ.
+ * Thú mất (BR-LT-12, `lateReturn = false`) không bao giờ cộng đêm trễ.
+ */
+function billableNights(b: BookingRow, now: number, lateReturn: boolean): number {
   const today = vnDate(now);
-  const start = b.actualCheckInAt ? vnDate(Date.parse(b.actualCheckInAt)) : b.checkInDate;
-  return Math.max(1, nightsBetween(start, today)) + (now > instantOf(today, CFG.checkoutTime) ? 1 : 0);
+  const late = lateReturn && now > instantOf(today, CFG.checkoutTime);
+  return Math.max(1, nightsBetween(b.checkInDate, today) + (late ? 1 : 0));
 }
 
-function openCheckout(req: MockRequest, b: BookingRow, now: number) {
-  const nights = billableNights(b, now);
+function openCheckout(req: MockRequest, b: BookingRow, now: number, lateReturn: boolean) {
+  const nights = billableNights(b, now, lateReturn);
   return openBoardingOrder({
     bookingId: b.bookingId,
     branchId: b.branchId,
@@ -1013,7 +1040,7 @@ const checkoutResult = (s: State, b: BookingRow, order: ReturnType<typeof openBo
   amount: order.lines.reduce((sum, l) => sum + l.quantity * l.unitPrice, 0),
 });
 
-/** #16 — ASSUMPTION A3 (BE chưa có, T43): chỉ lễ tân; 409 thú không còn trong chuồng; 400 BR-LT-04 ngoài giờ mở cửa; Order BOARDING PENDING (dùng lại PENDING, trả lại PAID); câu 409 tự đặt. */
+/** #16 — chỉ lễ tân; thứ tự như BE: 409 thú không còn trong chuồng → 400 BR-LT-04 ngoài giờ mở cửa → 409 đã thu tiền (PAID) → Order BOARDING PENDING (dùng lại PENDING). */
 const startCheckout: MockHandler = (req) => {
   const id = idParam(req, 'bookingId');
   if (isReply(id)) return id;
@@ -1022,9 +1049,10 @@ const startCheckout: MockHandler = (req) => {
   const s = load(now);
   const b = bookingFor(req, s, id);
   if (isReply(b)) return b;
-  if (!inStay(b)) return conflict(NOT_IN_STAY);
+  if (!inStay(b)) return conflict('Thú không còn trong chuồng');
   if (!withinOpeningHours(b.branchId, now)) return ruleFail('BR-LT-04', 'Chỉ trả thú trong giờ mở cửa của chi nhánh');
-  const order = openCheckout(req, b, now);
+  if (hasPaidBoardingOrder(b.bookingId)) return conflict('Đã thu tiền lưu trú, chỉ còn giao thú');
+  const order = openCheckout(req, b, now, true);
   return ok(checkoutResult(s, b, order, vnDate(now)), 200, 'Đã bắt đầu trả thú');
 };
 
@@ -1037,7 +1065,7 @@ function leaveKennel(s: State, b: BookingRow, reason: 'RETURNED' | 'PET_DECEASED
   if (kennel) kennel.status = 'AVAILABLE';
 }
 
-/** #17 — ASSUMPTION A4 (BE chưa có, T43): chỉ lễ tân; 409 không còn trong chuồng; 400 BR-LT-09 nếu Order lưu trú mới nhất chưa hủy chưa PAID hoặc chưa có; chuồng về AVAILABLE. */
+/** #17 — chỉ lễ tân; 409 câu FSM "… từ X sang CHECKED_OUT" nếu không còn trong chuồng; 400 BR-LT-09 nếu chưa có Order lưu trú PAID (`hasPaidOrder`, không dựa vào `activeOrderId`); chuồng về AVAILABLE. */
 const handOver: MockHandler = (req) => {
   const id = idParam(req, 'bookingId');
   if (isReply(id)) return id;
@@ -1046,28 +1074,31 @@ const handOver: MockHandler = (req) => {
   const s = load(now);
   const b = bookingFor(req, s, id);
   if (isReply(b)) return b;
-  if (!inStay(b)) return conflict(NOT_IN_STAY);
-  if (activeBoardingOrder(b.bookingId)?.status !== 'PAID') return ruleFail('BR-LT-09', 'Order lưu trú chưa thanh toán');
+  if (!inStay(b)) return stateError('đặt chỗ lưu trú', b.status, 'CHECKED_OUT');
+  if (!hasPaidBoardingOrder(b.bookingId)) return ruleFail('BR-LT-09', 'Order lưu trú chưa thanh toán, chưa giao thú được');
   leaveKennel(s, b, 'RETURNED', now);
   save(s);
   return ok(toBooking(s, b, vnDate(now)), 200, 'Đã giao thú');
 };
 
-/** #18 — ASSUMPTION A5 (BE chưa có, T43): chỉ lễ tân, `note` bắt buộc; CHECKED_OUT / PET_DECEASED, Order PENDING tính đến hôm nay như A3; chuồng về AVAILABLE. */
+/** #18 — chỉ lễ tân, `note` bắt buộc ≤ 2000 ký tự; 409 câu FSM "… từ X sang CHECKED_OUT"; CHECKED_OUT / PET_DECEASED, Order PENDING tính đến hôm nay KHÔNG cộng đêm trễ (BR-LT-12); chuồng về AVAILABLE. */
 const endDeceased: MockHandler = (req) => {
   const id = idParam(req, 'bookingId');
   if (isReply(id)) return id;
   const body = bodyOf(req.body);
   if (body.note != null && typeof body.note !== 'string') return malformed();
-  const bad = invalid([['note', 'Vui lòng ghi rõ diễn biến', !isText(body.note)]]);
+  const bad = invalid([
+    ['note', 'Vui lòng ghi rõ diễn biến', !isText(body.note)],
+    ['note', 'Diễn biến tối đa 2000 ký tự', tooLong(body.note, 2000)],
+  ]);
   if (bad) return bad;
   if (!DESK.includes(roleOf(req))) return denied();
   const now = Date.now();
   const s = load(now);
   const b = bookingFor(req, s, id);
   if (isReply(b)) return b;
-  if (!inStay(b)) return conflict(NOT_IN_STAY);
-  const order = openCheckout(req, b, now);
+  if (!inStay(b)) return stateError('đặt chỗ lưu trú', b.status, 'CHECKED_OUT');
+  const order = openCheckout(req, b, now, false);
   leaveKennel(s, b, 'PET_DECEASED', now);
   b.endNote = (body.note as string).trim();
   save(s);
@@ -1076,32 +1107,51 @@ const endDeceased: MockHandler = (req) => {
 
 // ─── #19–22 Nhật ký chăm sóc (A7, A8) ───
 
-const HTTPS_RE = /^https:\/\/\S+$/;
+const HTTP_RE = /^https?:\/\/\S+$/;
+const MAX_URL_LENGTH = 500;
 const TEXT_FIELDS = ['eating', 'drinking', 'hygiene', 'activity'] as const;
+const TEXT_LABEL = { eating: 'Mục ăn', drinking: 'Mục uống', hygiene: 'Mục vệ sinh', activity: 'Mục hoạt động' } as const;
+type CareTexts = Pick<CareLogRow, 'eating' | 'drinking' | 'hygiene' | 'activity' | 'note'>;
 
-/** Kiểu JSON của nhật ký (sai kiểu → MALFORMED) rồi Bean Validation (VALIDATION_FAILED). `creating`: thêm ngày nhật ký và danh sách ảnh bắt buộc. */
-function careLogBodyError(b: Record<string, unknown>, creating: boolean, today: string): MockReply | null {
+/** Kiểu JSON của nhật ký (sai kiểu → MALFORMED) rồi Bean Validation của CareLogRequest / UpdateCareLogRequest (VALIDATION_FAILED). `creating`: danh sách ảnh bắt buộc. Ngày, ảnh và mục rỗng kiểm sau, trong service. */
+function careLogBodyError(b: Record<string, unknown>, creating: boolean): MockReply | null {
   if (
     TEXT_FIELDS.some((k) => b[k] != null && typeof b[k] !== 'string') ||
     (b.note != null && typeof b.note !== 'string') ||
     (b.logDate != null && !isDate(b.logDate)) ||
     (b.isAbnormal != null && typeof b.isAbnormal !== 'boolean') ||
-    (b.photoUrls != null && (!Array.isArray(b.photoUrls) || b.photoUrls.some((u) => typeof u !== 'string')))
+    (b.photoUrls != null && (!Array.isArray(b.photoUrls) || b.photoUrls.some((u) => u !== null && typeof u !== 'string')))
   ) {
     return malformed();
   }
-  const photos = Array.isArray(b.photoUrls) ? (b.photoUrls as string[]) : [];
-  const checks: Check[] = [
-    ['logDate', 'Ngày nhật ký không được ở tương lai', creating && typeof b.logDate === 'string' && b.logDate > today],
-    ...TEXT_FIELDS.map((k): Check => [k, 'Tối đa 300 ký tự', tooLong(b[k], 300)]),
-    ['photoUrls', 'Vui lòng gửi danh sách ảnh (có thể để trống)', creating && b.photoUrls == null],
-    ['photoUrls', `Tối đa ${CFG.careLogMaxPhotos} ảnh`, photos.length > CFG.careLogMaxPhotos],
-    ['photoUrls', 'Ảnh phải là đường dẫn https', photos.some((u) => !HTTPS_RE.test(u))],
-  ];
-  return invalid(checks);
+  return invalid([
+    ...TEXT_FIELDS.map((k): Check => [k, `${TEXT_LABEL[k]} tối đa 300 ký tự`, tooLong(b[k], 300)]),
+    ['note', 'Ghi chú tối đa 2000 ký tự', tooLong(b.note, 2000)],
+    ['photoUrls', 'Vui lòng gửi danh sách ảnh (có thể rỗng)', creating && b.photoUrls == null],
+  ]);
 }
 
-/** #19 — ASSUMPTION A7 (BE chưa có, T42): khách thú của mình (người khác 404), nhân viên chi nhánh mình (khác 403); sắp logDate giảm dần, id giảm dần. */
+/** Chữ của mục nhật ký: ô gửi chuỗi thì cắt khoảng trắng (trống = xóa); khi sửa (`current`), ô vắng / null giữ nguyên (ADR-0085 E9). */
+function careTexts(b: Record<string, unknown>, current?: CareLogRow): CareTexts {
+  const pick = (k: keyof CareTexts) => (current && typeof b[k] !== 'string' ? current[k] : optionalText(b[k]));
+  return { eating: pick('eating'), drinking: pick('drinking'), hygiene: pick('hygiene'), activity: pick('activity'), note: pick('note') };
+}
+
+/** BR-LT-11 (E6): quá `care_log.max_photos` [CFG] → 400 BUSINESS_RULE_VIOLATION; URL không phải http / https hoặc > 500 ký tự → 400 VALIDATION_FAILED; rồi mục rỗng (E5) → 400 VALIDATION_FAILED. */
+function careContentError(texts: CareTexts, photos: (string | null)[], checkPhotos: boolean): MockReply | null {
+  if (checkPhotos) {
+    if (photos.length > CFG.careLogMaxPhotos) return ruleFail('BR-LT-11', `Mỗi mục nhật ký tối đa ${CFG.careLogMaxPhotos} ảnh`);
+    if (photos.some((u) => u === null || u.length > MAX_URL_LENGTH || !HTTP_RE.test(u))) {
+      return fail('VALIDATION_FAILED', `Ảnh phải là địa chỉ http / https dài tối đa ${MAX_URL_LENGTH} ký tự`, 400);
+    }
+  }
+  if (Object.values(texts).every((t) => t === null) && photos.length === 0) {
+    return fail('VALIDATION_FAILED', 'Mục nhật ký phải có ít nhất một nội dung hoặc ảnh', 400);
+  }
+  return null;
+}
+
+/** #19 — khách thú của mình (người khác 404), nhân viên chi nhánh mình (khác 403); sắp `logDate`, `id` TĂNG dần như BE (FE tự sắp lại mới nhất trước). */
 const listCareLogs: MockHandler = (req) => {
   const id = idParam(req, 'bookingId');
   if (isReply(id)) return id;
@@ -1111,7 +1161,7 @@ const listCareLogs: MockHandler = (req) => {
   if (isReply(b)) return b;
   const logs = s.careLogs
     .filter((l) => l.bookingId === b.bookingId)
-    .sort((x, y) => y.logDate.localeCompare(x.logDate) || y.careLogId - x.careLogId);
+    .sort((x, y) => x.logDate.localeCompare(y.logDate) || x.careLogId - y.careLogId);
   return ok(logs.map((l) => toCareLog(s, l)), 200, 'Nhật ký chăm sóc');
 };
 
@@ -1128,30 +1178,36 @@ function notifyAbnormal(b: BookingRow, log: CareLogRow) {
   for (const desk of staffOf(b.branchId, 'RECEPTIONIST')) pushNotification(desk.id, { ...notice, linkUrl: '/admin/boarding' });
 }
 
-/** #20 — ASSUMPTION A7 (BE chưa có, T42): VET, CARETAKER; 409 khi không CHECKED_IN / OVERDUE; logDate tương lai và ảnh sai là 400 body [chạy trước 403, tự đặt]; bất thường → thông báo CARE_LOG_ABNORMAL. */
+/**
+ * #20 — VET, CARETAKER. Thứ tự như CareLogService: Bean Validation (400) → 403 vai trò → 404 / 403 phạm vi → 409 không CHECKED_IN / OVERDUE → 400 ngày ngoài [ngày nhận thực tế, hôm nay]
+ * (câu không có tiền tố tên trường) → số ảnh quá [CFG] (BR-LT-11) → URL ảnh → mục rỗng; bất thường → thông báo CARE_LOG_ABNORMAL.
+ */
 const createCareLog: MockHandler = (req) => {
   const id = idParam(req, 'bookingId');
   if (isReply(id)) return id;
   const body = bodyOf(req.body);
-  const now = Date.now();
-  const today = vnDate(now);
-  const bad = careLogBodyError(body, true, today);
+  const bad = careLogBodyError(body, true);
   if (bad) return bad;
   if (!CARE_WRITERS.includes(roleOf(req))) return denied();
+  const now = Date.now();
   const s = load(now);
   const b = bookingFor(req, s, id);
   if (isReply(b)) return b;
-  if (!inStay(b)) return conflict('Thú cưng không đang lưu trú');
+  if (!inStay(b)) return conflict('Thú không đang lưu trú, không ghi nhật ký được');
+  const today = vnDate(now);
+  const logDate = (body.logDate as string | null | undefined) ?? today;
+  const stayStart = b.actualCheckInAt === null ? b.checkInDate : vnDate(Date.parse(b.actualCheckInAt));
+  if (logDate > today || logDate < stayStart) return fail('VALIDATION_FAILED', 'Ngày nhật ký phải từ ngày nhận thú tới hôm nay', 400);
+  const texts = careTexts(body);
+  const photos = body.photoUrls as string[];
+  const invalidContent = careContentError(texts, photos, true);
+  if (invalidContent) return invalidContent;
   const row: CareLogRow = {
     careLogId: Math.max(0, ...s.careLogs.map((l) => l.careLogId)) + 1,
     bookingId: b.bookingId,
-    logDate: (body.logDate as string | undefined) ?? today,
-    eating: optionalText(body.eating),
-    drinking: optionalText(body.drinking),
-    hygiene: optionalText(body.hygiene),
-    activity: optionalText(body.activity),
-    note: optionalText(body.note),
-    photoUrls: body.photoUrls as string[],
+    logDate,
+    ...texts,
+    photoUrls: photos,
     isAbnormal: body.isAbnormal === true,
     recordedBy: me(req).id,
     createdAt: iso(now),
@@ -1170,30 +1226,37 @@ function careLogFor(req: MockRequest, s: State, id: number): { log: CareLogRow; 
   return branchOf(req) === booking.branchId ? { log, booking } : scopeDenied();
 }
 
-/** #21 — ASSUMPTION A7 (BE chưa có, T42): chỉ người ghi (người khác 403 ACCESS_DENIED), trong 60 phút [CFG], quá hạn 409 "… (BR-LT-11)". */
+/**
+ * #21 — chỉ người ghi (người khác 403 ACCESS_DENIED_SCOPE_MISMATCH), trong 60 phút [CFG], quá hạn 409 "… (BR-LT-11)". Thứ tự như CareLogService: Bean Validation → 403 vai trò → 404 / 403 phạm vi
+ * → 403 người ghi → 409 hết hạn → số ảnh (chỉ khi gửi `photoUrls`) → URL ảnh → mục rỗng sau khi gộp; ô vắng / null giữ nguyên, chuỗi trống xóa (E9). Chỉ ghi vào nhật ký khi mọi kiểm tra qua.
+ */
 const updateCareLog: MockHandler = (req) => {
   const id = idParam(req, 'careLogId');
   if (isReply(id)) return id;
   const body = bodyOf(req.body);
-  const now = Date.now();
-  const bad = careLogBodyError(body, false, vnDate(now));
+  const bad = careLogBodyError(body, false);
   if (bad) return bad;
   if (!CARE_WRITERS.includes(roleOf(req))) return denied();
+  const now = Date.now();
   const s = load(now);
   const found = careLogFor(req, s, id);
   if (isReply(found)) return found;
   const { log } = found;
-  if (log.recordedBy !== me(req).id) return denied();
+  if (log.recordedBy !== me(req).id) return scopeDenied();
   if (now >= Date.parse(log.createdAt) + CFG.careLogEditWindowMinutes * MINUTE) {
-    return conflict('Đã quá thời hạn sửa nhật ký, vui lòng thêm bản bổ sung (BR-LT-11)');
+    return conflict('Đã quá thời hạn sửa nhật ký, hãy thêm bản bổ sung (BR-LT-11)');
   }
-  for (const k of [...TEXT_FIELDS, 'note'] as const) if (typeof body[k] === 'string') log[k] = optionalText(body[k]);
-  if (Array.isArray(body.photoUrls)) log.photoUrls = body.photoUrls as string[];
+  const sentPhotos = Array.isArray(body.photoUrls);
+  const photos = sentPhotos ? (body.photoUrls as string[]) : log.photoUrls;
+  const texts = careTexts(body, log);
+  const invalidContent = careContentError(texts, photos, sentPhotos);
+  if (invalidContent) return invalidContent;
+  Object.assign(log, texts, { photoUrls: photos });
   save(s);
-  return ok(toCareLog(s, log), 200, 'Đã cập nhật nhật ký chăm sóc');
+  return ok(toCareLog(s, log), 200, 'Đã sửa nhật ký chăm sóc');
 };
 
-/** #22 — ASSUMPTION A7 và A4 hợp đồng (BE chưa có, T42): VET, CARETAKER chi nhánh bổ sung bất cứ lúc nào, 1–2000 ký tự. */
+/** #22 — VET, CARETAKER chi nhánh bổ sung bất cứ lúc nào (A4 hợp đồng), `content` NotBlank, ≤ 2000 ký tự. */
 const addAddendum: MockHandler = (req) => {
   const id = idParam(req, 'careLogId');
   if (isReply(id)) return id;
@@ -1201,7 +1264,7 @@ const addAddendum: MockHandler = (req) => {
   if (body.content != null && typeof body.content !== 'string') return malformed();
   const bad = invalid([
     ['content', 'Vui lòng nhập nội dung bổ sung', !isText(body.content)],
-    ['content', 'Nội dung tối đa 2000 ký tự', tooLong(body.content, 2000)],
+    ['content', 'Nội dung bổ sung tối đa 2000 ký tự', tooLong(body.content, 2000)],
   ]);
   if (bad) return bad;
   if (!CARE_WRITERS.includes(roleOf(req))) return denied();
@@ -1218,7 +1281,7 @@ const addAddendum: MockHandler = (req) => {
   };
   s.addenda.push(row);
   save(s);
-  return ok({ addendumId: row.addendumId, content: row.content, createdBy: row.createdBy, createdAt: row.createdAt }, 201, 'Đã thêm bản bổ sung');
+  return ok({ addendumId: row.addendumId, content: row.content, createdBy: row.createdBy, createdAt: row.createdAt }, 201, 'Đã thêm bản bổ sung nhật ký');
 };
 
 // ─── Đăng ký nguồn cho mock khác (tránh import vòng: những mock đó không import file này) ───

@@ -31,6 +31,8 @@ import { NoKennelDialog } from './boarding/stay/NoKennelDialog';
 import { bookingQueryOf, canWriteCareLog, HISTORY_STATUSES, TAB_LABELS, type BoardingFilters, type BoardingTab, type HistoryStatus } from './boarding/rules';
 
 const PAGE_SIZE = 20;
+/** Cùng câu BE trả khi Từ > Đến; FE chặn trước nên không gửi request vô nghĩa. */
+const RANGE_ERROR = 'Ngày bắt đầu lọc phải trước hoặc bằng ngày kết thúc';
 const TABS = Object.keys(TAB_LABELS) as BoardingTab[];
 const EMPTY_TEXT: Record<BoardingTab, string> = {
   upcoming: 'Không có đặt chỗ sắp nhận nào.',
@@ -51,7 +53,8 @@ export function AdminBoardingPage() {
   const [page, setPage] = useState(0);
   const [active, setActive] = useState<ActiveDialog | null>(null);
   const [counter, setCounter] = useState(false);
-  const list = useBookingList(bookingQueryOf(filters, page, PAGE_SIZE));
+  const rangeInvalid = !!filters.from && !!filters.to && filters.from > filters.to;
+  const list = useBookingList(bookingQueryOf(filters, page, PAGE_SIZE), !rangeInvalid);
   const data = list.data;
   const today = todayVn();
   const close = () => setActive(null);
@@ -98,6 +101,11 @@ export function AdminBoardingPage() {
                   Xóa lọc ngày
                 </Button>
               )}
+              {rangeInvalid && (
+                <div className="basis-full">
+                  <FormError message={RANGE_ERROR} />
+                </div>
+              )}
               {filters.tab === 'inStay' && (
                 <Button
                   variant={filters.missingCareLogToday ? 'default' : 'outline'}
@@ -124,7 +132,7 @@ export function AdminBoardingPage() {
             </CardContent>
           </Card>
 
-          {list.isError ? (
+          {rangeInvalid ? null : list.isError ? (
             <Card className="card">
               <CardContent className="flex flex-wrap items-center gap-3 p-4">
                 <div className="min-w-0 flex-1">

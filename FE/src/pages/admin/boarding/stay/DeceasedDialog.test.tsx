@@ -109,7 +109,7 @@ describe('DeceasedDialog (UC59, A5, BR-LT-12)', () => {
     const invalidate = vi.spyOn(client, 'invalidateQueries');
     await user.type(await screen.findByLabelText('Diễn biến'), NOTE);
     await user.click(screen.getByRole('button', { name: 'Xác nhận thú đã mất' }));
-    expect(await screen.findByRole('alert')).toHaveTextContent('Thú cưng không còn trong chuồng');
+    expect(await screen.findByRole('alert')).toHaveTextContent('Không thể chuyển trạng thái đặt chỗ lưu trú từ CHECKED_OUT sang CHECKED_OUT'); // end-deceased: câu FSM của BE
     expect(invalidate).toHaveBeenCalledWith(expect.objectContaining({ queryKey: ['boarding'] }));
     expect(screen.queryByRole('button', { name: 'Xác nhận thú đã mất' })).not.toBeInTheDocument();
     await user.click(screen.getByRole('button', { name: 'Đóng' }));

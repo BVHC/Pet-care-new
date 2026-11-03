@@ -43,7 +43,8 @@ export function BookingDetailDialog({ booking: b, onClose }: { booking: Booking;
           <InfoRow label="Hủy muộn" value={b.lateCancel ? 'Có' : 'Không'} />
           <InfoRow label="Nguồn hủy" value={b.cancelSource ? BOOKING_CANCEL_SOURCE_LABELS[b.cancelSource] : NONE} />
           <InfoRow label="Lý do hủy" value={<span className="break-words text-right">{b.cancelReason ?? NONE}</span>} />
-          <InfoRow label="Order lưu trú" value={b.activeOrderId != null ? `#${b.activeOrderId}` : NONE} />
+          {/* BE chỉ trả activeOrderId cho Order OPEN / PENDING (chưa thu): null không có nghĩa chưa từng có Order, nên không hiện hàng. */}
+          {b.activeOrderId != null && <InfoRow label="Order chờ thu" value={`#${b.activeOrderId}`} />}
         </div>
         <div className="flex justify-end">
           <Button variant="outline" onClick={onClose}>

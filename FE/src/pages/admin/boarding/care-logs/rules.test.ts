@@ -86,18 +86,24 @@ describe('minutesLeft / canEditEntry (BR-LT-11)', () => {
   });
 });
 
-describe('photoError', () => {
+describe('photoError (cùng luật với BE: ^https?://\\S+$, ≤ 500 ký tự)', () => {
+  const BE_MESSAGE = 'Ảnh phải là địa chỉ http / https dài tối đa 500 ký tự';
+  const url500 = 'https://i.example.com/' + 'a'.repeat(500 - 'https://i.example.com/'.length);
   it.each([
-    ['https://img.example.com/a.jpg', undefined],
-    ['  https://img.example.com/a.jpg  ', undefined],
-    ['http://img.example.com/a.jpg', 'Ảnh phải là đường dẫn https (bắt đầu bằng https://)'],
-    ['ftp://x/y.jpg', 'Ảnh phải là đường dẫn https (bắt đầu bằng https://)'],
-    ['img.example.com/a.jpg', 'Ảnh phải là đường dẫn https (bắt đầu bằng https://)'],
-    ['https://img.example.com/a b.jpg', 'Ảnh phải là đường dẫn https (bắt đầu bằng https://)'],
-    ['https://', 'Ảnh phải là đường dẫn https (bắt đầu bằng https://)'],
-    ['', undefined],
-    ['   ', undefined],
-  ])('%j', (url, error) => expect(photoError(url)).toBe(error));
+    ['https://img.example.com/a.jpg', 'https://img.example.com/a.jpg', undefined],
+    ['https có khoảng trắng hai đầu', '  https://img.example.com/a.jpg  ', undefined],
+    ['http://img.example.com/a.jpg', 'http://img.example.com/a.jpg', undefined],
+    ['http://example.com/a.jpg', 'http://example.com/a.jpg', undefined],
+    ['ftp://x/y.jpg', 'ftp://x/y.jpg', BE_MESSAGE],
+    ['không có ://', 'img.example.com/a.jpg', BE_MESSAGE],
+    ['có khoảng trắng giữa', 'https://img.example.com/a b.jpg', BE_MESSAGE],
+    ['https://', 'https://', BE_MESSAGE],
+    ['http://', 'http://', BE_MESSAGE],
+    ['đúng 500 ký tự', url500, undefined],
+    ['501 ký tự', `${url500}a`, BE_MESSAGE],
+    ['ô trống', '', undefined],
+    ['ô chỉ có khoảng trắng', '   ', undefined],
+  ])('%s', (_label, url, error) => expect(photoError(url)).toBe(error));
 });
 
 describe('validateDraft', () => {
@@ -121,12 +127,15 @@ describe('validateDraft', () => {
 
   it('ghi chú không giới hạn ở UI (hợp đồng không nêu)', () => expect(validateDraft(draft({ note: 'n'.repeat(5000) }), CREATE)).toEqual({}));
 
-  it('ảnh: tối đa 5 (ô trống không tính), mỗi ảnh phải https', () => {
-    const five = Array.from({ length: 5 }, (_, i) => `https://i.example.com/${i}.jpg`);
-    expect(validateDraft(draft({ photoUrls: five }), CREATE).photoUrls).toBeUndefined();
-    expect(validateDraft(draft({ photoUrls: [...five, ''] }), CREATE).photoUrls).toBeUndefined();
-    expect(validateDraft(draft({ photoUrls: [...five, 'https://i.example.com/6.jpg'] }), CREATE).photoUrls).toBe('Tối đa 5 ảnh');
-    expect(validateDraft(draft({ photoUrls: ['http://i.example.com/a.jpg'] }), CREATE).photoUrls).toBe('Ảnh phải là đường dẫn https (bắt đầu bằng https://)');
+  it('ảnh: FE chỉ chặn quá 10 (cận trên của [CFG] care_log.max_photos; ô trống không tính), 6–10 ảnh để BE quyết theo [CFG]; mỗi ảnh phải http / https', () => {
+    const urls = (n: number) => Array.from({ length: n }, (_, i) => `https://i.example.com/${i}.jpg`);
+    expect(validateDraft(draft({ photoUrls: urls(5) }), CREATE).photoUrls).toBeUndefined();
+    expect(validateDraft(draft({ photoUrls: urls(6) }), CREATE).photoUrls).toBeUndefined();
+    expect(validateDraft(draft({ photoUrls: urls(10) }), CREATE).photoUrls).toBeUndefined();
+    expect(validateDraft(draft({ photoUrls: [...urls(10), ''] }), CREATE).photoUrls).toBeUndefined();
+    expect(validateDraft(draft({ photoUrls: urls(11) }), CREATE).photoUrls).toBe('Mỗi mục nhật ký tối đa 10 ảnh');
+    expect(validateDraft(draft({ photoUrls: ['http://i.example.com/a.jpg'] }), CREATE).photoUrls).toBeUndefined();
+    expect(validateDraft(draft({ photoUrls: ['ftp://i.example.com/a.jpg'] }), CREATE).photoUrls).toBe('Ảnh phải là địa chỉ http / https dài tối đa 500 ký tự');
   });
 
   it('mục hoàn toàn trống bị chặn (ASSUMPTION: BE / mock không chặn); chỉ ảnh, chỉ ghi chú, chỉ một ô vẫn qua; khoảng trắng không phải nội dung', () => {

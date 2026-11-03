@@ -156,7 +156,7 @@ export interface Booking {
   cancelSource?: BookingCancelSource | null;
   cancelReason?: string | null;
   overdueSince?: string | null;
-  /** Order lưu trú chưa kết thúc (PENDING / PAID) của đặt chỗ đang trong chuồng; BE thật luôn null tới T43 (ADR-0065 D10). */
+  /** Order lưu trú chưa kết thúc (OPEN / PENDING) của đặt chỗ đang trong chuồng; null khi chưa bắt đầu trả thú hoặc Order đã PAID / bị hủy (boarding-v1 A10, ADR-0086). */
   activeOrderId?: number | null;
   /** BR-LT-11: thú đang lưu trú chưa có nhật ký hôm nay. */
   missingCareLogToday: boolean;

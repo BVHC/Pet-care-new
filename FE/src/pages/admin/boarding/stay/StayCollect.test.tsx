@@ -62,6 +62,7 @@ describe('A11 — thu tiền Order lưu trú ở bàn Lễ tân', () => {
     const code = within(dialog).getByText(/DH-\d{4}-\d{5}/).textContent!;
     expect(within(dialog).getByText(money('200.000'))).toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'Giao thú' })).toBeDisabled();
+    const orderId = (await bookingOf(rex.bookingId)).activeOrderId!; // còn PENDING nên BE còn trả activeOrderId; sau khi thu thì không
 
     // 2) sang bàn Lễ tân: khách + Order đã nằm trong phiếu thu
     await user.click(screen.getByRole('button', { name: 'Thu tiền tại bàn Lễ tân' }));
@@ -79,10 +80,14 @@ describe('A11 — thu tiền Order lưu trú ở bàn Lễ tân', () => {
     expect(within(receipt).getByText(money('Đã thu 200.000'))).toBeInTheDocument();
     expect(within(receipt).getByText(code)).toBeInTheDocument();
     await user.click(within(receipt).getByRole('button', { name: 'Xong' }));
-    expect((await salesApi.getOrder((await bookingOf(rex.bookingId)).activeOrderId!)).status).toBe('PAID');
+    expect((await salesApi.getOrder(orderId)).status).toBe('PAID');
+    // BE chỉ trả activeOrderId cho Order OPEN / PENDING: PAID rồi thì null, Order tra được qua danh sách Order của đặt chỗ
+    expect((await bookingOf(rex.bookingId)).activeOrderId).toBeNull();
+    const page = await salesApi.listOrders({ boardingBookingId: rex.bookingId });
+    expect(page.content.map((o) => [o.orderId, o.code, o.status])).toEqual([[orderId, code, 'PAID']]);
     await waitFor(() => expect(usePosStore.getState().orderIds).toEqual([]));
 
-    // 4) quay lại trang lưu trú (danh sách vẫn giữ bản cũ): hộp thoại mở lại thấy PAID và bật Giao thú
+    // 4) quay lại trang lưu trú (danh sách vẫn giữ bản cũ, activeOrderId null): hộp thoại mở lại tra Order PAID qua danh sách, thấy PAID và bật Giao thú
     await user.click(screen.getByRole('link', { name: 'Về trang lưu trú' }));
     const handOver = await screen.findByRole('button', { name: 'Giao thú' });
     await waitFor(() => expect(handOver).toBeEnabled());

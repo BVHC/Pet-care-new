@@ -1,6 +1,7 @@
 // UC57 (BR-LT-11, BR-LT-12): quy tắc thuần của hộp thoại "Nhật ký chăm sóc" — nhóm theo ngày, kiểm dữ liệu, dựng request, quyền sửa trong hạn.
 // Chỉ để chặn lỗi sớm ở giao diện: BE / mock kiểm lại và thông điệp của họ là câu cuối cùng.
-import { BOARDING_CFG, type BookingStatus, type CareLog, type CareLogRequest, type UpdateCareLogRequest } from '@/shared/types/boarding';
+import { todayVn } from '@/components/appointments/format';
+import type { Booking, BookingStatus, CareLog, CareLogRequest, UpdateCareLogRequest } from '@/shared/types/boarding';
 import { canEditCareLog, isInStay } from '@/shared/utils/boarding';
 
 export const TEXT_FIELDS = ['eating', 'drinking', 'hygiene', 'activity'] as const;
@@ -11,7 +12,13 @@ export const FIELD_LABELS: Record<TextField, string> = { eating: 'Ăn', drinking
 export const TEXT_MAX = 300;
 /** Bản bổ sung 1–2000 ký tự (A7). */
 export const ADDENDUM_MAX = 2000;
-export const MAX_PHOTOS = BOARDING_CFG.careLogMaxPhotos;
+/**
+ * Số ô ảnh tối đa của form = cận trên của [CFG] `care_log.max_photos` (khoảng 0–10, mặc định 5; seed V2). Nhân viên VET / CARETAKER không đọc được [CFG]
+ * (`GET /api/system-configs` chỉ ADMIN) nên FE không biết giá trị thật: BE quyết, vượt → 400 BR-LT-11 và form hiện nguyên câu đó.
+ */
+export const MAX_PHOTOS = 10;
+/** Mỗi URL ảnh dài tối đa 500 ký tự (BE `CareLogService.MAX_URL_LENGTH`). */
+export const PHOTO_URL_MAX = 500;
 
 /** `in-stay`: ghi / sửa được · `finished`: đã trả thú, chỉ xem + bản bổ sung · `none`: chưa vào chuồng hoặc đã hủy, chưa có nhật ký nào. */
 export type CareLogMode = 'inStay' | 'finished' | 'none';
@@ -76,11 +83,17 @@ export const draftOf = (log: CareLog): CareLogDraft => ({
   isAbnormal: log.isAbnormal,
 });
 
-const HTTPS_RE = /^https:\/\/\S+$/;
-const HTTPS_MESSAGE = 'Ảnh phải là đường dẫn https (bắt đầu bằng https://)';
+/** Ngày (giờ VN) thú được nhận thực tế: mốc dưới của "Ngày nhật ký" (BE chặn ngày trước đó). Chưa có ngày nhận thực tế thì không đặt mốc. */
+export const stayStartOf = (b: Pick<Booking, 'actualCheckInAt'>): string | undefined => (b.actualCheckInAt ? todayVn(Date.parse(b.actualCheckInAt)) : undefined);
 
-/** Ô trống hợp lệ (bị bỏ khi gửi); còn lại phải là `https://…` không chứa khoảng trắng (cùng luật với BE). */
-export const photoError = (url: string): string | undefined => (url.trim() === '' || HTTPS_RE.test(url.trim()) ? undefined : HTTPS_MESSAGE);
+const PHOTO_RE = /^https?:\/\/\S+$/;
+const PHOTO_MESSAGE = `Ảnh phải là địa chỉ http / https dài tối đa ${PHOTO_URL_MAX} ký tự`;
+
+/** Ô trống hợp lệ (bị bỏ khi gửi); còn lại phải là `http(s)://…` không chứa khoảng trắng, ≤ 500 ký tự (cùng luật và cùng câu với BE). */
+export const photoError = (url: string): string | undefined => {
+  const trimmed = url.trim();
+  return trimmed === '' || (trimmed.length <= PHOTO_URL_MAX && PHOTO_RE.test(trimmed)) ? undefined : PHOTO_MESSAGE;
+};
 
 const photosOf = (d: Pick<CareLogDraft, 'photoUrls'>) => d.photoUrls.map((u) => u.trim()).filter(Boolean);
 
@@ -88,16 +101,17 @@ const photosOf = (d: Pick<CareLogDraft, 'photoUrls'>) => d.photoUrls.map((u) => 
  * ASSUMPTION (UI): mục hoàn toàn trống (không ô chữ, không ghi chú, không ảnh) bị chặn dù mock / hợp đồng chấp nhận,
  * vì nhật ký trống không chứng minh được thú đã được chăm sóc (BR-LT-11).
  */
-export function validateDraft(d: CareLogDraft, ctx: { creating: boolean; today: string }): DraftErrors {
+export function validateDraft(d: CareLogDraft, ctx: { creating: boolean; today: string; minDate?: string }): DraftErrors {
   const errors: DraftErrors = {};
   if (ctx.creating) {
     if (!d.logDate) errors.logDate = 'Vui lòng chọn ngày nhật ký';
     else if (d.logDate > ctx.today) errors.logDate = 'Ngày nhật ký không được ở tương lai';
+    else if (ctx.minDate && d.logDate < ctx.minDate) errors.logDate = 'Ngày nhật ký phải từ ngày nhận thú tới hôm nay';
   }
   for (const field of TEXT_FIELDS) if (d[field].trim().length > TEXT_MAX) errors[field] = `Tối đa ${TEXT_MAX} ký tự`;
   const photos = photosOf(d);
-  if (photos.length > MAX_PHOTOS) errors.photoUrls = `Tối đa ${MAX_PHOTOS} ảnh`;
-  else if (photos.some((u) => photoError(u))) errors.photoUrls = HTTPS_MESSAGE;
+  if (photos.length > MAX_PHOTOS) errors.photoUrls = `Mỗi mục nhật ký tối đa ${MAX_PHOTOS} ảnh`;
+  else if (photos.some((u) => photoError(u))) errors.photoUrls = PHOTO_MESSAGE;
   if (photos.length === 0 && !d.note.trim() && TEXT_FIELDS.every((f) => !d[f].trim())) {
     errors.form = 'Nhật ký trống: nhập ít nhất một nội dung hoặc một ảnh';
   }
