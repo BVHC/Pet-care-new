@@ -187,8 +187,9 @@ class PasswordResetIT {
                 .containsEntry("message", "Nếu email đã đăng ký, mã OTP đã được gửi tới hộp thư");
         @SuppressWarnings("unchecked")
         Map<String, Object> data = (Map<String, Object>) first.get("data");
-        assertThat(data).containsOnlyKeys("resendAvailableAt", "maskedEmail")
-                .containsEntry("resendAvailableAt", "2026-10-08T02:01:00Z");
+        assertThat(data).containsOnlyKeys("resendAvailableAt", "maskedEmail", "codeLength")
+                .containsEntry("resendAvailableAt", "2026-10-08T02:01:00Z")
+                .containsEntry("codeLength", 6);
         assertThat(data.get("maskedEmail")).isNull();
         for (ResponseEntity<Map<String, Object>> response : responses) {
             assertThat(response.getStatusCode()).isEqualTo(HttpStatus.ACCEPTED);
@@ -203,7 +204,8 @@ class PasswordResetIT {
             assertThat(resetOtpCount(email(ineligible))).isZero();
             assertThat(outboxCount(email(ineligible), "OTP_PASSWORD_RESET")).isZero();
         }
-        assertThat(codeOf(email(active))).matches("\\d{6}");
+        assertThat(codeOf(email(active))).matches("\\d{6}").as("codeLength khớp mã đã gửi")
+                .hasSize((Integer) data.get("codeLength"));
     }
 
     /** BR-TK-07: chặn gửi lại vẫn trả 202 cùng body (bắt sau rollback, không thành 500) và không ghi gì. */

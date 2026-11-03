@@ -45,7 +45,7 @@ Team: **BE-1** (branch `manh`) = identity, appointment, visit, care · **BE-2** 
 
 | Module | Owner | Built (contract #, ADR) | Still missing |
 |---|---|---|---|
-| identity | BE-1 | identity-v1 #1–24, #28–37, #38 (`GET /api/staff/assignable`, 0089); ST01, ST02, session cleanup; `StaffDirectoryApi`, `AccountContactApi` | #25–27 (UC22) |
+| identity | BE-1 | identity-v1 #1–38 (#38 `GET /api/staff/assignable`, 0089; #25–27 UC22 customer account email / counter link, 0092; OTP responses carry `codeLength` / `otpCodeLength`, 0091 — 0089, 0091, 0092 Proposed, awaiting BE-1); ST01, ST02, session cleanup; `StaffDirectoryApi`, `AccountContactApi` | — |
 | care | BE-1 | ST20 (EMAIL HIGH / NORMAL, IN_APP), outbox cleanup, care-v1 #1–8; `CareTask` + FSM, `CareTaskApi` complete (0074, 0079, 0080); V22 (4 reminder templates + `care_tasks` index / CHECK, 0081; D049 paid); ST19 + owner-transfer listeners (0084); ST18 `VaccineOverdueJob` in `visit` (0083, V23) | #9–10 (D025); D050 (boarding lookup) |
 | appointment | BE-1 | appointment-v1 #1–9, ST05, ST03, clinic-cancel listeners, 3 APIs (0045–0057); `AppointmentReportApi` (BE-2 wrote it for BE-1, 0087) | `findPetForShare` in booking (D027) |
 | visit | BE-1 | visit-v1 #1–15 (0058–0070), #18 (0073), #19 (0074), #20 (0075), #16 (0077), #17 (0078); `VisitQueryApi`, `VaccinationQueryApi` (0072), `PrescriptionApi` (0076); lock listener; ST04 reminder jobs (0082); `FollowUpApi` + pet-deceased listener (0084); `VaccinationReportApi` (BE-2 wrote it for BE-1, 0087) | #21 (T28b); D042, D043, D046, D052 (follow-up cancel gaps) |
@@ -116,13 +116,13 @@ Module codes: TK, QT, CN, CK, KH, SP, NS, LH, TN, KB, LT, BH, TG, KO, BV, DG, TB
 
 Open convention TBDs (don't decide silently — ask or write an ADR): command names when no Actor↔Command table exists; how "warn, don't block" rules return warnings (contracts assume a named field in `data`, e.g. `stockWarning`); locking for kennel capacity.
 
-**ADR map** (`docs/adr/`, immutable once Accepted — supersede instead of editing; **next free: 0091**):
+**ADR map** (`docs/adr/`, immutable once Accepted — supersede instead of editing; **next free: 0093**):
 
 | Area | ADRs |
 |---|---|
 | Platform | 0001 audit · 0002 client IP · 0004 [CFG] · 0007 jobs · 0015 timestamps from `Clock` · 0020 OSIV off · 0032 strict JSON ints · 0040 Swagger = contract |
 | Auth | 0003 JWT + DB session · 0005 public paths anonymous · 0006 customer owner scope · 0009 BCrypt · 0010, 0011, 0025 OTP · 0019 login · 0021 logout · 0022 change password · 0023 forgot / reset |
-| Accounts, staff, admin | 0024 staff directory · 0026 staff self-edit · 0027 profile link · 0028 customer self-edit · 0029–0035 staff admin / lock · 0036 [CFG] edit · 0037 templates · 0038 audit view · 0039 in-app notifications · 0089 staff assignable list (Proposed) |
+| Accounts, staff, admin | 0024 staff directory · 0026 staff self-edit · 0027 profile link · 0028 customer self-edit · 0029–0035 staff admin / lock · 0036 [CFG] edit · 0037 templates · 0038 audit view · 0039 in-app notifications · 0089 staff assignable list (Proposed) · 0091 OTP code length in responses (Proposed) · 0092 UC22 customer account email / counter link (Proposed) |
 | Notifications, jobs | 0008 session cleanup · 0012, 0014, 0016, 0017 ST20 · 0013 ST02 · 0018 FK indexes on `accounts` |
 | Appointment (BE-1) | 0045 booking locks · 0046 slots · 0047 book · 0048 view · 0049 reschedule / cancel · 0050 cross-module API · 0052 clinic cancel · 0053, 0054 ST05 · 0055 booking restriction · 0056 ST03 · 0057 assumptions confirmed |
 | Visit (BE-1) | 0058 foundation · 0059 check-in (amends 0044) · 0060 queue · 0061 dispatch · 0062 call / cancel / lock listener · 0063 reassign · 0066 medical record · 0067 record write · 0068 weight · 0069 complete (replaces 0066 §5) · 0070 addendum · 0072 vaccination foundation · 0073 vaccination options (#18) · 0074 vaccination record (#19) · 0075 vaccination delete (#20) · 0076 prescription foundation + `PrescriptionApi` · 0077 prescribe (#16) · 0078 remove prescription line (#17) |
@@ -187,7 +187,7 @@ Every write ADR follows these. Read the ADR of the neighbouring feature before w
   | Area | Order |
   |---|---|
   | Sessions | `accounts → sessions` (revoke via `@Modifying` queries in that order) |
-  | OTP | `accounts → otp_tokens → customers` |
+  | OTP | `accounts → otp_tokens → customers`. UC22 (ADR-0092): #25 / #26 `accounts → otp_tokens`; #27 has no OTP, `accounts → customers`, and its read of the counter profile (`CustomerQueryApi.findContact` loads the entity) must end its own tx before the write tx, else the re-check under lock reads the stale entity |
   | Staff admin | `branches (id ↑, only via BranchApi.lockForStaffChange) → accounts → staff_profiles → sessions`. Any flow lowering a branch's ACTIVE BRANCH_MANAGER count locks the branch first |
   | Customer | `accounts → customers (id ↑) → pets → weight_records` |
   | Appointment writes | `advisory(1001, pet) → branches (BranchApi.lockForBooking) → appointments`; advisory **1002** per customer (violation evaluation / restriction lift) always last; a MEDICAL booking then takes `medical_records → care_tasks` (`FollowUpApi`, ADR-0084) |

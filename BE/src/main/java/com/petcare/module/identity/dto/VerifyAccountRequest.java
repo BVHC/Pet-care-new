@@ -19,7 +19,7 @@ public record VerifyAccountRequest(
         @Size(max = 255, message = "Email tối đa 255 ký tự")
         String email,
 
-        @Schema(description = "Mã OTP 6 chữ số đã gửi tới email",
+        @Schema(description = "Mã OTP đã gửi tới email, độ dài theo cấu hình otp.code_length (mặc định 6 chữ số)",
                 example = "482913",
                 accessMode = Schema.AccessMode.WRITE_ONLY)
         @NotBlank(message = "Mã OTP không được để trống")

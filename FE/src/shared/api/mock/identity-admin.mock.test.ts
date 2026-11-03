@@ -729,13 +729,14 @@ describe('POST /api/staff/{id}/disable — giữ nguyên mustChangePassword (BE 
   });
 });
 
-describe('POST /api/staff/{id}/email-change — OTP của nhân viên luôn trả maskedEmail = null (BE StaffAdminMapper; chỉ luồng liên kết hồ sơ mới có email che)', () => {
-  it('200 với đúng hai khóa: resendAvailableAt là chuỗi, maskedEmail là null (không phải email đã che, không thiếu khóa)', async () => {
+describe('POST /api/staff/{id}/email-change — OTP của nhân viên luôn trả maskedEmail = null (BE StaffAdminMapper; chỉ luồng liên kết hồ sơ mới có email che) và codeLength', () => {
+  it('200 với đúng ba khóa: resendAvailableAt là chuỗi, maskedEmail là null (không phải email đã che, không thiếu khóa), codeLength 6 (BE OtpSentResponse dùng chung, StaffEmailChangeIT)', async () => {
     const target = await spawnStaff('VET', 1);
     const res = await send(opNamed('email-change'), target, await as(CALLERS.chuoi.email));
     expect(res.status).toBe(200);
-    expect(Object.keys(res.data.data).sort()).toEqual(['maskedEmail', 'resendAvailableAt']);
+    expect(Object.keys(res.data.data).sort()).toEqual(['codeLength', 'maskedEmail', 'resendAvailableAt']);
     expect(res.data.data.maskedEmail).toBeNull();
+    expect(res.data.data.codeLength).toBe(6);
     expect(typeof res.data.data.resendAvailableAt).toBe('string');
   });
 });

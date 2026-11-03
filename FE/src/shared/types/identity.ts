@@ -3,8 +3,8 @@
 
 import type { AccountStatus, Role } from './auth';
 
-/** Mirror OtpSentResponse từ auth.ts (dùng lại cho email-change). */
-export type OtpSentResponse = { resendAvailableAt: string; maskedEmail?: string | null };
+/** Dùng lại OtpSentResponse của auth.ts (có `codeLength`) cho email-change của nhân viên (#23) và của hồ sơ khách (#25): một khai báo duy nhất. */
+export type { OtpSentResponse } from './auth';
 
 /** Role được phép tạo qua POST /api/staff (BR-QT-01: SUPER_MANAGER tạo được tất cả trừ ADMIN). */
 export type CreateableStaffRole = Exclude<Role, 'CUSTOMER' | 'ADMIN'>;

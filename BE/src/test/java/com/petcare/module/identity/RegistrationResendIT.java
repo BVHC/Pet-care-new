@@ -152,9 +152,11 @@ class RegistrationResendIT {
         assertThat(response.getBody()).containsEntry("code", 200)
                 .containsEntry("message", "Đã gửi lại mã OTP, vui lòng kiểm tra email");
         Map<String, Object> data = data(response);
-        assertThat(data).containsOnlyKeys("resendAvailableAt", "maskedEmail").containsEntry("maskedEmail", null);
+        assertThat(data).containsOnlyKeys("resendAvailableAt", "maskedEmail", "codeLength")
+                .containsEntry("maskedEmail", null).containsEntry("codeLength", 6);
         assertThat(Instant.parse((String) data.get("resendAvailableAt"))).as("BR-TK-07: mốc gửi lại = now + 60 s")
                 .isEqualTo(T0.plusSeconds(60));
+        assertThat(latestCode(email)).as("codeLength khớp mã đã gửi").hasSize((Integer) data.get("codeLength"));
 
         List<Map<String, Object>> codes = codes(email);
         assertThat(codes).hasSize(2);

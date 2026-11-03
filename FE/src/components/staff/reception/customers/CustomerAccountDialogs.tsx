@@ -59,6 +59,7 @@ function AccountEmailForm({ customerId, onClose }: { customerId: number; onClose
   const [verified, setVerified] = useState(false);
   const [newEmail, setNewEmail] = useState('');
   const [code, setCode] = useState('');
+  // Email lễ tân vừa nhập: BE #25 luôn trả `maskedEmail: null` nên không dùng trường đó để nêu nơi nhận mã.
   const [sentTo, setSentTo] = useState<string | null>(null);
   // Độ dài mã BE báo ở response gửi mã (`codeLength`); vắng thì 6. Mỗi lần gửi lại đọc lại.
   const [codeLength, setCodeLength] = useState<number | undefined>();
@@ -73,7 +74,7 @@ function AccountEmailForm({ customerId, onClose }: { customerId: number; onClose
     if (invalid) return;
     send.mutate(newEmail.trim(), {
       onSuccess: (result) => {
-        setSentTo(result.maskedEmail ?? newEmail.trim());
+        setSentTo(newEmail.trim());
         setCodeLength(result.codeLength);
         setCode('');
       },

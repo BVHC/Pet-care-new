@@ -186,9 +186,10 @@ class LinkProfileIT {
         assertThat(response.getStatusCode()).isEqualTo(HttpStatus.OK);
         assertThat(response.getBody()).containsEntry("message", "Đã gửi mã xác thực tới email của hồ sơ");
         Map<String, Object> data = map(response.getBody().get("data"));
-        assertThat(data).containsOnlyKeys("resendAvailableAt", "maskedEmail")
+        assertThat(data).containsOnlyKeys("resendAvailableAt", "maskedEmail", "codeLength")
                 .containsEntry("resendAvailableAt", "2026-10-10T03:01:00Z")
-                .containsEntry("maskedEmail", "ho***@petcare.test");
+                .containsEntry("maskedEmail", "ho***@petcare.test")
+                .containsEntry("codeLength", 6);
 
         Map<String, Object> outbox = jdbc.queryForMap("""
                 SELECT template_code, channel, recipient_email, recipient_account_id,
@@ -196,7 +197,7 @@ class LinkProfileIT {
                 FROM notification_outbox WHERE recipient_email = ?""", counterEmail);
         assertThat(outbox).containsEntry("template_code", "OTP_PROFILE_LINK").containsEntry("channel", "EMAIL")
                 .containsEntry("email_tai_khoan", accountEmail).containsEntry("recipient_account_id", null);
-        assertThat((String) outbox.get("ma_otp")).matches("\\d{6}");
+        assertThat((String) outbox.get("ma_otp")).matches("\\d{6}").hasSize((Integer) data.get("codeLength"));
         assertThat(jdbc.queryForMap("""
                 SELECT account_id, customer_id, target_email FROM otp_tokens
                 WHERE purpose = 'LINK_PROFILE' AND customer_id = ?""", counter))

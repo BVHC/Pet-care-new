@@ -137,7 +137,8 @@ public class AuthController {
             description = "UC04 · BR-TK-04, 07, 10, 12. Actor: A02–A08. Quyền: Public. Chuyển trạng thái: "
                 + "—. Luôn trả 202 cùng nội dung (BR-TK-10), kể cả email không tồn tại, tài khoản không đủ điều kiện "
                 + "BR-TK-12 (`PENDING`, bị khóa, `DISABLED` — không gửi mã), đã chạm quota BR-TK-07 (không gửi mã, "
-                + "`resendAvailableAt` vẫn = now + 60 giây [CFG]). Tài khoản đang khóa tạm BR-TK-09 vẫn nhận mã. Gửi "
+                + "`resendAvailableAt` vẫn = now + 60 giây [CFG]). `codeLength` = `otp.code_length` [CFG], giống nhau "
+                + "ở mọi nhánh (không lộ tài khoản). Tài khoản đang khóa tạm BR-TK-09 vẫn nhận mã. Gửi "
                 + "lại = gọi lại endpoint này (A7). ADR-0023.")
     @ApiErrorDoc(status = 400, description = "`VALIDATION_FAILED` email trống / sai định dạng / quá 255 "
             + "ký tự")

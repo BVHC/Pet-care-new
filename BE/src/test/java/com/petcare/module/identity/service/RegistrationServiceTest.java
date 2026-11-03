@@ -125,7 +125,19 @@ class RegistrationServiceTest {
                 .containsEntry("thoi_han_phut", 5);
 
         assertThat(response).isEqualTo(new RegistrationResponse(ACCOUNT_ID, "khach@petcare.test",
-                AccountStatus.PENDING, RESEND));
+                AccountStatus.PENDING, RESEND, 6));
+    }
+
+    /** {@code otpCodeLength} = độ dài mã vừa sinh (theo [CFG] {@code otp.code_length}), không cố định 6 / không phải TTL. */
+    @Test
+    void registrationResponseCodeLengthFollowsTheIssuedCode() {
+        when(otps.issueOtp(eq(ACCOUNT_ID), eq(OtpPurpose.REGISTER), anyString()))
+                .thenReturn(new IssuedOtp("24681012", EXPIRES, RESEND, 5));
+
+        RegistrationResponse response = service.registerAccount(request("khach@petcare.test", "abc12345",
+                "Nguyễn Văn A", "0901234567", true, true));
+
+        assertThat(response.otpCodeLength()).isEqualTo(8);
     }
 
     /** BR-TK-08, BR-QT-13: hạn {@code PENDING} lấy [CFG] tại thời điểm đăng ký và chốt vào tài khoản. */
@@ -334,9 +346,21 @@ class RegistrationServiceTest {
                 .containsEntry("ma_otp", "123456").containsEntry("thoi_han_phut", 5);
         assertThat(sent.linkUrl()).isNull();
 
-        assertThat(response).isEqualTo(new OtpSentResponse(RESEND, null));
+        assertThat(response).isEqualTo(new OtpSentResponse(RESEND, null, 6));
         assertThat(account.getStatus()).as("resend không chuyển trạng thái").isEqualTo(AccountStatus.PENDING);
         verifyNoInteractions(customers);
+    }
+
+    /** {@code codeLength} = độ dài mã vừa sinh (theo [CFG] {@code otp.code_length}), không cố định 6 / không phải TTL. */
+    @Test
+    void resendCodeLengthFollowsTheIssuedCode() {
+        pendingAccount("khach@petcare.test");
+        when(otps.issueOtp(eq(ACCOUNT_ID), eq(OtpPurpose.REGISTER), anyString()))
+                .thenReturn(new IssuedOtp("24681012", EXPIRES, RESEND, 5));
+
+        OtpSentResponse response = service.resendRegistrationOtp(new ResendRegistrationOtpRequest("khach@petcare.test"));
+
+        assertThat(response.codeLength()).isEqualTo(8);
     }
 
     @Test

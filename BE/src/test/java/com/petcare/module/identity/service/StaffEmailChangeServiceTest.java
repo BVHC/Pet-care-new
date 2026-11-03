@@ -112,7 +112,7 @@ class StaffEmailChangeServiceTest {
 
         OtpSentResponse response = service.issueEmailChangeOtp(TARGET, "  Moi7@PetCare.TEST ", PREPARED);
 
-        assertThat(response).isEqualTo(new OtpSentResponse(NOW.plusSeconds(60), null));
+        assertThat(response).isEqualTo(new OtpSentResponse(NOW.plusSeconds(60), null, 6));
         InOrder order = inOrder(accounts, staffProfiles, otps, notifications);
         order.verify(accounts).findByIdForUpdate(TARGET);
         order.verify(staffProfiles).findById(TARGET);

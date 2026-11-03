@@ -79,7 +79,7 @@ public class PasswordResetService {
         }
         Instant resendAvailableAt = Instant.now(clock)
                 .plus(Duration.ofSeconds(configs.getInt(ConfigKey.OTP_RESEND_INTERVAL_SECONDS)));
-        return mapper.toOtpSentResponse(resendAvailableAt, null);
+        return mapper.toOtpSentResponse(resendAvailableAt, null, prepared.code().length());
     }
 
     /**

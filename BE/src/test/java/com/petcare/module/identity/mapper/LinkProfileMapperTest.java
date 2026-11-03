@@ -40,7 +40,19 @@ class LinkProfileMapperTest {
         Instant resendAt = Instant.parse("2026-10-10T03:01:00Z");
 
         assertThat(mapper.toOtpSentResponse(new IssuedOtp("123456", expiresAt, resendAt, 5), "ng***@gmail.com"))
-                .isEqualTo(new OtpSentResponse(resendAt, "ng***@gmail.com"));
+                .isEqualTo(new OtpSentResponse(resendAt, "ng***@gmail.com", 6));
+    }
+
+    /** Độ dài lấy từ mã đã sinh (theo [CFG] {@code otp.code_length}), không cố định 6 và không lấy từ {@code ttlMinutes}. */
+    @Test
+    void otpSentCodeLengthFollowsTheIssuedCode() {
+        Instant expiresAt = Instant.parse("2026-10-10T03:05:00Z");
+        Instant resendAt = Instant.parse("2026-10-10T03:01:00Z");
+
+        assertThat(mapper.toOtpSentResponse(new IssuedOtp("12345678", expiresAt, resendAt, 5), "ng***@gmail.com")
+                .codeLength()).isEqualTo(8);
+        assertThat(mapper.toOtpSentResponse(new IssuedOtp("1234", expiresAt, resendAt, 5), "ng***@gmail.com")
+                .codeLength()).isEqualTo(4);
     }
 
     @Test

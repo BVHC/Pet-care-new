@@ -122,7 +122,7 @@ export const useAddWeight = (petId: number) =>
 
 /**
  * #25: gửi mã tới email mới; chưa xác nhận thì email cũ giữ nguyên. Không làm mới cache.
- * Kiểu trả về là OtpSentResponse của auth.ts (có `codeLength`), không phải bản sao thiếu trường ở types/identity.ts.
+ * Kiểu trả về là OtpSentResponse của auth.ts (có `codeLength`); types/identity.ts chỉ còn re-export nó, không còn bản khai riêng thiếu trường.
  */
 export const useSendCustomerEmailChange = (customerId: number) =>
   useMutation({

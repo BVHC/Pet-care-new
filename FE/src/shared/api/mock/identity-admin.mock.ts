@@ -540,8 +540,8 @@ const sendEmailChange: MockHandler = ({ account, params, body }) => {
   if (wait > 0) return ruleFail('BR-TK-07', `Vui lòng chờ ${wait} giây trước khi gửi lại mã OTP`);
   s.emailChanges[id] = { newEmail, otp: { code: MOCK_OTP_CODE, sentAt: Date.now(), failed: 0 } };
   save(s);
-  // BE StaffAdminMapper: OTP của nhân viên luôn `maskedEmail: null` (chỉ luồng liên kết hồ sơ mới trả email đã che).
-  return ok({ resendAvailableAt: resendAt(s.emailChanges[id].otp.sentAt), maskedEmail: null }, 200, 'Đã gửi mã OTP tới email mới');
+  // BE StaffAdminMapper: OTP của nhân viên luôn `maskedEmail: null` (chỉ luồng liên kết hồ sơ mới trả email đã che), kèm `codeLength` (độ dài mã vừa gửi; mock luôn 6).
+  return ok({ resendAvailableAt: resendAt(s.emailChanges[id].otp.sentAt), maskedEmail: null, codeLength: MOCK_OTP_CODE.length }, 200, 'Đã gửi mã OTP tới email mới');
 };
 
 const confirmEmailChange: MockHandler = ({ account, params, body }) => {

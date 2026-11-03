@@ -242,7 +242,7 @@ class StaffAdminServiceTest {
 
     @Test
     void startEmailChangePreparesCodeBeforeTransactionAndPassesItThrough() {
-        OtpSentResponse sent = new OtpSentResponse(java.time.Instant.EPOCH, null);
+        OtpSentResponse sent = new OtpSentResponse(java.time.Instant.EPOCH, null, 6);
         when(otps.prepare()).thenReturn(PREPARED);
         when(emailChanges.issueEmailChangeOtp(7L, " New@PetCare.test ", PREPARED)).thenReturn(sent);
 

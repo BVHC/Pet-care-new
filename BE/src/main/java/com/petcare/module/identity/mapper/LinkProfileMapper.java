@@ -27,9 +27,13 @@ public interface LinkProfileMapper {
     /** Caller bảo đảm {@code candidates} khác null (MapStruct trả null cho list null). */
     List<LinkCandidateResponse> toCandidates(List<LinkCandidate> candidates);
 
-    /** {@code maskedEmail}: email hồ sơ tại quầy đã che — mã gửi tới đó, không tới email tài khoản (BR-TK-04). */
+    /**
+     * {@code maskedEmail}: email hồ sơ tại quầy đã che — mã gửi tới đó, không tới email tài khoản (BR-TK-04).
+     * {@code codeLength}: độ dài mã vừa sinh ({@code otp.code_length} [CFG]); mã gốc không ra response.
+     */
     @Mapping(target = "resendAvailableAt", source = "otp.resendAvailableAt")
     @Mapping(target = "maskedEmail", source = "maskedEmail")
+    @Mapping(target = "codeLength", expression = "java(otp.code().length())")
     OtpSentResponse toOtpSentResponse(IssuedOtp otp, String maskedEmail);
 
     @Mapping(target = "customerId", source = "customerId")

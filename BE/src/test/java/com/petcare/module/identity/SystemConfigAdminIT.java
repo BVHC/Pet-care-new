@@ -253,6 +253,44 @@ class SystemConfigAdminIT {
         assertThat(seconds).isBetween(599.0, 600.0);
     }
 
+    /**
+     * Độ dài OTP trong response theo [CFG] {@code otp.code_length}, không cố định 6: sau PUT sang 8, quên mật khẩu báo 8
+     * cho cả email có tài khoản lẫn email lạ (BR-TK-10: cùng một giá trị) và đăng ký báo {@code otpCodeLength} 8; số này
+     * bằng độ dài mã thật trong outbox. Không so cả body: IT dùng đồng hồ thật nên mốc gửi lại khác nhau giữa các lần gọi.
+     */
+    @Test
+    void otpCodeLengthChangeReachesForgotAndRegisterResponses() {
+        long vet = staff("VET", branch);
+        ok(put("otp.code_length", adminToken, Map.of("value", "8")));
+
+        ResponseEntity<Map<String, Object>> known = http.exchange("/api/auth/password/forgot", HttpMethod.POST,
+                new HttpEntity<>(Map.of("email", email(vet)), bearer(null)), MAP);
+        ResponseEntity<Map<String, Object>> unknown = http.exchange("/api/auth/password/forgot", HttpMethod.POST,
+                new HttpEntity<>(Map.of("email", newEmail()), bearer(null)), MAP);
+
+        assertThat(known.getStatusCode()).isEqualTo(HttpStatus.ACCEPTED);
+        assertThat(unknown.getStatusCode()).isEqualTo(HttpStatus.ACCEPTED);
+        assertThat(map(known.getBody().get("data"))).containsEntry("codeLength", 8);
+        assertThat(map(unknown.getBody().get("data"))).as("BR-TK-10: email lạ cùng giá trị")
+                .containsEntry("codeLength", 8);
+        assertThat(jdbc.queryForObject("""
+                SELECT length(payload->>'ma_otp') FROM notification_outbox
+                WHERE recipient_email = ? AND template_code = 'OTP_PASSWORD_RESET' ORDER BY id DESC LIMIT 1
+                """, Integer.class, email(vet))).as("mã thật trong outbox").isEqualTo(8);
+
+        String registered = newEmail();
+        ResponseEntity<Map<String, Object>> register = http.exchange("/api/auth/register", HttpMethod.POST,
+                new HttpEntity<>(Map.of("email", registered, "password", "abc12345", "fullName", "Khách " + tag,
+                        "phone", "0901234567", "isAdult", true, "termsAccepted", true), bearer(null)), MAP);
+
+        assertThat(register.getStatusCode()).as("%s", register.getBody()).isEqualTo(HttpStatus.CREATED);
+        assertThat(map(register.getBody().get("data"))).containsEntry("otpCodeLength", 8);
+        assertThat(jdbc.queryForObject("""
+                SELECT length(payload->>'ma_otp') FROM notification_outbox
+                WHERE recipient_email = ? AND template_code = 'OTP_REGISTER' ORDER BY id DESC LIMIT 1
+                """, Integer.class, registered)).as("mã thật trong outbox").isEqualTo(8);
+    }
+
     @Test
     void valueIsStoredCanonicalAndJsonScalarsAreCoerced() {
         assertThat(map(ok(put("otp.ttl_minutes", adminToken, Map.of("value", "07"))))).containsEntry("value", "7");

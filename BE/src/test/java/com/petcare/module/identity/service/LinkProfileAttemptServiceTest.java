@@ -163,7 +163,7 @@ class LinkProfileAttemptServiceTest {
 
         OtpSentResponse response = service.issueLinkOtp(ACCOUNT, COUNTER, null, PREPARED);
 
-        assertThat(response).isEqualTo(new OtpSentResponse(resendAt, "ng***@gmail.com"));
+        assertThat(response).isEqualTo(new OtpSentResponse(resendAt, "ng***@gmail.com", 6));
         InOrder order = inOrder(accounts, customerQueries, otps, notifications);
         order.verify(accounts).findByIdForUpdate(ACCOUNT);
         order.verify(customerQueries).findLinkCandidates(OWN_PHONE);

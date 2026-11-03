@@ -148,10 +148,11 @@ class StaffEmailChangeIT {
                 "VALIDATION_FAILED");
         Map<String, Object> data = map(ok(start(token(superManager), vet, newEmail.toUpperCase())));
 
-        assertThat(data).containsOnlyKeys("resendAvailableAt", "maskedEmail").containsEntry("maskedEmail", null);
+        assertThat(data).containsOnlyKeys("resendAvailableAt", "maskedEmail", "codeLength")
+                .containsEntry("maskedEmail", null).containsEntry("codeLength", 6);
         assertThat(Instant.parse((String) data.get("resendAvailableAt"))).isEqualTo(T0.plusSeconds(60));
         String code = code(newEmail);
-        assertThat(code).matches("\\d{6}");
+        assertThat(code).matches("\\d{6}").hasSize((Integer) data.get("codeLength"));
         assertThat(data.toString()).doesNotContain(code);
         assertThat(output.getAll()).doesNotContain(code);
 

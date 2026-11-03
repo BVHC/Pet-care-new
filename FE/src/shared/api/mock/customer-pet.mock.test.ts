@@ -184,26 +184,44 @@ describe('tài khoản của hồ sơ khách tại quầy (UC22, identity-v1 #25
 
   it('sửa email tài khoản qua OTP gửi tới email mới; sau đó đăng nhập bằng email mới (BR-TK-16)', async () => {
     const sent = await client.post('/api/customers/1/account-email-change', { newEmail: 'trang.moi@gmail.com', ...ID }, await desk());
-    expect(sent.data.data.maskedEmail).toBe('tr***@gmail.com');
+    expect(sent.data.data.maskedEmail).toBeNull(); // BE #25: maskedEmail luôn null, không che email mới
     expect(sent.data.data.codeLength).toBe(6);
     expect(ruleOf(await failure(client.post('/api/customers/1/account-email-change', { newEmail: 'trang.moi@gmail.com', ...ID }, await desk())))).toBe('BR-TK-07');
     expect(ruleOf(await failure(client.post('/api/customers/1/account-email-change/confirm', { code: '000000' }, await desk())))).toBe('BR-TK-05');
     expect((await client.post('/api/customers/1/account-email-change/confirm', { code: '123456' }, await desk())).status).toBe(204);
 
-    expect((await client.get('/api/customers/1', await desk())).data.data.customer.email).toBe('trang.moi@gmail.com');
+    // Khoảng trống BE-2, ADR-0034 TBD: BE chỉ đổi email TÀI KHOẢN, không đồng bộ customers.email của hồ sơ (BE test `customerProfileEmailIsNotSyncedKnownGap`).
+    // Khi BE-2 đồng bộ thì đổi ca này theo (và trả `accountEmailOf` về email hiện tại của tài khoản).
+    expect((await client.get('/api/customers/1', await desk())).data.data.customer.email).toBe('khach@petcare.vn');
     expect((await client.post('/api/auth/login', { email: 'trang.moi@gmail.com', password: MOCK_PASSWORD })).status).toBe(200);
     expect((await failure(client.post('/api/auth/login', { email: 'khach@petcare.vn', password: MOCK_PASSWORD }))).status).toBe(401);
   });
 
-  it('từ chối: hồ sơ chưa có tài khoản, email đã dùng, thiếu phương thức xác minh, không phải lễ tân', async () => {
-    expect(ruleOf(await failure(client.post('/api/customers/3/account-email-change', { newEmail: 'a@b.vn', ...ID }, await desk())))).toBe('BR-TK-16');
+  it('từ chối: hồ sơ chưa có tài khoản (400 không đuôi BR), email đã dùng, thiếu phương thức xác minh, không phải lễ tân', async () => {
+    const unlinked = await failure(client.post('/api/customers/3/account-email-change', { newEmail: 'a@b.vn', ...ID }, await desk()));
+    expect([unlinked.status, unlinked.data.errorCode, unlinked.data.message]).toEqual([
+      400,
+      'VALIDATION_FAILED',
+      'Hồ sơ chưa gắn tài khoản online nên không có email tài khoản để sửa',
+    ]);
     expect(ruleOf(await failure(client.post('/api/customers/1/account-email-change', { newEmail: 'reception@store1.vn', ...ID }, await desk())))).toBe('BR-TK-01');
     const noMethod = await failure(client.post('/api/customers/1/account-email-change', { newEmail: 'a@b.vn' }, await desk()));
-    expect(noMethod.data.message).toContain('verificationMethod:');
+    expect(noMethod.data.message).toBe('verificationMethod: Phương thức xác minh không được để trống');
     expect((await failure(client.post('/api/customers/1/account-email-change', { newEmail: 'a@b.vn', ...ID }, await vet()))).status).toBe(403);
   });
 
-  it('liên kết hồ sơ tại quầy với tài khoản online: hồ sơ online bị xóa, khách thấy thú của hồ sơ tại quầy (BR-TK-19)', async () => {
+  // Câu báo lỗi chép nguyên văn từ BE (CounterLinkStepService MSG_*, LinkAccountNotFoundException); ca đầy đủ ở identity.mock.test.ts.
+  const NO_EMAIL = 'Hồ sơ tại quầy chưa có email. Hãy bổ sung email vào hồ sơ (sửa hồ sơ khách) rồi liên kết lại (BR-TK-19)';
+  const HAS_ACCOUNT = 'Hồ sơ này đã gắn tài khoản (hồ sơ online hoặc đã liên kết) (BR-TK-19)';
+  const ONLINE_HAS_DATA = 'Hồ sơ online của tài khoản đã có thú cưng, lịch hẹn, đặt chỗ, đơn hàng hoặc góp ý nên không liên kết được (BR-TK-19)';
+  const ACCOUNT_NOT_FOUND = 'Không tìm thấy tài khoản khách hàng đã kích hoạt với email này';
+
+  it('liên kết hồ sơ tại quầy với tài khoản online: hồ sơ chưa có email thì được hướng dẫn bổ sung email, rồi hồ sơ online bị xóa, khách thấy thú của hồ sơ tại quầy (BR-TK-19)', async () => {
+    // Hồ sơ #4 chưa có email: BE trả hướng dẫn, lễ tân sửa hồ sơ khách rồi liên kết lại.
+    const refused = await failure(client.post('/api/customers/4/link-account', { accountEmail: 'khachmoi@petcare.vn', ...ID }, await desk()));
+    expect([refused.status, refused.data.errorCode, refused.data.message]).toEqual([400, 'BUSINESS_RULE_VIOLATION', NO_EMAIL]);
+    expect((await client.patch('/api/customers/4', { email: 'hoa.le@gmail.com' }, await desk())).status).toBe(200);
+
     const res = await client.post('/api/customers/4/link-account', { accountEmail: 'khachmoi@petcare.vn', ...ID }, await desk());
     expect(res.data.data).toEqual({ customerId: 4 });
     expect((await client.get('/api/customers/4', await desk())).data.data.customer).toMatchObject({ hasAccount: true, email: 'khachmoi@petcare.vn' });
@@ -211,14 +229,17 @@ describe('tài khoản của hồ sơ khách tại quầy (UC22, identity-v1 #25
     expect(ids(byPhone.data.data.content)).toEqual([3, 4]);
     const pets = await client.get('/api/me/pets', await as('khachmoi@petcare.vn'));
     expect(pets.data.data.map((p: { name: string }) => p.name)).toEqual(['Miu']);
-    // Hồ sơ đã liên kết thì không liên kết lần nữa.
-    expect(ruleOf(await failure(client.post('/api/customers/4/link-account', { accountEmail: 'khachmoi@petcare.vn', ...ID }, await desk())))).toBe('BR-TK-19');
+    // Hồ sơ đã liên kết thì không liên kết lần nữa: một câu chung, kể cả khi email tài khoản gõ lạ.
+    for (const accountEmail of ['khachmoi@petcare.vn', 'chua-co@gmail.com']) {
+      expect((await failure(client.post('/api/customers/4/link-account', { accountEmail, ...ID }, await desk()))).data.message).toBe(HAS_ACCOUNT);
+    }
   });
 
-  it('không liên kết: hồ sơ online, tài khoản đã có dữ liệu, email không có tài khoản', async () => {
-    expect(ruleOf(await failure(client.post('/api/customers/2/link-account', { accountEmail: 'khachmoi@petcare.vn', ...ID }, await desk())))).toBe('BR-TK-19');
-    expect(ruleOf(await failure(client.post('/api/customers/3/link-account', { accountEmail: 'khach@petcare.vn', ...ID }, await desk())))).toBe('BR-TK-19');
-    expect((await failure(client.post('/api/customers/3/link-account', { accountEmail: 'chua-co@gmail.com', ...ID }, await desk()))).status).toBe(404);
+  it('không liên kết: hồ sơ đã gắn tài khoản, tài khoản đã có dữ liệu, email không có tài khoản (404 một câu chung)', async () => {
+    expect((await failure(client.post('/api/customers/2/link-account', { accountEmail: 'khachmoi@petcare.vn', ...ID }, await desk()))).data.message).toBe(HAS_ACCOUNT);
+    expect((await failure(client.post('/api/customers/3/link-account', { accountEmail: 'khach@petcare.vn', ...ID }, await desk()))).data.message).toBe(ONLINE_HAS_DATA);
+    const unknown = await failure(client.post('/api/customers/3/link-account', { accountEmail: 'chua-co@gmail.com', ...ID }, await desk()));
+    expect([unknown.status, unknown.data.errorCode, unknown.data.message]).toEqual([404, 'RESOURCE_NOT_FOUND', ACCOUNT_NOT_FOUND]);
   });
 });
 

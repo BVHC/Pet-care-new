@@ -70,8 +70,9 @@ m.schema("RegisterRequest", {
 m.schema("RegistrationResponse", {
     "accountId": "int64", "email": "email", "status": "enum:PENDING",
     "otpResendAvailableAt": "datetime|Mốc được gửi lại OTP (BR-TK-07)",
+    "otpCodeLength": "int|Độ dài mã OTP ([CFG] otp.code_length, 4–8)",
 })
-m.schema("VerifyOtpRequest", {"email": "email", "code": "string|6 chữ số (BR-TK-05)"})
+m.schema("VerifyOtpRequest", {"email": "email", "code": "string|Mã OTP, độ dài theo cấu hình `otp.code_length` ([CFG], mặc định 6 chữ số; BR-TK-05)"})
 m.schema("VerificationResponse", {
     "accountId": "int64", "status": "enum:ACTIVE",
     "linkDecisionPending": "bool|true nếu SĐT trùng hồ sơ tại quầy chưa liên kết → mở màn hình liên kết (BR-TK-19)",
@@ -80,6 +81,7 @@ m.schema("EmailRequest", {"email": "email"})
 m.schema("OtpSentResponse", {
     "resendAvailableAt": "datetime|Mốc được gửi lại (BR-TK-07)",
     "maskedEmail": "string?|Email nhận mã đã che, chỉ có ở luồng liên kết hồ sơ",
+    "codeLength": "int|Độ dài mã OTP ([CFG] otp.code_length, 4–8)",
 })
 m.schema("LoginRequest", {"email": "email", "password": "string"})
 m.schema("AccountSummary", {
@@ -143,7 +145,7 @@ m.schema("CustomerEmailChangeRequest", {
 })
 m.schema("CounterLinkRequest", {
     "accountEmail": "email|Email tài khoản online của khách",
-    "verificationMethod": "enum:ID_CARD_IN_PERSON|BR-TK-19, A6",
+    "verificationMethod": "enum:ID_CARD_IN_PERSON|Lễ tân đã đối chiếu CCCD với họ tên hồ sơ; không lưu CCCD (BR-TK-16, 19, A6)",
 })
 m.schema("ReasonRequest", {"reason": "string:500|Bắt buộc (BR-QT-11)"})
 m.schema("PendingWorkItem", {
@@ -210,7 +212,7 @@ m.op("post", "/auth/logout", "logout", "Đăng xuất", "Auth", "UC03", "BR-TK-1
 m.op("post", "/auth/password/forgot", "forgotPassword", "Quên mật khẩu — gửi OTP", "Auth", "UC04",
      "BR-TK-04, 07, 10, 12", "A02–A08", "Public", "—", body="EmailRequest", resp="OtpSentResponse", status=202,
      public=True, errors=(400,), err_desc={400: "`VALIDATION_FAILED` email trống / sai định dạng / quá 255 ký tự"},
-     notes="Luôn trả 202 cùng nội dung (BR-TK-10), kể cả email không tồn tại, tài khoản không đủ điều kiện BR-TK-12 (`PENDING`, bị khóa, `DISABLED` — không gửi mã), đã chạm quota BR-TK-07 (không gửi mã, `resendAvailableAt` vẫn = now + 60 giây [CFG]). Tài khoản đang khóa tạm BR-TK-09 vẫn nhận mã. Gửi lại = gọi lại endpoint này (A7). ADR-0023.")
+     notes="Luôn trả 202 cùng nội dung (BR-TK-10), kể cả email không tồn tại, tài khoản không đủ điều kiện BR-TK-12 (`PENDING`, bị khóa, `DISABLED` — không gửi mã), đã chạm quota BR-TK-07 (không gửi mã, `resendAvailableAt` vẫn = now + 60 giây [CFG]). `codeLength` = `otp.code_length` [CFG], giống nhau ở mọi nhánh (không lộ tài khoản). Tài khoản đang khóa tạm BR-TK-09 vẫn nhận mã. Gửi lại = gọi lại endpoint này (A7). ADR-0023.")
 m.op("post", "/auth/password/reset", "resetPassword", "Đặt lại mật khẩu bằng OTP", "Auth", "UC04",
      "BR-TK-03, 05, 06, 13", "A02–A08", "Public", "—", body="ResetPasswordRequest", status=204, public=True,
      errors=(400,), err_desc={400: OTP_ERR + " — cũng là lỗi cho email không có tài khoản, tài khoản không đủ điều kiện BR-TK-12 hoặc chưa có mã (BR-TK-10) · `BR-TK-03` mật khẩu mới không hợp lệ (kiểm trước mã, không tiêu lượt nhập) hoặc trùng mật khẩu hiện tại (chỉ kiểm khi mã đúng; mã vẫn dùng lại được)"},
@@ -324,16 +326,20 @@ m.op("post", "/customers/{customerId}/account-email-change", "startCustomerEmail
      "Sửa email tài khoản khách / khôi phục tài khoản — gửi OTP", "Customer account", "UC22",
      "BR-TK-01, 04, 07, 16, BR-KH-10", "A06", "Lễ tân", body="CustomerEmailChangeRequest", resp="OtpSentResponse",
      path_params=["CustomerId"], errors=(400, 401, 403, 404),
-     err_desc={400: "Hồ sơ chưa gắn tài khoản · `BR-TK-01` email mới đã dùng · `BR-TK-07` gửi quá nhanh"})
+     err_desc={400: "`VALIDATION_FAILED` hồ sơ chưa gắn tài khoản online, hoặc tài khoản chưa xác thực email (PENDING) — message không kèm mã BR · `BR-TK-01` email mới đã dùng (kể cả tài khoản PENDING, nhân viên) hoặc trùng email hiện tại · `BR-TK-07` gửi lại trong 60 giây / quá 5 mã/giờ [CFG] tới email đó · `VALIDATION_FAILED` `newEmail` trống / sai định dạng / quá 255 ký tự, thiếu `verificationMethod` · `MALFORMED_REQUEST` `verificationMethod` ngoài `ID_CARD_IN_PERSON`"},
+     notes="Email mới được chuẩn hóa chữ thường. Mã gửi tới email mới (BR-TK-04), `maskedEmail` = null. Được cả khi tài khoản đang bị khóa (khôi phục tài khoản); tài khoản chưa xác thực email (PENDING) thì không. Mỗi tài khoản tối đa một mã đổi email còn hiệu lực: gửi mã mới (kể cả tới email khác) hủy mã cũ. Không ghi audit ở bước này. Gửi lại = gọi lại endpoint. ADR-0034.")
 m.op("post", "/customers/{customerId}/account-email-change/confirm", "confirmCustomerEmailChange",
-     "Sửa email tài khoản khách — xác nhận OTP", "Customer account", "UC22", "BR-TK-05, 06, 16", "A06", "Lễ tân",
-     body="OtpCodeRequest", status=204, path_params=["CustomerId"], errors=(400, 401, 403, 404), err_desc={400: OTP_ERR},
-     notes="Ghi audit kèm phương thức xác minh; gửi EMAIL_CHANGED_NOTICE tới email cũ và mới.")
+     "Sửa email tài khoản khách — xác nhận OTP", "Customer account", "UC22", "BR-TK-01, 05, 06, 16", "A06", "Lễ tân",
+     body="OtpCodeRequest", status=204, path_params=["CustomerId"], errors=(400, 401, 403, 404, 409),
+     err_desc={400: OTP_ERR + " (sai mã vẫn được tính) · không còn mã đang mở → `BR-TK-05` · `BR-TK-01` email mới vừa được tài khoản khác dùng (mã vẫn dùng lại được) · `VALIDATION_FAILED` hồ sơ chưa gắn tài khoản online, hoặc tài khoản chưa xác thực email (PENDING) — message không kèm mã BR · `VALIDATION_FAILED` `code` trống / không phải 1–8 chữ số",
+               409: "`CONCURRENCY_CONFLICT` hai lần xác nhận khác tài khoản cùng một email mới chạy song song"},
+     notes="Email mới lấy từ mã đang mở của tài khoản. Đổi email tài khoản, gửi EMAIL_CHANGED_NOTICE tới email cũ và mới, ghi audit `CUSTOMER_EMAIL_CHANGED` (before/after email, `verificationMethod = ID_CARD_IN_PERSON`). Trạng thái, khóa, mật khẩu không đổi; không hủy phiên của khách. Bấm lại sau lỗi mạng nhận `BR-TK-05`. ADR-0034.")
 m.op("post", "/customers/{customerId}/link-account", "linkAccountAtCounter", "Liên kết hồ sơ tại quầy với tài khoản",
      "Customer account", "UC22", "BR-TK-16, 19", "A06", "Lễ tân", body="CounterLinkRequest", resp="LinkResult",
      path_params=["CustomerId"], errors=(400, 401, 403, 404),
-     err_desc={400: "`BR-TK-19` hồ sơ không phải COUNTER / đã liên kết / hồ sơ online đã phát sinh dữ liệu"},
-     notes="Không cần OTP: lễ tân đã đối chiếu CCCD. Ghi audit.")
+     err_desc={400: "`BR-TK-19` hồ sơ đã gắn tài khoản (hồ sơ online hoặc đã liên kết) · hồ sơ tại quầy chưa có email — bổ sung email vào hồ sơ (`PATCH /customers/{customerId}`) rồi liên kết lại · tài khoản đã liên kết một hồ sơ tại quầy khác · hồ sơ online của tài khoản đã có thú cưng, lịch hẹn, đặt chỗ, Order hoặc feedback · hồ sơ tại quầy vừa được liên kết hoặc đổi email trong lúc chờ · `BR-TK-11` tài khoản đang bị khóa · `VALIDATION_FAILED` `accountEmail` trống / sai định dạng / quá 255 ký tự, thiếu `verificationMethod` · `MALFORMED_REQUEST` `verificationMethod` ngoài `ID_CARD_IN_PERSON`",
+               404: "không có hồ sơ khách · không có tài khoản khách đã kích hoạt với `accountEmail` (email lạ, tài khoản nhân viên, tài khoản chưa xác thực email PENDING — một thông báo chung)"},
+     notes="Không cần OTP: lễ tân đã đối chiếu CCCD với họ tên hồ sơ (không lưu CCCD). `accountEmail` được chuẩn hóa chữ thường. Thứ tự kiểm: hình thức → quyền → hồ sơ (404) → hồ sơ đã gắn tài khoản / chưa có email (400) → tài khoản (404; đang bị khóa → `BR-TK-11`) → hồ sơ online của tài khoản (400 `BR-TK-19`). Hồ sơ tại quầy phải có email (như UC07); email đó, kể cả email tạm lễ tân vừa nhập, bị ghi đè bằng email tài khoản khi liên kết. Gắn tài khoản vào hồ sơ tại quầy, xóa hồ sơ online cùng sổ địa chỉ của nó, SĐT hồ sơ giữ nguyên. Ghi audit `CUSTOMER_PROFILE_LINKED` (`verificationMethod = ID_CARD_IN_PERSON`); không gửi thông báo, không hủy phiên của khách.")
 
 m.op("get", "/accounts", "listAccounts", "Tìm tài khoản (khách và nhân viên)", "Accounts", "UC09", "BR-QT-11",
      "A03", "Chỉ ADMIN", resp="AccountSummary", page=True, errors=(401, 403),

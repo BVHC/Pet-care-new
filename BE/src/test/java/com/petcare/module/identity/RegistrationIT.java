@@ -110,6 +110,7 @@ class RegistrationIT {
         long accountId = ((Number) data.get("accountId")).longValue();
         assertThat(data).containsEntry("email", email).containsEntry("status", "PENDING");
         assertThat(Instant.parse((String) data.get("otpResendAvailableAt"))).isEqualTo(T0.plusSeconds(60));
+        assertThat(data).containsEntry("otpCodeLength", 6);
 
         Map<String, Object> account = jdbc.queryForMap("SELECT * FROM accounts WHERE id = ?", accountId);
         assertThat(account).containsEntry("email", email).containsEntry("role", "CUSTOMER")
@@ -142,7 +143,7 @@ class RegistrationIT {
         Map<String, Object> payload = payload(email);
         assertThat(payload).containsEntry("ten_khach", "Nguyễn Văn A").containsEntry("thoi_han_phut", 5);
         String code = (String) payload.get("ma_otp");
-        assertThat(code).matches("\\d{6}");
+        assertThat(code).matches("\\d{6}").hasSize((Integer) data.get("otpCodeLength"));
         assertThat((String) otp.get("code_hash")).isNotEqualTo(code);
         assertThat(passwordEncoder.matches(code, (String) otp.get("code_hash"))).isTrue();
 

@@ -1,5 +1,7 @@
 package com.petcare.module.identity.service;
 
+import com.petcare.module.identity.dto.VerificationMethod;
+
 /**
  * Mã action audit của module identity (convention 03: {@code <ĐỐI_TƯỢNG>_<QUÁ_KHỨ>}; danh mục ở convention 08 §8.3).
  * Lý do ({@code audit_logs.reason}) của {@code LOGIN_FAILED} theo docs/adr/0019 mục 6.
@@ -15,12 +17,25 @@ public final class IdentityAuditActions {
     public static final String ACCOUNT_TEMPORARILY_LOCKED = "ACCOUNT_TEMPORARILY_LOCKED";
     /**
      * Khách tự liên kết tài khoản vào hồ sơ tại quầy bằng OTP gửi tới email hồ sơ (BR-TK-19, UC07; docs/adr/0027).
-     * {@code entity = customers/<hồ sơ tại quầy>}, before/after có {@code verificationMethod}.
+     * {@code entity = customers/<hồ sơ tại quầy>}, before/after có {@code verificationMethod}. Lễ tân liên kết hộ (UC22,
+     * identity-v1 #27) ghi cùng action: actor là lễ tân, {@code after.verificationMethod = ID_CARD_IN_PERSON}.
      */
     public static final String CUSTOMER_PROFILE_LINKED = "CUSTOMER_PROFILE_LINKED";
+    /**
+     * Lễ tân sửa hộ email tài khoản khách sau khi email mới xác thực OTP (BR-TK-16, UC22; identity-v1 #26). Chỉ ghi khi
+     * xác nhận thành công (bước gửi mã không đổi dữ liệu). {@code entity = accounts/<id tài khoản>}; {@code before} =
+     * {@code email}; {@code after} = {@code email, verificationMethod} ({@code ID_CARD_IN_PERSON}). Không có số / ảnh
+     * CCCD, không có mã OTP.
+     */
+    public static final String CUSTOMER_EMAIL_CHANGED = "CUSTOMER_EMAIL_CHANGED";
 
     /** {@code verificationMethod} của {@code CUSTOMER_PROFILE_LINKED} khi khách tự liên kết (mã gửi tới email hồ sơ). */
     public static final String VERIFICATION_EMAIL_CODE = "EMAIL_CODE";
+    /**
+     * {@code verificationMethod} của {@code CUSTOMER_PROFILE_LINKED} khi lễ tân liên kết hộ sau khi đối chiếu CCCD với họ
+     * tên hồ sơ (BR-TK-16, 19); hệ thống không lưu số hay ảnh CCCD.
+     */
+    public static final String VERIFICATION_ID_CARD = VerificationMethod.ID_CARD_IN_PERSON.name();
 
     /** {@code LOGIN_FAILED.reason}: email không khớp tài khoản nào (kể cả vừa bị ST02 xóa). */
     public static final String REASON_UNKNOWN_EMAIL = "UNKNOWN_EMAIL";

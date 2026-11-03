@@ -1,6 +1,7 @@
 // Mock module identity (docs/api/identity-v1.md): đăng ký + OTP, đăng nhập, đăng xuất, quên / đặt lại mật khẩu, GET /me, đổi mật khẩu, hồ sơ nhân viên,
 // liên kết hồ sơ (UC07). Quản trị (UC08–11: staff, accounts, system-configs, notification-templates, audit-logs) KHÔNG ở file này mà ở identity-admin.mock.ts (adminIdentityRoutes). Câu báo lỗi chép từ BE.
-// Cuối file (identityRoutes) còn UC22 (identity-v1 #25–27: lễ tân sửa email / liên kết tài khoản của hồ sơ khách tại quầy): BE CHƯA có controller cho các route này, nên trên BE thật chúng trả 404.
+// Cuối file (identityRoutes) còn UC22 (identity-v1 #25–27: lễ tân sửa email / liên kết tài khoản của hồ sơ khách tại quầy): BE đã có cả ba (CustomerAccountController; mock chép thứ tự kiểm,
+// câu báo lỗi, `maskedEmail: null`, `codeLength` ở #25–26; #27 link-account không OTP, hồ sơ quầy phải có email, tài khoản phải ACTIVE và không bị khóa).
 import type { AccountSummary, AccountStatus, LoginResponse, Role } from '../../types/auth';
 import type { StaffProfile } from '../../types/profile';
 import type { AuditLogEntry } from '../../types/identity';
@@ -214,8 +215,15 @@ function accounts(s: State): Account[] {
 const normalize = (email: string) => email.trim().toLowerCase();
 const byEmail = (s: State, email: string) => accounts(s).find((a) => a.email === normalize(email));
 
-/** Email hiện tại của tài khoản (kể cả email lễ tân đã sửa hộ); hồ sơ gắn tài khoản lấy email theo đây (customer-v1 A5). */
-export const accountEmailOf = (accountId: number) => accounts(load()).find((a) => a.id === accountId)?.email ?? null;
+/**
+ * Email của hồ sơ khách có tài khoản (customer-pet.mock `emailOf`): email GỐC của tài khoản, KHÔNG theo email lễ tân vừa sửa hộ (UC22 #26). BE chỉ đổi email
+ * TÀI KHOẢN, không đồng bộ `customers.email` — khoảng trống của BE-2, ADR-0034 TBD (BE test `customerProfileEmailIsNotSyncedKnownGap`).
+ * Khi BE-2 đồng bộ thì trả lại email hiện tại: `accounts(load()).find((a) => a.id === accountId)?.email ?? null`.
+ */
+export const accountEmailOf = (accountId: number) => {
+  const s = load();
+  return MOCK_ACCOUNTS.find((a) => a.id === accountId)?.email ?? s.registered.find((r) => r.id === accountId)?.email ?? null;
+};
 
 /** Dạng RESPONSE (login, /me): đúng 6 trường như `AccountSummary` của BE. `branchId` chỉ có ở GET /me → staffProfile.branchId. */
 function summaryOf(a: Account): AccountSummary {
@@ -598,22 +606,35 @@ const changePassword: MockHandler = ({ account, body }) => {
 // ─── Tài khoản của hồ sơ khách tại quầy (UC22, identity-v1 #25–27, chỉ lễ tân) ───
 
 /** Lễ tân đối chiếu CCCD tại quầy; chỉ ghi phương thức, không lưu CCCD (BR-TK-16, A6). */
-const verificationChecks = (method: unknown): Check[] => [
-  ['verificationMethod', 'Phương thức xác minh phải là ID_CARD_IN_PERSON', method !== 'ID_CARD_IN_PERSON'],
-];
+const ID_CARD_IN_PERSON = 'ID_CARD_IN_PERSON';
+/** GlobalExceptionHandler: giá trị ngoài enum `verificationMethod` là lỗi đọc JSON. */
+const MALFORMED_JSON = 'Nội dung request không đúng định dạng JSON hoặc sai kiểu dữ liệu';
+/** CustomerAccountNotEditableException: 400 `VALIDATION_FAILED` KHÔNG đuôi (BR-…). */
+const NOT_LINKED = 'Hồ sơ chưa gắn tài khoản online nên không có email tài khoản để sửa';
+const ACCOUNT_PENDING = 'Tài khoản chưa xác thực email nên chưa sửa được email';
 
-const newEmailChecks = (field: string, email: unknown): Check[] => [
-  [field, 'Email không được để trống', !isText(email)],
-  [field, 'Email không đúng định dạng', isText(email) && !EMAIL_RE.test(email.trim())],
-  [field, 'Email tối đa 255 ký tự', isText(email) && email.trim().length > 255],
-];
+/** `CustomerEmailChangeRequest` của BE: `@NotBlank @Email @Size(max = 255)` trên giá trị chưa cắt khoảng trắng, `verificationMethod` `@NotNull`. */
+const customerEmailChangeChecks = (b: Record<string, unknown>): Check[] => {
+  const email = b.newEmail;
+  return [
+    ['newEmail', 'Email mới không được để trống', !isText(email)],
+    ['newEmail', 'Email mới không đúng định dạng', typeof email === 'string' && email !== '' && !EMAIL_RE.test(email)],
+    ['newEmail', 'Email mới tối đa 255 ký tự', typeof email === 'string' && email.length > 255],
+    ['verificationMethod', 'Phương thức xác minh không được để trống', !has(b.verificationMethod)],
+  ];
+};
 
-/** Hồ sơ khách và tài khoản gắn với nó; lỗi nếu không có hồ sơ hoặc hồ sơ chưa gắn tài khoản. */
+/**
+ * Hồ sơ khách → tài khoản gắn với nó, cùng thứ tự kiểm ở #25 và #26 như BE `CustomerEmailChangeService`: không có hồ sơ 404; chưa gắn tài khoản 400 không đuôi (BR-…);
+ * tài khoản không phải khách 404 như hồ sơ không có; tài khoản PENDING 400 không đuôi (BR-…). Tài khoản đang bị khóa vẫn sửa được (khôi phục tài khoản, BR-TK-16).
+ */
 function accountOfCustomer(s: State, customerId: number): Account | MockReply {
   const customer = findCustomer(customerId);
   if (!customer) return notFound('hồ sơ khách', customerId);
-  const a = customer.accountId === null ? undefined : accounts(s).find((x) => x.id === customer.accountId);
-  if (!a) return ruleFail('BR-TK-16', 'Hồ sơ chưa gắn tài khoản online nên không có email tài khoản để sửa');
+  if (customer.accountId === null) return fail('VALIDATION_FAILED', NOT_LINKED, 400);
+  const a = accounts(s).find((x) => x.id === customer.accountId && x.role === 'CUSTOMER');
+  if (!a) return notFound('hồ sơ khách', customerId);
+  if (a.status === 'PENDING') return fail('VALIDATION_FAILED', ACCOUNT_PENDING, 400);
   return a;
 }
 const isAccount = (x: Account | MockReply): x is Account => 'role' in x;
@@ -621,9 +642,11 @@ const isAccount = (x: Account | MockReply): x is Account => 'role' in x;
 /** BR-TK-01: email trùng tài khoản khác, kể cả tài khoản PENDING và nhân viên tạo thêm. */
 const emailTaken = (s: State, email: string) => !!byEmail(s, email) || Object.values(s.extraStaff).some((x) => x.email === email);
 
+/** Thứ tự như BE: lỗi đọc JSON → Bean Validation → vai (chỉ lễ tân) → hồ sơ / tài khoản → BR-TK-01 → BR-TK-07. */
 const sendCustomerEmailChange: MockHandler = ({ account, params, body }) => {
   const b = (body ?? {}) as Record<string, unknown>;
-  const bad = invalid([...newEmailChecks('newEmail', b.newEmail), ...verificationChecks(b.verificationMethod)]);
+  if (has(b.verificationMethod) && b.verificationMethod !== ID_CARD_IN_PERSON) return fail('MALFORMED_REQUEST', MALFORMED_JSON, 400);
+  const bad = invalid(customerEmailChangeChecks(b));
   if (bad) return bad;
   if (account!.role !== 'RECEPTIONIST') return denied();
   const s = load();
@@ -634,12 +657,15 @@ const sendCustomerEmailChange: MockHandler = ({ account, params, body }) => {
   if (newEmail === a.email) return ruleFail('BR-TK-01', 'Email mới trùng email hiện tại');
   if (emailTaken(s, newEmail)) return ruleFail('BR-TK-01', 'Email đã được sử dụng');
   const key = `CUSTOMER_EMAIL:${customerId}`;
-  const wait = waitSeconds(s.otps[key]);
+  // BR-TK-07 theo email nhận mã như BE (quota theo target_email): đổi sang email khác gửi được ngay, mã mới hủy mã cũ của tài khoản.
+  const previous = s.otps[key];
+  const wait = previous?.newEmail === newEmail ? waitSeconds(previous) : 0;
   if (wait > 0) return ruleFail('BR-TK-07', `Vui lòng chờ ${wait} giây trước khi gửi lại mã OTP`);
   const otp = issueOtp(s, key);
   s.otps[key] = { ...otp, newEmail };
   save(s);
-  return ok({ resendAvailableAt: resendAt(otp), maskedEmail: maskEmail(newEmail), codeLength: CODE_LENGTH }, 200, 'Đã gửi mã OTP tới email mới');
+  // BE: `maskedEmail` luôn null ở #25 (mã gửi tới email lễ tân vừa nhập, không cần che).
+  return ok({ resendAvailableAt: resendAt(otp), maskedEmail: null, codeLength: CODE_LENGTH }, 200, 'Đã gửi mã xác thực tới email mới');
 };
 
 /** Mã đúng mới đổi email; chưa xác nhận thì giữ nguyên email cũ (BR-TK-16). */
@@ -668,28 +694,53 @@ const confirmCustomerEmailChange: MockHandler = ({ account, params, body }) => {
   return noContent();
 };
 
-/** Không cần OTP: lễ tân đã đối chiếu CCCD với họ tên hồ sơ (identity-v1 mục B, BR-TK-19). */
+/** `CounterLinkRequest` của BE: `accountEmail` `@NotBlank @Email @Size(max = 255)` trên giá trị chưa cắt khoảng trắng, `verificationMethod` `@NotNull`. */
+const counterLinkChecks = (b: Record<string, unknown>): Check[] => {
+  const email = b.accountEmail;
+  return [
+    ['accountEmail', 'Email tài khoản không được để trống', !isText(email)],
+    ['accountEmail', 'Email tài khoản không đúng định dạng', typeof email === 'string' && email !== '' && !EMAIL_RE.test(email)],
+    ['accountEmail', 'Email tài khoản tối đa 255 ký tự', typeof email === 'string' && email.length > 255],
+    ['verificationMethod', 'Phương thức xác minh không được để trống', !has(b.verificationMethod)],
+  ];
+};
+
+// Câu báo lỗi #27 chép nguyên văn từ BE: CounterLinkStepService (MSG_*), LinkAccountNotFoundException.MESSAGE, LoginAttemptService.MSG_LOCKED, CustomerApiService.
+const PROFILE_HAS_ACCOUNT = 'Hồ sơ này đã gắn tài khoản (hồ sơ online hoặc đã liên kết)';
+const PROFILE_NO_EMAIL = 'Hồ sơ tại quầy chưa có email. Hãy bổ sung email vào hồ sơ (sửa hồ sơ khách) rồi liên kết lại';
+const LINK_ACCOUNT_NOT_FOUND = 'Không tìm thấy tài khoản khách hàng đã kích hoạt với email này';
+const ACCOUNT_LOCKED = 'Tài khoản đã bị khóa. Vui lòng liên hệ Pet Care để được hỗ trợ';
+const ACCOUNT_ALREADY_LINKED = 'Tài khoản đã được liên kết với một hồ sơ tại quầy khác';
+const ONLINE_PROFILE_HAS_DATA = 'Hồ sơ online của tài khoản đã có thú cưng, lịch hẹn, đặt chỗ, đơn hàng hoặc góp ý nên không liên kết được';
+const PROFILE_NOT_LINKABLE = 'Hồ sơ tại quầy không còn liên kết được';
+
+/**
+ * #27, không cần OTP: lễ tân đã đối chiếu CCCD với họ tên hồ sơ (BR-TK-19). Thứ tự như BE `CounterLinkService` + `CounterLinkStepService`: lỗi đọc JSON → Bean Validation → vai (chỉ lễ tân)
+ * → hồ sơ 404 → hồ sơ đã gắn tài khoản (hồ sơ online HOẶC hồ sơ quầy đã liên kết: BE không biết kênh, một câu chung) → hồ sơ không có email (kèm hướng dẫn bổ sung) → tìm tài khoản
+ * (một 404 cho email lạ / không phải khách / PENDING; "khách ACTIVE không có hồ sơ" của BE không dựng được trong mock: mọi tài khoản khách đều có hồ sơ) → BR-TK-11 (bị khóa) → hồ sơ online của tài khoản (đã liên kết hồ sơ quầy khác / đã có dữ liệu). Không có nhánh "hồ sơ của tài khoản
+ * chính là hồ sơ đang liên kết" (bấm đúp) vì nhánh "đã gắn tài khoản" chặn trước; mock không ghi audit.
+ */
 const linkCounterAccount: MockHandler = ({ account, params, body }) => {
   const b = (body ?? {}) as Record<string, unknown>;
-  const bad = invalid([...newEmailChecks('accountEmail', b.accountEmail), ...verificationChecks(b.verificationMethod)]);
+  if (has(b.verificationMethod) && b.verificationMethod !== ID_CARD_IN_PERSON) return fail('MALFORMED_REQUEST', MALFORMED_JSON, 400);
+  const bad = invalid(counterLinkChecks(b));
   if (bad) return bad;
   if (account!.role !== 'RECEPTIONIST') return denied();
   const customerId = Number(params.customerId);
   const counter = findCustomer(customerId);
   if (!counter) return notFound('hồ sơ khách', customerId);
+  if (counter.accountId !== null) return ruleFail('BR-TK-19', PROFILE_HAS_ACCOUNT);
+  if (!counter.email?.trim()) return ruleFail('BR-TK-19', PROFILE_NO_EMAIL);
   const s = load();
   const target = byEmail(s, b.accountEmail as string);
   if (!target || target.role !== 'CUSTOMER' || target.status !== 'ACTIVE') {
-    return fail('RESOURCE_NOT_FOUND', 'Không tìm thấy tài khoản khách hàng đã kích hoạt với email này', 404);
+    return fail('RESOURCE_NOT_FOUND', LINK_ACCOUNT_NOT_FOUND, 404);
   }
-  if (counter.createdChannel !== 'COUNTER') return ruleFail('BR-TK-19', 'Chỉ liên kết được hồ sơ lập tại quầy');
-  if (counter.accountId !== null) return ruleFail('BR-TK-19', 'Hồ sơ tại quầy này đã liên kết tài khoản');
+  if (s.locks[target.id]) return ruleFail('BR-TK-11', ACCOUNT_LOCKED);
   const blocker = linkBlocker(target.id);
-  if (blocker === 'ALREADY_LINKED') return ruleFail('BR-TK-19', 'Tài khoản đã được liên kết với một hồ sơ tại quầy khác');
-  if (blocker === 'HAS_DATA') {
-    return ruleFail('BR-TK-19', 'Hồ sơ online của tài khoản đã có thú cưng, lịch hẹn, đặt chỗ, đơn hàng hoặc góp ý nên không liên kết được');
-  }
-  if (!linkAccount(target.id, customerId, target.email)) return ruleFail('BR-TK-19', 'Không thể liên kết hồ sơ này');
+  if (blocker === 'ALREADY_LINKED') return ruleFail('BR-TK-19', ACCOUNT_ALREADY_LINKED);
+  if (blocker === 'HAS_DATA') return ruleFail('BR-TK-19', ONLINE_PROFILE_HAS_DATA);
+  if (!linkAccount(target.id, customerId, target.email)) return ruleFail('BR-TK-19', PROFILE_NOT_LINKABLE);
   return ok({ customerId }, 200, 'Đã liên kết hồ sơ với tài khoản');
 };
 

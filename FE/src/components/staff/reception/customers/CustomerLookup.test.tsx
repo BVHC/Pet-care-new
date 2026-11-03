@@ -129,7 +129,10 @@ describe('tra cứu và hồ sơ khách tại quầy', () => {
     await user.click(within(dialog).getByRole('button', { name: 'Gửi mã tới email mới' }));
     await user.type(await within(dialog).findByLabelText('Mã OTP'), '123456');
     await user.click(within(dialog).getByRole('button', { name: 'Xác nhận đổi email' }));
-    expect(await within(profile).findByText('trang.moi@gmail.com')).toBeInTheDocument();
+    await waitFor(() => expect(screen.queryByRole('dialog', { name: 'Sửa email tài khoản' })).not.toBeInTheDocument());
+    // Khoảng trống BE-2, ADR-0034 TBD: BE chỉ đổi email TÀI KHOẢN, không đồng bộ customers.email của hồ sơ, nên hồ sơ vẫn nêu email cũ (BE test `customerProfileEmailIsNotSyncedKnownGap`).
+    expect(await within(profile).findByText('khach@petcare.vn')).toBeInTheDocument();
+    expect(within(profile).queryByText('trang.moi@gmail.com')).not.toBeInTheDocument();
   });
 
   it('xóa thú chưa phát sinh giao dịch, xác nhận ngay trong hàng (BR-KH-06)', async () => {

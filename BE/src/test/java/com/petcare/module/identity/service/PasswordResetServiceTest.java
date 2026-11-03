@@ -50,7 +50,8 @@ class PasswordResetServiceTest {
     private static final String CURRENT = "matkhau123";
     private static final String NEW = "matkhaumoi9";
     private static final String CODE = "123456";
-    private static final OtpSentResponse SAME_RESPONSE = new OtpSentResponse(NOW.plusSeconds(60), null);
+    /** {@code codeLength} 6 = độ dài mã của {@link #prepared} ("246810"). */
+    private static final OtpSentResponse SAME_RESPONSE = new OtpSentResponse(NOW.plusSeconds(60), null, 6);
     private static final PasswordEncoder FAST = new BCryptPasswordEncoder(4);
 
     private final PasswordResetAttemptService attempts = mock(PasswordResetAttemptService.class);
@@ -108,6 +109,32 @@ class PasswordResetServiceTest {
         doThrow(new CannotAcquireLockException("deadlock detected")).when(attempts).issueResetOtp(EMAIL, prepared);
 
         assertThat(service.requestPasswordReset(new ForgotPasswordRequest(EMAIL))).isEqualTo(SAME_RESPONSE);
+    }
+
+    /**
+     * Độ dài mã lấy từ mã {@code prepare()} vừa sinh (theo [CFG] {@code otp.code_length}), nên giống hệt ở mọi nhánh —
+     * đã gửi, không gửi, BR-TK-07 bị nuốt, lỗi khóa bị nuốt — và không phụ thuộc tài khoản (BR-TK-10).
+     */
+    @Test
+    void forgotCodeLengthFollowsPreparedCodeOnEveryBranch() {
+        PreparedOtp eight = new PreparedOtp("24681012", "hash");
+        when(otps.prepare()).thenReturn(eight);
+        OtpSentResponse expected = new OtpSentResponse(NOW.plusSeconds(60), null, 8);
+        ForgotPasswordRequest request = new ForgotPasswordRequest(EMAIL);
+
+        when(attempts.issueResetOtp(EMAIL, eight)).thenReturn(true);
+        assertThat(service.requestPasswordReset(request)).as("đã gửi").isEqualTo(expected);
+
+        when(attempts.issueResetOtp(EMAIL, eight)).thenReturn(false);
+        assertThat(service.requestPasswordReset(request)).as("không gửi (email lạ / không đủ điều kiện)")
+                .isEqualTo(expected);
+
+        doThrow(new BusinessRuleViolationException("BR-TK-07", "Vui lòng chờ 30 giây trước khi gửi lại mã OTP"))
+                .when(attempts).issueResetOtp(EMAIL, eight);
+        assertThat(service.requestPasswordReset(request)).as("BR-TK-07 bị nuốt").isEqualTo(expected);
+
+        doThrow(new CannotAcquireLockException("deadlock detected")).when(attempts).issueResetOtp(EMAIL, eight);
+        assertThat(service.requestPasswordReset(request)).as("lỗi khóa bị nuốt").isEqualTo(expected);
     }
 
     @Test

@@ -40,7 +40,10 @@ class StaffAdminMapperTest {
                 "Quản lý", Role.SUPER_MANAGER, AccountStatus.ACTIVE, false, null, null, null, true, false));
     }
 
-    /** #23 (docs/adr/0034): mốc gửi lại lấy từ {@code resendAvailableAt}, không phải {@code expiresAt}; không có mã. */
+    /**
+     * #23 (docs/adr/0034): mốc gửi lại lấy từ {@code resendAvailableAt}, không phải {@code expiresAt}; không có mã, chỉ
+     * có độ dài mã (6 ≠ {@code ttlMinutes} 5 nên lấy nhầm nguồn là đỏ).
+     */
     @Test
     void otpSentResponseTakesResendMarkAndNeverTheCode() {
         Instant expiresAt = Instant.parse("2026-10-12T03:05:00Z");
@@ -48,7 +51,19 @@ class StaffAdminMapperTest {
 
         OtpSentResponse response = mapper.toOtpSentResponse(new IssuedOtp("246810", expiresAt, resendAt, 5));
 
-        assertThat(response).isEqualTo(new OtpSentResponse(resendAt, null));
+        assertThat(response).isEqualTo(new OtpSentResponse(resendAt, null, 6));
         assertThat(response.toString()).doesNotContain("246810");
+    }
+
+    /** Độ dài lấy từ mã đã sinh (theo [CFG] {@code otp.code_length}), không cố định 6. */
+    @Test
+    void otpSentResponseCodeLengthFollowsTheIssuedCode() {
+        Instant expiresAt = Instant.parse("2026-10-12T03:05:00Z");
+        Instant resendAt = Instant.parse("2026-10-12T03:01:00Z");
+
+        assertThat(mapper.toOtpSentResponse(new IssuedOtp("24681012", expiresAt, resendAt, 5)).codeLength())
+                .isEqualTo(8);
+        assertThat(mapper.toOtpSentResponse(new IssuedOtp("2468", expiresAt, resendAt, 5)).codeLength())
+                .isEqualTo(4);
     }
 }

@@ -290,7 +290,10 @@ const responseOf = (s: State, { busy: _busy, ...pet }: PetRow): PetResponse => (
 
 const weightOf = ({ petId: _petId, ...weight }: WeightRow): WeightRecord => weight;
 
-/** Hồ sơ có tài khoản dùng email của tài khoản, kể cả email lễ tân vừa sửa hộ (customer-v1 A5, A9). */
+/**
+ * Hồ sơ có tài khoản dùng email của tài khoản (customer-v1 A5, A9). `accountEmailOf` trả email GỐC của tài khoản (lúc seed / đăng ký), KHÔNG theo email lễ tân vừa sửa hộ (UC22 #26):
+ * BE chỉ đổi email TÀI KHOẢN, không đồng bộ `customers.email` (BE-2, ADR-0034 TBD). Liên kết hộ #27 ghi đè email hồ sơ quầy bằng email tài khoản (customer.mock `linkAccount`).
+ */
 const emailOf = (c: MockCustomer): string | null => (c.accountId === null ? c.email : (accountEmailOf(c.accountId) ?? c.email));
 
 const profileOf = (c: MockCustomer): CustomerProfile => ({

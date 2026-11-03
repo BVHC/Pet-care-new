@@ -16,6 +16,7 @@ public interface RegistrationMapper {
     @Mapping(target = "email", source = "account.email")
     @Mapping(target = "status", source = "account.status")
     @Mapping(target = "otpResendAvailableAt", source = "otp.resendAvailableAt")
+    @Mapping(target = "otpCodeLength", expression = "java(otp.code().length())")
     RegistrationResponse toResponse(Account account, IssuedOtp otp);
 
     @Mapping(target = "accountId", source = "account.id")
@@ -23,5 +24,6 @@ public interface RegistrationMapper {
     VerificationResponse toVerificationResponse(Account account, boolean linkDecisionPending);
 
     @Mapping(target = "maskedEmail", ignore = true)
+    @Mapping(target = "codeLength", expression = "java(otp.code().length())")
     OtpSentResponse toOtpSentResponse(IssuedOtp otp);
 }
