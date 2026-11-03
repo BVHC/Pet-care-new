@@ -158,7 +158,7 @@
 - **`POST /notification-templates/{code}/restore-default`** — Khôi phục mẫu mặc định. Response `200` `NotificationTemplate`. Lỗi: `401` · `403` · `404`.
 ### Audit
 
-- **`GET /audit-logs`** — Xem nhật ký audit. Query: `actorAccountId?`, `action?`, `entityType?`, `entityId?`, `from?`, `to?`, `page?`, `size?`. Response `200` trang `AuditLogEntry`. Lỗi: `400` `MALFORMED_REQUEST` tham số sai kiểu (from / to thiếu offset, id không phải số nguyên) · `VALIDATION_FAILED` action / entityType quá 50 ký tự, `to` trước `from`, `entityId` không kèm `entityType`, lọc `action` không kèm người / đối tượng mà thiếu from / to hoặc cách nhau quá 31 ngày (message nêu đủ lỗi, theo tên tham số) · `401` · `403` Không phải ADMIN (không ghi audit).
+- **`GET /audit-logs`** — Xem nhật ký audit. Query: `actorAccountId?`, `action?`, `entityType?`, `entityId?`, `from?`, `to?`, `page?`, `size?`. Response `200` trang `AuditLogEntry`. Lỗi: `400` `MALFORMED_REQUEST` tham số sai kiểu (from / to thiếu offset, id không phải số nguyên) · `VALIDATION_FAILED` action / entityType quá 50 ký tự, `to` trước `from`, `entityId` không kèm `entityType` (message nêu đủ lỗi, theo tên tham số) · `401` · `403` Không phải ADMIN (không ghi audit).
 ### Public
 
 - **`GET /public/vets`** — Đội ngũ bác sĩ. Public. Query: `branchId?`. Response `200` mảng `PublicVet`. Lỗi: `400`.

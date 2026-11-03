@@ -62,7 +62,7 @@ import com.zaxxer.hikari.HikariDataSource;
 
 /**
  * T15 phần 3 — {@code GET /api/audit-logs} (identity-v1 #36, UC11; BR-QT-15, 16; docs/adr/0038) qua HTTP trên Postgres 17
- * thật. {@code audit_logs} không xóa được (trigger BR-QT-16): mỗi test chèn dòng ở năm 2003, mỗi test một cửa sổ 2 ngày
+ * thật. {@code audit_logs} không dọn trong IT (trigger đã gỡ ở V31, ADR-0098, nhưng IT chung database vẫn không xóa): mỗi test chèn dòng ở năm 2003, mỗi test một cửa sổ 2 ngày
  * riêng ({@link #window}) và một dải {@code actor_account_id} riêng (cột không có FK), rồi chỉ đọc lại theo các dấu đó.
  * Câu EXPLAIN chạy trong transaction rollback. {@link AuditLogQueryRepository} là spy gọi bản thật; các test cần chen
  * vào (snapshot, trạng thái transaction, lỗi DB) bật hook.
@@ -278,7 +278,9 @@ class AuditLogViewIT {
         assertThat(ids(ok(list(adminToken, "actorAccountId", actor, "entityType", "accounts", "entityId", 12))))
                 .containsExactly(atTo);
         assertThat(ids(ok(list(adminToken, "action", "AUDITVIEWIT_A", "from", iso(from), "to", iso(to)))))
-                .as("action trong khoảng ≤ 31 ngày, không mốc").containsExactlyInAnyOrder(atFrom, otherActor);
+                .as("action + khoảng, không mốc").containsExactlyInAnyOrder(atFrom, otherActor);
+        assertThat(ids(ok(list(adminToken, "action", "AUDITVIEWIT_A"))))
+                .as("action một mình (R3 đã bỏ)").contains(atFrom, before, after, otherActor);
         assertThat(ids(ok(list(adminToken, "from", iso(from), "to", iso(from)))))
                 .as("from == to hợp lệ, khớp đúng thời điểm").containsExactlyInAnyOrder(atFrom, otherActor);
         assertThat(ids(ok(list(adminToken, "from", iso(from), "to", iso(to), "entityType", "branches"))))
@@ -367,21 +369,19 @@ class AuditLogViewIT {
         Instant from = window();
         String r1 = "to: Thời điểm kết thúc không được trước thời điểm bắt đầu";
         String r2 = "entityType: Bắt buộc khi lọc theo entityId";
-        String r3 = "from: Lọc theo hành động cần from và to cách nhau tối đa 31 ngày, hoặc kèm actorAccountId hay "
-                + "entityType + entityId";
 
         assertError(list(adminToken, "from", iso(from.plusSeconds(1)), "to", iso(from)), HttpStatus.BAD_REQUEST,
                 "VALIDATION_FAILED", r1);
         assertError(list(adminToken, "entityId", 5), HttpStatus.BAD_REQUEST, "VALIDATION_FAILED", r2);
-        assertError(list(adminToken, "action", "LOGIN_FAILED"), HttpStatus.BAD_REQUEST, "VALIDATION_FAILED", r3);
-        assertError(list(adminToken, "action", "LOGIN_FAILED", "from", iso(from)), HttpStatus.BAD_REQUEST,
-                "VALIDATION_FAILED", r3);
-        assertError(list(adminToken, "action", "LOGIN_FAILED", "from", iso(from), "to",
-                iso(from.plus(Duration.ofDays(31)).plusSeconds(1))), HttpStatus.BAD_REQUEST, "VALIDATION_FAILED", r3);
+        // R3 đã bỏ (ADR-0098): action đứng một mình, hoặc kèm khoảng dài hơn 31 ngày, đều hợp lệ.
+        assertThat(list(adminToken, "action", "LOGIN_FAILED").getStatusCode()).as("action một mình")
+                .isEqualTo(HttpStatus.OK);
+        assertThat(list(adminToken, "action", "LOGIN_FAILED", "from", iso(from)).getStatusCode())
+                .as("action + chỉ from").isEqualTo(HttpStatus.OK);
         assertThat(list(adminToken, "action", "LOGIN_FAILED", "from", iso(from), "to",
-                iso(from.plus(Duration.ofDays(31)))).getStatusCode()).as("đúng 31 ngày").isEqualTo(HttpStatus.OK);
+                iso(from.plus(Duration.ofDays(365)))).getStatusCode()).as("action + cả năm").isEqualTo(HttpStatus.OK);
         assertError(list(adminToken, "action", "LOGIN_FAILED", "entityId", 5), HttpStatus.BAD_REQUEST,
-                "VALIDATION_FAILED", r2 + "; " + r3);
+                "VALIDATION_FAILED", r2);
         assertError(list(adminToken, "action", "X_Y", "entityId", 5, "from", iso(from.plusSeconds(1)), "to",
                 iso(from)), HttpStatus.BAD_REQUEST, "VALIDATION_FAILED", r1 + "; " + r2);
     }
@@ -636,8 +636,10 @@ class AuditLogViewIT {
                     "ix_audit_logs_actor_created_at", "ix_audit_logs_actor_created_at");
             expectIndex(new AuditLogFilter(null, null, "explain_type_3", 1503L, null, null), "ix_audit_logs_entity",
                     "ix_audit_logs_entity");
-            expectIndex(new AuditLogFilter(null, "EXPLAIN_ACTION_5", null, null, day, day.plus(Duration.ofDays(31))),
-                    "ix_audit_logs_created_at", "ix_audit_logs_created_at");
+            expectIndex(new AuditLogFilter(null, "EXPLAIN_ACTION_5", null, null, null, null),
+                    "ix_audit_logs_action_created_at", "ix_audit_logs_action_created_at");
+            expectIndex(new AuditLogFilter(null, "EXPLAIN_ACTION_5", null, null, day, day.plus(Duration.ofDays(365))),
+                    "ix_audit_logs_action_created_at", "ix_audit_logs_action_created_at");
             String typeOnly = explain(AuditLogQuery.of(new AuditLogFilter(null, null, "explain_type_3", null, null,
                     null)), true);
             assertThat(typeOnly).as("chỉ entityType").doesNotContain("Seq Scan");

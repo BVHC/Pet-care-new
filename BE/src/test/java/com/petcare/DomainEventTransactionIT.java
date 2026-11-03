@@ -30,7 +30,7 @@ import com.petcare.platform.audit.AuditRecorder;
  * {@code publishEvent} + {@code @EventListener} chạy cùng thread, cùng transaction với bên phát; listener lỗi thì
  * rollback cả use case; phát ngoài transaction thì service {@code MANDATORY} của bên nhận lỗi ngay.
  * Các bean thăm dò chỉ có trong test và mô phỏng đúng pattern: service phát → listener → service nhận.
- * {@code audit_logs} không xóa được (trigger BR-QT-16) nên mỗi test đánh dấu bản ghi bằng {@code reason} ngẫu nhiên.
+ * {@code audit_logs} không dọn trong IT (IT chung database, ADR-0098) nên mỗi test đánh dấu bản ghi bằng {@code reason} ngẫu nhiên.
  */
 @SpringBootTest
 @ActiveProfiles("test")

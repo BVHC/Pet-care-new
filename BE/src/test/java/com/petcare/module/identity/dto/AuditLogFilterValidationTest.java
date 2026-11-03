@@ -22,9 +22,8 @@ import jakarta.validation.ValidatorFactory;
 
 /**
  * Bộ lọc của {@code GET /api/audit-logs} (identity-v1 #36; docs/adr/0038 mục 3): R1 {@code from > to} → lỗi ở
- * {@code to}; R2 {@code entityId} không kèm {@code entityType} → lỗi ở {@code entityType}; R3 {@code action} không có mốc
- * chọn lọc phải có {@code from} + {@code to} cách nhau ≤ 31 ngày → lỗi ở {@code from}. Không có rule {@code BR-…} nào:
- * đây là kiểm tra hình thức.
+ * {@code to}; R2 {@code entityId} không kèm {@code entityType} → lỗi ở {@code entityType}. R3 (giới hạn 31 ngày khi lọc
+ * {@code action}) đã bỏ ở ADR-0098. Không có rule {@code BR-…} nào: đây là kiểm tra hình thức.
  */
 class AuditLogFilterValidationTest {
 
@@ -75,27 +74,16 @@ class AuditLogFilterValidationTest {
                 .containsExactly(Map.entry("entityType", AuditLogFilterValidator.ENTITY_TYPE_MESSAGE));
     }
 
-    // ---------------------------------------------------------------- R3
+    // ---------------------------------------------------------------- action (R3 đã bỏ, ADR-0098)
 
     @Test
-    void actionWithAnchorNeedsNoWindow() {
+    void actionAloneNeedsNeitherAnchorNorWindow() {
+        assertThat(errors(filter(null, "LOGIN_FAILED", null, null, null, null))).isEmpty();
+        assertThat(errors(filter(null, "LOGIN_FAILED", null, null, T0, null))).as("chỉ from").isEmpty();
+        assertThat(errors(filter(null, "LOGIN_FAILED", null, null, T0, T0.plus(Duration.ofDays(365))))).as("cả năm")
+                .isEmpty();
         assertThat(errors(filter(5L, "LOGIN_FAILED", null, null, null, null))).isEmpty();
         assertThat(errors(filter(null, "STAFF_CREATED", "accounts", 9L, null, null))).isEmpty();
-    }
-
-    @Test
-    void actionWithoutAnchorNeedsBothBoundsWithinThirtyOneDays() {
-        Map<String, String> r3 = Map.of("from", AuditLogFilterValidator.ACTION_WINDOW_MESSAGE);
-
-        assertThat(errors(filter(null, "LOGIN_FAILED", null, null, null, null))).isEqualTo(r3);
-        assertThat(errors(filter(null, "LOGIN_FAILED", null, null, T0, null))).as("thiếu to").isEqualTo(r3);
-        assertThat(errors(filter(null, "LOGIN_FAILED", null, null, null, T0))).as("thiếu from").isEqualTo(r3);
-        assertThat(errors(filter(null, "LOGIN_FAILED", "accounts", null, T0, null)))
-                .as("entityType không kèm entityId không phải mốc").isEqualTo(r3);
-        assertThat(errors(filter(null, "LOGIN_FAILED", null, null, T0, T0.plus(Duration.ofDays(31)))))
-                .as("đúng 31 ngày").isEmpty();
-        assertThat(errors(filter(null, "LOGIN_FAILED", null, null, T0, T0.plus(Duration.ofDays(31)).plusSeconds(1))))
-                .as("31 ngày + 1 giây").isEqualTo(r3);
     }
 
     @Test
@@ -106,9 +94,9 @@ class AuditLogFilterValidationTest {
 
     @Test
     void everyViolatedRuleIsReported() {
-        assertThat(errors(filter(null, "LOGIN_FAILED", null, 9L, null, null))).containsOnly(
-                Map.entry("entityType", AuditLogFilterValidator.ENTITY_TYPE_MESSAGE),
-                Map.entry("from", AuditLogFilterValidator.ACTION_WINDOW_MESSAGE));
+        assertThat(errors(filter(null, "LOGIN_FAILED", null, 9L, T0.plusSeconds(1), T0))).containsOnly(
+                Map.entry("to", AuditLogFilterValidator.RANGE_MESSAGE),
+                Map.entry("entityType", AuditLogFilterValidator.ENTITY_TYPE_MESSAGE));
     }
 
     // ---------------------------------------------------------------- chuẩn hóa

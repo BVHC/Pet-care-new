@@ -58,8 +58,7 @@ public class AuditLogController {
                     @Parameter(name = "actorAccountId", in = ParameterIn.QUERY, example = "7",
                             description = "Người thực hiện (khớp đúng)"),
                     @Parameter(name = "action", in = ParameterIn.QUERY, example = "STAFF_CREATED",
-                            description = "Mã hành động, tối đa 50 ký tự (khớp đúng). Không kèm actorAccountId "
-                                    + "hay entityType + entityId thì bắt buộc from + to cách nhau ≤ 31 ngày"),
+                            description = "Mã hành động, tối đa 50 ký tự (khớp đúng)"),
                     @Parameter(name = "entityType", in = ParameterIn.QUERY, example = "accounts",
                             description = "Tên bảng, tối đa 50 ký tự (khớp đúng)"),
                     @Parameter(name = "entityId", in = ParameterIn.QUERY, example = "42",
@@ -73,8 +72,7 @@ public class AuditLogController {
                     @Parameter(name = "size", in = ParameterIn.QUERY, example = "20")})
     @ApiErrorDoc(status = 400, description = "`MALFORMED_REQUEST` tham số sai kiểu (from / to thiếu "
             + "offset, id không phải số nguyên) · `VALIDATION_FAILED` action / entityType quá 50 ký tự, `to` trước "
-            + "`from`, `entityId` không kèm `entityType`, lọc `action` không kèm người / đối tượng mà thiếu from / "
-            + "to hoặc cách nhau quá 31 ngày (message nêu đủ lỗi, theo tên tham số)")
+            + "`from`, `entityId` không kèm `entityType` (message nêu đủ lỗi, theo tên tham số)")
     @ApiErrorDoc(status = 403, description = "Không phải ADMIN (không ghi audit)")
     @GetMapping
     @PreAuthorize(ADMIN_ONLY)

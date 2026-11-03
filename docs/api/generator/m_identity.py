@@ -389,14 +389,14 @@ m.op("post", "/notification-templates/{code}/restore-default", "restoreNotificat
 m.op("get", "/audit-logs", "listAuditLogs", "Xem nhật ký audit", "Audit", "UC11", "BR-QT-15, 16", "A03", "Chỉ ADMIN",
      resp="AuditLogEntry", page=True, errors=(400, 401, 403),
      query=["actorAccountId=int64|Người thực hiện (khớp đúng)",
-            "action=string|Mã hành động, tối đa 50 ký tự (khớp đúng). Không kèm actorAccountId hay entityType + entityId thì bắt buộc from + to cách nhau ≤ 31 ngày",
+            "action=string|Mã hành động, tối đa 50 ký tự (khớp đúng)",
             "entityType=string|Tên bảng, tối đa 50 ký tự (khớp đúng)",
             "entityId=int64|Bắt buộc kèm entityType",
             "from=datetime|Từ thời điểm (tính cả mốc); `+` của offset phải encode `%2B`",
             "to=datetime|Đến thời điểm (tính cả mốc); không được trước from", "page", "size"],
      err_desc={400: "`MALFORMED_REQUEST` tham số sai kiểu (from / to thiếu offset, id không phải số nguyên) · "
-                    "`VALIDATION_FAILED` action / entityType quá 50 ký tự, `to` trước `from`, `entityId` không kèm `entityType`, "
-                    "lọc `action` không kèm người / đối tượng mà thiếu from / to hoặc cách nhau quá 31 ngày (message nêu đủ lỗi, theo tên tham số)",
+                    "`VALIDATION_FAILED` action / entityType quá 50 ký tự, `to` trước `from`, `entityId` không kèm `entityType` "
+                    "(message nêu đủ lỗi, theo tên tham số)",
                403: "Không phải ADMIN (không ghi audit)"},
      notes="Chỉ đọc; không có endpoint sửa / xóa (BR-QT-16): method khác → 405. Xem không ghi audit. Mọi dòng của mọi người (kể cả hệ thống, actor null). "
            "Sắp `createdAt` giảm dần rồi `id` giảm dần; khoảng [from, to] tính cả hai mốc; giá trị lọc không tồn tại → trang rỗng; "
