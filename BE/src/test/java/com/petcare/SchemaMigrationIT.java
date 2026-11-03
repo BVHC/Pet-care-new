@@ -150,11 +150,12 @@ class SchemaMigrationIT {
         // V29 index lịch hẹn theo chi nhánh × ngày (docs/adr/0094, trả D032),
         // V30 index lượt tiếp nhận theo chi nhánh × ngày check-in (docs/adr/0095, trả D041),
         // V31 index audit_logs (action, created_at) + gỡ 2 trigger chỉ-thêm-mới của audit_logs (docs/adr/0098, trả D021),
+        // V32 index thứ tự danh sách thông báo (account_id, created_at DESC, id DESC) (docs/adr/0099, trả D022),
         // V9000 chỉ ở test: baseline session.access_ttl_minutes = 720
         assertThat(rows).extracting(row -> row.get("version"))
                 .containsExactly("1", "2", "3", "4", "5", "6", "7", "8", "9", "10", "11", "12", "13", "14", "15",
                         "16", "17", "18", "19", "20", "21", "22", "23", "24", "25", "26", "27", "28", "29", "30",
-                        "31", "9000");
+                        "31", "32", "9000");
         assertThat(rows).allSatisfy(row -> assertThat(row).containsEntry("success", true));
     }
 
@@ -470,6 +471,26 @@ class SchemaMigrationIT {
                 String.class))
                 .containsExactlyInAnyOrder("ix_visits_queue", "ix_visits_assignee_status",
                         "ix_visits_pet_checked_in_at", "ix_visits_checked_in_by", "ix_visits_customer_id");
+    }
+
+    /**
+     * V32 (docs/adr/0099, trả D022): index thứ tự danh sách thông báo (account_id, created_at DESC, id DESC), không
+     * partial; index V1 {@code ix_notifications_account_read_created} còn nguyên cho countUnread / markAllRead.
+     */
+    @Test
+    void notificationAccountCreatedIndexKeepsTheV1Index() {
+        assertThat(jdbc.queryForList(
+                "SELECT indexdef FROM pg_indexes WHERE schemaname = 'public' AND indexname = 'ix_notifications_account_created'",
+                String.class))
+                .singleElement().asString()
+                .contains("ON public.notifications").contains("(account_id, created_at DESC, id DESC)")
+                .doesNotContain("WHERE");
+        assertThat(jdbc.queryForList(
+                "SELECT indexdef FROM pg_indexes WHERE schemaname = 'public'"
+                        + " AND indexname = 'ix_notifications_account_read_created'",
+                String.class))
+                .singleElement().asString()
+                .contains("(account_id, read_at, created_at DESC)");
     }
 
     /**

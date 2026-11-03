@@ -14,15 +14,18 @@ import com.petcare.module.care.entity.Notification;
 /**
  * Bảng {@code notifications}. Worker ST20 IN_APP ghi ({@code save}, docs/adr/0014); UC88 đọc và đánh dấu đã đọc
  * (care-v1 #5–8, docs/adr/0039). Mọi câu của UC88 lọc theo {@code account_id} của người đang đăng nhập và viết điều
- * kiện thành hằng số (không {@code :x IS NULL OR}) để dùng được index
- * {@code ix_notifications_account_read_created (account_id, read_at, created_at DESC)} của V1. Hai câu UPDATE hàng loạt
- * bỏ qua auditing listener nên tự đặt {@code updated_at} (docs/adr/0015).
+ * kiện thành hằng số (không {@code :x IS NULL OR}) để dùng được index. Hai index: V1
+ * {@code ix_notifications_account_read_created (account_id, read_at, created_at DESC)} cho các câu đếm và UPDATE chưa
+ * đọc; V32 {@code ix_notifications_account_created (account_id, created_at DESC, id DESC)} cho thứ tự của danh sách
+ * (docs/adr/0099, trả D022). Hai câu UPDATE hàng loạt bỏ qua auditing listener nên tự đặt {@code updated_at}
+ * (docs/adr/0015).
  */
 public interface NotificationRepository extends JpaRepository<Notification, Long> {
 
     /**
-     * care-v1 #5, mọi thông báo của tài khoản, mới nhất trước. Index lọc được theo tài khoản nhưng không cho thứ tự:
-     * Postgres sort các dòng của tài khoản đó (cả {@link #findMineUnread}) — nợ D022.
+     * care-v1 #5, mọi thông báo của tài khoản, mới nhất trước. Khớp thứ tự của {@code ix_notifications_account_created}
+     * nên không Sort. {@link #findMineUnread} do planner chọn giữa hai index (ít dòng chưa đọc thì index V1 cộng Sort nhỏ
+     * rẻ hơn).
      */
     @Query(value = """
             SELECT * FROM notifications
