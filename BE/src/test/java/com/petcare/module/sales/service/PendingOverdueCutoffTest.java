@@ -25,6 +25,13 @@ class PendingOverdueCutoffTest {
     }
 
     @Test
+    void cutoffForUsesTheGivenDaysWithoutReadingTheConfiguration() {
+        assertThat(at("2026-10-21T01:30:00Z").cutoffFor(3)).isEqualTo(Instant.parse("2026-10-18T17:00:00Z"));
+
+        org.mockito.Mockito.verifyNoInteractions(configs);
+    }
+
+    @Test
     void oneDayMeansBeforeMidnightOfTodayVietnamTime() {
         when(configs.getInt(ConfigKey.ORDER_PENDING_ALERT_DAYS)).thenReturn(1);
 

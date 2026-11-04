@@ -94,12 +94,12 @@ public class VisitController {
                 + "của lễ tân. Chuyển trạng thái: — → WAITING (Visit#1) · Lịch hẹn#3 · Order#1 (OPEN + dòng dịch vụ tự "
                 + "sinh) · có dịch vụ Khám → Care Task#6. Trễ quá `visit.late_priority_minutes` (15 phút) [CFG] xếp như "
                 + "walk-in. A9, A10, A11, A12. Thứ tự lỗi: 404 → 400 → 409 (docs/adr/0059). Có dịch vụ Khám: hủy nhắc "
-                + "tái khám đang chờ của thú và Care Task tái khám tương ứng (BR-TB-06, docs/adr/0084). Khách mang "
-                + "nhiều thú thì tạo nhiều Visit.")
+                + "tái khám đang chờ của thú và Care Task tái khám tương ứng (BR-TB-06, docs/adr/0084). Lịch có dịch vụ "
+                + "đã ngừng vẫn tiếp nhận (A12, docs/adr/0088). Khách mang nhiều thú thì tạo nhiều Visit.")
     @ApiErrorDoc(status = 400, description = "`BR-TN-01` walk-in thiếu dịch vụ / thú không khớp lịch hẹn / thú đã mất · "
             + "`BR-TN-02` lịch hẹn của chi nhánh khác hoặc ngoài cửa sổ check-in · `BR-CN-01` chi nhánh chưa ACTIVE · "
             + "`BR-CN-05` ngoài giờ mà chi nhánh không có cờ hoặc chưa đánh dấu cấp cứu · `BR-LH-01` walk-in: dịch vụ đã "
-            + "ngừng, đang tắt tại chi nhánh hoặc không thuộc MEDICAL / GROOMING; có lịch: dịch vụ đã ngừng kinh doanh · "
+            + "ngừng, đang tắt tại chi nhánh hoặc không thuộc MEDICAL / GROOMING · "
             + "body sai (`VALIDATION_FAILED`, `MALFORMED_REQUEST`); BR-TK-17")
     @ApiErrorDoc(status = 403)
     @ApiErrorDoc(status = 404)

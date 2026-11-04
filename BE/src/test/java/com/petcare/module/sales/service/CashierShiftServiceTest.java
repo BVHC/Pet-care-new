@@ -36,6 +36,7 @@ import com.petcare.module.sales.entity.CashierShift;
 import com.petcare.module.sales.fsm.CashierShiftTransitionHandler;
 import com.petcare.module.sales.repository.CashierShiftRepository;
 import com.petcare.module.sales.repository.CashierShiftRepository.OpenShiftRow;
+import com.petcare.platform.exception.AccessDeniedScopeException;
 import com.petcare.platform.exception.BusinessRuleViolationException;
 import com.petcare.platform.exception.InvalidStateTransitionException;
 import com.petcare.platform.security.BranchScope;
@@ -183,21 +184,21 @@ class CashierShiftServiceTest {
     }
 
     @Test
-    void staffThatIsNotAnActiveReceptionistWithABranchIsAProgrammingError() {
+    void staffThatIsNoLongerAnActiveReceptionistWithABranchIsForbiddenNotA500() {
         when(staffDirectory.findStaffForShare(ME)).thenReturn(Optional.of(
                 new StaffSummary(ME, "An", Role.VET, BRANCH, true, false)));
 
         assertThatThrownBy(() -> service.openCashierShift(new OpenShiftRequest(false)))
-                .isInstanceOf(IllegalStateException.class);
+                .isInstanceOf(AccessDeniedScopeException.class);
 
         when(staffDirectory.findStaffForShare(ME)).thenReturn(Optional.of(
                 new StaffSummary(ME, "An", Role.RECEPTIONIST, BRANCH, false, false)));
         assertThatThrownBy(() -> service.openCashierShift(new OpenShiftRequest(false)))
-                .isInstanceOf(IllegalStateException.class);
+                .isInstanceOf(AccessDeniedScopeException.class);
 
         when(staffDirectory.findStaffForShare(ME)).thenReturn(Optional.empty());
         assertThatThrownBy(() -> service.openCashierShift(new OpenShiftRequest(false)))
-                .isInstanceOf(IllegalStateException.class);
+                .isInstanceOf(AccessDeniedScopeException.class);
         verify(shifts, never()).saveAndFlush(any());
     }
 }

@@ -4,7 +4,6 @@ import java.time.Clock;
 import java.time.Instant;
 import java.time.LocalDate;
 import java.time.temporal.ChronoUnit;
-import java.util.Comparator;
 import java.util.HashSet;
 import java.util.LinkedHashMap;
 import java.util.List;
@@ -29,6 +28,7 @@ import com.petcare.module.sales.repository.CashierShiftRepository;
 import com.petcare.module.sales.repository.CashierShiftRepository.OpenShiftRow;
 import com.petcare.module.sales.repository.PaymentRepository;
 import com.petcare.module.sales.repository.SalesOrderRepository;
+import com.petcare.module.sales.repository.SalesOrderRepository.BranchRow;
 import com.petcare.platform.audit.AuditEntry;
 import com.petcare.platform.audit.AuditRecorder;
 import com.petcare.platform.config.TimeConfig;
@@ -47,9 +47,9 @@ import lombok.extern.slf4j.Slf4j;
  * BR-BH-04, 06, BR-QT-15; docs/adr/0064). Lễ tân có ca {@code OPEN} của chính mình. Một {@code @Transactional}, READ
  * COMMITTED (chờ khóa ca / Order rồi phải đọc lại trạng thái mới), không {@code noRollbackFor}, không {@code catch}.
  * <p>
- * Thứ tự khóa: ca {@code OPEN FOR SHARE} → mọi Order trong <b>một</b> câu theo id tăng dần → mọi lô của hợp sản phẩm
+ * Thứ tự khóa: ca {@code OPEN FOR SHARE} → (404 / 403 chi nhánh đọc không khóa) → mọi Order trong <b>một</b> câu theo id tăng dần → mọi lô của hợp sản phẩm
  * trong <b>một</b> câu ({@link StockApi#issueForPayment}) → {@code document_counters} (sinh mã cuối cùng). Thứ tự kiểm:
- * BR-TG-01 → 404 → 403 chi nhánh → 409 không {@code PENDING} → BR-TG-03 → BR-TG-02 → BR-BH-04 (thiếu tồn: không trừ gì,
+ * BR-TG-01 → 404 → 403 chi nhánh (trước khi khóa Order) → 409 không {@code PENDING} → BR-TG-03 → BR-TG-02 → BR-BH-04 (thiếu tồn: không trừ gì,
  * rollback). Gửi lại sau khi đã thu nhận 409 (Order không còn {@code PENDING}) nên không thu hai lần.
  */
 @Slf4j
@@ -74,8 +74,9 @@ public class PaymentService {
         OpenShiftRow shift = shifts.lockOpenShiftForShare(me.accountId())
                 .orElseThrow(() -> new BusinessRuleViolationException("BR-TG-01", "Bạn chưa mở ca thu ngân"));
 
-        List<SalesOrder> locked = lockOrders(request.orderIds());
-        locked.forEach(order -> branchScope.check(order.getBranchId()));
+        List<Long> ids = request.orderIds().stream().sorted().toList();
+        requireOwned(ids);
+        List<SalesOrder> locked = orders.findAllByIdForUpdate(ids);
         locked.stream().filter(order -> order.getStatus() != OrderStatus.PENDING).findFirst().ifPresent(order -> {
             throw new InvalidStateTransitionException("đơn hàng (chỉ thu được Order đang chờ thu tiền)",
                     order.getStatus().name(), OrderStatus.PAID.name());
@@ -115,17 +116,20 @@ public class PaymentService {
         return assembler.toResponse(payment, locked);
     }
 
-    private List<SalesOrder> lockOrders(List<Long> requested) {
-        List<Long> ids = requested.stream().sorted().toList();
-        List<SalesOrder> found = orders.findAllByIdForUpdate(ids).stream()
-                .sorted(Comparator.comparing(SalesOrder::getId)).toList();
-        if (found.size() < ids.size()) {
+    /**
+     * 404 (id nhỏ nhất không tồn tại) rồi 403 chi nhánh, đọc <b>không khóa</b> chi nhánh của các Order (bất biến) trước
+     * khi khóa: lễ tân chi nhánh khác không phải chờ khóa Order của người khác rồi mới nhận 403 (docs/adr/0103, thay
+     * ADR-0064 ở điểm này).
+     */
+    private void requireOwned(List<Long> ids) {
+        List<BranchRow> rows = orders.findBranchRows(ids);
+        if (rows.size() < ids.size()) {
             Set<Long> present = new HashSet<>();
-            found.forEach(order -> present.add(order.getId()));
+            rows.forEach(row -> present.add(row.getId()));
             Long missing = ids.stream().filter(id -> !present.contains(id)).findFirst().orElseThrow();
             throw new ResourceNotFoundException("đơn hàng", missing);
         }
-        return found;
+        rows.forEach(row -> branchScope.check(row.getBranchId()));
     }
 
     private static String shortageMessage(List<SalesOrder> locked, List<Shortage> shortages) {

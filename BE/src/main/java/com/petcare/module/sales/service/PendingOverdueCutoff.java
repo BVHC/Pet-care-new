@@ -25,7 +25,12 @@ public class PendingOverdueCutoff {
     private final Clock clock;
 
     public Instant cutoff() {
-        return LocalDate.now(clock).minusDays(days() - 1L).atStartOfDay(TimeConfig.BUSINESS_ZONE).toInstant();
+        return cutoffFor(days());
+    }
+
+    /** Mốc cho N đã đọc sẵn: một lượt job đọc [CFG] một lần rồi dùng cùng N cho mốc và thông báo (docs/adr/0103). */
+    public Instant cutoffFor(int days) {
+        return LocalDate.now(clock).minusDays(days - 1L).atStartOfDay(TimeConfig.BUSINESS_ZONE).toInstant();
     }
 
     /** N hiện hành của [CFG]; đọc lúc gọi (áp dụng từ lượt kiểm kế tiếp, ADR-0057). */

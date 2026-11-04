@@ -50,6 +50,7 @@ import com.petcare.module.sales.repository.CashierShiftRepository;
 import com.petcare.module.sales.repository.CashierShiftRepository.OpenShiftRow;
 import com.petcare.module.sales.repository.PaymentRepository;
 import com.petcare.module.sales.repository.SalesOrderRepository;
+import com.petcare.module.sales.repository.SalesOrderRepository.BranchRow;
 import com.petcare.platform.audit.AuditEntry;
 import com.petcare.platform.audit.AuditRecorder;
 import com.petcare.platform.exception.AccessDeniedScopeException;
@@ -125,6 +126,26 @@ class PaymentServiceTest {
         return order;
     }
 
+    /** Chi nhánh đọc không khóa ({@code findBranchRows}) rồi khóa mọi Order trong một câu ({@code findAllByIdForUpdate}). */
+    private void stubOrders(List<Long> ids, List<SalesOrder> found) {
+        lenient().when(orders.findBranchRows(ids)).thenReturn(found.stream().map(PaymentServiceTest::branchRow).toList());
+        lenient().when(orders.findAllByIdForUpdate(ids)).thenReturn(found);
+    }
+
+    private static BranchRow branchRow(SalesOrder order) {
+        return new BranchRow() {
+            @Override
+            public Long getId() {
+                return order.getId();
+            }
+
+            @Override
+            public Long getBranchId() {
+                return order.getBranchId();
+            }
+        };
+    }
+
     private static OrderLine goods(long productId, int quantity, long price) {
         return OrderLine.of(OrderLineType.GOODS, null, productId, "Hàng " + productId, quantity, price, false, 3L, 3L);
     }
@@ -137,7 +158,7 @@ class PaymentServiceTest {
     void collectsCombinedOrdersInTheLockedOrder() {
         SalesOrder a = pending(10L, CUSTOMER, BRANCH, goods(20L, 2, 100));
         SalesOrder b = pending(11L, CUSTOMER, BRANCH, goods(21L, 1, 300));
-        when(orders.findAllByIdForUpdate(List.of(10L, 11L))).thenReturn(List.of(a, b));
+        stubOrders(List.of(10L, 11L), List.of(a, b));
 
         assertThat(service.collectPayment(request(500, 10L, 11L))).isSameAs(response);
 
@@ -165,7 +186,7 @@ class PaymentServiceTest {
     void passesOnlyStockLinesToTheStock() {
         SalesOrder a = pending(10L, CUSTOMER, BRANCH, goods(20L, 2, 100),
                 OrderLine.of(OrderLineType.SERVICE, 9L, null, "Khám", 1, 500, false, 3L, 3L));
-        when(orders.findAllByIdForUpdate(List.of(10L))).thenReturn(List.of(a));
+        stubOrders(List.of(10L), List.of(a));
 
         service.collectPayment(request(700, 10L));
 
@@ -184,18 +205,35 @@ class PaymentServiceTest {
 
     @Test
     void missingOrderIs404() {
-        when(orders.findAllByIdForUpdate(List.of(10L, 11L))).thenReturn(List.of(
+        stubOrders(List.of(10L, 11L), List.of(
                 pending(10L, CUSTOMER, BRANCH, goods(20L, 1, 100))));
 
         assertThatThrownBy(() -> service.collectPayment(request(100, 10L, 11L)))
                 .isInstanceOf(ResourceNotFoundException.class);
+        verify(orders, never()).findAllByIdForUpdate(any());
         verifyNoInteractions(stock, codes, payments, audit);
+    }
+
+    @Test
+    void scopeIsCheckedOnTheUnlockedBranchBeforeAnyOrderIsLocked() {
+        SalesOrder a = pending(10L, CUSTOMER, BRANCH + 1, goods(20L, 1, 100));
+        stubOrders(List.of(10L), List.of(a));
+        doThrow(new AccessDeniedScopeException("branch:4", "branch:3")).when(branchScope).check(BRANCH + 1);
+
+        assertThatThrownBy(() -> service.collectPayment(request(100, 10L)))
+                .isInstanceOf(AccessDeniedScopeException.class);
+
+        InOrder order = inOrder(shifts, orders, branchScope);
+        order.verify(shifts).lockOpenShiftForShare(ME);
+        order.verify(orders).findBranchRows(List.of(10L));
+        order.verify(branchScope).check(BRANCH + 1);
+        verify(orders, never()).findAllByIdForUpdate(any());
     }
 
     @Test
     void orderOfAnotherBranchIs403() {
         SalesOrder a = pending(10L, CUSTOMER, BRANCH + 1, goods(20L, 1, 100));
-        when(orders.findAllByIdForUpdate(List.of(10L))).thenReturn(List.of(a));
+        stubOrders(List.of(10L), List.of(a));
         doThrow(new AccessDeniedScopeException("branch:4", "branch:3")).when(branchScope).check(BRANCH + 1);
 
         assertThatThrownBy(() -> service.collectPayment(request(100, 10L)))
@@ -207,7 +245,7 @@ class PaymentServiceTest {
     void orderThatIsNotPendingIs409() {
         SalesOrder open = SalesOrder.openRetail("DH-X-10", BRANCH, CUSTOMER, 3L);
         ReflectionTestUtils.setField(open, "id", 10L);
-        when(orders.findAllByIdForUpdate(List.of(10L))).thenReturn(List.of(open));
+        stubOrders(List.of(10L), List.of(open));
 
         assertThatThrownBy(() -> service.collectPayment(request(0, 10L)))
                 .isInstanceOf(InvalidStateTransitionException.class);
@@ -218,7 +256,7 @@ class PaymentServiceTest {
     void alreadyPaidOrderIs409() {
         SalesOrder paid = pending(10L, CUSTOMER, BRANCH, goods(20L, 1, 100));
         paid.markPaid(1L, NOW);
-        when(orders.findAllByIdForUpdate(List.of(10L))).thenReturn(List.of(paid));
+        stubOrders(List.of(10L), List.of(paid));
 
         assertThatThrownBy(() -> service.collectPayment(request(100, 10L)))
                 .isInstanceOf(InvalidStateTransitionException.class);
@@ -227,7 +265,7 @@ class PaymentServiceTest {
 
     @Test
     void ordersOfDifferentCustomersAreBrTg03() {
-        when(orders.findAllByIdForUpdate(List.of(10L, 11L))).thenReturn(List.of(
+        stubOrders(List.of(10L, 11L), List.of(
                 pending(10L, CUSTOMER, BRANCH, goods(20L, 1, 100)),
                 pending(11L, CUSTOMER + 1, BRANCH, goods(20L, 1, 100))));
 
@@ -238,7 +276,7 @@ class PaymentServiceTest {
 
     @Test
     void amountThatDiffersFromTheTotalIsBrTg02() {
-        when(orders.findAllByIdForUpdate(List.of(10L))).thenReturn(List.of(
+        stubOrders(List.of(10L), List.of(
                 pending(10L, CUSTOMER, BRANCH, goods(20L, 1, 100))));
 
         assertThatThrownBy(() -> service.collectPayment(request(99, 10L)))
@@ -249,7 +287,7 @@ class PaymentServiceTest {
     @Test
     void shortageIsBrBh04AndNothingIsWritten() {
         SalesOrder a = pending(10L, CUSTOMER, BRANCH, goods(20L, 5, 100));
-        when(orders.findAllByIdForUpdate(List.of(10L))).thenReturn(List.of(a));
+        stubOrders(List.of(10L), List.of(a));
         when(stock.issueForPayment(eq(BRANCH), anyList(), eq(ME))).thenReturn(List.of(new Shortage(20L, 5, 2)));
 
         assertThatThrownBy(() -> service.collectPayment(request(500, 10L)))
@@ -266,7 +304,7 @@ class PaymentServiceTest {
     void zeroAmountOrderIsCollected() {
         SalesOrder free = pending(10L, CUSTOMER, BRANCH, OrderLine.of(OrderLineType.SERVICE, 9L, null,
                 "Khám miễn phí", 1, 0, false, 3L, 3L));
-        when(orders.findAllByIdForUpdate(List.of(10L))).thenReturn(List.of(free));
+        stubOrders(List.of(10L), List.of(free));
 
         service.collectPayment(request(0, 10L));
 
@@ -280,7 +318,7 @@ class PaymentServiceTest {
     void auditsEachPaidOrderWithTheSharedPayment() {
         SalesOrder a = pending(10L, CUSTOMER, BRANCH, goods(20L, 1, 100));
         SalesOrder b = pending(11L, CUSTOMER, BRANCH, goods(20L, 1, 100));
-        when(orders.findAllByIdForUpdate(List.of(10L, 11L))).thenReturn(List.of(a, b));
+        stubOrders(List.of(10L, 11L), List.of(a, b));
 
         service.collectPayment(request(200, 10L, 11L));
 

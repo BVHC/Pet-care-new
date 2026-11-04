@@ -396,6 +396,43 @@ class BoardingBookingFsmIT extends BoardingItSupport {
         assertThat(statusOf(id)).isEqualTo("CHECKED_OUT");
     }
 
+    /**
+     * Order lưu trú đã kết thúc ({@code PAID} / {@code CANCELLED}) không hủy lại được: cả hủy phiên trả thú (Order#9) lẫn
+     * hủy khách không thanh toán (Order#10) đều 409 và không ghi gì (T45-2).
+     */
+    @ParameterizedTest(name = "{0}")
+    @ValueSource(strings = {"PAID", "CANCELLED"})
+    void aFinishedBoardingOrderRefusesAbortAndCancelUnpaid(String finished) {
+        long id = stay(DAY.plusDays(2));
+        at(DAY.plusDays(1), 10, 0);
+        long orderId = number(data(startCheckout(id), HttpStatus.OK).get("orderId"));
+        if ("PAID".equals(finished)) {
+            pay(orderId);
+        } else {
+            data(call(HttpMethod.POST, "/api/orders/" + orderId + "/abort-checkout", receptionist,
+                    Map.of("reason", "Khách muốn gửi thêm")), HttpStatus.OK);
+        }
+        Map<String, Object> before = Map.of("order", orderStatus(orderId), "stay", statusOf(id),
+                "audits", jdbc.queryForObject("""
+                        SELECT count(*) FROM audit_logs WHERE entity_id = ?
+                        AND action IN ('ORDER_CHECKOUT_ABORTED', 'ORDER_CANCELLED_UNPAID')""", Long.class, orderId));
+        Map<String, Object> reason = Map.of("reason", "Thử lại");
+
+        List<ResponseEntity<Map<String, Object>>> attempts = List.of(
+                call(HttpMethod.POST, "/api/orders/" + orderId + "/abort-checkout", receptionist, reason),
+                call(HttpMethod.POST, "/api/orders/" + orderId + "/cancel-unpaid", manager, reason));
+
+        for (ResponseEntity<Map<String, Object>> response : attempts) {
+            assertThat(response.getStatusCode()).as("%s", response.getBody()).isEqualTo(HttpStatus.CONFLICT);
+            assertThat(response.getBody()).containsEntry("errorCode", "INVALID_STATE_TRANSITION");
+        }
+        assertThat(Map.of("order", orderStatus(orderId), "stay", statusOf(id),
+                "audits", jdbc.queryForObject("""
+                        SELECT count(*) FROM audit_logs WHERE entity_id = ?
+                        AND action IN ('ORDER_CHECKOUT_ABORTED', 'ORDER_CANCELLED_UNPAID')""", Long.class, orderId)))
+                .isEqualTo(before);
+    }
+
     // ================================================================ cặp sai → 409, không ghi gì
 
     /** Nguồn đi bằng API / job thật; mỗi thao tác không có cạnh trong 03 phải 409 và không ghi gì. */

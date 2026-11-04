@@ -258,10 +258,10 @@ class OrderFsmIT extends CashierItSupport {
         Map<String, Object> before = footprint(order);
 
         List<String> tried = switch (source) {
-            case "RETAIL_OPEN" -> List.of("cancel-unpaid", "payment");
-            case "VISIT_OPEN" -> List.of("close", "cancel", "cancel-unpaid", "payment");
-            case "RETAIL_PENDING" -> List.of("close", "cancel");
-            default -> List.of("close", "cancel", "cancel-unpaid", "payment");
+            case "RETAIL_OPEN" -> List.of("cancel-unpaid", "abort-checkout", "payment");
+            case "VISIT_OPEN" -> List.of("close", "cancel", "cancel-unpaid", "abort-checkout", "payment");
+            case "RETAIL_PENDING" -> List.of("close", "cancel", "abort-checkout");
+            default -> List.of("close", "cancel", "cancel-unpaid", "abort-checkout", "payment");
         };
         for (String operation : tried) {
             ResponseEntity<Map<String, Object>> response = attempt(operation, order);
@@ -306,6 +306,7 @@ class OrderFsmIT extends CashierItSupport {
         return switch (operation) {
             case "close", "cancel" -> call(HttpMethod.POST, path, receptionistToken, null);
             case "cancel-unpaid" -> call(HttpMethod.POST, path, managerToken, Map.of("reason", "Thử"));
+            case "abort-checkout" -> call(HttpMethod.POST, path, receptionistToken, Map.of("reason", "Thử"));
             case "payment" -> call(HttpMethod.POST, "/api/payments", receptionistToken,
                     Map.of("orderIds", List.of(order), "method", "CASH", "amount", PRICE));
             default -> throw new IllegalArgumentException(operation);

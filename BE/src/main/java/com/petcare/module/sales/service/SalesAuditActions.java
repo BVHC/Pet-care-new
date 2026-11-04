@@ -15,6 +15,9 @@ final class SalesAuditActions {
     /** Order#8: thu tiền, mỗi Order một dòng audit (BR-QT-15; convention 08 §8.3). */
     static final String ORDER_PAID = "ORDER_PAID";
 
+    /** sales-v1 #11: lễ tân chuyển dòng thuốc kê đơn thiếu tồn sang mua ngoài lúc thu (BR-BH-04, BR-QT-15). */
+    static final String ORDER_LINE_MOVED_EXTERNAL = "ORDER_LINE_MOVED_EXTERNAL";
+
     private SalesAuditActions() {
     }
 }

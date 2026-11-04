@@ -141,7 +141,10 @@ class KennelFsmIT extends BoardingItSupport {
 
     // ================================================================ không có lối vòng qua FSM
 
-    /** {@code PATCH} chỉ sửa mã / ghi chú: gửi kèm {@code status} không đổi được trạng thái (hoặc bị từ chối). */
+    /**
+     * {@code PATCH} chỉ sửa mã / ghi chú; trường lạ như {@code status} bị bỏ qua (Jackson mặc định, boarding-v1 A11): 200,
+     * mã mới được ghi và trạng thái giữ nguyên.
+     */
     @Test
     void patchCannotChangeKennelStatus() {
         long kennel = createKennel("C-01");
@@ -152,8 +155,10 @@ class KennelFsmIT extends BoardingItSupport {
 
         ResponseEntity<Map<String, Object>> response = call(HttpMethod.PATCH, "/api/kennels/" + kennel, manager, body);
 
-        assertThat(response.getStatusCode().is2xxSuccessful() || response.getStatusCode() == HttpStatus.BAD_REQUEST)
-                .as("%s", response.getBody()).isTrue();
+        assertThat(response.getStatusCode()).as("%s", response.getBody()).isEqualTo(HttpStatus.OK);
+        assertThat(data(response, HttpStatus.OK)).containsEntry("code", "C-09").containsEntry("status", "AVAILABLE");
+        assertThat(jdbc.queryForObject("SELECT code FROM kennels WHERE id = ?", String.class, kennel))
+                .isEqualTo("C-09");
         assertThat(kennelStatus(kennel)).isEqualTo("AVAILABLE");
     }
 

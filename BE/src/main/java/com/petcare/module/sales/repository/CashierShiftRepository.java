@@ -1,5 +1,7 @@
 package com.petcare.module.sales.repository;
 
+import java.time.Instant;
+import java.time.LocalDate;
 import java.util.List;
 import java.util.Optional;
 
@@ -33,6 +35,28 @@ public interface CashierShiftRepository extends JpaRepository<CashierShift, Long
 
         Long getCashierId();
     }
+
+    /** Các cột bất biến đủ để tính hạn tự chốt của ca (ST13, docs/adr/0103): đọc không khóa, không nạp entity. */
+    interface ShiftDeadlineRow {
+        Long getId();
+
+        Long getBranchId();
+
+        Boolean getAfterHours();
+
+        LocalDate getBusinessDate();
+
+        Instant getOpenedAt();
+    }
+
+    /**
+     * ST13: hạn tự chốt chỉ phụ thuộc cột bất biến nên tính <b>trước</b> khi khóa; chỉ ca đã đến hạn mới bị khóa, phiếu
+     * thu của ca chưa đến hạn không phải chờ job. Rỗng khi ca không còn {@code OPEN}.
+     */
+    @Query("SELECT s.id AS id, s.branchId AS branchId, s.afterHours AS afterHours, s.businessDate AS businessDate, "
+            + "s.openedAt AS openedAt FROM CashierShift s WHERE s.id = :id "
+            + "AND s.status = com.petcare.module.sales.entity.CashierShiftStatus.OPEN")
+    Optional<ShiftDeadlineRow> findOpenDeadlineRow(@Param("id") Long id);
 
     /** Đọc thuần, không khóa; dùng {@code uq_cashier_shifts_one_open}. */
     @Query(value = "SELECT id AS id, branch_id AS branchId FROM cashier_shifts "

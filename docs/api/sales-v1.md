@@ -151,7 +151,7 @@ Trường có `?` là không bắt buộc / có thể null. Kiểu `email`, `dat
 | A7 | Một phiếu thu tối đa 20 Order, `orderIds` không trùng (400 `VALIDATION_FAILED`); gửi lại sau khi đã thu nhận 409 vì Order không còn `PENDING`, không có khóa idempotency | Chặn request lớn giữ khóa lâu; trạng thái Order là khóa chống thu hai lần (BR-TG-02) — docs/adr/0064 |
 | A8 | Ca người khác (kể cả cùng chi nhánh) chốt / xem bởi lễ tân không phải chủ ca: 403; lễ tân chỉ xem ca của mình (#20), danh sách ca (#19) và đối soát (#21) chỉ BRANCH_MANAGER | Contract quyền "lễ tân chủ ca", "BRANCH_MANAGER chi nhánh" — docs/adr/0064 |
 | A9 | Đối soát: `countedCash` gửi lên thì ghi đè số lễ tân đã nhập (audit giữ số cũ); `note` luôn bắt buộc; ca `RECONCILED` không sửa nữa | BR-TG-04, 05: quản lý xác nhận chênh lệch kèm ghi chú; sai sót phát hiện sau khi thu ghi nhận ở đây — docs/adr/0064 |
-| A10 | `move-to-external-purchase` (#11) chưa cài, chờ `PrescriptionApi` của visit; thu tiền thiếu thuốc kê đơn vẫn 400 `BR-BH-04` | 06 §3 Order#8; `PrescriptionApi` BE-1 giao 26/10 (docs/adr/0064) |
+| A10 | `move-to-external-purchase` (#11) chỉ cho chuyển dòng thuốc thiếu tồn tính **trong phạm vi Order đó** (cùng công thức `shortages` của #13 với một Order); tồn đủ cho riêng Order mà chỉ thiếu khi thu gộp thì 400 `BR-BH-04`, lễ tân thu riêng từng Order (không tách dòng, BR-KB-03). Không cần ca mở; xóa dòng Order, trừ tổng, ghi audit `ORDER_LINE_MOVED_EXTERNAL` | BR-BH-04, BR-KB-03; `PrescriptionApi` (BE-1, 26/10) — docs/adr/0103 |
 
 Không có câu hỏi mở.
 

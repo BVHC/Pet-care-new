@@ -115,7 +115,7 @@ class OpenApiContractParityIT {
         // + 1 identity #39 (refresh, docs/adr/0091).
         assertThat(documentedOps())
                 .as("số endpoint identity + care + customer + inventory + sales + appointment + visit + boarding + content + report đã cài")
-                .hasSize(185);
+                .hasSize(186);
     }
 
     @Test
