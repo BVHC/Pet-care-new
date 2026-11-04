@@ -41,6 +41,14 @@ import jakarta.validation.Valid;
 @RequestMapping("/api/auth")
 public class AuthController {
 
+    /**
+     * Mô tả 429 của endpoint public, chép nguyên văn từ {@code RATE_ERR} trong {@code docs/api/generator/m_identity.py}.
+     * Bộ lọc {@code RateLimitFilter} chặn trước controller (docs/adr/0100, nợ D011); annotation chỉ để tài liệu khớp.
+     */
+    private static final String TOO_MANY_REQUESTS = "`TOO_MANY_REQUESTS` một IP gọi quá nhiều lần trong một cửa sổ "
+            + "thời gian (ADR-0100): header `Retry-After` là số giây nguyên phải chờ. Request bị chặn trước khi xử "
+            + "lý: không đếm vào khóa tạm BR-TK-09 hay quota OTP BR-TK-07, không ghi audit";
+
     private final RegistrationService registrations;
     private final LoginService logins;
     private final RefreshTokenService refreshTokens;
@@ -65,6 +73,7 @@ public class AuthController {
             + "mã OTP/giờ [CFG]")
     @ApiErrorDoc(status = 409, description = "`CONCURRENCY_CONFLICT` hai request đăng ký cùng email cùng "
             + "lúc")
+    @ApiErrorDoc(status = 429, description = TOO_MANY_REQUESTS)
     @PostMapping("/register")
     @ResponseStatus(HttpStatus.CREATED)
     public ApiResponse<RegistrationResponse> register(@Valid @RequestBody RegisterAccountRequest request) {
@@ -79,6 +88,7 @@ public class AuthController {
     @ApiErrorDoc(status = 400, description = "`BR-TK-05` mã sai / hết hạn · `BR-TK-06` sai quá 5 lần, mã "
             + "bị hủy")
     @ApiErrorDoc(status = 404, description = "Không có tài khoản PENDING với email này")
+    @ApiErrorDoc(status = 429, description = TOO_MANY_REQUESTS)
     @PostMapping("/register/verify")
     public ApiResponse<VerificationResponse> verify(@Valid @RequestBody VerifyAccountRequest request) {
         return ApiResponse.ok(registrations.verifyAccount(request), "Xác thực tài khoản thành công");
@@ -90,6 +100,7 @@ public class AuthController {
                 + "cùng mục đích mất hiệu lực (BR-TK-05).")
     @ApiErrorDoc(status = 400, description = "`BR-TK-07` chưa đủ 60 giây hoặc vượt 5 mã/giờ")
     @ApiErrorDoc(status = 404, description = "Không có tài khoản PENDING với email này")
+    @ApiErrorDoc(status = 429, description = TOO_MANY_REQUESTS)
     @PostMapping("/register/resend-otp")
     public ApiResponse<OtpSentResponse> resendRegistrationOtp(
             @Valid @RequestBody ResendRegistrationOtpRequest request) {
@@ -110,6 +121,7 @@ public class AuthController {
     @ApiErrorDoc(status = 401, description = "Sai email hoặc mật khẩu — thông điệp chung \"Email hoặc mật "
             + "khẩu không đúng\" (BR-TK-10); sai lần thứ 5 trong 15 phút [CFG] kích hoạt ST01 (khóa tạm + email "
             + "cảnh báo); sai trong lúc khóa không đếm")
+    @ApiErrorDoc(status = 429, description = TOO_MANY_REQUESTS)
     @PostMapping("/login")
     public ApiResponse<LoginResponse> login(@Valid @RequestBody LoginRequest request,
             HttpServletRequest httpRequest) {
@@ -168,6 +180,7 @@ public class AuthController {
                 + "lại = gọi lại endpoint này (A7). ADR-0023.")
     @ApiErrorDoc(status = 400, description = "`VALIDATION_FAILED` email trống / sai định dạng / quá 255 "
             + "ký tự")
+    @ApiErrorDoc(status = 429, description = TOO_MANY_REQUESTS)
     @PostMapping("/password/forgot")
     @ResponseStatus(HttpStatus.ACCEPTED)
     public ApiResponse<OtpSentResponse> forgotPassword(@Valid @RequestBody ForgotPasswordRequest request) {
@@ -186,6 +199,7 @@ public class AuthController {
             + "bị hủy — cũng là lỗi cho email không có tài khoản, tài khoản không đủ điều kiện BR-TK-12 hoặc chưa "
             + "có mã (BR-TK-10) · `BR-TK-03` mật khẩu mới không hợp lệ (kiểm trước mã, không tiêu lượt nhập) hoặc "
             + "trùng mật khẩu hiện tại (chỉ kiểm khi mã đúng; mã vẫn dùng lại được)")
+    @ApiErrorDoc(status = 429, description = TOO_MANY_REQUESTS)
     @PostMapping("/password/reset")
     @ResponseStatus(HttpStatus.NO_CONTENT)
     public void resetPassword(@Valid @RequestBody ResetPasswordRequest request) {

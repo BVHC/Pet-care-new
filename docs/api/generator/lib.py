@@ -386,7 +386,7 @@ COMMON_SCHEMAS = {
                                                      "RESOURCE_NOT_FOUND", "ACCESS_DENIED_SCOPE_MISMATCH",
                                                      "CONCURRENCY_CONFLICT", "VALIDATION_FAILED", "MALFORMED_REQUEST",
                                                      "METHOD_NOT_ALLOWED", "UNSUPPORTED_MEDIA_TYPE", "UNAUTHENTICATED",
-                                                     "ACCESS_DENIED", "INTERNAL_ERROR"],
+                                                     "ACCESS_DENIED", "TOO_MANY_REQUESTS", "INTERNAL_ERROR"],
                           "description": "platform/exception/ErrorCode"},
             "message": {"type": "string", "description": "Thông điệp tiếng Việt hiển thị được; với BUSINESS_RULE_VIOLATION kết thúc bằng \" (BR-…)\""},
             "statusCode": {"type": "integer"},

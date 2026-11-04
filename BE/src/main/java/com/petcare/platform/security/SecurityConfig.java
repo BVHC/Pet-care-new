@@ -5,6 +5,7 @@ import static org.springframework.security.config.Customizer.withDefaults;
 import java.util.Arrays;
 import java.util.List;
 
+import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.boot.context.properties.EnableConfigurationProperties;
 import org.springframework.context.annotation.Bean;
@@ -19,6 +20,7 @@ import org.springframework.security.web.authentication.AnonymousAuthenticationFi
 import org.springframework.security.web.servlet.util.matcher.PathPatternRequestMatcher;
 import org.springframework.security.web.util.matcher.OrRequestMatcher;
 import org.springframework.security.web.util.matcher.RequestMatcher;
+import org.springframework.web.filter.CorsFilter;
 import org.springframework.web.servlet.HandlerExceptionResolver;
 
 /**
@@ -30,7 +32,7 @@ import org.springframework.web.servlet.HandlerExceptionResolver;
 @Configuration
 @EnableWebSecurity
 @EnableMethodSecurity
-@EnableConfigurationProperties(JwtProperties.class)
+@EnableConfigurationProperties({JwtProperties.class, RateLimitProperties.class})
 public class SecurityConfig {
 
     /** Không cần đăng nhập: health, tài liệu API và các path public của contract (docs/api/00-method.md §3.1). */
@@ -63,7 +65,13 @@ public class SecurityConfig {
             RestAccessDeniedHandler accessDeniedHandler,
             JwtTokenService tokens,
             SessionAuthenticator sessionAuthenticator,
-            @Qualifier("handlerExceptionResolver") HandlerExceptionResolver resolver) throws Exception {
+            @Qualifier("handlerExceptionResolver") HandlerExceptionResolver resolver,
+            RateLimitProperties rateLimitProperties,
+            ObjectProvider<RateLimiter> rateLimiter) throws Exception {
+        // Giới hạn tần suất theo IP (docs/adr/0100): chỉ có khi app.rate-limit.enabled=true (có bean RedisRateLimiter).
+        // Đặt sau CorsFilter để 429 vẫn mang header CORS; trước mọi filter xác thực nên không tốn BCrypt / DB.
+        rateLimiter.ifAvailable(limiter -> http.addFilterAfter(
+                new RateLimitFilter(limiter, rateLimitProperties, resolver), CorsFilter.class));
         return http
                 .csrf(AbstractHttpConfigurer::disable)
                 .cors(withDefaults())

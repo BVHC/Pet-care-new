@@ -60,6 +60,7 @@ Tất cả 6 field bắt buộc; `traceId` lấy từ MDC (xem [8. Logging & Aud
 | `AuthenticationException` (Spring Security) | `UNAUTHENTICATED` | 401 |
 | `AccessDeniedException` (Spring Security) | `ACCESS_DENIED` | 403 |
 | `PessimisticLockingFailureException`, `OptimisticLockingFailureException`, `DataIntegrityViolationException` | `CONCURRENCY_CONFLICT` — message chung, không lộ tên constraint | 409 |
+| `TooManyRequestsException` (platform; bộ lọc giới hạn tần suất theo IP của endpoint public, [ADR-0100](../../adr/0100-public-endpoint-rate-limit.md)) | `TOO_MANY_REQUESTS` — kèm header `Retry-After` (giây, ≥ 1); handler riêng vì phải gắn header | 429 |
 | Lỗi web khác của Spring mang status 4xx (`ResponseStatusException`…) | theo status: 401/403/404/405/415 như trên, còn lại `MALFORMED_REQUEST` | theo mã |
 | Mọi exception khác | `INTERNAL_ERROR` — message chung, log ERROR kèm stacktrace | 500 |
 
