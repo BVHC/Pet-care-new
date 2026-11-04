@@ -15,8 +15,9 @@ import com.petcare.module.identity.dto.AuditLogFilter;
  * Câu SQL của {@code GET /api/audit-logs} (identity-v1 #36; docs/adr/0038 mục 2, 6). Chỉ ghép điều kiện của tham số có
  * giá trị — <b>không</b> dùng {@code :x IS NULL OR …}: khi PgJDBC chuyển sang server-prepared statement, generic plan
  * của Postgres không dùng được index cho điều kiện đó. Index dùng theo tổ hợp: {@code ix_audit_logs_actor_created_at}
- * (người thực hiện), {@code ix_audit_logs_entity} (đối tượng), {@code ix_audit_logs_created_at} (khoảng thời gian, không
- * lọc, hoặc {@code action} trong khoảng ≤ 31 ngày). {@code AuditLogViewIT} EXPLAIN đúng chuỗi do lớp này sinh.
+ * (người thực hiện), {@code ix_audit_logs_entity} (đối tượng), {@code ix_audit_logs_action_created_at} ({@code action},
+ * V31, ADR-0098), {@code ix_audit_logs_created_at} (khoảng thời gian, không lọc). {@code AuditLogViewIT} EXPLAIN đúng
+ * chuỗi do lớp này sinh.
  */
 public final class AuditLogQuery {
 

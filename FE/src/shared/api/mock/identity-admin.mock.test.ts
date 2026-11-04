@@ -776,7 +776,7 @@ describe('GET /api/staff/assignable — tham số sai là 400 TRƯỚC cổng va
   });
 });
 
-describe('GET /api/audit-logs — tên bảng, mã hành động thật, so khớp đúng, luật 31 ngày (BE AuditLogFilterValidator)', () => {
+describe('GET /api/audit-logs — tên bảng, mã hành động thật, so khớp đúng, action không còn giới hạn khoảng (BE AuditLogFilterValidator, ADR-0098)', () => {
   const auditOf = async (params: object = {}) => (await client.get('/api/audit-logs', { params, ...(await as('admin@petcare.vn')) })).data.data;
   const failed = async (params: object) => failure(client.get('/api/audit-logs', { params, ...(await as('admin@petcare.vn')) }));
 
@@ -807,46 +807,34 @@ describe('GET /api/audit-logs — tên bảng, mã hành động thật, so kh�
 
   it('action so khớp ĐÚNG (không phải tiền tố, không phân biệt hoa thường là sai)', async () => {
     await doAdminThings();
-    const admin = { actorAccountId: 1 }; // có người thực hiện nên không cần from / to
-    expect((await auditOf({ ...admin, action: 'ACCOUNT_LOCKED' })).totalElements).toBe(1);
-    expect((await auditOf({ ...admin, action: 'ACCOUNT_LOCK' })).totalElements).toBe(0);
-    expect((await auditOf({ ...admin, action: 'account_locked' })).totalElements).toBe(0);
+    expect((await auditOf({ action: 'ACCOUNT_LOCKED' })).totalElements).toBe(1);
+    expect((await auditOf({ action: 'ACCOUNT_LOCK' })).totalElements).toBe(0);
+    expect((await auditOf({ action: 'account_locked' })).totalElements).toBe(0);
   });
 
-  it('R3: lọc action mà không có người thực hiện / (loại + id đối tượng) → cần from + to ≤ 31 ngày, nếu không 400 VALIDATION_FAILED đúng câu BE', async () => {
-    const message = 'from: Lọc theo hành động cần from và to cách nhau tối đa 31 ngày, hoặc kèm actorAccountId hay entityType + entityId';
+  it('R3 đã bỏ (V31, ADR-0098): lọc action một mình, thiếu from / to hay cách nhau hơn 31 ngày đều hợp lệ (200)', async () => {
+    await doAdminThings();
     for (const params of [
       { action: 'ACCOUNT_LOCKED' },
       { action: 'ACCOUNT_LOCKED', from: '2026-10-01T00:00:00+07:00' },
       { action: 'ACCOUNT_LOCKED', to: '2026-10-01T00:00:00+07:00' },
-      { action: 'ACCOUNT_LOCKED', from: '2026-09-01T00:00:00+07:00', to: '2026-10-02T00:00:01+07:00' }, // 31 ngày + 1 giây
-      { action: 'ACCOUNT_LOCKED', entityType: 'accounts' }, // loại mà không có id không là mốc chọn lọc
-    ]) {
-      const res = await failed(params);
-      expect(res.status, JSON.stringify(params)).toBe(400);
-      expect(res.data.errorCode).toBe('VALIDATION_FAILED');
-      expect(res.data.message).toBe(message);
-    }
-    // Hợp lệ: đúng 31 ngày; có người thực hiện; có loại + id đối tượng.
-    for (const params of [
-      { action: 'ACCOUNT_LOCKED', from: '2026-09-01T00:00:00+07:00', to: '2026-10-02T00:00:00+07:00' },
+      { action: 'ACCOUNT_LOCKED', from: '2025-01-01T00:00:00+07:00', to: '2026-12-31T00:00:00+07:00' }, // gần hai năm
+      { action: 'ACCOUNT_LOCKED', entityType: 'accounts' },
       { action: 'ACCOUNT_LOCKED', actorAccountId: 1 },
       { action: 'ACCOUNT_LOCKED', entityType: 'accounts', entityId: 4 },
     ]) {
-      expect((await auditOf(params)).content, JSON.stringify(params)).toEqual([]);
+      const res = await client.get('/api/audit-logs', { params, ...(await as('admin@petcare.vn')) });
+      expect(res.status, JSON.stringify(params)).toBe(200);
     }
+    expect((await auditOf({ action: 'ACCOUNT_LOCKED' })).content.map((r: { action: string }) => r.action)).toEqual(['ACCOUNT_LOCKED']);
   });
 
-  it('R1 from > to và R2 entityId không kèm entityType: báo đủ các luật vi phạm, theo thứ tự to → entityType → from, nối "; "', async () => {
-    // from > to: khoảng âm vẫn ≤ 31 ngày nên BE (Duration.compareTo) không báo thêm R3.
+  it('R1 from > to và R2 entityId không kèm entityType: báo đủ các luật vi phạm, theo thứ tự to → entityType, nối "; "', async () => {
     const r1r2 = await failed({ action: 'X', entityId: 4, from: '2026-10-05T00:00:00+07:00', to: '2026-10-01T00:00:00+07:00' });
     expect(r1r2.status).toBe(400);
     expect(r1r2.data.message).toBe('to: Thời điểm kết thúc không được trước thời điểm bắt đầu; entityType: Bắt buộc khi lọc theo entityId');
-    const r2r3 = await failed({ action: 'X', entityId: 4 });
-    expect(r2r3.data.message).toBe(
-      'entityType: Bắt buộc khi lọc theo entityId; ' +
-        'from: Lọc theo hành động cần from và to cách nhau tối đa 31 ngày, hoặc kèm actorAccountId hay entityType + entityId',
-    );
+    const r2 = await failed({ action: 'X', entityId: 4 });
+    expect(r2.data.message).toBe('entityType: Bắt buộc khi lọc theo entityId');
   });
 
   it('phân trang: mặc định size 20, kẹp 1–100, mới nhất trước', async () => {

@@ -47,7 +47,7 @@ Quy tắc của `AuditEntry` (vi phạm là lỗi lập trình → `IllegalArgum
 - Actor: tự lấy từ `SecurityContext`; principal của TK phải implement `AuditPrincipal`. Không có phiên đăng nhập → hệ thống (2 cột actor NULL), dùng cho job ST*. Khi chưa có phiên (đăng nhập thất bại, đăng ký) dùng `.actor(accountIdOrNull, emailNhapVao)`.
 - IP: tự lấy từ request hiện tại (sau `RemoteIpValve`, [ADR-0002](../../adr/0002-client-ip-behind-proxy.md)); ngoài request là NULL.
 
-`audit_logs` chỉ thêm mới: `AuditLogEntity` là `@Immutable`, `AuditLogRepository` chỉ có `save`, DB có trigger chặn UPDATE/DELETE/TRUNCATE. Màn hình xem audit (UC11, chỉ ADMIN, `GET /api/audit-logs`) dùng repository đọc riêng trong module QT: `identity/repository/AuditLogQueryRepository` ([ADR-0038](../../adr/0038-audit-log-view.md)). Xem không ghi audit.
+`audit_logs` chỉ thêm mới: `AuditLogEntity` là `@Immutable`, `AuditLogRepository` chỉ có `save`; trigger chặn UPDATE/DELETE/TRUNCATE ở DB đã gỡ ở V31 (ADR-0098), bảo đảm chỉ còn ở tầng ứng dụng. Màn hình xem audit (UC11, chỉ ADMIN, `GET /api/audit-logs`) dùng repository đọc riêng trong module QT: `identity/repository/AuditLogQueryRepository` ([ADR-0038](../../adr/0038-audit-log-view.md)). Xem không ghi audit.
 
 ## 8.3. Danh mục thao tác phải audit
 

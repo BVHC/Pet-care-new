@@ -915,8 +915,6 @@ const restoreTemplateDefault: MockHandler = ({ account, params }) => {
 
 // ─── Audit (UC11, ADMIN only) ───
 
-const AUDIT_ACTION_WINDOW_MS = 31 * 24 * 60 * 60 * 1000; // AuditLogFilter.MAX_ACTION_WINDOW
-
 const listAuditLogs: MockHandler = ({ account, query }) => {
   if (account!.role !== 'ADMIN') return denied();
   // identity-v1 #36: `from` / `to` là date-time kèm offset; thiếu offset → 400 MALFORMED_REQUEST.
@@ -930,16 +928,11 @@ const listAuditLogs: MockHandler = ({ account, query }) => {
   // `action` / `entityType` toàn khoảng trắng = không lọc; còn lại giữ nguyên văn (AuditLogFilter.blankToNull).
   const action = query.action?.trim() ? query.action : undefined;
   const entityType = query.entityType?.trim() ? query.entityType : undefined;
-  // AuditLogFilterValidator: R1 from > to; R2 entityId không kèm entityType; R3 lọc action mà không có người thực hiện / (loại + id đối tượng)
-  // thì phải có from + to cách nhau ≤ 31 ngày (không có index trên action). Báo đủ cả ba, theo thứ tự to → entityType → from.
-  const anchored = !!query.actorAccountId || (!!entityType && !!query.entityId);
-  const bounded = !!query.from && !!query.to && to - from <= AUDIT_ACTION_WINDOW_MS;
+  // AuditLogFilterValidator: R1 from > to; R2 entityId không kèm entityType. Báo đủ cả hai, theo thứ tự to → entityType.
+  // R3 (action cần from + to ≤ 31 ngày) đã bỏ cùng index action (V31, ADR-0098).
   const violations = [
     ...(query.from && query.to && from > to ? ['to: Thời điểm kết thúc không được trước thời điểm bắt đầu'] : []),
     ...(query.entityId && !entityType ? ['entityType: Bắt buộc khi lọc theo entityId'] : []),
-    ...(action && !anchored && !bounded
-      ? ['from: Lọc theo hành động cần from và to cách nhau tối đa 31 ngày, hoặc kèm actorAccountId hay entityType + entityId']
-      : []),
   ];
   if (violations.length) return fail('VALIDATION_FAILED', violations.join('; '), 400);
   const filtered = s.audit.filter((a) => {

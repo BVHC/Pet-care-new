@@ -28,7 +28,7 @@ import com.petcare.TestcontainersConfiguration;
 
 /**
  * {@link AuditRecorder} trên Postgres 17 thật (docs/adr/0001-audit-recording.md). {@code audit_logs} không xóa được
- * (trigger BR-QT-16) nên mỗi test đánh dấu bản ghi của mình bằng một {@code reason} ngẫu nhiên.
+ * (IT chung database, không dọn; ADR-0098) nên mỗi test đánh dấu bản ghi của mình bằng một {@code reason} ngẫu nhiên.
  */
 @SpringBootTest(webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT)
 @ActiveProfiles("test")
