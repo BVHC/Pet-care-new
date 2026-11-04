@@ -583,6 +583,52 @@ File FE đổi: `shared/constants/realtime.ts`, `app/App.tsx`, `domains/pets/hoo
 
 **Chưa quét (ghi rõ):** lễ tân `/admin/appointments`, `/admin/boarding`, `/admin/care-tasks`, kho phía lễ tân, `/admin/vaccines`; bác sĩ `khoi.vo`; chăm sóc `tai.bui`, `lan.ngo` (cả hai vai); toàn bộ trang công khai (bài viết, dịch vụ, bác sĩ, góp ý); mục (c) và hộp "Trả thú" của nhân viên (xem trên). Không sửa FE trong lượt này: chưa quét xong và quá mốc 18:30; M-1…M-6 để Hiến quyết.
 
+## C.17 Sau gộp origin/dev (V31, V32), 5/11/2026 (phiên C2b)
+
+**Phạm vi.** Kiểm bản gộp HEAD `9d69894` (cha 1 `42a9256` của Hiến, cha 2 `700cf1f` = `origin/dev` của Mạnh: ADR 0098 + 0099, Flyway V31 + V32, `AuditLog*` BE + test, `AdminAuditPage`, `identity-admin.mock*`). Phiên chỉ đo và báo: không sửa `BE/src`, `FE/src`, `docs/api`, `docs/adr`; không git ghi. Bằng chứng: `D:/Do-an/.c2-tmp/final2/cum-9/c2s-*` (BE, log từng nhóm), `cum-8/d7-*` (smoke), sổ chung `SHARED-CHANGES.md` (bốn mục P-C2b cuối sổ, kèm đính chính giờ). Tự động, chưa tick tay.
+
+**Bước 0 [TỰ ĐO].** Cây sạch; HEAD có hai cha; `git grep` marker trên cây và `--cached` rỗng; `CLAUDE.md` (CRLF, LF = CRLF = 269) còn đủ hai phía: hàng Platform (0098) và Notifications (0099) của Mạnh cùng hàng Appointment (0094) của phía Hiến, `git show --cc` chỉ cho thấy ba hàng này, không có `=======`. `origin/dev` cục bộ bằng HEAD lúc đo; không fetch lại nên không biết Mạnh có đẩy thêm sau đó không.
+
+**BE: C2 chạy lại trên mã gộp [TỰ ĐO]** (bản sao `be-scratch`, cổng ECJ đạt: `AppointmentMapperImpl implements AppointmentMapper`, "Unresolved compilation" = 0, đo đầu và cuối; IT chạy Testcontainers, `petcare_seed` không bị chạm trong lúc C2).
+
+| Nhóm | Ca | Đỏ | Trước gộp (3–4/11) |
+|---|---|---|---|
+| a-compile (878 main) | xanh, 44 s | 0 | xanh |
+| b-unit | 5517 | 1 | 5519 / 1 |
+| c-nền (6 lớp) | 46 | 2 | 45 / 2 |
+| d-identity | 830 | 1 | 830 / 0 (sau C3) |
+| e-visit | 498 | 1 | 498 / 1 |
+| f-appointment | 389 | 0 | 389 / 0 |
+| g-care-customer-catalog | 317 | 0 | 317 / 0 |
+| h-boarding-branch | 224 | 0 | 224 / 0 |
+| i-sales-inv-report-content-platform | 373 | 0 | 373 / 0 |
+| **Tổng** | **8194** | **5** | 8195 / 4 (sau C3) |
+
+Thời gian (wall) a 44 s, b 58 s, c 57 s, d 1339 s, e 406 s, f 1061 s, g 188 s, h 147 s, i 133 s; d và f bị máy ngủ làm phồng (ngủ ~990 s và ~840 s; thời gian thức ước ~350 s và ~220 s). Cả bốn ca đỏ cũ có thông điệp lỗi **giống hệt** log cũ (OpenApi hai ca, VisitCheckIn, plan ReminderScan) [TỰ ĐO, so nguyên văn].
+
+Chênh số ca: unit −2 (Mạnh bỏ ca luật R3: `AuditLogFilterValidationTest` 11 → 10 `@Test`, `AuditLogQueryServiceTest` 6 → 5); IT +1 (`SchemaMigrationIT` 26 → 27). `AuditRecorderIT` 7/7, `AssignableStaffIT` 11/11 xanh.
+
+**Năm ca đỏ và phân loại.**
+1. `VisitCheckInServiceTest.ownerMismatchAfterCheckInIsCorruptDataAndStopsBeforeTheInsert:436` — **đã có từ trước** (cùng ca, C2/C3). Đề xuất một dòng: dòng 436 `.isInstanceOf(IllegalStateException.class)` → `.isInstanceOf(BusinessRuleViolationException.class)` (theo chẩn đoán C3: `VisitCheckInService.java:146` ném `BusinessRuleViolationException`; **chưa chạy thử**).
+2–3. `OpenApiContractParityIT.operationMetadataMatchesContract:136` và `responseCodesAndErrorDescriptionsMatchContract:190` — **đã có từ trước** (cùng hai thao tác lệch: `POST /api/visits`, `POST /api/accounts/{id}/unlock`). Sửa ở `@Operation(description…)` của `VisitController` và `AccountAdminController` cho khớp hợp đồng (không phải sửa test); ca đếm `hasSize(185)` vẫn **xanh** sau khi Mạnh đổi hợp đồng.
+4. `ReminderScanIndexIT.scanAndLockQueriesUseTheirIndexesOnRealisticData` — **đã có từ trước**: trong nhóm e-visit đỏ (plan `ix_vaccinations_next_due`, `rows=864`); chạy riêng **xanh** (1/1); cặp `FkIndexScanIT,ReminderScanIndexIT` 2 ca / 1 đỏ, đúng như C3. Cơ chế chưa xác định; đề xuất của C3 chưa kiểm: `@DirtiesContext` trên `FkIndexScanIT`.
+5. **MỚI** `AuditLogViewIT.queriesUseExpectedIndex` (31 ca, 30 xanh) — đỏ **3/3 lần** (trong nhóm d-identity và chạy riêng hai lần), cùng plan: `Limit → Incremental Sort → Index Scan Backward using ix_audit_logs_created_at (Filter: action = 'EXPLAIN_ACTION_5')`, thay vì `ix_audit_logs_action_created_at` (V31) mà dòng 639–640 của test kỳ vọng. **Phân loại: do mã mới của Mạnh (commit `f84d06c`, 3/11), không do bản gộp** [TỰ ĐO]: `git diff 700cf1f..HEAD` trên test, `AuditLogQuery.java` và thư mục migration rỗng; ADR-0098 dòng 39 ghi `AuditLogViewIT` "chưa chạy (Docker tắt lúc viết)". Giải thích cơ chế là **lời Agent, chưa đo**: dữ liệu sinh `EXPLAIN_ACTION_{g%40}` (mỗi giá trị 2,5% của 60 000 dòng), `created_at` tăng theo `g` nên quét ngược `created_at` + Filter rẻ hơn index `(action, created_at)`. Đề xuất một dòng (**chưa kiểm chứng**): dòng 624 `(g % 40)` → `(g % 4000)` để mỗi action còn ~15 dòng (< LIMIT 20). Hai kỳ vọng sau nó (đếm dòng 640, ca 365 ngày 641–642) **chưa chạy** vì AssertJ dừng ở lỗi đầu, chưa biết xanh hay đỏ.
+
+**Môi trường [TỰ ĐO].** Máy **tự ngủ hai lần** khi C2 chạy: 23:40:01–23:56:30 và 00:07:28–00:21:25 (Kernel-Power 42/107/130/131/566; JVM test và BE đều ghi `Thread starvation or clock leap` 16m38s và 14m24s). Vì vậy `StaffAdminIT` 1009 s (cũ 12 s), nhóm d 1339 s (cũ ~405 s), nhóm f 1061 s (cũ 261 s); kết quả không đổi. Không đổi cài đặt nguồn của máy.
+
+**Khởi động lại BE [TỰ ĐO]** (Hiến duyệt trong prompt, mỗi việc một lần, đã ghi sổ trước và sau): 00:34:38 tắt cây tiến trình (JVM 2780 cũ, khởi động 21:35:45); 00:34:48–00:35:10 `mvn -B -ntp -o clean compile` trong `BE/` (BUILD SUCCESS, 878 file bằng javac); 00:35:20 `start-be-only.ps1`; JVM mới PID 32060 khởi động 00:35:26, "Started in 13,269 s", health UP 00:35:44. Flyway áp V31 và V32 (0,035 s); `flyway_schema_history` = 32 bản ghi, tất cả success; trigger không-nội-bộ trên `audit_logs` 2 → **0**; có `ix_audit_logs_action_created_at` và `ix_notifications_account_created`; `.class` mới hơn JVM = 0 (đo 00:39, 00:52); "Unresolved compilation"/`NoClassDefFoundError` = 0. Số đếm DB trước/sau: outbox 41/41, notifications 8/8, audit_logs 388/388, orders 17/17, payments 8/8. **Không hoàn tác được** trên `petcare_seed`. Ghi chú: mốc 23:33 outbox 40, notifications 7; tăng 1 trước 00:34 do job của BE sau khi máy thức.
+
+**FE nhắm đích [TỰ ĐO].** Vitest 7 file / **228 ca xanh**: `identity-admin.mock.test.ts` 139, `AdminAuditPage.test.tsx` 13 (có ca "lọc theo hành động kèm khoảng dài hơn 31 ngày"), `AdminUsersPage` 36, `AdminAccountsPage` 10, `AdminNotificationTemplatesPage` 9, `AdminSystemConfigsPage` 8, `useCustomerPet` 13 (không test nào gọi `useAdminIdentity` trực tiếp; tôi chạy các trang dùng nó). `npx tsc --noEmit` exit 0; `npm run lint` exit 0. Không chạy vitest toàn dự án.
+
+**Smoke chỉ đọc trên BE mới [TỰ ĐO]** (Playwright Chrome 1280 px, mock tắt, `cum-8/d7-lib.mjs` = bản sao nguyên văn `d6-lib.mjs`, chỉ cho `POST /api/auth/login`; d4-lib bị bỏ vì cho qua cả `refresh`; mỗi script < 20 s; token 10 phút). Tổng cả bốn stage: **0 response ≥ 400, 0 `pageerror`, `abortedWrites` rỗng**.
+- (a) `admin` `/admin/audit`: lọc `action=LOGIN_SUCCEEDED` một mình, kèm 2026-08-01…11-05 (96 ngày), 2026-01-01…11-05 (308 ngày), 2025-10-01…11-05 (400 ngày): cả bốn **200** (theo prompt phiên, trước gộp trả 400 khi hơn 31 ngày; phiên này không đo lại trên mã cũ); `total` API 338 = SQL ở cả ba khoảng; không lọc 392 = `count(*)` SQL; 3 dòng đầu bảng = API = SQL (#392, #391, #390). Dữ liệu `LOGIN_SUCCEEDED` demo chỉ từ 30/10 nên cả ba khoảng cùng 338 dòng (không chứng minh được cận ngày xa).
+- (b) `/admin/notifications` (mai.le): 2 mục, 1 chưa đọc; `/notifications` (khách `minh.anh`): 1 mục. Console của trang đăng nhập khách có 3 cảnh báo GSAP "target not found" (warning, không phải lỗi).
+- (c) `mai.le`: `/staff/reception` (tab Đón tiếp 0 / Hàng chờ 1 / Chờ thu 3; có nút "Chốt ca" nên đang có ca thu ngân mở), `/admin/appointments`, `/admin/pos` (17 Order); không bấm nút nào.
+- (d) `hung.tran`: `/admin/warehouse/{stock,receipts,adjustments,suppliers}` (8, 1, 0, 2 hàng) và `/admin/reports` (tab mặc định "Doanh thu"; sáu tab con chưa mở).
+- Cuối smoke: `audit_logs` 397 (đăng nhập của các stage cộng đăng nhập `khoi.vo`, `mai.le` lúc 00:49 không phải của phiên này, có phiên khác đang dùng BE), outbox/notifications/orders/payments không đổi.
+
+**Chưa kiểm.** Hai đề xuất một dòng (dòng 624 `AuditLogViewIT`, dòng 436 `VisitCheckInServiceTest`) chưa chạy thử; cơ chế `FkIndexScanIT` → `ReminderScanIndexIT`; năm tab báo cáo ngoài "Doanh thu"; luồng ghi trên BE mới (smoke chỉ đọc); IDE ghi đè `BE/target` sau 00:52 (đo được 0 trong 17 phút đầu); `git diff` trên bản gộp chưa được người thứ hai xem.
+
 ## D. Màn hình còn bị BE chặn (tiêu chí "tắt mock, mọi màn gọi API thật" **chưa đạt**)
 
 | Màn / luồng | Bị chặn bởi | Hiện tượng với BE thật |
