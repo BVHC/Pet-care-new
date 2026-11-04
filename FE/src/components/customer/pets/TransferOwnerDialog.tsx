@@ -9,6 +9,7 @@ import { Checkbox, FormError } from '@/components/admin/form-ui';
 import { Button } from '@/components/ui/button';
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Input } from '@/components/ui/input';
+import { LookupTruncatedNote } from '@/components/ui/LookupTruncatedNote';
 import { cn } from '@/lib/utils';
 import { plainMessage, toApiError } from '@/shared/api/api-error';
 import { useDebounce } from '@/shared/hooks/useDebounce';
@@ -93,23 +94,27 @@ function TransferForm({ pet, onClose }: { pet: PetResponse; onClose: () => void 
       </div>
 
       {candidates.length > 0 && (
-        <ul className="max-h-56 divide-y divide-(--ws-line) overflow-y-auto rounded-lg border border-(--ws-line)" aria-label="Hồ sơ tìm được">
-          {candidates.map((c) => (
-            <li key={c.customerId}>
-              <button
-                type="button"
-                aria-pressed={picked?.customerId === c.customerId}
-                onClick={() => setPicked(c)}
-                className={cn('w-full p-3 text-left hover:bg-(--ws-raised)', picked?.customerId === c.customerId && 'bg-(--ws-accent-soft)')}
-              >
-                <span className="block font-medium">{c.fullName}</span>
-                <span className="block text-xs text-(--ws-ink-2)">
-                  {c.phone ?? 'Chưa có SĐT'} · {c.maskedEmail ?? 'Chưa có email'} · {c.pets.length} thú
-                </span>
-              </button>
-            </li>
-          ))}
-        </ul>
+        <>
+          {/* So với content (gồm cả chủ hiện tại đã bị lọc khỏi candidates): totalElements của BE đếm cả hồ sơ đó. */}
+          {lookup.data && <LookupTruncatedNote shown={lookup.data.content.length} total={lookup.data.totalElements} className="text-xs text-(--ws-ink-3)" />}
+          <ul className="max-h-56 divide-y divide-(--ws-line) overflow-y-auto rounded-lg border border-(--ws-line)" aria-label="Hồ sơ tìm được">
+            {candidates.map((c) => (
+              <li key={c.customerId}>
+                <button
+                  type="button"
+                  aria-pressed={picked?.customerId === c.customerId}
+                  onClick={() => setPicked(c)}
+                  className={cn('w-full p-3 text-left hover:bg-(--ws-raised)', picked?.customerId === c.customerId && 'bg-(--ws-accent-soft)')}
+                >
+                  <span className="block font-medium">{c.fullName}</span>
+                  <span className="block text-xs text-(--ws-ink-2)">
+                    {c.phone ?? 'Chưa có SĐT'} · {c.maskedEmail ?? 'Chưa có email'} · {c.pets.length} thú
+                  </span>
+                </button>
+              </li>
+            ))}
+          </ul>
+        </>
       )}
       {debounced && !lookup.isFetching && lookup.isSuccess && candidates.length === 0 && (
         <p className="text-sm text-(--ws-ink-2)">Không tìm thấy hồ sơ phù hợp.</p>

@@ -20,7 +20,7 @@ public record AssignableStaffResponse(
         @Schema(description = "Chức vụ: VET hoặc CARETAKER", example = "VET")
         Role role,
 
-        @Schema(description = "Có thao tác trong staff.online_window_minutes [CFG] gần nhất (BR-TN-06, chỉ là gợi ý)",
+        @Schema(description = "Có phiên chưa hủy với access token còn hạn (BR-TN-06, ADR-0091); chỉ là gợi ý",
                 example = "true")
         boolean online) {
 }

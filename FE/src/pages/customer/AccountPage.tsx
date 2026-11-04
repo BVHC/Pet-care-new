@@ -8,6 +8,7 @@ import { AddressBook } from '@/components/customer/AddressBook';
 import { ProfileLinking } from '@/components/customer/ProfileLinking';
 import { Field, FormError, NoticeBar, type Notice } from '@/components/admin/form-ui';
 import { cn } from '@/lib/utils';
+import { doctorInitials } from '@/pages/doctors/initials';
 import { fieldErrorsOf, plainMessage, toApiError } from '@/shared/api/api-error';
 import { profileApi } from '@/shared/api/profile.api';
 import { useCustomerProfile, useMe, useProfileMutation } from '@/shared/hooks/useProfile';
@@ -122,13 +123,7 @@ function ProfileForm({ profile }: { profile: CustomerProfile }) {
   const save = useProfileMutation(profileApi.updateCustomerProfile);
   const counter = profile.createdChannel === 'COUNTER';
 
-  const initials =
-    fullName
-      .split(' ')
-      .slice(-2)
-      .map((w) => w[0] ?? '')
-      .join('')
-      .toUpperCase() || '?';
+  const initials = doctorInitials(fullName);
 
   const submit = async (e: FormEvent) => {
     e.preventDefault();

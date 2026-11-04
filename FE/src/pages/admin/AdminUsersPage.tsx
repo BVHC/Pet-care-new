@@ -518,7 +518,19 @@ function CreateForm({
         {roleNeedsBranch && (
           <Field label={branchRequired ? 'Chi nhánh *' : 'Chi nhánh'} hint={isBRANCH_MANAGER ? 'Mặc định chi nhánh của bạn.' : undefined}>
             {(id) => (
-              <select id={id} className={selectClass} value={shownBranch} onChange={(e) => setBranchId(e.target.value)} disabled={isBRANCH_MANAGER} required={branchRequired}>
+              <select
+                id={id}
+                className={selectClass}
+                value={shownBranch}
+                // Bong bóng của trình duyệt theo ngôn ngữ của nó (Chrome tiếng Anh): đặt câu tiếng Việt, xóa khi đã chọn (không xóa thì ô kẹt "không hợp lệ").
+                onInvalid={(e) => e.currentTarget.setCustomValidity('Vui lòng chọn chi nhánh')}
+                onChange={(e) => {
+                  e.currentTarget.setCustomValidity('');
+                  setBranchId(e.target.value);
+                }}
+                disabled={isBRANCH_MANAGER}
+                required={branchRequired}
+              >
                 <option value="">— Chọn chi nhánh —</option>
                 {branches.map((b) => <option key={b.branchId} value={b.branchId}>{b.name}</option>)}
               </select>
@@ -624,7 +636,17 @@ function TransferDialog({
     >
       <Field label="Chi nhánh mới *">
         {(id) => (
-          <select id={id} className={selectClass} value={branchId} onChange={(e) => setBranchId(e.target.value)} required>
+          <select
+            id={id}
+            className={selectClass}
+            value={branchId}
+            onInvalid={(e) => e.currentTarget.setCustomValidity('Vui lòng chọn chi nhánh mới')}
+            onChange={(e) => {
+              e.currentTarget.setCustomValidity('');
+              setBranchId(e.target.value);
+            }}
+            required
+          >
             <option value="">— Chọn chi nhánh —</option>
             {branches.map((b) => <option key={b.branchId} value={b.branchId}>{b.name}</option>)}
           </select>

@@ -221,7 +221,8 @@ describe('đặt chỗ BOOKED (#4 của Bim)', () => {
     expect(within(info).getByText('2 đêm')).toBeInTheDocument();
     expect(info).toHaveTextContent(/200\.000/);
     expect(info).toHaveTextContent(/400\.000/);
-    expect(info).toHaveTextContent('Tiền chốt khi trả thú, tính theo đêm thực tế; trả sau 12:00 tính thêm 1 đêm');
+    // L-50: nhận và trả cùng ngày sau 12:00 vẫn 1 đêm (BE `max(1, ngày ở + đêm trễ)`), nên câu phải nói rõ.
+    expect(info).toHaveTextContent('Tiền chốt khi trả thú, tính theo đêm thực tế; trả sau 12:00 tính thêm 1 đêm (nhận và trả cùng ngày vẫn tính 1 đêm).');
     expect(info).toHaveTextContent('Đặt online');
     await waitFor(() => expect(info).toHaveTextContent('PetCare Cầu Giấy'));
     expect(within(info).getByRole('link', { name: /0901234567/ })).toHaveAttribute('href', 'tel:0901234567');

@@ -265,6 +265,16 @@ describe('CheckInDialog — nhận thú', () => {
     expect(await bookingOf(4)).toMatchObject({ status: 'CHECKED_IN', kennelCode: 'C-03', checkInDate: '2026-10-23' });
   });
 
+  // L-46: lệnh ghi làm mới cả gốc ['boarding'] nên điều kiện nhận (đang mở) bị hỏi lại khi đặt chỗ đã CHECKED_IN → BE trả 409 ở console.
+  it('nhận xong thì không hỏi lại điều kiện nhận (đặt chỗ không còn BOOKED, BE sẽ trả 409)', async () => {
+    const { user, onClose } = await open({ dosed: true });
+    await fill(user);
+    await submit(user);
+
+    await waitFor(() => expect(onClose).toHaveBeenCalledTimes(1));
+    expect(requests().filter((r) => r.includes('/4/check-in-readiness'))).toHaveLength(1);
+  });
+
   it('đúng ngày nhận: không có ghi chú nhận sớm; ô tùy chọn để trống thì không gửi', async () => {
     const send = vi.spyOn(boardingApi, 'checkIn');
     const { user, onClose } = await open({ id: 1, at: '2026-10-30T09:00:00+07:00' });

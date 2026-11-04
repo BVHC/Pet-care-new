@@ -3,6 +3,7 @@ import userEvent from '@testing-library/user-event';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { MemoryRouter } from 'react-router-dom';
 import { afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
+import { customerPetApi } from '../../../domains/pets/customer-pet.api';
 import { apiClient } from '../../../shared/api/axios';
 import { inventoryApi } from '../../../shared/api/inventory.api';
 import { installMockApi } from '../../../shared/api/mock/mock-api';
@@ -142,6 +143,26 @@ describe('thu tiền gộp theo khách (UC70; BR-TG-02, BR-TG-03)', () => {
 
     await orderBox(/DH-\d{4}-00002/);
     await waitFor(() => expect(usePosStore.getState().orderIds).toEqual([]));
+  });
+
+  // CustomerLookup dùng chung (thu tiền, tiếp nhận, đặt lưu trú): tra cứu xin tối đa 100 dòng, còn nhiều hơn thì phải nhắc (L-15).
+  const lookupItem = { customerId: 1, fullName: 'Khách Một', phone: '0905111222', maskedEmail: null, createdChannel: 'COUNTER' as const, hasAccount: false, pets: [] };
+
+  it('BE còn nhiều kết quả hơn số dòng đã vẽ thì nhắc thu hẹp từ khóa, không cắt im lặng', async () => {
+    await withOpenShift();
+    vi.spyOn(customerPetApi, 'searchCustomers').mockResolvedValue({ content: [lookupItem], page: 0, size: 100, totalElements: 130, totalPages: 2 });
+    const user = renderPanel();
+    await user.type(await screen.findByPlaceholderText(/Tìm khách cần thu/), '0905111222');
+    expect(await screen.findByText('Đang hiển thị 1 / 130 kết quả, hãy thu hẹp từ khóa.')).toBeInTheDocument();
+  });
+
+  it('đủ kết quả trong một trang thì không có lời nhắc thu hẹp từ khóa', async () => {
+    await withOpenShift();
+    vi.spyOn(customerPetApi, 'searchCustomers').mockResolvedValue({ content: [lookupItem], page: 0, size: 100, totalElements: 1, totalPages: 1 });
+    const user = renderPanel();
+    await user.type(await screen.findByPlaceholderText(/Tìm khách cần thu/), '0905111222');
+    expect(await screen.findByRole('button', { name: /Khách Một/ })).toBeInTheDocument();
+    expect(screen.queryByText(/hãy thu hẹp từ khóa/)).not.toBeInTheDocument();
   });
 
   it('"Đổi khách" xóa phiếu và quay về ô tìm khách', async () => {

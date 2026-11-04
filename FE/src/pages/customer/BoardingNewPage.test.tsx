@@ -423,7 +423,8 @@ describe('BoardingNewPage: đặt chỗ', () => {
     expect(within(warning).getByRole('link', { name: 'Đặt lịch tiêm trước ngày nhận' })).toHaveAttribute('href', '/booking');
     // Đặt chỗ làm mới các gốc dữ liệu bị chạm.
     for (const key of [['boarding'], ['sales'], ['pets'], ['notifications'], ['appointments']]) {
-      expect(invalidate).toHaveBeenCalledWith({ queryKey: key });
+      // objectContaining: gốc ['boarding'] kèm `predicate` bỏ qua truy vấn điều kiện nhận thú (L-46), nên không còn đúng một khóa `queryKey`.
+      expect(invalidate).toHaveBeenCalledWith(expect.objectContaining({ queryKey: key }));
     }
   });
 

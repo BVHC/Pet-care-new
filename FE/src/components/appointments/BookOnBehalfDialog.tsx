@@ -10,6 +10,7 @@ import { Field, FormError, selectClass } from '@/components/admin/form-ui';
 import { Button } from '@/components/ui/button';
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Input } from '@/components/ui/input';
+import { LookupTruncatedNote } from '@/components/ui/LookupTruncatedNote';
 import { cn } from '@/lib/utils';
 import { plainMessage, toApiError } from '@/shared/api/api-error';
 import { appointmentApi } from '@/shared/api/appointment.api';
@@ -119,6 +120,9 @@ function BookForm({ branchId, onClose }: { branchId: number; onClose: () => void
         {lookup.isError && <FormError message={plainMessage(toApiError(lookup.error))} />}
         {debounced && !waitingForPhone && lookup.isSuccess && items.length === 0 && (
           <p className="text-sm text-(--text-secondary)">Không tìm thấy khách. Hồ sơ mới tạo ở màn Khách hàng.</p>
+        )}
+        {items.length > 0 && lookup.data && (
+          <LookupTruncatedNote shown={items.length} total={lookup.data.totalElements} className="text-xs text-(--text-secondary)" />
         )}
         <ul className="space-y-2" aria-label="Kết quả tìm khách">
           {items.map((c) => (

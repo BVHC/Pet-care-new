@@ -30,3 +30,26 @@ describe('AccountSidebar: mục "Lưu trú của tôi"', () => {
     expect(appointments.className).not.toMatch(/navItemActive/);
   });
 });
+
+// L-23: chữ viết tắt trên avatar lấy chữ đầu của họ và của tên cuối ("Nguyễn Văn An" → "NA"), như avatar bác sĩ; trước đây lấy chữ đầu của HAI TỪ CUỐI ("VA").
+describe('AccountSidebar: chữ viết tắt trên avatar', () => {
+  const avatarOf = (name: string) => {
+    const { container, unmount } = render(
+      <MemoryRouter>
+        <AccountSidebar userName={name} />
+      </MemoryRouter>,
+    );
+    const text = container.querySelector('[class*="userAvatar"]')?.textContent;
+    unmount();
+    return text;
+  };
+
+  it.each([
+    ['Nguyễn Văn An', 'NA'],
+    ['Nguyễn Thu Trang', 'NT'],
+    ['Ánh', 'Á'],
+    ['  Lê   Hoa ', 'LH'],
+  ])('%s → %s', (name, expected) => {
+    expect(avatarOf(name)).toBe(expected);
+  });
+});

@@ -21,6 +21,18 @@ const ModalTitleIdContext = React.createContext<string | undefined>(undefined)
 
 export function Modal({ open, onOpenChange, children, className }: ModalProps) {
   const titleId = React.useId()
+  const panelRef = React.useRef<HTMLDivElement>(null)
+
+  // Hộp tự viết bằng div nên tự lo focus: mở thì đưa focus vào khung (trừ khi một ô bên trong đã tự lấy, ví dụ autoFocus),
+  // đóng thì trả về nút đã bấm mở (L-04).
+  React.useEffect(() => {
+    if (!open) return
+    const opener = document.activeElement instanceof HTMLElement ? document.activeElement : null
+    const panel = panelRef.current
+    if (panel && !panel.contains(document.activeElement)) panel.focus()
+    return () => opener?.focus()
+  }, [open])
+
   return (
     <div
       data-state={open ? "open" : "closed"}
@@ -30,13 +42,23 @@ export function Modal({ open, onOpenChange, children, className }: ModalProps) {
         open ? "opacity-100 pointer-events-auto" : "opacity-0 pointer-events-none"
       )}
       onClick={(e) => e.target === e.currentTarget && onOpenChange(false)}
+      // Phím gõ trong hộp nổi bọt lên đây; phần tử bên trong đã xử lý Esc (preventDefault) thì hộp không đóng theo.
+      // Hộp xử lý xong cũng đánh dấu đã xử lý để hộp ngoài (nếu lồng) không đóng theo trong cùng một lần Esc.
+      onKeyDown={(e) => {
+        if (open && e.key === "Escape" && !e.defaultPrevented) {
+          onOpenChange(false)
+          e.preventDefault()
+        }
+      }}
     >
       <div
+        ref={panelRef}
         role="dialog"
         aria-modal="true"
         aria-labelledby={titleId}
+        tabIndex={-1}
         className={cn(
-          "relative w-full max-h-[90vh] overflow-auto rounded-2xl border border-(--color-border-default) bg-white shadow-2xl transition-all duration-200",
+          "relative w-full max-h-[90vh] overflow-auto rounded-2xl border border-(--color-border-default) bg-white shadow-2xl outline-none transition-all duration-200",
           open ? "scale-100 translate-y-0" : "scale-95 translate-y-4",
           className
         )}

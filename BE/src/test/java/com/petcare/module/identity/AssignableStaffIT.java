@@ -100,10 +100,15 @@ class AssignableStaffIT {
         superManager = staff(Role.SUPER_MANAGER, null, "Tong quan ly " + tag);
     }
 
-    /** Xóa đúng dòng của test, theo thứ tự FK {@code RESTRICT}: phiên → hồ sơ nhân viên → tài khoản → chi nhánh. */
+    /**
+     * Xóa đúng dòng của test, theo thứ tự FK {@code RESTRICT}: refresh token → phiên → hồ sơ nhân viên → tài khoản →
+     * chi nhánh.
+     */
     @AfterEach
     void cleanUp() {
         for (long id : accountIds) {
+            jdbc.update("DELETE FROM refresh_tokens WHERE session_id IN (SELECT id FROM sessions WHERE account_id = ?)",
+                    id);
             jdbc.update("DELETE FROM sessions WHERE account_id = ?", id);
             jdbc.update("DELETE FROM staff_profiles WHERE account_id = ?", id);
             jdbc.update("DELETE FROM accounts WHERE id = ?", id);
@@ -131,19 +136,22 @@ class AssignableStaffIT {
 
     @Test
     void listsOnlyActiveUnlockedStaffOfTheCallersBranchAndRoleOnlineFirstWithFourKeys() {
-        long onlineAtTheEdge = staff(Role.VET, branchA, "Bb " + tag, "ACTIVE", false, T0.minus(Duration.ofMinutes(10)));
-        long onlineNow = staff(Role.VET, branchA, "Dd " + tag, "ACTIVE", false, T0);
+        // Online ⇔ có phiên chưa hủy với access_expires_at > now (so sánh chặt): còn 1 giây là online,
+        // đúng mốc T0 là offline.
+        Instant tenMinutesLeft = T0.plus(Duration.ofMinutes(10));
+        long onlineAtTheEdge = staff(Role.VET, branchA, "Bb " + tag, "ACTIVE", false, T0.plus(Duration.ofSeconds(1)));
+        long onlineNow = staff(Role.VET, branchA, "Dd " + tag, "ACTIVE", false, tenMinutesLeft);
         long neverSeen = staff(Role.VET, branchA, "Aa " + tag);
         long sameName1 = staff(Role.VET, branchA, "Cc " + tag);
         long sameName2 = staff(Role.VET, branchA, "Cc " + tag);
-        long stale = staff(Role.VET, branchA, "Ee " + tag, "ACTIVE", false, T0.minus(Duration.ofMinutes(11)));
+        long stale = staff(Role.VET, branchA, "Ee " + tag, "ACTIVE", false, T0);
         long temporarilyLocked = staff(Role.VET, branchA, "Ff " + tag);
         jdbc.update("UPDATE accounts SET locked_until = ? WHERE id = ?", Timestamp.from(T0.plus(Duration.ofHours(1))),
                 temporarilyLocked);
-        staff(Role.VET, branchA, "Gg " + tag, "ACTIVE", true, T0);
-        staff(Role.VET, branchA, "Hh " + tag, "DISABLED", false, T0);
-        staff(Role.VET, branchB, "Ii " + tag, "ACTIVE", false, T0);
-        staff(Role.CARETAKER, branchA, "Jj " + tag, "ACTIVE", false, T0);
+        staff(Role.VET, branchA, "Gg " + tag, "ACTIVE", true, tenMinutesLeft);
+        staff(Role.VET, branchA, "Hh " + tag, "DISABLED", false, tenMinutesLeft);
+        staff(Role.VET, branchB, "Ii " + tag, "ACTIVE", false, tenMinutesLeft);
+        staff(Role.CARETAKER, branchA, "Jj " + tag, "ACTIVE", false, tenMinutesLeft);
 
         ResponseEntity<Map<String, Object>> response = get(PATH + "?role=VET", token(receptionistA));
 
@@ -307,14 +315,21 @@ class AssignableStaffIT {
         return staff(role, branchId, name, "ACTIVE", false, null);
     }
 
-    private long staff(Role role, Long branchId, String name, String status, boolean locked, Instant lastSeenAt) {
+    /**
+     * {@code onlineUntil} = hạn access token của một phiên chưa hủy (BR-TN-06, docs/adr/0091); {@code null} = không có
+     * phiên nào.
+     */
+    private long staff(Role role, Long branchId, String name, String status, boolean locked, Instant onlineUntil) {
         long id = jdbc.queryForObject("""
                 INSERT INTO accounts (email, phone, password_hash, role, status, is_locked)
                 VALUES (?, '0900000000', 'hash', ?, ?, ?) RETURNING id
                 """, Long.class, "assignable-it-" + UUID.randomUUID() + "@petcare.test", role.name(), status, locked);
         accountIds.add(id);
-        if (lastSeenAt != null) {
-            jdbc.update("UPDATE accounts SET last_seen_at = ? WHERE id = ?", Timestamp.from(lastSeenAt), id);
+        if (onlineUntil != null) {
+            jdbc.update("""
+                    INSERT INTO sessions (account_id, token_hash, expires_at, access_expires_at)
+                    VALUES (?, ?, ?, ?)""", id, UUID.randomUUID().toString(),
+                    Timestamp.from(T0.plus(Duration.ofHours(12))), Timestamp.from(onlineUntil));
         }
         jdbc.update("INSERT INTO staff_profiles (account_id, full_name, branch_id) VALUES (?, ?, ?)", id, name,
                 branchId);

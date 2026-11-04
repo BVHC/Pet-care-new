@@ -67,6 +67,14 @@ describe('BookOnBehalfDialog: ứng viên khách', () => {
     expect(screen.queryByText(/Không tìm thấy khách/)).not.toBeInTheDocument();
   });
 
+  it('BE còn nhiều kết quả hơn số dòng đã vẽ thì nhắc thu hẹp từ khóa, không cắt im lặng (L-15)', async () => {
+    const item = { customerId: 1, fullName: 'Khách Một', phone: '0905111222', maskedEmail: null, createdChannel: 'COUNTER' as const, hasAccount: false, pets: [] };
+    vi.spyOn(customerPetApi, 'searchCustomers').mockResolvedValue({ content: [item], page: 0, size: 100, totalElements: 130, totalPages: 2 });
+    const user = renderDialog();
+    await user.type(screen.getByLabelText('Tìm khách theo SĐT hoặc họ tên'), '0905111222');
+    expect(await screen.findByText('Đang hiển thị 1 / 130 kết quả, hãy thu hẹp từ khóa.')).toBeInTheDocument();
+  });
+
   it('đủ 10 số thì tra theo SĐT, hết lời nhắc', async () => {
     const search = vi.spyOn(customerPetApi, 'searchCustomers');
     const user = renderDialog();

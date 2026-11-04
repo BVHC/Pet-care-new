@@ -282,8 +282,8 @@ export function SiteHeader({ cartCount = 0, onNav }: SiteHeaderProps) {
             </div>
           )}
 
-          {/* Bell (chỉ khi đã đăng nhập — UC88) + Cart */}
-          {isAuthenticated && (
+          {/* Bell (chỉ khi đã đăng nhập — UC88) + Cart. Hàng ẩn chỉ mờ + cắt, không display:none: chỉ hàng đang hiện được mount chuông (tránh 2 nút trùng). */}
+          {isAuthenticated && !isScrolled && (
             <div className="shrink-0">
               <NotificationBell />
             </div>
@@ -388,7 +388,7 @@ export function SiteHeader({ cartCount = 0, onNav }: SiteHeaderProps) {
             )}
           </button>
 
-          {isAuthenticated && (
+          {isAuthenticated && isScrolled && (
             <div className="shrink-0">
               <NotificationBell />
             </div>

@@ -142,6 +142,10 @@ export function ReceiptForm({
 
       <div className="space-y-2">
         <p className="text-sm font-medium text-(--text-primary)">Các dòng hàng</p>
+        {/* Ô chọn sản phẩm chỉ lấy 100 dòng đầu (trần của BE): còn nhiều hơn thì nói rõ, không cắt im lặng (L-15). */}
+        {products.data && products.data.totalElements > productList.length && (
+          <p role="note" className="text-xs text-(--text-tertiary)">{`Chỉ hiện ${productList.length} / ${products.data.totalElements} sản phẩm đầu tiên, chưa chọn được các sản phẩm còn lại ở phiếu này.`}</p>
+        )}
         {lines.map((l, i) => {
           const product = productOf(l.productId);
           const label = (field: string) => `Dòng ${i + 1} — ${field}`;

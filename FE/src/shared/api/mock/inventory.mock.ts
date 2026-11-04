@@ -811,10 +811,11 @@ const createAdjustment: MockHandler = (req) => {
   if (!isManager(req)) return denied();
   const s = load();
   const branchId = branchOf(req);
+  // Như BE (StockAdjustmentService.createAdjustment): lý do OTHER kiểm trước khi tìm lô (404).
+  if (b.reason === 'OTHER' && !isText(b.note)) return ruleFail('BR-KO-06', 'Lý do "Khác" bắt buộc có ghi chú');
   const found = lines!.map((l) => lotInBranch(s, l.stockLotId as number, branchId));
   const missing = found.findIndex((f) => f === null);
   if (missing >= 0) return notFound('lô hàng', String(lines![missing].stockLotId));
-  if (b.reason === 'OTHER' && !isText(b.note)) return ruleFail('BR-KO-06', 'Lý do "Khác" bắt buộc ghi chú');
   // Không giảm quá tồn của lô (BR-KO-01, 06). Như BE (StockAdjustmentService): nêu đủ các lô thiếu, theo id lô tăng dần, lô mặc định ghi "mặc định #id".
   const lacking = lines!
     .map((l, i) => ({ lot: found[i]!.lot, delta: l.quantityDelta as number }))

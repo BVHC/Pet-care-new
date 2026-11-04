@@ -324,6 +324,18 @@ describe('AdminCareTasksPage (UC87 — lễ tân)', () => {
       expect(complete).not.toHaveBeenCalled();
     });
 
+    // L-29: hộp này dùng Modal tự viết (modal-templates); trước đây Esc không đóng và focus ở lại nút nền.
+    it('mở hộp thì focus vào hộp, Esc đóng hộp mà không gửi gì', async () => {
+      const complete = vi.spyOn(careApi, 'completeTask');
+      const user = renderPage();
+      await user.click(buttonIn(await rowWith(/Vaccine Dại/), /^Đã gọi/));
+      expect(screen.getByRole('dialog')).toHaveFocus();
+
+      await user.keyboard('{Escape}');
+      expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
+      expect(complete).not.toHaveBeenCalled();
+    });
+
     it('lỗi BR-TB-05 của máy chủ hiện ngay trong hộp thoại, không đóng', async () => {
       vi.spyOn(careApi, 'completeTask').mockRejectedValueOnce(
         new ApiError('BUSINESS_RULE_VIOLATION', 'Vui lòng chọn kết quả và nhập ghi chú (BR-TB-05)', 400),
@@ -338,6 +350,20 @@ describe('AdminCareTasksPage (UC87 — lễ tân)', () => {
       // FE bỏ đuôi rule (plainMessage): hiện đúng câu của BE, không kèm "(BR-TB-05)".
       expect(await within(dialog).findByRole('alert')).toHaveTextContent(/^Vui lòng chọn kết quả và nhập ghi chú$/);
       expect(within(dialog).getByRole('alert')).not.toHaveTextContent('BR-TB-05');
+      expect(screen.getByRole('dialog')).toBeInTheDocument();
+    });
+
+    // L-52: BE ghép tên trường vào message của VALIDATION_FAILED; người dùng chỉ thấy câu, không thấy "note: ".
+    it('ghi chú quá dài (400 VALIDATION_FAILED "note: …"): hiện câu không kèm tên trường, không đóng', async () => {
+      vi.spyOn(careApi, 'completeTask').mockRejectedValueOnce(new ApiError('VALIDATION_FAILED', 'note: Ghi chú tối đa 2000 ký tự', 400));
+      const user = renderPage();
+      await user.click(buttonIn(await rowWith(/Vaccine Dại/), /^Đã gọi/));
+      const dialog = screen.getByRole('dialog');
+      await user.click(within(dialog).getByRole('radio', { name: 'Liên hệ được' }));
+      await user.type(within(dialog).getByLabelText('Ghi chú'), 'Đã gọi');
+      await user.click(within(dialog).getByRole('button', { name: 'Lưu kết quả' }));
+
+      expect(await within(dialog).findByRole('alert')).toHaveTextContent(/^Ghi chú tối đa 2000 ký tự$/);
       expect(screen.getByRole('dialog')).toBeInTheDocument();
     });
 

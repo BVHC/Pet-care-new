@@ -7,6 +7,7 @@ import { Input } from '../../components/ui/input';
 import { Field, FormError, NoticeBar, type Notice } from '../../components/admin/form-ui';
 import { fieldErrorsOf, plainMessage, toApiError } from '../../shared/api/api-error';
 import { profileApi } from '../../shared/api/profile.api';
+import { doctorInitials } from '../doctors/initials';
 import { ROUTES } from '../../shared/constants/routes';
 import { useBranch } from '../../shared/hooks/useBranch';
 import { useMe, useProfileMutation } from '../../shared/hooks/useProfile';
@@ -43,12 +44,7 @@ export function StaffProfilePage() {
 }
 
 function Avatar({ url, name, size = 'h-16 w-16' }: { url?: string | null; name: string; size?: string }) {
-  const initials = name
-    .split(' ')
-    .slice(-2)
-    .map((w) => w[0] ?? '')
-    .join('')
-    .toUpperCase();
+  const initials = name.trim() ? doctorInitials(name) : '';
   return url?.trim().startsWith('https://') ? (
     <img src={url.trim()} alt="" className={`${size} shrink-0 rounded-full object-cover`} />
   ) : (

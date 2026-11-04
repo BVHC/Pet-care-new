@@ -1118,8 +1118,9 @@ function careLogBodyError(b: Record<string, unknown>, creating: boolean): MockRe
   if (
     TEXT_FIELDS.some((k) => b[k] != null && typeof b[k] !== 'string') ||
     (b.note != null && typeof b.note !== 'string') ||
-    (b.logDate != null && !isDate(b.logDate)) ||
-    (b.isAbnormal != null && typeof b.isAbnormal !== 'boolean') ||
+    // `logDate` và `isAbnormal` chỉ có ở CareLogRequest; UpdateCareLogRequest (PATCH) không có nên BE bỏ qua, sai kiểu cũng không 400 (L-42).
+    (creating && b.logDate != null && !isDate(b.logDate)) ||
+    (creating && b.isAbnormal != null && typeof b.isAbnormal !== 'boolean') ||
     (b.photoUrls != null && (!Array.isArray(b.photoUrls) || b.photoUrls.some((u) => u !== null && typeof u !== 'string')))
   ) {
     return malformed();
@@ -1162,7 +1163,7 @@ const listCareLogs: MockHandler = (req) => {
   const logs = s.careLogs
     .filter((l) => l.bookingId === b.bookingId)
     .sort((x, y) => x.logDate.localeCompare(y.logDate) || x.careLogId - y.careLogId);
-  return ok(logs.map((l) => toCareLog(s, l)), 200, 'Nhật ký chăm sóc');
+  return ok(logs.map((l) => toCareLog(s, l)));
 };
 
 /** CARE_LOG_ABNORMAL: báo khách (nếu có tài khoản) và mọi lễ tân chi nhánh, link theo người nhận (BR-LT-12, Đặt chỗ#8). */

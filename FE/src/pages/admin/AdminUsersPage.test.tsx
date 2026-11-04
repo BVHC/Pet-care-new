@@ -301,6 +301,27 @@ describe('AdminUsersPage (T22 - UC08)', () => {
       await waitFor(() => expect(seen.find((r) => r.method === 'POST' && r.url === '/api/staff')).toMatchObject({ status: 201, body: { role: 'RECEPTIONIST', branchId: 1 } }));
     });
 
+    // L-23: ô `required` chưa chọn thì trình duyệt tự hiện bong bóng theo ngôn ngữ của nó (Chrome tiếng Anh: "Please select an item in the list.").
+    it('chưa chọn chi nhánh: lời báo của ô là tiếng Việt, không gửi gì; chọn xong thì hết báo', async () => {
+      const user = userEvent.setup();
+      const seen = recordRequests();
+      renderPage();
+      await user.click(await screen.findByRole('button', { name: /Thêm người dùng/ }));
+
+      const dialog = await screen.findByRole('dialog');
+      await user.type(within(dialog).getByLabelText('Họ tên *'), 'Lễ tân CN1');
+      await user.type(within(dialog).getByLabelText('Email *'), 'letan.cn1@new.vn');
+      await user.type(within(dialog).getByLabelText('Số điện thoại *'), '0900000088');
+      await user.click(within(dialog).getByRole('button', { name: 'Tạo tài khoản' }));
+
+      const branch = within(dialog).getByLabelText('Chi nhánh *') as HTMLSelectElement;
+      expect(branch.validationMessage).toBe('Vui lòng chọn chi nhánh');
+      expect(seen.find((r) => r.method === 'POST' && r.url === '/api/staff')).toBeUndefined();
+
+      await user.selectOptions(branch, '1');
+      expect(branch.validationMessage).toBe('');
+    });
+
     // BE StaffAdminMapper: maskedEmail của email-change nhân viên luôn null (chỉ luồng liên kết hồ sơ có), mã gửi tới chính email vừa nhập.
     const openOtpStep = async () => {
       const user = userEvent.setup();
@@ -473,6 +494,20 @@ describe('AdminUsersPage (T22 - UC08)', () => {
       await user.click(await screen.findByRole('button', { name: 'Điều chuyển BS. Minh Anh' }));
 
       expect(within(await screen.findByRole('dialog')).getByLabelText('Chi nhánh mới *')).toBeRequired();
+    });
+
+    // L-23: cùng lý do với ô "Chi nhánh *" của form tạo: lời báo của trình duyệt phải là tiếng Việt.
+    it('điều chuyển: chưa chọn chi nhánh mới thì lời báo của ô là tiếng Việt, chọn xong thì hết báo', async () => {
+      const user = userEvent.setup();
+      renderPage();
+      await user.click(await screen.findByRole('button', { name: 'Điều chuyển BS. Minh Anh' }));
+      const dialog = await screen.findByRole('dialog');
+      const branch = within(dialog).getByLabelText('Chi nhánh mới *') as HTMLSelectElement;
+      await user.click(within(dialog).getByRole('button', { name: 'Điều chuyển' }));
+
+      expect(branch.validationMessage).toBe('Vui lòng chọn chi nhánh mới');
+      await user.selectOptions(branch, '2');
+      expect(branch.validationMessage).toBe('');
     });
 
     it('tải trang không phát sinh 403', async () => {

@@ -33,7 +33,7 @@ export const bookingAmount = (b: Pick<Booking, 'checkInDate' | 'checkOutDate' | 
 /** BR-LH-09: hủy muộn và không đến cộng dồn vào hạn chế đặt online (cùng bộ đếm với lịch hẹn). */
 export const RESTRICTION_RULE = `đủ ${APPOINTMENT_CFG.violationThreshold} lần hủy muộn hoặc không đến trong ${APPOINTMENT_CFG.violationWindowDays} ngày sẽ bị tạm ngừng đặt online ${APPOINTMENT_CFG.restrictionDays} ngày (vẫn đặt được qua lễ tân)`;
 
-export const AMOUNT_NOTE = `Tiền chốt khi trả thú, tính theo đêm thực tế; trả sau ${BOARDING_CFG.checkoutTime} tính thêm 1 đêm.`;
+export const AMOUNT_NOTE = `Tiền chốt khi trả thú, tính theo đêm thực tế; trả sau ${BOARDING_CFG.checkoutTime} tính thêm 1 đêm (nhận và trả cùng ngày vẫn tính 1 đêm).`;
 
 /** Mốc bắt đầu hủy muộn (00:00 giờ VN của ngày nhận trừ số giờ [CFG]) để nói rõ cho khách, ví dụ "00:00 25/10/2026". */
 export function lateCancelFromLabel(checkInDate: string): string {

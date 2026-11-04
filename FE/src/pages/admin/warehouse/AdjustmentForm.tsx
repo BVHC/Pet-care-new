@@ -102,6 +102,10 @@ export function AdjustmentForm({ onClose, onSaved }: { onClose: () => void; onSa
       </div>
       <div className="space-y-2">
         <p className="text-sm font-medium text-(--text-primary)">Các dòng điều chỉnh</p>
+        {/* Ô chọn sản phẩm chỉ lấy 100 dòng đầu (trần của BE): còn nhiều hơn thì nói rõ, không cắt im lặng (L-15). */}
+        {items.data && items.data.totalElements > items.data.content.length && (
+          <p role="note" className="text-xs text-(--text-tertiary)">{`Chỉ hiện ${items.data.content.length} / ${items.data.totalElements} sản phẩm đầu tiên, chưa chọn được các sản phẩm còn lại ở phiếu này.`}</p>
+        )}
         {lines.map((l, i) => (
           <AdjustmentLineRow
             key={i}
@@ -140,10 +144,15 @@ function AdjustmentLineRow({
   // Sản phẩm không quản lý hạn dùng chỉ có lô mặc định: chọn sẵn (A4).
   useEffect(() => {
     const only = lots.data?.length === 1 ? lots.data[0] : null;
-    if (only?.isDefault && line.stockLotId !== String(only.stockLotId)) {
-      onChange({ stockLotId: String(only.stockLotId), lotQuantity: only.quantity });
-    }
+    if (only?.isDefault && line.stockLotId !== String(only.stockLotId)) onChange({ stockLotId: String(only.stockLotId) });
   }, [lots.data, line.stockLotId, onChange]);
+
+  // Số lượng của lô đang chọn luôn theo danh sách lô mới nhất: tồn đổi sau khi chọn lô (người khác nhập / điều chỉnh) thì phép kiểm vượt tồn dùng số mới (L-15).
+  useEffect(() => {
+    if (!lots.data) return;
+    const quantity = lots.data.find((x) => String(x.stockLotId) === line.stockLotId)?.quantity ?? null;
+    if (quantity !== line.lotQuantity) onChange({ lotQuantity: quantity });
+  }, [lots.data, line.stockLotId, line.lotQuantity, onChange]);
 
   return (
     <div className="grid gap-2 rounded-lg border border-(--border-color) p-3 sm:grid-cols-[2fr_2fr_1fr_auto]">
@@ -165,10 +174,7 @@ function AdjustmentLineRow({
         className={selectClass}
         value={line.stockLotId}
         disabled={!line.productId}
-        onChange={(e) => {
-          const lot = lots.data?.find((x) => String(x.stockLotId) === e.target.value);
-          onChange({ stockLotId: e.target.value, lotQuantity: lot?.quantity ?? null });
-        }}
+        onChange={(e) => onChange({ stockLotId: e.target.value })}
       >
         <option value="">Chọn lô…</option>
         {lots.data?.map((lot) => (

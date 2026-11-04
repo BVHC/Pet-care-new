@@ -1,4 +1,4 @@
-import { render, screen, within } from '@testing-library/react';
+import { act, render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { MemoryRouter } from 'react-router-dom';
@@ -58,5 +58,38 @@ describe('SiteHeader: mục "Lưu trú của tôi"', () => {
 
   it('khóa điều hướng "boardingbookings" trỏ tới /boarding-bookings', () => {
     expect(NAV_TO_PATH.boardingbookings).toBe('/boarding-bookings');
+  });
+});
+
+// Hai hàng của header (đầu trang / đã cuộn) đều chứa chuông; hàng đang ẩn chỉ mờ + cắt (opacity-0, w-0/h-0, overflow-hidden) chứ không display:none,
+// nên bản trùng vẫn lọt `:visible`, vẫn nhận Tab và làm `getByRole` ra 2 phần tử. Chỉ hàng đang hiện được mount chuông (mục 9 của C6).
+describe('SiteHeader: chuông thông báo', () => {
+  const bells = () => screen.queryAllByRole('button', { name: /^Thông báo/ });
+  const scrollTo = (y: number) =>
+    act(() => {
+      Object.defineProperty(window, 'scrollY', { value: y, configurable: true });
+      window.dispatchEvent(new Event('scroll'));
+    });
+  afterEach(() => scrollTo(0));
+
+  it('khách đã đăng nhập, đầu trang: đúng một chuông', async () => {
+    await useSession.getState().login({ email: 'khach@petcare.vn', password: MOCK_PASSWORD });
+    renderHeader();
+    await waitFor(() => expect(bells()).toHaveLength(1));
+  });
+
+  it('đã cuộn xuống: vẫn đúng một chuông (chuông đổi sang hàng gọn)', async () => {
+    await useSession.getState().login({ email: 'khach@petcare.vn', password: MOCK_PASSWORD });
+    renderHeader();
+    await waitFor(() => expect(bells()).toHaveLength(1));
+    scrollTo(300);
+    await waitFor(() => expect(bells()).toHaveLength(1));
+    scrollTo(0);
+    await waitFor(() => expect(bells()).toHaveLength(1));
+  });
+
+  it('chưa đăng nhập: không có chuông', () => {
+    renderHeader();
+    expect(bells()).toHaveLength(0);
   });
 });

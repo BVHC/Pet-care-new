@@ -4,7 +4,7 @@
 - **Ngày:** 2026-10-31
 - **Liên quan:**
   - identity-v1 #38 `GET /api/staff/assignable`; visit-v1 #5 `POST /visits/{visitId}/assign` (lễ tân gán), #9 `POST /visits/{visitId}/reassign` (gán lại lượt đã gọi); 02 BR-TN-05, BR-TN-06, BR-TN-08; UC45.
-  - ADR-0024 (`StaffDirectoryApi`, `findAssignableStaff`, "active" = ACTIVE và không khóa, online theo [CFG] `staff.online_window_minutes`), ADR-0061 (gán lượt: kiểm lại người được gán dưới khóa), ADR-0063 (gán lại lượt đã gọi), ADR-0030 (`GET /api/staff` chỉ A03–A05), ADR-0029 (thứ tự lỗi quản trị nhân sự), ADR-0040 (Swagger = hợp đồng), ADR-0006 (CUSTOMER không có phạm vi chi nhánh).
+  - ADR-0024 (`StaffDirectoryApi`, `findAssignableStaff`, "active" = ACTIVE và không khóa, online theo phiên chưa hủy với access token còn hạn: ADR-0091), ADR-0061 (gán lượt: kiểm lại người được gán dưới khóa), ADR-0063 (gán lại lượt đã gọi), ADR-0030 (`GET /api/staff` chỉ A03–A05), ADR-0029 (thứ tự lỗi quản trị nhân sự), ADR-0040 (Swagger = hợp đồng), ADR-0006 (CUSTOMER không có phạm vi chi nhánh).
   - docs/06-module-contracts.md §4.2 (dòng "Gán / gán lại": "Danh sách chọn người cho FE chưa có endpoint") và §6 (ghi chú cho BE-1).
 - **Triển khai:**
   - Người viết: FE-1 (Hiến), **được người dùng cho phép sửa module `identity` của BE-1** cho việc này; BE-1 chưa xem. Các file dưới đây nằm trong module của BE-1.
@@ -58,7 +58,7 @@ Màn gán lượt của lễ tân (visit-v1 #5) cần danh sách VET / CARETAKER
 `ApiResponse<List<AssignableStaffResponse>>` qua `ok(...)`, mảng trả **thẳng trong `data`, không phân trang** (`docs/api/00-method.md` §3.4; cùng cách `listPublicVets`): số VET / CARETAKER của một chi nhánh nhỏ. `AssignableStaffResponse` đúng **4 trường**: `accountId`, `fullName`, `role` (VET | CARETAKER), `online`. Không trả email, SĐT, trạng thái, khóa, `branchId`, chuyên môn, giới thiệu, `mustChangePassword`.
 
 - **`accountId`, không `id`:** quy tắc `id` ở `docs/api/00-method.md:36` chỉ nói tham số path; mọi response nhân viên khác (`StaffResponse`, `PublicVet`) dùng `accountId`, và giá trị này chính là `assigneeId` của #5, #9.
-- **`online`:** có thao tác trong `staff.online_window_minutes` [CFG] gần nhất (BR-TN-06) — **chỉ là gợi ý**, vẫn gán được người offline (cảnh báo `assigneeOffline` ở #5). Thứ tự do `findAssignableStaff` quyết: online trước, rồi họ tên, rồi `accountId`; service giữ nguyên thứ tự, không sắp lại.
+- **`online`:** có phiên chưa hủy với access token còn hạn (BR-TN-06, ADR-0091) — **chỉ là gợi ý**, vẫn gán được người offline (cảnh báo `assigneeOffline` ở #5). Thứ tự do `findAssignableStaff` quyết: online trước, rồi họ tên, rồi `accountId`; service giữ nguyên thứ tự, không sắp lại.
 
 ### 8. Không audit, không khóa; tái dùng `StaffDirectoryApi`
 

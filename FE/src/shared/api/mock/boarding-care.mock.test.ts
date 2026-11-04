@@ -56,7 +56,7 @@ const notificationsOf = async (email: string) => (await client.get('/api/me/noti
 describe('GET /boarding-bookings/:id/care-logs (#19)', () => {
   it('cũ nhất trước như BE (ngày nhật ký tăng dần, rồi id tăng dần), kèm bản bổ sung, người ghi và hạn sửa', async () => {
     const res = await client.get('/api/boarding-bookings/2/care-logs', await vet());
-    expect(res.data).toMatchObject({ message: 'Nhật ký chăm sóc' });
+    expect(res.data).toMatchObject({ message: 'success' }); // BE: `ApiResponse.ok(careLogs.list(…))` không đặt message riêng (L-42)
     const logs: Log[] = res.data.data;
     expect(logs.map((l) => l.careLogId)).toEqual([1, 2]);
     expect(logs[1]).toMatchObject({
@@ -285,6 +285,14 @@ describe('PATCH /care-logs/:id (#21)', () => {
     const same = await edit(created.careLogId, {});
     expect(same.data.data).toMatchObject({ eating: 'Ăn hết', photoUrls: [] });
     expect((await edit(created.careLogId, { eating: null, photoUrls: null })).data.data).toMatchObject({ eating: 'Ăn hết', photoUrls: [] });
+  });
+
+  // L-42: `UpdateCareLogRequest` của BE chỉ có eating / drinking / hygiene / activity / note / photoUrls; trường lạ (kể cả sai kiểu) bị Jackson bỏ qua.
+  it('isAbnormal / logDate không thuộc DTO PATCH: sai kiểu vẫn bị bỏ qua như BE (200, giá trị cũ giữ nguyên)', async () => {
+    const created = (await write(2, { eating: 'Ăn ít', isAbnormal: true })).data.data;
+    const res = await edit(created.careLogId, { eating: 'Ăn hết', isAbnormal: 'yes', logDate: 'rác' });
+    expect(res.status).toBe(200);
+    expect(res.data.data).toMatchObject({ eating: 'Ăn hết', isAbnormal: true, logDate: created.logDate });
   });
 
   it('mục mẫu của Mực ghi 30 phút trước còn sửa được tới hết giờ', async () => {

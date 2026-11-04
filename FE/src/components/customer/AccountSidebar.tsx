@@ -18,6 +18,7 @@ import {
   User,
 } from 'lucide-react'
 import { toast } from 'sonner'
+import { doctorInitials } from '../../pages/doctors/initials'
 import { useSession, useSessionUser } from '../../shared/stores/session.store'
 import styles from './AccountSidebar.module.css'
 
@@ -123,12 +124,7 @@ export function AccountSidebar({
   const displayName = userName ?? authName
   const displayEmail = userEmail ?? authEmail
 
-  const initials = displayName
-    .split(' ')
-    .slice(-2)
-    .map((w) => w[0] ?? '')
-    .join('')
-    .toUpperCase()
+  const initials = doctorInitials(displayName)
 
   const handleLogout = async () => {
     await logout()

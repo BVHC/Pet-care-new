@@ -3,7 +3,8 @@ import { render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { MemoryRouter } from 'react-router-dom';
-import { beforeAll, beforeEach, describe, expect, it } from 'vitest';
+import { beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
+import { customerPetApi } from '../../../domains/pets/customer-pet.api';
 import { apiClient } from '../../../shared/api/axios';
 import { MOCK_PASSWORD } from '../../../shared/api/mock/identity.mock';
 import { installMockApi } from '../../../shared/api/mock/mock-api';
@@ -76,6 +77,14 @@ describe('RetailOrderPanel (T34 — UC66)', () => {
 
     await user.click(screen.getByRole('button', { name: 'Bán đơn mới' }));
     expect(await screen.findByPlaceholderText('SĐT, họ tên hoặc email của khách')).toBeInTheDocument();
+  });
+
+  it('BE còn nhiều kết quả hơn số dòng đã vẽ thì nhắc thu hẹp từ khóa, không cắt im lặng (L-15)', async () => {
+    const item = { customerId: 1, fullName: 'Khách Một', phone: '0905111222', maskedEmail: null, createdChannel: 'COUNTER' as const, hasAccount: false, pets: [] };
+    vi.spyOn(customerPetApi, 'searchCustomers').mockResolvedValue({ content: [item], page: 0, size: 100, totalElements: 130, totalPages: 2 });
+    const user = renderPanel();
+    await user.type(screen.getByPlaceholderText('SĐT, họ tên hoặc email của khách'), '0905111222');
+    expect(await screen.findByText('Đang hiển thị 1 / 130 kết quả, hãy thu hẹp từ khóa.')).toBeInTheDocument();
   });
 
   it('Order đã bị hủy ở quầy khác: chốt báo dễ hiểu (409) và tải lại trạng thái mới', async () => {

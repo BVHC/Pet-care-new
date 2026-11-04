@@ -348,6 +348,14 @@ describe('điều chỉnh tồn (UC76, BR-KO-06)', () => {
     expect((await failure(client.post('/api/stock-adjustments', { reason: 'DAMAGED', lines: [] }, await manager()))).data.errorCode).toBe('VALIDATION_FAILED');
   });
 
+  // L-15 (6): BE `createAdjustment` kiểm lý do OTHER TRƯỚC khi tìm lô (404), và câu có chữ "có": `Lý do "Khác" bắt buộc có ghi chú (BR-KO-06)`.
+  it('lý do Khác thiếu ghi chú được báo trước lỗi lô không tồn tại (404), đúng câu của BE', async () => {
+    const res = await failure(client.post('/api/stock-adjustments', { reason: 'OTHER', lines: [{ stockLotId: 99999, quantityDelta: -1 }] }, await manager()));
+    expect(res.status).toBe(400);
+    expect(ruleOf(res)).toBe('BR-KO-06');
+    expect(res.data.message).toBe('Lý do "Khác" bắt buộc có ghi chú (BR-KO-06)');
+  });
+
   // BE StockAdjustmentService: nêu đủ các lô thiếu, id tăng dần, nối bằng "; "; lô mặc định ghi "mặc định #id". Lô còn đủ không có mặt trong câu.
   it('giảm quá tồn nhiều lô: câu BR-KO-06 nêu đủ các lô thiếu theo id lô, lô mặc định ghi "mặc định #id"; không lô nào bị trừ', async () => {
     const lines = [

@@ -20,7 +20,10 @@ export const STAFF_NOTIFICATIONS_PATH = '/admin/notifications';
 
 /** Kích thước trang mặc định của BE (#5). */
 const PAGE_SIZE = 20;
-/** Chuông hỏi lại số chưa đọc mỗi phút. Với nhân viên, mỗi lần hỏi cũng làm mới last_seen_at (nợ D024, docs/adr/0039). */
+/**
+ * Chuông hỏi lại `GET /api/me/notifications/unread-count` (không tham số) mỗi phút; tạm dừng khi tab ở nền (`refetchIntervalInBackground` mặc định false).
+ * Từ V27 / docs/adr/0091 BE không ghi gì khi xác thực nên poll này không làm nhân viên "online" (đã trả nợ D024).
+ */
 const UNREAD_POLL_MS = 60_000;
 
 const LIST_KEY = ['notifications', 'list'] as const;

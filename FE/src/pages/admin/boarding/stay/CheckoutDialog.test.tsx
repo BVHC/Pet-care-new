@@ -80,7 +80,11 @@ describe('CheckoutDialog — bước chưa có Order', () => {
     const dialog = await screen.findByRole('dialog', { name: 'Trả thú' });
     await startButton();
     expect(within(dialog).getByText(/Cốm/)).toBeInTheDocument();
-    expect(within(dialog).getByText(/tối thiểu 1 đêm/)).toBeInTheDocument();
+    // L-50: luật `max(1, ngày ở + (sau 12:00 ? 1 : 0))` — câu cũ "tối thiểu 1 đêm; trả sau 12:00 tính thêm 1 đêm" dễ đọc thành 2 đêm cho ca cùng ngày.
+    const rule = within(dialog).getByText(/Số đêm = số ngày ở/);
+    expect(rule).toHaveTextContent('trả sau 12:00 cộng thêm 1 đêm');
+    expect(rule).toHaveTextContent('nhận và trả cùng ngày vẫn tính 1 đêm, kể cả sau 12:00');
+    expect(rule).not.toHaveTextContent('tối thiểu 1 đêm; trả sau');
     expect(within(dialog).queryByRole('button', { name: 'Giao thú' })).not.toBeInTheDocument();
     expect(within(dialog).queryByText(ORDER_CODE)).not.toBeInTheDocument();
     expect(writes()).toEqual([]);

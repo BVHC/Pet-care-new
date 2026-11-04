@@ -11,6 +11,7 @@ import { Link } from 'react-router-dom';
 import { toast } from 'sonner';
 import { formatCurrency } from '../../../lib/utils';
 import { Dialog, DialogContent, DialogDescription, DialogTitle } from '../../ui/dialog';
+import { LookupTruncatedNote } from '../../ui/LookupTruncatedNote';
 import { useCustomerDetail, useCustomerLookup } from '../../../domains/pets/hooks/useCustomerPet';
 import type { CustomerSearchQuery } from '../../../domains/pets/types';
 import { salesApi } from '../../../shared/api/sales.api';
@@ -164,23 +165,26 @@ function CustomerPicker({ searchRef, onPick }: { searchRef: ForwardedRef<HTMLInp
             }
           />
         ) : (
-          <ul aria-label="Hồ sơ khách" className="flex flex-col gap-2">
-            {items.map((c) => (
-              <li key={c.customerId}>
-                {/* Cùng SĐT có thể nhiều hồ sơ (BR-KH-10): hiện thêm email đã che để chọn đúng người. */}
-                <button
-                  type="button"
-                  onClick={() => onPick(c.customerId)}
-                  className="flex w-full flex-col items-start rounded-lg border border-(--ws-line) px-3 py-2 text-left hover:border-(--ws-accent)"
-                >
-                  <span className="text-sm font-semibold">{c.fullName}</span>
-                  <span className="ws-num text-xs text-(--ws-ink-2)">
-                    {c.phone ?? 'Chưa có SĐT'} · {c.maskedEmail ?? 'chưa có email'}
-                  </span>
-                </button>
-              </li>
-            ))}
-          </ul>
+          <>
+            {lookup.data && <LookupTruncatedNote shown={items.length} total={lookup.data.totalElements} className="mb-2 text-xs text-(--ws-ink-3)" />}
+            <ul aria-label="Hồ sơ khách" className="flex flex-col gap-2">
+              {items.map((c) => (
+                <li key={c.customerId}>
+                  {/* Cùng SĐT có thể nhiều hồ sơ (BR-KH-10): hiện thêm email đã che để chọn đúng người. */}
+                  <button
+                    type="button"
+                    onClick={() => onPick(c.customerId)}
+                    className="flex w-full flex-col items-start rounded-lg border border-(--ws-line) px-3 py-2 text-left hover:border-(--ws-accent)"
+                  >
+                    <span className="text-sm font-semibold">{c.fullName}</span>
+                    <span className="ws-num text-xs text-(--ws-ink-2)">
+                      {c.phone ?? 'Chưa có SĐT'} · {c.maskedEmail ?? 'chưa có email'}
+                    </span>
+                  </button>
+                </li>
+              ))}
+            </ul>
+          </>
         )}
       </div>
       <p className="border-t border-(--ws-line) px-4 py-2 text-xs text-(--ws-ink-3)">

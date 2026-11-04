@@ -109,7 +109,7 @@ function StartStep({ booking, onError, onClearError, onClose }: { booking: Booki
   return (
     <>
       <p className="text-sm text-(--text-secondary)">
-        Bắt đầu trả thú sẽ tạo Order lưu trú chờ thanh toán. Số đêm tính từ ngày nhận thực tế đến hôm nay, tối thiểu 1 đêm; trả sau 12:00 tính thêm 1 đêm (BR-LT-09).
+        Bắt đầu trả thú sẽ tạo Order lưu trú chờ thanh toán. Số đêm = số ngày ở (từ ngày nhận thực tế đến hôm nay); trả sau 12:00 cộng thêm 1 đêm. Luôn tính ít nhất 1 đêm: nhận và trả cùng ngày vẫn tính 1 đêm, kể cả sau 12:00 (BR-LT-09).
       </p>
       <StayFooter>
         <Button variant="outline" onClick={onClose} disabled={start.isPending}>

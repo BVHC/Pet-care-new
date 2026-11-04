@@ -71,7 +71,9 @@ export function useBoardingMutation<A, R>(fn: (args: A) => Promise<R>) {
     mutationFn: fn,
     onSuccess: () =>
       Promise.all([
-        queryClient.invalidateQueries({ queryKey: BOARDING_KEY }),
+        // Điều kiện nhận thú (['boarding','readiness',id]) không làm mới sau lệnh ghi: đặt chỗ đã rời BOOKED (nhận / hủy) nên BE chỉ trả 409 (L-46).
+        // Nơi cần số mới sau khi lệnh bị từ chối vẫn gọi `useRefreshBoarding`, nó quét cả khóa này.
+        queryClient.invalidateQueries({ queryKey: BOARDING_KEY, predicate: (q) => q.queryKey[1] !== 'readiness' }),
         ...TOUCHED_KEYS.map((queryKey) => queryClient.invalidateQueries({ queryKey })),
       ]),
   });

@@ -1,9 +1,10 @@
-import { fireEvent, render, screen, waitFor, within } from '@testing-library/react';
+import { act, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
-import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
+import { focusManager, QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { MemoryRouter, Route, Routes, useLocation } from 'react-router-dom';
 import { afterEach, beforeAll, describe, expect, it, vi } from 'vitest';
 import { apiClient } from '../../shared/api/axios';
+import { catalogApi } from '../../shared/api/catalog.api';
 import { inventoryApi } from '../../shared/api/inventory.api';
 import { MOCK_PASSWORD } from '../../shared/api/mock/identity.mock';
 import { installMockApi } from '../../shared/api/mock/mock-api';
@@ -242,6 +243,63 @@ describe('AdminWarehousePage (T24 — UC73–76)', () => {
     await user.click(within(form).getByRole('button', { name: 'Lưu phiếu điều chỉnh' }));
     expect(await screen.findByRole('status')).toHaveTextContent(/Đã lập phiếu điều chỉnh DC-\d{6}-0002/);
     expect(create).toHaveBeenCalledTimes(1);
+  });
+
+  // L-15 (2): ô chọn sản phẩm chỉ lấy 100 dòng đầu (trần của BE); BE còn nhiều hơn thì form phải nói, không cắt im lặng.
+  describe('ô chọn sản phẩm bị cắt ở 100 dòng', () => {
+    const noteIn = (form: HTMLElement) => within(form).queryByRole('note');
+
+    it('phiếu nhập: BE còn 130 sản phẩm thì nhắc số đang hiện; đủ sản phẩm thì không nhắc', async () => {
+      await signIn('manager@store1.vn');
+      const real = catalogApi.listProducts;
+      const user = renderAt('/admin/warehouse/receipts');
+      await user.click(await screen.findByRole('button', { name: 'Tạo phiếu nhập' }));
+      const form = screen.getByRole('dialog');
+      await waitFor(() => expect(within(form).getAllByRole('option', { name: /^Vaccine Dại Rabisin \(/ }).length).toBeGreaterThan(0));
+      expect(noteIn(form)).not.toBeInTheDocument();
+      await user.click(within(form).getByRole('button', { name: 'Hủy' }));
+
+      vi.spyOn(catalogApi, 'listProducts').mockImplementation(async (q) => ({ ...(await real(q)), totalElements: 130 }));
+      await user.click(screen.getByRole('button', { name: 'Tạo phiếu nhập' }));
+      expect(await within(screen.getByRole('dialog')).findByRole('note')).toHaveTextContent(/^Chỉ hiện \d+ \/ 130 sản phẩm đầu tiên/);
+    });
+
+    it('phiếu điều chỉnh: BE còn 130 sản phẩm tồn kho thì nhắc số đang hiện', async () => {
+      await signIn('manager@store1.vn');
+      const real = inventoryApi.listInventory;
+      vi.spyOn(inventoryApi, 'listInventory').mockImplementation(async (q) => ({ ...(await real(q)), totalElements: 130 }));
+      const user = renderAt('/admin/warehouse/adjustments');
+      await user.click(await screen.findByRole('button', { name: 'Lập phiếu điều chỉnh' }));
+      expect(await within(screen.getByRole('dialog')).findByRole('note')).toHaveTextContent(/^Chỉ hiện \d+ \/ 130 sản phẩm đầu tiên/);
+    });
+  });
+
+  // L-15 (3): `lotQuantity` từng được chụp lúc chọn lô; tồn đổi sau đó (người khác nhập / điều chỉnh) thì nhãn lô "còn N" cập nhật mà phép kiểm vượt tồn vẫn dùng số cũ.
+  it('điều chỉnh tồn: tồn của lô đổi sau khi chọn lô thì phép kiểm "giảm quá tồn" dùng số mới, không phải số lúc chọn', async () => {
+    await signIn('manager@store1.vn');
+    const create = vi.spyOn(inventoryApi, 'createAdjustment');
+    const user = renderAt('/admin/warehouse/adjustments');
+    await user.click(await screen.findByRole('button', { name: 'Lập phiếu điều chỉnh' }));
+    const form = screen.getByRole('dialog');
+    await user.selectOptions(within(form).getByLabelText('Lý do'), 'EXPIRED');
+    await user.selectOptions(within(form).getByLabelText('Dòng 1 — sản phẩm'), '5');
+    await waitFor(() => expect(within(within(form).getByLabelText('Dòng 1 — lô')).getAllByRole('option').length).toBe(3));
+    await user.selectOptions(within(form).getByLabelText('Dòng 1 — lô'), '15'); // RB2401 còn 15
+
+    // Người khác nhập thêm 10 vào lô này; form lấy lại số khi cửa sổ lấy lại focus.
+    await inventoryApi.createAdjustment({ reason: 'COUNT_MISMATCH', lines: [{ stockLotId: 15, quantityDelta: 10 }], note: 'Kiểm kê lại' });
+    create.mockClear();
+    act(() => {
+      focusManager.setFocused(false);
+      focusManager.setFocused(true);
+    });
+    await waitFor(() => expect(within(form).getByRole('option', { name: /RB2401.*còn 25/ })).toBeInTheDocument());
+
+    // 20 vượt số cũ (15) nhưng không vượt tồn thật (25).
+    fireEvent.change(within(form).getByLabelText('Dòng 1 — số điều chỉnh'), { target: { value: '-20' } });
+    await user.click(within(form).getByRole('button', { name: 'Lưu phiếu điều chỉnh' }));
+    expect(within(form).queryByRole('alert')).not.toBeInTheDocument();
+    await waitFor(() => expect(create).toHaveBeenCalledTimes(1));
   });
 
   // BE từ chối lưu và xác nhận nháp có nhà cung cấp ngừng hợp tác (400 BR-KO-02 "Nhà cung cấp … đã ngừng hợp tác, không chọn được ở phiếu nhập mới").

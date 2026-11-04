@@ -1,7 +1,8 @@
 import { render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
-import { beforeAll, beforeEach, describe, expect, it } from 'vitest';
+import { beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
+import { customerPetApi } from '@/domains/pets/customer-pet.api';
 import type { PetResponse } from '@/domains/pets/types';
 import { apiClient } from '../../../shared/api/axios';
 import { MOCK_PASSWORD } from '../../../shared/api/mock/identity.mock';
@@ -50,6 +51,19 @@ describe('TransferOwnerDialog: ứng viên chủ mới', () => {
 
     await user.clear(input);
     await waitFor(() => expect(candidates()).toHaveLength(0));
+  });
+
+  it('BE còn nhiều kết quả hơn số dòng đã vẽ thì nhắc thu hẹp từ khóa, đếm theo content (gồm cả chủ hiện tại bị lọc) (L-15)', async () => {
+    const base = { phone: '0905111222', maskedEmail: null, createdChannel: 'COUNTER' as const, hasAccount: false, pets: [] };
+    const content = [
+      { ...base, customerId: pet.customerId, fullName: 'Lê Chủ Cũ' },
+      { ...base, customerId: 2, fullName: 'Lê Chủ Mới' },
+    ];
+    vi.spyOn(customerPetApi, 'searchCustomers').mockResolvedValue({ content, page: 0, size: 100, totalElements: 130, totalPages: 2 });
+    const user = renderDialog();
+    await user.type(screen.getByLabelText('Tìm chủ mới (SĐT hoặc họ tên)'), '0905111222');
+    expect(await screen.findByText('Đang hiển thị 2 / 130 kết quả, hãy thu hẹp từ khóa.')).toBeInTheDocument();
+    expect(candidates()).toHaveLength(1);
   });
 
   it('SĐT bị xóa bớt (chưa đủ 10 số) thì hết ứng viên, chỉ còn lời nhắc', async () => {
