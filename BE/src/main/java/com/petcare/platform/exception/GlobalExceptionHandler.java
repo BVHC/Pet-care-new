@@ -8,6 +8,7 @@ import org.springframework.dao.DataAccessException;
 import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.dao.OptimisticLockingFailureException;
 import org.springframework.dao.PessimisticLockingFailureException;
+import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpStatusCode;
 import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
@@ -50,6 +51,16 @@ public class GlobalExceptionHandler {
     public ResponseEntity<ErrorResponse> handlePlatform(PlatformException ex) {
         log.warn("{}: {}", ex.errorCode(), ex.getMessage());
         return build(ex.errorCode(), ex.clientMessage());
+    }
+
+    /** 429 kèm {@code Retry-After} (docs/adr/0100); phải đứng riêng vì {@link #handlePlatform} không gắn được header. */
+    @ExceptionHandler(TooManyRequestsException.class)
+    public ResponseEntity<ErrorResponse> handleTooManyRequests(TooManyRequestsException ex) {
+        log.warn("{}: retryAfter={}s", ex.errorCode(), ex.retryAfterSeconds());
+        return ResponseEntity.status(ex.errorCode().status())
+                .header(HttpHeaders.RETRY_AFTER, Long.toString(ex.retryAfterSeconds()))
+                .contentType(MediaType.APPLICATION_JSON)
+                .body(ErrorResponse.of(ex.errorCode(), ex.clientMessage()));
     }
 
     @ExceptionHandler(MethodArgumentNotValidException.class)

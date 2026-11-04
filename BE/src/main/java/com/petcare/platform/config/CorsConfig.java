@@ -23,7 +23,8 @@ public class CorsConfig {
         config.setAllowedOrigins(properties.allowedOrigins());
         config.setAllowedMethods(List.of("GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"));
         config.setAllowedHeaders(List.of("Authorization", "Content-Type", TraceContext.HEADER));
-        config.setExposedHeaders(List.of(TraceContext.HEADER));
+        // Retry-After của 429 (docs/adr/0100): không expose thì JS cross-origin không đọc được số giây phải chờ.
+        config.setExposedHeaders(List.of(TraceContext.HEADER, "Retry-After"));
         config.setAllowCredentials(false);
         config.setMaxAge(3600L);
 

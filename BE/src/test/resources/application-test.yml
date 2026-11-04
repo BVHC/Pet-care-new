@@ -36,6 +36,9 @@ jwt:
 app:
   cors:
     allowed-origins: http://localhost:5173,http://localhost:3000
+  # Tắt giới hạn tần suất theo IP (docs/adr/0100): IT đăng nhập hàng loạt từ cùng một IP loopback. Chỉ RateLimitIT bật lại.
+  rate-limit:
+    enabled: false
   # Không job nào tự chạy trong test (docs/adr/0007); IT gọi job trực tiếp.
   jobs:
     session-cleanup:
