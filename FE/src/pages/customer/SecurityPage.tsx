@@ -19,15 +19,38 @@ import { toast } from 'sonner'
 import { AccountSidebar } from '@/components/customer/AccountSidebar'
 import { authApi } from '@/shared/api/auth.api'
 import { plainMessage, toApiError } from '@/shared/api/api-error'
-import { useSession } from '@/shared/stores/session.store'
+import { useCustomerProfile, useMe } from '@/shared/hooks/useProfile'
+import { useAccount, useSession } from '@/shared/stores/session.store'
 import { passwordPolicyError } from '@/shared/utils/password'
 import styles from './SecurityPage.module.css'
+
+/* ================================================================
+   Số điện thoại thật của người đang đăng nhập. Khách: hồ sơ khách (`GET /api/me/customer-profile`, chỉ CUSTOMER, nhân viên gọi sẽ 403);
+   nhân viên: `GET /api/me` (staffProfile). Hai component riêng vì hook không gọi có điều kiện được. Trang này mở cho mọi vai trò.
+   ================================================================ */
+
+function PhoneText({ isPending, isError, phone }: { isPending: boolean; isError: boolean; phone?: string | null }) {
+  if (isError) return <>Không tải được số điện thoại</>
+  if (isPending) return <>Đang tải…</>
+  return <>{phone || 'Chưa có số điện thoại'}</>
+}
+
+function CustomerPhone() {
+  const profile = useCustomerProfile()
+  return <PhoneText isPending={profile.isPending} isError={profile.isError} phone={profile.data?.phone} />
+}
+
+function StaffPhone() {
+  const me = useMe()
+  return <PhoneText isPending={me.isPending} isError={me.isError} phone={me.data?.staffProfile?.phone} />
+}
 
 /* ================================================================
    Main.
    ================================================================ */
 
 export function SecurityPage() {
+  const account = useAccount()
   const [twoFa, setTwoFa] = useState(false)
   const [loginAlert, setLoginAlert] = useState(true)
   const [showPwForm, setShowPwForm] = useState(false)
@@ -212,7 +235,7 @@ export function SecurityPage() {
                     <Mail size={20} />
                   </div>
                   <div className={styles.secContent}>
-                    <div className={styles.secTitle}>nguyenvana@email.com</div>
+                    <div className={styles.secTitle}>{account?.email}</div>
                     <div className={styles.secDesc}>Email đã xác minh · Dùng để đăng nhập</div>
                   </div>
                   <button type="button" className={`${styles.secBtn} ${styles.secBtnDanger}`}>
@@ -224,7 +247,7 @@ export function SecurityPage() {
                     <Smartphone size={20} />
                   </div>
                   <div className={styles.secContent}>
-                    <div className={styles.secTitle}>0901 234 567</div>
+                    <div className={styles.secTitle}>{account?.role === 'CUSTOMER' ? <CustomerPhone /> : <StaffPhone />}</div>
                     <div className={styles.secDesc}>Dùng để nhận mã OTP và thông báo</div>
                     {twoFa && <div className={styles.secMeta}><CheckCircle size={13} className="inline mr-1 text-emerald-600 align-[-1px]" />Đã liên kết 2FA</div>}
                   </div>
@@ -273,32 +296,16 @@ export function SecurityPage() {
                 <h2 className={styles.sectionTitle}>Phiên đăng nhập</h2>
               </div>
               <div className={styles.sectionBody}>
+                {/* Hợp đồng identity-v1 chưa có API liệt kê / thu hồi phiên: chỉ nói được về phiên đang dùng, không dựng danh sách thiết bị. */}
                 <div className={styles.secItem}>
                   <div className={`${styles.secIcon} ${styles.secIconPass}`}>
                     <CheckCircle size={20} />
                   </div>
                   <div className={styles.secContent}>
-                    <div className={styles.secTitle}>MacBook Pro · Trình duyệt hiện tại</div>
-                    <div className={styles.secDesc}>Hà Nội, Việt Nam · Đang hoạt động</div>
-                    <div className={styles.secMeta}>Phiên hiện tại</div>
+                    <div className={styles.secTitle}>Trình duyệt này</div>
+                    <div className={styles.secDesc}>Phiên hiện tại · Đang hoạt động</div>
+                    <div className={styles.secMeta}>Danh sách thiết bị khác chưa có trên hệ thống. Đổi mật khẩu sẽ đăng xuất các thiết bị khác.</div>
                   </div>
-                </div>
-                <div className={styles.secItem}>
-                  <div className={`${styles.secIcon} ${styles.secIconSession}`}>
-                    <Smartphone size={20} />
-                  </div>
-                  <div className={styles.secContent}>
-                    <div className={styles.secTitle}>iPhone 15 Pro · App Pet Care</div>
-                    <div className={styles.secDesc}>TP.HCM, Việt Nam · 2 giờ trước</div>
-                  </div>
-                  <button
-                    type="button"
-                    onClick={() => toast.success('Đã đăng xuất thiết bị.')}
-                    className={`${styles.secBtn} ${styles.secBtnDanger}`}
-                  >
-                    <Trash2 size={13} />
-                    Đăng xuất
-                  </button>
                 </div>
               </div>
             </section>

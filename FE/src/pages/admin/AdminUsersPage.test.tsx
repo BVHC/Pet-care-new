@@ -273,6 +273,33 @@ describe('AdminUsersPage (T22 - UC08)', () => {
       expect(within(modal).getByText('Hơn 8 năm khám và điều trị chó mèo, quan tâm đặc biệt tới bệnh da và dị ứng.')).toBeInTheDocument();
     });
 
+    // M-2 (C8, 4/11): avatar từng là `fullName.charAt(0)` nên cả bác sĩ "BS. …" cùng hiện "B"; nay như K52: chữ đầu của họ và của tên cuối, bỏ "BS.".
+    it('avatar nhân viên (bảng và hộp Chi tiết): chữ đầu họ + tên cuối, bỏ "BS."; bác sĩ khác tên không còn cùng "B"', async () => {
+      const user = userEvent.setup();
+      renderPage();
+      const minhAnh = await rowOf('BS. Minh Anh');
+      expect(within(minhAnh).getByText('MA')).toBeInTheDocument();
+      expect(within(await rowOf('BS. Quốc Bảo')).getByText('QB')).toBeInTheDocument();
+      expect(screen.queryByText('B')).not.toBeInTheDocument();
+
+      await user.click(within(minhAnh).getByRole('button', { name: 'Xem chi tiết BS. Minh Anh' }));
+      expect(within(screen.getByRole('dialog')).getByText('MA')).toBeInTheDocument();
+    });
+
+    // M-3 (C8, 4/11): cột hiện "● Online" / "Offline" (không phải thời điểm đăng nhập) mà tiêu đề ghi "Đăng nhập cuối"; cột 4 đã tên "Trạng thái" (hoạt động / khóa).
+    it('cột Online/Offline có tiêu đề "Trực tuyến", không còn "Đăng nhập cuối"; hộp Chi tiết cùng nhãn', async () => {
+      const user = userEvent.setup();
+      renderPage();
+      await rowOf('BS. Minh Anh');
+      expect(screen.getByRole('columnheader', { name: 'Trực tuyến' })).toBeInTheDocument();
+      expect(screen.queryByRole('columnheader', { name: 'Đăng nhập cuối' })).not.toBeInTheDocument();
+
+      await user.click(screen.getByRole('button', { name: 'Xem chi tiết BS. Minh Anh' }));
+      const modal = screen.getByRole('dialog');
+      expect(within(modal).getByText('Trực tuyến')).toBeInTheDocument();
+      expect(within(modal).queryByText('Đăng nhập')).not.toBeInTheDocument();
+    });
+
     // BR-QT-01: SUPER_MANAGER không tạo được SUPER_MANAGER; vai trò ngoài quyền không hiển thị để chọn.
     it('không có vai trò Quản lý chuỗi trong form tạo, nhưng có Quản lý chi nhánh và ô chi nhánh bắt buộc', async () => {
       const user = userEvent.setup();

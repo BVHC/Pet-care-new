@@ -35,6 +35,7 @@ import { useStaffBranchId } from '../../shared/hooks/useStaffBranch';
 import { Pager } from '../../components/admin/Pager';
 import type { ChangeableStaffRole, CreateableStaffRole, StaffResponse } from '../../shared/types/identity';
 import { useAccount } from '../../shared/stores/session.store';
+import { doctorInitials } from '../doctors/initials';
 
 /* ================================================================
    Constants.
@@ -219,7 +220,7 @@ export function AdminUsersPage() {
                 <th>Vai trò</th>
                 <th>Chi nhánh</th>
                 <th>Trạng thái</th>
-                <th>Đăng nhập cuối</th>
+                <th>Trực tuyến</th>
                 <th className="text-right">Thao tác</th>
               </tr>
             </thead>
@@ -238,7 +239,7 @@ export function AdminUsersPage() {
                     <td>
                       <div className="flex items-center gap-3">
                         <div className="h-10 w-10 rounded-full bg-linear-to-br from-accent to-accent-hover flex items-center justify-center text-white font-medium">
-                          {u.fullName.charAt(0)}
+                          {doctorInitials(u.fullName)}
                         </div>
                         <div>
                           <p className="font-medium text-(--text-primary)">
@@ -318,7 +319,7 @@ export function AdminUsersPage() {
           <div className="space-y-4">
             <div className="flex items-center gap-4 pb-4 border-b border-(--color-border-light)">
               <div className="h-14 w-14 rounded-full bg-linear-to-br from-accent to-accent-hover flex items-center justify-center text-white text-2xl font-bold">
-                {detail.fullName.charAt(0)}
+                {doctorInitials(detail.fullName)}
               </div>
               <div className="flex-1">
                 <h3 className="text-lg font-semibold text-(--text-primary)">{detail.fullName}</h3>
@@ -334,7 +335,7 @@ export function AdminUsersPage() {
               <InfoRow label="Mã tài khoản" value={`#${detail.accountId}`} />
               <InfoRow label="Số điện thoại" value={detail.phone} />
               <InfoRow label="Chi nhánh" value={detail.branchId ? branches.data?.find((b) => b.branchId === detail.branchId)?.name ?? `#${detail.branchId}` : '—'} />
-              <InfoRow label="Đăng nhập" value={detail.online ? '● Online' : 'Offline'} />
+              <InfoRow label="Trực tuyến" value={detail.online ? '● Online' : 'Offline'} />
               {detail.role === 'VET' && (
                 <>
                   <InfoRow label="Chuyên môn" value={detail.specialty ?? '—'} />
