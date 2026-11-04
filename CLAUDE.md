@@ -116,7 +116,7 @@ Module codes: TK, QT, CN, CK, KH, SP, NS, LH, TN, KB, LT, BH, TG, KO, BV, DG, TB
 
 Open convention TBDs (don't decide silently — ask or write an ADR): command names when no Actor↔Command table exists; how "warn, don't block" rules return warnings (contracts assume a named field in `data`, e.g. `stockWarning`); locking for kennel capacity.
 
-**ADR map** (`docs/adr/`, immutable once Accepted — supersede instead of editing; **next free: 0105** (0103 = BE-2, sales #11 + payment / ST13 hardening; 0104 = BE-2, unaccent customer search) — `origin/dev` already holds BE-2's 0088–0090, so this branch's N5 ADR-0088 must be renumbered before merge; after the 2026-11-03 merge ADR 0088 exists as two files with the same number (`0088-inventory-expiring-soon-flag`, BE-2, and `0088-n5-unlock-flag-follow-up-deferral-stopped-service`, BE-1) — renumbering N5 is BE-1's job. The OTP code length and UC22 ADRs of `dev` are 0096 and 0097 (renumbered from 0091 and 0092, which BE-1 took for the refresh token and D027)):
+**ADR map** (`docs/adr/`, immutable once Accepted — supersede instead of editing; **next free: 0106** (0103 = BE-2, sales #11 + payment / ST13 hardening; 0104 = BE-2, unaccent customer search; 0105 = BE-2, orders indexes measured, none added) — `origin/dev` already holds BE-2's 0088–0090, so this branch's N5 ADR-0088 must be renumbered before merge; after the 2026-11-03 merge ADR 0088 exists as two files with the same number (`0088-inventory-expiring-soon-flag`, BE-2, and `0088-n5-unlock-flag-follow-up-deferral-stopped-service`, BE-1) — renumbering N5 is BE-1's job. The OTP code length and UC22 ADRs of `dev` are 0096 and 0097 (renumbered from 0091 and 0092, which BE-1 took for the refresh token and D027)):
 
 | Area | ADRs |
 |---|---|
