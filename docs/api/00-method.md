@@ -66,6 +66,7 @@ Khớp `platform/model/ErrorResponse` và `platform/exception/ErrorCode`. Mọi 
 | 404 | `RESOURCE_NOT_FOUND` | Không có, hoặc người gọi không được biết là có (thú của chủ khác, bài viết ẩn) |
 | 409 | `INVALID_STATE_TRANSITION` | Trạng thái hiện tại không cho phép (không có trong bảng chuyển trạng thái của 03) |
 | 409 | `CONCURRENCY_CONFLICT` | Cập nhật đồng thời, vi phạm ràng buộc DB do tranh chấp |
+| 429 | `TOO_MANY_REQUESTS` | Một IP gọi quá nhiều lần vào endpoint public của `/auth` (đăng nhập, đăng ký, quên / đặt lại mật khẩu; ADR-0100). Kèm header `Retry-After` (số giây nguyên ≥ 1), đọc được cả khi gọi chéo origin. Chặn trước khi xử lý: không ghi audit, không đếm vào khóa tạm hay quota OTP |
 
 **Không dùng 422.** Rule mà FE cần phân biệt (chưa xác thực, khóa tạm, bắt đổi mật khẩu, chờ liên kết hồ sơ…) trả 400 `BUSINESS_RULE_VIOLATION`, không trả 403, vì 403 chỉ có message chung. Thứ tự kiểm tra: quyền → tồn tại → guard nghiệp vụ (400) → chuyển trạng thái hợp lệ (409). Trong từng file contract, mục lỗi ghi `` `400` `BR-…` …`` nghĩa là `BUSINESS_RULE_VIOLATION` với mã rule đó trong `message`.
 

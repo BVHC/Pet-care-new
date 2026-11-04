@@ -146,6 +146,11 @@ class GlobalExceptionHandlerTest {
         void boom() {
             throw new IllegalStateException("secret internal detail");
         }
+
+        @GetMapping("/too-many")
+        void tooMany() {
+            throw new TooManyRequestsException(37);
+        }
     }
 
     private final MockMvc mvc = MockMvcBuilders.standaloneSetup(new ThrowingController())
@@ -266,6 +271,21 @@ class GlobalExceptionHandlerTest {
     @Test
     void otherSpringClientErrorKeepsItsStatus() throws Exception {
         expectError(mvc.perform(get("/t/status-404")), ErrorCode.RESOURCE_NOT_FOUND);
+    }
+
+    @Test
+    void tooManyRequestsIs429WithRetryAfterHeader() throws Exception {
+        expectError(mvc.perform(get("/t/too-many")), ErrorCode.TOO_MANY_REQUESTS)
+                .andExpect(header().string("Retry-After", "37"))
+                .andExpect(jsonPath("$.message").value("Bạn thao tác quá nhanh, vui lòng thử lại sau 37 giây"));
+    }
+
+    @Test
+    void tooManyRequestsRoundsRetryAfterUpToOneSecond() {
+        TooManyRequestsException zero = new TooManyRequestsException(0);
+
+        org.assertj.core.api.Assertions.assertThat(zero.retryAfterSeconds()).isEqualTo(1);
+        org.assertj.core.api.Assertions.assertThat(zero.errorCode()).isEqualTo(ErrorCode.TOO_MANY_REQUESTS);
     }
 
     @Test

@@ -197,35 +197,38 @@ m.schema("AssignableStaff", {
 
 # ---------------- operations
 OTP_ERR = "`BR-TK-05` mã sai / hết hạn · `BR-TK-06` sai quá 5 lần, mã bị hủy"
+# 429 của endpoint public (ADR-0100, nợ D011): chặn theo IP trước khi xử lý, nên không chạm tài khoản, audit hay OTP.
+RATE_ERR = "`TOO_MANY_REQUESTS` một IP gọi quá nhiều lần trong một cửa sổ thời gian (ADR-0100): header `Retry-After` là số giây nguyên phải chờ. Request bị chặn trước khi xử lý: không đếm vào khóa tạm BR-TK-09 hay quota OTP BR-TK-07, không ghi audit"
 m.op("post", "/auth/register", "registerAccount", "Đăng ký tài khoản", "Auth", "UC01",
      "BR-TK-01, 02, 03, 04, 05, 07, BR-KH-01", "A01", "Public", "— → PENDING (Tài khoản#1); tạo hồ sơ online",
-     body="RegisterRequest", resp="RegistrationResponse", status=201, public=True, errors=(400, 409),
+     body="RegisterRequest", resp="RegistrationResponse", status=201, public=True, errors=(400, 409, 429),
      err_desc={400: "`BR-TK-01` email đã được sử dụng · `BR-TK-02` chưa xác nhận ≥ 18 tuổi / điều khoản · `BR-TK-03` mật khẩu yếu hoặc quá 72 byte · `BR-TK-07` email đã nhận quá 5 mã OTP/giờ [CFG]",
-               409: "`CONCURRENCY_CONFLICT` hai request đăng ký cùng email cùng lúc"},
+               409: "`CONCURRENCY_CONFLICT` hai request đăng ký cùng email cùng lúc", 429: RATE_ERR},
      notes="Gửi OTP_REGISTER qua outbox (A8).")
 m.op("post", "/auth/register/verify", "verifyRegistration", "Xác thực OTP đăng ký", "Auth", "UC02",
      "BR-TK-05, 06, 19", "A01", "Public", "PENDING → ACTIVE (Tài khoản#2)",
-     body="VerifyOtpRequest", resp="VerificationResponse", public=True, errors=(400, 404),
-     err_desc={400: OTP_ERR, 404: "Không có tài khoản PENDING với email này"}, notes="Không tự đăng nhập (A2).")
+     body="VerifyOtpRequest", resp="VerificationResponse", public=True, errors=(400, 404, 429),
+     err_desc={400: OTP_ERR, 404: "Không có tài khoản PENDING với email này", 429: RATE_ERR}, notes="Không tự đăng nhập (A2).")
 m.op("post", "/auth/register/resend-otp", "resendRegistrationOtp", "Gửi lại OTP đăng ký", "Auth", "UC02",
      "BR-TK-04, 05, 07", "A01", "Public", "—", body="EmailRequest", resp="OtpSentResponse", public=True,
-     errors=(400, 404), err_desc={400: "`BR-TK-07` chưa đủ 60 giây hoặc vượt 5 mã/giờ", 404: "Không có tài khoản PENDING với email này"},
+     errors=(400, 404, 429), err_desc={400: "`BR-TK-07` chưa đủ 60 giây hoặc vượt 5 mã/giờ", 404: "Không có tài khoản PENDING với email này", 429: RATE_ERR},
      notes="Mã cũ cùng mục đích mất hiệu lực (BR-TK-05).")
 m.op("post", "/auth/login", "login", "Đăng nhập", "Auth", "UC03",
      "BR-TK-08, 09, 10, 11, 17, BR-QT-15", "A02–A08", "Public", "—", body="LoginRequest", resp="LoginResponse",
-     public=True, errors=(400, 401),
+     public=True, errors=(400, 401, 429),
      err_desc={400: "Chỉ khi mật khẩu đúng (ADR-0019): `BR-TK-08` tài khoản chưa xác thực → FE chuyển màn OTP · `BR-TK-09` đang khóa tạm, message có giờ thử lại (`HH:mm dd/MM/yyyy`) · `BR-TK-11` tài khoản bị khóa / vô hiệu hóa",
-               401: "Sai email hoặc mật khẩu — thông điệp chung \"Email hoặc mật khẩu không đúng\" (BR-TK-10); sai lần thứ 5 trong 15 phút [CFG] kích hoạt ST01 (khóa tạm + email cảnh báo); sai trong lúc khóa không đếm"},
+               401: "Sai email hoặc mật khẩu — thông điệp chung \"Email hoặc mật khẩu không đúng\" (BR-TK-10); sai lần thứ 5 trong 15 phút [CFG] kích hoạt ST01 (khóa tạm + email cảnh báo); sai trong lúc khóa không đếm",
+               429: RATE_ERR},
      notes="Ghi audit thành công và thất bại (ADR-0019). `account.mustChangePassword = true` vẫn đăng nhập được (BR-TK-17). Request sai hình thức (400 `VALIDATION_FAILED` / `MALFORMED_REQUEST`) không tính là một lần đăng nhập sai.")
 m.op("post", "/auth/logout", "logout", "Đăng xuất", "Auth", "UC03", "BR-TK-11, BR-TN-06", "A02–A08",
      "Người đang đăng nhập", "—", status=204, errors=(401,), notes="Hủy phiên hiện tại; nhân viên chuyển offline ngay (ADR-0021). Body không được đọc. Gọi lại sau khi thành công → 401. Request cùng token đang chạy vẫn hoàn tất (§3.1 của `00-method`). Không ghi audit (ADR-0019).")
 m.op("post", "/auth/password/forgot", "forgotPassword", "Quên mật khẩu — gửi OTP", "Auth", "UC04",
      "BR-TK-04, 07, 10, 12", "A02–A08", "Public", "—", body="EmailRequest", resp="OtpSentResponse", status=202,
-     public=True, errors=(400,), err_desc={400: "`VALIDATION_FAILED` email trống / sai định dạng / quá 255 ký tự"},
+     public=True, errors=(400, 429), err_desc={400: "`VALIDATION_FAILED` email trống / sai định dạng / quá 255 ký tự", 429: RATE_ERR},
      notes="Luôn trả 202 cùng nội dung (BR-TK-10), kể cả email không tồn tại, tài khoản không đủ điều kiện BR-TK-12 (`PENDING`, bị khóa, `DISABLED` — không gửi mã), đã chạm quota BR-TK-07 (không gửi mã, `resendAvailableAt` vẫn = now + 60 giây [CFG]). `codeLength` = `otp.code_length` [CFG], giống nhau ở mọi nhánh (không lộ tài khoản). Tài khoản đang khóa tạm BR-TK-09 vẫn nhận mã. Gửi lại = gọi lại endpoint này (A7). ADR-0023.")
 m.op("post", "/auth/password/reset", "resetPassword", "Đặt lại mật khẩu bằng OTP", "Auth", "UC04",
      "BR-TK-03, 05, 06, 13", "A02–A08", "Public", "—", body="ResetPasswordRequest", status=204, public=True,
-     errors=(400,), err_desc={400: OTP_ERR + " — cũng là lỗi cho email không có tài khoản, tài khoản không đủ điều kiện BR-TK-12 hoặc chưa có mã (BR-TK-10) · `BR-TK-03` mật khẩu mới không hợp lệ (kiểm trước mã, không tiêu lượt nhập) hoặc trùng mật khẩu hiện tại (chỉ kiểm khi mã đúng; mã vẫn dùng lại được)"},
+     errors=(400, 429), err_desc={400: OTP_ERR + " — cũng là lỗi cho email không có tài khoản, tài khoản không đủ điều kiện BR-TK-12 hoặc chưa có mã (BR-TK-10) · `BR-TK-03` mật khẩu mới không hợp lệ (kiểm trước mã, không tiêu lượt nhập) hoặc trùng mật khẩu hiện tại (chỉ kiểm khi mã đúng; mã vẫn dùng lại được)", 429: RATE_ERR},
      notes="Thứ tự kiểm: hình thức → chính sách mật khẩu BR-TK-03 → mã BR-TK-05/06 → trùng mật khẩu hiện tại BR-TK-03. Thành công: hủy mọi phiên, gỡ khóa tạm, gỡ bắt đổi mật khẩu lần đầu BR-TK-17, chuyển offline (BR-TN-06), gửi email PASSWORD_CHANGED (BR-TK-13); không audit. ADR-0023.")
 
 m.op("get", "/me", "getMe", "Thông tin người đang đăng nhập", "Me", "UC06", "BR-TK-17, 19", "A02–A08",

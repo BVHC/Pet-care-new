@@ -14,6 +14,8 @@ export type ErrorCode =
   | 'UNSUPPORTED_MEDIA_TYPE'
   | 'UNAUTHENTICATED'
   | 'ACCESS_DENIED'
+  /** Một IP gọi endpoint public quá nhanh (429, header `Retry-After` = số giây phải chờ; ADR-0100). */
+  | 'TOO_MANY_REQUESTS'
   | 'INTERNAL_ERROR'
   /** BE hoặc phụ thuộc ngoài chưa sẵn sàng (500). */
   | 'UNAVAILABLE';
