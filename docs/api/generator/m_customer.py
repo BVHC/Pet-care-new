@@ -142,8 +142,8 @@ m.op("post", "/me/addresses/{addressId}/set-default", "setDefaultAddress", "Đ�
 
 m.op("get", "/customers", "searchCustomers", "Tra cứu khách & thú cưng", "Customers", "UC23", "BR-KH-01, 10",
      "A06, A07, A08", "Nhân viên mọi chi nhánh", resp="CustomerSearchItem", page=True, errors=(400, 401, 403),
-     query=["phone=string|Khớp đúng SĐT đã chuẩn hóa", "name=string|Họ tên chứa chuỗi", "email=string",
-            "petName=string", "page", "size"],
+     query=["phone=string|Khớp đúng SĐT đã chuẩn hóa", "name=string|Họ tên chứa chuỗi (không phân biệt hoa thường và dấu tiếng Việt)", "email=string",
+            "petName=string|Tên thú chứa chuỗi (không phân biệt hoa thường và dấu tiếng Việt)", "page", "size"],
      notes="Cần ít nhất một điều kiện tìm.",
      err_desc={400: "Không có điều kiện tìm nào"})
 m.op("post", "/customers", "createCounterCustomer", "Tạo hồ sơ khách tại quầy", "Customers", "UC22, UC44",

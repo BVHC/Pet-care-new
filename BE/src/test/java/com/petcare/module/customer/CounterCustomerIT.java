@@ -234,6 +234,29 @@ class CounterCustomerIT extends CustomerMeItSupport {
         assertThat(ids(search("phone=" + phone + "&petName=Mực" + tag))).isEmpty();
     }
 
+    /**
+     * T17-D05 (docs/adr/0104): tên khách / thú tìm không phân biệt dấu tiếng Việt, ở cả dạng dựng sẵn (NFC) lẫn dạng tổ
+     * hợp (NFD); {@code đ} khớp {@code d}; hai chữ chỉ khác dấu cũng khớp nhau.
+     */
+    @Test
+    void searchIgnoresVietnameseDiacriticsInPrecomposedAndDecomposedForm() {
+        String name = "Nguyễn Văn Đạt " + tag;
+        long composed = fx.track(counterProfile(null, name, phone, null));
+        long decomposed = fx.track(counterProfile(null,
+                java.text.Normalizer.normalize(name, java.text.Normalizer.Form.NFD), uniquePhone(), null));
+        fx.pet(composed, "Mèo Mướp" + tag, "CAT");
+
+        assertThat(ids(search("name=nguyen van dat " + tag))).containsExactlyInAnyOrder(composed, decomposed);
+        assertThat(ids(search("name=NGUYỄN VĂN ĐẠT " + tag))).containsExactlyInAnyOrder(composed, decomposed);
+        assertThat(ids(search("name=nguyên văn đat " + tag))).as("khác dấu vẫn khớp")
+                .containsExactlyInAnyOrder(composed, decomposed);
+        assertThat(ids(search("name=" + java.text.Normalizer.normalize("Văn Đạt " + tag,
+                java.text.Normalizer.Form.NFD)))).containsExactlyInAnyOrder(composed, decomposed);
+        assertThat(ids(search("petName=meo muop" + tag))).containsExactly(composed);
+        assertThat(ids(search("petName=MÈO MƯỚP" + tag))).containsExactly(composed);
+        assertThat(ids(search("name=nguyen van dut " + tag))).as("sai chữ vẫn không khớp").isEmpty();
+    }
+
     @Test
     void searchRowsMaskEmailAndListPets() {
         long target = fx.track(counterProfile(null, "Lê " + tag, phone, "le.thi@gmail.com"));

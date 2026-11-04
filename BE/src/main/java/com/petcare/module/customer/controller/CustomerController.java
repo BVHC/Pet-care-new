@@ -64,9 +64,10 @@ public class CustomerController {
                     @Parameter(name = "phone", in = ParameterIn.QUERY, example = "0901234567",
                             description = "Khớp đúng SĐT đã chuẩn hóa"),
                     @Parameter(name = "name", in = ParameterIn.QUERY, example = "Lan",
-                            description = "Họ tên chứa chuỗi"),
+                            description = "Họ tên chứa chuỗi (không phân biệt hoa thường và dấu tiếng Việt)"),
                     @Parameter(name = "email", in = ParameterIn.QUERY, example = "lan.nguyen@gmail.com"),
-                    @Parameter(name = "petName", in = ParameterIn.QUERY, example = "Mực"),
+                    @Parameter(name = "petName", in = ParameterIn.QUERY, example = "Mực",
+                            description = "Tên thú chứa chuỗi (không phân biệt hoa thường và dấu tiếng Việt)"),
                     @Parameter(name = "page", in = ParameterIn.QUERY, example = "0"),
                     @Parameter(name = "size", in = ParameterIn.QUERY, example = "20")})
     @ApiErrorDoc(status = 400, description = "Không có điều kiện tìm nào")
