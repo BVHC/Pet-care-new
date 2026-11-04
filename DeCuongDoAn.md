@@ -78,7 +78,7 @@ Phạm vi đồ án gồm toàn bộ 18 module nghiệp vụ trong bộ đặc t
 | Quy tắc nghiệp vụ (BR) | 134 quy tắc còn hiệu lực | 134 | Đặc tả bổ sung |
 | Máy trạng thái (FSM) | 10 đối tượng – 66 chuyển trạng thái | 10 – 66 | Đặc tả bổ sung |
 | Mô hình miền / bảng CSDL | 52 model / 55 bảng | 52 / 55 | Đặc tả bổ sung |
-| API (hợp đồng v1) | 230 endpoint – 12 module backend | 230 | Đặc tả bổ sung |
+| API (hợp đồng v1) | 232 endpoint – 12 module backend | 232 | Đặc tả bổ sung |
 
 #### 2.2.3. Phân hệ và tác nhân quản lý trực tiếp
 
@@ -500,8 +500,8 @@ Mục này phân công các thành viên nhóm phát triển phần mềm. Tác 
 
 | Thành viên | Vai trò | Module phụ trách phát triển | Module backend | FSM | Endpoint (API v1) |
 |---|---|---|---|:---:|:---:|
-| Bùi Văn Hiến | Nhóm trưởng – FE-1 | Giao diện của cả 17 module (4 cổng: Công khai, Khách hàng, Nhân viên, Quản trị) | — | — | Tích hợp toàn bộ 230 |
-| Nguyễn Đức Mạnh | BE-1 | 6 module: TK, QT, LH, TN, KB, TB | `identity`, `appointment`, `visit`, `care` và nền tảng `platform` | 4 FSM – 28 chuyển | 77 |
+| Bùi Văn Hiến | Nhóm trưởng – FE-1 | Giao diện của cả 17 module (4 cổng: Công khai, Khách hàng, Nhân viên, Quản trị) | — | — | Tích hợp toàn bộ 232 |
+| Nguyễn Đức Mạnh | BE-1 | 6 module: TK, QT, LH, TN, KB, TB | `identity`, `appointment`, `visit`, `care` và nền tảng `platform` | 4 FSM – 28 chuyển | 79 |
 | Phạm Quang Dũng | BE-2 | 11 module: CN, SP, KH, BH, TG, KO, LT, CK, BV, DG, BC | `branch`, `catalog`, `customer`, `sales`, `inventory`, `boarding`, `content`, `report` | 6 FSM – 38 chuyển | 153 |
 
 **Phân công giai đoạn 2 (tầng 3 và trí tuệ nhân tạo):**
@@ -547,7 +547,7 @@ Mục này phân công các thành viên nhóm phát triển phần mềm. Tác 
 
 **3. Phạm Quang Dũng – B22DCCN136 — Backend 2 (BE-2): Dữ liệu nền & thương mại**
 
-- Hợp đồng và hạ tầng tích hợp: hợp đồng API v1 giữa frontend – backend (12 module, 230 endpoint, đặc tả OpenAPI sinh tự động kèm công cụ kiểm tra); bộ interface giao tiếp giữa các module backend; khung phát/nhận sự kiện liên module trong cùng transaction.
+- Hợp đồng và hạ tầng tích hợp: hợp đồng API v1 giữa frontend – backend (12 module, 232 endpoint, đặc tả OpenAPI sinh tự động kèm công cụ kiểm tra); bộ interface giao tiếp giữa các module backend; khung phát/nhận sự kiện liên module trong cùng transaction.
 - **Sản phẩm & dịch vụ (SP):** danh mục sản phẩm, sản phẩm (thuốc kê đơn, quản lý hạn dùng), dịch vụ (nhóm, loại Khám/Tiêm), loại chuồng, loại vaccine và phác đồ tiêm chủng.
 - **Chi nhánh (CN):** tạo/kích hoạt chi nhánh, giờ mở cửa, ngày nghỉ và thu hẹp giờ (phát sự kiện hủy hàng loạt), cờ cấp cứu ngoài giờ; bật/tắt dịch vụ tại chi nhánh, quota mặc định và quota từng khung giờ.
 - **Khách hàng & thú cưng (KH):** hồ sơ khách tại quầy, tra cứu và cảnh báo nghi trùng; thú cưng (khóa loài, cân nặng); đánh dấu đã mất và chuyển chủ (phát sự kiện cho các module liên quan); xóa thú chưa phát sinh giao dịch.

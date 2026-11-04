@@ -141,7 +141,8 @@ function pagedOk<T>(all: T[], query: Record<string, string>): MockReply {
 
 // ─── Hiện diện (BR-TN-06) ───
 
-// BE: `online` = `last_seen_at` trong `staff.online_window_minutes`. Mock không theo dõi thao tác nên mặc định ai cũng online;
+// BE: `online` = có phiên chưa hủy với access token còn hạn (`sessions.access_expires_at > now`, BR-TN-06, ADR-0091); từ V27 không còn `last_seen_at` hay
+// cửa sổ `staff.online_window_minutes`. Mock không theo dõi phiên nên mặc định ai cũng online;
 // `setStaffOnline` đặt riêng một người offline (kho riêng, không đụng state danh tính) để dựng cảnh báo gán người offline (T36).
 const PRESENCE_KEY = 'petcare-mock-presence';
 
@@ -459,7 +460,7 @@ const disable: MockHandler = ({ account, params }) => {
   if (a.role === 'BRANCH_MANAGER' && countActiveBranchManagers(s, a.branchId ?? -1, a.id) < 1) {
     return ruleFail('BR-QT-04', 'Không vô hiệu hóa được: đây là quản lý cuối cùng của chi nhánh đang hoạt động');
   }
-  a.status = 'DISABLED'; // BE Account.disable() chỉ đặt status và xóa lastSeenAt; mustChangePassword giữ nguyên
+  a.status = 'DISABLED'; // BE Account.disable() chỉ đặt status; mustChangePassword giữ nguyên
   logAudit(s, { action: 'STAFF_DISABLED', entityType: 'accounts', entityId: id, beforeData: { status: 'ACTIVE' }, afterData: { status: 'DISABLED' } }, account!.id, account!.email);
   save(s);
   return ok(staffResponseOf(s, a));

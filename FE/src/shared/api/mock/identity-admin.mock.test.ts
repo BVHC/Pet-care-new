@@ -716,7 +716,7 @@ describe('disable / resend-initial-password / email-change/confirm — message n
   });
 });
 
-describe('POST /api/staff/{id}/disable — giữ nguyên mustChangePassword (BE Account.disable chỉ đặt status = DISABLED và lastSeenAt = null)', () => {
+describe('POST /api/staff/{id}/disable — giữ nguyên mustChangePassword (BE Account.disable chỉ đặt status = DISABLED)', () => {
   it('đích chưa đổi mật khẩu lần đầu bị vô hiệu hóa vẫn có mustChangePassword = true: trong response, GET /api/staff/{id} và danh sách', async () => {
     const chain = await as(CALLERS.chuoi.email);
     const target = await spawnStaff('VET', 1);
@@ -862,7 +862,7 @@ describe('GET /api/audit-logs — tên bảng, mã hành động thật, so kh�
 });
 
 // ─── UC10 — tham số [CFG] và mẫu thông báo: dữ liệu seed khớp BE, validate như BE (BR-QT-13, BR-QT-14) ───
-// Nguồn thật là migration của BE (V2 tham số; V3…V26 mẫu, V4 sửa OTP_REGISTER). Không có thư mục BE bên cạnh (chỉ checkout FE) thì các ca đối chiếu SQL
+// Nguồn thật là migration của BE (V2 + V27 tham số, V27 xóa staff.online_window_minutes và thêm session.access_ttl_minutes; V3…V26 mẫu, V4 sửa OTP_REGISTER). Không có thư mục BE bên cạnh (chỉ checkout FE) thì các ca đối chiếu SQL
 // được bỏ qua; ca gõ tay và ca hành vi vẫn chạy.
 
 const MIGRATIONS = resolve(__dirname, '../../../../../BE/src/main/resources/db/migration');
@@ -1002,6 +1002,21 @@ function applyTemplateUpdates(sql: string, templates: Map<string, SqlRow>) {
   }
 }
 
+/** `DELETE FROM system_configs WHERE key = '…';` (V27) ra danh sách khóa bị xóa. DELETE không điều kiện hay điều kiện khác thì ném lỗi, không đoán. */
+function deletedConfigKeys(sql: string): string[] {
+  const mentions = [...sql.matchAll(/DELETE\s+FROM\s+system_configs\b/gi)].length;
+  const statements = [...sql.matchAll(/DELETE\s+FROM\s+system_configs\s+WHERE\s+key\s*=\s*/gi)];
+  if (statements.length !== mentions) throw new Error('DELETE FROM system_configs không có dạng "WHERE key = …;"');
+  return statements.map((statement) => {
+    const { text: key, end } = readString(sql, statement.index! + statement[0].length);
+    if (!/^\s*;/.test(sql.slice(end))) throw new Error(`DELETE FROM system_configs WHERE key = '${key}': còn điều kiện khác`);
+    return key;
+  });
+}
+
+/** Cách làm đổi dữ liệu hai bảng mà bộ đọc không hiểu. DELETE trên system_configs không nằm ở đây: `deletedConfigKeys` đọc dạng `WHERE key =` và ném lỗi với dạng khác. */
+const UNREADABLE_SQL = /TRUNCATE(\s+TABLE)?\s+(system_configs|notification_templates)\b|DELETE\s+FROM\s+notification_templates\b|UPDATE\s+system_configs\b/i;
+
 const byText = (a: string, b: string) => (a < b ? -1 : a > b ? 1 : 0); // thứ tự code-unit như `String.compareTo` của Java (BE IT khẳng định isSorted)
 const versionOf = (file: string) => Number(/^V(\d+)__/.exec(file)![1]);
 
@@ -1015,7 +1030,13 @@ function sqlSeed() {
     if (!/system_configs|notification_templates/.test(raw)) continue;
     const sql = stripComments(raw);
     // Mọi cách khác làm đổi dữ liệu hai bảng này mà bộ đọc không hiểu: dừng, đừng đoán.
-    expect(sql, file).not.toMatch(/(DELETE\s+FROM|TRUNCATE(\s+TABLE)?)\s+(system_configs|notification_templates)\b|UPDATE\s+system_configs\b/i);
+    expect(sql, file).not.toMatch(UNREADABLE_SQL);
+    // Xóa trước, thêm sau (V27 xóa khóa cũ rồi thêm khóa mới): khóa chưa có để xóa thì dừng, đừng đoán.
+    for (const key of deletedConfigKeys(sql)) {
+      const at = configs.findIndex((r) => r.key === key);
+      if (at < 0) throw new Error(`${file}: DELETE khóa ${key} nhưng chưa có khóa này`);
+      configs.splice(at, 1);
+    }
     configs.push(...insertedRows(sql, 'system_configs'));
     for (const row of insertedRows(sql, 'notification_templates')) {
       if (templates.has(row.code as string)) throw new Error(`${file}: mẫu ${row.code} đã có`);
@@ -1045,7 +1066,36 @@ const putTemplate = async (code: string, body: object) => client.put(`/api/notif
 const auditActions = async () =>
   ((await client.get('/api/audit-logs', { params: { actorAccountId: 1 }, ...(await admin()) })).data.data.content as { action: string }[]).map((r) => r.action);
 
-describe('UC10 — tham số [CFG] seed khớp BE (V2__seed_system_configs.sql)', () => {
+describe('bộ đọc SQL của ca đối chiếu seed — DELETE trên system_configs (V27)', () => {
+  it("đọc `DELETE FROM system_configs WHERE key = '…';` ra khóa bị xóa; không có DELETE thì rỗng", () => {
+    expect(deletedConfigKeys("DELETE FROM system_configs WHERE key = 'staff.online_window_minutes';\nINSERT INTO t (a) VALUES ('x');")).toEqual(['staff.online_window_minutes']);
+    expect(deletedConfigKeys('SELECT 1;')).toEqual([]);
+  });
+
+  it.each([
+    ['không điều kiện', 'DELETE FROM system_configs;'],
+    ['điều kiện không phải key =', "DELETE FROM system_configs WHERE value = '10';"],
+    ['còn điều kiện sau key =', "DELETE FROM system_configs WHERE key = 'a.b' OR key = 'c.d';"],
+  ])('từ chối DELETE %s: dừng, không đoán', (_, sql) => {
+    expect(() => deletedConfigKeys(sql)).toThrow(/DELETE FROM system_configs/);
+  });
+
+  it.each([
+    'TRUNCATE system_configs;',
+    'TRUNCATE TABLE notification_templates;',
+    'DELETE FROM notification_templates;',
+    "DELETE FROM notification_templates WHERE code = 'X';",
+    "UPDATE system_configs SET value = '1';",
+  ])('lưới chặn vẫn cấm: %s', (sql) => {
+    expect(sql).toMatch(UNREADABLE_SQL);
+  });
+
+  it('lưới chặn không còn cấm DELETE có `WHERE key =` trên system_configs', () => {
+    expect("DELETE FROM system_configs WHERE key = 'a.b';").not.toMatch(UNREADABLE_SQL);
+  });
+});
+
+describe('UC10 — tham số [CFG] seed khớp BE (V2__seed_system_configs.sql, V27__refresh_tokens_access_ttl.sql)', () => {
   it.skipIf(!hasMigrations)('đúng 52 khóa của BE, từng dòng giống hệt SQL (key, value, valueType, minValue, maxValue, unit, description), sắp theo key', async () => {
     const expected = sqlConfigs();
     expect(expected).toHaveLength(52); // = số hằng số ConfigKey của BE
@@ -1057,7 +1107,7 @@ describe('UC10 — tham số [CFG] seed khớp BE (V2__seed_system_configs.sql)'
     }
   });
 
-  it('dòng gõ tay theo V2: khóa thật của BE có mặt, khóa bịa của bản mock cũ không còn', async () => {
+  it('dòng gõ tay theo V2 + V27: khóa thật của BE có mặt, khóa bịa của bản mock cũ và khóa V27 đã xóa không còn', async () => {
     const rows = await getConfigs();
     const by = Object.fromEntries(rows.map((r) => [r.key, r]));
     expect(rows).toHaveLength(52);
@@ -1066,8 +1116,9 @@ describe('UC10 — tham số [CFG] seed khớp BE (V2__seed_system_configs.sql)'
     expect(by['address.max_per_customer']).toMatchObject({ value: '5', minValue: '1', maxValue: '20', unit: 'địa chỉ' });
     expect(by['otp.resend_interval_seconds']).toMatchObject({ value: '60', minValue: '30', maxValue: '300', unit: 'giây' });
     expect(by['session.ttl_hours']).toMatchObject({ value: '12', minValue: '1', maxValue: '72', unit: 'giờ' });
+    expect(by['session.access_ttl_minutes']).toEqual({ key: 'session.access_ttl_minutes', value: '10', valueType: 'INT', minValue: '5', maxValue: '720', unit: 'phút', description: 'Hạn access token; nhân viên có phiên với access token còn hạn được coi là online (BR-TN-06, docs/adr/0091)' }); // V27
     expect(by['vet.bio_max_length']).toMatchObject({ value: '500', minValue: '100', maxValue: '500', unit: 'ký tự' });
-    for (const old of ['customer.address_book_max', 'auth.otp_resend_seconds', 'auth.otp_max_per_hour', 'auth.session_ttl_hours']) expect(by[old], old).toBeUndefined();
+    for (const old of ['customer.address_book_max', 'auth.otp_resend_seconds', 'auth.otp_max_per_hour', 'auth.session_ttl_hours', 'staff.online_window_minutes']) expect(by[old], old).toBeUndefined(); // staff.online_window_minutes: V27 xóa
   });
 });
 

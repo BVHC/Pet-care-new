@@ -1,4 +1,4 @@
-// UC10 — dữ liệu seed của mock tham số [CFG] và mẫu thông báo, CHÉP từ migration của BE (V2 cho tham số, V3…V26 cho mẫu, V4 sửa OTP_REGISTER).
+// UC10 — dữ liệu seed của mock tham số [CFG] và mẫu thông báo, CHÉP từ migration của BE (V2 + V27 cho tham số, V3…V26 cho mẫu, V4 sửa OTP_REGISTER).
 // Không viết tay: identity-admin.mock.test.ts đọc lại SQL và so từng trường nên lệch BE là test đỏ. BE thêm khóa / mã mới thì thêm vào đây theo cùng migration.
 import type { NotificationTemplate, SystemConfig } from '../../types/identity';
 
@@ -50,8 +50,8 @@ export const SEED_CONFIGS: SystemConfig[] = [
   { key: 'reminder.vaccine_overdue_days', value: '7', valueType: 'INT', minValue: '1', maxValue: '60', unit: 'ngày', description: 'Quá ngày tái chủng chừng này thì sinh Care Task quá hạn (BR-TB-04)' },
   { key: 'report.max_period_months', value: '12', valueType: 'INT', minValue: '1', maxValue: '24', unit: 'tháng', description: 'Kỳ báo cáo dài tối đa (BR-BC-01)' },
   { key: 'report.revaccination_grace_days', value: '7', valueType: 'INT', minValue: '0', maxValue: '30', unit: 'ngày', description: 'Tiêm lại không muộn quá số ngày này sau ngày tái chủng thì tính là quay lại (BR-BC-04)' },
+  { key: 'session.access_ttl_minutes', value: '10', valueType: 'INT', minValue: '5', maxValue: '720', unit: 'phút', description: 'Hạn access token; nhân viên có phiên với access token còn hạn được coi là online (BR-TN-06, docs/adr/0091)' },
   { key: 'session.ttl_hours', value: '12', valueType: 'INT', minValue: '1', maxValue: '72', unit: 'giờ', description: 'Hạn phiên đăng nhập tính từ lúc đăng nhập, không gia hạn (docs/adr/0003)' },
-  { key: 'staff.online_window_minutes', value: '10', valueType: 'INT', minValue: '1', maxValue: '60', unit: 'phút', description: 'Nhân viên có thao tác trong khoảng này được coi là online (BR-TN-06)' },
   { key: 'stock.expiry_warning_days', value: '30', valueType: 'INT', minValue: '7', maxValue: '180', unit: 'ngày', description: 'Cảnh báo lô sẽ hết hạn trong số ngày tới (BR-KO-07, ST08)' },
   { key: 'vet.bio_max_length', value: '500', valueType: 'INT', minValue: '100', maxValue: '500', unit: 'ký tự', description: 'Độ dài tối đa mô tả ngắn của bác sĩ; cột bio là VARCHAR(500) (BR-TK-20)' },
   { key: 'visit.check_in_early_minutes', value: '30', valueType: 'INT', minValue: '0', maxValue: '120', unit: 'phút', description: 'Check-in sớm nhất trước giờ hẹn (BR-TN-02)' },
