@@ -1,5 +1,7 @@
 package com.petcare.module.catalog.service;
 
+import static org.mockito.Mockito.lenient;
+import static org.mockito.Mockito.inOrder;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
@@ -12,6 +14,7 @@ import java.util.Optional;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
+import org.mockito.InOrder;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.test.util.ReflectionTestUtils;
@@ -130,8 +133,25 @@ class VaccinationProtocolServiceTest {
     private VaccinationProtocol existing() {
         VaccinationProtocol protocol = new VaccinationProtocol(Species.DOG, 3L, 1, 21, 6, false);
         ReflectionTestUtils.setField(protocol, "id", 4L);
-        when(protocols.findById(4L)).thenReturn(Optional.of(protocol));
+        lenient().when(protocols.findById(4L)).thenReturn(Optional.of(protocol));
+        lenient().when(protocols.findByIdForUpdate(4L)).thenReturn(Optional.of(protocol));
         return protocol;
+    }
+
+    /** Ghi phải khóa dòng trước khi đọc, không đọc không khóa (docs/adr/0106). */
+    @Test
+    void updateLocksTheRowAndNeverReadsItUnlocked() {
+        VaccinationProtocol protocol = new VaccinationProtocol(Species.DOG, 3L, 1, 21, 6, false);
+        ReflectionTestUtils.setField(protocol, "id", 4L);
+        when(protocols.findByIdForUpdate(4L)).thenReturn(Optional.of(protocol));
+        when(protocols.saveAndFlush(any(VaccinationProtocol.class))).thenAnswer(inv -> inv.getArgument(0));
+
+        service.updateProtocol(4L, new UpdateProtocolRequest(30, null, null, null));
+
+        InOrder order = inOrder(protocols);
+        order.verify(protocols).findByIdForUpdate(4L);
+        order.verify(protocols).saveAndFlush(any(VaccinationProtocol.class));
+        verify(protocols, never()).findById(any());
     }
 
     @Test
@@ -160,7 +180,7 @@ class VaccinationProtocolServiceTest {
 
     @Test
     void updateUnknownIsNotFound() {
-        when(protocols.findById(4L)).thenReturn(Optional.empty());
+        when(protocols.findByIdForUpdate(4L)).thenReturn(Optional.empty());
 
         assertThatThrownBy(() -> service.updateProtocol(4L, new UpdateProtocolRequest(null, null, null, null)))
                 .isInstanceOf(ResourceNotFoundException.class);
