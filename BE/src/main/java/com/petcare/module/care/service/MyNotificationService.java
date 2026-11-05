@@ -67,8 +67,9 @@ public class MyNotificationService {
 
     /**
      * care-v1 #7. UPDATE trước; chỉ khi không đổi dòng nào mới hỏi dòng có thuộc chủ không — có (đã đọc) là thành
-     * công, không có (không tồn tại / của người khác) là 404. Không ai xóa {@code notifications} nên giữa hai câu
-     * không có kết quả sai.
+     * công, không có (không tồn tại / của người khác / vừa bị job dọn xóa, docs/adr/0112) là 404. Chỉ job dọn xóa
+     * {@code notifications}, và chỉ dòng đã quá thời hạn giữ (≥ 30 ngày): dòng vừa UPDATE thành công đang bị khóa tới
+     * khi commit nên không bị xóa giữa chừng; dòng đã đọc bị xóa giữa hai câu cho 404 thay vì 204 (chấp nhận).
      */
     @Transactional
     public void markNotificationRead(Long notificationId) {

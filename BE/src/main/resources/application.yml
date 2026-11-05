@@ -98,6 +98,13 @@ app:
       cron: "0 0 3 * * *"
       retention-days: 30
       batch-size: 1000
+    # Xóa mã OTP hết hạn quá retention-days ngày (docs/adr/0111, trả D012). retention-days × 1440 phải ≥ cửa sổ tối đa của
+    # [CFG] otp.send_window_minutes (1440, V2) để không đụng quota BR-TK-07. Giây 17: không bắt đầu cùng ST20 / job */5.
+    otp-token-cleanup:
+      cron: "${OTP_TOKEN_CLEANUP_CRON:17 20 3 * * *}"
+      retention-days: 1
+      batch-size: 1000
+      time-budget: 60s
     # Xóa tài khoản PENDING quá hạn — ST02 (docs/adr/0013). Hạn là [CFG] account.pending_ttl_hours, chốt lúc đăng ký.
     pending-account-cleanup:
       cron: "${PENDING_ACCOUNT_CLEANUP_CRON:0 */15 * * * *}"
@@ -183,6 +190,15 @@ app:
       sent-retention-days: 30
       failed-retention-days: 90
       batch-size: 1000
+    # Xóa thông báo trong app (bảng notifications, docs/adr/0112, trả D023): đã đọc sau 30 ngày, chưa đọc sau 90 ngày
+    # (tính từ created_at; unread phải dài hơn read). Hai số là giả định của nhóm, chưa có PO duyệt. 03:50:23: sau dọn
+    # outbox 03:40, giây 23 lệch ST20 và job */5.
+    notification-cleanup:
+      cron: "${NOTIFICATION_CLEANUP_CRON:23 50 3 * * *}"
+      read-retention-days: 30
+      unread-retention-days: 90
+      batch-size: 1000
+      time-budget: 60s
 
 server:
   port: ${SERVER_PORT:8081}
