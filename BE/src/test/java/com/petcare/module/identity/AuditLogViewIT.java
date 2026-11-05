@@ -616,12 +616,14 @@ class AuditLogViewIT {
     @Test
     void queriesUseExpectedIndex() {
         Instant day = Instant.parse("2002-01-10T00:00:00Z");
+        // 500 giá trị action (0,2% mỗi giá trị, như actor): với 40 giá trị (2,5%) và created_at tương quan hoàn hảo với
+        // thứ tự lưu, planner đúng khi quét ix_audit_logs_created_at rồi lọc action thay vì dùng index action.
         tx.executeWithoutResult(status -> {
             jdbc.update("""
                     INSERT INTO audit_logs (actor_account_id, actor_email, action, entity_type, entity_id,
                                             after_data, created_at)
                     SELECT 900000000 + g % 500, 'explain' || (g % 500) || '@petcare.test',
-                           'EXPLAIN_ACTION_' || (g % 40), 'explain_type_' || (g % 10), g % 2000,
+                           'EXPLAIN_ACTION_' || (g % 500), 'explain_type_' || (g % 10), g % 2000,
                            '{"k": 1}'::jsonb, timestamptz '2001-01-01 00:00:00+00' + g * interval '17 minutes'
                     FROM generate_series(1, 60000) g
                     """);

@@ -48,6 +48,9 @@ export const salesApi = {
   abortCheckout: (orderId: number, reason: string) => post<Order>(`/api/orders/${orderId}/abort-checkout`, { reason }),
 
   // ─── Thu tiền (UC70) ───
+  /** #11 (BR-BH-04): dòng thuốc kê đơn của Order khám thiếu tồn lúc thu → mua ngoài; xóa dòng khỏi Order, tổng giảm. Lễ tân, Order PENDING. */
+  moveLineToExternalPurchase: (orderId: number, lineId: number) =>
+    post<Order>(`/api/orders/${orderId}/lines/${lineId}/move-to-external-purchase`),
   /** #12: Order PENDING của khách tại chi nhánh lễ tân, cũ nhất trước — để chọn Order thu gộp. */
   listPayableOrders: (customerId: number) => get<OrderSummary[]>(`/api/customers/${customerId}/payable-orders`),
   /** #13: không ghi gì; trả tổng tiền và các dòng thiếu tồn (BR-BH-04). */

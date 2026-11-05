@@ -81,6 +81,10 @@ export function usePay() {
   });
 }
 
+/** #11: xong thì làm mới danh sách Order chờ thu và bản xem trước (mọi khóa `['sales', …]`), dòng thiếu tồn biến mất khỏi phiếu thu. */
+export const useMoveToExternalPurchase = () =>
+  useSalesMutation((args: { orderId: number; lineId: number }) => salesApi.moveLineToExternalPurchase(args.orderId, args.lineId));
+
 export const usePayment = (paymentId: number | null) =>
   useQuery({ queryKey: ['sales', 'payment', paymentId], queryFn: () => salesApi.getPayment(paymentId!), enabled: paymentId != null });
 

@@ -770,6 +770,19 @@ export function addVaccineLine(visitId: number, args: { productId: number; descr
   return lineId;
 }
 
+/**
+ * sales-v1 #11: xóa dòng khỏi Order khi chuyển thuốc kê đơn sang mua ngoài lúc thu (BR-BH-04). Bên gọi (cashier.mock) đã kiểm
+ * rule và tồn kho; trả Order đã cập nhật (tổng giảm đúng giá trị dòng), null khi Order không có.
+ */
+export function removeOrderLine(orderId: number, lineId: number, account: AccountSummary): Order | null {
+  const s = load();
+  const order = s.orders.find((o) => o.orderId === orderId);
+  if (!order) return null;
+  order.lines = order.lines.filter((l) => l.lineId !== lineId);
+  save(s);
+  return view(order, account);
+}
+
 /** Xóa mũi tiêm ghi nhầm → xóa dòng Order vaccine tương ứng cùng giao dịch (BR-KB-04). */
 export function removeVaccineLine(visitId: number, lineId: number): void {
   const s = load();

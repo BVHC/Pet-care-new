@@ -9,7 +9,7 @@ import { appointmentRoutes } from './appointment.mock';
 import { boardingRoutes } from './boarding.mock';
 import { branchRoutes } from './branch.mock';
 import { careRoutes } from './care.mock';
-import { cashierRoutes } from './cashier.mock';
+import { cashierRoutes, orderExternalPurchaseRoutes } from './cashier.mock';
 import { catalogRoutes } from './catalog.mock';
 import { contentRoutes } from './content.mock';
 import { customerRoutes } from './customer.mock';
@@ -43,6 +43,7 @@ const ROUTES: Record<string, MockHandler> = {
   ...careRoutes,
   ...salesRoutes,
   ...cashierRoutes,
+  ...orderExternalPurchaseRoutes,
   ...visitRoutes,
   ...visitClinicalRoutes,
   ...reportRoutes,

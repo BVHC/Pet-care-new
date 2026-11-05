@@ -1,5 +1,8 @@
 package com.petcare.module.visit.service;
 
+import java.util.ArrayList;
+import java.util.Collection;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.stream.Collectors;
@@ -43,6 +46,29 @@ class PrescriptionItemReader {
                 .findProducts(rows.stream().map(PrescriptionItem::getProductId).distinct().toList()).stream()
                 .collect(Collectors.toMap(ProductInfo::productId, ProductInfo::name, (a, b) -> a));
         return rows.stream().map(row -> mapper.toPrescriptionItem(row, require(names, row.getProductId()))).toList();
+    }
+
+    /**
+     * Đơn thuốc của nhiều bệnh án một lượt đọc (hồ sơ sức khỏe, visit-v1 #21, docs/adr/0108): cũng đúng 2 câu bất kể số
+     * bệnh án; khóa là id lượt, bệnh án không có đơn thì không có khóa.
+     */
+    Map<Long, List<PrescriptionItemResponse>> forRecords(Collection<Long> visitIds) {
+        if (visitIds.isEmpty()) {
+            return Map.of();
+        }
+        List<PrescriptionItem> rows = items.findByMedicalRecordIdInOrderByIdAsc(visitIds);
+        if (rows.isEmpty()) {
+            return Map.of();
+        }
+        Map<Long, String> names = catalog
+                .findProducts(rows.stream().map(PrescriptionItem::getProductId).distinct().toList()).stream()
+                .collect(Collectors.toMap(ProductInfo::productId, ProductInfo::name, (a, b) -> a));
+        Map<Long, List<PrescriptionItemResponse>> byRecord = new LinkedHashMap<>();
+        for (PrescriptionItem row : rows) {
+            byRecord.computeIfAbsent(row.getMedicalRecordId(), id -> new ArrayList<>())
+                    .add(mapper.toPrescriptionItem(row, require(names, row.getProductId())));
+        }
+        return byRecord;
     }
 
     /** FK {@code RESTRICT} bảo đảm luôn có; thiếu là dữ liệu hỏng (500), không phải lỗi của người dùng. */

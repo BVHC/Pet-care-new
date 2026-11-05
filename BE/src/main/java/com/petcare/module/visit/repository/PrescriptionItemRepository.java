@@ -1,6 +1,7 @@
 package com.petcare.module.visit.repository;
 
 import java.time.Instant;
+import java.util.Collection;
 import java.util.List;
 import java.util.Optional;
 
@@ -21,6 +22,9 @@ public interface PrescriptionItemRepository extends JpaRepository<PrescriptionIt
 
     /** Đơn thuốc của một bệnh án theo thứ tự kê (visit-v1 #12, #13); gồm cả dòng mua ngoài (vẫn in trên đơn). */
     List<PrescriptionItem> findByMedicalRecordIdOrderByIdAsc(Long medicalRecordId);
+
+    /** Đơn thuốc của nhiều bệnh án một câu (hồ sơ sức khỏe, visit-v1 #21), theo thứ tự kê. */
+    List<PrescriptionItem> findByMedicalRecordIdInOrderByIdAsc(Collection<Long> medicalRecordIds);
 
     /**
      * BR-BH-04: thiếu tồn lúc thu, dòng đơn thuốc đang gắn với {@code orderLineId} chuyển sang mua ngoài. Một câu UPDATE

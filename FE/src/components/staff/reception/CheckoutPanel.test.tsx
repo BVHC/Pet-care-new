@@ -4,6 +4,7 @@ import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { MemoryRouter } from 'react-router-dom';
 import { afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
 import { customerPetApi } from '../../../domains/pets/customer-pet.api';
+import { ApiError } from '../../../shared/api/api-error';
 import { apiClient } from '../../../shared/api/axios';
 import { inventoryApi } from '../../../shared/api/inventory.api';
 import { installMockApi } from '../../../shared/api/mock/mock-api';
@@ -446,6 +447,67 @@ describe('thiếu tồn kho (BR-BH-04) và Order không kiểm kho', () => {
     await user.click(await orderBox(new RegExp(vitamin.code)));
     expect(await payButton('200.000')).toBeEnabled();
     expect(screen.queryByRole('alert')).not.toBeInTheDocument();
+  });
+
+  it('thuốc kê đơn thiếu tồn của Order khám: nút Mua ngoài, xác nhận hai bước, dòng bị bỏ khỏi Order, tổng thu giảm rồi thu được (sales-v1 #11)', async () => {
+    // Amoxicillin (sản phẩm #3) còn 5 < 10 của Order #2 (khám + Amoxicillin ×10 + Pate ×2); Pate đủ nên chỉ dòng thuốc thiếu.
+    await asAccount('manager@store1.vn', RECEPTION, () =>
+      api.post('/api/stock-adjustments', { reason: 'DAMAGED', lines: [{ stockLotId: 13, quantityDelta: -195 }, { stockLotId: 14, quantityDelta: -500 }] }),
+    );
+    await withOpenShift();
+    const before = await salesApi.getOrder(2);
+    const drugLine = before.lines.find((l) => l.lineType === 'DRUG')!;
+    const move = vi.spyOn(salesApi, 'moveLineToExternalPurchase');
+    const user = renderPanel();
+    await pickCustomer(user, 'Trang', /Nguyễn Thu Trang/);
+
+    const alert = await screen.findByRole('alert');
+    expect(alert).toHaveTextContent(/Amoxicillin 250mg: cần 10, còn 5/);
+    expect(screen.getByRole('button', { name: /^Thu / })).toBeDisabled();
+    await user.click(screen.getByRole('button', { name: 'Chuyển Amoxicillin 250mg sang mua ngoài' }));
+    expect(move).not.toHaveBeenCalled();
+    await user.click(await screen.findByRole('button', { name: 'Xác nhận chuyển Amoxicillin 250mg sang mua ngoài' }));
+
+    await waitFor(() => expect(move).toHaveBeenCalledWith(2, drugLine.lineId));
+    const after = await salesApi.getOrder(2);
+    expect(after.lines.some((l) => l.lineId === drugLine.lineId)).toBe(false);
+    expect(after.totalAmount).toBe(before.totalAmount - drugLine.lineTotal);
+    await waitFor(() => expect(screen.queryByText(/Kho không đủ hàng/)).not.toBeInTheDocument());
+    await user.click(await payButton(String(after.totalAmount).replace(/(\d)(?=(\d{3})+$)/g, '$1.')));
+    expect(within(await receipt()).getByText(money(`Đã thu ${String(after.totalAmount).replace(/(\d)(?=(\d{3})+$)/g, '$1.')}`))).toBeInTheDocument();
+    expect((await salesApi.getOrder(2)).status).toBe('PAID');
+  });
+
+  it('bấm Hủy ở bước xác nhận không gửi gì và quay lại nút Mua ngoài', async () => {
+    await asAccount('manager@store1.vn', RECEPTION, () =>
+      api.post('/api/stock-adjustments', { reason: 'DAMAGED', lines: [{ stockLotId: 13, quantityDelta: -195 }, { stockLotId: 14, quantityDelta: -500 }] }),
+    );
+    await withOpenShift();
+    const move = vi.spyOn(salesApi, 'moveLineToExternalPurchase');
+    const user = renderPanel();
+    await pickCustomer(user, 'Trang', /Nguyễn Thu Trang/);
+
+    await user.click(await screen.findByRole('button', { name: 'Chuyển Amoxicillin 250mg sang mua ngoài' }));
+    await user.click(screen.getByRole('button', { name: 'Hủy' }));
+    expect(move).not.toHaveBeenCalled();
+    expect(screen.getByRole('button', { name: 'Chuyển Amoxicillin 250mg sang mua ngoài' })).toBeInTheDocument();
+    expect(screen.getAllByRole('button', { name: /sang mua ngoài/ })).toHaveLength(1);
+  });
+
+  it('BE từ chối (409 Order đã đổi trạng thái): hiện câu báo, dòng thiếu tồn vẫn còn để lễ tân xử lý tiếp', async () => {
+    await asAccount('manager@store1.vn', RECEPTION, () =>
+      api.post('/api/stock-adjustments', { reason: 'DAMAGED', lines: [{ stockLotId: 13, quantityDelta: -195 }, { stockLotId: 14, quantityDelta: -500 }] }),
+    );
+    await withOpenShift();
+    vi.spyOn(salesApi, 'moveLineToExternalPurchase').mockRejectedValue(new ApiError('INVALID_STATE_TRANSITION', 'Không thể chuyển trạng thái đơn hàng từ PAID sang PENDING', 409));
+    const user = renderPanel();
+    await pickCustomer(user, 'Trang', /Nguyễn Thu Trang/);
+
+    await user.click(await screen.findByRole('button', { name: 'Chuyển Amoxicillin 250mg sang mua ngoài' }));
+    await user.click(screen.getByRole('button', { name: 'Xác nhận chuyển Amoxicillin 250mg sang mua ngoài' }));
+
+    expect(await screen.findByText(/Có Order không còn chờ thu/)).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Chuyển Amoxicillin 250mg sang mua ngoài' })).toBeInTheDocument();
   });
 
   it('Order chỉ có dịch vụ và vaccine vẫn thu được dù tồn vaccine về 0 (vaccine đã trừ khi tiêm)', async () => {

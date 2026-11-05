@@ -49,14 +49,15 @@ class FkIndexScanIT {
 
     /**
      * 20 000 dòng chèn rồi rollback để lại dòng chết và thống kê lệch trên ba bảng; IT chọn kế hoạch theo thống kê của
-     * {@code vaccinations} chạy sau trong cùng JVM (vd. {@code ReminderScanIndexIT}) có thể đổi index. VACUUM ANALYZE
-     * ngoài transaction trả bảng về trạng thái trước IT này.
+     * {@code vaccinations} chạy sau trong cùng JVM (vd. {@code ReminderScanIndexIT}) có thể đổi index. VACUUM thường
+     * không thu nhỏ heap và index đã phình sau rollback nên {@code relpages} vẫn lệch; VACUUM FULL ngoài transaction viết
+     * lại bảng và index, trả về kích thước trước IT này.
      */
     @AfterEach
     void vacuumWhatTheRolledBackRowsLeftBehind() {
-        jdbc.execute("VACUUM ANALYZE medical_record_addenda");
-        jdbc.execute("VACUUM ANALYZE prescription_items");
-        jdbc.execute("VACUUM ANALYZE vaccinations");
+        jdbc.execute("VACUUM (FULL, ANALYZE) medical_record_addenda");
+        jdbc.execute("VACUUM (FULL, ANALYZE) prescription_items");
+        jdbc.execute("VACUUM (FULL, ANALYZE) vaccinations");
     }
 
     @Test

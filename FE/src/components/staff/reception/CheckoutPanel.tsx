@@ -7,7 +7,7 @@ import { ReceiptText } from 'lucide-react';
 import { formatCurrency } from '../../../lib/utils';
 import { useCustomerDetail } from '../../../domains/pets/hooks/useCustomerPet';
 import { useHotkeys } from '../../../shared/hooks/useHotkeys';
-import { paymentErrorMessage, useMyShift, usePay, usePayableOrders, usePaymentPreview } from '../../../shared/hooks/useSales';
+import { paymentErrorMessage, useMoveToExternalPurchase, useMyShift, usePay, usePayableOrders, usePaymentPreview } from '../../../shared/hooks/useSales';
 import { usePOS } from '../../../shared/stores/pos.store';
 import { useAccount } from '../../../shared/stores/session.store';
 import { ORDER_SOURCE_LABELS, PAYMENT_METHOD_LABELS, type OrderSummary, type PaymentMethod, type PaymentPreview, type ShortageLine } from '../../../shared/types/sales';
@@ -315,20 +315,57 @@ function OrderChecklist({ orders, selected, onToggle }: { orders: OrderSummary[]
   );
 }
 
-/** BR-BH-04: thiếu tồn lúc thu thì từ chối thu và chỉ rõ dòng thiếu. VACCINE không bao giờ nằm đây (đã trừ khi tiêm). */
+/**
+ * BR-BH-04: thiếu tồn lúc thu thì từ chối thu và chỉ rõ dòng thiếu. VACCINE không bao giờ nằm đây (đã trừ khi tiêm).
+ * Dòng thuốc kê đơn của Order khám có thêm nút "Mua ngoài" (sales-v1 #11): khách mua thuốc nơi khác, dòng bị xóa khỏi Order
+ * và tổng thu giảm; không hoàn tác nên xác nhận hai bước. Hàng bán lẻ (GOODS) và Order lưu trú không có nút.
+ */
 function ShortageNotice({ shortages, orders }: { shortages: ShortageLine[]; orders: OrderSummary[] }) {
+  const move = useMoveToExternalPurchase();
+  const [confirming, setConfirming] = useState<string | null>(null);
+  const [error, setError] = useState('');
   const codeOf = (orderId: number) => orders.find((o) => o.orderId === orderId)?.code ?? `Order #${orderId}`;
+  const canMove = (s: ShortageLine) => s.lineType === 'DRUG' && orders.find((o) => o.orderId === s.orderId)?.source === 'VISIT';
+  const run = (s: ShortageLine) => {
+    setError('');
+    move.mutate(
+      { orderId: s.orderId, lineId: s.lineId },
+      { onError: (e) => setError(paymentErrorMessage(e)), onSettled: () => setConfirming(null) },
+    );
+  };
   return (
     <div role="alert" className="flex flex-col gap-1 rounded-md bg-(--ws-urgent-bg) px-3 py-2 text-sm text-(--ws-urgent-ink)">
       <p className="font-semibold">Kho không đủ hàng cho các dòng sau</p>
       <ul className="list-disc pl-4">
-        {shortages.map((s) => (
-          <li key={`${s.orderId}-${s.lineId}`}>
-            <span className="ws-num">{codeOf(s.orderId)}</span> · {s.productName}: cần {s.requested}, còn {s.available}
-          </li>
-        ))}
+        {shortages.map((s) => {
+          const key = `${s.orderId}-${s.lineId}`;
+          return (
+            <li key={key}>
+              <span className="ws-num">{codeOf(s.orderId)}</span> · {s.productName}: cần {s.requested}, còn {s.available}
+              {canMove(s) &&
+                (confirming === key ? (
+                  <span className="ml-2 inline-flex items-center gap-1.5">
+                    <WsButton size="sm" variant="primary" disabled={move.isPending} onClick={() => run(s)} aria-label={`Xác nhận chuyển ${s.productName} sang mua ngoài`}>
+                      {move.isPending ? 'Đang chuyển…' : 'Xác nhận'}
+                    </WsButton>
+                    <WsButton size="sm" disabled={move.isPending} onClick={() => setConfirming(null)}>
+                      Hủy
+                    </WsButton>
+                  </span>
+                ) : (
+                  <WsButton size="sm" className="ml-2" onClick={() => setConfirming(key)} aria-label={`Chuyển ${s.productName} sang mua ngoài`}>
+                    Mua ngoài
+                  </WsButton>
+                ))}
+            </li>
+          );
+        })}
       </ul>
+      {error && <p className="rounded-md bg-(--ws-surface) px-2 py-1 text-xs font-medium">{error}</p>}
       <p className="text-xs">Bỏ Order thiếu hàng khỏi phiếu thu hoặc nhờ quản lý bổ sung tồn kho rồi thu lại.</p>
+      {shortages.some(canMove) && (
+        <p className="text-xs">Thuốc kê đơn: nếu khách mua thuốc nơi khác, bấm Mua ngoài (dòng bị bỏ khỏi Order, tổng thu giảm, không hoàn tác).</p>
+      )}
     </div>
   );
 }

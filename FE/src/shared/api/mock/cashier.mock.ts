@@ -29,7 +29,7 @@ import {
 } from './envelope';
 import { staffNameOf } from './identity-admin.mock';
 import { availableQuantity, issueFefo, type StockShortage } from './inventory.mock';
-import { markOrdersPaid, ordersByIds, ordersOfPayment, orderTotal, payableOrdersOf, type OrderRow } from './sales.mock';
+import { markOrdersPaid, ordersByIds, ordersOfPayment, orderTotal, payableOrdersOf, removeOrderLine, type OrderRow } from './sales.mock';
 
 const RECEPTIONIST: readonly Role[] = ['RECEPTIONIST'];
 const CASH_STAFF: readonly Role[] = ['BRANCH_MANAGER', 'RECEPTIONIST'];
@@ -422,6 +422,28 @@ const previewPayment: MockHandler = (req) => {
   return ok({ customerId: found[0].customerId, branchId, totalAmount: totalOf(found), shortages: shortageLines(found, branchId) });
 };
 
+/**
+ * #11 (OrderExternalPurchaseService, ADR-0103 §A): vai trò 403 → Order 404 → chi nhánh 403 → dòng 404 → Order không PENDING 409 →
+ * không phải dòng DRUG của Order khám 400 BR-BH-04 → tồn vẫn đủ trong phạm vi Order này 400 BR-BH-04 → xóa dòng, tổng giảm.
+ * Không mô phỏng: đánh dấu dòng đơn thuốc ở bệnh án (mock bệnh án không giữ mã dòng Order), audit ORDER_LINE_MOVED_EXTERNAL.
+ */
+const moveToExternalPurchase: MockHandler = (req) => {
+  const orderId = idParam(req, 'orderId');
+  if (isReply(orderId)) return orderId;
+  const lineId = idParam(req, 'lineId');
+  if (isReply(lineId)) return lineId;
+  if (me(req).role !== 'RECEPTIONIST') return denied();
+  const found = lockOrders(req, [orderId]);
+  if (isReply(found)) return found;
+  const order = found[0];
+  const line = order.lines.find((l) => l.lineId === lineId);
+  if (!line) return notFound('dòng đơn hàng', lineId);
+  if (order.status !== 'PENDING') return conflict('đơn hàng (chỉ chuyển mua ngoài khi Order đang chờ thu tiền)', order.status, 'PENDING');
+  if (order.source !== 'VISIT' || line.lineType !== 'DRUG') return ruleFail('BR-BH-04', 'Chỉ chuyển được dòng thuốc kê đơn của Order khám sang mua ngoài');
+  if (!shortageLines([order], order.branchId).some((s) => s.lineId === lineId)) return ruleFail('BR-BH-04', 'Tồn kho vẫn đủ cho dòng này, thu bình thường');
+  return ok(removeOrderLine(orderId, lineId, me(req)), 200, 'Đã chuyển dòng thuốc sang mua ngoài');
+};
+
 // ─── Thu tiền: #14 ───
 
 const METHODS: readonly PaymentMethod[] = ['CASH', 'TRANSFER'];
@@ -554,6 +576,11 @@ const reconcileShift: MockHandler = (req) => {
 };
 
 /** sales-v1 #12–21 (đánh số theo docs/api/sales-v1.md mục A). */
+/** sales-v1 #11 (khóa Order, tồn kho): ở đây vì cần `shortageLines` của thu ngân; tách khỏi bảng #12–21 để test bảng route còn đúng 10 mục. */
+export const orderExternalPurchaseRoutes: Record<string, MockHandler> = {
+  'POST /api/orders/:orderId/lines/:lineId/move-to-external-purchase': moveToExternalPurchase, // 11
+};
+
 export const cashierRoutes: Record<string, MockHandler> = {
   'GET /api/customers/:customerId/payable-orders': listPayable, // 12
   'POST /api/payments/preview': previewPayment, // 13

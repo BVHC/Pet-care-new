@@ -586,7 +586,7 @@ class ChangePasswordIT {
     /**
      * docs/adr/0021: đổi mật khẩu khóa {@code accounts → sessions} như đăng xuất. (1) Một transaction kiểu đăng xuất
      * nhân viên đang giữ {@code accounts} rồi {@code sessions}: đổi mật khẩu chờ ở bước khóa dòng. (2) Đăng xuất khách
-     * ({@code last_seen_at} NULL) chỉ giữ dòng {@code sessions}: đổi mật khẩu chờ ở câu hủy phiên. Cả hai đều xong, không
+     * (không còn câu cập nhật {@code accounts}, từ V27) chỉ giữ dòng {@code sessions}: đổi mật khẩu chờ ở câu hủy phiên. Cả hai đều xong, không
      * deadlock.
      */
     @ParameterizedTest

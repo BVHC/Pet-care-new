@@ -429,11 +429,12 @@ class VisitCheckInServiceTest {
     }
 
     @Test
-    void ownerMismatchAfterCheckInIsCorruptDataAndStopsBeforeTheInsert() {
+    void ownerMismatchAfterCheckInIsTheAcceptedRaceAndStopsBeforeTheInsert() {
         when(appointments.checkIn(APPOINTMENT, BRANCH, NOW)).thenReturn(checkInInfo(77L, NOW));
 
         assertThatThrownBy(() -> service.checkInVisit(new CreateVisitRequest(PET, APPOINTMENT, null, null)))
-                .isInstanceOf(IllegalStateException.class);
+                .isInstanceOfSatisfying(BusinessRuleViolationException.class,
+                        e -> assertThat(e.getRuleId()).isEqualTo("BR-TN-01"));
         verify(codes, never()).nextCode();
         verify(visits, never()).saveAndFlush(any());
     }

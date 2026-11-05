@@ -747,6 +747,41 @@ Bốn đột biến đều bị bắt. Vite 5173 tự nạp lại nên mã độ
 
 **9. Chờ Hiến quyết** [ĐỌC TÀI LIỆU]: TTL token 10 hay 720 phút; nâng `vaccine_days_before` để quan sát VACCINE_DUE/OVERDUE (Đ2-A, bị bộ phân loại quyền từ chối); giữ hay chỉnh `RATE_LIMIT_*` (login 30, register 10, password 10 lần/60 s/IP) và có làm FE xử lý 429 không; hai ca thu ngân OPEN cùng chi nhánh có hợp lệ không (ca #3 còn mở; theo C.18, suy luận từ mã chưa chạy, `CashierShiftService:62–63` chỉ chặn cùng thu ngân); chốt Order #17 (thu hay hủy) và `mark-deceased` của Mochi; lượt #7 giữ gán `hang.dang` hay hoàn tác; các tính năng giả còn lại ở `/security`; L-58, L-59, L-60. **BE-note chờ Mạnh**: năm ca đỏ ở mục 4 (kèm hai đề xuất một dòng), rà soát ADR-0089, 0096, 0097, 0100 (còn Proposed), care #9–10 và visit #21 còn 404, đổi số ADR `0088-n5` (xem ghi chú dưới), SĐT UC07 10 hay 10–11 số. **BE-note chờ Dũng**: sales #11 404, tham số `expiringSoon=true` cho `GET /api/inventory`, `CareLogAddendumResponse` thiếu `createdByName`, `CheckoutStarted` thiếu `orderCode`, trả sớm không lưu số đêm và tiền chốt (L-43, L-47), `customers.email` NULL (L-21), T52 chưa bắt đầu. Hai tin gửi BE chưa có bằng chứng đã gửi. Lưu ý: `PROMPT-M1.md` dòng 7 ghi đổi ADR `0088-n5` sang 0103 nhưng dòng 19 còn ghi 0100 (số này PR #28 đã dùng): sửa trước khi gửi Mạnh; số ADR trống kế tiếp là 0103 và Flyway kế tiếp V33.
 
+## Chốt GĐ1 (5/11/2026, phiên chính do-an-25): sửa trực tiếp phần BE-1 / BE-2 còn nợ
+
+**Phạm vi.** Hiến yêu cầu chốt giai đoạn 1 và cho sửa trực tiếp code thay Mạnh (BE-1) và Dũng (BE-2) khi cần: quy tắc "không sửa `BE/`" được nới cho đợt này. mvn chỉ chạy trong bản sao `be-scratch`; `BE/` chỉ được biên dịch lại một lần khi triển khai. Chưa commit, Hiến tự commit. Nhãn: [TỰ ĐO] = đo trong phiên này; [ĐỌC] = đọc tài liệu / git, không đo lại.
+
+**1. Việc BE-2 đã có sẵn [ĐỌC git].** Dũng đẩy 5 commit lên `origin/dev` sáng 5/11 (06:34–07:29, 79 file): sales #11 `move-to-external-purchase`, Flyway V33 (trigram), ADR 0103–0107, và đã sửa `OpenApiContractParityIT`. Hiến gộp 09:32, HEAD `56b61c9`. Nên phần BE-2 còn lại chỉ là FE gọi sales #11 và duyệt ADR Proposed.
+
+**2. BE đã sửa hoặc thêm (phần BE-1).**
+- 4 ca test đỏ của Mạnh: `VisitCheckInServiceTest` (test chờ lỗi cũ, mã đã ném `BR-TN-01` từ commit `52f2aa1`); `AuditLogViewIT.queriesUseExpectedIndex` (planner chọn đúng khi action chiếm 2,5% dòng: dữ liệu giả lập đổi sang 500 giá trị action); cặp `FkIndexScanIT` / `ReminderScanIndexIT` (`FkIndexScanIT` nay `VACUUM (FULL, ANALYZE)` ba bảng sau khi rollback 20.000 dòng; cơ chế gốc là suy luận (dòng rollback để lại bảng phình và thống kê lệch làm planner chọn `ix_vaccinations_next_due`), kết quả đo: cặp xanh khi chạy liền nhau và trong nhóm visit); `ChangePasswordIT` chỉ sửa chú thích. `OpenApiContractParityIT` đổi `hasSize(187)`.
+- **T28b**: visit-v1 #21 `GET /api/pets/{petId}/health-record` (ADR-0108, Proposed): `PetHealthRecordController`, `HealthRecordService` (`REPEATABLE_READ`, chủ hiện tại + nhân viên LỄ TÂN / BÁC SĨ / CHĂM SÓC, BR-TK-19 → 400), 3 DTO, 4 truy vấn repository, 2 reader; khách không nhận `internalNote` và bản bổ sung nội bộ (BR-KH-07); mũi tiêm chỉ của hệ thống, mũi bị thay thế đánh dấu `superseded`; `HealthRecordIT` 10 ca.
+- ADR: thêm 0108 vào `docs/adr/INDEX.md`; 0109 đã bị phiên M5a (đặc tả AI, T53, chưa commit) lấy nên không trùng 0108; số kế tiếp **0110**, Flyway kế tiếp V34. **Không** đổi số ADR `0088-n5` của Mạnh (57 file tham chiếu).
+
+**3. FE đã sửa (sales #11).** `CheckoutPanel` (`ShortageNotice`) có nút "Mua ngoài" hai bước, chỉ với dòng thuốc (DRUG) của Order sinh từ lượt khám và chỉ khi dòng đó thiếu tính riêng Order đó; `sales.api.ts`, hook `useMoveToExternalPurchase`; mock `cashier.mock.ts` (`moveToExternalPurchase`, bảng `orderExternalPurchaseRoutes`) và `sales.mock.ts` (`removeOrderLine`); test `cashier.mock.test.ts` và `CheckoutPanel.test.tsx` (+3 ca).
+
+**4. Số đo [TỰ ĐO].**
+
+| Phép đo | Kết quả |
+|---|---|
+| BE: `mvn test` toàn bộ trong `be-scratch`, 10:10–10:41, theo 8 nhóm | **8299 ca, 0 đỏ** (unit 5575; nền 46; identity 830; visit 516; appointment 389; care + customer + catalog 321; boarding + branch 230; sales + inventory + report + content + platform 392). Nền trước đó: 8240 ca, 5 đỏ |
+| Cặp planner trong cùng JVM | nhóm visit: `FkIndexScanIT` chạy trước, `ReminderScanIndexIT` chạy sau, cả hai xanh |
+| FE: `tsc --noEmit`, `npm run lint` | exit 0, exit 0 |
+| FE: `vitest related` các file đã sửa | 128 file / 3060 ca xanh |
+| FE: `vitest run` toàn bộ | 174 file / 3774 ca xanh, exit 0 (10:47:23–10:52:24, `--maxWorkers=3`, một lần sau khi sửa FE; nền 5/11 02:00: 3767 ca, thêm 7 ca của phiên này). Chưa đo lặp ba lần như đợt trước |
+
+**5. Triển khai và kiểm trên BE thật [TỰ ĐO], 10:41–10:47.** Sao lưu `backup/petcare_seed_5-11_truoc-trien-khai-10h45.dump` (306.402 byte) trước khi bật; dừng cây tiến trình BE cũ, `mvn clean compile` xanh (23 giây), `start-be-only.ps1`: health UP sau 23 giây, Flyway áp **V33** (`search name unaccent trigram`) thành công, 0 dòng `ERROR` / `Unresolved compilation` / `NoClassDefFoundError`, 0 file `.class` mới hơn tiến trình JVM.
+- Tab "Sức khỏe" của khách minh.anh (thú Bông [TEST P6], chưa có lượt khám): `GET /api/pets/{id}/health-record` 200, khóa `petId, upcomingFollowUpDate, upcomingVaccinations, vaccinations, visits`; giao diện hiện "Chưa có lượt khám nào", "Chưa có mũi tiêm nào" và cân nặng; không có 404; 11 response, 0 lỗi ≥ 400, 0 ghi.
+- API với VET (khoi.vo): thú 2 và 8 trả 200 (1 lượt, 1 mũi, 1 mũi sắp tới); thú 3 trả `internalNote` cho nhân viên; thú không có → 404 `RESOURCE_NOT_FOUND`; `petId` không phải số → 400 `MALFORMED_REQUEST`; khách xem thú 2 của người khác → 403 `ACCESS_DENIED_SCOPE_MISMATCH`; không token → 401. Thứ tự lượt khám mới → cũ chỉ kiểm bằng `HealthRecordIT`: mỗi thú thử trên BE thật chỉ có 1 lượt khám nên không chứng minh được.
+- Sales #11: thăm dò không ghi (order giả 999999, VET) → 403 `ACCESS_DENIED`: route có trên BE vừa bật.
+- Tập lệnh: `final2/cum-8/d9-health.mjs`, `d9-health-api.mjs`, `d9-sales11-probe.mjs`; bằng chứng `evidence-d9-health*.json`. Lần chạy `d9-health.mjs` đầu lỗi do tập lệnh (đọc nhầm email nhân viên cùng dòng README; selector bắt cả nút "Thêm thú cưng": hộp thoại chỉ mở ra, không gửi gì), đã sửa tập lệnh, không phải lỗi sản phẩm.
+
+**6. Chưa kiểm / ngoài phạm vi, nói thẳng.**
+- Luồng ghi "Mua ngoài" trên BE thật chưa chạy: cần Order khám `PENDING` có dòng thuốc thiếu tồn, tức phải ghi DB demo; chờ Hiến duyệt. Mới có: mock + vitest, IT của Dũng, thăm dò route.
+- Chế độ xem của **khách** với lượt khám + `internalNote` chỉ kiểm bằng `HealthRecordIT`: hai khách đăng nhập được không sở hữu thú nào đã khám (thú 2–8 thuộc khách khác).
+- ADR Proposed cần Mạnh / Dũng duyệt: 0089, 0096, 0097, 0100, 0108. Hoãn có chủ đích: `createdByName` của bản bổ sung chăm sóc, `reasons[]` của `check-in-readiness`, `orderCode` của `CheckoutStarted`, tham số `expiringSoon`, email hồ sơ online, care #9–10 (D025, chờ PO), SĐT 10 hay 10–11 số.
+- Ma trận `GD1_PetCare_Full_Atomic_Test_Matrix_Manual.xlsx`: 362 ca, cột J (kết quả tay của Hiến) vẫn toàn "Chưa test"; phiên này không điền.
+
 ## D. Màn hình còn bị BE chặn (tiêu chí "tắt mock, mọi màn gọi API thật" **chưa đạt**)
 
 | Màn / luồng | Bị chặn bởi | Hiện tượng với BE thật |
@@ -754,8 +789,8 @@ Bốn đột biến đều bị bắt. Vite 5173 tự nạp lại nên mã độ
 | `/admin/reports`, thẻ "Đã thu hôm nay" ở dashboard | ~~module `report` (**T44**, BE-2)~~ **hết chặn từ 30/10** | BE-2 đã giao T44; FE gọi BE thật 7 / 7 endpoint đều 200, thẻ có số thật (mục C.10). Hiện tượng cũ (404, thẻ "–") chỉ đúng với BE trước 30/10. Đã đối chiếu chi tiết 1/11 (mục C.11) |
 | Nhận / trả thú, nhật ký chăm sóc, hủy phiên trả thú (`/admin/boarding`) | ~~boarding #13–22, sales #9 (**T42, T43**)~~ **BE đã giao** (T42 29/10, T43 30/10); FE đã chạy thật ở các ca không ghi (1/11) và các ca ghi (2/11), mục C.14; nhật ký bất thường đã chạy chiều 2/11; thú mất (Mochi) đã chạy 3/11 (đợt 3) | BE chạy được qua API (seed giai đoạn 2 nhận thú, ghi nhật ký, bắt đầu trả, thu tiền, giao thú); `activeOrderId` điền thật. Hiện tượng cũ (404 ở các nút nhận / trả / nhật ký, `activeOrderId` null) chỉ đúng với BE trước 29/10. **1/11 (mục C.14):** đã chạy thật ở chế độ không ghi (FE 5173 mock tắt, BE 8082): danh sách 3 tab, mở hộp "Nhận thú", "Nhật ký", "Trả thú", 403 theo vai, lọc ngày. **2/11 (đợt 2, mục C.14):** đã chạy thật cả các ca GHI (nhận sớm, bắt đầu / hủy phiên trả, thu tiền ở bàn Lễ tân, giao thú, ghi / sửa nhật ký và bản bổ sung); `activeOrderId` chỉ điền khi Order `OPEN` / `PENDING`, null sau `PAID` nên FE tra Order bằng `GET /api/orders?boardingBookingId=`. **Chiều 2/11 (đợt 2b, mục C.14):** nhật ký BẤT THƯỜNG thật (gửi `IN_APP` + `EMAIL`, `care_logs` #6) và trả thú lần hai (Order #16, 1 đêm, hand-over 200). **3/11 (đợt 3, mục C.14):** thú mất (Mochi) `end-deceased` 200 trên BE thật; Care Task `PICKUP_OVERDUE` #2 vẫn `OPEN` sau đó, rồi hủy tay (cụm 7) |
 | Cài đặt thông báo của khách | care-v1 #9–10 (**D025**) | 404 |
-| Tab "Hồ sơ sức khỏe" của thú | visit-v1 #21 (**T28b**) | 404 "Không tìm thấy đường dẫn yêu cầu" trong tab |
-| Chuyển dòng đơn sang mua ngoài ở thu ngân | sales #11 (**BE-2 nối `PrescriptionApi`**) | 404 |
+| Tab "Hồ sơ sức khỏe" của thú | ~~visit-v1 #21 (**T28b**)~~ **BE đã giao 5/11** (ADR-0108) | ~~404 "Không tìm thấy đường dẫn yêu cầu" trong tab~~ 200 trên BE thật (kiểm 5/11 10:43, mục "Chốt GĐ1") |
+| Chuyển dòng đơn sang mua ngoài ở thu ngân | ~~sales #11 (**BE-2 nối `PrescriptionApi`**)~~ **BE có từ 5/11** (Dũng, ADR-0103); FE có nút "Mua ngoài" từ 5/11 | ~~404~~ route có trên BE thật (VET gọi → 403); luồng ghi chưa chạy trên BE thật (mục "Chốt GĐ1") |
 | Lễ tân gán người phụ trách lượt | ~~`GET /api/staff` cho lễ tân (**BE-1**)~~ **đã mở 31/10** bằng endpoint hẹp `GET /api/staff/assignable` (identity #38, ADR-0089) | ~~hộp thoại báo "Danh sách nhân viên chờ BE-1 mở GET /api/staff cho lễ tân"~~ FE đã đổi hộp gán + chấm hiện diện sang endpoint mới; **BE thật phải build + bật lại mới thử được** (chưa gọi thật) |
 | UC22 đổi email / liên kết tài khoản của khách | identity #25–27 | 404 |
 

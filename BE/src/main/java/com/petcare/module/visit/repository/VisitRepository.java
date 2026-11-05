@@ -35,12 +35,25 @@ public interface VisitRepository extends JpaRepository<Visit, Long>, JpaSpecific
     /** Một cặp lịch hẹn → Visit (nợ D028). */
     record AppointmentVisitRow(Long appointmentId, Long visitId) {}
 
+    /** Một lượt đã hoàn tất của thú cho hồ sơ sức khỏe ({@code HealthRecordService}, visit-v1 #21). */
+    record HealthRow(Long visitId, Instant checkedInAt, Long branchId, ServiceGroup group) {}
+
     @Query("""
             SELECT new com.petcare.module.visit.repository.VisitRepository$SummaryRow(
                 v.id, v.branchId, v.customerId, v.petId, v.serviceGroup, v.status, v.assigneeId)
             FROM Visit v WHERE v.id = :id
             """)
     Optional<SummaryRow> findSummary(@Param("id") Long id);
+
+    /** Lượt {@code COMPLETED} của thú ở mọi chi nhánh, mới nhất trước (visit-v1 #21); đọc không khóa. */
+    @Query("""
+            SELECT new com.petcare.module.visit.repository.VisitRepository$HealthRow(
+                v.id, v.checkedInAt, v.branchId, v.serviceGroup)
+            FROM Visit v
+            WHERE v.petId = :petId AND v.status = com.petcare.module.visit.entity.VisitStatus.COMPLETED
+            ORDER BY v.checkedInAt DESC, v.id DESC
+            """)
+    List<HealthRow> findCompletedByPetId(@Param("petId") Long petId);
 
     /** Lượt {@code WAITING} / {@code IN_PROGRESS} gán cho nhân viên, theo {@code id} tăng dần; index {@code ix_visits_assignee_status}. */
     @Query("""

@@ -25,6 +25,9 @@ public interface VaccinationRepository extends JpaRepository<Vaccination, Long> 
     /** Mũi tiêm của một lượt theo thứ tự ghi. Lọc cả {@code pet_id} để đi index (cùng lý do {@code hasVaccinationInVisit}). */
     List<Vaccination> findByPetIdAndVisitIdOrderByIdAsc(Long petId, Long visitId);
 
+    /** Mọi mũi của thú ở mọi chi nhánh, ngày tiêm mới nhất trước, cùng ngày thì mũi ghi sau (visit-v1 #21). */
+    List<Vaccination> findByPetIdOrderByAdministeredOnDescIdDesc(Long petId);
+
     /**
      * Mũi gần nhất của thú cùng một loại (visit-v1 #18, docs/adr/0073): ngày tiêm mới nhất, cùng ngày thì mũi ghi sau —
      * cùng cách chọn với {@link #findLatestDoses}. Đi {@code ix_vaccinations_pet_type_administered}.

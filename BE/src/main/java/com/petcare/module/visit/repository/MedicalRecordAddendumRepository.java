@@ -1,5 +1,6 @@
 package com.petcare.module.visit.repository;
 
+import java.util.Collection;
 import java.util.List;
 
 import org.springframework.data.jpa.repository.JpaRepository;
@@ -14,4 +15,7 @@ public interface MedicalRecordAddendumRepository extends JpaRepository<MedicalRe
 
     /** Bản bổ sung của một bệnh án theo thứ tự ghi. */
     List<MedicalRecordAddendum> findByMedicalRecordIdOrderByIdAsc(Long medicalRecordId);
+
+    /** Bản bổ sung của nhiều bệnh án một câu (hồ sơ sức khỏe, visit-v1 #21), theo thứ tự ghi. */
+    List<MedicalRecordAddendum> findByMedicalRecordIdInOrderByIdAsc(Collection<Long> medicalRecordIds);
 }

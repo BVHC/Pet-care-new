@@ -920,3 +920,55 @@ describe('bao trùm: bảng route, đăng nhập, vai trò, lưu trữ, tên l�
     expect((await client.get('/api/me/cashier-shift', auth)).data.data.shift).toMatchObject({ businessDate: '2026-10-31', paymentCount: 1 });
   });
 });
+
+describe('chuyển dòng thuốc sang mua ngoài (#11, ADR-0103 §A)', () => {
+  // Order #2 (VISIT, PENDING, chi nhánh 1): khám 150.000, Amoxicillin ×10 (dòng 22, DRUG), Pate ×2 (dòng 23, GOODS). Amoxicillin còn 5 sau `adjust`.
+  const lowAmoxicillin = () => adjust([[13, -195], [14, -500]]);
+  const move = async (orderId: number | string, lineId: number | string, auth?: Awaited<ReturnType<typeof desk>>) =>
+    client.post(`/api/orders/${orderId}/lines/${lineId}/move-to-external-purchase`, undefined, auth ?? (await desk()));
+
+  it('thiếu tồn → 200 trả Order đã bỏ dòng, tổng giảm đúng giá trị dòng; xem trước không còn thiếu', async () => {
+    await lowAmoxicillin();
+    const before = await orderOf(2);
+    const line = before.lines.find((l: { lineId: number }) => l.lineId === 22);
+
+    const res = await move(2, 22);
+
+    expect(res.status).toBe(200);
+    expect(res.data.data.lines.map((l: { lineId: number }) => l.lineId)).not.toContain(22);
+    expect(res.data.data.totalAmount).toBe(before.totalAmount - line.lineTotal);
+    expect(res.data.data).toMatchObject({ orderId: 2, status: 'PENDING', source: 'VISIT' });
+    expect((await previewOf([2])).data.data).toMatchObject({ totalAmount: res.data.data.totalAmount, shortages: [] });
+    expect((await orderOf(2)).lines.some((l: { lineId: number }) => l.lineId === 22)).toBe(false);
+  });
+
+  it('tồn vẫn đủ trong phạm vi Order này → 400 BR-BH-04, không xóa gì', async () => {
+    const res = await failure(move(2, 22));
+
+    expect([res.status, ruleOf(res)]).toEqual([400, 'BR-BH-04']);
+    expect((await orderOf(2)).lines.some((l: { lineId: number }) => l.lineId === 22)).toBe(true);
+  });
+
+  it('dòng hàng (GOODS) của Order khám → 400 BR-BH-04, chỉ dòng thuốc kê đơn mới chuyển được', async () => {
+    await lowAmoxicillin();
+    const res = await failure(move(2, 23));
+
+    expect([res.status, ruleOf(res)]).toEqual([400, 'BR-BH-04']);
+    expect(res.data.message).toMatch(/dòng thuốc kê đơn/);
+    expect((await orderOf(2)).lines.some((l: { lineId: number }) => l.lineId === 23)).toBe(true);
+  });
+
+  it('thứ tự lỗi: id sai kiểu 400 → vai trò 403 → Order 404 → chi nhánh 403 → dòng 404 → không PENDING 409', async () => {
+    await lowAmoxicillin();
+    expect((await failure(move('x', 22))).data.errorCode).toBe('MALFORMED_REQUEST');
+    expect((await failure(move(2, 22, await manager()))).data.errorCode).toBe('ACCESS_DENIED');
+    const missing = await failure(move(999, 22));
+    expect([missing.status, missing.data.message]).toEqual([404, 'Không tìm thấy đơn hàng #999']);
+    expect((await failure(move(8, 22))).data.errorCode).toBe('ACCESS_DENIED_SCOPE_MISMATCH');
+    const noLine = await failure(move(2, 999));
+    expect([noLine.status, noLine.data.message]).toEqual([404, 'Không tìm thấy dòng đơn hàng #999']);
+    const paid = await orderOf(5);
+    const conflict = await failure(move(5, paid.lines[0].lineId));
+    expect([conflict.status, conflict.data.errorCode]).toEqual([409, 'INVALID_STATE_TRANSITION']);
+  });
+});

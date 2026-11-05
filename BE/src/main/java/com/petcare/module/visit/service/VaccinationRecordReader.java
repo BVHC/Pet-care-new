@@ -40,6 +40,11 @@ class VaccinationRecordReader {
         return toRecords(vaccinations.findByPetIdAndVisitIdOrderByIdAsc(petId, visitId));
     }
 
+    /** Mọi mũi của thú ở mọi chi nhánh, mới nhất trước (visit-v1 #21, docs/adr/0108); không bao giờ {@code null}. */
+    List<VaccinationRecordResponse> forPet(Long petId) {
+        return toRecords(vaccinations.findByPetIdOrderByAdministeredOnDescIdDesc(petId));
+    }
+
     /** Mũi gần nhất của thú cùng loại vaccine, ở mọi chi nhánh (visit-v1 #18, docs/adr/0073); chưa tiêm thì rỗng. */
     Optional<VaccinationRecordResponse> latestOfType(Long petId, Long vaccineTypeId) {
         return vaccinations.findFirstByPetIdAndVaccineTypeIdOrderByAdministeredOnDescIdDesc(petId, vaccineTypeId)

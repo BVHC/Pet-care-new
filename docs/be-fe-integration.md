@@ -16,26 +16,26 @@
 
 ## 1. Tổng quan: BE có bao nhiêu endpoint
 
-**228 / 232 endpoint đã có (98%).** Còn thiếu 4, nằm gọn ở 3 module (visit 1, care 2, sales 1):
+**230 / 232 endpoint đã có (99%; 5/11: thêm visit #21 và sales #11).** Còn thiếu 2, cùng ở care (#9–10, D025, chờ PO):
 
 | Module (hợp đồng) | Có / tổng | Thiếu | Ai · task | FE đã chạy thật |
 |---|---|---|---|---|
 | identity-v1 | 39 / 39 (2/11) | — (#25–27 UC22 đã cài thay BE-1 ngày 2/11, ADR-0097 Proposed, chờ BE-1 xác nhận; mã nằm trong bản gộp `d097685`, BE 8082 khởi động trên mã đó lúc 13:45 ngày 3/11 (khởi động lại 4/11 10:15); chưa gọi thử #25–27 và `codeLength` trên BE thật) | BE-1 | đăng nhập, đăng ký OTP, quản trị NV / tài khoản / [CFG] / mẫu / audit: **L**. **#39 `POST /auth/refresh` (ADR-0091) đã có ở BE, FE chưa nối (D055): với BE thật access token sống 10 phút nên FE bị đăng xuất sau 10 phút** |
 | appointment-v1 | 9 / 9 | — | BE-1 | khách đặt, đổi, hủy: **L**; lễ tân đặt hộ: **S** |
-| visit-v1 | 20 / 21 | #21 hồ sơ sức khỏe thú | BE-1 · T28b | tiếp nhận, hàng đợi, bệnh án, tiêm, kê đơn, hoàn tất: **L** |
+| visit-v1 | 21 / 21 | — (#21 hồ sơ sức khỏe thú có từ 05/11, T28b, ADR-0108 Proposed) | BE-1 · T28b | tiếp nhận, hàng đợi, bệnh án, tiêm, kê đơn, hoàn tất: **L**; #21: tab "Sức khỏe" của khách gọi BE thật 200 (5/11 10:43): **L** |
 | care-v1 | 8 / 10 | #9–10 cài đặt nhận thông báo (D025, chờ PO) | BE-1 | thông báo: **P**; Care Task lễ tân: **L** |
 | branch-v1 | 21 / 21 | — | BE-2 | **P** (xem), ca thu ngân dùng giờ mở cửa: **L** |
 | catalog-v1 | 22 / 22 | — | BE-2 | **P**, seed-dev tạo qua đúng API này |
 | customer-v1 | 21 / 21 | — | BE-2 | dùng trong luồng khám: **L**; trang khách: **P** |
 | inventory-v1 | 17 / 17 | — | BE-2 | FEFO khi thu tiền: **L**; phiếu nhập / điều chỉnh qua UI: **S** |
-| sales-v1 | 21 / 21 | — (#11 có từ 05/11, ADR-0103; #9 hủy phiên trả thú có từ 30/10, T43) | BE-2 | Order, thu tiền, ca, đối soát: **L**; #11: BE có, FE chưa có nút gọi: **S** |
+| sales-v1 | 21 / 21 | — (#11 có từ 05/11, ADR-0103; #9 hủy phiên trả thú có từ 30/10, T43) | BE-2 | Order, thu tiền, ca, đối soát: **L**; #11: BE có, FE có nút "Mua ngoài" từ 05/11 (mock + vitest; BE thật chỉ thăm dò route, chưa chạy luồng): **S** |
 | boarding-v1 | 22 / 22 | — (T42 29/10: #13–15, #19–22; T43 30/10: #16–18) | BE-2 · T42, T43 | chuồng, đặt chỗ, gia hạn, hủy: **L**; nhận / trả thú, nhật ký: BE có; đã chạy thật FE ↔ BE (1/11 đợt 1 chỉ đọc; 2/11 đợt 2 ca ghi: nhận, trả, thu, giao thú, nhật ký thường và bất thường, chiều 2/11); thú mất (Mochi) `end-deceased` đã chạy thật 3/11 (200; Order #17 `PENDING` 720.000 ₫, chưa thu) |
 | content-v1 | 22 / 22 | — | BE-2 | trang công khai, nội dung trang, chuyên mục + bài viết, feedback: **L** (28/10) |
 | report-v1 | 7 / 7 (T44 30/10) | — | BE-2 · T44 | báo cáo + thẻ "Đã thu hôm nay": **L** (30/10: FE gọi BE thật cả 7 endpoint, đều 200, thẻ khớp SQL; 1/11: đối chiếu chi tiết bằng SQL + curl + Chrome thật, 7 / 7 khớp, sửa lệch biên 12 tháng và `withinDays`, xem `T49-fe.md` C.11) |
 
 **Tác vụ hệ thống (giai đoạn 1: 12):** đã có ST01, ST02, ST03, ST04, ST05 (lịch hẹn + lưu trú), ST06 (trừ kho FEFO khi tiêm / thu tiền; phần giữ hàng đơn online là tầng 3), ST13, ST18, ST19, ST20; ST08 (cảnh báo tồn thấp / lô sắp hết hạn, T44 30/10) và ST15 (lưu trú quá hạn đón, T43 30/10).
 
-**Việc BE còn dở:** BE-1: T28b (#21), T40 (nối interface chéo, IN_PROGRESS), T41 (E2E BE, chưa bắt đầu), D025. **BE-2: T42 (29/10), T43 và T44 (30/10) đã `DONE`** (boarding #13–22, sales #9, report #1–7, ST08, ST15); còn T45 (test FSM + E2E bán lẻ, lưu trú, `NOT_STARTED`) và nút gọi sales #11 phía FE (BE có từ 05/11). Rủi ro lớn nhất của buổi demo 30/10 (T50) nay nằm ở phía FE: báo cáo (T44) đã gọi BE thật nhưng chưa đối chiếu chi tiết; nhận / trả thú, nhật ký (T42, T43): đã chạy thật FE ↔ BE (1/11 đợt 1 chỉ đọc; 2/11 đợt 2 các ca ghi nhận, trả, thu, giao thú, nhật ký thường và bất thường); thú mất (Mochi) `end-deceased` đã chạy thật 3/11 chiều (200; Order #17 `PENDING` chưa thu; chưa `mark-deceased`).
+**Việc BE còn dở:** BE-1: T28b (#21) xong 5/11 (phiên chính thay BE-1 theo yêu cầu của Hiến; ADR-0108 chờ Mạnh duyệt), T40 (nối interface chéo, IN_PROGRESS), T41 (E2E BE, chưa bắt đầu), D025. **BE-2: T42 (29/10), T43 và T44 (30/10) đã `DONE`** (boarding #13–22, sales #9, report #1–7, ST08, ST15); còn T45 (test FSM + E2E bán lẻ, lưu trú, `NOT_STARTED`) và nút gọi sales #11 phía FE (đã có 5/11, chưa chạy luồng trên BE thật). Rủi ro lớn nhất của buổi demo 30/10 (T50) nay nằm ở phía FE: báo cáo (T44) đã gọi BE thật nhưng chưa đối chiếu chi tiết; nhận / trả thú, nhật ký (T42, T43): đã chạy thật FE ↔ BE (1/11 đợt 1 chỉ đọc; 2/11 đợt 2 các ca ghi nhận, trả, thu, giao thú, nhật ký thường và bất thường); thú mất (Mochi) `end-deceased` đã chạy thật 3/11 chiều (200; Order #17 `PENDING` chưa thu; chưa `mark-deceased`).
 
 ## 2. Dữ liệu và database: có sẵn gì, tạo thế nào
 
@@ -163,7 +163,7 @@ Hạn và trạng thái lấy từ `docs/time.md` (28/10; T42–T44 cập nhật
 | T26 | 3 | Tiếp nhận: Visit, hàng đợi, gán / gán lại, gọi lượt | BE-1 · 21/10 · IN_PROGRESS | visit #1–9, #11, `GET /me/queue` | 9 lượt | T36 · **L** (cấp cứu 201, hàng đợi, đưa lên trước, hủy, gọi; ngoài giờ `BR-CN-05` hiện đúng câu). **Lễ tân không đọc được `GET /staff` nên hộp gán người bị chặn** (gán qua API) **[31/10: BE-1 mở endpoint hẹp `GET /staff/assignable` #38, ADR-0089; FE đã đổi hộp gán + chấm hiện diện; đã chạy thật 4/11 (ca C3-08 ✔)]** | 🟡 |
 | T27 | 4 | Khám: bệnh án, hoàn tất lượt | BE-1 · 22/10 · DONE | visit #10, #12–15 | 4 bệnh án | T37 · **L** (SOAP, cân nặng, hoàn tất, bản bổ sung sau khóa) | 🟢 |
 | T28 | 4 | Tiêm chủng | BE-1 · 23/10 · DONE | visit #18–20 | 3 mũi; phác đồ chó + mèo (mèo do seed giai đoạn 2) | T37 · **L** (gợi ý, ghi mũi, trừ kho, hết phác đồ, xóa) | 🟢 |
-| T28b | 4 | Hồ sơ sức khỏe thú | BE-1 · chưa xếp · NOT_STARTED | **chưa có** (visit #21) | — | T23 · tab 404 | 🔴 |
+| T28b | 4 | Hồ sơ sức khỏe thú | BE-1 · 5/11 · DONE | visit #21 (ADR-0108; `HealthRecordIT` 10 ca) | 7 thú có lượt khám hoàn tất (2–8), khách đăng nhập được chỉ có thú chưa khám | T23 · **L** (tab "Sức khỏe" 200 trên BE thật 5/11 10:43; API VET xem thú 2, 8; 403 chủ khác, 404, 400, 401) | 🟢 |
 | T29 | 5 | Order bán lẻ tại quầy | BE-2 · 19/10 · DONE | sales-v1 (Order bán lẻ) | — | T34 · **L** (28/10: tạo, thêm hàng, chốt, hủy chưa chốt ở quầy lễ tân; `/admin/pos`: xem, hủy khách không thanh toán) | 🟢 |
 | T30 | 5 | Thu ngân: ca, thu tiền, đối soát, ST13 | BE-2 · 21/10 · DONE | sales-v1 (ca, thu, đối soát) | 5 phiếu thu, 1 ca (#1 đang mở) | T35 · **L** (mở ca ngoài giờ, thu tiền mặt có thối, chốt ca, đối soát `RECONCILED`) | 🟢 (BR-BH-04 ✔ 28/10) |
 | T31 | 6 | Lưu trú: chuồng, đặt chỗ, gia hạn, hủy | BE-2 · 22/10 · DONE | boarding #1–12, ST05 | 6 chuồng, 4 đặt chỗ | T48 · **L** (tạo / bảo trì chuồng, đặt tại quầy, gia hạn, hủy; trùng mã `BR-LT-01`) | 🟢 |
@@ -204,9 +204,9 @@ Hạn và trạng thái lấy từ `docs/time.md` (28/10; T42–T44 cập nhật
    - **Nhận thú, nhật ký chăm sóc, trả thú, hủy phiên trả thú** (T42, T43, boarding #13–22, sales #9, ST15, `activeOrderId`) → bốn hộp thoại ở `/admin/boarding` và khách xem nhật ký (UC57, UC59, UC60): BE chạy được qua API (seed giai đoạn 2 nhận thú, ghi nhật ký, trả thú, thu tiền, giao thú), **1/11 (phiên P6) đợt 1 chỉ đọc đã chạy thật FE ↔ BE** (3 tab danh sách, mở hộp Nhận thú / Nhật ký / Trả thú, 403 theo vai, lọc ngày; mock T48 #13–22 / sales #9 đã đối chiếu với mã BE và sửa lệch K29–K37; `T49-fe.md` C.14), **2/11 (đợt 2) các ca GHI đã chạy thật** (bắt đầu / hủy phiên trả, nhận sớm, thu tiền ở bàn Lễ tân, giao thú, ghi / sửa nhật ký và bản bổ sung, khách tự đặt chỗ và xem nhật ký; trọn vòng trên đặt chỗ mới #5 của mèo `minh.anh`, Mochi chỉ bắt đầu / hủy phiên trả và nhật ký; sửa thêm K38–K40; `T49-fe.md` C.14), **chiều 2/11 (đợt 2b)** nhật ký BẤT THƯỜNG thật (gửi `IN_APP` + `EMAIL` cho chủ thú và `IN_APP` cho lễ tân) và trọn vòng lần hai trên đặt chỗ #6 (Order #16, 1 đêm; sửa thêm K41, K42). **Chiều 3/11 (phiên C1):** (e) thú mất Mochi (`C6-16`) `end-deceased` chạy thật, 200, Order #17 `PENDING` 720.000 ₫ (sau khi quan sát `PICKUP_OVERDUE` của cụm 7). Việc còn lại: chốt Order #17 (thu hoặc quản lý chi nhánh hủy) và `mark-deceased` Mochi (chờ Hiến duyệt).
 
 **🔴 Chưa ghép được (BE chưa có, FE chạy mock):**
-- **Hồ sơ sức khỏe thú** (T28b, visit #21) → tab trong chi tiết thú.
+- ~~**Hồ sơ sức khỏe thú** (T28b, visit #21) → tab trong chi tiết thú.~~ **BE có từ 5/11** (ADR-0108); tab gọi BE thật 200 (kiểm 5/11 10:43).
 - **Cài đặt nhận thông báo** (care #9–10, D025, chờ PO).
-- **Chuyển dòng đơn sang mua ngoài khi thu tiền** (sales #11): BE có từ 05/11 (`POST /api/orders/{orderId}/lines/{lineId}/move-to-external-purchase`, lễ tân, không cần ca mở, trả `Order` đã bỏ dòng). Nút còn thiếu ở `ShortageNotice` của `CheckoutPanel`: chỉ dòng `DRUG` của Order khám và chỉ khi dòng đó thiếu **tính riêng Order đó** — thiếu chỉ do thu gộp thì BE trả 400 `BR-BH-04` kèm lời khuyên thu riêng từng Order. Sau khi chuyển, tải lại preview (tổng đổi, thu với tổng cũ bị 400 `BR-TG-02`).
+- **Chuyển dòng đơn sang mua ngoài khi thu tiền** (sales #11): BE có từ 05/11 (`POST /api/orders/{orderId}/lines/{lineId}/move-to-external-purchase`, lễ tân, không cần ca mở, trả `Order` đã bỏ dòng). Nút **đã có từ 5/11** (hai bước xác nhận; chưa chạy luồng trên BE thật) ở `ShortageNotice` của `CheckoutPanel`: chỉ dòng `DRUG` của Order khám và chỉ khi dòng đó thiếu **tính riêng Order đó** — thiếu chỉ do thu gộp thì BE trả 400 `BR-BH-04` kèm lời khuyên thu riêng từng Order. Sau khi chuyển, tải lại preview (tổng đổi, thu với tổng cũ bị 400 `BR-TG-02`).
 - **UC22** (identity #25–27: đổi email / liên kết tài khoản của khách): **BE đã cài thay BE-1 ngày 2/11** (ADR-0097 Proposed; IT xanh trong bản sao mvn) mã nằm trong bản gộp `d097685`, BE 8082 khởi động trên mã đó lúc 13:45 ngày 3/11 (khởi động lại 4/11 10:15); chưa gọi thử #25–27 trên BE thật (#26 đổi email tài khoản thật, #27 xóa hồ sơ online, không hoàn tác); mock FE đã khớp. Còn mở phía BE-2: đồng bộ `customers.email`.
 
 ## 6. Nên làm gì để kịp demo (theo thứ tự ảnh hưởng)
