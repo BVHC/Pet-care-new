@@ -36,7 +36,10 @@ import org.springframework.test.context.ActiveProfiles;
 @Import(TestcontainersConfiguration.class)
 class SchemaMigrationIT {
 
-    /** erd §12 (L1043–1073): 52 model + 3 bảng con = 55 bảng. */
+    /**
+     * erd §12 (L1043–1073): 52 model + 3 bảng con = 55 bảng, cộng 4 bảng AI của erd §14.2 / docs/07 §8 (V34, docs/adr/0110)
+     * = 59. Các bảng tầng 3 khác (V36–V49) thêm vào đây khi có migration.
+     */
     private static final Set<String> ERD_TABLES = Set.of(
             "accounts", "staff_profiles", "otp_tokens", "sessions", "audit_logs", "system_configs",
             "notification_templates", "branches", "opening_hours", "holidays", "branch_services",
@@ -47,12 +50,13 @@ class SchemaMigrationIT {
             "boarding_check_ins", "care_logs", "care_log_addenda", "orders", "order_lines", "payments",
             "cashier_shifts", "suppliers", "inventory_items", "stock_lots", "stock_receipts", "stock_receipt_lines",
             "stock_adjustments", "stock_adjustment_lines", "stock_movements", "article_categories", "articles",
-            "page_contents", "feedbacks", "care_tasks", "notifications", "notification_outbox");
+            "page_contents", "feedbacks", "care_tasks", "notifications", "notification_outbox",
+            "ai_documents", "ai_chunks", "ai_chat_logs", "ai_item_profiles");
 
     /** Bảng loại LOG trong erd: chỉ có {@code created_at} (erd §0 L14). */
     private static final Set<String> LOG_TABLES = Set.of(
             "otp_tokens", "audit_logs", "weight_records", "visit_assignments", "medical_record_addenda",
-            "care_log_addenda", "stock_movements", "notification_outbox");
+            "care_log_addenda", "stock_movements", "notification_outbox", "ai_chat_logs");
 
     /** Bảng có khóa chính khác {@code id}: 1–1 dùng FK làm PK, PK ghép, PK chuỗi. */
     private static final Set<String> TABLES_WITHOUT_ID = Set.of(
@@ -152,11 +156,13 @@ class SchemaMigrationIT {
         // V31 index audit_logs (action, created_at) + gỡ 2 trigger chỉ-thêm-mới của audit_logs (docs/adr/0098, trả D021),
         // V32 index thứ tự danh sách thông báo (account_id, created_at DESC, id DESC) (docs/adr/0099, trả D022),
         // V33 tìm khách / thú theo tên không dấu: unaccent + pg_trgm, f_unaccent, 2 index GIN (docs/adr/0104, trả T17-D05),
+        // V34 extension pgvector + 4 bảng AI ai_documents / ai_chunks / ai_chat_logs / ai_item_profiles (docs/adr/0110),
+        // V35 seed 18 tham số [CFG] ai.* (docs/adr/0110),
         // V9000 chỉ ở test: baseline session.access_ttl_minutes = 720
         assertThat(rows).extracting(row -> row.get("version"))
                 .containsExactly("1", "2", "3", "4", "5", "6", "7", "8", "9", "10", "11", "12", "13", "14", "15",
                         "16", "17", "18", "19", "20", "21", "22", "23", "24", "25", "26", "27", "28", "29", "30",
-                        "31", "32", "33", "9000");
+                        "31", "32", "33", "34", "35", "9000");
         assertThat(rows).allSatisfy(row -> assertThat(row).containsEntry("success", true));
     }
 
@@ -180,7 +186,7 @@ class SchemaMigrationIT {
                 WHERE table_schema = 'public' AND table_type = 'BASE TABLE' AND table_name <> 'flyway_schema_history'
                 """, String.class);
 
-        assertThat(ERD_TABLES).hasSize(55);
+        assertThat(ERD_TABLES).hasSize(59);
         // document_counters (V14, ADR-0043) và refresh_tokens (V27, ADR-0091) là bảng hạ tầng ngoài ERD v16
         // (erd 13 muc 18)
         assertThat(tables).containsExactlyInAnyOrderElementsOf(
@@ -190,7 +196,7 @@ class SchemaMigrationIT {
 
     @Test
     void commonTimestampColumnsMatchTableKind() {
-        assertThat(LOG_TABLES).hasSize(8);
+        assertThat(LOG_TABLES).hasSize(9);
         for (String table : ERD_TABLES) {
             Map<String, Column> columns = columns(table);
             assertCommonTimestamp(table, columns.get("created_at"));
@@ -592,7 +598,8 @@ class SchemaMigrationIT {
                 JOIN pg_attribute a ON a.attrelid = c.conrelid AND a.attnum = c.conkey[1]
                 WHERE c.contype = 'f' AND c.confrelid = 'accounts'::regclass
                 """, String.class);
-        assertThat(foreignKeys).as("số cột FK trỏ tới accounts (V1: 43 cột ở 34 bảng)").hasSize(43);
+        assertThat(foreignKeys).as("số cột FK trỏ tới accounts (V1: 43 cột ở 34 bảng; V34: + ai_documents.updated_by, "
+                + "ai_item_profiles.updated_by)").hasSize(45);
 
         List<String> unindexed = jdbc.queryForList("""
                 SELECT c.conrelid::regclass || '.' || a.attname

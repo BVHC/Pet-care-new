@@ -1,5 +1,5 @@
 # Profile test. DataSource do Testcontainers cấp (com.petcare.TestcontainersConfiguration,
-# @ServiceConnection, postgres:17): mỗi lần chạy là một DB sạch, Flyway áp migration thật,
+# @ServiceConnection, pgvector/pgvector:pg17): mỗi lần chạy là một DB sạch, Flyway áp migration thật,
 # Hibernate ddl-auto=validate kế thừa từ application.yml. Cần Docker đang chạy.
 spring:
   application:

@@ -371,7 +371,7 @@ m.op("post", "/accounts/{id}/unlock", "unlockAccount", "Mở khóa tài khoản"
 
 m.op("get", "/system-configs", "listSystemConfigs", "Danh sách tham số [CFG]", "Configuration", "UC10", "BR-QT-13",
      "A03", "Chỉ ADMIN", resp="array:SystemConfig", errors=(401, 403),
-     notes="Mọi tham số (52), sắp theo key; minValue / maxValue là khoảng tĩnh, khoảng thu hẹp theo ràng buộc chéo chỉ có trong message lỗi của #32 (docs/adr/0036).")
+     notes="Mọi tham số, sắp theo key; minValue / maxValue là khoảng tĩnh, khoảng thu hẹp theo ràng buộc chéo chỉ có trong message lỗi của #32 (docs/adr/0036).")
 m.op("put", "/system-configs/{key}", "updateSystemConfig", "Sửa tham số", "Configuration", "UC10", "BR-QT-13, 15",
      "A03", "Chỉ ADMIN", body="UpdateConfigRequest", resp="SystemConfig", path_params=["ConfigKey"],
      errors=(400, 401, 403, 404), err_desc={400: "`BR-QT-13` ngoài khoảng hợp lệ, message ghi khoảng cho phép"},

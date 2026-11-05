@@ -9,7 +9,9 @@ import static org.mockito.Mockito.verify;
 
 import java.time.Duration;
 import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
@@ -35,12 +37,14 @@ class RateLimitFilterTest {
         }
 
         final List<Call> calls = new ArrayList<>();
+        /** Quyết định riêng theo khóa đầy đủ (ví dụ {@code rl:ai-hour:203.0.113.9}); khóa khác trả {@link #next}. */
+        final Map<String, Decision> byKey = new HashMap<>();
         Decision next = Decision.ALLOWED;
 
         @Override
         public Decision tryAcquire(String key, int limit, Duration window) {
             calls.add(new Call(key, limit, window));
-            return next;
+            return byKey.getOrDefault(key, next);
         }
     }
 
@@ -48,7 +52,8 @@ class RateLimitFilterTest {
     private final HandlerExceptionResolver resolver = mock(HandlerExceptionResolver.class);
     private final RateLimitProperties properties = new RateLimitProperties(true,
             new RateLimitProperties.Rule(30, 60), new RateLimitProperties.Rule(10, 45),
-            new RateLimitProperties.Rule(7, 30), 10);
+            new RateLimitProperties.Rule(7, 30), new RateLimitProperties.Rule(5, 20),
+            new RateLimitProperties.Rule(25, 1800), 10);
     private final RateLimitFilter filter = new RateLimitFilter(limiter, properties, resolver);
 
     private MockFilterChain run(String method, String uri, String remoteAddr) throws Exception {
@@ -85,13 +90,64 @@ class RateLimitFilterTest {
             "POST,    /api/auth/logout",
             "POST,    /api/public/anything",
             "POST,    /api/visits",
-            "GET,     /api/auth/password/forgot"})
+            "GET,     /api/auth/password/forgot",
+            "GET,     /api/public/ai/chat",
+            "OPTIONS, /api/me/ai/chat",
+            "PUT,     /api/me/ai/chat",
+            "POST,    /api/public/ai/recommendations",
+            "POST,    /api/me/ai/recommendations",
+            "POST,    /api/public/ai/chat/history"})
     void doesNotCountOtherMethodsOrPaths(String method, String uri) throws Exception {
         MockFilterChain chain = run(method, uri, "203.0.113.9");
 
         assertThat(limiter.calls).isEmpty();
         assertThat(chain.getRequest()).isNotNull();
         verify(resolver, never()).resolveException(any(), any(), any(), any());
+    }
+
+    /** BR-AI-09: hai endpoint hỏi đáp dùng chung một nhóm; mỗi request đếm cửa sổ phút rồi cửa sổ giờ của cùng IP. */
+    @ParameterizedTest
+    @CsvSource({"/api/public/ai/chat", "/api/me/ai/chat"})
+    void aiChatPathsAreCountedInOneGroupWithAMinuteWindowThenAnHourWindow(String uri) throws Exception {
+        MockFilterChain chain = run("POST", uri, "203.0.113.9");
+
+        assertThat(limiter.calls).containsExactly(
+                new RecordingLimiter.Call("rl:ai:203.0.113.9", 5, Duration.ofSeconds(20)),
+                new RecordingLimiter.Call("rl:ai-hour:203.0.113.9", 25, Duration.ofSeconds(1800)));
+        assertThat(chain.getRequest()).as("cho qua khi cả hai cửa sổ dưới ngưỡng").isNotNull();
+    }
+
+    @Test
+    void aiMinuteDenialStopsBeforeTheHourWindowSoItDoesNotSpendHourBudget() throws Exception {
+        limiter.byKey.put("rl:ai:203.0.113.9", RateLimiter.Decision.denied(13));
+        MockHttpServletRequest request = new MockHttpServletRequest("POST", "/api/public/ai/chat");
+        request.setRemoteAddr("203.0.113.9");
+        MockFilterChain chain = new MockFilterChain();
+
+        filter.doFilter(request, new MockHttpServletResponse(), chain);
+
+        assertThat(limiter.calls).extracting(RecordingLimiter.Call::key).containsExactly("rl:ai:203.0.113.9");
+        assertThat(chain.getRequest()).isNull();
+        ArgumentCaptor<Exception> error = ArgumentCaptor.forClass(Exception.class);
+        verify(resolver).resolveException(any(), any(), isNull(), error.capture());
+        assertThat(((TooManyRequestsException) error.getValue()).retryAfterSeconds()).isEqualTo(13);
+    }
+
+    @Test
+    void aiHourDenialBlocksEvenWhenTheMinuteWindowAllowsAndReportsTheHourRetryAfter() throws Exception {
+        limiter.byKey.put("rl:ai-hour:203.0.113.9", RateLimiter.Decision.denied(1700));
+        MockHttpServletRequest request = new MockHttpServletRequest("POST", "/api/me/ai/chat");
+        request.setRemoteAddr("203.0.113.9");
+        MockFilterChain chain = new MockFilterChain();
+
+        filter.doFilter(request, new MockHttpServletResponse(), chain);
+
+        assertThat(limiter.calls).extracting(RecordingLimiter.Call::key)
+                .containsExactly("rl:ai:203.0.113.9", "rl:ai-hour:203.0.113.9");
+        assertThat(chain.getRequest()).as("chain không được gọi").isNull();
+        ArgumentCaptor<Exception> error = ArgumentCaptor.forClass(Exception.class);
+        verify(resolver).resolveException(any(), any(), isNull(), error.capture());
+        assertThat(((TooManyRequestsException) error.getValue()).retryAfterSeconds()).isEqualTo(1700);
     }
 
     @Test

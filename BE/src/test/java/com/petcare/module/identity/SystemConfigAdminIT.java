@@ -4,6 +4,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.Mockito.doAnswer;
 import static org.mockito.Mockito.mockingDetails;
 
+import java.math.BigDecimal;
 import java.time.Instant;
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
@@ -313,7 +314,7 @@ class SystemConfigAdminIT {
         assertThat(audits()).isEmpty();
     }
 
-    // ================================================================ #32 BR-QT-13 — đủ 52 khóa
+    // ================================================================ #32 BR-QT-13 — đủ 70 khóa
 
     /**
      * Mỗi khóa: dưới min, trên max, không parse được → 400 BR-QT-13 với khoảng cho phép thực tế; bằng min và bằng max →
@@ -556,6 +557,18 @@ class SystemConfigAdminIT {
         if (key.type() == ConfigValueType.TIME) {
             return new Expected(List.of("05:59", "22:01", "noon", "12:00:30"), List.of(min, max),
                     "Giá trị của " + key.key() + " phải là giờ dạng HH:mm từ " + min + " đến " + max + " (BR-QT-13)");
+        }
+        if (key.type() == ConfigValueType.DECIMAL) {
+            // Khóa DECIMAL đầu tiên là ai.* (V35, ADR-0110): lệch 0,01 so với biên; dạng mũ ("1e2") bị từ chối ở API
+            BigDecimal lowDecimal = new BigDecimal(min);
+            BigDecimal highDecimal = new BigDecimal(max);
+            BigDecimal step = new BigDecimal("0.01");
+            return new Expected(
+                    List.of(lowDecimal.subtract(step).toPlainString(), highDecimal.add(step).toPlainString(), "abc",
+                            "1e2"),
+                    List.of(min, max),
+                    "Giá trị của " + key.key() + " phải là số thập phân từ " + lowDecimal.toPlainString() + " đến "
+                            + highDecimal.toPlainString() + " (" + unit + ") (BR-QT-13)");
         }
         int low = Integer.parseInt(min);
         int high = Integer.parseInt(max);

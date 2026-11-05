@@ -7,7 +7,12 @@ services:
   # PostgreSQL Database
   # ===========================================
   postgres:
-    image: postgres:17
+    # Ảnh có extension pgvector cho phân hệ AI (docs/adr/0110, ADR-0109 D3). Cùng bản chính 17 với postgres:17 nhưng
+    # nền Debian cũ hơn (glibc 2.36): volume do postgres:17 tạo từ trước báo "collation version mismatch" khi mở bằng ảnh
+    # này. DB đang có dữ liệu: tốt nhất pg_dump -Fc rồi pg_restore vào container mới (volume mới). Buộc giữ volume cũ thì
+    # chạy trong từng DB (đã kiểm trên volume tạm): REINDEX DATABASE <db>; ALTER DATABASE <db> REFRESH COLLATION VERSION;
+    # (ADR-0110 mục 2).
+    image: pgvector/pgvector:pg17
     container_name: petcare-postgres
     environment:
       # Chỉ có hiệu lực khi volume postgres_data được tạo mới
@@ -117,6 +122,11 @@ services:
       RATE_LIMIT_REGISTER_WINDOW_SECONDS: ${RATE_LIMIT_REGISTER_WINDOW_SECONDS:-60}
       RATE_LIMIT_PASSWORD_MAX: ${RATE_LIMIT_PASSWORD_MAX:-10}
       RATE_LIMIT_PASSWORD_WINDOW_SECONDS: ${RATE_LIMIT_PASSWORD_WINDOW_SECONDS:-60}
+      # Chatbot AI (docs/adr/0110, BR-AI-09): 10 câu / phút rồi 60 câu / giờ theo IP; mặc định trùng application.yml.
+      RATE_LIMIT_AI_MAX: ${RATE_LIMIT_AI_MAX:-10}
+      RATE_LIMIT_AI_WINDOW_SECONDS: ${RATE_LIMIT_AI_WINDOW_SECONDS:-60}
+      RATE_LIMIT_AI_HOUR_MAX: ${RATE_LIMIT_AI_HOUR_MAX:-60}
+      RATE_LIMIT_AI_HOUR_WINDOW_SECONDS: ${RATE_LIMIT_AI_HOUR_WINDOW_SECONDS:-3600}
     ports:
       - "8080:8080"
     depends_on:

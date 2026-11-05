@@ -91,6 +91,14 @@ app:
     password:
       limit: ${RATE_LIMIT_PASSWORD_MAX:10}
       window-seconds: ${RATE_LIMIT_PASSWORD_WINDOW_SECONDS:60}
+    # Chatbot AI (docs/adr/0110, BR-AI-09): POST /api/public/ai/chat và /api/me/ai/chat dùng chung một nhóm, hai cửa sổ
+    # trên cùng IP: 10 câu / phút (ai) rồi 60 câu / giờ (ai-hour). Chặn trước khi nhúng hay gọi LLM.
+    ai:
+      limit: ${RATE_LIMIT_AI_MAX:10}
+      window-seconds: ${RATE_LIMIT_AI_WINDOW_SECONDS:60}
+    ai-hour:
+      limit: ${RATE_LIMIT_AI_HOUR_MAX:60}
+      window-seconds: ${RATE_LIMIT_AI_HOUR_WINDOW_SECONDS:3600}
   # Job định kỳ (docs/adr/0007): cron 6 trường theo giờ Việt Nam, "-" để tắt.
   jobs:
     # Xóa phiên đăng nhập hết hạn quá retention-days ngày (docs/adr/0008). Docker đổi lịch bằng SESSION_CLEANUP_CRON.

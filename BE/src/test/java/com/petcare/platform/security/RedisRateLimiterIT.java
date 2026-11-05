@@ -63,7 +63,8 @@ class RedisRateLimiterIT {
             return null;
         });
         RateLimitProperties properties = new RateLimitProperties(true, new RateLimitProperties.Rule(30, 60),
-                new RateLimitProperties.Rule(10, 60), new RateLimitProperties.Rule(10, 60), 10);
+                new RateLimitProperties.Rule(10, 60), new RateLimitProperties.Rule(10, 60),
+                new RateLimitProperties.Rule(10, 60), new RateLimitProperties.Rule(60, 3600), 10);
         limiter = new RedisRateLimiter(redis, clock, properties);
     }
 

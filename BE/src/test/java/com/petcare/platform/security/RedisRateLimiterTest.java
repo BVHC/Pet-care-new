@@ -32,7 +32,8 @@ class RedisRateLimiterTest {
     private final MutableClock clock = new MutableClock(Instant.parse("2026-11-04T03:00:00Z"));
     private final RateLimitProperties properties = new RateLimitProperties(true,
             new RateLimitProperties.Rule(30, 60), new RateLimitProperties.Rule(10, 60),
-            new RateLimitProperties.Rule(10, 60), 10);
+            new RateLimitProperties.Rule(10, 60), new RateLimitProperties.Rule(10, 60),
+            new RateLimitProperties.Rule(60, 3600), 10);
     private final RedisRateLimiter limiter = new RedisRateLimiter(redis, clock, properties);
 
     @SuppressWarnings({"rawtypes", "unchecked"})

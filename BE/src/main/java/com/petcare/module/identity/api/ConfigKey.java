@@ -1,5 +1,6 @@
 package com.petcare.module.identity.api;
 
+import static com.petcare.module.identity.api.ConfigValueType.DECIMAL;
 import static com.petcare.module.identity.api.ConfigValueType.INT;
 import static com.petcare.module.identity.api.ConfigValueType.TIME;
 
@@ -71,6 +72,26 @@ public enum ConfigKey {
 
     // DG
     FEEDBACK_MAX_PER_DAY("feedback.max_per_day", INT),                     // BR-DG-01
+
+    // AI (docs/07 §4.6, docs/adr/0110; V35). Tên có ba đoạn <nhóm>.<mục>.<tên>
+    AI_CHAT_MAX_QUESTION_CHARS("ai.chat.max_question_chars", INT),                       // BR-AI-08
+    AI_CHAT_MAX_PREVIOUS_QUESTIONS("ai.chat.max_previous_questions", INT),               // BR-AI-08
+    AI_RETRIEVAL_TOP_K("ai.retrieval.top_k", INT),                                       // BR-AI-04
+    AI_RETRIEVAL_MIN_SIMILARITY("ai.retrieval.min_similarity", DECIMAL),                 // BR-AI-04
+    AI_LLM_TIMEOUT_SECONDS("ai.llm.timeout_seconds", INT),                               // BR-AI-10
+    AI_PERSONAL_APPOINTMENTS_LIMIT("ai.personal.appointments_limit", INT),               // BR-AI-27
+    AI_INDEX_CATALOG_SYNC_MINUTES("ai.index.catalog_sync_minutes", INT),                 // ST22
+    AI_RECO_WEIGHT_ATTR("ai.reco.weight_attr", DECIMAL),                                 // BR-AI-21
+    AI_RECO_WEIGHT_HISTORY("ai.reco.weight_history", DECIMAL),                           // BR-AI-21
+    AI_RECO_WEIGHT_POPULARITY("ai.reco.weight_popularity", DECIMAL),                     // BR-AI-21
+    AI_RECO_MAX_PER_GROUP("ai.reco.max_per_group", INT),                                 // BR-AI-21
+    AI_RECO_CACHE_MINUTES("ai.reco.cache_minutes", INT),                                 // BR-AI-23
+    AI_RECO_DEFAULT_GROOM_INTERVAL_DAYS("ai.reco.default_groom_interval_days", INT),     // 07 §7.3
+    AI_RECO_DEFAULT_PRODUCT_INTERVAL_DAYS("ai.reco.default_product_interval_days", INT), // 07 §7.3
+    AI_RECO_SENIOR_AGE_YEARS_DOG("ai.reco.senior_age_years_dog", INT),                   // 07 §7.3, Q3
+    AI_RECO_SENIOR_AGE_YEARS_CAT("ai.reco.senior_age_years_cat", INT),                   // 07 §7.3, Q3
+    AI_RECO_SENIOR_AGE_YEARS_OTHER("ai.reco.senior_age_years_other", INT),               // 07 §7.3, Q3
+    AI_LOG_RETENTION_DAYS("ai.log.retention_days", INT),                                 // BR-AI-24
 
     // TB
     REMINDER_VACCINE_DAYS_BEFORE("reminder.vaccine_days_before", INT),     // BR-TB-01

@@ -17,6 +17,9 @@ import jakarta.validation.constraints.NotNull;
  * @param login          {@code POST /api/auth/login}
  * @param register       {@code POST /api/auth/register}, {@code /register/verify}, {@code /register/resend-otp}
  * @param password       {@code POST /api/auth/password/forgot}, {@code /password/reset}
+ * @param ai             {@code POST /api/public/ai/chat} và {@code POST /api/me/ai/chat}, cửa sổ ngắn (mặc định 10 câu / phút,
+ *                       BR-AI-09); hai đường dẫn dùng chung một bộ đếm theo IP
+ * @param aiHour         cùng hai đường dẫn, cửa sổ dài (mặc định 60 câu / giờ, BR-AI-09); kiểm sau {@code ai}
  * @param breakerSeconds Redis lỗi thì bỏ qua Redis (cho qua) trong bấy nhiêu giây rồi thử lại
  */
 @Validated
@@ -26,6 +29,8 @@ public record RateLimitProperties(
         @NotNull @Valid Rule login,
         @NotNull @Valid Rule register,
         @NotNull @Valid Rule password,
+        @NotNull @Valid Rule ai,
+        @NotNull @Valid Rule aiHour,
         @DefaultValue("10") @Min(value = 1, message = "breaker-seconds phải từ 1 trở lên") int breakerSeconds) {
 
     /** Tối đa {@code limit} request trong mỗi cửa sổ {@code windowSeconds} giây cho một IP. */

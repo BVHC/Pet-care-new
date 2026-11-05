@@ -38,7 +38,7 @@ import com.petcare.platform.config.TraceContext;
 @Import({SecurityConfig.class, RestAuthenticationEntryPoint.class, RestAccessDeniedHandler.class, CorsConfig.class,
         JwtTokenService.class, TimeConfig.class, RateLimitSecurityTest.AuthProbe.class,
         RateLimitSecurityTest.InMemoryLimiter.class})
-@TestPropertySource(properties = "app.rate-limit.login.limit=2")
+@TestPropertySource(properties = {"app.rate-limit.login.limit=2", "app.rate-limit.ai.limit=2"})
 class RateLimitSecurityTest {
 
     private static final String ORIGIN = "http://localhost:5173";
@@ -46,7 +46,8 @@ class RateLimitSecurityTest {
     @RestController
     static class AuthProbe {
 
-        @PostMapping({"/api/auth/login", "/api/auth/password/forgot", "/api/auth/refresh"})
+        @PostMapping({"/api/auth/login", "/api/auth/password/forgot", "/api/auth/refresh", "/api/public/ai/chat",
+                "/api/me/ai/chat"})
         String ok() {
             return "ok";
         }
@@ -151,12 +152,37 @@ class RateLimitSecurityTest {
                 "rl:login:203.0.113.8", "rl:password:203.0.113.8");
     }
 
-    /** Giá trị mặc định của {@code application.yml} (docs/adr/0100) và việc ghi đè bằng thuộc tính test. */
+    /** docs/adr/0110: hai đường dẫn chatbot đi qua filter đã nối dây, dùng chung khóa phút và khóa giờ theo IP. */
+    @Test
+    void aiChatPathsAreWiredIntoTheSameTwoCountersAndOverTheLimitGets429() throws Exception {
+        mvc.perform(post("/api/public/ai/chat").with(request -> {
+            request.setRemoteAddr("203.0.113.10");
+            return request;
+        })).andExpect(status().isOk());
+        // /api/me/** cần đăng nhập: qua filter giới hạn (được đếm) rồi mới bị 401 vì không có token
+        mvc.perform(post("/api/me/ai/chat").with(request -> {
+            request.setRemoteAddr("203.0.113.10");
+            return request;
+        })).andExpect(status().isUnauthorized());
+
+        assertThat(InMemoryLimiter.COUNTS.keySet()).containsExactlyInAnyOrder(
+                "rl:ai:203.0.113.10", "rl:ai-hour:203.0.113.10");
+        assertThat(InMemoryLimiter.COUNTS.get("rl:ai:203.0.113.10")).hasValue(2);
+
+        mvc.perform(post("/api/public/ai/chat").with(request -> {
+            request.setRemoteAddr("203.0.113.10");
+            return request;
+        })).andExpect(status().isTooManyRequests()).andExpect(header().string("Retry-After", "42"));
+    }
+
+    /** Giá trị mặc định của {@code application.yml} (docs/adr/0100, 0110) và việc ghi đè bằng thuộc tính test. */
     @Test
     void propertiesBindFromApplicationYmlWithTestOverride(@Autowired RateLimitProperties properties) {
         assertThat(properties.login()).isEqualTo(new RateLimitProperties.Rule(2, 60));
         assertThat(properties.register()).isEqualTo(new RateLimitProperties.Rule(10, 60));
         assertThat(properties.password()).isEqualTo(new RateLimitProperties.Rule(10, 60));
+        assertThat(properties.ai()).as("BR-AI-09: 10 câu / phút").isEqualTo(new RateLimitProperties.Rule(2, 60));
+        assertThat(properties.aiHour()).as("BR-AI-09: 60 câu / giờ").isEqualTo(new RateLimitProperties.Rule(60, 3600));
         assertThat(properties.breakerSeconds()).isEqualTo(10);
     }
 }

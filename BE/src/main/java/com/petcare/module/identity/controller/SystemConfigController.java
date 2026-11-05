@@ -43,7 +43,7 @@ public class SystemConfigController {
     @Operation(operationId = "listSystemConfigs", tags = "Configuration",
             summary = "Danh sách tham số [CFG]",
             description = "UC10 · BR-QT-13. Actor: A03. Quyền: Chỉ ADMIN. Chuyển trạng thái: —. Mọi tham "
-                + "số (52), sắp theo key; minValue / maxValue là khoảng tĩnh, khoảng thu hẹp theo ràng buộc chéo chỉ "
+                + "số, sắp theo key; minValue / maxValue là khoảng tĩnh, khoảng thu hẹp theo ràng buộc chéo chỉ "
                 + "có trong message lỗi của #32 (docs/adr/0036).")
     @ApiErrorDoc(status = 403)
     @GetMapping

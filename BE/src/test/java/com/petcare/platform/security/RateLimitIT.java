@@ -42,6 +42,8 @@ import com.petcare.TestcontainersConfiguration;
  * {@code X-Forwarded-For} từ loopback (proxy nội bộ được tin, docs/adr/0002), và Redis được xóa trước mỗi test.
  * Chứng minh: G1 chặn trước BCrypt và audit · G2 IP khác không bị ảnh hưởng · G3 khóa có TTL, hết cửa sổ thì cho
  * qua lại · G6 envelope 429 + Retry-After + CORS · G7 nhóm độc lập, path / method ngoài phạm vi không đếm.
+ * Chatbot AI (docs/adr/0110, BR-AI-09; ngưỡng nhỏ 3 / phút và 5 / giờ): G8 hai đường dẫn dùng chung một bộ đếm theo IP ·
+ * G9 cửa sổ giờ chặn dù cửa sổ phút đã mở lại · G10 request bị chặn bởi cửa sổ phút không tiêu hao hạn mức giờ.
  * Redis chết (G5) ở {@code RateLimitRedisDownIT}; đếm atomic ở {@code RedisRateLimiterIT}.
  */
 @SpringBootTest(webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT)
@@ -54,7 +56,11 @@ import com.petcare.TestcontainersConfiguration;
         "app.rate-limit.register.limit=2",
         "app.rate-limit.register.window-seconds=60",
         "app.rate-limit.password.limit=2",
-        "app.rate-limit.password.window-seconds=60"})
+        "app.rate-limit.password.window-seconds=60",
+        "app.rate-limit.ai.limit=3",
+        "app.rate-limit.ai.window-seconds=60",
+        "app.rate-limit.ai-hour.limit=5",
+        "app.rate-limit.ai-hour.window-seconds=3600"})
 class RateLimitIT {
 
     /** Redis thật cho test này; {@code @ServiceConnection} ghi đè {@code spring.data.redis.*} của profile test. */
@@ -128,6 +134,11 @@ class RateLimitIT {
     private Reply login(String ip) throws Exception {
         return send("POST", "/api/auth/login", ip,
                 Map.of("email", "rate-" + SEQ.incrementAndGet() + "@example.com", "password", "matkhau123"), Map.of());
+    }
+
+    /** Endpoint chatbot chưa có controller (T77): dưới ngưỡng không phải 429; vượt ngưỡng thì filter trả 429 trước mọi thứ. */
+    private Reply aiChat(String path, String ip) throws Exception {
+        return send("POST", path, ip, Map.of("question", "Chó mấy tuần tuổi thì tiêm dại?"), Map.of());
     }
 
     private int countLoginFailed() {
@@ -227,6 +238,60 @@ class RateLimitIT {
         }
 
         assertThat(redis.keys("rl:*:" + ip)).isEmpty();
+    }
+
+    @Test
+    void aiChatEndpointsShareOneCounterPerIp() throws Exception {
+        String ip = nextIp();
+
+        assertThat(aiChat("/api/public/ai/chat", ip).status()).isNotEqualTo(429);
+        assertThat(aiChat("/api/me/ai/chat", ip).status()).as("filter chạy trước JWT: chưa có token thì 401").isEqualTo(401);
+        assertThat(aiChat("/api/public/ai/chat", ip).status()).isNotEqualTo(429);
+
+        Reply denied = aiChat("/api/me/ai/chat", ip);
+        assertThat(denied.status()).as("lần 4 của cùng IP dù khác đường dẫn").isEqualTo(429);
+        assertThat(json.readTree(denied.body()).get("errorCode").asText()).isEqualTo("TOO_MANY_REQUESTS");
+        assertThat(Integer.parseInt(denied.header("Retry-After"))).as("Retry-After của cửa sổ phút").isBetween(1, 60);
+        assertThat(aiChat("/api/public/ai/chat", ip).status()).isEqualTo(429);
+
+        assertThat(aiChat("/api/public/ai/chat", nextIp()).status()).as("IP khác không bị ảnh hưởng").isNotEqualTo(429);
+        assertThat(login(ip).status()).as("nhóm login độc lập với nhóm AI").isEqualTo(401);
+    }
+
+    @Test
+    void aiHourWindowBlocksEvenWhenTheMinuteWindowHasReset() throws Exception {
+        String ip = nextIp();
+        String minuteKey = "rl:ai:" + ip;
+        for (int i = 0; i < 3; i++) {
+            assertThat(aiChat("/api/public/ai/chat", ip).status()).as("lần %d", i + 1).isNotEqualTo(429);
+        }
+        assertThat(redis.getExpire(minuteKey)).as("cửa sổ phút").isBetween(1L, 60L);
+        assertThat(redis.getExpire("rl:ai-hour:" + ip)).as("cửa sổ giờ dài hơn cửa sổ phút").isBetween(61L, 3600L);
+
+        redis.expire(minuteKey, Duration.ofMillis(50));
+        await().atMost(Duration.ofSeconds(5)).until(() -> !redis.hasKey(minuteKey));
+
+        for (int i = 0; i < 2; i++) {
+            assertThat(aiChat("/api/public/ai/chat", ip).status()).as("mở lại cửa sổ phút, giờ mới 4–5/5").isNotEqualTo(429);
+        }
+        Reply denied = aiChat("/api/me/ai/chat", ip);
+        assertThat(denied.status()).as("lần 6 trong giờ: phút mới 3/3 nhưng giờ đã vượt 5").isEqualTo(429);
+        assertThat(Integer.parseInt(denied.header("Retry-After"))).as("Retry-After của cửa sổ giờ")
+                .isBetween(61, 3600);
+    }
+
+    @Test
+    void aiMinuteDenialDoesNotSpendTheHourBudget() throws Exception {
+        String ip = nextIp();
+        for (int i = 0; i < 3; i++) {
+            assertThat(aiChat("/api/public/ai/chat", ip).status()).isNotEqualTo(429);
+        }
+        for (int i = 0; i < 3; i++) {
+            assertThat(aiChat("/api/public/ai/chat", ip).status()).as("bị cửa sổ phút chặn").isEqualTo(429);
+        }
+
+        assertThat(redis.opsForValue().get("rl:ai-hour:" + ip)).as("chỉ 3 request qua cửa sổ phút mới tính giờ")
+                .isEqualTo("3");
     }
 
     @Test

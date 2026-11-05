@@ -85,6 +85,25 @@ class SystemConfigIT {
         expect("reminder.follow_up_days_before", "3", "INT", "1", "14");          // BR-TB-06
         expect("report.max_period_months", "12", "INT", "1", "24");               // BR-BC-01
         expect("report.revaccination_grace_days", "7", "INT", "0", "30");         // BR-BC-04
+        // V35 (docs/adr/0110): 18 khóa ai.*, docs/07 §4.6. DECIMAL viết dạng chuẩn ("0.6", không "0.60")
+        expect("ai.chat.max_question_chars", "500", "INT", "100", "2000");        // BR-AI-08
+        expect("ai.chat.max_previous_questions", "3", "INT", "0", "5");           // BR-AI-08
+        expect("ai.retrieval.top_k", "5", "INT", "1", "10");                      // BR-AI-04
+        expect("ai.retrieval.min_similarity", "0.6", "DECIMAL", "0.3", "0.9");    // BR-AI-04
+        expect("ai.llm.timeout_seconds", "15", "INT", "5", "60");                 // BR-AI-10
+        expect("ai.personal.appointments_limit", "5", "INT", "1", "10");          // BR-AI-27
+        expect("ai.index.catalog_sync_minutes", "60", "INT", "5", "1440");        // ST22
+        expect("ai.reco.weight_attr", "0.5", "DECIMAL", "0", "1");                // BR-AI-21
+        expect("ai.reco.weight_history", "0.3", "DECIMAL", "0", "1");             // BR-AI-21
+        expect("ai.reco.weight_popularity", "0.2", "DECIMAL", "0", "1");          // BR-AI-21
+        expect("ai.reco.max_per_group", "6", "INT", "1", "12");                   // BR-AI-21
+        expect("ai.reco.cache_minutes", "10", "INT", "0", "60");                  // BR-AI-23
+        expect("ai.reco.default_groom_interval_days", "30", "INT", "7", "365");   // 07 §7.3
+        expect("ai.reco.default_product_interval_days", "45", "INT", "7", "365"); // 07 §7.3
+        expect("ai.reco.senior_age_years_dog", "7", "INT", "5", "15");            // 07 §7.3, Q3 (giá trị tạm)
+        expect("ai.reco.senior_age_years_cat", "10", "INT", "5", "15");           // 07 §7.3, Q3 (giá trị tạm)
+        expect("ai.reco.senior_age_years_other", "7", "INT", "5", "15");          // 07 §7.3, Q3 (giá trị tạm)
+        expect("ai.log.retention_days", "30", "INT", "1", "180");                 // BR-AI-24
     }
 
     private static void expect(String key, String value, String type, String min, String max) {
@@ -108,7 +127,7 @@ class SystemConfigIT {
                     assertThat(rs.getString("description")).isNotBlank();
                 });
 
-        assertThat(EXPECTED).hasSize(52);
+        assertThat(EXPECTED).hasSize(70);
         assertThat(actual).isEqualTo(EXPECTED);
     }
 

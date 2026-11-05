@@ -6,6 +6,7 @@ import java.net.Inet6Address;
 import java.net.InetAddress;
 import java.time.Duration;
 import java.util.HexFormat;
+import java.util.List;
 import java.util.Map;
 
 import org.springframework.http.HttpMethod;
@@ -24,9 +25,13 @@ import jakarta.servlet.http.HttpServletResponse;
 
 /**
  * Giới hạn số request theo IP cho endpoint public của identity (docs/adr/0100, nợ D011): đăng nhập, đăng ký, quên /
- * đặt lại mật khẩu. Mỗi nhóm một ngưỡng riêng. Chạy trước {@link JwtAuthenticationFilter} và controller, nên request
- * bị chặn không tới BCrypt, DB hay {@code audit_logs}. Chỉ đếm {@code POST}; {@code OPTIONS} (preflight), {@code GET}
- * và path khác đi thẳng.
+ * đặt lại mật khẩu; và hai endpoint hỏi đáp của chatbot AI (docs/adr/0110, BR-AI-09). Mỗi nhóm một ngưỡng riêng. Chạy
+ * trước {@link JwtAuthenticationFilter} và controller, nên request bị chặn không tới BCrypt, DB, {@code audit_logs} hay
+ * nhà cung cấp LLM. Chỉ đếm {@code POST}; {@code OPTIONS} (preflight), {@code GET} và path khác đi thẳng.
+ *
+ * <p>Nhóm AI có hai cửa sổ (phút rồi giờ) trên cùng một IP, kiểm theo thứ tự đó và dừng ở cửa sổ đầu tiên từ chối: request
+ * bị chặn vì cửa sổ phút không tiêu hao hạn mức giờ. Ngược lại request qua cửa sổ phút rồi bị chặn vì giờ vẫn đã được tính
+ * vào cửa sổ phút ({@link RateLimiter} tính cả lần bị từ chối).
  *
  * <p>IP là {@code request.getRemoteAddr()}: sau {@code server.forward-headers-strategy=native} đã là IP client thật
  * (docs/adr/0002), không tự parse header. IPv6 gom theo /64 để một máy không né giới hạn bằng cách đổi đuôi địa chỉ.
@@ -38,25 +43,32 @@ import jakarta.servlet.http.HttpServletResponse;
 public class RateLimitFilter extends OncePerRequestFilter {
 
     enum Group {
-        LOGIN, REGISTER, PASSWORD
+        LOGIN, REGISTER, PASSWORD, AI
+    }
+
+    /** Một cửa sổ đếm: tên khóa Redis ({@code rl:<name>:<ip>}) và ngưỡng. */
+    private record Window(String name, RateLimitProperties.Rule rule) {
     }
 
     private static final RequestMatcher LOGIN = post("/api/auth/login");
     private static final RequestMatcher REGISTER = new OrRequestMatcher(
             post("/api/auth/register"), post("/api/auth/register/**"));
     private static final RequestMatcher PASSWORD = post("/api/auth/password/**");
-    private static final RequestMatcher ANY = new OrRequestMatcher(LOGIN, REGISTER, PASSWORD);
+    private static final RequestMatcher AI = new OrRequestMatcher(
+            post("/api/public/ai/chat"), post("/api/me/ai/chat"));
+    private static final RequestMatcher ANY = new OrRequestMatcher(LOGIN, REGISTER, PASSWORD, AI);
 
     private final RateLimiter limiter;
-    private final Map<Group, RateLimitProperties.Rule> rules;
+    private final Map<Group, List<Window>> windows;
     private final HandlerExceptionResolver resolver;
 
     public RateLimitFilter(RateLimiter limiter, RateLimitProperties properties, HandlerExceptionResolver resolver) {
         this.limiter = limiter;
-        this.rules = Map.of(
-                Group.LOGIN, properties.login(),
-                Group.REGISTER, properties.register(),
-                Group.PASSWORD, properties.password());
+        this.windows = Map.of(
+                Group.LOGIN, List.of(new Window("login", properties.login())),
+                Group.REGISTER, List.of(new Window("register", properties.register())),
+                Group.PASSWORD, List.of(new Window("password", properties.password())),
+                Group.AI, List.of(new Window("ai", properties.ai()), new Window("ai-hour", properties.aiHour())));
         this.resolver = resolver;
     }
 
@@ -72,13 +84,19 @@ public class RateLimitFilter extends OncePerRequestFilter {
     @Override
     protected void doFilterInternal(HttpServletRequest request, HttpServletResponse response, FilterChain chain)
             throws ServletException, IOException {
-        Group group = LOGIN.matches(request) ? Group.LOGIN : REGISTER.matches(request) ? Group.REGISTER : Group.PASSWORD;
-        RateLimitProperties.Rule rule = rules.get(group);
-        String key = "rl:" + group.name().toLowerCase() + ":" + clientKey(request.getRemoteAddr());
-        RateLimiter.Decision decision = limiter.tryAcquire(key, rule.limit(), Duration.ofSeconds(rule.windowSeconds()));
-        if (!decision.allowed()) {
-            resolver.resolveException(request, response, null, new TooManyRequestsException(decision.retryAfterSeconds()));
-            return;
+        Group group = LOGIN.matches(request) ? Group.LOGIN
+                : REGISTER.matches(request) ? Group.REGISTER
+                : PASSWORD.matches(request) ? Group.PASSWORD : Group.AI;
+        String client = clientKey(request.getRemoteAddr());
+        for (Window window : windows.get(group)) {
+            RateLimitProperties.Rule rule = window.rule();
+            RateLimiter.Decision decision = limiter.tryAcquire("rl:" + window.name() + ":" + client, rule.limit(),
+                    Duration.ofSeconds(rule.windowSeconds()));
+            if (!decision.allowed()) {
+                resolver.resolveException(request, response, null,
+                        new TooManyRequestsException(decision.retryAfterSeconds()));
+                return;
+            }
         }
         chain.doFilter(request, response);
     }

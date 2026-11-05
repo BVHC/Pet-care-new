@@ -21,7 +21,7 @@ Code và định danh viết tiếng Anh; tài liệu, message trả client và 
 | Hằng số | `UPPER_SNAKE_CASE` | `MAX_ADDRESSES` |
 | Mã rule | Chuỗi `"BR-<MÃ>-<số>"` truyền thẳng vào `BusinessRuleViolationException` tại chỗ kiểm tra, đúng mã trong `02-business-rules.md` | `"BR-LH-05"` |
 | Mã action audit | `<ĐỐI_TƯỢNG>_<QUÁ_KHỨ>`, hằng số do module giữ (một lớp `…AuditActions` mỗi module) | `ACCOUNT_LOCKED`, `ORDER_PAID` |
-| Khóa `system_configs` | `<nhóm>.<tên>` chữ thường | `otp.ttl_minutes`, `appointment.max_reschedules` (erd L170) |
+| Khóa `system_configs` | `<nhóm>.<tên>` chữ thường; tối đa ba đoạn `<nhóm>.<mục>.<tên>` (chỉ nhóm `ai`, `07` §4.6, ADR-0110) | `otp.ttl_minutes`, `appointment.max_reschedules` (erd L170), `ai.chat.max_question_chars` |
 
 ## Tên command
 
