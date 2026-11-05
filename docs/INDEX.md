@@ -2,6 +2,7 @@
 
 > Mục lục cho agent. Đọc file này trước, tra **Bảng 2** lấy vị trí, rồi chỉ đọc đúng đoạn cần (ví dụ `05-erd.md` L77–198) thay vì cả file.
 > Số dòng `L…` khớp bản **v16**. Nếu lệch, tìm theo **tiêu đề mục** hoặc theo **mã định danh** (Bảng 3).
+> **5/11/2026 (T54):** tầng 3 đã được duyệt (Hiến, nhóm trưởng). Quy tắc, FSM, model, bảng và API của Nhân sự ở `02`–`06`; AI ở [`07`](./07-ai-subsystem.md); phần BE-2 ở [`08`](./08-tang3-be2-spec.md); phần BE-1 ở [`09`](./09-tang3-be1-spec.md); `02`–`05` có mục trỏ tới `08`, `09`; interface chéo gộp ở `06` §6b. Các số tổng bên dưới (10 FSM / 66 chuyển, 55 bảng, 134 BR, 232 endpoint) là của bản v16 / GĐ1; tầng 3 thêm FSM #11–#26, 33 bảng, 139 endpoint (xem `api/INDEX.md`). Số dòng `L…` của `02`–`05` đã dịch theo các file hiện tại; riêng "Đối chiếu model → bảng" của `erd` vốn đã lệch từ trước.
 
 ## 1. Các file
 
@@ -13,7 +14,7 @@ Các file tham chiếu nhau bằng tên gọi tắt (cột 1).
 | state-machine | `03-state-machines.md` | Trạng thái nào, chuyển khi nào, kéo theo gì | 10 đối tượng, mục `## <số>. <Đối tượng>`; chuyển trạng thái đánh số `#1…`, tham chiếu dạng `Visit#5` | 2 |
 | domain-model | `04-domain-model.md` | Model nào, loại gì, quan hệ, rule chi phối | 11 nhóm `## <số>. <Nhóm> (<MÃ>)`, 52 model, mỗi model một dòng bảng | 3 |
 | erd | `05-erd.md` | Bảng, cột, kiểu, khóa, ràng buộc, index | 55 bảng, mỗi bảng một mục `` ### `<bảng>` — <LOẠI> · SM #n `` | 4 |
-| use-case | `01-business-operations.md` | Ai làm gì | 11 actor, UC01–UC89 (85 hiệu lực), 21 tác vụ hệ thống ST01–ST21 | Phải khớp business-rules |
+| use-case | `01-business-operations.md` | Ai làm gì | 11 actor, UC01–UC94 (90 hiệu lực), 23 tác vụ hệ thống ST01–ST23 | Phải khớp business-rules |
 
 **Actor:** A01 GUEST · A02 CUSTOMER · A03 ADMIN · A04 SUPER_MANAGER · A05 BRANCH_MANAGER · A06 RECEPTIONIST (kiêm thu ngân) · A07 VET · A08 CARETAKER · S01 System · S02 Payment Gateway (tầng 3) · S03 Email/Push.
 
@@ -23,9 +24,9 @@ Các file tham chiếu nhau bằng tên gọi tắt (cột 1).
 |---|---|
 | Quy ước mã rule, `[CFG]` | business-rules L6–9 |
 | Quy ước trạng thái, whitelist, `SYS ←`, bảng 10 đối tượng → `bảng.cột` | state-machine L5–27 |
-| Chuỗi tác động liên đối tượng (sự kiện → hệ quả) | state-machine L237–253 (*Phụ lục*) |
+| Chuỗi tác động liên đối tượng (sự kiện → hệ quả) | state-machine L280–-838 (*Phụ lục*) |
 | Loại model ROOT/PART/REF/LOG; 10 nguyên tắc xuyên suốt | domain-model L7–30 |
-| Nguồn số liệu báo cáo | domain-model L143–147 |
+| Nguồn số liệu báo cáo | domain-model L159–163 |
 | Kiểu dữ liệu, cột chung, quy tắc xóa | erd L8–41 |
 | Enum tiếng Việt → mã ASCII trong DB/code | erd L28–37 |
 | Sơ đồ ER luồng chính (mermaid) | erd L45–73 |
@@ -41,27 +42,27 @@ Tầng: **1** làm đầy đủ · **2** bản mỏng · **3** chỉ giữ trên
 
 | Mã | Module (từ khóa tìm kiếm) | Tầng | business-rules | use-case | state-machine | domain-model | erd | Tác vụ hệ thống |
 |---|---|---|---|---|---|---|---|---|
-| TK | Tài khoản & xác thực (auth, login, OTP, mật khẩu, liên kết hồ sơ, khôi phục tài khoản) | 1 | L13–36 (20) ✅ | UC01–07 · L27–37 | #1 Tài khoản · L31–51 | L34–44 (chung QT) | L77–198 (chung QT) | ST01, ST02 |
-| QT | Quản trị hệ thống (admin, phân quyền, khóa, audit, cấu hình) | 1 | L40–59 (16) ✅ | UC08–11 · L39–46 | #1 Tài khoản · L31–51 | L34–44 | L77–198 | — |
-| CN | Chi nhánh (giờ mở cửa, ngày nghỉ, cấp cứu ngoài giờ) | 1 | L61–69 (5) | UC12–14 · L48–54 | #2 Chi nhánh · L53–66 | L46–55 | L199–284 | — |
+| TK | Tài khoản & xác thực (auth, login, OTP, mật khẩu, liên kết hồ sơ, khôi phục tài khoản) | 1 | L13–36 (20) ✅ | UC01–07 · L27–37 | #1 Tài khoản · L33–53 | L34–44 (chung QT) | L77–198 (chung QT) | ST01, ST02 |
+| QT | Quản trị hệ thống (admin, phân quyền, khóa, audit, cấu hình) | 1 | L40–59 (16) ✅ | UC08–11 · L39–46 | #1 Tài khoản · L33–53 | L34–44 | L77–198 | — |
+| CN | Chi nhánh (giờ mở cửa, ngày nghỉ, cấp cứu ngoài giờ) | 1 | L61–69 (5) | UC12–14 · L48–54 | #2 Chi nhánh · L55–68 | L46–55 | L199–284 | — |
 | CK | Thông tin công khai (trang public, hiển thị giá) | 1 | L71–79 (5) | UC15–21 · L56–66 | — | L130 (PageContent) | L947–955 (`page_contents`) | — |
 | KH | Khách hàng & thú cưng (customer, pet, SĐT, tra cứu, nghi trùng, cân nặng, chuyển chủ) | 1 | L81–96 (10) | UC22–27 · L68–77 | — | L57–64 | L285–357 | ST19 |
 | SP | Sản phẩm & dịch vụ (product, service, loại vaccine, phác đồ, loại chuồng) | 1 | L98–110 (7) | UC28–33 · L79–88 | — | L66–75 | L358–443 | — |
-| LH | Lịch hẹn (appointment, quota, khung giờ, no-show, hạn chế đặt) | 1 | L116–133 (12) | UC39–43 · L100–108 | #3 Lịch hẹn · L68–88 | L77–82 | L444–495 | ST03, ST05 |
-| TN | Tiếp nhận & hàng đợi (check-in, visit, queue, gán nhân viên) | 1 | L135–149 (9) | UC44–47 · L110–117 | #4 Visit · L90–109 | L84–93 (chung KB) | L496–607 (chung KB) | — |
-| KB | Khám & điều trị (bệnh án, kê đơn, tiêm chủng, tái khám) | 1 | L151–162 (6) | UC48–53 · L119–128 | #4 Visit · L90–109 | L84–93 | L496–607 | ST04, ST06 |
-| LT | Lưu trú (boarding, chuồng, nhận/trả thú, nhật ký chăm sóc) | 2 | L164–181 (12) | UC54–60 · L130–140 | #6 Đặt chỗ · L136–160; #7 Chuồng · L162–179 | L95–102 | L608–704 | ST05, ST15 |
-| BH | Bán hàng & đơn hàng (order, dòng order, trừ kho khi thu) | 1 | L183–194 (6) | UC61–69 · L142–154 | #5 Order · L111–134 | L104–111 (chung TG) | L705–805 (chung TG) | ST06, ST13 |
-| TG | Thu ngân (payment, ca thu ngân, đối soát) | 1 | L196–206 (5) | UC70–72 · L156–162 | #8 Ca thu ngân · L181–199 | L104–111 | L705–805 | ST13 |
-| KO | Kho (tồn, lô, FEFO, nhập kho, điều chỉnh) | 2 | L208–219 (8) | UC73–79 · L164–174 | #9 Phiếu nhập · L201–215 | L113–122 | L806–917 | ST06, ST08 |
-| BV | Bài viết (article, chuyên mục) | 2 | L221–230 (4) | UC80–82 · L176–182 | — (vòng đời ở BR-BV-02) | L124–129 | L918–946 | — |
-| DG | Feedback & khiếu nại | 2 | L232–241 (4) | UC83–86 · L184–191 | — (vòng đời ở BR-DG-04) | L131 (Feedback) | L956–978 | — |
-| TB | Chăm sóc KH & thông báo (nhắc tái chủng/tái khám, Care Task, notification) | 1 | L243–254 (6) | UC87–88 · L193–198 | #10 Care Task · L217–233 | L133–139 | L979–1042 | ST04, ST18, ST19, ST20 |
-| BC | Báo cáo | 2 | L256–263 (4) | UC89 · L200–204 | — | L147 (không có model) | — (tính từ bảng nghiệp vụ) | — |
-| NS | Nhân sự (ca làm, nghỉ phép) | 3 | L112–114 | UC34–38 · L90–98 | — | — | — | — |
-| AI | Trí tuệ nhân tạo & đề xuất thông minh (chatbot RAG+LLM, recommendation engine) | Giai đoạn 2 | — | — | — | — | — |
+| LH | Lịch hẹn (appointment, quota, khung giờ, no-show, hạn chế đặt) | 1 | L129–146 (12) | UC39–43 · L100–108 | #3 Lịch hẹn · L70–90 | L77–82 | L444–495 | ST03, ST05 |
+| TN | Tiếp nhận & hàng đợi (check-in, visit, queue, gán nhân viên) | 1 | L148–162 (9) | UC44–47 · L110–117 | #4 Visit · L92–111 | L84–93 (chung KB) | L496–607 (chung KB) | — |
+| KB | Khám & điều trị (bệnh án, kê đơn, tiêm chủng, tái khám) | 1 | L164–175 (6) | UC48–53 · L119–128 | #4 Visit · L92–111 | L84–93 | L496–607 | ST04, ST06 |
+| LT | Lưu trú (boarding, chuồng, nhận/trả thú, nhật ký chăm sóc) | 2 | L177–194 (12) | UC54–60 · L130–140 | #6 Đặt chỗ · L138–162; #7 Chuồng · L164–181 | L95–102 | L608–704 | ST05, ST15 |
+| BH | Bán hàng & đơn hàng (order, dòng order, trừ kho khi thu) | 1 | L196–207 (6) | UC61–69 · L142–154 | #5 Order · L113–136 | L104–111 (chung TG) | L705–805 (chung TG) | ST06, ST13 |
+| TG | Thu ngân (payment, ca thu ngân, đối soát) | 1 | L209–219 (5) | UC70–72 · L156–162 | #8 Ca thu ngân · L183–201 | L104–111 | L705–805 | ST13 |
+| KO | Kho (tồn, lô, FEFO, nhập kho, điều chỉnh) | 2 | L221–232 (8) | UC73–79 · L164–174 | #9 Phiếu nhập · L203–217 | L113–122 | L806–917 | ST06, ST08 |
+| BV | Bài viết (article, chuyên mục) | 2 | L234–243 (4) | UC80–82 · L176–182 | — (vòng đời ở BR-BV-02) | L124–129 | L918–946 | — |
+| DG | Feedback & khiếu nại | 2 | L245–254 (4) | UC83–86 · L184–191 | — (vòng đời ở BR-DG-04) | L131 (Feedback) | L956–978 | — |
+| TB | Chăm sóc KH & thông báo (nhắc tái chủng/tái khám, Care Task, notification) | 1 | L256–267 (6) | UC87–88 · L193–198 | #10 Care Task · L219–235 | L133–139 | L979–1042 | ST04, ST18, ST19, ST20 |
+| BC | Báo cáo | 2 | L269–276 (4) | UC89 · L200–204 | — | L163 (không có model) | — (tính từ bảng nghiệp vụ) | — |
+| NS | Nhân sự (ca làm, nghỉ phép) — duyệt T54 (5/11/2026) | 3 | L112–127 (BR-NS-01…10) | UC34–38 · L90–98 | #11, #12 · L239–278 | §12.1 · L147–156 | §14.1 · L1189–1247 | — |
+| AI | Trí tuệ nhân tạo & đề xuất thông minh (chatbot RAG+LLM, recommendation engine) — duyệt T54 (5/11/2026); **đặc tả riêng đầy đủ: [07-ai-subsystem.md](./07-ai-subsystem.md)** | Giai đoạn 2 | 07 §4 (BR-AI-01…28) | UC90–94 · 07 §2 | #13 · 07 §9 | 07 §8 | 07 §8 | ST22, ST23 |
 
-**Tầng 3 — Giai đoạn 2 (11–12/2026):** UC13, UC27, UC32, UC34–38, UC43, UC50, UC51, UC55, UC56, UC61–65, UC68, UC69, UC77–79, UC80, UC82, UC85, UC86 · ST07, ST09–ST12, ST14, ST16, ST17, ST21. Quy tắc nghiệp vụ, FSM, model và API được đặc tả bổ sung đầu Giai đoạn 2.
+**Tầng 3 — Giai đoạn 2 (11–12/2026):** UC13, UC27, UC32, UC34–38, UC43, UC50, UC51, UC55, UC56, UC61–65, UC68, UC69, UC77–79, UC80, UC82, UC85, UC86 · ST07, ST09–ST12, ST14, ST16, ST17, ST21. Quy tắc nghiệp vụ, FSM, model và API đã được đặc tả bổ sung (duyệt T54, 5/11/2026): Nhân sự ở `02`–`06`; AI ở [`07-ai-subsystem.md`](./07-ai-subsystem.md); phần BE-2 ở [`08-tang3-be2-spec.md`](./08-tang3-be2-spec.md); phần BE-1 ở [`09-tang3-be1-spec.md`](./09-tang3-be1-spec.md); checklist T54 (bản ghi quyết định) và danh mục màn hình T57 ở [`10-t54-t57-checklists.md`](./10-t54-t57-checklists.md).
 
 ## 3. Tra theo mã định danh
 
@@ -71,7 +72,7 @@ Tầng: **1** làm đầy đủ · **2** bản mỏng · **3** chỉ giữ trên
 | `UC<số>` / `ST<số>` / `A<số>` | use-case mục A / mục B / mục 0 | tìm `\| UC44 \|`, `\| ST13 \|`, `\| A06 \|` |
 | `<Đối tượng>#<số>` (`Visit#5`, `Đặt chỗ#3`) | state-machine, mục của đối tượng, dòng `\| 5 \|` của bảng chuyển trạng thái | cột state-machine ở Bảng 2 |
 | `SM #<số>` (trong domain-model, erd) | state-machine mục `## <số>.` | |
-| Tên model (PascalCase) | domain-model; tên bảng ở erd L1043–1073 | |
+| Tên model (PascalCase) | domain-model; tên bảng ở erd L-67–-37 | |
 | Tên bảng (snake_case) | erd, mục `` ### `<bảng>` `` | |
 | `ROOT` / `PART` / `REF` / `LOG` | loại model (domain-model L9–13) | |
 | `[CFG]` | tham số cấu hình; số ghi kèm là mặc định, ADMIN đổi qua UC10 (BR-QT-13) | |

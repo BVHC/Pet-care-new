@@ -1,0 +1,252 @@
+# Pet Care Customer Merge API v1 (tầng 3) — OpenAPI 3.1, sinh từ khai báo; không sửa tay, sửa khai báo rồi sinh lại.
+# Module KH (gộp hồ sơ khách, UC27) · owner BE-2
+# Nguồn: 01 UC27; 08-tang3-be2-spec.md §F.2 (BR-KH-11…14); 05 bổ sung customers.merged_into_id, customer_merges
+# Truy vết: CONFIRMED = có trong docs · ASSUMPTION (A#) · TBD (Q#) — xem file .md cùng tên.
+
+openapi: "3.1.0"
+info:
+  title: "Pet Care Customer Merge API v1 (tầng 3)"
+  version: "1.0.0"
+  description: "Module KH (gộp hồ sơ khách, UC27) · owner BE-2. Nguồn: 01 UC27; 08-tang3-be2-spec.md §F.2 (BR-KH-11…14); 05 bổ sung customers.merged_into_id, customer_merges. Chi tiết và truy vết: ../custmerge-v1.md"
+servers:
+  - url: "/api"
+    description: "Mọi path bên dưới nằm sau tiền tố /api"
+tags:
+  - name: "Customer merge"
+    description: "Gộp hồ sơ khách trùng (UC27)"
+paths:
+  "/customers/{customerId}/merge-preview":
+    get:
+      tags: ["Customer merge"]
+      summary: "Xem trước gộp hồ sơ khách"
+      description: "UC27 · BR-KH-11, 12, 14. Actor: A05. Quyền: BRANCH_MANAGER (xem Q1). Chuyển trạng thái: —. Không ghi gì. `blockers` rỗng mới gộp được."
+      operationId: previewCustomerMerge
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: "#/components/parameters/CustomerId"
+        - name: sourceCustomerId
+          in: query
+          required: true
+          schema:
+            type: integer
+            format: int64
+          description: "Hồ sơ nguồn sẽ gộp vào hồ sơ `customerId` (đích)"
+      responses:
+        "200":
+          description: OK
+          content:
+            "application/json":
+              schema:
+                type: object
+                required: [data, message, code]
+                properties:
+                  data:
+                    $ref: "#/components/schemas/MergePreview"
+                  message:
+                    type: string
+                  code:
+                    type: integer
+                    description: "HTTP status của kết quả, ví dụ 200, 201"
+        "400":
+          description: "`sourceCustomerId` trùng đích hoặc thiếu"
+          content:
+            "application/json":
+              schema:
+                $ref: "#/components/schemas/Error"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          description: "Không tìm thấy một trong hai hồ sơ"
+          content:
+            "application/json":
+              schema:
+                $ref: "#/components/schemas/Error"
+  "/customer-merges":
+    post:
+      tags: ["Customer merge"]
+      summary: "Gộp hồ sơ khách trùng"
+      description: "UC27 · BR-KH-11…14. Actor: A05. Quyền: BRANCH_MANAGER (xem Q1). Chuyển trạng thái: —. Chuyển dữ liệu và phát `CustomerMergedEvent` trong một transaction (BR-KH-12). Không hoàn tác (BR-KH-13)."
+      operationId: mergeCustomers
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          "application/json":
+            schema:
+              $ref: "#/components/schemas/CustomerMergeRequest"
+      responses:
+        "201":
+          description: "Đã tạo"
+          content:
+            "application/json":
+              schema:
+                type: object
+                required: [data, message, code]
+                properties:
+                  data:
+                    $ref: "#/components/schemas/CustomerMergeResult"
+                  message:
+                    type: string
+                  code:
+                    type: integer
+                    description: "HTTP status của kết quả, ví dụ 200, 201"
+        "400":
+          description: "`BR-KH-11` cả hai đã liên kết tài khoản · đích không phải bên có tài khoản · nguồn còn Visit mở / Order `OPEN` / `PENDING` · đã `MERGED` · `BR-KH-14` chưa `confirm`"
+          content:
+            "application/json":
+              schema:
+                $ref: "#/components/schemas/Error"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          description: "Không tìm thấy hồ sơ"
+          content:
+            "application/json":
+              schema:
+                $ref: "#/components/schemas/Error"
+        "409":
+          description: "`CONCURRENCY_CONFLICT` hồ sơ vừa bị đổi"
+          content:
+            "application/json":
+              schema:
+                $ref: "#/components/schemas/Error"
+components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      description: "Access token trả về từ POST /auth/login, gắn với một phiên (sessions). Phiên bị hủy thì token hết hiệu lực ngay (BR-TK-11, 13, 14)."
+  parameters:
+    CustomerId:
+      name: customerId
+      in: path
+      required: true
+      schema:
+        type: integer
+        format: int64
+  schemas:
+    Error:
+      type: object
+      description: "Envelope lỗi duy nhất, do GlobalExceptionHandler (platform/exception) sinh. Vi phạm business rule: errorCode = BUSINESS_RULE_VIOLATION, message kết thúc bằng mã rule, ví dụ \"… (BR-LH-05)\"."
+      required: [success, errorCode, message, statusCode, timestamp, traceId]
+      properties:
+        success:
+          type: boolean
+          enum: [false]
+        errorCode:
+          type: string
+          enum: [BUSINESS_RULE_VIOLATION, INVALID_STATE_TRANSITION, RESOURCE_NOT_FOUND, ACCESS_DENIED_SCOPE_MISMATCH, CONCURRENCY_CONFLICT, VALIDATION_FAILED, MALFORMED_REQUEST, METHOD_NOT_ALLOWED, UNSUPPORTED_MEDIA_TYPE, UNAUTHENTICATED, ACCESS_DENIED, TOO_MANY_REQUESTS, INTERNAL_ERROR]
+          description: platform/exception/ErrorCode
+        message:
+          type: string
+          description: "Thông điệp tiếng Việt hiển thị được; với BUSINESS_RULE_VIOLATION kết thúc bằng \" (BR-…)\""
+        statusCode:
+          type: integer
+        timestamp:
+          type: string
+          format: date-time
+        traceId:
+          type: string
+    MergePreview:
+      type: object
+      required: [targetCustomerId, sourceCustomerId, petCount, addressCount, duplicateAddressCount, appointmentCount, boardingCount, orderCount, onlineOrderCount, feedbackCount, complaintCount, careTaskCount, warnings, blockers]
+      properties:
+        targetCustomerId:
+          type: integer
+          format: int64
+        sourceCustomerId:
+          type: integer
+          format: int64
+        petCount:
+          type: integer
+          format: int32
+        addressCount:
+          type: integer
+          format: int32
+        duplicateAddressCount:
+          type: integer
+          format: int32
+          description: "Địa chỉ trùng sẽ bỏ"
+        appointmentCount:
+          type: integer
+          format: int32
+        boardingCount:
+          type: integer
+          format: int32
+        orderCount:
+          type: integer
+          format: int32
+        onlineOrderCount:
+          type: integer
+          format: int32
+        feedbackCount:
+          type: integer
+          format: int32
+        complaintCount:
+          type: integer
+          format: int32
+        careTaskCount:
+          type: integer
+          format: int32
+        warnings:
+          type: array
+          items:
+            type: string
+          description: "Cảnh báo (ví dụ nghi trùng thú, khác SĐT)"
+        blockers:
+          type: array
+          items:
+            type: string
+          description: "Điều kiện chặn BR-KH-11; rỗng = gộp được"
+    CustomerMergeRequest:
+      type: object
+      required: [sourceCustomerId, targetCustomerId, confirm]
+      properties:
+        sourceCustomerId:
+          type: integer
+          format: int64
+        targetCustomerId:
+          type: integer
+          format: int64
+        confirm:
+          type: boolean
+          description: "Phải là true sau khi đã xem merge-preview (BR-KH-14)"
+    CustomerMergeResult:
+      type: object
+      required: [mergeId, sourceCustomerId, targetCustomerId, moved, createdAt]
+      properties:
+        mergeId:
+          type: integer
+          format: int64
+        sourceCustomerId:
+          type: integer
+          format: int64
+        targetCustomerId:
+          type: integer
+          format: int64
+        moved:
+          type: object
+          additionalProperties: true
+          description: "Số bản ghi đã chuyển theo loại"
+        createdAt:
+          type: string
+          format: date-time
+  responses:
+    Unauthorized:
+      description: "UNAUTHENTICATED: chưa đăng nhập hoặc phiên đã hết hạn / bị hủy."
+      content:
+        "application/json":
+          schema:
+            $ref: "#/components/schemas/Error"
+    Forbidden:
+      description: "ACCESS_DENIED: sai vai trò · ACCESS_DENIED_SCOPE_MISMATCH: ngoài phạm vi (chi nhánh, chủ sở hữu). Message chung, không lộ cấu trúc phân quyền."
+      content:
+        "application/json":
+          schema:
+            $ref: "#/components/schemas/Error"

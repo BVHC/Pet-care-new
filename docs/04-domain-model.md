@@ -140,8 +140,67 @@
 
 ---
 
-## Ngoài phạm vi (tầng 3, không có model)
+## 12. Tầng 3 — model bổ sung (GĐ2)
 
-Giữ trên sơ đồ use case, không thiết kế model: ca làm việc & nghỉ phép (UC34–38), phẫu thuật (UC50), khám tại nhà (UC43, UC51), nội trú (UC55, UC56), giỏ hàng & đơn online & thanh toán cổng (UC61–65), trả hàng (UC68, 69), chuyển kho & kiểm kê & truy vết lô (UC77–79), bài viết của VET & bình luận (UC80, 82), khiếu nại (UC85, 86), gộp hồ sơ khách (UC27), tạm ngừng/đóng chi nhánh (UC13).
+> Đặc tả bổ sung đầu GĐ2 (T51–T53), duyệt ở T54 ngày 5/11/2026. Mỗi mục bên dưới thay cho dòng tương ứng trong *Ngoài phạm vi*. Cột và ràng buộc chi tiết ở `05-erd.md` §14.
+
+### 12.1 Nhân sự (NS) — T51
+
+| Model | Loại | Thuộc | Ý nghĩa | Quan hệ chính | SM | Rule then chốt | Tầng |
+|---|---|---|---|---|---|---|---|
+| ShiftDefinition | REF | | Ca làm việc do chi nhánh định nghĩa: tên, giờ bắt đầu – kết thúc, cờ đang dùng. Không xóa, chỉ ngừng dùng | n–1 Branch | | BR-NS-01 | 3 |
+| ShiftAssignment | ROOT | | Một nhân viên A06–A08 làm một ca trong một ngày; giữ trạng thái `SCHEDULED` / `ON_LEAVE` / `ABSENT` / `CANCELLED` kèm lý do vắng hoặc hủy | n–1 Branch, Account (nhân viên), ShiftDefinition | #12 | Không chồng giờ trong ngày. BR-NS-02, 07, 09 | 3 |
+| ShiftRequest | ROOT | | Yêu cầu nghỉ (`LEAVE`) hoặc đổi sang ca khác cùng ngày (`SWAP`) của nhân viên cho một phân ca | n–1 ShiftAssignment, Account (người gửi, người xử lý); n–1? ShiftDefinition (ca đích của `SWAP`) | #11 | Tối đa 1 yêu cầu `PENDING`/phân ca. BR-NS-04, 05, 06 | 3 |
+
+*Không có model riêng cho vắng đột xuất:* lý do, người ghi và thời điểm nằm ngay trên ShiftAssignment (YAGNI, BR-NS-07).
+
+---
+
+### 12.2 Model ở file chuyên đề
+
+> Cột và ràng buộc ở file nguồn (cột *Nguồn*); **không chép lại ở đây**. Thuộc tính trạng thái trỏ tới FSM trong `03`.
+
+| Model | Bảng | Loại | SM | Nguồn |
+|---|---|---|---|---|
+| AiDocument | `ai_documents` | ROOT | #13 | `07` §8 |
+| AiChunk | `ai_chunks` | PART |  | `07` §8 |
+| AiChatLog | `ai_chat_logs` | LOG |  | `07` §8 |
+| AiItemProfile | `ai_item_profiles` | REF |  | `07` §8 |
+| ShippingFeeConfig | `shipping_fee_configs` | REF |  | `08` §A |
+| BranchHomeVisitFee | `branch_home_visit_fees` | REF |  | `08` §A |
+| ServiceMaterialNorm | `service_material_norms` | REF |  | `08` §A |
+| Cart | `carts` | ROOT |  | `08` §B |
+| CartItem | `cart_items` | PART |  | `08` §B |
+| OnlineOrder | `online_orders` | ROOT | #14 | `08` §B |
+| StockReservation | `stock_reservations` | PART |  | `08` §B |
+| PaymentTransaction | `payment_transactions` | ROOT | #15 | `08` §C |
+| PaymentReconciliation | `payment_reconciliations` | ROOT |  | `08` §C |
+| ReconciliationItem | `reconciliation_items` | PART |  | `08` §C |
+| ReturnRequest | `return_requests` | ROOT | #16 | `08` §D |
+| ReturnRequestLine | `return_request_lines` | PART |  | `08` §D |
+| Refund | `refunds` | ROOT | #17 | `08` §D |
+| StockTransfer | `stock_transfers` | ROOT | #18 | `08` §E |
+| StockTransferLine | `stock_transfer_lines` | PART |  | `08` §E |
+| StockCount | `stock_counts` | ROOT | #19 | `08` §E |
+| StockCountLine | `stock_count_lines` | PART |  | `08` §E |
+| CustomerMerge | `customer_merges` | LOG |  | `08` §F.2 |
+| ArticleComment | `article_comments` | ROOT |  | `08` §F.3 |
+| Surgery | `surgeries` | ROOT | #23 | `09` §B |
+| Admission | `admissions` | ROOT | #24 | `09` §C |
+| AdmissionOrder | `admission_orders` | ROOT | #25 | `09` §C |
+| AdmissionObservation | `admission_observations` | LOG |  | `09` §C |
+| Complaint | `complaints` | ROOT | #26 | `09` §D |
+| ComplaintMessage | `complaint_messages` | LOG |  | `09` §D |
+| VisitMaterialUsage | `visit_material_usages` | LOG |  | `09` §E |
+
+Ngoài ra các model có sẵn được mở rộng cột / giá trị (Appointment, Visit, OrderLine, Order, Service, Branch, Customer, Article, StockMovement, StockAdjustment): xem `05` §13 mục 26.
+
+---
+
+## Ngoài phạm vi (v16, trước khi đặc tả tầng 3)
+
+> Từ T54 (5/11/2026) các mục dưới đây đã có model ở §12. Đoạn giữ nguyên văn v16 để đối chiếu.
+
+Giữ trên sơ đồ use case, không thiết kế model: phẫu thuật (UC50), khám tại nhà (UC43, UC51), nội trú (UC55, UC56), giỏ hàng & đơn online & thanh toán cổng (UC61–65), trả hàng (UC68, 69), chuyển kho & kiểm kê & truy vết lô (UC77–79), bài viết của VET & bình luận (UC80, 82), khiếu nại (UC85, 86), gộp hồ sơ khách (UC27), tạm ngừng/đóng chi nhánh (UC13).
 
 Báo cáo (UC89) không có model; số liệu tính tại thời điểm xem từ Order, Payment, Visit, Appointment, Vaccination, InventoryItem, Feedback (BR-BC-01…04). Tỷ lệ quay lại tái chủng khớp theo VaccineType. *(v15: bỏ báo cáo công suất chuồng nên không dùng Kennel, BoardingBooking.)*

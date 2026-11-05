@@ -109,9 +109,22 @@
 | BR-SP-06 | Loại dịch vụ trong nhóm Khám/Tiêm | Mỗi dịch vụ thuộc nhóm **Khám/Tiêm** có thuộc tính **loại**: `KHÁM` hoặc `TIÊM`, do SUPER_MANAGER khai báo ở UC30. Thuộc tính này dùng cho điều kiện hoàn tất lượt (BR-KB-02). Quota (BR-LH-03) và gán nhân viên (BR-TN-05) vẫn tính theo nhóm, không theo loại. | UC30, UC48, UC49 | Không cho lưu dịch vụ nhóm Khám/Tiêm khi chưa chọn loại. |
 | BR-SP-07 | 🆕 Loại vaccine | **Loại vaccine** (ví dụ Dại, 5 bệnh cho chó, 4 bệnh cho mèo) là danh mục do SUPER_MANAGER quản lý ở UC31, gồm tên và loài áp dụng. Mỗi sản phẩm vaccine gắn đúng 1 loại vaccine (UC29). Phác đồ (BR-SP-02), gợi ý mũi kế tiếp (BR-KB-04), điều kiện lưu trú (BR-LT-05), nhắc tái chủng (BR-TB-03) và báo cáo (BR-BC-04) đều tính theo loại vaccine, không theo nhãn hàng; đổi nhãn hàng hay nhà cung cấp không ảnh hưởng lịch sử tiêm. | UC29, UC31 | Không cho lưu sản phẩm vaccine chưa gắn loại vaccine. Loại vaccine đã có phác đồ, sản phẩm hoặc mũi tiêm thì không xóa, chỉ ngừng sử dụng. |
 
-## 7. Nhân sự (NS) — tầng 3
+## 7. Nhân sự (NS) — tầng 3 — 📝
 
-> Module thuộc tầng 3, không viết rule. Các mệnh đề về ca làm trong module QT đã được gỡ ở v10.
+> **Đặc tả bổ sung GĐ2 (T51), duyệt ở T54 ngày 5/11/2026.** Các mệnh đề về ca làm trong module QT đã được gỡ ở v10 và không quay lại: lịch làm việc ở đây **không** chặn hay đổi hành vi của đặt lịch, hàng đợi, thu ngân (BR-TN-05 vẫn chỉ xét nhân viên `ACTIVE` của chi nhánh đúng chức vụ). Vòng đời yêu cầu nghỉ / đổi ca và phân ca: `03` #11, #12.
+
+| Mã | Tên rule | Mô tả | Áp dụng cho UC | Xử lý khi vi phạm |
+|----|----------|-------|-------------|-------------------|
+| BR-NS-01 | Ca làm việc | Mỗi chi nhánh tự định nghĩa các **ca làm việc** gồm tên, giờ bắt đầu, giờ kết thúc. Tên không trùng trong chi nhánh (không phân biệt hoa thường); giờ bắt đầu nhỏ hơn giờ kết thúc trong cùng ngày (không có ca qua nửa đêm). BRANCH_MANAGER chỉ tạo, sửa, ngừng dùng ca của chi nhánh mình. Ca không xóa, chỉ **ngừng dùng**; không ngừng dùng được ca còn phân ca `SCHEDULED` từ hôm nay trở đi. Ca đã có phân ca (kể cả đã qua) không sửa được giờ, chỉ đổi tên hoặc ngừng dùng; muốn đổi giờ thì tạo ca mới. | UC34 | Từ chối lưu và nêu lý do (trùng tên, giờ sai, ca còn phân ca, ca đã có phân ca). |
+| BR-NS-02 | Phân ca | BRANCH_MANAGER phân một nhân viên A06–A08 `ACTIVE` của chi nhánh mình vào một ca **đang dùng** của chi nhánh trong một ngày từ hôm nay trở đi. Một nhân viên không có hai phân ca `SCHEDULED` chồng giờ nhau trong cùng ngày; trùng đúng cặp ca – ngày cũng bị từ chối. Không có giới hạn số ca mỗi ngày nào khác, và không phụ thuộc giờ mở cửa (BR-CN-02) hay ngày nghỉ (BR-CN-03) của chi nhánh. BRANCH_MANAGER hủy được phân ca `SCHEDULED` chưa bắt đầu, kèm lý do (≤ 300 ký tự). Danh sách nhân viên chi nhánh dùng chức năng sẵn của UC08, không lặp ở module NS. | UC34 | Từ chối phân ca và nêu phân ca đang chồng. Hủy phân ca đã bắt đầu: từ chối (dùng BR-NS-07). |
+| BR-NS-03 | Phạm vi xem lịch | Nhân viên A06–A08 chỉ xem lịch làm việc của **chính mình** (UC35), theo khoảng ngày tối đa 62 ngày. BRANCH_MANAGER xem lịch mọi nhân viên của chi nhánh mình. Các vai trò khác không có chức năng này. | UC34, UC35 | Từ chối với `ACCESS_DENIED` / ngoài phạm vi chi nhánh (BR-QT-03). |
+| BR-NS-04 | Gửi yêu cầu nghỉ / đổi ca | Nhân viên A06–A08 gửi yêu cầu cho **phân ca `SCHEDULED` của chính mình**: `LEAVE` (nghỉ ca đó) hoặc `SWAP` (đổi sang một ca đang dùng khác của chi nhánh **trong cùng ngày**, ca mới không chồng giờ phân ca khác của người đó). Phải gửi trước giờ bắt đầu ca ít nhất 24 giờ **[CFG]** `workforce.request_lead_hours`; lý do bắt buộc (≤ 300 ký tự). Mỗi phân ca có tối đa 1 yêu cầu `PENDING`. | UC36 | Từ chối và nêu điều kiện vi phạm (quá hạn gửi, đã có yêu cầu chờ, ca đích chồng giờ). |
+| BR-NS-05 | Rút yêu cầu | Chỉ người gửi rút được, và chỉ khi yêu cầu còn `PENDING`. Phân ca giữ nguyên như trước khi gửi. | UC36 | Từ chối nếu không phải người gửi hoặc yêu cầu đã được xử lý. |
+| BR-NS-06 | Duyệt yêu cầu | BRANCH_MANAGER của chi nhánh duyệt hoặc từ chối yêu cầu `PENDING`; từ chối phải có lý do (≤ 300 ký tự). Duyệt chỉ được khi phân ca vẫn `SCHEDULED` và **chưa bắt đầu**; với `SWAP` kiểm lại lúc duyệt rằng ca đích còn dùng và không chồng giờ. Duyệt `LEAVE` đưa phân ca sang `ON_LEAVE`; duyệt `SWAP` đổi phân ca sang ca đích (vẫn `SCHEDULED`). Hệ thống **không** kiểm số người còn lại trong ca (chưa có định biên ca). Từ chối thì phân ca giữ nguyên. | UC37 | Từ chối thao tác và nêu lý do; không đổi phân ca. |
+| BR-NS-07 | Vắng đột xuất | BRANCH_MANAGER ghi nhận nhân viên vắng cho phân ca `SCHEDULED` có `work_date` từ hôm nay trở về trước, không quá 7 ngày **[CFG]** `workforce.absence_report_max_days`, kèm lý do (≤ 300 ký tự); phân ca sang `ABSENT` (trạng thái cuối). Ca của ngày tương lai không ghi vắng được: dùng hủy phân ca (BR-NS-02) hoặc để nhân viên xin nghỉ (BR-NS-04). Yêu cầu `PENDING` của phân ca đó tự chuyển `REJECTED` (03 Yêu cầu#5). | UC38 | Từ chối và nêu lý do (ca chưa tới ngày, quá hạn ghi nhận, ca đã xử lý). |
+| BR-NS-08 | Thông báo | Qua `NotificationApi` (`06` §1; kênh và thử lại theo ST20): yêu cầu mới gửi tới BRANCH_MANAGER của chi nhánh (IN_APP); duyệt, từ chối, hủy phân ca, ghi vắng đột xuất, tự hủy theo BR-NS-09 gửi tới nhân viên liên quan (IN_APP, kèm EMAIL nếu tài khoản có email). Mã mẫu thông báo chốt cùng danh sách ở `06` §8 Q4 (T55). | UC34, UC36–38 | Gửi thất bại thì thử lại theo ST20; không làm hỏng thao tác chính. |
+| BR-NS-09 | Nhân viên rời chi nhánh | Khi nhân viên bị vô hiệu hóa (BR-QT-09) hoặc điều chuyển sang chi nhánh khác (BR-QT-06): mọi phân ca `SCHEDULED` chưa bắt đầu của họ tại chi nhánh cũ chuyển `CANCELLED` và yêu cầu `PENDING` chuyển `REJECTED`, trong cùng transaction với thao tác gốc. Lịch sử đã qua giữ nguyên. Khác BR-QT-08, **không** chặn vô hiệu hóa hay điều chuyển. | UC08, UC34 | Không áp dụng (xử lý tự động). |
+| BR-NS-10 | Audit | **Mở rộng phạm vi audit của BR-QT-15** (hiện chưa có Nhân sự) sang mọi thao tác của BRANCH_MANAGER trong module này: tạo / sửa / ngừng dùng ca, phân ca, hủy phân ca, duyệt, từ chối, ghi vắng đột xuất; gồm người thực hiện, thời điểm, đối tượng, giá trị trước và sau. Gửi, rút yêu cầu của nhân viên không ghi audit (đã có vết ở chính yêu cầu). | UC34, UC37, UC38 | Không áp dụng (xử lý tự động). |
 
 ## 8. Lịch hẹn (LH) — 📝
 
@@ -261,3 +274,27 @@
 | BR-BC-02 | Ghi nhận doanh thu | Doanh thu = tổng giá trị Order `PAID` có thời điểm thanh toán trong kỳ, ghi cho chi nhánh của Order, tách theo nguồn (Visit, bán lẻ, lưu trú). Giá trị lấy theo đơn giá đã snapshot (BR-BH-03). Order hủy theo BR-BH-05 không tính vào doanh thu, hiển thị thành mục riêng **thất thu** (số lượng, giá trị, lý do). Order lưu trú hủy trong phiên trả thú (BR-LT-09) không tính là thất thu vì lần trả sau sinh Order mới. | UC89 | Không áp dụng (quy tắc tính). |
 | BR-BC-03 | Danh mục báo cáo | Báo cáo cố định: (1) doanh thu theo BR-BC-02; (2) số lượt dịch vụ hoàn tất theo nhóm và theo dịch vụ; (3) tỷ lệ `NO_SHOW` và hủy muộn trên tổng lịch hẹn đến hạn trong kỳ; (4) tỷ lệ quay lại tái chủng (BR-BC-04); (5) tồn dưới ngưỡng và lô sắp hết hạn (BR-KO-07); (6) feedback: số lượng và mức hài lòng trung bình theo chi nhánh. *(v15: bỏ báo cáo công suất chuồng; tình trạng chuồng xem trực tiếp ở UC54.)* | UC89 | Không áp dụng. |
 | BR-BC-04 | Tỷ lệ quay lại tái chủng | Đo mức khách quay lại hệ thống để tiêm đúng hạn (không đo việc thú có được tiêm hay không, vì mũi tiêm nơi khác không được ghi nhận — BR-KB-05). Mẫu số: số mũi có ngày tái chủng rơi trong kỳ, trừ thú đã mất trước ngày đó. Tử số: số mũi trong mẫu số đã được tiêm lại tại hệ thống theo BR-TB-03 (cùng loại vaccine) không muộn quá 7 ngày **[CFG]** sau ngày tái chủng. Mũi được tính cho chi nhánh của mũi trước đó. | UC89 | Không áp dụng (quy tắc tính). |
+
+
+---
+
+## 19. Tầng 3 — quy tắc ở các file chuyên đề (duyệt T54, 5/11/2026)
+
+> Quy tắc tầng 3 nằm ở file chuyên đề, **không chép lại ở đây** để một quy tắc chỉ có một nguồn. Mã BR tiếp nối số hiện có của từng tiền tố; thêm rule mới thì lấy số sau số lớn nhất ở **cả** file này và file chuyên đề.
+
+| Mã BR | Nội dung | UC / ST | Nguồn |
+|---|---|---|---|
+| BR-NS-01…10 | Nhân sự | UC34–38 | §7 của file này |
+| BR-AI-01…28 | Trí tuệ nhân tạo | UC90–94, ST22, ST23 | `07` §4 |
+| BR-SP-08…11 | Phí vận chuyển, phí khám tại nhà, định mức vật tư | UC32 | `08` §A |
+| BR-BH-07…15 | Giỏ hàng, đơn online, trả hàng | UC61–65, UC68, UC69 | `08` §B, §D |
+| BR-TG-06…14 | Thanh toán online, hoàn tiền | UC63, UC68, UC69, ST11, ST14, ST21 | `08` §C, §D |
+| BR-KO-08…13 | Chuyển kho, kiểm kê, truy vết lô | UC77–79 | `08` §E |
+| BR-CN-06…10 | Tạm ngừng / đóng cửa chi nhánh | UC13 | `08` §F.1 |
+| BR-KH-11…14 | Gộp hồ sơ khách trùng | UC27 | `08` §F.2 |
+| BR-BV-05…08 | Bài viết của bác sĩ, bình luận | UC80, UC82 | `08` §F.3 |
+| BR-LH-13, 14 | Lịch khám tại nhà | UC43 | `09` §A |
+| BR-KB-07…14 | Khám tại nhà, phẫu thuật, vật tư tiêu hao | UC50, UC51, ST07 | `09` §A, §B, §E |
+| BR-BH-16 | Thu tiền khám tại nhà | UC51 | `09` §A |
+| BR-LT-13…17 | Nội trú | UC55, UC56 | `09` §C |
+| BR-DG-05…09 | Khiếu nại | UC85, UC86, ST16, ST17 | `09` §D |

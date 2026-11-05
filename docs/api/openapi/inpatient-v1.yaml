@@ -1,0 +1,819 @@
+# Pet Care Inpatient API v1 (tầng 3) — OpenAPI 3.1, sinh từ khai báo; không sửa tay, sửa khai báo rồi sinh lại.
+# Module LT (nội trú) · owner BE-1
+# Nguồn: 01 UC55, UC56; 09-tang3-be1-spec.md §C (BR-LT-13…17; 03 #24 Nhập viện, #25 Y lệnh nội trú); 05 bổ sung admissions, admission_orders, admission_observations
+# Truy vết: CONFIRMED = có trong docs · ASSUMPTION (A#) · TBD (Q#) — xem file .md cùng tên.
+
+openapi: "3.1.0"
+info:
+  title: "Pet Care Inpatient API v1 (tầng 3)"
+  version: "1.0.0"
+  description: "Module LT (nội trú) · owner BE-1. Nguồn: 01 UC55, UC56; 09-tang3-be1-spec.md §C (BR-LT-13…17; 03 #24 Nhập viện, #25 Y lệnh nội trú); 05 bổ sung admissions, admission_orders, admission_observations. Chi tiết và truy vết: ../inpatient-v1.md"
+servers:
+  - url: "/api"
+    description: "Mọi path bên dưới nằm sau tiền tố /api"
+tags:
+  - name: Admissions
+    description: "Nhập / xuất viện (UC55)"
+  - name: "Admission orders"
+    description: "Y lệnh nội trú (UC56)"
+  - name: Observations
+    description: "Theo dõi hậu phẫu (UC56)"
+paths:
+  "/admissions":
+    post:
+      tags: [Admissions]
+      summary: "Nhập viện"
+      description: "UC55 · BR-LT-13. Actor: A07. Quyền: VET của chi nhánh. Chuyển trạng thái: — → ADMITTED (Nhập viện#1). Từ lưu trú: tạo Visit điều trị gán VET gọi, đặt chỗ giữ nguyên `CHECKED_IN` (BR-LT-17)."
+      operationId: admitPet
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          "application/json":
+            schema:
+              $ref: "#/components/schemas/AdmitRequest"
+      responses:
+        "201":
+          description: "Đã tạo"
+          content:
+            "application/json":
+              schema:
+                type: object
+                required: [data, message, code]
+                properties:
+                  data:
+                    $ref: "#/components/schemas/Admission"
+                  message:
+                    type: string
+                  code:
+                    type: integer
+                    description: "HTTP status của kết quả, ví dụ 200, 201"
+        "400":
+          description: "`BR-LT-13` không đúng một trong `visitId` / `boardingBookingId` · Visit không `IN_PROGRESS` / không của mình · đặt chỗ không `CHECKED_IN` · dịch vụ không `INPATIENT` · chuồng không `AVAILABLE` · thú đã mất"
+          content:
+            "application/json":
+              schema:
+                $ref: "#/components/schemas/Error"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          description: "Không tìm thấy Visit / đặt chỗ / dịch vụ / chuồng"
+          content:
+            "application/json":
+              schema:
+                $ref: "#/components/schemas/Error"
+        "409":
+          description: "Thú đã có ca nội trú `ADMITTED`"
+          content:
+            "application/json":
+              schema:
+                $ref: "#/components/schemas/Error"
+    get:
+      tags: [Admissions]
+      summary: "Ca nội trú của chi nhánh"
+      description: "UC55 · BR-LT-17. Actor: A06, A07, A08. Quyền: A06 chỉ xem; A07; A08 theo BR-LT-15. Chuyển trạng thái: —. `status` vắng = `ADMITTED`. Nhập viện sớm nhất trước."
+      operationId: listAdmissions
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: status
+          in: query
+          required: false
+          schema:
+            type: string
+            enum: [ADMITTED, DISCHARGED]
+        - $ref: "#/components/parameters/Page"
+        - $ref: "#/components/parameters/Size"
+      responses:
+        "200":
+          description: OK
+          content:
+            "application/json":
+              schema:
+                type: object
+                required: [data, message, code]
+                properties:
+                  data:
+                    allOf:
+                      - $ref: "#/components/schemas/PageMeta"
+                      - type: object
+                        required: [content]
+                        properties:
+                          content:
+                            type: array
+                            items:
+                              $ref: "#/components/schemas/AdmissionSummary"
+                  message:
+                    type: string
+                  code:
+                    type: integer
+                    description: "HTTP status của kết quả, ví dụ 200, 201"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+  "/admissions/{admissionId}":
+    get:
+      tags: [Admissions]
+      summary: "Chi tiết ca nội trú"
+      description: "UC55 · BR-LT-17. Actor: A06, A07, A08. Quyền: A06 chỉ xem; A07; A08 theo BR-LT-15. Chuyển trạng thái: —."
+      operationId: getAdmission
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: "#/components/parameters/AdmissionId"
+      responses:
+        "200":
+          description: OK
+          content:
+            "application/json":
+              schema:
+                type: object
+                required: [data, message, code]
+                properties:
+                  data:
+                    $ref: "#/components/schemas/Admission"
+                  message:
+                    type: string
+                  code:
+                    type: integer
+                    description: "HTTP status của kết quả, ví dụ 200, 201"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+  "/admissions/{admissionId}/discharge":
+    post:
+      tags: [Admissions]
+      summary: "Xuất viện"
+      description: "UC55 · BR-LT-14. Actor: A07. Quyền: VET của chi nhánh. Chuyển trạng thái: ADMITTED → DISCHARGED (Nhập viện#2). Thêm dòng dịch vụ nội trú (số ngày × giá đã chốt) vào Order của Visit; giải phóng chuồng nếu được cấp riêng."
+      operationId: dischargeAdmission
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: "#/components/parameters/AdmissionId"
+      requestBody:
+        required: true
+        content:
+          "application/json":
+            schema:
+              $ref: "#/components/schemas/DischargeRequest"
+      responses:
+        "200":
+          description: OK
+          content:
+            "application/json":
+              schema:
+                type: object
+                required: [data, message, code]
+                properties:
+                  data:
+                    $ref: "#/components/schemas/Admission"
+                  message:
+                    type: string
+                  code:
+                    type: integer
+                    description: "HTTP status của kết quả, ví dụ 200, 201"
+        "400":
+          description: "`BR-LT-14` còn y lệnh `ORDERED` · thiếu tóm tắt · `DECEASED` mà thú chưa đánh dấu đã mất"
+          content:
+            "application/json":
+              schema:
+                $ref: "#/components/schemas/Error"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "409":
+          description: "`INVALID_STATE_TRANSITION` trạng thái không cho phép (03 #24, #25)"
+          content:
+            "application/json":
+              schema:
+                $ref: "#/components/schemas/Error"
+  "/admissions/{admissionId}/orders":
+    post:
+      tags: ["Admission orders"]
+      summary: "Ra y lệnh"
+      description: "UC56 · BR-LT-15. Actor: A07. Quyền: VET của chi nhánh. Chuyển trạng thái: — → ORDERED (Y lệnh nội trú#1)."
+      operationId: createAdmissionOrder
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: "#/components/parameters/AdmissionId"
+      requestBody:
+        required: true
+        content:
+          "application/json":
+            schema:
+              $ref: "#/components/schemas/CreateAdmissionOrderRequest"
+      responses:
+        "201":
+          description: "Đã tạo"
+          content:
+            "application/json":
+              schema:
+                type: object
+                required: [data, message, code]
+                properties:
+                  data:
+                    $ref: "#/components/schemas/AdmissionOrder"
+                  message:
+                    type: string
+                  code:
+                    type: integer
+                    description: "HTTP status của kết quả, ví dụ 200, 201"
+        "400":
+          description: "`BR-LT-15` `MEDICATION` thiếu dòng đơn thuốc · dòng đơn không thuộc Visit"
+          content:
+            "application/json":
+              schema:
+                $ref: "#/components/schemas/Error"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "409":
+          description: "Ca không `ADMITTED`"
+          content:
+            "application/json":
+              schema:
+                $ref: "#/components/schemas/Error"
+    get:
+      tags: ["Admission orders"]
+      summary: "Y lệnh của ca nội trú"
+      description: "UC56 · BR-LT-15. Actor: A06, A07, A08. Quyền: A06 chỉ xem; A07; A08 theo BR-LT-15. Chuyển trạng thái: —. Không phân trang. Sắp `scheduledAt` tăng dần, trùng thì `orderId` tăng dần."
+      operationId: listAdmissionOrders
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: "#/components/parameters/AdmissionId"
+        - name: status
+          in: query
+          required: false
+          schema:
+            type: string
+            enum: [ORDERED, DONE, CANCELLED]
+      responses:
+        "200":
+          description: OK
+          content:
+            "application/json":
+              schema:
+                type: object
+                required: [data, message, code]
+                properties:
+                  data:
+                    type: array
+                    items:
+                      $ref: "#/components/schemas/AdmissionOrder"
+                  message:
+                    type: string
+                  code:
+                    type: integer
+                    description: "HTTP status của kết quả, ví dụ 200, 201"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+  "/admission-orders/{admissionOrderId}/complete":
+    post:
+      tags: ["Admission orders"]
+      summary: "Đánh dấu đã thực hiện y lệnh"
+      description: "UC56 · BR-LT-15. Actor: A07, A08. Quyền: A07; A08 chỉ việc không phải thuốc. Chuyển trạng thái: ORDERED → DONE (Y lệnh nội trú#2)."
+      operationId: completeAdmissionOrder
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: "#/components/parameters/AdmissionOrderId"
+      requestBody:
+        required: true
+        content:
+          "application/json":
+            schema:
+              $ref: "#/components/schemas/CompleteAdmissionOrderRequest"
+      responses:
+        "200":
+          description: OK
+          content:
+            "application/json":
+              schema:
+                type: object
+                required: [data, message, code]
+                properties:
+                  data:
+                    $ref: "#/components/schemas/AdmissionOrder"
+                  message:
+                    type: string
+                  code:
+                    type: integer
+                    description: "HTTP status của kết quả, ví dụ 200, 201"
+        "400":
+          description: "`BR-LT-15` thiếu ghi chú"
+          content:
+            "application/json":
+              schema:
+                $ref: "#/components/schemas/Error"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          description: "A08 không thực hiện y lệnh thuốc"
+          content:
+            "application/json":
+              schema:
+                $ref: "#/components/schemas/Error"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "409":
+          description: "`INVALID_STATE_TRANSITION` trạng thái không cho phép (03 #24, #25)"
+          content:
+            "application/json":
+              schema:
+                $ref: "#/components/schemas/Error"
+  "/admission-orders/{admissionOrderId}/cancel":
+    post:
+      tags: ["Admission orders"]
+      summary: "Hủy y lệnh"
+      description: "UC56 · BR-LT-15. Actor: A07. Quyền: VET của chi nhánh. Chuyển trạng thái: ORDERED → CANCELLED (Y lệnh nội trú#3)."
+      operationId: cancelAdmissionOrder
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: "#/components/parameters/AdmissionOrderId"
+      requestBody:
+        required: true
+        content:
+          "application/json":
+            schema:
+              $ref: "#/components/schemas/ReasonRequest"
+      responses:
+        "200":
+          description: OK
+          content:
+            "application/json":
+              schema:
+                type: object
+                required: [data, message, code]
+                properties:
+                  data:
+                    $ref: "#/components/schemas/AdmissionOrder"
+                  message:
+                    type: string
+                  code:
+                    type: integer
+                    description: "HTTP status của kết quả, ví dụ 200, 201"
+        "400":
+          description: "`BR-LT-15` thiếu lý do"
+          content:
+            "application/json":
+              schema:
+                $ref: "#/components/schemas/Error"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "409":
+          description: "`INVALID_STATE_TRANSITION` trạng thái không cho phép (03 #24, #25)"
+          content:
+            "application/json":
+              schema:
+                $ref: "#/components/schemas/Error"
+  "/admissions/{admissionId}/observations":
+    post:
+      tags: [Observations]
+      summary: "Ghi chỉ số theo dõi"
+      description: "UC56 · BR-LT-16. Actor: A07, A08. Quyền: A07, A08 của chi nhánh. Chuyển trạng thái: —. Chỉ thêm, không sửa / xóa. `abnormal = true` báo VET và khách (BR-LT-12); cân nặng ghi vào hồ sơ cân (BR-KH-04)."
+      operationId: createObservation
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: "#/components/parameters/AdmissionId"
+      requestBody:
+        required: true
+        content:
+          "application/json":
+            schema:
+              $ref: "#/components/schemas/CreateObservationRequest"
+      responses:
+        "201":
+          description: "Đã tạo"
+          content:
+            "application/json":
+              schema:
+                type: object
+                required: [data, message, code]
+                properties:
+                  data:
+                    $ref: "#/components/schemas/Observation"
+                  message:
+                    type: string
+                  code:
+                    type: integer
+                    description: "HTTP status của kết quả, ví dụ 200, 201"
+        "400":
+          description: "`BR-LT-16` không có chỉ số hay ghi chú nào · giá trị ngoài khoảng"
+          content:
+            "application/json":
+              schema:
+                $ref: "#/components/schemas/Error"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "409":
+          description: "Ca không `ADMITTED`"
+          content:
+            "application/json":
+              schema:
+                $ref: "#/components/schemas/Error"
+    get:
+      tags: [Observations]
+      summary: "Chỉ số theo dõi của ca nội trú"
+      description: "UC56 · BR-LT-16. Actor: A06, A07, A08. Quyền: A06 chỉ xem; A07; A08 theo BR-LT-15. Chuyển trạng thái: —. Mới nhất trước."
+      operationId: listObservations
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: "#/components/parameters/AdmissionId"
+        - $ref: "#/components/parameters/Page"
+        - $ref: "#/components/parameters/Size"
+      responses:
+        "200":
+          description: OK
+          content:
+            "application/json":
+              schema:
+                type: object
+                required: [data, message, code]
+                properties:
+                  data:
+                    allOf:
+                      - $ref: "#/components/schemas/PageMeta"
+                      - type: object
+                        required: [content]
+                        properties:
+                          content:
+                            type: array
+                            items:
+                              $ref: "#/components/schemas/Observation"
+                  message:
+                    type: string
+                  code:
+                    type: integer
+                    description: "HTTP status của kết quả, ví dụ 200, 201"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      description: "Access token trả về từ POST /auth/login, gắn với một phiên (sessions). Phiên bị hủy thì token hết hiệu lực ngay (BR-TK-11, 13, 14)."
+  parameters:
+    Page:
+      name: page
+      in: query
+      required: false
+      schema:
+        type: integer
+        minimum: 0
+        default: 0
+      description: "Số trang, bắt đầu từ 0"
+    Size:
+      name: size
+      in: query
+      required: false
+      schema:
+        type: integer
+        minimum: 1
+        maximum: 100
+        default: 20
+    AdmissionId:
+      name: admissionId
+      in: path
+      required: true
+      schema:
+        type: integer
+        format: int64
+    AdmissionOrderId:
+      name: admissionOrderId
+      in: path
+      required: true
+      schema:
+        type: integer
+        format: int64
+  schemas:
+    Error:
+      type: object
+      description: "Envelope lỗi duy nhất, do GlobalExceptionHandler (platform/exception) sinh. Vi phạm business rule: errorCode = BUSINESS_RULE_VIOLATION, message kết thúc bằng mã rule, ví dụ \"… (BR-LH-05)\"."
+      required: [success, errorCode, message, statusCode, timestamp, traceId]
+      properties:
+        success:
+          type: boolean
+          enum: [false]
+        errorCode:
+          type: string
+          enum: [BUSINESS_RULE_VIOLATION, INVALID_STATE_TRANSITION, RESOURCE_NOT_FOUND, ACCESS_DENIED_SCOPE_MISMATCH, CONCURRENCY_CONFLICT, VALIDATION_FAILED, MALFORMED_REQUEST, METHOD_NOT_ALLOWED, UNSUPPORTED_MEDIA_TYPE, UNAUTHENTICATED, ACCESS_DENIED, TOO_MANY_REQUESTS, INTERNAL_ERROR]
+          description: platform/exception/ErrorCode
+        message:
+          type: string
+          description: "Thông điệp tiếng Việt hiển thị được; với BUSINESS_RULE_VIOLATION kết thúc bằng \" (BR-…)\""
+        statusCode:
+          type: integer
+        timestamp:
+          type: string
+          format: date-time
+        traceId:
+          type: string
+    PageMeta:
+      type: object
+      required: [page, size, totalElements, totalPages]
+      properties:
+        page:
+          type: integer
+        size:
+          type: integer
+        totalElements:
+          type: integer
+          format: int64
+        totalPages:
+          type: integer
+    AdmissionStatus:
+      type: string
+      enum: [ADMITTED, DISCHARGED]
+      description: "03 #24"
+    DischargeOutcome:
+      type: string
+      enum: [HOME, DECEASED]
+    AdmissionOrderType:
+      type: string
+      enum: [MEDICATION, FEEDING, MONITORING, PROCEDURE, OTHER]
+    AdmissionOrderStatus:
+      type: string
+      enum: [ORDERED, DONE, CANCELLED]
+      description: "03 #25"
+    Appetite:
+      type: string
+      enum: [NORMAL, REDUCED, NONE]
+    AdmitRequest:
+      type: object
+      required: [serviceId]
+      properties:
+        visitId:
+          type: [integer, "null"]
+          format: int64
+          description: "Nhập viện từ lượt khám `IN_PROGRESS` của mình"
+        boardingBookingId:
+          type: [integer, "null"]
+          format: int64
+          description: "Hoặc chuyển từ đặt chỗ `CHECKED_IN` (BR-LT-13). Đúng một trong hai"
+        serviceId:
+          type: integer
+          format: int64
+          description: "Dịch vụ loại `INPATIENT`"
+        kennelId:
+          type: [integer, "null"]
+          format: int64
+          description: "Chuồng `AVAILABLE`; vắng = dùng chuồng đang ở (từ lưu trú)"
+    Admission:
+      type: object
+      required: [admissionId, code, visitId, petId, petName, branchId, serviceId, serviceName, unitPrice, status, admittedAt]
+      properties:
+        admissionId:
+          type: integer
+          format: int64
+        code:
+          type: string
+        visitId:
+          type: integer
+          format: int64
+        petId:
+          type: integer
+          format: int64
+        petName:
+          type: string
+        branchId:
+          type: integer
+          format: int64
+        boardingBookingId:
+          type: [integer, "null"]
+          format: int64
+        kennelId:
+          type: [integer, "null"]
+          format: int64
+        serviceId:
+          type: integer
+          format: int64
+        serviceName:
+          type: string
+        unitPrice:
+          type: integer
+          format: int64
+          minimum: 0
+          description: "Giá theo ngày, chốt lúc nhập viện"
+        status:
+          $ref: "#/components/schemas/AdmissionStatus"
+        admittedAt:
+          type: string
+          format: date-time
+        dischargeOutcome:
+          $ref: "#/components/schemas/DischargeOutcome"
+        dischargeSummary:
+          type: [string, "null"]
+        dischargedAt:
+          type: [string, "null"]
+          format: date-time
+        orderLineId:
+          type: [integer, "null"]
+          format: int64
+          description: "Có sau khi xuất viện"
+    AdmissionSummary:
+      type: object
+      required: [admissionId, code, petName, status, admittedAt]
+      properties:
+        admissionId:
+          type: integer
+          format: int64
+        code:
+          type: string
+        petName:
+          type: string
+        status:
+          $ref: "#/components/schemas/AdmissionStatus"
+        admittedAt:
+          type: string
+          format: date-time
+        kennelCode:
+          type: [string, "null"]
+    DischargeRequest:
+      type: object
+      required: [outcome, summary]
+      properties:
+        outcome:
+          $ref: "#/components/schemas/DischargeOutcome"
+        summary:
+          type: string
+          description: "Tóm tắt điều trị (BR-LT-14)"
+    AdmissionOrder:
+      type: object
+      required: [admissionOrderId, admissionId, orderType, content, scheduledAt, status]
+      properties:
+        admissionOrderId:
+          type: integer
+          format: int64
+        admissionId:
+          type: integer
+          format: int64
+        orderType:
+          $ref: "#/components/schemas/AdmissionOrderType"
+        content:
+          type: string
+        scheduledAt:
+          type: string
+          format: date-time
+        status:
+          $ref: "#/components/schemas/AdmissionOrderStatus"
+        prescriptionItemId:
+          type: [integer, "null"]
+          format: int64
+        doneAt:
+          type: [string, "null"]
+          format: date-time
+        doneNote:
+          type: [string, "null"]
+        cancelReason:
+          type: [string, "null"]
+    CreateAdmissionOrderRequest:
+      type: object
+      required: [orderType, content, scheduledAt]
+      properties:
+        orderType:
+          $ref: "#/components/schemas/AdmissionOrderType"
+        content:
+          type: string
+          maxLength: 500
+        scheduledAt:
+          type: string
+          format: date-time
+        prescriptionItemId:
+          type: [integer, "null"]
+          format: int64
+          description: "Bắt buộc với `MEDICATION` (dòng đơn của Visit, BR-LT-15)"
+    CompleteAdmissionOrderRequest:
+      type: object
+      required: [note]
+      properties:
+        note:
+          type: string
+          maxLength: 300
+    ReasonRequest:
+      type: object
+      required: [reason]
+      properties:
+        reason:
+          type: string
+          maxLength: 300
+    Observation:
+      type: object
+      required: [observationId, admissionId, recordedByName, abnormal, createdAt]
+      properties:
+        observationId:
+          type: integer
+          format: int64
+        admissionId:
+          type: integer
+          format: int64
+        recordedByName:
+          type: string
+        temperatureC:
+          type: [number, "null"]
+        heartRate:
+          type: [integer, "null"]
+          format: int32
+        respiratoryRate:
+          type: [integer, "null"]
+          format: int32
+        weightKg:
+          type: [number, "null"]
+        appetite:
+          $ref: "#/components/schemas/Appetite"
+        note:
+          type: [string, "null"]
+        abnormal:
+          type: boolean
+        createdAt:
+          type: string
+          format: date-time
+    CreateObservationRequest:
+      type: object
+      required: [abnormal]
+      properties:
+        temperatureC:
+          type: [number, "null"]
+        heartRate:
+          type: [integer, "null"]
+          format: int32
+        respiratoryRate:
+          type: [integer, "null"]
+          format: int32
+        weightKg:
+          type: [number, "null"]
+        appetite:
+          $ref: "#/components/schemas/Appetite"
+        note:
+          type: [string, "null"]
+          maxLength: 500
+        abnormal:
+          type: boolean
+          description: "true báo VET và khách (BR-LT-16)"
+  responses:
+    BadRequest:
+      description: "VALIDATION_FAILED / MALFORMED_REQUEST: dữ liệu không hợp lệ · BUSINESS_RULE_VIOLATION: vi phạm rule, message kết thúc bằng mã rule \"(BR-…)\"."
+      content:
+        "application/json":
+          schema:
+            $ref: "#/components/schemas/Error"
+    Unauthorized:
+      description: "UNAUTHENTICATED: chưa đăng nhập hoặc phiên đã hết hạn / bị hủy."
+      content:
+        "application/json":
+          schema:
+            $ref: "#/components/schemas/Error"
+    Forbidden:
+      description: "ACCESS_DENIED: sai vai trò · ACCESS_DENIED_SCOPE_MISMATCH: ngoài phạm vi (chi nhánh, chủ sở hữu). Message chung, không lộ cấu trúc phân quyền."
+      content:
+        "application/json":
+          schema:
+            $ref: "#/components/schemas/Error"
+    NotFound:
+      description: "Không tìm thấy (RESOURCE_NOT_FOUND)."
+      content:
+        "application/json":
+          schema:
+            $ref: "#/components/schemas/Error"

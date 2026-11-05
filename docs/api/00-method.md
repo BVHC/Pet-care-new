@@ -9,7 +9,7 @@
 2. **Mỗi endpoint có use case đứng sau.** `description` của mỗi operation ghi mã UC (hoặc ST) và mã rule. Không có use case thì không có endpoint.
 3. **Mỗi chuyển trạng thái do người kích hoạt có đúng một endpoint**; chuyển do hệ thống (`ST…`, `SYS ← …`) không có endpoint.
 4. **Không phát minh hành vi.** Thiếu thông tin thì chọn phương án ít phát minh nhất, ghi `ASSUMPTION (A#)` kèm lý do; không chọn được thì ghi `TBD (Q#)`. Đánh số A#, Q# riêng trong từng file.
-5. **YAGNI.** Chỉ có bộ lọc, phân trang, field mà use case cần. Tầng 3 không có endpoint.
+5. **YAGNI.** Chỉ có bộ lọc, phân trang, field mà use case cần. Tầng 3 chỉ có endpoint khi đặc tả bổ sung GĐ2 (BR, FSM, model) đã có; đặc tả đó đã được duyệt ở T54 (5/11/2026), đổi sau đó qua ADR.
 
 ## 2. Cách làm và cập nhật
 

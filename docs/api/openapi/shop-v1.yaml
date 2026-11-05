@@ -1,0 +1,1148 @@
+# Pet Care Online Shop API v1 (tầng 3) — OpenAPI 3.1, sinh từ khai báo; không sửa tay, sửa khai báo rồi sinh lại.
+# Module BH (thương mại điện tử) · owner BE-2
+# Nguồn: 01 UC61, UC62, UC64, UC65, ST09, ST10, ST12; 08-tang3-be2-spec.md §B (BR-BH-07…12; 03 #14 Đơn hàng online, Order#11–13); 05 bổ sung carts, cart_items, online_orders, stock_reservations
+# Truy vết: CONFIRMED = có trong docs · ASSUMPTION (A#) · TBD (Q#) — xem file .md cùng tên.
+
+openapi: "3.1.0"
+info:
+  title: "Pet Care Online Shop API v1 (tầng 3)"
+  version: "1.0.0"
+  description: "Module BH (thương mại điện tử) · owner BE-2. Nguồn: 01 UC61, UC62, UC64, UC65, ST09, ST10, ST12; 08-tang3-be2-spec.md §B (BR-BH-07…12; 03 #14 Đơn hàng online, Order#11–13); 05 bổ sung carts, cart_items, online_orders, stock_reservations. Chi tiết và truy vết: ../shop-v1.md"
+servers:
+  - url: "/api"
+    description: "Mọi path bên dưới nằm sau tiền tố /api"
+tags:
+  - name: Cart
+    description: "Giỏ hàng của tôi (UC61)"
+  - name: Checkout
+    description: "Chi nhánh xử lý và báo giá (UC62)"
+  - name: "My online orders"
+    description: "Đơn hàng online của tôi (UC62, UC64)"
+  - name: "Online order fulfillment"
+    description: "Xử lý và giao đơn online (UC65)"
+paths:
+  "/me/cart":
+    get:
+      tags: [Cart]
+      summary: "Xem giỏ hàng"
+      description: "UC61 · BR-BH-07. Actor: A02. Quyền: CUSTOMER, chỉ dữ liệu của mình. Chuyển trạng thái: —. Sản phẩm ngừng kinh doanh tự bị loại khỏi kết quả."
+      operationId: getMyCart
+      security:
+        - bearerAuth: []
+      responses:
+        "200":
+          description: OK
+          content:
+            "application/json":
+              schema:
+                type: object
+                required: [data, message, code]
+                properties:
+                  data:
+                    $ref: "#/components/schemas/Cart"
+                  message:
+                    type: string
+                  code:
+                    type: integer
+                    description: "HTTP status của kết quả, ví dụ 200, 201"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+    delete:
+      tags: [Cart]
+      summary: "Xóa toàn bộ giỏ"
+      description: "UC61 · BR-BH-07. Actor: A02. Quyền: CUSTOMER, chỉ dữ liệu của mình. Chuyển trạng thái: —."
+      operationId: clearMyCart
+      security:
+        - bearerAuth: []
+      responses:
+        "204":
+          description: "Không có nội dung"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+  "/me/cart/items/{productId}":
+    put:
+      tags: [Cart]
+      summary: "Thêm hoặc đặt số lượng sản phẩm trong giỏ"
+      description: "UC61 · BR-BH-07. Actor: A02. Quyền: CUSTOMER, chỉ dữ liệu của mình. Chuyển trạng thái: —."
+      operationId: setCartItem
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: "#/components/parameters/ProductId"
+      requestBody:
+        required: true
+        content:
+          "application/json":
+            schema:
+              $ref: "#/components/schemas/SetCartItemRequest"
+      responses:
+        "200":
+          description: OK
+          content:
+            "application/json":
+              schema:
+                type: object
+                required: [data, message, code]
+                properties:
+                  data:
+                    $ref: "#/components/schemas/Cart"
+                  message:
+                    type: string
+                  code:
+                    type: integer
+                    description: "HTTP status của kết quả, ví dụ 200, 201"
+        "400":
+          description: "`BR-BH-07` sản phẩm không phải `GOODS` / là thuốc kê đơn / quá 30 dòng · số lượng ngoài 1–99"
+          content:
+            "application/json":
+              schema:
+                $ref: "#/components/schemas/Error"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          description: "Không tìm thấy sản phẩm đang kinh doanh"
+          content:
+            "application/json":
+              schema:
+                $ref: "#/components/schemas/Error"
+    delete:
+      tags: [Cart]
+      summary: "Xóa sản phẩm khỏi giỏ"
+      description: "UC61 · BR-BH-07. Actor: A02. Quyền: CUSTOMER, chỉ dữ liệu của mình. Chuyển trạng thái: —. Sản phẩm không có trong giỏ vẫn trả giỏ hiện tại."
+      operationId: removeCartItem
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: "#/components/parameters/ProductId"
+      responses:
+        "200":
+          description: OK
+          content:
+            "application/json":
+              schema:
+                type: object
+                required: [data, message, code]
+                properties:
+                  data:
+                    $ref: "#/components/schemas/Cart"
+                  message:
+                    type: string
+                  code:
+                    type: integer
+                    description: "HTTP status của kết quả, ví dụ 200, 201"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+  "/me/online-orders/fulfillment-branches":
+    get:
+      tags: [Checkout]
+      summary: "Chi nhánh xử lý được cho giỏ hiện tại"
+      description: "UC62 · BR-BH-08. Actor: A02. Quyền: CUSTOMER, chỉ dữ liệu của mình. Chuyển trạng thái: —. Chỉ chi nhánh `ACTIVE` còn đủ hàng cho mọi dòng của giỏ (đã trừ phần giữ, BR-BH-09)."
+      operationId: listFulfillmentBranches
+      security:
+        - bearerAuth: []
+      responses:
+        "200":
+          description: OK
+          content:
+            "application/json":
+              schema:
+                type: object
+                required: [data, message, code]
+                properties:
+                  data:
+                    type: array
+                    items:
+                      $ref: "#/components/schemas/FulfillmentBranch"
+                  message:
+                    type: string
+                  code:
+                    type: integer
+                    description: "HTTP status của kết quả, ví dụ 200, 201"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+  "/me/online-orders/quote":
+    get:
+      tags: [Checkout]
+      summary: "Báo giá đơn online (ST09)"
+      description: "UC62 · BR-BH-08, BR-SP-08, ST09. Actor: A02. Quyền: CUSTOMER, chỉ dữ liệu của mình. Chuyển trạng thái: —. Không giữ hàng, không ghi gì; phí chốt thật lúc đặt."
+      operationId: quoteOnlineOrder
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: branchId
+          in: query
+          required: true
+          schema:
+            type: integer
+            format: int64
+        - name: addressId
+          in: query
+          required: true
+          schema:
+            type: integer
+            format: int64
+      responses:
+        "200":
+          description: OK
+          content:
+            "application/json":
+              schema:
+                type: object
+                required: [data, message, code]
+                properties:
+                  data:
+                    $ref: "#/components/schemas/OnlineOrderQuote"
+                  message:
+                    type: string
+                  code:
+                    type: integer
+                    description: "HTTP status của kết quả, ví dụ 200, 201"
+        "400":
+          description: "`BR-BH-08` giỏ rỗng · chi nhánh không đủ hàng · địa chỉ không phải của khách"
+          content:
+            "application/json":
+              schema:
+                $ref: "#/components/schemas/Error"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          description: "Không tìm thấy địa chỉ / chi nhánh"
+          content:
+            "application/json":
+              schema:
+                $ref: "#/components/schemas/Error"
+  "/me/online-orders":
+    post:
+      tags: ["My online orders"]
+      summary: "Đặt hàng online"
+      description: "UC62 · BR-BH-08, 09, BR-SP-08, 11. Actor: A02. Quyền: CUSTOMER, chỉ dữ liệu của mình. Chuyển trạng thái: — → PENDING_PAYMENT (Đơn hàng online#1); Order#11. Giữ hàng, chốt phí, tạo Order `ONLINE`, dọn giỏ trong một transaction. Bước tiếp: `POST /me/online-orders/{onlineOrderId}/pay` (payment-v1)."
+      operationId: placeOnlineOrder
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          "application/json":
+            schema:
+              $ref: "#/components/schemas/PlaceOnlineOrderRequest"
+      responses:
+        "201":
+          description: "Đã tạo"
+          content:
+            "application/json":
+              schema:
+                type: object
+                required: [data, message, code]
+                properties:
+                  data:
+                    $ref: "#/components/schemas/OnlineOrder"
+                  message:
+                    type: string
+                  code:
+                    type: integer
+                    description: "HTTP status của kết quả, ví dụ 200, 201"
+        "400":
+          description: "`BR-BH-08` giỏ rỗng · chi nhánh không `ACTIVE` / thiếu hàng · địa chỉ không phải của khách"
+          content:
+            "application/json":
+              schema:
+                $ref: "#/components/schemas/Error"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "409":
+          description: "`CONCURRENCY_CONFLICT` hàng vừa bị người khác giữ"
+          content:
+            "application/json":
+              schema:
+                $ref: "#/components/schemas/Error"
+    get:
+      tags: ["My online orders"]
+      summary: "Danh sách đơn online của tôi"
+      description: "UC64 · BR-BH-10. Actor: A02. Quyền: CUSTOMER, chỉ dữ liệu của mình. Chuyển trạng thái: —. Mới nhất trước (`createdAt` giảm dần, trùng thì `orderId` giảm dần)."
+      operationId: listMyOnlineOrders
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: status
+          in: query
+          required: false
+          schema:
+            type: string
+            enum: [PENDING_PAYMENT, PAID, PROCESSING, SHIPPED, DELIVERY_FAILED, DELIVERED, COMPLETED, CANCELLED]
+        - $ref: "#/components/parameters/Page"
+        - $ref: "#/components/parameters/Size"
+      responses:
+        "200":
+          description: OK
+          content:
+            "application/json":
+              schema:
+                type: object
+                required: [data, message, code]
+                properties:
+                  data:
+                    allOf:
+                      - $ref: "#/components/schemas/PageMeta"
+                      - type: object
+                        required: [content]
+                        properties:
+                          content:
+                            type: array
+                            items:
+                              $ref: "#/components/schemas/OnlineOrderSummary"
+                  message:
+                    type: string
+                  code:
+                    type: integer
+                    description: "HTTP status của kết quả, ví dụ 200, 201"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+  "/me/online-orders/{onlineOrderId}":
+    get:
+      tags: ["My online orders"]
+      summary: "Chi tiết đơn online của tôi"
+      description: "UC64 · BR-BH-10. Actor: A02. Quyền: CUSTOMER, chỉ dữ liệu của mình. Chuyển trạng thái: —."
+      operationId: getMyOnlineOrder
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: "#/components/parameters/OnlineOrderId"
+      responses:
+        "200":
+          description: OK
+          content:
+            "application/json":
+              schema:
+                type: object
+                required: [data, message, code]
+                properties:
+                  data:
+                    $ref: "#/components/schemas/OnlineOrder"
+                  message:
+                    type: string
+                  code:
+                    type: integer
+                    description: "HTTP status của kết quả, ví dụ 200, 201"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          description: "Không tìm thấy đơn — cả khi đơn thuộc người khác (ADR-0006)"
+          content:
+            "application/json":
+              schema:
+                $ref: "#/components/schemas/Error"
+  "/me/online-orders/{onlineOrderId}/cancel":
+    post:
+      tags: ["My online orders"]
+      summary: "Hủy đơn online"
+      description: "UC64 · BR-BH-09, 10, BR-TG-12. Actor: A02. Quyền: CUSTOMER, chỉ dữ liệu của mình. Chuyển trạng thái: PENDING_PAYMENT / PAID / PROCESSING → CANCELLED (Đơn hàng online#3, #13). Đơn đã thanh toán: hoàn hàng về lô gốc và sinh yêu cầu hoàn tiền (returns-v1, ST21)."
+      operationId: cancelMyOnlineOrder
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: "#/components/parameters/OnlineOrderId"
+      requestBody:
+        required: true
+        content:
+          "application/json":
+            schema:
+              $ref: "#/components/schemas/ReasonRequest"
+      responses:
+        "200":
+          description: OK
+          content:
+            "application/json":
+              schema:
+                type: object
+                required: [data, message, code]
+                properties:
+                  data:
+                    $ref: "#/components/schemas/OnlineOrder"
+                  message:
+                    type: string
+                  code:
+                    type: integer
+                    description: "HTTP status của kết quả, ví dụ 200, 201"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "409":
+          description: "`INVALID_STATE_TRANSITION` trạng thái đơn không cho phép (03 #14)"
+          content:
+            "application/json":
+              schema:
+                $ref: "#/components/schemas/Error"
+  "/me/online-orders/{onlineOrderId}/confirm-received":
+    post:
+      tags: ["My online orders"]
+      summary: "Xác nhận đã nhận hàng"
+      description: "UC64 · BR-BH-10. Actor: A02. Quyền: CUSTOMER, chỉ dữ liệu của mình. Chuyển trạng thái: DELIVERED → COMPLETED (Đơn hàng online#11)."
+      operationId: confirmOnlineOrderReceived
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: "#/components/parameters/OnlineOrderId"
+      responses:
+        "200":
+          description: OK
+          content:
+            "application/json":
+              schema:
+                type: object
+                required: [data, message, code]
+                properties:
+                  data:
+                    $ref: "#/components/schemas/OnlineOrder"
+                  message:
+                    type: string
+                  code:
+                    type: integer
+                    description: "HTTP status của kết quả, ví dụ 200, 201"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "409":
+          description: "`INVALID_STATE_TRANSITION` trạng thái đơn không cho phép (03 #14)"
+          content:
+            "application/json":
+              schema:
+                $ref: "#/components/schemas/Error"
+  "/online-orders":
+    get:
+      tags: ["Online order fulfillment"]
+      summary: "Danh sách đơn online của chi nhánh"
+      description: "UC65 · BR-BH-11. Actor: A05, A06. Quyền: A06 của chi nhánh xử lý; A05 chỉ xem. Chuyển trạng thái: —. Tự lấy chi nhánh của người gọi. `status` vắng = `PAID` + `PROCESSING` + `DELIVERY_FAILED` (việc cần làm). Cũ nhất trước."
+      operationId: listOnlineOrders
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: status
+          in: query
+          required: false
+          schema:
+            type: string
+            enum: [PENDING_PAYMENT, PAID, PROCESSING, SHIPPED, DELIVERY_FAILED, DELIVERED, COMPLETED, CANCELLED]
+        - $ref: "#/components/parameters/Page"
+        - $ref: "#/components/parameters/Size"
+      responses:
+        "200":
+          description: OK
+          content:
+            "application/json":
+              schema:
+                type: object
+                required: [data, message, code]
+                properties:
+                  data:
+                    allOf:
+                      - $ref: "#/components/schemas/PageMeta"
+                      - type: object
+                        required: [content]
+                        properties:
+                          content:
+                            type: array
+                            items:
+                              $ref: "#/components/schemas/OnlineOrderSummary"
+                  message:
+                    type: string
+                  code:
+                    type: integer
+                    description: "HTTP status của kết quả, ví dụ 200, 201"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+  "/online-orders/{onlineOrderId}":
+    get:
+      tags: ["Online order fulfillment"]
+      summary: "Chi tiết đơn online (nhân viên)"
+      description: "UC65 · BR-BH-11. Actor: A05, A06. Quyền: A06 của chi nhánh xử lý; A05 chỉ xem. Chuyển trạng thái: —."
+      operationId: getOnlineOrder
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: "#/components/parameters/OnlineOrderId"
+      responses:
+        "200":
+          description: OK
+          content:
+            "application/json":
+              schema:
+                type: object
+                required: [data, message, code]
+                properties:
+                  data:
+                    $ref: "#/components/schemas/OnlineOrder"
+                  message:
+                    type: string
+                  code:
+                    type: integer
+                    description: "HTTP status của kết quả, ví dụ 200, 201"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+  "/online-orders/{onlineOrderId}/start-processing":
+    post:
+      tags: ["Online order fulfillment"]
+      summary: "Bắt đầu xử lý"
+      description: "UC65 · BR-BH-11. Actor: A06. Quyền: Lễ tân chi nhánh xử lý. Chuyển trạng thái: PAID → PROCESSING (Đơn hàng online#5)."
+      operationId: startProcessingOnlineOrder
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: "#/components/parameters/OnlineOrderId"
+      responses:
+        "200":
+          description: OK
+          content:
+            "application/json":
+              schema:
+                type: object
+                required: [data, message, code]
+                properties:
+                  data:
+                    $ref: "#/components/schemas/OnlineOrder"
+                  message:
+                    type: string
+                  code:
+                    type: integer
+                    description: "HTTP status của kết quả, ví dụ 200, 201"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "409":
+          description: "`INVALID_STATE_TRANSITION` trạng thái đơn không cho phép (03 #14)"
+          content:
+            "application/json":
+              schema:
+                $ref: "#/components/schemas/Error"
+  "/online-orders/{onlineOrderId}/ship":
+    post:
+      tags: ["Online order fulfillment"]
+      summary: "Bàn giao cho đơn vị vận chuyển"
+      description: "UC65 · BR-BH-11. Actor: A06. Quyền: Lễ tân chi nhánh xử lý. Chuyển trạng thái: PROCESSING → SHIPPED (Đơn hàng online#6)."
+      operationId: shipOnlineOrder
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: "#/components/parameters/OnlineOrderId"
+      requestBody:
+        required: true
+        content:
+          "application/json":
+            schema:
+              $ref: "#/components/schemas/ShipRequest"
+      responses:
+        "200":
+          description: OK
+          content:
+            "application/json":
+              schema:
+                type: object
+                required: [data, message, code]
+                properties:
+                  data:
+                    $ref: "#/components/schemas/OnlineOrder"
+                  message:
+                    type: string
+                  code:
+                    type: integer
+                    description: "HTTP status của kết quả, ví dụ 200, 201"
+        "400":
+          description: "`BR-BH-11` thiếu đơn vị vận chuyển hoặc mã vận đơn"
+          content:
+            "application/json":
+              schema:
+                $ref: "#/components/schemas/Error"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "409":
+          description: "`INVALID_STATE_TRANSITION` trạng thái đơn không cho phép (03 #14)"
+          content:
+            "application/json":
+              schema:
+                $ref: "#/components/schemas/Error"
+  "/online-orders/{onlineOrderId}/mark-delivered":
+    post:
+      tags: ["Online order fulfillment"]
+      summary: "Cập nhật đã giao"
+      description: "UC65 · BR-BH-11, 12. Actor: A06. Quyền: Lễ tân chi nhánh xử lý. Chuyển trạng thái: SHIPPED → DELIVERED (Đơn hàng online#7). Bắt đầu đếm hạn trả hàng và hạn tự xác nhận (BR-BH-12)."
+      operationId: markOnlineOrderDelivered
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: "#/components/parameters/OnlineOrderId"
+      responses:
+        "200":
+          description: OK
+          content:
+            "application/json":
+              schema:
+                type: object
+                required: [data, message, code]
+                properties:
+                  data:
+                    $ref: "#/components/schemas/OnlineOrder"
+                  message:
+                    type: string
+                  code:
+                    type: integer
+                    description: "HTTP status của kết quả, ví dụ 200, 201"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "409":
+          description: "`INVALID_STATE_TRANSITION` trạng thái đơn không cho phép (03 #14)"
+          content:
+            "application/json":
+              schema:
+                $ref: "#/components/schemas/Error"
+  "/online-orders/{onlineOrderId}/fail-delivery":
+    post:
+      tags: ["Online order fulfillment"]
+      summary: "Ghi nhận giao thất bại"
+      description: "UC65 · BR-BH-11. Actor: A06. Quyền: Lễ tân chi nhánh xử lý. Chuyển trạng thái: SHIPPED → DELIVERY_FAILED (Đơn hàng online#8)."
+      operationId: failOnlineOrderDelivery
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: "#/components/parameters/OnlineOrderId"
+      requestBody:
+        required: true
+        content:
+          "application/json":
+            schema:
+              $ref: "#/components/schemas/ReasonRequest"
+      responses:
+        "200":
+          description: OK
+          content:
+            "application/json":
+              schema:
+                type: object
+                required: [data, message, code]
+                properties:
+                  data:
+                    $ref: "#/components/schemas/OnlineOrder"
+                  message:
+                    type: string
+                  code:
+                    type: integer
+                    description: "HTTP status của kết quả, ví dụ 200, 201"
+        "400":
+          description: "`BR-BH-11` thiếu lý do"
+          content:
+            "application/json":
+              schema:
+                $ref: "#/components/schemas/Error"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "409":
+          description: "`INVALID_STATE_TRANSITION` trạng thái đơn không cho phép (03 #14)"
+          content:
+            "application/json":
+              schema:
+                $ref: "#/components/schemas/Error"
+  "/online-orders/{onlineOrderId}/redeliver":
+    post:
+      tags: ["Online order fulfillment"]
+      summary: "Giao lại"
+      description: "UC65 · BR-BH-11. Actor: A06. Quyền: Lễ tân chi nhánh xử lý. Chuyển trạng thái: DELIVERY_FAILED → SHIPPED (Đơn hàng online#9)."
+      operationId: redeliverOnlineOrder
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: "#/components/parameters/OnlineOrderId"
+      requestBody:
+        required: true
+        content:
+          "application/json":
+            schema:
+              $ref: "#/components/schemas/ShipRequest"
+      responses:
+        "200":
+          description: OK
+          content:
+            "application/json":
+              schema:
+                type: object
+                required: [data, message, code]
+                properties:
+                  data:
+                    $ref: "#/components/schemas/OnlineOrder"
+                  message:
+                    type: string
+                  code:
+                    type: integer
+                    description: "HTTP status của kết quả, ví dụ 200, 201"
+        "400":
+          description: "`BR-BH-11` quá số lần giao lại tối đa [CFG] · thiếu mã vận đơn"
+          content:
+            "application/json":
+              schema:
+                $ref: "#/components/schemas/Error"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "409":
+          description: "`INVALID_STATE_TRANSITION` trạng thái đơn không cho phép (03 #14)"
+          content:
+            "application/json":
+              schema:
+                $ref: "#/components/schemas/Error"
+  "/online-orders/{onlineOrderId}/cancel-failed":
+    post:
+      tags: ["Online order fulfillment"]
+      summary: "Hủy đơn sau giao thất bại"
+      description: "UC65 · BR-BH-11, 09, BR-TG-12. Actor: A06. Quyền: Lễ tân chi nhánh xử lý. Chuyển trạng thái: DELIVERY_FAILED → CANCELLED (Đơn hàng online#10). Hoàn hàng về lô gốc và sinh yêu cầu hoàn tiền (returns-v1, ST21)."
+      operationId: cancelFailedOnlineOrder
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: "#/components/parameters/OnlineOrderId"
+      requestBody:
+        required: true
+        content:
+          "application/json":
+            schema:
+              $ref: "#/components/schemas/ReasonRequest"
+      responses:
+        "200":
+          description: OK
+          content:
+            "application/json":
+              schema:
+                type: object
+                required: [data, message, code]
+                properties:
+                  data:
+                    $ref: "#/components/schemas/OnlineOrder"
+                  message:
+                    type: string
+                  code:
+                    type: integer
+                    description: "HTTP status của kết quả, ví dụ 200, 201"
+        "400":
+          description: "`BR-BH-11` thiếu lý do"
+          content:
+            "application/json":
+              schema:
+                $ref: "#/components/schemas/Error"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "409":
+          description: "`INVALID_STATE_TRANSITION` trạng thái đơn không cho phép (03 #14)"
+          content:
+            "application/json":
+              schema:
+                $ref: "#/components/schemas/Error"
+components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      description: "Access token trả về từ POST /auth/login, gắn với một phiên (sessions). Phiên bị hủy thì token hết hiệu lực ngay (BR-TK-11, 13, 14)."
+  parameters:
+    Page:
+      name: page
+      in: query
+      required: false
+      schema:
+        type: integer
+        minimum: 0
+        default: 0
+      description: "Số trang, bắt đầu từ 0"
+    Size:
+      name: size
+      in: query
+      required: false
+      schema:
+        type: integer
+        minimum: 1
+        maximum: 100
+        default: 20
+    ProductId:
+      name: productId
+      in: path
+      required: true
+      schema:
+        type: integer
+        format: int64
+    OnlineOrderId:
+      name: onlineOrderId
+      in: path
+      required: true
+      schema:
+        type: integer
+        format: int64
+  schemas:
+    Error:
+      type: object
+      description: "Envelope lỗi duy nhất, do GlobalExceptionHandler (platform/exception) sinh. Vi phạm business rule: errorCode = BUSINESS_RULE_VIOLATION, message kết thúc bằng mã rule, ví dụ \"… (BR-LH-05)\"."
+      required: [success, errorCode, message, statusCode, timestamp, traceId]
+      properties:
+        success:
+          type: boolean
+          enum: [false]
+        errorCode:
+          type: string
+          enum: [BUSINESS_RULE_VIOLATION, INVALID_STATE_TRANSITION, RESOURCE_NOT_FOUND, ACCESS_DENIED_SCOPE_MISMATCH, CONCURRENCY_CONFLICT, VALIDATION_FAILED, MALFORMED_REQUEST, METHOD_NOT_ALLOWED, UNSUPPORTED_MEDIA_TYPE, UNAUTHENTICATED, ACCESS_DENIED, TOO_MANY_REQUESTS, INTERNAL_ERROR]
+          description: platform/exception/ErrorCode
+        message:
+          type: string
+          description: "Thông điệp tiếng Việt hiển thị được; với BUSINESS_RULE_VIOLATION kết thúc bằng \" (BR-…)\""
+        statusCode:
+          type: integer
+        timestamp:
+          type: string
+          format: date-time
+        traceId:
+          type: string
+    PageMeta:
+      type: object
+      required: [page, size, totalElements, totalPages]
+      properties:
+        page:
+          type: integer
+        size:
+          type: integer
+        totalElements:
+          type: integer
+          format: int64
+        totalPages:
+          type: integer
+    OnlineOrderStatus:
+      type: string
+      enum: [PENDING_PAYMENT, PAID, PROCESSING, SHIPPED, DELIVERY_FAILED, DELIVERED, COMPLETED, CANCELLED]
+      description: "03 #14 (08 §B)"
+    CartItem:
+      type: object
+      required: [productId, name, unit, unitPrice, quantity, available]
+      properties:
+        productId:
+          type: integer
+          format: int64
+        name:
+          type: string
+        unit:
+          type: string
+        unitPrice:
+          type: integer
+          format: int64
+          minimum: 0
+          description: "Giá hiện tại, chỉ để xem (BR-BH-07)"
+        quantity:
+          type: integer
+          format: int32
+        imageUrl:
+          type: [string, "null"]
+          maxLength: 500
+        available:
+          type: boolean
+          description: "false nếu hết hàng toàn chuỗi"
+    Cart:
+      type: object
+      required: [items, subtotal]
+      properties:
+        items:
+          type: array
+          items:
+            $ref: "#/components/schemas/CartItem"
+        subtotal:
+          type: integer
+          format: int64
+          minimum: 0
+          description: VND
+    SetCartItemRequest:
+      type: object
+      required: [quantity]
+      properties:
+        quantity:
+          type: integer
+          format: int32
+          description: "1–99 (BR-BH-07)"
+    FulfillmentBranch:
+      type: object
+      required: [branchId, name, address]
+      properties:
+        branchId:
+          type: integer
+          format: int64
+        name:
+          type: string
+        address:
+          type: string
+    OnlineOrderQuote:
+      type: object
+      required: [branchId, addressId, subtotal, shippingFee, freeShippingApplied, total]
+      properties:
+        branchId:
+          type: integer
+          format: int64
+        addressId:
+          type: integer
+          format: int64
+        subtotal:
+          type: integer
+          format: int64
+          minimum: 0
+          description: VND
+        shippingFee:
+          type: integer
+          format: int64
+          minimum: 0
+          description: BR-SP-08
+        freeShippingApplied:
+          type: boolean
+        total:
+          type: integer
+          format: int64
+          minimum: 0
+          description: VND
+    PlaceOnlineOrderRequest:
+      type: object
+      required: [branchId, addressId]
+      properties:
+        branchId:
+          type: integer
+          format: int64
+        addressId:
+          type: integer
+          format: int64
+    OnlineOrderLine:
+      type: object
+      required: [productId, name, unit, unitPrice, quantity, lineTotal]
+      properties:
+        productId:
+          type: integer
+          format: int64
+        name:
+          type: string
+        unit:
+          type: string
+        unitPrice:
+          type: integer
+          format: int64
+          minimum: 0
+          description: "Snapshot (BR-BH-03)"
+        quantity:
+          type: integer
+          format: int32
+        lineTotal:
+          type: integer
+          format: int64
+          minimum: 0
+          description: VND
+    OnlineOrderSummary:
+      type: object
+      required: [onlineOrderId, salesOrderId, code, status, branchName, itemCount, total, createdAt]
+      properties:
+        onlineOrderId:
+          type: integer
+          format: int64
+        salesOrderId:
+          type: integer
+          format: int64
+          description: "Order bán hàng tương ứng (`orders.id`), dùng khi tạo yêu cầu trả hàng (returns-v1)"
+        code:
+          type: string
+        status:
+          $ref: "#/components/schemas/OnlineOrderStatus"
+        branchName:
+          type: string
+        itemCount:
+          type: integer
+          format: int32
+        total:
+          type: integer
+          format: int64
+          minimum: 0
+          description: VND
+        createdAt:
+          type: string
+          format: date-time
+    OnlineOrder:
+      type: object
+      required: [onlineOrderId, salesOrderId, code, status, branchId, branchName, receiverName, receiverPhone, shipAddress, lines, subtotal, shippingFee, total, redeliveryCount, paymentDueAt, createdAt]
+      properties:
+        onlineOrderId:
+          type: integer
+          format: int64
+        salesOrderId:
+          type: integer
+          format: int64
+          description: "Order bán hàng tương ứng (`orders.id`), dùng khi tạo yêu cầu trả hàng (returns-v1)"
+        code:
+          type: string
+        status:
+          $ref: "#/components/schemas/OnlineOrderStatus"
+        branchId:
+          type: integer
+          format: int64
+        branchName:
+          type: string
+        receiverName:
+          type: string
+        receiverPhone:
+          type: string
+        shipAddress:
+          type: string
+        lines:
+          type: array
+          items:
+            $ref: "#/components/schemas/OnlineOrderLine"
+        subtotal:
+          type: integer
+          format: int64
+          minimum: 0
+          description: VND
+        shippingFee:
+          type: integer
+          format: int64
+          minimum: 0
+          description: VND
+        total:
+          type: integer
+          format: int64
+          minimum: 0
+          description: VND
+        carrier:
+          type: [string, "null"]
+        trackingCode:
+          type: [string, "null"]
+        redeliveryCount:
+          type: integer
+          format: int32
+        paymentDueAt:
+          type: string
+          format: date-time
+        paidAt:
+          type: [string, "null"]
+          format: date-time
+        shippedAt:
+          type: [string, "null"]
+          format: date-time
+        deliveredAt:
+          type: [string, "null"]
+          format: date-time
+        completedAt:
+          type: [string, "null"]
+          format: date-time
+        cancelledAt:
+          type: [string, "null"]
+          format: date-time
+        cancelReason:
+          type: [string, "null"]
+        createdAt:
+          type: string
+          format: date-time
+    ReasonRequest:
+      type: object
+      required: [reason]
+      properties:
+        reason:
+          type: string
+          maxLength: 300
+    ShipRequest:
+      type: object
+      required: [carrier, trackingCode]
+      properties:
+        carrier:
+          type: string
+          maxLength: 100
+        trackingCode:
+          type: string
+          maxLength: 100
+  responses:
+    BadRequest:
+      description: "VALIDATION_FAILED / MALFORMED_REQUEST: dữ liệu không hợp lệ · BUSINESS_RULE_VIOLATION: vi phạm rule, message kết thúc bằng mã rule \"(BR-…)\"."
+      content:
+        "application/json":
+          schema:
+            $ref: "#/components/schemas/Error"
+    Unauthorized:
+      description: "UNAUTHENTICATED: chưa đăng nhập hoặc phiên đã hết hạn / bị hủy."
+      content:
+        "application/json":
+          schema:
+            $ref: "#/components/schemas/Error"
+    Forbidden:
+      description: "ACCESS_DENIED: sai vai trò · ACCESS_DENIED_SCOPE_MISMATCH: ngoài phạm vi (chi nhánh, chủ sở hữu). Message chung, không lộ cấu trúc phân quyền."
+      content:
+        "application/json":
+          schema:
+            $ref: "#/components/schemas/Error"
+    NotFound:
+      description: "Không tìm thấy (RESOURCE_NOT_FOUND)."
+      content:
+        "application/json":
+          schema:
+            $ref: "#/components/schemas/Error"

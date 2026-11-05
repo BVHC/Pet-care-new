@@ -1,0 +1,889 @@
+# Pet Care Doctor Articles & Comments API v1 (tầng 3) — OpenAPI 3.1, sinh từ khai báo; không sửa tay, sửa khai báo rồi sinh lại.
+# Module BV (bài viết của bác sĩ, bình luận) · owner BE-2
+# Nguồn: 01 UC80, UC81 (mở rộng), UC82; 08-tang3-be2-spec.md §F.3 (BR-BV-05…08; 03 #21 Bài viết mở rộng); 05 bổ sung articles.author_account_id…, article_comments
+# Truy vết: CONFIRMED = có trong docs · ASSUMPTION (A#) · TBD (Q#) — xem file .md cùng tên.
+
+openapi: "3.1.0"
+info:
+  title: "Pet Care Doctor Articles & Comments API v1 (tầng 3)"
+  version: "1.0.0"
+  description: "Module BV (bài viết của bác sĩ, bình luận) · owner BE-2. Nguồn: 01 UC80, UC81 (mở rộng), UC82; 08-tang3-be2-spec.md §F.3 (BR-BV-05…08; 03 #21 Bài viết mở rộng); 05 bổ sung articles.author_account_id…, article_comments. Chi tiết và truy vết: ../articlex-v1.md"
+servers:
+  - url: "/api"
+    description: "Mọi path bên dưới nằm sau tiền tố /api"
+tags:
+  - name: "My articles"
+    description: "Bài viết của bác sĩ (UC80)"
+  - name: "Article review"
+    description: "Duyệt bài của bác sĩ (UC81 mở rộng)"
+  - name: Comments
+    description: "Bình luận bài viết (UC82, UC81)"
+paths:
+  "/me/articles":
+    post:
+      tags: ["My articles"]
+      summary: "Soạn bài viết (nháp)"
+      description: "UC80 · BR-BV-05. Actor: A07. Quyền: VET, chỉ bài của mình. Chuyển trạng thái: — → DRAFT (Bài viết#1)."
+      operationId: createMyArticle
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          "application/json":
+            schema:
+              $ref: "#/components/schemas/CreateMyArticleRequest"
+      responses:
+        "201":
+          description: "Đã tạo"
+          content:
+            "application/json":
+              schema:
+                type: object
+                required: [data, message, code]
+                properties:
+                  data:
+                    $ref: "#/components/schemas/MyArticle"
+                  message:
+                    type: string
+                  code:
+                    type: integer
+                    description: "HTTP status của kết quả, ví dụ 200, 201"
+        "400":
+          description: "`BR-BV-01` tiêu đề rỗng / quá dài · chuyên mục không tồn tại"
+          content:
+            "application/json":
+              schema:
+                $ref: "#/components/schemas/Error"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+    get:
+      tags: ["My articles"]
+      summary: "Bài viết của tôi"
+      description: "UC80 · BR-BV-05. Actor: A07. Quyền: VET, chỉ bài của mình. Chuyển trạng thái: —. Mới sửa trước (`updatedAt` giảm dần)."
+      operationId: listMyArticles
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: status
+          in: query
+          required: false
+          schema:
+            type: string
+            enum: [DRAFT, PENDING_REVIEW, REJECTED, PUBLISHED, HIDDEN]
+        - $ref: "#/components/parameters/Page"
+        - $ref: "#/components/parameters/Size"
+      responses:
+        "200":
+          description: OK
+          content:
+            "application/json":
+              schema:
+                type: object
+                required: [data, message, code]
+                properties:
+                  data:
+                    allOf:
+                      - $ref: "#/components/schemas/PageMeta"
+                      - type: object
+                        required: [content]
+                        properties:
+                          content:
+                            type: array
+                            items:
+                              $ref: "#/components/schemas/MyArticleSummary"
+                  message:
+                    type: string
+                  code:
+                    type: integer
+                    description: "HTTP status của kết quả, ví dụ 200, 201"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+  "/me/articles/{articleId}":
+    get:
+      tags: ["My articles"]
+      summary: "Chi tiết bài viết của tôi"
+      description: "UC80 · BR-BV-05. Actor: A07. Quyền: VET, chỉ bài của mình. Chuyển trạng thái: —."
+      operationId: getMyArticle
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: "#/components/parameters/ArticleId"
+      responses:
+        "200":
+          description: OK
+          content:
+            "application/json":
+              schema:
+                type: object
+                required: [data, message, code]
+                properties:
+                  data:
+                    $ref: "#/components/schemas/MyArticle"
+                  message:
+                    type: string
+                  code:
+                    type: integer
+                    description: "HTTP status của kết quả, ví dụ 200, 201"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+    patch:
+      tags: ["My articles"]
+      summary: "Sửa bài viết của tôi"
+      description: "UC80 · BR-BV-05, 06, 07. Actor: A07. Quyền: VET, chỉ bài của mình. Chuyển trạng thái: `REJECTED` → DRAFT khi sửa (Bài viết#6). Chỉ sửa được khi `DRAFT` hoặc `REJECTED`."
+      operationId: updateMyArticle
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: "#/components/parameters/ArticleId"
+      requestBody:
+        required: true
+        content:
+          "application/json":
+            schema:
+              $ref: "#/components/schemas/UpdateMyArticleRequest"
+      responses:
+        "200":
+          description: OK
+          content:
+            "application/json":
+              schema:
+                type: object
+                required: [data, message, code]
+                properties:
+                  data:
+                    $ref: "#/components/schemas/MyArticle"
+                  message:
+                    type: string
+                  code:
+                    type: integer
+                    description: "HTTP status của kết quả, ví dụ 200, 201"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "409":
+          description: "`BR-BV-07` bài đang `PENDING_REVIEW` (rút về nháp trước) hoặc đã `PUBLISHED` / `HIDDEN`"
+          content:
+            "application/json":
+              schema:
+                $ref: "#/components/schemas/Error"
+  "/me/articles/{articleId}/submit":
+    post:
+      tags: ["My articles"]
+      summary: "Gửi duyệt"
+      description: "UC80 · BR-BV-06. Actor: A07. Quyền: VET, chỉ bài của mình. Chuyển trạng thái: DRAFT → PENDING_REVIEW (Bài viết#2)."
+      operationId: submitMyArticle
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: "#/components/parameters/ArticleId"
+      responses:
+        "200":
+          description: OK
+          content:
+            "application/json":
+              schema:
+                type: object
+                required: [data, message, code]
+                properties:
+                  data:
+                    $ref: "#/components/schemas/MyArticle"
+                  message:
+                    type: string
+                  code:
+                    type: integer
+                    description: "HTTP status của kết quả, ví dụ 200, 201"
+        "400":
+          description: "`BR-BV-01` thiếu trường bắt buộc"
+          content:
+            "application/json":
+              schema:
+                $ref: "#/components/schemas/Error"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "409":
+          description: "`INVALID_STATE_TRANSITION` trạng thái bài không cho phép (03 #21)"
+          content:
+            "application/json":
+              schema:
+                $ref: "#/components/schemas/Error"
+  "/me/articles/{articleId}/withdraw":
+    post:
+      tags: ["My articles"]
+      summary: "Rút bài đang chờ duyệt"
+      description: "UC80 · BR-BV-06. Actor: A07. Quyền: VET, chỉ bài của mình. Chuyển trạng thái: PENDING_REVIEW → DRAFT (Bài viết#3)."
+      operationId: withdrawMyArticle
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: "#/components/parameters/ArticleId"
+      responses:
+        "200":
+          description: OK
+          content:
+            "application/json":
+              schema:
+                type: object
+                required: [data, message, code]
+                properties:
+                  data:
+                    $ref: "#/components/schemas/MyArticle"
+                  message:
+                    type: string
+                  code:
+                    type: integer
+                    description: "HTTP status của kết quả, ví dụ 200, 201"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "409":
+          description: "`INVALID_STATE_TRANSITION` trạng thái bài không cho phép (03 #21)"
+          content:
+            "application/json":
+              schema:
+                $ref: "#/components/schemas/Error"
+  "/articles/{articleId}/approve":
+    post:
+      tags: ["Article review"]
+      summary: "Duyệt bài của bác sĩ"
+      description: "UC81 · BR-BV-06, BR-BV-02. Actor: A04. Quyền: Chỉ SUPER_MANAGER. Chuyển trạng thái: PENDING_REVIEW → PUBLISHED (Bài viết#4). Ghi `published_at` ở lần xuất bản đầu (BR-BV-02); thông báo VET; ghi audit."
+      operationId: approveArticle
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: "#/components/parameters/ArticleId"
+      responses:
+        "200":
+          description: OK
+          content:
+            "application/json":
+              schema:
+                type: object
+                required: [data, message, code]
+                properties:
+                  data:
+                    $ref: "#/components/schemas/MyArticle"
+                  message:
+                    type: string
+                  code:
+                    type: integer
+                    description: "HTTP status của kết quả, ví dụ 200, 201"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "409":
+          description: "`INVALID_STATE_TRANSITION` trạng thái bài không cho phép (03 #21)"
+          content:
+            "application/json":
+              schema:
+                $ref: "#/components/schemas/Error"
+  "/articles/{articleId}/reject":
+    post:
+      tags: ["Article review"]
+      summary: "Từ chối bài của bác sĩ"
+      description: "UC81 · BR-BV-06. Actor: A04. Quyền: Chỉ SUPER_MANAGER. Chuyển trạng thái: PENDING_REVIEW → REJECTED (Bài viết#5)."
+      operationId: rejectArticle
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: "#/components/parameters/ArticleId"
+      requestBody:
+        required: true
+        content:
+          "application/json":
+            schema:
+              $ref: "#/components/schemas/ReviewNoteRequest"
+      responses:
+        "200":
+          description: OK
+          content:
+            "application/json":
+              schema:
+                type: object
+                required: [data, message, code]
+                properties:
+                  data:
+                    $ref: "#/components/schemas/MyArticle"
+                  message:
+                    type: string
+                  code:
+                    type: integer
+                    description: "HTTP status của kết quả, ví dụ 200, 201"
+        "400":
+          description: "`BR-BV-06` thiếu lý do"
+          content:
+            "application/json":
+              schema:
+                $ref: "#/components/schemas/Error"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "409":
+          description: "`INVALID_STATE_TRANSITION` trạng thái bài không cho phép (03 #21)"
+          content:
+            "application/json":
+              schema:
+                $ref: "#/components/schemas/Error"
+  "/public/articles/{slug}/comments":
+    get:
+      tags: [Comments]
+      summary: "Bình luận của một bài viết"
+      description: "UC82 · BR-BV-03, 08. Actor: A01, A02. Quyền: Công khai. Chuyển trạng thái: —. Chỉ bình luận `ACTIVE`, cũ nhất trước."
+      operationId: listPublicComments
+      security: []
+      parameters:
+        - $ref: "#/components/parameters/Slug"
+        - $ref: "#/components/parameters/Page"
+        - $ref: "#/components/parameters/Size"
+      responses:
+        "200":
+          description: OK
+          content:
+            "application/json":
+              schema:
+                type: object
+                required: [data, message, code]
+                properties:
+                  data:
+                    allOf:
+                      - $ref: "#/components/schemas/PageMeta"
+                      - type: object
+                        required: [content]
+                        properties:
+                          content:
+                            type: array
+                            items:
+                              $ref: "#/components/schemas/PublicComment"
+                  message:
+                    type: string
+                  code:
+                    type: integer
+                    description: "HTTP status của kết quả, ví dụ 200, 201"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "404":
+          description: "Bài không tồn tại hoặc chưa `PUBLISHED`"
+          content:
+            "application/json":
+              schema:
+                $ref: "#/components/schemas/Error"
+  "/me/articles/{articleId}/comments":
+    post:
+      tags: [Comments]
+      summary: "Đăng bình luận"
+      description: "UC82 · BR-BV-08. Actor: A02. Quyền: CUSTOMER. Chuyển trạng thái: —."
+      operationId: createComment
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: "#/components/parameters/ArticleId"
+      requestBody:
+        required: true
+        content:
+          "application/json":
+            schema:
+              $ref: "#/components/schemas/CreateCommentRequest"
+      responses:
+        "201":
+          description: "Đã tạo"
+          content:
+            "application/json":
+              schema:
+                type: object
+                required: [data, message, code]
+                properties:
+                  data:
+                    $ref: "#/components/schemas/Comment"
+                  message:
+                    type: string
+                  code:
+                    type: integer
+                    description: "HTTP status của kết quả, ví dụ 200, 201"
+        "400":
+          description: "`BR-BV-08` nội dung rỗng / quá 1 000 ký tự"
+          content:
+            "application/json":
+              schema:
+                $ref: "#/components/schemas/Error"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          description: "Bài không tồn tại hoặc chưa `PUBLISHED`"
+          content:
+            "application/json":
+              schema:
+                $ref: "#/components/schemas/Error"
+        "429":
+          description: "`TOO_MANY_REQUESTS` quá 10 bình luận / giờ [CFG] (BR-BV-08)"
+          content:
+            "application/json":
+              schema:
+                $ref: "#/components/schemas/Error"
+  "/me/comments/{commentId}":
+    patch:
+      tags: [Comments]
+      summary: "Sửa bình luận của tôi"
+      description: "UC82 · BR-BV-08. Actor: A02. Quyền: CUSTOMER, chỉ bình luận của mình. Chuyển trạng thái: —."
+      operationId: updateMyComment
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: "#/components/parameters/CommentId"
+      requestBody:
+        required: true
+        content:
+          "application/json":
+            schema:
+              $ref: "#/components/schemas/UpdateCommentRequest"
+      responses:
+        "200":
+          description: OK
+          content:
+            "application/json":
+              schema:
+                type: object
+                required: [data, message, code]
+                properties:
+                  data:
+                    $ref: "#/components/schemas/Comment"
+                  message:
+                    type: string
+                  code:
+                    type: integer
+                    description: "HTTP status của kết quả, ví dụ 200, 201"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "409":
+          description: "Bình luận đã bị ẩn hoặc đã xóa"
+          content:
+            "application/json":
+              schema:
+                $ref: "#/components/schemas/Error"
+    delete:
+      tags: [Comments]
+      summary: "Xóa bình luận của tôi"
+      description: "UC82 · BR-BV-08. Actor: A02. Quyền: CUSTOMER, chỉ bình luận của mình. Chuyển trạng thái: —. Xóa mềm (`DELETED`)."
+      operationId: deleteMyComment
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: "#/components/parameters/CommentId"
+      responses:
+        "204":
+          description: "Không có nội dung"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+  "/comments/{commentId}/hide":
+    post:
+      tags: [Comments]
+      summary: "Ẩn bình luận"
+      description: "UC81 · BR-BV-08. Actor: A04. Quyền: Chỉ SUPER_MANAGER. Chuyển trạng thái: ACTIVE → HIDDEN."
+      operationId: hideComment
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: "#/components/parameters/CommentId"
+      requestBody:
+        required: true
+        content:
+          "application/json":
+            schema:
+              $ref: "#/components/schemas/HideCommentRequest"
+      responses:
+        "200":
+          description: OK
+          content:
+            "application/json":
+              schema:
+                type: object
+                required: [data, message, code]
+                properties:
+                  data:
+                    $ref: "#/components/schemas/Comment"
+                  message:
+                    type: string
+                  code:
+                    type: integer
+                    description: "HTTP status của kết quả, ví dụ 200, 201"
+        "400":
+          description: "`BR-BV-08` thiếu lý do"
+          content:
+            "application/json":
+              schema:
+                $ref: "#/components/schemas/Error"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "409":
+          description: "Bình luận không `ACTIVE`"
+          content:
+            "application/json":
+              schema:
+                $ref: "#/components/schemas/Error"
+  "/comments/{commentId}/unhide":
+    post:
+      tags: [Comments]
+      summary: "Bỏ ẩn bình luận"
+      description: "UC81 · BR-BV-08. Actor: A04. Quyền: Chỉ SUPER_MANAGER. Chuyển trạng thái: HIDDEN → ACTIVE."
+      operationId: unhideComment
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: "#/components/parameters/CommentId"
+      responses:
+        "200":
+          description: OK
+          content:
+            "application/json":
+              schema:
+                type: object
+                required: [data, message, code]
+                properties:
+                  data:
+                    $ref: "#/components/schemas/Comment"
+                  message:
+                    type: string
+                  code:
+                    type: integer
+                    description: "HTTP status của kết quả, ví dụ 200, 201"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "409":
+          description: "Bình luận không `HIDDEN`"
+          content:
+            "application/json":
+              schema:
+                $ref: "#/components/schemas/Error"
+components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      description: "Access token trả về từ POST /auth/login, gắn với một phiên (sessions). Phiên bị hủy thì token hết hiệu lực ngay (BR-TK-11, 13, 14)."
+  parameters:
+    Page:
+      name: page
+      in: query
+      required: false
+      schema:
+        type: integer
+        minimum: 0
+        default: 0
+      description: "Số trang, bắt đầu từ 0"
+    Size:
+      name: size
+      in: query
+      required: false
+      schema:
+        type: integer
+        minimum: 1
+        maximum: 100
+        default: 20
+    ArticleId:
+      name: articleId
+      in: path
+      required: true
+      schema:
+        type: integer
+        format: int64
+    Slug:
+      name: slug
+      in: path
+      required: true
+      schema:
+        type: string
+    CommentId:
+      name: commentId
+      in: path
+      required: true
+      schema:
+        type: integer
+        format: int64
+  schemas:
+    Error:
+      type: object
+      description: "Envelope lỗi duy nhất, do GlobalExceptionHandler (platform/exception) sinh. Vi phạm business rule: errorCode = BUSINESS_RULE_VIOLATION, message kết thúc bằng mã rule, ví dụ \"… (BR-LH-05)\"."
+      required: [success, errorCode, message, statusCode, timestamp, traceId]
+      properties:
+        success:
+          type: boolean
+          enum: [false]
+        errorCode:
+          type: string
+          enum: [BUSINESS_RULE_VIOLATION, INVALID_STATE_TRANSITION, RESOURCE_NOT_FOUND, ACCESS_DENIED_SCOPE_MISMATCH, CONCURRENCY_CONFLICT, VALIDATION_FAILED, MALFORMED_REQUEST, METHOD_NOT_ALLOWED, UNSUPPORTED_MEDIA_TYPE, UNAUTHENTICATED, ACCESS_DENIED, TOO_MANY_REQUESTS, INTERNAL_ERROR]
+          description: platform/exception/ErrorCode
+        message:
+          type: string
+          description: "Thông điệp tiếng Việt hiển thị được; với BUSINESS_RULE_VIOLATION kết thúc bằng \" (BR-…)\""
+        statusCode:
+          type: integer
+        timestamp:
+          type: string
+          format: date-time
+        traceId:
+          type: string
+    PageMeta:
+      type: object
+      required: [page, size, totalElements, totalPages]
+      properties:
+        page:
+          type: integer
+        size:
+          type: integer
+        totalElements:
+          type: integer
+          format: int64
+        totalPages:
+          type: integer
+    ArticleReviewStatus:
+      type: string
+      enum: [DRAFT, PENDING_REVIEW, REJECTED, PUBLISHED, HIDDEN]
+      description: "BR-BV-02 và 03 #21"
+    CreateMyArticleRequest:
+      type: object
+      required: [title, content]
+      properties:
+        title:
+          type: string
+          maxLength: 200
+        categoryId:
+          type: [integer, "null"]
+          format: int64
+        summary:
+          type: [string, "null"]
+          maxLength: 500
+        content:
+          type: string
+        coverImageUrl:
+          type: [string, "null"]
+          pattern: "^https://\\S+$"
+          maxLength: 500
+    UpdateMyArticleRequest:
+      type: object
+      properties:
+        title:
+          type: [string, "null"]
+          maxLength: 200
+        categoryId:
+          type: [integer, "null"]
+          format: int64
+        summary:
+          type: [string, "null"]
+          maxLength: 500
+        content:
+          type: [string, "null"]
+        coverImageUrl:
+          type: [string, "null"]
+          pattern: "^https://\\S+$"
+          maxLength: 500
+    MyArticleSummary:
+      type: object
+      required: [articleId, title, status, updatedAt]
+      properties:
+        articleId:
+          type: integer
+          format: int64
+        title:
+          type: string
+        status:
+          $ref: "#/components/schemas/ArticleReviewStatus"
+        submittedAt:
+          type: [string, "null"]
+          format: date-time
+        publishedAt:
+          type: [string, "null"]
+          format: date-time
+        updatedAt:
+          type: string
+          format: date-time
+    MyArticle:
+      type: object
+      required: [articleId, title, content, status, updatedAt]
+      properties:
+        articleId:
+          type: integer
+          format: int64
+        title:
+          type: string
+        slug:
+          type: [string, "null"]
+        categoryId:
+          type: [integer, "null"]
+          format: int64
+        summary:
+          type: [string, "null"]
+        content:
+          type: string
+        coverImageUrl:
+          type: [string, "null"]
+          pattern: "^https://\\S+$"
+          maxLength: 500
+        status:
+          $ref: "#/components/schemas/ArticleReviewStatus"
+        reviewNote:
+          type: [string, "null"]
+          description: "Lý do từ chối (BR-BV-06)"
+        submittedAt:
+          type: [string, "null"]
+          format: date-time
+        publishedAt:
+          type: [string, "null"]
+          format: date-time
+        updatedAt:
+          type: string
+          format: date-time
+    ReviewNoteRequest:
+      type: object
+      required: [reviewNote]
+      properties:
+        reviewNote:
+          type: string
+          maxLength: 300
+          description: "Lý do từ chối, bắt buộc (BR-BV-06)"
+    CommentStatus:
+      type: string
+      enum: [ACTIVE, HIDDEN, DELETED]
+    CreateCommentRequest:
+      type: object
+      required: [content]
+      properties:
+        content:
+          type: string
+          maxLength: 1000
+          description: "1–1 000 ký tự (BR-BV-08)"
+    UpdateCommentRequest:
+      type: object
+      required: [content]
+      properties:
+        content:
+          type: string
+          maxLength: 1000
+    HideCommentRequest:
+      type: object
+      required: [reason]
+      properties:
+        reason:
+          type: string
+          maxLength: 300
+    PublicComment:
+      type: object
+      required: [commentId, authorName, content, createdAt]
+      properties:
+        commentId:
+          type: integer
+          format: int64
+        authorName:
+          type: string
+          description: "Tên rút gọn (BR-BV-08)"
+        content:
+          type: string
+        createdAt:
+          type: string
+          format: date-time
+        editedAt:
+          type: [string, "null"]
+          format: date-time
+    Comment:
+      type: object
+      required: [commentId, articleId, content, status, createdAt]
+      properties:
+        commentId:
+          type: integer
+          format: int64
+        articleId:
+          type: integer
+          format: int64
+        content:
+          type: string
+        status:
+          $ref: "#/components/schemas/CommentStatus"
+        createdAt:
+          type: string
+          format: date-time
+        editedAt:
+          type: [string, "null"]
+          format: date-time
+        hideReason:
+          type: [string, "null"]
+  responses:
+    BadRequest:
+      description: "VALIDATION_FAILED / MALFORMED_REQUEST: dữ liệu không hợp lệ · BUSINESS_RULE_VIOLATION: vi phạm rule, message kết thúc bằng mã rule \"(BR-…)\"."
+      content:
+        "application/json":
+          schema:
+            $ref: "#/components/schemas/Error"
+    Unauthorized:
+      description: "UNAUTHENTICATED: chưa đăng nhập hoặc phiên đã hết hạn / bị hủy."
+      content:
+        "application/json":
+          schema:
+            $ref: "#/components/schemas/Error"
+    Forbidden:
+      description: "ACCESS_DENIED: sai vai trò · ACCESS_DENIED_SCOPE_MISMATCH: ngoài phạm vi (chi nhánh, chủ sở hữu). Message chung, không lộ cấu trúc phân quyền."
+      content:
+        "application/json":
+          schema:
+            $ref: "#/components/schemas/Error"
+    NotFound:
+      description: "Không tìm thấy (RESOURCE_NOT_FOUND)."
+      content:
+        "application/json":
+          schema:
+            $ref: "#/components/schemas/Error"

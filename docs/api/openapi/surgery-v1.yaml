@@ -1,0 +1,590 @@
+# Pet Care Surgery API v1 (tầng 3) — OpenAPI 3.1, sinh từ khai báo; không sửa tay, sửa khai báo rồi sinh lại.
+# Module KB (phẫu thuật) · owner BE-1
+# Nguồn: 01 UC50; 09-tang3-be1-spec.md §B (BR-KB-08…11; 03 #23 Phẫu thuật); 05 bổ sung surgeries
+# Truy vết: CONFIRMED = có trong docs · ASSUMPTION (A#) · TBD (Q#) — xem file .md cùng tên.
+
+openapi: "3.1.0"
+info:
+  title: "Pet Care Surgery API v1 (tầng 3)"
+  version: "1.0.0"
+  description: "Module KB (phẫu thuật) · owner BE-1. Nguồn: 01 UC50; 09-tang3-be1-spec.md §B (BR-KB-08…11; 03 #23 Phẫu thuật); 05 bổ sung surgeries. Chi tiết và truy vết: ../surgery-v1.md"
+servers:
+  - url: "/api"
+    description: "Mọi path bên dưới nằm sau tiền tố /api"
+tags:
+  - name: Surgeries
+    description: "Phẫu thuật gắn lượt khám (UC50)"
+paths:
+  "/visits/{visitId}/surgeries":
+    post:
+      tags: [Surgeries]
+      summary: "Lập kế hoạch phẫu thuật từ lượt khám"
+      description: "UC50 · BR-KB-08. Actor: A07. Quyền: VET phụ trách Visit. Chuyển trạng thái: — → PLANNED (Phẫu thuật#1). Thông báo lễ tân chi nhánh để lập cam kết."
+      operationId: planSurgery
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: "#/components/parameters/VisitId"
+      requestBody:
+        required: true
+        content:
+          "application/json":
+            schema:
+              $ref: "#/components/schemas/PlanSurgeryRequest"
+      responses:
+        "201":
+          description: "Đã tạo"
+          content:
+            "application/json":
+              schema:
+                type: object
+                required: [data, message, code]
+                properties:
+                  data:
+                    $ref: "#/components/schemas/Surgery"
+                  message:
+                    type: string
+                  code:
+                    type: integer
+                    description: "HTTP status của kết quả, ví dụ 200, 201"
+        "400":
+          description: "`BR-KB-08` Visit không `IN_PROGRESS` · dịch vụ không phải `SURGERY` hoặc không bật ở chi nhánh"
+          content:
+            "application/json":
+              schema:
+                $ref: "#/components/schemas/Error"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+    get:
+      tags: [Surgeries]
+      summary: "Phẫu thuật của một lượt khám"
+      description: "UC50 · BR-KB-08. Actor: A06, A07, A08. Quyền: A07 / A06 của chi nhánh; A08 chỉ xem. Chuyển trạng thái: —. Không phân trang (ít dòng). Cũ nhất trước."
+      operationId: listVisitSurgeries
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: "#/components/parameters/VisitId"
+      responses:
+        "200":
+          description: OK
+          content:
+            "application/json":
+              schema:
+                type: object
+                required: [data, message, code]
+                properties:
+                  data:
+                    type: array
+                    items:
+                      $ref: "#/components/schemas/Surgery"
+                  message:
+                    type: string
+                  code:
+                    type: integer
+                    description: "HTTP status của kết quả, ví dụ 200, 201"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+  "/surgeries":
+    get:
+      tags: [Surgeries]
+      summary: "Phẫu thuật của chi nhánh"
+      description: "UC50 · BR-KB-09. Actor: A06, A07. Quyền: A06, A07 của chi nhánh. Chuyển trạng thái: —. `status` vắng = `PLANNED` + `CONSENTED` + `IN_PROGRESS` (việc cần làm). Cũ nhất trước."
+      operationId: listSurgeries
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: status
+          in: query
+          required: false
+          schema:
+            type: string
+            enum: [PLANNED, CONSENTED, IN_PROGRESS, COMPLETED, CANCELLED]
+        - $ref: "#/components/parameters/Page"
+        - $ref: "#/components/parameters/Size"
+      responses:
+        "200":
+          description: OK
+          content:
+            "application/json":
+              schema:
+                type: object
+                required: [data, message, code]
+                properties:
+                  data:
+                    allOf:
+                      - $ref: "#/components/schemas/PageMeta"
+                      - type: object
+                        required: [content]
+                        properties:
+                          content:
+                            type: array
+                            items:
+                              $ref: "#/components/schemas/SurgerySummary"
+                  message:
+                    type: string
+                  code:
+                    type: integer
+                    description: "HTTP status của kết quả, ví dụ 200, 201"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+  "/surgeries/{surgeryId}":
+    get:
+      tags: [Surgeries]
+      summary: "Chi tiết phẫu thuật"
+      description: "UC50 · BR-KB-08. Actor: A06, A07, A08. Quyền: A06, A07 của chi nhánh; A08 chỉ xem. Chuyển trạng thái: —."
+      operationId: getSurgery
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: "#/components/parameters/SurgeryId"
+      responses:
+        "200":
+          description: OK
+          content:
+            "application/json":
+              schema:
+                type: object
+                required: [data, message, code]
+                properties:
+                  data:
+                    $ref: "#/components/schemas/Surgery"
+                  message:
+                    type: string
+                  code:
+                    type: integer
+                    description: "HTTP status của kết quả, ví dụ 200, 201"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+  "/surgeries/{surgeryId}/consent":
+    post:
+      tags: [Surgeries]
+      summary: "Lập cam kết phẫu thuật"
+      description: "UC50 · BR-KB-09. Actor: A06. Quyền: Lễ tân chi nhánh của Visit. Chuyển trạng thái: PLANNED → CONSENTED (Phẫu thuật#2). Bản chụp, không sửa sau khi lập."
+      operationId: consentSurgery
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: "#/components/parameters/SurgeryId"
+      requestBody:
+        required: true
+        content:
+          "application/json":
+            schema:
+              $ref: "#/components/schemas/ConsentSurgeryRequest"
+      responses:
+        "200":
+          description: OK
+          content:
+            "application/json":
+              schema:
+                type: object
+                required: [data, message, code]
+                properties:
+                  data:
+                    $ref: "#/components/schemas/Surgery"
+                  message:
+                    type: string
+                  code:
+                    type: integer
+                    description: "HTTP status của kết quả, ví dụ 200, 201"
+        "400":
+          description: "`BR-KB-09` thiếu nội dung hoặc người ký"
+          content:
+            "application/json":
+              schema:
+                $ref: "#/components/schemas/Error"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "409":
+          description: "`INVALID_STATE_TRANSITION` trạng thái phẫu thuật không cho phép (03 #23)"
+          content:
+            "application/json":
+              schema:
+                $ref: "#/components/schemas/Error"
+  "/surgeries/{surgeryId}/start":
+    post:
+      tags: [Surgeries]
+      summary: "Bắt đầu phẫu thuật"
+      description: "UC50 · BR-KB-09, 10. Actor: A07. Quyền: VET phụ trách Visit. Chuyển trạng thái: CONSENTED → IN_PROGRESS (Phẫu thuật#3)."
+      operationId: startSurgery
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: "#/components/parameters/SurgeryId"
+      responses:
+        "200":
+          description: OK
+          content:
+            "application/json":
+              schema:
+                type: object
+                required: [data, message, code]
+                properties:
+                  data:
+                    $ref: "#/components/schemas/Surgery"
+                  message:
+                    type: string
+                  code:
+                    type: integer
+                    description: "HTTP status của kết quả, ví dụ 200, 201"
+        "400":
+          description: "`BR-KB-09` chưa có cam kết · Visit không còn `IN_PROGRESS`"
+          content:
+            "application/json":
+              schema:
+                $ref: "#/components/schemas/Error"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "409":
+          description: "`INVALID_STATE_TRANSITION` trạng thái phẫu thuật không cho phép (03 #23)"
+          content:
+            "application/json":
+              schema:
+                $ref: "#/components/schemas/Error"
+  "/surgeries/{surgeryId}/complete":
+    post:
+      tags: [Surgeries]
+      summary: "Hoàn tất phẫu thuật"
+      description: "UC50 · BR-KB-10. Actor: A07. Quyền: VET phụ trách Visit. Chuyển trạng thái: IN_PROGRESS → COMPLETED (Phẫu thuật#4). Thêm dịch vụ phẫu thuật vào Order của Visit với giá chốt lúc này (BR-BH-03)."
+      operationId: completeSurgery
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: "#/components/parameters/SurgeryId"
+      requestBody:
+        required: true
+        content:
+          "application/json":
+            schema:
+              $ref: "#/components/schemas/CompleteSurgeryRequest"
+      responses:
+        "200":
+          description: OK
+          content:
+            "application/json":
+              schema:
+                type: object
+                required: [data, message, code]
+                properties:
+                  data:
+                    $ref: "#/components/schemas/Surgery"
+                  message:
+                    type: string
+                  code:
+                    type: integer
+                    description: "HTTP status của kết quả, ví dụ 200, 201"
+        "400":
+          description: "`BR-KB-10` thiếu ghi chú kết quả"
+          content:
+            "application/json":
+              schema:
+                $ref: "#/components/schemas/Error"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "409":
+          description: "`INVALID_STATE_TRANSITION` trạng thái phẫu thuật không cho phép (03 #23)"
+          content:
+            "application/json":
+              schema:
+                $ref: "#/components/schemas/Error"
+  "/surgeries/{surgeryId}/cancel":
+    post:
+      tags: [Surgeries]
+      summary: "Hủy hoặc dừng phẫu thuật"
+      description: "UC50 · BR-KB-11. Actor: A07, A06. Quyền: A07 phụ trách; A06 chỉ khi `PLANNED` / `CONSENTED`. Chuyển trạng thái: PLANNED / CONSENTED / IN_PROGRESS → CANCELLED (Phẫu thuật#5)."
+      operationId: cancelSurgery
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: "#/components/parameters/SurgeryId"
+      requestBody:
+        required: true
+        content:
+          "application/json":
+            schema:
+              $ref: "#/components/schemas/CancelSurgeryRequest"
+      responses:
+        "200":
+          description: OK
+          content:
+            "application/json":
+              schema:
+                type: object
+                required: [data, message, code]
+                properties:
+                  data:
+                    $ref: "#/components/schemas/Surgery"
+                  message:
+                    type: string
+                  code:
+                    type: integer
+                    description: "HTTP status của kết quả, ví dụ 200, 201"
+        "400":
+          description: "`BR-KB-11` thiếu lý do"
+          content:
+            "application/json":
+              schema:
+                $ref: "#/components/schemas/Error"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          description: "Lễ tân không hủy được phẫu thuật `IN_PROGRESS`"
+          content:
+            "application/json":
+              schema:
+                $ref: "#/components/schemas/Error"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "409":
+          description: "`INVALID_STATE_TRANSITION` trạng thái phẫu thuật không cho phép (03 #23)"
+          content:
+            "application/json":
+              schema:
+                $ref: "#/components/schemas/Error"
+components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      description: "Access token trả về từ POST /auth/login, gắn với một phiên (sessions). Phiên bị hủy thì token hết hiệu lực ngay (BR-TK-11, 13, 14)."
+  parameters:
+    Page:
+      name: page
+      in: query
+      required: false
+      schema:
+        type: integer
+        minimum: 0
+        default: 0
+      description: "Số trang, bắt đầu từ 0"
+    Size:
+      name: size
+      in: query
+      required: false
+      schema:
+        type: integer
+        minimum: 1
+        maximum: 100
+        default: 20
+    VisitId:
+      name: visitId
+      in: path
+      required: true
+      schema:
+        type: integer
+        format: int64
+    SurgeryId:
+      name: surgeryId
+      in: path
+      required: true
+      schema:
+        type: integer
+        format: int64
+  schemas:
+    Error:
+      type: object
+      description: "Envelope lỗi duy nhất, do GlobalExceptionHandler (platform/exception) sinh. Vi phạm business rule: errorCode = BUSINESS_RULE_VIOLATION, message kết thúc bằng mã rule, ví dụ \"… (BR-LH-05)\"."
+      required: [success, errorCode, message, statusCode, timestamp, traceId]
+      properties:
+        success:
+          type: boolean
+          enum: [false]
+        errorCode:
+          type: string
+          enum: [BUSINESS_RULE_VIOLATION, INVALID_STATE_TRANSITION, RESOURCE_NOT_FOUND, ACCESS_DENIED_SCOPE_MISMATCH, CONCURRENCY_CONFLICT, VALIDATION_FAILED, MALFORMED_REQUEST, METHOD_NOT_ALLOWED, UNSUPPORTED_MEDIA_TYPE, UNAUTHENTICATED, ACCESS_DENIED, TOO_MANY_REQUESTS, INTERNAL_ERROR]
+          description: platform/exception/ErrorCode
+        message:
+          type: string
+          description: "Thông điệp tiếng Việt hiển thị được; với BUSINESS_RULE_VIOLATION kết thúc bằng \" (BR-…)\""
+        statusCode:
+          type: integer
+        timestamp:
+          type: string
+          format: date-time
+        traceId:
+          type: string
+    PageMeta:
+      type: object
+      required: [page, size, totalElements, totalPages]
+      properties:
+        page:
+          type: integer
+        size:
+          type: integer
+        totalElements:
+          type: integer
+          format: int64
+        totalPages:
+          type: integer
+    SurgeryStatus:
+      type: string
+      enum: [PLANNED, CONSENTED, IN_PROGRESS, COMPLETED, CANCELLED]
+      description: "03 #23"
+    PlanSurgeryRequest:
+      type: object
+      required: [serviceId]
+      properties:
+        serviceId:
+          type: integer
+          format: int64
+          description: "Dịch vụ loại `SURGERY` (BR-KB-08)"
+        planNote:
+          type: [string, "null"]
+          maxLength: 500
+    ConsentSurgeryRequest:
+      type: object
+      required: [consentText, signerName, signerRelation]
+      properties:
+        consentText:
+          type: string
+          description: "Rủi ro, chi phí dự kiến, phương pháp; bản chụp (BR-KB-09)"
+        signerName:
+          type: string
+          maxLength: 100
+        signerRelation:
+          type: string
+          maxLength: 50
+          description: "Chủ thú, người đại diện…"
+    CompleteSurgeryRequest:
+      type: object
+      required: [resultNote]
+      properties:
+        resultNote:
+          type: string
+          description: "Kết quả, biến chứng nếu có (BR-KB-10)"
+    CancelSurgeryRequest:
+      type: object
+      required: [reason]
+      properties:
+        reason:
+          type: string
+          maxLength: 300
+    SurgerySummary:
+      type: object
+      required: [surgeryId, visitId, petName, serviceName, status, createdAt]
+      properties:
+        surgeryId:
+          type: integer
+          format: int64
+        visitId:
+          type: integer
+          format: int64
+        petName:
+          type: string
+        serviceName:
+          type: string
+        status:
+          $ref: "#/components/schemas/SurgeryStatus"
+        createdAt:
+          type: string
+          format: date-time
+    Surgery:
+      type: object
+      required: [surgeryId, visitId, petId, petName, branchId, serviceId, serviceName, status, createdAt]
+      properties:
+        surgeryId:
+          type: integer
+          format: int64
+        visitId:
+          type: integer
+          format: int64
+        petId:
+          type: integer
+          format: int64
+        petName:
+          type: string
+        branchId:
+          type: integer
+          format: int64
+        serviceId:
+          type: integer
+          format: int64
+        serviceName:
+          type: string
+        status:
+          $ref: "#/components/schemas/SurgeryStatus"
+        planNote:
+          type: [string, "null"]
+        consentText:
+          type: [string, "null"]
+        consentSignerName:
+          type: [string, "null"]
+        consentSignerRelation:
+          type: [string, "null"]
+        consentedAt:
+          type: [string, "null"]
+          format: date-time
+        startedAt:
+          type: [string, "null"]
+          format: date-time
+        completedAt:
+          type: [string, "null"]
+          format: date-time
+        resultNote:
+          type: [string, "null"]
+        cancelReason:
+          type: [string, "null"]
+        orderLineId:
+          type: [integer, "null"]
+          format: int64
+          description: "Có sau khi hoàn tất"
+        createdAt:
+          type: string
+          format: date-time
+  responses:
+    BadRequest:
+      description: "VALIDATION_FAILED / MALFORMED_REQUEST: dữ liệu không hợp lệ · BUSINESS_RULE_VIOLATION: vi phạm rule, message kết thúc bằng mã rule \"(BR-…)\"."
+      content:
+        "application/json":
+          schema:
+            $ref: "#/components/schemas/Error"
+    Unauthorized:
+      description: "UNAUTHENTICATED: chưa đăng nhập hoặc phiên đã hết hạn / bị hủy."
+      content:
+        "application/json":
+          schema:
+            $ref: "#/components/schemas/Error"
+    Forbidden:
+      description: "ACCESS_DENIED: sai vai trò · ACCESS_DENIED_SCOPE_MISMATCH: ngoài phạm vi (chi nhánh, chủ sở hữu). Message chung, không lộ cấu trúc phân quyền."
+      content:
+        "application/json":
+          schema:
+            $ref: "#/components/schemas/Error"
+    NotFound:
+      description: "Không tìm thấy (RESOURCE_NOT_FOUND)."
+      content:
+        "application/json":
+          schema:
+            $ref: "#/components/schemas/Error"

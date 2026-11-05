@@ -1,0 +1,1110 @@
+# Pet Care AI API v1 (tầng 3) — OpenAPI 3.1, sinh từ khai báo; không sửa tay, sửa khai báo rồi sinh lại.
+# Module AI · owner FE-1 (dẫn) · cả nhóm
+# Nguồn: 07-ai-subsystem.md (UC90–UC94, ST22–ST23, BR-AI-01…28, FSM #13, §8 bảng ai_documents / ai_chunks / ai_chat_logs / ai_item_profiles); adr/0109
+# Truy vết: CONFIRMED = có trong docs · ASSUMPTION (A#) · TBD (Q#) — xem file .md cùng tên.
+
+openapi: "3.1.0"
+info:
+  title: "Pet Care AI API v1 (tầng 3)"
+  version: "1.0.0"
+  description: "Module AI · owner FE-1 (dẫn) · cả nhóm. Nguồn: 07-ai-subsystem.md (UC90–UC94, ST22–ST23, BR-AI-01…28, FSM #13, §8 bảng ai_documents / ai_chunks / ai_chat_logs / ai_item_profiles); adr/0109. Chi tiết và truy vết: ../ai-v1.md"
+servers:
+  - url: "/api"
+    description: "Mọi path bên dưới nằm sau tiền tố /api"
+tags:
+  - name: Chatbot
+    description: "Hỏi đáp công khai và hỏi đáp của khách đăng nhập (UC90, UC91)"
+  - name: "Pet assistant"
+    description: "Lịch tiêm và gợi ý theo thú của tôi (UC91, UC92)"
+  - name: Knowledge
+    description: "Quản lý tài liệu tri thức (UC93)"
+  - name: "Item profiles"
+    description: "Hồ sơ gợi ý của dịch vụ / sản phẩm (UC94)"
+paths:
+  "/public/ai/chat":
+    post:
+      tags: [Chatbot]
+      summary: "Hỏi đáp chatbot (khách vãng lai)"
+      description: "UC90, UC91 · BR-AI-01…10, 12, 24, 28. Actor: A01. Quyền: Public. Chuyển trạng thái: —. Luôn 200 với mọi kết quả nghiệp vụ; giao diện rẽ theo `result`. Cấp cứu, từ chối bệnh án, `NEED_LOGIN` và dưới ngưỡng truy hồi không gọi LLM; lỗi nhà cung cấp hoặc hết hạn mức trả `UNAVAILABLE` (BR-AI-10). Token gửi kèm bị bỏ qua (ADR-0005) nên không bao giờ trả `PERSONAL` / `NEED_PET_CHOICE`."
+      operationId: askChatbot
+      security: []
+      requestBody:
+        required: true
+        content:
+          "application/json":
+            schema:
+              $ref: "#/components/schemas/ChatRequest"
+      responses:
+        "200":
+          description: OK
+          content:
+            "application/json":
+              schema:
+                type: object
+                required: [data, message, code]
+                properties:
+                  data:
+                    $ref: "#/components/schemas/ChatResponse"
+                  message:
+                    type: string
+                  code:
+                    type: integer
+                    description: "HTTP status của kết quả, ví dụ 200, 201"
+        "400":
+          description: "`VALIDATION_FAILED` / `BR-AI-08` câu hỏi rỗng hoặc quá 500 ký tự · quá 3 câu hỏi trước · một câu hỏi trước quá 500 ký tự"
+          content:
+            "application/json":
+              schema:
+                $ref: "#/components/schemas/Error"
+        "429":
+          description: "`TOO_MANY_REQUESTS` một IP gọi quá nhiều lần (BR-AI-09, cơ chế ADR-0100): header `Retry-After` là số giây nguyên phải chờ; request bị chặn trước khi nhúng hay gọi LLM, không ghi nhật ký"
+          content:
+            "application/json":
+              schema:
+                $ref: "#/components/schemas/Error"
+  "/me/ai/chat":
+    post:
+      tags: [Chatbot]
+      summary: "Hỏi đáp chatbot (khách đăng nhập, có cá nhân hóa)"
+      description: "UC90, UC91 · BR-AI-01…10, 12, 24, 26…28. Actor: A02. Quyền: CUSTOMER. Chuyển trạng thái: —. Cùng luồng với endpoint công khai, thêm bước định tuyến ý định cá nhân trước truy hồi (BR-AI-26): lịch hẹn sắp tới và lịch tiêm trả `PERSONAL` bằng câu mẫu (không qua LLM, không ghi nội dung vào nhật ký); nhiều thú mà câu không nêu tên thì `NEED_PET_CHOICE` kèm `pets`. Khách lấy từ token, không lấy `petId` từ câu hỏi (BR-AI-27)."
+      operationId: askChatbotAsCustomer
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          "application/json":
+            schema:
+              $ref: "#/components/schemas/ChatRequest"
+      responses:
+        "200":
+          description: OK
+          content:
+            "application/json":
+              schema:
+                type: object
+                required: [data, message, code]
+                properties:
+                  data:
+                    $ref: "#/components/schemas/ChatResponse"
+                  message:
+                    type: string
+                  code:
+                    type: integer
+                    description: "HTTP status của kết quả, ví dụ 200, 201"
+        "400":
+          description: "`VALIDATION_FAILED` / `BR-AI-08` câu hỏi rỗng hoặc quá 500 ký tự · quá 3 câu hỏi trước · một câu hỏi trước quá 500 ký tự"
+          content:
+            "application/json":
+              schema:
+                $ref: "#/components/schemas/Error"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "429":
+          description: "`TOO_MANY_REQUESTS` một IP gọi quá nhiều lần (BR-AI-09, cơ chế ADR-0100): header `Retry-After` là số giây nguyên phải chờ; request bị chặn trước khi nhúng hay gọi LLM, không ghi nhật ký"
+          content:
+            "application/json":
+              schema:
+                $ref: "#/components/schemas/Error"
+  "/me/ai/pets/{petId}/vaccination-summary":
+    get:
+      tags: ["Pet assistant"]
+      summary: "Tra lịch tiêm của thú"
+      description: "UC91 · BR-AI-11, 12. Actor: A02. Quyền: CUSTOMER, chỉ thú hiện thuộc về mình. Chuyển trạng thái: —. Tất định, không qua LLM, chỉ mũi tiêm ghi nhận tại hệ thống (04 nguyên tắc 9); mỗi loại vaccine lấy mũi mới nhất chưa bị thay thế. Không ghi nội dung vào nhật ký. Giao diện gọi sau `NEED_PET_CHOICE` hoặc khi đã biết thú."
+      operationId: getPetVaccinationSummary
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: "#/components/parameters/PetId"
+      responses:
+        "200":
+          description: OK
+          content:
+            "application/json":
+              schema:
+                type: object
+                required: [data, message, code]
+                properties:
+                  data:
+                    $ref: "#/components/schemas/VaccinationSummary"
+                  message:
+                    type: string
+                  code:
+                    type: integer
+                    description: "HTTP status của kết quả, ví dụ 200, 201"
+        "400":
+          description: "`BR-KH-05` thú đã mất · `MALFORMED_REQUEST` `petId` sai kiểu"
+          content:
+            "application/json":
+              schema:
+                $ref: "#/components/schemas/Error"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          description: "Không tìm thấy thú — cả khi thú thuộc người khác hoặc chủ cũ (ADR-0006)"
+          content:
+            "application/json":
+              schema:
+                $ref: "#/components/schemas/Error"
+  "/me/ai/pets/{petId}/recommendations":
+    get:
+      tags: ["Pet assistant"]
+      summary: "Gợi ý cá nhân hóa cho thú"
+      description: "UC92 · BR-AI-18…23. Actor: A02. Quyền: CUSTOMER, chỉ thú hiện thuộc về mình. Chuyển trạng thái: —. Không bao giờ có thuốc, vaccine, sản phẩm kê đơn, dịch vụ khám / tiêm (BR-SP-01, BR-AI-18). Mỗi lần tính từ dữ liệu thú hiện tại (BR-AI-23)."
+      operationId: getPetRecommendations
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: "#/components/parameters/PetId"
+        - name: group
+          in: query
+          required: false
+          schema:
+            type: string
+            enum: [GROOMING, BOARDING, PRODUCT]
+          description: "Vắng = cả ba nhóm"
+        - name: limit
+          in: query
+          required: false
+          schema:
+            type: integer
+            format: int32
+          description: "1–12, vắng = 6 mỗi nhóm [CFG]"
+      responses:
+        "200":
+          description: OK
+          content:
+            "application/json":
+              schema:
+                type: object
+                required: [data, message, code]
+                properties:
+                  data:
+                    $ref: "#/components/schemas/RecommendationResponse"
+                  message:
+                    type: string
+                  code:
+                    type: integer
+                    description: "HTTP status của kết quả, ví dụ 200, 201"
+        "400":
+          description: "`BR-KH-05` thú đã mất · `VALIDATION_FAILED` `limit` ngoài 1–12"
+          content:
+            "application/json":
+              schema:
+                $ref: "#/components/schemas/Error"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          description: "Không tìm thấy thú (kể cả thú của người khác)"
+          content:
+            "application/json":
+              schema:
+                $ref: "#/components/schemas/Error"
+  "/ai/documents":
+    get:
+      tags: [Knowledge]
+      summary: "Danh sách tài liệu tri thức"
+      description: "UC93 · BR-AI-17. Actor: A04. Quyền: Chỉ SUPER_MANAGER. Chuyển trạng thái: —. Mới sửa trước (`updatedAt` giảm dần, trùng thì `documentId` giảm dần)."
+      operationId: listAiDocuments
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: status
+          in: query
+          required: false
+          schema:
+            type: string
+            enum: [DRAFT, PUBLISHED, ARCHIVED]
+        - name: topic
+          in: query
+          required: false
+          schema:
+            type: string
+            enum: [CARE, NUTRITION, BEHAVIOR, HYGIENE, VACCINATION, CLINIC_INFO]
+        - name: species
+          in: query
+          required: false
+          schema:
+            type: string
+            enum: [DOG, CAT, OTHER, ALL]
+        - name: q
+          in: query
+          required: false
+          schema:
+            type: string
+          description: "Tìm theo tiêu đề"
+        - $ref: "#/components/parameters/Page"
+        - $ref: "#/components/parameters/Size"
+      responses:
+        "200":
+          description: OK
+          content:
+            "application/json":
+              schema:
+                type: object
+                required: [data, message, code]
+                properties:
+                  data:
+                    allOf:
+                      - $ref: "#/components/schemas/PageMeta"
+                      - type: object
+                        required: [content]
+                        properties:
+                          content:
+                            type: array
+                            items:
+                              $ref: "#/components/schemas/AiDocumentSummary"
+                  message:
+                    type: string
+                  code:
+                    type: integer
+                    description: "HTTP status của kết quả, ví dụ 200, 201"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+    post:
+      tags: [Knowledge]
+      summary: "Tạo tài liệu tri thức (nháp)"
+      description: "UC93 · BR-AI-14, 17. Actor: A04. Quyền: Chỉ SUPER_MANAGER. Chuyển trạng thái: — → DRAFT (Tài liệu#1)."
+      operationId: createAiDocument
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          "application/json":
+            schema:
+              $ref: "#/components/schemas/CreateAiDocumentRequest"
+      responses:
+        "201":
+          description: "Đã tạo"
+          content:
+            "application/json":
+              schema:
+                type: object
+                required: [data, message, code]
+                properties:
+                  data:
+                    $ref: "#/components/schemas/AiDocument"
+                  message:
+                    type: string
+                  code:
+                    type: integer
+                    description: "HTTP status của kết quả, ví dụ 200, 201"
+        "400":
+          description: "`BR-AI-14` tiêu đề rỗng / quá 200 ký tự · nội dung quá 20 000 ký tự"
+          content:
+            "application/json":
+              schema:
+                $ref: "#/components/schemas/Error"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+  "/ai/documents/{documentId}":
+    get:
+      tags: [Knowledge]
+      summary: "Chi tiết tài liệu tri thức"
+      description: "UC93 · BR-AI-17. Actor: A04. Quyền: Chỉ SUPER_MANAGER. Chuyển trạng thái: —."
+      operationId: getAiDocument
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: "#/components/parameters/DocumentId"
+      responses:
+        "200":
+          description: OK
+          content:
+            "application/json":
+              schema:
+                type: object
+                required: [data, message, code]
+                properties:
+                  data:
+                    $ref: "#/components/schemas/AiDocument"
+                  message:
+                    type: string
+                  code:
+                    type: integer
+                    description: "HTTP status của kết quả, ví dụ 200, 201"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+    patch:
+      tags: [Knowledge]
+      summary: "Sửa tài liệu tri thức"
+      description: "UC93 · BR-AI-14, 16, 17. Actor: A04. Quyền: Chỉ SUPER_MANAGER. Chuyển trạng thái: PUBLISHED → PUBLISHED (Tài liệu#3) hoặc sửa nháp. Sửa tài liệu `PUBLISHED` tăng `version`; ST22 dựng đoạn mới rồi hoán đổi trong một transaction, đoạn cũ phục vụ tới lúc đó (BR-AI-16)."
+      operationId: updateAiDocument
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: "#/components/parameters/DocumentId"
+      requestBody:
+        required: true
+        content:
+          "application/json":
+            schema:
+              $ref: "#/components/schemas/UpdateAiDocumentRequest"
+      responses:
+        "200":
+          description: OK
+          content:
+            "application/json":
+              schema:
+                type: object
+                required: [data, message, code]
+                properties:
+                  data:
+                    $ref: "#/components/schemas/AiDocument"
+                  message:
+                    type: string
+                  code:
+                    type: integer
+                    description: "HTTP status của kết quả, ví dụ 200, 201"
+        "400":
+          description: "`BR-AI-14` nội dung quá dài · tài liệu `CATALOG_PROTOCOL` không sửa tay (BR-AI-13)"
+          content:
+            "application/json":
+              schema:
+                $ref: "#/components/schemas/Error"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "409":
+          description: "Tài liệu `ARCHIVED` không sửa được"
+          content:
+            "application/json":
+              schema:
+                $ref: "#/components/schemas/Error"
+  "/ai/documents/{documentId}/publish":
+    post:
+      tags: [Knowledge]
+      summary: "Xuất bản tài liệu"
+      description: "UC93 · BR-AI-14, 16, 17. Actor: A04. Quyền: Chỉ SUPER_MANAGER. Chuyển trạng thái: DRAFT / ARCHIVED → PUBLISHED (Tài liệu#2, #5). `indexStatus` về `PENDING`; ST22 nạp chỉ mục sau commit."
+      operationId: publishAiDocument
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: "#/components/parameters/DocumentId"
+      responses:
+        "200":
+          description: OK
+          content:
+            "application/json":
+              schema:
+                type: object
+                required: [data, message, code]
+                properties:
+                  data:
+                    $ref: "#/components/schemas/AiDocument"
+                  message:
+                    type: string
+                  code:
+                    type: integer
+                    description: "HTTP status của kết quả, ví dụ 200, 201"
+        "400":
+          description: "`BR-AI-14` thiếu `sourceNote` (lớp 1) hoặc `reviewerName` / `reviewedOn` (lớp 2) với tài liệu `MANUAL` · nội dung rỗng"
+          content:
+            "application/json":
+              schema:
+                $ref: "#/components/schemas/Error"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "409":
+          description: "`INVALID_STATE_TRANSITION` trạng thái hiện tại không cho phép (03 #13)"
+          content:
+            "application/json":
+              schema:
+                $ref: "#/components/schemas/Error"
+  "/ai/documents/{documentId}/archive":
+    post:
+      tags: [Knowledge]
+      summary: "Lưu trữ tài liệu"
+      description: "UC93 · BR-AI-16, 17. Actor: A04. Quyền: Chỉ SUPER_MANAGER. Chuyển trạng thái: PUBLISHED / DRAFT → ARCHIVED (Tài liệu#4, #6). Có hiệu lực ngay khi commit: truy hồi lọc `status` trong SQL (BR-AI-16)."
+      operationId: archiveAiDocument
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: "#/components/parameters/DocumentId"
+      responses:
+        "200":
+          description: OK
+          content:
+            "application/json":
+              schema:
+                type: object
+                required: [data, message, code]
+                properties:
+                  data:
+                    $ref: "#/components/schemas/AiDocument"
+                  message:
+                    type: string
+                  code:
+                    type: integer
+                    description: "HTTP status của kết quả, ví dụ 200, 201"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "409":
+          description: "`INVALID_STATE_TRANSITION` trạng thái hiện tại không cho phép (03 #13)"
+          content:
+            "application/json":
+              schema:
+                $ref: "#/components/schemas/Error"
+  "/ai/documents/{documentId}/reindex":
+    post:
+      tags: [Knowledge]
+      summary: "Nạp lại chỉ mục của tài liệu"
+      description: "UC93 · BR-AI-15, 16, 17. Actor: A04. Quyền: Chỉ SUPER_MANAGER. Chuyển trạng thái: —. Dùng để thử lại khi `indexStatus = FAILED`. Trả ngay với `indexStatus = PENDING`; ST22 làm nền."
+      operationId: reindexAiDocument
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: "#/components/parameters/DocumentId"
+      responses:
+        "202":
+          description: "Đã nhận"
+          content:
+            "application/json":
+              schema:
+                type: object
+                required: [data, message, code]
+                properties:
+                  data:
+                    $ref: "#/components/schemas/AiDocument"
+                  message:
+                    type: string
+                  code:
+                    type: integer
+                    description: "HTTP status của kết quả, ví dụ 200, 201"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "409":
+          description: "Tài liệu không `PUBLISHED` nên không có gì để nạp (03 #13)"
+          content:
+            "application/json":
+              schema:
+                $ref: "#/components/schemas/Error"
+  "/ai/item-profiles":
+    get:
+      tags: ["Item profiles"]
+      summary: "Danh sách dịch vụ / sản phẩm kèm hồ sơ gợi ý"
+      description: "UC94 · BR-AI-18, 20. Actor: A04. Quyền: Chỉ SUPER_MANAGER. Chuyển trạng thái: —. Chỉ dịch vụ thẩm mỹ và sản phẩm `GOODS` không kê đơn đang kinh doanh; loại chuồng dùng `kennel_types` nên không có ở đây (BR-AI-20)."
+      operationId: listItemProfiles
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: itemType
+          in: query
+          required: false
+          schema:
+            type: string
+            enum: [SERVICE, PRODUCT]
+        - name: missingOnly
+          in: query
+          required: false
+          schema:
+            type: boolean
+          description: "true = chỉ mục chưa có hồ sơ"
+        - name: q
+          in: query
+          required: false
+          schema:
+            type: string
+          description: "Tìm theo tên"
+        - $ref: "#/components/parameters/Page"
+        - $ref: "#/components/parameters/Size"
+      responses:
+        "200":
+          description: OK
+          content:
+            "application/json":
+              schema:
+                type: object
+                required: [data, message, code]
+                properties:
+                  data:
+                    allOf:
+                      - $ref: "#/components/schemas/PageMeta"
+                      - type: object
+                        required: [content]
+                        properties:
+                          content:
+                            type: array
+                            items:
+                              $ref: "#/components/schemas/ItemProfileRow"
+                  message:
+                    type: string
+                  code:
+                    type: integer
+                    description: "HTTP status của kết quả, ví dụ 200, 201"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+  "/ai/item-profiles/{itemType}/{itemId}":
+    put:
+      tags: ["Item profiles"]
+      summary: "Lưu hồ sơ gợi ý"
+      description: "UC94 · BR-AI-18, 20, 17. Actor: A04. Quyền: Chỉ SUPER_MANAGER. Chuyển trạng thái: —. Ghi đè toàn bộ hồ sơ; gửi mọi trường rỗng để xóa thuộc tính (mục trở về điểm trung tính, BR-AI-20)."
+      operationId: saveItemProfile
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: "#/components/parameters/ItemTypePath"
+        - $ref: "#/components/parameters/ItemId"
+      requestBody:
+        required: true
+        content:
+          "application/json":
+            schema:
+              $ref: "#/components/schemas/ItemProfile"
+      responses:
+        "200":
+          description: OK
+          content:
+            "application/json":
+              schema:
+                type: object
+                required: [data, message, code]
+                properties:
+                  data:
+                    $ref: "#/components/schemas/ItemProfileRow"
+                  message:
+                    type: string
+                  code:
+                    type: integer
+                    description: "HTTP status của kết quả, ví dụ 200, 201"
+        "400":
+          description: "`BR-AI-18` mục là dịch vụ khám / tiêm, thuốc, vaccine hoặc sản phẩm kê đơn · `VALIDATION_FAILED` `min` lớn hơn `max`"
+          content:
+            "application/json":
+              schema:
+                $ref: "#/components/schemas/Error"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          description: "Không tìm thấy dịch vụ / sản phẩm"
+          content:
+            "application/json":
+              schema:
+                $ref: "#/components/schemas/Error"
+components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      description: "Access token trả về từ POST /auth/login, gắn với một phiên (sessions). Phiên bị hủy thì token hết hiệu lực ngay (BR-TK-11, 13, 14)."
+  parameters:
+    Page:
+      name: page
+      in: query
+      required: false
+      schema:
+        type: integer
+        minimum: 0
+        default: 0
+      description: "Số trang, bắt đầu từ 0"
+    Size:
+      name: size
+      in: query
+      required: false
+      schema:
+        type: integer
+        minimum: 1
+        maximum: 100
+        default: 20
+    PetId:
+      name: petId
+      in: path
+      required: true
+      schema:
+        type: integer
+        format: int64
+    DocumentId:
+      name: documentId
+      in: path
+      required: true
+      schema:
+        type: integer
+        format: int64
+    ItemTypePath:
+      name: itemType
+      in: path
+      required: true
+      schema:
+        type: string
+        enum: [SERVICE, PRODUCT]
+    ItemId:
+      name: itemId
+      in: path
+      required: true
+      schema:
+        type: integer
+        format: int64
+  schemas:
+    Error:
+      type: object
+      description: "Envelope lỗi duy nhất, do GlobalExceptionHandler (platform/exception) sinh. Vi phạm business rule: errorCode = BUSINESS_RULE_VIOLATION, message kết thúc bằng mã rule, ví dụ \"… (BR-LH-05)\"."
+      required: [success, errorCode, message, statusCode, timestamp, traceId]
+      properties:
+        success:
+          type: boolean
+          enum: [false]
+        errorCode:
+          type: string
+          enum: [BUSINESS_RULE_VIOLATION, INVALID_STATE_TRANSITION, RESOURCE_NOT_FOUND, ACCESS_DENIED_SCOPE_MISMATCH, CONCURRENCY_CONFLICT, VALIDATION_FAILED, MALFORMED_REQUEST, METHOD_NOT_ALLOWED, UNSUPPORTED_MEDIA_TYPE, UNAUTHENTICATED, ACCESS_DENIED, TOO_MANY_REQUESTS, INTERNAL_ERROR]
+          description: platform/exception/ErrorCode
+        message:
+          type: string
+          description: "Thông điệp tiếng Việt hiển thị được; với BUSINESS_RULE_VIOLATION kết thúc bằng \" (BR-…)\""
+        statusCode:
+          type: integer
+        timestamp:
+          type: string
+          format: date-time
+        traceId:
+          type: string
+    PageMeta:
+      type: object
+      required: [page, size, totalElements, totalPages]
+      properties:
+        page:
+          type: integer
+        size:
+          type: integer
+        totalElements:
+          type: integer
+          format: int64
+        totalPages:
+          type: integer
+    ChatResult:
+      type: string
+      enum: [ANSWERED, OUT_OF_SCOPE, MEDICAL_REFUSAL, EMERGENCY, UNAVAILABLE, PERSONAL, NEED_PET_CHOICE, NEED_LOGIN]
+      description: "Kết quả của một lượt hỏi đáp; giao diện rẽ theo giá trị này (07 §10). `PERSONAL`, `NEED_PET_CHOICE` chỉ có ở `/me/ai/chat`; `NEED_LOGIN` chỉ có ở `/public/ai/chat`"
+    VaccinationStatus:
+      type: string
+      enum: [NOT_YET_ELIGIBLE, NOT_STARTED, UP_TO_DATE, DUE_SOON, OVERDUE]
+      description: BR-AI-11
+    RecoGroup:
+      type: string
+      enum: [GROOMING, BOARDING, PRODUCT]
+      description: BR-AI-18
+    ItemType:
+      type: string
+      enum: [SERVICE, PRODUCT]
+    DocumentSource:
+      type: string
+      enum: [MANUAL, CATALOG_PROTOCOL]
+      description: BR-AI-13
+    DocumentTopic:
+      type: string
+      enum: [CARE, NUTRITION, BEHAVIOR, HYGIENE, VACCINATION, CLINIC_INFO]
+    DocumentSpecies:
+      type: string
+      enum: [DOG, CAT, OTHER, ALL]
+    DocumentStatus:
+      type: string
+      enum: [DRAFT, PUBLISHED, ARCHIVED]
+      description: "03 #13"
+    IndexStatus:
+      type: string
+      enum: [PENDING, INDEXED, FAILED]
+    ChatRequest:
+      type: object
+      required: [question]
+      properties:
+        question:
+          type: string
+          maxLength: 500
+          description: "1–500 ký tự sau khi cắt khoảng trắng (BR-AI-08)"
+        previousQuestions:
+          type: [array, "null"]
+          items:
+            type: string
+          description: "Tối đa 3 câu hỏi trước **của chính người dùng**, mỗi câu ≤ 500 ký tự. Không có trường cho câu trả lời của trợ lý (BR-AI-08)"
+    ChatSource:
+      type: object
+      required: [documentId, title]
+      properties:
+        documentId:
+          type: integer
+          format: int64
+        title:
+          type: string
+    EmergencyBranch:
+      type: object
+      required: [branchId, name, address, phone]
+      properties:
+        branchId:
+          type: integer
+          format: int64
+        name:
+          type: string
+        address:
+          type: string
+        phone:
+          type: string
+    PetChoice:
+      type: object
+      required: [petId, name]
+      properties:
+        petId:
+          type: integer
+          format: int64
+        name:
+          type: string
+    ChatResponse:
+      type: object
+      required: [result, answer, sources, bookingHint, emergencyBranches, pets]
+      properties:
+        result:
+          $ref: "#/components/schemas/ChatResult"
+        answer:
+          type: string
+          description: "Câu trả lời hoặc câu mẫu cố định"
+        sources:
+          type: array
+          items:
+            $ref: "#/components/schemas/ChatSource"
+          description: "Tối đa 3 tài liệu; rỗng khi không ANSWERED"
+        disclaimer:
+          type: [string, "null"]
+          description: "Có với ANSWERED (BR-AI-05)"
+        bookingHint:
+          type: boolean
+          description: "true thì giao diện hiện nút đặt lịch khám (UC39)"
+        emergencyBranches:
+          type: array
+          items:
+            $ref: "#/components/schemas/EmergencyBranch"
+          description: "Chỉ có với EMERGENCY (BR-AI-03)"
+        pets:
+          type: array
+          items:
+            $ref: "#/components/schemas/PetChoice"
+          description: "Chỉ có với NEED_PET_CHOICE: giao diện cho chọn rồi gọi `…/vaccination-summary` (BR-AI-27)"
+    VaccinationItem:
+      type: object
+      required: [vaccineTypeId, vaccineName, status]
+      properties:
+        vaccineTypeId:
+          type: integer
+          format: int64
+        vaccineName:
+          type: string
+        status:
+          $ref: "#/components/schemas/VaccinationStatus"
+        lastDoseNumber:
+          type: [integer, "null"]
+          format: int32
+        lastAdministeredOn:
+          type: [string, "null"]
+          format: date
+        nextDoseNumber:
+          type: [integer, "null"]
+          format: int32
+        nextDueDate:
+          type: [string, "null"]
+          format: date
+        firstDoseFromAgeWeeks:
+          type: [integer, "null"]
+          format: int32
+          description: "Tuổi tối thiểu (tuần) của mũi 1, có với NOT_YET_ELIGIBLE / NOT_STARTED"
+    VaccinationSummary:
+      type: object
+      required: [petId, petName, items, message, disclaimer]
+      properties:
+        petId:
+          type: integer
+          format: int64
+        petName:
+          type: string
+        items:
+          type: array
+          items:
+            $ref: "#/components/schemas/VaccinationItem"
+        message:
+          type: string
+          description: "Câu hiển thị trong khung chat, sinh từ mẫu cố định, không qua LLM (BR-AI-11)"
+        disclaimer:
+          type: string
+    RecommendedItem:
+      type: object
+      required: [group, itemType, itemId, name, price, priceIsFrom, score, reasons]
+      properties:
+        group:
+          $ref: "#/components/schemas/RecoGroup"
+        itemType:
+          $ref: "#/components/schemas/ItemType"
+        itemId:
+          type: integer
+          format: int64
+        name:
+          type: string
+        price:
+          type: integer
+          format: int64
+          minimum: 0
+          description: VND
+        priceIsFrom:
+          type: boolean
+          description: BR-CK-02
+        priceUnit:
+          type: [string, "null"]
+          description: "`đêm` với BOARDING"
+        imageUrl:
+          type: [string, "null"]
+          maxLength: 500
+        score:
+          type: number
+          description: "0–100 (BR-AI-21)"
+        reasons:
+          type: array
+          items:
+            type: string
+          description: "Sinh từ mẫu, không dùng LLM (BR-AI-22)"
+    RecommendationResponse:
+      type: object
+      required: [petId, generatedAt, items]
+      properties:
+        petId:
+          type: integer
+          format: int64
+        generatedAt:
+          type: string
+          format: date-time
+        items:
+          type: array
+          items:
+            $ref: "#/components/schemas/RecommendedItem"
+          description: "Sắp theo nhóm rồi điểm giảm dần"
+    AiDocumentSummary:
+      type: object
+      required: [documentId, sourceType, title, topic, species, status, version, indexStatus, updatedAt]
+      properties:
+        documentId:
+          type: integer
+          format: int64
+        sourceType:
+          $ref: "#/components/schemas/DocumentSource"
+        title:
+          type: string
+        topic:
+          $ref: "#/components/schemas/DocumentTopic"
+        species:
+          $ref: "#/components/schemas/DocumentSpecies"
+        status:
+          $ref: "#/components/schemas/DocumentStatus"
+        version:
+          type: integer
+          format: int32
+        indexStatus:
+          $ref: "#/components/schemas/IndexStatus"
+        updatedAt:
+          type: string
+          format: date-time
+    AiDocument:
+      type: object
+      required: [documentId, sourceType, title, topic, species, content, status, version, indexedVersion, indexStatus, chunkCount, updatedAt]
+      properties:
+        documentId:
+          type: integer
+          format: int64
+        sourceType:
+          $ref: "#/components/schemas/DocumentSource"
+        title:
+          type: string
+        topic:
+          $ref: "#/components/schemas/DocumentTopic"
+        species:
+          $ref: "#/components/schemas/DocumentSpecies"
+        content:
+          type: string
+          description: "Markdown ≤ 20 000 ký tự"
+        sourceNote:
+          type: [string, "null"]
+          description: "Lớp 1 — nguồn (BR-AI-14)"
+        reviewerName:
+          type: [string, "null"]
+          description: "Lớp 2 — bác sĩ thú y rà soát"
+        reviewedOn:
+          type: [string, "null"]
+          format: date
+          description: "Ngày rà soát"
+        status:
+          $ref: "#/components/schemas/DocumentStatus"
+        version:
+          type: integer
+          format: int32
+        indexedVersion:
+          type: integer
+          format: int32
+          description: "0 = chưa nạp"
+        indexStatus:
+          $ref: "#/components/schemas/IndexStatus"
+        indexError:
+          type: [string, "null"]
+        chunkCount:
+          type: integer
+          format: int32
+        publishedAt:
+          type: [string, "null"]
+          format: date-time
+        updatedAt:
+          type: string
+          format: date-time
+    CreateAiDocumentRequest:
+      type: object
+      required: [title, topic, species, content]
+      properties:
+        title:
+          type: string
+          maxLength: 200
+        topic:
+          $ref: "#/components/schemas/DocumentTopic"
+        species:
+          $ref: "#/components/schemas/DocumentSpecies"
+        content:
+          type: string
+          description: "≤ 20 000 ký tự (BR-AI-14)"
+        sourceNote:
+          type: [string, "null"]
+          maxLength: 500
+          description: "Lớp 1 — nguồn; bắt buộc khi xuất bản"
+        reviewerName:
+          type: [string, "null"]
+          maxLength: 100
+          description: "Lớp 2 — bác sĩ thú y rà soát; bắt buộc khi xuất bản"
+        reviewedOn:
+          type: [string, "null"]
+          format: date
+          description: "Ngày rà soát; bắt buộc khi xuất bản"
+    UpdateAiDocumentRequest:
+      type: object
+      properties:
+        title:
+          type: [string, "null"]
+          maxLength: 200
+        topic:
+          $ref: "#/components/schemas/DocumentTopic"
+        species:
+          $ref: "#/components/schemas/DocumentSpecies"
+        content:
+          type: [string, "null"]
+        sourceNote:
+          type: [string, "null"]
+          maxLength: 500
+        reviewerName:
+          type: [string, "null"]
+          maxLength: 100
+        reviewedOn:
+          type: [string, "null"]
+          format: date
+    ProfileSpecies:
+      type: string
+      enum: [DOG, CAT, OTHER]
+    ItemProfile:
+      type: object
+      required: [breedKeywords]
+      properties:
+        species:
+          $ref: "#/components/schemas/ProfileSpecies"
+          description: "Vắng = mọi loài"
+        minAgeWeeks:
+          type: [integer, "null"]
+          format: int32
+        maxAgeWeeks:
+          type: [integer, "null"]
+          format: int32
+        minWeightKg:
+          type: [number, "null"]
+        maxWeightKg:
+          type: [number, "null"]
+        breedKeywords:
+          type: array
+          items:
+            type: string
+          description: "Từ khóa giống viết thường không dấu; rỗng = mọi giống"
+        repeatIntervalDays:
+          type: [integer, "null"]
+          format: int32
+          description: "Chu kỳ dùng lại (ngày); vắng = mặc định [CFG]"
+    ItemProfileRow:
+      type: object
+      required: [itemType, itemId, name, group, hasProfile]
+      properties:
+        itemType:
+          $ref: "#/components/schemas/ItemType"
+        itemId:
+          type: integer
+          format: int64
+        name:
+          type: string
+        group:
+          $ref: "#/components/schemas/RecoGroup"
+        hasProfile:
+          type: boolean
+        profile:
+          $ref: "#/components/schemas/ItemProfile"
+  responses:
+    BadRequest:
+      description: "VALIDATION_FAILED / MALFORMED_REQUEST: dữ liệu không hợp lệ · BUSINESS_RULE_VIOLATION: vi phạm rule, message kết thúc bằng mã rule \"(BR-…)\"."
+      content:
+        "application/json":
+          schema:
+            $ref: "#/components/schemas/Error"
+    Unauthorized:
+      description: "UNAUTHENTICATED: chưa đăng nhập hoặc phiên đã hết hạn / bị hủy."
+      content:
+        "application/json":
+          schema:
+            $ref: "#/components/schemas/Error"
+    Forbidden:
+      description: "ACCESS_DENIED: sai vai trò · ACCESS_DENIED_SCOPE_MISMATCH: ngoài phạm vi (chi nhánh, chủ sở hữu). Message chung, không lộ cấu trúc phân quyền."
+      content:
+        "application/json":
+          schema:
+            $ref: "#/components/schemas/Error"
+    NotFound:
+      description: "Không tìm thấy (RESOURCE_NOT_FOUND)."
+      content:
+        "application/json":
+          schema:
+            $ref: "#/components/schemas/Error"

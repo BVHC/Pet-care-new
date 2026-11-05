@@ -1,0 +1,363 @@
+# Pet Care Branch Lifecycle API v1 (tầng 3) — OpenAPI 3.1, sinh từ khai báo; không sửa tay, sửa khai báo rồi sinh lại.
+# Module CN (tạm ngừng / đóng cửa, UC13) · owner BE-2
+# Nguồn: 01 UC13; 08-tang3-be2-spec.md §F.1 (BR-CN-06…10; 03 #20 Chi nhánh mở rộng); 05 bổ sung cột suspended_at, expected_resume_on, closed_at… của branches
+# Truy vết: CONFIRMED = có trong docs · ASSUMPTION (A#) · TBD (Q#) — xem file .md cùng tên.
+
+openapi: "3.1.0"
+info:
+  title: "Pet Care Branch Lifecycle API v1 (tầng 3)"
+  version: "1.0.0"
+  description: "Module CN (tạm ngừng / đóng cửa, UC13) · owner BE-2. Nguồn: 01 UC13; 08-tang3-be2-spec.md §F.1 (BR-CN-06…10; 03 #20 Chi nhánh mở rộng); 05 bổ sung cột suspended_at, expected_resume_on, closed_at… của branches. Chi tiết và truy vết: ../branchlife-v1.md"
+servers:
+  - url: "/api"
+    description: "Mọi path bên dưới nằm sau tiền tố /api"
+tags:
+  - name: "Branch lifecycle"
+    description: "Tạm ngừng, mở lại, đóng cửa chi nhánh (UC13)"
+paths:
+  "/branches/{branchId}/closure-impact":
+    get:
+      tags: ["Branch lifecycle"]
+      summary: "Xem trước tồn đọng khi tạm ngừng / đóng cửa"
+      description: "UC13 · BR-CN-07, 08. Actor: A04. Quyền: Chỉ SUPER_MANAGER. Chuyển trạng thái: —. Không ghi gì, giống `…/impact` của branch-v1 (BR-CN-07)."
+      operationId: getBranchClosureImpact
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: "#/components/parameters/BranchId"
+      responses:
+        "200":
+          description: OK
+          content:
+            "application/json":
+              schema:
+                type: object
+                required: [data, message, code]
+                properties:
+                  data:
+                    $ref: "#/components/schemas/ClosureImpact"
+                  message:
+                    type: string
+                  code:
+                    type: integer
+                    description: "HTTP status của kết quả, ví dụ 200, 201"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+  "/branches/{branchId}/suspend":
+    post:
+      tags: ["Branch lifecycle"]
+      summary: "Tạm ngừng chi nhánh"
+      description: "UC13 · BR-CN-06…10. Actor: A04. Quyền: Chỉ SUPER_MANAGER. Chuyển trạng thái: ACTIVE → SUSPENDED (Chi nhánh mở rộng#1)."
+      operationId: suspendBranch
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: "#/components/parameters/BranchId"
+      requestBody:
+        required: true
+        content:
+          "application/json":
+            schema:
+              $ref: "#/components/schemas/SuspendBranchRequest"
+      responses:
+        "200":
+          description: OK
+          content:
+            "application/json":
+              schema:
+                type: object
+                required: [data, message, code]
+                properties:
+                  data:
+                    $ref: "#/components/schemas/BranchLifecycle"
+                  message:
+                    type: string
+                  code:
+                    type: integer
+                    description: "HTTP status của kết quả, ví dụ 200, 201"
+        "400":
+          description: "`BR-CN-08` còn điều kiện chặn (message liệt kê) · `BR-CN-09` còn lịch `BOOKED` mà chưa chọn hủy hàng loạt"
+          content:
+            "application/json":
+              schema:
+                $ref: "#/components/schemas/Error"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "409":
+          description: "`INVALID_STATE_TRANSITION` trạng thái chi nhánh không cho phép (03 #20)"
+          content:
+            "application/json":
+              schema:
+                $ref: "#/components/schemas/Error"
+  "/branches/{branchId}/resume":
+    post:
+      tags: ["Branch lifecycle"]
+      summary: "Mở lại chi nhánh đang tạm ngừng"
+      description: "UC13 · BR-CN-10, BR-QT-04. Actor: A04. Quyền: Chỉ SUPER_MANAGER. Chuyển trạng thái: SUSPENDED → ACTIVE (Chi nhánh mở rộng#2)."
+      operationId: resumeBranch
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: "#/components/parameters/BranchId"
+      responses:
+        "200":
+          description: OK
+          content:
+            "application/json":
+              schema:
+                type: object
+                required: [data, message, code]
+                properties:
+                  data:
+                    $ref: "#/components/schemas/BranchLifecycle"
+                  message:
+                    type: string
+                  code:
+                    type: integer
+                    description: "HTTP status của kết quả, ví dụ 200, 201"
+        "400":
+          description: "`BR-CN-01` chưa có giờ mở cửa hợp lệ · `BR-QT-04` chưa có BRANCH_MANAGER `ACTIVE`"
+          content:
+            "application/json":
+              schema:
+                $ref: "#/components/schemas/Error"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "409":
+          description: "`INVALID_STATE_TRANSITION` trạng thái chi nhánh không cho phép (03 #20)"
+          content:
+            "application/json":
+              schema:
+                $ref: "#/components/schemas/Error"
+  "/branches/{branchId}/close":
+    post:
+      tags: ["Branch lifecycle"]
+      summary: "Đóng cửa chi nhánh vĩnh viễn"
+      description: "UC13 · BR-CN-06…10. Actor: A04. Quyền: Chỉ SUPER_MANAGER. Chuyển trạng thái: ACTIVE / SUSPENDED → CLOSED (Chi nhánh mở rộng#3, #4). Không mở lại được. Dữ liệu lịch sử giữ nguyên."
+      operationId: closeBranch
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: "#/components/parameters/BranchId"
+      requestBody:
+        required: true
+        content:
+          "application/json":
+            schema:
+              $ref: "#/components/schemas/CloseBranchRequest"
+      responses:
+        "200":
+          description: OK
+          content:
+            "application/json":
+              schema:
+                type: object
+                required: [data, message, code]
+                properties:
+                  data:
+                    $ref: "#/components/schemas/BranchLifecycle"
+                  message:
+                    type: string
+                  code:
+                    type: integer
+                    description: "HTTP status của kết quả, ví dụ 200, 201"
+        "400":
+          description: "`BR-CN-08` còn điều kiện chặn (message liệt kê) · `BR-CN-09` còn lịch `BOOKED` mà chưa chọn hủy hàng loạt · còn tồn kho > 0 · còn nhân viên `ACTIVE`"
+          content:
+            "application/json":
+              schema:
+                $ref: "#/components/schemas/Error"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "409":
+          description: "`INVALID_STATE_TRANSITION` trạng thái chi nhánh không cho phép (03 #20)"
+          content:
+            "application/json":
+              schema:
+                $ref: "#/components/schemas/Error"
+components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      description: "Access token trả về từ POST /auth/login, gắn với một phiên (sessions). Phiên bị hủy thì token hết hiệu lực ngay (BR-TK-11, 13, 14)."
+  parameters:
+    BranchId:
+      name: branchId
+      in: path
+      required: true
+      schema:
+        type: integer
+        format: int64
+  schemas:
+    Error:
+      type: object
+      description: "Envelope lỗi duy nhất, do GlobalExceptionHandler (platform/exception) sinh. Vi phạm business rule: errorCode = BUSINESS_RULE_VIOLATION, message kết thúc bằng mã rule, ví dụ \"… (BR-LH-05)\"."
+      required: [success, errorCode, message, statusCode, timestamp, traceId]
+      properties:
+        success:
+          type: boolean
+          enum: [false]
+        errorCode:
+          type: string
+          enum: [BUSINESS_RULE_VIOLATION, INVALID_STATE_TRANSITION, RESOURCE_NOT_FOUND, ACCESS_DENIED_SCOPE_MISMATCH, CONCURRENCY_CONFLICT, VALIDATION_FAILED, MALFORMED_REQUEST, METHOD_NOT_ALLOWED, UNSUPPORTED_MEDIA_TYPE, UNAUTHENTICATED, ACCESS_DENIED, TOO_MANY_REQUESTS, INTERNAL_ERROR]
+          description: platform/exception/ErrorCode
+        message:
+          type: string
+          description: "Thông điệp tiếng Việt hiển thị được; với BUSINESS_RULE_VIOLATION kết thúc bằng \" (BR-…)\""
+        statusCode:
+          type: integer
+        timestamp:
+          type: string
+          format: date-time
+        traceId:
+          type: string
+    BranchLifecycleStatus:
+      type: string
+      enum: [DRAFT, ACTIVE, SUSPENDED, CLOSED]
+      description: "03 #2 và #20"
+    ClosureImpact:
+      type: object
+      required: [bookedAppointments, activeBoardingStays, openVisits, openCashierShifts, openOrders, unfinishedOnlineOrders, openCareTasks, pendingRefunds, inTransitTransfers, openStockCounts, stockItemCount, stockTotalQuantity, activeStaff, suspendBlockers, closeBlockers]
+      properties:
+        bookedAppointments:
+          type: integer
+          format: int32
+        activeBoardingStays:
+          type: integer
+          format: int32
+        openVisits:
+          type: integer
+          format: int32
+        openCashierShifts:
+          type: integer
+          format: int32
+        openOrders:
+          type: integer
+          format: int32
+        unfinishedOnlineOrders:
+          type: integer
+          format: int32
+        openCareTasks:
+          type: integer
+          format: int32
+        pendingRefunds:
+          type: integer
+          format: int32
+        inTransitTransfers:
+          type: integer
+          format: int32
+        openStockCounts:
+          type: integer
+          format: int32
+        stockItemCount:
+          type: integer
+          format: int32
+        stockTotalQuantity:
+          type: integer
+          format: int32
+        activeStaff:
+          type: integer
+          format: int32
+        suspendBlockers:
+          type: array
+          items:
+            type: string
+          description: "Điều kiện còn vướng nếu tạm ngừng ngay (BR-CN-08); rỗng = được"
+        closeBlockers:
+          type: array
+          items:
+            type: string
+          description: "Điều kiện còn vướng nếu đóng cửa ngay (BR-CN-08); rỗng = được"
+    SuspendBranchRequest:
+      type: object
+      required: [reason, cancelBookings]
+      properties:
+        reason:
+          type: string
+          maxLength: 300
+        expectedResumeOn:
+          type: [string, "null"]
+          format: date
+        cancelBookings:
+          type: boolean
+          description: "true = hủy hàng loạt lịch hẹn, đặt chỗ `BOOKED` và thông báo khách (BR-CN-09)"
+        careTaskTargetBranchId:
+          type: [integer, "null"]
+          format: int64
+          description: "Chi nhánh nhận Care Task `OPEN`; vắng = hủy kèm lý do"
+    CloseBranchRequest:
+      type: object
+      required: [reason, cancelBookings]
+      properties:
+        reason:
+          type: string
+          maxLength: 300
+        cancelBookings:
+          type: boolean
+        careTaskTargetBranchId:
+          type: [integer, "null"]
+          format: int64
+    BranchLifecycle:
+      type: object
+      required: [branchId, status]
+      properties:
+        branchId:
+          type: integer
+          format: int64
+        status:
+          $ref: "#/components/schemas/BranchLifecycleStatus"
+        suspendedAt:
+          type: [string, "null"]
+          format: date-time
+        expectedResumeOn:
+          type: [string, "null"]
+          format: date
+        closedAt:
+          type: [string, "null"]
+          format: date-time
+        reason:
+          type: [string, "null"]
+  responses:
+    BadRequest:
+      description: "VALIDATION_FAILED / MALFORMED_REQUEST: dữ liệu không hợp lệ · BUSINESS_RULE_VIOLATION: vi phạm rule, message kết thúc bằng mã rule \"(BR-…)\"."
+      content:
+        "application/json":
+          schema:
+            $ref: "#/components/schemas/Error"
+    Unauthorized:
+      description: "UNAUTHENTICATED: chưa đăng nhập hoặc phiên đã hết hạn / bị hủy."
+      content:
+        "application/json":
+          schema:
+            $ref: "#/components/schemas/Error"
+    Forbidden:
+      description: "ACCESS_DENIED: sai vai trò · ACCESS_DENIED_SCOPE_MISMATCH: ngoài phạm vi (chi nhánh, chủ sở hữu). Message chung, không lộ cấu trúc phân quyền."
+      content:
+        "application/json":
+          schema:
+            $ref: "#/components/schemas/Error"
+    NotFound:
+      description: "Không tìm thấy (RESOURCE_NOT_FOUND)."
+      content:
+        "application/json":
+          schema:
+            $ref: "#/components/schemas/Error"

@@ -1178,3 +1178,109 @@ Mục 1–4: các câu hỏi mở của bản v14, chốt ở v15. Mục 5: thay
 | 21 | Xóa dòng đơn thuốc (`prescription_items`, visit-v1 #17, BR-KB-03) | §0 chưa liệt kê BR-KB-03 trong các trường hợp xóa cứng, dù BR-BH-02 cho người thêm xóa dòng khi Order `OPEN` và contract #17 có sẵn. Bảng không có cột trạng thái và không bảng nào có FK trỏ tới `prescription_items`. Chốt **xóa cứng**, thêm BR-KB-03 vào §0 (tiền lệ mục 16); ứng dụng xóa dòng đơn trước dòng Order `DRUG` trong cùng transaction vì `order_line_id` là FK `RESTRICT` (ADR-0078). Bệnh án không bị xóa kèm | Không đổi schema (không migration) |
 | 22 | Ràng buộc `care_tasks` (nợ D049, T39 phần 2) | Hai câu hủy hệ thống và câu kiểm FK khi xóa mũi ghi nhầm (BR-KB-04) quét bảng (index V1 partial theo `task_type`); DB chưa giữ cột xử lý theo trạng thái (BR-TB-05). Thêm 2 index partial `IS NOT NULL` không lọc trạng thái và 3 CHECK (ADR-0081). Cùng migration seed 4 mẫu nhắc ST04 | `care_tasks`: `ix_care_tasks_vaccination_id`, `ix_care_tasks_medical_record_id`, `ck_care_tasks_open_unhandled`, `ck_care_tasks_done_handled`, `ck_care_tasks_cancelled_reason` (V22) |
 | 23 | Index FK của bệnh án / mũi tiêm và CHECK lý do mua ngoài (nợ D043, ADR-0093) | Xem bệnh án (#12), hồ sơ sức khỏe (#21), `existsByVaccineTypeId` và kiểm FK khi xóa dòng cha quét bảng (V1, V7 không tạo index cho bốn cột); `prescription_items.external_reason` chỉ có `IN (...)` nên NULL lọt khi mua ngoài. Thêm 4 index một cột và CHECK `is_external_purchase = (external_reason IS NOT NULL)`. Trigger chặn sửa bệnh án đã khóa / sửa-xóa bản bổ sung chấp nhận không làm (ứng dụng giữ BR-KB-01) | `medical_record_addenda`: `ix_medical_record_addenda_medical_record_id`; `prescription_items`: `ix_prescription_items_medical_record_id`, `ck_prescription_items_external_reason_tied`; `vaccinations`: `ix_vaccinations_visit_id`, `ix_vaccinations_vaccine_type_id` (V28) |
+| 24 | Bảng Nhân sự (T51, GĐ2, duyệt T54 ngày 5/11/2026) | Hai ca khác nhau của cùng một nhân viên có thể chồng giờ, nhưng giờ nằm ở `shift_definitions` nên `UNIQUE` không bắt được. Chốt: `UNIQUE` partial chỉ chặn trùng đúng cặp ca – ngày; chồng giờ kiểm trong service dưới khóa dòng `accounts` của nhân viên (BR-NS-02). **Chờ BE-1 quyết:** thêm cột `starts_at`, `ends_at` sao chép vào `shift_assignments` và dùng `EXCLUDE USING gist` như đặt chỗ lưu trú (mục 8) nếu muốn chặn ở DB | `shift_definitions`, `shift_assignments`, `shift_requests` |
+| 25 | Kho vector của AI dùng pgvector (T53, ADR-0109 D3) | Cột `ai_chunks.embedding` kiểu `vector(768)`; mọi môi trường (docker-compose, Testcontainers, Postgres của dev) phải dùng ảnh có pgvector; migration `CREATE EXTENSION IF NOT EXISTS vector` cần quyền owner như `btree_gist` (mục 8). Truy hồi lọc `PUBLISHED` và `doc_version = indexed_version` ngay trong SQL | `ai_chunks` |
+| 26 | Cột và giá trị mới của bảng có sẵn (T51, T52) | `orders.source` thêm `ONLINE`; `order_lines.line_type` thêm `HOME_FEE` (không `service_id`, `product_id`; sửa hai `CHECK` ở §8); `services.medical_type` thêm `SURGERY`, `INPATIENT`; `appointments` thêm `is_home_visit`, `home_address`, `home_contact_phone`, `home_fee`; `visits.is_home_visit`; `branches.status` thêm `SUSPENDED`, `CLOSED` và `suspended_at`, `suspend_reason`, `expected_resume_on`, `closed_at`, `close_reason`; `customers.merged_into_id`; `articles.status` thêm `PENDING_REVIEW`, `REJECTED` và `author_account_id`, `review_note`, `submitted_at`, `reviewed_by`, `reviewed_at`; `stock_movements.type` thêm `TRANSFER_OUT`, `TRANSFER_IN`, `TRANSFER_CANCEL`; `stock_adjustments.reason` thêm `COUNT_DIFF`, `RETURN_DISCARD`; mã chứng từ thêm tiền tố `DH`, `CK`, `KK`, `TH`, `HT`, `NT`, `KN` (`document_code_sequences`, ADR-0043) | nhiều bảng |
+
+---
+
+## 14. Tầng 3 — bảng bổ sung (GĐ2)
+
+> Đặc tả bổ sung đầu GĐ2 (T51–T53), **duyệt ở T54 ngày 5/11/2026**; chưa có migration (T55). Cột chung `created_at`, `updated_at` như §0. Mọi khóa ngoại `ON DELETE RESTRICT`. Quy tắc ở `02`, trạng thái ở `03`, model ở `04` §12.
+
+### 14.1 Nhân sự (NS) — T51
+
+### `shift_definitions` — REF
+
+| Cột | Kiểu | Ràng buộc | Ghi chú |
+|---|---|---|---|
+| id | BIGINT | PK | |
+| branch_id | BIGINT | NN, FK→branches | Ca thuộc đúng một chi nhánh (BR-NS-01) |
+| name | VARCHAR(60) | NN | Ví dụ "Ca sáng" |
+| start_time | TIME | NN | Giờ Việt Nam |
+| end_time | TIME | NN | Giờ Việt Nam |
+| is_active | BOOLEAN | NN, DEFAULT true | Ngừng dùng thay cho xóa |
+
+- `CHECK (start_time < end_time)` — không có ca qua nửa đêm (BR-NS-01)
+- `UNIQUE INDEX (branch_id, lower(name))` (index theo biểu thức, không phải ràng buộc bảng) — tên không trùng trong chi nhánh, không phân biệt hoa thường
+- Index: `(branch_id, is_active)` — danh sách ca khi phân ca
+
+### `shift_assignments` — ROOT · SM #12
+
+| Cột | Kiểu | Ràng buộc | Ghi chú |
+|---|---|---|---|
+| id | BIGINT | PK | |
+| branch_id | BIGINT | NN, FK→branches | Chi nhánh của ca; phải trùng `shift_definitions.branch_id` và chi nhánh của nhân viên lúc phân (kiểm trong service) |
+| staff_id | BIGINT | NN, FK→accounts | Nhân viên A06–A08 |
+| shift_definition_id | BIGINT | NN, FK→shift_definitions | Đổi khi duyệt `SWAP` (Phân ca#5) |
+| work_date | DATE | NN | Theo giờ Việt Nam |
+| status | VARCHAR(30) | NN, CHECK | `SCHEDULED`, `ON_LEAVE`, `ABSENT`, `CANCELLED` |
+| reason | VARCHAR(300) | ? | Lý do vắng đột xuất hoặc hủy |
+| status_changed_by | BIGINT | ?, FK→accounts | Người xử lý; NULL nếu hệ thống chuyển |
+| status_changed_at | TIMESTAMPTZ | ? | Lúc rời `SCHEDULED` |
+
+- `CHECK ((status = 'SCHEDULED') = (status_changed_at IS NULL))`
+- `CHECK (status NOT IN ('ABSENT', 'CANCELLED') OR reason IS NOT NULL)` (BR-NS-02, 07)
+- `UNIQUE (staff_id, shift_definition_id, work_date) WHERE status = 'SCHEDULED'` — chặn trùng đúng cặp ca – ngày; chồng giờ giữa hai ca khác nhau kiểm trong service (§13 mục 24)
+- Index: `(branch_id, work_date)` — lịch chi nhánh (UC34); `(staff_id, work_date)` — lịch của tôi (UC35) và kiểm chồng giờ
+- Index: `(shift_definition_id) WHERE status = 'SCHEDULED'` — kiểm "ngừng dùng ca còn phân ca" (BR-NS-01)
+- Index: `(status_changed_by) WHERE status_changed_by IS NOT NULL` — kiểm FK khi xóa `accounts` (cùng mẫu V7, ADR-0018)
+
+### `shift_requests` — ROOT · SM #11
+
+| Cột | Kiểu | Ràng buộc | Ghi chú |
+|---|---|---|---|
+| id | BIGINT | PK | |
+| assignment_id | BIGINT | NN, FK→shift_assignments | |
+| requester_id | BIGINT | NN, FK→accounts | Người gửi = nhân viên của phân ca (BR-NS-04) |
+| request_type | VARCHAR(30) | NN, CHECK | `LEAVE`, `SWAP` |
+| target_shift_definition_id | BIGINT | ?, FK→shift_definitions | Ca đích của `SWAP` |
+| reason | VARCHAR(300) | NN | Lý do của nhân viên |
+| status | VARCHAR(30) | NN, CHECK | `PENDING`, `APPROVED`, `REJECTED`, `WITHDRAWN` |
+| decided_by | BIGINT | ?, FK→accounts | BRANCH_MANAGER duyệt / từ chối; NULL nếu hệ thống từ chối hoặc người gửi rút |
+| decision_note | VARCHAR(300) | ? | Lý do từ chối (hoặc câu do hệ thống ghi) |
+| closed_at | TIMESTAMPTZ | ? | Lúc rời `PENDING` |
+
+- `CHECK ((request_type = 'SWAP') = (target_shift_definition_id IS NOT NULL))`
+- `CHECK ((status = 'PENDING') = (closed_at IS NULL))`
+- `CHECK (status <> 'REJECTED' OR decision_note IS NOT NULL)`; `CHECK (status <> 'APPROVED' OR decided_by IS NOT NULL)`
+- `UNIQUE (assignment_id) WHERE status = 'PENDING'` — tối đa 1 yêu cầu chờ mỗi phân ca (BR-NS-04)
+- Index: `(requester_id, created_at DESC)` — yêu cầu của tôi; `(status, created_at, id)` — danh sách chờ duyệt của chi nhánh (nối `shift_assignments.branch_id`)
+- Index: `(assignment_id)`, `(target_shift_definition_id) WHERE target_shift_definition_id IS NOT NULL`, `(decided_by) WHERE decided_by IS NOT NULL` — kiểm FK khi xóa dòng cha
+
+### 14.2 Bảng ở file chuyên đề
+
+> Cột, kiểu, ràng buộc và index ở file nguồn; **không chép lại ở đây**. Quy ước cột ở đầu `08` và `09` (`*_at` là `TIMESTAMPTZ`, `*_by` / `*_id` là `BIGINT` khóa ngoại, `?` là cho phép NULL). `07` đã viết đủ kiểu từng cột.
+
+| Bảng | Loại | SM | Nguồn |
+|---|---|---|---|
+| `ai_documents` | ROOT | #13 | `07` §8 |
+| `ai_chunks` | PART |  | `07` §8 |
+| `ai_chat_logs` | LOG |  | `07` §8 |
+| `ai_item_profiles` | REF |  | `07` §8 |
+| `shipping_fee_configs` | REF |  | `08` §A |
+| `branch_home_visit_fees` | REF |  | `08` §A |
+| `service_material_norms` | REF |  | `08` §A |
+| `carts` | ROOT |  | `08` §B |
+| `cart_items` | PART |  | `08` §B |
+| `online_orders` | ROOT | #14 | `08` §B |
+| `stock_reservations` | PART |  | `08` §B |
+| `payment_transactions` | ROOT | #15 | `08` §C |
+| `payment_reconciliations` | ROOT |  | `08` §C |
+| `reconciliation_items` | PART |  | `08` §C |
+| `return_requests` | ROOT | #16 | `08` §D |
+| `return_request_lines` | PART |  | `08` §D |
+| `refunds` | ROOT | #17 | `08` §D |
+| `stock_transfers` | ROOT | #18 | `08` §E |
+| `stock_transfer_lines` | PART |  | `08` §E |
+| `stock_counts` | ROOT | #19 | `08` §E |
+| `stock_count_lines` | PART |  | `08` §E |
+| `customer_merges` | LOG |  | `08` §F.2 |
+| `article_comments` | ROOT |  | `08` §F.3 |
+| `surgeries` | ROOT | #23 | `09` §B |
+| `admissions` | ROOT | #24 | `09` §C |
+| `admission_orders` | ROOT | #25 | `09` §C |
+| `admission_observations` | LOG |  | `09` §C |
+| `complaints` | ROOT | #26 | `09` §D |
+| `complaint_messages` | LOG |  | `09` §D |
+| `visit_material_usages` | LOG |  | `09` §E |

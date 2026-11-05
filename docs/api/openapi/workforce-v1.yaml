@@ -1,0 +1,980 @@
+# Pet Care Workforce API v1 (tầng 3) — OpenAPI 3.1, sinh từ khai báo; không sửa tay, sửa khai báo rồi sinh lại.
+# Module NS · owner BE-1
+# Nguồn: 01 UC34–UC38; 02 BR-NS-01…10; 03 #11 Yêu cầu nghỉ / đổi ca, #12 Phân ca; 04 §12.1; 05 §14.1 (shift_definitions, shift_assignments, shift_requests)
+# Truy vết: CONFIRMED = có trong docs · ASSUMPTION (A#) · TBD (Q#) — xem file .md cùng tên.
+
+openapi: "3.1.0"
+info:
+  title: "Pet Care Workforce API v1 (tầng 3)"
+  version: "1.0.0"
+  description: "Module NS · owner BE-1. Nguồn: 01 UC34–UC38; 02 BR-NS-01…10; 03 #11 Yêu cầu nghỉ / đổi ca, #12 Phân ca; 04 §12.1; 05 §14.1 (shift_definitions, shift_assignments, shift_requests). Chi tiết và truy vết: ../workforce-v1.md"
+servers:
+  - url: "/api"
+    description: "Mọi path bên dưới nằm sau tiền tố /api"
+tags:
+  - name: "Shift definitions"
+    description: "Ca làm việc của chi nhánh (UC34)"
+  - name: "Shift assignments"
+    description: "Phân ca, lịch làm việc, vắng đột xuất (UC34, UC35, UC38)"
+  - name: "Shift requests"
+    description: "Yêu cầu nghỉ / đổi ca và duyệt (UC36, UC37)"
+paths:
+  "/shift-definitions":
+    get:
+      tags: ["Shift definitions"]
+      summary: "Danh sách ca làm việc của chi nhánh"
+      description: "UC34 · BR-NS-01. Actor: A05. Quyền: BRANCH_MANAGER của chi nhánh. Chuyển trạng thái: —. Không phân trang. `activeOnly` vắng = false (cả ca ngừng dùng). Sắp theo `startTime` tăng dần."
+      operationId: listShiftDefinitions
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: activeOnly
+          in: query
+          required: false
+          schema:
+            type: boolean
+      responses:
+        "200":
+          description: OK
+          content:
+            "application/json":
+              schema:
+                type: object
+                required: [data, message, code]
+                properties:
+                  data:
+                    type: array
+                    items:
+                      $ref: "#/components/schemas/ShiftDefinition"
+                  message:
+                    type: string
+                  code:
+                    type: integer
+                    description: "HTTP status của kết quả, ví dụ 200, 201"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+    post:
+      tags: ["Shift definitions"]
+      summary: "Tạo ca làm việc"
+      description: "UC34 · BR-NS-01, BR-NS-10. Actor: A05. Quyền: BRANCH_MANAGER của chi nhánh. Chuyển trạng thái: —."
+      operationId: createShiftDefinition
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          "application/json":
+            schema:
+              $ref: "#/components/schemas/CreateShiftDefinitionRequest"
+      responses:
+        "201":
+          description: "Đã tạo"
+          content:
+            "application/json":
+              schema:
+                type: object
+                required: [data, message, code]
+                properties:
+                  data:
+                    $ref: "#/components/schemas/ShiftDefinition"
+                  message:
+                    type: string
+                  code:
+                    type: integer
+                    description: "HTTP status của kết quả, ví dụ 200, 201"
+        "400":
+          description: "`BR-NS-01` tên trùng trong chi nhánh · giờ bắt đầu không nhỏ hơn giờ kết thúc; `VALIDATION_FAILED` sai kiểu / quá dài"
+          content:
+            "application/json":
+              schema:
+                $ref: "#/components/schemas/Error"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+  "/shift-definitions/{shiftDefinitionId}":
+    patch:
+      tags: ["Shift definitions"]
+      summary: "Sửa / ngừng dùng ca làm việc"
+      description: "UC34 · BR-NS-01, BR-NS-10. Actor: A05. Quyền: BRANCH_MANAGER của chi nhánh. Chuyển trạng thái: —. Chỉ các trường có trong body được đổi."
+      operationId: updateShiftDefinition
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: "#/components/parameters/ShiftDefinitionId"
+      requestBody:
+        required: true
+        content:
+          "application/json":
+            schema:
+              $ref: "#/components/schemas/UpdateShiftDefinitionRequest"
+      responses:
+        "200":
+          description: OK
+          content:
+            "application/json":
+              schema:
+                type: object
+                required: [data, message, code]
+                properties:
+                  data:
+                    $ref: "#/components/schemas/ShiftDefinition"
+                  message:
+                    type: string
+                  code:
+                    type: integer
+                    description: "HTTP status của kết quả, ví dụ 200, 201"
+        "400":
+          description: "`BR-NS-01` tên trùng · sửa giờ khi ca đã có phân ca · ngừng dùng khi ca còn phân ca `SCHEDULED` từ hôm nay"
+          content:
+            "application/json":
+              schema:
+                $ref: "#/components/schemas/Error"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+  "/shift-assignments":
+    get:
+      tags: ["Shift assignments"]
+      summary: "Lịch phân ca của chi nhánh"
+      description: "UC34 · BR-NS-03. Actor: A05. Quyền: BRANCH_MANAGER của chi nhánh. Chuyển trạng thái: —. Sắp `workDate`, `startTime` tăng dần, trùng thì `shiftAssignmentId` tăng dần."
+      operationId: listShiftAssignments
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: from
+          in: query
+          required: true
+          schema:
+            type: string
+            format: date
+        - name: to
+          in: query
+          required: true
+          schema:
+            type: string
+            format: date
+        - name: staffId
+          in: query
+          required: false
+          schema:
+            type: integer
+            format: int64
+        - name: status
+          in: query
+          required: false
+          schema:
+            type: string
+            enum: [SCHEDULED, ON_LEAVE, ABSENT, CANCELLED]
+        - $ref: "#/components/parameters/Page"
+        - $ref: "#/components/parameters/Size"
+      responses:
+        "200":
+          description: OK
+          content:
+            "application/json":
+              schema:
+                type: object
+                required: [data, message, code]
+                properties:
+                  data:
+                    allOf:
+                      - $ref: "#/components/schemas/PageMeta"
+                      - type: object
+                        required: [content]
+                        properties:
+                          content:
+                            type: array
+                            items:
+                              $ref: "#/components/schemas/ShiftAssignment"
+                  message:
+                    type: string
+                  code:
+                    type: integer
+                    description: "HTTP status của kết quả, ví dụ 200, 201"
+        "400":
+          description: "`from` / `to` thiếu hoặc `to` < `from` hoặc khoảng quá 62 ngày (`BR-NS-03`)"
+          content:
+            "application/json":
+              schema:
+                $ref: "#/components/schemas/Error"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+    post:
+      tags: ["Shift assignments"]
+      summary: "Phân ca cho nhân viên"
+      description: "UC34 · BR-NS-02, BR-NS-08, BR-NS-10. Actor: A05. Quyền: BRANCH_MANAGER của chi nhánh. Chuyển trạng thái: — → SCHEDULED (Phân ca#1)."
+      operationId: createShiftAssignment
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          "application/json":
+            schema:
+              $ref: "#/components/schemas/CreateShiftAssignmentRequest"
+      responses:
+        "201":
+          description: "Đã tạo"
+          content:
+            "application/json":
+              schema:
+                type: object
+                required: [data, message, code]
+                properties:
+                  data:
+                    $ref: "#/components/schemas/ShiftAssignment"
+                  message:
+                    type: string
+                  code:
+                    type: integer
+                    description: "HTTP status của kết quả, ví dụ 200, 201"
+        "400":
+          description: "`BR-NS-02` ngày trong quá khứ · ca ngừng dùng · nhân viên không phải A06–A08 `ACTIVE` của chi nhánh · trùng hoặc chồng giờ phân ca khác"
+          content:
+            "application/json":
+              schema:
+                $ref: "#/components/schemas/Error"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          description: "Không tìm thấy nhân viên hoặc ca trong chi nhánh"
+          content:
+            "application/json":
+              schema:
+                $ref: "#/components/schemas/Error"
+  "/shift-assignments/{shiftAssignmentId}/cancel":
+    post:
+      tags: ["Shift assignments"]
+      summary: "Hủy phân ca"
+      description: "UC34 · BR-NS-02, BR-NS-08, BR-NS-10. Actor: A05. Quyền: BRANCH_MANAGER của chi nhánh. Chuyển trạng thái: SCHEDULED → CANCELLED (Phân ca#2). Yêu cầu `PENDING` của phân ca tự `REJECTED` (Yêu cầu#5)."
+      operationId: cancelShiftAssignment
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: "#/components/parameters/ShiftAssignmentId"
+      requestBody:
+        required: true
+        content:
+          "application/json":
+            schema:
+              $ref: "#/components/schemas/ReasonRequest"
+      responses:
+        "200":
+          description: OK
+          content:
+            "application/json":
+              schema:
+                type: object
+                required: [data, message, code]
+                properties:
+                  data:
+                    $ref: "#/components/schemas/ShiftAssignment"
+                  message:
+                    type: string
+                  code:
+                    type: integer
+                    description: "HTTP status của kết quả, ví dụ 200, 201"
+        "400":
+          description: "`BR-NS-02` ca đã bắt đầu (dùng ghi vắng đột xuất); `VALIDATION_FAILED` thiếu lý do"
+          content:
+            "application/json":
+              schema:
+                $ref: "#/components/schemas/Error"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "409":
+          description: "Phân ca không còn `SCHEDULED`"
+          content:
+            "application/json":
+              schema:
+                $ref: "#/components/schemas/Error"
+  "/shift-assignments/{shiftAssignmentId}/absent":
+    post:
+      tags: ["Shift assignments"]
+      summary: "Ghi nhận vắng đột xuất"
+      description: "UC38 · BR-NS-07, BR-NS-08, BR-NS-10. Actor: A05. Quyền: BRANCH_MANAGER của chi nhánh. Chuyển trạng thái: SCHEDULED → ABSENT (Phân ca#4). Yêu cầu `PENDING` của phân ca tự `REJECTED` (Yêu cầu#5)."
+      operationId: recordShiftAbsence
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: "#/components/parameters/ShiftAssignmentId"
+      requestBody:
+        required: true
+        content:
+          "application/json":
+            schema:
+              $ref: "#/components/schemas/ReasonRequest"
+      responses:
+        "200":
+          description: OK
+          content:
+            "application/json":
+              schema:
+                type: object
+                required: [data, message, code]
+                properties:
+                  data:
+                    $ref: "#/components/schemas/ShiftAssignment"
+                  message:
+                    type: string
+                  code:
+                    type: integer
+                    description: "HTTP status của kết quả, ví dụ 200, 201"
+        "400":
+          description: "`BR-NS-07` ca của ngày tương lai · quá 7 ngày **[CFG]**; `VALIDATION_FAILED` thiếu lý do"
+          content:
+            "application/json":
+              schema:
+                $ref: "#/components/schemas/Error"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "409":
+          description: "Phân ca không còn `SCHEDULED`"
+          content:
+            "application/json":
+              schema:
+                $ref: "#/components/schemas/Error"
+  "/me/shift-assignments":
+    get:
+      tags: ["Shift assignments"]
+      summary: "Lịch làm việc của tôi"
+      description: "UC35 · BR-NS-03. Actor: A06–A08. Quyền: Nhân viên A06–A08, chỉ dữ liệu của mình. Chuyển trạng thái: —. Không phân trang (tối đa 62 ngày). Sắp `workDate`, `startTime` tăng dần. Gồm cả phân ca đã nghỉ / vắng / hủy để hiển thị lịch sử."
+      operationId: listMyShiftAssignments
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: from
+          in: query
+          required: true
+          schema:
+            type: string
+            format: date
+        - name: to
+          in: query
+          required: true
+          schema:
+            type: string
+            format: date
+      responses:
+        "200":
+          description: OK
+          content:
+            "application/json":
+              schema:
+                type: object
+                required: [data, message, code]
+                properties:
+                  data:
+                    type: array
+                    items:
+                      $ref: "#/components/schemas/ShiftAssignment"
+                  message:
+                    type: string
+                  code:
+                    type: integer
+                    description: "HTTP status của kết quả, ví dụ 200, 201"
+        "400":
+          description: "`from` / `to` thiếu hoặc `to` < `from` hoặc khoảng quá 62 ngày (`BR-NS-03`)"
+          content:
+            "application/json":
+              schema:
+                $ref: "#/components/schemas/Error"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+  "/me/shift-requests":
+    post:
+      tags: ["Shift requests"]
+      summary: "Gửi yêu cầu nghỉ / đổi ca"
+      description: "UC36 · BR-NS-04, BR-NS-08. Actor: A06–A08. Quyền: Nhân viên A06–A08, chỉ dữ liệu của mình. Chuyển trạng thái: — → PENDING (Yêu cầu#1)."
+      operationId: createShiftRequest
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          "application/json":
+            schema:
+              $ref: "#/components/schemas/CreateShiftRequestRequest"
+      responses:
+        "201":
+          description: "Đã tạo"
+          content:
+            "application/json":
+              schema:
+                type: object
+                required: [data, message, code]
+                properties:
+                  data:
+                    $ref: "#/components/schemas/ShiftRequest"
+                  message:
+                    type: string
+                  code:
+                    type: integer
+                    description: "HTTP status của kết quả, ví dụ 200, 201"
+        "400":
+          description: "`BR-NS-04` phân ca không `SCHEDULED` · còn dưới 24 giờ **[CFG]** · đã có yêu cầu chờ · `SWAP` thiếu / thừa ca đích, ca đích khác ngày hoặc chồng giờ"
+          content:
+            "application/json":
+              schema:
+                $ref: "#/components/schemas/Error"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          description: "Không tìm thấy phân ca của mình"
+          content:
+            "application/json":
+              schema:
+                $ref: "#/components/schemas/Error"
+    get:
+      tags: ["Shift requests"]
+      summary: "Yêu cầu nghỉ / đổi ca của tôi"
+      description: "UC36 · BR-NS-03. Actor: A06–A08. Quyền: Nhân viên A06–A08, chỉ dữ liệu của mình. Chuyển trạng thái: —. Mới nhất trước (`createdAt` giảm dần, trùng thì `shiftRequestId` giảm dần)."
+      operationId: listMyShiftRequests
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: status
+          in: query
+          required: false
+          schema:
+            type: string
+            enum: [PENDING, APPROVED, REJECTED, WITHDRAWN]
+        - $ref: "#/components/parameters/Page"
+        - $ref: "#/components/parameters/Size"
+      responses:
+        "200":
+          description: OK
+          content:
+            "application/json":
+              schema:
+                type: object
+                required: [data, message, code]
+                properties:
+                  data:
+                    allOf:
+                      - $ref: "#/components/schemas/PageMeta"
+                      - type: object
+                        required: [content]
+                        properties:
+                          content:
+                            type: array
+                            items:
+                              $ref: "#/components/schemas/ShiftRequest"
+                  message:
+                    type: string
+                  code:
+                    type: integer
+                    description: "HTTP status của kết quả, ví dụ 200, 201"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+  "/me/shift-requests/{shiftRequestId}/withdraw":
+    post:
+      tags: ["Shift requests"]
+      summary: "Rút yêu cầu"
+      description: "UC36 · BR-NS-05. Actor: A06–A08. Quyền: Người gửi. Chuyển trạng thái: PENDING → WITHDRAWN (Yêu cầu#2)."
+      operationId: withdrawShiftRequest
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: "#/components/parameters/ShiftRequestId"
+      responses:
+        "200":
+          description: OK
+          content:
+            "application/json":
+              schema:
+                type: object
+                required: [data, message, code]
+                properties:
+                  data:
+                    $ref: "#/components/schemas/ShiftRequest"
+                  message:
+                    type: string
+                  code:
+                    type: integer
+                    description: "HTTP status của kết quả, ví dụ 200, 201"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "409":
+          description: "Yêu cầu không còn `PENDING`"
+          content:
+            "application/json":
+              schema:
+                $ref: "#/components/schemas/Error"
+  "/shift-requests":
+    get:
+      tags: ["Shift requests"]
+      summary: "Yêu cầu nghỉ / đổi ca của chi nhánh"
+      description: "UC37 · BR-NS-06. Actor: A05. Quyền: BRANCH_MANAGER của chi nhánh. Chuyển trạng thái: —. `status` vắng = `PENDING`. Cũ nhất trước (`createdAt` tăng dần, trùng thì `shiftRequestId` tăng dần) để xử lý theo thứ tự gửi."
+      operationId: listShiftRequests
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: status
+          in: query
+          required: false
+          schema:
+            type: string
+            enum: [PENDING, APPROVED, REJECTED, WITHDRAWN]
+        - $ref: "#/components/parameters/Page"
+        - $ref: "#/components/parameters/Size"
+      responses:
+        "200":
+          description: OK
+          content:
+            "application/json":
+              schema:
+                type: object
+                required: [data, message, code]
+                properties:
+                  data:
+                    allOf:
+                      - $ref: "#/components/schemas/PageMeta"
+                      - type: object
+                        required: [content]
+                        properties:
+                          content:
+                            type: array
+                            items:
+                              $ref: "#/components/schemas/ShiftRequest"
+                  message:
+                    type: string
+                  code:
+                    type: integer
+                    description: "HTTP status của kết quả, ví dụ 200, 201"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+  "/shift-requests/{shiftRequestId}/approve":
+    post:
+      tags: ["Shift requests"]
+      summary: "Duyệt yêu cầu"
+      description: "UC37 · BR-NS-06, BR-NS-08, BR-NS-10. Actor: A05. Quyền: BRANCH_MANAGER của chi nhánh. Chuyển trạng thái: PENDING → APPROVED (Yêu cầu#3); Phân ca#3 hoặc #5."
+      operationId: approveShiftRequest
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: "#/components/parameters/ShiftRequestId"
+      responses:
+        "200":
+          description: OK
+          content:
+            "application/json":
+              schema:
+                type: object
+                required: [data, message, code]
+                properties:
+                  data:
+                    $ref: "#/components/schemas/ShiftRequest"
+                  message:
+                    type: string
+                  code:
+                    type: integer
+                    description: "HTTP status của kết quả, ví dụ 200, 201"
+        "400":
+          description: "`BR-NS-06` phân ca đã bắt đầu · `SWAP`: ca đích ngừng dùng hoặc chồng giờ"
+          content:
+            "application/json":
+              schema:
+                $ref: "#/components/schemas/Error"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "409":
+          description: "Yêu cầu không còn `PENDING`"
+          content:
+            "application/json":
+              schema:
+                $ref: "#/components/schemas/Error"
+  "/shift-requests/{shiftRequestId}/reject":
+    post:
+      tags: ["Shift requests"]
+      summary: "Từ chối yêu cầu"
+      description: "UC37 · BR-NS-06, BR-NS-08, BR-NS-10. Actor: A05. Quyền: BRANCH_MANAGER của chi nhánh. Chuyển trạng thái: PENDING → REJECTED (Yêu cầu#4)."
+      operationId: rejectShiftRequest
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: "#/components/parameters/ShiftRequestId"
+      requestBody:
+        required: true
+        content:
+          "application/json":
+            schema:
+              $ref: "#/components/schemas/RejectShiftRequestRequest"
+      responses:
+        "200":
+          description: OK
+          content:
+            "application/json":
+              schema:
+                type: object
+                required: [data, message, code]
+                properties:
+                  data:
+                    $ref: "#/components/schemas/ShiftRequest"
+                  message:
+                    type: string
+                  code:
+                    type: integer
+                    description: "HTTP status của kết quả, ví dụ 200, 201"
+        "400":
+          description: "`VALIDATION_FAILED` thiếu lý do từ chối (`BR-NS-06`)"
+          content:
+            "application/json":
+              schema:
+                $ref: "#/components/schemas/Error"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "409":
+          description: "Yêu cầu không còn `PENDING`"
+          content:
+            "application/json":
+              schema:
+                $ref: "#/components/schemas/Error"
+components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      description: "Access token trả về từ POST /auth/login, gắn với một phiên (sessions). Phiên bị hủy thì token hết hiệu lực ngay (BR-TK-11, 13, 14)."
+  parameters:
+    Page:
+      name: page
+      in: query
+      required: false
+      schema:
+        type: integer
+        minimum: 0
+        default: 0
+      description: "Số trang, bắt đầu từ 0"
+    Size:
+      name: size
+      in: query
+      required: false
+      schema:
+        type: integer
+        minimum: 1
+        maximum: 100
+        default: 20
+    ShiftDefinitionId:
+      name: shiftDefinitionId
+      in: path
+      required: true
+      schema:
+        type: integer
+        format: int64
+    ShiftAssignmentId:
+      name: shiftAssignmentId
+      in: path
+      required: true
+      schema:
+        type: integer
+        format: int64
+    ShiftRequestId:
+      name: shiftRequestId
+      in: path
+      required: true
+      schema:
+        type: integer
+        format: int64
+  schemas:
+    Error:
+      type: object
+      description: "Envelope lỗi duy nhất, do GlobalExceptionHandler (platform/exception) sinh. Vi phạm business rule: errorCode = BUSINESS_RULE_VIOLATION, message kết thúc bằng mã rule, ví dụ \"… (BR-LH-05)\"."
+      required: [success, errorCode, message, statusCode, timestamp, traceId]
+      properties:
+        success:
+          type: boolean
+          enum: [false]
+        errorCode:
+          type: string
+          enum: [BUSINESS_RULE_VIOLATION, INVALID_STATE_TRANSITION, RESOURCE_NOT_FOUND, ACCESS_DENIED_SCOPE_MISMATCH, CONCURRENCY_CONFLICT, VALIDATION_FAILED, MALFORMED_REQUEST, METHOD_NOT_ALLOWED, UNSUPPORTED_MEDIA_TYPE, UNAUTHENTICATED, ACCESS_DENIED, TOO_MANY_REQUESTS, INTERNAL_ERROR]
+          description: platform/exception/ErrorCode
+        message:
+          type: string
+          description: "Thông điệp tiếng Việt hiển thị được; với BUSINESS_RULE_VIOLATION kết thúc bằng \" (BR-…)\""
+        statusCode:
+          type: integer
+        timestamp:
+          type: string
+          format: date-time
+        traceId:
+          type: string
+    PageMeta:
+      type: object
+      required: [page, size, totalElements, totalPages]
+      properties:
+        page:
+          type: integer
+        size:
+          type: integer
+        totalElements:
+          type: integer
+          format: int64
+        totalPages:
+          type: integer
+    ShiftDefinition:
+      type: object
+      required: [shiftDefinitionId, branchId, name, startTime, endTime, active]
+      properties:
+        shiftDefinitionId:
+          type: integer
+          format: int64
+        branchId:
+          type: integer
+          format: int64
+        name:
+          type: string
+          maxLength: 60
+        startTime:
+          type: string
+          pattern: "^[0-2][0-9]:[0-5][0-9]$"
+          example: "08:30"
+          description: "Giờ Việt Nam"
+        endTime:
+          type: string
+          pattern: "^[0-2][0-9]:[0-5][0-9]$"
+          example: "08:30"
+          description: "Giờ Việt Nam, sau startTime (BR-NS-01)"
+        active:
+          type: boolean
+    CreateShiftDefinitionRequest:
+      type: object
+      required: [name, startTime, endTime]
+      properties:
+        name:
+          type: string
+          maxLength: 60
+        startTime:
+          type: string
+          pattern: "^[0-2][0-9]:[0-5][0-9]$"
+          example: "08:30"
+        endTime:
+          type: string
+          pattern: "^[0-2][0-9]:[0-5][0-9]$"
+          example: "08:30"
+    UpdateShiftDefinitionRequest:
+      type: object
+      properties:
+        name:
+          type: [string, "null"]
+          maxLength: 60
+        startTime:
+          type: [string, "null"]
+          pattern: "^[0-2][0-9]:[0-5][0-9]$"
+          example: "08:30"
+          description: "Chỉ sửa được khi ca chưa có phân ca nào (BR-NS-01)"
+        endTime:
+          type: [string, "null"]
+          pattern: "^[0-2][0-9]:[0-5][0-9]$"
+          example: "08:30"
+        active:
+          type: [boolean, "null"]
+          description: "false = ngừng dùng (BR-NS-01)"
+    ShiftAssignmentStatus:
+      type: string
+      enum: [SCHEDULED, ON_LEAVE, ABSENT, CANCELLED]
+      description: "03 #12"
+    ShiftAssignment:
+      type: object
+      required: [shiftAssignmentId, branchId, staffId, staffName, shiftDefinitionId, shiftName, startTime, endTime, workDate, status]
+      properties:
+        shiftAssignmentId:
+          type: integer
+          format: int64
+        branchId:
+          type: integer
+          format: int64
+        staffId:
+          type: integer
+          format: int64
+        staffName:
+          type: string
+        shiftDefinitionId:
+          type: integer
+          format: int64
+        shiftName:
+          type: string
+        startTime:
+          type: string
+          pattern: "^[0-2][0-9]:[0-5][0-9]$"
+          example: "08:30"
+        endTime:
+          type: string
+          pattern: "^[0-2][0-9]:[0-5][0-9]$"
+          example: "08:30"
+        workDate:
+          type: string
+          format: date
+        status:
+          $ref: "#/components/schemas/ShiftAssignmentStatus"
+        reason:
+          type: [string, "null"]
+          description: "Lý do vắng hoặc hủy"
+        pendingRequestId:
+          type: [integer, "null"]
+          format: int64
+          description: "Yêu cầu PENDING của phân ca, nếu có (BR-NS-04)"
+    CreateShiftAssignmentRequest:
+      type: object
+      required: [staffId, shiftDefinitionId, workDate]
+      properties:
+        staffId:
+          type: integer
+          format: int64
+        shiftDefinitionId:
+          type: integer
+          format: int64
+        workDate:
+          type: string
+          format: date
+    ReasonRequest:
+      type: object
+      required: [reason]
+      properties:
+        reason:
+          type: string
+          maxLength: 300
+    ShiftRequestType:
+      type: string
+      enum: [LEAVE, SWAP]
+    ShiftRequestStatus:
+      type: string
+      enum: [PENDING, APPROVED, REJECTED, WITHDRAWN]
+      description: "03 #11"
+    ShiftRequest:
+      type: object
+      required: [shiftRequestId, shiftAssignmentId, requesterId, requesterName, workDate, currentShiftName, type, reason, status, createdAt]
+      properties:
+        shiftRequestId:
+          type: integer
+          format: int64
+        shiftAssignmentId:
+          type: integer
+          format: int64
+        requesterId:
+          type: integer
+          format: int64
+        requesterName:
+          type: string
+        workDate:
+          type: string
+          format: date
+        currentShiftName:
+          type: string
+        type:
+          $ref: "#/components/schemas/ShiftRequestType"
+        targetShiftDefinitionId:
+          type: [integer, "null"]
+          format: int64
+          description: "Chỉ có với SWAP"
+        targetShiftName:
+          type: [string, "null"]
+        reason:
+          type: string
+        status:
+          $ref: "#/components/schemas/ShiftRequestStatus"
+        decidedBy:
+          type: [integer, "null"]
+          format: int64
+        decisionNote:
+          type: [string, "null"]
+        closedAt:
+          type: [string, "null"]
+          format: date-time
+        createdAt:
+          type: string
+          format: date-time
+    CreateShiftRequestRequest:
+      type: object
+      required: [shiftAssignmentId, type, reason]
+      properties:
+        shiftAssignmentId:
+          type: integer
+          format: int64
+        type:
+          $ref: "#/components/schemas/ShiftRequestType"
+        targetShiftDefinitionId:
+          type: [integer, "null"]
+          format: int64
+          description: "Bắt buộc với SWAP, không được có với LEAVE"
+        reason:
+          type: string
+          maxLength: 300
+    RejectShiftRequestRequest:
+      type: object
+      required: [decisionNote]
+      properties:
+        decisionNote:
+          type: string
+          maxLength: 300
+  responses:
+    BadRequest:
+      description: "VALIDATION_FAILED / MALFORMED_REQUEST: dữ liệu không hợp lệ · BUSINESS_RULE_VIOLATION: vi phạm rule, message kết thúc bằng mã rule \"(BR-…)\"."
+      content:
+        "application/json":
+          schema:
+            $ref: "#/components/schemas/Error"
+    Unauthorized:
+      description: "UNAUTHENTICATED: chưa đăng nhập hoặc phiên đã hết hạn / bị hủy."
+      content:
+        "application/json":
+          schema:
+            $ref: "#/components/schemas/Error"
+    Forbidden:
+      description: "ACCESS_DENIED: sai vai trò · ACCESS_DENIED_SCOPE_MISMATCH: ngoài phạm vi (chi nhánh, chủ sở hữu). Message chung, không lộ cấu trúc phân quyền."
+      content:
+        "application/json":
+          schema:
+            $ref: "#/components/schemas/Error"
+    NotFound:
+      description: "Không tìm thấy (RESOURCE_NOT_FOUND)."
+      content:
+        "application/json":
+          schema:
+            $ref: "#/components/schemas/Error"

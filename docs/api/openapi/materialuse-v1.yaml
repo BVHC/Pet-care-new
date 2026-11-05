@@ -1,0 +1,297 @@
+# Pet Care Material Usage API v1 (tầng 3) — OpenAPI 3.1, sinh từ khai báo; không sửa tay, sửa khai báo rồi sinh lại.
+# Module KB (trừ vật tư tiêu hao, ST07) · owner BE-1
+# Nguồn: 01 ST07; 09-tang3-be1-spec.md §E (BR-KB-12…14); 05 bổ sung visit_material_usages
+# Truy vết: CONFIRMED = có trong docs · ASSUMPTION (A#) · TBD (Q#) — xem file .md cùng tên.
+
+openapi: "3.1.0"
+info:
+  title: "Pet Care Material Usage API v1 (tầng 3)"
+  version: "1.0.0"
+  description: "Module KB (trừ vật tư tiêu hao, ST07) · owner BE-1. Nguồn: 01 ST07; 09-tang3-be1-spec.md §E (BR-KB-12…14); 05 bổ sung visit_material_usages. Chi tiết và truy vết: ../materialuse-v1.md"
+servers:
+  - url: "/api"
+    description: "Mọi path bên dưới nằm sau tiền tố /api"
+tags:
+  - name: "Material usage"
+    description: "Vật tư tiêu hao theo lượt và thiếu hụt (ST07)"
+paths:
+  "/visits/{visitId}/material-usages":
+    get:
+      tags: ["Material usage"]
+      summary: "Vật tư tiêu hao của một lượt"
+      description: "ST07 · BR-KB-12, 14. Actor: A05, A07. Quyền: A05 của chi nhánh; A07 phụ trách lượt. Chuyển trạng thái: —. Không phân trang. Rỗng khi lượt chưa hoàn tất hoặc dịch vụ không có định mức."
+      operationId: listVisitMaterialUsages
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: "#/components/parameters/VisitId"
+      responses:
+        "200":
+          description: OK
+          content:
+            "application/json":
+              schema:
+                type: object
+                required: [data, message, code]
+                properties:
+                  data:
+                    type: array
+                    items:
+                      $ref: "#/components/schemas/MaterialUsage"
+                  message:
+                    type: string
+                  code:
+                    type: integer
+                    description: "HTTP status của kết quả, ví dụ 200, 201"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+  "/material-shortages":
+    get:
+      tags: ["Material usage"]
+      summary: "Thiếu hụt vật tư chưa xử lý"
+      description: "ST07 · BR-KB-13. Actor: A05. Quyền: BRANCH_MANAGER của chi nhánh. Chuyển trạng thái: —. Chỉ dòng `shortageQty > 0`. Cũ nhất trước."
+      operationId: listMaterialShortages
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: resolved
+          in: query
+          required: false
+          schema:
+            type: boolean
+          description: "Vắng = false (chưa xử lý)"
+        - $ref: "#/components/parameters/Page"
+        - $ref: "#/components/parameters/Size"
+      responses:
+        "200":
+          description: OK
+          content:
+            "application/json":
+              schema:
+                type: object
+                required: [data, message, code]
+                properties:
+                  data:
+                    allOf:
+                      - $ref: "#/components/schemas/PageMeta"
+                      - type: object
+                        required: [content]
+                        properties:
+                          content:
+                            type: array
+                            items:
+                              $ref: "#/components/schemas/MaterialUsage"
+                  message:
+                    type: string
+                  code:
+                    type: integer
+                    description: "HTTP status của kết quả, ví dụ 200, 201"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+  "/material-shortages/{usageId}/resolve":
+    post:
+      tags: ["Material usage"]
+      summary: "Đánh dấu đã xử lý thiếu hụt"
+      description: "ST07 · BR-KB-13. Actor: A05. Quyền: BRANCH_MANAGER của chi nhánh. Chuyển trạng thái: —. Chỉ ghi nhận; không tự điều chỉnh tồn (dùng inventory-v1)."
+      operationId: resolveMaterialShortage
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: "#/components/parameters/UsageId"
+      requestBody:
+        required: true
+        content:
+          "application/json":
+            schema:
+              $ref: "#/components/schemas/ResolveShortageRequest"
+      responses:
+        "200":
+          description: OK
+          content:
+            "application/json":
+              schema:
+                type: object
+                required: [data, message, code]
+                properties:
+                  data:
+                    $ref: "#/components/schemas/MaterialUsage"
+                  message:
+                    type: string
+                  code:
+                    type: integer
+                    description: "HTTP status của kết quả, ví dụ 200, 201"
+        "400":
+          description: "Dòng không có thiếu hụt"
+          content:
+            "application/json":
+              schema:
+                $ref: "#/components/schemas/Error"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "409":
+          description: "Đã được xử lý"
+          content:
+            "application/json":
+              schema:
+                $ref: "#/components/schemas/Error"
+components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      description: "Access token trả về từ POST /auth/login, gắn với một phiên (sessions). Phiên bị hủy thì token hết hiệu lực ngay (BR-TK-11, 13, 14)."
+  parameters:
+    Page:
+      name: page
+      in: query
+      required: false
+      schema:
+        type: integer
+        minimum: 0
+        default: 0
+      description: "Số trang, bắt đầu từ 0"
+    Size:
+      name: size
+      in: query
+      required: false
+      schema:
+        type: integer
+        minimum: 1
+        maximum: 100
+        default: 20
+    VisitId:
+      name: visitId
+      in: path
+      required: true
+      schema:
+        type: integer
+        format: int64
+    UsageId:
+      name: usageId
+      in: path
+      required: true
+      schema:
+        type: integer
+        format: int64
+  schemas:
+    Error:
+      type: object
+      description: "Envelope lỗi duy nhất, do GlobalExceptionHandler (platform/exception) sinh. Vi phạm business rule: errorCode = BUSINESS_RULE_VIOLATION, message kết thúc bằng mã rule, ví dụ \"… (BR-LH-05)\"."
+      required: [success, errorCode, message, statusCode, timestamp, traceId]
+      properties:
+        success:
+          type: boolean
+          enum: [false]
+        errorCode:
+          type: string
+          enum: [BUSINESS_RULE_VIOLATION, INVALID_STATE_TRANSITION, RESOURCE_NOT_FOUND, ACCESS_DENIED_SCOPE_MISMATCH, CONCURRENCY_CONFLICT, VALIDATION_FAILED, MALFORMED_REQUEST, METHOD_NOT_ALLOWED, UNSUPPORTED_MEDIA_TYPE, UNAUTHENTICATED, ACCESS_DENIED, TOO_MANY_REQUESTS, INTERNAL_ERROR]
+          description: platform/exception/ErrorCode
+        message:
+          type: string
+          description: "Thông điệp tiếng Việt hiển thị được; với BUSINESS_RULE_VIOLATION kết thúc bằng \" (BR-…)\""
+        statusCode:
+          type: integer
+        timestamp:
+          type: string
+          format: date-time
+        traceId:
+          type: string
+    PageMeta:
+      type: object
+      required: [page, size, totalElements, totalPages]
+      properties:
+        page:
+          type: integer
+        size:
+          type: integer
+        totalElements:
+          type: integer
+          format: int64
+        totalPages:
+          type: integer
+    MaterialUsage:
+      type: object
+      required: [usageId, visitId, serviceId, serviceName, productId, productName, unit, normQty, issuedQty, shortageQty]
+      properties:
+        usageId:
+          type: integer
+          format: int64
+        visitId:
+          type: integer
+          format: int64
+        serviceId:
+          type: integer
+          format: int64
+        serviceName:
+          type: string
+        productId:
+          type: integer
+          format: int64
+        productName:
+          type: string
+        unit:
+          type: string
+        normQty:
+          type: integer
+          format: int32
+          description: "Theo định mức (BR-SP-10)"
+        issuedQty:
+          type: integer
+          format: int32
+          description: "Đã xuất kho"
+        shortageQty:
+          type: integer
+          format: int32
+          description: "Thiếu tồn lúc hoàn tất; 0 = đủ"
+        resolvedAt:
+          type: [string, "null"]
+          format: date-time
+        resolvedNote:
+          type: [string, "null"]
+    ResolveShortageRequest:
+      type: object
+      required: [note]
+      properties:
+        note:
+          type: string
+          maxLength: 300
+          description: "Đã làm gì (điều chỉnh tồn, nhập thêm…)"
+  responses:
+    BadRequest:
+      description: "VALIDATION_FAILED / MALFORMED_REQUEST: dữ liệu không hợp lệ · BUSINESS_RULE_VIOLATION: vi phạm rule, message kết thúc bằng mã rule \"(BR-…)\"."
+      content:
+        "application/json":
+          schema:
+            $ref: "#/components/schemas/Error"
+    Unauthorized:
+      description: "UNAUTHENTICATED: chưa đăng nhập hoặc phiên đã hết hạn / bị hủy."
+      content:
+        "application/json":
+          schema:
+            $ref: "#/components/schemas/Error"
+    Forbidden:
+      description: "ACCESS_DENIED: sai vai trò · ACCESS_DENIED_SCOPE_MISMATCH: ngoài phạm vi (chi nhánh, chủ sở hữu). Message chung, không lộ cấu trúc phân quyền."
+      content:
+        "application/json":
+          schema:
+            $ref: "#/components/schemas/Error"
+    NotFound:
+      description: "Không tìm thấy (RESOURCE_NOT_FOUND)."
+      content:
+        "application/json":
+          schema:
+            $ref: "#/components/schemas/Error"

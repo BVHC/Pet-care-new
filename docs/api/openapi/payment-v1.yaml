@@ -1,0 +1,542 @@
+# Pet Care Online Payment API v1 (tầng 3) — OpenAPI 3.1, sinh từ khai báo; không sửa tay, sửa khai báo rồi sinh lại.
+# Module TG (thanh toán online) · owner BE-2
+# Nguồn: 01 UC63, ST11, ST14; 08-tang3-be2-spec.md §C (BR-TG-06…10; 03 #15 Giao dịch thanh toán online); 05 bổ sung payment_transactions, payment_reconciliations, reconciliation_items
+# Truy vết: CONFIRMED = có trong docs · ASSUMPTION (A#) · TBD (Q#) — xem file .md cùng tên.
+
+openapi: "3.1.0"
+info:
+  title: "Pet Care Online Payment API v1 (tầng 3)"
+  version: "1.0.0"
+  description: "Module TG (thanh toán online) · owner BE-2. Nguồn: 01 UC63, ST11, ST14; 08-tang3-be2-spec.md §C (BR-TG-06…10; 03 #15 Giao dịch thanh toán online); 05 bổ sung payment_transactions, payment_reconciliations, reconciliation_items. Chi tiết và truy vết: ../payment-v1.md"
+servers:
+  - url: "/api"
+    description: "Mọi path bên dưới nằm sau tiền tố /api"
+tags:
+  - name: "Online payment"
+    description: "Thanh toán đơn online của tôi (UC63)"
+  - name: "Gateway callback"
+    description: "Kết quả do cổng thanh toán gọi về (S02)"
+  - name: Reconciliation
+    description: "Đối soát cổng (ST14)"
+paths:
+  "/me/online-orders/{onlineOrderId}/pay":
+    post:
+      tags: ["Online payment"]
+      summary: "Bắt đầu thanh toán đơn online"
+      description: "UC63 · BR-TG-06, 09, 11. Actor: A02. Quyền: CUSTOMER, chỉ đơn của mình. Chuyển trạng thái: — → PENDING (Giao dịch#1). Giao diện chuyển khách tới `redirectUrl`. Kết quả chỉ tin từ callback đã ký (A3)."
+      operationId: payOnlineOrder
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: "#/components/parameters/OnlineOrderId"
+      responses:
+        "201":
+          description: "Đã tạo"
+          content:
+            "application/json":
+              schema:
+                type: object
+                required: [data, message, code]
+                properties:
+                  data:
+                    $ref: "#/components/schemas/PaymentSession"
+                  message:
+                    type: string
+                  code:
+                    type: integer
+                    description: "HTTP status của kết quả, ví dụ 200, 201"
+        "400":
+          description: "`BR-TG-06` đơn đã quá hạn thanh toán (`BR-BH-12`)"
+          content:
+            "application/json":
+              schema:
+                $ref: "#/components/schemas/Error"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "409":
+          description: "Đơn không ở `PENDING_PAYMENT` · đã có giao dịch `PENDING` (`BR-TG-06`)"
+          content:
+            "application/json":
+              schema:
+                $ref: "#/components/schemas/Error"
+  "/me/payment-transactions/{transactionId}":
+    get:
+      tags: ["Online payment"]
+      summary: "Trạng thái giao dịch của tôi"
+      description: "UC63 · BR-TG-06. Actor: A02. Quyền: CUSTOMER, chỉ đơn của mình. Chuyển trạng thái: —. Trang kết quả sau khi quay lại từ cổng hỏi endpoint này."
+      operationId: getMyPaymentTransaction
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: "#/components/parameters/TransactionId"
+      responses:
+        "200":
+          description: OK
+          content:
+            "application/json":
+              schema:
+                type: object
+                required: [data, message, code]
+                properties:
+                  data:
+                    $ref: "#/components/schemas/PaymentTransaction"
+                  message:
+                    type: string
+                  code:
+                    type: integer
+                    description: "HTTP status của kết quả, ví dụ 200, 201"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          description: "Không tìm thấy giao dịch — cả khi thuộc người khác"
+          content:
+            "application/json":
+              schema:
+                $ref: "#/components/schemas/Error"
+  "/public/payment-gateway/callback":
+    post:
+      tags: ["Gateway callback"]
+      summary: "Nhận kết quả thanh toán từ cổng"
+      description: "UC63 · BR-TG-07, 08, 09. Actor: S02. Quyền: Public, kiểm chữ ký. Chuyển trạng thái: PENDING → SUCCEEDED / FAILED (Giao dịch#2, #3). Idempotent theo mã tham chiếu: gọi lại cùng kết quả vẫn 200 và không đổi gì. Số tiền lệch → `FAILED` + mục đối soát (BR-TG-08)."
+      operationId: paymentGatewayCallback
+      security: []
+      requestBody:
+        required: true
+        content:
+          "application/json":
+            schema:
+              $ref: "#/components/schemas/GatewayCallbackRequest"
+      responses:
+        "200":
+          description: OK
+          content:
+            "application/json":
+              schema:
+                type: object
+                required: [data, message, code]
+                properties:
+                  data:
+                    $ref: "#/components/schemas/CallbackAck"
+                  message:
+                    type: string
+                  code:
+                    type: integer
+                    description: "HTTP status của kết quả, ví dụ 200, 201"
+        "400":
+          description: "`BR-TG-07` chữ ký không hợp lệ · mã tham chiếu không tồn tại (không ghi gì ngoài log)"
+          content:
+            "application/json":
+              schema:
+                $ref: "#/components/schemas/Error"
+  "/payment-reconciliations":
+    get:
+      tags: [Reconciliation]
+      summary: "Danh sách phiên đối soát"
+      description: "ST14 · BR-TG-10. Actor: A04. Quyền: Chỉ SUPER_MANAGER. Chuyển trạng thái: —. Mới nhất trước (`reconDate` giảm dần)."
+      operationId: listPaymentReconciliations
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: status
+          in: query
+          required: false
+          schema:
+            type: string
+            enum: [RUNNING, MATCHED, MISMATCHED, FAILED]
+        - $ref: "#/components/parameters/Page"
+        - $ref: "#/components/parameters/Size"
+      responses:
+        "200":
+          description: OK
+          content:
+            "application/json":
+              schema:
+                type: object
+                required: [data, message, code]
+                properties:
+                  data:
+                    allOf:
+                      - $ref: "#/components/schemas/PageMeta"
+                      - type: object
+                        required: [content]
+                        properties:
+                          content:
+                            type: array
+                            items:
+                              $ref: "#/components/schemas/ReconciliationSummary"
+                  message:
+                    type: string
+                  code:
+                    type: integer
+                    description: "HTTP status của kết quả, ví dụ 200, 201"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+  "/payment-reconciliations/{reconciliationId}/items":
+    get:
+      tags: [Reconciliation]
+      summary: "Các mục lệch của một phiên đối soát"
+      description: "ST14 · BR-TG-10. Actor: A04. Quyền: Chỉ SUPER_MANAGER. Chuyển trạng thái: —."
+      operationId: listReconciliationItems
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: "#/components/parameters/ReconciliationId"
+        - name: resolved
+          in: query
+          required: false
+          schema:
+            type: boolean
+        - $ref: "#/components/parameters/Page"
+        - $ref: "#/components/parameters/Size"
+      responses:
+        "200":
+          description: OK
+          content:
+            "application/json":
+              schema:
+                type: object
+                required: [data, message, code]
+                properties:
+                  data:
+                    allOf:
+                      - $ref: "#/components/schemas/PageMeta"
+                      - type: object
+                        required: [content]
+                        properties:
+                          content:
+                            type: array
+                            items:
+                              $ref: "#/components/schemas/ReconciliationItem"
+                  message:
+                    type: string
+                  code:
+                    type: integer
+                    description: "HTTP status của kết quả, ví dụ 200, 201"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+  "/payment-reconciliation-items/{itemId}/resolve":
+    post:
+      tags: [Reconciliation]
+      summary: "Ghi chú đã xử lý mục lệch"
+      description: "ST14 · BR-TG-10. Actor: A04. Quyền: Chỉ SUPER_MANAGER. Chuyển trạng thái: —. Chỉ ghi chú; không sửa giao dịch hay đơn (BR-TG-10)."
+      operationId: resolveReconciliationItem
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: "#/components/parameters/ItemId"
+      requestBody:
+        required: true
+        content:
+          "application/json":
+            schema:
+              $ref: "#/components/schemas/ResolveItemRequest"
+      responses:
+        "200":
+          description: OK
+          content:
+            "application/json":
+              schema:
+                type: object
+                required: [data, message, code]
+                properties:
+                  data:
+                    $ref: "#/components/schemas/ReconciliationItem"
+                  message:
+                    type: string
+                  code:
+                    type: integer
+                    description: "HTTP status của kết quả, ví dụ 200, 201"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "409":
+          description: "Mục đã được xử lý"
+          content:
+            "application/json":
+              schema:
+                $ref: "#/components/schemas/Error"
+components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      description: "Access token trả về từ POST /auth/login, gắn với một phiên (sessions). Phiên bị hủy thì token hết hiệu lực ngay (BR-TK-11, 13, 14)."
+  parameters:
+    Page:
+      name: page
+      in: query
+      required: false
+      schema:
+        type: integer
+        minimum: 0
+        default: 0
+      description: "Số trang, bắt đầu từ 0"
+    Size:
+      name: size
+      in: query
+      required: false
+      schema:
+        type: integer
+        minimum: 1
+        maximum: 100
+        default: 20
+    OnlineOrderId:
+      name: onlineOrderId
+      in: path
+      required: true
+      schema:
+        type: integer
+        format: int64
+    TransactionId:
+      name: transactionId
+      in: path
+      required: true
+      schema:
+        type: integer
+        format: int64
+    ReconciliationId:
+      name: reconciliationId
+      in: path
+      required: true
+      schema:
+        type: integer
+        format: int64
+    ItemId:
+      name: itemId
+      in: path
+      required: true
+      schema:
+        type: integer
+        format: int64
+  schemas:
+    Error:
+      type: object
+      description: "Envelope lỗi duy nhất, do GlobalExceptionHandler (platform/exception) sinh. Vi phạm business rule: errorCode = BUSINESS_RULE_VIOLATION, message kết thúc bằng mã rule, ví dụ \"… (BR-LH-05)\"."
+      required: [success, errorCode, message, statusCode, timestamp, traceId]
+      properties:
+        success:
+          type: boolean
+          enum: [false]
+        errorCode:
+          type: string
+          enum: [BUSINESS_RULE_VIOLATION, INVALID_STATE_TRANSITION, RESOURCE_NOT_FOUND, ACCESS_DENIED_SCOPE_MISMATCH, CONCURRENCY_CONFLICT, VALIDATION_FAILED, MALFORMED_REQUEST, METHOD_NOT_ALLOWED, UNSUPPORTED_MEDIA_TYPE, UNAUTHENTICATED, ACCESS_DENIED, TOO_MANY_REQUESTS, INTERNAL_ERROR]
+          description: platform/exception/ErrorCode
+        message:
+          type: string
+          description: "Thông điệp tiếng Việt hiển thị được; với BUSINESS_RULE_VIOLATION kết thúc bằng \" (BR-…)\""
+        statusCode:
+          type: integer
+        timestamp:
+          type: string
+          format: date-time
+        traceId:
+          type: string
+    PageMeta:
+      type: object
+      required: [page, size, totalElements, totalPages]
+      properties:
+        page:
+          type: integer
+        size:
+          type: integer
+        totalElements:
+          type: integer
+          format: int64
+        totalPages:
+          type: integer
+    PaymentTransactionStatus:
+      type: string
+      enum: [PENDING, SUCCEEDED, FAILED, EXPIRED, CANCELLED]
+      description: "03 #15"
+    PaymentSession:
+      type: object
+      required: [transactionId, code, amount, redirectUrl, expiresAt]
+      properties:
+        transactionId:
+          type: integer
+          format: int64
+        code:
+          type: string
+          description: "Mã tham chiếu gửi cổng"
+        amount:
+          type: integer
+          format: int64
+          minimum: 0
+          description: "Tiền hàng + phí vận chuyển (BR-TG-06)"
+        redirectUrl:
+          type: string
+          maxLength: 500
+          description: "Địa chỉ chuyển khách sang cổng"
+        expiresAt:
+          type: string
+          format: date-time
+          description: "Bây giờ + 15 phút [CFG] (BR-TG-09)"
+    PaymentTransaction:
+      type: object
+      required: [transactionId, onlineOrderId, status, amount, expiresAt]
+      properties:
+        transactionId:
+          type: integer
+          format: int64
+        onlineOrderId:
+          type: integer
+          format: int64
+        status:
+          $ref: "#/components/schemas/PaymentTransactionStatus"
+        amount:
+          type: integer
+          format: int64
+          minimum: 0
+          description: VND
+        expiresAt:
+          type: string
+          format: date-time
+        paidAt:
+          type: [string, "null"]
+          format: date-time
+        failureReason:
+          type: [string, "null"]
+    GatewayCallbackRequest:
+      type: object
+      required: [transactionCode, status, amount, signature]
+      properties:
+        transactionCode:
+          type: string
+          description: "Mã tham chiếu hệ thống đã gửi cổng"
+        gatewayTxnId:
+          type: [string, "null"]
+          description: "Mã giao dịch của cổng"
+        status:
+          type: string
+          description: "Mã trạng thái nguyên văn của cổng"
+        amount:
+          type: integer
+          format: int64
+          minimum: 0
+          description: VND
+        signature:
+          type: string
+          description: "Chữ ký của cổng, kiểm trước khi xử lý (BR-TG-07)"
+        payload:
+          type: [object, "null"]
+          additionalProperties: true
+          description: "Các trường còn lại của cổng, nguyên văn"
+    CallbackAck:
+      type: object
+      required: [received]
+      properties:
+        received:
+          type: boolean
+    ReconciliationStatus:
+      type: string
+      enum: [RUNNING, MATCHED, MISMATCHED, FAILED]
+    ReconciliationSummary:
+      type: object
+      required: [reconciliationId, reconDate, status, txnCount, mismatchCount]
+      properties:
+        reconciliationId:
+          type: integer
+          format: int64
+        reconDate:
+          type: string
+          format: date
+        status:
+          $ref: "#/components/schemas/ReconciliationStatus"
+        txnCount:
+          type: integer
+          format: int32
+        mismatchCount:
+          type: integer
+          format: int32
+        finishedAt:
+          type: [string, "null"]
+          format: date-time
+    ReconciliationItemKind:
+      type: string
+      enum: [MISSING_LOCAL, MISSING_GATEWAY, AMOUNT_DIFF, STATUS_DIFF]
+    ReconciliationItem:
+      type: object
+      required: [itemId, kind, resolved]
+      properties:
+        itemId:
+          type: integer
+          format: int64
+        kind:
+          $ref: "#/components/schemas/ReconciliationItemKind"
+        transactionId:
+          type: [integer, "null"]
+          format: int64
+        gatewayRef:
+          type: [string, "null"]
+        ourAmount:
+          type: [integer, "null"]
+          format: int64
+          minimum: 0
+          description: VND
+        gatewayAmount:
+          type: [integer, "null"]
+          format: int64
+          minimum: 0
+          description: VND
+        resolved:
+          type: boolean
+        resolvedNote:
+          type: [string, "null"]
+        resolvedAt:
+          type: [string, "null"]
+          format: date-time
+    ResolveItemRequest:
+      type: object
+      required: [note]
+      properties:
+        note:
+          type: string
+          maxLength: 300
+  responses:
+    BadRequest:
+      description: "VALIDATION_FAILED / MALFORMED_REQUEST: dữ liệu không hợp lệ · BUSINESS_RULE_VIOLATION: vi phạm rule, message kết thúc bằng mã rule \"(BR-…)\"."
+      content:
+        "application/json":
+          schema:
+            $ref: "#/components/schemas/Error"
+    Unauthorized:
+      description: "UNAUTHENTICATED: chưa đăng nhập hoặc phiên đã hết hạn / bị hủy."
+      content:
+        "application/json":
+          schema:
+            $ref: "#/components/schemas/Error"
+    Forbidden:
+      description: "ACCESS_DENIED: sai vai trò · ACCESS_DENIED_SCOPE_MISMATCH: ngoài phạm vi (chi nhánh, chủ sở hữu). Message chung, không lộ cấu trúc phân quyền."
+      content:
+        "application/json":
+          schema:
+            $ref: "#/components/schemas/Error"
+    NotFound:
+      description: "Không tìm thấy (RESOURCE_NOT_FOUND)."
+      content:
+        "application/json":
+          schema:
+            $ref: "#/components/schemas/Error"

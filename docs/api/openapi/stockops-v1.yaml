@@ -1,0 +1,990 @@
+# Pet Care Stock Operations API v1 (tầng 3) — OpenAPI 3.1, sinh từ khai báo; không sửa tay, sửa khai báo rồi sinh lại.
+# Module KO (chuyển kho, kiểm kê, truy vết lô) · owner BE-2
+# Nguồn: 01 UC77, UC78, UC79; 08-tang3-be2-spec.md §E (BR-KO-08…13; 03 #18 Phiếu chuyển kho, #19 Phiên kiểm kê); 05 bổ sung stock_transfers, stock_transfer_lines, stock_counts, stock_count_lines
+# Truy vết: CONFIRMED = có trong docs · ASSUMPTION (A#) · TBD (Q#) — xem file .md cùng tên.
+
+openapi: "3.1.0"
+info:
+  title: "Pet Care Stock Operations API v1 (tầng 3)"
+  version: "1.0.0"
+  description: "Module KO (chuyển kho, kiểm kê, truy vết lô) · owner BE-2. Nguồn: 01 UC77, UC78, UC79; 08-tang3-be2-spec.md §E (BR-KO-08…13; 03 #18 Phiếu chuyển kho, #19 Phiên kiểm kê); 05 bổ sung stock_transfers, stock_transfer_lines, stock_counts, stock_count_lines. Chi tiết và truy vết: ../stockops-v1.md"
+servers:
+  - url: "/api"
+    description: "Mọi path bên dưới nằm sau tiền tố /api"
+tags:
+  - name: "Stock transfers"
+    description: "Chuyển kho (UC77)"
+  - name: "Stock counts"
+    description: "Kiểm kê kho (UC78)"
+  - name: "Lot trace"
+    description: "Truy vết lô hàng (UC79)"
+paths:
+  "/stock-transfers":
+    post:
+      tags: ["Stock transfers"]
+      summary: "Tạo phiếu chuyển kho"
+      description: "UC77 · BR-KO-08. Actor: A05. Quyền: BRANCH_MANAGER của chi nhánh nguồn. Chuyển trạng thái: — → IN_TRANSIT (Phiếu chuyển kho#1). Trừ FEFO lô nguồn và ghi lô vào dòng ngay khi tạo."
+      operationId: createStockTransfer
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          "application/json":
+            schema:
+              $ref: "#/components/schemas/CreateStockTransferRequest"
+      responses:
+        "201":
+          description: "Đã tạo"
+          content:
+            "application/json":
+              schema:
+                type: object
+                required: [data, message, code]
+                properties:
+                  data:
+                    $ref: "#/components/schemas/StockTransfer"
+                  message:
+                    type: string
+                  code:
+                    type: integer
+                    description: "HTTP status của kết quả, ví dụ 200, 201"
+        "400":
+          description: "`BR-KO-08` đích trùng nguồn / không `ACTIVE` · dòng vượt tồn khả dụng · trùng sản phẩm"
+          content:
+            "application/json":
+              schema:
+                $ref: "#/components/schemas/Error"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          description: "Không tìm thấy chi nhánh đích hoặc sản phẩm"
+          content:
+            "application/json":
+              schema:
+                $ref: "#/components/schemas/Error"
+    get:
+      tags: ["Stock transfers"]
+      summary: "Danh sách phiếu chuyển kho"
+      description: "UC77 · BR-KO-11. Actor: A05. Quyền: BRANCH_MANAGER của chi nhánh nguồn / đích. Chuyển trạng thái: —. Mới nhất trước. `direction` vắng = cả hai chiều."
+      operationId: listStockTransfers
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: direction
+          in: query
+          required: false
+          schema:
+            type: string
+            enum: [OUTGOING, INCOMING]
+        - name: status
+          in: query
+          required: false
+          schema:
+            type: string
+            enum: [IN_TRANSIT, RECEIVED, CANCELLED]
+        - $ref: "#/components/parameters/Page"
+        - $ref: "#/components/parameters/Size"
+      responses:
+        "200":
+          description: OK
+          content:
+            "application/json":
+              schema:
+                type: object
+                required: [data, message, code]
+                properties:
+                  data:
+                    allOf:
+                      - $ref: "#/components/schemas/PageMeta"
+                      - type: object
+                        required: [content]
+                        properties:
+                          content:
+                            type: array
+                            items:
+                              $ref: "#/components/schemas/StockTransferSummary"
+                  message:
+                    type: string
+                  code:
+                    type: integer
+                    description: "HTTP status của kết quả, ví dụ 200, 201"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+  "/stock-transfers/{transferId}":
+    get:
+      tags: ["Stock transfers"]
+      summary: "Chi tiết phiếu chuyển kho"
+      description: "UC77 · BR-KO-11. Actor: A05. Quyền: BRANCH_MANAGER của chi nhánh nguồn / đích. Chuyển trạng thái: —."
+      operationId: getStockTransfer
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: "#/components/parameters/TransferId"
+      responses:
+        "200":
+          description: OK
+          content:
+            "application/json":
+              schema:
+                type: object
+                required: [data, message, code]
+                properties:
+                  data:
+                    $ref: "#/components/schemas/StockTransfer"
+                  message:
+                    type: string
+                  code:
+                    type: integer
+                    description: "HTTP status của kết quả, ví dụ 200, 201"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+  "/stock-transfers/{transferId}/receive":
+    post:
+      tags: ["Stock transfers"]
+      summary: "Xác nhận nhận hàng"
+      description: "UC77 · BR-KO-09. Actor: A05. Quyền: BRANCH_MANAGER của chi nhánh đích. Chuyển trạng thái: IN_TRANSIT → RECEIVED (Phiếu chuyển kho#2)."
+      operationId: receiveStockTransfer
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: "#/components/parameters/TransferId"
+      responses:
+        "200":
+          description: OK
+          content:
+            "application/json":
+              schema:
+                type: object
+                required: [data, message, code]
+                properties:
+                  data:
+                    $ref: "#/components/schemas/StockTransfer"
+                  message:
+                    type: string
+                  code:
+                    type: integer
+                    description: "HTTP status của kết quả, ví dụ 200, 201"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "409":
+          description: "`INVALID_STATE_TRANSITION` trạng thái hiện tại không cho phép (03 #18, #19)"
+          content:
+            "application/json":
+              schema:
+                $ref: "#/components/schemas/Error"
+  "/stock-transfers/{transferId}/cancel":
+    post:
+      tags: ["Stock transfers"]
+      summary: "Hủy phiếu chuyển kho"
+      description: "UC77 · BR-KO-10. Actor: A05. Quyền: BRANCH_MANAGER của chi nhánh nguồn / đích. Chuyển trạng thái: IN_TRANSIT → CANCELLED (Phiếu chuyển kho#3). Hoàn đúng lô nguồn."
+      operationId: cancelStockTransfer
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: "#/components/parameters/TransferId"
+      requestBody:
+        required: true
+        content:
+          "application/json":
+            schema:
+              $ref: "#/components/schemas/ReasonRequest"
+      responses:
+        "200":
+          description: OK
+          content:
+            "application/json":
+              schema:
+                type: object
+                required: [data, message, code]
+                properties:
+                  data:
+                    $ref: "#/components/schemas/StockTransfer"
+                  message:
+                    type: string
+                  code:
+                    type: integer
+                    description: "HTTP status của kết quả, ví dụ 200, 201"
+        "400":
+          description: "`BR-KO-10` thiếu lý do"
+          content:
+            "application/json":
+              schema:
+                $ref: "#/components/schemas/Error"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "409":
+          description: "`INVALID_STATE_TRANSITION` trạng thái hiện tại không cho phép (03 #18, #19)"
+          content:
+            "application/json":
+              schema:
+                $ref: "#/components/schemas/Error"
+  "/stock-counts":
+    post:
+      tags: ["Stock counts"]
+      summary: "Mở phiên kiểm kê"
+      description: "UC78 · BR-KO-12. Actor: A05. Quyền: BRANCH_MANAGER của chi nhánh. Chuyển trạng thái: — → OPEN (Phiên kiểm kê#1)."
+      operationId: openStockCount
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          "application/json":
+            schema:
+              $ref: "#/components/schemas/OpenStockCountRequest"
+      responses:
+        "201":
+          description: "Đã tạo"
+          content:
+            "application/json":
+              schema:
+                type: object
+                required: [data, message, code]
+                properties:
+                  data:
+                    $ref: "#/components/schemas/StockCount"
+                  message:
+                    type: string
+                  code:
+                    type: integer
+                    description: "HTTP status của kết quả, ví dụ 200, 201"
+        "400":
+          description: "`BR-KO-12` thiếu `categoryId` khi scope = CATEGORY"
+          content:
+            "application/json":
+              schema:
+                $ref: "#/components/schemas/Error"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "409":
+          description: "Chi nhánh đã có phiên `OPEN`"
+          content:
+            "application/json":
+              schema:
+                $ref: "#/components/schemas/Error"
+    get:
+      tags: ["Stock counts"]
+      summary: "Danh sách phiên kiểm kê"
+      description: "UC78 · BR-KO-12. Actor: A05. Quyền: BRANCH_MANAGER của chi nhánh. Chuyển trạng thái: —. Mới nhất trước."
+      operationId: listStockCounts
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: status
+          in: query
+          required: false
+          schema:
+            type: string
+            enum: [OPEN, CONFIRMED, CANCELLED]
+        - $ref: "#/components/parameters/Page"
+        - $ref: "#/components/parameters/Size"
+      responses:
+        "200":
+          description: OK
+          content:
+            "application/json":
+              schema:
+                type: object
+                required: [data, message, code]
+                properties:
+                  data:
+                    allOf:
+                      - $ref: "#/components/schemas/PageMeta"
+                      - type: object
+                        required: [content]
+                        properties:
+                          content:
+                            type: array
+                            items:
+                              $ref: "#/components/schemas/StockCountSummary"
+                  message:
+                    type: string
+                  code:
+                    type: integer
+                    description: "HTTP status của kết quả, ví dụ 200, 201"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+  "/stock-counts/{countId}":
+    get:
+      tags: ["Stock counts"]
+      summary: "Chi tiết phiên kiểm kê"
+      description: "UC78 · BR-KO-12. Actor: A05. Quyền: BRANCH_MANAGER của chi nhánh. Chuyển trạng thái: —."
+      operationId: getStockCount
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: "#/components/parameters/CountId"
+      responses:
+        "200":
+          description: OK
+          content:
+            "application/json":
+              schema:
+                type: object
+                required: [data, message, code]
+                properties:
+                  data:
+                    $ref: "#/components/schemas/StockCount"
+                  message:
+                    type: string
+                  code:
+                    type: integer
+                    description: "HTTP status của kết quả, ví dụ 200, 201"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+  "/stock-counts/{countId}/lines":
+    put:
+      tags: ["Stock counts"]
+      summary: "Lưu số đếm theo lô"
+      description: "UC78 · BR-KO-12. Actor: A05. Quyền: BRANCH_MANAGER của chi nhánh. Chuyển trạng thái: —. Ghi đè số đếm của các lô gửi lên; lô không gửi giữ nguyên."
+      operationId: saveStockCountLines
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: "#/components/parameters/CountId"
+      requestBody:
+        required: true
+        content:
+          "application/json":
+            schema:
+              $ref: "#/components/schemas/SaveStockCountLinesRequest"
+      responses:
+        "200":
+          description: OK
+          content:
+            "application/json":
+              schema:
+                type: object
+                required: [data, message, code]
+                properties:
+                  data:
+                    $ref: "#/components/schemas/StockCount"
+                  message:
+                    type: string
+                  code:
+                    type: integer
+                    description: "HTTP status của kết quả, ví dụ 200, 201"
+        "400":
+          description: "Lô không thuộc phạm vi phiên · số đếm âm"
+          content:
+            "application/json":
+              schema:
+                $ref: "#/components/schemas/Error"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "409":
+          description: "`INVALID_STATE_TRANSITION` trạng thái hiện tại không cho phép (03 #18, #19)"
+          content:
+            "application/json":
+              schema:
+                $ref: "#/components/schemas/Error"
+  "/stock-counts/{countId}/confirm":
+    post:
+      tags: ["Stock counts"]
+      summary: "Xác nhận kiểm kê"
+      description: "UC78 · BR-KO-12. Actor: A05. Quyền: BRANCH_MANAGER của chi nhánh. Chuyển trạng thái: OPEN → CONFIRMED (Phiên kiểm kê#2). Tạo điều chỉnh `COUNT_DIFF` cho lô lệch (inventory-v1, UC76); ghi audit."
+      operationId: confirmStockCount
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: "#/components/parameters/CountId"
+      responses:
+        "200":
+          description: OK
+          content:
+            "application/json":
+              schema:
+                type: object
+                required: [data, message, code]
+                properties:
+                  data:
+                    $ref: "#/components/schemas/StockCount"
+                  message:
+                    type: string
+                  code:
+                    type: integer
+                    description: "HTTP status của kết quả, ví dụ 200, 201"
+        "400":
+          description: "`BR-KO-12` chưa nhập số đếm cho lô nào"
+          content:
+            "application/json":
+              schema:
+                $ref: "#/components/schemas/Error"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "409":
+          description: "`INVALID_STATE_TRANSITION` trạng thái hiện tại không cho phép (03 #18, #19)"
+          content:
+            "application/json":
+              schema:
+                $ref: "#/components/schemas/Error"
+  "/stock-counts/{countId}/cancel":
+    post:
+      tags: ["Stock counts"]
+      summary: "Hủy phiên kiểm kê"
+      description: "UC78 · BR-KO-12. Actor: A05. Quyền: BRANCH_MANAGER của chi nhánh. Chuyển trạng thái: OPEN → CANCELLED (Phiên kiểm kê#3)."
+      operationId: cancelStockCount
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: "#/components/parameters/CountId"
+      requestBody:
+        required: true
+        content:
+          "application/json":
+            schema:
+              $ref: "#/components/schemas/ReasonRequest"
+      responses:
+        "200":
+          description: OK
+          content:
+            "application/json":
+              schema:
+                type: object
+                required: [data, message, code]
+                properties:
+                  data:
+                    $ref: "#/components/schemas/StockCount"
+                  message:
+                    type: string
+                  code:
+                    type: integer
+                    description: "HTTP status của kết quả, ví dụ 200, 201"
+        "400":
+          description: "`BR-KO-12` thiếu lý do"
+          content:
+            "application/json":
+              schema:
+                $ref: "#/components/schemas/Error"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "409":
+          description: "`INVALID_STATE_TRANSITION` trạng thái hiện tại không cho phép (03 #18, #19)"
+          content:
+            "application/json":
+              schema:
+                $ref: "#/components/schemas/Error"
+  "/stock-lots":
+    get:
+      tags: ["Lot trace"]
+      summary: "Tìm lô hàng"
+      description: "UC79 · BR-KO-13. Actor: A05, A07. Quyền: A05 lô của chi nhánh mình; A07 lô thuốc / vaccine. Chuyển trạng thái: —. Phải có `lotNumber` hoặc `productId`. Mới nhập trước."
+      operationId: searchStockLots
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: lotNumber
+          in: query
+          required: false
+          schema:
+            type: string
+          description: "Khớp một phần, không phân biệt hoa thường"
+        - name: productId
+          in: query
+          required: false
+          schema:
+            type: integer
+            format: int64
+        - $ref: "#/components/parameters/Page"
+        - $ref: "#/components/parameters/Size"
+      responses:
+        "200":
+          description: OK
+          content:
+            "application/json":
+              schema:
+                type: object
+                required: [data, message, code]
+                properties:
+                  data:
+                    allOf:
+                      - $ref: "#/components/schemas/PageMeta"
+                      - type: object
+                        required: [content]
+                        properties:
+                          content:
+                            type: array
+                            items:
+                              $ref: "#/components/schemas/LotSummary"
+                  message:
+                    type: string
+                  code:
+                    type: integer
+                    description: "HTTP status của kết quả, ví dụ 200, 201"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+  "/stock-lots/{lotId}/trace":
+    get:
+      tags: ["Lot trace"]
+      summary: "Truy vết đường đi của lô"
+      description: "UC79 · BR-KO-13. Actor: A05, A07. Quyền: A05 lô của chi nhánh mình; A07 lô thuốc / vaccine. Chuyển trạng thái: —. Tên thú / khách chỉ có với lô thuốc, vaccine. Mỗi lượt xem ghi audit (BR-KO-13)."
+      operationId: traceStockLot
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: "#/components/parameters/LotId"
+      responses:
+        "200":
+          description: OK
+          content:
+            "application/json":
+              schema:
+                type: object
+                required: [data, message, code]
+                properties:
+                  data:
+                    $ref: "#/components/schemas/LotTrace"
+                  message:
+                    type: string
+                  code:
+                    type: integer
+                    description: "HTTP status của kết quả, ví dụ 200, 201"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      description: "Access token trả về từ POST /auth/login, gắn với một phiên (sessions). Phiên bị hủy thì token hết hiệu lực ngay (BR-TK-11, 13, 14)."
+  parameters:
+    Page:
+      name: page
+      in: query
+      required: false
+      schema:
+        type: integer
+        minimum: 0
+        default: 0
+      description: "Số trang, bắt đầu từ 0"
+    Size:
+      name: size
+      in: query
+      required: false
+      schema:
+        type: integer
+        minimum: 1
+        maximum: 100
+        default: 20
+    TransferId:
+      name: transferId
+      in: path
+      required: true
+      schema:
+        type: integer
+        format: int64
+    CountId:
+      name: countId
+      in: path
+      required: true
+      schema:
+        type: integer
+        format: int64
+    LotId:
+      name: lotId
+      in: path
+      required: true
+      schema:
+        type: integer
+        format: int64
+  schemas:
+    Error:
+      type: object
+      description: "Envelope lỗi duy nhất, do GlobalExceptionHandler (platform/exception) sinh. Vi phạm business rule: errorCode = BUSINESS_RULE_VIOLATION, message kết thúc bằng mã rule, ví dụ \"… (BR-LH-05)\"."
+      required: [success, errorCode, message, statusCode, timestamp, traceId]
+      properties:
+        success:
+          type: boolean
+          enum: [false]
+        errorCode:
+          type: string
+          enum: [BUSINESS_RULE_VIOLATION, INVALID_STATE_TRANSITION, RESOURCE_NOT_FOUND, ACCESS_DENIED_SCOPE_MISMATCH, CONCURRENCY_CONFLICT, VALIDATION_FAILED, MALFORMED_REQUEST, METHOD_NOT_ALLOWED, UNSUPPORTED_MEDIA_TYPE, UNAUTHENTICATED, ACCESS_DENIED, TOO_MANY_REQUESTS, INTERNAL_ERROR]
+          description: platform/exception/ErrorCode
+        message:
+          type: string
+          description: "Thông điệp tiếng Việt hiển thị được; với BUSINESS_RULE_VIOLATION kết thúc bằng \" (BR-…)\""
+        statusCode:
+          type: integer
+        timestamp:
+          type: string
+          format: date-time
+        traceId:
+          type: string
+    PageMeta:
+      type: object
+      required: [page, size, totalElements, totalPages]
+      properties:
+        page:
+          type: integer
+        size:
+          type: integer
+        totalElements:
+          type: integer
+          format: int64
+        totalPages:
+          type: integer
+    StockTransferStatus:
+      type: string
+      enum: [IN_TRANSIT, RECEIVED, CANCELLED]
+      description: "03 #18"
+    StockTransferLineInput:
+      type: object
+      required: [productId, quantity]
+      properties:
+        productId:
+          type: integer
+          format: int64
+        quantity:
+          type: integer
+          format: int32
+          description: "≤ tồn khả dụng của nguồn (BR-KO-08)"
+    CreateStockTransferRequest:
+      type: object
+      required: [destBranchId, lines]
+      properties:
+        destBranchId:
+          type: integer
+          format: int64
+        lines:
+          type: array
+          items:
+            $ref: "#/components/schemas/StockTransferLineInput"
+          description: "≥ 1 dòng"
+    StockTransferLine:
+      type: object
+      required: [productId, productName, quantity]
+      properties:
+        productId:
+          type: integer
+          format: int64
+        productName:
+          type: string
+        quantity:
+          type: integer
+          format: int32
+        lotNumber:
+          type: [string, "null"]
+        expiryDate:
+          type: [string, "null"]
+          format: date
+    StockTransferSummary:
+      type: object
+      required: [transferId, code, sourceBranchId, destBranchId, status, lineCount, createdAt]
+      properties:
+        transferId:
+          type: integer
+          format: int64
+        code:
+          type: string
+        sourceBranchId:
+          type: integer
+          format: int64
+        destBranchId:
+          type: integer
+          format: int64
+        status:
+          $ref: "#/components/schemas/StockTransferStatus"
+        lineCount:
+          type: integer
+          format: int32
+        createdAt:
+          type: string
+          format: date-time
+    StockTransfer:
+      type: object
+      required: [transferId, code, sourceBranchId, sourceBranchName, destBranchId, destBranchName, status, lines, createdAt]
+      properties:
+        transferId:
+          type: integer
+          format: int64
+        code:
+          type: string
+        sourceBranchId:
+          type: integer
+          format: int64
+        sourceBranchName:
+          type: string
+        destBranchId:
+          type: integer
+          format: int64
+        destBranchName:
+          type: string
+        status:
+          $ref: "#/components/schemas/StockTransferStatus"
+        lines:
+          type: array
+          items:
+            $ref: "#/components/schemas/StockTransferLine"
+        createdAt:
+          type: string
+          format: date-time
+        receivedAt:
+          type: [string, "null"]
+          format: date-time
+        cancelledAt:
+          type: [string, "null"]
+          format: date-time
+        cancelReason:
+          type: [string, "null"]
+    ReasonRequest:
+      type: object
+      required: [reason]
+      properties:
+        reason:
+          type: string
+          maxLength: 300
+    StockCountStatus:
+      type: string
+      enum: [OPEN, CONFIRMED, CANCELLED]
+      description: "03 #19"
+    StockCountScope:
+      type: string
+      enum: [ALL, CATEGORY]
+    OpenStockCountRequest:
+      type: object
+      required: [scope]
+      properties:
+        scope:
+          $ref: "#/components/schemas/StockCountScope"
+        categoryId:
+          type: [integer, "null"]
+          format: int64
+          description: "Bắt buộc khi scope = CATEGORY"
+    StockCountLine:
+      type: object
+      required: [stockLotId, productId, productName, systemQty]
+      properties:
+        stockLotId:
+          type: integer
+          format: int64
+        productId:
+          type: integer
+          format: int64
+        productName:
+          type: string
+        lotNumber:
+          type: [string, "null"]
+        expiryDate:
+          type: [string, "null"]
+          format: date
+        countedQty:
+          type: [integer, "null"]
+          format: int32
+          description: "Chưa nhập = chưa đếm"
+        systemQty:
+          type: integer
+          format: int32
+          description: "Tồn hệ thống hiện tại"
+    StockCountSummary:
+      type: object
+      required: [countId, code, status, scope, createdAt]
+      properties:
+        countId:
+          type: integer
+          format: int64
+        code:
+          type: string
+        status:
+          $ref: "#/components/schemas/StockCountStatus"
+        scope:
+          $ref: "#/components/schemas/StockCountScope"
+        createdAt:
+          type: string
+          format: date-time
+        confirmedAt:
+          type: [string, "null"]
+          format: date-time
+    StockCount:
+      type: object
+      required: [countId, code, branchId, status, scope, lines, createdAt]
+      properties:
+        countId:
+          type: integer
+          format: int64
+        code:
+          type: string
+        branchId:
+          type: integer
+          format: int64
+        status:
+          $ref: "#/components/schemas/StockCountStatus"
+        scope:
+          $ref: "#/components/schemas/StockCountScope"
+        categoryId:
+          type: [integer, "null"]
+          format: int64
+        lines:
+          type: array
+          items:
+            $ref: "#/components/schemas/StockCountLine"
+        createdAt:
+          type: string
+          format: date-time
+        confirmedAt:
+          type: [string, "null"]
+          format: date-time
+        cancelReason:
+          type: [string, "null"]
+    CountedQtyInput:
+      type: object
+      required: [stockLotId, countedQty]
+      properties:
+        stockLotId:
+          type: integer
+          format: int64
+        countedQty:
+          type: integer
+          format: int32
+          description: "≥ 0"
+    SaveStockCountLinesRequest:
+      type: object
+      required: [lines]
+      properties:
+        lines:
+          type: array
+          items:
+            $ref: "#/components/schemas/CountedQtyInput"
+    LotSummary:
+      type: object
+      required: [lotId, productId, productName, branchId, quantity]
+      properties:
+        lotId:
+          type: integer
+          format: int64
+        productId:
+          type: integer
+          format: int64
+        productName:
+          type: string
+        lotNumber:
+          type: [string, "null"]
+        expiryDate:
+          type: [string, "null"]
+          format: date
+        branchId:
+          type: integer
+          format: int64
+        quantity:
+          type: integer
+          format: int32
+    LotTraceEvent:
+      type: object
+      required: [occurredAt, kind, quantity, branchId]
+      properties:
+        occurredAt:
+          type: string
+          format: date-time
+        kind:
+          type: string
+          enum: [RECEIPT, TRANSFER_IN, TRANSFER_OUT, TRANSFER_CANCEL, ORDER_ISSUE, VACCINATION, ADJUSTMENT]
+        quantity:
+          type: integer
+          format: int32
+          description: "Dương = nhập, âm = xuất"
+        documentCode:
+          type: [string, "null"]
+        branchId:
+          type: integer
+          format: int64
+        petName:
+          type: [string, "null"]
+          description: "Chỉ với lô thuốc, vaccine (BR-KO-13)"
+        customerName:
+          type: [string, "null"]
+          description: "Như trên"
+    LotTrace:
+      type: object
+      required: [lot, events, remaining]
+      properties:
+        lot:
+          $ref: "#/components/schemas/LotSummary"
+        events:
+          type: array
+          items:
+            $ref: "#/components/schemas/LotTraceEvent"
+          description: "Cũ nhất trước"
+        remaining:
+          type: integer
+          format: int32
+  responses:
+    BadRequest:
+      description: "VALIDATION_FAILED / MALFORMED_REQUEST: dữ liệu không hợp lệ · BUSINESS_RULE_VIOLATION: vi phạm rule, message kết thúc bằng mã rule \"(BR-…)\"."
+      content:
+        "application/json":
+          schema:
+            $ref: "#/components/schemas/Error"
+    Unauthorized:
+      description: "UNAUTHENTICATED: chưa đăng nhập hoặc phiên đã hết hạn / bị hủy."
+      content:
+        "application/json":
+          schema:
+            $ref: "#/components/schemas/Error"
+    Forbidden:
+      description: "ACCESS_DENIED: sai vai trò · ACCESS_DENIED_SCOPE_MISMATCH: ngoài phạm vi (chi nhánh, chủ sở hữu). Message chung, không lộ cấu trúc phân quyền."
+      content:
+        "application/json":
+          schema:
+            $ref: "#/components/schemas/Error"
+    NotFound:
+      description: "Không tìm thấy (RESOURCE_NOT_FOUND)."
+      content:
+        "application/json":
+          schema:
+            $ref: "#/components/schemas/Error"

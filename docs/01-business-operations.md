@@ -1,6 +1,6 @@
 # Pet Care Ecosystem — Use Case Catalog
 
-> Danh sách use case và tác vụ hệ thống của web Pet Care. Gồm **89 mã use case** (UC01–UC89; còn hiệu lực 85 sau khi bỏ UC18, UC19, UC20, UC41) + **21 tác vụ hệ thống** (không vẽ trên sơ đồ use case).
+> Danh sách use case và tác vụ hệ thống của web Pet Care. Gồm **94 mã use case** (UC01–UC94; còn hiệu lực 90 sau khi bỏ UC18, UC19, UC20, UC41; UC90–UC94 là phân hệ AI, đặc tả ở `07-ai-subsystem.md`) + **23 tác vụ hệ thống** (ST22, ST23 là của AI) (không vẽ trên sơ đồ use case).
 
 ---
 
@@ -203,6 +203,16 @@
 |---|---|---|
 | UC89 | Xem báo cáo | A04, A05 |
 
+## 19. Trí tuệ nhân tạo (tầng 3, đặc tả ở `07-ai-subsystem.md`)
+
+| Mã | Use case | Actor |
+|---|---|---|
+| UC90 | Hỏi đáp chatbot tư vấn chăm sóc (RAG + LLM trên tri thức công khai) | A01, A02 |
+| UC91 | Hỏi chatbot về lịch của tôi: lịch hẹn sắp tới, lịch tiêm của thú (tất định, không qua LLM) | A02 (A01 chỉ được nhắc đăng nhập) |
+| UC92 | Xem gợi ý cá nhân hóa cho thú (dịch vụ thẩm mỹ, lưu trú, sản phẩm) | A02 |
+| UC93 | Quản lý tri thức chatbot (soạn, xuất bản, lưu trữ, nạp lại chỉ mục) | A04 |
+| UC94 | Khai báo hồ sơ gợi ý của dịch vụ / sản phẩm | A04 |
+
 ---
 
 # B. Tác vụ hệ thống
@@ -232,6 +242,8 @@ Các mục dưới đây do hệ thống tự chạy theo thời gian hoặc the
 | ST19 | Tự hủy Care Task khi thú cưng đã mất | UC24 |
 | ST20 | Gửi thông báo & thử lại khi thất bại | Mọi sự kiện cần thông báo |
 | ST21 | Hoàn tiền online qua cổng thanh toán | UC64, UC69 |
+| ST22 | Nạp lại chỉ mục tri thức AI (chia đoạn, nhúng vector; đồng bộ phác đồ tiêm) | UC93, định kỳ |
+| ST23 | Xóa nhật ký hỏi đáp AI quá hạn lưu | Hằng ngày |
 
 ---
 

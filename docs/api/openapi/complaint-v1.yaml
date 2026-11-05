@@ -1,0 +1,823 @@
+# Pet Care Complaint API v1 (tầng 3) — OpenAPI 3.1, sinh từ khai báo; không sửa tay, sửa khai báo rồi sinh lại.
+# Module DG (khiếu nại) · owner BE-1
+# Nguồn: 01 UC85, UC86, ST16, ST17; 09-tang3-be1-spec.md §D (BR-DG-05…09; 03 #26 Khiếu nại); 05 bổ sung complaints, complaint_messages
+# Truy vết: CONFIRMED = có trong docs · ASSUMPTION (A#) · TBD (Q#) — xem file .md cùng tên.
+
+openapi: "3.1.0"
+info:
+  title: "Pet Care Complaint API v1 (tầng 3)"
+  version: "1.0.0"
+  description: "Module DG (khiếu nại) · owner BE-1. Nguồn: 01 UC85, UC86, ST16, ST17; 09-tang3-be1-spec.md §D (BR-DG-05…09; 03 #26 Khiếu nại); 05 bổ sung complaints, complaint_messages. Chi tiết và truy vết: ../complaint-v1.md"
+servers:
+  - url: "/api"
+    description: "Mọi path bên dưới nằm sau tiền tố /api"
+tags:
+  - name: "My complaints"
+    description: "Khiếu nại của tôi (UC85)"
+  - name: Complaints
+    description: "Xử lý khiếu nại (UC85 lễ tân tạo thay, UC86)"
+paths:
+  "/me/complaints":
+    post:
+      tags: ["My complaints"]
+      summary: "Gửi khiếu nại"
+      description: "UC85 · BR-DG-05. Actor: A02. Quyền: CUSTOMER, chỉ khiếu nại của mình. Chuyển trạng thái: — → OPEN (Khiếu nại#1)."
+      operationId: createMyComplaint
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          "application/json":
+            schema:
+              $ref: "#/components/schemas/CreateComplaintRequest"
+      responses:
+        "201":
+          description: "Đã tạo"
+          content:
+            "application/json":
+              schema:
+                type: object
+                required: [data, message, code]
+                properties:
+                  data:
+                    $ref: "#/components/schemas/Complaint"
+                  message:
+                    type: string
+                  code:
+                    type: integer
+                    description: "HTTP status của kết quả, ví dụ 200, 201"
+        "400":
+          description: "`BR-DG-05` nội dung < 10 / > 2 000 ký tự · thiếu chi nhánh · đối tượng liên quan không thuộc khách · quá 10 khiếu nại đang mở [CFG]"
+          content:
+            "application/json":
+              schema:
+                $ref: "#/components/schemas/Error"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          description: "Không tìm thấy chi nhánh / đối tượng liên quan"
+          content:
+            "application/json":
+              schema:
+                $ref: "#/components/schemas/Error"
+    get:
+      tags: ["My complaints"]
+      summary: "Khiếu nại của tôi"
+      description: "UC85 · BR-DG-06. Actor: A02. Quyền: CUSTOMER, chỉ khiếu nại của mình. Chuyển trạng thái: —. Mới nhất trước (`createdAt` giảm dần, trùng thì `complaintId` giảm dần)."
+      operationId: listMyComplaints
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: status
+          in: query
+          required: false
+          schema:
+            type: string
+            enum: [OPEN, IN_PROGRESS, RESOLVED, CLOSED]
+        - $ref: "#/components/parameters/Page"
+        - $ref: "#/components/parameters/Size"
+      responses:
+        "200":
+          description: OK
+          content:
+            "application/json":
+              schema:
+                type: object
+                required: [data, message, code]
+                properties:
+                  data:
+                    allOf:
+                      - $ref: "#/components/schemas/PageMeta"
+                      - type: object
+                        required: [content]
+                        properties:
+                          content:
+                            type: array
+                            items:
+                              $ref: "#/components/schemas/ComplaintSummary"
+                  message:
+                    type: string
+                  code:
+                    type: integer
+                    description: "HTTP status của kết quả, ví dụ 200, 201"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+  "/me/complaints/{complaintId}":
+    get:
+      tags: ["My complaints"]
+      summary: "Chi tiết khiếu nại của tôi"
+      description: "UC85 · BR-DG-06. Actor: A02. Quyền: CUSTOMER, chỉ khiếu nại của mình. Chuyển trạng thái: —."
+      operationId: getMyComplaint
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: "#/components/parameters/ComplaintId"
+      responses:
+        "200":
+          description: OK
+          content:
+            "application/json":
+              schema:
+                type: object
+                required: [data, message, code]
+                properties:
+                  data:
+                    $ref: "#/components/schemas/Complaint"
+                  message:
+                    type: string
+                  code:
+                    type: integer
+                    description: "HTTP status của kết quả, ví dụ 200, 201"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          description: "Không tìm thấy khiếu nại — cả khi thuộc người khác (ADR-0006)"
+          content:
+            "application/json":
+              schema:
+                $ref: "#/components/schemas/Error"
+  "/me/complaints/{complaintId}/messages":
+    post:
+      tags: ["My complaints"]
+      summary: "Trao đổi thêm"
+      description: "UC85 · BR-DG-07. Actor: A02. Quyền: CUSTOMER, chỉ khiếu nại của mình. Chuyển trạng thái: —."
+      operationId: postMyComplaintMessage
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: "#/components/parameters/ComplaintId"
+      requestBody:
+        required: true
+        content:
+          "application/json":
+            schema:
+              $ref: "#/components/schemas/PostMessageRequest"
+      responses:
+        "201":
+          description: "Đã tạo"
+          content:
+            "application/json":
+              schema:
+                type: object
+                required: [data, message, code]
+                properties:
+                  data:
+                    $ref: "#/components/schemas/Complaint"
+                  message:
+                    type: string
+                  code:
+                    type: integer
+                    description: "HTTP status của kết quả, ví dụ 200, 201"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "409":
+          description: "Khiếu nại đã `CLOSED`"
+          content:
+            "application/json":
+              schema:
+                $ref: "#/components/schemas/Error"
+  "/me/complaints/{complaintId}/close":
+    post:
+      tags: ["My complaints"]
+      summary: "Đóng hoặc rút khiếu nại"
+      description: "UC85 · BR-DG-07. Actor: A02. Quyền: CUSTOMER, chỉ khiếu nại của mình. Chuyển trạng thái: RESOLVED → CLOSED (Khiếu nại#5); OPEN / IN_PROGRESS → CLOSED (Khiếu nại#4). Đang xử lý thì là **rút** (`WITHDRAWN`, không mở lại); đã kết luận thì là đóng (`CUSTOMER`)."
+      operationId: closeMyComplaint
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: "#/components/parameters/ComplaintId"
+      responses:
+        "200":
+          description: OK
+          content:
+            "application/json":
+              schema:
+                type: object
+                required: [data, message, code]
+                properties:
+                  data:
+                    $ref: "#/components/schemas/Complaint"
+                  message:
+                    type: string
+                  code:
+                    type: integer
+                    description: "HTTP status của kết quả, ví dụ 200, 201"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "409":
+          description: "`INVALID_STATE_TRANSITION` trạng thái khiếu nại không cho phép (03 #26)"
+          content:
+            "application/json":
+              schema:
+                $ref: "#/components/schemas/Error"
+  "/me/complaints/{complaintId}/reopen":
+    post:
+      tags: ["My complaints"]
+      summary: "Mở lại khiếu nại"
+      description: "UC85 · BR-DG-07. Actor: A02. Quyền: CUSTOMER, chỉ khiếu nại của mình. Chuyển trạng thái: RESOLVED / CLOSED → OPEN (Khiếu nại#6, #7). Thân là lý do mở lại, ghi thành tin nhắn."
+      operationId: reopenMyComplaint
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: "#/components/parameters/ComplaintId"
+      requestBody:
+        required: true
+        content:
+          "application/json":
+            schema:
+              $ref: "#/components/schemas/PostMessageRequest"
+      responses:
+        "200":
+          description: OK
+          content:
+            "application/json":
+              schema:
+                type: object
+                required: [data, message, code]
+                properties:
+                  data:
+                    $ref: "#/components/schemas/Complaint"
+                  message:
+                    type: string
+                  code:
+                    type: integer
+                    description: "HTTP status của kết quả, ví dụ 200, 201"
+        "400":
+          description: "`BR-DG-07` quá 7 ngày [CFG] · quá số lần mở lại tối đa [CFG] · khiếu nại đã rút"
+          content:
+            "application/json":
+              schema:
+                $ref: "#/components/schemas/Error"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "409":
+          description: "`INVALID_STATE_TRANSITION` trạng thái khiếu nại không cho phép (03 #26)"
+          content:
+            "application/json":
+              schema:
+                $ref: "#/components/schemas/Error"
+  "/complaints":
+    post:
+      tags: [Complaints]
+      summary: "Lễ tân tạo khiếu nại thay khách"
+      description: "UC85 · BR-DG-05, 06. Actor: A06. Quyền: Lễ tân, khách ở chi nhánh của mình. Chuyển trạng thái: — → OPEN (Khiếu nại#1)."
+      operationId: createComplaintForCustomer
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          "application/json":
+            schema:
+              $ref: "#/components/schemas/CreateComplaintForCustomerRequest"
+      responses:
+        "201":
+          description: "Đã tạo"
+          content:
+            "application/json":
+              schema:
+                type: object
+                required: [data, message, code]
+                properties:
+                  data:
+                    $ref: "#/components/schemas/Complaint"
+                  message:
+                    type: string
+                  code:
+                    type: integer
+                    description: "HTTP status của kết quả, ví dụ 200, 201"
+        "400":
+          description: "`BR-DG-05` như tạo của khách"
+          content:
+            "application/json":
+              schema:
+                $ref: "#/components/schemas/Error"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          description: "Không tìm thấy khách / chi nhánh / đối tượng liên quan"
+          content:
+            "application/json":
+              schema:
+                $ref: "#/components/schemas/Error"
+    get:
+      tags: [Complaints]
+      summary: "Danh sách khiếu nại cần xử lý"
+      description: "UC86 · BR-DG-06, 08. Actor: A04, A05, A06. Quyền: BRANCH_MANAGER chi nhánh của khiếu nại; SUPER_MANAGER mọi khiếu nại; A06 chỉ cái mình tạo. Chuyển trạng thái: —. `status` vắng = `OPEN` + `IN_PROGRESS`. Cũ nhất trước (`lastActivityAt` tăng dần). Tự lọc theo phạm vi người gọi."
+      operationId: listComplaints
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: status
+          in: query
+          required: false
+          schema:
+            type: string
+            enum: [OPEN, IN_PROGRESS, RESOLVED, CLOSED]
+        - name: escalated
+          in: query
+          required: false
+          schema:
+            type: boolean
+          description: "true = chỉ khiếu nại đã leo thang (quá hạn)"
+        - $ref: "#/components/parameters/Page"
+        - $ref: "#/components/parameters/Size"
+      responses:
+        "200":
+          description: OK
+          content:
+            "application/json":
+              schema:
+                type: object
+                required: [data, message, code]
+                properties:
+                  data:
+                    allOf:
+                      - $ref: "#/components/schemas/PageMeta"
+                      - type: object
+                        required: [content]
+                        properties:
+                          content:
+                            type: array
+                            items:
+                              $ref: "#/components/schemas/ComplaintSummary"
+                  message:
+                    type: string
+                  code:
+                    type: integer
+                    description: "HTTP status của kết quả, ví dụ 200, 201"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+  "/complaints/{complaintId}":
+    get:
+      tags: [Complaints]
+      summary: "Chi tiết khiếu nại"
+      description: "UC86 · BR-DG-06. Actor: A04, A05, A06. Quyền: BRANCH_MANAGER chi nhánh của khiếu nại; SUPER_MANAGER mọi khiếu nại; A06 chỉ cái mình tạo. Chuyển trạng thái: —."
+      operationId: getComplaint
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: "#/components/parameters/ComplaintId"
+      responses:
+        "200":
+          description: OK
+          content:
+            "application/json":
+              schema:
+                type: object
+                required: [data, message, code]
+                properties:
+                  data:
+                    $ref: "#/components/schemas/Complaint"
+                  message:
+                    type: string
+                  code:
+                    type: integer
+                    description: "HTTP status của kết quả, ví dụ 200, 201"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+  "/complaints/{complaintId}/take":
+    post:
+      tags: [Complaints]
+      summary: "Nhận xử lý khiếu nại"
+      description: "UC86 · BR-DG-07. Actor: A04, A05. Quyền: BRANCH_MANAGER chi nhánh của khiếu nại; SUPER_MANAGER mọi khiếu nại. Chuyển trạng thái: OPEN → IN_PROGRESS (Khiếu nại#2)."
+      operationId: takeComplaint
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: "#/components/parameters/ComplaintId"
+      responses:
+        "200":
+          description: OK
+          content:
+            "application/json":
+              schema:
+                type: object
+                required: [data, message, code]
+                properties:
+                  data:
+                    $ref: "#/components/schemas/Complaint"
+                  message:
+                    type: string
+                  code:
+                    type: integer
+                    description: "HTTP status của kết quả, ví dụ 200, 201"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "409":
+          description: "`INVALID_STATE_TRANSITION` trạng thái khiếu nại không cho phép (03 #26)"
+          content:
+            "application/json":
+              schema:
+                $ref: "#/components/schemas/Error"
+  "/complaints/{complaintId}/messages":
+    post:
+      tags: [Complaints]
+      summary: "Trả lời khách"
+      description: "UC86 · BR-DG-07. Actor: A04, A05, A06. Quyền: BRANCH_MANAGER chi nhánh của khiếu nại; SUPER_MANAGER mọi khiếu nại; A06 chỉ cái mình tạo. Chuyển trạng thái: —."
+      operationId: postComplaintMessage
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: "#/components/parameters/ComplaintId"
+      requestBody:
+        required: true
+        content:
+          "application/json":
+            schema:
+              $ref: "#/components/schemas/PostMessageRequest"
+      responses:
+        "201":
+          description: "Đã tạo"
+          content:
+            "application/json":
+              schema:
+                type: object
+                required: [data, message, code]
+                properties:
+                  data:
+                    $ref: "#/components/schemas/Complaint"
+                  message:
+                    type: string
+                  code:
+                    type: integer
+                    description: "HTTP status của kết quả, ví dụ 200, 201"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "409":
+          description: "Khiếu nại đã `CLOSED`"
+          content:
+            "application/json":
+              schema:
+                $ref: "#/components/schemas/Error"
+  "/complaints/{complaintId}/resolve":
+    post:
+      tags: [Complaints]
+      summary: "Kết luận khiếu nại"
+      description: "UC86 · BR-DG-07. Actor: A04, A05. Quyền: BRANCH_MANAGER chi nhánh của khiếu nại; SUPER_MANAGER mọi khiếu nại (người đang xử lý). Chuyển trạng thái: IN_PROGRESS → RESOLVED (Khiếu nại#3)."
+      operationId: resolveComplaint
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: "#/components/parameters/ComplaintId"
+      requestBody:
+        required: true
+        content:
+          "application/json":
+            schema:
+              $ref: "#/components/schemas/ResolveComplaintRequest"
+      responses:
+        "200":
+          description: OK
+          content:
+            "application/json":
+              schema:
+                type: object
+                required: [data, message, code]
+                properties:
+                  data:
+                    $ref: "#/components/schemas/Complaint"
+                  message:
+                    type: string
+                  code:
+                    type: integer
+                    description: "HTTP status của kết quả, ví dụ 200, 201"
+        "400":
+          description: "`BR-DG-07` thiếu kết luận"
+          content:
+            "application/json":
+              schema:
+                $ref: "#/components/schemas/Error"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "409":
+          description: "`INVALID_STATE_TRANSITION` trạng thái khiếu nại không cho phép (03 #26)"
+          content:
+            "application/json":
+              schema:
+                $ref: "#/components/schemas/Error"
+components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      description: "Access token trả về từ POST /auth/login, gắn với một phiên (sessions). Phiên bị hủy thì token hết hiệu lực ngay (BR-TK-11, 13, 14)."
+  parameters:
+    Page:
+      name: page
+      in: query
+      required: false
+      schema:
+        type: integer
+        minimum: 0
+        default: 0
+      description: "Số trang, bắt đầu từ 0"
+    Size:
+      name: size
+      in: query
+      required: false
+      schema:
+        type: integer
+        minimum: 1
+        maximum: 100
+        default: 20
+    ComplaintId:
+      name: complaintId
+      in: path
+      required: true
+      schema:
+        type: integer
+        format: int64
+  schemas:
+    Error:
+      type: object
+      description: "Envelope lỗi duy nhất, do GlobalExceptionHandler (platform/exception) sinh. Vi phạm business rule: errorCode = BUSINESS_RULE_VIOLATION, message kết thúc bằng mã rule, ví dụ \"… (BR-LH-05)\"."
+      required: [success, errorCode, message, statusCode, timestamp, traceId]
+      properties:
+        success:
+          type: boolean
+          enum: [false]
+        errorCode:
+          type: string
+          enum: [BUSINESS_RULE_VIOLATION, INVALID_STATE_TRANSITION, RESOURCE_NOT_FOUND, ACCESS_DENIED_SCOPE_MISMATCH, CONCURRENCY_CONFLICT, VALIDATION_FAILED, MALFORMED_REQUEST, METHOD_NOT_ALLOWED, UNSUPPORTED_MEDIA_TYPE, UNAUTHENTICATED, ACCESS_DENIED, TOO_MANY_REQUESTS, INTERNAL_ERROR]
+          description: platform/exception/ErrorCode
+        message:
+          type: string
+          description: "Thông điệp tiếng Việt hiển thị được; với BUSINESS_RULE_VIOLATION kết thúc bằng \" (BR-…)\""
+        statusCode:
+          type: integer
+        timestamp:
+          type: string
+          format: date-time
+        traceId:
+          type: string
+    PageMeta:
+      type: object
+      required: [page, size, totalElements, totalPages]
+      properties:
+        page:
+          type: integer
+        size:
+          type: integer
+        totalElements:
+          type: integer
+          format: int64
+        totalPages:
+          type: integer
+    ComplaintStatus:
+      type: string
+      enum: [OPEN, IN_PROGRESS, RESOLVED, CLOSED]
+      description: "03 #26"
+    ComplaintTopic:
+      type: string
+      enum: [SERVICE_QUALITY, GROOMING, BOARDING, PURCHASE, STAFF, OTHER]
+    ComplaintRelatedType:
+      type: string
+      enum: [ORDER, ONLINE_ORDER, VISIT, BOARDING]
+    ComplaintClosedReason:
+      type: string
+      enum: [CUSTOMER, WITHDRAWN, AUTO]
+    CreateComplaintRequest:
+      type: object
+      required: [topic, content]
+      properties:
+        topic:
+          $ref: "#/components/schemas/ComplaintTopic"
+        branchId:
+          type: [integer, "null"]
+          format: int64
+          description: "Bắt buộc trừ chủ đề `OTHER` (BR-DG-05)"
+        relatedType:
+          $ref: "#/components/schemas/ComplaintRelatedType"
+        relatedId:
+          type: [integer, "null"]
+          format: int64
+          description: "Cùng có hoặc cùng vắng với `relatedType`; phải thuộc khách"
+        content:
+          type: string
+          maxLength: 2000
+          description: "10–2 000 ký tự"
+    CreateComplaintForCustomerRequest:
+      type: object
+      required: [customerId, topic, content]
+      properties:
+        customerId:
+          type: integer
+          format: int64
+          description: "Khách được tạo thay (lễ tân)"
+        topic:
+          $ref: "#/components/schemas/ComplaintTopic"
+        branchId:
+          type: [integer, "null"]
+          format: int64
+        relatedType:
+          $ref: "#/components/schemas/ComplaintRelatedType"
+        relatedId:
+          type: [integer, "null"]
+          format: int64
+        content:
+          type: string
+          maxLength: 2000
+    ComplaintSummary:
+      type: object
+      required: [complaintId, code, topic, status, escalated, lastActivityAt, createdAt]
+      properties:
+        complaintId:
+          type: integer
+          format: int64
+        code:
+          type: string
+        topic:
+          $ref: "#/components/schemas/ComplaintTopic"
+        status:
+          $ref: "#/components/schemas/ComplaintStatus"
+        branchId:
+          type: [integer, "null"]
+          format: int64
+        escalated:
+          type: boolean
+        lastActivityAt:
+          type: string
+          format: date-time
+        createdAt:
+          type: string
+          format: date-time
+    ComplaintMessageAuthorType:
+      type: string
+      enum: [CUSTOMER, STAFF, SYSTEM]
+    ComplaintMessageKind:
+      type: string
+      enum: [MESSAGE, STATUS]
+    ComplaintMessage:
+      type: object
+      required: [messageId, authorType, kind, body, createdAt]
+      properties:
+        messageId:
+          type: integer
+          format: int64
+        authorType:
+          $ref: "#/components/schemas/ComplaintMessageAuthorType"
+        authorName:
+          type: [string, "null"]
+        kind:
+          $ref: "#/components/schemas/ComplaintMessageKind"
+        body:
+          type: string
+        createdAt:
+          type: string
+          format: date-time
+    Complaint:
+      type: object
+      required: [complaintId, code, customerId, customerName, topic, content, status, createdByStaff, reopenCount, lastActivityAt, createdAt, messages]
+      properties:
+        complaintId:
+          type: integer
+          format: int64
+        code:
+          type: string
+        customerId:
+          type: integer
+          format: int64
+        customerName:
+          type: string
+        branchId:
+          type: [integer, "null"]
+          format: int64
+        topic:
+          $ref: "#/components/schemas/ComplaintTopic"
+        relatedType:
+          $ref: "#/components/schemas/ComplaintRelatedType"
+        relatedId:
+          type: [integer, "null"]
+          format: int64
+        content:
+          type: string
+        status:
+          $ref: "#/components/schemas/ComplaintStatus"
+        createdByStaff:
+          type: boolean
+          description: "Lễ tân tạo thay khách"
+        handlerName:
+          type: [string, "null"]
+        resolution:
+          type: [string, "null"]
+        resolvedAt:
+          type: [string, "null"]
+          format: date-time
+        closedAt:
+          type: [string, "null"]
+          format: date-time
+        closedReason:
+          $ref: "#/components/schemas/ComplaintClosedReason"
+        reopenCount:
+          type: integer
+          format: int32
+        escalatedAt:
+          type: [string, "null"]
+          format: date-time
+        lastActivityAt:
+          type: string
+          format: date-time
+        createdAt:
+          type: string
+          format: date-time
+        messages:
+          type: array
+          items:
+            $ref: "#/components/schemas/ComplaintMessage"
+          description: "Cũ nhất trước"
+    PostMessageRequest:
+      type: object
+      required: [body]
+      properties:
+        body:
+          type: string
+          maxLength: 2000
+    ResolveComplaintRequest:
+      type: object
+      required: [resolution]
+      properties:
+        resolution:
+          type: string
+          maxLength: 2000
+          description: "Kết luận (BR-DG-07)"
+  responses:
+    BadRequest:
+      description: "VALIDATION_FAILED / MALFORMED_REQUEST: dữ liệu không hợp lệ · BUSINESS_RULE_VIOLATION: vi phạm rule, message kết thúc bằng mã rule \"(BR-…)\"."
+      content:
+        "application/json":
+          schema:
+            $ref: "#/components/schemas/Error"
+    Unauthorized:
+      description: "UNAUTHENTICATED: chưa đăng nhập hoặc phiên đã hết hạn / bị hủy."
+      content:
+        "application/json":
+          schema:
+            $ref: "#/components/schemas/Error"
+    Forbidden:
+      description: "ACCESS_DENIED: sai vai trò · ACCESS_DENIED_SCOPE_MISMATCH: ngoài phạm vi (chi nhánh, chủ sở hữu). Message chung, không lộ cấu trúc phân quyền."
+      content:
+        "application/json":
+          schema:
+            $ref: "#/components/schemas/Error"
+    NotFound:
+      description: "Không tìm thấy (RESOURCE_NOT_FOUND)."
+      content:
+        "application/json":
+          schema:
+            $ref: "#/components/schemas/Error"

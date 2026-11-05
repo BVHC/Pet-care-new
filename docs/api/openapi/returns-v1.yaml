@@ -1,0 +1,708 @@
+# Pet Care Returns & Refunds API v1 (tầng 3) — OpenAPI 3.1, sinh từ khai báo; không sửa tay, sửa khai báo rồi sinh lại.
+# Module BH, TG (trả hàng, hoàn tiền) · owner BE-2
+# Nguồn: 01 UC68, UC69, ST21; 08-tang3-be2-spec.md §D (BR-BH-13…15, BR-TG-12…14; 03 #16 Yêu cầu trả hàng, #17 Hoàn tiền); 05 bổ sung return_requests, return_request_lines, refunds
+# Truy vết: CONFIRMED = có trong docs · ASSUMPTION (A#) · TBD (Q#) — xem file .md cùng tên.
+
+openapi: "3.1.0"
+info:
+  title: "Pet Care Returns & Refunds API v1 (tầng 3)"
+  version: "1.0.0"
+  description: "Module BH, TG (trả hàng, hoàn tiền) · owner BE-2. Nguồn: 01 UC68, UC69, ST21; 08-tang3-be2-spec.md §D (BR-BH-13…15, BR-TG-12…14; 03 #16 Yêu cầu trả hàng, #17 Hoàn tiền); 05 bổ sung return_requests, return_request_lines, refunds. Chi tiết và truy vết: ../returns-v1.md"
+servers:
+  - url: "/api"
+    description: "Mọi path bên dưới nằm sau tiền tố /api"
+tags:
+  - name: "Return requests"
+    description: "Yêu cầu trả hàng (UC68, UC69)"
+  - name: Refunds
+    description: "Hoàn tiền (UC69, ST21)"
+paths:
+  "/return-requests":
+    post:
+      tags: ["Return requests"]
+      summary: "Tạo yêu cầu trả hàng"
+      description: "UC68 · BR-BH-13. Actor: A06. Quyền: Lễ tân chi nhánh của Order. Chuyển trạng thái: — → PENDING (Yêu cầu trả hàng#1)."
+      operationId: createReturnRequest
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          "application/json":
+            schema:
+              $ref: "#/components/schemas/CreateReturnRequestRequest"
+      responses:
+        "201":
+          description: "Đã tạo"
+          content:
+            "application/json":
+              schema:
+                type: object
+                required: [data, message, code]
+                properties:
+                  data:
+                    $ref: "#/components/schemas/ReturnRequest"
+                  message:
+                    type: string
+                  code:
+                    type: integer
+                    description: "HTTP status của kết quả, ví dụ 200, 201"
+        "400":
+          description: "`BR-BH-13` Order chưa `PAID` / đơn online chưa giao · quá hạn 7 ngày [CFG] · dòng không phải `GOODS` hoặc là thuốc / vaccine / dịch vụ · vượt số lượng được trả · thiếu lý do"
+          content:
+            "application/json":
+              schema:
+                $ref: "#/components/schemas/Error"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          description: "Không tìm thấy Order hoặc dòng"
+          content:
+            "application/json":
+              schema:
+                $ref: "#/components/schemas/Error"
+    get:
+      tags: ["Return requests"]
+      summary: "Danh sách yêu cầu trả hàng của chi nhánh"
+      description: "UC68 · BR-BH-14. Actor: A05, A06. Quyền: A06, A05 của chi nhánh của Order. Chuyển trạng thái: —. Tự lấy chi nhánh của người gọi. `status` vắng = `PENDING`. Cũ nhất trước."
+      operationId: listReturnRequests
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: status
+          in: query
+          required: false
+          schema:
+            type: string
+            enum: [PENDING, APPROVED, REJECTED, CANCELLED, REFUNDED]
+        - $ref: "#/components/parameters/Page"
+        - $ref: "#/components/parameters/Size"
+      responses:
+        "200":
+          description: OK
+          content:
+            "application/json":
+              schema:
+                type: object
+                required: [data, message, code]
+                properties:
+                  data:
+                    allOf:
+                      - $ref: "#/components/schemas/PageMeta"
+                      - type: object
+                        required: [content]
+                        properties:
+                          content:
+                            type: array
+                            items:
+                              $ref: "#/components/schemas/ReturnRequestSummary"
+                  message:
+                    type: string
+                  code:
+                    type: integer
+                    description: "HTTP status của kết quả, ví dụ 200, 201"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+  "/return-requests/{requestId}":
+    get:
+      tags: ["Return requests"]
+      summary: "Chi tiết yêu cầu trả hàng"
+      description: "UC68 · BR-BH-14. Actor: A05, A06. Quyền: A06, A05 của chi nhánh của Order. Chuyển trạng thái: —."
+      operationId: getReturnRequest
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: "#/components/parameters/ReturnRequestId"
+      responses:
+        "200":
+          description: OK
+          content:
+            "application/json":
+              schema:
+                type: object
+                required: [data, message, code]
+                properties:
+                  data:
+                    $ref: "#/components/schemas/ReturnRequest"
+                  message:
+                    type: string
+                  code:
+                    type: integer
+                    description: "HTTP status của kết quả, ví dụ 200, 201"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+  "/return-requests/{requestId}/cancel":
+    post:
+      tags: ["Return requests"]
+      summary: "Rút yêu cầu trả hàng"
+      description: "UC68 · BR-BH-14. Actor: A06. Quyền: Người tạo. Chuyển trạng thái: PENDING → CANCELLED (Yêu cầu trả hàng#2)."
+      operationId: cancelReturnRequest
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: "#/components/parameters/ReturnRequestId"
+      responses:
+        "200":
+          description: OK
+          content:
+            "application/json":
+              schema:
+                type: object
+                required: [data, message, code]
+                properties:
+                  data:
+                    $ref: "#/components/schemas/ReturnRequest"
+                  message:
+                    type: string
+                  code:
+                    type: integer
+                    description: "HTTP status của kết quả, ví dụ 200, 201"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "409":
+          description: "`INVALID_STATE_TRANSITION` trạng thái hiện tại không cho phép (03 #16, #17)"
+          content:
+            "application/json":
+              schema:
+                $ref: "#/components/schemas/Error"
+  "/return-requests/{requestId}/approve":
+    post:
+      tags: ["Return requests"]
+      summary: "Duyệt yêu cầu trả hàng"
+      description: "UC69 · BR-BH-14, BR-TG-12. Actor: A05. Quyền: BRANCH_MANAGER của chi nhánh của Order. Chuyển trạng thái: PENDING → APPROVED (Yêu cầu trả hàng#3); Hoàn tiền#1. Nhập lại lô gốc hoặc điều chỉnh giảm, sinh hoàn tiền theo hình thức đã thu (BR-TG-12), trong một transaction."
+      operationId: approveReturnRequest
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: "#/components/parameters/ReturnRequestId"
+      requestBody:
+        required: true
+        content:
+          "application/json":
+            schema:
+              $ref: "#/components/schemas/ApproveReturnRequestRequest"
+      responses:
+        "200":
+          description: OK
+          content:
+            "application/json":
+              schema:
+                type: object
+                required: [data, message, code]
+                properties:
+                  data:
+                    $ref: "#/components/schemas/ReturnRequest"
+                  message:
+                    type: string
+                  code:
+                    type: integer
+                    description: "HTTP status của kết quả, ví dụ 200, 201"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "409":
+          description: "`INVALID_STATE_TRANSITION` trạng thái hiện tại không cho phép (03 #16, #17)"
+          content:
+            "application/json":
+              schema:
+                $ref: "#/components/schemas/Error"
+  "/return-requests/{requestId}/reject":
+    post:
+      tags: ["Return requests"]
+      summary: "Từ chối yêu cầu trả hàng"
+      description: "UC69 · BR-BH-14. Actor: A05. Quyền: BRANCH_MANAGER của chi nhánh của Order. Chuyển trạng thái: PENDING → REJECTED (Yêu cầu trả hàng#4)."
+      operationId: rejectReturnRequest
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: "#/components/parameters/ReturnRequestId"
+      requestBody:
+        required: true
+        content:
+          "application/json":
+            schema:
+              $ref: "#/components/schemas/RejectReturnRequestRequest"
+      responses:
+        "200":
+          description: OK
+          content:
+            "application/json":
+              schema:
+                type: object
+                required: [data, message, code]
+                properties:
+                  data:
+                    $ref: "#/components/schemas/ReturnRequest"
+                  message:
+                    type: string
+                  code:
+                    type: integer
+                    description: "HTTP status của kết quả, ví dụ 200, 201"
+        "400":
+          description: "`BR-BH-14` thiếu lý do"
+          content:
+            "application/json":
+              schema:
+                $ref: "#/components/schemas/Error"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "409":
+          description: "`INVALID_STATE_TRANSITION` trạng thái hiện tại không cho phép (03 #16, #17)"
+          content:
+            "application/json":
+              schema:
+                $ref: "#/components/schemas/Error"
+  "/refunds":
+    get:
+      tags: [Refunds]
+      summary: "Danh sách hoàn tiền của chi nhánh"
+      description: "UC69 · BR-TG-12. Actor: A05, A06. Quyền: A06, A05 của chi nhánh của Order. Chuyển trạng thái: —. `status` vắng = `REQUESTED` + `FAILED`. Cũ nhất trước."
+      operationId: listRefunds
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: status
+          in: query
+          required: false
+          schema:
+            type: string
+            enum: [REQUESTED, SUCCEEDED, FAILED]
+        - name: method
+          in: query
+          required: false
+          schema:
+            type: string
+            enum: [CASH, TRANSFER, GATEWAY]
+        - $ref: "#/components/parameters/Page"
+        - $ref: "#/components/parameters/Size"
+      responses:
+        "200":
+          description: OK
+          content:
+            "application/json":
+              schema:
+                type: object
+                required: [data, message, code]
+                properties:
+                  data:
+                    allOf:
+                      - $ref: "#/components/schemas/PageMeta"
+                      - type: object
+                        required: [content]
+                        properties:
+                          content:
+                            type: array
+                            items:
+                              $ref: "#/components/schemas/Refund"
+                  message:
+                    type: string
+                  code:
+                    type: integer
+                    description: "HTTP status của kết quả, ví dụ 200, 201"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+  "/refunds/{refundId}/confirm":
+    post:
+      tags: [Refunds]
+      summary: "Xác nhận đã hoàn tiền tại quầy"
+      description: "UC69 · BR-TG-13. Actor: A06. Quyền: Lễ tân có ca `OPEN` của chính mình. Chuyển trạng thái: REQUESTED → SUCCEEDED (Hoàn tiền#2). Số hoàn tính vào ca; yêu cầu trả hàng tương ứng → `REFUNDED` (Yêu cầu trả hàng#5)."
+      operationId: confirmRefund
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: "#/components/parameters/RefundId"
+      requestBody:
+        required: true
+        content:
+          "application/json":
+            schema:
+              $ref: "#/components/schemas/ConfirmRefundRequest"
+      responses:
+        "200":
+          description: OK
+          content:
+            "application/json":
+              schema:
+                type: object
+                required: [data, message, code]
+                properties:
+                  data:
+                    $ref: "#/components/schemas/Refund"
+                  message:
+                    type: string
+                  code:
+                    type: integer
+                    description: "HTTP status của kết quả, ví dụ 200, 201"
+        "400":
+          description: "`BR-TG-01` không có ca `OPEN` · hoàn tiền `GATEWAY` không xác nhận tay (do ST21)"
+          content:
+            "application/json":
+              schema:
+                $ref: "#/components/schemas/Error"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "409":
+          description: "`INVALID_STATE_TRANSITION` trạng thái hiện tại không cho phép (03 #16, #17)"
+          content:
+            "application/json":
+              schema:
+                $ref: "#/components/schemas/Error"
+  "/refunds/{refundId}/retry":
+    post:
+      tags: [Refunds]
+      summary: "Thử lại hoàn tiền qua cổng"
+      description: "UC69 · BR-TG-14. Actor: A05. Quyền: BRANCH_MANAGER của chi nhánh. Chuyển trạng thái: FAILED → REQUESTED (Hoàn tiền#4)."
+      operationId: retryRefund
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: "#/components/parameters/RefundId"
+      responses:
+        "200":
+          description: OK
+          content:
+            "application/json":
+              schema:
+                type: object
+                required: [data, message, code]
+                properties:
+                  data:
+                    $ref: "#/components/schemas/Refund"
+                  message:
+                    type: string
+                  code:
+                    type: integer
+                    description: "HTTP status của kết quả, ví dụ 200, 201"
+        "400":
+          description: "Chỉ hoàn tiền `GATEWAY`"
+          content:
+            "application/json":
+              schema:
+                $ref: "#/components/schemas/Error"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "409":
+          description: "`INVALID_STATE_TRANSITION` trạng thái hiện tại không cho phép (03 #16, #17)"
+          content:
+            "application/json":
+              schema:
+                $ref: "#/components/schemas/Error"
+components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      description: "Access token trả về từ POST /auth/login, gắn với một phiên (sessions). Phiên bị hủy thì token hết hiệu lực ngay (BR-TK-11, 13, 14)."
+  parameters:
+    Page:
+      name: page
+      in: query
+      required: false
+      schema:
+        type: integer
+        minimum: 0
+        default: 0
+      description: "Số trang, bắt đầu từ 0"
+    Size:
+      name: size
+      in: query
+      required: false
+      schema:
+        type: integer
+        minimum: 1
+        maximum: 100
+        default: 20
+    ReturnRequestId:
+      name: requestId
+      in: path
+      required: true
+      schema:
+        type: integer
+        format: int64
+    RefundId:
+      name: refundId
+      in: path
+      required: true
+      schema:
+        type: integer
+        format: int64
+  schemas:
+    Error:
+      type: object
+      description: "Envelope lỗi duy nhất, do GlobalExceptionHandler (platform/exception) sinh. Vi phạm business rule: errorCode = BUSINESS_RULE_VIOLATION, message kết thúc bằng mã rule, ví dụ \"… (BR-LH-05)\"."
+      required: [success, errorCode, message, statusCode, timestamp, traceId]
+      properties:
+        success:
+          type: boolean
+          enum: [false]
+        errorCode:
+          type: string
+          enum: [BUSINESS_RULE_VIOLATION, INVALID_STATE_TRANSITION, RESOURCE_NOT_FOUND, ACCESS_DENIED_SCOPE_MISMATCH, CONCURRENCY_CONFLICT, VALIDATION_FAILED, MALFORMED_REQUEST, METHOD_NOT_ALLOWED, UNSUPPORTED_MEDIA_TYPE, UNAUTHENTICATED, ACCESS_DENIED, TOO_MANY_REQUESTS, INTERNAL_ERROR]
+          description: platform/exception/ErrorCode
+        message:
+          type: string
+          description: "Thông điệp tiếng Việt hiển thị được; với BUSINESS_RULE_VIOLATION kết thúc bằng \" (BR-…)\""
+        statusCode:
+          type: integer
+        timestamp:
+          type: string
+          format: date-time
+        traceId:
+          type: string
+    PageMeta:
+      type: object
+      required: [page, size, totalElements, totalPages]
+      properties:
+        page:
+          type: integer
+        size:
+          type: integer
+        totalElements:
+          type: integer
+          format: int64
+        totalPages:
+          type: integer
+    ReturnReason:
+      type: string
+      enum: [DEFECTIVE, WRONG_ITEM, CHANGED_MIND, OTHER]
+    ReturnRequestStatus:
+      type: string
+      enum: [PENDING, APPROVED, REJECTED, CANCELLED, REFUNDED]
+      description: "03 #16"
+    ReturnLineInput:
+      type: object
+      required: [orderLineId, quantity]
+      properties:
+        orderLineId:
+          type: integer
+          format: int64
+        quantity:
+          type: integer
+          format: int32
+          description: "≤ đã mua trừ phần đã / đang trả (BR-BH-13)"
+    CreateReturnRequestRequest:
+      type: object
+      required: [orderId, lines, reasonCode]
+      properties:
+        orderId:
+          type: integer
+          format: int64
+          description: "`orders.id` (Order bán hàng). Với đơn online dùng `salesOrderId` của `OnlineOrder` (shop-v1), **không** dùng `onlineOrderId`"
+        lines:
+          type: array
+          items:
+            $ref: "#/components/schemas/ReturnLineInput"
+          description: "≥ 1 dòng"
+        reasonCode:
+          $ref: "#/components/schemas/ReturnReason"
+        reasonNote:
+          type: [string, "null"]
+          maxLength: 300
+    ReturnLine:
+      type: object
+      required: [orderLineId, productName, unitPrice, quantity]
+      properties:
+        orderLineId:
+          type: integer
+          format: int64
+        productName:
+          type: string
+        unitPrice:
+          type: integer
+          format: int64
+          minimum: 0
+          description: "Snapshot (BR-BH-03)"
+        quantity:
+          type: integer
+          format: int32
+    ReturnRequestSummary:
+      type: object
+      required: [requestId, code, orderId, status, reasonCode, createdAt]
+      properties:
+        requestId:
+          type: integer
+          format: int64
+        code:
+          type: string
+        orderId:
+          type: integer
+          format: int64
+        status:
+          $ref: "#/components/schemas/ReturnRequestStatus"
+        reasonCode:
+          $ref: "#/components/schemas/ReturnReason"
+        refundAmount:
+          type: [integer, "null"]
+          format: int64
+          minimum: 0
+          description: VND
+        createdAt:
+          type: string
+          format: date-time
+    ReturnRequest:
+      type: object
+      required: [requestId, code, orderId, branchId, status, reasonCode, lines, createdAt]
+      properties:
+        requestId:
+          type: integer
+          format: int64
+        code:
+          type: string
+        orderId:
+          type: integer
+          format: int64
+        branchId:
+          type: integer
+          format: int64
+        status:
+          $ref: "#/components/schemas/ReturnRequestStatus"
+        reasonCode:
+          $ref: "#/components/schemas/ReturnReason"
+        reasonNote:
+          type: [string, "null"]
+        lines:
+          type: array
+          items:
+            $ref: "#/components/schemas/ReturnLine"
+        restock:
+          type: [boolean, "null"]
+          description: "Có sau khi duyệt"
+        refundAmount:
+          type: [integer, "null"]
+          format: int64
+          minimum: 0
+          description: VND
+        decisionNote:
+          type: [string, "null"]
+        createdAt:
+          type: string
+          format: date-time
+        decidedAt:
+          type: [string, "null"]
+          format: date-time
+    ApproveReturnRequestRequest:
+      type: object
+      required: [restock]
+      properties:
+        restock:
+          type: boolean
+          description: "true = nhập lại lô gốc; false = loại bỏ (`RETURN_DISCARD`, BR-BH-14)"
+    RejectReturnRequestRequest:
+      type: object
+      required: [reason]
+      properties:
+        reason:
+          type: string
+          maxLength: 300
+    RefundMethod:
+      type: string
+      enum: [CASH, TRANSFER, GATEWAY]
+    RefundStatus:
+      type: string
+      enum: [REQUESTED, SUCCEEDED, FAILED]
+      description: "03 #17"
+    Refund:
+      type: object
+      required: [refundId, code, method, amount, status, attempts, createdAt]
+      properties:
+        refundId:
+          type: integer
+          format: int64
+        code:
+          type: string
+        returnRequestId:
+          type: [integer, "null"]
+          format: int64
+        onlineOrderId:
+          type: [integer, "null"]
+          format: int64
+        method:
+          $ref: "#/components/schemas/RefundMethod"
+        amount:
+          type: integer
+          format: int64
+          minimum: 0
+          description: VND
+        status:
+          $ref: "#/components/schemas/RefundStatus"
+        attempts:
+          type: integer
+          format: int32
+        failureReason:
+          type: [string, "null"]
+        completedAt:
+          type: [string, "null"]
+          format: date-time
+        createdAt:
+          type: string
+          format: date-time
+    ConfirmRefundRequest:
+      type: object
+      properties:
+        note:
+          type: [string, "null"]
+          maxLength: 300
+  responses:
+    BadRequest:
+      description: "VALIDATION_FAILED / MALFORMED_REQUEST: dữ liệu không hợp lệ · BUSINESS_RULE_VIOLATION: vi phạm rule, message kết thúc bằng mã rule \"(BR-…)\"."
+      content:
+        "application/json":
+          schema:
+            $ref: "#/components/schemas/Error"
+    Unauthorized:
+      description: "UNAUTHENTICATED: chưa đăng nhập hoặc phiên đã hết hạn / bị hủy."
+      content:
+        "application/json":
+          schema:
+            $ref: "#/components/schemas/Error"
+    Forbidden:
+      description: "ACCESS_DENIED: sai vai trò · ACCESS_DENIED_SCOPE_MISMATCH: ngoài phạm vi (chi nhánh, chủ sở hữu). Message chung, không lộ cấu trúc phân quyền."
+      content:
+        "application/json":
+          schema:
+            $ref: "#/components/schemas/Error"
+    NotFound:
+      description: "Không tìm thấy (RESOURCE_NOT_FOUND)."
+      content:
+        "application/json":
+          schema:
+            $ref: "#/components/schemas/Error"

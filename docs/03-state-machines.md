@@ -25,6 +25,22 @@
 | 8 | Ca thu ngân | `cashier_shifts.status` | TG | 1 |
 | 9 | Phiếu nhập kho | `stock_receipts.status` | KO | 2 |
 | 10 | Care Task | `care_tasks.status` | TB | 1 |
+| 11 | Yêu cầu nghỉ / đổi ca | `shift_requests.status` | NS | 3 |
+| 12 | Phân ca | `shift_assignments.status` | NS | 3 |
+| 13 | Tài liệu tri thức AI | `ai_documents.status` | AI (`07` §9) | 3 |
+| 14 | Đơn hàng online | `online_orders.status` | BH (`08` §B) | 3 |
+| 15 | Giao dịch thanh toán online | `payment_transactions.status` | TG (`08` §C) | 3 |
+| 16 | Yêu cầu trả hàng | `return_requests.status` | BH (`08` §D) | 3 |
+| 17 | Hoàn tiền | `refunds.status` | TG (`08` §D) | 3 |
+| 18 | Phiếu chuyển kho | `stock_transfers.status` | KO (`08` §E) | 3 |
+| 19 | Phiên kiểm kê | `stock_counts.status` | KO (`08` §E) | 3 |
+| 20 | Chi nhánh (mở rộng #2) | `branches.status` | CN (`08` §F.1) | 3 |
+| 21 | Bài viết (mở rộng) | `articles.status` | BV (`08` §F.3) | 3 |
+| 22 | Lịch khám tại nhà (bổ sung #3) | `appointments.status` | LH (`09` §A) | 3 |
+| 23 | Phẫu thuật | `surgeries.status` | KB (`09` §B) | 3 |
+| 24 | Nhập viện | `admissions.status` | LT (`09` §C) | 3 |
+| 25 | Y lệnh nội trú | `admission_orders.status` | LT (`09` §C) | 3 |
+| 26 | Khiếu nại | `complaints.status` | DG (`09` §D) | 3 |
 
 ---
 
@@ -234,6 +250,53 @@ Có hai loại ca, phân biệt bằng cờ `is_after_hours` đặt lúc mở ca
 
 ---
 
+## 11. Yêu cầu nghỉ / đổi ca
+`shift_requests.status` (+ `shift_requests.request_type`: `LEAVE` / `SWAP`) · NS · Tầng 3 · *đặc tả bổ sung GĐ2 (T51), duyệt ở T54 ngày 5/11/2026*
+
+| Trạng thái | Loại | Ý nghĩa | Ràng buộc khi ở trạng thái này |
+|---|---|---|---|
+| `PENDING` | INIT | Nhân viên đã gửi, chờ BRANCH_MANAGER xử lý | Không có `decided_at`; mỗi phân ca có tối đa 1 yêu cầu `PENDING` (BR-NS-04) |
+| `APPROVED` | FINAL | Đã duyệt | Phân ca đã đổi theo loại yêu cầu |
+| `REJECTED` | FINAL | Bị từ chối (do BRANCH_MANAGER hoặc do hệ thống) | Có `decision_note`; `decided_by` rỗng nếu do hệ thống |
+| `WITHDRAWN` | FINAL | Người gửi đã rút | Phân ca giữ nguyên |
+
+| # | Từ → Sang | Sự kiện | Người kích hoạt | Điều kiện | Hệ quả | Nguồn |
+|---|---|---|---|---|---|---|
+| 1 | — → `PENDING` | Gửi yêu cầu | A06, A07, A08 | Phân ca `SCHEDULED` của chính mình; chưa có yêu cầu `PENDING` khác của phân ca; còn ≥ 24 giờ **[CFG]** tới giờ bắt đầu ca; có lý do; `SWAP`: ca đích đang dùng, cùng ngày, không chồng giờ phân ca khác của người gửi | Thông báo BRANCH_MANAGER của chi nhánh | BR-NS-04, 08 · UC36 |
+| 2 | `PENDING` → `WITHDRAWN` | Rút yêu cầu | A06, A07, A08 (người gửi) | — | Phân ca giữ nguyên | BR-NS-05 · UC36 |
+| 3 | `PENDING` → `APPROVED` | Duyệt | A05 | Phân ca còn `SCHEDULED` và chưa bắt đầu; `SWAP`: ca đích còn dùng, không chồng giờ lúc duyệt | `LEAVE`: Phân ca#3 (→ `ON_LEAVE`); `SWAP`: Phân ca#5 (đổi sang ca đích). Thông báo nhân viên; ghi audit | BR-NS-06, 08, 10 · UC37 |
+| 4 | `PENDING` → `REJECTED` | Từ chối | A05 | Có lý do (`decision_note`) | Phân ca giữ nguyên. Thông báo nhân viên; ghi audit | BR-NS-06, 08, 10 · UC37 |
+| 5 | `PENDING` → `REJECTED` | Phân ca không còn hiệu lực | SYS ← Phân ca#2, #4, #6 | — | `decision_note` do hệ thống ghi; `decided_by` rỗng | BR-NS-07, 09 |
+
+---
+
+## 12. Phân ca
+`shift_assignments.status` · NS · Tầng 3 · *đặc tả bổ sung GĐ2 (T51), duyệt ở T54 ngày 5/11/2026*
+
+| Trạng thái | Loại | Ý nghĩa | Ràng buộc khi ở trạng thái này |
+|---|---|---|---|
+| `SCHEDULED` | INIT | Nhân viên được phân vào ca của một ngày | Là trạng thái duy nhất còn nhận yêu cầu nghỉ / đổi ca và được tính khi kiểm chồng giờ (BR-NS-02) |
+| `ON_LEAVE` | FINAL | Nghỉ được duyệt | — |
+| `ABSENT` | FINAL | Vắng đột xuất | Có `reason` |
+| `CANCELLED` | FINAL | Quản lý hủy, hoặc nhân viên rời chi nhánh | Có `reason`; `status_changed_by` rỗng nếu do hệ thống |
+
+| # | Từ → Sang | Sự kiện | Người kích hoạt | Điều kiện | Hệ quả | Nguồn |
+|---|---|---|---|---|---|---|
+| 1 | — → `SCHEDULED` | Phân ca | A05 | Nhân viên A06–A08 `ACTIVE` của chi nhánh mình; ca đang dùng; `work_date` ≥ hôm nay; không trùng hay chồng giờ phân ca `SCHEDULED` khác của nhân viên | Thông báo nhân viên; ghi audit | BR-NS-02, 08, 10 · UC34 |
+| 2 | `SCHEDULED` → `CANCELLED` | Hủy phân ca | A05 | Chưa bắt đầu; có lý do | Yêu cầu#5 nếu phân ca có yêu cầu `PENDING`. Thông báo nhân viên; ghi audit | BR-NS-02, 08, 10 · UC34 |
+| 3 | `SCHEDULED` → `ON_LEAVE` | Nghỉ được duyệt | SYS ← Yêu cầu#3 | Yêu cầu loại `LEAVE` | — | BR-NS-06 |
+| 4 | `SCHEDULED` → `ABSENT` | Ghi vắng đột xuất | A05 | `work_date` từ hôm nay trở về trước, không quá 7 ngày **[CFG]**; có lý do | Yêu cầu#5 nếu phân ca có yêu cầu `PENDING`. Thông báo nhân viên; ghi audit | BR-NS-07, 08, 10 · UC38 |
+| 5 | `SCHEDULED` → `SCHEDULED` | Đổi ca | SYS ← Yêu cầu#3 | Yêu cầu loại `SWAP` | Đổi `shift_definition_id` sang ca đích | BR-NS-06 |
+| 6 | `SCHEDULED` → `CANCELLED` | Nhân viên rời chi nhánh | SYS ← Tài khoản#5 (vô hiệu hóa) hoặc điều chuyển (BR-QT-06) | Phân ca chưa bắt đầu | Yêu cầu#5 nếu có yêu cầu `PENDING`. Thông báo nhân viên | BR-NS-09 |
+
+---
+
+## 13–26. Tầng 3 — máy trạng thái ở file chuyên đề (duyệt T54, 5/11/2026)
+
+> Chi tiết bảng trạng thái và bảng chuyển đánh số của #13–#26 nằm ở file chuyên đề (cột *Module* ở bảng đầu file ghi nơi tìm), **không chép lại ở đây** để một quy tắc chỉ có một nguồn. Tham chiếu chuyển trạng thái vẫn dạng `Đơn hàng online#2`, `Khiếu nại#3`… Thêm FSM mới thì lấy số sau #26.
+
+---
+
 ## Phụ lục: chuỗi tác động chính
 
 | Sự kiện nguồn | Kéo theo |
@@ -249,4 +312,7 @@ Có hai loại ca, phân biệt bằng cờ `is_after_hours` đặt lúc mở ca
 | Đặt chỗ#9 Bắt đầu trả thú | Order (`BOARDING`) → `PENDING` |
 | Đặt chỗ#10, #11 Kết thúc lưu trú | Chuồng → `AVAILABLE`; (#11) Order (`BOARDING`) → `PENDING` |
 | Thú cưng đánh dấu đã mất (BR-KH-05) | Lịch hẹn, Đặt chỗ `BOOKED` → `CANCELLED` (không tính hủy muộn); Care Task → `CANCELLED`; hủy nhắc tái chủng, tái khám |
+| Yêu cầu nghỉ / đổi ca#3 Duyệt | `LEAVE`: Phân ca → `ON_LEAVE`; `SWAP`: Phân ca đổi sang ca đích (vẫn `SCHEDULED`) |
+| Phân ca#2 Hủy, #4 Vắng đột xuất, #6 Nhân viên rời chi nhánh | Yêu cầu `PENDING` của phân ca → `REJECTED` (Yêu cầu#5) |
+| Nhân viên bị vô hiệu hóa / điều chuyển chi nhánh (BR-QT-09, BR-QT-06) | Phân ca `SCHEDULED` chưa bắt đầu → `CANCELLED` (BR-NS-09) |
 | Chuyển chủ thú cưng (BR-KH-08) | Lịch hẹn, Đặt chỗ `BOOKED` → `CANCELLED` (không tính hủy muộn); nhắc tái chủng, tái khám đi theo thú sang chủ mới |
