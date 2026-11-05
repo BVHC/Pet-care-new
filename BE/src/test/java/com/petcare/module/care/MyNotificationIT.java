@@ -262,6 +262,22 @@ class MyNotificationIT {
         assertThat(ok(get(token(other), "/unread-count", ""))).containsEntry("count", 1);
     }
 
+    /**
+     * Job dọn thông báo (docs/adr/0112) xóa dòng quá hạn giữ: bấm vào dòng vừa bị xóa là 404 như dòng không tồn tại.
+     * Xóa trực tiếp bằng SQL để không phụ thuộc mốc cắt toàn bảng của job (test khác dùng chung bảng).
+     */
+    @Test
+    void markReadOfNotificationRemovedByCleanupIs404() {
+        long removed = insert(me, "T", "a", "b", null, null, at(1));
+        long kept = insert(me, "T", "c", "d", null, null, at(2));
+        jdbc.update("DELETE FROM notifications WHERE id = ?", removed);
+
+        assertError(post(myToken, "/" + removed + "/read", null, null), HttpStatus.NOT_FOUND, "RESOURCE_NOT_FOUND",
+                "Không tìm thấy thông báo #" + removed);
+        assertThat(ok(get(myToken, "/unread-count", ""))).containsEntry("count", 1);
+        assertThat(markRead(myToken, kept).getStatusCode()).isEqualTo(HttpStatus.NO_CONTENT);
+    }
+
     @ParameterizedTest
     @ValueSource(strings = {"0", "-1"})
     void nonPositiveIdIs404(String id) {
