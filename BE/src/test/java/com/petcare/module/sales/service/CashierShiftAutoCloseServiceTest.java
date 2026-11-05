@@ -205,16 +205,18 @@ class CashierShiftAutoCloseServiceTest {
         verify(branches, never()).openingRangesOn(eq(BRANCH), any());
     }
 
+    /** T30-4 (docs/adr/0107): chi nhánh không còn khoảng mở cửa nào thì ca ngoài giờ chốt lúc 00:00 ngày thứ hai sau ngày mở. */
     @Test
-    void afterHoursShiftWithoutANextOpeningHasNoDeadline() {
+    void afterHoursShiftWithoutANextOpeningClosesAtMidnightOfTheSecondDayAfterOpening() {
         CashierShift shift = openShift(true, at("2026-10-21T22:00:00"));
         when(branches.nextOpeningStart(any(), any())).thenReturn(Optional.empty());
 
-        assertThat(close("2026-12-31T08:00:00"))
-                .isEqualTo(Result.NO_DEADLINE);
-
+        assertThat(close("2026-10-22T23:59:59")).isEqualTo(Result.NOT_DUE);
         assertThat(shift.getStatus()).isEqualTo(CashierShiftStatus.OPEN);
-        verify(shifts, never()).saveAndFlush(any());
+        assertThat(close("2026-10-23T00:00:00")).isEqualTo(Result.CLOSED);
+
+        assertThat(shift.getStatus()).isEqualTo(CashierShiftStatus.CLOSED);
+        assertThat(shift.isAutoClosed()).isTrue();
     }
 
     @Test
@@ -258,11 +260,11 @@ class CashierShiftAutoCloseServiceTest {
     }
 
     @Test
-    void aShiftWithoutADeadlineNeverTakesTheLock() {
+    void anAfterHoursShiftNotYetDueByTheFallbackNeverTakesTheLock() {
         openShift(true, at("2026-10-21T22:00:00"));
         when(branches.nextOpeningStart(any(), any())).thenReturn(Optional.empty());
 
-        assertThat(close("2026-12-31T08:00:00")).isEqualTo(Result.NO_DEADLINE);
+        assertThat(close("2026-10-22T12:00:00")).isEqualTo(Result.NOT_DUE);
 
         verify(shifts, never()).lockOpenSkipLocked(any());
     }

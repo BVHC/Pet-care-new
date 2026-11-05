@@ -4,6 +4,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyLong;
+import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.inOrder;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
@@ -37,6 +38,7 @@ import com.petcare.module.boarding.fsm.KennelTransitionHandler;
 import com.petcare.module.boarding.repository.BoardingBookingRepository;
 import com.petcare.module.boarding.repository.BoardingBookingRepository.BookingKeys;
 import com.petcare.module.boarding.repository.KennelRepository;
+import com.petcare.module.care.api.CareTaskApi;
 import com.petcare.module.branch.api.BranchQueryApi;
 import com.petcare.module.branch.api.BranchQueryApi.TimeRange;
 import com.petcare.module.catalog.api.CatalogQueryApi;
@@ -60,6 +62,7 @@ class BoardingCheckoutServiceTest {
     private static final long ACTOR = 3L;
 
     private BoardingOrderApi boardingOrders;
+    private CareTaskApi careTasks;
     private BoardingBookingRepository bookings;
     private KennelRepository kennels;
     private BoardingCheckoutService service;
@@ -107,10 +110,11 @@ class BoardingCheckoutServiceTest {
         SystemConfigApi configs = mock(SystemConfigApi.class);
         when(configs.getTime(ConfigKey.BOARDING_CHECKOUT_TIME)).thenReturn(LocalTime.NOON);
         boardingOrders = mock(BoardingOrderApi.class);
+        careTasks = mock(CareTaskApi.class);
         when(boardingOrders.openOrReuse(any())).thenReturn(new BoardingOrderRef(501L, 3, 450_000L));
-        service = new BoardingCheckoutService(scope, branches, catalog, configs, boardingOrders, bookings, kennels,
-                new BoardingBookingTransitionHandler(), new KennelTransitionHandler(), mock(BoardingAssembler.class),
-                clockAt(now));
+        service = new BoardingCheckoutService(scope, branches, catalog, configs, boardingOrders, careTasks, bookings,
+                kennels, new BoardingBookingTransitionHandler(), new KennelTransitionHandler(),
+                mock(BoardingAssembler.class), clockAt(now));
     }
 
     @Test
@@ -166,6 +170,7 @@ class BoardingCheckoutServiceTest {
 
         verify(kennels, never()).findByIdForUpdate(anyLong());
         verify(bookings, never()).saveAndFlush(any());
+        verifyNoInteractions(careTasks);
         assertThat(booking.getStatus()).isEqualTo(BoardingBookingStatus.CHECKED_IN);
     }
 
@@ -181,6 +186,7 @@ class BoardingCheckoutServiceTest {
         order.verify(kennels).findByIdForUpdate(KENNEL);
         order.verify(bookings).saveAndFlush(booking);
         order.verify(kennels).saveAndFlush(kennel);
+        verify(careTasks).cancelPickupOverdue(List.of(ID));
         assertThat(booking.getStatus()).isEqualTo(BoardingBookingStatus.CHECKED_OUT);
         assertThat(booking.getEndReason()).isEqualTo(BookingEndReason.RETURNED);
         assertThat(kennel.getStatus()).isEqualTo(KennelStatus.AVAILABLE);
@@ -197,6 +203,7 @@ class BoardingCheckoutServiceTest {
         assertThat(booking.getEndReason()).isEqualTo(BookingEndReason.PET_DECEASED);
         assertThat(booking.getEndNote()).isEqualTo("Mất lúc 9h");
         assertThat(kennel.getStatus()).isEqualTo(KennelStatus.AVAILABLE);
+        verify(careTasks).cancelPickupOverdue(List.of(ID));
     }
 
     @Test

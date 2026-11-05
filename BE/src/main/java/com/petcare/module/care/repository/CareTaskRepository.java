@@ -101,6 +101,19 @@ public interface CareTaskRepository extends JpaRepository<CareTask, Long>, JpaSp
             @Param("reason") String reason, @Param("now") Instant now);
 
     /**
+     * Care Task#7: task {@code PICKUP_OVERDUE} còn {@code OPEN} của các đặt chỗ lưu trú (thú đã rời khách sạn) →
+     * {@code CANCELLED}. Cùng cách ghi như {@link #cancelOpenVaccineTasks}; đi {@code uq_care_tasks_pickup_overdue}.
+     */
+    @Transactional(propagation = Propagation.MANDATORY)
+    @Modifying
+    @Query(value = """
+            UPDATE care_tasks SET status = 'CANCELLED', cancel_reason = :reason, handled_at = :now, updated_at = :now
+            WHERE status = 'OPEN' AND task_type = 'PICKUP_OVERDUE' AND boarding_booking_id IN (:bookingIds)
+            """, nativeQuery = true)
+    int cancelOpenPickupTasks(@Param("bookingIds") Collection<Long> bookingIds, @Param("reason") String reason,
+            @Param("now") Instant now);
+
+    /**
      * Care Task#6: task {@code FOLLOW_UP_DUE} còn {@code OPEN} của các bệnh án (khóa là id Visit) có nhắc tái khám bị
      * hủy → {@code CANCELLED}. Cùng cách ghi như {@link #cancelOpenVaccineTasks}; đi {@code ix_care_tasks_medical_record_id} (V22, docs/adr/0081).
      */

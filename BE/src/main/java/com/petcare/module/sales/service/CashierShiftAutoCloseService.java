@@ -47,7 +47,7 @@ import lombok.extern.slf4j.Slf4j;
 public class CashierShiftAutoCloseService {
 
     /** Kết quả xử lý một ca. */
-    public enum Result { CLOSED, NOT_DUE, SKIPPED, NO_DEADLINE }
+    public enum Result { CLOSED, NOT_DUE, SKIPPED }
 
     private static final DateTimeFormatter DATE = DateTimeFormatter.ofPattern("dd/MM/yyyy");
     private static final DateTimeFormatter DATE_TIME = DateTimeFormatter.ofPattern("HH:mm dd/MM/yyyy");
@@ -74,13 +74,8 @@ public class CashierShiftAutoCloseService {
         if (row.isEmpty()) {
             return Result.SKIPPED;
         }
-        Optional<LocalDateTime> deadline = deadlineOf(row.get());
-        if (deadline.isEmpty()) {
-            // Ca ngoài giờ không còn khoảng mở cửa nào: quản lý thấy ca OPEN ở sales-v1 #19 (nợ T30-4); không WARN mỗi lượt
-            log.debug("CASHIER_SHIFT_NO_NEXT_OPENING shiftId={} branchId={}", shiftId, row.get().getBranchId());
-            return Result.NO_DEADLINE;
-        }
-        if (now.isBefore(deadline.get().atZone(TimeConfig.BUSINESS_ZONE).toInstant())) {
+        LocalDateTime deadline = deadlineOf(row.get());
+        if (now.isBefore(deadline.atZone(TimeConfig.BUSINESS_ZONE).toInstant())) {
             return Result.NOT_DUE;
         }
         Optional<CashierShift> locked = shifts.lockOpenSkipLocked(shiftId);
@@ -99,15 +94,17 @@ public class CashierShiftAutoCloseService {
         return Result.CLOSED;
     }
 
-    private Optional<LocalDateTime> deadlineOf(ShiftDeadlineRow shift) {
+    private LocalDateTime deadlineOf(ShiftDeadlineRow shift) {
         if (Boolean.TRUE.equals(shift.getAfterHours())) {
-            // Ca ngoài giờ qua nửa đêm và thuộc ngày mở ca: hạn là lúc bắt đầu khoảng mở cửa kế tiếp sau khi mở ca.
+            // Ca ngoài giờ qua nửa đêm và thuộc ngày mở ca: hạn là lúc bắt đầu khoảng mở cửa kế tiếp sau khi mở ca. Chi
+            // nhánh không còn khoảng mở cửa nào (nghỉ dài hạn): 00:00 ngày thứ hai sau ngày mở ca, để ca không treo mãi.
             return branches.nextOpeningStart(shift.getBranchId(),
-                    LocalDateTime.ofInstant(shift.getOpenedAt(), TimeConfig.BUSINESS_ZONE));
+                    LocalDateTime.ofInstant(shift.getOpenedAt(), TimeConfig.BUSINESS_ZONE))
+                    .orElseGet(() -> shift.getBusinessDate().plusDays(2).atStartOfDay());
         }
         int grace = configs.getInt(ConfigKey.CASHIER_SHIFT_AUTO_CLOSE_GRACE_MINUTES);
-        return Optional.of(ShiftDeadline.regular(shift.getBusinessDate(),
-                branches.openingRangesOn(shift.getBranchId(), shift.getBusinessDate()), grace));
+        return ShiftDeadline.regular(shift.getBusinessDate(),
+                branches.openingRangesOn(shift.getBranchId(), shift.getBusinessDate()), grace);
     }
 
     private void notifyManagers(CashierShift shift, Instant closedAt) {

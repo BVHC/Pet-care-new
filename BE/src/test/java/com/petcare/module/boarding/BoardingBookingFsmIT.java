@@ -234,6 +234,34 @@ class BoardingBookingFsmIT extends BoardingItSupport {
     }
 
     /** #8 — nhật ký đánh dấu bất thường: giữ nguyên trạng thái, báo khách và lễ tân ngay. */
+    /** T43-2 (docs/adr/0107): thú đã rời khách sạn thì task đón thú quá hạn còn OPEN tự đóng, cả giao thú lẫn thú mất. */
+    @Test
+    void handingOverOrEndingAsDeceasedClosesTheOpenPickupTask() {
+        long returned = stay(DAY.plusDays(2));
+        long deceased = stayInSpareKennel(DAY.plusDays(2));
+        runOverdue(at(DAY.plusDays(2), 12, 1));
+        runOverdue(at(DAY.plusDays(3), 12, 1));
+        assertThat(pickupTaskStatuses(returned)).containsExactly("OPEN");
+        assertThat(pickupTaskStatuses(deceased)).containsExactly("OPEN");
+
+        long orderId = number(data(startCheckout(returned), HttpStatus.OK).get("orderId"));
+        pay(orderId);
+        data(handOver(returned), HttpStatus.OK);
+        data(endDeceased(deceased), HttpStatus.OK);
+
+        assertThat(pickupTaskStatuses(returned)).containsExactly("CANCELLED");
+        assertThat(pickupTaskStatuses(deceased)).containsExactly("CANCELLED");
+        assertThat(jdbc.queryForObject("""
+                SELECT cancel_reason FROM care_tasks WHERE boarding_booking_id = ? AND task_type = 'PICKUP_OVERDUE'""",
+                String.class, returned)).isEqualTo("Thú đã rời khách sạn (BR-LT-10)");
+    }
+
+    private List<String> pickupTaskStatuses(long bookingId) {
+        return jdbc.queryForList("""
+                SELECT status FROM care_tasks WHERE boarding_booking_id = ? AND task_type = 'PICKUP_OVERDUE'""",
+                String.class, bookingId);
+    }
+
     @Test
     void abnormalCareLogKeepsTheStatusAndNotifies() {
         long id = stay(DAY.plusDays(2));

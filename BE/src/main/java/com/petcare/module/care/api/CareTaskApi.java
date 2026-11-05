@@ -47,4 +47,12 @@ public interface CareTaskApi {
      * {@link #cancelForRevaccination}.
      */
     void cancelFollowUpTasks(Collection<Long> medicalRecordVisitIds);
+
+    /**
+     * Care Task#7: hủy task PICKUP_OVERDUE OPEN của các đặt chỗ lưu trú mà thú đã rời khách sạn (giao thú hoặc thú mất,
+     * BR-LT-10 hết lý do tồn tại; docs/adr/0107). Cùng quy ước như {@link #cancelForRevaccination}: chỉ task OPEN đổi,
+     * task đã đóng và task của đặt chỗ khác giữ nguyên, tập rỗng không chạm DB, {@code MANDATORY}. Bên gọi (boarding)
+     * gọi trong transaction đã khóa đặt chỗ.
+     */
+    void cancelPickupOverdue(Collection<Long> bookingIds);
 }

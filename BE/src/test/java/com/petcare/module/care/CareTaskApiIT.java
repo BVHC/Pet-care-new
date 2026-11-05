@@ -262,6 +262,8 @@ class CareTaskApiIT {
                 .isInstanceOf(IllegalTransactionStateException.class);
         assertThatThrownBy(() -> api.cancelFollowUpTasks(List.of(medicalRecord)))
                 .isInstanceOf(IllegalTransactionStateException.class);
+        assertThatThrownBy(() -> api.cancelPickupOverdue(List.of(booking)))
+                .isInstanceOf(IllegalTransactionStateException.class);
 
         assertThat(data.countTasks()).isZero();
     }
@@ -344,6 +346,30 @@ class CareTaskApiIT {
         tx.executeWithoutResult(status -> api.cancelFollowUpTasks(passed));
 
         assertMatrix(expectCancel, before, "Đã có lịch khám / lượt khám mới (BR-TB-06)");
+    }
+
+    /** Care Task#7 (T43-2, docs/adr/0107): thú đã rời khách sạn thì task đón thú quá hạn còn OPEN tự đóng. */
+    @Test
+    void pickupCancellationHitsOnlyTheOpenPickupTasksOfTheGivenBookings() {
+        Map<Long, Boolean> expectCancel = new LinkedHashMap<>();
+        List<Long> passed = new ArrayList<>();
+        int offset = 20;
+        for (String status : STATUSES) {
+            long other = data.booking(branch, customer, pet, offset);
+            offset += 10;
+            passed.add(other);
+            expectCancel.put(data.task("PICKUP_OVERDUE", other, branch, customer, pet, status), status.equals("OPEN"));
+        }
+        long notPassed = data.booking(branch, customer, pet, offset);
+        expectCancel.put(data.task("PICKUP_OVERDUE", notPassed, branch, customer, pet, "OPEN"), false);   // đặt chỗ khác
+        expectCancel.put(data.task("VACCINE_DUE", vaccination, branch, customer, pet, "OPEN"), false);     // khác loại
+        expectCancel.put(data.task("FOLLOW_UP_DUE", medicalRecord, branch, customer, pet, "OPEN"), false); // khác loại
+        Map<Long, Before> before = snapshot(expectCancel.keySet());
+
+        clock.set(T1);
+        tx.executeWithoutResult(status -> api.cancelPickupOverdue(passed));
+
+        assertMatrix(expectCancel, before, "Thú đã rời khách sạn (BR-LT-10)");
     }
 
     @Test

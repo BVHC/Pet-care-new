@@ -1,5 +1,6 @@
 package com.petcare.module.boarding.service;
 
+import java.util.List;
 import java.time.Clock;
 import java.time.Instant;
 import java.time.LocalDate;
@@ -21,6 +22,7 @@ import com.petcare.module.boarding.fsm.KennelTransitionHandler;
 import com.petcare.module.boarding.repository.BoardingBookingRepository;
 import com.petcare.module.boarding.repository.BoardingBookingRepository.BookingKeys;
 import com.petcare.module.boarding.repository.KennelRepository;
+import com.petcare.module.care.api.CareTaskApi;
 import com.petcare.module.branch.api.BranchQueryApi;
 import com.petcare.module.catalog.api.CatalogQueryApi;
 import com.petcare.module.identity.api.ConfigKey;
@@ -35,7 +37,8 @@ import com.petcare.platform.security.BranchScope;
 /**
  * Bắt đầu trả thú, giao thú, kết thúc do thú mất (UC59, boarding-v1 #16–18; Đặt chỗ#9, #10, #11; Chuồng#3;
  * docs/adr/0086). Chỉ lễ tân (controller). Khóa {@code boarding_bookings FOR NO KEY UPDATE → orders
- * (BoardingOrderApi) → document_counters}; giao thú và thú mất khóa thêm {@code kennels} sau đặt chỗ. Thứ tự lỗi như
+ * (BoardingOrderApi) → document_counters}; giao thú và thú mất khóa thêm {@code kennels} sau đặt chỗ, rồi đóng task đón
+ * thú quá hạn còn OPEN ({@code CareTaskApi.cancelPickupOverdue}, một câu UPDATE, docs/adr/0107). Thứ tự lỗi như
  * ADR-0049: 404 / 403 → 409 trạng thái → 400 rule.
  */
 @Service
@@ -48,6 +51,7 @@ public class BoardingCheckoutService {
     private final CatalogQueryApi catalog;
     private final SystemConfigApi configs;
     private final BoardingOrderApi boardingOrders;
+    private final CareTaskApi careTasks;
     private final BoardingBookingRepository bookings;
     private final KennelRepository kennels;
     private final BoardingBookingTransitionHandler transitions;
@@ -56,7 +60,7 @@ public class BoardingCheckoutService {
     private final Clock clock;
 
     public BoardingCheckoutService(BranchScope branchScope, BranchQueryApi branches, CatalogQueryApi catalog,
-            SystemConfigApi configs, BoardingOrderApi boardingOrders, BoardingBookingRepository bookings,
+            SystemConfigApi configs, BoardingOrderApi boardingOrders, CareTaskApi careTasks, BoardingBookingRepository bookings,
             KennelRepository kennels, BoardingBookingTransitionHandler transitions,
             KennelTransitionHandler kennelTransitions, BoardingAssembler assembler, Clock clock) {
         this.branchScope = branchScope;
@@ -64,6 +68,7 @@ public class BoardingCheckoutService {
         this.catalog = catalog;
         this.configs = configs;
         this.boardingOrders = boardingOrders;
+        this.careTasks = careTasks;
         this.bookings = bookings;
         this.kennels = kennels;
         this.transitions = transitions;
@@ -110,6 +115,7 @@ public class BoardingCheckoutService {
         release(kennel);
         BoardingBooking saved = bookings.saveAndFlush(booking);
         kennels.saveAndFlush(kennel);
+        careTasks.cancelPickupOverdue(List.of(bookingId));
         return assembler.toResponse(saved, LocalDate.now(clock));
     }
 
@@ -127,6 +133,7 @@ public class BoardingCheckoutService {
         release(kennel);
         BoardingBooking saved = bookings.saveAndFlush(booking);
         kennels.saveAndFlush(kennel);
+        careTasks.cancelPickupOverdue(List.of(bookingId));
         BoardingOrderRef order = boardingOrders.findPaidOrder(bookingId)
                 .orElseGet(() -> open(saved, BoardingRules.chargedNights(saved.getCheckInDate(), today, false), actor));
         return new CheckoutStartedResponse(assembler.toResponse(saved, today), order.orderId(), order.nights(),

@@ -99,6 +99,16 @@ class DocumentCodeIT {
                 type)).isEqualTo(20);
     }
 
+    /** docs/adr/0107: chuỗi lớn vượt 99 999 chứng từ / tháng thì mã dài ra sáu chữ số, không lỗi 500. */
+    @Test
+    void theHundredThousandthDocumentOfAMonthGetsASixDigitNumber() {
+        String type = newType();
+        jdbc.update("INSERT INTO document_counters (doc_type, period, last_value) VALUES (?, '2610', 99999)", type);
+
+        assertThat(next(type, "DH", LocalDate.of(2026, 10, 16))).isEqualTo("DH-2610-100000");
+        assertThat(next(type, "DH", LocalDate.of(2026, 10, 16))).isEqualTo("DH-2610-100001");
+    }
+
     @Test
     void exceedingTheMonthlyLimitFailsInsteadOfOverflowingTheColumn() {
         String type = newType();
