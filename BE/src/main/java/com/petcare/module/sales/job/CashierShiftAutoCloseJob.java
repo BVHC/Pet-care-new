@@ -76,7 +76,7 @@ public class CashierShiftAutoCloseJob {
                         switch (result) {
                             case CLOSED -> closed++;
                             case NOT_DUE -> notDue++;
-                            case SKIPPED, NO_DEADLINE -> skipped++;
+                            case SKIPPED -> skipped++;
                         }
                     } catch (RuntimeException e) {
                         failed++;

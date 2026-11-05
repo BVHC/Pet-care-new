@@ -101,7 +101,9 @@ public class AccountAdminController {
             summary = "Mở khóa tài khoản",
             description = "UC09 · BR-QT-11, 12. Actor: A03. Quyền: Chỉ ADMIN. Chuyển trạng thái: is_locked "
                 + "true → false (Tài khoản#8). status giữ nguyên giá trị trước khi khóa (BR-QT-12); giữ lý do khóa gần "
-                + "nhất; không mở phiên, không thông báo; ghi audit kèm lý do (docs/adr/0035).",
+                + "nhất; không mở phiên, không thông báo; ghi audit kèm lý do (docs/adr/0035). Lượt `IN_PROGRESS` của người "
+                + "được mở khóa mà họ lại phụ trách được (ACTIVE, đúng chi nhánh, đúng chức vụ) không còn cờ "
+                + "`needsReassign` (docs/adr/0088).",
             parameters = {
                     @Parameter(name = "id", in = ParameterIn.PATH, example = "42")})
     @ApiErrorDoc(status = 400, description = "Thiếu lý do (`VALIDATION_FAILED`)")

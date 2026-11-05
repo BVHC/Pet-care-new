@@ -65,6 +65,7 @@ Nguồn: BR-QT-15 và mọi chỗ đặc tả ghi "ghi audit". Mã action do mod
 | Đổi giá | Đổi giá sản phẩm, dịch vụ (UC29, UC30) | SP | `record` | `PRICE_CHANGED` |
 | Giao dịch tiền | Thu tiền (BR-TG-04; Order #8) | TG | `record` | `ORDER_PAID` |
 | | Hủy Order `PENDING` khách không thanh toán (BR-BH-05; Order #10) | BH | `record` | *(BH đặt)* |
+| | Chuyển dòng thuốc kê đơn sang mua ngoài lúc thu (BR-BH-04; sales #11) | BH | `record` | `ORDER_LINE_MOVED_EXTERNAL` |
 | | Hủy phiên trả thú (BR-LT-09; Order #9) | LT | `record` | *(LT đặt)* |
 | | Chuyển dòng thuốc kê đơn sang mua ngoài lúc thu (BR-BH-04) | BH | `record` | *(BH đặt)* |
 | | Đối soát ca thu ngân (Ca thu ngân #6) | TG | `record` | *(TG đặt)* |

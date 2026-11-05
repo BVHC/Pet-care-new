@@ -16,13 +16,14 @@ import org.springframework.transaction.annotation.Transactional;
  * transaction tạo chứng từ (sau mọi kiểm tra) để giữ khóa ngắn.
  * <p>
  * Kỳ theo ngày nghiệp vụ truyền vào (bên gọi dùng {@code LocalDate.now(clock)}), không theo ngày trên chứng từ. Dãy toàn
- * chuỗi. Mỗi kỳ tối đa {@value #MAX_PER_PERIOD} chứng từ; vượt thì {@link IllegalStateException} (cột {@code code} là
- * {@code VARCHAR(20)}). {@code platform} không biết module nào: bên gọi truyền loại và tiền tố.
+ * chuỗi. Mỗi kỳ tối đa {@value #MAX_PER_PERIOD} chứng từ (năm chữ số đầu, từ số thứ 100 000 dài ra sáu chữ số, mã
+ * dài nhất 14 ký tự với tiền tố hai chữ); vượt thì {@link IllegalStateException} (cột {@code code} là
+ * {@code VARCHAR(20)}; docs/adr/0107, thay giới hạn 99 999 của ADR-0043). {@code platform} không biết module nào: bên gọi truyền loại và tiền tố.
  */
 @Component
 public class DocumentCodeGenerator {
 
-    public static final int MAX_PER_PERIOD = 99_999;
+    public static final int MAX_PER_PERIOD = 999_999;
 
     private static final DateTimeFormatter PERIOD = DateTimeFormatter.ofPattern("yyMM");
 

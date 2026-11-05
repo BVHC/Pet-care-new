@@ -197,6 +197,31 @@ class PaymentIT extends CashierItSupport {
     }
 
     @Test
+    void anOrderOfAnotherBranchHeldByAnotherTransactionIs403WithoutWaiting() throws Exception {
+        long foreign = pendingOrderSql(otherBranch, customer, receptionist(otherBranch),
+                LineSpec.goods(goods1, "Hạt", 1, 100_000));
+        CompletableFuture<Void> locked = new CompletableFuture<>();
+        CompletableFuture<Void> release = new CompletableFuture<>();
+        CompletableFuture<Void> holder = CompletableFuture.runAsync(() -> new TransactionTemplate(transactionManager)
+                .executeWithoutResult(status -> {
+                    jdbc.queryForObject("SELECT id FROM orders WHERE id = ? FOR NO KEY UPDATE", Long.class, foreign);
+                    locked.complete(null);
+                    release.join();
+                }));
+        try {
+            locked.get(5, TimeUnit.SECONDS);
+
+            ResponseEntity<Map<String, Object>> response = CompletableFuture
+                    .supplyAsync(() -> payCash(100_000, foreign)).get(10, TimeUnit.SECONDS);
+
+            assertThat(response.getStatusCode()).as("%s", response.getBody()).isEqualTo(HttpStatus.FORBIDDEN);
+        } finally {
+            release.complete(null);
+            holder.get(5, TimeUnit.SECONDS);
+        }
+    }
+
+    @Test
     void amountMismatchIs400BrTg02() {
         long o = order(customer, LineSpec.goods(goods1, "Hạt", 1, 100_000));
 

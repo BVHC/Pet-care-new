@@ -16,7 +16,9 @@ import com.petcare.module.customer.entity.CustomerChannel;
  * Đường đọc của tra cứu khách (UC23, customer-v1 #8; BR-KH-10; docs/adr/0041). Truy vấn động chỉ ghép điều kiện đã gửi —
  * <b>không</b> dùng {@code :x IS NULL OR …} vì kế hoạch generic mất index ({@code ix_customers_phone},
  * {@code ix_customers_email}, {@code ix_pets_customer_id}); giống {@code AuditLogQueryRepository} của identity. Họ tên và
- * tên thú tìm bằng {@code ILIKE '%x%'} (không index, phân biệt dấu — nợ ghi ở docs/dept). Không tự mở transaction:
+ * tên thú tìm bằng {@code f_unaccent(cột) ILIKE f_unaccent(:x) ESCAPE '!'} — không phân biệt dấu tiếng Việt, dùng index
+ * trigram {@code ix_customers_full_name_unaccent_trgm} / {@code ix_pets_name_unaccent_trgm} của V33 (docs/adr/0104); đổi
+ * biểu thức ở đây thì phải đổi index cùng lúc ({@code CustomerSearchIndexIT} giữ điều đó). Không tự mở transaction:
  * dùng connection của {@code CustomerSearchService} (readOnly).
  */
 @Repository
@@ -52,7 +54,7 @@ public class CustomerSearchRepository {
     }
 
     /** FROM … WHERE chỉ chứa điều kiện đã gửi; tham số đặt vào {@code params}. */
-    private static String from(CustomerSearchFilter filter, MapSqlParameterSource params) {
+    static String from(CustomerSearchFilter filter, MapSqlParameterSource params) {
         StringBuilder sql = new StringBuilder("FROM customers c WHERE 1 = 1");
         if (filter.phone() != null) {
             sql.append(" AND c.phone = :phone");
@@ -63,12 +65,12 @@ public class CustomerSearchRepository {
             params.addValue("email", filter.email());
         }
         if (filter.name() != null) {
-            sql.append(" AND c.full_name ILIKE :name ESCAPE '!'");
+            sql.append(" AND f_unaccent(c.full_name) ILIKE f_unaccent(:name) ESCAPE '!'");
             params.addValue("name", likePattern(filter.name()));
         }
         if (filter.petName() != null) {
-            sql.append(" AND EXISTS (SELECT 1 FROM pets p WHERE p.customer_id = c.id AND p.name ILIKE :petName"
-                    + " ESCAPE '!')");
+            sql.append(" AND EXISTS (SELECT 1 FROM pets p WHERE p.customer_id = c.id"
+                    + " AND f_unaccent(p.name) ILIKE f_unaccent(:petName) ESCAPE '!')");
             params.addValue("petName", likePattern(filter.petName()));
         }
         return sql.toString();

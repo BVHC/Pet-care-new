@@ -151,11 +151,12 @@ class SchemaMigrationIT {
         // V30 index lượt tiếp nhận theo chi nhánh × ngày check-in (docs/adr/0095, trả D041),
         // V31 index audit_logs (action, created_at) + gỡ 2 trigger chỉ-thêm-mới của audit_logs (docs/adr/0098, trả D021),
         // V32 index thứ tự danh sách thông báo (account_id, created_at DESC, id DESC) (docs/adr/0099, trả D022),
+        // V33 tìm khách / thú theo tên không dấu: unaccent + pg_trgm, f_unaccent, 2 index GIN (docs/adr/0104, trả T17-D05),
         // V9000 chỉ ở test: baseline session.access_ttl_minutes = 720
         assertThat(rows).extracting(row -> row.get("version"))
                 .containsExactly("1", "2", "3", "4", "5", "6", "7", "8", "9", "10", "11", "12", "13", "14", "15",
                         "16", "17", "18", "19", "20", "21", "22", "23", "24", "25", "26", "27", "28", "29", "30",
-                        "31", "32", "9000");
+                        "31", "32", "33", "9000");
         assertThat(rows).allSatisfy(row -> assertThat(row).containsEntry("success", true));
     }
 

@@ -1,5 +1,6 @@
 package com.petcare.module.catalog.service;
 
+import static org.mockito.Mockito.inOrder;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
@@ -15,6 +16,7 @@ import java.util.Optional;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
+import org.mockito.InOrder;
 import org.mockito.ArgumentCaptor;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
@@ -162,9 +164,26 @@ class ServiceCatalogServiceTest {
     private Service existing(ServiceGroup group, MedicalType type, long price) {
         Service s = new Service("Dịch vụ", group, type, price, true, null);
         ReflectionTestUtils.setField(s, "id", 9L);
-        when(services.findById(9L)).thenReturn(Optional.of(s));
+        lenient().when(services.findById(9L)).thenReturn(Optional.of(s));
+        lenient().when(services.findByIdForUpdate(9L)).thenReturn(Optional.of(s));
         lenient().when(services.saveAndFlush(any(Service.class))).thenAnswer(inv -> inv.getArgument(0));
         return s;
+    }
+
+    /** Ghi phải khóa dòng trước khi đọc, không đọc không khóa (docs/adr/0106). */
+    @Test
+    void updateLocksTheRowAndNeverReadsItUnlocked() {
+        Service s = new Service("Dịch vụ", ServiceGroup.GROOMING, null, 100_000, true, null);
+        ReflectionTestUtils.setField(s, "id", 9L);
+        when(services.findByIdForUpdate(9L)).thenReturn(Optional.of(s));
+        when(services.saveAndFlush(any(Service.class))).thenAnswer(inv -> inv.getArgument(0));
+
+        service.updateService(9L, new UpdateServiceRequest(null, null, 120_000L, null, null, null, null));
+
+        InOrder order = inOrder(services);
+        order.verify(services).findByIdForUpdate(9L);
+        order.verify(services).saveAndFlush(any(Service.class));
+        verify(services, never()).findById(any());
     }
 
     @Test

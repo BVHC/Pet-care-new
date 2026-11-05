@@ -273,7 +273,7 @@ paths:
           required: false
           schema:
             type: string
-          description: "Họ tên chứa chuỗi"
+          description: "Họ tên chứa chuỗi (không phân biệt hoa thường và dấu tiếng Việt)"
         - name: email
           in: query
           required: false
@@ -284,6 +284,7 @@ paths:
           required: false
           schema:
             type: string
+          description: "Tên thú chứa chuỗi (không phân biệt hoa thường và dấu tiếng Việt)"
         - $ref: "#/components/parameters/Page"
         - $ref: "#/components/parameters/Size"
       responses:

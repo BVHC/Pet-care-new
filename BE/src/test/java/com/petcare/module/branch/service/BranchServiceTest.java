@@ -116,7 +116,7 @@ class BranchServiceTest {
     @Test
     void updatesOnlyGivenFieldsIncludingTheEmergencyFlag_BR_CN_05() {
         Branch branch = existing(BranchStatus.ACTIVE);
-        when(branches.findById(3L)).thenReturn(Optional.of(branch));
+        when(branches.findByIdForUpdate(3L)).thenReturn(Optional.of(branch));
         when(branches.saveAndFlush(any(Branch.class))).thenAnswer(inv -> inv.getArgument(0));
 
         BranchResponse response = service.updateBranch(3L,
@@ -128,9 +128,23 @@ class BranchServiceTest {
         assertThat(response.status()).isEqualTo(BranchStatus.ACTIVE);
     }
 
+    /** Ghi chi nhánh phải khóa dòng trước khi đọc: không khóa thì UPDATE tất cả cột ghi đè {@code status} vừa kích hoạt. */
+    @Test
+    void updateLocksTheBranchRowAndNeverReadsItUnlocked() {
+        when(branches.findByIdForUpdate(3L)).thenReturn(Optional.of(existing(BranchStatus.ACTIVE)));
+        when(branches.saveAndFlush(any(Branch.class))).thenAnswer(inv -> inv.getArgument(0));
+
+        service.updateBranch(3L, new UpdateBranchRequest(null, null, "0289999999", null, null, null));
+
+        InOrder order = inOrder(branches);
+        order.verify(branches).findByIdForUpdate(3L);
+        order.verify(branches).saveAndFlush(any(Branch.class));
+        verify(branches, never()).findById(any());
+    }
+
     @Test
     void renameChecksDuplicateExcludingSelf() {
-        when(branches.findById(3L)).thenReturn(Optional.of(existing(BranchStatus.DRAFT)));
+        when(branches.findByIdForUpdate(3L)).thenReturn(Optional.of(existing(BranchStatus.DRAFT)));
         when(branches.existsByNameAndIdNot("CN Quận 7", 3L)).thenReturn(true);
 
         assertThatThrownBy(() -> service.updateBranch(3L,
@@ -140,7 +154,7 @@ class BranchServiceTest {
 
     @Test
     void updateUnknownBranchIsNotFound() {
-        when(branches.findById(3L)).thenReturn(Optional.empty());
+        when(branches.findByIdForUpdate(3L)).thenReturn(Optional.empty());
 
         assertThatThrownBy(() -> service.updateBranch(3L, new UpdateBranchRequest(null, null, null, null, null, null)))
                 .isInstanceOf(ResourceNotFoundException.class);

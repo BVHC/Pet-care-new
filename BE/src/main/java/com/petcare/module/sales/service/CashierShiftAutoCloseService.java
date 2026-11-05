@@ -1,5 +1,6 @@
 package com.petcare.module.sales.service;
 
+import java.time.Clock;
 import java.time.Instant;
 import java.time.LocalDateTime;
 import java.time.format.DateTimeFormatter;
@@ -24,18 +25,21 @@ import com.petcare.module.sales.entity.CashierShift;
 import com.petcare.module.sales.entity.CashierShiftStatus;
 import com.petcare.module.sales.fsm.CashierShiftTransitionHandler;
 import com.petcare.module.sales.repository.CashierShiftRepository;
+import com.petcare.module.sales.repository.CashierShiftRepository.ShiftDeadlineRow;
 import com.petcare.platform.config.TimeConfig;
 
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 
 /**
- * ST13 — tự chốt ca thu ngân chưa chốt (Ca thu ngân#4 ca thường, #5 ca ngoài giờ; BR-TG-05; docs/adr/0064; cơ chế job:
- * docs/adr/0007). Mỗi ca một {@code @Transactional}: khóa {@code FOR NO KEY UPDATE SKIP LOCKED} (ca đang có phiếu thu
- * giữ {@code FOR SHARE} thì bỏ qua, lượt sau làm) → kiểm lại {@code OPEN} dưới khóa (đã nằm trong câu khóa) → hạn tính
- * <b>lúc chạy</b> từ giờ mở cửa hiện hành và [CFG] grace → tổng phiếu thu → {@code CLOSED}, {@code auto_closed},
- * không có số thực đếm → thông báo trong app cho BRANCH_MANAGER (không có ai: SUPER_MANAGER). Không audit (hệ thống,
- * không có actor; BR-QT-15 không liệt kê tự chốt). Không {@code catch}: lỗi thông báo làm rollback cả việc chốt.
+ * ST13 — tự chốt ca thu ngân chưa chốt (Ca thu ngân#4 ca thường, #5 ca ngoài giờ; BR-TG-05; docs/adr/0064, 0103; cơ chế
+ * job: docs/adr/0007). Mỗi ca một {@code @Transactional}: hạn tính <b>lúc chạy</b> từ cột bất biến của ca (đọc không
+ * khóa, {@code findOpenDeadlineRow}), giờ mở cửa hiện hành và [CFG] grace; <b>chỉ ca đã đến hạn mới bị khóa</b>
+ * {@code FOR NO KEY UPDATE SKIP LOCKED} (ca đang có phiếu thu giữ {@code FOR SHARE} thì bỏ qua, lượt sau làm) → tổng phiếu
+ * thu → {@code CLOSED}, {@code auto_closed}, không có số thực đếm → thông báo trong app cho BRANCH_MANAGER (không có ai:
+ * SUPER_MANAGER). {@code closed_at} lấy từ đồng hồ <b>sau khi có khóa</b> (không phải lúc job bắt đầu) nên không bao
+ * giờ sớm hơn {@code paid_at} của phiếu đã commit trong ca. Không audit (hệ thống, không có actor; BR-QT-15 không liệt
+ * kê tự chốt). Không {@code catch}: lỗi thông báo làm rollback cả việc chốt.
  */
 @Slf4j
 @Service
@@ -43,7 +47,7 @@ import lombok.extern.slf4j.Slf4j;
 public class CashierShiftAutoCloseService {
 
     /** Kết quả xử lý một ca. */
-    public enum Result { CLOSED, NOT_DUE, SKIPPED, NO_DEADLINE }
+    public enum Result { CLOSED, NOT_DUE, SKIPPED }
 
     private static final DateTimeFormatter DATE = DateTimeFormatter.ofPattern("dd/MM/yyyy");
     private static final DateTimeFormatter DATE_TIME = DateTimeFormatter.ofPattern("HH:mm dd/MM/yyyy");
@@ -56,6 +60,7 @@ public class CashierShiftAutoCloseService {
     private final ShiftNoticeRecipients recipients;
     private final ShiftTotalsReader totals;
     private final CashierShiftTransitionHandler fsm;
+    private final Clock clock;
 
     /** Keyset id các ca {@code OPEN}; đọc thuần, trước mọi khóa. */
     @Transactional(readOnly = true)
@@ -65,21 +70,21 @@ public class CashierShiftAutoCloseService {
 
     @Transactional
     public Result autoCloseCashierShift(Long shiftId, Instant now) {
+        Optional<ShiftDeadlineRow> row = shifts.findOpenDeadlineRow(shiftId);
+        if (row.isEmpty()) {
+            return Result.SKIPPED;
+        }
+        LocalDateTime deadline = deadlineOf(row.get());
+        if (now.isBefore(deadline.atZone(TimeConfig.BUSINESS_ZONE).toInstant())) {
+            return Result.NOT_DUE;
+        }
         Optional<CashierShift> locked = shifts.lockOpenSkipLocked(shiftId);
         if (locked.isEmpty()) {
             return Result.SKIPPED;
         }
         CashierShift shift = locked.get();
-        Optional<LocalDateTime> deadline = deadlineOf(shift);
-        if (deadline.isEmpty()) {
-            log.warn("CASHIER_SHIFT_NO_NEXT_OPENING shiftId={} branchId={}", shiftId, shift.getBranchId());
-            return Result.NO_DEADLINE;
-        }
-        if (now.isBefore(deadline.get().atZone(TimeConfig.BUSINESS_ZONE).toInstant())) {
-            return Result.NOT_DUE;
-        }
         fsm.validateTransition(shift.getStatus(), CashierShiftStatus.CLOSED);
-        Instant closedAt = now.truncatedTo(ChronoUnit.MICROS);
+        Instant closedAt = Instant.now(clock).truncatedTo(ChronoUnit.MICROS);
         shift.autoClose(totals.read(shiftId), closedAt);
         shifts.saveAndFlush(shift);
         notifyManagers(shift, closedAt);
@@ -89,15 +94,17 @@ public class CashierShiftAutoCloseService {
         return Result.CLOSED;
     }
 
-    private Optional<LocalDateTime> deadlineOf(CashierShift shift) {
-        if (shift.isAfterHours()) {
-            // Ca ngoài giờ qua nửa đêm và thuộc ngày mở ca: hạn là lúc bắt đầu khoảng mở cửa kế tiếp sau khi mở ca.
+    private LocalDateTime deadlineOf(ShiftDeadlineRow shift) {
+        if (Boolean.TRUE.equals(shift.getAfterHours())) {
+            // Ca ngoài giờ qua nửa đêm và thuộc ngày mở ca: hạn là lúc bắt đầu khoảng mở cửa kế tiếp sau khi mở ca. Chi
+            // nhánh không còn khoảng mở cửa nào (nghỉ dài hạn): 00:00 ngày thứ hai sau ngày mở ca, để ca không treo mãi.
             return branches.nextOpeningStart(shift.getBranchId(),
-                    LocalDateTime.ofInstant(shift.getOpenedAt(), TimeConfig.BUSINESS_ZONE));
+                    LocalDateTime.ofInstant(shift.getOpenedAt(), TimeConfig.BUSINESS_ZONE))
+                    .orElseGet(() -> shift.getBusinessDate().plusDays(2).atStartOfDay());
         }
         int grace = configs.getInt(ConfigKey.CASHIER_SHIFT_AUTO_CLOSE_GRACE_MINUTES);
-        return Optional.of(ShiftDeadline.regular(shift.getBusinessDate(),
-                branches.openingRangesOn(shift.getBranchId(), shift.getBusinessDate()), grace));
+        return ShiftDeadline.regular(shift.getBusinessDate(),
+                branches.openingRangesOn(shift.getBranchId(), shift.getBusinessDate()), grace);
     }
 
     private void notifyManagers(CashierShift shift, Instant closedAt) {

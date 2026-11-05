@@ -221,6 +221,54 @@ class StockApiIT extends InventoryItSupport {
         assertThat(lotQuantity(lotB)).isEqualTo(1000);
     }
 
+    /**
+     * T18-D07: lô luôn bị khóa theo id tăng dần. Lô id nhỏ (hạn dùng muộn hơn nên index FEFO trả sau) đang bị giữ thì lần
+     * bán chờ ngay ở đó và <b>chưa</b> khóa lô id lớn (hạn gần, index trả trước). Bỏ {@code ORDER BY l.id} → bán khóa lô
+     * id lớn trước rồi mới chờ → {@code NOWAIT} ở dưới thất bại.
+     */
+    @Test
+    void lotsAreLockedByAscendingIdSoALockedLowerLotLeavesTheHigherOneFree() throws Exception {
+        long low = lot(branch, drug, "LOW", inDays(60), 5, actor);
+        long high = lot(branch, drug, "HIGH", inDays(30), 5, actor);
+        java.util.concurrent.CompletableFuture<Void> locked = new java.util.concurrent.CompletableFuture<>();
+        java.util.concurrent.CompletableFuture<Void> release = new java.util.concurrent.CompletableFuture<>();
+        java.util.concurrent.CompletableFuture<Void> holder = java.util.concurrent.CompletableFuture.runAsync(
+                () -> new TransactionTemplate(transactionManager).executeWithoutResult(status -> {
+                    jdbc.queryForObject("SELECT id FROM stock_lots WHERE id = ? FOR NO KEY UPDATE", Long.class, low);
+                    locked.complete(null);
+                    release.join();
+                }));
+        try {
+            locked.get(5, java.util.concurrent.TimeUnit.SECONDS);
+            java.util.concurrent.CompletableFuture<List<Shortage>> selling = java.util.concurrent.CompletableFuture
+                    .supplyAsync(() -> sale(900L, new SaleLine(drug, 3)));
+            awaitSaleWaitingOnLots();
+
+            assertThat(jdbc.queryForObject("SELECT id FROM stock_lots WHERE id = ? FOR NO KEY UPDATE NOWAIT",
+                    Long.class, high)).as("lô id lớn chưa bị khóa khi lô id nhỏ còn bị giữ").isEqualTo(high);
+
+            release.complete(null);
+            holder.get(5, java.util.concurrent.TimeUnit.SECONDS);
+            assertThat(selling.get(15, java.util.concurrent.TimeUnit.SECONDS)).isEmpty();
+        } finally {
+            release.complete(null);
+        }
+    }
+
+    private void awaitSaleWaitingOnLots() throws InterruptedException {
+        long deadline = System.nanoTime() + java.util.concurrent.TimeUnit.SECONDS.toNanos(15);
+        while (System.nanoTime() < deadline) {
+            Long waiting = jdbc.queryForObject("""
+                    SELECT count(*) FROM pg_stat_activity WHERE wait_event_type = 'Lock' AND pid <> pg_backend_pid()
+                      AND query ILIKE '%stock_lots%'""", Long.class);
+            if (waiting != null && waiting >= 1) {
+                return;
+            }
+            Thread.sleep(25);
+        }
+        throw new AssertionError("lần bán không chờ khóa lô");
+    }
+
     // ---------------------------------------------------------------- tiêm
 
     @Test

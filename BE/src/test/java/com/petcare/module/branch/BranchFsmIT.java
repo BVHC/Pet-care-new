@@ -7,6 +7,8 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;
+import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicInteger;
 
 import org.junit.jupiter.api.AfterEach;
@@ -103,6 +105,54 @@ class BranchFsmIT {
         assertThat(jdbc.queryForObject("SELECT activated_at IS NOT NULL FROM branches WHERE id = ?", Boolean.class, id))
                 .isTrue();
         assertThat(publicView(id).getStatusCode()).isEqualTo(HttpStatus.OK);
+    }
+
+    /**
+     * Sửa chi nhánh (PATCH) không được ghi đè trạng thái do một lần kích hoạt đang chạy song song (docs/adr/0106): luồng
+     * giữ khóa dòng chi nhánh đã đặt {@code ACTIVE} nhưng chưa commit; PATCH đổi tên phải chờ khóa rồi đọc lại, nên sau đó
+     * chi nhánh vẫn {@code ACTIVE} và có tên mới. Không khóa thì PATCH đọc {@code DRAFT} rồi ghi lại {@code DRAFT}.
+     */
+    @Test
+    void anEditWaitingBehindAnActivationDoesNotRevertIt() throws Exception {
+        long id = create();
+        CompletableFuture<Void> locked = new CompletableFuture<>();
+        CompletableFuture<Void> release = new CompletableFuture<>();
+        CompletableFuture<Void> activation = CompletableFuture.runAsync(() -> new TransactionTemplate(
+                transactionManager).executeWithoutResult(tx -> {
+                    jdbc.update("UPDATE branches SET status = 'ACTIVE', activated_at = now() WHERE id = ?", id);
+                    locked.complete(null);
+                    release.join();
+                }));
+        try {
+            locked.get(5, TimeUnit.SECONDS);
+            CompletableFuture<ResponseEntity<Map<String, Object>>> edit = CompletableFuture.supplyAsync(() -> call(
+                    HttpMethod.PATCH, "/api/branches/" + id, superManager, Map.of("name", "Tên mới " + id)));
+            awaitLockWait();
+            release.complete(null);
+            activation.get(5, TimeUnit.SECONDS);
+
+            assertThat(edit.get(15, TimeUnit.SECONDS).getStatusCode()).isEqualTo(HttpStatus.OK);
+        } finally {
+            release.complete(null);
+        }
+
+        assertThat(status(id)).as("kích hoạt không bị PATCH ghi đè").isEqualTo("ACTIVE");
+        assertThat(jdbc.queryForObject("SELECT name FROM branches WHERE id = ?", String.class, id))
+                .isEqualTo("Tên mới " + id);
+    }
+
+    private void awaitLockWait() throws InterruptedException {
+        long deadline = System.nanoTime() + TimeUnit.SECONDS.toNanos(15);
+        while (System.nanoTime() < deadline) {
+            Long waiting = jdbc.queryForObject("""
+                    SELECT count(*) FROM pg_stat_activity WHERE wait_event_type = 'Lock' AND pid <> pg_backend_pid()
+                      AND query ILIKE '%branches%'""", Long.class);
+            if (waiting != null && waiting >= 1) {
+                return;
+            }
+            Thread.sleep(25);
+        }
+        throw new AssertionError("PATCH không chờ khóa chi nhánh");
     }
 
     // ================================================================ điều kiện của #2 (400) và cặp sai (409)

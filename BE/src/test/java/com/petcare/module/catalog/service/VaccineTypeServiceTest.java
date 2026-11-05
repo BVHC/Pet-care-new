@@ -1,5 +1,7 @@
 package com.petcare.module.catalog.service;
 
+import static org.mockito.Mockito.lenient;
+import static org.mockito.Mockito.inOrder;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
@@ -13,6 +15,7 @@ import java.util.Optional;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
+import org.mockito.InOrder;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.test.util.ReflectionTestUtils;
@@ -50,7 +53,8 @@ class VaccineTypeServiceTest {
     private VaccineType existing() {
         VaccineType type = new VaccineType("Dại", Species.DOG);
         ReflectionTestUtils.setField(type, "id", 3L);
-        when(vaccineTypes.findById(3L)).thenReturn(Optional.of(type));
+        lenient().when(vaccineTypes.findById(3L)).thenReturn(Optional.of(type));
+        lenient().when(vaccineTypes.findByIdForUpdate(3L)).thenReturn(Optional.of(type));
         return type;
     }
 
@@ -79,6 +83,22 @@ class VaccineTypeServiceTest {
 
         assertThatThrownBy(() -> service.updateVaccineType(3L, new UpdateVaccineTypeRequest("5 bệnh", null)))
                 .isInstanceOf(DuplicateCatalogEntryException.class);
+    }
+
+    /** Ghi phải khóa dòng trước khi đọc, không đọc không khóa (docs/adr/0106). */
+    @Test
+    void updateLocksTheRowAndNeverReadsItUnlocked() {
+        VaccineType type = new VaccineType("Dại", Species.DOG);
+        ReflectionTestUtils.setField(type, "id", 3L);
+        when(vaccineTypes.findByIdForUpdate(3L)).thenReturn(Optional.of(type));
+        when(vaccineTypes.saveAndFlush(any(VaccineType.class))).thenAnswer(inv -> inv.getArgument(0));
+
+        service.updateVaccineType(3L, new UpdateVaccineTypeRequest(null, false));
+
+        InOrder order = inOrder(vaccineTypes);
+        order.verify(vaccineTypes).findByIdForUpdate(3L);
+        order.verify(vaccineTypes).saveAndFlush(any(VaccineType.class));
+        verify(vaccineTypes, never()).findById(any());
     }
 
     @Test

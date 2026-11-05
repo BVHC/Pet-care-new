@@ -69,7 +69,8 @@ public class VaccineTypeService {
 
     @Transactional
     public VaccineTypeResponse updateVaccineType(Long vaccineTypeId, UpdateVaccineTypeRequest request) {
-        VaccineType vaccineType = find(vaccineTypeId);
+        VaccineType vaccineType = vaccineTypes.findByIdForUpdate(vaccineTypeId)
+                .orElseThrow(() -> new ResourceNotFoundException("Loại vaccine", vaccineTypeId));
         if (request.name() != null) {
             String name = request.name().trim();
             if (vaccineTypes.existsByNameAndSpeciesAndIdNot(name, vaccineType.getSpecies(), vaccineTypeId)) {

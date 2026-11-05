@@ -21,6 +21,7 @@ import com.petcare.module.sales.entity.CashierShiftStatus;
 import com.petcare.module.sales.fsm.CashierShiftTransitionHandler;
 import com.petcare.module.sales.repository.CashierShiftRepository;
 import com.petcare.platform.config.TimeConfig;
+import com.petcare.platform.exception.AccessDeniedScopeException;
 import com.petcare.platform.exception.BusinessRuleViolationException;
 import com.petcare.platform.exception.InvalidStateTransitionException;
 import com.petcare.platform.security.BranchScope;
@@ -53,8 +54,8 @@ public class CashierShiftService {
         SecurityPrincipal me = branchScope.current();
         StaffSummary staff = staffDirectory.findStaffForShare(me.accountId())
                 .filter(s -> s.role() == Role.RECEPTIONIST && s.active() && s.branchId() != null)
-                .orElseThrow(() -> new IllegalStateException("Tài khoản #" + me.accountId()
-                        + " không phải lễ tân đang hoạt động có chi nhánh"));
+                .orElseThrow(() -> new AccessDeniedScopeException("RECEPTIONIST đang hoạt động có chi nhánh",
+                        "account:" + me.accountId()));
         Long branchId = staff.branchId();
         Instant now = Instant.now(clock).truncatedTo(ChronoUnit.MICROS);
         LocalDateTime local = LocalDateTime.ofInstant(now, TimeConfig.BUSINESS_ZONE);

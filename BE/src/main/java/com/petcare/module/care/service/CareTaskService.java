@@ -32,6 +32,9 @@ public class CareTaskService implements CareTaskApi {
     /** Care Task#4 (ST19). */
     static final String PET_DECEASED_REASON = "Thú cưng đã mất (BR-KH-05)";
 
+    /** Lý do hủy task đón thú quá hạn khi thú đã rời khách sạn (docs/adr/0107). */
+    static final String PICKUP_CLOSED_REASON = "Thú đã rời khách sạn (BR-LT-10)";
+
     private final CareTaskRepository tasks;
     private final CareTaskTransitionHandler fsm;
     private final Clock clock;
@@ -82,6 +85,15 @@ public class CareTaskService implements CareTaskApi {
         }
         Instant now = clock.instant();
         tasks.cancelOpenFollowUpTasks(medicalRecordVisitIds, FOLLOW_UP_CANCELLED_REASON, now);
+    }
+
+    @Override
+    @Transactional(propagation = Propagation.MANDATORY)
+    public void cancelPickupOverdue(Collection<Long> bookingIds) {
+        if (bookingIds.isEmpty()) {
+            return;
+        }
+        tasks.cancelOpenPickupTasks(bookingIds, PICKUP_CLOSED_REASON, clock.instant());
     }
 
     /**

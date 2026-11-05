@@ -86,9 +86,14 @@ public class BranchService {
         return mapper.toResponse(branches.save(branch));
     }
 
+    /**
+     * Sửa thông tin chi nhánh (A04). Khóa dòng chi nhánh <b>trước khi đọc</b> như mọi nơi ghi {@code branches} khác:
+     * Hibernate UPDATE tất cả cột, nên đọc không khóa rồi ghi sẽ ghi đè {@code status} / {@code activated_at} của một lần
+     * kích hoạt đang chạy song song (docs/adr/0106).
+     */
     @Transactional
     public BranchResponse updateBranch(Long branchId, UpdateBranchRequest request) {
-        Branch branch = branches.findById(branchId).orElseThrow(() -> notFound(branchId));
+        Branch branch = branches.findByIdForUpdate(branchId).orElseThrow(() -> notFound(branchId));
         if (request.name() != null) {
             String name = request.name().trim();
             if (branches.existsByNameAndIdNot(name, branchId)) {

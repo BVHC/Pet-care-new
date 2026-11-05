@@ -86,7 +86,7 @@ public class VaccinationProtocolService {
     /** Loài, loại vaccine, mũi thứ không đổi được (catalog-v1 A3). */
     @Transactional
     public VaccinationProtocolResponse updateProtocol(Long protocolId, UpdateProtocolRequest request) {
-        VaccinationProtocol protocol = protocols.findById(protocolId)
+        VaccinationProtocol protocol = protocols.findByIdForUpdate(protocolId)
                 .orElseThrow(() -> new ResourceNotFoundException("Phác đồ tiêm chủng", protocolId));
         if (request.intervalDays() != null) {
             checkIntervalDays(request.intervalDays());

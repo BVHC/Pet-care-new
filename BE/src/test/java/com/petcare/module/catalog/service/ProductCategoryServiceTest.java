@@ -1,5 +1,8 @@
 package com.petcare.module.catalog.service;
 
+import static org.mockito.Mockito.lenient;
+import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.inOrder;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
@@ -11,6 +14,7 @@ import java.util.Optional;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
+import org.mockito.InOrder;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.test.util.ReflectionTestUtils;
@@ -40,7 +44,8 @@ class ProductCategoryServiceTest {
     private ProductCategory existing() {
         ProductCategory category = new ProductCategory("Thức ăn");
         ReflectionTestUtils.setField(category, "id", 2L);
-        when(categories.findById(2L)).thenReturn(Optional.of(category));
+        lenient().when(categories.findById(2L)).thenReturn(Optional.of(category));
+        lenient().when(categories.findByIdForUpdate(2L)).thenReturn(Optional.of(category));
         return category;
     }
 
@@ -83,9 +88,25 @@ class ProductCategoryServiceTest {
         verify(categories).saveAndFlush(any(ProductCategory.class));
     }
 
+    /** Ghi phải khóa dòng trước khi đọc, không đọc không khóa (docs/adr/0106). */
+    @Test
+    void updateLocksTheRowAndNeverReadsItUnlocked() {
+        ProductCategory category = new ProductCategory("Thức ăn");
+        ReflectionTestUtils.setField(category, "id", 2L);
+        when(categories.findByIdForUpdate(2L)).thenReturn(Optional.of(category));
+        when(categories.saveAndFlush(any(ProductCategory.class))).thenAnswer(inv -> inv.getArgument(0));
+
+        service.updateCategory(2L, new UpdateProductCategoryRequest(null, false));
+
+        InOrder order = inOrder(categories);
+        order.verify(categories).findByIdForUpdate(2L);
+        order.verify(categories).saveAndFlush(any(ProductCategory.class));
+        verify(categories, never()).findById(any());
+    }
+
     @Test
     void updateUnknownIsNotFound() {
-        when(categories.findById(2L)).thenReturn(Optional.empty());
+        when(categories.findByIdForUpdate(2L)).thenReturn(Optional.empty());
 
         assertThatThrownBy(() -> service.updateCategory(2L, new UpdateProductCategoryRequest("x", null)))
                 .isInstanceOf(ResourceNotFoundException.class);

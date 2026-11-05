@@ -126,6 +126,7 @@ class CareTaskServiceTest {
     void emptyIdsNeverTouchTheRepository() {
         service.cancelForRevaccination(List.of());
         service.cancelFollowUpTasks(List.of());
+        service.cancelPickupOverdue(List.of());
 
         verifyNoInteractions(tasks);
     }
@@ -143,6 +144,14 @@ class CareTaskServiceTest {
         service.cancelFollowUpTasks(List.of(700L));
 
         verify(tasks).cancelOpenFollowUpTasks(List.of(700L), CareTaskService.FOLLOW_UP_CANCELLED_REASON, NOW);
+        verifyNoMoreInteractions(tasks);
+    }
+
+    @Test
+    void pickupCancellationUsesItsOwnReasonAtTheClockTime() {
+        service.cancelPickupOverdue(List.of(800L, 801L));
+
+        verify(tasks).cancelOpenPickupTasks(List.of(800L, 801L), CareTaskService.PICKUP_CLOSED_REASON, NOW);
         verifyNoMoreInteractions(tasks);
     }
 
@@ -181,6 +190,7 @@ class CareTaskServiceTest {
                 CareTaskService.class.getMethod("create", NewCareTask.class),
                 CareTaskService.class.getMethod("cancelForRevaccination", java.util.Collection.class),
                 CareTaskService.class.getMethod("cancelFollowUpTasks", java.util.Collection.class),
+                CareTaskService.class.getMethod("cancelPickupOverdue", java.util.Collection.class),
                 CareTaskService.class.getMethod("cancelOpenTasksOfDeceasedPet", long.class),
                 CareTaskService.class.getMethod("moveOpenTasksToOwner", long.class, long.class)}) {
             Transactional transactional = method.getAnnotation(Transactional.class);

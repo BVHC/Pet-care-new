@@ -26,6 +26,7 @@ import com.petcare.module.sales.dto.OrderSummaryResponse;
 import com.petcare.module.sales.dto.UpdateOrderLineRequest;
 import com.petcare.module.sales.entity.OrderStatus;
 import com.petcare.module.sales.service.OrderCancellationService;
+import com.petcare.module.sales.service.OrderExternalPurchaseService;
 import com.petcare.module.sales.service.OrderLineService;
 import com.petcare.module.sales.service.OrderListService;
 import com.petcare.module.sales.service.OrderViewService;
@@ -59,14 +60,17 @@ public class OrderController {
     private final RetailOrderService retail;
     private final OrderListService list;
     private final OrderCancellationService cancellation;
+    private final OrderExternalPurchaseService externalPurchase;
 
     public OrderController(OrderViewService view, OrderLineService lines, RetailOrderService retail,
-            OrderListService list, OrderCancellationService cancellation) {
+            OrderListService list, OrderCancellationService cancellation,
+            OrderExternalPurchaseService externalPurchase) {
         this.view = view;
         this.lines = lines;
         this.retail = retail;
         this.list = list;
         this.cancellation = cancellation;
+        this.externalPurchase = externalPurchase;
     }
 
     /** sales-v1 #1 (Order#2). */
@@ -263,5 +267,25 @@ public class OrderController {
     public ApiResponse<OrderResponse> cancelUnpaid(@PathVariable Long orderId,
             @Valid @RequestBody OrderReasonRequest request) {
         return ApiResponse.ok(cancellation.cancelUnpaidOrder(orderId, request), "Đã hủy Order khách không thanh toán");
+    }
+
+    /** sales-v1 #11 (BR-BH-04). */
+    @Operation(operationId = "moveDrugLineToExternalPurchase", tags = "Orders",
+            summary = "Chuyển dòng thuốc kê đơn sang mua ngoài khi thiếu tồn lúc thu",
+            description = "UC70 · BR-BH-04, BR-KB-03, BR-QT-15. Actor: A06. Quyền: Lễ tân. Chuyển trạng thái: —. Dòng "
+                + "bị xóa khỏi Order, vẫn in trên đơn thuốc (external_reason = OUT_OF_STOCK_AT_PAYMENT). Ghi audit.",
+            parameters = {
+                    @Parameter(name = "orderId", in = ParameterIn.PATH, example = "101"),
+                    @Parameter(name = "lineId", in = ParameterIn.PATH, example = "31")})
+    @ApiErrorDoc(status = 400, description = "Dòng không phải DRUG hoặc tồn vẫn đủ")
+    @ApiErrorDoc(status = 403)
+    @ApiErrorDoc(status = 404)
+    @ApiErrorDoc(status = 409, description = "Order không PENDING")
+    @PostMapping("/{orderId}/lines/{lineId}/move-to-external-purchase")
+    @PreAuthorize(RECEPTIONIST)
+    public ApiResponse<OrderResponse> moveDrugLineToExternalPurchase(@PathVariable Long orderId,
+            @PathVariable Long lineId) {
+        return ApiResponse.ok(externalPurchase.moveDrugLineToExternalPurchase(orderId, lineId),
+                "Đã chuyển dòng thuốc sang mua ngoài");
     }
 }

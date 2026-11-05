@@ -36,6 +36,7 @@ m = Module(
         ("A8", "Ngày nhận và ngày trả phải có ít nhất một khung giờ mở cửa (không phải ngày nghỉ lễ hay ngày nghỉ cố định)", "BR-LT-04; docs/adr/0065 D6"),
         ("A9", "Thú chưa có cân nặng vẫn đặt được; cân bắt buộc lúc nhận thú", "BR-LT-02 so cân nặng hiện tại, BR-LT-08 bắt buộc cân khi nhận; docs/adr/0065 D7"),
         ("A10", "`activeOrderId` là Order BOARDING OPEN / PENDING của đặt chỗ, null nếu không có (T43)", "Order BOARDING chỉ sinh khi bắt đầu trả thú hoặc kết thúc do thú mất (BR-LT-09, 12)"),
+        ("A11", "`PATCH /kennels/{kennelId}` bỏ qua trường không có trong `UpdateKennelRequest` (kể cả `status`): trạng thái chuồng chỉ đổi bằng bảo trì / kết thúc bảo trì", "Jackson mặc định không từ chối trường lạ; trạng thái đi qua FSM Chuồng — T45-4, docs/adr/0103"),
     ],
     questions=[
         ("Q1", "Cơ chế tải ảnh nhật ký chăm sóc (upload trực tiếp hay presigned URL)?", "TBD (BE + FE)", "05 chỉ lưu URL"),

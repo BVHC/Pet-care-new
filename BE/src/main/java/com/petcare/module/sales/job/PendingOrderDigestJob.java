@@ -62,8 +62,8 @@ public class PendingOrderDigestJob {
         int failed = 0;
         boolean stoppedByBudget = false;
         try {
-            Instant mark = cutoff.cutoff();
             int days = cutoff.days();
+            Instant mark = cutoff.cutoffFor(days);
             List<BranchOverdue> branches = digest.findOverdueBranches(mark);
             for (BranchOverdue branch : branches) {
                 if (ticker.getAsLong() - started >= properties.timeBudget().toNanos()) {

@@ -26,6 +26,20 @@ public interface SalesOrderRepository extends JpaRepository<SalesOrder, Long> {
     @Query("SELECT o FROM SalesOrder o WHERE o.id = :id")
     Optional<SalesOrder> findByIdForUpdate(@Param("id") Long id);
 
+    /** Id và chi nhánh của Order, đọc không khóa và không nạp entity (thu tiền kiểm phạm vi trước khi khóa, docs/adr/0103). */
+    interface BranchRow {
+        Long getId();
+
+        Long getBranchId();
+    }
+
+    @Query("SELECT o.id AS id, o.branchId AS branchId FROM SalesOrder o WHERE o.id IN :ids ORDER BY o.id")
+    List<BranchRow> findBranchRows(@Param("ids") Collection<Long> ids);
+
+    /** Chi nhánh của Order, đọc không khóa và không nạp entity: {@code branch_id} bất biến nên đọc trước khóa vẫn đúng. */
+    @Query("SELECT o.branchId FROM SalesOrder o WHERE o.id = :id")
+    Optional<Long> findBranchIdById(@Param("id") Long id);
+
     @Lock(LockModeType.PESSIMISTIC_WRITE)
     @Query("SELECT o FROM SalesOrder o WHERE o.visitId = :visitId")
     Optional<SalesOrder> findByVisitIdForUpdate(@Param("visitId") Long visitId);

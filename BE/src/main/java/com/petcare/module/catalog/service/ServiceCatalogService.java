@@ -103,7 +103,8 @@ public class ServiceCatalogService {
     /** Sửa, đổi giá hoặc ngừng dịch vụ. Giá đêm đã snapshot ở đặt chỗ lưu trú không đổi (BR-LT-02). */
     @Transactional
     public ServiceResponse updateService(Long serviceId, UpdateServiceRequest request) {
-        Service service = find(serviceId);
+        Service service = services.findByIdForUpdate(serviceId)
+                .orElseThrow(() -> new ResourceNotFoundException("Dịch vụ", serviceId));
         ServiceGroup group = service.getGroup();
         long oldPrice = service.getPrice();
 

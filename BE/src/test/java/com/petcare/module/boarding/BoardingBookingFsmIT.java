@@ -234,6 +234,34 @@ class BoardingBookingFsmIT extends BoardingItSupport {
     }
 
     /** #8 — nhật ký đánh dấu bất thường: giữ nguyên trạng thái, báo khách và lễ tân ngay. */
+    /** T43-2 (docs/adr/0107): thú đã rời khách sạn thì task đón thú quá hạn còn OPEN tự đóng, cả giao thú lẫn thú mất. */
+    @Test
+    void handingOverOrEndingAsDeceasedClosesTheOpenPickupTask() {
+        long returned = stay(DAY.plusDays(2));
+        long deceased = stayInSpareKennel(DAY.plusDays(2));
+        runOverdue(at(DAY.plusDays(2), 12, 1));
+        runOverdue(at(DAY.plusDays(3), 12, 1));
+        assertThat(pickupTaskStatuses(returned)).containsExactly("OPEN");
+        assertThat(pickupTaskStatuses(deceased)).containsExactly("OPEN");
+
+        long orderId = number(data(startCheckout(returned), HttpStatus.OK).get("orderId"));
+        pay(orderId);
+        data(handOver(returned), HttpStatus.OK);
+        data(endDeceased(deceased), HttpStatus.OK);
+
+        assertThat(pickupTaskStatuses(returned)).containsExactly("CANCELLED");
+        assertThat(pickupTaskStatuses(deceased)).containsExactly("CANCELLED");
+        assertThat(jdbc.queryForObject("""
+                SELECT cancel_reason FROM care_tasks WHERE boarding_booking_id = ? AND task_type = 'PICKUP_OVERDUE'""",
+                String.class, returned)).isEqualTo("Thú đã rời khách sạn (BR-LT-10)");
+    }
+
+    private List<String> pickupTaskStatuses(long bookingId) {
+        return jdbc.queryForList("""
+                SELECT status FROM care_tasks WHERE boarding_booking_id = ? AND task_type = 'PICKUP_OVERDUE'""",
+                String.class, bookingId);
+    }
+
     @Test
     void abnormalCareLogKeepsTheStatusAndNotifies() {
         long id = stay(DAY.plusDays(2));
@@ -394,6 +422,43 @@ class BoardingBookingFsmIT extends BoardingItSupport {
 
         assertThat(orderStatus(orderId)).isEqualTo("CANCELLED");
         assertThat(statusOf(id)).isEqualTo("CHECKED_OUT");
+    }
+
+    /**
+     * Order lưu trú đã kết thúc ({@code PAID} / {@code CANCELLED}) không hủy lại được: cả hủy phiên trả thú (Order#9) lẫn
+     * hủy khách không thanh toán (Order#10) đều 409 và không ghi gì (T45-2).
+     */
+    @ParameterizedTest(name = "{0}")
+    @ValueSource(strings = {"PAID", "CANCELLED"})
+    void aFinishedBoardingOrderRefusesAbortAndCancelUnpaid(String finished) {
+        long id = stay(DAY.plusDays(2));
+        at(DAY.plusDays(1), 10, 0);
+        long orderId = number(data(startCheckout(id), HttpStatus.OK).get("orderId"));
+        if ("PAID".equals(finished)) {
+            pay(orderId);
+        } else {
+            data(call(HttpMethod.POST, "/api/orders/" + orderId + "/abort-checkout", receptionist,
+                    Map.of("reason", "Khách muốn gửi thêm")), HttpStatus.OK);
+        }
+        Map<String, Object> before = Map.of("order", orderStatus(orderId), "stay", statusOf(id),
+                "audits", jdbc.queryForObject("""
+                        SELECT count(*) FROM audit_logs WHERE entity_id = ?
+                        AND action IN ('ORDER_CHECKOUT_ABORTED', 'ORDER_CANCELLED_UNPAID')""", Long.class, orderId));
+        Map<String, Object> reason = Map.of("reason", "Thử lại");
+
+        List<ResponseEntity<Map<String, Object>>> attempts = List.of(
+                call(HttpMethod.POST, "/api/orders/" + orderId + "/abort-checkout", receptionist, reason),
+                call(HttpMethod.POST, "/api/orders/" + orderId + "/cancel-unpaid", manager, reason));
+
+        for (ResponseEntity<Map<String, Object>> response : attempts) {
+            assertThat(response.getStatusCode()).as("%s", response.getBody()).isEqualTo(HttpStatus.CONFLICT);
+            assertThat(response.getBody()).containsEntry("errorCode", "INVALID_STATE_TRANSITION");
+        }
+        assertThat(Map.of("order", orderStatus(orderId), "stay", statusOf(id),
+                "audits", jdbc.queryForObject("""
+                        SELECT count(*) FROM audit_logs WHERE entity_id = ?
+                        AND action IN ('ORDER_CHECKOUT_ABORTED', 'ORDER_CANCELLED_UNPAID')""", Long.class, orderId)))
+                .isEqualTo(before);
     }
 
     // ================================================================ cặp sai → 409, không ghi gì

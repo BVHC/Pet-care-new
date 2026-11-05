@@ -46,7 +46,7 @@ public class ProductCategoryService {
 
     @Transactional
     public ProductCategoryResponse updateCategory(Long categoryId, UpdateProductCategoryRequest request) {
-        ProductCategory category = categories.findById(categoryId)
+        ProductCategory category = categories.findByIdForUpdate(categoryId)
                 .orElseThrow(() -> new ResourceNotFoundException("Danh mục sản phẩm", categoryId));
         if (request.name() != null) {
             String name = request.name().trim();

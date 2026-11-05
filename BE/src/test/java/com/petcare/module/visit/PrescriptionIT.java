@@ -14,6 +14,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.UUID;
 import java.util.concurrent.Callable;
+import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
@@ -48,7 +49,6 @@ import org.springframework.transaction.support.TransactionTemplate;
 import com.petcare.TestcontainersConfiguration;
 import com.petcare.module.appointment.AppointmentItSupport;
 import com.petcare.module.identity.service.SessionService;
-import com.petcare.module.visit.api.PrescriptionApi;
 import com.petcare.module.visit.repository.PrescriptionItemRepository;
 import com.petcare.support.MutableClock;
 
@@ -98,8 +98,6 @@ class PrescriptionIT {
     private MutableClock clock;
     @Autowired
     private PrescriptionItemRepository itemRepository;
-    @Autowired
-    private PrescriptionApi prescriptionApi;
 
     private AppointmentItSupport data;
     private VaccinationItSupport catalog;
@@ -513,68 +511,7 @@ class PrescriptionIT {
      */
     @Test
     void aPrescribedDrugIsChargedAtCompletionAndIssuedFefoAtPayment() {
-        long exam = jdbc.queryForObject("""
-                INSERT INTO services (name, service_group, medical_type, price)
-                VALUES (?, 'MEDICAL', 'EXAM', 100000) RETURNING id""", Long.class, "Khám " + UUID.randomUUID());
-        services.add(exam);
-        jdbc.update("""
-                INSERT INTO order_lines (order_id, line_type, service_id, description, quantity, unit_price, line_total,
-                        added_by, owner_account_id) VALUES (?, 'SERVICE', ?, 'Khám', 1, 100000, 100000, ?, ?)""",
-                order, exam, vet, vet);
-        long itemId = id(data(post(vetToken, visit, body(3, null)), HttpStatus.CREATED).get("itemId"));
-        String complete = "/api/visits/" + visit + "/complete";
-
-        ResponseEntity<Map<String, Object>> early = exchange(vetToken, HttpMethod.POST, complete, null);
-        assertRule(early, "BR-KB-02");
-
-        data(exchange(vetToken, HttpMethod.PUT, "/api/visits/" + visit + "/medical-record",
-                Map.of("diagnosis", "Viêm da")), HttpStatus.OK);
-        data(exchange(vetToken, HttpMethod.POST, complete, null), HttpStatus.OK);
-        assertThat(jdbc.queryForObject("SELECT status FROM orders WHERE id = ?", String.class, order))
-                .isEqualTo("PENDING");
-        assertError(post(vetToken, visit, body(1, null)), HttpStatus.CONFLICT, "INVALID_STATE_TRANSITION");
-
-        long receptionist = data.staff("RECEPTIONIST", branch);
-        shifts.add(jdbc.queryForObject("""
-                INSERT INTO cashier_shifts (branch_id, cashier_id, is_after_hours, business_date, status, opened_at)
-                VALUES (?, ?, false, ?, 'OPEN', ?) RETURNING id""", Long.class, branch, receptionist, TODAY,
-                Timestamp.from(T0)));
-        Map<String, Object> pay = new LinkedHashMap<>();
-        pay.put("orderIds", List.of(order));
-        pay.put("method", "CASH");
-        pay.put("amount", total());
-
-        data(exchange(token(receptionist), HttpMethod.POST, "/api/payments", pay), HttpStatus.CREATED);
-
-        assertThat(quantity(lotNear)).as("FEFO: lô hạn gần hết trước").isZero();
-        assertThat(quantity(lotFar)).isEqualTo(2);
-        assertThat(quantity(lotExpired)).as("không bao giờ xuất lô hết hạn").isEqualTo(50);
-        assertThat(quantity(lotOtherBranch)).isEqualTo(40);
-        assertThat(jdbc.queryForObject("SELECT order_line_id IS NOT NULL FROM prescription_items WHERE id = ?",
-                Boolean.class, itemId)).isTrue();
-    }
-
-    /**
-     * Thiếu thuốc lúc thu → chuyển mua ngoài → thu lại (T38 phần 3). Kê không giữ hàng (ADR-0077 A28), nên tồn có thể
-     * tụt giữa lúc kê và lúc thu: thu bị từ chối 400 BR-BH-04 và không để lại dấu vết (kể cả số phiếu thu); sau khi dòng
-     * thuốc chuyển mua ngoài thì thu lại được, không tính tiền và không xuất kho thuốc đó; bệnh án (đã khóa) hiện lý do
-     * theo thời điểm: {@code OUT_OF_STOCK_AT_PAYMENT} cho thuốc A, {@code OUT_OF_STOCK_AT_PRESCRIBE} cho thuốc B.
-     *
-     * <p>Bước chuyển là <b>stand-in cho sales-v1 #11</b> (BE-2, T43, chưa có endpoint): một transaction đúng thứ tự khóa
-     * của hợp đồng ({@code orders} → {@code PrescriptionApi.markExternalPurchaseAtPayment} → xóa dòng Order → tính lại
-     * tổng; docs/adr/0076 §4, 06-module-contracts). Không audit, không kiểm BR-BH-04 phía sales (D048). Khi #11 có thật,
-     * thay khối đó bằng {@code POST /api/orders/{id}/lines/{lineId}/move-to-external-purchase}.
-     */
-    @Test
-    void aShortageAtPaymentMovesTheDrugToAnExternalPurchaseAndTheSecondPaymentSkipsIt() {
-        long exam = jdbc.queryForObject("""
-                INSERT INTO services (name, service_group, medical_type, price)
-                VALUES (?, 'MEDICAL', 'EXAM', 100000) RETURNING id""", Long.class, "Khám " + UUID.randomUUID());
-        services.add(exam);
-        jdbc.update("""
-                INSERT INTO order_lines (order_id, line_type, service_id, description, quantity, unit_price, line_total,
-                        added_by, owner_account_id) VALUES (?, 'SERVICE', ?, 'Khám', 1, 100000, 100000, ?, ?)""",
-                order, exam, vet, vet);
+        addExamLine(100_000);
         Map<String, Object> itemA = prescribe(3);
         long itemAId = id(itemA.get("itemId"));
         long lineA = id(itemA.get("orderLineId"));
@@ -617,15 +554,10 @@ class PrescriptionIT {
         assertThat(saleMovements()).isEqualTo(movements);
         assertThat(quantity(lotNear) + quantity(lotFar)).isZero();
 
-        // 2) stand-in sales #11: một transaction, khóa Order trước, gọi PrescriptionApi, xóa dòng Order, tính lại tổng
-        long lineTotal = jdbc.queryForObject("SELECT line_total FROM order_lines WHERE id = ?", Long.class, lineA);
-        tx.executeWithoutResult(status -> {
-            jdbc.queryForObject("SELECT id FROM orders WHERE id = ? FOR NO KEY UPDATE", Long.class, order);
-            prescriptionApi.markExternalPurchaseAtPayment(lineA, receptionist);
-            jdbc.update("DELETE FROM order_lines WHERE id = ?", lineA);
-            jdbc.update("UPDATE orders SET total_amount = total_amount - ? WHERE id = ?", lineTotal, order);
-        });
-        // đã commit: connection khác thấy cả ba thay đổi cùng lúc
+        // 2) sales #11: một request, khóa Order trước, gọi PrescriptionApi, xóa dòng Order, tính lại tổng, audit
+        data(moveToExternal(receptionistToken, order, lineA), HttpStatus.OK);
+        assertThat(movedAudits()).isEqualTo(1L);
+        // connection khác thấy cả ba thay đổi cùng lúc
         assertThat(jdbc.queryForMap("""
                 SELECT is_external_purchase, external_reason, order_line_id, quantity, dosage_instructions
                 FROM prescription_items WHERE id = ?""", itemAId))
@@ -664,6 +596,143 @@ class PrescriptionIT {
         assertThat(items.get(1)).containsEntry("isExternalPurchase", true)
                 .containsEntry("externalReason", "OUT_OF_STOCK_AT_PRESCRIBE").containsEntry("quantity", 2);
         assertThat(items.get(1).get("orderLineId")).isNull();
+    }
+
+    // ================================================================ sales-v1 #11 (docs/adr/0103)
+
+    @Test
+    void moveRefusesALineWhoseStockIsEnoughAndWritesNothing() {
+        long line = completeWithDrugLine(3);
+        String receptionistToken = receptionistWithOpenShift();
+        String orderXmin = xmin("orders", order);
+
+        assertRule(moveToExternal(receptionistToken, order, line), "BR-BH-04");
+
+        assertThat(xmin("orders", order)).isEqualTo(orderXmin);
+        assertThat(countLine(line)).isEqualTo(1L);
+        assertThat(movedAudits()).isZero();
+    }
+
+    @Test
+    void movingTwiceIs404AndWritesNothingMore() {
+        long line = completeWithDrugLine(3);
+        emptyStock();
+        String receptionistToken = receptionistWithOpenShift();
+        data(moveToExternal(receptionistToken, order, line), HttpStatus.OK);
+        String orderXmin = xmin("orders", order);
+
+        assertError(moveToExternal(receptionistToken, order, line), HttpStatus.NOT_FOUND, "RESOURCE_NOT_FOUND");
+
+        assertThat(xmin("orders", order)).isEqualTo(orderXmin);
+        assertThat(movedAudits()).isEqualTo(1L);
+    }
+
+    @Test
+    void movingAfterPaymentIs409() {
+        long line = completeWithDrugLine(3);
+        String receptionistToken = receptionistWithOpenShift();
+        data(collect(receptionistToken, total()), HttpStatus.CREATED);
+
+        assertError(moveToExternal(receptionistToken, order, line), HttpStatus.CONFLICT, "INVALID_STATE_TRANSITION");
+
+        assertThat(movedAudits()).isZero();
+    }
+
+    @Test
+    void managerAndAnotherBranchReceptionistAreForbidden() {
+        long line = completeWithDrugLine(3);
+        emptyStock();
+        String manager = token(data.staff("BRANCH_MANAGER", branch));
+        String foreign = token(data.staff("RECEPTIONIST", otherBranch));
+
+        assertThat(moveToExternal(manager, order, line).getStatusCode()).isEqualTo(HttpStatus.FORBIDDEN);
+        assertError(moveToExternal(foreign, order, line), HttpStatus.FORBIDDEN, "ACCESS_DENIED_SCOPE_MISMATCH");
+
+        assertThat(countLine(line)).isEqualTo(1L);
+    }
+
+    @Test
+    void anotherBranchReceptionistIsRefusedWithoutWaitingForTheOrderLock() {
+        long line = completeWithDrugLine(3);
+        emptyStock();
+        String foreign = token(data.staff("RECEPTIONIST", otherBranch));
+
+        ResponseEntity<Map<String, Object>> response = tx.execute(status -> {
+            jdbc.queryForObject("SELECT id FROM orders WHERE id = ? FOR NO KEY UPDATE", Long.class, order);
+            try {
+                return CompletableFuture.supplyAsync(() -> moveToExternal(foreign, order, line))
+                        .get(10, TimeUnit.SECONDS);
+            } catch (Exception e) {
+                throw new AssertionError("403 chi nhánh phải trả về mà không chờ khóa Order", e);
+            }
+        });
+
+        assertError(response, HttpStatus.FORBIDDEN, "ACCESS_DENIED_SCOPE_MISMATCH");
+    }
+
+    @Test
+    void anAuditFailureRollsBackTheMoveCompletely() {
+        long line = completeWithDrugLine(3);
+        emptyStock();
+        String receptionistToken = receptionistWithOpenShift();
+        State before = state();
+        String itemXmin = jdbc.queryForObject("SELECT xmin::text FROM prescription_items WHERE order_line_id = ?",
+                String.class, line);
+
+        ResponseEntity<Map<String, Object>> response = withRejectingTrigger("INSERT", "audit_logs",
+                "NEW.action = 'ORDER_LINE_MOVED_EXTERNAL'", () -> moveToExternal(receptionistToken, order, line));
+
+        assertError(response, HttpStatus.CONFLICT, "CONCURRENCY_CONFLICT");
+        assertThat(state()).isEqualTo(before);
+        assertThat(jdbc.queryForObject("SELECT xmin::text FROM prescription_items WHERE order_line_id = ?",
+                String.class, line)).isEqualTo(itemXmin);
+    }
+
+    @Test
+    void aPaymentWithTheOldTotalAfterTheMoveIs400() {
+        long line = completeWithDrugLine(3);
+        emptyStock();
+        String receptionistToken = receptionistWithOpenShift();
+        long oldTotal = total();
+        data(moveToExternal(receptionistToken, order, line), HttpStatus.OK);
+
+        assertRule(collect(receptionistToken, oldTotal), "BR-TG-02");
+
+        assertThat(jdbc.queryForObject("SELECT status FROM orders WHERE id = ?", String.class, order))
+                .isEqualTo("PENDING");
+    }
+
+    @Test
+    void aZeroPricedExamLeavesAZeroOrderThatCanBePaid() {
+        long line = completeWithDrugLine(3, 0);
+        emptyStock();
+        String receptionistToken = receptionistWithOpenShift();
+
+        data(moveToExternal(receptionistToken, order, line), HttpStatus.OK);
+
+        assertThat(total()).isZero();
+        Map<String, Object> preview = data(exchange(receptionistToken, HttpMethod.POST, "/api/payments/preview",
+                Map.of("orderIds", List.of(order))), HttpStatus.OK);
+        assertThat(listOf(preview.get("shortages"))).isEmpty();
+        data(collect(receptionistToken, 0), HttpStatus.CREATED);
+        assertThat(jdbc.queryForObject("SELECT status FROM orders WHERE id = ?", String.class, order))
+                .isEqualTo("PAID");
+    }
+
+    @Test
+    void twoLinesOfTheSameDrugNeedOnlyTheFirstMove() {
+        addExamLine(100_000);
+        long first = id(prescribe(3).get("orderLineId"));
+        long second = id(prescribe(2).get("orderLineId"));
+        completeVisit();
+        jdbc.update("UPDATE stock_lots SET quantity = CASE id WHEN ? THEN 0 ELSE 3 END WHERE id IN (?, ?)", lotNear,
+                lotNear, lotFar);
+        String receptionistToken = receptionistWithOpenShift();
+
+        data(moveToExternal(receptionistToken, order, first), HttpStatus.OK);
+
+        assertRule(moveToExternal(receptionistToken, order, second), "BR-BH-04");
+        assertThat(countLine(second)).isEqualTo(1L);
     }
 
     // ================================================================ rollback khi một bước ghi lỗi
@@ -1421,6 +1490,64 @@ class PrescriptionIT {
     private static void assertRule(ResponseEntity<Map<String, Object>> response, String ruleId) {
         assertError(response, HttpStatus.BAD_REQUEST, "BUSINESS_RULE_VIOLATION");
         assertThat((String) response.getBody().get("message")).endsWith("(" + ruleId + ")");
+    }
+
+    /** Lượt khám phải còn ít nhất một dịch vụ khám khi hoàn tất (BR-KB-02). */
+    private void addExamLine(long price) {
+        long exam = jdbc.queryForObject("""
+                INSERT INTO services (name, service_group, medical_type, price)
+                VALUES (?, 'MEDICAL', 'EXAM', ?) RETURNING id""", Long.class, "Khám " + UUID.randomUUID(), price);
+        services.add(exam);
+        jdbc.update("""
+                INSERT INTO order_lines (order_id, line_type, service_id, description, quantity, unit_price, line_total,
+                        added_by, owner_account_id) VALUES (?, 'SERVICE', ?, 'Khám', 1, ?, ?, ?, ?)""",
+                order, exam, price, price, vet, vet);
+    }
+
+    /** Ghi bệnh án rồi hoàn tất lượt → Order {@code PENDING}. */
+    private void completeVisit() {
+        data(exchange(vetToken, HttpMethod.PUT, "/api/visits/" + visit + "/medical-record",
+                Map.of("diagnosis", "Viêm da")), HttpStatus.OK);
+        data(exchange(vetToken, HttpMethod.POST, "/api/visits/" + visit + "/complete", null), HttpStatus.OK);
+        assertThat(jdbc.queryForObject("SELECT status FROM orders WHERE id = ?", String.class, order))
+                .isEqualTo("PENDING");
+    }
+
+    /** Kê {@code quantity} (đủ tồn) rồi hoàn tất lượt; trả id dòng Order của thuốc. */
+    private long completeWithDrugLine(int quantity) {
+        return completeWithDrugLine(quantity, 100_000);
+    }
+
+    private long completeWithDrugLine(int quantity, long examPrice) {
+        addExamLine(examPrice);
+        long line = id(prescribe(quantity).get("orderLineId"));
+        completeVisit();
+        return line;
+    }
+
+    /** Tồn tụt giữa lúc kê và lúc thu (A28); UPDATE thẳng chỉ để tạo trạng thái thiếu. */
+    private void emptyStock() {
+        jdbc.update("UPDATE stock_lots SET quantity = 0 WHERE id IN (?, ?)", lotNear, lotFar);
+    }
+
+    private String receptionistWithOpenShift() {
+        long receptionist = data.staff("RECEPTIONIST", branch);
+        shifts.add(jdbc.queryForObject("""
+                INSERT INTO cashier_shifts (branch_id, cashier_id, is_after_hours, business_date, status, opened_at)
+                VALUES (?, ?, false, ?, 'OPEN', ?) RETURNING id""", Long.class, branch, receptionist, TODAY,
+                Timestamp.from(T0)));
+        return token(receptionist);
+    }
+
+    private ResponseEntity<Map<String, Object>> moveToExternal(String bearer, long orderId, long lineId) {
+        return exchange(bearer, HttpMethod.POST,
+                "/api/orders/" + orderId + "/lines/" + lineId + "/move-to-external-purchase", null);
+    }
+
+    private long movedAudits() {
+        return jdbc.queryForObject(
+                "SELECT count(*) FROM audit_logs WHERE action = 'ORDER_LINE_MOVED_EXTERNAL' AND entity_id = ?",
+                Long.class, order);
     }
 
     private String token(long accountId) {

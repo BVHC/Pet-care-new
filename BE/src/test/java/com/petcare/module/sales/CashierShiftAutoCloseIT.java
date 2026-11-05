@@ -22,6 +22,8 @@ import org.springframework.transaction.support.TransactionTemplate;
 import com.petcare.TestcontainersConfiguration;
 import com.petcare.module.care.job.InAppNotificationJob;
 import com.petcare.module.sales.job.CashierShiftAutoCloseJob;
+import com.petcare.module.sales.service.CashierShiftAutoCloseService;
+import com.petcare.module.sales.service.CashierShiftAutoCloseService.Result;
 import com.petcare.support.MutableClock;
 
 /**
@@ -46,6 +48,8 @@ class CashierShiftAutoCloseIT extends CashierItSupport {
     private CashierShiftAutoCloseJob job;
     @Autowired
     private InAppNotificationJob inAppJob;
+    @Autowired
+    private CashierShiftAutoCloseService autoClose;
 
     private long branch;
     private long receptionist;
@@ -208,6 +212,55 @@ class CashierShiftAutoCloseIT extends CashierItSupport {
         job.run();
 
         assertThat(status(shift)).isEqualTo("CLOSED");
+    }
+
+    /** Ca chưa đến hạn không bị khóa: phiếu thu đang giữ FOR SHARE không làm ST13 báo "bỏ qua" (docs/adr/0103). */
+    @Test
+    void aShiftThatIsNotDueIsNotSkippedByAHeldShareLock() throws Exception {
+        long shift = openShiftSql(branch, receptionist, false, DAY, OPENED);
+        CompletableFuture<Void> locked = new CompletableFuture<>();
+        CompletableFuture<Void> release = new CompletableFuture<>();
+        CompletableFuture<Void> holder = CompletableFuture.runAsync(() -> new TransactionTemplate(transactionManager)
+                .executeWithoutResult(status -> {
+                    jdbc.queryForObject("SELECT id FROM cashier_shifts WHERE id = ? FOR SHARE", Long.class, shift);
+                    locked.complete(null);
+                    release.join();
+                }));
+        try {
+            locked.get(5, TimeUnit.SECONDS);
+
+            Result result = autoClose.autoCloseCashierShift(shift, Instant.parse("2005-06-15T10:00:00Z"));
+
+            assertThat(result).isEqualTo(Result.NOT_DUE);
+        } finally {
+            release.complete(null);
+            holder.get(5, TimeUnit.SECONDS);
+        }
+    }
+
+    /**
+     * T30-10: phiếu thu commit sau lúc job bắt đầu nhưng trước khi ST13 giành được khóa ca thì {@code closed_at} (đồng hồ
+     * lấy sau khóa) không sớm hơn {@code paid_at}, và tiền của phiếu có trong tổng ca.
+     */
+    @Test
+    void aPaymentCommittedAfterTheRunStartedStaysBeforeClosedAtAndInTheTotal() {
+        long shift = openShiftSql(branch, receptionist, false, DAY, OPENED);
+        long customer = newCustomer();
+        long payment = jdbc.queryForObject("""
+                INSERT INTO payments (code, branch_id, customer_id, cashier_shift_id, method, amount, received_by,
+                                      paid_at)
+                VALUES (?, ?, ?, ?, 'CASH', 70000, ?, ?) RETURNING id
+                """, Long.class, "PT-IT-" + java.util.UUID.randomUUID().toString().substring(0, 12), branch, customer,
+                shift, receptionist, java.sql.Timestamp.from(Instant.parse("2005-06-15T12:00:05Z")));
+        clock.set(Instant.parse("2005-06-15T12:00:10Z"));
+
+        Result result = autoClose.autoCloseCashierShift(shift, Instant.parse("2005-06-15T11:30:00Z"));
+
+        assertThat(result).isEqualTo(Result.CLOSED);
+        assertThat(shiftRow(shift)).containsEntry("expected_cash", 70_000L);
+        assertThat(jdbc.queryForObject("""
+                SELECT s.closed_at >= p.paid_at FROM cashier_shifts s, payments p WHERE s.id = ? AND p.id = ?""",
+                Boolean.class, shift, payment)).isTrue();
     }
 
     @Test

@@ -22,17 +22,18 @@ class OrderControllerSecurityTest {
 
     @Test
     void everyHandlerHasTheExpectedRoleGate() {
-        Map<String, String> expected = Map.of(
-                "create", OrderController.RECEPTIONIST,
-                "list", OrderController.BRANCH_STAFF,
-                "get", OrderController.BRANCH_STAFF,
-                "addLine", OrderController.LINE_EDITORS,
-                "updateLine", OrderController.LINE_EDITORS,
-                "deleteLine", OrderController.LINE_EDITORS,
-                "close", OrderController.RECEPTIONIST,
-                "cancel", OrderController.RECEPTIONIST,
-                "abortCheckout", OrderController.RECEPTIONIST,
-                "cancelUnpaid", OrderController.BRANCH_MANAGER);
+        Map<String, String> expected = Map.ofEntries(
+                Map.entry("create", OrderController.RECEPTIONIST),
+                Map.entry("list", OrderController.BRANCH_STAFF),
+                Map.entry("get", OrderController.BRANCH_STAFF),
+                Map.entry("addLine", OrderController.LINE_EDITORS),
+                Map.entry("updateLine", OrderController.LINE_EDITORS),
+                Map.entry("deleteLine", OrderController.LINE_EDITORS),
+                Map.entry("close", OrderController.RECEPTIONIST),
+                Map.entry("cancel", OrderController.RECEPTIONIST),
+                Map.entry("abortCheckout", OrderController.RECEPTIONIST),
+                Map.entry("cancelUnpaid", OrderController.BRANCH_MANAGER),
+                Map.entry("moveDrugLineToExternalPurchase", OrderController.RECEPTIONIST));
         List<Method> handlers = Arrays.stream(OrderController.class.getDeclaredMethods())
                 .filter(method -> AnnotatedElementUtils.hasAnnotation(method, RequestMapping.class))
                 .toList();

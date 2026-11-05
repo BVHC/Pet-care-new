@@ -38,8 +38,8 @@ class PendingOrderDigestJobTest {
     private final AtomicLong nanos = new AtomicLong();
 
     private PendingOrderDigestJob job(Duration budget) {
-        when(cutoff.cutoff()).thenReturn(CUTOFF);
         when(cutoff.days()).thenReturn(1);
+        when(cutoff.cutoffFor(1)).thenReturn(CUTOFF);
         return new PendingOrderDigestJob(service, cutoff, new PendingOrderDigestProperties("0 50 23 * * *", budget),
                 clock, nanos::get);
     }
@@ -62,6 +62,18 @@ class PendingOrderDigestJobTest {
 
         verify(service).notifyPendingOrders(1L, 2, Instant.parse("2026-10-19T03:00:00Z"), 1);
         verify(service).notifyPendingOrders(2L, 5, Instant.parse("2026-10-19T03:00:00Z"), 1);
+    }
+
+    @Test
+    void readsTheAlertDaysOnceAndDerivesTheCutoffFromThem() {
+        PendingOrderDigestJob job = job(Duration.ofSeconds(60));
+        List<BranchOverdue> rows = List.of(overdue(1L, 2));
+        when(service.findOverdueBranches(CUTOFF)).thenReturn(rows);
+
+        job.run();
+
+        verify(cutoff, org.mockito.Mockito.times(1)).days();
+        verify(cutoff, never()).cutoff();
     }
 
     @Test

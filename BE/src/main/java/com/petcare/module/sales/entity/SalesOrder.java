@@ -5,6 +5,8 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.Optional;
 
+import org.hibernate.annotations.BatchSize;
+
 import com.petcare.module.sales.api.OrderSource;
 import com.petcare.module.sales.exception.OrderAmountOverflowException;
 import com.petcare.platform.model.TimestampedEntity;
@@ -95,6 +97,7 @@ public class SalesOrder extends TimestampedEntity {
     @OneToMany(cascade = CascadeType.ALL, orphanRemoval = true)
     @JoinColumn(name = "order_id", nullable = false)
     @OrderBy("id")
+    @BatchSize(size = 20)
     private List<OrderLine> lines = new ArrayList<>();
 
     /** Order#1: Order nguồn VISIT ở {@code OPEN}. */
