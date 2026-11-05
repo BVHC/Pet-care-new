@@ -1,0 +1,9 @@
+{
+  "_note": "Ảnh chụp 4 dòng vaccination_protocols đang hoạt động (JOIN vaccine_types đang hoạt động) đọc chỉ-đọc từ DB petcare_seed ngày 5/11/2026. Dùng để dựng tài liệu CATALOG_PROTOCOL (BR-AI-13) mà script không phụ thuộc DB dev/demo. Danh mục demo còn thưa (5 bệnh chó chỉ có mũi 1; không có Dại cho chó), nên các câu về dại cho chó phải do tài liệu MANUAL trả lời.",
+  "rows": [
+    { "vaccineTypeId": 2, "name": "5 bệnh", "species": "DOG", "dose": 1, "intervalDays": 21, "minAgeWeeks": 6, "requiredForBoarding": true },
+    { "vaccineTypeId": 4, "name": "Dại", "species": "CAT", "dose": 1, "intervalDays": 365, "minAgeWeeks": 12, "requiredForBoarding": false },
+    { "vaccineTypeId": 5, "name": "4 bệnh", "species": "CAT", "dose": 1, "intervalDays": 21, "minAgeWeeks": 8, "requiredForBoarding": false },
+    { "vaccineTypeId": 5, "name": "4 bệnh", "species": "CAT", "dose": 2, "intervalDays": 365, "minAgeWeeks": 11, "requiredForBoarding": false }
+  ]
+}
