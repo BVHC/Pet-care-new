@@ -71,6 +71,10 @@ app:
       in-app-cron: "-"
     notification-outbox-cleanup:
       cron: "-"
+    otp-token-cleanup:
+      cron: "-"
+    notification-cleanup:
+      cron: "-"
 
 # Mail health indicator tắt: test không có SMTP chạy thường trực (GreenMail chỉ bật trong NotificationOutboxIT).
 management:

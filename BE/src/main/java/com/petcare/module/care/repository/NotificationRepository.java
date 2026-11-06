@@ -71,4 +71,33 @@ public interface NotificationRepository extends JpaRepository<Notification, Long
             WHERE account_id = :accountId AND read_at IS NULL
             """, nativeQuery = true)
     int markAllRead(@Param("accountId") Long accountId, @Param("now") Instant now);
+
+    /**
+     * Một lô của job dọn thông báo (docs/adr/0112, trả D023), lượt <b>đã đọc</b>: xóa tối đa {@code limit} dòng có
+     * {@code read_at IS NOT NULL AND created_at < cutoff}. {@code SKIP LOCKED}: không chờ dòng mà {@link #markRead} /
+     * {@link #markAllRead} đang khóa (job không xin {@code accounts}) nên không có chu trình deadlock; dòng bị bỏ qua
+     * được xóa ở lượt sau. Điều kiện {@code read_at} được đọc lại dưới khóa. Không bảng nào trỏ tới {@code notifications}.
+     */
+    @Modifying
+    @Query(value = """
+            DELETE FROM notifications WHERE id IN (
+                SELECT id FROM notifications
+                WHERE read_at IS NOT NULL AND created_at < :cutoff
+                ORDER BY id
+                LIMIT :limit
+                FOR UPDATE SKIP LOCKED)
+            """, nativeQuery = true)
+    int deleteReadBefore(@Param("cutoff") Instant cutoff, @Param("limit") int limit);
+
+    /** Như {@link #deleteReadBefore}, lượt <b>chưa đọc</b> ({@code read_at IS NULL}) với mốc cắt dài hơn. */
+    @Modifying
+    @Query(value = """
+            DELETE FROM notifications WHERE id IN (
+                SELECT id FROM notifications
+                WHERE read_at IS NULL AND created_at < :cutoff
+                ORDER BY id
+                LIMIT :limit
+                FOR UPDATE SKIP LOCKED)
+            """, nativeQuery = true)
+    int deleteUnreadBefore(@Param("cutoff") Instant cutoff, @Param("limit") int limit);
 }

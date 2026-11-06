@@ -82,4 +82,23 @@ public interface OtpTokenRepository extends JpaRepository<OtpToken, Long> {
     @Modifying
     @Query("DELETE FROM OtpToken o WHERE o.accountId = :accountId")
     int deleteByAccountId(@Param("accountId") Long accountId);
+
+    /**
+     * Một lô của job dọn OTP (docs/adr/0111, trả D012): xóa tối đa {@code limit} dòng có {@code expires_at < cutoff},
+     * mọi mục đích và trạng thái (mã hết hạn không ai dùng có cả {@code consumed_at} lẫn {@code invalidated_at} NULL).
+     * Chỉ chọn mã đã hết hạn quá thời hạn giữ nên không bao giờ chạm mã còn hiệu lực hay dòng trong cửa sổ quota
+     * BR-TK-07. {@code SKIP LOCKED}: không chờ dòng mà {@code invalidateActive*} hay ST02 đang khóa (và job không xin
+     * {@code accounts}) nên không thể có chu trình deadlock; dòng bị bỏ qua được xóa ở lượt sau. Không có FK nào trỏ
+     * tới {@code otp_tokens}.
+     */
+    @Modifying
+    @Query(value = """
+            DELETE FROM otp_tokens WHERE id IN (
+                SELECT id FROM otp_tokens
+                WHERE expires_at < :cutoff
+                ORDER BY id
+                LIMIT :limit
+                FOR UPDATE SKIP LOCKED)
+            """, nativeQuery = true)
+    int deleteExpiredBefore(@Param("cutoff") Instant cutoff, @Param("limit") int limit);
 }
