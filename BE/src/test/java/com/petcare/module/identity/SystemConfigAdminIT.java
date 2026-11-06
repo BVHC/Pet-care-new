@@ -314,7 +314,7 @@ class SystemConfigAdminIT {
         assertThat(audits()).isEmpty();
     }
 
-    // ================================================================ #32 BR-QT-13 — đủ 70 khóa
+    // ================================================================ #32 BR-QT-13 — đủ 78 khóa
 
     /**
      * Mỗi khóa: dưới min, trên max, không parse được → 400 BR-QT-13 với khoảng cho phép thực tế; bằng min và bằng max →

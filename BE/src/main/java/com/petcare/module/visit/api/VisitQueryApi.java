@@ -1,7 +1,9 @@
 package com.petcare.module.visit.api;
 
 import com.petcare.module.catalog.api.ServiceGroup;
+import com.petcare.module.customer.api.Species;
 
+import java.time.LocalDate;
 import java.util.Collection;
 import java.util.List;
 import java.util.Map;
@@ -45,4 +47,46 @@ public interface VisitQueryApi {
      * rỗng, không chạy SQL. Bên gọi truyền tối đa một trang (≤ 100 id).
      */
     Map<Long, Long> findVisitIdsByAppointmentIds(Collection<Long> appointmentIds);
+
+    // ------------------------------------------------------------------------------------------------------------
+    // Tầng 3 (T55b, docs/06 §6b, docs/adr/0113): ba method dưới đây là placeholder dạng default — ném
+    // UnsupportedOperationException tới khi VisitQueryService ghi đè; khi đó xóa default (method thành trừu tượng).
+    // ------------------------------------------------------------------------------------------------------------
+
+    /**
+     * Nhóm tuổi của thú theo docs/07 §7.3 (L315): JUNIOR &lt; 52 tuần; SENIOR từ ngưỡng theo loài (ai.reco.senior_age_years_*);
+     * ADULT ở giữa; UNKNOWN thiếu ngày sinh. Kiểu này do visit giữ để {@link #countCompletedByService} không phải import
+     * module {@code ai}; {@code boarding} (I-7) chọn dùng lại hay tự khai báo thì thống nhất ở T78 (docs/adr/0113).
+     */
+    enum AgeGroup { JUNIOR, ADULT, SENIOR, UNKNOWN }
+
+    /**
+     * I-6 (docs/07 §11): {@code serviceId → ngày dùng gần nhất} trong các Visit {@code COMPLETED} của thú. Dịch vụ chưa dùng
+     * thì vắng mặt. Đọc không khóa. Bản thật trước 7/12 (T78).
+     */
+    default Map<Long, LocalDate> findLastServiceDates(Long petId) {
+        throw placeholder("findLastServiceDates", "T78");
+    }
+
+    /**
+     * I-6 (docs/07 §11): {@code serviceId → số lượt Visit COMPLETED} từ {@code since} (ngày hoàn tất, tính cả ngày đó) của
+     * các thú thuộc {@code species} và {@code ageGroup}, toàn chuỗi; dịch vụ không có lượt thì vắng mặt. Đọc không khóa.
+     * Bản thật trước 7/12 (T78).
+     */
+    default Map<Long, Long> countCompletedByService(Species species, AgeGroup ageGroup, LocalDate since) {
+        throw placeholder("countCompletedByService", "T78");
+    }
+
+    /**
+     * BR-CN-07, BR-CN-08 (docs/08 §F.1): số Visit {@code WAITING} / {@code IN_PROGRESS} của chi nhánh. Đọc không khóa.
+     * Bản thật trước 7/12 (T75).
+     */
+    default long countOpenByBranch(Long branchId) {
+        throw placeholder("countOpenByBranch", "T75");
+    }
+
+    private static UnsupportedOperationException placeholder(String method, String task) {
+        return new UnsupportedOperationException("VisitQueryApi." + method + " chưa cài (placeholder T55b, docs/06 §6b); "
+                + "bản thật ở " + task);
+    }
 }

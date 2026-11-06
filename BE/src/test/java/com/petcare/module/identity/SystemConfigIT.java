@@ -104,6 +104,16 @@ class SystemConfigIT {
         expect("ai.reco.senior_age_years_cat", "10", "INT", "5", "15");           // 07 §7.3, Q3 (giá trị tạm)
         expect("ai.reco.senior_age_years_other", "7", "INT", "5", "15");          // 07 §7.3, Q3 (giá trị tạm)
         expect("ai.log.retention_days", "30", "INT", "1", "180");                 // BR-AI-24
+        // V40 (docs/adr/0113): 6 khóa complaint.* (docs/09 §G, BR-DG-05, 07, 08, 09) + 2 khóa workforce.* (docs/02
+        // BR-NS-04, BR-NS-07). Giá trị mặc định theo đặc tả; min–max là giả định của T55b (ADR-0113)
+        expect("complaint.max_open", "10", "INT", "1", "50");                     // BR-DG-05
+        expect("complaint.reopen_days", "7", "INT", "1", "30");                   // BR-DG-07
+        expect("complaint.max_reopen", "2", "INT", "0", "5");                     // BR-DG-07
+        expect("complaint.sla_open_hours", "24", "INT", "1", "168");              // BR-DG-08
+        expect("complaint.sla_resolve_hours", "72", "INT", "1", "720");           // BR-DG-08
+        expect("complaint.auto_close_days", "7", "INT", "1", "30");               // BR-DG-09
+        expect("workforce.request_lead_hours", "24", "INT", "0", "168");          // BR-NS-04
+        expect("workforce.absence_report_max_days", "7", "INT", "1", "30");       // BR-NS-07
     }
 
     private static void expect(String key, String value, String type, String min, String max) {
@@ -127,7 +137,7 @@ class SystemConfigIT {
                     assertThat(rs.getString("description")).isNotBlank();
                 });
 
-        assertThat(EXPECTED).hasSize(70);
+        assertThat(EXPECTED).hasSize(78);
         assertThat(actual).isEqualTo(EXPECTED);
     }
 

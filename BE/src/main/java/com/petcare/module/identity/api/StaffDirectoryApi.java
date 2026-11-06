@@ -57,4 +57,15 @@ public interface StaffDirectoryApi {
      * thứ tự tùy ý; tập rỗng → rỗng, không chạm DB. Bên gọi truyền tối đa 100 id và đã tự phân quyền.
      */
     List<StaffSummary> findStaffByIds(Collection<Long> accountIds);
+
+    /**
+     * BR-CN-08 (docs/08 §F.1): số nhân viên {@code status = ACTIVE} gắn với chi nhánh, mọi chức vụ, <b>tính cả người đang bị
+     * khóa</b> (cùng quy ước {@link #countBranchManagers}). Đọc không khóa. Placeholder T55b (docs/06 §6b, docs/adr/0113):
+     * ném {@code UnsupportedOperationException} tới khi {@code StaffDirectoryService} ghi đè, khi đó xóa default. Bản thật
+     * trước 7/12 (T75).
+     */
+    default int countActiveByBranch(Long branchId) {
+        throw new UnsupportedOperationException("StaffDirectoryApi.countActiveByBranch chưa cài (placeholder T55b, "
+                + "docs/06 §6b); bản thật ở T75");
+    }
 }

@@ -1,6 +1,7 @@
 package com.petcare.module.appointment.api;
 
 import java.time.LocalDate;
+import java.time.LocalDateTime;
 import java.time.LocalTime;
 import java.util.List;
 import java.util.Optional;
@@ -40,4 +41,33 @@ public interface AppointmentQueryApi {
      * bốn cột trả về không bao giờ đổi; trạng thái không có ở đây — {@code checkIn} kiểm dưới khóa. Không có thì rỗng.
      */
     Optional<CheckInRef> findCheckInRef(Long appointmentId);
+
+    // ------------------------------------------------------------------------------------------------------------
+    // Tầng 3 (T55b, docs/06 §6b, docs/adr/0113): placeholder dạng default — ném UnsupportedOperationException tới khi
+    // AppointmentLookupService ghi đè; khi đó xóa default.
+    // ------------------------------------------------------------------------------------------------------------
+
+    /** Lịch {@code BOOKED} sắp tới của khách (docs/07 I-10). Không thêm trường vào {@link BookedSlot} (07 L537). */
+    record UpcomingBooked(Long appointmentId, String code, Long petId, Long serviceId, Long branchId,
+                          LocalDate slotDate, LocalTime slotStart) {}
+
+    /**
+     * I-10 (docs/07 §11, UC91, BR-AI-27): lịch {@code BOOKED} của khách có {@code (slot_date, slot_start) >= now}, sắp theo
+     * {@code slot_date, slot_start} tăng dần, tối đa {@code limit}. {@code now} là giờ Việt Nam
+     * ({@code LocalDateTime.now(clock)}, cùng múi với cột {@code slot_date} / {@code slot_start}). Đọc không khóa. Bản thật
+     * trước 30/11 (T77).
+     */
+    default List<UpcomingBooked> findUpcomingBookedOfCustomer(Long customerId, LocalDateTime now, int limit) {
+        throw new UnsupportedOperationException("AppointmentQueryApi.findUpcomingBookedOfCustomer chưa cài "
+                + "(placeholder T55b, docs/06 §6b); bản thật ở T77");
+    }
+
+    /**
+     * BR-CN-07, BR-CN-08 (docs/08 §F.1): số lịch {@code BOOKED} của chi nhánh (mọi ngày). Đọc không khóa. Bản thật trước
+     * 7/12 (T75).
+     */
+    default long countBookedByBranch(Long branchId) {
+        throw new UnsupportedOperationException("AppointmentQueryApi.countBookedByBranch chưa cài "
+                + "(placeholder T55b, docs/06 §6b); bản thật ở T75");
+    }
 }

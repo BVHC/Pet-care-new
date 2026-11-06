@@ -19,10 +19,20 @@ class ConfigKeyTest {
     }
 
     @Test
-    void catalogHas70Parameters() {
+    void catalogHas78Parameters() {
         // 50 tham số [CFG] của docs/02 + session.ttl_hours (docs/adr/0003) + session.access_ttl_minutes (docs/adr/0091); V2 + V27 = 52 dòng
         // + 18 khóa ai.* (docs/07 §4.6, V35, docs/adr/0110) = 70
-        assertThat(ConfigKey.values()).hasSize(70);
+        // + 6 khóa complaint.* (docs/09 §G) + 2 khóa workforce.* (docs/02 BR-NS-04, 07), V40, docs/adr/0113 = 78
+        assertThat(ConfigKey.values()).hasSize(78);
+    }
+
+    @Test
+    void complaintAndWorkforceKeysCoverSpec09SectionGAndBrNs() {
+        assertThat(Arrays.stream(ConfigKey.values()).map(ConfigKey::key).filter(key -> key.startsWith("complaint.")))
+                .containsExactlyInAnyOrder("complaint.max_open", "complaint.reopen_days", "complaint.max_reopen",
+                        "complaint.sla_open_hours", "complaint.sla_resolve_hours", "complaint.auto_close_days");
+        assertThat(Arrays.stream(ConfigKey.values()).map(ConfigKey::key).filter(key -> key.startsWith("workforce.")))
+                .containsExactlyInAnyOrder("workforce.request_lead_hours", "workforce.absence_report_max_days");
     }
 
     @Test

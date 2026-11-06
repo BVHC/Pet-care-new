@@ -38,7 +38,8 @@ class SchemaMigrationIT {
 
     /**
      * erd §12 (L1043–1073): 52 model + 3 bảng con = 55 bảng, cộng 4 bảng AI của erd §14.2 / docs/07 §8 (V34, docs/adr/0110)
-     * = 59. Các bảng tầng 3 khác (V36–V49) thêm vào đây khi có migration.
+     * = 59, cộng 10 bảng tầng 3 phần BE-1 (V36–V39: Nhân sự 3, phẫu thuật 1, vật tư tiêu hao 1, nội trú 3, khiếu nại 2;
+     * docs/adr/0113) = 69. Các bảng tầng 3 khác (V42–V49, BE-2) thêm vào đây khi có migration.
      */
     private static final Set<String> ERD_TABLES = Set.of(
             "accounts", "staff_profiles", "otp_tokens", "sessions", "audit_logs", "system_configs",
@@ -51,12 +52,15 @@ class SchemaMigrationIT {
             "cashier_shifts", "suppliers", "inventory_items", "stock_lots", "stock_receipts", "stock_receipt_lines",
             "stock_adjustments", "stock_adjustment_lines", "stock_movements", "article_categories", "articles",
             "page_contents", "feedbacks", "care_tasks", "notifications", "notification_outbox",
-            "ai_documents", "ai_chunks", "ai_chat_logs", "ai_item_profiles");
+            "ai_documents", "ai_chunks", "ai_chat_logs", "ai_item_profiles",
+            "shift_definitions", "shift_assignments", "shift_requests", "surgeries", "visit_material_usages",
+            "admissions", "admission_orders", "admission_observations", "complaints", "complaint_messages");
 
     /** Bảng loại LOG trong erd: chỉ có {@code created_at} (erd §0 L14). */
     private static final Set<String> LOG_TABLES = Set.of(
             "otp_tokens", "audit_logs", "weight_records", "visit_assignments", "medical_record_addenda",
-            "care_log_addenda", "stock_movements", "notification_outbox", "ai_chat_logs");
+            "care_log_addenda", "stock_movements", "notification_outbox", "ai_chat_logs",
+            "admission_observations", "complaint_messages", "visit_material_usages");
 
     /** Bảng có khóa chính khác {@code id}: 1–1 dùng FK làm PK, PK ghép, PK chuỗi. */
     private static final Set<String> TABLES_WITHOUT_ID = Set.of(
@@ -77,7 +81,8 @@ class SchemaMigrationIT {
 
     /** erd §0 L26: mã chứng từ hiển thị VARCHAR(20) UNIQUE. */
     private static final List<String> DOCUMENT_CODE_TABLES = List.of(
-            "appointments", "visits", "boarding_bookings", "orders", "payments", "stock_receipts", "stock_adjustments");
+            "appointments", "visits", "boarding_bookings", "orders", "payments", "stock_receipts", "stock_adjustments",
+            "admissions", "complaints");
 
     /** Tập trạng thái theo docs/03-state-machines.md (SM#1–#10) và 02 (BR-BV-02, BR-DG-04), mã ASCII theo erd L28–37. */
     private static final Map<String, Set<String>> STATE_COLUMNS = new LinkedHashMap<>();
@@ -90,7 +95,7 @@ class SchemaMigrationIT {
         STATE_COLUMNS.put("appointments.status", Set.of("BOOKED", "CHECKED_IN", "COMPLETED", "CANCELLED", "NO_SHOW"));
         STATE_COLUMNS.put("visits.status", Set.of("WAITING", "IN_PROGRESS", "COMPLETED", "CANCELLED"));
         STATE_COLUMNS.put("orders.status", Set.of("OPEN", "PENDING", "PAID", "CANCELLED"));
-        STATE_COLUMNS.put("orders.source", Set.of("VISIT", "RETAIL", "BOARDING"));
+        STATE_COLUMNS.put("orders.source", Set.of("VISIT", "RETAIL", "BOARDING", "ONLINE")); // ONLINE: V42, docs/08 §B
         STATE_COLUMNS.put("boarding_bookings.status", Set.of("BOOKED", "CHECKED_IN", "OVERDUE", "CHECKED_OUT",
                 "CANCELLED", "NO_SHOW"));
         STATE_COLUMNS.put("kennels.status", Set.of("AVAILABLE", "OCCUPIED", "MAINTENANCE"));
@@ -101,6 +106,13 @@ class SchemaMigrationIT {
                 "PICKUP_OVERDUE"));
         STATE_COLUMNS.put("articles.status", Set.of("DRAFT", "PUBLISHED", "HIDDEN"));
         STATE_COLUMNS.put("feedbacks.status", Set.of("NEW", "SEEN", "RESOLVED"));
+        // Tầng 3 phần BE-1 (docs/03 #11, #12, docs/09 FSM #23–#26)
+        STATE_COLUMNS.put("shift_assignments.status", Set.of("SCHEDULED", "ON_LEAVE", "ABSENT", "CANCELLED"));
+        STATE_COLUMNS.put("shift_requests.status", Set.of("PENDING", "APPROVED", "REJECTED", "WITHDRAWN"));
+        STATE_COLUMNS.put("surgeries.status", Set.of("PLANNED", "CONSENTED", "IN_PROGRESS", "COMPLETED", "CANCELLED"));
+        STATE_COLUMNS.put("admissions.status", Set.of("ADMITTED", "DISCHARGED"));
+        STATE_COLUMNS.put("admission_orders.status", Set.of("ORDERED", "DONE", "CANCELLED"));
+        STATE_COLUMNS.put("complaints.status", Set.of("OPEN", "IN_PROGRESS", "RESOLVED", "CLOSED"));
     }
 
     private static final String SINGLE_COLUMN_CHECKS = """
@@ -158,11 +170,14 @@ class SchemaMigrationIT {
         // V33 tìm khách / thú theo tên không dấu: unaccent + pg_trgm, f_unaccent, 2 index GIN (docs/adr/0104, trả T17-D05),
         // V34 extension pgvector + 4 bảng AI ai_documents / ai_chunks / ai_chat_logs / ai_item_profiles (docs/adr/0110),
         // V35 seed 18 tham số [CFG] ai.* (docs/adr/0110),
+        // V36 bảng Nhân sự, V37 khám tại nhà + phẫu thuật + vật tư tiêu hao, V38 nội trú, V39 khiếu nại (docs/adr/0113),
+        // V40 seed 8 tham số [CFG] complaint.* / workforce.*, V41 giá trị mới medical_type / line_type,
+        // V42 Order nguồn ONLINE: 4 CHECK của orders (docs/adr/0116, làm thay BE-2),
         // V9000 chỉ ở test: baseline session.access_ttl_minutes = 720
         assertThat(rows).extracting(row -> row.get("version"))
                 .containsExactly("1", "2", "3", "4", "5", "6", "7", "8", "9", "10", "11", "12", "13", "14", "15",
                         "16", "17", "18", "19", "20", "21", "22", "23", "24", "25", "26", "27", "28", "29", "30",
-                        "31", "32", "33", "34", "35", "9000");
+                        "31", "32", "33", "34", "35", "36", "37", "38", "39", "40", "41", "42", "9000");
         assertThat(rows).allSatisfy(row -> assertThat(row).containsEntry("success", true));
     }
 
@@ -186,7 +201,7 @@ class SchemaMigrationIT {
                 WHERE table_schema = 'public' AND table_type = 'BASE TABLE' AND table_name <> 'flyway_schema_history'
                 """, String.class);
 
-        assertThat(ERD_TABLES).hasSize(59);
+        assertThat(ERD_TABLES).hasSize(69);
         // document_counters (V14, ADR-0043) và refresh_tokens (V27, ADR-0091) là bảng hạ tầng ngoài ERD v16
         // (erd 13 muc 18)
         assertThat(tables).containsExactlyInAnyOrderElementsOf(
@@ -196,7 +211,7 @@ class SchemaMigrationIT {
 
     @Test
     void commonTimestampColumnsMatchTableKind() {
-        assertThat(LOG_TABLES).hasSize(9);
+        assertThat(LOG_TABLES).hasSize(12);
         for (String table : ERD_TABLES) {
             Map<String, Column> columns = columns(table);
             assertCommonTimestamp(table, columns.get("created_at"));
@@ -556,7 +571,22 @@ class SchemaMigrationIT {
                         "VACCINE_REMINDER", "VACCINE_REMINDER_APP", "FOLLOW_UP_REMINDER", "FOLLOW_UP_REMINDER_APP",
                         "CARE_LOG_ABNORMAL", "CARE_LOG_ABNORMAL_APP", "BOARDING_NO_KENNEL_APP",
                         "BOARDING_OVERDUE", "BOARDING_OVERDUE_APP", "BOARDING_OVERDUE_MANAGER_APP",
-                        "BOARDING_CAPACITY_WARNING_APP", "STOCK_ALERT_DIGEST_APP");
+                        "BOARDING_CAPACITY_WARNING_APP", "STOCK_ALERT_DIGEST_APP",
+                        // V40 (docs/adr/0113): 40 mẫu tầng 3 — NS 9, khiếu nại 7, vật tư 1, đơn online 10, thanh toán 4,
+                        // trả hàng + hoàn tiền 6, duyệt bài viết 3
+                        "SHIFT_REQUEST_SUBMITTED_APP", "SHIFT_REQUEST_APPROVED", "SHIFT_REQUEST_APPROVED_APP",
+                        "SHIFT_REQUEST_REJECTED", "SHIFT_REQUEST_REJECTED_APP", "SHIFT_ASSIGNMENT_CANCELLED",
+                        "SHIFT_ASSIGNMENT_CANCELLED_APP", "SHIFT_ABSENCE_RECORDED", "SHIFT_ABSENCE_RECORDED_APP",
+                        "COMPLAINT_CREATED_APP", "COMPLAINT_TAKEN", "COMPLAINT_TAKEN_APP", "COMPLAINT_RESOLVED",
+                        "COMPLAINT_RESOLVED_APP", "COMPLAINT_REOPENED_APP", "COMPLAINT_ESCALATED_APP",
+                        "MATERIAL_SHORTAGE_APP",
+                        "ONLINE_ORDER_PLACED", "ONLINE_ORDER_PLACED_APP", "ONLINE_ORDER_PAID", "ONLINE_ORDER_PAID_APP",
+                        "ONLINE_ORDER_SHIPPED", "ONLINE_ORDER_SHIPPED_APP", "ONLINE_ORDER_DELIVERY_FAILED",
+                        "ONLINE_ORDER_DELIVERY_FAILED_APP", "ONLINE_ORDER_CANCELLED", "ONLINE_ORDER_CANCELLED_APP",
+                        "PAYMENT_FAILED", "PAYMENT_FAILED_APP", "PAYMENT_EXPIRED", "PAYMENT_EXPIRED_APP",
+                        "RETURN_REQUESTED_APP", "RETURN_APPROVED_APP", "RETURN_REJECTED_APP", "REFUND_REQUESTED",
+                        "REFUND_REQUESTED_APP", "REFUND_FAILED_APP",
+                        "ARTICLE_REVIEW_SUBMITTED_APP", "ARTICLE_REVIEW_APPROVED_APP", "ARTICLE_REVIEW_REJECTED_APP");
         assertThat(jdbc.queryForList("""
                 SELECT code FROM notification_templates
                 WHERE %s AND (body <> default_body OR subject IS DISTINCT FROM default_subject)
@@ -585,6 +615,22 @@ class SchemaMigrationIT {
                 .as("mẫu IN_APP phải có mã _APP và subject 1–200 ký tự (docs/adr/0014)").isEmpty();
     }
 
+    /** Mọi hằng số của {@code NotificationTemplateCode} có dòng seed: thiếu thì enqueue ghi outbox lỗi FK (06 §8 Q4). */
+    @Test
+    void everyNotificationTemplateCodeConstantHasASeededRow() throws IllegalAccessException {
+        List<String> constants = new java.util.ArrayList<>();
+        for (java.lang.reflect.Field field : com.petcare.module.identity.api.NotificationTemplateCode.class
+                .getDeclaredFields()) {
+            if (java.lang.reflect.Modifier.isStatic(field.getModifiers()) && field.getType() == String.class) {
+                constants.add((String) field.get(null));
+            }
+        }
+        List<String> seeded = jdbc.queryForList("SELECT code FROM notification_templates", String.class);
+
+        assertThat(constants).as("hằng số trùng giá trị").doesNotHaveDuplicates();
+        assertThat(seeded).containsAll(constants);
+    }
+
     /**
      * V7 (docs/adr/0018, nợ D009): mỗi cột FK trỏ tới {@code accounts} là cột đầu của một index mà câu kiểm FK
      * ({@code WHERE <cột> = $1}) dùng được — index không partial, hoặc partial đúng {@code <cột> IS NOT NULL}. Thiếu thì
@@ -599,7 +645,9 @@ class SchemaMigrationIT {
                 WHERE c.contype = 'f' AND c.confrelid = 'accounts'::regclass
                 """, String.class);
         assertThat(foreignKeys).as("số cột FK trỏ tới accounts (V1: 43 cột ở 34 bảng; V34: + ai_documents.updated_by, "
-                + "ai_item_profiles.updated_by)").hasSize(45);
+                + "ai_item_profiles.updated_by; V36–V39: + 16 cột — shift_assignments 2, shift_requests 2, surgeries 3, "
+                + "visit_material_usages 1, admissions 2, admission_orders 2, admission_observations 1, complaints 2, "
+                + "complaint_messages 1)").hasSize(61);
 
         List<String> unindexed = jdbc.queryForList("""
                 SELECT c.conrelid::regclass || '.' || a.attname

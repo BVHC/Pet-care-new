@@ -73,6 +73,18 @@ public enum ConfigKey {
     // DG
     FEEDBACK_MAX_PER_DAY("feedback.max_per_day", INT),                     // BR-DG-01
 
+    // DG — khiếu nại (docs/09 §G, docs/adr/0113; V40)
+    COMPLAINT_MAX_OPEN("complaint.max_open", INT),                         // BR-DG-05
+    COMPLAINT_REOPEN_DAYS("complaint.reopen_days", INT),                   // BR-DG-07
+    COMPLAINT_MAX_REOPEN("complaint.max_reopen", INT),                     // BR-DG-07
+    COMPLAINT_SLA_OPEN_HOURS("complaint.sla_open_hours", INT),             // BR-DG-08
+    COMPLAINT_SLA_RESOLVE_HOURS("complaint.sla_resolve_hours", INT),       // BR-DG-08
+    COMPLAINT_AUTO_CLOSE_DAYS("complaint.auto_close_days", INT),           // BR-DG-09
+
+    // NS — nhân sự (docs/02 BR-NS-04, BR-NS-07, docs/adr/0113; V40)
+    WORKFORCE_REQUEST_LEAD_HOURS("workforce.request_lead_hours", INT),     // BR-NS-04
+    WORKFORCE_ABSENCE_REPORT_MAX_DAYS("workforce.absence_report_max_days", INT), // BR-NS-07
+
     // AI (docs/07 §4.6, docs/adr/0110; V35). Tên có ba đoạn <nhóm>.<mục>.<tên>
     AI_CHAT_MAX_QUESTION_CHARS("ai.chat.max_question_chars", INT),                       // BR-AI-08
     AI_CHAT_MAX_PREVIOUS_QUESTIONS("ai.chat.max_previous_questions", INT),               // BR-AI-08

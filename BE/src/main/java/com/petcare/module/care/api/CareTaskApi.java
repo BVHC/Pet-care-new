@@ -55,4 +55,17 @@ public interface CareTaskApi {
      * gọi trong transaction đã khóa đặt chỗ.
      */
     void cancelPickupOverdue(Collection<Long> bookingIds);
+
+    /**
+     * BR-CN-09 (docs/08 §F.1): chuyển mọi task {@code OPEN} của chi nhánh {@code fromBranchId} sang {@code toBranchId}
+     * (một câu UPDATE, task đã đóng giữ nguyên), trả số task đã chuyển. {@code MANDATORY}, bên gọi (branchlife) đã khóa
+     * hai chi nhánh. <b>Chưa có trong hợp đồng:</b> hủy task kèm lý do khi SUPER_MANAGER không chọn chi nhánh đích, và đếm
+     * task {@code OPEN} cho danh sách tồn đọng (BR-CN-07) — chốt ở T75 (docs/adr/0113). Placeholder T55b (docs/06 §6b):
+     * ném {@code UnsupportedOperationException} tới khi {@code CareTaskService} ghi đè, khi đó xóa default. Bản thật trước
+     * 7/12 (T75).
+     */
+    default int reassignBranch(Long fromBranchId, Long toBranchId) {
+        throw new UnsupportedOperationException("CareTaskApi.reassignBranch chưa cài (placeholder T55b, docs/06 §6b); "
+                + "bản thật ở T75");
+    }
 }

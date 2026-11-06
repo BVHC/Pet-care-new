@@ -52,4 +52,58 @@ public final class NotificationTemplateCode {
     public static final String CASHIER_SHIFT_AUTO_CLOSED_APP = "CASHIER_SHIFT_AUTO_CLOSED_APP";
     public static final String PENDING_ORDERS_DIGEST_APP = "PENDING_ORDERS_DIGEST_APP";
     public static final String STOCK_ALERT_DIGEST_APP = "STOCK_ALERT_DIGEST_APP";
+
+    // NS — nhân viên (docs/02 BR-NS-08, docs/adr/0113; V40)
+    public static final String SHIFT_REQUEST_SUBMITTED_APP = "SHIFT_REQUEST_SUBMITTED_APP";
+    public static final String SHIFT_REQUEST_APPROVED = "SHIFT_REQUEST_APPROVED";
+    public static final String SHIFT_REQUEST_APPROVED_APP = "SHIFT_REQUEST_APPROVED_APP";
+    public static final String SHIFT_REQUEST_REJECTED = "SHIFT_REQUEST_REJECTED";
+    public static final String SHIFT_REQUEST_REJECTED_APP = "SHIFT_REQUEST_REJECTED_APP";
+    public static final String SHIFT_ASSIGNMENT_CANCELLED = "SHIFT_ASSIGNMENT_CANCELLED";
+    public static final String SHIFT_ASSIGNMENT_CANCELLED_APP = "SHIFT_ASSIGNMENT_CANCELLED_APP";
+    public static final String SHIFT_ABSENCE_RECORDED = "SHIFT_ABSENCE_RECORDED";
+    public static final String SHIFT_ABSENCE_RECORDED_APP = "SHIFT_ABSENCE_RECORDED_APP";
+
+    // DG — khiếu nại (docs/09 §D, V40)
+    public static final String COMPLAINT_CREATED_APP = "COMPLAINT_CREATED_APP";
+    public static final String COMPLAINT_TAKEN = "COMPLAINT_TAKEN";
+    public static final String COMPLAINT_TAKEN_APP = "COMPLAINT_TAKEN_APP";
+    public static final String COMPLAINT_RESOLVED = "COMPLAINT_RESOLVED";
+    public static final String COMPLAINT_RESOLVED_APP = "COMPLAINT_RESOLVED_APP";
+    public static final String COMPLAINT_REOPENED_APP = "COMPLAINT_REOPENED_APP";
+    public static final String COMPLAINT_ESCALATED_APP = "COMPLAINT_ESCALATED_APP";
+
+    // KB — vật tư tiêu hao (docs/09 §E, V40)
+    public static final String MATERIAL_SHORTAGE_APP = "MATERIAL_SHORTAGE_APP";
+
+    // BH — đơn hàng online (docs/08 §B, V40)
+    public static final String ONLINE_ORDER_PLACED = "ONLINE_ORDER_PLACED";
+    public static final String ONLINE_ORDER_PLACED_APP = "ONLINE_ORDER_PLACED_APP";
+    public static final String ONLINE_ORDER_PAID = "ONLINE_ORDER_PAID";
+    public static final String ONLINE_ORDER_PAID_APP = "ONLINE_ORDER_PAID_APP";
+    public static final String ONLINE_ORDER_SHIPPED = "ONLINE_ORDER_SHIPPED";
+    public static final String ONLINE_ORDER_SHIPPED_APP = "ONLINE_ORDER_SHIPPED_APP";
+    public static final String ONLINE_ORDER_DELIVERY_FAILED = "ONLINE_ORDER_DELIVERY_FAILED";
+    public static final String ONLINE_ORDER_DELIVERY_FAILED_APP = "ONLINE_ORDER_DELIVERY_FAILED_APP";
+    public static final String ONLINE_ORDER_CANCELLED = "ONLINE_ORDER_CANCELLED";
+    public static final String ONLINE_ORDER_CANCELLED_APP = "ONLINE_ORDER_CANCELLED_APP";
+
+    // TG — thanh toán online (docs/08 §C, V40)
+    public static final String PAYMENT_FAILED = "PAYMENT_FAILED";
+    public static final String PAYMENT_FAILED_APP = "PAYMENT_FAILED_APP";
+    public static final String PAYMENT_EXPIRED = "PAYMENT_EXPIRED";
+    public static final String PAYMENT_EXPIRED_APP = "PAYMENT_EXPIRED_APP";
+
+    // BH, TG — trả hàng và hoàn tiền (docs/08 §D, V40)
+    public static final String RETURN_REQUESTED_APP = "RETURN_REQUESTED_APP";
+    public static final String RETURN_APPROVED_APP = "RETURN_APPROVED_APP";
+    public static final String RETURN_REJECTED_APP = "RETURN_REJECTED_APP";
+    public static final String REFUND_REQUESTED = "REFUND_REQUESTED";
+    public static final String REFUND_REQUESTED_APP = "REFUND_REQUESTED_APP";
+    public static final String REFUND_FAILED_APP = "REFUND_FAILED_APP";
+
+    // BV — duyệt bài viết của bác sĩ (docs/08 §F.3, V40)
+    public static final String ARTICLE_REVIEW_SUBMITTED_APP = "ARTICLE_REVIEW_SUBMITTED_APP";
+    public static final String ARTICLE_REVIEW_APPROVED_APP = "ARTICLE_REVIEW_APPROVED_APP";
+    public static final String ARTICLE_REVIEW_REJECTED_APP = "ARTICLE_REVIEW_REJECTED_APP";
 }
