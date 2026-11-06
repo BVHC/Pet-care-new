@@ -114,6 +114,14 @@ class SystemConfigIT {
         expect("complaint.auto_close_days", "7", "INT", "1", "30");               // BR-DG-09
         expect("workforce.request_lead_hours", "24", "INT", "0", "168");          // BR-NS-04
         expect("workforce.absence_report_max_days", "7", "INT", "1", "30");       // BR-NS-07
+        // V44, V45, V46, V48 (docs/adr/0117): 7 khóa của BE-2, docs/08 §G. Khoảng min–max do T55c chọn
+        expect("shop.payment_window_hours", "24", "INT", "1", "168");             // BR-BH-12
+        expect("shop.auto_confirm_days", "7", "INT", "1", "30");                  // BR-BH-12
+        expect("shop.max_redelivery", "2", "INT", "0", "5");                      // BR-BH-11
+        expect("payment.txn_ttl_minutes", "15", "INT", "5", "60");                // BR-TG-09
+        expect("payment.refund_max_attempts", "3", "INT", "1", "10");             // BR-TG-14
+        expect("returns.window_days", "7", "INT", "1", "30");                     // BR-BH-13
+        expect("content.comment_per_hour", "10", "INT", "1", "100");              // BR-BV-08
     }
 
     private static void expect(String key, String value, String type, String min, String max) {
@@ -137,7 +145,7 @@ class SystemConfigIT {
                     assertThat(rs.getString("description")).isNotBlank();
                 });
 
-        assertThat(EXPECTED).hasSize(78);
+        assertThat(EXPECTED).hasSize(85);
         assertThat(actual).isEqualTo(EXPECTED);
     }
 

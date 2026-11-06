@@ -38,4 +38,39 @@ public interface PetQueryApi {
      * đọc mới mỗi lần gọi (không cache); bên gọi truyền tối đa 100 id; tập rỗng → danh sách rỗng.
      */
     List<PetSummary> findPets(Collection<Long> petIds);
+
+    // ------------------------------------------------------------------------------------------------------------
+    // Tầng 3 (T55c, docs/adr/0117, docs/06 §6b hàng 15): placeholder dạng default — ném UnsupportedOperationException
+    // tới khi PetQueryService ghi đè; khi đó xóa default (method thành trừu tượng).
+    // ------------------------------------------------------------------------------------------------------------
+
+    /** Hồ sơ thú cho gợi ý và chatbot (07 I-1). Tên thú không có ở đây: tra bằng {@link #findPets}. */
+    record PetProfile(Long petId, Long customerId, Species species, String breed, LocalDate birthDate,
+                      BigDecimal currentWeightKg, LocalDate deceasedOn) {
+
+        public boolean deceased() {
+            return deceasedOn != null;
+        }
+    }
+
+    /** Thú còn sống của khách, để chatbot hỏi "thú nào" (07 I-1). */
+    record LivingPet(Long petId, String name) {}
+
+    /**
+     * I-1 (07 §11, UC91, UC92): hồ sơ của thú, kể cả thú đã mất ({@code deceasedOn} khác null; bên gọi tự xét, BR-AI-11).
+     * Đọc không khóa. Bản thật trước 30/11 (T77).
+     */
+    default Optional<PetProfile> findPetProfile(Long petId) {
+        throw placeholder("findPetProfile", "T77");
+    }
+
+    /** I-1 (07 §11): thú chưa mất ({@code deceased_on IS NULL}) của khách, theo tên rồi id. Bản thật trước 30/11 (T77). */
+    default List<LivingPet> findLivingPetsOfCustomer(Long customerId) {
+        throw placeholder("findLivingPetsOfCustomer", "T77");
+    }
+
+    private static UnsupportedOperationException placeholder(String method, String task) {
+        return new UnsupportedOperationException("PetQueryApi." + method + " chưa cài (placeholder T55c, docs/06 §6b); "
+                + "bản thật ở " + task);
+    }
 }

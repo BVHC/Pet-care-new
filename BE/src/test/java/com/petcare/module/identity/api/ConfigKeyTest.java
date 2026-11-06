@@ -19,11 +19,12 @@ class ConfigKeyTest {
     }
 
     @Test
-    void catalogHas78Parameters() {
+    void catalogHas85Parameters() {
         // 50 tham số [CFG] của docs/02 + session.ttl_hours (docs/adr/0003) + session.access_ttl_minutes (docs/adr/0091); V2 + V27 = 52 dòng
         // + 18 khóa ai.* (docs/07 §4.6, V35, docs/adr/0110) = 70
         // + 6 khóa complaint.* (docs/09 §G) + 2 khóa workforce.* (docs/02 BR-NS-04, 07), V40, docs/adr/0113 = 78
-        assertThat(ConfigKey.values()).hasSize(78);
+        // + 7 khóa của BE-2 (docs/08 §G; V44, V45, V46, V48; docs/adr/0117) = 85
+        assertThat(ConfigKey.values()).hasSize(85);
     }
 
     @Test
@@ -33,6 +34,14 @@ class ConfigKeyTest {
                         "complaint.sla_open_hours", "complaint.sla_resolve_hours", "complaint.auto_close_days");
         assertThat(Arrays.stream(ConfigKey.values()).map(ConfigKey::key).filter(key -> key.startsWith("workforce.")))
                 .containsExactlyInAnyOrder("workforce.request_lead_hours", "workforce.absence_report_max_days");
+    }
+
+    @Test
+    void be2KeysCoverSpec08SectionG() {
+        assertThat(Arrays.stream(ConfigKey.values()).map(ConfigKey::key))
+                .contains("shop.payment_window_hours", "shop.auto_confirm_days", "shop.max_redelivery",
+                        "payment.txn_ttl_minutes", "payment.refund_max_attempts", "returns.window_days",
+                        "content.comment_per_hour");
     }
 
     @Test

@@ -1,8 +1,11 @@
 package com.petcare.module.sales.api;
 
+import java.time.Instant;
+import java.time.LocalDate;
 import java.util.Collection;
 import java.util.List;
 import java.util.Map;
+import java.util.Optional;
 
 /** Owner: sales (BH) · BE-2. */
 public interface OrderQueryApi {
@@ -28,4 +31,55 @@ public interface OrderQueryApi {
      * Thêm 2026-10-20 bởi BE-1 cho hàng đợi visit (visit-v1 #2–4, docs/adr/0060).
      */
     Map<Long, Long> findOrderIdsByVisitIds(Collection<Long> visitIds);
+
+    // ------------------------------------------------------------------------------------------------------------
+    // Tầng 3 (T55c, docs/adr/0117, docs/06 §6b hàng 8, 13, 16): placeholder dạng default — ném UnsupportedOperationException
+    // tới khi OrderQueryService ghi đè; khi đó xóa default (method thành trừu tượng).
+    // ------------------------------------------------------------------------------------------------------------
+
+    /**
+     * Một dòng Order trả được (BR-BH-13): chỉ dòng {@code GOODS}. {@code returnedQuantity} = đã trả (yêu cầu
+     * {@code APPROVED} / {@code REFUNDED}), {@code pendingReturnQuantity} = đang chờ duyệt ({@code PENDING}).
+     */
+    record ReturnableLine(Long orderLineId, Long productId, String description, int quantity, long unitPrice,
+                          int returnedQuantity, int pendingReturnQuantity) {}
+
+    /**
+     * Order cho trả hàng. {@code paidAt} và {@code collectMethod} null khi Order chưa {@code PAID}. {@code collectMethod}
+     * là hình thức thu (BR-TG-12): quầy {@code CASH} / {@code TRANSFER} theo {@code payments.method}, đơn online
+     * {@code GATEWAY}. Hạn trả của đơn online tính từ {@code delivered_at} (shop), không có ở đây.
+     */
+    record ReturnableOrder(Long orderId, Long branchId, Long customerId, OrderSource source, Instant paidAt,
+                           CollectMethod collectMethod, List<ReturnableLine> lines) {}
+
+    /** BR-BH-13, UC68: dòng trả được và số đã / đang trả của Order {@code orders.id}; không có Order thì rỗng. Đọc không khóa. Bản thật trước 30/11 (T73). */
+    default Optional<ReturnableOrder> findLinesForReturn(Long orderId) {
+        throw placeholder("findLinesForReturn", "T73");
+    }
+
+    /**
+     * I-8 (07 §11, UC92): ngày mua gần nhất (ngày {@code paid_at} theo giờ Việt Nam) của từng sản phẩm trong các Order
+     * {@code PAID} của khách; sản phẩm chưa mua thì vắng mặt. Bản thật trước 7/12 (T78).
+     */
+    default Map<Long, LocalDate> findLastPurchaseDates(Long customerId, Collection<Long> productIds) {
+        throw placeholder("findLastPurchaseDates", "T78");
+    }
+
+    /**
+     * I-8 (07 §11, UC92): {@code productId → tổng số lượng bán} từ {@code since} (ngày {@code paid_at}, tính cả ngày đó)
+     * trong các Order {@code PAID}, toàn chuỗi. Bản thật trước 7/12 (T78).
+     */
+    default Map<Long, Long> sumSoldUnitsByProduct(LocalDate since) {
+        throw placeholder("sumSoldUnitsByProduct", "T78");
+    }
+
+    /** BR-CN-07, BR-CN-08 (UC13): số Order {@code OPEN} / {@code PENDING} của chi nhánh. Bản thật trước 7/12 (T75). */
+    default long countOpenByBranch(Long branchId) {
+        throw placeholder("countOpenByBranch", "T75");
+    }
+
+    private static UnsupportedOperationException placeholder(String method, String task) {
+        return new UnsupportedOperationException("OrderQueryApi." + method + " chưa cài (placeholder T55c, docs/06 §6b); "
+                + "bản thật ở " + task);
+    }
 }

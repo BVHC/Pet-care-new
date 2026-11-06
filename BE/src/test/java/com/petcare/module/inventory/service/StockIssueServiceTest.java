@@ -198,6 +198,11 @@ class StockIssueServiceTest {
         for (Method method : StockApi.class.getMethods()) {
             try {
                 Method impl = StockIssueService.class.getMethod(method.getName(), method.getParameterTypes());
+                if (impl.getDeclaringClass() == StockApi.class) {
+                    // Placeholder tầng 3 (T55c, docs/adr/0117): vẫn là default của interface, ném UnsupportedOperationException.
+                    // Khi bản thật ghi đè trong StockIssueService thì method khai báo ở lớp này và bị kiểm MANDATORY ngay đây.
+                    continue;
+                }
                 assertThat(impl.getAnnotation(Transactional.class).propagation()).as(method.getName())
                         .isEqualTo(Propagation.MANDATORY);
             } catch (NoSuchMethodException e) {

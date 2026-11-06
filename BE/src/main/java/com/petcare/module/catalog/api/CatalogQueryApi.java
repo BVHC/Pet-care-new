@@ -70,4 +70,31 @@ public interface CatalogQueryApi {
      * Thêm 2026-10-25 bởi BE-1 (visit #18 gợi ý sản phẩm còn tồn, docs/adr/0073).
      */
     List<ProductInfo> findProductsByVaccineType(Long vaccineTypeId);
+
+    // ------------------------------------------------------------------------------------------------------------
+    // Tầng 3 (T55c, docs/adr/0117, docs/06 §6b hàng 15, 16): placeholder dạng default — ném UnsupportedOperationException
+    // tới khi CatalogQueryService ghi đè; khi đó xóa default (method thành trừu tượng).
+    // ------------------------------------------------------------------------------------------------------------
+
+    /** Nguồn của gợi ý (07 I-3): đều đang kinh doanh; sản phẩm chỉ {@code GOODS} không kê đơn. */
+    record Recommendable(List<ServiceInfo> groomingServices, List<KennelTypeInfo> kennelTypes,
+                         List<ProductInfo> products) {}
+
+    /**
+     * I-3 (07 §11, UC91, ST22): mọi dòng phác đồ <b>đang dùng</b> của loài, mọi loại vaccine, theo loại vaccine rồi mũi
+     * tăng dần. Bản thật trước 30/11 (T77).
+     */
+    default List<ProtocolDose> listActiveProtocols(Species species) {
+        throw placeholder("listActiveProtocols", "T77");
+    }
+
+    /** I-3 (07 §11, UC92): dịch vụ thẩm mỹ, loại chuồng và sản phẩm {@code GOODS} không kê đơn đang kinh doanh. Bản thật trước 7/12 (T78). */
+    default Recommendable listRecommendable() {
+        throw placeholder("listRecommendable", "T78");
+    }
+
+    private static UnsupportedOperationException placeholder(String method, String task) {
+        return new UnsupportedOperationException("CatalogQueryApi." + method + " chưa cài (placeholder T55c, docs/06 §6b); "
+                + "bản thật ở " + task);
+    }
 }

@@ -105,6 +105,15 @@ public enum ConfigKey {
     AI_RECO_SENIOR_AGE_YEARS_OTHER("ai.reco.senior_age_years_other", INT),               // 07 §7.3, Q3
     AI_LOG_RETENTION_DAYS("ai.log.retention_days", INT),                                 // BR-AI-24
 
+    // BH online, TG online, trả hàng, bình luận (docs/08 §G, docs/adr/0117; V44, V45, V46, V48)
+    SHOP_PAYMENT_WINDOW_HOURS("shop.payment_window_hours", INT),         // BR-BH-12
+    SHOP_AUTO_CONFIRM_DAYS("shop.auto_confirm_days", INT),               // BR-BH-12
+    SHOP_MAX_REDELIVERY("shop.max_redelivery", INT),                     // BR-BH-11
+    PAYMENT_TXN_TTL_MINUTES("payment.txn_ttl_minutes", INT),             // BR-TG-09
+    PAYMENT_REFUND_MAX_ATTEMPTS("payment.refund_max_attempts", INT),     // BR-TG-14
+    RETURNS_WINDOW_DAYS("returns.window_days", INT),                     // BR-BH-13
+    CONTENT_COMMENT_PER_HOUR("content.comment_per_hour", INT),           // BR-BV-08
+
     // TB
     REMINDER_VACCINE_DAYS_BEFORE("reminder.vaccine_days_before", INT),     // BR-TB-01
     REMINDER_VACCINE_OVERDUE_DAYS("reminder.vaccine_overdue_days", INT),   // BR-TB-04

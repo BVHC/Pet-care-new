@@ -39,7 +39,8 @@ class SchemaMigrationIT {
     /**
      * erd §12 (L1043–1073): 52 model + 3 bảng con = 55 bảng, cộng 4 bảng AI của erd §14.2 / docs/07 §8 (V34, docs/adr/0110)
      * = 59, cộng 10 bảng tầng 3 phần BE-1 (V36–V39: Nhân sự 3, phẫu thuật 1, vật tư tiêu hao 1, nội trú 3, khiếu nại 2;
-     * docs/adr/0113) = 69. Các bảng tầng 3 khác (V42–V49, BE-2) thêm vào đây khi có migration.
+     * docs/adr/0113), cộng 19 bảng tầng 3 phần BE-2 (V43–V48: phí 3, thương mại điện tử 4, thanh toán 3, trả hàng 3,
+     * kho 4, gộp khách 1, bình luận 1; docs/adr/0117) = 88.
      */
     private static final Set<String> ERD_TABLES = Set.of(
             "accounts", "staff_profiles", "otp_tokens", "sessions", "audit_logs", "system_configs",
@@ -54,25 +55,33 @@ class SchemaMigrationIT {
             "page_contents", "feedbacks", "care_tasks", "notifications", "notification_outbox",
             "ai_documents", "ai_chunks", "ai_chat_logs", "ai_item_profiles",
             "shift_definitions", "shift_assignments", "shift_requests", "surgeries", "visit_material_usages",
-            "admissions", "admission_orders", "admission_observations", "complaints", "complaint_messages");
+            "admissions", "admission_orders", "admission_observations", "complaints", "complaint_messages",
+            "shipping_fee_configs", "branch_home_visit_fees", "service_material_norms", "carts", "cart_items",
+            "online_orders", "stock_reservations", "payment_transactions", "payment_reconciliations",
+            "reconciliation_items", "return_requests", "return_request_lines", "refunds", "stock_transfers",
+            "stock_transfer_lines", "stock_counts", "stock_count_lines", "customer_merges", "article_comments");
 
     /** Bảng loại LOG trong erd: chỉ có {@code created_at} (erd §0 L14). */
     private static final Set<String> LOG_TABLES = Set.of(
             "otp_tokens", "audit_logs", "weight_records", "visit_assignments", "medical_record_addenda",
             "care_log_addenda", "stock_movements", "notification_outbox", "ai_chat_logs",
-            "admission_observations", "complaint_messages", "visit_material_usages");
+            "admission_observations", "complaint_messages", "visit_material_usages", "customer_merges");
 
     /** Bảng có khóa chính khác {@code id}: 1–1 dùng FK làm PK, PK ghép, PK chuỗi. */
     private static final Set<String> TABLES_WITHOUT_ID = Set.of(
             "staff_profiles", "kennel_types", "medical_records", "boarding_check_ins",
-            "branch_services", "branch_quota_defaults", "system_configs", "notification_templates", "page_contents");
+            "branch_services", "branch_quota_defaults", "system_configs", "notification_templates", "page_contents",
+            "branch_home_visit_fees");
 
     /** erd §0 L20: tiền là BIGINT. */
     private static final List<String> MONEY_COLUMNS = List.of(
             "products.price", "services.price", "boarding_bookings.nightly_price", "orders.total_amount",
             "order_lines.unit_price", "order_lines.line_total", "cashier_shifts.expected_cash",
             "cashier_shifts.expected_transfer", "cashier_shifts.counted_cash", "cashier_shifts.difference",
-            "payments.amount", "stock_receipt_lines.unit_cost");
+            "payments.amount", "stock_receipt_lines.unit_cost",
+            "shipping_fee_configs.base_fee", "shipping_fee_configs.free_threshold", "branch_home_visit_fees.fee",
+            "online_orders.shipping_fee", "payment_transactions.amount", "return_requests.refund_amount",
+            "refunds.amount", "reconciliation_items.our_amount", "reconciliation_items.gateway_amount");
 
     /** erd §0 L23: giờ trong ngày là TIME. */
     private static final List<String> TIME_COLUMNS = List.of(
@@ -82,7 +91,8 @@ class SchemaMigrationIT {
     /** erd §0 L26: mã chứng từ hiển thị VARCHAR(20) UNIQUE. */
     private static final List<String> DOCUMENT_CODE_TABLES = List.of(
             "appointments", "visits", "boarding_bookings", "orders", "payments", "stock_receipts", "stock_adjustments",
-            "admissions", "complaints");
+            "admissions", "complaints",
+            "online_orders", "return_requests", "refunds", "stock_transfers", "stock_counts");
 
     /** Tập trạng thái theo docs/03-state-machines.md (SM#1–#10) và 02 (BR-BV-02, BR-DG-04), mã ASCII theo erd L28–37. */
     private static final Map<String, Set<String>> STATE_COLUMNS = new LinkedHashMap<>();
@@ -91,7 +101,7 @@ class SchemaMigrationIT {
         STATE_COLUMNS.put("accounts.role", Set.of("CUSTOMER", "ADMIN", "SUPER_MANAGER", "BRANCH_MANAGER",
                 "RECEPTIONIST", "VET", "CARETAKER"));
         STATE_COLUMNS.put("accounts.status", Set.of("PENDING", "ACTIVE", "DISABLED"));
-        STATE_COLUMNS.put("branches.status", Set.of("DRAFT", "ACTIVE"));
+        STATE_COLUMNS.put("branches.status", Set.of("DRAFT", "ACTIVE", "SUSPENDED", "CLOSED")); // V48, 08 §F.1 FSM #20
         STATE_COLUMNS.put("appointments.status", Set.of("BOOKED", "CHECKED_IN", "COMPLETED", "CANCELLED", "NO_SHOW"));
         STATE_COLUMNS.put("visits.status", Set.of("WAITING", "IN_PROGRESS", "COMPLETED", "CANCELLED"));
         STATE_COLUMNS.put("orders.status", Set.of("OPEN", "PENDING", "PAID", "CANCELLED"));
@@ -104,7 +114,7 @@ class SchemaMigrationIT {
         STATE_COLUMNS.put("care_tasks.status", Set.of("OPEN", "DONE", "CANCELLED"));
         STATE_COLUMNS.put("care_tasks.task_type", Set.of("VACCINE_DUE", "VACCINE_OVERDUE", "FOLLOW_UP_DUE",
                 "PICKUP_OVERDUE"));
-        STATE_COLUMNS.put("articles.status", Set.of("DRAFT", "PUBLISHED", "HIDDEN"));
+        STATE_COLUMNS.put("articles.status", Set.of("DRAFT", "PUBLISHED", "HIDDEN", "PENDING_REVIEW", "REJECTED")); // V48, 08 §F.3 FSM #21
         STATE_COLUMNS.put("feedbacks.status", Set.of("NEW", "SEEN", "RESOLVED"));
         // Tầng 3 phần BE-1 (docs/03 #11, #12, docs/09 FSM #23–#26)
         STATE_COLUMNS.put("shift_assignments.status", Set.of("SCHEDULED", "ON_LEAVE", "ABSENT", "CANCELLED"));
@@ -113,6 +123,28 @@ class SchemaMigrationIT {
         STATE_COLUMNS.put("admissions.status", Set.of("ADMITTED", "DISCHARGED"));
         STATE_COLUMNS.put("admission_orders.status", Set.of("ORDERED", "DONE", "CANCELLED"));
         STATE_COLUMNS.put("complaints.status", Set.of("OPEN", "IN_PROGRESS", "RESOLVED", "CLOSED"));
+        // Tầng 3 phần BE-2 (T55c, docs/08-tang3-be2-spec.md): FSM #14–#19, §A–§F
+        STATE_COLUMNS.put("online_orders.status", Set.of("PENDING_PAYMENT", "PAID", "PROCESSING", "SHIPPED",
+                "DELIVERY_FAILED", "DELIVERED", "COMPLETED", "CANCELLED"));
+        STATE_COLUMNS.put("stock_reservations.status", Set.of("HELD", "CONSUMED", "RELEASED"));
+        STATE_COLUMNS.put("payment_transactions.status", Set.of("PENDING", "SUCCEEDED", "FAILED", "EXPIRED", "CANCELLED"));
+        STATE_COLUMNS.put("payment_reconciliations.status", Set.of("RUNNING", "MATCHED", "MISMATCHED", "FAILED"));
+        STATE_COLUMNS.put("reconciliation_items.kind", Set.of("MISSING_LOCAL", "MISSING_GATEWAY", "AMOUNT_DIFF", "STATUS_DIFF"));
+        STATE_COLUMNS.put("return_requests.status", Set.of("PENDING", "APPROVED", "REJECTED", "CANCELLED", "REFUNDED"));
+        STATE_COLUMNS.put("return_requests.reason_code", Set.of("DEFECTIVE", "WRONG_ITEM", "CHANGED_MIND", "OTHER"));
+        STATE_COLUMNS.put("refunds.status", Set.of("REQUESTED", "SUCCEEDED", "FAILED"));
+        STATE_COLUMNS.put("refunds.method", Set.of("CASH", "TRANSFER", "GATEWAY"));
+        STATE_COLUMNS.put("stock_transfers.status", Set.of("IN_TRANSIT", "RECEIVED", "CANCELLED"));
+        STATE_COLUMNS.put("stock_counts.status", Set.of("OPEN", "CONFIRMED", "CANCELLED"));
+        STATE_COLUMNS.put("stock_counts.scope", Set.of("ALL", "CATEGORY"));
+        STATE_COLUMNS.put("article_comments.status", Set.of("ACTIVE", "HIDDEN", "DELETED"));
+        // Ba CHECK của kho nới ở V47 (05 §13 mục 26)
+        STATE_COLUMNS.put("stock_movements.movement_type", Set.of("RECEIPT", "RECEIPT_CANCEL", "SALE", "VACCINATION",
+                "VACCINATION_REVERT", "ADJUSTMENT", "TRANSFER_OUT", "TRANSFER_IN", "TRANSFER_CANCEL"));
+        STATE_COLUMNS.put("stock_movements.source_type", Set.of("stock_receipts", "orders", "vaccinations",
+                "stock_adjustments", "stock_transfers"));
+        STATE_COLUMNS.put("stock_adjustments.reason", Set.of("DAMAGED", "EXPIRED", "COUNT_MISMATCH", "OTHER",
+                "COUNT_DIFF", "RETURN_DISCARD"));
     }
 
     private static final String SINGLE_COLUMN_CHECKS = """
@@ -173,11 +205,15 @@ class SchemaMigrationIT {
         // V36 bảng Nhân sự, V37 khám tại nhà + phẫu thuật + vật tư tiêu hao, V38 nội trú, V39 khiếu nại (docs/adr/0113),
         // V40 seed 8 tham số [CFG] complaint.* / workforce.*, V41 giá trị mới medical_type / line_type,
         // V42 Order nguồn ONLINE: 4 CHECK của orders (docs/adr/0116, làm thay BE-2),
+        // V43 phí vận chuyển / phí khám tại nhà / định mức vật tư (docs/adr/0117, T55c),
+        // V44 giỏ hàng, đơn online, giữ hàng + 3 khóa shop.*, V45 giao dịch thanh toán, đối soát + 2 khóa payment.*,
+        // V46 trả hàng, hoàn tiền + returns.window_days, V47 chuyển kho, kiểm kê + 3 CHECK của kho,
+        // V48 chi nhánh tạm ngừng / đóng, gộp khách, bài viết của bác sĩ, bình luận + content.comment_per_hour,
         // V9000 chỉ ở test: baseline session.access_ttl_minutes = 720
         assertThat(rows).extracting(row -> row.get("version"))
                 .containsExactly("1", "2", "3", "4", "5", "6", "7", "8", "9", "10", "11", "12", "13", "14", "15",
                         "16", "17", "18", "19", "20", "21", "22", "23", "24", "25", "26", "27", "28", "29", "30",
-                        "31", "32", "33", "34", "35", "36", "37", "38", "39", "40", "41", "42", "9000");
+                        "31", "32", "33", "34", "35", "36", "37", "38", "39", "40", "41", "42", "43", "44", "45", "46", "47", "48", "9000");
         assertThat(rows).allSatisfy(row -> assertThat(row).containsEntry("success", true));
     }
 
@@ -201,7 +237,7 @@ class SchemaMigrationIT {
                 WHERE table_schema = 'public' AND table_type = 'BASE TABLE' AND table_name <> 'flyway_schema_history'
                 """, String.class);
 
-        assertThat(ERD_TABLES).hasSize(69);
+        assertThat(ERD_TABLES).hasSize(88);
         // document_counters (V14, ADR-0043) và refresh_tokens (V27, ADR-0091) là bảng hạ tầng ngoài ERD v16
         // (erd 13 muc 18)
         assertThat(tables).containsExactlyInAnyOrderElementsOf(
@@ -211,7 +247,7 @@ class SchemaMigrationIT {
 
     @Test
     void commonTimestampColumnsMatchTableKind() {
-        assertThat(LOG_TABLES).hasSize(12);
+        assertThat(LOG_TABLES).hasSize(13);
         for (String table : ERD_TABLES) {
             Map<String, Column> columns = columns(table);
             assertCommonTimestamp(table, columns.get("created_at"));
@@ -647,7 +683,7 @@ class SchemaMigrationIT {
         assertThat(foreignKeys).as("số cột FK trỏ tới accounts (V1: 43 cột ở 34 bảng; V34: + ai_documents.updated_by, "
                 + "ai_item_profiles.updated_by; V36–V39: + 16 cột — shift_assignments 2, shift_requests 2, surgeries 3, "
                 + "visit_material_usages 1, admissions 2, admission_orders 2, admission_observations 1, complaints 2, "
-                + "complaint_messages 1)").hasSize(61);
+                + "complaint_messages 1; V43–V48 của BE-2: + 16 cột ở 14 bảng)").hasSize(77);
 
         List<String> unindexed = jdbc.queryForList("""
                 SELECT c.conrelid::regclass || '.' || a.attname
