@@ -61,6 +61,13 @@ describe('ArticleDetailPage (UC17)', () => {
     expect(screen.getByRole('link', { name: /Tất cả bài viết/ })).toHaveAttribute('href', '/news');
   });
 
+  it('UC82: khối bình luận nằm dưới bài (ngoài <article>), người ẩn danh thấy lời mời đăng nhập', async () => {
+    renderPage('royal-canin-vs-pedigree-chon-hang-nao-cho-cho-cung');
+    const heading = await screen.findByRole('heading', { level: 2, name: 'Bình luận (2)' });
+    expect(heading.closest('article')).toBeNull();
+    expect(screen.getByRole('link', { name: 'Đăng nhập' })).toBeInTheDocument();
+  });
+
   it('nội dung HTML được render thành phần tử thật: heading con và danh sách', async () => {
     renderPage('meo-bo-an-3-ngay-khi-nao-can-cap-cuu');
     const heading = await screen.findByRole('heading', { level: 2, name: 'Khi nào cần đưa đi cấp cứu ngay' });

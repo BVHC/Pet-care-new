@@ -9,7 +9,8 @@ import { cn } from '@/lib/utils';
 import { plainMessage, toApiError } from '@/shared/api/api-error';
 import { useDebounce } from '@/shared/hooks/useDebounce';
 import { useCustomerLookup } from '@/domains/pets/hooks/useCustomerPet';
-import { CHANNEL_LABEL, SPECIES_EMOJI } from '@/domains/pets/labels';
+import { SpeciesIcon } from '@/components/customer/pets/pet-presentation';
+import { CHANNEL_LABEL } from '@/domains/pets/labels';
 import type { CustomerSearchItem, CustomerSearchQuery } from '@/domains/pets/types';
 
 type Mode = 'phone' | 'name' | 'email' | 'petName';
@@ -145,9 +146,10 @@ function CustomerRow({ item, onOpen }: { item: CustomerSearchItem; onOpen: () =>
           {item.pets.map((pet) => (
             <li
               key={pet.petId}
-              className={cn('rounded-full px-2 py-0.5 text-xs', pet.deceased ? 'bg-(--ws-raised) text-(--ws-ink-3)' : 'bg-amber-50 text-amber-800')}
+              className={cn('inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-xs', pet.deceased ? 'bg-(--ws-raised) text-(--ws-ink-3)' : 'bg-amber-50 text-amber-800')}
             >
-              {SPECIES_EMOJI[pet.species]} {pet.name}
+              <SpeciesIcon species={pet.species} className="h-3.5 w-3.5" />
+              {pet.name}
               {pet.deceased && ' (đã mất)'}
             </li>
           ))}

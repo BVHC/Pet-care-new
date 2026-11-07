@@ -6,7 +6,7 @@ const labels = (role: Role) => menuFor(role).flatMap((s) => s.items.map((i) => i
 
 describe('staff menu', () => {
   it('leaves the pages a workspace already covers out of the receptionist menu', () => {
-    expect(labels('RECEPTIONIST')).toEqual(['Order tại quầy', 'Lịch hẹn', 'Lưu trú', 'Việc gọi điện', 'Đơn online', 'Hoàn tiền', 'Kho hàng']);
+    expect(labels('RECEPTIONIST')).toEqual(['Order tại quầy', 'Lịch hẹn', 'Lưu trú', 'Việc gọi điện', 'Đơn online', 'Nội trú', 'Lịch làm việc', 'Trả hàng & hoàn tiền', 'Kho hàng']);
   });
 
   // T47: nội dung công khai (UC21, UC81) là việc của A04; feedback (UC84) của A04 và A05; Care Task (UC87) chỉ của A06 (BR-TB-05).
@@ -40,8 +40,9 @@ describe('staff menu', () => {
   });
 
   it('gives vets and caretakers the boarding page and the read-only customer lookup besides their workspace (UC23, UC57)', () => {
-    expect(labels('VET')).toEqual(['Lưu trú', 'Tra cứu khách & thú']);
-    expect(labels('CARETAKER')).toEqual(['Lưu trú', 'Tra cứu khách & thú']);
+    // Tầng 3 (T57): thêm Nội trú (UC55, 56), Lịch làm việc (UC35, 36); VET thêm Bài viết của tôi (UC80) và Kho hàng (chỉ tab Truy vết lô, UC79).
+    expect(labels('VET')).toEqual(['Lưu trú', 'Nội trú', 'Lịch làm việc', 'Tra cứu khách & thú', 'Bài viết của tôi', 'Kho hàng']);
+    expect(labels('CARETAKER')).toEqual(['Lưu trú', 'Nội trú', 'Lịch làm việc', 'Tra cứu khách & thú']);
     expect(rolesForPath('/admin/customers')).not.toContain('RECEPTIONIST');
   });
 

@@ -1,8 +1,8 @@
 import type { ElementType } from 'react';
 import {
   Activity, BadgePercent, BarChart3, Bell, BedDouble, Bot, Boxes, Building2, CalendarClock, ClipboardList, Crown, FileText,
-  Lock, Mail, MessageSquareText, Newspaper, Package, PhoneCall, Scale, Settings, ShieldAlert, ShoppingBag,
-  Tags, Truck, UserCog, UserSearch, Warehouse, LayoutGrid,
+  CalendarDays, Lock, Mail, MessageSquareText, Newspaper, Package, PenLine, PhoneCall, Scale, Settings, ShieldAlert, ShoppingBag,
+  Stethoscope, Tags, Truck, UserCog, UserSearch, Warehouse, LayoutGrid,
 } from 'lucide-react';
 import { STAFF_ROLES, type Role } from '../types/auth';
 import { WORKSPACE_LABELS, WORKSPACE_ROLES, workspaceForPath } from './workspaces';
@@ -39,8 +39,13 @@ export const ADMIN_MENU: MenuSection[] = [
       { path: '/admin/care-tasks', label: 'Việc gọi điện', icon: PhoneCall, roles: ['RECEPTIONIST'] },
       // Hàng chờ (UC45, UC46), Khám & EMR (UC48), Tiêm chủng (UC49), Grooming (UC52) nằm ở các bàn làm việc; URL cũ /admin/queue|exam|vaccination|grooming chỉ còn chuyển hướng (App.tsx).
       { path: '/admin/orders', label: 'Đơn online', icon: Package, roles: ['RECEPTIONIST'] }, // UC65 (tầng 3)
+      // UC55, UC56 (tầng 3): VET, CARETAKER ra y lệnh / ghi theo dõi; RECEPTIONIST chỉ xem (inpatient-v1 §B).
+      { path: '/admin/inpatient', label: 'Nội trú', icon: Stethoscope, roles: ['VET', 'CARETAKER', 'RECEPTIONIST'] },
+      // UC35, UC36 (tầng 3): lịch của tôi, gửi / rút yêu cầu nghỉ hoặc đổi ca.
+      { path: '/admin/my-schedule', label: 'Lịch làm việc', icon: CalendarDays, roles: ['RECEPTIONIST', 'VET', 'CARETAKER'] },
       // UC23 cho A07, A08 (chỉ xem). Lễ tân tra cứu và sửa hồ sơ ngay ở bàn Lễ tân.
-      { path: '/admin/customers', label: 'Tra cứu khách & thú', icon: UserSearch, roles: ['VET', 'CARETAKER'] },
+      // UC27 (tầng 3): BRANCH_MANAGER gộp hồ sơ khách trùng ngay ở màn tra cứu.
+      { path: '/admin/customers', label: 'Tra cứu khách & thú', icon: UserSearch, roles: ['VET', 'CARETAKER', 'BRANCH_MANAGER'] },
       // UC88 (A02–A08: mọi nhân viên kể cả ADMIN; BE isAuthenticated, ADR-0039): mở từ chuông trên khung nhân viên.
       { path: '/admin/notifications', label: 'Thông báo', icon: Bell, roles: STAFF_ROLES, hidden: true },
     ],
@@ -51,7 +56,7 @@ export const ADMIN_MENU: MenuSection[] = [
       // v16 không có hóa đơn: thu tiền (UC70) làm ở bàn Lễ tân; URL cũ /admin/invoices chuyển hướng (App.tsx).
       // UC72 (A05): đối soát ca thu ngân. Thu tiền (UC70) và mở / chốt ca (UC71) của lễ tân làm ngay ở bàn Lễ tân.
       { path: '/admin/payments', label: 'Ca thu ngân', icon: Scale, roles: ['BRANCH_MANAGER'] },
-      { path: '/admin/refunds', label: 'Hoàn tiền', icon: Scale, roles: ['RECEPTIONIST', 'BRANCH_MANAGER'] }, // UC68 (tầng 3)
+      { path: '/admin/refunds', label: 'Trả hàng & hoàn tiền', icon: Scale, roles: ['RECEPTIONIST', 'BRANCH_MANAGER'] }, // UC68, UC69 (tầng 3)
       { path: '/admin/promotions', label: 'Khuyến mãi', icon: BadgePercent, roles: ['SUPER_MANAGER'] }, // ngoài phạm vi
       { path: '/admin/membership', label: 'Thành viên', icon: Crown, roles: ['SUPER_MANAGER'] }, // ngoài phạm vi
     ],
@@ -68,6 +73,8 @@ export const ADMIN_MENU: MenuSection[] = [
       { path: '/admin/page-contents', label: 'Nội dung trang', icon: FileText, roles: ['SUPER_MANAGER'] }, // UC21
       { path: '/admin/articles', label: 'Bài viết', icon: Newspaper, roles: ['SUPER_MANAGER'] }, // UC81 (tab Bài viết, Chuyên mục)
       // UC84: SUPER_MANAGER xem tất cả, BRANCH_MANAGER chỉ feedback chi nhánh mình (BR-DG-03).
+      // UC80 (tầng 3): bác sĩ soạn bài, gửi duyệt.
+      { path: '/admin/my-articles', label: 'Bài viết của tôi', icon: PenLine, roles: ['VET'] },
       { path: '/admin/feedbacks', label: 'Góp ý của khách', icon: MessageSquareText, roles: ['SUPER_MANAGER', 'BRANCH_MANAGER'] },
     ],
   },
@@ -75,7 +82,8 @@ export const ADMIN_MENU: MenuSection[] = [
     section: 'Kho & Mua hàng',
     items: [
       // UC73–76: tab tồn kho (A06 chỉ xem), phiếu nhập, điều chỉnh, nhà cung cấp (A05) — lọc tab theo role trong trang.
-      { path: '/admin/warehouse', label: 'Kho hàng', icon: Warehouse, roles: ['BRANCH_MANAGER', 'RECEPTIONIST'] },
+      // Tầng 3: tab Chuyển kho, Kiểm kê (BRANCH_MANAGER), Truy vết lô (BRANCH_MANAGER, VET).
+      { path: '/admin/warehouse', label: 'Kho hàng', icon: Warehouse, roles: ['BRANCH_MANAGER', 'RECEPTIONIST', 'VET'] },
       // Trang cũ, nay chuyển hướng sang tab kho (gỡ ở T57).
       { path: '/admin/purchasing', label: 'Mua hàng', icon: Truck, roles: ['BRANCH_MANAGER'], hidden: true },
       { path: '/admin/vaccines', label: 'Vaccine', icon: Boxes, roles: ['BRANCH_MANAGER', 'RECEPTIONIST'], hidden: true },
@@ -85,7 +93,7 @@ export const ADMIN_MENU: MenuSection[] = [
     section: 'Quản trị',
     items: [
       { path: '/admin/workforce', label: 'Nhân sự', icon: ClipboardList, roles: ['BRANCH_MANAGER'] }, // UC34–38 (tầng 3)
-      { path: '/admin/incidents', label: 'Sự cố', icon: ShieldAlert, roles: ['SUPER_MANAGER', 'BRANCH_MANAGER'] }, // UC86 (tầng 3)
+      { path: '/admin/incidents', label: 'Khiếu nại', icon: ShieldAlert, roles: ['SUPER_MANAGER', 'BRANCH_MANAGER'] }, // UC86 (tầng 3)
       { path: '/admin/reports', label: 'Báo cáo', icon: BarChart3, roles: ['SUPER_MANAGER', 'BRANCH_MANAGER'] }, // UC89
       { path: '/admin/audit', label: 'Kiểm toán', icon: Activity, roles: ['ADMIN'] }, // UC11
     ],
@@ -98,7 +106,7 @@ export const ADMIN_MENU: MenuSection[] = [
       { path: '/admin/accounts', label: 'Khóa tài khoản', icon: Lock, roles: ['ADMIN'] }, // UC09 — khóa/mở khóa + lý do
       { path: '/admin/system-configs', label: 'Tham số', icon: Settings, roles: ['ADMIN'] }, // UC10
       { path: '/admin/notification-templates', label: 'Mẫu thông báo', icon: Mail, roles: ['ADMIN'] }, // UC10
-      { path: '/admin/ai', label: 'Trí tuệ nhân tạo', icon: Bot, roles: ['SUPER_MANAGER'] }, // tầng 3, chưa đặc tả
+      { path: '/admin/ai', label: 'Trí tuệ nhân tạo', icon: Bot, roles: ['SUPER_MANAGER'] }, // UC93, UC94 (tầng 3)
     ],
   },
 ];

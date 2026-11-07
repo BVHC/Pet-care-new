@@ -34,6 +34,11 @@ export interface MockCustomer {
   linkDecisionPending: boolean;
   /** Hồ sơ online đã có thú cưng, lịch hẹn, đặt chỗ, Order hoặc feedback: không liên kết được (BR-TK-19). */
   hasData: boolean;
+  /**
+   * UC27 (custmerge-v1, BR-KH-12): hồ sơ này đã gộp vào hồ sơ có id này, tức `status = MERGED`. Vắng hoặc null = còn dùng. Hồ sơ MERGED vẫn nằm trong state
+   * (để audit, `findCustomer` vẫn thấy) nhưng không liên kết được (`linkCandidates`, `linkAccount`) và customer-pet.mock ẩn khỏi tra cứu.
+   */
+  mergedIntoId?: number | null;
 }
 
 interface MockAddress extends Address {
@@ -80,7 +85,8 @@ const STATE_KEY = 'petcare-mock-customer';
 function load(): State {
   try {
     const raw = localStorage.getItem(STATE_KEY);
-    if (raw) return JSON.parse(raw) as State;
+    // Gộp với dữ liệu mẫu: state ghi bởi bản cũ mà thiếu bảng vẫn đọc được (hồ sơ cũ không có `mergedIntoId`: coi như chưa gộp).
+    if (raw) return { ...seed(), ...(JSON.parse(raw) as Partial<State>) };
   } catch {
     // Dữ liệu hỏng: dùng lại dữ liệu mẫu.
   }
@@ -120,7 +126,7 @@ export function createOnlineProfile(accountId: number, fullName: string, phone: 
 
 /** Hồ sơ tại quầy chưa liên kết có cùng SĐT, theo thứ tự id. */
 export const linkCandidates = (phone: string) =>
-  load().customers.filter((c) => c.createdChannel === 'COUNTER' && c.accountId === null && c.phone === phone);
+  load().customers.filter((c) => c.createdChannel === 'COUNTER' && c.accountId === null && c.phone === phone && c.mergedIntoId == null);
 
 /** Sau khi xác thực email: đặt cờ chờ quyết định nếu SĐT trùng hồ sơ tại quầy chưa liên kết (BR-TK-19). */
 export function flagLinkDecisionIfPhoneMatches(accountId: number): boolean {
@@ -144,7 +150,7 @@ export function linkBlocker(accountId: number): 'ALREADY_LINKED' | 'HAS_DATA' | 
 export function linkAccount(accountId: number, counterId: number, accountEmail: string): boolean {
   const s = load();
   const counter = s.customers.find((c) => c.customerId === counterId);
-  if (!counter || counter.createdChannel !== 'COUNTER' || counter.accountId !== null) return false;
+  if (!counter || counter.createdChannel !== 'COUNTER' || counter.accountId !== null || counter.mergedIntoId != null) return false;
   const online = s.customers.find((c) => c.accountId === accountId && c.createdChannel === 'ONLINE');
   if (online) {
     s.customers = s.customers.filter((c) => c !== online);
@@ -225,6 +231,55 @@ export function markHasData(customerId: number) {
     c.hasData = true;
     save(s);
   }
+}
+
+// ─── Cho custmerge.mock (UC27, BR-KH-11…14): gộp hồ sơ khách trùng ───
+
+/** Hồ sơ còn dùng (chưa MERGED); hồ sơ đã gộp thì undefined. `findCustomer` vẫn trả cả hồ sơ MERGED. */
+export const findLiveCustomer = (customerId: number) => {
+  const c = findCustomer(customerId);
+  return c && c.mergedIntoId == null ? c : undefined;
+};
+
+const addressKey = (a: MockAddress) => [a.addressLine, a.ward ?? '', a.province].map((x) => x.trim().toLowerCase()).join('|');
+
+/** Sổ địa chỉ của hồ sơ nguồn: tổng số, và số địa chỉ trùng (cùng đường, phường, tỉnh) với địa chỉ đã có ở hồ sơ đích — những địa chỉ này bị bỏ khi gộp. */
+export function addressMergeStats(sourceId: number, targetId: number): { count: number; duplicates: number } {
+  const { addresses } = load();
+  const have = new Set(addresses.filter((a) => a.customerId === targetId).map(addressKey));
+  const source = addresses.filter((a) => a.customerId === sourceId);
+  return { count: source.length, duplicates: source.filter((a) => have.has(addressKey(a))).length };
+}
+
+/**
+ * Gộp hồ sơ: nguồn thành MERGED (`mergedIntoId` = đích), địa chỉ không trùng chuyển sang đích (địa chỉ trùng bị bỏ), đích đánh dấu đã có dữ liệu (BR-TK-19).
+ * Đích giữ địa chỉ mặc định của mình; đích chưa có địa chỉ nào thì địa chỉ mặc định của nguồn lên mặc định. Không áp trần 5 địa chỉ (BR-TK-18 chỉ áp cho khách tự thêm).
+ * Đích đang chờ quyết định liên kết (BR-TK-19) mà không còn hồ sơ tại quầy nào cùng SĐT để liên kết thì cờ chờ được gỡ (khỏi kẹt ở "chờ quyết định" với danh sách ứng viên rỗng).
+ * Điều kiện BR-KH-11 đã kiểm ở custmerge.mock.ts. Trả số địa chỉ đã chuyển, null nếu thiếu hồ sơ.
+ */
+export function mergeCustomerRecords(sourceId: number, targetId: number): { addressesMoved: number } | null {
+  const s = load();
+  const source = s.customers.find((c) => c.customerId === sourceId);
+  const target = s.customers.find((c) => c.customerId === targetId);
+  if (!source || !target) return null;
+  const have = new Set(s.addresses.filter((a) => a.customerId === targetId).map(addressKey));
+  const targetHasDefault = s.addresses.some((a) => a.customerId === targetId && a.isDefault);
+  const mine = s.addresses.filter((a) => a.customerId === sourceId);
+  const keep = mine.filter((a) => !have.has(addressKey(a)));
+  s.addresses = s.addresses.filter((a) => !mine.includes(a) || keep.includes(a));
+  const promoted = targetHasDefault ? undefined : (keep.find((a) => a.isDefault) ?? keep[0]);
+  for (const a of keep) {
+    a.customerId = targetId;
+    a.isDefault = a === promoted;
+  }
+  source.mergedIntoId = targetId;
+  target.hasData = true;
+  const stillLinkable = s.customers.some(
+    (c) => c.createdChannel === 'COUNTER' && c.accountId === null && c.mergedIntoId == null && c.customerId !== targetId && c.phone === target.phone,
+  );
+  if (target.linkDecisionPending && !stillLinkable) target.linkDecisionPending = false;
+  save(s);
+  return { addressesMoved: keep.length };
 }
 
 // ─── Handlers ───

@@ -6,6 +6,7 @@ import { CommonPageHero } from '@/shared/components/layout/CommonPageHero'
 import { usePublicArticle } from '@/shared/hooks/usePublicSite'
 import type { PublicArticle } from '@/shared/types/public-site'
 import { formatPublishedDate } from '@/shared/utils/public-format'
+import { ArticleComments } from './ArticleComments'
 import styles from './ArticleDetailPage.module.css'
 
 /* ================================================================
@@ -95,6 +96,8 @@ function ArticleView({ article }: { article: PublicArticle }) {
               là NƠI DUY NHẤT của FE render HTML thô. Không thêm chỗ thứ hai, không render nội dung page_contents (UC21) kiểu này. */}
           <div className={`${styles.prose} mt-8`} dangerouslySetInnerHTML={{ __html: article.content }} />
         </article>
+
+        <ArticleComments articleId={article.articleId} slug={article.slug} />
 
         <div className="mt-12 border-t border-(--color-border-default) pt-6">
           <Link to="/news" className={`inline-flex items-center gap-2 text-[14px] font-bold text-accent hover:text-accent-hover ${FOCUS}`}>

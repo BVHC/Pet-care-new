@@ -2,14 +2,14 @@ import { Outlet } from 'react-router-dom';
 import { SiteHeader } from './SiteHeader';
 import { SiteFooter } from './SiteFooter';
 import { NAV_TO_PATH } from '../../constants/routes';
-import { useCartStore } from '../../stores/cart.store';
+import { useCartCount } from '../../hooks/useCartCount';
 import { useNavigate } from 'react-router-dom';
 import { InteractiveMascotCompanion } from '../../../components/customer/InteractiveMascotCompanion';
 
-// Layout công khai (Home, Shop, Booking...).
+// Layout công khai (Home, Shop, Booking...). Huy hiệu giỏ lấy từ giỏ hàng lưu trên BE (shop-v1 #1), không còn giỏ cục bộ.
 export function PublicLayout() {
   const navigate = useNavigate();
-  const count = useCartStore((s) => s.count());
+  const count = useCartCount();
 
   const onNav = (page: string) => {
     const path = NAV_TO_PATH[page] ?? '/';

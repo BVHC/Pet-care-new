@@ -6,7 +6,7 @@ import { ruleIdOf } from '../api-error';
 import { MOCK_PASSWORD } from './identity.mock';
 import { installMockApi } from './mock-api';
 import { updateVisitRow } from './visit.mock';
-import { visitClinicalRoutes } from './visit-clinical.mock';
+import { registerCompletionListener, visitClinicalRoutes } from './visit-clinical.mock';
 
 // Giờ cố định: thứ Sáu 23/10/2026 10:40 (giờ Việt Nam), chi nhánh 1 đang mở cửa. Dữ liệu mẫu của visit.mock (docs/testcases/T36-fe.md A.3):
 //  - 2002 Lu (chó) lịch hẹn #10 Khám tổng quát, IN_PROGRESS, VET #5 · 2102 Tôm (hamster) walk-in WAITING, VET #5 · 2101 Miu cấp cứu WAITING chưa gán
@@ -230,6 +230,20 @@ describe('hoàn tất lượt Khám/Tiêm (#10, UC48; BR-KB-02)', () => {
     expect((await appointmentOf(10)).status).toBe('COMPLETED');
     expect((await getRecord(2002)).data.data).toMatchObject({ locked: true, diagnosis: 'Viêm da dị ứng' });
     expect((await client.get('/api/me/queue', await vet())).data.data.map((v: { visitId: number }) => v.visitId)).not.toContain(2002);
+  });
+
+  it('listener hoàn tất (T57, ST07): chạy đúng một lần SAU khi hoàn tất thành công với lượt đã COMPLETED; hoàn tất bị từ chối thì không chạy; đăng ký lại cùng tên thì thay, không nhân đôi', async () => {
+    const seen: [number, string, number][] = [];
+    registerCompletionListener('test', () => seen.push([-1, 'cũ', 0]));
+    registerCompletionListener('test', (v) => seen.push([v.visitId, v.status, v.branchId]));
+    expect((await failure(complete(2002))).status).toBe(400);
+    expect(seen).toEqual([]);
+    await putRecord(2002, { diagnosis: 'Khỏe' });
+    expect((await complete(2002)).status).toBe(200);
+    expect(seen).toEqual([[2002, 'COMPLETED', 1]]);
+    expect((await failure(complete(2002))).status).toBe(409);
+    expect(seen).toHaveLength(1);
+    registerCompletionListener('test', () => undefined);
   });
 
   it('thú hết bị khóa bởi lượt đã xong: đánh dấu đã mất được (BR-KH-05 chỉ chặn khi còn lượt chưa kết thúc)', async () => {

@@ -3,6 +3,7 @@ import { act, renderHook, waitFor } from '@testing-library/react';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { ApiError, plainMessage, toApiError } from '../api/api-error';
+import { POLL } from '../api/axios';
 import { identityApi } from '../api/identity.api';
 import { visitApi } from '../api/visit.api';
 import type { Appointment } from '../types/appointment';
@@ -145,7 +146,7 @@ describe('hook đọc: chỉ gọi API khi enabled (vai trò không có quyền 
     await waitFor(() => expect(queue.result.current.data).toHaveLength(1));
     await waitFor(() => expect(mine.result.current.data).toHaveLength(1));
     await waitFor(() => expect(one.result.current.data?.visitId).toBe(3));
-    expect(visitApi.listQueue).toHaveBeenCalledWith({ status: 'WAITING' });
+    expect(visitApi.listQueue).toHaveBeenCalledWith({ status: 'WAITING' }, POLL);
     expect(visitApi.getVisit).toHaveBeenCalledWith(3);
   });
 

@@ -3,8 +3,8 @@
 export type Species = 'DOG' | 'CAT' | 'OTHER';
 /** Khám/Tiêm, Thẩm mỹ, Lưu trú (05 §0). */
 export type ServiceGroup = 'MEDICAL' | 'GROOMING' | 'BOARDING';
-/** Chỉ nhóm MEDICAL (BR-SP-06). */
-export type MedicalType = 'EXAM' | 'VACCINE';
+/** Chỉ nhóm MEDICAL (BR-SP-06). `SURGERY`, `INPATIENT` thêm ở T57 (09-tang3-be1-spec §B–C, ASSUMPTION A1; catalog-v1 chưa ghi): chỉ vào Order qua phẫu thuật / nội trú, không đặt lịch được. */
+export type MedicalType = 'EXAM' | 'VACCINE' | 'SURGERY' | 'INPATIENT';
 export type ProductType = 'GOODS' | 'DRUG' | 'VACCINE';
 
 export const SPECIES_LABELS: Record<Species, string> = { DOG: 'Chó', CAT: 'Mèo', OTHER: 'Khác' };
@@ -13,7 +13,7 @@ export const SERVICE_GROUP_LABELS: Record<ServiceGroup, string> = {
   GROOMING: 'Thẩm mỹ',
   BOARDING: 'Lưu trú (loại chuồng)',
 };
-export const MEDICAL_TYPE_LABELS: Record<MedicalType, string> = { EXAM: 'Khám', VACCINE: 'Tiêm' };
+export const MEDICAL_TYPE_LABELS: Record<MedicalType, string> = { EXAM: 'Khám', VACCINE: 'Tiêm', SURGERY: 'Phẫu thuật', INPATIENT: 'Nội trú' };
 export const PRODUCT_TYPE_LABELS: Record<ProductType, string> = { GOODS: 'Hàng hóa', DRUG: 'Thuốc', VACCINE: 'Vaccine' };
 
 export interface ProductCategory {

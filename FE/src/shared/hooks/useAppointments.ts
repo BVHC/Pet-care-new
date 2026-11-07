@@ -1,18 +1,23 @@
 // React Query cho lịch hẹn (UC39, UC40): khóa gốc ['appointments']; lệnh ghi làm mới cả gốc vì đặt / đổi / hủy
 // đổi cùng lúc danh sách, chi tiết, khung giờ trống (quota) và hạn chế đặt online (hủy muộn, BR-LH-09).
 // Dữ liệu công khai cho trang đặt lịch (chi nhánh, dịch vụ) dùng khóa ['public', …].
-import { keepPreviousData, useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+// T57: lịch khám tại nhà cũng là lịch hẹn (hủy / đổi giờ dùng chung endpoint, BR-LH-14), nên mọi lệnh ghi làm mới thêm ['homevisit'] (danh sách của khách và của chi nhánh, chi tiết).
+import { keepPreviousData, useMutation, useQuery, useQueryClient, type QueryClient } from '@tanstack/react-query';
 import { appointmentApi } from '../api/appointment.api';
 import { branchApi } from '../api/branch.api';
 import { catalogApi } from '../api/catalog.api';
 import { toApiError } from '../api/api-error';
 import { retryDelay, shouldRetry } from '../constants/realtime';
 import type { AppointmentQuery } from '../types/appointment';
+import { HOMEVISIT_KEY } from './useHomeVisit';
 
 /** Lỗi 4xx không đổi khi thử lại (lỗi axios đổi sang ApiError để đọc mã HTTP). */
 const retry = { retry: (count: number, error: unknown) => shouldRetry(count, toApiError(error)), retryDelay } as const;
 
 export const APPOINTMENTS_KEY = ['appointments'] as const;
+
+const invalidateAppointments = (queryClient: QueryClient) =>
+  Promise.all([queryClient.invalidateQueries({ queryKey: APPOINTMENTS_KEY }), queryClient.invalidateQueries({ queryKey: HOMEVISIT_KEY })]).then(() => undefined);
 
 /** Chưa đủ chi nhánh, dịch vụ, ngày thì chưa gọi. */
 export const useAvailableSlots = (branchId: number | null, serviceId: number | null, date: string | null) =>
@@ -54,7 +59,7 @@ export const useCustomerBookingRestriction = (customerId: number | null) =>
 /** Hook chỉ gọi API và làm mới cache; màn hình tự báo thành công / lỗi. */
 export function useAppointmentMutation<A, R>(fn: (args: A) => Promise<R>) {
   const queryClient = useQueryClient();
-  return useMutation({ mutationFn: fn, onSuccess: () => queryClient.invalidateQueries({ queryKey: APPOINTMENTS_KEY }) });
+  return useMutation({ mutationFn: fn, onSuccess: () => invalidateAppointments(queryClient) });
 }
 
 /**
@@ -63,7 +68,7 @@ export function useAppointmentMutation<A, R>(fn: (args: A) => Promise<R>) {
  */
 export function useRefreshAppointments() {
   const queryClient = useQueryClient();
-  return () => queryClient.invalidateQueries({ queryKey: APPOINTMENTS_KEY });
+  return () => invalidateAppointments(queryClient);
 }
 
 export const usePublicBranches = () =>

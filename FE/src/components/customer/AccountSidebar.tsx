@@ -4,11 +4,11 @@ import {
   Bell,
   CalendarClock,
   ChevronRight,
-  CreditCard,
   Gift,
   Heart,
   HelpCircle,
   LogOut,
+  MessageSquareWarning,
   Package,
   PawPrint,
   Settings,
@@ -96,7 +96,7 @@ function NavItem({
 
 export interface AccountSidebarProps {
   /** Tab đang active. */
-  active?: 'profile' | 'pets' | 'orders' | 'recommend' | 'favorites' | 'notifications' | 'payment' | 'security' | 'settings' | 'help' | 'membership' | 'vouchers' | 'caregivers' | 'appointments' | 'boarding' | 'packages'
+  active?: 'profile' | 'pets' | 'orders' | 'recommend' | 'favorites' | 'notifications' | 'security' | 'settings' | 'help' | 'membership' | 'vouchers' | 'caregivers' | 'appointments' | 'boarding' | 'packages' | 'complaints'
   /** Số thú cưng (hiện badge). */
   petCount?: number
   /** User display name. */
@@ -204,12 +204,6 @@ export function AccountSidebar({
           href="/notifications"
         />
         <NavItem
-          icon={CreditCard}
-          label="Thanh toán"
-          active={active === 'payment'}
-          href="/payment"
-        />
-        <NavItem
           icon={Shield}
           label="Bảo mật"
           active={active === 'security'}
@@ -232,6 +226,12 @@ export function AccountSidebar({
           label="Người chăm sóc"
           active={active === 'caregivers'}
           href="/caregivers"
+        />
+        <NavItem
+          icon={MessageSquareWarning}
+          label="Khiếu nại"
+          active={active === 'complaints'}
+          href="/complaints"
         />
 
         <div className={styles.navDivider} />

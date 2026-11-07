@@ -3,6 +3,7 @@
 // gọi lượt là VET, CARETAKER; đánh dấu cấp cứu là lễ tân hoặc VET; gán lại lượt đã gọi là BRANCH_MANAGER (SUPER_MANAGER khi chi nhánh hết quản lý ACTIVE).
 // T37: #10 hoàn tất lượt (VET cho Khám/Tiêm, CARETAKER cho Thẩm mỹ), #12 xem bệnh án (VET, CARETAKER), #13 ghi bệnh án, #14 cân nặng, #15 bản bổ sung (VET), #18–20 tiêm chủng
 // (VET được gán lượt; BE có từ T28, 26/10). T46: #16–17 kê đơn / xóa dòng đơn thuốc (VET được gán lượt; BE có từ T38).
+import type { AxiosRequestConfig } from 'axios';
 import { apiClient } from './axios';
 import { appointmentApi } from './appointment.api';
 import type { PageResponse } from '../types';
@@ -31,7 +32,8 @@ import type {
   VisitQueueQuery,
 } from '../types/visit';
 
-const get = async <T>(url: string, params?: object): Promise<T> => (await apiClient.get(url, { params })).data.data;
+/** `config`: truyền `POLL` (axios.ts) cho request theo nhịp refetchInterval. */
+const get = async <T>(url: string, params?: object, config?: AxiosRequestConfig): Promise<T> => (await apiClient.get(url, { params, ...config })).data.data;
 const post = async <T>(url: string, body?: object): Promise<T> => (await apiClient.post(url, body)).data.data;
 const put = async <T>(url: string, body: object): Promise<T> => (await apiClient.put(url, body)).data.data;
 
@@ -45,9 +47,9 @@ export const visitApi = {
    */
   checkIn: (body: CheckInRequest) => post<Visit>('/api/visits', body),
   /** #2: A05–A08; mảng trần theo BR-TN-04 (cấp cứu → lịch hẹn → walk-in). Không gửi `date`/`status`: chỉ lượt WAITING / IN_PROGRESS của mọi ngày. */
-  listQueue: (query: VisitQueueQuery = {}) => get<Visit[]>('/api/visits', query),
+  listQueue: (query: VisitQueueQuery = {}, config?: AxiosRequestConfig) => get<Visit[]>('/api/visits', query, config),
   /** #3: VET, CARETAKER; lượt WAITING / IN_PROGRESS gán cho chính mình. */
-  getMyQueue: () => get<Visit[]>('/api/me/queue'),
+  getMyQueue: (config?: AxiosRequestConfig) => get<Visit[]>('/api/me/queue', undefined, config),
   /** #4: A04–A08 (SUPER_MANAGER mọi chi nhánh); nhân viên xem lượt chi nhánh khác → 403. */
   getVisit: (visitId: number) => get<Visit>(`/api/visits/${visitId}`),
   /** #5 (lễ tân): lượt chưa gọi. Người offline vẫn gán được, `assigneeOffline` là cảnh báo (BR-TN-06). 400 BR-TN-05 khi sai chức vụ / không ACTIVE. */
@@ -110,5 +112,6 @@ export const visitApi = {
    * Khách đã tới để check-in: lịch BOOKED hôm nay trong cửa sổ check-in (appointment-v1 #3 `checkInReady`, BR-TN-02). Lễ tân / BRANCH_MANAGER.
    * `size` mặc định 100 để một trang đủ cho một chi nhánh trong ngày.
    */
-  listArrivals: (query: ArrivalsQuery = {}): Promise<PageResponse<Appointment>> => appointmentApi.list({ size: 100, ...query, checkInReady: true, status: 'BOOKED' }),
+  listArrivals: (query: ArrivalsQuery = {}, config?: AxiosRequestConfig): Promise<PageResponse<Appointment>> =>
+    appointmentApi.list({ size: 100, ...query, checkInReady: true, status: 'BOOKED' }, config),
 };

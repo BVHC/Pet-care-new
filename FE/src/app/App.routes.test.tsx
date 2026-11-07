@@ -160,10 +160,13 @@ describe('route guards', () => {
     expect(await screen.findByRole('tab', { name: 'Phiếu nhập', selected: true })).toBeInTheDocument();
   });
 
-  it('keeps a vet out of the warehouse (UC75 is A05, A06)', async () => {
+  // UC79 (tầng 3): A07 truy vết lô thuốc / vaccine; các tab kho khác (UC73–76) vẫn chỉ của A05, A06.
+  it('lets a vet into the warehouse for the lot-trace tab only (UC79), not the stock tabs (UC75)', async () => {
     await signInAs('doctor@store1.vn');
     open('/admin/warehouse');
-    expect(await forbidden()).toBeInTheDocument();
+    expect(await screen.findByRole('tab', { name: 'Truy vết lô' })).toBeInTheDocument();
+    expect(screen.queryByRole('tab', { name: 'Tồn kho' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('tab', { name: 'Chuyển kho' })).not.toBeInTheDocument();
   });
 
   it('opens the read-only customer lookup for a vet (UC23)', async () => {

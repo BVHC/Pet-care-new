@@ -11,7 +11,7 @@ import type { PriorityClass, Visit, VisitServiceGroup, VisitStatus } from '../..
 import { OPEN_VISIT_STATUSES, VISIT_STATUSES } from '../../types/visit';
 import { addDays } from '../../utils/branch-schedule';
 import { vnDate } from '../../utils/vn-time';
-import { cancelAppointmentByVisit, checkInAppointment, findCheckInRef } from './appointment.mock';
+import { cancelAppointmentByVisit, checkInAppointment, findCheckInRef, isHomeVisitAppointment } from './appointment.mock';
 import { acceptsAfterHours, branchBooking, isOpenAt } from './branch.mock';
 import { catalogServices } from './catalog.mock';
 import { findCustomer, markHasData } from './customer.mock';
@@ -60,6 +60,8 @@ interface VisitRow {
   completedAt: string | null;
   cancelledAt: string | null;
   cancelReason: string | null;
+  /** Khám tại nhà (T57, 09 §A, 05 `visits.is_home_visit`): chỉ lượt do `startDirectVisit` tạo cho lịch tại nhà mới có khóa này; lượt thường không có. */
+  isHomeVisit?: boolean;
 }
 interface State {
   seq: number;
@@ -301,6 +303,8 @@ const checkInVisit: MockHandler = (req) => {
   if (appointmentId !== null) {
     if (!ref) return notFound('lịch hẹn', appointmentId);
     if (ref.branchId !== branchId) return ruleFail('BR-TN-02', 'Lịch hẹn thuộc chi nhánh khác');
+    // T57 (ASSUMPTION, homevisit-v1 im lặng): lịch tại nhà do bác sĩ tự bắt đầu, không qua check-in của lễ tân (BR-KB-07).
+    if (isHomeVisitAppointment(appointmentId)) return ruleFail('BR-KB-07', 'Lịch khám tại nhà do bác sĩ bắt đầu tại địa chỉ của khách, không tiếp nhận qua quầy');
   }
   const serviceId = ref ? ref.serviceId : parsed.serviceId;
   const service = serviceId === null ? undefined : catalogServices().find((x) => x.serviceId === serviceId);
@@ -399,7 +403,7 @@ const listQueue: MockHandler = (req) => {
   const branchId = branchOf(req);
   const rows = load(now)
     .visits.filter((v) => {
-      if (v.branchId !== branchId) return false;
+      if (v.branchId !== branchId || v.isHomeVisit) return false; // lượt tại nhà không vào hàng đợi (BR-KB-07)
       if (status !== undefined ? v.status !== status : date === undefined && !unfinished.includes(v.status)) return false;
       if (day !== undefined) {
         const checkedIn = Date.parse(v.checkedInAt);
@@ -709,6 +713,63 @@ export const completedVisitsOfPet = (petId: number): VisitRow[] => load().visits
 /** Thú còn lượt chưa kết thúc nào khác không (để gỡ `busy: OPEN_VISIT` khi lượt cuối hoàn tất). */
 export const hasOtherOpenVisit = (petId: number, exceptVisitId: number): boolean =>
   load().visits.some((v) => v.petId === petId && v.visitId !== exceptVisitId && (OPEN_VISIT_STATUSES as readonly string[]).includes(v.status));
+
+/** Thú còn lượt chưa kết thúc nào không (BR-TN-01), cho mock khám tại nhà / nội trú (T57). */
+export const petHasOpenVisit = (petId: number): boolean =>
+  load().visits.some((v) => v.petId === petId && (OPEN_VISIT_STATUSES as readonly string[]).includes(v.status));
+
+export type DirectVisit = { ok: true; visit: VisitRow } | { ok: false; reason: 'PET_BUSY' | 'NO_ORDER' };
+
+/**
+ * Cho mock khám tại nhà / nội trú (T57): `VisitApi.startHomeVisit` và `VisitApi.startTreatmentVisit` (09 §A, §C). Lượt `IN_PROGRESS` gán thẳng VET, không qua tiếp nhận, hàng đợi hay
+ * gọi lượt (BR-KB-07, BR-LT-13b); mở Order VISIT với dòng dịch vụ khám `serviceId` (tên và giá chụp lúc này). `PET_BUSY` khi thú còn lượt mở khác (BR-TN-01), `NO_ORDER` khi dịch vụ
+ * không còn kinh doanh (không ghi gì). Không kiểm vai trò, chi nhánh, thú mất: bên gọi đã kiểm.
+ */
+export function startDirectVisit(args: {
+  branchId: number;
+  customerId: number;
+  petId: number;
+  serviceId: number;
+  vetId: number;
+  appointmentId: number | null;
+  isHomeVisit: boolean;
+  now?: number;
+}): DirectVisit {
+  const now = args.now ?? Date.now();
+  if (petHasOpenVisit(args.petId)) return { ok: false, reason: 'PET_BUSY' };
+  const s = load(now);
+  const visitId = s.seq + 1;
+  const order = openOrderForVisit({ visitId, branchId: args.branchId, customerId: args.customerId, serviceId: args.serviceId, assigneeId: args.vetId, actorId: args.vetId, createdAt: isoOf(now) });
+  if (!order) return { ok: false, reason: 'NO_ORDER' };
+  s.seq = visitId;
+  const row: VisitRow = {
+    visitId,
+    code: nextCode(s, now),
+    branchId: args.branchId,
+    customerId: args.customerId,
+    petId: args.petId,
+    appointmentId: args.appointmentId,
+    serviceGroup: 'MEDICAL',
+    status: 'IN_PROGRESS',
+    priorityClass: args.appointmentId === null ? 'WALK_IN' : 'APPOINTMENT',
+    queueSortKeyUs: now * 1000,
+    assigneeId: args.vetId,
+    needsReassign: false,
+    orderId: order.orderId,
+    checkedInBy: args.vetId,
+    checkedInAt: isoOf(now),
+    calledAt: isoOf(now),
+    completedAt: null,
+    cancelledAt: null,
+    cancelReason: null,
+    ...(args.isHomeVisit && { isHomeVisit: true }),
+  };
+  s.visits.push(row);
+  save(s);
+  markHasData(args.customerId);
+  setPetOpenVisit(args.petId, true);
+  return { ok: true, visit: row };
+}
 
 /** visit-v1 #1–9, #11 và GET /me/queue (#10 hoàn tất, bệnh án, tiêm chủng ở visit-clinical.mock.ts, T37). */
 export const visitRoutes: Record<string, MockHandler> = {

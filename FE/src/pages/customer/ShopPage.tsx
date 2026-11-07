@@ -3,6 +3,7 @@ import { Link, useSearchParams } from 'react-router-dom'
 import gsap from 'gsap'
 import { ChevronLeft, ChevronRight, MapPin, PawPrint, RotateCw, Search, SlidersHorizontal, Store, WifiOff, X } from 'lucide-react'
 import { usePublicBranches, usePublicProductCategories, usePublicProducts } from '@/shared/hooks/usePublicSite'
+import { AddToCartButton } from '@/components/customer/shop/AddToCartButton'
 import type { PublicBranch } from '@/shared/types/branch'
 import type { PublicProduct, PublicProductQuery } from '@/shared/types/public-site'
 import { branchNamesByIds, productPriceLabel } from '@/shared/utils/public-format'
@@ -378,15 +379,15 @@ function ShopHero() {
             </span>
           </div>
           <p className="mt-1 text-[13px] sm:text-sm text-[#70584b] font-medium max-w-xl">
-            Thức ăn, phụ kiện và sản phẩm chăm sóc sức khỏe cho thú cưng, bán tại quầy các chi nhánh PetCare.
+            Thức ăn, phụ kiện và sản phẩm chăm sóc sức khỏe cho thú cưng, đặt online giao tận nơi hoặc mua trực tiếp tại quầy các chi nhánh PetCare.
           </p>
         </div>
 
-        {/* Không có đặt mua online (BR-CK-03): dẫn khách tới chi nhánh. */}
+        {/* Đặt online qua giỏ hàng (UC61), hoặc mua trực tiếp tại quầy. */}
         <div className="flex flex-wrap items-center gap-2 sm:gap-2.5 pb-0.5">
           <div className="inline-flex items-center gap-1.5 rounded-full bg-white/90 px-3.5 py-1.5 text-[12.5px] font-bold text-[#3b2a1e] shadow-xs border border-[#ebdccb]/80 backdrop-blur-xs">
             <Store size={14} className="text-accent" aria-hidden />
-            <span>Mua trực tiếp tại quầy</span>
+            <span>Đặt online hoặc mua tại quầy</span>
           </div>
 
           <Link
@@ -635,6 +636,13 @@ function ProductCard({
           </span>
           <span className="text-[11.5px] text-(--color-text-secondary)">/ {p.unit}</span>
         </div>
+
+        {/* Hết hàng ở mọi chi nhánh thì không có nút (xem StockLine). */}
+        {p.inStockBranchIds.length > 0 && (
+          <div className="pt-2.5">
+            <AddToCartButton productId={p.productId} />
+          </div>
+        )}
       </div>
     </article>
   )

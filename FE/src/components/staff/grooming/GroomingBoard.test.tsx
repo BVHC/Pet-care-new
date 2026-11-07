@@ -1,7 +1,7 @@
 import { fireEvent, screen, waitFor, within } from '@testing-library/react';
 import { afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
 import { ApiError } from '../../../shared/api/api-error';
-import { apiClient } from '../../../shared/api/axios';
+import { POLL, apiClient } from '../../../shared/api/axios';
 import { installMockApi } from '../../../shared/api/mock/mock-api';
 import { salesApi } from '../../../shared/api/sales.api';
 import { visitApi } from '../../../shared/api/visit.api';
@@ -125,7 +125,7 @@ describe('grooming board (useKanban trên API visit)', () => {
 
     await waitFor(async () => expect((await visitApi.getVisit(2103)).status).toBe('COMPLETED'));
     expect((await salesApi.getOrder(orderId)).status).toBe('PENDING');
-    await waitFor(() => expect(list).toHaveBeenCalledWith({ serviceGroup: 'GROOMING', status: 'COMPLETED', assigneeId: GROOMER }));
+    await waitFor(() => expect(list).toHaveBeenCalledWith({ serviceGroup: 'GROOMING', status: 'COMPLETED', assigneeId: GROOMER }, POLL));
     const done = await cardIn(/Xong hôm nay/, /Bim/);
     expect(done.getByText(/Xong lúc/)).toBeInTheDocument();
     expect(done.queryByRole('button')).not.toBeInTheDocument();
@@ -199,7 +199,7 @@ describe('grooming board (useKanban trên API visit)', () => {
     expect(mochi.queryByTitle('Kéo sang cột khác')).not.toBeInTheDocument();
     const bim = await cardIn(/Chờ làm/, /Bim/);
     expect(bim.getByRole('button', { name: 'Bắt đầu' })).toBeInTheDocument();
-    expect(branch).toHaveBeenCalledWith({ serviceGroup: 'GROOMING' });
+    expect(branch).toHaveBeenCalledWith({ serviceGroup: 'GROOMING' }, POLL);
     expect(mine).not.toHaveBeenCalled();
   });
 
@@ -210,7 +210,7 @@ describe('grooming board (useKanban trên API visit)', () => {
     await cardIn(/Chờ làm/, /Bim/);
 
     expect(mine).toHaveBeenCalled();
-    await waitFor(() => expect(branch).toHaveBeenCalledWith({ serviceGroup: 'GROOMING', status: 'COMPLETED', assigneeId: GROOMER }));
+    await waitFor(() => expect(branch).toHaveBeenCalledWith({ serviceGroup: 'GROOMING', status: 'COMPLETED', assigneeId: GROOMER }, POLL));
     expect(branch.mock.calls.every(([query]) => query?.status === 'COMPLETED')).toBe(true);
   });
 

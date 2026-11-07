@@ -17,6 +17,7 @@
 //    ép kiểu số / chữ cho nhau, FE không bao giờ gửi vậy.
 //  - `updatedAt` chỉ đổi khi dữ liệu thực sự đổi (BE: @LastModifiedDate chạy khi entity có thay đổi); đổi trạng thái luôn đổi.
 //  - Chuyên mục ẩn vẫn nhận bài mới / bài chuyển vào (BE không chặn).
+import type { ArticleReviewStatus } from '../../types/articlex';
 import type { Article, ArticleCategory, ArticleSummary } from '../../types/content';
 import type { AccountSummary } from '../../types/auth';
 import type { PublicArticle, PublicArticleCard } from '../../types/public-site';
@@ -56,6 +57,36 @@ function save(state: ContentState) {
   } catch {
     // Không ghi được (chế độ riêng tư): thay đổi chỉ mất khi tải lại.
   }
+}
+
+// ─── Bài viết của bác sĩ (UC80, articlex-v1; T57): cùng bảng `articles`, thêm cột author_account_id… ───
+// articlex.mock.ts đọc / ghi bài của bác sĩ thẳng trong state này (cùng dãy id, cùng kiểm slug trùng, cùng bộ lọc `PUBLISHED` ở trang công khai), nên bài đã duyệt hiện
+// cùng bài của SUPER_MANAGER mà không cần nguồn riêng. Kiểu `ArticleStatus` của content-v1 vẫn chỉ biết 3 giá trị; hai giá trị mới (PENDING_REVIEW, REJECTED) chỉ gặp ở bài của bác sĩ.
+
+export { load as loadContent, save as saveContent };
+
+export interface DoctorArticleFields {
+  /** `articles.author_account_id`: tác giả là VET; vắng hoặc null = bài của SUPER_MANAGER (luồng content-v1, không qua duyệt, BR-BV-07). */
+  authorAccountId: number | null;
+  reviewNote: string | null;
+  submittedAt: string | null;
+  reviewedBy: number | null;
+  reviewedAt: string | null;
+}
+export type StoredArticle = Omit<ArticleRecord, 'status'> & { status: ArticleReviewStatus } & Partial<DoctorArticleFields>;
+
+const doctorOwned = (a: ArticleRecord): boolean => (a as StoredArticle).authorAccountId != null;
+/** BR-BV-05: nháp của bác sĩ chỉ tác giả xem / sửa; SUPER_MANAGER không thấy (404). */
+const isVetDraft = (a: ArticleRecord): boolean => doctorOwned(a) && a.status === 'DRAFT';
+const doctorOwnedRefusal = () => ruleFail('BR-BV-05', 'Bài viết của bác sĩ do tác giả soạn, SUPER_MANAGER chỉ duyệt, từ chối hoặc ẩn');
+
+let reviewQueueHook: (() => void) | null = null;
+/**
+ * articlex.mock.ts đăng ký hàm tạo bài mẫu của bác sĩ lúc nạp (KHÔNG ghi gì lúc nạp). `GET /articles?status=PENDING_REVIEW|REJECTED` (hai giá trị mới của content-v1 dành cho hàng
+ * chờ duyệt) gọi hàm này trước khi đọc, nên màn duyệt có dữ liệu mẫu mà các truy vấn cũ (không dùng hai giá trị này) không bao giờ thấy bài mẫu mới.
+ */
+export function registerReviewQueueHook(hook: () => void) {
+  reviewQueueHook = hook;
 }
 
 // ─── Công khai (T46) ───
@@ -117,7 +148,8 @@ const SLUG = /^[a-z0-9]+(?:-[a-z0-9]+)*$/;
 const SLUG_MESSAGE = 'Đường dẫn chỉ gồm chữ thường không dấu, số và dấu gạch ngang';
 /** Ảnh bìa: `^https://\S+$` (chuỗi rỗng chỉ hợp lệ ở PATCH, nơi nó có nghĩa là xóa). */
 const COVER_URL = /^https:\/\/\S+$/;
-const STATUSES: readonly string[] = ['DRAFT', 'PUBLISHED', 'HIDDEN'];
+/** Ba giá trị của content-v1 cộng hai giá trị của hàng chờ duyệt bài bác sĩ (articlex-v1: `GET /articles?status=PENDING_REVIEW`). */
+const STATUSES: readonly string[] = ['DRAFT', 'PUBLISHED', 'HIDDEN', 'PENDING_REVIEW', 'REJECTED'];
 
 const malformed = () => fail('MALFORMED_REQUEST', 'Nội dung request không đúng định dạng JSON hoặc sai kiểu dữ liệu', 400);
 
@@ -175,7 +207,7 @@ const updateArticleChecks = (b: Body): Check[] => [
 ];
 
 /** `ArticleService.cleanContent`: NFC + strip, lọc HTML; `null` là trống sau khi lọc (BR-BV-01). */
-function cleanContent(html: string): string | null {
+export function cleanContent(html: string): string | null {
   const cleaned = cleanArticleHtml(norm(html));
   return hasArticleText(cleaned) ? cleaned : null;
 }
@@ -309,10 +341,12 @@ const listArticles: MockHandler = ({ query, account }) => {
   if (bad) return bad;
   const denial = guard(account);
   if (denial) return denial;
+  if (status === 'PENDING_REVIEW' || status === 'REJECTED') reviewQueueHook?.();
   const q = query.q ? norm(query.q).toLowerCase() : '';
   const found = load()
     .articles.filter(
       (a) =>
+        !isVetDraft(a) &&
         (!status || a.status === status) &&
         (query.categoryId === undefined || a.categoryId === Number(query.categoryId)) &&
         (!q || a.title.toLowerCase().includes(q)),
@@ -327,7 +361,7 @@ const getArticle: MockHandler = ({ params, account }) => {
   const denial = guard(account);
   if (denial) return denial;
   const article = findArticle(load(), params);
-  return article ? ok(articleOf(article)) : notFound('bài viết', params.articleId);
+  return article && !isVetDraft(article) ? ok(articleOf(article)) : notFound('bài viết', params.articleId);
 };
 
 /** Bài mới luôn DRAFT, chưa có `firstPublishedAt`. Ảnh bìa gửi rỗng là sai (chỉ PATCH mới dùng "" để xóa). */
@@ -380,7 +414,8 @@ const updateArticle: MockHandler = ({ body, params, account }) => {
   const state = load();
   if (has(b.categoryId) && !state.categories.some((c) => c.categoryId === b.categoryId)) return notFound('chuyên mục', b.categoryId as number);
   const article = findArticle(state, params);
-  if (!article) return notFound('bài viết', params.articleId);
+  if (!article || isVetDraft(article)) return notFound('bài viết', params.articleId);
+  if (doctorOwned(article)) return doctorOwnedRefusal();
   if (has(b.slug) && b.slug !== article.slug) {
     if (article.firstPublishedAt) return ruleFail('BR-BV-01', 'Không đổi được đường dẫn sau lần xuất bản đầu tiên');
     if (state.articles.some((a) => a.slug === b.slug)) return ruleFail('BR-BV-01', 'Đường dẫn bài viết đã tồn tại');
@@ -411,8 +446,10 @@ const transition =
     if (denial) return denial;
     const state = load();
     const article = findArticle(state, params);
-    if (!article) return notFound('bài viết', params.articleId);
-    const allowed = to === 'PUBLISHED' ? article.status !== 'PUBLISHED' : article.status === 'PUBLISHED';
+    if (!article || isVetDraft(article)) return notFound('bài viết', params.articleId);
+    // Bài của bác sĩ chờ duyệt / bị từ chối đi qua approve / reject (articlex-v1), nên "xuất bản" ở đây chỉ mở lại bài đang ẩn.
+    const allowed =
+      to === 'PUBLISHED' ? (doctorOwned(article) ? (article.status as string) === 'HIDDEN' : article.status !== 'PUBLISHED') : article.status === 'PUBLISHED';
     if (!allowed) return fail('INVALID_STATE_TRANSITION', `Không thể chuyển trạng thái Article từ ${article.status} sang ${to}`, 409);
     const now = nowIso();
     article.status = to;
@@ -430,7 +467,8 @@ const deleteArticle: MockHandler = ({ params, account }) => {
   if (denial) return denial;
   const state = load();
   const article = findArticle(state, params);
-  if (!article) return notFound('bài viết', params.articleId);
+  if (!article || isVetDraft(article)) return notFound('bài viết', params.articleId);
+  if (doctorOwned(article)) return doctorOwnedRefusal();
   if (article.firstPublishedAt) return ruleFail('BR-BV-02', 'Bài viết đã từng xuất bản, chỉ ẩn được');
   state.articles = state.articles.filter((a) => a !== article);
   save(state);

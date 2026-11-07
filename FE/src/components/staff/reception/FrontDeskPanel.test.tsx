@@ -7,6 +7,7 @@ import { identityApi } from '../../../shared/api/identity.api';
 import { setStaffOnline } from '../../../shared/api/mock/identity-admin.mock';
 import { installMockApi } from '../../../shared/api/mock/mock-api';
 import { salesApi } from '../../../shared/api/sales.api';
+import { surgeryApi } from '../../../shared/api/surgery.api';
 import { visitApi } from '../../../shared/api/visit.api';
 import { VISIT_REFRESH_MS } from '../../../shared/hooks/useVisits';
 import { useSession } from '../../../shared/stores/session.store';
@@ -221,6 +222,7 @@ describe('FrontDeskPanel — tab Hàng chờ (UC45; BR-TN-04)', () => {
     vi.setSystemTime(new Date(at('10:40')));
     vi.spyOn(visitApi, 'listArrivals').mockResolvedValue(pageOf([]));
     vi.spyOn(salesApi, 'listOrders').mockResolvedValue(pageOf([]));
+    vi.spyOn(surgeryApi, 'list').mockResolvedValue(pageOf([])); // tab Phẫu thuật của lễ tân; phiên giả không qua được mock thật (401 sẽ đăng xuất)
     vi.spyOn(identityApi, 'listAssignableStaff').mockResolvedValue([]);
     const list = vi
       .spyOn(visitApi, 'listQueue')

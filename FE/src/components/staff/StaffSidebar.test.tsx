@@ -51,9 +51,11 @@ describe('staff sidebar', () => {
     renderSidebar('VET', { path: '/staff/doctor' });
 
     const admin = within(nav('Quản trị'));
-    expect(admin.getAllByRole('link')).toHaveLength(2);
+    // Tầng 3 (T57): thêm Nội trú, Lịch làm việc, Bài viết của tôi, Kho hàng (tab Truy vết lô).
+    expect(admin.getAllByRole('link')).toHaveLength(6);
     expect(admin.getByRole('link', { name: 'Lưu trú' })).toHaveAttribute('href', '/admin/boarding');
     expect(admin.getByRole('link', { name: 'Tra cứu khách & thú' })).toHaveAttribute('href', '/admin/customers');
+    expect(admin.getByRole('link', { name: 'Kho hàng' })).toHaveAttribute('href', '/admin/warehouse');
     expect(screen.getByRole('heading', { name: 'Cả phòng khám hôm nay' })).toBeInTheDocument();
   });
 

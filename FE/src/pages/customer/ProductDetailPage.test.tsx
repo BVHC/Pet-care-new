@@ -1,18 +1,23 @@
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
-import { render, screen, within } from '@testing-library/react';
+import { render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { MemoryRouter, Route, Routes } from 'react-router-dom';
-import { beforeAll, describe, expect, it, vi } from 'vitest';
+import { beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
+import { loginAs } from '../../components/customer/shop/testing';
 import { ApiError } from '../../shared/api/api-error';
 import { apiClient } from '../../shared/api/axios';
 import { catalogApi } from '../../shared/api/catalog.api';
 import { installMockApi } from '../../shared/api/mock/mock-api';
+import { shopApi } from '../../shared/api/shop.api';
+import { useSession } from '../../shared/stores/session.store';
 import { ProductDetailPage } from './ProductDetailPage';
 
-// UC16, BR-CK-01/03: chi tiết sản phẩm công khai. Seed: id 1 Hạt Royal Canin (còn hàng ở PetCare Cầu Giấy), id 4 Vitamin tổng hợp
-// (hết hàng mọi chi nhánh), id 3 Amoxicillin là thuốc kê đơn nên 404 như id lạ. Lỗi giả dùng 403 (hook công khai không thử lại 4xx).
+// UC16, BR-CK-01/03 + UC61: chi tiết sản phẩm công khai; khách đặt số lượng rồi thêm vào giỏ (khách vãng lai bị chuyển sang đăng nhập, nhân viên không thấy).
+// Seed: id 1 Hạt Royal Canin (còn hàng ở PetCare Cầu Giấy), id 4 Vitamin tổng hợp (hết hàng mọi chi nhánh), id 5 Vaccine Dại (không bán online),
+// id 3 Amoxicillin là thuốc kê đơn nên 404 như id lạ. Lỗi giả dùng 403 (hook công khai không thử lại 4xx).
 
 beforeAll(() => installMockApi(apiClient));
+beforeEach(() => useSession.getState().clear());
 
 function renderPage(id: string) {
   const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
@@ -21,6 +26,7 @@ function renderPage(id: string) {
       <MemoryRouter initialEntries={[`/shop/${id}`]}>
         <Routes>
           <Route path="/shop/:id" element={<ProductDetailPage />} />
+          <Route path="/auth/login" element={<p>Trang đăng nhập</p>} />
         </Routes>
       </MemoryRouter>
     </QueryClientProvider>,
@@ -41,18 +47,65 @@ describe('ProductDetailPage (UC16)', () => {
 
     const stock = screen.getByRole('list', { name: 'Chi nhánh còn hàng' });
     expect(within(stock).getByRole('link', { name: 'PetCare Cầu Giấy' })).toHaveAttribute('href', '/branches');
-    expect(main).toHaveTextContent(/bán tại quầy/i);
-    expect(main).toHaveTextContent(/liên hệ chi nhánh/i);
+    expect(main).toHaveTextContent(/mua trực tiếp tại quầy/i);
 
     const crumbs = screen.getByRole('navigation', { name: 'Đường dẫn' });
     expect(within(crumbs).getByRole('link', { name: 'Danh mục sản phẩm' })).toHaveAttribute('href', '/shop');
   });
 
-  it('không có giỏ hàng, nút mua, đánh giá, ưu đãi vận chuyển (BR-CK-03), không số lượng tồn', async () => {
+  it('không có đánh giá, đổi trả, "mua ngay", không lộ số lượng tồn (BR-CK-03)', async () => {
     renderPage('1');
     await screen.findByRole('heading', { level: 1, name: 'Hạt Royal Canin Mini Adult 2kg' });
-    expect(screen.queryByRole('button')).not.toBeInTheDocument();
-    expect(document.body).not.toHaveTextContent(/giỏ hàng|Mua ngay|đánh giá|vận chuyển|Đổi trả|có sẵn|Số lượng/i);
+    expect(document.body).not.toHaveTextContent(/Mua ngay|đánh giá|Đổi trả|có sẵn|còn \d/i);
+  });
+
+  it('khách vãng lai: có ô số lượng và "Thêm vào giỏ"; bấm thì chuyển sang đăng nhập, giỏ không bị ghi', async () => {
+    const setItem = vi.spyOn(shopApi, 'setCartItem');
+    const user = renderPage('1');
+    await screen.findByRole('heading', { level: 1, name: 'Hạt Royal Canin Mini Adult 2kg' });
+    expect(screen.getByLabelText('Số lượng đặt')).toHaveValue(1);
+    await user.click(screen.getByRole('button', { name: 'Thêm vào giỏ' }));
+    expect(await screen.findByText('Trang đăng nhập')).toBeInTheDocument();
+    expect(setItem).not.toHaveBeenCalled();
+  });
+
+  it('khách hàng: đặt số lượng 3 rồi thêm vào giỏ, giỏ trên BE cộng dồn vào dòng có sẵn (1 + 3)', async () => {
+    await loginAs();
+    const user = renderPage('1');
+    await screen.findByRole('heading', { level: 1, name: 'Hạt Royal Canin Mini Adult 2kg' });
+    const box = screen.getByLabelText('Số lượng đặt');
+    await user.clear(box);
+    await user.type(box, '3');
+    await user.click(screen.getByRole('button', { name: 'Thêm vào giỏ' }));
+    await waitFor(async () => expect((await shopApi.getCart()).items.find((i) => i.productId === 1)?.quantity).toBe(4));
+  });
+
+  it('số lượng đặt bị kẹp trong 1–99', async () => {
+    const user = renderPage('1');
+    await screen.findByRole('heading', { level: 1, name: 'Hạt Royal Canin Mini Adult 2kg' });
+    const box = screen.getByLabelText('Số lượng đặt');
+    await user.clear(box);
+    await user.type(box, '500');
+    expect(box).toHaveValue(99);
+  });
+
+  it('vaccine không bán online (400 BR-BH-07 của BE): trang không hỏng và giỏ không có vaccine', async () => {
+    await loginAs();
+    const spy = vi.spyOn(shopApi, 'setCartItem');
+    const user = renderPage('5');
+    await screen.findByRole('heading', { level: 1, name: 'Vaccine Dại Rabisin' });
+    await user.click(screen.getByRole('button', { name: 'Thêm vào giỏ' }));
+    await waitFor(() => expect(spy).toHaveBeenCalledWith(5, { quantity: 1 }));
+    await waitFor(() => expect(screen.getByRole('button', { name: 'Thêm vào giỏ' })).toBeEnabled());
+    expect((await shopApi.getCart()).items.map((i) => i.productId)).toEqual([1, 2]);
+  });
+
+  it('nhân viên (lễ tân) không thấy ô số lượng lẫn nút thêm vào giỏ', async () => {
+    await loginAs('reception@store1.vn');
+    renderPage('1');
+    await screen.findByRole('heading', { level: 1, name: 'Hạt Royal Canin Mini Adult 2kg' });
+    expect(screen.queryByRole('button', { name: 'Thêm vào giỏ' })).not.toBeInTheDocument();
+    expect(screen.queryByLabelText('Số lượng đặt')).not.toBeInTheDocument();
   });
 
   it('mô tả hiện khi có, ảnh thật hiện khi có imageUrl', async () => {
@@ -83,6 +136,7 @@ describe('ProductDetailPage (UC16)', () => {
     expect(await screen.findByRole('heading', { level: 1, name: 'Vitamin tổng hợp PetCare' })).toBeInTheDocument();
     expect(screen.getByText('Tạm hết hàng tại các chi nhánh')).toBeInTheDocument();
     expect(screen.queryByRole('list', { name: 'Chi nhánh còn hàng' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Thêm vào giỏ' })).not.toBeInTheDocument();
   });
 
   it.each([

@@ -1,10 +1,12 @@
 // Quản lý chuyên mục và bài viết (UC81) — theo docs/api/content-v1.md #3–13, chỉ SUPER_MANAGER. Trường `?` có thể vắng hoặc null.
 // Bản công khai (PublicArticle*) ở ./public-site.
 
-export type ArticleStatus = 'DRAFT' | 'PUBLISHED' | 'HIDDEN';
+export type ArticleStatus = 'DRAFT' | 'PENDING_REVIEW' | 'REJECTED' | 'PUBLISHED' | 'HIDDEN';
 
 export const ARTICLE_STATUS_LABELS: Record<ArticleStatus, string> = {
   DRAFT: 'Nháp',
+  PENDING_REVIEW: 'Chờ duyệt',
+  REJECTED: 'Bị từ chối',
   PUBLISHED: 'Đang đăng',
   HIDDEN: 'Đã ẩn',
 };

@@ -1,6 +1,7 @@
 import type { AxiosInstance } from 'axios';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { ACCOUNTS, authAs, failure, makeClient, pinClock } from '../../../test/boarding-harness';
+import { applyLifecycle } from './branch.mock';
 import { recordDoseForMock } from './visit-clinical.mock';
 
 // Tác vụ hệ thống chạy lười (ST05 NO_SHOW, ST15 OVERDUE, hủy do phòng khám) và liên thông với các mock khác (chi nhánh, thú cưng, thông báo).
@@ -204,6 +205,29 @@ describe('chi nhánh đổi lịch: đặt chỗ lưu trú BOOKED bị ảnh hư
     at('2026-10-30T19:00:00+07:00');
     const impact = await client.post('/api/branches/1/holidays/impact', { holidayDate: '2026-11-01' }, await manager());
     expect(impact.data.data.boardingBookings).toEqual([]);
+  });
+});
+
+describe('chi nhánh tạm ngừng / đóng cửa: hủy hàng loạt đặt chỗ lưu trú BOOKED (UC13, BR-CN-09, A14)', () => {
+  const SUSPENDED = 'Chi nhánh tạm ngừng hoạt động nên đặt chỗ lưu trú bị hủy';
+  const CLOSED = 'Chi nhánh đã đóng cửa nên đặt chỗ lưu trú bị hủy';
+
+  it('tạm ngừng có chọn hủy: mọi đặt chỗ BOOKED bị phòng khám hủy với câu lý do tạm ngừng (không phải câu giờ mở cửa), khách được báo, đặt chỗ đang lưu trú giữ nguyên', async () => {
+    await get(1);
+    const before = (await notifications(ACCOUNTS.customer)).length;
+    applyLifecycle(1, { to: 'SUSPENDED', reason: 'Sửa chữa', expectedResumeOn: null }, true);
+    for (const id of [1, 4]) expect(await get(id)).toMatchObject({ status: 'CANCELLED', cancelSource: 'CLINIC', lateCancel: false, cancelReason: SUSPENDED });
+    expect((await get(2)).status).toBe('CHECKED_IN');
+    const mine = await notifications(ACCOUNTS.customer);
+    expect(mine.length).toBeGreaterThan(before);
+    expect(mine[0]).toMatchObject({ type: 'BOARDING_CANCELLED_BY_CLINIC' });
+    expect(mine[0].body).toContain(`Lý do: ${SUSPENDED}`);
+  });
+
+  it('đóng cửa có chọn hủy: câu lý do đóng cửa', async () => {
+    await get(1);
+    applyLifecycle(1, { to: 'CLOSED', reason: 'Dừng hoạt động' }, true);
+    for (const id of [1, 4]) expect(await get(id)).toMatchObject({ status: 'CANCELLED', cancelSource: 'CLINIC', cancelReason: CLOSED });
   });
 });
 

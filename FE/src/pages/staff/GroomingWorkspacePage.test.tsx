@@ -1,6 +1,6 @@
 import { screen, waitFor, within } from '@testing-library/react';
 import { afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
-import { apiClient } from '../../shared/api/axios';
+import { POLL, apiClient } from '../../shared/api/axios';
 import { installMockApi } from '../../shared/api/mock/mock-api';
 import { visitApi } from '../../shared/api/visit.api';
 import { useGroomingStore } from '../../shared/stores/grooming.store';
@@ -23,7 +23,7 @@ describe('grooming desk (khu grooming trên API visit)', () => {
     expect(await screen.findByText(/1 bé đang chờ hoặc đang làm/)).toBeInTheDocument();
     expect(await within(screen.getByRole('list', { name: 'Chờ làm' })).findByRole('article', { name: /Bim/ })).toBeInTheDocument();
     expect(screen.getByRole('radio', { name: 'Của tôi' })).toBeChecked();
-    await waitFor(() => expect(branch).toHaveBeenCalledWith({ serviceGroup: 'GROOMING', status: 'COMPLETED', assigneeId: 6 }));
+    await waitFor(() => expect(branch).toHaveBeenCalledWith({ serviceGroup: 'GROOMING', status: 'COMPLETED', assigneeId: 6 }, POLL));
     expect(branch.mock.calls.every(([query]) => query?.status === 'COMPLETED')).toBe(true);
     expect(arrivals).not.toHaveBeenCalled();
   });

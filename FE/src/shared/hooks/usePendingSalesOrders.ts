@@ -1,9 +1,11 @@
 // "Chờ thu" của quầy: Order PENDING của chi nhánh (sales-v1 #2) thay cho danh sách chờ thu của clinic-db (T35).
 // Không còn kênh storage của clinic-db báo Order mới chốt, nên hỏi lại định kỳ để lễ tân thấy Order mới không cần tải lại trang.
 import { useQuery } from '@tanstack/react-query';
+import { POLL } from '../api/axios';
 import { salesApi } from '../api/sales.api';
 import { retryDelay, shouldRetry } from '../constants/realtime';
 import { useAccount } from '../stores/session.store';
+import { useAccessValid } from './useAccessValid';
 import type { Role } from '../types/auth';
 import type { OrderQuery, OrderSummary } from '../types/sales';
 import type { PageResponse } from '../types';
@@ -18,11 +20,12 @@ const contentOf = (page: PageResponse<OrderSummary>) => page.content;
 
 export const usePendingSalesOrders = (enabled = true) => {
   const role = useAccount()?.role;
+  const open = useAccessValid();
   return useQuery({
     queryKey: ['sales', 'orders', PENDING_QUERY],
-    queryFn: () => salesApi.listOrders(PENDING_QUERY),
+    queryFn: () => salesApi.listOrders(PENDING_QUERY, POLL),
     select: contentOf,
-    enabled: enabled && role != null && ORDER_READERS.includes(role),
+    enabled: enabled && open && role != null && ORDER_READERS.includes(role),
     refetchInterval: PENDING_REFRESH_MS,
     refetchIntervalInBackground: false,
     retry: shouldRetry,

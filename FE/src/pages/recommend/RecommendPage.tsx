@@ -1,383 +1,230 @@
-import { useEffect, useMemo, useRef, useState } from 'react'
+import { useState } from 'react'
 import { Link } from 'react-router-dom'
-import { toast } from 'sonner'
-import {
-  ChevronRight,
-  Cat,  Dog,  Heart,  Search,
-  Plus,
-
-  Star,
-} from 'lucide-react'
-import { MOCK_PETS, getRecommendationCount, getRecommendations, type Pet, type RecProduct } from './recommend.mock'
-import { useCartStore } from '../../shared/stores/cart.store'
-import { CATEGORY_LABELS } from '../customer/shop.mock'
+import { ChevronRight, Heart, PawPrint, Plus, Sparkles } from 'lucide-react'
+import { PetAvatar } from '../../components/customer/pets/pet-presentation'
+import { useMyPets } from '../../domains/pets/hooks/useCustomerPet'
+import { SPECIES_LABEL } from '../../domains/pets/labels'
+import type { PetResponse } from '../../domains/pets/types'
+import { plainMessage, toApiError } from '../../shared/api/api-error'
+import { useRecommendations } from '../../shared/hooks/useAi'
+import { useAccount } from '../../shared/stores/session.store'
+import type { RecoGroup, RecommendedItem } from '../../shared/types/ai'
+import { vnDate } from '../../shared/utils/vn-time'
 import styles from './RecommendPage.module.css'
 
-const vnd = new Intl.NumberFormat('vi-VN', {
-  style: 'currency',
-  currency: 'VND',
-  maximumFractionDigits: 0,
-})
+// UC92: gợi ý dịch vụ / sản phẩm theo thú (GET /me/ai/pets/{petId}/recommendations). Chỉ khách hàng; lý do sinh từ mẫu, không qua LLM (BR-AI-22).
 
-const soldFmt = new Intl.NumberFormat('vi-VN')
+const vnd = new Intl.NumberFormat('vi-VN')
+const GROUPS: { key: RecoGroup; title: string; cta: string; to: (i: RecommendedItem) => string }[] = [
+  { key: 'GROOMING', title: 'Dịch vụ thẩm mỹ', cta: 'Đặt lịch', to: () => '/booking' },
+  { key: 'BOARDING', title: 'Lưu trú', cta: 'Xem lưu trú', to: () => '/hotel' },
+  { key: 'PRODUCT', title: 'Sản phẩm', cta: 'Xem sản phẩm', to: (i) => `/shop/${i.itemId}` },
+]
+const BTN = 'mt-4 inline-flex rounded-full bg-accent px-6 py-2.5 text-[13px] font-bold text-white transition-colors hover:bg-(--color-accent-hover)'
 
-/* ================================================================
-   Formatter helpers.
-   ================================================================ */
+/** Giá theo BR-CK-02: "Từ X đ"; loại chuồng thêm đơn vị `/ đêm`. */
+const priceLabel = (i: RecommendedItem) => `${i.priceIsFrom ? 'Từ ' : ''}${vnd.format(i.price)} đ${i.priceUnit ? ` / ${i.priceUnit}` : ''}`
 
-function isPetActive(pet: Pet, selectedId: number | null): boolean {
-  return pet.id === selectedId
+/** Tuổi từ ngày sinh: dưới 2 năm tính theo tháng. */
+function ageLabel(pet: PetResponse): string | null {
+  if (!pet.birthDate) return null
+  const [by, bm, bd] = pet.birthDate.split('-').map(Number)
+  const [ty, tm, td] = vnDate().split('-').map(Number)
+  const months = (ty - by) * 12 + (tm - bm) - (td < bd ? 1 : 0)
+  if (months < 0) return null
+  const text = months < 24 ? `${months} tháng` : `${Math.floor(months / 12)} tuổi`
+  return pet.birthDateEstimated ? `khoảng ${text}` : text
 }
 
-/* ================================================================
-   Pet avatar in sidebar.
-   ================================================================ */
-
-function SidebarPetItem({
-  pet,
-  active,
-  onClick,
-}: {
-  pet: Pet
-  active: boolean
-  onClick: () => void
-}) {
+function EmptyBox({ title, children }: { title: string; children: React.ReactNode }) {
   return (
-    <button
-      onClick={onClick}
-      className={`${styles.petItem} ${active ? styles.petItemActive : ''}`}
-    >
-      <img src={pet.image} alt={pet.name} className={styles.petAvatar} loading="lazy" />
-      <div className={styles.petInfo}>
-        <div className={styles.petName}>{pet.name}</div>
-        <div className={styles.petMeta}>
-          {pet.breed} · {pet.age}
-        </div>
-      </div>
-      <span className={styles.petDot} aria-hidden />
-    </button>
+    <div className={styles.empty}>
+      <Sparkles size={40} strokeWidth={1.5} className="text-(--color-border-strong)" aria-hidden />
+      <h2 className={styles.emptyTitle}>{title}</h2>
+      <div className={styles.emptyDesc}>{children}</div>
+    </div>
   )
 }
 
-/* ================================================================
-   Featured pet card — hiện ở đầu main.
-   ================================================================ */
-
-function FeaturedPet({ pet }: { pet: Pet }) {
-  const count = getRecommendationCount(pet.id)
+function ItemCard({ item, cta, to }: { item: RecommendedItem; cta: string; to: string }) {
   return (
-    <div className={styles.featured}>
-      <div className={styles.featuredInner}>
-        <img src={pet.image} alt={pet.name} className={styles.featuredAvatar} />
-        <div>
-          <div className={styles.featuredName}>{pet.name}</div>
-          <div className={styles.featuredBreed}>
-            {pet.breed} · {pet.age} · {pet.weight}
+    <li className={styles.card}>
+      <div className={styles.cardMedia}>
+        {item.imageUrl ? (
+          <img src={item.imageUrl} alt="" loading="lazy" />
+        ) : (
+          <div aria-hidden className="flex h-full items-center justify-center bg-(--color-surface-2) text-(--text-tertiary)">
+            <PawPrint className="h-10 w-10" />
           </div>
-          <div className={styles.featuredTags}>
-            {pet.type === 'dog' ? (
-              <span className={styles.featuredTag}>
-                <Dog size={12} />
-                Chó
-              </span>
-            ) : (
-              <span className={styles.featuredTag}>
-                <Cat size={12} />
-                Mèo
-              </span>
-            )}
-            <span className={styles.featuredTag}>{pet.weight}</span>
-            {pet.healthNote && (
-              <span className={styles.featuredTag}>{pet.healthNote}</span>
-            )}
+        )}
+        <span className={styles.cardBadge}>Phù hợp {Math.round(item.score)}%</span>
+      </div>
+      <div className={styles.cardBody}>
+        <h3 className={styles.cardName}>{item.name}</h3>
+        <ul className="mb-2 list-disc space-y-0.5 pl-4 text-[12px] text-(--color-text-secondary)">
+          {item.reasons.map((r) => (
+            <li key={r}>{r}</li>
+          ))}
+        </ul>
+        <div className={styles.cardFooter}>
+          <span className={styles.cardPrice}>{priceLabel(item)}</span>
+        </div>
+        <Link to={to} className="mt-2 text-[12.5px] font-bold text-accent underline-offset-4 hover:underline">
+          {cta} →
+        </Link>
+      </div>
+    </li>
+  )
+}
+
+function Recommendations({ pet }: { pet: PetResponse }) {
+  const q = useRecommendations(pet.petId)
+  if (q.isError) {
+    return (
+      <EmptyBox title="Chưa tải được gợi ý">
+        <p role="alert">{plainMessage(toApiError(q.error))}</p>
+        <button type="button" className={BTN} onClick={() => void q.refetch()}>
+          Thử lại
+        </button>
+      </EmptyBox>
+    )
+  }
+  if (!q.data) return <p role="status" className="py-10 text-center text-(--color-text-secondary)">Đang tính gợi ý cho {pet.name}…</p>
+  if (q.data.items.length === 0) return <EmptyBox title={`Chưa có gợi ý phù hợp cho ${pet.name}`}>Khi có thêm dịch vụ và sản phẩm phù hợp, gợi ý sẽ hiện ở đây.</EmptyBox>
+  return (
+    <div className="space-y-8">
+      {GROUPS.map((g) => {
+        const items = q.data.items.filter((i) => i.group === g.key)
+        return (
+          items.length > 0 && (
+            <section key={g.key} aria-labelledby={`reco-${g.key}`}>
+              <h2 id={`reco-${g.key}`} className="mb-3 font-friendly text-[18px] font-extrabold text-(--color-text-primary)">
+                {g.title}
+              </h2>
+              <ul className={styles.grid}>
+                {items.map((i) => (
+                  <ItemCard key={`${i.itemType}-${i.itemId}`} item={i} cta={g.cta} to={g.to(i)} />
+                ))}
+              </ul>
+            </section>
+          )
+        )
+      })}
+    </div>
+  )
+}
+
+function CustomerArea() {
+  const petsQuery = useMyPets()
+  // Khách chờ liên kết hồ sơ (BR-TK-19) nhận lỗi 400 ở /me/pets: coi như chưa có thú, như mock AI.
+  const pets = (petsQuery.data ?? []).filter((p) => !p.deceasedOn)
+  const [selectedId, setSelectedId] = useState<number | null>(null)
+  const selected = pets.find((p) => p.petId === selectedId) ?? pets[0] ?? null
+
+  if (petsQuery.isLoading) return <p role="status" className="py-20 text-center text-(--color-text-secondary)">Đang tải thú cưng…</p>
+  if (!selected) {
+    return (
+      <div className="mx-auto max-w-[1280px] px-5 sm:px-8">
+        <EmptyBox title="Bạn chưa có thú cưng nào">
+          <p>Thêm thú cưng của bạn để nhận gợi ý dịch vụ và sản phẩm phù hợp với loài, tuổi và cân nặng.</p>
+          <Link to="/pets" className={BTN}>
+            Thêm thú cưng
+          </Link>
+        </EmptyBox>
+      </div>
+    )
+  }
+  const age = ageLabel(selected)
+  return (
+    <div className={`${styles.page} mx-auto max-w-[1280px] px-0`}>
+      <aside className={styles.sidebar} aria-label="Thú cưng của bạn">
+        <div className={styles.sidebarHead}>
+          <span className={styles.sidebarTitle}>
+            <Heart size={14} aria-hidden />
+            Thú cưng của bạn
+          </span>
+          <Link to="/pets" className="text-[11.5px] font-semibold text-accent underline-offset-4 hover:underline">
+            Quản lý
+          </Link>
+        </div>
+        <div className={styles.sidebarList}>
+          {pets.map((pet) => (
+            <button
+              key={pet.petId}
+              type="button"
+              aria-pressed={pet.petId === selected.petId}
+              onClick={() => setSelectedId(pet.petId)}
+              className={`${styles.petItem} ${pet.petId === selected.petId ? styles.petItemActive : ''}`}
+            >
+              <PetAvatar pet={pet} />
+              <div className={styles.petInfo}>
+                <div className={styles.petName}>{pet.name}</div>
+                <div className={styles.petMeta}>{[SPECIES_LABEL[pet.species], pet.breed].filter(Boolean).join(' · ')}</div>
+              </div>
+              <span className={styles.petDot} aria-hidden />
+            </button>
+          ))}
+          <Link to="/pets" className={styles.addPetBtn}>
+            <Plus size={15} aria-hidden />
+            Thêm thú cưng
+          </Link>
+        </div>
+      </aside>
+
+      <div className={styles.featured}>
+        <div className={styles.featuredInner}>
+          <PetAvatar pet={selected} size="lg" />
+          <div>
+            <h1 className={styles.featuredName}>Gợi ý cho {selected.name}</h1>
+            <div className={styles.featuredTags}>
+              <span className={styles.featuredTag}>{SPECIES_LABEL[selected.species]}</span>
+              {selected.breed && <span className={styles.featuredTag}>{selected.breed}</span>}
+              {age && <span className={styles.featuredTag}>{age}</span>}
+              {selected.currentWeightKg != null && <span className={styles.featuredTag}>{selected.currentWeightKg} kg</span>}
+            </div>
           </div>
         </div>
-        <div className={styles.featuredMeta}>
-          <div className={styles.featuredMetaLabel}>Gợi ý</div>
-          <div className={styles.featuredMetaCount}>{count}</div>
-        </div>
+      </div>
+
+      <div className={styles.main}>
+        <Recommendations key={selected.petId} pet={selected} />
       </div>
     </div>
   )
 }
 
-/* ================================================================
-   Sticky filter bar.
-   ================================================================ */
-
-const SORT_OPTIONS = [
-  { id: 'popular', label: 'Bán chạy' },
-  { id: 'rating', label: 'Đánh giá cao' },
-  { id: 'price_asc', label: 'Giá thấp → cao' },
-  { id: 'price_desc', label: 'Giá cao → thấp' },
-]
-
-function FilterBar({
-  petType,
-  sort,
-  onType,
-  onSort,
-}: {
-  petType: 'dog' | 'cat'
-  sort: string
-  onType: (t: 'dog' | 'cat') => void
-  onSort: (s: string) => void
-}) {
-  const [stuck, setStuck] = useState(false)
-  const sentinelRef = useRef<HTMLDivElement>(null)
-
-  useEffect(() => {
-    const el = sentinelRef.current
-    if (!el) return
-    const io = new IntersectionObserver(([e]) => setStuck(!e.isIntersecting), {
-      rootMargin: '-62px 0px 0px 0px',
-      threshold: 0,
-    })
-    io.observe(el)
-    return () => io.disconnect()
-  }, [])
-
-  return (
-    <>
-      <div ref={sentinelRef} aria-hidden className="h-px" />
-      <div className={`${styles.filterBar} ${stuck ? styles.filterBarStuck : ''}`}>
-        <div className={styles.filterInner}>
-          <div className={styles.segment}>
-            <button
-              onClick={() => onType('dog')}
-              className={`${styles.segmentBtn} ${petType === 'dog' ? styles.segmentBtnActive : ''}`}
-            >
-              <span className="inline-flex items-center gap-1.5">
-                <Dog size={14} />
-                Cho chó
-              </span>
-            </button>
-            <button
-              onClick={() => onType('cat')}
-              className={`${styles.segmentBtn} ${petType === 'cat' ? styles.segmentBtnActive : ''}`}
-            >
-              <span className="inline-flex items-center gap-1.5">
-                <Cat size={14} />
-                Cho mèo
-              </span>
-            </button>
-          </div>
-
-          <select
-            value={sort}
-            onChange={(e) => onSort(e.target.value)}
-            className={styles.sortSelect}
-            aria-label="Sắp xếp"
-          >
-            {SORT_OPTIONS.map((o) => (
-              <option key={o.id} value={o.id}>
-                {o.label}
-              </option>
-            ))}
-          </select>
-
-          <Link
-            to={`/shop?petType=${petType}`}
-            className="ml-auto mr-1 shrink-0 whitespace-nowrap rounded-full bg-(--color-accent-soft) px-3.5 py-2 text-[12px] font-bold text-accent transition-colors hover:bg-accent hover:text-white"
-          >
-            Xem tất cả →
-          </Link>
-        </div>
-      </div>
-    </>
-  )
-}
-
-/* ================================================================
-   Product card.
-   ================================================================ */
-
-function RecProductCard({
-  product: p,
-  onAdd,
-}: {
-  product: RecProduct
-  onAdd: (p: RecProduct) => void
-}) {
-  return (
-    <article data-card className={styles.card}>
-      <div className={styles.cardMedia}>
-        <Link to={`/shop/${p.id}`} aria-label={p.name}>
-          <img src={p.image} alt={p.name} loading="lazy" />
-        </Link>
-
-        {p.badge && <span className={styles.cardBadge}>{p.badge}</span>}
-
-        <div className={styles.cardAction}>
-          <button
-            onClick={() => onAdd(p)}
-            className="flex w-full items-center justify-center gap-1.5 rounded-lg bg-accent px-2 py-2 text-[12.5px] font-bold text-white shadow-[0_8px_16px_-8px_rgba(164,51,36,0.8)] transition-colors hover:bg-(--color-accent-hover) active:scale-[0.985]"
-          >
-            <Plus size={14} strokeWidth={2.5} />
-            Thêm vào giỏ
-          </button>
-        </div>
-      </div>
-
-      <div className={styles.cardBody}>
-        <p className={styles.cardCategory}>{CATEGORY_LABELS[p.category as keyof typeof CATEGORY_LABELS] ?? p.category}</p>
-
-        <h3 className={styles.cardName}>
-          <Link to={`/shop/${p.id}`}>{p.name}</Link>
-        </h3>
-
-        <div className={styles.cardRating}>
-          <Star
-            size={11}
-            className="fill-(--color-brand-primary) text-(--color-brand-primary)"
-          />
-          <span className={styles.cardRatingStrong}>{p.rating.toFixed(1)}</span>
-          <span>· đã bán {soldFmt.format(p.sold)}</span>
-        </div>
-
-        <div className={styles.cardFooter}>
-          <span className={styles.cardPrice}>{vnd.format(p.price)}</span>
-          {p.oldPrice && (
-            <span className={styles.cardOldPrice}>{vnd.format(p.oldPrice)}</span>
-          )}
-        </div>
-      </div>
-    </article>
-  )
-}
-
-/* ================================================================
-   Main page.
-   ================================================================ */
-
-function loadPetsFromStorage(): Pet[] {
-  try {
-    const raw = localStorage.getItem('myPets')
-    if (raw) return JSON.parse(raw)
-  } catch {
-    // ignore
-  }
-  return MOCK_PETS
-}
-
 export function RecommendPage() {
-  const addItem = useCartStore((s) => s.addItem)
-
-  const [pets] = useState<Pet[]>(loadPetsFromStorage)
-  const [selectedPetId, setSelectedPetId] = useState<number>(() => pets[0]?.id ?? null)
-  const [petType, setPetType] = useState<'dog' | 'cat'>(() => pets[0]?.type ?? 'dog')
-  const [sort, setSort] = useState('popular')
-
-  // Khi chọn pet mới, đồng bộ loài.
-  const handleSelectPet = (pet: Pet) => {
-    setSelectedPetId(pet.id)
-    setPetType(pet.type)
-  }
-
-  const selectedPet = pets.find((p) => p.id === selectedPetId) ?? null
-
-  const products = useMemo(() => {
-    const list = getRecommendations(selectedPetId ?? 0).filter((p) => p.petType === petType)
-    if (sort === 'price_asc') list.sort((a, b) => a.price - b.price)
-    else if (sort === 'price_desc') list.sort((a, b) => b.price - a.price)
-    else if (sort === 'rating') list.sort((a, b) => b.rating - a.rating)
-    else list.sort((a, b) => b.sold - a.sold)
-    return list
-  }, [selectedPetId, petType, sort])
-
-  const handleAdd = (p: RecProduct) => {
-    addItem({
-      id: p.id,
-      productId: p.id,
-      productName: p.name,
-      quantity: 1,
-      unitPrice: p.price,
-      subtotal: p.price,
-    })
-    toast.success('Đã thêm vào giỏ', { description: p.name })
-  }
-
+  const account = useAccount()
   return (
     <div className="bg-(--color-surface-page) pb-24">
-      {/* Breadcrumb */}
       <div className="mx-auto max-w-[1280px] px-5 py-4 sm:px-8">
         <nav aria-label="Đường dẫn" className="flex items-center gap-1.5 text-[12.5px] text-(--color-text-secondary)">
           <Link to="/" className="underline-offset-4 transition-colors hover:text-(--color-text-primary) hover:underline">
             Trang chủ
           </Link>
-          <ChevronRight size={13} />
-          <span className="font-semibold text-(--color-text-primary)">Gợi ý sản phẩm</span>
+          <ChevronRight size={13} aria-hidden />
+          <span className="font-semibold text-(--color-text-primary)">Gợi ý cho thú cưng</span>
         </nav>
       </div>
 
-      {/* 2-column layout */}
-      <div className={`${styles.page} mx-auto max-w-[1280px] px-0`}>
-        {/* ====== Sidebar ====== */}
-        <aside className={styles.sidebar}>
-          <div className={styles.sidebarHead}>
-            <span className={styles.sidebarTitle}>
-              <Heart size={14} />
-              Thú cưng của bạn
-            </span>
-            <Link
-              to="/account#pets"
-              className="text-[11.5px] font-semibold text-accent underline-offset-4 transition-colors hover:text-(--color-accent-hover) hover:underline"
-            >
-              Quản lý
-            </Link>
-          </div>
-
-          <div className={styles.sidebarList}>
-            {pets.map((pet) => (
-              <SidebarPetItem
-                key={pet.id}
-                pet={pet}
-                active={isPetActive(pet, selectedPetId)}
-                onClick={() => handleSelectPet(pet)}
-              />
-            ))}
-
-            <button className={styles.addPetBtn}>
-              <Plus size={15} />
-              Thêm thú cưng
-            </button>
-          </div>
-        </aside>
-
-        {/* ====== Main ====== */}
-        <div className="min-w-0">
-          {/* Featured pet */}
-          {selectedPet && <FeaturedPet pet={selectedPet} />}
-
-          {/* Filter bar */}
-          <FilterBar petType={petType} sort={sort} onType={setPetType} onSort={setSort} />
-
-          {/* Product grid */}
-          <div className={styles.main}>
-            {products.length === 0 ? (
-              <div className={styles.empty}>
-                <Search size={48} strokeWidth={1.5} className="text-(--color-border-strong)" />
-                <p className={styles.emptyTitle}>Chưa có gợi ý cho pet này</p>
-                <p className={styles.emptyDesc}>
-                  Thêm thú cưng của bạn để nhận gợi ý sản phẩm phù hợp.
-                </p>
-                <Link
-                  to="/account#pets"
-                  className="mt-4 rounded-full bg-accent px-6 py-2.5 text-[13px] font-bold text-white transition-colors hover:bg-(--color-accent-hover)"
-                >
-                  Thêm thú cưng
-                </Link>
-              </div>
+      {account?.role === 'CUSTOMER' ? (
+        <CustomerArea />
+      ) : (
+        <div className="mx-auto max-w-[1280px] px-5 sm:px-8">
+          <EmptyBox title="Gợi ý dành cho khách hàng của PetCare">
+            {account ? (
+              <p>Tài khoản nhân viên không có thú cưng để gợi ý. Hãy đăng nhập bằng tài khoản khách hàng.</p>
             ) : (
-              <div className={styles.grid}>
-                {products.map((p) => (
-                  <RecProductCard key={p.id} product={p} onAdd={handleAdd} />
-                ))}
-              </div>
+              <>
+                <p>Đăng nhập để xem dịch vụ và sản phẩm phù hợp với từng bé nhà bạn.</p>
+                <Link to="/auth/login" state={{ from: '/recommend' }} className={BTN}>
+                  Đăng nhập
+                </Link>
+              </>
             )}
-          </div>
+          </EmptyBox>
         </div>
-      </div>
+      )}
     </div>
   )
 }

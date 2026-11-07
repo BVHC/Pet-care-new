@@ -69,6 +69,16 @@ interface Row {
   cancelledAt: string | null;
   note: string | null;
   visitId: number | null;
+  // Khám tại nhà (T57, homevisit-v1, 05 `appointments.is_home_visit…`): CHỈ lịch tại nhà mới có các khóa này; lịch thường không bao giờ có (kể cả undefined).
+  isHomeVisit?: boolean;
+  homeAddress?: string;
+  homeContactPhone?: string;
+  homeFee?: number;
+  createdAt?: string;
+  /** Ghi chú "không gặp được khách" (BR-LH-14). */
+  unreachableNote?: string;
+  /** Lúc bác sĩ ghi "không gặp được": thời điểm vi phạm của NO_SHOW tại nhà (ST05 không áp dụng, nên không phải giờ hẹn + 30'). */
+  noShowAt?: string;
 }
 
 interface RestrictionRow extends BookingRestriction {
@@ -83,6 +93,8 @@ interface State {
   nextRestrictionId: number;
   appointments: Row[];
   restrictions: RestrictionRow[];
+  /** Dữ liệu mẫu khám tại nhà đã nạp chưa (T57): nạp lười khi route tại nhà chạy lần đầu, KHÔNG ở `seed` / `load`, để lịch thường và hạn mức khung giờ giữ nguyên. */
+  homeSeeded?: boolean;
 }
 
 // ─── Giờ Việt Nam (UTC+7, không đổi giờ mùa hè) ───
@@ -234,7 +246,7 @@ const violationTimes = (s: State, customerId: number) => [
   ...s.appointments
     .filter((a) => a.customerId === customerId)
     .flatMap((a) => {
-      if (a.status === 'NO_SHOW') return [startOf(a)];
+      if (a.status === 'NO_SHOW') return [a.noShowAt ? Date.parse(a.noShowAt) : startOf(a)];
       if (a.status === 'CANCELLED' && a.lateCancel && a.cancelledAt) return [Date.parse(a.cancelledAt)];
       return [];
     }),
@@ -286,7 +298,7 @@ function sweep(s: State, now: number): boolean {
     changed = true;
   }
   const due = s.appointments
-    .filter((a) => a.status === 'BOOKED' && now > startOf(a) + CFG.noShowAfterMinutes * MINUTE)
+    .filter((a) => a.status === 'BOOKED' && !a.isHomeVisit && now > startOf(a) + CFG.noShowAfterMinutes * MINUTE) // BR-LH-14: ST05 bỏ qua lịch tại nhà
     .sort((a, b) => startOf(a) - startOf(b));
   for (const a of due) {
     a.status = 'NO_SHOW';
@@ -342,7 +354,11 @@ function flagsFor(a: Omit<Row, 'bookedBy'>, role: Role, now: number) {
   return { canReschedule: a.rescheduleCount < CFG.maxReschedules && leadOk, canCancel: now < start };
 }
 
-function toResponse({ bookedBy: _bookedBy, ...a }: Row, role: Role, now: number): Appointment {
+function toResponse(
+  { bookedBy: _bookedBy, isHomeVisit: _home, homeAddress: _address, homeContactPhone: _phone, homeFee: _fee, createdAt: _createdAt, unreachableNote: _note, noShowAt: _noShowAt, ...a }: Row,
+  role: Role,
+  now: number,
+): Appointment {
   return {
     ...a,
     customerName: findCustomer(a.customerId)?.fullName ?? `Khách #${a.customerId}`,
@@ -519,6 +535,7 @@ const DETAIL_ROLES: readonly Role[] = [...LIST_ROLES, 'VET', 'CARETAKER'];
 /** Chỉ lịch BOOKED hôm nay, giờ hẹn − 30' ≤ now ≤ giờ hẹn + 30' [CFG] (ADR-0048 §6). */
 const checkInReady = (a: Row, now: number) =>
   a.status === 'BOOKED' &&
+  !a.isHomeVisit &&
   a.slotDate === vnDate(now) &&
   startOf(a) - CFG.checkInEarlyMinutes * MINUTE <= now &&
   now <= startOf(a) + CFG.noShowAfterMinutes * MINUTE;
@@ -559,6 +576,7 @@ const listAppointments: MockHandler = (req) => {
   const found = s.appointments
     .filter(
       (a) =>
+        !a.isHomeVisit && // lịch tại nhà liệt kê qua /home-visit-appointments (ASSUMPTION T57)
         (customerScope === null || a.customerId === customerScope) &&
         (branchScope === null || a.branchId === branchScope) &&
         (num('branchId') === undefined || a.branchId === num('branchId')) &&
@@ -817,6 +835,173 @@ export function completeAppointmentByVisit(appointmentId: number): void {
   const a = s.appointments.find((x) => x.appointmentId === appointmentId);
   if (!a || a.status !== 'CHECKED_IN') return;
   a.status = 'COMPLETED';
+  save(s);
+}
+
+// ─── Cho mock khám tại nhà (T57, homevisit.mock.ts): lịch tại nhà là một hàng của `appointments` có cờ `is_home_visit` (09 §A, A1: dùng chung quota nhóm Khám/Tiêm), chỉ thêm export ───
+
+export type AppointmentRowCopy = Row;
+export type HomeVisitRow = Row & Required<Pick<Row, 'isHomeVisit' | 'homeAddress' | 'homeContactPhone' | 'homeFee' | 'createdAt'>>;
+const isHome = (a: Row): a is HomeVisitRow => a.isHomeVisit === true;
+
+/**
+ * Dữ liệu mẫu khám tại nhà, nạp lười lúc route tại nhà chạy lần đầu (không ở `seed`, để lịch thường, quota khung giờ, hạn chế đặt online giữ nguyên với các test GĐ1).
+ * Chi nhánh 1: 2 lịch BOOKED (Tôm hôm nay 16:30 và Bim sau 2 ngày, của khach@petcare.vn), 1 COMPLETED, 1 NO_SHOW (không gặp được khách), 1 CANCELLED; chi nhánh 2: 1 BOOKED (để thử 403 phạm vi).
+ */
+function seedHomeVisits(s: State, now: number) {
+  const today = vnDate(now);
+  const d = (n: number) => addDays(today, n);
+  const add = (r: Pick<Row, 'customerId' | 'petId' | 'branchId' | 'slotDate' | 'slotStart' | 'status'> & Partial<Row> & Required<Pick<Row, 'homeAddress' | 'homeContactPhone' | 'homeFee'>>) => {
+    s.appointments.push({
+      appointmentId: s.nextId++,
+      code: codeOf(addDays(r.slotDate, -5), s.nextCode++),
+      serviceId: 1,
+      serviceGroup: 'MEDICAL',
+      channel: r.customerId === 1 ? 'ONLINE' : 'COUNTER',
+      bookedBy: r.customerId === 1 ? 7 : 4,
+      rescheduleCount: 0,
+      lateCancel: false,
+      cancelSource: null,
+      cancelReason: null,
+      cancelledAt: null,
+      note: null,
+      visitId: null,
+      isHomeVisit: true,
+      createdAt: iso(instantOf(addDays(r.slotDate, -5), '09:00')),
+      ...r,
+    });
+  };
+  const trang = { homeAddress: '12 Trần Thái Tông, Dịch Vọng Hậu, Hà Nội', homeContactPhone: '0912345678' };
+  const binh = { homeAddress: '45 Láng Hạ, Láng Hạ, Hà Nội', homeContactPhone: '0987000111' };
+  add({ customerId: 1, petId: 3, branchId: 1, slotDate: d(0), slotStart: '16:30', status: 'BOOKED', ...trang, homeFee: 100_000, note: 'Bé hamster bỏ ăn hai ngày' });
+  add({ customerId: 1, petId: 2, branchId: 1, slotDate: d(2), slotStart: '09:30', status: 'BOOKED', ...binh, homeFee: 100_000 });
+  add({ customerId: 1, petId: 1, branchId: 1, slotDate: d(-9), slotStart: '10:00', status: 'COMPLETED', ...trang, homeFee: 100_000, visitId: 61 });
+  add({ customerId: 1, petId: 2, branchId: 1, slotDate: d(-6), slotStart: '11:00', status: 'CANCELLED', ...binh, homeFee: 100_000, cancelSource: 'CUSTOMER', cancelReason: 'Bé đã đỡ, tự theo dõi thêm', cancelledAt: iso(instantOf(d(-8), '10:00')) });
+  add({
+    customerId: 4, petId: 5, branchId: 1, slotDate: d(-4), slotStart: '14:00', status: 'NO_SHOW', homeAddress: 'Số 9 ngõ 105 Xuân Thủy, Cầu Giấy, Hà Nội', homeContactPhone: '0905111222', homeFee: 100_000,
+    unreachableNote: 'Đến nơi gọi ba lần không ai ra mở cửa', noShowAt: iso(instantOf(d(-4), '15:10')),
+  });
+  add({ customerId: 4, petId: 5, branchId: 2, slotDate: d(4), slotStart: '10:00', status: 'BOOKED', homeAddress: '27 Quang Trung, Hà Đông, Hà Nội', homeContactPhone: '0905111222', homeFee: 120_000 });
+}
+
+/** Trạng thái đã nạp dữ liệu mẫu khám tại nhà (một lần). */
+function homeState(now: number): State {
+  const s = load(now);
+  if (!s.homeSeeded) {
+    seedHomeVisits(s, now);
+    s.homeSeeded = true;
+    save(s);
+  }
+  return s;
+}
+
+/** Lịch hẹn `appointmentId` là lịch tại nhà? (không nạp dữ liệu mẫu: lịch chưa có thì không phải). */
+export const isHomeVisitAppointment = (appointmentId: number): boolean =>
+  load(Date.now()).appointments.some((a) => a.appointmentId === appointmentId && a.isHomeVisit === true);
+
+/** Bản sao các lịch tại nhà, mọi chi nhánh, mọi trạng thái (đã nạp dữ liệu mẫu). */
+export const homeVisitAppointments = (now = Date.now()): HomeVisitRow[] => homeState(now).appointments.filter(isHome).map((a) => ({ ...a }));
+
+/** Bản sao của MỌI lịch hẹn theo mã (cả lịch thường), để `start` / `mark-unreachable` phân biệt "không có" với "không phải lịch tại nhà". */
+export const findAppointmentRow = (appointmentId: number, now = Date.now()): Row | undefined => {
+  const a = homeState(now).appointments.find((x) => x.appointmentId === appointmentId);
+  return a && { ...a };
+};
+
+export interface HomeBooking {
+  petId: number;
+  branchId: number;
+  serviceId: number;
+  slotDate: string;
+  slotStart: string;
+  homeAddress: string;
+  homeContactPhone: string;
+  homeFee: number;
+  note: string | null;
+  /** Khách tự đặt: chịu hạn chế đặt online (BR-LH-09) và hạn đặt của khách (BR-LH-04); lễ tân đặt hộ thì không. */
+  online: boolean;
+  bookedBy: number;
+}
+
+/**
+ * Tạo lịch tại nhà sau khi bên gọi đã kiểm BR-LH-13 (chi nhánh, dịch vụ, địa chỉ) và quyền. Thứ tự như `bookAppointment`: BR-LH-09 → thú đã mất → BR-LH-04 → BR-LH-02 → BR-LH-05 → quota.
+ * Quota đầy là 409 CONCURRENCY_CONFLICT (homevisit-v1: "khung vừa hết quota"), khác lịch thường (400 BR-LH-03).
+ */
+export function bookHomeVisitAppointment(b: HomeBooking, now = Date.now()): { ok: true; row: HomeVisitRow } | { ok: false; reply: MockReply } {
+  const s = homeState(now);
+  const pet = petSummary(b.petId);
+  const booking = branchBooking(b.branchId);
+  if (!pet || !booking) return { ok: false, reply: notFound(pet ? 'chi nhánh' : 'thú cưng', pet ? b.branchId : b.petId) };
+  const restriction = b.online ? activeRestriction(s, pet.customerId, now) : undefined;
+  if (restriction) {
+    return {
+      ok: false,
+      reply: ruleFail('BR-LH-09', `Bạn đang bị hạn chế đặt lịch online đến ${vnDateTime(Date.parse(restriction.endsAt))}, vui lòng liên hệ chi nhánh để đặt lịch`),
+    };
+  }
+  if (pet.deceasedOn) return { ok: false, reply: ruleFail('BR-LH-13', 'Thú cưng đã mất, không đặt được lịch khám tại nhà') };
+  if (!inWindow(b.online, now, b.slotDate, b.slotStart)) return { ok: false, reply: windowError(b.online) };
+  if (!booking.slotsOn(b.slotDate).includes(b.slotStart)) return { ok: false, reply: slotError() };
+  if (s.appointments.filter((a) => a.petId === b.petId && a.status === 'BOOKED').length >= CFG.maxBookedPerPet) {
+    return { ok: false, reply: ruleFail('BR-LH-05', `Thú cưng đã có ${CFG.maxBookedPerPet} lịch hẹn đang chờ`) };
+  }
+  const conflict = petConflict(s, b.petId, 'MEDICAL', b.slotDate, b.slotStart);
+  if (conflict) return { ok: false, reply: conflict };
+  if (countInSlot(s, b.branchId, 'MEDICAL', b.slotDate, b.slotStart) >= booking.quotaFor('MEDICAL', b.slotDate, b.slotStart)) {
+    return { ok: false, reply: fail('CONCURRENCY_CONFLICT', 'Khung giờ vừa hết chỗ, vui lòng chọn khung khác (BR-LH-03)', 409) };
+  }
+  const row: HomeVisitRow = {
+    appointmentId: s.nextId++,
+    code: codeOf(vnDate(now), s.nextCode++),
+    customerId: pet.customerId,
+    petId: b.petId,
+    branchId: b.branchId,
+    serviceId: b.serviceId,
+    serviceGroup: 'MEDICAL',
+    slotDate: b.slotDate,
+    slotStart: b.slotStart,
+    status: 'BOOKED',
+    channel: b.online ? 'ONLINE' : 'COUNTER',
+    bookedBy: b.bookedBy,
+    rescheduleCount: 0,
+    lateCancel: false,
+    cancelSource: null,
+    cancelReason: null,
+    cancelledAt: null,
+    note: b.note,
+    visitId: null,
+    isHomeVisit: true,
+    homeAddress: b.homeAddress,
+    homeContactPhone: b.homeContactPhone,
+    homeFee: b.homeFee,
+    createdAt: iso(now),
+  };
+  s.appointments.push(row);
+  save(s);
+  markPetHasBooking(b.petId);
+  markHasData(pet.customerId);
+  return { ok: true, row: { ...row } };
+}
+
+/** Lịch tại nhà BOOKED → CHECKED_IN, gắn lượt khám (Lịch khám tại nhà#2). Bên gọi đã kiểm điều kiện. */
+export function checkInHomeVisit(appointmentId: number, visitId: number): void {
+  const s = homeState(Date.now());
+  const a = s.appointments.find((x) => x.appointmentId === appointmentId && x.isHomeVisit);
+  if (!a || a.status !== 'BOOKED') return;
+  a.status = 'CHECKED_IN';
+  a.visitId = visitId;
+  save(s);
+}
+
+/** Lịch tại nhà BOOKED → NO_SHOW kèm ghi chú (Lịch khám tại nhà#3), tính vào hạn chế đặt online ngay lúc ghi (BR-LH-14, BR-LH-09). */
+export function markHomeVisitNoShow(appointmentId: number, note: string, now: number): void {
+  const s = homeState(now);
+  const a = s.appointments.find((x) => x.appointmentId === appointmentId && x.isHomeVisit);
+  if (!a || a.status !== 'BOOKED') return;
+  a.status = 'NO_SHOW';
+  a.unreachableNote = note;
+  a.noShowAt = iso(now);
+  evaluateAfterViolation(s, a.customerId, now);
   save(s);
 }
 

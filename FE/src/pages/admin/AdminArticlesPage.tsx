@@ -3,13 +3,15 @@ import { Navigate, useNavigate, useParams } from 'react-router-dom';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '../../components/ui/tabs';
 import { ArticleCategoriesTab } from './articles/ArticleCategoriesTab';
 import { ArticlesTab } from './articles/ArticlesTab';
+import { ReviewTab } from './articles/ReviewTab';
 
 const TABS: { key: string; label: string; render: () => ReactNode }[] = [
   { key: 'articles', label: 'Bài viết', render: () => <ArticlesTab /> },
+  { key: 'review', label: 'Chờ duyệt', render: () => <ReviewTab /> },
   { key: 'categories', label: 'Chuyên mục', render: () => <ArticleCategoriesTab /> },
 ];
 
-/** T47 — soạn, đăng, ẩn, xóa bài viết và quản lý chuyên mục (UC81, chỉ SUPER_MANAGER). Mỗi tab một URL. Giữ nguyên <h1> "Bài viết" (route test dựa vào đó). */
+/** T47 — soạn, đăng, ẩn, xóa bài viết, duyệt bài của bác sĩ (tab Chờ duyệt, T57) và quản lý chuyên mục (UC81, chỉ SUPER_MANAGER). Mỗi tab một URL. Giữ nguyên <h1> "Bài viết" (route test dựa vào đó). */
 export function AdminArticlesPage() {
   const { tab } = useParams();
   const navigate = useNavigate();

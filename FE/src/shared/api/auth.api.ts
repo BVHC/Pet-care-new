@@ -9,6 +9,7 @@ import type {
   LoginResponse,
   OtpSentResponse,
   RegisterRequest,
+  RefreshResponse,
   RegistrationResponse,
   ResetPasswordRequest,
   VerificationResponse,
@@ -28,6 +29,10 @@ export const authApi = {
   /** Token chi mang sub/sid/jti (ADR-0003): role, mustChangePassword doc tu `account`. */
   login: async (payload: LoginRequest): Promise<LoginResponse> =>
     (await apiClient.post('/api/auth/login', payload)).data.data,
+
+  /** Token mới thay token cũ; token cũ dùng lại hủy cả phiên (ADR-0091). Path public: axios.ts không làm mới / thử lại quanh nó. */
+  refresh: async (refreshToken: string): Promise<RefreshResponse> =>
+    (await apiClient.post('/api/auth/refresh', { refreshToken })).data.data,
 
   logout: async (): Promise<void> => {
     await apiClient.post('/api/auth/logout');

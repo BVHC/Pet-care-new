@@ -9,6 +9,7 @@ import type {
   StaffResponse,
   SystemConfig,
 } from '../../types/identity';
+import { lifecycleOf } from './branch.mock';
 import { MOCK_OTP_CODE, MOCK_PASSWORD, MOCK_ACCOUNTS, STAFF_SEED, branchIdOf, load, save, type MockAccount } from './identity.mock';
 import { SEED_CONFIGS, SEED_TEMPLATES } from './identity-admin.seed';
 import {
@@ -23,6 +24,7 @@ import {
   type MockHandler,
   type MockReply,
 } from './envelope';
+import { staffLeftBranch } from './workforce.mock';
 
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 const RESEND_SECONDS = 60;
@@ -75,6 +77,20 @@ function countActiveBranchManagers(s: ReturnType<typeof load>, branchId: number,
       !s.locks[a.id] &&
       a.branchId === branchId,
   ).length;
+}
+
+/**
+ * BR-QT-04 như BE `StaffAccountService.checkNotLastBranchManager`: chỉ chặn khi người bị tác động là BRANCH_MANAGER ACTIVE, chi nhánh (đọc từ branch.mock) đang ACTIVE
+ * và họ là người cuối. Chi nhánh DRAFT / SUSPENDED / CLOSED không chặn (BR-CN-10); nếu chặn thì chi nhánh có nhân viên không tạm ngừng / đóng cửa được (BR-CN-08).
+ */
+function isLastActiveManager(s: ReturnType<typeof load>, a: MockStaffWithState): boolean {
+  const branchId = a.branchId ?? -1;
+  return (
+    a.role === 'BRANCH_MANAGER' &&
+    a.status === 'ACTIVE' &&
+    lifecycleOf(branchId)?.status === 'ACTIVE' &&
+    countActiveBranchManagers(s, branchId, a.id) < 1
+  );
 }
 
 /** MockAccount + status + mustChangePassword; tránh đụng field của extraStaff (đang mutable). */
@@ -364,11 +380,7 @@ const changeRole: MockHandler = ({ account, params, body }) => {
   const a = findStaffAccount(s, id);
   if (!a) return notFound('nhân viên', id);
   if (a.role === (b.role as Role)) return ok(staffResponseOf(s, a));
-  if (a.role === 'BRANCH_MANAGER') {
-    if (countActiveBranchManagers(s, a.branchId ?? -1, a.id) < 1) {
-      return ruleFail('BR-QT-04', 'Chi nhánh phải có ít nhất một quản lý đang hoạt động');
-    }
-  }
+  if (isLastActiveManager(s, a)) return ruleFail('BR-QT-04', 'Chi nhánh phải có ít nhất một quản lý đang hoạt động');
   const before = { role: a.role };
   a.role = b.role as Role;
   if (a.role !== 'VET') {
@@ -393,13 +405,12 @@ const transfer: MockHandler = ({ account, params, body }) => {
   const a = findStaffAccount(s, id);
   if (!a) return notFound('nhân viên', id);
   if (a.branchId === branchId) return ok(staffResponseOf(s, a));
-  if (a.role === 'BRANCH_MANAGER' && countActiveBranchManagers(s, a.branchId ?? -1, a.id) < 1) {
-    return ruleFail('BR-QT-04', 'Chi nhánh phải có ít nhất một quản lý đang hoạt động');
-  }
+  if (isLastActiveManager(s, a)) return ruleFail('BR-QT-04', 'Chi nhánh phải có ít nhất một quản lý đang hoạt động');
   const before = { branchId: a.branchId };
   a.branchId = branchId;
   logAudit(s, { action: 'STAFF_TRANSFERRED', entityType: 'accounts', entityId: id, beforeData: before, afterData: { branchId } }, account!.id, account!.email);
   save(s);
+  if (before.branchId != null) staffLeftBranch(a.id, before.branchId); // BR-NS-09: StaffLeftBranchEvent (06 §3) phát sau mọi guard, nhân viên rời chi nhánh cũ
   return ok(staffResponseOf(s, a));
 };
 
@@ -457,12 +468,11 @@ const disable: MockHandler = ({ account, params }) => {
   // Message chép từ BE (StaffAccountService.disableStaff; 409 là InvalidStateTransitionException "Không thể chuyển trạng thái {fsm} từ {from} sang {to}").
   if (s.locks[a.id]) return ruleFail('BR-QT-12', 'Tài khoản đang bị khóa, cần mở khóa trước khi vô hiệu hóa');
   if (a.status === 'DISABLED') return fail('INVALID_STATE_TRANSITION', 'Không thể chuyển trạng thái tài khoản từ DISABLED sang DISABLED', 409);
-  if (a.role === 'BRANCH_MANAGER' && countActiveBranchManagers(s, a.branchId ?? -1, a.id) < 1) {
-    return ruleFail('BR-QT-04', 'Không vô hiệu hóa được: đây là quản lý cuối cùng của chi nhánh đang hoạt động');
-  }
+  if (isLastActiveManager(s, a)) return ruleFail('BR-QT-04', 'Không vô hiệu hóa được: đây là quản lý cuối cùng của chi nhánh đang hoạt động');
   a.status = 'DISABLED'; // BE Account.disable() chỉ đặt status; mustChangePassword giữ nguyên
   logAudit(s, { action: 'STAFF_DISABLED', entityType: 'accounts', entityId: id, beforeData: { status: 'ACTIVE' }, afterData: { status: 'DISABLED' } }, account!.id, account!.email);
   save(s);
+  if (a.branchId != null) staffLeftBranch(a.id, a.branchId); // BR-NS-09: StaffLeftBranchEvent phát sau mọi guard (Tài khoản#5); SUPER_MANAGER không có chi nhánh nên không phát
   return ok(staffResponseOf(s, a));
 };
 
@@ -700,6 +710,14 @@ function configNumber(type: SystemConfig['valueType'], raw: string): number | nu
   }
 }
 
+/** BE `BigDecimal.stripTrailingZeros().toPlainString()` cho chuỗi đã qua `configNumber`: bỏ dấu +, số 0 đầu và số 0 cuối phần thập phân ("+007.50" → "7.5", "1.0" → "1"); không đi qua `Number` nên không mất chữ số hay ra dạng mũ. */
+function plainDecimal(raw: string): string {
+  const [whole, fraction = ''] = raw.replace(/^[+-]/, '').split('.');
+  const digits = fraction.replace(/0+$/, '');
+  const int = whole.replace(/^0+(?=\d)/, '');
+  return (raw.startsWith('-') && (int !== '0' || digits) ? '-' : '') + int + (digits ? `.${digits}` : '');
+}
+
 /** BE `ConfigConstraints.ALL` (ADR-0036, 0056), chỉ khóa INT: `lower` phải nhỏ hơn (`strict`) hoặc không lớn hơn `upper`. */
 const CONFIG_CONSTRAINTS = [
   { lower: 'visit.late_priority_minutes', upper: 'appointment.no_show_after_minutes', strict: true },
@@ -791,7 +809,7 @@ const updateSystemConfig: MockHandler = ({ account, params, body }) => {
   if (value === null || (min !== undefined && value < min) || (max !== undefined && value > max)) {
     return ruleFail('BR-QT-13', describeAllowed(seed, minText, maxText, reasons));
   }
-  const canonical = type === 'INT' || type === 'DECIMAL' ? String(value) : raw; // "05" → "5"; TIME / BOOL đã đúng dạng
+  const canonical = type === 'INT' ? String(value) : type === 'DECIMAL' ? plainDecimal(raw) : raw; // "05" → "5", "0.60" → "0.6"; TIME / BOOL đã đúng dạng
   const before = currentOf(key);
   if (canonical !== before) {
     s.configOverrides[key] = canonical;

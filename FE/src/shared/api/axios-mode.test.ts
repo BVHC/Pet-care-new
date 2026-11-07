@@ -62,3 +62,14 @@ describe('chế độ API của axios.ts', () => {
     expect((await networkError(client.get('/api/orders'))).response).toBeUndefined();
   });
 });
+
+describe('API_MODE (nhãn nguồn dữ liệu lúc dev)', () => {
+  it.each([
+    [{ VITE_API_MOCK: 'true', VITE_API_MOCK_ONLY: '' }, 'mock'],
+    [{ VITE_API_MOCK: 'false', VITE_API_MOCK_ONLY: '' }, 'real'],
+    [{ VITE_API_MOCK: 'false', VITE_API_MOCK_ONLY: '/api/me/notifications' }, 'hybrid'],
+  ])('%j -> %s', async (env, mode) => {
+    await load(env);
+    expect((await import('./axios')).API_MODE).toBe(mode);
+  });
+});

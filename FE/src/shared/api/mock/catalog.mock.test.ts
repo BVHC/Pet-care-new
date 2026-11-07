@@ -1,6 +1,7 @@
 import axios, { type AxiosInstance, type AxiosResponse } from 'axios';
 import { beforeEach, describe, expect, it } from 'vitest';
 import { ruleIdOf } from '../api-error';
+import { CLINICAL_SEED_SERVICES } from './clinical-shared';
 import { MOCK_PASSWORD } from './identity.mock';
 import { installMockApi } from './mock-api';
 
@@ -135,6 +136,51 @@ describe('services', () => {
     const id = created.data.data.serviceId;
     const updated = await client.patch(`/api/services/${id}`, { price: 320_000 }, auth);
     expect(updated.data.data).toMatchObject({ serviceId: id, price: 320_000, kennelType: { species: 'DOG', maxWeightKg: 40 } });
+  });
+});
+
+describe('surgery / inpatient services (T57, 09 §B–C ASSUMPTION A1)', () => {
+  type Row = { serviceId: number; name: string; group: string; medicalType: string | null; price: number; isActive: boolean };
+  const listAll = async () => (await client.get('/api/services', await manager())).data.data as Row[];
+
+  it('seeds 4 SURGERY and 4 INPATIENT services in the MEDICAL group, same data as CLINICAL_SEED_SERVICES', async () => {
+    const tier3 = (await listAll()).filter((s) => s.serviceId >= 7000).sort((a, b) => a.serviceId - b.serviceId);
+    expect(tier3.map(({ serviceId, name, price, isActive, medicalType }) => ({ serviceId, name, price, isActive, medicalType }))).toEqual(
+      CLINICAL_SEED_SERVICES.map(({ serviceId, name, price, isActive, medicalType }) => ({ serviceId, name, price, isActive, medicalType })),
+    );
+    expect(tier3.every((s) => s.group === 'MEDICAL')).toBe(true);
+    expect(tier3.filter((s) => s.medicalType === 'SURGERY')).toHaveLength(4);
+    expect(tier3.filter((s) => s.medicalType === 'INPATIENT')).toHaveLength(4);
+  });
+
+  it('adds the missing ones to a state saved before T57 and keeps what was already saved', async () => {
+    const auth = await manager();
+    await client.patch('/api/services/1', { price: 160_000 }, auth);
+    const stored = JSON.parse(localStorage.getItem('petcare-mock-catalog')!);
+    stored.services = stored.services.filter((s: Row) => s.serviceId < 7000);
+    localStorage.setItem('petcare-mock-catalog', JSON.stringify(stored));
+
+    const after = await listAll();
+    expect(after.filter((s) => s.serviceId >= 7000)).toHaveLength(8);
+    expect(after.find((s) => s.serviceId === 1)?.price).toBe(160_000);
+  });
+
+  it('does not throw on an empty or broken saved state', async () => {
+    for (const raw of ['{}', 'khong phai json']) {
+      localStorage.setItem('petcare-mock-catalog', raw);
+      expect((await listAll()).filter((s) => s.serviceId >= 7000)).toHaveLength(8);
+    }
+  });
+
+  it('lets the chain manager create and price them like any MEDICAL service; other groups still have no type (BR-SP-06)', async () => {
+    const auth = await manager();
+    const created = await client.post('/api/services', { name: 'Cắt u mới', group: 'MEDICAL', medicalType: 'SURGERY', price: 2_100_000 }, auth);
+    expect(created.status).toBe(201);
+    expect(created.data.data).toMatchObject({ group: 'MEDICAL', medicalType: 'SURGERY', price: 2_100_000 });
+    const repriced = await client.patch('/api/services/7101', { price: 380_000 }, auth);
+    expect(repriced.data.data).toMatchObject({ serviceId: 7101, medicalType: 'INPATIENT', price: 380_000 });
+    const grooming = await failure(client.post('/api/services', { name: 'Spa', group: 'GROOMING', medicalType: 'SURGERY', price: 100_000 }, auth));
+    expect(ruleIdOf(grooming.data.message)).toBe('BR-SP-06');
   });
 });
 

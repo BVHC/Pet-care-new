@@ -2,6 +2,7 @@
 // Xem: A05–A08 của chi nhánh; tạo / chốt / hủy bán lẻ: lễ tân; hủy Order khách không thanh toán: BRANCH_MANAGER.
 // Thu tiền, ca thu ngân, payable-orders (#12–21; T35): thu tiền / mở / chốt ca là lễ tân, xem danh sách ca và đối soát là
 // BRANCH_MANAGER, xem phiếu thu và chi tiết ca là cả hai (chi tiết ca của lễ tân chỉ ca của mình).
+import type { AxiosRequestConfig } from 'axios';
 import { apiClient } from './axios';
 import type { PageResponse } from '../types';
 import type {
@@ -22,14 +23,15 @@ import type {
   UpdateOrderLineRequest,
 } from '../types/sales';
 
-const get = async <T>(url: string, params?: object): Promise<T> => (await apiClient.get(url, { params })).data.data;
+/** `config`: truyền `POLL` (axios.ts) cho request theo nhịp refetchInterval. */
+const get = async <T>(url: string, params?: object, config?: AxiosRequestConfig): Promise<T> => (await apiClient.get(url, { params, ...config })).data.data;
 const post = async <T>(url: string, body?: object): Promise<T> => (await apiClient.post(url, body)).data.data;
 const patch = async <T>(url: string, body: object): Promise<T> => (await apiClient.patch(url, body)).data.data;
 
 export const salesApi = {
   /** Order#2: hồ sơ khách bắt buộc (hợp đồng A1). */
   createRetailOrder: (customerId: number) => post<Order>('/api/orders', { customerId }),
-  listOrders: (query: OrderQuery) => get<PageResponse<OrderSummary>>('/api/orders', query),
+  listOrders: (query: OrderQuery, config?: AxiosRequestConfig) => get<PageResponse<OrderSummary>>('/api/orders', query, config),
   getOrder: (orderId: number) => get<Order>(`/api/orders/${orderId}`),
 
   addLine: (orderId: number, body: AddOrderLineRequest) => post<AddOrderLineResult>(`/api/orders/${orderId}/lines`, body),

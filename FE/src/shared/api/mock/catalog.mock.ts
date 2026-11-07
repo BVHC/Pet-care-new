@@ -75,6 +75,15 @@ function seed(): State {
       service({ serviceId: 4, name: 'Cắt tỉa lông', group: 'GROOMING', price: 250_000, priceIsFrom: true }),
       service({ serviceId: 5, name: 'Chuồng chó nhỏ', group: 'BOARDING', price: 200_000, kennelType: { species: 'DOG', maxWeightKg: 10 } }),
       service({ serviceId: 6, name: 'Chuồng mèo', group: 'BOARDING', price: 180_000, kennelType: { species: 'CAT', maxWeightKg: 8 } }),
+      // T57: dịch vụ phẫu thuật / nội trú (09 §B–C, ASSUMPTION A1). Cùng dữ liệu với CLINICAL_SEED_SERVICES của clinical-shared.ts (test catalog.mock.test.ts so khớp); bật theo chi nhánh: xem tier3-wiring.ts.
+      service({ serviceId: 7001, name: 'Triệt sản chó mèo', group: 'MEDICAL', medicalType: 'SURGERY', price: 1_800_000 }),
+      service({ serviceId: 7002, name: 'Phẫu thuật mô mềm', group: 'MEDICAL', medicalType: 'SURGERY', price: 3_500_000 }),
+      service({ serviceId: 7003, name: 'Phẫu thuật nha khoa', group: 'MEDICAL', medicalType: 'SURGERY', price: 2_200_000 }),
+      service({ serviceId: 7004, name: 'Cắt u (ngừng kinh doanh)', group: 'MEDICAL', medicalType: 'SURGERY', price: 2_800_000, isActive: false }),
+      service({ serviceId: 7101, name: 'Nội trú điều trị (theo ngày)', group: 'MEDICAL', medicalType: 'INPATIENT', price: 350_000 }),
+      service({ serviceId: 7102, name: 'Nội trú chăm sóc đặc biệt (theo ngày)', group: 'MEDICAL', medicalType: 'INPATIENT', price: 600_000 }),
+      service({ serviceId: 7103, name: 'Nội trú theo dõi (chi nhánh 2)', group: 'MEDICAL', medicalType: 'INPATIENT', price: 300_000 }),
+      service({ serviceId: 7104, name: 'Nội trú cũ (ngừng kinh doanh)', group: 'MEDICAL', medicalType: 'INPATIENT', price: 300_000, isActive: false }),
     ],
     protocols: [
       { protocolId: 1, species: 'DOG', vaccineTypeId: 2, doseNumber: 1, intervalDays: 21, minAgeWeeks: 6, requiredForBoarding: true, isActive: true },
@@ -88,10 +97,16 @@ function seed(): State {
 
 const STATE_KEY = 'petcare-mock-catalog';
 
+/** State lưu từ trước T57 chưa có dịch vụ phẫu thuật / nội trú (id ≥ 7000): gộp các dòng mẫu còn thiếu, giữ nguyên mọi dòng đã lưu. */
+function withClinicalServices(stored: State): State {
+  const missing = seed().services.filter((x) => x.serviceId >= 7000 && !stored.services.some((y) => y.serviceId === x.serviceId));
+  return missing.length ? { ...stored, services: [...stored.services, ...missing] } : stored;
+}
+
 function load(): State {
   try {
     const raw = localStorage.getItem(STATE_KEY);
-    return raw ? (JSON.parse(raw) as State) : seed();
+    return raw ? withClinicalServices(JSON.parse(raw) as State) : seed();
   } catch {
     return seed();
   }

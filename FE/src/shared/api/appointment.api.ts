@@ -1,6 +1,7 @@
 // Lịch hẹn (UC39, UC40) theo docs/api/appointment-v1.md #1–9.
 // Khung giờ, đặt / đổi / hủy: CUSTOMER (lịch của mình), RECEPTIONIST (chi nhánh mình); xem: thêm BRANCH_MANAGER
 // (chi tiết thêm VET, CARETAKER); hạn chế đặt online: khách xem của mình, lễ tân / quản lý chi nhánh xem và gỡ toàn chuỗi.
+import type { AxiosRequestConfig } from 'axios';
 import { apiClient } from './axios';
 import type { PageResponse } from '../types';
 import type {
@@ -14,7 +15,8 @@ import type {
   Slot,
 } from '../types/appointment';
 
-const get = async <T>(url: string, params?: object): Promise<T> => (await apiClient.get(url, { params })).data.data;
+/** `config`: truyền `POLL` (axios.ts) cho request theo nhịp refetchInterval. */
+const get = async <T>(url: string, params?: object, config?: AxiosRequestConfig): Promise<T> => (await apiClient.get(url, { params, ...config })).data.data;
 const post = async <T>(url: string, body?: object): Promise<T> => (await apiClient.post(url, body)).data.data;
 
 export const appointmentApi = {
@@ -24,7 +26,7 @@ export const appointmentApi = {
 
   /** Khách → ONLINE, lễ tân → COUNTER; khách của lịch là chủ hiện tại của thú (A2). */
   book: (body: BookAppointmentRequest) => post<Appointment>('/api/appointments', body),
-  list: (query: AppointmentQuery = {}) => get<PageResponse<Appointment>>('/api/appointments', query),
+  list: (query: AppointmentQuery = {}, config?: AxiosRequestConfig) => get<PageResponse<Appointment>>('/api/appointments', query, config),
   get: (appointmentId: number) => get<Appointment>(`/api/appointments/${appointmentId}`),
   /** Cùng chi nhánh, thú, dịch vụ; giữ mã lịch hẹn (BR-LH-06). */
   reschedule: (appointmentId: number, body: RescheduleRequest) =>

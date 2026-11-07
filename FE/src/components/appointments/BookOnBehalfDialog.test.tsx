@@ -1,13 +1,18 @@
-import { act, render, screen, waitFor } from '@testing-library/react';
+import { act, render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
 import { customerPetApi } from '../../domains/pets/customer-pet.api';
 import { apiClient } from '../../shared/api/axios';
+import { feesApi } from '../../shared/api/fees.api';
+import { homevisitApi } from '../../shared/api/homevisit.api';
 import { MOCK_PASSWORD } from '../../shared/api/mock/identity.mock';
 import { installMockApi } from '../../shared/api/mock/mock-api';
 import { useSession } from '../../shared/stores/session.store';
 import { BookOnBehalfDialog } from './BookOnBehalfDialog';
+
+const toast = vi.hoisted(() => Object.assign(vi.fn(), { success: vi.fn(), error: vi.fn(), warning: vi.fn() }));
+vi.mock('sonner', () => ({ toast }));
 
 // Đặt hộ sai khách là đặt lịch cho nhầm người: từ khóa quá ngắn (dưới 2 ký tự) hoặc ô trống thì không được còn ứng viên của lần tra trước.
 // Mock: SĐT 0905111222 có 3 hồ sơ (#2, #3, #4).
@@ -84,5 +89,78 @@ describe('BookOnBehalfDialog: ứng viên khách', () => {
     expect(search.mock.calls[0][0]).toMatchObject({ phone: '0905111222' });
     expect(search.mock.calls[0][0]).not.toHaveProperty('name');
     expect(screen.queryByText('Nhập đủ 10 số điện thoại để tra cứu.')).not.toBeInTheDocument();
+  });
+});
+
+// Khám tại nhà (UC43, homevisit-v1 #1): đồng hồ ghim thứ Sáu 23/10/2026 09:00; khách Nguyễn Thu Trang (0912345678) có Mochi, Bim, Tôm. Lịch tại nhà không nằm trong GET /appointments,
+// nên kết quả đặt hộ báo qua toast. Chọn ngày 26/10 vì Tôm đã có một lịch tại nhà mẫu hôm nay 16:30 (BR-LH-05: mỗi nhóm một lịch trong ngày).
+describe('BookOnBehalfDialog: khám tại nhà', () => {
+  beforeEach(() => {
+    vi.useFakeTimers({ toFake: ['Date'] });
+    vi.setSystemTime(new Date('2026-10-23T09:00:00+07:00'));
+  });
+  afterEach(() => vi.useRealTimers());
+
+  async function openForTom() {
+    const onClose = vi.fn();
+    const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+    render(
+      <QueryClientProvider client={client}>
+        <BookOnBehalfDialog open branchId={1} onClose={onClose} />
+      </QueryClientProvider>,
+    );
+    const user = userEvent.setup();
+    await user.type(screen.getByLabelText('Tìm khách theo SĐT hoặc họ tên'), 'Nguyễn Thu Trang');
+    await user.click(await screen.findByRole('button', { name: /^Chọn khách Nguyễn Thu Trang/ }));
+    await user.click(await screen.findByRole('button', { name: /^Tôm/ }));
+    await user.click(screen.getByRole('button', { name: 'Khám tại nhà' }));
+    return { user, onClose };
+  }
+
+  async function pickSlot(user: Awaited<ReturnType<typeof openForTom>>['user'], service: string) {
+    await user.selectOptions(screen.getByLabelText('Dịch vụ'), service);
+    await user.click(screen.getByRole('button', { name: 'Ngày hẹn' }));
+    await user.click(screen.getByRole('button', { name: '26/10/2026' }));
+    await user.click(within(await screen.findByRole('group', { name: 'Khung giờ' })).getByRole('button', { name: /^10:00/ }));
+  }
+
+  it('chọn "Khám tại nhà": hiện phí chi nhánh, số liên hệ điền sẵn từ hồ sơ khách, dịch vụ chỉ còn nhóm Khám/Tiêm', async () => {
+    await openForTom();
+    expect(await screen.findByText(/Phí khám tại nhà/)).toHaveTextContent('100.000');
+    expect(screen.getByLabelText('Số điện thoại liên hệ')).toHaveValue('0912345678');
+    const options = within(screen.getByLabelText('Dịch vụ')).getAllByRole('option').map((o) => o.textContent);
+    expect(options).toContain('Khám tổng quát (Khám/Tiêm)');
+    expect(options.some((o) => /Thẩm mỹ/.test(o ?? ''))).toBe(false);
+  });
+
+  it('đặt hộ lịch tại nhà: nhập địa chỉ tay thì BE nhận customerId + address, hộp thoại đóng và toast báo mã lịch', async () => {
+    const { user, onClose } = await openForTom();
+    await pickSlot(user, 'Khám tổng quát (Khám/Tiêm)');
+    await user.click(screen.getByRole('button', { name: 'Đặt lịch' }));
+    expect(await screen.findByText('Vui lòng nhập địa chỉ khám tại nhà.')).toBeInTheDocument();
+
+    await user.type(screen.getByLabelText('Địa chỉ khám tại nhà'), '12 Nguyễn Trãi, Thanh Xuân, Hà Nội');
+    await user.click(screen.getByRole('button', { name: 'Đặt lịch' }));
+
+    await waitFor(() => expect(onClose).toHaveBeenCalledTimes(1));
+    expect(toast.success).toHaveBeenCalledWith(expect.stringMatching(/^Đã đặt lịch tại nhà LH-\d{6}-\d{4} — Tôm, 10:00–10:30/));
+    const mine = await homevisitApi.list({ date: '2026-10-26' });
+    expect(mine.content).toEqual([expect.objectContaining({ petName: 'Tôm', homeAddress: '12 Nguyễn Trãi, Thanh Xuân, Hà Nội', homeFee: 100_000 })]);
+  });
+
+  it('dịch vụ không phải khám (Tiêm phòng): BE từ chối BR-LH-13, câu báo hiện trong hộp thoại và hộp vẫn mở', async () => {
+    const { user, onClose } = await openForTom();
+    await pickSlot(user, 'Tiêm phòng (Khám/Tiêm)');
+    await user.type(screen.getByLabelText('Địa chỉ khám tại nhà'), '12 Nguyễn Trãi, Hà Nội');
+    await user.click(screen.getByRole('button', { name: 'Đặt lịch' }));
+    expect(await screen.findByText('Dịch vụ khám tại nhà phải là dịch vụ khám')).toBeInTheDocument();
+    expect(onClose).not.toHaveBeenCalled();
+  });
+
+  it('chi nhánh chưa bật khám tại nhà: báo rõ và tắt nút Đặt lịch', async () => {
+    vi.spyOn(feesApi, 'getHomeVisitFee').mockResolvedValue({ branchId: 1, enabled: false, fee: 0 });
+    await openForTom();
+    expect(await screen.findByText('Chi nhánh này chưa bật khám tại nhà nên chưa đặt được.')).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Đặt lịch' })).toBeDisabled();
   });
 });

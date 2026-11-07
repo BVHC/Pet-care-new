@@ -33,6 +33,9 @@
 //  A12 ST05 (NO_SHOW) và ST15 (OVERDUE) chạy "lười" mỗi lần nạp state (mẫu `sweep` của appointment.mock): BOOKED quá giờ đóng cửa muộn nhất của ngày nhận → NO_SHOW + đánh giá hạn chế đặt online (BR-LH-09);
 //      [ASSUMPTION] thời điểm vi phạm = chính mốc đóng cửa (BE ghi `updated_at` lúc job chạy, nên lệch vài phút). CHECKED_IN quá 12:00 giờ VN của ngày trả → OVERDUE, `overdueSince` = 12:00 ngày trả [ASSUMPTION];
 //      không sinh Care Task (T39 / T43) và hai tác vụ này KHÔNG đẩy thông báo.
+//  A13 (T57) Thú còn ca nội trú ADMITTED: #16 và #17 trả 409 INVALID_STATE_TRANSITION "… (BR-LT-17)" ngay sau 409 "không còn trong chuồng" (09 BR-LT-17 ghi "409 BR-LT-17 khi trả thú còn nội trú"; boarding-v1 im lặng;
+//      00-method §3 chỉ có hai mã 409 nên mã rule nối cuối message). #18 thú mất không bị chặn. Nguồn `registerAdmissionSource` do tier3-wiring.ts nối (inpatient.mock import boarding.mock nên không import ngược được); chưa nối thì không chặn.
+//  A14 (T57) Hủy hàng loạt vì chi nhánh tạm ngừng / đóng cửa (UC13, BR-CN-09) có câu lý do riêng, không dùng câu "giờ mở cửa thu hẹp"; câu chữ là ASSUMPTION (branchlife-v1 không ghi), chép kiểu các câu còn lại.
 // Không mô phỏng: khóa đồng thời, audit (BR-QT-15 không gồm chuồng / đặt chỗ), email, Care Task PICKUP_OVERDUE.
 import type { Role } from '../../types/auth';
 import {
@@ -169,6 +172,8 @@ const CLINIC_REASON = {
   holidayAdded: 'Chi nhánh nghỉ vào ngày nhận hoặc ngày trả của đặt chỗ',
   hoursReduced: 'Chi nhánh thay đổi giờ mở cửa, ngày nhận hoặc ngày trả nằm ngoài giờ mở cửa mới',
   noKennel: 'Chi nhánh không còn chuồng trống đúng loại vào ngày nhận',
+  branchSuspended: 'Chi nhánh tạm ngừng hoạt động nên đặt chỗ lưu trú bị hủy',
+  branchClosed: 'Chi nhánh đã đóng cửa nên đặt chỗ lưu trú bị hủy',
 } as const;
 
 const branchNameOf = (branchId: number) => branchBooking(branchId)?.branch.name ?? `Chi nhánh #${branchId}`;
@@ -209,6 +214,13 @@ function noShowCutoff(branchId: number, date: string): number {
 }
 
 const inStay = (b: Pick<BookingRow, 'status'>) => IN_STAY_STATUSES.includes(b.status);
+
+/** `AdmissionQueryApi.hasActiveAdmission(petId)` (BR-LT-17): mock nội trú đăng ký lúc nạp qua tier3-wiring.ts; chưa đăng ký thì thú không có ca nội trú. */
+let hasAdmission: (petId: number) => boolean = () => false;
+export function registerAdmissionSource(source: (petId: number) => boolean) {
+  hasAdmission = source;
+}
+const stillAdmitted = (b: Pick<BookingRow, 'petId'>) => (hasAdmission(b.petId) ? fail('INVALID_STATE_TRANSITION', 'Thú cưng còn ca nội trú đang điều trị, chưa trả thú được (BR-LT-17)', 409) : null);
 
 /** ASSUMPTION A12: ST05 (NO_SHOW) chép BE nhưng chạy lười, thời điểm vi phạm = mốc đóng cửa; ST15 (OVERDUE) BE chưa có (T43), `overdueSince` = 12:00 ngày trả; không đẩy thông báo. true nếu có thay đổi. */
 function sweep(s: State, now: number, effects: Effects): boolean {
@@ -1050,6 +1062,8 @@ const startCheckout: MockHandler = (req) => {
   const b = bookingFor(req, s, id);
   if (isReply(b)) return b;
   if (!inStay(b)) return conflict('Thú không còn trong chuồng');
+  const admitted = stillAdmitted(b);
+  if (admitted) return admitted;
   if (!withinOpeningHours(b.branchId, now)) return ruleFail('BR-LT-04', 'Chỉ trả thú trong giờ mở cửa của chi nhánh');
   if (hasPaidBoardingOrder(b.bookingId)) return conflict('Đã thu tiền lưu trú, chỉ còn giao thú');
   const order = openCheckout(req, b, now, true);
@@ -1075,6 +1089,8 @@ const handOver: MockHandler = (req) => {
   const b = bookingFor(req, s, id);
   if (isReply(b)) return b;
   if (!inStay(b)) return stateError('đặt chỗ lưu trú', b.status, 'CHECKED_OUT');
+  const admitted = stillAdmitted(b);
+  if (admitted) return admitted;
   if (!hasPaidBoardingOrder(b.bookingId)) return ruleFail('BR-LT-09', 'Order lưu trú chưa thanh toán, chưa giao thú được');
   leaveKennel(s, b, 'RETURNED', now);
   save(s);
@@ -1307,7 +1323,7 @@ registerBoardingSource({
   cancelByClinic: (bookingIds, cause) => {
     const now = Date.now();
     const s = everything();
-    const reason = cause === 'HOLIDAY_ADDED' ? CLINIC_REASON.holidayAdded : CLINIC_REASON.hoursReduced;
+    const reason = { HOLIDAY_ADDED: CLINIC_REASON.holidayAdded, OPENING_HOURS_REDUCED: CLINIC_REASON.hoursReduced, BRANCH_SUSPENDED: CLINIC_REASON.branchSuspended, BRANCH_CLOSED: CLINIC_REASON.branchClosed }[cause];
     for (const b of s.bookings.filter((x) => bookingIds.includes(x.bookingId) && x.status === 'BOOKED')) clinicCancel(b, reason, now);
     save(s);
   },

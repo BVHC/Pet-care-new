@@ -1,55 +1,24 @@
+// Giỏ hàng (UC61, shop-v1 #1–4, BR-BH-07): giỏ lưu trên BE, mỗi thao tác là một lệnh ghi; giá chỉ để xem, giá chốt khi đặt.
+import { useState } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
-import {
-  ChevronRight,
-  Minus,
-  Plus,
-  ShoppingBag,
-  ShoppingCart,
-  Trash2,
-} from 'lucide-react'
+import { ChevronRight, Minus, Plus, ShoppingBag, ShoppingCart, Trash2 } from 'lucide-react'
 import { toast } from 'sonner'
-import { useCartStore } from '../../shared/stores/cart.store'
+import { ErrorPanel, InlineError, LoadingBlock } from '@/components/customer/shop/panels'
+import { vnd } from '@/components/customer/shop/styles'
+import { plainMessage, toApiError } from '@/shared/api/api-error'
+import { shopApi } from '@/shared/api/shop.api'
+import { useCart, useShopMutation } from '@/shared/hooks/useShop'
+import { CommonPageHero } from '@/shared/components/layout/CommonPageHero'
+import { SHOP_LIMITS, type CartItem } from '@/shared/types/shop'
 import styles from './CartPage.module.css'
 
-const vnd = new Intl.NumberFormat('vi-VN', {
-  style: 'currency',
-  currency: 'VND',
-  maximumFractionDigits: 0,
-})
-
-const FREE_SHIPPING_THRESHOLD = 300_000
-
-/* ================================================================
-   Cart item row.
-   ================================================================ */
-
-function CartItemRow({
-  item,
-  onUpdateQty,
-  onRemove,
-}: {
-  item: {
-    id: number
-    productId: number
-    productName?: string
-    quantity: number
-    unitPrice: number
-    subtotal: number
-    image?: string
-  }
-  onUpdateQty: (id: number, qty: number) => void
-  onRemove: (id: number) => void
-}) {
+function CartItemRow({ item, busy, onQuantity, onRemove }: { item: CartItem; busy: boolean; onQuantity: (qty: number) => void; onRemove: () => void }) {
   return (
     <div className={styles.cartItem}>
-      <Link to={`/shop/${item.productId}`} className="shrink-0">
-        {item.image ? (
-          <img
-            src={item.image}
-            alt={item.productName}
-            className={styles.itemImage}
-            loading="lazy"
-          />
+      {/* Link ảnh trùng với link tên bên cạnh nên bỏ khỏi thứ tự Tab và trình đọc màn hình. */}
+      <Link to={`/shop/${item.productId}`} aria-hidden tabIndex={-1} className="shrink-0">
+        {item.imageUrl ? (
+          <img src={item.imageUrl} alt="" className={styles.itemImage} loading="lazy" />
         ) : (
           <span className={styles.itemImageFallback}>
             <ShoppingBag size={22} />
@@ -58,297 +27,132 @@ function CartItemRow({
       </Link>
 
       <div className={styles.itemInfo}>
-        <Link
-          to={`/shop/${item.productId}`}
-          className={styles.itemName}
-        >
-          {item.productName}
+        <Link to={`/shop/${item.productId}`} className={styles.itemName}>
+          {item.name}
         </Link>
-        <span className={styles.itemUnitPrice}>{vnd.format(item.unitPrice)} / 1</span>
+        <span className={styles.itemUnitPrice}>
+          {vnd(item.unitPrice)} / {item.unit}
+        </span>
+        {!item.available && <span className="mt-1 text-[12px] font-bold text-red-700">Hết hàng</span>}
       </div>
 
-      {/* Quantity stepper */}
       <div className={styles.qtyStepper}>
-        <button
-          type="button"
-          onClick={() => onUpdateQty(item.id, item.quantity - 1)}
-          className={styles.qtyBtn}
-          aria-label="Giảm số lượng"
-          disabled={item.quantity <= 1}
-        >
+        <button type="button" onClick={() => onQuantity(item.quantity - 1)} className={styles.qtyBtn} aria-label={`Giảm số lượng ${item.name}`} disabled={busy || item.quantity <= SHOP_LIMITS.minQuantity}>
           <Minus size={14} />
         </button>
-        <span className={styles.qtyValue}>{item.quantity}</span>
-        <button
-          type="button"
-          onClick={() => onUpdateQty(item.id, item.quantity + 1)}
-          className={styles.qtyBtn}
-          aria-label="Tăng số lượng"
-        >
+        <span className={styles.qtyValue} aria-label={`Số lượng ${item.name}`}>
+          {item.quantity}
+        </span>
+        <button type="button" onClick={() => onQuantity(item.quantity + 1)} className={styles.qtyBtn} aria-label={`Tăng số lượng ${item.name}`} disabled={busy || item.quantity >= SHOP_LIMITS.maxQuantity}>
           <Plus size={14} />
         </button>
       </div>
 
-      {/* Subtotal */}
       <div className={styles.itemSubtotal}>
-        <span className={styles.itemSubtotalPrice}>{vnd.format(item.subtotal)}</span>
-        <span className={styles.itemSubtotalUnit}>/ {item.quantity} cái</span>
+        <span className={styles.itemSubtotalPrice}>{vnd(item.unitPrice * item.quantity)}</span>
       </div>
 
-      {/* Remove */}
-      <button
-        type="button"
-        onClick={() => onRemove(item.id)}
-        className={styles.removeBtn}
-        aria-label={`Xóa ${item.productName}`}
-      >
+      <button type="button" onClick={onRemove} disabled={busy} className={styles.removeBtn} aria-label={`Xóa ${item.name}`}>
         <Trash2 size={15} />
       </button>
     </div>
   )
 }
 
-/* ================================================================
-   Order summary card.
-   ================================================================ */
-
-function OrderSummary({
-  subtotal,
-  onCheckout,
-  onContinue,
-}: {
-  subtotal: number
-  onCheckout: () => void
-  onContinue: () => void
-}) {
-  const shipping = subtotal >= FREE_SHIPPING_THRESHOLD ? 0 : 30000
-  const finalTotal = subtotal + shipping
-  const progress = Math.min((subtotal / FREE_SHIPPING_THRESHOLD) * 100, 100)
-  const toFreeShipping = Math.max(FREE_SHIPPING_THRESHOLD - subtotal, 0)
-
+function Summary({ subtotal, soldOut, onCheckout }: { subtotal: number; soldOut: boolean; onCheckout: () => void }) {
   return (
-    <div className={styles.summaryCard}>
+    <aside className={styles.summaryCard} aria-label="Tóm tắt đơn hàng">
       <div className={styles.summaryHeader}>
         <ShoppingBag size={18} className="text-accent" />
         <h2 className={styles.summaryTitle}>Tóm tắt đơn hàng</h2>
       </div>
-
       <div className={styles.summaryBody}>
-        {/* Free shipping progress */}
-        <div className={styles.freeShipBar}>
-          <div className={styles.freeShipProgress}>
-            <div className={styles.freeShipFill} style={{ width: `${progress}%` }} />
-          </div>
-          {subtotal >= FREE_SHIPPING_THRESHOLD ? (
-            <p className={styles.freeShipText}>
-              <strong>Đã đạt miễn phí vận chuyển!</strong>
-            </p>
-          ) : (
-            <p className={styles.freeShipText}>
-              Thêm <strong>{vnd.format(toFreeShipping)}</strong> để được miễn phí vận chuyển
-            </p>
-          )}
-        </div>
-
         <div className={styles.summaryRow}>
           <span className={styles.summaryRowLabel}>Tạm tính</span>
-          <span className={styles.summaryRowValue}>{vnd.format(subtotal)}</span>
+          <span className={styles.summaryRowValue}>{vnd(subtotal)}</span>
         </div>
-
-        <div className={styles.summaryRow}>
-          <span className={styles.summaryRowLabel}>Vận chuyển</span>
-          {shipping === 0 ? (
-            <span className={styles.summaryRowFree}>Miễn phí</span>
-          ) : (
-            <span className={styles.summaryRowValue}>{vnd.format(shipping)}</span>
-          )}
-        </div>
-
-        <hr className={styles.summaryDivider} />
-
-        <div className={styles.summaryTotal}>
-          <span className={styles.summaryTotalLabel}>Tổng</span>
-          <span className={styles.summaryTotalValue}>{vnd.format(finalTotal)}</span>
-        </div>
+        <p className="text-[12.5px] text-(--color-text-secondary)">Phí vận chuyển được tính ở bước đặt hàng, sau khi bạn chọn địa chỉ và chi nhánh xử lý.</p>
+        {soldOut && (
+          <p role="note" className="rounded-xl bg-amber-50 px-3 py-2 text-[12.5px] font-medium text-amber-900">
+            Có sản phẩm đã hết hàng, hãy xóa khỏi giỏ để đặt hàng.
+          </p>
+        )}
       </div>
-
       <div className={styles.summaryActions}>
-        <button
-          type="button"
-          onClick={onCheckout}
-          className={styles.checkoutBtn}
-        >
+        <button type="button" onClick={onCheckout} disabled={soldOut} className={styles.checkoutBtn}>
           <ChevronRight size={17} />
-          Thanh toán ngay
+          Tiến hành đặt hàng
         </button>
-        <button
-          type="button"
-          onClick={onContinue}
-          className={styles.continueBtn}
-        >
+        <Link to="/shop" className={styles.continueBtn}>
           Tiếp tục mua sắm
-        </button>
+        </Link>
       </div>
-    </div>
+    </aside>
   )
 }
-
-/* ================================================================
-   Empty state.
-   ================================================================ */
-
-function EmptyState({ onShop }: { onShop: () => void }) {
-  return (
-    <div className={styles.emptyState}>
-      <span className={styles.emptyIcon}>
-        <ShoppingCart size={36} />
-      </span>
-      <p className={styles.emptyTitle}>Giỏ hàng trống</p>
-      <p className={styles.emptyDesc}>
-        Thêm sản phẩm vào giỏ để bắt đầu mua sắm cho boss yêu nhé.
-      </p>
-      <button
-        type="button"
-        onClick={onShop}
-        className={styles.emptyShopBtn}
-      >
-        <ShoppingBag size={16} />
-        Khám phá cửa hàng
-      </button>
-    </div>
-  )
-}
-
-/* ================================================================
-   Main page.
-   ================================================================ */
 
 export function CartPage() {
   const navigate = useNavigate()
-  const items = useCartStore((s) => s.items)
-  const updateItem = useCartStore((s) => s.updateItem)
-  const removeItem = useCartStore((s) => s.removeItem)
-  const clearCart = useCartStore((s) => s.clearCart)
-  const subtotal = useCartStore((s) => s.subtotal)
+  const cart = useCart()
+  const [error, setError] = useState('')
+  const change = useShopMutation((fn: () => Promise<unknown>) => fn())
 
-  const handleUpdateQty = (id: number, qty: number) => {
-    if (qty < 1) return
-    updateItem(id, qty)
+  // Mọi lệnh ghi qua một chỗ: lỗi (400 BR-BH-07, 404 sản phẩm đã ngừng bán) hiện ngay trên giỏ, dữ liệu được tải lại.
+  const run = (fn: () => Promise<unknown>, done?: string) => {
+    setError('')
+    change.mutate(fn, {
+      onSuccess: () => done && toast.success(done),
+      onError: (e) => setError(plainMessage(toApiError(e))),
+    })
   }
 
-  const handleRemove = (id: number) => {
-    const item = items.find((i) => i.id === id)
-    removeItem(id)
-    if (item) toast.success(`Đã xóa "${item.productName}" khỏi giỏ`)
-  }
-
-  const handleClear = () => {
-    clearCart()
-    toast.success('Đã xóa toàn bộ giỏ hàng')
-  }
-
-  const handleCheckout = () => {
-    if (items.length === 0) {
-      toast.error('Giỏ hàng trống.')
-      return
-    }
-    navigate('/checkout')
-  }
-
-  const handleContinue = () => {
-    navigate('/shop')
-  }
-
-  const handleEmptyShop = () => {
-    navigate('/shop')
-  }
+  const items = cart.data?.items ?? []
+  const count = items.reduce((sum, i) => sum + i.quantity, 0)
 
   return (
     <div className="bg-(--color-surface-page) pb-24">
-      {/* ====== Hero slab ====== */}
-      <section className={styles.slab}>
-        <img
-          src="/imgs/hero-dog-clean.png"
-          alt=""
-          className={styles.slabBg}
-          aria-hidden
-          loading="eager"
-        />
-        <div className={styles.slabOverlay} aria-hidden />
-        <div className={styles.slabNoise} aria-hidden />
+      <CommonPageHero breadcrumbs={[{ label: 'Cửa hàng', href: '/shop' }, { label: 'Giỏ hàng' }]} title="Giỏ hàng của bạn" subtitle={count > 0 ? `${count} sản phẩm trong giỏ` : undefined} />
 
-        <div className={`${styles.slabContent} mx-auto max-w-[1280px] px-5 sm:px-8`}>
-          <nav
-            aria-label="Đường dẫn"
-            className="mb-5 text-[12.5px] text-white/50"
-          >
-            <Link
-              to="/"
-              className="underline-offset-4 transition-colors hover:text-white hover:underline"
-            >
-              Trang chủ
+      <div className="mx-auto max-w-[1280px] px-8 pt-8">
+        {cart.isError ? (
+          <ErrorPanel title="Không tải được giỏ hàng" error={cart.error} onRetry={() => void cart.refetch()} retrying={cart.isFetching} />
+        ) : !cart.data ? (
+          <LoadingBlock label="Đang tải giỏ hàng" />
+        ) : items.length === 0 ? (
+          <div className={styles.emptyState}>
+            <span className={styles.emptyIcon}>
+              <ShoppingCart size={36} />
+            </span>
+            <p className={styles.emptyTitle}>Giỏ hàng trống</p>
+            <p className={styles.emptyDesc}>Thêm sản phẩm vào giỏ để bắt đầu mua sắm cho boss yêu nhé.</p>
+            <Link to="/shop" className={styles.emptyShopBtn}>
+              <ShoppingBag size={16} />
+              Khám phá cửa hàng
             </Link>
-            <span className="mx-1.5">/</span>
-            <Link
-              to="/shop"
-              className="underline-offset-4 transition-colors hover:text-white hover:underline"
-            >
-              Cửa hàng
-            </Link>
-            <span className="mx-1.5">/</span>
-            <span className="font-semibold text-white/85">Giỏ hàng</span>
-          </nav>
-
-          <div className="flex flex-wrap items-end justify-between gap-4">
-            <h1 className="font-friendly font-extrabold text-[clamp(24px,3.2vw,40px)] leading-[1.05] text-white">
-              Giỏ hàng của bạn
-            </h1>
-            {items.length > 0 && (
-              <p className="text-[12.5px] text-white/60">
-                {items.reduce((s, i) => s + i.quantity, 0)} sản phẩm
-              </p>
-            )}
           </div>
-        </div>
-      </section>
-
-      {/* ====== Content ====== */}
-      <div className="mx-auto max-w-[1280px] px-5 pt-8 sm:px-8">
-        {items.length === 0 ? (
-          <EmptyState onShop={handleEmptyShop} />
         ) : (
-          <div className={styles.page}>
-            {/* ====== Items list ====== */}
-            <div className={styles.itemsSection}>
-              <div className={styles.itemsHeader}>
-                <span className={styles.itemsHeaderLabel}>
-                  {items.length} sản phẩm
-                </span>
-                <button
-                  type="button"
-                  onClick={handleClear}
-                  className={styles.clearBtn}
-                >
-                  Xóa tất cả
-                </button>
+          <div className="space-y-4">
+            <InlineError message={error} />
+            <div className={styles.page}>
+              <div className={styles.itemsSection}>
+                <div className={styles.itemsHeader}>
+                  <span className={styles.itemsHeaderLabel}>{items.length} dòng hàng</span>
+                  <button type="button" disabled={change.isPending} onClick={() => run(() => shopApi.clearCart(), 'Đã xóa toàn bộ giỏ hàng')} className={styles.clearBtn}>
+                    Xóa tất cả
+                  </button>
+                </div>
+                {items.map((item) => (
+                  <CartItemRow
+                    key={item.productId}
+                    item={item}
+                    busy={change.isPending}
+                    onQuantity={(qty) => run(() => shopApi.setCartItem(item.productId, { quantity: qty }))}
+                    onRemove={() => run(() => shopApi.removeCartItem(item.productId), `Đã xóa "${item.name}" khỏi giỏ`)}
+                  />
+                ))}
               </div>
-
-              {items.map((item) => (
-                <CartItemRow
-                  key={item.id}
-                  item={item}
-                  onUpdateQty={handleUpdateQty}
-                  onRemove={handleRemove}
-                />
-              ))}
+              <Summary subtotal={cart.data.subtotal} soldOut={items.some((i) => !i.available)} onCheckout={() => navigate('/checkout')} />
             </div>
-
-            {/* ====== Order summary ====== */}
-            <OrderSummary
-              subtotal={subtotal}
-              onCheckout={handleCheckout}
-              onContinue={handleContinue}
-            />
           </div>
         )}
       </div>

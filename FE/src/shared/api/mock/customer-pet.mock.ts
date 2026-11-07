@@ -10,8 +10,8 @@ import {
   allCustomers,
   createCounterProfile,
   customerOfAccount,
-  findCustomer,
   findCustomerOrGuest,
+  findLiveCustomer,
   markHasData,
   updateCustomerFields,
   type MockCustomer,
@@ -177,7 +177,8 @@ const STATE_KEY = 'petcare-mock-pets';
 function load(): State {
   try {
     const raw = localStorage.getItem(STATE_KEY);
-    if (raw) return JSON.parse(raw) as State;
+    // Gộp với dữ liệu mẫu: state ghi bởi bản cũ mà thiếu bảng vẫn đọc được.
+    if (raw) return { ...seed(), ...(JSON.parse(raw) as Partial<State>) };
   } catch {
     // Dữ liệu hỏng: dùng lại dữ liệu mẫu.
   }
@@ -269,6 +270,27 @@ export function recordIntakeWeight(petId: number, weightKg: number, boardingBook
 /** Mũi tiêm mẫu trong hồ sơ sức khỏe của thú (dữ liệu có sẵn, ngoài mũi do mock lâm sàng ghi): cho BR-LT-05 đối chiếu mũi bắt buộc khi lưu trú. */
 export const seededVaccinationDoses = (petId: number): VaccinationRecord[] => HEALTH[petId]?.vaccinations ?? [];
 
+/** Thú của một hồ sơ khách cho UC27 (custmerge-v1): `busy` khác null nghĩa là đang có việc dở (lượt khám mở, đang lưu trú, Order chưa thanh toán). */
+export interface PetMergeInfo {
+  petId: number;
+  name: string;
+  species: Species;
+  busy: string | null;
+}
+export const petsOfCustomer = (customerId: number): PetMergeInfo[] =>
+  load()
+    .pets.filter((p) => p.customerId === customerId)
+    .map((p) => ({ petId: p.petId, name: p.name, species: p.species, busy: p.busy ?? (staySource(p.petId) ? 'BOARDING' : null) }));
+
+/** UC27 (BR-KH-12, `CustomerMergedEvent`): chuyển mọi thú của hồ sơ nguồn sang hồ sơ đích, giữ nguyên cân nặng và hồ sơ sức khỏe. Không gộp thú trùng. Trả số thú đã chuyển. */
+export function movePetsOfCustomer(fromId: number, toId: number): number {
+  const s = load();
+  const moving = s.pets.filter((p) => p.customerId === fromId);
+  for (const p of moving) p.customerId = toId;
+  if (moving.length) save(s);
+  return moving.length;
+}
+
 /** Thú đã phát sinh lịch hẹn thì không xóa cứng được nữa (BR-KH-06). */
 export function markPetHasBooking(petId: number) {
   const s = load();
@@ -325,7 +347,7 @@ function searchItemOf(s: State, c: MockCustomer): CustomerSearchItem {
 
 /** Hồ sơ khác có cùng SĐT: cảnh báo nghi trùng, không chặn (BR-KH-10). */
 const duplicatesOf = (s: State, phone: string | null, exceptId: number) =>
-  phone ? allCustomers().filter((c) => c.phone === phone && c.customerId !== exceptId).map((c) => searchItemOf(s, c)) : [];
+  phone ? allCustomers().filter((c) => c.phone === phone && c.customerId !== exceptId && c.mergedIntoId == null).map((c) => searchItemOf(s, c)) : [];
 
 /** BR-KH-02: chủ đã có thú cùng tên, cùng loài → cảnh báo nghi trùng. */
 const hasTwin = (s: State, pet: PetRow) =>
@@ -373,8 +395,10 @@ const searchCustomers: MockHandler = (req) => {
     return fail('VALIDATION_FAILED', 'Cần ít nhất một điều kiện tìm: số điện thoại, họ tên, email hoặc tên thú cưng', 400);
   }
   const s = load();
+  // Hồ sơ đã gộp (MERGED, UC27) ẩn khỏi tra cứu nhưng giữ để audit (BR-KH-12).
   const found = allCustomers().filter(
     (c) =>
+      c.mergedIntoId == null &&
       (!phone || c.phone === phone) &&
       (!name || foldVi(c.fullName).includes(foldVi(name))) &&
       (!email || emailOf(c)?.toLowerCase() === email) &&
@@ -394,7 +418,7 @@ const searchCustomers: MockHandler = (req) => {
 const getCustomer: MockHandler = (req) => {
   if (!canLookUp(req)) return denied();
   const c = findCustomerOrGuest(Number(req.params.customerId));
-  if (!c) return notFound('khách hàng', req.params.customerId);
+  if (!c || c.mergedIntoId != null) return notFound('khách hàng', req.params.customerId);
   const s = load();
   return ok({ customer: profileOf(c), pets: s.pets.filter((p) => p.customerId === c.customerId).map((p) => responseOf(s, p)) });
 };
@@ -425,7 +449,7 @@ const updateCustomer: MockHandler = (req) => {
   const bad = invalid(customerChecks(b, false));
   if (bad) return bad;
   if (!isDesk(req)) return denied();
-  const c = findCustomer(Number(req.params.customerId));
+  const c = findLiveCustomer(Number(req.params.customerId));
   if (!c) return notFound('khách hàng', req.params.customerId);
   if (has(b.email) && c.accountId !== null) {
     return ruleFail('BR-TK-16', 'Hồ sơ đã gắn tài khoản nên email theo tài khoản; dùng chức năng sửa email tài khoản khách');
@@ -488,7 +512,7 @@ const addPetForCustomer: MockHandler = (req) => {
   const bad = invalid(petChecks(b, false));
   if (bad) return bad;
   if (!isDesk(req)) return denied();
-  const owner = findCustomer(Number(req.params.customerId));
+  const owner = findLiveCustomer(Number(req.params.customerId));
   if (!owner) return notFound('khách hàng', req.params.customerId);
   const s = load();
   const pet = newPet(s, owner.customerId, b);
@@ -601,7 +625,7 @@ const transferOwner: MockHandler = (req) => {
   const s = load();
   const pet = s.pets.find((p) => p.petId === Number(req.params.petId));
   if (!pet) return notFound('thú cưng', req.params.petId);
-  const newOwner = findCustomer(Number(b.newCustomerId));
+  const newOwner = findLiveCustomer(Number(b.newCustomerId));
   if (!newOwner) return notFound('khách hàng', String(b.newCustomerId));
   if (newOwner.customerId === pet.customerId) {
     return fail('VALIDATION_FAILED', 'newCustomerId: Chủ mới phải khác chủ hiện tại', 400);

@@ -38,6 +38,8 @@ describe('mock API envelope (00-method §3.4–3.5)', () => {
       data: {
         accessToken: expect.any(String),
         expiresAt: expect.any(String),
+        accessTokenExpiresAt: expect.any(String),
+        refreshToken: expect.any(String),
         account: {
           id: 5,
           email: 'doctor@store1.vn',

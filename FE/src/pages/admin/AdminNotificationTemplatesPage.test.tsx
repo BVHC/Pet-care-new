@@ -50,10 +50,10 @@ describe('AdminNotificationTemplatesPage (T22 - UC10)', () => {
     expect(await screen.findByText('Chi nhánh không còn quản lý đang hoạt động (đã sửa)')).toBeInTheDocument();
   });
 
-  it('liệt kê đủ 30 mẫu của BE; mã bịa BRANCH_MANAGER_LOCKED_APP của bản mock cũ không còn', async () => {
+  it('liệt kê đủ 70 mẫu của BE (kể cả 40 mẫu tầng 3); mã bịa BRANCH_MANAGER_LOCKED_APP của bản mock cũ không còn', async () => {
     renderPage();
     await screen.findByRole('button', { name: 'Sửa OTP_REGISTER' });
-    expect(screen.getAllByRole('button', { name: /^Sửa / })).toHaveLength(30);
+    expect(screen.getAllByRole('button', { name: /^Sửa / })).toHaveLength(70);
     expect(screen.queryByRole('button', { name: 'Sửa BRANCH_MANAGER_LOCKED_APP' })).not.toBeInTheDocument();
   });
 

@@ -54,6 +54,8 @@ interface Probe<T> {
   value?: T;
   error?: unknown;
 }
+/** T57: catalog.mock có sẵn dịch vụ phẫu thuật / nội trú (id ≥ 7000) mà script seed không tạo; các phép đếm dịch vụ của bài kiểm này chỉ tính dịch vụ do script seed tạo. */
+const isSeeded = (s: { serviceId: number }) => s.serviceId < 7000;
 async function probe<T>(read: () => Promise<T>): Promise<Probe<T>> {
   try {
     return { value: await read() };
@@ -102,7 +104,7 @@ describe('seed dev — dry run trên lớp mock (KHÔNG phải BE thật)', () =
       categories: { name: string }[];
       vaccineTypes: { vaccineTypeId: number; name: string; species: string }[];
       products: { sku: string; productType: string; isPrescription: boolean; tracksExpiry: boolean; vaccineTypeId: number | null; isActive: boolean }[];
-      services: { name: string; group: string; medicalType: string | null; kennelType: { species: string; maxWeightKg: number } | null }[];
+      services: { serviceId: number; name: string; group: string; medicalType: string | null; kennelType: { species: string; maxWeightKg: number } | null }[];
       protocols: { species: string; vaccineTypeId: number; doseNumber: number }[];
     }>,
     inventory: {} as Probe<{
@@ -158,7 +160,7 @@ describe('seed dev — dry run trên lớp mock (KHÔNG phải BE thật)', () =
       return {
         list,
         hours: await bm.get(`/api/branches/${id}/opening-hours`),
-        services: await bm.get(`/api/branches/${id}/services`),
+        services: (await bm.get<{ serviceId: number; name: string; group: string; enabled: boolean }[]>(`/api/branches/${id}/services`)).filter(isSeeded),
         quotaDefaults: await bm.get(`/api/branches/${id}/quota-defaults`),
         publicBranches: (await client.get('/api/public/branches')).data.data,
       };
@@ -170,7 +172,7 @@ describe('seed dev — dry run trên lớp mock (KHÔNG phải BE thật)', () =
         categories: await sm.get('/api/product-categories'),
         vaccineTypes: await sm.get('/api/vaccine-types'),
         products: (await sm.get<{ content: never[] }>('/api/products', { size: 100 })).content,
-        services: await sm.get('/api/services'),
+        services: (await sm.get<{ serviceId: number; name: string; group: string; medicalType: string | null; kennelType: { species: string; maxWeightKg: number } | null }[]>('/api/services')).filter(isSeeded),
         protocols: await sm.get('/api/vaccination-protocols'),
       };
     });

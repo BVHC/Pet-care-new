@@ -25,7 +25,8 @@ interface LineDraft {
 }
 
 const emptyLine = (): LineDraft => ({ productId: '', stockLotId: '', lotQuantity: null, delta: '' });
-const REASONS = Object.keys(ADJUSTMENT_REASON_LABELS) as AdjustmentReason[];
+// COUNT_DIFF do xác nhận kiểm kê (stockops #10) sinh ra, không chọn tay.
+const REASONS = (Object.keys(ADJUSTMENT_REASON_LABELS) as AdjustmentReason[]).filter((r) => r !== 'COUNT_DIFF');
 
 /**
  * UC76 — phiếu điều chỉnh tồn, có hiệu lực ngay khi lưu (BR-KO-06): lý do bắt buộc, "Khác" bắt ghi chú,
@@ -77,7 +78,7 @@ export function AdjustmentForm({ onClose, onSaved }: { onClose: () => void; onSa
       open
       onOpenChange={(open) => !open && onClose()}
       title="Lập phiếu điều chỉnh tồn"
-      description="Có hiệu lực ngay khi lưu và được ghi nhật ký. Kiểm kê và chuyển kho chưa có ở giai đoạn này."
+      description="Có hiệu lực ngay khi lưu và được ghi nhật ký."
       onSubmit={submit}
       submitText="Lưu phiếu điều chỉnh"
       loading={save.isPending}

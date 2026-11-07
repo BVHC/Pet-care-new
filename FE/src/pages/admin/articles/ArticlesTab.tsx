@@ -19,7 +19,7 @@ import { TableState } from './TableState';
 
 const PAGE_SIZE = 20;
 const STATUSES = Object.keys(ARTICLE_STATUS_LABELS) as ArticleStatus[];
-const STATUS_VARIANT = { DRAFT: 'neutral', PUBLISHED: 'success', HIDDEN: 'warning' } as const;
+const STATUS_VARIANT = { DRAFT: 'neutral', PENDING_REVIEW: 'info', REJECTED: 'danger', PUBLISHED: 'success', HIDDEN: 'warning' } as const;
 
 /** UC81 — bài viết: lọc, soạn, sửa, đăng / ẩn, xóa bài chưa từng xuất bản (BR-BV-01, 02). */
 export function ArticlesTab() {

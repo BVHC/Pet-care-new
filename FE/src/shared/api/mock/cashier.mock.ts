@@ -66,6 +66,13 @@ interface PaymentRow {
   receivedBy: number;
   paidAt: string;
 }
+/** Hoàn tiền tại quầy tính vào ca (BR-TG-13, `CashierShiftApi.recordRefund`, T57 returns). Vắng ở state lưu từ trước T57: đọc như []. */
+interface ShiftRefundRow {
+  refundId: number;
+  shiftId: number;
+  method: PaymentMethod;
+  amount: number;
+}
 interface State {
   shiftSeq: number;
   paymentSeq: number;
@@ -73,6 +80,7 @@ interface State {
   counters: Record<string, number>;
   shifts: ShiftRow[];
   payments: PaymentRow[];
+  refunds?: ShiftRefundRow[];
 }
 
 /** Lễ tân chi nhánh 2 của dữ liệu mẫu: chưa có tài khoản đăng nhập trong mock nên chỉ có tên để hiển thị. */
@@ -83,6 +91,9 @@ const periodOf = (iso: string) => vnDate(Date.parse(iso)).slice(2, 7).replace('-
 const codeOf = (period: string, n: number) => `PT-${period}-${String(n).padStart(5, '0')}`;
 
 const sumOf = (rows: PaymentRow[], method: PaymentMethod) => rows.filter((p) => p.method === method).reduce((n, p) => n + p.amount, 0);
+/** Tổng hoàn tiền tại quầy của ca theo hình thức; đối soát ca trừ khoản này (UC72). */
+const refundedOf = (s: State, shiftId: number, method: PaymentMethod) =>
+  (s.refunds ?? []).filter((r) => r.shiftId === shiftId && r.method === method).reduce((n, r) => n + r.amount, 0);
 
 /**
  * Ngày tính từ lúc nạp (giờ Việt Nam). Chi nhánh 1: ca #1 ĐÃ ĐỐI SOÁT (3 ngày trước, chứa phiếu #1 của Order #5) · ca #2 TỰ CHỐT chưa
@@ -189,8 +200,8 @@ function shiftView(s: State, r: ShiftRow): CashierShift {
     openedAt: r.openedAt,
     closedAt: r.closedAt,
     autoClosed: r.autoClosed,
-    expectedCash: closed ? sumOf(paid, 'CASH') : null,
-    expectedTransfer: closed ? sumOf(paid, 'TRANSFER') : null,
+    expectedCash: closed ? sumOf(paid, 'CASH') - refundedOf(s, r.shiftId, 'CASH') : null,
+    expectedTransfer: closed ? sumOf(paid, 'TRANSFER') - refundedOf(s, r.shiftId, 'TRANSFER') : null,
     countedCash: r.countedCash,
     difference: r.difference,
     reconcileNote: r.reconcileNote,
@@ -593,3 +604,25 @@ export const cashierRoutes: Record<string, MockHandler> = {
   'GET /api/cashier-shifts/:shiftId': getShift, // 20
   'POST /api/cashier-shifts/:shiftId/reconcile': reconcileShift, // 21
 };
+
+// ─── Cho mock trả hàng / hoàn tiền (T57, returns.mock.ts): như CashierShiftQueryApi / CashierShiftApi của BE, chỉ thêm export ───
+
+/** Ca `OPEN` của một lễ tân (mỗi người tối đa một ca mở); null nếu chưa mở. */
+export function openShiftOf(accountId: number): { shiftId: number; branchId: number } | null {
+  const shift = load().shifts.find((x) => x.cashierId === accountId && x.status === 'OPEN');
+  return shift ? { shiftId: shift.shiftId, branchId: shift.branchId } : null;
+}
+
+/** Hình thức đã thu của Order (`payments.method` qua `orders.payment_id`); null khi Order chưa có phiếu thu. */
+export function paymentMethodOfOrder(orderId: number): PaymentMethod | null {
+  const paymentId = ordersByIds([orderId])[0]?.paymentId;
+  return paymentId == null ? null : (load().payments.find((p) => p.paymentId === paymentId)?.method ?? null);
+}
+
+/** `CashierShiftApi.recordRefund` (BR-TG-13): tính hoàn tiền vào ca, đối soát ca trừ khoản này. Gọi lại cùng `refundId` không ghi thêm. */
+export function recordRefund(shiftId: number, method: PaymentMethod, amount: number, refundId: number): void {
+  const s = load();
+  if ((s.refunds ?? []).some((r) => r.refundId === refundId)) return;
+  s.refunds = [...(s.refunds ?? []), { refundId, shiftId, method, amount }];
+  save(s);
+}

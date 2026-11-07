@@ -17,6 +17,8 @@ import { OrderHistoryPage } from '../pages/customer/OrderHistoryPage';
 import { FavoritesPage } from '../pages/customer/FavoritesPage';
 import { NotificationsPage } from '../pages/customer/NotificationsPage';
 import { PaymentPage } from '../pages/customer/PaymentPage';
+import { PaymentGatewayMockPage } from '../pages/customer/PaymentGatewayMockPage';
+import { ComplaintsPage } from '../pages/customer/ComplaintsPage';
 import { SecurityPage } from '../pages/customer/SecurityPage';
 import { SettingsPage } from '../pages/customer/SettingsPage';
 import { HelpPage } from '../pages/customer/HelpPage';
@@ -69,6 +71,9 @@ import { AdminPromotionsPage } from '../pages/admin/AdminPromotionsPage';
 import { AdminMembershipPage } from '../pages/admin/AdminMembershipPage';
 import { AdminWarehousePage } from '../pages/admin/AdminWarehousePage';
 import { AdminWorkforcePage } from '../pages/admin/AdminWorkforcePage';
+import { MySchedulePage } from '../pages/admin/MySchedulePage';
+import { AdminInpatientPage } from '../pages/admin/AdminInpatientPage';
+import { AdminMyArticlesPage } from '../pages/admin/AdminMyArticlesPage';
 import { AdminIncidentsPage } from '../pages/admin/AdminIncidentsPage';
 import { AdminReportsPage } from '../pages/admin/AdminReportsPage';
 import { AdminAuditPage } from '../pages/admin/AdminAuditPage';
@@ -180,17 +185,20 @@ export function App() {
             <Route path="/boarding-bookings/:bookingId" element={<BoardingDetailPage />} />
             <Route path="/notifications" element={<NotificationsPage />} />
             <Route path="/settings" element={<SettingsPage />} />
+            {/* Tầng 3 (T57): mua hàng online UC61–64, thanh toán UC63, khiếu nại UC85 — giỏ và đơn nằm trên BE, nên cần đăng nhập */}
+            <Route path="/cart" element={<CartPage />} />
+            <Route path="/checkout" element={<CheckoutPage />} />
+            <Route path="/order/:id" element={<OrderConfirmationPage />} />
+            <Route path="/orders" element={<OrderHistoryPage />} />
+            <Route path="/payment" element={<PaymentPage />} />
+            <Route path="/payment/mock-gateway" element={<PaymentGatewayMockPage />} />
+            <Route path="/complaints" element={<ComplaintsPage />} />
           </Route>
 
           {/* Trang của spec cũ, ngoài phạm vi GĐ1 v16 (gỡ ở T57) */}
           <Route path="/shop" element={<ShopPage />} />
           <Route path="/shop/:id" element={<ProductDetailPage />} />
-          <Route path="/cart" element={<CartPage />} />
-          <Route path="/checkout" element={<CheckoutPage />} />
-          <Route path="/order/:id" element={<OrderConfirmationPage />} />
-          <Route path="/orders" element={<OrderHistoryPage />} />
           <Route path="/favorites" element={<FavoritesPage />} />
-          <Route path="/payment" element={<PaymentPage />} />
           <Route path="/membership" element={<MembershipPage />} />
           <Route path="/caregivers" element={<CaregiversPage />} />
           <Route path="/vouchers" element={<VouchersPage />} />
@@ -245,6 +253,9 @@ export function App() {
             <Route path="/admin/purchasing" element={<Navigate to="/admin/warehouse/receipts" replace />} />
             <Route path="/admin/vaccines" element={<Navigate to="/admin/warehouse/stock?productType=VACCINE" replace />} />
             <Route path="/admin/workforce" element={<AdminWorkforcePage />} />
+            <Route path="/admin/my-schedule" element={<MySchedulePage />} />
+            <Route path="/admin/inpatient" element={<AdminInpatientPage />} />
+            <Route path="/admin/my-articles" element={<AdminMyArticlesPage />} />
             <Route path="/admin/incidents" element={<AdminIncidentsPage />} />
             <Route path="/admin/reports" element={<AdminReportsPage />} />
             <Route path="/admin/audit" element={<AdminAuditPage />} />

@@ -8,11 +8,13 @@ import { NoticeBar, type Notice } from '../../components/admin/form-ui';
 import { plainMessage, toApiError } from '../../shared/api/api-error';
 import { useBranch } from '../../shared/hooks/useBranch';
 import { useAccount } from '../../shared/stores/session.store';
-import { BRANCH_STATUS_LABELS, type Branch } from '../../shared/types/branch';
+import { BRANCH_STATUS_LABELS, BRANCH_STATUS_VARIANT, type Branch } from '../../shared/types/branch';
 import { ActivateBranchModal } from './branch/ActivateBranchModal';
 import { BranchFormModal } from './branch/BranchFormModal';
 import { BranchServicesTab } from './branch/BranchServicesTab';
 import { HolidaysTab } from './branch/HolidaysTab';
+import { HomeVisitFeeCard } from './branch/HomeVisitFeeCard';
+import { LifecycleTab } from './branch/LifecycleTab';
 import { OpeningHoursTab } from './branch/OpeningHoursTab';
 import { QuotaTab } from './branch/QuotaTab';
 
@@ -21,19 +23,32 @@ interface TabDef {
   label: string;
   /** Quota chỉ BRANCH_MANAGER đọc được (SUPER_MANAGER bị 403). */
   managerOnly?: boolean;
-  render: (branch: Branch, canEdit: boolean) => ReactNode;
+  /** Vòng đời chi nhánh (UC13) chỉ SUPER_MANAGER. */
+  chainOnly?: boolean;
+  render: (branch: Branch, canEdit: boolean, isChain: boolean) => ReactNode;
 }
 
 const TABS: TabDef[] = [
   { key: 'hours', label: 'Giờ mở cửa', render: (b, canEdit) => <OpeningHoursTab branch={b} canEdit={canEdit} /> },
   { key: 'holidays', label: 'Ngày nghỉ', render: (b, canEdit) => <HolidaysTab branch={b} canEdit={canEdit} /> },
-  { key: 'services', label: 'Dịch vụ', render: (b, canEdit) => <BranchServicesTab branch={b} canEdit={canEdit} /> },
+  {
+    key: 'services',
+    label: 'Dịch vụ',
+    // Phí khám tại nhà (fees #3–4) BRANCH_MANAGER bị 403 nên chỉ SUPER_MANAGER thấy khối này.
+    render: (b, canEdit, isChain) => (
+      <div className="space-y-4">
+        <BranchServicesTab branch={b} canEdit={canEdit} />
+        {isChain && <HomeVisitFeeCard branch={b} />}
+      </div>
+    ),
+  },
   { key: 'quota', label: 'Quota lịch hẹn', managerOnly: true, render: (b) => <QuotaTab branch={b} /> },
+  { key: 'lifecycle', label: 'Tạm ngừng / đóng cửa', chainOnly: true, render: (b) => <LifecycleTab branch={b} /> },
 ];
 
 /**
  * T20 — cấu hình một chi nhánh (UC14, UC33, UC42). BRANCH_MANAGER của chi nhánh sửa được; SUPER_MANAGER chỉ xem
- * và sửa thông tin / kích hoạt chi nhánh (UC12). Mỗi tab một URL.
+ * và sửa thông tin / kích hoạt chi nhánh (UC12), đặt phí khám tại nhà (UC32), tạm ngừng / mở lại / đóng cửa (UC13). Mỗi tab một URL.
  */
 export function AdminBranchDetailPage() {
   const { branchId, tab } = useParams();
@@ -47,7 +62,7 @@ export function AdminBranchDetailPage() {
 
   const isManager = account?.role === 'BRANCH_MANAGER';
   const isChain = account?.role === 'SUPER_MANAGER';
-  const tabs = TABS.filter((t) => !t.managerOnly || isManager);
+  const tabs = TABS.filter((t) => (!t.managerOnly || isManager) && (!t.chainOnly || isChain));
   if (!tabs.some((t) => t.key === tab)) return <Navigate to={`/admin/branches/${id}/hours`} replace />;
 
   if (branch.isError) return <NoticeBar notice={{ kind: 'error', text: plainMessage(toApiError(branch.error)) }} />;
@@ -66,7 +81,7 @@ export function AdminBranchDetailPage() {
           )}
           <div className="flex flex-wrap items-center gap-3">
             <h1 className="text-2xl font-semibold text-(--text-primary)">{b.name}</h1>
-            <StatusBadge status={BRANCH_STATUS_LABELS[b.status]} variant={b.status === 'ACTIVE' ? 'success' : 'neutral'} />
+            <StatusBadge status={BRANCH_STATUS_LABELS[b.status]} variant={BRANCH_STATUS_VARIANT[b.status]} />
           </div>
           <p className="flex flex-wrap items-center gap-x-4 gap-y-1 text-sm text-(--text-secondary)">
             <span className="inline-flex items-center gap-1">
@@ -113,7 +128,7 @@ export function AdminBranchDetailPage() {
         </TabsList>
         {tabs.map((t) => (
           <TabsContent key={t.key} value={t.key} className="mt-4">
-            {t.render(b, isManager)}
+            {t.render(b, isManager, isChain)}
           </TabsContent>
         ))}
       </Tabs>

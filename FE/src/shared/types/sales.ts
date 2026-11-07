@@ -4,7 +4,8 @@
 export type OrderSource = 'VISIT' | 'RETAIL' | 'BOARDING';
 /** 03 #5 Order. */
 export type OrderStatus = 'OPEN' | 'PENDING' | 'PAID' | 'CANCELLED';
-export type OrderLineType = 'SERVICE' | 'GOODS' | 'DRUG' | 'VACCINE' | 'BOARDING';
+/** `HOME_FEE` (T57, homevisit-v1): phí khám tại nhà, không có serviceId / productId; hệ thống thêm khi bắt đầu khám, không sửa / xóa trực tiếp. */
+export type OrderLineType = 'SERVICE' | 'GOODS' | 'DRUG' | 'VACCINE' | 'BOARDING' | 'HOME_FEE';
 export type OrderCancelType = 'VISIT_CANCELLED' | 'RETAIL_UNCLOSED' | 'CHECKOUT_ABORTED' | 'UNPAID';
 
 export const ORDER_STATUS_LABELS: Record<OrderStatus, string> = {
@@ -20,6 +21,7 @@ export const ORDER_LINE_TYPE_LABELS: Record<OrderLineType, string> = {
   DRUG: 'Thuốc',
   VACCINE: 'Vaccine',
   BOARDING: 'Lưu trú',
+  HOME_FEE: 'Phí khám tại nhà',
 };
 export const CANCEL_TYPE_LABELS: Record<OrderCancelType, string> = {
   VISIT_CANCELLED: 'Hủy lượt tiếp nhận',

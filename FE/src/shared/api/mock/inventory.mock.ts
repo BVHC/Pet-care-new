@@ -99,6 +99,22 @@ interface ReceiptRow {
   cancelledAt: string | null;
   cancelReason: string | null;
 }
+/** Loại biến động của sổ lô (stockops-v1 `LotTraceEvent.kind`). */
+export type LotMovementKind = 'RECEIPT' | 'TRANSFER_IN' | 'TRANSFER_OUT' | 'TRANSFER_CANCEL' | 'ORDER_ISSUE' | 'VACCINATION' | 'ADJUSTMENT';
+/** Một dòng sổ lô (T57, `stock_movements` của BE): số lượng dương = nhập, âm = xuất. Chỉ ghi cùng chỗ đổi `quantity` của lô, nên tổng sổ = tồn của lô. */
+interface MovementRow {
+  id: number;
+  lotId: number;
+  branchId: number;
+  kind: LotMovementKind;
+  quantity: number;
+  occurredAt: string;
+  documentCode: string | null;
+  /** Phiếu chuyển kho của stockops.mock: mã chứng từ được tra theo id này, không lưu lại hai nơi. */
+  transferId?: number | null;
+  petId?: number | null;
+  customerId?: number | null;
+}
 interface State {
   seq: number;
   suppliers: Supplier[];
@@ -106,6 +122,77 @@ interface State {
   lots: LotRow[];
   receipts: ReceiptRow[];
   adjustments: StockAdjustment[];
+  /** Sổ lô. State lưu từ trước T57 chưa có: `load()` dựng một dòng tồn đầu cho mỗi lô còn hàng. */
+  movements: MovementRow[];
+}
+
+/** Phiếu chuyển kho mẫu (T57): sổ lô của mock kho đã tính sẵn các lần chuyển này nên tồn mẫu không đổi; stockops.mock dựng phiếu từ đây (khớp theo id). */
+export interface SeedTransfer {
+  transferId: number;
+  sourceBranchId: number;
+  destBranchId: number;
+  status: 'IN_TRANSIT' | 'RECEIVED' | 'CANCELLED';
+  createdDaysAgo: number;
+  /** Ngày nhận / hủy, tính theo số ngày trước hôm nay; null khi còn đang chuyển. */
+  closedDaysAgo: number | null;
+  cancelReason?: string;
+  lines: { productId: number; sourceLotId: number; destLotId: number | null; quantity: number }[];
+}
+export const SEED_TRANSFERS: readonly SeedTransfer[] = [
+  { transferId: 1, sourceBranchId: 2, destBranchId: 1, status: 'CANCELLED', createdDaysAgo: 8, closedDaysAgo: 8, cancelReason: 'Chi nhánh đích đã đủ hàng', lines: [{ productId: 1, sourceLotId: 18, destLotId: null, quantity: 2 }] },
+  { transferId: 2, sourceBranchId: 1, destBranchId: 2, status: 'RECEIVED', createdDaysAgo: 6, closedDaysAgo: 5, lines: [{ productId: 1, sourceLotId: 11, destLotId: 18, quantity: 5 }] },
+  { transferId: 3, sourceBranchId: 1, destBranchId: 2, status: 'IN_TRANSIT', createdDaysAgo: 2, closedDaysAgo: null, lines: [{ productId: 3, sourceLotId: 13, destLotId: null, quantity: 30 }] },
+  { transferId: 4, sourceBranchId: 2, destBranchId: 1, status: 'IN_TRANSIT', createdDaysAgo: 1, closedDaysAgo: null, lines: [{ productId: 1, sourceLotId: 18, destLotId: null, quantity: 3 }] },
+];
+
+/**
+ * Sổ lô mẫu (T57): mỗi lô có đường đi cộng lại đúng bằng tồn mẫu bên dưới (lô 11 = 12, 13 = 200, 18 = 7…), tất định theo `today`.
+ * Lô không có phiếu nhập trong mock có dòng nhập đầu kỳ (không mã chứng từ). Thú / khách gắn vào lần xuất của lô thuốc, vaccine
+ * (BR-KO-13); thú 1 Mochi, 2 Bim, 4 Lu, 5 Miu của customer-pet.mock.
+ */
+function seedMovements(today: string): MovementRow[] {
+  const rows: MovementRow[] = [];
+  const at = (daysAgo: number, time = '09:00') => `${addDays(today, -daysAgo)}T${time}:00+07:00`;
+  const add = (lotId: number, branchId: number, kind: LotMovementKind, quantity: number, daysAgo: number, extra: Partial<MovementRow> = {}) =>
+    rows.push({ id: rows.length + 1, lotId, branchId, kind, quantity, occurredAt: at(daysAgo), documentCode: null, ...extra });
+  const receiptCode = `PN-${dayCode(addDays(today, -30))}-0001`;
+  const dose = (lotId: number, daysAgo: number, petId: number, customerId: number) => add(lotId, 1, 'VACCINATION', -1, daysAgo, { petId, customerId, occurredAt: at(daysAgo, '10:30') });
+  const PETS: [number, number][] = [[1, 1], [2, 1], [5, 4], [4, 3]];
+
+  add(11, 1, 'RECEIPT', 18, 60);
+  add(11, 1, 'ADJUSTMENT', -1, 5, { documentCode: `DC-${dayCode(addDays(today, -5))}-0001`, occurredAt: at(5, '10:00') });
+  add(12, 1, 'RECEIPT', 10, 45);
+  add(12, 1, 'ORDER_ISSUE', -4, 20);
+  add(12, 1, 'ORDER_ISSUE', -3, 9);
+  add(13, 1, 'RECEIPT', 330, 80);
+  add(13, 1, 'ORDER_ISSUE', -60, 30, { petId: 4, customerId: 3 });
+  add(13, 1, 'ORDER_ISSUE', -40, 12, { petId: 5, customerId: 4 });
+  add(14, 1, 'RECEIPT', 500, 30, { documentCode: receiptCode, occurredAt: at(30, '09:30') });
+  add(15, 1, 'RECEIPT', 18, 30, { documentCode: receiptCode, occurredAt: at(30, '09:30') });
+  [20, 12, 4].forEach((d, i) => dose(15, d, ...PETS[i]));
+  add(16, 1, 'RECEIPT', 10, 200);
+  [150, 140, 130, 110, 95, 80, 60, 45].forEach((d, i) => dose(16, d, ...PETS[i % PETS.length]));
+  add(17, 1, 'RECEIPT', 10, 100);
+  [95, 80, 70, 50, 30, 10].forEach((d, i) => dose(17, d, ...PETS[i % PETS.length]));
+  add(18, 2, 'RECEIPT', 5, 40);
+  for (const t of SEED_TRANSFERS) {
+    for (const l of t.lines) {
+      add(l.sourceLotId, t.sourceBranchId, 'TRANSFER_OUT', -l.quantity, t.createdDaysAgo, { transferId: t.transferId });
+      if (t.status === 'RECEIVED') add(l.destLotId!, t.destBranchId, 'TRANSFER_IN', l.quantity, t.closedDaysAgo!, { transferId: t.transferId, occurredAt: at(t.closedDaysAgo!, '14:00') });
+      if (t.status === 'CANCELLED') add(l.sourceLotId, t.sourceBranchId, 'TRANSFER_CANCEL', l.quantity, t.closedDaysAgo!, { transferId: t.transferId, occurredAt: at(t.closedDaysAgo!, '15:00') });
+    }
+  }
+  return rows;
+}
+
+/** State lưu từ trước T57 không có sổ lô: mỗi lô còn hàng có một dòng tồn đầu bằng tồn hiện tại (ASSUMPTION: không dựng lại lịch sử cũ). */
+function openingMovements(s: Pick<State, 'items' | 'lots'>, today: string): MovementRow[] {
+  return s.lots
+    .filter((l) => l.quantity > 0)
+    .flatMap((l, i): MovementRow[] => {
+      const item = s.items.find((x) => x.id === l.itemId);
+      return item ? [{ id: i + 1, lotId: l.id, branchId: item.branchId, kind: 'RECEIPT', quantity: l.quantity, occurredAt: `${addDays(today, -1)}T08:00:00+07:00`, documentCode: null }] : [];
+    });
 }
 
 /** Ngày tương đối với hôm nay để "sắp hết hạn / đã hết hạn" đúng ở mọi ngày chạy. Quản lý chi nhánh 1 = tài khoản #3. */
@@ -208,6 +295,7 @@ function seed(today = localIsoDate()): State {
         createdAt: `${addDays(today, -5)}T10:00:00+07:00`,
       },
     ],
+    movements: seedMovements(today),
   };
 }
 
@@ -216,7 +304,10 @@ const STATE_KEY = 'petcare-mock-inventory';
 function load(): State {
   try {
     const raw = localStorage.getItem(STATE_KEY);
-    if (raw) return JSON.parse(raw) as State;
+    if (raw) {
+      const stored = JSON.parse(raw) as State;
+      return stored.movements ? stored : { ...stored, movements: openingMovements(stored, localIsoDate()) };
+    }
   } catch {
     // Dữ liệu hỏng: dùng lại dữ liệu mẫu.
   }
@@ -247,6 +338,12 @@ const expiresWithinWarning = (lot: LotRow, today: string) => lot.expiryDate !== 
 const sum = (xs: number[]) => xs.reduce((a, b) => a + b, 0);
 const lotsOf = (s: State, itemId: number) => s.lots.filter((l) => l.itemId === itemId);
 const itemOf = (s: State, branchId: number, productId: number) => s.items.find((i) => i.branchId === branchId && i.productId === productId);
+
+/** Ghi sổ lô; gọi ngay cạnh chỗ đổi `quantity` của lô để tổng sổ luôn bằng tồn. */
+function logMove(s: State, m: Pick<MovementRow, 'lotId' | 'branchId' | 'kind' | 'quantity'> & Partial<MovementRow>) {
+  s.movements.push({ occurredAt: new Date().toISOString(), documentCode: null, ...m, id: s.movements.length + 1 });
+}
+const branchOfLot = (s: State, lot: LotRow) => s.items.find((i) => i.id === lot.itemId)!.branchId;
 
 function itemView(s: State, p: Product, item: ItemRow | undefined, today: string): InventoryItem {
   const lots = item ? lotsOf(s, item.id) : [];
@@ -304,6 +401,13 @@ function fefoLots(s: State, branchId: number, productId: number, today: string):
     .sort((a, b) => (a.expiryDate ?? '9999-12-31').localeCompare(b.expiryDate ?? '9999-12-31') || a.id - b.id);
 }
 
+/** Thông tin kèm lần xuất cho sổ lô (tùy chọn; người gọi cũ không truyền thì dòng sổ không có mã chứng từ / thú / khách). */
+export interface MovementContext {
+  documentCode?: string | null;
+  petId?: number | null;
+  customerId?: number | null;
+}
+
 export interface IssuedLot {
   lotId: number;
   lotNumber: string | null;
@@ -314,21 +418,23 @@ export interface IssuedLot {
  * Trừ đúng 1 liều theo FEFO cho mũi tiêm (BR-KB-04, ST06: kho trừ NGAY khi ghi nhận mũi, không chờ PAID). Trả lô đã trừ (để hoàn đúng lô khi xóa mũi);
  * null khi không còn tồn khả dụng và khi đó không trừ gì.
  */
-export function issueOneFefo(branchId: number, productId: number): IssuedLot | null {
+export function issueOneFefo(branchId: number, productId: number, ctx: MovementContext = {}): IssuedLot | null {
   const s = load();
   const lot = fefoLots(s, branchId, productId, localIsoDate())[0];
   if (!lot) return null;
   lot.quantity -= 1;
+  logMove(s, { lotId: lot.id, branchId, kind: 'VACCINATION', quantity: -1, ...ctx });
   save(s);
   return { lotId: lot.id, lotNumber: lot.lotNumber, expiryDate: lot.expiryDate };
 }
 
 /** Hoàn kho vào ĐÚNG lô đã trừ (xóa mũi ghi nhầm, BR-KB-04), kể cả khi lô đã hết hạn lúc hoàn. */
-export function returnToLot(lotId: number, quantity: number): void {
+export function returnToLot(lotId: number, quantity: number, ctx: MovementContext = {}): void {
   const s = load();
   const lot = s.lots.find((l) => l.id === lotId);
   if (!lot) return;
   lot.quantity += quantity;
+  logMove(s, { lotId, branchId: branchOfLot(s, lot), kind: 'VACCINATION', quantity, ...ctx });
   save(s);
 }
 
@@ -337,7 +443,7 @@ export function returnToLot(lotId: number, quantity: number): void {
  * thì không trừ gì và trả danh sách thiếu (mã sản phẩm tăng dần); đủ thì trừ FEFO — hạn dùng sớm nhất trước, lô mặc định (không hạn)
  * cuối, cùng hạn thì id nhỏ trước — và lưu số dư lô. Không bao giờ lấy lô đã hết hạn (BR-KO-05).
  */
-export function issueFefo(branchId: number, lines: { productId: number; quantity: number }[]): StockShortage[] {
+export function issueFefo(branchId: number, lines: { productId: number; quantity: number }[], ctx: MovementContext = {}): StockShortage[] {
   const requested = new Map<number, number>();
   for (const l of lines) requested.set(l.productId, (requested.get(l.productId) ?? 0) + l.quantity);
   if (requested.size === 0) return [];
@@ -357,6 +463,7 @@ export function issueFefo(branchId: number, lines: { productId: number; quantity
       const take = Math.min(lot.quantity, remaining);
       lot.quantity -= take;
       remaining -= take;
+      logMove(s, { lotId: lot.id, branchId, kind: 'ORDER_ISSUE', quantity: -take, ...ctx });
       if (remaining === 0) break;
     }
   }
@@ -735,6 +842,7 @@ const confirmReceipt: MockHandler = (req) => {
     const lot = lotForLine(s, item, line, productOf(line.productId)!.tracksExpiry);
     lot.quantity += line.quantity;
     line.stockLotId = lot.id;
+    logMove(s, { lotId: lot.id, branchId: r.branchId, kind: 'RECEIPT', quantity: line.quantity, documentCode: r.code });
   }
   r.status = 'CONFIRMED';
   r.confirmedBy = req.account!.id;
@@ -767,7 +875,11 @@ const cancelReceipt: MockHandler = (req) => {
     if (shortages.length) {
       return ruleFail('BR-KO-04', `Không hủy được: ${shortages.join('; ')}. Dùng phiếu điều chỉnh tồn (BR-KO-06)`);
     }
-    for (const l of r.lines) s.lots.find((x) => x.id === l.stockLotId)!.quantity -= l.quantity;
+    for (const l of r.lines) {
+      s.lots.find((x) => x.id === l.stockLotId)!.quantity -= l.quantity;
+      // ASSUMPTION: `LotTraceEvent.kind` không có "hủy phiếu nhập", ghi ADJUSTMENT kèm mã phiếu.
+      logMove(s, { lotId: l.stockLotId!, branchId: r.branchId, kind: 'ADJUSTMENT', quantity: -l.quantity, documentCode: r.code });
+    }
   } else if (r.status !== 'DRAFT') {
     return fail('INVALID_STATE_TRANSITION', 'Phiếu nhập đã hủy', 409);
   }
@@ -823,9 +935,12 @@ const createAdjustment: MockHandler = (req) => {
     .filter(({ lot, delta }) => delta < 0 && lot.quantity + delta < 0)
     .map(({ lot, delta }) => `lô ${lot.isDefault ? `mặc định #${lot.id}` : `${lot.lotNumber} (hạn ${lot.expiryDate})`} còn ${lot.quantity}, giảm ${-delta}`);
   if (lacking.length) return ruleFail('BR-KO-06', `Không giảm quá tồn của lô: ${lacking.join('; ')}`);
+  const adjustmentId = s.adjustments.length + 1;
+  const adjustmentCode = `DC-${dayCode(localIsoDate())}-${pad4(adjustmentId)}`;
   const adjustmentLines: AdjustmentLine[] = lines!.map((l, i) => {
     const { lot, item } = found[i]!;
     lot.quantity += l.quantityDelta as number;
+    logMove(s, { lotId: lot.id, branchId, kind: 'ADJUSTMENT', quantity: l.quantityDelta as number, documentCode: adjustmentCode });
     return {
       stockLotId: lot.id,
       productId: item.productId,
@@ -835,10 +950,9 @@ const createAdjustment: MockHandler = (req) => {
       balanceAfter: lot.quantity,
     };
   });
-  const adjustmentId = s.adjustments.length + 1;
   const created: StockAdjustment = {
     adjustmentId,
-    code: `DC-${dayCode(localIsoDate())}-${pad4(adjustmentId)}`,
+    code: adjustmentCode,
     branchId,
     reason: b.reason as AdjustmentReason,
     note: optional(b.note),
@@ -890,6 +1004,167 @@ export function stockSnapshot(today: string): StockSnapshotItem[] {
       lots: lots.map((l) => ({ stockLotId: l.id, lotNumber: l.lotNumber, expiryDate: l.expiryDate, quantity: l.quantity, expired: isExpired(l, today) })),
     };
   });
+}
+
+// ─── Cho mock chuyển kho / kiểm kê / truy vết lô (T57, stockops.mock.ts) và vật tư tiêu hao (materialuse.mock.ts): chỉ THÊM export ───
+// Như `StockApi.transferOut / transferIn / transferCancel / issueMaterials` và `StockQueryApi.findMovementsOfLot` (docs/08 §E, docs/09 §E).
+// Chi nhánh luôn do người gọi truyền vào (stockops.mock lấy từ `branchIdOf`), không đọc từ tài khoản ở đây.
+
+export interface LotInfo {
+  lotId: number;
+  branchId: number;
+  productId: number;
+  lotNumber: string | null;
+  expiryDate: string | null;
+  quantity: number;
+  isDefault: boolean;
+}
+const lotInfoOfRow = (s: State, lot: LotRow): LotInfo => ({
+  lotId: lot.id,
+  branchId: branchOfLot(s, lot),
+  productId: s.items.find((i) => i.id === lot.itemId)!.productId,
+  lotNumber: lot.lotNumber,
+  expiryDate: lot.expiryDate,
+  quantity: lot.quantity,
+  isDefault: lot.isDefault,
+});
+
+/** Mọi lô của mọi chi nhánh, kể cả lô đã hết hàng (truy hồi lô đã dùng hết vẫn cần tìm được). */
+export function allLots(): LotInfo[] {
+  const s = load();
+  return s.lots.map((l) => lotInfoOfRow(s, l));
+}
+export const lotInfoOf = (lotId: number): LotInfo | undefined => allLots().find((l) => l.lotId === lotId);
+
+/** Lô còn tồn (> 0) của chi nhánh, tùy chọn chỉ sản phẩm thuộc một danh mục: phạm vi của một phiên kiểm kê (BR-KO-12). */
+export function countableLots(branchId: number, categoryId: number | null): LotInfo[] {
+  return allLots().filter((l) => l.branchId === branchId && l.quantity > 0 && (categoryId === null || productOf(l.productId)?.categoryId === categoryId));
+}
+
+export interface LotMovement {
+  id: number;
+  lotId: number;
+  branchId: number;
+  kind: LotMovementKind;
+  quantity: number;
+  occurredAt: string;
+  documentCode: string | null;
+  transferId: number | null;
+  petId: number | null;
+  customerId: number | null;
+}
+/** Sổ của một lô, cũ nhất trước (`StockQueryApi.findMovementsOfLot`). */
+export function lotMovements(lotId: number): LotMovement[] {
+  return load()
+    .movements.filter((m) => m.lotId === lotId)
+    .map((m) => ({ transferId: null, petId: null, customerId: null, ...m }))
+    .sort((a, b) => Date.parse(a.occurredAt) - Date.parse(b.occurredAt) || a.id - b.id);
+}
+
+export interface TransferSlice {
+  lotId: number;
+  lotNumber: string | null;
+  expiryDate: string | null;
+  quantity: number;
+}
+export interface TransferContext {
+  documentCode: string;
+  transferId: number;
+}
+
+/**
+ * BR-KO-08: trừ `quantity` của sản phẩm khỏi lô nguồn theo FEFO (chỉ lô chưa hết hạn); trả các lô đã trừ, mỗi lô một mục. Thiếu tồn khả dụng
+ * thì trả null và không trừ gì. Người gọi kiểm `availableQuantity` của mọi dòng trước để phiếu có nhiều dòng không bị trừ dở.
+ */
+export function transferOut(branchId: number, productId: number, quantity: number, ctx: TransferContext): TransferSlice[] | null {
+  const s = load();
+  const lots = fefoLots(s, branchId, productId, localIsoDate());
+  if (sum(lots.map((l) => l.quantity)) < quantity) return null;
+  let remaining = quantity;
+  const slices: TransferSlice[] = [];
+  for (const lot of lots) {
+    if (remaining === 0) break;
+    const take = Math.min(lot.quantity, remaining);
+    lot.quantity -= take;
+    remaining -= take;
+    slices.push({ lotId: lot.id, lotNumber: lot.lotNumber, expiryDate: lot.expiryDate, quantity: take });
+    logMove(s, { lotId: lot.id, branchId, kind: 'TRANSFER_OUT', quantity: -take, ...ctx });
+  }
+  save(s);
+  return slices;
+}
+
+/** BR-KO-09: tạo (hoặc cộng vào) lô ở chi nhánh đích với đúng số lô, hạn dùng; số lô null = lô mặc định. Trả id lô đích. */
+export function transferIn(branchId: number, productId: number, lotNumber: string | null, expiryDate: string | null, quantity: number, ctx: TransferContext): number {
+  const s = load();
+  const item = itemFor(s, branchId, productId);
+  const lot = lotForLine(s, item, { lineId: 0, productId, quantity, unitCost: 0, lotNumber, expiryDate, stockLotId: null }, lotNumber !== null);
+  lot.quantity += quantity;
+  logMove(s, { lotId: lot.id, branchId, kind: 'TRANSFER_IN', quantity, ...ctx });
+  save(s);
+  return lot.id;
+}
+
+/** BR-KO-10: hoàn đúng lô nguồn, kể cả khi lô đã hết hạn lúc hoàn (như `returnToLot`). */
+export function transferCancel(sourceLotId: number, quantity: number, ctx: TransferContext): void {
+  const s = load();
+  const lot = s.lots.find((l) => l.id === sourceLotId);
+  if (!lot) return;
+  lot.quantity += quantity;
+  logMove(s, { lotId: lot.id, branchId: branchOfLot(s, lot), kind: 'TRANSFER_CANCEL', quantity, ...ctx });
+  save(s);
+}
+
+/**
+ * BR-KO-12: điều chỉnh `COUNT_DIFF` (số đếm − tồn hiện tại) cho các lô lệch của chi nhánh, một phiếu duy nhất; trả phiếu, null khi không lô nào lệch.
+ * ASSUMPTION: `COUNT_DIFF` chưa có trong enum `AdjustmentReason` của inventory-v1 / `types/inventory.ts`, nên ép kiểu ở đây.
+ */
+export function applyCountDiff(branchId: number, accountId: number, counts: { stockLotId: number; countedQty: number }[], note: string | null): StockAdjustment | null {
+  const s = load();
+  const diffs = counts.flatMap(({ stockLotId, countedQty }) => {
+    const found = lotInBranch(s, stockLotId, branchId);
+    return found && found.lot.quantity !== countedQty ? [{ ...found, countedQty }] : [];
+  });
+  if (diffs.length === 0) return null;
+  const adjustmentId = s.adjustments.length + 1;
+  const code = `DC-${dayCode(localIsoDate())}-${pad4(adjustmentId)}`;
+  const lines: AdjustmentLine[] = diffs.map(({ lot, item, countedQty }) => {
+    const quantityDelta = countedQty - lot.quantity;
+    lot.quantity = countedQty;
+    logMove(s, { lotId: lot.id, branchId, kind: 'ADJUSTMENT', quantity: quantityDelta, documentCode: code });
+    return { stockLotId: lot.id, productId: item.productId, productName: productOf(item.productId)?.name ?? '', lotNumber: lot.lotNumber, quantityDelta, balanceAfter: lot.quantity };
+  });
+  const created: StockAdjustment = { adjustmentId, code, branchId, reason: 'COUNT_DIFF' as AdjustmentReason, note, lines, createdBy: accountId, createdAt: new Date().toISOString() };
+  s.adjustments.push(created);
+  save(s);
+  return created;
+}
+
+export interface MaterialIssue {
+  productId: number;
+  issued: number;
+  shortage: number;
+}
+/**
+ * `StockApi.issueMaterials` (ST07, BR-KB-13): xuất FEFO phần có, KHÔNG chặn khi thiếu mà trả số thiếu theo từng dòng (khác `issueFefo`, thiếu là không trừ gì).
+ * ASSUMPTION: `LotTraceEvent.kind` không có loại cho vật tư tiêu hao, ghi ORDER_ISSUE.
+ */
+export function issueMaterials(branchId: number, lines: { productId: number; quantity: number }[], ctx: MovementContext = {}): MaterialIssue[] {
+  const s = load();
+  const today = localIsoDate();
+  const result = lines.map(({ productId, quantity }) => {
+    let remaining = quantity;
+    for (const lot of fefoLots(s, branchId, productId, today)) {
+      if (remaining === 0) break;
+      const take = Math.min(lot.quantity, remaining);
+      lot.quantity -= take;
+      remaining -= take;
+      logMove(s, { lotId: lot.id, branchId, kind: 'ORDER_ISSUE', quantity: -take, ...ctx });
+    }
+    return { productId, issued: quantity - remaining, shortage: remaining };
+  });
+  save(s);
+  return result;
 }
 
 export const inventoryRoutes: Record<string, MockHandler> = {

@@ -20,6 +20,7 @@ import { QueryError, RowsSkeleton, WsButton } from '../ui';
 import { AddendaSection } from './AddendaSection';
 import { fieldClass } from './field-class';
 import { PrescriptionSection } from './PrescriptionSection';
+import { SurgerySection } from './SurgerySection';
 import { VaccinationSection } from './VaccinationSection';
 
 interface Props {
@@ -157,6 +158,7 @@ function Editor({ visit, userId, perms, summary, onCompleted, record }: Props & 
 
           {editable && perms.writeRecord && <WeightBox visit={visit} />}
           {visit.serviceGroup === 'MEDICAL' && <VaccinationSection visit={visit} doses={record.vaccinations} canVaccinate={editable && perms.vaccinate} />}
+          {visit.serviceGroup === 'MEDICAL' && <SurgerySection visit={visit} canManage={editable && perms.writeRecord} />}
           <OrderLines orderId={visit.orderId} />
           <PrescriptionSection visitId={visit.visitId} items={record.prescriptions} canPrescribe={editable && perms.prescribe} />
           {record.locked && <AddendaSection visitId={visit.visitId} addenda={record.addenda} canAdd={perms.addendum} />}

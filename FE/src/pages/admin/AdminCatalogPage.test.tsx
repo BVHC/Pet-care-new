@@ -1,4 +1,4 @@
-import { render, screen, waitFor, within } from '@testing-library/react';
+import { fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { MemoryRouter, Route, Routes, useLocation } from 'react-router-dom';
@@ -268,5 +268,90 @@ describe('vaccination protocols (UC31)', () => {
     await user.click(within(form).getByRole('button', { name: 'Thêm vào phác đồ' }));
 
     expect(await rowOf('Ho cũi')).toBeInTheDocument();
+  });
+});
+
+// Phí & định mức (UC32): dữ liệu mẫu ở shared/api/mock/fees.mock.ts — phí vận chuyển 30.000 đ, miễn phí từ 500.000 đ;
+// dịch vụ 1 "Khám tổng quát" có định mức Amoxicillin ×2 và Vitamin ×1; "Tiêm phòng" chưa có định mức.
+describe('fees tab (UC32)', () => {
+  const pickService = async (user: ReturnType<typeof userEvent.setup>, name: string) => {
+    await screen.findByRole('option', { name });
+    await user.selectOptions(screen.getByLabelText('Chọn dịch vụ'), name);
+  };
+
+  it('is reachable as a tab and shows the current shipping fee', async () => {
+    const user = userEvent.setup();
+    renderAt('/admin/catalog/products');
+    await user.click(screen.getByRole('tab', { name: 'Phí & định mức' }));
+    expect(screen.getByTestId('where')).toHaveTextContent('/admin/catalog/fees');
+    expect(await screen.findByLabelText('Phí vận chuyển cơ bản (₫)')).toHaveValue(30000);
+    expect(screen.getByLabelText('Miễn phí từ tiền hàng (₫)')).toHaveValue(500000);
+  });
+
+  it('saves the shipping fee and shows the new numbers; a negative fee is refused by the server (BR-SP-08) and the draft stays', async () => {
+    const user = userEvent.setup();
+    renderAt('/admin/catalog/fees');
+    const base = await screen.findByLabelText('Phí vận chuyển cơ bản (₫)');
+    fireEvent.change(base, { target: { value: '-5' } }); // gõ dấu trừ vào ô số không ổn định trong jsdom
+    await user.click(screen.getByRole('button', { name: 'Lưu phí vận chuyển' }));
+    expect(await screen.findByRole('alert')).toHaveTextContent('Phí cơ bản phải là số nguyên từ 0 trở lên');
+    expect(base).toHaveValue(-5); // nháp không bị làm mới đè
+
+    await user.clear(base);
+    await user.type(base, '25000');
+    await user.click(screen.getByRole('button', { name: 'Lưu phí vận chuyển' }));
+    expect(await screen.findByText(/Đã lưu phí vận chuyển/)).toBeInTheDocument();
+    await waitFor(() => expect(screen.getByText(/Hiện tại: 25\.000/)).toBeInTheDocument());
+    expect(screen.queryByRole('alert')).not.toBeInTheDocument();
+  });
+
+  it('blocks an empty fee field instead of saving 0', async () => {
+    const user = userEvent.setup();
+    renderAt('/admin/catalog/fees');
+    await user.clear(await screen.findByLabelText('Miễn phí từ tiền hàng (₫)'));
+    await user.click(screen.getByRole('button', { name: 'Lưu phí vận chuyển' }));
+    expect(await screen.findByRole('alert')).toHaveTextContent('Nhập phí cơ bản và ngưỡng miễn phí');
+  });
+
+  it('shows the material norms of the chosen service, then adds a product (no vaccines offered) and saves', async () => {
+    const user = userEvent.setup();
+    renderAt('/admin/catalog/fees');
+    await pickService(user, 'Khám tổng quát');
+    const table = await screen.findByRole('table', { name: 'Định mức vật tư' });
+    expect(within(table).getByLabelText('Số lượng Amoxicillin 250mg')).toHaveValue(2);
+    expect(within(table).getByLabelText('Số lượng Vitamin tổng hợp PetCare')).toHaveValue(1);
+
+    const picker = screen.getByLabelText('Thêm vật tư');
+    await waitFor(() => expect(within(picker).getByRole('option', { name: /Pate Whiskas/ })).toBeInTheDocument());
+    expect(within(picker).queryByRole('option', { name: /Vaccine/ })).not.toBeInTheDocument();
+    expect(within(picker).queryByRole('option', { name: /Amoxicillin/ })).not.toBeInTheDocument(); // đã có trong bảng
+    await user.selectOptions(picker, 'Pate Whiskas 85g (gói)');
+    await user.click(screen.getByRole('button', { name: 'Lưu định mức' }));
+    expect(await screen.findByText('Đã lưu định mức vật tư.')).toBeInTheDocument();
+    expect(within(await screen.findByRole('table', { name: 'Định mức vật tư' })).getByLabelText('Số lượng Pate Whiskas 85g')).toHaveValue(1);
+  });
+
+  it('shows the server rule when a quantity is below 1 (BR-SP-10) and removing every row clears the norms', async () => {
+    const user = userEvent.setup();
+    renderAt('/admin/catalog/fees');
+    await pickService(user, 'Cắt tỉa lông');
+    const qty = await screen.findByLabelText('Số lượng Pate Whiskas 85g');
+    await user.clear(qty);
+    await user.type(qty, '0');
+    await user.click(screen.getByRole('button', { name: 'Lưu định mức' }));
+    expect(await screen.findByRole('alert')).toHaveTextContent('phải là số nguyên từ 1 trở lên');
+
+    await user.click(screen.getByRole('button', { name: 'Bỏ Pate Whiskas 85g' }));
+    await user.click(screen.getByRole('button', { name: 'Lưu định mức' }));
+    expect(await screen.findByText('Đã xóa hết định mức vật tư của dịch vụ.')).toBeInTheDocument();
+    expect(screen.getByText('Dịch vụ này chưa có định mức vật tư.')).toBeInTheDocument();
+  });
+
+  it('hides the forms from anyone but the chain manager', async () => {
+    await useSession.getState().login({ email: 'manager@store1.vn', password: MOCK_PASSWORD });
+    renderAt('/admin/catalog/fees');
+    expect(await screen.findByText('Chỉ quản lý chuỗi cấu hình phí và định mức')).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Lưu phí vận chuyển' })).not.toBeInTheDocument();
+    expect(screen.queryByLabelText('Chọn dịch vụ')).not.toBeInTheDocument();
   });
 });

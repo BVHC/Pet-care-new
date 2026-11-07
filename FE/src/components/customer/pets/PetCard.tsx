@@ -4,7 +4,8 @@
  */
 import { HeartCrack } from 'lucide-react';
 import { cn } from '@/lib/utils';
-import { SPECIES_EMOJI, SPECIES_LABEL } from '@/domains/pets/labels';
+import { SPECIES_LABEL } from '@/domains/pets/labels';
+import { SpeciesIcon } from './pet-presentation';
 
 interface Props {
   pet: {
@@ -54,7 +55,7 @@ export function PetCard({ pet, selected, onClick, className }: Props) {
       <div className="mb-3 flex items-start justify-between">
         <div
           className={cn(
-            'flex h-16 w-16 items-center justify-center rounded-2xl text-3xl',
+            'flex h-16 w-16 items-center justify-center rounded-2xl text-stone-700',
             isDeceased
               ? 'bg-slate-100 grayscale'
               : pet.species === 'DOG'
@@ -67,7 +68,7 @@ export function PetCard({ pet, selected, onClick, className }: Props) {
           {pet.photoUrl ? (
             <img src={pet.photoUrl} alt={pet.name} className="h-16 w-16 rounded-2xl object-cover" />
           ) : (
-            SPECIES_EMOJI[pet.species]
+            <SpeciesIcon species={pet.species} className="h-8 w-8" />
           )}
         </div>
         {isDeceased && (

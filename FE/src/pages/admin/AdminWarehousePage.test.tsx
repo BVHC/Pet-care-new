@@ -81,11 +81,11 @@ describe('AdminWarehousePage (T24 — UC73–76)', () => {
     expect(within(row).queryByRole('button', { name: /Tồn tối thiểu/ })).not.toBeInTheDocument();
   });
 
-  it('quản lý: 4 tab, lọc dưới tồn tối thiểu, xem lô có cờ hết hạn, đặt tồn tối thiểu', async () => {
+  it('quản lý: 8 tab, lọc dưới tồn tối thiểu, xem lô có cờ hết hạn, đặt tồn tối thiểu', async () => {
     await signIn('manager@store1.vn');
     const user = renderAt('/admin/warehouse');
     await rowOf('Hạt Royal Canin Mini Adult 2kg');
-    expect(screen.getAllByRole('tab').map((t) => t.textContent)).toEqual(['Tồn kho', 'Phiếu nhập', 'Điều chỉnh tồn', 'Nhà cung cấp']);
+    expect(screen.getAllByRole('tab').map((t) => t.textContent)).toEqual(['Tồn kho', 'Phiếu nhập', 'Điều chỉnh tồn', 'Nhà cung cấp', 'Chuyển kho', 'Kiểm kê', 'Truy vết lô', 'Thiếu hụt vật tư']);
 
     await user.click(screen.getByLabelText('Chỉ hàng dưới tồn tối thiểu'));
     await waitFor(() => expect(screen.queryByText('Hạt Royal Canin Mini Adult 2kg')).not.toBeInTheDocument());

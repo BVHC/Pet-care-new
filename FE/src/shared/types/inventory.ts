@@ -2,7 +2,7 @@
 import type { ProductType } from './catalog';
 
 export type ReceiptStatus = 'DRAFT' | 'CONFIRMED' | 'CANCELLED';
-export type AdjustmentReason = 'DAMAGED' | 'EXPIRED' | 'COUNT_MISMATCH' | 'OTHER';
+export type AdjustmentReason = 'DAMAGED' | 'EXPIRED' | 'COUNT_MISMATCH' | 'OTHER' | 'COUNT_DIFF';
 
 export const RECEIPT_STATUS_LABELS: Record<ReceiptStatus, string> = { DRAFT: 'Nháp', CONFIRMED: 'Đã nhập kho', CANCELLED: 'Đã hủy' };
 export const ADJUSTMENT_REASON_LABELS: Record<AdjustmentReason, string> = {
@@ -10,6 +10,7 @@ export const ADJUSTMENT_REASON_LABELS: Record<AdjustmentReason, string> = {
   EXPIRED: 'Hết hạn',
   COUNT_MISMATCH: 'Lệch kiểm đếm',
   OTHER: 'Khác',
+  COUNT_DIFF: 'Chênh lệch kiểm kê',
 };
 /**
  * [CFG] stock.expiry_warning_days mặc định 30 (7–180). Chỉ còn dùng cho bộ lọc "Có lô hết hạn trong 30 ngày" (BE chưa có tham số lọc `expiringSoon`,

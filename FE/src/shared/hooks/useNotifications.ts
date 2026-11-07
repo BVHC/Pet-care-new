@@ -10,8 +10,10 @@ import {
 import { toast } from 'sonner';
 import { careApi } from '../api/care.api';
 import { plainMessage, toApiError } from '../api/api-error';
+import { POLL } from '../api/axios';
 import { rolesForPath } from '../constants/staff-menu';
 import { useAccount } from '../stores/session.store';
+import { useAccessValid } from './useAccessValid';
 import type { Role } from '../types/auth';
 import type { AppNotification } from '../types/care';
 
@@ -47,11 +49,12 @@ function useNotificationsEnabled(): boolean {
 
 export function useUnreadCount() {
   const enabled = useNotificationsEnabled();
+  const open = useAccessValid();
   return useQuery({
     queryKey: UNREAD_KEY,
-    queryFn: careApi.countUnread,
+    queryFn: () => careApi.countUnread(POLL),
     select: (data) => data.count,
-    enabled,
+    enabled: enabled && open,
     refetchInterval: UNREAD_POLL_MS,
   });
 }

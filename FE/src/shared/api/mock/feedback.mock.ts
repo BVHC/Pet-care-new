@@ -415,6 +415,18 @@ const resolveFeedback: MockHandler = ({ account, params, body }) => {
 /** Cho mock báo cáo (T49, như *ReportApi của BE, 06 §8 Q3): mọi feedback của mọi chi nhánh, chỉ đọc. */
 export const feedbackRecords = (): readonly FeedbackRecord[] => load().feedbacks;
 
+/** UC27 (custmerge-v1 preview): số feedback của một hồ sơ khách, mọi trạng thái. */
+export const feedbackCountOf = (customerId: number): number => load().feedbacks.filter((f) => f.customerId === customerId).length;
+
+/** UC27 (BR-KH-12, `CustomerMergedEvent` của module content): chuyển feedback của hồ sơ nguồn sang hồ sơ đích, giữ nguyên trạng thái và ghi chú xử lý. Trả số bản ghi đã chuyển. */
+export function moveFeedbacks(fromId: number, toId: number): number {
+  const state = load();
+  const moving = state.feedbacks.filter((f) => f.customerId === fromId);
+  for (const f of moving) f.customerId = toId;
+  if (moving.length) save(state);
+  return moving.length;
+}
+
 export const feedbackRoutes: Record<string, MockHandler> = {
   'POST /api/me/feedbacks': submitFeedback,
   'GET /api/me/feedbacks': listMyFeedbacks,

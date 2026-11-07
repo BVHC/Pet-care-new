@@ -422,6 +422,11 @@ const completeVisit: MockHandler = (req) => {
   if (ROLE_OF_GROUP[visit.serviceGroup] !== me(req).role) return ruleFail('BR-TN-05', 'Chức vụ hiện tại không phụ trách được nhóm dịch vụ của lượt — cần gán lại lượt');
   const wrongState = transition(visit.status, 'COMPLETED');
   if (wrongState) return wrongState;
+  // T57: phẫu thuật còn mở (BR-KB-10) và ca nội trú còn ADMITTED (BR-LT-14) chặn hoàn tất; mock tầng 3 đăng ký guard, chưa đăng ký thì không có gì để chặn.
+  for (const guard of completionGuards.values()) {
+    const blocked = guard(visitId);
+    if (blocked) return blocked;
+  }
   if (visit.serviceGroup === 'MEDICAL') {
     const rejected = completionGuard(load(), visit);
     if (rejected) return rejected;
@@ -432,6 +437,8 @@ const completeVisit: MockHandler = (req) => {
   if (visit.appointmentId !== null) completeAppointmentByVisit(visit.appointmentId);
   markOrderPendingByVisit(visitId, at);
   if (!hasOtherOpenVisit(visit.petId, visitId)) setPetOpenVisit(visit.petId, false);
+  // T57: việc chạy cùng giao dịch hoàn tất (ST07 trừ vật tư tiêu hao, BR-KB-12); chưa đăng ký thì không có gì để chạy.
+  for (const listener of completionListeners.values()) listener(done);
   return ok(visitView(done), 200, 'Đã hoàn tất lượt');
 };
 
@@ -733,6 +740,26 @@ const deletePrescription: MockHandler = (req) => {
   save(s);
   return noContent();
 };
+
+// ─── Cho mock phẫu thuật / nội trú (T57), chỉ thêm export ───
+
+/** Guard hoàn tất lượt của module tầng 3, theo tên để nạp lại module không đăng ký hai lần. Trả 400 `ruleFail` để chặn, null để cho qua. */
+const completionGuards = new Map<string, (visitId: number) => MockReply | null>();
+export function registerCompletionGuard(name: string, guard: (visitId: number) => MockReply | null) {
+  completionGuards.set(name, guard);
+}
+
+/** Việc chạy SAU khi hoàn tất lượt thành công (ST07, BR-KB-12), theo tên để nạp lại module không đăng ký hai lần. Nhận dòng lượt đã COMPLETED; Order đã sang PENDING nhưng các dòng còn nguyên. */
+const completionListeners = new Map<string, (visit: VisitRow) => void>();
+export function registerCompletionListener(name: string, listener: (visit: VisitRow) => void) {
+  completionListeners.set(name, listener);
+}
+
+/** Mã các dòng đơn thuốc của lượt, cho y lệnh `MEDICATION` liên kết đúng dòng đơn của Visit (BR-LT-15). */
+export const prescriptionItemIdsOfVisit = (visitId: number): number[] =>
+  load()
+    .prescriptions.filter((p) => p.visitId === visitId)
+    .map((p) => p.itemId);
 
 // ─── Cho mock lưu trú (T48, boarding.mock.ts): như VaccinationQueryApi.findBoardingVaccineGaps của BE, chỉ thêm export ───
 

@@ -2,6 +2,7 @@ import type { ReactNode } from 'react';
 import { renderHook, waitFor } from '@testing-library/react';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { POLL } from '../api/axios';
 import { salesApi } from '../api/sales.api';
 import { useSession } from '../stores/session.store';
 import type { AccountSummary, Role } from '../types/auth';
@@ -39,7 +40,7 @@ describe('usePendingSalesOrders', () => {
     signIn('RECEPTIONIST');
     const { result } = renderHook(() => usePendingSalesOrders(), { wrapper });
     await waitFor(() => expect(result.current.data?.map((o) => o.orderId)).toEqual([2, 4]));
-    expect(salesApi.listOrders).toHaveBeenCalledWith({ status: 'PENDING', size: 100 });
+    expect(salesApi.listOrders).toHaveBeenCalledWith({ status: 'PENDING', size: 100 }, POLL);
   });
 
   it.each(['BRANCH_MANAGER', 'VET', 'CARETAKER'] as Role[])('%s (A05, A07, A08) cũng đọc được danh sách Order', async (role) => {

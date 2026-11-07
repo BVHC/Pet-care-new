@@ -1,6 +1,8 @@
 import type { AxiosInstance } from 'axios';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { ACCOUNTS, authAs, failure, makeClient, pinClock } from '../../../test/boarding-harness';
+import { registerAdmissionSource } from './boarding.mock';
+import { hasActiveAdmission } from './inpatient.mock';
 import { recordDoseForMock } from './visit-clinical.mock';
 
 // Nhận thú (#13, #14), hủy vì hết chuồng (#15), trả thú (#16–18) và hủy phiên trả thú (sales #9) — mock chép BE (BoardingCheckInService, BoardingCheckoutService, BoardingRules, PetWeightApiService).
@@ -720,5 +722,41 @@ describe('đặt lại sau khi đặt chỗ cũ đã CHECKED_OUT (Review Focus #
     await client.post('/api/payments', { orderIds: [orderId], method: 'CASH', amount }, await desk());
     await handOver(4);
     expect((await client.post('/api/boarding-bookings', again, await desk())).status).toBe(201);
+  });
+});
+
+describe('guard BR-LT-17 — thú còn ca nội trú ADMITTED không trả được (T57, A13)', () => {
+  // Nguồn thật (mock nội trú) do tier3-wiring nối; ở đây thay bằng nguồn giả theo thú, test tự trả lại sau mỗi ca.
+  afterEach(() => registerAdmissionSource(hasActiveAdmission));
+  const refusedAs = (res: Awaited<ReturnType<typeof failure>>) => [res.status, res.data.errorCode, /\((BR-[A-Z]+-\d+)\)$/.exec(res.data.message)?.[1]];
+
+  it('bắt đầu trả thú và giao thú → 409 INVALID_STATE_TRANSITION "(BR-LT-17)", không sinh Order; hết ADMITTED thì trả được', async () => {
+    const { petId, bookingId } = await rexInStay();
+    registerAdmissionSource((id) => id === petId);
+    expect(refusedAs(await failure(startCheckout(bookingId)))).toEqual([409, 'INVALID_STATE_TRANSITION', 'BR-LT-17']);
+    expect(refusedAs(await failure(handOver(bookingId)))).toEqual([409, 'INVALID_STATE_TRANSITION', 'BR-LT-17']);
+    expect((await get(bookingId)).activeOrderId).toBeNull();
+
+    registerAdmissionSource(() => false);
+    expect((await startCheckout(bookingId)).status).toBe(200);
+  });
+
+  it('thứ tự: sau 409 "không còn trong chuồng", trước 400 BR-LT-04 (ngoài giờ mở cửa) và 400 BR-LT-09 (chưa thu tiền)', async () => {
+    const { petId, bookingId } = await rexInStay();
+    registerAdmissionSource((id) => id === petId);
+    at('2026-10-23T20:00:00+07:00');
+    expect(refusedAs(await failure(startCheckout(bookingId)))).toEqual([409, 'INVALID_STATE_TRANSITION', 'BR-LT-17']);
+    // Đặt chỗ #5 (Bim) đã CHECKED_OUT: câu 409 trạng thái, không phải BR-LT-17 dù nguồn nói thú nào cũng có ca.
+    registerAdmissionSource(() => true);
+    const gone = await failure(handOver(5));
+    expect(refusedAs(gone)).toEqual([409, 'INVALID_STATE_TRANSITION', undefined]);
+    expect((await failure(startCheckout(5))).data.message).toBe('Thú không còn trong chuồng');
+  });
+
+  it('chỉ chặn thú có ca nội trú: Cốm vẫn trả được; thú mất (end-deceased) không bị chặn', async () => {
+    const { petId, bookingId } = await rexInStay();
+    registerAdmissionSource((id) => id === petId);
+    expect((await startCheckout(2)).status).toBe(200);
+    expect((await post(`/api/boarding-bookings/${bookingId}/end-deceased`, { note: 'Thú mất trong lúc điều trị' })).status).toBe(200);
   });
 });

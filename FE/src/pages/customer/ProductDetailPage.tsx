@@ -1,8 +1,11 @@
 import { useEffect, useState } from 'react'
 import { Link, useParams } from 'react-router-dom'
 import { MapPin, PawPrint, RotateCw, Store, WifiOff } from 'lucide-react'
+import { AddToCartButton } from '@/components/customer/shop/AddToCartButton'
 import { toApiError } from '@/shared/api/api-error'
 import { usePublicBranches, usePublicProduct } from '@/shared/hooks/usePublicSite'
+import { useAccount } from '@/shared/stores/session.store'
+import { SHOP_LIMITS } from '@/shared/types/shop'
 import type { PublicBranch } from '@/shared/types/branch'
 import type { PublicProduct } from '@/shared/types/public-site'
 import { branchNamesByIds, productPriceLabel } from '@/shared/utils/public-format'
@@ -134,7 +137,12 @@ function ProductView({
   branches: PublicBranch[] | undefined
   branchesLoading: boolean
 }) {
-  // BR-CK-03: chỉ tên chi nhánh còn hàng, không số lượng, không nút mua.
+  // BR-CK-03: chỉ tên chi nhánh còn hàng, không số lượng tồn. Khách đặt mua qua giỏ hàng (UC61).
+  // Giữ chữ đang gõ (cho phép xóa trắng để gõ số mới); số lượng gửi đi luôn nằm trong 1–99.
+  const [quantityText, setQuantityText] = useState('1')
+  const quantity = quantityText === '' ? SHOP_LIMITS.minQuantity : Number(quantityText)
+  const account = useAccount()
+  const canBuy = !account || account.role === 'CUSTOMER'
   const stockedAt = branches ? branchNamesByIds(p.inStockBranchIds, branches) : []
   const outOfStock = p.inStockBranchIds.length === 0 || (branches !== undefined && stockedAt.length === 0)
 
@@ -177,7 +185,7 @@ function ProductView({
           <section aria-labelledby="product-stock" className={`${CARD} mt-8 p-5 sm:p-6`}>
             <h2 id="product-stock" className="flex items-center gap-2 font-friendly text-[18px] font-bold text-(--color-surface-dark)">
               <Store size={18} aria-hidden className="text-accent" />
-              Mua tại chi nhánh
+              Mua hàng
             </h2>
 
             {outOfStock ? (
@@ -205,8 +213,30 @@ function ProductView({
               <p className="mt-3 text-[14px] text-(--color-dark-gray)/70">Còn hàng tại chi nhánh PetCare.</p>
             )}
 
+            {!outOfStock && canBuy && (
+              <div className="mt-5 flex flex-wrap items-end gap-3">
+                <div>
+                  <label htmlFor="product-quantity" className="mb-1 block text-[13px] font-semibold text-(--color-dark-gray)/70">
+                    Số lượng đặt
+                  </label>
+                  <input
+                    id="product-quantity"
+                    type="number"
+                    inputMode="numeric"
+                    min={SHOP_LIMITS.minQuantity}
+                    max={SHOP_LIMITS.maxQuantity}
+                    value={quantityText}
+                    onBlur={() => quantityText === '' && setQuantityText(String(SHOP_LIMITS.minQuantity))}
+                    onChange={(e) => setQuantityText(e.target.value === '' ? '' : String(Math.min(SHOP_LIMITS.maxQuantity, Math.max(SHOP_LIMITS.minQuantity, Math.trunc(Number(e.target.value)) || SHOP_LIMITS.minQuantity))))}
+                    className={`h-10 w-24 rounded-xl border border-(--color-border-default) bg-white px-3 text-[14px] tabular-nums ${FOCUS}`}
+                  />
+                </div>
+                <AddToCartButton productId={p.productId} quantity={quantity} className={`${BUTTON} disabled:opacity-60`} />
+              </div>
+            )}
+
             <p className="mt-4 text-[13.5px] leading-relaxed text-(--color-dark-gray)/70">
-              Sản phẩm bán tại quầy, vui lòng liên hệ chi nhánh để mua.
+              Đặt online giao tận nơi (thanh toán trước qua cổng), hoặc mua trực tiếp tại quầy các chi nhánh.
             </p>
             <Link to="/branches" className={`${BUTTON} mt-4`}>
               Xem chi nhánh &amp; số điện thoại

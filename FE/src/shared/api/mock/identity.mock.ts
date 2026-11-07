@@ -43,6 +43,17 @@ export const MOCK_OTP_CODE = '123456';
 /** BE trả độ dài mã ở mọi response gửi mã (`codeLength`; đăng ký: `otpCodeLength`) để FE dựng ô nhập; mock luôn 6. */
 const CODE_LENGTH = MOCK_OTP_CODE.length;
 
+/**
+ * Hạn token của mock (ADR-0091). Dev: access 10 phút, phiên 12 giờ như mặc định của BE, nên `npm run dev` chạy refresh thật.
+ * Test: không hết hạn (10 năm), giống mock trước D055 (token trần không hết hạn) và như profile test của BE (V9000: access 720 phút để các IT dịch đồng hồ
+ * không đổi hành vi): nhiều test dịch `Date` hàng giờ, hàng ngày sau khi đăng nhập. Test refresh tự đặt hạn ngắn.
+ */
+const TEST_UNBOUNDED_MS = 10 * 365 * 24 * 3_600_000;
+export const mockSessionConfig = {
+  accessTtlMs: import.meta.env.MODE === 'test' ? TEST_UNBOUNDED_MS : 10 * 60_000,
+  sessionTtlMs: import.meta.env.MODE === 'test' ? TEST_UNBOUNDED_MS : 12 * 3_600_000,
+};
+
 export interface MockAccount {
   id: number;
   email: string;
@@ -122,7 +133,20 @@ interface Otp {
   failed: number;
   cancelled?: boolean;
 }
+/** Như bảng `sessions` + `refresh_tokens` của BE: mỗi lần làm mới đổi cả hai token (access cũ chết ngay, refresh cũ chỉ để nhận ra lần dùng lại). */
+interface MockSession {
+  accountId: number;
+  access: string;
+  refresh: string;
+  usedRefresh: string[];
+  seq: number;
+  accessExpiresAt: number;
+  expiresAt: number;
+  revoked?: boolean;
+}
 interface State {
+  /** Phiên đăng nhập theo mã phiên; token trần `mock-token-<id>` (e2e, test cũ) không thuộc phiên nào và không bao giờ hết hạn. */
+  sessions: Record<string, MockSession>;
   /** Mật khẩu mới, đã gỡ mustChangePassword, email do lễ tân sửa hộ (UC22)… theo id tài khoản. */
   changes: Record<number, { password?: string; mustChangePassword?: boolean; email?: string }>;
   /** Khách tự đăng ký (UC01). */
@@ -154,6 +178,7 @@ export function load(): State {
   try {
     const s = JSON.parse(localStorage.getItem(STATE_KEY) ?? '{}');
     return {
+      sessions: s.sessions ?? {},
       changes: s.changes ?? {},
       registered: s.registered ?? [],
       otps: s.otps ?? {},
@@ -166,7 +191,7 @@ export function load(): State {
       audit: s.audit ?? [],
     };
   } catch {
-    return { changes: {}, registered: [], otps: {}, profiles: {}, extraStaff: {}, emailChanges: {}, locks: {}, configOverrides: {}, templateOverrides: {}, audit: [] };
+    return { sessions: {}, changes: {}, registered: [], otps: {}, profiles: {}, extraStaff: {}, emailChanges: {}, locks: {}, configOverrides: {}, templateOverrides: {}, audit: [] };
   }
 }
 
@@ -231,11 +256,35 @@ function summaryOf(a: Account): AccountSummary {
 }
 
 const TOKEN_PREFIX = 'mock-token-';
+const ACCESS_OF_SESSION = /^mock-token-\d+\.([a-z0-9]+)\.\d+$/;
+const REFRESH_OF_SESSION = /^mock-refresh-([a-z0-9]+)\.\d+$/;
+/** InvalidRefreshTokenException.MESSAGE: một câu chung cho mọi lý do từ chối. */
+const REFRESH_INVALID = 'Refresh token không hợp lệ hoặc đã hết hạn';
 
 /** Ngữ cảnh request nội bộ (`req.account`): summaryOf cộng `branchId` mà các mock khác đọc; không bao giờ lọt vào response. Null nếu token không hợp lệ. */
 export function accountForToken(token: string): AccountSummary | null {
-  const account = accounts(load()).find((a) => a.status === 'ACTIVE' && token === TOKEN_PREFIX + a.id);
+  const s = load();
+  const sid = ACCESS_OF_SESSION.exec(token)?.[1];
+  const session = sid ? s.sessions[sid] : undefined;
+  const now = Date.now();
+  // Token của phiên phải là access hiện hành (mỗi lần làm mới đổi token, như BE đổi `jti`), phiên chưa hủy, chưa quá hạn access và hạn phiên.
+  const live = session && !session.revoked && session.access === token && now < session.accessExpiresAt && now < session.expiresAt ? session : null;
+  const account = accounts(s).find((a) => a.status === 'ACTIVE' && (live ? live.accountId === a.id : token === TOKEN_PREFIX + a.id));
   return account ? { ...summaryOf(account), branchId: account.branchId } : null;
+}
+
+/** Cấp cặp token mới cho phiên (đăng nhập và làm mới dùng chung); hạn access không vượt hạn phiên. */
+function issueTokens(sid: string, session: MockSession, now: number) {
+  session.seq += 1;
+  session.access = `${TOKEN_PREFIX}${session.accountId}.${sid}.${session.seq}`;
+  session.refresh = `mock-refresh-${sid}.${session.seq}`;
+  session.accessExpiresAt = Math.min(now + mockSessionConfig.accessTtlMs, session.expiresAt);
+  return {
+    accessToken: session.access,
+    accessTokenExpiresAt: new Date(session.accessExpiresAt).toISOString(),
+    refreshToken: session.refresh,
+    expiresAt: new Date(session.expiresAt).toISOString(),
+  };
 }
 
 // ─── Kiểm dữ liệu vào (cùng câu báo lỗi với các DTO của BE) ───
@@ -360,17 +409,52 @@ const login: MockHandler = ({ body }) => {
   const b = (body ?? {}) as Record<string, unknown>;
   const bad = invalid([...emailChecks(b.email), ['password', 'Mật khẩu không được để trống', !isText(b.password)]]);
   if (bad) return bad;
-  const account = byEmail(load(), b.email as string);
+  const s = load();
+  const account = byEmail(s, b.email as string);
   if (!account || account.password !== b.password) return fail('UNAUTHENTICATED', BAD_CREDENTIALS, 401);
   if (account.status === 'PENDING') {
     return ruleFail('BR-TK-08', 'Tài khoản chưa xác thực email. Vui lòng nhập mã OTP đã gửi tới email');
   }
+  const now = Date.now();
+  for (const [id, old] of Object.entries(s.sessions)) if (old.expiresAt <= now) delete s.sessions[id];
+  const sid = now.toString(36) + Math.random().toString(36).slice(2, 8);
+  const session: MockSession = {
+    accountId: account.id, access: '', refresh: '', usedRefresh: [], seq: 0, accessExpiresAt: 0, expiresAt: now + mockSessionConfig.sessionTtlMs,
+  };
+  s.sessions[sid] = session;
   const res: LoginResponse = {
-    accessToken: TOKEN_PREFIX + account.id,
-    expiresAt: new Date(Date.now() + 12 * 3_600_000).toISOString(), // session.ttl_hours mặc định
+    ...issueTokens(sid, session, now),
     account: summaryOf(account),
     linkDecisionPending: customerOfAccount(account.id)?.linkDecisionPending ?? false,
   };
+  save(s);
+  return ok(res);
+};
+
+/** #39: path public, xác thực bằng refresh token. Mọi từ chối là cùng một 401; token đã dùng bị đưa lại thì hủy cả phiên (ADR-0091 §4). */
+const refresh: MockHandler = ({ body }) => {
+  const b = (body ?? {}) as Record<string, unknown>;
+  const bad = invalid([
+    ['refreshToken', 'Refresh token không được để trống', !isText(b.refreshToken)],
+    ['refreshToken', 'Refresh token tối đa 128 ký tự', tooLong(b.refreshToken, 128)],
+  ]);
+  if (bad) return bad;
+  const token = b.refreshToken as string;
+  const s = load();
+  const sid = REFRESH_OF_SESSION.exec(token)?.[1];
+  const session = sid ? s.sessions[sid] : undefined;
+  const now = Date.now();
+  if (!sid || !session || session.revoked || now >= session.expiresAt) return fail('UNAUTHENTICATED', REFRESH_INVALID, 401);
+  if (session.refresh !== token) {
+    if (session.usedRefresh.includes(token)) {
+      session.revoked = true;
+      save(s);
+    }
+    return fail('UNAUTHENTICATED', REFRESH_INVALID, 401);
+  }
+  session.usedRefresh.push(token);
+  const res = issueTokens(sid, session, now);
+  save(s);
   return ok(res);
 };
 
@@ -752,6 +836,7 @@ export const identityRoutes: Record<string, MockHandler> = {
   'POST /api/auth/register/verify': verifyRegistration,
   'POST /api/auth/register/resend-otp': resendRegistrationOtp,
   'POST /api/auth/login': login,
+  'POST /api/auth/refresh': refresh,
   'POST /api/auth/logout': () => noContent(),
   'POST /api/auth/password/forgot': forgotPassword,
   'POST /api/auth/password/reset': resetPassword,

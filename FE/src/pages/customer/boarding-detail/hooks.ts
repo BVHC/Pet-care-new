@@ -3,7 +3,9 @@
 // viết lại vì `useCareLogs` không nhận tùy chọn `refetchInterval`.
 import { useQuery } from '@tanstack/react-query';
 import { toApiError } from '@/shared/api/api-error';
+import { POLL } from '@/shared/api/axios';
 import { boardingApi } from '@/shared/api/boarding.api';
+import { useAccessValid } from '@/shared/hooks/useAccessValid';
 import { retryDelay, shouldRetry } from '@/shared/constants/realtime';
 import type { Booking } from '@/shared/types/boarding';
 import { isInStay } from '@/shared/utils/boarding';
@@ -12,11 +14,12 @@ import { hasCareLogs } from './model';
 export const CARE_LOG_REFRESH_MS = 60_000;
 
 export function useStayCareLogs(booking: Pick<Booking, 'bookingId' | 'status'>) {
+  const open = useAccessValid();
   return useQuery({
     queryKey: ['boarding', 'care-logs', booking.bookingId],
-    queryFn: () => boardingApi.listCareLogs(booking.bookingId),
-    // BOOKED / CANCELLED / NO_SHOW chưa có nhật ký: không gọi API.
-    enabled: hasCareLogs(booking.status),
+    queryFn: () => boardingApi.listCareLogs(booking.bookingId, POLL),
+    // BOOKED / CANCELLED / NO_SHOW chưa có nhật ký: không gọi API. Token hết hạn: tạm dừng (D055).
+    enabled: hasCareLogs(booking.status) && open,
     // Chỉ khi thú còn trong chuồng, và React Query bỏ qua nhịp khi tab đang ẩn; rời trang thì observer tự dọn timer.
     refetchInterval: isInStay(booking.status) ? CARE_LOG_REFRESH_MS : false,
     refetchIntervalInBackground: false,

@@ -1,3 +1,5 @@
+// NGỪNG DÙNG cho giỏ hàng (T57): giỏ nay lưu trên BE (shop-v1 #1–4; `useCart` ở hooks/useShop.ts, huy hiệu ở hooks/useCartCount.ts).
+// Giữ file đến Bước C (xóa cần Hiến duyệt) vì RecommendPage còn gọi `addItem`; giỏ cục bộ này không còn hiện ở header, giỏ, thanh toán.
 import { create } from 'zustand';
 import { persist } from 'zustand/middleware';
 import type { CartItem } from '../types';

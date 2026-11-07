@@ -3,7 +3,9 @@ import userEvent from '@testing-library/user-event';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { MemoryRouter } from 'react-router-dom';
 import { afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
+import { appointmentApi } from '../../shared/api/appointment.api';
 import { apiClient } from '../../shared/api/axios';
+import { homevisitApi } from '../../shared/api/homevisit.api';
 import { MOCK_PASSWORD } from '../../shared/api/mock/identity.mock';
 import { installMockApi } from '../../shared/api/mock/mock-api';
 import { useSession } from '../../shared/stores/session.store';
@@ -52,6 +54,8 @@ describe('AdminAppointmentsPage (UC39, UC40 — lễ tân)', () => {
   });
 
   it('đặt lịch hộ: tìm khách → chọn thú → dịch vụ → khung → lịch tại quầy hiện trong danh sách', async () => {
+    // Bảng lịch tại nhà bên dưới nạp dữ liệu mẫu tại nhà (Tôm có lịch khám hôm nay 16:30 → BR-LH-05 chặn đặt thêm lịch Khám cho Tôm): ca này chỉ thử lịch thường nên cho bảng đó trống.
+    vi.spyOn(homevisitApi, 'list').mockResolvedValue({ content: [], page: 0, size: 50, totalElements: 0, totalPages: 0 });
     const user = renderPage();
     await user.click(screen.getByRole('button', { name: /Đặt lịch hộ/ }));
     const dialog = await screen.findByRole('dialog', { name: 'Đặt lịch hộ khách' });
@@ -67,6 +71,7 @@ describe('AdminAppointmentsPage (UC39, UC40 — lễ tân)', () => {
     const tom = await rowOf('Tôm');
     expect(tom).toHaveTextContent('09:30–10:00');
     expect(tom).toHaveTextContent('Đặt tại quầy');
+    vi.restoreAllMocks();
   });
 
   it('xem hạn chế đặt online của khách và gỡ sớm (lý do bắt buộc)', async () => {
@@ -85,5 +90,56 @@ describe('AdminAppointmentsPage (UC39, UC40 — lễ tân)', () => {
 
     await waitFor(() => expect(screen.queryByRole('dialog', { name: 'Gỡ hạn chế đặt online' })).not.toBeInTheDocument());
     expect(await screen.findByText('Khách không bị hạn chế đặt lịch online.')).toBeInTheDocument();
+  });
+});
+
+// Lịch khám tại nhà (UC43, homevisit-v1 #3; homevisit.mock nạp lười, tính theo hôm nay 23/10): chi nhánh 1 hôm nay có Tôm 16:30 đã đặt (khách Nguyễn Thu Trang, phí 100.000 ₫).
+describe('AdminAppointmentsPage — lịch khám tại nhà', () => {
+  const homeRow = async (pet: string) => within(await screen.findByRole('table', { name: 'Danh sách lịch khám tại nhà' })).findByRole('cell', { name: pet }).then((c) => c.closest('tr')!);
+
+  it('lễ tân thấy bảng riêng của ngày đang lọc: giờ, mã, địa chỉ, phí, trạng thái; lịch thường không lẫn vào', async () => {
+    renderPage();
+    const tom = await homeRow('Tôm');
+    expect(tom).toHaveTextContent('16:30–17:00');
+    expect(tom).toHaveTextContent('12 Trần Thái Tông, Dịch Vọng Hậu, Hà Nội');
+    expect(tom).toHaveTextContent('100.000');
+    expect(tom).toHaveTextContent('Đã đặt');
+    expect(screen.getByRole('heading', { level: 2, name: /^Lịch khám tại nhà ngày/ })).toBeInTheDocument();
+    expect(within(screen.getByRole('table', { name: 'Danh sách lịch hẹn' })).queryByRole('cell', { name: 'Tôm' })).not.toBeInTheDocument();
+  });
+
+  it('hủy hộ lịch tại nhà dùng appointment-v1: hộp thoại hủy, bảng chuyển Đã hủy và hết nút', async () => {
+    const user = renderPage();
+    const tom = await homeRow('Tôm');
+    await user.click(await within(tom).findByRole('button', { name: /^Hủy LH-/ }));
+    const dialog = await screen.findByRole('dialog', { name: 'Hủy lịch hẹn' });
+    await user.type(within(dialog).getByLabelText('Lý do hủy (không bắt buộc)'), 'Khách gọi báo bận');
+    await user.click(within(dialog).getByRole('button', { name: 'Xác nhận hủy' }));
+
+    await waitFor(() => expect(screen.queryByRole('dialog', { name: 'Hủy lịch hẹn' })).not.toBeInTheDocument());
+    await waitFor(async () => expect(await homeRow('Tôm')).toHaveTextContent('Đã hủy'));
+    expect(within(await homeRow('Tôm')).queryByRole('button')).not.toBeInTheDocument();
+  });
+
+  it('lịch đã bị hủy ở nơi khác: bấm Xác nhận hủy nhận 409, hộp thoại giữ câu báo thay vì biến mất', async () => {
+    const user = renderPage();
+    const tom = await homeRow('Tôm');
+    await user.click(await within(tom).findByRole('button', { name: /^Hủy LH-/ }));
+    const dialog = await screen.findByRole('dialog', { name: 'Hủy lịch hẹn' });
+    const id = (await homevisitApi.list({ date: '2026-10-23' })).content.find((v) => v.petName === 'Tôm')!.appointmentId;
+    await appointmentApi.cancel(id, {});
+    await user.click(within(dialog).getByRole('button', { name: 'Xác nhận hủy' }));
+    expect(await within(dialog).findByText('Lịch hẹn đã được tiếp nhận hoặc thay đổi, vui lòng tải lại.')).toBeInTheDocument();
+  });
+
+  it('quản lý chi nhánh không phải lễ tân: không có bảng lịch khám tại nhà và không hỏi API tại nhà', async () => {
+    useSession.getState().clear();
+    await useSession.getState().login({ email: 'manager@store1.vn', password: MOCK_PASSWORD });
+    const list = vi.spyOn(homevisitApi, 'list');
+    renderPage();
+    await rowOf('Lu');
+    expect(screen.queryByRole('table', { name: 'Danh sách lịch khám tại nhà' })).not.toBeInTheDocument();
+    expect(list).not.toHaveBeenCalled();
+    vi.restoreAllMocks();
   });
 });

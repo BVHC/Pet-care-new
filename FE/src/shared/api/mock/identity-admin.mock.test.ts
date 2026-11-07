@@ -2,6 +2,7 @@ import { existsSync, readdirSync, readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 import axios, { type AxiosInstance, type AxiosResponse } from 'axios';
 import { beforeEach, describe, expect, it } from 'vitest';
+import { applyLifecycle } from './branch.mock';
 import { MOCK_OTP_CODE, MOCK_PASSWORD } from './identity.mock';
 import { installMockApi } from './mock-api';
 
@@ -678,7 +679,7 @@ describe('disable / resend-initial-password / email-change/confirm — message n
 
   it('disable: quản lý cuối cùng của chi nhánh → 400 câu riêng của disable (BR-QT-04); đổi chức vụ / điều chuyển giữ nguyên câu chung cũ', async () => {
     const chain = await as(CALLERS.chuoi.email);
-    const lastManager = await spawnStaff('BRANCH_MANAGER', 3); // chi nhánh 3 chỉ có đúng một quản lý
+    const lastManager = CALLERS.manager.id; // chi nhánh 1 (ACTIVE duy nhất trong seed) chỉ có đúng một quản lý; chi nhánh DRAFT không chặn, xem describe BR-QT-04 bên dưới
     expect(triple(await send(disable, lastManager, chain))).toEqual(
       ruleViolation('Không vô hiệu hóa được: đây là quản lý cuối cùng của chi nhánh đang hoạt động (BR-QT-04)'),
     );
@@ -713,6 +714,79 @@ describe('disable / resend-initial-password / email-change/confirm — message n
       ruleViolation('Nhập sai mã OTP quá 5 lần, mã đã bị hủy. Vui lòng yêu cầu mã mới (BR-TK-06)'),
     );
     expect(triple(await send(confirm, target, chain, { code: MOCK_OTP_CODE }))).toEqual(ruleViolation(OTP_REJECTED)); // mã đã bị hủy, đúng mã cũng không dùng được
+  });
+});
+
+// ─── BR-QT-04 chỉ áp cho chi nhánh ACTIVE (02 BR-QT-04 "chi nhánh đang hoạt động", 08 BR-CN-10; BE StaffAccountService.checkNotLastBranchManager) ───
+// BE chặn khi: người bị tác động là BRANCH_MANAGER ACTIVE, chi nhánh ACTIVE và họ là người cuối. Chi nhánh 3 (DRAFT, chưa có quản lý) dùng làm sân thử: quản lý tạo lúc chạy là người duy nhất,
+// `applyLifecycle` của branch.mock đặt trạng thái chi nhánh. Không đụng nhân viên seed: vô hiệu hóa / điều chuyển chúng đổi biến module của mock, test sau bị lệch.
+describe('BR-QT-04 chỉ chặn quản lý cuối của chi nhánh ACTIVE — DRAFT / SUSPENDED / CLOSED không chặn (disable, change-role, transfer)', () => {
+  const GENERIC = 'Chi nhánh phải có ít nhất một quản lý đang hoạt động';
+  const ACTIONS = {
+    disable: { path: 'disable', body: {}, blocked: 'Không vô hiệu hóa được: đây là quản lý cuối cùng của chi nhánh đang hoạt động' },
+    'change-role': { path: 'change-role', body: { role: 'VET' }, blocked: GENERIC },
+    transfer: { path: 'transfer', body: { branchId: 2 }, blocked: GENERIC },
+  } as const;
+  type ActionName = keyof typeof ACTIONS;
+  const names = Object.keys(ACTIONS) as ActionName[];
+  const blockedBy = (name: ActionName) => ruleViolation(`${ACTIONS[name].blocked} (BR-QT-04)`);
+  const run = async (name: ActionName, id: number) => {
+    try {
+      return await client.post(`/api/staff/${id}/${ACTIONS[name].path}`, ACTIONS[name].body, await as(CALLERS.chuoi.email));
+    } catch (e) {
+      if (axios.isAxiosError(e) && e.response) return e.response;
+      throw e;
+    }
+  };
+  const suspend = () => applyLifecycle(3, { to: 'SUSPENDED', reason: 'Sửa chữa', expectedResumeOn: null });
+  /** Quản lý duy nhất của chi nhánh 3 khi chi nhánh đang ở `state` (tạo quản lý trước, vì chi nhánh tạm ngừng / đóng không nhận nhân viên mới). */
+  async function soleManager(state: 'DRAFT' | 'ACTIVE' | 'SUSPENDED' | 'CLOSED') {
+    const id = await spawnStaff('BRANCH_MANAGER', 3);
+    if (state !== 'DRAFT') applyLifecycle(3, { to: 'ACTIVE' });
+    if (state === 'SUSPENDED') suspend();
+    if (state === 'CLOSED') applyLifecycle(3, { to: 'CLOSED', reason: 'Dừng kinh doanh' });
+    return id;
+  }
+
+  it.each(names)('%s: chi nhánh ACTIVE, quản lý duy nhất → 400 BR-QT-04, nguyên trạng', async (name) => {
+    const id = await soleManager('ACTIVE');
+    expect(triple(await run(name, id))).toEqual(blockedBy(name));
+    expect(await staffOf(id)).toMatchObject({ status: 'ACTIVE', role: 'BRANCH_MANAGER', branchId: 3 });
+  });
+
+  it('chi nhánh ACTIVE có quản lý thứ hai: gỡ người đầu được; người còn lại thành quản lý cuối và bị chặn cả ba thao tác', async () => {
+    const first = await soleManager('ACTIVE');
+    const second = await spawnStaff('BRANCH_MANAGER', 3);
+    expect((await run('disable', first)).status).toBe(200);
+    for (const name of names) expect(triple(await run(name, second)), name).toEqual(blockedBy(name));
+  });
+
+  it.each(names)('%s: chi nhánh DRAFT dù chỉ có một quản lý → 200 (BE chỉ đếm khi chi nhánh ACTIVE)', async (name) => {
+    expect((await run(name, await soleManager('DRAFT'))).status).toBe(200);
+  });
+
+  it.each(['SUSPENDED', 'CLOSED'] as const)('chi nhánh %s: gỡ quản lý duy nhất → 200 cả ba thao tác (bug cũ: chi nhánh có nhân viên không tạm ngừng / đóng cửa được)', async (state) => {
+    for (const name of names) {
+      localStorage.clear(); // mỗi thao tác một state sạch (chi nhánh 3 trở lại DRAFT, quản lý tạo lại)
+      const res = await run(name, await soleManager(state));
+      expect(res.status, `${state} ${name}: ${JSON.stringify(res.data)}`).toBe(200);
+    }
+  });
+
+  it('tạm ngừng → vô hiệu hóa quản lý cuối được → mở lại bị chặn BR-QT-04 khi chưa có quản lý ACTIVE (branchlife #3)', async () => {
+    const id = await soleManager('SUSPENDED');
+    expect((await run('disable', id)).status).toBe(200);
+    const blocked = await failure(client.post('/api/branches/3/resume', {}, await as(CALLERS.chuoi.email)));
+    expect([blocked.status, blocked.data.errorCode]).toEqual([400, 'BUSINESS_RULE_VIOLATION']);
+    expect(blocked.data.message).toMatch(/BR-QT-04\)$/);
+  });
+
+  it.each(['change-role', 'transfer'] as const)('%s: người bị tác động đã DISABLED không bị chặn (BE chỉ chặn BRANCH_MANAGER ACTIVE) dù chi nhánh ACTIVE không còn quản lý ACTIVE → 200', async (name) => {
+    const id = await soleManager('SUSPENDED');
+    expect((await run('disable', id)).status).toBe(200);
+    applyLifecycle(3, { to: 'ACTIVE' }); // ép mở lại: chi nhánh ACTIVE, không còn quản lý ACTIVE nào
+    expect(await staffOf(id)).toMatchObject({ status: 'DISABLED' });
+    expect((await run(name, id)).status).toBe(200);
   });
 });
 
@@ -850,7 +924,7 @@ describe('GET /api/audit-logs — tên bảng, mã hành động thật, so kh�
 });
 
 // ─── UC10 — tham số [CFG] và mẫu thông báo: dữ liệu seed khớp BE, validate như BE (BR-QT-13, BR-QT-14) ───
-// Nguồn thật là migration của BE (V2 + V27 tham số, V27 xóa staff.online_window_minutes và thêm session.access_ttl_minutes; V3…V26 mẫu, V4 sửa OTP_REGISTER). Không có thư mục BE bên cạnh (chỉ checkout FE) thì các ca đối chiếu SQL
+// Nguồn thật là migration của BE (V2 + V27 + V35 + V40 + V44…V46 + V48 tham số, V27 xóa staff.online_window_minutes và thêm session.access_ttl_minutes; V3…V26 + V40 mẫu, V4 sửa OTP_REGISTER). Không có thư mục BE bên cạnh (chỉ checkout FE) thì các ca đối chiếu SQL
 // được bỏ qua; ca gõ tay và ca hành vi vẫn chạy.
 
 const MIGRATIONS = resolve(__dirname, '../../../../../BE/src/main/resources/db/migration');
@@ -1083,10 +1157,10 @@ describe('bộ đọc SQL của ca đối chiếu seed — DELETE trên system_c
   });
 });
 
-describe('UC10 — tham số [CFG] seed khớp BE (V2__seed_system_configs.sql, V27__refresh_tokens_access_ttl.sql)', () => {
-  it.skipIf(!hasMigrations)('đúng 52 khóa của BE, từng dòng giống hệt SQL (key, value, valueType, minValue, maxValue, unit, description), sắp theo key', async () => {
+describe('UC10 — tham số [CFG] seed khớp BE (V2, V27, V35, V40, V44, V45, V46, V48)', () => {
+  it.skipIf(!hasMigrations)('đúng 85 khóa của BE, từng dòng giống hệt SQL (key, value, valueType, minValue, maxValue, unit, description), sắp theo key', async () => {
     const expected = sqlConfigs();
-    expect(expected).toHaveLength(52); // = số hằng số ConfigKey của BE
+    expect(expected).toHaveLength(85); // = số hằng số ConfigKey của BE (52 của V2 + V27, 18 ai.* của V35, 8 của V40, 7 của V44…V48)
     const rows = await getConfigs();
     expect(rows.map((r) => r.key)).toEqual(expected.map((r) => r.key));
     for (const [i, row] of rows.entries()) {
@@ -1095,10 +1169,10 @@ describe('UC10 — tham số [CFG] seed khớp BE (V2__seed_system_configs.sql, 
     }
   });
 
-  it('dòng gõ tay theo V2 + V27: khóa thật của BE có mặt, khóa bịa của bản mock cũ và khóa V27 đã xóa không còn', async () => {
+  it('dòng gõ tay theo V2 + V27 (+ V35, V40, V44…V48): khóa thật của BE có mặt, khóa bịa của bản mock cũ và khóa V27 đã xóa không còn', async () => {
     const rows = await getConfigs();
     const by = Object.fromEntries(rows.map((r) => [r.key, r]));
-    expect(rows).toHaveLength(52);
+    expect(rows).toHaveLength(85);
     expect(by['otp.ttl_minutes']).toEqual({ key: 'otp.ttl_minutes', value: '5', valueType: 'INT', minValue: '1', maxValue: '15', unit: 'phút', description: 'Thời gian hiệu lực của mã OTP (BR-TK-05)' });
     expect(by['boarding.checkout_time']).toMatchObject({ value: '12:00', valueType: 'TIME', minValue: '06:00', maxValue: '22:00', unit: 'giờ' });
     expect(by['address.max_per_customer']).toMatchObject({ value: '5', minValue: '1', maxValue: '20', unit: 'địa chỉ' });
@@ -1107,6 +1181,25 @@ describe('UC10 — tham số [CFG] seed khớp BE (V2__seed_system_configs.sql, 
     expect(by['session.access_ttl_minutes']).toEqual({ key: 'session.access_ttl_minutes', value: '10', valueType: 'INT', minValue: '5', maxValue: '720', unit: 'phút', description: 'Hạn access token; nhân viên có phiên với access token còn hạn được coi là online (BR-TN-06, docs/adr/0091)' }); // V27
     expect(by['vet.bio_max_length']).toMatchObject({ value: '500', minValue: '100', maxValue: '500', unit: 'ký tự' });
     for (const old of ['customer.address_book_max', 'auth.otp_resend_seconds', 'auth.otp_max_per_hour', 'auth.session_ttl_hours', 'staff.online_window_minutes']) expect(by[old], old).toBeUndefined(); // staff.online_window_minutes: V27 xóa
+  });
+
+  it('33 khóa tầng 3 gõ tay theo V35 / V40 / V44–V48: đúng số lượng từng nhóm, 4 khóa DECIMAL đều ở ai.*', async () => {
+    const rows = await getConfigs();
+    const by = Object.fromEntries(rows.map((r) => [r.key, r]));
+    const prefixCount = (prefix: string) => rows.filter((r) => r.key.startsWith(prefix)).length;
+    expect([prefixCount('ai.'), prefixCount('complaint.'), prefixCount('workforce.'), prefixCount('shop.'), prefixCount('payment.'), prefixCount('returns.'), prefixCount('content.')]).toEqual([18, 6, 2, 3, 2, 1, 1]);
+    expect(rows.filter((r) => r.valueType === 'DECIMAL').map((r) => r.key)).toEqual(['ai.reco.weight_attr', 'ai.reco.weight_history', 'ai.reco.weight_popularity', 'ai.retrieval.min_similarity']);
+    expect(rows.filter((r) => r.valueType !== 'INT' && r.valueType !== 'DECIMAL').map((r) => r.key)).toEqual(['boarding.checkout_time']); // tầng 3 không thêm BOOL / TIME
+    expect(by['ai.retrieval.min_similarity']).toEqual({ key: 'ai.retrieval.min_similarity', value: '0.6', valueType: 'DECIMAL', minValue: '0.3', maxValue: '0.9', unit: 'cosine', description: 'Ngưỡng độ tương đồng cosine tối thiểu để một đoạn được dùng; dưới ngưỡng thì ngoài phạm vi (BR-AI-04)' });
+    expect(by['ai.reco.weight_attr']).toMatchObject({ value: '0.5', minValue: '0', maxValue: '1', unit: 'trọng số' });
+    expect(by['ai.chat.max_question_chars']).toMatchObject({ value: '500', valueType: 'INT', minValue: '100', maxValue: '2000', unit: 'ký tự' });
+    expect(by['ai.reco.senior_age_years_cat']).toMatchObject({ value: '10', minValue: '5', maxValue: '15', unit: 'năm' });
+    expect(by['complaint.sla_resolve_hours']).toMatchObject({ value: '72', minValue: '1', maxValue: '720', unit: 'giờ' });
+    expect(by['workforce.request_lead_hours']).toMatchObject({ value: '24', minValue: '0', maxValue: '168', unit: 'giờ' });
+    expect(by['shop.payment_window_hours']).toMatchObject({ value: '24', minValue: '1', maxValue: '168', unit: 'giờ' });
+    expect(by['payment.refund_max_attempts']).toMatchObject({ value: '3', minValue: '1', maxValue: '10', unit: 'lần' });
+    expect(by['returns.window_days']).toMatchObject({ value: '7', minValue: '1', maxValue: '30', unit: 'ngày' });
+    expect(by['content.comment_per_hour']).toMatchObject({ value: '10', minValue: '1', maxValue: '100', unit: 'bình luận' });
   });
 });
 
@@ -1146,6 +1239,33 @@ describe('PUT /api/system-configs/{key} — validate như BE SystemConfigEditSer
     }
     const res = await putConfig('boarding.checkout_time', '21:30');
     expect([res.status, res.data.data.value, res.data.data.valueType]).toEqual([200, '21:30', 'TIME']);
+  });
+
+  it('DECIMAL (V35, ai.retrieval.min_similarity 0.3–0.9): chỉ số thập phân thường, khoảng và đơn vị trong câu báo lỗi, lưu dạng chuẩn BigDecimal.stripTrailingZeros', async () => {
+    const message = 'Giá trị của ai.retrieval.min_similarity phải là số thập phân từ 0.3 đến 0.9 (cosine) (BR-QT-13)';
+    for (const value of ['0.29', '0.91', '1', '-0.5', '1e-1', '0,6', '.6', '0.', 'abc', '0.6 cosine']) {
+      const res = await failure(putConfig('ai.retrieval.min_similarity', value));
+      expect([res.status, res.data.errorCode, res.data.message], value).toEqual([400, 'BUSINESS_RULE_VIOLATION', message]);
+    }
+    for (const [sent, stored] of [['0.30', '0.3'], ['+0.90', '0.9'], ['0.75', '0.75'], ['00.700', '0.7'], [0.8, '0.8']] as const) {
+      const res = await putConfig('ai.retrieval.min_similarity', sent);
+      expect([res.status, res.data.data.value, res.data.data.valueType], String(sent)).toEqual([200, stored, 'DECIMAL']);
+      expect((await getConfigs()).find((c) => c.key === 'ai.retrieval.min_similarity')!.value).toBe(stored);
+    }
+    // Khoảng 0–1 của trọng số: "1.0" → "1"; số rất dài không đi qua Number (không ra dạng mũ). Tổng ba trọng số = 1 KHÔNG được kiểm (V35, ConfigConstraints chỉ hỗ trợ cặp INT).
+    expect((await putConfig('ai.reco.weight_attr', '1.0')).data.data.value).toBe('1');
+    expect((await putConfig('ai.reco.weight_history', '0.0000001')).data.data.value).toBe('0.0000001');
+    expect((await putConfig('ai.reco.weight_popularity', '0.0')).data.data.value).toBe('0');
+    expect((await failure(putConfig('ai.reco.weight_attr', '1.01'))).data.message).toBe('Giá trị của ai.reco.weight_attr phải là số thập phân từ 0 đến 1 (trọng số) (BR-QT-13)');
+  });
+
+  it('khóa INT mới của tầng 3 dùng khoảng của chính dòng: ai.chat.max_question_chars, complaint.max_reopen (0–5), content.comment_per_hour', async () => {
+    expect((await failure(putConfig('ai.chat.max_question_chars', '2001'))).data.message).toBe('Giá trị của ai.chat.max_question_chars phải là số nguyên từ 100 đến 2000 (ký tự) (BR-QT-13)');
+    expect((await failure(putConfig('complaint.max_reopen', '6'))).data.message).toBe('Giá trị của complaint.max_reopen phải là số nguyên từ 0 đến 5 (lần) (BR-QT-13)');
+    expect((await failure(putConfig('content.comment_per_hour', '0'))).data.message).toBe('Giá trị của content.comment_per_hour phải là số nguyên từ 1 đến 100 (bình luận) (BR-QT-13)');
+    expect((await failure(putConfig('ai.retrieval.top_k', '1.5'))).data.errorCode).toBe('BUSINESS_RULE_VIOLATION'); // INT không nhận số thập phân
+    const res = await putConfig('complaint.max_reopen', '0');
+    expect([res.status, res.data.data.value]).toEqual([200, '0']);
   });
 
   it('ràng buộc chéo (ADR-0036): khoảng thu hẹp theo giá trị hiện hành của khóa kia, kèm lý do', async () => {
@@ -1191,8 +1311,8 @@ describe('PUT /api/system-configs/{key} — validate như BE SystemConfigEditSer
   });
 });
 
-describe('UC10 — mẫu thông báo seed khớp BE (V3…V26)', () => {
-  it.skipIf(!hasMigrations)('đúng 30 mã của BE, từng mẫu giống hệt SQL (kênh, tiêu đề, nội dung, allowedVars, requiredVars, isDefault), sắp theo code', async () => {
+describe('UC10 — mẫu thông báo seed khớp BE (V3…V26, V40)', () => {
+  it.skipIf(!hasMigrations)('đúng 70 mã của BE (30 của V3…V26 + 40 tầng 3 của V40), từng mẫu giống hệt SQL (kênh, tiêu đề, nội dung, allowedVars, requiredVars, isDefault), sắp theo code', async () => {
     const expected = sqlTemplates().map((r) => ({
       code: r.code,
       channel: r.channel,
@@ -1202,7 +1322,7 @@ describe('UC10 — mẫu thông báo seed khớp BE (V3…V26)', () => {
       requiredVars: r.required_vars,
       isDefault: r.subject === r.default_subject && r.body === r.default_body,
     }));
-    expect(expected).toHaveLength(30);
+    expect(expected).toHaveLength(70);
     const rows = await getTemplates();
     expect(rows.map((r) => r.code)).toEqual(expected.map((r) => r.code));
     for (const [i, row] of rows.entries()) {
@@ -1225,7 +1345,7 @@ describe('UC10 — mẫu thông báo seed khớp BE (V3…V26)', () => {
   it('dòng gõ tay theo SQL: mã thật của BE có mặt, mã bịa của bản mock cũ không còn, OTP_REGISTER là bản V4', async () => {
     const rows = await getTemplates();
     const by = Object.fromEntries(rows.map((r) => [r.code as string, r]));
-    expect(rows).toHaveLength(30);
+    expect(rows).toHaveLength(70);
     expect(by['LAST_BRANCH_MANAGER_LOCKED_APP']).toMatchObject({
       channel: 'IN_APP',
       subject: 'Chi nhánh không còn quản lý đang hoạt động',

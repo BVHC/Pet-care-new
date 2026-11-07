@@ -1,55 +1,4 @@
-/* /cart — Giỏ hàng.
-   Breadcrumb + slab hero nhẹ → layout 2 cột: items + order summary. */
-
-/* ================================================================
-   Hero slab — nhẹ, chỉ để breadcrumb + H1.
-   ================================================================ */
-
-.slab {
-  background: var(--color-surface-dark);
-  position: relative;
-  overflow: hidden;
-  isolation: isolate;
-}
-
-.slabBg {
-  position: absolute;
-  inset: 0;
-  width: 100%;
-  height: 100%;
-  object-fit: cover;
-  object-position: center;
-  z-index: 0;
-  opacity: 0.22;
-}
-
-.slabOverlay {
-  position: absolute;
-  inset: 0;
-  z-index: 1;
-  background: linear-gradient(
-    135deg,
-    rgba(56, 36, 23, 0.96) 0%,
-    rgba(56, 36, 23, 0.80) 55%,
-    rgba(56, 36, 23, 0.50) 100%
-  );
-  pointer-events: none;
-}
-
-.slabNoise {
-  position: absolute;
-  inset: 0;
-  z-index: 2;
-  opacity: 0.06;
-  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='160' height='160'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.85' numOctaves='3'/%3E%3C/filter%3E%3Crect width='160' height='160' filter='url(%23n)'/%3E%3C/svg%3E");
-  pointer-events: none;
-}
-
-.slabContent {
-  position: relative;
-  z-index: 3;
-  padding: 28px 0 24px;
-}
+/* /cart — Giỏ hàng (UC61): 2 cột, danh sách dòng + tóm tắt. Hero dùng chung ở components/customer/shop/PageHero. */
 
 /* ================================================================
    2-column layout: items + summary.
@@ -230,13 +179,6 @@
   display: block;
 }
 
-.itemSubtotalUnit {
-  font-size: 11px;
-  color: var(--color-text-secondary);
-  display: block;
-  margin-top: 1px;
-}
-
 /* Remove button */
 .removeBtn {
   display: grid;
@@ -310,72 +252,6 @@
   color: var(--color-text-primary);
 }
 
-.summaryRowFree {
-  color: #16a34a;
-  font-weight: 700;
-}
-
-/* Progress bar: free shipping */
-.freeShipBar {
-  display: flex;
-  flex-direction: column;
-  gap: 6px;
-  background: var(--color-surface-2);
-  border-radius: 10px;
-  padding: 10px 12px;
-}
-
-.freeShipProgress {
-  height: 6px;
-  border-radius: 999px;
-  background: var(--color-accent-soft);
-  overflow: hidden;
-}
-
-.freeShipFill {
-  height: 100%;
-  border-radius: 999px;
-  background: var(--color-accent);
-  transition: width 0.4s ease;
-}
-
-.freeShipText {
-  font-size: 12px;
-  color: var(--color-text-secondary);
-}
-
-.freeShipText strong {
-  color: #16a34a;
-  font-weight: 700;
-}
-
-.summaryDivider {
-  border: none;
-  border-top: 1px solid var(--color-border-default);
-  margin: 2px 0;
-}
-
-.summaryTotal {
-  display: flex;
-  justify-content: space-between;
-  align-items: baseline;
-  padding-top: 4px;
-}
-
-.summaryTotalLabel {
-  font-family: var(--font-friendly);
-  font-size: 16px;
-  font-weight: 800;
-  color: var(--color-text-primary);
-}
-
-.summaryTotalValue {
-  font-family: var(--font-friendly);
-  font-size: 20px;
-  font-weight: 800;
-  color: var(--color-accent);
-}
-
 .summaryActions {
   padding: 0 20px 20px;
   display: flex;
@@ -406,11 +282,19 @@
   transform: translateY(-1px);
 }
 
+.checkoutBtn:disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
+  transform: none;
+  box-shadow: none;
+}
+
 .checkoutBtn:active {
   transform: scale(0.985);
 }
 
 .continueBtn {
+  display: block;
   width: 100%;
   text-align: center;
   padding: 11px 20px;
@@ -476,6 +360,7 @@
 
 .emptyShopBtn {
   display: inline-flex;
+  text-decoration: none;
   align-items: center;
   gap: 7px;
   padding: 11px 24px;
@@ -501,10 +386,6 @@
   .removeBtn,
   .checkoutBtn,
   .emptyShopBtn {
-    transition: none;
-  }
-
-  .freeShipFill {
     transition: none;
   }
 }

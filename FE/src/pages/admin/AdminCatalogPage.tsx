@@ -2,6 +2,7 @@ import type { ReactNode } from 'react';
 import { Navigate, useNavigate, useParams } from 'react-router-dom';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '../../components/ui/tabs';
 import { CategoriesTab } from './catalog/CategoriesTab';
+import { FeesTab } from './catalog/FeesTab';
 import { ProductsTab } from './catalog/ProductsTab';
 import { ProtocolsTab } from './catalog/ProtocolsTab';
 import { ServicesTab } from './catalog/ServicesTab';
@@ -13,6 +14,7 @@ const TABS: { key: string; label: string; render: () => ReactNode }[] = [
   { key: 'services', label: 'Dịch vụ & loại chuồng', render: () => <ServicesTab /> },
   { key: 'vaccine-types', label: 'Loại vaccine', render: () => <VaccineTypesTab /> },
   { key: 'protocols', label: 'Phác đồ tiêm', render: () => <ProtocolsTab /> },
+  { key: 'fees', label: 'Phí & định mức', render: () => <FeesTab /> }, // UC32
 ];
 
 /** T21 — quản lý danh mục dùng chung toàn chuỗi (UC28–UC31, chỉ SUPER_MANAGER). Mỗi tab một URL. */

@@ -214,7 +214,11 @@ describe('services at the branch (UC33)', () => {
   it('lists active catalog services with their flag and turns one on', async () => {
     const auth = await manager();
     const list = (await client.get('/api/branches/1/services', auth)).data.data as { serviceId: number; enabled: boolean }[];
-    expect(list).toHaveLength(6);
+    // T57: danh mục có thêm 6 dịch vụ phẫu thuật / nội trú đang kinh doanh (id ≥ 7000, chưa bật ở chi nhánh nào trong state của branch.mock); 6 dịch vụ GĐ1 giữ nguyên.
+    expect(list.filter((s) => s.serviceId < 7000)).toHaveLength(6);
+    const tier3 = list.filter((s) => s.serviceId >= 7000);
+    expect(tier3.map((s) => s.serviceId).sort((a, b) => a - b)).toEqual([7001, 7002, 7003, 7101, 7102, 7103]);
+    expect(tier3.some((s) => s.enabled)).toBe(false);
     expect(list.find((s) => s.serviceId === 6)?.enabled).toBe(false);
 
     const res = await client.put('/api/branches/1/services/6', { enabled: true }, auth);

@@ -10,7 +10,6 @@ export type WeightSource = 'VET' | 'INTAKE' | 'OWNER';
 export type ServiceGroup = 'MEDICAL' | 'GROOMING';
 
 export const SPECIES_LABEL: Record<Species, string> = { DOG: 'Chó', CAT: 'Mèo', OTHER: 'Khác' };
-export const SPECIES_EMOJI: Record<Species, string> = { DOG: '🐶', CAT: '🐱', OTHER: '🐾' };
 export const SEX_LABEL: Record<Sex, string> = { MALE: 'Đực', FEMALE: 'Cái', UNKNOWN: 'Chưa rõ' };
 export const WEIGHT_SOURCE_LABEL: Record<WeightSource, string> = {
   VET: 'Bác sĩ đo khi khám',

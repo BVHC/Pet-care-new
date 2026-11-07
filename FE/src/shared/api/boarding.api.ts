@@ -2,6 +2,7 @@
 // Chuồng: BRANCH_MANAGER ghi, GET thêm RECEPTIONIST / CARETAKER · đặt chỗ: CUSTOMER, RECEPTIONIST · nhận thú: lễ tân, CARETAKER ·
 // trả thú, hủy vì hết chuồng, thú mất: chỉ lễ tân · nhật ký: VET, CARETAKER ghi; khách xem của thú mình.
 // Hủy phiên trả thú là thao tác trên Order: salesApi.abortCheckout (sales-v1 #9).
+import type { AxiosRequestConfig } from 'axios';
 import { apiClient } from './axios';
 import type {
   AddendumRequest,
@@ -29,7 +30,8 @@ import type {
 } from '../types/boarding';
 import type { PageResponse } from '../types';
 
-const get = async <T>(url: string, params?: object): Promise<T> => (await apiClient.get(url, { params })).data.data;
+/** `config`: truyền `POLL` (axios.ts) cho request theo nhịp refetchInterval. */
+const get = async <T>(url: string, params?: object, config?: AxiosRequestConfig): Promise<T> => (await apiClient.get(url, { params, ...config })).data.data;
 const post = async <T>(url: string, body?: object): Promise<T> => (await apiClient.post(url, body)).data.data;
 const patch = async <T>(url: string, body: object): Promise<T> => (await apiClient.patch(url, body)).data.data;
 
@@ -70,7 +72,7 @@ export const boardingApi = {
   endDeceased: (bookingId: number, body: DeceasedEndRequest) => post<CheckoutStarted>(`/api/boarding-bookings/${bookingId}/end-deceased`, body),
 
   // ───── Nhật ký chăm sóc (UC57, UC60) ─────
-  listCareLogs: (bookingId: number) => get<CareLog[]>(`/api/boarding-bookings/${bookingId}/care-logs`),
+  listCareLogs: (bookingId: number, config?: AxiosRequestConfig) => get<CareLog[]>(`/api/boarding-bookings/${bookingId}/care-logs`, undefined, config),
   createCareLog: (bookingId: number, body: CareLogRequest) => post<CareLog>(`/api/boarding-bookings/${bookingId}/care-logs`, body),
   /** Người ghi, trong `editableUntil`; sau đó 409 (BR-LT-11). */
   updateCareLog: (careLogId: number, body: UpdateCareLogRequest) => patch<CareLog>(`/api/care-logs/${careLogId}`, body),

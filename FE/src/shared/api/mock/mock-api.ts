@@ -22,6 +22,22 @@ import { reportRoutes } from './report.mock';
 import { salesRoutes } from './sales.mock';
 import { visitRoutes } from './visit.mock';
 import { visitClinicalRoutes } from './visit-clinical.mock';
+import { aiRoutes } from './ai.mock';
+import { articlexRoutes } from './articlex.mock';
+import { branchlifeRoutes } from './branchlife.mock';
+import { complaintRoutes } from './complaint.mock';
+import { custmergeRoutes } from './custmerge.mock';
+import { feesRoutes } from './fees.mock';
+import { homevisitRoutes } from './homevisit.mock';
+import { inpatientRoutes } from './inpatient.mock';
+import { materialUseRoutes } from './materialuse.mock';
+import { paymentRoutes } from './payment.mock';
+import { returnsRoutes } from './returns.mock';
+import { shopRoutes } from './shop.mock';
+import { stockopsRoutes } from './stockops.mock';
+import { surgeryRoutes } from './surgery.mock';
+import { workforceRoutes } from './workforce.mock';
+import './tier3-wiring';
 import { fail, ruleFail, type MockHandler, type MockReply } from './envelope';
 import { accountForToken, identityRoutes } from './identity.mock';
 import { isMockedRequest, type MockRule } from './mock-scope';
@@ -47,6 +63,22 @@ const ROUTES: Record<string, MockHandler> = {
   ...visitRoutes,
   ...visitClinicalRoutes,
   ...reportRoutes,
+  // Tầng 3 (T57): các module mới; shop đặt trước payment để đường tĩnh `…/online-orders/*` khớp trước.
+  ...workforceRoutes,
+  ...complaintRoutes,
+  ...stockopsRoutes,
+  ...materialUseRoutes,
+  ...feesRoutes,
+  ...shopRoutes,
+  ...paymentRoutes,
+  ...returnsRoutes,
+  ...branchlifeRoutes,
+  ...custmergeRoutes,
+  ...articlexRoutes,
+  ...homevisitRoutes,
+  ...surgeryRoutes,
+  ...inpatientRoutes,
+  ...aiRoutes,
 };
 
 const COMPILED = Object.entries(ROUTES).map(([key, handler]) => {
@@ -72,7 +104,7 @@ function findRoute(method: string, path: string) {
 }
 
 /** Không cần đăng nhập (00-method §3.1). */
-const PUBLIC_PATH = /^\/api\/(auth\/(register(\/.*)?|login|password\/.*)|public\/.*)$/;
+const PUBLIC_PATH = /^\/api\/(auth\/(register(\/.*)?|login|refresh|password\/.*)|public\/.*)$/;
 /** Vẫn gọi được khi còn mustChangePassword (identity-v1 A4). */
 const ALLOWED_BEFORE_PASSWORD_CHANGE = new Set(['GET /api/me', 'POST /api/me/password', 'POST /api/auth/logout']);
 

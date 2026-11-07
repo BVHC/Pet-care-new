@@ -5,12 +5,14 @@
 // lượt đã đổi ở nơi khác.
 import { keepPreviousData, useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { plainMessage, toApiError } from '../api/api-error';
+import { POLL } from '../api/axios';
 import { identityApi } from '../api/identity.api';
 import { visitApi, type ArrivalsQuery } from '../api/visit.api';
 import { retryDelay, shouldRetry } from '../constants/realtime';
 import type { Appointment } from '../types/appointment';
 import type { PageResponse } from '../types';
 import { useAccount } from '../stores/session.store';
+import { useAccessValid } from './useAccessValid';
 import type { AssignableStaffResponse } from '../types/identity';
 import type { AssignRequest, CheckInRequest, MoveVisitRequest, ReassignRequest, Visit, VisitAction, VisitQueueQuery } from '../types/visit';
 
@@ -23,11 +25,16 @@ export const visitQueryRetry = retry;
 const live = { ...retry, refetchInterval: VISIT_REFRESH_MS, refetchIntervalInBackground: false } as const;
 
 /** #2 (A05–A08). */
-export const useVisitQueue = (query: VisitQueueQuery = {}, enabled = true) =>
-  useQuery({ queryKey: ['visits', 'queue', query], queryFn: () => visitApi.listQueue(query), enabled, placeholderData: keepPreviousData, ...live });
+export const useVisitQueue = (query: VisitQueueQuery = {}, enabled = true) => {
+  const open = useAccessValid();
+  return useQuery({ queryKey: ['visits', 'queue', query], queryFn: () => visitApi.listQueue(query, POLL), enabled: enabled && open, placeholderData: keepPreviousData, ...live });
+};
 
 /** #3 (VET, CARETAKER). */
-export const useMyQueue = (enabled = true) => useQuery({ queryKey: ['visits', 'my-queue'], queryFn: visitApi.getMyQueue, enabled, ...live });
+export const useMyQueue = (enabled = true) => {
+  const open = useAccessValid();
+  return useQuery({ queryKey: ['visits', 'my-queue'], queryFn: () => visitApi.getMyQueue(POLL), enabled: enabled && open, ...live });
+};
 
 /** #4 (A04–A08). Chưa chọn lượt (null) thì chưa gọi. */
 export const useVisit = (visitId: number | null, enabled = true) =>
@@ -36,8 +43,10 @@ export const useVisit = (visitId: number | null, enabled = true) =>
 const contentOf = (page: PageResponse<Appointment>) => page.content;
 
 /** Khách đã tới để check-in (appointment-v1 #3 `checkInReady`, lễ tân / BRANCH_MANAGER). Khóa dưới ['visits'] nên check-in làm tải lại. */
-export const useArrivals = (enabled = true, query: ArrivalsQuery = {}) =>
-  useQuery({ queryKey: ['visits', 'arrivals', query], queryFn: () => visitApi.listArrivals(query), select: contentOf, enabled, ...live });
+export const useArrivals = (enabled = true, query: ArrivalsQuery = {}) => {
+  const open = useAccessValid();
+  return useQuery({ queryKey: ['visits', 'arrivals', query], queryFn: () => visitApi.listArrivals(query, POLL), select: contentOf, enabled: enabled && open, ...live });
+};
 
 // ─── Lệnh ghi ───
 

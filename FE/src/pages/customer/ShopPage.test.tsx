@@ -2,20 +2,24 @@ import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { Link, MemoryRouter, useLocation } from 'react-router-dom';
-import { beforeAll, describe, expect, it, vi } from 'vitest';
+import { beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
+import { loginAs } from '../../components/customer/shop/testing';
 import { ApiError } from '../../shared/api/api-error';
 import { apiClient } from '../../shared/api/axios';
 import { catalogApi } from '../../shared/api/catalog.api';
 import { installMockApi } from '../../shared/api/mock/mock-api';
+import { shopApi } from '../../shared/api/shop.api';
+import { useSession } from '../../shared/stores/session.store';
 import type { PublicProduct } from '../../shared/types/public-site';
 import { ShopPage } from './ShopPage';
 
-// UC16, BR-CK-01/03: cửa hàng công khai đọc /api/public/products. Seed có 5 sản phẩm (không kê đơn, đang bán), xếp theo tên:
+// UC16, BR-CK-01/03 + UC61: cửa hàng công khai đọc /api/public/products; thẻ còn hàng có "Thêm vào giỏ" (khách vãng lai bị chuyển sang đăng nhập). Seed có 5 sản phẩm (không kê đơn, đang bán), xếp theo tên:
 // Hạt Royal Canin (Thức ăn), Pate Whiskas (Thức ăn), Vaccine 5 bệnh Vanguard + Vaccine Dại Rabisin (Vaccine), Vitamin tổng hợp
 // (Thuốc, hết hàng ở mọi chi nhánh). Chi nhánh ACTIVE duy nhất là PetCare Cầu Giấy (id 1). Danh mục Phụ kiện không có sản phẩm.
 // Lỗi giả dùng 403 vì hook công khai không thử lại 4xx.
 
 beforeAll(() => installMockApi(apiClient));
+beforeEach(() => useSession.getState().clear());
 
 const URL_PROBE = 'url-probe';
 
@@ -89,11 +93,40 @@ describe('ShopPage (UC16)', () => {
     expect(screen.getByRole('navigation', { name: 'Phân trang' })).toHaveTextContent('1–5 trên 5 sản phẩm');
   });
 
-  it('không còn giỏ hàng, nút mua, yêu thích, đánh giá, đã bán (BR-CK-03: không đặt mua online)', async () => {
+  it('thẻ còn hàng có "Thêm vào giỏ", thẻ hết hàng ở mọi chi nhánh thì không có', async () => {
+    renderPage();
+    expect(within(await card('Pate Whiskas 85g')).getByRole('button', { name: 'Thêm vào giỏ' })).toBeInTheDocument();
+    expect(within(await card('Vitamin tổng hợp PetCare')).queryByRole('button', { name: 'Thêm vào giỏ' })).not.toBeInTheDocument();
+  });
+
+  it('khách vãng lai bấm "Thêm vào giỏ": chuyển sang đăng nhập, giỏ không bị ghi', async () => {
+    const setItem = vi.spyOn(shopApi, 'setCartItem');
+    const user = renderPage();
+    await user.click(within(await card('Pate Whiskas 85g')).getByRole('button', { name: 'Thêm vào giỏ' }));
+    expect(currentUrl()).toBe('/auth/login');
+    expect(setItem).not.toHaveBeenCalled();
+  });
+
+  it('khách hàng bấm "Thêm vào giỏ": giỏ trên BE cộng thêm 1 vào dòng có sẵn (pate 2 thành 3)', async () => {
+    await loginAs();
+    const user = renderPage();
+    await user.click(within(await card('Pate Whiskas 85g')).getByRole('button', { name: 'Thêm vào giỏ' }));
+    await waitFor(async () => expect((await shopApi.getCart()).items.find((i) => i.productId === 2)?.quantity).toBe(3));
+    expect(currentUrl()).toBe('/shop');
+  });
+
+  it('nhân viên (lễ tân) không thấy nút "Thêm vào giỏ"', async () => {
+    await loginAs('reception@store1.vn');
     renderPage();
     await card('Pate Whiskas 85g');
-    expect(screen.queryByRole('button', { name: /giỏ|mua|yêu thích/i })).not.toBeInTheDocument();
-    expect(document.body).not.toHaveTextContent(/Thêm vào giỏ|đã bán|Giao 2 giờ|4\.9\/5/);
+    expect(screen.queryByRole('button', { name: 'Thêm vào giỏ' })).not.toBeInTheDocument();
+  });
+
+  it('không có yêu thích, đánh giá, đã bán, lời hứa giao nhanh; thẻ chỉ hiện chi nhánh còn hàng, không số lượng tồn (BR-CK-03)', async () => {
+    renderPage();
+    await card('Pate Whiskas 85g');
+    expect(screen.queryByRole('button', { name: /yêu thích|mua ngay/i })).not.toBeInTheDocument();
+    expect(document.body).not.toHaveTextContent(/đã bán|Giao 2 giờ|4\.9\/5/);
     // Chỉ tên chi nhánh, không có "còn 12", "12 sản phẩm có sẵn"…
     expect(document.body).not.toHaveTextContent(/\bcòn \d|có sẵn/i);
   });

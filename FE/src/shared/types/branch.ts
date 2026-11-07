@@ -1,9 +1,16 @@
 // Chi nhánh, giờ mở cửa, ngày nghỉ, dịch vụ tại chi nhánh, quota — theo docs/api/branch-v1.md (mục Schema).
 import type { ServiceGroup } from './catalog';
 
-export type BranchStatus = 'DRAFT' | 'ACTIVE';
+export type BranchStatus = 'DRAFT' | 'ACTIVE' | 'SUSPENDED' | 'CLOSED';
 
-export const BRANCH_STATUS_LABELS: Record<BranchStatus, string> = { DRAFT: 'Nháp', ACTIVE: 'Đang hoạt động' };
+export const BRANCH_STATUS_LABELS: Record<BranchStatus, string> = {
+  DRAFT: 'Nháp',
+  ACTIVE: 'Đang hoạt động',
+  SUSPENDED: 'Tạm ngừng',
+  CLOSED: 'Đã đóng cửa',
+};
+
+export const BRANCH_STATUS_VARIANT = { DRAFT: 'neutral', ACTIVE: 'success', SUSPENDED: 'warning', CLOSED: 'danger' } as const satisfies Record<BranchStatus, string>;
 
 export interface Branch {
   branchId: number;

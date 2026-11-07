@@ -3,6 +3,7 @@ import { toast } from 'sonner';
 import { cn } from '../../lib/utils';
 import { DoctorQueue } from '../../components/staff/doctor/DoctorQueue';
 import { ExamPanel } from '../../components/staff/doctor/ExamPanel';
+import { HomeVisitQueue } from '../../components/staff/doctor/HomeVisitQueue';
 import { WorkspaceHeader } from '../../components/staff/ui';
 import { useStaffUser } from '../../shared/hooks/useStaffUser';
 import { useCallVisit, useMarkEmergency, useMyQueue, useVisitQueue, visitErrorMessage } from '../../shared/hooks/useVisits';
@@ -18,6 +19,7 @@ const PANES: { id: Pane; label: string }[] = [
 /**
  * Phòng khám: hàng chờ của tôi (visit-v1 #3) và lượt Khám/Tiêm đã hoàn tất hôm nay (#2) | lượt đang chọn. Gọi lượt (#8), đánh dấu cấp cứu (#7), bệnh án, cân nặng, tiêm chủng,
  * hoàn tất lượt và bản bổ sung (#10, #12–15, #18–20; T37) đều chạy trên API. ≥1024px hai cột; điện thoại một khung mỗi lần.
+ * Tầng 3 (T57): dưới hàng chờ có khung "Khám tại nhà" (UC51, homevisit-v1 #3, #5, #6); khung "Phẫu thuật" (UC50) nằm trong bệnh án của lượt Khám/Tiêm (SurgerySection).
  */
 export function DoctorWorkspacePage() {
   const user = useStaffUser();
@@ -83,16 +85,25 @@ export function DoctorWorkspacePage() {
       </div>
 
       <div className="grid min-h-0 flex-1 gap-3 p-3 lg:grid-cols-[272px_minmax(0,1fr)]">
-        <DoctorQueue
-          className={cn(pane === 'queue' ? 'flex' : 'hidden', 'min-h-[60dvh] lg:flex lg:min-h-0')}
-          query={queue}
-          completed={completed}
-          userId={userId}
-          selectedId={selected?.visitId ?? null}
-          onSelect={open}
-          onCall={callVisit}
-          callingId={call.isPending ? (call.variables ?? null) : null}
-        />
+        <div className={cn(pane === 'queue' ? 'flex' : 'hidden', 'min-h-[60dvh] flex-col gap-3 lg:flex lg:min-h-0')}>
+          <DoctorQueue
+            className="min-h-0 flex-1"
+            query={queue}
+            completed={completed}
+            userId={userId}
+            selectedId={selected?.visitId ?? null}
+            onSelect={open}
+            onCall={callVisit}
+            callingId={call.isPending ? (call.variables ?? null) : null}
+          />
+          <HomeVisitQueue
+            className="max-h-[40dvh] shrink-0"
+            onStarted={(visitId) => {
+              setPicked(visitId);
+              setPane('patient');
+            }}
+          />
+        </div>
         <ExamPanel
           className={cn(pane === 'patient' ? 'flex' : 'hidden', 'min-h-[60dvh] lg:flex lg:min-h-0')}
           visit={selected}

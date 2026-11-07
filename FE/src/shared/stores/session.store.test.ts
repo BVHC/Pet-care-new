@@ -48,7 +48,7 @@ describe('session', () => {
 
   it('ends the session when the BE answers 401 (session revoked or expired)', async () => {
     await login('doctor@store1.vn');
-    useSession.setState({ token: 'mock-token-revoked' });
+    useSession.setState({ token: 'mock-token-revoked', refreshToken: 'mock-refresh-revoked' }); // phiên bị hủy: cả hai token đều chết
 
     await apiClient.get('/api/me').catch(() => undefined);
 

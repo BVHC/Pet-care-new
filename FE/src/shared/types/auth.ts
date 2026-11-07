@@ -39,9 +39,22 @@ export interface LoginRequest {
 
 export interface LoginResponse {
   accessToken: string;
+  /** Hạn tuyệt đối của phiên (`session.ttl_hours`), không gia hạn. */
   expiresAt: string;
+  /** Hạn của access token (`session.access_ttl_minutes`, mặc định 10 phút); gia hạn bằng `refreshToken` (ADR-0091). */
+  accessTokenExpiresAt: string;
+  /** Dùng một lần: mỗi lần làm mới đổi sang token khác. */
+  refreshToken: string;
   account: AccountSummary;
   linkDecisionPending: boolean;
+}
+
+/** `POST /api/auth/refresh` (identity-v1 #39, public). */
+export interface RefreshResponse {
+  accessToken: string;
+  accessTokenExpiresAt: string;
+  refreshToken: string;
+  expiresAt: string;
 }
 
 export interface ChangePasswordRequest {

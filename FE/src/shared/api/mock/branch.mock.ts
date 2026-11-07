@@ -17,6 +17,7 @@ import type {
   SlotQuota,
   TimeRange,
 } from '../../types/branch';
+import type { BranchLifecycle, BranchLifecycleStatus } from '../../types/branchlife';
 import type { PublicService } from '../../types/catalog';
 import {
   addDays,
@@ -49,9 +50,26 @@ import { branchIdOf, countBranchManagers } from './identity.mock';
 
 type Booked<T> = T & { branchId: number };
 
+/**
+ * Chi nhánh trong state: `status` có thêm SUSPENDED / CLOSED của UC13 (branchlife-v1). Kiểu `Branch` của branch-v1 giữ hai giá trị cũ, nên chỉ
+ * kiểu LƯU được mở rộng; các trường vòng đời để riêng ở `State.lifecycle` (không lọt vào `Branch` trả về, cũng không vào chi nhánh công khai).
+ */
+export type StoredBranch = Omit<Branch, 'status'> & { status: BranchLifecycleStatus };
+
+/** Cột `suspended_at`, `suspend_reason`, `expected_resume_on`, `closed_at`, `close_reason` của `branches` (08 §F.1); chưa từng tạm ngừng / đóng thì không có dòng. */
+interface LifecycleRow {
+  suspendedAt: string | null;
+  suspendReason: string | null;
+  expectedResumeOn: string | null;
+  closedAt: string | null;
+  closeReason: string | null;
+}
+
 interface State {
   seq: number;
-  branches: Branch[];
+  branches: StoredBranch[];
+  /** UC13. State lưu từ trước T57 chưa có trường này: `load()` gộp giá trị mặc định. */
+  lifecycle: Record<number, LifecycleRow>;
   /** Các bản giờ mở cửa theo chi nhánh. */
   hours: Record<number, OpeningHoursVersion[]>;
   holidays: Booked<Holiday>[];
@@ -130,6 +148,7 @@ function seed(today = localIsoDate()): State {
       { appointmentId: 3, branchId: 1, code: code('LH', thursday, 1), slotDate: thursday, slotStart: '14:00', petName: 'Miu', customerName: 'Lê Minh Châu', customerPhone: null },
     ],
     boardings: [],
+    lifecycle: {},
   };
 }
 
@@ -138,7 +157,8 @@ const STATE_KEY = 'petcare-mock-branch';
 function load(): State {
   try {
     const raw = localStorage.getItem(STATE_KEY);
-    return raw ? (JSON.parse(raw) as State) : seed();
+    // Gộp với dữ liệu mẫu: state ghi bởi bản cũ mà thiếu bảng (vd `lifecycle`) vẫn đọc được.
+    return raw ? { ...seed(), ...(JSON.parse(raw) as Partial<State>) } : seed();
   } catch {
     return seed();
   }
@@ -181,7 +201,7 @@ const bodyOf = (b: unknown) => (b ?? {}) as Record<string, unknown>;
 const byName = (a: { name: string }, b: { name: string }) => a.name.localeCompare(b.name, 'vi');
 
 /** 404 chi nhánh → phạm vi → xử lý; giống thứ tự của BE. */
-function onBranch(req: MockRequest, handle: (s: State, branch: Branch) => MockReply): MockReply {
+function onBranch(req: MockRequest, handle: (s: State, branch: StoredBranch) => MockReply): MockReply {
   if (!/^\d+$/.test(req.params.branchId)) return badParam('branchId');
   const s = load();
   const branch = s.branches.find((b) => b.branchId === Number(req.params.branchId));
@@ -200,8 +220,11 @@ const strip = <T extends { branchId: number }>({ branchId: _branchId, ...rest }:
 export interface BoardingSource {
   /** Đặt chỗ BOOKED của chi nhánh. */
   booked(branchId: number): AffectedBoarding[];
-  /** Hủy do phòng khám (Đặt chỗ#5), không tính hủy muộn, báo khách. */
-  cancelByClinic(bookingIds: number[], cause: 'HOLIDAY_ADDED' | 'OPENING_HOURS_REDUCED'): void;
+  /**
+   * Hủy do phòng khám (Đặt chỗ#5), không tính hủy muộn, báo khách. `BRANCH_SUSPENDED` / `BRANCH_CLOSED` là UC13 (branchlife-v1, BR-CN-09):
+   * mock lưu trú chưa có câu lý do riêng cho hai nguyên nhân này nên đang dùng câu của "giờ mở cửa thu hẹp".
+   */
+  cancelByClinic(bookingIds: number[], cause: 'HOLIDAY_ADDED' | 'OPENING_HOURS_REDUCED' | 'BRANCH_SUSPENDED' | 'BRANCH_CLOSED'): void;
 }
 let boardingSource: BoardingSource = { booked: () => [], cancelByClinic: () => undefined };
 export function registerBoardingSource(source: BoardingSource) {
@@ -273,7 +296,7 @@ function branchChecks(b: Record<string, unknown>, creating: boolean): Check[] {
 
 const listBranches: MockHandler = (req) => {
   const status = req.query.status;
-  if (status !== undefined && status !== 'DRAFT' && status !== 'ACTIVE') return badParam('status');
+  if (status !== undefined && !['DRAFT', 'ACTIVE', 'SUSPENDED', 'CLOSED'].includes(status)) return badParam('status');
   return ok(
     load()
       .branches.filter((b) => inScope(req, b.branchId) && (!status || b.status === status))
@@ -330,8 +353,9 @@ const updateBranch: MockHandler = (req) => {
 
 const activateBranch: MockHandler = (req) =>
   onBranch(req, (s, branch) => {
-    if (branch.status === 'ACTIVE') {
-      return fail('INVALID_STATE_TRANSITION', 'Không thể chuyển trạng thái BranchTransitionHandler từ ACTIVE sang ACTIVE', 409);
+    // Chỉ DRAFT → ACTIVE; SUSPENDED → ACTIVE là mở lại (branchlife-v1 #3), CLOSED không mở lại được.
+    if (branch.status !== 'DRAFT') {
+      return fail('INVALID_STATE_TRANSITION', `Không thể chuyển trạng thái BranchTransitionHandler từ ${branch.status} sang ACTIVE`, 409);
     }
     const noManager = countBranchManagers(branch.branchId) < 1;
     const noHours = !(s.hours[branch.branchId] ?? []).some((v) => v.days.some((d) => d.ranges.length > 0));
@@ -694,6 +718,78 @@ export function openingRangesOn(branchId: number, date: string): TimeRange[] {
 export const acceptsAfterHours = (branchId: number): boolean =>
   load().branches.find((b) => b.branchId === branchId)?.acceptsAfterHoursEmergency ?? false;
 
+// ─── Vòng đời chi nhánh (UC13, branchlife-v1): trạng thái SUSPENDED / CLOSED nằm ở đây, route ở branchlife.mock.ts ───
+// Chi nhánh không ACTIVE thì mọi chỗ đang kiểm `branch.status !== 'ACTIVE'` (đặt lịch, đặt chỗ lưu trú, tiếp nhận) và `activeBranches`
+// (trang công khai, BR-CK-01) đã chặn / ẩn sẵn, nên BR-CN-10 không cần sửa thêm ở các mock đó.
+
+const lifecycleView = (s: State, b: StoredBranch): BranchLifecycle => {
+  const row = s.lifecycle[b.branchId];
+  return {
+    branchId: b.branchId,
+    status: b.status,
+    suspendedAt: row?.suspendedAt ?? null,
+    expectedResumeOn: row?.expectedResumeOn ?? null,
+    closedAt: row?.closedAt ?? null,
+    // Một trường `reason`: lý do của lần gần nhất (đóng cửa thì lý do đóng, tạm ngừng thì lý do tạm ngừng, đang hoạt động thì null).
+    reason: b.status === 'CLOSED' ? (row?.closeReason ?? null) : b.status === 'SUSPENDED' ? (row?.suspendReason ?? null) : null,
+  };
+};
+
+/** Trạng thái vòng đời của chi nhánh; null nếu không có chi nhánh. */
+export function lifecycleOf(branchId: number): BranchLifecycle | null {
+  const s = load();
+  const b = s.branches.find((x) => x.branchId === branchId);
+  return b ? lifecycleView(s, b) : null;
+}
+
+/** Số lịch hẹn và đặt chỗ lưu trú `BOOKED` của chi nhánh (BR-CN-07); lịch hẹn là dữ liệu mẫu của file này, đặt chỗ đọc qua nguồn lưu trú đã đăng ký. */
+export function bookedOfBranch(branchId: number): { appointments: number; boardings: number } {
+  const s = load();
+  return {
+    appointments: s.appointments.filter((a) => a.branchId === branchId).length,
+    boardings: boardingSource.booked(branchId).length,
+  };
+}
+
+/** Chi nhánh đã có bản giờ mở cửa nào có khoảng giờ chưa (BR-CN-01); cùng phép kiểm với kích hoạt. */
+export const hasOpeningHours = (branchId: number): boolean =>
+  (load().hours[branchId] ?? []).some((v) => v.days.some((d) => d.ranges.length > 0));
+
+export type LifecycleChange =
+  | { to: 'SUSPENDED'; reason: string; expectedResumeOn: string | null }
+  | { to: 'CLOSED'; reason: string }
+  | { to: 'ACTIVE' };
+
+/**
+ * Áp một chuyển trạng thái UC13 (đã kiểm hợp lệ ở branchlife.mock.ts). `cancelBookings` hủy hàng loạt lịch hẹn và đặt chỗ BOOKED của chi nhánh
+ * (BR-CN-09, `BranchClinicCancellationEvent`, không tính hủy muộn). Mở lại xóa cột tạm ngừng; đóng cửa giữ `suspendedAt` cũ (lịch sử) và bỏ ngày dự kiến mở lại.
+ */
+export function applyLifecycle(branchId: number, change: LifecycleChange, cancelBookings = false): BranchLifecycle | null {
+  const s = load();
+  const b = s.branches.find((x) => x.branchId === branchId);
+  if (!b) return null;
+  const now = new Date().toISOString();
+  const row: LifecycleRow = s.lifecycle[branchId] ?? { suspendedAt: null, suspendReason: null, expectedResumeOn: null, closedAt: null, closeReason: null };
+  if (change.to !== 'ACTIVE' && cancelBookings) {
+    const impact: ScheduleImpact = {
+      appointments: s.appointments.filter((a) => a.branchId === branchId).map(strip),
+      boardingBookings: boardingSource.booked(branchId),
+    };
+    cancel(s, impact, change.to === 'SUSPENDED' ? 'BRANCH_SUSPENDED' : 'BRANCH_CLOSED');
+  }
+  if (change.to === 'SUSPENDED') {
+    Object.assign(row, { suspendedAt: now, suspendReason: change.reason, expectedResumeOn: change.expectedResumeOn });
+  } else if (change.to === 'CLOSED') {
+    Object.assign(row, { closedAt: now, closeReason: change.reason, expectedResumeOn: null });
+  } else {
+    Object.assign(row, { suspendedAt: null, suspendReason: null, expectedResumeOn: null });
+  }
+  b.status = change.to;
+  s.lifecycle[branchId] = row;
+  save(s);
+  return lifecycleView(s, b);
+}
+
 // ─── Công khai: branch-v1 #20, #21 và catalog-v1 #19 ───
 // Dịch vụ công khai đặt ở đây vì cần cờ bật theo chi nhánh của file này (catalog.mock không đọc ngược branch.mock).
 
@@ -707,7 +803,7 @@ export const activeBranchSummaries = (): { branchId: number; name: string }[] =>
 const notPositive = (name: string) => fail('VALIDATION_FAILED', `${name}: ${name} phải là số dương`, 400);
 
 /** Chỉ chi nhánh ACTIVE (BR-CK-01); `weeklyHours` là bản giờ đang áp dụng hôm nay. */
-function publicBranchOf(s: State, { activatedAt: _activatedAt, status: _status, ...branch }: Branch): PublicBranch {
+function publicBranchOf(s: State, { activatedAt: _activatedAt, status: _status, ...branch }: StoredBranch): PublicBranch {
   const today = localIsoDate();
   const current = [...(s.hours[branch.branchId] ?? [])]
     .filter((v) => v.effectiveFrom <= today)

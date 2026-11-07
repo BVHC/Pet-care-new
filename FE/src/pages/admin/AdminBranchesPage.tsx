@@ -8,7 +8,7 @@ import { EmptyRow, NoticeBar, selectClass, type Notice } from '../../components/
 import { cn } from '../../lib/utils';
 import { useBranches } from '../../shared/hooks/useBranch';
 import { useAccount } from '../../shared/stores/session.store';
-import { BRANCH_STATUS_LABELS, type Branch, type BranchStatus } from '../../shared/types/branch';
+import { BRANCH_STATUS_LABELS, BRANCH_STATUS_VARIANT, type Branch, type BranchStatus } from '../../shared/types/branch';
 import { ActivateBranchModal } from './branch/ActivateBranchModal';
 import { BranchFormModal } from './branch/BranchFormModal';
 
@@ -52,6 +52,8 @@ export function AdminBranchesPage() {
             <option value="">Mọi trạng thái</option>
             <option value="DRAFT">{BRANCH_STATUS_LABELS.DRAFT}</option>
             <option value="ACTIVE">{BRANCH_STATUS_LABELS.ACTIVE}</option>
+            <option value="SUSPENDED">{BRANCH_STATUS_LABELS.SUSPENDED}</option>
+            <option value="CLOSED">{BRANCH_STATUS_LABELS.CLOSED}</option>
           </select>
           {canManage && (
             <Button onClick={() => setEditing('new')}>
@@ -85,7 +87,7 @@ export function AdminBranchesPage() {
                     <td className="text-(--text-secondary)">{b.address}</td>
                     <td className="text-(--text-secondary)">{b.phone}</td>
                     <td>
-                      <StatusBadge status={BRANCH_STATUS_LABELS[b.status]} variant={b.status === 'ACTIVE' ? 'success' : 'neutral'} />
+                      <StatusBadge status={BRANCH_STATUS_LABELS[b.status]} variant={BRANCH_STATUS_VARIANT[b.status]} />
                     </td>
                     <td>{b.acceptsAfterHoursEmergency ? 'Có' : '—'}</td>
                     <td>

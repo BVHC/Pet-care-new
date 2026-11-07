@@ -3,7 +3,7 @@ import { screen, waitFor, within } from '@testing-library/react';
 import { afterEach, beforeAll, describe, expect, it, vi } from 'vitest';
 import { formatCurrency } from '../../lib/utils';
 import { ApiError } from '../../shared/api/api-error';
-import { apiClient } from '../../shared/api/axios';
+import { POLL, apiClient } from '../../shared/api/axios';
 import { installMockApi } from '../../shared/api/mock/mock-api';
 import { reportApi } from '../../shared/api/report.api';
 import { salesApi } from '../../shared/api/sales.api';
@@ -144,9 +144,9 @@ describe('số liệu của chi nhánh (BRANCH_MANAGER)', () => {
     expect(valueOf('Khám/Tiêm').getByText('3 lượt')).toBeInTheDocument();
     expect(valueOf('Thẩm mỹ').getByText('1 lượt')).toBeInTheDocument();
 
-    expect(listQueue).toHaveBeenCalledWith({ date: '2026-10-22' });
-    expect(listQueue).toHaveBeenCalledWith({});
-    expect(listOrders).toHaveBeenCalledWith({ status: 'PENDING', size: 100 });
+    expect(listQueue).toHaveBeenCalledWith({ date: '2026-10-22' }, POLL);
+    expect(listQueue).toHaveBeenCalledWith({}, POLL);
+    expect(listOrders).toHaveBeenCalledWith({ status: 'PENDING', size: 100 }, POLL);
     expect(report).toHaveBeenCalledWith({ from: '2026-10-22', to: '2026-10-22' });
   });
 
@@ -165,7 +165,7 @@ describe('số liệu của chi nhánh (BRANCH_MANAGER)', () => {
     renderDesk(<AdminDashboardPage />);
 
     await waitFor(() => expect(report).toHaveBeenCalledWith({ from: '2026-10-23', to: '2026-10-23' }));
-    expect(listQueue).toHaveBeenCalledWith({ date: '2026-10-23' });
+    expect(listQueue).toHaveBeenCalledWith({ date: '2026-10-23' }, POLL);
   });
 
   it('báo cáo doanh thu hỏng thì chỉ thẻ "Đã thu hôm nay" hiện "–" kèm Thử lại, các thẻ khác vẫn có số', async () => {

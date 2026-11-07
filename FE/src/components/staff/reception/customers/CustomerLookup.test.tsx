@@ -114,6 +114,16 @@ describe('tra cứu và hồ sơ khách tại quầy', () => {
     expect(await within(dialog).findByText('Thú đang có lượt khám chưa kết thúc')).toBeInTheDocument();
   });
 
+  it('lễ tân tạo khiếu nại thay khách từ hồ sơ khách đang mở (UC85)', async () => {
+    const user = renderDesk();
+    await user.type(screen.getByLabelText('Tra cứu theo SĐT'), '0912345678');
+    await user.click(await screen.findByRole('button', { name: /^Mở hồ sơ Nguyễn Thu Trang/ }));
+    const profile = await screen.findByRole('dialog', { name: 'Nguyễn Thu Trang' });
+    await user.click(within(profile).getByRole('tab', { name: 'Thông tin khách' }));
+    await user.click(within(profile).getByRole('button', { name: 'Tạo khiếu nại' }));
+    expect(await screen.findByRole('dialog', { name: 'Tạo khiếu nại thay khách' })).toBeInTheDocument();
+  });
+
   it('sửa email tài khoản khách qua OTP sau khi đối chiếu CCCD (UC22, BR-TK-16)', async () => {
     const user = renderDesk();
     await user.type(screen.getByLabelText('Tra cứu theo SĐT'), '0912345678');
