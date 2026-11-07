@@ -14,7 +14,6 @@ import { BookingPage } from '../pages/customer/BookingPage';
 import PetsPage from '../pages/customer/PetsPage';
 import { AccountPage } from '../pages/customer/AccountPage';
 import { OrderHistoryPage } from '../pages/customer/OrderHistoryPage';
-import { FavoritesPage } from '../pages/customer/FavoritesPage';
 import { NotificationsPage } from '../pages/customer/NotificationsPage';
 import { PaymentPage } from '../pages/customer/PaymentPage';
 import { PaymentGatewayMockPage } from '../pages/customer/PaymentGatewayMockPage';
@@ -22,11 +21,7 @@ import { ComplaintsPage } from '../pages/customer/ComplaintsPage';
 import { SecurityPage } from '../pages/customer/SecurityPage';
 import { SettingsPage } from '../pages/customer/SettingsPage';
 import { HelpPage } from '../pages/customer/HelpPage';
-import { MembershipPage } from '../pages/customer/MembershipPage';
-import { CaregiversPage } from '../pages/customer/CaregiversPage';
-import { VouchersPage } from '../pages/customer/VouchersPage';
 import { AppointmentsPage } from '../pages/customer/AppointmentsPage';
-import { PackagesPage } from '../pages/customer/PackagesPage';
 import { ReviewsPage } from '../pages/customer/ReviewsPage';
 import { BoardingBookingsPage } from '../pages/customer/BoardingBookingsPage';
 import { BoardingNewPage } from '../pages/customer/BoardingNewPage';
@@ -67,8 +62,6 @@ import { AdminPOSPage } from '../pages/admin/AdminPOSPage';
 import { AdminAppointmentsPage } from '../pages/admin/AdminAppointmentsPage';
 import { AdminPaymentsPage } from '../pages/admin/AdminPaymentsPage';
 import { AdminRefundsPage } from '../pages/admin/AdminRefundsPage';
-import { AdminPromotionsPage } from '../pages/admin/AdminPromotionsPage';
-import { AdminMembershipPage } from '../pages/admin/AdminMembershipPage';
 import { AdminWarehousePage } from '../pages/admin/AdminWarehousePage';
 import { AdminWorkforcePage } from '../pages/admin/AdminWorkforcePage';
 import { MySchedulePage } from '../pages/admin/MySchedulePage';
@@ -198,11 +191,6 @@ export function App() {
           {/* Trang của spec cũ, ngoài phạm vi GĐ1 v16 (gỡ ở T57) */}
           <Route path="/shop" element={<ShopPage />} />
           <Route path="/shop/:id" element={<ProductDetailPage />} />
-          <Route path="/favorites" element={<FavoritesPage />} />
-          <Route path="/membership" element={<MembershipPage />} />
-          <Route path="/caregivers" element={<CaregiversPage />} />
-          <Route path="/vouchers" element={<VouchersPage />} />
-          <Route path="/packages" element={<PackagesPage />} />
           <Route path="/recommend" element={<RecommendPage />} />
         </Route>
 
@@ -246,8 +234,6 @@ export function App() {
             <Route path="/admin/invoices" element={<RedirectByRole targets={TO_CASHIER} />} />
             <Route path="/admin/payments" element={<AdminPaymentsPage />} />
             <Route path="/admin/refunds" element={<AdminRefundsPage />} />
-            <Route path="/admin/promotions" element={<AdminPromotionsPage />} />
-            <Route path="/admin/membership" element={<AdminMembershipPage />} />
             <Route path="/admin/warehouse/:tab?" element={<AdminWarehousePage />} />
             {/* Trang mua hàng / vaccine cũ (mô hình đơn mua trước v16): chuyển sang tab kho tương ứng, gỡ ở T57. */}
             <Route path="/admin/purchasing" element={<Navigate to="/admin/warehouse/receipts" replace />} />

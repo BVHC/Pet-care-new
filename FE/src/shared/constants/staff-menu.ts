@@ -1,6 +1,6 @@
 import type { ElementType } from 'react';
 import {
-  Activity, BadgePercent, BarChart3, Bell, BedDouble, Bot, Boxes, Building2, CalendarClock, ClipboardList, Crown, FileText,
+  Activity, BarChart3, Bell, BedDouble, Bot, Boxes, Building2, CalendarClock, ClipboardList, FileText,
   CalendarDays, Lock, Mail, MessageSquareText, Newspaper, Package, PenLine, PhoneCall, Scale, Settings, ShieldAlert, ShoppingBag,
   Stethoscope, Tags, Truck, UserCog, UserSearch, Warehouse, LayoutGrid,
 } from 'lucide-react';
@@ -57,8 +57,6 @@ export const ADMIN_MENU: MenuSection[] = [
       // UC72 (A05): đối soát ca thu ngân. Thu tiền (UC70) và mở / chốt ca (UC71) của lễ tân làm ngay ở bàn Lễ tân.
       { path: '/admin/payments', label: 'Ca thu ngân', icon: Scale, roles: ['BRANCH_MANAGER'] },
       { path: '/admin/refunds', label: 'Trả hàng & hoàn tiền', icon: Scale, roles: ['RECEPTIONIST', 'BRANCH_MANAGER'] }, // UC68, UC69 (tầng 3)
-      { path: '/admin/promotions', label: 'Khuyến mãi', icon: BadgePercent, roles: ['SUPER_MANAGER'] }, // ngoài phạm vi
-      { path: '/admin/membership', label: 'Thành viên', icon: Crown, roles: ['SUPER_MANAGER'] }, // ngoài phạm vi
     ],
   },
   {

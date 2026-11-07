@@ -23,7 +23,6 @@ export const ROUTES = {
   newsDetail: '/news/:slug', // UC17, BR-BV-01: đường dẫn bài là slug, không phải id
   terms: '/terms',
   privacy: '/privacy',
-  favorites: '/favorites',
   notifications: '/notifications',
   payment: '/payment',
   security: '/security',
@@ -37,11 +36,7 @@ export const ROUTES = {
   petProfile: '/pets',
   appointments: '/appointments',
   boardingBookings: '/boarding-bookings', // UC60: lưu trú của tôi
-  packages: '/packages',
   review: '/review',
-  membership: '/membership',
-  caregivers: '/caregivers',
-  vouchers: '/vouchers',
 
   // staff
   reception: '/staff/reception',
@@ -81,15 +76,10 @@ export const NAV_TO_PATH: Record<string, string> = {
   petprofile: ROUTES.petProfile,
   appointments: ROUTES.appointments,
   boardingbookings: ROUTES.boardingBookings,
-  packages: ROUTES.packages,
   review: ROUTES.review,
   notifications: ROUTES.notifications,
-  favorites: ROUTES.favorites,
   payment: ROUTES.payment,
   security: ROUTES.security,
   settings: ROUTES.settings,
   help: ROUTES.help,
-  membership: ROUTES.membership,
-  caregivers: ROUTES.caregivers,
-  vouchers: ROUTES.vouchers,
 };

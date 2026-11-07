@@ -4,8 +4,6 @@ import {
   Bell,
   CalendarClock,
   ChevronRight,
-  Gift,
-  Heart,
   HelpCircle,
   LogOut,
   MessageSquareWarning,
@@ -14,7 +12,6 @@ import {
   Settings,
   Shield,
   Sparkles,
-  Star,
   User,
 } from 'lucide-react'
 import { toast } from 'sonner'
@@ -96,7 +93,7 @@ function NavItem({
 
 export interface AccountSidebarProps {
   /** Tab đang active. */
-  active?: 'profile' | 'pets' | 'orders' | 'recommend' | 'favorites' | 'notifications' | 'security' | 'settings' | 'help' | 'membership' | 'vouchers' | 'caregivers' | 'appointments' | 'boarding' | 'packages' | 'complaints'
+  active?: 'profile' | 'pets' | 'orders' | 'recommend' | 'notifications' | 'security' | 'settings' | 'help' | 'appointments' | 'boarding' | 'complaints'
   /** Số thú cưng (hiện badge). */
   petCount?: number
   /** User display name. */
@@ -177,12 +174,6 @@ export function AccountSidebar({
           href="/boarding-bookings"
         />
         <NavItem
-          icon={Gift}
-          label="Gói dịch vụ"
-          active={active === 'packages'}
-          href="/packages"
-        />
-        <NavItem
           icon={Sparkles}
           label="Gợi ý sản phẩm"
           active={active === 'recommend'}
@@ -191,12 +182,6 @@ export function AccountSidebar({
 
         <div className={styles.navDivider} />
 
-        <NavItem
-          icon={Heart}
-          label="Yêu thích"
-          active={active === 'favorites'}
-          href="/favorites"
-        />
         <NavItem
           icon={Bell}
           label="Thông báo"
@@ -208,24 +193,6 @@ export function AccountSidebar({
           label="Bảo mật"
           active={active === 'security'}
           href="/security"
-        />
-        <NavItem
-          icon={Sparkles}
-          label="Hội viên"
-          active={active === 'membership'}
-          href="/membership"
-        />
-        <NavItem
-          icon={Star}
-          label="Voucher"
-          active={active === 'vouchers'}
-          href="/vouchers"
-        />
-        <NavItem
-          icon={Heart}
-          label="Người chăm sóc"
-          active={active === 'caregivers'}
-          href="/caregivers"
         />
         <NavItem
           icon={MessageSquareWarning}

@@ -87,7 +87,6 @@ export function SiteFooter({ onNav }: SiteFooterProps) {
           <a href="#" onClick={go('listing')}>Tất cả sản phẩm</a>
           <a href="#" onClick={go('recommend')}>Gợi ý cho thú cưng</a>
           <a href="#" onClick={go('cart')}>Giỏ hàng</a>
-          <a href="#" onClick={go('favorites')}>Yêu thích</a>
         </FooterCol>
 
         <FooterCol title="Đặt lịch">
@@ -99,9 +98,7 @@ export function SiteFooter({ onNav }: SiteFooterProps) {
           <a href="#" onClick={go('orders')}>Lịch sử đơn hàng</a>
         </FooterCol>
 
-        <FooterCol title="Hội viên">
-          <a href="#" onClick={go('membership')}>Hạng &amp; quyền lợi</a>
-          <a href="#" onClick={go('vouchers')}>Voucher của tôi</a>
+        <FooterCol title="Về PetCare">
           <a href="#" onClick={go('about')}>Về PetCare</a>
           <a href="#" onClick={go('news')}>Tin tức &amp; bài viết</a>
         </FooterCol>
@@ -111,7 +108,6 @@ export function SiteFooter({ onNav }: SiteFooterProps) {
           <a href="#" onClick={go('register')}>Đăng ký</a>
           <a href="#" onClick={go('account')}>Tài khoản của tôi</a>
           <a href="#" onClick={go('notifications')}>Thông báo</a>
-          <a href="#" onClick={go('caregivers')}>Người chăm sóc</a>
           <a href="#" onClick={go('settings')}>Cài đặt</a>
           <a href="#" onClick={go('help')}>Trợ giúp</a>
         </FooterCol>

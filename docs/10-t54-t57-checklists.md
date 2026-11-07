@@ -143,6 +143,8 @@ Danh sách lấy từ `staff-menu.ts` và `App.tsx` (5/11/2026); các trang đã
 | **Mã chết** | `clinic-db.ts`, `clinic.api.ts`, `useClinic.ts` (`docs/testcases/T37-fe.md` §B.6) | Gỡ cùng test, **sau** T57 vì mock cũ có thể còn trỏ vào |
 | **Giữ** | `/admin/payments` (ca thu ngân, UC72), các trang GĐ1 khác | Không đụng |
 
+**Đã làm 7/11/2026 (Hiến duyệt):** gỡ cả bảy trang "Ngoài phạm vi" và mã chết `clinic-db.ts`, `clinic.api.ts`, `useClinic.ts`, kèm `cart.store.ts` và `recommend.mock.ts` (không ai import). Kiểm UC trước khi gỡ: `docs/01`, `02`, `04` không có UC nào dùng voucher, khuyến mãi, hội viên, yêu thích, người chăm sóc, gói dịch vụ. `/shop/:id` giữ. Chưa gỡ vì ngoài danh sách: `AdminPurchasingPage.tsx`, `AdminVaccinesPage.tsx`, `shared/stores/notifications.store.ts` (không ai import).
+
 ### 2.3 Việc FE-1 làm khi hợp đồng được duyệt (T57 → T66–T68, T79–T82)
 
 1. Khung route và guard cho các route mới ở §2.1 (7 role, 1280 px).
