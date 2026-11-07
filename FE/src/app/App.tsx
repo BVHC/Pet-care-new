@@ -188,7 +188,7 @@ export function App() {
             <Route path="/complaints" element={<ComplaintsPage />} />
           </Route>
 
-          {/* Trang của spec cũ, ngoài phạm vi GĐ1 v16 (gỡ ở T57) */}
+          {/* UC16 danh mục sản phẩm công khai: khách thêm vào giỏ; /recommend link tới /shop/:id (giữ ở T57 Bước C) */}
           <Route path="/shop" element={<ShopPage />} />
           <Route path="/shop/:id" element={<ProductDetailPage />} />
           <Route path="/recommend" element={<RecommendPage />} />
