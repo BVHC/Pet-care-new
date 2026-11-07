@@ -106,6 +106,13 @@ app:
       cron: "0 0 3 * * *"
       retention-days: 30
       batch-size: 1000
+    # Xóa refresh token hết hạn quá retention-days ngày (docs/adr/0114, trả D054). expires_at = hạn phiên nên không đụng
+    # token của phiên còn hạn. Giây 11: không bắt đầu cùng ST20 / job */5.
+    refresh-token-cleanup:
+      cron: "${REFRESH_TOKEN_CLEANUP_CRON:11 10 3 * * *}"
+      retention-days: 1
+      batch-size: 1000
+      time-budget: 60s
     # Xóa mã OTP hết hạn quá retention-days ngày (docs/adr/0111, trả D012). retention-days × 1440 phải ≥ cửa sổ tối đa của
     # [CFG] otp.send_window_minutes (1440, V2) để không đụng quota BR-TK-07. Giây 17: không bắt đầu cùng ST20 / job */5.
     otp-token-cleanup:
