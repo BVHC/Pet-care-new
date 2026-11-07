@@ -43,6 +43,46 @@ Một số mock có thêm tài khoản hoặc khách mẫu riêng; xem phần "D
 - `PH` không sửa định mức của dịch vụ "Khám tổng quát", vì `VT-05` cần định mức mẫu; `VT-05` làm đổi dữ liệu mà `GH-07` và `CN-03` đọc, nên đặt lại dữ liệu trước hai ca đó.
 - `AI-36` và `AI-37` để cuối nhóm AI; `AI-37` cần đặt lại `petcare-mock-ai` ngay trước khi chạy.
 
+**Tập chạy trước (smoke): đường chính thành công của mỗi UC.** Nếu chưa thể chạy cả bộ, chạy các chuỗi dưới đây trước. Trong một dòng, chạy theo thứ tự trái sang phải; ca nào có "Điều kiện" thì chạy ca điều kiện trước. Ca ghi `(Mock)` ở cột Áp dụng là ca chỉ đúng trên mock nhưng cần cho luồng. Các ca thứ tự lỗi không có trong tập này vì BE sẽ viết lại thứ tự đó.
+
+| UC | Chuỗi ca |
+|---|---|
+| UC34 | NS-02, NS-10 |
+| UC35 | NS-21 (Mock) |
+| UC36 | NS-23, NS-27 |
+| UC37 | NS-31 |
+| UC38 | NS-19 |
+| UC43 | KN-03, KN-07 |
+| UC51 | KN-17 (Mock, dựng dữ liệu), KN-18 |
+| UC50 | PT-02, PT-07, PT-09, PT-11, PT-12 |
+| UC55 | NT-05 |
+| UC56 | NT-09, NT-14, NT-20, NT-27 (hoàn tất hoặc hủy mọi y lệnh trước NT-27) |
+| UC61 | TM-23 |
+| UC62, UC63 | TM-28, TM-29 (Mock; cổng giả lập) |
+| UC64 | TM-40 |
+| UC65 | DH-04, DH-05, DH-06, DH-07 |
+| UC68 | TH-13 |
+| UC69 | TH-17, TH-21 (TH-21 cần ca thu ngân đang mở) |
+| UC77 | KH-27, KH-28, KH-29, KH-30 |
+| UC78 | KH-35 (Mock), KH-37, KH-38 |
+| UC79 | KH-16 (Mock), KH-17 (Mock) |
+| ST07 | VT-04, VT-05 (Mock) |
+| UC32 | PH-02, PH-10, PH-16 |
+| UC13 | CN-10, CN-13 |
+| UC27 | GH-11, GH-13 |
+| UC80 | BV-03, BV-06 |
+| UC81 | BV-10 (Mock), BV-12 |
+| UC82 | BV-20, BV-24 |
+| UC85 | KL-02, KL-16 |
+| UC86 | KL-25, KL-27 (Mock) |
+| UC90 | AI-01, AI-02 (Mock) |
+| UC91 | AI-11 |
+| UC92 | AI-16 (Mock) |
+| UC93 | AI-20, AI-22 |
+| UC94 | AI-32 |
+
+Chuỗi này chọn tự động theo mẫu "Mong đợi bắt đầu bằng thông báo thành công" rồi soát tay; một số ca ở giữa chuỗi (ví dụ `DH-05`, `KH-28`) tôi chưa đọc kỹ nội dung, nên nếu ca nào hóa ra là ca lỗi thì bỏ nó khỏi chuỗi. `PT-11` mở hộp và thử để trống ô kết quả (hiện lỗi), `PT-12` làm tiếp và hoàn tất; chạy cả hai.
+
 **Chỗ thiếu màn hình hoặc lệch, phát hiện khi soạn (không có ca, hoặc ca viết theo thực tế):**
 
 - Xem vật tư tiêu hao theo lượt (materialuse #1): có hook `useVisitMaterialUsages` nhưng không trang nào dùng. Kết quả ST07 chỉ nhìn gián tiếp qua tab "Thiếu hụt vật tư".
