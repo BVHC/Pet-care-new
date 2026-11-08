@@ -113,6 +113,8 @@ services:
       NOTIFICATION_IN_APP_CRON: ${NOTIFICATION_IN_APP_CRON:-*/5 * * * * *}
       # Lịch dọn notification_outbox đã xử lý (docs/adr/0016); mặc định trùng application.yml.
       NOTIFICATION_OUTBOX_CLEANUP_CRON: ${NOTIFICATION_OUTBOX_CLEANUP_CRON:-0 40 3 * * *}
+      # Lịch dọn refresh token hết hạn (docs/adr/0114, D054); mặc định trùng application.yml.
+      REFRESH_TOKEN_CLEANUP_CRON: ${REFRESH_TOKEN_CLEANUP_CRON:-11 10 3 * * *}
       # Lịch dọn mã OTP hết hạn (docs/adr/0111, D012); mặc định trùng application.yml.
       OTP_TOKEN_CLEANUP_CRON: ${OTP_TOKEN_CLEANUP_CRON:-17 20 3 * * *}
       # Lịch dọn thông báo trong app (docs/adr/0112, D023); mặc định trùng application.yml.

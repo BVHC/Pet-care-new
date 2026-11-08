@@ -21,6 +21,11 @@
     }
   },
   "include": ["src"],
-  "exclude": ["src/legacy/**/*"],
+  "exclude": [
+    "src/legacy/**/*",
+    "src/test/seed-dev.dry-run.test.ts",
+    "src/test/seed-dev-phase2.test.ts",
+    "src/test/seed-dev-phase2.fake-be.ts"
+  ],
   "references": [{ "path": "./tsconfig.node.json" }]
 }

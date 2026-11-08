@@ -209,11 +209,12 @@ class SchemaMigrationIT {
         // V44 giỏ hàng, đơn online, giữ hàng + 3 khóa shop.*, V45 giao dịch thanh toán, đối soát + 2 khóa payment.*,
         // V46 trả hàng, hoàn tiền + returns.window_days, V47 chuyển kho, kiểm kê + 3 CHECK của kho,
         // V48 chi nhánh tạm ngừng / đóng, gộp khách, bài viết của bác sĩ, bình luận + content.comment_per_hour,
+        // V50 index refresh_tokens (expires_at, id) cho job dọn refresh token (docs/adr/0114, trả D054; V49 để dành cho BE-2),
         // V9000 chỉ ở test: baseline session.access_ttl_minutes = 720
         assertThat(rows).extracting(row -> row.get("version"))
                 .containsExactly("1", "2", "3", "4", "5", "6", "7", "8", "9", "10", "11", "12", "13", "14", "15",
                         "16", "17", "18", "19", "20", "21", "22", "23", "24", "25", "26", "27", "28", "29", "30",
-                        "31", "32", "33", "34", "35", "36", "37", "38", "39", "40", "41", "42", "43", "44", "45", "46", "47", "48", "9000");
+                        "31", "32", "33", "34", "35", "36", "37", "38", "39", "40", "41", "42", "43", "44", "45", "46", "47", "48", "50", "9000");
         assertThat(rows).allSatisfy(row -> assertThat(row).containsEntry("success", true));
     }
 

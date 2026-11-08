@@ -1,10 +1,13 @@
 name: CI/CD Pipeline
 
+# docs/adr/0121 (trả D060). Pull request vào dev chạy kiểm nhanh: conflict marker, compile, unit test, FE.
+# integration-tests (mvn verify toàn bộ) chỉ chạy khi push vào main hoặc chạy tay (workflow_dispatch).
 on:
   push:
-    branches: [main, develop]
+    branches: [main, dev]
   pull_request:
-    branches: [main, develop]
+    branches: [main, dev]
+  workflow_dispatch:
 
 env:
   JAVA_VERSION: '21'
@@ -18,24 +21,18 @@ jobs:
     name: Backend CI (Maven)
     runs-on: ubuntu-latest
 
-    services:
-      postgres:
-        image: pgvector/pgvector:pg17
-        env:
-          POSTGRES_USER: postgres
-          POSTGRES_PASSWORD: postgres
-          POSTGRES_DB: petcare_test
-        ports:
-          - 5432:5432
-        options: >-
-          --health-cmd pg_isready
-          --health-interval 10s
-          --health-timeout 5s
-          --health-retries 5
-
+    # Test dùng Testcontainers (pgvector/pgvector:pg17) nên không cần service Postgres; Docker có sẵn trên runner.
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
+
+      # Rebase / merge đã commit nhầm conflict marker sáu lần (CLAUDE.md, Gotchas).
+      - name: Check for conflict markers
+        run: |
+          if git grep -nE '^(<<<<<<<|>>>>>>>) '; then
+            echo '::error::Còn conflict marker trong repo'
+            exit 1
+          fi
 
       - name: Setup Java ${{ env.JAVA_VERSION }}
         uses: actions/setup-java@v4
@@ -47,11 +44,8 @@ jobs:
       - name: Build with Maven
         run: cd BE && mvn clean compile -DskipTests
 
-      - name: Run Flyway Migration
-        run: cd BE && mvn flyway:migrate -Dflyway.url=jdbc:postgresql://localhost:5432/petcare_test -Dflyway.user=postgres -Dflyway.password=postgres
-
       - name: Run Backend Tests
-        run: cd BE && mvn test -Dflyway.url=jdbc:postgresql://localhost:5432/petcare_test -Dflyway.user=postgres -Dflyway.password=postgres
+        run: cd BE && mvn test
 
   # ===========================================
   # Frontend CI
@@ -88,27 +82,14 @@ jobs:
         run: npm run build
 
   # ===========================================
-  # Integration Tests
+  # Integration Tests (chỉ main / chạy tay, docs/adr/0121)
   # ===========================================
   integration-tests:
     name: Integration Tests
     runs-on: ubuntu-latest
     needs: [backend-ci, frontend-ci]
-
-    services:
-      postgres:
-        image: pgvector/pgvector:pg17
-        env:
-          POSTGRES_USER: postgres
-          POSTGRES_PASSWORD: postgres
-          POSTGRES_DB: petcare_test
-        ports:
-          - 5432:5432
-        options: >-
-          --health-cmd pg_isready
-          --health-interval 10s
-          --health-timeout 5s
-          --health-retries 5
+    if: github.event_name == 'workflow_dispatch' || (github.event_name == 'push' && github.ref == 'refs/heads/main')
+    timeout-minutes: 180
 
     steps:
       - name: Checkout code
@@ -132,7 +113,7 @@ jobs:
         run: cd BE && mvn package -DskipTests
 
       - name: Run Backend Tests
-        run: cd BE && mvn verify -Dflyway.url=jdbc:postgresql://localhost:5432/petcare_test -Dflyway.user=postgres -Dflyway.password=postgres
+        run: cd BE && mvn verify
 
       - name: Install FE dependencies
         run: cd FE && npm ci
@@ -141,13 +122,13 @@ jobs:
         run: cd FE && npm run build
 
   # ===========================================
-  # Deploy to Staging (on develop branch)
+  # Deploy to Staging (on dev branch; chỗ giữ chỗ, chưa có lệnh triển khai)
   # ===========================================
   deploy-staging:
     name: Deploy to Staging
     runs-on: ubuntu-latest
     needs: [integration-tests]
-    if: github.ref == 'refs/heads/develop'
+    if: github.ref == 'refs/heads/dev'
 
     steps:
       - name: Checkout code

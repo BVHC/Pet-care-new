@@ -71,6 +71,8 @@ app:
       in-app-cron: "-"
     notification-outbox-cleanup:
       cron: "-"
+    refresh-token-cleanup:
+      cron: "-"
     otp-token-cleanup:
       cron: "-"
     notification-cleanup:
