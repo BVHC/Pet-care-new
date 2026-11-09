@@ -7,6 +7,7 @@ import { PublicLayout } from '../shared/components/layout/PublicLayout';
 import { HomePage } from '../pages/customer/HomePage';
 import { ShopPage } from '../pages/customer/ShopPage';
 import { ProductDetailPage } from '../pages/customer/ProductDetailPage';
+import { NotFoundPage } from '../pages/NotFoundPage';
 import { CartPage } from '../pages/customer/CartPage';
 import { CheckoutPage } from '../pages/customer/CheckoutPage';
 import { OrderConfirmationPage } from '../pages/customer/OrderConfirmationPage';
@@ -192,6 +193,8 @@ export function App() {
           <Route path="/shop" element={<ShopPage />} />
           <Route path="/shop/:id" element={<ProductDetailPage />} />
           <Route path="/recommend" element={<RecommendPage />} />
+          {/* Mọi URL không khớp (gồm trang đã gỡ ở T57 Bước C): 404 trong khung công khai, không trắng trang */}
+          <Route path="*" element={<NotFoundPage />} />
         </Route>
 
         {/* Auth Routes (without header/footer layout) */}

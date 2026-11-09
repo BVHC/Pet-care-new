@@ -6,6 +6,7 @@ import { apiClient } from '../shared/api/axios';
 import { MOCK_PASSWORD } from '../shared/api/mock/identity.mock';
 import { installMockApi } from '../shared/api/mock/mock-api';
 import { useSession } from '../shared/stores/session.store';
+import { homePathFor } from '../shared/constants/workspaces';
 import { App } from './App';
 
 // Nghiệm thu T5 (docs/time.md): chưa đăng nhập → Đăng nhập; sai role → 403;
@@ -307,5 +308,27 @@ describe('boarding pages (T48)', () => {
     await signInAs('khachmoi@petcare.vn');
     open('/boarding-bookings');
     expect(await screen.findByRole('heading', { level: 1, name: 'Lưu trú của tôi' })).toBeInTheDocument();
+  });
+});
+
+// T57 Bước C: 7 URL đã gỡ và mọi URL lạ ra trang 404 (trong khung công khai), không trắng trang.
+describe('unknown URL (T57 Bước C)', () => {
+  it.each(['/membership', '/vouchers', '/caregivers', '/packages', '/favorites', '/admin/promotions', '/admin/membership', '/khong-ton-tai'])(
+    'shows the not-found page on %s',
+    async (path) => {
+      open(path);
+      expect(await screen.findByRole('heading', { level: 1, name: 'Không tìm thấy trang' })).toBeInTheDocument();
+    },
+  );
+
+  it('sends a visitor to the public home', async () => {
+    open('/khong-ton-tai');
+    expect(await screen.findByRole('link', { name: 'Về trang chủ' })).toHaveAttribute('href', '/');
+  });
+
+  it('sends a signed-in staff member to their own home, not the public one', async () => {
+    await signInAs('doctor@store1.vn');
+    open('/admin/promotions');
+    expect(await screen.findByRole('link', { name: 'Về trang chủ' })).toHaveAttribute('href', homePathFor('VET'));
   });
 });
