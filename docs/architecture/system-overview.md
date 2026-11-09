@@ -14,8 +14,8 @@
 
 | Phần | Trạng thái |
 |---|---|
-| Đặc tả | v16 `docs/01`–`05`; tầng 3 + AI duyệt T54 (5/11) ở `docs/07`–`10`; hợp đồng giữa module `docs/06-module-contracts.md` (tầng 3: §6b); hợp đồng FE↔BE `docs/api/` (pha 1: 12 module, 232 endpoint; pha 2: 15 module, 139 endpoint chưa cài; sinh từ `docs/api/generator/`) |
-| Backend | 14 thư mục `module/`: 12 module pha 1 + `payment`, `shop` (chỉ `api` + placeholder, T55c). 230 handler (`@*Mapping`); `OpenApiContractParityIT` ghim 187 operation trong 10 module có annotation. Bảng module ở `CLAUDE.md` *Current state*; từng feature ở mục 3.2. **Chưa có Java** cho Nhân sự, khám tại nhà, phẫu thuật, nội trú, khiếu nại, shop, payment, `ai` |
+| Đặc tả | v16 `docs/01`–`05`; tầng 3 + AI duyệt T54 (5/11) ở `docs/07`–`10`; hợp đồng giữa module `docs/06-module-contracts.md` (tầng 3: §6b); hợp đồng FE↔BE `docs/api/` (pha 1: 12 module, 232 endpoint; pha 2: 14 module, 131 endpoint chưa cài; sinh từ `docs/api/generator/`) |
+| Backend | 14 thư mục `module/`: 12 module pha 1 + `payment`, `shop` (chỉ `api` + placeholder, T55c). 230 handler (`@*Mapping`); `OpenApiContractParityIT` ghim 187 operation trong 10 module có annotation. Bảng module ở `CLAUDE.md` *Current state*; từng feature ở mục 3.2. **Chưa có Java** cho Nhân sự, phẫu thuật, nội trú, khiếu nại, shop, payment, `ai` |
 | Database | V1 = 55 bảng erd; V2 = 52 [CFG] (nay 85 khóa); V3–V48 và V50 seed mẫu / index / CHECK / cột / bảng tầng 3 và AI (mục 4b). Số V chưa xác nhận chéo với bên kia: V22, V23, V27–V32, V36–V41 (BE-1), V24–V26, V33, V42–V48 (BE-2; V42 do BE-1 làm thay); V34–V35 là AI (FE-1). **Số kế tiếp V51**; V50 (BE-1) là index `refresh_tokens (expires_at, id)` của ADR-0114, V49 (cuối dải BE-2, để dành cho ADR-0117 TBD-1 / TBD-2) còn trống — DB đã chạy V50 sẽ fail validate Flyway khi V49 xuất hiện (`out-of-order` tắt). ADMIN đầu tiên không seed: dev tạo bằng SQL, **gồm cả dòng `staff_profiles`** (thiếu thì `GET /api/me` trả 500): `INSERT INTO accounts (email, phone, password_hash, role, status) VALUES ('<email>', '<sđt>', '<bcrypt>', 'ADMIN', 'ACTIVE') RETURNING id;` rồi `INSERT INTO staff_profiles (account_id, full_name) VALUES (<id>, '<họ tên>');` (`branch_id` NULL — BR-QT-03) |
 | Frontend | Dựng theo đặc tả cũ. Auth, hồ sơ, catalog, branch, kho, Order / thu ngân, bàn làm việc nhân viên, báo cáo gọi BE thật hoặc mock theo hợp đồng. Chưa nối refresh token (D055). T57 (màn hình tầng 3) chưa bắt đầu — mục 6 |
 | Test | 328 lớp `*Test`, 196 lớp `*IT`. Nền chạy và các test đỏ đã biết: `CLAUDE.md` *Tests baseline* |
@@ -136,7 +136,7 @@ Quy ước (CLAUDE.md *Backend architecture*): ném `UnsupportedOperationExcepti
 | `StockApi` · `StockQueryApi` · `VaccinationQueryApi` (chuyển kho, #12) | `transferOut`, `transferIn`, `transferCancel` · `findMovementsOfLot` · `findByStockLot` | 3/12 (T74) |
 | Sự kiện (không placeholder) | `StaffLeftBranchEvent` (#1, workforce T58), `CustomerMergedEvent` (#14, T75): đã khai báo, chưa có bên phát / nhận | |
 
-Còn thiếu hẳn (chưa khai báo ở T55, `docs/06` §6b #2, #5, #6, #9–11): `CatalogQueryApi.findHomeVisitFee` / `findMaterialNorms`, `VisitOrderApi.addHomeFeeLine` / `addServiceLine`, `KennelApi.occupyForTreatment`, `AdmissionQueryApi`, `VisitApi.startTreatmentVisit`, `StockApi.issueMaterials`.
+Còn thiếu hẳn (chưa khai báo ở T55, `docs/06` §6b #2, #5, #6, #9–11): `CatalogQueryApi.findMaterialNorms`, `VisitOrderApi.addServiceLine`, `KennelApi.occupyForTreatment`, `AdmissionQueryApi`, `VisitApi.startTreatmentVisit`, `StockApi.issueMaterials`.
 
 ## 4. Backend — chưa có
 
@@ -144,7 +144,7 @@ Còn thiếu hẳn (chưa khai báo ở T55, `docs/06` §6b #2, #5, #6, #9–11)
 |---|---|---|
 | visit #21 hồ sơ sức khỏe thú (T28b) | BR-KH-07, ADR-0108 | D045 (khóa Order trước khi đọc) |
 | care #9–10 cài đặt nhận thông báo | UC88 | D025, chờ PO |
-| Tầng 3 BE-1: Nhân sự (T58–T59), khám tại nhà (T60), phẫu thuật (T61), nội trú (T69), khiếu nại (T70), trừ vật tư ST07 (T71) | `docs/09`, ADR-0113 | Schema đã có (V36–V41), chưa có Java |
+| Tầng 3 BE-1: Nhân sự (T58–T59), phẫu thuật (T61), nội trú (T69), khiếu nại (T70), trừ vật tư ST07 (T71) | `docs/09`, ADR-0113 | Schema đã có (V36–V41), chưa có Java |
 | Tầng 3 BE-2: phí / định mức vật tư, thương mại điện tử, thanh toán online, trả hàng – hoàn tiền, kho mở rộng, vòng đời chi nhánh, gộp khách, bình luận bài viết | `docs/08`, ADR-0116, 0117 | Schema đã có (V42–V48), interface ở mục 3.3. T62 phí / định mức, T63–T64 đơn online, T65 thanh toán, T73 trả hàng, T74 kho mở rộng, T75 chi nhánh / khách / bài viết |
 | Phân hệ AI (chatbot RAG, gợi ý) | `docs/07`, ADR-0109, 0110 | Có V34–V35 (4 bảng, 18 khóa `ai.*`); chưa có module `ai`, rate limit nhóm AI, job ST22–23 (T77 chatbot, T78 gợi ý) |
 | Gọi `AuditRecorder` ở module còn lại | BR-QT-15 | Snapshot JSON object |

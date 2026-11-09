@@ -1,70 +1,16 @@
 # Pet Care Ecosystem — Đặc tả bổ sung tầng 3, phần BE-1 (T51)
 
-> **Đặc tả chính thức phần BE-1 · T51 · đã duyệt ở T54 (Hiến, nhóm trưởng, 5/11/2026).** BE-1 (Mạnh) đọc khi bắt đầu task tương ứng; muốn đổi thì qua ADR. File này gom quy tắc nghiệp vụ, máy trạng thái, mô hình dữ liệu / ERD, API và hợp đồng chéo module cho phần còn lại của T51: **UC43, UC50, UC51, UC55, UC56, UC85, UC86 · ST07, ST16, ST17** (7 UC, 3 ST). Phần Nhân sự (UC34–38) đã viết ở `02`–`06` và `api/workforce-v1`.
+> **Đặc tả chính thức phần BE-1 · T51 · đã duyệt ở T54 (Hiến, nhóm trưởng, 5/11/2026).** BE-1 (Mạnh) đọc khi bắt đầu task tương ứng; muốn đổi thì qua ADR. File này gom quy tắc nghiệp vụ, máy trạng thái, mô hình dữ liệu / ERD, API và hợp đồng chéo module cho phần còn lại của T51: **UC50, UC55, UC56, UC85, UC86 · ST07, ST16, ST17** (5 UC, 3 ST). Phần Nhân sự (UC34–38) đã viết ở `02`–`06` và `api/workforce-v1`.
 >
-> **Vì sao đặt ở file riêng:** như `08` (BE-2) và `07` (AI): `02`–`06` đang được hai thành viên backend sửa song song. **Đây là nguồn chính thức; `02`–`05` chỉ có mục trỏ tới đây** (không chép trùng); interface chéo gộp ở `06`. **Thứ tự các mục theo hạn trong `time.md`:** A (UC43, UC51 — T60, 23–25/11) → B (UC50 — T61) → C (UC55, UC56 — T69) → D (UC85, UC86, ST16, ST17 — T70) → E (ST07 — T71).
-> **Hợp đồng máy đọc:** [`api/homevisit-v1.md`](./api/homevisit-v1.md), [`surgery-v1.md`](./api/surgery-v1.md), [`inpatient-v1.md`](./api/inpatient-v1.md), [`complaint-v1.md`](./api/complaint-v1.md), [`materialuse-v1.md`](./api/materialuse-v1.md).
+> **Vì sao đặt ở file riêng:** như `08` (BE-2) và `07` (AI): `02`–`06` đang được hai thành viên backend sửa song song. **Đây là nguồn chính thức; `02`–`05` chỉ có mục trỏ tới đây** (không chép trùng); interface chéo gộp ở `06`. **Thứ tự các mục theo hạn trong `time.md`:** B (UC50 — T61) → C (UC55, UC56 — T69) → D (UC85, UC86, ST16, ST17 — T70) → E (ST07 — T71).
+> **Hợp đồng máy đọc:** [`surgery-v1.md`](./api/surgery-v1.md), [`inpatient-v1.md`](./api/inpatient-v1.md), [`complaint-v1.md`](./api/complaint-v1.md), [`materialuse-v1.md`](./api/materialuse-v1.md).
 
-**Quy ước đánh số (đã chốt ở T54):** BR tiếp nối tiền tố hiện có (đã kiểm số lớn nhất trong `02`: BR-LH-12, BR-KB-06, BR-LT-12, BR-DG-04, BR-BH-06); FSM của BE-1 bắt đầu từ **#22** (`08` dùng #14–#21, AI #13, NS #11–#12). BE-1 thêm rule mới phải lấy số sau số lớn nhất ở **cả** `02` và file này.
+**Quy ước đánh số (đã chốt ở T54):** BR tiếp nối tiền tố hiện có (đã kiểm số lớn nhất trong `02`: BR-LH-12, BR-KB-06, BR-LT-12, BR-DG-04, BR-BH-06); FSM của BE-1 bắt đầu từ **#23** (`08` dùng #14–#21, AI #13, NS #11–#12). BE-1 thêm rule mới phải lấy số sau số lớn nhất ở **cả** `02` và file này.
 
 **Quy ước cột (cho migration ở T55):** cột `*_at` là `TIMESTAMPTZ`; `*_date`, `*_on` là `DATE`; `*_by` và `*_id` (trừ khi ghi khác) là `BIGINT` khóa ngoại; `id` là `BIGINT` khóa chính; `quantity`, `*_qty`, `*_count` là `INT`; tiền là `BIGINT` (đồng); trạng thái và loại là `VARCHAR(30)` + `CHECK` (05 §0); `?` sau tên cột là cho phép NULL. Cột liệt kê không ghi kiểu thì theo quy ước này.
 
-**Chủ sở hữu (đã chốt ở T54, Hiến quyết 5/11/2026):** khiếu nại (`complaint`) và nội trú (`inpatient`) là package **mới của BE-1**, cùng `homevisit`, `surgery`, `materialuse`. Lý do: đề cương 2.4.4 ghi "LT (nội trú) – Mạnh", `time.md` giao T69, T70 cho BE-1, và để BE-1 không sửa module của BE-2. Feedback (UC83, 84) vẫn ở `content` của BE-2. Chỗ nào cần dữ liệu của `boarding`, `inventory`, `sales` thì gọi interface của BE-2 (ở `06`).
+**Chủ sở hữu (đã chốt ở T54, Hiến quyết 5/11/2026):** khiếu nại (`complaint`) và nội trú (`inpatient`) là package **mới của BE-1**, cùng `surgery`, `materialuse`. Lý do: đề cương 2.4.4 ghi "LT (nội trú) – Mạnh", `time.md` giao T69, T70 cho BE-1, và để BE-1 không sửa module của BE-2. Feedback (UC83, 84) vẫn ở `content` của BE-2. Chỗ nào cần dữ liệu của `boarding`, `inventory`, `sales` thì gọi interface của BE-2 (ở `06`).
 
-**Đặt tên path:** đã grep `docs/api/openapi/*.yaml`. Khám tại nhà dùng `/home-visit-appointments`, không sửa `/appointments` của appointment-v1; hủy và đổi giờ dùng lại `POST /appointments/{appointmentId}/cancel` và `…/reschedule` sẵn có.
-
----
-
-## A. Khám tại nhà (UC43, UC51 · T60)
-
-| Mã | Use case | Actor |
-|---|---|---|
-| UC43 | Đặt lịch khám tại nhà (khách đặt, hoặc lễ tân đặt hộ) | A02, A06 |
-| UC51 | Khám tại nhà (bác sĩ thực hiện lịch khám tại nhà) | A07 |
-
-**Cách tiếp cận ít phát minh nhất:** khám tại nhà là **một lịch hẹn nhóm Khám (loại `EXAM`) có cờ tại nhà**, nên dùng lại khung giờ, quota, nhắc lịch, hủy / đổi giờ và hạn chế đặt online của lịch hẹn (BR-LH-01…12). Chỉ thêm: địa chỉ, phí khám tại nhà chốt lúc đặt (BR-SP-09, BR-SP-11) và cách bác sĩ **tự bắt đầu** lượt khám tại địa chỉ mà không qua tiếp nhận và hàng đợi.
-
-### Quy tắc
-
-| Mã | Tên | Mô tả | UC | Xử lý khi vi phạm |
-|---|---|---|---|---|
-| BR-LH-13 | Đặt lịch khám tại nhà | Khách hoặc lễ tân (đặt hộ) tạo lịch hẹn `MEDICAL` loại `EXAM` kèm cờ tại nhà: chọn thú, chi nhánh **đã bật khám tại nhà** (BR-SP-09), dịch vụ khám đang bật ở chi nhánh, ngày và khung 30 phút theo BR-LH-02…05 (*ASSUMPTION A1:* tính vào quota nhóm Khám / Tiêm của chi nhánh), địa chỉ và SĐT liên hệ. Khách chọn địa chỉ từ **sổ địa chỉ của chính mình** (BR-TK-18); lễ tân đặt hộ chọn hoặc nhập địa chỉ cho khách đó. **Phí khám tại nhà và địa chỉ được chốt (snapshot) lúc đặt** (BR-SP-11). Không giới hạn vùng phục vụ (*ASSUMPTION A2*, Q3). | UC43 | 400 `BR-LH-13`: chi nhánh chưa bật, địa chỉ sai, vi phạm BR-LH-04, 05, 09. |
-| BR-LH-14 | Hủy, đổi giờ, không gặp được | Hủy và đổi giờ như BR-LH-06, 07 (hủy muộn tính như lịch thường). Phí khám tại nhà **chỉ phát sinh khi thực hiện** (thành dòng Order ở BR-KB-07), hủy không mất phí. ST05 **bỏ qua** lịch tại nhà (bác sĩ có thể đến muộn); nếu đến nơi mà không gặp được khách, bác sĩ ghi **không gặp được** → `NO_SHOW` (tính vào hạn chế đặt online, BR-LH-09). *ASSUMPTION A3.* | UC43, UC51 | 409 `INVALID_STATE_TRANSITION`. |
-| BR-KB-07 | Thực hiện khám tại nhà | VET **của chi nhánh** tự bắt đầu lịch `BOOKED` tại nhà, **trong ngày hẹn**, không qua check-in của lễ tân và không vào hàng đợi (BR-TN): hệ thống tạo Visit `IN_PROGRESS` **gán đúng VET đó** (BR-TN-05, `is_home_visit = true`), lịch hẹn → `CHECKED_IN`, mở Order nguồn `VISIT` (BR-BH-01) với dòng dịch vụ khám và **dòng phí khám tại nhà** (snapshot). Từ đó bệnh án, kê đơn, tiêm, hoàn tất theo UC48 (BR-KB-01…04, 06). | UC51 | 400 `BR-KB-07`: không phải lịch tại nhà của chi nhánh mình, ngoài ngày hẹn, thú đã mất, Visit mở khác của thú (BR-TN-01). |
-| BR-BH-16 | Thu tiền khám tại nhà | Order của lượt khám tại nhà vào `PENDING` khi hoàn tất (BR-KB-02) và **thu tại chi nhánh qua lễ tân** (UC70, ca thu ngân của chi nhánh), khách đến quầy hoặc chuyển khoản. Chưa thu tại nhà (*ASSUMPTION A4*, Q4). | UC51 | — |
-
-### Máy trạng thái #22 — Lịch khám tại nhà (bổ sung cho `03` #3)
-
-Dùng lại bảng trạng thái của lịch hẹn (`BOOKED`, `CHECKED_IN`, `COMPLETED`, `CANCELLED`, `NO_SHOW`); chỉ khác **người kích hoạt và điều kiện** của ba chuyển:
-
-| # | Từ → Sang | Sự kiện | Người kích hoạt | Điều kiện | Hệ quả | Nguồn |
-|---|---|---|---|---|---|---|
-| 1 | — → `BOOKED` | Đặt lịch khám tại nhà | A02, A06 | BR-LH-13 | Chốt phí và địa chỉ; nhắc lịch ST03 như lịch thường | UC43 |
-| 2 | `BOOKED` → `CHECKED_IN` | Bắt đầu khám tại nhà | A07 | BR-KB-07 | Tạo Visit `IN_PROGRESS` gán VET; mở Order `VISIT` + dòng phí (Visit#1 biến thể) | UC51 |
-| 3 | `BOOKED` → `NO_SHOW` | Không gặp được khách | A07 | Ngày hẹn; có ghi chú | Tính vào BR-LH-09; thông báo khách | BR-LH-14 · UC51 |
-
-Các chuyển còn lại (`CHECKED_IN` → `COMPLETED`, `BOOKED` → `CANCELLED`) giữ nguyên `03` #3 (hoàn tất khi lượt khám hoàn tất, BR-LH-11). ST05 không áp dụng cho lịch tại nhà.
-
-### Dữ liệu (05 bổ sung)
-
-- `appointments` thêm: `is_home_visit BOOLEAN NN DEFAULT false`, `home_address VARCHAR(300)?`, `home_contact_phone VARCHAR(15)?`, `home_fee BIGINT?`. `CHECK ((is_home_visit) = (home_address IS NOT NULL AND home_fee IS NOT NULL))`; `CHECK (NOT is_home_visit OR service_group = 'MEDICAL')`; `home_fee ≥ 0`.
-- `visits` thêm `is_home_visit BOOLEAN NN DEFAULT false` (để hàng đợi bỏ qua và báo cáo phân biệt).
-- `order_lines.line_type` thêm `HOME_FEE` (không có `service_id`, `product_id`; cập nhật hai `CHECK` hiện có ở `05` §8). `orders.source` giữ `VISIT`.
-
-### API (`homevisit-v1`, 6 endpoint)
-
-`POST /home-visit-appointments` (A02, A06) · `GET /me/home-visit-appointments` (A02) · `GET /home-visit-appointments` (A06, A07 — chi nhánh của mình, lọc `date`, `status`) · `GET /home-visit-appointments/{appointmentId}` · `POST /home-visit-appointments/{appointmentId}/start` (A07, trả `visitId`, `orderId`) · `POST /home-visit-appointments/{appointmentId}/mark-unreachable` (A07, ghi chú). Xem phí: `GET /branches/{branchId}/home-visit-fee` (fees-v1, mở thêm cho A02). Khung giờ trống: `GET /branches/{branchId}/available-slots` (appointment-v1). Hủy / đổi giờ: endpoint sẵn có.
-
-### Hợp đồng chéo
-
-| Interface | Owner | Dùng cho |
-|---|---|---|
-| `CatalogQueryApi.findHomeVisitFee(branchId)` (bật / tắt + phí) | BE-2 (catalog / fees) | BR-LH-13, BR-SP-09 |
-| `VisitOrderApi.addHomeFeeLine(visitId, amount)` | BE-2 (sales) | BR-KB-07 |
-| `VisitApi.startHomeVisit(appointmentId, vetId)` (nội bộ BE-1) | BE-1 (visit) | #2 |
-| ST05 loại trừ `is_home_visit` | BE-1 (appointment) | BR-LH-14 |
-
-**Giả định:** A1 dùng chung quota nhóm Khám / Tiêm; A2 không giới hạn vùng; A3 ST05 bỏ qua lịch tại nhà; A4 thu tiền tại chi nhánh. **Câu hỏi:** Q3 có cần giới hạn bán kính phục vụ / phí theo khoảng cách không (đã ghi ở fees-v1 Q1); Q4 có cần thu tiền tại nhà (tiền mặt / chuyển khoản do bác sĩ nhận) không.
 
 ---
 
@@ -132,7 +78,7 @@ Các chuyển còn lại (`CHECKED_IN` → `COMPLETED`, `BOOKED` → `CANCELLED`
 
 | Mã | Tên | Mô tả | UC | Xử lý khi vi phạm |
 |---|---|---|---|---|
-| BR-LT-13 | Nhập viện | VET nhập viện một thú vào điều trị nội trú từ **(a) lượt khám đang `IN_PROGRESS`** của mình, hoặc **(b) đặt chỗ lưu trú đang `CHECKED_IN`** (chuyển từ lưu trú sang điều trị): với (b) hệ thống tạo một **Visit điều trị** `IN_PROGRESS` gán VET đó (không qua hàng đợi, như BR-KB-07) rồi nhập viện vào Visit này, nên mọi khoản phí vẫn vào Order `VISIT` (BR-BH-01). Mỗi thú tối đa **một** ca nội trú `ADMITTED` (BR-TN-01). Chọn dịch vụ nội trú (loại `INPATIENT`, *ASSUMPTION A1*, giá **theo ngày**, chốt lúc nhập viện) và chuồng `AVAILABLE` của chi nhánh (*ASSUMPTION A2:* dùng chung chuồng với lưu trú). | UC55 | 400 `BR-LT-13`: thú đã nội trú, đặt chỗ không `CHECKED_IN`, hết chuồng, thú đã mất. |
+| BR-LT-13 | Nhập viện | VET nhập viện một thú vào điều trị nội trú từ **(a) lượt khám đang `IN_PROGRESS`** của mình, hoặc **(b) đặt chỗ lưu trú đang `CHECKED_IN`** (chuyển từ lưu trú sang điều trị): với (b) hệ thống tạo một **Visit điều trị** `IN_PROGRESS` gán VET đó (không qua hàng đợi) rồi nhập viện vào Visit này, nên mọi khoản phí vẫn vào Order `VISIT` (BR-BH-01). Mỗi thú tối đa **một** ca nội trú `ADMITTED` (BR-TN-01). Chọn dịch vụ nội trú (loại `INPATIENT`, *ASSUMPTION A1*, giá **theo ngày**, chốt lúc nhập viện) và chuồng `AVAILABLE` của chi nhánh (*ASSUMPTION A2:* dùng chung chuồng với lưu trú). | UC55 | 400 `BR-LT-13`: thú đã nội trú, đặt chỗ không `CHECKED_IN`, hết chuồng, thú đã mất. |
 | BR-LT-14 | Xuất viện | VET xuất viện kèm **tóm tắt điều trị** và kết cục (`HOME` về nhà / tiếp tục lưu trú, `DECEASED` thú mất). Điều kiện: không còn y lệnh `ORDERED` (phải xong hoặc hủy). Hệ thống thêm dòng dịch vụ nội trú vào Order của Visit với số lượng = **số ngày** (từ ngày nhập đến ngày xuất, tối thiểu 1) × giá đã chốt (UC55 «extend» UC67); giải phóng chuồng nếu chuồng được cấp riêng cho nội trú. Kết cục `DECEASED` yêu cầu VET đánh dấu thú đã mất theo BR-KH-05 (xác nhận hai bước). Visit hoàn tất theo UC48 sau xuất viện; không hoàn tất Visit khi còn ca nội trú `ADMITTED`. | UC55 | 400 `BR-LT-14`. |
 | BR-LT-15 | Y lệnh nội trú | VET ra y lệnh cho ca `ADMITTED`: loại `MEDICATION`, `FEEDING`, `MONITORING`, `PROCEDURE`, `OTHER`; nội dung (≤ 500 ký tự) và giờ thực hiện dự kiến. Y lệnh `MEDICATION` liên kết một dòng đơn thuốc của Visit (kê qua visit-v1 #16, kiểm tồn BR-KB-03). Việc **không phải thuốc** do VET hoặc CARETAKER thực hiện; **thuốc** chỉ VET. Thực hiện → `DONE` kèm ghi chú; VET hủy y lệnh chưa làm kèm lý do. | UC56 | 403 / 409. |
 | BR-LT-16 | Theo dõi hậu phẫu | VET hoặc CARETAKER ghi **chỉ số theo dõi** (nhiệt độ, nhịp tim, nhịp thở, cân nặng, ăn uống, ghi chú, cờ **bất thường**) — chỉ thêm, không sửa, không xóa (LOG). Mục đánh dấu bất thường báo VET phụ trách và khách theo cách của nhật ký lưu trú (BR-LT-12, `NotificationApi`). Cân nặng ghi vào hồ sơ cân của thú (BR-KH-04). | UC56 | — |
@@ -279,13 +225,12 @@ Hợp đồng chéo: `StockApi.issueMaterials(branchId, lines)` trả danh sách
 | Nhóm | UC / ST | FSM | Bảng mới / cột | Module API (endpoint) |
 |---|---|---|---|---|
 | Nhân sự (đã làm ở `02`–`06`) | UC34–38 | #11, #12 | 3 | `workforce` (14) |
-| A. Khám tại nhà | UC43, UC51 | #22 | cột mới ở `appointments`, `visits`, `order_lines` | `homevisit` (6) |
 | B. Phẫu thuật | UC50 | #23 | 1 | `surgery` (8) |
 | C. Nội trú | UC55, UC56 | #24, #25 | 3 | `inpatient` (10) |
 | D. Khiếu nại | UC85, UC86 · ST16, ST17 | #26 | 2 | `complaint` (12) |
 | E. Vật tư tiêu hao | ST07 | — | 1 | `materialuse` (3) |
 
-**Đủ phạm vi T51:** 12 UC (UC34–38 ở NS, UC43, UC50, UC51, UC55, UC56, UC85, UC86) và 3 ST (ST07, ST16, ST17) đều có quy tắc, máy trạng thái (nơi có chuyển trạng thái), dữ liệu và API.
+**Đủ phạm vi T51:** 10 UC (UC34–38 ở NS, UC50, UC55, UC56, UC85, UC86) và 3 ST (ST07, ST16, ST17) đều có quy tắc, máy trạng thái (nơi có chuyển trạng thái), dữ liệu và API.
 
 ### Cấu hình [CFG] mới (thêm vào `ConfigKey` ở T55)
 
@@ -293,7 +238,7 @@ Hợp đồng chéo: `StockApi.issueMaterials(branchId, lines)` trả danh sách
 
 ### Thay đổi cần BE-2 (catalog, boarding, sales) xác nhận
 
-`services.medical_type` thêm `SURGERY`, `INPATIENT`; `order_lines.line_type` thêm `HOME_FEE`; chuồng dùng chung cho nội trú; guard trả thú khi còn ca nội trú; `StockApi.issueMaterials`.
+`services.medical_type` thêm `SURGERY`, `INPATIENT`; chuồng dùng chung cho nội trú; guard trả thú khi còn ca nội trú; `StockApi.issueMaterials`.
 
 ### Quyết định T54 (Hiến duyệt 5/11/2026) cho các câu hỏi của BE-1
 
@@ -301,8 +246,7 @@ Hợp đồng chéo: `StockApi.issueMaterials(branchId, lines)` trả danh sách
 |---|---|
 | Q1 `medical_type` thêm `SURGERY`, `INPATIENT` | Chốt theo đề xuất; BE-2 xác nhận khi làm T55 phần BE-2 |
 | Q2 package `inpatient`, `complaint` | **Thuộc BE-1** (xem đầu file) |
-| Q3 bán kính khám tại nhà | Không giới hạn (A2) |
-| Q4 thu tiền tại nhà; khách xem nội trú | Thu tại chi nhánh (A4); khách **chưa** xem nội trú ở GĐ2 |
+| Q4 khách xem nội trú | Khách **chưa** xem nội trú ở GĐ2 |
 | Q5 ảnh đính kèm khiếu nại | Chưa có ở GĐ2 |
 | Q6 báo thiếu vật tư | Thông báo riêng `MATERIAL_SHORTAGE`, không đưa vào ST08 |
 | Còn lại (A1…A4) | **Chốt theo đề xuất**; BE-1 muốn đổi thì qua ADR |
@@ -311,9 +255,9 @@ Hợp đồng chéo: `StockApi.issueMaterials(branchId, lines)` trả danh sách
 
 | File | Tình trạng |
 |---|---|
-| `02` | Mục 19 trỏ tới BR-LH-13, 14, BR-KB-07…14, BR-BH-16, BR-LT-13…17, BR-DG-05…09 ở file này |
-| `03` | Mục trỏ tới FSM #22…#26 |
+| `02` | Mục 19 trỏ tới BR-KB-08…14, BR-LT-13…17, BR-DG-05…09 ở file này |
+| `03` | Mục trỏ tới FSM #23…#26 |
 | `04`, `05` | Mục trỏ tới model, bảng và cột mới ở file này |
 | `06` | Interface chéo gộp vào bảng tầng 3 kèm hạn giao; `ConfigKey` mới làm ở T55 |
-| `api/INDEX.md` | Đã thêm 5 module `homevisit`, `surgery`, `inpatient`, `complaint`, `materialuse` |
+| `api/INDEX.md` | Đã thêm 4 module `surgery`, `inpatient`, `complaint`, `materialuse` |
 

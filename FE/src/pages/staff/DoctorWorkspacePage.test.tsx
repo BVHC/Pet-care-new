@@ -7,7 +7,7 @@ import { catalogApi } from '../../shared/api/catalog.api';
 import { installMockApi } from '../../shared/api/mock/mock-api';
 import { salesApi } from '../../shared/api/sales.api';
 import { visitApi } from '../../shared/api/visit.api';
-import { makeVisit, renderDesk, signInAs, startDesk } from '../../test/visit-harness';
+import { makeVisit, renderDesk, startDesk } from '../../test/visit-harness';
 import { DoctorWorkspacePage } from './DoctorWorkspacePage';
 
 const toast = vi.hoisted(() => Object.assign(vi.fn(), { success: vi.fn(), error: vi.fn(), warning: vi.fn() }));
@@ -1036,26 +1036,6 @@ describe('exam room — không gửi request vai trò này không được làm 
     expect(exam().queryByRole('button', { name: /Hoàn tất|^Lưu/ })).not.toBeInTheDocument();
     expect(complete).not.toHaveBeenCalled();
     expect(save).not.toHaveBeenCalled();
-  });
-});
-
-describe('exam room — khám tại nhà (UC51; homevisit-v1 #3, #5)', () => {
-  it('khung "Khám tại nhà" hiện lịch hôm nay của chi nhánh; sau khi lễ tân hủy lượt 2102 của Tôm, "Bắt đầu khám tại nhà" mở thẳng lượt mới của Tôm ở khung bệnh nhân', async () => {
-    await startDesk('doctor@store1.vn');
-    await signInAs('reception@store1.vn');
-    await visitApi.cancel(2102, {});
-    await signInAs('doctor@store1.vn');
-    const { user } = renderDesk(<DoctorWorkspacePage />);
-    await screen.findByRole('heading', { level: 2, name: 'Lu' });
-
-    const home = within(await screen.findByRole('region', { name: 'Khám tại nhà' }));
-    expect(await home.findByText(/12 Trần Thái Tông/)).toBeInTheDocument();
-    await user.click(home.getByRole('button', { name: 'Bắt đầu khám tại nhà: Tôm' }));
-
-    expect(await screen.findByRole('heading', { level: 2, name: 'Tôm' })).toBeInTheDocument();
-    expect(exam().getByText('Đang khám')).toBeInTheDocument();
-    expect(exam().getByText('BS. Minh Anh')).toBeInTheDocument();
-    await waitFor(() => expect(home.queryByRole('button', { name: 'Bắt đầu khám tại nhà: Tôm' })).not.toBeInTheDocument());
   });
 });
 

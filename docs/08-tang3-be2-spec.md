@@ -18,26 +18,24 @@
 
 | Mã | Use case | Actor |
 |---|---|---|
-| UC32 | Cấu hình phí vận chuyển, phí khám tại nhà, định mức vật tư tiêu hao (mở rộng UC30) | A04 |
+| UC32 | Cấu hình phí vận chuyển, định mức vật tư tiêu hao (mở rộng UC30) | A04 |
 
 ### Quy tắc
 
 | Mã | Tên | Mô tả | UC | Xử lý khi vi phạm |
 |---|---|---|---|---|
 | BR-SP-08 | Phí vận chuyển | SUPER_MANAGER cấu hình **một bộ chung toàn chuỗi**: phí cơ bản `base_fee` (đ, ≥ 0) và ngưỡng miễn phí `free_threshold` (đ, 0 = không miễn phí). Phí của đơn = 0 nếu tiền hàng ≥ ngưỡng và ngưỡng > 0, ngược lại bằng phí cơ bản. *ASSUMPTION A1:* phí cố định, không theo vùng hay khoảng cách (YAGNI). | UC32, UC62, ST09 | 400 nêu giá trị sai. |
-| BR-SP-09 | Phí khám tại nhà | SUPER_MANAGER đặt cho **từng chi nhánh**: bật / tắt nhận khám tại nhà và phí (đ ≥ 0). Chi nhánh chưa bật không nhận đặt lịch khám tại nhà (UC43). | UC32, UC43 | Từ chối đặt lịch khám tại nhà ở chi nhánh chưa bật. |
 | BR-SP-10 | Định mức vật tư | SUPER_MANAGER khai báo cho mỗi dịch vụ danh sách (sản phẩm, số lượng mỗi lần thực hiện, số nguyên ≥ 1). Sản phẩm phải là `GOODS` hoặc `DRUG`, **không** là vaccine (vaccine đã trừ kho khi tiêm, BR-KO-05); mỗi cặp dịch vụ – sản phẩm tối đa một dòng. ST07 dùng để tự trừ vật tư. Sửa định mức chỉ ảnh hưởng các lần thực hiện sau. | UC32, ST07 | 400 nêu dòng sai. |
-| BR-SP-11 | Chốt giá trị | Phí vận chuyển và phí khám tại nhà **chốt tại lúc tạo đơn / đặt lịch** (cùng tinh thần BR-BH-03); đổi cấu hình không ảnh hưởng đơn hoặc lịch đã tạo. Mọi thay đổi cấu hình ghi audit (mở rộng BR-QT-15, như BR-AI-17). | UC32 | — |
+| BR-SP-11 | Chốt giá trị | Phí vận chuyển **chốt tại lúc tạo đơn** (cùng tinh thần BR-BH-03); đổi cấu hình không ảnh hưởng đơn đã tạo. Mọi thay đổi cấu hình ghi audit (mở rộng BR-QT-15, như BR-AI-17). | UC32 | — |
 
 ### Dữ liệu (05 bổ sung)
 
 - `shipping_fee_configs` — REF, **một dòng duy nhất**: `id`, `base_fee BIGINT NN CHECK ≥ 0`, `free_threshold BIGINT NN CHECK ≥ 0`, `updated_by FK→accounts`. `CHECK (id = 1)`.
-- `branch_home_visit_fees` — REF: `branch_id BIGINT PK FK→branches`, `enabled BOOLEAN NN DEFAULT false`, `fee BIGINT NN CHECK ≥ 0`, `updated_by FK→accounts`.
 - `service_material_norms` — REF: `id`, `service_id FK→services NN`, `product_id FK→products NN`, `quantity INT NN CHECK ≥ 1`, `UNIQUE (service_id, product_id)`; Index `(product_id)` kiểm FK. Ràng buộc loại sản phẩm kiểm trong service (BR-SP-10).
 
 ### API (`fees-v1`, 6 endpoint)
 
-`GET`/`PUT /shipping-fee-config` · `GET`/`PUT /branches/{branchId}/home-visit-fee` · `GET`/`PUT /services/{serviceId}/material-norms` (PUT ghi đè cả danh sách). Đọc: A04; `GET /branches/{branchId}/home-visit-fee` thêm A02, A06, A07 (để hiện phí khi đặt lịch). Phí vận chuyển của một giỏ hàng cụ thể lấy qua `GET /me/online-orders/quote` (mục B).
+`GET`/`PUT /shipping-fee-config` · `GET`/`PUT /services/{serviceId}/material-norms` (PUT ghi đè cả danh sách). Đọc: A04. Phí vận chuyển của một giỏ hàng cụ thể lấy qua `GET /me/online-orders/quote` (mục B).
 
 ---
 

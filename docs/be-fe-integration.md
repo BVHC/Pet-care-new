@@ -253,7 +253,7 @@ Cổng **8082** vì Docker Desktop tự bật lại container `petcare-api` cũ 
 
 ## 8. Tầng 3: thứ tự ghép (T57b, 7/11/2026)
 
-> **Nguồn:** `docs/time.md` M5b–M5c (bảng task 7/11), `FE/.env.example` (khối "Tầng 3"), `FE/src/shared/api/mock/*.mock.ts` (15 module), thử chế độ hỗn hợp ngày 7/11 (mục 8.4). **Hiện trạng:** BE chưa có controller nào của 15 module tầng 3, chỉ có migration V34–V48 và interface chéo (T55). FE chạy mock đầy đủ (T57 bước A, B; chưa commit). Mọi cột "ngày" là **dự kiến theo `time.md`**, không phải ngày đã giao.
+> **Nguồn:** `docs/time.md` M5b–M5c (bảng task 7/11), `FE/.env.example` (khối "Tầng 3"), `FE/src/shared/api/mock/*.mock.ts` (14 module), thử chế độ hỗn hợp ngày 7/11 (mục 8.4). **Hiện trạng:** BE chưa có controller nào của 14 module tầng 3, chỉ có migration V34–V48 và interface chéo (T55). FE chạy mock đầy đủ (T57 bước A, B; chưa commit). Mọi cột "ngày" là **dự kiến theo `time.md`**, không phải ngày đã giao.
 
 ### 8.1 Bảng ghép (theo ngày BE bắt đầu)
 
@@ -261,10 +261,9 @@ Cổng **8082** vì Docker Desktop tự bật lại container `petcare-api` cũ 
 
 | Module (hợp đồng) | BE: task · người · ngày dự kiến | FE: task · ngày dự kiến | Luật gỡ khi BE xong | Chờ / ghi chú |
 |---|---|---|---|---|
-| `fees` (UC32) | T62 · BE-2 · 16/11 | T80 · 03–04/12 (màn cấu hình phí và định mức) | `/api/shipping-fee-config`, `/api/branches/*/home-visit-fee`, `/api/services/*/material-norms` | Làm trước vì T60 (khám tại nhà) và T71 (ST07) cần. Màn đã có trên mock nên ghép được ngay khi BE xong, không cần đợi T80 |
+| `fees` (UC32) | T62 · BE-2 · 16/11 | T80 · 03–04/12 (màn cấu hình phí và định mức) | `/api/shipping-fee-config`, `/api/services/*/material-norms` | Làm trước vì T71 (ST07) cần. Màn đã có trên mock nên ghép được ngay khi BE xong, không cần đợi T80 |
 | `workforce` (UC34–38) | T58 · BE-1 · 16–18/11; T59 · BE-1 · 19–20/11 | T66 · 16–20/11 | `/api/shift-definitions`, `/api/shift-assignments`, `/api/me/shift-assignments`, `/api/me/shift-requests`, `/api/shift-requests` | Cần nhân viên thật: mock dùng id nhân viên riêng (mục 8.4) |
 | `shop` (UC61, 62, 64, 65) | T63 · BE-2 · 17–19/11; T64 · BE-2 · 20–23/11 | T67 · 23–25/11 (khách); T68 · 26–27/11 (lễ tân, UC65) | `/api/me/cart`, `/api/me/online-orders`, `/api/online-orders` | Cần sổ địa chỉ GĐ1 (T8). Luật `shop` cũng bắt `…/online-orders/*/pay`, nhưng `pay` còn luật riêng của `payment`. Gỡ `shop` mà `payment` còn mock thì `pay` chỉ chạy với đơn của mock |
-| `homevisit` (UC43, 51) | T60 · BE-1 · 23–25/11 | T68 · 26–27/11 | `/api/home-visit-appointments`, `/api/me/home-visit-appointments` | Cần T62 (phí khám tại nhà). Trang `/admin/appointments` còn gọi `GET /api/appointments/{id}` của GĐ1 |
 | `payment` (UC63, ST11, ST14) | T65 · BE-2 · 24–27/11 | T67 · 23–25/11 | `POST /api/me/online-orders/*/pay`, `/api/me/payment-transactions`, `POST /api/public/payment-gateway/callback`, `/api/payment-reconciliations`, `/api/payment-reconciliation-items` | **Chặn bởi tài khoản sandbox cổng** (`payment-gateway-setup.md`). Cổng trên FE là giả lập (`/payment/mock-gateway`); đổi sang cổng thật là việc riêng |
 | `surgery` (UC50) | T61 · BE-1 · 26–27/11 | T68 · 26–27/11 | `/api/visits/*/surgeries`, `/api/surgeries` | Cần lượt khám thật. Phẫu thuật hoàn tất thêm dòng vào Order qua interface `sales` (T72 nối thật) |
 | `inpatient` (UC55, 56) | T69 · BE-1 · 30/11–02/12 | T79 · 30/11–02/12 | `/api/admissions`, `/api/admission-orders` | Cần lưu trú GĐ1 (T31, T42) cho luồng "nhập viện từ lưu trú" |
@@ -293,8 +292,8 @@ Sau đó: T72 (BE-1) và T76 (BE-2) kiểm thử FSM + nối thật interface ch
 
 1. **Thứ tự kiểm lỗi 400 / 403 / 404 / 409 của mock là giả định, chưa đo trên BE tầng 3, và các mock KHÔNG thống nhất với nhau.**
    - `shop`, `payment`, `returns`, `stockops`, `fees`, `materialuse`: 401 → 400 sai kiểu → **400 `VALIDATION_FAILED` của body trước** 403 vai trò → 404 → 403 phạm vi → 400 BR → 409 (theo đo trên BE GĐ1 ở `care`, `cashier`, `inventory`: `@Valid` chạy trước `@PreAuthorize`).
-   - `complaint`, `articlex`, `workforce`, `ai`, `branchlife`, `custmerge`, `homevisit`, `surgery`, `inpatient`: 401 → 400 sai kiểu → **403 vai trò trước** 400 `VALIDATION_FAILED` → 404 → 403 phạm vi → 400 BR → 409. Dựa vào `00-method.md` §3.5 (quyền → tồn tại → BR 400 → 409), mục đó không nói `VALIDATION_FAILED` đứng ở đâu.
-   - 14 / 15 mock đặt **400 BR trước 409** (ngoại lệ có chủ ý: `homevisit` #5 `start`, 409 trước BR-TN-01 vì BR-TN-01 sinh ra khi tạo Visit). Riêng `ai`: giới hạn tần suất theo IP đứng đầu hai endpoint chat (BR-AI-09). BE GĐ1 đo thấy **409 chạy trước rule 400** ở `sales`, `cashier`, `boarding` (ADR-0064 §2.4, ADR-0065 §7), ngược `00-method.md`; `stockops.mock.ts` đã ghi đây là rủi ro.
+   - `complaint`, `articlex`, `workforce`, `ai`, `branchlife`, `custmerge`, `surgery`, `inpatient`: 401 → 400 sai kiểu → **403 vai trò trước** 400 `VALIDATION_FAILED` → 404 → 403 phạm vi → 400 BR → 409. Dựa vào `00-method.md` §3.5 (quyền → tồn tại → BR 400 → 409), mục đó không nói `VALIDATION_FAILED` đứng ở đâu.
+   - Cả 14 mock đặt **400 BR trước 409**. Riêng `ai`: giới hạn tần suất theo IP đứng đầu hai endpoint chat (BR-AI-09). BE GĐ1 đo thấy **409 chạy trước rule 400** ở `sales`, `cashier`, `boarding` (ADR-0064 §2.4, ADR-0065 §7), ngược `00-method.md`; `stockops.mock.ts` đã ghi đây là rủi ro.
    - Khi ghép: gọi từng cặp lỗi lên BE thật, chỉnh mock theo BE (không chỉnh BE), cập nhật test của mock.
 2. **Mọi chỗ hợp đồng im lặng** nằm ở khối ASSUMPTION / "yaml thiếu" đầu từng `*.mock.ts`; bản gửi BE: `D:/Do-an/.c2-tmp/final2/msg-be-t57-hop-dong.md` (đã soạn 7/11).
 3. **Hằng số [CFG] mock không đọc:** `complaint.max_open`, `complaint.reopen_days`, `complaint.max_reopen`, `content.comment_per_hour`, phí vận chuyển mặc định 30.000 đ / miễn phí từ 500.000 đ, và hạn chờ của ST10, ST11, ST12, ST21 (mock chạy lười mỗi request, BE chạy theo cron).
@@ -312,7 +311,6 @@ Sau đó: T72 (BE-1) và T76 (BE-2) kiểm thử FSM + nối thật interface ch
 | Route | Lệnh BE thật lỗi | Nguyên nhân |
 |---|---|---|
 | `/admin/articles/review` (SUPER_MANAGER) | `GET /api/articles?status=PENDING_REVIEW` → 400 "Tham số 'status' sai kiểu dữ liệu" | content-v1 của BE GĐ1 chưa có trạng thái `PENDING_REVIEW`; luật mock cho đường này sẽ bắt luôn `/api/articles` của GĐ1 |
-| `/admin/appointments` (lễ tân) | `GET /api/appointments/12` → 404 | lịch khám tại nhà (mock, id 12) bị trang mở tiếp bằng endpoint lịch hẹn GĐ1 |
 
 **Gốc lỗi chung: id của mock khác id của BE.** Nhân viên (mock id 1–23 trùng số với id BE nhưng khác người), khách, thú, lượt khám, đơn quầy, sản phẩm, lô: nơi nào id đi từ BE GĐ1 vào endpoint tầng 3 là mock thì 404 hoặc sai người.
 
@@ -328,10 +326,9 @@ Sau đó: T72 (BE-1) và T76 (BE-2) kiểm thử FSM + nối thật interface ch
 | `payment` | Không thử riêng | Phụ thuộc đơn mock của `shop` |
 | `returns` | Danh sách trả hàng (2) và hoàn tiền (2): 200 | Tạo trả hàng cho Order quầy thật #17 → 404 |
 | `stockops` | Danh sách chuyển kho (4), kiểm kê (2): 200 | `GET /api/stock-lots?productId=4` (sản phẩm thật) trả rỗng |
-| `homevisit` | Danh sách khám tại nhà: 200 | Đặt lịch cho thú thật #10 → 404; trang `/admin/appointments` lỗi 404 (bảng trên) |
 | `surgery` | Danh sách (rỗng): 200 | Mở phẫu thuật cho lượt thật #7 → 404 |
 | `inpatient` | Danh sách (rỗng): 200 | Nhập viện từ lượt thật #7 → 404 |
 | `materialuse` | Danh sách thiếu vật tư (quản lý): 200 | Vật tư theo lượt thật #7 → 404 (bác sĩ) hoặc 403 (lễ tân) |
 | `custmerge` | Màn "Gộp hồ sơ khách trùng" (`/admin/customers`, BRANCH_MANAGER) mở được | Xem trước gộp với khách thật #6 → 404 |
 
-**Kết luận.** Hỗn hợp đủ để xem giao diện tầng 3 với dữ liệu mock và để demo từng màn riêng lẻ. Nó **không** làm luồng liên module chạy với dữ liệu thật: mọi luồng bắt đầu từ lượt khám, thú, khách, đơn, sản phẩm hoặc nhân viên thật của GĐ1 đều vỡ hoặc sai người (đã đo: `surgery`, `inpatient`, `materialuse`, `custmerge`, `returns` tạo mới, `homevisit` đặt lịch, `ai` gợi ý, `workforce`, `shop` với sản phẩm khác id 1–2). Muốn demo GĐ1 trên BE thật mà không lộ các màn này, cần ẩn menu và route tầng 3 (đề xuất cờ `VITE_TIER3`, **chưa làm, chờ Hiến quyết**).
+**Kết luận.** Hỗn hợp đủ để xem giao diện tầng 3 với dữ liệu mock và để demo từng màn riêng lẻ. Nó **không** làm luồng liên module chạy với dữ liệu thật: mọi luồng bắt đầu từ lượt khám, thú, khách, đơn, sản phẩm hoặc nhân viên thật của GĐ1 đều vỡ hoặc sai người (đã đo: `surgery`, `inpatient`, `materialuse`, `custmerge`, `returns` tạo mới, `ai` gợi ý, `workforce`, `shop` với sản phẩm khác id 1–2). Muốn demo GĐ1 trên BE thật mà không lộ các màn này, cần ẩn menu và route tầng 3 (đề xuất cờ `VITE_TIER3`, **chưa làm, chờ Hiến quyết**).

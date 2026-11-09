@@ -10,7 +10,7 @@ import sys
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 MODULES = ["identity", "customer", "catalog", "branch", "appointment", "visit", "sales", "inventory", "boarding",
-           "content", "care", "report", "workforce", "ai", "fees", "shop", "payment", "returns", "stockops", "branchlife", "custmerge", "articlex", "homevisit", "surgery", "inpatient", "complaint", "materialuse"]
+           "content", "care", "report", "workforce", "ai", "fees", "shop", "payment", "returns", "stockops", "branchlife", "custmerge", "articlex", "surgery", "inpatient", "complaint", "materialuse"]
 
 total = 0
 for key in sys.argv[1:] or MODULES:

@@ -3,7 +3,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { ACCOUNTS, authAs, failure, makeClient, pinClock } from '../../../test/boarding-harness';
 
 // Nối nghiệp vụ chéo của nhóm Clinical (tier3-wiring.ts): chạy qua mock-api đầy đủ, đồng hồ ghim thứ Sáu 23/10/2026 09:00 (chi nhánh 1 đang mở cửa).
-// Lượt 2002 (Lu, IN_PROGRESS) do BS. Minh Anh (#5) phụ trách, Order mở dòng khám tổng quát 150.000 ₫; lịch khám tại nhà #12 (Tôm, BOOKED hôm nay) bị lượt chờ 2102 chặn tới khi lễ tân hủy lượt đó;
+// Lượt 2002 (Lu, IN_PROGRESS) do BS. Minh Anh (#5) phụ trách, Order mở dòng khám tổng quát 150.000 ₫;
 // đặt chỗ lưu trú #2 Cốm (CHECKED_IN, chuồng C-01) là chỗ nhập viện từ lưu trú.
 
 let client: AxiosInstance;
@@ -110,32 +110,6 @@ describe('phẫu thuật → Order của lượt (VisitOrderApi.addServiceLine, 
     expect(ruleOf(book)).toEqual([400, 'BUSINESS_RULE_VIOLATION', 'BR-LH-01']);
     const walkIn = await failure(client.post('/api/visits', { petId: 4, serviceId: 7101 }, await as(ACCOUNTS.desk)));
     expect(ruleOf(walkIn)).toEqual([400, 'BUSINESS_RULE_VIOLATION', 'BR-LH-01']);
-  });
-});
-
-describe('khám tại nhà → dòng HOME_FEE (VisitOrderApi.addHomeFeeLine, 09 §A, BR-BH-16)', () => {
-  it('bắt đầu khám: Order VISIT có dòng phí đúng số đã chốt lúc đặt lịch; dòng không sửa / xóa tay; hoàn tất lượt thì Order PENDING vẫn gồm phí', async () => {
-    const doctor = await as(ACCOUNTS.vet);
-    const desk = await as(ACCOUNTS.desk);
-    await client.post('/api/visits/2102/cancel', { reason: 'Khách chuyển sang khám tại nhà' }, desk);
-    const { homeFee } = (await client.get('/api/home-visit-appointments/12', doctor)).data.data as { homeFee: number };
-    expect(homeFee).toBeGreaterThan(0);
-
-    const started = (await client.post('/api/home-visit-appointments/12/start', {}, doctor)).data.data as { visitId: number; orderId: number };
-    const order = (await client.get(`/api/orders/${started.orderId}`, desk)).data.data as OrderView;
-    expect(order.lines).toHaveLength(2);
-    const fee = order.lines.find((l) => l.lineType === 'HOME_FEE')!;
-    expect(fee).toMatchObject({ serviceId: null, productId: null, quantity: 1, unitPrice: homeFee, canEdit: false, canDelete: false });
-    expect(order.totalAmount).toBe(150_000 + homeFee);
-    // serviceIdsOfVisit chỉ thấy dòng SERVICE: phí khám tại nhà không phải dịch vụ.
-    expect(order.lines.filter((l) => l.lineType === 'SERVICE').map((l) => l.serviceId)).toEqual([1]);
-
-    for (const who of [doctor, desk]) {
-      expect(ruleOf(await failure(client.delete(`/api/orders/${order.orderId}/lines/${fee.lineId}`, who)))).toEqual([400, 'BUSINESS_RULE_VIOLATION', 'BR-BH-02']);
-    }
-    await client.put(`/api/visits/${started.visitId}/medical-record`, { diagnosis: 'Hamster viêm da nhẹ' }, doctor);
-    await client.post(`/api/visits/${started.visitId}/complete`, {}, doctor);
-    expect(await orderOf(started.visitId)).toMatchObject({ status: 'PENDING', totalAmount: 150_000 + homeFee });
   });
 });
 

@@ -7,7 +7,6 @@
 **Legend:** `CONFIRMED` = có trong docs · `ASSUMPTION (A#)` = suy luận ít phát minh nhất · `TBD (Q#)` = cần quyết định (mục E). Method/path/shape là **PROPOSED** theo quy ước chung ở [`00-method.md`](./00-method.md); envelope, mã lỗi, phân trang, kiểu dữ liệu theo mục 3 của file đó.
 
 **Đóng băng phạm vi (không có endpoint):**
-- UC43 khám tại nhà là tầng 3, không có endpoint.
 - Check-in lịch hẹn (Lịch hẹn#3) là một phần của tiếp nhận Visit: `POST /visits` ở module visit. Hoàn tất (#7) và hủy lượt (#8) cũng đi từ Visit.
 - Hủy do phòng khám (#5) không có endpoint: chạy theo sự kiện ngày nghỉ / thu hẹp giờ, thú mất, chuyển chủ (06-module-contracts §3).
 - ST03 nhắc lịch hẹn, ST05 chuyển NO_SHOW (#6) là tác vụ hệ thống.

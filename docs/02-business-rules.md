@@ -286,15 +286,13 @@
 |---|---|---|---|
 | BR-NS-01…10 | Nhân sự | UC34–38 | §7 của file này |
 | BR-AI-01…28 | Trí tuệ nhân tạo | UC90–94, ST22, ST23 | `07` §4 |
-| BR-SP-08…11 | Phí vận chuyển, phí khám tại nhà, định mức vật tư | UC32 | `08` §A |
+| BR-SP-08, 10, 11 | Phí vận chuyển, định mức vật tư | UC32 | `08` §A |
 | BR-BH-07…15 | Giỏ hàng, đơn online, trả hàng | UC61–65, UC68, UC69 | `08` §B, §D |
 | BR-TG-06…14 | Thanh toán online, hoàn tiền | UC63, UC68, UC69, ST11, ST14, ST21 | `08` §C, §D |
 | BR-KO-08…13 | Chuyển kho, kiểm kê, truy vết lô | UC77–79 | `08` §E |
 | BR-CN-06…10 | Tạm ngừng / đóng cửa chi nhánh | UC13 | `08` §F.1 |
 | BR-KH-11…14 | Gộp hồ sơ khách trùng | UC27 | `08` §F.2 |
 | BR-BV-05…08 | Bài viết của bác sĩ, bình luận | UC80, UC82 | `08` §F.3 |
-| BR-LH-13, 14 | Lịch khám tại nhà | UC43 | `09` §A |
-| BR-KB-07…14 | Khám tại nhà, phẫu thuật, vật tư tiêu hao | UC50, UC51, ST07 | `09` §A, §B, §E |
-| BR-BH-16 | Thu tiền khám tại nhà | UC51 | `09` §A |
+| BR-KB-08…14 | Phẫu thuật, vật tư tiêu hao | UC50, ST07 | `09` §B, §E |
 | BR-LT-13…17 | Nội trú | UC55, UC56 | `09` §C |
 | BR-DG-05…09 | Khiếu nại | UC85, UC86, ST16, ST17 | `09` §D |

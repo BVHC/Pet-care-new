@@ -1,12 +1,12 @@
 import axios, { type AxiosInstance, type AxiosResponse } from 'axios';
 import { beforeEach, describe, expect, it } from 'vitest';
 import { ruleIdOf } from '../api-error';
-import type { HomeVisitFee, MaterialNorm, ShippingFeeConfig } from '../../types/fees';
-import { homeVisitFeeOf, materialNormsOf, shippingFeeConfig } from './fees.mock';
+import type { MaterialNorm, ShippingFeeConfig } from '../../types/fees';
+import { materialNormsOf, shippingFeeConfig } from './fees.mock';
 import { MOCK_PASSWORD } from './identity.mock';
 import { installMockApi } from './mock-api';
 
-// Dữ liệu mẫu (fees.mock.ts): phí vận chuyển 30.000 / miễn phí từ 500.000; khám tại nhà: chi nhánh 1 bật 100.000, chi nhánh 2 tắt (lưu 80.000), chi nhánh 3 chưa cấu hình;
+// Dữ liệu mẫu (fees.mock.ts): phí vận chuyển 30.000 / miễn phí từ 500.000;
 // định mức dịch vụ 1: Amoxicillin (#3) × 2, Vitamin (#4) × 1; dịch vụ 4: Pate (#2) × 1.
 
 let client: AxiosInstance;
@@ -55,24 +55,18 @@ type Call = (auth: object) => Promise<AxiosResponse>;
 const CALLS: Record<string, Call> = {
   'GET /shipping-fee-config': (a) => client.get('/api/shipping-fee-config', a),
   'PUT /shipping-fee-config': (a) => client.put('/api/shipping-fee-config', { baseFee: 25_000, freeThreshold: 300_000 }, a),
-  'GET /branches/1/home-visit-fee': (a) => client.get('/api/branches/1/home-visit-fee', a),
-  'PUT /branches/1/home-visit-fee': (a) => client.put('/api/branches/1/home-visit-fee', { enabled: true, fee: 120_000 }, a),
   'GET /services/1/material-norms': (a) => client.get('/api/services/1/material-norms', a),
   'PUT /services/1/material-norms': (a) => client.put('/api/services/1/material-norms', { items: [{ productId: 3, quantity: 3 }] }, a),
 };
 const SUPER_ONLY: Who[] = ['chuoi'];
-/** fees-v1 #3 "Quyền:": SUPER_MANAGER, CUSTOMER, A06 (lễ tân) và A07 (bác sĩ) của chính chi nhánh 1. */
-const HOME_VISIT_READERS: Who[] = ['chuoi', 'khach', 'reception', 'doctor'];
 const ALLOWED: Record<string, Who[]> = {
   'GET /shipping-fee-config': SUPER_ONLY,
   'PUT /shipping-fee-config': SUPER_ONLY,
-  'GET /branches/1/home-visit-fee': HOME_VISIT_READERS,
-  'PUT /branches/1/home-visit-fee': SUPER_ONLY,
   'GET /services/1/material-norms': SUPER_ONLY,
   'PUT /services/1/material-norms': SUPER_ONLY,
 };
 
-describe('phân quyền: 6 endpoint × 8 tài khoản (dòng "Quyền:" của yaml) và 401', () => {
+describe('phân quyền: 4 endpoint × 8 tài khoản (dòng "Quyền:" của yaml) và 401', () => {
   const ROLES = Object.keys(EMAILS) as Who[];
   const cases = Object.keys(CALLS).flatMap((endpoint) => ROLES.map((who) => [endpoint, who, ALLOWED[endpoint].includes(who) ? 200 : 403] as const));
   it.each(cases)('%s với %s → %i', async (endpoint, who, expected) => {
@@ -83,16 +77,6 @@ describe('phân quyền: 6 endpoint × 8 tài khoản (dòng "Quyền:" của ya
     const res = await failure(CALLS[endpoint]({}));
     expect(res.status).toBe(401);
     expect(res.data.errorCode).toBe('UNAUTHENTICATED');
-  });
-
-  it('phí khám tại nhà: lễ tân, bác sĩ chỉ xem chi nhánh mình (403 phạm vi); chuỗi và khách xem được mọi chi nhánh', async () => {
-    for (const who of ['reception', 'doctor'] as const) {
-      const res = await failure(client.get('/api/branches/2/home-visit-fee', await as(who)));
-      expect(res.status).toBe(403);
-      expect(res.data.errorCode).toBe('ACCESS_DENIED_SCOPE_MISMATCH');
-      expect(ruleIdOf(res.data.message)).toBeNull();
-    }
-    for (const who of ['chuoi', 'khach'] as const) expect(await status(client.get('/api/branches/2/home-visit-fee', await as(who)))).toBe(200);
   });
 });
 
@@ -139,49 +123,7 @@ describe('phí vận chuyển (#1, #2, BR-SP-08)', () => {
   });
 });
 
-describe('phí khám tại nhà (#3, #4, BR-SP-09)', () => {
-  it('chi nhánh chưa cấu hình trả enabled = false, fee = 0; chi nhánh tắt giữ phí đã lưu', async () => {
-    const auth = await as('chuoi');
-    expect((await client.get('/api/branches/3/home-visit-fee', auth)).data.data).toEqual({ branchId: 3, enabled: false, fee: 0 });
-    expect((await client.get('/api/branches/1/home-visit-fee', auth)).data.data).toEqual({ branchId: 1, enabled: true, fee: 100_000 });
-    expect((await client.get('/api/branches/2/home-visit-fee', auth)).data.data).toEqual({ branchId: 2, enabled: false, fee: 80_000 });
-  });
-
-  it('chi nhánh không có → 404; id sai kiểu → 400 MALFORMED_REQUEST; 404 đến trước BR-SP-09', async () => {
-    const auth = await as('chuoi');
-    expect(await status(client.get('/api/branches/99/home-visit-fee', auth))).toBe(404);
-    expect((await failure(client.get('/api/branches/abc/home-visit-fee', auth))).data.errorCode).toBe('MALFORMED_REQUEST');
-    expect(await status(client.put('/api/branches/99/home-visit-fee', { enabled: true, fee: -5 }, auth))).toBe(404);
-  });
-
-  it('lưu: bật chi nhánh 3 thì homeVisitFeeOf trả phí; tắt thì trả null (chưa bật không nhận đặt lịch)', async () => {
-    const auth = await as('chuoi');
-    expect(homeVisitFeeOf(1)).toBe(100_000);
-    expect(homeVisitFeeOf(2)).toBeNull();
-    expect(homeVisitFeeOf(3)).toBeNull();
-    const saved = await client.put('/api/branches/3/home-visit-fee', { enabled: true, fee: 0 }, auth);
-    expect(saved.data.data).toEqual({ branchId: 3, enabled: true, fee: 0 });
-    expect(homeVisitFeeOf(3)).toBe(0);
-    await client.put('/api/branches/3/home-visit-fee', { enabled: false, fee: 70_000 }, auth);
-    expect(homeVisitFeeOf(3)).toBeNull();
-    expect((await client.get('/api/branches/3/home-visit-fee', auth)).data.data).toEqual({ branchId: 3, enabled: false, fee: 70_000 });
-  });
-
-  it('phí âm / thập phân → 400 BR-SP-09; sai kiểu → MALFORMED_REQUEST; thiếu → VALIDATION_FAILED', async () => {
-    const auth = await as('chuoi');
-    for (const fee of [-1, 10.5]) {
-      const res = await failure(client.put('/api/branches/1/home-visit-fee', { enabled: true, fee }, auth));
-      expect(ruleIdOf(res.data.message)).toBe('BR-SP-09');
-    }
-    expect((await failure(client.put('/api/branches/1/home-visit-fee', { enabled: 'yes', fee: 1 }, auth))).data.errorCode).toBe('MALFORMED_REQUEST');
-    const missing = await failure(client.put('/api/branches/1/home-visit-fee', { fee: 1 }, auth));
-    expect(missing.data.errorCode).toBe('VALIDATION_FAILED');
-    expect(missing.data.message).toContain('enabled:');
-    expect(homeVisitFeeOf(1)).toBe(100_000);
-  });
-});
-
-describe('định mức vật tư (#5, #6, BR-SP-10)', () => {
+describe('định mức vật tư (#3, #4, BR-SP-10)', () => {
   const norms = async (serviceId: number) => (await client.get(`/api/services/${serviceId}/material-norms`, await as('chuoi'))).data.data as MaterialNorm[];
 
   it('đọc định mức mẫu kèm tên, đơn vị; dịch vụ không có định mức trả mảng rỗng; dịch vụ không có → 404', async () => {
@@ -238,25 +180,18 @@ describe('state lưu dạng cũ / thiếu bảng', () => {
     localStorage.setItem('petcare-mock-fees', '{}');
     const auth = await as('chuoi');
     expect((await client.get('/api/shipping-fee-config', auth)).data.data.baseFee).toBe(30_000);
-    expect((await client.get('/api/branches/1/home-visit-fee', auth)).data.data.fee).toBe(100_000);
     expect(await status(client.get('/api/services/1/material-norms', auth))).toBe(200);
   });
 
-  it('chỉ có shipping → giữ cấu hình đã lưu, bù hai bảng còn lại', async () => {
+  it('chỉ có shipping → giữ cấu hình đã lưu, bù bảng còn lại', async () => {
     localStorage.setItem('petcare-mock-fees', JSON.stringify({ shipping: { baseFee: 11_000, freeThreshold: 0, updatedAt: '2026-01-01T00:00:00.000Z' } }));
     const auth = await as('chuoi');
     expect((await client.get('/api/shipping-fee-config', auth)).data.data.baseFee).toBe(11_000);
-    expect(homeVisitFeeOf(1)).toBe(100_000);
     expect(materialNormsOf(1)).toHaveLength(2);
   });
 
   it('dữ liệu hỏng (không phải JSON) → dùng lại dữ liệu mẫu', async () => {
     localStorage.setItem('petcare-mock-fees', 'không phải json');
     expect(shippingFeeConfig().baseFee).toBe(30_000);
-  });
-
-  it('homeVisitFee kiểu HomeVisitFee đúng hình dạng hợp đồng', async () => {
-    const fee = (await client.get('/api/branches/1/home-visit-fee', await as('khach'))).data.data as HomeVisitFee;
-    expect(Object.keys(fee).sort()).toEqual(['branchId', 'enabled', 'fee']);
   });
 });

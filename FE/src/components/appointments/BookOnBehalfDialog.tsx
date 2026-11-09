@@ -2,7 +2,6 @@
  * Lễ tân đặt lịch hộ (UC39, A06) — appointment-v1 #2, kênh COUNTER: tìm khách (UC23) → chọn thú → dịch vụ đang bật tại
  * chi nhánh (Khám/Tiêm, Thẩm mỹ — BR-LH-01) → khung chưa bắt đầu còn chỗ (BR-LH-04) → ghi chú → đặt.
  * Khách của lịch là chủ hiện tại của thú (A2). Giới hạn số lịch của thú vẫn áp dụng (BR-LH-05); hạn chế online không chặn.
- * Tùy chọn "Khám tại nhà" (UC43, homevisit-v1 #1): lễ tân nhập địa chỉ và số liên hệ, đặt qua POST /home-visit-appointments kèm `customerId`; phí hiện từ fees-v1 #3.
  */
 import { useState } from 'react';
 import { Search } from 'lucide-react';
@@ -16,18 +15,14 @@ import { cn } from '@/lib/utils';
 import { plainMessage, toApiError } from '@/shared/api/api-error';
 import { appointmentApi } from '@/shared/api/appointment.api';
 import { useBranchServices } from '@/shared/hooks/useBranch';
-import { useHomeVisitFee } from '@/shared/hooks/useFees';
-import { useCreateHomeVisit } from '@/shared/hooks/useHomeVisit';
 import { useDebounce } from '@/shared/hooks/useDebounce';
 import { useAppointmentMutation, useRefreshAppointments } from '@/shared/hooks/useAppointments';
 import { useCustomerDetail, useCustomerLookup } from '@/domains/pets/hooks/useCustomerPet';
 import { SPECIES_LABEL } from '@/domains/pets/labels';
 import type { CustomerSearchQuery } from '@/domains/pets/types';
 import { QUOTA_GROUP_LABELS } from '@/shared/types/branch';
-import { HOME_VISIT_PHONE_PATTERN } from '@/shared/types/homevisit';
 import { CustomerRestrictionPanel } from './CustomerRestrictionPanel';
 import { formatSlot, todayVn } from './format';
-import { HomeVisitDeskFields } from './HomeVisitDeskFields';
 import { SlotPicker } from './SlotPicker';
 
 const NOTE_MAX = 500;
@@ -66,30 +61,17 @@ function BookForm({ branchId, onClose }: { branchId: number; onClose: () => void
   const [slotStart, setSlotStart] = useState<string | null>(null);
   const [note, setNote] = useState('');
   const [error, setError] = useState('');
-  const [home, setHome] = useState(false);
-  const [address, setAddress] = useState('');
-  const [phone, setPhone] = useState('');
   const book = useAppointmentMutation(appointmentApi.book);
-  const bookHome = useCreateHomeVisit();
   const refreshAppointments = useRefreshAppointments();
-  const fee = useHomeVisitFee(home ? branchId : null);
 
-  // Chỉ dịch vụ đang bật, nhóm Khám/Tiêm hoặc Thẩm mỹ (BR-LH-01). Khám tại nhà chỉ cho dịch vụ khám: danh sách chi nhánh không nêu loại, nên giữ nhóm Khám/Tiêm và để BE (BR-LH-13) từ chối dịch vụ không phải khám.
-  const bookable = (services.data ?? []).filter((s) => s.enabled && (home ? s.group === 'MEDICAL' : s.group !== 'BOARDING'));
+  // Chỉ dịch vụ đang bật, nhóm Khám/Tiêm hoặc Thẩm mỹ (BR-LH-01).
+  const bookable = (services.data ?? []).filter((s) => s.enabled && s.group !== 'BOARDING');
   const customer = detail.data?.customer;
 
   const chooseCustomer = (id: number | null) => {
     setCustomerId(id);
     setPetId(null);
-    setPhone('');
     setError('');
-  };
-  const pickMode = (next: boolean) => {
-    setHome(next);
-    setServiceId(null);
-    setSlotStart(null);
-    setError('');
-    if (next && !phone) setPhone(customer?.phone ?? '');
   };
 
   const submit = () => {
@@ -102,26 +84,6 @@ function BookForm({ branchId, onClose }: { branchId: number; onClose: () => void
       setError(`Ghi chú tối đa ${NOTE_MAX} ký tự.`);
       return;
     }
-    const onError = (e: unknown) => {
-      const apiError = toApiError(e);
-      refreshAppointments();
-      setError(apiError.ruleId === 'BR-LH-03' || apiError.errorCode === 'CONCURRENCY_CONFLICT' ? 'Khung giờ vừa hết chỗ, vui lòng chọn khung khác.' : plainMessage(apiError));
-    };
-    if (home) {
-      if (!address.trim()) return setError('Vui lòng nhập địa chỉ khám tại nhà.');
-      if (!HOME_VISIT_PHONE_PATTERN.test(phone.trim())) return setError('Số điện thoại liên hệ gồm 10–11 chữ số, bắt đầu bằng 0.');
-      bookHome.mutate(
-        { customerId, petId, branchId, serviceId, slotDate: date, slotStart, address: address.trim(), contactPhone: phone.trim(), note: note.trim() || undefined },
-        {
-          onSuccess: (a) => {
-            toast.success(`Đã đặt lịch tại nhà ${a.code} — ${a.petName}, ${formatSlot(a)}`);
-            onClose();
-          },
-          onError,
-        },
-      );
-      return;
-    }
     book.mutate(
       { petId, branchId, serviceId, slotDate: date, slotStart, note: note.trim() || undefined },
       {
@@ -129,7 +91,11 @@ function BookForm({ branchId, onClose }: { branchId: number; onClose: () => void
           toast.success(`Đã đặt lịch ${a.code} — ${a.petName}, ${formatSlot(a)}`);
           onClose();
         },
-        onError,
+        onError: (e) => {
+          const apiError = toApiError(e);
+          refreshAppointments();
+          setError(apiError.ruleId === 'BR-LH-03' ? 'Khung giờ vừa hết chỗ, vui lòng chọn khung khác.' : plainMessage(apiError));
+        },
       },
     );
   };
@@ -217,23 +183,6 @@ function BookForm({ branchId, onClose }: { branchId: number; onClose: () => void
         </div>
       </div>
 
-      <div role="group" aria-label="Hình thức khám" className="flex gap-2">
-        {[
-          { id: false, label: 'Khám tại chi nhánh' },
-          { id: true, label: 'Khám tại nhà' },
-        ].map((m) => (
-          <button
-            key={m.label}
-            type="button"
-            aria-pressed={home === m.id}
-            onClick={() => pickMode(m.id)}
-            className={cn('rounded-full border px-3 py-1.5 text-sm', home === m.id ? 'border-accent bg-accent text-white' : 'border-(--color-border-default) bg-white')}
-          >
-            {m.label}
-          </button>
-        ))}
-      </div>
-
       <Field label="Dịch vụ">
         {(id) => (
           <select
@@ -266,8 +215,6 @@ function BookForm({ branchId, onClose }: { branchId: number; onClose: () => void
         hint="Lễ tân đặt được mọi khung chưa bắt đầu còn chỗ."
       />
 
-      {home && <HomeVisitDeskFields fee={fee.data} address={address} phone={phone} onAddress={setAddress} onPhone={setPhone} />}
-
       <Field label="Ghi chú (không bắt buộc)" hint={`${note.trim().length}/${NOTE_MAX} ký tự`}>
         {(id) => (
           <textarea
@@ -285,8 +232,8 @@ function BookForm({ branchId, onClose }: { branchId: number; onClose: () => void
         <Button variant="outline" onClick={onClose} disabled={book.isPending}>
           Đóng
         </Button>
-        <Button onClick={submit} disabled={book.isPending || bookHome.isPending || (home && fee.data?.enabled === false)}>
-          {book.isPending || bookHome.isPending ? 'Đang đặt…' : 'Đặt lịch'}
+        <Button onClick={submit} disabled={book.isPending}>
+          {book.isPending ? 'Đang đặt…' : 'Đặt lịch'}
         </Button>
       </div>
     </div>

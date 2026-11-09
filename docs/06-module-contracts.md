@@ -47,12 +47,11 @@
 | `care` | TB | CareTask, Notification, NotificationOutbox | BE-1 | `NotificationApi`, `CareTaskApi` |
 | `ai` | AI | AiDocument, AiChunk, AiChatLog, AiItemProfile (`07-ai-subsystem.md` §8) | FE-1 (dẫn) · cả nhóm | Không công bố gì; chỉ gọi các `*QueryApi` mới I-1…I-8, I-10 và bộ khớp rate limit I-9 (`07` §11). Duyệt T54 (5/11/2026) |
 | `workforce` | NS | ShiftDefinition, ShiftAssignment, ShiftRequest (04 §12.1) | BE-1 | Không công bố gì; chỉ nhận `StaffLeftBranchEvent` (§3). Duyệt T54 (5/11/2026) |
-| `homevisit` | LH, KB (khám tại nhà) | Không model riêng: cột mở rộng của Appointment, Visit, OrderLine (`09` §A) | BE-1 | `VisitApi.startHomeVisit` (nội bộ BE-1) |
 | `surgery` | KB (phẫu thuật) | Surgery (`09` §B) | BE-1 | Guard "Visit không hoàn tất khi còn phẫu thuật mở" (nội bộ BE-1) |
 | `inpatient` | LT (nội trú) | Admission, AdmissionOrder, AdmissionObservation (`09` §C) | BE-1 | `AdmissionQueryApi.hasActiveAdmission(petId)` (cho boarding chặn trả thú, BR-LT-17) |
 | `complaint` | DG (khiếu nại) | Complaint, ComplaintMessage (`09` §D) | BE-1 | Không công bố gì; nghe `CustomerMergedEvent` |
 | `materialuse` | KB (ST07) | VisitMaterialUsage (`09` §E) | BE-1 | Không công bố gì; gọi `StockApi.issueMaterials` |
-| `fees` | SP mở rộng (UC32) | ShippingFeeConfig, BranchHomeVisitFee, ServiceMaterialNorm (`08` §A) | BE-2 | `CatalogQueryApi.findHomeVisitFee`, `findMaterialNorms` |
+| `fees` | SP mở rộng (UC32) | ShippingFeeConfig, ServiceMaterialNorm (`08` §A) | BE-2 | `CatalogQueryApi.findMaterialNorms` |
 | `shop` | BH (thương mại điện tử) | Cart, CartItem, OnlineOrder, StockReservation (`08` §B) | BE-2 | `OnlineOrderApi.markPaid`, `markPaymentCancelled` (cho payment) |
 | `payment` | TG (thanh toán online) | PaymentTransaction, PaymentReconciliation, ReconciliationItem (`08` §C) | BE-2 | `PaymentGatewayClient` (nội bộ) |
 | `returns` | BH, TG (trả hàng, hoàn tiền) | ReturnRequest, ReturnRequestLine, Refund (`08` §D) | BE-2 | Không công bố gì |
@@ -62,7 +61,7 @@
 | `articlex` | BV (bài viết của bác sĩ, bình luận) | ArticleComment, cột mở rộng của Article (`08` §F.3) | BE-2 | Không công bố gì |
 | `report` | BC | — (không có model, 04 *Ngoài phạm vi*) | BE-2 | Không công bố gì; chỉ có controller UC89 gọi các `*ReportApi` (§8 Q3) |
 
-> **Tầng 3 (duyệt T54, Hiến, 5/11/2026):** module `workforce` và `ai` ở các bảng dưới; 13 module còn lại (`homevisit`, `surgery`, `inpatient`, `complaint`, `materialuse` của BE-1; `fees`, `shop`, `payment`, `returns`, `stockops`, `branchlife`, `custmerge`, `articlex` của BE-2) cũng liệt kê ở §2. **Interface chéo, sự kiện và hạn giao của cả tầng 3 gộp ở §6b.** Chủ sở hữu đã chốt: `inpatient`, `complaint` thuộc BE-1.
+> **Tầng 3 (duyệt T54, Hiến, 5/11/2026):** module `workforce` và `ai` ở các bảng dưới; 12 module còn lại (`surgery`, `inpatient`, `complaint`, `materialuse` của BE-1; `fees`, `shop`, `payment`, `returns`, `stockops`, `branchlife`, `custmerge`, `articlex` của BE-2) cũng liệt kê ở §2. **Interface chéo, sự kiện và hạn giao của cả tầng 3 gộp ở §6b.** Chủ sở hữu đã chốt: `inpatient`, `complaint` thuộc BE-1.
 
 ## 3. Sự kiện
 
@@ -235,12 +234,11 @@ Bên sở hữu phải có implementation thật trước ngày bên gọi bắt
 | # | Interface / sự kiện | Bên cung cấp | Bên gọi / nhận | Bản thật trước | Nguồn |
 |---|---|---|---|---|---|
 | 1 | `StaffLeftBranchEvent(staffId, branchId)` (vô hiệu hóa hoặc điều chuyển nhân viên) | identity (BE-1) | workforce (BE-1) | 16/11 (T58) | §3, `02` BR-NS-09 **T55b (6/11): `StaffLeftBranchEvent` đã khai báo, chưa phát.** |
-| 2 | `CatalogQueryApi.findHomeVisitFee(branchId)`; `CatalogQueryApi.findMaterialNorms(serviceIds)` | catalog / fees (BE-2, T62 làm trước, 16/11) | homevisit, materialuse (BE-1) | 23/11 (T60); định mức 8/12 (T71) | `09` §A, §E |
+| 2 | `CatalogQueryApi.findMaterialNorms(serviceIds)` | catalog / fees (BE-2, T62 làm trước, 16/11) | materialuse (BE-1) | định mức 8/12 (T71) | `09` §E |
 | 3 | `StockApi.reserve`, `release`, `consumeReservation`, `restock`; `StockQueryApi.findAvailableQuantity`; `CustomerQueryApi.findAddress` | inventory, customer (BE-2) | shop (BE-2) | 17/11 (T63) | `08` §B · **T55c: placeholder đã có** (`StockApi.reserve/release/consumeReservation/restock`, `StockQueryApi.findAvailableQuantity`, `CustomerQueryApi.findAddress`; ADR-0117). |
 | 4 | `OnlineOrderApi.markPaid`, `markPaymentCancelled`; mã mẫu thông báo `PAYMENT_*` | shop (BE-2); mã mẫu: BE-1 | payment (BE-2) | 24/11 (T65) | `08` §C · **T55c: `OnlineOrderApi` + `OnlineOrderApiPlaceholder` đã có**; mã mẫu `PAYMENT_*` T55b đã seed ở V40. |
-| 5 | `VisitOrderApi.addHomeFeeLine(visitId, amount)` | sales (BE-2) | homevisit (BE-1) | 23/11 (T60) | `09` §A |
 | 6 | `VisitOrderApi.addServiceLine(visitId, serviceId, quantity)` | sales (BE-2) | surgery (BE-1, T61), inpatient (BE-1, T69) | 26/11 (T61) | `09` §B, §C |
-| 7 | Giá trị mới của cột có sẵn: `services.medical_type` thêm `SURGERY`, `INPATIENT`; `order_lines.line_type` thêm `HOME_FEE`; `orders.source` thêm `ONLINE` | catalog, sales (BE-2) | BE-1 (homevisit, surgery, inpatient), shop | Trong migration T55 (10–11/11) | `05` §13 mục 26 **T55b (BE-1 làm thay BE-2, 6/11): V41 đã có `SURGERY`, `INPATIENT`, `HOME_FEE`; V42 đã có `orders.source = ONLINE` (4 CHECK của `orders`; tiền online ở `payment_transactions`, không vào `payments`; ADR-0116). BE-2 chưa xác nhận V41, V42; phần Java (`OrderSource`, contract, loại ONLINE khỏi ST13 / thu quầy) làm ở T63.** |
+| 7 | Giá trị mới của cột có sẵn: `services.medical_type` thêm `SURGERY`, `INPATIENT`; `orders.source` thêm `ONLINE` | catalog, sales (BE-2) | BE-1 (surgery, inpatient), shop | Trong migration T55 (10–11/11) | `05` §13 mục 26 **T55b (BE-1 làm thay BE-2, 6/11): V41 đã có `SURGERY`, `INPATIENT`, `HOME_FEE`; V42 đã có `orders.source = ONLINE` (4 CHECK của `orders`; tiền online ở `payment_transactions`, không vào `payments`; ADR-0116). BE-2 chưa xác nhận V41, V42; phần Java (`OrderSource`, contract, loại ONLINE khỏi ST13 / thu quầy) làm ở T63.** |
 | 8 | `StockApi.restockToOriginalLot`, `discardReturned` (lý do điều chỉnh `RETURN_DISCARD`); `OrderQueryApi.findLinesForReturn`; `CashierShiftApi.recordRefund`; `PaymentGatewayClient.refund` | inventory, sales, payment (BE-2) | returns (BE-2) | 30/11 (T73) | `08` §D · **T55c: placeholder đã có** (`StockApi.restockToOriginalLot/discardReturned`, `OrderQueryApi.findLinesForReturn`, `CashierShiftApi.recordRefund` và `PaymentGatewayClient` là interface mới). |
 | 9 | `BoardingQueryApi.findCheckedInStay(petId)`; `KennelApi.occupyForTreatment(kennelId)`, `release(kennelId)` | boarding (BE-2) | inpatient (BE-1) | 30/11 (T69) | `09` §C |
 | 10 | `AdmissionQueryApi.hasActiveAdmission(petId)` cho guard trả thú (BR-LT-09 + BR-LT-17); `VisitApi.startTreatmentVisit(petId, vetId, boardingBookingId)`; **đổi hợp đồng GĐ1 khi cài ở T69:** thêm lỗi 409 `BR-LT-17` vào `boarding-v1` (trả thú) trong `m_boarding.py`, để FE (T79) biết | inpatient, visit (BE-1) | boarding (BE-2); inpatient (BE-1) | 30/11 (T69) | `09` §C |

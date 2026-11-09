@@ -3,7 +3,6 @@
  * Danh sách theo ngày (mặc định hôm nay) và trạng thái (5 trạng thái của 03 §3); đặt lịch hộ (kênh COUNTER);
  * đổi giờ / hủy hộ theo cờ `canReschedule` / `canCancel` (hủy hộ: cancelSource STAFF); xem và gỡ hạn chế đặt online.
  * Check-in không làm ở đây: thuộc tiếp nhận (POST /visits, T36).
- * Khám tại nhà (UC43, homevisit-v1): hộp "Đặt lịch hộ" có tùy chọn tại nhà; lịch tại nhà không nằm trong danh sách trên nên lễ tân xem ở bảng riêng bên dưới (HomeVisitDeskList).
  */
 import { useState } from 'react';
 import { Eye, Plus, RefreshCw, X } from 'lucide-react';
@@ -11,7 +10,6 @@ import { Checkbox, EmptyRow, FormError, selectClass } from '@/components/admin/f
 import { BookOnBehalfDialog } from '@/components/appointments/BookOnBehalfDialog';
 import { CancelAppointmentDialog, RescheduleDialog } from '@/components/appointments/ChangeAppointmentDialogs';
 import { CustomerRestrictionPanel } from '@/components/appointments/CustomerRestrictionPanel';
-import { HomeVisitDeskList } from '@/components/appointments/HomeVisitDeskList';
 import { formatShortDate, formatSlot, formatVnDateTime, slotEnd, STATUS_TONE, todayVn } from '@/components/appointments/format';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
@@ -181,8 +179,6 @@ export function AdminAppointmentsPage() {
           )}
         </CardContent>
       </Card>
-
-      {isDesk && <HomeVisitDeskList date={date} />}
 
       <AppointmentDetailDialog
         appointmentId={openId}

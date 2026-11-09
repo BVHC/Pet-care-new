@@ -5,7 +5,7 @@ m = Module(
     sources="01 UC15, UC16, UC28–UC31; 02 BR-SP-01…07, BR-CK-01…03; 04 §4; 05 §4 (product_categories, products, services, kennel_types, vaccine_types, vaccination_protocols)",
     intro="Danh mục sản phẩm, sản phẩm, dịch vụ (gồm loại chuồng), loại vaccine, phác đồ tiêm; trang công khai dịch vụ và sản phẩm.",
     frozen=[
-        "UC32 phí vận chuyển & phí khám tại nhà là tầng 3, không có endpoint.",
+        "UC32 phí vận chuyển là tầng 3, không có endpoint.",
         "Định mức vật tư tiêu hao của dịch vụ (UC30, ST07) là tầng 3.",
         "Bật / tắt dịch vụ tại chi nhánh (UC33) thuộc module branch.",
         "Tồn kho thuộc module inventory; trang công khai chỉ nhận danh sách chi nhánh còn hàng qua `StockQueryApi`.",

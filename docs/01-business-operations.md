@@ -1,6 +1,6 @@
 # Pet Care Ecosystem — Use Case Catalog
 
-> Danh sách use case và tác vụ hệ thống của web Pet Care. Gồm **94 mã use case** (UC01–UC94; còn hiệu lực 90 sau khi bỏ UC18, UC19, UC20, UC41; UC90–UC94 là phân hệ AI, đặc tả ở `07-ai-subsystem.md`) + **23 tác vụ hệ thống** (ST22, ST23 là của AI) (không vẽ trên sơ đồ use case).
+> Danh sách use case và tác vụ hệ thống của web Pet Care. Gồm **94 mã use case** (UC01–UC94; còn hiệu lực 88 sau khi bỏ UC18, UC19, UC20, UC41, UC43, UC51; UC90–UC94 là phân hệ AI, đặc tả ở `07-ai-subsystem.md`) + **23 tác vụ hệ thống** (ST22, ST23 là của AI) (không vẽ trên sơ đồ use case).
 
 ---
 
@@ -14,7 +14,7 @@
 | A04 | SUPER_MANAGER | Quản lý cấp chuỗi, phạm vi mọi chi nhánh. **Trong phạm vi đồ án:** quản lý chi nhánh (tạo, kích hoạt, cờ cấp cứu ngoài giờ); quản lý danh mục sản phẩm, dịch vụ, giá, loại vaccine và phác đồ tiêm chủng; tạo, đổi chức vụ, điều chuyển, vô hiệu hóa nhân viên; quản lý nội dung trang và đăng bài viết; xem feedback; xem báo cáo toàn chuỗi. **Hướng phát triển (tầng 3):** tạm ngừng / đóng chi nhánh, phí vận chuyển, duyệt bài viết của VET, xử lý khiếu nại. |
 | A05 | BRANCH_MANAGER | Quản lý một chi nhánh, chỉ thao tác trên dữ liệu của chi nhánh mình. **Trong phạm vi đồ án:** tạo và vô hiệu hóa nhân viên cấp dưới; cấu hình giờ mở cửa, ngày nghỉ, quota lịch hẹn; bật/tắt dịch vụ tại chi nhánh; quản lý chuồng; nhập kho, điều chỉnh tồn, đặt tồn tối thiểu; hủy Order khách không thanh toán; đối soát ca thu ngân; gán lại lượt đã gọi khi nhân viên phụ trách bị khóa; xem feedback và báo cáo chi nhánh. **Hướng phát triển (tầng 3):** phân ca và duyệt nghỉ, gộp hồ sơ khách trùng, duyệt trả hàng, chuyển kho, kiểm kê, xử lý khiếu nại. |
 | A06 | RECEPTIONIST | Lễ tân kiêm thu ngân tại một chi nhánh, là đầu mối vận hành hằng ngày. **Trong phạm vi đồ án:** tiếp nhận khách, điều phối hàng đợi, đặt lịch hộ khách, quản lý hồ sơ khách tại quầy, bán hàng, thu tiền, nhận/trả thú lưu trú, thực hiện Care Task gọi điện chăm sóc khách. **Hướng phát triển (tầng 3):** xử lý và giao đơn online, tạo yêu cầu trả hàng, tạo khiếu nại thay khách. |
-| A07 | VET | Bác sĩ thú y tại một chi nhánh. **Trong phạm vi đồ án:** khám, chẩn đoán, kê đơn, hẹn tái khám, tiêm chủng, cập nhật và bổ sung bệnh án, ghi nhật ký chăm sóc thú lưu trú; có hồ sơ giới thiệu hiển thị công khai. **Hướng phát triển (tầng 3):** phẫu thuật, khám tại nhà, điều trị nội trú, viết bài chuyên môn, truy vết lô. |
+| A07 | VET | Bác sĩ thú y tại một chi nhánh. **Trong phạm vi đồ án:** khám, chẩn đoán, kê đơn, hẹn tái khám, tiêm chủng, cập nhật và bổ sung bệnh án, ghi nhật ký chăm sóc thú lưu trú; có hồ sơ giới thiệu hiển thị công khai. **Hướng phát triển (tầng 3):** phẫu thuật, điều trị nội trú, viết bài chuyên môn, truy vết lô. |
 | A08 | CARETAKER | Nhân viên chăm sóc tại một chi nhánh; chỉ được xem bệnh án, không được sửa. **Trong phạm vi đồ án:** thực hiện dịch vụ thẩm mỹ (tắm, cắt tỉa), nhận thú lưu trú, ghi nhật ký chăm sóc thú lưu trú. **Hướng phát triển (tầng 3):** chăm sóc thú nội trú. |
 | S01 | System | Tự động chạy các tác vụ định kỳ và tác vụ kích hoạt theo sự kiện (mục B): nhắc lịch, hủy đơn quá hạn, cảnh báo tồn kho, sinh Care Task… |
 | S02 | Payment Gateway | *(Tầng 3)* Cổng thanh toán bên ngoài. Xử lý thanh toán online, hoàn tiền, trả kết quả giao dịch về hệ thống. |
@@ -84,7 +84,7 @@
 | UC29 | Quản lý sản phẩm (tạo, cập nhật, đổi giá, ngừng kinh doanh; sản phẩm vaccine gắn loại vaccine — BR-SP-07) | A04 |
 | UC30 | Quản lý dịch vụ (tạo, cập nhật, đổi giá, ngừng; gồm loại chuồng lưu trú — BR-SP-04; loại Khám/Tiêm của dịch vụ — BR-SP-06; định mức vật tư thuộc tầng 3) | A04 |
 | UC31 | Quản lý loại vaccine & phác đồ tiêm chủng (phác đồ theo loại vaccine, gồm cờ bắt buộc khi lưu trú — BR-SP-02, BR-SP-07) | A04 |
-| UC32 | Cấu hình phí vận chuyển & phí khám tại nhà | A04 |
+| UC32 | Cấu hình phí vận chuyển | A04 |
 | UC33 | Bật / tắt dịch vụ tại chi nhánh | A05 |
 
 ## 7. Nhân sự (phạm vi mở rộng)
@@ -105,7 +105,6 @@
 | UC40 | Quản lý lịch hẹn (xem danh sách, đổi khung giờ trong cùng chi nhánh, hủy) | A02, A06 |
 | ~~UC41~~ | ~~Phân công nhân sự cho lịch hẹn~~ — bỏ ở v8, nhân viên được gán khi tiếp nhận (UC45). Giữ mã đến khi chốt phạm vi rồi đánh số lại một lần. | — |
 | UC42 | Thiết lập quota lịch hẹn (quota mặc định theo nhóm dịch vụ; quota riêng cho từng khung giờ, cho phép 0 để khóa khung — BR-LH-03) | A05 |
-| UC43 | Đặt lịch khám tại nhà | A02, A06 |
 
 ## 9. Tiếp nhận & hàng đợi
 
@@ -123,7 +122,6 @@
 | UC48 | Khám bệnh (khám, chẩn đoán, xét nghiệm, kê đơn, hẹn tái khám — BR-KB-06, hoàn tất) | A07 |
 | UC49 | Tiêm chủng (chọn loại vaccine theo phác đồ rồi chọn sản phẩm còn tồn; lượt tiêm riêng, hoặc tiêm ngay trong lượt khám trên cùng Visit; VET được chọn mũi thứ khác với gợi ý; xóa mũi ghi nhầm khi lượt còn mở; chỉ ghi nhận mũi tiêm tại hệ thống — BR-KB-04, BR-KB-05) | A07 |
 | UC50 | Phẫu thuật (lập cam kết, thực hiện) | A07, A06 |
-| UC51 | Khám tại nhà | A07 |
 | UC52 | Thực hiện dịch vụ thẩm mỹ | A08 |
 | UC53 | Xem & bổ sung bệnh án | A07, A08 (chỉ xem) |
 

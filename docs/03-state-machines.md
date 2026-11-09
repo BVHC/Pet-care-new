@@ -36,7 +36,6 @@
 | 19 | Phiên kiểm kê | `stock_counts.status` | KO (`08` §E) | 3 |
 | 20 | Chi nhánh (mở rộng #2) | `branches.status` | CN (`08` §F.1) | 3 |
 | 21 | Bài viết (mở rộng) | `articles.status` | BV (`08` §F.3) | 3 |
-| 22 | Lịch khám tại nhà (bổ sung #3) | `appointments.status` | LH (`09` §A) | 3 |
 | 23 | Phẫu thuật | `surgeries.status` | KB (`09` §B) | 3 |
 | 24 | Nhập viện | `admissions.status` | LT (`09` §C) | 3 |
 | 25 | Y lệnh nội trú | `admission_orders.status` | LT (`09` §C) | 3 |

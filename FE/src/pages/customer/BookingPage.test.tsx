@@ -5,7 +5,6 @@ import axios from 'axios';
 import { MemoryRouter } from 'react-router-dom';
 import { afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
 import { apiClient } from '../../shared/api/axios';
-import { feesApi } from '../../shared/api/fees.api';
 import { MOCK_PASSWORD } from '../../shared/api/mock/identity.mock';
 import { installMockApi } from '../../shared/api/mock/mock-api';
 import { useSession } from '../../shared/stores/session.store';
@@ -106,81 +105,5 @@ describe('BookingPage (UC39)', () => {
     expect(notice).toHaveTextContent('3 lần không đến hoặc hủy muộn');
     expect(screen.queryByRole('form', { name: 'Thông tin đặt lịch' })).not.toBeInTheDocument();
     expect(screen.queryByRole('button', { name: /Xác nhận đặt lịch/ })).not.toBeInTheDocument();
-  });
-});
-
-// Khám tại nhà (UC43, homevisit-v1 #1, fees-v1 #3): chi nhánh 1 bật khám tại nhà, phí 100.000 ₫. Sổ địa chỉ của khach@petcare.vn: 12 Trần Thái Tông (mặc định, 0912345678) và 45 Láng Hạ.
-describe('BookingPage — khám tại nhà (UC43)', () => {
-  afterEach(() => vi.restoreAllMocks());
-  const pickHome = async (user: User) => user.click(await screen.findByRole('button', { name: 'Khám tại nhà' }));
-
-  it('chọn "Khám tại nhà": hiện phí của chi nhánh và sổ địa chỉ, chỉ còn dịch vụ nhóm Khám/Tiêm', async () => {
-    const user = renderPage();
-    await user.click(await screen.findByRole('button', { name: /PetCare Cầu Giấy/ }));
-    expect(await screen.findByRole('button', { name: /Tắm & sấy/ })).toBeInTheDocument();
-    await pickHome(user);
-
-    expect(await screen.findByText(/Phí khám tại nhà/)).toHaveTextContent('100.000');
-    const addresses = screen.getByRole('group', { name: 'Chọn địa chỉ khám tại nhà' });
-    expect(await within(addresses).findByRole('button', { name: /12 Trần Thái Tông/ })).toBeInTheDocument();
-    expect(within(addresses).getByRole('button', { name: /45 Láng Hạ/ })).toBeInTheDocument();
-    expect(screen.queryByRole('button', { name: /Tắm & sấy/ })).not.toBeInTheDocument();
-    expect(screen.getByRole('button', { name: /Khám tổng quát/ })).toBeInTheDocument();
-  });
-
-  it('đặt lịch tại nhà: thú → dịch vụ khám → ngày → khung → địa chỉ (điền sẵn số liên hệ) → thấy mã, địa chỉ và phí', async () => {
-    const user = renderPage();
-    await pickHome(user);
-    const slots = await choose(user, 'Tôm', /Khám tổng quát/, '26/10/2026');
-    await user.click(within(slots).getByRole('button', { name: /^10:00/ }));
-    await user.click(await screen.findByRole('button', { name: /45 Láng Hạ/ }));
-    expect(screen.getByLabelText('Số điện thoại liên hệ')).toHaveValue('0987000111');
-    await user.click(screen.getByRole('button', { name: /Xác nhận đặt lịch/ }));
-
-    const done = await screen.findByRole('dialog', { name: 'Đặt lịch thành công' });
-    expect(within(done).getByText(/^LH-261023-\d{4}$/)).toBeInTheDocument();
-    expect(within(done).getByText('45 Láng Hạ, Láng Hạ, Hà Nội')).toBeInTheDocument();
-    expect(within(done).getByText(/100\.000/)).toBeInTheDocument();
-    expect(within(done).getByText('10:00–10:30, Thứ Hai, 26/10/2026')).toBeInTheDocument();
-    expect(within(done).getByText(/Lịch khám tại nhà đã được giữ/)).toBeInTheDocument();
-  });
-
-  it('thiếu địa chỉ hoặc số liên hệ sai: báo ngay, không gọi BE', async () => {
-    const user = renderPage();
-    await pickHome(user);
-    const slots = await choose(user, 'Tôm', /Khám tổng quát/, '26/10/2026');
-    await user.click(within(slots).getByRole('button', { name: /^10:00/ }));
-    await user.click(screen.getByRole('button', { name: /Xác nhận đặt lịch/ }));
-    expect(await screen.findByText('Vui lòng chọn địa chỉ khám tại nhà.')).toBeInTheDocument();
-
-    await user.click(await screen.findByRole('button', { name: /12 Trần Thái Tông/ }));
-    await user.clear(screen.getByLabelText('Số điện thoại liên hệ'));
-    await user.type(screen.getByLabelText('Số điện thoại liên hệ'), '12345');
-    await user.click(screen.getByRole('button', { name: /Xác nhận đặt lịch/ }));
-    expect(await screen.findByText('Số điện thoại liên hệ gồm 10–11 chữ số, bắt đầu bằng 0.')).toBeInTheDocument();
-    expect(screen.queryByRole('dialog', { name: 'Đặt lịch thành công' })).not.toBeInTheDocument();
-  });
-
-  it('BE từ chối dịch vụ không phải khám (BR-LH-13): hiện lý do của BE, form giữ nguyên để chọn lại', async () => {
-    const user = renderPage();
-    await pickHome(user);
-    const slots = await choose(user, 'Tôm', /Tiêm phòng/, '26/10/2026');
-    await user.click(within(slots).getByRole('button', { name: /^10:00/ }));
-    await user.click(await screen.findByRole('button', { name: /12 Trần Thái Tông/ }));
-    await user.click(screen.getByRole('button', { name: /Xác nhận đặt lịch/ }));
-    expect(await screen.findByText('Dịch vụ khám tại nhà phải là dịch vụ khám')).toBeInTheDocument();
-    expect(screen.getByRole('button', { name: /Khám tổng quát/ })).toBeInTheDocument();
-  });
-
-  it('chi nhánh chưa bật khám tại nhà: báo rõ và không cho xác nhận', async () => {
-    vi.spyOn(feesApi, 'getHomeVisitFee').mockResolvedValue({ branchId: 1, enabled: false, fee: 0 });
-    const user = renderPage();
-    await pickHome(user);
-    expect(await screen.findByText(/Chi nhánh này chưa nhận khám tại nhà/)).toBeInTheDocument();
-    expect(screen.getByRole('button', { name: /Xác nhận đặt lịch/ })).toBeDisabled();
-    // Quay về khám tại chi nhánh thì đặt lại được.
-    await user.click(screen.getByRole('button', { name: 'Khám tại chi nhánh' }));
-    expect(screen.queryByText(/Chi nhánh này chưa nhận khám tại nhà/)).not.toBeInTheDocument();
-    expect(screen.getByRole('button', { name: /Xác nhận đặt lịch/ })).toBeEnabled();
   });
 });

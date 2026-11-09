@@ -28,7 +28,6 @@ import { branchlifeRoutes } from './branchlife.mock';
 import { complaintRoutes } from './complaint.mock';
 import { custmergeRoutes } from './custmerge.mock';
 import { feesRoutes } from './fees.mock';
-import { homevisitRoutes } from './homevisit.mock';
 import { inpatientRoutes } from './inpatient.mock';
 import { materialUseRoutes } from './materialuse.mock';
 import { paymentRoutes } from './payment.mock';
@@ -75,7 +74,6 @@ const ROUTES: Record<string, MockHandler> = {
   ...branchlifeRoutes,
   ...custmergeRoutes,
   ...articlexRoutes,
-  ...homevisitRoutes,
   ...surgeryRoutes,
   ...inpatientRoutes,
   ...aiRoutes,

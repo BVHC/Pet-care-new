@@ -7,7 +7,7 @@
 **Legend:** `CONFIRMED` = có trong docs · `ASSUMPTION (A#)` = suy luận ít phát minh nhất · `TBD (Q#)` = cần quyết định (mục E). Method/path/shape là **PROPOSED** theo quy ước chung ở [`00-method.md`](./00-method.md); envelope, mã lỗi, phân trang, kiểu dữ liệu theo mục 3 của file đó.
 
 **Đóng băng phạm vi (không có endpoint):**
-- UC32 phí vận chuyển & phí khám tại nhà là tầng 3, không có endpoint.
+- UC32 phí vận chuyển là tầng 3, không có endpoint.
 - Định mức vật tư tiêu hao của dịch vụ (UC30, ST07) là tầng 3.
 - Bật / tắt dịch vụ tại chi nhánh (UC33) thuộc module branch.
 - Tồn kho thuộc module inventory; trang công khai chỉ nhận danh sách chi nhánh còn hàng qua `StockQueryApi`.

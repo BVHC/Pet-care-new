@@ -6,10 +6,10 @@ import { apiClient } from '../api/axios';
 import { feesApi } from '../api/fees.api';
 import { MOCK_PASSWORD } from '../api/mock/identity.mock';
 import { useSession } from '../stores/session.store';
-import { useFeesMutation, useHomeVisitFee, useMaterialNorms, useShippingFeeConfig } from './useFees';
+import { useFeesMutation, useMaterialNorms, useShippingFeeConfig } from './useFees';
 import { installMockApi } from '../api/mock/mock-api';
 
-// Dữ liệu mẫu (fees.mock.ts): phí vận chuyển 30.000, khám tại nhà chi nhánh 1 bật 100.000, dịch vụ 1 có 2 dòng định mức. Điểm cần giữ: lệnh ghi làm mới ['fees'],
+// Dữ liệu mẫu (fees.mock.ts): phí vận chuyển 30.000, dịch vụ 1 có 2 dòng định mức. Điểm cần giữ: lệnh ghi làm mới ['fees'],
 // kể cả khi BE từ chối (400 BR-SP-10), vì form đang mở có thể đang giữ số cũ.
 
 beforeAll(() => installMockApi(apiClient));
@@ -25,7 +25,6 @@ function setup() {
   return renderHook(
     () => ({
       shipping: useShippingFeeConfig(),
-      home: useHomeVisitFee(1),
       norms: useMaterialNorms(1),
       none: useMaterialNorms(null),
       saveShipping: useFeesMutation(feesApi.saveShippingFeeConfig),
@@ -36,10 +35,9 @@ function setup() {
 }
 
 describe('useFees', () => {
-  it('đọc: phí vận chuyển, phí khám tại nhà, định mức; id null thì không gọi', async () => {
+  it('đọc: phí vận chuyển, định mức; id null thì không gọi', async () => {
     const { result } = setup();
     await waitFor(() => expect(result.current.shipping.data).toMatchObject({ baseFee: 30_000, freeThreshold: 500_000 }));
-    await waitFor(() => expect(result.current.home.data).toEqual({ branchId: 1, enabled: true, fee: 100_000 }));
     await waitFor(() => expect(result.current.norms.data).toHaveLength(2));
     expect(result.current.none.fetchStatus).toBe('idle');
   });

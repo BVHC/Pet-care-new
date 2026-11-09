@@ -410,7 +410,7 @@ const admit: MockHandler = (req) => {
   if (booking) {
     const exam = treatmentService(branchId);
     if (!exam) return fail('INTERNAL_ERROR', 'Chi nhánh chưa bật dịch vụ khám để mở Order cho lượt điều trị', 500);
-    const started = startDirectVisit({ branchId, customerId, petId, serviceId: exam.serviceId, vetId: me(req).id, appointmentId: null, isHomeVisit: false, now });
+    const started = startDirectVisit({ branchId, customerId, petId, serviceId: exam.serviceId, vetId: me(req).id, appointmentId: null, now });
     if (!started.ok) {
       return started.reason === 'PET_BUSY' ? ruleFail('BR-TN-01', 'Thú cưng đang có lượt khám chưa kết thúc') : fail('INTERNAL_ERROR', 'Không mở được Order cho lượt điều trị', 500);
     }

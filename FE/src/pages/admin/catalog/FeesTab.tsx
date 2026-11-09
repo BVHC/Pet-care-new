@@ -93,7 +93,7 @@ function FeesBody() {
   );
 }
 
-/** UC32 — phí & định mức (chỉ SUPER_MANAGER). Phí khám tại nhà của chi nhánh nằm ở tab chi nhánh, không ở đây. */
+/** UC32 — phí & định mức (chỉ SUPER_MANAGER). */
 export function FeesTab() {
   const role = useAccount()?.role;
   if (role !== 'SUPER_MANAGER') return <StatePanel icon={Inbox} title="Chỉ quản lý chuỗi cấu hình phí và định mức" />;

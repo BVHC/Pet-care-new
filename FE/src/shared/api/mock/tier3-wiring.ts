@@ -5,18 +5,16 @@ import { branchBooking } from './branch.mock';
 import { registerClosureSources } from './branchlife.mock';
 import { catalogServices } from './catalog.mock';
 import { CLINICAL_SEED_SERVICES, registerClinicalServiceSource, registerVisitOrderSource } from './clinical-shared';
-import { homeVisitFeeOf, shippingFeeConfig } from './fees.mock';
-import { registerHomeVisitFeeSource } from './homevisit.mock';
+import { shippingFeeConfig } from './fees.mock';
 import { hasActiveAdmission } from './inpatient.mock';
 import { recordMaterialUsage } from './materialuse.mock';
 import { pendingRefundCount } from './returns.mock';
-import { addHomeFeeLine, addServiceLine, serviceIdsOfVisit } from './sales.mock';
+import { addServiceLine, serviceIdsOfVisit } from './sales.mock';
 import { openOnlineOrderCount, registerShippingFeeSource } from './shop.mock';
 import { inTransitTransfersOf, openStockCountsOf } from './stockops.mock';
 import { registerCompletionListener } from './visit-clinical.mock';
 
 registerShippingFeeSource(() => shippingFeeConfig());
-registerHomeVisitFeeSource(homeVisitFeeOf);
 registerClosureSources({
   unfinishedOnlineOrders: openOnlineOrderCount,
   pendingRefunds: pendingRefundCount,
@@ -26,8 +24,8 @@ registerClosureSources({
 
 // ─── Lâm sàng (T57 bước A → luồng chính) ───
 
-// Phẫu thuật hoàn tất, xuất viện nội trú, bắt đầu khám tại nhà: dòng vào Order thật của lượt (09 §A–C).
-registerVisitOrderSource({ addServiceLine, addHomeFeeLine });
+// Phẫu thuật hoàn tất, xuất viện nội trú: dòng vào Order thật của lượt (09 §B, §C).
+registerVisitOrderSource({ addServiceLine });
 // BR-LT-17: bắt đầu trả thú / giao thú khi thú còn ca nội trú ADMITTED → 409.
 registerAdmissionSource(hasActiveAdmission);
 // ST07 (BR-KB-12): hoàn tất lượt thành công thì trừ vật tư theo định mức của mọi dịch vụ đang có trong Order của lượt.

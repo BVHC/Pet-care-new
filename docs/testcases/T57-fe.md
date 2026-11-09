@@ -1,7 +1,7 @@
-# T57 (FE): Màn hình tầng 3 và AI: ma trận test tay (27 UC tầng 3, 5 UC AI, ST07)
+# T57 (FE): Màn hình tầng 3 và AI: ma trận test tay (25 UC tầng 3, 5 UC AI, ST07)
 
-> Phạm vi: màn hình của 15 module tầng 3 (`workforce`, `homevisit`, `surgery`, `inpatient`, `shop`, `payment`, `returns`, `stockops`, `materialuse`, `fees`, `branchlife`, `custmerge`, `articlex`, `complaint`, `ai`) theo danh mục `docs/10-t54-t57-checklists.md` §2.1. Mỗi mục có bảng màn hình, dữ liệu mẫu, cách đặt lại và bảng ca.
-> **Trạng thái BE:** BE chưa có controller nào của 15 module này (chỉ có migration V34–V48 và interface chéo), nên **mọi ca chạy trên mock** (`FE/src/shared/api/mock/<module>.mock.ts`). Hợp đồng: `docs/api/<module>-v1.md`; đặc tả `docs/07` đến `docs/09`.
+> Phạm vi: màn hình của 14 module tầng 3 (`workforce`, `surgery`, `inpatient`, `shop`, `payment`, `returns`, `stockops`, `materialuse`, `fees`, `branchlife`, `custmerge`, `articlex`, `complaint`, `ai`) theo danh mục `docs/10-t54-t57-checklists.md` §2.1. Mỗi mục có bảng màn hình, dữ liệu mẫu, cách đặt lại và bảng ca.
+> **Trạng thái BE:** BE chưa có controller nào của 14 module này (chỉ có migration V34–V48 và interface chéo), nên **mọi ca chạy trên mock** (`FE/src/shared/api/mock/<module>.mock.ts`). Hợp đồng: `docs/api/<module>-v1.md`; đặc tả `docs/07` đến `docs/09`.
 > **Không có kết quả nào trong file này đã được chạy.** Cột J để Hiến tự điền sau khi chạy tay; tất cả bắt đầu ở "Chưa test".
 
 ## 0. Khung chung
@@ -34,11 +34,11 @@ Một số mock có thêm tài khoản hoặc khách mẫu riêng; xem phần "D
 
 **Chưa có màn hình (không có ca):** đối soát cổng thanh toán (payment-v1 #4–#6); cờ "của tôi" trên bình luận công khai (FE nhớ id ở localStorage); trả hàng cho đơn online (thiếu `orderLineId` và nguồn `ONLINE`). Mỗi mục module nêu thêm các chỗ thiếu của riêng nó.
 
-**Đặt lại dữ liệu.** Cách chắc nhất là xóa mọi khóa `petcare-mock-*` (và sessionStorage `petcare.mock-gateway.*`) rồi đăng nhập lại. Muốn xóa từng phần thì xóa theo cả bộ khóa liên quan: mã lượt khám, đơn, kho được cấp lại từ đầu nên các khóa `-visit`, `-sales`, `-appointments`, `-clinical`, `-surgery`, `-inpatient`, `-boarding`, `-pets`, `-fees`, `-care` (khám tại nhà, phẫu thuật, nội trú) phải xóa cùng lúc; `-stockops` và `-inventory` xóa cùng lúc; `-content` và `-articlex` xóa cùng lúc. Khóa `petcare-my-comments:<id>` là của FE (nhớ bình luận của khách), không phải khóa mock.
+**Đặt lại dữ liệu.** Cách chắc nhất là xóa mọi khóa `petcare-mock-*` (và sessionStorage `petcare.mock-gateway.*`) rồi đăng nhập lại. Muốn xóa từng phần thì xóa theo cả bộ khóa liên quan: mã lượt khám, đơn, kho được cấp lại từ đầu nên các khóa `-visit`, `-sales`, `-appointments`, `-clinical`, `-surgery`, `-inpatient`, `-boarding`, `-pets`, `-fees`, `-care` (phẫu thuật, nội trú) phải xóa cùng lúc; `-stockops` và `-inventory` xóa cùng lúc; `-content` và `-articlex` xóa cùng lúc. Khóa `petcare-my-comments:<id>` là của FE (nhớ bình luận của khách), không phải khóa mock.
 
 **Thứ tự chạy khuyến nghị (ghi chú của người soạn).**
 
-- Chạy theo thứ tự mục. Trong nhân sự, `NS` tạo yêu cầu mẫu dùng chung cho các ca sau; trong khám tại nhà, khối tắt khám tại nhà (`KN`) chạy trước ca bắt đầu khám tại nhà (UC51).
+- Chạy theo thứ tự mục. Trong nhân sự, `NS` tạo yêu cầu mẫu dùng chung cho các ca sau.
 - `CN` (tạm ngừng, đóng chi nhánh) chạy **sau cùng** của nhóm kho/phí/chi nhánh: tạm ngừng hủy lịch hẹn hàng loạt và không khôi phục được trên mock.
 - `PH` không sửa định mức của dịch vụ "Khám tổng quát", vì `VT-05` cần định mức mẫu; `VT-05` làm đổi dữ liệu mà `GH-07` và `CN-03` đọc, nên đặt lại dữ liệu trước hai ca đó.
 - `AI-36` và `AI-37` để cuối nhóm AI; `AI-37` cần đặt lại `petcare-mock-ai` ngay trước khi chạy.
@@ -52,8 +52,6 @@ Một số mock có thêm tài khoản hoặc khách mẫu riêng; xem phần "D
 | UC36 | NS-23, NS-27 |
 | UC37 | NS-31 |
 | UC38 | NS-19 |
-| UC43 | KN-03, KN-07 |
-| UC51 | KN-17 (Mock, dựng dữ liệu), KN-18 |
 | UC50 | PT-02, PT-07, PT-09, PT-11, PT-12 |
 | UC55 | NT-05 |
 | UC56 | NT-09, NT-14, NT-20, NT-27 (hoàn tất hoặc hủy mọi y lệnh trước NT-27) |
@@ -90,18 +88,17 @@ Chuỗi này chọn tự động theo mẫu "Mong đợi bắt đầu bằng th�
 - UC50: CARETAKER (xem phẫu thuật) không có màn hình nào; CARETAKER bị 403 ở `/staff/doctor` và `/staff/reception` (ca `PT-17`).
 - Nhân sự: lỗi 409 của `workforce` không dựng được bằng tay (ghi một dòng dưới bảng `NS`).
 - **Lệch cần quyết (ca `DH-15`):** yaml `shop-v1` và mock cho BRANCH_MANAGER xem đơn online, nhưng `ADMIN_MENU` chỉ cho RECEPTIONIST vào `/admin/orders`, nên `manager@store1.vn` không thấy menu và bị 403 tại chỗ (nhánh "Bạn chỉ có quyền xem." không bao giờ hiện). Ca viết theo thực tế (403). Cần Hiến chốt: mở `/admin/orders` cho BRANCH_MANAGER ở dạng chỉ xem (khi làm T68) hay bỏ nhánh đó.
-- Ca có phần "(theo mã, chưa xác nhận trên giao diện)": `KN-14`, `PT-12`, `NT-07`, `NT-08`, `NT-27`, `KH-32`, `VT-05`, `VT-07`, `VT-09`, `CN-11`, `CN-12`; ở nhóm thương mại và nhóm bài viết/khiếu nại/AI, các chỗ chưa xác nhận ghi ngay trong ô Bước hoặc Mong đợi.
+- Ca có phần "(theo mã, chưa xác nhận trên giao diện)": `PT-12`, `NT-07`, `NT-08`, `NT-27`, `KH-32`, `VT-05`, `VT-07`, `VT-09`, `CN-11`, `CN-12`; ở nhóm thương mại và nhóm bài viết/khiếu nại/AI, các chỗ chưa xác nhận ghi ngay trong ô Bước hoặc Mong đợi.
 
 **Kiểm nhãn khi soạn (bằng chương trình, không phải chạy giao diện).** Trong 581 nhãn đi sau "Bấm", "nút", "tab", "Mở", "Chọn" ở cột Bước, 565 có nguyên văn trong `FE/src`; 16 còn lại là nhãn ghép từ dữ liệu (tùy chọn của ô chọn, `aria-label` có tên sản phẩm hoặc tên chi nhánh). Ở các chuỗi trong ngoặc kép khác (giá trị người chạy gõ vào, thông báo có biến) khoảng 14% không có nguyên văn vì là giá trị gõ vào hoặc thông báo ghép biến; chưa đối chiếu từng chuỗi.
 
-**Mã ca.** Tiền tố theo module: `NS` nhân sự, `KN` khám tại nhà, `PT` phẫu thuật, `NT` nội trú, `TM` cửa hàng online của khách, `DH` xử lý đơn online, `TH` trả hàng, `KH` kho mở rộng, `VT` vật tư tiêu hao, `PH` phí và định mức, `CN` vòng đời chi nhánh, `GH` gộp hồ sơ khách, `BV` bài viết và bình luận, `KL` khiếu nại, `AI` phân hệ AI.
+**Mã ca.** Tiền tố theo module: `NS` nhân sự, `PT` phẫu thuật, `NT` nội trú, `TM` cửa hàng online của khách, `DH` xử lý đơn online, `TH` trả hàng, `KH` kho mở rộng, `VT` vật tư tiêu hao, `PH` phí và định mức, `CN` vòng đời chi nhánh, `GH` gộp hồ sơ khách, `BV` bài viết và bình luận, `KL` khiếu nại, `AI` phân hệ AI.
 
 ## Bản đồ mã ca
 
 | Mã | Module | Số ca |
 |---|---|---|
 | NS | Nhân sự | 40 |
-| KN | Khám tại nhà | 26 |
 | PT | Phẫu thuật | 19 |
 | NT | Nội trú | 30 |
 | TM | Cửa hàng online | 47 |
@@ -109,13 +106,13 @@ Chuỗi này chọn tự động theo mẫu "Mong đợi bắt đầu bằng th�
 | TH | Trả hàng | 24 |
 | KH | Kho mở rộng | 40 |
 | VT | Vật tư tiêu hao | 13 |
-| PH | Phí và định mức | 22 |
+| PH | Phí và định mức | 16 |
 | CN | Vòng đời chi nhánh | 16 |
 | GH | Gộp hồ sơ | 19 |
 | BV | Bài viết và bình luận | 26 |
 | KL | Khiếu nại | 30 |
 | AI | AI | 37 |
-| | Tổng | 406 |
+| | Tổng | 374 |
 
 ## NS. Nhân sự (UC34–38)
 
@@ -184,56 +181,6 @@ Dữ liệu mẫu:
 
 Không có ca: lỗi 409 INVALID_STATE_TRANSITION của hủy phân ca, ghi vắng, rút, duyệt, từ chối (yêu cầu / phân ca vừa đổi trạng thái) không dựng được bằng tay vì nút chỉ hiện ở trạng thái hợp lệ và một trình duyệt chỉ giữ một phiên đăng nhập; đã có ở test mock. Lỗi BR-NS-02 "phân ca cho ngày trong quá khứ" bị ô "Ngày làm" (thuộc tính min) chặn trước khi gửi; BR-NS-06 "phân ca đã bắt đầu" khi duyệt không dựng được vì yêu cầu mẫu đều ở ngày tương lai.
 
-## KN. Khám tại nhà (UC43, UC51)
-
-Nguồn: mock `FE/src/shared/api/mock/homevisit.mock.ts` (lịch tại nhà là một hàng của `appointment.mock.ts`, khóa `petcare-mock-appointments`) và `fees.mock.ts` (chỉ để biết phí); hợp đồng `docs/api/homevisit-v1.md` (6 endpoint) và fees-v1 #3. ASSUMPTION quan trọng: A1 lịch tại nhà KHÔNG nằm trong danh sách `GET /appointments` (lễ tân xem ở bảng riêng); A2 "không gặp được khách" đếm vào BR-LH-09 ngay lúc ghi; A7 "bắt đầu" kiểm 409 trước BR-TN-01; A9 mọi thú mẫu đều đang có lượt khám mở nên "Bắt đầu" lần đầu cho Tôm ra BR-TN-01.
-
-Mã ca theo UC: UC43 khách KN-01…KN-06; UC43 lễ tân KN-07…KN-09; chi nhánh tắt khám tại nhà KN-10…KN-13; UC51 KN-14…KN-22; chặn vai trò KN-23…KN-26. Cần chạy theo thứ tự: khối tắt khám tại nhà (KN-10…KN-13) chạy trước UC51, vì KN-20 cộng một lần vi phạm BR-LH-09 cho khach@petcare.vn và có thể làm `/booking` đổi thành thông báo hạn chế đặt lịch online.
-
-| UC | Route | Vai trò thấy | h1 / tiêu đề | Vào từ đâu |
-|---|---|---|---|---|
-| UC43 | `/booking` (nhóm nút "Hình thức khám" › "Khám tại nhà"; bước "Địa chỉ và phí khám tại nhà") | CUSTOMER (đã qua bước liên kết hồ sơ) | h1 "Đặt lịch khám cho boss" | Thanh điều hướng khách hoặc nhập `/booking` |
-| UC43 | `/appointments`, khối "Lịch khám tại nhà" | CUSTOMER | Tiêu đề "Lịch hẹn" (dòng nhỏ "Lịch hẹn của tôi"), khối h2 "Lịch khám tại nhà" | Hộp "Đặt lịch thành công!" › "Xem lịch hẹn của tôi", hoặc nhập `/appointments` |
-| UC43 | `/admin/appointments`: nút "Đặt lịch hộ" (hộp "Đặt lịch hộ khách") và bảng "Lịch khám tại nhà ngày …" | RECEPTIONIST | h1 "Quản lý lịch hẹn" | Menu "Nghiệp vụ" › "Lịch hẹn" |
-| UC51 | `/staff/doctor`, khung "Khám tại nhà" (nút "Bắt đầu khám tại nhà", "Không gặp được khách") | VET | Tiêu đề bàn làm việc "Phòng khám" | Bàn làm việc bác sĩ, dưới "Hàng chờ của bạn" |
-
-Dữ liệu mẫu (nạp lười ở lần đầu một route tại nhà chạy):
-- khach@petcare.vn (thú Mochi, Bim, Tôm; sổ địa chỉ có 2 địa chỉ: người nhận "Nguyễn Thu Trang" mặc định, "Nguyễn Văn Bình"): lịch tại nhà "Đã đặt" của Tôm hôm nay lúc 16:30 (chi nhánh 1, ghi chú "Bé hamster bỏ ăn hai ngày"); "Đã đặt" của Bim 2 ngày sau lúc 09:30; "Đã khám" của Mochi 9 ngày trước; "Đã hủy" của Bim 6 ngày trước (lý do "Bé đã đỡ, tự theo dõi thêm"). Khung giờ khám tại nhà 30 phút, phí chốt 100.000 ₫.
-- Khách tại quầy (thú Miu): lịch "Không gặp được khách" 4 ngày trước ở chi nhánh 1 (ghi chú "Đến nơi gọi ba lần không ai ra mở cửa") và lịch "Đã đặt" 4 ngày sau ở chi nhánh 2.
-- Phí khám tại nhà (fees): chi nhánh 1 đang bật, 100.000 ₫; chi nhánh 2 tắt (còn lưu 80.000 ₫); chi nhánh 3 chưa cấu hình. Chỉ chi nhánh 1 "PetCare Cầu Giấy" đang hoạt động công khai nên khách chỉ thấy một chi nhánh và nó được chọn sẵn.
-- Mọi thú mẫu đều có lượt mở ở visit.mock: Tôm có lượt "Chờ" gán BS. Minh Anh, Bim và Mochi có lượt Thẩm mỹ, Miu có lượt cấp cứu chờ gán, Lu có lượt đang khám của BS. Minh Anh.
-
-Đặt lại: xóa `petcare-mock-appointments` (kèm cờ `homeSeeded`), `petcare-mock-visit`, `petcare-mock-sales`, `petcare-mock-clinical` (bệnh án, đơn thuốc), `petcare-mock-surgery`, `petcare-mock-inpatient`, `petcare-mock-boarding`, `petcare-mock-pets`, `petcare-mock-fees`, `petcare-mock-care` (thông báo). Xóa CÙNG LÚC cả bộ này: mã lượt khám cấp lại từ đầu (lượt 2002 cố định, lượt mới từ 3001) nên phẫu thuật, ca nội trú và bệnh án khóa theo mã lượt sẽ gắn nhầm vào lượt mới nếu chỉ xóa một khóa. Sau KN-10 phải làm KN-13 (hoặc xóa `petcare-mock-fees`) để chi nhánh 1 bật lại khám tại nhà.
-
-| Mã | Vai trò · tài khoản | Bước | Mong đợi | Áp dụng | J |
-|---|---|---|---|---|---|
-| KN-01 | CUSTOMER · khach@petcare.vn | 1) Đăng nhập, mở `/booking`; 2) Ở nhóm "Hình thức khám" bấm "Khám tại nhà" | Hiện thêm bước 5 "Địa chỉ và phí khám tại nhà", bước ghi chú thành bước 6. Có dòng "Phí khám tại nhà 100.000 ₫, chốt lúc đặt lịch và thu tại chi nhánh sau buổi khám."; nhóm "Chọn địa chỉ khám tại nhà" có 2 thẻ (Nguyễn Thu Trang, Nguyễn Văn Bình); ô "Số điện thoại liên hệ" có gợi ý "Số bác sĩ gọi khi đến nơi". Bước "Dịch vụ" ở chế độ này chỉ có "Khám tổng quát" và "Tiêm phòng" (không có "Tắm & sấy", "Cắt tỉa lông"); quay lại "Khám tại chi nhánh" thì có đủ dịch vụ khám và thẩm mỹ | Mock | Chưa test |
-| KN-02 | CUSTOMER · khach@petcare.vn | 1) Mở `/appointments`; 2) Cuộn tới khối "Lịch khám tại nhà" | Khối h2 "Lịch khám tại nhà" có 4 thẻ sắp theo ngày khám giảm dần: Bim (Đã đặt, 2 ngày sau, 09:30), Tôm (Đã đặt, hôm nay, 16:30–17:00), Bim (Đã hủy), Mochi (Đã khám). Mỗi thẻ có mã lịch, tên dịch vụ "Khám tổng quát", tên thú, ngày, giờ, địa chỉ và dòng "Phí khám tại nhà 100.000 ₫, chốt lúc đặt lịch và thu tại chi nhánh sau buổi khám." | Mock | Chưa test |
-| KN-03 | CUSTOMER · khach@petcare.vn | 1) Mở `/booking`, bấm "Khám tại nhà"; 2) Chọn thú "Mochi", chi nhánh "PetCare Cầu Giấy" (chọn sẵn), dịch vụ "Khám tổng quát"; 3) "Ngày hẹn" chọn một ngày cách hôm nay từ 2 ngày, nhóm "Khung giờ" chọn một khung còn chỗ; 4) Bấm thẻ địa chỉ "Nguyễn Thu Trang" (ô "Số điện thoại liên hệ" tự điền); 5) Bấm "Xác nhận đặt lịch" | Hộp "Đặt lịch thành công!" với mô tả "Lịch khám tại nhà đã được giữ. Bác sĩ sẽ đến đúng ngày hẹn; bạn có thể đổi giờ hoặc hủy trong mục Lịch hẹn của tôi." và các dòng "Mã lịch hẹn", "Dịch vụ", "Thú cưng", "Chi nhánh", "Thời gian", "Địa chỉ" (địa chỉ của thẻ vừa chọn), "Phí khám tại nhà" (100.000 ₫). Lịch mới có ở khối "Lịch khám tại nhà" của `/appointments` với trạng thái "Đã đặt" | Mock + BE | Chưa test |
-| KN-04 | CUSTOMER · khach@petcare.vn | 1) Mở `/booking`, bấm "Khám tại nhà"; 2) Chọn thú, dịch vụ "Khám tổng quát", ngày và khung giờ nhưng KHÔNG chọn thẻ địa chỉ; 3) Bấm "Xác nhận đặt lịch" | Dòng đỏ: Vui lòng chọn địa chỉ khám tại nhà. Không có lịch mới | Mock + BE | Chưa test |
-| KN-05 | CUSTOMER · khach@petcare.vn | 1) Mở `/booking`, bấm "Khám tại nhà"; 2) Chọn thú "Tôm", dịch vụ "Tiêm phòng", ngày cách hôm nay từ 2 ngày, một khung giờ, thẻ địa chỉ bất kỳ; 3) Bấm "Xác nhận đặt lịch" | Dòng đỏ dưới biểu mẫu: Dịch vụ khám tại nhà phải là dịch vụ khám. Không có lịch mới | Mock + BE | Chưa test |
-| KN-06 | CUSTOMER · khach@petcare.vn | 1) Mở `/appointments`, khối "Lịch khám tại nhà"; 2) Ở thẻ "Đã đặt" của Bim bấm "Hủy lịch"; 3) Hộp "Hủy lịch hẹn": bấm "Xác nhận hủy" | Hộp đóng; thẻ đổi huy hiệu thành "Đã hủy" và hết nút "Đổi giờ", "Hủy lịch" | Mock + BE | Chưa test |
-| KN-07 | RECEPTIONIST · reception@store1.vn | Điều kiện: hôm nay còn ít nhất một khung chưa bắt đầu (buổi tối có thể hết khung). 1) Mở "Nghiệp vụ" › "Lịch hẹn" (`/admin/appointments`), bấm "Đặt lịch hộ"; 2) Hộp "Đặt lịch hộ khách": ô "Tìm khách theo SĐT hoặc họ tên" nhập "Nguyễn Thu Trang", bấm "Chọn" ở dòng khách đó; 3) Nhóm "Chọn thú cưng" bấm "Mochi · Mèo"; 4) Nhóm "Hình thức khám" bấm "Khám tại nhà"; 5) Ô "Dịch vụ" chọn "Khám tổng quát (Khám/Tiêm)", "Ngày hẹn" giữ hôm nay, chọn một khung chưa bắt đầu; 6) Ô "Địa chỉ khám tại nhà" nhập "21 Phố Huế, Hai Bà Trưng, Hà Nội"; giữ "Số điện thoại liên hệ" tự điền; 7) Bấm "Đặt lịch" | Hộp đóng; thông báo nổi "Đã đặt lịch tại nhà <mã> — Mochi, <giờ khám>"; dưới bảng "Lịch khám tại nhà ngày <dd/mm>" (ngày lọc hôm nay) có dòng mới: giờ hẹn, mã, Mochi, Khám tổng quát, địa chỉ vừa nhập, phí 100.000 ₫, trạng thái "Đã đặt" | Mock + BE | Chưa test |
-| KN-08 | RECEPTIONIST · reception@store1.vn | 1) Mở "Đặt lịch hộ" như KN-07 tới bước chọn thú, "Hình thức khám" › "Khám tại nhà", dịch vụ, khung giờ; 2) Để trống "Địa chỉ khám tại nhà"; 3) Bấm "Đặt lịch" | Hộp giữ nguyên, lỗi: Vui lòng nhập địa chỉ khám tại nhà. Không có lịch mới | Mock + BE | Chưa test |
-| KN-09 | RECEPTIONIST · reception@store1.vn | 1) Mở `/admin/appointments`, ô "Ngày hẹn" là hôm nay; 2) Cuộn xuống dưới bảng "Danh sách lịch hẹn" | Có mục "Lịch khám tại nhà ngày <dd/mm>" với bảng "Danh sách lịch khám tại nhà" (cột Giờ hẹn, Mã, Thú cưng, Dịch vụ, Địa chỉ, Phí, Trạng thái, Thao tác): lịch Tôm 16:30–17:00 "Đã đặt" phí 100.000 ₫ (và lịch Mochi nếu đã làm KN-07). Cột Thao tác chỉ có "Đổi giờ" / "Hủy" (khi lịch còn đổi, hủy được), KHÔNG có "Bắt đầu khám tại nhà" hay "Không gặp được khách". Các lịch tại nhà KHÔNG xuất hiện trong bảng "Danh sách lịch hẹn" phía trên | Mock | Chưa test |
-| KN-10 | SUPER_MANAGER · chuoi@petcare.vn | 1) Đăng nhập, mở `/admin/branches/1/services`; 2) Ở thẻ "Phí khám tại nhà" bỏ chọn "Nhận đặt lịch khám tại nhà"; 3) Bấm "Lưu phí khám tại nhà" | Thông báo "Đã lưu phí khám tại nhà: tắt" (dựng dữ liệu cho KN-11, KN-12) | Mock + BE | Chưa test |
-| KN-11 | CUSTOMER · khach@petcare.vn | Điều kiện: đã làm KN-10. 1) Mở `/booking`; 2) Bấm "Khám tại nhà" | Dòng đỏ "Chi nhánh này chưa nhận khám tại nhà. Chọn chi nhánh khác hoặc đặt khám tại chi nhánh."; không hiện dòng phí; nút "Xác nhận đặt lịch" bị khóa | Mock + BE | Chưa test |
-| KN-12 | RECEPTIONIST · reception@store1.vn | Điều kiện: đã làm KN-10. 1) Mở `/admin/appointments`, bấm "Đặt lịch hộ"; 2) Chọn khách, thú, bấm "Khám tại nhà" | Trong khối địa chỉ hiện lỗi đỏ "Chi nhánh này chưa bật khám tại nhà nên chưa đặt được."; nút "Đặt lịch" bị khóa | Mock + BE | Chưa test |
-| KN-13 | SUPER_MANAGER · chuoi@petcare.vn | Điều kiện: đã làm KN-10. 1) Mở `/admin/branches/1/services`; 2) Chọn lại "Nhận đặt lịch khám tại nhà", giữ phí 100000; 3) Bấm "Lưu phí khám tại nhà" | Thông báo "Đã lưu phí khám tại nhà: bật, 100.000 ₫"; `/booking` và hộp "Đặt lịch hộ" lại đặt được khám tại nhà (dọn dữ liệu) | Mock + BE | Chưa test |
-| KN-14 | VET · doctor@store1.vn | 1) Đăng nhập, mở `/staff/doctor` | Dưới "Hàng chờ của bạn" có khung "Khám tại nhà": ô "Ngày khám tại nhà" là hôm nay, bên phải "N chờ khám". Lịch hôm nay của chi nhánh 1 sắp theo giờ: "16:30" "Tôm" chip "Đã đặt", "Khám tổng quát", địa chỉ "12 Trần Thái Tông, Dịch Vọng Hậu, Hà Nội", dòng "<mã> · phí tại nhà 100.000 ₫"; mỗi lịch "Đã đặt" có hai nút "Bắt đầu khám tại nhà" và "Không gặp được khách". Lịch của chi nhánh 2 không hiện | Mock | Chưa test |
-| KN-15 | VET · doctor@store1.vn | Điều kiện: đã làm KN-03. 1) Ở khung "Khám tại nhà", ô "Ngày khám tại nhà" chọn ngày của lịch đặt ở KN-03 (cách hôm nay từ 2 ngày) | Dòng lịch Mochi "Đã đặt" hiện hai nút "Bắt đầu khám tại nhà" và "Không gặp được khách" nhưng bị khóa (mờ), kèm dòng "Chỉ bắt đầu hoặc ghi nhận được đúng ngày hẹn." | Mock + BE | Chưa test |
-| KN-16 | VET · doctor@store1.vn | 1) Mở `/staff/doctor`, ô "Ngày khám tại nhà" là hôm nay; 2) Ở dòng "Tôm" bấm "Bắt đầu khám tại nhà" (lần đầu, Tôm còn lượt chờ) | Dòng chữ đỏ ở cuối khung: Thú cưng đang có lượt khám chưa kết thúc. Lịch Tôm vẫn "Đã đặt" (mẫu dữ liệu: Tôm có lượt "Chờ" của BS. Minh Anh) | Mock | Chưa test |
-| KN-17 | RECEPTIONIST · reception@store1.vn | 1) Mở `/staff/reception`, chọn tab "Hàng chờ"; 2) Ở lượt của "Tôm" (trạng thái chờ) chọn mục "Hủy lượt"; 3) Hộp "Hủy lượt khách bỏ về": bấm "Xác nhận hủy lượt" | Thông báo nổi "Đã hủy lượt Tôm (<mã lượt>)."; lượt Tôm biến khỏi hàng chờ (dựng dữ liệu cho KN-18) | Mock | Chưa test |
-| KN-18 | VET · doctor@store1.vn | Điều kiện: đã làm KN-17. 1) Mở `/staff/doctor`; 2) Ở dòng "Tôm" của khung "Khám tại nhà" bấm "Bắt đầu khám tại nhà" | Thông báo nổi "Đã bắt đầu khám tại nhà cho Tôm."; bệnh án của lượt mới của Tôm mở ở khung bên phải; dòng lịch Tôm đổi chip thành "Đang khám" và hết hai nút; Order của lượt có dòng dịch vụ "Khám tổng quát" và dòng phí khám tại nhà 100.000 ₫ (theo mã, chưa xác nhận nhãn dòng trên giao diện) | Mock + BE | Chưa test |
-| KN-19 | VET · doctor@store1.vn | Điều kiện: đã làm KN-07 (lịch Mochi hôm nay còn "Đã đặt"). 1) Ở khung "Khám tại nhà", dòng "Mochi" bấm "Không gặp được khách"; 2) Hộp "Không gặp được khách" (mô tả "Mochi · <địa chỉ>. Lịch chuyển sang "Không gặp được khách" và tính vào hạn chế đặt online của khách."): để trống "Ghi chú"; 3) Bấm "Ghi nhận" | Hộp giữ nguyên, lỗi: Nhập ghi chú (đã gọi mấy lần, chờ bao lâu…). Lịch Mochi vẫn "Đã đặt" | Mock + BE | Chưa test |
-| KN-20 | VET · doctor@store1.vn | Điều kiện: như KN-19. Chạy sau các ca đặt lịch của khách (KN-03) vì ca này cộng một lần vi phạm BR-LH-09 cho khach@petcare.vn. 1) Tiếp KN-19: "Ghi chú" nhập "Gọi ba lần không ai nghe máy"; 2) Bấm "Ghi nhận" | Thông báo nổi "Đã ghi không gặp được khách của Mochi."; dòng Mochi đổi chip "Không gặp được khách" và hết hai nút | Mock + BE | Chưa test |
-| KN-21 | CUSTOMER · khach@petcare.vn | Điều kiện: đã làm KN-20. 1) Mở `/appointments`, khối "Lịch khám tại nhà" | Thẻ Mochi (hôm nay) huy hiệu "Không gặp được khách" kèm khung đỏ "Bác sĩ đến nhưng không gặp được bạn: tính vào hạn chế đặt lịch online." (nếu lần này đủ ngưỡng vi phạm, đầu trang có thể hiện thêm thông báo hạn chế đặt lịch online) | Mock + BE | Chưa test |
-| KN-22 | CUSTOMER · khach@petcare.vn | Điều kiện: đã làm KN-20. 1) Bấm chuông thông báo hoặc mở `/notifications` | Có tin "Bác sĩ chưa gặp được bạn tại địa chỉ khám tại nhà" với nội dung "Bác sĩ đến khám cho Mochi tại <địa chỉ> nhưng chưa gặp được bạn. Lịch <mã> được ghi nhận là không gặp được khách và tính vào số lần vi phạm đặt lịch online (BR-LH-09). Vui lòng liên hệ chi nhánh để đặt lại." (chữ do mock đặt) | Mock | Chưa test |
-| KN-23 | BRANCH_MANAGER · manager@store1.vn | 1) Đăng nhập; 2) Nhập thẳng `/staff/doctor` | Trang 403 với "Tài khoản manager@store1.vn (Quản lý chi nhánh) không được phép mở trang này." (không có khung "Khám tại nhà", không có nút bắt đầu) | Mock + BE | Chưa test |
-| KN-24 | RECEPTIONIST · reception@store1.vn | 1) Đăng nhập; 2) Nhập thẳng `/staff/doctor` | Trang 403 với "Tài khoản reception@store1.vn (Lễ tân) không được phép mở trang này." (lễ tân đặt hộ và xem lịch tại nhà ở `/admin/appointments` nhưng không bắt đầu khám được) | Mock + BE | Chưa test |
-| KN-25 | VET · doctor@store1.vn | 1) Đăng nhập; 2) Nhập thẳng `/admin/appointments` | Trang 403 với "Tài khoản doctor@store1.vn (Bác sĩ thú y) không được phép mở trang này." (bác sĩ không có nút "Đặt lịch hộ") | Mock + BE | Chưa test |
-| KN-26 | SUPER_MANAGER · chuoi@petcare.vn | 1) Đăng nhập; 2) Nhập thẳng `/staff/doctor` rồi `/admin/appointments` | Cả hai trang đều 403 với "Tài khoản chuoi@petcare.vn (Quản lý chuỗi) không được phép mở trang này." (quản lý chuỗi và quản trị hệ thống không có endpoint khám tại nhà nào; admin@petcare.vn cho kết quả như vậy) | Mock + BE | Chưa test |
-
 ## PT. Phẫu thuật (UC50)
 
 Nguồn: mock `FE/src/shared/api/mock/surgery.mock.ts` (dịch vụ phẫu thuật mẫu id 7001–7004 ở `clinical-shared.ts` và `catalog.mock.ts`); hợp đồng `docs/api/surgery-v1.md` (8 endpoint). ASSUMPTION quan trọng: A1 "VET phụ trách" là người được gán lượt; A2 phẫu thuật chưa có cam kết mà bắt đầu là 400 BR-KB-09 (không phải 409); A3 thiếu nội dung cam kết, kết quả, lý do là 400 BR-KB-09 / BR-KB-10 / BR-KB-11 (FE chặn trước bằng câu riêng); A7 chữ thông báo lễ tân do mock đặt; A8 dữ liệu mẫu không có phẫu thuật đang mở trên lượt thật.
@@ -252,7 +199,7 @@ Dữ liệu mẫu:
 - Lịch sử có sẵn nhưng không hiện ở màn hình chi nhánh 1: một phẫu thuật "Đã hoàn tất" (lượt đã xong), một "Đã hủy" (lượt đã xong) và một "Chờ cam kết" ở chi nhánh 2.
 - Tab "Phẫu thuật" của lễ tân ban đầu trống ("Không có phẫu thuật chờ cam kết").
 
-Đặt lại: xóa `petcare-mock-appointments` (kèm cờ `homeSeeded`), `petcare-mock-visit`, `petcare-mock-sales`, `petcare-mock-clinical` (bệnh án, đơn thuốc), `petcare-mock-surgery`, `petcare-mock-inpatient`, `petcare-mock-boarding`, `petcare-mock-pets`, `petcare-mock-fees`, `petcare-mock-care` (thông báo). Xóa CÙNG LÚC cả bộ này: mã lượt khám cấp lại từ đầu (lượt 2002 cố định, lượt mới từ 3001) nên phẫu thuật, ca nội trú và bệnh án khóa theo mã lượt sẽ gắn nhầm vào lượt mới nếu chỉ xóa một khóa. Riêng PT dùng `petcare-mock-surgery` làm khóa chính.
+Đặt lại: xóa `petcare-mock-appointments` , `petcare-mock-visit`, `petcare-mock-sales`, `petcare-mock-clinical` (bệnh án, đơn thuốc), `petcare-mock-surgery`, `petcare-mock-inpatient`, `petcare-mock-boarding`, `petcare-mock-pets`, `petcare-mock-fees`, `petcare-mock-care` (thông báo). Xóa CÙNG LÚC cả bộ này: mã lượt khám cấp lại từ đầu (lượt 2002 cố định, lượt mới từ 3001) nên phẫu thuật, ca nội trú và bệnh án khóa theo mã lượt sẽ gắn nhầm vào lượt mới nếu chỉ xóa một khóa. Riêng PT dùng `petcare-mock-surgery` làm khóa chính.
 
 | Mã | Vai trò · tài khoản | Bước | Mong đợi | Áp dụng | J |
 |---|---|---|---|---|---|
@@ -293,7 +240,7 @@ Dữ liệu mẫu:
 - Lưu trú mẫu chi nhánh 1 đang "Đã nhận" (CHECKED_IN): Cốm ở chuồng C-01, Mực ở chuồng C-02: nguồn "Từ đặt chỗ lưu trú".
 - Dịch vụ nội trú chi nhánh 1 trong ô chọn: "Nội trú điều trị (theo ngày)" 350.000 ₫, "Nội trú chăm sóc đặc biệt (theo ngày)" 600.000 ₫ và "Nội trú theo dõi (chi nhánh 2)" (chỉ bật ở chi nhánh 2 nhưng vẫn liệt kê); "Nội trú cũ (ngừng kinh doanh)" không liệt kê.
 
-Đặt lại: xóa `petcare-mock-appointments` (kèm cờ `homeSeeded`), `petcare-mock-visit`, `petcare-mock-sales`, `petcare-mock-clinical` (bệnh án, đơn thuốc), `petcare-mock-surgery`, `petcare-mock-inpatient`, `petcare-mock-boarding`, `petcare-mock-pets`, `petcare-mock-fees`, `petcare-mock-care` (thông báo). Xóa CÙNG LÚC cả bộ này: mã lượt khám cấp lại từ đầu (lượt 2002 cố định, lượt mới từ 3001) nên phẫu thuật, ca nội trú và bệnh án khóa theo mã lượt sẽ gắn nhầm vào lượt mới nếu chỉ xóa một khóa. Riêng NT dùng `petcare-mock-inpatient` làm khóa chính; `petcare-mock-pets` giữ cân nặng ghi từ theo dõi, `petcare-mock-boarding` giữ đặt chỗ lưu trú và chuồng.
+Đặt lại: xóa `petcare-mock-appointments` , `petcare-mock-visit`, `petcare-mock-sales`, `petcare-mock-clinical` (bệnh án, đơn thuốc), `petcare-mock-surgery`, `petcare-mock-inpatient`, `petcare-mock-boarding`, `petcare-mock-pets`, `petcare-mock-fees`, `petcare-mock-care` (thông báo). Xóa CÙNG LÚC cả bộ này: mã lượt khám cấp lại từ đầu (lượt 2002 cố định, lượt mới từ 3001) nên phẫu thuật, ca nội trú và bệnh án khóa theo mã lượt sẽ gắn nhầm vào lượt mới nếu chỉ xóa một khóa. Riêng NT dùng `petcare-mock-inpatient` làm khóa chính; `petcare-mock-pets` giữ cân nặng ghi từ theo dõi, `petcare-mock-boarding` giữ đặt chỗ lưu trú và chuồng.
 
 | Mã | Vai trò · tài khoản | Bước | Mong đợi | Áp dụng | J |
 |---|---|---|---|---|---|
@@ -643,25 +590,23 @@ Không đưa vào ca vì giao diện không tới được: 400 BR-KB-13 "dòng 
 
 ## PH. Phí và định mức (UC32)
 
-Nguồn: mock `FE/src/shared/api/mock/fees.mock.ts`; hợp đồng `docs/api/fees-v1.md` + `openapi/fees-v1.yaml` (6 endpoint, BE chưa cài). ASSUMPTION quan trọng của mock: A1 thứ tự kiểm 401, 400 sai kiểu, 400 body thiếu trường, 403 vai trò, 404, 400 BR-SP; A2 `PUT /shipping-fee-config` số âm hoặc thập phân là 400 BR-SP-08, chuỗi / boolean là MALFORMED_REQUEST; A4 `GET /branches/{id}/home-visit-fee` trả 403 cho BRANCH_MANAGER đúng yaml (chỉ SUPER_MANAGER, CUSTOMER, RECEPTIONIST và VET của chính chi nhánh đọc được); A5 `PUT material-norms` kiểm từng dòng (sản phẩm không có hoặc là vaccine, số lượng < 1) trước, rồi mới tới trùng sản phẩm; A6 dữ liệu mẫu; A7 không mô phỏng audit (BR-SP-11).
+Nguồn: mock `FE/src/shared/api/mock/fees.mock.ts`; hợp đồng `docs/api/fees-v1.md` + `openapi/fees-v1.yaml` (4 endpoint, BE chưa cài). ASSUMPTION quan trọng của mock: A1 thứ tự kiểm 401, 400 sai kiểu, 400 body thiếu trường, 403 vai trò, 404, 400 BR-SP; A2 `PUT /shipping-fee-config` số âm hoặc thập phân là 400 BR-SP-08, chuỗi / boolean là MALFORMED_REQUEST; A5 `PUT material-norms` kiểm từng dòng (sản phẩm không có hoặc là vaccine, số lượng < 1) trước, rồi mới tới trùng sản phẩm; A6 dữ liệu mẫu; A7 không mô phỏng audit (BR-SP-11).
 
 ### Màn hình
 
 | UC | Route | Vai trò thấy | `<h1>` / tiêu đề | Vào từ đâu |
 |---|---|---|---|---|
 | UC32 | `/admin/catalog/fees` | SUPER_MANAGER | "Sản phẩm & dịch vụ", tab "Phí & định mức" (thẻ "Phí vận chuyển" và "Định mức vật tư theo dịch vụ") | Menu "Sản phẩm & dịch vụ", tab "Phí & định mức" |
-| UC32 | `/admin/branches/:branchId/services` | SUPER_MANAGER (khối "Phí khám tại nhà"); BRANCH_MANAGER vào được tab nhưng không có khối này | `<h1>` là tên chi nhánh kèm nhãn trạng thái; khối "Phí khám tại nhà" | Menu "Chi nhánh", nút "Cấu hình (tên chi nhánh)", tab "Dịch vụ" |
 
 ### Dữ liệu mẫu
 
 - Phí vận chuyển toàn chuỗi: phí cơ bản 30.000 ₫, miễn phí từ tiền hàng 500.000 ₫.
-- Phí khám tại nhà theo chi nhánh: "PetCare Cầu Giấy" (chi nhánh 1) đang BẬT, 100.000 ₫; "PetCare Hà Đông" (chi nhánh 2) đang TẮT nhưng còn lưu 80.000 ₫; "PetCare Long Biên" (chi nhánh 3) chưa cấu hình (hiện tắt, phí 0).
 - Định mức vật tư mẫu: "Khám tổng quát" gồm Amoxicillin 250mg x 2 viên và Vitamin tổng hợp PetCare x 1 lọ; "Cắt tỉa lông" gồm Pate Whiskas 85g x 1 gói; các dịch vụ còn lại (kể cả "Tắm & sấy", "Tiêm phòng") chưa có định mức. Sản phẩm được chọn vào định mức: Hạt Royal Canin Mini Adult 2kg (túi), Pate Whiskas 85g (gói), Amoxicillin 250mg (viên), Vitamin tổng hợp PetCare (lọ); vaccine không được chọn; "Vòng cổ size S" đã ngừng kinh doanh nên không có trong danh sách.
 - Các ca sửa định mức dưới đây chỉ làm trên dịch vụ "Tắm & sấy", KHÔNG sửa "Khám tổng quát" (nhóm VT dùng định mức của dịch vụ đó).
 
 ### Đặt lại
 
-Xóa `petcare-mock-fees` (phí vận chuyển, phí khám tại nhà, định mức). Các ca PH-20 và PH-21 kiểm tra vai trò nên không cần đặt lại.
+Xóa `petcare-mock-fees` (phí vận chuyển, định mức). Các ca PH-20 và PH-21 kiểm tra vai trò nên không cần đặt lại.
 
 ### Ca kiểm thử
 
@@ -680,17 +625,11 @@ Xóa `petcare-mock-fees` (phí vận chuyển, phí khám tại nhà, định m�
 | PH-11 | SUPER_MANAGER · chuoi@petcare.vn | [UC32] Điều kiện: đã chạy PH-10 (Pate Whiskas là dòng 1 của "Tắm & sấy"). 1) Đổi "Số lượng Pate Whiskas 85g" thành 0; 2) bấm "Lưu định mức" | Báo đỏ "Dòng 1: số lượng Pate Whiskas 85g phải là số nguyên từ 1 trở lên" (400 BR-SP-10); định mức đã lưu không đổi (nạp lại dịch vụ vẫn 3 gói) | Mock + BE | Chưa test |
 | PH-12 | SUPER_MANAGER · chuoi@petcare.vn | [UC32] Điều kiện: đã chạy PH-10. 1) Xóa trắng "Số lượng Pate Whiskas 85g"; 2) bấm "Lưu định mức" | Báo đỏ "Nhập số lượng cho Pate Whiskas 85g." (chặn ở FE, không gọi API) | Mock + BE | Chưa test |
 | PH-13 | SUPER_MANAGER · chuoi@petcare.vn | [UC32] Điều kiện: đã chạy PH-10. 1) Bấm "Bỏ Pate Whiskas 85g" và "Bỏ Vitamin tổng hợp PetCare"; 2) bấm "Lưu định mức" | Sau bước 1 hiện lại "Dịch vụ này chưa có định mức vật tư."; thông báo "Đã xóa hết định mức vật tư của dịch vụ."; chọn lại dịch vụ vẫn rỗng | Mock + BE | Chưa test |
-| PH-14 | SUPER_MANAGER · chuoi@petcare.vn | [UC32] 1) Menu "Chi nhánh"; 2) bấm "Cấu hình PetCare Cầu Giấy"; 3) bấm tab "Dịch vụ" | URL `/admin/branches/1/services` (từ `/admin/branches/1/hours`); khối "Phí khám tại nhà" có hộp tick "Nhận đặt lịch khám tại nhà" đang tick, ô "Phí khám tại nhà (VND)" = 100000; nút "Lưu phí khám tại nhà" vô hiệu cho tới khi sửa | Mock | Chưa test |
-| PH-15 | SUPER_MANAGER · chuoi@petcare.vn | [UC32] 1) Chi nhánh "PetCare Hà Đông", tab "Dịch vụ"; 2) tick "Nhận đặt lịch khám tại nhà" (phí giữ 80000); 3) bấm "Lưu phí khám tại nhà" | Trước khi tick: hộp trống, phí 80000 (cấu hình cũ được giữ); thanh thông báo xanh "Đã lưu phí khám tại nhà: bật, 80.000 ₫" | Mock | Chưa test |
-| PH-16 | SUPER_MANAGER · chuoi@petcare.vn | [UC32] 1) Chi nhánh "PetCare Cầu Giấy", tab "Dịch vụ"; 2) bỏ tick "Nhận đặt lịch khám tại nhà"; 3) bấm "Lưu phí khám tại nhà" | Thông báo "Đã lưu phí khám tại nhà: tắt"; tải lại trang vẫn bỏ tick (chi nhánh không còn nhận đặt lịch khám tại nhà, BR-SP-09) | Mock + BE | Chưa test |
-| PH-17 | SUPER_MANAGER · chuoi@petcare.vn | [UC32] 1) Chi nhánh "PetCare Cầu Giấy", tab "Dịch vụ"; 2) nhập phí -1000; 3) bấm "Lưu phí khám tại nhà" | Thanh thông báo đỏ "Phí khám tại nhà phải là số nguyên từ 0 trở lên" (400 BR-SP-09); phí đã lưu trước đó không đổi | Mock + BE | Chưa test |
-| PH-18 | SUPER_MANAGER · chuoi@petcare.vn | [UC32] 1) Chi nhánh "PetCare Long Biên", tab "Dịch vụ" | Chi nhánh chưa cấu hình: hộp "Nhận đặt lịch khám tại nhà" không tick, ô "Phí khám tại nhà (VND)" = 0 (đọc `enabled = false`, `fee = 0`) | Mock + BE | Chưa test |
-| PH-19 | BRANCH_MANAGER · manager@store1.vn | [UC32] 1) Menu "Chi nhánh" (mở thẳng cấu hình chi nhánh mình); 2) bấm tab "Dịch vụ" | Các tab chỉ gồm "Giờ mở cửa", "Ngày nghỉ", "Dịch vụ", "Quota lịch hẹn" (không có "Tạm ngừng / đóng cửa"); tab "Dịch vụ" KHÔNG có khối "Phí khám tại nhà". Giao diện không gọi GET phí khám tại nhà với vai này nên không thấy lỗi trên màn hình; 403 ACCESS_DENIED "Không có quyền thực hiện thao tác này" của `GET /branches/{id}/home-visit-fee` chỉ quan sát được khi gọi API trực tiếp (BE thật), mock đã có ma trận vai trò ở `fees.mock.test.ts` | Mock + BE | Chưa test |
+| PH-19 | BRANCH_MANAGER · manager@store1.vn | [UC32] 1) Menu "Chi nhánh" (mở thẳng cấu hình chi nhánh mình); 2) bấm tab "Dịch vụ" | Các tab chỉ gồm "Giờ mở cửa", "Ngày nghỉ", "Dịch vụ", "Quota lịch hẹn" (không có "Tạm ngừng / đóng cửa"); tab "Dịch vụ" chỉ có danh sách dịch vụ của chi nhánh | Mock + BE | Chưa test |
 | PH-20 | BRANCH_MANAGER · manager@store1.vn | [UC32] 1) Tìm "Sản phẩm & dịch vụ" trong menu; 2) gõ thẳng `/admin/catalog/fees` | Menu không có "Sản phẩm & dịch vụ"; bước 2 hiện trang 403 "Bạn không có quyền vào trang này" kèm "Tài khoản manager@store1.vn (Quản lý chi nhánh) không được phép mở trang này." | Mock + BE | Chưa test |
 | PH-21 | ADMIN · admin@petcare.vn | [UC32] 1) Gõ thẳng `/admin/catalog/fees`; 2) gõ thẳng `/admin/branches/1/services` | Cả hai hiện trang 403 "Bạn không có quyền vào trang này" (ADMIN chỉ quản trị kỹ thuật, không cấu hình phí) | Mock + BE | Chưa test |
-| PH-22 | SUPER_MANAGER · chuoi@petcare.vn | [UC32] 1) Chi nhánh "PetCare Cầu Giấy", tab "Dịch vụ"; 2) xóa trắng ô "Phí khám tại nhà (VND)"; 3) bấm "Lưu phí khám tại nhà" | Lỗi ngay dưới ô "Phí khám tại nhà (VND)": "Vui lòng nhập phí khám tại nhà" (chặn ở FE, không gọi API; ô trống không bị đổi thành 0) | Mock + BE | Chưa test |
 
-Không đưa vào ca vì giao diện không tới được: 400 BR-SP-10 "sản phẩm là vaccine" và "trùng sản phẩm" (ô chọn đã loại), 404 dịch vụ hoặc chi nhánh không tồn tại, và tác động của phí lên đơn / lịch đã chốt (BR-SP-11) thuộc nhóm shop và lịch khám tại nhà.
+Không đưa vào ca vì giao diện không tới được: 400 BR-SP-10 "sản phẩm là vaccine" và "trùng sản phẩm" (ô chọn đã loại), 404 dịch vụ hoặc chi nhánh không tồn tại, và tác động của phí lên đơn / lịch đã chốt (BR-SP-11) thuộc nhóm shop.
 
 ## CN. Tạm ngừng, mở lại, đóng cửa chi nhánh (UC13)
 

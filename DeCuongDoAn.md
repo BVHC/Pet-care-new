@@ -44,12 +44,12 @@ Hệ thống có 8 tác nhân người (A01–A08) và 3 tác nhân hệ thống
 | Mã | Tác nhân | Vai trò chính | Số use case (GĐ1 + GĐ2) |
 |---|---|---|:---:|
 | A01 | Khách vãng lai (GUEST) | Chưa đăng nhập; xem thông tin công khai và đăng ký tài khoản. Muốn đặt lịch phải đăng ký hoặc nhờ lễ tân đặt hộ | 5 (5 + 0) |
-| A02 | Khách hàng (CUSTOMER) | Chủ thú cưng đã có tài khoản, chỉ truy cập dữ liệu của chính mình: hồ sơ cá nhân và thú cưng, đặt lịch, đặt chỗ lưu trú, hồ sơ sức khỏe, feedback; mua hàng và thanh toán online, đặt lịch khám tại nhà, khiếu nại, bình luận bài viết | 24 (17 + 7) |
+| A02 | Khách hàng (CUSTOMER) | Chủ thú cưng đã có tài khoản, chỉ truy cập dữ liệu của chính mình: hồ sơ cá nhân và thú cưng, đặt lịch, đặt chỗ lưu trú, hồ sơ sức khỏe, feedback; mua hàng và thanh toán online, khiếu nại, bình luận bài viết | 23 (17 + 6) |
 | A03 | Quản trị hệ thống (ADMIN) | Quản trị kỹ thuật: tài khoản SUPER_MANAGER, khóa/mở khóa người dùng, tham số cấu hình, mẫu thông báo, nhật ký audit; không tham gia nghiệp vụ phòng khám, bán hàng | 10 (10 + 0) |
-| A04 | Quản lý chuỗi (SUPER_MANAGER) | Quản lý cấp chuỗi, phạm vi mọi chi nhánh: chi nhánh (gồm tạm ngừng, đóng cửa), danh mục sản phẩm – dịch vụ, phí vận chuyển và phí khám tại nhà, tài khoản nhân viên, nội dung trang, bài viết (gồm duyệt bài của bác sĩ), feedback, khiếu nại, báo cáo toàn chuỗi | 19 (16 + 3) |
+| A04 | Quản lý chuỗi (SUPER_MANAGER) | Quản lý cấp chuỗi, phạm vi mọi chi nhánh: chi nhánh (gồm tạm ngừng, đóng cửa), danh mục sản phẩm – dịch vụ, phí vận chuyển, tài khoản nhân viên, nội dung trang, bài viết (gồm duyệt bài của bác sĩ), feedback, khiếu nại, báo cáo toàn chuỗi | 19 (16 + 3) |
 | A05 | Quản lý chi nhánh (BRANCH_MANAGER) | Quản lý một chi nhánh: nhân viên cấp dưới, ca làm việc và nghỉ phép, giờ mở cửa, quota lịch hẹn, dịch vụ tại chi nhánh, chuồng, kho (gồm chuyển kho, kiểm kê, truy vết lô), duyệt trả hàng, gộp hồ sơ khách trùng, đối soát ca thu ngân, feedback, khiếu nại và báo cáo chi nhánh | 29 (20 + 9) |
-| A06 | Lễ tân kiêm thu ngân (RECEPTIONIST) | Đầu mối vận hành hằng ngày tại quầy: hồ sơ khách, lịch hẹn, tiếp nhận, hàng đợi, bán hàng, thu tiền, nhận/trả thú lưu trú, Care Task; xử lý và giao đơn online, tạo yêu cầu trả hàng, lập cam kết phẫu thuật, tạo khiếu nại thay khách | 30 (23 + 7) |
-| A07 | Bác sĩ thú y (VET) | Khám, chẩn đoán, kê đơn, tiêm chủng, hẹn tái khám, bổ sung bệnh án, ghi nhật ký chăm sóc; phẫu thuật, khám tại nhà, điều trị nội trú, viết bài chuyên môn, truy vết lô; có hồ sơ giới thiệu công khai | 22 (14 + 8) |
+| A06 | Lễ tân kiêm thu ngân (RECEPTIONIST) | Đầu mối vận hành hằng ngày tại quầy: hồ sơ khách, lịch hẹn, tiếp nhận, hàng đợi, bán hàng, thu tiền, nhận/trả thú lưu trú, Care Task; xử lý và giao đơn online, tạo yêu cầu trả hàng, lập cam kết phẫu thuật, tạo khiếu nại thay khách | 29 (23 + 6) |
+| A07 | Bác sĩ thú y (VET) | Khám, chẩn đoán, kê đơn, tiêm chủng, hẹn tái khám, bổ sung bệnh án, ghi nhật ký chăm sóc; phẫu thuật, điều trị nội trú, viết bài chuyên môn, truy vết lô; có hồ sơ giới thiệu công khai | 21 (14 + 7) |
 | A08 | Nhân viên chăm sóc (CARETAKER) | Dịch vụ thẩm mỹ (tắm, cắt tỉa), nhận thú lưu trú, ghi nhật ký chăm sóc; chỉ được xem bệnh án | 15 (13 + 2) |
 | S01 | Hệ thống (System) | Tự chạy tác vụ định kỳ và tác vụ theo sự kiện: nhắc lịch, trừ kho, cảnh báo tồn kho, tự chốt ca, sinh Care Task, xử lý đơn online quá hạn, leo thang khiếu nại | 21 tác vụ (12 + 9) |
 | S02 | Cổng thanh toán (Payment Gateway) | Xử lý thanh toán và hoàn tiền trực tuyến qua VNPay, ZaloPay hoặc MoMo | GĐ2: 1 use case, 3 tác vụ |
@@ -65,7 +65,7 @@ Phạm vi đồ án gồm toàn bộ 18 module nghiệp vụ trong bộ đặc t
   + Tầng 1 (12 module): Tài khoản & xác thực (TK), Quản trị hệ thống (QT), Chi nhánh (CN), Thông tin công khai (CK), Khách hàng & thú cưng (KH), Sản phẩm & dịch vụ (SP), Lịch hẹn (LH), Tiếp nhận & hàng đợi (TN), Khám & điều trị (KB), Bán hàng & đơn hàng (BH), Thu ngân (TG), Chăm sóc khách hàng & thông báo (TB).
   + Tầng 2 (5 module): Lưu trú (LT), Kho (KO), Bài viết (BV), Feedback (DG), Báo cáo (BC).
 - **Giai đoạn 2 – GĐ2 (11–12/2026):** các use case tầng 3 và phân hệ trí tuệ nhân tạo. Tầng 3 hiện mới được đặc tả ở mức use case; đầu giai đoạn 2, nhóm bổ sung quy tắc nghiệp vụ, máy trạng thái, mô hình dữ liệu và API trước khi cài đặt.
-  + Tầng 3: phân hệ Nhân sự (NS) và phần mở rộng của 10 module – thương mại điện tử và thanh toán trực tuyến, trả hàng – hoàn tiền, khám tại nhà, phẫu thuật, điều trị nội trú, chuyển kho, kiểm kê, truy vết lô, khiếu nại, bài viết của bác sĩ và bình luận, tạm ngừng/đóng cửa chi nhánh, gộp hồ sơ khách trùng.
+  + Tầng 3: phân hệ Nhân sự (NS) và phần mở rộng của 9 module – thương mại điện tử và thanh toán trực tuyến, trả hàng – hoàn tiền, phẫu thuật, điều trị nội trú, chuyển kho, kiểm kê, truy vết lô, khiếu nại, bài viết của bác sĩ và bình luận, tạm ngừng/đóng cửa chi nhánh, gộp hồ sơ khách trùng.
   + Phân hệ trí tuệ nhân tạo: chatbot tư vấn sức khỏe – dinh dưỡng và hệ thống gợi ý cá nhân hóa.
 
 **Quy mô đặc tả:**
@@ -93,10 +93,10 @@ Phạm vi đồ án gồm toàn bộ 18 module nghiệp vụ trong bộ đặc t
 | CN | Chi nhánh | 1 | A04 (UC12); A05 với chi nhánh mình (UC14) | A01, A02 xem chi nhánh (UC15) | A04 tạm ngừng / đóng cửa chi nhánh (UC13) |
 | CK | Thông tin công khai | 1 | A04 (UC21) | A01, A02 xem thông tin công khai (UC15–UC17); A07 cập nhật hồ sơ giới thiệu công khai (UC06) | — |
 | KH | Khách hàng & thú cưng | 1 | A06 (UC22, UC24, UC26) | A02 quản lý thú cưng của mình, xem hồ sơ sức khỏe (UC24, UC25); A06, A07, A08 tra cứu (UC23) | A05 gộp hồ sơ khách trùng (UC27) |
-| SP | Sản phẩm & dịch vụ | 1 | A04 (UC28–UC31) | A05 bật/tắt dịch vụ tại chi nhánh (UC33); A01, A02 xem (UC15, UC16) | A04 cấu hình phí vận chuyển, phí khám tại nhà (UC32) và định mức vật tư của dịch vụ (UC30) |
-| LH | Lịch hẹn | 1 | A06 (UC39, UC40); A05 thiết lập quota (UC42) | A02 tự đặt, đổi, hủy lịch (UC39, UC40); S01 nhắc lịch, chuyển lịch sang không đến – NO_SHOW (ST03, ST05) | A02, A06 đặt lịch khám tại nhà (UC43) |
+| SP | Sản phẩm & dịch vụ | 1 | A04 (UC28–UC31) | A05 bật/tắt dịch vụ tại chi nhánh (UC33); A01, A02 xem (UC15, UC16) | A04 cấu hình phí vận chuyển (UC32) và định mức vật tư của dịch vụ (UC30) |
+| LH | Lịch hẹn | 1 | A06 (UC39, UC40); A05 thiết lập quota (UC42) | A02 tự đặt, đổi, hủy lịch (UC39, UC40); S01 nhắc lịch, chuyển lịch sang không đến – NO_SHOW (ST03, ST05) | — |
 | TN | Tiếp nhận & hàng đợi | 1 | A06 (UC44, UC45, UC47) | A05 gán lại lượt đã gọi (UC45); A07, A08 xem hàng đợi và gọi lượt (UC46); A07 xác định ca cấp cứu (UC47) | — |
-| KB | Khám & điều trị | 1 | A07 (UC48, UC49, UC53) | A08 thực hiện dịch vụ thẩm mỹ, xem bệnh án (UC52, UC53); A02 xem hồ sơ sức khỏe (UC25) | A07 phẫu thuật (UC50, A06 lập cam kết), khám tại nhà (UC51); S01 trừ vật tư tiêu hao (ST07) |
+| KB | Khám & điều trị | 1 | A07 (UC48, UC49, UC53) | A08 thực hiện dịch vụ thẩm mỹ, xem bệnh án (UC52, UC53); A02 xem hồ sơ sức khỏe (UC25) | A07 phẫu thuật (UC50, A06 lập cam kết); S01 trừ vật tư tiêu hao (ST07) |
 | LT | Lưu trú & nội trú | 2 | A05 quản lý chuồng (UC54); A06 đặt chỗ, nhận/trả thú (UC58, UC59) | A02 đặt chỗ, xem nhật ký (UC58, UC60); A08 nhận thú, ghi nhật ký (UC59, UC57); A07 ghi nhật ký (UC57); S01 (ST05, ST15) | A07 nhập/xuất viện (UC55), điều trị nội trú (UC56) |
 | BH | Bán hàng & đơn hàng | 1 | A06 (UC66, UC67) | A05 hủy Order khách không thanh toán (UC66); A07, A08 thêm dịch vụ, thuốc vào Order (UC67) | A02 giỏ hàng, đặt hàng, thanh toán online, đơn hàng của tôi (UC61–UC64, cùng S02); A06 xử lý và giao đơn online (UC65), tạo yêu cầu trả hàng (UC68); A05 duyệt trả hàng (UC69); S01 (ST09–ST12, ST21) |
 | TG | Thu ngân | 1 | A06 (UC70, UC71) | A05 đối soát ca (UC72); S01 tự chốt ca (ST13) | S01, S02 đối soát cổng thanh toán (ST14) |
@@ -121,7 +121,7 @@ Chức năng ghi *(GĐ2)* thực hiện ở giai đoạn 2 (11–12/2026); các 
   + Quản lý chi nhánh: thông tin, kích hoạt, giờ mở cửa (tối đa 2 khoảng mỗi ngày), ngày nghỉ, chi nhánh nhận cấp cứu ngoài giờ.
   + Quản lý danh mục dùng chung toàn chuỗi: sản phẩm (thuốc kê đơn, hàng có hạn dùng), dịch vụ khám/tiêm, thẩm mỹ, lưu trú (loại chuồng), loại vaccine và phác đồ tiêm chủng theo loài.
   + Bật/tắt dịch vụ tại từng chi nhánh và cấu hình số lịch hẹn tối đa (quota) theo nhóm dịch vụ, khung giờ.
-  + *(GĐ2)* Tạm ngừng hoặc đóng cửa chi nhánh kèm chuyển giao công việc tồn đọng; cấu hình phí vận chuyển, phí khám tại nhà và định mức vật tư tiêu hao của dịch vụ.
+  + *(GĐ2)* Tạm ngừng hoặc đóng cửa chi nhánh kèm chuyển giao công việc tồn đọng; cấu hình phí vận chuyển và định mức vật tư tiêu hao của dịch vụ.
 - **Phân hệ Khách hàng và Hồ sơ thú cưng (Customer & Pet Profile):**
   + Quản lý hồ sơ khách hàng dùng chung toàn chuỗi (tạo khi đăng ký online hoặc tại quầy); tra cứu theo số điện thoại, họ tên, email, tên thú cưng; cảnh báo hồ sơ nghi trùng.
   + Quản lý thông tin thú cưng như loài, giống, ngày sinh, giới tính, cân nặng theo từng lần đo; đánh dấu thú đã mất, chuyển chủ thú cưng.
@@ -131,13 +131,12 @@ Chức năng ghi *(GĐ2)* thực hiện ở giai đoạn 2 (11–12/2026); các 
   + Cho phép khách hàng đặt lịch trực tuyến các dịch vụ khám bệnh, tiêm chủng, thẩm mỹ theo khung giờ 30 phút và chi nhánh; lễ tân đặt hộ tại quầy.
   + Quản lý vòng đời lịch hẹn từ khi đặt, đổi giờ, tiếp nhận đến khi hoàn thành, hủy hoặc không đến (NO_SHOW).
   + Kiểm soát quota theo khung giờ, giới hạn số lịch của mỗi thú cưng; hạn chế đặt online với khách nhiều lần không đến hoặc hủy muộn; nhắc lịch trước 24 giờ.
-  + *(GĐ2)* Đặt lịch khám tại nhà.
 - **Phân hệ Tiếp nhận, Khám chữa bệnh và Tiêm chủng (Reception, Clinical & Vaccination):**
   + Tiếp nhận khách có hẹn, khách không hẹn trước và ca cấp cứu; tự động tạo đơn (Order) cho mỗi lượt tiếp nhận.
   + Điều phối hàng đợi tại chi nhánh theo thứ tự ưu tiên cấp cứu → lịch hẹn → khách không hẹn; gán bác sĩ hoặc nhân viên chăm sóc phù hợp.
   + Quản lý khám bệnh và hồ sơ bệnh án điện tử (EMR): chẩn đoán, kê đơn có kiểm tra tồn kho, hẹn tái khám; bệnh án khóa khi hoàn tất, chỉ được bổ sung có ghi vết.
   + Tiêm chủng theo phác đồ và loại vaccine, tự trừ kho vaccine và tính ngày tái chủng; thực hiện dịch vụ thẩm mỹ (tắm, cắt tỉa).
-  + *(GĐ2)* Phẫu thuật (lập cam kết, thực hiện) phát sinh từ lượt khám; khám tại nhà; tự trừ vật tư tiêu hao theo định mức khi hoàn tất khám, thẩm mỹ.
+  + *(GĐ2)* Phẫu thuật (lập cam kết, thực hiện) phát sinh từ lượt khám; tự trừ vật tư tiêu hao theo định mức khi hoàn tất khám, thẩm mỹ.
 - **Phân hệ Bán hàng, Thu ngân và Đơn hàng (Retail POS, Cashier & Orders):**
   + Bán hàng tại quầy với đơn từ lượt khám, bán lẻ và lưu trú; chốt giá tại thời điểm bán, không bán lẻ thuốc kê đơn.
   + Thu tiền mặt hoặc chuyển khoản theo ca thu ngân của từng lễ tân, thu gộp nhiều đơn của cùng khách; chỉ giao hàng sau khi thanh toán; đối soát ca thu ngân.
@@ -177,7 +176,7 @@ Chức năng ghi *(GĐ2)* thực hiện ở giai đoạn 2 (11–12/2026); các 
 
 #### 2.2.5. Use case của từng tác nhân
 
-Phần này liệt kê toàn bộ 85 use case theo từng tác nhân; cột *Phạm vi quyền / ghi chú* nêu giới hạn theo quy tắc nghiệp vụ. Use case ghi *(GĐ2)* thuộc tầng 3, thực hiện ở giai đoạn 2; quy tắc chi tiết của các use case này được đặc tả bổ sung đầu giai đoạn 2.
+Phần này liệt kê toàn bộ 83 use case theo từng tác nhân; cột *Phạm vi quyền / ghi chú* nêu giới hạn theo quy tắc nghiệp vụ. Use case ghi *(GĐ2)* thuộc tầng 3, thực hiện ở giai đoạn 2; quy tắc chi tiết của các use case này được đặc tả bổ sung đầu giai đoạn 2.
 
 ##### Use case chung của mọi người dùng đã có tài khoản (A02–A08)
 
@@ -202,7 +201,7 @@ Phần này liệt kê toàn bộ 85 use case theo từng tác nhân; cột *Ph�
 
 Muốn đặt lịch, khách vãng lai phải đăng ký tài khoản (UC01) hoặc nhờ lễ tân đặt hộ (UC39).
 
-##### A02 – Khách hàng (CUSTOMER) · 24 use case (GĐ1: 17, GĐ2: 7)
+##### A02 – Khách hàng (CUSTOMER) · 23 use case (GĐ1: 17, GĐ2: 6)
 
 Gồm 6 use case chung ở trên và các use case sau (chỉ trên dữ liệu của chính mình):
 
@@ -219,7 +218,6 @@ Gồm 6 use case chung ở trên và các use case sau (chỉ trên dữ liệu 
 | LT | UC58 | Đặt chỗ lưu trú theo loại chuồng | Đặt trước ≥ 1 ngày, xa nhất 60 ngày, từ 1 đến 30 đêm; hủy, gia hạn |
 | LT | UC60 | Xem lưu trú & nhật ký chăm sóc của thú cưng | Xem nhật ký ngay khi được ghi |
 | DG | UC83 | Gửi feedback | Không công khai; tối đa 5 feedback mỗi ngày; xem lại được nhưng không sửa, xóa |
-| LH | UC43 | Đặt lịch khám tại nhà | *(GĐ2)* Đặt lịch để bác sĩ đến khám tại nhà |
 | BH | UC61 | Quản lý giỏ hàng | *(GĐ2)* Thêm, sửa, xóa sản phẩm trong giỏ; không có thuốc kê đơn |
 | BH | UC62 | Đặt hàng online | *(GĐ2)* Chọn địa chỉ giao hàng từ sổ địa chỉ; hệ thống tính phí vận chuyển (ST09) |
 | BH | UC63 | Thanh toán online | *(GĐ2)* Thanh toán qua cổng thanh toán (S02) |
@@ -259,7 +257,7 @@ Gồm 6 use case chung ở trên và các use case sau (phạm vi mọi chi nhá
 | DG | UC84 | Xem & xử lý feedback | Mọi feedback, kể cả feedback không gắn chi nhánh |
 | BC | UC89 | Xem báo cáo | Toàn chuỗi, lọc theo chi nhánh |
 | CN | UC13 | Tạm ngừng / đóng cửa chi nhánh | *(GĐ2)* Gồm chuyển giao công việc tồn đọng |
-| SP | UC32 | Cấu hình phí vận chuyển & phí khám tại nhà | *(GĐ2)* Dùng khi đặt hàng online và đặt lịch khám tại nhà |
+| SP | UC32 | Cấu hình phí vận chuyển | *(GĐ2)* Dùng khi đặt hàng online |
 | DG | UC86 | Xử lý khiếu nại | *(GĐ2)* Cùng quản lý chi nhánh xử lý khiếu nại |
 
 Trường hợp đặc biệt: gán lại lượt đã gọi (UC45) khi chi nhánh không còn BRANCH_MANAGER đang hoạt động (BR-TN-08).
@@ -296,7 +294,7 @@ Gồm 6 use case chung ở trên và các use case sau (chỉ trên dữ liệu 
 
 Ngoài ra, quản lý chi nhánh được gỡ sớm hạn chế đặt online của khách (BR-LH-09) và nhận cảnh báo từ hệ thống: ca thu ngân tự chốt, Order chờ thanh toán quá hạn, tồn kho dưới ngưỡng và lô sắp hết hạn, thú quá hạn đón từ 7 ngày, hết chuồng khi nhận thú.
 
-##### A06 – Lễ tân kiêm thu ngân (RECEPTIONIST) · 30 use case (GĐ1: 23, GĐ2: 7)
+##### A06 – Lễ tân kiêm thu ngân (RECEPTIONIST) · 29 use case (GĐ1: 23, GĐ2: 6)
 
 Gồm 6 use case chung ở trên và các use case sau (tại chi nhánh mình):
 
@@ -321,13 +319,12 @@ Gồm 6 use case chung ở trên và các use case sau (tại chi nhánh mình):
 | TB | UC87 | Thực hiện Care Task | Gọi điện nhắc tái chủng, tái khám, quá hạn đón; ghi kết quả hoặc hủy kèm lý do |
 | NS | UC35 | Xem lịch làm việc của tôi | *(GĐ2)* Ca làm việc được phân |
 | NS | UC36 | Gửi / rút yêu cầu nghỉ, đổi ca | *(GĐ2)* Quản lý chi nhánh duyệt (UC37) |
-| LH | UC43 | Đặt lịch khám tại nhà | *(GĐ2)* Đặt hộ khách |
 | KB | UC50 | Phẫu thuật | *(GĐ2)* Lập cam kết phẫu thuật với khách |
 | BH | UC65 | Xử lý & giao đơn online | *(GĐ2)* Xử lý, bàn giao, cập nhật trạng thái, ghi nhận giao thất bại |
 | BH | UC68 | Tạo yêu cầu trả hàng | *(GĐ2)* Quản lý chi nhánh duyệt (UC69) |
 | DG | UC85 | Gửi & theo dõi khiếu nại | *(GĐ2)* Tạo khiếu nại thay khách |
 
-##### A07 – Bác sĩ thú y (VET) · 22 use case (GĐ1: 14, GĐ2: 8)
+##### A07 – Bác sĩ thú y (VET) · 21 use case (GĐ1: 14, GĐ2: 7)
 
 Gồm 6 use case chung ở trên (UC06 gồm hồ sơ giới thiệu công khai: ảnh, chuyên môn, mô tả ngắn) và các use case sau:
 
@@ -344,7 +341,6 @@ Gồm 6 use case chung ở trên (UC06 gồm hồ sơ giới thiệu công khai:
 | NS | UC35 | Xem lịch làm việc của tôi | *(GĐ2)* Ca làm việc được phân |
 | NS | UC36 | Gửi / rút yêu cầu nghỉ, đổi ca | *(GĐ2)* Quản lý chi nhánh duyệt (UC37) |
 | KB | UC50 | Phẫu thuật | *(GĐ2)* Phát sinh từ lượt khám (UC48); lễ tân lập cam kết |
-| KB | UC51 | Khám tại nhà | *(GĐ2)* Thực hiện lịch khám tại nhà (UC43) |
 | LT | UC55 | Nhập / xuất viện | *(GĐ2)* Gồm chuyển thú từ lưu trú sang điều trị |
 | LT | UC56 | Điều trị nội trú | *(GĐ2)* Ra y lệnh, theo dõi hậu phẫu |
 | KO | UC79 | Truy vết lô hàng | *(GĐ2)* Cùng quản lý chi nhánh |
@@ -509,8 +505,8 @@ Mục này phân công các thành viên nhóm phát triển phần mềm. Tác 
 | Thành viên | Use case bổ sung | Tác vụ tự động |
 |---|---|---|
 | Bùi Văn Hiến | Giao diện của toàn bộ chức năng giai đoạn 2, gồm chatbot và khu vực gợi ý | — |
-| Nguyễn Đức Mạnh | 12 use case: Nhân sự (UC34–UC38); đặt lịch và khám tại nhà (UC43, UC51); phẫu thuật (UC50); nhập/xuất viện, điều trị nội trú (UC55, UC56); khiếu nại (UC85, UC86) | ST07, ST16, ST17 |
-| Phạm Quang Dũng | 15 use case: thương mại điện tử và thanh toán online (UC61–UC65); trả hàng – hoàn tiền (UC68, UC69); tạm ngừng/đóng cửa chi nhánh (UC13); gộp hồ sơ khách (UC27); phí vận chuyển, phí khám tại nhà (UC32) và định mức vật tư (thuộc UC30); chuyển kho, kiểm kê, truy vết lô (UC77–UC79); bài viết của bác sĩ, bình luận (UC80, UC82) | ST09–ST12, ST14, ST21 |
+| Nguyễn Đức Mạnh | 10 use case: Nhân sự (UC34–UC38); phẫu thuật (UC50); nhập/xuất viện, điều trị nội trú (UC55, UC56); khiếu nại (UC85, UC86) | ST07, ST16, ST17 |
+| Phạm Quang Dũng | 15 use case: thương mại điện tử và thanh toán online (UC61–UC65); trả hàng – hoàn tiền (UC68, UC69); tạm ngừng/đóng cửa chi nhánh (UC13); gộp hồ sơ khách (UC27); phí vận chuyển (UC32) và định mức vật tư (thuộc UC30); chuyển kho, kiểm kê, truy vết lô (UC77–UC79); bài viết của bác sĩ, bình luận (UC80, UC82) | ST09–ST12, ST14, ST21 |
 | Cả nhóm | Phân hệ trí tuệ nhân tạo: chatbot tư vấn (RAG + LLM), gợi ý cá nhân hóa; đặc tả bổ sung quy tắc, máy trạng thái, mô hình dữ liệu, API cho tầng 3 | — |
 
 #### 2.4.3. Nhiệm vụ chi tiết của từng thành viên
@@ -530,7 +526,7 @@ Mục này phân công các thành viên nhóm phát triển phần mềm. Tác 
 - Cổng quản trị: chi nhánh (giờ mở cửa, ngày nghỉ, dịch vụ tại chi nhánh, quota); danh mục sản phẩm, dịch vụ, loại chuồng, loại vaccine và phác đồ; tài khoản nhân viên, khóa/mở khóa, tham số cấu hình, mẫu thông báo, nhật ký audit; kho (nhà cung cấp, phiếu nhập, tồn theo lô và hạn dùng, điều chỉnh tồn, tồn tối thiểu); chuồng lưu trú; đối soát ca thu ngân; nội dung trang và bài viết; feedback; báo cáo và dashboard.
 - Tích hợp và hoàn thiện: nối toàn bộ API thật của 2 backend; quản lý state và cache (React Query, Zustand); xử lý lỗi theo bộ mã lỗi chuẩn; tối ưu responsive; kiểm thử giao diện (Vitest, Playwright).
 - Vai trò nhóm trưởng: điều phối chung, theo dõi tiến độ, tổ chức tổng duyệt demo.
-- Giai đoạn 2: giao diện cửa hàng online (giỏ hàng, đặt hàng, thanh toán, đơn hàng của tôi), xử lý giao đơn và trả hàng; lịch làm việc, nghỉ phép; khám tại nhà, phẫu thuật, nội trú; chuyển kho, kiểm kê, truy vết lô; bài viết của bác sĩ, bình luận; khiếu nại; chatbot tư vấn và khu vực gợi ý dịch vụ, sản phẩm.
+- Giai đoạn 2: giao diện cửa hàng online (giỏ hàng, đặt hàng, thanh toán, đơn hàng của tôi), xử lý giao đơn và trả hàng; lịch làm việc, nghỉ phép; phẫu thuật, nội trú; chuyển kho, kiểm kê, truy vết lô; bài viết của bác sĩ, bình luận; khiếu nại; chatbot tư vấn và khu vực gợi ý dịch vụ, sản phẩm.
 
 **2. Nguyễn Đức Mạnh – B22DCCN521 — Backend 1 (BE-1): Định danh & luồng khám**
 
@@ -543,7 +539,7 @@ Mục này phân công các thành viên nhóm phát triển phần mềm. Tác 
 - **Khám & điều trị (KB):** bệnh án, chẩn đoán, ghi chú nội bộ, hoàn tất lượt theo loại dịch vụ, khóa bệnh án và bản bổ sung; dịch vụ thẩm mỹ; tiêm chủng (trừ kho FEFO qua dịch vụ kho, dòng Order vaccine, ngày tái chủng, xóa mũi ghi nhầm); kê đơn (thiếu tồn thì giảm số lượng hoặc mua ngoài); hẹn tái khám; cung cấp dữ liệu bệnh án, mũi tiêm cho hồ sơ sức khỏe và interface kiểm tra "đủ mũi bắt buộc" cho phân hệ Lưu trú.
 - **Chăm sóc khách hàng & thông báo (TB):** Care Task; nhắc tái chủng, tái khám (ST04); sinh Care Task (ST18); hủy Care Task khi thú mất (ST19); hủy nhắc khi thú đã tiêm lại hoặc đã đặt lịch khám.
 - Kiểm thử: integration test FSM Tài khoản, Lịch hẹn, Visit, Care Task (đủ cặp hợp lệ/không hợp lệ); nối thật các interface chéo; kiểm thử end-to-end luồng chính đặt lịch → tiếp nhận → khám/tiêm → Order → thu tiền → nhắc tái chủng.
-- Giai đoạn 2: phân hệ Nhân sự (ca làm việc, lịch làm việc, nghỉ phép – đổi ca, vắng đột xuất); đặt lịch và khám tại nhà; phẫu thuật; nhập/xuất viện và điều trị nội trú; khiếu nại, leo thang và tự đóng khiếu nại (ST16, ST17); trừ vật tư tiêu hao theo định mức (ST07).
+- Giai đoạn 2: phân hệ Nhân sự (ca làm việc, lịch làm việc, nghỉ phép – đổi ca, vắng đột xuất); phẫu thuật; nhập/xuất viện và điều trị nội trú; khiếu nại, leo thang và tự đóng khiếu nại (ST16, ST17); trừ vật tư tiêu hao theo định mức (ST07).
 
 **3. Phạm Quang Dũng – B22DCCN136 — Backend 2 (BE-2): Dữ liệu nền & thương mại**
 
@@ -558,7 +554,7 @@ Mục này phân công các thành viên nhóm phát triển phần mềm. Tác 
 - **Thông tin công khai, Bài viết, Feedback (CK, BV, DG):** API trang công khai (dịch vụ, chi nhánh, sản phẩm còn hàng theo chi nhánh), nội dung trang, chuyên mục và bài viết, feedback.
 - **Báo cáo (BC):** báo cáo chi nhánh và toàn chuỗi; mỗi module công bố số liệu tổng hợp của mình, module Báo cáo kiểm tra phạm vi, kỳ báo cáo và ghép kết quả.
 - Kiểm thử: integration test FSM Chi nhánh, Order, Ca thu ngân, Phiếu nhập kho, Đặt chỗ lưu trú, Chuồng; kiểm thử end-to-end luồng bán lẻ và luồng lưu trú.
-- Giai đoạn 2: thương mại điện tử (giỏ hàng, đặt hàng online, phí vận chuyển, xử lý và giao đơn); tích hợp cổng thanh toán VNPay, ZaloPay hoặc MoMo, hết hạn giao dịch, đối soát cổng; tự hủy đơn chưa thanh toán, tự xác nhận đã nhận hàng (ST09–ST12, ST14); trả hàng – hoàn tiền (ST21); chuyển kho, kiểm kê, truy vết lô; tạm ngừng/đóng cửa chi nhánh; gộp hồ sơ khách trùng; phí khám tại nhà, định mức vật tư; bài viết của bác sĩ và bình luận.
+- Giai đoạn 2: thương mại điện tử (giỏ hàng, đặt hàng online, phí vận chuyển, xử lý và giao đơn); tích hợp cổng thanh toán VNPay, ZaloPay hoặc MoMo, hết hạn giao dịch, đối soát cổng; tự hủy đơn chưa thanh toán, tự xác nhận đã nhận hàng (ST09–ST12, ST14); trả hàng – hoàn tiền (ST21); chuyển kho, kiểm kê, truy vết lô; tạm ngừng/đóng cửa chi nhánh; gộp hồ sơ khách trùng; định mức vật tư; bài viết của bác sĩ và bình luận.
 
 #### 2.4.4. Ranh giới phối hợp giữa các thành viên
 
@@ -579,7 +575,6 @@ Các điểm module của hai thành viên backend gọi nhau. Bên cung cấp c
 | Ngày nghỉ, thu hẹp giờ mở cửa | CN – Dũng (phát sự kiện) | LH – Mạnh; LT – Dũng | Hủy hàng loạt lịch hẹn, đặt chỗ bị ảnh hưởng và thông báo khách |
 | Báo cáo | BC – Dũng | `sales`, `inventory`, `content` – Dũng; `appointment`, `visit` – Mạnh | Mỗi module tính số liệu tổng hợp của mình; module Báo cáo chỉ ghép |
 | Trừ vật tư tiêu hao (GĐ2) | KB – Mạnh | SP, KO – Dũng | Hoàn tất khám, thẩm mỹ thì trừ kho vật tư theo định mức của dịch vụ |
-| Khám tại nhà (GĐ2) | LH, KB – Mạnh | SP – Dũng | Lấy phí khám tại nhà từ cấu hình phí |
 | Nhập viện từ lưu trú (GĐ2) | LT (nội trú) – Mạnh | LT (lưu trú) – Dũng | Chuyển thú đang lưu trú sang điều trị nội trú |
 
 Quy tắc phối hợp: bên gọi viết unit test trên interface (mock) mà không chờ bên cung cấp; bên cung cấp chưa cài đặt thì đưa lớp placeholder báo lỗi rõ ràng thay vì trả giá trị giả; mọi thay đổi chữ ký interface phải báo bên kia trước khi merge.
@@ -594,7 +589,7 @@ Quy tắc phối hợp: bên gọi viết unit test trên interface (mock) mà k
 | W3 – Luồng khám & bán hàng | 19–23/10/2026 | Hoàn thiện Lịch hẹn, Tiếp nhận & hàng đợi, Khám, Tiêm chủng | Bán lẻ, Thu ngân, Đặt chỗ lưu trú, Thông tin công khai – Bài viết – Feedback | Đặt lịch, bán lẻ tại quầy, thu ngân, hàng đợi, màn hình khám | M3 (23/10) |
 | W4 – Lưu trú, CSKH, Báo cáo | 26–29/10/2026 | Kê đơn, hẹn tái khám, Care Task và nhắc; test FSM, end-to-end luồng chính | Nhận/trả thú, nhật ký chăm sóc, Báo cáo, cảnh báo kho; test FSM, end-to-end | Kê đơn, trang công khai, nội dung, lưu trú, báo cáo; nối API thật toàn bộ | M4 (30/10): sẵn sàng demo |
 | Demo giai đoạn 1 | 30/10/2026 | Cả nhóm | Cả nhóm | Cả nhóm | Tổng duyệt demo GĐ1 |
-| GĐ2 – Tầng 3 & AI | 02/11–11/12/2026 | Đặc tả bổ sung; Nhân sự; đặt lịch và khám tại nhà, phẫu thuật; nội trú; khiếu nại; trừ vật tư tiêu hao; phân hệ AI (cả nhóm) | Đặc tả bổ sung; thương mại điện tử, thanh toán online, trả hàng – hoàn tiền; chuyển kho, kiểm kê, truy vết lô; chi nhánh, hồ sơ khách, bài viết mở rộng; phân hệ AI (cả nhóm) | Giao diện các chức năng GĐ2, chatbot và gợi ý | M5 (11/12): hoàn thành tầng 3 và AI |
+| GĐ2 – Tầng 3 & AI | 02/11–11/12/2026 | Đặc tả bổ sung; Nhân sự; phẫu thuật; nội trú; khiếu nại; trừ vật tư tiêu hao; phân hệ AI (cả nhóm) | Đặc tả bổ sung; thương mại điện tử, thanh toán online, trả hàng – hoàn tiền; chuyển kho, kiểm kê, truy vết lô; chi nhánh, hồ sơ khách, bài viết mở rộng; phân hệ AI (cả nhóm) | Giao diện các chức năng GĐ2, chatbot và gợi ý | M5 (11/12): hoàn thành tầng 3 và AI |
 | Hoàn thiện đồ án | 14–31/12/2026 | Cả nhóm | Cả nhóm | Cả nhóm | Kiểm thử tổng thể, hoàn thiện sản phẩm, viết báo cáo đồ án |
 
 ---
@@ -634,11 +629,11 @@ Quy tắc phối hợp: bên gọi viết unit test trên interface (mock) mà k
 
 | Hạng mục | Bản đề cương trước | Bản cập nhật |
 |---|---|---|
-| Căn cứ xác định phạm vi | 7 phân hệ chức năng, triển khai theo kế hoạch 25 module ban đầu | Bộ đặc tả nghiệp vụ v16: 18 module, 85 use case, 21 tác vụ tự động; giai đoạn 1 triển khai tầng 1–2 (17 module, 58 use case, 12 tác vụ), giai đoạn 2 triển khai tầng 3 (27 use case, 9 tác vụ) và phân hệ AI |
+| Căn cứ xác định phạm vi | 7 phân hệ chức năng, triển khai theo kế hoạch 25 module ban đầu | Bộ đặc tả nghiệp vụ v16: 18 module, 83 use case, 21 tác vụ tự động; giai đoạn 1 triển khai tầng 1–2 (17 module, 58 use case, 12 tác vụ), giai đoạn 2 triển khai tầng 3 (25 use case, 9 tác vụ) và phân hệ AI |
 | Tác nhân và use case | 5 vai trò: Khách hàng, Nhân viên, Kỹ thuật viên/Bác sĩ, Quản lý chi nhánh, Quản trị viên hệ thống | 8 tác nhân người (thêm Khách vãng lai, Quản lý chuỗi; tách "Nhân viên", "Kỹ thuật viên/Bác sĩ" thành Lễ tân kiêm thu ngân, Bác sĩ thú y, Nhân viên chăm sóc) và 3 tác nhân hệ thống; xác định tác nhân quản lý trực tiếp từng phân hệ (mục 2.2.3) và use case của từng tác nhân (mục 2.2.5) |
-| Nghiệp vụ bổ sung | — | Lưu trú (chuồng, đặt chỗ, nhật ký chăm sóc); thu ngân theo ca và đối soát; Care Task chăm sóc khách; nhắc tái khám; tiêm chủng theo loại vaccine và phác đồ; cấp cứu ngoài giờ; quota theo khung giờ; trang công khai, bài viết, feedback; giai đoạn 2: khám tại nhà, phẫu thuật, điều trị nội trú, kiểm kê, truy vết lô, khiếu nại, bình luận bài viết |
+| Nghiệp vụ bổ sung | — | Lưu trú (chuồng, đặt chỗ, nhật ký chăm sóc); thu ngân theo ca và đối soát; Care Task chăm sóc khách; nhắc tái khám; tiêm chủng theo loại vaccine và phác đồ; cấp cứu ngoài giờ; quota theo khung giờ; trang công khai, bài viết, feedback; giai đoạn 2: phẫu thuật, điều trị nội trú, kiểm kê, truy vết lô, khiếu nại, bình luận bài viết |
 | Chia giai đoạn | Không chia giai đoạn | Thanh toán trực tuyến (VNPay, ZaloPay, MoMo), giỏ hàng và đơn online, trả hàng – hoàn tiền, điều chuyển hàng giữa chi nhánh, lịch làm việc – phân ca nhân viên thực hiện ở giai đoạn 2 (11–12/2026) |
 | Loại khỏi phạm vi | Có trong phân công | Đa tổ chức (Organization), ủy quyền người chăm sóc (Caregiver), Consent & Break-Glass, khách hàng thân thiết – voucher – gói trả trước, quản lý sự cố (Incident), quy trình mua hàng PR/PO Maker-Checker, hóa đơn (Invoice) tách riêng (thay bằng Order và phiếu thu) |
 | Trí tuệ nhân tạo | Phân hệ dự kiến trong phạm vi | Giữ trong phạm vi, thực hiện ở giai đoạn 2 (cả nhóm) |
-| Phân công backend | BE-1: Auth, IAM, Tổ chức – Chi nhánh, Nhân sự, Lịch hẹn, Hàng đợi, Thông báo, Audit, Sự cố, Báo cáo. BE-2: Khách hàng – thú cưng, Khám bệnh, Tiêm chủng, Grooming, Danh mục, POS, Kho – mua hàng, Tài chính, Loyalty, Event Bridges | BE-1 (Mạnh): TK, QT, LH, TN, KB, TB. BE-2 (Dũng): CN, SP, KH, BH, TG, KO, LT, CK, BV, DG, BC. Thay đổi chính: Chi nhánh và Báo cáo chuyển sang BE-2; Khám bệnh, Tiêm chủng, Thẩm mỹ chuyển sang BE-1. Giai đoạn 2: BE-1 thêm Nhân sự, khám tại nhà, phẫu thuật, nội trú, khiếu nại; BE-2 thêm thương mại điện tử, thanh toán online, trả hàng – hoàn tiền, kho mở rộng |
+| Phân công backend | BE-1: Auth, IAM, Tổ chức – Chi nhánh, Nhân sự, Lịch hẹn, Hàng đợi, Thông báo, Audit, Sự cố, Báo cáo. BE-2: Khách hàng – thú cưng, Khám bệnh, Tiêm chủng, Grooming, Danh mục, POS, Kho – mua hàng, Tài chính, Loyalty, Event Bridges | BE-1 (Mạnh): TK, QT, LH, TN, KB, TB. BE-2 (Dũng): CN, SP, KH, BH, TG, KO, LT, CK, BV, DG, BC. Thay đổi chính: Chi nhánh và Báo cáo chuyển sang BE-2; Khám bệnh, Tiêm chủng, Thẩm mỹ chuyển sang BE-1. Giai đoạn 2: BE-1 thêm Nhân sự, phẫu thuật, nội trú, khiếu nại; BE-2 thêm thương mại điện tử, thanh toán online, trả hàng – hoàn tiền, kho mở rộng |
 | Công nghệ | Ant Design; GitLab; Redis lưu session, OTP, khóa slot | Tailwind CSS và Radix UI; GitHub và GitHub Actions; phiên đăng nhập và OTP lưu trong PostgreSQL, vai trò Redis chốt bằng ADR; bổ sung Testcontainers, Playwright |

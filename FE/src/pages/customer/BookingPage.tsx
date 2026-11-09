@@ -3,20 +3,16 @@
  * Luồng: thú cưng (còn sống) → chi nhánh → dịch vụ Khám/Tiêm hoặc Thẩm mỹ (BR-LH-01) → ngày (hôm nay … +30 ngày [CFG])
  * → khung giờ còn chỗ → ghi chú → đặt. Lịch được giữ ngay (BOOKED), không có bước chờ xác nhận.
  * Route nằm sau RequireLinkDecision (BR-TK-19). Khách đang bị hạn chế (BR-LH-09): ẩn form, hiện lý do và thời điểm hết hạn.
- * Tùy chọn "Khám tại nhà" (UC43, homevisit-v1 #1): thêm địa chỉ trong sổ + số liên hệ + phí của chi nhánh (fees-v1 #3), đặt qua POST /home-visit-appointments;
- * chỉ gọi hook tại nhà khi khách chọn tùy chọn này (lần gọi đầu nạp dữ liệu mẫu lịch tại nhà của mock).
  */
 import { useState, type FormEvent, type ReactNode } from 'react';
 import { Link } from 'react-router-dom';
-import { Calendar, CalendarCheck, Cat, ChevronRight, ClipboardCheck, Clock, Dog, Home, MapPin, PawPrint, RefreshCw, Scissors, Stethoscope } from 'lucide-react';
+import { Calendar, CalendarCheck, Cat, Check, ChevronRight, ClipboardCheck, Clock, Dog, MapPin, PawPrint, RefreshCw, Scissors, Stethoscope, X } from 'lucide-react';
 import { RestrictionNotice } from '@/components/appointments/RestrictionNotice';
 import { SlotPicker } from '@/components/appointments/SlotPicker';
 import { customerMaxDate, customerMinDate, formatSlot } from '@/components/appointments/format';
 import { plainMessage, toApiError } from '@/shared/api/api-error';
 import { appointmentApi } from '@/shared/api/appointment.api';
 import { useMyPets } from '@/domains/pets/hooks/useCustomerPet';
-import { useHomeVisitFee } from '@/shared/hooks/useFees';
-import { useCreateHomeVisit } from '@/shared/hooks/useHomeVisit';
 import {
   useAppointmentMutation,
   useMyBookingRestriction,
@@ -24,11 +20,8 @@ import {
   usePublicServices,
   useRefreshAppointments,
 } from '@/shared/hooks/useAppointments';
-import { APPOINTMENT_CFG } from '@/shared/types/appointment';
+import { APPOINTMENT_CFG, type Appointment } from '@/shared/types/appointment';
 import { SERVICE_GROUP_LABELS } from '@/shared/types/catalog';
-import { HOME_VISIT_PHONE_PATTERN } from '@/shared/types/homevisit';
-import { SuccessModal, type Booked } from './booking/BookingSuccess';
-import { HomeVisitStep } from './booking/HomeVisitStep';
 import styles from './BookingPage.module.css';
 
 const NOTE_MAX = 500;
@@ -38,16 +31,59 @@ const vnd = new Intl.NumberFormat('vi-VN', { style: 'currency', currency: 'VND',
 const PET_ICON = { DOG: Dog, CAT: Cat, OTHER: PawPrint } as const;
 
 /* ================================================================
-   Form.
+   Success modal.
    ================================================================ */
 
-const rowsOf = (a: { code: string; serviceName: string; petName: string; slotDate: string; slotStart: string }, branchName: string): [string, string][] => [
-  ['Mã lịch hẹn', a.code],
-  ['Dịch vụ', a.serviceName],
-  ['Thú cưng', a.petName],
-  ['Chi nhánh', branchName],
-  ['Thời gian', formatSlot(a)],
-];
+function SuccessModal({ appointment, onClose }: { appointment: Appointment; onClose: () => void }) {
+  const rows: [string, string][] = [
+    ['Mã lịch hẹn', appointment.code],
+    ['Dịch vụ', appointment.serviceName],
+    ['Thú cưng', appointment.petName],
+    ['Chi nhánh', appointment.branchName],
+    ['Thời gian', formatSlot(appointment)],
+  ];
+  return (
+    <div className={styles.successOverlay} role="dialog" aria-modal="true" aria-label="Đặt lịch thành công">
+      <div className={styles.successCard}>
+        <div className={styles.successIcon}>
+          <Check size={36} strokeWidth={2.5} />
+        </div>
+        <h2 className={styles.successTitle}>Đặt lịch thành công!</h2>
+        <p className={styles.successDesc}>
+          Lịch hẹn đã được giữ. Vui lòng đến đúng giờ; bạn có thể đổi giờ hoặc hủy trong mục Lịch hẹn của tôi.
+        </p>
+        <dl className={styles.successDetails}>
+          {rows.map(([label, value]) => (
+            <div key={label} className={styles.successDetail}>
+              <dt className={styles.successDetailLabel}>{label}</dt>
+              <dd className={styles.successDetailValue}>{value}</dd>
+            </div>
+          ))}
+        </dl>
+        <div className={styles.successActions}>
+          <Link to="/appointments" className={styles.successSecondary}>
+            Xem lịch hẹn của tôi
+          </Link>
+          <button type="button" className={styles.successPrimary} onClick={onClose}>
+            Đặt thêm lịch
+          </button>
+        </div>
+        <button
+          type="button"
+          onClick={onClose}
+          aria-label="Đóng"
+          className="absolute top-4 right-4 rounded-full p-1.5 text-(--color-text-secondary) hover:bg-(--color-surface-2) transition-colors"
+        >
+          <X size={18} />
+        </button>
+      </div>
+    </div>
+  );
+}
+
+/* ================================================================
+   Form.
+   ================================================================ */
 
 function Step({ n, title, children }: { n: number; title: string; children: ReactNode }) {
   return (
@@ -61,7 +97,7 @@ function Step({ n, title, children }: { n: number; title: string; children: Reac
   );
 }
 
-function BookingForm({ onBooked }: { onBooked: (booked: Booked) => void }) {
+function BookingForm({ onBooked }: { onBooked: (appointment: Appointment) => void }) {
   const pets = useMyPets();
   const branches = usePublicBranches();
   const [petId, setPetId] = useState<number | null>(null);
@@ -71,20 +107,15 @@ function BookingForm({ onBooked }: { onBooked: (booked: Booked) => void }) {
   const [slotStart, setSlotStart] = useState<string | null>(null);
   const [note, setNote] = useState('');
   const [error, setError] = useState('');
-  const [home, setHome] = useState(false);
-  const [addressId, setAddressId] = useState<number | null>(null);
-  const [phone, setPhone] = useState('');
   const book = useAppointmentMutation(appointmentApi.book);
-  const bookHome = useCreateHomeVisit();
   const refreshAppointments = useRefreshAppointments();
 
   const branchList = branches.data ?? [];
   // Chuỗi chỉ có một chi nhánh nhận đặt lịch thì chọn sẵn.
   const branchId = pickedBranchId ?? (branchList.length === 1 ? branchList[0].branchId : null);
   const services = usePublicServices(branchId);
-  const fee = useHomeVisitFee(home ? branchId : null);
-  // Nhóm Lưu trú đặt ở UC58, không qua lịch hẹn (BR-LH-01). Khám tại nhà chỉ cho dịch vụ khám: danh sách công khai không nêu loại (PublicService), nên giữ cả nhóm Khám/Tiêm và để BE (BR-LH-13) từ chối dịch vụ không phải khám.
-  const bookable = (services.data ?? []).filter((s) => (home ? s.group === 'MEDICAL' : s.group !== 'BOARDING'));
+  // Nhóm Lưu trú đặt ở UC58, không qua lịch hẹn (BR-LH-01).
+  const bookable = (services.data ?? []).filter((s) => s.group !== 'BOARDING');
   const alivePets = (pets.data ?? []).filter((p) => !p.deceasedOn);
 
   const pickBranch = (id: number) => {
@@ -95,19 +126,6 @@ function BookingForm({ onBooked }: { onBooked: (booked: Booked) => void }) {
   const pickService = (id: number) => {
     setServiceId(id);
     setSlotStart(null);
-  };
-  const pickMode = (next: boolean) => {
-    setHome(next);
-    setServiceId(null);
-    setSlotStart(null);
-    setError('');
-  };
-
-  const onFailed = (err: unknown) => {
-    const apiError = toApiError(err);
-    refreshAppointments();
-    // BR-LH-03: khung vừa hết chỗ trong lúc chọn (lịch tại nhà: 409 CONCURRENCY_CONFLICT) — tải lại khung, bỏ chọn.
-    setError(apiError.ruleId === 'BR-LH-03' || apiError.errorCode === 'CONCURRENCY_CONFLICT' ? 'Khung giờ bạn chọn vừa hết chỗ. Vui lòng chọn khung khác.' : plainMessage(apiError));
   };
 
   const submit = (e: FormEvent) => {
@@ -121,32 +139,20 @@ function BookingForm({ onBooked }: { onBooked: (booked: Booked) => void }) {
       setError(`Ghi chú tối đa ${NOTE_MAX} ký tự.`);
       return;
     }
-    const branchName = branchList.find((b) => b.branchId === branchId)?.name ?? '';
-    if (home) {
-      if (addressId == null) return setError('Vui lòng chọn địa chỉ khám tại nhà.');
-      if (!HOME_VISIT_PHONE_PATTERN.test(phone.trim())) return setError('Số điện thoại liên hệ gồm 10–11 chữ số, bắt đầu bằng 0.');
-      bookHome.mutate(
-        { petId, branchId, serviceId, slotDate: date, slotStart, addressId, contactPhone: phone.trim(), note: note.trim() || undefined },
-        {
-          onSuccess: (a) => {
-            setSlotStart(null);
-            setNote('');
-            onBooked({ rows: [...rowsOf(a, branchName), ['Địa chỉ', a.homeAddress], ['Phí khám tại nhà', vnd.format(a.homeFee)]], home: true });
-          },
-          onError: onFailed,
-        },
-      );
-      return;
-    }
     book.mutate(
       { petId, branchId, serviceId, slotDate: date, slotStart, note: note.trim() || undefined },
       {
         onSuccess: (appointment) => {
           setSlotStart(null);
           setNote('');
-          onBooked({ rows: rowsOf(appointment, appointment.branchName), home: false });
+          onBooked(appointment);
         },
-        onError: onFailed,
+        onError: (err) => {
+          const apiError = toApiError(err);
+          refreshAppointments();
+          // BR-LH-03: khung vừa hết chỗ trong lúc chọn — tải lại khung, bỏ chọn.
+          setError(apiError.ruleId === 'BR-LH-03' ? 'Khung giờ bạn chọn vừa hết chỗ. Vui lòng chọn khung khác.' : plainMessage(apiError));
+        },
       },
     );
   };
@@ -172,18 +178,6 @@ function BookingForm({ onBooked }: { onBooked: (booked: Booked) => void }) {
       </div>
 
       <div className={styles.formBody}>
-        <div className={styles.pills} role="group" aria-label="Hình thức khám">
-          {[
-            { id: false, label: 'Khám tại chi nhánh', icon: Stethoscope },
-            { id: true, label: 'Khám tại nhà', icon: Home },
-          ].map(({ id, label, icon: Icon }) => (
-            <button key={label} type="button" aria-pressed={home === id} onClick={() => pickMode(id)} className={`${styles.pill} ${home === id ? styles.pillActive : ''}`}>
-              <Icon size={16} aria-hidden />
-              {label}
-            </button>
-          ))}
-        </div>
-
         <Step n={1} title="Thú cưng">
           {pets.isPending && <p className={styles.muted}>Đang tải thú cưng…</p>}
           <div className={styles.pills} role="group" aria-label="Chọn thú cưng">
@@ -274,22 +268,7 @@ function BookingForm({ onBooked }: { onBooked: (booked: Booked) => void }) {
           />
         </Step>
 
-        {home && (
-          <Step n={5} title="Địa chỉ và phí khám tại nhà">
-            <HomeVisitStep
-              fee={fee.data}
-              addressId={addressId}
-              phone={phone}
-              onAddress={(a) => {
-                setAddressId(a.addressId);
-                setPhone((p) => p || a.receiverPhone);
-              }}
-              onPhone={setPhone}
-            />
-          </Step>
-        )}
-
-        <Step n={home ? 6 : 5} title="Ghi chú cho phòng khám">
+        <Step n={5} title="Ghi chú cho phòng khám">
           <label htmlFor="booking-note" className="sr-only">
             Ghi chú cho phòng khám
           </label>
@@ -314,9 +293,9 @@ function BookingForm({ onBooked }: { onBooked: (booked: Booked) => void }) {
       </div>
 
       <div className={styles.submitWrap}>
-        <button type="submit" className={styles.submitBtn} disabled={book.isPending || bookHome.isPending || (home && fee.data?.enabled === false)}>
+        <button type="submit" className={styles.submitBtn} disabled={book.isPending}>
           <Calendar size={18} aria-hidden />
-          {book.isPending || bookHome.isPending ? 'Đang đặt lịch…' : 'Xác nhận đặt lịch'}
+          {book.isPending ? 'Đang đặt lịch…' : 'Xác nhận đặt lịch'}
           <ChevronRight size={18} aria-hidden />
         </button>
       </div>
@@ -331,7 +310,7 @@ function BookingForm({ onBooked }: { onBooked: (booked: Booked) => void }) {
 export function BookingPage() {
   const restriction = useMyBookingRestriction();
   const branches = usePublicBranches();
-  const [booked, setBooked] = useState<Booked | null>(null);
+  const [booked, setBooked] = useState<Appointment | null>(null);
   const [formKey, setFormKey] = useState(0);
   const blocked = restriction.data?.restricted ? restriction.data.restriction : null;
 
@@ -420,7 +399,7 @@ export function BookingPage() {
 
       {booked && (
         <SuccessModal
-          booked={booked}
+          appointment={booked}
           onClose={() => {
             setBooked(null);
             setFormKey((k) => k + 1);

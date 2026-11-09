@@ -316,7 +316,6 @@ describe('xuất viện (#4, BR-LT-14)', () => {
     const calls: unknown[][] = [];
     registerVisitOrderSource({
       addServiceLine: (...args) => (calls.push(args), 7000 + calls.length),
-      addHomeFeeLine: () => 1,
     });
     const doctor = await vet();
     const a = await admit(doctor);

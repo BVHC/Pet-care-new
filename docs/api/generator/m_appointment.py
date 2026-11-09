@@ -5,7 +5,6 @@ m = Module(
     sources="01 UC39, UC40; 02 BR-LH-01…12, BR-TK-19, BR-KH-05, BR-TB-01, 06; 03 #3 Lịch hẹn; 04 §5; 05 §5 (appointments, booking_restrictions)",
     intro="Khung giờ trống, đặt lịch, xem, đổi khung, hủy lịch hẹn; hạn chế đặt online.",
     frozen=[
-        "UC43 khám tại nhà là tầng 3, không có endpoint.",
         "Check-in lịch hẹn (Lịch hẹn#3) là một phần của tiếp nhận Visit: `POST /visits` ở module visit. Hoàn tất (#7) và hủy lượt (#8) cũng đi từ Visit.",
         "Hủy do phòng khám (#5) không có endpoint: chạy theo sự kiện ngày nghỉ / thu hẹp giờ, thú mất, chuyển chủ (06-module-contracts §3).",
         "ST03 nhắc lịch hẹn, ST05 chuyển NO_SHOW (#6) là tác vụ hệ thống.",

@@ -13,7 +13,6 @@ import { ActivateBranchModal } from './branch/ActivateBranchModal';
 import { BranchFormModal } from './branch/BranchFormModal';
 import { BranchServicesTab } from './branch/BranchServicesTab';
 import { HolidaysTab } from './branch/HolidaysTab';
-import { HomeVisitFeeCard } from './branch/HomeVisitFeeCard';
 import { LifecycleTab } from './branch/LifecycleTab';
 import { OpeningHoursTab } from './branch/OpeningHoursTab';
 import { QuotaTab } from './branch/QuotaTab';
@@ -34,13 +33,7 @@ const TABS: TabDef[] = [
   {
     key: 'services',
     label: 'Dịch vụ',
-    // Phí khám tại nhà (fees #3–4) BRANCH_MANAGER bị 403 nên chỉ SUPER_MANAGER thấy khối này.
-    render: (b, canEdit, isChain) => (
-      <div className="space-y-4">
-        <BranchServicesTab branch={b} canEdit={canEdit} />
-        {isChain && <HomeVisitFeeCard branch={b} />}
-      </div>
-    ),
+    render: (b, canEdit) => <BranchServicesTab branch={b} canEdit={canEdit} />,
   },
   { key: 'quota', label: 'Quota lịch hẹn', managerOnly: true, render: (b) => <QuotaTab branch={b} /> },
   { key: 'lifecycle', label: 'Tạm ngừng / đóng cửa', chainOnly: true, render: (b) => <LifecycleTab branch={b} /> },
@@ -48,7 +41,7 @@ const TABS: TabDef[] = [
 
 /**
  * T20 — cấu hình một chi nhánh (UC14, UC33, UC42). BRANCH_MANAGER của chi nhánh sửa được; SUPER_MANAGER chỉ xem
- * và sửa thông tin / kích hoạt chi nhánh (UC12), đặt phí khám tại nhà (UC32), tạm ngừng / mở lại / đóng cửa (UC13). Mỗi tab một URL.
+ * và sửa thông tin / kích hoạt chi nhánh (UC12), tạm ngừng / mở lại / đóng cửa (UC13). Mỗi tab một URL.
  */
 export function AdminBranchDetailPage() {
   const { branchId, tab } = useParams();

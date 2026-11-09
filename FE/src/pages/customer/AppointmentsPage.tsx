@@ -2,7 +2,6 @@
  * Lịch hẹn của tôi (UC40, A02) — appointment-v1 #3, #5, #6, #7.
  * "Sắp tới" là lịch BOOKED; "Đã qua / đã hủy" là các trạng thái còn lại. Nút đổi giờ / hủy chỉ hiện theo cờ
  * `canReschedule` / `canCancel` của BE (BR-LH-06, 07). Không chặn khi hồ sơ còn chờ liên kết (ADR-0055).
- * Lịch khám tại nhà (homevisit-v1 #2) không nằm trong danh sách lịch hẹn nên có khối riêng bên dưới (HomeVisitSection).
  */
 import { useState } from 'react';
 import { Link } from 'react-router-dom';
@@ -12,7 +11,6 @@ import { CancelAppointmentDialog, RescheduleDialog } from '@/components/appointm
 import { RestrictionNotice } from '@/components/appointments/RestrictionNotice';
 import { formatSlotDate, formatVnDateTime, slotEnd, STATUS_TONE } from '@/components/appointments/format';
 import { CommonPageHero } from '@/shared/components/layout/CommonPageHero';
-import { HomeVisitSection } from './appointments/HomeVisitSection';
 import { cn } from '@/lib/utils';
 import { plainMessage, toApiError } from '@/shared/api/api-error';
 import { useAppointmentList, useMyBookingRestriction, usePublicBranches } from '@/shared/hooks/useAppointments';
@@ -254,8 +252,6 @@ export function AppointmentsPage() {
                 ))}
               </div>
             )}
-
-            <HomeVisitSection />
           </div>
         </div>
       </div>

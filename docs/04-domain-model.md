@@ -167,7 +167,6 @@
 | AiChatLog | `ai_chat_logs` | LOG |  | `07` §8 |
 | AiItemProfile | `ai_item_profiles` | REF |  | `07` §8 |
 | ShippingFeeConfig | `shipping_fee_configs` | REF |  | `08` §A |
-| BranchHomeVisitFee | `branch_home_visit_fees` | REF |  | `08` §A |
 | ServiceMaterialNorm | `service_material_norms` | REF |  | `08` §A |
 | Cart | `carts` | ROOT |  | `08` §B |
 | CartItem | `cart_items` | PART |  | `08` §B |
@@ -201,6 +200,6 @@ Ngoài ra các model có sẵn được mở rộng cột / giá trị (Appointm
 
 > Từ T54 (5/11/2026) các mục dưới đây đã có model ở §12. Đoạn giữ nguyên văn v16 để đối chiếu.
 
-Giữ trên sơ đồ use case, không thiết kế model: phẫu thuật (UC50), khám tại nhà (UC43, UC51), nội trú (UC55, UC56), giỏ hàng & đơn online & thanh toán cổng (UC61–65), trả hàng (UC68, 69), chuyển kho & kiểm kê & truy vết lô (UC77–79), bài viết của VET & bình luận (UC80, 82), khiếu nại (UC85, 86), gộp hồ sơ khách (UC27), tạm ngừng/đóng chi nhánh (UC13).
+Giữ trên sơ đồ use case, không thiết kế model: phẫu thuật (UC50), nội trú (UC55, UC56), giỏ hàng & đơn online & thanh toán cổng (UC61–65), trả hàng (UC68, 69), chuyển kho & kiểm kê & truy vết lô (UC77–79), bài viết của VET & bình luận (UC80, 82), khiếu nại (UC85, 86), gộp hồ sơ khách (UC27), tạm ngừng/đóng chi nhánh (UC13).
 
 Báo cáo (UC89) không có model; số liệu tính tại thời điểm xem từ Order, Payment, Visit, Appointment, Vaccination, InventoryItem, Feedback (BR-BC-01…04). Tỷ lệ quay lại tái chủng khớp theo VaccineType. *(v15: bỏ báo cáo công suất chuồng nên không dùng Kennel, BoardingBooking.)*

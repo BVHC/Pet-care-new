@@ -1,21 +1,19 @@
 # Pet Care Fee & Material-norm Config API v1 (tầng 3) — OpenAPI 3.1, sinh từ khai báo; không sửa tay, sửa khai báo rồi sinh lại.
 # Module SP (mở rộng UC30) · owner BE-2
-# Nguồn: 01 UC32; 08-tang3-be2-spec.md §A (BR-SP-08…11); 05 bổ sung shipping_fee_configs, branch_home_visit_fees, service_material_norms
+# Nguồn: 01 UC32; 08-tang3-be2-spec.md §A (BR-SP-08, 10, 11); 05 bổ sung shipping_fee_configs, service_material_norms
 # Truy vết: CONFIRMED = có trong docs · ASSUMPTION (A#) · TBD (Q#) — xem file .md cùng tên.
 
 openapi: "3.1.0"
 info:
   title: "Pet Care Fee & Material-norm Config API v1 (tầng 3)"
   version: "1.0.0"
-  description: "Module SP (mở rộng UC30) · owner BE-2. Nguồn: 01 UC32; 08-tang3-be2-spec.md §A (BR-SP-08…11); 05 bổ sung shipping_fee_configs, branch_home_visit_fees, service_material_norms. Chi tiết và truy vết: ../fees-v1.md"
+  description: "Module SP (mở rộng UC30) · owner BE-2. Nguồn: 01 UC32; 08-tang3-be2-spec.md §A (BR-SP-08, 10, 11); 05 bổ sung shipping_fee_configs, service_material_norms. Chi tiết và truy vết: ../fees-v1.md"
 servers:
   - url: "/api"
     description: "Mọi path bên dưới nằm sau tiền tố /api"
 tags:
   - name: "Shipping fee"
     description: "Phí vận chuyển toàn chuỗi (UC32)"
-  - name: "Home visit fee"
-    description: "Phí khám tại nhà theo chi nhánh (UC32)"
   - name: "Material norms"
     description: "Định mức vật tư của dịch vụ (UC32)"
 paths:
@@ -86,83 +84,6 @@ paths:
           $ref: "#/components/responses/Unauthorized"
         "403":
           $ref: "#/components/responses/Forbidden"
-  "/branches/{branchId}/home-visit-fee":
-    get:
-      tags: ["Home visit fee"]
-      summary: "Xem phí khám tại nhà của chi nhánh"
-      description: "UC32 · BR-SP-09. Actor: A02, A04, A06, A07. Quyền: SUPER_MANAGER; CUSTOMER (xem phí khi đặt); A06, A07 của chính chi nhánh. Chuyển trạng thái: —. Chi nhánh chưa cấu hình trả `enabled = false`, `fee = 0`."
-      operationId: getHomeVisitFee
-      security:
-        - bearerAuth: []
-      parameters:
-        - $ref: "#/components/parameters/BranchId"
-      responses:
-        "200":
-          description: OK
-          content:
-            "application/json":
-              schema:
-                type: object
-                required: [data, message, code]
-                properties:
-                  data:
-                    $ref: "#/components/schemas/HomeVisitFee"
-                  message:
-                    type: string
-                  code:
-                    type: integer
-                    description: "HTTP status của kết quả, ví dụ 200, 201"
-        "400":
-          $ref: "#/components/responses/BadRequest"
-        "401":
-          $ref: "#/components/responses/Unauthorized"
-        "403":
-          $ref: "#/components/responses/Forbidden"
-        "404":
-          $ref: "#/components/responses/NotFound"
-    put:
-      tags: ["Home visit fee"]
-      summary: "Lưu phí khám tại nhà của chi nhánh"
-      description: "UC32 · BR-SP-09, 11. Actor: A04. Quyền: Chỉ SUPER_MANAGER. Chuyển trạng thái: —."
-      operationId: saveHomeVisitFee
-      security:
-        - bearerAuth: []
-      parameters:
-        - $ref: "#/components/parameters/BranchId"
-      requestBody:
-        required: true
-        content:
-          "application/json":
-            schema:
-              $ref: "#/components/schemas/SaveHomeVisitFeeRequest"
-      responses:
-        "200":
-          description: OK
-          content:
-            "application/json":
-              schema:
-                type: object
-                required: [data, message, code]
-                properties:
-                  data:
-                    $ref: "#/components/schemas/HomeVisitFee"
-                  message:
-                    type: string
-                  code:
-                    type: integer
-                    description: "HTTP status của kết quả, ví dụ 200, 201"
-        "400":
-          description: "`BR-SP-09` phí âm"
-          content:
-            "application/json":
-              schema:
-                $ref: "#/components/schemas/Error"
-        "401":
-          $ref: "#/components/responses/Unauthorized"
-        "403":
-          $ref: "#/components/responses/Forbidden"
-        "404":
-          $ref: "#/components/responses/NotFound"
   "/services/{serviceId}/material-norms":
     get:
       tags: ["Material norms"]
@@ -251,13 +172,6 @@ components:
       scheme: bearer
       description: "Access token trả về từ POST /auth/login, gắn với một phiên (sessions). Phiên bị hủy thì token hết hiệu lực ngay (BR-TK-11, 13, 14)."
   parameters:
-    BranchId:
-      name: branchId
-      in: path
-      required: true
-      schema:
-        type: integer
-        format: int64
     ServiceId:
       name: serviceId
       in: path
@@ -315,31 +229,6 @@ components:
           minimum: 0
           description: VND
         freeThreshold:
-          type: integer
-          format: int64
-          minimum: 0
-          description: VND
-    HomeVisitFee:
-      type: object
-      required: [branchId, enabled, fee]
-      properties:
-        branchId:
-          type: integer
-          format: int64
-        enabled:
-          type: boolean
-        fee:
-          type: integer
-          format: int64
-          minimum: 0
-          description: VND
-    SaveHomeVisitFeeRequest:
-      type: object
-      required: [enabled, fee]
-      properties:
-        enabled:
-          type: boolean
-        fee:
           type: integer
           format: int64
           minimum: 0
