@@ -7,7 +7,11 @@
 **Legend:** `CONFIRMED` = có trong docs · `ASSUMPTION (A#)` = suy luận ít phát minh nhất · `TBD (Q#)` = cần quyết định (mục E). Method/path/shape là **PROPOSED** theo quy ước chung ở [`00-method.md`](./00-method.md); envelope, mã lỗi, phân trang, kiểu dữ liệu theo mục 3 của file đó.
 
 **Đóng băng phạm vi (không có endpoint):**
+<<<<<<< HEAD
 - UC50 phẫu thuật, UC55–UC56 nội trú là tầng 3.
+=======
+- UC51 khám tại nhà, UC55–UC56 nội trú là tầng 3 (UC50 phẫu thuật đã bỏ, ADR-0125).
+>>>>>>> 78fe062 (docs: chốt đặc tả nội trú (ADR-0124) và bỏ module phẫu thuật (ADR-0125).)
 - Thêm / đổi / xóa dòng dịch vụ, hàng của Order nguồn VISIT (UC67) thuộc module sales: `/orders/{orderId}/lines`.
 - ST04 nhắc tái chủng / tái khám, ST06 trừ kho khi tiêm (chạy trong `POST …/vaccinations`) và ST07 (tầng 3) không có endpoint riêng.
 - Lịch sử cân nặng đọc ở module customer: `GET /pets/{petId}/weights`.

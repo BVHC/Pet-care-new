@@ -5,7 +5,11 @@ m = Module(
     sources="01 UC25, UC44–UC49, UC52, UC53; 02 BR-TN-01…09, BR-KB-01…06, BR-KH-04, 05, 07, BR-CN-05, BR-BH-02; 03 #4 Visit (+ Lịch hẹn#3, #7, #8, Order#1, #4, #6, Care Task#5, #6); 04 §6; 05 §6 (visits, visit_assignments, medical_records, medical_record_addenda, prescription_items, vaccinations)",
     intro="Tiếp nhận, hàng đợi, gán / gọi / gán lại lượt, hoàn tất / hủy lượt; bệnh án, bản bổ sung, kê đơn, tiêm chủng; hồ sơ sức khỏe thú cưng.",
     frozen=[
+<<<<<<< HEAD
         "UC50 phẫu thuật, UC55–UC56 nội trú là tầng 3.",
+=======
+        "UC51 khám tại nhà, UC55–UC56 nội trú là tầng 3 (UC50 phẫu thuật đã bỏ, ADR-0125).",
+>>>>>>> 78fe062 (docs: chốt đặc tả nội trú (ADR-0124) và bỏ module phẫu thuật (ADR-0125).)
         "Thêm / đổi / xóa dòng dịch vụ, hàng của Order nguồn VISIT (UC67) thuộc module sales: `/orders/{orderId}/lines`.",
         "ST04 nhắc tái chủng / tái khám, ST06 trừ kho khi tiêm (chạy trong `POST …/vaccinations`) và ST07 (tầng 3) không có endpoint riêng.",
         "Lịch sử cân nặng đọc ở module customer: `GET /pets/{petId}/weights`.",

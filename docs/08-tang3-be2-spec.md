@@ -372,13 +372,13 @@ Hợp đồng chéo (số đếm tồn đọng, mỗi owner một method đọc)
 | Mã | Tên | Mô tả | UC | Xử lý khi vi phạm |
 |---|---|---|---|---|
 | BR-KH-11 | Điều kiện gộp | BRANCH_MANAGER gộp hồ sơ **nguồn** vào hồ sơ **đích**: hai hồ sơ khác nhau, đều chưa `MERGED`. **Không gộp nếu cả hai đã liên kết tài khoản** (BR-TK-19: mỗi hồ sơ tối đa một tài khoản); nếu một bên có tài khoản thì hồ sơ **đích** phải là bên đó. Không gộp khi nguồn còn Visit mở hoặc Order `OPEN` / `PENDING`. | UC27 | 400 `BR-KH-11`. |
-| BR-KH-12 | Hệ quả | Chuyển thú, sổ địa chỉ (bỏ địa chỉ trùng), lịch hẹn, đặt chỗ lưu trú, Visit / Order lịch sử, feedback, khiếu nại, Care Task, giỏ hàng và đơn online sang hồ sơ đích, trong **một transaction** (04 nguyên tắc 6), qua sự kiện `CustomerMergedEvent(sourceId, targetId)` mà mỗi module tự xử lý. Hồ sơ nguồn thành `MERGED`, trỏ `merged_into_id`, ẩn khỏi tra cứu, giữ để audit. **Không tự gộp thú trùng** (lễ tân xử lý sau, BR-KH-06). | UC27 | — |
+| BR-KH-12 | Hệ quả | Chuyển thú, sổ địa chỉ (bỏ địa chỉ trùng), lịch hẹn, đặt chỗ lưu trú, Visit / Order lịch sử, feedback, Care Task, giỏ hàng và đơn online sang hồ sơ đích, trong **một transaction** (04 nguyên tắc 6), qua sự kiện `CustomerMergedEvent(sourceId, targetId)` mà mỗi module tự xử lý. Hồ sơ nguồn thành `MERGED`, trỏ `merged_into_id`, ẩn khỏi tra cứu, giữ để audit. **Không tự gộp thú trùng** (lễ tân xử lý sau, BR-KH-06). | UC27 | — |
 | BR-KH-13 | Không hoàn tác | Gộp không hoàn tác được (*ASSUMPTION A3*); ghi `customer_merges` (nguồn, đích, người làm, số bản ghi đã chuyển theo loại) và audit. | UC27 | — |
 | BR-KH-14 | Xem trước bắt buộc | Gộp phải kèm `confirm = true` sau khi xem `merge-preview` (số thú, lịch, đơn… sẽ chuyển; cảnh báo xung đột). | UC27 | 400. |
 
 Dữ liệu: `customers` thêm `merged_into_id BIGINT? FK→customers` (`CHECK (merged_into_id <> id)`); `customer_merges` — LOG: `id`, `source_customer_id`, `target_customer_id`, `executed_by FK`, `moved JSONB` (đếm theo loại), `created_at`. Không có máy trạng thái riêng (thao tác một bước, không hoàn tác). **API `custmerge-v1` (2):** `GET /customers/{customerId}/merge-preview?sourceCustomerId=…`, `POST /customer-merges`.
 
-Hợp đồng chéo: mỗi module giữ `customer_id` lắng nghe `CustomerMergedEvent` (`@EventListener` đồng bộ, như `PetOwnerTransferredEvent`): appointment, visit, boarding, sales (orders, carts, online orders), care, content (feedback) — BE-1 và BE-2 cùng làm; module khiếu nại của BE-1 (mục 09) cũng nghe. Hạn đề xuất trước 7/12.
+Hợp đồng chéo: mỗi module giữ `customer_id` lắng nghe `CustomerMergedEvent` (`@EventListener` đồng bộ, như `PetOwnerTransferredEvent`): appointment, visit, boarding, sales (orders, carts, online orders), care, content (feedback) — BE-1 và BE-2 cùng làm; Hạn đề xuất trước 7/12.
 
 ### F.3 Bài viết của bác sĩ và bình luận (UC80, UC82; mở rộng UC81)
 

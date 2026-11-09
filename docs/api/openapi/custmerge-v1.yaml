@@ -155,7 +155,7 @@ components:
           type: string
     MergePreview:
       type: object
-      required: [targetCustomerId, sourceCustomerId, petCount, addressCount, duplicateAddressCount, appointmentCount, boardingCount, orderCount, onlineOrderCount, feedbackCount, complaintCount, careTaskCount, warnings, blockers]
+      required: [targetCustomerId, sourceCustomerId, petCount, addressCount, duplicateAddressCount, appointmentCount, boardingCount, orderCount, onlineOrderCount, feedbackCount, careTaskCount, warnings, blockers]
       properties:
         targetCustomerId:
           type: integer
@@ -186,9 +186,6 @@ components:
           type: integer
           format: int32
         feedbackCount:
-          type: integer
-          format: int32
-        complaintCount:
           type: integer
           format: int32
         careTaskCount:

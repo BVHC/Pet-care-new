@@ -1030,16 +1030,10 @@ Domain model gộp "bản bổ sung" vào CareLog; tách thành bảng con để
 | branch_id | BIGINT | ?, FK→branches | |
 | rating | SMALLINT | ?, CHECK 1–5 | |
 | content | VARCHAR(2000) | NN | Tối thiểu 10 ký tự |
-| status | VARCHAR(10) | NN, CHECK | `NEW`, `SEEN`, `RESOLVED` (BR-DG-04) |
-| seen_at | TIMESTAMPTZ | ? | |
-| resolved_by | BIGINT | ?, FK→accounts | |
-| resolved_at | TIMESTAMPTZ | ? | |
-| resolution_note | TEXT | ? | Nội bộ, khách không thấy |
 
 - `CHECK (topic <> 'BRANCH_SERVICE' OR branch_id IS NOT NULL)`
 - `CHECK (char_length(content) >= 10)`
-- `CHECK (status <> 'RESOLVED' OR resolution_note IS NOT NULL)`
-- Index: `(customer_id, created_at)` cho giới hạn 5/ngày; `(branch_id, status)`
+- Không trạng thái (ADR-0122); xóa cứng sau 30 ngày bởi ST24 (BR-DG-05). Index: `(customer_id, created_at)` cho giới hạn 5/ngày; `(branch_id, created_at)`; `(created_at)` cho ST24. Cột `status`, `seen_at`, `resolved_by`, `resolved_at`, `resolution_note` của V1 bỏ ở V51
 
 ---
 
@@ -1178,10 +1172,11 @@ Mục 1–4: các câu hỏi mở của bản v14, chốt ở v15. Mục 5: thay
 | 21 | Xóa dòng đơn thuốc (`prescription_items`, visit-v1 #17, BR-KB-03) | §0 chưa liệt kê BR-KB-03 trong các trường hợp xóa cứng, dù BR-BH-02 cho người thêm xóa dòng khi Order `OPEN` và contract #17 có sẵn. Bảng không có cột trạng thái và không bảng nào có FK trỏ tới `prescription_items`. Chốt **xóa cứng**, thêm BR-KB-03 vào §0 (tiền lệ mục 16); ứng dụng xóa dòng đơn trước dòng Order `DRUG` trong cùng transaction vì `order_line_id` là FK `RESTRICT` (ADR-0078). Bệnh án không bị xóa kèm | Không đổi schema (không migration) |
 | 22 | Ràng buộc `care_tasks` (nợ D049, T39 phần 2) | Hai câu hủy hệ thống và câu kiểm FK khi xóa mũi ghi nhầm (BR-KB-04) quét bảng (index V1 partial theo `task_type`); DB chưa giữ cột xử lý theo trạng thái (BR-TB-05). Thêm 2 index partial `IS NOT NULL` không lọc trạng thái và 3 CHECK (ADR-0081). Cùng migration seed 4 mẫu nhắc ST04 | `care_tasks`: `ix_care_tasks_vaccination_id`, `ix_care_tasks_medical_record_id`, `ck_care_tasks_open_unhandled`, `ck_care_tasks_done_handled`, `ck_care_tasks_cancelled_reason` (V22) |
 | 23 | Index FK của bệnh án / mũi tiêm và CHECK lý do mua ngoài (nợ D043, ADR-0093) | Xem bệnh án (#12), hồ sơ sức khỏe (#21), `existsByVaccineTypeId` và kiểm FK khi xóa dòng cha quét bảng (V1, V7 không tạo index cho bốn cột); `prescription_items.external_reason` chỉ có `IN (...)` nên NULL lọt khi mua ngoài. Thêm 4 index một cột và CHECK `is_external_purchase = (external_reason IS NOT NULL)`. Trigger chặn sửa bệnh án đã khóa / sửa-xóa bản bổ sung chấp nhận không làm (ứng dụng giữ BR-KB-01) | `medical_record_addenda`: `ix_medical_record_addenda_medical_record_id`; `prescription_items`: `ix_prescription_items_medical_record_id`, `ck_prescription_items_external_reason_tied`; `vaccinations`: `ix_vaccinations_visit_id`, `ix_vaccinations_vaccine_type_id` (V28) |
-| 24 | Bảng Nhân sự (T51, GĐ2, duyệt T54 ngày 5/11/2026) | Hai ca khác nhau của cùng một nhân viên có thể chồng giờ, nhưng giờ nằm ở `shift_definitions` nên `UNIQUE` không bắt được. Chốt: `UNIQUE` partial chỉ chặn trùng đúng cặp ca – ngày; chồng giờ kiểm trong service dưới khóa dòng `accounts` của nhân viên (BR-NS-02). **Chờ BE-1 quyết:** thêm cột `starts_at`, `ends_at` sao chép vào `shift_assignments` và dùng `EXCLUDE USING gist` như đặt chỗ lưu trú (mục 8) nếu muốn chặn ở DB | `shift_definitions`, `shift_assignments`, `shift_requests` |
+| 24 | Bảng Nhân sự (T51, GĐ2, duyệt T54 ngày 5/11/2026) | Hai ca khác nhau của cùng một nhân viên có thể chồng giờ, nhưng giờ nằm ở `shift_definitions` nên `UNIQUE` không bắt được. Chốt: `UNIQUE` partial chỉ chặn trùng đúng cặp ca – ngày; chồng giờ kiểm trong service dưới khóa dòng `accounts` của nhân viên (BR-NS-02). **BE-1 đã chốt (ADR-0123):** chỉ kiểm trong service dưới khóa `accounts` của nhân viên (`FOR NO KEY UPDATE`) cộng `UNIQUE` partial ở DB, không dùng `EXCLUDE USING gist` (không sao chép giờ vào `shift_assignments`) | `shift_definitions`, `shift_assignments`, `shift_requests` |
 | 25 | Kho vector của AI dùng pgvector (T53, ADR-0109 D3) | Cột `ai_chunks.embedding` kiểu `vector(768)`; mọi môi trường (docker-compose, Testcontainers, Postgres của dev) phải dùng ảnh có pgvector; migration `CREATE EXTENSION IF NOT EXISTS vector` cần quyền owner như `btree_gist` (mục 8). Truy hồi lọc `PUBLISHED` và `doc_version = indexed_version` ngay trong SQL | `ai_chunks` |
 | 26 | Cột và giá trị mới của bảng có sẵn (T51, T52) | `orders.source` thêm `ONLINE`; `order_lines.line_type` thêm `HOME_FEE` (không `service_id`, `product_id`; sửa hai `CHECK` ở §8); `services.medical_type` thêm `SURGERY`, `INPATIENT`; `appointments` thêm `is_home_visit`, `home_address`, `home_contact_phone`, `home_fee`; `visits.is_home_visit`; `branches.status` thêm `SUSPENDED`, `CLOSED` và `suspended_at`, `suspend_reason`, `expected_resume_on`, `closed_at`, `close_reason`; `customers.merged_into_id`; `articles.status` thêm `PENDING_REVIEW`, `REJECTED` và `author_account_id`, `review_note`, `submitted_at`, `reviewed_by`, `reviewed_at`; `stock_movements.type` thêm `TRANSFER_OUT`, `TRANSFER_IN`, `TRANSFER_CANCEL`; `stock_adjustments.reason` thêm `COUNT_DIFF`, `RETURN_DISCARD`; mã chứng từ thêm tiền tố `DH`, `CK`, `KK`, `TH`, `HT`, `NT`, `KN` (`document_code_sequences`, ADR-0043) | nhiều bảng |
 | 27 | Migration tầng 3 phần BE-1 (T55b, 6/11/2026, ADR-0113) | `09` ghi cột enum ngắn `VARCHAR(10/20)`: làm `VARCHAR(30)` theo mục 7; `complaint_messages.author_type`, `kind` thêm `NOT NULL`; CHECK cột ↔ trạng thái cho `surgeries`, `admissions`, `admission_orders`, `complaints` (khuôn mục 22); thêm index `admissions (visit_id)`, `admission_orders (prescription_item_id)` một phần và index cho mọi FK → `accounts` (mục 14); `EXCLUDE` chống chồng giờ ca (mục 24) **chưa làm**; `orders.source = ONLINE` đã có ở V42 (ADR-0116: 4 CHECK của `orders`, tiền online ở `payment_transactions`, không vào `payments`); `HOME_FEE`, `SURGERY`, `INPATIENT` đã có ở V41 | `shift_definitions`, `shift_assignments`, `shift_requests`, `surgeries`, `visit_material_usages`, `admissions`, `admission_orders`, `admission_observations`, `complaints`, `complaint_messages`; `appointments`, `visits`, `services`, `order_lines` (V36–V39, V41), `orders` (V42) |
+| 28 | Bỏ khiếu nại; `feedbacks` không trạng thái, xóa sau 30 ngày (ADR-0122, 2026-11-08) | `complaints`, `complaint_messages` (V39) bỏ ở V51 chưa viết; `feedbacks` bỏ `status`, `seen_at`, `resolved_by`, `resolved_at`, `resolution_note` và index `(branch_id, status)`, thêm `(branch_id, created_at)` và `(created_at)`. Các dòng liên quan tới `complaints` ở mục 27 và §14 là lịch sử của V39 | Hiện trạng code còn theo V39 (nợ D061) |
 
 ---
 
@@ -1216,6 +1211,7 @@ Mục 1–4: các câu hỏi mở của bản v14, chốt ở v15. Mục 5: thay
 | shift_definition_id | BIGINT | NN, FK→shift_definitions | Đổi khi duyệt `SWAP` (Phân ca#5) |
 | work_date | DATE | NN | Theo giờ Việt Nam |
 | status | VARCHAR(30) | NN, CHECK | `SCHEDULED`, `ON_LEAVE`, `ABSENT`, `CANCELLED` |
+| source | VARCHAR(30) | NN, CHECK | `SELF` (nhân viên tự đăng ký, BR-NS-11), `MANAGER` (quản lý phân hộ, BR-NS-02). *(ADR-0123; V36 chưa có cột, thêm ở migration của T58)* |
 | reason | VARCHAR(300) | ? | Lý do vắng đột xuất hoặc hủy |
 | status_changed_by | BIGINT | ?, FK→accounts | Người xử lý; NULL nếu hệ thống chuyển |
 | status_changed_at | TIMESTAMPTZ | ? | Lúc rời `SCHEDULED` |
@@ -1278,10 +1274,8 @@ Mục 1–4: các câu hỏi mở của bản v14, chốt ở v15. Mục 5: thay
 | `stock_count_lines` | PART |  | `08` §E |
 | `customer_merges` | LOG |  | `08` §F.2 |
 | `article_comments` | ROOT |  | `08` §F.3 |
-| `surgeries` | ROOT | #23 | `09` §B |
+| ~~`surgeries`~~ | — | ~~#23~~ | bỏ ở ADR-0125; bảng còn trong DB tới V51 (D063) |
 | `admissions` | ROOT | #24 | `09` §C |
 | `admission_orders` | ROOT | #25 | `09` §C |
 | `admission_observations` | LOG |  | `09` §C |
-| `complaints` | ROOT | #26 | `09` §D |
-| `complaint_messages` | LOG |  | `09` §D |
 | `visit_material_usages` | LOG |  | `09` §E |

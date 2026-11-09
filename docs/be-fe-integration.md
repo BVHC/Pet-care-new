@@ -216,7 +216,7 @@ Hạn và trạng thái lấy từ `docs/time.md` (28/10; T42–T44 cập nhật
 1. **BE-2 đã giao T44, T42, T43 (29–30/10).** T45 đã `DONE` (30/10) và sales #11 đã có BE (05/11, ADR-0103); còn lại phía FE-1 là nút gọi #11.
 2. **BE-2: xác nhận `V22`, `V23`** của BE-1 (BE-2 đã lấy `V24`–`V26` và ADR-0085…0087 cho T42–T44, ghi "chưa xác nhận với BE-1"); kiểm test của BE-2 dùng `new VaccinationQueryApi() {…}` có vỡ không (T39 thêm hàm trừu tượng).
 3. **[Đã xong 4/11: BE đã nạp #38, ca `C3-08` ✔]** **BE-1: build + bật lại BE có endpoint hẹp `GET /api/staff/assignable`** (#38, ADR-0089, 31/10; thay cho "mở `GET /api/staff` cho lễ tân", endpoint cũ vẫn đóng), rồi T28b, T40, T41.
-4. **FE-1:** đối chiếu chi tiết báo cáo (đã xong 1/11, gồm đợt 2: 7 / 7 endpoint khớp SQL, sửa biên 12 tháng, câu lỗi, thứ tự 403 / 400, `pendingCount`; còn mở câu hỏi PO G11 / G9, `T49-fe.md` C.11), cụm 6 (nhận / trả thú, nhật ký; T42, T43) đã chạy đợt 1 chỉ đọc 1/11 và đợt 2 các ca ghi 2/11, kể cả nhật ký bất thường (`T49-fe.md` C.14); thú mất (Mochi) `end-deceased` đã chạy thật 3/11 chiều (còn chốt Order #17 và `mark-deceased`, chờ Hiến); Care Task: C7-04 đã chạy 3/11, còn `VACCINE_DUE` (C7-06, C7-07) chờ Hiến cấp quyền nâng [CFG] (nếu không kịp thì demo nói rõ ca đó chưa chạy thật); chạy thử nhóm 🟡 ở mục 5; sửa 3 ca e2e; **nối refresh token (ADR-0091, D055):** FE chưa xử lý `refreshToken` / `POST /auth/refresh` (#39) và access token với BE thật chỉ sống 10 phút; mock identity chưa trả `accessTokenExpiresAt` / `refreshToken` trong `LoginResponse`, và key [CFG] `staff.online_window_minutes` trong `identity-admin.seed.ts` đã đổi thành `session.access_ttl_minutes` ở BE (`online` nay suy ra từ `sessions.access_expires_at`, không từ `last_seen_at`). Seed giai đoạn 2 **đã có** (mục 2): dựng lại dữ liệu demo bằng một lệnh, trong giờ mở cửa, sát buổi demo vì dữ liệu hết hạn dần.
+4. **FE-1:** đối chiếu chi tiết báo cáo (đã xong 1/11, gồm đợt 2: 7 / 7 endpoint khớp SQL, sửa biên 12 tháng, câu lỗi, thứ tự 403 / 400, `pendingCount`; còn mở câu hỏi PO G11 / G9, `T49-fe.md` C.11), cụm 6 (nhận / trả thú, nhật ký; T42, T43) đã chạy đợt 1 chỉ đọc 1/11 và đợt 2 các ca ghi 2/11, kể cả nhật ký bất thường (`T49-fe.md` C.14); thú mất (Mochi) `end-deceased` đã chạy thật 3/11 chiều (còn chốt Order #17 và `mark-deceased`, chờ Hiến); Care Task: C7-04 đã chạy 3/11, còn `VACCINE_DUE` (C7-06, C7-07) chờ Hiến cấp quyền nâng [CFG] (nếu không kịp thì demo nói rõ ca đó chưa chạy thật); chạy thử nhóm 🟡 ở mục 5; sửa 3 ca e2e; **refresh token (ADR-0091, D055): đã nối** ở `session.store.ts` / `axios.ts` (làm mới khi người dùng thao tác và còn < 5 phút; request poll không làm mới), mock identity trả `refreshToken` / `accessTokenExpiresAt` và có `POST /auth/refresh`, khóa [CFG] đã là `session.access_ttl_minutes`; **còn lại:** chạy thử với BE thật (access token chỉ sống 10 phút). Seed giai đoạn 2 **đã có** (mục 2): dựng lại dữ liệu demo bằng một lệnh, trong giờ mở cửa, sát buổi demo vì dữ liệu hết hạn dần.
 5. **Cả nhóm:** `docs/time.md` và `docs/architecture/system-overview.md` phải sạch dấu xung đột: `origin/dev` mang dấu đã commit ở hai file này (từ commit `a210199` của BE-1; bản gộp 28/10, `28345f1`, từng sạch). Bản gộp 30/10 đã dọn lại; chạy `git grep -n '^<<<<<<< \|^>>>>>>> '` trước khi push.
 
 ## 7. Dựng môi trường để tự kiểm
@@ -265,11 +265,11 @@ Cổng **8082** vì Docker Desktop tự bật lại container `petcare-api` cũ 
 | `workforce` (UC34–38) | T58 · BE-1 · 16–18/11; T59 · BE-1 · 19–20/11 | T66 · 16–20/11 | `/api/shift-definitions`, `/api/shift-assignments`, `/api/me/shift-assignments`, `/api/me/shift-requests`, `/api/shift-requests` | Cần nhân viên thật: mock dùng id nhân viên riêng (mục 8.4) |
 | `shop` (UC61, 62, 64, 65) | T63 · BE-2 · 17–19/11; T64 · BE-2 · 20–23/11 | T67 · 23–25/11 (khách); T68 · 26–27/11 (lễ tân, UC65) | `/api/me/cart`, `/api/me/online-orders`, `/api/online-orders` | Cần sổ địa chỉ GĐ1 (T8). Luật `shop` cũng bắt `…/online-orders/*/pay`, nhưng `pay` còn luật riêng của `payment`. Gỡ `shop` mà `payment` còn mock thì `pay` chỉ chạy với đơn của mock |
 | `payment` (UC63, ST11, ST14) | T65 · BE-2 · 24–27/11 | T67 · 23–25/11 | `POST /api/me/online-orders/*/pay`, `/api/me/payment-transactions`, `POST /api/public/payment-gateway/callback`, `/api/payment-reconciliations`, `/api/payment-reconciliation-items` | **Chặn bởi tài khoản sandbox cổng** (`payment-gateway-setup.md`). Cổng trên FE là giả lập (`/payment/mock-gateway`); đổi sang cổng thật là việc riêng |
-| `surgery` (UC50) | T61 · BE-1 · 26–27/11 | T68 · 26–27/11 | `/api/visits/*/surgeries`, `/api/surgeries` | Cần lượt khám thật. Phẫu thuật hoàn tất thêm dòng vào Order qua interface `sales` (T72 nối thật) |
+| ~~`surgery` (UC50)~~ (bỏ, ADR-0125) | — | — | — | — |
 | `inpatient` (UC55, 56) | T69 · BE-1 · 30/11–02/12 | T79 · 30/11–02/12 | `/api/admissions`, `/api/admission-orders` | Cần lưu trú GĐ1 (T31, T42) cho luồng "nhập viện từ lưu trú" |
 | `returns` (UC68, 69, ST21) | T73 · BE-2 · 30/11–02/12 | T79 · 30/11–02/12 | `/api/return-requests`, `/api/refunds` | Cần T65 (hoàn tiền qua cổng). Trả hàng cho đơn online còn thiếu dữ liệu ở hợp đồng shop-v1 / sales-v1 (ghi chú hợp đồng cho BE `msg-be-t57-hop-dong.md`) |
 | `stockops` (UC77–79) | T74 · BE-2 · 03–04/12 | T80 · 03–04/12 | `/api/stock-transfers`, `/api/stock-counts`, `/api/stock-lots` | Cần kho GĐ1 (T18). Điểm hợp đồng với inventory-v1: ghi chú hợp đồng cho BE `msg-be-t57-hop-dong.md` |
-| `complaint` (UC85, 86, ST16, ST17) | T70 · BE-1 · 03–07/12 | T81 · 07–08/12 | `/api/me/complaints`, `/api/complaints` | Cần danh sách lượt khám / Order / đơn online / lưu trú của khách để chọn "đối tượng liên quan" |
+| ~~`complaint`~~ (bỏ, ADR-0122) | — | — | — | — |
 | `branchlife` (UC13) | T75 · BE-2 · 07–08/12 | T80 · 03–04/12 | `GET /api/branches/*/closure-impact`, `POST /api/branches/*/suspend`, `POST /api/branches/*/resume`, `POST /api/branches/*/close` | Cần `shop`, `returns`, `stockops` thật để đếm tồn đọng (đơn online dở, hoàn tiền chờ, chuyển kho, kiểm kê; mock nối chéo ở `tier3-wiring.ts`). |
 | `custmerge` (UC27) | T75 · BE-2 · 07–08/12 | T80 · 03–04/12 | `GET /api/customers/*/merge-preview`, `POST /api/customer-merges` | BRANCH_MANAGER không tra cứu khách được (UC23 không có A05): chỉ gộp theo mã |
 | `articlex` (UC80, 82, mở rộng UC81) | T75 · BE-2 · 07–08/12 | T81 · 07–08/12 | `/api/me/articles`, `POST /api/articles/*/approve`, `POST /api/articles/*/reject`, `/api/public/articles/*/comments`, `/api/me/comments`, `/api/comments` | Hàng chờ duyệt dùng `GET /api/articles?status=PENDING_REVIEW` của content-v1 (BE GĐ1 hiện trả 400): không có luật nào gỡ được riêng, BE phải mở rộng `status` |
@@ -282,7 +282,7 @@ Sau đó: T72 (BE-1) và T76 (BE-2) kiểm thử FSM + nối thật interface ch
 
 - **T80 (FE, 03–04/12) xong trước T75 (BE, 07–08/12)** cho `branchlife` và `custmerge`: hai màn này chỉ ghép được sau 08/12, ngoài khung T80.
 - **T67 (FE, 23–25/11) xong trước T65 (BE, 24–27/11):** thanh toán thật chỉ ghép được từ 27/11, và còn chờ tài khoản sandbox.
-- **T68 (FE, 26–27/11) cùng ngày T61 (BE)**; T66 cùng ngày T58, T59; T79 cùng ngày T69, T73. FE chỉ ghép được sau khi BE giao, nên các task này kết thúc đúng ngày BE hoặc sau.
+- **T68 (FE, 26–27/11) cùng ngày T60, T64 (BE)**; T66 cùng ngày T58, T59; T79 cùng ngày T69, T73. FE chỉ ghép được sau khi BE giao, nên các task này kết thúc đúng ngày BE hoặc sau.
 - **T81 (FE, 07–08/12) bắt đầu đúng ngày T70 (BE) kết thúc** và cùng ngày T75.
 - **`materialuse` (T71) không có hàng FE:** màn thiếu vật tư chưa thuộc task nào.
 - **T77, T78 (AI)** ghi "FE-1 (dẫn), cả nhóm": `time.md` không nói ai viết controller `ai-v1` (13 endpoint) ở BE.
@@ -292,12 +292,17 @@ Sau đó: T72 (BE-1) và T76 (BE-2) kiểm thử FSM + nối thật interface ch
 
 1. **Thứ tự kiểm lỗi 400 / 403 / 404 / 409 của mock là giả định, chưa đo trên BE tầng 3, và các mock KHÔNG thống nhất với nhau.**
    - `shop`, `payment`, `returns`, `stockops`, `fees`, `materialuse`: 401 → 400 sai kiểu → **400 `VALIDATION_FAILED` của body trước** 403 vai trò → 404 → 403 phạm vi → 400 BR → 409 (theo đo trên BE GĐ1 ở `care`, `cashier`, `inventory`: `@Valid` chạy trước `@PreAuthorize`).
+<<<<<<< HEAD
    - `complaint`, `articlex`, `workforce`, `ai`, `branchlife`, `custmerge`, `surgery`, `inpatient`: 401 → 400 sai kiểu → **403 vai trò trước** 400 `VALIDATION_FAILED` → 404 → 403 phạm vi → 400 BR → 409. Dựa vào `00-method.md` §3.5 (quyền → tồn tại → BR 400 → 409), mục đó không nói `VALIDATION_FAILED` đứng ở đâu.
    - Cả 14 mock đặt **400 BR trước 409**. Riêng `ai`: giới hạn tần suất theo IP đứng đầu hai endpoint chat (BR-AI-09). BE GĐ1 đo thấy **409 chạy trước rule 400** ở `sales`, `cashier`, `boarding` (ADR-0064 §2.4, ADR-0065 §7), ngược `00-method.md`; `stockops.mock.ts` đã ghi đây là rủi ro.
+=======
+   - `articlex`, `workforce`, `ai`, `branchlife`, `custmerge`, `homevisit`, `inpatient` (`surgery` đã bỏ): 401 → 400 sai kiểu → **403 vai trò trước** 400 `VALIDATION_FAILED` → 404 → 403 phạm vi → 400 BR → 409. Dựa vào `00-method.md` §3.5 (quyền → tồn tại → BR 400 → 409), mục đó không nói `VALIDATION_FAILED` đứng ở đâu.
+   - 14 / 15 mock đặt **400 BR trước 409** (ngoại lệ có chủ ý: `homevisit` #5 `start`, 409 trước BR-TN-01 vì BR-TN-01 sinh ra khi tạo Visit). Riêng `ai`: giới hạn tần suất theo IP đứng đầu hai endpoint chat (BR-AI-09). BE GĐ1 đo thấy **409 chạy trước rule 400** ở `sales`, `cashier`, `boarding` (ADR-0064 §2.4, ADR-0065 §7), ngược `00-method.md`; `stockops.mock.ts` đã ghi đây là rủi ro.
+>>>>>>> 78fe062 (docs: chốt đặc tả nội trú (ADR-0124) và bỏ module phẫu thuật (ADR-0125).)
    - Khi ghép: gọi từng cặp lỗi lên BE thật, chỉnh mock theo BE (không chỉnh BE), cập nhật test của mock.
 2. **Mọi chỗ hợp đồng im lặng** nằm ở khối ASSUMPTION / "yaml thiếu" đầu từng `*.mock.ts`; bản gửi BE: `D:/Do-an/.c2-tmp/final2/msg-be-t57-hop-dong.md` (đã soạn 7/11).
-3. **Hằng số [CFG] mock không đọc:** `complaint.max_open`, `complaint.reopen_days`, `complaint.max_reopen`, `content.comment_per_hour`, phí vận chuyển mặc định 30.000 đ / miễn phí từ 500.000 đ, và hạn chờ của ST10, ST11, ST12, ST21 (mock chạy lười mỗi request, BE chạy theo cron).
-4. **Tác vụ hệ thống mock không mô phỏng:** ST14 (đối soát cổng), ST16 / ST17 (khiếu nại), thông báo ST20, audit BR-QT-15, xung đột 409 `CONCURRENCY_CONFLICT` của giữ hàng.
+3. **Hằng số [CFG] mock không đọc:** `content.comment_per_hour`, phí vận chuyển mặc định 30.000 đ / miễn phí từ 500.000 đ, và hạn chờ của ST10, ST11, ST12, ST21 (mock chạy lười mỗi request, BE chạy theo cron).
+4. **Tác vụ hệ thống mock không mô phỏng:** ST14 (đối soát cổng), thông báo ST20, audit BR-QT-15, xung đột 409 `CONCURRENCY_CONFLICT` của giữ hàng.
 5. **Sau mỗi lần gỡ luật:** `tsc`, lint, vitest nhắm đích, rồi quét lại các trang của module bằng BE thật (cách ở mục 8.4); ghi kết quả vào `docs/testcases/T57-fe.md`.
 
 ### 8.4 Chế độ hỗn hợp tầng 3: kết quả thử ngày 7/11/2026
@@ -319,14 +324,18 @@ Sau đó: T72 (BE-1) và T76 (BE-2) kiểm thử FSM + nối thật interface ch
 | `fees` | Đọc cấu hình phí, định mức (SUPER_MANAGER): 200. Chi nhánh 1 và dịch vụ 4 có ở cả mock lẫn BE (chưa so tên) | BM bị 403 theo đúng vai trò mock |
 | `branchlife` | Xem tồn đọng chi nhánh 1 (SUPER_MANAGER): 200 | Số tồn đọng là của mock, không phải của BE |
 | `ai` | Chat công khai 200; 16 tài liệu tri thức mock | Gợi ý và tóm tắt tiêm theo thú thật (id 10): 404 "Không tìm thấy thú cưng"; trang `/recommend` mở được, lệnh gợi ý của nó trả 404 |
-| `complaint` | Danh sách khách (2), quản lý (5), SUPER_MANAGER (7): 200 | Tạo kèm đối tượng thật (lượt, Order) **chưa thử** (lỗi trong probe, không phải kết luận) |
 | `articlex` | `/admin/my-articles`: tạo nháp 201, danh sách 200 | Hàng chờ duyệt (bảng trên). Tên tác giả (BR-TK-20) mock lấy theo id nhân viên mock nên suy ra sẽ sai người; chưa kiểm vì bản nháp chưa có tên |
 | `workforce` | Danh sách ca (5), yêu cầu (2): 200 | Nhân viên là của mock: lịch "của tôi" của `khoi.vo` (id 6) hiện "Thu Hà"; phân ca liệt kê "Thu Hà", "BS. Quốc Bảo", "Lan Chi" thay vì nhân viên thật |
 | `shop` | Giỏ, đơn của tôi (2), đơn online lễ tân (4): 200 | Thêm sản phẩm thật vào giỏ: id 1, 2 trùng tên và giá (cùng seed), id 3, 5, 6 sai loại (400 BR-BH-07), id 7, 8 → 404. Báo giá / đặt đơn **chưa thử** (khách demo không có địa chỉ) |
 | `payment` | Không thử riêng | Phụ thuộc đơn mock của `shop` |
 | `returns` | Danh sách trả hàng (2) và hoàn tiền (2): 200 | Tạo trả hàng cho Order quầy thật #17 → 404 |
 | `stockops` | Danh sách chuyển kho (4), kiểm kê (2): 200 | `GET /api/stock-lots?productId=4` (sản phẩm thật) trả rỗng |
+<<<<<<< HEAD
 | `surgery` | Danh sách (rỗng): 200 | Mở phẫu thuật cho lượt thật #7 → 404 |
+=======
+| `homevisit` | Danh sách khám tại nhà: 200 | Đặt lịch cho thú thật #10 → 404; trang `/admin/appointments` lỗi 404 (bảng trên) |
+| ~~`surgery`~~ (bỏ, ADR-0125; mock còn trong FE, D063) | — | — |
+>>>>>>> 78fe062 (docs: chốt đặc tả nội trú (ADR-0124) và bỏ module phẫu thuật (ADR-0125).)
 | `inpatient` | Danh sách (rỗng): 200 | Nhập viện từ lượt thật #7 → 404 |
 | `materialuse` | Danh sách thiếu vật tư (quản lý): 200 | Vật tư theo lượt thật #7 → 404 (bác sĩ) hoặc 403 (lễ tân) |
 | `custmerge` | Màn "Gộp hồ sơ khách trùng" (`/admin/customers`, BRANCH_MANAGER) mở được | Xem trước gộp với khách thật #6 → 404 |
