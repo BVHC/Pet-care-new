@@ -42,7 +42,7 @@
 
 Trường có `?` là không bắt buộc / có thể null. Kiểu `email`, `date`, `datetime`… theo mục 3 của `00-method.md`.
 
-- **`MergePreview`** — {`targetCustomerId`: int64, `sourceCustomerId`: int64, `petCount`: int32, `addressCount`: int32, `duplicateAddressCount`: int32, `appointmentCount`: int32, `boardingCount`: int32, `orderCount`: int32, `onlineOrderCount`: int32, `feedbackCount`: int32, `complaintCount`: int32, `careTaskCount`: int32, `warnings`: [string], `blockers`: [string]}
+- **`MergePreview`** — {`targetCustomerId`: int64, `sourceCustomerId`: int64, `petCount`: int32, `addressCount`: int32, `duplicateAddressCount`: int32, `appointmentCount`: int32, `boardingCount`: int32, `orderCount`: int32, `onlineOrderCount`: int32, `feedbackCount`: int32, `careTaskCount`: int32, `warnings`: [string], `blockers`: [string]}
 - **`CustomerMergeRequest`** — {`sourceCustomerId`: int64, `targetCustomerId`: int64, `confirm`: boolean}
 - **`CustomerMergeResult`** — {`mergeId`: int64, `sourceCustomerId`: int64, `targetCustomerId`: int64, `moved`: object, `createdAt`: date-time}
 
@@ -67,7 +67,7 @@ Trường có `?` là không bắt buộc / có thể null. Kiểu `email`, `dat
 | ID | Câu hỏi | Trạng thái | Gốc |
 |---|---|---|---|
 | Q1 | Phạm vi quản lý của A05: chỉ khách đã có giao dịch tại chi nhánh mình hay toàn chuỗi | TBD (PO) | BR-KH-11, UC27 |
-| Q2 | Có cần SUPER_MANAGER duyệt khi hồ sơ có đơn hàng lớn / khiếu nại đang mở không | TBD (PO) | BR-KH-11 |
+| Q2 | Có cần SUPER_MANAGER duyệt khi hồ sơ có đơn hàng lớn không | TBD (PO) | BR-KH-11 |
 
 ---
 

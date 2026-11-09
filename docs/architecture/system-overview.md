@@ -1,23 +1,28 @@
 # System Overview — trạng thái kỹ thuật thực tế
 
-> Mô tả **codebase hiện có**, không phải thiết kế mục tiêu. Nghiệp vụ: `docs/01`–`05` (tra qua `docs/INDEX.md`); quy ước code: `docs/convention/backend/`; quy tắc toàn hệ thống, thứ tự khóa, công cụ platform: `CLAUDE.md`. **Chi tiết hành vi, thứ tự khóa / lỗi và danh sách test nằm trong ADR của từng dòng** — file này chỉ là bản đồ.
-> Cập nhật: 2026-11-07 (đối chiếu lại với code tại `5088cff` = `origin/dev`). Trạng thái task: `docs/time.md`.
+> Mô tả **codebase hiện có**, không phải thiết kế mục tiêu. Nghiệp vụ: `docs/01`–`05` (tra qua `docs/INDEX.md`); quy ước code: `docs/convention/backend/`; quy tắc toàn hệ thống, công cụ platform: `CLAUDE.md`; thứ tự khóa: `docs/architecture/concurrency-locking.md`; bẫy FE: `docs/architecture/frontend-notes.md`. **Chi tiết hành vi, thứ tự khóa / lỗi và danh sách test nằm trong ADR của từng dòng** — file này chỉ là bản đồ.
+> Cập nhật: 2026-11-08 (đối chiếu lại với code tại `8f8542d` = `origin/manh`, hơn `origin/dev` @ `3a65850` một commit). Trạng thái task: `docs/time.md`.
 >
 > Nhật ký (mới nhất trước, giữ 5 dòng; cũ hơn: `git log` của file này):
+> - 2026-11-09 — ADR-0124 (nội trú: số ngày gồm cả hai đầu, một dòng Order lúc xuất viện + tiền tạm tính, giữ chuồng cũ khi nhập từ lưu trú, một y lệnh một lần, theo dõi nội trú) và ADR-0125 (bỏ phẫu thuật: UC50, FSM #23, `surgery-v1`). **Code chưa theo** (V37 còn `surgeries`, V41 còn `SURGERY`; FE còn màn phẫu thuật; nội trú chưa có Java): nợ D063, D064.
+> - 2026-11-08 — ADR-0122 (Accepted, Dũng đã chốt): bỏ khiếu nại; feedback sẽ không trạng thái, giữ 30 ngày (ST24). **Code chưa theo** (V39 / V40 còn bảng, 6 khóa, 7 mẫu; feedback còn `status`; FE còn trang khiếu nại): nợ D061.
+> - 2026-11-08 — Đối chiếu docs với code: FE đã nối refresh token (D055 trả trong code, `3a65850`; chưa chạy với BE thật), T57-fe đã dựng mock + màn hình cho 15 module tầng 3 (mock có 85 khóa [CFG], 70 mẫu thông báo); chuyển nguyên văn thứ tự khóa / quy ước cô lập IT / bẫy FE từ `CLAUDE.md` sang `docs/architecture/{concurrency-locking,testing-notes,frontend-notes}.md`.
 > - 2026-11-07 — Trả D060 (ADR-0121): CI trên `main, dev`, bỏ `flyway:migrate`, kiểm conflict marker, IT chỉ `main` / chạy tay, loại 3 file test seed-dev khỏi `tsc`; chấp nhận D056 (ADR-0115: Redis compose không mật khẩu, không đổi gì).
 > - 2026-11-07 — Trả D054 (ADR-0114): job `RefreshTokenCleanupJob` 03:10:11 xóa refresh token hết hạn quá 1 ngày; không migration.
-> - 2026-11-07 — Đối chiếu lại toàn file với code: còn 3 lớp `*Placeholder` + placeholder dạng `default` ở 14 interface `api` (mục 3.3), thêm module `payment` / `shop` (chỉ `api`), V34–V48, parity IT ghim 187 endpoint, 230 handler, 85 khóa [CFG], image test `pgvector/pgvector:pg17`.
-> - 2026-11-06 — T55 xong: T55a (FE-1) hạ tầng pgvector V34–V35 (ADR-0110); T55b (BE-1) schema tầng 3 V36–V41, 8 khóa [CFG], 40 mẫu thông báo, placeholder liên module (ADR-0113), V42 nguồn Order `ONLINE` (ADR-0116); T55c (BE-2) V43–V48, 7 khóa [CFG], placeholder liên module, module `payment` / `shop` (ADR-0117). Cả ba ADR còn Proposed.
-> - 2026-11-05 — BE-2 trả nợ (ADR-0103–0107, V33): sales #11 `move-to-external-purchase`, thu tiền kiểm chi nhánh trước khi khóa, ST13 chỉ khóa ca đã đến hạn; tra cứu khách không dấu (unaccent + trigram); khóa trước khi đọc ở sửa branch / catalog (sửa lỗi mất cập nhật `status`); đo index Order, không thêm; trần mã chứng từ 999 999, giao thú / thú mất đóng task `PICKUP_OVERDUE`, ca ngoài giờ không còn tự chốt 00:00.
 
 ## 1. Tóm tắt
 
 | Phần | Trạng thái |
 |---|---|
+<<<<<<< HEAD
 | Đặc tả | v16 `docs/01`–`05`; tầng 3 + AI duyệt T54 (5/11) ở `docs/07`–`10`; hợp đồng giữa module `docs/06-module-contracts.md` (tầng 3: §6b); hợp đồng FE↔BE `docs/api/` (pha 1: 12 module, 232 endpoint; pha 2: 14 module, 131 endpoint chưa cài; sinh từ `docs/api/generator/`) |
 | Backend | 14 thư mục `module/`: 12 module pha 1 + `payment`, `shop` (chỉ `api` + placeholder, T55c). 230 handler (`@*Mapping`); `OpenApiContractParityIT` ghim 187 operation trong 10 module có annotation. Bảng module ở `CLAUDE.md` *Current state*; từng feature ở mục 3.2. **Chưa có Java** cho Nhân sự, phẫu thuật, nội trú, khiếu nại, shop, payment, `ai` |
+=======
+| Đặc tả | v16 `docs/01`–`05`; tầng 3 + AI duyệt T54 (5/11) ở `docs/07`–`10`; hợp đồng giữa module `docs/06-module-contracts.md` (tầng 3: §6b); hợp đồng FE↔BE `docs/api/` (pha 1: 12 module, 232 endpoint; pha 2: 15 module, 139 endpoint chưa cài; sinh từ `docs/api/generator/`) |
+| Backend | 14 thư mục `module/`: 12 module pha 1 + `payment`, `shop` (chỉ `api` + placeholder, T55c). 230 handler (`@*Mapping`); `OpenApiContractParityIT` ghim 187 operation trong 10 module có annotation. Bảng module ở `CLAUDE.md` *Current state*; từng feature ở mục 3.2. **Chưa có Java** cho Nhân sự, khám tại nhà, nội trú, shop, payment, `ai` (phẫu thuật đã bỏ, ADR-0125) |
+>>>>>>> 78fe062 (docs: chốt đặc tả nội trú (ADR-0124) và bỏ module phẫu thuật (ADR-0125).)
 | Database | V1 = 55 bảng erd; V2 = 52 [CFG] (nay 85 khóa); V3–V48 và V50 seed mẫu / index / CHECK / cột / bảng tầng 3 và AI (mục 4b). Số V chưa xác nhận chéo với bên kia: V22, V23, V27–V32, V36–V41 (BE-1), V24–V26, V33, V42–V48 (BE-2; V42 do BE-1 làm thay); V34–V35 là AI (FE-1). **Số kế tiếp V51**; V50 (BE-1) là index `refresh_tokens (expires_at, id)` của ADR-0114, V49 (cuối dải BE-2, để dành cho ADR-0117 TBD-1 / TBD-2) còn trống — DB đã chạy V50 sẽ fail validate Flyway khi V49 xuất hiện (`out-of-order` tắt). ADMIN đầu tiên không seed: dev tạo bằng SQL, **gồm cả dòng `staff_profiles`** (thiếu thì `GET /api/me` trả 500): `INSERT INTO accounts (email, phone, password_hash, role, status) VALUES ('<email>', '<sđt>', '<bcrypt>', 'ADMIN', 'ACTIVE') RETURNING id;` rồi `INSERT INTO staff_profiles (account_id, full_name) VALUES (<id>, '<họ tên>');` (`branch_id` NULL — BR-QT-03) |
-| Frontend | Dựng theo đặc tả cũ. Auth, hồ sơ, catalog, branch, kho, Order / thu ngân, bàn làm việc nhân viên, báo cáo gọi BE thật hoặc mock theo hợp đồng. Chưa nối refresh token (D055). T57 (màn hình tầng 3) chưa bắt đầu — mục 6 |
+| Frontend | Dựng theo đặc tả cũ. Auth, hồ sơ, catalog, branch, kho, Order / thu ngân, bàn làm việc nhân viên, báo cáo gọi BE thật hoặc mock theo hợp đồng. Refresh token đã nối (D055, `session.store.ts` / `axios.ts`; chưa chạy với BE thật). T57-fe đã dựng mock + màn hình tầng 3 cho 15 module (chạy trên mock, chưa có BE thật) — mục 6 |
 | Test | 328 lớp `*Test`, 196 lớp `*IT`. Nền chạy và các test đỏ đã biết: `CLAUDE.md` *Tests baseline* |
 
 ## 2. Thành phần runtime
@@ -144,7 +149,11 @@ Còn thiếu hẳn (chưa khai báo ở T55, `docs/06` §6b #2, #5, #6, #9–11)
 |---|---|---|
 | visit #21 hồ sơ sức khỏe thú (T28b) | BR-KH-07, ADR-0108 | D045 (khóa Order trước khi đọc) |
 | care #9–10 cài đặt nhận thông báo | UC88 | D025, chờ PO |
+<<<<<<< HEAD
 | Tầng 3 BE-1: Nhân sự (T58–T59), phẫu thuật (T61), nội trú (T69), khiếu nại (T70), trừ vật tư ST07 (T71) | `docs/09`, ADR-0113 | Schema đã có (V36–V41), chưa có Java |
+=======
+| Tầng 3 BE-1: Nhân sự (T58–T59), khám tại nhà (T60), nội trú (T69; ADR-0124; phẫu thuật T61 đã bỏ, ADR-0125), feedback không trạng thái + ST24 (T70, ADR-0122; khiếu nại đã bỏ), trừ vật tư ST07 (T71) | `docs/09`, ADR-0113 | Schema đã có (V36–V41), chưa có Java |
+>>>>>>> 78fe062 (docs: chốt đặc tả nội trú (ADR-0124) và bỏ module phẫu thuật (ADR-0125).)
 | Tầng 3 BE-2: phí / định mức vật tư, thương mại điện tử, thanh toán online, trả hàng – hoàn tiền, kho mở rộng, vòng đời chi nhánh, gộp khách, bình luận bài viết | `docs/08`, ADR-0116, 0117 | Schema đã có (V42–V48), interface ở mục 3.3. T62 phí / định mức, T63–T64 đơn online, T65 thanh toán, T73 trả hàng, T74 kho mở rộng, T75 chi nhánh / khách / bài viết |
 | Phân hệ AI (chatbot RAG, gợi ý) | `docs/07`, ADR-0109, 0110 | Có V34–V35 (4 bảng, 18 khóa `ai.*`); chưa có module `ai`, rate limit nhóm AI, job ST22–23 (T77 chatbot, T78 gợi ý) |
 | Gọi `AuditRecorder` ở module còn lại | BR-QT-15 | Snapshot JSON object |
@@ -195,11 +204,11 @@ Job: Scheduler (4 thread) → {Việc}Job.run() (không tx, MDC traceId) → Ser
 
 ## 6. Frontend (`FE/`)
 
-- **Stack:** React 18, Vite, TypeScript, React Router 6, React Query 5, Zustand, react-hook-form + zod, Tailwind 4 + Radix, Vitest, Playwright. Chi tiết, bẫy và quy ước mock: `CLAUDE.md` *Frontend notes*.
+- **Stack:** React 18, Vite, TypeScript, React Router 6, React Query 5, Zustand, react-hook-form + zod, Tailwind 4 + Radix, Vitest, Playwright. Chi tiết, bẫy và quy ước mock: `docs/architecture/frontend-notes.md`.
 - **Routes** (`src/app/App.tsx`): công khai; mọi role đã đăng nhập; khách A02 (`/booking`, `/pets`, `/review`, `/boarding-bookings…` sau `RequireLinkDecision`); bàn làm việc `/staff/*` và back office `/admin/*` trong `StaffShell`. Chặn route: `RequireRole`. Nhiều route thuộc phạm vi cũ / tầng 3 (shop, membership, vouchers…) — đối chiếu `docs/INDEX.md` trước khi nối API.
 - **API:** một client `shared/api/axios.ts` (`VITE_API_URL`, mặc định 8081), lỗi `ApiError` + `ruleId`. Mock theo hợp đồng `shared/api/mock/` bật ở `npm run dev` (`VITE_API_MOCK=false` để gọi BE thật). Đã chạy với BE thật: bàn làm việc, thu tiền, báo cáo, Care Task, content (T49, 27/10 – 1/11); mock lưu trú #13–22 chưa chạy với BE thật. Trang quản trị nội dung (`/admin/page-contents`, `/admin/articles`), góp ý (`/admin/feedbacks`, `/review`) và Care Task (`/admin/care-tasks`) chạy mock. `clinic.api.ts` / `clinic-db.ts` / `useClinic.ts` là mã chết (xóa ở T57). `mock-api.test.ts` cố ý assert mock trả 404 cho path chưa có mock (`/api/visits/1/not-yet-built`).
 - **Chạy với BE thật (T49):** BE `SERVER_PORT=8082`, `VITE_API_MOCK=false VITE_API_URL=http://localhost:8082 npx vite`; BE **không trả `branchId` ở `POST /auth/login`** (dùng `useStaffBranch()`). Cách dựng lại và màn bị BE chặn: `docs/testcases/T49-fe.md` §D, §F.
-- **Khuyết tật:** 2 `QueryClient` (`main.tsx`, `App.tsx` thắng); Vite proxy 8080 ≠ axios 8081; chưa có refresh token (D055).
+- **Khuyết tật:** 2 `QueryClient` (`main.tsx`, `App.tsx` thắng); Vite proxy 8080 ≠ axios 8081; refresh token đã nối (D055) nhưng chưa chạy với BE thật.
 
 ## 7. Nợ cấu hình & tài liệu (đừng tin, hãy kiểm tra)
 

@@ -1,6 +1,8 @@
 # Pet Care Ecosystem — Checklist duyệt đặc tả tầng 3 (T54) và danh mục màn hình FE (T57)
 
 > **T54 đã được Hiến (nhóm trưởng) duyệt 5/11/2026.** Phần 1 giữ lại làm bản ghi: ai đọc gì, câu hỏi đã quyết thế nào, xung đột đã xử lý ra sao. BE-1 (Mạnh), BE-2 (Dũng) đọc khi bắt đầu task tương ứng và muốn đổi thì qua ADR. Phần 2 (T57) vẫn ở mức **danh mục màn hình, route, quyền và trang cũ cần xử lý**; chưa viết dòng code FE nào, chưa xóa trang nào.
+> **Đính chính 2026-11-09 ([ADR-0125](./adr/0125-drop-surgery-module.md)):** phẫu thuật (UC50, FSM #23, `surgery-v1`, T61) đã bỏ sau khi T54 duyệt; các dòng nhắc phẫu thuật bên dưới là bản ghi lịch sử, không còn hiệu lực.
+> **Đính chính 2026-11-08 ([ADR-0122](./adr/0122-drop-complaint-feedback-stateless-retention.md)):** module khiếu nại (UC85, UC86, ST16, ST17, FSM #26, `complaint-v1`) đã bỏ sau khi T54 duyệt; các dòng nhắc khiếu nại bên dưới là bản ghi lịch sử của T54, không còn hiệu lực.
 
 ---
 
@@ -10,7 +12,11 @@
 
 | Người | Đọc | Vì sao |
 |---|---|---|
+<<<<<<< HEAD
 | **Mạnh (BE-1)** | [`09`](./09-tang3-be1-spec.md); Nhân sự ở `02` §7, `03` #11–#12, [`workforce-v1`](./api/workforce-v1.md); mục BE-1 trong `07` §11 (I-2, I-6, I-9, I-10) | Chủ của phẫu thuật, nội trú, khiếu nại, ST07, Nhân sự |
+=======
+| **Mạnh (BE-1)** | [`09`](./09-tang3-be1-spec.md); Nhân sự ở `02` §7, `03` #11–#12, [`workforce-v1`](./api/workforce-v1.md); mục BE-1 trong `07` §11 (I-2, I-6, I-9, I-10) | Chủ của khám tại nhà, ~~phẫu thuật~~ (bỏ, ADR-0125), nội trú, ~~khiếu nại~~ (bỏ, ADR-0122), ST07, Nhân sự |
+>>>>>>> 78fe062 (docs: chốt đặc tả nội trú (ADR-0124) và bỏ module phẫu thuật (ADR-0125).)
 | **Dũng (BE-2)** | [`08`](./08-tang3-be2-spec.md); mục BE-2 trong `07` §11 (I-1, I-3, I-4, I-5, I-7, I-8) và `09` (phần "Thay đổi cần BE-2 xác nhận") | Chủ của thương mại điện tử, thanh toán, trả hàng, kho mở rộng, chi nhánh, gộp khách, bài viết |
 | **Hiến (FE-1)** | [`07`](./07-ai-subsystem.md), [`adr/0109`](./adr/0109-ai-llm-embedding-vector-store.md); §2 của file này | Chủ AI; FE phải bám hợp đồng |
 | **Cả nhóm** | §1.3 (câu hỏi cần quyết) và §1.4 (xung đột) | Quyết một lần cho cả ba file |
@@ -29,7 +35,12 @@
 | | UC68, 69 · ST21 | `08` §D | #16, #17 | `returns` (9) |
 | | UC77–79 | `08` §E | #18, #19 | `stockops` (13) |
 | | UC13 · UC27 · UC80, UC82 | `08` §F | #20, #21 | `branchlife` (4), `custmerge` (2), `articlex` (14) |
+<<<<<<< HEAD
 | | UC50 | `09` §B | #23 | `surgery` (8) |
+=======
+| BE-1 | UC43, UC51 | `09` §A | #22 | `homevisit` (6) |
+| | ~~UC50~~ (bỏ, ADR-0125) | `09` §B | ~~#23~~ | ~~`surgery` (8)~~ |
+>>>>>>> 78fe062 (docs: chốt đặc tả nội trú (ADR-0124) và bỏ module phẫu thuật (ADR-0125).)
 | | UC55, UC56 | `09` §C | #24, #25 | `inpatient` (10) |
 | | UC85, UC86 · ST16, ST17 | `09` §D | #26 | `complaint` (12) |
 | | ST07 | `09` §E | — | `materialuse` (3) |
@@ -43,7 +54,11 @@
 | 1 | **Chọn cổng thanh toán** (VNPay / ZaloPay / MoMo) và đăng ký sandbox | Nhóm | `08` §C Q1 | T65 |
 | 2 | **Tên bác sĩ thú y** rà soát tri thức AI (quy trình hai lớp đã chốt) | Nhóm | `07` Q2 | T56, T77 |
 | 3 | Xác nhận hạ tầng pgvector ở T55 (đổi ảnh compose, Testcontainers, V34) | Hiến, Mạnh, Dũng | `07` §17.1, ADR-0109 D3 | T55, T77 |
+<<<<<<< HEAD
 | 4 | `services.medical_type` thêm `SURGERY`, `INPATIENT`; `orders.source` thêm `ONLINE` | Dũng | `09` §B, §C; `08` §B | T61, T69 |
+=======
+| 4 | `services.medical_type` thêm `SURGERY`, `INPATIENT`; `order_lines.line_type` thêm `HOME_FEE`; `orders.source` thêm `ONLINE` | Dũng | `09` §C; `08` §B | T60, T69 (`SURGERY` bỏ ở ADR-0125) |
+>>>>>>> 78fe062 (docs: chốt đặc tả nội trú (ADR-0124) và bỏ module phẫu thuật (ADR-0125).)
 | 5 | Package `inpatient` và `complaint` thuộc BE-1 (đề xuất) hay `boarding` / `content` của BE-2 | Mạnh, Dũng | `09` đầu file | T69, T70 |
 | 6 | Hoàn tiền sau `PAID` không đổi Order; báo cáo doanh thu trừ hoàn tiền và phí vận chuyển thế nào | Dũng | `08` §B, §G | T73, báo cáo |
 | 7 | `stock_reservations` đổi định nghĩa "tồn khả dụng" (BR-KO-01) ở mọi nơi tính tồn | Dũng | `08` §G | T63 |
@@ -107,7 +122,13 @@ Bảng chi tiết ở cuối [`07`](./07-ai-subsystem.md) §17.1, [`08`](./08-ta
 | UC32 | Tab "Phí & định mức" ở `/admin/catalog` | SUPER_MANAGER | `fees` | `/admin/catalog` |
 | UC34, 37, 38 | `/admin/workforce` (ca, phân ca, duyệt, vắng đột xuất) | BRANCH_MANAGER | `workforce` | `/admin/workforce` (mock cũ) |
 | UC35, 36 | `/admin/my-schedule` (lịch của tôi, gửi / rút yêu cầu) | RECEPTIONIST, VET, CARETAKER | `workforce` | — mới |
+<<<<<<< HEAD
 | UC50 | Khung phẫu thuật trong lượt khám (VET); danh sách chờ cam kết (lễ tân) | VET, RECEPTIONIST, CARETAKER (xem) | `surgery` | bàn bác sĩ, bàn lễ tân |
+=======
+| UC43 | Tùy chọn "khám tại nhà" ở `/booking`; đặt hộ ở `/admin/appointments` | CUSTOMER, RECEPTIONIST | `homevisit` | `/booking`, `/admin/appointments` |
+| UC51 | Nút "Bắt đầu khám tại nhà" ở bàn làm việc bác sĩ | VET | `homevisit` | `/staff/doctor` |
+| ~~UC50~~ | ~~Khung phẫu thuật trong lượt khám (VET); danh sách chờ cam kết (lễ tân)~~ — bỏ ở ADR-0125, FE gỡ (D063) | — | — | — |
+>>>>>>> 78fe062 (docs: chốt đặc tả nội trú (ADR-0124) và bỏ module phẫu thuật (ADR-0125).)
 | UC55, 56 | `/admin/inpatient` (danh sách, chi tiết, y lệnh, theo dõi, xuất viện) | VET, CARETAKER, RECEPTIONIST (xem) | `inpatient` | — mới |
 | UC61 | `/cart` | CUSTOMER | `shop` | `/cart` (mock cũ) |
 | UC62 | `/checkout` (địa chỉ, chi nhánh, báo giá) | CUSTOMER | `shop` | `/checkout` |
@@ -119,8 +140,8 @@ Bảng chi tiết ở cuối [`07`](./07-ai-subsystem.md) §17.1, [`08`](./08-ta
 | UC80 | `/admin/my-articles` (soạn, gửi duyệt) | VET | `articlex` | — mới |
 | UC81 (mở rộng) | Hàng chờ duyệt ở `/admin/articles/:tab`; ẩn bình luận | SUPER_MANAGER | `articlex` | `/admin/articles` |
 | UC82 | Khối bình luận ở `/news/:slug` | CUSTOMER (đăng), ẩn danh (xem) | `articlex` | `/news/:slug` |
-| UC85 | `/complaints` (khách); tạo thay khách ở bàn lễ tân | CUSTOMER, RECEPTIONIST | `complaint` | — mới |
-| UC86 | `/admin/incidents` đổi thành "Khiếu nại" | BRANCH_MANAGER, SUPER_MANAGER | `complaint` | `/admin/incidents` (hiện ghi UC86) |
+| ~~UC85~~ | ~~`/complaints`; tạo thay khách~~ — bỏ (ADR-0122) | — | — | — |
+| ~~UC86~~ | ~~`/admin/incidents` đổi thành "Khiếu nại"~~ — bỏ (ADR-0122) | — | — | — |
 | UC90, 91 | Khung chat (hai chế độ: khách vãng lai gọi endpoint công khai, đã đăng nhập gọi `/me`) | mọi người; CUSTOMER (cá nhân) | `ai` | `InteractiveMascotCompanion` |
 | UC92 | Khu vực gợi ý theo thú | CUSTOMER | `ai` | `/recommend` |
 | UC93, 94 | Tab "Tài liệu tri thức", "Hồ sơ gợi ý" ở `/admin/ai` | SUPER_MANAGER | `ai` | `/admin/ai` |

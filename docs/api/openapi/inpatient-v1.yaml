@@ -1,13 +1,13 @@
 # Pet Care Inpatient API v1 (tầng 3) — OpenAPI 3.1, sinh từ khai báo; không sửa tay, sửa khai báo rồi sinh lại.
 # Module LT (nội trú) · owner BE-1
-# Nguồn: 01 UC55, UC56; 09-tang3-be1-spec.md §C (BR-LT-13…17; 03 #24 Nhập viện, #25 Y lệnh nội trú); 05 bổ sung admissions, admission_orders, admission_observations
+# Nguồn: 01 UC55, UC56; 09-tang3-be1-spec.md §C (BR-LT-13…17; 03 #24 Nhập viện, #25 Y lệnh nội trú); 05 bổ sung admissions, admission_orders, admission_observations; ADR-0124
 # Truy vết: CONFIRMED = có trong docs · ASSUMPTION (A#) · TBD (Q#) — xem file .md cùng tên.
 
 openapi: "3.1.0"
 info:
   title: "Pet Care Inpatient API v1 (tầng 3)"
   version: "1.0.0"
-  description: "Module LT (nội trú) · owner BE-1. Nguồn: 01 UC55, UC56; 09-tang3-be1-spec.md §C (BR-LT-13…17; 03 #24 Nhập viện, #25 Y lệnh nội trú); 05 bổ sung admissions, admission_orders, admission_observations. Chi tiết và truy vết: ../inpatient-v1.md"
+  description: "Module LT (nội trú) · owner BE-1. Nguồn: 01 UC55, UC56; 09-tang3-be1-spec.md §C (BR-LT-13…17; 03 #24 Nhập viện, #25 Y lệnh nội trú); 05 bổ sung admissions, admission_orders, admission_observations; ADR-0124. Chi tiết và truy vết: ../inpatient-v1.md"
 servers:
   - url: "/api"
     description: "Mọi path bên dưới nằm sau tiền tố /api"
@@ -17,13 +17,13 @@ tags:
   - name: "Admission orders"
     description: "Y lệnh nội trú (UC56)"
   - name: Observations
-    description: "Theo dõi hậu phẫu (UC56)"
+    description: "Theo dõi nội trú (UC56)"
 paths:
   "/admissions":
     post:
       tags: [Admissions]
       summary: "Nhập viện"
-      description: "UC55 · BR-LT-13. Actor: A07. Quyền: VET của chi nhánh. Chuyển trạng thái: — → ADMITTED (Nhập viện#1). Từ lưu trú: tạo Visit điều trị gán VET gọi, đặt chỗ giữ nguyên `CHECKED_IN` (BR-LT-17)."
+      description: "UC55 · BR-LT-13. Actor: A07. Quyền: VET của chi nhánh. Chuyển trạng thái: — → ADMITTED (Nhập viện#1). Từ lưu trú: tạo Visit điều trị gán VET gọi (Order không có dòng tự sinh), đặt chỗ giữ nguyên `CHECKED_IN`, thú ở nguyên chuồng (BR-LT-13, BR-LT-17)."
       operationId: admitPet
       security:
         - bearerAuth: []
@@ -50,7 +50,7 @@ paths:
                     type: integer
                     description: "HTTP status của kết quả, ví dụ 200, 201"
         "400":
-          description: "`BR-LT-13` không đúng một trong `visitId` / `boardingBookingId` · Visit không `IN_PROGRESS` / không của mình · đặt chỗ không `CHECKED_IN` · dịch vụ không `INPATIENT` · chuồng không `AVAILABLE` · thú đã mất"
+          description: "`BR-LT-13` không đúng một trong `visitId` / `boardingBookingId` · Visit không `IN_PROGRESS` / không của mình · đặt chỗ không `CHECKED_IN` · dịch vụ không `INPATIENT` · chuồng không `AVAILABLE` · thiếu `kennelId` khi nhập từ khám / có `kennelId` khi nhập từ lưu trú · thú đã mất"
           content:
             "application/json":
               schema:
@@ -155,7 +155,7 @@ paths:
     post:
       tags: [Admissions]
       summary: "Xuất viện"
-      description: "UC55 · BR-LT-14. Actor: A07. Quyền: VET của chi nhánh. Chuyển trạng thái: ADMITTED → DISCHARGED (Nhập viện#2). Thêm dòng dịch vụ nội trú (số ngày × giá đã chốt) vào Order của Visit; giải phóng chuồng nếu được cấp riêng."
+      description: "UC55 · BR-LT-14. Actor: A07. Quyền: VET của chi nhánh. Chuyển trạng thái: ADMITTED → DISCHARGED (Nhập viện#2). Thêm **một** dòng dịch vụ nội trú (số lượng = ngày xuất − ngày nhập + 1, đơn giá = `unitPrice` đã chốt) vào Order của Visit trong cùng transaction; giải phóng chuồng nếu được cấp riêng. `DECEASED` không tự đánh dấu thú mất (BR-LT-14)."
       operationId: dischargeAdmission
       security:
         - bearerAuth: []
@@ -184,7 +184,7 @@ paths:
                     type: integer
                     description: "HTTP status của kết quả, ví dụ 200, 201"
         "400":
-          description: "`BR-LT-14` còn y lệnh `ORDERED` · thiếu tóm tắt · `DECEASED` mà thú chưa đánh dấu đã mất"
+          description: "`BR-LT-14` còn y lệnh `ORDERED` · thiếu tóm tắt"
           content:
             "application/json":
               schema:
@@ -400,7 +400,7 @@ paths:
     post:
       tags: [Observations]
       summary: "Ghi chỉ số theo dõi"
-      description: "UC56 · BR-LT-16. Actor: A07, A08. Quyền: A07, A08 của chi nhánh. Chuyển trạng thái: —. Chỉ thêm, không sửa / xóa. `abnormal = true` báo VET và khách (BR-LT-12); cân nặng ghi vào hồ sơ cân (BR-KH-04)."
+      description: "UC56 · BR-LT-16. Actor: A07, A08. Quyền: A07, A08 của chi nhánh. Chuyển trạng thái: —. Chỉ thêm, không sửa / xóa. `abnormal = true` báo VET phụ trách và khách theo cách của nhật ký lưu trú (BR-LT-12); cân nặng ghi vào hồ sơ cân (BR-KH-04)."
       operationId: createObservation
       security:
         - bearerAuth: []
@@ -600,10 +600,10 @@ components:
         kennelId:
           type: [integer, "null"]
           format: int64
-          description: "Chuồng `AVAILABLE`; vắng = dùng chuồng đang ở (từ lưu trú)"
+          description: "Chuồng `AVAILABLE`. Bắt buộc với `visitId`; **cấm** với `boardingBookingId` (thú ở nguyên chuồng của đặt chỗ, BR-LT-13)"
     Admission:
       type: object
-      required: [admissionId, code, visitId, petId, petName, branchId, serviceId, serviceName, unitPrice, status, admittedAt]
+      required: [admissionId, code, visitId, petId, petName, branchId, serviceId, serviceName, unitPrice, status, admittedAt, billedDays, estimatedAmount]
       properties:
         admissionId:
           type: integer
@@ -642,6 +642,15 @@ components:
         admittedAt:
           type: string
           format: date-time
+        billedDays:
+          type: integer
+          format: int32
+          description: "Số ngày tính tiền = ngày xuất (hoặc hôm nay nếu `ADMITTED`) − ngày nhập + 1, giờ Việt Nam; tính khi đọc, không lưu (BR-LT-14)"
+        estimatedAmount:
+          type: integer
+          format: int64
+          minimum: 0
+          description: "`billedDays` × `unitPrice`; tiền tạm tính, dòng Order chỉ có sau xuất viện"
         dischargeOutcome:
           $ref: "#/components/schemas/DischargeOutcome"
         dischargeSummary:
@@ -655,7 +664,7 @@ components:
           description: "Có sau khi xuất viện"
     AdmissionSummary:
       type: object
-      required: [admissionId, code, petName, status, admittedAt]
+      required: [admissionId, code, petName, status, admittedAt, billedDays, estimatedAmount]
       properties:
         admissionId:
           type: integer
@@ -671,6 +680,14 @@ components:
           format: date-time
         kennelCode:
           type: [string, "null"]
+        billedDays:
+          type: integer
+          format: int32
+        estimatedAmount:
+          type: integer
+          format: int64
+          minimum: 0
+          description: VND
     DischargeRequest:
       type: object
       required: [outcome, summary]
@@ -791,7 +808,7 @@ components:
           maxLength: 500
         abnormal:
           type: boolean
-          description: "true báo VET và khách (BR-LT-16)"
+          description: "true báo VET phụ trách và khách (BR-LT-16)"
   responses:
     BadRequest:
       description: "VALIDATION_FAILED / MALFORMED_REQUEST: dữ liệu không hợp lệ · BUSINESS_RULE_VIOLATION: vi phạm rule, message kết thúc bằng mã rule \"(BR-…)\"."

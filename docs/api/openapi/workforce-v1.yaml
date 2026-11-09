@@ -1,13 +1,13 @@
 # Pet Care Workforce API v1 (tầng 3) — OpenAPI 3.1, sinh từ khai báo; không sửa tay, sửa khai báo rồi sinh lại.
 # Module NS · owner BE-1
-# Nguồn: 01 UC34–UC38; 02 BR-NS-01…10; 03 #11 Yêu cầu nghỉ / đổi ca, #12 Phân ca; 04 §12.1; 05 §14.1 (shift_definitions, shift_assignments, shift_requests)
+# Nguồn: 01 UC34–UC38; 02 BR-NS-01…12; 03 #11 Yêu cầu nghỉ / đổi ca, #12 Phân ca; ADR-0123; 04 §12.1; 05 §14.1 (shift_definitions, shift_assignments, shift_requests)
 # Truy vết: CONFIRMED = có trong docs · ASSUMPTION (A#) · TBD (Q#) — xem file .md cùng tên.
 
 openapi: "3.1.0"
 info:
   title: "Pet Care Workforce API v1 (tầng 3)"
   version: "1.0.0"
-  description: "Module NS · owner BE-1. Nguồn: 01 UC34–UC38; 02 BR-NS-01…10; 03 #11 Yêu cầu nghỉ / đổi ca, #12 Phân ca; 04 §12.1; 05 §14.1 (shift_definitions, shift_assignments, shift_requests). Chi tiết và truy vết: ../workforce-v1.md"
+  description: "Module NS · owner BE-1. Nguồn: 01 UC34–UC38; 02 BR-NS-01…12; 03 #11 Yêu cầu nghỉ / đổi ca, #12 Phân ca; ADR-0123; 04 §12.1; 05 §14.1 (shift_definitions, shift_assignments, shift_requests). Chi tiết và truy vết: ../workforce-v1.md"
 servers:
   - url: "/api"
     description: "Mọi path bên dưới nằm sau tiền tố /api"
@@ -18,6 +18,8 @@ tags:
     description: "Phân ca, lịch làm việc, vắng đột xuất (UC34, UC35, UC38)"
   - name: "Shift requests"
     description: "Yêu cầu nghỉ / đổi ca và duyệt (UC36, UC37)"
+  - name: "Shift registrations"
+    description: "Đăng ký ca theo tuần và thống kê số ca (UC35, UC34)"
 paths:
   "/shift-definitions":
     get:
@@ -212,7 +214,7 @@ paths:
     post:
       tags: ["Shift assignments"]
       summary: "Phân ca cho nhân viên"
-      description: "UC34 · BR-NS-02, BR-NS-08, BR-NS-10. Actor: A05. Quyền: BRANCH_MANAGER của chi nhánh. Chuyển trạng thái: — → SCHEDULED (Phân ca#1)."
+      description: "UC34 · BR-NS-02, BR-NS-08, BR-NS-10. Actor: A05. Quyền: BRANCH_MANAGER của chi nhánh. Chuyển trạng thái: — → SCHEDULED (Phân ca#1). Phân hộ (đường dự phòng, ví dụ nhân viên mới vào giữa tuần): tạo phân ca `source = MANAGER`. Không kiểm định mức tuần (BR-NS-12). Nhân viên tự đăng ký dùng `PUT /me/shift-registrations/{weekStart}`."
       operationId: createShiftAssignment
       security:
         - bearerAuth: []
@@ -676,6 +678,97 @@ paths:
             "application/json":
               schema:
                 $ref: "#/components/schemas/Error"
+  "/me/shift-registrations/{weekStart}":
+    put:
+      tags: ["Shift registrations"]
+      summary: "Đăng ký ca theo tuần (thay cả tuần)"
+      description: "UC35 · BR-NS-11, BR-NS-12. Actor: A06–A08. Quyền: Nhân viên A06–A08, chỉ dữ liệu của mình. Chuyển trạng thái: — → SCHEDULED (Phân ca#1) · SCHEDULED → CANCELLED (Phân ca#7). Idempotent: gửi lại cùng nội dung không đổi kết quả. Mục thiếu so với phân ca `SELF` hiện có bị hủy (lý do hệ thống ghi 'Nhân viên sửa đăng ký tuần'), mục mới được tạo, mục giữ nguyên không đổi; phân ca `MANAGER` không bị đụng nhưng được tính vào định mức. Không thông báo, không audit (BR-NS-08, 10). Yêu cầu `PENDING` của phân ca bị hủy tự `REJECTED` (Yêu cầu#5). Xem lịch dùng `GET /me/shift-assignments`."
+      operationId: putMyShiftRegistration
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: "#/components/parameters/WeekStart"
+      requestBody:
+        required: true
+        content:
+          "application/json":
+            schema:
+              $ref: "#/components/schemas/PutShiftRegistrationRequest"
+      responses:
+        "200":
+          description: OK
+          content:
+            "application/json":
+              schema:
+                type: object
+                required: [data, message, code]
+                properties:
+                  data:
+                    $ref: "#/components/schemas/ShiftRegistration"
+                  message:
+                    type: string
+                  code:
+                    type: integer
+                    description: "HTTP status của kết quả, ví dụ 200, 201"
+        "400":
+          description: "`BR-NS-11` `weekStart` không phải thứ Hai · quá hạn (sau 00:00 thứ Hai của tuần) · ngày ngoài tuần · ca ngừng dùng hoặc không thuộc chi nhánh · trùng cặp (ngày, ca) trong lô · chồng giờ với phân ca khác (kể cả `MANAGER`); `BR-NS-12` tập kết quả của tuần chưa đủ định mức. Một lỗi thì không lưu gì, `message` liệt kê mọi mục lỗi"
+          content:
+            "application/json":
+              schema:
+                $ref: "#/components/schemas/Error"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "409":
+          description: "`CONCURRENCY_CONFLICT` trùng cặp ca – ngày do thao tác song song"
+          content:
+            "application/json":
+              schema:
+                $ref: "#/components/schemas/Error"
+  "/shift-weekly-summaries":
+    get:
+      tags: ["Shift registrations"]
+      summary: "Thống kê số ca mỗi nhân viên trong tuần"
+      description: "UC34 · BR-NS-12. Actor: A05. Quyền: BRANCH_MANAGER của chi nhánh. Chuyển trạng thái: —. Không phân trang. Mọi nhân viên A06–A08 `ACTIVE` của chi nhánh, kể cả người chưa có ca nào. Sắp `staffName` tăng dần. Chỉ để quản lý theo dõi, không chặn gì (BR-NS-12)."
+      operationId: listShiftWeeklySummaries
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: weekStart
+          in: query
+          required: true
+          schema:
+            type: string
+            format: date
+      responses:
+        "200":
+          description: OK
+          content:
+            "application/json":
+              schema:
+                type: object
+                required: [data, message, code]
+                properties:
+                  data:
+                    type: array
+                    items:
+                      $ref: "#/components/schemas/ShiftWeeklySummary"
+                  message:
+                    type: string
+                  code:
+                    type: integer
+                    description: "HTTP status của kết quả, ví dụ 200, 201"
+        "400":
+          description: "`weekStart` thiếu hoặc không phải thứ Hai (`BR-NS-12`)"
+          content:
+            "application/json":
+              schema:
+                $ref: "#/components/schemas/Error"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
 components:
   securitySchemes:
     bearerAuth:
@@ -722,6 +815,14 @@ components:
       schema:
         type: integer
         format: int64
+    WeekStart:
+      name: weekStart
+      in: path
+      required: true
+      schema:
+        type: string
+        format: date
+      description: "Thứ Hai của tuần (giờ Việt Nam), dạng yyyy-MM-dd"
   schemas:
     Error:
       type: object
@@ -820,9 +921,13 @@ components:
       type: string
       enum: [SCHEDULED, ON_LEAVE, ABSENT, CANCELLED]
       description: "03 #12"
+    ShiftAssignmentSource:
+      type: string
+      enum: [SELF, MANAGER]
+      description: "SELF = nhân viên tự đăng ký (BR-NS-11); MANAGER = BRANCH_MANAGER phân hộ (BR-NS-02)"
     ShiftAssignment:
       type: object
-      required: [shiftAssignmentId, branchId, staffId, staffName, shiftDefinitionId, shiftName, startTime, endTime, workDate, status]
+      required: [shiftAssignmentId, branchId, staffId, staffName, shiftDefinitionId, shiftName, startTime, endTime, workDate, status, source]
       properties:
         shiftAssignmentId:
           type: integer
@@ -853,6 +958,8 @@ components:
           format: date
         status:
           $ref: "#/components/schemas/ShiftAssignmentStatus"
+        source:
+          $ref: "#/components/schemas/ShiftAssignmentSource"
         reason:
           type: [string, "null"]
           description: "Lý do vắng hoặc hủy"
@@ -880,6 +987,68 @@ components:
         reason:
           type: string
           maxLength: 300
+    ShiftRegistrationItem:
+      type: object
+      required: [workDate, shiftDefinitionId]
+      properties:
+        workDate:
+          type: string
+          format: date
+          description: "Phải nằm trong tuần của đường dẫn"
+        shiftDefinitionId:
+          type: integer
+          format: int64
+          description: "Ca đang dùng của chi nhánh"
+    PutShiftRegistrationRequest:
+      type: object
+      required: [items]
+      properties:
+        items:
+          type: array
+          items:
+            $ref: "#/components/schemas/ShiftRegistrationItem"
+          description: "Toàn bộ (ngày, ca) nhân viên muốn có trong tuần; thay thế các phân ca SELF hiện có (BR-NS-11)"
+    ShiftRegistration:
+      type: object
+      required: [weekStart, requiredShifts, shiftCount, assignments]
+      properties:
+        weekStart:
+          type: string
+          format: date
+        requiredShifts:
+          type: integer
+          format: int32
+          description: "[CFG] workforce.weekly_required_shifts (BR-NS-12)"
+        shiftCount:
+          type: integer
+          format: int32
+          description: "Số phân ca SCHEDULED của tuần, cả SELF và MANAGER"
+        assignments:
+          type: array
+          items:
+            $ref: "#/components/schemas/ShiftAssignment"
+          description: "Mọi phân ca của nhân viên trong tuần sau khi lưu"
+    ShiftWeeklySummary:
+      type: object
+      required: [staffId, staffName, role, shiftCount, requiredShifts, meetsRequirement]
+      properties:
+        staffId:
+          type: integer
+          format: int64
+        staffName:
+          type: string
+        role:
+          type: string
+          enum: [RECEPTIONIST, VET, CARETAKER]
+        shiftCount:
+          type: integer
+          format: int32
+          description: "Số phân ca SCHEDULED của tuần"
+        requiredShifts:
+          type: integer
+          format: int32
+        meetsRequirement:
+          type: boolean
     ShiftRequestType:
       type: string
       enum: [LEAVE, SWAP]
