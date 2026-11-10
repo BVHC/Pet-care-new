@@ -35,6 +35,10 @@ public interface PetRepository extends JpaRepository<Pet, Long> {
     @Query(value = "SELECT * FROM pets WHERE customer_id = :customerId ORDER BY id", nativeQuery = true)
     List<Pet> findByCustomer(@Param("customerId") Long customerId);
 
+    /** Thú chưa mất của khách, theo tên rồi id (I-1, 07 §11). */
+    @Query("SELECT p FROM Pet p WHERE p.customerId = :customerId AND p.deceasedOn IS NULL ORDER BY p.name, p.id")
+    List<Pet> findLivingByCustomer(@Param("customerId") Long customerId);
+
     @Query(value = "SELECT * FROM pets WHERE customer_id IN (:customerIds) ORDER BY customer_id, id",
             nativeQuery = true)
     List<Pet> findByCustomers(@Param("customerIds") List<Long> customerIds);

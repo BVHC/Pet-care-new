@@ -72,8 +72,7 @@ public interface CatalogQueryApi {
     List<ProductInfo> findProductsByVaccineType(Long vaccineTypeId);
 
     // ------------------------------------------------------------------------------------------------------------
-    // Tầng 3 (T55c, docs/adr/0117, docs/06 §6b hàng 15, 16): placeholder dạng default — ném UnsupportedOperationException
-    // tới khi CatalogQueryService ghi đè; khi đó xóa default (method thành trừu tượng).
+    // Tầng 3 cho module ai (07 I-3). Placeholder T55c đã được thay bằng bản thật ở AI-0 (9/11/2026).
     // ------------------------------------------------------------------------------------------------------------
 
     /** Nguồn của gợi ý (07 I-3): đều đang kinh doanh; sản phẩm chỉ {@code GOODS} không kê đơn. */
@@ -82,19 +81,10 @@ public interface CatalogQueryApi {
 
     /**
      * I-3 (07 §11, UC91, ST22): mọi dòng phác đồ <b>đang dùng</b> của loài, mọi loại vaccine, theo loại vaccine rồi mũi
-     * tăng dần. Bản thật trước 30/11 (T77).
+     * tăng dần.
      */
-    default List<ProtocolDose> listActiveProtocols(Species species) {
-        throw placeholder("listActiveProtocols", "T77");
-    }
+    List<ProtocolDose> listActiveProtocols(Species species);
 
-    /** I-3 (07 §11, UC92): dịch vụ thẩm mỹ, loại chuồng và sản phẩm {@code GOODS} không kê đơn đang kinh doanh. Bản thật trước 7/12 (T78). */
-    default Recommendable listRecommendable() {
-        throw placeholder("listRecommendable", "T78");
-    }
-
-    private static UnsupportedOperationException placeholder(String method, String task) {
-        return new UnsupportedOperationException("CatalogQueryApi." + method + " chưa cài (placeholder T55c, docs/06 §6b); "
-                + "bản thật ở " + task);
-    }
+    /** I-3 (07 §11, UC92): dịch vụ thẩm mỹ, loại chuồng và sản phẩm {@code GOODS} không kê đơn đang kinh doanh. */
+    Recommendable listRecommendable();
 }

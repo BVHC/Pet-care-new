@@ -56,22 +56,12 @@ public interface BranchQueryApi {
     int quotaFor(Long branchId, ServiceGroup group, LocalDate slotDate, LocalTime slotStart);
 
     // ------------------------------------------------------------------------------------------------------------
-    // Tầng 3 (T55c, docs/adr/0117, docs/06 §6b hàng 15): placeholder dạng default — ném UnsupportedOperationException
-    // tới khi BranchQueryService ghi đè; khi đó xóa default (method thành trừu tượng).
+    // Tầng 3 cho module ai (07 I-4). Placeholder T55c đã được thay bằng bản thật ở AI-0 (9/11/2026).
     // ------------------------------------------------------------------------------------------------------------
 
-    /** I-4 (07 §11, UC90, UC92): chi nhánh {@code ACTIVE} nhận cấp cứu ngoài giờ (BR-CN-05), theo tên. Bản thật trước 30/11 (T77). */
-    default List<BranchSummary> findEmergencyBranches() {
-        throw placeholder("findEmergencyBranches", "T77");
-    }
+    /** I-4 (07 §11, UC90, UC92): chi nhánh {@code ACTIVE} nhận cấp cứu ngoài giờ (BR-CN-05), theo tên. */
+    List<BranchSummary> findEmergencyBranches();
 
-    /** I-4 (07 §11, UC92): dịch vụ (kể cả loại chuồng) đang bật ở ít nhất một chi nhánh {@code ACTIVE}. Bản thật trước 30/11 (T77). */
-    default Set<Long> findServiceIdsEnabledAnywhere() {
-        throw placeholder("findServiceIdsEnabledAnywhere", "T77");
-    }
-
-    private static UnsupportedOperationException placeholder(String method, String task) {
-        return new UnsupportedOperationException("BranchQueryApi." + method + " chưa cài (placeholder T55c, docs/06 §6b); "
-                + "bản thật ở " + task);
-    }
+    /** I-4 (07 §11, UC92): dịch vụ (kể cả loại chuồng) đang bật ở ít nhất một chi nhánh {@code ACTIVE}. */
+    Set<Long> findServiceIdsEnabledAnywhere();
 }

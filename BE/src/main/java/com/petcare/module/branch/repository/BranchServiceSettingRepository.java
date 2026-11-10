@@ -20,6 +20,12 @@ public interface BranchServiceSettingRepository extends JpaRepository<BranchServ
             + "AND s.id.serviceId = :serviceId AND s.enabled = true ORDER BY s.id.branchId")
     List<Long> findActiveBranchIdsEnabling(@Param("serviceId") Long serviceId);
 
+    /** Dịch vụ đang bật ở ít nhất một chi nhánh {@code ACTIVE}, theo id tăng dần (I-4, 07 §11). */
+    @Query("SELECT DISTINCT s.id.serviceId FROM BranchServiceSetting s, Branch b WHERE b.id = s.id.branchId "
+            + "AND b.status = com.petcare.module.branch.entity.BranchStatus.ACTIVE AND s.enabled = true "
+            + "ORDER BY s.id.serviceId")
+    List<Long> findServiceIdsEnabledInActiveBranches();
+
     /** Cặp {@code [serviceId, branchId]} của chi nhánh {@code ACTIVE} đang bật các dịch vụ, theo dịch vụ rồi chi nhánh tăng dần. */
     @Query("SELECT s.id.serviceId, s.id.branchId FROM BranchServiceSetting s, Branch b WHERE b.id = s.id.branchId "
             + "AND b.status = com.petcare.module.branch.entity.BranchStatus.ACTIVE "

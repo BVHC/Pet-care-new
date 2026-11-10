@@ -6,7 +6,6 @@ import static org.mockito.Mockito.CALLS_REAL_METHODS;
 import static org.mockito.Mockito.mock;
 
 import java.time.LocalDate;
-import java.time.LocalDateTime;
 import java.time.LocalTime;
 
 import org.junit.jupiter.api.Test;
@@ -15,14 +14,6 @@ import org.junit.jupiter.api.Test;
 class AppointmentQueryApiTier3PlaceholderTest {
 
     private final AppointmentQueryApi appointments = mock(AppointmentQueryApi.class, CALLS_REAL_METHODS);
-
-    @Test
-    void findUpcomingBookedOfCustomerThrowsUntilImplemented() {
-        assertThatThrownBy(() -> appointments.findUpcomingBookedOfCustomer(1L, LocalDateTime.of(2026, 11, 20, 9, 0), 5))
-                .isInstanceOf(UnsupportedOperationException.class)
-                .hasMessageContaining("AppointmentQueryApi.findUpcomingBookedOfCustomer")
-                .hasMessageContaining("T77");
-    }
 
     @Test
     void countBookedByBranchThrowsUntilImplemented() {

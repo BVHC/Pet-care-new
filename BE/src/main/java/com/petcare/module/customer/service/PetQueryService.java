@@ -59,6 +59,23 @@ public class PetQueryService implements PetQueryApi {
                 .toList();
     }
 
+    /** I-1 (07 §11): kể cả thú đã mất; bên gọi tự xét {@code deceasedOn} (BR-AI-11). */
+    @Override
+    @Transactional(readOnly = true)
+    public Optional<PetProfile> findPetProfile(Long petId) {
+        return pets.findById(petId).map(pet -> new PetProfile(pet.getId(), pet.getCustomerId(), pet.getSpecies(),
+                pet.getBreed(), pet.getBirthDate(), weights.findCurrentWeight(pet.getId()).orElse(null),
+                pet.getDeceasedOn()));
+    }
+
+    /** I-1 (07 §11): thú đã chuyển chủ không còn {@code customer_id} này nên tự vắng mặt. */
+    @Override
+    @Transactional(readOnly = true)
+    public List<LivingPet> findLivingPetsOfCustomer(Long customerId) {
+        return pets.findLivingByCustomer(customerId).stream().map(pet -> new LivingPet(pet.getId(), pet.getName()))
+                .toList();
+    }
+
     private PetSummary summarize(Pet pet) {
         return summarize(pet, weights.findCurrentWeight(pet.getId()).orElse(null));
     }

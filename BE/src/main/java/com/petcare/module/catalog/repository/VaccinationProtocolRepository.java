@@ -27,6 +27,9 @@ public interface VaccinationProtocolRepository
 
     List<VaccinationProtocol> findBySpeciesAndRequiredForBoardingTrueAndActiveTrue(Species species);
 
+    /** I-3 (07 §11): mọi dòng đang dùng của loài, theo loại vaccine rồi mũi tăng dần. */
+    List<VaccinationProtocol> findBySpeciesAndActiveTrueOrderByVaccineTypeIdAscDoseNumberAsc(Species species);
+
     /**
      * Khóa dòng (Hibernate phát {@code FOR NO KEY UPDATE}) cho thao tác sửa: đọc rồi ghi không khóa sẽ UPDATE tất cả cột
      * từ bản đã đọc và ghi đè thay đổi chen giữa (docs/adr/0106). Phải gọi trong transaction của use case.

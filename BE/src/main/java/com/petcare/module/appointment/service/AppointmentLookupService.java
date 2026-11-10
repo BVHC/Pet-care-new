@@ -1,10 +1,12 @@
 package com.petcare.module.appointment.service;
 
 import java.time.LocalDate;
+import java.time.LocalDateTime;
 import java.util.List;
 import java.util.Objects;
 import java.util.Optional;
 
+import org.springframework.data.domain.PageRequest;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -62,5 +64,17 @@ public class AppointmentLookupService implements AppointmentQueryApi {
     public Optional<CheckInRef> findCheckInRef(Long appointmentId) {
         Objects.requireNonNull(appointmentId, "appointmentId");
         return appointments.findCheckInRef(appointmentId);
+    }
+
+    /** I-10: {@code limit <= 0} trả rỗng, không chạy SQL. */
+    @Override
+    public List<UpcomingBooked> findUpcomingBookedOfCustomer(Long customerId, LocalDateTime now, int limit) {
+        Objects.requireNonNull(customerId, "customerId");
+        Objects.requireNonNull(now, "now");
+        if (limit <= 0) {
+            return List.of();
+        }
+        return appointments.findUpcomingBookedByCustomerId(customerId, now.toLocalDate(), now.toLocalTime(),
+                PageRequest.ofSize(limit));
     }
 }

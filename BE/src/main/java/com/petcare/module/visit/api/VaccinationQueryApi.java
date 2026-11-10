@@ -28,8 +28,8 @@ public interface VaccinationQueryApi {
     Map<Long, Long> findVaccineTypeIds(Collection<Long> vaccinationIds);
 
     // ------------------------------------------------------------------------------------------------------------
-    // Tầng 3 (T55b, docs/06 §6b, docs/adr/0113): placeholder dạng default — ném UnsupportedOperationException tới khi
-    // VaccinationQueryService ghi đè; khi đó xóa default.
+    // Tầng 3 (T55b, docs/06 §6b, docs/adr/0113): findDoseHistory đã có bản thật ở AI-0 (9/11/2026); findByStockLot còn là
+    // placeholder dạng default — ném UnsupportedOperationException tới khi VaccinationQueryService ghi đè.
     // ------------------------------------------------------------------------------------------------------------
 
     /** Một mũi tiêm ghi nhận tại hệ thống; {@code superseded} = đã bị mũi mới thay thế ({@code superseded_at} khác NULL). */
@@ -38,12 +38,9 @@ public interface VaccinationQueryApi {
 
     /**
      * I-2 (docs/07 §11, UC91): lịch sử mũi tiêm của thú, mới nhất trước; chỉ mũi ghi nhận tại hệ thống (04 nguyên tắc 8),
-     * kể cả mũi đã bị thay thế. Đọc không khóa. Bản thật trước 30/11 (T77).
+     * kể cả mũi đã bị thay thế. Đọc không khóa.
      */
-    default List<DoseRecord> findDoseHistory(Long petId) {
-        throw new UnsupportedOperationException("VaccinationQueryApi.findDoseHistory chưa cài (placeholder T55b, "
-                + "docs/06 §6b); bản thật ở T77");
-    }
+    List<DoseRecord> findDoseHistory(Long petId);
 
     /** Một mũi tiêm dùng lô kho: thú, lượt khám, ngày tiêm (BR-KO-13). */
     record LotVaccination(Long vaccinationId, Long petId, Long visitId, LocalDate administeredOn) {}

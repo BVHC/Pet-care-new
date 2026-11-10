@@ -43,8 +43,9 @@ public interface AppointmentQueryApi {
     Optional<CheckInRef> findCheckInRef(Long appointmentId);
 
     // ------------------------------------------------------------------------------------------------------------
-    // Tầng 3 (T55b, docs/06 §6b, docs/adr/0113): placeholder dạng default — ném UnsupportedOperationException tới khi
-    // AppointmentLookupService ghi đè; khi đó xóa default.
+    // Tầng 3 (T55b, docs/06 §6b, docs/adr/0113): findUpcomingBookedOfCustomer đã có bản thật ở AI-0 (9/11/2026);
+    // countBookedByBranch còn là placeholder dạng default — ném UnsupportedOperationException tới khi AppointmentLookupService
+    // ghi đè.
     // ------------------------------------------------------------------------------------------------------------
 
     /** Lịch {@code BOOKED} sắp tới của khách (docs/07 I-10). Không thêm trường vào {@link BookedSlot} (07 L537). */
@@ -55,12 +56,9 @@ public interface AppointmentQueryApi {
      * I-10 (docs/07 §11, UC91, BR-AI-27): lịch {@code BOOKED} của khách có {@code (slot_date, slot_start) >= now}, sắp theo
      * {@code slot_date, slot_start} tăng dần, tối đa {@code limit}. {@code now} là giờ Việt Nam
      * ({@code LocalDateTime.now(clock)}, cùng múi với cột {@code slot_date} / {@code slot_start}). Đọc không khóa. Bản thật
-     * trước 30/11 (T77).
+     * ở AI-0 (9/11/2026); {@code limit <= 0} trả rỗng.
      */
-    default List<UpcomingBooked> findUpcomingBookedOfCustomer(Long customerId, LocalDateTime now, int limit) {
-        throw new UnsupportedOperationException("AppointmentQueryApi.findUpcomingBookedOfCustomer chưa cài "
-                + "(placeholder T55b, docs/06 §6b); bản thật ở T77");
-    }
+    List<UpcomingBooked> findUpcomingBookedOfCustomer(Long customerId, LocalDateTime now, int limit);
 
     /**
      * BR-CN-07, BR-CN-08 (docs/08 §F.1): số lịch {@code BOOKED} của chi nhánh (mọi ngày). Đọc không khóa. Bản thật trước

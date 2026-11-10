@@ -2,14 +2,19 @@ package com.petcare.module.catalog.service;
 
 import java.util.Collection;
 import java.util.List;
+import java.util.Map;
 import java.util.Optional;
+import java.util.function.Function;
+import java.util.stream.Collectors;
 
 import org.springframework.data.domain.Sort;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import com.petcare.module.catalog.api.CatalogQueryApi;
+import com.petcare.module.catalog.api.ProductType;
 import com.petcare.module.catalog.api.ServiceGroup;
+import com.petcare.module.catalog.entity.KennelType;
 import com.petcare.module.catalog.entity.Product;
 import com.petcare.module.catalog.entity.VaccinationProtocol;
 import com.petcare.module.catalog.repository.KennelTypeRepository;
@@ -123,6 +128,36 @@ public class CatalogQueryService implements CatalogQueryApi {
     public List<ProductInfo> findProductsByVaccineType(Long vaccineTypeId) {
         return products.findByVaccineTypeIdOrderByNameAscIdAsc(vaccineTypeId).stream()
                 .map(CatalogQueryService::toInfo).toList();
+    }
+
+    @Override
+    public List<ProtocolDose> listActiveProtocols(Species species) {
+        return protocols.findBySpeciesAndActiveTrueOrderByVaccineTypeIdAscDoseNumberAsc(species).stream()
+                .map(CatalogQueryService::toDose).toList();
+    }
+
+    /** I-3 (UC92): không có thuốc, vaccine, hàng kê đơn, hay dịch vụ nhóm MEDICAL; mọi nguồn đều đang kinh doanh. */
+    @Override
+    public Recommendable listRecommendable() {
+        Sort byName = Sort.by("name", "id");
+        List<ServiceInfo> grooming = activeServicesOf(ServiceGroup.GROOMING, byName).stream()
+                .map(CatalogQueryService::toInfo).toList();
+        List<com.petcare.module.catalog.entity.Service> boarding = activeServicesOf(ServiceGroup.BOARDING, byName);
+        Map<Long, KennelType> kennelBySvc = kennelTypes.findAllById(boarding.stream().map(s -> s.getId()).toList())
+                .stream().collect(Collectors.toMap(KennelType::getServiceId, Function.identity()));
+        List<KennelTypeInfo> kennels = boarding.stream().filter(s -> kennelBySvc.containsKey(s.getId()))
+                .map(s -> new KennelTypeInfo(s.getId(), s.getName(), kennelBySvc.get(s.getId()).getSpecies(),
+                        kennelBySvc.get(s.getId()).getMaxWeightKg(), s.getPrice(), s.isActive()))
+                .toList();
+        List<ProductInfo> goods = products.findAll((root, query, cb) -> cb.and(cb.isTrue(root.get("active")),
+                cb.equal(root.get("productType"), ProductType.GOODS), cb.isFalse(root.get("prescription"))), byName)
+                .stream().map(CatalogQueryService::toInfo).toList();
+        return new Recommendable(grooming, kennels, goods);
+    }
+
+    private List<com.petcare.module.catalog.entity.Service> activeServicesOf(ServiceGroup group, Sort sort) {
+        return services.findAll((root, query, cb) -> cb.and(cb.isTrue(root.get("active")),
+                cb.equal(root.get("group"), group)), sort);
     }
 
     private static ServiceInfo toInfo(com.petcare.module.catalog.entity.Service s) {

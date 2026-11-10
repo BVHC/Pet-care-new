@@ -358,6 +358,23 @@ public interface AppointmentRepository extends JpaRepository<Appointment, Long>,
             """)
     List<BookedSlot> findBookedByCustomerId(@Param("customerId") Long customerId);
 
+    /**
+     * I-10 (07 §11, BR-AI-27): lịch {@code BOOKED} của khách từ {@code (fromDate, fromTime)} trở đi, sớm nhất trước. Giờ bắt
+     * đầu so sánh bằng {@code >=}, nên lịch đúng bằng {@code now} vẫn còn là "sắp tới". Số dòng do {@code page} giới hạn.
+     */
+    @Query("""
+            SELECT new com.petcare.module.appointment.api.AppointmentQueryApi$UpcomingBooked(
+                a.id, a.code, a.petId, a.serviceId, a.branchId, a.slotDate, a.slotStart)
+            FROM Appointment a
+            WHERE a.customerId = :customerId
+              AND a.status = com.petcare.module.appointment.entity.AppointmentStatus.BOOKED
+              AND (a.slotDate > :fromDate OR (a.slotDate = :fromDate AND a.slotStart >= :fromTime))
+            ORDER BY a.slotDate, a.slotStart, a.id
+            """)
+    List<com.petcare.module.appointment.api.AppointmentQueryApi.UpcomingBooked> findUpcomingBookedByCustomerId(
+            @Param("customerId") Long customerId, @Param("fromDate") java.time.LocalDate fromDate,
+            @Param("fromTime") java.time.LocalTime fromTime, org.springframework.data.domain.Pageable page);
+
     /** Visit#1 (docs/adr/0059): bốn cột bất biến theo PK, không nạp entity (cùng lý do với {@link #findAccessRow}). */
     @Query("""
             SELECT new com.petcare.module.appointment.api.AppointmentQueryApi$CheckInRef(

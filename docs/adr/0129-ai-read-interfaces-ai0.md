@@ -1,0 +1,47 @@
+# ADR-0129: Cài thật các interface đọc cho module `ai` (AI-0: I-1…I-8, I-10)
+
+- **Trạng thái:** Proposed (Hiến chọn hướng ở mục 2 ngày 9/11/2026; các giả định ở mục 4 chờ BE-1, BE-2 xác nhận)
+- **Ngày:** 2026-11-09
+- **Liên quan:** `docs/07` §11 (I-1…I-10), `docs/06` §6b hàng 15, 16; ADR-0113 (placeholder BE-1), ADR-0117 (placeholder BE-2): **thay** phần "placeholder, bản thật ở T77/T78" của 15 method dưới đây bằng bản thật; ADR-0060 (tiền lệ method đọc theo lô do BE-1 thêm vào sales); ADR-0042 §6, ADR-0087 (ngoại lệ đọc thẳng bảng module khác, **không dùng** ở đây).
+- **Triển khai:** nhãn commit AI-0. Hiến làm thay BE-1 và BE-2 (tiền lệ T55b, T55c) và đã báo Mạnh, Dũng trước khi sửa module của họ.
+
+## Bối cảnh
+
+Module `ai` chỉ đọc dữ liệu qua `*QueryApi` (07 §11). T55b, T55c để 15 method dạng `default` ném `UnsupportedOperationException`, hạn bản thật 30/11 và 7/12. Hiến chọn làm trước (AI-0) để Mạnh và Dũng không phải quay lại `customer`, `catalog`, `inventory`, `sales` lần hai. Chữ ký giữ nguyên; không migration; không khóa; không ghi.
+
+## Quyết định
+
+1. **Cài thật 15 method** ở lớp `*QueryService` của module chủ và **xóa `default` + test placeholder** của đúng 15 method đó. Các `default` của T63, T73, T74, T75 (`findAvailableQuantity`, `findLinesForReturn`, `findMovementsOfLot`, `sumQuantityByBranch`, `countOpenByBranch`, `countActiveStaysByBranch`, `countBookedByBranch`, `findByStockLot`) giữ nguyên. Hàm `private placeholder()` chỉ bị xóa ở `PetQueryApi`, `CatalogQueryApi`, `BranchQueryApi` vì ở đó không còn `default` nào.
+
+2. **Dịch vụ của một lượt khám (I-6).** Bảng `visits` **không có** `service_id`; dịch vụ của lượt là các dòng `SERVICE` của Order nguồn `VISIT` (Visit#1 mở Order kèm dòng dịch vụ tự sinh, ADR-0059, 04; 07 L299 "visits hoàn tất + dịch vụ của lượt"). Lấy bằng **một method đọc theo lô mới** `VisitOrderApi.findServiceIdsByVisitIds(Collection<Long>)` trả `Map<visitId, List<serviceId>>` (Hiến chọn hướng "thêm một method đọc theo lô vào sales" ngày 9/11/2026, phương án ban đầu nêu tên `OrderQueryApi`; **việc đặt ở `VisitOrderApi` là lệch do người cài quyết** để tránh vòng bean, xem bên dưới, chờ Hiến xác nhận). Đây là method thứ 16, **ngoài bảng 15 method của AI-0**; chỉ thêm, không đổi chữ ký nào. Một câu JPQL, lượt không có Order hoặc không có dòng dịch vụ thì vắng mặt (không ném). `MANDATORY` như mọi method của `VisitOrderApi` (`VisitOrderServiceTest.everyApiMethodRunsInTheCallersTransaction` ghim quy ước 1–1): bên gọi `VisitServiceUsageService` là lớp `readOnly` nên luôn có transaction.
+   - Đặt ở `VisitOrderApi` thay vì `OrderQueryApi` vì `OrderQueryService` đã phụ thuộc `VisitQueryApi`: visit gọi `OrderQueryApi` sẽ thành vòng bean `VisitQueryService → OrderQueryService → VisitQueryService`. `VisitOrderService` không phụ thuộc visit.
+   - Đã loại: `VisitOrderApi.findServiceIds(visitId)` (theo từng lượt, `MANDATORY`, ném khi chưa có Order: đếm toàn chuỗi 90 ngày thành N+1); JOIN thẳng `orders`/`order_lines`/`pets` trong visit (06 §6 cấm, ADR-0042 §6 chỉ cho ngoại lệ có chủ đích, không cần ở đây).
+
+3. **Loài và nhóm tuổi (I-6, I-7).** Loài, ngày sinh của thú lấy qua `PetQueryApi.findPets` theo lô ≤ 100 id (không JOIN `pets`); đọc nhóm trước theo (thú, dịch vụ / loại chuồng) rồi lọc ở Java. Phân loại bằng **một định nghĩa dùng chung** `VisitQueryApi.AgeGroup.of(birthDate, today, seniorAgeYears)`: tuổi tính bằng **ngày**, 52 tuần = **364 ngày** (không phải một năm lịch); `JUNIOR` khi `< 364` ngày; `SENIOR` khi `>= ngưỡng × 364` ngày; `UNKNOWN` khi thiếu ngày sinh. Ngưỡng là [CFG] `ai.reco.senior_age_years_dog|cat|other` đọc qua `SystemConfigApi` theo loài đang hỏi. Tuổi tính tại **ngày gọi** (`LocalDate.now(clock)`; 07 §7.3 im lặng về ngày gọi hay ngày khám). `AgeGroup.of` nằm ở `visit.api` vì `boarding` đã dùng enum này.
+
+4. **Giả định cho chỗ đặc tả im lặng** (BE-1, BE-2 xác nhận hoặc sửa bằng ADR mới):
+   - **I-6** dịch vụ của lượt = mọi dòng `SERVICE` của Order VISIT, không lọc trạng thái Order. Ngày hoàn tất = `completed_at` theo giờ Việt Nam. Trong `countCompletedByService` một lượt có hai dòng cùng dịch vụ chỉ tính **một** lượt cho dịch vụ đó. `since` tính từ 00:00 giờ Việt Nam của ngày `since`.
+   - **I-7** `countStaysByKennelType` đếm đặt chỗ `CHECKED_OUT` (kể cả `end_reason = PET_DECEASED`) có `actual_check_out_at` từ 00:00 giờ Việt Nam của ngày `since`. `findStaysOfPet` theo `check_in_date` giảm dần rồi `id` giảm dần, mọi trạng thái.
+   - **I-5** tồn khả dụng của một chi nhánh = lô chưa hết hạn (`expiry_date IS NULL OR >= hôm nay`) **trừ phần `HELD`** của `stock_reservations` theo (chi nhánh, sản phẩm), đúng quyết định T54 (08 §G: mọi nơi tính tồn đều trừ phần giữ). Bảng này hiện chưa có dòng nào nên hành vi chưa đổi, nhưng T63 không phải quay lại. **Không** lọc trạng thái chi nhánh (như `branchIdsWithAvailableStock`: bên gọi tự lọc).
+   - **I-8** `findLastPurchaseDates`: Order `PAID` của khách, mọi nguồn. `sumSoldUnitsByProduct`: mọi dòng có `product_id` của Order `PAID` toàn chuỗi, **không trừ hàng đã trả** (`returns`, V46). Ngày `paid_at` theo giờ Việt Nam.
+   - **I-4** `findServiceIdsEnabledAnywhere` chỉ xét `branch_services.is_enabled` ở chi nhánh `ACTIVE`, **không** lọc `services.is_active` (bên gọi giao với `listRecommendable`). `findEmergencyBranches`: `ACTIVE` và `accepts_after_hours_emergency`, theo tên rồi id.
+   - **I-3** `listRecommendable`: dịch vụ `GROOMING` đang kinh doanh; loại chuồng = dịch vụ `BOARDING` đang kinh doanh có dòng `kennel_types`; sản phẩm `GOODS` không kê đơn đang kinh doanh; mỗi nguồn theo tên rồi id. `listActiveProtocols(species)`: theo loại vaccine rồi mũi tăng dần.
+   - **I-2** dùng lại `VaccinationRepository.findByPetIdOrderByAdministeredOnDescIdDesc` (đã phục vụ visit-v1 #21, sổ sức khỏe): mọi mũi **kể cả mũi bị thay thế**; mới nhất trước, cùng ngày thì mũi ghi sau trước. Đổi truy vấn này sẽ đổi cả #21.
+   - **I-10** `limit <= 0` trả rỗng; so sánh `(slot_date, slot_start) >= now`. Giờ khung so qua tham số JPQL (Hibernate cắt `LocalTime` tới mili giây: lệch tối đa 1 ms với `now`, giờ khung luôn tròn phút).
+   - **I-1** thú đã chuyển chủ tự vắng khỏi danh sách của chủ cũ vì `pets.customer_id` đã đổi (không có bảng lịch sử chuyển chủ để đọc).
+
+## Kiểm thử
+
+IT trên Postgres thật (Testcontainers `pgvector/pgvector:pg17`) cho từng method: `PetAiReadIT`, `VisitAiReadIT`, `AppointmentAiReadIT`, `CatalogAiReadIT`, `BranchAiReadIT`, `StockAiReadIT`, `BoardingAiReadIT`, `OrderAiReadIT`, cộng `AgeGroupTest` (ranh giới 363/364 và `ngưỡng × 364 − 1`/`ngưỡng × 364`, null). Dữ liệu qua `AiReadFixtures` (chèn SQL với `session_replication_role = replica`, không dựng cả chuỗi chứng từ). Đếm toàn chuỗi chỉ khẳng định trên id dịch vụ, sản phẩm, loại chuồng do chính test tạo. Đồng hồ thật của ứng dụng, không `MutableClock`, nên không dùng era.
+
+**Fixture phải loại dòng bằng đúng bộ lọc cần kiểm.** Dữ liệu "tự nhiên" che bộ lọc trạng thái (lượt chưa xong có `completed_at` null nên `status = 'COMPLETED'` thừa so với `completed_at IS NOT NULL`). Vì vậy fixture cố ý đặt `completed_at` / `paid_at` / `actual_check_out_at` ở các dòng không đủ điều kiện, để chỉ bộ lọc trạng thái loại được chúng.
+
+**Đột biến (25, mỗi cái làm đúng test dự kiến đỏ; mã đã khôi phục):** loài mèo đọc khóa ngưỡng của chó, ở visit và ở boarding (`seniorThresholdFollowsTheSpeciesOfThePet` ở cả hai IT; 07 §14.3 "nhóm tuổi theo loài, mèo 10 năm"); bỏ lọc `ACTIVE` ở `findEmergencyBranches` và ở `findServiceIdsEnabledInActiveBranches` (`BranchAiReadIT`, 2 ca); **thêm** lọc `superseded_at IS NULL` ở I-2 (`VisitAiReadIT.doseHistory…`; I-2 vốn không có bộ lọc để bỏ, đột biến có nghĩa là thêm); bỏ điều kiện `>= now` ở I-10 và bỏ `limit` (`AppointmentAiReadIT`); bỏ phần trừ `HELD` và tính lô hết hạn ở I-5 (`StockAiReadIT`); `JUNIOR < 364` thành `<= 364` và `SENIOR >=` thành `>` (`AgeGroupTest` 3 ca, `VisitAiReadIT` và `BoardingAiReadIT` ở ca ranh giới nhóm tuổi: **cả hai module** bắt); bỏ lọc `PAID` ở `findLastPurchases` và `sumSoldUnits`, `since >=` thành `>`, ngày theo UTC thay vì giờ Việt Nam (`OrderAiReadIT`); bỏ lọc `COMPLETED` ở `completedOfPet` và `completedSince`, `since >=` thành `>`, ngày hoàn tất theo UTC, lấy ngày xa nhất thay vì gần nhất (`VisitAiReadIT`); bỏ lọc `GOODS` (`CatalogAiReadIT`); bỏ lọc thú đã mất và bỏ cân nặng mới nhất (`PetAiReadIT`); bỏ lọc `CHECKED_OUT` và `since >=` thành `>` ở boarding (`BoardingAiReadIT`).
+
+## Hệ quả và phần chưa làm
+
+- **Chưa chạy với interface thật từ `ai`:** module `ai` chưa có bản BE (AI-1); các method mới chưa có bên gọi thật.
+- **Khóa `OTHER` chưa được test phân biệt với khóa chó:** mặc định `ai.reco.senior_age_years_other` = `..._dog` = 7 năm, nên đổi `OTHER` sang khóa chó không làm test nào đỏ dưới cấu hình mặc định (khóa mèo thì khác, 10 năm, nên có test bắt). Muốn bắt cần đổi [CFG] trong IT rồi `reload()` và khôi phục; chưa làm.
+- **Chưa đo hiệu năng.** `VisitUsageRepository.completedSince` quét `visits` theo `status` và `completed_at` không có chỉ mục (V30 chỉ có `(branch_id, checked_in_at)`): seq scan ở quy mô demo; `countCompletedByService` còn gọi `findPets` và `findServiceIdsByVisitIds` theo lô 100. Không thêm migration (AI-0 cấm); đo ở T78, cần thì thêm chỉ mục bằng ADR mới.
+- **Việc cho BE-2:** `VisitOrderApi.findServiceIdsByVisitIds` là method mới trong module sales; `docs/06` §6b đã ghi.
+- **Việc cho BE-1:** `VisitQueryService` có thêm bean `VisitServiceUsageService` (constructor đổi: `VisitQueryServiceTest` đã sửa); `VisitQueryApi.AgeGroup.of` là static mới.

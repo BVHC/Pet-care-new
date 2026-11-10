@@ -5,8 +5,6 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.Mockito.CALLS_REAL_METHODS;
 import static org.mockito.Mockito.mock;
 
-import com.petcare.module.customer.api.Species;
-
 import java.time.LocalDate;
 
 import org.junit.jupiter.api.Test;
@@ -22,36 +20,11 @@ class VisitApiTier3PlaceholderTest {
     private final VaccinationQueryApi vaccinations = mock(VaccinationQueryApi.class, CALLS_REAL_METHODS);
 
     @Test
-    void findLastServiceDatesThrowsUntilImplemented() {
-        assertThatThrownBy(() -> visits.findLastServiceDates(1L))
-                .isInstanceOf(UnsupportedOperationException.class)
-                .hasMessageContaining("VisitQueryApi.findLastServiceDates")
-                .hasMessageContaining("T78");
-    }
-
-    @Test
-    void countCompletedByServiceThrowsUntilImplemented() {
-        assertThatThrownBy(() -> visits.countCompletedByService(Species.DOG, VisitQueryApi.AgeGroup.ADULT,
-                LocalDate.of(2026, 8, 1)))
-                .isInstanceOf(UnsupportedOperationException.class)
-                .hasMessageContaining("VisitQueryApi.countCompletedByService")
-                .hasMessageContaining("T78");
-    }
-
-    @Test
     void countOpenByBranchThrowsUntilImplemented() {
         assertThatThrownBy(() -> visits.countOpenByBranch(1L))
                 .isInstanceOf(UnsupportedOperationException.class)
                 .hasMessageContaining("VisitQueryApi.countOpenByBranch")
                 .hasMessageContaining("T75");
-    }
-
-    @Test
-    void findDoseHistoryThrowsUntilImplemented() {
-        assertThatThrownBy(() -> vaccinations.findDoseHistory(1L))
-                .isInstanceOf(UnsupportedOperationException.class)
-                .hasMessageContaining("VaccinationQueryApi.findDoseHistory")
-                .hasMessageContaining("T77");
     }
 
     @Test

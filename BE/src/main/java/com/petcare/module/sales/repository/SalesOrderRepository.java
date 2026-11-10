@@ -114,6 +114,54 @@ public interface SalesOrderRepository extends JpaRepository<SalesOrder, Long> {
     @Query("SELECT o.visitId AS visitId, o.id AS id FROM SalesOrder o WHERE o.visitId IN :visitIds")
     List<VisitOrderRow> findVisitOrderIds(@Param("visitIds") Collection<Long> visitIds);
 
+    /** I-8: lần mua gần nhất (thời điểm {@code paid_at}) của từng sản phẩm trong Order {@code PAID} của khách. */
+    @Query("""
+            SELECT l.productId AS productId, MAX(o.paidAt) AS lastPaidAt
+            FROM SalesOrder o JOIN o.lines l
+            WHERE o.customerId = :customerId AND o.status = com.petcare.module.sales.entity.OrderStatus.PAID
+              AND l.productId IN :productIds
+            GROUP BY l.productId
+            """)
+    List<PurchaseRow> findLastPurchases(@Param("customerId") Long customerId,
+            @Param("productIds") Collection<Long> productIds);
+
+    /** I-8: tổng số lượng từng sản phẩm bán ra trong Order {@code PAID} có {@code paid_at >= from}, toàn chuỗi. */
+    @Query("""
+            SELECT l.productId AS productId, SUM(l.quantity) AS units
+            FROM SalesOrder o JOIN o.lines l
+            WHERE o.status = com.petcare.module.sales.entity.OrderStatus.PAID AND o.paidAt >= :from
+              AND l.productId IS NOT NULL
+            GROUP BY l.productId
+            """)
+    List<SoldRow> sumSoldUnits(@Param("from") java.time.Instant from);
+
+    /** Dòng {@code SERVICE} của Order nguồn VISIT, theo lô lượt; lượt không có Order hoặc dòng dịch vụ thì vắng mặt. */
+    @Query("""
+            SELECT o.visitId AS visitId, l.serviceId AS serviceId
+            FROM SalesOrder o JOIN o.lines l
+            WHERE o.visitId IN :visitIds AND l.lineType = com.petcare.module.sales.entity.OrderLineType.SERVICE
+            ORDER BY o.visitId, l.id
+            """)
+    List<VisitServiceRow> findVisitServiceIds(@Param("visitIds") Collection<Long> visitIds);
+
+    interface PurchaseRow {
+        Long getProductId();
+
+        java.time.Instant getLastPaidAt();
+    }
+
+    interface SoldRow {
+        Long getProductId();
+
+        Long getUnits();
+    }
+
+    interface VisitServiceRow {
+        Long getVisitId();
+
+        Long getServiceId();
+    }
+
     interface VisitOrderRow {
         Long getVisitId();
 

@@ -58,18 +58,14 @@ public interface BoardingQueryApi {
     /** Một lần lưu trú của thú (07 I-7); {@code kennelTypeId} = {@code services.id} của loại chuồng. */
     record StayOfPet(Long bookingId, Long kennelTypeId, StayStatus status, LocalDate checkInDate, LocalDate checkOutDate) {}
 
-    /** I-7 (07 §11, UC92): mọi đặt chỗ lưu trú của thú, mới nhất trước. Bản thật trước 7/12 (T78). */
-    default List<StayOfPet> findStaysOfPet(Long petId) {
-        throw placeholder("findStaysOfPet", "T78");
-    }
+    /** I-7 (07 §11, UC92): mọi đặt chỗ lưu trú của thú, mới nhất trước. Bản thật ở AI-0 (9/11/2026). */
+    List<StayOfPet> findStaysOfPet(Long petId);
 
     /**
      * I-7 (07 §11, UC92): {@code kennelTypeId → số lượt lưu trú} đã {@code CHECKED_OUT} từ {@code since} của các thú thuộc
-     * {@code species} và {@code ageGroup}, toàn chuỗi; loại chuồng không có lượt thì vắng mặt. Bản thật trước 7/12 (T78).
+     * {@code species} và {@code ageGroup}, toàn chuỗi; loại chuồng không có lượt thì vắng mặt. Bản thật ở AI-0 (9/11/2026).
      */
-    default Map<Long, Long> countStaysByKennelType(Species species, VisitQueryApi.AgeGroup ageGroup, LocalDate since) {
-        throw placeholder("countStaysByKennelType", "T78");
-    }
+    Map<Long, Long> countStaysByKennelType(Species species, VisitQueryApi.AgeGroup ageGroup, LocalDate since);
 
     /** BR-CN-07, BR-CN-08 (UC13): số đặt chỗ {@code CHECKED_IN} / {@code OVERDUE} (thú đang trong chuồng) của chi nhánh. Bản thật trước 7/12 (T75). */
     default long countActiveStaysByBranch(Long branchId) {

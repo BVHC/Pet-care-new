@@ -20,7 +20,8 @@ import com.petcare.module.visit.repository.VisitRepository.AppointmentVisitRow;
 class VisitQueryServiceTest {
 
     private final VisitRepository visits = mock(VisitRepository.class);
-    private final VisitQueryService service = new VisitQueryService(visits, Mappers.getMapper(VisitQueryMapper.class));
+    private final VisitQueryService service = new VisitQueryService(visits, Mappers.getMapper(VisitQueryMapper.class),
+            mock(VisitServiceUsageService.class));
 
     @Test
     void emptyAppointmentIdsReadNothing() {

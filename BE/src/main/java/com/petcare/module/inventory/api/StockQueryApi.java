@@ -56,12 +56,10 @@ public interface StockQueryApi {
     }
 
     /**
-     * I-5 (07 §11, UC92): trong các sản phẩm đã cho, tập sản phẩm còn tồn khả dụng &gt; 0 ở ít nhất một chi nhánh. Bản thật
-     * trước 7/12 (T78).
+     * I-5 (07 §11, UC92): trong các sản phẩm đã cho, tập sản phẩm còn tồn khả dụng &gt; 0 ở ít nhất một chi nhánh. Tồn khả
+     * dụng tính như {@link #findAvailableQuantity}: lô chưa hết hạn trừ phần đang giữ. Bản thật ở AI-0 (9/11/2026).
      */
-    default Set<Long> findProductIdsInStockAnywhere(Collection<Long> productIds) {
-        throw placeholder("findProductIdsInStockAnywhere", "T78");
-    }
+    Set<Long> findProductIdsInStockAnywhere(Collection<Long> productIds);
 
     /** BR-KO-13 (UC79): mọi biến động của một lô, theo thời điểm tăng dần. Đọc không khóa. Bản thật trước 3/12 (T74). */
     default List<LotMovement> findMovementsOfLot(Long lotId) {

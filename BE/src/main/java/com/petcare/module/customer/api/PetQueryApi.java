@@ -40,8 +40,7 @@ public interface PetQueryApi {
     List<PetSummary> findPets(Collection<Long> petIds);
 
     // ------------------------------------------------------------------------------------------------------------
-    // Tầng 3 (T55c, docs/adr/0117, docs/06 §6b hàng 15): placeholder dạng default — ném UnsupportedOperationException
-    // tới khi PetQueryService ghi đè; khi đó xóa default (method thành trừu tượng).
+    // Tầng 3 cho module ai (07 I-1). Placeholder T55c đã được thay bằng bản thật ở AI-0 (9/11/2026).
     // ------------------------------------------------------------------------------------------------------------
 
     /** Hồ sơ thú cho gợi ý và chatbot (07 I-1). Tên thú không có ở đây: tra bằng {@link #findPets}. */
@@ -58,19 +57,10 @@ public interface PetQueryApi {
 
     /**
      * I-1 (07 §11, UC91, UC92): hồ sơ của thú, kể cả thú đã mất ({@code deceasedOn} khác null; bên gọi tự xét, BR-AI-11).
-     * Đọc không khóa. Bản thật trước 30/11 (T77).
+     * Đọc không khóa.
      */
-    default Optional<PetProfile> findPetProfile(Long petId) {
-        throw placeholder("findPetProfile", "T77");
-    }
+    Optional<PetProfile> findPetProfile(Long petId);
 
-    /** I-1 (07 §11): thú chưa mất ({@code deceased_on IS NULL}) của khách, theo tên rồi id. Bản thật trước 30/11 (T77). */
-    default List<LivingPet> findLivingPetsOfCustomer(Long customerId) {
-        throw placeholder("findLivingPetsOfCustomer", "T77");
-    }
-
-    private static UnsupportedOperationException placeholder(String method, String task) {
-        return new UnsupportedOperationException("PetQueryApi." + method + " chưa cài (placeholder T55c, docs/06 §6b); "
-                + "bản thật ở " + task);
-    }
+    /** I-1 (07 §11): thú chưa mất ({@code deceased_on IS NULL}) của khách, theo tên rồi id. */
+    List<LivingPet> findLivingPetsOfCustomer(Long customerId);
 }

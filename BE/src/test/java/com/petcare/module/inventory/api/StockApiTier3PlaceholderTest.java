@@ -76,12 +76,6 @@ class StockApiTier3PlaceholderTest {
     }
 
     @Test
-    void findProductIdsInStockAnywhereThrowsUntilImplemented() {
-        assertPlaceholder(() -> query.findProductIdsInStockAnywhere(Set.of(1L)),
-                "StockQueryApi.findProductIdsInStockAnywhere", "T78");
-    }
-
-    @Test
     void findMovementsOfLotThrowsUntilImplemented() {
         assertPlaceholder(() -> query.findMovementsOfLot(1L), "StockQueryApi.findMovementsOfLot", "T74");
     }

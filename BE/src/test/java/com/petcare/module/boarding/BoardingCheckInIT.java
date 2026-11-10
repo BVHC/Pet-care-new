@@ -58,6 +58,11 @@ class BoardingCheckInIT extends BoardingItSupport {
                 public Map<Long, Long> findVaccineTypeIds(java.util.Collection<Long> vaccinationIds) {
                     return Map.of();
                 }
+
+                @Override
+                public List<DoseRecord> findDoseHistory(Long petId) {
+                    return List.of();
+                }
             };
         }
     }

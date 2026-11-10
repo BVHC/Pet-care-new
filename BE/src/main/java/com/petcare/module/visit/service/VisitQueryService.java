@@ -1,5 +1,6 @@
 package com.petcare.module.visit.service;
 
+import java.time.LocalDate;
 import java.util.Collection;
 import java.util.List;
 import java.util.Map;
@@ -10,6 +11,7 @@ import java.util.stream.Collectors;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import com.petcare.module.customer.api.Species;
 import com.petcare.module.visit.api.VisitQueryApi;
 import com.petcare.module.visit.mapper.VisitQueryMapper;
 import com.petcare.module.visit.repository.VisitRepository;
@@ -28,10 +30,26 @@ public class VisitQueryService implements VisitQueryApi {
 
     private final VisitRepository visits;
     private final VisitQueryMapper mapper;
+    private final VisitServiceUsageService serviceUsage;
 
-    public VisitQueryService(VisitRepository visits, VisitQueryMapper mapper) {
+    public VisitQueryService(VisitRepository visits, VisitQueryMapper mapper, VisitServiceUsageService serviceUsage) {
         this.visits = visits;
         this.mapper = mapper;
+        this.serviceUsage = serviceUsage;
+    }
+
+    @Override
+    public Map<Long, LocalDate> findLastServiceDates(Long petId) {
+        Objects.requireNonNull(petId, "petId");
+        return serviceUsage.findLastServiceDates(petId);
+    }
+
+    @Override
+    public Map<Long, Long> countCompletedByService(Species species, AgeGroup ageGroup, LocalDate since) {
+        Objects.requireNonNull(species, "species");
+        Objects.requireNonNull(ageGroup, "ageGroup");
+        Objects.requireNonNull(since, "since");
+        return serviceUsage.countCompletedByService(species, ageGroup, since);
     }
 
     @Override

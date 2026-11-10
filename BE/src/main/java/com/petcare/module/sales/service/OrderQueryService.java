@@ -1,5 +1,6 @@
 package com.petcare.module.sales.service;
 
+import java.time.LocalDate;
 import java.util.Collection;
 import java.util.List;
 import java.util.Map;
@@ -12,7 +13,10 @@ import com.petcare.module.boarding.api.BoardingQueryApi;
 import com.petcare.module.sales.api.OrderQueryApi;
 import com.petcare.module.sales.entity.OrderStatus;
 import com.petcare.module.sales.repository.SalesOrderRepository;
+import com.petcare.module.sales.repository.SalesOrderRepository.PurchaseRow;
+import com.petcare.module.sales.repository.SalesOrderRepository.SoldRow;
 import com.petcare.module.sales.repository.SalesOrderRepository.VisitOrderRow;
+import com.petcare.platform.config.TimeConfig;
 import com.petcare.module.visit.api.VisitQueryApi;
 
 import lombok.RequiredArgsConstructor;
@@ -50,6 +54,26 @@ public class OrderQueryService implements OrderQueryApi {
         return orders.findIdAndBranchByCustomer(customerId, List.of(OrderStatus.OPEN, OrderStatus.PENDING)).stream()
                 .map(row -> new UnpaidOrderRef(row.getId(), row.getBranchId()))
                 .toList();
+    }
+
+    /** I-8 (UC92): ngày {@code paid_at} theo giờ Việt Nam; sản phẩm chưa mua thì vắng mặt. */
+    @Override
+    public Map<Long, LocalDate> findLastPurchaseDates(Long customerId, Collection<Long> productIds) {
+        Objects.requireNonNull(customerId, "customerId");
+        Objects.requireNonNull(productIds, "productIds");
+        if (productIds.isEmpty()) {
+            return Map.of();
+        }
+        return orders.findLastPurchases(customerId, productIds).stream().collect(Collectors.toUnmodifiableMap(
+                PurchaseRow::getProductId, row -> row.getLastPaidAt().atZone(TimeConfig.BUSINESS_ZONE).toLocalDate()));
+    }
+
+    /** I-8 (UC92): {@code since} tính cả ngày đó (từ 00:00 giờ Việt Nam). */
+    @Override
+    public Map<Long, Long> sumSoldUnitsByProduct(LocalDate since) {
+        Objects.requireNonNull(since, "since");
+        return orders.sumSoldUnits(since.atStartOfDay(TimeConfig.BUSINESS_ZONE).toInstant()).stream()
+                .collect(Collectors.toUnmodifiableMap(SoldRow::getProductId, SoldRow::getUnits));
     }
 
     /** Thêm bởi BE-1 (docs/adr/0060). {@code uq_orders_visit_id} bảo đảm mỗi lượt tối đa một Order: trùng → lỗi. */

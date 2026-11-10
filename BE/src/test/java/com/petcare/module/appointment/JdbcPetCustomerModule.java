@@ -64,6 +64,16 @@ final class JdbcPetCustomerModule implements PetQueryApi, CustomerQueryApi {
     }
 
     @Override
+    public Optional<PetProfile> findPetProfile(Long petId) {
+        throw new UnsupportedOperationException("findPetProfile");
+    }
+
+    @Override
+    public List<LivingPet> findLivingPetsOfCustomer(Long customerId) {
+        throw new UnsupportedOperationException("findLivingPetsOfCustomer");
+    }
+
+    @Override
     public List<PetSummary> findPets(Collection<Long> petIds) {
         findPetsCalls.incrementAndGet();
         if (petIds.isEmpty()) {

@@ -16,18 +16,7 @@ import org.junit.jupiter.api.Test;
  */
 class CustomerApiTier3PlaceholderTest {
 
-    private final PetQueryApi pets = mock(PetQueryApi.class, CALLS_REAL_METHODS);
     private final CustomerQueryApi customers = mock(CustomerQueryApi.class, CALLS_REAL_METHODS);
-
-    @Test
-    void findPetProfileThrowsUntilImplemented() {
-        assertPlaceholder(() -> pets.findPetProfile(1L), "PetQueryApi.findPetProfile", "T77");
-    }
-
-    @Test
-    void findLivingPetsOfCustomerThrowsUntilImplemented() {
-        assertPlaceholder(() -> pets.findLivingPetsOfCustomer(1L), "PetQueryApi.findLivingPetsOfCustomer", "T77");
-    }
 
     @Test
     void findAddressThrowsUntilImplemented() {

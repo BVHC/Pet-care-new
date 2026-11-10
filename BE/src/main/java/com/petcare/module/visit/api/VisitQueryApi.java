@@ -49,8 +49,8 @@ public interface VisitQueryApi {
     Map<Long, Long> findVisitIdsByAppointmentIds(Collection<Long> appointmentIds);
 
     // ------------------------------------------------------------------------------------------------------------
-    // Tầng 3 (T55b, docs/06 §6b, docs/adr/0113): ba method dưới đây là placeholder dạng default — ném
-    // UnsupportedOperationException tới khi VisitQueryService ghi đè; khi đó xóa default (method thành trừu tượng).
+    // Tầng 3 (T55b, docs/06 §6b, docs/adr/0113): I-6 đã có bản thật ở AI-0 (9/11/2026); countOpenByBranch còn là
+    // placeholder dạng default — ném UnsupportedOperationException tới khi VisitQueryService ghi đè.
     // ------------------------------------------------------------------------------------------------------------
 
     /**
@@ -58,24 +58,40 @@ public interface VisitQueryApi {
      * ADULT ở giữa; UNKNOWN thiếu ngày sinh. Kiểu này do visit giữ để {@link #countCompletedByService} không phải import
      * module {@code ai}; {@code boarding} (I-7) chọn dùng lại hay tự khai báo thì thống nhất ở T78 (docs/adr/0113).
      */
-    enum AgeGroup { JUNIOR, ADULT, SENIOR, UNKNOWN }
+    enum AgeGroup {
+        JUNIOR, ADULT, SENIOR, UNKNOWN;
+
+        private static final long DAYS_PER_YEAR_OF_52_WEEKS = 52 * 7;
+
+        /**
+         * Nhóm tuổi tại {@code today} (07 §7.3): tuổi tính bằng <b>ngày</b>, vì "52 tuần" là 364 ngày chứ không phải một
+         * năm lịch. JUNIOR khi dưới 364 ngày; SENIOR khi từ {@code seniorAgeYears × 364} ngày; còn lại ADULT; thiếu ngày
+         * sinh là UNKNOWN. Visit và boarding cùng gọi để hai bên không lệch ranh giới.
+         */
+        public static AgeGroup of(LocalDate birthDate, LocalDate today, int seniorAgeYears) {
+            if (birthDate == null) {
+                return UNKNOWN;
+            }
+            long days = java.time.temporal.ChronoUnit.DAYS.between(birthDate, today);
+            if (days < DAYS_PER_YEAR_OF_52_WEEKS) {
+                return JUNIOR;
+            }
+            return days >= seniorAgeYears * DAYS_PER_YEAR_OF_52_WEEKS ? SENIOR : ADULT;
+        }
+    }
 
     /**
      * I-6 (docs/07 §11): {@code serviceId → ngày dùng gần nhất} trong các Visit {@code COMPLETED} của thú. Dịch vụ chưa dùng
-     * thì vắng mặt. Đọc không khóa. Bản thật trước 7/12 (T78).
+     * thì vắng mặt. Đọc không khóa. Dịch vụ của lượt là các dòng {@code SERVICE} của Order (bản thật ở AI-0, 9/11/2026).
      */
-    default Map<Long, LocalDate> findLastServiceDates(Long petId) {
-        throw placeholder("findLastServiceDates", "T78");
-    }
+    Map<Long, LocalDate> findLastServiceDates(Long petId);
 
     /**
      * I-6 (docs/07 §11): {@code serviceId → số lượt Visit COMPLETED} từ {@code since} (ngày hoàn tất, tính cả ngày đó) của
      * các thú thuộc {@code species} và {@code ageGroup}, toàn chuỗi; dịch vụ không có lượt thì vắng mặt. Đọc không khóa.
-     * Bản thật trước 7/12 (T78).
+     * Bản thật ở AI-0 (9/11/2026).
      */
-    default Map<Long, Long> countCompletedByService(Species species, AgeGroup ageGroup, LocalDate since) {
-        throw placeholder("countCompletedByService", "T78");
-    }
+    Map<Long, Long> countCompletedByService(Species species, AgeGroup ageGroup, LocalDate since);
 
     /**
      * BR-CN-07, BR-CN-08 (docs/08 §F.1): số Visit {@code WAITING} / {@code IN_PROGRESS} của chi nhánh. Đọc không khóa.

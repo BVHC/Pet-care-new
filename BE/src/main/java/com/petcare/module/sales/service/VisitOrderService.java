@@ -103,6 +103,18 @@ public class VisitOrderService implements VisitOrderApi {
 
     @Override
     @Transactional(propagation = Propagation.MANDATORY)
+    public java.util.Map<Long, List<Long>> findServiceIdsByVisitIds(java.util.Collection<Long> visitIds) {
+        java.util.Map<Long, List<Long>> result = new java.util.LinkedHashMap<>();
+        if (visitIds.isEmpty()) {
+            return result;
+        }
+        orders.findVisitServiceIds(visitIds).forEach(row ->
+                result.computeIfAbsent(row.getVisitId(), id -> new java.util.ArrayList<>()).add(row.getServiceId()));
+        return result;
+    }
+
+    @Override
+    @Transactional(propagation = Propagation.MANDATORY)
     public List<Long> findServiceIds(Long visitId) {
         SalesOrder order = orders.findByVisitId(visitId)
                 .orElseThrow(() -> new IllegalStateException("Visit #" + visitId + " chưa có Order"));

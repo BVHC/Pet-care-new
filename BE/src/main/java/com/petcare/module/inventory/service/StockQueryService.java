@@ -58,4 +58,9 @@ public class StockQueryService implements StockQueryApi {
     public boolean hasStockAnywhere(Long productId) {
         return inventory.hasStockAnywhere(productId);
     }
+
+    @Override
+    public Set<Long> findProductIdsInStockAnywhere(Collection<Long> productIds) {
+        return inventory.productIdsInStockAnywhere(productIds, LocalDate.now(clock));
+    }
 }

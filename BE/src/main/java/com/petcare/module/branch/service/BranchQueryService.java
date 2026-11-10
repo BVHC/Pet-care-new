@@ -6,9 +6,11 @@ import java.time.LocalTime;
 import java.util.ArrayList;
 import java.util.Collection;
 import java.util.LinkedHashMap;
+import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
+import java.util.Set;
 
 import org.springframework.data.domain.Sort;
 import org.springframework.stereotype.Service;
@@ -118,6 +120,21 @@ public class BranchQueryService implements BranchQueryApi {
                 .or(() -> quotaDefaults.findById(new BranchQuotaDefaultId(branchId, group))
                         .map(entry -> entry.getDefaultQuota()))
                 .orElse(FALLBACK_QUOTA);
+    }
+
+    /** I-4 (UC90, UC92): chi nhánh {@code ACTIVE} nhận cấp cứu ngoài giờ (BR-CN-05), theo tên. */
+    @Override
+    public List<BranchSummary> findEmergencyBranches() {
+        return branches.findAll((root, query, cb) -> cb.and(
+                        cb.equal(root.get("status"), com.petcare.module.branch.entity.BranchStatus.ACTIVE),
+                        cb.isTrue(root.get("acceptsAfterHoursEmergency"))), Sort.by("name", "id"))
+                .stream().map(BranchQueryService::toSummary).toList();
+    }
+
+    /** I-4 (UC92): dịch vụ (kể cả loại chuồng) đang bật ở ít nhất một chi nhánh {@code ACTIVE}. */
+    @Override
+    public Set<Long> findServiceIdsEnabledAnywhere() {
+        return new LinkedHashSet<>(serviceSettings.findServiceIdsEnabledInActiveBranches());
     }
 
     /** {@code BranchStatus} ở đây là enum của {@link BranchQueryApi}, không phải enum của entity. */

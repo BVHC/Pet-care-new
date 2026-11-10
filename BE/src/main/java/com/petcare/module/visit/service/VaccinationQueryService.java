@@ -76,6 +76,16 @@ public class VaccinationQueryService implements VaccinationQueryApi {
                 .collect(Collectors.toMap(DoseType::getId, DoseType::getVaccineTypeId));
     }
 
+    /** I-2: mũi đã bị thay thế vẫn trả về, đánh dấu {@code superseded}; bảng chỉ chứa mũi ghi nhận tại hệ thống. */
+    @Override
+    public List<DoseRecord> findDoseHistory(Long petId) {
+        Objects.requireNonNull(petId, "petId");
+        return vaccinations.findByPetIdOrderByAdministeredOnDescIdDesc(petId).stream()
+                .map(v -> new DoseRecord(v.getId(), v.getVaccineTypeId(), v.getDoseNumber(), v.getAdministeredOn(),
+                        v.getNextDueDate(), v.getSupersededAt() != null))
+                .toList();
+    }
+
     private static BoardingVaccineGap gapOf(Long typeId, LatestDose dose, LocalDate onDate) {
         if (dose == null) {
             return new BoardingVaccineGap(typeId, null, null);

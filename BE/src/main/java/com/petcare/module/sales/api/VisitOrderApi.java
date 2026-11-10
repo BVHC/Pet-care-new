@@ -1,6 +1,8 @@
 package com.petcare.module.sales.api;
 
+import java.util.Collection;
 import java.util.List;
+import java.util.Map;
 
 /**
  * Owner: sales (BH) · BE-2. Caller: visit (TN, KB) · BE-1.
@@ -33,6 +35,13 @@ public interface VisitOrderApi {
 
     /** Dịch vụ đang có trong Order của Visit — điều kiện hoàn tất lượt theo loại EXAM/VACCINE (BR-KB-02). */
     List<Long> findServiceIds(Long visitId);
+
+    /**
+     * Như {@link #findServiceIds} cho nhiều lượt một lần (AI-0, cho {@code VisitQueryApi} I-6): {@code visitId → các
+     * serviceId} (theo thứ tự dòng, có thể lặp nếu Order có hai dòng cùng dịch vụ); lượt không có Order hoặc không có
+     * dòng dịch vụ thì vắng mặt, <b>không ném</b>. Đọc không khóa, tham gia transaction của bên gọi; tập rỗng → map rỗng.
+     */
+    Map<Long, List<Long>> findServiceIdsByVisitIds(Collection<Long> visitIds);
 
     /** BR-KB-03 đủ tồn: dòng đơn thuốc sinh 1 dòng DRUG, owner = VET. */
     LineRef addDrugLine(Long visitId, Long productId, int quantity, Long actorId);

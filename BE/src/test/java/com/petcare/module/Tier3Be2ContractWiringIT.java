@@ -3,7 +3,6 @@ package com.petcare.module;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
-import java.time.LocalDate;
 import java.util.List;
 import java.util.Set;
 
@@ -16,11 +15,7 @@ import org.springframework.transaction.support.TransactionTemplate;
 
 import com.petcare.TestcontainersConfiguration;
 import com.petcare.module.boarding.api.BoardingQueryApi;
-import com.petcare.module.branch.api.BranchQueryApi;
-import com.petcare.module.catalog.api.CatalogQueryApi;
 import com.petcare.module.customer.api.CustomerQueryApi;
-import com.petcare.module.customer.api.PetQueryApi;
-import com.petcare.module.customer.api.Species;
 import com.petcare.module.inventory.api.StockApi;
 import com.petcare.module.inventory.api.StockQueryApi;
 import com.petcare.module.payment.api.PaymentGatewayClient;
@@ -29,7 +24,6 @@ import com.petcare.module.sales.api.CashierShiftQueryApi;
 import com.petcare.module.sales.api.CollectMethod;
 import com.petcare.module.sales.api.OrderQueryApi;
 import com.petcare.module.shop.api.OnlineOrderApi;
-import com.petcare.module.visit.api.VisitQueryApi;
 
 /**
  * Nối dây các interface chéo tầng 3 của BE-2 trong Spring thật (T55c, docs/adr/0117): mỗi interface có đúng một bean (không
@@ -50,9 +44,6 @@ class Tier3Be2ContractWiringIT {
     @Autowired private CashierShiftQueryApi shiftQuery;
     @Autowired private CashierShiftApi shifts;
     @Autowired private CustomerQueryApi customers;
-    @Autowired private PetQueryApi pets;
-    @Autowired private CatalogQueryApi catalog;
-    @Autowired private BranchQueryApi branches;
     @Autowired private BoardingQueryApi boarding;
     @Autowired private OnlineOrderApi onlineOrders;
     @Autowired private PaymentGatewayClient gateway;
@@ -69,10 +60,7 @@ class Tier3Be2ContractWiringIT {
         assertPlaceholder(() -> orders.countOpenByBranch(1L));
         assertPlaceholder(() -> shiftQuery.hasOpenShift(1L));
         assertPlaceholder(() -> customers.findAddress(1L, 2L));
-        assertPlaceholder(() -> pets.findPetProfile(1L));
-        assertPlaceholder(() -> catalog.listRecommendable());
-        assertPlaceholder(() -> branches.findEmergencyBranches());
-        assertPlaceholder(() -> boarding.countStaysByKennelType(Species.DOG, VisitQueryApi.AgeGroup.ADULT, LocalDate.of(2026, 8, 1)));
+        assertPlaceholder(() -> boarding.countActiveStaysByBranch(1L));
     }
 
     @Test

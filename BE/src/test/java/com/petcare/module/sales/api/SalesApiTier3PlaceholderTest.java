@@ -27,17 +27,6 @@ class SalesApiTier3PlaceholderTest {
     }
 
     @Test
-    void findLastPurchaseDatesThrowsUntilImplemented() {
-        assertPlaceholder(() -> orders.findLastPurchaseDates(1L, Set.of(1L)), "OrderQueryApi.findLastPurchaseDates", "T78");
-    }
-
-    @Test
-    void sumSoldUnitsByProductThrowsUntilImplemented() {
-        assertPlaceholder(() -> orders.sumSoldUnitsByProduct(LocalDate.of(2026, 8, 1)),
-                "OrderQueryApi.sumSoldUnitsByProduct", "T78");
-    }
-
-    @Test
     void countOpenByBranchThrowsUntilImplemented() {
         assertPlaceholder(() -> orders.countOpenByBranch(1L), "OrderQueryApi.countOpenByBranch", "T75");
     }

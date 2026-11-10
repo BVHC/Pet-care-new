@@ -59,19 +59,15 @@ public interface OrderQueryApi {
 
     /**
      * I-8 (07 §11, UC92): ngày mua gần nhất (ngày {@code paid_at} theo giờ Việt Nam) của từng sản phẩm trong các Order
-     * {@code PAID} của khách; sản phẩm chưa mua thì vắng mặt. Bản thật trước 7/12 (T78).
+     * {@code PAID} của khách; sản phẩm chưa mua thì vắng mặt. Bản thật ở AI-0 (9/11/2026).
      */
-    default Map<Long, LocalDate> findLastPurchaseDates(Long customerId, Collection<Long> productIds) {
-        throw placeholder("findLastPurchaseDates", "T78");
-    }
+    Map<Long, LocalDate> findLastPurchaseDates(Long customerId, Collection<Long> productIds);
 
     /**
      * I-8 (07 §11, UC92): {@code productId → tổng số lượng bán} từ {@code since} (ngày {@code paid_at}, tính cả ngày đó)
-     * trong các Order {@code PAID}, toàn chuỗi. Bản thật trước 7/12 (T78).
+     * trong các Order {@code PAID}, toàn chuỗi. Không trừ phần đã trả hàng (đặc tả im lặng, ghi ở ADR của AI-0).
      */
-    default Map<Long, Long> sumSoldUnitsByProduct(LocalDate since) {
-        throw placeholder("sumSoldUnitsByProduct", "T78");
-    }
+    Map<Long, Long> sumSoldUnitsByProduct(LocalDate since);
 
     /** BR-CN-07, BR-CN-08 (UC13): số Order {@code OPEN} / {@code PENDING} của chi nhánh. Bản thật trước 7/12 (T75). */
     default long countOpenByBranch(Long branchId) {

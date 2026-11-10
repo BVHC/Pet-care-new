@@ -204,6 +204,27 @@ public class InventoryQueryRepository {
                 """, new MapSqlParameterSource("branchId", branchId).addValue("today", today), Long.class));
     }
 
+    /**
+     * I-5 (07 §11): trong các sản phẩm đã cho, những sản phẩm có tồn khả dụng &gt; 0 ở ít nhất một chi nhánh. Tồn của một
+     * chi nhánh = lô chưa hết hạn (BR-KO-01) trừ phần đang giữ {@code HELD} (BR-BH-09, 08 §G); không lọc trạng thái chi nhánh.
+     */
+    public Set<Long> productIdsInStockAnywhere(Collection<Long> productIds, LocalDate today) {
+        if (productIds.isEmpty()) {
+            return new LinkedHashSet<>();
+        }
+        return new LinkedHashSet<>(jdbc.queryForList("""
+                SELECT DISTINCT t.product_id
+                FROM (SELECT i.branch_id, i.product_id, SUM(l.quantity) AS qty
+                      FROM stock_lots l JOIN inventory_items i ON i.id = l.inventory_item_id
+                      WHERE i.product_id IN (:productIds) AND (l.expiry_date IS NULL OR l.expiry_date >= :today)
+                      GROUP BY i.branch_id, i.product_id) t
+                WHERE t.qty - COALESCE((SELECT SUM(r.quantity) FROM stock_reservations r
+                                        WHERE r.branch_id = t.branch_id AND r.product_id = t.product_id
+                                          AND r.status = 'HELD'), 0) > 0
+                ORDER BY t.product_id
+                """, new MapSqlParameterSource("productIds", productIds).addValue("today", today), Long.class));
+    }
+
     /** Còn số dư ở bất kỳ chi nhánh nào, kể cả lô đã hết hạn (BR-SP-05: vẫn phải xử lý lô đó). */
     public boolean hasStockAnywhere(long productId) {
         return Boolean.TRUE.equals(jdbc.queryForObject("""
