@@ -133,6 +133,11 @@ services:
       RATE_LIMIT_AI_WINDOW_SECONDS: ${RATE_LIMIT_AI_WINDOW_SECONDS:-60}
       RATE_LIMIT_AI_HOUR_MAX: ${RATE_LIMIT_AI_HOUR_MAX:-60}
       RATE_LIMIT_AI_HOUR_WINDOW_SECONDS: ${RATE_LIMIT_AI_HOUR_WINDOW_SECONDS:-3600}
+      # Nhà cung cấp AI (docs/adr/0109, 0130; BR-AI-25): khóa Gemini chỉ qua biến môi trường, để trống thì chatbot trả UNAVAILABLE.
+      GEMINI_API_KEY: ${GEMINI_API_KEY:-}
+      # ST22 nạp chỉ mục tri thức và ST23 dọn nhật ký hỏi đáp (docs/adr/0130); mặc định trùng application.yml.
+      KNOWLEDGE_INDEX_CRON: ${KNOWLEDGE_INDEX_CRON:-45 */5 * * * *}
+      CHAT_LOG_CLEANUP_CRON: ${CHAT_LOG_CLEANUP_CRON:-29 0 4 * * *}
     ports:
       - "8080:8080"
     depends_on:

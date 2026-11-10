@@ -99,6 +99,23 @@ app:
     ai-hour:
       limit: ${RATE_LIMIT_AI_HOUR_MAX:60}
       window-seconds: ${RATE_LIMIT_AI_HOUR_WINDOW_SECONDS:3600}
+  # Nhà cung cấp AI (docs/adr/0109 D4, 0130; BR-AI-25). Khóa chỉ đến từ biến môi trường GEMINI_API_KEY, KHÔNG đặt giá trị
+  # ở đây hay ở .env.example. Thiếu khóa: BE vẫn chạy, UC90 trả UNAVAILABLE / NO_KEY (BR-AI-10). embedding-dim cố định
+  # 768 theo cột vector(768); đổi cần migration (BR-AI-15).
+  ai:
+    provider: ${AI_PROVIDER:gemini}
+    api-key: ${GEMINI_API_KEY:}
+    base-url: https://generativelanguage.googleapis.com/v1beta/models/
+    llm-model: ${AI_LLM_MODEL:gemini-3.1-flash-lite}
+    embedding-model: ${AI_EMBEDDING_MODEL:gemini-embedding-001}
+    embedding-dim: ${AI_EMBEDDING_DIM:768}
+    # ST22 (docs/adr/0130): enabled=false tắt cả lượt nạp sau commit lẫn lượt quét khi khởi động (profile test tắt).
+    indexing:
+      enabled: ${AI_INDEXING_ENABLED:true}
+      batch-size: 16
+      batch-gap: 800ms
+      max-attempts: 3
+      retry-backoff: 20s
   # Job định kỳ (docs/adr/0007): cron 6 trường theo giờ Việt Nam, "-" để tắt.
   jobs:
     # Xóa phiên đăng nhập hết hạn quá retention-days ngày (docs/adr/0008). Docker đổi lịch bằng SESSION_CLEANUP_CRON.
@@ -212,6 +229,16 @@ app:
       cron: "${NOTIFICATION_CLEANUP_CRON:23 50 3 * * *}"
       read-retention-days: 30
       unread-retention-days: 90
+      batch-size: 1000
+      time-budget: 60s
+    # ST22 (docs/adr/0130): quét tài liệu AI chưa nạp và, mỗi [CFG] ai.index.catalog_sync_minutes, đồng bộ tài liệu phác
+    # đồ tiêm. Mọi phút lẻ 5 đã có job dài (0, 1, 2, 3, 4 mod 5), nên chọn giây 45; job chỉ xếp hàng cho một luồng nền
+    # riêng, không gọi mạng trên thread scheduler.
+    knowledge-index:
+      cron: "${KNOWLEDGE_INDEX_CRON:45 */5 * * * *}"
+    # ST23 (docs/adr/0130): xóa nhật ký hỏi đáp quá [CFG] ai.log.retention_days (BR-AI-24). 04:00:29, sau nhóm 03:xx.
+    chat-log-cleanup:
+      cron: "${CHAT_LOG_CLEANUP_CRON:29 0 4 * * *}"
       batch-size: 1000
       time-budget: 60s
 

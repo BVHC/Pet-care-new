@@ -55,7 +55,8 @@ class OpenApiContractParityIT {
     private static final Path CONTRACT_DIR = Path.of("..", "docs", "api", "openapi");
     /** File hợp đồng đã có annotation đầy đủ; thêm file khi module đó viết xong tài liệu (D026: branch, catalog). */
     private static final Set<String> DOCUMENTED = Set.of("identity-v1.yaml", "care-v1.yaml", "customer-v1.yaml",
-            "inventory-v1.yaml", "sales-v1.yaml", "appointment-v1.yaml", "visit-v1.yaml", "boarding-v1.yaml", "content-v1.yaml", "report-v1.yaml");
+            "inventory-v1.yaml", "sales-v1.yaml", "appointment-v1.yaml", "visit-v1.yaml", "boarding-v1.yaml", "content-v1.yaml", "report-v1.yaml",
+            "ai-v1.yaml");
     private static final Set<String> METHODS = Set.of("get", "post", "put", "patch", "delete");
     private static final Pattern SECRET = Pattern.compile("(?i)(password|secret|hash)$|^otp(code)?$");
     /** Tên khớp {@link #SECRET} nhưng không phải bí mật: cờ bắt đổi mật khẩu (BR-TK-17). */
@@ -112,10 +113,11 @@ class OpenApiContractParityIT {
         // + 4 care #1–4 (T39 phần 1, docs/adr/0080) + 7 boarding #13–15, #19–22 (T42, docs/adr/0085) + 3 boarding #16–18 và 1 sales #9 (T43, docs/adr/0086) + 7 report #1–7 (T44, docs/adr/0087)
         // + 1 identity #38 (docs/adr/0089) + 2 identity #25, #26 (UC22 sửa hộ email tài khoản khách, BR-TK-16)
         // + 1 identity #27 (UC22 lễ tân liên kết hộ hồ sơ tại quầy với tài khoản online, BR-TK-19)
-        // + 1 identity #39 (refresh, docs/adr/0091).
+        // + 1 identity #39 (refresh, docs/adr/0091)
+        // + 7 ai #5–#11 (UC93 quản lý tài liệu tri thức, T77a, docs/adr/0130; ai #1–#4 và #12–#13 chưa cài).
         assertThat(documentedOps())
-                .as("số endpoint identity + care + customer + inventory + sales + appointment + visit + boarding + content + report đã cài")
-                .hasSize(187);
+                .as("số endpoint identity + care + customer + inventory + sales + appointment + visit + boarding + content + report + ai đã cài")
+                .hasSize(194);
     }
 
     @Test
