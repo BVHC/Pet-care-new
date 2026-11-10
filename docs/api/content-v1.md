@@ -1,19 +1,19 @@
 # Content & Feedback API v1 — Pet Care v16
 
 > **Module:** CK (nội dung trang), BV, DG (tầng 2) · **Owner:** BE-2. Nội dung trang tĩnh (banner, giới thiệu, chính sách, FAQ), chuyên mục và bài viết, feedback của khách.
-> **Nguồn chân lý:** 01 UC17, UC21, UC81, UC83, UC84; 02 BR-CK-01, BR-BV-01…04, BR-DG-01…04, BR-TK-19; 04 §10; 05 §10 (page_contents, article_categories, articles, feedbacks).
+> **Nguồn chân lý:** 01 UC17, UC21, UC81, UC83, UC84; 02 BR-CK-01, BR-BV-01…04, BR-DG-01…03, 05, BR-TK-19; 04 §10; 05 §10 (page_contents, article_categories, articles, feedbacks).
 > **Contract máy đọc:** [`./openapi/content-v1.yaml`](./openapi/content-v1.yaml) — sinh cùng lúc với file này nên luôn khớp.
 
 **Legend:** `CONFIRMED` = có trong docs · `ASSUMPTION (A#)` = suy luận ít phát minh nhất · `TBD (Q#)` = cần quyết định (mục E). Method/path/shape là **PROPOSED** theo quy ước chung ở [`00-method.md`](./00-method.md); envelope, mã lỗi, phân trang, kiểu dữ liệu theo mục 3 của file đó.
 
 **Đóng băng phạm vi (không có endpoint):**
 - UC80 (VET gửi duyệt bài), UC82 (bình luận) và phần 'duyệt, ẩn bình luận' của UC81 là tầng 3.
-- UC85, UC86 khiếu nại là tầng 3.
+- Khiếu nại (UC85, UC86) đã bỏ ở ADR-0122: feedback đảm nhiệm.
 - Dịch vụ, sản phẩm, chi nhánh, bác sĩ công khai nằm ở catalog, branch, identity (`/public/...`).
 
 ---
 
-## A. Danh sách endpoint (22)
+## A. Danh sách endpoint (21)
 
 | # | Endpoint | Thao tác | Use case | Rule |
 |---|---|---|---|---|
@@ -35,10 +35,9 @@
 | 16 | `GET /public/articles` | Danh sách bài viết | UC17 | BR-BV-03, BR-CK-01 |
 | 17 | `GET /public/articles/{slug}` | Đọc bài viết | UC17 | BR-BV-03 |
 | 18 | `POST /me/feedbacks` | Gửi feedback | UC83 | BR-DG-01, 02, BR-TK-19 |
-| 19 | `GET /me/feedbacks` | Feedback tôi đã gửi | UC83 | BR-DG-02, 04 |
+| 19 | `GET /me/feedbacks` | Feedback tôi đã gửi | UC83 | BR-DG-02, 05 |
 | 20 | `GET /feedbacks` | Danh sách feedback | UC84 | BR-DG-02, 03 |
-| 21 | `GET /feedbacks/{feedbackId}` | Xem feedback | UC84 | BR-DG-03, 04 |
-| 22 | `POST /feedbacks/{feedbackId}/resolve` | Đánh dấu đã xử lý | UC84 | BR-DG-04 |
+| 21 | `GET /feedbacks/{feedbackId}` | Xem feedback | UC84 | BR-DG-03 |
 
 ---
 
@@ -63,11 +62,10 @@
 | Chuyên mục công khai | A01, A02 | Public | — | — | Bỏ chuyên mục ẩn. |
 | Danh sách bài viết | A01, A02 | Public | — | — | Chỉ PUBLISHED, mới nhất trước. |
 | Đọc bài viết | A01, A02 | Public | — | — | — |
-| Gửi feedback | A02 | Chỉ CUSTOMER | — → NEW | — | — |
-| Feedback tôi đã gửi | A02 | Chỉ CUSTOMER | — | — | Không sửa, không xóa. |
+| Gửi feedback | A02 | Chỉ CUSTOMER | — | — | — |
+| Feedback tôi đã gửi | A02 | Chỉ CUSTOMER | — | — | Không sửa, không xóa; feedback quá 30 ngày đã bị xóa (BR-DG-05). |
 | Danh sách feedback | A04, A05 | SUPER_MANAGER: tất cả · BRANCH_MANAGER: chi nhánh mình | — | — | — |
-| Xem feedback | A04, A05 | Như listFeedbacks | NEW → SEEN khi mở lần đầu (A2) | — | — |
-| Đánh dấu đã xử lý | A04, A05 | Như listFeedbacks | SEEN → RESOLVED | — | — |
+| Xem feedback | A04, A05 | Như listFeedbacks | — | — | — |
 
 ---
 
@@ -102,9 +100,8 @@
 
 - **`POST /me/feedbacks`** — Gửi feedback. Request `CreateFeedbackRequest`. Response `201` `MyFeedback`. Lỗi: `400` `BR-DG-01` nội dung ngoài 10–2000 ký tự, thiếu chi nhánh khi BRANCH_SERVICE, điểm ngoài 1–5, vượt 5 feedback / ngày [CFG] (message ghi thời điểm gửi tiếp) · `BR-TK-19` hồ sơ còn chờ quyết định liên kết · `401` · `403`.
 - **`GET /me/feedbacks`** — Feedback tôi đã gửi. Response `200` mảng `MyFeedback`. Lỗi: `401` · `403`.
-- **`GET /feedbacks`** — Danh sách feedback. Query: `branchId?`, `status?`, `topic?`, `from?`, `to?`, `page?`, `size?`. Response `200` trang `Feedback`. Lỗi: `400` · `401` · `403`.
+- **`GET /feedbacks`** — Danh sách feedback. Query: `branchId?`, `topic?`, `from?`, `to?`, `page?`, `size?`. Response `200` trang `Feedback`. Lỗi: `400` · `401` · `403`.
 - **`GET /feedbacks/{feedbackId}`** — Xem feedback. Response `200` `Feedback`. Lỗi: `401` · `403` · `404`.
-- **`POST /feedbacks/{feedbackId}/resolve`** — Đánh dấu đã xử lý. Request `ResolveFeedbackRequest`. Response `200` `Feedback`. Lỗi: `400` `BR-DG-04` thiếu ghi chú · `401` · `403` · `404` · `409` Đã RESOLVED.
 
 ### Schema
 
@@ -123,9 +120,8 @@ Trường có `?` là không bắt buộc / có thể null. Kiểu `email`, `dat
 - **`PublicArticleCard`** — {`articleId`: int64, `title`: string, `slug`: string, `categoryName`: string, `categorySlug`: string, `coverImageUrl?`: string, `summary?`: string, `authorDisplayName`: string, `publishedAt`: date-time}
 - **`PublicArticle`** — {`articleId`: int64, `title`: string, `slug`: string, `categoryName`: string, `categorySlug`: string, `coverImageUrl?`: string, `summary?`: string, `content`: string, `authorDisplayName`: string, `publishedAt`: date-time}
 - **`CreateFeedbackRequest`** — {`topic`: BRANCH_SERVICE|WEBSITE|OTHER, `branchId?`: int64, `rating?`: int32, `content`: string}
-- **`MyFeedback`** — {`feedbackId`: int64, `topic`: BRANCH_SERVICE|WEBSITE|OTHER, `branchId?`: int64, `rating?`: int32, `content`: string, `status`: NEW|SEEN|RESOLVED, `createdAt`: date-time}
-- **`Feedback`** — {`feedbackId`: int64, `customerId`: int64, `customerName`: string, `topic`: BRANCH_SERVICE|WEBSITE|OTHER, `branchId?`: int64, `branchName?`: string, `rating?`: int32, `content`: string, `status`: NEW|SEEN|RESOLVED, `seenAt?`: date-time, `resolvedBy?`: int64, `resolvedAt?`: date-time, `resolutionNote?`: string, `createdAt`: date-time}
-- **`ResolveFeedbackRequest`** — {`resolutionNote`: string}
+- **`MyFeedback`** — {`feedbackId`: int64, `topic`: BRANCH_SERVICE|WEBSITE|OTHER, `branchId?`: int64, `rating?`: int32, `content`: string, `createdAt`: date-time}
+- **`Feedback`** — {`feedbackId`: int64, `customerId`: int64, `customerName`: string, `topic`: BRANCH_SERVICE|WEBSITE|OTHER, `branchId?`: int64, `branchName?`: string, `rating?`: int32, `content`: string, `createdAt`: date-time}
 
 ---
 
@@ -133,8 +129,9 @@ Trường có `?` là không bắt buộc / có thể null. Kiểu `email`, `dat
 
 1. Soạn và đăng bài, chuyên mục, nội dung trang: chỉ SUPER_MANAGER.
 2. Bài DRAFT / HIDDEN truy cập từ trang công khai trả 404 (BR-BV-03). Nội dung bài lưu HTML đã lọc (05 `articles.content`).
-3. Feedback không công khai: chỉ khách gửi xem lại (không thấy ghi chú nội bộ), SUPER_MANAGER xem tất cả, BRANCH_MANAGER chỉ feedback gắn chi nhánh mình; ngoài phạm vi trả 403 (BR-DG-02, 03).
+3. Feedback không công khai: chỉ khách gửi xem lại, SUPER_MANAGER xem tất cả, BRANCH_MANAGER chỉ feedback gắn chi nhánh mình; ngoài phạm vi trả 403 (BR-DG-02, 03).
 4. Giới hạn 5 feedback / khách / ngày [CFG] kiểm ở server (BR-DG-01).
+5. Feedback không có trạng thái (ADR-0122); giữ 30 ngày [CFG] `feedback.retention_days` rồi bị xóa cứng bởi ST24 (BR-DG-05).
 
 ---
 
@@ -143,7 +140,7 @@ Trường có `?` là không bắt buộc / có thể null. Kiểu `email`, `dat
 | ID | Giả định | Lý do |
 |---|---|---|
 | A1 | Slug chuyên mục không đổi sau khi tạo | Không có rule; slug dùng trong URL công khai như BR-BV-01 |
-| A2 | Mở chi tiết feedback lần đầu bởi người có quyền tự chuyển NEW → SEEN trong cùng request GET | BR-DG-04 'tự chuyển khi người có quyền mở lần đầu' |
+| A2 | Feedback quá 30 ngày bị xóa cứng; khách không còn thấy feedback đó ở `GET /me/feedbacks` | BR-DG-05; ADR-0122 |
 | A3 | `content` của trang là JSON tự do theo từng key (danh sách banner, câu hỏi FAQ…) | 05 `page_contents.content` JSONB, cấu trúc tùy trang |
 
 | ID | Câu hỏi | Trạng thái | Gốc |

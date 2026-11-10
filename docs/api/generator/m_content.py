@@ -2,11 +2,11 @@ from lib import Module
 
 m = Module(
     key="content", title="Content & Feedback API v1", codes="CK (nội dung trang), BV, DG (tầng 2)", owner="BE-2",
-    sources="01 UC17, UC21, UC81, UC83, UC84; 02 BR-CK-01, BR-BV-01…04, BR-DG-01…04, BR-TK-19; 04 §10; 05 §10 (page_contents, article_categories, articles, feedbacks)",
+    sources="01 UC17, UC21, UC81, UC83, UC84; 02 BR-CK-01, BR-BV-01…04, BR-DG-01…03, 05, BR-TK-19; 04 §10; 05 §10 (page_contents, article_categories, articles, feedbacks)",
     intro="Nội dung trang tĩnh (banner, giới thiệu, chính sách, FAQ), chuyên mục và bài viết, feedback của khách.",
     frozen=[
         "UC80 (VET gửi duyệt bài), UC82 (bình luận) và phần 'duyệt, ẩn bình luận' của UC81 là tầng 3.",
-        "UC85, UC86 khiếu nại là tầng 3.",
+        "Khiếu nại (UC85, UC86) đã bỏ ở ADR-0122: feedback đảm nhiệm.",
         "Dịch vụ, sản phẩm, chi nhánh, bác sĩ công khai nằm ở catalog, branch, identity (`/public/...`).",
     ],
     tags={
@@ -19,12 +19,13 @@ m = Module(
     security=[
         "Soạn và đăng bài, chuyên mục, nội dung trang: chỉ SUPER_MANAGER.",
         "Bài DRAFT / HIDDEN truy cập từ trang công khai trả 404 (BR-BV-03). Nội dung bài lưu HTML đã lọc (05 `articles.content`).",
-        "Feedback không công khai: chỉ khách gửi xem lại (không thấy ghi chú nội bộ), SUPER_MANAGER xem tất cả, BRANCH_MANAGER chỉ feedback gắn chi nhánh mình; ngoài phạm vi trả 403 (BR-DG-02, 03).",
+        "Feedback không công khai: chỉ khách gửi xem lại, SUPER_MANAGER xem tất cả, BRANCH_MANAGER chỉ feedback gắn chi nhánh mình; ngoài phạm vi trả 403 (BR-DG-02, 03).",
         "Giới hạn 5 feedback / khách / ngày [CFG] kiểm ở server (BR-DG-01).",
+        "Feedback không có trạng thái (ADR-0122); giữ 30 ngày [CFG] `feedback.retention_days` rồi bị xóa cứng bởi ST24 (BR-DG-05).",
     ],
     assumptions=[
         ("A1", "Slug chuyên mục không đổi sau khi tạo", "Không có rule; slug dùng trong URL công khai như BR-BV-01"),
-        ("A2", "Mở chi tiết feedback lần đầu bởi người có quyền tự chuyển NEW → SEEN trong cùng request GET", "BR-DG-04 'tự chuyển khi người có quyền mở lần đầu'"),
+        ("A2", "Feedback quá 30 ngày bị xóa cứng; khách không còn thấy feedback đó ở `GET /me/feedbacks`", "BR-DG-05; ADR-0122"),
         ("A3", "`content` của trang là JSON tự do theo từng key (danh sách banner, câu hỏi FAQ…)", "05 `page_contents.content` JSONB, cấu trúc tùy trang"),
     ],
     questions=[
@@ -82,15 +83,13 @@ m.schema("CreateFeedbackRequest", {
 })
 m.schema("MyFeedback", {
     "feedbackId": "int64", "topic": "enum:BRANCH_SERVICE,WEBSITE,OTHER", "branchId": "int64?", "rating": "int?",
-    "content": "string", "status": "enum:NEW,SEEN,RESOLVED|Khách chỉ thấy trạng thái (BR-DG-04)", "createdAt": "datetime",
+    "content": "string", "createdAt": "datetime",
 })
 m.schema("Feedback", {
     "feedbackId": "int64", "customerId": "int64", "customerName": "string", "topic": "enum:BRANCH_SERVICE,WEBSITE,OTHER",
     "branchId": "int64?", "branchName": "string?", "rating": "int?", "content": "string",
-    "status": "enum:NEW,SEEN,RESOLVED", "seenAt": "datetime?", "resolvedBy": "int64?", "resolvedAt": "datetime?",
-    "resolutionNote": "string?|Nội bộ", "createdAt": "datetime",
+    "createdAt": "datetime",
 })
-m.schema("ResolveFeedbackRequest", {"resolutionNote": "string|Bắt buộc (BR-DG-04)"})
 
 SM = "Chỉ SUPER_MANAGER"
 m.op("get", "/page-contents", "listPageContents", "Danh sách nội dung trang", "Pages", "UC21", "—", "A04", SM,
@@ -146,18 +145,14 @@ m.op("get", "/public/articles/{slug}", "getPublicArticle", "Đọc bài viết",
      err_desc={404: "Không có, hoặc bài DRAFT / HIDDEN (BR-BV-03)"})
 
 m.op("post", "/me/feedbacks", "submitFeedback", "Gửi feedback", "Feedback", "UC83", "BR-DG-01, 02, BR-TK-19", "A02",
-     "Chỉ CUSTOMER", "— → NEW", body="CreateFeedbackRequest", resp="MyFeedback", status=201, errors=(400, 401, 403),
+     "Chỉ CUSTOMER", body="CreateFeedbackRequest", resp="MyFeedback", status=201, errors=(400, 401, 403),
      err_desc={400: "`BR-DG-01` nội dung ngoài 10–2000 ký tự, thiếu chi nhánh khi BRANCH_SERVICE, điểm ngoài 1–5, vượt 5 feedback / ngày [CFG] (message ghi thời điểm gửi tiếp) · `BR-TK-19` hồ sơ còn chờ quyết định liên kết"})
-m.op("get", "/me/feedbacks", "listMyFeedbacks", "Feedback tôi đã gửi", "Feedback", "UC83", "BR-DG-02, 04", "A02",
-     "Chỉ CUSTOMER", resp="array:MyFeedback", errors=(401, 403), notes="Không sửa, không xóa.")
+m.op("get", "/me/feedbacks", "listMyFeedbacks", "Feedback tôi đã gửi", "Feedback", "UC83", "BR-DG-02, 05", "A02",
+     "Chỉ CUSTOMER", resp="array:MyFeedback", errors=(401, 403), notes="Không sửa, không xóa; feedback quá 30 ngày đã bị xóa (BR-DG-05).")
 m.op("get", "/feedbacks", "listFeedbacks", "Danh sách feedback", "Feedback", "UC84", "BR-DG-02, 03", "A04, A05",
      "SUPER_MANAGER: tất cả · BRANCH_MANAGER: chi nhánh mình", resp="Feedback", page=True, errors=(400, 401, 403),
-     query=["branchId=int64", "status=enum:NEW,SEEN,RESOLVED", "topic=enum:BRANCH_SERVICE,WEBSITE,OTHER", "from=date",
+     query=["branchId=int64", "topic=enum:BRANCH_SERVICE,WEBSITE,OTHER", "from=date",
             "to=date", "page", "size"])
-m.op("get", "/feedbacks/{feedbackId}", "getFeedback", "Xem feedback", "Feedback", "UC84", "BR-DG-03, 04", "A04, A05",
-     "Như listFeedbacks", "NEW → SEEN khi mở lần đầu (A2)", resp="Feedback", path_params=["FeedbackId"],
+m.op("get", "/feedbacks/{feedbackId}", "getFeedback", "Xem feedback", "Feedback", "UC84", "BR-DG-03", "A04, A05",
+     "Như listFeedbacks", resp="Feedback", path_params=["FeedbackId"],
      errors=(401, 403, 404))
-m.op("post", "/feedbacks/{feedbackId}/resolve", "resolveFeedback", "Đánh dấu đã xử lý", "Feedback", "UC84",
-     "BR-DG-04", "A04, A05", "Như listFeedbacks", "SEEN → RESOLVED", body="ResolveFeedbackRequest", resp="Feedback",
-     path_params=["FeedbackId"], errors=(400, 401, 403, 404, 409),
-     err_desc={400: "`BR-DG-04` thiếu ghi chú", 409: "Đã RESOLVED"})

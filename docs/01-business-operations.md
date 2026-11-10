@@ -1,6 +1,6 @@
 # Pet Care Ecosystem — Use Case Catalog
 
-> Danh sách use case và tác vụ hệ thống của web Pet Care. Gồm **94 mã use case** (UC01–UC94; còn hiệu lực 88 sau khi bỏ UC18, UC19, UC20, UC41, UC43, UC51; UC90–UC94 là phân hệ AI, đặc tả ở `07-ai-subsystem.md`) + **23 tác vụ hệ thống** (ST22, ST23 là của AI) (không vẽ trên sơ đồ use case).
+> Danh sách use case và tác vụ hệ thống của web Pet Care. Gồm **94 mã use case** (UC01–UC94; còn hiệu lực 85 sau khi bỏ UC18, UC19, UC20, UC41, UC43, UC50, UC51, UC85, UC86; UC90–UC94 là phân hệ AI, đặc tả ở `07-ai-subsystem.md`) + **24 mã tác vụ hệ thống** (ST16, ST17 đã bỏ; ST22, ST23 là của AI; ST24 dọn feedback) (không vẽ trên sơ đồ use case).
 
 ---
 
@@ -9,12 +9,12 @@
 | Mã | Actor | Vai trò |
 |---|---|---|
 | A01 | GUEST | Khách vãng lai, chưa đăng nhập. Được xem thông tin công khai (dịch vụ, chi nhánh kèm số điện thoại, bác sĩ, sản phẩm, bài viết) và đăng ký tài khoản. Muốn đặt lịch phải đăng ký tài khoản (UC01) hoặc nhờ lễ tân đặt hộ (UC39). |
-| A02 | CUSTOMER | Chủ thú cưng đã có tài khoản; chỉ truy cập được dữ liệu của chính mình. **Trong phạm vi đồ án:** quản lý hồ sơ cá nhân và thú cưng, đặt lịch khám và lưu trú, xem hồ sơ sức khỏe và nhật ký chăm sóc của thú, nhận nhắc lịch hẹn, tái chủng, tái khám, gửi feedback. **Hướng phát triển (tầng 3):** mua hàng online, khiếu nại, bình luận bài viết. |
+| A02 | CUSTOMER | Chủ thú cưng đã có tài khoản; chỉ truy cập được dữ liệu của chính mình. **Trong phạm vi đồ án:** quản lý hồ sơ cá nhân và thú cưng, đặt lịch khám và lưu trú, xem hồ sơ sức khỏe và nhật ký chăm sóc của thú, nhận nhắc lịch hẹn, tái chủng, tái khám, gửi feedback. **Hướng phát triển (tầng 3):** mua hàng online, bình luận bài viết. |
 | A03 | ADMIN | Quản trị kỹ thuật của hệ thống: tạo tài khoản SUPER_MANAGER, khóa/mở khóa người dùng, cấu hình tham số và mẫu thông báo, xem audit. Không tham gia nghiệp vụ phòng khám và bán hàng. |
-| A04 | SUPER_MANAGER | Quản lý cấp chuỗi, phạm vi mọi chi nhánh. **Trong phạm vi đồ án:** quản lý chi nhánh (tạo, kích hoạt, cờ cấp cứu ngoài giờ); quản lý danh mục sản phẩm, dịch vụ, giá, loại vaccine và phác đồ tiêm chủng; tạo, đổi chức vụ, điều chuyển, vô hiệu hóa nhân viên; quản lý nội dung trang và đăng bài viết; xem feedback; xem báo cáo toàn chuỗi. **Hướng phát triển (tầng 3):** tạm ngừng / đóng chi nhánh, phí vận chuyển, duyệt bài viết của VET, xử lý khiếu nại. |
-| A05 | BRANCH_MANAGER | Quản lý một chi nhánh, chỉ thao tác trên dữ liệu của chi nhánh mình. **Trong phạm vi đồ án:** tạo và vô hiệu hóa nhân viên cấp dưới; cấu hình giờ mở cửa, ngày nghỉ, quota lịch hẹn; bật/tắt dịch vụ tại chi nhánh; quản lý chuồng; nhập kho, điều chỉnh tồn, đặt tồn tối thiểu; hủy Order khách không thanh toán; đối soát ca thu ngân; gán lại lượt đã gọi khi nhân viên phụ trách bị khóa; xem feedback và báo cáo chi nhánh. **Hướng phát triển (tầng 3):** phân ca và duyệt nghỉ, gộp hồ sơ khách trùng, duyệt trả hàng, chuyển kho, kiểm kê, xử lý khiếu nại. |
-| A06 | RECEPTIONIST | Lễ tân kiêm thu ngân tại một chi nhánh, là đầu mối vận hành hằng ngày. **Trong phạm vi đồ án:** tiếp nhận khách, điều phối hàng đợi, đặt lịch hộ khách, quản lý hồ sơ khách tại quầy, bán hàng, thu tiền, nhận/trả thú lưu trú, thực hiện Care Task gọi điện chăm sóc khách. **Hướng phát triển (tầng 3):** xử lý và giao đơn online, tạo yêu cầu trả hàng, tạo khiếu nại thay khách. |
-| A07 | VET | Bác sĩ thú y tại một chi nhánh. **Trong phạm vi đồ án:** khám, chẩn đoán, kê đơn, hẹn tái khám, tiêm chủng, cập nhật và bổ sung bệnh án, ghi nhật ký chăm sóc thú lưu trú; có hồ sơ giới thiệu hiển thị công khai. **Hướng phát triển (tầng 3):** phẫu thuật, điều trị nội trú, viết bài chuyên môn, truy vết lô. |
+| A04 | SUPER_MANAGER | Quản lý cấp chuỗi, phạm vi mọi chi nhánh. **Trong phạm vi đồ án:** quản lý chi nhánh (tạo, kích hoạt, cờ cấp cứu ngoài giờ); quản lý danh mục sản phẩm, dịch vụ, giá, loại vaccine và phác đồ tiêm chủng; tạo, đổi chức vụ, điều chuyển, vô hiệu hóa nhân viên; quản lý nội dung trang và đăng bài viết; xem feedback; xem báo cáo toàn chuỗi. **Hướng phát triển (tầng 3):** tạm ngừng / đóng chi nhánh, phí vận chuyển, duyệt bài viết của VET. |
+| A05 | BRANCH_MANAGER | Quản lý một chi nhánh, chỉ thao tác trên dữ liệu của chi nhánh mình. **Trong phạm vi đồ án:** tạo và vô hiệu hóa nhân viên cấp dưới; cấu hình giờ mở cửa, ngày nghỉ, quota lịch hẹn; bật/tắt dịch vụ tại chi nhánh; quản lý chuồng; nhập kho, điều chỉnh tồn, đặt tồn tối thiểu; hủy Order khách không thanh toán; đối soát ca thu ngân; gán lại lượt đã gọi khi nhân viên phụ trách bị khóa; xem feedback và báo cáo chi nhánh. **Hướng phát triển (tầng 3):** phân ca và duyệt nghỉ, gộp hồ sơ khách trùng, duyệt trả hàng, chuyển kho, kiểm kê. |
+| A06 | RECEPTIONIST | Lễ tân kiêm thu ngân tại một chi nhánh, là đầu mối vận hành hằng ngày. **Trong phạm vi đồ án:** tiếp nhận khách, điều phối hàng đợi, đặt lịch hộ khách, quản lý hồ sơ khách tại quầy, bán hàng, thu tiền, nhận/trả thú lưu trú, thực hiện Care Task gọi điện chăm sóc khách. **Hướng phát triển (tầng 3):** xử lý và giao đơn online, tạo yêu cầu trả hàng. |
+| A07 | VET | Bác sĩ thú y tại một chi nhánh. **Trong phạm vi đồ án:** khám, chẩn đoán, kê đơn, hẹn tái khám, tiêm chủng, cập nhật và bổ sung bệnh án, ghi nhật ký chăm sóc thú lưu trú; có hồ sơ giới thiệu hiển thị công khai. **Hướng phát triển (tầng 3):** điều trị nội trú (phẫu thuật đã bỏ, ADR-0125), viết bài chuyên môn, truy vết lô. |
 | A08 | CARETAKER | Nhân viên chăm sóc tại một chi nhánh; chỉ được xem bệnh án, không được sửa. **Trong phạm vi đồ án:** thực hiện dịch vụ thẩm mỹ (tắm, cắt tỉa), nhận thú lưu trú, ghi nhật ký chăm sóc thú lưu trú. **Hướng phát triển (tầng 3):** chăm sóc thú nội trú. |
 | S01 | System | Tự động chạy các tác vụ định kỳ và tác vụ kích hoạt theo sự kiện (mục B): nhắc lịch, hủy đơn quá hạn, cảnh báo tồn kho, sinh Care Task… |
 | S02 | Payment Gateway | *(Tầng 3)* Cổng thanh toán bên ngoài. Xử lý thanh toán online, hoàn tiền, trả kết quả giao dịch về hệ thống. |
@@ -92,7 +92,7 @@
 | Mã | Use case | Actor |
 |---|---|---|
 | UC34 | Quản lý ca làm việc (định nghĩa ca, phân ca, xem nhân viên chi nhánh) | A05 |
-| UC35 | Xem lịch làm việc của tôi | A06, A07, A08 |
+| UC35 | Xem lịch làm việc của tôi và đăng ký ca theo tuần (BR-NS-11, 12; ADR-0123) | A06, A07, A08 |
 | UC36 | Gửi / rút yêu cầu nghỉ, đổi ca | A06, A07, A08 |
 | UC37 | Duyệt yêu cầu nghỉ, đổi ca | A05 |
 | UC38 | Ghi nhận vắng đột xuất | A05 |
@@ -121,7 +121,7 @@
 |---|---|---|
 | UC48 | Khám bệnh (khám, chẩn đoán, xét nghiệm, kê đơn, hẹn tái khám — BR-KB-06, hoàn tất) | A07 |
 | UC49 | Tiêm chủng (chọn loại vaccine theo phác đồ rồi chọn sản phẩm còn tồn; lượt tiêm riêng, hoặc tiêm ngay trong lượt khám trên cùng Visit; VET được chọn mũi thứ khác với gợi ý; xóa mũi ghi nhầm khi lượt còn mở; chỉ ghi nhận mũi tiêm tại hệ thống — BR-KB-04, BR-KB-05) | A07 |
-| UC50 | Phẫu thuật (lập cam kết, thực hiện) | A07, A06 |
+| ~~UC50~~ | ~~Phẫu thuật (lập cam kết, thực hiện)~~ — bỏ ở ADR-0125, giữ mã để không lệch số | — |
 | UC52 | Thực hiện dịch vụ thẩm mỹ | A08 |
 | UC53 | Xem & bổ sung bệnh án | A07, A08 (chỉ xem) |
 
@@ -131,7 +131,7 @@
 |---|---|---|
 | UC54 | Quản lý chuồng (tạo chuồng theo loại chuồng, đổi trạng thái `AVAILABLE` / `MAINTENANCE`) | A05 |
 | UC55 | Nhập / xuất viện (gồm chuyển từ lưu trú sang điều trị) | A07 |
-| UC56 | Điều trị nội trú (ra y lệnh, theo dõi hậu phẫu) | A07 |
+| UC56 | Điều trị nội trú (ra y lệnh, theo dõi nội trú) | A07 |
 | UC57 | Ghi nhật ký chăm sóc | A08, A07 |
 | UC58 | Đặt chỗ lưu trú theo loại chuồng (đặt, hủy, gia hạn) | A02, A06 |
 | UC59 | Nhận / trả thú cưng lưu trú (kiểm tra tiêm phòng khi nhận; thu tiền trước khi trả; hủy phiên trả thú khi khách không thanh toán; kết thúc lưu trú khi thú mất) | A06, A08 (A08 chỉ nhận thú) |
@@ -179,14 +179,14 @@
 | UC81 | Quản lý bài viết, chuyên mục & bình luận (soạn, duyệt, gỡ bài, ẩn bình luận) | A04 |
 | UC82 | Bình luận bài viết (đăng, sửa, xóa của mình) | A02 |
 
-## 16. Feedback & khiếu nại
+## 16. Feedback (khiếu nại đã bỏ, ADR-0122)
 
 | Mã | Use case | Actor |
 |---|---|---|
 | UC83 | Gửi feedback (về dịch vụ tại chi nhánh hoặc website; không công khai) | A02 |
-| UC84 | Xem & xử lý feedback | A04, A05 (chi nhánh mình) |
-| UC85 | Gửi & theo dõi khiếu nại (tạo, xem, đóng / mở lại) | A02, A06 (tạo thay khách) |
-| UC86 | Xử lý khiếu nại | A05, A04 |
+| UC84 | Xem feedback (không trạng thái; chỉ đọc) | A04, A05 (chi nhánh mình) |
+| ~~UC85~~ | ~~Gửi & theo dõi khiếu nại~~ — bỏ ở ADR-0122, feedback (UC83) đảm nhiệm. Giữ mã. | — |
+| ~~UC86~~ | ~~Xử lý khiếu nại~~ — bỏ ở ADR-0122. Giữ mã. | — |
 
 ## 17. Chăm sóc khách hàng & thông báo
 
@@ -234,14 +234,15 @@ Các mục dưới đây do hệ thống tự chạy theo thời gian hoặc the
 | ST13 | Tự chốt ca thu ngân chưa chốt & cảnh báo Order `PENDING` quá hạn | Ca thường: cuối ngày, theo giờ đóng cửa chi nhánh. Ca ngoài giờ: khi đến giờ mở cửa kế tiếp của chi nhánh |
 | ST14 | Đối soát cổng thanh toán | Hằng ngày |
 | ST15 | Đánh dấu lưu trú quá hạn đón (OVERDUE) | Định kỳ |
-| ST16 | Leo thang khiếu nại quá hạn | Định kỳ |
-| ST17 | Tự đóng khiếu nại | Định kỳ |
+| ~~ST16~~ | ~~Leo thang khiếu nại quá hạn~~ — bỏ ở ADR-0122. Giữ mã. | — |
+| ~~ST17~~ | ~~Tự đóng khiếu nại~~ — bỏ ở ADR-0122. Giữ mã. | — |
 | ST18 | Sinh Care Task | ST04 (nhắc tái chủng / tái khám với hồ sơ không có email; quá hạn tái chủng), ST15 (quá hạn đón) |
 | ST19 | Tự hủy Care Task khi thú cưng đã mất | UC24 |
 | ST20 | Gửi thông báo & thử lại khi thất bại | Mọi sự kiện cần thông báo |
 | ST21 | Hoàn tiền online qua cổng thanh toán | UC64, UC69 |
 | ST22 | Nạp lại chỉ mục tri thức AI (chia đoạn, nhúng vector; đồng bộ phác đồ tiêm) | UC93, định kỳ |
 | ST23 | Xóa nhật ký hỏi đáp AI quá hạn lưu | Hằng ngày |
+| ST24 | Dọn feedback quá hạn lưu (xóa cứng sau 30 ngày, BR-DG-05) | Hằng ngày |
 
 ---
 
@@ -252,8 +253,8 @@ Các mục dưới đây do hệ thống tự chạy theo thời gian hoặc the
 | UC01 Đăng ký, UC04 Quên mật khẩu, UC07 Liên kết tài khoản | «include» | UC02 Xác thực OTP |
 | UC08 Quản lý tài khoản nhân viên, UC22 Quản lý hồ sơ khách tại quầy (khi sửa email) | «extend» | UC02 Xác thực OTP |
 | UC44 Tiếp nhận khách (khách chưa có hồ sơ) | «extend» | UC22 Quản lý hồ sơ khách tại quầy |
-| UC48 Khám bệnh | «extend» | UC50 Phẫu thuật *(tầng 3)*, UC55 Nhập viện *(tầng 3)* |
-| UC50 Phẫu thuật, UC55 Nhập viện *(tầng 3)* | «extend» | UC67 Thêm dịch vụ / hàng vào Order |
+| UC48 Khám bệnh | «extend» | UC55 Nhập viện *(tầng 3)* (UC50 Phẫu thuật đã bỏ, ADR-0125) |
+| UC55 Nhập viện *(tầng 3)* | «extend» | UC67 Thêm dịch vụ / hàng vào Order |
 | UC62 Đặt hàng online *(tầng 3)* | «include» | UC63 Thanh toán online |
 | UC66 Chốt Order tại quầy | «include» | UC70 Thu tiền tại quầy |
 | UC59 Nhận / trả thú lưu trú (khi trả thú — BR-LT-09) | «include» | UC70 Thu tiền tại quầy |

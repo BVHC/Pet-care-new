@@ -19,7 +19,7 @@
 ## Nguyên tắc xuyên suốt
 
 1. **Customer là thực thể gốc, Account là phần gắn thêm.** Mọi dữ liệu nghiệp vụ (Pet, Appointment, Order…) trỏ tới Customer, không trỏ tới Account. Liên kết tài khoản chỉ là gán `Customer.account_id` (BR-TK-19, BR-KH-01).
-2. **Không xóa cứng dữ liệu nghiệp vụ.** Dùng trạng thái cuối hoặc cờ: Pet đã mất, Supplier ngừng hợp tác, Order/StockReceipt `CANCELLED`, Article `HIDDEN`. Ngoại lệ: Pet chưa phát sinh giao dịch (BR-KH-06), Account `PENDING` quá hạn cùng hồ sơ online tạo kèm (BR-TK-08), hồ sơ online chưa phát sinh dữ liệu khi liên kết vào hồ sơ tại quầy (BR-TK-19), Article chưa từng xuất bản.
+2. **Không xóa cứng dữ liệu nghiệp vụ.** Dùng trạng thái cuối hoặc cờ: Pet đã mất, Supplier ngừng hợp tác, Order/StockReceipt `CANCELLED`, Article `HIDDEN`. Ngoại lệ: Pet chưa phát sinh giao dịch (BR-KH-06), Account `PENDING` quá hạn cùng hồ sơ online tạo kèm (BR-TK-08), hồ sơ online chưa phát sinh dữ liệu khi liên kết vào hồ sơ tại quầy (BR-TK-19), Article chưa từng xuất bản, Feedback quá hạn lưu 30 ngày (BR-DG-05).
 3. **Snapshot giá.** `OrderLine` chốt đơn giá lúc thêm dòng (BR-BH-03); `BoardingBooking` chốt giá đêm lúc đặt (BR-LT-02). Không tính tiền từ giá hiện tại.
 4. **Mọi sản phẩm đều tồn theo lô.** Sản phẩm không quản lý hạn dùng có đúng 1 `StockLot` không số lô, không hạn. Nhờ vậy kiểm tra tồn khả dụng, trừ kho FEFO, điều chỉnh, hủy phiếu nhập dùng chung một cách cài đặt (BR-KO-01, 05).
 5. **Mọi thay đổi tồn kho sinh `StockMovement`.** `StockLot.quantity` là số dư; `StockMovement` là lịch sử để truy vết.
@@ -128,7 +128,7 @@
 | ArticleCategory | REF | | Chuyên mục bài viết, có thể ẩn | 1–n Article | | Còn bài thì chỉ ẩn. BR-BV-04 | 2 |
 | Article | ROOT | | Bài viết do SUPER_MANAGER soạn và đăng | n–1 ArticleCategory | BR-BV-02 | Slug khóa sau lần xuất bản đầu. BR-BV-01…03 | 2 |
 | PageContent | REF | | Nội dung trang tĩnh: banner, giới thiệu, chính sách, FAQ | | | UC21 | 2 |
-| Feedback | ROOT | | Ý kiến không công khai của khách về chi nhánh hoặc website | n–1 Customer; n–1? Branch | BR-DG-04 | Chỉ SUPER_MANAGER và BRANCH_MANAGER (chi nhánh mình) xem. BR-DG-01…04 | 2 |
+| Feedback | ROOT | | Ý kiến không công khai của khách về chi nhánh hoặc website | n–1 Customer; n–1? Branch | | Chỉ SUPER_MANAGER và BRANCH_MANAGER (chi nhánh mình) xem; không trạng thái; xóa cứng sau 30 ngày. BR-DG-01…03, 05 | 2 |
 
 ## 11. Chăm sóc khách & thông báo (TB)
 
@@ -184,12 +184,10 @@
 | StockCountLine | `stock_count_lines` | PART |  | `08` §E |
 | CustomerMerge | `customer_merges` | LOG |  | `08` §F.2 |
 | ArticleComment | `article_comments` | ROOT |  | `08` §F.3 |
-| Surgery | `surgeries` | ROOT | #23 | `09` §B |
+| ~~Surgery~~ | ~~`surgeries`~~ (bỏ, ADR-0125; bảng còn trong DB tới V51, D063) | — | — | — |
 | Admission | `admissions` | ROOT | #24 | `09` §C |
 | AdmissionOrder | `admission_orders` | ROOT | #25 | `09` §C |
 | AdmissionObservation | `admission_observations` | LOG |  | `09` §C |
-| Complaint | `complaints` | ROOT | #26 | `09` §D |
-| ComplaintMessage | `complaint_messages` | LOG |  | `09` §D |
 | VisitMaterialUsage | `visit_material_usages` | LOG |  | `09` §E |
 
 Ngoài ra các model có sẵn được mở rộng cột / giá trị (Appointment, Visit, OrderLine, Order, Service, Branch, Customer, Article, StockMovement, StockAdjustment): xem `05` §13 mục 26.
@@ -200,6 +198,6 @@ Ngoài ra các model có sẵn được mở rộng cột / giá trị (Appointm
 
 > Từ T54 (5/11/2026) các mục dưới đây đã có model ở §12. Đoạn giữ nguyên văn v16 để đối chiếu.
 
-Giữ trên sơ đồ use case, không thiết kế model: phẫu thuật (UC50), nội trú (UC55, UC56), giỏ hàng & đơn online & thanh toán cổng (UC61–65), trả hàng (UC68, 69), chuyển kho & kiểm kê & truy vết lô (UC77–79), bài viết của VET & bình luận (UC80, 82), khiếu nại (UC85, 86), gộp hồ sơ khách (UC27), tạm ngừng/đóng chi nhánh (UC13).
+Giữ trên sơ đồ use case, không thiết kế model: nội trú (UC55, UC56), giỏ hàng & đơn online & thanh toán cổng (UC61–65), trả hàng (UC68, 69), chuyển kho & kiểm kê & truy vết lô (UC77–79), bài viết của VET & bình luận (UC80, 82), gộp hồ sơ khách (UC27), tạm ngừng/đóng chi nhánh (UC13).
 
 Báo cáo (UC89) không có model; số liệu tính tại thời điểm xem từ Order, Payment, Visit, Appointment, Vaccination, InventoryItem, Feedback (BR-BC-01…04). Tỷ lệ quay lại tái chủng khớp theo VaccineType. *(v15: bỏ báo cáo công suất chuồng nên không dùng Kennel, BoardingBooking.)*

@@ -4,7 +4,7 @@
 
 ## Quy ước
 
-- **Phạm vi file:** chỉ gồm đối tượng có chuyển trạng thái kèm điều kiện phức tạp hoặc kéo theo đối tượng khác. Đối tượng có vòng đời tuyến tính đơn giản (Bài viết — BR-BV-02, Feedback — BR-DG-04) xem trực tiếp trong business-rules. Liên hệ đã bỏ ở v13. Bệnh án không có trạng thái riêng (khóa khi Visit `COMPLETED`).
+- **Phạm vi file:** chỉ gồm đối tượng có chuyển trạng thái kèm điều kiện phức tạp hoặc kéo theo đối tượng khác. Đối tượng có vòng đời tuyến tính đơn giản (Bài viết — BR-BV-02; Feedback không còn vòng đời, ADR-0122) xem trực tiếp trong business-rules. Liên hệ đã bỏ ở v13. Bệnh án không có trạng thái riêng (khóa khi Visit `COMPLETED`).
 - **Whitelist:** mọi chuyển trạng thái không có trong bảng đều bị từ chối.
 - **Loại trạng thái:** `INIT` khởi tạo · `MID` trung gian · `FINAL` trạng thái cuối, không chuyển tiếp.
 - **Người kích hoạt:** mã actor (`A06`), tác vụ hệ thống (`ST05`), hoặc `SYS ← <Đối tượng>#<số>` khi là hệ quả của một chuyển trạng thái khác.
@@ -36,10 +36,10 @@
 | 19 | Phiên kiểm kê | `stock_counts.status` | KO (`08` §E) | 3 |
 | 20 | Chi nhánh (mở rộng #2) | `branches.status` | CN (`08` §F.1) | 3 |
 | 21 | Bài viết (mở rộng) | `articles.status` | BV (`08` §F.3) | 3 |
-| 23 | Phẫu thuật | `surgeries.status` | KB (`09` §B) | 3 |
+| 23 | ~~Phẫu thuật~~ — bỏ ở ADR-0125, giữ số | — | — | — |
 | 24 | Nhập viện | `admissions.status` | LT (`09` §C) | 3 |
 | 25 | Y lệnh nội trú | `admission_orders.status` | LT (`09` §C) | 3 |
-| 26 | Khiếu nại | `complaints.status` | DG (`09` §D) | 3 |
+| 26 | ~~Khiếu nại~~ — bỏ ở ADR-0122, giữ số | — | — | — |
 
 ---
 
@@ -265,7 +265,7 @@ Có hai loại ca, phân biệt bằng cờ `is_after_hours` đặt lúc mở ca
 | 2 | `PENDING` → `WITHDRAWN` | Rút yêu cầu | A06, A07, A08 (người gửi) | — | Phân ca giữ nguyên | BR-NS-05 · UC36 |
 | 3 | `PENDING` → `APPROVED` | Duyệt | A05 | Phân ca còn `SCHEDULED` và chưa bắt đầu; `SWAP`: ca đích còn dùng, không chồng giờ lúc duyệt | `LEAVE`: Phân ca#3 (→ `ON_LEAVE`); `SWAP`: Phân ca#5 (đổi sang ca đích). Thông báo nhân viên; ghi audit | BR-NS-06, 08, 10 · UC37 |
 | 4 | `PENDING` → `REJECTED` | Từ chối | A05 | Có lý do (`decision_note`) | Phân ca giữ nguyên. Thông báo nhân viên; ghi audit | BR-NS-06, 08, 10 · UC37 |
-| 5 | `PENDING` → `REJECTED` | Phân ca không còn hiệu lực | SYS ← Phân ca#2, #4, #6 | — | `decision_note` do hệ thống ghi; `decided_by` rỗng | BR-NS-07, 09 |
+| 5 | `PENDING` → `REJECTED` | Phân ca không còn hiệu lực | SYS ← Phân ca#2, #4, #6, #7 | — | `decision_note` do hệ thống ghi; `decided_by` rỗng | BR-NS-07, 09 |
 
 ---
 
@@ -281,18 +281,19 @@ Có hai loại ca, phân biệt bằng cờ `is_after_hours` đặt lúc mở ca
 
 | # | Từ → Sang | Sự kiện | Người kích hoạt | Điều kiện | Hệ quả | Nguồn |
 |---|---|---|---|---|---|---|
-| 1 | — → `SCHEDULED` | Phân ca | A05 | Nhân viên A06–A08 `ACTIVE` của chi nhánh mình; ca đang dùng; `work_date` ≥ hôm nay; không trùng hay chồng giờ phân ca `SCHEDULED` khác của nhân viên | Thông báo nhân viên; ghi audit | BR-NS-02, 08, 10 · UC34 |
+| 1 | — → `SCHEDULED` | Phân ca hộ, hoặc nhân viên đăng ký ca | A05 (phân hộ, `source = MANAGER`); A06, A07, A08 (tự đăng ký cho chính mình, `source = SELF`) | Nhân viên A06–A08 `ACTIVE` của chi nhánh; ca đang dùng; `work_date` ≥ hôm nay; không trùng hay chồng giờ phân ca `SCHEDULED` khác của nhân viên. Tự đăng ký: gửi trước 00:00 thứ Hai của tuần và tập kết quả của tuần đủ định mức | A05: thông báo nhân viên, ghi audit. Tự đăng ký: không thông báo, không audit | BR-NS-02, 08, 10, 11, 12 · UC34, UC35 |
 | 2 | `SCHEDULED` → `CANCELLED` | Hủy phân ca | A05 | Chưa bắt đầu; có lý do | Yêu cầu#5 nếu phân ca có yêu cầu `PENDING`. Thông báo nhân viên; ghi audit | BR-NS-02, 08, 10 · UC34 |
 | 3 | `SCHEDULED` → `ON_LEAVE` | Nghỉ được duyệt | SYS ← Yêu cầu#3 | Yêu cầu loại `LEAVE` | — | BR-NS-06 |
 | 4 | `SCHEDULED` → `ABSENT` | Ghi vắng đột xuất | A05 | `work_date` từ hôm nay trở về trước, không quá 7 ngày **[CFG]**; có lý do | Yêu cầu#5 nếu phân ca có yêu cầu `PENDING`. Thông báo nhân viên; ghi audit | BR-NS-07, 08, 10 · UC38 |
 | 5 | `SCHEDULED` → `SCHEDULED` | Đổi ca | SYS ← Yêu cầu#3 | Yêu cầu loại `SWAP` | Đổi `shift_definition_id` sang ca đích | BR-NS-06 |
 | 6 | `SCHEDULED` → `CANCELLED` | Nhân viên rời chi nhánh | SYS ← Tài khoản#5 (vô hiệu hóa) hoặc điều chuyển (BR-QT-06) | Phân ca chưa bắt đầu | Yêu cầu#5 nếu có yêu cầu `PENDING`. Thông báo nhân viên | BR-NS-09 |
+| 7 | `SCHEDULED` → `CANCELLED` | Nhân viên sửa đăng ký tuần | A06, A07, A08 (chính nhân viên) | Phân ca `source = SELF` của mình; mục bị bỏ khỏi danh sách gửi lại; trước 00:00 thứ Hai của tuần; tập kết quả của tuần vẫn đủ định mức | `reason` hệ thống ghi "Nhân viên sửa đăng ký tuần"; `status_changed_by` = nhân viên. Yêu cầu#5 nếu có yêu cầu `PENDING`. Không thông báo, không audit | BR-NS-11, 12 · UC35 |
 
 ---
 
 ## 13–26. Tầng 3 — máy trạng thái ở file chuyên đề (duyệt T54, 5/11/2026)
 
-> Chi tiết bảng trạng thái và bảng chuyển đánh số của #13–#26 nằm ở file chuyên đề (cột *Module* ở bảng đầu file ghi nơi tìm), **không chép lại ở đây** để một quy tắc chỉ có một nguồn. Tham chiếu chuyển trạng thái vẫn dạng `Đơn hàng online#2`, `Khiếu nại#3`… Thêm FSM mới thì lấy số sau #26.
+> Chi tiết bảng trạng thái và bảng chuyển đánh số của #13–#26 nằm ở file chuyên đề (cột *Module* ở bảng đầu file ghi nơi tìm), **không chép lại ở đây** để một quy tắc chỉ có một nguồn. Tham chiếu chuyển trạng thái vẫn dạng `Đơn hàng online#2`… Thêm FSM mới thì lấy số sau #26.
 
 ---
 
@@ -312,6 +313,6 @@ Có hai loại ca, phân biệt bằng cờ `is_after_hours` đặt lúc mở ca
 | Đặt chỗ#10, #11 Kết thúc lưu trú | Chuồng → `AVAILABLE`; (#11) Order (`BOARDING`) → `PENDING` |
 | Thú cưng đánh dấu đã mất (BR-KH-05) | Lịch hẹn, Đặt chỗ `BOOKED` → `CANCELLED` (không tính hủy muộn); Care Task → `CANCELLED`; hủy nhắc tái chủng, tái khám |
 | Yêu cầu nghỉ / đổi ca#3 Duyệt | `LEAVE`: Phân ca → `ON_LEAVE`; `SWAP`: Phân ca đổi sang ca đích (vẫn `SCHEDULED`) |
-| Phân ca#2 Hủy, #4 Vắng đột xuất, #6 Nhân viên rời chi nhánh | Yêu cầu `PENDING` của phân ca → `REJECTED` (Yêu cầu#5) |
+| Phân ca#2 Hủy, #4 Vắng đột xuất, #6 Nhân viên rời chi nhánh, #7 Nhân viên sửa đăng ký tuần | Yêu cầu `PENDING` của phân ca → `REJECTED` (Yêu cầu#5) |
 | Nhân viên bị vô hiệu hóa / điều chuyển chi nhánh (BR-QT-09, BR-QT-06) | Phân ca `SCHEDULED` chưa bắt đầu → `CANCELLED` (BR-NS-09) |
 | Chuyển chủ thú cưng (BR-KH-08) | Lịch hẹn, Đặt chỗ `BOOKED` → `CANCELLED` (không tính hủy muộn); nhắc tái chủng, tái khám đi theo thú sang chủ mới |

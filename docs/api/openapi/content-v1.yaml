@@ -1,13 +1,13 @@
 # Pet Care Content & Feedback API v1 — OpenAPI 3.1, sinh từ khai báo; không sửa tay, sửa khai báo rồi sinh lại.
 # Module CK (nội dung trang), BV, DG (tầng 2) · owner BE-2
-# Nguồn: 01 UC17, UC21, UC81, UC83, UC84; 02 BR-CK-01, BR-BV-01…04, BR-DG-01…04, BR-TK-19; 04 §10; 05 §10 (page_contents, article_categories, articles, feedbacks)
+# Nguồn: 01 UC17, UC21, UC81, UC83, UC84; 02 BR-CK-01, BR-BV-01…04, BR-DG-01…03, 05, BR-TK-19; 04 §10; 05 §10 (page_contents, article_categories, articles, feedbacks)
 # Truy vết: CONFIRMED = có trong docs · ASSUMPTION (A#) · TBD (Q#) — xem file .md cùng tên.
 
 openapi: "3.1.0"
 info:
   title: "Pet Care Content & Feedback API v1"
   version: "1.0.0"
-  description: "Module CK (nội dung trang), BV, DG (tầng 2) · owner BE-2. Nguồn: 01 UC17, UC21, UC81, UC83, UC84; 02 BR-CK-01, BR-BV-01…04, BR-DG-01…04, BR-TK-19; 04 §10; 05 §10 (page_contents, article_categories, articles, feedbacks). Chi tiết và truy vết: ../content-v1.md"
+  description: "Module CK (nội dung trang), BV, DG (tầng 2) · owner BE-2. Nguồn: 01 UC17, UC21, UC81, UC83, UC84; 02 BR-CK-01, BR-BV-01…04, BR-DG-01…03, 05, BR-TK-19; 04 §10; 05 §10 (page_contents, article_categories, articles, feedbacks). Chi tiết và truy vết: ../content-v1.md"
 servers:
   - url: "/api"
     description: "Mọi path bên dưới nằm sau tiền tố /api"
@@ -628,7 +628,7 @@ paths:
     post:
       tags: [Feedback]
       summary: "Gửi feedback"
-      description: "UC83 · BR-DG-01, 02, BR-TK-19. Actor: A02. Quyền: Chỉ CUSTOMER. Chuyển trạng thái: — → NEW."
+      description: "UC83 · BR-DG-01, 02, BR-TK-19. Actor: A02. Quyền: Chỉ CUSTOMER. Chuyển trạng thái: —."
       operationId: submitFeedback
       security:
         - bearerAuth: []
@@ -667,7 +667,7 @@ paths:
     get:
       tags: [Feedback]
       summary: "Feedback tôi đã gửi"
-      description: "UC83 · BR-DG-02, 04. Actor: A02. Quyền: Chỉ CUSTOMER. Chuyển trạng thái: —. Không sửa, không xóa."
+      description: "UC83 · BR-DG-02, 05. Actor: A02. Quyền: Chỉ CUSTOMER. Chuyển trạng thái: —. Không sửa, không xóa; feedback quá 30 ngày đã bị xóa (BR-DG-05)."
       operationId: listMyFeedbacks
       security:
         - bearerAuth: []
@@ -708,12 +708,6 @@ paths:
           schema:
             type: integer
             format: int64
-        - name: status
-          in: query
-          required: false
-          schema:
-            type: string
-            enum: [NEW, SEEN, RESOLVED]
         - name: topic
           in: query
           required: false
@@ -768,7 +762,7 @@ paths:
     get:
       tags: [Feedback]
       summary: "Xem feedback"
-      description: "UC84 · BR-DG-03, 04. Actor: A04, A05. Quyền: Như listFeedbacks. Chuyển trạng thái: NEW → SEEN khi mở lần đầu (A2)."
+      description: "UC84 · BR-DG-03. Actor: A04, A05. Quyền: Như listFeedbacks. Chuyển trạng thái: —."
       operationId: getFeedback
       security:
         - bearerAuth: []
@@ -796,56 +790,6 @@ paths:
           $ref: "#/components/responses/Forbidden"
         "404":
           $ref: "#/components/responses/NotFound"
-  "/feedbacks/{feedbackId}/resolve":
-    post:
-      tags: [Feedback]
-      summary: "Đánh dấu đã xử lý"
-      description: "UC84 · BR-DG-04. Actor: A04, A05. Quyền: Như listFeedbacks. Chuyển trạng thái: SEEN → RESOLVED."
-      operationId: resolveFeedback
-      security:
-        - bearerAuth: []
-      parameters:
-        - $ref: "#/components/parameters/FeedbackId"
-      requestBody:
-        required: true
-        content:
-          "application/json":
-            schema:
-              $ref: "#/components/schemas/ResolveFeedbackRequest"
-      responses:
-        "200":
-          description: OK
-          content:
-            "application/json":
-              schema:
-                type: object
-                required: [data, message, code]
-                properties:
-                  data:
-                    $ref: "#/components/schemas/Feedback"
-                  message:
-                    type: string
-                  code:
-                    type: integer
-                    description: "HTTP status của kết quả, ví dụ 200, 201"
-        "400":
-          description: "`BR-DG-04` thiếu ghi chú"
-          content:
-            "application/json":
-              schema:
-                $ref: "#/components/schemas/Error"
-        "401":
-          $ref: "#/components/responses/Unauthorized"
-        "403":
-          $ref: "#/components/responses/Forbidden"
-        "404":
-          $ref: "#/components/responses/NotFound"
-        "409":
-          description: "Đã RESOLVED"
-          content:
-            "application/json":
-              schema:
-                $ref: "#/components/schemas/Error"
 components:
   securitySchemes:
     bearerAuth:
@@ -1201,7 +1145,7 @@ components:
           description: "10–2000 ký tự"
     MyFeedback:
       type: object
-      required: [feedbackId, topic, content, status, createdAt]
+      required: [feedbackId, topic, content, createdAt]
       properties:
         feedbackId:
           type: integer
@@ -1217,16 +1161,12 @@ components:
           format: int32
         content:
           type: string
-        status:
-          type: string
-          enum: [NEW, SEEN, RESOLVED]
-          description: "Khách chỉ thấy trạng thái (BR-DG-04)"
         createdAt:
           type: string
           format: date-time
     Feedback:
       type: object
-      required: [feedbackId, customerId, customerName, topic, content, status, createdAt]
+      required: [feedbackId, customerId, customerName, topic, content, createdAt]
       properties:
         feedbackId:
           type: integer
@@ -1249,31 +1189,9 @@ components:
           format: int32
         content:
           type: string
-        status:
-          type: string
-          enum: [NEW, SEEN, RESOLVED]
-        seenAt:
-          type: [string, "null"]
-          format: date-time
-        resolvedBy:
-          type: [integer, "null"]
-          format: int64
-        resolvedAt:
-          type: [string, "null"]
-          format: date-time
-        resolutionNote:
-          type: [string, "null"]
-          description: "Nội bộ"
         createdAt:
           type: string
           format: date-time
-    ResolveFeedbackRequest:
-      type: object
-      required: [resolutionNote]
-      properties:
-        resolutionNote:
-          type: string
-          description: "Bắt buộc (BR-DG-04)"
   responses:
     BadRequest:
       description: "VALIDATION_FAILED / MALFORMED_REQUEST: dữ liệu không hợp lệ · BUSINESS_RULE_VIOLATION: vi phạm rule, message kết thúc bằng mã rule \"(BR-…)\"."

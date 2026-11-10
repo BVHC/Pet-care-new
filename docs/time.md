@@ -51,9 +51,9 @@ Giai đoạn 1 (05–30/10, đếm lại từ bảng ngày 31/10 sau T39–T41 c
 
 ## Phạm vi
 
-- UC gốc: `docs/01-business-operations.md` — 89 mã UC01–UC89, bỏ UC18, UC19, UC20, UC41, UC43, UC51 → **83 UC**, cùng 21 tác vụ hệ thống ST01–ST21.
+- UC gốc: `docs/01-business-operations.md` — 89 mã UC01–UC89, bỏ UC18, UC19, UC20, UC41, UC43, UC50, UC51, UC85, UC86 → **80 UC**, cùng 21 tác vụ hệ thống ST01–ST21.
 - **Giai đoạn 1 (các bảng dưới): 58 UC + 12 ST** (ST01–ST06, ST08, ST13, ST15, ST18–ST20). Mã UC, ST, rule của từng task ghi trong ngoặc ở cột "Công việc".
-- **Giai đoạn 2: 25 UC tầng 3 + 9 ST + phân hệ AI**, task T51–T87 ở cuối file.
+- **Giai đoạn 2: 22 UC tầng 3 + 8 ST + phân hệ AI**, task T51–T87 ở cuối file.
 
 ## GĐ 0 — Thiết kế & Setup (05–06/10)
 
@@ -138,9 +138,9 @@ Giai đoạn 1 (05–30/10, đếm lại từ bảng ngày 31/10 sau T39–T41 c
 ## Giai đoạn 2 — Tầng 3 & AI (02/11–31/12/2026)
 
 > **Kế hoạch:** đề cương `DeCuongDoAn.md` mục 2.2.2, 2.2.4, 2.4.2–2.4.5 (phạm vi, phân công, mốc M5 11/12, hoàn thiện 14–31/12). Ngày của từng task xếp theo tuần thứ 2–thứ 6.
-> **Phạm vi** (`docs/INDEX.md`): **25 UC** — BE-1 (10): UC34–38, UC50, UC55, UC56, UC85, UC86 · BE-2 (15): UC13, UC27, UC32, UC61–65, UC68, UC69, UC77–79, UC80, UC82. **9 ST** — BE-1: ST07, ST16, ST17 · BE-2: ST09–ST12, ST14, ST21. **Phân hệ AI** (cả nhóm): chatbot tư vấn sức khỏe – dinh dưỡng (RAG + LLM), gợi ý cá nhân hóa. FE-1 làm toàn bộ giao diện.
+> **Phạm vi** (`docs/INDEX.md`): **22 UC** (UC50 phẫu thuật bỏ ở ADR-0125; UC85, UC86 khiếu nại bỏ ở ADR-0122) — BE-1 (7): UC34–38, UC55, UC56 · BE-2 (15): UC13, UC27, UC32, UC61–65, UC68, UC69, UC77–79, UC80, UC82. **8 ST** — BE-1: ST07 · BE-2: ST09–ST12, ST14, ST21 · ST24 (dọn feedback, T70). **Phân hệ AI** (cả nhóm): chatbot tư vấn sức khỏe – dinh dưỡng (RAG + LLM), gợi ý cá nhân hóa. FE-1 làm toàn bộ giao diện.
 
-- Tầng 3 đã đặc tả đủ BR, FSM, model, API ở M5a (T51–T54, duyệt 5/11/2026), chưa cài đặt. Cột Test là tiêu chí nghiệm thu theo use case; endpoint ở `docs/api` (131 endpoint tầng 3).
+- Tầng 3 đã đặc tả đủ BR, FSM, model, API ở M5a (T51–T54, duyệt 5/11/2026), chưa cài đặt. Cột Test là tiêu chí nghiệm thu theo use case; endpoint ở `docs/api` (113 endpoint tầng 3).
 - Trạng thái (cập nhật 9/11/2026): **M5a: T51–T57 xong** (hàng T51–T57 đều DONE; T51–T54 duyệt 5/11, T55 6/11, T56 và T57 7–9/11) — đặc tả đủ phạm vi đã được Hiến duyệt thay nhóm (BE-1 ở `09`, BE-2 ở `08`, AI ở `07`, Nhân sự ở `02`–`06`; interface chéo ở `06` §6b). **T55 xong** (T55a FE-1, T55b BE-1, T55c BE-2): ADR-0113, ADR-0116, ADR-0117 **giữ Proposed**: đối chiếu 9/11 với migration V36–V48 và interface chéo đã commit thấy khớp ở mức schema / hành vi (0 lệch thực chất), nhưng còn câu trong ADR nói khác code (sửa chữ ADR, không sửa code; phiên đối chiếu không được sửa nội dung ADR), nên chưa lật Accepted; Hiến lật sau khi người giữ ADR sửa chữ, A-1…A-3 và TBD-1…TBD-6 của ADR-0117 vẫn chờ Dũng. **T56 xong** (ADR-0122, Accepted: mô hình mặc định `gemini-3.1-flash-lite`, p95 spike 6,4 giây chưa đạt mốc 5 giây, đo lại ở T77). **T57 xong** (Bước C và trang 404 xong; 14 module tầng 3 chạy trên mock vì BE chưa có controller nào của chúng, chỉ có migration V34–V50 và interface chéo). Việc còn mở sau M5a, KHÔNG thuộc tay phiên Claude: (1) Hiến chạy tay `docs/testcases/T57-fe.md`; (2) tên bác sĩ thú y rà soát KB (Q2), đang chặn nạp KB vào DB dev / demo; (3) thu hồi khóa Gemini đã lộ; (4) Hiến đăng ký sandbox VNPay theo `payment-gateway-setup.md` trước 24/11 (chưa có đến 20/11 thì BE-2 dùng `FakeGatewayClient`, mục 6 của tài liệu đó); (5) ADR-0123 (FE nối refresh token, D055) còn Proposed, chờ kiểm hết hạn thật phía BE; (6) các mục "trông chết" của T57 chờ Hiến duyệt gỡ: `AdminPurchasingPage.tsx`, `AdminVaccinesPage.tsx`, `shared/stores/notifications.store.ts` (không ai import), ba mục menu `hidden: true` ở `staff-menu.ts` (`/admin/notifications`, `/admin/purchasing`, `/admin/vaccines`), chữ "voucher 10%" ở `SiteFooter.tsx`, kiểu `Voucher` / `voucherCode` ở `shared/types/index.ts`. Các task M5b trở đi (BE-1, BE-2 từ 16/11: T58, T62) chưa bắt đầu; T65 cần tài khoản sandbox cổng thanh toán.
 - **Điều chỉnh so với đề cương:**
   - Cấu hình phí vận chuyển và định mức vật tư (UC32, T62) là việc đầu tiên của BE-2 (16/11), vì ST07 (T71) cần; đề cương xếp mục này cuối danh sách BE-2.
@@ -155,8 +155,8 @@ Giai đoạn 1 (05–30/10, đếm lại từ bảng ngày 31/10 sau T39–T41 c
 | Mốc | Thời gian | Nội dung | Task |
 |---|---|---|---|
 | M5a | 02–13/11 | Đặc tả bổ sung tầng 3 + AI, hợp đồng chéo, schema, spike AI | T51–T57 |
-| M5b | 16–27/11 | Nhân sự, phẫu thuật; thương mại điện tử, thanh toán online | T58–T68 |
-| M5c | 30/11–11/12 | Nội trú, khiếu nại, ST07; trả hàng – hoàn tiền, kho mở rộng, chi nhánh – khách – bài viết; chatbot, gợi ý; test tầng 3. **M5 (11/12): hoàn thành tầng 3 và AI** | T69–T83 |
+| M5b | 16–27/11 | Nhân sự; thương mại điện tử, thanh toán online (phẫu thuật bỏ, ADR-0125) | T58–T68 |
+| M5c | 30/11–11/12 | Nội trú, feedback không trạng thái (ST24), ST07; trả hàng – hoàn tiền, kho mở rộng, chi nhánh – khách – bài viết; chatbot, gợi ý; test tầng 3. **M5 (11/12): hoàn thành tầng 3 và AI** | T69–T83 |
 | M5d | 14–31/12 | Hoàn thiện đồ án: kiểm thử tổng thể, hoàn thiện sản phẩm, báo cáo | T84–T87 |
 
 ### M5a — Đặc tả bổ sung & khung (02–13/11)
@@ -177,21 +177,21 @@ Giai đoạn 1 (05–30/10, đếm lại từ bảng ngày 31/10 sau T39–T41 c
 |---|---|---|---|---|---|---|
 | T58 | Nhân sự: định nghĩa ca, phân ca, xem nhân viên chi nhánh; lịch làm việc của tôi _(UC34, UC35)_ | BE-1 | 16–18/11 | **NOT_STARTED** | Module mới | BRANCH_MANAGER phân ca cho nhân viên chi nhánh mình (chi nhánh khác → 403); A06–A08 chỉ xem lịch của mình |
 | T59 | Nhân sự: gửi / rút yêu cầu nghỉ, đổi ca; duyệt; ghi nhận vắng đột xuất _(UC36–38)_ | BE-1 | 19–20/11 | **NOT_STARTED** | — | Nhân viên gửi/rút yêu cầu → quản lý chi nhánh duyệt hoặc từ chối; vắng đột xuất ghi theo ca; chuyển trạng thái đúng FSM đặc tả ở T51 |
-| T61 | Phẫu thuật: phát sinh từ lượt khám, lễ tân lập cam kết, thực hiện _(UC50)_ | BE-1 | 26–27/11 | **NOT_STARTED** | — | Phẫu thuật mở từ lượt khám (UC48 «extend» UC50); có cam kết trước khi thực hiện; dịch vụ phẫu thuật thêm vào Order (UC50 «extend» UC67) |
+| T61 | ~~Phẫu thuật~~ _(UC50)_ — bỏ ở ADR-0125 (2026-11-09), giữ số | BE-1 | — | **DROPPED** | — | Không làm. Bảng `surgeries` (V37) và giá trị `SURGERY` (V41) gỡ bằng migration riêng (D063) |
 | T62 | Danh mục mở rộng: phí vận chuyển; định mức vật tư tiêu hao của dịch vụ _(UC32, mở rộng UC30)_ — làm trước vì ST07 (T71) cần | BE-2 | 16/11 | **NOT_STARTED** | — | SUPER_MANAGER cấu hình phí vận chuyển; khai báo định mức vật tư cho dịch vụ; interface đọc phí và định mức cho BE-1 |
 | T63 | Thương mại điện tử: giỏ hàng, đặt hàng online (chọn địa chỉ từ sổ địa chỉ, ST09 tính phí vận chuyển), đơn hàng của tôi _(UC61, UC62, UC64 · ST09)_ | BE-2 | 17–19/11 | **NOT_STARTED** | Cần sổ địa chỉ (GĐ1, T8) | Giỏ hàng không nhận thuốc kê đơn (BR-SP-01); phải đăng nhập mới mua; đơn có phí vận chuyển theo UC32; khách xem, theo dõi, hủy đơn, xác nhận đã nhận |
 | T64 | Thương mại điện tử: xử lý & giao đơn online; ST10 tự hủy đơn chưa thanh toán; ST12 tự xác nhận đã nhận hàng _(UC65 · ST10, ST12)_ | BE-2 | 20–23/11 | **NOT_STARTED** | — | Lễ tân xử lý, bàn giao, cập nhật trạng thái, ghi nhận giao thất bại; đơn chưa thanh toán quá hạn → tự hủy (ST10); đơn đã giao quá hạn → tự xác nhận đã nhận (ST12) |
 | T65 | Thanh toán online qua cổng VNPay, ZaloPay hoặc MoMo (sandbox); ST11 hết hạn giao dịch; ST14 đối soát cổng _(UC63 · ST11, ST14)_ | BE-2 | 24–27/11 | **NOT_STARTED** | Cần tài khoản sandbox của cổng | Thanh toán sandbox thành công → đơn đã thanh toán; kết quả giao dịch trả về được xác thực; giao dịch quá hạn → hết hạn (ST11); đối soát hằng ngày (ST14) |
 | T66 | FE: Nhân sự — phân ca, lịch làm việc của tôi, yêu cầu nghỉ / đổi ca, duyệt, vắng đột xuất _(UC34–38)_ | FE-1 | 16–20/11 | **NOT_STARTED** | Có UI cũ `/admin/workforce` (ca làm việc, nghỉ phép — mock) | Phân ca theo chi nhánh; nhân viên xem lịch, gửi yêu cầu; quản lý duyệt; gọi API thật của T58, T59 |
 | T67 | FE: Cửa hàng online — giỏ hàng, đặt hàng, thanh toán, đơn hàng của tôi _(UC61–64)_ | FE-1 | 23–25/11 | **NOT_STARTED** | Có UI cũ `/shop`, `/cart`, `/checkout`, `/orders` (mock) | Không hiện thuốc kê đơn; chọn địa chỉ từ sổ địa chỉ, hiện phí vận chuyển; chuyển sang cổng sandbox rồi nhận kết quả; gọi API thật của T63–T65 |
-| T68 | FE: Xử lý & giao đơn (lễ tân), phẫu thuật _(UC65, UC50)_ | FE-1 | 26–27/11 | **NOT_STARTED** | Có UI cũ `/admin/orders` (mock) | Lễ tân cập nhật trạng thái giao, ghi giao thất bại; lập cam kết phẫu thuật; gọi API thật của T61, T64 |
+| T68 | FE: Xử lý & giao đơn (lễ tân) _(UC65; phẫu thuật bỏ, ADR-0125)_ | FE-1 | 26–27/11 | **NOT_STARTED** | Có UI cũ `/admin/orders` (mock) | Lễ tân cập nhật trạng thái giao, ghi giao thất bại; gọi API thật của T64; gỡ phần phẫu thuật của FE (D063) |
 
-### M5c — Nội trú, khiếu nại, kho, trả hàng, AI (30/11–11/12)
+### M5c — Nội trú, feedback, kho, trả hàng, AI (30/11–11/12)
 
 | # | Công việc | Ai | Ngày | Trạng thái | Hiện trạng | Test |
 |---|---|---|---|---|---|---|
-| T69 | Nội trú: nhập / xuất viện (gồm chuyển thú từ lưu trú sang điều trị), điều trị nội trú — ra y lệnh, theo dõi hậu phẫu _(UC55, UC56)_ | BE-1 | 30/11–02/12 | **NOT_STARTED** | Cần lưu trú GĐ1 (T31, T42) | Nhập viện từ lượt khám hoặc từ lưu trú (phối hợp LT của BE-2); y lệnh, theo dõi hậu phẫu; dịch vụ nội trú thêm vào Order (UC55 «extend» UC67); xuất viện |
-| T70 | Khiếu nại: khách gửi & theo dõi (lễ tân tạo thay khách), quản lý xử lý; ST16 leo thang quá hạn; ST17 tự đóng _(UC85, UC86 · ST16, ST17)_ | BE-1 | 03–07/12 | **NOT_STARTED** | — | Khách tạo, xem, đóng hoặc mở lại; BRANCH_MANAGER (chi nhánh mình) và SUPER_MANAGER xử lý; quá hạn → leo thang (ST16); hết hạn → tự đóng (ST17) |
+| T69 | Nội trú: nhập / xuất viện (gồm chuyển thú từ lưu trú sang điều trị), điều trị nội trú — ra y lệnh, theo dõi nội trú _(UC55, UC56; ADR-0124)_ | BE-1 | 30/11–02/12 | **NOT_STARTED** | Cần lưu trú GĐ1 (T31, T42) | Nhập viện từ lượt khám hoặc từ lưu trú (phối hợp LT của BE-2); y lệnh, theo dõi nội trú; xuất viện thêm một dòng dịch vụ nội trú (số ngày × giá đã chốt) vào Order qua `VisitOrderApi.addServiceLine` có `unitPrice` (UC55 «extend» UC67); hiện tiền tạm tính khi đang nằm; guard boarding chặn kết thúc lưu trú còn nội trú |
+| T70 | Feedback không trạng thái + job dọn sau 30 ngày; gỡ phần khiếu nại (V39 / V40 → V51) _(UC83–84, ST24; ADR-0122, thay UC85, UC86, ST16, ST17)_ | BE-1 (đề xuất; `feedbacks` thuộc `content` của BE-2, Dũng đã chốt 8/11) | 03–07/12 | **NOT_STARTED** | — | Khiếu nại đã bỏ (ADR-0122). Bỏ trạng thái feedback và endpoint resolve (content-v1 22 → 21), giữ 5/ngày; `FeedbackCleanupJob` xóa sau `feedback.retention_days` (30); V51 gỡ bảng, 6 khóa, 7 mẫu khiếu nại; gỡ trang / mock khiếu nại ở FE |
 | T71 | Tự trừ vật tư tiêu hao theo định mức khi hoàn tất khám, dịch vụ thẩm mỹ _(ST07)_ | BE-1 | 08/12 | **NOT_STARTED** | Cần T62 (định mức), kho GĐ1 (T18) | Hoàn tất khám (UC48) / thẩm mỹ (UC52) → trừ vật tư theo định mức của dịch vụ qua interface kho của BE-2; thiếu tồn xử lý theo BR đặc tả ở T51 |
 | T72 | Integration test FSM tầng 3 phần BE-1 + nối thật interface chéo (trừ vật tư, nhập viện từ lưu trú) | BE-1 | 09–10/12 | **NOT_STARTED** | — | Đủ cặp chuyển hợp lệ / không hợp lệ cho mọi FSM tầng 3 của BE-1, ngoài bảng → 409 INVALID_STATE_TRANSITION; interface chéo chạy thật, bỏ placeholder |
 | T73 | Trả hàng – hoàn tiền: lễ tân tạo yêu cầu trả hàng, quản lý chi nhánh duyệt; ST21 hoàn tiền online qua cổng _(UC68, UC69 · ST21)_ | BE-2 | 30/11–02/12 | **NOT_STARTED** | Cần T65 (cổng thanh toán) | Yêu cầu trả hàng → BRANCH_MANAGER duyệt hoặc từ chối; hủy đơn online đã thanh toán (UC64) hoặc duyệt trả hàng → hoàn tiền qua cổng sandbox (ST21) |
@@ -202,9 +202,9 @@ Giai đoạn 1 (05–30/10, đếm lại từ bảng ngày 31/10 sau T39–T41 c
 | T78 | AI: gợi ý cá nhân hóa dịch vụ thẩm mỹ, lưu trú và sản phẩm theo loài, giống, độ tuổi, cân nặng, lịch sử dùng dịch vụ | FE-1 (dẫn), cả nhóm | 07–09/12 | **NOT_STARTED** | Cần dữ liệu thú cưng (T17), danh mục (T9), lịch sử khám & lưu trú | A02 nhận gợi ý theo đặc điểm thú của mình; không gợi ý thuốc kê đơn (BR-SP-01); đổi loài / tuổi / cân nặng thì gợi ý đổi theo |
 | T79 | FE: Nội trú (nhập / xuất viện, y lệnh) + trả hàng – hoàn tiền _(UC55, UC56, UC68, UC69)_ | FE-1 | 30/11–02/12 | **NOT_STARTED** | Có UI cũ `/admin/refunds` (duyệt hoàn tiền — mock) | VET nhập / xuất viện, ra y lệnh; lễ tân tạo yêu cầu trả hàng, quản lý duyệt; gọi API thật của T69, T73 |
 | T80 | FE: Kho mở rộng (chuyển kho, kiểm kê, truy vết lô) + tạm ngừng / đóng chi nhánh, gộp hồ sơ khách, cấu hình phí & định mức _(UC77–79, UC13, UC27, UC32)_ | FE-1 | 03–04/12 | **NOT_STARTED** | — | Gọi API thật của T62, T74, T75; chức năng ngoài quyền bị ẩn theo role |
-| T81 | FE: Khiếu nại (khách, lễ tân, quản lý) + bài viết của bác sĩ, duyệt bài, bình luận _(UC85, UC86, UC80, UC82)_ | FE-1 | 07–08/12 | **NOT_STARTED** | — | Khách tạo / đóng / mở lại khiếu nại, lễ tân tạo thay khách, quản lý xử lý; VET gửi bài, SUPER_MANAGER duyệt, khách bình luận; gọi API thật của T70, T75 |
+| T81 | FE: gỡ trang / mock khiếu nại (ADR-0122), bỏ trạng thái ở màn feedback + bài viết của bác sĩ, duyệt bài, bình luận _(UC84, UC80, UC82)_ | FE-1 | 07–08/12 | **NOT_STARTED** | — | Màn feedback của quản lý chỉ đọc (không đánh dấu xử lý); VET gửi bài, SUPER_MANAGER duyệt, khách bình luận; gọi API thật của T70, T75 |
 | T82 | FE: Chatbot tư vấn + khu vực gợi ý dịch vụ, sản phẩm | FE-1 | 09–10/12 | **NOT_STARTED** | Có UI cũ: khung chat mascot `InteractiveMascotCompanion`, `/recommend` (mock) | Chatbot trên cổng công khai và khách hàng; khu vực gợi ý theo thú cưng; gọi API thật của T77, T78; AI lỗi → hiện thông báo, không chặn trang |
-| T83 | Tổng duyệt GĐ2 + đóng M5 | Cả nhóm | 11/12 | **NOT_STARTED** | — | Demo không lỗi: mua online → thanh toán sandbox → giao; phẫu thuật → nội trú; khiếu nại; chatbot; gợi ý; đủ 25 UC + 9 ST |
+| T83 | Tổng duyệt GĐ2 + đóng M5 | Cả nhóm | 11/12 | **NOT_STARTED** | — | Demo không lỗi: mua online → thanh toán sandbox → giao; khám → nội trú → xuất viện → thu tiền; feedback; chatbot; gợi ý; đủ 22 UC + 8 ST |
 
 ### M5d — Hoàn thiện đồ án (14–31/12)
 

@@ -22,7 +22,7 @@ m = Module(
     ],
     questions=[
         ("Q1", "Phạm vi quản lý của A05: chỉ khách đã có giao dịch tại chi nhánh mình hay toàn chuỗi", "TBD (PO)", "BR-KH-11, UC27"),
-        ("Q2", "Có cần SUPER_MANAGER duyệt khi hồ sơ có đơn hàng lớn / khiếu nại đang mở không", "TBD (PO)", "BR-KH-11"),
+        ("Q2", "Có cần SUPER_MANAGER duyệt khi hồ sơ có đơn hàng lớn không", "TBD (PO)", "BR-KH-11"),
     ],
 )
 
@@ -31,7 +31,7 @@ m.param("CustomerId", "customerId", "path", "int64")
 m.schema("MergePreview", {
     "targetCustomerId": "int64", "sourceCustomerId": "int64", "petCount": "int", "addressCount": "int",
     "duplicateAddressCount": "int|Địa chỉ trùng sẽ bỏ", "appointmentCount": "int", "boardingCount": "int",
-    "orderCount": "int", "onlineOrderCount": "int", "feedbackCount": "int", "complaintCount": "int",
+    "orderCount": "int", "onlineOrderCount": "int", "feedbackCount": "int",
     "careTaskCount": "int",
     "warnings": "array:string|Cảnh báo (ví dụ nghi trùng thú, khác SĐT)",
     "blockers": "array:string|Điều kiện chặn BR-KH-11; rỗng = gộp được",
