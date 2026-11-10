@@ -1,0 +1,21 @@
+# Từ khóa cấp cứu của chatbot (07 §4.1 BR-AI-03). Mỗi dòng một cụm từ.
+# Khớp không phân biệt hoa thường, theo cụm từ có ranh giới từ, ưu tiên dạng có dấu; dạng bỏ dấu chỉ dùng cho cụm từ từ
+# 2 âm tiết trở lên (cùng nguyên tắc BR-AI-26). Dùng CỤM, không dùng từ "liệt" đơn lẻ vì trùng "liệt kê".
+# Trúng một cụm thì ChatService trả EMERGENCY, không gọi embedding hay LLM. Danh sách khởi điểm, hiệu chỉnh ở T56.
+khó thở
+thở dốc
+co giật
+ngộ độc
+ăn nhầm thuốc
+ăn nhầm chocolate
+ăn nhầm hóa chất
+chảy máu không cầm
+bất tỉnh
+ngất
+bị liệt
+liệt chân
+liệt nửa người
+bụng căng cứng
+xe đâm
+rơi từ trên cao
+không đi tiểu

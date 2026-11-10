@@ -1,0 +1,13 @@
+# Hoạt chất cho hậu kiểm liều thuốc (07 §4.1 BR-AI-06). Mỗi dòng một tên.
+# Câu trả lời của LLM có số kèm "ml" hoặc "giọt" TRONG CÙNG CÂU với một trong các tên này (hoặc từ thuốc, kháng sinh, siro,
+# vaccine, tẩy giun, xổ giun cố định trong mã) bị thay bằng câu mẫu từ chối. Lưới phụ, không đổi luật (ADR-0122).
+paracetamol
+ibuprofen
+aspirin
+amoxicillin
+doxycycline
+metronidazole
+ivermectin
+praziquantel
+prednisolone
+meloxicam

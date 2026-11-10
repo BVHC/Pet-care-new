@@ -22,8 +22,8 @@ import lombok.NoArgsConstructor;
 
 /**
  * Bảng {@code ai_chat_logs} (07 §8, LOG): một dòng cho mỗi lượt hỏi đáp UC90 (BR-AI-24). Không có cột tài khoản, IP hay
- * kênh. Chỉ thêm, nên entity bất biến; ST23 xóa quá hạn bằng câu native ở {@code AiChatLogRepository}. Chưa có nơi ghi
- * (chat là việc của T77b); entity có ở đây để schema được kiểm khi khởi động.
+ * kênh. Chỉ thêm, nên entity bất biến; ST23 xóa quá hạn bằng câu native ở {@code AiChatLogRepository}. Ghi bởi {@code ChatService}
+ * qua {@link #of} (docs/adr/0131); schema cũng được kiểm khi khởi động.
  */
 @Getter
 @Immutable
@@ -31,6 +31,9 @@ import lombok.NoArgsConstructor;
 @Table(name = "ai_chat_logs")
 @NoArgsConstructor(access = AccessLevel.PROTECTED)
 public class AiChatLog extends CreatedAtEntity {
+
+    /** Độ rộng cột {@code question}; [CFG] {@code ai.chat.max_question_chars} cho tới 2000 nên nhật ký cắt bớt. */
+    public static final int QUESTION_MAX_LENGTH = 500;
 
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
@@ -71,4 +74,28 @@ public class AiChatLog extends CreatedAtEntity {
 
     @Column(name = "latency_ms", nullable = false)
     private int latencyMs;
+
+    /**
+     * Một dòng nhật ký (BR-AI-24). {@code question} và {@code answer} phải là bản <b>đã che</b> (BR-AI-12); các kết quả
+     * cá nhân và {@code NEED_LOGIN} truyền {@code null} cho mọi trường nội dung. Câu hỏi quá {@value #QUESTION_MAX_LENGTH}
+     * ký tự bị cắt cho vừa cột.
+     */
+    public static AiChatLog of(ChatResult result, ChatErrorKind errorKind, String question, String answer,
+            BigDecimal topSimilarity, Long[] sourceDocumentIds, String llmModel, Integer inputTokens,
+            Integer outputTokens, Integer thoughtTokens, int latencyMs) {
+        AiChatLog log = new AiChatLog();
+        log.result = result;
+        log.errorKind = errorKind;
+        log.question = question == null || question.length() <= QUESTION_MAX_LENGTH ? question
+                : question.substring(0, QUESTION_MAX_LENGTH);
+        log.answer = answer;
+        log.topSimilarity = topSimilarity;
+        log.sourceDocumentIds = sourceDocumentIds;
+        log.llmModel = llmModel;
+        log.inputTokens = inputTokens;
+        log.outputTokens = outputTokens;
+        log.thoughtTokens = thoughtTokens;
+        log.latencyMs = latencyMs;
+        return log;
+    }
 }

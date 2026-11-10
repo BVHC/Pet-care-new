@@ -114,10 +114,11 @@ class OpenApiContractParityIT {
         // + 1 identity #38 (docs/adr/0089) + 2 identity #25, #26 (UC22 sửa hộ email tài khoản khách, BR-TK-16)
         // + 1 identity #27 (UC22 lễ tân liên kết hộ hồ sơ tại quầy với tài khoản online, BR-TK-19)
         // + 1 identity #39 (refresh, docs/adr/0091)
-        // + 7 ai #5–#11 (UC93 quản lý tài liệu tri thức, T77a, docs/adr/0130; ai #1–#4 và #12–#13 chưa cài).
+        // + 7 ai #5–#11 (UC93 quản lý tài liệu tri thức, T77a, docs/adr/0130)
+        // + 1 ai #1 (POST /public/ai/chat, T77b, docs/adr/0131; ai #2–#4 và #12–#13 chưa cài).
         assertThat(documentedOps())
                 .as("số endpoint identity + care + customer + inventory + sales + appointment + visit + boarding + content + report + ai đã cài")
-                .hasSize(194);
+                .hasSize(195);
     }
 
     @Test

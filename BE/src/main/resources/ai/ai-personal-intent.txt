@@ -1,0 +1,79 @@
+# Luật định tuyến ý định cá nhân và nhận câu hỏi bệnh án (07 §4.2 BR-AI-26, BR-AI-28). Chia mục bằng [TÊN].
+# Khớp theo cụm từ có ranh giới từ, ưu tiên dạng có dấu; dạng bỏ dấu chỉ dùng cho cụm từ từ 2 âm tiết trở lên, để "giá"
+# không trùng "già", "gia đình", "gia hạn" và "tiêm" không trùng "tiệm". Danh sách khởi điểm, hiệu chỉnh ở T56.
+#
+# Ý định = một từ khóa ([APPOINTMENT] hoặc [VACCINATION]) CÙNG VỚI dấu hiệu sở hữu. Dấu hiệu mạnh ([STRONG] hoặc tên một
+# thú còn sống của khách) đủ một mình; dấu hiệu yếu ([WEAK]) chỉ đủ với lịch hẹn, không đủ với tiêm chủng.
+
+# Dấu hiệu sở hữu mạnh
+[STRONG]
+của tôi
+của mình
+nhà tôi
+nhà mình
+bé nhà
+con nhà
+
+# Dấu hiệu sở hữu yếu
+[WEAK]
+sắp tới
+sắp đến
+kế tiếp
+tiếp theo
+đã đặt
+đến hạn
+quá hạn
+hôm nay
+ngày mai
+tuần này
+
+# Từ khóa ý định APPOINTMENT_UPCOMING
+[APPOINTMENT]
+lịch hẹn
+đã đặt lịch
+lịch khám
+có lịch
+hẹn khám
+
+# Từ khóa ý định VACCINATION_SCHEDULE
+[VACCINATION]
+tiêm
+vaccine
+vắc xin
+tái chủng
+mũi tiêm
+
+# Cụm chỉ giá hoặc chi phí: câu chứa cụm này KHÔNG là ý định cá nhân
+[PRICE]
+giá bao nhiêu
+giá tiêm
+bao nhiêu tiền
+chi phí
+mấy tiền
+
+# BR-AI-28b: câu hỏi bệnh án, đơn thuốc, kết quả xét nghiệm (kèm dấu hiệu sở hữu mạnh) bị từ chối ở MỌI endpoint
+[RECORD]
+bệnh án
+đơn thuốc
+toa thuốc
+kết quả xét nghiệm
+hồ sơ bệnh án
+
+# Tên thú trùng từ thông dụng: chỉ là dấu hiệu mạnh khi đi sau một trong [PET_NAME_PREFIX] ("con Vàng"), đứng một mình
+# ("giá vàng hôm nay") thì không (ADR-0122). Cũng là quy tắc che tên thú ở /me (BR-AI-12b).
+[COMMON_PET_NAMES]
+vàng
+mít
+đen
+nâu
+trắng
+xám
+cam
+bơ
+đốm
+
+[PET_NAME_PREFIX]
+bé
+con
+chú
+em
