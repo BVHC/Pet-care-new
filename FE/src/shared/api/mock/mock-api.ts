@@ -25,7 +25,6 @@ import { visitClinicalRoutes } from './visit-clinical.mock';
 import { aiRoutes } from './ai.mock';
 import { articlexRoutes } from './articlex.mock';
 import { branchlifeRoutes } from './branchlife.mock';
-import { complaintRoutes } from './complaint.mock';
 import { custmergeRoutes } from './custmerge.mock';
 import { feesRoutes } from './fees.mock';
 import { inpatientRoutes } from './inpatient.mock';
@@ -34,7 +33,6 @@ import { paymentRoutes } from './payment.mock';
 import { returnsRoutes } from './returns.mock';
 import { shopRoutes } from './shop.mock';
 import { stockopsRoutes } from './stockops.mock';
-import { surgeryRoutes } from './surgery.mock';
 import { workforceRoutes } from './workforce.mock';
 import './tier3-wiring';
 import { fail, ruleFail, type MockHandler, type MockReply } from './envelope';
@@ -64,7 +62,6 @@ const ROUTES: Record<string, MockHandler> = {
   ...reportRoutes,
   // Tầng 3 (T57): các module mới; shop đặt trước payment để đường tĩnh `…/online-orders/*` khớp trước.
   ...workforceRoutes,
-  ...complaintRoutes,
   ...stockopsRoutes,
   ...materialUseRoutes,
   ...feesRoutes,
@@ -74,7 +71,6 @@ const ROUTES: Record<string, MockHandler> = {
   ...branchlifeRoutes,
   ...custmergeRoutes,
   ...articlexRoutes,
-  ...surgeryRoutes,
   ...inpatientRoutes,
   ...aiRoutes,
 };

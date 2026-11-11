@@ -6,7 +6,6 @@ import {
   ChevronRight,
   HelpCircle,
   LogOut,
-  MessageSquareWarning,
   Package,
   PawPrint,
   Settings,
@@ -93,7 +92,7 @@ function NavItem({
 
 export interface AccountSidebarProps {
   /** Tab đang active. */
-  active?: 'profile' | 'pets' | 'orders' | 'recommend' | 'notifications' | 'security' | 'settings' | 'help' | 'appointments' | 'boarding' | 'complaints'
+  active?: 'profile' | 'pets' | 'orders' | 'recommend' | 'notifications' | 'security' | 'settings' | 'help' | 'appointments' | 'boarding'
   /** Số thú cưng (hiện badge). */
   petCount?: number
   /** User display name. */
@@ -193,12 +192,6 @@ export function AccountSidebar({
           label="Bảo mật"
           active={active === 'security'}
           href="/security"
-        />
-        <NavItem
-          icon={MessageSquareWarning}
-          label="Khiếu nại"
-          active={active === 'complaints'}
-          href="/complaints"
         />
 
         <div className={styles.navDivider} />

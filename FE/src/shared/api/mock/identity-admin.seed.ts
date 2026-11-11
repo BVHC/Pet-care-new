@@ -1,6 +1,7 @@
 // UC10 — dữ liệu seed của mock tham số [CFG] và mẫu thông báo, CHÉP từ migration của BE (V2 + V27 + V35 + V40 + V44…V46 + V48 cho tham số, V3…V26 + V40 cho mẫu, V4 sửa OTP_REGISTER).
 // T57-A: 52 → 85 khóa (thêm 18 `ai.*` của V35 gồm 4 DECIMAL, 8 `complaint.*` / `workforce.*` của V40, 7 `shop.*` / `payment.*` / `returns.*` / `content.*` của V44, V45, V46, V48; V43 và V47 không seed khóa).
 // T57-A: mẫu thông báo 30 → 70 mã (thêm 40 mẫu tầng 3; migration V41…V48 không INSERT / UPDATE bảng mẫu, cả 40 mẫu nằm ở V40).
+// Không seed 6 khóa `complaint.*` và 7 mẫu `COMPLAINT_*` của V39 / V40 (còn 79 khóa, 63 mẫu); identity-admin.mock.test.ts lọc chúng khỏi phần SQL khi đối chiếu.
 // Không viết tay: identity-admin.mock.test.ts đọc lại SQL và so từng trường nên lệch BE là test đỏ. BE thêm khóa / mã mới thì thêm vào đây theo cùng migration.
 import type { NotificationTemplate, SystemConfig } from '../../types/identity';
 
@@ -52,12 +53,6 @@ export const SEED_CONFIGS: SystemConfig[] = [
   { key: 'care_log.max_photos', value: '5', valueType: 'INT', minValue: '0', maxValue: '10', unit: 'ảnh', description: 'Số ảnh tối đa của một mục nhật ký (BR-LT-11)' },
   { key: 'care_log.min_per_day', value: '1', valueType: 'INT', minValue: '1', maxValue: '5', unit: 'mục', description: 'Số mục nhật ký chăm sóc tối thiểu mỗi ngày (BR-LT-11)' },
   { key: 'cashier_shift.auto_close_grace_minutes', value: '30', valueType: 'INT', minValue: '0', maxValue: '180', unit: 'phút', description: 'Quá giờ đóng cửa cuối ngày chừng này thì tự chốt ca thường (BR-TG-05, ST13)' },
-  { key: 'complaint.auto_close_days', value: '7', valueType: 'INT', minValue: '1', maxValue: '30', unit: 'ngày', description: 'Khiếu nại RESOLVED quá số ngày này mà khách không phản hồi thì ST17 tự đóng (BR-DG-09)' },
-  { key: 'complaint.max_open', value: '10', valueType: 'INT', minValue: '1', maxValue: '50', unit: 'khiếu nại', description: 'Số khiếu nại OPEN / IN_PROGRESS tối đa của một khách cùng lúc (BR-DG-05)' },
-  { key: 'complaint.max_reopen', value: '2', valueType: 'INT', minValue: '0', maxValue: '5', unit: 'lần', description: 'Số lần mở lại tối đa của một khiếu nại (BR-DG-07)' },
-  { key: 'complaint.reopen_days', value: '7', valueType: 'INT', minValue: '1', maxValue: '30', unit: 'ngày', description: 'Số ngày khách được mở lại khiếu nại kể từ lúc RESOLVED (BR-DG-07)' },
-  { key: 'complaint.sla_open_hours', value: '24', valueType: 'INT', minValue: '1', maxValue: '168', unit: 'giờ', description: 'Khiếu nại OPEN chưa được nhận quá số giờ này thì ST16 leo thang (BR-DG-08)' },
-  { key: 'complaint.sla_resolve_hours', value: '72', valueType: 'INT', minValue: '1', maxValue: '720', unit: 'giờ', description: 'Khiếu nại IN_PROGRESS quá số giờ này kể từ hoạt động cuối thì ST16 leo thang (BR-DG-08)' },
   { key: 'content.comment_per_hour', value: '10', valueType: 'INT', minValue: '1', maxValue: '100', unit: 'bình luận', description: 'Số bình luận tối đa mỗi khách mỗi giờ; vượt thì 429 (BR-BV-08)' },
   { key: 'feedback.max_per_day', value: '5', valueType: 'INT', minValue: '1', maxValue: '20', unit: 'feedback', description: 'Số feedback tối đa một khách gửi mỗi ngày (BR-DG-01)' },
   { key: 'login.failed_window_minutes', value: '15', valueType: 'INT', minValue: '5', maxValue: '60', unit: 'phút', description: 'Cửa sổ đếm số lần đăng nhập sai (BR-TK-09)' },
@@ -255,69 +250,6 @@ export const SEED_TEMPLATES: NotificationTemplate[] = [
     body: 'Ca {loai_ca} {ma_ca} của {ten_thu_ngan} tại {chi_nhanh} (ngày {ngay_ca}) chưa được chốt nên hệ thống đã tự chốt lúc {gio_chot}. Vui lòng nhập số tiền thực đếm khi đối soát ca.',
     allowedVars: ['ma_ca', 'loai_ca', 'ten_thu_ngan', 'chi_nhanh', 'ngay_ca', 'gio_chot'],
     requiredVars: ['ma_ca', 'loai_ca', 'ten_thu_ngan', 'chi_nhanh', 'ngay_ca', 'gio_chot'],
-    isDefault: true,
-  },
-  {
-    code: 'COMPLAINT_CREATED_APP',
-    channel: 'IN_APP',
-    subject: 'Khiếu nại mới {ma_khieu_nai}',
-    body: 'Khách {ten_khach} vừa gửi khiếu nại {ma_khieu_nai} về {chu_de}. Vui lòng nhận xử lý.',
-    allowedVars: ['ten_khach', 'ma_khieu_nai', 'chu_de'],
-    requiredVars: ['ten_khach', 'ma_khieu_nai', 'chu_de'],
-    isDefault: true,
-  },
-  {
-    code: 'COMPLAINT_ESCALATED_APP',
-    channel: 'IN_APP',
-    subject: 'Khiếu nại {ma_khieu_nai} quá hạn xử lý',
-    body: 'Khiếu nại {ma_khieu_nai} ({chu_de}) quá hạn xử lý và đã được chuyển lên cấp quản lý cao nhất.',
-    allowedVars: ['ma_khieu_nai', 'chu_de'],
-    requiredVars: ['ma_khieu_nai', 'chu_de'],
-    isDefault: true,
-  },
-  {
-    code: 'COMPLAINT_REOPENED_APP',
-    channel: 'IN_APP',
-    subject: 'Khiếu nại {ma_khieu_nai} được mở lại',
-    body: 'Khách {ten_khach} đã mở lại khiếu nại {ma_khieu_nai} (lần {so_lan_mo_lai}). Vui lòng nhận xử lý.',
-    allowedVars: ['ten_khach', 'ma_khieu_nai', 'so_lan_mo_lai'],
-    requiredVars: ['ten_khach', 'ma_khieu_nai', 'so_lan_mo_lai'],
-    isDefault: true,
-  },
-  {
-    code: 'COMPLAINT_RESOLVED',
-    channel: 'EMAIL',
-    subject: 'Khiếu nại {ma_khieu_nai} đã được giải quyết',
-    body: 'Xin chào {ten_khach},\n\nKhiếu nại {ma_khieu_nai} của Quý khách đã được giải quyết. Kết luận: {ket_luan}\n\nNếu chưa hài lòng, Quý khách có thể mở lại trong {so_ngay_mo_lai} ngày. Nếu không có phản hồi, khiếu nại sẽ tự đóng sau {so_ngay_tu_dong_dong} ngày.\n\nTrân trọng,\nPet Care',
-    allowedVars: ['ma_khieu_nai', 'ket_luan', 'so_ngay_mo_lai', 'so_ngay_tu_dong_dong', 'ten_khach'],
-    requiredVars: ['ma_khieu_nai', 'ket_luan', 'so_ngay_mo_lai', 'so_ngay_tu_dong_dong'],
-    isDefault: true,
-  },
-  {
-    code: 'COMPLAINT_RESOLVED_APP',
-    channel: 'IN_APP',
-    subject: 'Khiếu nại {ma_khieu_nai} đã được giải quyết',
-    body: 'Khiếu nại {ma_khieu_nai} đã được giải quyết: {ket_luan} Bạn có thể mở lại trong {so_ngay_mo_lai} ngày.',
-    allowedVars: ['ma_khieu_nai', 'ket_luan', 'so_ngay_mo_lai'],
-    requiredVars: ['ma_khieu_nai', 'ket_luan', 'so_ngay_mo_lai'],
-    isDefault: true,
-  },
-  {
-    code: 'COMPLAINT_TAKEN',
-    channel: 'EMAIL',
-    subject: 'Khiếu nại {ma_khieu_nai} đã được tiếp nhận',
-    body: 'Xin chào {ten_khach},\n\nKhiếu nại {ma_khieu_nai} của Quý khách đã được tiếp nhận và đang xử lý. Quý khách có thể theo dõi và trao đổi trên ứng dụng Pet Care.\n\nTrân trọng,\nPet Care',
-    allowedVars: ['ma_khieu_nai', 'ten_khach'],
-    requiredVars: ['ma_khieu_nai'],
-    isDefault: true,
-  },
-  {
-    code: 'COMPLAINT_TAKEN_APP',
-    channel: 'IN_APP',
-    subject: 'Khiếu nại {ma_khieu_nai} đã được tiếp nhận',
-    body: 'Khiếu nại {ma_khieu_nai} của bạn đã được tiếp nhận và đang xử lý.',
-    allowedVars: ['ma_khieu_nai'],
-    requiredVars: ['ma_khieu_nai'],
     isDefault: true,
   },
   {

@@ -54,7 +54,7 @@ interface Probe<T> {
   value?: T;
   error?: unknown;
 }
-/** T57: catalog.mock có sẵn dịch vụ phẫu thuật / nội trú (id ≥ 7000) mà script seed không tạo; các phép đếm dịch vụ của bài kiểm này chỉ tính dịch vụ do script seed tạo. */
+/** T57: catalog.mock có sẵn dịch vụ nội trú (id ≥ 7000) mà script seed không tạo; các phép đếm dịch vụ của bài kiểm này chỉ tính dịch vụ do script seed tạo. */
 const isSeeded = (s: { serviceId: number }) => s.serviceId < 7000;
 async function probe<T>(read: () => Promise<T>): Promise<Probe<T>> {
   try {

@@ -897,7 +897,7 @@ describe('GET /me/ai/pets/{petId}/vaccination-summary (#3, BR-AI-11)', () => {
     expect((await errorOf(client.get('/api/me/ai/pets/4/vaccination-summary', await customer())))[0]).toBe(404); // Lu của hồ sơ tại quầy #3
     expect(await errorOf(client.get('/api/me/ai/pets/1/vaccination-summary', await as('khachmoi@petcare.vn')))).toEqual([404, 'RESOURCE_NOT_FOUND', 'Không tìm thấy thú cưng #1']);
     await client.post('/api/pets/3/mark-deceased', { deceasedOn: isoDay(-1), confirmed: true }, await as(ROLES.RECEPTIONIST));
-    expect(await errorOf(client.get('/api/me/ai/pets/3/vaccination-summary', await customer()))).toEqual([400, 'BUSINESS_RULE_VIOLATION', 'Thú cưng đã mất, hồ sơ chỉ đọc (BR-KH-05)']);
+    expect(await errorOf(client.get('/api/me/ai/pets/3/vaccination-summary', await customer()))).toEqual([400, 'BUSINESS_RULE_VIOLATION', 'Thú cưng đã mất, không tra được lịch tiêm (BR-KH-05)']);
   });
 });
 
@@ -1013,7 +1013,7 @@ describe('GET /me/ai/pets/{petId}/recommendations (#4, BR-AI-18…23)', () => {
   it('thú của người khác / chủ cũ → 404 như không tồn tại; thú đã mất → 400 BR-KH-05', async () => {
     expect(await errorOf(client.get('/api/me/ai/pets/4/recommendations', await customer()))).toEqual([404, 'RESOURCE_NOT_FOUND', 'Không tìm thấy thú cưng #4']);
     await client.post('/api/pets/3/mark-deceased', { deceasedOn: isoDay(-1), confirmed: true }, await as(ROLES.RECEPTIONIST));
-    expect(await errorOf(client.get('/api/me/ai/pets/3/recommendations', await customer()))).toEqual([400, 'BUSINESS_RULE_VIOLATION', 'Thú cưng đã mất, hồ sơ chỉ đọc (BR-KH-05)']);
+    expect(await errorOf(client.get('/api/me/ai/pets/3/recommendations', await customer()))).toEqual([400, 'BUSINESS_RULE_VIOLATION', 'Thú cưng đã mất, không gợi ý được (BR-KH-05)']);
   });
 });
 

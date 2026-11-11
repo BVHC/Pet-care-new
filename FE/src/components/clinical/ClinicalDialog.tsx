@@ -1,4 +1,4 @@
-// Khung hộp thoại dùng chung cho thao tác lâm sàng tầng 3 (nội trú, phẫu thuật): Radix Dialog, form một nút gửi, lỗi của BE hiện ngay trong hộp.
+// Khung hộp thoại dùng chung cho thao tác lâm sàng tầng 3 (nội trú): Radix Dialog, form một nút gửi, lỗi của BE hiện ngay trong hộp.
 import type { FormEvent, ReactNode } from 'react';
 import { FormError } from '@/components/admin/form-ui';
 import { Button } from '@/components/ui/button';

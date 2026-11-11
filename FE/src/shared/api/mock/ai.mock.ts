@@ -587,11 +587,11 @@ const weeksOld = (birthDate: string | null | undefined, today: string) => (birth
 const dmy = (iso: string) => iso.split('-').reverse().join('/');
 const isCustomer = (req: MockRequest) => req.account!.role === 'CUSTOMER';
 
-/** Thú của mình theo `petId` (BR-AI-11): không có hoặc của người khác / chủ cũ → 404 cùng câu (ADR-0006); đã mất → 400 BR-KH-05. */
-function ownLivingPet(req: MockRequest): PetResponse | MockReply {
+/** Thú của mình theo `petId` (BR-AI-11): không có hoặc của người khác / chủ cũ → 404 cùng câu (ADR-0006); đã mất → 400 BR-KH-05 với câu của từng endpoint (đo trên BE thật, T82b). */
+function ownLivingPet(req: MockRequest, deceasedMessage: string): PetResponse | MockReply {
   const pet = myPets(req).find((p) => p.petId === Number(req.params.petId));
   if (!pet) return notFound('thú cưng', req.params.petId);
-  return pet.deceasedOn ? ruleFail('BR-KH-05', 'Thú cưng đã mất, hồ sơ chỉ đọc') : pet;
+  return pet.deceasedOn ? ruleFail('BR-KH-05', deceasedMessage) : pet;
 }
 const isReply = (x: PetResponse | MockReply): x is MockReply => 'status' in x && !('petId' in x);
 
@@ -690,7 +690,7 @@ const getVaccinationSummary: MockHandler = (req) => {
   const bad = typeError(req.params, ['petId']);
   if (bad) return bad;
   if (!isCustomer(req)) return denied();
-  const pet = ownLivingPet(req);
+  const pet = ownLivingPet(req, 'Thú cưng đã mất, không tra được lịch tiêm');
   return isReply(pet) ? pet : ok(vaccinationSummaryOf(req, pet));
 };
 
@@ -909,7 +909,7 @@ const getRecommendations: MockHandler = (req) => {
   const bad = invalid([['limit', `limit phải từ ${min} tới ${max}`, limit !== undefined && (Number(limit) < min || Number(limit) > max)]]);
   if (bad) return bad;
   if (!isCustomer(req)) return denied();
-  const pet = ownLivingPet(req);
+  const pet = ownLivingPet(req, 'Thú cưng đã mất, không gợi ý được');
   if (isReply(pet)) return pet;
   const response: RecommendationResponse = {
     petId: pet.petId,

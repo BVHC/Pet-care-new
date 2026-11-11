@@ -31,21 +31,6 @@ describe('AccountSidebar: mục "Lưu trú của tôi"', () => {
   });
 });
 
-describe('AccountSidebar: mục "Khiếu nại"', () => {
-  it('dẫn tới /complaints và chỉ tô sáng khi active="complaints"', () => {
-    renderSidebar('complaints');
-    const link = screen.getByRole('link', { name: 'Khiếu nại' });
-    expect(link).toHaveAttribute('href', '/complaints');
-    expect(link.className).toMatch(/navItemActive/);
-    expect(screen.getByRole('link', { name: 'Lịch hẹn' }).className).not.toMatch(/navItemActive/);
-  });
-
-  it('không tô sáng khi đang ở mục khác', () => {
-    renderSidebar('boarding');
-    expect(screen.getByRole('link', { name: 'Khiếu nại' }).className).not.toMatch(/navItemActive/);
-  });
-});
-
 // L-23: chữ viết tắt trên avatar lấy chữ đầu của họ và của tên cuối ("Nguyễn Văn An" → "NA"), như avatar bác sĩ; trước đây lấy chữ đầu của HAI TỪ CUỐI ("VA").
 describe('AccountSidebar: chữ viết tắt trên avatar', () => {
   const avatarOf = (name: string) => {

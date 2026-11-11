@@ -1038,18 +1038,3 @@ describe('exam room — không gửi request vai trò này không được làm 
     expect(save).not.toHaveBeenCalled();
   });
 });
-
-describe('exam room — phẫu thuật trong lượt khám (UC50; surgery-v1 #2)', () => {
-  it('lượt đang khám của chính mình có khung Phẫu thuật với nút lập kế hoạch; lượt đã khóa (Mochi) chỉ hiện lịch sử phẫu thuật, không có nút', async () => {
-    const { user } = await renderExamRoom();
-    await screen.findByRole('heading', { level: 2, name: 'Lu' });
-    expect(await exam().findByRole('region', { name: 'Phẫu thuật' })).toBeInTheDocument();
-    expect(exam().getByRole('button', { name: 'Lập kế hoạch phẫu thuật' })).toBeInTheDocument();
-
-    await user.click((await screen.findAllByRole('button', { name: /Mochi/ }))[0]);
-    expect(await screen.findByRole('heading', { level: 2, name: 'Mochi' })).toBeInTheDocument();
-    expect(await exam().findByText('Phẫu thuật mô mềm')).toBeInTheDocument();
-    expect(exam().getByText(/Lý do hủy: Khách cân nhắc chi phí/)).toBeInTheDocument();
-    expect(exam().queryByRole('button', { name: /phẫu thuật/i })).not.toBeInTheDocument();
-  });
-});

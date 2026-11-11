@@ -18,7 +18,6 @@ const PANES: { id: Pane; label: string }[] = [
 /**
  * Phòng khám: hàng chờ của tôi (visit-v1 #3) và lượt Khám/Tiêm đã hoàn tất hôm nay (#2) | lượt đang chọn. Gọi lượt (#8), đánh dấu cấp cứu (#7), bệnh án, cân nặng, tiêm chủng,
  * hoàn tất lượt và bản bổ sung (#10, #12–15, #18–20; T37) đều chạy trên API. ≥1024px hai cột; điện thoại một khung mỗi lần.
- * Tầng 3 (T57): khung "Phẫu thuật" (UC50) nằm trong bệnh án của lượt Khám/Tiêm (SurgerySection).
  */
 export function DoctorWorkspacePage() {
   const user = useStaffUser();

@@ -4,10 +4,10 @@
 // canEdit / canDelete. Không mô phỏng: audit (BE ghi ORDER_CANCELLED_UNPAID), dịch vụ bật theo chi nhánh. Thu tiền / ca thu ngân / payable-orders là T35.
 // Order BOARDING (T43 chưa có ở BE; T48): sinh bởi mock lưu trú khi bắt đầu trả thú / thú mất (openBoardingOrder), hủy phiên trả thú là
 // POST /orders/:orderId/abort-checkout (#9, ASSUMPTION A6 của T48).
-// T57 (tầng 3): `addServiceLine` cuối file là VisitOrderApi cho phẫu thuật, nội trú (nối ở tier3-wiring.ts). ASSUMPTION (sales-v1, catalog-v1 im lặng):
-//  T1  Dòng SERVICE của dịch vụ SURGERY / INPATIENT là dòng hệ thống: không sửa / xóa trực tiếp (400 BR-BH-02, canEdit / canDelete = false), như dòng vaccine / thuốc, vì phẫu thuật
-//      và ca nội trú giữ mã dòng (`order_line_id` UQ).
-//  T2  Dịch vụ SURGERY / INPATIENT không thêm tay được (POST /orders/:id/lines, PATCH đổi dịch vụ): 400 BR-KB-08 / BR-LT-14 như thuốc kê đơn (BR-SP-01), đúng 09 BR-KB-08 "phẫu thuật chỉ phát sinh từ khám".
+// T57 (tầng 3): `addServiceLine` cuối file là VisitOrderApi cho nội trú (nối ở tier3-wiring.ts). ASSUMPTION (sales-v1, catalog-v1 im lặng):
+//  T1  Dòng SERVICE của dịch vụ INPATIENT là dòng hệ thống: không sửa / xóa trực tiếp (400 BR-BH-02, canEdit / canDelete = false), như dòng vaccine / thuốc, vì ca nội trú
+//      giữ mã dòng (`order_line_id` UQ).
+//  T2  Dịch vụ INPATIENT không thêm tay được (POST /orders/:id/lines, PATCH đổi dịch vụ): 400 BR-LT-14 như thuốc kê đơn (BR-SP-01).
 import type { AccountSummary, Role } from '../../types/auth';
 import type { ServiceGroup } from '../../types/catalog';
 import type {
@@ -237,10 +237,9 @@ function save(s: State) {
 
 // ─── Quyền dòng (BR-BH-02, docs/adr/0044 §3) ───
 
-/** Dịch vụ phẫu thuật / nội trú chỉ vào Order qua luồng riêng (phẫu thuật hoàn tất, xuất viện): mã rule và câu báo lỗi, null với dịch vụ khác (T2). */
+/** Dịch vụ nội trú chỉ vào Order qua luồng riêng (xuất viện): mã rule và câu báo lỗi, null với dịch vụ khác (T2). */
 function ownFlowRule(serviceId: number | null | undefined): { ruleId: string; message: string } | null {
   const type = catalogServices().find((x) => x.serviceId === serviceId)?.medicalType;
-  if (type === 'SURGERY') return { ruleId: 'BR-KB-08', message: 'Dịch vụ phẫu thuật chỉ được đưa vào Order khi hoàn tất phẫu thuật' };
   return type === 'INPATIENT' ? { ruleId: 'BR-LT-14', message: 'Dịch vụ nội trú chỉ được đưa vào Order khi xuất viện' } : null;
 }
 
@@ -931,7 +930,7 @@ export function openBoardingOrder(args: {
   return row;
 }
 
-// ─── Cho mock phẫu thuật / nội trú (T57): như VisitOrderApi của BE (09 §B, §C), chỉ thêm export ───
+// ─── Cho mock nội trú (T57): như VisitOrderApi của BE (09 §C), chỉ thêm export ───
 
 /**
  * `VisitOrderApi.addServiceLine(visitId, serviceId, quantity)`: dòng SERVICE thật (`serviceIdsOfVisit` thấy được), tên chụp lúc này, giá = `unitPrice` nếu truyền (nội trú: giá đã chốt lúc nhập viện,

@@ -5,7 +5,7 @@
  * `readOnly`: bác sĩ, nhân viên chăm sóc tra cứu (UC23) — chỉ xem, kể cả hồ sơ sức khỏe của thú.
  */
 import { useState, type FormEvent } from 'react';
-import { AlertTriangle, ArrowRightLeft, HeartCrack, Link2, Mail, Pencil, Plus, ShieldAlert, Stethoscope, Trash2 } from 'lucide-react';
+import { AlertTriangle, ArrowRightLeft, HeartCrack, Link2, Mail, Pencil, Plus, Stethoscope, Trash2 } from 'lucide-react';
 import { toast } from 'sonner';
 import { Field, FormError } from '@/components/admin/form-ui';
 import { MarkDeceasedDialog } from '@/components/customer/pets/MarkDeceasedDialog';
@@ -13,14 +13,12 @@ import { PetAvatar } from '@/components/customer/pets/pet-presentation';
 import { PetDetailDrawer } from '@/components/customer/pets/PetDetailDrawer';
 import { PetFormDialog } from '@/components/customer/pets/PetFormDialog';
 import { TransferOwnerDialog } from '@/components/customer/pets/TransferOwnerDialog';
-import { CreateComplaintDialog } from '@/components/staff/reception/CreateComplaintDialog';
 import { AccountEmailDialog, LinkAccountDialog } from './CustomerAccountDialogs';
 import { Button } from '@/components/ui/button';
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Input } from '@/components/ui/input';
 import { cn } from '@/lib/utils';
 import { fieldErrorsOf, plainMessage, toApiError } from '@/shared/api/api-error';
-import { useAccount } from '@/shared/stores/session.store';
 import type { CustomerProfile } from '@/shared/types/profile';
 import {
   customerErrors,
@@ -223,10 +221,7 @@ function PetList({
 
 function ProfileTab({ customer, readOnly }: { customer: CustomerProfile; readOnly: boolean }) {
   const [account, setAccount] = useState<'email' | 'link' | null>(null);
-  const [complaining, setComplaining] = useState(false);
   const [editing, setEditing] = useState(false);
-  // UC85 (complaint-v1 #7): chỉ lễ tân tạo khiếu nại thay khách.
-  const canComplain = useAccount()?.role === 'RECEPTIONIST';
   const [fullName, setFullName] = useState(customer.fullName);
   const [phone, setPhone] = useState(customer.phone ?? '');
   const [email, setEmail] = useState(customer.email ?? '');
@@ -301,17 +296,11 @@ function ProfileTab({ customer, readOnly }: { customer: CustomerProfile; readOnl
                 <Link2 className="h-4 w-4" aria-hidden /> Liên kết tài khoản online
               </Button>
             )}
-            {canComplain && (
-              <Button variant="outline" onClick={() => setComplaining(true)}>
-                <ShieldAlert className="h-4 w-4" aria-hidden /> Tạo khiếu nại
-              </Button>
-            )}
             <Button variant="outline" onClick={() => setEditing(true)}>
               <Pencil className="h-4 w-4" aria-hidden /> Sửa thông tin
             </Button>
           </div>
         )}
-        {canComplain && <CreateComplaintDialog open={complaining} onOpenChange={setComplaining} customerId={customer.customerId} />}
         <AccountEmailDialog customer={customer} open={account === 'email'} onClose={() => setAccount(null)} />
         <LinkAccountDialog customer={customer} open={account === 'link'} onClose={() => setAccount(null)} />
       </div>

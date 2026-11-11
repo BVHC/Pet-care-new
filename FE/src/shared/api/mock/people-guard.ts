@@ -1,4 +1,4 @@
-// Cửa vào chung của mock workforce / complaint (T57 bước A, nhóm PEOPLE). Thứ tự kiểm theo brief (00-method §3.5 + bài học report A1):
+// Cửa vào chung của mock workforce (T57 bước A, nhóm PEOPLE). Thứ tự kiểm theo brief (00-method §3.5 + bài học report A1):
 //   401 (adapter) → 400 MALFORMED_REQUEST (path / query sai kiểu hoặc thiếu, body thiếu / không phải JSON object / sai kiểu / ngoài enum)
 //   → 403 ACCESS_DENIED (vai trò) → 400 VALIDATION_FAILED (Bean Validation, SAU vai trò) → handler (403 phạm vi → 404 → 400 BR-… → 409).
 // BE tầng 3 chưa cài nên thứ tự này là theo quy ước chung, chưa đo trên BE thật.

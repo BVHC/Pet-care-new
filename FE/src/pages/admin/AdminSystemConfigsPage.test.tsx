@@ -58,7 +58,7 @@ describe('AdminSystemConfigsPage (T22 - UC10)', () => {
       expect(await screen.findByText('vet.bio_max_length')).toBeInTheDocument();
       expect(await screen.findByText('address.max_per_customer')).toBeInTheDocument(); // khóa thật của BE (V2); khóa cũ customer.address_book_max không tồn tại
       expect(screen.queryByText('customer.address_book_max')).not.toBeInTheDocument();
-      expect(screen.getAllByRole('button', { name: /^Sửa / })).toHaveLength(85); // đủ 85 tham số [CFG] của BE (V2 + V27 + V35 + V40 + V44…V48)
+      expect(screen.getAllByRole('button', { name: /^Sửa / })).toHaveLength(79); // 85 tham số [CFG] của BE (V2 + V27 + V35 + V40 + V44…V48) trừ 6 khóa complaint.* mà mock không seed (xem identity-admin.mock.test.ts)
 
       const bioRow = await rowOf('vet.bio_max_length');
       expect(within(bioRow).getByText('500 ký tự')).toBeInTheDocument(); // ô giá trị; mô tả cũng có "VARCHAR(500)" nên không dò /500/

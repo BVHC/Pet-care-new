@@ -1106,7 +1106,12 @@ function sqlSeed() {
     }
     applyTemplateUpdates(sql, templates);
   }
-  return { configs, templates };
+  // Mock không seed `complaint.*` và `COMPLAINT_*` (ADR-0122), nhưng V39 / V40 của BE còn INSERT chúng cho tới khi có V51 (DROP + DELETE);
+  // lọc ra để so đúng phần mock có. Khi V51 đến thì hai bộ lọc dưới thành no-op: xóa chúng.
+  return {
+    configs: configs.filter((r) => !String(r.key).startsWith('complaint.')),
+    templates: new Map([...templates].filter(([code]) => !code.startsWith('COMPLAINT_'))),
+  };
 }
 
 const CONFIG_FIELDS = ['key', 'value', 'valueType', 'minValue', 'maxValue', 'unit', 'description'];
@@ -1158,9 +1163,9 @@ describe('bộ đọc SQL của ca đối chiếu seed — DELETE trên system_c
 });
 
 describe('UC10 — tham số [CFG] seed khớp BE (V2, V27, V35, V40, V44, V45, V46, V48)', () => {
-  it.skipIf(!hasMigrations)('đúng 85 khóa của BE, từng dòng giống hệt SQL (key, value, valueType, minValue, maxValue, unit, description), sắp theo key', async () => {
+  it.skipIf(!hasMigrations)('đúng 79 khóa, từng dòng giống hệt SQL (key, value, valueType, minValue, maxValue, unit, description), sắp theo key', async () => {
     const expected = sqlConfigs();
-    expect(expected).toHaveLength(85); // = số hằng số ConfigKey của BE (52 của V2 + V27, 18 ai.* của V35, 8 của V40, 7 của V44…V48)
+    expect(expected).toHaveLength(79); // = 85 hằng số ConfigKey của BE (52 của V2 + V27, 18 ai.* của V35, 8 của V40, 7 của V44…V48) trừ 6 complaint.* mà mock không seed (xem sqlSeed)
     const rows = await getConfigs();
     expect(rows.map((r) => r.key)).toEqual(expected.map((r) => r.key));
     for (const [i, row] of rows.entries()) {
@@ -1172,7 +1177,7 @@ describe('UC10 — tham số [CFG] seed khớp BE (V2, V27, V35, V40, V44, V45, 
   it('dòng gõ tay theo V2 + V27 (+ V35, V40, V44…V48): khóa thật của BE có mặt, khóa bịa của bản mock cũ và khóa V27 đã xóa không còn', async () => {
     const rows = await getConfigs();
     const by = Object.fromEntries(rows.map((r) => [r.key, r]));
-    expect(rows).toHaveLength(85);
+    expect(rows).toHaveLength(79);
     expect(by['otp.ttl_minutes']).toEqual({ key: 'otp.ttl_minutes', value: '5', valueType: 'INT', minValue: '1', maxValue: '15', unit: 'phút', description: 'Thời gian hiệu lực của mã OTP (BR-TK-05)' });
     expect(by['boarding.checkout_time']).toMatchObject({ value: '12:00', valueType: 'TIME', minValue: '06:00', maxValue: '22:00', unit: 'giờ' });
     expect(by['address.max_per_customer']).toMatchObject({ value: '5', minValue: '1', maxValue: '20', unit: 'địa chỉ' });
@@ -1183,18 +1188,17 @@ describe('UC10 — tham số [CFG] seed khớp BE (V2, V27, V35, V40, V44, V45, 
     for (const old of ['customer.address_book_max', 'auth.otp_resend_seconds', 'auth.otp_max_per_hour', 'auth.session_ttl_hours', 'staff.online_window_minutes']) expect(by[old], old).toBeUndefined(); // staff.online_window_minutes: V27 xóa
   });
 
-  it('33 khóa tầng 3 gõ tay theo V35 / V40 / V44–V48: đúng số lượng từng nhóm, 4 khóa DECIMAL đều ở ai.*', async () => {
+  it('27 khóa tầng 3 gõ tay theo V35 / V40 / V44–V48: đúng số lượng từng nhóm, 4 khóa DECIMAL đều ở ai.*', async () => {
     const rows = await getConfigs();
     const by = Object.fromEntries(rows.map((r) => [r.key, r]));
     const prefixCount = (prefix: string) => rows.filter((r) => r.key.startsWith(prefix)).length;
-    expect([prefixCount('ai.'), prefixCount('complaint.'), prefixCount('workforce.'), prefixCount('shop.'), prefixCount('payment.'), prefixCount('returns.'), prefixCount('content.')]).toEqual([18, 6, 2, 3, 2, 1, 1]);
+    expect([prefixCount('ai.'), prefixCount('complaint.'), prefixCount('workforce.'), prefixCount('shop.'), prefixCount('payment.'), prefixCount('returns.'), prefixCount('content.')]).toEqual([18, 0, 2, 3, 2, 1, 1]);
     expect(rows.filter((r) => r.valueType === 'DECIMAL').map((r) => r.key)).toEqual(['ai.reco.weight_attr', 'ai.reco.weight_history', 'ai.reco.weight_popularity', 'ai.retrieval.min_similarity']);
     expect(rows.filter((r) => r.valueType !== 'INT' && r.valueType !== 'DECIMAL').map((r) => r.key)).toEqual(['boarding.checkout_time']); // tầng 3 không thêm BOOL / TIME
     expect(by['ai.retrieval.min_similarity']).toEqual({ key: 'ai.retrieval.min_similarity', value: '0.6', valueType: 'DECIMAL', minValue: '0.3', maxValue: '0.9', unit: 'cosine', description: 'Ngưỡng độ tương đồng cosine tối thiểu để một đoạn được dùng; dưới ngưỡng thì ngoài phạm vi (BR-AI-04)' });
     expect(by['ai.reco.weight_attr']).toMatchObject({ value: '0.5', minValue: '0', maxValue: '1', unit: 'trọng số' });
     expect(by['ai.chat.max_question_chars']).toMatchObject({ value: '500', valueType: 'INT', minValue: '100', maxValue: '2000', unit: 'ký tự' });
     expect(by['ai.reco.senior_age_years_cat']).toMatchObject({ value: '10', minValue: '5', maxValue: '15', unit: 'năm' });
-    expect(by['complaint.sla_resolve_hours']).toMatchObject({ value: '72', minValue: '1', maxValue: '720', unit: 'giờ' });
     expect(by['workforce.request_lead_hours']).toMatchObject({ value: '24', minValue: '0', maxValue: '168', unit: 'giờ' });
     expect(by['shop.payment_window_hours']).toMatchObject({ value: '24', minValue: '1', maxValue: '168', unit: 'giờ' });
     expect(by['payment.refund_max_attempts']).toMatchObject({ value: '3', minValue: '1', maxValue: '10', unit: 'lần' });
@@ -1259,12 +1263,12 @@ describe('PUT /api/system-configs/{key} — validate như BE SystemConfigEditSer
     expect((await failure(putConfig('ai.reco.weight_attr', '1.01'))).data.message).toBe('Giá trị của ai.reco.weight_attr phải là số thập phân từ 0 đến 1 (trọng số) (BR-QT-13)');
   });
 
-  it('khóa INT mới của tầng 3 dùng khoảng của chính dòng: ai.chat.max_question_chars, complaint.max_reopen (0–5), content.comment_per_hour', async () => {
+  it('khóa INT mới của tầng 3 dùng khoảng của chính dòng: ai.chat.max_question_chars, workforce.request_lead_hours (0–168), content.comment_per_hour', async () => {
     expect((await failure(putConfig('ai.chat.max_question_chars', '2001'))).data.message).toBe('Giá trị của ai.chat.max_question_chars phải là số nguyên từ 100 đến 2000 (ký tự) (BR-QT-13)');
-    expect((await failure(putConfig('complaint.max_reopen', '6'))).data.message).toBe('Giá trị của complaint.max_reopen phải là số nguyên từ 0 đến 5 (lần) (BR-QT-13)');
+    expect((await failure(putConfig('workforce.request_lead_hours', '169'))).data.message).toBe('Giá trị của workforce.request_lead_hours phải là số nguyên từ 0 đến 168 (giờ) (BR-QT-13)');
     expect((await failure(putConfig('content.comment_per_hour', '0'))).data.message).toBe('Giá trị của content.comment_per_hour phải là số nguyên từ 1 đến 100 (bình luận) (BR-QT-13)');
     expect((await failure(putConfig('ai.retrieval.top_k', '1.5'))).data.errorCode).toBe('BUSINESS_RULE_VIOLATION'); // INT không nhận số thập phân
-    const res = await putConfig('complaint.max_reopen', '0');
+    const res = await putConfig('workforce.request_lead_hours', '0');
     expect([res.status, res.data.data.value]).toEqual([200, '0']);
   });
 
@@ -1312,7 +1316,7 @@ describe('PUT /api/system-configs/{key} — validate như BE SystemConfigEditSer
 });
 
 describe('UC10 — mẫu thông báo seed khớp BE (V3…V26, V40)', () => {
-  it.skipIf(!hasMigrations)('đúng 70 mã của BE (30 của V3…V26 + 40 tầng 3 của V40), từng mẫu giống hệt SQL (kênh, tiêu đề, nội dung, allowedVars, requiredVars, isDefault), sắp theo code', async () => {
+  it.skipIf(!hasMigrations)('đúng 63 mã, từng mẫu giống hệt SQL (kênh, tiêu đề, nội dung, allowedVars, requiredVars, isDefault), sắp theo code', async () => {
     const expected = sqlTemplates().map((r) => ({
       code: r.code,
       channel: r.channel,
@@ -1322,7 +1326,7 @@ describe('UC10 — mẫu thông báo seed khớp BE (V3…V26, V40)', () => {
       requiredVars: r.required_vars,
       isDefault: r.subject === r.default_subject && r.body === r.default_body,
     }));
-    expect(expected).toHaveLength(70);
+    expect(expected).toHaveLength(63);
     const rows = await getTemplates();
     expect(rows.map((r) => r.code)).toEqual(expected.map((r) => r.code));
     for (const [i, row] of rows.entries()) {
@@ -1345,7 +1349,7 @@ describe('UC10 — mẫu thông báo seed khớp BE (V3…V26, V40)', () => {
   it('dòng gõ tay theo SQL: mã thật của BE có mặt, mã bịa của bản mock cũ không còn, OTP_REGISTER là bản V4', async () => {
     const rows = await getTemplates();
     const by = Object.fromEntries(rows.map((r) => [r.code as string, r]));
-    expect(rows).toHaveLength(70);
+    expect(rows).toHaveLength(63);
     expect(by['LAST_BRANCH_MANAGER_LOCKED_APP']).toMatchObject({
       channel: 'IN_APP',
       subject: 'Chi nhánh không còn quản lý đang hoạt động',

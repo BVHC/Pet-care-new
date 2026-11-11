@@ -139,17 +139,17 @@ describe('services', () => {
   });
 });
 
-describe('surgery / inpatient services (T57, 09 §B–C ASSUMPTION A1)', () => {
+describe('inpatient services (T57, 09 §C ASSUMPTION A1)', () => {
   type Row = { serviceId: number; name: string; group: string; medicalType: string | null; price: number; isActive: boolean };
   const listAll = async () => (await client.get('/api/services', await manager())).data.data as Row[];
 
-  it('seeds 4 SURGERY and 4 INPATIENT services in the MEDICAL group, same data as CLINICAL_SEED_SERVICES', async () => {
+  it('seeds 4 INPATIENT services in the MEDICAL group, same data as CLINICAL_SEED_SERVICES, and no SURGERY', async () => {
     const tier3 = (await listAll()).filter((s) => s.serviceId >= 7000).sort((a, b) => a.serviceId - b.serviceId);
     expect(tier3.map(({ serviceId, name, price, isActive, medicalType }) => ({ serviceId, name, price, isActive, medicalType }))).toEqual(
       CLINICAL_SEED_SERVICES.map(({ serviceId, name, price, isActive, medicalType }) => ({ serviceId, name, price, isActive, medicalType })),
     );
     expect(tier3.every((s) => s.group === 'MEDICAL')).toBe(true);
-    expect(tier3.filter((s) => s.medicalType === 'SURGERY')).toHaveLength(4);
+    expect(tier3.filter((s) => s.medicalType === 'SURGERY')).toHaveLength(0);
     expect(tier3.filter((s) => s.medicalType === 'INPATIENT')).toHaveLength(4);
   });
 
@@ -161,25 +161,34 @@ describe('surgery / inpatient services (T57, 09 §B–C ASSUMPTION A1)', () => {
     localStorage.setItem('petcare-mock-catalog', JSON.stringify(stored));
 
     const after = await listAll();
-    expect(after.filter((s) => s.serviceId >= 7000)).toHaveLength(8);
+    expect(after.filter((s) => s.serviceId >= 7000)).toHaveLength(4);
     expect(after.find((s) => s.serviceId === 1)?.price).toBe(160_000);
   });
 
   it('does not throw on an empty or broken saved state', async () => {
     for (const raw of ['{}', 'khong phai json']) {
       localStorage.setItem('petcare-mock-catalog', raw);
-      expect((await listAll()).filter((s) => s.serviceId >= 7000)).toHaveLength(8);
+      expect((await listAll()).filter((s) => s.serviceId >= 7000)).toHaveLength(4);
     }
+  });
+
+  it('drops the SURGERY services of a state saved before they were removed', async () => {
+    await client.patch('/api/services/1', { price: 160_000 }, await manager());
+    const stored = JSON.parse(localStorage.getItem('petcare-mock-catalog')!);
+    stored.services.push({ serviceId: 7001, name: 'Triệt sản chó mèo', group: 'MEDICAL', medicalType: 'SURGERY', price: 1_800_000, isActive: true });
+    localStorage.setItem('petcare-mock-catalog', JSON.stringify(stored));
+    const after = (await listAll()).filter((s) => s.serviceId >= 7000);
+    expect(after.map((s) => s.serviceId).sort()).toEqual([7101, 7102, 7103, 7104]);
   });
 
   it('lets the chain manager create and price them like any MEDICAL service; other groups still have no type (BR-SP-06)', async () => {
     const auth = await manager();
-    const created = await client.post('/api/services', { name: 'Cắt u mới', group: 'MEDICAL', medicalType: 'SURGERY', price: 2_100_000 }, auth);
+    const created = await client.post('/api/services', { name: 'Nội trú mới', group: 'MEDICAL', medicalType: 'INPATIENT', price: 2_100_000 }, auth);
     expect(created.status).toBe(201);
-    expect(created.data.data).toMatchObject({ group: 'MEDICAL', medicalType: 'SURGERY', price: 2_100_000 });
+    expect(created.data.data).toMatchObject({ group: 'MEDICAL', medicalType: 'INPATIENT', price: 2_100_000 });
     const repriced = await client.patch('/api/services/7101', { price: 380_000 }, auth);
     expect(repriced.data.data).toMatchObject({ serviceId: 7101, medicalType: 'INPATIENT', price: 380_000 });
-    const grooming = await failure(client.post('/api/services', { name: 'Spa', group: 'GROOMING', medicalType: 'SURGERY', price: 100_000 }, auth));
+    const grooming = await failure(client.post('/api/services', { name: 'Spa', group: 'GROOMING', medicalType: 'INPATIENT', price: 100_000 }, auth));
     expect(ruleIdOf(grooming.data.message)).toBe('BR-SP-06');
   });
 });

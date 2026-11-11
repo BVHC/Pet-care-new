@@ -422,7 +422,7 @@ const completeVisit: MockHandler = (req) => {
   if (ROLE_OF_GROUP[visit.serviceGroup] !== me(req).role) return ruleFail('BR-TN-05', 'Chức vụ hiện tại không phụ trách được nhóm dịch vụ của lượt — cần gán lại lượt');
   const wrongState = transition(visit.status, 'COMPLETED');
   if (wrongState) return wrongState;
-  // T57: phẫu thuật còn mở (BR-KB-10) và ca nội trú còn ADMITTED (BR-LT-14) chặn hoàn tất; mock tầng 3 đăng ký guard, chưa đăng ký thì không có gì để chặn.
+  // T57: ca nội trú còn ADMITTED (BR-LT-14) chặn hoàn tất; mock tầng 3 đăng ký guard, chưa đăng ký thì không có gì để chặn.
   for (const guard of completionGuards.values()) {
     const blocked = guard(visitId);
     if (blocked) return blocked;
@@ -741,7 +741,7 @@ const deletePrescription: MockHandler = (req) => {
   return noContent();
 };
 
-// ─── Cho mock phẫu thuật / nội trú (T57), chỉ thêm export ───
+// ─── Cho mock nội trú (T57), chỉ thêm export ───
 
 /** Guard hoàn tất lượt của module tầng 3, theo tên để nạp lại module không đăng ký hai lần. Trả 400 `ruleFail` để chặn, null để cho qua. */
 const completionGuards = new Map<string, (visitId: number) => MockReply | null>();

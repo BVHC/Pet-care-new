@@ -84,7 +84,7 @@ describe('xem trước (#1)', () => {
   it('đếm thú, địa chỉ, feedback của nguồn; cảnh báo khác họ tên; cùng SĐT thì không cảnh báo SĐT', async () => {
     const p = await preview(3, 4);
     expect(p).toMatchObject({ targetCustomerId: 3, sourceCustomerId: 4, petCount: 1, addressCount: 0, duplicateAddressCount: 0, feedbackCount: 2 });
-    expect(p).toMatchObject({ appointmentCount: 0, boardingCount: 0, orderCount: 0, onlineOrderCount: 0, complaintCount: 0, careTaskCount: 0 });
+    expect(p).toMatchObject({ appointmentCount: 0, boardingCount: 0, orderCount: 0, onlineOrderCount: 0, careTaskCount: 0 });
     expect(p.warnings).toHaveLength(1);
     expect(p.warnings[0]).toContain('Họ tên');
     // Khách mẫu nào cũng còn Order OPEN / PENDING nên bị chặn làm nguồn.
@@ -205,7 +205,7 @@ describe('gộp (#2)', () => {
     expect(res.status).toBe(201);
     expect(res.data.message).toBe('Đã gộp hồ sơ khách');
     expect(result(res)).toMatchObject({ mergeId: 1, sourceCustomerId: a, targetCustomerId: b });
-    expect(result(res).moved).toEqual({ pets: 2, addresses: 0, appointments: 0, boardings: 0, orders: 0, onlineOrders: 0, feedbacks: 0, complaints: 0, careTasks: 0 });
+    expect(result(res).moved).toEqual({ pets: 2, addresses: 0, appointments: 0, boardings: 0, orders: 0, onlineOrders: 0, feedbacks: 0, careTasks: 0 });
     expect(Date.parse(result(res).createdAt)).not.toBeNaN();
 
     expect(await petsOf(b)).toEqual(['Bơ', 'Lu Lu', 'Mực']);
@@ -289,7 +289,6 @@ describe('gộp (#2)', () => {
       ['boardings', 'boardingCount'],
       ['orders', 'orderCount'],
       ['onlineOrders', 'onlineOrderCount'],
-      ['complaints', 'complaintCount'],
       ['careTasks', 'careTaskCount'],
     ];
     const move = vi.fn((_from: number, _to: number) => 0);

@@ -18,7 +18,6 @@ import { OrderHistoryPage } from '../pages/customer/OrderHistoryPage';
 import { NotificationsPage } from '../pages/customer/NotificationsPage';
 import { PaymentPage } from '../pages/customer/PaymentPage';
 import { PaymentGatewayMockPage } from '../pages/customer/PaymentGatewayMockPage';
-import { ComplaintsPage } from '../pages/customer/ComplaintsPage';
 import { SecurityPage } from '../pages/customer/SecurityPage';
 import { SettingsPage } from '../pages/customer/SettingsPage';
 import { HelpPage } from '../pages/customer/HelpPage';
@@ -68,7 +67,6 @@ import { AdminWorkforcePage } from '../pages/admin/AdminWorkforcePage';
 import { MySchedulePage } from '../pages/admin/MySchedulePage';
 import { AdminInpatientPage } from '../pages/admin/AdminInpatientPage';
 import { AdminMyArticlesPage } from '../pages/admin/AdminMyArticlesPage';
-import { AdminIncidentsPage } from '../pages/admin/AdminIncidentsPage';
 import { AdminReportsPage } from '../pages/admin/AdminReportsPage';
 import { AdminAuditPage } from '../pages/admin/AdminAuditPage';
 import { AdminUsersPage } from '../pages/admin/AdminUsersPage';
@@ -179,14 +177,13 @@ export function App() {
             <Route path="/boarding-bookings/:bookingId" element={<BoardingDetailPage />} />
             <Route path="/notifications" element={<NotificationsPage />} />
             <Route path="/settings" element={<SettingsPage />} />
-            {/* Tầng 3 (T57): mua hàng online UC61–64, thanh toán UC63, khiếu nại UC85 — giỏ và đơn nằm trên BE, nên cần đăng nhập */}
+            {/* Tầng 3 (T57): mua hàng online UC61–64, thanh toán UC63 — giỏ và đơn nằm trên BE, nên cần đăng nhập */}
             <Route path="/cart" element={<CartPage />} />
             <Route path="/checkout" element={<CheckoutPage />} />
             <Route path="/order/:id" element={<OrderConfirmationPage />} />
             <Route path="/orders" element={<OrderHistoryPage />} />
             <Route path="/payment" element={<PaymentPage />} />
             <Route path="/payment/mock-gateway" element={<PaymentGatewayMockPage />} />
-            <Route path="/complaints" element={<ComplaintsPage />} />
           </Route>
 
           {/* UC16 danh mục sản phẩm công khai: khách thêm vào giỏ; /recommend link tới /shop/:id (giữ ở T57 Bước C) */}
@@ -245,7 +242,6 @@ export function App() {
             <Route path="/admin/my-schedule" element={<MySchedulePage />} />
             <Route path="/admin/inpatient" element={<AdminInpatientPage />} />
             <Route path="/admin/my-articles" element={<AdminMyArticlesPage />} />
-            <Route path="/admin/incidents" element={<AdminIncidentsPage />} />
             <Route path="/admin/reports" element={<AdminReportsPage />} />
             <Route path="/admin/audit" element={<AdminAuditPage />} />
             <Route path="/admin/users" element={<AdminUsersPage />} />

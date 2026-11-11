@@ -24,7 +24,7 @@ registerClosureSources({
 
 // ─── Lâm sàng (T57 bước A → luồng chính) ───
 
-// Phẫu thuật hoàn tất, xuất viện nội trú: dòng vào Order thật của lượt (09 §B, §C).
+// Xuất viện nội trú: dòng vào Order thật của lượt (09 §C).
 registerVisitOrderSource({ addServiceLine });
 // BR-LT-17: bắt đầu trả thú / giao thú khi thú còn ca nội trú ADMITTED → 409.
 registerAdmissionSource(hasActiveAdmission);
@@ -32,11 +32,11 @@ registerAdmissionSource(hasActiveAdmission);
 registerCompletionListener('materialuse', ({ visitId, branchId }) => {
   recordMaterialUsage({ visitId, branchId, serviceIds: serviceIdsOfVisit(visitId) });
 });
-// Dịch vụ SURGERY / INPATIENT lấy từ danh mục (SM đổi giá, ngừng kinh doanh có hiệu lực ngay). Bật theo chi nhánh: dòng mẫu của clinical-shared HOẶC bật ở UC33.
-// shortcut: branch.mock chưa gieo sẵn 7001–7104 vào `services` nên chi nhánh mẫu bật bằng danh sách riêng; tắt dịch vụ mẫu ở UC33 chưa có hiệu lực. Gieo vào branch.mock rồi bỏ danh sách này.
+// Dịch vụ INPATIENT lấy từ danh mục (SM đổi giá, ngừng kinh doanh có hiệu lực ngay). Bật theo chi nhánh: dòng mẫu của clinical-shared HOẶC bật ở UC33.
+// shortcut: branch.mock chưa gieo sẵn 7101–7104 vào `services` nên chi nhánh mẫu bật bằng danh sách riêng; tắt dịch vụ mẫu ở UC33 chưa có hiệu lực. Gieo vào branch.mock rồi bỏ danh sách này.
 registerClinicalServiceSource((serviceId) => {
   const service = catalogServices().find((x) => x.serviceId === serviceId);
-  if (service?.medicalType !== 'SURGERY' && service?.medicalType !== 'INPATIENT') return undefined;
+  if (service?.medicalType !== 'INPATIENT') return undefined;
   const seeded = CLINICAL_SEED_SERVICES.find((x) => x.serviceId === serviceId)?.branches ?? [];
   return {
     serviceId,

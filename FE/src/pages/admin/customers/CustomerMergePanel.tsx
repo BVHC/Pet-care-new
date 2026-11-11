@@ -23,7 +23,6 @@ const MOVED: { label: string; of: (p: MergePreview) => number }[] = [
   { label: 'Order', of: (p) => p.orderCount },
   { label: 'Đơn online', of: (p) => p.onlineOrderCount },
   { label: 'Phản hồi', of: (p) => p.feedbackCount },
-  { label: 'Khiếu nại', of: (p) => p.complaintCount },
   { label: 'Việc gọi điện', of: (p) => p.careTaskCount },
 ];
 

@@ -13,7 +13,6 @@ export interface MergePreview {
   orderCount: number;
   onlineOrderCount: number;
   feedbackCount: number;
-  complaintCount: number;
   careTaskCount: number;
   warnings: string[];
   blockers: string[];

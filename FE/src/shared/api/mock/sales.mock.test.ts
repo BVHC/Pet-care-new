@@ -195,22 +195,22 @@ describe('danh sách / chi tiết (#2, #3) — phạm vi chi nhánh', () => {
   });
 });
 
-describe('dòng của phẫu thuật, nội trú (T57: addServiceLine; ASSUMPTION T1, T2)', () => {
+describe('dòng của nội trú (T57: addServiceLine; ASSUMPTION T1, T2)', () => {
   /** Lượt giả 9001 của chi nhánh 1 do BS. Minh Anh (#5) phụ trách, Order OPEN có dòng khám tổng quát 150.000 ₫. */
   const visitOrder = () => openOrderForVisit({ visitId: 9001, branchId: 1, customerId: 1, serviceId: 1, assigneeId: 5, actorId: 4 })!;
   const detail = async (orderId: number, auth: object) => (await client.get(`/api/orders/${orderId}`, auth)).data.data;
 
   it('addServiceLine: dòng SERVICE thật, tên và giá chụp lúc này (hoặc giá truyền vào), serviceIdsOfVisit thấy', () => {
     visitOrder();
-    const surgery = addServiceLine(9001, 7002, 1, 5)!;
+    const intensive = addServiceLine(9001, 7102, 1, 5)!;
     const stay = addServiceLine(9001, 7101, 3, 5, 400_000)!;
-    expect(new Set([surgery, stay]).size).toBe(2);
-    expect(serviceIdsOfVisit(9001)).toEqual([1, 7002, 7101]);
+    expect(new Set([intensive, stay]).size).toBe(2);
+    expect(serviceIdsOfVisit(9001)).toEqual([1, 7102, 7101]);
   });
 
   it('dòng sinh ra đúng loại, tên, số lượng, đơn giá, chủ dòng', async () => {
     const order = visitOrder();
-    addServiceLine(9001, 7002, 1, 5);
+    addServiceLine(9001, 7102, 1, 5);
     addServiceLine(9001, 7101, 3, 5, 400_000);
     const lines = (await detail(order.orderId, await vet())).lines;
     expect(
@@ -225,25 +225,25 @@ describe('dòng của phẫu thuật, nội trú (T57: addServiceLine; ASSUMPTIO
       ]),
     ).toEqual([
       ['SERVICE', 1, 'Khám tổng quát', 1, 150_000, true, 5],
-      ['SERVICE', 7002, 'Phẫu thuật mô mềm', 1, 3_500_000, false, 5],
+      ['SERVICE', 7102, 'Nội trú chăm sóc đặc biệt (theo ngày)', 1, 600_000, false, 5],
       ['SERVICE', 7101, 'Nội trú điều trị (theo ngày)', 3, 400_000, false, 5],
     ]);
   });
 
   it('trả null khi lượt không có Order, Order không còn OPEN (lượt 61 đã PENDING) hoặc dịch vụ không có trong danh mục', () => {
-    expect(addServiceLine(9999, 7001, 1, 5)).toBeNull();
-    expect(addServiceLine(61, 7001, 1, 5)).toBeNull();
+    expect(addServiceLine(9999, 7101, 1, 5)).toBeNull();
+    expect(addServiceLine(61, 7101, 1, 5)).toBeNull();
     visitOrder();
     expect(addServiceLine(9001, 123_456, 1, 5)).toBeNull();
   });
 
-  it('tổng Order gồm cả dòng phẫu thuật / nội trú; dòng đó không sửa, không xóa trực tiếp (400 BR-BH-02), ai gọi cũng vậy', async () => {
+  it('tổng Order gồm cả dòng nội trú; dòng đó không sửa, không xóa trực tiếp (400 BR-BH-02), ai gọi cũng vậy', async () => {
     const order = visitOrder();
-    addServiceLine(9001, 7001, 1, 5);
+    addServiceLine(9001, 7101, 1, 5);
     addServiceLine(9001, 7102, 2, 5, 600_000);
     const doctor = await vet();
     const view = await detail(order.orderId, doctor);
-    expect(view.totalAmount).toBe(150_000 + 1_800_000 + 1_200_000);
+    expect(view.totalAmount).toBe(150_000 + 350_000 + 1_200_000);
     for (const line of view.lines.slice(1)) {
       expect([line.canEdit, line.canDelete]).toEqual([false, false]);
       expect(ruleOf(await failure(client.delete(`/api/orders/${order.orderId}/lines/${line.lineId}`, doctor)))).toBe('BR-BH-02');
@@ -255,13 +255,12 @@ describe('dòng của phẫu thuật, nội trú (T57: addServiceLine; ASSUMPTIO
     expect([view.lines[0].canEdit, view.lines[0].canDelete]).toEqual([true, true]);
   });
 
-  it('không thêm tay dịch vụ phẫu thuật / nội trú (400 BR-KB-08 / BR-LT-14, sau 404 và ngừng kinh doanh vẫn là câu riêng), dịch vụ thường thì thêm bình thường', async () => {
+  it('không thêm tay dịch vụ nội trú (400 BR-LT-14, sau 404 và ngừng kinh doanh vẫn là câu riêng), dịch vụ thường thì thêm bình thường', async () => {
     const order = visitOrder();
     const doctor = await vet();
     const add = (serviceId: number) => client.post(`/api/orders/${order.orderId}/lines`, { lineType: 'SERVICE', serviceId, quantity: 1 }, doctor);
-    expect(ruleOf(await failure(add(7003)))).toBe('BR-KB-08');
     expect(ruleOf(await failure(add(7103)))).toBe('BR-LT-14');
-    expect((await failure(add(7004))).data.message).toContain('ngừng kinh doanh');
+    expect((await failure(add(7104))).data.message).toContain('ngừng kinh doanh');
     expect((await failure(add(123_456))).status).toBe(404);
     expect((await add(2)).status).toBe(201);
   });

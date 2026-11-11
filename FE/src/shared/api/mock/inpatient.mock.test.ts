@@ -208,9 +208,9 @@ describe('nhập viện (#1, BR-LT-13, 17)', () => {
     expect(asRule(await failure(client.post('/api/admissions', { visitId: 2002, serviceId: 1 }, doctor)), 'BR-LT-13')).toEqual(BAD_RULE('BR-LT-13'));
   });
 
-  it('dịch vụ không phải INPATIENT (khám, phẫu thuật), ngừng, chỉ bật ở chi nhánh khác; thú đã mất: 400 BR-LT-13 và không ghi gì', async () => {
+  it('dịch vụ không phải INPATIENT (khám), ngừng, chỉ bật ở chi nhánh khác; thú đã mất: 400 BR-LT-13 và không ghi gì', async () => {
     const doctor = await vet();
-    for (const serviceId of [1, 7001, 7104, 7103]) {
+    for (const serviceId of [1, 7104, 7103]) {
       const res = await failure(client.post('/api/admissions', { visitId: 2002, serviceId }, doctor));
       expect([serviceId, ...asRule(res, 'BR-LT-13')]).toEqual([serviceId, ...BAD_RULE('BR-LT-13')]);
     }

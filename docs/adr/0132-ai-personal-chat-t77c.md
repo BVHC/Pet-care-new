@@ -1,6 +1,6 @@
 # ADR-0132: Chat cá nhân UC91 (T77c = AI-3, ai-v1 #2 và #3)
 
-- **Trạng thái:** Proposed (Hiến làm việc AI-3 = T77c, 10/11/2026; chờ Hiến duyệt các điểm ở mục "Cần Hiến xác nhận").
+- **Trạng thái:** Accepted (Hiến xác nhận 11/11/2026 các điểm ở mục "Cần Hiến xác nhận"; đo qua BE thật ở T77 đợt 2, `docs/07` §13). Từng Proposed khi làm việc AI-3 = T77c, 10/11/2026.
 - **Liên quan:** ADR-0006 (thú thuộc chủ hiện tại, người khác là 404), 0028 (Bean Validation chạy trước `@PreAuthorize`), 0082 (cửa sổ nhắc vaccine ST04), 0108 (`upcomingVaccinations`), 0122 (tên thú, từ thông dụng), 0129 (I-1…I-10 đã cài thật), 0131 (đường ống `ChatService`); đặc tả `07` §4.2 (BR-AI-11, 12b, 26, 27, 28), §5.2, §10, §11; hợp đồng `ai-v1` #2, #3.
 - **Đánh số:** không có migration. ADR kế tiếp: **0133**.
 
@@ -76,11 +76,11 @@ Khách từ token → `PetQueryApi.findPet` → **kiểm chủ trước** (khôn
 
 ## Cần Hiến xác nhận
 
-- Giả định 2 (nhật ký ghi bản che tên thú ở cả cấp cứu và từ chối bệnh án) và giả định 3 (hỏi lại chỉ trong các thú đã nêu tên).
-- Giả định 1 cho tài khoản chưa có hồ sơ khách (404 ở #3, câu mẫu ở `/me`).
-- Chữ của câu mẫu `NO_PET` và mẫu `VaccinationSummary.message` (giả định 6).
+- Giả định 2 (nhật ký ghi bản che tên thú ở cả cấp cứu và từ chối bệnh án) và giả định 3 (hỏi lại chỉ trong các thú đã nêu tên). **Hiến xác nhận 11/11/2026 (Q-A, đồng ý).**
+- Giả định 1 cho tài khoản chưa có hồ sơ khách (404 ở #3, câu mẫu ở `/me`). **Hiến xác nhận 11/11/2026 (Q-B, đồng ý).**
+- Chữ của câu mẫu `NO_PET` và mẫu `VaccinationSummary.message` (giả định 6). **Hiến xác nhận 11/11/2026 (Q-C, giữ nguyên chữ).**
 
 ## Chưa làm / chưa chạy
 
-- Chưa chạy qua BE thật (8081 / 8082) với Gemini thật: nhóm câu `/me` của bộ 43 câu mới chạy với lớp giả (CI không gọi mạng); p95 của nhóm này chưa đo. **T77 chưa DONE**: còn thiếu p95 đạt ở BE thật và quyết định về các điểm trên. Người rà soát tri thức vẫn là giả định cho demo (BS. Nguyễn Văn Nam), chưa có bác sĩ thú y thật (Q2 chưa giải).
+- **Đã chạy qua BE thật** (8082, Gemini thật, DB demo 5433) ở T77 đợt 2, 11/11/2026: đủ 43 câu hai lượt (72 câu chat), nhóm `/me` đạt 11 / 11 câu ở lượt 1 và 4 / 4 câu qua LLM ở lượt 2, p95 gộp 2 791 ms (58 mẫu); che tên thú đạt ở cả ba nhánh có ghi nội dung: từ chối bệnh án (Q43 ghi "[thú]"), đường LLM và cấp cứu (hai câu ngoài bộ 43 câu, "Mochi ăn chocolate…" và "Mochi co giật…", đều ghi "[thú]"); 0 / 42 dòng nhật ký của đợt 2 chứa "Mochi", "Kitty"; chi tiết `docs/07` §13 "Đo lại ở T77, đợt 2". **Không kiểm trực tiếp được** `expect.intent` của nhóm `/me` (response không có trường `intent`; ý định chỉ đọc qua câu mẫu trong `answer`). Người rà soát tri thức vẫn là giả định cho demo (BS. Nguyễn Văn Nam), chưa có bác sĩ thú y thật (Q2 chưa giải).
 - Chưa có gợi ý UC92, mở rộng ý định sang lưu trú / tái khám (`07` Q7), trường mới cho `BookedSlot` (ngoài phạm vi, theo prompt).

@@ -6,7 +6,6 @@ import { cn, formatCurrency } from '../../../lib/utils';
 import { useFreshIds } from '../../../shared/hooks/useFreshIds';
 import { useNow } from '../../../shared/hooks/useNow';
 import { usePendingSalesOrders } from '../../../shared/hooks/usePendingSalesOrders';
-import { useSurgeries } from '../../../shared/hooks/useSurgery';
 import { useArrivals, useVisitQueue } from '../../../shared/hooks/useVisits';
 import { usePOS } from '../../../shared/stores/pos.store';
 import { useAccount } from '../../../shared/stores/session.store';
@@ -17,10 +16,9 @@ import { visitPermissions } from '../../../shared/types/visit';
 import { formatClock } from '../../../shared/utils/clinic-format';
 import { Kbd, Panel, QueryError, RowsSkeleton, StatePanel, WsButton } from '../ui';
 import { arrivalWindow } from './arrival';
-import { SURGERY_LIST_SIZE, SurgeryConsentList } from './SurgeryConsentList';
 import { VisitQueueList } from './VisitQueueList';
 
-type DeskTab = 'arrivals' | 'queue' | 'pending' | 'surgery';
+type DeskTab = 'arrivals' | 'queue' | 'pending';
 
 /** Giờ hẹn của lịch: `slotDate` + `slotStart` là giờ Việt Nam (docs/time.md). */
 const slotMs = (a: Appointment) => Date.parse(`${a.slotDate}T${a.slotStart}:00+07:00`);
@@ -42,30 +40,22 @@ export function FrontDeskPanel({
   const arrivals = useArrivals(perms.arrivals);
   const queue = useVisitQueue({}, perms.queue);
   const pending = usePendingSalesOrders();
-  // Phẫu thuật chờ cam kết là việc của lễ tân (surgery-v1 #3, #5): vai trò khác không có tab và không hỏi (BE trả 403 với quản lý chi nhánh).
-  const showSurgery = useAccount()?.role === 'RECEPTIONIST';
-  const surgeries = useSurgeries({ status: 'PLANNED', size: SURGERY_LIST_SIZE }, showSurgery);
 
   const tabs: { id: DeskTab; label: string; count?: number }[] = [
     { id: 'arrivals', label: 'Đón tiếp', count: arrivals.data?.length },
     { id: 'queue', label: 'Hàng chờ', count: queue.data?.length },
     { id: 'pending', label: 'Chờ thu', count: pending.data?.length },
-    ...(showSurgery ? [{ id: 'surgery' as const, label: 'Phẫu thuật', count: surgeries.data?.totalElements }] : []),
   ];
 
   return (
     <Panel label="Đón tiếp và hàng chờ" className={className}>
       <Tabs.Root value={tab} onValueChange={(v) => setTab(v as DeskTab)} className="flex min-h-0 flex-1 flex-col">
-        <Tabs.List aria-label="Danh sách ở quầy" className={cn('grid gap-1 border-b border-(--ws-line) p-1.5', showSurgery ? 'grid-cols-4' : 'grid-cols-3')}>
+        <Tabs.List aria-label="Danh sách ở quầy" className="grid grid-cols-3 gap-1 border-b border-(--ws-line) p-1.5">
           {tabs.map((t) => (
             <Tabs.Trigger
               key={t.id}
               value={t.id}
-              className={cn(
-                'flex h-9 items-center justify-center gap-1.5 rounded-md text-[13px] font-medium text-(--ws-ink-2) hover:text-(--ws-ink) data-[state=active]:bg-(--ws-raised) data-[state=active]:font-semibold data-[state=active]:text-(--ws-ink) data-[state=active]:shadow-[inset_0_0_0_1px_var(--ws-line)]',
-                // 4 tab trong cột 320px: bớt khoảng đệm để "Phẫu thuật" và số đếm không tràn.
-                showSurgery && 'gap-1 px-0.5 text-[12px]',
-              )}
+              className="flex h-9 items-center justify-center gap-1.5 rounded-md text-[13px] font-medium text-(--ws-ink-2) hover:text-(--ws-ink) data-[state=active]:bg-(--ws-raised) data-[state=active]:font-semibold data-[state=active]:text-(--ws-ink) data-[state=active]:shadow-[inset_0_0_0_1px_var(--ws-line)]"
             >
               {t.label}
               <span className="ws-num rounded-full bg-(--ws-accent-soft) px-1.5 text-[11px] font-semibold text-(--ws-accent-ink)">
@@ -83,11 +73,6 @@ export function FrontDeskPanel({
         <Tabs.Content value="pending" className="min-h-0 flex-1 overflow-y-auto">
           <PendingList query={pending} onCollect={onCollect} />
         </Tabs.Content>
-        {showSurgery && (
-          <Tabs.Content value="surgery" className="min-h-0 flex-1 overflow-y-auto">
-            <SurgeryConsentList />
-          </Tabs.Content>
-        )}
       </Tabs.Root>
     </Panel>
   );

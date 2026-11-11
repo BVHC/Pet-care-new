@@ -1,7 +1,7 @@
 import type { ElementType } from 'react';
 import {
   Activity, BarChart3, Bell, BedDouble, Bot, Boxes, Building2, CalendarClock, ClipboardList, FileText,
-  CalendarDays, Lock, Mail, MessageSquareText, Newspaper, Package, PenLine, PhoneCall, Scale, Settings, ShieldAlert, ShoppingBag,
+  CalendarDays, Lock, Mail, MessageSquareText, Newspaper, Package, PenLine, PhoneCall, Scale, Settings, ShoppingBag,
   Stethoscope, Tags, Truck, UserCog, UserSearch, Warehouse, LayoutGrid,
 } from 'lucide-react';
 import { STAFF_ROLES, type Role } from '../types/auth';
@@ -91,7 +91,6 @@ export const ADMIN_MENU: MenuSection[] = [
     section: 'Quản trị',
     items: [
       { path: '/admin/workforce', label: 'Nhân sự', icon: ClipboardList, roles: ['BRANCH_MANAGER'] }, // UC34–38 (tầng 3)
-      { path: '/admin/incidents', label: 'Khiếu nại', icon: ShieldAlert, roles: ['SUPER_MANAGER', 'BRANCH_MANAGER'] }, // UC86 (tầng 3)
       { path: '/admin/reports', label: 'Báo cáo', icon: BarChart3, roles: ['SUPER_MANAGER', 'BRANCH_MANAGER'] }, // UC89
       { path: '/admin/audit', label: 'Kiểm toán', icon: Activity, roles: ['ADMIN'] }, // UC11
     ],

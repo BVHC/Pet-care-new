@@ -4,8 +4,8 @@
 //
 // Chuyển dữ liệu (BR-KH-12, `CustomerMergedEvent`): mỗi loại dữ liệu có MỘT nguồn vừa đếm (preview) vừa chuyển (gộp), nên `moved[loại]` luôn bằng số đếm của preview.
 //  - Chuyển thật: hồ sơ khách + sổ địa chỉ (customer.mock.ts, địa chỉ trùng bị bỏ), thú cưng (customer-pet.mock.ts), feedback (feedback.mock.ts).
-//  - Nguồn đăng ký `registerMergeSources` (mặc định đếm 0, chuyển 0): lịch hẹn, đặt chỗ lưu trú, Order, đơn online, khiếu nại, Care Task. Các mock đó chưa export hàm
-//    đếm / chuyển theo khách (hoặc chưa tồn tại: shop, complaint), nên dữ liệu của chúng vẫn nằm ở hồ sơ nguồn cho tới khi luồng chính nối nguồn.
+//  - Nguồn đăng ký `registerMergeSources` (mặc định đếm 0, chuyển 0): lịch hẹn, đặt chỗ lưu trú, Order, đơn online, Care Task. Các mock đó chưa export hàm
+//    đếm / chuyển theo khách (hoặc chưa tồn tại: shop), nên dữ liệu của chúng vẫn nằm ở hồ sơ nguồn cho tới khi luồng chính nối nguồn.
 //  - Chặn BR-KH-11 về Visit mở / Order OPEN / PENDING đọc thật: thú còn lượt khám mở hoặc đang lưu trú (customer-pet.mock.ts) và Order trong mock bán hàng.
 //
 // ASSUMPTION (hợp đồng im lặng hoặc mock đơn giản hơn BE; BE tầng 3 CHƯA cài nên không có số đo thật):
@@ -21,7 +21,7 @@
 //  A5  Địa chỉ trùng (cùng đường, phường, tỉnh, không phân biệt hoa thường) bị bỏ; còn lại chuyển sang đích và KHÔNG áp trần 5 địa chỉ (BR-TK-18 chỉ áp cho khách tự thêm). Địa chỉ mặc
 //      định của đích được giữ. `moved.addresses` = số địa chỉ đã chuyển = `addressCount − duplicateAddressCount` của preview.
 //  A7  Đích đang chờ khách quyết định liên kết (BR-TK-19) mà gộp xong không còn hồ sơ tại quầy nào cùng SĐT để liên kết thì cờ chờ được gỡ (customer.mock.ts `mergeCustomerRecords`).
-//  A6  `moved` có đủ chín khóa: pets, addresses, appointments, boardings, orders, onlineOrders, feedbacks, complaints, careTasks (yaml chỉ ghi "số bản ghi đã chuyển theo loại").
+//  A6  `moved` có đủ tám khóa: pets, addresses, appointments, boardings, orders, onlineOrders, feedbacks, careTasks (yaml chỉ ghi "số bản ghi đã chuyển theo loại").
 import { foldVi } from '../../utils/text';
 import type { CustomerMergeResult, MergePreview } from '../../types/custmerge';
 import { addressMergeStats, findCustomer, mergeCustomerRecords, type MockCustomer } from './customer.mock';
@@ -34,7 +34,7 @@ import { allOrderRows } from './sales.mock';
 // ─── Nguồn của module khác ───
 
 /** Loại dữ liệu chưa đọc / chuyển được từ mock khác; khóa cũng là khóa trong `moved` của kết quả (A6). */
-export type MergeKind = 'appointments' | 'boardings' | 'orders' | 'onlineOrders' | 'complaints' | 'careTasks';
+export type MergeKind = 'appointments' | 'boardings' | 'orders' | 'onlineOrders' | 'careTasks';
 
 export interface MergeSource {
   /** Số bản ghi của khách (mọi trạng thái) sẽ chuyển. */
@@ -44,7 +44,7 @@ export interface MergeSource {
 }
 
 const NONE: MergeSource = { count: () => 0, move: () => 0 };
-let sources: Record<MergeKind, MergeSource> = { appointments: NONE, boardings: NONE, orders: NONE, onlineOrders: NONE, complaints: NONE, careTasks: NONE };
+let sources: Record<MergeKind, MergeSource> = { appointments: NONE, boardings: NONE, orders: NONE, onlineOrders: NONE, careTasks: NONE };
 
 /** Đăng ký (đè từng phần) nguồn của module khác; trả hàm khôi phục nguồn trước đó (dùng trong test). */
 export function registerMergeSources(next: Partial<Record<MergeKind, MergeSource>>): () => void {
@@ -140,7 +140,6 @@ function previewOf(source: MockCustomer, target: MockCustomer): MergePreview {
     orderCount: sources.orders.count(id),
     onlineOrderCount: sources.onlineOrders.count(id),
     feedbackCount: feedbackCountOf(id),
-    complaintCount: sources.complaints.count(id),
     careTaskCount: sources.careTasks.count(id),
     warnings: warningsOf(source, target),
     blockers: blockersOf(source, target),
@@ -230,7 +229,6 @@ function executeMerge(source: MockCustomer, target: MockCustomer, executedBy: nu
     orders: sources.orders.move(from, to),
     onlineOrders: sources.onlineOrders.move(from, to),
     feedbacks,
-    complaints: sources.complaints.move(from, to),
     careTasks: sources.careTasks.move(from, to),
   };
   const s = load();
