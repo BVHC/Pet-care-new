@@ -1,6 +1,7 @@
 package com.petcare.module.ai.entity;
 
 import java.math.BigDecimal;
+import java.util.List;
 
 import org.hibernate.annotations.JdbcTypeCode;
 import org.hibernate.type.SqlTypes;
@@ -21,8 +22,9 @@ import lombok.NoArgsConstructor;
 
 /**
  * Bảng {@code ai_item_profiles} (07 §8, REF): thuộc tính đối tượng và chu kỳ dùng lại của một dịch vụ thẩm mỹ hoặc sản
- * phẩm {@code GOODS} (BR-AI-20). Đúng một trong {@code service_id} / {@code product_id} (CHECK ở V34). Chưa có logic
- * (UC94 là việc của T78); entity có ở đây để schema được kiểm khi khởi động.
+ * phẩm {@code GOODS} (BR-AI-20). Đúng một trong {@code service_id} / {@code product_id} (CHECK ở V34). Luật nghiệp vụ
+ * (loại mục nào được có hồ sơ, min ≤ max) do {@code ItemProfileService} kiểm; ở đây chỉ chuyển qua lại với
+ * {@link ProfileCriteria}. Hồ sơ rỗng không được lưu: UC94 xóa dòng (BR-AI-20, docs/adr/0133).
  */
 @Getter
 @Entity
@@ -65,4 +67,43 @@ public class AiItemProfile extends TimestampedEntity {
 
     @Column(name = "updated_by")
     private Long updatedBy;
+
+    public static AiItemProfile forService(Long serviceId, ProfileCriteria criteria, Long actor) {
+        AiItemProfile profile = new AiItemProfile();
+        profile.serviceId = serviceId;
+        profile.apply(criteria, actor);
+        return profile;
+    }
+
+    public static AiItemProfile forProduct(Long productId, ProfileCriteria criteria, Long actor) {
+        AiItemProfile profile = new AiItemProfile();
+        profile.productId = productId;
+        profile.apply(criteria, actor);
+        return profile;
+    }
+
+    /** Ghi đè toàn bộ thuộc tính (UC94: PUT thay cả hồ sơ, không vá từng trường). */
+    public void apply(ProfileCriteria criteria, Long actor) {
+        this.species = criteria.species();
+        this.minAgeWeeks = toShort(criteria.minAgeWeeks());
+        this.maxAgeWeeks = toShort(criteria.maxAgeWeeks());
+        this.minWeightKg = criteria.minWeightKg();
+        this.maxWeightKg = criteria.maxWeightKg();
+        this.breedKeywords = criteria.breedKeywords().isEmpty() ? null : criteria.breedKeywords().toArray(String[]::new);
+        this.repeatIntervalDays = toShort(criteria.repeatIntervalDays());
+        this.updatedBy = actor;
+    }
+
+    public ProfileCriteria criteria() {
+        return new ProfileCriteria(species, toInt(minAgeWeeks), toInt(maxAgeWeeks), minWeightKg, maxWeightKg,
+                breedKeywords == null ? List.of() : List.of(breedKeywords), toInt(repeatIntervalDays));
+    }
+
+    private static Short toShort(Integer value) {
+        return value == null ? null : value.shortValue();
+    }
+
+    private static Integer toInt(Short value) {
+        return value == null ? null : value.intValue();
+    }
 }

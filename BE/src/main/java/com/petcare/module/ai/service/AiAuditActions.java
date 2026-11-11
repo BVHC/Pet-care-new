@@ -10,6 +10,11 @@ final class AiAuditActions {
     static final String DOCUMENT_ARCHIVED = "AI_DOCUMENT_ARCHIVED";
     static final String DOCUMENT_REINDEX_REQUESTED = "AI_DOCUMENT_REINDEX_REQUESTED";
 
+    /** Hồ sơ gợi ý (UC94, BR-AI-17): bảng khác nên {@code entity_type} khác. */
+    static final String PROFILE_ENTITY_TYPE = "ai_item_profiles";
+    static final String ITEM_PROFILE_SAVED = "AI_ITEM_PROFILE_SAVED";
+    static final String ITEM_PROFILE_CLEARED = "AI_ITEM_PROFILE_CLEARED";
+
     private AiAuditActions() {
     }
 }

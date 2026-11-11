@@ -87,4 +87,20 @@ public interface CatalogQueryApi {
 
     /** I-3 (07 §11, UC92): dịch vụ thẩm mỹ, loại chuồng và sản phẩm {@code GOODS} không kê đơn đang kinh doanh. */
     Recommendable listRecommendable();
+
+    /** Danh mục và ảnh của một sản phẩm, để gợi ý ghép "cùng danh mục" (07 §7.3) và hiển thị (BR-AI-22). */
+    record ProductDisplay(Long categoryId, String imageUrl) {}
+
+    /**
+     * {@code priceFromServiceIds}: trong các dịch vụ đã cho, những dịch vụ hiển thị giá dạng "Từ X đ" ({@code price_is_from},
+     * BR-CK-02); {@code products}: {@code productId → ProductDisplay}.
+     */
+    record RecommendDisplay(java.util.Set<Long> priceFromServiceIds, java.util.Map<Long, ProductDisplay> products) {}
+
+    /**
+     * Thêm 2026-11-11 bởi FE-1 làm thay BE-2 (T78, docs/adr/0133, Hiến duyệt): {@link #listRecommendable} không mang
+     * {@code categoryId}, {@code imageUrl} của sản phẩm và cờ {@code price_is_from} của dịch vụ. Đọc theo lô, chỉ thêm
+     * method (không đổi record hay chữ ký nào); id không tồn tại thì vắng mặt; tập rỗng thì kết quả rỗng, không chạy SQL.
+     */
+    RecommendDisplay findRecommendDisplay(Collection<Long> serviceIds, Collection<Long> productIds);
 }

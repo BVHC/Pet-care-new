@@ -4,6 +4,7 @@ import java.util.Collection;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
+import java.util.Set;
 import java.util.function.Function;
 import java.util.stream.Collectors;
 
@@ -153,6 +154,18 @@ public class CatalogQueryService implements CatalogQueryApi {
                 cb.equal(root.get("productType"), ProductType.GOODS), cb.isFalse(root.get("prescription"))), byName)
                 .stream().map(CatalogQueryService::toInfo).toList();
         return new Recommendable(grooming, kennels, goods);
+    }
+
+    /** Thêm cho gợi ý (T78): đọc theo lô, bỏ qua id không tồn tại. */
+    @Override
+    public RecommendDisplay findRecommendDisplay(Collection<Long> serviceIds, Collection<Long> productIds) {
+        Set<Long> priceFrom = serviceIds == null || serviceIds.isEmpty() ? Set.of()
+                : services.findAllById(serviceIds).stream().filter(com.petcare.module.catalog.entity.Service::isPriceIsFrom)
+                        .map(com.petcare.module.catalog.entity.Service::getId).collect(Collectors.toSet());
+        Map<Long, ProductDisplay> display = productIds == null || productIds.isEmpty() ? Map.of()
+                : products.findAllById(productIds).stream().collect(Collectors.toMap(Product::getId,
+                        p -> new ProductDisplay(p.getCategoryId(), p.getImageUrl())));
+        return new RecommendDisplay(priceFrom, display);
     }
 
     private List<com.petcare.module.catalog.entity.Service> activeServicesOf(ServiceGroup group, Sort sort) {

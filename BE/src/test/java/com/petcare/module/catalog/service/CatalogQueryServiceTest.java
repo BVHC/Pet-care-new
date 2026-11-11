@@ -17,11 +17,15 @@ import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.test.util.ReflectionTestUtils;
 
 import com.petcare.module.catalog.api.CatalogQueryApi.KennelTypeInfo;
+import com.petcare.module.catalog.api.CatalogQueryApi.ProductDisplay;
 import com.petcare.module.catalog.api.CatalogQueryApi.ProtocolDose;
+import com.petcare.module.catalog.api.CatalogQueryApi.RecommendDisplay;
 import com.petcare.module.catalog.api.CatalogQueryApi.ServiceInfo;
 import com.petcare.module.catalog.api.MedicalType;
+import com.petcare.module.catalog.api.ProductType;
 import com.petcare.module.catalog.api.ServiceGroup;
 import com.petcare.module.catalog.entity.KennelType;
+import com.petcare.module.catalog.entity.Product;
 import com.petcare.module.catalog.entity.Service;
 import com.petcare.module.catalog.entity.VaccinationProtocol;
 import com.petcare.module.catalog.repository.KennelTypeRepository;
@@ -90,6 +94,35 @@ class CatalogQueryServiceTest {
     void emptyServiceIdsSkipsTheQuery() {
         assertThat(service.findServices(List.of())).isEmpty();
         verifyNoInteractions(services);
+    }
+
+    @Test
+    void recommendDisplayReadsTheCategoryTheImageAndThePriceFromColumn() {
+        Service from = service(1, ServiceGroup.GROOMING, null, 50_000, true);
+        Service flat = new Service("Trọn gói", ServiceGroup.GROOMING, null, 70_000, false, null);
+        ReflectionTestUtils.setField(flat, "id", 2L);
+        Product food = new Product(9L, "SKU-7", "Hạt cho chó", ProductType.GOODS, false, false, null, "túi", 90_000, null,
+                "https://img.example/hat.png");
+        ReflectionTestUtils.setField(food, "id", 7L);
+        Product bare = new Product(4L, "SKU-8", "Vòng cổ", ProductType.GOODS, false, false, null, "cái", 30_000, null, null);
+        ReflectionTestUtils.setField(bare, "id", 8L);
+        when(services.findAllById(List.of(1L, 2L))).thenReturn(List.of(from, flat));
+        when(products.findAllById(List.of(7L, 8L))).thenReturn(List.of(food, bare));
+
+        RecommendDisplay display = service.findRecommendDisplay(List.of(1L, 2L), List.of(7L, 8L));
+
+        assertThat(display.priceFromServiceIds()).as("chỉ dịch vụ có price_is_from").containsExactly(1L);
+        assertThat(display.products().get(7L)).isEqualTo(new ProductDisplay(9L, "https://img.example/hat.png"));
+        assertThat(display.products().get(8L)).isEqualTo(new ProductDisplay(4L, null));
+    }
+
+    @Test
+    void recommendDisplayWithoutIdsSkipsTheQueries() {
+        RecommendDisplay display = service.findRecommendDisplay(List.of(), List.of());
+
+        assertThat(display.priceFromServiceIds()).isEmpty();
+        assertThat(display.products()).isEmpty();
+        verifyNoInteractions(services, products);
     }
 
     @Test

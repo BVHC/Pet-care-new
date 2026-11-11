@@ -7,12 +7,15 @@ import java.util.List;
 
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.transaction.support.TransactionTemplate;
 
 import com.petcare.module.AiReadFixtures;
 import com.petcare.module.AiReadItSupport;
 import com.petcare.module.catalog.api.CatalogQueryApi;
 import com.petcare.module.catalog.api.CatalogQueryApi.KennelTypeInfo;
+import com.petcare.module.catalog.api.CatalogQueryApi.ProductDisplay;
 import com.petcare.module.catalog.api.CatalogQueryApi.ProtocolDose;
+import com.petcare.module.catalog.api.CatalogQueryApi.RecommendDisplay;
 import com.petcare.module.catalog.api.CatalogQueryApi.Recommendable;
 import com.petcare.module.catalog.api.ProductType;
 import com.petcare.module.customer.api.Species;
@@ -41,6 +44,31 @@ class CatalogAiReadIT extends AiReadItSupport {
             assertThat(p.active()).isTrue();
             assertThat(p.species()).isEqualTo(Species.DOG);
         });
+    }
+
+    @Test
+    void recommendDisplayCarriesCategoryImageAndThePriceFromColumnOfTheGivenIdsOnly() {
+        long fromService = fx.service("GROOMING", true);
+        long flatService = fx.service("GROOMING", true);
+        long skipped = fx.service("GROOMING", true);
+        jdbc.update("UPDATE services SET price_is_from = false WHERE id = ?", flatService);
+        long withImage = fx.product("GOODS", false, true);
+        long withoutImage = fx.product("GOODS", false, true);
+        long skippedProduct = fx.product("GOODS", false, true);
+        // Danh mục 4242 không có thật (fixture cũng dùng id giả): bỏ kiểm khóa ngoại trong đúng transaction này.
+        new TransactionTemplate(transactionManager).executeWithoutResult(status -> {
+            jdbc.execute("SET LOCAL session_replication_role = replica");
+            jdbc.update("UPDATE products SET category_id = 4242, image_url = 'https://img.example/a.png' WHERE id = ?", withImage);
+        });
+
+        RecommendDisplay display = catalog.findRecommendDisplay(List.of(fromService, flatService),
+                List.of(withImage, withoutImage));
+
+        assertThat(display.priceFromServiceIds()).containsExactly(fromService);
+        assertThat(display.products()).containsOnlyKeys(withImage, withoutImage).doesNotContainKey(skippedProduct);
+        assertThat(display.products().get(withImage)).isEqualTo(new ProductDisplay(4242L, "https://img.example/a.png"));
+        assertThat(display.products().get(withoutImage).imageUrl()).isNull();
+        assertThat(display.priceFromServiceIds()).doesNotContain(skipped);
     }
 
     @Test
