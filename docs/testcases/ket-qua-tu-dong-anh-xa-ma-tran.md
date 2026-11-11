@@ -1,5 +1,7 @@
 # Ánh xạ kết quả chạy tự động ↔ ma trận 362 ca
 
+> **Cập nhật 11/11/2026:** ma trận đã được sửa theo lần rà 9/11 (`GD-sua-ma-tran-11-11.md`): mã ca không đổi, thêm ca mới (TC-C1-057..059, TC-C2-043..050, TC-C5-039..040) và 12 sheet GĐ2. Tiêu đề, nhãn và mã luật của các ca viết lại ở bảng dưới (TC-C1-024, TC-C2-033, TC-C3-038, TC-C6-021, 022, 029b, 036, 037, TC-C9-001, 014) là bản chụp ngày 3/11; bảng này mô tả file 154.879 byte cũ.
+
 > Tài liệu giúp Hiến **tick tay** cột J (“Kết quả”) của `PetCare_Full_Atomic_Test_Matrix_Manual.xlsx`. Tài liệu này **không tick** và **không sửa** ma trận. Mọi kết luận lấy từ chữ do các phiên khác ghi trong `test-tay-ghep-api-theo-cum.md` và bằng chứng kèm theo; phiên lập tài liệu này **không chạy lại** thứ gì (chỉ đọc và kiểm hình thức).
 
 ## Ngày chốt số liệu
