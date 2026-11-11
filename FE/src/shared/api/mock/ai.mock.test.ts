@@ -89,15 +89,22 @@ describe('phân quyền #5–#13: chỉ SUPER_MANAGER (BR-AI-17)', () => {
     expect((ok as AxiosResponse).status).toBeLessThan(300);
   });
 
-  it('thứ tự brief: 400 sai kiểu → 403 vai trò → 400 VALIDATION_FAILED / BR (VET gửi thân sai vẫn 403, id sai kiểu vẫn 400)', async () => {
+  // Đo trên BE thật 11/11/2026: `@Valid` chạy trước `@PreAuthorize` (VET gửi thân thiếu trường vẫn nhận 400, không phải 403); BR-AI-14 chạy trong service nên đứng SAU vai trò.
+  it('thứ tự đo trên BE: 400 sai kiểu → 400 VALIDATION_FAILED → 403 vai trò → BR (id sai kiểu vẫn 400)', async () => {
     const vet = await as(ROLES.VET);
-    expect((await failure(client.post('/api/ai/documents', { title: '' }, vet))).status).toBe(403); // thiếu topic / species / tiêu đề rỗng nhưng vai trò chặn trước
+    const complete = { topic: 'CARE', species: 'ALL', content: 'x' };
+    expect((await failure(client.post('/api/ai/documents', { title: '' }, vet))).data.errorCode).toBe('VALIDATION_FAILED'); // thiếu topic / species / content: VALIDATION trước vai trò
+    expect((await failure(client.post('/api/ai/documents', { ...complete, title: '' }, vet))).status).toBe(403); // tiêu đề rỗng là BR-AI-14 (service): vai trò chặn trước
+    expect((await failure(client.post('/api/ai/documents', { ...complete, title: 'T' }, vet))).status).toBe(403);
     expect(await errorOf(client.get('/api/ai/documents/abc', vet))).toEqual([400, 'MALFORMED_REQUEST', "Tham số 'documentId' sai kiểu dữ liệu"]);
     expect((await failure(client.get('/api/ai/documents', { params: { status: 'NOPE' }, ...vet }))).data.errorCode).toBe('MALFORMED_REQUEST');
-    expect((await failure(client.patch('/api/ai/documents/9', { title: 5 }, vet))).data.errorCode).toBe('MALFORMED_REQUEST'); // sai kiểu thân đến trước vai trò
-    expect((await failure(client.patch('/api/ai/documents/9', { sourceNote: 'x'.repeat(501) }, vet))).status).toBe(403); // @Size sau vai trò
+    expect((await failure(client.patch('/api/ai/documents/9', { title: 5 }, vet))).data.errorCode).toBe('MALFORMED_REQUEST'); // sai kiểu thân đến trước
+    expect((await failure(client.patch('/api/ai/documents/9', { sourceNote: 'x'.repeat(501) }, vet))).data.errorCode).toBe('VALIDATION_FAILED'); // @Size trước vai trò
+    expect((await failure(client.patch('/api/ai/documents/9', { topic: 'CARE' }, vet))).status).toBe(403);
     expect((await failure(client.put('/api/ai/item-profiles/KENNEL/3', { breedKeywords: [] }, vet))).data.errorCode).toBe('MALFORMED_REQUEST');
-    expect((await failure(client.put('/api/ai/item-profiles/SERVICE/3', { breedKeywords: [], minAgeWeeks: 9, maxAgeWeeks: 1 }, vet))).status).toBe(403);
+    expect((await failure(client.put('/api/ai/item-profiles/SERVICE/3', { breedKeywords: [], minAgeWeeks: 9, maxAgeWeeks: 1 }, vet))).data.errorCode).toBe('VALIDATION_FAILED');
+    expect((await failure(client.put('/api/ai/item-profiles/SERVICE/3', {}, vet))).data.errorCode).toBe('VALIDATION_FAILED'); // thiếu breedKeywords
+    expect((await failure(client.put('/api/ai/item-profiles/SERVICE/3', { breedKeywords: [] }, vet))).status).toBe(403);
   });
 });
 
@@ -154,8 +161,8 @@ describe('POST /ai/documents (#6) và GET /ai/documents/{id} (#7)', () => {
   it('BR-AI-14: tiêu đề rỗng / quá 200 ký tự, nội dung quá 20 000 ký tự; ngay 200 và 20 000 thì được', async () => {
     const valid = { topic: 'CARE', species: 'ALL', content: 'x' };
     const post = async (body: object) => client.post('/api/ai/documents', body, await manager());
-    expect(await errorOf(post({ ...valid, title: '   ' }))).toEqual([400, 'BUSINESS_RULE_VIOLATION', 'Tiêu đề không được để trống (BR-AI-14)']);
-    expect((await errorOf(post(valid)))[2]).toBe('Tiêu đề không được để trống (BR-AI-14)');
+    expect(await errorOf(post({ ...valid, title: '   ' }))).toEqual([400, 'BUSINESS_RULE_VIOLATION', 'Tiêu đề không được rỗng (BR-AI-14)']);
+    expect((await errorOf(post(valid)))[2]).toBe('Tiêu đề không được rỗng (BR-AI-14)');
     expect(await errorOf(post({ ...valid, title: 'T'.repeat(201) }))).toEqual([400, 'BUSINESS_RULE_VIOLATION', 'Tiêu đề tối đa 200 ký tự (BR-AI-14)']);
     expect(await errorOf(post({ ...valid, title: 'T', content: 'x'.repeat(20_001) }))).toEqual([400, 'BUSINESS_RULE_VIOLATION', 'Nội dung tối đa 20 000 ký tự (BR-AI-14)']);
     expect((await post({ ...valid, title: 'T'.repeat(200), content: 'x'.repeat(20_000) })).status).toBe(201);
@@ -163,7 +170,7 @@ describe('POST /ai/documents (#6) và GET /ai/documents/{id} (#7)', () => {
 
   it('VALIDATION_FAILED: thiếu topic / species / content, sourceNote > 500, reviewerName > 100 (trước BR-AI-14); enum / ngày / kiểu sai là MALFORMED_REQUEST', async () => {
     const post = async (body: unknown) => client.post('/api/ai/documents', body, await manager());
-    expect(await errorOf(post({ title: '' }))).toEqual([400, 'VALIDATION_FAILED', 'topic: Vui lòng chọn chủ đề; species: Vui lòng chọn loài áp dụng; content: Vui lòng nhập nội dung']);
+    expect(await errorOf(post({ title: '' }))).toEqual([400, 'VALIDATION_FAILED', 'species: Loài áp dụng không được để trống; topic: Chủ đề không được để trống; content: Nội dung không được để trống']);
     expect((await errorOf(post({ title: 'T', topic: 'CARE', species: 'ALL', content: 'x', sourceNote: 'x'.repeat(501), reviewerName: 'x'.repeat(101) })))[2]).toBe(
       'sourceNote: Ghi chú nguồn tối đa 500 ký tự; reviewerName: Tên người rà soát tối đa 100 ký tự',
     );
@@ -260,6 +267,10 @@ describe('FSM #13: publish / archive / reindex (#9–#11) và chỉ mục (ST22)
   });
 
   it('CATALOG_PROTOCOL lưu trữ được (#4) nhưng xuất bản lại bằng tay → 400 BR-AI-13', async () => {
+    // BE (đo 11/11/2026): xuất bản tay tài liệu phác đồ luôn 400 BR-AI-13, kể cả khi đang PUBLISHED (không phải 409 PUBLISHED → PUBLISHED).
+    expect(await errorOf(postDoc('/13/publish'))).toEqual([
+      400, 'BUSINESS_RULE_VIOLATION', 'Tài liệu sinh từ phác đồ tiêm do hệ thống quản lý, không xuất bản tay (BR-AI-13)',
+    ]);
     expect((await postDoc('/13/archive')).data.data.status).toBe('ARCHIVED');
     expect(await errorOf(postDoc('/13/publish'))).toEqual([
       400, 'BUSINESS_RULE_VIOLATION', 'Tài liệu sinh từ phác đồ tiêm do hệ thống quản lý, không xuất bản tay (BR-AI-13)',
@@ -284,12 +295,12 @@ const listProfiles = async (params: object = {}) => (await client.get('/api/ai/i
 const putProfile = async (path: string, body: unknown) => client.put(`/api/ai/item-profiles/${path}`, body, await manager());
 
 describe('GET /ai/item-profiles (#12)', () => {
-  it('chỉ dịch vụ thẩm mỹ và sản phẩm GOODS không kê đơn đang kinh doanh; dịch vụ trước, id tăng dần', async () => {
+  it('chỉ dịch vụ thẩm mỹ và sản phẩm GOODS không kê đơn đang kinh doanh; dịch vụ trước, mỗi loại theo tên rồi id (BE: Sort name, id)', async () => {
     const page = await listProfiles();
-    expect(page.content.map((r) => `${r.itemType}:${r.itemId}`)).toEqual(['SERVICE:3', 'SERVICE:4', 'PRODUCT:1', 'PRODUCT:2']);
+    expect(page.content.map((r) => `${r.itemType}:${r.itemId}`)).toEqual(['SERVICE:4', 'SERVICE:3', 'PRODUCT:1', 'PRODUCT:2']); // "Cắt tỉa lông" trước "Tắm & sấy"
     // khám / tiêm (1, 2), loại chuồng (5, 6), thuốc (3, 4), vaccine (5, 6), sản phẩm ngừng bán (7) đều không có mặt
-    expect(page.content[0]).toEqual({ itemType: 'SERVICE', itemId: 3, name: 'Tắm & sấy', group: 'GROOMING', hasProfile: false });
-    expect(page.content[1]).toMatchObject({ hasProfile: true, profile: { species: 'DOG', minAgeWeeks: 12, minWeightKg: 5, breedKeywords: ['poodle', 'phoc soc', 'shih tzu'], repeatIntervalDays: 45 } });
+    expect(page.content[1]).toEqual({ itemType: 'SERVICE', itemId: 3, name: 'Tắm & sấy', group: 'GROOMING', hasProfile: false });
+    expect(page.content[0]).toMatchObject({ hasProfile: true, profile: { species: 'DOG', minAgeWeeks: 12, minWeightKg: 5, breedKeywords: ['poodle', 'phoc soc', 'shih tzu'], repeatIntervalDays: 45 } });
     expect(page.content[2]).toMatchObject({ group: 'PRODUCT', name: 'Hạt Royal Canin Mini Adult 2kg' });
   });
 
@@ -463,14 +474,15 @@ describe('phân quyền #1–#4', () => {
     expect((await errorOf(client.get(`/api/me/ai/pets/999/${path}`, vet)))[0]).toBe(403); // 404 sau vai trò
   });
 
-  it('#4 thứ tự: group / limit sai kiểu 400 MALFORMED trước vai trò; limit ngoài 1–12 là VALIDATION_FAILED SAU vai trò (VET vẫn 403)', async () => {
+  it('#4 thứ tự (đo trên BE): group / limit sai kiểu 400 MALFORMED, limit ngoài 1–12 là VALIDATION_FAILED, đều TRƯỚC vai trò (VET vẫn 400) và trước 404', async () => {
     const vet = await as(ROLES.VET);
-    expect((await errorOf(client.get('/api/me/ai/pets/1/recommendations', { params: { limit: 99 }, ...vet })))[0]).toBe(403);
+    expect((await errorOf(client.get('/api/me/ai/pets/1/recommendations', { params: { limit: 99 }, ...vet })))[1]).toBe('VALIDATION_FAILED');
+    expect((await errorOf(client.get('/api/me/ai/pets/1/recommendations', { ...vet })))[0]).toBe(403);
     expect((await errorOf(client.get('/api/me/ai/pets/1/recommendations', { params: { limit: 'abc' }, ...vet })))[1]).toBe('MALFORMED_REQUEST');
     expect((await errorOf(client.get('/api/me/ai/pets/1/recommendations', { params: { group: 'NOPE' }, ...vet })))[1]).toBe('MALFORMED_REQUEST');
     const mine = await customer();
     for (const limit of [0, 13, -1]) {
-      expect(await errorOf(client.get('/api/me/ai/pets/1/recommendations', { params: { limit }, ...mine })), String(limit)).toEqual([400, 'VALIDATION_FAILED', 'limit: limit phải từ 1 đến 12']);
+      expect(await errorOf(client.get('/api/me/ai/pets/1/recommendations', { params: { limit }, ...mine })), String(limit)).toEqual([400, 'VALIDATION_FAILED', 'limit: limit phải từ 1 tới 12']);
     }
     expect((await errorOf(client.get('/api/me/ai/pets/999/recommendations', { params: { limit: 99 }, ...mine })))[1]).toBe('VALIDATION_FAILED'); // VALIDATION trước 404
   });
@@ -608,8 +620,8 @@ describe('chatbot: giới hạn tần suất theo IP (BR-AI-09)', () => {
 describe('chatbot: kiểm đầu vào (BR-AI-08)', () => {
   it('VALIDATION_FAILED: câu hỏi rỗng / quá 500 ký tự, quá 3 câu hỏi trước, một câu hỏi trước quá 500 ký tự; đúng 500 thì được', async () => {
     const post = (body: unknown) => client.post('/api/public/ai/chat', body);
-    expect(await errorOf(post({ question: '   ' }))).toEqual([400, 'VALIDATION_FAILED', 'question: Vui lòng nhập câu hỏi']);
-    expect((await errorOf(post({})))[2]).toBe('question: Vui lòng nhập câu hỏi');
+    expect(await errorOf(post({ question: '   ' }))).toEqual([400, 'VALIDATION_FAILED', 'question: Câu hỏi không được để trống']);
+    expect((await errorOf(post({})))[2]).toBe('question: Câu hỏi không được để trống');
     expect(await errorOf(post({ question: 'a'.repeat(501) }))).toEqual([400, 'VALIDATION_FAILED', 'question: Câu hỏi tối đa 500 ký tự']);
     expect(await errorOf(post({ question: 'Chó ăn gì?', previousQuestions: ['a', 'b', 'c', 'd'] }))).toEqual([400, 'VALIDATION_FAILED', 'previousQuestions: Tối đa 3 câu hỏi trước']);
     expect((await errorOf(post({ question: 'Chó ăn gì?', previousQuestions: ['a'.repeat(501)] })))[2]).toBe('previousQuestions: Mỗi câu hỏi trước tối đa 500 ký tự');
@@ -631,7 +643,8 @@ describe('chatbot: kiểm đầu vào (BR-AI-08)', () => {
     }
     const vet = await as(ROLES.VET);
     expect((await errorOf(client.post('/api/me/ai/chat', { question: 7 }, vet)))[1]).toBe('MALFORMED_REQUEST');
-    expect((await errorOf(client.post('/api/me/ai/chat', { question: '' }, vet)))[0]).toBe(403); // @NotBlank sau vai trò
+    expect((await errorOf(client.post('/api/me/ai/chat', { question: '' }, vet)))[1]).toBe('VALIDATION_FAILED'); // @NotBlank trước vai trò (đo trên BE 11/11/2026: VET + `{}` → 400)
+    expect((await errorOf(client.post('/api/me/ai/chat', { question: 'x' }, vet)))[0]).toBe(403);
   });
 });
 
@@ -697,7 +710,7 @@ describe('chatbot: ý định cá nhân (BR-AI-26…28)', () => {
   it('/me lịch tiêm: nêu tên → PERSONAL của thú đó; không nêu tên và nhiều thú → NEED_PET_CHOICE; sau đó gọi #3 cho thú đã chọn', async () => {
     const named = await askMe('Mochi tiêm khi nào?');
     expect(named.result).toBe('PERSONAL');
-    expect(named.answer.split('\n')[0]).toBe('Lịch tiêm của Mochi:');
+    expect(named.answer.split('\n')[0]).toBe('Lịch tiêm của Mochi (chỉ tính các mũi ghi nhận tại hệ thống):');
     const choice = await askMe('Lịch tiêm sắp tới của bé già nhà tôi');
     expect(choice.result).toBe('NEED_PET_CHOICE');
     expect(choice.sources).toEqual([]);
@@ -713,7 +726,7 @@ describe('chatbot: ý định cá nhân (BR-AI-26…28)', () => {
     for (const petId of [2, 3]) expect((await client.post(`/api/pets/${petId}/mark-deceased`, { deceasedOn: isoDay(-1), confirmed: true }, reception)).status).toBe(200);
     const single = await askMe('Mũi tiêm tiếp theo của tôi là khi nào?');
     expect(single.result).toBe('PERSONAL');
-    expect(single.answer.split('\n')[0]).toBe('Lịch tiêm của Mochi:');
+    expect(single.answer.split('\n')[0]).toBe('Lịch tiêm của Mochi (chỉ tính các mũi ghi nhận tại hệ thống):');
     const none = await askMe('Mũi tiêm tiếp theo của tôi là khi nào?', {}, await as('khachmoi@petcare.vn'));
     expect(none).toMatchObject({ result: 'PERSONAL', answer: 'Bạn chưa có thú cưng nào còn sống trong hồ sơ. Hãy thêm thú cưng để xem lịch tiêm.' });
   });
@@ -832,19 +845,19 @@ const summaryOf = async (petId: number, auth?: object) => (await client.get(`/ap
 describe('GET /me/ai/pets/{petId}/vaccination-summary (#3, BR-AI-11)', () => {
   it('Bim (chó, đã tiêm Dại): theo phác đồ của loài, mỗi loại vaccine một dòng, Dại UP_TO_DATE, 5 bệnh NOT_STARTED kèm tuổi mũi 1; Ho cũi (không có phác đồ) không có mặt', async () => {
     const res = await summaryOf(2);
-    expect(res).toMatchObject({ petId: 2, petName: 'Bim', disclaimer: expect.stringContaining('ghi nhận tại hệ thống Pet Care') });
+    expect(res).toMatchObject({ petId: 2, petName: 'Bim', disclaimer: 'Thông tin tham khảo, không thay thế khám thú y.' });
     expect(res.items).toEqual([
       { vaccineTypeId: 1, vaccineName: 'Dại', status: 'UP_TO_DATE', lastDoseNumber: 1, lastAdministeredOn: '2026-08-01', nextDoseNumber: 1, nextDueDate: '2027-08-01', firstDoseFromAgeWeeks: null },
       { vaccineTypeId: 2, vaccineName: '5 bệnh', status: 'NOT_STARTED', lastDoseNumber: null, lastAdministeredOn: null, nextDoseNumber: 1, nextDueDate: null, firstDoseFromAgeWeeks: 6 },
     ]);
     expect(res.message).toBe(
-      'Lịch tiêm của Bim:\n- Dại: đã tiêm mũi 1 ngày 01/08/2026, mũi tiếp theo dự kiến 01/08/2027.\n- 5 bệnh: chưa có mũi nào ghi nhận tại hệ thống, mũi 1 từ 6 tuần tuổi.',
+      'Lịch tiêm của Bim (chỉ tính các mũi ghi nhận tại hệ thống):\n- Dại: còn hạn, đã tiêm mũi 1 ngày 01/08/2026; mũi tiếp theo hạn 01/08/2027.\n- 5 bệnh: chưa tiêm tại hệ thống, mũi đầu tiên từ 6 tuần tuổi.',
     );
   });
 
   it('Mochi (mèo, chưa có mũi nào) NOT_STARTED cả hai; Tôm (loài khác) không có phác đồ; thú chưa đủ tuổi NOT_YET_ELIGIBLE', async () => {
     expect((await summaryOf(1)).items.map((i) => [i.vaccineName, i.status])).toEqual([['Dại', 'NOT_STARTED'], ['4 bệnh', 'NOT_STARTED']]);
-    expect(await summaryOf(3)).toMatchObject({ items: [], message: 'Hiện hệ thống chưa có phác đồ tiêm phòng cho loài của Tôm.' });
+    expect(await summaryOf(3)).toMatchObject({ items: [], message: 'Chưa có phác đồ tiêm cho loài của Tôm trong danh mục.' });
     const auth = await customer();
     const puppy = (await client.post('/api/me/pets', { name: 'Cún', species: 'DOG', sex: 'MALE', birthDate: isoDay(-49) }, auth)).data.data.pet; // 7 tuần
     const res = await summaryOf(puppy.petId, auth);

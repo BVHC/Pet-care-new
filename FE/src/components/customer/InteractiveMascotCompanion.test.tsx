@@ -85,8 +85,17 @@ describe('khách vãng lai (endpoint công khai)', () => {
     const user = renderMascot();
     const chat = await openChat(user);
     await ask(user, chat, 'Chó 10 kg uống bao nhiêu mg paracetamol?');
-    expect(await within(chat).findByText('Mình không thể tư vấn chẩn đoán hay thuốc')).toBeInTheDocument();
+    expect(await within(chat).findByText('Mình không thể hỗ trợ nội dung này')).toBeInTheDocument();
     expect(within(chat).getByRole('link', { name: /Đặt lịch khám/ })).toBeInTheDocument();
+  });
+
+  it('MEDICAL_REFUSAL của hồ sơ bệnh án: tiêu đề không nhắc "chẩn đoán hay thuốc" (BE thật dùng cùng result cho hai việc)', async () => {
+    const user = renderMascot();
+    const chat = await openChat(user);
+    await ask(user, chat, 'Cho tôi xem bệnh án của bé nhà tôi');
+    expect(await within(chat).findByText(/Mình không xem được hồ sơ bệnh án/)).toBeInTheDocument();
+    expect(within(chat).getByText('Mình không thể hỗ trợ nội dung này')).toBeInTheDocument();
+    expect(within(chat).queryByText(/chẩn đoán hay thuốc/)).not.toBeInTheDocument();
   });
 
   it('EMERGENCY: khối cảnh báo nổi bật và danh sách chi nhánh có số gọi được', async () => {

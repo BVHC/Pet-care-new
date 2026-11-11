@@ -253,7 +253,7 @@ Cổng **8082** vì Docker Desktop tự bật lại container `petcare-api` cũ 
 
 ## 8. Tầng 3: thứ tự ghép (T57b, 7/11/2026)
 
-> **Nguồn:** `docs/time.md` M5b–M5c (bảng task 7/11), `FE/.env.example` (khối "Tầng 3"), `FE/src/shared/api/mock/*.mock.ts` (14 module), thử chế độ hỗn hợp ngày 7/11 (mục 8.4). **Hiện trạng:** BE chưa có controller nào của 14 module tầng 3, chỉ có migration V34–V48 và interface chéo (T55). FE chạy mock đầy đủ (T57 bước A, B; chưa commit). Mọi cột "ngày" là **dự kiến theo `time.md`**, không phải ngày đã giao.
+> **Nguồn:** `docs/time.md` M5b–M5c (bảng task 7/11), `FE/.env.example` (khối "Tầng 3"), `FE/src/shared/api/mock/*.mock.ts` (14 module), thử chế độ hỗn hợp ngày 7/11 (mục 8.4). **Hiện trạng:** BE chưa có controller của 13 trong 14 module tầng 3 (riêng `ai` đã có từ T77–T78 và được ghép ở T82 ngày 11/11/2026), chỉ có migration V34–V48 và interface chéo (T55). FE chạy mock đầy đủ (T57 bước A, B; chưa commit). Mọi cột "ngày" là **dự kiến theo `time.md`**, không phải ngày đã giao.
 
 ### 8.1 Bảng ghép (theo ngày BE bắt đầu)
 
@@ -274,7 +274,7 @@ Cổng **8082** vì Docker Desktop tự bật lại container `petcare-api` cũ 
 | `custmerge` (UC27) | T75 · BE-2 · 07–08/12 | T80 · 03–04/12 | `GET /api/customers/*/merge-preview`, `POST /api/customer-merges` | BRANCH_MANAGER không tra cứu khách được (UC23 không có A05): chỉ gộp theo mã |
 | `articlex` (UC80, 82, mở rộng UC81) | T75 · BE-2 · 07–08/12 | T81 · 07–08/12 | `/api/me/articles`, `POST /api/articles/*/approve`, `POST /api/articles/*/reject`, `/api/public/articles/*/comments`, `/api/me/comments`, `/api/comments` | Hàng chờ duyệt dùng `GET /api/articles?status=PENDING_REVIEW` của content-v1 (BE GĐ1 hiện trả 400): không có luật nào gỡ được riêng, BE phải mở rộng `status` |
 | `materialuse` (ST07) | T71 · BE-1 · 08/12 | không có hàng FE riêng (màn `/admin/warehouse/shortages` chưa thuộc task nào) | `GET /api/visits/*/material-usages`, `/api/material-shortages` | Cần T62 (định mức), kho GĐ1 (T18) |
-| `ai` (UC90–94, ST22, 23) | T77 · FE-1 (dẫn), cả nhóm · 30/11–04/12; T78 · 07–09/12 | T82 · 09–10/12 | `/api/public/ai`, `/api/me/ai`, `/api/ai` | Cần T56 (spike, đang làm) và tên bác sĩ thú y rà soát tri thức (chặn công bố). Giới hạn tần suất chatbot theo IP đã có từ T55a |
+| `ai` (UC90–94, ST22, 23) | T77 · FE-1 (dẫn), cả nhóm · 30/11–04/12; T78 · 07–09/12 | T82 · 09–10/12 | `/api/public/ai`, `/api/me/ai`, `/api/ai` | **Đã ghép 11/11/2026 (T82):** BE giao 10–11/11 (T77a–c, T78, làm trước lịch); luật mock `ai` đã gỡ khỏi `FE/.env.example`; đo trên BE 8082 thật (Gemini thật), mock chỉnh theo BE (thứ tự lỗi, mẫu câu lịch tiêm, thứ tự #12); kết quả từng ca ở `docs/testcases/T57-fe.md` mục "Kết quả ghép BE thật (T82, 11/11/2026)". **Lệch còn lại:** chữ thông báo lỗi (BE không đặt tiền tố trường ở ba lỗi độ dài của chat; #13 trả thông điệp mặc định tiếng Anh); mock trả lời chatbot bằng từ khóa nên câu liều thuốc ra MEDICAL_REFUSAL còn BE ra OUT_OF_SCOPE; chưa đo BR-KH-05 và nhánh lịch hẹn BOOKED. Tri thức demo là dữ liệu giả định: người rà soát "BS. Nguyễn Văn Nam" là tên GIẢ ĐỊNH, Q2 chưa giải |
 
 Sau đó: T72 (BE-1) và T76 (BE-2) kiểm thử FSM + nối thật interface chéo, 09–10/12; T83 tổng duyệt 11/12.
 
@@ -291,8 +291,8 @@ Sau đó: T72 (BE-1) và T76 (BE-2) kiểm thử FSM + nối thật interface ch
 ### 8.3 FE phải đo lại khi ghép
 
 1. **Thứ tự kiểm lỗi 400 / 403 / 404 / 409 của mock là giả định, chưa đo trên BE tầng 3, và các mock KHÔNG thống nhất với nhau.**
-   - `shop`, `payment`, `returns`, `stockops`, `fees`, `materialuse`: 401 → 400 sai kiểu → **400 `VALIDATION_FAILED` của body trước** 403 vai trò → 404 → 403 phạm vi → 400 BR → 409 (theo đo trên BE GĐ1 ở `care`, `cashier`, `inventory`: `@Valid` chạy trước `@PreAuthorize`).
-   - `articlex`, `workforce`, `ai`, `branchlife`, `custmerge`, `inpatient` (`surgery` đã bỏ): 401 → 400 sai kiểu → **403 vai trò trước** 400 `VALIDATION_FAILED` → 404 → 403 phạm vi → 400 BR → 409. Dựa vào `00-method.md` §3.5 (quyền → tồn tại → BR 400 → 409), mục đó không nói `VALIDATION_FAILED` đứng ở đâu.
+   - `shop`, `payment`, `returns`, `stockops`, `fees`, `materialuse`, `ai` (đã đo trên BE 11/11/2026, T82): 401 → 400 sai kiểu → **400 `VALIDATION_FAILED` của body trước** 403 vai trò → 404 → 403 phạm vi → 400 BR → 409 (theo đo trên BE GĐ1 ở `care`, `cashier`, `inventory`: `@Valid` chạy trước `@PreAuthorize`).
+   - `articlex`, `workforce`, `branchlife`, `custmerge`, `inpatient` (`surgery` đã bỏ): 401 → 400 sai kiểu → **403 vai trò trước** 400 `VALIDATION_FAILED` → 404 → 403 phạm vi → 400 BR → 409. Dựa vào `00-method.md` §3.5 (quyền → tồn tại → BR 400 → 409), mục đó không nói `VALIDATION_FAILED` đứng ở đâu.
    - Cả 14 mock đặt **400 BR trước 409**. Riêng `ai`: giới hạn tần suất theo IP đứng đầu hai endpoint chat (BR-AI-09). BE GĐ1 đo thấy **409 chạy trước rule 400** ở `sales`, `cashier`, `boarding` (ADR-0064 §2.4, ADR-0065 §7), ngược `00-method.md`; `stockops.mock.ts` đã ghi đây là rủi ro.
    - Khi ghép: gọi từng cặp lỗi lên BE thật, chỉnh mock theo BE (không chỉnh BE), cập nhật test của mock.
 2. **Mọi chỗ hợp đồng im lặng** nằm ở khối ASSUMPTION / "yaml thiếu" đầu từng `*.mock.ts`; bản gửi BE: `D:/Do-an/.c2-tmp/final2/msg-be-t57-hop-dong.md` (đã soạn 7/11).

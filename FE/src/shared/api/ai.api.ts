@@ -1,4 +1,4 @@
-// AI API — docs/api/ai-v1.md #1–13 (UC90–UC94). BE tầng 3 CHƯA cài: hợp đồng là nguồn duy nhất, mock ai.mock.ts đứng thay.
+// AI API — docs/api/ai-v1.md #1–13 (UC90–UC94). BE đã cài (T77a–T78), FE ghép thật ở T82 (11/11/2026); mock ai.mock.ts chỉ dùng khi VITE_API_MOCK=true.
 // Chatbot luôn 200 với mọi kết quả nghiệp vụ (giao diện rẽ theo `result`); chỉ đầu vào sai là 400 và một IP gọi quá nhiều là 429 (BR-AI-09).
 // Khách đăng nhập gọi `askAsCustomer` (#2, CHỈ CUSTOMER), chưa đăng nhập gọi `ask` (#1, token gửi kèm bị bỏ qua nên không cá nhân hóa).
 // Tri thức (#5–11) và hồ sơ gợi ý (#12–13) chỉ SUPER_MANAGER.

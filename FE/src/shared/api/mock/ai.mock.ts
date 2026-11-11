@@ -1,10 +1,11 @@
-// Mock ai-v1 (tầng 3, UC90–UC94; docs/api/ai-v1.md #1–13, openapi/ai-v1.yaml). BE tầng 3 CHƯA cài nên không có số đo thật: mock chép hợp đồng, 07-ai-subsystem.md (BR-AI-01…28) và RateLimitFilter / RateLimitProperties
+// Mock ai-v1 (tầng 3, UC90–UC94; docs/api/ai-v1.md #1–13, openapi/ai-v1.yaml). BE đã cài (T77a–T78) và T82 (11/11/2026) đã đo thứ tự / mã lỗi trên BE thật (cổng 8082, Gemini thật) rồi chỉnh mock theo BE. Mock chép hợp đồng, 07-ai-subsystem.md (BR-AI-01…28) và RateLimitFilter / RateLimitProperties
 // đã có trong BE (BR-AI-09). Chatbot KHÔNG gọi Gemini: tìm "đoạn" bằng độ phủ từ khóa trên chính các tài liệu PUBLISHED trong state, nên lưu trữ / xuất bản / sửa tài liệu ở UC93 đổi câu trả lời của chatbot như BE
 // (BR-AI-16). Chỗ hợp đồng IM LẶNG hoặc mock đơn giản hóa so với BE là ASSUMPTION:
-//  A1  Thứ tự kiểm, theo brief T57 cho cả 13 endpoint: 401 (adapter) → 400 sai kiểu path / query / body (MALFORMED_REQUEST) → 403 vai trò → 400 VALIDATION_FAILED → 404 → 400 BR-… → 409. KHÁC các mock GĐ1 (care, customer-pet…)
-//      đặt kiểm @Valid của body TRƯỚC vai trò; mock này đặt SAU vai trò. Riêng hai endpoint chat, giới hạn tần suất theo IP (BR-AI-09) đứng ĐẦU TIÊN, trước cả vai trò và kiểu body, vì RateLimitFilter của BE chạy trước
-//      JwtAuthenticationFilter và controller (nên request bị 403 vẫn tính vào hạn mức). Không mô phỏng được: 429 đến trước 401 (adapter của mock-api trả 401 trước handler) và header `Retry-After` (MockReply không có headers,
-//      số giây chỉ nằm trong câu báo lỗi); BR-AI-17 audit (mock không export ghi audit).
+//  A1  Thứ tự kiểm, ĐÃ ĐO trên BE thật 11/11/2026: 429 giới hạn tần suất (chỉ hai endpoint chat, đứng trước cả 401 và 400) → 401 → 400 sai kiểu path / query / thân (MALFORMED_REQUEST) → 400 VALIDATION_FAILED của thân / query (`@Valid`)
+//      → 403 vai trò → 404 → 400 BR-… (BR-AI-13, 14, 18 chạy trong service nên SAU vai trò) → 409. Giống các mock GĐ1: `@Valid` chạy trước `@PreAuthorize` (VET gửi thân thiếu trường vẫn nhận 400). Không mô phỏng được: 429 đến trước 401
+//      (adapter của mock-api trả 401 trước handler) và header `Retry-After` (MockReply không có headers, số giây chỉ nằm trong câu báo lỗi); BR-AI-17 audit (mock không export ghi audit).
+//      Lệch chữ còn lại so với BE (cùng mã và trạng thái): ba lỗi độ dài của chat BE không có tiền tố trường ("Câu hỏi tối đa 500 ký tự"), mock có "question: "; #13 BE trả thông điệp mặc định tiếng Anh ("breedKeywords: must not be null"), mock tiếng Việt;
+//      câu BR-AI-13 / BR-AI-14 khác chữ; trả lời chatbot là suy luận bằng từ khóa (A5), BE thật gọi Gemini nên câu chẩn đoán có thể ra OUT_OF_SCOPE thay vì MEDICAL_REFUSAL (đo: "thuốc gì, liều bao nhiêu" → OUT_OF_SCOPE). MEDICAL_REFUSAL của BE còn dùng cho hồ sơ bệnh án (BR-AI-28b).
 //  A2  Giới hạn tần suất (BR-AI-09): 10 câu / phút rồi 60 câu / giờ cho MỖI IP, cả hai endpoint chat dùng chung; cửa sổ cố định bắt đầu ở lần gọi đầu, lần bị từ chối vẫn được tính, bị chặn ở cửa sổ phút thì không tiêu hao hạn mức
 //      giờ (RateLimitFilter). Mock chỉ có MỘT "IP" (một trình duyệt). 429 TOO_MANY_REQUESTS, câu "Bạn thao tác quá nhanh, vui lòng thử lại sau N giây" (TooManyRequestsException).
 //  A3  Hạn mức nhà cung cấp 20 lệnh sinh / ngày (07 §13 phát hiện 1: gói free `gemini-2.5-flash`, 429 `GenerateRequestsPerDayPerProjectPerModel-FreeTier`) KHÔNG phải [CFG] nên là hằng số `AI_DAILY_LLM_LIMIT`. Chỉ câu đi tới
@@ -287,17 +288,15 @@ const newestFirst = (a: DocRow, b: DocRow) => Date.parse(b.updatedAt) - Date.par
 const stateError = (from: DocumentStatus, to: DocumentStatus) =>
   fail('INVALID_STATE_TRANSITION', `Không thể chuyển trạng thái tài liệu tri thức từ ${from} sang ${to}`, 409);
 
-/** Gác chung #7–#11: id sai kiểu / thân sai kiểu (400 MALFORMED) → vai trò → kiểm VALIDATION_FAILED → tài liệu (404). `shape` chạy trước vai trò, `validate` sau vai trò (A1). */
+/** Gác chung #7–#11: id sai kiểu / thân sai kiểu (400 MALFORMED) → kiểm VALIDATION_FAILED → vai trò → tài liệu (404). `@Valid` chạy trước `@PreAuthorize` (đo trên BE 11/11/2026, A1). */
 function withDocument(
   handler: (req: MockRequest, s: State, doc: DocRow) => MockReply,
   checks: { shape?: (req: MockRequest) => MockReply | null; validate?: (req: MockRequest) => MockReply | null } = {},
 ): MockHandler {
   return (req) => {
-    const early = typeError(req.params, ['documentId']) ?? checks.shape?.(req) ?? null;
+    const early = typeError(req.params, ['documentId']) ?? checks.shape?.(req) ?? checks.validate?.(req) ?? null;
     if (early) return early;
     if (!isSuperManager(req)) return denied();
-    const bad = checks.validate?.(req) ?? null;
-    if (bad) return bad;
     const s = load();
     const doc = s.documents.find((d) => d.documentId === Number(req.params.documentId));
     return doc ? handler(req, s, doc) : notFound('tài liệu tri thức', req.params.documentId);
@@ -347,16 +346,16 @@ const lengthChecks = (b: Record<string, unknown>) =>
 const createDocument: MockHandler = (req) => {
   const b = req.body;
   if (!isObject(b) || !documentBodyTypesOk(b)) return malformed();
-  if (!isSuperManager(req)) return denied();
   const bad = invalid([
-    ['topic', 'Vui lòng chọn chủ đề', !has(b.topic)],
-    ['species', 'Vui lòng chọn loài áp dụng', !has(b.species)],
-    ['content', 'Vui lòng nhập nội dung', !has(b.content)],
+    ['species', 'Loài áp dụng không được để trống', !has(b.species)],
+    ['topic', 'Chủ đề không được để trống', !has(b.topic)],
+    ['content', 'Nội dung không được để trống', !has(b.content)],
     ['sourceNote', `Ghi chú nguồn tối đa ${AI_LIMITS.sourceNote} ký tự`, tooLong(b.sourceNote, AI_LIMITS.sourceNote)],
     ['reviewerName', `Tên người rà soát tối đa ${AI_LIMITS.reviewerName} ký tự`, tooLong(b.reviewerName, AI_LIMITS.reviewerName)],
   ]);
   if (bad) return bad;
-  if (isBlank(b.title)) return ruleFail('BR-AI-14', 'Tiêu đề không được để trống');
+  if (!isSuperManager(req)) return denied();
+  if (isBlank(b.title)) return ruleFail('BR-AI-14', 'Tiêu đề không được rỗng');
   if ((b.title as string).trim().length > AI_LIMITS.title) return ruleFail('BR-AI-14', `Tiêu đề tối đa ${AI_LIMITS.title} ký tự`);
   if ((b.content as string).length > AI_LIMITS.content) return ruleFail('BR-AI-14', 'Nội dung tối đa 20 000 ký tự');
 
@@ -436,16 +435,14 @@ const updateDocument = withDocument(
 );
 
 const publishDocument = withDocument((_req, s, doc) => {
-  if (doc.sourceType === 'CATALOG_PROTOCOL') {
-    if (doc.status !== 'PUBLISHED') return ruleFail('BR-AI-13', 'Tài liệu sinh từ phác đồ tiêm do hệ thống quản lý, không xuất bản tay');
-  } else {
-    const missing = [
-      isBlank(doc.content) && 'nội dung',
-      isBlank(doc.sourceNote) && 'ghi chú nguồn (lớp 1)',
-      (isBlank(doc.reviewerName) || !doc.reviewedOn) && 'người rà soát và ngày rà soát (lớp 2)',
-    ].filter(Boolean);
-    if (missing.length) return ruleFail('BR-AI-14', `Không thể xuất bản, còn thiếu: ${missing.join('; ')}`);
-  }
+  // BE: tài liệu phác đồ luôn 400 BR-AI-13, kể cả khi đã PUBLISHED (đo 11/11/2026; không rơi xuống 409 PUBLISHED → PUBLISHED).
+  if (doc.sourceType === 'CATALOG_PROTOCOL') return ruleFail('BR-AI-13', 'Tài liệu sinh từ phác đồ tiêm do hệ thống quản lý, không xuất bản tay');
+  const missing = [
+    isBlank(doc.content) && 'nội dung',
+    isBlank(doc.sourceNote) && 'ghi chú nguồn (lớp 1)',
+    (isBlank(doc.reviewerName) || !doc.reviewedOn) && 'người rà soát và ngày rà soát (lớp 2)',
+  ].filter(Boolean);
+  if (missing.length) return ruleFail('BR-AI-14', `Không thể xuất bản, còn thiếu: ${missing.join('; ')}`);
   if (doc.status === 'PUBLISHED') return stateError('PUBLISHED', 'PUBLISHED');
   const at = nowIso();
   Object.assign(doc, { status: 'PUBLISHED', indexStatus: 'PENDING', indexError: null, publishedAt: at, updatedAt: at });
@@ -486,7 +483,7 @@ function profileItems(): Item[] {
     ...catalogProducts()
       .filter((x) => x.isActive && x.productType === 'GOODS' && !x.isPrescription)
       .map((x): Item => ({ itemType: 'PRODUCT', itemId: x.productId, name: x.name, group: 'PRODUCT' })),
-  ].sort((a, b) => (a.itemType === b.itemType ? a.itemId - b.itemId : a.itemType === 'SERVICE' ? -1 : 1));
+  ].sort((a, b) => (a.itemType === b.itemType ? a.name.localeCompare(b.name, 'vi') || a.itemId - b.itemId : a.itemType === 'SERVICE' ? -1 : 1));
 }
 
 const rowOf = (item: Item, profile: ItemProfile | undefined): ItemProfileRow => ({ ...item, hasProfile: !!profile, ...(profile ? { profile } : {}) });
@@ -525,7 +522,6 @@ const saveItemProfile: MockHandler = (req) => {
   ) {
     return malformed();
   }
-  if (!isSuperManager(req)) return denied();
   const num = (v: unknown) => (typeof v === 'number' ? v : null);
   const minAge = num(b.minAgeWeeks);
   const maxAge = num(b.maxAgeWeeks);
@@ -545,6 +541,7 @@ const saveItemProfile: MockHandler = (req) => {
     ['minWeightKg', 'Cân nặng tối thiểu không được lớn hơn cân nặng tối đa', minKg !== null && maxKg !== null && minKg > maxKg],
   ]);
   if (bad) return bad;
+  if (!isSuperManager(req)) return denied();
 
   const itemType = req.params.itemType as ItemType;
   const itemId = Number(req.params.itemId);
@@ -644,23 +641,25 @@ export function vaccinationItemOf(args: {
   };
 }
 
+/** Mẫu câu cố định của BE (VaccinationSummaryService.line, BR-AI-11); NOT_STARTED đã đo trên BE thật 11/11/2026. */
 function vaccinationLine(item: VaccinationItem): string {
-  const ageNote = item.firstDoseFromAgeWeeks != null ? `mũi 1 từ ${item.firstDoseFromAgeWeeks} tuần tuổi` : '';
+  const head = `- ${item.vaccineName}: `;
+  const done = item.lastDoseNumber != null ? `đã tiêm mũi ${item.lastDoseNumber} ngày ${dmy(item.lastAdministeredOn!)}` : '';
   switch (item.status) {
     case 'NOT_YET_ELIGIBLE':
-      return `- ${item.vaccineName}: bé chưa đủ tuổi tiêm, ${ageNote}.`;
+      return `${head}bé còn nhỏ, mũi đầu tiên từ ${item.firstDoseFromAgeWeeks} tuần tuổi.`;
     case 'NOT_STARTED':
-      return `- ${item.vaccineName}: chưa có mũi nào ghi nhận tại hệ thống, ${ageNote}.`;
+      return `${head}chưa tiêm tại hệ thống, mũi đầu tiên từ ${item.firstDoseFromAgeWeeks} tuần tuổi.`;
     case 'UP_TO_DATE':
-      return `- ${item.vaccineName}: đã tiêm mũi ${item.lastDoseNumber} ngày ${dmy(item.lastAdministeredOn!)}, mũi tiếp theo dự kiến ${dmy(item.nextDueDate!)}.`;
+      return `${head}còn hạn, ${done}${item.nextDueDate ? `; mũi tiếp theo hạn ${dmy(item.nextDueDate)}.` : '.'}`;
     case 'DUE_SOON':
-      return `- ${item.vaccineName}: đã tiêm mũi ${item.lastDoseNumber} ngày ${dmy(item.lastAdministeredOn!)}, sắp đến hạn tiêm tiếp ngày ${dmy(item.nextDueDate!)}.`;
+      return `${head}sắp đến hạn mũi tiếp theo vào ${dmy(item.nextDueDate!)} (${done}).`;
     case 'OVERDUE':
-      return `- ${item.vaccineName}: đã tiêm mũi ${item.lastDoseNumber} ngày ${dmy(item.lastAdministeredOn!)}, đã quá hạn tiêm tiếp từ ${dmy(item.nextDueDate!)}.`;
+      return `${head}đã quá hạn mũi tiếp theo từ ${dmy(item.nextDueDate!)} (${done}).`;
   }
 }
 
-const VACCINATION_DISCLAIMER = 'Chỉ gồm các mũi tiêm được ghi nhận tại hệ thống Pet Care; thông tin tham khảo, không thay thế tư vấn của bác sĩ thú y.';
+const VACCINATION_DISCLAIMER = 'Thông tin tham khảo, không thay thế khám thú y.';
 
 function vaccinationSummaryOf(req: MockRequest, pet: PetResponse): VaccinationSummary {
   const today = vnDate();
@@ -682,8 +681,8 @@ function vaccinationSummaryOf(req: MockRequest, pet: PetResponse): VaccinationSu
       });
     });
   const message = items.length
-    ? [`Lịch tiêm của ${pet.name}:`, ...items.map(vaccinationLine)].join('\n')
-    : `Hiện hệ thống chưa có phác đồ tiêm phòng cho loài của ${pet.name}.`;
+    ? [`Lịch tiêm của ${pet.name} (chỉ tính các mũi ghi nhận tại hệ thống):`, ...items.map(vaccinationLine)].join('\n')
+    : `Chưa có phác đồ tiêm cho loài của ${pet.name} trong danh mục.`;
   return { petId: pet.petId, petName: pet.name, items, message, disclaimer: VACCINATION_DISCLAIMER };
 }
 
@@ -906,10 +905,10 @@ const getRecommendations: MockHandler = (req) => {
   const badPath = typeError(req.params, ['petId']) ?? typeError(req.query, ['limit']);
   if (badPath) return badPath;
   if (group !== undefined && !RECO_GROUPS.includes(group as RecoGroup)) return badParam('group');
-  if (!isCustomer(req)) return denied();
   const { min, max } = AI_LIMITS.recommendationLimit;
-  const bad = invalid([['limit', `limit phải từ ${min} đến ${max}`, limit !== undefined && (Number(limit) < min || Number(limit) > max)]]);
+  const bad = invalid([['limit', `limit phải từ ${min} tới ${max}`, limit !== undefined && (Number(limit) < min || Number(limit) > max)]]);
   if (bad) return bad;
+  if (!isCustomer(req)) return denied();
   const pet = ownLivingPet(req);
   if (isReply(pet)) return pet;
   const response: RecommendationResponse = {
@@ -1135,18 +1134,18 @@ function chat(req: MockRequest, scope: 'public' | 'me'): MockReply {
   const b = req.body;
   const previousRaw = isObject(b) ? b.previousQuestions : undefined;
   if (!isObject(b) || !optString(b.question) || !(previousRaw == null || (Array.isArray(previousRaw) && previousRaw.every((q) => typeof q === 'string')))) return malformed();
-  if (scope === 'me' && !isCustomer(req)) return denied();
   const maxChars = aiConfig('ai.chat.max_question_chars');
   const maxPrevious = aiConfig('ai.chat.max_previous_questions');
   const question = typeof b.question === 'string' ? b.question.trim() : '';
   const previous = ((previousRaw as string[] | null | undefined) ?? []).map((q) => q.trim());
   const bad = invalid([
-    ['question', 'Vui lòng nhập câu hỏi', question === ''],
+    ['question', 'Câu hỏi không được để trống', question === ''],
     ['question', `Câu hỏi tối đa ${maxChars} ký tự`, question.length > maxChars],
     ['previousQuestions', `Tối đa ${maxPrevious} câu hỏi trước`, previous.length > maxPrevious],
     ['previousQuestions', `Mỗi câu hỏi trước tối đa ${maxChars} ký tự`, previous.some((q) => q.length > maxChars)],
   ]);
   if (bad) return bad;
+  if (scope === 'me' && !isCustomer(req)) return denied();
 
   // 2. Che email, SĐT, số giấy tờ (BR-AI-12a).
   const masked = maskPersonal(question);

@@ -88,7 +88,8 @@ function ResponseView({ response: r, onChoosePet }: { response: ChatResponse; on
           <WifiOff size={13} aria-hidden /> Trợ lý đang bận
         </p>
       )}
-      {r.result === 'MEDICAL_REFUSAL' && <p className="mb-1 font-semibold text-stone-500">Mình không thể tư vấn chẩn đoán hay thuốc</p>}
+      {/* BE dùng MEDICAL_REFUSAL cho hai việc (chẩn đoán / liều thuốc, và hồ sơ bệnh án): tiêu đề phải đúng cho cả hai, lý do cụ thể nằm trong `answer`. */}
+      {r.result === 'MEDICAL_REFUSAL' && <p className="mb-1 font-semibold text-stone-500">Mình không thể hỗ trợ nội dung này</p>}
       <p>{r.answer}</p>
       {r.result === 'ANSWERED' && (
         <>
