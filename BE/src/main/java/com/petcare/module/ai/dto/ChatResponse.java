@@ -47,6 +47,17 @@ public record ChatResponse(
         return new ChatResponse(ChatResult.EMERGENCY, warning, List.of(), null, false, List.copyOf(branches), List.of());
     }
 
+    /** {@code PERSONAL}: câu mẫu về lịch hẹn / lịch tiêm của khách, không qua LLM (BR-AI-27). */
+    public static ChatResponse personal(String answer, boolean bookingHint) {
+        return canned(ChatResult.PERSONAL, answer, bookingHint);
+    }
+
+    /** {@code NEED_PET_CHOICE}: hỏi lại thú nào, kèm các thú để giao diện cho chọn (BR-AI-27). */
+    public static ChatResponse needPetChoice(String question, List<PetChoice> pets) {
+        return new ChatResponse(ChatResult.NEED_PET_CHOICE, question, List.of(), null, false, List.of(),
+                List.copyOf(pets));
+    }
+
     /** {@code ANSWERED}: câu trả lời của LLM kèm nguồn từ siêu dữ liệu truy hồi và lời nhắc tham khảo (BR-AI-05). */
     public static ChatResponse answered(String answer, List<ChatSource> sources, String disclaimer) {
         return new ChatResponse(ChatResult.ANSWERED, answer, List.copyOf(sources), disclaimer, false, List.of(),

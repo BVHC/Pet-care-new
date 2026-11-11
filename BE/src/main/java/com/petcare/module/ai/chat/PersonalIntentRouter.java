@@ -1,5 +1,6 @@
 package com.petcare.module.ai.chat;
 
+import java.util.Comparator;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
@@ -18,6 +19,7 @@ import org.springframework.stereotype.Component;
 public class PersonalIntentRouter {
 
     private static final String RESOURCE = "ai/ai-personal-intent.txt";
+    private static final String PET_MASK = "[thú]";
     private static final List<String> SECTIONS = List.of("STRONG", "WEAK", "APPOINTMENT", "VACCINATION", "PRICE",
             "RECORD", "COMMON_PET_NAMES", "PET_NAME_PREFIX");
 
@@ -66,18 +68,40 @@ public class PersonalIntentRouter {
      * em; đứng một mình ("giá vàng hôm nay") thì không.
      */
     public List<String> mentionedPetNames(String question, List<String> petNames) {
-        return petNames.stream().filter(name -> isMentioned(question, name)).toList();
+        return petNames.stream().filter(name -> !nameSpans(question, name).isEmpty()).toList();
+    }
+
+    /**
+     * Thay tên các thú của khách bằng {@code [thú]} (BR-AI-12b, ADR-0122) đúng ở những chỗ {@link #mentionedPetNames} coi
+     * là "đã nhắc": tên trùng từ thông dụng chỉ bị che sau bé / con / chú / em (giữ tiền tố), dạng bỏ dấu của tên từ 2 âm
+     * tiết trở lên cũng bị che. Gọi SAU khi định tuyến (cần tên thú để nhận ý định), TRƯỚC khi nhúng và gọi LLM. Trả về
+     * dạng NFC của câu.
+     */
+    public String maskPetNames(String text, List<String> petNames) {
+        List<int[]> spans = petNames.stream().flatMap(name -> nameSpans(text, name).stream())
+                .sorted(Comparator.<int[]>comparingInt(span -> span[0]).thenComparing(span -> span[0] - span[1])).toList();
+        String nfc = PhraseMatcher.nfc(text);
+        StringBuilder masked = new StringBuilder();
+        int copied = 0;
+        for (int[] span : spans) {
+            if (span[0] < copied) {
+                continue;
+            }
+            masked.append(nfc, copied, span[0]).append(PET_MASK);
+            copied = span[1];
+        }
+        return masked.append(nfc, copied, nfc.length()).toString();
     }
 
     private boolean hasStrongSign(String question, List<String> petNames) {
         return PhraseMatcher.anyPhrase(question, strong) || !mentionedPetNames(question, petNames).isEmpty();
     }
 
-    private boolean isMentioned(String question, String petName) {
+    private List<int[]> nameSpans(String question, String petName) {
         String name = PhraseMatcher.norm(petName);
         if (!commonPetNames.contains(name)) {
-            return PhraseMatcher.hasPhrase(question, name);
+            return PhraseMatcher.spans(question, name);
         }
-        return petNamePrefixes.stream().anyMatch(prefix -> PhraseMatcher.hasPhrase(question, prefix + " " + name));
+        return PhraseMatcher.spansAfterPrefix(question, petNamePrefixes, name);
     }
 }

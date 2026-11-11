@@ -5,6 +5,8 @@ import java.math.RoundingMode;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Optional;
+import java.util.function.Supplier;
 
 import org.springframework.stereotype.Service;
 
@@ -24,6 +26,8 @@ import com.petcare.module.ai.repository.AiChatLogRepository;
 import com.petcare.module.ai.retrieval.ChunkRetriever;
 import com.petcare.module.ai.retrieval.RetrievedChunk;
 import com.petcare.module.branch.api.BranchQueryApi;
+import com.petcare.module.customer.api.CustomerQueryApi;
+import com.petcare.module.customer.api.PetQueryApi;
 import com.petcare.module.identity.api.ConfigKey;
 import com.petcare.module.identity.api.SystemConfigApi;
 
@@ -39,8 +43,10 @@ import io.micrometer.core.instrument.MeterRegistry;
  * (BR-AI-10). Mọi kết quả nghiệp vụ là một {@link ChatResponse}; chỉ đầu vào sai là {@link ChatValidationException}.
  * <p>
  * Ngữ cảnh khách (tên các thú còn sống) đi vào {@link PersonalIntentRouter} qua tham số {@code petNames}; endpoint công
- * khai không biết khách là ai nên truyền rỗng. Nhánh {@code /me} (so khớp tên thú, {@code PersonalService}, che tên thú)
- * là việc của AI-3, chưa có ở đây.
+ * khai không biết khách là ai nên truyền rỗng. {@code /me} (docs/adr/0132) thêm hai việc: ý định cá nhân do
+ * {@link PersonalService} trả bằng câu mẫu (không nhúng, không LLM, không ghi nội dung vào nhật ký), và tên thú được che
+ * thành {@code [thú]} <b>sau</b> định tuyến, <b>trước</b> nhúng và LLM (BR-AI-12b). Nhật ký ghi bản đã che tên thú ở mọi
+ * nhánh có ghi nội dung, nên "Mochi bị co giật" cũng chỉ vào nhật ký là "[thú] bị co giật".
  */
 @Service
 public class ChatService {
@@ -59,10 +65,14 @@ public class ChatService {
     private final ChunkRetriever retriever;
     private final AiChatLogRepository logs;
     private final MeterRegistry meters;
+    private final CustomerQueryApi customers;
+    private final PetQueryApi pets;
+    private final PersonalService personal;
 
     public ChatService(SystemConfigApi config, EmergencyDetector emergency, PersonalIntentRouter router,
             DoseGuard doseGuard, BranchQueryApi branches, EmbeddingClient embeddings, LlmClient llm,
-            ChunkRetriever retriever, AiChatLogRepository logs, MeterRegistry meters) {
+            ChunkRetriever retriever, AiChatLogRepository logs, MeterRegistry meters, CustomerQueryApi customers,
+            PetQueryApi pets, PersonalService personal) {
         this.config = config;
         this.emergency = emergency;
         this.router = router;
@@ -73,22 +83,44 @@ public class ChatService {
         this.retriever = retriever;
         this.logs = logs;
         this.meters = meters;
+        this.customers = customers;
+        this.pets = pets;
+        this.personal = personal;
     }
 
     /** {@code POST /public/ai/chat} (ai-v1 #1): khách vãng lai, không có tên thú. */
     public ChatResponse ask(ChatRequest request) {
-        return run(request, List.of());
+        return run(request, () -> Viewer.GUEST);
     }
 
-    private ChatResponse run(ChatRequest request, List<String> petNames) {
+    /** {@code POST /me/ai/chat} (ai-v1 #2): khách lấy từ tài khoản của token, không bao giờ từ câu hỏi (BR-AI-27). */
+    public ChatResponse askAsCustomer(Long accountId, ChatRequest request) {
+        return run(request, () -> viewerOf(accountId));
+    }
+
+    /**
+     * Khách và các thú còn sống được tra sau khi kiểm đầu vào (request sai là 400, không tra gì) và trước cấp cứu: câu
+     * bệnh án cần tên thú, và nhật ký cần tên thú để che. Tài khoản chưa có hồ sơ khách (BR-TK-19) coi như không có thú
+     * và không có lịch (ADR-0132).
+     */
+    private Viewer viewerOf(Long accountId) {
+        Long customerId = customers.findCustomerIdByAccountId(accountId).orElse(null);
+        return new Viewer(true, customerId, customerId == null ? List.of() : pets.findLivingPetsOfCustomer(customerId));
+    }
+
+    private ChatResponse run(ChatRequest request, Supplier<Viewer> viewerSource) {
         long started = System.nanoTime();
         String question = request.question() == null ? "" : request.question().strip();
         List<String> previous = request.previousQuestions() == null ? List.of() : request.previousQuestions();
         validate(question, previous);
+        Viewer viewer = viewerSource.get();
+        List<String> petNames = viewer.pets().stream().map(PetQueryApi.LivingPet::name).toList();
 
         String masked = PiiMasker.mask(question);
         List<String> maskedPrevious = previous.stream().map(text -> PiiMasker.mask(text.strip())).toList();
-        Trace trace = new Trace(masked, started);
+        // Bản gửi nhà cung cấp và bản ghi nhật ký đã che cả tên thú; định tuyến dưới đây vẫn dùng bản chưa che tên thú.
+        String withoutPetNames = maskPetNames(masked, petNames);
+        Trace trace = new Trace(withoutPetNames, started);
 
         if (emergency.isEmergency(masked)) {
             return finish(emergencyResponse(), trace, true);
@@ -96,11 +128,27 @@ public class ChatService {
         if (router.isMedicalRecordQuestion(masked, petNames)) {
             return finish(ChatResponse.canned(ChatResult.MEDICAL_REFUSAL, ChatTexts.MEDICAL_RECORD, false), trace, true);
         }
-        if (router.detect(masked, petNames).isPresent()) {
-            // BR-AI-28a: không biết khách là ai. Câu cá nhân không ghi nội dung vào nhật ký (BR-AI-24).
-            return finish(ChatResponse.canned(ChatResult.NEED_LOGIN, ChatTexts.NEED_LOGIN, false), trace, false);
+        Optional<PersonalIntent> intent = router.detect(masked, petNames);
+        if (intent.isPresent()) {
+            // Câu cá nhân không ghi nội dung vào nhật ký (BR-AI-24).
+            return finish(viewer.signedIn() ? personalResponse(intent.get(), viewer, masked)
+                    : ChatResponse.canned(ChatResult.NEED_LOGIN, ChatTexts.NEED_LOGIN, false), trace, false);
         }
-        return retrieveAndAnswer(masked, maskedPrevious, trace);
+        return retrieveAndAnswer(withoutPetNames, maskedPrevious.stream().map(text -> maskPetNames(text, petNames)).toList(),
+                trace);
+    }
+
+    /** Chỉ đổi dạng chữ khi khách có thú: khách vãng lai giữ nguyên câu hỏi. */
+    private String maskPetNames(String text, List<String> petNames) {
+        return petNames.isEmpty() ? text : router.maskPetNames(text, petNames);
+    }
+
+    private ChatResponse personalResponse(PersonalIntent intent, Viewer viewer, String question) {
+        List<String> petNames = viewer.pets().stream().map(PetQueryApi.LivingPet::name).toList();
+        PersonalService.Reply reply = personal.answer(intent, viewer.customerId(), viewer.pets(),
+                router.mentionedPetNames(question, petNames));
+        return reply.result() == ChatResult.NEED_PET_CHOICE ? ChatResponse.needPetChoice(reply.answer(), reply.pets())
+                : ChatResponse.personal(reply.answer(), reply.bookingHint());
     }
 
     private ChatResponse retrieveAndAnswer(String question, List<String> previous, Trace trace) {
@@ -211,6 +259,11 @@ public class ChatService {
 
     private static int length(String text) {
         return text.codePointCount(0, text.length());
+    }
+
+    /** Người hỏi: khách vãng lai, hoặc khách đã đăng nhập (có thể chưa có hồ sơ khách: {@code customerId} null). */
+    private record Viewer(boolean signedIn, Long customerId, List<PetQueryApi.LivingPet> pets) {
+        static final Viewer GUEST = new Viewer(false, null, List.of());
     }
 
     /** Dữ liệu một lượt để ghi nhật ký (BR-AI-24); {@code question} đã che. */
