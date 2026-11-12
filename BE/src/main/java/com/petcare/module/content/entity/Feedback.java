@@ -1,7 +1,5 @@
 package com.petcare.module.content.entity;
 
-import java.time.Instant;
-
 import com.petcare.platform.model.TimestampedEntity;
 
 import jakarta.persistence.Column;
@@ -16,11 +14,10 @@ import jakarta.persistence.Table;
 import lombok.AccessLevel;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
-import lombok.Setter;
 
 /**
- * Bảng {@code feedbacks} (erd §10, ROOT): ý kiến không công khai của khách, không sửa, không xóa (BR-DG-02).
- * {@code resolution_note} là ghi chú nội bộ, khách không thấy (BR-DG-04).
+ * Bảng {@code feedbacks} (erd §10, ROOT): ý kiến không công khai của khách, không sửa, không xóa, không có trạng thái
+ * (BR-DG-02; docs/adr/0122: bỏ BR-DG-04). Giữ 30 ngày rồi ST24 xóa cứng (BR-DG-05).
  */
 @Getter
 @Entity
@@ -47,27 +44,6 @@ public class Feedback extends TimestampedEntity {
 
     @Column(name = "content", nullable = false, updatable = false)
     private String content;
-
-    @Setter
-    @Enumerated(EnumType.STRING)
-    @Column(name = "status", nullable = false)
-    private FeedbackStatus status = FeedbackStatus.NEW;
-
-    @Setter
-    @Column(name = "seen_at")
-    private Instant seenAt;
-
-    @Setter
-    @Column(name = "resolved_by")
-    private Long resolvedBy;
-
-    @Setter
-    @Column(name = "resolved_at")
-    private Instant resolvedAt;
-
-    @Setter
-    @Column(name = "resolution_note")
-    private String resolutionNote;
 
     public Feedback(Long customerId, FeedbackTopic topic, Long branchId, Short rating, String content) {
         this.customerId = customerId;

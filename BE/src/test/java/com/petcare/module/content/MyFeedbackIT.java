@@ -81,9 +81,9 @@ class MyFeedbackIT extends ContentItSupport {
 
         Map<String, Object> created = data(submit(customer, request), HttpStatus.CREATED);
 
-        assertThat(created).containsOnlyKeys("feedbackId", "topic", "branchId", "rating", "content", "status",
+        assertThat(created).containsOnlyKeys("feedbackId", "topic", "branchId", "rating", "content",
                         "createdAt")
-                .containsEntry("status", "NEW").containsEntry("rating", 5).containsEntry("branchId", null)
+                .containsEntry("rating", 5).containsEntry("branchId", null)
                 .containsEntry("createdAt", "2004-03-10T03:00:00Z");
     }
 
@@ -275,18 +275,13 @@ class MyFeedbackIT extends ContentItSupport {
         data(submit(customer, body("Góp ý đầu tiên của tôi.")), HttpStatus.CREATED);
         clock.advance(Duration.ofSeconds(30));
         data(submit(customer, body("Góp ý thứ hai của tôi.")), HttpStatus.CREATED);
-        jdbc.update("UPDATE feedbacks SET status = 'RESOLVED', resolution_note = 'ghi chú nội bộ', "
-                + "resolved_by = ?, resolved_at = now(), seen_at = now() WHERE customer_id = ? "
-                + "AND content LIKE '%đầu tiên%'", staff("SUPER_MANAGER", null), customerId);
-
         List<Map<String, Object>> mine = list(call(HttpMethod.GET, PATH, customer, null), HttpStatus.OK);
 
         assertThat(mine).hasSize(2);
         assertThat(mine.get(0)).containsEntry("content", "Góp ý thứ hai của tôi.");
-        assertThat(mine.get(1)).containsEntry("status", "RESOLVED");
+        assertThat(mine.get(1)).containsEntry("content", "Góp ý đầu tiên của tôi.");
         for (Map<String, Object> item : mine) {
-            assertThat(item).containsOnlyKeys("feedbackId", "topic", "branchId", "rating", "content", "status",
-                    "createdAt");
+            assertThat(item).containsOnlyKeys("feedbackId", "topic", "branchId", "rating", "content", "createdAt");
         }
     }
 }

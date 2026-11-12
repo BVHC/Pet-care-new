@@ -104,6 +104,7 @@ class SystemConfigIT {
         expect("ai.reco.senior_age_years_cat", "10", "INT", "5", "15");           // 07 §7.3, Q3 (giá trị tạm)
         expect("ai.reco.senior_age_years_other", "7", "INT", "5", "15");          // 07 §7.3, Q3 (giá trị tạm)
         expect("ai.log.retention_days", "30", "INT", "1", "180");                 // BR-AI-24
+<<<<<<< HEAD
         expect("ai.chat.general_knowledge_enabled", "false", "BOOL", "false", "true"); // BR-AI-33, V52 (min / max của BOOL không dùng)
         expect("ai.chat.business_intent_enabled", "false", "BOOL", "false", "true"); // BR-AI-31, V53
         // V40 (docs/adr/0113): 6 khóa complaint.* (docs/09 §G, BR-DG-05, 07, 08, 09) + 2 khóa workforce.* (docs/02
@@ -114,6 +115,12 @@ class SystemConfigIT {
         expect("complaint.sla_open_hours", "24", "INT", "1", "168");              // BR-DG-08
         expect("complaint.sla_resolve_hours", "72", "INT", "1", "720");           // BR-DG-08
         expect("complaint.auto_close_days", "7", "INT", "1", "30");               // BR-DG-09
+=======
+        // V51 (docs/adr/0122, 0131): 6 khóa complaint.* của V40 đã gỡ; thêm feedback.retention_days (BR-DG-05)
+        expect("feedback.retention_days", "30", "INT", "7", "365");               // BR-DG-05
+        // V40 (docs/adr/0113): 2 khóa workforce.* (docs/02 BR-NS-04, BR-NS-07). Giá trị mặc định theo đặc tả;
+        // min–max là giả định của T55b (ADR-0113)
+>>>>>>> f6ac718 (feat: T70: bỏ khiếu nại, feedback không còn trạng thái, giữ 30 ngày — V51, V52, ST24 FeedbackCleanupJob (ADR-0131))
         expect("workforce.request_lead_hours", "24", "INT", "0", "168");          // BR-NS-04
         expect("workforce.absence_report_max_days", "7", "INT", "1", "30");       // BR-NS-07
         // V44, V45, V46, V48 (docs/adr/0117): 7 khóa của BE-2, docs/08 §G. Khoảng min–max do T55c chọn
@@ -147,7 +154,11 @@ class SystemConfigIT {
                     assertThat(rs.getString("description")).isNotBlank();
                 });
 
+<<<<<<< HEAD
         assertThat(EXPECTED).hasSize(87);
+=======
+        assertThat(EXPECTED).hasSize(80);
+>>>>>>> f6ac718 (feat: T70: bỏ khiếu nại, feedback không còn trạng thái, giữ 30 ngày — V51, V52, ST24 FeedbackCleanupJob (ADR-0131))
         assertThat(actual).isEqualTo(EXPECTED);
     }
 

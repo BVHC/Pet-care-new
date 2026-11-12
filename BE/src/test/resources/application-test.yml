@@ -77,6 +77,8 @@ app:
       cron: "-"
     notification-cleanup:
       cron: "-"
+    feedback-cleanup:
+      cron: "-"
     knowledge-index:
       cron: "-"
     chat-log-cleanup:

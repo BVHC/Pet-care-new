@@ -231,6 +231,14 @@ app:
       unread-retention-days: 90
       batch-size: 1000
       time-budget: 60s
+    # ST24 (docs/adr/0122, 0131; BR-DG-05): xóa cứng feedback quá [CFG] feedback.retention_days. 03:30:31: giữa dọn OTP
+    # (03:20:17) và dọn outbox (03:40), giây 31 chưa job nào dùng; ngân sách 60s nên xong trước 03:40. Sau mỗi lô đầy nghỉ
+    # batch-gap để một đợt tồn đọng lớn không làm chậm request. Đặt FEEDBACK_CLEANUP_CRON=- để tắt.
+    feedback-cleanup:
+      cron: "${FEEDBACK_CLEANUP_CRON:31 30 3 * * *}"
+      batch-size: 500
+      batch-gap: 50ms
+      time-budget: 60s
     # ST22 (docs/adr/0130): quét tài liệu AI chưa nạp và, mỗi [CFG] ai.index.catalog_sync_minutes, đồng bộ tài liệu phác
     # đồ tiêm. Mọi phút lẻ 5 đã có job dài (0, 1, 2, 3, 4 mod 5), nên chọn giây 45; job chỉ xếp hàng cho một luồng nền
     # riêng, không gọi mạng trên thread scheduler.

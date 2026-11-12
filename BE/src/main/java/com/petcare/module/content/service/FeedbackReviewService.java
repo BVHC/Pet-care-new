@@ -1,7 +1,5 @@
 package com.petcare.module.content.service;
 
-import java.time.Clock;
-import java.time.Instant;
 import java.time.LocalDate;
 import java.util.ArrayList;
 import java.util.HashMap;
@@ -19,9 +17,7 @@ import org.springframework.transaction.annotation.Transactional;
 
 import com.petcare.module.branch.api.BranchQueryApi;
 import com.petcare.module.content.dto.FeedbackResponse;
-import com.petcare.module.content.dto.ResolveFeedbackRequest;
 import com.petcare.module.content.entity.Feedback;
-import com.petcare.module.content.entity.FeedbackStatus;
 import com.petcare.module.content.entity.FeedbackTopic;
 import com.petcare.module.content.exception.ContentValidationException;
 import com.petcare.module.content.repository.FeedbackRepository;
@@ -29,8 +25,6 @@ import com.petcare.module.customer.api.CustomerQueryApi;
 import com.petcare.module.customer.api.CustomerQueryApi.CustomerContact;
 import com.petcare.platform.config.TimeConfig;
 import com.petcare.platform.exception.AccessDeniedScopeException;
-import com.petcare.platform.exception.BusinessRuleViolationException;
-import com.petcare.platform.exception.InvalidStateTransitionException;
 import com.petcare.platform.exception.ResourceNotFoundException;
 import com.petcare.platform.model.PageResponse;
 import com.petcare.platform.security.AccessScope;
@@ -40,11 +34,9 @@ import com.petcare.platform.security.SecurityPrincipal;
 import jakarta.persistence.criteria.Predicate;
 
 /**
- * Xem và xử lý feedback (content-v1 #20–22; UC84; BR-DG-02, 03, 04). SUPER_MANAGER thấy mọi feedback; BRANCH_MANAGER chỉ
- * feedback gắn chi nhánh mình (feedback không gắn chi nhánh chỉ SUPER_MANAGER), ngoài phạm vi là 403. Mở chi tiết lần
- * đầu tự chuyển {@code NEW → SEEN} bằng một UPDATE có điều kiện (hai người mở cùng lúc: {@code seen_at} ghi một lần);
- * đánh dấu đã xử lý khóa dòng, chỉ từ {@code SEEN} (feedback còn {@code NEW} là 409: chưa ai xem). Thứ tự lỗi:
- * 403/404 → 400 → 409. Không audit.
+ * Xem feedback (content-v1 #20–21; UC84; BR-DG-02, 03). Chỉ đọc: feedback không có trạng thái, không đánh dấu xử lý
+ * (docs/adr/0122). SUPER_MANAGER thấy mọi feedback; BRANCH_MANAGER chỉ feedback gắn chi nhánh mình (feedback không gắn
+ * chi nhánh chỉ SUPER_MANAGER), ngoài phạm vi là 403. Thứ tự lỗi: 403/404 → 400. Không ghi, không khóa, không audit.
  */
 @Service
 public class FeedbackReviewService {
@@ -55,20 +47,18 @@ public class FeedbackReviewService {
     private final CustomerQueryApi customers;
     private final BranchQueryApi branches;
     private final BranchScope scope;
-    private final Clock clock;
 
     public FeedbackReviewService(FeedbackRepository feedbacks, CustomerQueryApi customers, BranchQueryApi branches,
-            BranchScope scope, Clock clock) {
+            BranchScope scope) {
         this.feedbacks = feedbacks;
         this.customers = customers;
         this.branches = branches;
         this.scope = scope;
-        this.clock = clock;
     }
 
     @Transactional(readOnly = true, isolation = Isolation.REPEATABLE_READ)
-    public PageResponse<FeedbackResponse> list(Long branchId, FeedbackStatus status, FeedbackTopic topic,
-            LocalDate from, LocalDate to, int page, int size) {
+    public PageResponse<FeedbackResponse> list(Long branchId, FeedbackTopic topic, LocalDate from, LocalDate to,
+            int page, int size) {
         if (from != null && to != null && from.isAfter(to)) {
             throw new ContentValidationException("Ngày bắt đầu không được sau ngày kết thúc");
         }
@@ -77,9 +67,6 @@ public class FeedbackReviewService {
             List<Predicate> predicates = new ArrayList<>();
             if (effectiveBranch != null) {
                 predicates.add(cb.equal(root.get("branchId"), effectiveBranch));
-            }
-            if (status != null) {
-                predicates.add(cb.equal(root.get("status"), status));
             }
             if (topic != null) {
                 predicates.add(cb.equal(root.get("topic"), topic));
@@ -104,32 +91,11 @@ public class FeedbackReviewService {
                 f.getBranchId() == null ? null : branchNames.get(f.getBranchId()))));
     }
 
-    /** Mở chi tiết: người có quyền mở lần đầu thì {@code NEW → SEEN} (A2 của contract). Cần transaction ghi. */
-    @Transactional
-    public FeedbackResponse open(Long feedbackId) {
+    /** Chi tiết một feedback. Chỉ đọc: 404 nếu không có, 403 nếu ngoài phạm vi (BR-DG-03). */
+    @Transactional(readOnly = true)
+    public FeedbackResponse get(Long feedbackId) {
         authorize(feedbackId);
-        feedbacks.markSeenIfNew(feedbackId, Instant.now(clock).truncatedTo(java.time.temporal.ChronoUnit.MICROS));
         return toResponse(feedbacks.findById(feedbackId).orElseThrow(() -> notFound(feedbackId)));
-    }
-
-    @Transactional
-    public FeedbackResponse resolve(Long feedbackId, ResolveFeedbackRequest request) {
-        authorize(feedbackId);
-        String note = ContentText.normalize(request.resolutionNote());
-        if (note.isEmpty()) {
-            throw new BusinessRuleViolationException("BR-DG-04", "Vui lòng nhập ghi chú xử lý");
-        }
-        Long actorId = scope.current().accountId();
-        Feedback feedback = feedbacks.findByIdForUpdate(feedbackId).orElseThrow(() -> notFound(feedbackId));
-        if (feedback.getStatus() != FeedbackStatus.SEEN) {
-            throw new InvalidStateTransitionException("Feedback", feedback.getStatus().name(),
-                    FeedbackStatus.RESOLVED.name());
-        }
-        feedback.setStatus(FeedbackStatus.RESOLVED);
-        feedback.setResolvedBy(actorId);
-        feedback.setResolvedAt(Instant.now(clock).truncatedTo(java.time.temporal.ChronoUnit.MICROS));
-        feedback.setResolutionNote(note);
-        return toResponse(feedbacks.saveAndFlush(feedback));
     }
 
     /** 404 nếu không có; 403 nếu ngoài phạm vi (feedback không gắn chi nhánh chỉ SUPER_MANAGER, BR-DG-03). */
@@ -161,9 +127,8 @@ public class FeedbackReviewService {
 
     private static FeedbackResponse toResponse(Feedback f, String customerName, String branchName) {
         return new FeedbackResponse(f.getId(), f.getCustomerId(), customerName, f.getTopic(), f.getBranchId(),
-                branchName, f.getRating() == null ? null : f.getRating().intValue(), f.getContent(), f.getStatus(),
-                ArticleService.micros(f.getSeenAt()), f.getResolvedBy(), ArticleService.micros(f.getResolvedAt()),
-                f.getResolutionNote(), ArticleService.micros(f.getCreatedAt()));
+                branchName, f.getRating() == null ? null : f.getRating().intValue(), f.getContent(),
+                ArticleService.micros(f.getCreatedAt()));
     }
 
     private static ResourceNotFoundException notFound(Long feedbackId) {

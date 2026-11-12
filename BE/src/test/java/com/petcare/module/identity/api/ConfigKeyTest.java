@@ -19,23 +19,34 @@ class ConfigKeyTest {
     }
 
     @Test
+<<<<<<< HEAD
     void catalogHas87Parameters() {
+=======
+    void catalogHas80Parameters() {
+>>>>>>> f6ac718 (feat: T70: bỏ khiếu nại, feedback không còn trạng thái, giữ 30 ngày — V51, V52, ST24 FeedbackCleanupJob (ADR-0131))
         // 50 tham số [CFG] của docs/02 + session.ttl_hours (docs/adr/0003) + session.access_ttl_minutes (docs/adr/0091); V2 + V27 = 52 dòng
         // + 18 khóa ai.* (docs/07 §4.6, V35, docs/adr/0110) = 70
-        // + 6 khóa complaint.* (docs/09 §G) + 2 khóa workforce.* (docs/02 BR-NS-04, 07), V40, docs/adr/0113 = 78
+        // + 6 khóa complaint.* + 2 khóa workforce.* (V40, docs/adr/0113) = 78
         // + 7 khóa của BE-2 (docs/08 §G; V44, V45, V46, V48; docs/adr/0117) = 85
+<<<<<<< HEAD
         // + 1 công tắc BOOL ai.chat.general_knowledge_enabled (V52, docs/adr/0136) = 86
         // + 1 công tắc BOOL ai.chat.business_intent_enabled (V53, docs/adr/0134 "Đã cài ở T90") = 87
         assertThat(ConfigKey.values()).hasSize(87);
+=======
+        // − 6 khóa complaint.* + 1 khóa feedback.retention_days (V51, docs/adr/0122, 0131) = 80
+        assertThat(ConfigKey.values()).hasSize(80);
+>>>>>>> f6ac718 (feat: T70: bỏ khiếu nại, feedback không còn trạng thái, giữ 30 ngày — V51, V52, ST24 FeedbackCleanupJob (ADR-0131))
     }
 
     @Test
-    void complaintAndWorkforceKeysCoverSpec09SectionGAndBrNs() {
-        assertThat(Arrays.stream(ConfigKey.values()).map(ConfigKey::key).filter(key -> key.startsWith("complaint.")))
-                .containsExactlyInAnyOrder("complaint.max_open", "complaint.reopen_days", "complaint.max_reopen",
-                        "complaint.sla_open_hours", "complaint.sla_resolve_hours", "complaint.auto_close_days");
+    void workforceAndFeedbackKeysFollowSpec() {
+        assertThat(Arrays.stream(ConfigKey.values()).map(ConfigKey::key))
+                .as("khiếu nại đã bỏ (docs/adr/0122): không còn khóa complaint.*")
+                .noneMatch(key -> key.startsWith("complaint."));
         assertThat(Arrays.stream(ConfigKey.values()).map(ConfigKey::key).filter(key -> key.startsWith("workforce.")))
                 .containsExactlyInAnyOrder("workforce.request_lead_hours", "workforce.absence_report_max_days");
+        assertThat(Arrays.stream(ConfigKey.values()).map(ConfigKey::key).filter(key -> key.startsWith("feedback.")))
+                .containsExactlyInAnyOrder("feedback.max_per_day", "feedback.retention_days");
     }
 
     @Test

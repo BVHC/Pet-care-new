@@ -43,8 +43,8 @@ class FeedbackReportIT extends ContentItSupport {
 
     private void feedback(Long branchId, Integer rating, String createdAt) {
         jdbc.update("""
-                INSERT INTO feedbacks (customer_id, topic, branch_id, rating, content, status, created_at, updated_at)
-                VALUES (?, ?, ?, ?, 'Góp ý đủ dài để hợp lệ.', 'NEW', CAST(? AS timestamptz), CAST(? AS timestamptz))
+                INSERT INTO feedbacks (customer_id, topic, branch_id, rating, content, created_at, updated_at)
+                VALUES (?, ?, ?, ?, 'Góp ý đủ dài để hợp lệ.', CAST(? AS timestamptz), CAST(? AS timestamptz))
                 """, customer, branchId == null ? "WEBSITE" : "BRANCH_SERVICE", branchId, rating, createdAt, createdAt);
     }
 
