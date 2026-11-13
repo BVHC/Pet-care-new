@@ -19,6 +19,7 @@
 import { mkdirSync, readFileSync, readdirSync, writeFileSync } from 'node:fs';
 import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { makeClient, parseArgs } from './kb-http.mjs';
 
 // Người rà soát GIẢ ĐỊNH cho demo (Hiến quyết 9/11/2026), không phải bác sĩ thật.
 const reviewerName = 'BS. Nguyễn Văn Nam';
@@ -30,8 +31,7 @@ const kbDir = join(repoRoot, 'BE', 'scripts', 'spike', 'kb');
 const outDir = resolve(repoRoot, '..', '.c2-tmp', 'ai-kb');
 const SOURCE_NOTE_MAX = 500;
 
-const args = Object.fromEntries(process.argv.slice(2).reduce((acc, a, i, all) => (a.startsWith('--')
-  ? [...acc, [a.slice(2), all[i + 1] && !all[i + 1].startsWith('--') ? all[i + 1] : 'true']] : acc), []));
+const args = parseArgs(process.argv.slice(2));
 const API = (args.api ?? process.env.AI_API_URL ?? 'http://localhost:8082').replace(/\/$/, '');
 const DRY = args['dry-run'] === 'true';
 const WAIT_MS = Number(args['wait-seconds'] ?? 600) * 1000;
@@ -73,40 +73,9 @@ if (DRY) {
   process.exit(0);
 }
 
-// ---- HTTP -----------------------------------------------------------------------------------------------------------
-async function call(method, path, body, token) {
-  const res = await fetch(`${API}${path}`, {
-    method,
-    headers: { 'content-type': 'application/json', ...(token ? { authorization: `Bearer ${token}` } : {}) },
-    body: body === undefined ? undefined : JSON.stringify(body),
-  });
-  const text = await res.text();
-  let json = null;
-  try { json = JSON.parse(text); } catch { /* thân không phải JSON */ }
-  return { status: res.status, json };
-}
-const fail = (what, r) => { throw new Error(`${what}: HTTP ${r.status} ${r.json?.errorCode ?? ''} ${String(r.json?.message ?? '').slice(0, 300)}`); };
-
-async function login() {
-  const readme = readFileSync(join(repoRoot, 'FE', 'scripts', 'seed-dev', 'README.md'), 'utf8');
-  const email = /`([^`]+@petcare\.local)`\s*\|\s*SUPER_MANAGER/.exec(readme)?.[1];
-  const password = /Mật khẩu chung[^`]*`([^`]+)`/.exec(readme)?.[1];
-  if (!email || !password) throw new Error('Không đọc được tài khoản SUPER_MANAGER demo từ FE/scripts/seed-dev/README.md');
-  const r = await call('POST', '/api/auth/login', { email, password });
-  if (r.status !== 200 || !r.json?.data?.accessToken) fail(`Đăng nhập ${email}`, r);
-  console.log(`Đã đăng nhập SUPER_MANAGER ${email}`);
-  return r.json.data.accessToken;
-}
-
-async function listAll(token) {
-  const rows = [];
-  for (let page = 0; ; page++) {
-    const r = await call('GET', `/api/ai/documents?size=100&page=${page}`, undefined, token);
-    if (r.status !== 200) fail('Liệt kê tài liệu', r);
-    rows.push(...r.json.data.content);
-    if (rows.length >= r.json.data.totalElements) return rows;
-  }
-}
+// ---- HTTP: dùng chung ở kb-http.mjs --------------------------------------------------------------------------------
+const { call, fail, login: loginShared, listAll } = makeClient(API);
+const login = () => loginShared(repoRoot);
 
 // ---- nạp ------------------------------------------------------------------------------------------------------------
 const token = await login();

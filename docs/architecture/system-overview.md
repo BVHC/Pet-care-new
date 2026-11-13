@@ -4,11 +4,11 @@
 > Cập nhật: 2026-11-08 (đối chiếu lại với code tại `8f8542d` = `origin/manh`, hơn `origin/dev` @ `3a65850` một commit). Trạng thái task: `docs/time.md`.
 >
 > Nhật ký (mới nhất trước, giữ 5 dòng; cũ hơn: `git log` của file này):
+> - 2026-11-13 — AI v2 đặc tả **Proposed** (ADR-0134 nạp file + quản trị kho, 0135 ngữ cảnh thú + Gemini trả phí, 0136 kiến thức chung có kiểm soát; `07` §4.7 BR-AI-29…35; `time.md` T88–T93; V52 giữ chỗ). **Chưa cài**: mã chờ Hiến duyệt spec. Kho nguồn `docs/docs_RAG` (21 tài liệu DRAFT) vào repo, script nạp `load-docs-rag.mjs`.
 > - 2026-11-10 — T77a (AI-1, ADR-0130, Proposed): module `ai` có phần BE đầu tiên: lớp Gemini, UC93 (ai-v1 #5–#11), FSM #13, ST22 (nạp chỉ mục, đồng bộ phác đồ), ST23; không migration; chưa có chat, chưa nạp KB demo, chưa chạy với Gemini thật.
 > - 2026-11-09 — ADR-0124 (nội trú: số ngày gồm cả hai đầu, một dòng Order lúc xuất viện + tiền tạm tính, giữ chuồng cũ khi nhập từ lưu trú, một y lệnh một lần, theo dõi nội trú) và ADR-0125 (bỏ phẫu thuật: UC50, FSM #23, `surgery-v1`). **Code chưa theo** (V37 còn `surgeries`, V41 còn `SURGERY`; FE còn màn phẫu thuật; nội trú chưa có Java): nợ D063, D064.
 > - 2026-11-08 — ADR-0122 (Accepted, Dũng đã chốt): bỏ khiếu nại; feedback sẽ không trạng thái, giữ 30 ngày (ST24). **Code chưa theo** (V39 / V40 còn bảng, 6 khóa, 7 mẫu; feedback còn `status`; FE còn trang khiếu nại): nợ D061.
 > - 2026-11-08 — Đối chiếu docs với code: FE đã nối refresh token (D055 trả trong code, `3a65850`; chưa chạy với BE thật), T57-fe đã dựng mock + màn hình cho 15 module tầng 3 (mock có 85 khóa [CFG], 70 mẫu thông báo); chuyển nguyên văn thứ tự khóa / quy ước cô lập IT / bẫy FE từ `CLAUDE.md` sang `docs/architecture/{concurrency-locking,testing-notes,frontend-notes}.md`.
-> - 2026-11-07 — Trả D060 (ADR-0121): CI trên `main, dev`, bỏ `flyway:migrate`, kiểm conflict marker, IT chỉ `main` / chạy tay, loại 3 file test seed-dev khỏi `tsc`; chấp nhận D056 (ADR-0115: Redis compose không mật khẩu, không đổi gì).
 
 ## 1. Tóm tắt
 
