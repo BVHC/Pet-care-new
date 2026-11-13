@@ -282,7 +282,7 @@ public class KnowledgeService {
      * Ảnh chụp để audit (BR-AI-17): trường nghiệp vụ, độ dài và SHA-256 của nội dung, không chép cả nội dung (tối đa 20 000
      * ký tự mỗi lần sửa). Luôn là Map, không bao giờ là entity (docs/adr/0001).
      */
-    private static Map<String, Object> snapshot(AiDocument doc) {
+    static Map<String, Object> snapshot(AiDocument doc) {
         Map<String, Object> snapshot = new LinkedHashMap<>();
         snapshot.put("title", doc.getTitle());
         snapshot.put("sourceType", doc.getSourceType().name());

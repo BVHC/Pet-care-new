@@ -14,8 +14,9 @@ import com.petcare.platform.fsm.StateMachineBase;
 
 /**
  * FSM #13 "Tài liệu tri thức" (docs/07-ai-subsystem.md §9). #1 — → {@code DRAFT}; #2 {@code DRAFT → PUBLISHED}; #3 (sửa)
- * và #7 (ST22 đổi phác đồ) {@code PUBLISHED → PUBLISHED}; #4 {@code PUBLISHED → ARCHIVED}; #5 {@code ARCHIVED →
- * PUBLISHED}; #6 {@code DRAFT → ARCHIVED}. Không có cạnh {@code ARCHIVED → ARCHIVED}, nên sửa tài liệu đã lưu trữ bị
+ * và #7 (ST22 đổi phác đồ) {@code PUBLISHED → PUBLISHED}; #4 {@code PUBLISHED → ARCHIVED} (người quản lý, hoặc ST22 khi
+ * loại vaccine hết phác đồ); #5 {@code ARCHIVED → PUBLISHED} (người quản lý với {@code MANUAL}; ST22 với phác đồ do chính nó
+ * lưu trữ); #6 {@code DRAFT → ARCHIVED}. Không có cạnh {@code ARCHIVED → ARCHIVED}, nên sửa tài liệu đã lưu trữ bị
  * 409. ST22 tạo thẳng tài liệu {@code CATALOG_PROTOCOL} ở {@code PUBLISHED} (07 §9, dòng dưới bảng): không phải một
  * dòng đánh số của bảng nên không nằm ở {@code initialStates} (docs/adr/0130).
  */

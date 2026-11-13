@@ -11,12 +11,17 @@ Nguồn đã đọc (5/11/2026):
 - Đăng ký sandbox: [sandbox.vnpayment.vn/devreg](https://sandbox.vnpayment.vn/devreg/)
 - Tài liệu tích hợp: [sandbox.vnpayment.vn/apis/docs/huong-dan-tich-hop](https://sandbox.vnpayment.vn/apis/docs/huong-dan-tich-hop/) và [trang thanh toán (pay)](https://sandbox.vnpayment.vn/apis/docs/thanh-toan-pay/pay.html)
 
+**Cập nhật 12/11/2026 (Hiến đã đăng ký thật, đối chiếu với thư VNPay gửi về):**
+- Trang đăng ký hiện là [pay.vnpaytest.vn/dev-registration](https://pay.vnpaytest.vn/dev-registration) (link `devreg` ở trên và trang `huong-dan-tich-hop` đã không còn mở được). Form: Tên website / thương hiệu, Địa chỉ website, Email đăng ký, Mật khẩu, Xác nhận mật khẩu, reCAPTCHA. Không đòi website đang chạy, không đòi giấy tờ doanh nghiệp.
+- Thư VNPay đến ngay sau khi đăng ký, gồm: `vnp_TmnCode`, `vnp_HashSecret`, `vnp_Url` (`https://sandbox.vnpayment.vn/paymentv2/vpcpay.html`, khớp `PAYMENT_BASE_URL` ở mục 3), trang quản trị merchant `https://sandbox.vnpayment.vn/merchantv2/` (đăng nhập bằng email đăng ký và mật khẩu đã nhập lúc đăng ký), công cụ kịch bản test IPN `https://sandbox.vnpayment.vn/vnpaygw-sit-testing/user/login` (cùng tài khoản), tài liệu [sandbox.vnpayment.vn/apis/docs/gioi-thieu](https://sandbox.vnpayment.vn/apis/docs/gioi-thieu/), mã demo tích hợp, và thẻ test NCB (số thẻ, tên chủ thẻ, ngày phát hành, OTP nằm trong thư; không chép vào repo).
+- Thư nói rõ: merchant tự tạo địa chỉ IPN (server gọi server) để cập nhật trạng thái thanh toán và **gửi URL đó cho VNPay**.
+
 ## 2. Hiến cần làm
 
-Người cài cổng là **Dũng (BE-2)**, trên máy của Dũng. Vì vậy khóa phải đến tay Dũng, không phải chỉ nằm trên máy Hiến.
+Người cài cổng là **Dũng (BE-2)**, trên máy của Dũng. Vì vậy khóa phải đến tay Dũng, không phải chỉ nằm trên máy Hiến. Cách đỡ phải chuyển khóa: **Dũng tự đăng ký một merchant sandbox riêng** (vài phút, cùng form ở mục 1) và dùng khóa của chính mình; ô IPN URL của một terminal chỉ có một giá trị (theo tài liệu thư viện cộng đồng, chưa kiểm chứng), nên hai người dùng chung terminal sẽ tranh nhau địa chỉ tunnel.
 
 1. Vào [sandbox.vnpayment.vn/devreg](https://sandbox.vnpayment.vn/devreg/), điền thông tin đăng ký (dùng email thật, nhận được thư).
-2. Sau khi đăng ký, VNPay gửi thông tin sandbox: **mã website (`vnp_TmnCode`)**, **chuỗi bí mật (`HashSecret`)** và đường dẫn đăng nhập trang quản trị merchant. *(Chưa kiểm chứng: đây là mô tả chung của các hướng dẫn tích hợp, chưa tự đăng ký để xem thư thật. Nếu thư khác, ghi lại cho Dũng.)*
+2. Sau khi đăng ký, VNPay gửi thông tin sandbox: **mã website (`vnp_TmnCode`)**, **chuỗi bí mật (`HashSecret`)** và đường dẫn đăng nhập trang quản trị merchant. *(Đã kiểm chứng 12/11/2026: thư VNPay đúng như mô tả, xem mục 1.)*
 3. **Gửi `vnp_TmnCode` và `HashSecret` cho Dũng qua kênh riêng** (tin nhắn trực tiếp hoặc trình quản lý mật khẩu). Đây là khóa sandbox, không phải khóa tiền thật, nhưng **không** đưa vào repo, tài liệu, ADR, ảnh chụp màn hình công khai hay chat với AI. Dũng đặt vào biến môi trường ở mục 3 trên máy mình (file `.env.local` hoặc biến hệ thống, **không commit**), rồi báo "đã đặt xong".
 4. **Đăng ký IPN URL:** tài liệu chính thức nói gửi IPN URL cho VNPay khi hoàn tất tích hợp ([trang thanh toán](https://sandbox.vnpayment.vn/apis/docs/thanh-toan-pay/pay.html)); trang quản trị merchant có thể có ô cấu hình IPN URL trong mục sửa terminal (`TerminalEdit`), theo tài liệu thư viện cộng đồng, *chưa kiểm chứng trực tiếp*. Làm theo cách nào có trên tài khoản, ghi lại vào ADR của T65. Vì phải đăng ký địa chỉ với VNPay, dùng **tên miền tunnel cố định** (mục 4), không dùng địa chỉ đổi mỗi lần chạy.
 

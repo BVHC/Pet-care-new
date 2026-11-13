@@ -16,7 +16,7 @@ public final class ChatTexts {
     public static final String MEDICAL_REFUSAL = "Mình không thể chẩn đoán bệnh, kê đơn hay nêu liều dùng thuốc. "
             + "Bạn vui lòng đặt lịch khám để bác sĩ thú y tư vấn trực tiếp.";
     public static final String MEDICAL_RECORD =
-            "Mình không xem được hồ sơ bệnh án. Bạn xem ở Hồ sơ sức khỏe của thú (UC25) hoặc hỏi bác sĩ.";
+            "Mình không xem được hồ sơ bệnh án. Bạn xem ở Hồ sơ sức khỏe của thú hoặc hỏi bác sĩ.";
     public static final String UNAVAILABLE =
             "Trợ lý đang bận, bạn vui lòng thử lại sau ít phút hoặc đặt lịch để được tư vấn trực tiếp.";
     public static final String EMERGENCY = "Đây có thể là tình huống khẩn cấp. Hãy đưa thú tới ngay chi nhánh nhận "

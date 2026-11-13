@@ -37,6 +37,21 @@ public interface AiDocumentRepository extends JpaRepository<AiDocument, Long>, J
     @Query("SELECT d.id FROM AiDocument d WHERE d.vaccineTypeId = :vaccineTypeId")
     Optional<Long> findIdByVaccineTypeId(@Param("vaccineTypeId") Long vaccineTypeId);
 
+    /** Tài liệu phác đồ đang {@code PUBLISHED}: ST22 so {@code vaccineTypeId} với các loại còn phác đồ để lưu trữ phần hết. */
+    @Query("""
+            SELECT d.id AS id, d.vaccineTypeId AS vaccineTypeId FROM AiDocument d
+            WHERE d.sourceType = com.petcare.module.ai.entity.DocumentSource.CATALOG_PROTOCOL
+              AND d.status = com.petcare.module.ai.entity.DocumentStatus.PUBLISHED
+            ORDER BY d.id""")
+    List<PublishedProtocol> findPublishedProtocols();
+
+    /** Hai cột của {@link #findPublishedProtocols()}. */
+    interface PublishedProtocol {
+        Long getId();
+
+        Long getVaccineTypeId();
+    }
+
     /** Tài liệu {@code PUBLISHED} chưa có đoạn khớp phiên bản hiện tại (ST22, 07 §5.3 bước 1), theo id tăng. */
     @Query(value = """
             SELECT id FROM ai_documents

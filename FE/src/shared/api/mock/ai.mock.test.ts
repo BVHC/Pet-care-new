@@ -745,7 +745,7 @@ describe('chatbot: ý định cá nhân (BR-AI-26…28)', () => {
   });
 
   it('bệnh án / đơn thuốc kèm dấu hiệu sở hữu hoặc tên thú → MEDICAL_REFUSAL chỉ đường tới Hồ sơ sức khỏe, với mọi người dùng, không LLM', async () => {
-    const expected = 'Mình không xem được hồ sơ bệnh án. Bạn xem ở Hồ sơ sức khỏe của thú (UC25) hoặc hỏi bác sĩ.';
+    const expected = 'Mình không xem được hồ sơ bệnh án. Bạn xem ở Hồ sơ sức khỏe của thú hoặc hỏi bác sĩ.';
     for (const res of [await askPublic('Đơn thuốc của tôi hôm qua là gì?'), await askMe('Đơn thuốc của Mochi hôm qua là gì?'), await askMe('Kết quả xét nghiệm nhà mình đâu?')]) {
       expect(res).toMatchObject({ result: 'MEDICAL_REFUSAL', answer: expected });
       expectInvariants(res);

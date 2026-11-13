@@ -1,6 +1,6 @@
 # ADR-0133: Gợi ý cá nhân hóa UC92 và hồ sơ gợi ý UC94 (T78 = AI-4, ai-v1 #4, #12, #13)
 
-- **Trạng thái:** Proposed (Hiến làm việc AI-4 = T78, 11/11/2026; chờ Hiến duyệt các điểm ở mục "Cần Hiến xác nhận").
+- **Trạng thái:** Accepted (Hiến và nhóm duyệt 12/11/2026, các điểm ở mục "Đã chốt 12/11/2026"). Từng Proposed khi làm việc AI-4 = T78, 11/11/2026.
 - **Liên quan:** ADR-0006 (thú thuộc chủ hiện tại, người khác là 404), 0028 (Bean Validation chạy trước `@PreAuthorize`), 0113 (`VisitQueryApi.AgeGroup`), 0117, 0129 (I-1…I-8 đã cài thật), 0130 (bảng `ai_item_profiles`, UC93), 0132 (mẫu `PetAssistantController`); đặc tả `07` §4.4 (BR-AI-18…23), §4.6, §7, §8, §10, §11, §14.3; `docs/06` §6b hàng 16; hợp đồng `ai-v1` #4, #12, #13.
 - **Đánh số:** không có migration (V34 đã có `ai_item_profiles`, V35 đã có đủ khóa `ai.reco.*`). ADR kế tiếp: **0134**.
 
@@ -57,7 +57,7 @@ T78 cài UC92 (`GET /api/me/ai/pets/{petId}/recommendations`, #4) và UC94 (`GET
 ### D10. Hợp đồng và parity
 Hợp đồng HTTP không đổi (`m_ai.py`, `ai-v1.yaml` đã có sẵn #4, #12, #13; không chạy lại bộ sinh). `OpenApiContractParityIT`: ghim `hasSize` nâng 197 → 200 (đúng 3 endpoint mới). `limit` ngoài 1–12 do Spring MVC kiểm trên `@RequestParam` (không `@Validated` ở lớp) → 400 `VALIDATION_FAILED`.
 
-## Giả định ở chỗ đặc tả im lặng (cần Hiến xác nhận)
+## Giả định ở chỗ đặc tả im lặng (đã chốt 12/11/2026, xem mục "Đã chốt 12/11/2026")
 
 1. **`c_max`** lấy trên ứng viên của nhóm, trước khi loại theo hồ sơ (D5). Cách khác (sau khi loại) cũng khớp ví dụ §7.3 nếu có mục thứ tư làm `c_max`.
 2. **"Từng dùng dịch vụ thẩm mỹ khác"** chỉ tính dịch vụ nhóm `GROOMING` (D4).
@@ -169,11 +169,13 @@ Ghi chú: ví dụ tính tay §7.3 (92,0 / loại / 37,0) là ca bảng ở cả
 - **`OpenApiContractParityIT`: 11 ca, 5 đỏ, đúng 5 ca đỏ của mốc trước, không ca nào của `ai`.** Bốn ca do lệch `feedbacks` sẵn có (`GET /api/feedbacks`, `/{feedbackId}`, `/api/me/feedbacks`: mô tả, tham số, cây thuộc tính) và `POST /api/feedbacks/{feedbackId}/resolve` có trong code mà `content-v1.yaml` không có; ca đếm endpoint: **199 so với ghim 200** (mốc trước 196 so với 197; chênh 1 cũng do `resolveFeedback`). 199 = 196 + 3 chứng tỏ #4, #12, #13 được tính đúng, và cả ba có mặt trong danh sách `documentedOps`. Các ca `responseCodesAndErrorDescriptionsMatchContract`, `everyLeafPropertyHasARealisticExample`, `responsesExposeNoSecretField`, `structureIsConsistent` xanh, nên mô tả lỗi, ví dụ và cây thuộc tính của #4, #12, #13 khớp hợp đồng.
 - Hợp đồng HTTP không đổi (`m_ai.py`, `ai-v1.yaml` đã có sẵn #4, #12, #13); không chạy lại bộ sinh.
 
-## Cần Hiến xác nhận
+## Đã chốt 12/11/2026
 
-- Các giả định 1–11 ở trên, nhất là 1 (`c_max`), 3 (trạng thái lưu trú), 8 (hồ sơ rỗng xóa dòng) và 9 (cache theo tiến trình).
-- Method mới `CatalogQueryApi.findRecommendDisplay` trong module của BE-2 (D9): báo Dũng, ghi ở `docs/06` §6b.
-- Ngưỡng SENIOR theo loài vẫn là giá trị tạm (Q3, `07` §7.3): đổi bằng [CFG], không cần sửa mã.
+Hiến và nhóm duyệt ngày 12/11/2026 (nội dung gốc giữ nguyên làm lịch sử, thêm "Quyết định" cho từng điểm).
+
+- Các giả định 1–11 ở trên, nhất là 1 (`c_max`), 3 (trạng thái lưu trú), 8 (hồ sơ rỗng xóa dòng) và 9 (cache theo tiến trình). **Quyết định: duyệt nguyên giả định 1–11.**
+- Method mới `CatalogQueryApi.findRecommendDisplay` trong module của BE-2 (D9): báo Dũng, ghi ở `docs/06` §6b. **Quyết định: giữ (Hiến duyệt từ 11/11/2026, D9);** báo Dũng trong tin nhắn gộp 12/11/2026 (`.c2-tmp/final2/msg-be-adr-ai-12-11.md`).
+- Ngưỡng SENIOR theo loài vẫn là giá trị tạm (Q3, `07` §7.3): đổi bằng [CFG], không cần sửa mã. **Quyết định: vẫn là [CFG] tạm** (Q3 chưa giải).
 
 ## Chưa làm / chưa chạy
 
