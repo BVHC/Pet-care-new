@@ -15,10 +15,13 @@ import org.springframework.web.bind.annotation.RestController;
 import com.petcare.module.ai.dto.AiDocumentResponse;
 import com.petcare.module.ai.dto.AiDocumentSummaryResponse;
 import com.petcare.module.ai.dto.CreateAiDocumentRequest;
+import com.petcare.module.ai.dto.ImportAiDocumentRequest;
+import com.petcare.module.ai.dto.ImportAiDocumentResponse;
 import com.petcare.module.ai.dto.UpdateAiDocumentRequest;
 import com.petcare.module.ai.entity.DocumentSpecies;
 import com.petcare.module.ai.entity.DocumentStatus;
 import com.petcare.module.ai.entity.DocumentTopic;
+import com.petcare.module.ai.service.KnowledgeImportService;
 import com.petcare.module.ai.service.KnowledgeService;
 import com.petcare.platform.config.ApiErrorDoc;
 import com.petcare.platform.model.ApiResponse;
@@ -41,9 +44,11 @@ public class KnowledgeController {
     static final String SUPER_MANAGER = "hasRole('SUPER_MANAGER')";
 
     private final KnowledgeService knowledge;
+    private final KnowledgeImportService importer;
 
-    public KnowledgeController(KnowledgeService knowledge) {
+    public KnowledgeController(KnowledgeService knowledge, KnowledgeImportService importer) {
         this.knowledge = knowledge;
+        this.importer = importer;
     }
 
     /** ai-v1 #5. */
@@ -163,5 +168,20 @@ public class KnowledgeController {
     @PreAuthorize(SUPER_MANAGER)
     public ApiResponse<AiDocumentResponse> reindexAiDocument(@PathVariable Long documentId) {
         return ApiResponse.accepted(knowledge.reindex(documentId), "Đã xếp hàng nạp lại chỉ mục");
+    }
+
+    /** ai-v1 #14, Tài liệu#1 từ file. */
+    @Operation(operationId = "importAiDocument", tags = "Knowledge", summary = "Nạp tài liệu tri thức từ file",
+            description = "UC93 · BR-AI-14, 17, 29. Actor: A04. Quyền: Chỉ SUPER_MANAGER. Chuyển trạng thái: — → DRAFT "
+                + "(Tài liệu#1). Nhận `.md`, `.txt`, `.docx`, `.pdf` (base64 trong JSON, tối đa 2 MB); tạo một hoặc nhiều "
+                + "nháp `MANUAL`, không xuất bản. PDF scan không có lớp chữ bị từ chối. Xuất bản đi #9 với hai lớp BR-AI-14.")
+    @ApiErrorDoc(status = 400, description = "`BR-AI-29` kiểu file không hỗ trợ, nội dung không khớp phần mở rộng, quá cỡ, "
+            + "rỗng, hỏng, PDF không có chữ · `BR-AI-14` tiêu đề rỗng / quá 200 ký tự")
+    @ApiErrorDoc(status = 403)
+    @PostMapping("/import")
+    @ResponseStatus(HttpStatus.CREATED)
+    @PreAuthorize(SUPER_MANAGER)
+    public ApiResponse<ImportAiDocumentResponse> importAiDocument(@Valid @RequestBody ImportAiDocumentRequest request) {
+        return ApiResponse.created(importer.importFile(request), "Đã nạp file thành tài liệu nháp");
     }
 }

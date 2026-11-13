@@ -4,7 +4,8 @@
 // Không SQL, không ST22 (DRAFT không nạp chỉ mục). Idempotent theo tiêu đề. Giá trị frontmatter không có trong bảng → dừng, mã 2.
 //
 // Chạy (BE 8082 trên DB demo 5433):
-//   node BE/scripts/ai-kb/load-docs-rag.mjs [--api http://localhost:8082] [--dry-run]
+//   node BE/scripts/ai-kb/load-docs-rag.mjs [--api http://localhost:8082] [--dry-run] [--publish-demo] [--archive-superseded]
+// --publish-demo: PATCH người rà soát GIẢ ĐỊNH rồi xuất bản (cho demo, Q2 mở). --archive-superseded: lưu trữ tài liệu MANUAL cũ đang PUBLISHED không thuộc docs_RAG (trừ KEEP_TITLES).
 // Mã thoát: 0 xong · 2 dữ liệu lệch (topic lạ, trùng tiêu đề / document_id, quá 20 000 ký tự) · 3 API lỗi.
 // Ghi D:/Do-an/.c2-tmp/ai-kb/docs-rag-map.json (document_id → documentId) cho bộ đo.
 import { mkdirSync, readdirSync, readFileSync, statSync, writeFileSync } from 'node:fs';
@@ -98,6 +99,53 @@ export function toCreateRequest(d) {
   };
 }
 
+// ---- xuất bản demo và lưu trữ kho cũ (13/11/2026, Hiến chọn "B": xuất bản cả 21 với người rà soát GIẢ ĐỊNH, bỏ kho cũ) -----------
+export const DEMO_REVIEWER = 'BS. Nguyễn Văn Nam';   // GIẢ ĐỊNH cho demo (Hiến quyết 9/11/2026), không phải bác sĩ thật; Q2 vẫn mở
+const DEMO_NOTE = 'Duyệt giả định cho demo.';
+
+// Bốn tài liệu riêng của Pet Care (lưu trú, cấp cứu ngoài giờ, dịch vụ): docs_RAG không có, nên giữ khi lưu trữ kho cũ.
+export const KEEP_TITLES = [
+  'Chăm sóc thú cưng sau khi lưu trú trở về',
+  'Chuẩn bị khi đưa thú cưng đi lưu trú',
+  'Cấp cứu ngoài giờ tại Pet Care',
+  'Dịch vụ của Pet Care và cách đặt lịch hẹn',
+];
+
+/** Thân PATCH để một tài liệu DRAFT đủ hai lớp BR-AI-14 (nguồn + người rà soát giả định); nhãn "giả định" luôn nằm cuối sourceNote. */
+export function demoReviewPatch(doc, reviewerName, reviewedOn) {
+  const note = String(doc.sourceNote ?? '');
+  const sourceNote = note.endsWith(DEMO_NOTE) ? note
+    : `${note.slice(0, SOURCE_NOTE_MAX - DEMO_NOTE.length - 1)} ${DEMO_NOTE}`;
+  return { sourceNote, reviewerName, reviewedOn };
+}
+
+/**
+ * Id tài liệu cũ cần lưu trữ: MANUAL đang PUBLISHED, tiêu đề thuộc **kho demo cũ** (`oldKbTitles`: `title:` của BE/scripts/spike/kb),
+ * không thuộc docs_RAG, không thuộc KEEP_TITLES. Giới hạn theo kho cũ để chạy lại sau này không lưu trữ nhầm tài liệu người dùng tự nạp.
+ */
+export function supersededOldDocs(existing, ragTitles, oldKbTitles) {
+  return existing.filter((d) => d.sourceType === 'MANUAL' && d.status === 'PUBLISHED' && oldKbTitles.has(d.title)
+    && !ragTitles.has(d.title) && !KEEP_TITLES.includes(d.title)).map((d) => d.documentId);
+}
+
+/** Tiêu đề trùng (bản đã lưu trữ và bản đang dùng): ưu tiên tài liệu chưa lưu trữ, bất kể thứ tự danh sách. */
+export function indexByTitle(documents) {
+  const byTitle = new Map();
+  for (const d of documents) {
+    const seen = byTitle.get(d.title);
+    if (!seen || (seen.status === 'ARCHIVED' && d.status !== 'ARCHIVED')) byTitle.set(d.title, d);
+  }
+  return byTitle;
+}
+
+/** `title:` của 29 file kho demo cũ (BE/scripts/spike/kb), cùng nguồn với load-demo-kb.mjs. */
+function oldDemoKbTitles(spikeKbDir) {
+  return new Set(readdirSync(spikeKbDir).filter((f) => f.endsWith('.md')).map((f) => {
+    const m = /^title:\s*(.+)$/m.exec(readFileSync(join(spikeKbDir, f), 'utf8').replace(/\r\n/g, '\n'));
+    return m ? m[1].trim() : null;
+  }).filter(Boolean));
+}
+
 // ---- CLI ------------------------------------------------------------------------------------------------------------
 async function main() {
   const here = dirname(fileURLToPath(import.meta.url));
@@ -132,7 +180,7 @@ async function main() {
   const api = makeClient(args.api ?? process.env.AI_API_URL ?? 'http://localhost:8082');
   let token;
   try { token = await api.login(repoRoot); } catch (e) { console.error(e.message); process.exit(3); }
-  const existing = new Map((await api.listAll(token)).map((x) => [x.title, x]));
+  const existing = indexByTitle(await api.listAll(token));
   const map = {}; let created = 0; let kept = 0;
   for (const [d, r] of plan) {
     if (r.skip) continue;
@@ -142,9 +190,36 @@ async function main() {
     if (res.status !== 201) { console.error(`Tạo "${r.title}": HTTP ${res.status} ${res.json?.errorCode ?? ''} ${res.json?.message ?? ''}`); process.exit(3); }
     map[d.documentId] = res.json.data.documentId; created++;
   }
+  if (args['publish-demo'] === 'true') {
+    const reviewedOn = new Date().toLocaleDateString('sv-SE', { timeZone: 'Asia/Ho_Chi_Minh' });
+    console.log(`Xuất bản demo với người rà soát GIẢ ĐỊNH ${DEMO_REVIEWER}, ngày ${reviewedOn} (không phải bác sĩ thật; Q2 mở)`);
+    let published = 0; let already = 0;
+    for (const [d, r] of plan) {
+      if (r.skip) continue;
+      const id = map[d.documentId];
+      const cur = await api.call('GET', `/api/ai/documents/${id}`, undefined, token);
+      if (cur.status !== 200) { console.error(`Đọc #${id}: HTTP ${cur.status}`); process.exit(3); }
+      if (cur.json.data.status !== 'DRAFT') { already++; continue; }
+      const patch = await api.call('PATCH', `/api/ai/documents/${id}`, demoReviewPatch(cur.json.data, DEMO_REVIEWER, reviewedOn), token);
+      if (patch.status !== 200) { console.error(`Sửa #${id}: HTTP ${patch.status} ${patch.json?.errorCode ?? ''} ${patch.json?.message ?? ''}`); process.exit(3); }
+      const pub = await api.call('POST', `/api/ai/documents/${id}/publish`, undefined, token);
+      if (pub.status !== 200) { console.error(`Xuất bản #${id}: HTTP ${pub.status} ${pub.json?.errorCode ?? ''} ${pub.json?.message ?? ''}`); process.exit(3); }
+      published++;
+    }
+    console.log(`Xuất bản: ${published} tài liệu; đã xuất bản từ trước (bỏ qua): ${already}. ST22 sẽ nạp chỉ mục nền (vài phút).`);
+  }
+  if (args['archive-superseded'] === 'true') {
+    const ragTitles = new Set(plan.filter(([, r]) => !r.skip).map(([, r]) => r.title));
+    const old = supersededOldDocs(await api.listAll(token), ragTitles, oldDemoKbTitles(join(repoRoot, 'BE', 'scripts', 'spike', 'kb')));
+    for (const id of old) {
+      const res = await api.call('POST', `/api/ai/documents/${id}/archive`, undefined, token);
+      if (res.status !== 200) { console.error(`Lưu trữ #${id}: HTTP ${res.status} ${res.json?.errorCode ?? ''}`); process.exit(3); }
+    }
+    console.log(`Lưu trữ kho cũ: ${old.length} tài liệu (giữ ${KEEP_TITLES.length} tài liệu riêng của Pet Care và phác đồ tiêm). Hoàn tác: xuất bản lại ở /admin/ai.`);
+  }
   mkdirSync(outDir, { recursive: true });
   writeFileSync(join(outDir, 'docs-rag-map.json'), JSON.stringify({ writtenAt: new Date().toISOString(), api: api.API, ids: map }, null, 1));
-  console.log(`Xong: tạo mới ${created}, đã có ${kept} (không tạo trùng). Tất cả ở DRAFT, chưa xuất bản. Bản đồ: ${join(outDir, 'docs-rag-map.json')}`);
+  console.log(`Xong: tạo mới ${created}, đã có ${kept} (không tạo trùng). ${args['publish-demo'] === 'true' ? 'Đã xuất bản (người rà soát giả định).' : 'Tài liệu tạo mới ở DRAFT (chưa xuất bản); tài liệu đã có giữ nguyên trạng thái.'} Bản đồ: ${join(outDir, 'docs-rag-map.json')}`);
 }
 
 if (process.argv[1] && pathToFileURL(resolve(process.argv[1])).href === import.meta.url) {

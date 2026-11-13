@@ -181,6 +181,21 @@ export interface CreateAiDocumentRequest {
 }
 export type UpdateAiDocumentRequest = Partial<CreateAiDocumentRequest>;
 
+/** #14 nạp file (BR-AI-29): file gửi base64 trong JSON; phần mở rộng và cỡ tối đa BE cũng kiểm. */
+export const AI_IMPORT_EXTENSIONS = ['md', 'txt', 'docx', 'pdf'];
+export const AI_IMPORT_MAX_BYTES = 2 * 1024 * 1024;
+export interface ImportAiDocumentRequest {
+  fileName: string;
+  contentBase64: string;
+  topic: DocumentTopic;
+  species: DocumentSpecies;
+  sourceNote?: string | null;
+}
+export interface ImportAiDocumentResponse {
+  fileKind: string;
+  documents: AiDocument[];
+}
+
 // ─── Hồ sơ gợi ý (#12, #13) ───
 
 export interface ItemProfileQuery {

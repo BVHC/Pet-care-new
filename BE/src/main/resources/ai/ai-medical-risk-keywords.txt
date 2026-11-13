@@ -1,0 +1,21 @@
+# Cụm từ rủi ro y khoa của chatbot (docs/adr/0136 D2, BR-AI-33). Mỗi dòng một cụm từ.
+# CHỈ chạy khi [CFG] ai.chat.general_knowledge_enabled bật; khi tắt, đường ống giữ như T77 (Q24 giữ nguyên quyết định 12/11/2026).
+# Khớp như ai-emergency-keywords.txt: không phân biệt hoa thường, theo cụm có ranh giới từ, ưu tiên dạng có dấu; dạng bỏ dấu
+# chỉ dùng cho cụm từ 2 âm tiết trở lên. Trúng một cụm thì ChatService trả MEDICAL_REFUSAL, không gọi embedding hay LLM.
+# Dùng CỤM đủ nghĩa, không dùng từ đơn ("liều", "thuốc") vì trùng "liều lượng vận động", "thuốc lá".
+bị bệnh gì
+mắc bệnh gì
+bệnh gì
+chẩn đoán
+kê đơn
+uống thuốc gì
+dùng thuốc gì
+cho uống thuốc
+thuốc gì
+liều thuốc
+liều dùng
+bao nhiêu mg
+bao nhiêu ml thuốc
+tự điều trị
+tự chữa
+điều trị tại nhà

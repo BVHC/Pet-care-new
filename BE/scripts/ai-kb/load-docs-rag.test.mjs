@@ -83,3 +83,52 @@ test('sourceNote cắt 500 ký tự', () => {
 test('nội dung quá 20 000 ký tự thì ném', () => {
   assert.throws(() => toCreateRequest({ ...base, content: 'a'.repeat(20_001) }), /20 000/);
 });
+
+// ---- --publish-demo và --archive-superseded (13/11/2026, Hiến chọn B) -------------------------------------------------
+import { demoReviewPatch, supersededOldDocs, indexByTitle, KEEP_TITLES } from './load-docs-rag.mjs';
+
+test('demoReviewPatch: thêm người rà soát giả định, nhãn "giả định" trong sourceNote, ≤ 500 ký tự', () => {
+  const p = demoReviewPatch({ sourceNote: '[docs_RAG X v1 LOW] https://a.b' }, 'BS. Nguyễn Văn Nam', '2026-11-13');
+  assert.equal(p.reviewerName, 'BS. Nguyễn Văn Nam');
+  assert.equal(p.reviewedOn, '2026-11-13');
+  assert.match(p.sourceNote, /Duyệt giả định cho demo\.$/);
+  assert.ok(demoReviewPatch({ sourceNote: 'x'.repeat(495) }, 'A', '2026-11-13').sourceNote.length <= 500);
+  assert.match(demoReviewPatch({ sourceNote: 'x'.repeat(495) }, 'A', '2026-11-13').sourceNote, /Duyệt giả định cho demo\.$/);
+});
+
+test('demoReviewPatch không thêm nhãn hai lần', () => {
+  const once = demoReviewPatch({ sourceNote: 'a' }, 'A', '2026-11-13').sourceNote;
+  assert.equal(demoReviewPatch({ sourceNote: once }, 'A', '2026-11-13').sourceNote, once);
+});
+
+test('supersededOldDocs: chỉ MANUAL PUBLISHED thuộc kho demo cũ, không thuộc docs_RAG, không thuộc KEEP_TITLES', () => {
+  const docs = [
+    { documentId: 1, title: 'Cũ A', status: 'PUBLISHED', sourceType: 'MANUAL' },
+    { documentId: 2, title: KEEP_TITLES[0], status: 'PUBLISHED', sourceType: 'MANUAL' },
+    { documentId: 3, title: 'Mới R', status: 'PUBLISHED', sourceType: 'MANUAL' },
+    { documentId: 4, title: 'Phác đồ tiêm Dại (mèo)', status: 'PUBLISHED', sourceType: 'CATALOG_PROTOCOL' },
+    { documentId: 5, title: 'Cũ B', status: 'ARCHIVED', sourceType: 'MANUAL' },
+    { documentId: 6, title: 'Cũ C', status: 'DRAFT', sourceType: 'MANUAL' },
+    { documentId: 7, title: 'Tài liệu Hiến tự nạp sau này', status: 'PUBLISHED', sourceType: 'MANUAL' },
+  ];
+  const oldKb = new Set(['Cũ A', 'Cũ B', 'Cũ C', KEEP_TITLES[0], 'Mới R']);
+  assert.deepEqual(supersededOldDocs(docs, new Set(['Mới R']), oldKb), [1]);
+});
+
+test('supersededOldDocs không bao giờ lưu trữ tài liệu ngoài kho demo cũ (kể cả khi chạy lại sau khi người dùng nạp thêm)', () => {
+  const mine = [{ documentId: 9, title: 'Của Hiến', status: 'PUBLISHED', sourceType: 'MANUAL' }];
+  assert.deepEqual(supersededOldDocs(mine, new Set(), new Set(['Cũ A'])), []);
+});
+
+test('indexByTitle: trùng tiêu đề thì ưu tiên tài liệu chưa lưu trữ, bất kể thứ tự', () => {
+  const rows = [
+    { documentId: 59, title: 'Hành vi và huấn luyện chó', status: 'ARCHIVED' },
+    { documentId: 38, title: 'Hành vi và huấn luyện chó', status: 'PUBLISHED' },
+    { documentId: 70, title: 'Chỉ đã lưu trữ', status: 'ARCHIVED' },
+  ];
+  assert.equal(indexByTitle(rows).get('Hành vi và huấn luyện chó').documentId, 38);
+  assert.equal(indexByTitle([...rows].reverse()).get('Hành vi và huấn luyện chó').documentId, 38);
+  assert.equal(indexByTitle(rows).get('Chỉ đã lưu trữ').documentId, 70);
+});
+
+test('KEEP_TITLES là 4 tài liệu riêng của Pet Care', () => { assert.equal(KEEP_TITLES.length, 4); });

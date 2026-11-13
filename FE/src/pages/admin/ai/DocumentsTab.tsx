@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { Archive, Eye, Pencil, Plus, RefreshCw, Search, Send } from 'lucide-react';
+import { Archive, Eye, FileUp, Pencil, Plus, RefreshCw, Search, Send } from 'lucide-react';
 import { Button } from '../../../components/ui/button';
 import { Card, CardContent } from '../../../components/ui/card';
 import { Input } from '../../../components/ui/input';
@@ -23,6 +23,7 @@ import {
 import { formatDateTimeVn } from '../articles/format';
 import { TableState } from '../articles/TableState';
 import { DocumentForm } from './DocumentForm';
+import { ImportDocumentDialog } from './ImportDocumentDialog';
 import { INDEX_LABELS, INDEX_VARIANT, SOURCE_LABELS, SPECIES_LABELS, STATUS_LABELS, STATUS_VARIANT, TOPIC_LABELS } from './labels';
 
 const PAGE_SIZE = 20;
@@ -44,6 +45,7 @@ export function DocumentsTab() {
     size: PAGE_SIZE,
   });
   const [editing, setEditing] = useState<number | 'new' | null>(null);
+  const [importing, setImporting] = useState(false);
   const [notice, setNotice] = useState<Notice | null>(null);
   const publish = useAiMutation((d: AiDocumentSummary) => aiApi.publishDocument(d.documentId));
   const archive = useAiMutation((d: AiDocumentSummary) => aiApi.archiveDocument(d.documentId));
@@ -97,6 +99,10 @@ export function DocumentsTab() {
               </option>
             ))}
           </select>
+          <Button variant="outline" onClick={() => setImporting(true)}>
+            <FileUp className="h-4 w-4" />
+            Nạp từ file
+          </Button>
           <Button onClick={() => setEditing('new')}>
             <Plus className="h-4 w-4" />
             Tạo tài liệu
@@ -182,6 +188,16 @@ export function DocumentsTab() {
           {data && <Pager data={data} unit="tài liệu" onPage={setPage} />}
         </CardContent>
       </Card>
+
+      {importing && (
+        <ImportDocumentDialog
+          onClose={() => setImporting(false)}
+          onDone={(text) => {
+            setImporting(false);
+            setNotice({ kind: 'success', text });
+          }}
+        />
+      )}
 
       {editing !== null && (
         <DocumentForm

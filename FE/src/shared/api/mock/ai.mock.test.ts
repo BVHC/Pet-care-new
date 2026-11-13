@@ -59,6 +59,13 @@ const ROLES = {
   CUSTOMER: 'khach@petcare.vn',
 } as const;
 
+const b64 = (text: string) => {
+  const bytes = new TextEncoder().encode(text);
+  let binary = '';
+  for (let i = 0; i < bytes.length; i += 0x8000) binary += String.fromCharCode(...bytes.subarray(i, i + 0x8000));
+  return btoa(binary);
+};
+
 const STATE_KEY = 'petcare-mock-ai';
 const storedState = () => JSON.parse(localStorage.getItem(STATE_KEY) ?? '{}');
 
@@ -69,6 +76,7 @@ const KNOWLEDGE_CALLS: Record<string, Call> = {
   '#5 GET /ai/documents': (a) => client.get('/api/ai/documents', a),
   '#6 POST /ai/documents': (a) => client.post('/api/ai/documents', { title: 'T', topic: 'CARE', species: 'ALL', content: 'x' }, a),
   '#7 GET /ai/documents/{id}': (a) => client.get('/api/ai/documents/1', a),
+  '#14 POST /ai/documents/import': (a) => client.post('/api/ai/documents/import', { fileName: 'a.md', contentBase64: b64('# Tiêu đề\n\nNội dung'), topic: 'CARE', species: 'ALL' }, a),
   '#8 PATCH /ai/documents/{id}': (a) => client.patch('/api/ai/documents/9', { topic: 'CARE' }, a),
   '#9 POST /ai/documents/{id}/publish': (a) => client.post('/api/ai/documents/11/publish', {}, a),
   '#10 POST /ai/documents/{id}/archive': (a) => client.post('/api/ai/documents/9/archive', {}, a),
@@ -77,7 +85,7 @@ const KNOWLEDGE_CALLS: Record<string, Call> = {
   '#13 PUT /ai/item-profiles/{type}/{id}': (a) => client.put('/api/ai/item-profiles/SERVICE/3', { breedKeywords: [] }, a),
 };
 
-describe('phân quyền #5–#13: chỉ SUPER_MANAGER (BR-AI-17)', () => {
+describe('phân quyền #5–#14: chỉ SUPER_MANAGER (BR-AI-17)', () => {
   it.each(Object.keys(KNOWLEDGE_CALLS))('%s: 7 vai trò + không token', async (name) => {
     const call = KNOWLEDGE_CALLS[name];
     for (const [role, email] of Object.entries(ROLES)) {
@@ -186,6 +194,60 @@ describe('POST /ai/documents (#6) và GET /ai/documents/{id} (#7)', () => {
     expect((await failure(client.get('/api/ai/documents/x', await manager()))).data.errorCode).toBe('MALFORMED_REQUEST');
     expect(await getDoc(13)).toMatchObject({ sourceType: 'CATALOG_PROTOCOL', sourceNote: null, reviewerName: null, reviewedOn: null, status: 'PUBLISHED', indexStatus: 'INDEXED', indexedVersion: 1 });
     expect((await getDoc(13)).chunkCount).toBeGreaterThan(0);
+  });
+});
+
+describe('POST /ai/documents/import (#14, BR-AI-29)', () => {
+  const body = (over: object = {}) => ({ fileName: 'cham-soc-cho.md', contentBase64: b64('# Chăm sóc chó\n\nCho ăn hai bữa.'), topic: 'NUTRITION', species: 'DOG', ...over });
+  const post = async (data: unknown) => client.post('/api/ai/documents/import', data, await manager());
+
+  it('file .md → 201, một nháp MANUAL DRAFT không người rà soát, nguồn mặc định, chưa nạp chỉ mục', async () => {
+    const res = await post(body());
+    expect(res.status).toBe(201);
+    const { fileKind, documents } = res.data.data as { fileKind: string; documents: AiDocument[] };
+    expect(fileKind).toBe('MD');
+    expect(documents).toHaveLength(1);
+    expect(documents[0]).toMatchObject({
+      sourceType: 'MANUAL', title: 'cham-soc-cho', topic: 'NUTRITION', species: 'DOG', content: '# Chăm sóc chó\n\nCho ăn hai bữa.', reviewerName: null, reviewedOn: null,
+      status: 'DRAFT', version: 1, indexedVersion: 0, indexStatus: 'PENDING', publishedAt: null,
+    });
+    expect(documents[0].sourceNote).toBe('Nạp từ file cham-soc-cho (MD, 1 kB)');
+    expect(documents[0].documentId).toBe(17);
+    expect(await getDoc(17)).toEqual(documents[0]);
+  });
+
+  it('.docx và .pdf: mock không trích được chữ thật nên điền chữ giả định; sourceNote người dùng giữ nguyên', async () => {
+    const res = await post(body({ fileName: 'goc.docx', sourceNote: '  WSAVA 2024  ' }));
+    const doc = (res.data.data as { documents: AiDocument[] }).documents[0];
+    expect(doc.content).toBe('Nội dung trích từ goc.docx (mock).');
+    expect(doc.sourceNote).toBe('WSAVA 2024');
+    expect(((await post(body({ fileName: 'v.PDF' }))).data.data as { fileKind: string }).fileKind).toBe('PDF');
+  });
+
+  it('văn bản dài hơn 20 000 ký tự tách thành nhiều nháp "(phần n/N)", mỗi phần ≤ 20 000', async () => {
+    const res = await post(body({ contentBase64: b64('a'.repeat(45_000)) }));
+    const docs = (res.data.data as { documents: AiDocument[] }).documents;
+    expect(docs.map((d) => d.title)).toEqual(['cham-soc-cho (phần 1/3)', 'cham-soc-cho (phần 2/3)', 'cham-soc-cho (phần 3/3)']);
+    expect(docs.every((d) => d.content.length <= 20_000)).toBe(true);
+  });
+
+  it('từ chối BR-AI-29: định dạng, rỗng, base64 hỏng, quá cỡ; không tạo gì', async () => {
+    const rule = (msg: string) => [400, 'BUSINESS_RULE_VIOLATION', `${msg} (BR-AI-29)`];
+    expect(await errorOf(post(body({ fileName: 'chay.exe' })))).toEqual(rule('File có định dạng không được hỗ trợ (chỉ .md, .txt, .docx, .pdf)'));
+    expect(await errorOf(post(body({ fileName: 'khongduoi' })))).toEqual(rule('File có định dạng không được hỗ trợ (chỉ .md, .txt, .docx, .pdf)'));
+    expect(await errorOf(post(body({ contentBase64: '***' })))).toEqual(rule('Nội dung file không phải base64 hợp lệ'));
+    expect(await errorOf(post(body({ contentBase64: b64('   \n  ') })))).toEqual(rule('File không có chữ để nạp'));
+    expect(await errorOf(post(body({ contentBase64: b64('x'.repeat(2 * 1024 * 1024 + 1)) })))).toEqual(rule('File vượt quá tối đa 2048 kB'));
+    expect((await listDocs({ size: 100 })).totalElements).toBe(16);
+  });
+
+  it('VALIDATION_FAILED thiếu trường; MALFORMED_REQUEST sai kiểu; @Valid chạy trước vai trò', async () => {
+    expect((await errorOf(post({ fileName: 'a.md' })))[1]).toBe('VALIDATION_FAILED');
+    expect((await errorOf(post(body({ topic: undefined }))))[2]).toBe('topic: Chủ đề không được để trống');
+    expect((await errorOf(post(body({ fileName: 5 }))))[1]).toBe('MALFORMED_REQUEST');
+    const vet = await as(ROLES.VET);
+    expect((await failure(client.post('/api/ai/documents/import', { fileName: 'a.md' }, vet))).data.errorCode).toBe('VALIDATION_FAILED');
+    expect((await failure(client.post('/api/ai/documents/import', body(), vet))).status).toBe(403);
   });
 });
 

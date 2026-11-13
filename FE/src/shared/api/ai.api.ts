@@ -1,4 +1,4 @@
-// AI API — docs/api/ai-v1.md #1–13 (UC90–UC94). BE đã cài (T77a–T78), FE ghép thật ở T82 (11/11/2026); mock ai.mock.ts chỉ dùng khi VITE_API_MOCK=true.
+// AI API — docs/api/ai-v1.md #1–14 (UC90–UC94). BE đã cài (T77a–T78), FE ghép thật ở T82 (11/11/2026); mock ai.mock.ts chỉ dùng khi VITE_API_MOCK=true.
 // Chatbot luôn 200 với mọi kết quả nghiệp vụ (giao diện rẽ theo `result`); chỉ đầu vào sai là 400 và một IP gọi quá nhiều là 429 (BR-AI-09).
 // Khách đăng nhập gọi `askAsCustomer` (#2, CHỈ CUSTOMER), chưa đăng nhập gọi `ask` (#1, token gửi kèm bị bỏ qua nên không cá nhân hóa).
 // Tri thức (#5–11) và hồ sơ gợi ý (#12–13) chỉ SUPER_MANAGER.
@@ -11,6 +11,8 @@ import type {
   ChatRequest,
   ChatResponse,
   CreateAiDocumentRequest,
+  ImportAiDocumentRequest,
+  ImportAiDocumentResponse,
   ItemProfile,
   ItemProfileQuery,
   ItemProfileRow,
@@ -41,6 +43,8 @@ export const aiApi = {
   listDocuments: (query: AiDocumentQuery = {}) => get<PageResponse<AiDocumentSummary>>('/api/ai/documents', query),
   /** #6 → 201, DRAFT. 400 BR-AI-14 tiêu đề rỗng / quá 200 ký tự, nội dung quá 20 000 ký tự. */
   createDocument: (body: CreateAiDocumentRequest) => post<AiDocument>('/api/ai/documents', body),
+  /** #14 nạp file thành một hoặc nhiều nháp MANUAL (BR-AI-29). 400 `BR-AI-29` kiểu / cỡ / nội dung file; 403 không phải SUPER_MANAGER. */
+  importDocument: (body: ImportAiDocumentRequest) => post<ImportAiDocumentResponse>('/api/ai/documents/import', body),
   /** #7 */
   getDocument: (documentId: number) => get<AiDocument>(`/api/ai/documents/${documentId}`),
   /** #8 400 BR-AI-13 tài liệu CATALOG_PROTOCOL; 409 tài liệu ARCHIVED. Sửa nội dung tài liệu PUBLISHED tăng `version`. */

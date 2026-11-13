@@ -25,6 +25,10 @@ public final class ChatTexts {
             "Đây có thể là tình huống khẩn cấp. Hãy gọi ngay cho chi nhánh Pet Care gần nhất để được hướng dẫn.";
     public static final String NEED_LOGIN = "Vui lòng đăng nhập để xem lịch hẹn / lịch tiêm của bạn.";
     public static final String DISCLAIMER = "Thông tin tham khảo, không thay thế khám thú y.";
+    /** Tiền tố bắt buộc khi trả lời bằng kiến thức chung (không có tài liệu nội bộ làm căn cứ), BR-AI-33. */
+    public static final String GENERAL_PREFIX = "Thông tin tham khảo chung:";
+    public static final String GREETING = "Chào bạn! Mình là trợ lý AI của Pet Care. Bạn cứ hỏi về chăm sóc, dinh dưỡng, "
+            + "vệ sinh hay lịch tiêm của chó mèo nhé.";
     public static final String NEED_PET_CHOICE = "Bạn muốn xem lịch tiêm của bé nào?";
     public static final String NO_APPOINTMENT = "Bạn chưa có lịch hẹn sắp tới.";
     public static final String NO_PET = "Bạn chưa có thú cưng nào trong hồ sơ. Hãy thêm thú cưng để xem lịch tiêm.";

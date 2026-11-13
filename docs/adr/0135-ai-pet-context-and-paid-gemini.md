@@ -3,7 +3,7 @@
 - **Trạng thái:** Proposed (Hiến duyệt **hướng** 13/11/2026; nội dung chờ Hiến duyệt; T91). **Công tắc `ai.chat.pet_context_enabled` (`BOOL`) mặc định `false` và chỉ được bật sau khi mục "Hiến xác minh" dưới đây hoàn tất.**
 - **Ngày:** 2026-11-13
 - **Liên quan:** ADR-0122 (gói free, che tên thú), 0129 (I-1…I-10 đã cài), 0131 (đường ống), 0132 (chat cá nhân, che tên thú sau định tuyến), 0134, 0136; `07` §4.5 BR-AI-25 (v2), §4.7 BR-AI-32, §5.2 bước 6c, §5.4 khối `THÔNG TIN THÚ`, §12; `docs/06` §6b I-1.
-- **Đánh số:** [CFG] `ai.chat.pet_context_enabled` seed ở V52 (chung với ADR-0134, 0136). Không có endpoint mới.
+- **Đánh số:** [CFG] `ai.chat.pet_context_enabled` seed ở V53 (chung với ADR-0134, 0136). Không có endpoint mới.
 
 ## Bối cảnh
 
@@ -29,13 +29,13 @@ Chat cá nhân (T77c) chỉ có hai ý định tất định (lịch hẹn, lị
 
 - **Không gửi:** `petId`, `customerId`, tên thú (vẫn `[thú]`), ngày sinh chính xác, email, SĐT, token, bệnh án, đơn thuốc, ghi chú khám. Không có dữ liệu thức ăn (DB không có cột); không suy đoán.
 - Khối `THÔNG TIN THÚ` trong lời nhắc v2 (`07` §5.4) là văn bản tất định do BE dựng; lời nhắc nói rõ không bịa ngoài khối này và không dùng để chẩn đoán / nêu liều (BR-AI-02, 06 giữ nguyên, hậu kiểm liều vẫn chạy).
-- Nhật ký: chỉ `used_pet_context = true` (V52); **không** ghi nội dung khối. CHECK `ck_ai_chat_logs_no_content_for_personal` không đổi.
+- Nhật ký: chỉ `used_pet_context = true` (V53); **không** ghi nội dung khối. CHECK `ck_ai_chat_logs_no_content_for_personal` không đổi.
 
 ### D3. Thay đổi interface của module khác (báo Dũng)
 - `PetQueryApi.PetProfile` thêm `Sex sex`, `Boolean isNeutered` (cột `pets.sex`, `pets.is_neutered` đã có từ V1). Record đổi chữ ký → mọi `new PetProfile(...)` trong test của `customer`, `ai`, `boarding` phải sửa; ghi ở `06` §6b. Phương án không đổi record (method mới `findPetBody(petId)`) bị loại vì thêm một lượt đọc cho mỗi câu.
 
 ### D4. Công tắc và hành vi khi tắt
-- `ai.chat.pet_context_enabled = false` (mặc định, V52): bước 6c bị bỏ qua hoàn toàn; `/me/ai/chat` hành xử đúng như T77c; `used_pet_context = false`. Đổi [CFG] có hiệu lực ở lượt sau (đọc mỗi lượt), không cần khởi động lại.
+- `ai.chat.pet_context_enabled = false` (mặc định, V53): bước 6c bị bỏ qua hoàn toàn; `/me/ai/chat` hành xử đúng như T77c; `used_pet_context = false`. Đổi [CFG] có hiệu lực ở lượt sau (đọc mỗi lượt), không cần khởi động lại.
 
 ## Phương án đã loại
 

@@ -134,8 +134,15 @@ public class ChatService {
             return finish(viewer.signedIn() ? personalResponse(intent.get(), viewer, masked)
                     : ChatResponse.canned(ChatResult.NEED_LOGIN, ChatTexts.NEED_LOGIN, false), trace, false);
         }
+        boolean general = config.getBool(ConfigKey.AI_CHAT_GENERAL_KNOWLEDGE_ENABLED);
+        if (general && GeneralKnowledgeGuards.isGreeting(masked)) {
+            return finish(ChatResponse.canned(ChatResult.ANSWERED, ChatTexts.GREETING, false), trace, true);
+        }
+        if (general && GeneralKnowledgeGuards.isMedicalRisk(masked)) {
+            return finish(ChatResponse.canned(ChatResult.MEDICAL_REFUSAL, ChatTexts.MEDICAL_REFUSAL, true), trace, true);
+        }
         return retrieveAndAnswer(withoutPetNames, maskedPrevious.stream().map(text -> maskPetNames(text, petNames)).toList(),
-                trace);
+                trace, general);
     }
 
     /** Chỉ đổi dạng chữ khi khách có thú: khách vãng lai giữ nguyên câu hỏi. */
@@ -151,7 +158,7 @@ public class ChatService {
                 : ChatResponse.personal(reply.answer(), reply.bookingHint());
     }
 
-    private ChatResponse retrieveAndAnswer(String question, List<String> previous, Trace trace) {
+    private ChatResponse retrieveAndAnswer(String question, List<String> previous, Trace trace, boolean general) {
         List<RetrievedChunk> nearest;
         try {
             float[] vector = embeddings.embedQuery(question);
@@ -163,14 +170,15 @@ public class ChatService {
                 .orElse(null);
         double threshold = config.getDecimal(ConfigKey.AI_RETRIEVAL_MIN_SIMILARITY).doubleValue();
         List<RetrievedChunk> hits = nearest.stream().filter(chunk -> chunk.similarity() >= threshold).toList();
-        if (hits.isEmpty()) {
+        if (hits.isEmpty() && !general) {
             return finish(outOfScope(), trace, true);
         }
 
         trace.llmModel = llm.llmModel();
         LlmAnswer reply;
         try {
-            reply = llm.generate(ChatPrompt.SYSTEM, ChatPrompt.userBlock(hits, previous, question));
+            // Công tắc bật (docs/adr/0136): lời nhắc v2, kể cả khi không có đoạn nào đạt τ (khối tài liệu rỗng).
+            reply = llm.generate(general ? ChatPrompt.SYSTEM_GENERAL : ChatPrompt.SYSTEM, ChatPrompt.userBlock(hits, previous, question));
         } catch (AiProviderException e) {
             return unavailable(e, trace);
         }
@@ -181,7 +189,11 @@ public class ChatService {
         if (doseGuard.violates(reply.answer())) {
             return finish(ChatResponse.canned(ChatResult.MEDICAL_REFUSAL, ChatTexts.MEDICAL_REFUSAL, true), trace, true);
         }
-        return finish(ChatResponse.answered(reply.answer(), sourcesOf(hits), ChatTexts.DISCLAIMER), trace, true);
+        String answer = reply.answer();
+        if (hits.isEmpty() && !answer.startsWith(ChatTexts.GENERAL_PREFIX)) {
+            answer = ChatTexts.GENERAL_PREFIX + " " + answer;   // không có tài liệu làm căn cứ: không giả vờ lấy từ tài liệu nội bộ
+        }
+        return finish(ChatResponse.answered(answer, sourcesOf(hits), ChatTexts.DISCLAIMER), trace, true);
     }
 
     /** Tối đa 3 tài liệu có đoạn tương đồng cao nhất, không trùng (BR-AI-05); {@code hits} đã sắp giảm dần. */

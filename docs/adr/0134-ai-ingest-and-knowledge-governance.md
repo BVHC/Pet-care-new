@@ -3,7 +3,7 @@
 - **Trạng thái:** Proposed (Hiến duyệt **hướng** 13/11/2026; nội dung chờ Hiến duyệt trước khi viết mã; T88 / T89 / T90).
 - **Ngày:** 2026-11-13
 - **Liên quan:** ADR-0109 (LLM, embedding, pgvector), 0110 (V34 `ai_documents`), 0130 (UC93, FSM #13, ST22, #5 lưu trữ tự động phác đồ), 0131 (đường ống chat), 0135, 0136 (hai ADR còn lại của AI v2); `07` §1.1, §4.3 (BR-AI-13, BR-AI-14, BR-AI-29, BR-AI-30, BR-AI-31), §4.6, §8, §10, §11 (I-11, I-12); `docs/docs_RAG/00_governance/*`; hợp đồng `ai-v1`.
-- **Đánh số:** Flyway **V52** (V49 chừa BE-2, V51 dành cho gỡ bảng khiếu nại ở T70). Hợp đồng `ai-v1` thêm #14. Mã BR mới từ BR-AI-29 (26–28 đã dùng).
+- **Đánh số:** Flyway **V53** (V52 đã dùng cho công tắc kiến thức chung ở T92, không sửa; V49 chừa BE-2, V51 dành cho gỡ bảng khiếu nại ở T70). Hợp đồng `ai-v1` thêm #14. Mã BR mới từ BR-AI-29 (26–28 đã dùng).
 
 ## Bối cảnh
 
@@ -21,10 +21,10 @@ Sau AI-7, kho tri thức chatbot chỉ có 32 tài liệu (29 `MANUAL` tự so�
 - Tài liệu tạo ra **luôn `DRAFT`**, `source_note` = `sourceNote` người dùng gửi hoặc `"Nạp từ file <tên> (<kiểu>, <kB>)"`, không `reviewer_name`. Xuất bản đi đúng #9 với hai lớp kiểm soát (BR-AI-14). Vì vậy nạp file **không** đổi FSM #13 và không chạm truy hồi.
 - Audit: `AI_DOCUMENT_CREATED` cho từng tài liệu (như #6) kèm `importedFrom` (tên file, kiểu, kích thước, hash) trong ảnh chụp sau.
 
-### D2. Trường nguồn và phiên bản trên `ai_documents` (BR-AI-30, V52)
+### D2. Trường nguồn và phiên bản trên `ai_documents` (BR-AI-30, V53)
 - Thêm `external_id VARCHAR(100) NULL`, `UNIQUE` một phần (`WHERE external_id IS NOT NULL`): khóa idempotent cho file nạp (`FILE-…`), bài viết (`ARTICLE-<id>`), bộ `docs_RAG` (`PET-…`, khi script chuyển sang dùng cột này).
 - Thêm `risk_level VARCHAR(10) NULL CHECK (risk_level IN ('LOW','MODERATE','HIGH'))`: lấy từ frontmatter `docs_RAG` hoặc người quản lý đặt khi sửa; **chưa** dùng để lọc truy hồi ở T89 (chính sách lọc theo rủi ro thuộc ADR-0136 D3).
-- Enum `topic` thêm `SAFETY` (cấp cứu, sơ cứu, ngộ độc, an toàn trẻ em) và `LIFESTYLE` (nhận nuôi, đi lại, nhiều thú, thú già): V52 `DROP CONSTRAINT ck_ai_documents_topic` + `ADD` lại 8 giá trị; `DocumentTopic` và hợp đồng (#5 lọc `topic`, #6, #8) thêm hai giá trị; FE `labels.ts` thêm nhãn. Bảng ánh xạ `docs_RAG` (README) sau V52 đổi nhóm an toàn → `SAFETY`, lối sống → `LIFESTYLE` (script đọc enum từ một hằng, đổi một chỗ).
+- Enum `topic` thêm `SAFETY` (cấp cứu, sơ cứu, ngộ độc, an toàn trẻ em) và `LIFESTYLE` (nhận nuôi, đi lại, nhiều thú, thú già): V53 `DROP CONSTRAINT ck_ai_documents_topic` + `ADD` lại 8 giá trị; `DocumentTopic` và hợp đồng (#5 lọc `topic`, #6, #8) thêm hai giá trị; FE `labels.ts` thêm nhãn. Bảng ánh xạ `docs_RAG` (README) sau V53 đổi nhóm an toàn → `SAFETY`, lối sống → `LIFESTYLE` (script đọc enum từ một hằng, đổi một chỗ).
 - **Không** thêm trạng thái `PENDING_REVIEW` / `REJECTED` / `EXPIRED` vào DB (xem "Phương án đã loại"). Ánh xạ: file `VERIFIED` + `review.approved` = `PUBLISHED` có `reviewer_name` + `reviewed_on`; còn lại = `DRAFT`; `REJECTED` / `EXPIRED` = không nạp, đã nạp thì lưu trữ tay.
 - `keywords`, `life_stage`, `valid_from`, `valid_until` của frontmatter: **nợ**, không có cột. `keywords` có thể nhét vào văn bản nhúng sau khi đo Hybrid RAG (ADR-0136 D5), không phải bây giờ.
 
@@ -39,8 +39,23 @@ Sau AI-7, kho tri thức chatbot chỉ có 32 tài liệu (29 `MANUAL` tự so�
 - Hệ quả: BR-AI-01 bỏ "giá vaccine" khỏi ví dụ "gần chủ đề ngoài phạm vi"; câu Q của bộ 43 thuộc nhóm này **đổi kỳ vọng** → ghi ở bộ v2, baseline 43 giữ nguyên và được chạy với `ai.chat.business_intent_enabled = false` (ADR-0136 D6), nên Q16 "Giá tiêm vaccine dại bao nhiêu?" vẫn `OUT_OF_SCOPE` ở pha baseline.
 
 ### D5. Bộ `docs/docs_RAG` (T88, đã làm 13/11)
-- Nạp bằng `BE/scripts/ai-kb/load-docs-rag.mjs` qua UC93 #6, idempotent theo tiêu đề (chuyển sang `external_id` sau V52), **chỉ `DRAFT`**, không người rà soát; dry-run 21 / 21, test đơn vị 9 / 9. Nạp thật vào DB demo 5433 chờ Hiến cho phép.
-- Muốn demo thì xuất bản với người rà soát **giả định** như KB hiện tại (Hiến quyết 9/11), bằng lệnh riêng, nhãn giả định giữ ở mọi tài liệu; không coi là `VERIFIED` thật (Q2 chưa giải).
+- Nạp bằng `BE/scripts/ai-kb/load-docs-rag.mjs` qua UC93 #6, idempotent theo tiêu đề (chuyển sang `external_id` sau V53), nạp ở `DRAFT` rồi (13/11, Hiến chọn B) **xuất bản bằng `--publish-demo` với người rà soát giả định** "BS. Nguyễn Văn Nam" (sourceNote có nhãn "Duyệt giả định cho demo."); `--archive-superseded` lưu trữ 25 tài liệu demo cũ (chỉ các tiêu đề của `BE/scripts/spike/kb`, giữ 4 tài liệu riêng của Pet Care và 3 phác đồ). Đã chạy trên DB demo 5433: 28 `PUBLISHED`, 52 đoạn `INDEXED`. Test đơn vị 15 / 15, dry-run 21 / 21.
+- Người rà soát là **giả định** như KB demo trước (Hiến quyết 9/11); nhãn giả định giữ ở mọi tài liệu; không coi là `VERIFIED` thật (Q2 chưa giải). Bộ này gồm các tài liệu `HIGH` (cấp cứu, sơ cứu, ngộ độc, vaccine, ký sinh trùng) nên **chỉ dùng cho demo**, không dùng cho chạy thật khi chưa có bác sĩ thú y thật.
+
+## Đã cài ở T89 (13/11/2026, Hiến yêu cầu "nạp được file") và chỗ khác bản đề xuất
+
+Phần nạp file (D1) đã cài trước khi ADR được duyệt, theo yêu cầu của Hiến ngày 13/11. **Khác bản đề xuất ở trên** (ghi để Hiến duyệt lại):
+
+| Đề xuất | Đã cài | Lý do |
+|---|---|---|
+| `multipart/form-data` | **JSON base64** `{fileName, contentBase64, topic, species, sourceNote?}` | `m_ai.py` và `OpenApiContractParityIT` chưa hỗ trợ multipart, chưa có tiền lệ trong repo; JSON dùng chung cơ chế hợp đồng và mock FE |
+| Trần cỡ là [CFG] `ai.ingest.max_file_kb` (V53) | **Hằng 2 MB** (`DocumentFileReader.MAX_FILE_BYTES`) | Chưa có V53; đổi sang [CFG] khi làm V53 |
+| Hết giờ trích 20 giây | **Chưa có** (chỉ chặn cỡ file 2 MB và XML `.docx` giải nén > 10 MB) | Hạn chế bằng cỡ; làm khi có V53 |
+| `external_id` chống nạp trùng | **Chưa có**: nạp lại cùng file tạo thêm nháp | Cần V53; người quản lý xem danh sách và lưu trữ nháp thừa |
+| `risk_level`, topic `SAFETY` / `LIFESTYLE` | **Chưa có** | Cần V53 |
+| POI `poi-ooxml`, PDFBox | **Đã thêm**: `poi-ooxml` 5.2.5, `pdfbox` 2.0.27 | Chỉ các bản này có sẵn trong Maven cache của máy dev; ghi nhận để Hiến xác nhận hoặc nâng bản khi có mạng (PDFBox 3.x) |
+
+Đã làm đúng đề xuất: kiểm byte đầu **và** phần mở rộng, PDF scan bị từ chối (OCR ngoài phạm vi), không lưu file gốc, chặn zip bomb `.docx`, file > 20 000 ký tự tách theo `##` thành "(phần n/N)", tài liệu luôn `DRAFT` không người rà soát, một transaction cho cả file, audit `AI_DOCUMENT_CREATED` như #6, chỉ SUPER_MANAGER. Kiểm thử: `DocumentFileReaderTest` 11 ca, `KnowledgeImportIT` 6 ca, mock FE 5 ca + 2 ca giao diện (`AdminAIPage.test.tsx`).
 
 ## Phương án đã loại
 
@@ -55,8 +70,8 @@ Sau AI-7, kho tri thức chatbot chỉ có 32 tài liệu (29 `MANUAL` tự so�
 | Chỗ | Thay đổi |
 |---|---|
 | `docs/api/generator/m_ai.py` | #14 `POST /ai/documents/import` (multipart); #5 lọc `topic` và #6 / #8 enum thêm `SAFETY`, `LIFESTYLE`; `AiDocumentResponse` thêm `externalId`, `riskLevel` (nullable); 400 `BR-AI-29`, 409 `BR-AI-30` |
-| V52 | `ai_documents`: `external_id`, `risk_level`, enum `topic` 8 giá trị; seed [CFG] `ai.ingest.max_file_kb` (INT 2048, 256–10240) và `ai.chat.business_intent_enabled` (BOOL `false`) |
-| `ConfigKey` | `AI_INGEST_MAX_FILE_KB("ai.ingest.max_file_kb", INT)`, `AI_CHAT_BUSINESS_INTENT_ENABLED("ai.chat.business_intent_enabled", BOOL)`; `ConfigKeyTest`, `SystemConfigIT`, `SystemConfigAdminIT`: **85 → 89** khóa (4 khóa v2 của ADR-0134, 0135, 0136 cùng V52; đếm 13/11 trên `ConfigKey.java`); mock `identity-admin.seed.ts` thêm 4 dòng |
+| V53 | `ai_documents`: `external_id`, `risk_level`, enum `topic` 8 giá trị; seed [CFG] `ai.ingest.max_file_kb` (INT 2048, 256–10240) và `ai.chat.business_intent_enabled` (BOOL `false`) |
+| `ConfigKey` | `AI_INGEST_MAX_FILE_KB("ai.ingest.max_file_kb", INT)`, `AI_CHAT_BUSINESS_INTENT_ENABLED("ai.chat.business_intent_enabled", BOOL)`; `ConfigKeyTest`, `SystemConfigIT`, `SystemConfigAdminIT`: **85 → 89** khóa (4 khóa v2 của ADR-0134, 0135, 0136; đếm 13/11 trên `ConfigKey.java`. T92 đã thêm 1 khóa ở V52: 85 → 86; ba khóa còn lại cùng V53 → 89); mock `identity-admin.seed.ts` thêm 4 dòng |
 | `pom.xml` | `org.apache.poi:poi-ooxml`, `org.apache.pdfbox:pdfbox` (phiên bản chốt sau `mvn dependency:tree`, kiểm xung đột `commons-*`) |
 | `OpenApiContractParityIT` | ghim 200 → 201 (+1 endpoint) |
 | `docs/06` §6b | I-11 (`catalog`), I-12 (`content`), cả hai của BE-2: chờ Dũng xác nhận; chi nhánh tái dùng `listActiveBranches()` |
@@ -79,5 +94,5 @@ Sau AI-7, kho tri thức chatbot chỉ có 32 tài liệu (29 `MANUAL` tự so�
 
 1. Có chấp nhận thêm hai thư viện POI, PDFBox không (so với chỉ `.md` / `.txt` ở bước đầu, `.docx` / `.pdf` ở bước sau)?
 2. Bài viết đổi nội dung sau khi tài liệu đã `PUBLISHED`: giữ `PUBLISHED` và `version + 1`, hay về `DRAFT` chờ rà soát lại? (Đề xuất: về `DRAFT`, vì BR-AI-14 nói sửa nội dung phải cập nhật người rà soát.)
-3. Enum `topic` thêm `SAFETY`, `LIFESTYLE` (V52) hay giữ 6 giá trị và để `CARE` ôm hết?
+3. Enum `topic` thêm `SAFETY`, `LIFESTYLE` (V53) hay giữ 6 giá trị và để `CARE` ôm hết?
 4. Nạp thật 21 tài liệu `docs_RAG` vào 5433 (DRAFT) và có xuất bản với người rà soát giả định cho demo không?

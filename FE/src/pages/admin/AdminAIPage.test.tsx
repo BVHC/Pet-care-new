@@ -1,5 +1,5 @@
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
-import { render, screen, waitFor, within } from '@testing-library/react';
+import { fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { MemoryRouter } from 'react-router-dom';
 import { beforeAll, beforeEach, describe, expect, it } from 'vitest';
@@ -84,6 +84,44 @@ describe('tab Tài liệu tri thức', () => {
     await user.click(within(form).getByRole('button', { name: 'Lưu nháp' }));
     expect(await screen.findByRole('status')).toHaveTextContent('Đã lưu bản nháp “Cách cho mèo uống thuốc”');
     expect(within(await docRow('Cách cho mèo uống thuốc')).getByText('Nháp')).toBeInTheDocument();
+  });
+
+  it('nạp từ file (BR-AI-29): thiếu file / chủ đề / loài thì báo ngay; chọn file .md thì có bản nháp mới, chưa xuất bản', async () => {
+    const user = renderPage();
+    await docRow(T.draft);
+    await user.click(screen.getByRole('button', { name: /Nạp từ file/ }));
+    const dialog = await screen.findByRole('dialog', { name: 'Nạp tài liệu từ file' });
+    await user.click(within(dialog).getByRole('button', { name: 'Nạp file' }));
+    expect(within(dialog).getByText('Chọn một file.')).toBeInTheDocument();
+    expect(within(dialog).getByText('Chọn chủ đề.')).toBeInTheDocument();
+    expect(within(dialog).getByText('Chọn loài áp dụng.')).toBeInTheDocument();
+
+    const file = new File(['# Chải lông\n\nChải lông mỗi ngày.'], 'chai-long.md', { type: 'text/markdown' });
+    await user.upload(within(dialog).getByLabelText('File'), file);
+    await user.selectOptions(within(dialog).getByLabelText('Chủ đề'), 'HYGIENE');
+    await user.selectOptions(within(dialog).getByLabelText('Loài áp dụng'), 'DOG');
+    await user.click(within(dialog).getByRole('button', { name: 'Nạp file' }));
+
+    expect(await screen.findByRole('status')).toHaveTextContent('Đã nạp “chai-long.md” thành 1 bản nháp');
+    expect(within(await docRow('chai-long')).getByText('Nháp')).toBeInTheDocument();
+    expect(screen.queryByRole('dialog', { name: 'Nạp tài liệu từ file' })).not.toBeInTheDocument();
+  });
+
+  it('nạp từ file: file sai định dạng hoặc quá 2 MB bị chặn ngay ở giao diện, không gọi BE', async () => {
+    const user = renderPage();
+    await docRow(T.draft);
+    await user.click(screen.getByRole('button', { name: /Nạp từ file/ }));
+    const dialog = await screen.findByRole('dialog', { name: 'Nạp tài liệu từ file' });
+    await user.selectOptions(within(dialog).getByLabelText('Chủ đề'), 'CARE');
+    await user.selectOptions(within(dialog).getByLabelText('Loài áp dụng'), 'ALL');
+    fireEvent.change(within(dialog).getByLabelText('File'), { target: { files: [new File(['x'], 'chay.exe')] } }); // user.upload lọc theo `accept` nên không chọn được .exe
+    await user.click(within(dialog).getByRole('button', { name: 'Nạp file' }));
+    expect(within(dialog).getByText('Chỉ nhận file .md, .txt, .docx, .pdf.')).toBeInTheDocument();
+    const big = new File(['x'], 'lon.txt');
+    Object.defineProperty(big, 'size', { value: 2 * 1024 * 1024 + 1 }); // khỏi cấp phát 2 MB thật
+    fireEvent.change(within(dialog).getByLabelText('File'), { target: { files: [big] } });
+    await user.click(within(dialog).getByRole('button', { name: 'Nạp file' }));
+    expect(within(dialog).getByText('File vượt quá 2 MB.')).toBeInTheDocument();
   });
 
   it('xuất bản nháp thiếu nguồn và người rà soát: BE chặn (BR-AI-14), thông báo liệt kê phần thiếu ngay trên trang', async () => {

@@ -1,14 +1,16 @@
-// UC10 — dữ liệu seed của mock tham số [CFG] và mẫu thông báo, CHÉP từ migration của BE (V2 + V27 + V35 + V40 + V44…V46 + V48 cho tham số, V3…V26 + V40 cho mẫu, V4 sửa OTP_REGISTER).
+// UC10 — dữ liệu seed của mock tham số [CFG] và mẫu thông báo, CHÉP từ migration của BE (V2 + V27 + V35 + V40 + V44…V46 + V48 + V52 cho tham số, V3…V26 + V40 cho mẫu, V4 sửa OTP_REGISTER).
+// T92: 85 → 86 khóa (thêm `ai.chat.general_knowledge_enabled` của V52, khóa BOOL đầu tiên).
 // T57-A: 52 → 85 khóa (thêm 18 `ai.*` của V35 gồm 4 DECIMAL, 8 `complaint.*` / `workforce.*` của V40, 7 `shop.*` / `payment.*` / `returns.*` / `content.*` của V44, V45, V46, V48; V43 và V47 không seed khóa).
 // T57-A: mẫu thông báo 30 → 70 mã (thêm 40 mẫu tầng 3; migration V41…V48 không INSERT / UPDATE bảng mẫu, cả 40 mẫu nằm ở V40).
-// Không seed 6 khóa `complaint.*` và 7 mẫu `COMPLAINT_*` của V39 / V40 (còn 79 khóa, 63 mẫu); identity-admin.mock.test.ts lọc chúng khỏi phần SQL khi đối chiếu.
+// Không seed 6 khóa `complaint.*` và 7 mẫu `COMPLAINT_*` của V39 / V40 (còn 80 khóa, 63 mẫu); identity-admin.mock.test.ts lọc chúng khỏi phần SQL khi đối chiếu.
 // Không viết tay: identity-admin.mock.test.ts đọc lại SQL và so từng trường nên lệch BE là test đỏ. BE thêm khóa / mã mới thì thêm vào đây theo cùng migration.
 import type { NotificationTemplate, SystemConfig } from '../../types/identity';
 
-/** 85 tham số [CFG] của BE (`ConfigKey`), sắp theo key như `ORDER BY key`. `value` là mặc định. DECIMAL (4 khóa `ai.*`) là chuỗi chuẩn hóa như `ConfigValues`: '0.6', không '0.60'. */
+/** 86 tham số [CFG] của BE (`ConfigKey`), sắp theo key như `ORDER BY key`. `value` là mặc định. DECIMAL (4 khóa `ai.*`) là chuỗi chuẩn hóa như `ConfigValues`: '0.6', không '0.60'. */
 export const SEED_CONFIGS: SystemConfig[] = [
   { key: 'account.pending_ttl_hours', value: '24', valueType: 'INT', minValue: '1', maxValue: '168', unit: 'giờ', description: 'Tài khoản chưa xác thực quá thời gian này thì bị xóa (BR-TK-08, ST02)' },
   { key: 'address.max_per_customer', value: '5', valueType: 'INT', minValue: '1', maxValue: '20', unit: 'địa chỉ', description: 'Số địa chỉ tối đa trong sổ địa chỉ của khách (BR-TK-18)' },
+  { key: 'ai.chat.general_knowledge_enabled', value: 'false', valueType: 'BOOL', minValue: 'false', maxValue: 'true', unit: 'bật/tắt', description: 'Cho chatbot trả lời bằng kiến thức chăm sóc thú cưng phổ thông khi kho tri thức không có đáp án (BR-AI-33); tắt = chỉ trả lời từ tài liệu' },
   { key: 'ai.chat.max_previous_questions', value: '3', valueType: 'INT', minValue: '0', maxValue: '5', unit: 'câu', description: 'Số câu hỏi trước của chính người dùng được đưa vào ngữ cảnh (BR-AI-08)' },
   { key: 'ai.chat.max_question_chars', value: '500', valueType: 'INT', minValue: '100', maxValue: '2000', unit: 'ký tự', description: 'Độ dài tối đa của một câu hỏi chatbot (BR-AI-08)' },
   { key: 'ai.index.catalog_sync_minutes', value: '60', valueType: 'INT', minValue: '5', maxValue: '1440', unit: 'phút', description: 'Chu kỳ đồng bộ tài liệu phác đồ từ danh mục vaccine (ST22)' },

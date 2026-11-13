@@ -124,6 +124,16 @@ m.schema("CreateAiDocumentRequest", {
     "content": "string|≤ 20 000 ký tự (BR-AI-14)", "sourceNote": "string:500?|Lớp 1 — nguồn; bắt buộc khi xuất bản",
     "reviewerName": "string:100?|Lớp 2 — bác sĩ thú y rà soát; bắt buộc khi xuất bản", "reviewedOn": "date?|Ngày rà soát; bắt buộc khi xuất bản",
 })
+m.schema("ImportAiDocumentRequest", {
+    "fileName": "string:255|Tên file kèm phần mở rộng (.md, .txt, .docx, .pdf)",
+    "contentBase64": "string|Nội dung file mã hóa base64 (không kèm tiền tố data:), tối đa 2 MB trước khi mã hóa",
+    "topic": "ref:DocumentTopic|Chủ đề áp cho mọi tài liệu tạo ra", "species": "ref:DocumentSpecies",
+    "sourceNote": "string:500?|Lớp 1 — nguồn; bỏ trống thì ghi \"Nạp từ file <tên> (<kiểu>, <kB>)\"",
+})
+m.schema("ImportAiDocumentResponse", {
+    "fileKind": "string|Kiểu file đã đọc",
+    "documents": "array:ref:AiDocument|Tài liệu nháp đã tạo, theo thứ tự phần; file dài hơn 20 000 ký tự tách theo mục `##`",
+})
 m.schema("UpdateAiDocumentRequest", {
     "title": "string:200?", "topic": "ref:DocumentTopic?", "species": "ref:DocumentSpecies?",
     "content": "string?", "sourceNote": "string:500?", "reviewerName": "string:100?", "reviewedOn": "date?",
@@ -190,6 +200,11 @@ m.op("post", "/ai/documents", "createAiDocument", "Tạo tài liệu tri thức 
      "BR-AI-14, 17", "A04", A04, "— → DRAFT (Tài liệu#1)", body="CreateAiDocumentRequest", resp="AiDocument",
      status=201, errors=(400, 401, 403),
      err_desc={400: "`BR-AI-14` tiêu đề rỗng / quá 200 ký tự · nội dung quá 20 000 ký tự"})
+m.op("post", "/ai/documents/import", "importAiDocument", "Nạp tài liệu tri thức từ file", "Knowledge", "UC93",
+     "BR-AI-14, 17, 29", "A04", A04, "— → DRAFT (Tài liệu#1)", body="ImportAiDocumentRequest",
+     resp="ImportAiDocumentResponse", status=201, errors=(400, 401, 403),
+     err_desc={400: "`BR-AI-29` kiểu file không hỗ trợ, nội dung không khớp phần mở rộng, quá cỡ, rỗng, hỏng, PDF không có chữ · `BR-AI-14` tiêu đề rỗng / quá 200 ký tự"},
+     notes="Nhận `.md`, `.txt`, `.docx`, `.pdf` (base64 trong JSON, tối đa 2 MB); tạo một hoặc nhiều nháp `MANUAL`, không xuất bản. PDF scan không có lớp chữ bị từ chối. Xuất bản đi #9 với hai lớp BR-AI-14.")
 m.op("get", "/ai/documents/{documentId}", "getAiDocument", "Chi tiết tài liệu tri thức", "Knowledge", "UC93",
      "BR-AI-17", "A04", A04, resp="AiDocument", path_params=["DocumentId"], errors=(400, 401, 403, 404))
 m.op("patch", "/ai/documents/{documentId}", "updateAiDocument", "Sửa tài liệu tri thức", "Knowledge", "UC93",

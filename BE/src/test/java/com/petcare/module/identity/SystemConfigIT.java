@@ -104,6 +104,7 @@ class SystemConfigIT {
         expect("ai.reco.senior_age_years_cat", "10", "INT", "5", "15");           // 07 §7.3, Q3 (giá trị tạm)
         expect("ai.reco.senior_age_years_other", "7", "INT", "5", "15");          // 07 §7.3, Q3 (giá trị tạm)
         expect("ai.log.retention_days", "30", "INT", "1", "180");                 // BR-AI-24
+        expect("ai.chat.general_knowledge_enabled", "false", "BOOL", "false", "true"); // BR-AI-33, V52 (min / max của BOOL không dùng)
         // V40 (docs/adr/0113): 6 khóa complaint.* (docs/09 §G, BR-DG-05, 07, 08, 09) + 2 khóa workforce.* (docs/02
         // BR-NS-04, BR-NS-07). Giá trị mặc định theo đặc tả; min–max là giả định của T55b (ADR-0113)
         expect("complaint.max_open", "10", "INT", "1", "50");                     // BR-DG-05
@@ -145,7 +146,7 @@ class SystemConfigIT {
                     assertThat(rs.getString("description")).isNotBlank();
                 });
 
-        assertThat(EXPECTED).hasSize(85);
+        assertThat(EXPECTED).hasSize(86);
         assertThat(actual).isEqualTo(EXPECTED);
     }
 

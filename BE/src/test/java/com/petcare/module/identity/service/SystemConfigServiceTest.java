@@ -38,9 +38,11 @@ class SystemConfigServiceTest {
         for (ConfigKey key : ConfigKey.values()) {
             String value = key == ConfigKey.APPOINTMENT_NO_SHOW_AFTER_MINUTES
                     || key == ConfigKey.APPOINTMENT_REMINDER_HOURS_BEFORE ? "6" : "5";
-            rows.add(key.type() == ConfigValueType.TIME
-                    ? new ConfigRow(key.key(), "12:00", ConfigValueType.TIME, "06:00", "22:00")
-                    : new ConfigRow(key.key(), value, key.type(), "1", "10"));
+            rows.add(switch (key.type()) {
+                case TIME -> new ConfigRow(key.key(), "12:00", ConfigValueType.TIME, "06:00", "22:00");
+                case BOOL -> new ConfigRow(key.key(), "false", ConfigValueType.BOOL, "false", "true");   // V52: min / max không dùng
+                default -> new ConfigRow(key.key(), value, key.type(), "1", "10");
+            });
         }
         return rows;
     }
@@ -282,7 +284,7 @@ class SystemConfigServiceTest {
         return entity;
     }
 
-    /** ConfigKey hiện chưa có khóa DECIMAL/BOOL; bộ parse của hai kiểu này kiểm tra trực tiếp. */
+    /** Bộ parse DECIMAL / BOOL kiểm tra trực tiếp, kể cả giá trị sai (ConfigKey chỉ có khóa hợp lệ của hai kiểu này). */
     @Test
     void parsesDecimalAndBoolWithRange() {
         assertThat(SystemConfigService.parseInRange(row(ConfigValueType.DECIMAL, "2.50", "0", "10")))

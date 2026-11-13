@@ -54,7 +54,7 @@ import type {
   VaccinationStatus,
   VaccinationSummary,
 } from '../../types/ai';
-import { AI_LIMITS, DOCUMENT_SPECIES, DOCUMENT_STATUSES, DOCUMENT_TOPICS, ITEM_TYPES, PROFILE_SPECIES, RECO_GROUPS } from '../../types/ai';
+import { AI_IMPORT_EXTENSIONS, AI_IMPORT_MAX_BYTES, AI_LIMITS, DOCUMENT_SPECIES, DOCUMENT_STATUSES, DOCUMENT_TOPICS, ITEM_TYPES, PROFILE_SPECIES, RECO_GROUPS } from '../../types/ai';
 import type { Appointment } from '../../types/appointment';
 import type { Booking } from '../../types/boarding';
 import { SPECIES_LABELS, type Species, type VaccinationProtocol, type VaccineType } from '../../types/catalog';
@@ -384,6 +384,68 @@ const createDocument: MockHandler = (req) => {
   s.documents.push(doc);
   save(s);
   return ok(documentOf(doc), 201, 'Đã tạo tài liệu nháp');
+};
+
+/** #14 (BR-AI-29). Mock chỉ đọc được `.md` / `.txt`; `.docx` / `.pdf` thành nháp có chữ giả định (BE thật mới trích văn bản). */
+const importDocument: MockHandler = (req) => {
+  const b = req.body;
+  if (!isObject(b) || (b.fileName != null && typeof b.fileName !== 'string') || (b.contentBase64 != null && typeof b.contentBase64 !== 'string')) return malformed();
+  const bad = invalid([
+    ['fileName', 'Tên file không được để trống', isBlank(b.fileName)],
+    ['contentBase64', 'Nội dung file không được để trống', isBlank(b.contentBase64)],
+    ['topic', 'Chủ đề không được để trống', !has(b.topic)],
+    ['species', 'Loài áp dụng không được để trống', !has(b.species)],
+    ['sourceNote', `Ghi chú nguồn tối đa ${AI_LIMITS.sourceNote} ký tự`, tooLong(b.sourceNote, AI_LIMITS.sourceNote)],
+  ]);
+  if (bad) return bad;
+  if (!isSuperManager(req)) return denied();
+  const fileName = b.fileName as string;
+  const dot = fileName.lastIndexOf('.');
+  const ext = dot < 0 ? '' : fileName.slice(dot + 1).toLowerCase();
+  if (!AI_IMPORT_EXTENSIONS.includes(ext)) return ruleFail('BR-AI-29', 'File có định dạng không được hỗ trợ (chỉ .md, .txt, .docx, .pdf)');
+  let bytes: Uint8Array;
+  try {
+    bytes = Uint8Array.from(atob(b.contentBase64 as string), (c) => c.charCodeAt(0));
+  } catch {
+    return ruleFail('BR-AI-29', 'Nội dung file không phải base64 hợp lệ');
+  }
+  if (bytes.length === 0) return ruleFail('BR-AI-29', 'File rỗng');
+  if (bytes.length > AI_IMPORT_MAX_BYTES) return ruleFail('BR-AI-29', 'File vượt quá tối đa 2048 kB');
+  const text = (ext === 'md' || ext === 'txt' ? new TextDecoder().decode(bytes) : `Nội dung trích từ ${fileName} (mock).`).replace(/\r\n/g, '\n').trim();
+  if (!text) return ruleFail('BR-AI-29', 'File không có chữ để nạp');
+  const stem = (dot > 0 ? fileName.slice(0, dot) : fileName).trim().slice(0, AI_LIMITS.title - 20);
+  if (!stem) return ruleFail('BR-AI-29', 'Tên file không hợp lệ');
+  const parts: string[] = [];
+  for (let i = 0; i < text.length; i += AI_LIMITS.content) parts.push(text.slice(i, i + AI_LIMITS.content));
+  const s = load();
+  const at = nowIso();
+  const note = isBlank(b.sourceNote) ? `Nạp từ file ${stem} (${ext.toUpperCase()}, ${Math.max(1, Math.round(bytes.length / 1024))} kB)` : (b.sourceNote as string).trim();
+  const created = parts.map((content, i) => {
+    const doc: DocRow = {
+      documentId: s.nextDocumentId++,
+      sourceType: 'MANUAL',
+      title: parts.length === 1 ? stem : `${stem} (phần ${i + 1}/${parts.length})`,
+      topic: b.topic as DocumentTopic,
+      species: b.species as DocumentSpecies,
+      content,
+      sourceNote: note,
+      reviewerName: null,
+      reviewedOn: null,
+      status: 'DRAFT',
+      version: 1,
+      indexedVersion: 0,
+      indexStatus: 'PENDING',
+      indexError: null,
+      chunkCount: 0,
+      publishedAt: null,
+      updatedAt: at,
+      served: null,
+    };
+    s.documents.push(doc);
+    return documentOf(doc);
+  });
+  save(s);
+  return ok({ fileKind: ext.toUpperCase(), documents: created }, 201, 'Đã nạp file thành tài liệu nháp');
 };
 
 const getDocument = withDocument((_req, _s, doc) => ok(documentOf(doc)));
@@ -1202,6 +1264,7 @@ export const aiRoutes: Record<string, MockHandler> = {
   'GET /api/me/ai/pets/:petId/recommendations': getRecommendations,
   'GET /api/ai/documents': listDocuments,
   'POST /api/ai/documents': createDocument,
+  'POST /api/ai/documents/import': importDocument,
   'GET /api/ai/documents/:documentId': getDocument,
   'PATCH /api/ai/documents/:documentId': updateDocument,
   'POST /api/ai/documents/:documentId/publish': publishDocument,

@@ -40,7 +40,7 @@ Script đọc đúng bảng này; giá trị không có trong bảng thì dừng
 | grooming_skin, dental_care | `HYGIENE` |
 | vaccination, parasite_prevention | `VACCINATION` |
 
-`CARE` là ánh xạ tạm cho nhóm an toàn / cấp cứu / lối sống; ADR-0134 đề xuất thêm `SAFETY` và `LIFESTYLE` ở V52.
+`CARE` là ánh xạ tạm cho nhóm an toàn / cấp cứu / lối sống; ADR-0134 đề xuất thêm `SAFETY` và `LIFESTYLE` ở V53.
 
 - `species`: `[dog]` → `DOG`, `[cat]` → `CAT`, `[dog, cat]` → `ALL`.
 - Trạng thái: `DRAFT` / `PENDING_REVIEW` của file → `DRAFT` trong DB (không có người rà soát). `VERIFIED` kèm `review.approved: true` → `PUBLISHED` với `reviewer_name = review.reviewer_name`, `reviewed_on = review.reviewed_at`. `REJECTED` / `EXPIRED` → không nạp; đã nạp rồi thì lưu trữ tay qua UC93.

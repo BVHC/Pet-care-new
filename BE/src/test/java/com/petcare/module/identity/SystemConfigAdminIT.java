@@ -554,6 +554,12 @@ class SystemConfigAdminIT {
 
     /** Khoảng thực tế độc lập với code: seed V2 + bảng cặp của ADR-0036 (giá trị khóa kia lúc test chạy là seed). */
     private static Expected expected(ConfigKey key, String min, String max, String unit) {
+        if (key.type() == ConfigValueType.BOOL) {
+            // Khóa BOOL đầu tiên là ai.chat.general_knowledge_enabled (V52): min / max không dùng; chỉ đúng "true" / "false"
+            // (không đổi hoa thường, không "1" / "yes"); kết thúc ở "false" = mặc định để không để lại bật cho IT khác.
+            return new Expected(List.of("yes", "1", "TRUE", "True"), List.of("true", "false"),
+                    "Giá trị của " + key.key() + " phải là true hoặc false (BR-QT-13)");
+        }
         if (key.type() == ConfigValueType.TIME) {
             return new Expected(List.of("05:59", "22:01", "noon", "12:00:30"), List.of(min, max),
                     "Giá trị của " + key.key() + " phải là giờ dạng HH:mm từ " + min + " đến " + max + " (BR-QT-13)");

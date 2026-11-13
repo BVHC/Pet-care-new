@@ -16,7 +16,7 @@
 
 ---
 
-## A. Danh sách endpoint (13)
+## A. Danh sách endpoint (14)
 
 | # | Endpoint | Thao tác | Use case | Rule |
 |---|---|---|---|---|
@@ -26,13 +26,14 @@
 | 4 | `GET /me/ai/pets/{petId}/recommendations` | Gợi ý cá nhân hóa cho thú | UC92 | BR-AI-18…23 |
 | 5 | `GET /ai/documents` | Danh sách tài liệu tri thức | UC93 | BR-AI-17 |
 | 6 | `POST /ai/documents` | Tạo tài liệu tri thức (nháp) | UC93 | BR-AI-14, 17 |
-| 7 | `GET /ai/documents/{documentId}` | Chi tiết tài liệu tri thức | UC93 | BR-AI-17 |
-| 8 | `PATCH /ai/documents/{documentId}` | Sửa tài liệu tri thức | UC93 | BR-AI-14, 16, 17 |
-| 9 | `POST /ai/documents/{documentId}/publish` | Xuất bản tài liệu | UC93 | BR-AI-14, 16, 17 |
-| 10 | `POST /ai/documents/{documentId}/archive` | Lưu trữ tài liệu | UC93 | BR-AI-16, 17 |
-| 11 | `POST /ai/documents/{documentId}/reindex` | Nạp lại chỉ mục của tài liệu | UC93 | BR-AI-15, 16, 17 |
-| 12 | `GET /ai/item-profiles` | Danh sách dịch vụ / sản phẩm kèm hồ sơ gợi ý | UC94 | BR-AI-18, 20 |
-| 13 | `PUT /ai/item-profiles/{itemType}/{itemId}` | Lưu hồ sơ gợi ý | UC94 | BR-AI-18, 20, 17 |
+| 7 | `POST /ai/documents/import` | Nạp tài liệu tri thức từ file | UC93 | BR-AI-14, 17, 29 |
+| 8 | `GET /ai/documents/{documentId}` | Chi tiết tài liệu tri thức | UC93 | BR-AI-17 |
+| 9 | `PATCH /ai/documents/{documentId}` | Sửa tài liệu tri thức | UC93 | BR-AI-14, 16, 17 |
+| 10 | `POST /ai/documents/{documentId}/publish` | Xuất bản tài liệu | UC93 | BR-AI-14, 16, 17 |
+| 11 | `POST /ai/documents/{documentId}/archive` | Lưu trữ tài liệu | UC93 | BR-AI-16, 17 |
+| 12 | `POST /ai/documents/{documentId}/reindex` | Nạp lại chỉ mục của tài liệu | UC93 | BR-AI-15, 16, 17 |
+| 13 | `GET /ai/item-profiles` | Danh sách dịch vụ / sản phẩm kèm hồ sơ gợi ý | UC94 | BR-AI-18, 20 |
+| 14 | `PUT /ai/item-profiles/{itemType}/{itemId}` | Lưu hồ sơ gợi ý | UC94 | BR-AI-18, 20, 17 |
 
 ---
 
@@ -46,6 +47,7 @@
 | Gợi ý cá nhân hóa cho thú | A02 | CUSTOMER, chỉ thú hiện thuộc về mình | — | — | Không bao giờ có thuốc, vaccine, sản phẩm kê đơn, dịch vụ khám / tiêm (BR-SP-01, BR-AI-18). Mỗi lần tính từ dữ liệu thú hiện tại (BR-AI-23). |
 | Danh sách tài liệu tri thức | A04 | Chỉ SUPER_MANAGER | — | — | Mới sửa trước (`updatedAt` giảm dần, trùng thì `documentId` giảm dần). |
 | Tạo tài liệu tri thức (nháp) | A04 | Chỉ SUPER_MANAGER | — → DRAFT (Tài liệu#1) | — | — |
+| Nạp tài liệu tri thức từ file | A04 | Chỉ SUPER_MANAGER | — → DRAFT (Tài liệu#1) | — | Nhận `.md`, `.txt`, `.docx`, `.pdf` (base64 trong JSON, tối đa 2 MB); tạo một hoặc nhiều nháp `MANUAL`, không xuất bản. PDF scan không có lớp chữ bị từ chối. Xuất bản đi #9 với hai lớp BR-AI-14. |
 | Chi tiết tài liệu tri thức | A04 | Chỉ SUPER_MANAGER | — | — | — |
 | Sửa tài liệu tri thức | A04 | Chỉ SUPER_MANAGER | PUBLISHED → PUBLISHED (Tài liệu#3) hoặc sửa nháp | — | Sửa tài liệu `PUBLISHED` tăng `version`; ST22 dựng đoạn mới rồi hoán đổi trong một transaction, đoạn cũ phục vụ tới lúc đó (BR-AI-16). |
 | Xuất bản tài liệu | A04 | Chỉ SUPER_MANAGER | DRAFT / ARCHIVED → PUBLISHED (Tài liệu#2, #5) | — | `indexStatus` về `PENDING`; ST22 nạp chỉ mục sau commit. |
@@ -70,6 +72,7 @@
 
 - **`GET /ai/documents`** — Danh sách tài liệu tri thức. Query: `status?`, `topic?`, `species?`, `q?`, `page?`, `size?`. Response `200` trang `AiDocumentSummary`. Lỗi: `400` · `401` · `403`.
 - **`POST /ai/documents`** — Tạo tài liệu tri thức (nháp). Request `CreateAiDocumentRequest`. Response `201` `AiDocument`. Lỗi: `400` `BR-AI-14` tiêu đề rỗng / quá 200 ký tự · nội dung quá 20 000 ký tự · `401` · `403`.
+- **`POST /ai/documents/import`** — Nạp tài liệu tri thức từ file. Request `ImportAiDocumentRequest`. Response `201` `ImportAiDocumentResponse`. Lỗi: `400` `BR-AI-29` kiểu file không hỗ trợ, nội dung không khớp phần mở rộng, quá cỡ, rỗng, hỏng, PDF không có chữ · `BR-AI-14` tiêu đề rỗng / quá 200 ký tự · `401` · `403`.
 - **`GET /ai/documents/{documentId}`** — Chi tiết tài liệu tri thức. Response `200` `AiDocument`. Lỗi: `400` · `401` · `403` · `404`.
 - **`PATCH /ai/documents/{documentId}`** — Sửa tài liệu tri thức. Request `UpdateAiDocumentRequest`. Response `200` `AiDocument`. Lỗi: `400` `BR-AI-14` nội dung quá dài · tài liệu `CATALOG_PROTOCOL` không sửa tay (BR-AI-13) · `401` · `403` · `404` · `409` Tài liệu `ARCHIVED` không sửa được.
 - **`POST /ai/documents/{documentId}/publish`** — Xuất bản tài liệu. Response `200` `AiDocument`. Lỗi: `400` `BR-AI-14` thiếu `sourceNote` (lớp 1) hoặc `reviewerName` / `reviewedOn` (lớp 2) với tài liệu `MANUAL` · nội dung rỗng · `401` · `403` · `404` · `409` `INVALID_STATE_TRANSITION` trạng thái hiện tại không cho phép (03 #13).
@@ -105,6 +108,8 @@ Trường có `?` là không bắt buộc / có thể null. Kiểu `email`, `dat
 - **`AiDocumentSummary`** — {`documentId`: int64, `sourceType`: DocumentSource, `title`: string, `topic`: DocumentTopic, `species`: DocumentSpecies, `status`: DocumentStatus, `version`: int32, `indexStatus`: IndexStatus, `updatedAt`: date-time}
 - **`AiDocument`** — {`documentId`: int64, `sourceType`: DocumentSource, `title`: string, `topic`: DocumentTopic, `species`: DocumentSpecies, `content`: string, `sourceNote?`: string, `reviewerName?`: string, `reviewedOn?`: date, `status`: DocumentStatus, `version`: int32, `indexedVersion`: int32, `indexStatus`: IndexStatus, `indexError?`: string, `chunkCount`: int32, `publishedAt?`: date-time, `updatedAt`: date-time}
 - **`CreateAiDocumentRequest`** — {`title`: string, `topic`: DocumentTopic, `species`: DocumentSpecies, `content`: string, `sourceNote?`: string, `reviewerName?`: string, `reviewedOn?`: date}
+- **`ImportAiDocumentRequest`** — {`fileName`: string, `contentBase64`: string, `topic`: DocumentTopic, `species`: DocumentSpecies, `sourceNote?`: string}
+- **`ImportAiDocumentResponse`** — {`fileKind`: string, `documents`: [AiDocument]}
 - **`UpdateAiDocumentRequest`** — {`title?`: string, `topic?`: DocumentTopic, `species?`: DocumentSpecies, `content?`: string, `sourceNote?`: string, `reviewerName?`: string, `reviewedOn?`: date}
 - **`ProfileSpecies`** — enum: `DOG`, `CAT`, `OTHER`.
 - **`ItemProfile`** — {`species?`: ProfileSpecies, `minAgeWeeks?`: int32, `maxAgeWeeks?`: int32, `minWeightKg?`: number, `maxWeightKg?`: number, `breedKeywords`: [string], `repeatIntervalDays?`: int32}

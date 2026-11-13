@@ -48,6 +48,7 @@ import com.petcare.module.ai.retrieval.RetrievedChunk;
 import com.petcare.module.ai.service.KnowledgeIndexer;
 import com.petcare.module.appointment.AppointmentItSupport;
 import com.petcare.module.identity.service.SessionService;
+import com.petcare.module.identity.service.SystemConfigService;
 import com.petcare.support.MutableClock;
 import com.zaxxer.hikari.HikariDataSource;
 
@@ -115,6 +116,8 @@ class ChatIT {
     private SessionService sessions;
     @Autowired
     private PlatformTransactionManager transactionManager;
+    @Autowired
+    private SystemConfigService configService;
 
     private AiItSupport support;
     private final List<Long> branches = new ArrayList<>();
@@ -134,6 +137,7 @@ class ChatIT {
         support.cleanUp();
         branches.forEach(id -> jdbc.update("DELETE FROM branches WHERE id = ?", id));
         branches.clear();
+        setGeneralKnowledge(false);
     }
 
     // ================================================================ truy hồi thật (ChunkRetriever)
@@ -416,6 +420,53 @@ class ChatIT {
         assertThat(columns).containsExactlyInAnyOrder("id", "result", "error_kind", "question", "answer",
                 "top_similarity", "source_document_ids", "llm_model", "input_tokens", "output_tokens", "thought_tokens",
                 "latency_ms", "created_at");
+    }
+
+    // ================================================================ kiến thức chung có kiểm soát (BR-AI-33, V52)
+
+    @Test
+    void theGeneralKnowledgeSwitchIsOffByDefaultAndTheOldPipelineAnswersOutOfScopeWithoutAnyDocument() {
+        assertThat(jdbc.queryForObject("SELECT value FROM system_configs WHERE key = 'ai.chat.general_knowledge_enabled'",
+                String.class)).isEqualTo("false");
+
+        Map<String, Object> data = data(chat(Map.of("question", "Bao lâu nên cắt móng cho chó?")));
+
+        assertThat(data).containsEntry("result", "OUT_OF_SCOPE");
+        assertThat(llm.calls()).as("dưới τ thì không gọi LLM").isEmpty();
+    }
+
+    @Test
+    void withTheSwitchOnAPetCareQuestionWithoutADocumentIsAnsweredFromGeneralKnowledgeAndLogged() {
+        setGeneralKnowledge(true);
+        llm.reply(true, "Nên cắt móng khoảng 3–4 tuần một lần.");
+
+        Map<String, Object> data = data(chat(Map.of("question", "Bao lâu nên cắt móng cho chó?")));
+
+        assertThat(data).containsEntry("result", "ANSWERED").containsEntry("answer",
+                ChatTexts.GENERAL_PREFIX + " Nên cắt móng khoảng 3–4 tuần một lần.");
+        assertThat(sources(data)).isEmpty();
+        assertThat(llm.calls()).hasSize(1);
+        assertThat(llm.calls().get(0).systemPrompt()).isEqualTo(ChatPrompt.SYSTEM_GENERAL);
+        assertThat(onlyLog()).containsEntry("result", "ANSWERED");
+    }
+
+    @Test
+    void withTheSwitchOnAGreetingAndAMedicalRiskQuestionNeverReachTheProviders() {
+        setGeneralKnowledge(true);
+
+        assertThat(data(chat(Map.of("question", "hello")))).containsEntry("result", "ANSWERED")
+                .containsEntry("answer", ChatTexts.GREETING);
+        assertThat(data(chat(Map.of("question", "Chó nôn vàng uống thuốc gì?")))).containsEntry("result", "MEDICAL_REFUSAL")
+                .containsEntry("bookingHint", true);
+
+        assertThat(embeddings.calls()).isZero();
+        assertThat(llm.calls()).isEmpty();
+    }
+
+    /** [CFG] đọc từ cache; sửa DB rồi nạp lại như UC10 làm sau khi commit. */
+    private void setGeneralKnowledge(boolean on) {
+        jdbc.update("UPDATE system_configs SET value = ? WHERE key = 'ai.chat.general_knowledge_enabled'", String.valueOf(on));
+        configService.reload();
     }
 
     // ================================================================ hỗ trợ

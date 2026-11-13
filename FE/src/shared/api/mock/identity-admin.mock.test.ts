@@ -1162,10 +1162,10 @@ describe('bộ đọc SQL của ca đối chiếu seed — DELETE trên system_c
   });
 });
 
-describe('UC10 — tham số [CFG] seed khớp BE (V2, V27, V35, V40, V44, V45, V46, V48)', () => {
-  it.skipIf(!hasMigrations)('đúng 79 khóa, từng dòng giống hệt SQL (key, value, valueType, minValue, maxValue, unit, description), sắp theo key', async () => {
+describe('UC10 — tham số [CFG] seed khớp BE (V2, V27, V35, V40, V44, V45, V46, V48, V52)', () => {
+  it.skipIf(!hasMigrations)('đúng 80 khóa, từng dòng giống hệt SQL (key, value, valueType, minValue, maxValue, unit, description), sắp theo key', async () => {
     const expected = sqlConfigs();
-    expect(expected).toHaveLength(79); // = 85 hằng số ConfigKey của BE (52 của V2 + V27, 18 ai.* của V35, 8 của V40, 7 của V44…V48) trừ 6 complaint.* mà mock không seed (xem sqlSeed)
+    expect(expected).toHaveLength(80); // = 86 hằng số ConfigKey của BE (52 của V2 + V27, 19 ai.* của V35 + V52, 8 của V40, 7 của V44…V48) trừ 6 complaint.* mà mock không seed (xem sqlSeed)
     const rows = await getConfigs();
     expect(rows.map((r) => r.key)).toEqual(expected.map((r) => r.key));
     for (const [i, row] of rows.entries()) {
@@ -1177,7 +1177,7 @@ describe('UC10 — tham số [CFG] seed khớp BE (V2, V27, V35, V40, V44, V45, 
   it('dòng gõ tay theo V2 + V27 (+ V35, V40, V44…V48): khóa thật của BE có mặt, khóa bịa của bản mock cũ và khóa V27 đã xóa không còn', async () => {
     const rows = await getConfigs();
     const by = Object.fromEntries(rows.map((r) => [r.key, r]));
-    expect(rows).toHaveLength(79);
+    expect(rows).toHaveLength(80);
     expect(by['otp.ttl_minutes']).toEqual({ key: 'otp.ttl_minutes', value: '5', valueType: 'INT', minValue: '1', maxValue: '15', unit: 'phút', description: 'Thời gian hiệu lực của mã OTP (BR-TK-05)' });
     expect(by['boarding.checkout_time']).toMatchObject({ value: '12:00', valueType: 'TIME', minValue: '06:00', maxValue: '22:00', unit: 'giờ' });
     expect(by['address.max_per_customer']).toMatchObject({ value: '5', minValue: '1', maxValue: '20', unit: 'địa chỉ' });
@@ -1188,14 +1188,15 @@ describe('UC10 — tham số [CFG] seed khớp BE (V2, V27, V35, V40, V44, V45, 
     for (const old of ['customer.address_book_max', 'auth.otp_resend_seconds', 'auth.otp_max_per_hour', 'auth.session_ttl_hours', 'staff.online_window_minutes']) expect(by[old], old).toBeUndefined(); // staff.online_window_minutes: V27 xóa
   });
 
-  it('27 khóa tầng 3 gõ tay theo V35 / V40 / V44–V48: đúng số lượng từng nhóm, 4 khóa DECIMAL đều ở ai.*', async () => {
+  it('28 khóa tầng 3 gõ tay theo V35 / V40 / V44–V48 / V52: đúng số lượng từng nhóm, 4 khóa DECIMAL đều ở ai.*', async () => {
     const rows = await getConfigs();
     const by = Object.fromEntries(rows.map((r) => [r.key, r]));
     const prefixCount = (prefix: string) => rows.filter((r) => r.key.startsWith(prefix)).length;
-    expect([prefixCount('ai.'), prefixCount('complaint.'), prefixCount('workforce.'), prefixCount('shop.'), prefixCount('payment.'), prefixCount('returns.'), prefixCount('content.')]).toEqual([18, 0, 2, 3, 2, 1, 1]);
+    expect([prefixCount('ai.'), prefixCount('complaint.'), prefixCount('workforce.'), prefixCount('shop.'), prefixCount('payment.'), prefixCount('returns.'), prefixCount('content.')]).toEqual([19, 0, 2, 3, 2, 1, 1]);
     expect(rows.filter((r) => r.valueType === 'DECIMAL').map((r) => r.key)).toEqual(['ai.reco.weight_attr', 'ai.reco.weight_history', 'ai.reco.weight_popularity', 'ai.retrieval.min_similarity']);
-    expect(rows.filter((r) => r.valueType !== 'INT' && r.valueType !== 'DECIMAL').map((r) => r.key)).toEqual(['boarding.checkout_time']); // tầng 3 không thêm BOOL / TIME
+    expect(rows.filter((r) => r.valueType !== 'INT' && r.valueType !== 'DECIMAL').map((r) => r.key)).toEqual(['ai.chat.general_knowledge_enabled', 'boarding.checkout_time']); // BOOL duy nhất là công tắc V52 (T92); tầng 3 không thêm TIME
     expect(by['ai.retrieval.min_similarity']).toEqual({ key: 'ai.retrieval.min_similarity', value: '0.6', valueType: 'DECIMAL', minValue: '0.3', maxValue: '0.9', unit: 'cosine', description: 'Ngưỡng độ tương đồng cosine tối thiểu để một đoạn được dùng; dưới ngưỡng thì ngoài phạm vi (BR-AI-04)' });
+    expect(by['ai.chat.general_knowledge_enabled']).toMatchObject({ value: 'false', valueType: 'BOOL', minValue: 'false', maxValue: 'true', unit: 'bật/tắt' }); // mặc định tắt (BR-AI-33)
     expect(by['ai.reco.weight_attr']).toMatchObject({ value: '0.5', minValue: '0', maxValue: '1', unit: 'trọng số' });
     expect(by['ai.chat.max_question_chars']).toMatchObject({ value: '500', valueType: 'INT', minValue: '100', maxValue: '2000', unit: 'ký tự' });
     expect(by['ai.reco.senior_age_years_cat']).toMatchObject({ value: '10', minValue: '5', maxValue: '15', unit: 'năm' });
