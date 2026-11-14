@@ -19,23 +19,15 @@ class ConfigKeyTest {
     }
 
     @Test
-<<<<<<< HEAD
-    void catalogHas87Parameters() {
-=======
-    void catalogHas80Parameters() {
->>>>>>> f6ac718 (feat: T70: bỏ khiếu nại, feedback không còn trạng thái, giữ 30 ngày — V51, V52, ST24 FeedbackCleanupJob (ADR-0131))
+    void catalogHas82Parameters() {
         // 50 tham số [CFG] của docs/02 + session.ttl_hours (docs/adr/0003) + session.access_ttl_minutes (docs/adr/0091); V2 + V27 = 52 dòng
         // + 18 khóa ai.* (docs/07 §4.6, V35, docs/adr/0110) = 70
         // + 6 khóa complaint.* + 2 khóa workforce.* (V40, docs/adr/0113) = 78
         // + 7 khóa của BE-2 (docs/08 §G; V44, V45, V46, V48; docs/adr/0117) = 85
-<<<<<<< HEAD
         // + 1 công tắc BOOL ai.chat.general_knowledge_enabled (V52, docs/adr/0136) = 86
         // + 1 công tắc BOOL ai.chat.business_intent_enabled (V53, docs/adr/0134 "Đã cài ở T90") = 87
-        assertThat(ConfigKey.values()).hasSize(87);
-=======
-        // − 6 khóa complaint.* + 1 khóa feedback.retention_days (V51, docs/adr/0122, 0131) = 80
-        assertThat(ConfigKey.values()).hasSize(80);
->>>>>>> f6ac718 (feat: T70: bỏ khiếu nại, feedback không còn trạng thái, giữ 30 ngày — V51, V52, ST24 FeedbackCleanupJob (ADR-0131))
+        // − 6 khóa complaint.* + 1 khóa feedback.retention_days (V51, docs/adr/0122, 0131) = 82
+        assertThat(ConfigKey.values()).hasSize(82);
     }
 
     @Test
