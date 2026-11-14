@@ -770,6 +770,7 @@ Domain model gộp "bản bổ sung" vào CareLog; tách thành bảng con để
 | payment_id | BIGINT | ?, FK→payments | Gán khi `PAID` |
 | status | VARCHAR(10) | NN, CHECK | `OPEN`, `PENDING`, `PAID`, `CANCELLED` |
 | total_amount | BIGINT | NN, DEFAULT 0 | Tổng các dòng; cập nhật cùng transaction khi thêm/xóa dòng [ERD] |
+| version | BIGINT | NN, DEFAULT 0 | `@Version`: lưới an toàn chống ghi đè bản cũ, không thay khóa dòng; không ra API [ERD] (V54, ADR-0132) |
 | created_by | BIGINT | NN, FK→accounts | |
 | pending_at | TIMESTAMPTZ | ? | Thời điểm chốt; ST13 dùng để liệt kê Order quá hạn |
 | paid_at | TIMESTAMPTZ | ? | Mốc ghi nhận doanh thu (BR-BC-02) |

@@ -2,14 +2,8 @@ package com.petcare.module.content;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
-import java.sql.Timestamp;
-import java.time.Duration;
 import java.util.List;
 import java.util.Map;
-import java.util.concurrent.CompletableFuture;
-import java.util.concurrent.ExecutorService;
-import java.util.concurrent.Executors;
-import java.util.concurrent.TimeUnit;
 
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -17,12 +11,11 @@ import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.context.annotation.Import;
 import org.springframework.http.HttpMethod;
 import org.springframework.http.HttpStatus;
-import org.springframework.http.ResponseEntity;
 import org.springframework.test.context.ActiveProfiles;
 
 import com.petcare.TestcontainersConfiguration;
 
-/** Xem và xử lý feedback — content-v1 #20–22 (UC84; BR-DG-02, 03, 04) trên Postgres 17 thật. */
+/** Xem feedback, chỉ đọc, không trạng thái — content-v1 #20–21 (UC84; BR-DG-02, 03; ADR-0122) trên Postgres 17 thật. */
 @SpringBootTest(webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT)
 @ActiveProfiles("test")
 @Import({TestcontainersConfiguration.class, ContentItSupport.ContentClockConfig.class})
@@ -57,8 +50,8 @@ class FeedbackReviewIT extends ContentItSupport {
 
     private long feedback(Long branchId, String topic, String createdAt) {
         return jdbc.queryForObject("""
-                INSERT INTO feedbacks (customer_id, topic, branch_id, rating, content, status, created_at, updated_at)
-                VALUES (?, ?, ?, 4, 'Góp ý đủ dài để hợp lệ.', 'NEW', CAST(? AS timestamptz), CAST(? AS timestamptz))
+                INSERT INTO feedbacks (customer_id, topic, branch_id, rating, content, created_at, updated_at)
+                VALUES (?, ?, ?, 4, 'Góp ý đủ dài để hợp lệ.', CAST(? AS timestamptz), CAST(? AS timestamptz))
                 RETURNING id
                 """, Long.class, customerId, topic, branchId, createdAt, createdAt);
     }
@@ -89,10 +82,6 @@ class FeedbackReviewIT extends ContentItSupport {
         assertError(call(HttpMethod.GET, PATH + "/" + inB, managerA, null), HttpStatus.FORBIDDEN, "ACCESS_DENIED_SCOPE_MISMATCH");
         assertError(call(HttpMethod.GET, PATH + "/" + noBranch, managerA, null), HttpStatus.FORBIDDEN,
                 "ACCESS_DENIED_SCOPE_MISMATCH");
-        assertError(call(HttpMethod.POST, PATH + "/" + inB + "/resolve", managerA, Map.of("resolutionNote", "ok")),
-                HttpStatus.FORBIDDEN, "ACCESS_DENIED_SCOPE_MISMATCH");
-        assertThat(jdbc.queryForObject("SELECT status FROM feedbacks WHERE id = ?", String.class, inB))
-                .isEqualTo("NEW");
     }
 
     @Test
@@ -108,135 +97,67 @@ class FeedbackReviewIT extends ContentItSupport {
     }
 
     @Test
-    void filtersByBranchStatusTopicAndVietnamDayRange() {
-        jdbc.update("UPDATE feedbacks SET status = 'SEEN' WHERE id = ?", inB);
-
+    void filtersByBranchTopicAndVietnamDayRange() {
         assertThat(ids("?size=100&branchId=" + branchB, superManager)).containsExactly(inB);
-        assertThat(ids("?size=100&status=SEEN", superManager)).containsExactly(inB);
         assertThat(ids("?size=100&topic=WEBSITE", superManager)).containsExactly(noBranch);
         // 2004-03-10T17:00Z = 00:00 ngày 11/03 giờ VN: inA (01:00Z) và inB (02:00Z) là 10/03, noBranch (11/03 02:00Z) là 11/03.
         assertThat(ids("?size=100&from=2004-03-10&to=2004-03-10", superManager)).containsExactly(inB, inA);
         assertThat(ids("?size=100&from=2004-03-11&to=2004-03-11", superManager)).containsExactly(noBranch);
         assertError(call(HttpMethod.GET, PATH + "?from=2004-03-12&to=2004-03-10", superManager, null),
                 HttpStatus.BAD_REQUEST, "VALIDATION_FAILED");
-        assertError(call(HttpMethod.GET, PATH + "?status=NOPE", superManager, null), HttpStatus.BAD_REQUEST,
-                "MALFORMED_REQUEST");
     }
 
-    // ---------------------------------------------------------------- mở lần đầu: NEW → SEEN
+    /** ADR-0122: tham số {@code status} của bản cũ không còn nghĩa; client cũ còn gửi thì bị bỏ qua, không lỗi. */
+    @Test
+    void theRemovedStatusFilterIsIgnored() {
+        assertThat(ids("?size=100&status=SEEN", superManager)).containsExactly(noBranch, inB, inA);
+        assertThat(ids("?size=100&status=NOPE", superManager)).containsExactly(noBranch, inB, inA);
+    }
+
+    // ---------------------------------------------------------------- chi tiết: chỉ đọc
 
     @Test
-    void openingNewMarksSeenOnceAndShowsCustomerAndBranchNames() {
+    void detailShowsCustomerAndBranchNamesAndNoStatusFields() {
         Map<String, Object> opened = data(call(HttpMethod.GET, PATH + "/" + inA, managerA, null), HttpStatus.OK);
 
         assertThat(opened).containsOnlyKeys("feedbackId", "customerId", "customerName", "topic", "branchId",
-                        "branchName", "rating", "content", "status", "seenAt", "resolvedBy", "resolvedAt",
-                        "resolutionNote", "createdAt")
-                .containsEntry("status", "SEEN").containsEntry("seenAt", "2004-03-10T03:00:00Z")
-                .containsEntry("resolutionNote", null);
+                "branchName", "rating", "content", "createdAt");
         assertThat((String) opened.get("customerName")).startsWith("Khách content IT");
         assertThat((String) opened.get("branchName")).startsWith("ContentIT chi nhánh");
-
-        clock.advance(Duration.ofMinutes(1));
-        Map<String, Object> again = data(call(HttpMethod.GET, PATH + "/" + inA, managerA, null), HttpStatus.OK);
-        assertThat(again).containsEntry("seenAt", "2004-03-10T03:00:00Z").containsEntry("status", "SEEN");
+        assertThat(opened).containsEntry("createdAt", "2004-03-10T01:00:00Z");
     }
 
     @Test
-    void openingSeenOrResolvedWritesNothing() {
-        data(call(HttpMethod.GET, PATH + "/" + inA, managerA, null), HttpStatus.OK);
+    void listItemsHaveNoStatusFieldsEither() {
+        Map<String, Object> page = data(call(HttpMethod.GET, PATH + "?size=100", managerA, null), HttpStatus.OK);
+
+        assertThat(pageContent(page)).isNotEmpty().allSatisfy(item -> assertThat(item).containsOnlyKeys(
+                "feedbackId", "customerId", "customerName", "topic", "branchId", "branchName", "rating", "content",
+                "createdAt"));
+    }
+
+    @Test
+    void openingAFeedbackWritesNothing() {
         String before = jdbc.queryForObject("SELECT xmin::text FROM feedbacks WHERE id = ?", String.class, inA);
 
         data(call(HttpMethod.GET, PATH + "/" + inA, managerA, null), HttpStatus.OK);
+        data(call(HttpMethod.GET, PATH + "/" + inA, superManager, null), HttpStatus.OK);
 
         assertThat(jdbc.queryForObject("SELECT xmin::text FROM feedbacks WHERE id = ?", String.class, inA))
                 .isEqualTo(before);
     }
 
     @Test
-    void twoConcurrentFirstOpensStampSeenAtOnce() throws Exception {
-        ExecutorService pool = Executors.newFixedThreadPool(2);
-        try {
-            List<CompletableFuture<ResponseEntity<Map<String, Object>>>> opens = List.of(
-                    CompletableFuture.supplyAsync(() -> call(HttpMethod.GET, PATH + "/" + inA, superManager, null),
-                            pool),
-                    CompletableFuture.supplyAsync(() -> call(HttpMethod.GET, PATH + "/" + inA, managerA, null), pool));
-            for (CompletableFuture<ResponseEntity<Map<String, Object>>> open : opens) {
-                assertThat(data(open.get(15, TimeUnit.SECONDS), HttpStatus.OK)).containsEntry("status", "SEEN")
-                        .containsEntry("seenAt", "2004-03-10T03:00:00Z");
-            }
-            assertThat(jdbc.queryForObject("SELECT count(*) FROM feedbacks WHERE id = ? AND seen_at = ?", Long.class,
-                    inA, Timestamp.from(java.time.Instant.parse("2004-03-10T03:00:00Z")))).isEqualTo(1L);
-        } finally {
-            pool.shutdownNow();
-        }
-    }
-
-    @Test
     void unknownFeedbackIs404() {
         assertError(call(HttpMethod.GET, PATH + "/999999999", superManager, null), HttpStatus.NOT_FOUND,
                 "RESOURCE_NOT_FOUND");
-        assertError(call(HttpMethod.POST, PATH + "/999999999/resolve", superManager, Map.of("resolutionNote", "ok")),
-                HttpStatus.NOT_FOUND, "RESOURCE_NOT_FOUND");
     }
 
-    // ---------------------------------------------------------------- xử lý: SEEN → RESOLVED
-
+    /** ADR-0122: bỏ BR-DG-04 và endpoint đánh dấu đã xử lý (content-v1 22 → 21 endpoint). */
     @Test
-    void resolveRecordsWhoWhenAndTheInternalNote() {
-        data(call(HttpMethod.GET, PATH + "/" + inA, managerA, null), HttpStatus.OK);
-        clock.advance(Duration.ofMinutes(2));
-
-        Map<String, Object> resolved = data(call(HttpMethod.POST, PATH + "/" + inA + "/resolve", managerA,
-                Map.of("resolutionNote", "  Đã gọi lại khách xin lỗi.  ")), HttpStatus.OK);
-
-        assertThat(resolved).containsEntry("status", "RESOLVED").containsEntry("resolutionNote",
-                        "Đã gọi lại khách xin lỗi.").containsEntry("resolvedAt", "2004-03-10T03:02:00Z");
-        assertThat(jdbc.queryForObject("SELECT resolved_by FROM feedbacks WHERE id = ?", Long.class, inA)).isNotNull();
-    }
-
-    @Test
-    void resolveRequiresANonBlankNote() {
-        data(call(HttpMethod.GET, PATH + "/" + inA, managerA, null), HttpStatus.OK);
-
-        assertRule(call(HttpMethod.POST, PATH + "/" + inA + "/resolve", managerA, Map.of("resolutionNote", "   ")),
-                "BR-DG-04");
-        assertError(callRaw(HttpMethod.POST, PATH + "/" + inA + "/resolve", managerA, "{}"), HttpStatus.BAD_REQUEST,
-                "VALIDATION_FAILED");
-        assertError(call(HttpMethod.POST, PATH + "/" + inA + "/resolve", managerA,
-                Map.of("resolutionNote", "n".repeat(2001))), HttpStatus.BAD_REQUEST, "VALIDATION_FAILED");
-        assertThat(jdbc.queryForObject("SELECT status FROM feedbacks WHERE id = ?", String.class, inA))
-                .isEqualTo("SEEN");
-    }
-
-    @Test
-    void resolveNewOrAlreadyResolvedIs409() {
-        assertError(call(HttpMethod.POST, PATH + "/" + inA + "/resolve", managerA, Map.of("resolutionNote", "ok")),
-                HttpStatus.CONFLICT, "INVALID_STATE_TRANSITION");
-
-        data(call(HttpMethod.GET, PATH + "/" + inA, managerA, null), HttpStatus.OK);
-        data(call(HttpMethod.POST, PATH + "/" + inA + "/resolve", managerA, Map.of("resolutionNote", "ok")),
-                HttpStatus.OK);
-        assertError(call(HttpMethod.POST, PATH + "/" + inA + "/resolve", managerA, Map.of("resolutionNote", "lại")),
-                HttpStatus.CONFLICT, "INVALID_STATE_TRANSITION");
-    }
-
-    @Test
-    void customerNeverSeesTheNoteAfterResolve() {
-        long[] mine = onlineCustomer(false);
-        long own = jdbc.queryForObject("""
-                INSERT INTO feedbacks (customer_id, topic, content, status) VALUES (?, 'WEBSITE',
-                'Góp ý của riêng khách này.', 'NEW') RETURNING id
-                """, Long.class, mine[1]);
-        data(call(HttpMethod.GET, PATH + "/" + own, superManager, null), HttpStatus.OK);
-        data(call(HttpMethod.POST, PATH + "/" + own + "/resolve", superManager,
-                Map.of("resolutionNote", "Ghi chú nội bộ")), HttpStatus.OK);
-
-        List<Map<String, Object>> shown = list(call(HttpMethod.GET, "/api/me/feedbacks", token(mine[0]), null),
-                HttpStatus.OK);
-
-        assertThat(shown).hasSize(1);
-        assertThat(shown.get(0)).containsEntry("status", "RESOLVED").doesNotContainKey("resolutionNote");
-        assertThat(shown.toString()).doesNotContain("Ghi chú nội bộ");
+    void theResolveEndpointIsGone() {
+        assertThat(call(HttpMethod.POST, PATH + "/" + inA + "/resolve", managerA, Map.of("resolutionNote", "ok"))
+                .getStatusCode()).isEqualTo(HttpStatus.NOT_FOUND);
+        assertThat(jdbc.queryForObject("SELECT count(*) FROM feedbacks WHERE id = ?", Long.class, inA)).isEqualTo(1L);
     }
 }
