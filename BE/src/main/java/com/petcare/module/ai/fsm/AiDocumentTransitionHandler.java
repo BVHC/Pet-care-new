@@ -16,8 +16,9 @@ import com.petcare.platform.fsm.StateMachineBase;
  * FSM #13 "Tài liệu tri thức" (docs/07-ai-subsystem.md §9). #1 — → {@code DRAFT}; #2 {@code DRAFT → PUBLISHED}; #3 (sửa)
  * và #7 (ST22 đổi phác đồ) {@code PUBLISHED → PUBLISHED}; #4 {@code PUBLISHED → ARCHIVED} (người quản lý, hoặc ST22 khi
  * loại vaccine hết phác đồ); #5 {@code ARCHIVED → PUBLISHED} (người quản lý với {@code MANUAL}; ST22 với phác đồ do chính nó
- * lưu trữ); #6 {@code DRAFT → ARCHIVED}. Không có cạnh {@code ARCHIVED → ARCHIVED}, nên sửa tài liệu đã lưu trữ bị
- * 409. ST22 tạo thẳng tài liệu {@code CATALOG_PROTOCOL} ở {@code PUBLISHED} (07 §9, dòng dưới bảng): không phải một
+ * lưu trữ); #6 {@code DRAFT → ARCHIVED}; #8 {@code PUBLISHED → DRAFT} (chỉ ST22: bài viết đã đổi nội dung nên bản đã
+ * duyệt không còn đúng, docs/adr/0134; không có endpoint UC93 nào đi cạnh này). Không có cạnh
+ * {@code ARCHIVED → ARCHIVED}, nên sửa tài liệu đã lưu trữ bị 409. ST22 tạo thẳng tài liệu {@code CATALOG_PROTOCOL} ở {@code PUBLISHED} (07 §9, dòng dưới bảng): không phải một
  * dòng đánh số của bảng nên không nằm ở {@code initialStates} (docs/adr/0130).
  */
 @Component
@@ -30,7 +31,7 @@ public class AiDocumentTransitionHandler extends StateMachineBase<DocumentStatus
     public Map<DocumentStatus, Set<DocumentStatus>> allowedTransitions() {
         return Map.of(
                 DRAFT, Set.of(PUBLISHED, ARCHIVED),         // #2 | #6
-                PUBLISHED, Set.of(PUBLISHED, ARCHIVED),     // #3, #7 | #4
+                PUBLISHED, Set.of(PUBLISHED, ARCHIVED, DRAFT),   // #3, #7 | #4 | #8
                 ARCHIVED, Set.of(PUBLISHED));               // #5
     }
 

@@ -75,6 +75,18 @@ Không đổi: cấp cứu chặn trước tất cả, từ chối hỏi bệnh 
 
 Rủi ro còn lại: kiến thức chung do mô hình tự nêu, **chưa đo** bộ v2; "bệnh gì" chặn cả câu hỏi thông tin chung như "chó hay mắc bệnh gì" (an toàn hơn là thiếu, chấp nhận ở demo). Số V52 chiếm trước V51 (gỡ khiếu nại, T70): nếu V51 thêm sau khi V52 đã chạy ở một DB thì Flyway báo "resolved migration not applied" — đổi số V51 hoặc bật `outOfOrder` ở DB đó.
 
+## Đã cài ở T90 (13/11/2026): `sourceType` ở phản hồi và nhật ký
+
+Hiến chọn "có" (13/11/2026): `sourceType` vào phản hồi #1, #2 và cột `ai_chat_logs.source_type` ngay ở T90 (V53), vì hàng T90 ở `time.md` đòi `sourceType = DATABASE` cho câu giá. Chỗ khác so với đề xuất / prompt:
+
+| Đề xuất | Đã cài | Lý do |
+|---|---|---|
+| Prompt T90: 4 giá trị (`DATABASE`, `KNOWLEDGE_BASE`, `GENERAL_KNOWLEDGE`, `SAFETY`) và `VARCHAR(20)` | **5 giá trị** theo D4 / BR-AI-34, thêm `KNOWLEDGE_BASE_AND_GENERAL`; cột `VARCHAR(30)` | Đặc tả là nguồn sự thật; `KNOWLEDGE_BASE_AND_GENERAL` dài 26 ký tự |
+| `ai_chat_logs` thêm `intent`, `used_pet_context` | **Chưa** (nợ) | Không có việc nào ở T90 ghi hai cột này; thêm khi T91 (ngữ cảnh thú) và bộ đo v2 cần |
+| Bộ đếm `ai.chat.result` thêm nhãn `sourceType` | **Chưa** (nợ) | Chưa có dashboard dùng; cột nhật ký đủ để thống kê |
+
+Ánh xạ cài đặt (`ChatResponse` là chỗ duy nhất dựng): `EMERGENCY`, `MEDICAL_REFUSAL` (kể cả từ chối bệnh án và từ chối do `DoseGuard`) → `SAFETY`; `PERSONAL`, `NEED_PET_CHOICE`, `NEED_LOGIN` và câu BUSINESS → `DATABASE`; `ANSWERED` từ truy hồi: có đoạn → `KNOWLEDGE_BASE`, không đoạn (đã thêm tiền tố) → `GENERAL_KNOWLEDGE`, có đoạn và câu mở đầu bằng "Thông tin tham khảo chung:" → `KNOWLEDGE_BASE_AND_GENERAL`; `OUT_OF_SCOPE`, `UNAVAILABLE` và lời chào (T92) → `null`. Lời chào để `null` vì không lấy từ CSDL, kho hay kiến thức chung; D4 không nêu. FE chỉ thêm trường tùy chọn ở kiểu và mock, chưa hiển thị (T93).
+
 ## Kiểm thử dự kiến (T92, TDD + đột biến)
 
 - Unit `CategoryMapperTest`: 4 nhóm × có / không đoạn → `result`, `sourceType` đúng bảng D2; thiếu tiền tố "Thông tin tham khảo chung:" được thêm; `MEDICAL_RISK` không bao giờ `ANSWERED`.

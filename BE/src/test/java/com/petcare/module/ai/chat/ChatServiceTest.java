@@ -77,7 +77,8 @@ class ChatServiceTest {
                 "1 Cầu Giấy, Hà Nội", "0901234567", BranchQueryApi.BranchStatus.ACTIVE, true)));
         service = new ChatService(config, new EmergencyDetector(), new PersonalIntentRouter(), new DoseGuard(), branches,
                 embeddings, llm, retriever, logs, meters, mock(com.petcare.module.customer.api.CustomerQueryApi.class),
-                mock(com.petcare.module.customer.api.PetQueryApi.class), mock(PersonalService.class));
+                mock(com.petcare.module.customer.api.PetQueryApi.class), mock(PersonalService.class),
+                mock(BusinessAnswerService.class));
     }
 
     // ---- bảng tất định từ questions.json -------------------------------------------------------------------------

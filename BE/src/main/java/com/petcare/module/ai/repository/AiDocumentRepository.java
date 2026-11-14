@@ -52,6 +52,25 @@ public interface AiDocumentRepository extends JpaRepository<AiDocument, Long>, J
         Long getVaccineTypeId();
     }
 
+    /** Mã tài liệu của một bài viết ({@code ARTICLE-<id>}, BR-AI-30), không nạp entity: bên gọi khóa dòng rồi mới đọc. */
+    @Query("SELECT d.id FROM AiDocument d WHERE d.externalId = :externalId")
+    Optional<Long> findIdByExternalId(@Param("externalId") String externalId);
+
+    /** Tài liệu từ bài viết đang {@code PUBLISHED}: ST22 so với các bài còn xuất bản để lưu trữ phần bài đã gỡ. */
+    @Query("""
+            SELECT d.id AS id, d.externalId AS externalId FROM AiDocument d
+            WHERE d.externalId LIKE 'ARTICLE-%'
+              AND d.status = com.petcare.module.ai.entity.DocumentStatus.PUBLISHED
+            ORDER BY d.id""")
+    List<ArticleDocument> findPublishedArticleDocuments();
+
+    /** Hai cột của {@link #findPublishedArticleDocuments()}. */
+    interface ArticleDocument {
+        Long getId();
+
+        String getExternalId();
+    }
+
     /** Tài liệu {@code PUBLISHED} chưa có đoạn khớp phiên bản hiện tại (ST22, 07 §5.3 bước 1), theo id tăng. */
     @Query(value = """
             SELECT id FROM ai_documents

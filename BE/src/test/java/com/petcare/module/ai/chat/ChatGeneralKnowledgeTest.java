@@ -55,7 +55,8 @@ class ChatGeneralKnowledgeTest {
         service = new ChatService(config, new EmergencyDetector(), new PersonalIntentRouter(), new DoseGuard(), branches,
                 embeddings, llm, retriever, mock(AiChatLogRepository.class), new SimpleMeterRegistry(),
                 mock(com.petcare.module.customer.api.CustomerQueryApi.class),
-                mock(com.petcare.module.customer.api.PetQueryApi.class), mock(PersonalService.class));
+                mock(com.petcare.module.customer.api.PetQueryApi.class), mock(PersonalService.class),
+                mock(BusinessAnswerService.class));
     }
 
     private void similarities(Double... values) {

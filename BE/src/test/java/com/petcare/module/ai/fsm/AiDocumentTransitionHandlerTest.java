@@ -17,8 +17,9 @@ import com.petcare.platform.fsm.StateMachineBase;
 
 /**
  * Bản sao độc lập của bảng FSM #13 ở docs/07-ai-subsystem.md §9: #1 — → DRAFT; #2 DRAFT → PUBLISHED; #3 và #7
- * PUBLISHED → PUBLISHED; #4 PUBLISHED → ARCHIVED; #5 ARCHIVED → PUBLISHED; #6 DRAFT → ARCHIVED. Không có cạnh
- * ARCHIVED → ARCHIVED hay DRAFT → DRAFT; trạng thái khởi tạo duy nhất của bảng là DRAFT.
+ * PUBLISHED → PUBLISHED; #4 PUBLISHED → ARCHIVED; #5 ARCHIVED → PUBLISHED; #6 DRAFT → ARCHIVED; #8 PUBLISHED → DRAFT
+ * (chỉ ST22: bài viết đổi nội dung, docs/adr/0134). Không có cạnh ARCHIVED → ARCHIVED, ARCHIVED → DRAFT hay
+ * DRAFT → DRAFT; trạng thái khởi tạo duy nhất của bảng là DRAFT.
  */
 class AiDocumentTransitionHandlerTest extends FsmTransitionTestBase<DocumentStatus> {
 
@@ -36,7 +37,7 @@ class AiDocumentTransitionHandlerTest extends FsmTransitionTestBase<DocumentStat
     protected Map<DocumentStatus, Set<DocumentStatus>> expectedTransitions() {
         return Map.of(
                 DRAFT, Set.of(PUBLISHED, ARCHIVED),         // #2 | #6
-                PUBLISHED, Set.of(PUBLISHED, ARCHIVED),     // #3, #7 | #4
+                PUBLISHED, Set.of(PUBLISHED, ARCHIVED, DRAFT),   // #3, #7 | #4 | #8 (ST22: bài viết đổi nội dung)
                 ARCHIVED, Set.of(PUBLISHED));               // #5
     }
 

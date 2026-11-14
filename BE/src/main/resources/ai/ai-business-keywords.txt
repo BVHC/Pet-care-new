@@ -1,0 +1,32 @@
+# Cụm từ nhận ý định nghiệp vụ của chatbot (BR-AI-31, docs/adr/0134 mục "Đã cài ở T90"). Mỗi dòng một cụm từ, chia mục bằng [TÊN].
+# CHỈ chạy khi [CFG] ai.chat.business_intent_enabled bật. Khớp như ai-emergency-keywords.txt: không phân biệt hoa thường,
+# theo cụm có ranh giới từ, ưu tiên dạng có dấu; dạng bỏ dấu chỉ dùng cho cụm từ 2 âm tiết trở lên (nên "gia tam" không khớp
+# "giá": đúng như BR-AI-26, tránh trùng "già").
+# Ranh giới từ không đủ để tách "giá" khỏi "giá trị dinh dưỡng": mục [PRICE_EXCLUDE] liệt kê cụm chứa "giá" nhưng không hỏi giá;
+# các cụm này bị che trước khi khớp, nên "giá trị ... và giá tắm bao nhiêu" vẫn nhận ra "giá tắm".
+
+# Hỏi giá: một cụm là đủ.
+[PRICE]
+giá
+bảng giá
+bao nhiêu tiền
+mấy tiền
+chi phí
+
+# Tín hiệu yếu: chỉ có nghĩa khi câu còn nhắc tên một dịch vụ ("phí tắm"), vì một mình quá rộng ("lãng phí").
+[PRICE_WEAK]
+phí
+
+[PRICE_EXCLUDE]
+giá trị
+đánh giá
+
+# Hỏi chi nhánh: tên, địa chỉ, số điện thoại, giờ mở cửa.
+[BRANCH]
+chi nhánh
+địa chỉ
+giờ mở cửa
+mở cửa
+giờ làm việc
+số điện thoại
+hotline

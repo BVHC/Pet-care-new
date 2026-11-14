@@ -758,6 +758,10 @@ components:
       type: string
       enum: [ANSWERED, OUT_OF_SCOPE, MEDICAL_REFUSAL, EMERGENCY, UNAVAILABLE, PERSONAL, NEED_PET_CHOICE, NEED_LOGIN]
       description: "Kết quả của một lượt hỏi đáp; giao diện rẽ theo giá trị này (07 §10). `PERSONAL`, `NEED_PET_CHOICE` chỉ có ở `/me/ai/chat`; `NEED_LOGIN` chỉ có ở `/public/ai/chat`"
+    ChatSourceType:
+      type: string
+      enum: [DATABASE, KNOWLEDGE_BASE, GENERAL_KNOWLEDGE, KNOWLEDGE_BASE_AND_GENERAL, SAFETY]
+      description: "Nguồn của câu trả lời (BR-AI-34, ADR-0136 D4). `DATABASE`: lịch hẹn, lịch tiêm, giá dịch vụ, chi nhánh · `KNOWLEDGE_BASE`: tài liệu `PUBLISHED` · `GENERAL_KNOWLEDGE`: kiến thức chung, không có tài liệu · `KNOWLEDGE_BASE_AND_GENERAL`: có tài liệu và mô hình bổ sung · `SAFETY`: câu mẫu cấp cứu, từ chối y khoa. Vắng với `OUT_OF_SCOPE`, `UNAVAILABLE` và lời chào"
     VaccinationStatus:
       type: string
       enum: [NOT_YET_ELIGIBLE, NOT_STARTED, UP_TO_DATE, DUE_SOON, OVERDUE]
@@ -860,6 +864,9 @@ components:
           items:
             $ref: "#/components/schemas/PetChoice"
           description: "Chỉ có với NEED_PET_CHOICE: giao diện cho chọn rồi gọi `…/vaccination-summary` (BR-AI-27)"
+        sourceType:
+          $ref: "#/components/schemas/ChatSourceType"
+          description: "Nguồn của câu trả lời (BR-AI-34), trường tùy chọn; không có với OUT_OF_SCOPE và UNAVAILABLE"
     VaccinationItem:
       type: object
       required: [vaccineTypeId, vaccineName, status]

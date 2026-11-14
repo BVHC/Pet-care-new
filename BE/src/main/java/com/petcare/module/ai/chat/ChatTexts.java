@@ -32,6 +32,14 @@ public final class ChatTexts {
     public static final String NEED_PET_CHOICE = "Bạn muốn xem lịch tiêm của bé nào?";
     public static final String NO_APPOINTMENT = "Bạn chưa có lịch hẹn sắp tới.";
     public static final String NO_PET = "Bạn chưa có thú cưng nào trong hồ sơ. Hãy thêm thú cưng để xem lịch tiêm.";
+    /** Câu của đường BUSINESS (BR-AI-31, ADR-0134 "Đã cài ở T90"): {@link #BUSINESS_NO_PRICE} nguyên văn đặc tả thêm dấu chấm. */
+    public static final String BUSINESS_NO_PRICE =
+            "Mình chưa có dữ liệu giá cho dịch vụ này, bạn xem bảng giá hoặc hỏi lễ tân.";
+    public static final String BUSINESS_PRICE_HEADER = "Giá dịch vụ tại Pet Care:";
+    public static final String BUSINESS_PRICE_NOTE =
+            "Giá có thể thay đổi theo từng thú; bạn xem bảng giá hoặc hỏi lễ tân để biết chính xác.";
+    public static final String BUSINESS_NO_BRANCH = "Mình chưa có dữ liệu chi nhánh lúc này, bạn vui lòng hỏi lễ tân.";
+    public static final String BUSINESS_BRANCH_HEADER = "Các chi nhánh Pet Care đang hoạt động:";
 
     private ChatTexts() {
     }

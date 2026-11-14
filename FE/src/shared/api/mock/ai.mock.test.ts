@@ -487,8 +487,8 @@ const askMe = async (question: string, extra: object = {}, auth?: object) => (aw
 const llmCalls = () => (storedState().llm?.count ?? 0) as number;
 const putConfig = async (key: string, value: string) => client.put(`/api/system-configs/${key}`, { value }, await as(ROLES.ADMIN));
 
-const KEYS = ['answer', 'bookingHint', 'disclaimer', 'emergencyBranches', 'pets', 'result', 'sources'];
-/** Bất biến của ChatResponse (một nơi dựng): đủ khóa; sources / disclaimer chỉ ANSWERED; emergencyBranches chỉ EMERGENCY; pets chỉ NEED_PET_CHOICE. */
+const KEYS = ['answer', 'bookingHint', 'disclaimer', 'emergencyBranches', 'pets', 'result', 'sourceType', 'sources'];
+/** Bất biến của ChatResponse (một nơi dựng): đủ khóa; sources / disclaimer chỉ ANSWERED; emergencyBranches chỉ EMERGENCY; pets chỉ NEED_PET_CHOICE; sourceType theo BR-AI-34 (SAFETY, DATABASE, KNOWLEDGE_BASE, vắng với OUT_OF_SCOPE / UNAVAILABLE). */
 function expectInvariants(res: ChatResponse, label = res.result) {
   expect(Object.keys(res).sort(), label).toEqual(KEYS);
   expect(typeof res.answer, label).toBe('string');
@@ -498,6 +498,8 @@ function expectInvariants(res: ChatResponse, label = res.result) {
   expect(res.disclaimer, label).toBe(res.result === 'ANSWERED' ? 'Thông tin tham khảo, không thay thế khám thú y.' : null);
   expect(res.emergencyBranches.length > 0, label).toBe(res.result === 'EMERGENCY');
   expect(res.pets.length > 0, label).toBe(res.result === 'NEED_PET_CHOICE');
+  const source = { EMERGENCY: 'SAFETY', MEDICAL_REFUSAL: 'SAFETY', PERSONAL: 'DATABASE', NEED_PET_CHOICE: 'DATABASE', NEED_LOGIN: 'DATABASE', ANSWERED: 'KNOWLEDGE_BASE', OUT_OF_SCOPE: null, UNAVAILABLE: null }[res.result];
+  expect(res.sourceType, label).toBe(source);
   if (['OUT_OF_SCOPE', 'UNAVAILABLE'].includes(res.result)) expect(res.bookingHint, label).toBe(true);
   if (['EMERGENCY', 'NEED_LOGIN', 'NEED_PET_CHOICE', 'ANSWERED'].includes(res.result)) expect(res.bookingHint, label).toBe(false);
 }

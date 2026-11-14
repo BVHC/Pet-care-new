@@ -108,7 +108,7 @@ class ChatServiceMeTest {
         PersonalService personal = new PersonalService(appointments, mock(CatalogQueryApi.class), branches, vaccinations,
                 config, CLOCK);
         service = new ChatService(config, new EmergencyDetector(), new PersonalIntentRouter(), new DoseGuard(), branches,
-                embeddings, llm, retriever, logs, meters, customers, pets, personal);
+                embeddings, llm, retriever, logs, meters, customers, pets, personal, mock(BusinessAnswerService.class));
     }
 
     // ---- bảng tất định từ questions.json (endpoint = me) ------------------------------------------------------------

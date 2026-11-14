@@ -97,6 +97,8 @@ class MeChatIT {
     private SessionService sessions;
     @Autowired
     private PlatformTransactionManager transactionManager;
+    @Autowired
+    private com.petcare.module.identity.service.SystemConfigService configService;
 
     private AiReadFixtures fx;
     private AppointmentItSupport support;
@@ -116,6 +118,7 @@ class MeChatIT {
         jdbc.update("DELETE FROM ai_chat_logs WHERE created_at >= ?", java.sql.Timestamp.from(T0));
         fx.cleanup();
         support.cleanUp();
+        setBusiness(false);
     }
 
     // ================================================================ #2 lịch hẹn sắp tới
@@ -410,6 +413,45 @@ class MeChatIT {
         assertThat(data).containsEntry("result", "MEDICAL_REFUSAL");
         assertThat(onlyLog()).containsEntry("question", "Đơn thuốc của [thú] hôm qua là gì?");
         assertThat(embeddings.calls()).isZero();
+    }
+
+    // ================================================================ đường BUSINESS (BR-AI-31, V53)
+
+    /** [CFG] đọc từ cache; sửa DB rồi nạp lại như UC10 làm sau khi commit. */
+    private void setBusiness(boolean on) {
+        jdbc.update("UPDATE system_configs SET value = ? WHERE key = 'ai.chat.business_intent_enabled'", String.valueOf(on));
+        configService.reload();
+    }
+
+    /**
+     * Câu giá / chi nhánh không phải dữ liệu cá nhân nên được ghi nội dung như câu thường (CHECK
+     * {@code ck_ai_chat_logs_no_content_for_personal} chỉ áp cho PERSONAL, NEED_PET_CHOICE, NEED_LOGIN); tên thú trong câu
+     * đã bị che trước khi tới lớp business và nhật ký (BR-AI-12b).
+     */
+    @Test
+    void aBusinessQuestionOfALoggedInCustomerIsAnsweredFromTheDatabaseAndTheirPetNameIsNotLogged() {
+        setBusiness(true);
+        Customer a = customer("Khách A");
+        fx.pet(a.customerId(), "Mochi", "DOG", today().minusYears(1), null, null);
+
+        Map<String, Object> data = data(chat(a, "Giá dịch vụ xyzzyquux cho Mochi bao nhiêu?"));
+
+        assertThat(data).containsEntry("result", "ANSWERED").containsEntry("answer", ChatTexts.BUSINESS_NO_PRICE)
+                .containsEntry("sourceType", "DATABASE");
+        assertThat(embeddings.calls()).isZero();
+        assertThat(llm.calls()).isEmpty();
+        assertThat(onlyLog()).containsEntry("result", "ANSWERED").containsEntry("question",
+                "Giá dịch vụ xyzzyquux cho [thú] bao nhiêu?");
+    }
+
+    @Test
+    void aPersonalIntentStillBeatsABusinessQuestionOfALoggedInCustomer() {
+        setBusiness(true);
+        Customer a = customer("Khách A");
+
+        Map<String, Object> data = data(chat(a, "Sắp tới tôi có lịch hẹn ở chi nhánh nào?"));
+
+        assertThat(data).containsEntry("result", "PERSONAL").containsEntry("sourceType", "DATABASE");
     }
 
     // ================================================================ hỗ trợ

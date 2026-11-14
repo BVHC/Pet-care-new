@@ -38,6 +38,7 @@ import type {
   ChatResponse,
   ChatResult,
   ChatSource,
+  ChatSourceType,
   DocumentSpecies,
   DocumentStatus,
   DocumentTopic,
@@ -1075,7 +1076,15 @@ export function chatResponse(
     bookingHint: extra.bookingHint ?? false,
     emergencyBranches: result === 'EMERGENCY' ? (extra.emergencyBranches ?? []) : [],
     pets: result === 'NEED_PET_CHOICE' ? (extra.pets ?? []) : [],
+    sourceType: sourceTypeOf(result, extra.sources?.length ?? 0),
   };
+}
+
+/** Nguồn theo BR-AI-34 như BE: an toàn, cơ sở dữ liệu, tài liệu; mock không có kiến thức chung nên ANSWERED không đoạn thì vắng. */
+function sourceTypeOf(result: ChatResult, sourceCount: number): ChatSourceType | null {
+  if (result === 'EMERGENCY' || result === 'MEDICAL_REFUSAL') return 'SAFETY';
+  if (result === 'PERSONAL' || result === 'NEED_PET_CHOICE' || result === 'NEED_LOGIN') return 'DATABASE';
+  return result === 'ANSWERED' && sourceCount > 0 ? 'KNOWLEDGE_BASE' : null;
 }
 
 /** Chi nhánh nhận cấp cứu ngoài giờ (BR-CN-05) kèm tên, địa chỉ, SĐT. */

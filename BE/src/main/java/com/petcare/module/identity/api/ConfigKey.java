@@ -106,6 +106,7 @@ public enum ConfigKey {
     AI_RECO_SENIOR_AGE_YEARS_OTHER("ai.reco.senior_age_years_other", INT),               // 07 §7.3, Q3
     AI_LOG_RETENTION_DAYS("ai.log.retention_days", INT),                                 // BR-AI-24
     AI_CHAT_GENERAL_KNOWLEDGE_ENABLED("ai.chat.general_knowledge_enabled", BOOL),        // BR-AI-33 (V52, docs/adr/0136)
+    AI_CHAT_BUSINESS_INTENT_ENABLED("ai.chat.business_intent_enabled", BOOL),            // BR-AI-31 (V53, docs/adr/0134)
 
     // BH online, TG online, trả hàng, bình luận (docs/08 §G, docs/adr/0117; V44, V45, V46, V48)
     SHOP_PAYMENT_WINDOW_HOURS("shop.payment_window_hours", INT),         // BR-BH-12

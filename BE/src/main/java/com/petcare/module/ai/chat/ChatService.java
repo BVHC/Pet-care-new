@@ -68,11 +68,12 @@ public class ChatService {
     private final CustomerQueryApi customers;
     private final PetQueryApi pets;
     private final PersonalService personal;
+    private final BusinessAnswerService business;
 
     public ChatService(SystemConfigApi config, EmergencyDetector emergency, PersonalIntentRouter router,
             DoseGuard doseGuard, BranchQueryApi branches, EmbeddingClient embeddings, LlmClient llm,
             ChunkRetriever retriever, AiChatLogRepository logs, MeterRegistry meters, CustomerQueryApi customers,
-            PetQueryApi pets, PersonalService personal) {
+            PetQueryApi pets, PersonalService personal, BusinessAnswerService business) {
         this.config = config;
         this.emergency = emergency;
         this.router = router;
@@ -86,6 +87,7 @@ public class ChatService {
         this.customers = customers;
         this.pets = pets;
         this.personal = personal;
+        this.business = business;
     }
 
     /** {@code POST /public/ai/chat} (ai-v1 #1): khách vãng lai, không có tên thú. */
@@ -133,6 +135,13 @@ public class ChatService {
             // Câu cá nhân không ghi nội dung vào nhật ký (BR-AI-24).
             return finish(viewer.signedIn() ? personalResponse(intent.get(), viewer, masked)
                     : ChatResponse.canned(ChatResult.NEED_LOGIN, ChatTexts.NEED_LOGIN, false), trace, false);
+        }
+        if (config.getBool(ConfigKey.AI_CHAT_BUSINESS_INTENT_ENABLED)) {
+            // BR-AI-31: giá dịch vụ và chi nhánh từ CSDL, trước hai lớp T92 và truy hồi; không nhúng, không gọi mô hình.
+            Optional<String> reply = business.answer(withoutPetNames);
+            if (reply.isPresent()) {
+                return finish(ChatResponse.database(reply.get()), trace, true);
+            }
         }
         boolean general = config.getBool(ConfigKey.AI_CHAT_GENERAL_KNOWLEDGE_ENABLED);
         if (general && GeneralKnowledgeGuards.isGreeting(masked)) {
@@ -231,7 +240,7 @@ public class ChatService {
         LlmAnswer usage = trace.llm;
         Long[] sourceIds = response.sources().isEmpty() ? null
                 : response.sources().stream().map(ChatSource::documentId).toArray(Long[]::new);
-        logs.save(AiChatLog.of(response.result(), errorKind, logContent ? trace.question : null,
+        logs.save(AiChatLog.of(response.result(), errorKind, response.sourceType(), logContent ? trace.question : null,
                 logContent ? PiiMasker.mask(response.answer()) : null, similarityOf(trace), sourceIds, trace.llmModel,
                 usage == null ? null : usage.inputTokens(), usage == null ? null : usage.outputTokens(),
                 usage == null ? null : usage.thoughtTokens(), trace.latencyMs()));

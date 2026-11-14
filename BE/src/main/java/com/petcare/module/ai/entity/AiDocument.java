@@ -47,6 +47,10 @@ public class AiDocument extends TimestampedEntity {
     @Column(name = "vaccine_type_id", updatable = false)
     private Long vaccineTypeId;
 
+    /** Khóa nguồn ngoài (V53): hiện chỉ {@code ARTICLE-<id>} của bài viết ST22 đồng bộ (BR-AI-30); UNIQUE khi có giá trị. */
+    @Column(name = "external_id", updatable = false, length = 100)
+    private String externalId;
+
     @Column(name = "title", nullable = false, length = TITLE_MAX_LENGTH)
     private String title;
 
@@ -123,6 +127,26 @@ public class AiDocument extends TimestampedEntity {
         return doc;
     }
 
+    /**
+     * Bài viết đã xuất bản (BR-AI-30): ST22 tạo ở {@code DRAFT}, chưa người rà soát, không bao giờ tự {@code PUBLISHED} lần
+     * đầu. Chủ đề {@code CARE} và loài {@code ALL} là mặc định để người quản lý sửa khi rà soát; {@code contentHash} là mã
+     * băm của bài lúc đồng bộ (không ghi bởi đường sửa tay), nên so được "bài đã đổi" mà không bị sửa tay làm nhiễu.
+     */
+    public static AiDocument articleDraft(String externalId, String title, String content, String contentHash,
+            String sourceNote) {
+        AiDocument doc = new AiDocument();
+        doc.sourceType = DocumentSource.MANUAL;
+        doc.status = DocumentStatus.DRAFT;
+        doc.externalId = externalId;
+        doc.topic = DocumentTopic.CARE;
+        doc.species = DocumentSpecies.ALL;
+        doc.title = title;
+        doc.content = content;
+        doc.contentHash = contentHash;
+        doc.sourceNote = sourceNote;
+        return doc;
+    }
+
     public void edit(String title, DocumentTopic topic, DocumentSpecies species, String content, String sourceNote,
             String reviewerName, LocalDate reviewedOn, Long updatedBy) {
         this.title = title;
@@ -161,12 +185,25 @@ public class AiDocument extends TimestampedEntity {
         this.indexError = null;
     }
 
-    /** Tài liệu#7: ST22 dựng lại nội dung từ phác đồ đang hoạt động. */
-    public void applyCatalogContent(String title, String content, String contentHash) {
+    /** Tài liệu#7 (phác đồ) và bản nháp của bài viết: ST22 dựng lại nội dung từ nguồn ngoài đang hoạt động. */
+    public void applySourceContent(String title, String content, String contentHash) {
         this.title = title;
         this.content = content;
         this.contentHash = contentHash;
         this.version++;
         requestIndex();
+    }
+
+    /**
+     * Tài liệu#8: bài viết nguồn đã đổi nội dung nên bản đã rà soát không còn đúng. Về {@code DRAFT} và xóa người, ngày rà
+     * soát (nội dung mới chưa ai xem; BR-AI-14); {@code updated_by} null vì ST22 làm. Người quản lý rà soát rồi xuất bản
+     * lại bằng #2.
+     */
+    public void demoteForReview(String title, String content, String contentHash) {
+        applySourceContent(title, content, contentHash);
+        this.status = DocumentStatus.DRAFT;
+        this.reviewerName = null;
+        this.reviewedOn = null;
+        this.updatedBy = null;
     }
 }

@@ -10,6 +10,8 @@ export type ChatResult =
   | 'PERSONAL'
   | 'NEED_PET_CHOICE'
   | 'NEED_LOGIN';
+/** Nguồn của câu trả lời (BR-AI-34). Vắng với OUT_OF_SCOPE, UNAVAILABLE và lời chào. FE chưa hiển thị (T93). */
+export type ChatSourceType = 'DATABASE' | 'KNOWLEDGE_BASE' | 'GENERAL_KNOWLEDGE' | 'KNOWLEDGE_BASE_AND_GENERAL' | 'SAFETY';
 export type VaccinationStatus = 'NOT_YET_ELIGIBLE' | 'NOT_STARTED' | 'UP_TO_DATE' | 'DUE_SOON' | 'OVERDUE';
 export type RecoGroup = 'GROOMING' | 'BOARDING' | 'PRODUCT';
 export type ItemType = 'SERVICE' | 'PRODUCT';
@@ -79,6 +81,8 @@ export interface ChatResponse {
   emergencyBranches: EmergencyBranch[];
   /** Chỉ có với NEED_PET_CHOICE: giao diện cho chọn rồi gọi `getVaccinationSummary` (BR-AI-27). */
   pets: PetChoice[];
+  /** Nguồn của câu trả lời (BR-AI-34), trường tùy chọn; không có với OUT_OF_SCOPE và UNAVAILABLE. */
+  sourceType?: ChatSourceType | null;
 }
 
 // ─── Trợ lý theo thú (#3, #4) ───

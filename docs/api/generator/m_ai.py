@@ -56,6 +56,12 @@ m.schema("ChatResult", None,
                "NEED_LOGIN"],
          desc="Kết quả của một lượt hỏi đáp; giao diện rẽ theo giá trị này (07 §10). `PERSONAL`, `NEED_PET_CHOICE` chỉ có ở "
               "`/me/ai/chat`; `NEED_LOGIN` chỉ có ở `/public/ai/chat`")
+m.schema("ChatSourceType", None,
+         enum=["DATABASE", "KNOWLEDGE_BASE", "GENERAL_KNOWLEDGE", "KNOWLEDGE_BASE_AND_GENERAL", "SAFETY"],
+         desc="Nguồn của câu trả lời (BR-AI-34, ADR-0136 D4). `DATABASE`: lịch hẹn, lịch tiêm, giá dịch vụ, chi nhánh · "
+              "`KNOWLEDGE_BASE`: tài liệu `PUBLISHED` · `GENERAL_KNOWLEDGE`: kiến thức chung, không có tài liệu · "
+              "`KNOWLEDGE_BASE_AND_GENERAL`: có tài liệu và mô hình bổ sung · `SAFETY`: câu mẫu cấp cứu, từ chối y khoa. "
+              "Vắng với `OUT_OF_SCOPE`, `UNAVAILABLE` và lời chào")
 m.schema("VaccinationStatus", None, enum=["NOT_YET_ELIGIBLE", "NOT_STARTED", "UP_TO_DATE", "DUE_SOON", "OVERDUE"],
          desc="BR-AI-11")
 m.schema("RecoGroup", None, enum=["GROOMING", "BOARDING", "PRODUCT"], desc="BR-AI-18")
@@ -81,6 +87,7 @@ m.schema("ChatResponse", {
     "bookingHint": "bool|true thì giao diện hiện nút đặt lịch khám (UC39)",
     "emergencyBranches": "array:ref:EmergencyBranch|Chỉ có với EMERGENCY (BR-AI-03)",
     "pets": "array:ref:PetChoice|Chỉ có với NEED_PET_CHOICE: giao diện cho chọn rồi gọi `…/vaccination-summary` (BR-AI-27)",
+    "sourceType": "ref:ChatSourceType?|Nguồn của câu trả lời (BR-AI-34), trường tùy chọn; không có với OUT_OF_SCOPE và UNAVAILABLE",
 })
 
 # ---- thú của tôi

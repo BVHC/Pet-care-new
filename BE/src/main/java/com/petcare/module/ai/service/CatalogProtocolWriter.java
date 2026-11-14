@@ -65,7 +65,7 @@ public class CatalogProtocolWriter {
             return false;   // chưa xuất bản (không xảy ra với phác đồ) hoặc phác đồ không đổi
         }
         fsm.validateTransition(DocumentStatus.PUBLISHED, DocumentStatus.PUBLISHED);   // #7
-        doc.applyCatalogContent(title, content, hash);
+        doc.applySourceContent(title, content, hash);
         docs.saveAndFlush(doc);
         events.publishEvent(new AiIndexRequested(doc.getId()));
         return true;
@@ -100,7 +100,7 @@ public class CatalogProtocolWriter {
         fsm.validateTransition(DocumentStatus.ARCHIVED, DocumentStatus.PUBLISHED);   // #5
         Map<String, Object> before = KnowledgeService.snapshot(doc);
         if (!hash.equals(doc.getContentHash())) {
-            doc.applyCatalogContent(title, content, hash);
+            doc.applySourceContent(title, content, hash);
         }
         doc.publish(Instant.now(clock), null);
         docs.saveAndFlush(doc);

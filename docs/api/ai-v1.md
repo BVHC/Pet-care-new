@@ -88,6 +88,7 @@
 Trường có `?` là không bắt buộc / có thể null. Kiểu `email`, `date`, `datetime`… theo mục 3 của `00-method.md`.
 
 - **`ChatResult`** — enum: `ANSWERED`, `OUT_OF_SCOPE`, `MEDICAL_REFUSAL`, `EMERGENCY`, `UNAVAILABLE`, `PERSONAL`, `NEED_PET_CHOICE`, `NEED_LOGIN`. Kết quả của một lượt hỏi đáp; giao diện rẽ theo giá trị này (07 §10). `PERSONAL`, `NEED_PET_CHOICE` chỉ có ở `/me/ai/chat`; `NEED_LOGIN` chỉ có ở `/public/ai/chat`
+- **`ChatSourceType`** — enum: `DATABASE`, `KNOWLEDGE_BASE`, `GENERAL_KNOWLEDGE`, `KNOWLEDGE_BASE_AND_GENERAL`, `SAFETY`. Nguồn của câu trả lời (BR-AI-34, ADR-0136 D4). `DATABASE`: lịch hẹn, lịch tiêm, giá dịch vụ, chi nhánh · `KNOWLEDGE_BASE`: tài liệu `PUBLISHED` · `GENERAL_KNOWLEDGE`: kiến thức chung, không có tài liệu · `KNOWLEDGE_BASE_AND_GENERAL`: có tài liệu và mô hình bổ sung · `SAFETY`: câu mẫu cấp cứu, từ chối y khoa. Vắng với `OUT_OF_SCOPE`, `UNAVAILABLE` và lời chào
 - **`VaccinationStatus`** — enum: `NOT_YET_ELIGIBLE`, `NOT_STARTED`, `UP_TO_DATE`, `DUE_SOON`, `OVERDUE`. BR-AI-11
 - **`RecoGroup`** — enum: `GROOMING`, `BOARDING`, `PRODUCT`. BR-AI-18
 - **`ItemType`** — enum: `SERVICE`, `PRODUCT`.
@@ -100,7 +101,7 @@ Trường có `?` là không bắt buộc / có thể null. Kiểu `email`, `dat
 - **`ChatSource`** — {`documentId`: int64, `title`: string}
 - **`EmergencyBranch`** — {`branchId`: int64, `name`: string, `address`: string, `phone`: string}
 - **`PetChoice`** — {`petId`: int64, `name`: string}
-- **`ChatResponse`** — {`result`: ChatResult, `answer`: string, `sources`: [ChatSource], `disclaimer?`: string, `bookingHint`: boolean, `emergencyBranches`: [EmergencyBranch], `pets`: [PetChoice]}
+- **`ChatResponse`** — {`result`: ChatResult, `answer`: string, `sources`: [ChatSource], `disclaimer?`: string, `bookingHint`: boolean, `emergencyBranches`: [EmergencyBranch], `pets`: [PetChoice], `sourceType?`: ChatSourceType}
 - **`VaccinationItem`** — {`vaccineTypeId`: int64, `vaccineName`: string, `status`: VaccinationStatus, `lastDoseNumber?`: int32, `lastAdministeredOn?`: date, `nextDoseNumber?`: int32, `nextDueDate?`: date, `firstDoseFromAgeWeeks?`: int32}
 - **`VaccinationSummary`** — {`petId`: int64, `petName`: string, `items`: [VaccinationItem], `message`: string, `disclaimer`: string}
 - **`RecommendedItem`** — {`group`: RecoGroup, `itemType`: ItemType, `itemId`: int64, `name`: string, `price`: int64, `priceIsFrom`: boolean, `priceUnit?`: string, `imageUrl?`: string, `score`: number, `reasons`: [string]}

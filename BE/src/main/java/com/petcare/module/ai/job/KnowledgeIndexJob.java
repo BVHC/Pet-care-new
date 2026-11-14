@@ -3,7 +3,9 @@ package com.petcare.module.ai.job;
 import java.time.Clock;
 import java.time.Duration;
 import java.time.Instant;
+import java.util.Locale;
 import java.util.UUID;
+import java.util.function.IntSupplier;
 
 import org.slf4j.MDC;
 import org.springframework.boot.context.event.ApplicationReadyEvent;
@@ -11,6 +13,7 @@ import org.springframework.context.event.EventListener;
 import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Component;
 
+import com.petcare.module.ai.service.ArticleSync;
 import com.petcare.module.ai.service.CatalogProtocolSync;
 import com.petcare.module.ai.service.KnowledgeIndexer;
 import com.petcare.module.identity.api.ConfigKey;
@@ -23,7 +26,8 @@ import lombok.extern.slf4j.Slf4j;
 /**
  * ST22 — các đường kích hoạt định kỳ (07 §3, docs/adr/0130; cơ chế job: docs/adr/0007). Lượt chạy làm hai việc: (1) khi đã
  * qua [CFG] {@code ai.index.catalog_sync_minutes} kể từ lần đồng bộ trước, đồng bộ tài liệu phác đồ tiêm
- * ({@link CatalogProtocolSync}); (2) xếp hàng mọi tài liệu {@code PUBLISHED} chưa có chỉ mục khớp phiên bản cho luồng nền
+ * ({@link CatalogProtocolSync}) và tài liệu từ bài viết đã xuất bản ({@link ArticleSync}, BR-AI-30, hai bước độc lập);
+ * (2) xếp hàng mọi tài liệu {@code PUBLISHED} chưa có chỉ mục khớp phiên bản cho luồng nền
  * của {@link KnowledgeIndexer}, nên job <b>không gọi mạng</b> trên thread scheduler. Mọi phút lẻ 5 đã có job dài, nên cron
  * chạy mỗi 5 phút ở giây 45 và chu kỳ thật của bước (1) được kiểm bằng thời gian trôi qua, đọc [CFG] ở mỗi lượt (đổi
  * [CFG] có hiệu lực từ lượt sau). Lỗi được log và nuốt; lượt sau tự thử lại vì điều kiện nằm ở dòng
@@ -34,14 +38,16 @@ import lombok.extern.slf4j.Slf4j;
 public class KnowledgeIndexJob {
 
     private final CatalogProtocolSync catalogSync;
+    private final ArticleSync articleSync;
     private final KnowledgeIndexer indexer;
     private final SystemConfigApi config;
     private final Clock clock;
     private volatile Instant lastCatalogSync;
 
-    public KnowledgeIndexJob(CatalogProtocolSync catalogSync, KnowledgeIndexer indexer, SystemConfigApi config,
-            Clock clock) {
+    public KnowledgeIndexJob(CatalogProtocolSync catalogSync, ArticleSync articleSync, KnowledgeIndexer indexer,
+            SystemConfigApi config, Clock clock) {
         this.catalogSync = catalogSync;
+        this.articleSync = articleSync;
         this.indexer = indexer;
         this.config = config;
         this.clock = clock;
@@ -53,9 +59,12 @@ public class KnowledgeIndexJob {
         try {
             Instant now = Instant.now(clock);
             if (catalogSyncDue(now)) {
-                int changed = catalogSync.sync();
-                lastCatalogSync = now;
-                log.info("KNOWLEDGE_INDEX catalogChanged={}", changed);
+                // Hai bước độc lập: một bên lỗi không chặn bên kia; chỉ khi cả hai xong mới tính là đã đồng bộ lượt này.
+                boolean catalogDone = syncStep("catalog", catalogSync::sync);
+                boolean articlesDone = syncStep("articles", articleSync::sync);
+                if (catalogDone && articlesDone) {
+                    lastCatalogSync = now;
+                }
             }
             indexer.requestPending();
         } catch (RuntimeException e) {
@@ -72,6 +81,16 @@ public class KnowledgeIndexJob {
             indexer.requestPending();
         } catch (RuntimeException e) {
             log.error("KNOWLEDGE_INDEX_STARTUP_SCAN_FAILED", e);
+        }
+    }
+
+    private static boolean syncStep(String name, IntSupplier step) {
+        try {
+            log.info("KNOWLEDGE_INDEX {}Changed={}", name, step.getAsInt());
+            return true;
+        } catch (RuntimeException e) {
+            log.error("KNOWLEDGE_INDEX_{}_SYNC_FAILED", name.toUpperCase(Locale.ROOT), e);
+            return false;
         }
     }
 

@@ -121,6 +121,7 @@ class ChatIT {
 
     private AiItSupport support;
     private final List<Long> branches = new ArrayList<>();
+    private final List<Long> services = new ArrayList<>();
 
     @BeforeEach
     void setUp() {
@@ -135,9 +136,13 @@ class ChatIT {
     void tearDown() {
         jdbc.update("DELETE FROM ai_chat_logs WHERE created_at >= ?", java.sql.Timestamp.from(T0));
         support.cleanUp();
+        branches.forEach(id -> jdbc.update("DELETE FROM branch_services WHERE branch_id = ?", id));
+        services.forEach(id -> jdbc.update("DELETE FROM services WHERE id = ?", id));
+        services.clear();
         branches.forEach(id -> jdbc.update("DELETE FROM branches WHERE id = ?", id));
         branches.clear();
         setGeneralKnowledge(false);
+        setBusiness(false);
     }
 
     // ================================================================ truy hồi thật (ChunkRetriever)
@@ -419,7 +424,7 @@ class ChatIT {
 
         assertThat(columns).containsExactlyInAnyOrder("id", "result", "error_kind", "question", "answer",
                 "top_similarity", "source_document_ids", "llm_model", "input_tokens", "output_tokens", "thought_tokens",
-                "latency_ms", "created_at");
+                "latency_ms", "created_at", "source_type");
     }
 
     // ================================================================ kiến thức chung có kiểm soát (BR-AI-33, V52)
@@ -469,6 +474,111 @@ class ChatIT {
         configService.reload();
     }
 
+    // ================================================================ đường BUSINESS (BR-AI-31, V53)
+
+    private long activeBranch(boolean emergency) {
+        long id = jdbc.queryForObject("""
+                INSERT INTO branches (name, address, phone, latitude, longitude, status, activated_at,
+                        accepts_after_hours_emergency)
+                VALUES (?, 'Số 9 đường thử', '0283334444', 10.762622, 106.660172, 'ACTIVE', now(), ?) RETURNING id""",
+                Long.class, TAG + " chi nhánh " + UUID.randomUUID().toString().substring(0, 6), emergency);
+        branches.add(id);
+        return id;
+    }
+
+    /** Dịch vụ thẩm mỹ giá {@code price}; {@code atBranch} khác null thì bật tại chi nhánh đó. */
+    private long groomingService(String name, long price, boolean active, Long atBranch) {
+        long id = jdbc.queryForObject("""
+                INSERT INTO services (name, service_group, price, price_is_from, is_active)
+                VALUES (?, 'GROOMING', ?, false, ?) RETURNING id""", Long.class, name, price, active);
+        services.add(id);
+        if (atBranch != null) {
+            jdbc.update("INSERT INTO branch_services (branch_id, service_id, is_enabled) VALUES (?, ?, true)", atBranch, id);
+        }
+        return id;
+    }
+
+    private void setBusiness(boolean on) {
+        jdbc.update("UPDATE system_configs SET value = ? WHERE key = 'ai.chat.business_intent_enabled'", String.valueOf(on));
+        configService.reload();
+    }
+
+    @Test
+    void theBusinessSwitchIsOffByDefaultSoAPriceQuestionKeepsTheOldPipeline() {
+        assertThat(jdbc.queryForObject("SELECT value FROM system_configs WHERE key = 'ai.chat.business_intent_enabled'",
+                String.class)).isEqualTo("false");
+        long branch = activeBranch(false);
+        groomingService(TAG + " Hydro", 123_000, true, branch);
+
+        Map<String, Object> data = data(chat(Map.of("question", "Giá " + TAG + " Hydro bao nhiêu?")));
+
+        assertThat(data).containsEntry("result", "OUT_OF_SCOPE");
+        assertThat(data.get("sourceType")).isNull();
+        assertThat(onlyLog().get("source_type")).isNull();
+    }
+
+    @Test
+    void withTheSwitchOnAPriceQuestionIsAnsweredFromTheCatalogWithoutEmbeddingOrModel() {
+        setBusiness(true);
+        setGeneralKnowledge(true);
+        long branch = activeBranch(false);
+        groomingService(TAG + " Hydro", 1_234_000, true, branch);
+        groomingService(TAG + " Hydro cũ", 999_000, false, branch);
+        groomingService(TAG + " Hydro nội bộ", 888_000, true, null);
+
+        Map<String, Object> data = data(chat(Map.of("question", "Giá " + TAG + " Hydro bao nhiêu?")));
+
+        assertThat(data).containsEntry("result", "ANSWERED").containsEntry("sourceType", "DATABASE");
+        assertThat((String) data.get("answer")).contains(TAG + " Hydro: 1.234.000 ₫")
+                .as("không báo giá dịch vụ đã ngừng hoặc chưa bật ở chi nhánh nào")
+                .doesNotContain("999.000").doesNotContain("888.000");
+        assertThat(sources(data)).isEmpty();
+        assertThat(embeddings.calls()).isZero();
+        assertThat(llm.calls()).isEmpty();
+        assertThat(onlyLog()).containsEntry("result", "ANSWERED").containsEntry("source_type", "DATABASE");
+    }
+
+    @Test
+    void withTheSwitchOnAnUnknownServiceGetsTheFixedSentenceEvenWithGeneralKnowledgeOn() {
+        setBusiness(true);
+        setGeneralKnowledge(true);
+
+        Map<String, Object> data = data(chat(Map.of("question", "Giá dịch vụ xyzzyquux bao nhiêu?")));
+
+        assertThat(data).containsEntry("result", "ANSWERED").containsEntry("answer", ChatTexts.BUSINESS_NO_PRICE)
+                .containsEntry("sourceType", "DATABASE");
+        assertThat(embeddings.calls()).isZero();
+        assertThat(llm.calls()).isEmpty();
+    }
+
+    @Test
+    void withTheSwitchOnABranchQuestionListsActiveBranchesOnly() {
+        setBusiness(true);
+        long branch = activeBranch(true);
+        long draft = jdbc.queryForObject("""
+                INSERT INTO branches (name, address, phone, latitude, longitude, status)
+                VALUES (?, 'Số 7 đường nháp', '0285556666', 10.762622, 106.660172, 'DRAFT') RETURNING id""",
+                Long.class, TAG + " chi nhánh nháp");
+        branches.add(draft);
+
+        Map<String, Object> data = data(chat(Map.of("question", "Chi nhánh Pet Care ở đâu?")));
+
+        assertThat((String) data.get("answer")).contains(TAG + " chi nhánh ").contains("Số 9 đường thử")
+                .contains("0283334444").contains("Nhận cấp cứu ngoài giờ").doesNotContain("Số 7 đường nháp");
+        assertThat(data).containsEntry("sourceType", "DATABASE");
+        assertThat(branch).isPositive();
+        assertThat(llm.calls()).isEmpty();
+    }
+
+    @Test
+    void anEmergencyStillBeatsABusinessQuestionWithTheSwitchOn() {
+        setBusiness(true);
+
+        Map<String, Object> data = data(chat(Map.of("question", "Mèo co giật, chi nhánh nào gần nhất?")));
+
+        assertThat(data).containsEntry("result", "EMERGENCY").containsEntry("sourceType", "SAFETY");
+    }
+
     // ================================================================ hỗ trợ
 
     private ResponseEntity<Map<String, Object>> chat(Map<String, Object> body) {
@@ -491,8 +601,8 @@ class ChatIT {
     /** Dòng nhật ký duy nhất của era này; {@code sources} là chuỗi id cách nhau bởi dấu phẩy. */
     private Map<String, Object> onlyLog() {
         List<Map<String, Object>> rows = jdbc.queryForList("""
-                SELECT result, error_kind, question, answer, top_similarity, llm_model, input_tokens, output_tokens,
-                       thought_tokens, latency_ms, array_to_string(source_document_ids, ',') AS sources
+                SELECT result, error_kind, source_type, question, answer, top_similarity, llm_model, input_tokens,
+                       output_tokens, thought_tokens, latency_ms, array_to_string(source_document_ids, ',') AS sources
                 FROM ai_chat_logs WHERE created_at >= ?""", java.sql.Timestamp.from(T0));
         assertThat(rows).as("số dòng nhật ký").hasSize(1);
         return rows.get(0);

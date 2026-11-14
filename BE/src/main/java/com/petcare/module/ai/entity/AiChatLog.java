@@ -47,6 +47,10 @@ public class AiChatLog extends CreatedAtEntity {
     @Column(name = "error_kind", length = 30)
     private ChatErrorKind errorKind;
 
+    @Enumerated(EnumType.STRING)
+    @Column(name = "source_type", length = 30)
+    private ChatSourceType sourceType;
+
     @Column(name = "question", length = 500)
     private String question;
 
@@ -80,12 +84,13 @@ public class AiChatLog extends CreatedAtEntity {
      * cá nhân và {@code NEED_LOGIN} truyền {@code null} cho mọi trường nội dung. Câu hỏi quá {@value #QUESTION_MAX_LENGTH}
      * ký tự bị cắt cho vừa cột.
      */
-    public static AiChatLog of(ChatResult result, ChatErrorKind errorKind, String question, String answer,
-            BigDecimal topSimilarity, Long[] sourceDocumentIds, String llmModel, Integer inputTokens,
+    public static AiChatLog of(ChatResult result, ChatErrorKind errorKind, ChatSourceType sourceType, String question,
+            String answer, BigDecimal topSimilarity, Long[] sourceDocumentIds, String llmModel, Integer inputTokens,
             Integer outputTokens, Integer thoughtTokens, int latencyMs) {
         AiChatLog log = new AiChatLog();
         log.result = result;
         log.errorKind = errorKind;
+        log.sourceType = sourceType;
         log.question = question == null || question.length() <= QUESTION_MAX_LENGTH ? question
                 : question.substring(0, QUESTION_MAX_LENGTH);
         log.answer = answer;
