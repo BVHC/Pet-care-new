@@ -1,4 +1,4 @@
-import { AlertTriangle, Calendar, ChevronRight, LogIn, Phone, WifiOff } from 'lucide-react'
+import { AlertTriangle, BookOpen, Calendar, ChevronRight, Database, Lightbulb, LogIn, Phone, WifiOff, type LucideIcon } from 'lucide-react'
 import { Link, useLocation } from 'react-router-dom'
 import { plainMessage, toApiError } from '../../../shared/api/api-error'
 import { useVaccinationSummary } from '../../../shared/hooks/useAi'
@@ -11,6 +11,46 @@ const BUBBLE = 'max-w-[88%] rounded-2xl px-3.5 py-2.5 shadow-sm whitespace-pre-l
 const BOT = `${BUBBLE} bg-white text-(--color-text-primary) border border-stone-200/80 rounded-bl-xs`
 const CTA =
   'inline-flex items-center gap-1 px-2.5 py-1 rounded-lg bg-accent text-white text-[11px] font-semibold hover:bg-accent-hover transition-colors shadow-xs'
+
+/**
+ * BR-AI-34: nhãn nguồn dưới câu trả lời. Không nhãn nào ngụ ý "đã được bác sĩ duyệt" (người rà soát của kho demo là giả định, Q2).
+ * SAFETY, vắng và giá trị BE thêm sau này thì không nhãn (không nổ).
+ */
+function sourceBadge(type: ChatResponse['sourceType']): { Icon: LucideIcon; text: string; tone?: string } | null {
+  switch (type) {
+    case 'DATABASE':
+      return { Icon: Database, text: 'Từ dữ liệu của phòng khám' }
+    case 'KNOWLEDGE_BASE':
+      return { Icon: BookOpen, text: 'Theo tài liệu của phòng khám' }
+    case 'GENERAL_KNOWLEDGE':
+      return { Icon: Lightbulb, text: 'Kiến thức tham khảo chung, không phải tài liệu của phòng khám', tone: 'text-amber-700' }
+    case 'KNOWLEDGE_BASE_AND_GENERAL':
+      return { Icon: BookOpen, text: 'Theo tài liệu của phòng khám, có bổ sung kiến thức chung' }
+    default:
+      return null
+  }
+}
+
+/** Chân bong bóng: nhãn nguồn (ANSWERED, PERSONAL), danh sách nguồn và lời nhắc (ANSWERED) dồn một khối, một đường kẻ. */
+function SourceFooter({ r }: { r: ChatResponse }) {
+  const answered = r.result === 'ANSWERED'
+  const badge = answered || r.result === 'PERSONAL' ? sourceBadge(r.sourceType) : null
+  const sources = answered && r.sources.length > 0 ? r.sources.map((s) => s.title).join('; ') : null
+  const disclaimer = answered ? r.disclaimer : null
+  if (!badge && !sources && !disclaimer) return null
+  return (
+    <div className="mt-2 space-y-1 border-t border-stone-100 pt-1.5 text-[11px] text-stone-500">
+      {badge && (
+        <p className={badge.tone}>
+          <badge.Icon size={11} className="mr-1 inline align-[-1px]" aria-hidden />
+          {badge.text}
+        </p>
+      )}
+      {sources && <p>Nguồn: {sources}</p>}
+      {disclaimer && <p className="italic">{disclaimer}</p>}
+    </div>
+  )
+}
 
 function BookingButton() {
   return (
@@ -91,16 +131,7 @@ function ResponseView({ response: r, onChoosePet }: { response: ChatResponse; on
       {/* BE dùng MEDICAL_REFUSAL cho hai việc (chẩn đoán / liều thuốc, và hồ sơ bệnh án): tiêu đề phải đúng cho cả hai, lý do cụ thể nằm trong `answer`. */}
       {r.result === 'MEDICAL_REFUSAL' && <p className="mb-1 font-semibold text-stone-500">Mình không thể hỗ trợ nội dung này</p>}
       <p>{r.answer}</p>
-      {r.result === 'ANSWERED' && (
-        <>
-          {r.sources.length > 0 && (
-            <p className="mt-2 border-t border-stone-100 pt-1.5 text-[11px] text-stone-500">
-              Nguồn: {r.sources.map((s) => s.title).join('; ')}
-            </p>
-          )}
-          {r.disclaimer && <p className="mt-1 text-[11px] italic text-stone-500">{r.disclaimer}</p>}
-        </>
-      )}
+      <SourceFooter r={r} />
       {r.result === 'NEED_PET_CHOICE' && <PetButtons pets={r.pets} onChoose={onChoosePet} />}
       {r.result === 'NEED_LOGIN' && <LoginButton />}
       {r.bookingHint && <BookingButton />}

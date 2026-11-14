@@ -59,6 +59,9 @@ public class KnowledgeController {
                     @Parameter(name = "status", in = ParameterIn.QUERY, example = "PUBLISHED"),
                     @Parameter(name = "topic", in = ParameterIn.QUERY, example = "VACCINATION"),
                     @Parameter(name = "species", in = ParameterIn.QUERY, example = "DOG"),
+                    @Parameter(name = "fromArticle", in = ParameterIn.QUERY, example = "true",
+                            description = "true = chỉ tài liệu đồng bộ từ bài viết (external_id ARTICLE-…), false = chỉ "
+                                + "tài liệu không từ bài viết; vắng = tất cả"),
                     @Parameter(name = "q", in = ParameterIn.QUERY, example = "chó con",
                             description = "Tìm theo tiêu đề"),
                     @Parameter(name = "page", in = ParameterIn.QUERY, example = "0",
@@ -72,10 +75,11 @@ public class KnowledgeController {
             @RequestParam(required = false) DocumentStatus status,
             @RequestParam(required = false) DocumentTopic topic,
             @RequestParam(required = false) DocumentSpecies species,
+            @RequestParam(required = false) Boolean fromArticle,
             @RequestParam(required = false) String q,
             @RequestParam(defaultValue = "0") int page,
             @RequestParam(defaultValue = "20") int size) {
-        return ApiResponse.ok(knowledge.list(status, topic, species, q, page, size));
+        return ApiResponse.ok(knowledge.list(status, topic, species, fromArticle, q, page, size));
     }
 
     /** ai-v1 #6, Tài liệu#1. */

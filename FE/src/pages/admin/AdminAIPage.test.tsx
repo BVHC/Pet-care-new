@@ -10,8 +10,8 @@ import { installMockApi } from '../../shared/api/mock/mock-api';
 import { useSession } from '../../shared/stores/session.store';
 import { AdminAIPage } from './AdminAIPage';
 
-// UC93, UC94 (SUPER_MANAGER chuoi@petcare.vn). Dữ liệu mẫu ai.seed.ts: 16 tài liệu — #9 và #12 DRAFT, #11 ARCHIVED, #8 PUBLISHED nhưng chỉ mục FAILED, #13–16 CATALOG_PROTOCOL (chỉ đọc),
-// còn lại PUBLISHED. Hồ sơ gợi ý: 4 dịch vụ / sản phẩm, trong đó 3 đã có hồ sơ; dịch vụ "Tắm & sấy" (#3) chưa có.
+// UC93, UC94 (SUPER_MANAGER chuoi@petcare.vn). Dữ liệu mẫu ai.seed.ts: 19 tài liệu — #9 và #12 DRAFT, #11 ARCHIVED, #8 PUBLISHED nhưng chỉ mục FAILED, #13–16 CATALOG_PROTOCOL (chỉ đọc),
+// #17–19 đồng bộ từ bài viết (ARTICLE-8 DRAFT, ARTICLE-6 PUBLISHED, ARTICLE-10 ARCHIVED), còn lại PUBLISHED. Hồ sơ gợi ý: 4 dịch vụ / sản phẩm, trong đó 3 đã có hồ sơ; dịch vụ "Tắm & sấy" (#3) chưa có.
 
 beforeAll(() => installMockApi(apiClient));
 const login = async (email: string) => {
@@ -37,10 +37,10 @@ const docRow = async (title: string) => (await screen.findByText(title)).closest
 const buttonNames = (row: HTMLElement) => within(row).getAllByRole('button').map((b) => b.getAttribute('aria-label'));
 
 describe('tab Tài liệu tri thức', () => {
-  it('liệt kê 16 tài liệu, mới sửa trước, kèm trạng thái và chỉ mục', async () => {
+  it('liệt kê 19 tài liệu, mới sửa trước, kèm trạng thái và chỉ mục', async () => {
     renderPage();
     await docRow(T.draft);
-    expect(within(screen.getByRole('table', { name: 'Tài liệu tri thức' })).getAllByRole('row')).toHaveLength(17);
+    expect(within(screen.getByRole('table', { name: 'Tài liệu tri thức' })).getAllByRole('row')).toHaveLength(20);
     expect(within(await docRow(T.draft)).getByText('Nháp')).toBeInTheDocument();
     expect(within(await docRow(T.failed)).getByText('Nạp lỗi')).toBeInTheDocument();
     expect(within(await docRow(T.archived)).getByText('Đã lưu trữ')).toBeInTheDocument();
@@ -50,11 +50,57 @@ describe('tab Tài liệu tri thức', () => {
     const user = renderPage();
     await docRow(T.draft);
     await user.selectOptions(screen.getByLabelText('Lọc trạng thái'), 'DRAFT');
-    await waitFor(() => expect(within(screen.getByRole('table', { name: 'Tài liệu tri thức' })).getAllByRole('row')).toHaveLength(3));
+    await waitFor(() => expect(within(screen.getByRole('table', { name: 'Tài liệu tri thức' })).getAllByRole('row')).toHaveLength(4));
     await user.selectOptions(screen.getByLabelText('Lọc trạng thái'), '');
     await user.type(screen.getByLabelText('Tìm theo tiêu đề'), 'lưu trú');
     await waitFor(() => expect(within(screen.getByRole('table', { name: 'Tài liệu tri thức' })).getAllByRole('row')).toHaveLength(2));
     expect(screen.getByText(T.failed)).toBeInTheDocument();
+  });
+
+  // T93 (ADR-0134): tài liệu đồng bộ từ bài viết (external_id = ARTICLE-<id>) có huy hiệu và bộ lọc riêng; `false` phải tới được BE (axios giữ false).
+  it('lọc nguồn bài viết: Từ bài viết chỉ còn 3 tài liệu ARTICLE-*, Không từ bài viết còn 16, về Tất cả thì đủ 19; huy hiệu chỉ ở tài liệu từ bài viết', async () => {
+    const user = renderPage();
+    const table = () => within(screen.getByRole('table', { name: 'Tài liệu tri thức' }));
+    const rows = () => table().getAllByRole('row');
+    await docRow(T.draft);
+    expect(table().getAllByText('Từ bài viết')).toHaveLength(3); // phạm vi bảng: <option> cùng tên không tính
+    expect(within(await docRow(T.draft)).queryByText('Từ bài viết')).not.toBeInTheDocument();
+
+    await user.selectOptions(screen.getByLabelText('Lọc nguồn bài viết'), 'true');
+    await waitFor(() => expect(rows()).toHaveLength(4));
+    expect(table().getAllByText('Từ bài viết')).toHaveLength(3);
+    expect(screen.queryByText(T.draft)).not.toBeInTheDocument();
+
+    await user.selectOptions(screen.getByLabelText('Lọc nguồn bài viết'), 'false');
+    await waitFor(() => expect(rows()).toHaveLength(17));
+    expect(table().queryByText('Từ bài viết')).not.toBeInTheDocument();
+
+    await user.selectOptions(screen.getByLabelText('Lọc nguồn bài viết'), '');
+    await waitFor(() => expect(rows()).toHaveLength(20));
+  });
+
+  it('lọc nguồn bài viết ghép với trạng thái; không khớp thì câu trạng thái rỗng nhắc bộ lọc', async () => {
+    const user = renderPage();
+    await docRow(T.draft);
+    await user.selectOptions(screen.getByLabelText('Lọc nguồn bài viết'), 'true');
+    await user.selectOptions(screen.getByLabelText('Lọc trạng thái'), 'PUBLISHED');
+    await waitFor(() => expect(within(screen.getByRole('table', { name: 'Tài liệu tri thức' })).getAllByRole('row')).toHaveLength(2));
+    await user.type(screen.getByLabelText('Tìm theo tiêu đề'), 'không có bài nào như vậy');
+    expect(await screen.findByText('Không có tài liệu nào khớp bộ lọc.')).toBeInTheDocument();
+    await user.clear(screen.getByLabelText('Tìm theo tiêu đề'));
+    await user.selectOptions(screen.getByLabelText('Lọc trạng thái'), '');
+    await user.selectOptions(screen.getByLabelText('Lọc nguồn bài viết'), 'false');
+    await user.type(screen.getByLabelText('Tìm theo tiêu đề'), 'Chuẩn bị đưa thú cưng');
+    await waitFor(() => expect(within(screen.getByRole('table', { name: 'Tài liệu tri thức' })).getAllByRole('row')).toHaveLength(2));
+  });
+
+  it('bộ lọc nguồn là bộ lọc DUY NHẤT đang bật mà kho không có tài liệu từ bài viết: câu rỗng nhắc bộ lọc, không phải "Chưa có tài liệu nào"', async () => {
+    localStorage.setItem('petcare-mock-ai', JSON.stringify({ documents: [{ documentId: 1, title: 'Tài liệu soạn tay duy nhất', status: 'DRAFT' }] }));
+    const user = renderPage();
+    await docRow('Tài liệu soạn tay duy nhất');
+    await user.selectOptions(screen.getByLabelText('Lọc nguồn bài viết'), 'true');
+    expect(await screen.findByText('Không có tài liệu nào khớp bộ lọc.')).toBeInTheDocument();
+    expect(screen.queryByText('Chưa có tài liệu nào.')).not.toBeInTheDocument();
   });
 
   it('nút theo trạng thái: nháp xuất bản / lưu trữ; đã xuất bản lưu trữ; lỗi chỉ mục có Nạp lại; lưu trữ xuất bản lại; phác đồ chỉ xem', async () => {

@@ -10,7 +10,7 @@ import { useAiDocument, useAiDocuments, useAiMutation, useAskChatbot, useItemPro
 import { installMockApi } from '../api/mock/mock-api';
 
 // Điểm cần giữ: lệnh ghi làm mới ['ai'] cả khi BE từ chối (409 vì tài liệu đã bị người khác lưu trữ), lỗi 4xx không thử lại, hỏi đáp chọn endpoint theo trạng thái đăng nhập.
-// Tài liệu mẫu (ai.seed.ts): DRAFT 9 và 12; PUBLISHED 1–8, 10 và 13–16; ARCHIVED 11.
+// Tài liệu mẫu (ai.seed.ts): DRAFT 9, 12 và 17 (17 đồng bộ từ bài viết); PUBLISHED 1–8, 10, 13–16 và 18; ARCHIVED 11 và 19.
 
 beforeAll(() => installMockApi(apiClient));
 
@@ -30,7 +30,7 @@ describe('tri thức và hồ sơ gợi ý (SUPER_MANAGER)', () => {
 
   it('đọc: danh sách theo bộ lọc, chi tiết chỉ chạy khi có id, hồ sơ gợi ý', async () => {
     const { result } = setup(() => ({ drafts: useAiDocuments({ status: 'DRAFT' }), none: useAiDocument(null), one: useAiDocument(9), profiles: useItemProfiles({ missingOnly: true }) }));
-    await waitFor(() => expect(result.current.drafts.data?.totalElements).toBe(2));
+    await waitFor(() => expect(result.current.drafts.data?.totalElements).toBe(3));
     expect(result.current.none.fetchStatus).toBe('idle');
     await waitFor(() => expect(result.current.one.data?.title).toBe('Chó sủa nhiều và lo âu khi xa chủ'));
     await waitFor(() => expect(result.current.profiles.data?.content.map((r) => r.itemId)).toEqual([3]));
@@ -38,12 +38,12 @@ describe('tri thức và hồ sơ gợi ý (SUPER_MANAGER)', () => {
 
   it('ghi làm mới ["ai"]: lưu trữ bản nháp thì danh sách nháp và chi tiết cập nhật ngay', async () => {
     const { result } = setup(() => ({ drafts: useAiDocuments({ status: 'DRAFT' }), one: useAiDocument(9), archive: useAiMutation(aiApi.archiveDocument) }));
-    await waitFor(() => expect(result.current.drafts.data?.totalElements).toBe(2));
+    await waitFor(() => expect(result.current.drafts.data?.totalElements).toBe(3));
     await waitFor(() => expect(result.current.one.data?.status).toBe('DRAFT'));
 
     await act(() => result.current.archive.mutateAsync(9));
 
-    await waitFor(() => expect(result.current.drafts.data?.totalElements).toBe(1));
+    await waitFor(() => expect(result.current.drafts.data?.totalElements).toBe(2));
     await waitFor(() => expect(result.current.one.data?.status).toBe('ARCHIVED'));
   });
 

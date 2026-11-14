@@ -32,6 +32,7 @@ Hiện nay (BR-AI-04) không đoạn nào đạt τ = 0,60 thì trả `OUT_OF_SC
 - `sourceType ∈ DATABASE, KNOWLEDGE_BASE, GENERAL_KNOWLEDGE, KNOWLEDGE_BASE_AND_GENERAL, SAFETY`; `SAFETY` cho `EMERGENCY`, `MEDICAL_REFUSAL`; `DATABASE` cho `PERSONAL`, `NEED_PET_CHOICE`, `NEED_LOGIN`, BUSINESS; `OUT_OF_SCOPE` và `UNAVAILABLE` có `sourceType = null`.
 - Phản hồi #1, #2 thêm trường **tùy chọn** `sourceType` (tương thích ngược; mock FE thêm sau). `ai_chat_logs` thêm `source_type`, `intent` (`EMERGENCY, MEDICAL_RECORD, APPOINTMENT_UPCOMING, VACCINATION_SCHEDULE, BUSINESS_PRICE, BUSINESS_BRANCH, PET_CARE, MEDICAL_RISK, OUT_OF_DOMAIN, UNKNOWN`), `used_pet_context` (V53). Không ghi thêm nội dung.
 - Bộ đếm `ai.chat.result` thêm nhãn `sourceType` để theo dõi tỷ lệ kiến thức chung (BR-AI-24 "hiệu chỉnh").
+- **FE hiện nhãn từ T93 (14/11/2026):** `ChatMessages.tsx` hiện nhãn ở `ANSWERED` và `PERSONAL` cho bốn giá trị (`SAFETY`, vắng và giá trị lạ thì không nhãn); chữ nhãn và lý do ở ADR-0134 "Đã cài ở T93".
 
 ### D5. Hybrid RAG: điều kiện, không phải việc
 - Chỉ xem xét khi Recall@5 trên nhóm RAG của bộ v2 < 90 % sau khi kho đã mở rộng (T90). Phương án khi đó: `pg_trgm` / `tsvector` (đã có `unaccent`, V33) + vector, hợp điểm RRF; thêm `keywords` của `docs_RAG` vào văn bản nhúng. Không thêm vector DB, không thêm dịch vụ rerank bên ngoài.
@@ -85,7 +86,7 @@ Hiến chọn "có" (13/11/2026): `sourceType` vào phản hồi #1, #2 và cộ
 | `ai_chat_logs` thêm `intent`, `used_pet_context` | **Chưa** (nợ) | Không có việc nào ở T90 ghi hai cột này; thêm khi T91 (ngữ cảnh thú) và bộ đo v2 cần |
 | Bộ đếm `ai.chat.result` thêm nhãn `sourceType` | **Chưa** (nợ) | Chưa có dashboard dùng; cột nhật ký đủ để thống kê |
 
-Ánh xạ cài đặt (`ChatResponse` là chỗ duy nhất dựng): `EMERGENCY`, `MEDICAL_REFUSAL` (kể cả từ chối bệnh án và từ chối do `DoseGuard`) → `SAFETY`; `PERSONAL`, `NEED_PET_CHOICE`, `NEED_LOGIN` và câu BUSINESS → `DATABASE`; `ANSWERED` từ truy hồi: có đoạn → `KNOWLEDGE_BASE`, không đoạn (đã thêm tiền tố) → `GENERAL_KNOWLEDGE`, có đoạn và câu mở đầu bằng "Thông tin tham khảo chung:" → `KNOWLEDGE_BASE_AND_GENERAL`; `OUT_OF_SCOPE`, `UNAVAILABLE` và lời chào (T92) → `null`. Lời chào để `null` vì không lấy từ CSDL, kho hay kiến thức chung; D4 không nêu. FE chỉ thêm trường tùy chọn ở kiểu và mock, chưa hiển thị (T93).
+Ánh xạ cài đặt (`ChatResponse` là chỗ duy nhất dựng): `EMERGENCY`, `MEDICAL_REFUSAL` (kể cả từ chối bệnh án và từ chối do `DoseGuard`) → `SAFETY`; `PERSONAL`, `NEED_PET_CHOICE`, `NEED_LOGIN` và câu BUSINESS → `DATABASE`; `ANSWERED` từ truy hồi: có đoạn → `KNOWLEDGE_BASE`, không đoạn (đã thêm tiền tố) → `GENERAL_KNOWLEDGE`, có đoạn và câu mở đầu bằng "Thông tin tham khảo chung:" → `KNOWLEDGE_BASE_AND_GENERAL`; `OUT_OF_SCOPE`, `UNAVAILABLE` và lời chào (T92) → `null`. Lời chào để `null` vì không lấy từ CSDL, kho hay kiến thức chung; D4 không nêu. FE thêm trường tùy chọn ở kiểu và mock; hiển thị nhãn ở T93 (14/11/2026, ADR-0134 "Đã cài ở T93").
 
 ## Kiểm thử dự kiến (T92, TDD + đột biến)
 

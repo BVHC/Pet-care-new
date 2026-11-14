@@ -59,3 +59,91 @@ describe('ChatEntryView theo result', () => {
     expect(screen.getByText('Thông tin tham khảo.')).toBeInTheDocument();
   });
 });
+
+// T93, BR-AI-34: nhãn nguồn dưới câu trả lời. Người rà soát của kho demo là giả định (Q2) nên không nhãn nào được ngụ ý "đã được bác sĩ duyệt".
+describe('Nhãn nguồn của câu trả lời (sourceType)', () => {
+  const LABELS = {
+    DATABASE: 'Từ dữ liệu của phòng khám',
+    KNOWLEDGE_BASE: 'Theo tài liệu của phòng khám',
+    GENERAL_KNOWLEDGE: 'Kiến thức tham khảo chung, không phải tài liệu của phòng khám',
+    KNOWLEDGE_BASE_AND_GENERAL: 'Theo tài liệu của phòng khám, có bổ sung kiến thức chung',
+  } as const;
+  const ANY_LABEL = /Từ dữ liệu của phòng khám|Theo tài liệu của phòng khám|Kiến thức tham khảo chung/;
+
+  it.each(Object.entries(LABELS))('ANSWERED + %s: hiện đúng nhãn', (sourceType, label) => {
+    show({ result: 'ANSWERED', answer: 'Câu trả lời.', sourceType: sourceType as ChatResponse['sourceType'] });
+    expect(screen.getByText(label)).toBeInTheDocument();
+    expect(screen.getByText('Câu trả lời.')).toBeInTheDocument();
+  });
+
+  it('PERSONAL + DATABASE: có nhãn dữ liệu của phòng khám (không nằm trong khối ANSWERED)', () => {
+    show({ result: 'PERSONAL', answer: 'Bạn có 1 lịch hẹn sắp tới.', sourceType: 'DATABASE' });
+    expect(screen.getByText(LABELS.DATABASE)).toBeInTheDocument();
+  });
+
+  it.each([
+    ['NEED_LOGIN', 'DATABASE'],
+    ['NEED_PET_CHOICE', 'DATABASE'],
+    ['OUT_OF_SCOPE', null],
+    ['UNAVAILABLE', null],
+    ['MEDICAL_REFUSAL', 'SAFETY'],
+    ['EMERGENCY', 'SAFETY'],
+  ] as const)('%s: không nhãn dù sourceType = %s', (result, sourceType) => {
+    show({ result, answer: 'Câu mẫu.', sourceType, pets: result === 'NEED_PET_CHOICE' ? [{ petId: 1, name: 'Mochi' }] : [] });
+    expect(screen.getByText(/Câu mẫu\./)).toBeInTheDocument();
+    expect(screen.queryByText(ANY_LABEL)).not.toBeInTheDocument();
+  });
+
+  it.each([['SAFETY'], [null], [undefined], ['GIA_TRI_MOI_CUA_BE'], ['constructor']])('ANSWERED + sourceType %s: không nhãn, không nổ', (sourceType) => {
+    show({ result: 'ANSWERED', answer: 'Câu trả lời.', sourceType: sourceType as ChatResponse['sourceType'] });
+    expect(screen.getByText('Câu trả lời.')).toBeInTheDocument();
+    expect(screen.queryByText(ANY_LABEL)).not.toBeInTheDocument();
+  });
+
+  it('không nhãn nào ngụ ý đã được bác sĩ duyệt và không có emoji', () => {
+    for (const label of Object.values(LABELS)) {
+      expect(label).not.toMatch(/duyệt|bác sĩ|xác nhận/i);
+    }
+    for (const sourceType of Object.keys(LABELS)) {
+      const { container, unmount } = render(
+        <QueryClientProvider client={new QueryClient()}>
+          <MemoryRouter>
+            <ChatEntryView
+              entry={{ id: 'x', from: 'bot', response: { ...base, answer: 'Câu trả lời.', sourceType: sourceType as ChatResponse['sourceType'] } }}
+              onChoosePet={vi.fn()}
+            />
+          </MemoryRouter>
+        </QueryClientProvider>,
+      );
+      expect(container.textContent).not.toMatch(/\p{Extended_Pictographic}/u);
+      unmount();
+    }
+  });
+
+  it('nhãn, nguồn và lời nhắc gộp một khối chân (một đường kẻ), nhãn là chữ thường không role', () => {
+    const { container } = render(
+      <QueryClientProvider client={new QueryClient()}>
+        <MemoryRouter>
+          <ChatEntryView
+            entry={{
+              id: 'x',
+              from: 'bot',
+              response: { ...base, answer: 'Mũi dại từ 12 tuần.', sources: [{ documentId: 1, title: 'Vaccine dại' }], disclaimer: 'Thông tin tham khảo.', sourceType: 'KNOWLEDGE_BASE' },
+            }}
+            onChoosePet={vi.fn()}
+          />
+        </MemoryRouter>
+      </QueryClientProvider>,
+    );
+    expect(container.querySelectorAll('.border-t')).toHaveLength(1);
+    const badge = screen.getByText(LABELS.KNOWLEDGE_BASE);
+    expect(badge.tagName).toBe('P');
+    expect(badge).not.toHaveAttribute('role');
+    expect(screen.getByText('Nguồn: Vaccine dại')).toBeInTheDocument();
+  });
+
+  it('kiến thức chung có màu nhấn khác nhãn tài liệu', () => {
+    show({ result: 'ANSWERED', answer: 'Thông tin tham khảo chung: ...', sourceType: 'GENERAL_KNOWLEDGE' });
+    expect(screen.getByText(LABELS.GENERAL_KNOWLEDGE).className).toMatch(/amber/);
+  });
+});

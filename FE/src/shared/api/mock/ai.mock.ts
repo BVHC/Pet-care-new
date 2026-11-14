@@ -32,6 +32,11 @@
 //      tồn khả dụng > 0 ở ≥ 1 chi nhánh ACTIVE; loại chuồng đúng loài, đủ sức chứa cân nặng và (như dịch vụ) bật ở ≥ 1 chi nhánh. Không cache (BR-AI-23 cho phép).
 //  A11 Hồ sơ gợi ý: danh sách sắp dịch vụ trước sản phẩm, rồi id tăng dần (hợp đồng không nêu thứ tự); từ khóa giống được chuẩn hóa chữ thường không dấu, bỏ trùng; hồ sơ toàn trường rỗng = xóa (`hasProfile` false);
 //      mục ngừng kinh doanh vẫn ghi được hồ sơ nếu tồn tại. Dịch vụ khám / tiêm, loại chuồng, thuốc, vaccine, sản phẩm kê đơn → 400 BR-AI-18.
+//  A12 T93 (BR-AI-31, 33, 34): hai công tắc [CFG] BOOL `ai.chat.business_intent_enabled` và `ai.chat.general_knowledge_enabled` (mặc định tắt) đọc mỗi lượt hỏi từ màn tham số của mock identity; cả hai tắt thì chatbot chạy y hệt trước T93.
+//      BUSINESS (sau cấp cứu, bệnh án, ý định cá nhân; trước hai lớp kiến thức chung và truy hồi): giá dịch vụ / chi nhánh dựng từ catalog.mock / branch.mock, `sourceType = DATABASE`, không nguồn, không lời nhắc, không nhúng, không LLM.
+//      Kiến thức chung: lời chào và cụm rủi ro y khoa trả câu mẫu tất định; không có đoạn đạt τ vẫn tới bước "LLM" (tốn một lệnh sinh), câu nói về thú trả `GENERAL_KNOWLEDGE` bằng chữ GIẢ LẬP (mock không có mô hình), câu có đoạn và xin "ngoài ra / bổ sung"
+//      trả `KNOWLEDGE_BASE_AND_GENERAL` (cờ từ khóa giả lập; BE thật do mô hình quyết định). Cụm từ chép từ ai-business-keywords.txt và ai-medical-risk-keywords.txt của BE; "giá trị" / "đánh giá" chỉ che dạng có dấu.
+//      Tài liệu mẫu có thêm 3 dòng đồng bộ từ bài viết (`externalId` ARTICLE-<mã>, id 17–19); `fromArticle` đứng sau species và trước page / size như KnowledgeController (BE nhận thêm on / yes / 1, mock chỉ true / false như `missingOnly`).
 import type {
   AiDocument,
   AiDocumentSummary,
@@ -62,10 +67,10 @@ import { SPECIES_LABELS, type Species, type VaccinationProtocol, type VaccineTyp
 import type { PetResponse, VaccinationRecord } from '../../../domains/pets/types';
 import { foldVi } from '../../utils/text';
 import { vnDate } from '../../utils/vn-time';
-import { chunkCountOf, seedManualDocuments, SEED_POPULARITY, SEED_PROFILES, type DocRow } from './ai.seed';
+import { chunkCountOf, seedArticleDocuments, seedManualDocuments, SEED_POPULARITY, SEED_PROFILES, type DocRow } from './ai.seed';
 import { appointmentRoutes } from './appointment.mock';
 import { boardingRoutes } from './boarding.mock';
-import { activeBranchSummaries, branchBooking } from './branch.mock';
+import { activeBranchSummaries, branchBooking, openingRangesOn } from './branch.mock';
 import { catalogProducts, catalogProtocols, catalogServices, catalogVaccineTypes } from './catalog.mock';
 import { customerPetRoutes } from './customer-pet.mock';
 import { denied, fail, has, invalid, notFound, ok, optional, ruleFail, tooLong, type MockHandler, type MockReply, type MockRequest } from './envelope';
@@ -116,6 +121,15 @@ export function aiConfig(key: string): number {
   return Number(loadIdentity().configOverrides?.[key] ?? seed.value);
 }
 
+/** Công tắc BOOL [CFG] (BR-AI-31, 33): `'true'` trong giá trị admin đã sửa hoặc mặc định của seed; đọc mỗi lượt hỏi như `getBool` của BE. */
+function aiFlag(key: string): boolean {
+  const seed = SEED_CONFIGS.find((c) => c.key === key);
+  if (!seed) throw new Error(`Không có tham số [CFG] ${key}`);
+  return (loadIdentity().configOverrides?.[key] ?? seed.value) === 'true';
+}
+const BUSINESS_FLAG = 'ai.chat.business_intent_enabled';
+const GENERAL_FLAG = 'ai.chat.general_knowledge_enabled';
+
 // ─── State ───
 
 /** BR-AI-13: mỗi loại vaccine đang hoạt động CÓ phác đồ một tài liệu, sinh từ danh mục, PUBLISHED + INDEXED, chỉ đọc. */
@@ -153,6 +167,7 @@ function catalogDocuments(firstId: number, now: number): DocRow[] {
         chunkCount: chunkCountOf(content),
         publishedAt: at,
         updatedAt: at,
+        externalId: null,
         served: { title, content },
       };
     });
@@ -160,7 +175,8 @@ function catalogDocuments(firstId: number, now: number): DocRow[] {
 
 function seedDocuments(now: number): DocRow[] {
   const manual = seedManualDocuments(now);
-  return [...manual, ...catalogDocuments(manual.length + 1, now)];
+  const catalog = catalogDocuments(manual.length + 1, now);
+  return [...manual, ...catalog, ...seedArticleDocuments(manual.length + catalog.length + 1, now)];
 }
 
 const isObject = (v: unknown): v is Record<string, unknown> => !!v && typeof v === 'object' && !Array.isArray(v);
@@ -189,6 +205,7 @@ function normalizeDoc(d: Partial<DocRow>, fallbackId: number): DocRow {
     chunkCount: typeof d.chunkCount === 'number' ? d.chunkCount : chunkCountOf(content),
     publishedAt: d.publishedAt ?? null,
     updatedAt: typeof d.updatedAt === 'string' ? d.updatedAt : nowIso(),
+    externalId: typeof d.externalId === 'string' ? d.externalId : null,
     served: d.served ?? (indexedVersion > 0 ? { title, content } : null),
   };
 }
@@ -283,6 +300,7 @@ const summaryOf = (d: DocRow): AiDocumentSummary => ({
   version: d.version,
   indexStatus: d.indexStatus,
   updatedAt: d.updatedAt,
+  externalId: d.externalId,
 });
 const documentOf = ({ served: _served, ...d }: DocRow): AiDocument => d;
 const newestFirst = (a: DocRow, b: DocRow) => Date.parse(b.updatedAt) - Date.parse(a.updatedAt) || b.documentId - a.documentId;
@@ -305,10 +323,12 @@ function withDocument(
 }
 
 const listDocuments: MockHandler = (req) => {
-  const { status, topic, species, q } = req.query;
+  const { status, topic, species, fromArticle, q } = req.query;
   if (status !== undefined && !DOCUMENT_STATUSES.includes(status as DocumentStatus)) return badParam('status');
   if (topic !== undefined && !DOCUMENT_TOPICS.includes(topic as DocumentTopic)) return badParam('topic');
   if (species !== undefined && !DOCUMENT_SPECIES.includes(species as DocumentSpecies)) return badParam('species');
+  // Thứ tự tham số của KnowledgeController: status, topic, species, fromArticle, q, page, size. BE (Spring) nhận thêm on/yes/1; mock chỉ true / false như `missingOnly`.
+  if (fromArticle !== undefined && fromArticle !== 'true' && fromArticle !== 'false') return badParam('fromArticle');
   const badPaging = typeError(req.query, ['page', 'size']);
   if (badPaging) return badPaging;
   if (!isSuperManager(req)) return denied();
@@ -319,6 +339,7 @@ const listDocuments: MockHandler = (req) => {
         (!status || d.status === status) &&
         (!topic || d.topic === topic) &&
         (!species || d.species === species) &&
+        (fromArticle === undefined || (fromArticle === 'true') === !!d.externalId?.startsWith('ARTICLE-')) &&
         (!needle || foldVi(d.title).includes(needle)),
     )
     .sort(newestFirst);
@@ -380,6 +401,7 @@ const createDocument: MockHandler = (req) => {
     chunkCount: 0,
     publishedAt: null,
     updatedAt: at,
+    externalId: null,
     served: null,
   };
   s.documents.push(doc);
@@ -440,6 +462,7 @@ const importDocument: MockHandler = (req) => {
       chunkCount: 0,
       publishedAt: null,
       updatedAt: at,
+      externalId: null,
       served: null,
     };
     s.documents.push(doc);
@@ -1009,6 +1032,70 @@ const PRICE_BLOCKERS = ['giá bao nhiêu', 'giá tiêm', 'bao nhiêu tiền', 'c
 const MEDICAL_RECORD_PHRASES = ['bệnh án', 'đơn thuốc', 'toa thuốc', 'kết quả xét nghiệm', 'xét nghiệm', 'hồ sơ bệnh'] as const;
 const INJECTION_PHRASES = ['bỏ qua mọi quy tắc', 'bỏ qua các quy tắc', 'bỏ qua hướng dẫn', 'lời nhắc hệ thống', 'system prompt', 'từ giờ bạn là'] as const;
 const ANIMAL_WORDS = ['chó', 'mèo', 'thú', 'bé', 'cún', 'hamster', 'thỏ'] as const;
+// T93: chép từ tài nguyên của BE. ai-business-keywords.txt (BR-AI-31) và ai-medical-risk-keywords.txt (BR-AI-33, ADR-0136 D2).
+const BUSINESS_PRICE = ['giá', 'bảng giá', 'bao nhiêu tiền', 'mấy tiền', 'chi phí'] as const;
+const BUSINESS_PRICE_WEAK = ['phí'] as const;
+const BUSINESS_PRICE_EXCLUDE = ['giá trị', 'đánh giá'] as const;
+const BUSINESS_BRANCH = ['chi nhánh', 'địa chỉ', 'giờ mở cửa', 'mở cửa', 'giờ làm việc', 'số điện thoại', 'hotline'] as const;
+const MEDICAL_RISK_PHRASES = [
+  'bị bệnh gì', 'mắc bệnh gì', 'bệnh gì', 'chẩn đoán', 'kê đơn', 'uống thuốc gì', 'dùng thuốc gì', 'cho uống thuốc', 'thuốc gì', 'liều thuốc', 'liều dùng', 'bao nhiêu mg', 'bao nhiêu ml thuốc',
+  'tự điều trị', 'tự chữa', 'điều trị tại nhà',
+] as const;
+/** Giả lập: BE thật để mô hình tự thêm kiến thức ngoài đoạn (câu trả lời mở đầu bằng "Thông tin tham khảo chung:"); mock không có mô hình nên dùng cụm xin bổ sung làm cờ tất định. */
+const GENERAL_SUPPLEMENT_PHRASES = ['ngoài ra', 'bổ sung', 'mẹo thêm'] as const;
+/** Cả câu chỉ là lời chào / cảm ơn (có thể kèm "bạn", "ạ", "nhé"…), như GeneralKnowledgeGuards.isGreeting của BE. */
+const GREETING_RE = /^(xin chao|chao|hello|hi|hey|alo|cam on|thanks|thank you)( ban| a| nhe| nha| tro ly| ad| bot| pet care)*$/;
+const isGreeting = (text: string) => GREETING_RE.test(foldVi(lowerNfc(text)).replace(/[^a-z0-9 ]/g, ' ').replace(/\s+/g, ' ').trim());
+
+/** `1234000` → `1.234.000 ₫` (BE `BusinessAnswerService.vnd`). */
+const vnd = (amount: number) => `${String(amount).replace(/\B(?=(\d{3})+(?!\d))/g, '.')} ₫`;
+/** Che cụm như "giá trị" / "đánh giá" (chứa "giá" nhưng không hỏi giá) trước khi khớp. Mock chỉ che dạng có dấu (BE che cả dạng bỏ dấu của cụm nhiều âm tiết). */
+const withoutExcluded = (text: string) => BUSINESS_PRICE_EXCLUDE.reduce((out, p) => out.replace(new RegExp(wordRegExp(p).source, 'gu'), ' '), lowerNfc(text));
+const NAME_STOP_WORDS = new Set(['dich', 'vu', 'va']);
+const nameTokens = (text: string) => foldVi(lowerNfc(text)).split(/[^a-z0-9]+/).filter(Boolean);
+
+/** Tối đa 3 dịch vụ công khai (đang kinh doanh, bật ở ≥ 1 chi nhánh ACTIVE) khớp tên: từ đầu của tên có trong câu hoặc ≥ nửa số từ; điểm cao trước rồi theo tên (BusinessAnswerService.matchServices). */
+function matchServices(question: string) {
+  const branchIds = activeBranchSummaries().map((b) => b.branchId);
+  const asked = new Set(nameTokens(question));
+  return catalogServices()
+    .filter((x) => x.isActive && branchIds.some((id) => branchBooking(id)?.isServiceEnabled(x.serviceId)))
+    .map((service) => {
+      const name = nameTokens(service.name).filter((t) => !NAME_STOP_WORDS.has(t));
+      const score = name.length ? name.filter((t) => asked.has(t)).length / name.length : 0;
+      return { service, score: score >= 0.5 || (name.length > 0 && asked.has(name[0])) ? score : 0 };
+    })
+    .filter((x) => x.score > 0)
+    .sort((a, b) => b.score - a.score || (a.service.name < b.service.name ? -1 : a.service.name > b.service.name ? 1 : 0))
+    .slice(0, 3)
+    .map((x) => x.service);
+}
+
+function branchAnswer(): string {
+  const today = vnDate();
+  const lines = activeBranchSummaries().flatMap(({ branchId }) => {
+    const branch = branchBooking(branchId)?.branch;
+    if (!branch) return [];
+    const ranges = openingRangesOn(branchId, today);
+    const hours = ranges.length ? `Hôm nay: ${ranges.map((r) => `${r.open}–${r.close}`).join(', ')}.` : 'Hôm nay nghỉ.';
+    return [`\n- ${branch.name}${branch.address ? `: ${branch.address}.` : ''}${branch.phone ? ` SĐT ${branch.phone}.` : ''} ${hours}${branch.acceptsAfterHoursEmergency ? ' Nhận cấp cứu ngoài giờ.' : ''}`];
+  });
+  return lines.length ? `${REPLIES.branchHeader}${lines.join('')}` : REPLIES.noBranch;
+}
+
+/** BR-AI-31: giá dịch vụ và chi nhánh dựng từ dữ liệu, không nhúng, không LLM; null = không có ý định nghiệp vụ, đi tiếp đường cũ (BusinessAnswerService.answer). */
+function businessReply(question: string): string | null {
+  const branch = hasAny(question, BUSINESS_BRANCH);
+  const clean = withoutExcluded(question);
+  const price = hasAny(clean, BUSINESS_PRICE);
+  const matched = price || hasAny(clean, BUSINESS_PRICE_WEAK) ? matchServices(question) : [];
+  const asksPrice = price || matched.length > 0;
+  if (!branch && !asksPrice) return null;
+  const parts: string[] = [];
+  if (asksPrice) parts.push(matched.length ? [REPLIES.priceHeader, ...matched.map((x) => `- ${x.name}: ${vnd(x.price)}`), REPLIES.priceNote].join('\n') : REPLIES.noPrice);
+  if (branch) parts.push(branchAnswer());
+  return parts.join('\n\n');
+}
 /** Tên thú trùng từ thông dụng chỉ là dấu hiệu sở hữu khi đi sau "bé", "con", "chú", "em" (BR-AI-26). */
 const COMMON_PET_NAMES = ['vàng', 'mít', 'đen', 'nâu', 'trắng', 'xám'] as const;
 
@@ -1057,6 +1144,16 @@ const REPLIES = {
   noAppointments: 'Bạn chưa có lịch hẹn sắp tới.',
   noPets: 'Bạn chưa có thú cưng nào còn sống trong hồ sơ. Hãy thêm thú cưng để xem lịch tiêm.',
   pickPet: 'Bạn muốn xem lịch tiêm của bé nào?',
+  // T93: chép từ ChatTexts của BE (ADR-0134 "Đã cài ở T90", ADR-0136 "Đã cài ở T92").
+  greeting: 'Chào bạn! Mình là trợ lý AI của Pet Care. Bạn cứ hỏi về chăm sóc, dinh dưỡng, vệ sinh hay lịch tiêm của chó mèo nhé.',
+  noPrice: 'Mình chưa có dữ liệu giá cho dịch vụ này, bạn xem bảng giá hoặc hỏi lễ tân.',
+  priceHeader: 'Giá dịch vụ tại Pet Care:',
+  priceNote: 'Giá có thể thay đổi theo từng thú; bạn xem bảng giá hoặc hỏi lễ tân để biết chính xác.',
+  noBranch: 'Mình chưa có dữ liệu chi nhánh lúc này, bạn vui lòng hỏi lễ tân.',
+  branchHeader: 'Các chi nhánh Pet Care đang hoạt động:',
+  generalPrefix: 'Thông tin tham khảo chung:',
+  // Mock không gọi mô hình: câu kiến thức chung là chữ giả lập, nói rõ cho người xem demo.
+  generalMock: 'đây là câu trả lời mô phỏng từ kiến thức chung của mô hình (mock không gọi Gemini); bạn đặt lịch để bác sĩ thú y tư vấn chính xác cho bé.',
 } as const;
 
 /**
@@ -1066,21 +1163,22 @@ const REPLIES = {
 export function chatResponse(
   result: ChatResult,
   answer: string,
-  extra: { sources?: ChatSource[]; bookingHint?: boolean; emergencyBranches?: EmergencyBranch[]; pets?: PetChoice[] } = {},
+  extra: { sources?: ChatSource[]; bookingHint?: boolean; emergencyBranches?: EmergencyBranch[]; pets?: PetChoice[]; sourceType?: ChatSourceType | null; disclaimer?: string | null } = {},
 ): ChatResponse {
   return {
     result,
     answer,
     sources: result === 'ANSWERED' ? (extra.sources ?? []) : [],
-    disclaimer: result === 'ANSWERED' ? DISCLAIMER : null,
+    // `disclaimer` / `sourceType` tường minh cho câu không qua mô hình (BUSINESS, lời chào: BE trả disclaimer null); vắng thì suy ra như BE `answered`.
+    disclaimer: extra.disclaimer !== undefined ? extra.disclaimer : result === 'ANSWERED' ? DISCLAIMER : null,
     bookingHint: extra.bookingHint ?? false,
     emergencyBranches: result === 'EMERGENCY' ? (extra.emergencyBranches ?? []) : [],
     pets: result === 'NEED_PET_CHOICE' ? (extra.pets ?? []) : [],
-    sourceType: sourceTypeOf(result, extra.sources?.length ?? 0),
+    sourceType: extra.sourceType !== undefined ? extra.sourceType : sourceTypeOf(result, extra.sources?.length ?? 0),
   };
 }
 
-/** Nguồn theo BR-AI-34 như BE: an toàn, cơ sở dữ liệu, tài liệu; mock không có kiến thức chung nên ANSWERED không đoạn thì vắng. */
+/** Nguồn theo BR-AI-34 như BE: an toàn, cơ sở dữ liệu, tài liệu. Kiến thức chung, BUSINESS và lời chào truyền `sourceType` tường minh (T93); mặc định ANSWERED không đoạn thì vắng. */
 function sourceTypeOf(result: ChatResult, sourceCount: number): ChatSourceType | null {
   if (result === 'EMERGENCY' || result === 'MEDICAL_REFUSAL') return 'SAFETY';
   if (result === 'PERSONAL' || result === 'NEED_PET_CHOICE' || result === 'NEED_LOGIN') return 'DATABASE';
@@ -1237,6 +1335,15 @@ function chat(req: MockRequest, scope: 'public' | 'me'): MockReply {
 
   // 6. Chỉ ở /me: tên thú → [thú], SAU khi định tuyến ý định (BR-AI-12b).
   const sent = scope === 'me' ? maskPetNames(masked, names) : masked;
+  // 5b. BR-AI-31 (công tắc tắt mặc định): giá dịch vụ và chi nhánh từ dữ liệu, trước hai lớp kiến thức chung và truy hồi; không nhúng, không LLM, không ghi nhật ký nhà cung cấp.
+  if (aiFlag(BUSINESS_FLAG)) {
+    const reply = businessReply(sent);
+    if (reply) return ok(chatResponse('ANSWERED', reply, { sourceType: 'DATABASE', disclaimer: null }));
+  }
+  // 5c. BR-AI-33 (công tắc tắt mặc định): lời chào và cụm rủi ro y khoa trả câu mẫu tất định, trước nhúng và LLM.
+  const general = aiFlag(GENERAL_FLAG);
+  if (general && isGreeting(masked)) return ok(chatResponse('ANSWERED', REPLIES.greeting, { sourceType: null, disclaimer: null }));
+  if (general && hasAny(masked, MEDICAL_RISK_PHRASES)) return ok(chatResponse('MEDICAL_REFUSAL', REPLIES.medicalRefusal, { bookingHint: true }));
   const sentPrevious = previous.map((q) => (scope === 'me' ? maskPetNames(maskPersonal(q), names) : maskPersonal(q)));
   const call: ProviderCall = { question: sent, previousQuestions: sentPrevious, llm: false };
   s.provider = [...s.provider, call].slice(-REMEMBERED_PROVIDER_CALLS);
@@ -1246,7 +1353,8 @@ function chat(req: MockRequest, scope: 'public' | 'me'): MockReply {
   const tau = aiConfig('ai.retrieval.min_similarity');
   const found = retrieve(s, sent);
   const hits = found.filter((h) => h.similarity >= tau).slice(0, aiConfig('ai.retrieval.top_k'));
-  if (!hits.length && !(nearTopic && NEAR_TOPIC_SIMILARITY >= tau && found.length)) {
+  // Công tắc kiến thức chung bật: không có đoạn nào ≥ τ vẫn hỏi LLM (lời nhắc v2, khối tài liệu rỗng), nên không dừng ở đây.
+  if (!general && !hits.length && !(nearTopic && NEAR_TOPIC_SIMILARITY >= tau && found.length)) {
     save(s);
     return ok(chatResponse('OUT_OF_SCOPE', REPLIES.outOfScope, { bookingHint: true }));
   }
@@ -1261,9 +1369,17 @@ function chat(req: MockRequest, scope: 'public' | 'me'): MockReply {
   // 9. Hậu kiểm / inScope giả bằng từ khóa (A5).
   if (mentionsDosage(sent) || asksDiagnosis(sent)) return ok(chatResponse('MEDICAL_REFUSAL', REPLIES.medicalRefusal, { bookingHint: true }));
   if (hasAny(sent, PRICE_PHRASES) || hasAny(sent, INJECTION_PHRASES)) return ok(chatResponse('OUT_OF_SCOPE', REPLIES.outOfScope, { bookingHint: true }));
-  if (!hits.length) return ok(chatResponse('OUT_OF_SCOPE', REPLIES.outOfScope, { bookingHint: true })); // các đoạn truy hồi không đủ trả lời đúng câu hỏi: inScope = false
+  if (!hits.length) {
+    // Công tắc bật và câu nói về thú: kiến thức chung, tiền tố bắt buộc, sources rỗng (BR-AI-33); còn lại các đoạn truy hồi không đủ trả lời đúng câu hỏi: inScope = false.
+    if (general && hasAny(sent, ANIMAL_WORDS)) return ok(chatResponse('ANSWERED', `${REPLIES.generalPrefix} ${REPLIES.generalMock}`, { sourceType: 'GENERAL_KNOWLEDGE' }));
+    return ok(chatResponse('OUT_OF_SCOPE', REPLIES.outOfScope, { bookingHint: true }));
+  }
   const sources = hits.slice(0, 3).map((h) => ({ documentId: h.doc.documentId, title: h.doc.title }));
-  return ok(chatResponse('ANSWERED', excerptOf(hits[0].doc, sent), { sources }));
+  const excerpt = excerptOf(hits[0].doc, sent);
+  if (general && hasAny(sent, GENERAL_SUPPLEMENT_PHRASES)) {
+    return ok(chatResponse('ANSWERED', `${REPLIES.generalPrefix} ${excerpt}`, { sources, sourceType: 'KNOWLEDGE_BASE_AND_GENERAL' }));
+  }
+  return ok(chatResponse('ANSWERED', excerpt, { sources }));
 }
 
 export const aiRoutes: Record<string, MockHandler> = {

@@ -489,7 +489,7 @@ class AiDocumentFsmIT {
 
         assertThat(all).extracting(d -> id(d)).containsExactly(fourth, third, second, first);
         assertThat(all.get(0)).containsOnlyKeys("documentId", "sourceType", "title", "topic", "species", "status",
-                "version", "indexStatus", "updatedAt");
+                "version", "indexStatus", "updatedAt", "externalId");
         assertThat(content(call(manager, HttpMethod.GET, BASE + q + "&status=DRAFT", null))).extracting(d -> id(d))
                 .containsExactly(fourth, first);
         assertThat(content(call(manager, HttpMethod.GET, BASE + q + "&status=ARCHIVED&topic=CARE&species=ALL", null)))
@@ -505,6 +505,41 @@ class AiDocumentFsmIT {
         assertThat(data(call(manager, HttpMethod.GET, BASE + q + "&size=0&page=-3", null)))
                 .containsEntry("size", 1).containsEntry("page", 0);
         assertThat(data(call(manager, HttpMethod.GET, BASE + q + "&size=1000", null))).containsEntry("size", 100);
+    }
+
+    /** T93: {@code fromArticle} tách tài liệu đồng bộ từ bài viết ({@code external_id LIKE 'ARTICLE-%'}) khỏi phần còn lại, kể cả dòng NULL. */
+    @Test
+    void listFiltersDocumentsThatComeFromAnArticleAndExposesTheExternalId() {
+        long manual = doc("DRAFT", "tay");
+        long articleDraft = doc("DRAFT", "bài một");
+        long articlePublished = doc("PUBLISHED", "bài hai");
+        long otherSource = doc("DRAFT", "nguồn khác");
+        jdbc.update("UPDATE ai_documents SET external_id = 'ARTICLE-9930001' WHERE id = ?", articleDraft);
+        jdbc.update("UPDATE ai_documents SET external_id = 'ARTICLE-9930002' WHERE id = ?", articlePublished);
+        jdbc.update("UPDATE ai_documents SET external_id = 'OTHER-9930003' WHERE id = ?", otherSource);
+        String q = "?q=" + TAG.toLowerCase();
+
+        assertThat(content(call(manager, HttpMethod.GET, BASE + q + "&fromArticle=true", null)))
+                .extracting(d -> id(d)).containsExactlyInAnyOrder(articleDraft, articlePublished);
+        assertThat(content(call(manager, HttpMethod.GET, BASE + q + "&fromArticle=false", null)))
+                .as("false gồm cả dòng external_id NULL lẫn khóa không phải ARTICLE-")
+                .extracting(d -> id(d)).containsExactlyInAnyOrder(manual, otherSource);
+        assertThat(content(call(manager, HttpMethod.GET, BASE + q, null))).as("vắng = tất cả")
+                .extracting(d -> id(d)).containsExactlyInAnyOrder(manual, articleDraft, articlePublished, otherSource);
+        assertThat(content(call(manager, HttpMethod.GET, BASE + q + "&fromArticle=true&status=PUBLISHED", null)))
+                .as("ghép với bộ lọc khác").extracting(d -> id(d)).containsExactly(articlePublished);
+
+        Map<String, Object> row = content(call(manager, HttpMethod.GET, BASE + q + "&fromArticle=true&status=DRAFT", null)).get(0);
+        assertThat(row).containsEntry("externalId", "ARTICLE-9930001");
+        assertThat(content(call(manager, HttpMethod.GET, BASE + q + "&fromArticle=false&status=DRAFT", null)))
+                .filteredOn(d -> id(d) == manual).singleElement().satisfies(d -> assertThat(d).containsEntry("externalId", null));
+        assertThat(data(call(manager, HttpMethod.GET, BASE + "/" + articleDraft, null)))
+                .as("#7 cũng trả externalId").containsEntry("externalId", "ARTICLE-9930001");
+        assertThat(data(call(manager, HttpMethod.GET, BASE + "/" + manual, null))).containsEntry("externalId", null);
+
+        ResponseEntity<Map<String, Object>> malformed = call(manager, HttpMethod.GET, BASE + q + "&fromArticle=maybe", null);
+        assertThat(malformed.getStatusCode().value()).isEqualTo(400);
+        assertThat(malformed.getBody()).containsEntry("errorCode", "MALFORMED_REQUEST");
     }
 
     @Test

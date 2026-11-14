@@ -35,11 +35,14 @@ export function DocumentsTab() {
   const [status, setStatus] = useState('');
   const [topic, setTopic] = useState('');
   const [species, setSpecies] = useState('');
+  // '' = tất cả, 'true' = chỉ tài liệu đồng bộ từ bài viết, 'false' = chỉ tài liệu không từ bài viết (ADR-0134, T93).
+  const [source, setSource] = useState('');
   const [page, setPage] = useState(0);
   const list = useAiDocuments({
     status: (status || undefined) as DocumentStatus | undefined,
     topic: (topic || undefined) as DocumentTopic | undefined,
     species: (species || undefined) as DocumentSpecies | undefined,
+    fromArticle: source ? source === 'true' : undefined,
     q: search || undefined,
     page,
     size: PAGE_SIZE,
@@ -99,6 +102,11 @@ export function DocumentsTab() {
               </option>
             ))}
           </select>
+          <select aria-label="Lọc nguồn bài viết" className={cn(selectClass, 'sm:w-48')} value={source} onChange={(e) => filter(setSource)(e.target.value)}>
+            <option value="">Mọi nguồn</option>
+            <option value="true">Từ bài viết</option>
+            <option value="false">Không từ bài viết</option>
+          </select>
           <Button variant="outline" onClick={() => setImporting(true)}>
             <FileUp className="h-4 w-4" />
             Nạp từ file
@@ -136,8 +144,11 @@ export function DocumentsTab() {
                     <tr key={d.documentId}>
                       <td className="max-w-sm px-3!">
                         <p className="font-medium text-(--text-primary)">{d.title}</p>
-                        <p className="text-xs text-(--text-tertiary)">
-                          #{d.documentId} · {SOURCE_LABELS[d.sourceType]} · phiên bản {d.version}
+                        <p className="flex flex-wrap items-center gap-x-1.5 text-xs text-(--text-tertiary)">
+                          <span>
+                            #{d.documentId} · {SOURCE_LABELS[d.sourceType]} · phiên bản {d.version}
+                          </span>
+                          {d.externalId?.startsWith('ARTICLE-') && <StatusBadge status="Từ bài viết" variant="info" />}
                         </p>
                       </td>
                       <td className="px-3!">
@@ -180,7 +191,7 @@ export function DocumentsTab() {
                 })
               ) : (
                 <TableState colSpan={6} loading={list.isLoading} error={list.isError ? plainMessage(toApiError(list.error)) : undefined} onRetry={() => list.refetch()}>
-                  {status || topic || species || search ? 'Không có tài liệu nào khớp bộ lọc.' : 'Chưa có tài liệu nào.'}
+                  {status || topic || species || source || search ? 'Không có tài liệu nào khớp bộ lọc.' : 'Chưa có tài liệu nào.'}
                 </TableState>
               )}
             </tbody>

@@ -70,7 +70,7 @@
 - **`GET /me/ai/pets/{petId}/recommendations`** — Gợi ý cá nhân hóa cho thú. Query: `group?`, `limit?`. Response `200` `RecommendationResponse`. Lỗi: `400` `BR-KH-05` thú đã mất · `VALIDATION_FAILED` `limit` ngoài 1–12 · `401` · `403` · `404` Không tìm thấy thú (kể cả thú của người khác).
 ### Knowledge
 
-- **`GET /ai/documents`** — Danh sách tài liệu tri thức. Query: `status?`, `topic?`, `species?`, `q?`, `page?`, `size?`. Response `200` trang `AiDocumentSummary`. Lỗi: `400` · `401` · `403`.
+- **`GET /ai/documents`** — Danh sách tài liệu tri thức. Query: `status?`, `topic?`, `species?`, `fromArticle?`, `q?`, `page?`, `size?`. Response `200` trang `AiDocumentSummary`. Lỗi: `400` · `401` · `403`.
 - **`POST /ai/documents`** — Tạo tài liệu tri thức (nháp). Request `CreateAiDocumentRequest`. Response `201` `AiDocument`. Lỗi: `400` `BR-AI-14` tiêu đề rỗng / quá 200 ký tự · nội dung quá 20 000 ký tự · `401` · `403`.
 - **`POST /ai/documents/import`** — Nạp tài liệu tri thức từ file. Request `ImportAiDocumentRequest`. Response `201` `ImportAiDocumentResponse`. Lỗi: `400` `BR-AI-29` kiểu file không hỗ trợ, nội dung không khớp phần mở rộng, quá cỡ, rỗng, hỏng, PDF không có chữ · `BR-AI-14` tiêu đề rỗng / quá 200 ký tự · `401` · `403`.
 - **`GET /ai/documents/{documentId}`** — Chi tiết tài liệu tri thức. Response `200` `AiDocument`. Lỗi: `400` · `401` · `403` · `404`.
@@ -106,8 +106,8 @@ Trường có `?` là không bắt buộc / có thể null. Kiểu `email`, `dat
 - **`VaccinationSummary`** — {`petId`: int64, `petName`: string, `items`: [VaccinationItem], `message`: string, `disclaimer`: string}
 - **`RecommendedItem`** — {`group`: RecoGroup, `itemType`: ItemType, `itemId`: int64, `name`: string, `price`: int64, `priceIsFrom`: boolean, `priceUnit?`: string, `imageUrl?`: string, `score`: number, `reasons`: [string]}
 - **`RecommendationResponse`** — {`petId`: int64, `generatedAt`: date-time, `items`: [RecommendedItem]}
-- **`AiDocumentSummary`** — {`documentId`: int64, `sourceType`: DocumentSource, `title`: string, `topic`: DocumentTopic, `species`: DocumentSpecies, `status`: DocumentStatus, `version`: int32, `indexStatus`: IndexStatus, `updatedAt`: date-time}
-- **`AiDocument`** — {`documentId`: int64, `sourceType`: DocumentSource, `title`: string, `topic`: DocumentTopic, `species`: DocumentSpecies, `content`: string, `sourceNote?`: string, `reviewerName?`: string, `reviewedOn?`: date, `status`: DocumentStatus, `version`: int32, `indexedVersion`: int32, `indexStatus`: IndexStatus, `indexError?`: string, `chunkCount`: int32, `publishedAt?`: date-time, `updatedAt`: date-time}
+- **`AiDocumentSummary`** — {`documentId`: int64, `sourceType`: DocumentSource, `title`: string, `topic`: DocumentTopic, `species`: DocumentSpecies, `status`: DocumentStatus, `version`: int32, `indexStatus`: IndexStatus, `updatedAt`: date-time, `externalId?`: string}
+- **`AiDocument`** — {`documentId`: int64, `sourceType`: DocumentSource, `title`: string, `topic`: DocumentTopic, `species`: DocumentSpecies, `content`: string, `sourceNote?`: string, `reviewerName?`: string, `reviewedOn?`: date, `status`: DocumentStatus, `version`: int32, `indexedVersion`: int32, `indexStatus`: IndexStatus, `indexError?`: string, `chunkCount`: int32, `publishedAt?`: date-time, `updatedAt`: date-time, `externalId?`: string}
 - **`CreateAiDocumentRequest`** — {`title`: string, `topic`: DocumentTopic, `species`: DocumentSpecies, `content`: string, `sourceNote?`: string, `reviewerName?`: string, `reviewedOn?`: date}
 - **`ImportAiDocumentRequest`** — {`fileName`: string, `contentBase64`: string, `topic`: DocumentTopic, `species`: DocumentSpecies, `sourceNote?`: string}
 - **`ImportAiDocumentResponse`** — {`fileKind`: string, `documents`: [AiDocument]}

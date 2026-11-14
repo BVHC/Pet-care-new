@@ -14,12 +14,13 @@ import {
   recoScore,
   vaccinationItemOf,
 } from './ai.mock';
+import { acceptsAfterHours, activeBranchSummaries } from './branch.mock';
 import { MOCK_PASSWORD } from './identity.mock';
 import { recordDoseForMock } from './visit-clinical.mock';
 import { installMockApi } from './mock-api';
 
 // Mock ai.mock.ts, qua axios như care.mock.test.ts. Dữ liệu mẫu (ai.seed.ts): 12 tài liệu MANUAL (id 1–12: PUBLISHED 1–8 và 10, trong đó #8 FAILED v2 đang phục vụ bản v1; DRAFT 9 và 12; ARCHIVED 11)
-// cộng 4 tài liệu CATALOG_PROTOCOL (id 13–16) sinh từ phác đồ của catalog.mock; hồ sơ gợi ý của dịch vụ 4 và sản phẩm 1, 2 (dịch vụ 3 chưa có).
+// cộng 4 tài liệu CATALOG_PROTOCOL (id 13–16) sinh từ phác đồ của catalog.mock và 3 tài liệu đồng bộ từ bài viết (id 17–19: ARTICLE-8 DRAFT, ARTICLE-6 PUBLISHED, ARTICLE-10 ARCHIVED); hồ sơ gợi ý của dịch vụ 4 và sản phẩm 1, 2 (dịch vụ 3 chưa có).
 
 let client: AxiosInstance;
 
@@ -125,9 +126,9 @@ const patchDoc = async (id: number, body: object) => client.patch(`/api/ai/docum
 const reviewed = { sourceNote: 'Tài liệu tự soạn', reviewerName: 'BS. Kiểm thử', reviewedOn: '2026-11-05' };
 
 describe('GET /ai/documents (#5)', () => {
-  it('mới sửa trước, trùng thì id giảm dần; 16 tài liệu mẫu gồm 4 CATALOG_PROTOCOL sinh từ phác đồ', async () => {
+  it('mới sửa trước, trùng thì id giảm dần; 19 tài liệu mẫu gồm 4 CATALOG_PROTOCOL sinh từ phác đồ và 3 từ bài viết', async () => {
     const page = await listDocs({ size: 100 });
-    expect(page).toMatchObject({ page: 0, size: 100, totalElements: 16, totalPages: 1 });
+    expect(page).toMatchObject({ page: 0, size: 100, totalElements: 19, totalPages: 1 });
     const times = page.content.map((d) => Date.parse(d.updatedAt));
     expect(times).toEqual([...times].sort((a, b) => b - a));
     expect(page.content[0]).not.toHaveProperty('content'); // Summary: không có nội dung
@@ -137,16 +138,69 @@ describe('GET /ai/documents (#5)', () => {
   });
 
   it('lọc status / topic / species / q (q theo tiêu đề, không phân biệt dấu); phân trang kẹp như các danh sách khác', async () => {
-    expect((await listDocs({ status: 'DRAFT' })).content.map((d) => d.documentId).sort((a, b) => a - b)).toEqual([9, 12]);
-    expect((await listDocs({ status: 'ARCHIVED' })).content.map((d) => d.documentId)).toEqual([11]);
+    expect((await listDocs({ status: 'DRAFT' })).content.map((d) => d.documentId).sort((a, b) => a - b)).toEqual([9, 12, 17]);
+    expect((await listDocs({ status: 'ARCHIVED' })).content.map((d) => d.documentId).sort((a, b) => a - b)).toEqual([11, 19]);
     expect((await listDocs({ topic: 'HYGIENE' })).totalElements).toBe(2);
     expect((await listDocs({ species: 'CAT', status: 'PUBLISHED' })).content.map((d) => d.documentId)).toEqual(expect.arrayContaining([2]));
     expect((await listDocs({ q: 'thuc pham doc' })).content.map((d) => d.documentId)).toEqual([4]);
     expect(await listDocs({ q: 'không có tài liệu này' })).toMatchObject({ totalElements: 0, content: [] });
-    expect(await listDocs({ page: 1, size: 5 })).toMatchObject({ page: 1, size: 5, totalElements: 16, totalPages: 4 });
+    expect(await listDocs({ page: 1, size: 5 })).toMatchObject({ page: 1, size: 5, totalElements: 19, totalPages: 4 });
     expect(await listDocs({ size: 500 })).toMatchObject({ size: 100 });
     expect(await listDocs({ page: -2, size: 0 })).toMatchObject({ page: 0, size: 1 });
     expect((await failure(client.get('/api/ai/documents', { params: { page: 'x' }, ...(await manager()) }))).data.errorCode).toBe('MALFORMED_REQUEST');
+  });
+});
+
+describe('GET /ai/documents (#5): tài liệu đồng bộ từ bài viết (T93, ADR-0134)', () => {
+  const ids = (page: PageResponse<AiDocumentSummary>) => page.content.map((d) => d.documentId).sort((a, b) => a - b);
+
+  it('mẫu: ARTICLE-8 nháp chưa người rà soát, ARTICLE-6 đã xuất bản (đã nạp), ARTICLE-10 đã lưu trữ; nguồn là bài viết, luôn MANUAL', async () => {
+    const articles = (await listDocs({ size: 100 })).content.filter((d) => d.externalId);
+    expect(articles.map((d) => [d.documentId, d.externalId, d.status, d.sourceType]).sort()).toEqual([
+      [17, 'ARTICLE-8', 'DRAFT', 'MANUAL'],
+      [18, 'ARTICLE-6', 'PUBLISHED', 'MANUAL'],
+      [19, 'ARTICLE-10', 'ARCHIVED', 'MANUAL'],
+    ]);
+    const draft = await getDoc(17);
+    expect(draft).toMatchObject({ reviewerName: null, reviewedOn: null, indexedVersion: 0, chunkCount: 0, indexStatus: 'PENDING' });
+    expect(draft.sourceNote).toMatch(/^Bài viết #8 /);
+    expect(await getDoc(18)).toMatchObject({ externalId: 'ARTICLE-6', indexStatus: 'INDEXED', indexedVersion: 1 });
+    expect((await getDoc(18)).reviewerName).toBeTruthy(); // BR-AI-14: tài liệu PUBLISHED có đủ hai lớp kiểm soát
+  });
+
+  it('fromArticle: true chỉ tài liệu từ bài viết, false chỉ phần còn lại (kể cả externalId vắng), vắng = tất cả; ghép với bộ lọc khác', async () => {
+    expect(ids(await listDocs({ fromArticle: true }))).toEqual([17, 18, 19]);
+    const rest = await listDocs({ fromArticle: false, size: 100 });
+    expect(rest.totalElements).toBe(16);
+    expect(rest.content.every((d) => d.externalId === null)).toBe(true);
+    expect((await listDocs({ size: 100 })).totalElements).toBe(19);
+    expect(ids(await listDocs({ fromArticle: true, status: 'PUBLISHED' }))).toEqual([18]);
+    expect(ids(await listDocs({ fromArticle: true, q: 'cào sofa' }))).toEqual([18]);
+    expect(ids(await listDocs({ fromArticle: false, status: 'DRAFT' }))).toEqual([9, 12]);
+  });
+
+  it('fromArticle phân trang theo kết quả đã lọc, không theo trang hiện tại', async () => {
+    expect(await listDocs({ fromArticle: true, size: 2, page: 1 })).toMatchObject({ page: 1, size: 2, totalElements: 3, totalPages: 2 });
+    expect(await listDocs({ fromArticle: false, size: 5, page: 3 })).toMatchObject({ totalElements: 16, totalPages: 4 });
+  });
+
+  it('fromArticle sai kiểu → 400 MALFORMED_REQUEST đứng sau status / topic / species và trước page / size (thứ tự tham số của KnowledgeController)', async () => {
+    const auth = await manager();
+    const code = async (params: object) => (await failure(client.get('/api/ai/documents', { params, ...auth }))).data;
+    expect(await code({ fromArticle: 'maybe' })).toMatchObject({ errorCode: 'MALFORMED_REQUEST', message: "Tham số 'fromArticle' sai kiểu dữ liệu" });
+    expect(await code({ fromArticle: 'maybe', status: 'NOPE' })).toMatchObject({ message: "Tham số 'status' sai kiểu dữ liệu" });
+    expect(await code({ fromArticle: 'maybe', species: 'NOPE' })).toMatchObject({ message: "Tham số 'species' sai kiểu dữ liệu" });
+    expect(await code({ fromArticle: 'maybe', page: 'x' })).toMatchObject({ message: "Tham số 'fromArticle' sai kiểu dữ liệu" });
+    expect((await failure(client.get('/api/ai/documents', { params: { fromArticle: 'maybe' }, ...(await as(ROLES.VET)) }))).data.errorCode).toBe('MALFORMED_REQUEST'); // kiểu sai đến trước vai trò (đo trên BE 11/11)
+  });
+
+  it('tạo / nạp file / sửa: tài liệu soạn tay và nạp file có externalId null; sửa tài liệu từ bài viết giữ nguyên externalId', async () => {
+    const created = await postDoc('', { title: 'Tay', topic: 'CARE', species: 'ALL', content: 'x' });
+    expect(created.data.data.externalId).toBeNull();
+    const imported = await postDoc('/import', { fileName: 'a.md', contentBase64: b64('# Tiêu đề\n\nNội dung'), topic: 'CARE', species: 'ALL' });
+    expect(imported.data.data.documents[0].externalId).toBeNull();
+    expect((await patchDoc(17, { content: 'Nội dung bài viết đã sửa tay' })).data.data).toMatchObject({ externalId: 'ARTICLE-8', content: 'Nội dung bài viết đã sửa tay' });
+    expect((await listDocs({ fromArticle: true })).totalElements).toBe(3);
   });
 });
 
@@ -160,10 +214,10 @@ describe('POST /ai/documents (#6) và GET /ai/documents/{id} (#7)', () => {
       sourceType: 'MANUAL', title: 'Bản nháp mới', topic: 'BEHAVIOR', species: 'DOG', content: '', sourceNote: null, reviewerName: null, reviewedOn: null,
       status: 'DRAFT', version: 1, indexedVersion: 0, indexStatus: 'PENDING', indexError: null, chunkCount: 0, publishedAt: null,
     });
-    expect(doc.documentId).toBe(17);
+    expect(doc.documentId).toBe(20);
     expect(doc).not.toHaveProperty('served');
-    expect(await getDoc(17)).toEqual(doc);
-    expect((await listDocs()).content[0].documentId).toBe(17); // mới sửa trước
+    expect(await getDoc(20)).toEqual(doc);
+    expect((await listDocs()).content[0].documentId).toBe(20); // mới sửa trước
   });
 
   it('BR-AI-14: tiêu đề rỗng / quá 200 ký tự, nội dung quá 20 000 ký tự; ngay 200 và 20 000 thì được', async () => {
@@ -212,8 +266,8 @@ describe('POST /ai/documents/import (#14, BR-AI-29)', () => {
       status: 'DRAFT', version: 1, indexedVersion: 0, indexStatus: 'PENDING', publishedAt: null,
     });
     expect(documents[0].sourceNote).toBe('Nạp từ file cham-soc-cho (MD, 1 kB)');
-    expect(documents[0].documentId).toBe(17);
-    expect(await getDoc(17)).toEqual(documents[0]);
+    expect(documents[0].documentId).toBe(20);
+    expect(await getDoc(20)).toEqual(documents[0]);
   });
 
   it('.docx và .pdf: mock không trích được chữ thật nên điền chữ giả định; sourceNote người dùng giữ nguyên', async () => {
@@ -238,7 +292,7 @@ describe('POST /ai/documents/import (#14, BR-AI-29)', () => {
     expect(await errorOf(post(body({ contentBase64: '***' })))).toEqual(rule('Nội dung file không phải base64 hợp lệ'));
     expect(await errorOf(post(body({ contentBase64: b64('   \n  ') })))).toEqual(rule('File không có chữ để nạp'));
     expect(await errorOf(post(body({ contentBase64: b64('x'.repeat(2 * 1024 * 1024 + 1)) })))).toEqual(rule('File vượt quá tối đa 2048 kB'));
-    expect((await listDocs({ size: 100 })).totalElements).toBe(16);
+    expect((await listDocs({ size: 100 })).totalElements).toBe(19);
   });
 
   it('VALIDATION_FAILED thiếu trường; MALFORMED_REQUEST sai kiểu; @Valid chạy trước vai trò', async () => {
@@ -436,9 +490,9 @@ describe('state localStorage cũ hoặc thiếu trường không làm nổ route
     ['chỉ có nextDocumentId', '{"nextDocumentId":3}'],
     ['JSON hỏng', '{khong-phai-json'],
     ['không phải object', '[1,2]'],
-  ])('%s → vẫn có 16 tài liệu mẫu và hồ sơ mẫu', async (_name, raw) => {
+  ])('%s → vẫn có 19 tài liệu mẫu và hồ sơ mẫu', async (_name, raw) => {
     localStorage.setItem(STATE_KEY, raw);
-    expect((await listDocs()).totalElements).toBe(16);
+    expect((await listDocs()).totalElements).toBe(19);
     expect((await listProfiles()).totalElements).toBe(4);
     expect((await postDoc('/1/reindex')).status).toBe(202);
   });
@@ -452,6 +506,24 @@ describe('state localStorage cũ hoặc thiếu trường không làm nổ route
     const created = await client.post('/api/ai/documents', { title: 'Mới', topic: 'CARE', species: 'ALL', content: '' }, await manager());
     expect(created.data.data.documentId).toBe(41);
     expect(storedState().documents).toHaveLength(3);
+  });
+
+  it('externalId: state cũ không có trường → null (bẫy T47: không nổ route); chuỗi giữ nguyên; sai kiểu → null; bộ lọc fromArticle vẫn chạy', async () => {
+    localStorage.setItem(
+      STATE_KEY,
+      JSON.stringify({
+        documents: [
+          { documentId: 1, title: 'Cũ không externalId', status: 'DRAFT' },
+          { documentId: 2, title: 'Từ bài viết', status: 'DRAFT', externalId: 'ARTICLE-5' },
+          { documentId: 3, title: 'Sai kiểu', status: 'DRAFT', externalId: 5 },
+        ],
+      }),
+    );
+    expect((await getDoc(1)).externalId).toBeNull();
+    expect((await getDoc(2)).externalId).toBe('ARTICLE-5');
+    expect((await getDoc(3)).externalId).toBeNull();
+    expect((await listDocs({ fromArticle: true })).content.map((d) => d.documentId)).toEqual([2]);
+    expect((await listDocs({ fromArticle: false })).content.map((d) => d.documentId).sort()).toEqual([1, 3]);
   });
 });
 
@@ -816,6 +888,165 @@ describe('chatbot: ý định cá nhân (BR-AI-26…28)', () => {
     }
     expect(llmCalls()).toBe(0);
     expect((await askPublic('Đơn thuốc là gì?')).answer).not.toBe(expected); // không có dấu hiệu sở hữu thì là câu hỏi kiến thức
+  });
+});
+
+// ─── T93: đường BUSINESS (BR-AI-31) và kiến thức chung (BR-AI-33) sau hai công tắc [CFG], mặc định TẮT như BE ───
+
+const BUSINESS_FLAG = 'ai.chat.business_intent_enabled';
+const GENERAL_FLAG = 'ai.chat.general_knowledge_enabled';
+const GREETING = 'Chào bạn! Mình là trợ lý AI của Pet Care. Bạn cứ hỏi về chăm sóc, dinh dưỡng, vệ sinh hay lịch tiêm của chó mèo nhé.';
+const NO_PRICE = 'Mình chưa có dữ liệu giá cho dịch vụ này, bạn xem bảng giá hoặc hỏi lễ tân.';
+const GENERAL_PREFIX = 'Thông tin tham khảo chung:';
+const turnOn = async (...flags: string[]) => {
+  for (const flag of flags) expect((await putConfig(flag, 'true')).status).toBe(200);
+};
+/** Phản hồi không đi qua bước truy hồi / LLM: không ghi nhật ký nhà cung cấp, không tốn lệnh sinh. */
+const untouchedProvider = (before: { provider: number; llm: number }) => {
+  expect(aiProviderLog().length).toBe(before.provider);
+  expect(llmCalls()).toBe(before.llm);
+};
+
+describe('chatbot: công tắc ai.chat.business_intent_enabled (BR-AI-31)', () => {
+  it('mặc định tắt: câu hỏi giá và chi nhánh đi đường cũ, không có nguồn DATABASE; khóa BOOL mặc định false', async () => {
+    const price = await askPublic('Giá tắm sấy bao nhiêu?');
+    const branch = await askPublic('Chi nhánh nào mở cửa lúc mấy giờ?');
+    expect(price.sourceType).not.toBe('DATABASE');
+    expect(branch.sourceType).not.toBe('DATABASE');
+    expect(price.answer).not.toContain('Giá dịch vụ tại Pet Care:');
+  });
+
+  it('bật: hỏi giá trả giá từ danh mục, ANSWERED nguồn DATABASE, không nguồn tài liệu, không lời nhắc, không nút đặt lịch', async () => {
+    await turnOn(BUSINESS_FLAG);
+    const res = await askPublic('Giá tắm sấy bao nhiêu?');
+    expect(Object.keys(res).sort()).toEqual(KEYS);
+    expect(res).toMatchObject({ result: 'ANSWERED', sourceType: 'DATABASE', sources: [], disclaimer: null, bookingHint: false, emergencyBranches: [], pets: [] });
+    expect(res.answer).toBe(
+      'Giá dịch vụ tại Pet Care:\n- Tắm & sấy: 120.000 ₫\nGiá có thể thay đổi theo từng thú; bạn xem bảng giá hoặc hỏi lễ tân để biết chính xác.',
+    );
+  });
+
+  it('bật: nhiều dịch vụ khớp thì tối đa 3, điểm cao trước rồi theo tên; tên chỉ khớp một nửa số từ vẫn tính', async () => {
+    await turnOn(BUSINESS_FLAG);
+    const res = await askPublic('Giá khám tổng quát và tiêm phòng và tắm và cắt tỉa là bao nhiêu?');
+    const lines = res.answer.split('\n').filter((l) => l.startsWith('- '));
+    expect(lines.length).toBeGreaterThan(0);
+    expect(lines.length).toBeLessThanOrEqual(3);
+    expect(res.answer).toContain('- Khám tổng quát: 150.000 ₫');
+  });
+
+  it('bật: hỏi giá mà không khớp dịch vụ nào → câu cố định, KHÔNG rơi sang đường tài liệu', async () => {
+    await turnOn(BUSINESS_FLAG);
+    const res = await askPublic('Giá dịch vụ xyz bao nhiêu?');
+    expect(res).toMatchObject({ result: 'ANSWERED', sourceType: 'DATABASE', answer: NO_PRICE });
+  });
+
+  it('bật: "giá trị" và "đánh giá" không phải hỏi giá; "phí" một mình chỉ tính khi câu còn nhắc tên dịch vụ', async () => {
+    await turnOn(BUSINESS_FLAG);
+    expect((await askPublic('Giá trị dinh dưỡng của hạt cho chó con là gì?')).sourceType).not.toBe('DATABASE');
+    expect((await askPublic('Đánh giá về thức ăn cho mèo thế nào?')).sourceType).not.toBe('DATABASE');
+    expect((await askPublic('Lãng phí thức ăn của chó phải làm sao?')).sourceType).not.toBe('DATABASE');
+    expect((await askPublic('Phí tắm sấy thế nào?')).answer).toContain('- Tắm & sấy: 120.000 ₫');
+    expect((await askPublic('Giá trị dinh dưỡng và giá tắm sấy bao nhiêu?')).answer).toContain('- Tắm & sấy: 120.000 ₫'); // cụm "giá trị" bị che, "giá tắm" vẫn nhận
+  });
+
+  it('bật: hỏi chi nhánh trả danh sách chi nhánh ACTIVE kèm giờ hôm nay và cờ cấp cứu ngoài giờ; hỏi cả giá lẫn chi nhánh thì hai đoạn cách nhau một dòng trống', async () => {
+    await turnOn(BUSINESS_FLAG);
+    const branches = activeBranchSummaries();
+    const res = await askPublic('Địa chỉ chi nhánh và giờ mở cửa ở đâu?');
+    expect(res).toMatchObject({ result: 'ANSWERED', sourceType: 'DATABASE', sources: [], disclaimer: null, bookingHint: false });
+    expect(res.answer.startsWith('Các chi nhánh Pet Care đang hoạt động:')).toBe(true);
+    for (const b of branches) expect(res.answer).toContain(`- ${b.name}`);
+    expect(res.answer.match(/Hôm nay(?:: \d{2}:\d{2}–\d{2}:\d{2}(?:, \d{2}:\d{2}–\d{2}:\d{2})*| nghỉ)\./g)).toHaveLength(branches.length);
+    expect(res.answer.match(/Nhận cấp cứu ngoài giờ\./g)).toHaveLength(branches.filter((b) => acceptsAfterHours(b.branchId)).length);
+
+    const both = await askPublic('Giá tắm sấy và số điện thoại chi nhánh?');
+    expect(both.answer).toMatch(/^Giá dịch vụ tại Pet Care:[\s\S]+chính xác\.\n\nCác chi nhánh Pet Care đang hoạt động:/);
+  });
+
+  it('bật: đứng SAU cấp cứu, bệnh án và ý định cá nhân; chạy ở cả /me; không gọi nhà cung cấp, không tốn lệnh sinh', async () => {
+    await turnOn(BUSINESS_FLAG);
+    const before = { provider: aiProviderLog().length, llm: llmCalls() };
+    expect((await askPublic('Chó co giật, giá cấp cứu bao nhiêu?')).result).toBe('EMERGENCY');
+    expect((await askMe('Đơn thuốc của Mochi giá bao nhiêu?')).result).toBe('MEDICAL_REFUSAL');
+    expect((await askPublic('Lịch hẹn của tôi sắp tới ở chi nhánh nào?')).result).toBe('NEED_LOGIN');
+    const asMe = await askMe('Giá tắm sấy bao nhiêu?');
+    expect(asMe).toMatchObject({ result: 'ANSWERED', sourceType: 'DATABASE' });
+    untouchedProvider(before);
+  });
+
+  it('tắt lại thì có hiệu lực ngay (đọc mỗi lượt hỏi)', async () => {
+    await turnOn(BUSINESS_FLAG);
+    expect((await askPublic('Giá tắm sấy bao nhiêu?')).sourceType).toBe('DATABASE');
+    expect((await putConfig(BUSINESS_FLAG, 'false')).status).toBe(200);
+    expect((await askPublic('Giá tắm sấy bao nhiêu?')).sourceType).not.toBe('DATABASE');
+  });
+});
+
+describe('chatbot: công tắc ai.chat.general_knowledge_enabled (BR-AI-33)', () => {
+  it('mặc định tắt: lời chào và cụm rủi ro y khoa không có lớp tất định riêng; câu không có tài liệu vẫn OUT_OF_SCOPE', async () => {
+    expect((await askPublic('Xin chào')).answer).not.toBe(GREETING);
+    const noDoc = await askPublic('Hamster thích bánh xe quay không?');
+    expect(noDoc).toMatchObject({ result: 'OUT_OF_SCOPE', sourceType: null });
+  });
+
+  it('bật: lời chào thuần túy → ANSWERED câu mẫu, không nguồn, không lời nhắc, sourceType vắng; chào kèm câu hỏi thì không', async () => {
+    await turnOn(GENERAL_FLAG);
+    const before = { provider: aiProviderLog().length, llm: llmCalls() };
+    for (const hello of ['Xin chào', 'hello bạn', 'Cảm ơn bạn nhé', 'Chào bạn ạ']) {
+      const res = await askPublic(hello);
+      expect(res, hello).toMatchObject({ result: 'ANSWERED', answer: GREETING, sources: [], disclaimer: null, bookingHint: false, sourceType: null });
+    }
+    untouchedProvider(before);
+    expect((await askPublic('Xin chào, chó con tiêm phòng dại lúc mấy tuần?')).answer).not.toBe(GREETING);
+  });
+
+  it('bật: cụm rủi ro y khoa → MEDICAL_REFUSAL (SAFETY, có nút đặt lịch) trước nhúng và LLM; tắt thì không có lớp này', async () => {
+    await turnOn(GENERAL_FLAG);
+    const before = { provider: aiProviderLog().length, llm: llmCalls() };
+    for (const q of ['Chó nôn như vậy là bị bệnh gì?', 'Mèo biếng ăn nên cho uống thuốc gì?', 'Liều dùng thuốc giun cho chó con?']) {
+      const res = await askPublic(q);
+      expect(res, q).toMatchObject({ result: 'MEDICAL_REFUSAL', sourceType: 'SAFETY', bookingHint: true, sources: [], disclaimer: null });
+    }
+    untouchedProvider(before);
+  });
+
+  it('bật, không có đoạn nào đạt τ nhưng câu nói về thú: trả kiến thức chung có tiền tố, sources rỗng, vẫn có lời nhắc, sourceType GENERAL_KNOWLEDGE; tốn một lệnh sinh', async () => {
+    await turnOn(GENERAL_FLAG);
+    expect((await putConfig('ai.retrieval.min_similarity', '0.9')).status).toBe(200);
+    const before = llmCalls();
+    const res = await askPublic('Hamster thích bánh xe quay không?');
+    expect(res).toMatchObject({ result: 'ANSWERED', sourceType: 'GENERAL_KNOWLEDGE', sources: [], bookingHint: false, disclaimer: 'Thông tin tham khảo, không thay thế khám thú y.' });
+    expect(res.answer.startsWith(GENERAL_PREFIX)).toBe(true);
+    expect(llmCalls()).toBe(before + 1);
+  });
+
+  it('bật, không đoạn nào và câu không nói về thú → OUT_OF_SCOPE (mô hình đặt inScope = false) dù đã tốn lệnh sinh; hết hạn mức ngày → UNAVAILABLE', async () => {
+    await turnOn(GENERAL_FLAG);
+    expect((await putConfig('ai.retrieval.min_similarity', '0.9')).status).toBe(200);
+    const before = llmCalls();
+    expect(await askPublic('Giá vàng hôm nay là bao nhiêu?')).toMatchObject({ result: 'OUT_OF_SCOPE', sourceType: null });
+    expect(llmCalls()).toBe(before + 1);
+    mergeState({ llm: { date: today(), count: AI_DAILY_LLM_LIMIT } });
+    expect((await askPublic('Hamster thích bánh xe quay không?')).result).toBe('UNAVAILABLE');
+  });
+
+  it('bật, có đoạn đạt τ: KNOWLEDGE_BASE như cũ; câu xin bổ sung thì mô hình thêm kiến thức chung → KNOWLEDGE_BASE_AND_GENERAL (cờ từ khóa giả lập)', async () => {
+    await turnOn(GENERAL_FLAG);
+    const plain = await askPublic('Chó con tiêm phòng dại lúc mấy tuần?');
+    expect(plain).toMatchObject({ result: 'ANSWERED', sourceType: 'KNOWLEDGE_BASE' });
+    expect(plain.answer.startsWith(GENERAL_PREFIX)).toBe(false);
+    const mixed = await askPublic('Ngoài ra, chó con tiêm phòng dại lúc mấy tuần?');
+    expect(mixed).toMatchObject({ result: 'ANSWERED', sourceType: 'KNOWLEDGE_BASE_AND_GENERAL' });
+    expect(mixed.answer.startsWith(GENERAL_PREFIX)).toBe(true);
+    expect(mixed.sources.length).toBeGreaterThan(0);
+  });
+
+  it('hai công tắc bật cùng lúc: BUSINESS đứng trước lời chào / rủi ro y khoa / truy hồi; cấp cứu vẫn trước hết', async () => {
+    await turnOn(BUSINESS_FLAG, GENERAL_FLAG);
+    expect((await askPublic('Chào bạn, giá tắm sấy bao nhiêu?')).sourceType).toBe('DATABASE');
+    expect((await askPublic('Giá thuốc gì cho chó bị bệnh gì?')).sourceType).toBe('DATABASE');
+    expect((await askPublic('Chó co giật liên tục')).result).toBe('EMERGENCY');
   });
 });
 

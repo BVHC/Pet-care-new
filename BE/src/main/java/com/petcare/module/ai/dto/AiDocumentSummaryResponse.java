@@ -38,10 +38,15 @@ public record AiDocumentSummaryResponse(
         IndexStatus indexStatus,
 
         @Schema(description = "Lần sửa cuối", example = "2026-11-10T09:30:00Z")
-        Instant updatedAt) {
+        Instant updatedAt,
+
+        @Schema(description = "Khóa nguồn ngoài: ARTICLE-<id> với tài liệu đồng bộ từ bài viết (BR-AI-30), null với tài liệu "
+                + "soạn tay, nạp file và phác đồ", example = "ARTICLE-12", nullable = true)
+        String externalId) {
 
     public static AiDocumentSummaryResponse from(AiDocument doc) {
         return new AiDocumentSummaryResponse(doc.getId(), doc.getSourceType(), doc.getTitle(), doc.getTopic(),
-                doc.getSpecies(), doc.getStatus(), doc.getVersion(), doc.getIndexStatus(), doc.getUpdatedAt());
+                doc.getSpecies(), doc.getStatus(), doc.getVersion(), doc.getIndexStatus(), doc.getUpdatedAt(),
+                doc.getExternalId());
     }
 }

@@ -79,7 +79,7 @@ public class KnowledgeService {
     /** ai-v1 #5. Mới sửa trước ({@code updatedAt} giảm dần, trùng thì {@code id} giảm dần); {@code size} kẹp 1–100. */
     @Transactional(readOnly = true, isolation = Isolation.REPEATABLE_READ)
     public PageResponse<AiDocumentSummaryResponse> list(DocumentStatus status, DocumentTopic topic,
-            DocumentSpecies species, String q, int page, int size) {
+            DocumentSpecies species, Boolean fromArticle, String q, int page, int size) {
         Specification<AiDocument> spec = (root, query, cb) -> {
             List<Predicate> predicates = new ArrayList<>();
             if (status != null) {
@@ -90,6 +90,12 @@ public class KnowledgeService {
             }
             if (species != null) {
                 predicates.add(cb.equal(root.get("species"), species));
+            }
+            if (fromArticle != null) {
+                // T93: tài liệu đồng bộ từ bài viết có external_id 'ARTICLE-<id>' (BR-AI-30). "Không từ bài viết" gồm cả dòng NULL:
+                // NOT LIKE trên NULL ra NULL (loại dòng), nên phải thêm nhánh IS NULL.
+                Predicate article = cb.like(root.get("externalId"), "ARTICLE-%");
+                predicates.add(fromArticle ? article : cb.or(cb.isNull(root.get("externalId")), cb.not(article)));
             }
             if (q != null && !q.isBlank()) {
                 String pattern = "%" + escapeLike(q.trim().toLowerCase(Locale.ROOT)) + "%";

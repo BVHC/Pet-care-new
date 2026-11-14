@@ -116,6 +116,7 @@ m.schema("AiDocumentSummary", {
     "documentId": "int64", "sourceType": "ref:DocumentSource", "title": "string", "topic": "ref:DocumentTopic",
     "species": "ref:DocumentSpecies", "status": "ref:DocumentStatus", "version": "int",
     "indexStatus": "ref:IndexStatus", "updatedAt": "datetime",
+    "externalId": "string?|Khóa nguồn ngoài: ARTICLE-<id> với tài liệu đồng bộ từ bài viết (BR-AI-30), null với tài liệu soạn tay, nạp file và phác đồ",
 })
 m.schema("AiDocument", {
     "documentId": "int64", "sourceType": "ref:DocumentSource", "title": "string", "topic": "ref:DocumentTopic",
@@ -125,6 +126,7 @@ m.schema("AiDocument", {
     "status": "ref:DocumentStatus", "version": "int", "indexedVersion": "int|0 = chưa nạp",
     "indexStatus": "ref:IndexStatus", "indexError": "string?", "chunkCount": "int",
     "publishedAt": "datetime?", "updatedAt": "datetime",
+    "externalId": "string?|Khóa nguồn ngoài: ARTICLE-<id> với tài liệu đồng bộ từ bài viết (BR-AI-30), null với tài liệu soạn tay, nạp file và phác đồ",
 })
 m.schema("CreateAiDocumentRequest", {
     "title": "string:200", "topic": "ref:DocumentTopic", "species": "ref:DocumentSpecies",
@@ -201,7 +203,8 @@ m.op("get", "/me/ai/pets/{petId}/recommendations", "getPetRecommendations", "G�
 m.op("get", "/ai/documents", "listAiDocuments", "Danh sách tài liệu tri thức", "Knowledge", "UC93", "BR-AI-17",
      "A04", A04, resp="AiDocumentSummary", page=True,
      query=["status=enum:DRAFT,PUBLISHED,ARCHIVED", "topic=enum:CARE,NUTRITION,BEHAVIOR,HYGIENE,VACCINATION,CLINIC_INFO",
-            "species=enum:DOG,CAT,OTHER,ALL", "q=string|Tìm theo tiêu đề", "page", "size"], errors=(400, 401, 403),
+            "species=enum:DOG,CAT,OTHER,ALL", "fromArticle=bool|true = chỉ tài liệu đồng bộ từ bài viết (external_id ARTICLE-…), false = chỉ tài liệu không từ bài viết; vắng = tất cả",
+            "q=string|Tìm theo tiêu đề", "page", "size"], errors=(400, 401, 403),
      notes="Mới sửa trước (`updatedAt` giảm dần, trùng thì `documentId` giảm dần).")
 m.op("post", "/ai/documents", "createAiDocument", "Tạo tài liệu tri thức (nháp)", "Knowledge", "UC93",
      "BR-AI-14, 17", "A04", A04, "— → DRAFT (Tài liệu#1)", body="CreateAiDocumentRequest", resp="AiDocument",

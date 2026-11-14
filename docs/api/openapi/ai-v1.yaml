@@ -233,6 +233,12 @@ paths:
           schema:
             type: string
             enum: [DOG, CAT, OTHER, ALL]
+        - name: fromArticle
+          in: query
+          required: false
+          schema:
+            type: boolean
+          description: "true = chỉ tài liệu đồng bộ từ bài viết (external_id ARTICLE-…), false = chỉ tài liệu không từ bài viết; vắng = tất cả"
         - name: q
           in: query
           required: false
@@ -987,6 +993,9 @@ components:
         updatedAt:
           type: string
           format: date-time
+        externalId:
+          type: [string, "null"]
+          description: "Khóa nguồn ngoài: ARTICLE-<id> với tài liệu đồng bộ từ bài viết (BR-AI-30), null với tài liệu soạn tay, nạp file và phác đồ"
     AiDocument:
       type: object
       required: [documentId, sourceType, title, topic, species, content, status, version, indexedVersion, indexStatus, chunkCount, updatedAt]
@@ -1037,6 +1046,9 @@ components:
         updatedAt:
           type: string
           format: date-time
+        externalId:
+          type: [string, "null"]
+          description: "Khóa nguồn ngoài: ARTICLE-<id> với tài liệu đồng bộ từ bài viết (BR-AI-30), null với tài liệu soạn tay, nạp file và phác đồ"
     CreateAiDocumentRequest:
       type: object
       required: [title, topic, species, content]

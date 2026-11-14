@@ -22,11 +22,14 @@ export interface DocRow {
   chunkCount: number;
   publishedAt: string | null;
   updatedAt: string;
+  /** Khóa nguồn ngoài (V53): `ARTICLE-<id>` với tài liệu đồng bộ từ bài viết (BR-AI-30), null với tài liệu soạn tay, nạp file và phác đồ. */
+  externalId: string | null;
   /** Đoạn đang phục vụ (BR-AI-16: `doc_version = indexed_version`): tiêu đề và nội dung ở phiên bản ĐÃ NẠP, có thể cũ hơn `content`. null = chưa có đoạn nào. */
   served: { title: string; content: string } | null;
 }
 
 const NOTICE = '> Nội dung mẫu minh họa cho demo, chưa được bác sĩ thú y duyệt.';
+const ARTICLE_NOTICE = '> Nội dung mẫu mô phỏng bài viết đã đồng bộ vào kho tri thức (BR-AI-30), chưa được bác sĩ thú y duyệt.';
 export const SAMPLE_SOURCE = 'Mẫu minh họa tự soạn cho demo, không trích nguồn thật; thay bằng nguồn WSAVA / AAHA / MSD sau khi bác sĩ rà soát.';
 export const SAMPLE_REVIEWER = 'BS. Minh Anh (dữ liệu mẫu)';
 
@@ -39,6 +42,8 @@ type Seed = Pick<DocRow, 'documentId' | 'title' | 'topic' | 'species' | 'status'
   /** DRAFT / ARCHIVED: có đủ lớp 1 và 2 hay không. */
   noReview?: boolean;
   noSource?: boolean;
+  /** Tài liệu đồng bộ từ bài viết (BR-AI-30): mã bài viết, thành `external_id = ARTICLE-<id>` và ghi chú nguồn như ArticleSync. */
+  articleId?: number;
 };
 
 const SEEDS: Seed[] = [
@@ -171,35 +176,73 @@ export function chunkCountOf(content: string): number {
 
 const DAY = 86_400_000;
 
+function rowOf(seed: Seed, now: number): DocRow {
+  const content = `${seed.articleId ? ARTICLE_NOTICE : NOTICE}\n\n${seed.body}`;
+  const updatedAt = new Date(now - seed.ago * DAY).toISOString();
+  const published = seed.status === 'PUBLISHED';
+  const archived = seed.status === 'ARCHIVED';
+  const reviewed = !seed.noReview;
+  const sourceNote = seed.articleId
+    ? `Bài viết #${seed.articleId} của ${SAMPLE_REVIEWER}, xuất bản ${vnDate(now - (seed.ago + 7) * DAY)}`
+    : seed.noSource
+      ? null
+      : SAMPLE_SOURCE;
+  return {
+    documentId: seed.documentId,
+    sourceType: 'MANUAL',
+    title: seed.title,
+    topic: seed.topic,
+    species: seed.species,
+    content,
+    sourceNote,
+    reviewerName: reviewed ? SAMPLE_REVIEWER : null,
+    reviewedOn: reviewed ? vnDate(now - (seed.ago + 1) * DAY) : null,
+    status: seed.status,
+    version: seed.failed ? 2 : 1,
+    indexedVersion: published || archived ? 1 : 0,
+    indexStatus: seed.failed ? 'FAILED' : published || archived ? 'INDEXED' : 'PENDING',
+    indexError: seed.failed?.error ?? null,
+    chunkCount: published || archived ? chunkCountOf(seed.failed ? `${NOTICE}\n\n${seed.failed.servedBody}` : content) : 0,
+    publishedAt: published || archived ? updatedAt : null,
+    updatedAt,
+    externalId: seed.articleId ? `ARTICLE-${seed.articleId}` : null,
+    served: published || archived ? { title: seed.title, content: seed.failed ? `${NOTICE}\n\n${seed.failed.servedBody}` : content } : null,
+  };
+}
+
 /** Tài liệu MANUAL mẫu; thời điểm tính ngược từ `now`. Bản FAILED: v2 chờ nạp, bản v1 cũ vẫn phục vụ (BR-AI-16). */
 export function seedManualDocuments(now: number): DocRow[] {
-  return SEEDS.map((seed): DocRow => {
-    const content = `${NOTICE}\n\n${seed.body}`;
-    const updatedAt = new Date(now - seed.ago * DAY).toISOString();
-    const published = seed.status === 'PUBLISHED';
-    const archived = seed.status === 'ARCHIVED';
-    const reviewed = !seed.noReview;
-    return {
-      documentId: seed.documentId,
-      sourceType: 'MANUAL',
-      title: seed.title,
-      topic: seed.topic,
-      species: seed.species,
-      content,
-      sourceNote: seed.noSource ? null : SAMPLE_SOURCE,
-      reviewerName: reviewed ? SAMPLE_REVIEWER : null,
-      reviewedOn: reviewed ? vnDate(now - (seed.ago + 1) * DAY) : null,
-      status: seed.status,
-      version: seed.failed ? 2 : 1,
-      indexedVersion: published || archived ? 1 : 0,
-      indexStatus: seed.failed ? 'FAILED' : published || archived ? 'INDEXED' : 'PENDING',
-      indexError: seed.failed?.error ?? null,
-      chunkCount: published || archived ? chunkCountOf(seed.failed ? `${NOTICE}\n\n${seed.failed.servedBody}` : content) : 0,
-      publishedAt: published || archived ? updatedAt : null,
-      updatedAt,
-      served: published || archived ? { title: seed.title, content: seed.failed ? `${NOTICE}\n\n${seed.failed.servedBody}` : content } : null,
-    };
-  });
+  return SEEDS.map((seed) => rowOf(seed, now));
+}
+
+/** Bài viết mẫu của mock content (mã 8, 6, 10) và trạng thái của tài liệu đồng bộ: nháp chưa người rà soát; đã xuất bản (đã rà soát); đã lưu trữ. */
+const ARTICLE_SEEDS: Omit<Seed, 'documentId'>[] = [
+  {
+    articleId: 8, title: 'Chó sợ pháo hoa: 4 bước giúp bé bình tĩnh qua đêm Giao thừa', topic: 'CARE', species: 'ALL', status: 'DRAFT', ago: 1, noReview: true,
+    body: `## Chuẩn bị trước đêm pháo hoa
+Tạo một góc kín, tối và yên tĩnh cho bé, đóng cửa sổ và bật nhạc nhỏ để át tiếng nổ.
+
+## Trong lúc bắn pháo
+Ở cạnh bé, giữ giọng nói bình thản. Đừng mắng khi bé run hoặc trốn.`,
+  },
+  {
+    articleId: 6, title: 'Mèo cào sofa: 5 cách ngăn chặn mà không cần bỏ rơi cả căn phòng', topic: 'BEHAVIOR', species: 'CAT', status: 'PUBLISHED', ago: 3,
+    body: `## Vì sao mèo cào sofa
+Cào là bản năng mài móng và đánh dấu lãnh thổ, không phải phá phách.
+
+## Cách giảm
+Đặt trụ cào ngay cạnh chỗ bé hay cào, dán băng keo hai mặt lên góc sofa và khen thưởng khi bé dùng trụ cào.`,
+  },
+  {
+    articleId: 10, title: 'Cách chọn khách sạn thú cưng uy tín: checklist 15 câu hỏi cần hỏi trước khi đặt', topic: 'CARE', species: 'ALL', status: 'ARCHIVED', ago: 9,
+    body: `## Câu hỏi nên hỏi
+Hỏi về chuồng riêng, giờ cho ăn, cách xử lý khi thú ốm và có camera theo dõi hay không.`,
+  },
+];
+
+/** Tài liệu đồng bộ từ bài viết (ArticleSync, BR-AI-30); đặt SAU tài liệu catalog để mã của tài liệu cũ không dịch. */
+export function seedArticleDocuments(firstId: number, now: number): DocRow[] {
+  return ARTICLE_SEEDS.map((seed, i) => rowOf({ ...seed, documentId: firstId + i }, now));
 }
 
 /** Hồ sơ gợi ý mẫu, khóa `SERVICE:<id>` / `PRODUCT:<id>` (khớp danh mục mẫu của catalog.mock). Dịch vụ 3 (Tắm & sấy) cố ý chưa có hồ sơ để thử `missingOnly`. */

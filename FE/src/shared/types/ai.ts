@@ -10,7 +10,7 @@ export type ChatResult =
   | 'PERSONAL'
   | 'NEED_PET_CHOICE'
   | 'NEED_LOGIN';
-/** Nguồn của câu trả lời (BR-AI-34). Vắng với OUT_OF_SCOPE, UNAVAILABLE và lời chào. FE chưa hiển thị (T93). */
+/** Nguồn của câu trả lời (BR-AI-34). Vắng với OUT_OF_SCOPE, UNAVAILABLE và lời chào. Giao diện hiện nhãn ở ChatMessages (T93); giá trị lạ thì không nhãn. */
 export type ChatSourceType = 'DATABASE' | 'KNOWLEDGE_BASE' | 'GENERAL_KNOWLEDGE' | 'KNOWLEDGE_BASE_AND_GENERAL' | 'SAFETY';
 export type VaccinationStatus = 'NOT_YET_ELIGIBLE' | 'NOT_STARTED' | 'UP_TO_DATE' | 'DUE_SOON' | 'OVERDUE';
 export type RecoGroup = 'GROOMING' | 'BOARDING' | 'PRODUCT';
@@ -143,6 +143,8 @@ export interface AiDocumentQuery {
   status?: DocumentStatus;
   topic?: DocumentTopic;
   species?: DocumentSpecies;
+  /** true = chỉ tài liệu đồng bộ từ bài viết (external_id ARTICLE-…), false = chỉ tài liệu không từ bài viết; vắng = tất cả. */
+  fromArticle?: boolean;
   /** Tìm theo tiêu đề. */
   q?: string;
   page?: number;
@@ -158,6 +160,8 @@ export interface AiDocumentSummary {
   version: number;
   indexStatus: IndexStatus;
   updatedAt: string;
+  /** Khóa nguồn ngoài: ARTICLE-<id> với tài liệu đồng bộ từ bài viết (BR-AI-30), null với tài liệu soạn tay, nạp file và phác đồ. */
+  externalId?: string | null;
 }
 export interface AiDocument extends AiDocumentSummary {
   /** Markdown ≤ 20 000 ký tự. */
