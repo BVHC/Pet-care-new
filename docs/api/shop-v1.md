@@ -136,9 +136,9 @@ Trường có `?` là không bắt buộc / có thể null. Kiểu `email`, `dat
 | ID | Câu hỏi | Trạng thái | Gốc |
 |---|---|---|---|
 | Q1 | Có cho khách chọn nhận tại chi nhánh thay vì giao tận nơi không | TBD (PO) | UC62 |
-| Q2 | Đơn vị vận chuyển là nhập tay (chuỗi) hay danh mục | TBD (BE-2) | BR-BH-11 |
-| Q3 | Chi nhánh xử lý do khách chọn (đề xuất) hay hệ thống tự chọn | TBD (PO) | BR-BH-08 |
-| Q4 | Báo cáo doanh thu có tính phí vận chuyển và trừ hoàn tiền thế nào | TBD (BE-2) | 08 §B ASSUMPTION A5 |
+| Q2 | Đơn vị vận chuyển là nhập tay (chuỗi) hay danh mục | Đã chốt: nhập tay (chuỗi, cột VARCHAR; 08 §G) | BR-BH-11 |
+| Q3 | Chi nhánh xử lý do khách chọn (đề xuất) hay hệ thống tự chọn | Đã chốt: khách chọn chi nhánh ACTIVE đủ hàng mọi dòng (08 §G, ADR-0137) | BR-BH-08 |
+| Q4 | Báo cáo doanh thu có tính phí vận chuyển và trừ hoàn tiền thế nào | Đã chốt: trừ hoàn tiền, phí vận chuyển báo riêng (08 §G, T54) | 08 §B ASSUMPTION A5 |
 
 ---
 

@@ -26,9 +26,9 @@ m = Module(
         ("A3", "Khách quay lại từ cổng thì giao diện hỏi `GET /me/payment-transactions/{id}` (không tin tham số trên URL quay về)", "Kết quả chỉ tin từ callback đã ký"),
     ],
     questions=[
-        ("Q1", "Chọn VNPay, ZaloPay hay MoMo và đăng ký tài khoản sandbox", "TBD (nhóm)", "time.md T65"),
-        ("Q2", "Có giới hạn IP của cổng được gọi callback không", "TBD (BE-1, BE-2)", "BR-TG-07"),
-        ("Q3", "Cổng có hỗ trợ hủy phiên chưa thanh toán không", "TBD (BE-2)", "03 #15 Giao dịch#5"),
+        ("Q1", "Chọn VNPay, ZaloPay hay MoMo và đăng ký tài khoản sandbox", "Đã chốt: VNPay; đăng ký sandbox là phụ thuộc bên ngoài (08 §G, ADR-0137)", "time.md T65"),
+        ("Q2", "Có giới hạn IP của cổng được gọi callback không", "Đã chốt: không allowlist IP, tin chữ ký HMAC-SHA512 + số tiền + idempotent (08 §G, ADR-0137 D4)", "BR-TG-07"),
+        ("Q3", "Cổng có hỗ trợ hủy phiên chưa thanh toán không", "Đã chốt: VNPay không hủy được phiên; giao dịch hết hạn bằng ST11 (08 §G, ADR-0137 D3)", "03 #15 Giao dịch#5"),
     ],
 )
 
