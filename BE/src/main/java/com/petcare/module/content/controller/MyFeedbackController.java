@@ -33,7 +33,7 @@ public class MyFeedbackController {
 
     @Operation(operationId = "submitFeedback", tags = "Feedback", summary = "Gửi feedback",
             description = "UC83 · BR-DG-01, 02, BR-TK-19. Actor: A02. Quyền: Chỉ CUSTOMER. "
-                + "Chuyển trạng thái: — → NEW.")
+                + "Chuyển trạng thái: —.")
     @ApiErrorDoc(status = 400, description = "`BR-DG-01` nội dung ngoài 10–2000 ký tự, thiếu chi nhánh khi "
             + "BRANCH_SERVICE, điểm ngoài 1–5, vượt 5 feedback / ngày [CFG] (message ghi thời điểm gửi tiếp) · "
             + "`BR-TK-19` hồ sơ còn chờ quyết định liên kết")
@@ -46,8 +46,8 @@ public class MyFeedbackController {
     }
 
     @Operation(operationId = "listMyFeedbacks", tags = "Feedback", summary = "Feedback tôi đã gửi",
-            description = "UC83 · BR-DG-02, 04. Actor: A02. Quyền: Chỉ CUSTOMER. Chuyển trạng thái: —. "
-                + "Không sửa, không xóa.")
+            description = "UC83 · BR-DG-02, 05. Actor: A02. Quyền: Chỉ CUSTOMER. Chuyển trạng thái: —. "
+                + "Không sửa, không xóa; feedback quá 30 ngày đã bị xóa (BR-DG-05).")
     @ApiErrorDoc(status = 403)
     @GetMapping
     @PreAuthorize(ContentAccess.CUSTOMER)
