@@ -214,16 +214,24 @@ class SchemaMigrationIT {
 =======
         // V51 gỡ khiếu nại (2 bảng, 6 khóa complaint.*, 7 mẫu COMPLAINT_*), thêm feedback.retention_days + 2 index feedbacks
         // (docs/adr/0122, 0131), V52 bỏ 5 cột trạng thái của feedbacks (docs/adr/0122, 0131),
+<<<<<<< HEAD
 >>>>>>> f6ac718 (feat: T70: bỏ khiếu nại, feedback không còn trạng thái, giữ 30 ngày — V51, V52, ST24 FeedbackCleanupJob (ADR-0131))
+=======
+        // V54 cột orders.version cho @Version của SalesOrder (docs/adr/0132, trả D045),
+>>>>>>> 7443907 (fix: Order ghi trên bản cũ trả 409 thay vì ghi lùi tổng tiền — V54, ADR-0132 (D045))
         // V9000 chỉ ở test: baseline session.access_ttl_minutes = 720
         assertThat(rows).extracting(row -> row.get("version"))
                 .containsExactly("1", "2", "3", "4", "5", "6", "7", "8", "9", "10", "11", "12", "13", "14", "15",
                         "16", "17", "18", "19", "20", "21", "22", "23", "24", "25", "26", "27", "28", "29", "30",
 <<<<<<< HEAD
+<<<<<<< HEAD
                         "31", "32", "33", "34", "35", "36", "37", "38", "39", "40", "41", "42", "43", "44", "45", "46", "47", "48", "50", "52", "53", "9000");
 =======
                         "31", "32", "33", "34", "35", "36", "37", "38", "39", "40", "41", "42", "43", "44", "45", "46", "47", "48", "50", "51", "52", "9000");
 >>>>>>> f6ac718 (feat: T70: bỏ khiếu nại, feedback không còn trạng thái, giữ 30 ngày — V51, V52, ST24 FeedbackCleanupJob (ADR-0131))
+=======
+                        "31", "32", "33", "34", "35", "36", "37", "38", "39", "40", "41", "42", "43", "44", "45", "46", "47", "48", "50", "51", "52", "54", "9000");
+>>>>>>> 7443907 (fix: Order ghi trên bản cũ trả 409 thay vì ghi lùi tổng tiền — V54, ADR-0132 (D045))
         assertThat(rows).allSatisfy(row -> assertThat(row).containsEntry("success", true));
     }
 

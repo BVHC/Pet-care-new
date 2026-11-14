@@ -5,18 +5,25 @@
 >
 > Nhật ký (mới nhất trước, giữ 5 dòng; cũ hơn: `git log` của file này):
 <<<<<<< HEAD
+<<<<<<< HEAD
 > - 2026-11-13 — AI v2 đặc tả **Proposed** (ADR-0134 nạp file + quản trị kho, 0135 ngữ cảnh thú + Gemini trả phí, 0136 kiến thức chung có kiểm soát; `07` §4.7 BR-AI-29…35; `time.md` T88–T93; V52 đã dùng cho công tắc T92, V53 giữ chỗ). **Chưa cài**: mã chờ Hiến duyệt spec. Kho nguồn `docs/docs_RAG` (21 tài liệu DRAFT) vào repo, script nạp `load-docs-rag.mjs`.
 > - 2026-11-10 — T77a (AI-1, ADR-0130, Proposed): module `ai` có phần BE đầu tiên: lớp Gemini, UC93 (ai-v1 #5–#11), FSM #13, ST22 (nạp chỉ mục, đồng bộ phác đồ), ST23; không migration; chưa có chat, chưa nạp KB demo, chưa chạy với Gemini thật.
 > - 2026-11-09 — ADR-0124 (nội trú: số ngày gồm cả hai đầu, một dòng Order lúc xuất viện + tiền tạm tính, giữ chuồng cũ khi nhập từ lưu trú, một y lệnh một lần, theo dõi nội trú) và ADR-0125 (bỏ phẫu thuật: UC50, FSM #23, `surgery-v1`). **Code chưa theo** (V37 còn `surgeries`, V41 còn `SURGERY`; FE còn màn phẫu thuật; nội trú chưa có Java): nợ D063, D064.
 > - 2026-11-08 — ADR-0122 (Accepted, Dũng đã chốt): bỏ khiếu nại; feedback sẽ không trạng thái, giữ 30 ngày (ST24). **Code chưa theo** (V39 / V40 còn bảng, 6 khóa, 7 mẫu; feedback còn `status`; FE còn trang khiếu nại): nợ D061.
 > - 2026-11-08 — Đối chiếu docs với code: FE đã nối refresh token (D055 trả trong code, `3a65850`; chưa chạy với BE thật), T57-fe đã dựng mock + màn hình cho 15 module tầng 3 (mock có 85 khóa [CFG], 70 mẫu thông báo); chuyển nguyên văn thứ tự khóa / quy ước cô lập IT / bẫy FE từ `CLAUDE.md` sang `docs/architecture/{concurrency-locking,testing-notes,frontend-notes}.md`.
 =======
+=======
+> - 2026-11-14 — D045 (ADR-0132, Proposed): V54 `orders.version` + `@Version` trên `SalesOrder` (lưới an toàn: ghi trên entity nạp trước khóa → 409; không đổi hành vi hôm nay); `SalesOrderVersionIT` (4 ca xanh) + IT sales / visit / boarding / schema xanh 14/11. Migration của BE-2 lấy từ V55.
+>>>>>>> 7443907 (fix: Order ghi trên bản cũ trả 409 thay vì ghi lùi tổng tiền — V54, ADR-0132 (D045))
 > - 2026-11-10 — T70 PR3 (ADR-0131, Proposed): ST24 `FeedbackCleanupJob` (module `content`): xóa cứng feedback quá `feedback.retention_days` ([CFG], 30), 03:30:31, lô 500 + nghỉ 50 ms + ngân sách 60 s, bỏ lượt nếu hạn ngoài 7–365; `FeedbackCleanupIT` era 1981 + `FeedbackCleanupJobTest`. Không migration. IT chưa chạy (Docker tắt).
 > - 2026-11-10 — T70 PR1 + PR2 (ADR-0131, Proposed): V51 gỡ khiếu nại khỏi DB (2 bảng, 6 khóa, 7 mẫu), thêm khóa `feedback.retention_days` và 2 index `feedbacks`; V52 bỏ 5 cột trạng thái `feedbacks`, feedback chỉ đọc (bỏ `/resolve`, `status`), ghim OpenAPI 193. Chưa chạy IT (Docker tắt). Test FE đọc migration BE đỏ tới T81 (D065).
 > - 2026-11-10 — Đồng bộ lại `CLAUDE.md` và file này với code (module `ai`, ghim OpenAPI 194, nhóm rate limit AI đã nối vào filter, era IT 1981 / 2042); `CLAUDE.md` rút gọn mục FE, bản T57 mới chuyển vào `frontend-notes.md`; thêm hàng khóa AI vào `concurrency-locking.md`.
 > - 2026-11-10 — T77a (AI-1, ADR-0130, Proposed): module `ai` có phần BE đầu tiên: lớp Gemini, UC93 (ai-v1 #5–#11), FSM #13, ST22 (nạp chỉ mục, đồng bộ phác đồ), ST23; không migration; chưa có chat, chưa nạp KB demo, chưa chạy với Gemini thật.
+<<<<<<< HEAD
 > - 2026-11-09 — ADR-0124 (nội trú: số ngày gồm cả hai đầu, một dòng Order lúc xuất viện + tiền tạm tính, giữ chuồng cũ khi nhập từ lưu trú, một y lệnh một lần, theo dõi nội trú) và ADR-0125 (bỏ phẫu thuật: UC50, FSM #23, `surgery-v1`). **Code chưa theo** (V37 còn `surgeries`, V41 còn `SURGERY`; FE còn màn phẫu thuật; nội trú chưa có Java): nợ D063, D064.
 >>>>>>> f6ac718 (feat: T70: bỏ khiếu nại, feedback không còn trạng thái, giữ 30 ngày — V51, V52, ST24 FeedbackCleanupJob (ADR-0131))
+=======
+>>>>>>> 7443907 (fix: Order ghi trên bản cũ trả 409 thay vì ghi lùi tổng tiền — V54, ADR-0132 (D045))
 
 ## 1. Tóm tắt
 
@@ -162,7 +169,7 @@ Còn thiếu hẳn (chưa khai báo ở T55, `docs/06` §6b #2, #5, #6, #9–11)
 
 ## 4b. Database — migration (`BE/src/main/resources/db/migration/`)
 
-Không bao giờ sửa migration đã chạy (checksum). Số V dùng chung với BE-2; **kế tiếp V54** (V50 = BE-1, ADR-0114; V51, V52 = BE-1, ADR-0131; V53 đang giữ; V49 để trống cho BE-2). "Chưa xác nhận" = bên kia chưa đồng ý số (note ở `docs/06` §6).
+Không bao giờ sửa migration đã chạy (checksum). Số V dùng chung với BE-2; **kế tiếp V55** (V50 = BE-1, ADR-0114; V51, V52 = BE-1, ADR-0131; V53 đang giữ; V54 = BE-1, ADR-0132; V49 để trống cho BE-2). "Chưa xác nhận" = bên kia chưa đồng ý số (note ở `docs/06` §6).
 
 | V | Nội dung (ADR) | Chủ |
 |---|---|---|
@@ -188,6 +195,7 @@ Không bao giờ sửa migration đã chạy (checksum). Số V dùng chung vớ
 | 50 | Index `refresh_tokens (expires_at, id)` cho job dọn refresh token (0114, trả D054); V49 bỏ trống cho BE-2 | BE-1 |
 | 51 | Gỡ khiếu nại (ADR-0122, 0131): `DROP` `complaint_messages`, `complaints` (V39); xóa 6 khóa `complaint.*` và 7 mẫu `COMPLAINT_*` (V40) ⇒ 80 khóa, 63 mẫu; thêm khóa `feedback.retention_days` (30, 7–365) và index `feedbacks (created_at)`, `(branch_id, created_at)`; không đụng cột `feedbacks` | BE-1 |
 | 52 | Feedback không trạng thái (ADR-0122, 0131): bỏ `feedbacks.status`, `seen_at`, `resolved_by`, `resolved_at`, `resolution_note` (kèm CHECK, FK, index dính cột); đi cùng code content. Chờ BE-2 xác nhận số | BE-1 |
+| 54 | `orders.version BIGINT NOT NULL DEFAULT 0` cho `@Version` của `SalesOrder`: lưới an toàn chống ghi đè bản cũ, trả D045 (0132). Bảng của BE-2, BE-1 làm thay; chờ BE-2 xác nhận số | BE-2 (BE-1 làm thay) |
 
 - **PK đặc biệt (9 bảng):** 1–1 (`staff_profiles`, `kennel_types`, `medical_records`, `boarding_check_ins`), ghép (`branch_services`, `branch_quota_defaults`), chuỗi (`system_configs`, `notification_templates`, `page_contents`). Bảng LOG chỉ `created_at`. Tên ràng buộc `ck_ / uq_ / ix_ / ex_`.
 - **Thứ tự xóa cứng** (app xóa con trước, cùng tx): BR-TK-08 `otp_tokens` → hồ sơ online → `accounts`; BR-TK-19 `addresses` → hồ sơ online → gán `account_id` (flush trước, `uq_customers_account_id` không deferrable); BR-KH-06 `weight_records` → `pets`; BR-KB-04 hoàn kho + `stock_movements` → `vaccinations` → `order_lines`; BR-KB-03 `prescription_items` → `order_lines` (dòng `DRUG`, bệnh án giữ).
