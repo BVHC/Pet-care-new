@@ -3,7 +3,7 @@ from lib import Module
 m = Module(
     key="fees", title="Fee & Material-norm Config API v1 (tầng 3)", codes="SP (mở rộng UC30)", owner="BE-2",
     sources="01 UC32; 08-tang3-be2-spec.md §A (BR-SP-08, 10, 11); 05 bổ sung shipping_fee_configs, service_material_norms",
-    intro="Cấu hình phí vận chuyển (toàn chuỗi) và định mức vật tư tiêu hao của dịch vụ. **Đặc tả bổ sung GĐ2, đã duyệt ở T54 (Hiến, 5/11/2026); chưa có cài đặt.**",
+    intro="Cấu hình phí vận chuyển (toàn chuỗi) và định mức vật tư tiêu hao của dịch vụ. **Đặc tả bổ sung GĐ2, đã duyệt ở T54 (Hiến, 5/11/2026). Đã cài (task 115, ADR-0140): #1 `getShippingFeeConfig`, #2 `saveShippingFeeConfig` và `ShippingFeeApi.quote` (ST09); chưa cài: #3, #4 (định mức vật tư).**",
     frozen=[
         "Phí vận chuyển của một giỏ hàng cụ thể lấy qua `GET /me/online-orders/quote` (shop-v1), không có endpoint tính phí ở đây (ST09).",
         "ST07 (tự trừ vật tư theo định mức) là tác vụ hệ thống của BE-1, đọc định mức qua interface (08 §A, 09).",
