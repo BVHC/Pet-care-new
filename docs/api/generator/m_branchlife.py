@@ -14,13 +14,14 @@ m = Module(
         "Mọi endpoint chỉ SUPER_MANAGER (BR-CN-06); chi nhánh `DRAFT` không tạm ngừng / đóng.",
         "Kiểm điều kiện chặn và thực hiện chạy trong cùng transaction, khóa chi nhánh trước khi đọc (ADR-0106; `BranchApi.lockForBooking`).",
         "Mọi thao tác ghi audit kèm lý do (BR-QT-15).",
+        "Hiệu lực của `SUSPENDED` / `CLOSED` theo từng luồng ở 08 §F.1 (bảng \"Hiệu lực của trạng thái chi nhánh theo luồng\"); thao tác ghi bị chặn vì trạng thái chi nhánh trả 400 `BR-CN-10` ở module sở hữu luồng đó.",
     ],
     assumptions=[
         ("A1", "Tạm ngừng chỉ chặn việc đang dở tại chỗ (Visit mở, thú trong chuồng, ca thu ngân mở); lịch đặt trước xử lý bằng lựa chọn hủy hàng loạt", "BR-CN-08, BR-CN-09"),
         ("A2", "Đóng cửa phải dọn sạch tồn kho và nhân viên trước", "Tránh dữ liệu mồ côi; BR-CN-08"),
     ],
     questions=[
-        ("Q1", "Care Task `OPEN` khi đóng chi nhánh: chuyển sang chi nhánh khác hay luôn hủy", "TBD (BE-1)", "BR-CN-09"),
+        ("Q1", "Care Task `OPEN` khi đóng chi nhánh: chuyển sang chi nhánh khác hay luôn hủy", "Đã chốt (08 §G, ADR-0139): chuyển sang chi nhánh SUPER_MANAGER chọn; không chọn thì hủy kèm lý do", "BR-CN-09"),
         ("Q2", "Tạm ngừng có cần ngày dự kiến mở lại bắt buộc không", "TBD (PO)", "BR-CN-10"),
     ],
 )
@@ -37,11 +38,11 @@ m.schema("ClosureImpact", {
     "closeBlockers": "array:string|Điều kiện còn vướng nếu đóng cửa ngay (BR-CN-08); rỗng = được",
 })
 m.schema("SuspendBranchRequest", {
-    "reason": "string:300", "expectedResumeOn": "date?", "cancelBookings": "bool|true = hủy hàng loạt lịch hẹn, đặt chỗ `BOOKED` và thông báo khách (BR-CN-09)",
+    "reason": "string:300", "expectedResumeOn": "date?", "cancelBookings": "bool|Còn lịch hẹn / đặt chỗ `BOOKED` thì bắt buộc `true` (hủy hàng loạt và thông báo khách, BR-CN-09); `false` khi còn lịch = 400 `BR-CN-09`, không có đường giữ lại",
     "careTaskTargetBranchId": "int64?|Chi nhánh nhận Care Task `OPEN`; vắng = hủy kèm lý do",
 })
 m.schema("CloseBranchRequest", {
-    "reason": "string:300", "cancelBookings": "bool", "careTaskTargetBranchId": "int64?",
+    "reason": "string:300", "cancelBookings": "bool|Như `SuspendBranchRequest`: còn lịch `BOOKED` thì bắt buộc `true` (BR-CN-09)", "careTaskTargetBranchId": "int64?",
 })
 m.schema("BranchLifecycle", {
     "branchId": "int64", "status": "ref:BranchLifecycleStatus", "suspendedAt": "datetime?", "expectedResumeOn": "date?",
@@ -50,7 +51,7 @@ m.schema("BranchLifecycle", {
 
 A04 = "Chỉ SUPER_MANAGER"
 TRANS = "`INVALID_STATE_TRANSITION` trạng thái chi nhánh không cho phép (03 #20)"
-BLOCK = "`BR-CN-08` còn điều kiện chặn (message liệt kê) · `BR-CN-09` còn lịch `BOOKED` mà chưa chọn hủy hàng loạt"
+BLOCK = "`BR-CN-08` còn điều kiện chặn (message liệt kê) · `BR-CN-09` còn lịch `BOOKED` mà `cancelBookings = false` (bắt buộc hủy hàng loạt, không có đường giữ lại)"
 
 m.op("get", "/branches/{branchId}/closure-impact", "getBranchClosureImpact", "Xem trước tồn đọng khi tạm ngừng / đóng cửa",
      "Branch lifecycle", "UC13", "BR-CN-07, 08", "A04", A04, resp="ClosureImpact", path_params=["BranchId"],
@@ -62,7 +63,8 @@ m.op("post", "/branches/{branchId}/suspend", "suspendBranch", "Tạm ngừng chi
 m.op("post", "/branches/{branchId}/resume", "resumeBranch", "Mở lại chi nhánh đang tạm ngừng", "Branch lifecycle", "UC13",
      "BR-CN-10, BR-QT-04", "A04", A04, "SUSPENDED → ACTIVE (Chi nhánh mở rộng#2)", resp="BranchLifecycle",
      path_params=["BranchId"], errors=(400, 401, 403, 404, 409),
-     err_desc={400: "`BR-CN-01` chưa có giờ mở cửa hợp lệ · `BR-QT-04` chưa có BRANCH_MANAGER `ACTIVE`", 409: TRANS})
+     err_desc={400: "`BR-CN-01` chưa có giờ mở cửa hợp lệ · `BR-QT-04` chưa có BRANCH_MANAGER `ACTIVE`", 409: TRANS},
+     notes="Xóa `suspendedAt`, lý do tạm ngừng và `expectedResumeOn` của chi nhánh; lịch sử tạm ngừng còn trong audit (ADR-0139).")
 m.op("post", "/branches/{branchId}/close", "closeBranch", "Đóng cửa chi nhánh vĩnh viễn", "Branch lifecycle", "UC13",
      "BR-CN-06…10", "A04", A04, "ACTIVE / SUSPENDED → CLOSED (Chi nhánh mở rộng#3, #4)", body="CloseBranchRequest",
      resp="BranchLifecycle", path_params=["BranchId"], errors=(400, 401, 403, 404, 409),

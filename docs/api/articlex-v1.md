@@ -44,12 +44,12 @@
 | Sửa bài viết của tôi | A07 | VET, chỉ bài của mình | `REJECTED` → DRAFT khi sửa (Bài viết#6) | — | Chỉ sửa được khi `DRAFT` hoặc `REJECTED`. |
 | Gửi duyệt | A07 | VET, chỉ bài của mình | DRAFT → PENDING_REVIEW (Bài viết#2) | — | — |
 | Rút bài đang chờ duyệt | A07 | VET, chỉ bài của mình | PENDING_REVIEW → DRAFT (Bài viết#3) | — | — |
-| Duyệt bài của bác sĩ | A04 | Chỉ SUPER_MANAGER | PENDING_REVIEW → PUBLISHED (Bài viết#4) | — | Ghi `published_at` ở lần xuất bản đầu (BR-BV-02); thông báo VET; ghi audit. |
+| Duyệt bài của bác sĩ | A04 | Chỉ SUPER_MANAGER | PENDING_REVIEW → PUBLISHED (Bài viết#4) | — | Ghi `published_at` ở lần xuất bản đầu (BR-BV-02); thông báo VET; ghi audit. Body tùy chọn: không gửi body, hoặc gửi body không có `categoryId`, = giữ chuyên mục VET đề xuất; có `categoryId` thì SUPER_MANAGER chọn / đổi chuyên mục khi duyệt (ADR-0139). |
 | Từ chối bài của bác sĩ | A04 | Chỉ SUPER_MANAGER | PENDING_REVIEW → REJECTED (Bài viết#5) | — | — |
-| Bình luận của một bài viết | A01, A02 | Công khai | — | — | Chỉ bình luận `ACTIVE`, cũ nhất trước. |
+| Bình luận của một bài viết | A01, A02 | Công khai | — | — | Chỉ bình luận `ACTIVE`, cũ nhất trước, `size` mặc định 20 (ADR-0139). `authorName` rút gọn: mọi từ trừ từ cuối viết tắt chữ cái đầu kèm dấu chấm, từ cuối giữ nguyên ("Nguyễn Văn An" → "N. V. An"). |
 | Đăng bình luận | A02 | CUSTOMER | — | — | — |
 | Sửa bình luận của tôi | A02 | CUSTOMER, chỉ bình luận của mình | — | — | — |
-| Xóa bình luận của tôi | A02 | CUSTOMER, chỉ bình luận của mình | — | Có | Xóa mềm (`DELETED`). |
+| Xóa bình luận của tôi | A02 | CUSTOMER, chỉ bình luận của mình | — | Có | Xóa mềm (`DELETED`, trạng thái cuối). Tác giả xóa được cả bình luận `HIDDEN` (ADR-0139). |
 | Ẩn bình luận | A04 | Chỉ SUPER_MANAGER | ACTIVE → HIDDEN | — | — |
 | Bỏ ẩn bình luận | A04 | Chỉ SUPER_MANAGER | HIDDEN → ACTIVE | — | — |
 
@@ -67,15 +67,15 @@
 - **`POST /me/articles/{articleId}/withdraw`** — Rút bài đang chờ duyệt. Response `200` `MyArticle`. Lỗi: `400` · `401` · `403` · `404` · `409` `INVALID_STATE_TRANSITION` trạng thái bài không cho phép (03 #21).
 ### Article review
 
-- **`POST /articles/{articleId}/approve`** — Duyệt bài của bác sĩ. Response `200` `MyArticle`. Lỗi: `400` · `401` · `403` · `404` · `409` `INVALID_STATE_TRANSITION` trạng thái bài không cho phép (03 #21).
+- **`POST /articles/{articleId}/approve`** — Duyệt bài của bác sĩ. Request `ApproveArticleRequest` (tùy chọn). Response `200` `MyArticle`. Lỗi: `400` · `401` · `403` · `404` Bài không tồn tại · `categoryId` không tồn tại · `409` `INVALID_STATE_TRANSITION` trạng thái bài không cho phép (03 #21).
 - **`POST /articles/{articleId}/reject`** — Từ chối bài của bác sĩ. Request `ReviewNoteRequest`. Response `200` `MyArticle`. Lỗi: `400` `BR-BV-06` thiếu lý do · `401` · `403` · `404` · `409` `INVALID_STATE_TRANSITION` trạng thái bài không cho phép (03 #21).
 ### Comments
 
 - **`GET /public/articles/{slug}/comments`** — Bình luận của một bài viết. Public. Query: `page?`, `size?`. Response `200` trang `PublicComment`. Lỗi: `400` · `404` Bài không tồn tại hoặc chưa `PUBLISHED`.
 - **`POST /me/articles/{articleId}/comments`** — Đăng bình luận. Request `CreateCommentRequest`. Response `201` `Comment`. Lỗi: `400` `BR-BV-08` nội dung rỗng / quá 1 000 ký tự · `401` · `403` · `404` Bài không tồn tại hoặc chưa `PUBLISHED` · `429` `TOO_MANY_REQUESTS` quá 10 bình luận / giờ [CFG] (BR-BV-08).
-- **`PATCH /me/comments/{commentId}`** — Sửa bình luận của tôi. Request `UpdateCommentRequest`. Response `200` `Comment`. Lỗi: `400` · `401` · `403` · `404` · `409` Bình luận đã bị ẩn hoặc đã xóa.
+- **`PATCH /me/comments/{commentId}`** — Sửa bình luận của tôi. Request `UpdateCommentRequest`. Response `200` `Comment`. Lỗi: `400` · `401` · `403` · `404` · `409` Bình luận đã bị ẩn (`HIDDEN`) hoặc đã xóa (`DELETED`): tác giả không sửa được.
 - **`DELETE /me/comments/{commentId}`** — Xóa bình luận của tôi. Response `204` rỗng. Lỗi: `400` · `401` · `403` · `404`.
-- **`POST /comments/{commentId}/hide`** — Ẩn bình luận. Request `HideCommentRequest`. Response `200` `Comment`. Lỗi: `400` `BR-BV-08` thiếu lý do · `401` · `403` · `404` · `409` Bình luận không `ACTIVE`.
+- **`POST /comments/{commentId}/hide`** — Ẩn bình luận. Request `HideCommentRequest`. Response `200` `Comment`. Lỗi: `400` `BR-BV-08` thiếu lý do · `401` · `403` · `404` · `409` Bình luận không `ACTIVE` (kể cả đã `DELETED`).
 - **`POST /comments/{commentId}/unhide`** — Bỏ ẩn bình luận. Response `200` `Comment`. Lỗi: `400` · `401` · `403` · `404` · `409` Bình luận không `HIDDEN`.
 
 ### Schema
@@ -87,6 +87,7 @@ Trường có `?` là không bắt buộc / có thể null. Kiểu `email`, `dat
 - **`UpdateMyArticleRequest`** — {`title?`: string, `categoryId?`: int64, `summary?`: string, `content?`: string, `coverImageUrl?`: string}
 - **`MyArticleSummary`** — {`articleId`: int64, `title`: string, `status`: ArticleReviewStatus, `submittedAt?`: date-time, `publishedAt?`: date-time, `updatedAt`: date-time}
 - **`MyArticle`** — {`articleId`: int64, `title`: string, `slug?`: string, `categoryId?`: int64, `summary?`: string, `content`: string, `coverImageUrl?`: string, `status`: ArticleReviewStatus, `reviewNote?`: string, `submittedAt?`: date-time, `publishedAt?`: date-time, `updatedAt`: date-time}
+- **`ApproveArticleRequest`** — {`categoryId?`: int64}
 - **`ReviewNoteRequest`** — {`reviewNote`: string}
 - **`CommentStatus`** — enum: `ACTIVE`, `HIDDEN`, `DELETED`.
 - **`CreateCommentRequest`** — {`content`: string}
@@ -111,13 +112,13 @@ Trường có `?` là không bắt buộc / có thể null. Kiểu `email`, `dat
 | ID | Giả định | Lý do |
 |---|---|---|
 | A1 | VET không sửa bài đã `PUBLISHED`; muốn đổi nội dung thì SUPER_MANAGER ẩn và VET soạn bài mới | BR-BV-07 |
-| A2 | Hiển thị tên khách rút gọn ở bình luận | Giảm lộ dữ liệu cá nhân (BR-BV-08) |
-| A3 | Bình luận hiện ngay khi đăng, ẩn sau nếu vi phạm (không duyệt trước) | YAGNI |
+| A2 | Hiển thị tên khách rút gọn ở bình luận | Giảm lộ dữ liệu cá nhân (BR-BV-08); định dạng "N. V. An" (ADR-0139) |
+| A3 | Bình luận hiện ngay khi đăng, ẩn sau nếu vi phạm (không duyệt trước) | Đã chốt ở ADR-0139 |
 
 | ID | Câu hỏi | Trạng thái | Gốc |
 |---|---|---|---|
-| Q1 | VET có chọn chuyên mục hay SUPER_MANAGER gán khi duyệt | TBD (PO) | BR-BV-05 |
-| Q2 | Bình luận có cần duyệt trước khi hiện không | TBD (PO) | BR-BV-08 |
+| Q1 | VET có chọn chuyên mục hay SUPER_MANAGER gán khi duyệt | Đã chốt (ADR-0139): VET đề xuất; SUPER_MANAGER chọn và được đổi chuyên mục khi duyệt | BR-BV-05 |
+| Q2 | Bình luận có cần duyệt trước khi hiện không | Đã chốt (ADR-0139): không duyệt trước, hiện ngay, SUPER_MANAGER ẩn sau | BR-BV-08 |
 | Q3 | Có cho khách báo cáo bình luận vi phạm không | TBD (PO) | UC81 |
 
 ---

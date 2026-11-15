@@ -357,21 +357,50 @@ Chuyển kho: `POST /stock-transfers`, `GET /stock-transfers` (lọc `direction`
 | BR-CN-06 | Trạng thái mở rộng | `branches.status` thêm `SUSPENDED` (tạm ngừng, mở lại được) và `CLOSED` (đóng vĩnh viễn, trạng thái cuối). Chỉ SUPER_MANAGER; chỉ từ `ACTIVE` hoặc `SUSPENDED`; chi nhánh `DRAFT` không tạm ngừng / đóng. | UC13 | 409 `INVALID_STATE_TRANSITION`. |
 | BR-CN-07 | Xem trước tồn đọng | Trước khi tạm ngừng / đóng, hệ thống trả **danh sách tồn đọng** của chi nhánh: lịch hẹn `BOOKED`, đặt chỗ lưu trú `BOOKED` / `CHECKED_IN`, Visit mở, ca thu ngân `OPEN`, Order `OPEN` / `PENDING`, đơn online chưa kết thúc, Care Task `OPEN`, hoàn tiền chưa xong, phiếu chuyển kho `IN_TRANSIT`, phiên kiểm kê `OPEN`, tồn kho (số mặt hàng, tổng số lượng), nhân viên `ACTIVE`. | UC13 | — |
 | BR-CN-08 | Điều kiện chặn | **Tạm ngừng** bị chặn khi còn Visit mở, thú đang trong chuồng (đặt chỗ `CHECKED_IN` / `OVERDUE`) hoặc ca thu ngân `OPEN`. **Đóng cửa** bị chặn thêm khi còn Order `OPEN` / `PENDING`, đơn online chưa `COMPLETED` / `CANCELLED`, hoàn tiền chưa `SUCCEEDED`, phiếu chuyển kho `IN_TRANSIT`, phiên kiểm kê `OPEN`, **tồn kho > 0** (phải chuyển kho UC77 hoặc điều chỉnh giảm UC76 trước) và nhân viên `ACTIVE` còn gắn chi nhánh (phải điều chuyển hoặc vô hiệu hóa, BR-QT-06, 09). | UC13 | 400 `BR-CN-08`, message liệt kê điều kiện còn vướng. |
-| BR-CN-09 | Xử lý lịch đặt trước và việc dở | SUPER_MANAGER **chọn** hủy hàng loạt lịch hẹn và đặt chỗ `BOOKED` (thông báo từng khách, không tính hủy muộn, tái dùng `BranchClinicCancellationEvent`, BR-LH-10); bắt buộc chọn khi còn lịch. Care Task `OPEN` chuyển sang chi nhánh khác do SUPER_MANAGER chọn hoặc hủy kèm lý do. | UC13 | 400. |
-| BR-CN-10 | Hiệu lực | `SUSPENDED` và `CLOSED`: không nhận lịch hẹn, đặt chỗ, đơn online mới; không hiện công khai (BR-CK-01 chỉ `ACTIVE`); lịch sử giữ nguyên. Mở lại `SUSPENDED` → `ACTIVE` cần cấu hình giờ mở cửa hợp lệ (BR-CN-01). `CLOSED` không mở lại. BR-QT-04 (≥ 1 BRANCH_MANAGER) chỉ áp dụng cho chi nhánh `ACTIVE`. | UC13 | — |
+| BR-CN-09 | Xử lý lịch đặt trước và việc dở | Khi chi nhánh còn lịch hẹn hoặc đặt chỗ lưu trú `BOOKED`, tạm ngừng / đóng cửa **bắt buộc hủy hàng loạt** các lịch đó (thông báo từng khách, không tính hủy muộn, tái dùng `BranchClinicCancellationEvent`, BR-LH-10); **không có đường "giữ lại"**. Request gửi `cancelBookings = false` mà còn lịch `BOOKED` thì bị từ chối 400 `BR-CN-09`; hết lịch `BOOKED` thì giá trị `cancelBookings` không còn tác dụng. Care Task `OPEN` chuyển sang chi nhánh khác do SUPER_MANAGER chọn hoặc hủy kèm lý do. *(chốt ở ADR-0139, 15/11/2026)* | UC13 | 400 `BR-CN-09`. |
+| BR-CN-10 | Hiệu lực | `SUSPENDED` và `CLOSED`: không nhận lịch hẹn, đặt chỗ, đơn online mới; không hiện công khai (BR-CK-01 chỉ `ACTIVE`); lịch sử giữ nguyên. Mở lại `SUSPENDED` → `ACTIVE` cần cấu hình giờ mở cửa hợp lệ (BR-CN-01) và **xóa** `suspended_at`, `suspend_reason`, `expected_resume_on` (lịch sử tạm ngừng còn trong `audit_logs`; CHECK của V48 cho phép). `CLOSED` không mở lại. BR-QT-04 (≥ 1 BRANCH_MANAGER) chỉ áp dụng cho chi nhánh `ACTIVE`. Hiệu lực của từng trạng thái theo từng luồng nghiệp vụ ở bảng "Hiệu lực của trạng thái chi nhánh theo luồng" bên dưới; thao tác ghi bị chặn vì trạng thái chi nhánh trả **400 `BR-CN-10`**. *(chốt ở ADR-0139, 15/11/2026)* | UC13 | 400 `BR-CN-10`. |
 
 **Máy trạng thái #20 — Chi nhánh (mở rộng `03` #2):**
 
 | # | Từ → Sang | Sự kiện | Người kích hoạt | Điều kiện | Hệ quả | Nguồn |
 |---|---|---|---|---|---|---|
-| 1 | `ACTIVE` → `SUSPENDED` | Tạm ngừng | A04 | Không vướng BR-CN-08 (mức tạm ngừng); có lý do; xử lý lịch theo BR-CN-09 | Phát `BranchClinicCancellationEvent` nếu chọn hủy; ẩn công khai | BR-CN-06…10 · UC13 |
-| 2 | `SUSPENDED` → `ACTIVE` | Mở lại | A04 | Giờ mở cửa hợp lệ; còn ≥ 1 BRANCH_MANAGER `ACTIVE` (BR-QT-04) | Hiện lại công khai | BR-CN-10 · UC13 |
-| 3 | `ACTIVE` → `CLOSED` | Đóng cửa | A04 | Không vướng BR-CN-08 (mức đóng); có lý do | Như #1; không mở lại | BR-CN-06…10 · UC13 |
-| 4 | `SUSPENDED` → `CLOSED` | Đóng cửa | A04 | Như #3 | — | BR-CN-08 · UC13 |
+| 1 | `ACTIVE` → `SUSPENDED` | Tạm ngừng | A04 | Không vướng BR-CN-08 (mức tạm ngừng); có lý do; xử lý lịch theo BR-CN-09 | Đặt `suspended_at` (= bây giờ) và `suspend_reason`; phát `BranchClinicCancellationEvent` khi hủy hàng loạt (bắt buộc nếu còn lịch `BOOKED`, BR-CN-09); ẩn công khai | BR-CN-06…10 · UC13 |
+| 2 | `SUSPENDED` → `ACTIVE` | Mở lại | A04 | Giờ mở cửa hợp lệ; còn ≥ 1 BRANCH_MANAGER `ACTIVE` (BR-QT-04) | Hiện lại công khai; xóa `suspended_at`, `suspend_reason`, `expected_resume_on` (ADR-0139) | BR-CN-10 · UC13 |
+| 3 | `ACTIVE` → `CLOSED` | Đóng cửa | A04 | Không vướng BR-CN-08 (mức đóng); có lý do | Như #1, nhưng đặt `closed_at` (= bây giờ) và `close_reason` (V48 buộc cả hai); không mở lại | BR-CN-06…10 · UC13 |
+| 4 | `SUSPENDED` → `CLOSED` | Đóng cửa | A04 | Như #3 | Đặt `closed_at` và `close_reason`; `suspended_at`, `suspend_reason` giữ làm lịch sử | BR-CN-08 · UC13 |
+
+**Hiệu lực của trạng thái chi nhánh theo luồng** (chốt ở ADR-0139, 15/11/2026). `SUSPENDED` = hoàn tất việc đang dở, không bắt đầu việc mới; `CLOSED` = chỉ đọc (đóng cửa chỉ được khi số tồn đọng của BR-CN-07, BR-CN-08 đã về 0, nên các luồng "không xảy ra" ở cột `CLOSED` là hệ quả của điều kiện đóng). Thao tác ghi bị chặn trả 400 `BR-CN-10`. Chi nhánh `DRAFT` chưa nhận việc nào ngoài chuẩn bị (BR-CN-01).
+
+| Luồng | `ACTIVE` | `SUSPENDED` | `CLOSED` |
+|---|---|---|---|
+| Đặt lịch hẹn mới (online và tại quầy) | cho phép | chặn | chặn |
+| Check-in lịch hẹn `BOOKED` | cho phép | không xảy ra (đã hủy hàng loạt, BR-CN-09) | chặn |
+| Tiếp nhận vãng lai và cấp cứu | cho phép | chặn | chặn |
+| Tiếp tục Visit đang mở đến khi hoàn tất | cho phép | không xảy ra (BR-CN-08) | không xảy ra |
+| Order bán lẻ mới tại quầy | cho phép | chặn | chặn |
+| Tiếp tục Order `OPEN` đã có (thêm dòng, chuyển `PENDING`) | cho phép | cho phép | không xảy ra (BR-CN-08) |
+| Thu tiền Order `PENDING`: mở ca thu ngân mới và thanh toán | cho phép | cho phép (chỉ để thu Order `PENDING`) | chặn |
+| Đặt chỗ lưu trú mới | cho phép | chặn | chặn |
+| Check-in lưu trú | cho phép | không xảy ra (đã hủy hàng loạt, BR-CN-09) | chặn |
+| Gia hạn lưu trú | cho phép | chặn | chặn |
+| Checkout và trả thú của lượt lưu trú đang diễn ra | cho phép | không xảy ra (BR-CN-08) | không xảy ra |
+| Đơn online mới chọn chi nhánh này | cho phép | chặn | chặn |
+| Xử lý và giao đơn online đã `PAID` | cho phép | cho phép | không xảy ra |
+| Nhập kho (phiếu nhập) | cho phép | chặn | chặn |
+| Điều chỉnh tồn và kiểm kê | cho phép | cho phép | chặn |
+| Chuyển kho đi (chi nhánh là nguồn) | cho phép | cho phép | chặn |
+| Tạo phiếu chuyển kho mới tới chi nhánh này | cho phép | chặn | chặn |
+| Nhận hoặc hủy phiếu `IN_TRANSIT` đã có tới chi nhánh này | cho phép | cho phép | không xảy ra (BR-CN-08) |
+| Tạo, gán, điều chuyển nhân viên vào chi nhánh (BR-QT-03, BR-QT-06) | cho phép | chặn | chặn |
+| Trang công khai, khung giờ, danh sách chi nhánh cho khách | hiện | ẩn | ẩn |
+| Job ST03, ST04, ST05, ST13, ST15 | chạy | vẫn xử lý bản ghi đang có | không còn gì để xử lý |
+| Báo cáo (UC89) | có | có, lịch sử | có, lịch sử |
+
+Ghi chú: (1) BR-CN-08 bắt buộc không còn Visit mở, thú trong chuồng (`CHECKED_IN` / `OVERDUE`) và ca thu ngân `OPEN` trước khi tạm ngừng, nên các ô tương ứng là "không xảy ra"; Order `PENDING` được phép còn lại khi tạm ngừng (chỉ đóng cửa mới đòi bằng 0), vì vậy mở ca mới để thu chúng là `cho phép`. (2) Thu Order `PENDING` ở `SUSPENDED` cần mở ca thu ngân mới; đóng cửa yêu cầu Order `OPEN` / `PENDING` bằng 0 (BR-CN-08) nên ở `CLOSED` ô này là chặn. (3) Đơn online chỉ chọn một chi nhánh `ACTIVE` đủ hàng (ADR-0137), nên `SUSPENDED` / `CLOSED` không bao giờ được chọn.
 
 Dữ liệu: `branches` thêm `suspended_at`, `suspend_reason VARCHAR(300)?`, `expected_resume_on DATE?`, `closed_at`, `close_reason VARCHAR(300)?`; `status CHECK` thêm hai giá trị; `CHECK` cột ↔ trạng thái. **API `branchlife-v1` (4):** `GET /branches/{branchId}/closure-impact`, `POST …/suspend`, `POST …/resume`, `POST …/close`.
 
-Hợp đồng chéo (số đếm tồn đọng, mỗi owner một method đọc): `VisitQueryApi.countOpenByBranch`, `AppointmentQueryApi.countBookedByBranch`, `BoardingQueryApi.countActiveStaysByBranch`, `CashierShiftQueryApi.hasOpenShift`, `OrderQueryApi.countOpenByBranch`, `StockQueryApi.sumQuantityByBranch`, `StaffDirectoryApi.countActiveByBranch`, `CareTaskApi.reassignBranch(fromBranchId, toBranchId)`.
+Hợp đồng chéo (số đếm tồn đọng, mỗi owner một method đọc): `VisitQueryApi.countOpenByBranch`, `AppointmentQueryApi.countBookedByBranch`, `BoardingQueryApi.countActiveStaysByBranch`, `CashierShiftQueryApi.hasOpenShift`, `OrderQueryApi.countOpenByBranch`, `StockQueryApi.sumQuantityByBranch`, `StaffDirectoryApi.countActiveByBranch`, `CareTaskApi.reassignBranch(fromBranchId, toBranchId)`. Các method của BE-1 (visit, appointment, identity, care) là method mới ở module của BE-1; task 142 cần chúng, nếu BE-1 chưa làm thì bắt đầu bằng `*Placeholder` (`docs/06-module-contracts.md` §6b #13).
 
 ### F.2 Gộp hồ sơ khách trùng (UC27)
 
@@ -411,13 +440,20 @@ Hợp đồng chéo: mỗi module giữ `customer_id` lắng nghe `CustomerMerge
 | 1 | — → `DRAFT` | Soạn bài | A07 (hoặc A04 như cũ) | — | — | BR-BV-05 · UC80 |
 | 2 | `DRAFT` → `PENDING_REVIEW` | Gửi duyệt | A07 (tác giả) | Đủ trường BR-BV-01 | `submitted_at`; thông báo SUPER_MANAGER | BR-BV-06 · UC80 |
 | 3 | `PENDING_REVIEW` → `DRAFT` | Rút lại | A07 (tác giả) | — | — | BR-BV-06 |
-| 4 | `PENDING_REVIEW` → `PUBLISHED` | Duyệt | A04 | — | `published_at` nếu lần đầu; thông báo VET; ghi audit | BR-BV-06 · UC81 |
+| 4 | `PENDING_REVIEW` → `PUBLISHED` | Duyệt | A04 | — | `first_published_at` nếu lần đầu; thông báo VET; ghi audit | BR-BV-06 · UC81 |
 | 5 | `PENDING_REVIEW` → `REJECTED` | Từ chối | A04 | Có `review_note` | Thông báo VET; ghi audit | BR-BV-06 · UC81 |
 | 6 | `REJECTED` → `DRAFT` | Sửa lại | A07 (tác giả) | — | Xóa `review_note` hiển thị | BR-BV-06 |
+| 7 | `PUBLISHED` → `HIDDEN` | Ẩn bài | A04 | Bài của VET hoặc của SUPER_MANAGER; ẩn thì bình luận không hiện (BR-BV-08) | Ghi audit | BR-BV-02, 07 · UC81 |
+| 8 | `HIDDEN` → `PUBLISHED` | Bỏ ẩn | A04 | — | `first_published_at` giữ lần đầu; bình luận `ACTIVE` hiện lại; ghi audit | BR-BV-02 · UC81 |
+| 9 | `DRAFT` → `PUBLISHED` | Xuất bản trực tiếp | A04 | Bài do SUPER_MANAGER tự soạn, không qua duyệt (BR-BV-07) | `first_published_at` lần đầu | BR-BV-02, 07 · UC81 |
+
+Các chuyển #7–#9 bổ sung ở T106 (15/11/2026, ADR-0139) cho khớp BR-BV-02 (`DRAFT → PUBLISHED ⇄ HIDDEN`); trạng thái dùng đúng giá trị của V48 (`DRAFT`, `PENDING_REVIEW`, `REJECTED`, `PUBLISHED`, `HIDDEN`). Chuyển #7–#9 đã có endpoint ở content-v1 (`…/publish`, `…/hide`), không thêm endpoint.
 
 Dữ liệu: `articles` thêm `author_account_id FK→accounts?`, `review_note VARCHAR(300)?`, `submitted_at?`, `reviewed_by FK?`, `reviewed_at?`; `status CHECK` thêm `PENDING_REVIEW`, `REJECTED`; Index `(author_account_id, status)`. `article_comments` — ROOT: `id`, `article_id FK`, `customer_id FK`, `content VARCHAR(1000) NN`, `status VARCHAR(20) CHECK ('ACTIVE','HIDDEN','DELETED')`, `edited_at?`, `hidden_by FK?`, `hide_reason VARCHAR(300)?`, `hidden_at?`; Index `(article_id, status, created_at)`. **API `articlex-v1` (14):** VET `POST /me/articles`, `GET /me/articles`, `GET /me/articles/{articleId}`, `PATCH /me/articles/{articleId}`, `POST …/submit`, `POST …/withdraw`; SUPER_MANAGER `POST /articles/{articleId}/approve`, `POST …/reject`; bình luận `GET /public/articles/{slug}/comments`, `POST /me/articles/{articleId}/comments`, `PATCH /me/comments/{commentId}`, `DELETE /me/comments/{commentId}`, `POST /comments/{commentId}/hide`, `POST …/unhide`. Danh sách bài chờ duyệt dùng `GET /articles?status=PENDING_REVIEW` của content-v1 (mở rộng giá trị `status`).
 
-**Giả định:** A4 VET không sửa bài đã xuất bản; A5 tên khách rút gọn. **Câu hỏi:** Q3 VET có được chọn chuyên mục không hay SUPER_MANAGER gán khi duyệt; Q4 bình luận có cần duyệt trước khi hiện không (đề xuất không, ẩn sau).
+**Giả định:** A4 VET không sửa bài đã xuất bản; A5 tên khách rút gọn. **Câu hỏi:** ~~Q3 VET có được chọn chuyên mục không hay SUPER_MANAGER gán khi duyệt~~ **đã chốt ở ADR-0139 (15/11/2026): VET được đề xuất chuyên mục; SUPER_MANAGER chọn và được đổi chuyên mục khi duyệt: request duyệt có `categoryId` tùy chọn (vắng = giữ chuyên mục VET đề xuất; id không tồn tại → 404).** ~~Q4 bình luận có cần duyệt trước khi hiện không~~ **đã chốt ở ADR-0139: không duyệt trước, bình luận hiện công khai ngay, SUPER_MANAGER ẩn sau.**
+
+**Chi tiết bình luận (chốt ở ADR-0139):** danh sách công khai cũ nhất trước, mỗi trang 20 bình luận; tên tác giả rút gọn (A5) = mọi từ trừ từ cuối viết tắt chữ cái đầu kèm dấu chấm, từ cuối giữ nguyên, ví dụ "Nguyễn Văn An" → "N. V. An". Tác giả **không sửa** được bình luận `HIDDEN` (409) nhưng **xóa được** (xóa mềm → `DELETED`, trạng thái cuối); ẩn bình luận `DELETED` → 409; đăng bình luận vào bài không `PUBLISHED` → 404 cho khách.
 
 ---
 
@@ -485,3 +521,10 @@ Dữ liệu: `articles` thêm `author_account_id FK→accounts?`, `review_note V
 | Hoàn tại quầy (BR-TG-13, §D Q5) | Vào ca `OPEN` của người xác nhận, không kiểm tiền két, đối soát ca trừ hoàn tiền; mã giao dịch chuyển khoản tùy chọn, văn bản tự do, lưu audit (autopilot 15/11, ADR-0138) |
 | Idempotency ST21 | `refunds.code` là mã tham chiếu gửi cổng và dùng lại khi thử lại; tạo: `attempts` = 0, `next_attempt_at` = `created_at` (autopilot 15/11, ADR-0138) |
 | `refundStatus` của đơn online (§D Q4) | Có: chi tiết đơn của khách có `refundStatus` (null khi không có hoàn tiền) (autopilot 15/11, ADR-0138) |
+| Mở lại chi nhánh (ADR-0117 TBD-4) | `SUSPENDED → ACTIVE` xóa `suspended_at`, `suspend_reason`, `expected_resume_on`; lịch sử tạm ngừng ở `audit_logs` (autopilot 15/11, ADR-0139 B1) |
+| Hủy hàng loạt khi tạm ngừng / đóng (BR-CN-09) | Còn lịch `BOOKED` thì bắt buộc hủy hàng loạt, không có đường giữ lại; `cancelBookings = false` mà còn lịch → 400 `BR-CN-09` (autopilot 15/11, ADR-0139 B2) |
+| Hiệu lực trạng thái chi nhánh theo luồng (F.1) | Bảng mới "Hiệu lực của trạng thái chi nhánh theo luồng": `SUSPENDED` hoàn tất việc dở, không bắt đầu việc mới; `CLOSED` chỉ đọc; thao tác ghi bị chặn trả 400 `BR-CN-10` (autopilot 15/11, ADR-0139 B3) |
+| FSM #21 thiếu chuyển (F.3) | Thêm #7 `PUBLISHED → HIDDEN`, #8 `HIDDEN → PUBLISHED`, #9 `DRAFT → PUBLISHED` (A04, bài của SUPER_MANAGER) cho khớp BR-BV-02 (autopilot 15/11, ADR-0139 B4) |
+| Q3 chuyên mục (F.3) | VET đề xuất, SUPER_MANAGER chọn và được đổi khi duyệt qua `categoryId` tùy chọn của request duyệt (vắng = giữ; id lạ → 404) (autopilot 15/11, ADR-0139 B5) |
+| Q4 duyệt trước bình luận (F.3) | Không duyệt trước; hiện ngay, SUPER_MANAGER ẩn sau (autopilot 15/11, ADR-0139 B5) |
+| Chi tiết bình luận (BR-BV-08, A5) | Cũ nhất trước, 20 / trang; tên rút gọn "N. V. An"; tác giả không sửa bình luận `HIDDEN` (409) nhưng xóa được (→ `DELETED`); ẩn bình luận `DELETED` → 409; bài không `PUBLISHED` → 404 (autopilot 15/11, ADR-0139 B5) |

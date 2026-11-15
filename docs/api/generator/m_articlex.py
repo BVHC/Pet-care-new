@@ -22,12 +22,12 @@ m = Module(
     ],
     assumptions=[
         ("A1", "VET không sửa bài đã `PUBLISHED`; muốn đổi nội dung thì SUPER_MANAGER ẩn và VET soạn bài mới", "BR-BV-07"),
-        ("A2", "Hiển thị tên khách rút gọn ở bình luận", "Giảm lộ dữ liệu cá nhân (BR-BV-08)"),
-        ("A3", "Bình luận hiện ngay khi đăng, ẩn sau nếu vi phạm (không duyệt trước)", "YAGNI"),
+        ("A2", "Hiển thị tên khách rút gọn ở bình luận", "Giảm lộ dữ liệu cá nhân (BR-BV-08); định dạng \"N. V. An\" (ADR-0139)"),
+        ("A3", "Bình luận hiện ngay khi đăng, ẩn sau nếu vi phạm (không duyệt trước)", "Đã chốt ở ADR-0139"),
     ],
     questions=[
-        ("Q1", "VET có chọn chuyên mục hay SUPER_MANAGER gán khi duyệt", "TBD (PO)", "BR-BV-05"),
-        ("Q2", "Bình luận có cần duyệt trước khi hiện không", "TBD (PO)", "BR-BV-08"),
+        ("Q1", "VET có chọn chuyên mục hay SUPER_MANAGER gán khi duyệt", "Đã chốt (ADR-0139): VET đề xuất; SUPER_MANAGER chọn và được đổi chuyên mục khi duyệt", "BR-BV-05"),
+        ("Q2", "Bình luận có cần duyệt trước khi hiện không", "Đã chốt (ADR-0139): không duyệt trước, hiện ngay, SUPER_MANAGER ẩn sau", "BR-BV-08"),
         ("Q3", "Có cho khách báo cáo bình luận vi phạm không", "TBD (PO)", "UC81"),
     ],
 )
@@ -55,6 +55,7 @@ m.schema("MyArticle", {
     "reviewNote": "string?|Lý do từ chối (BR-BV-06)", "submittedAt": "datetime?", "publishedAt": "datetime?",
     "updatedAt": "datetime",
 })
+m.schema("ApproveArticleRequest", {"categoryId": "int64?|SUPER_MANAGER chọn / đổi chuyên mục khi duyệt; vắng = giữ chuyên mục VET đề xuất; id không tồn tại = 404 (ADR-0139)"}, required=[])
 m.schema("ReviewNoteRequest", {"reviewNote": "string:300|Lý do từ chối, bắt buộc (BR-BV-06)"})
 m.schema("CommentStatus", None, enum=["ACTIVE", "HIDDEN", "DELETED"])
 m.schema("CreateCommentRequest", {"content": "string:1000|1–1 000 ký tự (BR-BV-08)"})
@@ -98,9 +99,10 @@ m.op("post", "/me/articles/{articleId}/withdraw", "withdrawMyArticle", "Rút bà
 
 # ---- UC81 mở rộng
 m.op("post", "/articles/{articleId}/approve", "approveArticle", "Duyệt bài của bác sĩ", "Article review", "UC81",
-     "BR-BV-06, BR-BV-02", "A04", A04, "PENDING_REVIEW → PUBLISHED (Bài viết#4)", resp="MyArticle",
-     path_params=["ArticleId"], errors=(400, 401, 403, 404, 409), err_desc={409: TRANS},
-     notes="Ghi `published_at` ở lần xuất bản đầu (BR-BV-02); thông báo VET; ghi audit.")
+     "BR-BV-06, BR-BV-02", "A04", A04, "PENDING_REVIEW → PUBLISHED (Bài viết#4)", body="ApproveArticleRequest", body_optional=True, resp="MyArticle",
+     path_params=["ArticleId"], errors=(400, 401, 403, 404, 409),
+     err_desc={404: "Bài không tồn tại · `categoryId` không tồn tại", 409: TRANS},
+     notes="Ghi `published_at` ở lần xuất bản đầu (BR-BV-02); thông báo VET; ghi audit. Body tùy chọn: không gửi body, hoặc gửi body không có `categoryId`, = giữ chuyên mục VET đề xuất; có `categoryId` thì SUPER_MANAGER chọn / đổi chuyên mục khi duyệt (ADR-0139).")
 m.op("post", "/articles/{articleId}/reject", "rejectArticle", "Từ chối bài của bác sĩ", "Article review", "UC81",
      "BR-BV-06", "A04", A04, "PENDING_REVIEW → REJECTED (Bài viết#5)", body="ReviewNoteRequest", resp="MyArticle",
      path_params=["ArticleId"], errors=(400, 401, 403, 404, 409),
@@ -110,7 +112,7 @@ m.op("post", "/articles/{articleId}/reject", "rejectArticle", "Từ chối bài 
 m.op("get", "/public/articles/{slug}/comments", "listPublicComments", "Bình luận của một bài viết", "Comments", "UC82",
      "BR-BV-03, 08", "A01, A02", "Công khai", resp="PublicComment", page=True, path_params=["Slug"],
      query=["page", "size"], public=True, errors=(400, 404),
-     err_desc={404: "Bài không tồn tại hoặc chưa `PUBLISHED`"}, notes="Chỉ bình luận `ACTIVE`, cũ nhất trước.")
+     err_desc={404: "Bài không tồn tại hoặc chưa `PUBLISHED`"}, notes="Chỉ bình luận `ACTIVE`, cũ nhất trước, `size` mặc định 20 (ADR-0139). `authorName` rút gọn: mọi từ trừ từ cuối viết tắt chữ cái đầu kèm dấu chấm, từ cuối giữ nguyên (\"Nguyễn Văn An\" → \"N. V. An\").")
 m.op("post", "/me/articles/{articleId}/comments", "createComment", "Đăng bình luận", "Comments", "UC82", "BR-BV-08",
      "A02", "CUSTOMER", body="CreateCommentRequest", resp="Comment", status=201, path_params=["ArticleId"],
      errors=(400, 401, 403, 404, 429),
@@ -118,13 +120,13 @@ m.op("post", "/me/articles/{articleId}/comments", "createComment", "Đăng bình
                429: "`TOO_MANY_REQUESTS` quá 10 bình luận / giờ [CFG] (BR-BV-08)"})
 m.op("patch", "/me/comments/{commentId}", "updateMyComment", "Sửa bình luận của tôi", "Comments", "UC82", "BR-BV-08",
      "A02", CUS, body="UpdateCommentRequest", resp="Comment", path_params=["CommentId"],
-     errors=(400, 401, 403, 404, 409), err_desc={409: "Bình luận đã bị ẩn hoặc đã xóa"})
+     errors=(400, 401, 403, 404, 409), err_desc={409: "Bình luận đã bị ẩn (`HIDDEN`) hoặc đã xóa (`DELETED`): tác giả không sửa được"})
 m.op("delete", "/me/comments/{commentId}", "deleteMyComment", "Xóa bình luận của tôi", "Comments", "UC82", "BR-BV-08",
      "A02", CUS, status=204, path_params=["CommentId"], errors=(400, 401, 403, 404), idem="Có",
-     notes="Xóa mềm (`DELETED`).")
+     notes="Xóa mềm (`DELETED`, trạng thái cuối). Tác giả xóa được cả bình luận `HIDDEN` (ADR-0139).")
 m.op("post", "/comments/{commentId}/hide", "hideComment", "Ẩn bình luận", "Comments", "UC81", "BR-BV-08", "A04", A04,
      "ACTIVE → HIDDEN", body="HideCommentRequest", resp="Comment", path_params=["CommentId"],
-     errors=(400, 401, 403, 404, 409), err_desc={400: "`BR-BV-08` thiếu lý do", 409: "Bình luận không `ACTIVE`"})
+     errors=(400, 401, 403, 404, 409), err_desc={400: "`BR-BV-08` thiếu lý do", 409: "Bình luận không `ACTIVE` (kể cả đã `DELETED`)"})
 m.op("post", "/comments/{commentId}/unhide", "unhideComment", "Bỏ ẩn bình luận", "Comments", "UC81", "BR-BV-08", "A04",
      A04, "HIDDEN → ACTIVE", resp="Comment", path_params=["CommentId"], errors=(400, 401, 403, 404, 409),
      err_desc={409: "Bình luận không `HIDDEN`"})
