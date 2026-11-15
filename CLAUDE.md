@@ -60,6 +60,7 @@ Branch `manh` @ `c27bae3` (T77a, on top of AI-0 `4ea419e` and the `origin/dev` m
 | customer, inventory, sales, boarding, content | BE-2 | customer-v1 #1–21, inventory-v1 #1–17, sales-v1 #1–21, boarding-v1 #1–22, content-v1 #1–22; ST05, ST08, ST13, ST15 | — |
 | report | BE-2 | report-v1 #1–7 (no tables; the 5 `*ReportApi` live in their owner modules) | — |
 | fees | BE-2 | fees-v1 #1–2 (shipping fee config + `ShippingFeeApi` ST09, ADR-0140) | #3–4 material norms |
+| shop | BE-2 | shop-v1 cart (`getMyCart`, `setCartItem`, `removeCartItem`, `clearMyCart`; UC61, ADR-0141) | checkout / online orders (task 117, 125–126), `OnlineOrderApi` real bean (T65) |
 | ai | FE-1 | ai-v1 #5–11 (UC93), FSM #13, ST22, ST23, `GeminiClient` (T77a) | chat #1–2 (T77b), #3, #4, #12–13 |
 
 **Debts:** `docs/dept/INDEX.md` (65 entries, gitignored). Open on 2026-11-10: D058 (tier-3 placeholders), D059 (ADR / Flyway numbering unconfirmed), D020, D025, D026, D046, D050, D051, D057, D061, D062 (workforce self-registration, ADR-0123: spec done, no code), D063, D064 (inpatient contract changes, ADR-0124: no Java, FE mock behind), D065 (FE test that reads BE migrations goes red after V51 until T81). D055 (FE refresh) is paid in code. D056 (Redis without password) is accepted (ADR-0115).
@@ -124,7 +125,7 @@ Module codes: TK, QT, CN, CK, KH, SP, NS, LH, TN, KB, LT, BH, TG, KO, BV, DG, TB
 
 Open convention TBDs (don't decide silently — ask or write an ADR): command names when no Actor↔Command table exists; how "warn, don't block" rules return warnings (contracts assume a named field in `data`, e.g. `stockWarning`); locking for kennel capacity.
 
-**ADRs** (`docs/adr/`, immutable once Accepted — supersede instead of editing; `docs/adr/INDEX.md` is the full list). **Next free: 0141.** Reserved: 0118–0120 (BE-2), 0126–0128 (renumbering of the duplicates below). Phase 2 so far: 0108–0110 AI / pgvector, 0113 / 0116 / 0117 tier-3 schema + placeholders, 0121 CI, 0122 drop complaints, 0123 workforce self-registration, 0124 inpatient, 0125 drop surgery, 0129 AI-0, 0130 T77a. **Numbers used twice:** 0088 (BE-2 `inventory-expiring-soon-flag` vs BE-1 `n5-unlock-flag-…`), 0123 (FE refresh token vs workforce), 0124 (`bo-kham-tai-nha` vs inpatient). Renumbering is each owner's job: add a **Đánh số lại** line to both files and fix every reference.
+**ADRs** (`docs/adr/`, immutable once Accepted — supersede instead of editing; `docs/adr/INDEX.md` is the full list). **Next free: 0142.** Reserved: 0118–0120 (BE-2), 0126–0128 (renumbering of the duplicates below). Phase 2 so far: 0108–0110 AI / pgvector, 0113 / 0116 / 0117 tier-3 schema + placeholders, 0121 CI, 0122 drop complaints, 0123 workforce self-registration, 0124 inpatient, 0125 drop surgery, 0129 AI-0, 0130 T77a. **Numbers used twice:** 0088 (BE-2 `inventory-expiring-soon-flag` vs BE-1 `n5-unlock-flag-…`), 0123 (FE refresh token vs workforce), 0124 (`bo-kham-tai-nha` vs inpatient). Renumbering is each owner's job: add a **Đánh số lại** line to both files and fix every reference.
 
 ## Backend architecture
 

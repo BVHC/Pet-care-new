@@ -40,6 +40,11 @@ public class StockQueryService implements StockQueryApi {
     }
 
     @Override
+    public Map<Long, Long> findChainAvailableQuantity(Collection<Long> productIds) {
+        return inventory.chainAvailableQuantities(productIds, LocalDate.now(clock));
+    }
+
+    @Override
     public List<Long> branchIdsWithAvailableStock(Long productId) {
         return inventory.branchIdsWithAvailableStock(productId, LocalDate.now(clock));
     }

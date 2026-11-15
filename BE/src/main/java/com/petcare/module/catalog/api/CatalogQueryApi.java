@@ -5,6 +5,7 @@ import com.petcare.module.customer.api.Species;
 import java.math.BigDecimal;
 import java.util.Collection;
 import java.util.List;
+import java.util.Map;
 import java.util.Optional;
 
 /** Owner: catalog (SP) · BE-2. Chỉ đọc danh mục sản phẩm, dịch vụ, loại chuồng, loại vaccine, phác đồ. */
@@ -103,4 +104,13 @@ public interface CatalogQueryApi {
      * method (không đổi record hay chữ ký nào); id không tồn tại thì vắng mặt; tập rỗng thì kết quả rỗng, không chạy SQL.
      */
     RecommendDisplay findRecommendDisplay(Collection<Long> serviceIds, Collection<Long> productIds);
+
+    /** Đơn vị tính và ảnh của một sản phẩm, để hiển thị dòng giỏ hàng (BR-BH-07). */
+    record ProductSaleDisplay(String unit, String imageUrl) {}
+
+    /**
+     * Thêm 2026-11-15 bởi BE-2 (task 116, docs/adr/0141): {@link ProductInfo} không mang đơn vị và ảnh. Đọc theo lô, id không
+     * tồn tại thì vắng mặt; tập rỗng → map rỗng, không chạy SQL. Chỉ thêm method (không đổi record hay chữ ký nào).
+     */
+    Map<Long, ProductSaleDisplay> findProductSaleDisplay(Collection<Long> productIds);
 }
