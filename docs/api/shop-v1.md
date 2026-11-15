@@ -100,6 +100,7 @@
 Trường có `?` là không bắt buộc / có thể null. Kiểu `email`, `date`, `datetime`… theo mục 3 của `00-method.md`.
 
 - **`OnlineOrderStatus`** — enum: `PENDING_PAYMENT`, `PAID`, `PROCESSING`, `SHIPPED`, `DELIVERY_FAILED`, `DELIVERED`, `COMPLETED`, `CANCELLED`. 03 #14 (08 §B)
+- **`RefundStatus`** — enum: `REQUESTED`, `SUCCEEDED`, `FAILED`. 03 #17 (returns-v1)
 - **`CartItem`** — {`productId`: int64, `name`: string, `unit`: string, `unitPrice`: int64, `quantity`: int32, `imageUrl?`: string, `available`: boolean}
 - **`Cart`** — {`items`: [CartItem], `subtotal`: int64}
 - **`SetCartItemRequest`** — {`quantity`: int32}
@@ -108,7 +109,7 @@ Trường có `?` là không bắt buộc / có thể null. Kiểu `email`, `dat
 - **`PlaceOnlineOrderRequest`** — {`branchId`: int64, `addressId`: int64}
 - **`OnlineOrderLine`** — {`productId`: int64, `name`: string, `unit`: string, `unitPrice`: int64, `quantity`: int32, `lineTotal`: int64}
 - **`OnlineOrderSummary`** — {`onlineOrderId`: int64, `salesOrderId`: int64, `code`: string, `status`: OnlineOrderStatus, `branchName`: string, `itemCount`: int32, `total`: int64, `createdAt`: date-time}
-- **`OnlineOrder`** — {`onlineOrderId`: int64, `salesOrderId`: int64, `code`: string, `status`: OnlineOrderStatus, `branchId`: int64, `branchName`: string, `receiverName`: string, `receiverPhone`: string, `shipAddress`: string, `lines`: [OnlineOrderLine], `subtotal`: int64, `shippingFee`: int64, `total`: int64, `carrier?`: string, `trackingCode?`: string, `redeliveryCount`: int32, `paymentDueAt`: date-time, `paidAt?`: date-time, `shippedAt?`: date-time, `deliveredAt?`: date-time, `completedAt?`: date-time, `cancelledAt?`: date-time, `cancelReason?`: string, `createdAt`: date-time}
+- **`OnlineOrder`** — {`onlineOrderId`: int64, `salesOrderId`: int64, `code`: string, `status`: OnlineOrderStatus, `branchId`: int64, `branchName`: string, `receiverName`: string, `receiverPhone`: string, `shipAddress`: string, `lines`: [OnlineOrderLine], `subtotal`: int64, `shippingFee`: int64, `total`: int64, `carrier?`: string, `trackingCode?`: string, `redeliveryCount`: int32, `paymentDueAt`: date-time, `paidAt?`: date-time, `shippedAt?`: date-time, `deliveredAt?`: date-time, `completedAt?`: date-time, `cancelledAt?`: date-time, `cancelReason?`: string, `createdAt`: date-time, `refundStatus?`: RefundStatus}
 - **`ReasonRequest`** — {`reason`: string}
 - **`ShipRequest`** — {`carrier`: string, `trackingCode`: string}
 

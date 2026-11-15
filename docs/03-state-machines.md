@@ -30,8 +30,8 @@
 | 13 | Tài liệu tri thức AI | `ai_documents.status` | AI (`07` §9) | 3 |
 | 14 | Đơn hàng online | `online_orders.status` | BH (`08` §B) | 3 |
 | 15 | Giao dịch thanh toán online | `payment_transactions.status` | TG (`08` §C) | 3 |
-| 16 | Yêu cầu trả hàng | `return_requests.status` | BH (`08` §D) | 3 |
-| 17 | Hoàn tiền | `refunds.status` | TG (`08` §D) | 3 |
+| 16 | Yêu cầu trả hàng | `return_requests.status` | BH (`08` §D, 6 chuyển) | 3 |
+| 17 | Hoàn tiền | `refunds.status` | TG (`08` §D, 5 chuyển) | 3 |
 | 18 | Phiếu chuyển kho | `stock_transfers.status` | KO (`08` §E) | 3 |
 | 19 | Phiên kiểm kê | `stock_counts.status` | KO (`08` §E) | 3 |
 | 20 | Chi nhánh (mở rộng #2) | `branches.status` | CN (`08` §F.1) | 3 |
