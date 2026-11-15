@@ -208,35 +208,22 @@ class SchemaMigrationIT {
         // V46 trả hàng, hoàn tiền + returns.window_days, V47 chuyển kho, kiểm kê + 3 CHECK của kho,
         // V48 chi nhánh tạm ngừng / đóng, gộp khách, bài viết của bác sĩ, bình luận + content.comment_per_hour,
         // V50 index refresh_tokens (expires_at, id) cho job dọn refresh token (docs/adr/0114, trả D054; V49 để dành cho BE-2),
-<<<<<<< HEAD
-        // V52 công tắc [CFG] ai.chat.general_knowledge_enabled (docs/adr/0136, T92; V51 để dành cho gỡ bảng khiếu nại, T70),
-        // V53 ai_documents.external_id + ai_chat_logs.source_type + công tắc [CFG] ai.chat.business_intent_enabled (docs/adr/0134, T90),
-=======
         // V51 gỡ khiếu nại (2 bảng, 6 khóa complaint.*, 7 mẫu COMPLAINT_*), thêm feedback.retention_days + 2 index feedbacks
-        // (docs/adr/0122, 0131), V52 bỏ 5 cột trạng thái của feedbacks (docs/adr/0122, 0131),
-<<<<<<< HEAD
->>>>>>> f6ac718 (feat: T70: bỏ khiếu nại, feedback không còn trạng thái, giữ 30 ngày — V51, V52, ST24 FeedbackCleanupJob (ADR-0131))
-=======
+        // (docs/adr/0122, 0131),
+        // V52 công tắc [CFG] ai.chat.general_knowledge_enabled (docs/adr/0136, T92),
+        // V53 ai_documents.external_id + ai_chat_logs.source_type + công tắc [CFG] ai.chat.business_intent_enabled (docs/adr/0134, T90),
         // V54 cột orders.version cho @Version của SalesOrder (docs/adr/0132, trả D045),
->>>>>>> 7443907 (fix: Order ghi trên bản cũ trả 409 thay vì ghi lùi tổng tiền — V54, ADR-0132 (D045))
+        // V55 bỏ 5 cột trạng thái của feedbacks (docs/adr/0122, 0131; đánh số lại từ V52 vì trùng công tắc AI),
         // V9000 chỉ ở test: baseline session.access_ttl_minutes = 720
         assertThat(rows).extracting(row -> row.get("version"))
                 .containsExactly("1", "2", "3", "4", "5", "6", "7", "8", "9", "10", "11", "12", "13", "14", "15",
                         "16", "17", "18", "19", "20", "21", "22", "23", "24", "25", "26", "27", "28", "29", "30",
-<<<<<<< HEAD
-<<<<<<< HEAD
-                        "31", "32", "33", "34", "35", "36", "37", "38", "39", "40", "41", "42", "43", "44", "45", "46", "47", "48", "50", "52", "53", "9000");
-=======
-                        "31", "32", "33", "34", "35", "36", "37", "38", "39", "40", "41", "42", "43", "44", "45", "46", "47", "48", "50", "51", "52", "9000");
->>>>>>> f6ac718 (feat: T70: bỏ khiếu nại, feedback không còn trạng thái, giữ 30 ngày — V51, V52, ST24 FeedbackCleanupJob (ADR-0131))
-=======
-                        "31", "32", "33", "34", "35", "36", "37", "38", "39", "40", "41", "42", "43", "44", "45", "46", "47", "48", "50", "51", "52", "54", "9000");
->>>>>>> 7443907 (fix: Order ghi trên bản cũ trả 409 thay vì ghi lùi tổng tiền — V54, ADR-0132 (D045))
+                        "31", "32", "33", "34", "35", "36", "37", "38", "39", "40", "41", "42", "43", "44", "45", "46", "47", "48", "50", "51", "52", "53", "54", "55", "9000");
         assertThat(rows).allSatisfy(row -> assertThat(row).containsEntry("success", true));
     }
 
     /**
-     * V51 + V52 (docs/adr/0122, 0131): hai bảng khiếu nại, 6 khóa {@code complaint.*} và 7 mẫu {@code COMPLAINT_*} đã
+     * V51 + V55 (docs/adr/0122, 0131): hai bảng khiếu nại, 6 khóa {@code complaint.*} và 7 mẫu {@code COMPLAINT_*} đã
      * gỡ; {@code feedbacks} không còn 5 cột trạng thái (và các CHECK / index / FK dính cột đi theo), có hai index cho
      * ST24 và danh sách theo chi nhánh.
      */
@@ -258,7 +245,7 @@ class SchemaMigrationIT {
         assertThat(jdbc.queryForList("""
                 SELECT column_name FROM information_schema.columns
                 WHERE table_schema = 'public' AND table_name = 'feedbacks'
-                """, String.class)).as("cột feedbacks sau V52").containsExactlyInAnyOrder("id", "customer_id", "topic",
+                """, String.class)).as("cột feedbacks sau V55").containsExactlyInAnyOrder("id", "customer_id", "topic",
                 "branch_id", "rating", "content", "created_at", "updated_at");
         assertThat(jdbc.queryForList("""
                 SELECT conname FROM pg_constraint WHERE conrelid = 'feedbacks'::regclass AND contype IN ('c', 'f')
@@ -740,7 +727,7 @@ class SchemaMigrationIT {
         assertThat(foreignKeys).as("số cột FK trỏ tới accounts (V1: 43 cột ở 34 bảng; V34: + ai_documents.updated_by, "
                 + "ai_item_profiles.updated_by; V36–V38: + 13 cột — shift_assignments 2, shift_requests 2, surgeries 3, "
                 + "visit_material_usages 1, admissions 2, admission_orders 2, admission_observations 1; V39 thêm 3 cột "
-                + "của complaints / complaint_messages và V51 gỡ lại; V43–V48 của BE-2: + 16 cột ở 14 bảng; V52 gỡ feedbacks.resolved_by)").hasSize(73);
+                + "của complaints / complaint_messages và V51 gỡ lại; V43–V48 của BE-2: + 16 cột ở 14 bảng; V55 gỡ feedbacks.resolved_by)").hasSize(73);
 
         List<String> unindexed = jdbc.queryForList("""
                 SELECT c.conrelid::regclass || '.' || a.attname

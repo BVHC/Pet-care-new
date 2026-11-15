@@ -245,3 +245,5 @@ graphify-out/
 
 docs/dept
 docs/plan
+# Autopilot BE-2 scratch (decisions, debt)
+.autopilot/

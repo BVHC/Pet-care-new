@@ -114,22 +114,15 @@ class OpenApiContractParityIT {
         // + 1 identity #38 (docs/adr/0089) + 2 identity #25, #26 (UC22 sửa hộ email tài khoản khách, BR-TK-16)
         // + 1 identity #27 (UC22 lễ tân liên kết hộ hồ sơ tại quầy với tài khoản online, BR-TK-19)
         // + 1 identity #39 (refresh, docs/adr/0091)
-<<<<<<< HEAD
         // + 7 ai #5–#11 (UC93 quản lý tài liệu tri thức, T77a, docs/adr/0130)
         // + 1 ai #1 (POST /public/ai/chat, T77b, docs/adr/0131)
         // + 2 ai #2, #3 (POST /me/ai/chat, GET /me/ai/pets/{petId}/vaccination-summary, T77c, docs/adr/0132)
         // + 3 ai #4, #12, #13 (GET /me/ai/pets/{petId}/recommendations, GET và PUT /ai/item-profiles, T78, docs/adr/0133)
-        // + 1 ai #14 (POST /ai/documents/import, nạp tài liệu từ file, T89, docs/adr/0134).
+        // + 1 ai #14 (POST /ai/documents/import, nạp tài liệu từ file, T89, docs/adr/0134)
+        // − 1 content #22 (đánh dấu feedback đã xử lý; feedback không trạng thái, V55, docs/adr/0122, 0131): content còn 21.
         assertThat(documentedOps())
                 .as("số endpoint identity + care + customer + inventory + sales + appointment + visit + boarding + content + report + ai đã cài")
-                .hasSize(201);
-=======
-        // + 7 ai #5–#11 (UC93 quản lý tài liệu tri thức, T77a, docs/adr/0130; ai #1–#4 và #12–#13 chưa cài).
-        // − 1 content #22 (đánh dấu feedback đã xử lý; feedback không trạng thái, V52, docs/adr/0122, 0131): content còn 21.
-        assertThat(documentedOps())
-                .as("số endpoint identity + care + customer + inventory + sales + appointment + visit + boarding + content + report + ai đã cài")
-                .hasSize(193);
->>>>>>> f6ac718 (feat: T70: bỏ khiếu nại, feedback không còn trạng thái, giữ 30 ngày — V51, V52, ST24 FeedbackCleanupJob (ADR-0131))
+                .hasSize(200);
     }
 
     @Test
