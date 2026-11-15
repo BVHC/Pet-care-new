@@ -30,7 +30,7 @@
 |---|---|---|---|---|---|
 | Xem trước tồn đọng khi tạm ngừng / đóng cửa | A04 | Chỉ SUPER_MANAGER | — | — | Không ghi gì, giống `…/impact` của branch-v1 (BR-CN-07). |
 | Tạm ngừng chi nhánh | A04 | Chỉ SUPER_MANAGER | ACTIVE → SUSPENDED (Chi nhánh mở rộng#1) | — | — |
-| Mở lại chi nhánh đang tạm ngừng | A04 | Chỉ SUPER_MANAGER | SUSPENDED → ACTIVE (Chi nhánh mở rộng#2) | — | Xóa `suspendedAt` và lý do tạm ngừng của chi nhánh; lịch sử tạm ngừng còn trong audit (ADR-0139). |
+| Mở lại chi nhánh đang tạm ngừng | A04 | Chỉ SUPER_MANAGER | SUSPENDED → ACTIVE (Chi nhánh mở rộng#2) | — | Xóa `suspendedAt`, lý do tạm ngừng và `expectedResumeOn` của chi nhánh; lịch sử tạm ngừng còn trong audit (ADR-0139). |
 | Đóng cửa chi nhánh vĩnh viễn | A04 | Chỉ SUPER_MANAGER | ACTIVE / SUSPENDED → CLOSED (Chi nhánh mở rộng#3, #4) | — | Không mở lại được. Dữ liệu lịch sử giữ nguyên. |
 
 ---

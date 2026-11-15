@@ -44,9 +44,9 @@
 | Sửa bài viết của tôi | A07 | VET, chỉ bài của mình | `REJECTED` → DRAFT khi sửa (Bài viết#6) | — | Chỉ sửa được khi `DRAFT` hoặc `REJECTED`. |
 | Gửi duyệt | A07 | VET, chỉ bài của mình | DRAFT → PENDING_REVIEW (Bài viết#2) | — | — |
 | Rút bài đang chờ duyệt | A07 | VET, chỉ bài của mình | PENDING_REVIEW → DRAFT (Bài viết#3) | — | — |
-| Duyệt bài của bác sĩ | A04 | Chỉ SUPER_MANAGER | PENDING_REVIEW → PUBLISHED (Bài viết#4) | — | Ghi `published_at` ở lần xuất bản đầu (BR-BV-02); thông báo VET; ghi audit. Body tùy chọn: `categoryId` để SUPER_MANAGER chọn / đổi chuyên mục khi duyệt (VET chỉ đề xuất); vắng = giữ chuyên mục hiện có (ADR-0139). |
+| Duyệt bài của bác sĩ | A04 | Chỉ SUPER_MANAGER | PENDING_REVIEW → PUBLISHED (Bài viết#4) | — | Ghi `published_at` ở lần xuất bản đầu (BR-BV-02); thông báo VET; ghi audit. Body tùy chọn: không gửi body, hoặc gửi body không có `categoryId`, = giữ chuyên mục VET đề xuất; có `categoryId` thì SUPER_MANAGER chọn / đổi chuyên mục khi duyệt (ADR-0139). |
 | Từ chối bài của bác sĩ | A04 | Chỉ SUPER_MANAGER | PENDING_REVIEW → REJECTED (Bài viết#5) | — | — |
-| Bình luận của một bài viết | A01, A02 | Công khai | — | — | Chỉ bình luận `ACTIVE`, cũ nhất trước, 20 bình luận / trang (ADR-0139). `authorName` rút gọn: mọi từ trừ từ cuối viết tắt chữ cái đầu kèm dấu chấm, từ cuối giữ nguyên ("Nguyễn Văn An" → "N. V. An"). |
+| Bình luận của một bài viết | A01, A02 | Công khai | — | — | Chỉ bình luận `ACTIVE`, cũ nhất trước, `size` mặc định 20 (ADR-0139). `authorName` rút gọn: mọi từ trừ từ cuối viết tắt chữ cái đầu kèm dấu chấm, từ cuối giữ nguyên ("Nguyễn Văn An" → "N. V. An"). |
 | Đăng bình luận | A02 | CUSTOMER | — | — | — |
 | Sửa bình luận của tôi | A02 | CUSTOMER, chỉ bình luận của mình | — | — | — |
 | Xóa bình luận của tôi | A02 | CUSTOMER, chỉ bình luận của mình | — | Có | Xóa mềm (`DELETED`, trạng thái cuối). Tác giả xóa được cả bình luận `HIDDEN` (ADR-0139). |
@@ -67,7 +67,7 @@
 - **`POST /me/articles/{articleId}/withdraw`** — Rút bài đang chờ duyệt. Response `200` `MyArticle`. Lỗi: `400` · `401` · `403` · `404` · `409` `INVALID_STATE_TRANSITION` trạng thái bài không cho phép (03 #21).
 ### Article review
 
-- **`POST /articles/{articleId}/approve`** — Duyệt bài của bác sĩ. Request `ApproveArticleRequest`. Response `200` `MyArticle`. Lỗi: `400` · `401` · `403` · `404` Bài không tồn tại · `categoryId` không tồn tại · `409` `INVALID_STATE_TRANSITION` trạng thái bài không cho phép (03 #21).
+- **`POST /articles/{articleId}/approve`** — Duyệt bài của bác sĩ. Request `ApproveArticleRequest` (tùy chọn). Response `200` `MyArticle`. Lỗi: `400` · `401` · `403` · `404` Bài không tồn tại · `categoryId` không tồn tại · `409` `INVALID_STATE_TRANSITION` trạng thái bài không cho phép (03 #21).
 - **`POST /articles/{articleId}/reject`** — Từ chối bài của bác sĩ. Request `ReviewNoteRequest`. Response `200` `MyArticle`. Lỗi: `400` `BR-BV-06` thiếu lý do · `401` · `403` · `404` · `409` `INVALID_STATE_TRANSITION` trạng thái bài không cho phép (03 #21).
 ### Comments
 

@@ -11,11 +11,11 @@ Rà soát đặc tả F trước task 142–144 thấy: TBD-4 (mở lại chi nh
 
 ## 2. Quyết định
 
-**B1. Mở lại chi nhánh (TBD-4).** `SUSPENDED → ACTIVE` đặt `suspended_at`, `suspend_reason` và `expected_resume_on` về NULL; lịch sử tạm ngừng nằm ở `audit_logs`. Các CHECK của V48 cho phép: `ck_branches_suspended` chỉ buộc khi `status = 'SUSPENDED'`, `ck_branches_draft_not_suspended` chỉ cho `DRAFT`, không CHECK nào buộc `suspended_at` khi `ACTIVE`.
+**B1. Mở lại chi nhánh (TBD-4).** `SUSPENDED → ACTIVE` đặt `suspended_at`, `suspend_reason` và `expected_resume_on` về NULL; lịch sử tạm ngừng nằm ở `audit_logs`. Các CHECK của V48 cho phép: `ck_branches_suspended` chỉ buộc khi `status = 'SUSPENDED'`, `ck_branches_draft_not_suspended` chỉ cho `DRAFT`, không CHECK nào buộc `suspended_at` khi `ACTIVE`. Chuyển #1 đặt `suspended_at` và `suspend_reason`; #3, #4 đặt `closed_at` và `close_reason` (V48 buộc).
 
 **B2. BR-CN-09.** Còn lịch hẹn hoặc đặt chỗ lưu trú `BOOKED` thì tạm ngừng / đóng cửa **bắt buộc** hủy hàng loạt; không có đường giữ lại. `cancelBookings = false` mà còn lịch → 400 `BR-CN-09`.
 
-**B3. Hiệu lực theo luồng.** Bảng mới "Hiệu lực của trạng thái chi nhánh theo luồng" ở `08` §F.1, 20 dòng × `ACTIVE` / `SUSPENDED` / `CLOSED`. `SUSPENDED` = hoàn tất việc dở, không bắt đầu việc mới; `CLOSED` = chỉ đọc, đóng chỉ được khi tồn đọng BR-CN-07 / 08 bằng 0. Thao tác ghi bị chặn trả 400 `BR-CN-10`. BR-CN-08 thắng: các luồng mà backlog phải rỗng trước khi tạm ngừng (Visit mở, thú trong chuồng, ca `OPEN`) ở cột `SUSPENDED` là "không xảy ra (BR-CN-08)"; Order `PENDING` được phép còn lại nên mở ca mới để thu chúng là "cho phép".
+**B3. Hiệu lực theo luồng.** Bảng mới "Hiệu lực của trạng thái chi nhánh theo luồng" ở `08` §F.1, 22 dòng × `ACTIVE` / `SUSPENDED` / `CLOSED`. `SUSPENDED` = hoàn tất việc dở, không bắt đầu việc mới; `CLOSED` = chỉ đọc, đóng chỉ được khi tồn đọng BR-CN-07 / 08 bằng 0. Thao tác ghi bị chặn trả 400 `BR-CN-10`. BR-CN-08 thắng: các luồng mà backlog phải rỗng trước khi tạm ngừng (Visit mở, thú trong chuồng, ca `OPEN`) ở cột `SUSPENDED` là "không xảy ra (BR-CN-08)"; Order `PENDING` được phép còn lại nên mở ca mới để thu chúng là "cho phép".
 
 **B4. FSM #21.** Thêm #7 `PUBLISHED → HIDDEN` và #8 `HIDDEN → PUBLISHED` (A04), #9 `DRAFT → PUBLISHED` (A04, bài của SUPER_MANAGER, không duyệt, BR-BV-07). Tổng 9 chuyển; trạng thái đúng giá trị V48.
 

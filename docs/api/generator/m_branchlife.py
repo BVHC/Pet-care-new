@@ -64,7 +64,7 @@ m.op("post", "/branches/{branchId}/resume", "resumeBranch", "Mở lại chi nhá
      "BR-CN-10, BR-QT-04", "A04", A04, "SUSPENDED → ACTIVE (Chi nhánh mở rộng#2)", resp="BranchLifecycle",
      path_params=["BranchId"], errors=(400, 401, 403, 404, 409),
      err_desc={400: "`BR-CN-01` chưa có giờ mở cửa hợp lệ · `BR-QT-04` chưa có BRANCH_MANAGER `ACTIVE`", 409: TRANS},
-     notes="Xóa `suspendedAt` và lý do tạm ngừng của chi nhánh; lịch sử tạm ngừng còn trong audit (ADR-0139).")
+     notes="Xóa `suspendedAt`, lý do tạm ngừng và `expectedResumeOn` của chi nhánh; lịch sử tạm ngừng còn trong audit (ADR-0139).")
 m.op("post", "/branches/{branchId}/close", "closeBranch", "Đóng cửa chi nhánh vĩnh viễn", "Branch lifecycle", "UC13",
      "BR-CN-06…10", "A04", A04, "ACTIVE / SUSPENDED → CLOSED (Chi nhánh mở rộng#3, #4)", body="CloseBranchRequest",
      resp="BranchLifecycle", path_params=["BranchId"], errors=(400, 401, 403, 404, 409),

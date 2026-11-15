@@ -364,10 +364,10 @@ Chuyển kho: `POST /stock-transfers`, `GET /stock-transfers` (lọc `direction`
 
 | # | Từ → Sang | Sự kiện | Người kích hoạt | Điều kiện | Hệ quả | Nguồn |
 |---|---|---|---|---|---|---|
-| 1 | `ACTIVE` → `SUSPENDED` | Tạm ngừng | A04 | Không vướng BR-CN-08 (mức tạm ngừng); có lý do; xử lý lịch theo BR-CN-09 | Phát `BranchClinicCancellationEvent` nếu chọn hủy; ẩn công khai | BR-CN-06…10 · UC13 |
+| 1 | `ACTIVE` → `SUSPENDED` | Tạm ngừng | A04 | Không vướng BR-CN-08 (mức tạm ngừng); có lý do; xử lý lịch theo BR-CN-09 | Đặt `suspended_at` (= bây giờ) và `suspend_reason`; phát `BranchClinicCancellationEvent` khi hủy hàng loạt (bắt buộc nếu còn lịch `BOOKED`, BR-CN-09); ẩn công khai | BR-CN-06…10 · UC13 |
 | 2 | `SUSPENDED` → `ACTIVE` | Mở lại | A04 | Giờ mở cửa hợp lệ; còn ≥ 1 BRANCH_MANAGER `ACTIVE` (BR-QT-04) | Hiện lại công khai; xóa `suspended_at`, `suspend_reason`, `expected_resume_on` (ADR-0139) | BR-CN-10 · UC13 |
-| 3 | `ACTIVE` → `CLOSED` | Đóng cửa | A04 | Không vướng BR-CN-08 (mức đóng); có lý do | Như #1; không mở lại | BR-CN-06…10 · UC13 |
-| 4 | `SUSPENDED` → `CLOSED` | Đóng cửa | A04 | Như #3 | — | BR-CN-08 · UC13 |
+| 3 | `ACTIVE` → `CLOSED` | Đóng cửa | A04 | Không vướng BR-CN-08 (mức đóng); có lý do | Như #1, nhưng đặt `closed_at` (= bây giờ) và `close_reason` (V48 buộc cả hai); không mở lại | BR-CN-06…10 · UC13 |
+| 4 | `SUSPENDED` → `CLOSED` | Đóng cửa | A04 | Như #3 | Đặt `closed_at` và `close_reason`; `suspended_at`, `suspend_reason` giữ làm lịch sử | BR-CN-08 · UC13 |
 
 **Hiệu lực của trạng thái chi nhánh theo luồng** (chốt ở ADR-0139, 15/11/2026). `SUSPENDED` = hoàn tất việc đang dở, không bắt đầu việc mới; `CLOSED` = chỉ đọc (đóng cửa chỉ được khi số tồn đọng của BR-CN-07, BR-CN-08 đã về 0, nên các luồng "không xảy ra" ở cột `CLOSED` là hệ quả của điều kiện đóng). Thao tác ghi bị chặn trả 400 `BR-CN-10`. Chi nhánh `DRAFT` chưa nhận việc nào ngoài chuẩn bị (BR-CN-01).
 
@@ -378,9 +378,10 @@ Chuyển kho: `POST /stock-transfers`, `GET /stock-transfers` (lọc `direction`
 | Tiếp nhận vãng lai và cấp cứu | cho phép | chặn | chặn |
 | Tiếp tục Visit đang mở đến khi hoàn tất | cho phép | không xảy ra (BR-CN-08) | không xảy ra |
 | Order bán lẻ mới tại quầy | cho phép | chặn | chặn |
+| Tiếp tục Order `OPEN` đã có (thêm dòng, chuyển `PENDING`) | cho phép | cho phép | không xảy ra (BR-CN-08) |
 | Thu tiền Order `PENDING`: mở ca thu ngân mới và thanh toán | cho phép | cho phép (chỉ để thu Order `PENDING`) | chặn |
 | Đặt chỗ lưu trú mới | cho phép | chặn | chặn |
-| Check-in lưu trú | cho phép | không xảy ra | chặn |
+| Check-in lưu trú | cho phép | không xảy ra (đã hủy hàng loạt, BR-CN-09) | chặn |
 | Gia hạn lưu trú | cho phép | chặn | chặn |
 | Checkout và trả thú của lượt lưu trú đang diễn ra | cho phép | không xảy ra (BR-CN-08) | không xảy ra |
 | Đơn online mới chọn chi nhánh này | cho phép | chặn | chặn |
@@ -388,7 +389,8 @@ Chuyển kho: `POST /stock-transfers`, `GET /stock-transfers` (lọc `direction`
 | Nhập kho (phiếu nhập) | cho phép | chặn | chặn |
 | Điều chỉnh tồn và kiểm kê | cho phép | cho phép | chặn |
 | Chuyển kho đi (chi nhánh là nguồn) | cho phép | cho phép | chặn |
-| Chuyển kho đến (chi nhánh là đích) | cho phép | chặn | chặn |
+| Tạo phiếu chuyển kho mới tới chi nhánh này | cho phép | chặn | chặn |
+| Nhận hoặc hủy phiếu `IN_TRANSIT` đã có tới chi nhánh này | cho phép | cho phép | không xảy ra (BR-CN-08) |
 | Tạo, gán, điều chuyển nhân viên vào chi nhánh (BR-QT-03, BR-QT-06) | cho phép | chặn | chặn |
 | Trang công khai, khung giờ, danh sách chi nhánh cho khách | hiện | ẩn | ẩn |
 | Job ST03, ST04, ST05, ST13, ST15 | chạy | vẫn xử lý bản ghi đang có | không còn gì để xử lý |
@@ -438,12 +440,12 @@ Hợp đồng chéo: mỗi module giữ `customer_id` lắng nghe `CustomerMerge
 | 1 | — → `DRAFT` | Soạn bài | A07 (hoặc A04 như cũ) | — | — | BR-BV-05 · UC80 |
 | 2 | `DRAFT` → `PENDING_REVIEW` | Gửi duyệt | A07 (tác giả) | Đủ trường BR-BV-01 | `submitted_at`; thông báo SUPER_MANAGER | BR-BV-06 · UC80 |
 | 3 | `PENDING_REVIEW` → `DRAFT` | Rút lại | A07 (tác giả) | — | — | BR-BV-06 |
-| 4 | `PENDING_REVIEW` → `PUBLISHED` | Duyệt | A04 | — | `published_at` nếu lần đầu; thông báo VET; ghi audit | BR-BV-06 · UC81 |
+| 4 | `PENDING_REVIEW` → `PUBLISHED` | Duyệt | A04 | — | `first_published_at` nếu lần đầu; thông báo VET; ghi audit | BR-BV-06 · UC81 |
 | 5 | `PENDING_REVIEW` → `REJECTED` | Từ chối | A04 | Có `review_note` | Thông báo VET; ghi audit | BR-BV-06 · UC81 |
 | 6 | `REJECTED` → `DRAFT` | Sửa lại | A07 (tác giả) | — | Xóa `review_note` hiển thị | BR-BV-06 |
 | 7 | `PUBLISHED` → `HIDDEN` | Ẩn bài | A04 | Bài của VET hoặc của SUPER_MANAGER; ẩn thì bình luận không hiện (BR-BV-08) | Ghi audit | BR-BV-02, 07 · UC81 |
-| 8 | `HIDDEN` → `PUBLISHED` | Bỏ ẩn | A04 | — | `published_at` giữ lần đầu; bình luận `ACTIVE` hiện lại; ghi audit | BR-BV-02 · UC81 |
-| 9 | `DRAFT` → `PUBLISHED` | Xuất bản trực tiếp | A04 | Bài do SUPER_MANAGER tự soạn, không qua duyệt (BR-BV-07) | `published_at` lần đầu | BR-BV-02, 07 · UC81 |
+| 8 | `HIDDEN` → `PUBLISHED` | Bỏ ẩn | A04 | — | `first_published_at` giữ lần đầu; bình luận `ACTIVE` hiện lại; ghi audit | BR-BV-02 · UC81 |
+| 9 | `DRAFT` → `PUBLISHED` | Xuất bản trực tiếp | A04 | Bài do SUPER_MANAGER tự soạn, không qua duyệt (BR-BV-07) | `first_published_at` lần đầu | BR-BV-02, 07 · UC81 |
 
 Các chuyển #7–#9 bổ sung ở T106 (15/11/2026, ADR-0139) cho khớp BR-BV-02 (`DRAFT → PUBLISHED ⇄ HIDDEN`); trạng thái dùng đúng giá trị của V48 (`DRAFT`, `PENDING_REVIEW`, `REJECTED`, `PUBLISHED`, `HIDDEN`). Chuyển #7–#9 đã có endpoint ở content-v1 (`…/publish`, `…/hide`), không thêm endpoint.
 

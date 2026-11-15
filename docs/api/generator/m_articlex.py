@@ -99,10 +99,10 @@ m.op("post", "/me/articles/{articleId}/withdraw", "withdrawMyArticle", "Rút bà
 
 # ---- UC81 mở rộng
 m.op("post", "/articles/{articleId}/approve", "approveArticle", "Duyệt bài của bác sĩ", "Article review", "UC81",
-     "BR-BV-06, BR-BV-02", "A04", A04, "PENDING_REVIEW → PUBLISHED (Bài viết#4)", body="ApproveArticleRequest", resp="MyArticle",
+     "BR-BV-06, BR-BV-02", "A04", A04, "PENDING_REVIEW → PUBLISHED (Bài viết#4)", body="ApproveArticleRequest", body_optional=True, resp="MyArticle",
      path_params=["ArticleId"], errors=(400, 401, 403, 404, 409),
      err_desc={404: "Bài không tồn tại · `categoryId` không tồn tại", 409: TRANS},
-     notes="Ghi `published_at` ở lần xuất bản đầu (BR-BV-02); thông báo VET; ghi audit. Body tùy chọn: `categoryId` để SUPER_MANAGER chọn / đổi chuyên mục khi duyệt (VET chỉ đề xuất); vắng = giữ chuyên mục hiện có (ADR-0139).")
+     notes="Ghi `published_at` ở lần xuất bản đầu (BR-BV-02); thông báo VET; ghi audit. Body tùy chọn: không gửi body, hoặc gửi body không có `categoryId`, = giữ chuyên mục VET đề xuất; có `categoryId` thì SUPER_MANAGER chọn / đổi chuyên mục khi duyệt (ADR-0139).")
 m.op("post", "/articles/{articleId}/reject", "rejectArticle", "Từ chối bài của bác sĩ", "Article review", "UC81",
      "BR-BV-06", "A04", A04, "PENDING_REVIEW → REJECTED (Bài viết#5)", body="ReviewNoteRequest", resp="MyArticle",
      path_params=["ArticleId"], errors=(400, 401, 403, 404, 409),
@@ -112,7 +112,7 @@ m.op("post", "/articles/{articleId}/reject", "rejectArticle", "Từ chối bài 
 m.op("get", "/public/articles/{slug}/comments", "listPublicComments", "Bình luận của một bài viết", "Comments", "UC82",
      "BR-BV-03, 08", "A01, A02", "Công khai", resp="PublicComment", page=True, path_params=["Slug"],
      query=["page", "size"], public=True, errors=(400, 404),
-     err_desc={404: "Bài không tồn tại hoặc chưa `PUBLISHED`"}, notes="Chỉ bình luận `ACTIVE`, cũ nhất trước, 20 bình luận / trang (ADR-0139). `authorName` rút gọn: mọi từ trừ từ cuối viết tắt chữ cái đầu kèm dấu chấm, từ cuối giữ nguyên (\"Nguyễn Văn An\" → \"N. V. An\").")
+     err_desc={404: "Bài không tồn tại hoặc chưa `PUBLISHED`"}, notes="Chỉ bình luận `ACTIVE`, cũ nhất trước, `size` mặc định 20 (ADR-0139). `authorName` rút gọn: mọi từ trừ từ cuối viết tắt chữ cái đầu kèm dấu chấm, từ cuối giữ nguyên (\"Nguyễn Văn An\" → \"N. V. An\").")
 m.op("post", "/me/articles/{articleId}/comments", "createComment", "Đăng bình luận", "Comments", "UC82", "BR-BV-08",
      "A02", "CUSTOMER", body="CreateCommentRequest", resp="Comment", status=201, path_params=["ArticleId"],
      errors=(400, 401, 403, 404, 429),

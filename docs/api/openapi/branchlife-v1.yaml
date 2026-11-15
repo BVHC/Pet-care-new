@@ -103,7 +103,7 @@ paths:
     post:
       tags: ["Branch lifecycle"]
       summary: "Mở lại chi nhánh đang tạm ngừng"
-      description: "UC13 · BR-CN-10, BR-QT-04. Actor: A04. Quyền: Chỉ SUPER_MANAGER. Chuyển trạng thái: SUSPENDED → ACTIVE (Chi nhánh mở rộng#2). Xóa `suspendedAt` và lý do tạm ngừng của chi nhánh; lịch sử tạm ngừng còn trong audit (ADR-0139)."
+      description: "UC13 · BR-CN-10, BR-QT-04. Actor: A04. Quyền: Chỉ SUPER_MANAGER. Chuyển trạng thái: SUSPENDED → ACTIVE (Chi nhánh mở rộng#2). Xóa `suspendedAt`, lý do tạm ngừng và `expectedResumeOn` của chi nhánh; lịch sử tạm ngừng còn trong audit (ADR-0139)."
       operationId: resumeBranch
       security:
         - bearerAuth: []
