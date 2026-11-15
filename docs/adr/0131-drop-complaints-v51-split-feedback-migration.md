@@ -2,6 +2,7 @@
 
 - **Trạng thái:** Proposed (BE-1 làm T70 PR1, PR2 và PR3, 10/11/2026; V52, V53 chờ BE-2 xác nhận số)
 - **Liên quan:** ADR-0122 (bỏ khiếu nại, feedback không trạng thái, giữ 30 ngày), ADR-0113 (V36–V41, **không sửa**, chỉ gỡ phần khiếu nại bằng V51), ADR-0123 (Nhân sự, cần một số V), ADR-0112 (khuôn job dọn dẹp); nợ D061, D062; `docs/02` BR-DG-05, `docs/09` §D, §G.
+- **Đánh số lại:** (autopilot 15/11/2026) migration `feedbacks` (V52 trong văn bản dưới) đã đổi thành **V55** vì V52 trùng `V52__ai_general_knowledge_switch`; các chỗ ghi V52 cho phần feedback nghĩa là V55.
 - **Đánh số:** V51 dùng cho PR này, V52 giữ cho phần `feedbacks` (PR2), V53 cho D062. V49 vẫn bỏ trống cho BE-2 (CLAUDE.md *Persistence*).
 
 ## Bối cảnh
