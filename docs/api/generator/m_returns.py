@@ -81,9 +81,9 @@ m.op("post", "/return-requests/{requestId}/cancel", "cancelReturnRequest", "Rút
      path_params=["ReturnRequestId"], errors=(400, 401, 403, 404, 409), err_desc={409: TRANS})
 m.op("post", "/return-requests/{requestId}/approve", "approveReturnRequest", "Duyệt yêu cầu trả hàng", "Return requests",
      "UC69", "BR-BH-14, BR-TG-12", "A05", "BRANCH_MANAGER của chi nhánh của Order",
-     "PENDING → APPROVED (Yêu cầu trả hàng#3); Hoàn tiền#1", body="ApproveReturnRequestRequest", resp="ReturnRequest",
+     "PENDING → APPROVED (Yêu cầu trả hàng#3); Hoàn tiền#1 · tiền hoàn 0 đồng: PENDING → REFUNDED (Yêu cầu trả hàng#6), không sinh hoàn tiền", body="ApproveReturnRequestRequest", resp="ReturnRequest",
      path_params=["ReturnRequestId"], errors=(400, 401, 403, 404, 409), err_desc={409: TRANS},
-     notes="Nhập lại lô gốc hoặc điều chỉnh giảm, sinh hoàn tiền theo hình thức đã thu (BR-TG-12), trong một transaction.")
+     notes="Nhập lại lô gốc hoặc điều chỉnh giảm, sinh hoàn tiền theo hình thức đã thu (BR-TG-12), trong một transaction. Nếu `refund_amount` = 0 thì yêu cầu chuyển thẳng `REFUNDED` (#6) và không sinh dòng hoàn tiền (BR-BH-14).")
 m.op("post", "/return-requests/{requestId}/reject", "rejectReturnRequest", "Từ chối yêu cầu trả hàng", "Return requests",
      "UC69", "BR-BH-14", "A05", "BRANCH_MANAGER của chi nhánh của Order", "PENDING → REJECTED (Yêu cầu trả hàng#4)",
      body="RejectReturnRequestRequest", resp="ReturnRequest", path_params=["ReturnRequestId"],
@@ -93,11 +93,11 @@ m.op("get", "/refunds", "listRefunds", "Danh sách hoàn tiền của chi nhánh
      "A05, A06", BR, resp="Refund", page=True,
      query=["status=enum:REQUESTED,SUCCEEDED,FAILED", "method=enum:CASH,TRANSFER,GATEWAY", "page", "size"],
      errors=(400, 401, 403), notes="`status` vắng = `REQUESTED` + `FAILED`. Cũ nhất trước.")
-m.op("post", "/refunds/{refundId}/confirm", "confirmRefund", "Xác nhận đã hoàn tiền tại quầy", "Refunds", "UC69",
+m.op("post", "/refunds/{refundId}/confirm", "confirmRefund", "Xác nhận đã hoàn tiền (tại quầy hoặc ngoài hệ thống)", "Refunds", "UC69",
      "BR-TG-13, BR-TG-14", "A06, A05", "Lễ tân có ca `OPEN` của chính mình; hoặc BRANCH_MANAGER của chi nhánh với hoàn `GATEWAY` ở `FAILED`", "REQUESTED → SUCCEEDED (Hoàn tiền#2); FAILED → SUCCEEDED (Hoàn tiền#5)",
      body="ConfirmRefundRequest", resp="Refund", path_params=["RefundId"], errors=(400, 401, 403, 404, 409),
-     err_desc={400: "`BR-TG-01` không có ca `OPEN` · hoàn tiền `GATEWAY` không xác nhận tay (do ST21)", 409: TRANS},
-     notes="Số hoàn tính vào ca; yêu cầu trả hàng tương ứng → `REFUNDED` (Yêu cầu trả hàng#5). A05 xác nhận hoàn ngoài hệ thống cho hoàn `GATEWAY` ở `FAILED`: `note` bắt buộc (audit), không cần ca. Chuyển khoản tại quầy: `note` tùy chọn (mã giao dịch ngân hàng).")
+     err_desc={400: "`BR-TG-01` đường (a) không có ca `OPEN` · `VALIDATION_FAILED` đường (b) thiếu `note`", 403: "Đường (a) chỉ A06; đường (b) chỉ A05 của chi nhánh của Order; hoàn `GATEWAY` ở `FAILED` mà người gọi là A06, hoặc hoàn tại quầy mà người gọi là A05", 409: TRANS + " · hoàn `GATEWAY` không ở `FAILED` (ST21 tự xử lý `REQUESTED`)"},
+     notes="Hai đường. (a) A06, hoàn `CASH` / `TRANSFER` ở `REQUESTED`: ghi vào ca `OPEN` của chính người gọi (400 `BR-TG-01` nếu không có ca); `note` tùy chọn (mã giao dịch ngân hàng, lưu audit). (b) A05 của chi nhánh của Order, hoàn `GATEWAY` ở `FAILED`: xác nhận đã hoàn ngoài hệ thống, `note` bắt buộc (lưu audit, 400 nếu thiếu), không cần ca (Hoàn tiền#5). Yêu cầu trả hàng tương ứng (nếu có) → `REFUNDED` (Yêu cầu trả hàng#5).")
 m.op("post", "/refunds/{refundId}/retry", "retryRefund", "Thử lại hoàn tiền qua cổng", "Refunds", "UC69", "BR-TG-14",
      "A05", "BRANCH_MANAGER của chi nhánh", "FAILED → REQUESTED (Hoàn tiền#4)", resp="Refund",
      path_params=["RefundId"], errors=(400, 401, 403, 404, 409),

@@ -24,7 +24,7 @@
 | 5 | `POST /return-requests/{requestId}/approve` | Duyệt yêu cầu trả hàng | UC69 | BR-BH-14, BR-TG-12 |
 | 6 | `POST /return-requests/{requestId}/reject` | Từ chối yêu cầu trả hàng | UC69 | BR-BH-14 |
 | 7 | `GET /refunds` | Danh sách hoàn tiền của chi nhánh | UC69 | BR-TG-12 |
-| 8 | `POST /refunds/{refundId}/confirm` | Xác nhận đã hoàn tiền tại quầy | UC69 | BR-TG-13, BR-TG-14 |
+| 8 | `POST /refunds/{refundId}/confirm` | Xác nhận đã hoàn tiền (tại quầy hoặc ngoài hệ thống) | UC69 | BR-TG-13, BR-TG-14 |
 | 9 | `POST /refunds/{refundId}/retry` | Thử lại hoàn tiền qua cổng | UC69 | BR-TG-14 |
 
 ---
@@ -37,10 +37,10 @@
 | Danh sách yêu cầu trả hàng của chi nhánh | A05, A06 | A06, A05 của chi nhánh của Order | — | — | Tự lấy chi nhánh của người gọi. `status` vắng = `PENDING`. Cũ nhất trước. |
 | Chi tiết yêu cầu trả hàng | A05, A06 | A06, A05 của chi nhánh của Order | — | — | — |
 | Rút yêu cầu trả hàng | A06 | Người tạo | PENDING → CANCELLED (Yêu cầu trả hàng#2) | — | — |
-| Duyệt yêu cầu trả hàng | A05 | BRANCH_MANAGER của chi nhánh của Order | PENDING → APPROVED (Yêu cầu trả hàng#3); Hoàn tiền#1 | — | Nhập lại lô gốc hoặc điều chỉnh giảm, sinh hoàn tiền theo hình thức đã thu (BR-TG-12), trong một transaction. |
+| Duyệt yêu cầu trả hàng | A05 | BRANCH_MANAGER của chi nhánh của Order | PENDING → APPROVED (Yêu cầu trả hàng#3); Hoàn tiền#1 · tiền hoàn 0 đồng: PENDING → REFUNDED (Yêu cầu trả hàng#6), không sinh hoàn tiền | — | Nhập lại lô gốc hoặc điều chỉnh giảm, sinh hoàn tiền theo hình thức đã thu (BR-TG-12), trong một transaction. Nếu `refund_amount` = 0 thì yêu cầu chuyển thẳng `REFUNDED` (#6) và không sinh dòng hoàn tiền (BR-BH-14). |
 | Từ chối yêu cầu trả hàng | A05 | BRANCH_MANAGER của chi nhánh của Order | PENDING → REJECTED (Yêu cầu trả hàng#4) | — | — |
 | Danh sách hoàn tiền của chi nhánh | A05, A06 | A06, A05 của chi nhánh của Order | — | — | `status` vắng = `REQUESTED` + `FAILED`. Cũ nhất trước. |
-| Xác nhận đã hoàn tiền tại quầy | A06, A05 | Lễ tân có ca `OPEN` của chính mình; hoặc BRANCH_MANAGER của chi nhánh với hoàn `GATEWAY` ở `FAILED` | REQUESTED → SUCCEEDED (Hoàn tiền#2); FAILED → SUCCEEDED (Hoàn tiền#5) | — | Số hoàn tính vào ca; yêu cầu trả hàng tương ứng → `REFUNDED` (Yêu cầu trả hàng#5). A05 xác nhận hoàn ngoài hệ thống cho hoàn `GATEWAY` ở `FAILED`: `note` bắt buộc (audit), không cần ca. Chuyển khoản tại quầy: `note` tùy chọn (mã giao dịch ngân hàng). |
+| Xác nhận đã hoàn tiền (tại quầy hoặc ngoài hệ thống) | A06, A05 | Lễ tân có ca `OPEN` của chính mình; hoặc BRANCH_MANAGER của chi nhánh với hoàn `GATEWAY` ở `FAILED` | REQUESTED → SUCCEEDED (Hoàn tiền#2); FAILED → SUCCEEDED (Hoàn tiền#5) | — | Hai đường. (a) A06, hoàn `CASH` / `TRANSFER` ở `REQUESTED`: ghi vào ca `OPEN` của chính người gọi (400 `BR-TG-01` nếu không có ca); `note` tùy chọn (mã giao dịch ngân hàng, lưu audit). (b) A05 của chi nhánh của Order, hoàn `GATEWAY` ở `FAILED`: xác nhận đã hoàn ngoài hệ thống, `note` bắt buộc (lưu audit, 400 nếu thiếu), không cần ca (Hoàn tiền#5). Yêu cầu trả hàng tương ứng (nếu có) → `REFUNDED` (Yêu cầu trả hàng#5). |
 | Thử lại hoàn tiền qua cổng | A05 | BRANCH_MANAGER của chi nhánh | FAILED → REQUESTED (Hoàn tiền#4) | — | — |
 
 ---
@@ -58,7 +58,7 @@
 ### Refunds
 
 - **`GET /refunds`** — Danh sách hoàn tiền của chi nhánh. Query: `status?`, `method?`, `page?`, `size?`. Response `200` trang `Refund`. Lỗi: `400` · `401` · `403`.
-- **`POST /refunds/{refundId}/confirm`** — Xác nhận đã hoàn tiền tại quầy. Request `ConfirmRefundRequest`. Response `200` `Refund`. Lỗi: `400` `BR-TG-01` không có ca `OPEN` · hoàn tiền `GATEWAY` không xác nhận tay (do ST21) · `401` · `403` · `404` · `409` `INVALID_STATE_TRANSITION` trạng thái hiện tại không cho phép (03 #16, #17).
+- **`POST /refunds/{refundId}/confirm`** — Xác nhận đã hoàn tiền (tại quầy hoặc ngoài hệ thống). Request `ConfirmRefundRequest`. Response `200` `Refund`. Lỗi: `400` `BR-TG-01` đường (a) không có ca `OPEN` · `VALIDATION_FAILED` đường (b) thiếu `note` · `401` · `403` Đường (a) chỉ A06; đường (b) chỉ A05 của chi nhánh của Order; hoàn `GATEWAY` ở `FAILED` mà người gọi là A06, hoặc hoàn tại quầy mà người gọi là A05 · `404` · `409` `INVALID_STATE_TRANSITION` trạng thái hiện tại không cho phép (03 #16, #17) · hoàn `GATEWAY` không ở `FAILED` (ST21 tự xử lý `REQUESTED`).
 - **`POST /refunds/{refundId}/retry`** — Thử lại hoàn tiền qua cổng. Response `200` `Refund`. Lỗi: `400` Chỉ hoàn tiền `GATEWAY` · `401` · `403` · `404` · `409` `INVALID_STATE_TRANSITION` trạng thái hiện tại không cho phép (03 #16, #17).
 
 ### Schema
