@@ -30,7 +30,7 @@
 |---|---|---|---|---|---|
 | Xem trước tồn đọng khi tạm ngừng / đóng cửa | A04 | Chỉ SUPER_MANAGER | — | — | Không ghi gì, giống `…/impact` của branch-v1 (BR-CN-07). |
 | Tạm ngừng chi nhánh | A04 | Chỉ SUPER_MANAGER | ACTIVE → SUSPENDED (Chi nhánh mở rộng#1) | — | — |
-| Mở lại chi nhánh đang tạm ngừng | A04 | Chỉ SUPER_MANAGER | SUSPENDED → ACTIVE (Chi nhánh mở rộng#2) | — | — |
+| Mở lại chi nhánh đang tạm ngừng | A04 | Chỉ SUPER_MANAGER | SUSPENDED → ACTIVE (Chi nhánh mở rộng#2) | — | Xóa `suspendedAt` và lý do tạm ngừng của chi nhánh; lịch sử tạm ngừng còn trong audit (ADR-0139). |
 | Đóng cửa chi nhánh vĩnh viễn | A04 | Chỉ SUPER_MANAGER | ACTIVE / SUSPENDED → CLOSED (Chi nhánh mở rộng#3, #4) | — | Không mở lại được. Dữ liệu lịch sử giữ nguyên. |
 
 ---
@@ -40,9 +40,9 @@
 ### Branch lifecycle
 
 - **`GET /branches/{branchId}/closure-impact`** — Xem trước tồn đọng khi tạm ngừng / đóng cửa. Response `200` `ClosureImpact`. Lỗi: `400` · `401` · `403` · `404`.
-- **`POST /branches/{branchId}/suspend`** — Tạm ngừng chi nhánh. Request `SuspendBranchRequest`. Response `200` `BranchLifecycle`. Lỗi: `400` `BR-CN-08` còn điều kiện chặn (message liệt kê) · `BR-CN-09` còn lịch `BOOKED` mà chưa chọn hủy hàng loạt · `401` · `403` · `404` · `409` `INVALID_STATE_TRANSITION` trạng thái chi nhánh không cho phép (03 #20).
+- **`POST /branches/{branchId}/suspend`** — Tạm ngừng chi nhánh. Request `SuspendBranchRequest`. Response `200` `BranchLifecycle`. Lỗi: `400` `BR-CN-08` còn điều kiện chặn (message liệt kê) · `BR-CN-09` còn lịch `BOOKED` mà `cancelBookings = false` (bắt buộc hủy hàng loạt, không có đường giữ lại) · `401` · `403` · `404` · `409` `INVALID_STATE_TRANSITION` trạng thái chi nhánh không cho phép (03 #20).
 - **`POST /branches/{branchId}/resume`** — Mở lại chi nhánh đang tạm ngừng. Response `200` `BranchLifecycle`. Lỗi: `400` `BR-CN-01` chưa có giờ mở cửa hợp lệ · `BR-QT-04` chưa có BRANCH_MANAGER `ACTIVE` · `401` · `403` · `404` · `409` `INVALID_STATE_TRANSITION` trạng thái chi nhánh không cho phép (03 #20).
-- **`POST /branches/{branchId}/close`** — Đóng cửa chi nhánh vĩnh viễn. Request `CloseBranchRequest`. Response `200` `BranchLifecycle`. Lỗi: `400` `BR-CN-08` còn điều kiện chặn (message liệt kê) · `BR-CN-09` còn lịch `BOOKED` mà chưa chọn hủy hàng loạt · còn tồn kho > 0 · còn nhân viên `ACTIVE` · `401` · `403` · `404` · `409` `INVALID_STATE_TRANSITION` trạng thái chi nhánh không cho phép (03 #20).
+- **`POST /branches/{branchId}/close`** — Đóng cửa chi nhánh vĩnh viễn. Request `CloseBranchRequest`. Response `200` `BranchLifecycle`. Lỗi: `400` `BR-CN-08` còn điều kiện chặn (message liệt kê) · `BR-CN-09` còn lịch `BOOKED` mà `cancelBookings = false` (bắt buộc hủy hàng loạt, không có đường giữ lại) · còn tồn kho > 0 · còn nhân viên `ACTIVE` · `401` · `403` · `404` · `409` `INVALID_STATE_TRANSITION` trạng thái chi nhánh không cho phép (03 #20).
 
 ### Schema
 
@@ -61,6 +61,7 @@ Trường có `?` là không bắt buộc / có thể null. Kiểu `email`, `dat
 1. Mọi endpoint chỉ SUPER_MANAGER (BR-CN-06); chi nhánh `DRAFT` không tạm ngừng / đóng.
 2. Kiểm điều kiện chặn và thực hiện chạy trong cùng transaction, khóa chi nhánh trước khi đọc (ADR-0106; `BranchApi.lockForBooking`).
 3. Mọi thao tác ghi audit kèm lý do (BR-QT-15).
+4. Hiệu lực của `SUSPENDED` / `CLOSED` theo từng luồng ở 08 §F.1 (bảng "Hiệu lực của trạng thái chi nhánh theo luồng"); thao tác ghi bị chặn vì trạng thái chi nhánh trả 400 `BR-CN-10` ở module sở hữu luồng đó.
 
 ---
 
@@ -73,7 +74,7 @@ Trường có `?` là không bắt buộc / có thể null. Kiểu `email`, `dat
 
 | ID | Câu hỏi | Trạng thái | Gốc |
 |---|---|---|---|
-| Q1 | Care Task `OPEN` khi đóng chi nhánh: chuyển sang chi nhánh khác hay luôn hủy | TBD (BE-1) | BR-CN-09 |
+| Q1 | Care Task `OPEN` khi đóng chi nhánh: chuyển sang chi nhánh khác hay luôn hủy | Đã chốt (08 §G, ADR-0139): chuyển sang chi nhánh SUPER_MANAGER chọn; không chọn thì hủy kèm lý do | BR-CN-09 |
 | Q2 | Tạm ngừng có cần ngày dự kiến mở lại bắt buộc không | TBD (PO) | BR-CN-10 |
 
 ---

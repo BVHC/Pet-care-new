@@ -272,7 +272,7 @@ paths:
     post:
       tags: ["Article review"]
       summary: "Duyệt bài của bác sĩ"
-      description: "UC81 · BR-BV-06, BR-BV-02. Actor: A04. Quyền: Chỉ SUPER_MANAGER. Chuyển trạng thái: PENDING_REVIEW → PUBLISHED (Bài viết#4). Ghi `published_at` ở lần xuất bản đầu (BR-BV-02); thông báo VET; ghi audit."
+      description: "UC81 · BR-BV-06, BR-BV-02. Actor: A04. Quyền: Chỉ SUPER_MANAGER. Chuyển trạng thái: PENDING_REVIEW → PUBLISHED (Bài viết#4). Ghi `published_at` ở lần xuất bản đầu (BR-BV-02); thông báo VET; ghi audit. SUPER_MANAGER chọn và được đổi chuyên mục của bài khi duyệt (ADR-0139; VET chỉ đề xuất)."
       operationId: approveArticle
       security:
         - bearerAuth: []
@@ -362,7 +362,7 @@ paths:
     get:
       tags: [Comments]
       summary: "Bình luận của một bài viết"
-      description: "UC82 · BR-BV-03, 08. Actor: A01, A02. Quyền: Công khai. Chuyển trạng thái: —. Chỉ bình luận `ACTIVE`, cũ nhất trước."
+      description: "UC82 · BR-BV-03, 08. Actor: A01, A02. Quyền: Công khai. Chuyển trạng thái: —. Chỉ bình luận `ACTIVE`, cũ nhất trước, 20 bình luận / trang (ADR-0139). `authorName` rút gọn: mọi từ trừ từ cuối viết tắt chữ cái đầu kèm dấu chấm, từ cuối giữ nguyên (\"Nguyễn Văn An\" → \"N. V. An\")."
       operationId: listPublicComments
       security: []
       parameters:
@@ -496,7 +496,7 @@ paths:
         "404":
           $ref: "#/components/responses/NotFound"
         "409":
-          description: "Bình luận đã bị ẩn hoặc đã xóa"
+          description: "Bình luận đã bị ẩn (`HIDDEN`) hoặc đã xóa (`DELETED`): tác giả không sửa được"
           content:
             "application/json":
               schema:
@@ -504,7 +504,7 @@ paths:
     delete:
       tags: [Comments]
       summary: "Xóa bình luận của tôi"
-      description: "UC82 · BR-BV-08. Actor: A02. Quyền: CUSTOMER, chỉ bình luận của mình. Chuyển trạng thái: —. Xóa mềm (`DELETED`)."
+      description: "UC82 · BR-BV-08. Actor: A02. Quyền: CUSTOMER, chỉ bình luận của mình. Chuyển trạng thái: —. Xóa mềm (`DELETED`, trạng thái cuối). Tác giả xóa được cả bình luận `HIDDEN` (ADR-0139)."
       operationId: deleteMyComment
       security:
         - bearerAuth: []
@@ -566,7 +566,7 @@ paths:
         "404":
           $ref: "#/components/responses/NotFound"
         "409":
-          description: "Bình luận không `ACTIVE`"
+          description: "Bình luận không `ACTIVE` (kể cả đã `DELETED`)"
           content:
             "application/json":
               schema:
