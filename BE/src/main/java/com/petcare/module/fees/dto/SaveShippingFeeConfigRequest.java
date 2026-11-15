@@ -8,9 +8,9 @@ import jakarta.validation.constraints.NotNull;
  * {@code VALIDATION_FAILED}.
  */
 public record SaveShippingFeeConfigRequest(
-        @NotNull(message = "Phí cơ bản là bắt buộc") @Schema(description = "VND", example = "30000",
+        @NotNull(message = "Phí cơ bản là bắt buộc") @Schema(description = "VND", example = "30000", minimum = "0",
                 requiredMode = Schema.RequiredMode.REQUIRED) Long baseFee,
 
-        @NotNull(message = "Ngưỡng miễn phí là bắt buộc") @Schema(description = "VND", example = "500000",
+        @NotNull(message = "Ngưỡng miễn phí là bắt buộc") @Schema(description = "VND", example = "500000", minimum = "0",
                 requiredMode = Schema.RequiredMode.REQUIRED) Long freeThreshold) {
 }

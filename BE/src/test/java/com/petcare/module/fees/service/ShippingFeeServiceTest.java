@@ -9,6 +9,9 @@ import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
 
+import java.time.Clock;
+import java.time.Instant;
+import java.time.ZoneOffset;
 import java.util.Map;
 import java.util.Optional;
 
@@ -34,6 +37,9 @@ import com.petcare.platform.security.SecurityPrincipal;
 class ShippingFeeServiceTest {
 
     private static final long ACTOR = 7L;
+    private static final Instant NOW = Instant.parse("2026-11-15T03:00:00.123456789Z");
+    private static final Instant NOW_MICROS = Instant.parse("2026-11-15T03:00:00.123456Z");
+    private static final Clock CLOCK = Clock.fixed(NOW, ZoneOffset.UTC);
 
     private final ShippingFeeConfigRepository configs = mock(ShippingFeeConfigRepository.class);
     private final AuditRecorder audit = mock(AuditRecorder.class);
@@ -45,8 +51,7 @@ class ShippingFeeServiceTest {
     void setUp() {
         when(scope.current()).thenReturn(principal);
         when(principal.accountId()).thenReturn(ACTOR);
-        when(configs.saveAndFlush(any())).thenAnswer(i -> i.getArgument(0));
-        service = new ShippingFeeService(configs, new ShippingFeeConfigMapperImpl(), audit, scope);
+        service = new ShippingFeeService(configs, new ShippingFeeConfigMapperImpl(), audit, scope, CLOCK);
     }
 
     private ShippingFeeConfig config(long baseFee, long freeThreshold) {
@@ -127,19 +132,18 @@ class ShippingFeeServiceTest {
     // ================================================================ save
 
     @Test
-    void saveLocksThenWritesThenAuditsAndRecordsTheActor() {
+    void saveLocksThenWritesThenAuditsAndRecordsTheActorAndTheClockTime() {
         stored(10_000, 100_000);
 
         ShippingFeeConfigResponse response = service.save(new SaveShippingFeeConfigRequest(30_000L, 500_000L));
 
         assertThat(response.baseFee()).isEqualTo(30_000);
         assertThat(response.freeThreshold()).isEqualTo(500_000);
-        ArgumentCaptor<ShippingFeeConfig> saved = ArgumentCaptor.forClass(ShippingFeeConfig.class);
+        assertThat(response.updatedAt()).isEqualTo(NOW_MICROS);
         InOrder order = inOrder(configs, audit);
         order.verify(configs).findForUpdate();
-        order.verify(configs).saveAndFlush(saved.capture());
+        order.verify(configs).replace(30_000L, 500_000L, ACTOR, NOW_MICROS);
         order.verify(audit).record(any(AuditEntry.class));
-        assertThat(saved.getValue().getUpdatedBy()).isEqualTo(ACTOR);
     }
 
     @Test
@@ -163,7 +167,7 @@ class ShippingFeeServiceTest {
 
         service.save(new SaveShippingFeeConfigRequest(10_000L, 100_000L));
 
-        verify(configs).saveAndFlush(any());
+        verify(configs).replace(10_000L, 100_000L, ACTOR, NOW_MICROS);
         verify(audit).record(any(AuditEntry.class));
     }
 

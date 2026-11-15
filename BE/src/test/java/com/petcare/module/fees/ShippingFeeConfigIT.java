@@ -3,6 +3,7 @@ package com.petcare.module.fees;
 import static org.assertj.core.api.Assertions.assertThat;
 
 import java.net.URI;
+import java.time.Instant;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
@@ -121,10 +122,18 @@ class ShippingFeeConfigIT {
     }
 
     @Test
-    void anIdenticalPutStillAudits() {
-        call(manager, HttpMethod.PUT, body(10, 20));
-        call(manager, HttpMethod.PUT, body(10, 20));
+    void anIdenticalPutByTheSameAccountStillWritesTheRowAndAudits() {
+        Object first = data(call(manager, HttpMethod.PUT, body(10, 20))).get("updatedAt");
+        Instant storedFirst = jdbc.queryForObject("SELECT updated_at FROM shipping_fee_configs WHERE id = 1",
+                java.sql.Timestamp.class).toInstant();
 
+        Object second = data(call(manager, HttpMethod.PUT, body(10, 20))).get("updatedAt");
+        Instant storedSecond = jdbc.queryForObject("SELECT updated_at FROM shipping_fee_configs WHERE id = 1",
+                java.sql.Timestamp.class).toInstant();
+
+        assertThat(storedSecond).isAfter(storedFirst);
+        assertThat(second).isNotEqualTo(first);
+        assertThat(Instant.parse((String) second)).isEqualTo(storedSecond);
         assertThat(audits()).hasSize(2);
     }
 
@@ -194,12 +203,26 @@ class ShippingFeeConfigIT {
     /** Hai người sửa cùng lúc: PUT xếp hàng sau khóa dòng 1 và audit {@code before} là giá trị vừa commit, không phải giá trị cũ. */
     @Test
     void putWaitsForTheRowLockAndAuditsTheValuesCommittedMeanwhile() throws Exception {
+        putWaitsFor("FOR NO KEY UPDATE");
+        List<Map<String, Object>> audits = audits();
+        assertThat(audits).hasSize(1);
+        assertThat((String) audits.get(0).get("before_data")).contains("\"baseFee\": 7", "\"freeThreshold\": 70");
+        assertThat((String) audits.get(0).get("after_data")).contains("\"baseFee\": 30000");
+    }
+
+    /** FOR SHARE chặn FOR NO KEY UPDATE nhưng không chặn FOR SHARE khác: PUT khóa yếu hơn sẽ không chờ và test đỏ. */
+    @Test
+    void putTakesAStrongEnoughLockToWaitBehindAShareLock() throws Exception {
+        putWaitsFor("FOR SHARE");
+    }
+
+    private void putWaitsFor(String holderLock) throws Exception {
         CountDownLatch held = new CountDownLatch(1);
         CountDownLatch release = new CountDownLatch(1);
         ExecutorService pool = Executors.newFixedThreadPool(2);
         try {
             Future<?> holder = pool.submit(() -> tx.executeWithoutResult(status -> {
-                jdbc.queryForList("SELECT id FROM shipping_fee_configs WHERE id = 1 FOR NO KEY UPDATE");
+                jdbc.queryForList("SELECT id FROM shipping_fee_configs WHERE id = 1 " + holderLock);
                 held.countDown();
                 await(release);
                 jdbc.update("UPDATE shipping_fee_configs SET base_fee = 7, free_threshold = 70 WHERE id = 1");
@@ -219,11 +242,6 @@ class ShippingFeeConfigIT {
             pool.shutdown();
             assertThat(pool.awaitTermination(30, TimeUnit.SECONDS)).isTrue();
         }
-
-        List<Map<String, Object>> audits = audits();
-        assertThat(audits).hasSize(1);
-        assertThat((String) audits.get(0).get("before_data")).contains("\"baseFee\": 7", "\"freeThreshold\": 70");
-        assertThat((String) audits.get(0).get("after_data")).contains("\"baseFee\": 30000");
     }
 
     // ================================================================ helpers

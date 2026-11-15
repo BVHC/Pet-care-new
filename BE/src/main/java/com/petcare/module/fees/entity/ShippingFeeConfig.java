@@ -33,11 +33,4 @@ public class ShippingFeeConfig extends TimestampedEntity {
 
     @Column(name = "updated_by")
     private Long updatedBy;
-
-    /** Thay cả hai giá trị (PUT ghi đè toàn bộ); {@code updated_at} do listener đặt từ {@code Clock}. */
-    public void replace(long baseFee, long freeThreshold, Long updatedBy) {
-        this.baseFee = baseFee;
-        this.freeThreshold = freeThreshold;
-        this.updatedBy = updatedBy;
-    }
 }

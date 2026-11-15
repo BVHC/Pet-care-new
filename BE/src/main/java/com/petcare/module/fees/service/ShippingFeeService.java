@@ -1,5 +1,8 @@
 package com.petcare.module.fees.service;
 
+import java.time.Clock;
+import java.time.Instant;
+import java.time.temporal.ChronoUnit;
 import java.util.LinkedHashMap;
 import java.util.Map;
 
@@ -21,7 +24,7 @@ import com.petcare.platform.security.BranchScope;
 
 /**
  * Phí vận chuyển toàn chuỗi: cấu hình (UC32, BR-SP-08, 11) và ST09 (docs/adr/0140). PUT là một use case một transaction:
- * kiểm giá trị → khóa dòng 1 → đọc dưới khóa → ghi → audit. Bảng chỉ có một dòng nên không có khóa nào khác.
+ * kiểm giá trị → khóa dòng 1 → đọc dưới khóa → `now` từ `Clock` → UPDATE tường minh (luôn ghi dòng) → audit. Bảng chỉ có một dòng nên không có khóa nào khác.
  */
 @Service
 public class ShippingFeeService implements ShippingFeeApi {
@@ -33,13 +36,15 @@ public class ShippingFeeService implements ShippingFeeApi {
     private final ShippingFeeConfigMapper mapper;
     private final AuditRecorder auditRecorder;
     private final BranchScope scope;
+    private final Clock clock;
 
     public ShippingFeeService(ShippingFeeConfigRepository configs, ShippingFeeConfigMapper mapper,
-            AuditRecorder auditRecorder, BranchScope scope) {
+            AuditRecorder auditRecorder, BranchScope scope, Clock clock) {
         this.configs = configs;
         this.mapper = mapper;
         this.auditRecorder = auditRecorder;
         this.scope = scope;
+        this.clock = clock;
     }
 
     /** fees-v1 #1. */
@@ -62,11 +67,11 @@ public class ShippingFeeService implements ShippingFeeApi {
         }
         ShippingFeeConfig config = configs.findForUpdate().orElseThrow(ShippingFeeService::missing);
         Map<String, Object> before = snapshot(config);
-        config.replace(baseFee, freeThreshold, scope.current().accountId());
-        configs.saveAndFlush(config);
+        Instant now = clock.instant().truncatedTo(ChronoUnit.MICROS);
+        configs.replace(baseFee, freeThreshold, scope.current().accountId(), now);
         auditRecorder.record(AuditEntry.of(ACTION_UPDATED).entity(ENTITY_TYPE, ShippingFeeConfig.SINGLE_ROW_ID)
-                .before(before).after(snapshot(config)));
-        return mapper.toResponse(config);
+                .before(before).after(snapshot(baseFee, freeThreshold)));
+        return new ShippingFeeConfigResponse(baseFee, freeThreshold, now);
     }
 
     @Override
@@ -90,9 +95,13 @@ public class ShippingFeeService implements ShippingFeeApi {
 
     /** Ảnh chụp để audit: luôn là Map (docs/adr/0001). */
     private static Map<String, Object> snapshot(ShippingFeeConfig config) {
+        return snapshot(config.getBaseFee(), config.getFreeThreshold());
+    }
+
+    private static Map<String, Object> snapshot(long baseFee, long freeThreshold) {
         Map<String, Object> snapshot = new LinkedHashMap<>();
-        snapshot.put("baseFee", config.getBaseFee());
-        snapshot.put("freeThreshold", config.getFreeThreshold());
+        snapshot.put("baseFee", baseFee);
+        snapshot.put("freeThreshold", freeThreshold);
         return snapshot;
     }
 }
