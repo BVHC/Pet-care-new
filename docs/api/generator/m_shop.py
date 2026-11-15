@@ -42,6 +42,7 @@ m.param("OnlineOrderId", "onlineOrderId", "path", "int64")
 m.schema("OnlineOrderStatus", None,
          enum=["PENDING_PAYMENT", "PAID", "PROCESSING", "SHIPPED", "DELIVERY_FAILED", "DELIVERED", "COMPLETED", "CANCELLED"],
          desc="03 #14 (08 §B)")
+m.schema("RefundStatus", None, enum=["REQUESTED", "SUCCEEDED", "FAILED"], desc="03 #17 (returns-v1)")
 m.schema("CartItem", {
     "productId": "int64", "name": "string", "unit": "string", "unitPrice": "money|Giá hiện tại, chỉ để xem (BR-BH-07)",
     "quantity": "int", "imageUrl": "url?", "available": "bool|false nếu hết hàng toàn chuỗi",
@@ -67,6 +68,7 @@ m.schema("OnlineOrder", {
     "carrier": "string?", "trackingCode": "string?", "redeliveryCount": "int",
     "paymentDueAt": "datetime", "paidAt": "datetime?", "shippedAt": "datetime?", "deliveredAt": "datetime?",
     "completedAt": "datetime?", "cancelledAt": "datetime?", "cancelReason": "string?", "createdAt": "datetime",
+    "refundStatus": "ref:RefundStatus?|Trạng thái hoàn tiền gần nhất của đơn; null khi chưa có hoàn tiền (08 §D Q4, ADR-0138)",
 })
 m.schema("ReasonRequest", {"reason": "string:300"})
 m.schema("ShipRequest", {"carrier": "string:100", "trackingCode": "string:100"})

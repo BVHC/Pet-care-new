@@ -24,8 +24,8 @@ m = Module(
         ("A3", "Trả hàng không đổi trạng thái Order / đơn online", "BR-BH-15"),
     ],
     questions=[
-        ("Q1", "Khách có xem được trạng thái hoàn tiền của đơn không (thêm `refundStatus` vào shop-v1 `OnlineOrder`)", "TBD (PO)", "08 §D Q4"),
-        ("Q2", "Hoàn chuyển khoản tại quầy có cần ghi mã giao dịch ngân hàng không", "TBD (BE-2)", "08 §D Q5"),
+        ("Q1", "Khách có xem được trạng thái hoàn tiền của đơn không (thêm `refundStatus` vào shop-v1 `OnlineOrder`)", "Đã chốt: có; `refundStatus` null khi không có hoàn tiền (ADR-0138)", "08 §D Q4"),
+        ("Q2", "Hoàn chuyển khoản tại quầy có cần ghi mã giao dịch ngân hàng không", "Đã chốt: văn bản tự do, không bắt buộc, lưu ở audit (ADR-0138)", "08 §D Q5"),
         ("Q3", "Hạn trả hàng 7 ngày có áp cho mọi sản phẩm không", "TBD (PO)", "BR-BH-13"),
     ],
 )
@@ -94,10 +94,10 @@ m.op("get", "/refunds", "listRefunds", "Danh sách hoàn tiền của chi nhánh
      query=["status=enum:REQUESTED,SUCCEEDED,FAILED", "method=enum:CASH,TRANSFER,GATEWAY", "page", "size"],
      errors=(400, 401, 403), notes="`status` vắng = `REQUESTED` + `FAILED`. Cũ nhất trước.")
 m.op("post", "/refunds/{refundId}/confirm", "confirmRefund", "Xác nhận đã hoàn tiền tại quầy", "Refunds", "UC69",
-     "BR-TG-13", "A06", "Lễ tân có ca `OPEN` của chính mình", "REQUESTED → SUCCEEDED (Hoàn tiền#2)",
+     "BR-TG-13, BR-TG-14", "A06, A05", "Lễ tân có ca `OPEN` của chính mình; hoặc BRANCH_MANAGER của chi nhánh với hoàn `GATEWAY` ở `FAILED`", "REQUESTED → SUCCEEDED (Hoàn tiền#2); FAILED → SUCCEEDED (Hoàn tiền#5)",
      body="ConfirmRefundRequest", resp="Refund", path_params=["RefundId"], errors=(400, 401, 403, 404, 409),
      err_desc={400: "`BR-TG-01` không có ca `OPEN` · hoàn tiền `GATEWAY` không xác nhận tay (do ST21)", 409: TRANS},
-     notes="Số hoàn tính vào ca; yêu cầu trả hàng tương ứng → `REFUNDED` (Yêu cầu trả hàng#5).")
+     notes="Số hoàn tính vào ca; yêu cầu trả hàng tương ứng → `REFUNDED` (Yêu cầu trả hàng#5). A05 xác nhận hoàn ngoài hệ thống cho hoàn `GATEWAY` ở `FAILED`: `note` bắt buộc (audit), không cần ca. Chuyển khoản tại quầy: `note` tùy chọn (mã giao dịch ngân hàng).")
 m.op("post", "/refunds/{refundId}/retry", "retryRefund", "Thử lại hoàn tiền qua cổng", "Refunds", "UC69", "BR-TG-14",
      "A05", "BRANCH_MANAGER của chi nhánh", "FAILED → REQUESTED (Hoàn tiền#4)", resp="Refund",
      path_params=["RefundId"], errors=(400, 401, 403, 404, 409),

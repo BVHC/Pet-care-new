@@ -24,7 +24,7 @@
 | 5 | `POST /return-requests/{requestId}/approve` | Duyệt yêu cầu trả hàng | UC69 | BR-BH-14, BR-TG-12 |
 | 6 | `POST /return-requests/{requestId}/reject` | Từ chối yêu cầu trả hàng | UC69 | BR-BH-14 |
 | 7 | `GET /refunds` | Danh sách hoàn tiền của chi nhánh | UC69 | BR-TG-12 |
-| 8 | `POST /refunds/{refundId}/confirm` | Xác nhận đã hoàn tiền tại quầy | UC69 | BR-TG-13 |
+| 8 | `POST /refunds/{refundId}/confirm` | Xác nhận đã hoàn tiền tại quầy | UC69 | BR-TG-13, BR-TG-14 |
 | 9 | `POST /refunds/{refundId}/retry` | Thử lại hoàn tiền qua cổng | UC69 | BR-TG-14 |
 
 ---
@@ -40,7 +40,7 @@
 | Duyệt yêu cầu trả hàng | A05 | BRANCH_MANAGER của chi nhánh của Order | PENDING → APPROVED (Yêu cầu trả hàng#3); Hoàn tiền#1 | — | Nhập lại lô gốc hoặc điều chỉnh giảm, sinh hoàn tiền theo hình thức đã thu (BR-TG-12), trong một transaction. |
 | Từ chối yêu cầu trả hàng | A05 | BRANCH_MANAGER của chi nhánh của Order | PENDING → REJECTED (Yêu cầu trả hàng#4) | — | — |
 | Danh sách hoàn tiền của chi nhánh | A05, A06 | A06, A05 của chi nhánh của Order | — | — | `status` vắng = `REQUESTED` + `FAILED`. Cũ nhất trước. |
-| Xác nhận đã hoàn tiền tại quầy | A06 | Lễ tân có ca `OPEN` của chính mình | REQUESTED → SUCCEEDED (Hoàn tiền#2) | — | Số hoàn tính vào ca; yêu cầu trả hàng tương ứng → `REFUNDED` (Yêu cầu trả hàng#5). |
+| Xác nhận đã hoàn tiền tại quầy | A06, A05 | Lễ tân có ca `OPEN` của chính mình; hoặc BRANCH_MANAGER của chi nhánh với hoàn `GATEWAY` ở `FAILED` | REQUESTED → SUCCEEDED (Hoàn tiền#2); FAILED → SUCCEEDED (Hoàn tiền#5) | — | Số hoàn tính vào ca; yêu cầu trả hàng tương ứng → `REFUNDED` (Yêu cầu trả hàng#5). A05 xác nhận hoàn ngoài hệ thống cho hoàn `GATEWAY` ở `FAILED`: `note` bắt buộc (audit), không cần ca. Chuyển khoản tại quầy: `note` tùy chọn (mã giao dịch ngân hàng). |
 | Thử lại hoàn tiền qua cổng | A05 | BRANCH_MANAGER của chi nhánh | FAILED → REQUESTED (Hoàn tiền#4) | — | — |
 
 ---
@@ -99,8 +99,8 @@ Trường có `?` là không bắt buộc / có thể null. Kiểu `email`, `dat
 
 | ID | Câu hỏi | Trạng thái | Gốc |
 |---|---|---|---|
-| Q1 | Khách có xem được trạng thái hoàn tiền của đơn không (thêm `refundStatus` vào shop-v1 `OnlineOrder`) | TBD (PO) | 08 §D Q4 |
-| Q2 | Hoàn chuyển khoản tại quầy có cần ghi mã giao dịch ngân hàng không | TBD (BE-2) | 08 §D Q5 |
+| Q1 | Khách có xem được trạng thái hoàn tiền của đơn không (thêm `refundStatus` vào shop-v1 `OnlineOrder`) | Đã chốt: có; `refundStatus` null khi không có hoàn tiền (ADR-0138) | 08 §D Q4 |
+| Q2 | Hoàn chuyển khoản tại quầy có cần ghi mã giao dịch ngân hàng không | Đã chốt: văn bản tự do, không bắt buộc, lưu ở audit (ADR-0138) | 08 §D Q5 |
 | Q3 | Hạn trả hàng 7 ngày có áp cho mọi sản phẩm không | TBD (PO) | BR-BH-13 |
 
 ---

@@ -336,7 +336,7 @@ paths:
     post:
       tags: [Refunds]
       summary: "Xác nhận đã hoàn tiền tại quầy"
-      description: "UC69 · BR-TG-13. Actor: A06. Quyền: Lễ tân có ca `OPEN` của chính mình. Chuyển trạng thái: REQUESTED → SUCCEEDED (Hoàn tiền#2). Số hoàn tính vào ca; yêu cầu trả hàng tương ứng → `REFUNDED` (Yêu cầu trả hàng#5)."
+      description: "UC69 · BR-TG-13, BR-TG-14. Actor: A06, A05. Quyền: Lễ tân có ca `OPEN` của chính mình; hoặc BRANCH_MANAGER của chi nhánh với hoàn `GATEWAY` ở `FAILED`. Chuyển trạng thái: REQUESTED → SUCCEEDED (Hoàn tiền#2); FAILED → SUCCEEDED (Hoàn tiền#5). Số hoàn tính vào ca; yêu cầu trả hàng tương ứng → `REFUNDED` (Yêu cầu trả hàng#5). A05 xác nhận hoàn ngoài hệ thống cho hoàn `GATEWAY` ở `FAILED`: `note` bắt buộc (audit), không cần ca. Chuyển khoản tại quầy: `note` tùy chọn (mã giao dịch ngân hàng)."
       operationId: confirmRefund
       security:
         - bearerAuth: []
