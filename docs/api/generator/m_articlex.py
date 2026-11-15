@@ -55,6 +55,7 @@ m.schema("MyArticle", {
     "reviewNote": "string?|Lý do từ chối (BR-BV-06)", "submittedAt": "datetime?", "publishedAt": "datetime?",
     "updatedAt": "datetime",
 })
+m.schema("ApproveArticleRequest", {"categoryId": "int64?|SUPER_MANAGER chọn / đổi chuyên mục khi duyệt; vắng = giữ chuyên mục VET đề xuất; id không tồn tại = 404 (ADR-0139)"}, required=[])
 m.schema("ReviewNoteRequest", {"reviewNote": "string:300|Lý do từ chối, bắt buộc (BR-BV-06)"})
 m.schema("CommentStatus", None, enum=["ACTIVE", "HIDDEN", "DELETED"])
 m.schema("CreateCommentRequest", {"content": "string:1000|1–1 000 ký tự (BR-BV-08)"})
@@ -98,9 +99,10 @@ m.op("post", "/me/articles/{articleId}/withdraw", "withdrawMyArticle", "Rút bà
 
 # ---- UC81 mở rộng
 m.op("post", "/articles/{articleId}/approve", "approveArticle", "Duyệt bài của bác sĩ", "Article review", "UC81",
-     "BR-BV-06, BR-BV-02", "A04", A04, "PENDING_REVIEW → PUBLISHED (Bài viết#4)", resp="MyArticle",
-     path_params=["ArticleId"], errors=(400, 401, 403, 404, 409), err_desc={409: TRANS},
-     notes="Ghi `published_at` ở lần xuất bản đầu (BR-BV-02); thông báo VET; ghi audit. SUPER_MANAGER chọn và được đổi chuyên mục của bài khi duyệt (ADR-0139; VET chỉ đề xuất).")
+     "BR-BV-06, BR-BV-02", "A04", A04, "PENDING_REVIEW → PUBLISHED (Bài viết#4)", body="ApproveArticleRequest", resp="MyArticle",
+     path_params=["ArticleId"], errors=(400, 401, 403, 404, 409),
+     err_desc={404: "Bài không tồn tại · `categoryId` không tồn tại", 409: TRANS},
+     notes="Ghi `published_at` ở lần xuất bản đầu (BR-BV-02); thông báo VET; ghi audit. Body tùy chọn: `categoryId` để SUPER_MANAGER chọn / đổi chuyên mục khi duyệt (VET chỉ đề xuất); vắng = giữ chuyên mục hiện có (ADR-0139).")
 m.op("post", "/articles/{articleId}/reject", "rejectArticle", "Từ chối bài của bác sĩ", "Article review", "UC81",
      "BR-BV-06", "A04", A04, "PENDING_REVIEW → REJECTED (Bài viết#5)", body="ReviewNoteRequest", resp="MyArticle",
      path_params=["ArticleId"], errors=(400, 401, 403, 404, 409),

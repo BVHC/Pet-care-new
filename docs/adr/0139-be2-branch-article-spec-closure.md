@@ -11,15 +11,15 @@ Rà soát đặc tả F trước task 142–144 thấy: TBD-4 (mở lại chi nh
 
 ## 2. Quyết định
 
-**B1. Mở lại chi nhánh (TBD-4).** `SUSPENDED → ACTIVE` đặt `suspended_at` và `suspend_reason` về NULL; lịch sử tạm ngừng nằm ở `audit_logs`. Các CHECK của V48 cho phép: `ck_branches_suspended` chỉ buộc khi `status = 'SUSPENDED'`, `ck_branches_draft_not_suspended` chỉ cho `DRAFT`, không CHECK nào buộc `suspended_at` khi `ACTIVE`.
+**B1. Mở lại chi nhánh (TBD-4).** `SUSPENDED → ACTIVE` đặt `suspended_at`, `suspend_reason` và `expected_resume_on` về NULL; lịch sử tạm ngừng nằm ở `audit_logs`. Các CHECK của V48 cho phép: `ck_branches_suspended` chỉ buộc khi `status = 'SUSPENDED'`, `ck_branches_draft_not_suspended` chỉ cho `DRAFT`, không CHECK nào buộc `suspended_at` khi `ACTIVE`.
 
 **B2. BR-CN-09.** Còn lịch hẹn hoặc đặt chỗ lưu trú `BOOKED` thì tạm ngừng / đóng cửa **bắt buộc** hủy hàng loạt; không có đường giữ lại. `cancelBookings = false` mà còn lịch → 400 `BR-CN-09`.
 
-**B3. Hiệu lực theo luồng.** Bảng mới "Hiệu lực của trạng thái chi nhánh theo luồng" ở `08` §F.1, 20 dòng × `ACTIVE` / `SUSPENDED` / `CLOSED`. `SUSPENDED` = hoàn tất việc dở, không bắt đầu việc mới; `CLOSED` = chỉ đọc, đóng chỉ được khi tồn đọng BR-CN-07 / 08 bằng 0. Thao tác ghi bị chặn trả 400 `BR-CN-10`. Lưu ý đã ghi cạnh bảng: BR-CN-08 chặn tạm ngừng khi còn Visit mở, thú trong chuồng, ca `OPEN`, nên các ô `cho phép` ở `SUSPENDED` cho Visit / checkout / thu tiền chủ yếu để việc phát sinh sau đó (Order `PENDING`, ca mở mới) vẫn kết thúc được.
+**B3. Hiệu lực theo luồng.** Bảng mới "Hiệu lực của trạng thái chi nhánh theo luồng" ở `08` §F.1, 20 dòng × `ACTIVE` / `SUSPENDED` / `CLOSED`. `SUSPENDED` = hoàn tất việc dở, không bắt đầu việc mới; `CLOSED` = chỉ đọc, đóng chỉ được khi tồn đọng BR-CN-07 / 08 bằng 0. Thao tác ghi bị chặn trả 400 `BR-CN-10`. BR-CN-08 thắng: các luồng mà backlog phải rỗng trước khi tạm ngừng (Visit mở, thú trong chuồng, ca `OPEN`) ở cột `SUSPENDED` là "không xảy ra (BR-CN-08)"; Order `PENDING` được phép còn lại nên mở ca mới để thu chúng là "cho phép".
 
 **B4. FSM #21.** Thêm #7 `PUBLISHED → HIDDEN` và #8 `HIDDEN → PUBLISHED` (A04), #9 `DRAFT → PUBLISHED` (A04, bài của SUPER_MANAGER, không duyệt, BR-BV-07). Tổng 9 chuyển; trạng thái đúng giá trị V48.
 
-**B5. Bài viết và bình luận.** Q3: VET đề xuất chuyên mục, SUPER_MANAGER chọn và được đổi khi duyệt. Q4: không duyệt trước, bình luận hiện ngay, SUPER_MANAGER ẩn sau. Danh sách bình luận cũ nhất trước, 20 / trang. Tên tác giả rút gọn: mọi từ trừ từ cuối viết tắt chữ cái đầu kèm dấu chấm, từ cuối giữ nguyên ("Nguyễn Văn An" → "N. V. An"). Tác giả không sửa bình luận `HIDDEN` (409) nhưng xóa được (xóa mềm → `DELETED`, trạng thái cuối); ẩn bình luận `DELETED` → 409; đăng vào bài không `PUBLISHED` → 404 cho khách.
+**B5. Bài viết và bình luận.** Q3: VET đề xuất chuyên mục, SUPER_MANAGER chọn và được đổi khi duyệt: request duyệt (`approveArticle`) có `categoryId` tùy chọn, vắng = giữ chuyên mục VET đề xuất, id không tồn tại → 404. Q4: không duyệt trước, bình luận hiện ngay, SUPER_MANAGER ẩn sau. Danh sách bình luận cũ nhất trước, 20 / trang. Tên tác giả rút gọn: mọi từ trừ từ cuối viết tắt chữ cái đầu kèm dấu chấm, từ cuối giữ nguyên ("Nguyễn Văn An" → "N. V. An"). Tác giả không sửa bình luận `HIDDEN` (409) nhưng xóa được (xóa mềm → `DELETED`, trạng thái cuối); ẩn bình luận `DELETED` → 409; đăng vào bài không `PUBLISHED` → 404 cho khách.
 
 **B6. Sửa `02` tại chỗ** (đánh dấu "sửa ở T106"): BR-CN-01 (4 trạng thái theo #20), BR-BV-02 (trạng thái duyệt theo #21), BR-QT-03 và BR-QT-04 (chi nhánh `SUSPENDED` / `CLOSED` không nhận nhân viên, 400 `BR-CN-10`).
 
@@ -30,6 +30,5 @@ Rà soát đặc tả F trước task 142–144 thấy: TBD-4 (mở lại chi nh
 ## 3. Hệ quả
 
 - Task 142 không còn TBD chặn; vẫn phụ thuộc các method số đếm của BE-1 (placeholder nếu chưa có) và UC77 / hoàn tiền để đóng cửa.
-- Task 143, 144 không còn thiếu chuyển FSM hay câu hỏi mở; cách truyền chuyên mục khi duyệt (Q3) do task 143 chốt trong request duyệt; `05` vẫn chưa ghi giá trị mới của `branches.status`, `articles.status` (việc riêng).
-- Khi mở lại, `expected_resume_on` không được ADR này nhắc tới; cài đặt giữ nguyên hay xóa là quyết định của task 142 (đề xuất xóa cùng hai cột kia).
+- Task 143, 144 không còn thiếu chuyển FSM hay câu hỏi mở; `05` vẫn chưa ghi giá trị mới của `branches.status`, `articles.status` (việc riêng).
 - ADR-0117 là Proposed; TBD-4 đánh dấu "Đã chốt ở ADR-0139".

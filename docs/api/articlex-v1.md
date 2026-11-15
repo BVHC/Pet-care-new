@@ -44,7 +44,7 @@
 | Sửa bài viết của tôi | A07 | VET, chỉ bài của mình | `REJECTED` → DRAFT khi sửa (Bài viết#6) | — | Chỉ sửa được khi `DRAFT` hoặc `REJECTED`. |
 | Gửi duyệt | A07 | VET, chỉ bài của mình | DRAFT → PENDING_REVIEW (Bài viết#2) | — | — |
 | Rút bài đang chờ duyệt | A07 | VET, chỉ bài của mình | PENDING_REVIEW → DRAFT (Bài viết#3) | — | — |
-| Duyệt bài của bác sĩ | A04 | Chỉ SUPER_MANAGER | PENDING_REVIEW → PUBLISHED (Bài viết#4) | — | Ghi `published_at` ở lần xuất bản đầu (BR-BV-02); thông báo VET; ghi audit. SUPER_MANAGER chọn và được đổi chuyên mục của bài khi duyệt (ADR-0139; VET chỉ đề xuất). |
+| Duyệt bài của bác sĩ | A04 | Chỉ SUPER_MANAGER | PENDING_REVIEW → PUBLISHED (Bài viết#4) | — | Ghi `published_at` ở lần xuất bản đầu (BR-BV-02); thông báo VET; ghi audit. Body tùy chọn: `categoryId` để SUPER_MANAGER chọn / đổi chuyên mục khi duyệt (VET chỉ đề xuất); vắng = giữ chuyên mục hiện có (ADR-0139). |
 | Từ chối bài của bác sĩ | A04 | Chỉ SUPER_MANAGER | PENDING_REVIEW → REJECTED (Bài viết#5) | — | — |
 | Bình luận của một bài viết | A01, A02 | Công khai | — | — | Chỉ bình luận `ACTIVE`, cũ nhất trước, 20 bình luận / trang (ADR-0139). `authorName` rút gọn: mọi từ trừ từ cuối viết tắt chữ cái đầu kèm dấu chấm, từ cuối giữ nguyên ("Nguyễn Văn An" → "N. V. An"). |
 | Đăng bình luận | A02 | CUSTOMER | — | — | — |
@@ -67,7 +67,7 @@
 - **`POST /me/articles/{articleId}/withdraw`** — Rút bài đang chờ duyệt. Response `200` `MyArticle`. Lỗi: `400` · `401` · `403` · `404` · `409` `INVALID_STATE_TRANSITION` trạng thái bài không cho phép (03 #21).
 ### Article review
 
-- **`POST /articles/{articleId}/approve`** — Duyệt bài của bác sĩ. Response `200` `MyArticle`. Lỗi: `400` · `401` · `403` · `404` · `409` `INVALID_STATE_TRANSITION` trạng thái bài không cho phép (03 #21).
+- **`POST /articles/{articleId}/approve`** — Duyệt bài của bác sĩ. Request `ApproveArticleRequest`. Response `200` `MyArticle`. Lỗi: `400` · `401` · `403` · `404` Bài không tồn tại · `categoryId` không tồn tại · `409` `INVALID_STATE_TRANSITION` trạng thái bài không cho phép (03 #21).
 - **`POST /articles/{articleId}/reject`** — Từ chối bài của bác sĩ. Request `ReviewNoteRequest`. Response `200` `MyArticle`. Lỗi: `400` `BR-BV-06` thiếu lý do · `401` · `403` · `404` · `409` `INVALID_STATE_TRANSITION` trạng thái bài không cho phép (03 #21).
 ### Comments
 
@@ -87,6 +87,7 @@ Trường có `?` là không bắt buộc / có thể null. Kiểu `email`, `dat
 - **`UpdateMyArticleRequest`** — {`title?`: string, `categoryId?`: int64, `summary?`: string, `content?`: string, `coverImageUrl?`: string}
 - **`MyArticleSummary`** — {`articleId`: int64, `title`: string, `status`: ArticleReviewStatus, `submittedAt?`: date-time, `publishedAt?`: date-time, `updatedAt`: date-time}
 - **`MyArticle`** — {`articleId`: int64, `title`: string, `slug?`: string, `categoryId?`: int64, `summary?`: string, `content`: string, `coverImageUrl?`: string, `status`: ArticleReviewStatus, `reviewNote?`: string, `submittedAt?`: date-time, `publishedAt?`: date-time, `updatedAt`: date-time}
+- **`ApproveArticleRequest`** — {`categoryId?`: int64}
 - **`ReviewNoteRequest`** — {`reviewNote`: string}
 - **`CommentStatus`** — enum: `ACTIVE`, `HIDDEN`, `DELETED`.
 - **`CreateCommentRequest`** — {`content`: string}
