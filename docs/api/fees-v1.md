@@ -1,6 +1,6 @@
 # Fee & Material-norm Config API v1 (tầng 3) — Pet Care v16
 
-> **Module:** SP (mở rộng UC30) · **Owner:** BE-2. Cấu hình phí vận chuyển (toàn chuỗi) và định mức vật tư tiêu hao của dịch vụ. **Đặc tả bổ sung GĐ2, đã duyệt ở T54 (Hiến, 5/11/2026); chưa có cài đặt.**
+> **Module:** SP (mở rộng UC30) · **Owner:** BE-2. Cấu hình phí vận chuyển (toàn chuỗi) và định mức vật tư tiêu hao của dịch vụ. **Đặc tả bổ sung GĐ2, đã duyệt ở T54 (Hiến, 5/11/2026); **Đã cài (task 115, ADR-0140): #1 `getShippingFeeConfig`, #2 `saveShippingFeeConfig` và `ShippingFeeApi.quote` (ST09); chưa cài: #3, #4 (định mức vật tư).**
 > **Nguồn chân lý:** 01 UC32; 08-tang3-be2-spec.md §A (BR-SP-08, 10, 11); 05 bổ sung shipping_fee_configs, service_material_norms.
 > **Contract máy đọc:** [`./openapi/fees-v1.yaml`](./openapi/fees-v1.yaml) — sinh cùng lúc với file này nên luôn khớp.
 
