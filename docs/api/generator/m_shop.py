@@ -113,15 +113,17 @@ m.op("post", "/me/online-orders", "placeOnlineOrder", "Đặt hàng online", "My
 # ---- UC64 đơn của tôi
 m.op("get", "/me/online-orders", "listMyOnlineOrders", "Danh sách đơn online của tôi", "My online orders", "UC64",
      "BR-BH-10", "A02", CUS, resp="OnlineOrderSummary", page=True, query=[STS, "page", "size"], errors=(400, 401, 403),
-     notes="Mới nhất trước (`createdAt` giảm dần, trùng thì `orderId` giảm dần).")
+     notes="Mới nhất trước (`createdAt` giảm dần, trùng thì `onlineOrderId` giảm dần).")
 m.op("get", "/me/online-orders/{onlineOrderId}", "getMyOnlineOrder", "Chi tiết đơn online của tôi", "My online orders", "UC64",
      "BR-BH-10", "A02", CUS, resp="OnlineOrder", path_params=["OnlineOrderId"], errors=(400, 401, 403, 404),
      err_desc={404: "Không tìm thấy đơn — cả khi đơn thuộc người khác (ADR-0006)"})
 m.op("post", "/me/online-orders/{onlineOrderId}/cancel", "cancelMyOnlineOrder", "Hủy đơn online", "My online orders", "UC64",
      "BR-BH-09, 10, BR-TG-12", "A02", CUS,
-     "PENDING_PAYMENT / PAID / PROCESSING → CANCELLED (Đơn hàng online#3, #13)", body="ReasonRequest",
+     "PENDING_PAYMENT → CANCELLED (Đơn hàng online#3)", body="ReasonRequest",
      resp="OnlineOrder", path_params=["OnlineOrderId"], errors=(400, 401, 403, 404, 409),
-     err_desc={409: TRANS}, notes="Đơn đã thanh toán: hoàn hàng về lô gốc và sinh yêu cầu hoàn tiền (returns-v1, ST21).")
+     err_desc={400: "Thiếu lý do hoặc quá 300 ký tự",
+               409: TRANS + " · đơn đã thanh toán (`PAID` / `PROCESSING`, Đơn hàng online#13) chưa hủy được, chờ task hoàn tiền"},
+     notes="Chỉ hủy được khi chưa thanh toán: nhả giữ hàng, hủy giao dịch `PENDING`, Order → `CANCELLED`. Đơn đã thanh toán (#13: hoàn hàng về lô gốc và sinh yêu cầu hoàn tiền, returns-v1, ST21) chưa làm: trả 409 tới task 138.")
 m.op("post", "/me/online-orders/{onlineOrderId}/confirm-received", "confirmOnlineOrderReceived", "Xác nhận đã nhận hàng",
      "My online orders", "UC64", "BR-BH-10", "A02", CUS, "DELIVERED → COMPLETED (Đơn hàng online#11)",
      resp="OnlineOrder", path_params=["OnlineOrderId"], errors=(400, 401, 403, 404, 409), err_desc={409: TRANS})

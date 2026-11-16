@@ -107,4 +107,66 @@ class OnlineSalesOrderServiceTest {
                 .isInstanceOf(com.petcare.module.sales.exception.OrderAmountOverflowException.class);
         verifyNoInteractions(orders);
     }
+
+    // ================================================================ hủy (task 125, Order#13)
+
+    private SalesOrder pendingOnline(OrderSource source, OrderStatus status) {
+        SalesOrder order = SalesOrder.openOnline("DH-X", 4L, 14L, 21L, NOW);
+        ReflectionTestUtils.setField(order, "source", source);
+        ReflectionTestUtils.setField(order, "status", status);
+        when(orders.findByIdForUpdate(901L)).thenReturn(java.util.Optional.of(order));
+        return order;
+    }
+
+    @Test
+    void cancelLocksTheOrderThenCancelsItWithTheCustomerTypeActorReasonAndTheClock() {
+        SalesOrder order = pendingOnline(OrderSource.ONLINE, OrderStatus.PENDING);
+
+        service.cancel(901L, OnlineSalesOrderApi.OnlineCancelType.CUSTOMER, 21L, "Đổi ý");
+
+        org.mockito.InOrder inOrder = org.mockito.Mockito.inOrder(orders);
+        inOrder.verify(orders).findByIdForUpdate(901L);
+        inOrder.verify(orders).flush();
+        assertThat(order.getStatus()).isEqualTo(OrderStatus.CANCELLED);
+        assertThat(order.getCancelType()).isEqualTo(com.petcare.module.sales.entity.OrderCancelType.ONLINE_CUSTOMER);
+        assertThat(order.getCancelledBy()).isEqualTo(21L);
+        assertThat(order.getCancelReason()).isEqualTo("Đổi ý");
+        assertThat(order.getCancelledAt()).isEqualTo(NOW);
+    }
+
+    @Test
+    void anExpiredCancelByTheSystemKeepsNoActorAndUsesTheExpiredType() {
+        SalesOrder order = pendingOnline(OrderSource.ONLINE, OrderStatus.PENDING);
+
+        service.cancel(901L, OnlineSalesOrderApi.OnlineCancelType.EXPIRED, null, "Quá hạn thanh toán");
+
+        assertThat(order.getCancelType()).isEqualTo(com.petcare.module.sales.entity.OrderCancelType.ONLINE_EXPIRED);
+        assertThat(order.getCancelledBy()).isNull();
+    }
+
+    @Test
+    void cancelOfANonPendingOrderIs409AWrongSourceOrMissingOrderIsACallerBugAndNothingIsFlushed() {
+        pendingOnline(OrderSource.ONLINE, OrderStatus.PAID);
+        assertThatThrownBy(() -> service.cancel(901L, OnlineSalesOrderApi.OnlineCancelType.CUSTOMER, 21L, "x"))
+                .isInstanceOf(com.petcare.platform.exception.InvalidStateTransitionException.class);
+
+        pendingOnline(OrderSource.RETAIL, OrderStatus.PENDING);
+        assertThatThrownBy(() -> service.cancel(901L, OnlineSalesOrderApi.OnlineCancelType.CUSTOMER, 21L, "x"))
+                .isInstanceOf(IllegalStateException.class);
+
+        when(orders.findByIdForUpdate(902L)).thenReturn(java.util.Optional.empty());
+        assertThatThrownBy(() -> service.cancel(902L, OnlineSalesOrderApi.OnlineCancelType.CUSTOMER, 21L, "x"))
+                .isInstanceOf(IllegalStateException.class);
+        org.mockito.Mockito.verify(orders, org.mockito.Mockito.never()).flush();
+    }
+
+    @Test
+    void cancelAndFindLinesAreMandatoryOrReadOnlyAsDocumented() throws NoSuchMethodException {
+        Method cancel = OnlineSalesOrderService.class.getMethod("cancel", Long.class,
+                OnlineSalesOrderApi.OnlineCancelType.class, Long.class, String.class);
+        Method lines = OnlineSalesOrderService.class.getMethod("findLines", java.util.Collection.class);
+
+        assertThat(cancel.getAnnotation(Transactional.class).propagation()).isEqualTo(Propagation.MANDATORY);
+        assertThat(lines.getAnnotation(Transactional.class).readOnly()).isTrue();
+    }
 }

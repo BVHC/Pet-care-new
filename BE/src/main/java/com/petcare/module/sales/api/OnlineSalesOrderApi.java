@@ -1,6 +1,8 @@
 package com.petcare.module.sales.api;
 
+import java.util.Collection;
 import java.util.List;
+import java.util.Map;
 
 /**
  * Owner: sales (BH) · BE-2. Caller: shop (task 117) · BE-2. Tạo Order nguồn ONLINE (Order#11, BR-BH-09). Mã Order do
@@ -24,4 +26,22 @@ public interface OnlineSalesOrderApi {
      */
     Long createPendingOrder(String code, Long branchId, Long customerId, Long accountId,
                             List<OnlineOrderLineInput> lines);
+
+    /** Ai hủy Order ONLINE: khách ({@code ONLINE_CUSTOMER}, Đơn hàng online#3) hay hệ thống quá hạn ({@code ONLINE_EXPIRED}, #4). */
+    enum OnlineCancelType { CUSTOMER, EXPIRED }
+
+    /**
+     * Order#13 (Đơn hàng online#3, #4): {@code PENDING} → {@code CANCELLED}, {@code cancel_type} theo {@code type},
+     * {@code cancelled_by = actorId} ({@code null} = hệ thống), {@code cancel_reason = reason}. Khóa dòng Order trước khi
+     * đọc (ADR-0145: sau khóa {@code online_orders}). Order không phải nguồn ONLINE hoặc không tồn tại là lỗi của bên gọi
+     * ({@code IllegalStateException}); Order không còn {@code PENDING} là 409 {@code INVALID_STATE_TRANSITION}.
+     * {@code MANDATORY}. Hủy sau khi {@code PAID} không đổi Order (08 §B #14b), nên không có ở đây.
+     */
+    void cancel(Long orderId, OnlineCancelType type, Long actorId, String reason);
+
+    /**
+     * Dòng hàng đã chốt của các Order ONLINE, theo lô: {@code orderId → dòng} (giá là bản chụp lúc đặt). Order không có
+     * dòng vắng mặt trong map; tập rỗng → map rỗng, không chạy SQL. Chỉ đọc, không khóa.
+     */
+    Map<Long, List<OnlineOrderLineInput>> findLines(Collection<Long> orderIds);
 }

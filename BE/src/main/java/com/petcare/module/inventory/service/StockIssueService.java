@@ -3,6 +3,7 @@ package com.petcare.module.inventory.service;
 import java.time.Clock;
 import java.time.Instant;
 import java.time.LocalDate;
+import java.time.temporal.ChronoUnit;
 import java.util.ArrayList;
 import java.util.Collection;
 import java.util.Comparator;
@@ -189,6 +190,14 @@ public class StockIssueService implements StockApi {
         requested.forEach((productId, quantity) -> reservations.insertHeld(orderRef.onlineOrderId(), branchId,
                 productId, quantity, now));
         return List.of();
+    }
+
+    @Override
+    @Transactional(propagation = Propagation.MANDATORY)
+    public void release(OrderRef orderRef) {
+        require(orderRef, "orderRef");
+        require(orderRef.onlineOrderId(), "onlineOrderId");
+        reservations.releaseHeld(orderRef.onlineOrderId(), Instant.now(clock).truncatedTo(ChronoUnit.MICROS));
     }
 
     @Override

@@ -74,10 +74,12 @@ public interface StockApi {
      */
     List<Shortage> reserve(Long branchId, OrderRef orderRef, List<SaleLine> lines);
 
-    /** Đơn hàng online#3, #4 (hủy / quá hạn thanh toán): nhả phần giữ, {@code HELD} → {@code RELEASED}. Bản thật trước 17/11 (T63). */
-    default void release(OrderRef orderRef) {
-        throw placeholder("release", "T63");
-    }
+    /**
+     * Đơn hàng online#3, #4 (hủy / quá hạn thanh toán): nhả phần giữ của {@code orderRef.onlineOrderId()}, {@code HELD} →
+     * {@code RELEASED} (một câu UPDATE, không khóa lô: nhả chỉ làm tăng tồn khả dụng). Idempotent: không còn dòng
+     * {@code HELD} thì không đổi gì. {@code MANDATORY}; bên gọi đã khóa {@code online_orders} (ADR-0145).
+     */
+    void release(OrderRef orderRef);
 
     /**
      * Đơn hàng online#2 (BR-BH-09): xuất FEFO từ phần giữ trong cùng transaction với {@code PAID}, movement {@code SALE}

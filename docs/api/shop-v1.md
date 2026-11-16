@@ -50,9 +50,9 @@
 | Chi nhánh xử lý được cho giỏ hiện tại | A02 | CUSTOMER, chỉ dữ liệu của mình | — | — | Chỉ chi nhánh `ACTIVE` còn đủ hàng cho mọi dòng của giỏ (đã trừ phần giữ, BR-BH-09). |
 | Báo giá đơn online (ST09) | A02 | CUSTOMER, chỉ dữ liệu của mình | — | — | Không giữ hàng, không ghi gì; phí chốt thật lúc đặt. |
 | Đặt hàng online | A02 | CUSTOMER, chỉ dữ liệu của mình | — → PENDING_PAYMENT (Đơn hàng online#1); Order#11 | — | Giữ hàng, chốt phí, tạo Order `ONLINE`, dọn giỏ trong một transaction. Bước tiếp: `POST /me/online-orders/{onlineOrderId}/pay` (payment-v1). |
-| Danh sách đơn online của tôi | A02 | CUSTOMER, chỉ dữ liệu của mình | — | — | Mới nhất trước (`createdAt` giảm dần, trùng thì `orderId` giảm dần). |
+| Danh sách đơn online của tôi | A02 | CUSTOMER, chỉ dữ liệu của mình | — | — | Mới nhất trước (`createdAt` giảm dần, trùng thì `onlineOrderId` giảm dần). |
 | Chi tiết đơn online của tôi | A02 | CUSTOMER, chỉ dữ liệu của mình | — | — | — |
-| Hủy đơn online | A02 | CUSTOMER, chỉ dữ liệu của mình | PENDING_PAYMENT / PAID / PROCESSING → CANCELLED (Đơn hàng online#3, #13) | — | Đơn đã thanh toán: hoàn hàng về lô gốc và sinh yêu cầu hoàn tiền (returns-v1, ST21). |
+| Hủy đơn online | A02 | CUSTOMER, chỉ dữ liệu của mình | PENDING_PAYMENT → CANCELLED (Đơn hàng online#3) | — | Chỉ hủy được khi chưa thanh toán: nhả giữ hàng, hủy giao dịch `PENDING`, Order → `CANCELLED`. Đơn đã thanh toán (#13: hoàn hàng về lô gốc và sinh yêu cầu hoàn tiền, returns-v1, ST21) chưa làm: trả 409 tới task 138. |
 | Xác nhận đã nhận hàng | A02 | CUSTOMER, chỉ dữ liệu của mình | DELIVERED → COMPLETED (Đơn hàng online#11) | — | — |
 | Danh sách đơn online của chi nhánh | A05, A06 | A06 của chi nhánh xử lý; A05 chỉ xem | — | — | Tự lấy chi nhánh của người gọi. `status` vắng = `PAID` + `PROCESSING` + `DELIVERY_FAILED` (việc cần làm). Cũ nhất trước. |
 | Chi tiết đơn online (nhân viên) | A05, A06 | A06 của chi nhánh xử lý; A05 chỉ xem | — | — | — |
@@ -82,7 +82,7 @@
 - **`POST /me/online-orders`** — Đặt hàng online. Request `PlaceOnlineOrderRequest`. Response `201` `OnlineOrder`. Lỗi: `400` `BR-BH-08` giỏ rỗng · chi nhánh không `ACTIVE` / thiếu hàng · `401` · `403` · `404` Không tìm thấy chi nhánh / địa chỉ (hoặc địa chỉ không phải của khách) · `409` `CONCURRENCY_CONFLICT` hàng vừa bị người khác giữ.
 - **`GET /me/online-orders`** — Danh sách đơn online của tôi. Query: `status?`, `page?`, `size?`. Response `200` trang `OnlineOrderSummary`. Lỗi: `400` · `401` · `403`.
 - **`GET /me/online-orders/{onlineOrderId}`** — Chi tiết đơn online của tôi. Response `200` `OnlineOrder`. Lỗi: `400` · `401` · `403` · `404` Không tìm thấy đơn — cả khi đơn thuộc người khác (ADR-0006).
-- **`POST /me/online-orders/{onlineOrderId}/cancel`** — Hủy đơn online. Request `ReasonRequest`. Response `200` `OnlineOrder`. Lỗi: `400` · `401` · `403` · `404` · `409` `INVALID_STATE_TRANSITION` trạng thái đơn không cho phép (03 #14).
+- **`POST /me/online-orders/{onlineOrderId}/cancel`** — Hủy đơn online. Request `ReasonRequest`. Response `200` `OnlineOrder`. Lỗi: `400` Thiếu lý do hoặc quá 300 ký tự · `401` · `403` · `404` · `409` `INVALID_STATE_TRANSITION` trạng thái đơn không cho phép (03 #14) · đơn đã thanh toán (`PAID` / `PROCESSING`, Đơn hàng online#13) chưa hủy được, chờ task hoàn tiền.
 - **`POST /me/online-orders/{onlineOrderId}/confirm-received`** — Xác nhận đã nhận hàng. Response `200` `OnlineOrder`. Lỗi: `400` · `401` · `403` · `404` · `409` `INVALID_STATE_TRANSITION` trạng thái đơn không cho phép (03 #14).
 ### Online order fulfillment
 
