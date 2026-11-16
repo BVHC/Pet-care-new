@@ -17,6 +17,7 @@ import org.springframework.transaction.annotation.Transactional;
 import com.petcare.module.inventory.api.StockApi;
 import com.petcare.module.inventory.api.StockApi.OrderSale;
 import com.petcare.module.inventory.api.StockApi.Shortage;
+import com.petcare.module.sales.api.OrderSource;
 import com.petcare.module.sales.dto.CreatePaymentRequest;
 import com.petcare.module.sales.dto.PaymentResponse;
 import com.petcare.module.sales.entity.OrderLine;
@@ -79,6 +80,10 @@ public class PaymentService {
         List<SalesOrder> locked = orders.findAllByIdForUpdate(ids);
         locked.stream().filter(order -> order.getStatus() != OrderStatus.PENDING).findFirst().ifPresent(order -> {
             throw new InvalidStateTransitionException("đơn hàng (chỉ thu được Order đang chờ thu tiền)",
+                    order.getStatus().name(), OrderStatus.PAID.name());
+        });
+        locked.stream().filter(order -> order.getSource() == OrderSource.ONLINE).findFirst().ifPresent(order -> {
+            throw new InvalidStateTransitionException("đơn hàng online (thanh toán qua cổng, quầy không thu)",
                     order.getStatus().name(), OrderStatus.PAID.name());
         });
         Set<Long> customerIds = locked.stream().map(SalesOrder::getCustomerId).collect(Collectors.toSet());

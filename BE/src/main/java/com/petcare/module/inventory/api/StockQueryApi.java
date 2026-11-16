@@ -58,9 +58,7 @@ public interface StockQueryApi {
      * {@code availableQuantity(ies)} sang đây. Sản phẩm không có lô trả 0 (vẫn có key); tập rỗng → map rỗng. Bản thật
      * trước 17/11 (T63).
      */
-    default Map<Long, Integer> findAvailableQuantity(Long branchId, Collection<Long> productIds) {
-        throw placeholder("findAvailableQuantity", "T63");
-    }
+    Map<Long, Integer> findAvailableQuantity(Long branchId, Collection<Long> productIds);
 
     /**
      * I-5 (07 §11, UC92): trong các sản phẩm đã cho, tập sản phẩm còn tồn khả dụng &gt; 0 ở ít nhất một chi nhánh. Tồn khả

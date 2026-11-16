@@ -99,13 +99,14 @@ m.op("get", "/me/online-orders/fulfillment-branches", "listFulfillmentBranches",
 m.op("get", "/me/online-orders/quote", "quoteOnlineOrder", "Báo giá đơn online (ST09)", "Checkout", "UC62",
      "BR-BH-08, BR-SP-08, ST09", "A02", CUS, resp="OnlineOrderQuote",
      query=["branchId!=int64", "addressId!=int64"], errors=(400, 401, 403, 404),
-     err_desc={400: "`BR-BH-08` giỏ rỗng · chi nhánh không đủ hàng · địa chỉ không phải của khách",
-               404: "Không tìm thấy địa chỉ / chi nhánh"},
+     err_desc={400: "`BR-BH-08` giỏ rỗng · chi nhánh không đủ hàng",
+               404: "Không tìm thấy địa chỉ (hoặc địa chỉ không phải của khách) / chi nhánh"},
      notes="Không giữ hàng, không ghi gì; phí chốt thật lúc đặt.")
 m.op("post", "/me/online-orders", "placeOnlineOrder", "Đặt hàng online", "My online orders", "UC62",
      "BR-BH-08, 09, BR-SP-08, 11", "A02", CUS, "— → PENDING_PAYMENT (Đơn hàng online#1); Order#11",
      body="PlaceOnlineOrderRequest", resp="OnlineOrder", status=201, errors=(400, 401, 403, 404, 409),
-     err_desc={400: "`BR-BH-08` giỏ rỗng · chi nhánh không `ACTIVE` / thiếu hàng · địa chỉ không phải của khách",
+     err_desc={400: "`BR-BH-08` giỏ rỗng · chi nhánh không `ACTIVE` / thiếu hàng",
+               404: "Không tìm thấy chi nhánh / địa chỉ (hoặc địa chỉ không phải của khách)",
                409: "`CONCURRENCY_CONFLICT` hàng vừa bị người khác giữ"},
      notes="Giữ hàng, chốt phí, tạo Order `ONLINE`, dọn giỏ trong một transaction. Bước tiếp: `POST /me/online-orders/{onlineOrderId}/pay` (payment-v1).")
 

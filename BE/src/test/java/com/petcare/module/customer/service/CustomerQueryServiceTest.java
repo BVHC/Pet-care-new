@@ -42,8 +42,9 @@ class CustomerQueryServiceTest {
     private final BoardingQueryApi boardings = mock(BoardingQueryApi.class);
     private final OrderQueryApi orders = mock(OrderQueryApi.class);
     private final FeedbackQueryApi feedbacks = mock(FeedbackQueryApi.class);
+    private final AddressRepository addresses = mock(AddressRepository.class);
     private final CustomerQueryService service = new CustomerQueryService(customers,
-            new CustomerDataProbe(pets, appointments, boardings, orders, feedbacks));
+            new CustomerDataProbe(pets, appointments, boardings, orders, feedbacks), addresses);
 
     private static Customer online(long accountId, String phone) {
         return Customer.createOnline(accountId, "Khách online", phone, null);
@@ -84,4 +85,20 @@ class CustomerQueryServiceTest {
         assertThat(service.checkOnlineProfileLinkable(10L)).isEqualTo(OnlineProfileLinkability.HAS_DATA);
     }
 
+
+    @Test
+    void findAddressAsksTheOwnerFilteredQueryAndMapsTheRow() {
+        com.petcare.module.customer.entity.Address row = com.petcare.module.customer.entity.Address.create(7L, "An",
+                "0901234567", "12 Lê Lợi", null, "TP.HCM", true);
+        org.springframework.test.util.ReflectionTestUtils.setField(row, "id", 3L);
+        when(addresses.findOwned(3L, 7L)).thenReturn(Optional.of(row));
+        when(addresses.findOwned(3L, 8L)).thenReturn(Optional.empty());
+
+        assertThat(service.findAddress(7L, 3L)).get().satisfies(a -> {
+            assertThat(a.addressId()).isEqualTo(3L);
+            assertThat(a.ward()).isNull();
+            assertThat(a.province()).isEqualTo("TP.HCM");
+        });
+        assertThat(service.findAddress(8L, 3L)).isEmpty();
+    }
 }

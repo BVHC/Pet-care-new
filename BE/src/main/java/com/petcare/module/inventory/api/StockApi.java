@@ -1,7 +1,9 @@
 package com.petcare.module.inventory.api;
 
 import java.time.LocalDate;
+import java.util.Collection;
 import java.util.List;
+import java.util.Map;
 
 /**
  * Owner: inventory (KO) · BE-2. Caller: sales (Order#8), visit (ghi / xóa mũi tiêm).
@@ -56,14 +58,21 @@ public interface StockApi {
     record TransferredLot(Long productId, Long sourceLotId, int quantity, String lotNumber, LocalDate expiryDate) {}
 
     /**
-     * BR-BH-08, BR-BH-09 (08 §B): giữ hàng tại chi nhánh cho đơn online ({@code stock_reservations} {@code HELD}), kiểm
-     * theo tồn khả dụng đã trừ phần đang giữ ({@link StockQueryApi#findAvailableQuantity}). Thiếu bất kỳ dòng nào thì
-     * không giữ gì và trả {@link Shortage} từng dòng (cùng kiểu {@link #issueForPayment}); rỗng = đã giữ. Bản thật
-     * trước 17/11 (T63).
+     * BR-BH-08 (08 §B, P1 ADR-0144): khóa lô <b>một câu, id tăng dần</b> ({@code FOR NO KEY UPDATE}, cùng
+     * {@link #issueForPayment}) rồi trả tồn khả dụng = Σ lô chưa hết hạn − Σ {@code HELD}, tối thiểu 0, đọc sau khi giữ
+     * khóa. Có key cho mọi {@code productIds} (không lô → 0); tập rỗng → map rỗng, không chạm DB. Khóa giữ tới hết
+     * transaction nên placement kiểm tồn rồi {@link #reserve} không bị bán quầy / đơn khác chen vào.
      */
-    default List<Shortage> reserve(Long branchId, OrderRef orderRef, List<SaleLine> lines) {
-        throw placeholder("reserve", "T63");
-    }
+    Map<Long, Integer> lockAvailableQuantity(Long branchId, Collection<Long> productIds);
+
+    /**
+     * BR-BH-08, BR-BH-09 (08 §B): giữ hàng tại chi nhánh cho đơn online ({@code stock_reservations} {@code HELD}, một dòng
+     * mỗi sản phẩm; cộng dồn dòng trùng sản phẩm). Khóa lại lô và kiểm lại dưới khóa theo
+     * {@link #lockAvailableQuantity}. Thiếu bất kỳ dòng nào thì không giữ gì và trả {@link Shortage} từng dòng thiếu (cùng
+     * kiểu {@link #issueForPayment}); rỗng = đã giữ. Số lượng &le; 0 hoặc thiếu {@code onlineOrderId} là lỗi lập trình
+     * ({@code IllegalArgumentException}). {@code MANDATORY}: {@code online_orders} phải đã có dòng (FK).
+     */
+    List<Shortage> reserve(Long branchId, OrderRef orderRef, List<SaleLine> lines);
 
     /** Đơn hàng online#3, #4 (hủy / quá hạn thanh toán): nhả phần giữ, {@code HELD} → {@code RELEASED}. Bản thật trước 17/11 (T63). */
     default void release(OrderRef orderRef) {

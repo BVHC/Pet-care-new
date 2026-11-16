@@ -10,6 +10,7 @@ import org.springframework.transaction.annotation.Transactional;
 import com.petcare.module.customer.api.CustomerQueryApi;
 import com.petcare.module.customer.entity.Customer;
 import com.petcare.module.customer.entity.CustomerChannel;
+import com.petcare.module.customer.repository.AddressRepository;
 import com.petcare.module.customer.repository.CustomerRepository;
 
 /**
@@ -21,10 +22,20 @@ public class CustomerQueryService implements CustomerQueryApi {
 
     private final CustomerRepository customers;
     private final CustomerDataProbe data;
+    private final AddressRepository addresses;
 
-    public CustomerQueryService(CustomerRepository customers, CustomerDataProbe data) {
+    public CustomerQueryService(CustomerRepository customers, CustomerDataProbe data, AddressRepository addresses) {
         this.customers = customers;
         this.data = data;
+        this.addresses = addresses;
+    }
+
+    /** BR-BH-08: lọc theo chủ ngay trong SQL; địa chỉ của khách khác cũng là "không có". */
+    @Override
+    @Transactional(readOnly = true)
+    public Optional<AddressInfo> findAddress(Long customerId, Long addressId) {
+        return addresses.findOwned(addressId, customerId).map(a -> new AddressInfo(a.getId(), a.getReceiverName(),
+                a.getReceiverPhone(), a.getAddressLine(), a.getWard(), a.getProvince()));
     }
 
     @Override

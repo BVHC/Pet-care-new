@@ -12,6 +12,7 @@ import org.springframework.transaction.annotation.Transactional;
 
 import com.petcare.module.customer.api.CustomerQueryApi;
 import com.petcare.module.inventory.api.StockQueryApi;
+import com.petcare.module.sales.api.OrderSource;
 import com.petcare.module.sales.dto.OrderSummaryResponse;
 import com.petcare.module.sales.dto.PaymentPreviewRequest;
 import com.petcare.module.sales.dto.PaymentPreviewResponse;
@@ -64,6 +65,9 @@ public class PaymentQueryService {
         if (found.stream().anyMatch(order -> order.getStatus() != OrderStatus.PENDING)) {
             throw new BusinessRuleViolationException("BR-TG-01", "Chỉ thu được Order đang chờ thu tiền");
         }
+        if (found.stream().anyMatch(order -> order.getSource() == OrderSource.ONLINE)) {
+            throw new BusinessRuleViolationException("BR-TG-01", "Order online thanh toán qua cổng, quầy không thu");
+        }
         Long branchId = found.get(0).getBranchId();
         Set<Long> productIds = PaymentLines.stockLines(found).stream().flatMap(sale -> sale.lines().stream())
                 .map(line -> line.productId()).collect(Collectors.toSet());
@@ -82,7 +86,7 @@ public class PaymentQueryService {
         customers.findContact(customerId).orElseThrow(() -> new ResourceNotFoundException("khách hàng", customerId));
         List<SalesOrder> pending = orders.findByCustomerIdAndBranchIdAndStatusOrderByPendingAtAscIdAsc(customerId,
                 branchId, OrderStatus.PENDING);
-        return assembler.toSummaries(pending);
+        return assembler.toSummaries(pending.stream().filter(order -> order.getSource() != OrderSource.ONLINE).toList());
     }
 
     /** #15: phiếu thu cùng các Order của nó; 404 → 403 chi nhánh. */

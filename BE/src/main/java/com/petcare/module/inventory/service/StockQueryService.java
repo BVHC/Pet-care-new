@@ -15,7 +15,7 @@ import com.petcare.module.inventory.repository.InventoryQueryRepository;
 
 /**
  * {@link StockQueryApi} thật (thay {@code StockQueryApiPlaceholder}, docs/adr/0042). Chỉ đọc, không khóa: bên quyết định
- * trừ kho dùng {@code StockApi} để khóa và kiểm lại. Tồn khả dụng = tổng lô chưa hết hạn (BR-KO-01);
+ * trừ kho dùng {@code StockApi} để khóa và kiểm lại. Tồn khả dụng = tổng lô chưa hết hạn (BR-KO-01) trừ phần HELD của đơn online (BR-BH-09);
  * {@code hasStockAnywhere} tính cả lô đã hết hạn còn số dư (BR-SP-05).
  */
 @Service
@@ -36,6 +36,11 @@ public class StockQueryService implements StockQueryApi {
     }
     @Override
     public Map<Long, Integer> availableQuantities(Long branchId, Collection<Long> productIds) {
+        return inventory.availableQuantities(branchId, productIds, LocalDate.now(clock));
+    }
+
+    @Override
+    public Map<Long, Integer> findAvailableQuantity(Long branchId, Collection<Long> productIds) {
         return inventory.availableQuantities(branchId, productIds, LocalDate.now(clock));
     }
 

@@ -66,7 +66,7 @@ public class OrderListRepository {
         StringBuilder sql = new StringBuilder("FROM orders o WHERE o.branch_id = :branchId");
         params.addValue("branchId", filter.branchId());
         if (filter.pendingBefore() != null) {
-            sql.append(" AND o.status = 'PENDING' AND o.pending_at < :pendingBefore");
+            sql.append(" AND o.status = 'PENDING' AND o.source <> 'ONLINE' AND o.pending_at < :pendingBefore");
             params.addValue("pendingBefore", Timestamp.from(filter.pendingBefore()));
         }
         if (filter.status() != null) {

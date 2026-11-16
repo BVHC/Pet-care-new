@@ -124,7 +124,7 @@ public class CartService {
         }
     }
 
-    private static boolean eligible(ProductInfo info) {
+    static boolean eligible(ProductInfo info) {
         return info != null && info.active() && info.type() == ProductType.GOODS && !info.prescription();
     }
 

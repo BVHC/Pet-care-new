@@ -38,8 +38,8 @@ import lombok.RequiredArgsConstructor;
 @RequiredArgsConstructor
 public class VisitOrderService implements VisitOrderApi {
 
-    static final String DOC_TYPE = "ORDER";
-    static final String PREFIX = "DH";
+    static final String DOC_TYPE = com.petcare.module.sales.api.OnlineSalesOrderApi.ORDER_DOC_TYPE;
+    static final String PREFIX = com.petcare.module.sales.api.OnlineSalesOrderApi.ORDER_PREFIX;
 
     private final SalesOrderRepository orders;
     private final CatalogQueryApi catalog;

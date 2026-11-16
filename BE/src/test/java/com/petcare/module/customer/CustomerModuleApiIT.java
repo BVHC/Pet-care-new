@@ -64,6 +64,30 @@ class CustomerModuleApiIT extends CustomerMeItSupport {
         fx.cleanup();
     }
 
+    // ---------------------------------------------------------------- CustomerQueryApi.findAddress
+
+    @Test
+    void findAddressReturnsOnlyTheOwnersAddress() {
+        long owner = fx.track(counterProfile(null, "Chủ sổ", "0911000222", null));
+        long other = fx.track(counterProfile(null, "Khách khác", "0911000333", null));
+        Long own = jdbc.queryForObject("""
+                INSERT INTO addresses (customer_id, receiver_name, receiver_phone, address_line, ward, province, is_default)
+                VALUES (?, 'An', '0901234567', '12 Lê Lợi', 'P. Bến Nghé', 'TP.HCM', true) RETURNING id
+                """, Long.class, owner);
+
+        assertThat(customerQuery.findAddress(owner, own)).get().satisfies(a -> {
+            assertThat(a.addressId()).isEqualTo(own);
+            assertThat(a.receiverName()).isEqualTo("An");
+            assertThat(a.receiverPhone()).isEqualTo("0901234567");
+            assertThat(a.addressLine()).isEqualTo("12 Lê Lợi");
+            assertThat(a.ward()).isEqualTo("P. Bến Nghé");
+            assertThat(a.province()).isEqualTo("TP.HCM");
+        });
+        assertThat(customerQuery.findAddress(other, own)).isEmpty();
+        assertThat(customerQuery.findAddress(owner, -1L)).isEmpty();
+        jdbc.update("DELETE FROM addresses WHERE id = ?", own);
+    }
+
     // ---------------------------------------------------------------- CustomerApi
 
     @Test

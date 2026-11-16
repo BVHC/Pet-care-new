@@ -1,12 +1,16 @@
 package com.petcare.module.inventory.service;
 
 import java.time.Clock;
+import java.time.Instant;
 import java.time.LocalDate;
 import java.util.ArrayList;
+import java.util.Collection;
 import java.util.Comparator;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.TreeMap;
+import java.util.TreeSet;
 import java.util.stream.Collectors;
 
 import org.springframework.stereotype.Service;
@@ -18,6 +22,7 @@ import com.petcare.module.inventory.entity.LockedLot;
 import com.petcare.module.inventory.entity.MovementType;
 import com.petcare.module.inventory.entity.StockSources;
 import com.petcare.module.inventory.repository.StockLotDao;
+import com.petcare.module.inventory.repository.StockReservationDao;
 import com.petcare.platform.exception.BusinessRuleViolationException;
 import com.petcare.platform.exception.ResourceNotFoundException;
 
@@ -37,11 +42,13 @@ import com.petcare.platform.exception.ResourceNotFoundException;
 public class StockIssueService implements StockApi {
 
     private final StockLotDao lots;
+    private final StockReservationDao reservations;
     private final StockLedger ledger;
     private final Clock clock;
 
-    public StockIssueService(StockLotDao lots, StockLedger ledger, Clock clock) {
+    public StockIssueService(StockLotDao lots, StockReservationDao reservations, StockLedger ledger, Clock clock) {
         this.lots = lots;
+        this.reservations = reservations;
         this.ledger = ledger;
         this.clock = clock;
     }
@@ -69,9 +76,12 @@ public class StockIssueService implements StockApi {
         Map<Long, List<LockedLot>> byProduct = lots.lockIssuableLots(branchId, requested.keySet(), today).stream()
                 .collect(Collectors.groupingBy(LockedLot::productId));
 
+        // Phần HELD của đơn online không được xuất ở quầy (BR-BH-09): đọc sau khi khóa lô, cùng transaction.
+        Map<Long, Integer> held = reservations.heldQuantities(branchId, requested.keySet());
         List<Shortage> shortages = new ArrayList<>();
         requested.forEach((productId, quantity) -> {
-            int available = FefoAllocator.available(byProduct.getOrDefault(productId, List.of()), today);
+            int available = Math.max(0, FefoAllocator.available(byProduct.getOrDefault(productId, List.of()), today)
+                    - held.getOrDefault(productId, 0));
             if (available < quantity) {
                 shortages.add(new Shortage(productId, quantity, available));
             }
@@ -122,10 +132,63 @@ public class StockIssueService implements StockApi {
         requirePositive(quantity);
         LocalDate today = LocalDate.now(clock);
         List<LockedLot> candidates = lots.lockIssuableLots(branchId, List.of(productId), today);
-        return FefoAllocator.firstLotWith(candidates, quantity, today).map(LockedLot::id)
+        int held = reservations.heldQuantities(branchId, List.of(productId)).getOrDefault(productId, 0);
+        int available = Math.max(0, FefoAllocator.available(candidates, today) - held);
+        // Không xuất vào phần HELD cho đơn online: tồn khả dụng (đã trừ HELD) phải đủ, ngoài việc một lô đủ số lượng.
+        return FefoAllocator.firstLotWith(candidates, quantity, today).filter(lot -> available >= quantity)
+                .map(LockedLot::id)
                 .orElseThrow(() -> new BusinessRuleViolationException("BR-KO-05",
-                        "Không còn lô chưa hết hạn nào đủ " + quantity + " để xuất (tồn khả dụng "
-                                + FefoAllocator.available(candidates, today) + ")"));
+                        "Không còn lô chưa hết hạn nào đủ " + quantity + " để xuất (tồn khả dụng " + available + ")"));
+    }
+
+    @Override
+    @Transactional(propagation = Propagation.MANDATORY)
+    public Map<Long, Integer> lockAvailableQuantity(Long branchId, Collection<Long> productIds) {
+        require(branchId, "branchId");
+        Map<Long, Integer> result = new LinkedHashMap<>();
+        if (productIds.isEmpty()) {
+            return result;
+        }
+        productIds.forEach(id -> result.put(id, 0));
+        LocalDate today = LocalDate.now(clock);
+        // Một câu, id lô tăng dần (cùng StockLotDao.lockIssuableLots); đọc HELD sau khi đã giữ khóa.
+        Map<Long, List<LockedLot>> byProduct = lots.lockIssuableLots(branchId, new TreeSet<>(productIds), today)
+                .stream().collect(Collectors.groupingBy(LockedLot::productId));
+        Map<Long, Integer> held = reservations.heldQuantities(branchId, result.keySet());
+        result.replaceAll((productId, zero) -> Math.max(0, FefoAllocator.available(
+                byProduct.getOrDefault(productId, List.of()), today) - held.getOrDefault(productId, 0)));
+        return result;
+    }
+
+    @Override
+    @Transactional(propagation = Propagation.MANDATORY)
+    public List<Shortage> reserve(Long branchId, OrderRef orderRef, List<SaleLine> lines) {
+        require(branchId, "branchId");
+        require(orderRef, "orderRef");
+        require(orderRef.onlineOrderId(), "onlineOrderId");
+        Map<Long, Integer> requested = new TreeMap<>();
+        for (SaleLine line : lines) {
+            requirePositive(line.quantity());
+            requested.merge(line.productId(), line.quantity(), StockIssueService::addQuantities);
+        }
+        if (requested.isEmpty()) {
+            return List.of();
+        }
+        // Khóa lại lô (đã khóa thì không đổi gì) và kiểm lại dưới khóa: bên gọi không thể giữ hàng vượt tồn khả dụng.
+        Map<Long, Integer> available = lockAvailableQuantity(branchId, requested.keySet());
+        List<Shortage> shortages = new ArrayList<>();
+        requested.forEach((productId, quantity) -> {
+            if (available.get(productId) < quantity) {
+                shortages.add(new Shortage(productId, quantity, available.get(productId)));
+            }
+        });
+        if (!shortages.isEmpty()) {
+            return shortages;
+        }
+        Instant now = Instant.now(clock);
+        requested.forEach((productId, quantity) -> reservations.insertHeld(orderRef.onlineOrderId(), branchId,
+                productId, quantity, now));
+        return List.of();
     }
 
     @Override

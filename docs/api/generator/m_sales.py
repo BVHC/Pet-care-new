@@ -43,7 +43,7 @@ m.param("PaymentId", "paymentId", "path", "int64")
 m.param("ShiftId", "shiftId", "path", "int64")
 m.param("CustomerId", "customerId", "path", "int64")
 
-m.schema("OrderSource", None, enum=["VISIT", "RETAIL", "BOARDING"])
+m.schema("OrderSource", None, enum=["VISIT", "RETAIL", "BOARDING", "ONLINE"])
 m.schema("OrderStatus", None, enum=["OPEN", "PENDING", "PAID", "CANCELLED"], desc="03 #5")
 m.schema("OrderLine", {
     "lineId": "int64", "lineType": "enum:SERVICE,GOODS,DRUG,VACCINE,BOARDING", "serviceId": "int64?",
@@ -57,7 +57,7 @@ m.schema("Order", {
     "customerId": "int64", "customerName": "string", "branchId": "int64", "visitId": "int64?",
     "boardingBookingId": "int64?", "totalAmount": "money", "lines": "array:ref:OrderLine",
     "createdAt": "datetime", "pendingAt": "datetime?", "paidAt": "datetime?", "paymentId": "int64?",
-    "cancelType": "enum:VISIT_CANCELLED,RETAIL_UNCLOSED,CHECKOUT_ABORTED,UNPAID?", "cancelReason": "string?",
+    "cancelType": "enum:VISIT_CANCELLED,RETAIL_UNCLOSED,CHECKOUT_ABORTED,UNPAID,ONLINE_CUSTOMER,ONLINE_EXPIRED?", "cancelReason": "string?",
     "cancelledAt": "datetime?", "deliveryAllowed": "bool|true chỉ khi PAID (BR-BH-06)",
 })
 m.schema("OrderSummary", {

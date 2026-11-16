@@ -43,8 +43,7 @@ public interface CustomerQueryApi {
     OnlineProfileLinkability checkOnlineProfileLinkable(Long accountId);
 
     // ------------------------------------------------------------------------------------------------------------
-    // Tầng 3 (T55c, docs/adr/0117, docs/06 §6b hàng 3): placeholder dạng default — ném UnsupportedOperationException
-    // tới khi CustomerQueryService ghi đè; khi đó xóa default (method thành trừu tượng).
+    // Tầng 3 (T55c, docs/adr/0117, docs/06 §6b hàng 3): findAddress đã cài thật ở CustomerQueryService (task 117).
     // ------------------------------------------------------------------------------------------------------------
 
     /** Một địa chỉ trong sổ địa chỉ của khách (erd {@code addresses}); shop chốt snapshot từ đây lúc đặt hàng (BR-BH-08). */
@@ -53,14 +52,7 @@ public interface CustomerQueryApi {
 
     /**
      * BR-BH-08: địa chỉ {@code addressId} <b>của khách {@code customerId}</b>; không có hoặc của khách khác thì rỗng (bên
-     * gọi trả 400 {@code BR-BH-08}, không lộ địa chỉ của người khác). Đọc không khóa. Bản thật trước 17/11 (T63).
+     * gọi trả 400 {@code BR-BH-08}, không lộ địa chỉ của người khác). Đọc không khóa. Bản thật: task 117.
      */
-    default Optional<AddressInfo> findAddress(Long customerId, Long addressId) {
-        throw placeholder("findAddress", "T63");
-    }
-
-    private static UnsupportedOperationException placeholder(String method, String task) {
-        return new UnsupportedOperationException("CustomerQueryApi." + method + " chưa cài (placeholder T55c, docs/06 §6b); "
-                + "bản thật ở " + task);
-    }
+    Optional<AddressInfo> findAddress(Long customerId, Long addressId);
 }

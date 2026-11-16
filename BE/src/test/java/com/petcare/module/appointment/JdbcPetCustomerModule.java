@@ -112,6 +112,11 @@ final class JdbcPetCustomerModule implements PetQueryApi, CustomerQueryApi {
         throw new UnsupportedOperationException("không dùng trong IT lịch hẹn");
     }
 
+    @Override
+    public Optional<AddressInfo> findAddress(Long customerId, Long addressId) {
+        throw new UnsupportedOperationException("không dùng trong IT lịch hẹn");
+    }
+
     private static PetSummary pet(ResultSet rs) throws SQLException {
         return new PetSummary(rs.getLong("id"), rs.getLong("customer_id"), rs.getString("name"),
                 Species.valueOf(rs.getString("species")), toLocalDate(rs.getDate("birth_date")),

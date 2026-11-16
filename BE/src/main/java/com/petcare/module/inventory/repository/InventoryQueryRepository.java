@@ -52,7 +52,11 @@ public class InventoryQueryRepository {
             LEFT JOIN inventory_items i ON i.product_id = p.id AND i.branch_id = :branchId
             LEFT JOIN LATERAL (
                 SELECT SUM(l.quantity) AS total,
-                       SUM(l.quantity) FILTER (WHERE l.expiry_date IS NULL OR l.expiry_date >= :today) AS available,
+                       GREATEST(0, COALESCE(SUM(l.quantity) FILTER (WHERE l.expiry_date IS NULL
+                                                                     OR l.expiry_date >= :today), 0)
+                                  - COALESCE((SELECT SUM(r.quantity) FROM stock_reservations r
+                                              WHERE r.branch_id = :branchId AND r.product_id = p.id
+                                                AND r.status = 'HELD'), 0)) AS available,
                        SUM(l.quantity) FILTER (WHERE l.expiry_date < :today) AS expired,
                        MIN(l.expiry_date) FILTER (WHERE l.quantity > 0 AND l.expiry_date >= :today) AS nearest
                 FROM stock_lots l WHERE l.inventory_item_id = i.id) t ON true
@@ -130,10 +134,13 @@ public class InventoryQueryRepository {
 
     // ---------------------------------------------------------------- StockQueryApi
 
-    /** Tồn khả dụng: tổng lô chưa hết hạn (BR-KO-01). */
+    /** Tồn khả dụng: tổng lô chưa hết hạn (BR-KO-01) trừ phần HELD (BR-BH-09), tối thiểu 0. */
     public int availableQuantity(long branchId, long productId, LocalDate today) {
         Long total = jdbc.queryForObject("""
-                SELECT COALESCE(SUM(l.quantity), 0)
+                SELECT GREATEST(0, COALESCE(SUM(l.quantity), 0)
+                       - COALESCE((SELECT SUM(r.quantity) FROM stock_reservations r
+                                   WHERE r.branch_id = :branchId AND r.product_id = :productId
+                                     AND r.status = 'HELD'), 0))
                 FROM stock_lots l JOIN inventory_items i ON i.id = l.inventory_item_id
                 WHERE i.branch_id = :branchId AND i.product_id = :productId
                   AND (l.expiry_date IS NULL OR l.expiry_date >= :today)
@@ -150,7 +157,11 @@ public class InventoryQueryRepository {
         }
         productIds.forEach(id -> result.put(id, 0));
         jdbc.query("""
-                SELECT i.product_id AS product_id, COALESCE(SUM(l.quantity), 0) AS total
+                SELECT i.product_id AS product_id,
+                       GREATEST(0, COALESCE(SUM(l.quantity), 0)
+                       - COALESCE((SELECT SUM(r.quantity) FROM stock_reservations r
+                                   WHERE r.branch_id = :branchId AND r.product_id = i.product_id
+                                     AND r.status = 'HELD'), 0)) AS total
                 FROM stock_lots l JOIN inventory_items i ON i.id = l.inventory_item_id
                 WHERE i.branch_id = :branchId AND i.product_id IN (:productIds)
                   AND (l.expiry_date IS NULL OR l.expiry_date >= :today)
@@ -194,11 +205,16 @@ public class InventoryQueryRepository {
 
     public List<Long> branchIdsWithAvailableStock(long productId, LocalDate today) {
         return jdbc.queryForList("""
-                SELECT i.branch_id
-                FROM stock_lots l JOIN inventory_items i ON i.id = l.inventory_item_id
-                WHERE i.product_id = :productId AND l.quantity > 0
-                  AND (l.expiry_date IS NULL OR l.expiry_date >= :today)
-                GROUP BY i.branch_id ORDER BY i.branch_id
+                SELECT t.branch_id
+                FROM (SELECT i.branch_id, i.product_id, SUM(l.quantity) AS qty
+                      FROM stock_lots l JOIN inventory_items i ON i.id = l.inventory_item_id
+                      WHERE i.product_id = :productId AND l.quantity > 0
+                        AND (l.expiry_date IS NULL OR l.expiry_date >= :today)
+                      GROUP BY i.branch_id, i.product_id) t
+                WHERE t.qty - COALESCE((SELECT SUM(r.quantity) FROM stock_reservations r
+                                        WHERE r.branch_id = t.branch_id AND r.product_id = t.product_id
+                                          AND r.status = 'HELD'), 0) > 0
+                ORDER BY t.branch_id
                 """, new MapSqlParameterSource("productId", productId).addValue("today", today), Long.class);
     }
 
@@ -210,11 +226,16 @@ public class InventoryQueryRepository {
         }
         productIds.forEach(id -> result.put(id, new ArrayList<>()));
         jdbc.query("""
-                SELECT i.product_id AS product_id, i.branch_id AS branch_id
-                FROM stock_lots l JOIN inventory_items i ON i.id = l.inventory_item_id
-                WHERE i.product_id IN (:productIds) AND l.quantity > 0
-                  AND (l.expiry_date IS NULL OR l.expiry_date >= :today)
-                GROUP BY i.product_id, i.branch_id ORDER BY i.product_id, i.branch_id
+                SELECT t.product_id AS product_id, t.branch_id AS branch_id
+                FROM (SELECT i.product_id, i.branch_id, SUM(l.quantity) AS qty
+                      FROM stock_lots l JOIN inventory_items i ON i.id = l.inventory_item_id
+                      WHERE i.product_id IN (:productIds) AND l.quantity > 0
+                        AND (l.expiry_date IS NULL OR l.expiry_date >= :today)
+                      GROUP BY i.product_id, i.branch_id) t
+                WHERE t.qty - COALESCE((SELECT SUM(r.quantity) FROM stock_reservations r
+                                        WHERE r.branch_id = t.branch_id AND r.product_id = t.product_id
+                                          AND r.status = 'HELD'), 0) > 0
+                ORDER BY t.product_id, t.branch_id
                 """, new MapSqlParameterSource("productIds", productIds).addValue("today", today),
                 rs -> {
                     result.get(rs.getLong("product_id")).add(rs.getLong("branch_id"));
@@ -225,11 +246,16 @@ public class InventoryQueryRepository {
     /** Sản phẩm còn tồn khả dụng tại một chi nhánh. */
     public Set<Long> productIdsWithAvailableStock(long branchId, LocalDate today) {
         return new LinkedHashSet<>(jdbc.queryForList("""
-                SELECT DISTINCT i.product_id
-                FROM stock_lots l JOIN inventory_items i ON i.id = l.inventory_item_id
-                WHERE i.branch_id = :branchId AND l.quantity > 0
-                  AND (l.expiry_date IS NULL OR l.expiry_date >= :today)
-                ORDER BY i.product_id
+                SELECT t.product_id
+                FROM (SELECT i.product_id, SUM(l.quantity) AS qty
+                      FROM stock_lots l JOIN inventory_items i ON i.id = l.inventory_item_id
+                      WHERE i.branch_id = :branchId AND l.quantity > 0
+                        AND (l.expiry_date IS NULL OR l.expiry_date >= :today)
+                      GROUP BY i.product_id) t
+                WHERE t.qty - COALESCE((SELECT SUM(r.quantity) FROM stock_reservations r
+                                        WHERE r.branch_id = :branchId AND r.product_id = t.product_id
+                                          AND r.status = 'HELD'), 0) > 0
+                ORDER BY t.product_id
                 """, new MapSqlParameterSource("branchId", branchId).addValue("today", today), Long.class));
     }
 

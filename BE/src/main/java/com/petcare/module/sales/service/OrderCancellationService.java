@@ -63,6 +63,10 @@ public class OrderCancellationService {
             throw new InvalidStateTransitionException("đơn hàng (chỉ hủy được Order đang chờ thu tiền)",
                     order.getStatus().name(), OrderStatus.CANCELLED.name());
         }
+        if (order.getSource() == OrderSource.ONLINE) {
+            throw new InvalidStateTransitionException("đơn hàng online (khách hủy hoặc hết hạn thanh toán, quầy không hủy)",
+                    order.getStatus().name(), OrderStatus.CANCELLED.name());
+        }
         String reason = request == null || request.reason() == null ? "" : request.reason().strip();
         if (reason.isEmpty()) {
             throw new BusinessRuleViolationException("BR-BH-05", "Vui lòng nhập lý do hủy Order");

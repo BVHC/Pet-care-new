@@ -1,9 +1,6 @@
 package com.petcare.module.customer.api;
 
-import static com.petcare.module.PlaceholderAssert.assertPlaceholder;
 import static org.assertj.core.api.Assertions.assertThat;
-import static org.mockito.Mockito.CALLS_REAL_METHODS;
-import static org.mockito.Mockito.mock;
 
 import java.math.BigDecimal;
 import java.time.LocalDate;
@@ -11,17 +8,9 @@ import java.time.LocalDate;
 import org.junit.jupiter.api.Test;
 
 /**
- * Placeholder tầng 3 của customer (T55c, docs/06 §6b hàng 3, 14, 15; docs/adr/0117): method {@code default} ném
- * {@link UnsupportedOperationException} tới khi bản thật ghi đè; {@link CustomerMergedEvent} chỉ khai báo.
+ * Placeholder tầng 3 của customer (T55c, docs/06 §6b hàng 3, 14, 15; docs/adr/0117): {@link CustomerMergedEvent} chỉ khai báo.
  */
 class CustomerApiTier3PlaceholderTest {
-
-    private final CustomerQueryApi customers = mock(CustomerQueryApi.class, CALLS_REAL_METHODS);
-
-    @Test
-    void findAddressThrowsUntilImplemented() {
-        assertPlaceholder(() -> customers.findAddress(1L, 2L), "CustomerQueryApi.findAddress", "T63");
-    }
 
     @Test
     void customerMergedEventCarriesSourceAndTarget() {

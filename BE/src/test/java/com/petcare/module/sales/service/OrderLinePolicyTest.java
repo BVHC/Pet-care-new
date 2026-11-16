@@ -243,4 +243,20 @@ class OrderLinePolicyTest {
         assertThat(OrderLinePolicy.evaluate(Operation.DELETE, "RECEPTIONIST", ME, retail, auto))
                 .as("chỉ áp cho Order VISIT").isEmpty();
     }
+
+    @Test
+    void onlineOrderLinesAreUntouchableAtTheCounterForEveryRoleOperationAndStatus() {
+        for (String role : ROLES) {
+            for (OrderStatus status : OrderStatus.values()) {
+                SalesOrder online = SalesOrder.openOnline("DH-2611-00001", 1L, 2L, 3L,
+                        java.time.Instant.parse("2026-11-17T03:00:00Z"));
+                ReflectionTestUtils.setField(online, "status", status);
+                OrderLine goods = line(OrderLineType.GOODS, ME);
+                assertThat(OrderLinePolicy.evaluate(Operation.EDIT, role, ME, online, goods))
+                        .contains(Denial.ONLINE_ORDER);
+                assertThat(OrderLinePolicy.evaluate(Operation.DELETE, role, ME, online, goods))
+                        .contains(Denial.ONLINE_ORDER);
+            }
+        }
+    }
 }

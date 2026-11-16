@@ -329,4 +329,29 @@ class PaymentServiceTest {
         assertThat(entries.getAllValues().get(0).after().toString()).contains("paymentId=" + PAYMENT_ID)
                 .contains("paymentCode=PT-2610-00001").contains("method=CASH").contains("amount=100");
     }
+
+    @Test
+    void onlineOrderIsNotCollectableAtTheCounterAndNothingIsTouched() {
+        SalesOrder online = SalesOrder.openOnline("DH-X-12", BRANCH, CUSTOMER, 3L, NOW);
+        ReflectionTestUtils.setField(online, "id", 12L);
+        online.addLine(goods(20L, 1, 100));
+        stubOrders(List.of(12L), List.of(online));
+
+        assertThatThrownBy(() -> service.collectPayment(request(100, 12L)))
+                .isInstanceOf(InvalidStateTransitionException.class).hasMessageContaining("online");
+        verifyNoInteractions(stock, codes, payments, audit);
+    }
+
+    @Test
+    void onlineOrderMixedWithACounterOrderRejectsTheWholeCollection() {
+        SalesOrder counter = pending(10L, CUSTOMER, BRANCH, goods(20L, 1, 100));
+        SalesOrder online = SalesOrder.openOnline("DH-X-12", BRANCH, CUSTOMER, 3L, NOW);
+        ReflectionTestUtils.setField(online, "id", 12L);
+        online.addLine(goods(20L, 1, 100));
+        stubOrders(List.of(10L, 12L), List.of(counter, online));
+
+        assertThatThrownBy(() -> service.collectPayment(request(200, 10L, 12L)))
+                .isInstanceOf(InvalidStateTransitionException.class);
+        verifyNoInteractions(stock, codes, payments, audit);
+    }
 }
