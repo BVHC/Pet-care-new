@@ -142,7 +142,7 @@ m.op("post", "/online-orders/{onlineOrderId}/start-processing", "startProcessing
 m.op("post", "/online-orders/{onlineOrderId}/ship", "shipOnlineOrder", "Bàn giao cho đơn vị vận chuyển", "Online order fulfillment",
      "UC65", "BR-BH-11", "A06", LT, "PROCESSING → SHIPPED (Đơn hàng online#6)", body="ShipRequest", resp="OnlineOrder",
      path_params=["OnlineOrderId"], errors=(400, 401, 403, 404, 409),
-     err_desc={400: "`BR-BH-11` thiếu đơn vị vận chuyển hoặc mã vận đơn", 409: TRANS})
+     err_desc={400: "`BR-BH-11` thiếu đơn vị vận chuyển hoặc mã vận đơn · `VALIDATION_FAILED` quá 100 ký tự", 409: TRANS})
 m.op("post", "/online-orders/{onlineOrderId}/mark-delivered", "markOnlineOrderDelivered", "Cập nhật đã giao",
      "Online order fulfillment", "UC65", "BR-BH-11, 12", "A06", LT, "SHIPPED → DELIVERED (Đơn hàng online#7)",
      resp="OnlineOrder", path_params=["OnlineOrderId"], errors=(400, 401, 403, 404, 409), err_desc={409: TRANS},
@@ -150,11 +150,11 @@ m.op("post", "/online-orders/{onlineOrderId}/mark-delivered", "markOnlineOrderDe
 m.op("post", "/online-orders/{onlineOrderId}/fail-delivery", "failOnlineOrderDelivery", "Ghi nhận giao thất bại",
      "Online order fulfillment", "UC65", "BR-BH-11", "A06", LT, "SHIPPED → DELIVERY_FAILED (Đơn hàng online#8)",
      body="ReasonRequest", resp="OnlineOrder", path_params=["OnlineOrderId"], errors=(400, 401, 403, 404, 409),
-     err_desc={400: "`BR-BH-11` thiếu lý do", 409: TRANS})
+     err_desc={400: "`VALIDATION_FAILED` thiếu lý do hoặc quá 300 ký tự (BR-BH-11)", 409: TRANS})
 m.op("post", "/online-orders/{onlineOrderId}/redeliver", "redeliverOnlineOrder", "Giao lại", "Online order fulfillment", "UC65",
      "BR-BH-11", "A06", LT, "DELIVERY_FAILED → SHIPPED (Đơn hàng online#9)", body="ShipRequest", resp="OnlineOrder",
      path_params=["OnlineOrderId"], errors=(400, 401, 403, 404, 409),
-     err_desc={400: "`BR-BH-11` quá số lần giao lại tối đa [CFG] · thiếu mã vận đơn", 409: TRANS})
+     err_desc={400: "`BR-BH-11` quá số lần giao lại tối đa [CFG] · thiếu đơn vị vận chuyển hoặc mã vận đơn · `VALIDATION_FAILED` quá 100 ký tự", 409: TRANS})
 m.op("post", "/online-orders/{onlineOrderId}/cancel-failed", "cancelFailedOnlineOrder", "Hủy đơn sau giao thất bại",
      "Online order fulfillment", "UC65", "BR-BH-11, 09, BR-TG-12", "A06", LT,
      "DELIVERY_FAILED → CANCELLED (Đơn hàng online#10)", body="ReasonRequest", resp="OnlineOrder",

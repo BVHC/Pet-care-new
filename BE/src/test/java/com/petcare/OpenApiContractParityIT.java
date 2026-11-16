@@ -123,10 +123,11 @@ class OpenApiContractParityIT {
         // + 4 shop cart (task 116, docs/adr/0143)
         // + 3 shop checkout (task 117: fulfillment-branches, quote, place; docs/adr/0144)
         // + 4 shop my online orders (task 125: list, get, cancel, confirm-received; docs/adr/0145)
+        // + 7 shop fulfillment (task 126: list, get, start-processing, ship, mark-delivered, fail-delivery, redeliver; cancel-failed chờ task 138; docs/adr/0146)
         // − 1 content #22 (đánh dấu feedback đã xử lý; feedback không trạng thái, V55, docs/adr/0122, 0131): content còn 21.
         assertThat(documentedOps())
                 .as("số endpoint identity + care + customer + inventory + sales + appointment + visit + boarding + content + report + ai + fees + shop đã cài")
-                .hasSize(213);
+                .hasSize(220);
     }
 
     @Test

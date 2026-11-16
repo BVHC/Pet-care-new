@@ -94,10 +94,56 @@ public class OnlineOrder extends TimestampedEntity {
     @Column(name = "cancelled_by")
     private Long cancelledBy;
 
+    /** Lý do giao thất bại gần nhất (V58, ADR-0137 D2); giữ nguyên sau khi giao lại; không có trong response hợp đồng. */
+    @Column(name = "delivery_failure_reason", length = 500)
+    private String deliveryFailureReason;
+
+    /** Đơn hàng online#5 (PAID → PROCESSING): lễ tân bắt đầu xử lý; caller đã kiểm trạng thái và khóa dòng đơn. */
+    public void startProcessing() {
+        this.status = OnlineOrderStatus.PROCESSING;
+    }
+
+    /** Đơn hàng online#6 (PROCESSING → SHIPPED): bàn giao vận chuyển; caller đã kiểm trạng thái và khóa dòng đơn. */
+    public void ship(String carrier, String trackingCode, Instant now) {
+        this.status = OnlineOrderStatus.SHIPPED;
+        this.carrier = carrier;
+        this.trackingCode = trackingCode;
+        this.shippedAt = now;
+    }
+
+    /** Đơn hàng online#7 (SHIPPED → DELIVERED): bắt đầu đếm hạn trả hàng và hạn tự xác nhận (BR-BH-12). */
+    public void markDelivered(Instant now) {
+        this.status = OnlineOrderStatus.DELIVERED;
+        this.deliveredAt = now;
+    }
+
+    /** Đơn hàng online#8 (SHIPPED → DELIVERY_FAILED): ghi lý do giao thất bại gần nhất. */
+    public void failDelivery(String reason) {
+        this.status = OnlineOrderStatus.DELIVERY_FAILED;
+        this.deliveryFailureReason = reason;
+    }
+
+    /** Đơn hàng online#9 (DELIVERY_FAILED → SHIPPED): giao lại, thêm một lần, thay đơn vị vận chuyển / mã vận đơn. */
+    public void redeliver(String carrier, String trackingCode, Instant now) {
+        this.status = OnlineOrderStatus.SHIPPED;
+        this.carrier = carrier;
+        this.trackingCode = trackingCode;
+        this.shippedAt = now;
+        this.redeliveryCount++;
+    }
+
     /** Đơn hàng online#3 (PENDING_PAYMENT → CANCELLED): khách hủy; caller đã kiểm trạng thái và khóa dòng đơn. */
     public void cancelByCustomer(Long accountId, String reason, Instant now) {
         this.status = OnlineOrderStatus.CANCELLED;
         this.cancelledBy = accountId;
+        this.cancelReason = reason;
+        this.cancelledAt = now;
+    }
+
+    /** Đơn hàng online#4 (PENDING_PAYMENT → CANCELLED): ST10 hủy đơn quá hạn thanh toán; {@code cancelled_by} để trống (hệ thống). */
+    public void expire(String reason, Instant now) {
+        this.status = OnlineOrderStatus.CANCELLED;
+        this.cancelledBy = null;
         this.cancelReason = reason;
         this.cancelledAt = now;
     }
