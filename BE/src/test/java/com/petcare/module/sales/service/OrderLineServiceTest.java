@@ -587,4 +587,28 @@ class OrderLineServiceTest {
             assertThat(tx.readOnly()).as(name).isFalse();
         }
     }
+
+    private SalesOrder onlineOrder() {
+        SalesOrder order = retailOrder(OrderStatus.PENDING);
+        ReflectionTestUtils.setField(order, "source", OrderSource.ONLINE);
+        return order;
+    }
+
+    @Test
+    void onlineOrderRefusesAddEditAndDeleteWith409AndNothingChanges() {
+        actingAs("RECEPTIONIST");
+        SalesOrder order = onlineOrder();
+        existing(order, 1L, OrderLineType.GOODS, 3L, false, 5, 100);
+        lenient().when(catalog.findProductForShare(20L)).thenReturn(Optional.of(product(ProductType.GOODS, false, true, 10)));
+
+        assertThatThrownBy(() -> service.addLine(ORDER_ID, goods(1))).isInstanceOf(InvalidStateTransitionException.class);
+        assertThatThrownBy(() -> service.updateLine(ORDER_ID, 1L, new UpdateOrderLineRequest(2, null)))
+                .isInstanceOf(InvalidStateTransitionException.class);
+        assertThatThrownBy(() -> service.deleteLine(ORDER_ID, 1L)).isInstanceOf(InvalidStateTransitionException.class);
+
+        assertThat(order.getLines()).hasSize(1);
+        assertThat(order.getLines().get(0).getQuantity()).isEqualTo(5);
+        assertThat(order.getTotalAmount()).isEqualTo(500L);
+        verify(orders, never()).flush();
+    }
 }

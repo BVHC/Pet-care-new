@@ -93,4 +93,18 @@ class OnlineSalesOrderServiceTest {
         assertThat(method.getAnnotation(Transactional.class).propagation()).isEqualTo(Propagation.MANDATORY);
         assertThat(OnlineSalesOrderApi.class).isAssignableFrom(OnlineSalesOrderService.class);
     }
+
+    @Test
+    void nullFieldsAndOverflowAreRefusedBeforeAnyWrite() {
+        assertThatThrownBy(() -> service.createPendingOrder(null, 1L, 2L, 3L,
+                List.of(new OnlineOrderLineInput(1L, "x", 1, 1L)))).isInstanceOf(IllegalArgumentException.class);
+        assertThatThrownBy(() -> service.createPendingOrder("C", 1L, 2L, 3L,
+                List.of(new OnlineOrderLineInput(null, "x", 1, 1L)))).isInstanceOf(IllegalArgumentException.class);
+        assertThatThrownBy(() -> service.createPendingOrder("C", 1L, 2L, 3L,
+                List.of(new OnlineOrderLineInput(1L, null, 1, 1L)))).isInstanceOf(IllegalArgumentException.class);
+        assertThatThrownBy(() -> service.createPendingOrder("C", 1L, 2L, 3L,
+                List.of(new OnlineOrderLineInput(1L, "a", Integer.MAX_VALUE, Long.MAX_VALUE))))
+                .isInstanceOf(com.petcare.module.sales.exception.OrderAmountOverflowException.class);
+        verifyNoInteractions(orders);
+    }
 }

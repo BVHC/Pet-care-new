@@ -221,4 +221,42 @@ class OnlineSalesOrderIT extends CashierItSupport {
                 HttpStatus.OK);
         assertThat(page.get("totalElements")).isEqualTo(1);
     }
+
+    @Test
+    void receptionistCannotAddEditOrDeleteLinesOfAnOnlineOrder() {
+        long online = placeOne();
+        long lineId = jdbc.queryForObject("SELECT id FROM order_lines WHERE order_id = ?", Long.class, online);
+
+        assertThat(call(HttpMethod.POST, "/api/orders/" + online + "/lines", tReceptionist,
+                Map.of("lineType", "GOODS", "productId", cheap, "quantity", 1)).getStatusCode())
+                .isEqualTo(HttpStatus.CONFLICT);
+        assertThat(call(HttpMethod.PATCH, "/api/orders/" + online + "/lines/" + lineId, tReceptionist,
+                Map.of("quantity", 1)).getStatusCode()).isEqualTo(HttpStatus.CONFLICT);
+        assertThat(call(HttpMethod.DELETE, "/api/orders/" + online + "/lines/" + lineId, tReceptionist, null)
+                .getStatusCode()).isEqualTo(HttpStatus.CONFLICT);
+
+        assertThat(order(online)).containsEntry("total_amount", 180_000L);
+        assertThat(jdbc.queryForList("SELECT quantity FROM order_lines WHERE order_id = ?", Integer.class, online))
+                .containsExactly(2);
+    }
+
+    @Test
+    void moveToExternalPurchaseRejectsAnOnlineOrder() {
+        long online = placeOne();
+        long lineId = jdbc.queryForObject("SELECT id FROM order_lines WHERE order_id = ?", Long.class, online);
+
+        ResponseEntity<Map<String, Object>> response = call(HttpMethod.POST,
+                "/api/orders/" + online + "/lines/" + lineId + "/move-to-external-purchase", tReceptionist, null);
+
+        assertThat(response.getStatusCode()).isEqualTo(HttpStatus.BAD_REQUEST);
+        assertThat((String) response.getBody().get("message")).endsWith("(BR-BH-04)");
+    }
+
+    @Test
+    void createPendingOrderRefusesNullFields() {
+        assertThatThrownBy(() -> tx.execute(s -> onlineOrders.createPendingOrder("DH-X", branch, customer, manager,
+                List.of(new OnlineOrderLineInput(null, "Hạt", 1, 1L))))).isInstanceOf(IllegalArgumentException.class);
+        assertThatThrownBy(() -> tx.execute(s -> onlineOrders.createPendingOrder(null, branch, customer, manager,
+                List.of(new OnlineOrderLineInput(goods, "Hạt", 1, 1L))))).isInstanceOf(IllegalArgumentException.class);
+    }
 }

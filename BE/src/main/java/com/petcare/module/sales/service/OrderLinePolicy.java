@@ -26,6 +26,8 @@ final class OrderLinePolicy {
     enum Denial {
         /** Order đã PAID / CANCELLED → 409. */
         ORDER_FINISHED,
+        /** Order nguồn ONLINE: quầy không sửa dòng (khớp kho giữ và số tiền cổng) → 409. */
+        ONLINE_ORDER,
         /** Dòng không sửa / xóa trực tiếp (VACCINE, BOARDING, DRUG) → 400 BR-BH-02. */
         NOT_DIRECTLY_EDITABLE,
         /** Dòng dịch vụ / thuốc bị khóa khi Order PENDING → 403 BR-BH-02. */
@@ -69,6 +71,9 @@ final class OrderLinePolicy {
     static Optional<Denial> evaluate(Operation operation, String role, long accountId, SalesOrder order,
             OrderLine line) {
         OrderStatus status = order.getStatus();
+        if (order.getSource() == OrderSource.ONLINE) {
+            return Optional.of(Denial.ONLINE_ORDER);
+        }
         if (status == OrderStatus.PAID || status == OrderStatus.CANCELLED) {
             return Optional.of(Denial.ORDER_FINISHED);
         }

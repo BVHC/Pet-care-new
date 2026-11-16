@@ -34,10 +34,16 @@ public class OnlineSalesOrderService implements OnlineSalesOrderApi {
     @Transactional(propagation = Propagation.MANDATORY)
     public Long createPendingOrder(String code, Long branchId, Long customerId, Long accountId,
             List<OnlineOrderLineInput> lines) {
+        if (code == null || branchId == null || customerId == null || accountId == null) {
+            throw new IllegalArgumentException("Order online thiếu code / chi nhánh / khách / tài khoản");
+        }
         if (lines == null || lines.isEmpty()) {
             throw new IllegalArgumentException("Order online cần ít nhất một dòng hàng");
         }
         for (OnlineOrderLineInput line : lines) {
+            if (line.productId() == null || line.name() == null || line.name().isBlank()) {
+                throw new IllegalArgumentException("Dòng hàng online thiếu productId / tên");
+            }
             if (line.quantity() <= 0 || line.unitPrice() < 0) {
                 throw new IllegalArgumentException("Dòng hàng online sai số lượng / đơn giá: sản phẩm " + line.productId());
             }

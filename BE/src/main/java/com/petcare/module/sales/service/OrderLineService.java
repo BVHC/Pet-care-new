@@ -140,6 +140,10 @@ public class OrderLineService {
     }
 
     private static void requireAcceptsLine(SalesOrder order, OrderLineType type) {
+        if (order.getSource() == OrderSource.ONLINE) {
+            throw new InvalidStateTransitionException("đơn hàng online (quầy không thêm dòng)",
+                    order.getStatus().name(), OrderStatus.OPEN.name());
+        }
         if (!OrderLinePolicy.orderAcceptsLine(order.getStatus(), type)) {
             throw new InvalidStateTransitionException("đơn hàng (không thêm được dòng này ở trạng thái hiện tại)",
                     order.getStatus().name(), OrderStatus.OPEN.name());
@@ -242,6 +246,8 @@ public class OrderLineService {
             return;
         }
         switch (denial.get()) {
+            case ONLINE_ORDER -> throw new InvalidStateTransitionException(
+                    "đơn hàng online (quầy không sửa dòng)", order.getStatus().name(), OrderStatus.OPEN.name());
             case ORDER_FINISHED -> throw new InvalidStateTransitionException(
                     "đơn hàng (đã kết thúc, không sửa dòng được)", order.getStatus().name(), OrderStatus.OPEN.name());
             case NOT_DIRECTLY_EDITABLE -> throw new BusinessRuleViolationException("BR-BH-02", switch (line.getLineType()) {
