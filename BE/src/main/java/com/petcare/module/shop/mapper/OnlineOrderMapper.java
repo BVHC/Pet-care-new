@@ -8,6 +8,7 @@ import org.mapstruct.ReportingPolicy;
 
 import com.petcare.module.shop.dto.OnlineOrderLineResponse;
 import com.petcare.module.shop.dto.OnlineOrderResponse;
+import com.petcare.module.shop.dto.OnlineOrderSummaryResponse;
 import com.petcare.module.shop.entity.OnlineOrder;
 
 @Mapper(componentModel = "spring", unmappedTargetPolicy = ReportingPolicy.ERROR)
@@ -40,4 +41,14 @@ public interface OnlineOrderMapper {
     @Mapping(target = "refundStatus", ignore = true)
     OnlineOrderResponse toResponse(OnlineOrder order, String branchName, List<OnlineOrderLineResponse> lines,
             long subtotal);
+
+    @Mapping(target = "onlineOrderId", source = "order.id")
+    @Mapping(target = "salesOrderId", source = "order.orderId")
+    @Mapping(target = "code", source = "order.code")
+    @Mapping(target = "status", source = "order.status")
+    @Mapping(target = "branchName", source = "branchName")
+    @Mapping(target = "itemCount", source = "itemCount")
+    @Mapping(target = "total", expression = "java(subtotal + order.getShippingFee())")
+    @Mapping(target = "createdAt", source = "order.createdAt")
+    OnlineOrderSummaryResponse toSummary(OnlineOrder order, String branchName, int itemCount, long subtotal);
 }

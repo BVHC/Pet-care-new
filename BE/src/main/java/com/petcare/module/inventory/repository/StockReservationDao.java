@@ -12,7 +12,7 @@ import org.springframework.stereotype.Repository;
 
 /**
  * {@code stock_reservations} (BR-BH-09, V44): phần hàng đang giữ cho đơn online. Chỉ đọc tổng {@code HELD} và chèn dòng
- * {@code HELD}; chuyển trạng thái (nhả / xuất) thuộc task sau. Không tự mở transaction.
+ * {@code HELD}; nhả ({@code HELD} → {@code RELEASED}, task 125); xuất thuộc task sau. Không tự mở transaction.
  */
 @Repository
 public class StockReservationDao {
@@ -48,5 +48,13 @@ public class StockReservationDao {
                 VALUES (:order, :branch, :product, :quantity, 'HELD', :now, :now)
                 """, new MapSqlParameterSource("order", onlineOrderId).addValue("branch", branchId)
                 .addValue("product", productId).addValue("quantity", quantity).addValue("now", Timestamp.from(now)));
+    }
+
+    /** Nhả phần giữ của một đơn online: {@code HELD} → {@code RELEASED}; trả số dòng đã nhả (0 = không còn gì giữ). */
+    public int releaseHeld(long onlineOrderId, Instant now) {
+        return jdbc.update("""
+                UPDATE stock_reservations SET status = 'RELEASED', updated_at = :now
+                WHERE online_order_id = :order AND status = 'HELD'
+                """, new MapSqlParameterSource("order", onlineOrderId).addValue("now", Timestamp.from(now)));
     }
 }

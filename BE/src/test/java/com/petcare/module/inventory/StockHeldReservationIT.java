@@ -301,6 +301,52 @@ class StockHeldReservationIT extends InventoryItSupport {
                 .isInstanceOf(IllegalTransactionStateException.class);
         assertThatThrownBy(() -> stock.reserve(branch, new OrderRef(1L, 1L), List.of(new SaleLine(product, 1))))
                 .isInstanceOf(IllegalTransactionStateException.class);
+        assertThatThrownBy(() -> stock.release(new OrderRef(1L, 1L)))
+                .isInstanceOf(IllegalTransactionStateException.class);
+    }
+
+    // ---------------------------------------------------------------- (b2) release (task 125, ADR-0145)
+
+    @Test
+    void releaseTurnsOnlyThatOrdersHeldRowsIntoReleasedAndIsIdempotent() {
+        lot(branch, product, "A", inDays(30), 10, actor);
+        long mine = held(branch, product, 4, "HELD");
+        long other = held(branch, product, 3, "HELD");
+        assertThat(queries.availableQuantity(branch, product)).isEqualTo(3);
+
+        inTx(() -> {
+            stock.release(new OrderRef(mine, 1L));
+            return null;
+        });
+
+        assertThat(jdbc.queryForObject("SELECT status FROM stock_reservations WHERE online_order_id = ?", String.class,
+                mine)).isEqualTo("RELEASED");
+        assertThat(jdbc.queryForObject("SELECT status FROM stock_reservations WHERE online_order_id = ?", String.class,
+                other)).isEqualTo("HELD");
+        assertThat(queries.availableQuantity(branch, product)).as("10 - 3").isEqualTo(7);
+
+        inTx(() -> {
+            stock.release(new OrderRef(mine, 1L));
+            return null;
+        });
+        assertThat(heldTotal(branch, product)).isEqualTo(3);
+    }
+
+    @Test
+    void releaseNeverTouchesConsumedRowsAndRefusesNullReferences() {
+        long consumed = held(branch, product, 2, "CONSUMED");
+
+        inTx(() -> {
+            stock.release(new OrderRef(consumed, 1L));
+            return null;
+        });
+
+        assertThat(jdbc.queryForObject("SELECT status FROM stock_reservations WHERE online_order_id = ?", String.class,
+                consumed)).isEqualTo("CONSUMED");
+        assertThatThrownBy(() -> inTx(() -> {
+            stock.release(new OrderRef(null, 1L));
+            return null;
+        })).isInstanceOf(IllegalArgumentException.class);
     }
 
     // ---------------------------------------------------------------- (c) lock strength and race

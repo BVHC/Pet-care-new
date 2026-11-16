@@ -90,6 +90,24 @@ public class OnlineOrder extends TimestampedEntity {
     @Column(name = "cancel_reason", length = 300)
     private String cancelReason;
 
+    /** Tài khoản đã hủy; {@code null} khi hệ thống hủy (ST10). Chỉ có ở đơn {@code CANCELLED}. */
+    @Column(name = "cancelled_by")
+    private Long cancelledBy;
+
+    /** Đơn hàng online#3 (PENDING_PAYMENT → CANCELLED): khách hủy; caller đã kiểm trạng thái và khóa dòng đơn. */
+    public void cancelByCustomer(Long accountId, String reason, Instant now) {
+        this.status = OnlineOrderStatus.CANCELLED;
+        this.cancelledBy = accountId;
+        this.cancelReason = reason;
+        this.cancelledAt = now;
+    }
+
+    /** Đơn hàng online#11 (DELIVERED → COMPLETED): khách xác nhận đã nhận; caller đã kiểm trạng thái và khóa dòng đơn. */
+    public void confirmReceived(Instant now) {
+        this.status = OnlineOrderStatus.COMPLETED;
+        this.completedAt = now;
+    }
+
     /** Đơn hàng online#1 (— → PENDING_PAYMENT): đơn mới, đang giữ hàng, chờ thanh toán trước {@code paymentDueAt}. */
     public static OnlineOrder place(String code, Long orderId, Long customerId, Long branchId, String receiverName,
             String receiverPhone, String shipAddress, long shippingFee, Instant paymentDueAt) {
