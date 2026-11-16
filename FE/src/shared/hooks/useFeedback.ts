@@ -1,9 +1,9 @@
-// React Query cho feedback (T47: UC83 khách, UC84 quản lý). Khóa cục bộ, gốc ['feedback', …].
+// React Query cho feedback (UC83 khách, UC84 quản lý chỉ xem). Khóa cục bộ, gốc ['feedback', …].
 import { keepPreviousData, useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { toApiError } from '../api/api-error';
 import { feedbackApi } from '../api/feedback.api';
 import { retryDelay, shouldRetry } from '../constants/realtime';
-import type { CreateFeedbackRequest, FeedbackQuery, ResolveFeedbackRequest } from '../types/feedback';
+import type { CreateFeedbackRequest, FeedbackQuery } from '../types/feedback';
 
 /** Lỗi 4xx không đổi khi thử lại. */
 const retry = { retry: (count: number, error: unknown) => shouldRetry(count, toApiError(error)), retryDelay } as const;
@@ -25,22 +25,6 @@ export function useSubmitFeedback() {
 export const useFeedbackList = (query: FeedbackQuery) =>
   useQuery({ queryKey: [...LIST_KEY, query], queryFn: () => feedbackApi.list(query), placeholderData: keepPreviousData, ...retry });
 
-/**
- * Mở chi tiết (#21) CÓ GHI DỮ LIỆU (NEW → SEEN) nên là mutation bắn từ thao tác bấm dòng, không phải query: không tự gọi
- * lại khi focus / mount, không prefetch. Mở xong làm mới danh sách để huy hiệu "Mới gửi" đổi thành "Đã xem".
- */
-export function useOpenFeedback() {
-  const queryClient = useQueryClient();
-  return useMutation({
-    mutationFn: (feedbackId: number) => feedbackApi.open(feedbackId),
-    onSuccess: () => queryClient.invalidateQueries({ queryKey: LIST_KEY }),
-  });
-}
-
-export function useResolveFeedback() {
-  const queryClient = useQueryClient();
-  return useMutation({
-    mutationFn: ({ feedbackId, ...body }: ResolveFeedbackRequest & { feedbackId: number }) => feedbackApi.resolve(feedbackId, body),
-    onSuccess: () => queryClient.invalidateQueries({ queryKey: LIST_KEY }),
-  });
-}
+/** Chi tiết (#21) chỉ đọc nên là query bình thường: tự tải khi mở hộp thoại, "Thử lại" gọi `refetch`. */
+export const useFeedbackDetail = (feedbackId: number) =>
+  useQuery({ queryKey: ['feedback', 'detail', feedbackId], queryFn: () => feedbackApi.get(feedbackId), ...retry });

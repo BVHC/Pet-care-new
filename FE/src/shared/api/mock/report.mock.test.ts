@@ -76,11 +76,6 @@ const feedbackRow = (f: Partial<FeedbackRecord> & Pick<FeedbackRecord, 'feedback
   branchId: 1,
   rating: null,
   content: 'Nội dung góp ý mẫu',
-  status: 'NEW',
-  seenAt: null,
-  resolvedBy: null,
-  resolvedAt: null,
-  resolutionNote: null,
   ...f,
 });
 const putFeedbacks = (feedbacks: FeedbackRecord[]) => localStorage.setItem(FEEDBACK_STATE_KEY, JSON.stringify({ feedbacks }));

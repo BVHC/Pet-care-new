@@ -158,40 +158,42 @@ PAGE-A 30 (bỏ ghi đè → trộn, bỏ kiểm 64 KB, đếm ký tự thay vì
 
 ## C. Feedback (UC83, UC84)
 
+> **Cập nhật 16/11/2026 (T81, ADR-0122, V55):** feedback **không còn trạng thái**, không có ghi chú xử lý và không có `POST /feedbacks/{id}/resolve` (#22 đã bỏ, BE trả 404). Màn của quản lý chỉ đọc; `GET /feedbacks/{id}` (#21) không còn tác dụng phụ; tham số `status` của #20 bị BE bỏ qua. Feedback tự bị xóa sau `feedback.retention_days` (BR-DG-05, ST24). Các mục dưới đã viết lại theo đó. Đã kiểm với BE thật 8082 (mục C.7).
+
 ### C.1 Tài khoản và dữ liệu mẫu (mật khẩu `Petcare123`)
 
-`khach@petcare.vn` (khách 1, có đủ 3 trạng thái), `khachmoi@petcare.vn` (chờ quyết định liên kết, BR-TK-19), `chuoi@petcare.vn` (SUPER_MANAGER), `manager@store1.vn` (BRANCH_MANAGER chi nhánh 1), `manager2@store2.vn` (chi nhánh 2, DRAFT). 6 feedback (#1 RESOLVED, #2 SEEN `WEBSITE` không gắn chi nhánh, #3 NEW, #4 SEEN, #5 NEW `OTHER` không gắn chi nhánh, #6 RESOLVED; #3 và #4 của khách 3, 4 là hồ sơ tại quầy dùng chung SĐT với `khachmoi@`); ngày tính lùi từ hôm nay theo giờ Việt Nam, đều trước 00:00 hôm nay nên không tính vào giới hạn hôm nay. Reset: xóa `petcare-mock-feedback`.
+`khach@petcare.vn` (khách 1, có #1, #2, #3), `khachmoi@petcare.vn` (chờ quyết định liên kết, BR-TK-19), `chuoi@petcare.vn` (SUPER_MANAGER), `manager@store1.vn` (BRANCH_MANAGER chi nhánh 1), `manager2@store2.vn` (chi nhánh 2, DRAFT). 6 feedback (#2 `WEBSITE` và #5 `OTHER` không gắn chi nhánh, còn lại chi nhánh 1; #4 và #6 của khách 3, 4 là hồ sơ tại quầy dùng chung SĐT với `khachmoi@`); ngày tính lùi từ hôm nay theo giờ Việt Nam, đều trước 00:00 hôm nay nên không tính vào giới hạn hôm nay. Reset: xóa `petcare-mock-feedback`.
 
-### C.2 Endpoint mock (content-v1 #18–22; test: `feedback.mock.test.ts`)
+### C.2 Endpoint mock (content-v1 #18–21; test: `feedback.mock.test.ts`)
 
 | # | Route mock | Quyền | Rule đã mô phỏng |
 |---|---|---|---|
 | 18 | `POST /api/me/feedbacks` | CUSTOMER | Thứ tự BR-TK-19 ("Hồ sơ của bạn đang chờ quyết định liên kết…") → nội dung 10–2000 **code point** (NFC + strip) → điểm 1–5 → BRANCH_SERVICE thiếu chi nhánh → chi nhánh không ACTIVE 404 → quá 5/ngày [CFG] "Bạn đã gửi đủ 5 feedback hôm nay, có thể gửi tiếp từ 00:00 ngày …" (ngày Việt Nam); sau khi gửi gọi `markHasData(customerId)` |
 | 19 | `GET /api/me/feedbacks` | CUSTOMER | Mảng, không phân trang, mới nhất trước, chỉ của chính mình; **không chặn** khách chờ liên kết |
-| 20 | `GET /api/feedbacks` | SUPER_MANAGER, BRANCH_MANAGER | Phân trang; lọc `branchId` / `status` / `topic` / `from` / `to` (`yyyy-MM-dd`, giờ Việt Nam, gồm hai đầu; ngày không có thật bị từ chối); `from > to` → 400 "Ngày bắt đầu không được sau ngày kết thúc"; `createdAt DESC`. BRANCH_MANAGER: bỏ `branchId` = chi nhánh mình, chi nhánh khác → 403 `ACCESS_DENIED_SCOPE_MISMATCH`, không thấy feedback không gắn chi nhánh; chi nhánh 2 → danh sách rỗng (không phải 403) |
-| 21 | `GET /api/feedbacks/:id` | như trên | 404 / 403 phạm vi; **có tác dụng phụ** NEW → SEEN, ghi `seenAt` MỘT lần (mở lần hai không đổi) |
-| 22 | `POST /api/feedbacks/:id/resolve` | như trên | Chỉ từ `SEEN`; ghi chú trống sau strip → 400 `BR-DG-04` "Vui lòng nhập ghi chú xử lý", tối đa 2000 (UTF-16); NEW hoặc RESOLVED → 409 "Không thể chuyển trạng thái Feedback từ … sang RESOLVED"; ghi `resolvedBy` (chỉ mã), `resolvedAt`, `resolutionNote` |
+| 20 | `GET /api/feedbacks` | SUPER_MANAGER, BRANCH_MANAGER | Phân trang; lọc `branchId` / `topic` / `from` / `to` (tham số `status` của bản cũ bị bỏ qua như BE: 200, trả đủ) (`yyyy-MM-dd`, giờ Việt Nam, gồm hai đầu; ngày không có thật bị từ chối); `from > to` → 400 "Ngày bắt đầu không được sau ngày kết thúc"; `createdAt DESC`. BRANCH_MANAGER: bỏ `branchId` = chi nhánh mình, chi nhánh khác → 403 `ACCESS_DENIED_SCOPE_MISMATCH`, không thấy feedback không gắn chi nhánh; chi nhánh 2 → danh sách rỗng (không phải 403) |
+| 21 | `GET /api/feedbacks/:id` | như trên | **Chỉ đọc** (không ghi state); 404 trước, rồi 403 phạm vi |
+| ~~22~~ | ~~`POST /api/feedbacks/:id/resolve`~~ | — | Đã bỏ (ADR-0122): mock không có route, trả 404 như BE |
 
-Khách chỉ thấy `MyFeedback` (không có ghi chú nội bộ, BR-DG-04).
+Khách thấy `MyFeedback` (6 trường: không tên khách, không tên chi nhánh); quản lý thấy `Feedback` (9 trường). Cả hai không có trường trạng thái.
 
 ### C.3 ASSUMPTION và chỗ BE khác kế hoạch (đã đọc code BE)
 
 - `GET /me/feedbacks` **không** chặn khách còn chờ quyết định liên kết: BE (`FeedbackSubmitService.listMine`) chỉ kiểm BR-TK-19 ở POST (không có `MyFeedbackService` như kế hoạch giả định); khách đó nhận `[]` (thực tế rỗng vì chưa gửi được); trang `/review` nằm sau `RequireLinkDecision` nên không gọi tới.
 - `GET /feedbacks`: BE kiểm `from > to` (400) **trước** phạm vi chi nhánh (403), ngược với thứ tự chung của kế hoạch.
 - Gửi: chi nhánh có gửi `branchId` phải ACTIVE với **mọi** chủ đề (không chỉ BRANCH_SERVICE); không ACTIVE hoặc không có → 404.
-- Ghi chú xử lý ≤ 2000 theo UTF-16 (`@Size`), khác nội dung feedback đếm code point. Giới hạn mỗi ngày là hằng `DAILY_LIMIT = 5` (mặc định của [CFG] `feedback.max_per_day`; mock identity chưa có tham số này). Thời điểm trả `…Z` như BE thật (hợp đồng ghi `+07:00`), FE định dạng giờ Việt Nam tường minh.
+- Giới hạn mỗi ngày là hằng `DAILY_LIMIT = 5` (mặc định của [CFG] `feedback.max_per_day`; mock identity chưa có tham số này). Thời điểm trả `…Z` như BE thật (hợp đồng ghi `+07:00`), FE định dạng giờ Việt Nam tường minh.
 
 ### C.4 Giao diện
 
-- **Khách `/review` ("Góp ý của tôi")**: thay hẳn trang cũ toàn dữ liệu giả (tab Google, "hữu ích", modal chi nhánh cứng, "hiển thị sau khi duyệt" trái BR-DG-02). Nói rõ góp ý không hiển thị công khai. Form: chủ đề (Dịch vụ tại chi nhánh / Website / Khác), chi nhánh (bắt buộc khi chọn dịch vụ tại chi nhánh, từ chi nhánh ACTIVE công khai), điểm 1–5 tùy chọn (có "Bỏ chọn"), nội dung 10–2000 có bộ đếm theo code point. Danh sách của tôi: mới nhất trước, huy hiệu Mới gửi / Đã xem / Đã xử lý. Gửi xong form được làm sạch, thông báo mất khi gõ tiếp. Nhãn menu người dùng ở `SiteHeader` đổi "Đánh giá dịch vụ" → "Góp ý của tôi".
-- **Quản trị `/admin/feedbacks`**: lọc trạng thái, chủ đề, chi nhánh (**chỉ SUPER_MANAGER**; BRANCH_MANAGER ngầm là chi nhánh mình), từ ngày / đến ngày, phân trang; bấm dòng mở chi tiết (gọi #21, NEW → SEEN, danh sách làm mới; không prefetch chi tiết) với ô "Ghi chú xử lý" (bắt buộc, ≤ 2000, bộ đếm) và nút "Đánh dấu đã xử lý" **chỉ khi SEEN**; khi RESOLVED chỉ đọc (ai, lúc nào, ghi chú).
+- **Khách `/review` ("Góp ý của tôi")**: thay hẳn trang cũ toàn dữ liệu giả (tab Google, "hữu ích", modal chi nhánh cứng, "hiển thị sau khi duyệt" trái BR-DG-02). Nói rõ góp ý không hiển thị công khai. Form: chủ đề (Dịch vụ tại chi nhánh / Website / Khác), chi nhánh (bắt buộc khi chọn dịch vụ tại chi nhánh, từ chi nhánh ACTIVE công khai), điểm 1–5 tùy chọn (có "Bỏ chọn"), nội dung 10–2000 có bộ đếm theo code point. Danh sách của tôi: mới nhất trước, không có huy hiệu trạng thái; câu "Góp ý chỉ được lưu một thời gian rồi tự xóa" (BR-DG-05; FE không đọc [CFG] nên không ghi số ngày). Gửi xong form được làm sạch, thông báo mất khi gõ tiếp. Nhãn menu người dùng ở `SiteHeader` đổi "Đánh giá dịch vụ" → "Góp ý của tôi".
+- **Quản trị `/admin/feedbacks`**: chỉ đọc. Lọc chủ đề, chi nhánh (**chỉ SUPER_MANAGER**; BRANCH_MANAGER ngầm là chi nhánh mình), từ ngày / đến ngày, phân trang; không có cột hay bộ lọc trạng thái. Đầu trang có câu: góp ý chỉ lưu trong thời hạn cấu hình (`feedback.retention_days`, mặc định 30 ngày), quá hạn tự xóa, báo cáo chỉ tính trong thời hạn đó. Bấm dòng mở chi tiết (`GET` #21 bằng `useFeedbackDetail`, một query bình thường, không làm mới danh sách): khách, chủ đề, chi nhánh, mức hài lòng, giờ gửi, nội dung; không có ô ghi chú hay nút xử lý.
 
 ### C.5 Ca kiểm thử
 
 | # | Tài khoản | Làm | Kỳ vọng | Test tự động (rút gọn) |
 |---|---|---|---|---|
-| 1 | khach@ | Mở `/review` | h1 "Góp ý của tôi", câu "không hiển thị công khai"; 3 góp ý: Mới gửi (hôm qua 16:20), Đã xem, Đã xử lý; không có "ghi chú nội bộ" hay góp ý của khách khác | `ReviewsPage` › có `<h1>`; mới nhất trước; không hiện ghi chú nội bộ |
-| 2 | khach@ | Chi nhánh Cầu Giấy, 4 sao, nội dung ≥ 10 ký tự, Gửi | "Đã gửi góp ý"; mục mới ở đầu, Mới gửi, 4 sao; form sạch | › hợp lệ: có thông báo thành công |
+| 1 | khach@ | Mở `/review` | h1 "Góp ý của tôi", câu "không hiển thị công khai"; 3 góp ý (hôm qua 16:20, 24/10, 18/10), không có huy hiệu trạng thái, không có góp ý của khách khác; có câu "Góp ý chỉ được lưu một thời gian rồi tự xóa" | `ReviewsPage` › có `<h1>`; mới nhất trước; không hiện góp ý của khách khác và nói rõ lưu có thời hạn |
+| 2 | khach@ | Chi nhánh Cầu Giấy, 4 sao, nội dung ≥ 10 ký tự, Gửi | "Đã gửi góp ý"; mục mới ở đầu, 4 sao, không huy hiệu; form sạch | › hợp lệ: có thông báo thành công |
 | 3 | khach@ | Chủ đề Website, không điểm; chọn 2 sao rồi "Bỏ chọn" | Gửi được, không chi nhánh, không sao | › chủ đề Website; Bỏ chọn |
 | 4 | khach@ | Gõ "ngắn", Gửi | "Nội dung feedback phải từ 10 đến 2000 ký tự", nội dung giữ nguyên | › nội dung quá ngắn |
 | 5 | khach@ | Chủ đề chi nhánh nhưng chưa chọn chi nhánh | "Vui lòng chọn chi nhánh khi góp ý về dịch vụ tại chi nhánh" | › chưa chọn chi nhánh |
@@ -200,14 +202,22 @@ Khách chỉ thấy `MyFeedback` (không có ghi chú nội bộ, BR-DG-04).
 | 8 | khachmoi@ | Mở `/review`, gửi Website | "Bạn chưa gửi góp ý nào"; gửi thì "Hồ sơ của bạn đang chờ quyết định liên kết…" (BR-TK-19), nội dung giữ | › hồ sơ còn chờ quyết định liên kết |
 | 9 | khach@ | Menu người dùng ở header | Mục "Góp ý của tôi" dẫn tới `/review` | › mục "Góp ý của tôi" trong menu |
 | 10 | chuoi@ | Mở `/admin/feedbacks` | h1 "Góp ý của khách"; 6 góp ý, mới nhất trước; #5 "Không gắn chi nhánh" và "Chưa chấm" | `AdminFeedbacksPage` › danh sách (UC84) |
-| 11 | chuoi@ | Lọc Trạng thái "Mới gửi", Chủ đề Website, Chi nhánh, Từ / Đến ngày; Từ > Đến; Xóa lọc | Thu hẹp đúng; Từ > Đến → "Ngày bắt đầu không được sau ngày kết thúc"; Xóa lọc về đủ 6 | › bộ lọc và phân trang |
-| 12 | chuoi@ | Bấm dòng "Mới gửi" | Hộp thoại "Góp ý #n"; thành "Đã xem" ở cả hộp thoại và bảng; có giờ xem lần đầu | › mở chi tiết |
-| 13 | chuoi@ | Mở góp ý "Đã xem": ghi chú trống rồi Đánh dấu đã xử lý; sau đó nhập ghi chú, lưu | Lần 1 "Vui lòng nhập ghi chú xử lý", giữ nhập. Lần 2 chỉ đọc, "Bạn", "Đã đánh dấu xử lý góp ý #n". Tab thứ hai xử lý trước thì báo 409 | › xử lý (SEEN → RESOLVED…); người khác vừa xử lý xong: 409 |
+| 11 | chuoi@ | Lọc Chủ đề Website, Chi nhánh, Từ / Đến ngày; Từ > Đến; Xóa lọc | Thu hẹp đúng; Từ > Đến → "Ngày bắt đầu không được sau ngày kết thúc"; Xóa lọc về đủ 6 | › bộ lọc và phân trang |
+| 12 | chuoi@ | Bấm một dòng | Hộp thoại "Góp ý #n" đủ thông tin; không có trạng thái, ô ghi chú hay nút xử lý; chỉ một GET chi tiết, không request ghi, không làm mới danh sách | › mở chi tiết (chỉ đọc, #21) |
+| 13 | chuoi@ | Xem trang | Không có cột "Trạng thái", không có ô lọc "Trạng thái", không còn chữ Mới gửi / Đã xem / Đã xử lý; có câu về thời hạn lưu giữ; request danh sách không mang `status` | › không có cột hay bộ lọc trạng thái…; gọi BE không kèm tham số status |
 | 14 | manager@store1.vn rồi manager2@store2.vn | Mở `/admin/feedbacks` | store1: #3, #4, #6, #1, không có bộ lọc chi nhánh, không thấy #5 và #2. store2: "Chưa có góp ý nào" (không phải 403) | › phạm vi theo vai trò; rỗng: chưa có góp ý nào |
 
-### C.6 Đột biến: 97 đột biến, 97 bị bắt
+### C.6 Đột biến: 97 đột biến, 97 bị bắt (bản trước 16/11; đã viết lại với bản không trạng thái, xem C.7)
 
 M01–M50 (luật mock: giới hạn ngày, đếm code point, BR-TK-19, lộ ghi chú nội bộ, phạm vi chi nhánh, resolve từ NEW, mở lại đổi `seenAt`, `markHasData`, sắp xếp, `from > to`…), P01–P20 (trang khách), A01–A27 (trang admin: lần đầu lỗi hạ tầng `0xC0000142` khi chạy song song, chạy lại tuần tự: 27/27 đỏ).
+
+### C.7 Cập nhật 16/11/2026: bỏ trạng thái, ghép BE thật (T81)
+
+- **Test:** `feedback.mock.test.ts` 82 ca, `AdminFeedbacksPage.test.tsx` 22 ca, `ReviewsPage.test.tsx` 19 ca (cùng `custmerge`, `report` mock) xanh. Đột biến mới 11/11 bị bắt: gửi lại `status` ở danh sách, chi tiết gọi bằng POST, mở chi tiết ghi state, bỏ phạm vi chi nhánh, mock còn route `resolve`, mock từ chối `status`, `MyFeedback` lộ `customerId`, bỏ câu thời hạn (admin, khách), khách hiện lại huy hiệu, chi tiết admin hiện lại hàng trạng thái.
+- **BE thật 8082 + FE 5173 (mock tắt), chỉ đọc, Playwright 28/29 đạt, cộng luồng gửi bên dưới:** SUPER_MANAGER `/admin/feedbacks` 2 dòng (#1, #2), không cột / bộ lọc / chữ trạng thái, mở chi tiết #1 (200), không request `/resolve`, danh sách không mang `status`, báo cáo Feedback đúng (Tây Hồ 1 góp ý 5,0; không gắn chi nhánh 1 góp ý 4,0); BRANCH_MANAGER chi nhánh 1 `/admin/feedbacks` 1 dòng (#1), không có ô lọc Chi nhánh; khách demo `minh.anh` `/review` 1 góp ý, không huy hiệu, có câu thời hạn. Ca đỏ duy nhất: lỗi console 404 của `GET /api/me/cart` (module shop, BE chưa có controller), không liên quan feedback.
+- **BE đo bằng API (cùng ngày):** `?status=NEW` 200 trả đủ; `?from > to` 400 `VALIDATION_FAILED`; `?topic=NOPE` 400 `MALFORMED_REQUEST`; `/feedbacks/999` 404; BRANCH_MANAGER chi nhánh 1 mở #2 hoặc `?branchId=2` 403 `ACCESS_DENIED_SCOPE_MISMATCH`; khách gọi `GET /feedbacks` 403; `OPTIONS /feedbacks/1/resolve` 404 (đường dẫn không còn).
+- **Luồng gửi đã kiểm trên BE thật (Hiến duyệt, 13/13 đạt):** khách `minh.anh` ở `/review`: nội dung "ngắn" → 400 "Nội dung feedback phải từ 10 đến 2000 ký tự", nội dung giữ nguyên; chủ đề chi nhánh thiếu chi nhánh → 400 "Vui lòng chọn chi nhánh…"; gửi Website không chi nhánh, không điểm → 201, danh sách tự làm mới (2 mục, mục mới ở đầu, không huy hiệu), form sạch; SUPER_MANAGER thấy 3 dòng, BRANCH_MANAGER chi nhánh 1 vẫn 1 dòng. **Đã ghi 1 dòng vào DB 5433:** feedback #3 "TEST T81…" (xem `SHARED-CHANGES.md`; ST24 tự xóa theo `feedback.retention_days`, hoàn tác thủ công: `DELETE FROM feedbacks WHERE id = 3`).
+- **Chưa kiểm trên BE thật:** giới hạn 5 góp ý mỗi ngày (chỉ gửi 1) và chủ đề BRANCH_SERVICE kèm chi nhánh hợp lệ; BRANCH_MANAGER chi nhánh 2 (`c9.bm2@example.vn`, tài khoản fixture, không có mật khẩu trong README); ST24 xóa sau hạn (đang `feedback.retention_days` = 365 ở 5433).
 
 ## D. Care Task của lễ tân (UC87)
 

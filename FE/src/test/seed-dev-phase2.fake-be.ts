@@ -126,7 +126,7 @@ export function installFakeBe(client: AxiosInstance, options: FakeBeOptions = {}
   const shifts: FakeShift[] = [];
   const careLogs: { careLogId: number; bookingId: number; abnormal: boolean; addenda: number }[] = [];
   const accounts = new Map<string, { id: number; password: string; role: string; verified: boolean }>();
-  const feedbacks: { feedbackId: number; email: string; status: string }[] = [];
+  const feedbacks: { feedbackId: number; email: string }[] = [];
   STAFF_KEYS.forEach((key, i) => accounts.set(`${key}@petcare.local`, { id: i + 2, password: DEV_PASSWORD, role: ROLE_OF_KEY[key], verified: true }));
 
   const ok = (data: unknown): Reply => ({ status: 200, data });
@@ -516,7 +516,7 @@ export function installFakeBe(client: AxiosInstance, options: FakeBeOptions = {}
     const denied = only(who, 'CUSTOMER');
     if (denied) return denied;
     if (body.topic === 'BRANCH_SERVICE' && !body.branchId) return bad('BR-DG-01: thiếu chi nhánh');
-    const f = { feedbackId: next(), email: String(who), status: 'NEW' };
+    const f = { feedbackId: next(), email: String(who) };
     feedbacks.push(f);
     return created({ feedbackId: f.feedbackId });
   });
@@ -524,13 +524,6 @@ export function installFakeBe(client: AxiosInstance, options: FakeBeOptions = {}
   route('GET', '/api/feedbacks/:id', ({ params }) => {
     const f = feedbacks.find((x) => x.feedbackId === Number(params[0]));
     if (!f) return bad('Không có feedback', 404);
-    if (f.status === 'NEW') f.status = 'SEEN';
-    return ok(f);
-  });
-  route('POST', '/api/feedbacks/:id/resolve', ({ params, body }) => {
-    const f = feedbacks.find((x) => x.feedbackId === Number(params[0]));
-    if (!f || f.status !== 'SEEN' || !body.resolutionNote) return bad('BR-DG-04: không xử lý được', 409);
-    f.status = 'RESOLVED';
     return ok(f);
   });
 

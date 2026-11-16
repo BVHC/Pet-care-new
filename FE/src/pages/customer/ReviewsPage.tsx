@@ -1,13 +1,12 @@
 /**
- * Góp ý của tôi (UC83, A02): gửi góp ý và xem lại góp ý đã gửi — content-v1 #18–19, BR-DG-01, 02, 04.
+ * Góp ý của tôi (UC83, A02): gửi góp ý và xem lại góp ý đã gửi — content-v1 #18–19, BR-DG-01, 02, 05.
  * Route nằm sau RequireLinkDecision: hồ sơ còn chờ quyết định liên kết không vào được trang này (BR-TK-19).
- * Góp ý không công khai, không sửa, không xóa; khách chỉ thấy trạng thái, không bao giờ thấy ghi chú nội bộ (BR-DG-04).
+ * Góp ý không công khai, không sửa, không xóa, không có trạng thái (ADR-0122); chỉ được lưu một thời hạn rồi tự xóa (BR-DG-05).
  * Mọi luật kiểm ở BE: form gửi nguyên văn rồi hiện câu báo lỗi của BE ngay trên nút gửi, không lặp lại luật ở client.
  */
 import { useState, type FormEvent } from 'react';
 import { AlertTriangle, MessageSquareText, Star } from 'lucide-react';
 import { Field, NoticeBar, type Notice } from '@/components/admin/form-ui';
-import { StatusBadge } from '@/components/ui/modal-templates';
 import { cn } from '@/lib/utils';
 import { plainMessage, toApiError } from '@/shared/api/api-error';
 import { CommonPageHero } from '@/shared/components/layout/CommonPageHero';
@@ -16,8 +15,6 @@ import { useMyFeedbacks, useSubmitFeedback } from '@/shared/hooks/useFeedback';
 import {
   FEEDBACK_CONTENT_MAX,
   FEEDBACK_CONTENT_MIN,
-  FEEDBACK_STATUS_LABELS,
-  FEEDBACK_STATUS_VARIANT,
   FEEDBACK_TOPIC_LABELS,
   feedbackContentLength,
   formatFeedbackTime,
@@ -97,7 +94,8 @@ function FeedbackForm() {
         Gửi góp ý mới
       </h2>
       <p className="mt-1.5 text-[13px] leading-relaxed text-(--color-text-secondary)">
-        Góp ý không hiển thị công khai. Chỉ quản lý PetCare xem được; bạn xem lại được nhưng không sửa hay xóa được.
+        Góp ý không hiển thị công khai. Chỉ quản lý PetCare xem được; bạn xem lại được nhưng không sửa hay xóa được. Góp ý chỉ được lưu một
+        thời gian rồi tự xóa.
       </p>
 
       <form onSubmit={onSubmit} noValidate className="mt-5 space-y-5">
@@ -265,7 +263,7 @@ function FeedbackHistory() {
         <div className="flex flex-col items-center rounded-[18px] border border-dashed border-(--color-border-default) bg-white px-6 py-14 text-center">
           <MessageSquareText className="mb-3 h-10 w-10 text-(--color-text-secondary) opacity-40" aria-hidden />
           <p className="font-bold text-(--color-text-primary)">Bạn chưa gửi góp ý nào</p>
-          <p className="mt-1 max-w-[36ch] text-sm text-(--color-text-secondary)">Góp ý đã gửi sẽ hiện ở đây cùng trạng thái xử lý.</p>
+          <p className="mt-1 max-w-[36ch] text-sm text-(--color-text-secondary)">Góp ý đã gửi sẽ hiện ở đây.</p>
         </div>
       ) : (
         <ul aria-labelledby="feedback-history-title" className={cn(cardClass, 'divide-y divide-(--color-border-default) overflow-hidden')}>
@@ -284,9 +282,6 @@ function FeedbackItem({ feedback: f, branchName }: { feedback: MyFeedback; branc
       <div className="flex flex-wrap items-center gap-x-3 gap-y-1">
         <span className="text-[13px] font-bold text-(--color-text-primary)">{FEEDBACK_TOPIC_LABELS[f.topic]}</span>
         {branchName && <span className="text-[13px] text-(--color-text-secondary)">{branchName}</span>}
-        <span className="ml-auto">
-          <StatusBadge status={FEEDBACK_STATUS_LABELS[f.status]} variant={FEEDBACK_STATUS_VARIANT[f.status]} />
-        </span>
       </div>
       <div className="mt-1 flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-(--color-text-secondary)">
         {f.rating != null && (

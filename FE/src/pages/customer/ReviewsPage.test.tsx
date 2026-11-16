@@ -14,8 +14,8 @@ import { useSession } from '../../shared/stores/session.store';
 import { ReviewsPage } from './ReviewsPage';
 
 // Dữ liệu mẫu ở shared/api/mock/feedback.mock.ts, đồng hồ ghim ở thứ Ba 27/10/2026 10:00 giờ Việt Nam. Của khach@petcare.vn (khách 1):
-// #3 NEW (chi nhánh 1, 3 sao, hôm qua 16:20) · #2 SEEN (WEBSITE, 4 sao, 24/10 20:40) · #1 RESOLVED (chi nhánh 1, 5 sao, 18/10 10:15,
-// có ghi chú nội bộ "… (ghi chú nội bộ)" mà khách KHÔNG được thấy). Feedback #4, #5, #6 là của khách khác.
+// #3 (chi nhánh 1, 3 sao, hôm qua 16:20) · #2 (WEBSITE, 4 sao, 24/10 20:40) · #1 (chi nhánh 1, 5 sao, 18/10 10:15). Feedback #4, #5, #6
+// là của khách khác. Feedback không có trạng thái (ADR-0122, V55): khách chỉ thấy nội dung đã gửi.
 beforeAll(() => installMockApi(apiClient));
 
 beforeEach(async () => {
@@ -66,7 +66,7 @@ describe('trang Góp ý của tôi (UC83; BR-DG-01, 02, 04)', () => {
       expect(screen.queryByRole('status', { name: 'Đang tải góp ý' })).not.toBeInTheDocument();
     });
 
-    it('mới nhất trước, kèm chủ đề, chi nhánh, điểm, giờ Việt Nam và huy hiệu "Mới gửi" / "Đã xem" / "Đã xử lý"', async () => {
+    it('mới nhất trước, kèm chủ đề, chi nhánh, điểm, giờ Việt Nam; không có huy hiệu trạng thái', async () => {
       renderPage();
       const rows = await items();
       expect(rows).toHaveLength(3);
@@ -74,26 +74,23 @@ describe('trang Góp ý của tôi (UC83; BR-DG-01, 02, 04)', () => {
       expect(rows[0]).toHaveTextContent('Phòng chờ hơi đông vào cuối tuần');
       expect(within(rows[0]).getByText('Dịch vụ tại chi nhánh')).toBeInTheDocument();
       expect(within(rows[0]).getByText('PetCare Cầu Giấy')).toBeInTheDocument();
-      expect(within(rows[0]).getByText('Mới gửi')).toBeInTheDocument();
       expect(within(rows[0]).getByRole('img', { name: 'Mức hài lòng 3 trên 5' })).toBeInTheDocument();
       expect(within(rows[0]).getByText('26/10/2026 16:20')).toBeInTheDocument();
 
       expect(rows[1]).toHaveTextContent('Trang đặt lịch dễ dùng');
       expect(within(rows[1]).getByText('Website')).toBeInTheDocument();
       expect(within(rows[1]).queryByText('PetCare Cầu Giấy')).not.toBeInTheDocument();
-      expect(within(rows[1]).getByText('Đã xem')).toBeInTheDocument();
       expect(within(rows[1]).getByText('24/10/2026 20:40')).toBeInTheDocument();
 
       expect(rows[2]).toHaveTextContent('Bác sĩ khám rất kỹ');
-      expect(within(rows[2]).getByText('Đã xử lý')).toBeInTheDocument();
       expect(within(rows[2]).getByRole('img', { name: 'Mức hài lòng 5 trên 5' })).toBeInTheDocument();
+      for (const row of rows) expect(row).not.toHaveTextContent(/Mới gửi|Đã xem|Đã xử lý/);
     });
 
-    it('không hiện ghi chú nội bộ của feedback đã xử lý, cũng không hiện góp ý của khách khác (BR-DG-04, BR-DG-02)', async () => {
+    it('không hiện góp ý của khách khác (BR-DG-02) và nói rõ góp ý chỉ được lưu một thời gian rồi tự xóa (BR-DG-05)', async () => {
       const { container } = renderPage();
       await historyList();
-      expect(container).not.toHaveTextContent('ghi chú nội bộ');
-      expect(container).not.toHaveTextContent('Đã gọi lại cảm ơn khách');
+      expect(container).toHaveTextContent('Góp ý chỉ được lưu một thời gian rồi tự xóa');
       expect(container).not.toHaveTextContent('chờ lấy thuốc'); // feedback #4 của khách khác
       expect(container).not.toHaveTextContent('nhắc lịch tiêm phòng'); // feedback #5 của khách khác
     });
@@ -101,7 +98,7 @@ describe('trang Góp ý của tôi (UC83; BR-DG-01, 02, 04)', () => {
     it('xuống dòng trong nội dung được giữ nguyên khi hiện lại', async () => {
       localStorage.setItem(
         FEEDBACK_STATE_KEY,
-        JSON.stringify({ feedbacks: [{ feedbackId: 1, customerId: 1, topic: 'OTHER', content: 'Dòng một của góp ý.\nDòng hai của góp ý.', status: 'NEW', createdAt: '2026-10-26T03:00:00.000Z' }] }),
+        JSON.stringify({ feedbacks: [{ feedbackId: 1, customerId: 1, topic: 'OTHER', content: 'Dòng một của góp ý.\nDòng hai của góp ý.', createdAt: '2026-10-26T03:00:00.000Z' }] }),
       );
       renderPage();
       const paragraph = within((await items())[0]).getByText(/Dòng một của góp ý/);
@@ -130,7 +127,7 @@ describe('trang Góp ý của tôi (UC83; BR-DG-01, 02, 04)', () => {
   });
 
   describe('gửi góp ý', () => {
-    it('hợp lệ: có thông báo thành công, danh sách làm mới (mục mới ở đầu, "Mới gửi"), form được làm sạch', async () => {
+    it('hợp lệ: có thông báo thành công, danh sách làm mới (mục mới ở đầu), form được làm sạch', async () => {
       const user = userEvent.setup();
       renderPage();
       await historyList();
@@ -145,7 +142,7 @@ describe('trang Góp ý của tôi (UC83; BR-DG-01, 02, 04)', () => {
       await waitFor(async () => expect(await items()).toHaveLength(4));
       const [first] = await items();
       expect(first).toHaveTextContent(validText);
-      expect(within(first).getByText('Mới gửi')).toBeInTheDocument();
+      expect(first).not.toHaveTextContent('Mới gửi');
       expect(within(first).getByRole('img', { name: 'Mức hài lòng 4 trên 5' })).toBeInTheDocument();
       expect(within(first).getByText('PetCare Cầu Giấy')).toBeInTheDocument();
       expect(within(first).getByText('27/10/2026 10:00')).toBeInTheDocument();
