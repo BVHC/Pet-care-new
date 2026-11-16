@@ -80,7 +80,6 @@ public abstract class ContentItSupport {
             jdbc.update("DELETE FROM feedbacks WHERE customer_id IN (" + ids(customers) + ")");
         }
         if (!accounts.isEmpty()) {
-            jdbc.update("DELETE FROM feedbacks WHERE resolved_by IN (" + ids(accounts) + ")");
             jdbc.update("DELETE FROM articles WHERE created_by IN (" + ids(accounts) + ")");
         }
         if (!categories.isEmpty()) {

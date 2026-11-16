@@ -64,15 +64,6 @@ public final class NotificationTemplateCode {
     public static final String SHIFT_ABSENCE_RECORDED = "SHIFT_ABSENCE_RECORDED";
     public static final String SHIFT_ABSENCE_RECORDED_APP = "SHIFT_ABSENCE_RECORDED_APP";
 
-    // DG — khiếu nại (docs/09 §D, V40)
-    public static final String COMPLAINT_CREATED_APP = "COMPLAINT_CREATED_APP";
-    public static final String COMPLAINT_TAKEN = "COMPLAINT_TAKEN";
-    public static final String COMPLAINT_TAKEN_APP = "COMPLAINT_TAKEN_APP";
-    public static final String COMPLAINT_RESOLVED = "COMPLAINT_RESOLVED";
-    public static final String COMPLAINT_RESOLVED_APP = "COMPLAINT_RESOLVED_APP";
-    public static final String COMPLAINT_REOPENED_APP = "COMPLAINT_REOPENED_APP";
-    public static final String COMPLAINT_ESCALATED_APP = "COMPLAINT_ESCALATED_APP";
-
     // KB — vật tư tiêu hao (docs/09 §E, V40)
     public static final String MATERIAL_SHORTAGE_APP = "MATERIAL_SHORTAGE_APP";
 

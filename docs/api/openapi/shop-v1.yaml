@@ -883,6 +883,10 @@ components:
       type: string
       enum: [PENDING_PAYMENT, PAID, PROCESSING, SHIPPED, DELIVERY_FAILED, DELIVERED, COMPLETED, CANCELLED]
       description: "03 #14 (08 §B)"
+    RefundStatus:
+      type: string
+      enum: [REQUESTED, SUCCEEDED, FAILED]
+      description: "03 #17 (returns-v1)"
     CartItem:
       type: object
       required: [productId, name, unit, unitPrice, quantity, available]
@@ -1104,6 +1108,9 @@ components:
         createdAt:
           type: string
           format: date-time
+        refundStatus:
+          $ref: "#/components/schemas/RefundStatus"
+          description: "Trạng thái hoàn tiền gần nhất của đơn; null khi chưa có hoàn tiền (08 §D Q4, ADR-0138)"
     ReasonRequest:
       type: object
       required: [reason]

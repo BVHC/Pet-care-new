@@ -187,7 +187,7 @@ paths:
     post:
       tags: ["Return requests"]
       summary: "Duyệt yêu cầu trả hàng"
-      description: "UC69 · BR-BH-14, BR-TG-12. Actor: A05. Quyền: BRANCH_MANAGER của chi nhánh của Order. Chuyển trạng thái: PENDING → APPROVED (Yêu cầu trả hàng#3); Hoàn tiền#1. Nhập lại lô gốc hoặc điều chỉnh giảm, sinh hoàn tiền theo hình thức đã thu (BR-TG-12), trong một transaction."
+      description: "UC69 · BR-BH-14, BR-TG-12. Actor: A05. Quyền: BRANCH_MANAGER của chi nhánh của Order. Chuyển trạng thái: PENDING → APPROVED (Yêu cầu trả hàng#3); Hoàn tiền#1 · tiền hoàn 0 đồng: PENDING → REFUNDED (Yêu cầu trả hàng#6), không sinh hoàn tiền. Nhập lại lô gốc hoặc điều chỉnh giảm, sinh hoàn tiền theo hình thức đã thu (BR-TG-12), trong một transaction. Nếu `refund_amount` = 0 thì yêu cầu chuyển thẳng `REFUNDED` (#6) và không sinh dòng hoàn tiền (BR-BH-14)."
       operationId: approveReturnRequest
       security:
         - bearerAuth: []
@@ -335,8 +335,8 @@ paths:
   "/refunds/{refundId}/confirm":
     post:
       tags: [Refunds]
-      summary: "Xác nhận đã hoàn tiền tại quầy"
-      description: "UC69 · BR-TG-13. Actor: A06. Quyền: Lễ tân có ca `OPEN` của chính mình. Chuyển trạng thái: REQUESTED → SUCCEEDED (Hoàn tiền#2). Số hoàn tính vào ca; yêu cầu trả hàng tương ứng → `REFUNDED` (Yêu cầu trả hàng#5)."
+      summary: "Xác nhận đã hoàn tiền (tại quầy hoặc ngoài hệ thống)"
+      description: "UC69 · BR-TG-13, BR-TG-14. Actor: A06, A05. Quyền: Lễ tân có ca `OPEN` của chính mình; hoặc BRANCH_MANAGER của chi nhánh với hoàn `GATEWAY` ở `FAILED`. Chuyển trạng thái: REQUESTED → SUCCEEDED (Hoàn tiền#2); FAILED → SUCCEEDED (Hoàn tiền#5). Hai đường. (a) A06, hoàn `CASH` / `TRANSFER` ở `REQUESTED`: ghi vào ca `OPEN` của chính người gọi (400 `BR-TG-01` nếu không có ca); `note` tùy chọn (mã giao dịch ngân hàng, lưu audit). (b) A05 của chi nhánh của Order, hoàn `GATEWAY` ở `FAILED`: xác nhận đã hoàn ngoài hệ thống, `note` bắt buộc (lưu audit, 400 nếu thiếu), không cần ca (Hoàn tiền#5). Yêu cầu trả hàng tương ứng (nếu có) → `REFUNDED` (Yêu cầu trả hàng#5)."
       operationId: confirmRefund
       security:
         - bearerAuth: []
@@ -365,7 +365,7 @@ paths:
                     type: integer
                     description: "HTTP status của kết quả, ví dụ 200, 201"
         "400":
-          description: "`BR-TG-01` không có ca `OPEN` · hoàn tiền `GATEWAY` không xác nhận tay (do ST21)"
+          description: "`BR-TG-01` đường (a) không có ca `OPEN` · `VALIDATION_FAILED` đường (b) thiếu `note`"
           content:
             "application/json":
               schema:
@@ -373,11 +373,15 @@ paths:
         "401":
           $ref: "#/components/responses/Unauthorized"
         "403":
-          $ref: "#/components/responses/Forbidden"
+          description: "Đường (a) chỉ A06; đường (b) chỉ A05 của chi nhánh của Order; hoàn `GATEWAY` ở `FAILED` mà người gọi là A06, hoặc hoàn tại quầy mà người gọi là A05"
+          content:
+            "application/json":
+              schema:
+                $ref: "#/components/schemas/Error"
         "404":
           $ref: "#/components/responses/NotFound"
         "409":
-          description: "`INVALID_STATE_TRANSITION` trạng thái hiện tại không cho phép (03 #16, #17)"
+          description: "`INVALID_STATE_TRANSITION` trạng thái hiện tại không cho phép (03 #16, #17) · hoàn `GATEWAY` không ở `FAILED` (ST21 tự xử lý `REQUESTED`)"
           content:
             "application/json":
               schema:

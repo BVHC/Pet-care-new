@@ -164,13 +164,13 @@ class Module:
 
     def op(self, method, path, op_id, name, tag, uc, rules, actor, authz, transition="—", body=None,
            resp=None, status=200, page=False, errors=(400, 401, 403, 404, 409), err_desc=None, query=None,
-           path_params=None, notes="", public=False, idem="—"):
+           path_params=None, notes="", public=False, idem="—", body_optional=False):
         self.ops.append(Op(method=method, path=path, op_id=op_id, name=name, tag=tag, uc=uc, rules=rules,
                            actor=actor, authz=authz, transition=transition, body=body, resp=resp, status=status,
                            page=page, errors=[e for e in errors
                                               if not (public and e in (401, 403) and e not in (err_desc or {}))],
                            err_desc=err_desc or {}, query=query or [], path_params=path_params or [],
-                           notes=notes, public=public, idem=idem))
+                           notes=notes, public=public, idem=idem, body_optional=body_optional))
 
     # ---- OpenAPI
     def _response(self, op):
@@ -211,7 +211,7 @@ class Module:
             if params:
                 o["parameters"] = params
             if op.body:
-                o["requestBody"] = {"required": True, "content": {"application/json": {
+                o["requestBody"] = {"required": not getattr(op, "body_optional", False), "content": {"application/json": {
                     "schema": {"$ref": f"#/components/schemas/{op.body}"}}}}
             responses = {str(op.status): self._response(op)}
             for e in op.errors:
@@ -317,7 +317,7 @@ class Module:
             L.append(f"- **`{op.method.upper()} {op.path}`** — {op.name}. "
                      + ("Public. " if op.public else "")
                      + (f"Query: {', '.join('`' + q.split('=')[0].rstrip('!') + ('' if q.split('=')[0].endswith('!') else '?') + '`' for q in op.query)}. " if op.query else "")
-                     + (f"Request `{op.body}`. " if op.body else "")
+                     + (f"Request `{op.body}`{' (tùy chọn)' if getattr(op, 'body_optional', False) else ''}. " if op.body else "")
                      + f"Response `{op.status}` {resp}."
                      + (f" Lỗi: {errs}." if errs else ""))
         L.append("\n### Schema\n")

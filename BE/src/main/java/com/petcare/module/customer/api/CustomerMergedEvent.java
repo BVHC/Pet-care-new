@@ -5,6 +5,6 @@ package com.petcare.module.customer.api;
  * transaction gộp, chỉ khai báo ở T55c (docs/adr/0117): <b>chưa có bên phát</b>, bản thật trước 7/12 (T75).
  * Listener (mỗi module giữ {@code customer_id} tự đổi {@code sourceId} → {@code targetId} của bản ghi mình, dùng
  * {@code @EventListener} đồng bộ như {@link PetOwnerTransferredEvent}): appointment, visit, boarding, sales (orders, carts,
- * online orders), care, content (feedback), complaint.
+ * online orders), care, content (feedback).
  */
 public record CustomerMergedEvent(Long sourceId, Long targetId) {}

@@ -30,9 +30,9 @@ m = Module(
     ],
     questions=[
         ("Q1", "Có cho khách chọn nhận tại chi nhánh thay vì giao tận nơi không", "TBD (PO)", "UC62"),
-        ("Q2", "Đơn vị vận chuyển là nhập tay (chuỗi) hay danh mục", "TBD (BE-2)", "BR-BH-11"),
-        ("Q3", "Chi nhánh xử lý do khách chọn (đề xuất) hay hệ thống tự chọn", "TBD (PO)", "BR-BH-08"),
-        ("Q4", "Báo cáo doanh thu có tính phí vận chuyển và trừ hoàn tiền thế nào", "TBD (BE-2)", "08 §B ASSUMPTION A5"),
+        ("Q2", "Đơn vị vận chuyển là nhập tay (chuỗi) hay danh mục", "Đã chốt: nhập tay (chuỗi, cột VARCHAR; 08 §G)", "BR-BH-11"),
+        ("Q3", "Chi nhánh xử lý do khách chọn (đề xuất) hay hệ thống tự chọn", "Đã chốt: khách chọn chi nhánh ACTIVE đủ hàng mọi dòng (08 §G, ADR-0137)", "BR-BH-08"),
+        ("Q4", "Báo cáo doanh thu có tính phí vận chuyển và trừ hoàn tiền thế nào", "Đã chốt: trừ hoàn tiền, phí vận chuyển báo riêng (08 §G, T54)", "08 §B ASSUMPTION A5"),
     ],
 )
 
@@ -42,6 +42,7 @@ m.param("OnlineOrderId", "onlineOrderId", "path", "int64")
 m.schema("OnlineOrderStatus", None,
          enum=["PENDING_PAYMENT", "PAID", "PROCESSING", "SHIPPED", "DELIVERY_FAILED", "DELIVERED", "COMPLETED", "CANCELLED"],
          desc="03 #14 (08 §B)")
+m.schema("RefundStatus", None, enum=["REQUESTED", "SUCCEEDED", "FAILED"], desc="03 #17 (returns-v1)")
 m.schema("CartItem", {
     "productId": "int64", "name": "string", "unit": "string", "unitPrice": "money|Giá hiện tại, chỉ để xem (BR-BH-07)",
     "quantity": "int", "imageUrl": "url?", "available": "bool|false nếu hết hàng toàn chuỗi",
@@ -67,6 +68,7 @@ m.schema("OnlineOrder", {
     "carrier": "string?", "trackingCode": "string?", "redeliveryCount": "int",
     "paymentDueAt": "datetime", "paidAt": "datetime?", "shippedAt": "datetime?", "deliveredAt": "datetime?",
     "completedAt": "datetime?", "cancelledAt": "datetime?", "cancelReason": "string?", "createdAt": "datetime",
+    "refundStatus": "ref:RefundStatus?|Trạng thái hoàn tiền gần nhất của đơn; null khi chưa có hoàn tiền (08 §D Q4, ADR-0138)",
 })
 m.schema("ReasonRequest", {"reason": "string:300"})
 m.schema("ShipRequest", {"carrier": "string:100", "trackingCode": "string:100"})

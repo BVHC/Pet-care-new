@@ -73,14 +73,7 @@ public enum ConfigKey {
 
     // DG
     FEEDBACK_MAX_PER_DAY("feedback.max_per_day", INT),                     // BR-DG-01
-
-    // DG — khiếu nại (docs/09 §G, docs/adr/0113; V40)
-    COMPLAINT_MAX_OPEN("complaint.max_open", INT),                         // BR-DG-05
-    COMPLAINT_REOPEN_DAYS("complaint.reopen_days", INT),                   // BR-DG-07
-    COMPLAINT_MAX_REOPEN("complaint.max_reopen", INT),                     // BR-DG-07
-    COMPLAINT_SLA_OPEN_HOURS("complaint.sla_open_hours", INT),             // BR-DG-08
-    COMPLAINT_SLA_RESOLVE_HOURS("complaint.sla_resolve_hours", INT),       // BR-DG-08
-    COMPLAINT_AUTO_CLOSE_DAYS("complaint.auto_close_days", INT),           // BR-DG-09
+    FEEDBACK_RETENTION_DAYS("feedback.retention_days", INT),               // BR-DG-05 (V51, docs/adr/0122)
 
     // NS — nhân sự (docs/02 BR-NS-04, BR-NS-07, docs/adr/0113; V40)
     WORKFORCE_REQUEST_LEAD_HOURS("workforce.request_lead_hours", INT),     // BR-NS-04
@@ -107,7 +100,7 @@ public enum ConfigKey {
     AI_LOG_RETENTION_DAYS("ai.log.retention_days", INT),                                 // BR-AI-24
     AI_CHAT_GENERAL_KNOWLEDGE_ENABLED("ai.chat.general_knowledge_enabled", BOOL),        // BR-AI-33 (V52, docs/adr/0136)
     AI_CHAT_BUSINESS_INTENT_ENABLED("ai.chat.business_intent_enabled", BOOL),            // BR-AI-31 (V53, docs/adr/0134)
-    AI_CHAT_PET_CONTEXT_ENABLED("ai.chat.pet_context_enabled", BOOL),                    // BR-AI-32 (V55, docs/adr/0135)
+    AI_CHAT_PET_CONTEXT_ENABLED("ai.chat.pet_context_enabled", BOOL),                    // BR-AI-32 (V56, docs/adr/0135)
 
     // BH online, TG online, trả hàng, bình luận (docs/08 §G, docs/adr/0117; V44, V45, V46, V48)
     SHOP_PAYMENT_WINDOW_HOURS("shop.payment_window_hours", INT),         // BR-BH-12

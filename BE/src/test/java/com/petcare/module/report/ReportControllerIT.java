@@ -237,8 +237,8 @@ class ReportControllerIT extends CashierItSupport {
     void feedbackIsNamedAndNoShowAndRevaccinationAnswer() {
         customerForFeedback = newCustomer();
         jdbc.update("""
-                INSERT INTO feedbacks (customer_id, topic, branch_id, rating, content, status, created_at, updated_at)
-                VALUES (?, 'BRANCH_SERVICE', ?, 5, 'Báo cáo IT feedback đủ dài.', 'NEW', ?, ?)""", customerForFeedback,
+                INSERT INTO feedbacks (customer_id, topic, branch_id, rating, content, created_at, updated_at)
+                VALUES (?, 'BRANCH_SERVICE', ?, 5, 'Báo cáo IT feedback đủ dài.', ?, ?)""", customerForFeedback,
                 b1, Timestamp.from(IN_PERIOD), Timestamp.from(IN_PERIOD));
 
         Map<String, Object> feedback = get("/api/reports/feedback?branchId=" + b1 + "&" + PERIOD, manager1);

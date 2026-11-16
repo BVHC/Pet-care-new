@@ -82,7 +82,7 @@ paths:
                     type: integer
                     description: "HTTP status của kết quả, ví dụ 200, 201"
         "400":
-          description: "`BR-CN-08` còn điều kiện chặn (message liệt kê) · `BR-CN-09` còn lịch `BOOKED` mà chưa chọn hủy hàng loạt"
+          description: "`BR-CN-08` còn điều kiện chặn (message liệt kê) · `BR-CN-09` còn lịch `BOOKED` mà `cancelBookings = false` (bắt buộc hủy hàng loạt, không có đường giữ lại)"
           content:
             "application/json":
               schema:
@@ -103,7 +103,7 @@ paths:
     post:
       tags: ["Branch lifecycle"]
       summary: "Mở lại chi nhánh đang tạm ngừng"
-      description: "UC13 · BR-CN-10, BR-QT-04. Actor: A04. Quyền: Chỉ SUPER_MANAGER. Chuyển trạng thái: SUSPENDED → ACTIVE (Chi nhánh mở rộng#2)."
+      description: "UC13 · BR-CN-10, BR-QT-04. Actor: A04. Quyền: Chỉ SUPER_MANAGER. Chuyển trạng thái: SUSPENDED → ACTIVE (Chi nhánh mở rộng#2). Xóa `suspendedAt`, lý do tạm ngừng và `expectedResumeOn` của chi nhánh; lịch sử tạm ngừng còn trong audit (ADR-0139)."
       operationId: resumeBranch
       security:
         - bearerAuth: []
@@ -176,7 +176,7 @@ paths:
                     type: integer
                     description: "HTTP status của kết quả, ví dụ 200, 201"
         "400":
-          description: "`BR-CN-08` còn điều kiện chặn (message liệt kê) · `BR-CN-09` còn lịch `BOOKED` mà chưa chọn hủy hàng loạt · còn tồn kho > 0 · còn nhân viên `ACTIVE`"
+          description: "`BR-CN-08` còn điều kiện chặn (message liệt kê) · `BR-CN-09` còn lịch `BOOKED` mà `cancelBookings = false` (bắt buộc hủy hàng loạt, không có đường giữ lại) · còn tồn kho > 0 · còn nhân viên `ACTIVE`"
           content:
             "application/json":
               schema:
@@ -299,7 +299,7 @@ components:
           format: date
         cancelBookings:
           type: boolean
-          description: "true = hủy hàng loạt lịch hẹn, đặt chỗ `BOOKED` và thông báo khách (BR-CN-09)"
+          description: "Còn lịch hẹn / đặt chỗ `BOOKED` thì bắt buộc `true` (hủy hàng loạt và thông báo khách, BR-CN-09); `false` khi còn lịch = 400 `BR-CN-09`, không có đường giữ lại"
         careTaskTargetBranchId:
           type: [integer, "null"]
           format: int64
@@ -313,6 +313,7 @@ components:
           maxLength: 300
         cancelBookings:
           type: boolean
+          description: "Như `SuspendBranchRequest`: còn lịch `BOOKED` thì bắt buộc `true` (BR-CN-09)"
         careTaskTargetBranchId:
           type: [integer, "null"]
           format: int64

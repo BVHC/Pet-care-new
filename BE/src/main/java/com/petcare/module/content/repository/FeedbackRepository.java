@@ -1,11 +1,8 @@
 package com.petcare.module.content.repository;
 
-import java.util.Optional;
-
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.JpaSpecificationExecutor;
 import org.springframework.data.jpa.repository.Modifying;
-import org.springframework.data.jpa.repository.Lock;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 import org.springframework.transaction.annotation.Propagation;
@@ -13,11 +10,9 @@ import org.springframework.transaction.annotation.Transactional;
 
 import com.petcare.module.content.entity.Feedback;
 
-import jakarta.persistence.LockModeType;
-
 public interface FeedbackRepository extends JpaRepository<Feedback, Long>, JpaSpecificationExecutor<Feedback> {
 
-    /** Chỉ chi nhánh của feedback (có thể null): phân quyền trước khi ghi, không nạp entity vào persistence context. */
+    /** Chỉ chi nhánh của feedback (có thể null): phân quyền trước khi đọc, không nạp entity vào persistence context. */
     interface BranchOnly {
         /** Cột thứ hai để dòng có chi nhánh NULL vẫn là kết quả (một cột NULL duy nhất thì Spring Data trả rỗng). */
         Long getId();
@@ -26,14 +21,6 @@ public interface FeedbackRepository extends JpaRepository<Feedback, Long>, JpaSp
     }
 
     java.util.Optional<BranchOnly> findBranchOnlyById(Long id);
-
-    /** NEW → SEEN có điều kiện (BR-DG-04): trả 1 nếu đây là lần mở đầu tiên, 0 nếu đã có người mở trước. */
-    @Transactional(propagation = Propagation.MANDATORY)
-    @Modifying
-    @Query("UPDATE Feedback f SET f.status = com.petcare.module.content.entity.FeedbackStatus.SEEN, "
-            + "f.seenAt = :now, f.updatedAt = :now WHERE f.id = :id "
-            + "AND f.status = com.petcare.module.content.entity.FeedbackStatus.NEW")
-    int markSeenIfNew(@Param("id") Long id, @Param("now") java.time.Instant now);
 
     /**
      * Advisory lock theo transaction ({@code pg_advisory_xact_lock}, namespace 1003 theo khách): tuần tự hóa giới hạn
@@ -48,8 +35,23 @@ public interface FeedbackRepository extends JpaRepository<Feedback, Long>, JpaSp
 
     java.util.List<Feedback> findByCustomerIdOrderByCreatedAtDescIdDesc(Long customerId);
 
-    @Transactional(propagation = Propagation.MANDATORY)
-    @Lock(LockModeType.PESSIMISTIC_WRITE)
-    @Query("SELECT f FROM Feedback f WHERE f.id = :id")
-    Optional<Feedback> findByIdForUpdate(@Param("id") Long id);
+    /**
+     * Một lô của ST24 (BR-DG-05, docs/adr/0122, 0131): xóa cứng tối đa {@code limit} feedback có
+     * {@code created_at < cutoff} (so sánh chặt: đúng biên thì giữ), cũ nhất trước. {@code created_at} bất biến
+     * ({@code updatable = false}, không có UPDATE nào khác trong mã) nên mọi dòng bị xóa đều là dòng subquery đã chọn và
+     * đã khóa: không có khoảng hở giữa chọn và xóa, và không bao giờ xóa dòng còn hạn. {@code ORDER BY created_at, id}
+     * để quét {@code ix_feedbacks_created_at} (V51); ADR-0122 ghi "id tăng dần", đổi vì thứ tự theo id không dùng được
+     * index đó. {@code SKIP LOCKED}: không chờ dòng mà tx khác đang giữ (dòng bỏ qua được xóa ở lượt sau), nên job
+     * không tạo chu trình khóa. Không bảng nào trỏ FK tới {@code feedbacks}; không ghi audit (không thuộc BR-QT-15).
+     */
+    @Modifying
+    @Query(value = """
+            DELETE FROM feedbacks WHERE id IN (
+                SELECT id FROM feedbacks
+                WHERE created_at < :cutoff
+                ORDER BY created_at, id
+                LIMIT :limit
+                FOR UPDATE SKIP LOCKED)
+            """, nativeQuery = true)
+    int deleteExpiredBefore(@Param("cutoff") java.time.Instant cutoff, @Param("limit") int limit);
 }

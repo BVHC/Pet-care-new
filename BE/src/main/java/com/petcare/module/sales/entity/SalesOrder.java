@@ -23,6 +23,7 @@ import jakarta.persistence.JoinColumn;
 import jakarta.persistence.OneToMany;
 import jakarta.persistence.OrderBy;
 import jakarta.persistence.Table;
+import jakarta.persistence.Version;
 import lombok.AccessLevel;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
@@ -30,7 +31,8 @@ import lombok.NoArgsConstructor;
 /**
  * Bảng {@code orders} (erd §8, ROOT, SM #5). Tên lớp tránh {@code Order}: từ khóa JPQL. Chuyển trạng thái do service
  * kiểm bằng {@code OrderTransitionHandler} trước khi gọi các method ở đây; caller giữ khóa dòng Order
- * ({@code FOR NO KEY UPDATE}) từ trước khi đọc entity (docs/adr/0044). {@code totalAmount} luôn tính lại từ các dòng
+ * ({@code FOR NO KEY UPDATE}) từ trước khi đọc entity (docs/adr/0044): khóa vẫn là cơ chế chính, {@code version} chỉ là
+ * lưới an toàn khi quy ước đó bị vi phạm (docs/adr/0132). {@code totalAmount} luôn tính lại từ các dòng
  * ({@code addExact}), không cộng dồn chênh lệch.
  */
 @Getter
@@ -71,6 +73,15 @@ public class SalesOrder extends TimestampedEntity {
 
     @Column(name = "total_amount", nullable = false)
     private long totalAmount;
+
+    /**
+     * Lưới an toàn chống ghi đè bản cũ (D045, docs/adr/0132): không thay khóa dòng. Entity nạp trước khi lấy khóa rồi
+     * flush thì {@code UPDATE … WHERE version = ?} trúng 0 dòng → 409, thay vì ghi lùi {@code total_amount} / {@code status}.
+     * Không có setter và không đưa ra DTO.
+     */
+    @Version
+    @Column(name = "version", nullable = false)
+    private long version;
 
     @Column(name = "created_by", nullable = false, updatable = false)
     private Long createdBy;

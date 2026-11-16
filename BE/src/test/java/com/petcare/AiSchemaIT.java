@@ -248,7 +248,7 @@ class AiSchemaIT {
         assertThat(row).containsEntry("value", "false").containsEntry("value_type", "BOOL");
     }
 
-    /** V55 (BR-AI-32): cờ NOT NULL, mặc định false (dòng cũ và dòng không gửi khối thú). */
+    /** V56 (BR-AI-32): cờ NOT NULL, mặc định false (dòng cũ và dòng không gửi khối thú). */
     @Test
     void usedPetContextDefaultsToFalseAndCannotBeNull() {
         assertThat(chatLog("ANSWERED", null, "Câu hỏi", "Trả lời")).isOne();

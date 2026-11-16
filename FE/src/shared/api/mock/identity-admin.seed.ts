@@ -1,5 +1,5 @@
-// UC10 — dữ liệu seed của mock tham số [CFG] và mẫu thông báo, CHÉP từ migration của BE (V2 + V27 + V35 + V40 + V44…V46 + V48 + V52 + V53 + V55 cho tham số, V3…V26 + V40 cho mẫu, V4 sửa OTP_REGISTER).
-// T91: 87 → 88 khóa (thêm `ai.chat.pet_context_enabled` của V55, công tắc BOOL thứ ba).
+// UC10 — dữ liệu seed của mock tham số [CFG] và mẫu thông báo, CHÉP từ migration của BE (V2 + V27 + V35 + V40 + V44…V46 + V48 + V52 + V53 + V56 cho tham số, V3…V26 + V40 cho mẫu, V4 sửa OTP_REGISTER).
+// T91: 87 → 88 khóa (thêm `ai.chat.pet_context_enabled` của V56, công tắc BOOL thứ ba).
 // T90: 86 → 87 khóa (thêm `ai.chat.business_intent_enabled` của V53, công tắc BOOL thứ hai).
 // T92: 85 → 86 khóa (thêm `ai.chat.general_knowledge_enabled` của V52, khóa BOOL đầu tiên).
 // T57-A: 52 → 85 khóa (thêm 18 `ai.*` của V35 gồm 4 DECIMAL, 8 `complaint.*` / `workforce.*` của V40, 7 `shop.*` / `payment.*` / `returns.*` / `content.*` của V44, V45, V46, V48; V43 và V47 không seed khóa).

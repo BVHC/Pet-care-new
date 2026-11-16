@@ -100,6 +100,7 @@
 Trường có `?` là không bắt buộc / có thể null. Kiểu `email`, `date`, `datetime`… theo mục 3 của `00-method.md`.
 
 - **`OnlineOrderStatus`** — enum: `PENDING_PAYMENT`, `PAID`, `PROCESSING`, `SHIPPED`, `DELIVERY_FAILED`, `DELIVERED`, `COMPLETED`, `CANCELLED`. 03 #14 (08 §B)
+- **`RefundStatus`** — enum: `REQUESTED`, `SUCCEEDED`, `FAILED`. 03 #17 (returns-v1)
 - **`CartItem`** — {`productId`: int64, `name`: string, `unit`: string, `unitPrice`: int64, `quantity`: int32, `imageUrl?`: string, `available`: boolean}
 - **`Cart`** — {`items`: [CartItem], `subtotal`: int64}
 - **`SetCartItemRequest`** — {`quantity`: int32}
@@ -108,7 +109,7 @@ Trường có `?` là không bắt buộc / có thể null. Kiểu `email`, `dat
 - **`PlaceOnlineOrderRequest`** — {`branchId`: int64, `addressId`: int64}
 - **`OnlineOrderLine`** — {`productId`: int64, `name`: string, `unit`: string, `unitPrice`: int64, `quantity`: int32, `lineTotal`: int64}
 - **`OnlineOrderSummary`** — {`onlineOrderId`: int64, `salesOrderId`: int64, `code`: string, `status`: OnlineOrderStatus, `branchName`: string, `itemCount`: int32, `total`: int64, `createdAt`: date-time}
-- **`OnlineOrder`** — {`onlineOrderId`: int64, `salesOrderId`: int64, `code`: string, `status`: OnlineOrderStatus, `branchId`: int64, `branchName`: string, `receiverName`: string, `receiverPhone`: string, `shipAddress`: string, `lines`: [OnlineOrderLine], `subtotal`: int64, `shippingFee`: int64, `total`: int64, `carrier?`: string, `trackingCode?`: string, `redeliveryCount`: int32, `paymentDueAt`: date-time, `paidAt?`: date-time, `shippedAt?`: date-time, `deliveredAt?`: date-time, `completedAt?`: date-time, `cancelledAt?`: date-time, `cancelReason?`: string, `createdAt`: date-time}
+- **`OnlineOrder`** — {`onlineOrderId`: int64, `salesOrderId`: int64, `code`: string, `status`: OnlineOrderStatus, `branchId`: int64, `branchName`: string, `receiverName`: string, `receiverPhone`: string, `shipAddress`: string, `lines`: [OnlineOrderLine], `subtotal`: int64, `shippingFee`: int64, `total`: int64, `carrier?`: string, `trackingCode?`: string, `redeliveryCount`: int32, `paymentDueAt`: date-time, `paidAt?`: date-time, `shippedAt?`: date-time, `deliveredAt?`: date-time, `completedAt?`: date-time, `cancelledAt?`: date-time, `cancelReason?`: string, `createdAt`: date-time, `refundStatus?`: RefundStatus}
 - **`ReasonRequest`** — {`reason`: string}
 - **`ShipRequest`** — {`carrier`: string, `trackingCode`: string}
 
@@ -136,9 +137,9 @@ Trường có `?` là không bắt buộc / có thể null. Kiểu `email`, `dat
 | ID | Câu hỏi | Trạng thái | Gốc |
 |---|---|---|---|
 | Q1 | Có cho khách chọn nhận tại chi nhánh thay vì giao tận nơi không | TBD (PO) | UC62 |
-| Q2 | Đơn vị vận chuyển là nhập tay (chuỗi) hay danh mục | TBD (BE-2) | BR-BH-11 |
-| Q3 | Chi nhánh xử lý do khách chọn (đề xuất) hay hệ thống tự chọn | TBD (PO) | BR-BH-08 |
-| Q4 | Báo cáo doanh thu có tính phí vận chuyển và trừ hoàn tiền thế nào | TBD (BE-2) | 08 §B ASSUMPTION A5 |
+| Q2 | Đơn vị vận chuyển là nhập tay (chuỗi) hay danh mục | Đã chốt: nhập tay (chuỗi, cột VARCHAR; 08 §G) | BR-BH-11 |
+| Q3 | Chi nhánh xử lý do khách chọn (đề xuất) hay hệ thống tự chọn | Đã chốt: khách chọn chi nhánh ACTIVE đủ hàng mọi dòng (08 §G, ADR-0137) | BR-BH-08 |
+| Q4 | Báo cáo doanh thu có tính phí vận chuyển và trừ hoàn tiền thế nào | Đã chốt: trừ hoàn tiền, phí vận chuyển báo riêng (08 §G, T54) | 08 §B ASSUMPTION A5 |
 
 ---
 

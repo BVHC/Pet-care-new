@@ -40,7 +40,7 @@ class SchemaMigrationIT {
      * erd §12 (L1043–1073): 52 model + 3 bảng con = 55 bảng, cộng 4 bảng AI của erd §14.2 / docs/07 §8 (V34, docs/adr/0110)
      * = 59, cộng 10 bảng tầng 3 phần BE-1 (V36–V39: Nhân sự 3, phẫu thuật 1, vật tư tiêu hao 1, nội trú 3, khiếu nại 2;
      * docs/adr/0113), cộng 19 bảng tầng 3 phần BE-2 (V43–V48: phí 3, thương mại điện tử 4, thanh toán 3, trả hàng 3,
-     * kho 4, gộp khách 1, bình luận 1; docs/adr/0117) = 88.
+     * kho 4, gộp khách 1, bình luận 1; docs/adr/0117) = 88, trừ 2 bảng khiếu nại gỡ ở V51 (docs/adr/0122, 0131) = 86.
      */
     private static final Set<String> ERD_TABLES = Set.of(
             "accounts", "staff_profiles", "otp_tokens", "sessions", "audit_logs", "system_configs",
@@ -55,7 +55,7 @@ class SchemaMigrationIT {
             "page_contents", "feedbacks", "care_tasks", "notifications", "notification_outbox",
             "ai_documents", "ai_chunks", "ai_chat_logs", "ai_item_profiles",
             "shift_definitions", "shift_assignments", "shift_requests", "surgeries", "visit_material_usages",
-            "admissions", "admission_orders", "admission_observations", "complaints", "complaint_messages",
+            "admissions", "admission_orders", "admission_observations",
             "shipping_fee_configs", "branch_home_visit_fees", "service_material_norms", "carts", "cart_items",
             "online_orders", "stock_reservations", "payment_transactions", "payment_reconciliations",
             "reconciliation_items", "return_requests", "return_request_lines", "refunds", "stock_transfers",
@@ -65,7 +65,7 @@ class SchemaMigrationIT {
     private static final Set<String> LOG_TABLES = Set.of(
             "otp_tokens", "audit_logs", "weight_records", "visit_assignments", "medical_record_addenda",
             "care_log_addenda", "stock_movements", "notification_outbox", "ai_chat_logs",
-            "admission_observations", "complaint_messages", "visit_material_usages", "customer_merges");
+            "admission_observations", "visit_material_usages", "customer_merges");
 
     /** Bảng có khóa chính khác {@code id}: 1–1 dùng FK làm PK, PK ghép, PK chuỗi. */
     private static final Set<String> TABLES_WITHOUT_ID = Set.of(
@@ -91,7 +91,7 @@ class SchemaMigrationIT {
     /** erd §0 L26: mã chứng từ hiển thị VARCHAR(20) UNIQUE. */
     private static final List<String> DOCUMENT_CODE_TABLES = List.of(
             "appointments", "visits", "boarding_bookings", "orders", "payments", "stock_receipts", "stock_adjustments",
-            "admissions", "complaints",
+            "admissions",
             "online_orders", "return_requests", "refunds", "stock_transfers", "stock_counts");
 
     /** Tập trạng thái theo docs/03-state-machines.md (SM#1–#10) và 02 (BR-BV-02, BR-DG-04), mã ASCII theo erd L28–37. */
@@ -115,14 +115,12 @@ class SchemaMigrationIT {
         STATE_COLUMNS.put("care_tasks.task_type", Set.of("VACCINE_DUE", "VACCINE_OVERDUE", "FOLLOW_UP_DUE",
                 "PICKUP_OVERDUE"));
         STATE_COLUMNS.put("articles.status", Set.of("DRAFT", "PUBLISHED", "HIDDEN", "PENDING_REVIEW", "REJECTED")); // V48, 08 §F.3 FSM #21
-        STATE_COLUMNS.put("feedbacks.status", Set.of("NEW", "SEEN", "RESOLVED"));
         // Tầng 3 phần BE-1 (docs/03 #11, #12, docs/09 FSM #23–#26)
         STATE_COLUMNS.put("shift_assignments.status", Set.of("SCHEDULED", "ON_LEAVE", "ABSENT", "CANCELLED"));
         STATE_COLUMNS.put("shift_requests.status", Set.of("PENDING", "APPROVED", "REJECTED", "WITHDRAWN"));
         STATE_COLUMNS.put("surgeries.status", Set.of("PLANNED", "CONSENTED", "IN_PROGRESS", "COMPLETED", "CANCELLED"));
         STATE_COLUMNS.put("admissions.status", Set.of("ADMITTED", "DISCHARGED"));
         STATE_COLUMNS.put("admission_orders.status", Set.of("ORDERED", "DONE", "CANCELLED"));
-        STATE_COLUMNS.put("complaints.status", Set.of("OPEN", "IN_PROGRESS", "RESOLVED", "CLOSED"));
         // Tầng 3 phần BE-2 (T55c, docs/08-tang3-be2-spec.md): FSM #14–#19, §A–§F
         STATE_COLUMNS.put("online_orders.status", Set.of("PENDING_PAYMENT", "PAID", "PROCESSING", "SHIPPED",
                 "DELIVERY_FAILED", "DELIVERED", "COMPLETED", "CANCELLED"));
@@ -210,15 +208,60 @@ class SchemaMigrationIT {
         // V46 trả hàng, hoàn tiền + returns.window_days, V47 chuyển kho, kiểm kê + 3 CHECK của kho,
         // V48 chi nhánh tạm ngừng / đóng, gộp khách, bài viết của bác sĩ, bình luận + content.comment_per_hour,
         // V50 index refresh_tokens (expires_at, id) cho job dọn refresh token (docs/adr/0114, trả D054; V49 để dành cho BE-2),
-        // V52 công tắc [CFG] ai.chat.general_knowledge_enabled (docs/adr/0136, T92; V51 để dành cho gỡ bảng khiếu nại, T70),
+        // V51 gỡ khiếu nại (2 bảng, 6 khóa complaint.*, 7 mẫu COMPLAINT_*), thêm feedback.retention_days + 2 index feedbacks
+        // (docs/adr/0122, 0131),
+        // V52 công tắc [CFG] ai.chat.general_knowledge_enabled (docs/adr/0136, T92),
         // V53 ai_documents.external_id + ai_chat_logs.source_type + công tắc [CFG] ai.chat.business_intent_enabled (docs/adr/0134, T90),
-        // V55 ai_chat_logs.used_pet_context + công tắc [CFG] ai.chat.pet_context_enabled (docs/adr/0135, T91),
+        // V54 cột orders.version cho @Version của SalesOrder (docs/adr/0132, trả D045),
+        // V55 bỏ 5 cột trạng thái của feedbacks (docs/adr/0122, 0131; đánh số lại từ V52 vì trùng công tắc AI),
+        // V56 ai_chat_logs.used_pet_context + công tắc [CFG] ai.chat.pet_context_enabled (docs/adr/0135, T91; đánh số lại từ V55 vì trùng V55 của feedbacks),
         // V9000 chỉ ở test: baseline session.access_ttl_minutes = 720
         assertThat(rows).extracting(row -> row.get("version"))
                 .containsExactly("1", "2", "3", "4", "5", "6", "7", "8", "9", "10", "11", "12", "13", "14", "15",
                         "16", "17", "18", "19", "20", "21", "22", "23", "24", "25", "26", "27", "28", "29", "30",
-                        "31", "32", "33", "34", "35", "36", "37", "38", "39", "40", "41", "42", "43", "44", "45", "46", "47", "48", "50", "52", "53", "55", "9000");
+                        "31", "32", "33", "34", "35", "36", "37", "38", "39", "40", "41", "42", "43", "44", "45", "46", "47", "48", "50", "51", "52", "53", "54", "55", "56", "9000");
         assertThat(rows).allSatisfy(row -> assertThat(row).containsEntry("success", true));
+    }
+
+    /**
+     * V51 + V55 (docs/adr/0122, 0131): hai bảng khiếu nại, 6 khóa {@code complaint.*} và 7 mẫu {@code COMPLAINT_*} đã
+     * gỡ; {@code feedbacks} không còn 5 cột trạng thái (và các CHECK / index / FK dính cột đi theo), có hai index cho
+     * ST24 và danh sách theo chi nhánh.
+     */
+    @Test
+    void v51And52DropComplaintsAndFeedbackStatus() {
+        assertThat(jdbc.queryForList("""
+                SELECT table_name FROM information_schema.tables
+                WHERE table_schema = 'public' AND table_name LIKE 'complaint%'
+                """, String.class)).as("bảng khiếu nại").isEmpty();
+        assertThat(jdbc.queryForList("SELECT key FROM system_configs WHERE key LIKE 'complaint.%'", String.class))
+                .as("khóa complaint.*").isEmpty();
+        assertThat(jdbc.queryForList("SELECT code FROM notification_templates WHERE code LIKE 'COMPLAINT\\_%'",
+                String.class)).as("mẫu COMPLAINT_*").isEmpty();
+        assertThat(jdbc.queryForList("""
+                SELECT value || '/' || min_value || '/' || max_value FROM system_configs
+                WHERE key = 'feedback.retention_days'
+                """, String.class)).containsExactly("30/7/365");
+
+        assertThat(jdbc.queryForList("""
+                SELECT column_name FROM information_schema.columns
+                WHERE table_schema = 'public' AND table_name = 'feedbacks'
+                """, String.class)).as("cột feedbacks sau V55").containsExactlyInAnyOrder("id", "customer_id", "topic",
+                "branch_id", "rating", "content", "created_at", "updated_at");
+        assertThat(jdbc.queryForList("""
+                SELECT conname FROM pg_constraint WHERE conrelid = 'feedbacks'::regclass AND contype IN ('c', 'f')
+                """, String.class)).as("ràng buộc feedbacks còn lại").containsExactlyInAnyOrder(
+                "ck_feedbacks_topic", "ck_feedbacks_rating", "ck_feedbacks_branch_required",
+                "ck_feedbacks_content_length", "feedbacks_customer_id_fkey", "feedbacks_branch_id_fkey");
+        Map<String, String> indexes = new java.util.HashMap<>();
+        jdbc.query("SELECT indexname, indexdef FROM pg_indexes WHERE schemaname = 'public' AND tablename = 'feedbacks'",
+                rs -> {
+                    indexes.put(rs.getString("indexname"), rs.getString("indexdef"));
+                });
+        assertThat(indexes).containsOnlyKeys("feedbacks_pkey", "ix_feedbacks_customer_created_at",
+                "ix_feedbacks_created_at", "ix_feedbacks_branch_created");
+        assertThat(indexes.get("ix_feedbacks_created_at")).endsWith("(created_at)");
+        assertThat(indexes.get("ix_feedbacks_branch_created")).endsWith("(branch_id, created_at)");
     }
 
     /** V16 (docs/adr/0045): 10 chữ số giữ mã lịch hẹn ≤ 20 ký tự; không quay vòng nên hết số thì lỗi, không trùng mã. */
@@ -241,7 +284,7 @@ class SchemaMigrationIT {
                 WHERE table_schema = 'public' AND table_type = 'BASE TABLE' AND table_name <> 'flyway_schema_history'
                 """, String.class);
 
-        assertThat(ERD_TABLES).hasSize(88);
+        assertThat(ERD_TABLES).hasSize(86);
         // document_counters (V14, ADR-0043) và refresh_tokens (V27, ADR-0091) là bảng hạ tầng ngoài ERD v16
         // (erd 13 muc 18)
         assertThat(tables).containsExactlyInAnyOrderElementsOf(
@@ -251,7 +294,7 @@ class SchemaMigrationIT {
 
     @Test
     void commonTimestampColumnsMatchTableKind() {
-        assertThat(LOG_TABLES).hasSize(13);
+        assertThat(LOG_TABLES).hasSize(12);
         for (String table : ERD_TABLES) {
             Map<String, Column> columns = columns(table);
             assertCommonTimestamp(table, columns.get("created_at"));
@@ -613,12 +656,10 @@ class SchemaMigrationIT {
                         "BOARDING_OVERDUE", "BOARDING_OVERDUE_APP", "BOARDING_OVERDUE_MANAGER_APP",
                         "BOARDING_CAPACITY_WARNING_APP", "STOCK_ALERT_DIGEST_APP",
                         // V40 (docs/adr/0113): 40 mẫu tầng 3 — NS 9, khiếu nại 7, vật tư 1, đơn online 10, thanh toán 4,
-                        // trả hàng + hoàn tiền 6, duyệt bài viết 3
+                        // trả hàng + hoàn tiền 6, duyệt bài viết 3; V51 gỡ 7 mẫu khiếu nại (docs/adr/0122) nên còn 33
                         "SHIFT_REQUEST_SUBMITTED_APP", "SHIFT_REQUEST_APPROVED", "SHIFT_REQUEST_APPROVED_APP",
                         "SHIFT_REQUEST_REJECTED", "SHIFT_REQUEST_REJECTED_APP", "SHIFT_ASSIGNMENT_CANCELLED",
                         "SHIFT_ASSIGNMENT_CANCELLED_APP", "SHIFT_ABSENCE_RECORDED", "SHIFT_ABSENCE_RECORDED_APP",
-                        "COMPLAINT_CREATED_APP", "COMPLAINT_TAKEN", "COMPLAINT_TAKEN_APP", "COMPLAINT_RESOLVED",
-                        "COMPLAINT_RESOLVED_APP", "COMPLAINT_REOPENED_APP", "COMPLAINT_ESCALATED_APP",
                         "MATERIAL_SHORTAGE_APP",
                         "ONLINE_ORDER_PLACED", "ONLINE_ORDER_PLACED_APP", "ONLINE_ORDER_PAID", "ONLINE_ORDER_PAID_APP",
                         "ONLINE_ORDER_SHIPPED", "ONLINE_ORDER_SHIPPED_APP", "ONLINE_ORDER_DELIVERY_FAILED",
@@ -685,9 +726,9 @@ class SchemaMigrationIT {
                 WHERE c.contype = 'f' AND c.confrelid = 'accounts'::regclass
                 """, String.class);
         assertThat(foreignKeys).as("số cột FK trỏ tới accounts (V1: 43 cột ở 34 bảng; V34: + ai_documents.updated_by, "
-                + "ai_item_profiles.updated_by; V36–V39: + 16 cột — shift_assignments 2, shift_requests 2, surgeries 3, "
-                + "visit_material_usages 1, admissions 2, admission_orders 2, admission_observations 1, complaints 2, "
-                + "complaint_messages 1; V43–V48 của BE-2: + 16 cột ở 14 bảng)").hasSize(77);
+                + "ai_item_profiles.updated_by; V36–V38: + 13 cột — shift_assignments 2, shift_requests 2, surgeries 3, "
+                + "visit_material_usages 1, admissions 2, admission_orders 2, admission_observations 1; V39 thêm 3 cột "
+                + "của complaints / complaint_messages và V51 gỡ lại; V43–V48 của BE-2: + 16 cột ở 14 bảng; V55 gỡ feedbacks.resolved_by)").hasSize(73);
 
         List<String> unindexed = jdbc.queryForList("""
                 SELECT c.conrelid::regclass || '.' || a.attname

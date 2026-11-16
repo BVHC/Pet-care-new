@@ -32,8 +32,9 @@
 
 - `shipping_fee_configs` — REF, **một dòng duy nhất**: `id`, `base_fee BIGINT NN CHECK ≥ 0`, `free_threshold BIGINT NN CHECK ≥ 0`, `updated_by FK→accounts`. `CHECK (id = 1)`.
 - `service_material_norms` — REF: `id`, `service_id FK→services NN`, `product_id FK→products NN`, `quantity INT NN CHECK ≥ 1`, `UNIQUE (service_id, product_id)`; Index `(product_id)` kiểm FK. Ràng buộc loại sản phẩm kiểm trong service (BR-SP-10).
+- `branch_home_visit_fees` (V43) **mồ côi** từ khi bỏ khám tại nhà (ADR-0124): không còn UC dùng, giữ nguyên trong CSDL; gỡ bằng một migration sau này (không làm ở đợt này; ADR-0137).
 
-### API (`fees-v1`, 6 endpoint)
+### API (`fees-v1`, 4 endpoint)
 
 `GET`/`PUT /shipping-fee-config` · `GET`/`PUT /services/{serviceId}/material-norms` (PUT ghi đè cả danh sách). Đọc: A04. Phí vận chuyển của một giỏ hàng cụ thể lấy qua `GET /me/online-orders/quote` (mục B).
 
@@ -98,9 +99,13 @@
 
 - `carts` — ROOT: `id`, `customer_id FK→customers UQ NN`.
 - `cart_items` — PART: `cart_id FK`, `product_id FK`, `quantity SMALLINT NN CHECK 1–99`, `UNIQUE (cart_id, product_id)`.
-- `online_orders` — ROOT · SM #14: `id`, `code VARCHAR(20) UQ` (`DH-yyMMdd-xxxx`, cùng cơ chế mã chứng từ ADR-0043), `order_id FK→orders UQ NN`, `customer_id FK NN`, `branch_id FK NN`, `status VARCHAR(30) NN CHECK`, `receiver_name VARCHAR(100)`, `receiver_phone VARCHAR(15)`, `ship_address VARCHAR(300)` (**snapshot** từ sổ địa chỉ), `shipping_fee BIGINT NN CHECK ≥ 0`, `carrier VARCHAR(100)?`, `tracking_code VARCHAR(100)?`, `redelivery_count SMALLINT NN DEFAULT 0`, `payment_due_at TIMESTAMPTZ NN`, `paid_at`, `shipped_at`, `delivered_at`, `completed_at`, `cancelled_at TIMESTAMPTZ?`, `cancel_reason VARCHAR(300)?`, `cancelled_by FK→accounts?` (NULL = hệ thống). Ràng buộc: `CHECK` thời điểm ↔ trạng thái (cùng khuôn `care_tasks`, ADR-0081); `SHIPPED` có `carrier` và `tracking_code`. Index: `(branch_id, status, payment_due_at)`; `(customer_id, created_at DESC)`; `(status, payment_due_at) WHERE status = 'PENDING_PAYMENT'` cho ST10; `(delivered_at) WHERE status = 'DELIVERED'` cho ST12.
+- `online_orders` — ROOT · SM #14: `id`, `code VARCHAR(20) UQ` (`DH-yyMMdd-xxxx`, cùng cơ chế mã chứng từ ADR-0043), `order_id FK→orders UQ NN`, `customer_id FK NN`, `branch_id FK NN`, `status VARCHAR(30) NN CHECK`, `receiver_name VARCHAR(100)`, `receiver_phone VARCHAR(15)`, `ship_address VARCHAR(300)` (**snapshot** từ sổ địa chỉ), `shipping_fee BIGINT NN CHECK ≥ 0`, `carrier VARCHAR(100)?`, `tracking_code VARCHAR(100)?`, `redelivery_count SMALLINT NN DEFAULT 0`, `payment_due_at TIMESTAMPTZ NN`, `paid_at`, `shipped_at`, `delivered_at`, `completed_at`, `cancelled_at TIMESTAMPTZ?`, `cancel_reason VARCHAR(300)?`, `cancelled_by FK→accounts?` (NULL = hệ thống), `delivery_failure_reason VARCHAR(500)?` (NULL; bắt buộc khi ghi "giao thất bại" #8, giữ lý do gần nhất; migration đi cùng task xử lý & giao đơn, ADR-0137 D2). Ràng buộc: `CHECK` thời điểm ↔ trạng thái (cùng khuôn `care_tasks`, ADR-0081); `SHIPPED` có `carrier` và `tracking_code`. Index: `(branch_id, status, payment_due_at)`; `(customer_id, created_at DESC)`; `(status, payment_due_at) WHERE status = 'PENDING_PAYMENT'` cho ST10; `(delivered_at) WHERE status = 'DELIVERED'` cho ST12.
 - `stock_reservations` — PART: `id`, `online_order_id FK`, `branch_id FK`, `product_id FK`, `quantity INT NN CHECK > 0`, `status VARCHAR(30) CHECK ('HELD','CONSUMED','RELEASED')`, `UNIQUE (online_order_id, product_id)`; Index `(branch_id, product_id) WHERE status = 'HELD'` (tính tồn khả dụng).
 - `orders.source` thêm giá trị `ONLINE` (05 §8); `order_lines` giữ snapshot giá (BR-BH-03).
+
+**Thứ tự khóa khi đặt hàng (BR-BH-08, 09; ST06; ADR-0137 D5, D6).** Đặt hàng là **một** transaction: dòng `carts` của khách `FOR NO KEY UPDATE` → `branches` (chỉ **đọc** và kiểm `ACTIVE`, **không** dùng `BranchApi.lockForBooking`) → **mọi** `stock_lots` của các sản phẩm đặt tại chi nhánh đã chọn trong **một** câu `ORDER BY id FOR NO KEY UPDATE` (cùng khuôn `StockApi.issueForPayment`) → tính tồn khả dụng = Σ `quantity` các lô chưa hết hạn − Σ phần `HELD` → **tất cả** dòng đủ hàng hoặc **không giữ gì** (400 `BR-BH-08`, chưa ghi gì; không giữ một phần) → INSERT `orders` / `online_orders` / `stock_reservations` → `document_counters` cuối cùng. Bán lẻ tại quầy, kê đơn và thu tiền cũng phải trừ phần `HELD` khi kiểm tồn (rủi ro 2 ở §G).
+
+**Hoàn về lô gốc (BR-BH-09, BR-BH-14; ADR-0137 D1).** `stock_movements` đã có `(source_type, source_id)`. Với chứng từ nguồn có các movement **âm**, hoàn = cộng lại **đúng các lô đó**, bắt đầu từ lô có hạn dùng muộn nhất, mỗi lô **không quá** số đã xuất từ lô đó. Loại movement mới `SALE_RETURN` (delta dương), dùng cho hủy sau khi đã thanh toán (nguồn `orders`, `source_id` = id Order) và cho yêu cầu trả hàng được duyệt (nguồn mới `return_requests`). Migration (giá trị `movement_type`, `source_type`) đi cùng task triển khai đầu tiên (trả hàng hoặc hủy sau thanh toán), dùng số **V49** để dành nếu còn trống, không thì số kế tiếp.
 
 ### API
 
@@ -139,7 +144,7 @@ A1 phí cố định; A2 không bán thuốc / vaccine online; A3 một chi nhá
 | BR-TG-08 | Số tiền khớp | Số tiền cổng báo phải bằng số tiền giao dịch. Lệch → giao dịch `FAILED` và đưa vào danh sách đối soát để xử lý tay; **không** tự đánh dấu đơn đã trả. | UC63 | — |
 | BR-TG-09 | Hết hạn giao dịch (ST11) | Giao dịch `PENDING` quá 15 phút **[CFG]** `payment.txn_ttl_minutes`: trước khi chuyển `EXPIRED`, ST11 **hỏi cổng** trạng thái giao dịch; cổng báo đã thành công thì xử lý như thành công (Giao dịch#2), ngược lại `EXPIRED`. Đơn vẫn `PENDING_PAYMENT` để khách thử lại tới `payment_due_at`. | ST11 | — |
 | BR-TG-10 | Đối soát cổng (ST14) | Hằng ngày sau 02:00 (giờ Việt Nam), lấy báo cáo giao dịch hôm trước của cổng, so với `payment_transactions` theo mã tham chiếu; lệch (thiếu bên hệ thống, thiếu bên cổng, lệch số tiền, lệch trạng thái) ghi `reconciliation_items`, **không tự sửa**. SUPER_MANAGER xem và ghi chú đã xử lý. | ST14 | — |
-| BR-TG-11 | Cổng trung lập | Hệ thống chỉ làm việc với cổng qua interface `PaymentGatewayClient` (tạo phiên, xác thực chữ ký callback, truy vấn giao dịch, hoàn tiền, báo cáo đối soát); mọi tham số riêng của cổng được ánh xạ về dạng chung ở lớp tích hợp. Khóa bí mật, địa chỉ cổng ở biến môi trường `PAYMENT_GATEWAY`, `PAYMENT_MERCHANT_CODE`, `PAYMENT_SECRET`, `PAYMENT_BASE_URL`, `PAYMENT_RETURN_URL`, `PAYMENT_IPN_URL` (BR-TG-07; không ghi vào repo). Cổng chọn VNPay, đăng ký sandbox là việc của Hiến (Q1). Giao dịch dùng cổng nào ghi vào `payment_transactions.gateway`. | UC63, ST11, ST14, ST21 | — |
+| BR-TG-11 | Cổng trung lập | Hệ thống chỉ làm việc với cổng qua interface `PaymentGatewayClient` (tạo phiên, xác thực chữ ký callback, truy vấn giao dịch, hoàn tiền, báo cáo đối soát); mọi tham số riêng của cổng được ánh xạ về dạng chung ở lớp tích hợp. Khóa bí mật, địa chỉ cổng ở biến môi trường `PAYMENT_GATEWAY`, `PAYMENT_MERCHANT_CODE`, `PAYMENT_SECRET`, `PAYMENT_BASE_URL`, `PAYMENT_RETURN_URL`, `PAYMENT_IPN_URL` (không phải [CFG]; BR-TG-07, không ghi vào repo; ADR-0137 D4). Cổng chọn VNPay; đăng ký sandbox là việc của Hiến, một **phụ thuộc bên ngoài**, không phải câu hỏi mở của đặc tả. Giao dịch dùng cổng nào ghi vào `payment_transactions.gateway`. | UC63, ST11, ST14, ST21 | — |
 
 ### Máy trạng thái #15 — Giao dịch thanh toán online
 
@@ -161,6 +166,8 @@ A1 phí cố định; A2 không bán thuốc / vaccine online; A3 một chi nhá
 | 4 | `PENDING` → `EXPIRED` | Hết hạn | ST11 | Quá `expires_at` và cổng không báo thành công | — | BR-TG-09 |
 | 5 | `PENDING` → `CANCELLED` | Đơn bị hủy | SYS ← Đơn hàng online#3, #4 | — | Hủy phiên ở cổng nếu cổng hỗ trợ | BR-BH-10, 12 |
 
+**Giao dịch thành công về muộn (ADR-0137 D3).** Cổng báo thành công cho một giao dịch mà đơn đã `CANCELLED`. Nếu giao dịch còn `PENDING` (VNPay không hủy được phiên chưa thanh toán, nên đây là trường hợp thường): đi cạnh #2 bình thường `PENDING → SUCCEEDED`, đơn **vẫn** `CANCELLED`, ST21 hoàn tiền `GATEWAY` toàn bộ tự động (BR-TG-12 b, BR-TG-14). Nếu giao dịch đã ở trạng thái FINAL (`CANCELLED` / `EXPIRED` / `FAILED`): **không đổi trạng thái** (FINAL giữ nguyên, không thêm cạnh); callback chỉ được ghi log và thành một mục đối soát cho ST14 để xử lý tay (BR-TG-10). Khi thông báo `PAYMENT_FAILED` (D3) được đưa vào outbox, bên gọi phải tự truyền đủ biến của mẫu, gồm `ten_khach`, vì `enqueue` không kiểm `required_vars`.
+
 ### Dữ liệu (05 bổ sung)
 
 - `payment_transactions` — ROOT · SM #15: `id`, `code VARCHAR(40) UQ NN` (mã tham chiếu gửi cổng), `online_order_id FK NN`, `gateway VARCHAR(20) NN` (tên cổng, ví dụ `VNPAY`), `amount BIGINT NN CHECK > 0`, `status VARCHAR(30) NN CHECK`, `gateway_txn_id VARCHAR(100)?`, `redirect_url VARCHAR(1000)?`, `expires_at TIMESTAMPTZ NN`, `paid_at?`, `failure_reason VARCHAR(300)?`. `UNIQUE (online_order_id) WHERE status = 'PENDING'` (BR-TG-06); `UNIQUE (gateway, gateway_txn_id) WHERE gateway_txn_id IS NOT NULL`; Index `(status, expires_at) WHERE status = 'PENDING'` cho ST11.
@@ -173,9 +180,9 @@ A1 phí cố định; A2 không bán thuốc / vaccine online; A3 một chi nhá
 
 ### Hợp đồng chéo
 
-`OnlineOrderApi.markPaid(orderId, transactionCode)` và `markPaymentCancelled(orderId)` (shop, cùng BE-2); mã mẫu thông báo `PAYMENT_*` (`06` §8 Q4). Giả định cổng chỉ cần **một** loại tích hợp ở GĐ2.
+`OnlineOrderApi.markPaid(orderId, transactionCode)` và `markPaymentCancelled(onlineOrderId)` (shop, cùng BE-2). `markPaymentCancelled`: payment gọi khi cổng báo khách hủy / thanh toán thất bại; đơn **vẫn** `PENDING_PAYMENT` (khách thử lại bằng giao dịch mới tới `payment_due_at`, sau đó ST10 hủy), **không** đổi trạng thái, idempotent, chỉ đưa vào outbox mẫu `PAYMENT_FAILED` (EMAIL) và `PAYMENT_FAILED_APP` (IN_APP, đã seed ở V40); payment chỉ gọi ở lần chuyển `PENDING → FAILED` nên gọi lại callback không gửi thêm thư (ADR-0137 D3). VNPay không có API hủy phiên chưa thanh toán: giao dịch cục bộ tự hết hạn bằng ST11. mã mẫu thông báo `PAYMENT_*` (`06` §8 Q4). Giả định cổng chỉ cần **một** loại tích hợp ở GĐ2.
 
-**Câu hỏi:** Q1 chọn cổng (đã chốt VNPay) và đăng ký sandbox (Hiến, còn mở); Q2 có cần danh sách IP cổng được phép gọi callback không; Q3 cổng có cho hủy phiên chưa thanh toán không (ảnh hưởng #5).
+**Đã chốt (ADR-0137, 15/11/2026):** Q1 cổng là VNPay; đăng ký sandbox của Hiến là phụ thuộc bên ngoài (`payment-gateway-setup.md`). Q2 **không** có danh sách IP được phép; độ tin cậy của callback dựa vào chữ ký HMAC-SHA512 (`vnp_SecureHash`) + số tiền khớp + idempotent theo mã giao dịch (D4). Q3 VNPay không hủy được phiên chưa thanh toán: giao dịch cục bộ hết hạn bằng ST11, `markPaymentCancelled` không đổi trạng thái đơn (D3).
 
 ---
 
@@ -190,12 +197,12 @@ A1 phí cố định; A2 không bán thuốc / vaccine online; A3 một chi nhá
 
 | Mã | Tên | Mô tả | UC | Xử lý khi vi phạm |
 |---|---|---|---|---|
-| BR-BH-13 | Điều kiện trả hàng | Chỉ Order `PAID` (tại quầy) hoặc đơn online đã `DELIVERED` / `COMPLETED`; trong **7 ngày** **[CFG]** `returns.window_days` kể từ lúc thanh toán (quầy) hoặc `delivered_at` (online); chỉ dòng `GOODS` không kê đơn — **không** trả dịch vụ, thuốc, vaccine; số lượng ≤ đã mua trừ phần đã / đang trả; mỗi yêu cầu có ≥ 1 dòng và lý do (`DEFECTIVE`, `WRONG_ITEM`, `CHANGED_MIND`, `OTHER`). Lễ tân tạo hộ khách, ở chi nhánh của Order. | UC68 | 400 `BR-BH-13`. |
-| BR-BH-14 | Duyệt và từ chối | BRANCH_MANAGER của chi nhánh của Order duyệt hoặc từ chối (từ chối bắt buộc lý do); lễ tân rút được khi `PENDING`. Khi duyệt chọn `restock`: **nhập lại kho vào lô gốc** hoặc **loại bỏ** (điều chỉnh giảm, lý do `RETURN_DISCARD`). Tiền hoàn = Σ(đơn giá snapshot × số lượng); **phí vận chuyển không hoàn** khi trả hàng (*ASSUMPTION A6*). | UC69 | 409 `INVALID_STATE_TRANSITION`. |
+| BR-BH-13 | Điều kiện trả hàng | Chỉ Order `PAID` (tại quầy) hoặc đơn online đã `DELIVERED` / `COMPLETED`; trong **7 ngày** **[CFG]** `returns.window_days` kể từ lúc thanh toán (quầy) hoặc `delivered_at` (online); chỉ dòng `GOODS` không kê đơn — **không** trả dịch vụ, thuốc, vaccine; số lượng ≤ đã mua trừ phần đã / đang trả; mỗi yêu cầu có ≥ 1 dòng và lý do (`DEFECTIVE`, `WRONG_ITEM`, `CHANGED_MIND`, `OTHER`). Lễ tân tạo hộ khách, ở chi nhánh của Order. Hạn 7 ngày của đơn online lấy `delivered_at` qua `OnlineOrderQueryApi.findDeliveredAtByOrderId(orderId)` (shop, `orderId` = `orders.id`; rỗng nếu Order không phải ONLINE hoặc chưa giao thì từ chối 400 `BR-BH-13`). | UC68 | 400 `BR-BH-13`. |
+| BR-BH-14 | Duyệt và từ chối | BRANCH_MANAGER của chi nhánh của Order duyệt hoặc từ chối (từ chối bắt buộc lý do); lễ tân rút được khi `PENDING`. Khi duyệt chọn `restock`: **nhập lại kho vào lô gốc** hoặc **loại bỏ** (điều chỉnh giảm, lý do `RETURN_DISCARD`). Tiền hoàn = Σ(đơn giá snapshot × số lượng); **phí vận chuyển không hoàn** khi trả hàng (*ASSUMPTION A6*). **Lô gốc (ADR-0138 R1):** `StockApi.restockToOriginalLot(orderLineId, qty)` tìm Order và sản phẩm của dòng, lấy các lô của sản phẩm đó có movement âm `source_type = 'orders'`, `source_id` = Order; nhập lại lô hạn muộn nhất trước, mỗi lô tối đa (đã xuất − đã trả từ lô đó); movement `SALE_RETURN`, nguồn `return_requests`. Lô đã hết hạn vẫn nhận lại (sổ lô khớp, FEFO không xuất lô hết hạn, BR-KO-05; ST08 báo, quản lý loại bỏ bằng điều chỉnh). `restock = false`: không đổi tồn, chỉ ghi nhận. **Hoàn 0 đồng (R2):** tiền hoàn = 0 thì duyệt xong chuyển thẳng `REFUNDED` (FSM #16 #6), không sinh dòng `refunds` (`amount > 0` giữ nguyên). | UC69 | 409 `INVALID_STATE_TRANSITION`. |
 | BR-BH-15 | Trả hàng không đổi trạng thái đơn | Duyệt trả hàng không đổi trạng thái Order hay đơn online (hoàn tiền một phần); đơn online có yêu cầu trả hàng đang mở thì ST12 không tự xác nhận (BR-BH-12). | UC68, UC69 | — |
-| BR-TG-12 | Khi nào sinh hoàn tiền | Tự sinh trong hai trường hợp: (a) yêu cầu trả hàng được duyệt (số tiền theo BR-BH-14); (b) hủy đơn online đã `PAID` (Đơn hàng online#10, #13), hoàn **toàn bộ** tiền đã trả gồm phí vận chuyển. Hình thức hoàn = hình thức đã thu: đơn online → `GATEWAY`; tại quầy → `CASH` hoặc `TRANSFER` theo `payments.method`. | UC64, UC69 | — |
-| BR-TG-13 | Hoàn tiền tại quầy | Lễ tân xác nhận đã hoàn trong **ca `OPEN` của chính mình** ở chi nhánh của Order (BR-TG-01); số hoàn tính vào ca (đối soát ca trừ hoàn tiền, UC72); ghi audit (BR-QT-15 đã có "giao dịch tiền"). | UC69 | 400 `BR-TG-01` nếu không có ca mở. |
-| BR-TG-14 | Hoàn tiền qua cổng (ST21) | ST21 gọi cổng hoàn tiền cho `refunds` `GATEWAY` ở `REQUESTED`, **idempotent** theo mã tham chiếu hoàn tiền; lỗi tạm thời thử lại tối đa 3 lần **[CFG]** `payment.refund_max_attempts` cách 15 phút; hết lần → `FAILED`, BRANCH_MANAGER thử lại (`retry`) hoặc xử lý ngoài hệ thống kèm ghi chú. | ST21 | — |
+| BR-TG-12 | Khi nào sinh hoàn tiền | Tự sinh trong hai trường hợp: (a) yêu cầu trả hàng được duyệt (số tiền theo BR-BH-14); (b) hủy đơn online đã `PAID` (Đơn hàng online#10, #13), hoặc đơn online `CANCELLED` mà có giao dịch `SUCCEEDED` (giao dịch thành công về muộn, mục C), hoàn **toàn bộ** tiền đã trả gồm phí vận chuyển. Hình thức hoàn = hình thức đã thu: đơn online → `GATEWAY`; tại quầy → `CASH` hoặc `TRANSFER` theo `payments.method`. | UC64, UC69 | — |
+| BR-TG-13 | Hoàn tiền tại quầy | Lễ tân xác nhận đã hoàn trong **ca `OPEN` của chính mình** ở chi nhánh của Order (BR-TG-01); số hoàn tính vào ca (đối soát ca trừ hoàn tiền, UC72); ghi audit (BR-QT-15 đã có "giao dịch tiền"). Hoàn trong ca của người xác nhận; hệ thống không kiểm tra tiền trong két (việc vật lý); đối soát ca (BR-TG-05) trừ hoàn tiền tại quầy khỏi tiền mặt kỳ vọng. Mã giao dịch ngân hàng của hoàn `TRANSFER` là văn bản tự do, không bắt buộc, lưu ở lý do của dòng audit (`refunds` không có cột ghi chú). | UC69 | 400 `BR-TG-01` nếu không có ca mở. |
+| BR-TG-14 | Hoàn tiền qua cổng (ST21) | ST21 gọi cổng hoàn tiền cho `refunds` `GATEWAY` ở `REQUESTED`, **idempotent** theo mã tham chiếu hoàn tiền; lỗi tạm thời thử lại tối đa 3 lần **[CFG]** `payment.refund_max_attempts` cách 15 phút; hết lần → `FAILED`, BRANCH_MANAGER thử lại (`retry`) hoặc xử lý ngoài hệ thống kèm ghi chú. `refunds.code` chính là mã tham chiếu hoàn tiền gửi cổng và giữ nguyên ở mọi lần thử lại; khi tạo `attempts` = 0, `next_attempt_at` = `created_at`. **Xử lý ngoài hệ thống:** BRANCH_MANAGER của chi nhánh của Order xác nhận đã hoàn ngoài hệ thống, bắt buộc ghi chú (lưu ở lý do audit), `FAILED → SUCCEEDED` (FSM #17 #5), đặt `completed_at` và `confirmed_by`; yêu cầu trả hàng tương ứng (nếu có) → `REFUNDED`. | ST21 | — |
 
 ### Máy trạng thái #16 — Yêu cầu trả hàng
 
@@ -213,9 +220,10 @@ A1 phí cố định; A2 không bán thuốc / vaccine online; A3 một chi nhá
 |---|---|---|---|---|---|---|
 | 1 | — → `PENDING` | Tạo yêu cầu | A06 | BR-BH-13 | Thông báo BRANCH_MANAGER | UC68 |
 | 2 | `PENDING` → `CANCELLED` | Rút yêu cầu | A06 (người tạo) | — | — | BR-BH-14 |
-| 3 | `PENDING` → `APPROVED` | Duyệt | A05 | Chọn `restock` | Nhập lại lô gốc hoặc điều chỉnh giảm; sinh Hoàn tiền#1; thông báo; ghi audit | BR-BH-14, BR-TG-12 · UC69 |
+| 3 | `PENDING` → `APPROVED` | Duyệt | A05 | Chọn `restock`; `refund_amount` > 0 | Nhập lại lô gốc hoặc điều chỉnh giảm; sinh Hoàn tiền#1; thông báo; ghi audit | BR-BH-14, BR-TG-12 · UC69 |
 | 4 | `PENDING` → `REJECTED` | Từ chối | A05 | Có lý do | Thông báo | BR-BH-14 · UC69 |
-| 5 | `APPROVED` → `REFUNDED` | Hoàn tiền xong | SYS ← Hoàn tiền#2 | — | — | BR-TG-12 |
+| 5 | `APPROVED` → `REFUNDED` | Hoàn tiền xong | SYS ← Hoàn tiền#2, #5 | — | — | BR-TG-12 |
+| 6 | `PENDING` → `REFUNDED` | Duyệt, tiền hoàn 0 đồng | A05 | Chọn `restock`; `refund_amount` = 0 | Nhập lại lô gốc hoặc điều chỉnh giảm; **không** sinh Hoàn tiền; thông báo; ghi audit (sửa ở T105, ADR-0138 R2) | BR-BH-14 · UC69 |
 
 ### Máy trạng thái #17 — Hoàn tiền
 
@@ -225,20 +233,21 @@ A1 phí cố định; A2 không bán thuốc / vaccine online; A3 một chi nhá
 |---|---|---|
 | `REQUESTED` | INIT | Chờ hoàn (cổng chưa xử lý, hoặc lễ tân chưa xác nhận tại quầy) |
 | `SUCCEEDED` | FINAL | Đã hoàn |
-| `FAILED` | MID | Cổng không hoàn được sau số lần thử tối đa; chờ xử lý tay |
+| `FAILED` | MID | Cổng không hoàn được sau số lần thử tối đa; chờ xử lý tay (thử lại #4 hoặc xác nhận hoàn ngoài hệ thống #5) |
 
 | # | Từ → Sang | Sự kiện | Người kích hoạt | Điều kiện | Hệ quả | Nguồn |
 |---|---|---|---|---|---|---|
 | 1 | — → `REQUESTED` | Sinh hoàn tiền | SYS ← Yêu cầu trả hàng#3, Đơn hàng online#10, #13 | — | Thông báo khách | BR-TG-12 |
-| 2 | `REQUESTED` → `SUCCEEDED` | Hoàn xong | ST21 (cổng xác nhận) hoặc A06 (tiền mặt / chuyển khoản tại quầy) | `GATEWAY`: cổng xác nhận; quầy: ca `OPEN` của lễ tân | Quầy: ghi vào ca. Yêu cầu trả hàng → `REFUNDED` (Yêu cầu#5) | BR-TG-13, 14 |
+| 2 | `REQUESTED` → `SUCCEEDED` | Hoàn xong | ST21 (cổng xác nhận) hoặc A06 (tiền mặt / chuyển khoản tại quầy) | `GATEWAY`: cổng xác nhận; quầy: ca `OPEN` của lễ tân | Quầy: ghi vào ca, trừ tiền mặt kỳ vọng khi đối soát. Yêu cầu trả hàng → `REFUNDED` (Yêu cầu#5) | BR-TG-13, 14 |
 | 3 | `REQUESTED` → `FAILED` | Hết lần thử | ST21 | `attempts` ≥ tối đa [CFG] | Cảnh báo BRANCH_MANAGER | BR-TG-14 |
 | 4 | `FAILED` → `REQUESTED` | Thử lại | A05 | Chỉ `GATEWAY` | `attempts` về 0 | BR-TG-14 |
+| 5 | `FAILED` → `SUCCEEDED` | Xác nhận đã hoàn ngoài hệ thống | A05 (chi nhánh của Order) | Có ghi chú (lưu ở lý do audit) | Đặt `completed_at`, `confirmed_by`; yêu cầu trả hàng (nếu có) → `REFUNDED` (Yêu cầu#5) (ADR-0138 R4) | BR-TG-14 |
 
 ### Dữ liệu (05 bổ sung)
 
 - `return_requests` — ROOT · SM #16: `id`, `code` (`TH-yyMMdd-xxxx`), `order_id FK→orders NN`, `branch_id FK NN`, `status`, `reason_code VARCHAR(30) NN CHECK`, `reason_note VARCHAR(300)?`, `created_by FK NN`, `decided_by FK?`, `decision_note VARCHAR(300)?`, `decided_at?`, `restock BOOLEAN?`, `refund_amount BIGINT?`. `CHECK` quyết định ↔ trạng thái; Index `(branch_id, status, created_at)`.
 - `return_request_lines` — PART: `request_id FK`, `order_line_id FK`, `quantity INT NN CHECK > 0`, `UNIQUE (request_id, order_line_id)`.
-- `refunds` — ROOT · SM #17: `id`, `code` (`HT-yyMMdd-xxxx`), `return_request_id FK?`, `online_order_id FK?` với `CHECK ((return_request_id IS NULL) <> (online_order_id IS NULL))`, `branch_id FK NN`, `method VARCHAR(20) CHECK ('CASH','TRANSFER','GATEWAY')`, `amount BIGINT NN CHECK > 0`, `status`, `attempts SMALLINT NN DEFAULT 0`, `next_attempt_at?`, `gateway_refund_id VARCHAR(100)?`, `failure_reason VARCHAR(300)?`, `confirmed_by FK?`, `cashier_shift_id FK?`, `completed_at?`. `CHECK (method = 'GATEWAY' OR status <> 'SUCCEEDED' OR cashier_shift_id IS NOT NULL)`; Index `(status, next_attempt_at) WHERE method = 'GATEWAY' AND status = 'REQUESTED'` cho ST21.
+- `refunds` — ROOT · SM #17: `id`, `code` (`HT-yyMMdd-xxxx`), `return_request_id FK?`, `online_order_id FK?` với `CHECK ((return_request_id IS NULL) <> (online_order_id IS NULL))`, `branch_id FK NN`, `method VARCHAR(20) (V46: VARCHAR(30)) CHECK ('CASH','TRANSFER','GATEWAY')`, `amount BIGINT NN CHECK > 0`, `status`, `attempts SMALLINT NN DEFAULT 0`, `next_attempt_at?` (khi tạo = `created_at`), `gateway_refund_id VARCHAR(100)?` (mã hoàn do cổng trả; mã tham chiếu gửi cổng là `code`, dùng lại ở mọi lần thử), `failure_reason VARCHAR(300)?`, `confirmed_by FK?`, `cashier_shift_id FK?`, `completed_at?`. `CHECK (method = 'GATEWAY' OR status <> 'SUCCEEDED' OR cashier_shift_id IS NOT NULL)`; Index `(status, next_attempt_at) WHERE method = 'GATEWAY' AND status = 'REQUESTED'` cho ST21.
 
 ### API (`returns-v1`, 9 endpoint)
 
@@ -248,13 +257,14 @@ A1 phí cố định; A2 không bán thuốc / vaccine online; A3 một chi nhá
 
 | Interface | Owner | Dùng cho |
 |---|---|---|
-| `StockApi.restockToOriginalLot(orderLineId, quantity)`, `StockApi.discardReturned(orderLineId, quantity)` | BE-2 (inventory) | BR-BH-14 |
+| `StockApi.restockToOriginalLot(orderLineId, quantity)` (lô gốc theo movement âm nguồn `orders`, movement `SALE_RETURN` nguồn `return_requests`; migration CHECK ở task 137), `StockApi.discardReturned(orderLineId, quantity)` | BE-2 (inventory) | BR-BH-14 |
+| `OnlineOrderQueryApi.findDeliveredAtByOrderId(orderId)` → `Optional<Instant>` (rỗng khi Order không ONLINE hoặc chưa giao) | BE-2 (shop, task 125/126) | BR-BH-13 |
 | `OrderQueryApi.findLinesForReturn(orderId)` (dòng, đã trả / đang trả, hình thức thu) | BE-2 (sales) | BR-BH-13 |
 | `CashierShiftApi.recordRefund(shiftId, method, amount)`; đối soát ca trừ hoàn tiền | BE-2 (sales) | BR-TG-13, UC72 |
 | `PaymentGatewayClient.refund(...)` | BE-2 (payment) | ST21 |
 | Điều chỉnh tồn lý do mới `RETURN_DISCARD` | BE-2 (inventory) | BR-BH-14 |
 
-**Giả định:** A6 phí vận chuyển không hoàn khi trả hàng. **Câu hỏi:** Q4 khách có xem được trạng thái hoàn tiền của đơn không (đề xuất có, thêm trường `refundStatus` vào `OnlineOrder`); Q5 hoàn chuyển khoản tại quầy có cần ghi mã giao dịch ngân hàng không.
+**Giả định:** A6 phí vận chuyển không hoàn khi trả hàng. **Câu hỏi:** Q4 khách có xem được trạng thái hoàn tiền của đơn không (đề xuất có, thêm trường `refundStatus` vào `OnlineOrder`); Q5 hoàn chuyển khoản tại quầy có cần ghi mã giao dịch ngân hàng không. **Đã chốt (ADR-0138, 15/11/2026):** Q4 có, `refundStatus` null khi không có hoàn tiền; Q5 mã giao dịch là văn bản tự do, không bắt buộc, lưu ở audit.
 
 ---
 
@@ -347,21 +357,50 @@ Chuyển kho: `POST /stock-transfers`, `GET /stock-transfers` (lọc `direction`
 | BR-CN-06 | Trạng thái mở rộng | `branches.status` thêm `SUSPENDED` (tạm ngừng, mở lại được) và `CLOSED` (đóng vĩnh viễn, trạng thái cuối). Chỉ SUPER_MANAGER; chỉ từ `ACTIVE` hoặc `SUSPENDED`; chi nhánh `DRAFT` không tạm ngừng / đóng. | UC13 | 409 `INVALID_STATE_TRANSITION`. |
 | BR-CN-07 | Xem trước tồn đọng | Trước khi tạm ngừng / đóng, hệ thống trả **danh sách tồn đọng** của chi nhánh: lịch hẹn `BOOKED`, đặt chỗ lưu trú `BOOKED` / `CHECKED_IN`, Visit mở, ca thu ngân `OPEN`, Order `OPEN` / `PENDING`, đơn online chưa kết thúc, Care Task `OPEN`, hoàn tiền chưa xong, phiếu chuyển kho `IN_TRANSIT`, phiên kiểm kê `OPEN`, tồn kho (số mặt hàng, tổng số lượng), nhân viên `ACTIVE`. | UC13 | — |
 | BR-CN-08 | Điều kiện chặn | **Tạm ngừng** bị chặn khi còn Visit mở, thú đang trong chuồng (đặt chỗ `CHECKED_IN` / `OVERDUE`) hoặc ca thu ngân `OPEN`. **Đóng cửa** bị chặn thêm khi còn Order `OPEN` / `PENDING`, đơn online chưa `COMPLETED` / `CANCELLED`, hoàn tiền chưa `SUCCEEDED`, phiếu chuyển kho `IN_TRANSIT`, phiên kiểm kê `OPEN`, **tồn kho > 0** (phải chuyển kho UC77 hoặc điều chỉnh giảm UC76 trước) và nhân viên `ACTIVE` còn gắn chi nhánh (phải điều chuyển hoặc vô hiệu hóa, BR-QT-06, 09). | UC13 | 400 `BR-CN-08`, message liệt kê điều kiện còn vướng. |
-| BR-CN-09 | Xử lý lịch đặt trước và việc dở | SUPER_MANAGER **chọn** hủy hàng loạt lịch hẹn và đặt chỗ `BOOKED` (thông báo từng khách, không tính hủy muộn, tái dùng `BranchClinicCancellationEvent`, BR-LH-10); bắt buộc chọn khi còn lịch. Care Task `OPEN` chuyển sang chi nhánh khác do SUPER_MANAGER chọn hoặc hủy kèm lý do. | UC13 | 400. |
-| BR-CN-10 | Hiệu lực | `SUSPENDED` và `CLOSED`: không nhận lịch hẹn, đặt chỗ, đơn online mới; không hiện công khai (BR-CK-01 chỉ `ACTIVE`); lịch sử giữ nguyên. Mở lại `SUSPENDED` → `ACTIVE` cần cấu hình giờ mở cửa hợp lệ (BR-CN-01). `CLOSED` không mở lại. BR-QT-04 (≥ 1 BRANCH_MANAGER) chỉ áp dụng cho chi nhánh `ACTIVE`. | UC13 | — |
+| BR-CN-09 | Xử lý lịch đặt trước và việc dở | Khi chi nhánh còn lịch hẹn hoặc đặt chỗ lưu trú `BOOKED`, tạm ngừng / đóng cửa **bắt buộc hủy hàng loạt** các lịch đó (thông báo từng khách, không tính hủy muộn, tái dùng `BranchClinicCancellationEvent`, BR-LH-10); **không có đường "giữ lại"**. Request gửi `cancelBookings = false` mà còn lịch `BOOKED` thì bị từ chối 400 `BR-CN-09`; hết lịch `BOOKED` thì giá trị `cancelBookings` không còn tác dụng. Care Task `OPEN` chuyển sang chi nhánh khác do SUPER_MANAGER chọn hoặc hủy kèm lý do. *(chốt ở ADR-0139, 15/11/2026)* | UC13 | 400 `BR-CN-09`. |
+| BR-CN-10 | Hiệu lực | `SUSPENDED` và `CLOSED`: không nhận lịch hẹn, đặt chỗ, đơn online mới; không hiện công khai (BR-CK-01 chỉ `ACTIVE`); lịch sử giữ nguyên. Mở lại `SUSPENDED` → `ACTIVE` cần cấu hình giờ mở cửa hợp lệ (BR-CN-01) và **xóa** `suspended_at`, `suspend_reason`, `expected_resume_on` (lịch sử tạm ngừng còn trong `audit_logs`; CHECK của V48 cho phép). `CLOSED` không mở lại. BR-QT-04 (≥ 1 BRANCH_MANAGER) chỉ áp dụng cho chi nhánh `ACTIVE`. Hiệu lực của từng trạng thái theo từng luồng nghiệp vụ ở bảng "Hiệu lực của trạng thái chi nhánh theo luồng" bên dưới; thao tác ghi bị chặn vì trạng thái chi nhánh trả **400 `BR-CN-10`**. *(chốt ở ADR-0139, 15/11/2026)* | UC13 | 400 `BR-CN-10`. |
 
 **Máy trạng thái #20 — Chi nhánh (mở rộng `03` #2):**
 
 | # | Từ → Sang | Sự kiện | Người kích hoạt | Điều kiện | Hệ quả | Nguồn |
 |---|---|---|---|---|---|---|
-| 1 | `ACTIVE` → `SUSPENDED` | Tạm ngừng | A04 | Không vướng BR-CN-08 (mức tạm ngừng); có lý do; xử lý lịch theo BR-CN-09 | Phát `BranchClinicCancellationEvent` nếu chọn hủy; ẩn công khai | BR-CN-06…10 · UC13 |
-| 2 | `SUSPENDED` → `ACTIVE` | Mở lại | A04 | Giờ mở cửa hợp lệ; còn ≥ 1 BRANCH_MANAGER `ACTIVE` (BR-QT-04) | Hiện lại công khai | BR-CN-10 · UC13 |
-| 3 | `ACTIVE` → `CLOSED` | Đóng cửa | A04 | Không vướng BR-CN-08 (mức đóng); có lý do | Như #1; không mở lại | BR-CN-06…10 · UC13 |
-| 4 | `SUSPENDED` → `CLOSED` | Đóng cửa | A04 | Như #3 | — | BR-CN-08 · UC13 |
+| 1 | `ACTIVE` → `SUSPENDED` | Tạm ngừng | A04 | Không vướng BR-CN-08 (mức tạm ngừng); có lý do; xử lý lịch theo BR-CN-09 | Đặt `suspended_at` (= bây giờ) và `suspend_reason`; phát `BranchClinicCancellationEvent` khi hủy hàng loạt (bắt buộc nếu còn lịch `BOOKED`, BR-CN-09); ẩn công khai | BR-CN-06…10 · UC13 |
+| 2 | `SUSPENDED` → `ACTIVE` | Mở lại | A04 | Giờ mở cửa hợp lệ; còn ≥ 1 BRANCH_MANAGER `ACTIVE` (BR-QT-04) | Hiện lại công khai; xóa `suspended_at`, `suspend_reason`, `expected_resume_on` (ADR-0139) | BR-CN-10 · UC13 |
+| 3 | `ACTIVE` → `CLOSED` | Đóng cửa | A04 | Không vướng BR-CN-08 (mức đóng); có lý do | Như #1, nhưng đặt `closed_at` (= bây giờ) và `close_reason` (V48 buộc cả hai); không mở lại | BR-CN-06…10 · UC13 |
+| 4 | `SUSPENDED` → `CLOSED` | Đóng cửa | A04 | Như #3 | Đặt `closed_at` và `close_reason`; `suspended_at`, `suspend_reason` giữ làm lịch sử | BR-CN-08 · UC13 |
+
+**Hiệu lực của trạng thái chi nhánh theo luồng** (chốt ở ADR-0139, 15/11/2026). `SUSPENDED` = hoàn tất việc đang dở, không bắt đầu việc mới; `CLOSED` = chỉ đọc (đóng cửa chỉ được khi số tồn đọng của BR-CN-07, BR-CN-08 đã về 0, nên các luồng "không xảy ra" ở cột `CLOSED` là hệ quả của điều kiện đóng). Thao tác ghi bị chặn trả 400 `BR-CN-10`. Chi nhánh `DRAFT` chưa nhận việc nào ngoài chuẩn bị (BR-CN-01).
+
+| Luồng | `ACTIVE` | `SUSPENDED` | `CLOSED` |
+|---|---|---|---|
+| Đặt lịch hẹn mới (online và tại quầy) | cho phép | chặn | chặn |
+| Check-in lịch hẹn `BOOKED` | cho phép | không xảy ra (đã hủy hàng loạt, BR-CN-09) | chặn |
+| Tiếp nhận vãng lai và cấp cứu | cho phép | chặn | chặn |
+| Tiếp tục Visit đang mở đến khi hoàn tất | cho phép | không xảy ra (BR-CN-08) | không xảy ra |
+| Order bán lẻ mới tại quầy | cho phép | chặn | chặn |
+| Tiếp tục Order `OPEN` đã có (thêm dòng, chuyển `PENDING`) | cho phép | cho phép | không xảy ra (BR-CN-08) |
+| Thu tiền Order `PENDING`: mở ca thu ngân mới và thanh toán | cho phép | cho phép (chỉ để thu Order `PENDING`) | chặn |
+| Đặt chỗ lưu trú mới | cho phép | chặn | chặn |
+| Check-in lưu trú | cho phép | không xảy ra (đã hủy hàng loạt, BR-CN-09) | chặn |
+| Gia hạn lưu trú | cho phép | chặn | chặn |
+| Checkout và trả thú của lượt lưu trú đang diễn ra | cho phép | không xảy ra (BR-CN-08) | không xảy ra |
+| Đơn online mới chọn chi nhánh này | cho phép | chặn | chặn |
+| Xử lý và giao đơn online đã `PAID` | cho phép | cho phép | không xảy ra |
+| Nhập kho (phiếu nhập) | cho phép | chặn | chặn |
+| Điều chỉnh tồn và kiểm kê | cho phép | cho phép | chặn |
+| Chuyển kho đi (chi nhánh là nguồn) | cho phép | cho phép | chặn |
+| Tạo phiếu chuyển kho mới tới chi nhánh này | cho phép | chặn | chặn |
+| Nhận hoặc hủy phiếu `IN_TRANSIT` đã có tới chi nhánh này | cho phép | cho phép | không xảy ra (BR-CN-08) |
+| Tạo, gán, điều chuyển nhân viên vào chi nhánh (BR-QT-03, BR-QT-06) | cho phép | chặn | chặn |
+| Trang công khai, khung giờ, danh sách chi nhánh cho khách | hiện | ẩn | ẩn |
+| Job ST03, ST04, ST05, ST13, ST15 | chạy | vẫn xử lý bản ghi đang có | không còn gì để xử lý |
+| Báo cáo (UC89) | có | có, lịch sử | có, lịch sử |
+
+Ghi chú: (1) BR-CN-08 bắt buộc không còn Visit mở, thú trong chuồng (`CHECKED_IN` / `OVERDUE`) và ca thu ngân `OPEN` trước khi tạm ngừng, nên các ô tương ứng là "không xảy ra"; Order `PENDING` được phép còn lại khi tạm ngừng (chỉ đóng cửa mới đòi bằng 0), vì vậy mở ca mới để thu chúng là `cho phép`. (2) Thu Order `PENDING` ở `SUSPENDED` cần mở ca thu ngân mới; đóng cửa yêu cầu Order `OPEN` / `PENDING` bằng 0 (BR-CN-08) nên ở `CLOSED` ô này là chặn. (3) Đơn online chỉ chọn một chi nhánh `ACTIVE` đủ hàng (ADR-0137), nên `SUSPENDED` / `CLOSED` không bao giờ được chọn.
 
 Dữ liệu: `branches` thêm `suspended_at`, `suspend_reason VARCHAR(300)?`, `expected_resume_on DATE?`, `closed_at`, `close_reason VARCHAR(300)?`; `status CHECK` thêm hai giá trị; `CHECK` cột ↔ trạng thái. **API `branchlife-v1` (4):** `GET /branches/{branchId}/closure-impact`, `POST …/suspend`, `POST …/resume`, `POST …/close`.
 
-Hợp đồng chéo (số đếm tồn đọng, mỗi owner một method đọc): `VisitQueryApi.countOpenByBranch`, `AppointmentQueryApi.countBookedByBranch`, `BoardingQueryApi.countActiveStaysByBranch`, `CashierShiftQueryApi.hasOpenShift`, `OrderQueryApi.countOpenByBranch`, `StockQueryApi.sumQuantityByBranch`, `StaffDirectoryApi.countActiveByBranch`, `CareTaskApi.reassignBranch(fromBranchId, toBranchId)`.
+Hợp đồng chéo (số đếm tồn đọng, mỗi owner một method đọc): `VisitQueryApi.countOpenByBranch`, `AppointmentQueryApi.countBookedByBranch`, `BoardingQueryApi.countActiveStaysByBranch`, `CashierShiftQueryApi.hasOpenShift`, `OrderQueryApi.countOpenByBranch`, `StockQueryApi.sumQuantityByBranch`, `StaffDirectoryApi.countActiveByBranch`, `CareTaskApi.reassignBranch(fromBranchId, toBranchId)`. Các method của BE-1 (visit, appointment, identity, care) là method mới ở module của BE-1; task 142 cần chúng, nếu BE-1 chưa làm thì bắt đầu bằng `*Placeholder` (`docs/06-module-contracts.md` §6b #13).
 
 ### F.2 Gộp hồ sơ khách trùng (UC27)
 
@@ -401,13 +440,20 @@ Hợp đồng chéo: mỗi module giữ `customer_id` lắng nghe `CustomerMerge
 | 1 | — → `DRAFT` | Soạn bài | A07 (hoặc A04 như cũ) | — | — | BR-BV-05 · UC80 |
 | 2 | `DRAFT` → `PENDING_REVIEW` | Gửi duyệt | A07 (tác giả) | Đủ trường BR-BV-01 | `submitted_at`; thông báo SUPER_MANAGER | BR-BV-06 · UC80 |
 | 3 | `PENDING_REVIEW` → `DRAFT` | Rút lại | A07 (tác giả) | — | — | BR-BV-06 |
-| 4 | `PENDING_REVIEW` → `PUBLISHED` | Duyệt | A04 | — | `published_at` nếu lần đầu; thông báo VET; ghi audit | BR-BV-06 · UC81 |
+| 4 | `PENDING_REVIEW` → `PUBLISHED` | Duyệt | A04 | — | `first_published_at` nếu lần đầu; thông báo VET; ghi audit | BR-BV-06 · UC81 |
 | 5 | `PENDING_REVIEW` → `REJECTED` | Từ chối | A04 | Có `review_note` | Thông báo VET; ghi audit | BR-BV-06 · UC81 |
 | 6 | `REJECTED` → `DRAFT` | Sửa lại | A07 (tác giả) | — | Xóa `review_note` hiển thị | BR-BV-06 |
+| 7 | `PUBLISHED` → `HIDDEN` | Ẩn bài | A04 | Bài của VET hoặc của SUPER_MANAGER; ẩn thì bình luận không hiện (BR-BV-08) | Ghi audit | BR-BV-02, 07 · UC81 |
+| 8 | `HIDDEN` → `PUBLISHED` | Bỏ ẩn | A04 | — | `first_published_at` giữ lần đầu; bình luận `ACTIVE` hiện lại; ghi audit | BR-BV-02 · UC81 |
+| 9 | `DRAFT` → `PUBLISHED` | Xuất bản trực tiếp | A04 | Bài do SUPER_MANAGER tự soạn, không qua duyệt (BR-BV-07) | `first_published_at` lần đầu | BR-BV-02, 07 · UC81 |
+
+Các chuyển #7–#9 bổ sung ở T106 (15/11/2026, ADR-0139) cho khớp BR-BV-02 (`DRAFT → PUBLISHED ⇄ HIDDEN`); trạng thái dùng đúng giá trị của V48 (`DRAFT`, `PENDING_REVIEW`, `REJECTED`, `PUBLISHED`, `HIDDEN`). Chuyển #7–#9 đã có endpoint ở content-v1 (`…/publish`, `…/hide`), không thêm endpoint.
 
 Dữ liệu: `articles` thêm `author_account_id FK→accounts?`, `review_note VARCHAR(300)?`, `submitted_at?`, `reviewed_by FK?`, `reviewed_at?`; `status CHECK` thêm `PENDING_REVIEW`, `REJECTED`; Index `(author_account_id, status)`. `article_comments` — ROOT: `id`, `article_id FK`, `customer_id FK`, `content VARCHAR(1000) NN`, `status VARCHAR(20) CHECK ('ACTIVE','HIDDEN','DELETED')`, `edited_at?`, `hidden_by FK?`, `hide_reason VARCHAR(300)?`, `hidden_at?`; Index `(article_id, status, created_at)`. **API `articlex-v1` (14):** VET `POST /me/articles`, `GET /me/articles`, `GET /me/articles/{articleId}`, `PATCH /me/articles/{articleId}`, `POST …/submit`, `POST …/withdraw`; SUPER_MANAGER `POST /articles/{articleId}/approve`, `POST …/reject`; bình luận `GET /public/articles/{slug}/comments`, `POST /me/articles/{articleId}/comments`, `PATCH /me/comments/{commentId}`, `DELETE /me/comments/{commentId}`, `POST /comments/{commentId}/hide`, `POST …/unhide`. Danh sách bài chờ duyệt dùng `GET /articles?status=PENDING_REVIEW` của content-v1 (mở rộng giá trị `status`).
 
-**Giả định:** A4 VET không sửa bài đã xuất bản; A5 tên khách rút gọn. **Câu hỏi:** Q3 VET có được chọn chuyên mục không hay SUPER_MANAGER gán khi duyệt; Q4 bình luận có cần duyệt trước khi hiện không (đề xuất không, ẩn sau).
+**Giả định:** A4 VET không sửa bài đã xuất bản; A5 tên khách rút gọn. **Câu hỏi:** ~~Q3 VET có được chọn chuyên mục không hay SUPER_MANAGER gán khi duyệt~~ **đã chốt ở ADR-0139 (15/11/2026): VET được đề xuất chuyên mục; SUPER_MANAGER chọn và được đổi chuyên mục khi duyệt: request duyệt có `categoryId` tùy chọn (vắng = giữ chuyên mục VET đề xuất; id không tồn tại → 404).** ~~Q4 bình luận có cần duyệt trước khi hiện không~~ **đã chốt ở ADR-0139: không duyệt trước, bình luận hiện công khai ngay, SUPER_MANAGER ẩn sau.**
+
+**Chi tiết bình luận (chốt ở ADR-0139):** danh sách công khai cũ nhất trước, mỗi trang 20 bình luận; tên tác giả rút gọn (A5) = mọi từ trừ từ cuối viết tắt chữ cái đầu kèm dấu chấm, từ cuối giữ nguyên, ví dụ "Nguyễn Văn An" → "N. V. An". Tác giả **không sửa** được bình luận `HIDDEN` (409) nhưng **xóa được** (xóa mềm → `DELETED`, trạng thái cuối); ẩn bình luận `DELETED` → 409; đăng bình luận vào bài không `PUBLISHED` → 404 cho khách.
 
 ---
 
@@ -415,7 +461,7 @@ Dữ liệu: `articles` thêm `author_account_id FK→accounts?`, `review_note V
 
 | Nhóm | UC / ST | FSM | Bảng mới | Module API (endpoint) |
 |---|---|---|---|---|
-| A. Phí cấu hình | UC32 | — | 3 | `fees` (6) |
+| A. Phí cấu hình | UC32 | — | 3 | `fees` (4) |
 | B. Thương mại điện tử | UC61, 62, 64, 65 · ST09, 10, 12 | #14, Order#11–13 | 4 | `shop` (19) |
 | C. Thanh toán online | UC63 · ST11, 14 | #15 | 3 | `payment` (6) |
 | D. Trả hàng, hoàn tiền | UC68, 69 · ST21 | #16, #17 | 3 | `returns` (9) |
@@ -437,7 +483,7 @@ Dữ liệu: `articles` thêm `author_account_id FK→accounts?`, `review_note V
 1. Hoàn tiền sau `PAID` không đổi Order (Q4 ở B) ảnh hưởng báo cáo doanh thu UC89.
 2. `stock_reservations` đổi định nghĩa "tồn khả dụng" (BR-KO-01) — mọi nơi tính tồn (kê đơn, bán lẻ, báo cáo) phải trừ phần giữ.
 3. Gộp khách (UC27) chạm mọi module có `customer_id`; cần danh sách đầy đủ ở T55.
-4. Cổng thanh toán chưa chọn (Q1 ở C) chặn T65.
+4. Cổng thanh toán đã chọn VNPay; việc đăng ký sandbox (Hiến) là phụ thuộc bên ngoài của T65, phần interface làm được trước.
 5. Đóng chi nhánh (UC13) phụ thuộc UC77 (chuyển kho) và UC73–76; làm UC77 trước.
 
 ### Liên kết với `02`–`06` (đã làm ở T54)
@@ -461,3 +507,24 @@ Dữ liệu: `articles` thêm `author_account_id FK→accounts?`, `review_note V
 | Care Task `OPEN` khi đóng chi nhánh (F.1) | Chuyển sang chi nhánh SUPER_MANAGER chọn; không chọn thì hủy kèm lý do |
 | Phạm vi gộp khách (F.2, custmerge Q1) | BRANCH_MANAGER gộp mọi hồ sơ khách (hồ sơ dùng chung toàn chuỗi), audit đầy đủ (A1) |
 | Còn lại (A1…A6, Q nhỏ) | **Chốt theo đề xuất** đã ghi ở từng mục; BE-2 muốn đổi thì qua ADR |
+| Chi nhánh xử lý đơn online (B, BR-BH-08, A3) | Khách chọn **một** chi nhánh `ACTIVE` đủ hàng cho mọi dòng (autopilot 15/11, ADR-0137) |
+| Hoàn về lô gốc (ADR-0117 TBD-1) | Cộng lại đúng các lô của movement âm nguồn, lô hạn muộn nhất trước, không quá số đã xuất từ lô đó; movement mới `SALE_RETURN`, nguồn `orders` hoặc `return_requests` (autopilot 15/11, ADR-0137 D1) |
+| Lý do giao thất bại (TBD-2) | Cột `online_orders.delivery_failure_reason VARCHAR(500)` NULL, migration cùng task xử lý & giao đơn (autopilot 15/11, ADR-0137 D2) |
+| `markPaymentCancelled` (TBD-5, C Q3) | Đơn vẫn `PENDING_PAYMENT`, không đổi trạng thái, idempotent, outbox `PAYMENT_FAILED`; giao dịch thành công về muộn cho đơn đã hủy → hoàn tiền qua ST21 (autopilot 15/11, ADR-0137 D3) |
+| Callback cổng và khóa cổng (C, Q2) | Không allowlist IP; tin cậy bằng chữ ký HMAC-SHA512 + số tiền + idempotent; khóa ở biến môi trường `PAYMENT_*`, không phải [CFG] (autopilot 15/11, ADR-0137 D4) |
+| Khóa giữ hàng (BR-BH-08/09, ST06) | `carts` → đọc `branches` → mọi `stock_lots` một câu `ORDER BY id FOR NO KEY UPDATE` → INSERT → `document_counters`; trừ `HELD` ở mọi nơi kiểm tồn (autopilot 15/11, ADR-0137 D5) |
+| ST06 một phần | Tất cả hoặc không: không giữ hàng một phần, 400 `BR-BH-08` (autopilot 15/11, ADR-0137 D6) |
+| Lô nhận hàng trả (ADR-0117 TBD-1, tinh chỉnh ADR-0137 D1) | `StockApi.restockToOriginalLot`: lô có movement âm nguồn `orders` của Order, hạn muộn nhất trước, mỗi lô không quá số đã xuất trừ số đã trả; movement `SALE_RETURN`, nguồn `return_requests`; lô hết hạn vẫn nhận lại; `restock = false` không đổi tồn; migration ở task 137 (autopilot 15/11, ADR-0138) |
+| Hoàn 0 đồng (TBD-3) | Duyệt yêu cầu có tiền hoàn 0 thì hoàn tất `REFUNDED`, không sinh `refunds` (FSM #16 #6) (autopilot 15/11, ADR-0138) |
+| Hạn trả đơn online (TBD-6) | `OnlineOrderQueryApi.findDeliveredAtByOrderId(orderId)` → `Optional<Instant>` ở `shop.api`, BE-2, task 125/126 (autopilot 15/11, ADR-0138) |
+| Hoàn thất bại xử lý ngoài hệ thống (BR-TG-14) | FSM #17 #5 `FAILED → SUCCEEDED`, A05, ghi chú bắt buộc (audit), đặt `completed_at` (autopilot 15/11, ADR-0138) |
+| Hoàn tại quầy (BR-TG-13, §D Q5) | Vào ca `OPEN` của người xác nhận, không kiểm tiền két, đối soát ca trừ hoàn tiền; mã giao dịch chuyển khoản tùy chọn, văn bản tự do, lưu audit (autopilot 15/11, ADR-0138) |
+| Idempotency ST21 | `refunds.code` là mã tham chiếu gửi cổng và dùng lại khi thử lại; tạo: `attempts` = 0, `next_attempt_at` = `created_at` (autopilot 15/11, ADR-0138) |
+| `refundStatus` của đơn online (§D Q4) | Có: chi tiết đơn của khách có `refundStatus` (null khi không có hoàn tiền) (autopilot 15/11, ADR-0138) |
+| Mở lại chi nhánh (ADR-0117 TBD-4) | `SUSPENDED → ACTIVE` xóa `suspended_at`, `suspend_reason`, `expected_resume_on`; lịch sử tạm ngừng ở `audit_logs` (autopilot 15/11, ADR-0139 B1) |
+| Hủy hàng loạt khi tạm ngừng / đóng (BR-CN-09) | Còn lịch `BOOKED` thì bắt buộc hủy hàng loạt, không có đường giữ lại; `cancelBookings = false` mà còn lịch → 400 `BR-CN-09` (autopilot 15/11, ADR-0139 B2) |
+| Hiệu lực trạng thái chi nhánh theo luồng (F.1) | Bảng mới "Hiệu lực của trạng thái chi nhánh theo luồng": `SUSPENDED` hoàn tất việc dở, không bắt đầu việc mới; `CLOSED` chỉ đọc; thao tác ghi bị chặn trả 400 `BR-CN-10` (autopilot 15/11, ADR-0139 B3) |
+| FSM #21 thiếu chuyển (F.3) | Thêm #7 `PUBLISHED → HIDDEN`, #8 `HIDDEN → PUBLISHED`, #9 `DRAFT → PUBLISHED` (A04, bài của SUPER_MANAGER) cho khớp BR-BV-02 (autopilot 15/11, ADR-0139 B4) |
+| Q3 chuyên mục (F.3) | VET đề xuất, SUPER_MANAGER chọn và được đổi khi duyệt qua `categoryId` tùy chọn của request duyệt (vắng = giữ; id lạ → 404) (autopilot 15/11, ADR-0139 B5) |
+| Q4 duyệt trước bình luận (F.3) | Không duyệt trước; hiện ngay, SUPER_MANAGER ẩn sau (autopilot 15/11, ADR-0139 B5) |
+| Chi tiết bình luận (BR-BV-08, A5) | Cũ nhất trước, 20 / trang; tên rút gọn "N. V. An"; tác giả không sửa bình luận `HIDDEN` (409) nhưng xóa được (→ `DELETED`); ẩn bình luận `DELETED` → 409; bài không `PUBLISHED` → 404 (autopilot 15/11, ADR-0139 B5) |

@@ -133,8 +133,8 @@ final class PetFixtures {
 
     void feedback(long customerId) {
         replica(() -> jdbc.update("""
-                INSERT INTO feedbacks (customer_id, topic, content, status)
-                VALUES (?, 'WEBSITE', 'Nội dung phản hồi đủ dài', 'NEW')
+                INSERT INTO feedbacks (customer_id, topic, content)
+                VALUES (?, 'WEBSITE', 'Nội dung phản hồi đủ dài')
                 """, customerId));
     }
 

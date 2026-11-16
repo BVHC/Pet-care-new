@@ -112,7 +112,7 @@ public class FeedbackSubmitService {
 
     private static MyFeedbackResponse toResponse(Feedback f) {
         return new MyFeedbackResponse(f.getId(), f.getTopic(), f.getBranchId(),
-                f.getRating() == null ? null : f.getRating().intValue(), f.getContent(), f.getStatus(),
+                f.getRating() == null ? null : f.getRating().intValue(), f.getContent(),
                 ArticleService.micros(f.getCreatedAt()));
     }
 }
