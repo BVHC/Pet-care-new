@@ -76,10 +76,10 @@
 ### Checkout
 
 - **`GET /me/online-orders/fulfillment-branches`** — Chi nhánh xử lý được cho giỏ hiện tại. Response `200` mảng `FulfillmentBranch`. Lỗi: `401` · `403`.
-- **`GET /me/online-orders/quote`** — Báo giá đơn online (ST09). Query: `branchId`, `addressId`. Response `200` `OnlineOrderQuote`. Lỗi: `400` `BR-BH-08` giỏ rỗng · chi nhánh không đủ hàng · địa chỉ không phải của khách · `401` · `403` · `404` Không tìm thấy địa chỉ / chi nhánh.
+- **`GET /me/online-orders/quote`** — Báo giá đơn online (ST09). Query: `branchId`, `addressId`. Response `200` `OnlineOrderQuote`. Lỗi: `400` `BR-BH-08` giỏ rỗng · chi nhánh không đủ hàng · `401` · `403` · `404` Không tìm thấy địa chỉ (hoặc địa chỉ không phải của khách) / chi nhánh.
 ### My online orders
 
-- **`POST /me/online-orders`** — Đặt hàng online. Request `PlaceOnlineOrderRequest`. Response `201` `OnlineOrder`. Lỗi: `400` `BR-BH-08` giỏ rỗng · chi nhánh không `ACTIVE` / thiếu hàng · địa chỉ không phải của khách · `401` · `403` · `404` · `409` `CONCURRENCY_CONFLICT` hàng vừa bị người khác giữ.
+- **`POST /me/online-orders`** — Đặt hàng online. Request `PlaceOnlineOrderRequest`. Response `201` `OnlineOrder`. Lỗi: `400` `BR-BH-08` giỏ rỗng · chi nhánh không `ACTIVE` / thiếu hàng · `401` · `403` · `404` Không tìm thấy chi nhánh / địa chỉ (hoặc địa chỉ không phải của khách) · `409` `CONCURRENCY_CONFLICT` hàng vừa bị người khác giữ.
 - **`GET /me/online-orders`** — Danh sách đơn online của tôi. Query: `status?`, `page?`, `size?`. Response `200` trang `OnlineOrderSummary`. Lỗi: `400` · `401` · `403`.
 - **`GET /me/online-orders/{onlineOrderId}`** — Chi tiết đơn online của tôi. Response `200` `OnlineOrder`. Lỗi: `400` · `401` · `403` · `404` Không tìm thấy đơn — cả khi đơn thuộc người khác (ADR-0006).
 - **`POST /me/online-orders/{onlineOrderId}/cancel`** — Hủy đơn online. Request `ReasonRequest`. Response `200` `OnlineOrder`. Lỗi: `400` · `401` · `403` · `404` · `409` `INVALID_STATE_TRANSITION` trạng thái đơn không cho phép (03 #14).

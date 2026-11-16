@@ -167,6 +167,8 @@ Xóa mũi tiêm ghi nhầm (ADR-0075): cùng tiền tố khóa `pets FOR SHARE` 
 
 Bên sở hữu phải có implementation thật trước ngày bên gọi bắt đầu dùng. Trước ngày đó bên gọi dùng mock / placeholder (§1). Ngày theo `timeline_petcare_v15.xlsx`.
 
+**Lưu ý cho BE-1 (task 117, ADR-0144, 17/11/2026):** `CustomerQueryApi.findAddress` nay trừu tượng (bản thật), `StockApi.reserve` / `lockAvailableQuantity` và `StockQueryApi.findAvailableQuantity` là bản thật, không còn placeholder. Khi merge sang `manh`: `JdbcPetCustomerModule`, `LinkProfileIT.JdbcCustomerModule` (cần override `findAddress`) và `Tier3Be2ContractWiringIT` (bỏ assert placeholder của `reserve` / `findAvailableQuantity` / `findAddress`) sẽ xung đột hoặc đỏ.
+
 | Interface | Owner · xong | Bên gọi · bắt đầu | Ghi chú |
 |---|---|---|---|
 | `SystemConfigApi` | BE-1 · 06/10 — **đã giao 04/10** | mọi module | Chữ ký đổi từ `String key` sang `ConfigKey` (ADR-0004). Audit có sẵn ở `platform/audit`; xác thực, `BranchScope` ở `platform/security` (ADR-0003) |

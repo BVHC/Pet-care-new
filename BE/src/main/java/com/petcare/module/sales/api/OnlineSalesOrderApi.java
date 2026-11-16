@@ -10,6 +10,10 @@ import java.util.List;
  */
 public interface OnlineSalesOrderApi {
 
+    /** Dãy mã chứng từ của Order bán hàng (dùng chung với Order tại quầy, ADR-0043): {@code DH-yyMM-00001}. */
+    String ORDER_DOC_TYPE = "ORDER";
+    String ORDER_PREFIX = "DH";
+
     /** Dòng hàng đã chốt: {@code unitPrice} là bản chụp giá lúc đặt (BR-BH-03), không đọc lại giá hiện tại. */
     record OnlineOrderLineInput(Long productId, String name, int quantity, long unitPrice) {}
 

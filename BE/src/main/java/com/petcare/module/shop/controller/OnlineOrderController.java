@@ -51,9 +51,9 @@ public class OnlineOrderController {
             description = "UC62 · BR-BH-08, BR-SP-08, ST09. Actor: A02. Quyền: CUSTOMER, chỉ dữ liệu của mình. Chuyển trạng thái: —. Không giữ hàng, không ghi gì; phí chốt thật lúc đặt.",
             parameters = {@Parameter(name = "branchId", in = ParameterIn.QUERY, required = true, example = "3"),
                     @Parameter(name = "addressId", in = ParameterIn.QUERY, required = true, example = "7")})
-    @ApiErrorDoc(status = 400, description = "`BR-BH-08` giỏ rỗng · chi nhánh không đủ hàng · địa chỉ không phải của khách")
+    @ApiErrorDoc(status = 400, description = "`BR-BH-08` giỏ rỗng · chi nhánh không đủ hàng")
     @ApiErrorDoc(status = 403)
-    @ApiErrorDoc(status = 404, description = "Không tìm thấy địa chỉ / chi nhánh")
+    @ApiErrorDoc(status = 404, description = "Không tìm thấy địa chỉ (hoặc địa chỉ không phải của khách) / chi nhánh")
     @GetMapping("/quote")
     @PreAuthorize(CUSTOMER)
     public ApiResponse<OnlineOrderQuoteResponse> quoteOnlineOrder(@RequestParam Long branchId,
@@ -63,9 +63,9 @@ public class OnlineOrderController {
 
     @Operation(operationId = "placeOnlineOrder", tags = "My online orders", summary = "Đặt hàng online",
             description = "UC62 · BR-BH-08, 09, BR-SP-08, 11. Actor: A02. Quyền: CUSTOMER, chỉ dữ liệu của mình. Chuyển trạng thái: — → PENDING_PAYMENT (Đơn hàng online#1); Order#11. Giữ hàng, chốt phí, tạo Order `ONLINE`, dọn giỏ trong một transaction. Bước tiếp: `POST /me/online-orders/{onlineOrderId}/pay` (payment-v1).")
-    @ApiErrorDoc(status = 400, description = "`BR-BH-08` giỏ rỗng · chi nhánh không `ACTIVE` / thiếu hàng · địa chỉ không phải của khách")
+    @ApiErrorDoc(status = 400, description = "`BR-BH-08` giỏ rỗng · chi nhánh không `ACTIVE` / thiếu hàng")
     @ApiErrorDoc(status = 403)
-    @ApiErrorDoc(status = 404)
+    @ApiErrorDoc(status = 404, description = "Không tìm thấy chi nhánh / địa chỉ (hoặc địa chỉ không phải của khách)")
     @ApiErrorDoc(status = 409, description = "`CONCURRENCY_CONFLICT` hàng vừa bị người khác giữ")
     @PostMapping
     @PreAuthorize(CUSTOMER)

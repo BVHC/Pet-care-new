@@ -210,7 +210,7 @@ paths:
                     type: integer
                     description: "HTTP status của kết quả, ví dụ 200, 201"
         "400":
-          description: "`BR-BH-08` giỏ rỗng · chi nhánh không đủ hàng · địa chỉ không phải của khách"
+          description: "`BR-BH-08` giỏ rỗng · chi nhánh không đủ hàng"
           content:
             "application/json":
               schema:
@@ -220,7 +220,7 @@ paths:
         "403":
           $ref: "#/components/responses/Forbidden"
         "404":
-          description: "Không tìm thấy địa chỉ / chi nhánh"
+          description: "Không tìm thấy địa chỉ (hoặc địa chỉ không phải của khách) / chi nhánh"
           content:
             "application/json":
               schema:
@@ -256,7 +256,7 @@ paths:
                     type: integer
                     description: "HTTP status của kết quả, ví dụ 200, 201"
         "400":
-          description: "`BR-BH-08` giỏ rỗng · chi nhánh không `ACTIVE` / thiếu hàng · địa chỉ không phải của khách"
+          description: "`BR-BH-08` giỏ rỗng · chi nhánh không `ACTIVE` / thiếu hàng"
           content:
             "application/json":
               schema:
@@ -266,7 +266,11 @@ paths:
         "403":
           $ref: "#/components/responses/Forbidden"
         "404":
-          $ref: "#/components/responses/NotFound"
+          description: "Không tìm thấy chi nhánh / địa chỉ (hoặc địa chỉ không phải của khách)"
+          content:
+            "application/json":
+              schema:
+                $ref: "#/components/schemas/Error"
         "409":
           description: "`CONCURRENCY_CONFLICT` hàng vừa bị người khác giữ"
           content:

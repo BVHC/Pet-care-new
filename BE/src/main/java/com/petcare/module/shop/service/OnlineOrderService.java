@@ -79,8 +79,6 @@ public class OnlineOrderService {
 
     static final String RULE = "BR-BH-08";
     /** Order bán hàng dùng dãy mã chung với Order tại quầy (ADR-0043): {@code DH-yyMM-00001}. */
-    static final String ORDER_DOC_TYPE = "ORDER";
-    static final String ORDER_PREFIX = "DH";
     /** Mã đơn online riêng (P5): {@code DO-yyMM-00001}; tiền tố khác {@code DH} để không nhầm với mã Order. */
     static final String ONLINE_DOC_TYPE = "ONLINE_ORDER";
     static final String ONLINE_PREFIX = "DO";
@@ -202,7 +200,7 @@ public class OnlineOrderService {
         Instant now = clock.instant().truncatedTo(ChronoUnit.MICROS);
         Instant dueAt = now.plus(config.getInt(ConfigKey.SHOP_PAYMENT_WINDOW_HOURS), ChronoUnit.HOURS);
         LocalDate today = LocalDate.now(clock);
-        String orderCode = codes.next(ORDER_DOC_TYPE, ORDER_PREFIX, today);
+        String orderCode = codes.next(OnlineSalesOrderApi.ORDER_DOC_TYPE, OnlineSalesOrderApi.ORDER_PREFIX, today);
         String onlineCode = codes.next(ONLINE_DOC_TYPE, ONLINE_PREFIX, today);
         // 6. INSERT orders + order_lines (Order#11), online_orders, stock_reservations
         List<OnlineOrderLineInput> inputs = lines.stream()
