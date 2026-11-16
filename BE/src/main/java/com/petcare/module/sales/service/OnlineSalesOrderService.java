@@ -87,6 +87,26 @@ public class OnlineSalesOrderService implements OnlineSalesOrderApi {
     }
 
     @Override
+    @Transactional(propagation = Propagation.MANDATORY)
+    public void markPaid(Long orderId, Instant paidAt) {
+        if (orderId == null || paidAt == null) {
+            throw new IllegalArgumentException("Order online thiếu orderId / thời điểm thanh toán");
+        }
+        SalesOrder order = orders.findByIdForUpdate(orderId)
+                .orElseThrow(() -> new IllegalStateException("Order online #" + orderId + " không tồn tại"));
+        if (order.getSource() != OrderSource.ONLINE) {
+            throw new IllegalStateException("Order #" + orderId + " không phải nguồn ONLINE");
+        }
+        if (order.getStatus() == OrderStatus.PAID) {
+            return; // idempotent: callback lặp lại không đổi gì
+        }
+        fsm.validateTransition(order.getStatus(), OrderStatus.PAID); // CANCELLED → 409
+        // Order#12: không có Payment (payment_id NULL, V42); tiền ở payment_transactions
+        order.markPaid(null, paidAt.truncatedTo(java.time.temporal.ChronoUnit.MICROS));
+        orders.flush();
+    }
+
+    @Override
     @Transactional(readOnly = true)
     public Map<Long, List<OnlineOrderLineInput>> findLines(Collection<Long> orderIds) {
         Map<Long, List<OnlineOrderLineInput>> result = new LinkedHashMap<>();

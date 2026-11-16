@@ -202,6 +202,39 @@ public class StockIssueService implements StockApi {
 
     @Override
     @Transactional(propagation = Propagation.MANDATORY)
+    public void consumeReservation(OrderRef orderRef, Long actorId) {
+        require(orderRef, "orderRef");
+        require(orderRef.onlineOrderId(), "onlineOrderId");
+        require(orderRef.orderId(), "orderId");
+        require(actorId, "actorId");
+        // Thứ tự khóa ADR-0145 C3: dòng giữ của đơn trước, rồi mọi lô một câu (id tăng dần).
+        List<StockReservationDao.HeldRow> held = reservations.lockHeld(orderRef.onlineOrderId());
+        if (held.isEmpty()) {
+            return; // idempotent: đã CONSUMED / RELEASED hoặc chưa giữ gì
+        }
+        long branchId = held.get(0).branchId();
+        if (held.stream().anyMatch(r -> r.branchId() != branchId)) {
+            throw new IllegalStateException("Phần giữ của đơn online #" + orderRef.onlineOrderId()
+                    + " nằm ở nhiều chi nhánh");
+        }
+        LocalDate today = LocalDate.now(clock);
+        Map<Long, List<LockedLot>> byProduct = lots.lockIssuableLots(branchId,
+                held.stream().map(StockReservationDao.HeldRow::productId).toList(), today).stream()
+                .collect(Collectors.groupingBy(LockedLot::productId));
+        List<FefoAllocator.Take> takes = new ArrayList<>();
+        for (StockReservationDao.HeldRow row : held) {
+            takes.addAll(FefoAllocator.allocate(byProduct.getOrDefault(row.productId(), List.of()), row.quantity(), today)
+                    .orElseThrow(() -> new IllegalStateException("Hàng đã giữ cho đơn online #"
+                            + orderRef.onlineOrderId() + " không còn đủ lô chưa hết hạn: sản phẩm " + row.productId()
+                            + ", cần " + row.quantity())));
+        }
+        takes.stream().sorted(Comparator.comparing(t -> t.lot().id())).forEach(take -> ledger.apply(take.lot(),
+                -take.quantity(), MovementType.SALE, StockSources.ORDERS, orderRef.orderId(), actorId));
+        reservations.consumeHeld(orderRef.onlineOrderId(), Instant.now(clock).truncatedTo(ChronoUnit.MICROS));
+    }
+
+    @Override
+    @Transactional(propagation = Propagation.MANDATORY)
     public void issueForVaccination(Long stockLotId, int quantity, Long vaccinationId, Long actorId) {
         require(stockLotId, "stockLotId");
         require(vaccinationId, "vaccinationId");

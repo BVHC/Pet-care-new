@@ -259,4 +259,86 @@ class OnlineSalesOrderIT extends CashierItSupport {
         assertThatThrownBy(() -> tx.execute(s -> onlineOrders.createPendingOrder(null, branch, customer, manager,
                 List.of(new OnlineOrderLineInput(goods, "Hạt", 1, 1L))))).isInstanceOf(IllegalArgumentException.class);
     }
+
+    // ---------------------------------------------------------------- task 127: Order#12 (markPaid)
+
+    @Test
+    void markPaidMovesAPendingOnlineOrderToPaidWithPaidAtAndNoPaymentRow() {
+        long online = placeOne();
+        Instant paidAt = Instant.parse("2005-06-15T03:04:05.123456789Z");
+
+        tx.executeWithoutResult(s -> onlineOrders.markPaid(online, paidAt));
+
+        Map<String, Object> row = order(online);
+        assertThat(row).containsEntry("status", "PAID").containsEntry("payment_id", null)
+                .containsEntry("total_amount", 180_000L);
+        assertThat(((java.sql.Timestamp) row.get("paid_at")).toInstant())
+                .isEqualTo(paidAt.truncatedTo(java.time.temporal.ChronoUnit.MICROS));
+        assertThat(jdbc.queryForObject("SELECT count(*) FROM payments WHERE branch_id = ?", Long.class, branch)).isZero();
+    }
+
+    @Test
+    void markPaidIsIdempotentAndKeepsTheFirstPaidAt() {
+        long online = placeOne();
+        Instant first = Instant.parse("2005-06-15T03:00:00Z");
+        tx.executeWithoutResult(s -> onlineOrders.markPaid(online, first));
+
+        tx.executeWithoutResult(s -> onlineOrders.markPaid(online, first.plusSeconds(600)));
+
+        assertThat(order(online)).containsEntry("status", "PAID");
+        assertThat(((java.sql.Timestamp) order(online).get("paid_at")).toInstant()).isEqualTo(first);
+    }
+
+    @Test
+    void markPaidOnACancelledOrderIsAConflictAndChangesNothing() {
+        long online = placeOne();
+        tx.executeWithoutResult(s -> onlineOrders.cancel(online, OnlineSalesOrderApi.OnlineCancelType.CUSTOMER,
+                manager, "Khach doi y"));
+
+        assertThatThrownBy(() -> tx.executeWithoutResult(s -> onlineOrders.markPaid(online, Instant.now())))
+                .isInstanceOf(com.petcare.platform.exception.InvalidStateTransitionException.class);
+
+        assertThat(order(online)).containsEntry("status", "CANCELLED").containsEntry("paid_at", null);
+    }
+
+    @Test
+    void markPaidRefusesANonOnlineOrderAnUnknownIdMissingArgumentsAndNoTransaction() {
+        long counter = pendingOrderSql(branch, customer, receptionist, LineSpec.goods(goods, "Hạt", 1, 100_000));
+        long online = placeOne();
+
+        assertThatThrownBy(() -> tx.executeWithoutResult(s -> onlineOrders.markPaid(counter, Instant.now())))
+                .isInstanceOf(IllegalStateException.class).hasMessageContaining("ONLINE");
+        assertThat(orderStatus(counter)).isEqualTo("PENDING");
+        assertThatThrownBy(() -> tx.executeWithoutResult(s -> onlineOrders.markPaid(-1L, Instant.now())))
+                .isInstanceOf(IllegalStateException.class);
+        assertThatThrownBy(() -> tx.executeWithoutResult(s -> onlineOrders.markPaid(null, Instant.now())))
+                .isInstanceOf(IllegalArgumentException.class);
+        assertThatThrownBy(() -> tx.executeWithoutResult(s -> onlineOrders.markPaid(online, null)))
+                .isInstanceOf(IllegalArgumentException.class);
+        assertThatThrownBy(() -> onlineOrders.markPaid(online, Instant.now()))
+                .isInstanceOf(IllegalTransactionStateException.class);
+        assertThat(orderStatus(online)).isEqualTo("PENDING");
+    }
+
+    @Test
+    void markPaidLocksTheOrderRowBeforeReadingSoConcurrentCallsPayExactlyOnce() throws Exception {
+        long online = placeOne();
+        Instant a = Instant.parse("2005-06-15T03:00:00Z");
+        Instant b = Instant.parse("2005-06-15T04:00:00Z");
+
+        List<Outcome> outcomes = whileOrderLocked(online, () -> { }, List.of(
+                () -> tx.execute(s -> {
+                    onlineOrders.markPaid(online, a);
+                    return "a";
+                }),
+                () -> tx.execute(s -> {
+                    onlineOrders.markPaid(online, b);
+                    return "b";
+                })));
+
+        assertThat(outcomes).extracting(Outcome::error).containsOnlyNulls();
+        assertThat(order(online)).containsEntry("status", "PAID");
+        Instant paidAt = ((java.sql.Timestamp) order(online).get("paid_at")).toInstant();
+        assertThat(paidAt).as("một lần ghi, lần sau idempotent").isIn(a, b);
+    }
 }

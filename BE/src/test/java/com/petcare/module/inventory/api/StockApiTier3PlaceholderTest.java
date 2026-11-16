@@ -25,11 +25,6 @@ class StockApiTier3PlaceholderTest {
             List.of(new StockApi.TransferredLot(1L, 5L, 2, "L1", LocalDate.of(2027, 1, 1)));
 
     @Test
-    void consumeReservationThrowsUntilImplemented() {
-        assertPlaceholder(() -> stock.consumeReservation(ref, 1L), "StockApi.consumeReservation", "T63");
-    }
-
-    @Test
     void restockThrowsUntilImplemented() {
         assertPlaceholder(() -> stock.restock(ref, 1L), "StockApi.restock", "T63");
     }
