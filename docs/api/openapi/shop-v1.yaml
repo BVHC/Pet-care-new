@@ -605,7 +605,7 @@ paths:
                     type: integer
                     description: "HTTP status của kết quả, ví dụ 200, 201"
         "400":
-          description: "`BR-BH-11` thiếu đơn vị vận chuyển hoặc mã vận đơn"
+          description: "`BR-BH-11` thiếu đơn vị vận chuyển hoặc mã vận đơn · `VALIDATION_FAILED` quá 100 ký tự"
           content:
             "application/json":
               schema:
@@ -695,7 +695,7 @@ paths:
                     type: integer
                     description: "HTTP status của kết quả, ví dụ 200, 201"
         "400":
-          description: "`BR-BH-11` thiếu lý do"
+          description: "`VALIDATION_FAILED` thiếu lý do hoặc quá 300 ký tự (BR-BH-11)"
           content:
             "application/json":
               schema:
@@ -745,7 +745,7 @@ paths:
                     type: integer
                     description: "HTTP status của kết quả, ví dụ 200, 201"
         "400":
-          description: "`BR-BH-11` quá số lần giao lại tối đa [CFG] · thiếu mã vận đơn"
+          description: "`BR-BH-11` quá số lần giao lại tối đa [CFG] · thiếu đơn vị vận chuyển hoặc mã vận đơn · `VALIDATION_FAILED` quá 100 ký tự"
           content:
             "application/json":
               schema:

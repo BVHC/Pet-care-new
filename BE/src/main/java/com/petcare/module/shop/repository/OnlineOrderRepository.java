@@ -1,6 +1,7 @@
 package com.petcare.module.shop.repository;
 
 import java.time.Instant;
+import java.util.Collection;
 import java.util.Optional;
 
 import org.springframework.data.domain.Page;
@@ -33,6 +34,13 @@ public interface OnlineOrderRepository extends JpaRepository<OnlineOrder, Long> 
     /** {@code delivered_at} của đơn ứng với Order {@code orders.id}; rỗng khi không có đơn hoặc chưa giao. */
     @Query("SELECT o.deliveredAt FROM OnlineOrder o WHERE o.orderId = :orderId AND o.deliveredAt IS NOT NULL")
     Optional<Instant> findDeliveredAtByOrderId(@Param("orderId") Long orderId);
+
+    /** Chi nhánh xử lý, đọc không khóa và không nạp entity ({@code branch_id} bất biến): kiểm phạm vi (403) trước khi khóa. */
+    @Query("SELECT o.branchId FROM OnlineOrder o WHERE o.id = :id")
+    Optional<Long> findBranchIdById(@Param("id") Long id);
+
+    /** Đơn của một chi nhánh theo tập trạng thái (task 126), phân trang; sắp xếp do {@code Pageable} (cũ nhất trước). */
+    Page<OnlineOrder> findByBranchIdAndStatusIn(Long branchId, Collection<OnlineOrderStatus> statuses, Pageable pageable);
 
     /** Đơn của khách, phân trang; sắp xếp do {@code Pageable} (mới nhất trước, {@code ix_online_orders_customer_created}). */
     Page<OnlineOrder> findByCustomerId(Long customerId, Pageable pageable);
