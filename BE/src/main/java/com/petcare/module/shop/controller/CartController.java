@@ -57,7 +57,7 @@ public class CartController {
     @Operation(operationId = "setCartItem", tags = "Cart", summary = "Thêm hoặc đặt số lượng sản phẩm trong giỏ",
             description = "UC61 · BR-BH-07. Actor: A02. Quyền: CUSTOMER, chỉ dữ liệu của mình. Chuyển trạng thái: —.",
             parameters = {@Parameter(name = "productId", in = ParameterIn.PATH, example = "12")})
-    @ApiErrorDoc(status = 400, description = "`BR-BH-07` sản phẩm không phải `GOODS` / là thuốc kê đơn / quá 30 dòng · số lượng ngoài 1–99")
+    @ApiErrorDoc(status = 400, description = "`BR-BH-07` sản phẩm không phải `GOODS` / là thuốc kê đơn / quá 30 dòng · `VALIDATION_FAILED` số lượng ngoài 1–99")
     @ApiErrorDoc(status = 403)
     @ApiErrorDoc(status = 404, description = "Không tìm thấy sản phẩm đang kinh doanh")
     @PutMapping("/items/{productId}")

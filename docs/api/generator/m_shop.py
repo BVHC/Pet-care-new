@@ -48,7 +48,7 @@ m.schema("CartItem", {
     "quantity": "int", "imageUrl": "url?", "available": "bool|false nếu hết hàng toàn chuỗi",
 })
 m.schema("Cart", {"items": "array:ref:CartItem", "subtotal": "money"})
-m.schema("SetCartItemRequest", {"quantity": "int|1–99 (BR-BH-07)"})
+m.schema("SetCartItemRequest", {"quantity": "int|1–99 (VALIDATION_FAILED)"})
 m.schema("FulfillmentBranch", {"branchId": "int64", "name": "string", "address": "string"})
 m.schema("OnlineOrderQuote", {
     "branchId": "int64", "addressId": "int64", "subtotal": "money", "shippingFee": "money|BR-SP-08",
@@ -84,7 +84,7 @@ m.op("get", "/me/cart", "getMyCart", "Xem giỏ hàng", "Cart", "UC61", "BR-BH-0
 m.op("put", "/me/cart/items/{productId}", "setCartItem", "Thêm hoặc đặt số lượng sản phẩm trong giỏ", "Cart", "UC61",
      "BR-BH-07", "A02", CUS, body="SetCartItemRequest", resp="Cart", path_params=["ProductId"],
      errors=(400, 401, 403, 404), idem="Có",
-     err_desc={400: "`BR-BH-07` sản phẩm không phải `GOODS` / là thuốc kê đơn / quá 30 dòng · số lượng ngoài 1–99",
+     err_desc={400: "`BR-BH-07` sản phẩm không phải `GOODS` / là thuốc kê đơn / quá 30 dòng · `VALIDATION_FAILED` số lượng ngoài 1–99",
                404: "Không tìm thấy sản phẩm đang kinh doanh"})
 m.op("delete", "/me/cart/items/{productId}", "removeCartItem", "Xóa sản phẩm khỏi giỏ", "Cart", "UC61", "BR-BH-07",
      "A02", CUS, resp="Cart", path_params=["ProductId"], errors=(400, 401, 403), idem="Có",

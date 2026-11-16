@@ -96,7 +96,7 @@ paths:
                     type: integer
                     description: "HTTP status của kết quả, ví dụ 200, 201"
         "400":
-          description: "`BR-BH-07` sản phẩm không phải `GOODS` / là thuốc kê đơn / quá 30 dòng · số lượng ngoài 1–99"
+          description: "`BR-BH-07` sản phẩm không phải `GOODS` / là thuốc kê đơn / quá 30 dòng · `VALIDATION_FAILED` số lượng ngoài 1–99"
           content:
             "application/json":
               schema:
@@ -932,7 +932,7 @@ components:
         quantity:
           type: integer
           format: int32
-          description: "1–99 (BR-BH-07)"
+          description: "1–99 (VALIDATION_FAILED)"
     FulfillmentBranch:
       type: object
       required: [branchId, name, address]

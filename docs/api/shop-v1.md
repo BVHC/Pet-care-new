@@ -70,7 +70,7 @@
 ### Cart
 
 - **`GET /me/cart`** — Xem giỏ hàng. Response `200` `Cart`. Lỗi: `401` · `403`.
-- **`PUT /me/cart/items/{productId}`** — Thêm hoặc đặt số lượng sản phẩm trong giỏ. Request `SetCartItemRequest`. Response `200` `Cart`. Lỗi: `400` `BR-BH-07` sản phẩm không phải `GOODS` / là thuốc kê đơn / quá 30 dòng · số lượng ngoài 1–99 · `401` · `403` · `404` Không tìm thấy sản phẩm đang kinh doanh.
+- **`PUT /me/cart/items/{productId}`** — Thêm hoặc đặt số lượng sản phẩm trong giỏ. Request `SetCartItemRequest`. Response `200` `Cart`. Lỗi: `400` `BR-BH-07` sản phẩm không phải `GOODS` / là thuốc kê đơn / quá 30 dòng · `VALIDATION_FAILED` số lượng ngoài 1–99 · `401` · `403` · `404` Không tìm thấy sản phẩm đang kinh doanh.
 - **`DELETE /me/cart/items/{productId}`** — Xóa sản phẩm khỏi giỏ. Response `200` `Cart`. Lỗi: `400` · `401` · `403`.
 - **`DELETE /me/cart`** — Xóa toàn bộ giỏ. Response `204` rỗng. Lỗi: `401` · `403`.
 ### Checkout

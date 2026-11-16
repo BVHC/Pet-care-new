@@ -61,6 +61,8 @@ class CartIT {
     @Autowired
     private SessionService sessions;
     @Autowired
+    private java.time.Clock clock;
+    @Autowired
     private PlatformTransactionManager transactionManager;
 
     private AppointmentItSupport support;
@@ -358,7 +360,7 @@ class CartIT {
         long splitAcrossBranches = goods(1_000);
         long released = goods(1_000);
         long notEnough = goods(1_000);
-        LocalDate today = LocalDate.now();
+        LocalDate today = LocalDate.now(clock);
         fx.lot(branch, inStock, 5, null);
         fx.lot(branch, expiredOnly, 50, today.minusDays(1));
         fx.lot(branch, heldAway, 5, null);
