@@ -113,7 +113,7 @@ m.op("post", "/me/online-orders", "placeOnlineOrder", "Đặt hàng online", "My
 # ---- UC64 đơn của tôi
 m.op("get", "/me/online-orders", "listMyOnlineOrders", "Danh sách đơn online của tôi", "My online orders", "UC64",
      "BR-BH-10", "A02", CUS, resp="OnlineOrderSummary", page=True, query=[STS, "page", "size"], errors=(400, 401, 403),
-     notes="Mới nhất trước (`createdAt` giảm dần, trùng thì `orderId` giảm dần).")
+     notes="Mới nhất trước (`createdAt` giảm dần, trùng thì `onlineOrderId` giảm dần).")
 m.op("get", "/me/online-orders/{onlineOrderId}", "getMyOnlineOrder", "Chi tiết đơn online của tôi", "My online orders", "UC64",
      "BR-BH-10", "A02", CUS, resp="OnlineOrder", path_params=["OnlineOrderId"], errors=(400, 401, 403, 404),
      err_desc={404: "Không tìm thấy đơn — cả khi đơn thuộc người khác (ADR-0006)"})

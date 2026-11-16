@@ -38,7 +38,7 @@ public class MyOnlineOrderController {
     }
 
     @Operation(operationId = "listMyOnlineOrders", tags = "My online orders", summary = "Danh sách đơn online của tôi",
-            description = "UC64 · BR-BH-10. Actor: A02. Quyền: CUSTOMER, chỉ dữ liệu của mình. Chuyển trạng thái: —. Mới nhất trước (`createdAt` giảm dần, trùng thì `orderId` giảm dần).",
+            description = "UC64 · BR-BH-10. Actor: A02. Quyền: CUSTOMER, chỉ dữ liệu của mình. Chuyển trạng thái: —. Mới nhất trước (`createdAt` giảm dần, trùng thì `onlineOrderId` giảm dần).",
             parameters = {@Parameter(name = "status", in = ParameterIn.QUERY, example = "PENDING_PAYMENT"),
                     @Parameter(name = "page", in = ParameterIn.QUERY, example = "0"),
                     @Parameter(name = "size", in = ParameterIn.QUERY, example = "20")})

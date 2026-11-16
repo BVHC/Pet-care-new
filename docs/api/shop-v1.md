@@ -50,7 +50,7 @@
 | Chi nhánh xử lý được cho giỏ hiện tại | A02 | CUSTOMER, chỉ dữ liệu của mình | — | — | Chỉ chi nhánh `ACTIVE` còn đủ hàng cho mọi dòng của giỏ (đã trừ phần giữ, BR-BH-09). |
 | Báo giá đơn online (ST09) | A02 | CUSTOMER, chỉ dữ liệu của mình | — | — | Không giữ hàng, không ghi gì; phí chốt thật lúc đặt. |
 | Đặt hàng online | A02 | CUSTOMER, chỉ dữ liệu của mình | — → PENDING_PAYMENT (Đơn hàng online#1); Order#11 | — | Giữ hàng, chốt phí, tạo Order `ONLINE`, dọn giỏ trong một transaction. Bước tiếp: `POST /me/online-orders/{onlineOrderId}/pay` (payment-v1). |
-| Danh sách đơn online của tôi | A02 | CUSTOMER, chỉ dữ liệu của mình | — | — | Mới nhất trước (`createdAt` giảm dần, trùng thì `orderId` giảm dần). |
+| Danh sách đơn online của tôi | A02 | CUSTOMER, chỉ dữ liệu của mình | — | — | Mới nhất trước (`createdAt` giảm dần, trùng thì `onlineOrderId` giảm dần). |
 | Chi tiết đơn online của tôi | A02 | CUSTOMER, chỉ dữ liệu của mình | — | — | — |
 | Hủy đơn online | A02 | CUSTOMER, chỉ dữ liệu của mình | PENDING_PAYMENT → CANCELLED (Đơn hàng online#3) | — | Chỉ hủy được khi chưa thanh toán: nhả giữ hàng, hủy giao dịch `PENDING`, Order → `CANCELLED`. Đơn đã thanh toán (#13: hoàn hàng về lô gốc và sinh yêu cầu hoàn tiền, returns-v1, ST21) chưa làm: trả 409 tới task 138. |
 | Xác nhận đã nhận hàng | A02 | CUSTOMER, chỉ dữ liệu của mình | DELIVERED → COMPLETED (Đơn hàng online#11) | — | — |

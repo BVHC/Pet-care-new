@@ -82,7 +82,7 @@ public class OnlineSalesOrderService implements OnlineSalesOrderApi {
         }
         fsm.validateTransition(order.getStatus(), OrderStatus.CANCELLED);
         order.cancel(type == OnlineCancelType.CUSTOMER ? OrderCancelType.ONLINE_CUSTOMER : OrderCancelType.ONLINE_EXPIRED,
-                actorId, reason, Instant.now(clock));
+                actorId, reason, Instant.now(clock).truncatedTo(java.time.temporal.ChronoUnit.MICROS));
         orders.flush();
     }
 
