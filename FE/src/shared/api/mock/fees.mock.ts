@@ -1,11 +1,12 @@
 // Mock fees-v1 (UC32; docs/api/fees-v1.md #1–4): phí vận chuyển toàn chuỗi, định mức vật tư theo dịch vụ.
 // Quyền chép dòng "Quyền:" của yaml: cả #1–#4 chỉ SUPER_MANAGER.
-// BE tầng 3 CHƯA cài, nên mọi điểm dưới đây là ASSUMPTION của T57 (không có số đo thật):
+// BE đã cài #1 và #2 (task 115, ADR-0140; đo trên BE thật 16/11/2026, T80); #3 và #4 (định mức) CHƯA cài, nên A1 (phần #3, #4) và A3 đến A6 là ASSUMPTION của T57:
 //  A1  Thứ tự kiểm (Spring): 401 → 400 MALFORMED_REQUEST (path không phải số nguyên; body sai kiểu JSON) → 400 VALIDATION_FAILED của BODY (`@Valid
 //      @RequestBody`: thiếu trường) → 403 vai trò → 404 → 400 `BR-SP-…` → ghi. Cùng thứ tự với inventory / care mock đã đo trên BE thật; ràng buộc
 //      @Positive của tham số query / path (report-v1 A1) chạy SAU vai trò nhưng fees không có tham số như vậy. Id ≤ 0 trên path là 404, không phải 400.
-//  A2  `PUT /shipping-fee-config`: yaml ghi "BR-SP-08 số âm hoặc sai kiểu". Mock: chuỗi / boolean / đối tượng → MALFORMED_REQUEST (Jackson từ chối
-//      trước khi vào service); số âm hoặc số thập phân (1000.5) → 400 BR-SP-08; thiếu / null → VALIDATION_FAILED.
+//  A2  `PUT /shipping-fee-config` (ĐÃ ĐO trên BE thật): chuỗi / boolean / đối tượng / số thập phân → MALFORMED_REQUEST (Jackson từ chối trước khi
+//      vào service); thiếu / null → VALIDATION_FAILED; số âm → 400 BR-SP-08 với chữ của ShippingFeeService ("… không được âm (nhận -1)").
+//      PUT giống hệt cấu hình hiện có vẫn ghi: updatedAt tiến lên (ADR-0140 mục 1.5).
 //  A3  `materialNormsOf(serviceId)`: định mức hiện hành, `[]` khi dịch vụ không có định mức hoặc không tồn tại.
 //      `shippingFeeConfig()`: cấu hình hiện hành (một dòng duy nhất). Giá trị đã chốt vào đơn (BR-SP-11) là việc của mock đặt đơn.
 //  A4  #4: nhận dịch vụ của mọi nhóm (kể cả lưu trú — ST07 chỉ chạy với khám / thẩm mỹ); sản phẩm ngừng kinh doanh vẫn nhận. Thứ tự trả về = thứ tự
@@ -101,16 +102,16 @@ const getShippingFeeConfig: MockHandler = (req) => (SUPER.includes(role(req)) ? 
 const saveShippingFeeConfig: MockHandler = (req) => {
   if (!isObject(req.body)) return malformed();
   const { baseFee, freeThreshold } = req.body;
-  if ((has(baseFee) && typeof baseFee !== 'number') || (has(freeThreshold) && typeof freeThreshold !== 'number')) return malformed();
+  const notWhole = (v: unknown) => has(v) && !Number.isInteger(v);
+  if (notWhole(baseFee) || notWhole(freeThreshold)) return malformed();
   const bad = invalid([
     ['baseFee', 'Vui lòng nhập phí cơ bản', !has(baseFee)],
     ['freeThreshold', 'Vui lòng nhập ngưỡng miễn phí', !has(freeThreshold)],
   ]);
   if (bad) return bad;
   if (!SUPER.includes(role(req))) return denied();
-  const notAmount = (v: unknown) => !Number.isInteger(v) || (v as number) < 0;
-  if (notAmount(baseFee)) return ruleFail('BR-SP-08', 'Phí cơ bản phải là số nguyên từ 0 trở lên');
-  if (notAmount(freeThreshold)) return ruleFail('BR-SP-08', 'Ngưỡng miễn phí phải là số nguyên từ 0 trở lên (0 = không miễn phí)');
+  if ((baseFee as number) < 0) return ruleFail('BR-SP-08', `Phí cơ bản không được âm (nhận ${baseFee})`);
+  if ((freeThreshold as number) < 0) return ruleFail('BR-SP-08', `Ngưỡng miễn phí không được âm (nhận ${freeThreshold})`);
   const s = load();
   s.shipping = { baseFee: baseFee as number, freeThreshold: freeThreshold as number, updatedAt: new Date().toISOString() };
   save(s);

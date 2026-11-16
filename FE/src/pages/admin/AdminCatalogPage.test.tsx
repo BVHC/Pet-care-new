@@ -3,8 +3,11 @@ import userEvent from '@testing-library/user-event';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { MemoryRouter, Route, Routes, useLocation } from 'react-router-dom';
 import { beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
+import { formatVnDateTime } from '../../components/appointments/format';
+import { ApiError } from '../../shared/api/api-error';
 import { apiClient } from '../../shared/api/axios';
 import { catalogApi } from '../../shared/api/catalog.api';
+import { feesApi } from '../../shared/api/fees.api';
 import { MOCK_PASSWORD } from '../../shared/api/mock/identity.mock';
 import { installMockApi } from '../../shared/api/mock/mock-api';
 import { useSession } from '../../shared/stores/session.store';
@@ -294,15 +297,55 @@ describe('fees tab (UC32)', () => {
     const base = await screen.findByLabelText('Phí vận chuyển cơ bản (₫)');
     fireEvent.change(base, { target: { value: '-5' } }); // gõ dấu trừ vào ô số không ổn định trong jsdom
     await user.click(screen.getByRole('button', { name: 'Lưu phí vận chuyển' }));
-    expect(await screen.findByRole('alert')).toHaveTextContent('Phí cơ bản phải là số nguyên từ 0 trở lên');
+    expect(await screen.findByRole('alert')).toHaveTextContent('Phí cơ bản không được âm (nhận -5)'); // chữ của BE, không kèm mã rule
+    expect(screen.getByRole('alert')).not.toHaveTextContent('BR-SP-08');
     expect(base).toHaveValue(-5); // nháp không bị làm mới đè
 
     await user.clear(base);
     await user.type(base, '25000');
     await user.click(screen.getByRole('button', { name: 'Lưu phí vận chuyển' }));
-    expect(await screen.findByText(/Đã lưu phí vận chuyển/)).toBeInTheDocument();
+    // Chưa nói "đơn đặt từ bây giờ tính theo mức mới": checkout mock không đọc cấu hình thật (T63 / T67 sẽ thêm lại).
+    expect(await screen.findByText('Đã lưu phí vận chuyển.')).toBeInTheDocument();
     await waitFor(() => expect(screen.getByText(/Hiện tại: 25\.000/)).toBeInTheDocument());
     expect(screen.queryByRole('alert')).not.toBeInTheDocument();
+  });
+
+  it('shows when the saved fee was last updated, as the server reports it', async () => {
+    renderAt('/admin/catalog/fees');
+    const { updatedAt } = await feesApi.getShippingFeeConfig();
+    expect(await screen.findByText((text) => text.includes(`cập nhật ${formatVnDateTime(updatedAt)}`))).toBeInTheDocument();
+  });
+
+  // BE từ chối số thực bằng MALFORMED_REQUEST (câu chung về JSON), nên form chặn trước và nói rõ.
+  it.each([
+    ['Phí vận chuyển cơ bản (₫)', '1000.5'],
+    ['Miễn phí từ tiền hàng (₫)', '0.5'],
+  ])('refuses a decimal in "%s" before sending it', async (label, value) => {
+    const save = vi.spyOn(feesApi, 'saveShippingFeeConfig');
+    try {
+      const user = userEvent.setup();
+      renderAt('/admin/catalog/fees');
+      fireEvent.change(await screen.findByLabelText(label), { target: { value } });
+      await user.click(screen.getByRole('button', { name: 'Lưu phí vận chuyển' }));
+      expect(await screen.findByRole('alert')).toHaveTextContent('Phí và ngưỡng phải là số nguyên (đồng).');
+      expect(save).not.toHaveBeenCalled();
+    } finally {
+      save.mockRestore();
+    }
+  });
+
+  it('shows the server refusal of a save (403) and leaves the save button usable', async () => {
+    const save = vi.spyOn(feesApi, 'saveShippingFeeConfig').mockRejectedValueOnce(new ApiError('ACCESS_DENIED', 'Không có quyền thực hiện thao tác này', 403));
+    try {
+      const user = userEvent.setup();
+      renderAt('/admin/catalog/fees');
+      await screen.findByLabelText('Phí vận chuyển cơ bản (₫)');
+      await user.click(screen.getByRole('button', { name: 'Lưu phí vận chuyển' }));
+      expect(await screen.findByRole('alert')).toHaveTextContent('Không có quyền thực hiện thao tác này');
+      expect(screen.getByRole('button', { name: 'Lưu phí vận chuyển' })).toBeEnabled();
+    } finally {
+      save.mockRestore();
+    }
   });
 
   it('blocks an empty fee field instead of saving 0', async () => {
