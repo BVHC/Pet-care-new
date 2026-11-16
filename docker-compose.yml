@@ -140,6 +140,9 @@ services:
       # ST22 nạp chỉ mục tri thức và ST23 dọn nhật ký hỏi đáp (docs/adr/0130); mặc định trùng application.yml.
       KNOWLEDGE_INDEX_CRON: ${KNOWLEDGE_INDEX_CRON:-45 */5 * * * *}
       CHAT_LOG_CLEANUP_CRON: ${CHAT_LOG_CLEANUP_CRON:-29 0 4 * * *}
+      # ST10 hủy đơn online quá hạn thanh toán và ST12 tự xác nhận đã nhận (docs/adr/0146); mặc định trùng application.yml.
+      ONLINE_ORDER_PAYMENT_EXPIRY_CRON: ${ONLINE_ORDER_PAYMENT_EXPIRY_CRON:-20 6/15 * * * *}
+      ONLINE_ORDER_AUTO_CONFIRM_CRON: ${ONLINE_ORDER_AUTO_CONFIRM_CRON:-40 12 * * * *}
     ports:
       - "8080:8080"
     depends_on:

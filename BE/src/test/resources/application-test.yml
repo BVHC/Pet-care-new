@@ -83,6 +83,10 @@ app:
       cron: "-"
     chat-log-cleanup:
       cron: "-"
+    online-order-payment-expiry:
+      cron: "-"
+    online-order-auto-confirm:
+      cron: "-"
   # ST22 không tự chạy trong test: không lượt nạp sau commit, không quét khi khởi động (không khóa API, mọi tài liệu
   # PUBLISHED của IT khác sẽ bị đặt FAILED). Chỉ KnowledgeIndexTriggerIT bật lại; các IT còn lại gọi KnowledgeIndexer.
   # api-key rỗng ép test không bao giờ gọi mạng, kể cả khi máy dev đã export GEMINI_API_KEY (CI và IT không gọi mạng).

@@ -21,7 +21,7 @@ import com.petcare.module.shop.entity.OnlineOrder;
 /**
  * Thông báo cho khách của xử lý và giao đơn online (BR-BH-11, 08 §B #6 và #8; docs/adr/0146). Chỉ ghi outbox trong
  * transaction của bên gọi (rollback thì không gửi gì); mẫu V40 có biến bắt buộc mà {@code enqueue} không kiểm nên mỗi
- * hàm tự điền đủ. Kênh theo BR-TB-02 như đơn vừa đặt: tài khoản không {@code PENDING} → IN_APP + EMAIL tới email tài
+ * hàm tự điền đủ. Kênh theo BR-TB-02 như BoardingRecipients (ADR-0037): tài khoản không {@code PENDING} → IN_APP + EMAIL tới email tài
  * khoản; ngược lại EMAIL tới email hồ sơ nếu có; không kênh nào thì thôi.
  */
 @Component
@@ -65,6 +65,17 @@ class OnlineOrderNotices {
         payload.put("so_dien_thoai_chi_nhanh", branch.phone());
         send(contact, NotificationTemplateCode.ONLINE_ORDER_DELIVERY_FAILED,
                 NotificationTemplateCode.ONLINE_ORDER_DELIVERY_FAILED_APP, payload);
+    }
+
+    /** ONLINE_ORDER_CANCELLED (ST10, #4): {@code ma_don}, {@code ly_do}. */
+    void cancelled(OnlineOrder order, String reason) {
+        CustomerContact contact = contact(order);
+        Map<String, Object> payload = new LinkedHashMap<>();
+        payload.put("ten_khach", contact.fullName());
+        payload.put("ma_don", order.getCode());
+        payload.put("ly_do", reason);
+        send(contact, NotificationTemplateCode.ONLINE_ORDER_CANCELLED, NotificationTemplateCode.ONLINE_ORDER_CANCELLED_APP,
+                payload);
     }
 
     private CustomerContact contact(OnlineOrder order) {

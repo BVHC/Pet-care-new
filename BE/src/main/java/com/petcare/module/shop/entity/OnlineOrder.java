@@ -140,6 +140,14 @@ public class OnlineOrder extends TimestampedEntity {
         this.cancelledAt = now;
     }
 
+    /** Đơn hàng online#4 (PENDING_PAYMENT → CANCELLED): ST10 hủy đơn quá hạn thanh toán; {@code cancelled_by} để trống (hệ thống). */
+    public void expire(String reason, Instant now) {
+        this.status = OnlineOrderStatus.CANCELLED;
+        this.cancelledBy = null;
+        this.cancelReason = reason;
+        this.cancelledAt = now;
+    }
+
     /** Đơn hàng online#11 (DELIVERED → COMPLETED): khách xác nhận đã nhận; caller đã kiểm trạng thái và khóa dòng đơn. */
     public void confirmReceived(Instant now) {
         this.status = OnlineOrderStatus.COMPLETED;
