@@ -118,7 +118,7 @@ public abstract class CashierItSupport extends SalesItSupport {
     /** Dòng Order dựng bằng SQL: loại, id dịch vụ / sản phẩm, mô tả, số lượng, đơn giá. */
     protected record LineSpec(String type, Long serviceId, Long productId, String description, int quantity,
             long unitPrice) {
-        static LineSpec goods(long productId, String name, int quantity, long unitPrice) {
+        public static LineSpec goods(long productId, String name, int quantity, long unitPrice) {
             return new LineSpec("GOODS", null, productId, name, quantity, unitPrice);
         }
     }
