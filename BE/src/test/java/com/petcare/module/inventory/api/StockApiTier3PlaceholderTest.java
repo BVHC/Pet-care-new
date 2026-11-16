@@ -8,7 +8,6 @@ import static org.mockito.Mockito.mock;
 import java.time.Instant;
 import java.time.LocalDate;
 import java.util.List;
-import java.util.Set;
 
 import org.junit.jupiter.api.Test;
 
@@ -24,11 +23,6 @@ class StockApiTier3PlaceholderTest {
     private final List<StockApi.SaleLine> lines = List.of(new StockApi.SaleLine(1L, 2));
     private final List<StockApi.TransferredLot> lots =
             List.of(new StockApi.TransferredLot(1L, 5L, 2, "L1", LocalDate.of(2027, 1, 1)));
-
-    @Test
-    void reserveThrowsUntilImplemented() {
-        assertPlaceholder(() -> stock.reserve(1L, ref, lines), "StockApi.reserve", "T63");
-    }
 
     @Test
     void releaseThrowsUntilImplemented() {
@@ -68,11 +62,6 @@ class StockApiTier3PlaceholderTest {
     @Test
     void transferCancelThrowsUntilImplemented() {
         assertPlaceholder(() -> stock.transferCancel(1L, 2L, lots, 1L), "StockApi.transferCancel", "T74");
-    }
-
-    @Test
-    void findAvailableQuantityThrowsUntilImplemented() {
-        assertPlaceholder(() -> query.findAvailableQuantity(1L, Set.of(1L)), "StockQueryApi.findAvailableQuantity", "T63");
     }
 
     @Test

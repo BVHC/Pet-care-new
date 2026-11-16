@@ -19,6 +19,7 @@ import java.time.Instant;
 import java.time.LocalDate;
 import java.time.ZoneOffset;
 import java.util.List;
+import java.util.Map;
 import java.util.Set;
 
 import org.junit.jupiter.api.Test;
@@ -33,6 +34,7 @@ import com.petcare.module.inventory.api.StockApi.Shortage;
 import com.petcare.module.inventory.entity.LockedLot;
 import com.petcare.module.inventory.entity.MovementType;
 import com.petcare.module.inventory.repository.StockLotDao;
+import com.petcare.module.inventory.repository.StockReservationDao;
 import com.petcare.platform.exception.BusinessRuleViolationException;
 import com.petcare.platform.exception.ResourceNotFoundException;
 
@@ -43,8 +45,10 @@ class StockIssueServiceTest {
     private static final LocalDate TODAY = LocalDate.of(2026, 10, 16);
 
     private final StockLotDao lots = mock(StockLotDao.class);
+    private final StockReservationDao reservations = mock(StockReservationDao.class);
     private final StockLedger ledger = mock(StockLedger.class);
-    private final StockIssueService service = new StockIssueService(lots, ledger, Clock.fixed(NOW, ZoneOffset.UTC));
+    private final StockIssueService service = new StockIssueService(lots, reservations, ledger,
+            Clock.fixed(NOW, ZoneOffset.UTC));
 
     private static LockedLot lot(long id, long productId, String expiry, int quantity) {
         return new LockedLot(id, 1L, 5L, productId, "L" + id, expiry == null ? null : LocalDate.parse(expiry), quantity,
@@ -191,6 +195,103 @@ class StockIssueServiceTest {
 
         verify(ledger).apply(lot(3, 10, "2026-10-15", 0), 1, MovementType.VACCINATION_REVERT, "vaccinations", 900L,
                 3L);
+    }
+
+    // ---------------------------------------------------------------- HELD (task 117, BR-BH-08, BR-BH-09)
+
+    @Test
+    void paymentCannotIssueQuantityHeldForOnlineOrdersAndWritesNothing() {
+        when(lots.lockIssuableLots(eq(5L), any(), eq(TODAY))).thenReturn(List.of(lot(1, 10, "2027-01-01", 10)));
+        when(reservations.heldQuantities(5L, Set.of(10L))).thenReturn(Map.of(10L, 7));
+
+        List<Shortage> shortages = issueForSale(90L, 5L, List.of(new SaleLine(10L, 4)), 3L);
+
+        assertThat(shortages).containsExactly(new Shortage(10L, 4, 3));
+        verify(ledger, never()).apply(any(), anyInt(), any(), any(), anyLong(), anyLong());
+        InOrder order = inOrder(lots, reservations);
+        order.verify(lots).lockIssuableLots(5L, Set.of(10L), TODAY);
+        order.verify(reservations).heldQuantities(5L, Set.of(10L));
+    }
+
+    @Test
+    void paymentIssuesWhatIsLeftAfterTheHeldQuantity() {
+        when(lots.lockIssuableLots(eq(5L), any(), eq(TODAY))).thenReturn(List.of(lot(1, 10, "2027-01-01", 10)));
+        when(reservations.heldQuantities(5L, Set.of(10L))).thenReturn(Map.of(10L, 7));
+
+        assertThat(issueForSale(90L, 5L, List.of(new SaleLine(10L, 3)), 3L)).isEmpty();
+
+        verify(ledger).apply(lot(1, 10, "2027-01-01", 10), -3, MovementType.SALE, "orders", 90L, 3L);
+    }
+
+    @Test
+    void lockFefoLotRefusesQuantityHeldForOnlineOrders() {
+        when(lots.lockIssuableLots(5L, List.of(10L), TODAY)).thenReturn(List.of(lot(1, 10, "2027-01-01", 10)));
+        when(reservations.heldQuantities(5L, List.of(10L))).thenReturn(Map.of(10L, 8));
+
+        assertThatThrownBy(() -> service.lockFefoLot(5L, 10L, 3)).isInstanceOf(BusinessRuleViolationException.class)
+                .hasMessageContaining("tồn khả dụng 2");
+        assertThat(service.lockFefoLot(5L, 10L, 2)).isEqualTo(1L);
+    }
+
+    @Test
+    void lockAvailableQuantityLocksAllLotsInOneStatementThenReadsHeldAndSubtractsIt() {
+        when(lots.lockIssuableLots(eq(5L), any(), eq(TODAY))).thenReturn(List.of(lot(1, 10, "2027-01-01", 10),
+                lot(2, 10, "2026-10-01", 50), lot(3, 20, null, 4)));
+        when(reservations.heldQuantities(eq(5L), any())).thenReturn(Map.of(10L, 6, 20L, 9));
+
+        Map<Long, Integer> available = service.lockAvailableQuantity(5L, List.of(20L, 10L, 30L));
+
+        assertThat(available).containsEntry(10L, 4).containsEntry(20L, 0).containsEntry(30L, 0).hasSize(3);
+        InOrder order = inOrder(lots, reservations);
+        order.verify(lots).lockIssuableLots(5L, Set.of(10L, 20L, 30L), TODAY);
+        order.verify(reservations).heldQuantities(eq(5L), any());
+    }
+
+    @Test
+    void lockAvailableQuantityWithoutProductsTouchesNothing() {
+        assertThat(service.lockAvailableQuantity(5L, List.of())).isEmpty();
+        verifyNoInteractions(lots, reservations, ledger);
+    }
+
+    @Test
+    void reserveLocksThenChecksThenInsertsOneHeldRowPerProduct() {
+        when(lots.lockIssuableLots(eq(5L), any(), eq(TODAY))).thenReturn(List.of(lot(1, 10, "2027-01-01", 10),
+                lot(2, 20, null, 5)));
+        when(reservations.heldQuantities(eq(5L), any())).thenReturn(Map.of(10L, 2));
+
+        List<Shortage> shortages = service.reserve(5L, new StockApi.OrderRef(77L, 88L),
+                List.of(new SaleLine(20L, 5), new SaleLine(10L, 3), new SaleLine(10L, 5)));
+
+        assertThat(shortages).isEmpty();
+        InOrder order = inOrder(lots, reservations);
+        order.verify(lots).lockIssuableLots(5L, Set.of(10L, 20L), TODAY);
+        order.verify(reservations).heldQuantities(eq(5L), any());
+        order.verify(reservations).insertHeld(77L, 5L, 10L, 8, NOW);
+        order.verify(reservations).insertHeld(77L, 5L, 20L, 5, NOW);
+    }
+
+    @Test
+    void reserveReportsEveryShortLineAndInsertsNothing() {
+        when(lots.lockIssuableLots(eq(5L), any(), eq(TODAY))).thenReturn(List.of(lot(1, 10, "2027-01-01", 10)));
+        when(reservations.heldQuantities(eq(5L), any())).thenReturn(Map.of(10L, 7));
+
+        List<Shortage> shortages = service.reserve(5L, new StockApi.OrderRef(77L, 88L),
+                List.of(new SaleLine(10L, 4), new SaleLine(20L, 1)));
+
+        assertThat(shortages).containsExactly(new Shortage(10L, 4, 3), new Shortage(20L, 1, 0));
+        verify(reservations, never()).insertHeld(anyLong(), anyLong(), anyLong(), anyInt(), any());
+    }
+
+    @Test
+    void reserveRejectsProgrammingErrorsBeforeTouchingTheDatabase() {
+        StockApi.OrderRef ref = new StockApi.OrderRef(77L, 88L);
+
+        assertThatThrownBy(() -> service.reserve(5L, ref, List.of(new SaleLine(10L, 0))))
+                .isInstanceOf(IllegalArgumentException.class);
+        assertThatThrownBy(() -> service.reserve(5L, new StockApi.OrderRef(null, 88L), List.of(new SaleLine(10L, 1))))
+                .isInstanceOf(IllegalArgumentException.class);
+        assertThat(service.reserve(5L, ref, List.of())).isEmpty();
+        verifyNoInteractions(lots, reservations);
     }
 
     @Test

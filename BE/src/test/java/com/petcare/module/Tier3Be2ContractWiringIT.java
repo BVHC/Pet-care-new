@@ -4,7 +4,6 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 import java.util.List;
-import java.util.Set;
 
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -52,9 +51,7 @@ class Tier3Be2ContractWiringIT {
     void existingRealBeansInheritThePlaceholderDefaults() {
         StockApi.OrderRef ref = new StockApi.OrderRef(1L, 2L);
 
-        assertPlaceholder(() -> stock.reserve(1L, ref, List.of()));
         assertPlaceholder(() -> stock.transferOut(1L, 2L, List.of(), 3L));
-        assertPlaceholder(() -> stockQuery.findAvailableQuantity(1L, Set.of(1L)));
         assertPlaceholder(() -> stockQuery.sumQuantityByBranch(1L));
         assertPlaceholder(() -> orders.findLinesForReturn(1L));
         assertPlaceholder(() -> orders.countOpenByBranch(1L));
