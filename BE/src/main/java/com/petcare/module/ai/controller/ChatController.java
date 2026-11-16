@@ -17,7 +17,7 @@ import io.swagger.v3.oas.annotations.Operation;
 import jakarta.validation.Valid;
 
 /**
- * Hỏi đáp chatbot — ai-v1 #1 (UC90, UC91; docs/adr/0131) và #2 (UC91; docs/adr/0132). Path public: token gửi kèm bị bỏ
+ * Hỏi đáp chatbot — ai-v1 #1 (UC90, UC91; docs/adr/0141) và #2 (UC91; docs/adr/0142). Path public: token gửi kèm bị bỏ
  * qua (ADR-0005), nên câu hỏi về lịch của khách nhận {@code NEED_LOGIN}; {@code /me} lấy khách từ token và trả
  * {@code PERSONAL} / {@code NEED_PET_CHOICE}. Không chứa logic: {@link ChatService} dựng mọi kết quả; chỉ đầu vào sai là
  * 400 và vượt tần suất là 429 (do {@code RateLimitFilter}, BR-AI-09). Bean Validation của body chạy trước

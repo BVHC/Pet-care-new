@@ -41,7 +41,7 @@ import com.petcare.platform.exception.ResourceNotFoundException;
  * Không bao giờ có trong khối: {@code petId}, {@code customerId}, tên thú, ngày sinh, ngày đủ ngày tháng năm, liên hệ,
  * bệnh án. Thiếu dữ liệu thì bỏ dòng, không đoán. Chuỗi tự do (giống, tên loại vaccine) chỉ vào khối khi là chữ ngắn thuần
  * túy, để không chèn chỉ thị vào lời nhắc (cùng tinh thần {@code ChatPrompt.fenceSafe}, BR-AI-12). Không {@code @Transactional}:
- * mỗi lần đọc là một lệnh gọi {@code *QueryApi} ngắn và chạy trước lệnh LLM (docs/adr/0131).
+ * mỗi lần đọc là một lệnh gọi {@code *QueryApi} ngắn và chạy trước lệnh LLM (docs/adr/0141).
  */
 @Component
 public class PetContextBuilder {

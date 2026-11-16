@@ -27,12 +27,12 @@ import com.petcare.module.identity.api.ConfigKey;
 import com.petcare.module.identity.api.SystemConfigApi;
 
 /**
- * Trả lời ý định cá nhân bằng câu mẫu, không qua LLM (BR-AI-27, docs/adr/0132). Khách và các thú còn sống do bên gọi đưa
+ * Trả lời ý định cá nhân bằng câu mẫu, không qua LLM (BR-AI-27, docs/adr/0142). Khách và các thú còn sống do bên gọi đưa
  * vào: khách lấy từ tài khoản của token, không bao giờ từ câu hỏi; tên thú chỉ để chọn trong số thú của chính khách.
  * <p>
  * Lịch hẹn: I-10 đã lọc {@code >= bây giờ} trong SQL, nhưng đặc tả vẫn đòi lọc lại ở module {@code ai} (lịch {@code BOOKED}
  * đã quá giờ mà ST05 chưa chuyển {@code NO_SHOW} nằm trong dữ liệu) và chỉ lấy thú còn sống của khách (thú đã chuyển chủ
- * hay đã mất không hiện lịch cũ). Lọc sau {@code limit} nên có thể trả ít dòng hơn giới hạn dù còn lịch (ADR-0132).
+ * hay đã mất không hiện lịch cũ). Lọc sau {@code limit} nên có thể trả ít dòng hơn giới hạn dù còn lịch (ADR-0142).
  */
 @Service
 public class PersonalService {

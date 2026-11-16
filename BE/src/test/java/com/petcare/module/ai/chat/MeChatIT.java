@@ -43,7 +43,7 @@ import com.petcare.support.MutableClock;
 
 /**
  * Chat cá nhân UC91 qua HTTP, trên Postgres thật (ai-v1 #2 {@code POST /me/ai/chat}, #3
- * {@code GET /me/ai/pets/{petId}/vaccination-summary}; BR-AI-11, 12b, 26…28; docs/adr/0132), với embedding và LLM giả (CI
+ * {@code GET /me/ai/pets/{petId}/vaccination-summary}; BR-AI-11, 12b, 26…28; docs/adr/0142), với embedding và LLM giả (CI
  * không gọi mạng). Dữ liệu dựng bằng SQL; số liệu trả về đối chiếu với chính CSDL. Phần bảo mật: khách khác không thấy dữ
  * liệu, thú sau khi chuyển chủ là 404 cho chủ cũ NGAY ở lần gọi kế tiếp (không cache), thú mất là 400. Era <b>năm 2043</b>.
  */

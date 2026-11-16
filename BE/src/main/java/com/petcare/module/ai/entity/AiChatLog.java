@@ -23,7 +23,7 @@ import lombok.NoArgsConstructor;
 /**
  * Bảng {@code ai_chat_logs} (07 §8, LOG): một dòng cho mỗi lượt hỏi đáp UC90 (BR-AI-24). Không có cột tài khoản, IP hay
  * kênh. Chỉ thêm, nên entity bất biến; ST23 xóa quá hạn bằng câu native ở {@code AiChatLogRepository}. Ghi bởi {@code ChatService}
- * qua {@link #of} (docs/adr/0131); schema cũng được kiểm khi khởi động.
+ * qua {@link #of} (docs/adr/0141); schema cũng được kiểm khi khởi động.
  */
 @Getter
 @Immutable

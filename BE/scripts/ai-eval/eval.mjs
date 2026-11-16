@@ -1,4 +1,4 @@
-// Đo lại chatbot ở T77 qua BE THẬT (docs/07 §14.1, §13 "Đo lại ở T77", docs/adr/0122, 0131, 0132): gọi POST /api/public/ai/chat
+// Đo lại chatbot ở T77 qua BE THẬT (docs/07 §14.1, §13 "Đo lại ở T77", docs/adr/0122, 0141, 0142): gọi POST /api/public/ai/chat
 // và POST /api/me/ai/chat, giãn nhịp, chấm từng câu theo bộ 43 câu của spike và đo độ trễ.
 //
 // Câu endpoint "me" cần hai khách thử (fixture T77, tạo qua API: t77.multi@example.vn có thú Mochi, Kitty; t77.vang@example.vn có

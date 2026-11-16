@@ -4,10 +4,10 @@ package com.petcare.module.ai.chat;
  * Câu mẫu cố định của chatbot, không do LLM sinh. Nguyên văn đặc tả: {@link #OUT_OF_SCOPE} (BR-AI-07),
  * {@link #MEDICAL_RECORD} và {@link #NEED_LOGIN} (BR-AI-28), {@link #EMERGENCY} và {@link #DISCLAIMER} (07 §10). Đặc tả
  * không nêu nguyên văn {@link #MEDICAL_REFUSAL} (BR-AI-02), {@link #UNAVAILABLE} (BR-AI-10) và {@link #EMERGENCY_NO_BRANCH}
- * (BR-AI-03, danh sách rỗng): lấy theo mock FE của T57 để giao diện và máy chủ cùng một chữ (ADR-0131).
+ * (BR-AI-03, danh sách rỗng): lấy theo mock FE của T57 để giao diện và máy chủ cùng một chữ (ADR-0141).
  * <p>
- * Câu của UC91 (ADR-0132): {@link #NEED_PET_CHOICE} nguyên văn 07 §10; {@link #NO_APPOINTMENT} nguyên văn BR-AI-27 thêm dấu
- * chấm; {@link #NO_PET} đặc tả chỉ nói "câu mẫu hướng dẫn thêm thú" nên chữ do ADR-0132 chọn.
+ * Câu của UC91 (ADR-0142): {@link #NEED_PET_CHOICE} nguyên văn 07 §10; {@link #NO_APPOINTMENT} nguyên văn BR-AI-27 thêm dấu
+ * chấm; {@link #NO_PET} đặc tả chỉ nói "câu mẫu hướng dẫn thêm thú" nên chữ do ADR-0142 chọn.
  */
 public final class ChatTexts {
 

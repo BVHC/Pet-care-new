@@ -2,7 +2,7 @@
 
 - **Trạng thái:** Proposed (Hiến duyệt **hướng** 13/11/2026; nội dung chờ Hiến duyệt; T88 / T89 / T90). D1 (nạp file) đã cài ở T89; D3 (đồng bộ bài viết) và D4 (đường BUSINESS) đã cài ở T90 (13/11), xem hai mục "Đã cài" bên dưới; D2 `risk_level` / topic mới còn nợ.
 - **Ngày:** 2026-11-13
-- **Liên quan:** ADR-0109 (LLM, embedding, pgvector), 0110 (V34 `ai_documents`), 0130 (UC93, FSM #13, ST22, #5 lưu trữ tự động phác đồ), 0131 (đường ống chat), 0135, 0136 (hai ADR còn lại của AI v2); `07` §1.1, §4.3 (BR-AI-13, BR-AI-14, BR-AI-29, BR-AI-30, BR-AI-31), §4.6, §8, §10, §11 (I-11, I-12); `docs/docs_RAG/00_governance/*`; hợp đồng `ai-v1`.
+- **Liên quan:** ADR-0109 (LLM, embedding, pgvector), 0110 (V34 `ai_documents`), 0130 (UC93, FSM #13, ST22, #5 lưu trữ tự động phác đồ), 0141 (đường ống chat), 0135, 0136 (hai ADR còn lại của AI v2); `07` §1.1, §4.3 (BR-AI-13, BR-AI-14, BR-AI-29, BR-AI-30, BR-AI-31), §4.6, §8, §10, §11 (I-11, I-12); `docs/docs_RAG/00_governance/*`; hợp đồng `ai-v1`.
 - **Đánh số:** Flyway **V53** (V52 đã dùng cho công tắc kiến thức chung ở T92, không sửa; V49 chừa BE-2, V51 dành cho gỡ bảng khiếu nại ở T70). Hợp đồng `ai-v1` thêm #14. Mã BR mới từ BR-AI-29 (26–28 đã dùng).
 
 ## Bối cảnh

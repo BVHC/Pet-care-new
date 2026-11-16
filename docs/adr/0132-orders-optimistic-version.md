@@ -3,6 +3,7 @@
 - **Trạng thái:** Proposed
 - **Ngày:** 2026-11-14
 - **Liên quan:** ADR-0044 (Order lõi, khóa trước khi đọc), 0069 (hoàn tất lượt, thứ tự gọi tránh D045), 0103 (thu tiền); convention 07 §7.3 (chiến lược khóa phải có ADR trước khi cài `@Version`); 04 §4.4 (409). Nợ D045 (trả), D059 (số V chưa xác nhận với BE-2).
+- **Đánh số (16/11/2026):** số 0132 từng trùng với ADR AI `0132-ai-personal-chat-t77c`; ADR AI đã đổi sang **0142** (`0142-ai-personal-chat-t77c`), ADR này giữ **0132**.
 - **Triển khai:**
   - `V54__orders_version.sql` (`orders.version BIGINT NOT NULL DEFAULT 0`), `sales/entity/SalesOrder` (`@Version`). `orders` là bảng của BE-2: BE-1 làm thay như V42 (ADR-0116); số V54 chờ BE-2 xác nhận (D059).
   - Test: `SalesOrderVersionIT`; `SchemaMigrationIT` thêm V54.

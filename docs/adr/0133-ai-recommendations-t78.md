@@ -1,7 +1,7 @@
 # ADR-0133: Gợi ý cá nhân hóa UC92 và hồ sơ gợi ý UC94 (T78 = AI-4, ai-v1 #4, #12, #13)
 
 - **Trạng thái:** Accepted (Hiến và nhóm duyệt 12/11/2026, các điểm ở mục "Đã chốt 12/11/2026"). Từng Proposed khi làm việc AI-4 = T78, 11/11/2026.
-- **Liên quan:** ADR-0006 (thú thuộc chủ hiện tại, người khác là 404), 0028 (Bean Validation chạy trước `@PreAuthorize`), 0113 (`VisitQueryApi.AgeGroup`), 0117, 0129 (I-1…I-8 đã cài thật), 0130 (bảng `ai_item_profiles`, UC93), 0132 (mẫu `PetAssistantController`); đặc tả `07` §4.4 (BR-AI-18…23), §4.6, §7, §8, §10, §11, §14.3; `docs/06` §6b hàng 16; hợp đồng `ai-v1` #4, #12, #13.
+- **Liên quan:** ADR-0006 (thú thuộc chủ hiện tại, người khác là 404), 0028 (Bean Validation chạy trước `@PreAuthorize`), 0113 (`VisitQueryApi.AgeGroup`), 0117, 0129 (I-1…I-8 đã cài thật), 0130 (bảng `ai_item_profiles`, UC93), 0142 (mẫu `PetAssistantController`); đặc tả `07` §4.4 (BR-AI-18…23), §4.6, §7, §8, §10, §11, §14.3; `docs/06` §6b hàng 16; hợp đồng `ai-v1` #4, #12, #13.
 - **Đánh số:** không có migration (V34 đã có `ai_item_profiles`, V35 đã có đủ khóa `ai.reco.*`). ADR kế tiếp: **0134**.
 
 ## Bối cảnh
@@ -163,7 +163,7 @@ Ghi chú: ví dụ tính tay §7.3 (92,0 / loại / 37,0) là ca bảng ở cả
 
 ## Kết quả kiểm thử
 
-- **Unit toàn dự án: 6062 xanh, 0 đỏ** (nền 5986: ADR-0132 ghi 5985 trước ca cuối của T77c; T78 thêm đúng 76 ca = 11 + 7 + 37 + 19 + 2). Ca mới: `RecoAttributesTest` 11, `RecoWeightsTest` 7, `RecommendationServiceTest` 37, `ItemProfileServiceTest` 19, `CatalogQueryServiceTest` +2.
+- **Unit toàn dự án: 6062 xanh, 0 đỏ** (nền 5986: ADR-0142 ghi 5985 trước ca cuối của T77c; T78 thêm đúng 76 ca = 11 + 7 + 37 + 19 + 2). Ca mới: `RecoAttributesTest` 11, `RecoWeightsTest` 7, `RecommendationServiceTest` 37, `ItemProfileServiceTest` 19, `CatalogQueryServiceTest` +2.
 - **IT mới (Postgres + pgvector thật, Testcontainers, embedding / LLM giả):** `ItemProfileIT` 9 (era 2045), `RecommendationIT` 7 (era 2044; kiểm `embeddings.calls() == 0` và `llm.calls()` rỗng ở mọi ca), `CatalogAiReadIT` +1 (3). Cả ba xanh.
 - **Hồi quy IT nhóm ai + catalog: 154 xanh, 0 đỏ** (ai 130, catalog 24; `AiDocumentFsmIT` 33, `ChatIT` 22, `MeChatIT` 18, `KnowledgeIndexerIT` 20, `CatalogProtocolSyncIT` 7, `KnowledgeIndexTriggerIT` 6, `ChatLogCleanupIT` 5, `AiJobScheduleIT` 3, `CatalogAdminIT` 11, `PublicCatalogIT` 10, kể cả các IT mới), `Tier3Be2ContractWiringIT` 2 xanh.
 - **`OpenApiContractParityIT`: 11 ca, 5 đỏ, đúng 5 ca đỏ của mốc trước, không ca nào của `ai`.** Bốn ca do lệch `feedbacks` sẵn có (`GET /api/feedbacks`, `/{feedbackId}`, `/api/me/feedbacks`: mô tả, tham số, cây thuộc tính) và `POST /api/feedbacks/{feedbackId}/resolve` có trong code mà `content-v1.yaml` không có; ca đếm endpoint: **199 so với ghim 200** (mốc trước 196 so với 197; chênh 1 cũng do `resolveFeedback`). 199 = 196 + 3 chứng tỏ #4, #12, #13 được tính đúng, và cả ba có mặt trong danh sách `documentedOps`. Các ca `responseCodesAndErrorDescriptionsMatchContract`, `everyLeafPropertyHasARealisticExample`, `responsesExposeNoSecretField`, `structureIsConsistent` xanh, nên mô tả lỗi, ví dụ và cây thuộc tính của #4, #12, #13 khớp hợp đồng.

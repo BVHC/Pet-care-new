@@ -40,7 +40,7 @@ import com.petcare.platform.exception.BusinessRuleViolationException;
 import com.petcare.platform.exception.ResourceNotFoundException;
 
 /**
- * Tra lịch tiêm tất định (BR-AI-11, ADR-0132) với các {@code *QueryApi} giả: mỗi loại vaccine theo phác đồ của loài lấy
+ * Tra lịch tiêm tất định (BR-AI-11, ADR-0142) với các {@code *QueryApi} giả: mỗi loại vaccine theo phác đồ của loài lấy
  * mũi mới nhất chưa bị thay thế, năm trạng thái, ngưỡng {@code DUE_SOON} đọc từ [CFG] ở MỖI lần gọi (cùng biên với cửa sổ
  * nhắc ST04: hai cận đều tính), quyền sở hữu kiểm lại mỗi lần gọi.
  */

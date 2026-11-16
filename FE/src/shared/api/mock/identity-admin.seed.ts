@@ -1,10 +1,11 @@
-// UC10 — dữ liệu seed của mock tham số [CFG] và mẫu thông báo, CHÉP từ migration của BE (V2 + V27 + V35 + V40 + V44…V46 + V48 + V52 + V53 + V56 cho tham số, V3…V26 + V40 cho mẫu, V4 sửa OTP_REGISTER).
+// UC10 — dữ liệu seed của mock tham số [CFG] và mẫu thông báo, CHÉP từ migration của BE (V2 + V27 + V35 + V40 + V44…V46 + V48 + V51 + V52 + V53 + V56 cho tham số, V3…V26 + V40 cho mẫu, V4 sửa OTP_REGISTER, V51 xóa 7 mẫu COMPLAINT_*).
+// T81 (V51, ADR-0122 / 0131): 88 → 83 khóa so với BE trước V51 (xóa 6 `complaint.*`, thêm `feedback.retention_days`); mẫu 70 → 63 (xóa 7 `COMPLAINT_*`).
 // T91: 87 → 88 khóa (thêm `ai.chat.pet_context_enabled` của V56, công tắc BOOL thứ ba).
 // T90: 86 → 87 khóa (thêm `ai.chat.business_intent_enabled` của V53, công tắc BOOL thứ hai).
 // T92: 85 → 86 khóa (thêm `ai.chat.general_knowledge_enabled` của V52, khóa BOOL đầu tiên).
 // T57-A: 52 → 85 khóa (thêm 18 `ai.*` của V35 gồm 4 DECIMAL, 8 `complaint.*` / `workforce.*` của V40, 7 `shop.*` / `payment.*` / `returns.*` / `content.*` của V44, V45, V46, V48; V43 và V47 không seed khóa).
 // T57-A: mẫu thông báo 30 → 70 mã (thêm 40 mẫu tầng 3; migration V41…V48 không INSERT / UPDATE bảng mẫu, cả 40 mẫu nằm ở V40).
-// Không seed 6 khóa `complaint.*` và 7 mẫu `COMPLAINT_*` của V39 / V40 (còn 82 khóa, 63 mẫu); identity-admin.mock.test.ts lọc chúng khỏi phần SQL khi đối chiếu.
+// Không có `complaint.*` và `COMPLAINT_*` (V51 đã xóa chúng khỏi BE): 83 khóa, 63 mẫu; identity-admin.mock.test.ts áp các lệnh DELETE của V51 khi đọc SQL để đối chiếu.
 // Không viết tay: identity-admin.mock.test.ts đọc lại SQL và so từng trường nên lệch BE là test đỏ. BE thêm khóa / mã mới thì thêm vào đây theo cùng migration.
 import type { NotificationTemplate, SystemConfig } from '../../types/identity';
 
@@ -61,6 +62,7 @@ export const SEED_CONFIGS: SystemConfig[] = [
   { key: 'cashier_shift.auto_close_grace_minutes', value: '30', valueType: 'INT', minValue: '0', maxValue: '180', unit: 'phút', description: 'Quá giờ đóng cửa cuối ngày chừng này thì tự chốt ca thường (BR-TG-05, ST13)' },
   { key: 'content.comment_per_hour', value: '10', valueType: 'INT', minValue: '1', maxValue: '100', unit: 'bình luận', description: 'Số bình luận tối đa mỗi khách mỗi giờ; vượt thì 429 (BR-BV-08)' },
   { key: 'feedback.max_per_day', value: '5', valueType: 'INT', minValue: '1', maxValue: '20', unit: 'feedback', description: 'Số feedback tối đa một khách gửi mỗi ngày (BR-DG-01)' },
+  { key: 'feedback.retention_days', value: '30', valueType: 'INT', minValue: '7', maxValue: '365', unit: 'ngày', description: 'Số ngày giữ feedback kể từ lúc gửi; quá hạn thì ST24 xóa cứng (BR-DG-05)' },
   { key: 'login.failed_window_minutes', value: '15', valueType: 'INT', minValue: '5', maxValue: '60', unit: 'phút', description: 'Cửa sổ đếm số lần đăng nhập sai (BR-TK-09)' },
   { key: 'login.lock_minutes', value: '15', valueType: 'INT', minValue: '5', maxValue: '1440', unit: 'phút', description: 'Thời gian khóa tạm do đăng nhập sai (BR-TK-09, ST01)' },
   { key: 'login.max_failed_attempts', value: '5', valueType: 'INT', minValue: '3', maxValue: '10', unit: 'lần', description: 'Số lần đăng nhập sai liên tiếp thì khóa tạm (BR-TK-09)' },

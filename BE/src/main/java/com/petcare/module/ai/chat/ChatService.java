@@ -36,7 +36,7 @@ import com.petcare.module.identity.api.SystemConfigApi;
 import io.micrometer.core.instrument.MeterRegistry;
 
 /**
- * Đường ống hỏi đáp UC90 (07 §5.2, docs/adr/0131). Thứ tự cố định: kiểm đầu vào → che email / SĐT / số giấy tờ →
+ * Đường ống hỏi đáp UC90 (07 §5.2, docs/adr/0141). Thứ tự cố định: kiểm đầu vào → che email / SĐT / số giấy tờ →
  * cấp cứu (không nhúng, không LLM) → bệnh án → ý định cá nhân → khối thông tin thú (chỉ {@code /me}, khi [CFG] bật, BR-AI-32)
  * → nhúng → truy hồi → ngưỡng τ → LLM → hậu kiểm → nhật ký và bộ đếm. Bước 1 còn có giới hạn tần suất theo IP ở {@code RateLimitFilter} (BR-AI-09), chạy trước cả controller.
  * <p>
@@ -45,7 +45,7 @@ import io.micrometer.core.instrument.MeterRegistry;
  * (BR-AI-10). Mọi kết quả nghiệp vụ là một {@link ChatResponse}; chỉ đầu vào sai là {@link ChatValidationException}.
  * <p>
  * Ngữ cảnh khách (tên các thú còn sống) đi vào {@link PersonalIntentRouter} qua tham số {@code petNames}; endpoint công
- * khai không biết khách là ai nên truyền rỗng. {@code /me} (docs/adr/0132) thêm hai việc: ý định cá nhân do
+ * khai không biết khách là ai nên truyền rỗng. {@code /me} (docs/adr/0142) thêm hai việc: ý định cá nhân do
  * {@link PersonalService} trả bằng câu mẫu (không nhúng, không LLM, không ghi nội dung vào nhật ký), và tên thú được che
  * thành {@code [thú]} <b>sau</b> định tuyến, <b>trước</b> nhúng và LLM (BR-AI-12b). Nhật ký ghi bản đã che tên thú ở mọi
  * nhánh có ghi nội dung, nên "Mochi bị co giật" cũng chỉ vào nhật ký là "[thú] bị co giật".
@@ -108,7 +108,7 @@ public class ChatService {
     /**
      * Khách và các thú còn sống được tra sau khi kiểm đầu vào (request sai là 400, không tra gì) và trước cấp cứu: câu
      * bệnh án cần tên thú, và nhật ký cần tên thú để che. Tài khoản chưa có hồ sơ khách (BR-TK-19) coi như không có thú
-     * và không có lịch (ADR-0132).
+     * và không có lịch (ADR-0142).
      */
     private Viewer viewerOf(Long accountId) {
         Long customerId = customers.findCustomerIdByAccountId(accountId).orElse(null);

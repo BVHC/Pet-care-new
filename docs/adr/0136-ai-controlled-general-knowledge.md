@@ -2,7 +2,7 @@
 
 - **Trạng thái:** Proposed (Hiến duyệt **hướng** 13/11/2026; nội dung chờ Hiến duyệt; T92 — **lát cắt tối thiểu đã cài 13/11/2026**, xem mục "Đã cài ở T92"; D2 Hiến duyệt 13/11). **Công tắc `ai.chat.general_knowledge_enabled` (`BOOL`) mặc định `false` trong mã (V52). Tiêu chí bật thật: bộ v2 đạt mục "Kiểm thử" và Hiến cho phép. Trạng thái thực tế: ĐANG BẬT trên DB demo 5433 từ 13/11/2026 để Hiến thử (bộ v2 CHƯA đo); tắt trước khi đo baseline 43 câu; hoàn tác: ADMIN `PUT /api/system-configs/ai.chat.general_knowledge_enabled {"value":"false"}` hoặc `/admin/system-configs`.**
 - **Ngày:** 2026-11-13
-- **Liên quan:** ADR-0109, 0122 (τ, mô hình), 0131 (đường ống, Q24), 0132 (chat cá nhân), 0134, 0135; `07` §1.1, §4.1 BR-AI-01 / 04 (v2), §4.7 BR-AI-33, 34, 35, §5.2 bước 7–9, §5.4 lời nhắc v2, §8 `ai_chat_logs`, §13, §14.
+- **Liên quan:** ADR-0109, 0122 (τ, mô hình), 0141 (đường ống, Q24), 0142 (chat cá nhân), 0134, 0135; `07` §1.1, §4.1 BR-AI-01 / 04 (v2), §4.7 BR-AI-33, 34, 35, §5.2 bước 7–9, §5.4 lời nhắc v2, §8 `ai_chat_logs`, §13, §14.
 - **Đánh số:** V52 chỉ mang công tắc `ai.chat.general_knowledge_enabled` (đã cài 13/11/2026, **không sửa** vì đã chạy trên DB demo, Flyway kiểm checksum); cột `ai_chat_logs.source_type`, `intent`, `used_pet_context` và các khóa [CFG] còn lại sang **V53**. Hợp đồng #1, #2 thêm trường tùy chọn `sourceType`.
 
 ## Bối cảnh
@@ -22,7 +22,7 @@ Hiện nay (BR-AI-04) không đoạn nào đạt τ = 0,60 thì trả `OUT_OF_SC
   - `PET_CARE` + không đoạn → `ANSWERED`, `sourceType = GENERAL_KNOWLEDGE`, câu trả lời bắt buộc mở đầu "Thông tin tham khảo chung:" (hậu kiểm bằng chuỗi; thiếu → thêm vào), `disclaimer` của phản hồi ghi "không thay bác sĩ thú y".
   - `MEDICAL_RISK` → `MEDICAL_REFUSAL`; `OUT_OF_DOMAIN` → `OUT_OF_SCOPE`; `BUSINESS` (lọt qua từ khóa) → `OUT_OF_SCOPE` với câu mẫu "chưa có dữ liệu".
   - Hậu kiểm liều áp lên `answer` của mọi nhánh `ANSWERED`.
-- **Xem lại quyết định Q24 ngày 12/11/2026 (ADR-0131 "Đã chốt" điểm 4: giữ nguyên, theo dõi qua `ai_chat_logs`, không đổi lời nhắc, không thêm lớp từ khóa).** Quyết định đó vẫn đúng ở chế độ `false`. Đề xuất dưới đây **chỉ** áp khi `general_knowledge_enabled = true`, vì khi đó mô hình được trả lời rộng hơn nên câu kiểu "bị bệnh gì" rủi ro hơn; **Hiến duyệt 13/11/2026:** đồng ý, lớp từ khóa chỉ chạy khi `general_knowledge_enabled = true`; ở chế độ `false` quyết định Q24 ngày 12/11 của ADR-0131 giữ nguyên (ADR-0131 không sửa). Lớp tất định bổ sung cho `MEDICAL_RISK` (học từ Q24): danh sách cụm "bị bệnh gì", "mắc bệnh gì", "có phải bị", "uống thuốc gì", "liều" trong `ai-medical-risk-keywords.txt` (cùng cơ chế `PhraseMatcher` của BR-AI-03), chạy **trước** LLM → `MEDICAL_REFUSAL` không cần gọi mô hình. Danh sách khởi điểm 10–15 cụm, đo trên bộ v2; không phải [CFG].
+- **Xem lại quyết định Q24 ngày 12/11/2026 (ADR-0141 "Đã chốt" điểm 4: giữ nguyên, theo dõi qua `ai_chat_logs`, không đổi lời nhắc, không thêm lớp từ khóa).** Quyết định đó vẫn đúng ở chế độ `false`. Đề xuất dưới đây **chỉ** áp khi `general_knowledge_enabled = true`, vì khi đó mô hình được trả lời rộng hơn nên câu kiểu "bị bệnh gì" rủi ro hơn; **Hiến duyệt 13/11/2026:** đồng ý, lớp từ khóa chỉ chạy khi `general_knowledge_enabled = true`; ở chế độ `false` quyết định Q24 ngày 12/11 của ADR-0141 giữ nguyên (ADR-0141 không sửa). Lớp tất định bổ sung cho `MEDICAL_RISK` (học từ Q24): danh sách cụm "bị bệnh gì", "mắc bệnh gì", "có phải bị", "uống thuốc gì", "liều" trong `ai-medical-risk-keywords.txt` (cùng cơ chế `PhraseMatcher` của BR-AI-03), chạy **trước** LLM → `MEDICAL_REFUSAL` không cần gọi mô hình. Danh sách khởi điểm 10–15 cụm, đo trên bộ v2; không phải [CFG].
 
 ### D3. Rủi ro của tài liệu và kho demo
 - `risk_level` (ADR-0134) **chưa** lọc truy hồi ở T92; chỉ ghi vào `sources` để giao diện hiện. Lọc theo rủi ro (ví dụ không trích tài liệu `HIGH` cho khách vãng lai) là ADR sau nếu bộ v2 cho thấy cần.
@@ -101,4 +101,4 @@ Hiến chọn "có" (13/11/2026): `sourceType` vào phản hồi #1, #2 và cộ
 1. Tiền tố "Thông tin tham khảo chung:" và câu `disclaimer` — chữ cụ thể.
 2. Danh sách cụm `MEDICAL_RISK` khởi điểm (10–15 cụm) — Hiến xem trước khi đo.
 3. Tiêu chí bật công tắc (ba lượt liên tiếp, p95 ≤ 5 s) có quá chặt hay quá lỏng với demo 11/12?
-4. ~~Lớp từ khóa `MEDICAL_RISK` (D2) xem lại quyết định Q24 ngày 12/11 (ADR-0131 "Đã chốt" điểm 4)~~ **Đã chốt 13/11/2026 (Hiến): đồng ý, chỉ áp khi bật kiến thức chung; khi tắt giữ nguyên quyết định 12/11.**
+4. ~~Lớp từ khóa `MEDICAL_RISK` (D2) xem lại quyết định Q24 ngày 12/11 (ADR-0141 "Đã chốt" điểm 4)~~ **Đã chốt 13/11/2026 (Hiến): đồng ý, chỉ áp khi bật kiến thức chung; khi tắt giữ nguyên quyết định 12/11.**
