@@ -14,7 +14,6 @@ import org.springframework.transaction.support.TransactionTemplate;
 
 import com.petcare.TestcontainersConfiguration;
 import com.petcare.module.boarding.api.BoardingQueryApi;
-import com.petcare.module.customer.api.CustomerQueryApi;
 import com.petcare.module.inventory.api.StockApi;
 import com.petcare.module.inventory.api.StockQueryApi;
 import com.petcare.module.payment.api.PaymentGatewayClient;
@@ -42,7 +41,6 @@ class Tier3Be2ContractWiringIT {
     @Autowired private OrderQueryApi orders;
     @Autowired private CashierShiftQueryApi shiftQuery;
     @Autowired private CashierShiftApi shifts;
-    @Autowired private CustomerQueryApi customers;
     @Autowired private BoardingQueryApi boarding;
     @Autowired private OnlineOrderApi onlineOrders;
     @Autowired private PaymentGatewayClient gateway;
@@ -56,7 +54,6 @@ class Tier3Be2ContractWiringIT {
         assertPlaceholder(() -> orders.findLinesForReturn(1L));
         assertPlaceholder(() -> orders.countOpenByBranch(1L));
         assertPlaceholder(() -> shiftQuery.hasOpenShift(1L));
-        assertPlaceholder(() -> customers.findAddress(1L, 2L));
         assertPlaceholder(() -> boarding.countActiveStaysByBranch(1L));
     }
 

@@ -1065,7 +1065,7 @@ components:
           type: integer
     OrderSource:
       type: string
-      enum: [VISIT, RETAIL, BOARDING]
+      enum: [VISIT, RETAIL, BOARDING, ONLINE]
     OrderStatus:
       type: string
       enum: [OPEN, PENDING, PAID, CANCELLED]
@@ -1168,7 +1168,7 @@ components:
           format: int64
         cancelType:
           type: [string, "null"]
-          enum: [VISIT_CANCELLED, RETAIL_UNCLOSED, CHECKOUT_ABORTED, UNPAID, null]
+          enum: [VISIT_CANCELLED, RETAIL_UNCLOSED, CHECKOUT_ABORTED, UNPAID, ONLINE_CUSTOMER, ONLINE_EXPIRED, null]
         cancelReason:
           type: [string, "null"]
         cancelledAt:

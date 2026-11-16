@@ -954,6 +954,11 @@ class LinkProfileIT {
         }
 
         @Override
+        public Optional<AddressInfo> findAddress(Long customerId, Long addressId) {
+            throw new UnsupportedOperationException("không dùng trong IT liên kết hồ sơ");
+        }
+
+        @Override
         public OnlineProfileLinkability checkOnlineProfileLinkable(Long accountId) {
             Map<String, Object> own = jdbc.queryForMap(
                     "SELECT id, created_channel FROM customers WHERE account_id = ?", accountId);

@@ -199,4 +199,36 @@ class PaymentQueryServiceTest {
 
         assertThatThrownBy(() -> service.getPayment(55L)).isInstanceOf(ResourceNotFoundException.class);
     }
+
+    @Test
+    void previewRefusesAnOnlineOrderBeforeReadingStock() {
+        SalesOrder online = SalesOrder.openOnline("DH-X-16", BRANCH, CUSTOMER, 3L,
+                java.time.Instant.parse("2026-10-20T03:00:00Z"));
+        ReflectionTestUtils.setField(online, "id", 16L);
+        online.addLine(goods(20L, 1, 100));
+        when(orders.findAllByIdOrdered(List.of(16L))).thenReturn(List.of(online));
+
+        assertThatThrownBy(() -> service.previewPayment(new PaymentPreviewRequest(List.of(16L))))
+                .isInstanceOf(BusinessRuleViolationException.class).hasMessageContaining("BR-TG-01");
+        verifyNoInteractions(stockQuery);
+    }
+
+    @Test
+    void payableListHidesOnlineOrders() {
+        when(branchScope.resolve(null)).thenReturn(BRANCH);
+        when(customers.findContact(CUSTOMER)).thenReturn(Optional.of(
+                new CustomerContact(CUSTOMER, "An", "0900000000", null, null, false)));
+        SalesOrder counter = pending(10L, CUSTOMER, BRANCH, goods(20L, 1, 100));
+        SalesOrder online = SalesOrder.openOnline("DH-X-16", BRANCH, CUSTOMER, 3L,
+                java.time.Instant.parse("2026-10-20T03:00:00Z"));
+        ReflectionTestUtils.setField(online, "id", 16L);
+        when(orders.findByCustomerIdAndBranchIdAndStatusOrderByPendingAtAscIdAsc(CUSTOMER, BRANCH,
+                OrderStatus.PENDING)).thenReturn(List.of(counter, online));
+
+        service.listPayableOrders(CUSTOMER);
+
+        org.mockito.ArgumentCaptor<List<SalesOrder>> shown = org.mockito.ArgumentCaptor.forClass(List.class);
+        org.mockito.Mockito.verify(assembler).toSummaries(shown.capture());
+        assertThat(shown.getValue()).containsExactly(counter);
+    }
 }

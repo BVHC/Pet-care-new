@@ -296,4 +296,25 @@ class OrderCancellationServiceTest {
         assertThat(order.getStatus()).isEqualTo(OrderStatus.PENDING);
         verifyNoInteractions(audit);
     }
+
+    @Test
+    void pendingOnlineOrderCannotBeCancelledAtTheCounterNotEvenWithAReason() {
+        SalesOrder order = order(OrderSource.ONLINE, OrderStatus.PENDING);
+
+        assertThatThrownBy(() -> service.cancelUnpaidOrder(ORDER_ID, REASON))
+                .isInstanceOf(InvalidStateTransitionException.class).hasMessageContaining("online");
+        assertThat(order.getStatus()).isEqualTo(OrderStatus.PENDING);
+        assertThat(order.getCancelType()).isNull();
+        verifyNoInteractions(audit, boarding);
+        verify(orders, never()).flush();
+    }
+
+    @Test
+    void onlineOrderIsNotAnAbortableCheckoutEither() {
+        order(OrderSource.ONLINE, OrderStatus.PENDING);
+
+        assertThatThrownBy(() -> service.abortCheckout(ORDER_ID, REASON))
+                .isInstanceOf(InvalidStateTransitionException.class);
+        verifyNoInteractions(audit, boarding);
+    }
 }

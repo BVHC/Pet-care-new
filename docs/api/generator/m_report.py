@@ -30,13 +30,13 @@ PERIOD = ["branchId=int64|SUPER_MANAGER: bỏ trống = toàn chuỗi · BRANCH_
           "from!=date", "to!=date|Kỳ ≤ 12 tháng [CFG]"]
 
 m.schema("RevenueRow", {
-    "branchId": "int64", "branchName": "string", "source": "enum:VISIT,RETAIL,BOARDING", "orderCount": "int",
+    "branchId": "int64", "branchName": "string", "source": "enum:VISIT,RETAIL,BOARDING,ONLINE", "orderCount": "int",
     "amount": "money",
 })
 m.schema("RevenueReport", {"from": "date", "to": "date", "rows": "array:ref:RevenueRow", "totalAmount": "money"},
          desc="BR-BC-02: Order PAID có thời điểm thanh toán trong kỳ, theo đơn giá snapshot")
 m.schema("LostRevenueRow", {
-    "orderId": "int64", "orderCode": "string", "branchId": "int64", "source": "enum:VISIT,RETAIL,BOARDING",
+    "orderId": "int64", "orderCode": "string", "branchId": "int64", "source": "enum:VISIT,RETAIL,BOARDING,ONLINE",
     "amount": "money", "reason": "string", "cancelledAt": "datetime",
 })
 m.schema("LostRevenueReport", {"from": "date", "to": "date", "rows": "array:ref:LostRevenueRow", "count": "int",

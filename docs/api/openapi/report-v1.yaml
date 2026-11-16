@@ -430,7 +430,7 @@ components:
           type: string
         source:
           type: string
-          enum: [VISIT, RETAIL, BOARDING]
+          enum: [VISIT, RETAIL, BOARDING, ONLINE]
         orderCount:
           type: integer
           format: int32
@@ -473,7 +473,7 @@ components:
           format: int64
         source:
           type: string
-          enum: [VISIT, RETAIL, BOARDING]
+          enum: [VISIT, RETAIL, BOARDING, ONLINE]
         amount:
           type: integer
           format: int64

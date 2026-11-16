@@ -139,6 +139,22 @@ public class SalesOrder extends TimestampedEntity {
         return order;
     }
 
+    /**
+     * Order#11: Order nguồn ONLINE sinh thẳng ở {@code PENDING} khi khách đặt hàng (BR-BH-09). {@code createdBy} là tài
+     * khoản của khách; không Visit, không đặt chỗ, {@code payment_id} luôn NULL (V42).
+     */
+    public static SalesOrder openOnline(String code, Long branchId, Long customerId, Long createdBy, Instant now) {
+        SalesOrder order = new SalesOrder();
+        order.code = code;
+        order.source = OrderSource.ONLINE;
+        order.branchId = branchId;
+        order.customerId = customerId;
+        order.createdBy = createdBy;
+        order.status = OrderStatus.PENDING;
+        order.pendingAt = now;
+        return order;
+    }
+
     /** Order#2: Order bán lẻ ở {@code OPEN}, không gắn Visit / đặt chỗ (BR-BH-01). */
     public static SalesOrder openRetail(String code, Long branchId, Long customerId, Long createdBy) {
         SalesOrder order = new SalesOrder();

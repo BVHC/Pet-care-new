@@ -56,9 +56,9 @@
 
 Trường có `?` là không bắt buộc / có thể null. Kiểu `email`, `date`, `datetime`… theo mục 3 của `00-method.md`.
 
-- **`RevenueRow`** — {`branchId`: int64, `branchName`: string, `source`: VISIT|RETAIL|BOARDING, `orderCount`: int32, `amount`: int64}
+- **`RevenueRow`** — {`branchId`: int64, `branchName`: string, `source`: VISIT|RETAIL|BOARDING|ONLINE, `orderCount`: int32, `amount`: int64}
 - **`RevenueReport`** — {`from`: date, `to`: date, `rows`: [RevenueRow], `totalAmount`: int64} — BR-BC-02: Order PAID có thời điểm thanh toán trong kỳ, theo đơn giá snapshot
-- **`LostRevenueRow`** — {`orderId`: int64, `orderCode`: string, `branchId`: int64, `source`: VISIT|RETAIL|BOARDING, `amount`: int64, `reason`: string, `cancelledAt`: date-time}
+- **`LostRevenueRow`** — {`orderId`: int64, `orderCode`: string, `branchId`: int64, `source`: VISIT|RETAIL|BOARDING|ONLINE, `amount`: int64, `reason`: string, `cancelledAt`: date-time}
 - **`LostRevenueReport`** — {`from`: date, `to`: date, `rows`: [LostRevenueRow], `count`: int32, `totalAmount`: int64} — BR-BC-02: chỉ Order hủy theo BR-BH-05 (UNPAID); hủy phiên trả thú không tính
 - **`ServiceCountRow`** — {`branchId`: int64, `serviceGroup`: MEDICAL|GROOMING, `serviceId`: int64, `serviceName`: string, `count`: int32}
 - **`CompletedServicesReport`** — {`from`: date, `to`: date, `rows`: [ServiceCountRow]}

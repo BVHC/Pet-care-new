@@ -76,6 +76,7 @@ public interface SalesOrderRepository extends JpaRepository<SalesOrder, Long> {
      */
     @Query("SELECT o.branchId AS branchId, count(o) AS orderCount, min(o.pendingAt) AS oldestPendingAt "
             + "FROM SalesOrder o WHERE o.status = com.petcare.module.sales.entity.OrderStatus.PENDING "
+            + "AND o.source <> com.petcare.module.sales.api.OrderSource.ONLINE "
             + "AND o.pendingAt < :cutoff GROUP BY o.branchId ORDER BY o.branchId")
     List<BranchOverdue> findOverdueByBranch(@Param("cutoff") java.time.Instant cutoff);
 

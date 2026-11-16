@@ -167,4 +167,20 @@ class SalesOrderTest {
     void repriceOfNonBoardingLineThrows() {
         assertThatThrownBy(() -> service(1, 100L).repriceBoarding(2)).isInstanceOf(IllegalStateException.class);
     }
+
+    @Test
+    void onlineOrderIsBornPendingWithoutVisitOrBookingAndCancelTypesExist() {
+        SalesOrder order = SalesOrder.openOnline("DH-2611-00001", 1L, 2L, 9L, NOW);
+
+        assertThat(order.getSource()).isEqualTo(OrderSource.ONLINE);
+        assertThat(order.getStatus()).isEqualTo(OrderStatus.PENDING);
+        assertThat(order.getPendingAt()).isEqualTo(NOW);
+        assertThat(order.getCreatedBy()).isEqualTo(9L);
+        assertThat(order.getVisitId()).isNull();
+        assertThat(order.getBoardingBookingId()).isNull();
+        assertThat(order.getPaymentId()).isNull();
+        order.cancel(OrderCancelType.ONLINE_CUSTOMER, 9L, "doi y", NOW);
+        assertThat(order.getCancelType()).isEqualTo(OrderCancelType.ONLINE_CUSTOMER);
+        assertThat(OrderCancelType.valueOf("ONLINE_EXPIRED")).isNotNull();
+    }
 }
