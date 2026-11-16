@@ -56,7 +56,7 @@ class OpenApiContractParityIT {
     /** File hợp đồng đã có annotation đầy đủ; thêm file khi module đó viết xong tài liệu (D026: branch, catalog). */
     private static final Set<String> DOCUMENTED = Set.of("identity-v1.yaml", "care-v1.yaml", "customer-v1.yaml",
             "inventory-v1.yaml", "sales-v1.yaml", "appointment-v1.yaml", "visit-v1.yaml", "boarding-v1.yaml", "content-v1.yaml", "report-v1.yaml",
-            "ai-v1.yaml", "fees-v1.yaml");
+            "ai-v1.yaml", "fees-v1.yaml", "shop-v1.yaml");
     private static final Set<String> METHODS = Set.of("get", "post", "put", "patch", "delete");
     private static final Pattern SECRET = Pattern.compile("(?i)(password|secret|hash)$|^otp(code)?$");
     /** Tên khớp {@link #SECRET} nhưng không phải bí mật: cờ bắt đổi mật khẩu (BR-TK-17). */
@@ -120,10 +120,11 @@ class OpenApiContractParityIT {
         // + 3 ai #4, #12, #13 (GET /me/ai/pets/{petId}/recommendations, GET và PUT /ai/item-profiles, T78, docs/adr/0133)
         // + 1 ai #14 (POST /ai/documents/import, nạp tài liệu từ file, T89, docs/adr/0134)
         // + 2 fees #1–2 (task 115, docs/adr/0140)
+        // + 4 shop cart (task 116, docs/adr/0143)
         // − 1 content #22 (đánh dấu feedback đã xử lý; feedback không trạng thái, V55, docs/adr/0122, 0131): content còn 21.
         assertThat(documentedOps())
-                .as("số endpoint identity + care + customer + inventory + sales + appointment + visit + boarding + content + report + ai + fees đã cài")
-                .hasSize(202);
+                .as("số endpoint identity + care + customer + inventory + sales + appointment + visit + boarding + content + report + ai + fees + shop đã cài")
+                .hasSize(206);
     }
 
     @Test

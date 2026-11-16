@@ -163,6 +163,35 @@ public class InventoryQueryRepository {
         return result;
     }
 
+    /**
+     * Tồn khả dụng toàn chuỗi của nhiều sản phẩm bằng một câu: Σ lô chưa hết hạn (mọi chi nhánh) − Σ {@code HELD}, tối thiểu 0;
+     * sản phẩm không có lô có giá trị 0.
+     */
+    public Map<Long, Long> chainAvailableQuantities(Collection<Long> productIds, LocalDate today) {
+        Map<Long, Long> result = new LinkedHashMap<>();
+        if (productIds.isEmpty()) {
+            return result;
+        }
+        productIds.forEach(id -> result.put(id, 0L));
+        jdbc.query("""
+                SELECT t.product_id AS product_id, SUM(t.qty) AS total
+                FROM (SELECT i.product_id, SUM(l.quantity) AS qty
+                      FROM stock_lots l JOIN inventory_items i ON i.id = l.inventory_item_id
+                      WHERE i.product_id IN (:productIds) AND (l.expiry_date IS NULL OR l.expiry_date >= :today)
+                      GROUP BY i.product_id
+                      UNION ALL
+                      SELECT r.product_id, -SUM(r.quantity)
+                      FROM stock_reservations r
+                      WHERE r.product_id IN (:productIds) AND r.status = 'HELD'
+                      GROUP BY r.product_id) t
+                GROUP BY t.product_id
+                """, new MapSqlParameterSource("productIds", productIds).addValue("today", today),
+                rs -> {
+                    result.put(rs.getLong("product_id"), Math.max(0L, rs.getLong("total")));
+                });
+        return result;
+    }
+
     public List<Long> branchIdsWithAvailableStock(long productId, LocalDate today) {
         return jdbc.queryForList("""
                 SELECT i.branch_id

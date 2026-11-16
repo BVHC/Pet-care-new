@@ -4,12 +4,11 @@
 > Cập nhật: 2026-11-10 (đối chiếu với code tại `c27bae3`, nhánh `manh`; vị trí `origin/*` kiểm bằng `git log`). Trạng thái task: `docs/time.md`.
 >
 > Nhật ký (mới nhất trước, giữ 5 dòng; cũ hơn: `git log` của file này):
+> - 2026-11-15 — Task 116 (ADR-0143, Accepted): module `shop` có phần cài đầu tiên: giỏ hàng shop-v1 `getMyCart`, `setCartItem`, `removeCartItem`, `clearMyCart` (UC61, BR-BH-07); thêm `StockQueryApi.findChainAvailableQuantity` và `CatalogQueryApi.findProductSaleDisplay`; không migration; `OpenApiContractParityIT` pin 206.
 > - 2026-11-15 — Task 115 (ADR-0140, Accepted): module `fees`: fees-v1 #1, #2 (`GET`/`PUT /shipping-fee-config`, SUPER_MANAGER) và ST09 `ShippingFeeApi.quote`; không migration; `OpenApiContractParityIT` pin 202.
 > - 2026-11-14 — D045 (ADR-0132, Proposed): V54 `orders.version` + `@Version` trên `SalesOrder` (lưới an toàn: ghi trên entity nạp trước khóa → 409; không đổi hành vi hôm nay); `SalesOrderVersionIT` (4 ca xanh) + IT sales / visit / boarding / schema xanh 14/11. Migration của BE-2 lấy từ V56.
 > - 2026-11-13 — AI v2 đặc tả **Proposed** (ADR-0134 nạp file + quản trị kho, 0135 ngữ cảnh thú + Gemini trả phí, 0136 kiến thức chung có kiểm soát; `07` §4.7 BR-AI-29…35; `time.md` T88–T93; V52 đã dùng cho công tắc T92, V53 giữ chỗ). **Chưa cài**: mã chờ Hiến duyệt spec. Kho nguồn `docs/docs_RAG` (21 tài liệu DRAFT) vào repo, script nạp `load-docs-rag.mjs`.
 > - 2026-11-10 — T70 PR3 (ADR-0131, Proposed): ST24 `FeedbackCleanupJob` (module `content`): xóa cứng feedback quá `feedback.retention_days` ([CFG], 30), 03:30:31, lô 500 + nghỉ 50 ms + ngân sách 60 s, bỏ lượt nếu hạn ngoài 7–365; `FeedbackCleanupIT` era 1981 + `FeedbackCleanupJobTest`. Không migration. IT chưa chạy (Docker tắt).
-> - 2026-11-10 — T70 PR1 + PR2 (ADR-0131, Proposed): V51 gỡ khiếu nại khỏi DB (2 bảng, 6 khóa, 7 mẫu), thêm khóa `feedback.retention_days` và 2 index `feedbacks`; V52 (nay V55, đánh số lại 15/11 vì trùng V52 công tắc AI) bỏ 5 cột trạng thái `feedbacks`, feedback chỉ đọc (bỏ `/resolve`, `status`), ghim OpenAPI 193. Chưa chạy IT (Docker tắt). Test FE đọc migration BE đỏ tới T81 (D065).
-> - 2026-11-10 — T77a (AI-1, ADR-0130, Proposed): module `ai` có phần BE đầu tiên: lớp Gemini, UC93 (ai-v1 #5–#11), FSM #13, ST22 (nạp chỉ mục, đồng bộ phác đồ), ST23; không migration; chưa có chat, chưa nạp KB demo, chưa chạy với Gemini thật.
 
 ## 1. Tóm tắt
 
@@ -123,6 +122,7 @@ Stack: Java 21, Spring Boot 3.5.15, Spring Security, Data JPA, Validation, AOP, 
 | ai · tri thức UC93, FSM #13 | ai-v1 #5–#11, #14 | `KnowledgeController`, `KnowledgeService`, `fsm/AiDocumentTransitionHandler`, `AiDocument` (+ `AiChunk`, `AiChatLog`, `AiItemProfile`) | 0130 (Accepted 12/11); #14 nạp file `.md` / `.txt` / `.docx` / `.pdf` thành nháp (T89, 13/11: `DocumentFileReader`, `KnowledgeImportService`, ADR-0134 Proposed, JSON base64, trần 2 MB hằng, chưa `external_id`). Khóa `FOR NO KEY UPDATE` trước khi đọc, audit `AI_DOCUMENT_*`; nháp thiếu nguồn lưu `source_note = ''` (V34); `ai_chunks.embedding` không ánh xạ entity, ghi bằng native `CAST(? AS vector)` |
 | ai · ST22 nạp chỉ mục, ST23, lớp Gemini | cron `45 */5 * * * *` (ST22), `29 0 4 * * *` (ST23) | `KnowledgeIndexer` (luồng nền `ai-index`), `KnowledgeIndexWriter.swap`, `DocumentChunker`, `CatalogProtocolSync` / `Writer`, `KnowledgeIndexJob`, `ChatLogCleanupJob`, `GeminiClient` | 0130. Nhúng ngoài transaction, hoán đổi đoạn một transaction (kiểm lại phiên bản dưới khóa), kích hoạt `AFTER_COMMIT`; khóa `GEMINI_API_KEY` chỉ ở header; profile `test` tắt ST22; chưa có chat (T77b) |
 | fees · phí vận chuyển, ST09 | fees-v1 #1, #2 | `ShippingFeeConfigController`, `ShippingFeeService` (`ShippingFeeApi.quote`), `ShippingFeeConfig` | 0140. PUT: khóa dòng 1 `FOR NO KEY UPDATE` → ghi → audit `SHIPPING_FEE_CONFIG_UPDATED`; phí cố định toàn chuỗi, không cache. Chưa cài: #3, #4 (định mức vật tư). |
+| shop · giỏ hàng UC61 | shop-v1 `getMyCart`, `setCartItem`, `removeCartItem`, `clearMyCart` | `CartController`, `CartService`, `Cart`, `CartItem`, `CartMapper` | 0143. Ghi: `carts` `FOR NO KEY UPDATE` → dọn dòng không bán được → kiểm 30 dòng → upsert `cart_items`; xem ẩn dòng không bán được (không ghi); `available` = tồn toàn chuỗi − `HELD`. Chưa: đặt hàng (task 117). |
 
 ### 3.3 Interface chéo tầng 3 chưa cài (placeholder, T55b / T55c)
 

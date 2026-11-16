@@ -1,6 +1,6 @@
 # Online Shop API v1 (tầng 3) — Pet Care v16
 
-> **Module:** BH (thương mại điện tử) · **Owner:** BE-2. Giỏ hàng, đặt hàng online, theo dõi / hủy / xác nhận đã nhận của khách và xử lý, giao đơn của lễ tân. **Đặc tả bổ sung GĐ2, đã duyệt ở T54 (Hiến, 5/11/2026); chưa có cài đặt.** Thanh toán ở payment-v1, trả hàng và hoàn tiền ở returns-v1.
+> **Module:** BH (thương mại điện tử) · **Owner:** BE-2. Giỏ hàng, đặt hàng online, theo dõi / hủy / xác nhận đã nhận của khách và xử lý, giao đơn của lễ tân. **Đặc tả bổ sung GĐ2, đã duyệt ở T54 (Hiến, 5/11/2026). Đã cài (task 116, ADR-0143): giỏ hàng `getMyCart`, `setCartItem`, `removeCartItem`, `clearMyCart`; chưa cài: đặt hàng, theo dõi, xử lý và giao đơn.** Thanh toán ở payment-v1, trả hàng và hoàn tiền ở returns-v1.
 > **Nguồn chân lý:** 01 UC61, UC62, UC64, UC65, ST09, ST10, ST12; 08-tang3-be2-spec.md §B (BR-BH-07…12; 03 #14 Đơn hàng online, Order#11–13); 05 bổ sung carts, cart_items, online_orders, stock_reservations.
 > **Contract máy đọc:** [`./openapi/shop-v1.yaml`](./openapi/shop-v1.yaml) — sinh cùng lúc với file này nên luôn khớp.
 
@@ -70,7 +70,7 @@
 ### Cart
 
 - **`GET /me/cart`** — Xem giỏ hàng. Response `200` `Cart`. Lỗi: `401` · `403`.
-- **`PUT /me/cart/items/{productId}`** — Thêm hoặc đặt số lượng sản phẩm trong giỏ. Request `SetCartItemRequest`. Response `200` `Cart`. Lỗi: `400` `BR-BH-07` sản phẩm không phải `GOODS` / là thuốc kê đơn / quá 30 dòng · số lượng ngoài 1–99 · `401` · `403` · `404` Không tìm thấy sản phẩm đang kinh doanh.
+- **`PUT /me/cart/items/{productId}`** — Thêm hoặc đặt số lượng sản phẩm trong giỏ. Request `SetCartItemRequest`. Response `200` `Cart`. Lỗi: `400` `BR-BH-07` sản phẩm không phải `GOODS` / là thuốc kê đơn / quá 30 dòng · `VALIDATION_FAILED` số lượng ngoài 1–99 · `401` · `403` · `404` Không tìm thấy sản phẩm đang kinh doanh.
 - **`DELETE /me/cart/items/{productId}`** — Xóa sản phẩm khỏi giỏ. Response `200` `Cart`. Lỗi: `400` · `401` · `403`.
 - **`DELETE /me/cart`** — Xóa toàn bộ giỏ. Response `204` rỗng. Lỗi: `401` · `403`.
 ### Checkout

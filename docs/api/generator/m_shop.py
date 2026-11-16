@@ -3,7 +3,7 @@ from lib import Module
 m = Module(
     key="shop", title="Online Shop API v1 (tầng 3)", codes="BH (thương mại điện tử)", owner="BE-2",
     sources="01 UC61, UC62, UC64, UC65, ST09, ST10, ST12; 08-tang3-be2-spec.md §B (BR-BH-07…12; 03 #14 Đơn hàng online, Order#11–13); 05 bổ sung carts, cart_items, online_orders, stock_reservations",
-    intro="Giỏ hàng, đặt hàng online, theo dõi / hủy / xác nhận đã nhận của khách và xử lý, giao đơn của lễ tân. **Đặc tả bổ sung GĐ2, đã duyệt ở T54 (Hiến, 5/11/2026); chưa có cài đặt.** Thanh toán ở payment-v1, trả hàng và hoàn tiền ở returns-v1.",
+    intro="Giỏ hàng, đặt hàng online, theo dõi / hủy / xác nhận đã nhận của khách và xử lý, giao đơn của lễ tân. **Đặc tả bổ sung GĐ2, đã duyệt ở T54 (Hiến, 5/11/2026). Đã cài (task 116, ADR-0143): giỏ hàng `getMyCart`, `setCartItem`, `removeCartItem`, `clearMyCart`; chưa cài: đặt hàng, theo dõi, xử lý và giao đơn.** Thanh toán ở payment-v1, trả hàng và hoàn tiền ở returns-v1.",
     frozen=[
         "Path `/orders`, `/payments` của sales-v1 là nghiệp vụ tại quầy; đơn online dùng path riêng `/me/online-orders`, `/online-orders` (08 đầu file).",
         "Chuyển trạng thái do hệ thống (Đơn hàng online#2, #4, #12) không có endpoint: thanh toán thành công do callback cổng (payment-v1), hủy quá hạn do ST10, tự xác nhận do ST12.",
@@ -48,7 +48,7 @@ m.schema("CartItem", {
     "quantity": "int", "imageUrl": "url?", "available": "bool|false nếu hết hàng toàn chuỗi",
 })
 m.schema("Cart", {"items": "array:ref:CartItem", "subtotal": "money"})
-m.schema("SetCartItemRequest", {"quantity": "int|1–99 (BR-BH-07)"})
+m.schema("SetCartItemRequest", {"quantity": "int|1–99 (VALIDATION_FAILED)"})
 m.schema("FulfillmentBranch", {"branchId": "int64", "name": "string", "address": "string"})
 m.schema("OnlineOrderQuote", {
     "branchId": "int64", "addressId": "int64", "subtotal": "money", "shippingFee": "money|BR-SP-08",
@@ -84,7 +84,7 @@ m.op("get", "/me/cart", "getMyCart", "Xem giỏ hàng", "Cart", "UC61", "BR-BH-0
 m.op("put", "/me/cart/items/{productId}", "setCartItem", "Thêm hoặc đặt số lượng sản phẩm trong giỏ", "Cart", "UC61",
      "BR-BH-07", "A02", CUS, body="SetCartItemRequest", resp="Cart", path_params=["ProductId"],
      errors=(400, 401, 403, 404), idem="Có",
-     err_desc={400: "`BR-BH-07` sản phẩm không phải `GOODS` / là thuốc kê đơn / quá 30 dòng · số lượng ngoài 1–99",
+     err_desc={400: "`BR-BH-07` sản phẩm không phải `GOODS` / là thuốc kê đơn / quá 30 dòng · `VALIDATION_FAILED` số lượng ngoài 1–99",
                404: "Không tìm thấy sản phẩm đang kinh doanh"})
 m.op("delete", "/me/cart/items/{productId}", "removeCartItem", "Xóa sản phẩm khỏi giỏ", "Cart", "UC61", "BR-BH-07",
      "A02", CUS, resp="Cart", path_params=["ProductId"], errors=(400, 401, 403), idem="Có",

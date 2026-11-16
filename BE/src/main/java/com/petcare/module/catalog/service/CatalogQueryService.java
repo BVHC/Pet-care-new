@@ -168,6 +168,16 @@ public class CatalogQueryService implements CatalogQueryApi {
         return new RecommendDisplay(priceFrom, display);
     }
 
+    /** Thêm cho giỏ hàng (task 116): đọc theo lô, bỏ qua id không tồn tại. */
+    @Override
+    public Map<Long, ProductSaleDisplay> findProductSaleDisplay(Collection<Long> productIds) {
+        if (productIds == null || productIds.isEmpty()) {
+            return Map.of();
+        }
+        return products.findAllById(productIds).stream().collect(Collectors.toMap(Product::getId,
+                p -> new ProductSaleDisplay(p.getUnit(), p.getImageUrl())));
+    }
+
     private List<com.petcare.module.catalog.entity.Service> activeServicesOf(ServiceGroup group, Sort sort) {
         return services.findAll((root, query, cb) -> cb.and(cb.isTrue(root.get("active")),
                 cb.equal(root.get("group"), group)), sort);
