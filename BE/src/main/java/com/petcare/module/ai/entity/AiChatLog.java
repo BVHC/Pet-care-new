@@ -23,7 +23,7 @@ import lombok.NoArgsConstructor;
 /**
  * Bảng {@code ai_chat_logs} (07 §8, LOG): một dòng cho mỗi lượt hỏi đáp UC90 (BR-AI-24). Không có cột tài khoản, IP hay
  * kênh. Chỉ thêm, nên entity bất biến; ST23 xóa quá hạn bằng câu native ở {@code AiChatLogRepository}. Ghi bởi {@code ChatService}
- * qua {@link #of} (docs/adr/0131); schema cũng được kiểm khi khởi động.
+ * qua {@link #of} (docs/adr/0141); schema cũng được kiểm khi khởi động.
  */
 @Getter
 @Immutable
@@ -79,6 +79,15 @@ public class AiChatLog extends CreatedAtEntity {
     @Column(name = "latency_ms", nullable = false)
     private int latencyMs;
 
+    /** Khối "THÔNG TIN THÚ" đã được gửi cho nhà cung cấp (BR-AI-32). Chỉ là cờ: nội dung khối không bao giờ vào nhật ký. */
+    @Column(name = "used_pet_context", nullable = false)
+    private boolean usedPetContext;
+
+    /** Ý định của lượt hỏi (V57, docs/adr/0136 D4): nhãn thống kê, không chứa nội dung. Dòng cũ là NULL. */
+    @Enumerated(EnumType.STRING)
+    @Column(name = "intent", length = 30)
+    private ChatIntent intent;
+
     /**
      * Một dòng nhật ký (BR-AI-24). {@code question} và {@code answer} phải là bản <b>đã che</b> (BR-AI-12); các kết quả
      * cá nhân và {@code NEED_LOGIN} truyền {@code null} cho mọi trường nội dung. Câu hỏi quá {@value #QUESTION_MAX_LENGTH}
@@ -86,7 +95,7 @@ public class AiChatLog extends CreatedAtEntity {
      */
     public static AiChatLog of(ChatResult result, ChatErrorKind errorKind, ChatSourceType sourceType, String question,
             String answer, BigDecimal topSimilarity, Long[] sourceDocumentIds, String llmModel, Integer inputTokens,
-            Integer outputTokens, Integer thoughtTokens, int latencyMs) {
+            Integer outputTokens, Integer thoughtTokens, int latencyMs, boolean usedPetContext, ChatIntent intent) {
         AiChatLog log = new AiChatLog();
         log.result = result;
         log.errorKind = errorKind;
@@ -101,6 +110,8 @@ public class AiChatLog extends CreatedAtEntity {
         log.outputTokens = outputTokens;
         log.thoughtTokens = thoughtTokens;
         log.latencyMs = latencyMs;
+        log.usedPetContext = usedPetContext;
+        log.intent = intent;
         return log;
     }
 }

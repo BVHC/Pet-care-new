@@ -40,7 +40,7 @@ import com.petcare.module.identity.service.SessionService;
 
 /**
  * Giỏ hàng qua HTTP trên Postgres thật (shop-v1 {@code getMyCart}, {@code setCartItem}, {@code removeCartItem},
- * {@code clearMyCart}; UC61, BR-BH-07; docs/adr/0141). Hạn dùng của lô tính theo ngày thật (đồng hồ ứng dụng, không có
+ * {@code clearMyCart}; UC61, BR-BH-07; docs/adr/0143). Hạn dùng của lô tính theo ngày thật (đồng hồ ứng dụng, không có
  * job quét theo đồng hồ) nên không cần era {@code MutableClock}. Sản phẩm, chi nhánh, lô, phần giữ do
  * {@link AiReadFixtures} tạo (id sản phẩm và chi nhánh thật, riêng mỗi test); giỏ do test này xóa trước khi fixture xóa sản phẩm.
  */

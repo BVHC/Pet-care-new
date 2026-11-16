@@ -15,7 +15,7 @@ import com.petcare.module.AiReadItSupport;
 import com.petcare.module.inventory.api.StockQueryApi;
 
 /**
- * {@link StockQueryApi#findChainAvailableQuantity} (task 116, docs/adr/0141): tồn khả dụng toàn chuỗi = Σ lô chưa hết hạn ở
+ * {@link StockQueryApi#findChainAvailableQuantity} (task 116, docs/adr/0143): tồn khả dụng toàn chuỗi = Σ lô chưa hết hạn ở
  * mọi chi nhánh − Σ phần {@code HELD}, không âm, một câu SQL. Truy vấn chỉ xét các id được hỏi nên khẳng định chính xác được.
  */
 class StockChainAvailabilityIT extends AiReadItSupport {

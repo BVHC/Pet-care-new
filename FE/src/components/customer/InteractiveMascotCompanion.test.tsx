@@ -49,6 +49,10 @@ describe('mở khung chat', () => {
     const chat = await openChat(user);
     expect(within(chat).getByText(AI_PROVIDER_NOTICE)).toBeInTheDocument();
     expect(AI_PROVIDER_NOTICE).toMatch(/Google/);
+    // BR-AI-32 (phương án A, ADR-0135): khách đăng nhập hỏi về thú thì thông tin cơ bản của thú có thể đi kèm; nói rõ trường nào và không có tên.
+    expect(AI_PROVIDER_NOTICE).toMatch(/đăng nhập/);
+    expect(AI_PROVIDER_NOTICE).toMatch(/loài, giống, nhóm tuổi, cân nặng/);
+    expect(AI_PROVIDER_NOTICE).toMatch(/không gồm tên/);
     expect(within(chat).getByText(/Mình không chẩn đoán bệnh hay kê thuốc/)).toBeInTheDocument();
     expect(publicAsk).not.toHaveBeenCalled();
     expect(meAsk).not.toHaveBeenCalled();

@@ -2,7 +2,7 @@
 
 - **Trạng thái:** Proposed (Hiến duyệt **hướng** 13/11/2026; nội dung chờ Hiến duyệt; T88 / T89 / T90). D1 (nạp file) đã cài ở T89; D3 (đồng bộ bài viết) và D4 (đường BUSINESS) đã cài ở T90 (13/11), xem hai mục "Đã cài" bên dưới; D2 `risk_level` / topic mới còn nợ.
 - **Ngày:** 2026-11-13
-- **Liên quan:** ADR-0109 (LLM, embedding, pgvector), 0110 (V34 `ai_documents`), 0130 (UC93, FSM #13, ST22, #5 lưu trữ tự động phác đồ), 0131 (đường ống chat), 0135, 0136 (hai ADR còn lại của AI v2); `07` §1.1, §4.3 (BR-AI-13, BR-AI-14, BR-AI-29, BR-AI-30, BR-AI-31), §4.6, §8, §10, §11 (I-11, I-12); `docs/docs_RAG/00_governance/*`; hợp đồng `ai-v1`.
+- **Liên quan:** ADR-0109 (LLM, embedding, pgvector), 0110 (V34 `ai_documents`), 0130 (UC93, FSM #13, ST22, #5 lưu trữ tự động phác đồ), 0141 (đường ống chat), 0135, 0136 (hai ADR còn lại của AI v2); `07` §1.1, §4.3 (BR-AI-13, BR-AI-14, BR-AI-29, BR-AI-30, BR-AI-31), §4.6, §8, §10, §11 (I-11, I-12); `docs/docs_RAG/00_governance/*`; hợp đồng `ai-v1`.
 - **Đánh số:** Flyway **V53** (V52 đã dùng cho công tắc kiến thức chung ở T92, không sửa; V49 chừa BE-2, V51 dành cho gỡ bảng khiếu nại ở T70). Hợp đồng `ai-v1` thêm #14. Mã BR mới từ BR-AI-29 (26–28 đã dùng).
 
 ## Bối cảnh
@@ -82,7 +82,7 @@ Hiến trả lời 13/11/2026: (a) Dũng (chủ `content`) đã biết `ai` thê
 | Bài > 20 000 ký tự: tách hay cắt | **Bỏ qua**, không cắt: log WARN `ARTICLE_SYNC_TOO_LONG`, đếm `ai.article.sync{outcome=too_long}`; bài không có chữ: `empty`; lỗi một bài: `failed` (log `ARTICLE_SYNC_FAILED`) | Prompt T90; nợ: tách theo `##` như file nạp nếu bài dài là chuyện thường |
 | `topic`, `species` của tài liệu từ bài | `CARE` và `ALL` mặc định (người quản lý đổi khi rà soát) | Bài viết không có chủ đề, loài tương ứng |
 | Bộ lọc `externalId LIKE 'ARTICLE-%'` ở UC93 / FE (T93) | **Đã cài ở T93 (14/11/2026)**: xem mục "Đã cài ở T93" bên dưới | Việc của T93; `external_id` đã có ở DB từ V53 |
-| V53: `external_id`, `risk_level`, topic mới, `ai.ingest.max_file_kb`, `pet_context_enabled` | V53 chỉ có `external_id` (UNIQUE một phần), `ai_chat_logs.source_type` và khóa `ai.chat.business_intent_enabled` | Chỉ cài cái có việc dùng. **Nợ (V54 nếu cần):** `risk_level`, topic `SAFETY` / `LIFESTYLE`, `ai.ingest.max_file_kb`, `ai.chat.pet_context_enabled`, `ai_chat_logs.intent` / `used_pet_context`, `external_id` cho file nạp |
+| V53: `external_id`, `risk_level`, topic mới, `ai.ingest.max_file_kb`, `pet_context_enabled` | V53 chỉ có `external_id` (UNIQUE một phần), `ai_chat_logs.source_type` và khóa `ai.chat.business_intent_enabled` | Chỉ cài cái có việc dùng. **Nợ (V54 nếu cần):** `risk_level`, topic `SAFETY` / `LIFESTYLE`, `ai.ingest.max_file_kb`, `ai_chat_logs.intent`, `external_id` cho file nạp (`ai.chat.pet_context_enabled` và `ai_chat_logs.used_pet_context` đã cài ở T91, 14/11/2026, **V56** vì V54 đã bị `orders.version` chiếm ở `origin/dev`: ADR-0135 "Đã cài ở T91") |
 | Sửa tay nháp rồi bài đổi | Nháp theo bài (nội dung bị thay, audit giữ `before` có `contentSha256`): bản sửa tay **mất** nếu bài đổi trước khi xuất bản | Nguồn sự thật là bài; ghi nhận là rủi ro |
 
 Số khóa [CFG] 86 → 87 (khóa `ai.*` 19 → 20). Số V53 chiếm trước V51 (gỡ khiếu nại, T70): nếu V51 được thêm sau khi V53 đã chạy ở một DB thì Flyway báo "resolved migration not applied" (đổi số V51 hoặc bật `outOfOrder` ở DB đó), như V52.

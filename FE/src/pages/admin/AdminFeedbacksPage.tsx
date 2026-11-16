@@ -1,34 +1,25 @@
-// T47 — UC84: góp ý của khách. SUPER_MANAGER xem tất cả (lọc được theo chi nhánh), BRANCH_MANAGER chỉ chi nhánh mình (BE tự giới hạn,
-// ngầm là chi nhánh của họ nên không có bộ lọc chi nhánh) — content-v1 #20–22, BR-DG-02…04. Giữ nguyên <h1> (route test dựa vào đó).
+// UC84: góp ý của khách, chỉ đọc (không trạng thái, không xử lý: ADR-0122). SUPER_MANAGER xem tất cả (lọc được theo chi nhánh),
+// BRANCH_MANAGER chỉ chi nhánh mình (BE tự giới hạn, ngầm là chi nhánh của họ nên không có bộ lọc chi nhánh) — content-v1 #20–21,
+// BR-DG-02, 03, 05. Giữ nguyên <h1> (route test dựa vào đó).
 import { useState } from 'react';
 import { AlertTriangle, MessageSquareText } from 'lucide-react';
-import { Field, NoticeBar, selectClass, type Notice } from '../../components/admin/form-ui';
+import { Field, selectClass } from '../../components/admin/form-ui';
 import { Button } from '../../components/ui/button';
 import { Card, CardContent } from '../../components/ui/card';
 import { Input } from '../../components/ui/input';
-import { StatusBadge } from '../../components/ui/modal-templates';
 import { plainMessage, toApiError } from '../../shared/api/api-error';
 import { useBranches } from '../../shared/hooks/useBranch';
-import { useFeedbackList, useOpenFeedback } from '../../shared/hooks/useFeedback';
+import { useFeedbackList } from '../../shared/hooks/useFeedback';
 import { useAccount } from '../../shared/stores/session.store';
 import type { PageResponse } from '../../shared/types';
-import {
-  FEEDBACK_STATUS_LABELS,
-  FEEDBACK_STATUS_VARIANT,
-  FEEDBACK_TOPIC_LABELS,
-  formatFeedbackTime,
-  type Feedback,
-  type FeedbackStatus,
-  type FeedbackTopic,
-} from '../../shared/types/feedback';
+import { FEEDBACK_TOPIC_LABELS, formatFeedbackTime, type Feedback, type FeedbackTopic } from '../../shared/types/feedback';
 import { FeedbackDetailModal, RatingStars } from './feedbacks/FeedbackDetailModal';
 
 const PAGE_SIZE = 20;
-const STATUSES = Object.keys(FEEDBACK_STATUS_LABELS) as FeedbackStatus[];
 const TOPICS = Object.keys(FEEDBACK_TOPIC_LABELS) as FeedbackTopic[];
 const EXCERPT_LENGTH = 90;
 
-const NO_FILTERS = { status: '', topic: '', branchId: '', from: '', to: '' };
+const NO_FILTERS = { topic: '', branchId: '', from: '', to: '' };
 
 /** Một dòng gọn trong bảng; toàn văn nằm ở `title` và ở hộp thoại chi tiết. */
 function excerpt(text: string) {
@@ -76,10 +67,7 @@ export function AdminFeedbacksPage() {
   const [filters, setFilters] = useState(NO_FILTERS);
   const [page, setPage] = useState(0);
   const [selected, setSelected] = useState<number | null>(null);
-  const [notice, setNotice] = useState<Notice | null>(null);
-  const open = useOpenFeedback();
   const list = useFeedbackList({
-    status: (filters.status || undefined) as FeedbackStatus | undefined,
     topic: (filters.topic || undefined) as FeedbackTopic | undefined,
     branchId: chainWide && filters.branchId ? Number(filters.branchId) : undefined,
     from: filters.from || undefined,
@@ -98,42 +86,21 @@ export function AdminFeedbacksPage() {
     setPage(0);
   };
 
-  /** Mở chi tiết ghi dữ liệu (NEW → SEEN): bắn từ thao tác bấm, làm mới danh sách khi xong. */
-  const openFeedback = (feedbackId: number) => {
-    setNotice(null);
-    setSelected(feedbackId);
-    open.mutate(feedbackId);
-  };
-  const closeDetail = () => {
-    setSelected(null);
-    open.reset();
-  };
-
   return (
     <div className="space-y-6">
       <div>
         <h1 className="text-2xl font-semibold text-(--text-primary)">Góp ý của khách</h1>
         <p className="text-(--text-secondary)">
-          {chainWide
-            ? 'Góp ý của khách ở mọi chi nhánh, gồm cả góp ý về website. Mở một góp ý là đã xem; xử lý xong thì ghi chú và đánh dấu đã xử lý.'
-            : 'Góp ý của khách về chi nhánh của bạn. Mở một góp ý là đã xem; xử lý xong thì ghi chú và đánh dấu đã xử lý.'}
+          {chainWide ? 'Góp ý của khách ở mọi chi nhánh, gồm cả góp ý về website.' : 'Góp ý của khách về chi nhánh của bạn.'} Màn này chỉ để đọc.
+        </p>
+        <p className="mt-1 text-sm text-(--text-tertiary)">
+          Góp ý chỉ lưu trong thời hạn cấu hình (<code>feedback.retention_days</code>, mặc định 30 ngày); quá hạn hệ thống tự xóa, báo cáo
+          góp ý chỉ tính trong thời hạn đó.
         </p>
       </div>
 
       <Card className="card">
-        <CardContent className="grid grid-cols-2 items-end gap-3 p-4 sm:grid-cols-3 lg:grid-cols-6">
-          <Field label="Trạng thái">
-            {(id) => (
-              <select id={id} className={selectClass} value={filters.status} onChange={(e) => setFilter('status')(e.target.value)}>
-                <option value="">Mọi trạng thái</option>
-                {STATUSES.map((s) => (
-                  <option key={s} value={s}>
-                    {FEEDBACK_STATUS_LABELS[s]}
-                  </option>
-                ))}
-              </select>
-            )}
-          </Field>
+        <CardContent className="grid grid-cols-2 items-end gap-3 p-4 sm:grid-cols-3 lg:grid-cols-5">
           <Field label="Chủ đề">
             {(id) => (
               <select id={id} className={selectClass} value={filters.topic} onChange={(e) => setFilter('topic')(e.target.value)}>
@@ -164,8 +131,6 @@ export function AdminFeedbacksPage() {
           )}
         </CardContent>
       </Card>
-
-      <NoticeBar notice={notice} />
 
       <Card className="card">
         <CardContent className="overflow-hidden p-0">
@@ -208,12 +173,11 @@ export function AdminFeedbacksPage() {
                       <th>Chi nhánh</th>
                       <th>Điểm</th>
                       <th>Nội dung</th>
-                      <th className="whitespace-nowrap">Trạng thái</th>
                     </tr>
                   </thead>
                   <tbody>
                     {list.data.content.map((f) => (
-                      <tr key={f.feedbackId} onClick={() => openFeedback(f.feedbackId)} className="cursor-pointer">
+                      <tr key={f.feedbackId} onClick={() => setSelected(f.feedbackId)} className="cursor-pointer">
                         <td className="whitespace-nowrap text-xs! text-(--text-secondary)!">{formatFeedbackTime(f.createdAt)}</td>
                         <td className="min-w-28">
                           {/* Phần tử bàn phím vào được; bấm ở đâu trên dòng cũng mở (onClick của <tr>). */}
@@ -239,9 +203,6 @@ export function AdminFeedbacksPage() {
                         <td className="min-w-48 max-w-sm text-(--text-secondary)!">
                           <span title={f.content}>{excerpt(f.content)}</span>
                         </td>
-                        <td className="whitespace-nowrap">
-                          <StatusBadge status={FEEDBACK_STATUS_LABELS[f.status]} variant={FEEDBACK_STATUS_VARIANT[f.status]} />
-                        </td>
                       </tr>
                     ))}
                   </tbody>
@@ -253,17 +214,7 @@ export function AdminFeedbacksPage() {
         </CardContent>
       </Card>
 
-      {selected !== null && (
-        <FeedbackDetailModal
-          key={selected}
-          feedbackId={selected}
-          feedback={open.data}
-          error={open.error}
-          onRetry={() => open.mutate(selected)}
-          onClose={closeDetail}
-          onResolved={(f) => setNotice({ kind: 'success', text: `Đã đánh dấu xử lý góp ý #${f.feedbackId}` })}
-        />
-      )}
+      {selected !== null && <FeedbackDetailModal key={selected} feedbackId={selected} onClose={() => setSelected(null)} />}
     </div>
   );
 }

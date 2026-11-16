@@ -13,7 +13,7 @@ import org.springframework.transaction.annotation.Transactional;
 
 import com.petcare.module.shop.entity.CartItem;
 
-/** Bảng {@code cart_items}; mọi lệnh ghi chạy dưới khóa dòng {@code carts} của khách (docs/adr/0141). */
+/** Bảng {@code cart_items}; mọi lệnh ghi chạy dưới khóa dòng {@code carts} của khách (docs/adr/0143). */
 public interface CartItemRepository extends JpaRepository<CartItem, Long> {
 
     /** Các dòng của giỏ theo thứ tự thêm vào. */

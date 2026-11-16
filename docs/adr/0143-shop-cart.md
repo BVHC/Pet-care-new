@@ -1,6 +1,7 @@
-# ADR-0141: Module `shop`: giỏ hàng (task 116, BE-2)
+# ADR-0143: Module `shop`: giỏ hàng (task 116, BE-2)
 
 - **Trạng thái:** Accepted (autopilot BE-2, 15/11/2026)
+- **Đánh số lại:** 0141 → 0143 (autopilot BE-2, 17/11/2026) vì 0141 đã dùng cho ADR AI trên dev.
 - **Ngày:** 2026-11-15
 - **Liên quan:** `docs/08-tang3-be2-spec.md` §B (BR-BH-07, BR-SP-01, A2), `docs/api/shop-v1.md` (`getMyCart`, `setCartItem`, `removeCartItem`, `clearMyCart`), `V44__online_orders_and_carts.sql` (`carts`, `cart_items`), ADR-0006, ADR-0040, ADR-0137, ADR-0140, `docs/06-module-contracts.md` §6b hàng 23, `docs/superpowers/specs/2026-11-15-task116-cart-design.md`.
 - **Triển khai:** `com.petcare.module.shop` (controller / service / repository / entity / dto / mapper); `StockQueryApi.findChainAvailableQuantity` (inventory); `CatalogQueryApi.findProductSaleDisplay` (catalog). Không migration (V44 đã có hai bảng).

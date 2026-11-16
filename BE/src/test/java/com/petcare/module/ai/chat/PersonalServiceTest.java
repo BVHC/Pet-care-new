@@ -36,7 +36,7 @@ import com.petcare.module.identity.api.ConfigKey;
 import com.petcare.module.identity.api.SystemConfigApi;
 
 /**
- * Trả lời cá nhân bằng mẫu (BR-AI-27, ADR-0132) với các {@code *QueryApi} giả. I-10 đã lọc {@code >= now} trong SQL, nên
+ * Trả lời cá nhân bằng mẫu (BR-AI-27, ADR-0142) với các {@code *QueryApi} giả. I-10 đã lọc {@code >= now} trong SQL, nên
  * lọc lại ở module {@code ai} chỉ kiểm được ở đây (lớp giả trả cả lịch đã quá giờ): đây là test duy nhất giữ lọc đó.
  */
 class PersonalServiceTest {

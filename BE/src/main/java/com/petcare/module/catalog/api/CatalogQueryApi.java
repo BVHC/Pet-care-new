@@ -109,7 +109,7 @@ public interface CatalogQueryApi {
     record ProductSaleDisplay(String unit, String imageUrl) {}
 
     /**
-     * Thêm 2026-11-15 bởi BE-2 (task 116, docs/adr/0141): {@link ProductInfo} không mang đơn vị và ảnh. Đọc theo lô, id không
+     * Thêm 2026-11-15 bởi BE-2 (task 116, docs/adr/0143): {@link ProductInfo} không mang đơn vị và ảnh. Đọc theo lô, id không
      * tồn tại thì vắng mặt; tập rỗng → map rỗng, không chạy SQL. Chỉ thêm method (không đổi record hay chữ ký nào).
      */
     Map<Long, ProductSaleDisplay> findProductSaleDisplay(Collection<Long> productIds);

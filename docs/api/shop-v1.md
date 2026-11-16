@@ -1,6 +1,6 @@
 # Online Shop API v1 (tầng 3) — Pet Care v16
 
-> **Module:** BH (thương mại điện tử) · **Owner:** BE-2. Giỏ hàng, đặt hàng online, theo dõi / hủy / xác nhận đã nhận của khách và xử lý, giao đơn của lễ tân. **Đặc tả bổ sung GĐ2, đã duyệt ở T54 (Hiến, 5/11/2026). Đã cài (task 116, ADR-0141): giỏ hàng `getMyCart`, `setCartItem`, `removeCartItem`, `clearMyCart`; chưa cài: đặt hàng, theo dõi, xử lý và giao đơn.** Thanh toán ở payment-v1, trả hàng và hoàn tiền ở returns-v1.
+> **Module:** BH (thương mại điện tử) · **Owner:** BE-2. Giỏ hàng, đặt hàng online, theo dõi / hủy / xác nhận đã nhận của khách và xử lý, giao đơn của lễ tân. **Đặc tả bổ sung GĐ2, đã duyệt ở T54 (Hiến, 5/11/2026). Đã cài (task 116, ADR-0143): giỏ hàng `getMyCart`, `setCartItem`, `removeCartItem`, `clearMyCart`; chưa cài: đặt hàng, theo dõi, xử lý và giao đơn.** Thanh toán ở payment-v1, trả hàng và hoàn tiền ở returns-v1.
 > **Nguồn chân lý:** 01 UC61, UC62, UC64, UC65, ST09, ST10, ST12; 08-tang3-be2-spec.md §B (BR-BH-07…12; 03 #14 Đơn hàng online, Order#11–13); 05 bổ sung carts, cart_items, online_orders, stock_reservations.
 > **Contract máy đọc:** [`./openapi/shop-v1.yaml`](./openapi/shop-v1.yaml) — sinh cùng lúc với file này nên luôn khớp.
 

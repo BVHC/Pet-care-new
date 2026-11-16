@@ -56,7 +56,7 @@ import io.micrometer.core.instrument.Counter;
 import io.micrometer.core.instrument.MeterRegistry;
 
 /**
- * Hỏi đáp chatbot công khai (ai-v1 #1; 07 §5.1, §5.2, §14.3; docs/adr/0131) trên Postgres + pgvector thật, qua HTTP,
+ * Hỏi đáp chatbot công khai (ai-v1 #1; 07 §5.1, §5.2, §14.3; docs/adr/0141) trên Postgres + pgvector thật, qua HTTP,
  * với embedding và LLM giả (CI không gọi mạng). Truy hồi đi qua {@link ChunkRetriever} thật, không phải bản SQL riêng của
  * test: chỉ lấy {@code PUBLISHED} ở đúng {@code indexed_version}, lưu trữ có hiệu lực ngay khi commit, hoán đổi phiên
  * bản của ST22 không để khoảng trống (BR-AI-04, BR-AI-16). Giới hạn tần suất (BR-AI-09) do {@code RateLimitIT} lo.
@@ -424,7 +424,7 @@ class ChatIT {
 
         assertThat(columns).containsExactlyInAnyOrder("id", "result", "error_kind", "question", "answer",
                 "top_similarity", "source_document_ids", "llm_model", "input_tokens", "output_tokens", "thought_tokens",
-                "latency_ms", "created_at", "source_type");
+                "latency_ms", "created_at", "source_type", "used_pet_context", "intent");
     }
 
     // ================================================================ kiến thức chung có kiểm soát (BR-AI-33, V52)

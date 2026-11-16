@@ -15,7 +15,7 @@ import lombok.NoArgsConstructor;
 /**
  * Bảng {@code carts} (ROOT, V44): giỏ hàng của một khách, tạo lười ở lần ghi đầu tiên bằng
  * {@code INSERT … ON CONFLICT DO NOTHING} ({@link com.petcare.module.shop.repository.CartRepository#insertIfAbsent}),
- * nên entity chỉ để đọc (BR-BH-07, docs/adr/0141).
+ * nên entity chỉ để đọc (BR-BH-07, docs/adr/0143).
  */
 @Getter
 @Entity

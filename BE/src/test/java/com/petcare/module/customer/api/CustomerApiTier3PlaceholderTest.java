@@ -34,8 +34,9 @@ class CustomerApiTier3PlaceholderTest {
     @Test
     void petProfileKnowsWhetherThePetIsDeceased() {
         PetQueryApi.PetProfile alive = new PetQueryApi.PetProfile(1L, 2L, Species.DOG, "Poodle", LocalDate.of(2020, 1, 1),
-                BigDecimal.valueOf(4.5), null);
-        PetQueryApi.PetProfile gone = new PetQueryApi.PetProfile(1L, 2L, Species.CAT, null, null, null, LocalDate.of(2026, 10, 1));
+                BigDecimal.valueOf(4.5), null, Sex.MALE, true);
+        PetQueryApi.PetProfile gone = new PetQueryApi.PetProfile(1L, 2L, Species.CAT, null, null, null, LocalDate.of(2026, 10, 1),
+                Sex.UNKNOWN, null);
 
         assertThat(alive.deceased()).isFalse();
         assertThat(gone.deceased()).isTrue();

@@ -40,6 +40,13 @@ public class GeminiClient implements LlmClient, EmbeddingClient {
             "type", "OBJECT",
             "properties", Map.of("inScope", Map.of("type", "BOOLEAN"), "answer", Map.of("type", "STRING")),
             "required", List.of("inScope", "answer"));
+    /** Lược đồ của chế độ mở (docs/adr/0136 D2): nhóm là enum nên mô hình không bịa nhóm; vẫn parse an toàn ở {@link AnswerCategory#parse}. */
+    private static final Map<String, Object> CATEGORY_SCHEMA = Map.of(
+            "type", "OBJECT",
+            "properties", Map.of("category", Map.of("type", "STRING",
+                    "enum", java.util.Arrays.stream(AnswerCategory.values()).map(Enum::name).toList()),
+                    "answer", Map.of("type", "STRING")),
+            "required", List.of("category", "answer"));
 
     private final AiProperties props;
     private final SystemConfigApi config;
@@ -94,31 +101,54 @@ public class GeminiClient implements LlmClient, EmbeddingClient {
 
     @Override
     public LlmAnswer generate(String systemPrompt, String userBlock) {
+        JsonNode response = generateContent(systemPrompt, userBlock, ANSWER_SCHEMA);
+        JsonNode parsed = parsedAnswer(response);
+        if (!parsed.path("inScope").isBoolean() || !parsed.path("answer").isTextual()) {
+            throw providerError("JSON thiếu inScope / answer (finishReason=" + finishReason(response) + ")");
+        }
+        JsonNode usage = response.path("usageMetadata");
+        return new LlmAnswer(parsed.get("inScope").asBoolean(), parsed.get("answer").asText(), token(usage, "promptTokenCount"),
+                token(usage, "candidatesTokenCount"), token(usage, "thoughtsTokenCount"));
+    }
+
+    @Override
+    public LlmAnswer generateCategorized(String systemPrompt, String userBlock) {
+        JsonNode response = generateContent(systemPrompt, userBlock, CATEGORY_SCHEMA);
+        JsonNode parsed = parsedAnswer(response);
+        if (!parsed.path("category").isTextual() || !parsed.path("answer").isTextual()) {
+            throw providerError("JSON thiếu category / answer (finishReason=" + finishReason(response) + ")");
+        }
+        AnswerCategory category = AnswerCategory.parse(parsed.get("category").asText());
+        JsonNode usage = response.path("usageMetadata");
+        return new LlmAnswer(category == AnswerCategory.PET_CARE || category == AnswerCategory.OUT_OF_DOMAIN,
+                parsed.get("answer").asText(), token(usage, "promptTokenCount"), token(usage, "candidatesTokenCount"),
+                token(usage, "thoughtsTokenCount"), category);
+    }
+
+    private JsonNode generateContent(String systemPrompt, String userBlock, Map<String, Object> schema) {
         Map<String, Object> generation = new LinkedHashMap<>();
         generation.put("temperature", 0.2);
         generation.put("maxOutputTokens", 600);
         generation.put("thinkingConfig", Map.of("thinkingBudget", 0));
         generation.put("responseMimeType", "application/json");
-        generation.put("responseSchema", ANSWER_SCHEMA);
+        generation.put("responseSchema", schema);
         Map<String, Object> body = new LinkedHashMap<>();
         body.put("systemInstruction", Map.of("parts", List.of(Map.of("text", systemPrompt))));
         body.put("contents", List.of(Map.of("role", "user", "parts", List.of(Map.of("text", userBlock)))));
         body.put("generationConfig", generation);
+        return post(props.llmModel(), "generateContent", body);
+    }
 
-        JsonNode response = post(props.llmModel(), "generateContent", body);
-        JsonNode candidate = response.path("candidates").path(0);
-        JsonNode parsed;
+    private static JsonNode parsedAnswer(JsonNode response) {
         try {
-            parsed = JSON.readTree(candidate.path("content").path("parts").path(0).path("text").asText(""));
+            return JSON.readTree(response.path("candidates").path(0).path("content").path("parts").path(0).path("text").asText(""));
         } catch (java.io.IOException e) {
-            throw providerError("Câu trả lời không phải JSON (finishReason=" + candidate.path("finishReason").asText("?") + ")");
+            throw providerError("Câu trả lời không phải JSON (finishReason=" + finishReason(response) + ")");
         }
-        if (!parsed.path("inScope").isBoolean() || !parsed.path("answer").isTextual()) {
-            throw providerError("JSON thiếu inScope / answer (finishReason=" + candidate.path("finishReason").asText("?") + ")");
-        }
-        JsonNode usage = response.path("usageMetadata");
-        return new LlmAnswer(parsed.get("inScope").asBoolean(), parsed.get("answer").asText(), token(usage, "promptTokenCount"),
-                token(usage, "candidatesTokenCount"), token(usage, "thoughtsTokenCount"));
+    }
+
+    private static String finishReason(JsonNode response) {
+        return response.path("candidates").path(0).path("finishReason").asText("?");
     }
 
     private Map<String, Object> embedRequest(String text, String taskType) {

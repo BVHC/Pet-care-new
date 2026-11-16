@@ -9,7 +9,7 @@ import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.CsvSource;
 
 /**
- * Che tên thú ở {@code /me} (BR-AI-12b, ADR-0122, ADR-0132): cùng một quy tắc khớp với bước nhận ý định (BR-AI-26), nên
+ * Che tên thú ở {@code /me} (BR-AI-12b, ADR-0122, ADR-0142): cùng một quy tắc khớp với bước nhận ý định (BR-AI-26), nên
  * thứ router coi là "đã nhắc tên thú" thì cũng bị che, không sót, không che thừa.
  */
 class PetNameMaskingTest {

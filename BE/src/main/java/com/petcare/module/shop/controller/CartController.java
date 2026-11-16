@@ -22,7 +22,7 @@ import io.swagger.v3.oas.annotations.Parameter;
 import io.swagger.v3.oas.annotations.enums.ParameterIn;
 import jakarta.validation.Valid;
 
-/** Giỏ hàng của tôi, shop-v1 (tag Cart; UC61, BR-BH-07; docs/adr/0141). Chỉ CUSTOMER, chỉ giỏ của chính mình. */
+/** Giỏ hàng của tôi, shop-v1 (tag Cart; UC61, BR-BH-07; docs/adr/0143). Chỉ CUSTOMER, chỉ giỏ của chính mình. */
 @RestController
 @RequestMapping("/api/me/cart")
 public class CartController {

@@ -20,7 +20,7 @@ public interface StockQueryApi {
 
     /**
      * Tồn khả dụng <b>toàn chuỗi</b> (mọi chi nhánh, không xét trạng thái chi nhánh) của nhiều sản phẩm một lần, một câu SQL:
-     * tổng các lô chưa hết hạn trừ tổng phần đang giữ {@code HELD}, không âm. Thêm 2026-11-15 (task 116, docs/adr/0141) cho cờ
+     * tổng các lô chưa hết hạn trừ tổng phần đang giữ {@code HELD}, không âm. Thêm 2026-11-15 (task 116, docs/adr/0143) cho cờ
      * {@code available} của giỏ hàng. Key đủ mọi id (không có lô → 0); tập rỗng → map rỗng, không chạm DB.
      */
     Map<Long, Long> findChainAvailableQuantity(Collection<Long> productIds);

@@ -100,6 +100,8 @@ public enum ConfigKey {
     AI_LOG_RETENTION_DAYS("ai.log.retention_days", INT),                                 // BR-AI-24
     AI_CHAT_GENERAL_KNOWLEDGE_ENABLED("ai.chat.general_knowledge_enabled", BOOL),        // BR-AI-33 (V52, docs/adr/0136)
     AI_CHAT_BUSINESS_INTENT_ENABLED("ai.chat.business_intent_enabled", BOOL),            // BR-AI-31 (V53, docs/adr/0134)
+    AI_CHAT_PET_CONTEXT_ENABLED("ai.chat.pet_context_enabled", BOOL),                    // BR-AI-32 (V56, docs/adr/0135)
+    AI_CHAT_OPEN_DOMAIN_ENABLED("ai.chat.open_domain_enabled", BOOL),                    // BR-AI-33 chế độ mở (V57, docs/adr/0136)
 
     // BH online, TG online, trả hàng, bình luận (docs/08 §G, docs/adr/0117; V44, V45, V46, V48)
     SHOP_PAYMENT_WINDOW_HOURS("shop.payment_window_hours", INT),         // BR-BH-12

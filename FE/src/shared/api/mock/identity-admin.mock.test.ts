@@ -1076,8 +1076,28 @@ function deletedConfigKeys(sql: string): string[] {
   });
 }
 
-/** Cách làm đổi dữ liệu hai bảng mà bộ đọc không hiểu. DELETE trên system_configs không nằm ở đây: `deletedConfigKeys` đọc dạng `WHERE key =` và ném lỗi với dạng khác. */
-const UNREADABLE_SQL = /TRUNCATE(\s+TABLE)?\s+(system_configs|notification_templates)\b|DELETE\s+FROM\s+notification_templates\b|UPDATE\s+system_configs\b/i;
+/** `DELETE FROM notification_templates WHERE code IN ('…', …);` (V51) ra danh sách mã mẫu bị xóa. Dạng khác (không điều kiện, `code = …`, còn điều kiện sau danh sách) thì ném lỗi, không đoán. */
+function deletedTemplateCodes(sql: string): string[] {
+  const mentions = [...sql.matchAll(/DELETE\s+FROM\s+notification_templates\b/gi)].length;
+  const statements = [...sql.matchAll(/DELETE\s+FROM\s+notification_templates\s+WHERE\s+code\s+IN\s*\(/gi)];
+  if (statements.length !== mentions) throw new Error('DELETE FROM notification_templates không có dạng "WHERE code IN (…);"');
+  return statements.flatMap((statement) => {
+    const codes: string[] = [];
+    let i = statement.index! + statement[0].length;
+    for (;;) {
+      const { text, end } = readString(sql, skipSpace(sql, i));
+      codes.push(text);
+      i = skipSpace(sql, end);
+      if (sql[i] !== ',') break;
+      i += 1;
+    }
+    if (sql[i] !== ')' || !/^\s*;/.test(sql.slice(i + 1))) throw new Error(`DELETE FROM notification_templates WHERE code IN (…): danh sách không đóng bằng ");" sau '${codes[codes.length - 1]}'`);
+    return codes;
+  });
+}
+
+/** Cách làm đổi dữ liệu hai bảng mà bộ đọc không hiểu. DELETE trên hai bảng không nằm ở đây: `deletedConfigKeys` đọc dạng `WHERE key =`, `deletedTemplateCodes` đọc dạng `WHERE code IN (…)`, cả hai ném lỗi với dạng khác. */
+const UNREADABLE_SQL = /TRUNCATE(\s+TABLE)?\s+(system_configs|notification_templates)\b|UPDATE\s+system_configs\b/i;
 
 const byText = (a: string, b: string) => (a < b ? -1 : a > b ? 1 : 0); // thứ tự code-unit như `String.compareTo` của Java (BE IT khẳng định isSorted)
 const versionOf = (file: string) => Number(/^V(\d+)__/.exec(file)![1]);
@@ -1099,6 +1119,9 @@ function sqlSeed() {
       if (at < 0) throw new Error(`${file}: DELETE khóa ${key} nhưng chưa có khóa này`);
       configs.splice(at, 1);
     }
+    for (const code of deletedTemplateCodes(sql)) {
+      if (!templates.delete(code)) throw new Error(`${file}: DELETE mẫu ${code} nhưng chưa có mẫu này`);
+    }
     configs.push(...insertedRows(sql, 'system_configs'));
     for (const row of insertedRows(sql, 'notification_templates')) {
       if (templates.has(row.code as string)) throw new Error(`${file}: mẫu ${row.code} đã có`);
@@ -1106,12 +1129,8 @@ function sqlSeed() {
     }
     applyTemplateUpdates(sql, templates);
   }
-  // Mock không seed `complaint.*` và `COMPLAINT_*` (ADR-0122), nhưng V39 / V40 của BE còn INSERT chúng cho tới khi có V51 (DROP + DELETE);
-  // lọc ra để so đúng phần mock có. Khi V51 đến thì hai bộ lọc dưới thành no-op: xóa chúng.
-  return {
-    configs: configs.filter((r) => !String(r.key).startsWith('complaint.')),
-    templates: new Map([...templates].filter(([code]) => !code.startsWith('COMPLAINT_'))),
-  };
+  // `complaint.*` và `COMPLAINT_*` do V40 thêm đã bị V51 xóa (ADR-0122, 0131): bộ đọc áp DELETE ở trên nên không còn bộ lọc riêng.
+  return { configs, templates };
 }
 
 const CONFIG_FIELDS = ['key', 'value', 'valueType', 'minValue', 'maxValue', 'unit', 'description'];
@@ -1150,8 +1169,6 @@ describe('bộ đọc SQL của ca đối chiếu seed — DELETE trên system_c
   it.each([
     'TRUNCATE system_configs;',
     'TRUNCATE TABLE notification_templates;',
-    'DELETE FROM notification_templates;',
-    "DELETE FROM notification_templates WHERE code = 'X';",
     "UPDATE system_configs SET value = '1';",
   ])('lưới chặn vẫn cấm: %s', (sql) => {
     expect(sql).toMatch(UNREADABLE_SQL);
@@ -1162,10 +1179,33 @@ describe('bộ đọc SQL của ca đối chiếu seed — DELETE trên system_c
   });
 });
 
-describe('UC10 — tham số [CFG] seed khớp BE (V2, V27, V35, V40, V44, V45, V46, V48, V52, V53)', () => {
-  it.skipIf(!hasMigrations)('đúng 81 khóa, từng dòng giống hệt SQL (key, value, valueType, minValue, maxValue, unit, description), sắp theo key', async () => {
+describe('bộ đọc SQL của ca đối chiếu seed — DELETE trên notification_templates (V51)', () => {
+  it("đọc `DELETE FROM notification_templates WHERE code IN ('…', …);` ra mã bị xóa, kể cả xuống dòng giữa các mã; không có DELETE thì rỗng", () => {
+    expect(deletedTemplateCodes("DELETE FROM notification_templates WHERE code IN (\n    'A_ONE', 'B_TWO',\n    'C_THREE');\nINSERT INTO t (a) VALUES ('x');")).toEqual(['A_ONE', 'B_TWO', 'C_THREE']);
+    expect(deletedTemplateCodes("DELETE FROM notification_templates WHERE code IN ('A');")).toEqual(['A']);
+    expect(deletedTemplateCodes('SELECT 1;')).toEqual([]);
+  });
+
+  it.each([
+    ['không điều kiện', 'DELETE FROM notification_templates;'],
+    ['code = (một mã)', "DELETE FROM notification_templates WHERE code = 'X';"],
+    ['điều kiện không phải code IN', "DELETE FROM notification_templates WHERE channel = 'APP';"],
+    ['còn điều kiện sau danh sách', "DELETE FROM notification_templates WHERE code IN ('A', 'B') AND channel = 'APP';"],
+    ['danh sách không đóng', "DELETE FROM notification_templates WHERE code IN ('A', 'B';"],
+    ['phần tử không phải literal', "DELETE FROM notification_templates WHERE code IN ('A', B);"],
+  ])('từ chối DELETE %s: dừng, không đoán', (_, sql) => {
+    expect(() => deletedTemplateCodes(sql)).toThrow();
+  });
+
+  it('lưới chặn không còn cấm DELETE có `WHERE code IN (…)`; sqlSeed chỉ chấp nhận dạng đó qua deletedTemplateCodes', () => {
+    expect("DELETE FROM notification_templates WHERE code IN ('A');").not.toMatch(UNREADABLE_SQL);
+  });
+});
+
+describe('UC10 — tham số [CFG] seed khớp BE (V2, V27, V35, V40, V44, V45, V46, V48, V51, V52, V53, V56, V57)', () => {
+  it.skipIf(!hasMigrations)('đúng 84 khóa, từng dòng giống hệt SQL (key, value, valueType, minValue, maxValue, unit, description), sắp theo key', async () => {
     const expected = sqlConfigs();
-    expect(expected).toHaveLength(81); // = 87 hằng số ConfigKey của BE (52 của V2 + V27, 20 ai.* của V35 + V52 + V53, 8 của V40, 7 của V44…V48) trừ 6 complaint.* mà mock không seed (xem sqlSeed)
+    expect(expected).toHaveLength(84); // = 84 hằng số ConfigKey của BE: 52 của V2 + V27, 22 ai.* của V35 + V52 + V53 + V56 + V57, 2 workforce.* của V40 (6 complaint.* của V40 đã bị V51 xóa), 7 của V44…V48, feedback.retention_days của V51
     const rows = await getConfigs();
     expect(rows.map((r) => r.key)).toEqual(expected.map((r) => r.key));
     for (const [i, row] of rows.entries()) {
@@ -1177,7 +1217,8 @@ describe('UC10 — tham số [CFG] seed khớp BE (V2, V27, V35, V40, V44, V45, 
   it('dòng gõ tay theo V2 + V27 (+ V35, V40, V44…V48): khóa thật của BE có mặt, khóa bịa của bản mock cũ và khóa V27 đã xóa không còn', async () => {
     const rows = await getConfigs();
     const by = Object.fromEntries(rows.map((r) => [r.key, r]));
-    expect(rows).toHaveLength(81);
+    expect(rows).toHaveLength(84);
+    expect(by['feedback.retention_days']).toEqual({ key: 'feedback.retention_days', value: '30', valueType: 'INT', minValue: '7', maxValue: '365', unit: 'ngày', description: 'Số ngày giữ feedback kể từ lúc gửi; quá hạn thì ST24 xóa cứng (BR-DG-05)' }); // V51
     expect(by['otp.ttl_minutes']).toEqual({ key: 'otp.ttl_minutes', value: '5', valueType: 'INT', minValue: '1', maxValue: '15', unit: 'phút', description: 'Thời gian hiệu lực của mã OTP (BR-TK-05)' });
     expect(by['boarding.checkout_time']).toMatchObject({ value: '12:00', valueType: 'TIME', minValue: '06:00', maxValue: '22:00', unit: 'giờ' });
     expect(by['address.max_per_customer']).toMatchObject({ value: '5', minValue: '1', maxValue: '20', unit: 'địa chỉ' });
@@ -1192,12 +1233,14 @@ describe('UC10 — tham số [CFG] seed khớp BE (V2, V27, V35, V40, V44, V45, 
     const rows = await getConfigs();
     const by = Object.fromEntries(rows.map((r) => [r.key, r]));
     const prefixCount = (prefix: string) => rows.filter((r) => r.key.startsWith(prefix)).length;
-    expect([prefixCount('ai.'), prefixCount('complaint.'), prefixCount('workforce.'), prefixCount('shop.'), prefixCount('payment.'), prefixCount('returns.'), prefixCount('content.')]).toEqual([20, 0, 2, 3, 2, 1, 1]);
+    expect([prefixCount('ai.'), prefixCount('complaint.'), prefixCount('workforce.'), prefixCount('shop.'), prefixCount('payment.'), prefixCount('returns.'), prefixCount('content.')]).toEqual([22, 0, 2, 3, 2, 1, 1]);
     expect(rows.filter((r) => r.valueType === 'DECIMAL').map((r) => r.key)).toEqual(['ai.reco.weight_attr', 'ai.reco.weight_history', 'ai.reco.weight_popularity', 'ai.retrieval.min_similarity']);
-    expect(rows.filter((r) => r.valueType !== 'INT' && r.valueType !== 'DECIMAL').map((r) => r.key)).toEqual(['ai.chat.business_intent_enabled', 'ai.chat.general_knowledge_enabled', 'boarding.checkout_time']); // BOOL: hai công tắc V52 (T92) và V53 (T90); tầng 3 không thêm TIME
+    expect(rows.filter((r) => r.valueType !== 'INT' && r.valueType !== 'DECIMAL').map((r) => r.key)).toEqual(['ai.chat.business_intent_enabled', 'ai.chat.general_knowledge_enabled', 'ai.chat.open_domain_enabled', 'ai.chat.pet_context_enabled', 'boarding.checkout_time']); // BOOL: bốn công tắc V52 (T92), V53 (T90), V56 (T91) và V57 (T92 phần 2); tầng 3 không thêm TIME
     expect(by['ai.retrieval.min_similarity']).toEqual({ key: 'ai.retrieval.min_similarity', value: '0.6', valueType: 'DECIMAL', minValue: '0.3', maxValue: '0.9', unit: 'cosine', description: 'Ngưỡng độ tương đồng cosine tối thiểu để một đoạn được dùng; dưới ngưỡng thì ngoài phạm vi (BR-AI-04)' });
     expect(by['ai.chat.business_intent_enabled']).toMatchObject({ value: 'false', valueType: 'BOOL', minValue: 'false', maxValue: 'true', unit: 'bật/tắt' }); // mặc định tắt (BR-AI-31)
     expect(by['ai.chat.general_knowledge_enabled']).toMatchObject({ value: 'false', valueType: 'BOOL', minValue: 'false', maxValue: 'true', unit: 'bật/tắt' }); // mặc định tắt (BR-AI-33)
+    expect(by['ai.chat.open_domain_enabled']).toMatchObject({ value: 'false', valueType: 'BOOL', minValue: 'false', maxValue: 'true', unit: 'bật/tắt' }); // mặc định tắt, chế độ mở chỉ có tác dụng khi kiến thức chung bật (BR-AI-33, V57)
+    expect(by['ai.chat.pet_context_enabled']).toMatchObject({ value: 'false', valueType: 'BOOL', minValue: 'false', maxValue: 'true', unit: 'bật/tắt' }); // mặc định tắt, chỉ bật sau khi xác minh điều khoản dữ liệu (BR-AI-32)
     expect(by['ai.reco.weight_attr']).toMatchObject({ value: '0.5', minValue: '0', maxValue: '1', unit: 'trọng số' });
     expect(by['ai.chat.max_question_chars']).toMatchObject({ value: '500', valueType: 'INT', minValue: '100', maxValue: '2000', unit: 'ký tự' });
     expect(by['ai.reco.senior_age_years_cat']).toMatchObject({ value: '10', minValue: '5', maxValue: '15', unit: 'năm' });

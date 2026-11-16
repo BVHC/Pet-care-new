@@ -7,8 +7,8 @@ import { MOCK_PASSWORD } from './identity.mock';
 import { installMockApi } from './mock-api';
 
 // Dữ liệu mẫu (feedback.mock.ts), đồng hồ ghim ở thứ Ba 27/10/2026 10:00 giờ Việt Nam. Mọi feedback mẫu tạo trước 00:00 hôm nay (giờ VN):
-// #1 khách 1, chi nhánh 1, RESOLVED (bởi #3) · #2 khách 1, WEBSITE không chi nhánh, SEEN · #3 khách 1, chi nhánh 1, NEW ·
-// #4 khách 3, chi nhánh 1, SEEN · #5 khách 4, OTHER không chi nhánh, NEW · #6 khách 4, chi nhánh 1, RESOLVED (bởi #2).
+// #1 khách 1, chi nhánh 1 · #2 khách 1, WEBSITE không chi nhánh · #3 khách 1, chi nhánh 1 ·
+// #4 khách 3, chi nhánh 1 · #5 khách 4, OTHER không chi nhánh · #6 khách 4, chi nhánh 1. Feedback không có trạng thái (ADR-0122, V55).
 // createdAt giảm dần: #3, #5, #4, #2, #6, #1. Chi nhánh ACTIVE duy nhất: 1 (2 và 3 là DRAFT). Khách 7 = khach@, 10 = khachmoi@ (khách 2, chờ liên kết).
 const TUE_10 = '2026-10-27T10:00:00+07:00';
 const setNow = (iso: string) => vi.setSystemTime(new Date(iso));
@@ -60,8 +60,6 @@ const mine = async (who: Who) => (await client.get('/api/me/feedbacks', who)).da
 const listOf = (who: Who, params: Record<string, unknown> = {}) => client.get('/api/feedbacks', { params, ...who });
 const idsOf = (res: AxiosResponse) => (res.data.data.content as { feedbackId: number }[]).map((f) => f.feedbackId);
 const open = (who: Who, id: number | string) => client.get(`/api/feedbacks/${id}`, who);
-const resolve = (who: Who, id: number | string, body: unknown = { resolutionNote: 'Đã gọi lại khách xin lỗi.' }) =>
-  client.post(`/api/feedbacks/${id}/resolve`, body, who);
 
 /** Bản ghi đầy đủ cho test ghi thẳng state (bỏ dữ liệu mẫu). */
 const rec = (r: Partial<FeedbackRecord> & { feedbackId: number }): FeedbackRecord => ({
@@ -70,33 +68,23 @@ const rec = (r: Partial<FeedbackRecord> & { feedbackId: number }): FeedbackRecor
   branchId: null,
   rating: null,
   content: 'Góp ý đủ dài để hợp lệ.',
-  status: 'NEW',
-  seenAt: null,
-  resolvedBy: null,
-  resolvedAt: null,
-  resolutionNote: null,
   createdAt: '2026-10-20T03:00:00.000Z',
   ...r,
 });
 const inject = (records: FeedbackRecord[]) => localStorage.setItem(FEEDBACK_STATE_KEY, JSON.stringify({ feedbacks: records }));
 const stored = () => JSON.parse(localStorage.getItem(FEEDBACK_STATE_KEY)!) as { feedbacks: FeedbackRecord[] };
 
-const MY_KEYS = ['branchId', 'content', 'createdAt', 'feedbackId', 'rating', 'status', 'topic'];
-const FULL_KEYS = [
-  'branchId', 'branchName', 'content', 'createdAt', 'customerId', 'customerName', 'feedbackId', 'rating', 'resolutionNote', 'resolvedAt',
-  'resolvedBy', 'seenAt', 'status', 'topic',
-];
+const MY_KEYS = ['branchId', 'content', 'createdAt', 'feedbackId', 'rating', 'topic'];
+const FULL_KEYS = ['branchId', 'branchName', 'content', 'createdAt', 'customerId', 'customerName', 'feedbackId', 'rating', 'topic'];
+const GONE_KEYS = ['status', 'seenAt', 'resolvedBy', 'resolvedAt', 'resolutionNote'];
 
 describe('dữ liệu mẫu', () => {
-  it('6 feedback đủ NEW / SEEN / RESOLVED, có WEBSITE và OTHER không gắn chi nhánh, tạo trước 00:00 hôm nay giờ VN', async () => {
+  it('6 feedback, có WEBSITE và OTHER không gắn chi nhánh, tạo trước 00:00 hôm nay giờ VN', async () => {
     const res = await listOf(await chain());
     expect(res.data.data).toMatchObject({ page: 0, size: 20, totalElements: 6, totalPages: 1 });
     expect(idsOf(res)).toEqual([3, 5, 4, 2, 6, 1]);
-    const all = res.data.data.content as { feedbackId: number; status: string; topic: string; branchId: number | null; customerId: number; createdAt: string }[];
+    const all = res.data.data.content as { feedbackId: number; topic: string; branchId: number | null; customerId: number; createdAt: string }[];
     const byId = (id: number) => all.find((f) => f.feedbackId === id)!;
-    expect(all.filter((f) => f.status === 'NEW').map((f) => f.feedbackId)).toEqual([3, 5]);
-    expect(all.filter((f) => f.status === 'SEEN').map((f) => f.feedbackId)).toEqual([4, 2]);
-    expect(all.filter((f) => f.status === 'RESOLVED').map((f) => f.feedbackId)).toEqual([6, 1]);
     expect(byId(2)).toMatchObject({ topic: 'WEBSITE', branchId: null });
     expect(byId(5)).toMatchObject({ topic: 'OTHER', branchId: null });
     // Khách 2 (khachmoi@) đang chờ quyết định liên kết nên không thể có feedback; chỉ khách 1, 3, 4.
@@ -112,17 +100,14 @@ describe('dữ liệu mẫu', () => {
     expect(after).toEqual(before);
   });
 
-  it('feedback RESOLVED mẫu có người xử lý, lúc xử lý và ghi chú nội bộ; SEEN có seenAt', async () => {
-    const resolved = (await open(await chain(), 1)).data.data;
-    expect(resolved).toMatchObject({ status: 'RESOLVED', resolvedBy: 3 });
-    expect(resolved.resolutionNote).toEqual(expect.stringContaining('ghi chú nội bộ'));
-    expect(Date.parse(resolved.resolvedAt)).toBeGreaterThan(Date.parse(resolved.seenAt));
-    expect((await open(await chain(), 2)).data.data.seenAt).toEqual(expect.any(String));
+  it('bản ghi mẫu không mang trường trạng thái hay xử lý (V55 đã bỏ 5 cột)', async () => {
+    const json = JSON.stringify((await listOf(await chain())).data.data);
+    for (const gone of GONE_KEYS) expect(json).not.toContain(`"${gone}"`);
   });
 });
 
 describe('POST /api/me/feedbacks (#18, UC83; BR-DG-01, BR-TK-19)', () => {
-  it('201, trả MyFeedback (đúng 7 trường) trạng thái NEW, createdAt là bây giờ', async () => {
+  it('201, trả MyFeedback (đúng 6 trường, không có trạng thái), createdAt là bây giờ', async () => {
     const res = await submit(await customer(), { ...BODY, rating: 5 });
     expect(res.status).toBe(201);
     expect(Object.keys(res.data.data).sort()).toEqual(MY_KEYS);
@@ -132,7 +117,6 @@ describe('POST /api/me/feedbacks (#18, UC83; BR-DG-01, BR-TK-19)', () => {
       branchId: null,
       rating: 5,
       content: BODY.content,
-      status: 'NEW',
       createdAt: '2026-10-27T03:00:00.000Z',
     });
   });
@@ -333,34 +317,22 @@ describe('POST /api/me/feedbacks (#18, UC83; BR-DG-01, BR-TK-19)', () => {
       expect(findCustomer(2)!.hasData).toBe(true);
     });
 
-    it('SUPER_MANAGER thấy ngay feedback vừa gửi ở đầu danh sách, trạng thái NEW, kèm tên khách', async () => {
+    it('SUPER_MANAGER thấy ngay feedback vừa gửi ở đầu danh sách, kèm tên khách', async () => {
       await submit(await customer(), { topic: 'BRANCH_SERVICE', branchId: 1, content: BODY.content, rating: 4 });
       const res = await listOf(await chain());
       expect(idsOf(res)[0]).toBe(7);
-      expect(res.data.data.content[0]).toMatchObject({ customerName: 'Nguyễn Thu Trang', branchName: 'PetCare Cầu Giấy', status: 'NEW', seenAt: null });
+      expect(res.data.data.content[0]).toMatchObject({ customerName: 'Nguyễn Thu Trang', branchName: 'PetCare Cầu Giấy' });
     });
   });
 });
 
 describe('GET /api/me/feedbacks (#19)', () => {
-  it('mảng (không phân trang) của riêng tôi, mới nhất trước, chỉ 7 trường của MyFeedback', async () => {
+  it('mảng (không phân trang) của riêng tôi, mới nhất trước, chỉ 6 trường của MyFeedback', async () => {
     const res = await client.get('/api/me/feedbacks', await customer());
     expect(res.status).toBe(200);
     expect(Array.isArray(res.data.data)).toBe(true);
     expect((res.data.data as { feedbackId: number }[]).map((f) => f.feedbackId)).toEqual([3, 2, 1]);
     for (const item of res.data.data) expect(Object.keys(item).sort()).toEqual(MY_KEYS);
-  });
-
-  it('không lộ ghi chú nội bộ dù feedback đã RESOLVED, kể cả sau khi quản lý vừa xử lý', async () => {
-    const who = await customer();
-    const note = (await open(await chain(), 1)).data.data.resolutionNote as string;
-    expect(JSON.stringify(await mine(who))).not.toContain(note);
-    await open(await manager(), 3);
-    await resolve(await manager(), 3, { resolutionNote: 'Ghi chú nội bộ mới, khách không được thấy.' });
-    const list = await mine(who);
-    expect(list.find((f) => f.feedbackId === 3)!.status).toBe('RESOLVED');
-    expect(JSON.stringify(list)).not.toContain('khách không được thấy');
-    expect(JSON.stringify(list)).not.toContain('resolutionNote');
   });
 
   it('feedback vừa gửi lên đầu; trong cùng một thời điểm ghim thì mã lớn hơn đứng trước (createdAt DESC, id DESC)', async () => {
@@ -402,12 +374,12 @@ describe('GET /api/me/feedbacks (#19)', () => {
 });
 
 describe('GET /api/feedbacks (#20, UC84; BR-DG-02, 03)', () => {
-  it('SUPER_MANAGER thấy tất cả, createdAt mới nhất trước, đủ 14 trường kèm tên khách và tên chi nhánh', async () => {
+  it('SUPER_MANAGER thấy tất cả, createdAt mới nhất trước, đủ 9 trường kèm tên khách và tên chi nhánh, không có trạng thái', async () => {
     const res = await listOf(await chain());
     expect(idsOf(res)).toEqual([3, 5, 4, 2, 6, 1]);
     for (const item of res.data.data.content) expect(Object.keys(item).sort()).toEqual(FULL_KEYS);
     const [first] = res.data.data.content;
-    expect(first).toMatchObject({ customerId: 1, customerName: 'Nguyễn Thu Trang', branchId: 1, branchName: 'PetCare Cầu Giấy', status: 'NEW', resolutionNote: null });
+    expect(first).toMatchObject({ customerId: 1, customerName: 'Nguyễn Thu Trang', branchId: 1, branchName: 'PetCare Cầu Giấy' });
     expect(res.data.data.content[1]).toMatchObject({ feedbackId: 5, branchId: null, branchName: null, rating: null });
   });
 
@@ -445,15 +417,18 @@ describe('GET /api/feedbacks (#20, UC84; BR-DG-02, 03)', () => {
   });
 
   describe('bộ lọc', () => {
-    it('theo trạng thái, chủ đề và kết hợp', async () => {
+    it('theo chủ đề và kết hợp với chi nhánh', async () => {
       const who = await chain();
-      expect(idsOf(await listOf(who, { status: 'NEW' }))).toEqual([3, 5]);
-      expect(idsOf(await listOf(who, { status: 'SEEN' }))).toEqual([4, 2]);
-      expect(idsOf(await listOf(who, { status: 'RESOLVED' }))).toEqual([6, 1]);
       expect(idsOf(await listOf(who, { topic: 'WEBSITE' }))).toEqual([2]);
       expect(idsOf(await listOf(who, { topic: 'OTHER' }))).toEqual([5]);
       expect(idsOf(await listOf(who, { topic: 'BRANCH_SERVICE' }))).toEqual([3, 4, 6, 1]);
-      expect(idsOf(await listOf(who, { topic: 'BRANCH_SERVICE', status: 'SEEN', branchId: 1 }))).toEqual([4]);
+      expect(idsOf(await listOf(who, { topic: 'BRANCH_SERVICE', branchId: 1 }))).toEqual([3, 4, 6, 1]);
+      expect(idsOf(await listOf(who, { topic: 'WEBSITE', branchId: 1 }))).toEqual([]);
+    });
+
+    it('tham số status của bản cũ bị bỏ qua như BE: 200, trả đủ, không lọc, không 400', async () => {
+      const who = await chain();
+      for (const status of ['NEW', 'SEEN', 'RESOLVED', 'NOPE']) expect(idsOf(await listOf(who, { status }))).toEqual([3, 5, 4, 2, 6, 1]);
     });
 
     it('from / to là ngày giờ Việt Nam, gồm cả hai đầu: 23:59:59 VN còn thuộc ngày đó, 00:00:00 VN thuộc ngày sau', async () => {
@@ -486,7 +461,6 @@ describe('GET /api/feedbacks (#20, UC84; BR-DG-02, 03)', () => {
   describe('lỗi tham số (400, đến trước vai trò)', () => {
     it.each([
       ['branchId', 'abc'],
-      ['status', 'NOPE'],
       ['topic', 'LA'],
       ['from', '2026/10/01'],
       ['from', '2026-02-30'],
@@ -502,8 +476,8 @@ describe('GET /api/feedbacks (#20, UC84; BR-DG-02, 03)', () => {
       expectFail(await failure(listOf(await chain(), { branchId })), 400, 'VALIDATION_FAILED', 'branchId: branchId phải là số dương');
     });
 
-    it('lỗi kiểu đến trước vai trò: lễ tân gửi status=NOPE nhận 400; gửi query đúng nhận 403', async () => {
-      expectFail(await failure(listOf(await desk(), { status: 'NOPE' })), 400, 'MALFORMED_REQUEST');
+    it('lỗi kiểu đến trước vai trò: lễ tân gửi topic=LA nhận 400; gửi query đúng nhận 403', async () => {
+      expectFail(await failure(listOf(await desk(), { topic: 'LA' })), 400, 'MALFORMED_REQUEST');
       expectFail(await failure(listOf(await desk())), 403, 'ACCESS_DENIED');
     });
   });
@@ -542,34 +516,20 @@ describe('GET /api/feedbacks (#20, UC84; BR-DG-02, 03)', () => {
   });
 });
 
-describe('GET /api/feedbacks/:feedbackId (#21; BR-DG-03, 04, A2: mở lần đầu NEW → SEEN)', () => {
-  it('mở feedback NEW: SEEN, ghi seenAt là bây giờ; danh sách cũng đổi', async () => {
-    const who = await manager();
-    expect(idsOf(await listOf(who, { status: 'NEW' }))).toEqual([3]);
-    const res = await open(who, 3);
+describe('GET /api/feedbacks/:feedbackId (#21; BR-DG-03): chỉ đọc, không đổi gì', () => {
+  it('200, đúng 9 trường kèm tên khách và tên chi nhánh; không ghi state (không còn NEW → SEEN)', async () => {
+    const res = await open(await manager(), 3);
     expect(res.status).toBe(200);
     expect(Object.keys(res.data.data).sort()).toEqual(FULL_KEYS);
-    expect(res.data.data).toMatchObject({ feedbackId: 3, status: 'SEEN', seenAt: '2026-10-27T03:00:00.000Z', customerName: 'Nguyễn Thu Trang', branchName: 'PetCare Cầu Giấy' });
-    expect(idsOf(await listOf(who, { status: 'NEW' }))).toEqual([]);
-    expect((await listOf(who)).data.data.content.find((f: { feedbackId: number }) => f.feedbackId === 3).status).toBe('SEEN');
+    expect(res.data.data).toMatchObject({ feedbackId: 3, customerName: 'Nguyễn Thu Trang', branchName: 'PetCare Cầu Giấy' });
+    expect(localStorage.getItem(FEEDBACK_STATE_KEY)).toBeNull();
   });
 
-  it('mở lại (kể cả người khác, sau nhiều phút) không đổi seenAt', async () => {
-    await open(await manager(), 3);
+  it('mở nhiều lần, bởi nhiều người, ở nhiều thời điểm: luôn cùng một kết quả', async () => {
+    const first = (await open(await manager(), 3)).data.data;
     setNow('2026-10-27T10:05:00+07:00');
-    const again = await open(await chain(), 3);
-    expect(again.data.data).toMatchObject({ status: 'SEEN', seenAt: '2026-10-27T03:00:00.000Z' });
-  });
-
-  it('mở feedback SEEN hoặc RESOLVED không ghi gì: state nguyên văn, seenAt giữ như cũ', async () => {
-    const who = await chain();
-    await open(who, 3); // ghi state lần đầu
-    const seenBefore = (await listOf(who)).data.data.content.find((f: { feedbackId: number }) => f.feedbackId === 4).seenAt;
-    const stateBefore = localStorage.getItem(FEEDBACK_STATE_KEY);
-    setNow('2026-10-27T11:00:00+07:00');
-    expect((await open(who, 4)).data.data.seenAt).toBe(seenBefore); // SEEN mẫu
-    await open(who, 1); // RESOLVED mẫu
-    expect(localStorage.getItem(FEEDBACK_STATE_KEY)).toBe(stateBefore);
+    expect((await open(await chain(), 3)).data.data).toEqual(first);
+    expect((await open(await manager(), 3)).data.data).toEqual(first);
   });
 
   it('404 khi không có; id không phải số: 400 MALFORMED_REQUEST', async () => {
@@ -578,17 +538,16 @@ describe('GET /api/feedbacks/:feedbackId (#21; BR-DG-03, 04, A2: mở lần đ�
     expectFail(await failure(open(await chain(), 'abc')), 400, 'MALFORMED_REQUEST', "Tham số 'feedbackId' sai kiểu dữ liệu");
   });
 
-  describe('phạm vi (BR-DG-03): ngoài phạm vi là 403 và KHÔNG chuyển NEW → SEEN', () => {
-    it('BRANCH_MANAGER không mở được feedback không gắn chi nhánh (WEBSITE #2, OTHER #5)', async () => {
+  describe('phạm vi (BR-DG-03): ngoài phạm vi là 403', () => {
+    it('BRANCH_MANAGER không mở được feedback không gắn chi nhánh (WEBSITE #2, OTHER #5); SUPER_MANAGER mở được', async () => {
       const who = await manager();
       expectFail(await failure(open(who, 2)), 403, 'ACCESS_DENIED_SCOPE_MISMATCH', 'Không có quyền truy cập dữ liệu này');
       expectFail(await failure(open(who, 5)), 403, 'ACCESS_DENIED_SCOPE_MISMATCH');
-      expect((await open(await chain(), 5)).data.data.status).toBe('SEEN'); // chỉ lần mở của SUPER_MANAGER mới đổi
+      expect((await open(await chain(), 5)).data.data.feedbackId).toBe(5);
     });
 
-    it('BRANCH_MANAGER chi nhánh khác không mở được feedback của chi nhánh 1; feedback vẫn NEW', async () => {
+    it('BRANCH_MANAGER chi nhánh khác không mở được feedback của chi nhánh 1', async () => {
       expectFail(await failure(open(await manager2(), 3)), 403, 'ACCESS_DENIED_SCOPE_MISMATCH');
-      expect(idsOf(await listOf(await chain(), { status: 'NEW' }))).toEqual([3, 5]);
     });
 
     it('404 đến trước 403: id lạ luôn 404 với quản lý chi nhánh', async () => {
@@ -602,99 +561,14 @@ describe('GET /api/feedbacks/:feedbackId (#21; BR-DG-03, 04, A2: mở lần đ�
       expectFail(await failure(open(who, 9999)), 403, 'ACCESS_DENIED');
     }
     expectFail(await failure(client.get('/api/feedbacks/3')), 401, 'UNAUTHENTICATED');
-    expect(idsOf(await listOf(await chain(), { status: 'NEW' }))).toEqual([3, 5]);
   });
 });
 
-describe('POST /api/feedbacks/:feedbackId/resolve (#22; BR-DG-04)', () => {
-  it('từ SEEN: RESOLVED, ghi người xử lý, lúc xử lý, ghi chú đã strip; seenAt giữ nguyên', async () => {
-    const who = await manager();
-    const seen = (await open(who, 3)).data.data.seenAt;
-    setNow('2026-10-27T10:02:00+07:00');
-    const res = await resolve(who, 3, { resolutionNote: '  Đã gọi lại khách xin lỗi.  ' });
-    expect(res.status).toBe(200);
-    expect(Object.keys(res.data.data).sort()).toEqual(FULL_KEYS);
-    expect(res.data.data).toMatchObject({
-      status: 'RESOLVED',
-      resolvedBy: 3,
-      resolvedAt: '2026-10-27T03:02:00.000Z',
-      resolutionNote: 'Đã gọi lại khách xin lỗi.',
-      seenAt: seen,
-    });
-    expect((await open(who, 3)).data.data).toMatchObject({ status: 'RESOLVED', resolvedBy: 3 });
-  });
-
-  it('SUPER_MANAGER xử lý được feedback không gắn chi nhánh; resolvedBy là mã người gọi', async () => {
-    const res = await resolve(await chain(), 2); // #2 WEBSITE đang SEEN
-    expect(res.data.data).toMatchObject({ feedbackId: 2, status: 'RESOLVED', resolvedBy: 2 });
-  });
-
-  it('chuẩn hóa NFC ghi chú; đúng 2000 ký tự được nhận', async () => {
-    const who = await chain();
-    const note = 'Đã xử lý xong, khách hài lòng.'.normalize('NFD');
-    expect((await resolve(who, 2, { resolutionNote: note })).data.data.resolutionNote).toBe(note.normalize('NFC'));
-    expect((await resolve(who, 4, { resolutionNote: 'n'.repeat(2000) })).status).toBe(200);
-  });
-
-  describe('thứ tự: body 400 → vai trò 403 → 404 → phạm vi 403 → ghi chú trống 400 BR-DG-04 → trạng thái 409', () => {
-    it('ghi chú trống sau strip: 400 BR-DG-04, vẫn SEEN', async () => {
-      const who = await chain();
-      const res = await failure(resolve(who, 2, { resolutionNote: '   ' }));
-      expectFail(res, 400, 'BUSINESS_RULE_VIOLATION', 'Vui lòng nhập ghi chú xử lý (BR-DG-04)');
-      expect(ruleOf(res)).toBe('BR-DG-04');
-      expect((await open(who, 2)).data.data).toMatchObject({ status: 'SEEN', resolutionNote: null, resolvedBy: null });
-    });
-
-    it('thiếu resolutionNote hoặc quá 2000 đơn vị UTF-16: 400 VALIDATION_FAILED theo từng trường', async () => {
-      const who = await chain();
-      expectFail(await failure(resolve(who, 2, {})), 400, 'VALIDATION_FAILED', 'resolutionNote: Vui lòng nhập ghi chú xử lý');
-      expectFail(await failure(resolve(who, 2, { resolutionNote: 'n'.repeat(2001) })), 400, 'VALIDATION_FAILED', 'resolutionNote: Ghi chú tối đa 2000 ký tự');
-      // @Size của BE đếm đơn vị UTF-16 (khác nội dung feedback đếm code point): 1001 emoji = 2002 đơn vị.
-      expectFail(await failure(resolve(who, 2, { resolutionNote: '😀'.repeat(1001) })), 400, 'VALIDATION_FAILED', 'resolutionNote: Ghi chú tối đa 2000 ký tự');
-      expectFail(await failure(resolve(who, 2, { resolutionNote: 123 })), 400, 'MALFORMED_REQUEST');
-      expectFail(await failure(resolve(who, 'abc')), 400, 'MALFORMED_REQUEST', "Tham số 'feedbackId' sai kiểu dữ liệu");
-    });
-
-    it('feedback còn NEW: ghi chú hợp lệ nhận 409; ghi chú trống nhận 400 BR-DG-04 (trống đến trước trạng thái)', async () => {
-      const who = await chain();
-      expectFail(await failure(resolve(who, 3)), 409, 'INVALID_STATE_TRANSITION', 'Không thể chuyển trạng thái Feedback từ NEW sang RESOLVED');
-      expect(ruleOf(await failure(resolve(who, 3, { resolutionNote: ' ' })))).toBe('BR-DG-04');
-      expect(idsOf(await listOf(who, { status: 'NEW' }))).toEqual([3, 5]);
-    });
-
-    it('đã RESOLVED: 409 "từ RESOLVED sang RESOLVED", người xử lý và ghi chú cũ giữ nguyên', async () => {
-      const who = await manager();
-      const before = (await open(who, 1)).data.data;
-      expectFail(await failure(resolve(who, 1, { resolutionNote: 'Ghi đè' })), 409, 'INVALID_STATE_TRANSITION', 'Không thể chuyển trạng thái Feedback từ RESOLVED sang RESOLVED');
-      expect((await open(who, 1)).data.data).toEqual(before);
-    });
-
-    it('body sai đến trước phạm vi; phạm vi đến trước ghi chú trống', async () => {
-      const who = await manager();
-      expectFail(await failure(resolve(who, 2, {})), 400, 'VALIDATION_FAILED'); // #2 không gắn chi nhánh, nhưng body sai đến trước
-      expectFail(await failure(resolve(who, 2, { resolutionNote: ' ' })), 403, 'ACCESS_DENIED_SCOPE_MISMATCH');
-    });
-
-    it('404 khi không có feedback', async () => {
-      expectFail(await failure(resolve(await chain(), 9999)), 404, 'RESOURCE_NOT_FOUND', 'Không tìm thấy feedback #9999');
-    });
-  });
-
-  describe('phạm vi: ngoài phạm vi là 403 và không ghi gì', () => {
-    it('BRANCH_MANAGER chi nhánh 1 với feedback không gắn chi nhánh; chi nhánh 2 với feedback chi nhánh 1', async () => {
-      expectFail(await failure(resolve(await manager(), 2)), 403, 'ACCESS_DENIED_SCOPE_MISMATCH');
-      expectFail(await failure(resolve(await manager2(), 4)), 403, 'ACCESS_DENIED_SCOPE_MISMATCH');
-      expect((await open(await chain(), 2)).data.data.status).toBe('SEEN');
-      expect((await open(await chain(), 4)).data.data.status).toBe('SEEN');
-    });
-  });
-
-  it('chỉ SUPER_MANAGER và BRANCH_MANAGER: khách, lễ tân, ADMIN 403; không token 401', async () => {
-    for (const who of [await customer(), await desk(), await admin()]) {
-      expectFail(await failure(resolve(who, 4)), 403, 'ACCESS_DENIED');
-    }
-    expectFail(await failure(client.post('/api/feedbacks/4/resolve', { resolutionNote: 'x' })), 401, 'UNAUTHENTICATED');
-    expect((await open(await chain(), 4)).data.data.status).toBe('SEEN');
+describe('POST /api/feedbacks/:feedbackId/resolve (#22 đã bỏ ở ADR-0122, BE trả 404)', () => {
+  it('không còn route, kể cả với quản lý đúng phạm vi; không ghi gì', async () => {
+    const res = await failure(client.post('/api/feedbacks/3/resolve', { resolutionNote: 'Đã xử lý.' }, await manager()));
+    expectFail(res, 404, 'RESOURCE_NOT_FOUND');
+    expect(localStorage.getItem(FEEDBACK_STATE_KEY)).toBeNull();
   });
 });
 
@@ -709,18 +583,36 @@ describe('state localStorage cũ (trình duyệt dev giữ state từ bản trư
     expect(idsOf(await listOf(await chain()))).toHaveLength(6);
   });
 
-  it('bản ghi thiếu các trường thêm sau (branchId, rating, seenAt, resolved*) được gộp mặc định; phần cũ còn nguyên', async () => {
+  it('bản ghi thiếu trường thêm sau được gộp mặc định; trường của bản cũ (status, seenAt, ghi chú xử lý) không lọt ra ngoài', async () => {
     localStorage.setItem(
       FEEDBACK_STATE_KEY,
-      JSON.stringify({ feedbacks: [{ feedbackId: 11, customerId: 1, topic: 'WEBSITE', content: 'Bản ghi từ bản cũ của mock.', status: 'NEW', createdAt: '2026-10-20T03:00:00.000Z' }] }),
+      JSON.stringify({
+        feedbacks: [
+          {
+            feedbackId: 11,
+            customerId: 1,
+            topic: 'WEBSITE',
+            content: 'Bản ghi từ bản cũ của mock.',
+            status: 'RESOLVED',
+            seenAt: '2026-10-20T04:00:00.000Z',
+            resolvedBy: 3,
+            resolvedAt: '2026-10-21T04:00:00.000Z',
+            resolutionNote: 'Ghi chú nội bộ của bản cũ.',
+            createdAt: '2026-10-20T03:00:00.000Z',
+          },
+        ],
+      }),
     );
     const who = await chain();
     const listed = (await listOf(who)).data.data.content[0];
-    expect(listed).toMatchObject({ feedbackId: 11, content: 'Bản ghi từ bản cũ của mock.', branchId: null, rating: null, seenAt: null, resolvedBy: null, resolvedAt: null, resolutionNote: null });
+    expect(listed).toMatchObject({ feedbackId: 11, content: 'Bản ghi từ bản cũ của mock.', branchId: null, rating: null });
     expect(Object.keys(listed).sort()).toEqual(FULL_KEYS);
-    expect((await open(who, 11)).data.data.status).toBe('SEEN');
-    expect((await resolve(who, 11)).data.data.status).toBe('RESOLVED');
-    expect((await mine(await customer())).map((f) => f.feedbackId)).toEqual([11]);
+    for (const gone of GONE_KEYS) expect(Object.keys(listed)).not.toContain(gone);
+    expect((await open(who, 11)).data.data).toEqual(listed);
+    const mineNow = await mine(await customer());
+    expect(mineNow.map((f) => f.feedbackId)).toEqual([11]);
+    expect(Object.keys(mineNow[0]).sort()).toEqual(MY_KEYS);
+    expect(JSON.stringify(mineNow)).not.toContain('Ghi chú nội bộ');
     expect((await submit(await customer())).data.data.feedbackId).toBe(12);
   });
 });

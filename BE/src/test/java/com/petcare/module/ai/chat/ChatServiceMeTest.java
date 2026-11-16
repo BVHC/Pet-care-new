@@ -58,7 +58,7 @@ import io.micrometer.core.instrument.MeterRegistry;
 import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
 
 /**
- * Đường ống hỏi đáp của khách đăng nhập {@code POST /me/ai/chat} (07 §5.2 bước 5–6, ADR-0132) với lớp giả: khách lấy từ
+ * Đường ống hỏi đáp của khách đăng nhập {@code POST /me/ai/chat} (07 §5.2 bước 5–6, ADR-0142) với lớp giả: khách lấy từ
  * tài khoản, ý định cá nhân là câu mẫu không gọi nhúng / LLM, và tên thú chỉ bị che SAU khi định tuyến, TRƯỚC khi nhúng và
  * gọi LLM. Bảng tất định lấy từ {@code ai/questions.json} (các nhóm {@code endpoint = me}); như ChatServiceTest, chỉ kiểm
  * số lần gọi lớp giả và ánh xạ {@code result}. Dữ liệu khớp CSDL do {@code MeChatIT} kiểm.
@@ -108,7 +108,8 @@ class ChatServiceMeTest {
         PersonalService personal = new PersonalService(appointments, mock(CatalogQueryApi.class), branches, vaccinations,
                 config, CLOCK);
         service = new ChatService(config, new EmergencyDetector(), new PersonalIntentRouter(), new DoseGuard(), branches,
-                embeddings, llm, retriever, logs, meters, customers, pets, personal, mock(BusinessAnswerService.class));
+                embeddings, llm, retriever, logs, meters, customers, pets, personal, mock(BusinessAnswerService.class),
+                mock(PetContextBuilder.class));
     }
 
     // ---- bảng tất định từ questions.json (endpoint = me) ------------------------------------------------------------

@@ -23,7 +23,7 @@ import jakarta.validation.constraints.Max;
 import jakarta.validation.constraints.Min;
 
 /**
- * Trợ lý theo thú của khách — ai-v1 #3 (UC91, BR-AI-11; docs/adr/0132) và #4 (UC92, BR-AI-18…23; docs/adr/0133). Khách lấy
+ * Trợ lý theo thú của khách — ai-v1 #3 (UC91, BR-AI-11; docs/adr/0142) và #4 (UC92, BR-AI-18…23; docs/adr/0133). Khách lấy
  * từ token; {@code petId} chỉ từ đường dẫn. Thú của người khác hoặc chủ cũ là 404 (kiểm lại mỗi lần gọi), thú đã mất là 400
  * {@code BR-KH-05}. Không chứa logic: {@link VaccinationSummaryService} và {@link RecommendationService} dựng kết quả.
  * {@code limit} ngoài 1–12 do Spring MVC kiểm ({@code HandlerMethodValidationException} → 400 {@code VALIDATION_FAILED},

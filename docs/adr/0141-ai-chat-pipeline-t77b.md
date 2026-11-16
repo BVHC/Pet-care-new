@@ -1,8 +1,9 @@
-# ADR-0131: Đường ống hỏi đáp chatbot công khai (T77b = AI-2, ai-v1 #1)
+# ADR-0141: Đường ống hỏi đáp chatbot công khai (T77b = AI-2, ai-v1 #1)
 
 - **Trạng thái:** Accepted (Hiến và nhóm duyệt 12/11/2026, các điểm ở mục "Đã chốt 12/11/2026"). Từng Proposed khi làm việc AI-2 = T77b, 10/11/2026.
 - **Liên quan:** ADR-0109 (LLM, embedding, pgvector), 0110 (hạ tầng, giới hạn tần suất), 0122 (mô hình mặc định, tên thú, τ, `UNAVAILABLE`), 0130 (nền module `ai`: `GeminiClient`, UC93, ST22, ST23); đặc tả `07` §4.1, §4.2 (BR-AI-26, 28), §5.1, §5.2, §5.4, §12, §14.3; hợp đồng `ai-v1` #1.
 - **Đánh số:** không có migration (V34 đủ bốn bảng, V35 đủ 18 khóa `ai.*`). ADR kế tiếp: **0132**.
+- **Đánh số lại:** (16/11/2026) trước đây ADR-0131; trùng số với `0131-drop-complaints-v51-split-feedback-migration` (T70, BE-1). ADR của AI đổi sang **0141**, ADR của BE-1 giữ **0131**: đổi số bên BE-1 buộc sửa chú thích của `V51`, `V54`, `V55`, mà Flyway kiểm checksum cả chú thích (DB dev có thể đã áp). Mọi tham chiếu trong repo tới ADR chat công khai đã đổi theo; các câu ghi "ADR kế tiếp" trong file này là số liệu lịch sử lúc viết.
 
 ## Bối cảnh
 

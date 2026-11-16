@@ -1,5 +1,5 @@
 import axios, { type AxiosInstance, type AxiosResponse } from 'axios';
-import { beforeEach, describe, expect, it } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { ruleIdOf } from '../api-error';
 import type { MaterialNorm, ShippingFeeConfig } from '../../types/fees';
 import { materialNormsOf, shippingFeeConfig } from './fees.mock';
@@ -96,15 +96,48 @@ describe('phí vận chuyển (#1, #2, BR-SP-08)', () => {
     expect(shippingFeeConfig().baseFee).toBe(25_000);
   });
 
-  it('số âm hoặc số thập phân → 400 BR-SP-08; không ghi gì', async () => {
+  // Chữ lấy từ ShippingFeeService.save (đo trên BE thật 16/11/2026): nêu giá trị nhận được.
+  it('số âm → 400 BR-SP-08 với chữ của BE; không ghi gì', async () => {
     const auth = await as('chuoi');
-    for (const body of [{ baseFee: -1, freeThreshold: 0 }, { baseFee: 1000, freeThreshold: -5 }, { baseFee: 1000.5, freeThreshold: 0 }]) {
+    const cases = [
+      [{ baseFee: -1, freeThreshold: 0 }, 'Phí cơ bản không được âm (nhận -1)'],
+      [{ baseFee: 1000, freeThreshold: -5 }, 'Ngưỡng miễn phí không được âm (nhận -5)'],
+    ] as const;
+    for (const [body, text] of cases) {
       const res = await failure(client.put('/api/shipping-fee-config', body, auth));
       expect(res.status).toBe(400);
       expect(res.data.errorCode).toBe('BUSINESS_RULE_VIOLATION');
       expect(ruleIdOf(res.data.message)).toBe('BR-SP-08');
+      expect(res.data.message).toBe(`${text} (BR-SP-08)`);
     }
     expect(shippingFeeConfig().baseFee).toBe(30_000);
+  });
+
+  // ADR-0140 mục 1.5 và đo trên BE thật: Jackson từ chối số thực trước khi vào service, nên KHÔNG phải BR-SP-08.
+  it('số thập phân → 400 MALFORMED_REQUEST (không phải BR-SP-08); không ghi gì', async () => {
+    const auth = await as('chuoi');
+    for (const body of [{ baseFee: 1000.5, freeThreshold: 0 }, { baseFee: 1000, freeThreshold: 0.5 }, { baseFee: -1.5, freeThreshold: 0 }]) {
+      const res = await failure(client.put('/api/shipping-fee-config', body, auth));
+      expect(res.status).toBe(400);
+      expect(res.data.errorCode).toBe('MALFORMED_REQUEST');
+    }
+    expect(shippingFeeConfig().baseFee).toBe(30_000);
+  });
+
+  // BE ghi cả khi giống hệt (updated_at, updated_by, audit): updatedAt phải tiến lên chặt chẽ.
+  describe('PUT giống hệt cấu hình hiện có', () => {
+    afterEach(() => vi.useRealTimers());
+
+    it('vẫn ghi: updatedAt tiến lên', async () => {
+      vi.useFakeTimers({ toFake: ['Date'] });
+      const auth = await as('chuoi');
+      const same = { baseFee: 30_000, freeThreshold: 500_000 };
+      const first = (await client.put('/api/shipping-fee-config', same, auth)).data.data as ShippingFeeConfig;
+      vi.advanceTimersByTime(5_000);
+      const second = (await client.put('/api/shipping-fee-config', same, auth)).data.data as ShippingFeeConfig;
+      expect(Date.parse(second.updatedAt)).toBe(Date.parse(first.updatedAt) + 5_000);
+      expect((await client.get('/api/shipping-fee-config', auth)).data.data).toEqual(second);
+    });
   });
 
   it('sai kiểu JSON → 400 MALFORMED_REQUEST; thiếu trường → 400 VALIDATION_FAILED theo trường', async () => {

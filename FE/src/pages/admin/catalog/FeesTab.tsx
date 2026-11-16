@@ -14,12 +14,12 @@ import { useAccount } from '../../../shared/stores/session.store';
 import type { ShippingFeeConfig } from '../../../shared/types/fees';
 import { MaterialNormsCard } from './MaterialNormsCard';
 
-/** Ô tiền: chuỗi rỗng không thành 0 âm thầm. Số âm / thập phân để máy chủ từ chối (400 BR-SP-08) và hiện đúng lời của nó. */
+/** Ô tiền: chuỗi rỗng không thành 0 âm thầm. Số âm để máy chủ từ chối (400 BR-SP-08) và hiện đúng lời của nó; số thập phân chặn ở form vì máy chủ chỉ trả câu chung MALFORMED_REQUEST. */
 const moneyOf = (text: string) => (text.trim() === '' ? NaN : Number(text));
 
 /** #2 Phí vận chuyển: một bộ chung cho cả chuỗi. Phí = 0 khi tiền hàng ≥ ngưỡng miễn phí và ngưỡng > 0 (BR-SP-08); đơn đã đặt giữ phí lúc đặt (BR-SP-11). */
 function ShippingFeeCard({ config, onNotice }: { config: ShippingFeeConfig; onNotice: (notice: Notice | null) => void }) {
-  // `noValidate` ở form: để máy chủ trả lời số âm / thập phân (BR-SP-08) bằng câu của nó thay vì bóng nói của trình duyệt.
+  // `noValidate` ở form: để máy chủ trả lời số âm (BR-SP-08) bằng câu của nó thay vì bóng nói của trình duyệt.
   // Nhập một lần từ bản của máy chủ: trang cha gắn `key` theo `updatedAt` nên chỉ nhập lại khi bản đã lưu đổi.
   const [baseFee, setBaseFee] = useState(String(config.baseFee));
   const [freeThreshold, setFreeThreshold] = useState(String(config.freeThreshold));
@@ -29,11 +29,13 @@ function ShippingFeeCard({ config, onNotice }: { config: ShippingFeeConfig; onNo
   const submit = async () => {
     const body = { baseFee: moneyOf(baseFee), freeThreshold: moneyOf(freeThreshold) };
     if (Number.isNaN(body.baseFee) || Number.isNaN(body.freeThreshold)) return setError('Nhập phí cơ bản và ngưỡng miễn phí (nhập 0 nếu không miễn phí).');
+    if (!Number.isInteger(body.baseFee) || !Number.isInteger(body.freeThreshold)) return setError('Phí và ngưỡng phải là số nguyên (đồng).');
     setError('');
     onNotice(null);
     try {
       await save.mutateAsync(body);
-      onNotice({ kind: 'success', text: 'Đã lưu phí vận chuyển. Đơn đặt từ bây giờ tính theo mức mới.' });
+      // Chưa nói "đơn đặt từ bây giờ tính theo mức mới": checkout còn là mock, không đọc cấu hình này. Thêm lại khi `shop` thật có mã (T63 / T67).
+      onNotice({ kind: 'success', text: 'Đã lưu phí vận chuyển.' });
     } catch (e) {
       setError(plainMessage(toApiError(e)));
     }

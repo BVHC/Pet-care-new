@@ -13,10 +13,10 @@ import type { Feedback } from '../../shared/types/feedback';
 import { AdminFeedbacksPage } from './AdminFeedbacksPage';
 
 // Dữ liệu mẫu ở shared/api/mock/feedback.mock.ts, đồng hồ ghim ở thứ Ba 27/10/2026 10:00 giờ Việt Nam. Mới nhất trước:
-// #3 NEW (khách 1, chi nhánh 1, 26/10 16:20) · #5 NEW (khách 4, OTHER không chi nhánh, 26/10 08:10) · #4 SEEN (khách 3, chi nhánh 1, 25/10 09:05) ·
-// #2 SEEN (khách 1, WEBSITE không chi nhánh, 24/10 20:40) · #6 RESOLVED (khách 4, chi nhánh 1, 21/10, bởi tài khoản #2) ·
-// #1 RESOLVED (khách 1, chi nhánh 1, 18/10, bởi tài khoản #3, ghi chú "… (ghi chú nội bộ)").
-// SUPER_MANAGER chuoi@ (tài khoản #2) thấy cả 6; BRANCH_MANAGER manager@ (chi nhánh 1) thấy #3, #4, #6, #1; manager2@ (chi nhánh 2) không thấy gì.
+// #3 (khách 1, chi nhánh 1, 26/10 16:20) · #5 (khách 4, OTHER không chi nhánh, 26/10 08:10) · #4 (khách 3, chi nhánh 1, 25/10 09:05) ·
+// #2 (khách 1, WEBSITE không chi nhánh, 24/10 20:40) · #6 (khách 4, chi nhánh 1, 21/10) · #1 (khách 1, chi nhánh 1, 18/10).
+// Feedback không có trạng thái (ADR-0122, V55): màn chỉ đọc. SUPER_MANAGER chuoi@ thấy cả 6; BRANCH_MANAGER manager@ (chi nhánh 1) thấy
+// #3, #4, #6, #1; manager2@ (chi nhánh 2) không thấy gì.
 beforeAll(() => installMockApi(apiClient));
 
 beforeEach(async () => {
@@ -58,11 +58,6 @@ function inject(records: Partial<FeedbackRecord>[]) {
       branchId: null,
       rating: null,
       content: `Góp ý số ${i + 1} của khách hàng`,
-      status: 'NEW',
-      seenAt: null,
-      resolvedBy: null,
-      resolvedAt: null,
-      resolutionNote: null,
       createdAt: new Date(Date.parse('2026-10-20T03:00:00Z') + i * 60_000).toISOString(),
       ...r,
     }),
@@ -77,7 +72,7 @@ describe('danh sách (UC84)', () => {
     expect(await idsShown()).toEqual([3, 5, 4, 2, 6, 1]);
   });
 
-  it('mỗi dòng có ngày gửi giờ Việt Nam, khách, chủ đề, chi nhánh, điểm, nội dung và huy hiệu trạng thái', async () => {
+  it('mỗi dòng có ngày gửi giờ Việt Nam, khách, chủ đề, chi nhánh, điểm, nội dung; không có trạng thái', async () => {
     renderPage();
     const first = await rowOf(3);
     expect(within(first).getByText('26/10/2026 16:20')).toBeInTheDocument();
@@ -86,14 +81,33 @@ describe('danh sách (UC84)', () => {
     expect(within(first).getByText('PetCare Cầu Giấy')).toBeInTheDocument();
     expect(within(first).getByRole('img', { name: 'Mức hài lòng 3 trên 5' })).toBeInTheDocument();
     expect(within(first).getByText(/Phòng chờ hơi đông/)).toBeInTheDocument();
-    expect(within(first).getByText('Mới gửi')).toBeInTheDocument();
-
-    expect(within(await rowOf(2)).getByText('Đã xem')).toBeInTheDocument();
-    expect(within(await rowOf(1)).getByText('Đã xử lý')).toBeInTheDocument();
+    expect(within(first).queryByText(/Mới gửi|Đã xem|Đã xử lý/)).not.toBeInTheDocument();
     // Góp ý không gắn chi nhánh và không chấm điểm.
     const other = await rowOf(5);
     expect(within(other).getByText('Không gắn chi nhánh')).toBeInTheDocument();
     expect(within(other).getByText('Chưa chấm')).toBeInTheDocument();
+  });
+
+  it('không có cột hay bộ lọc trạng thái; nói rõ góp ý chỉ để đọc và chỉ được lưu có thời hạn (BR-DG-05)', async () => {
+    renderPage();
+    await table();
+    expect(screen.queryByRole('columnheader', { name: 'Trạng thái' })).not.toBeInTheDocument();
+    expect(screen.queryByLabelText('Trạng thái')).not.toBeInTheDocument();
+    const note = screen.getByText(/quá hạn hệ thống tự xóa/);
+    expect(note).toHaveTextContent('feedback.retention_days');
+    expect(note).toHaveTextContent(/mặc định 30 ngày/);
+  });
+
+  it('gọi BE không kèm tham số status (BE đã bỏ), kể cả khi đổi bộ lọc', async () => {
+    const get = vi.spyOn(apiClient, 'get');
+    const user = userEvent.setup();
+    renderPage();
+    await table();
+    await user.selectOptions(screen.getByLabelText('Chủ đề'), 'Website');
+    await waitFor(async () => expect(await idsShown()).toEqual([2]));
+    const params = get.mock.calls.filter(([url]) => url === '/api/feedbacks').map(([, config]) => config?.params ?? {});
+    expect(params.length).toBeGreaterThanOrEqual(2);
+    for (const p of params) expect(p).not.toHaveProperty('status');
   });
 
   it('nội dung dài được rút gọn trong bảng', async () => {
@@ -164,19 +178,16 @@ describe('danh sách (UC84)', () => {
       renderPage();
       expect(await idsShown()).toEqual([3, 4, 6, 1]);
       expect(screen.queryByLabelText('Chi nhánh')).not.toBeInTheDocument();
-      expect(screen.getByLabelText('Trạng thái')).toBeInTheDocument();
+      expect(screen.queryByLabelText('Trạng thái')).not.toBeInTheDocument();
     });
   });
 
   describe('bộ lọc và phân trang', () => {
-    it('lọc theo trạng thái, chủ đề và chi nhánh', async () => {
+    it('lọc theo chủ đề và chi nhánh', async () => {
       const user = userEvent.setup();
       renderPage();
       await table();
 
-      await user.selectOptions(screen.getByLabelText('Trạng thái'), 'Mới gửi');
-      await waitFor(async () => expect(await idsShown()).toEqual([3, 5]));
-      await user.selectOptions(screen.getByLabelText('Trạng thái'), 'Mọi trạng thái');
       await user.selectOptions(screen.getByLabelText('Chủ đề'), 'Website');
       await waitFor(async () => expect(await idsShown()).toEqual([2]));
       await user.selectOptions(screen.getByLabelText('Chủ đề'), 'Mọi chủ đề');
@@ -208,7 +219,7 @@ describe('danh sách (UC84)', () => {
     });
 
     it('chia trang 20 dòng; Trước / Sau; đổi bộ lọc thì về trang đầu', async () => {
-      inject(Array.from({ length: 45 }, (_, i) => ({ status: i % 2 === 0 ? 'NEW' : 'SEEN' })));
+      inject(Array.from({ length: 45 }, (_, i) => ({ topic: i % 2 === 0 ? 'WEBSITE' : 'OTHER' })));
       const user = userEvent.setup();
       renderPage();
 
@@ -222,12 +233,12 @@ describe('danh sách (UC84)', () => {
       await waitFor(async () => expect((await idsShown())[0]).toBe(25));
       expect(screen.getByText(/Trang 2\/3/)).toBeInTheDocument();
 
-      await user.selectOptions(screen.getByLabelText('Trạng thái'), 'Đã xem');
+      await user.selectOptions(screen.getByLabelText('Chủ đề'), 'Website');
       await waitFor(() => expect(screen.getByText(/Trang 1\/2/)).toBeInTheDocument());
       expect(await rows()).toHaveLength(20);
 
       await user.click(screen.getByRole('button', { name: 'Sau' }));
-      await waitFor(async () => expect(await rows()).toHaveLength(2));
+      await waitFor(async () => expect(await rows()).toHaveLength(3));
       expect(screen.getByRole('button', { name: 'Sau' })).toBeDisabled();
     });
 
@@ -239,26 +250,37 @@ describe('danh sách (UC84)', () => {
   });
 });
 
-describe('mở chi tiết (A2: mở lần đầu tự chuyển NEW → SEEN)', () => {
-  it('bấm dòng mới gửi: hiện đủ thông tin, trạng thái thành "Đã xem" ở cả chi tiết lẫn bảng', async () => {
+describe('mở chi tiết (chỉ đọc, #21)', () => {
+  const FIRST_CONTENT = /Phòng chờ hơi đông vào cuối tuần/;
+
+  it('bấm dòng: hiện đủ thông tin; không có trạng thái, ô ghi chú hay nút xử lý', async () => {
     const user = userEvent.setup();
     renderPage();
-    expect(within(await rowOf(3)).getByText('Mới gửi')).toBeInTheDocument();
-
     await user.click(within(await rowOf(3)).getByText('Nguyễn Thu Trang'));
     const modal = await dialog();
-    expect(await within(modal).findByRole('heading', { name: 'Góp ý #3' })).toBeInTheDocument();
+    expect(await within(modal).findByText(FIRST_CONTENT)).toBeInTheDocument();
+    expect(within(modal).getByRole('heading', { name: 'Góp ý #3' })).toBeInTheDocument();
     expect(modal).toHaveTextContent('Nguyễn Thu Trang');
     expect(modal).toHaveTextContent('Dịch vụ tại chi nhánh');
     expect(modal).toHaveTextContent('PetCare Cầu Giấy');
     expect(modal).toHaveTextContent('26/10/2026 16:20');
-    expect(modal).toHaveTextContent('Phòng chờ hơi đông vào cuối tuần, mong có thêm ghế ngồi');
     expect(within(modal).getByRole('img', { name: 'Mức hài lòng 3 trên 5' })).toBeInTheDocument();
-    expect(within(modal).getByText('Đã xem')).toBeInTheDocument();
-    expect(modal).toHaveTextContent('27/10/2026 10:00'); // xem lần đầu
+    expect(within(modal).queryByText(/Mới gửi|Đã xem|Đã xử lý|Xem lần đầu|Trạng thái/)).not.toBeInTheDocument();
+    expect(within(modal).queryByRole('textbox')).not.toBeInTheDocument();
+    expect(within(modal).queryByRole('button', { name: /xử lý/i })).not.toBeInTheDocument();
+  });
 
-    await waitFor(async () => expect(within(await rowOf(3)).getByText('Đã xem')).toBeInTheDocument());
-    expect(within(await rowOf(3)).queryByText('Mới gửi')).not.toBeInTheDocument();
+  it('mở chỉ GET chi tiết một lần, không có request ghi nào (không /resolve) và không làm mới danh sách', async () => {
+    const get = vi.spyOn(apiClient, 'get');
+    const post = vi.spyOn(apiClient, 'post');
+    const user = userEvent.setup();
+    renderPage();
+    await user.click(within(await rowOf(3)).getByText('Nguyễn Thu Trang'));
+    await within(await dialog()).findByText(FIRST_CONTENT);
+    const calls = (path: string) => get.mock.calls.filter(([url]) => url === path).length;
+    expect(calls('/api/feedbacks/3')).toBe(1);
+    expect(calls('/api/feedbacks')).toBe(1);
+    expect(post).not.toHaveBeenCalled();
   });
 
   it('nút tên khách (bàn phím vào được) cũng mở được; đóng bằng nút X', async () => {
@@ -273,32 +295,32 @@ describe('mở chi tiết (A2: mở lần đầu tự chuyển NEW → SEEN)', (
   });
 
   it('đang mở: khung chờ trong hộp thoại cho tới khi BE trả lời', async () => {
-    const real = await feedbackApi.open(4);
+    const real = await feedbackApi.get(4);
     let answer!: (feedback: Feedback) => void;
-    vi.spyOn(feedbackApi, 'open').mockImplementationOnce(() => new Promise<Feedback>((resolve) => (answer = resolve)));
+    vi.spyOn(feedbackApi, 'get').mockImplementationOnce(() => new Promise<Feedback>((resolve) => (answer = resolve)));
     const user = userEvent.setup();
     renderPage();
     await user.click(await within(await table()).findByRole('button', { name: openButton(4) }));
     const modal = await dialog();
     expect(within(modal).getByRole('status', { name: 'Đang mở góp ý' })).toBeInTheDocument();
-    expect(within(modal).queryByRole('textbox', { name: 'Ghi chú xử lý' })).not.toBeInTheDocument();
+    expect(within(modal).queryByText(/Mình chờ lấy thuốc/)).not.toBeInTheDocument();
 
     await act(async () => answer(real));
-    expect(await within(modal).findByRole('textbox', { name: 'Ghi chú xử lý' })).toBeInTheDocument();
+    expect(await within(modal).findByText(/Mình chờ lấy thuốc/)).toBeInTheDocument();
     expect(within(modal).queryByRole('status', { name: 'Đang mở góp ý' })).not.toBeInTheDocument();
   });
 
   it('lỗi mở (403 / 404): câu của BE trong hộp thoại kèm "Thử lại"; thử lại được', async () => {
-    vi.spyOn(feedbackApi, 'open').mockRejectedValueOnce(new ApiError('ACCESS_DENIED_SCOPE_MISMATCH', 'Không có quyền truy cập dữ liệu này', 403));
+    vi.spyOn(feedbackApi, 'get').mockRejectedValueOnce(new ApiError('ACCESS_DENIED_SCOPE_MISMATCH', 'Không có quyền truy cập dữ liệu này', 403));
     const user = userEvent.setup();
     renderPage();
     await user.click(await within(await table()).findByRole('button', { name: openButton(4) }));
     const modal = await dialog();
     expect(await within(modal).findByRole('alert')).toHaveTextContent('Không có quyền truy cập dữ liệu này');
-    expect(within(modal).queryByRole('textbox', { name: 'Ghi chú xử lý' })).not.toBeInTheDocument();
+    expect(within(modal).queryByText(/Mình chờ lấy thuốc/)).not.toBeInTheDocument();
 
     await user.click(within(modal).getByRole('button', { name: 'Thử lại' }));
-    expect(await within(modal).findByRole('textbox', { name: 'Ghi chú xử lý' })).toBeInTheDocument();
+    expect(await within(modal).findByText(/Mình chờ lấy thuốc/)).toBeInTheDocument();
   });
 
   it('BRANCH_MANAGER mở được góp ý của chi nhánh mình', async () => {
@@ -306,120 +328,6 @@ describe('mở chi tiết (A2: mở lần đầu tự chuyển NEW → SEEN)', (
     const user = userEvent.setup();
     renderPage();
     await user.click(within(await rowOf(3)).getByText('Nguyễn Thu Trang'));
-    expect(await within(await dialog()).findByText('Đã xem')).toBeInTheDocument();
-  });
-});
-
-describe('xử lý (SEEN → RESOLVED; BR-DG-04)', () => {
-  it('feedback SEEN có ô "Ghi chú xử lý" (bộ đếm /2000) và nút "Đánh dấu đã xử lý"', async () => {
-    const user = userEvent.setup();
-    renderPage();
-    await user.click(within(await rowOf(4)).getByText('Lê Hoàng Long'));
-    const modal = await dialog();
-    const note = await within(modal).findByRole('textbox', { name: 'Ghi chú xử lý' });
-    expect(note).toHaveAttribute('maxlength', '2000');
-    expect(within(modal).getByText('0/2000')).toBeInTheDocument();
-    await user.type(note, 'Đã gọi lại');
-    expect(within(modal).getByText('10/2000')).toBeInTheDocument();
-    expect(within(modal).getByRole('button', { name: 'Đánh dấu đã xử lý' })).toBeEnabled();
-  });
-
-  it('đánh dấu đã xử lý: chi tiết chuyển sang chỉ đọc (ai, lúc nào, ghi chú), bảng và thông báo trang cập nhật', async () => {
-    const user = userEvent.setup();
-    renderPage();
-    await user.click(within(await rowOf(4)).getByText('Lê Hoàng Long'));
-    const modal = await dialog();
-    await user.type(await within(modal).findByRole('textbox', { name: 'Ghi chú xử lý' }), '  Đã gọi lại khách xin lỗi.  ');
-    await user.click(within(modal).getByRole('button', { name: 'Đánh dấu đã xử lý' }));
-
-    expect(await within(modal).findByText('Đã gọi lại khách xin lỗi.')).toBeInTheDocument();
-    expect(within(modal).queryByRole('textbox', { name: 'Ghi chú xử lý' })).not.toBeInTheDocument();
-    expect(within(modal).queryByRole('button', { name: 'Đánh dấu đã xử lý' })).not.toBeInTheDocument();
-    expect(within(modal).getByText('Đã xử lý')).toBeInTheDocument();
-    expect(modal).toHaveTextContent('Bạn'); // chuoi@ là tài khoản #2, người vừa xử lý
-    expect(modal).toHaveTextContent('27/10/2026 10:00');
-
-    await waitFor(async () => expect(within(await rowOf(4)).getByText('Đã xử lý')).toBeInTheDocument());
-    expect(screen.getByText('Đã đánh dấu xử lý góp ý #4')).toBeInTheDocument();
-  });
-
-  it('feedback đã RESOLVED: chỉ đọc, không có ô nhập hay nút; người xử lý khác hiện theo mã tài khoản', async () => {
-    const user = userEvent.setup();
-    renderPage();
-    await user.click(within(await rowOf(1)).getByText('Nguyễn Thu Trang'));
-    const modal = await dialog();
-    expect(await within(modal).findByText(/Đã gọi lại cảm ơn khách/)).toBeInTheDocument();
-    expect(modal).toHaveTextContent('Tài khoản #3');
-    expect(within(modal).queryByRole('textbox')).not.toBeInTheDocument();
-    expect(within(modal).queryByRole('button', { name: 'Đánh dấu đã xử lý' })).not.toBeInTheDocument();
-  });
-
-  it('nút chỉ có ở trạng thái SEEN: một chi tiết còn NEW thì không có ô nhập, không có nút', async () => {
-    const fresh: Feedback = {
-      feedbackId: 3,
-      customerId: 1,
-      customerName: 'Nguyễn Thu Trang',
-      topic: 'WEBSITE',
-      branchId: null,
-      branchName: null,
-      rating: null,
-      content: 'Góp ý chưa ai xem.',
-      status: 'NEW',
-      seenAt: null,
-      resolvedBy: null,
-      resolvedAt: null,
-      resolutionNote: null,
-      createdAt: '2026-10-26T03:00:00.000Z',
-    };
-    vi.spyOn(feedbackApi, 'open').mockResolvedValueOnce(fresh);
-    const user = userEvent.setup();
-    renderPage();
-    await user.click(within(await rowOf(3)).getByText('Nguyễn Thu Trang'));
-    const modal = await dialog();
-    expect(await within(modal).findByText('Góp ý chưa ai xem.')).toBeInTheDocument();
-    expect(within(modal).queryByRole('textbox')).not.toBeInTheDocument();
-    expect(within(modal).queryByRole('button', { name: 'Đánh dấu đã xử lý' })).not.toBeInTheDocument();
-  });
-
-  describe('lỗi của BE hiện ngay trong hộp thoại, ghi chú đã nhập được giữ lại', () => {
-    it('ghi chú trống: 400 BR-DG-04', async () => {
-      const user = userEvent.setup();
-      renderPage();
-      await user.click(within(await rowOf(4)).getByText('Lê Hoàng Long'));
-      const modal = await dialog();
-      await user.type(await within(modal).findByRole('textbox', { name: 'Ghi chú xử lý' }), '   ');
-      await user.click(within(modal).getByRole('button', { name: 'Đánh dấu đã xử lý' }));
-
-      const alert = await within(modal).findByRole('alert');
-      expect(alert).toHaveTextContent('Vui lòng nhập ghi chú xử lý');
-      expect(alert).not.toHaveTextContent('BR-DG-04');
-      expect(within(modal).getByRole('textbox', { name: 'Ghi chú xử lý' })).toHaveValue('   ');
-    });
-
-    it('người khác vừa xử lý xong: 409', async () => {
-      const user = userEvent.setup();
-      renderPage();
-      await user.click(within(await rowOf(4)).getByText('Lê Hoàng Long'));
-      const modal = await dialog();
-      const note = await within(modal).findByRole('textbox', { name: 'Ghi chú xử lý' });
-      await feedbackApi.resolve(4, { resolutionNote: 'Người khác đã xử lý trước.' });
-      await user.type(note, 'Tôi cũng xử lý');
-      await user.click(within(modal).getByRole('button', { name: 'Đánh dấu đã xử lý' }));
-
-      expect(await within(modal).findByRole('alert')).toHaveTextContent('Không thể chuyển trạng thái Feedback từ RESOLVED sang RESOLVED');
-      expect(within(modal).getByRole('textbox', { name: 'Ghi chú xử lý' })).toHaveValue('Tôi cũng xử lý');
-    });
-
-    it('ngoài phạm vi: 403', async () => {
-      vi.spyOn(feedbackApi, 'resolve').mockRejectedValueOnce(new ApiError('ACCESS_DENIED_SCOPE_MISMATCH', 'Không có quyền truy cập dữ liệu này', 403));
-      const user = userEvent.setup();
-      renderPage();
-      await user.click(within(await rowOf(4)).getByText('Lê Hoàng Long'));
-      const modal = await dialog();
-      await user.type(await within(modal).findByRole('textbox', { name: 'Ghi chú xử lý' }), 'Ghi chú');
-      await user.click(within(modal).getByRole('button', { name: 'Đánh dấu đã xử lý' }));
-
-      expect(await within(modal).findByRole('alert')).toHaveTextContent('Không có quyền truy cập dữ liệu này');
-    });
+    expect(await within(await dialog()).findByText(FIRST_CONTENT)).toBeInTheDocument();
   });
 });

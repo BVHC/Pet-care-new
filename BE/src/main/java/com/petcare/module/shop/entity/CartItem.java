@@ -14,7 +14,7 @@ import lombok.NoArgsConstructor;
 
 /**
  * Bảng {@code cart_items} (PART, V44): một dòng giỏ, duy nhất theo (giỏ, sản phẩm). Ghi bằng upsert / xóa hàng loạt của
- * {@link com.petcare.module.shop.repository.CartItemRepository} (không qua kiểm bẩn của JPA, docs/adr/0141), entity chỉ để đọc.
+ * {@link com.petcare.module.shop.repository.CartItemRepository} (không qua kiểm bẩn của JPA, docs/adr/0143), entity chỉ để đọc.
  */
 @Getter
 @Entity

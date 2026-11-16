@@ -1,4 +1,4 @@
-// Nạp tri thức DEMO cho chatbot qua UC93 (ai-v1 #5–#11) vào BE đang chạy (T77b, docs/adr/0131).
+// Nạp tri thức DEMO cho chatbot qua UC93 (ai-v1 #5–#11) vào BE đang chạy (T77b, docs/adr/0141).
 //
 // ┌─ GIẢ ĐỊNH CHO DEMO ──────────────────────────────────────────────────────────────────────────────────────────────┐
 // │ Người rà soát bên dưới là GIẢ ĐỊNH (Hiến quyết 9/11/2026): chưa có bác sĩ thú y thật (07 Q2 chưa giải). Nguồn của │

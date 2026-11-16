@@ -42,9 +42,14 @@ export const AI_LIMITS = {
   recommendationLimit: { min: 1, max: 12 },
 } as const;
 
-/** BR-AI-25: khung chatbot LUÔN hiện thông báo này khi còn chạy gói free của nhà cung cấp (hợp đồng không có trường cho nó). */
+/**
+ * BR-AI-25: khung chatbot LUÔN hiện thông báo này khi còn chạy gói free của nhà cung cấp (hợp đồng không có trường cho nó).
+ * Câu thứ hai là BR-AI-32 (phương án A, ADR-0135, 16/11/2026): khi công tắc `ai.chat.pet_context_enabled` bật, khách đăng nhập hỏi về
+ * thú của mình thì thông tin cơ bản của thú đi kèm; công tắc tắt thì không có gì được gửi thêm, nên câu viết "có thể".
+ */
 export const AI_PROVIDER_NOTICE =
-  'Câu hỏi được gửi tới nhà cung cấp AI (Google) và có thể được dùng để cải thiện sản phẩm; đừng nhập thông tin cá nhân (kể cả tên thú).';
+  'Câu hỏi được gửi tới nhà cung cấp AI (Google) và có thể được dùng để cải thiện sản phẩm; đừng nhập thông tin cá nhân (kể cả tên thú). ' +
+  'Khi bạn đăng nhập và hỏi về thú của mình, thông tin cơ bản của thú (loài, giống, nhóm tuổi, cân nặng, tiêm phòng; không gồm tên) có thể được gửi kèm.';
 
 // ─── Chatbot (#1, #2) ───
 

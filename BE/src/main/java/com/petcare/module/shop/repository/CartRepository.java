@@ -12,7 +12,7 @@ import org.springframework.transaction.annotation.Transactional;
 
 import com.petcare.module.shop.entity.Cart;
 
-/** Bảng {@code carts} (docs/adr/0141). */
+/** Bảng {@code carts} (docs/adr/0143). */
 public interface CartRepository extends JpaRepository<Cart, Long> {
 
     /** Giỏ của khách, đọc không khóa (GET). */

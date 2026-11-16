@@ -242,11 +242,6 @@ describe('gộp (#2)', () => {
       branchId: null,
       rating: 4,
       content: 'Trang web dễ dùng, cần thêm ảnh bác sĩ.',
-      status: 'SEEN',
-      seenAt: '2026-10-01T01:00:00.000Z',
-      resolvedBy: null,
-      resolvedAt: null,
-      resolutionNote: null,
       createdAt: '2026-10-01T00:00:00.000Z',
     });
     localStorage.setItem(FEEDBACK_STATE_KEY, JSON.stringify({ feedbacks: [rec(1, a), rec(2, a), rec(3, b), rec(4, 1)] }));
@@ -254,7 +249,7 @@ describe('gộp (#2)', () => {
     expect(p.feedbackCount).toBe(2);
     expect(result(await merge(confirmed(a, b), await manager())).moved.feedbacks).toBe(p.feedbackCount);
     expect(feedbackRecords().filter((f) => f.customerId === b).map((f) => f.feedbackId)).toEqual([1, 2, 3]);
-    expect(feedbackRecords().find((f) => f.feedbackId === 1)).toMatchObject({ status: 'SEEN', seenAt: '2026-10-01T01:00:00.000Z' });
+    expect(feedbackRecords().find((f) => f.feedbackId === 1)).toMatchObject({ content: 'Trang web dễ dùng, cần thêm ảnh bác sĩ.', rating: 4 });
     expect(feedbackRecords().find((f) => f.feedbackId === 4)?.customerId).toBe(1);
   });
 

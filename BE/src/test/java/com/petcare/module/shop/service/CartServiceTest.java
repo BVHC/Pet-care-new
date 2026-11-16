@@ -46,7 +46,7 @@ import com.petcare.platform.exception.ResourceNotFoundException;
 import com.petcare.platform.security.BranchScope;
 import com.petcare.platform.security.SecurityPrincipal;
 
-/** Giỏ hàng (UC61, BR-BH-07; docs/adr/0141): thứ tự khóa → dọn → kiểm → ghi, và nhánh lỗi không ghi gì. */
+/** Giỏ hàng (UC61, BR-BH-07; docs/adr/0143): thứ tự khóa → dọn → kiểm → ghi, và nhánh lỗi không ghi gì. */
 class CartServiceTest {
 
     private static final long ACCOUNT = 5L;

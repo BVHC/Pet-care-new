@@ -87,6 +87,11 @@ public record ChatResponse(
         boolean general = answer.startsWith(ChatTexts.GENERAL_PREFIX);
         ChatSourceType source = sources.isEmpty() ? ChatSourceType.GENERAL_KNOWLEDGE
                 : general ? ChatSourceType.KNOWLEDGE_BASE_AND_GENERAL : ChatSourceType.KNOWLEDGE_BASE;
+        return answered(answer, sources, disclaimer, source);
+    }
+
+    /** Nguồn do bên gọi quyết (chế độ mở: lấy từ {@code category}, không suy từ tiền tố hay danh sách nguồn). */
+    public static ChatResponse answered(String answer, List<ChatSource> sources, String disclaimer, ChatSourceType source) {
         return new ChatResponse(ChatResult.ANSWERED, answer, List.copyOf(sources), disclaimer, false, List.of(),
                 List.of(), source);
     }

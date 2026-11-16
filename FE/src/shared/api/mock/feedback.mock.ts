@@ -1,35 +1,32 @@
-// Mock feedback (T47, UC83 + UC84; content-v1 #18–22; BR-DG-01…04, BR-TK-19): khách gửi và xem lại, SUPER_MANAGER / BRANCH_MANAGER
-// xem, mở (NEW → SEEN) và đánh dấu đã xử lý. Luật, thứ tự kiểm và câu báo lỗi chép từ BE (FeedbackSubmitService,
-// FeedbackReviewService, FeedbackController). State ở localStorage (FEEDBACK_STATE_KEY), đọc lại mỗi request.
+// Mock feedback (UC83 + UC84; content-v1 #18–21; BR-DG-01…03, BR-TK-19): khách gửi và xem lại, SUPER_MANAGER / BRANCH_MANAGER chỉ xem.
+// Không có trạng thái, ghi chú xử lý hay `POST /feedbacks/{id}/resolve` (ADR-0122, V55: BE trả 404 cho đường dẫn đó). Luật, thứ tự kiểm
+// và câu báo lỗi chép từ BE (FeedbackSubmitService, FeedbackReviewService, FeedbackController). State ở localStorage (FEEDBACK_STATE_KEY),
+// đọc lại mỗi request.
 //
 // Các điểm hợp đồng im lặng, hoặc BE khác kế hoạch (ASSUMPTION):
 //  - GET /me/feedbacks KHÔNG chặn khách còn chờ quyết định liên kết: BE (FeedbackSubmitService.listMine) chỉ kiểm BR-TK-19 ở POST, nên
 //    khách đó nhận feedback của chính mình (thực tế rỗng vì họ chưa gửi được). Trang /review nằm sau RequireLinkDecision nên không gọi tới.
 //  - GET /feedbacks: BE kiểm `from > to` (400) TRƯỚC phạm vi chi nhánh (403), ngược với thứ tự chung "phạm vi trước 400 rule" của kế hoạch.
+//    Tham số `status` của bản cũ bị BE bỏ qua (200, trả đủ, đã đo 16/11/2026), không phải 400.
 //  - Gửi: chi nhánh có gửi `branchId` thì phải ACTIVE với MỌI chủ đề (không chỉ BRANCH_SERVICE); không ACTIVE hoặc không có là 404.
-//  - Ghi chú xử lý tối đa 2000 theo đơn vị UTF-16 (`@Size` của BE), khác nội dung feedback đếm code point.
 //  - Giới hạn mỗi ngày là hằng số DAILY_LIMIT = 5 (mặc định của [CFG] feedback.max_per_day; mock identity chưa có tham số này).
 //  - Thời điểm trả theo `…Z` như BE thật (hợp đồng ghi +07:00); FE định dạng theo giờ Việt Nam tường minh nên đúng cho cả hai.
-//  - `Feedback.resolvedBy` chỉ là mã tài khoản (hợp đồng không kèm tên người xử lý).
 //  - Dữ liệu mẫu có feedback của khách 3, 4 (hồ sơ tại quầy chưa gắn tài khoản, chỉ để danh sách quản lý có nhiều tên): nếu khachmoi@ liên
 //    kết với một trong hai hồ sơ đó (cùng SĐT 0905111222) thì thấy các feedback này ở "Góp ý của tôi". Khách 2 (khachmoi@) không có feedback.
 import type { AccountSummary, Role } from '../../types/auth';
 import {
   FEEDBACK_CONTENT_MAX,
   FEEDBACK_CONTENT_MIN,
-  FEEDBACK_STATUS_LABELS,
   FEEDBACK_TOPIC_LABELS,
-  RESOLUTION_NOTE_MAX,
   feedbackContentLength,
   type Feedback,
-  type FeedbackStatus,
   type FeedbackTopic,
   type MyFeedback,
 } from '../../types/feedback';
 import { vnDate } from '../../utils/vn-time';
 import { activeBranchSummaries, branchBooking } from './branch.mock';
 import { allCustomers, customerOfAccount, markHasData } from './customer.mock';
-import { denied, fail, has, invalid, notFound, ok, ruleFail, scopeDenied, tooLong, type MockHandler, type MockReply } from './envelope';
+import { denied, fail, has, invalid, notFound, ok, ruleFail, scopeDenied, type MockHandler, type MockReply } from './envelope';
 import { branchIdOf } from './identity.mock';
 import { clampPaging, notPositive, pageOf, typeError } from './public.mock';
 
@@ -42,11 +39,6 @@ export interface FeedbackRecord {
   branchId: number | null;
   rating: number | null;
   content: string;
-  status: FeedbackStatus;
-  seenAt: string | null;
-  resolvedBy: number | null;
-  resolvedAt: string | null;
-  resolutionNote: string | null;
   createdAt: string;
 }
 
@@ -59,18 +51,17 @@ const DAILY_LIMIT = 5;
 const DAY_MS = 86_400_000;
 
 /** Trường tùy chọn của một bản ghi; gộp vào bản ghi đã lưu để state cũ (thiếu trường thêm sau) không làm handler throw. */
-const DEFAULTS = { branchId: null, rating: null, seenAt: null, resolvedBy: null, resolvedAt: null, resolutionNote: null };
+const DEFAULTS = { branchId: null, rating: null };
 
 /**
  * Dữ liệu mẫu: thời điểm tính lùi từ hôm nay theo giờ Việt Nam, đều trước 00:00 hôm nay nên ổn định trong ngày và không tính vào giới
- * hạn hôm nay. Khách 1 (khach@) có đủ ba trạng thái; #2 và #5 không gắn chi nhánh (chỉ SUPER_MANAGER xem); chi nhánh 2, 3 là DRAFT
+ * hạn hôm nay. Khách 1 (khach@) có #1, #2, #3; #2 và #5 không gắn chi nhánh (chỉ SUPER_MANAGER xem); chi nhánh 2, 3 là DRAFT
  * nên không có feedback (BE chỉ nhận chi nhánh ACTIVE).
  */
 function seedFeedbacks(): FeedbackRecord[] {
   const ago = (days: number, hhmm: string) => new Date(`${vnDate(Date.now() - days * DAY_MS)}T${hhmm}:00+07:00`).toISOString();
   const rec = (r: Partial<FeedbackRecord> & Pick<FeedbackRecord, 'feedbackId' | 'customerId' | 'topic' | 'content' | 'createdAt'>): FeedbackRecord => ({
     ...DEFAULTS,
-    status: 'NEW',
     ...r,
   });
   return [
@@ -81,12 +72,7 @@ function seedFeedbacks(): FeedbackRecord[] {
       branchId: 1,
       rating: 5,
       content: 'Bác sĩ khám rất kỹ và giải thích dễ hiểu, lễ tân hướng dẫn nhiệt tình. Bé Mochi hợp tác hơn mình nghĩ.',
-      status: 'RESOLVED',
       createdAt: ago(9, '10:15'),
-      seenAt: ago(9, '14:00'),
-      resolvedBy: 3,
-      resolvedAt: ago(8, '09:30'),
-      resolutionNote: 'Đã gọi lại cảm ơn khách, chuyển lời khen tới bác sĩ phụ trách (ghi chú nội bộ).',
     }),
     rec({
       feedbackId: 2,
@@ -94,9 +80,7 @@ function seedFeedbacks(): FeedbackRecord[] {
       topic: 'WEBSITE',
       rating: 4,
       content: 'Trang đặt lịch dễ dùng, nhưng mình muốn chọn bác sĩ ngay ở bước chọn giờ thay vì phải gọi hỏi lại.',
-      status: 'SEEN',
       createdAt: ago(3, '20:40'),
-      seenAt: ago(2, '08:30'),
     }),
     rec({
       feedbackId: 3,
@@ -114,9 +98,7 @@ function seedFeedbacks(): FeedbackRecord[] {
       branchId: 1,
       rating: 2,
       content: 'Mình chờ lấy thuốc gần 40 phút dù đã đặt lịch trước. Mong phòng khám sắp xếp lại quy trình vào giờ cao điểm.',
-      status: 'SEEN',
       createdAt: ago(2, '09:05'),
-      seenAt: ago(2, '10:00'),
     }),
     rec({
       feedbackId: 5,
@@ -132,12 +114,7 @@ function seedFeedbacks(): FeedbackRecord[] {
       branchId: 1,
       rating: 4,
       content: 'Bé được tắm rất sạch nhưng trả bé trễ hơn giờ hẹn khoảng 30 phút. Nhân viên có xin lỗi nên mình thấy ổn.',
-      status: 'RESOLVED',
       createdAt: ago(6, '15:45'),
-      seenAt: ago(6, '16:30'),
-      resolvedBy: 2,
-      resolvedAt: ago(5, '10:00'),
-      resolutionNote: 'Đã xin lỗi khách và nhắc nhóm chăm sóc kiểm tra lại giờ trả bé sau khi tắm.',
     }),
   ];
 }
@@ -164,7 +141,6 @@ function save(s: FeedbackState) {
 // ─── Dữ liệu vào, như Spring + Bean Validation của BE ───
 
 const TOPICS = Object.keys(FEEDBACK_TOPIC_LABELS);
-const STATUSES = Object.keys(FEEDBACK_STATUS_LABELS);
 const INT = /^-?\d+$/;
 const ISO_DAY = /^\d{4}-\d{2}-\d{2}$/;
 
@@ -177,7 +153,6 @@ const isDay = (v: string) => {
 /** Theo đúng thứ tự tham số của controller: Spring báo lỗi kiểu của tham số đầu tiên sai. */
 const QUERY_TYPES: [name: string, valid: (v: string) => boolean][] = [
   ['branchId', (v) => INT.test(v)],
-  ['status', (v) => STATUSES.includes(v)],
   ['topic', (v) => TOPICS.includes(v)],
   ['from', isDay],
   ['to', isDay],
@@ -208,14 +183,13 @@ const inScope = (account: AccountSummary, branchId: number | null) =>
 
 // ─── Dạng trả về ───
 
-/** Dựng từng trường (không trải bản ghi) để ghi chú nội bộ và seenAt không lọt vào MyFeedback (BR-DG-04). */
+/** Dựng từng trường (không trải bản ghi) để trường của quản lý và của bản state cũ không lọt vào MyFeedback. */
 const myView = (f: FeedbackRecord): MyFeedback => ({
   feedbackId: f.feedbackId,
   topic: f.topic,
   branchId: f.branchId,
   rating: f.rating,
   content: f.content,
-  status: f.status,
   createdAt: f.createdAt,
 });
 
@@ -236,11 +210,6 @@ function fullViews(records: FeedbackRecord[]): Feedback[] {
     branchName: f.branchId === null ? null : branchName(f.branchId),
     rating: f.rating,
     content: f.content,
-    status: f.status,
-    seenAt: f.seenAt,
-    resolvedBy: f.resolvedBy,
-    resolvedAt: f.resolvedAt,
-    resolutionNote: f.resolutionNote,
     createdAt: f.createdAt,
   }));
 }
@@ -301,7 +270,6 @@ const submitFeedback: MockHandler = ({ account, body }) => {
     branchId: has(branchId) ? (branchId as number) : null,
     rating: has(rating) ? (rating as number) : null,
     content: text,
-    status: 'NEW',
     createdAt: new Date(now).toISOString(),
   };
   state.feedbacks.push(created);
@@ -323,7 +291,7 @@ const listMyFeedbacks: MockHandler = ({ account }) => {
   );
 };
 
-// ─── Quản lý: xem, mở, xử lý (#20–22) ───
+// ─── Quản lý: xem (#20, #21) ───
 
 /** Tham số sai kiểu (400) đến trước vai trò (403); từ đó `from > to` (400) đến trước phạm vi chi nhánh (403), như FeedbackReviewService.list. */
 const listFeedbacks: MockHandler = ({ account, query: raw }) => {
@@ -348,7 +316,6 @@ const listFeedbacks: MockHandler = ({ account, query: raw }) => {
       return (
         inScope(account!, f.branchId) &&
         (requested === null || f.branchId === requested) &&
-        (query.status === undefined || f.status === query.status) &&
         (query.topic === undefined || f.topic === query.topic) &&
         at >= fromMs &&
         at < toMs
@@ -367,58 +334,22 @@ function authorize(account: AccountSummary, feedbackId: string, state: FeedbackS
 }
 const isRecord = (v: FeedbackRecord | MockReply): v is FeedbackRecord => 'feedbackId' in v;
 
-/** CÓ GHI DỮ LIỆU (A2): mở lần đầu NEW → SEEN, ghi `seenAt` một lần; mở lại không ghi gì. Ngoài phạm vi không đổi trạng thái. */
+/** Chỉ đọc (ADR-0122): không còn NEW → SEEN. 404 trước, rồi 403 phạm vi. */
 const openFeedback: MockHandler = ({ account, params }) => {
   const bad = typeError(params, ['feedbackId']);
   if (bad) return bad;
   if (!REVIEWERS.includes(account!.role)) return denied();
-  const state = load();
-  const found = authorize(account!, params.feedbackId, state);
-  if (!isRecord(found)) return found;
-  if (found.status === 'NEW') {
-    found.status = 'SEEN';
-    found.seenAt = new Date().toISOString();
-    save(state);
-  }
-  return ok(fullViews([found])[0]);
-};
-
-/** Thứ tự (BE): path / body sai 400 → vai trò 403 → 404 → phạm vi 403 → ghi chú trống 400 BR-DG-04 → chỉ từ SEEN, còn lại 409. */
-const resolveFeedback: MockHandler = ({ account, params, body }) => {
-  const bad = typeError(params, ['feedbackId']);
-  if (bad) return bad;
-  if (!isObject(body) || (has(body.resolutionNote) && typeof body.resolutionNote !== 'string')) return malformed();
-  const note = body.resolutionNote;
-  const invalidBody = invalid([
-    ['resolutionNote', 'Vui lòng nhập ghi chú xử lý', !has(note)],
-    ['resolutionNote', `Ghi chú tối đa ${RESOLUTION_NOTE_MAX} ký tự`, tooLong(note, RESOLUTION_NOTE_MAX)],
-  ]);
-  if (invalidBody) return invalidBody;
-  if (!REVIEWERS.includes(account!.role)) return denied();
-  const state = load();
-  const found = authorize(account!, params.feedbackId, state);
-  if (!isRecord(found)) return found;
-
-  const text = normalize(note as string);
-  if (text === '') return ruleFail('BR-DG-04', 'Vui lòng nhập ghi chú xử lý');
-  if (found.status !== 'SEEN') {
-    return fail('INVALID_STATE_TRANSITION', `Không thể chuyển trạng thái Feedback từ ${found.status} sang RESOLVED`, 409);
-  }
-  found.status = 'RESOLVED';
-  found.resolvedBy = account!.id;
-  found.resolvedAt = new Date().toISOString();
-  found.resolutionNote = text;
-  save(state);
-  return ok(fullViews([found])[0]);
+  const found = authorize(account!, params.feedbackId, load());
+  return isRecord(found) ? ok(fullViews([found])[0]) : found;
 };
 
 /** Cho mock báo cáo (T49, như *ReportApi của BE, 06 §8 Q3): mọi feedback của mọi chi nhánh, chỉ đọc. */
 export const feedbackRecords = (): readonly FeedbackRecord[] => load().feedbacks;
 
-/** UC27 (custmerge-v1 preview): số feedback của một hồ sơ khách, mọi trạng thái. */
+/** UC27 (custmerge-v1 preview): số feedback của một hồ sơ khách. */
 export const feedbackCountOf = (customerId: number): number => load().feedbacks.filter((f) => f.customerId === customerId).length;
 
-/** UC27 (BR-KH-12, `CustomerMergedEvent` của module content): chuyển feedback của hồ sơ nguồn sang hồ sơ đích, giữ nguyên trạng thái và ghi chú xử lý. Trả số bản ghi đã chuyển. */
+/** UC27 (BR-KH-12, `CustomerMergedEvent` của module content): chuyển feedback của hồ sơ nguồn sang hồ sơ đích, giữ nguyên nội dung. Trả số bản ghi đã chuyển. */
 export function moveFeedbacks(fromId: number, toId: number): number {
   const state = load();
   const moving = state.feedbacks.filter((f) => f.customerId === fromId);
@@ -432,5 +363,4 @@ export const feedbackRoutes: Record<string, MockHandler> = {
   'GET /api/me/feedbacks': listMyFeedbacks,
   'GET /api/feedbacks': listFeedbacks,
   'GET /api/feedbacks/:feedbackId': openFeedback,
-  'POST /api/feedbacks/:feedbackId/resolve': resolveFeedback,
 };

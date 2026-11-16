@@ -316,7 +316,8 @@ describe('seed giai đoạn 2: chạy trên BE giả', () => {
     await expect(run({ stages: ['content'] })).rejects.toBeInstanceOf(Phase2AlreadySeededError);
     const summary = await run({ stages: ['feedback'], otp: new StubOtpSource('123456') });
     expect(summary.sections.Feedback).toHaveLength(2);
-    expect(be.state.feedbacks.map((f) => f.status).sort()).toEqual(['NEW', 'RESOLVED']);
+    expect(be.state.feedbacks).toHaveLength(2);
+    expect(be.calls.some((c) => c.path.endsWith('/resolve'))).toBe(false);
   });
 
   it('ngoài giờ mở cửa (giữa trưa): từ chối luồng hôm nay, KHÔNG ghi gì', async () => {

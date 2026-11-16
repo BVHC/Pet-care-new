@@ -1,8 +1,9 @@
-# ADR-0132: Chat cá nhân UC91 (T77c = AI-3, ai-v1 #2 và #3)
+# ADR-0142: Chat cá nhân UC91 (T77c = AI-3, ai-v1 #2 và #3)
 
 - **Trạng thái:** Accepted (Hiến xác nhận 11/11/2026 các điểm ở mục "Cần Hiến xác nhận"; đo qua BE thật ở T77 đợt 2, `docs/07` §13). Từng Proposed khi làm việc AI-3 = T77c, 10/11/2026.
-- **Liên quan:** ADR-0006 (thú thuộc chủ hiện tại, người khác là 404), 0028 (Bean Validation chạy trước `@PreAuthorize`), 0082 (cửa sổ nhắc vaccine ST04), 0108 (`upcomingVaccinations`), 0122 (tên thú, từ thông dụng), 0129 (I-1…I-10 đã cài thật), 0131 (đường ống `ChatService`); đặc tả `07` §4.2 (BR-AI-11, 12b, 26, 27, 28), §5.2, §10, §11; hợp đồng `ai-v1` #2, #3.
+- **Liên quan:** ADR-0006 (thú thuộc chủ hiện tại, người khác là 404), 0028 (Bean Validation chạy trước `@PreAuthorize`), 0082 (cửa sổ nhắc vaccine ST04), 0108 (`upcomingVaccinations`), 0122 (tên thú, từ thông dụng), 0129 (I-1…I-10 đã cài thật), 0141 (đường ống `ChatService`); đặc tả `07` §4.2 (BR-AI-11, 12b, 26, 27, 28), §5.2, §10, §11; hợp đồng `ai-v1` #2, #3.
 - **Đánh số:** không có migration. ADR kế tiếp: **0133**.
+- **Đánh số lại:** (16/11/2026) trước đây ADR-0132; trùng số với `0132-orders-optimistic-version` (D045, BE-1). ADR của AI đổi sang **0142**, ADR của BE-1 giữ **0132**: đổi số bên BE-1 buộc sửa chú thích của `V54`, mà Flyway kiểm checksum cả chú thích (DB dev có thể đã áp). Mọi tham chiếu trong repo tới ADR chat cá nhân đã đổi theo; các câu ghi "ADR kế tiếp" trong file này là số liệu lịch sử lúc viết.
 
 ## Bối cảnh
 
@@ -41,7 +42,7 @@ Khách từ token → `PetQueryApi.findPet` → **kiểm chủ trước** (khôn
 3. **Nhiều thú được nêu tên, hoặc hai thú trùng tên**: hỏi lại bằng `NEED_PET_CHOICE`, danh sách chỉ gồm các thú đã khớp (không phải toàn bộ thú của khách). Đặc tả chỉ nói "thú nêu tên thì dùng thú đó".
 4. **Loại vaccine**: chỉ xét loại có trong `listActiveProtocols(loài)`; mũi của loại ngoài phác đồ bị bỏ qua. Thiếu ngày sinh thì không đánh giá tuổi (ra `NOT_STARTED`, không `NOT_YET_ELIGIBLE`). `nextDueDate` null thì `UP_TO_DATE` (cột `vaccinations.next_due_date` là `NOT NULL`, nên chỉ là phòng thủ). `nextDoseNumber` = số mũi sau chỉ khi phác đồ có dòng đó, ngược lại null (mũi nhắc lại hằng năm không có số).
 5. **Lịch hẹn lọc sau `limit`**: I-10 nhận `limit` rồi `ai` mới lọc thú còn sống, nên có thể trả ít dòng hơn giới hạn dù còn lịch. Chấp nhận vì lịch `BOOKED` của thú đã mất / đã chuyển chủ hiếm; muốn tránh cần thêm bộ lọc thú vào I-10 (việc của BE-1).
-6. **Câu mẫu**: đặc tả không nêu nguyên văn câu "chưa có thú cưng" (`ChatTexts.NO_PET`) và mẫu `VaccinationSummary.message`: chữ do ADR này chọn. "Bạn muốn xem lịch tiêm của bé nào?" và dòng lịch hẹn lấy nguyên văn ví dụ ở `07` §10; "Bạn chưa có lịch hẹn sắp tới." là câu của BR-AI-27 thêm dấu chấm (như `NEED_LOGIN` ở ADR-0131). Loài chưa có phác đồ đang dùng: "Chưa có phác đồ tiêm cho loài của {tên} trong danh mục." với `items` rỗng.
+6. **Câu mẫu**: đặc tả không nêu nguyên văn câu "chưa có thú cưng" (`ChatTexts.NO_PET`) và mẫu `VaccinationSummary.message`: chữ do ADR này chọn. "Bạn muốn xem lịch tiêm của bé nào?" và dòng lịch hẹn lấy nguyên văn ví dụ ở `07` §10; "Bạn chưa có lịch hẹn sắp tới." là câu của BR-AI-27 thêm dấu chấm (như `NEED_LOGIN` ở ADR-0141). Loài chưa có phác đồ đang dùng: "Chưa có phác đồ tiêm cho loài của {tên} trong danh mục." với `items` rỗng.
 7. **#3 dùng `PetQueryApi.findPet`** (đủ tên, loài, ngày sinh, chủ, ngày mất trong một lần gọi) thay vì `findPetProfile` + `findPets` của I-1 (hai lần gọi, và `PetProfile` không có tên).
 8. **Ghim parity**: ghim `hasSize` của `OpenApiContractParityIT.documentedModulesCoverAllTheirImplementedEndpoints` nâng từ 195 lên 197 (đúng 2 endpoint). Giá trị thật đọc được là 196 vì lệch `feedbacks` sẵn có (ca này đã đỏ ở mốc trước với 194 so với 195), không phải do T77c.
 

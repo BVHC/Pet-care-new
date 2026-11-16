@@ -31,7 +31,7 @@ import com.petcare.platform.exception.BusinessRuleViolationException;
 import com.petcare.platform.exception.ResourceNotFoundException;
 
 /**
- * Tra lịch tiêm tất định (BR-AI-11, UC91, docs/adr/0132): với mỗi loại vaccine có trong phác đồ đang dùng của loài, lấy mũi
+ * Tra lịch tiêm tất định (BR-AI-11, UC91, docs/adr/0142): với mỗi loại vaccine có trong phác đồ đang dùng của loài, lấy mũi
  * mới nhất chưa bị thay thế rồi xếp vào một trong năm trạng thái. Câu {@code message} sinh từ mẫu, không qua LLM.
  * <p>
  * Quyền sở hữu kiểm lại <b>mỗi lần gọi</b> (không cache) vì module {@code ai} không nghe {@code PetOwnerTransferredEvent}:

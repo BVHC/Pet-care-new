@@ -4,10 +4,10 @@ package com.petcare.module.ai.chat;
  * Câu mẫu cố định của chatbot, không do LLM sinh. Nguyên văn đặc tả: {@link #OUT_OF_SCOPE} (BR-AI-07),
  * {@link #MEDICAL_RECORD} và {@link #NEED_LOGIN} (BR-AI-28), {@link #EMERGENCY} và {@link #DISCLAIMER} (07 §10). Đặc tả
  * không nêu nguyên văn {@link #MEDICAL_REFUSAL} (BR-AI-02), {@link #UNAVAILABLE} (BR-AI-10) và {@link #EMERGENCY_NO_BRANCH}
- * (BR-AI-03, danh sách rỗng): lấy theo mock FE của T57 để giao diện và máy chủ cùng một chữ (ADR-0131).
+ * (BR-AI-03, danh sách rỗng): lấy theo mock FE của T57 để giao diện và máy chủ cùng một chữ (ADR-0141).
  * <p>
- * Câu của UC91 (ADR-0132): {@link #NEED_PET_CHOICE} nguyên văn 07 §10; {@link #NO_APPOINTMENT} nguyên văn BR-AI-27 thêm dấu
- * chấm; {@link #NO_PET} đặc tả chỉ nói "câu mẫu hướng dẫn thêm thú" nên chữ do ADR-0132 chọn.
+ * Câu của UC91 (ADR-0142): {@link #NEED_PET_CHOICE} nguyên văn 07 §10; {@link #NO_APPOINTMENT} nguyên văn BR-AI-27 thêm dấu
+ * chấm; {@link #NO_PET} đặc tả chỉ nói "câu mẫu hướng dẫn thêm thú" nên chữ do ADR-0142 chọn.
  */
 public final class ChatTexts {
 
@@ -27,6 +27,12 @@ public final class ChatTexts {
     public static final String DISCLAIMER = "Thông tin tham khảo, không thay thế khám thú y.";
     /** Tiền tố bắt buộc khi trả lời bằng kiến thức chung (không có tài liệu nội bộ làm căn cứ), BR-AI-33. */
     public static final String GENERAL_PREFIX = "Thông tin tham khảo chung:";
+    /**
+     * Chế độ mở (docs/adr/0136 "Đã cài ở T92 (phần 2)"): tiền tố bắt buộc của câu ngoài lĩnh vực thú cưng và câu lưu ý đi kèm.
+     * Cố ý KHÔNG bắt đầu bằng {@link #GENERAL_PREFIX} (dấu hai chấm nằm sau "ngoài lĩnh vực thú cưng") để hai tiền tố không nhầm nhau.
+     */
+    public static final String OPEN_PREFIX = "Thông tin tham khảo chung (ngoài lĩnh vực thú cưng):";
+    public static final String OPEN_DISCLAIMER = "Thông tin tham khảo chung, không thay thế ý kiến chuyên gia.";
     public static final String GREETING = "Chào bạn! Mình là trợ lý AI của Pet Care. Bạn cứ hỏi về chăm sóc, dinh dưỡng, "
             + "vệ sinh hay lịch tiêm của chó mèo nhé.";
     public static final String NEED_PET_CHOICE = "Bạn muốn xem lịch tiêm của bé nào?";

@@ -31,7 +31,7 @@ import com.petcare.platform.exception.ResourceNotFoundException;
 import com.petcare.platform.security.BranchScope;
 
 /**
- * Giỏ hàng của khách (UC61, BR-BH-07, BR-SP-01; docs/adr/0141). Mỗi khách một giỏ lưu ở server, tạo lười ở lần ghi đầu
+ * Giỏ hàng của khách (UC61, BR-BH-07, BR-SP-01; docs/adr/0143). Mỗi khách một giỏ lưu ở server, tạo lười ở lần ghi đầu
  * tiên. Một dòng chỉ được tính khi sản phẩm còn bán được ({@link #eligible}: đang kinh doanh, {@code GOODS}, không kê đơn).
  * <p>
  * Ghi = một use case một transaction: xác định khách (tài khoản hiện tại) → kiểm sản phẩm khi thêm → tạo giỏ nếu chưa có →

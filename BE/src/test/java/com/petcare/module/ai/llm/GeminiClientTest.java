@@ -171,6 +171,46 @@ class GeminiClientTest {
         assertThat(generation.at("/thinkingConfig/thinkingBudget").asInt(-1)).isZero();
         assertThat(generation.path("responseMimeType").asText()).isEqualTo("application/json");
         assertThat(generation.at("/responseSchema/required")).hasSize(2);
+        assertThat(generation.at("/responseSchema/properties").fieldNames()).toIterable().containsExactlyInAnyOrder("inScope", "answer");
+        assertThat(answer.category()).as("lược đồ cũ không có category").isNull();
+    }
+
+    @Test
+    void generateCategorizedAsksForACategoryEnumAndParsesIt() {
+        body = generateJson("{\"category\":\"OUT_OF_DOMAIN\",\"answer\":\"Paris.\"}");
+
+        LlmAnswer answer = client().generateCategorized("HỆ THỐNG", "NGƯỜI DÙNG");
+
+        assertThat(answer.category()).isEqualTo(AnswerCategory.OUT_OF_DOMAIN);
+        assertThat(answer.answer()).isEqualTo("Paris.");
+        assertThat(answer.inputTokens()).isEqualTo(120);
+        Recorded request = requests.get(0);
+        assertThat(request.body().at("/systemInstruction/parts/0/text").asText()).isEqualTo("HỆ THỐNG");
+        assertThat(request.body().at("/contents/0/parts/0/text").asText()).isEqualTo("NGƯỜI DÙNG");
+        JsonNode generation = request.body().path("generationConfig");
+        assertThat(generation.at("/thinkingConfig/thinkingBudget").asInt(-1)).isZero();
+        assertThat(generation.at("/responseSchema/properties").fieldNames()).toIterable().containsExactlyInAnyOrder("category", "answer");
+        assertThat(generation.at("/responseSchema/required")).hasSize(2);
+        assertThat(generation.at("/responseSchema/properties/category/enum"))
+                .extracting(JsonNode::asText).containsExactlyInAnyOrder("PET_CARE", "MEDICAL_RISK", "OUT_OF_DOMAIN", "BUSINESS", "BLOCKED");
+    }
+
+    @Test
+    void anUnknownCategoryIsReturnedAsNullSoTheCallerCanFailSafe() {
+        body = generateJson("{\"category\":\"WEATHER\",\"answer\":\"Trời nắng.\"}");
+
+        LlmAnswer answer = client().generateCategorized("s", "u");
+
+        assertThat(answer.category()).isNull();
+        assertThat(answer.inScope()).isFalse();
+    }
+
+    @Test
+    void aCategorizedAnswerMissingAFieldIsAProviderError() {
+        body = generateJson("{\"answer\":\"không có category\"}");
+
+        assertThatThrownBy(() -> client().generateCategorized("s", "u")).isInstanceOfSatisfying(AiProviderException.class,
+                e -> assertThat(e.kind()).isEqualTo(ChatErrorKind.PROVIDER_ERROR));
     }
 
     @Test
