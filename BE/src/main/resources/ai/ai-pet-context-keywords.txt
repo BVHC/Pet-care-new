@@ -1,0 +1,38 @@
+# Cụm từ chọn trường cho khối "THÔNG TIN THÚ" của chatbot (BR-AI-32, docs/adr/0135 D2). Mỗi dòng một cụm từ, chia mục bằng [TÊN].
+# Chỉ chạy khi [CFG] ai.chat.pet_context_enabled bật. Khớp như ai-business-keywords.txt: không phân biệt hoa thường, theo cụm
+# có ranh giới từ, ưu tiên dạng có dấu; dạng bỏ dấu chỉ dùng cho cụm từ 2 âm tiết trở lên.
+# Không khớp mục nào thì dùng nhóm mặc định "chăm sóc": loài, giống, nhóm tuổi, ba dịch vụ gần nhất. Khớp cả hai mục thì gửi
+# hợp các trường của hai nhóm.
+
+# Dinh dưỡng, cân nặng: loài, giống, nhóm tuổi, cân nặng mới nhất, triệt sản.
+[NUTRITION]
+ăn
+bữa
+thức ăn
+đồ ăn
+khẩu phần
+dinh dưỡng
+thực đơn
+hạt
+pate
+béo
+gầy
+thừa cân
+giảm cân
+tăng cân
+cân
+cân nặng
+
+# Tiêm phòng, ký sinh trùng: loài, nhóm tuổi, mũi tiêm gần nhất theo loại vaccine.
+[VACCINATION]
+tiêm
+vaccine
+vắc xin
+vacxin
+tái chủng
+xổ giun
+tẩy giun
+giun
+ve
+bọ chét
+ký sinh trùng

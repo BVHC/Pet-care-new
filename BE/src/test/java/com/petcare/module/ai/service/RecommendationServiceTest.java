@@ -50,6 +50,7 @@ import com.petcare.module.catalog.api.ServiceGroup;
 import com.petcare.module.customer.api.CustomerQueryApi;
 import com.petcare.module.customer.api.PetQueryApi;
 import com.petcare.module.customer.api.PetQueryApi.PetProfile;
+import com.petcare.module.customer.api.Sex;
 import com.petcare.module.customer.api.Species;
 import com.petcare.module.identity.api.ConfigKey;
 import com.petcare.module.identity.api.SystemConfigApi;
@@ -148,7 +149,7 @@ class RecommendationServiceTest {
 
     @BeforeEach
     void setUp() {
-        pet = new PetProfile(PET, CUSTOMER, Species.DOG, "Poodle", TODAY.minusWeeks(20), MOCHI_KG, null);
+        pet = new PetProfile(PET, CUSTOMER, Species.DOG, "Poodle", TODAY.minusWeeks(20), MOCHI_KG, null, Sex.MALE, null);
         when(customers.findCustomerIdByAccountId(ACCOUNT)).thenReturn(Optional.of(CUSTOMER));
         when(pets.findPetProfile(PET)).thenAnswer(i -> Optional.of(pet));
         when(catalog.listRecommendable()).thenAnswer(i -> new Recommendable(grooming, kennels, products));
@@ -291,7 +292,7 @@ class RecommendationServiceTest {
         config.values.put(ConfigKey.AI_RECO_CACHE_MINUTES, BigDecimal.TEN);
         assertThat(ids(recommend())).contains(101L).doesNotContain(102L);
 
-        pet = new PetProfile(PET, CUSTOMER, Species.DOG, "Poodle", TODAY.minusWeeks(20), new BigDecimal("30"), null);
+        pet = new PetProfile(PET, CUSTOMER, Species.DOG, "Poodle", TODAY.minusWeeks(20), new BigDecimal("30"), null, Sex.MALE, null);
         RecommendationResponse heavy = recommend();
 
         assertThat(ids(heavy)).as("Mochi 30 kg: mục chó lớn xuất hiện, mục ≤ 8 kg bị loại").contains(102L).doesNotContain(101L);
@@ -305,7 +306,7 @@ class RecommendationServiceTest {
         recommend();
 
         // Chỉ đổi loài (giống, ngày sinh, cân nặng giữ nguyên): khóa cache phải đổi vì riêng loài.
-        pet = new PetProfile(PET, CUSTOMER, Species.CAT, "Poodle", TODAY.minusWeeks(20), MOCHI_KG, null);
+        pet = new PetProfile(PET, CUSTOMER, Species.CAT, "Poodle", TODAY.minusWeeks(20), MOCHI_KG, null, Sex.MALE, null);
 
         assertThat(ids(recommend())).as("các mục chỉ dành cho chó bị loại; 104 đông khách hơn 103").containsExactly(104L, 103L);
     }
@@ -392,9 +393,9 @@ class RecommendationServiceTest {
 
         stays = new ArrayList<>(List.of(new StayOfPet(1L, 301L, StayStatus.CHECKED_OUT, TODAY.minusDays(30), TODAY.minusDays(28))));
         assertThat(item(recommend(), 301).score()).as("lưu trú mới: H = 1").hasToString("80.0");
-        pet = new PetProfile(PET, CUSTOMER, Species.DOG, "Corgi", TODAY.minusWeeks(20), MOCHI_KG, null);
+        pet = new PetProfile(PET, CUSTOMER, Species.DOG, "Corgi", TODAY.minusWeeks(20), MOCHI_KG, null, Sex.MALE, null);
         recommend();
-        pet = new PetProfile(PET, CUSTOMER, Species.DOG, "Corgi", TODAY.minusWeeks(21), MOCHI_KG, null);
+        pet = new PetProfile(PET, CUSTOMER, Species.DOG, "Corgi", TODAY.minusWeeks(21), MOCHI_KG, null, Sex.MALE, null);
         recommend();
 
         verify(visits, times(4)).countCompletedByService(any(), any(), any());
@@ -406,7 +407,7 @@ class RecommendationServiceTest {
         config.values.put(ConfigKey.AI_RECO_CACHE_MINUTES, BigDecimal.TEN);
         recommend();
 
-        pet = new PetProfile(PET, 8L, Species.DOG, "Poodle", TODAY.minusWeeks(20), MOCHI_KG, null);
+        pet = new PetProfile(PET, 8L, Species.DOG, "Poodle", TODAY.minusWeeks(20), MOCHI_KG, null, Sex.MALE, null);
 
         assertThatThrownBy(this::recommend).isInstanceOf(ResourceNotFoundException.class);
     }
@@ -415,7 +416,7 @@ class RecommendationServiceTest {
 
     @Test
     void anotherCustomersPetAnUnknownPetAndAnAccountWithoutCustomerAreAllNotFound() {
-        pet = new PetProfile(PET, 8L, Species.DOG, "Poodle", TODAY.minusWeeks(20), MOCHI_KG, null);
+        pet = new PetProfile(PET, 8L, Species.DOG, "Poodle", TODAY.minusWeeks(20), MOCHI_KG, null, Sex.MALE, null);
         assertThatThrownBy(this::recommend).isInstanceOf(ResourceNotFoundException.class);
 
         assertThatThrownBy(() -> service.recommend(ACCOUNT, 404L, null, null)).isInstanceOf(ResourceNotFoundException.class);
@@ -426,10 +427,10 @@ class RecommendationServiceTest {
 
     @Test
     void aDeceasedPetIsRejectedAfterTheOwnershipCheck() {
-        pet = new PetProfile(PET, CUSTOMER, Species.DOG, "Poodle", TODAY.minusWeeks(20), MOCHI_KG, TODAY.minusDays(3));
+        pet = new PetProfile(PET, CUSTOMER, Species.DOG, "Poodle", TODAY.minusWeeks(20), MOCHI_KG, TODAY.minusDays(3), Sex.MALE, null);
         assertThatThrownBy(this::recommend).isInstanceOf(BusinessRuleViolationException.class).hasMessageContaining("BR-KH-05");
 
-        pet = new PetProfile(PET, 8L, Species.DOG, "Poodle", TODAY.minusWeeks(20), MOCHI_KG, TODAY.minusDays(3));
+        pet = new PetProfile(PET, 8L, Species.DOG, "Poodle", TODAY.minusWeeks(20), MOCHI_KG, TODAY.minusDays(3), Sex.MALE, null);
         assertThatThrownBy(this::recommend).as("thú mất của người khác vẫn là 404").isInstanceOf(ResourceNotFoundException.class);
     }
 
@@ -485,7 +486,7 @@ class RecommendationServiceTest {
 
     @Test
     void kennelWeightLimitIsNotEvaluatedWhenThePetHasNoWeight() {
-        pet = new PetProfile(PET, CUSTOMER, Species.DOG, "Poodle", TODAY.minusWeeks(20), null, null);
+        pet = new PetProfile(PET, CUSTOMER, Species.DOG, "Poodle", TODAY.minusWeeks(20), null, null, Sex.MALE, null);
         kennel(301, Species.DOG, "1.00");
         kennel(302, Species.CAT, "10");
 
@@ -496,7 +497,7 @@ class RecommendationServiceTest {
 
     @Test
     void catOfEightYearsIsAdultNotSeniorSoTheCatKeyIsUsedNotTheDogKey() {
-        pet = new PetProfile(PET, CUSTOMER, Species.CAT, "Mun", TODAY.minusYears(8), MOCHI_KG, null);
+        pet = new PetProfile(PET, CUSTOMER, Species.CAT, "Mun", TODAY.minusYears(8), MOCHI_KG, null, Sex.MALE, null);
         groom(101, "Tắm");
 
         recommend();
@@ -508,7 +509,7 @@ class RecommendationServiceTest {
     @Test
     void otherSpeciesReadsItsOwnSeniorKeyNotTheDogOne() {
         config.values.put(ConfigKey.AI_RECO_SENIOR_AGE_YEARS_OTHER, new BigDecimal("12"));
-        pet = new PetProfile(PET, CUSTOMER, Species.OTHER, "Thỏ", TODAY.minusYears(8), MOCHI_KG, null);
+        pet = new PetProfile(PET, CUSTOMER, Species.OTHER, "Thỏ", TODAY.minusYears(8), MOCHI_KG, null, Sex.MALE, null);
         groom(101, "Tắm");
 
         recommend();
@@ -520,13 +521,13 @@ class RecommendationServiceTest {
     void ageGroupBoundariesFollowSection73() {
         groom(101, "Tắm");
 
-        pet = new PetProfile(PET, CUSTOMER, Species.CAT, "Mun", TODAY.minusDays(363), MOCHI_KG, null);
+        pet = new PetProfile(PET, CUSTOMER, Species.CAT, "Mun", TODAY.minusDays(363), MOCHI_KG, null, Sex.MALE, null);
         recommend();
-        pet = new PetProfile(PET, CUSTOMER, Species.CAT, "Mun", TODAY.minusDays(364), MOCHI_KG, null);
+        pet = new PetProfile(PET, CUSTOMER, Species.CAT, "Mun", TODAY.minusDays(364), MOCHI_KG, null, Sex.MALE, null);
         recommend();
-        pet = new PetProfile(PET, CUSTOMER, Species.CAT, "Mun", TODAY.minusDays(10 * 364), MOCHI_KG, null);
+        pet = new PetProfile(PET, CUSTOMER, Species.CAT, "Mun", TODAY.minusDays(10 * 364), MOCHI_KG, null, Sex.MALE, null);
         recommend();
-        pet = new PetProfile(PET, CUSTOMER, Species.CAT, "Mun", null, MOCHI_KG, null);
+        pet = new PetProfile(PET, CUSTOMER, Species.CAT, "Mun", null, MOCHI_KG, null, Sex.MALE, null);
         recommend();
 
         verify(visits).countCompletedByService(Species.CAT, AgeGroup.JUNIOR, TODAY.minusDays(90));
@@ -537,7 +538,7 @@ class RecommendationServiceTest {
 
     @Test
     void petWithoutBirthDateAndWeightIsNeitherExcludedNorPenalised() {
-        pet = new PetProfile(PET, CUSTOMER, Species.DOG, null, null, null, null);
+        pet = new PetProfile(PET, CUSTOMER, Species.DOG, null, null, null, null, Sex.MALE, null);
         workedExample();
 
         RecommendationResponse response = recommend();

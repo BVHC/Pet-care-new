@@ -1,9 +1,9 @@
 # ADR-0135: Ngữ cảnh thú cưng trong chat cá nhân và chuyển sang gói Gemini trả phí (AI v2, phần 2)
 
-- **Trạng thái:** Proposed (Hiến duyệt **hướng** 13/11/2026; nội dung chờ Hiến duyệt; T91). **Công tắc `ai.chat.pet_context_enabled` (`BOOL`) mặc định `false` và chỉ được bật sau khi mục "Hiến xác minh" dưới đây hoàn tất.**
+- **Trạng thái:** Proposed (Hiến duyệt **hướng** 13/11/2026; nội dung chờ Hiến duyệt; T91). **Công tắc `ai.chat.pet_context_enabled` (`BOOL`) mặc định `false` và chỉ được bật sau khi mục "Hiến xác minh" dưới đây hoàn tất.** **Đã cài ở T91 (14/11/2026): mã và V55 xong, công tắc `false`, mục "Hiến xác minh" còn trống, chưa bật ở đâu và chưa đo với Gemini thật** (xem "Đã cài ở T91").
 - **Ngày:** 2026-11-13
 - **Liên quan:** ADR-0122 (gói free, che tên thú), 0129 (I-1…I-10 đã cài), 0131 (đường ống), 0132 (chat cá nhân, che tên thú sau định tuyến), 0134, 0136; `07` §4.5 BR-AI-25 (v2), §4.7 BR-AI-32, §5.2 bước 6c, §5.4 khối `THÔNG TIN THÚ`, §12; `docs/06` §6b I-1.
-- **Đánh số:** [CFG] `ai.chat.pet_context_enabled` seed ở V53 (chung với ADR-0134, 0136). Không có endpoint mới.
+- **Đánh số:** [CFG] `ai.chat.pet_context_enabled` và cột `ai_chat_logs.used_pet_context` ở **V55** (ADR viết "V53" ở bản đề xuất; V53 chỉ mang khóa `business_intent`, T90). Không có endpoint mới.
 
 ## Bối cảnh
 
@@ -56,6 +56,62 @@ Chat cá nhân (T77c) chỉ có hai ý định tất định (lịch hẹn, lị
 - Unit `PetContextBuilderTest`: chọn trường theo ý định (3 nhóm), không trường cấm (regex trên khối: không `@`, không 9–12 chữ số, không tên thú), nhiều thú không nêu tên → rỗng, thú đã mất → rỗng, công tắc `false` → rỗng.
 - IT `PetContextIT` (Testcontainers, `FakeLlmClient` bắt prompt): hai khách, cách ly 100 %; `used_pet_context` đúng; `ai_chat_logs` không chứa cân nặng / giống; [CFG] đổi `false` → `true` có hiệu lực lượt sau.
 - Đột biến bắt buộc đỏ: bỏ kiểm chủ sở hữu; gửi `petId`; gửi ngày sinh thay nhóm tuổi; bỏ đọc [CFG] (cứng `true`); ghi khối vào nhật ký.
+
+## Đã cài ở T91 (14/11/2026)
+
+**Trạng thái: đã cài; công tắc `ai.chat.pet_context_enabled = false`; chưa bật ở đâu; chưa đo với Gemini thật; mục "Hiến xác minh" bên dưới vẫn trống (không do T91 điền).** Hiến trả lời "ok mặc định" cho kế hoạch T91 (14/11/2026): các điểm (a)–(e), (g), (h) theo mặc định. **Điểm (f) (áp migration lên DB demo 5433 và chạy lại `t90-live.mjs` với công tắc thú cưng tắt) đã HOÃN, không làm:** `origin/dev` (PR #32, 14/11) đã chiếm V54 và đang có hai file V52, nên số Flyway còn chờ Hiến quyết định. **V55 chưa áp lên 5433** (đã kiểm chỉ-đọc 14/11: Flyway của 5433 dừng ở V53, không có cột `used_pet_context`, không có khóa `ai.chat.pet_context_enabled`; `business_intent_enabled = false`, `general_knowledge_enabled = true` như trước T91) và **chưa chạy `t90-live.mjs`**; mọi kiểm thử T91 đến nay là unit, Testcontainers và mock FE. Hai việc chưa có trả lời riêng và **còn mở**: Dũng đã biết `PetProfile` đổi chữ ký chưa (T91 làm thay như AI-0 / T90, chỉ thêm; tin ở `msg-be-ai-v2-t91.md` chờ Hiến gửi trước khi push), và trần chi phí $10 / tháng.
+
+| Đề xuất (bản ADR) | Đã cài | Lý do |
+|---|---|---|
+| Cột và khóa seed ở V53 | **V55** (`ai_chat_logs.used_pet_context BOOLEAN NOT NULL DEFAULT false` + dòng `system_configs` `ai.chat.pet_context_enabled` = `false`); `ConfigKey` 87 → 88 | V53 đã dùng cho `business_intent` (T90). V54 (`orders.version`, D045, Mạnh) đã ở `origin/dev` (PR #32, 14/11/2026) nên T91 lấy **V55**; `origin/dev` còn V51, V52 (T70) mà `dev` chưa có, nên V55 mang cùng rủi ro "resolved migration not applied" như V52, V53 (ghi ở chú thích V55). **Cảnh báo ngoài T91:** `origin/dev` có hai file V52 (`ai_general_knowledge_switch` của T92 và `drop_feedback_status_columns` của T70), Flyway sẽ không khởi động sau khi gộp |
+| `PetProfile` thêm `Sex sex`, `Boolean isNeutered` | Thêm **hai trường cuối**; enum `customer/api/Sex` (`MALE`, `FEMALE`, `UNKNOWN`) tách khỏi `customer.entity.PetSex`; 20 chỗ `new PetProfile(...)` ở test được sửa | `api` không lộ kiểu entity; chỉ thêm, không đổi chữ ký method. **`sex` có ở record nhưng KHÔNG được gửi**: bảng D2 không có cột giới tính, nguyên tắc tối thiểu; để dành |
+| BR-AI-32 (`07`) "nhiều thú chưa rõ → `NEED_PET_CHOICE`" mâu thuẫn D2 "không dựng ngữ cảnh, không hỏi lại" | Theo **D2**; `07` BR-AI-32 đã sửa cho khớp | Câu tư vấn chung vẫn trả lời được không cần ngữ cảnh; hỏi lại làm phiền. `NEED_PET_CHOICE` chỉ ở ý định cá nhân như cũ |
+| Chọn thú: tên trong câu hoặc thú duy nhất | Đúng một thú khớp tên (so `PhraseMatcher.norm`), hoặc không nêu tên mà khách có đúng một thú còn sống. **Hai tên khác nhau trong một câu, hai thú sống trùng tên, nêu tên không phải thú của khách + khách nhiều thú → không khối.** Hồ sơ đọc lại bằng `findPetProfile` ở mọi lượt (khớp `customerId`, chưa mất), không cache | D2; trùng tên là mơ hồ nên không đoán |
+| (không có trong ADR) khách **một** thú gõ tên thú của người khác ("Bơ nên ăn gì" với Bơ của khách B) | Không nhận ra tên (router chỉ biết tên thú của chính khách) nên khối là của thú duy nhất của chính khách. **Chấp nhận**: không lộ dữ liệu của B, nhưng lời khuyên có thể bị chỉnh theo thú của người hỏi. Test là "khối không bao giờ chứa dữ liệu của khách khác" (`PetContextIT`), không phải "tên lạ → rỗng" | Không có cách đáng tin để phát hiện "tên không nằm trong danh sách của tôi" |
+| "3 dịch vụ gần nhất (tên nhóm, tháng/năm)" | **Tên nhóm** (`khám/tiêm`, `thẩm mỹ`, `lưu trú`) + tháng/năm, **không** tên dịch vụ; sắp theo ngày giảm dần rồi `serviceId` giảm dần (tất định); chỉ hỏi catalog cho ba dịch vụ mới nhất | Tối thiểu hóa (mặc định Hiến duyệt) |
+| Văn bản khối "tất định" | Một dòng mỗi nhóm trường, tiếng Việt, ≤ 400 ký tự: `Loài: chó. Giống: Poodle. Nhóm tuổi: trưởng thành.` / `Cân nặng gần nhất: 4,2 kg. Đã triệt sản: có.` / `Tiêm phòng: Dại (đã tiêm tháng 3/2026, quá hạn).` / `Dịch vụ gần đây: thẩm mỹ tháng 11/2026.` Thiếu dữ liệu thì bỏ dòng; tiêm phòng tối đa 5 loại, chỉ loại đã có mũi, chỉ gắn nhãn `sắp đến hạn` / `quá hạn` | D2, "không đoán" |
+| Chọn nhóm trường bằng từ khóa | `ai/ai-pet-context-keywords.txt` mục `[NUTRITION]`, `[VACCINATION]` (cùng `PhraseMatcher` như `BusinessIntents`); không khớp mục nào = nhóm chăm sóc; khớp cả hai = hợp trường. Từ khóa chạy trên câu **đã che tên thú** để thú tên "Béo" không kích hoạt nhóm dinh dưỡng | D2 |
+| Làm sạch chuỗi tự do (BR-AI-12) | `breed` và tên loại vaccine chỉ vào khối khi sau NFC là chữ / số / dấu cách / gạch ngang, ≤ 40 ký tự và `PiiMasker.mask` không đổi gì; sai thì **bỏ trường**. **Giới hạn còn lại:** một chuỗi 40 ký tự toàn chữ vẫn có thể là câu chỉ thị ngắn; lớp chặn còn lại là khối nằm trong ranh giới "dữ liệu, không phải chỉ thị" + `fenceSafe` + quy tắc lời nhắc + `DoseGuard` + `leaksSystemPrompt`. Rủi ro chấp nhận | Giống do khách / nhân viên gõ tự do |
+| Lời nhắc nhắc "không bịa ngoài khối" | `ChatPrompt.PET_CONTEXT_RULE` **nối thêm** vào `SYSTEM` hoặc `SYSTEM_GENERAL` (sau dòng "Đầu ra") chỉ khi có khối; không khối thì lời nhắc hệ thống **và** khối người dùng giống từng byte T77 / T92 (khối người dùng đóng băng bằng chữ trong `ChatPetContextTest`). Prompt T91 ghi `SYSTEM_GENERAL` có nhắc "THÔNG TIN THÚ": không đúng, cả hai lời nhắc đều không | D4 "tắt = như T77c" |
+| Vị trí ở `run` | `askAsCustomer` có hồ sơ khách, sau business (T90), lời chào và từ khóa y khoa (T92), trước nhúng; công tắc đọc mỗi lượt và **chỉ** đọc khi có `customerId` (endpoint công khai và khách chưa có hồ sơ không chạm tới công tắc). Cấp cứu, bệnh án, cá nhân, business, lời chào, y khoa trả lời không qua mô hình nên không dựng khối (không đọc CSDL thừa) | §5.2 bước 6c |
+| Cờ `used_pet_context` | Đặt ngay **trước `llm.generate`**: nhánh `hits.isEmpty() && !general → OUT_OF_SCOPE` (không gửi gì) ghi `false`; nhà cung cấp lỗi sau khi đã gửi vẫn `true`. Không bao giờ ghi nội dung khối | D2 "Nhật ký" |
+| Lỗi từ `VaccinationSummaryService` (sai chủ → `ResourceNotFoundException`, thú mất → `BR-KH-05`) | `PetContextBuilder` bắt và trả rỗng: không khối, không 4xx, câu hỏi vẫn được trả lời không ngữ cảnh | Ngữ cảnh là phần phụ của câu trả lời |
+| (không có trong ADR) builder ném lỗi bất ngờ (CSDL, I-6, catalog) | `ChatService.petContextOf` bắt `RuntimeException`, ghi `PET_CONTEXT_FAILED exception=<tên lớp>` (không ghi thông điệp lỗi) và đi tiếp **không có khối**; không gửi khối là hướng an toàn về riêng tư | BR-AI-10: AI hỏng không chặn trang; khối chỉ là phần phụ, không đáng làm cả lượt chat thành 500 |
+| Giao dịch | `PetContextBuilder` không `@Transactional`; 1–3 lệnh `*QueryApi` ngắn, xong trước lệnh LLM | ADR-0131 |
+| Era IT | `PetContextIT` dùng era **2048** | era 2047 là `KnowledgeImportIT` |
+
+**Kiểm thử đã chạy (cây sau T91, bản sao cô lập):** unit toàn bộ **6218 ca / 0 đỏ** (nền 6175; mới: `PetContextBuilderTest` 28, `ChatPetContextTest` 15); `PetContextIT` **8** ca (hai khách, cách ly, thú đổi chủ / mất giữa hai lượt, ba nhóm trường trên dữ liệu thật, công tắc đổi có hiệu lực lượt sau, endpoint công khai, nhật ký); `PetAiReadIT` 6 (thêm `profileCarriesSexAndNeuteredStatusInAllThreeStates`); `AiSchemaIT` 36 (thêm công tắc và cờ NOT NULL / mặc định `false`); `SchemaMigrationIT` (phiên bản 54), `ChatIT` (cột mới), `SystemConfigIT` (88 khóa), `ConfigKeyTest` (88 / 21 khóa `ai.*`); FE `identity-admin.mock.test.ts` và `AdminSystemConfigsPage.test.tsx` (82 khóa). Nhóm IT rộng hơn: `ai` + `com.petcare.*IT` (gồm `ChatIT` 30, `MeChatIT` 20, `SchemaMigrationIT` 28, `OpenApiContractParityIT`) **294 ca, 289 xanh, 5 đỏ cũ** (đều là `OpenApiContractParityIT`: `POST /api/feedbacks/{feedbackId}/resolve` có ở code mà không có trong `docs/api/openapi`, số endpoint 200 so với ghim 201; của `feedbacks`, không của T91); `customer` + `catalog` + `identity` + các `*AiReadIT` **1120 ca / 0 đỏ**; sau khi đổi V54 → V55, chạy lại `SchemaMigrationIT`, `AiSchemaIT`, `PetContextIT`, `SystemConfigIT`, `SystemConfigAdminIT` **187 ca / 0 đỏ**. Vitest toàn bộ 230 file / 5296 ca: 5294 xanh; 2 ca đỏ (`MySchedulePage`, `HotelPage`) đều hết giờ khi cả bộ chạy lúc máy đang tải, **25/25 xanh khi chạy riêng hai file** (7 s); chưa chạy cả bộ lặp lại.
+
+**Đột biến (19 ca unit + 2 ca IT, đều làm test đỏ; nền 0 đỏ; `.c2-tmp/t91-mutate.py`, kết quả `final2/t91-mutations.txt`):**
+
+| # | Đột biến | Test đỏ |
+|---|---|---|
+| M1 | bỏ kiểm chủ sở hữu của hồ sơ | 2 (`aPetThatNowBelongsToAnotherCustomer…`, `ownershipIsCheckedAgainstTheProfileOnEveryCall…`) |
+| M2 | gửi `petId` | 2 |
+| M3 | gửi ngày sinh thay nhóm tuổi | 6 |
+| M4 / M4i | bỏ đọc [CFG] (cứng bật) | 2 unit / 1 IT |
+| M5 | ghi nội dung khối vào nhật ký | 1 |
+| M6 | bỏ làm sạch `breed` | 7 |
+| M7 / M7i | nhiều thú không nêu tên vẫn dựng (lấy thú đầu) | 1 unit / 1 IT (hai khách) |
+| M8 | khối đi vào văn bản nhúng | 1 |
+| M9 | khối có ở endpoint công khai | 2 |
+| M10 | bỏ kiểm thú đã mất | 1 |
+| M11 | khối ngoài `fenceSafe` | 1 |
+| M12 | tên thú nằm trong khối | 2 |
+| M13 | quy tắc lời nhắc nối cả khi không có khối | 3 |
+| M14 | cờ nhật ký bật trước nhánh `OUT_OF_SCOPE` | 1 |
+| M15 | bỏ nhóm từ khóa dinh dưỡng | 10 |
+| M16 | bỏ tên thú nhận ra khỏi lời gọi builder | 1 |
+| M17 | không bắt lỗi của tóm tắt tiêm phòng | 1 |
+| M18 | tháng/năm thành ngày đủ | 4 |
+| M19 | builder ném lỗi bất ngờ làm hỏng cả lượt (bỏ bắt `RuntimeException`) | 1 |
+
+**Nợ và việc của Hiến trước khi bật công tắc:**
+1. Điền bảng "Hiến xác minh" (6 điểm) ngay dưới; T91 không điền và không diễn giải điều khoản của Google. Chưa điền thì giữ `false`; báo cáo đồ án phải ghi đúng là chưa bật.
+2. Chưa đo với Gemini thật (câu trả lời có khối so với không khối, p95 tăng thêm vài chục ms do 1–3 lần đọc). Đo sau khi bật, trên khách demo giả, rồi tắt lại nếu cần.
+3. `AI_PROVIDER_NOTICE` (thông báo cho khách rằng dữ liệu thú được gửi cho nhà cung cấp AI) **chưa sửa**: việc mở cho Hiến sau khi xác minh.
+4. Trần chi phí $10 / tháng chưa được trả lời; Dũng chưa xác nhận bằng chữ việc đổi `PetProfile`.
+5. Nợ chưa đụng: `ai_chat_logs.intent`, `risk_level`, topic `SAFETY` / `LIFESTYLE`, `ai.ingest.max_file_kb` (ADR-0134).
 
 ## Hiến xác minh (điền trước khi bật công tắc)
 

@@ -57,6 +57,11 @@ public final class AiReadFixtures {
                 """, customerId, name, species, breed, birthDate, deceasedOn);
     }
 
+    /** Đặt giới tính ({@code MALE / FEMALE / UNKNOWN}) và triệt sản (null = chưa rõ) cho thú đã tạo bằng {@link #pet}. */
+    public void sexAndNeutered(long petId, String sex, Boolean neutered) {
+        jdbc.update("UPDATE pets SET sex = ?, is_neutered = ? WHERE id = ?", sex, neutered, petId);
+    }
+
     public long pet(long customerId, String species, LocalDate birthDate) {
         return pet(customerId, "AI-" + UUID.randomUUID().toString().substring(0, 8), species, birthDate, null, null);
     }

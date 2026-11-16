@@ -12,6 +12,7 @@ import com.petcare.module.AiReadFixtures;
 import com.petcare.module.AiReadItSupport;
 import com.petcare.module.customer.api.PetQueryApi;
 import com.petcare.module.customer.api.PetQueryApi.LivingPet;
+import com.petcare.module.customer.api.Sex;
 import com.petcare.module.customer.api.Species;
 
 /** I-1 (07 §11, AI-0): hồ sơ thú và thú còn sống của khách, đọc từ Postgres thật. */
@@ -36,6 +37,28 @@ class PetAiReadIT extends AiReadItSupport {
         assertThat(profile.birthDate()).isEqualTo(birth);
         assertThat(profile.currentWeightKg()).isEqualByComparingTo(new BigDecimal("4.50"));
         assertThat(profile.deceased()).isFalse();
+    }
+
+    @Test
+    void profileCarriesSexAndNeuteredStatusInAllThreeStates() {
+        long customer = AiReadFixtures.next();
+        long male = fx.pet(customer, "Mochi", "DOG", null, null, null);
+        long female = fx.pet(customer, "Kitty", "CAT", null, null, null);
+        long unknown = fx.pet(customer, "Bông", "OTHER", null, null, null);
+        fx.sexAndNeutered(male, "MALE", true);
+        fx.sexAndNeutered(female, "FEMALE", false);
+        fx.sexAndNeutered(unknown, "UNKNOWN", null);
+
+        PetQueryApi.PetProfile maleProfile = pets.findPetProfile(male).orElseThrow();
+        PetQueryApi.PetProfile femaleProfile = pets.findPetProfile(female).orElseThrow();
+        PetQueryApi.PetProfile unknownProfile = pets.findPetProfile(unknown).orElseThrow();
+
+        assertThat(maleProfile.sex()).isEqualTo(Sex.MALE);
+        assertThat(maleProfile.isNeutered()).isTrue();
+        assertThat(femaleProfile.sex()).isEqualTo(Sex.FEMALE);
+        assertThat(femaleProfile.isNeutered()).isFalse();
+        assertThat(unknownProfile.sex()).isEqualTo(Sex.UNKNOWN);
+        assertThat(unknownProfile.isNeutered()).as("chưa rõ triệt sản").isNull();
     }
 
     @Test

@@ -12,6 +12,7 @@ import org.springframework.transaction.annotation.Propagation;
 import org.springframework.transaction.annotation.Transactional;
 
 import com.petcare.module.customer.api.PetQueryApi;
+import com.petcare.module.customer.api.Sex;
 import com.petcare.module.customer.entity.Pet;
 import com.petcare.module.customer.repository.PetRepository;
 import com.petcare.module.customer.repository.WeightRecordRepository;
@@ -65,7 +66,7 @@ public class PetQueryService implements PetQueryApi {
     public Optional<PetProfile> findPetProfile(Long petId) {
         return pets.findById(petId).map(pet -> new PetProfile(pet.getId(), pet.getCustomerId(), pet.getSpecies(),
                 pet.getBreed(), pet.getBirthDate(), weights.findCurrentWeight(pet.getId()).orElse(null),
-                pet.getDeceasedOn()));
+                pet.getDeceasedOn(), Sex.valueOf(pet.getSex().name()), pet.getNeutered()));
     }
 
     /** I-1 (07 §11): thú đã chuyển chủ không còn {@code customer_id} này nên tự vắng mặt. */

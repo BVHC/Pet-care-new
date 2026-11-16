@@ -200,7 +200,7 @@ class AiSchemaIT {
 
         assertThat(columns).containsExactlyInAnyOrder("id", "result", "error_kind", "question", "answer",
                 "top_similarity", "source_document_ids", "llm_model", "input_tokens", "output_tokens",
-                "thought_tokens", "latency_ms", "created_at", "source_type");
+                "thought_tokens", "latency_ms", "created_at", "source_type", "used_pet_context");
     }
 
     /** V53 (BR-AI-34): năm nguồn của câu trả lời và NULL (OUT_OF_SCOPE, UNAVAILABLE, dòng cũ); giá trị khác bị CSDL từ chối. */
@@ -238,6 +238,24 @@ class AiSchemaIT {
                 "SELECT value, value_type FROM system_configs WHERE key = 'ai.chat.business_intent_enabled'");
 
         assertThat(row).containsEntry("value", "false").containsEntry("value_type", "BOOL");
+    }
+
+    @Test
+    void thePetContextSwitchStartsOffAndIsABooleanConfig() {
+        Map<String, Object> row = jdbc.queryForMap(
+                "SELECT value, value_type FROM system_configs WHERE key = 'ai.chat.pet_context_enabled'");
+
+        assertThat(row).containsEntry("value", "false").containsEntry("value_type", "BOOL");
+    }
+
+    /** V55 (BR-AI-32): cờ NOT NULL, mặc định false (dòng cũ và dòng không gửi khối thú). */
+    @Test
+    void usedPetContextDefaultsToFalseAndCannotBeNull() {
+        assertThat(chatLog("ANSWERED", null, "Câu hỏi", "Trả lời")).isOne();
+        assertThat(jdbc.queryForObject("SELECT used_pet_context FROM ai_chat_logs ORDER BY id DESC LIMIT 1", Boolean.class))
+                .isFalse();
+        assertThatThrownBy(() -> jdbc.update("INSERT INTO ai_chat_logs (result, llm_model, latency_ms, used_pet_context) "
+                + "VALUES ('OUT_OF_SCOPE', 'm', 1, NULL)")).hasMessageContaining("used_pet_context");
     }
 
     @Test

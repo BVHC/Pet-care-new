@@ -61,7 +61,8 @@ class ChatBusinessTest {
         service = new ChatService(config, new EmergencyDetector(), new PersonalIntentRouter(), new DoseGuard(), branches,
                 embeddings, llm, retriever, logs, new SimpleMeterRegistry(),
                 mock(com.petcare.module.customer.api.CustomerQueryApi.class),
-                mock(com.petcare.module.customer.api.PetQueryApi.class), mock(PersonalService.class), business);
+                mock(com.petcare.module.customer.api.PetQueryApi.class), mock(PersonalService.class), business,
+                mock(PetContextBuilder.class));
     }
 
     private ChatResponse ask(String question) {

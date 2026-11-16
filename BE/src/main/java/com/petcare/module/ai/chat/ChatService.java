@@ -8,6 +8,8 @@ import java.util.Map;
 import java.util.Optional;
 import java.util.function.Supplier;
 
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Service;
 
 import com.petcare.module.ai.dto.ChatRequest;
@@ -35,8 +37,8 @@ import io.micrometer.core.instrument.MeterRegistry;
 
 /**
  * Đường ống hỏi đáp UC90 (07 §5.2, docs/adr/0131). Thứ tự cố định: kiểm đầu vào → che email / SĐT / số giấy tờ →
- * cấp cứu (không nhúng, không LLM) → bệnh án → ý định cá nhân → nhúng → truy hồi → ngưỡng τ → LLM → hậu kiểm → nhật ký
- * và bộ đếm. Bước 1 còn có giới hạn tần suất theo IP ở {@code RateLimitFilter} (BR-AI-09), chạy trước cả controller.
+ * cấp cứu (không nhúng, không LLM) → bệnh án → ý định cá nhân → khối thông tin thú (chỉ {@code /me}, khi [CFG] bật, BR-AI-32)
+ * → nhúng → truy hồi → ngưỡng τ → LLM → hậu kiểm → nhật ký và bộ đếm. Bước 1 còn có giới hạn tần suất theo IP ở {@code RateLimitFilter} (BR-AI-09), chạy trước cả controller.
  * <p>
  * Không có {@code @Transactional}: lệnh nhúng và lệnh LLM có thể chậm tới {@code ai.llm.timeout_seconds} nên không được
  * giữ kết nối CSDL; truy hồi và ghi nhật ký mỗi lần một câu lệnh ngắn. Không thử lại nhà cung cấp trong cùng request
@@ -51,6 +53,7 @@ import io.micrometer.core.instrument.MeterRegistry;
 @Service
 public class ChatService {
 
+    private static final Logger log = LoggerFactory.getLogger(ChatService.class);
     private static final int MAX_SOURCES = 3;
     private static final String COUNTER = "ai.chat.result";
     private static final String NO_ERROR = "NONE";
@@ -69,11 +72,12 @@ public class ChatService {
     private final PetQueryApi pets;
     private final PersonalService personal;
     private final BusinessAnswerService business;
+    private final PetContextBuilder petContext;
 
     public ChatService(SystemConfigApi config, EmergencyDetector emergency, PersonalIntentRouter router,
             DoseGuard doseGuard, BranchQueryApi branches, EmbeddingClient embeddings, LlmClient llm,
             ChunkRetriever retriever, AiChatLogRepository logs, MeterRegistry meters, CustomerQueryApi customers,
-            PetQueryApi pets, PersonalService personal, BusinessAnswerService business) {
+            PetQueryApi pets, PersonalService personal, BusinessAnswerService business, PetContextBuilder petContext) {
         this.config = config;
         this.emergency = emergency;
         this.router = router;
@@ -88,6 +92,7 @@ public class ChatService {
         this.pets = pets;
         this.personal = personal;
         this.business = business;
+        this.petContext = petContext;
     }
 
     /** {@code POST /public/ai/chat} (ai-v1 #1): khách vãng lai, không có tên thú. */
@@ -151,7 +156,25 @@ public class ChatService {
             return finish(ChatResponse.canned(ChatResult.MEDICAL_REFUSAL, ChatTexts.MEDICAL_REFUSAL, true), trace, true);
         }
         return retrieveAndAnswer(withoutPetNames, maskedPrevious.stream().map(text -> maskPetNames(text, petNames)).toList(),
-                trace, general);
+                trace, general, petContextOf(viewer, masked, withoutPetNames, petNames));
+    }
+
+    /**
+     * BR-AI-32, docs/adr/0135: khối {@code THÔNG TIN THÚ} chỉ cho khách có hồ sơ ở {@code /me} và khi [CFG] bật (đọc mỗi
+     * lượt, nên endpoint công khai và khách chưa có hồ sơ không bao giờ chạm tới công tắc). {@code null} = không có khối.
+     * Khối chỉ là phần phụ: lỗi đọc dữ liệu thú không được làm hỏng lượt hỏi (BR-AI-10), nên không gửi khối và đi tiếp.
+     */
+    private String petContextOf(Viewer viewer, String masked, String withoutPetNames, List<String> petNames) {
+        if (viewer.customerId() == null || !config.getBool(ConfigKey.AI_CHAT_PET_CONTEXT_ENABLED)) {
+            return null;
+        }
+        try {
+            return petContext.build(viewer.customerId(), viewer.pets(), router.mentionedPetNames(masked, petNames),
+                    withoutPetNames).orElse(null);
+        } catch (RuntimeException e) {
+            log.warn("PET_CONTEXT_FAILED exception={}", e.getClass().getSimpleName());
+            return null;
+        }
     }
 
     /** Chỉ đổi dạng chữ khi khách có thú: khách vãng lai giữ nguyên câu hỏi. */
@@ -167,7 +190,8 @@ public class ChatService {
                 : ChatResponse.personal(reply.answer(), reply.bookingHint());
     }
 
-    private ChatResponse retrieveAndAnswer(String question, List<String> previous, Trace trace, boolean general) {
+    private ChatResponse retrieveAndAnswer(String question, List<String> previous, Trace trace, boolean general,
+            String petContextBlock) {
         List<RetrievedChunk> nearest;
         try {
             float[] vector = embeddings.embedQuery(question);
@@ -187,7 +211,10 @@ public class ChatService {
         LlmAnswer reply;
         try {
             // Công tắc bật (docs/adr/0136): lời nhắc v2, kể cả khi không có đoạn nào đạt τ (khối tài liệu rỗng).
-            reply = llm.generate(general ? ChatPrompt.SYSTEM_GENERAL : ChatPrompt.SYSTEM, ChatPrompt.userBlock(hits, previous, question));
+            // Cờ nhật ký bật đúng lúc khối được gửi đi (BR-AI-32): nhánh OUT_OF_SCOPE ở trên không gửi gì nên ghi false.
+            trace.usedPetContext = petContextBlock != null;
+            reply = llm.generate(ChatPrompt.system(general, petContextBlock != null),
+                    ChatPrompt.userBlock(hits, petContextBlock, previous, question));
         } catch (AiProviderException e) {
             return unavailable(e, trace);
         }
@@ -243,7 +270,7 @@ public class ChatService {
         logs.save(AiChatLog.of(response.result(), errorKind, response.sourceType(), logContent ? trace.question : null,
                 logContent ? PiiMasker.mask(response.answer()) : null, similarityOf(trace), sourceIds, trace.llmModel,
                 usage == null ? null : usage.inputTokens(), usage == null ? null : usage.outputTokens(),
-                usage == null ? null : usage.thoughtTokens(), trace.latencyMs()));
+                usage == null ? null : usage.thoughtTokens(), trace.latencyMs(), trace.usedPetContext));
         return response;
     }
 
@@ -295,6 +322,7 @@ public class ChatService {
         String llmModel;
         LlmAnswer llm;
         ChatErrorKind errorKind;
+        boolean usedPetContext;
 
         Trace(String question, long startedNanos) {
             this.question = question;

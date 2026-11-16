@@ -43,9 +43,12 @@ public interface PetQueryApi {
     // Tầng 3 cho module ai (07 I-1). Placeholder T55c đã được thay bằng bản thật ở AI-0 (9/11/2026).
     // ------------------------------------------------------------------------------------------------------------
 
-    /** Hồ sơ thú cho gợi ý và chatbot (07 I-1). Tên thú không có ở đây: tra bằng {@link #findPets}. */
+    /**
+     * Hồ sơ thú cho gợi ý và chatbot (07 I-1). Tên thú không có ở đây: tra bằng {@link #findPets}. {@code sex} và
+     * {@code isNeutered} thêm ở T91 (docs/adr/0135 D3): {@code isNeutered} null = chưa rõ.
+     */
     record PetProfile(Long petId, Long customerId, Species species, String breed, LocalDate birthDate,
-                      BigDecimal currentWeightKg, LocalDate deceasedOn) {
+                      BigDecimal currentWeightKg, LocalDate deceasedOn, Sex sex, Boolean isNeutered) {
 
         public boolean deceased() {
             return deceasedOn != null;

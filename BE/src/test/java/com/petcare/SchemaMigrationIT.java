@@ -212,11 +212,12 @@ class SchemaMigrationIT {
         // V50 index refresh_tokens (expires_at, id) cho job dọn refresh token (docs/adr/0114, trả D054; V49 để dành cho BE-2),
         // V52 công tắc [CFG] ai.chat.general_knowledge_enabled (docs/adr/0136, T92; V51 để dành cho gỡ bảng khiếu nại, T70),
         // V53 ai_documents.external_id + ai_chat_logs.source_type + công tắc [CFG] ai.chat.business_intent_enabled (docs/adr/0134, T90),
+        // V55 ai_chat_logs.used_pet_context + công tắc [CFG] ai.chat.pet_context_enabled (docs/adr/0135, T91),
         // V9000 chỉ ở test: baseline session.access_ttl_minutes = 720
         assertThat(rows).extracting(row -> row.get("version"))
                 .containsExactly("1", "2", "3", "4", "5", "6", "7", "8", "9", "10", "11", "12", "13", "14", "15",
                         "16", "17", "18", "19", "20", "21", "22", "23", "24", "25", "26", "27", "28", "29", "30",
-                        "31", "32", "33", "34", "35", "36", "37", "38", "39", "40", "41", "42", "43", "44", "45", "46", "47", "48", "50", "52", "53", "9000");
+                        "31", "32", "33", "34", "35", "36", "37", "38", "39", "40", "41", "42", "43", "44", "45", "46", "47", "48", "50", "52", "53", "55", "9000");
         assertThat(rows).allSatisfy(row -> assertThat(row).containsEntry("success", true));
     }
 

@@ -424,7 +424,7 @@ class ChatIT {
 
         assertThat(columns).containsExactlyInAnyOrder("id", "result", "error_kind", "question", "answer",
                 "top_similarity", "source_document_ids", "llm_model", "input_tokens", "output_tokens", "thought_tokens",
-                "latency_ms", "created_at", "source_type");
+                "latency_ms", "created_at", "source_type", "used_pet_context");
     }
 
     // ================================================================ kiến thức chung có kiểm soát (BR-AI-33, V52)
